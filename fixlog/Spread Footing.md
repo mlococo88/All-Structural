@@ -2378,3 +2378,275 @@ index 642e9e3..7a5de83 100644
 +  const DD=sfdDevData(dir);   /* SFRP: shared with the Report tab (same values) */
 +  const dv=DD.dv, Ld=dv.Ld, hf=DD.hf, sec=DD.sec, avail=DD.avail;
 ```
+
+
+## 2026-11-01 — PR: claude/sf-rebar-qty — Rebar entered as a spacing or a total quantity, for each footing mat and each pedestal (SFRQ; input form only) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SFRQ`.
+
+### SFRQ. Input method per footing mat and per pedestal   [calculation inputs change form; CLAUDE.md §4]
+- **Engineer request (2026-11-01):** "For the reinforcement tab, I want rebar to be entered as either a total qty or a spacing. Allow the user to select the input method for each pedestal and footing."
+- **Footing mats** (bottom x, bottom y, top x, top y). Each mat has a selector "Spacing" / "Total qty" (`freinf.<mat>.mode` = `'spacing'` | `'qty'`, `freinf.<mat>.n`). Helper `sfdMat(k)`:
+  - **Width:** w is the width across which the bars are spread, the width the design already uses: L for x-bars, B for y-bars.
+  - **Cover basis:** c is the side/end cover input (Materials, "Side/end cover, bottom bars"; blank = the bottom cover), the existing `sfdEndCover()`. It is used for every mat.
+  - **Spacing (default; unchanged):** A_s/ft = A_b·12/s (`barAreaPerFt(size, spc)`, the same call as before), with s as entered. Bar count shown: n = floor((12w − 2c − d_b)/s) + 1 (display only).
+  - **Quantity:** A_s,total = n·A_b; A_s/ft = n·A_b/w. The spacing s = (12w − 2c − d_b)/(n − 1) (corner-bar centre span over n − 1 gaps) is used for the s ≤ s_max check, for c_b and ψ_e of ℓ_d, and for the 3D bars. A warning appears when n < 2.
+  - **Used in:**
+    - `directionDesign`: `AsBot`, `AsTop` (before: `barAreaPerFt(state.freinf.botX.size, state.freinf.botX.spc)`; after: `sfdMat('botX').As`) and `spcBot`, `spcTop` (before: `num(state.freinf.botX.spc)`; after: `sfdMat('botX').spc`);
+    - the γ_f band steel (`AsPerFtX/Y`);
+    - `sfdDevData` (`spcD`);
+    - `buildRebar` (3D).
+- **Pedestals.** The input today is longitudinal bar size, "n along x-face", "n along y-face" (perimeter layout of `pedBarCoords`, n = 2(nx + ny) − 4, corners shared), ties as size + spacing, cover and dowels. A per-pedestal selector "Long. bars entered as" (`reinf.longMode`) is added: `'faces'` (n per face, the current form and the default), `'total'` (`reinf.nTot`), `'spacing'` (`reinf.longSpc`, in, centre to centre along each face). Ties stay as a spacing. Helper `sfdPedBars(i)`:
+  - **Corner-bar centre span:** L_c = b − 2·cover − d_b per face, the basis of the existing bar-fit clear-spacing check. `pedBarCoords` places bars at cover to the bar centre; that is an existing difference, not changed, and is listed under open items.
+  - **Total N:**
+    - An odd N is raised to N + 1, because the perimeter layout is symmetric. N < 4 is raised to 4. Both give a warning.
+    - nx + ny = N/2 + 2, split so that the c-c spacings L_cx/(nx − 1) and L_cy/(ny − 1) are as equal as possible. On a tie, fewer bars go on the x-faces.
+  - **Spacing s:** bars per face = ceil(L_c/s) + 1 (≥ 2), so the spacing provided does not exceed the spacing entered.
+  - **Used in:** `pedDes` (`nBars`, `clrX/Y`, `pmBars`: before `rf.nx`, `rf.ny`; after `PB.nx`, `PB.ny`), the 3D cage, and the report.
+- **Shown (entered and derived):**
+  - Reinforcement tab: "→ s = 12.71 in" / "→ 13 bars" under each mat, and A_s worked as n·A_b/w or A_b·12/s.
+  - Pedestal card: "Longitudinal bars: total 13 #8 → 14 bars (6 per x-face at 6.20 in, 3 per y-face at 6.50 in); odd total raised to 14", with the L_c values.
+  - Footing Design 5.1 link line: "bottom x 8 #8 → s = 12.71 in". The 5.2 / 5.3 notes work the quantity conversion.
+  - Pedestal Design 6.x: a note with the bars as entered and as laid out.
+  - Report §1.4: A_s step (n A_b / w or 12 A_b / s) and the derived spacing step. §1.5 and §6 A_st label: as entered → laid out.
+- **Saved data (§5):** `mode` defaults to `'spacing'` and `longMode` to `'faces'` (`defaultState`, `newPed`, and `migrateState` for older saves). Switching the selector fills an empty new field with the equivalent value (spacing → n = derived count; n per face → total = current n; → spacing = the larger current c-c spacing, rounded to 0.5 in).
+- **Check cases (hand):**
+  - Footing x-bars, L = 8 ft, #8 (A_b = 0.79 in², d_b = 1.0 in), c = 3 in (bottom cover; no side cover entered):
+    - spacing 12 in: A_s = 0.79·12/12 = **0.790 in²/ft**, n = floor((96 − 6 − 1)/12) + 1 = floor(7.42) + 1 = **8 bars**;
+    - quantity 8: A_s = 8·0.79/8 = **0.790 in²/ft**, s = (96 − 6 − 1)/7 = **12.71 in** (≤ 18 in).
+    - Every result of the footing design is identical except the spacing used in s ≤ s_max (12.00 → 12.71 in, both pass). ℓ_d is identical (28.46 in) because c_b = min(c + d_b/2 = 3.5, s/2) is set by the cover.
+  - Default #8 @ 9 in: x-bars → floor(89/9) + 1 = 10 bars; y-bars across B = 10 ft → floor(113/9) + 1 = 13 bars.
+  - Pedestal 18 × 18 in, cover 2 in, #8: L_c = 18 − 4 − 1 = 13 in.
+    - 3 per face (8 bars) = total 8 (nx + ny = 6 → 3 / 3, s = 6.50 in each) = spacing 6.5 in (ceil(13/6.5) + 1 = 3 per face). Identical pedestal design.
+    - Spacing 5 in: ceil(2.6) + 1 = 4 per face, 12 bars at 4.33 in.
+    - 36 × 18 in pedestal, total 13: raised to 14, split 6 / 3 (6.20 / 6.50 in).
+- **How verified (headless Chromium):**
+  - origin/main vs the branch on 7 projects: every existing value of `R` and `P2`, the dashboard, warnings and self-consistency are identical. New keys only: `pedDes.PB`, `freinf.*.mode`, `reinf.longMode`.
+  - An origin/main save loads with identical results and is migrated to spacing / n per face.
+  - The equivalent pairs above compare as stated.
+  - The UI mode switch starts at the equivalent value.
+  - The Report tab builds on 9 projects (incl. quantity modes): 0 unresolved references, 0 KaTeX errors, spot values equal the app values.
+  - 0 console errors. `node tests/check-syntax.mjs` passes.
+- **Decision recorded (§9):**
+  - The split rule for a total quantity (equalize the c-c spacing on the two faces; odd N raised to the next even number) and the per-face rounding for a spacing (ceil, so the spacing does not exceed the entered value) are the rules stated above. They are layout rules only: the design method is unchanged.
+  - Engineer to confirm or name a different rule, e.g. bars in proportion to the face lengths.
+- **Open items (not changed):**
+  - `pedBarCoords` (P–M strain compatibility) puts the corner bars at cover to the bar **centre**, while the bar-fit check uses cover to the bar **face**. This is an existing difference, raised and not changed (CLAUDE.md §4).
+  - The note text "Enter #0 spacing to omit a mat" means bar size #0; it was left as it is.
+
+Diff (`Spread Footing.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/Spread Footing.html b/Spread Footing.html
+index 7a5de83..7f96751 100644
+--- a/Spread Footing.html	
++++ b/Spread Footing.html	
+@@ -51,0 +52 @@ table.tbl td:first-child,table.tbl th:first-child{text-align:left}
++table.sfdRbTbl th,table.sfdRbTbl td{padding:3px 4px}   /* SFRQ: Reinforcement tab table fits the input panel */
+@@ -338,6 +339,6 @@ a.wkA:hover{text-decoration:underline}
+- <div class="note">Bottom mat resists positive (cantilever/sagging) moment; top mat resists negative moment between pedestals. Bars in the x-direction resist bending about the y-axis. Enter #0 spacing to omit a mat. Check-only: the tool reports DCR and required A<sub>s</sub>.</div>
+- <table class="tbl sfdRbTbl" style="font-size:11px"><tr><th>Mat</th><th>Bar #</th><th>Spacing s (in)</th><th>A<sub>b</sub> (in&sup2;)</th><th>A<sub>s</sub> = A<sub>b</sub>&middot;12/s (in&sup2;/ft)</th><th>s vs s<sub>max</sub> (in)</th></tr>
+- <tr><td>Bottom, x-bars</td><td><select data-path="freinf.botX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botX.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="botX"></td><td class="sfdRbAs" data-mat="botX"></td><td class="sfdRbS" data-mat="botX"></td></tr>
+- <tr><td>Bottom, y-bars</td><td><select data-path="freinf.botY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.botY.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="botY"></td><td class="sfdRbAs" data-mat="botY"></td><td class="sfdRbS" data-mat="botY"></td></tr>
+- <tr><td>Top, x-bars</td><td><select data-path="freinf.topX.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topX.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="topX"></td><td class="sfdRbAs" data-mat="topX"></td><td class="sfdRbS" data-mat="topX"></td></tr>
+- <tr><td>Top, y-bars</td><td><select data-path="freinf.topY.size" class="barsel"></select></td><td><input type="number" step="0.5" data-path="freinf.topY.spc" data-num style="width:60px"></td><td class="sfdRbAb" data-mat="topY"></td><td class="sfdRbAs" data-mat="topY"></td><td class="sfdRbS" data-mat="topY"></td></tr>
++ <div class="note">Bottom mat resists positive (cantilever/sagging) moment; top mat resists negative moment between pedestals. Bars in the x-direction resist bending about the y-axis (x-bars are spread across L, y-bars across B). Each mat is entered either as a <b>spacing</b> s or as a <b>total quantity</b> n of bars across the footing width. Enter #0 spacing to omit a mat. Check-only: the tool reports DCR and required A<sub>s</sub>.</div>
++ <table class="tbl sfdRbTbl" style="font-size:10.5px"><tr><th>Mat</th><th>Bar #</th><th>Input</th><th>s (in) / n</th><th>A<sub>b</sub> (in&sup2;)</th><th>A<sub>s</sub>/ft (in&sup2;)</th><th>s vs s<sub>max</sub> (in)</th></tr>
++ <tr><td>Bottom x</td><td><select data-path="freinf.botX.size" class="barsel" style="width:60px"></select></td><td><select data-path="freinf.botX.mode" class="sfdRbMode" style="width:74px"><option value="spacing">Spacing</option><option value="qty">Total qty</option></select></td><td><input type="number" step="0.5" data-path="freinf.botX.spc" data-num style="width:46px" class="sfdRbSpc" data-mat="botX" title="center-to-center spacing, in"><input type="number" step="1" min="0" data-path="freinf.botX.n" data-num style="width:46px" class="sfdRbN" data-mat="botX" title="total number of bars across the footing width"><div class="sfdRbD" data-mat="botX" style="font-size:10px"></div></td><td class="sfdRbAb" data-mat="botX"></td><td class="sfdRbAs" data-mat="botX"></td><td class="sfdRbS" data-mat="botX"></td></tr>
++ <tr><td>Bottom y</td><td><select data-path="freinf.botY.size" class="barsel" style="width:60px"></select></td><td><select data-path="freinf.botY.mode" class="sfdRbMode" style="width:74px"><option value="spacing">Spacing</option><option value="qty">Total qty</option></select></td><td><input type="number" step="0.5" data-path="freinf.botY.spc" data-num style="width:46px" class="sfdRbSpc" data-mat="botY" title="center-to-center spacing, in"><input type="number" step="1" min="0" data-path="freinf.botY.n" data-num style="width:46px" class="sfdRbN" data-mat="botY" title="total number of bars across the footing width"><div class="sfdRbD" data-mat="botY" style="font-size:10px"></div></td><td class="sfdRbAb" data-mat="botY"></td><td class="sfdRbAs" data-mat="botY"></td><td class="sfdRbS" data-mat="botY"></td></tr>
++ <tr><td>Top x</td><td><select data-path="freinf.topX.size" class="barsel" style="width:60px"></select></td><td><select data-path="freinf.topX.mode" class="sfdRbMode" style="width:74px"><option value="spacing">Spacing</option><option value="qty">Total qty</option></select></td><td><input type="number" step="0.5" data-path="freinf.topX.spc" data-num style="width:46px" class="sfdRbSpc" data-mat="topX" title="center-to-center spacing, in"><input type="number" step="1" min="0" data-path="freinf.topX.n" data-num style="width:46px" class="sfdRbN" data-mat="topX" title="total number of bars across the footing width"><div class="sfdRbD" data-mat="topX" style="font-size:10px"></div></td><td class="sfdRbAb" data-mat="topX"></td><td class="sfdRbAs" data-mat="topX"></td><td class="sfdRbS" data-mat="topX"></td></tr>
++ <tr><td>Top y</td><td><select data-path="freinf.topY.size" class="barsel" style="width:60px"></select></td><td><select data-path="freinf.topY.mode" class="sfdRbMode" style="width:74px"><option value="spacing">Spacing</option><option value="qty">Total qty</option></select></td><td><input type="number" step="0.5" data-path="freinf.topY.spc" data-num style="width:46px" class="sfdRbSpc" data-mat="topY" title="center-to-center spacing, in"><input type="number" step="1" min="0" data-path="freinf.topY.n" data-num style="width:46px" class="sfdRbN" data-mat="topY" title="total number of bars across the footing width"><div class="sfdRbD" data-mat="topY" style="font-size:10px"></div></td><td class="sfdRbAb" data-mat="topY"></td><td class="sfdRbAs" data-mat="topY"></td><td class="sfdRbS" data-mat="topY"></td></tr>
+@@ -635 +636 @@ function newPed(n){return {label:'Ped '+n,x:0,y:0,bx:1.5,by:1.5,h:2,loadEx:0,loa
+- reinf:{longSize:8,nx:3,ny:3,tieSize:3,tieSpc:12,cover:2,dowelSize:8,dowelN:8}};}
++ reinf:{longSize:8,nx:3,ny:3,longMode:'faces',tieSize:3,tieSpc:12,cover:2,dowelSize:8,dowelN:8}};}
+@@ -645 +646 @@ function defaultState(){
+- freinf:{botX:{size:8,spc:9},botY:{size:8,spc:9},topX:{size:0,spc:12},topY:{size:0,spc:12}},
++ freinf:{botX:{size:8,spc:9,mode:'spacing'},botY:{size:8,spc:9,mode:'spacing'},topX:{size:0,spc:12,mode:'spacing'},topY:{size:0,spc:12,mode:'spacing'}},
+@@ -658,0 +660 @@ function migrateState(){
++ ['botX','botY','topX','topY'].forEach(k=>{const m=state.freinf[k];if(m&&!m.mode)m.mode='spacing';});   /* SFRQ: older saves entered a spacing */
+@@ -675,0 +678 @@ function migrateState(){
++  if(!p.reinf.longMode)p.reinf.longMode='faces';   /* SFRQ: older saves entered bars per face */
+@@ -797,0 +801,10 @@ function buildPedCards(){
++  /* SFRQ: how the longitudinal bars are entered: n per face (as before), a total quantity, or a spacing */
++  const mt=document.createElement('table');mt.className='tbl';mt.style.fontSize='11px';
++  mt.innerHTML='<tr><th>Long. bars entered as</th><th>Total qty</th><th>Spacing c-c (in)</th></tr>';
++  const mr=document.createElement('tr');
++  mr.appendChild(cell('<select data-path="peds.'+i+'.reinf.longMode" style="width:auto"><option value="faces">n per face</option><option value="total">Total quantity</option><option value="spacing">Spacing</option></select>'));
++  mr.appendChild(cell('<input type="number" step="1" min="0" data-path="peds.'+i+'.reinf.nTot" data-num style="width:52px">'));
++  mr.appendChild(cell('<input type="number" step="0.5" data-path="peds.'+i+'.reinf.longSpc" data-num style="width:52px">'));
++  mt.appendChild(mr);b.appendChild(mt);
++  const pbi=el('div','note sfdPbInfo');pbi.dataset.ped=i;pbi.style.fontSize='10.5px';b.appendChild(pbi);
++  mr.querySelectorAll('select,input').forEach(x=>{const v=getPath(state,x.dataset.path);x.value=(v===undefined||v===null)?'':v;});
+@@ -827,0 +841,9 @@ function handleFieldChange(inp){
++ /* SFRQ: switching the input form starts the new field at the value equivalent to the current bars (when empty) */
++ {const mm=inp.dataset.path.match(/^freinf\.(\w+)\.mode$/);
++  if(mm&&v==='qty'){const m=state.freinf[mm[1]];if(!(num(m.n)>0)){m.mode='spacing';const n0=sfdMat(mm[1]).n;m.mode='qty';m.n=n0||0;bindStaticInputs();}}
++  if(mm&&v==='spacing'){const m=state.freinf[mm[1]];if(!(num(m.spc)>0)){m.mode='qty';const s0=sfdMat(mm[1]).spc;m.mode='spacing';m.spc=Math.round(s0*2)/2||12;bindStaticInputs();}}
++  const pm=inp.dataset.path.match(/^peds\.(\d+)\.reinf\.longMode$/);
++  if(pm){const i=+pm[1],rf=state.peds[i].reinf;rf.longMode='faces';const b0=sfdPedBars(i);rf.longMode=v;
++   if(v==='total'&&!(num(rf.nTot)>0))rf.nTot=b0.n;
++   if(v==='spacing'&&!(num(rf.longSpc)>0))rf.longSpc=Math.round(Math.max(b0.sx,b0.sy)*2)/2;
++   buildPedCards();}}
+@@ -924,0 +947,51 @@ function sfdInputTabMarks(){
++/* SFRQ (2026-11-01): rebar entered as a spacing or as a total quantity.
++   Footing mat k ('botX' | 'botY' | 'topX' | 'topY'): x-bars are spread across the footing length L, y-bars across B
++   (the width w perpendicular to the bars, the same width the design uses). Cover basis for the bar positions: the
++   side/end cover (Materials, "Side/end cover, bottom bars"; blank = the bottom cover), i.e. sfdEndCover(), for every mat.
++     spacing mode (default; older projects): s as entered; A_s/ft = A_b*12/s (barAreaPerFt, unchanged);
++       derived count n = floor((12w - 2c - d_b)/s) + 1 (display only).
++     quantity mode: n as entered; A_s,total = n*A_b; A_s/ft = n*A_b/w; spacing for the s_max check and for c_b of
++       the development length s = (12w - 2c - d_b)/(n - 1) (the corner-bar centre span over the n - 1 gaps).
++   Returns { mode, size, Ab, db, w (ft), c (in), span (in), spc (in), n, As (in^2/ft), AsTot (in^2) }. */
++function sfdMat(k){
++ const m=(state.freinf&&state.freinf[k])||{}, size=m.size, Ab=BAR_AREA[size]||0, db=BAR_DIA[size]||0;
++ const w=(k.slice(-1)==='X')?num(state.geom.L):num(state.geom.B), c=sfdEndCover(), span=w*12-2*c-db;
++ if(m.mode==='qty'){
++  const n=Math.max(Math.round(num(m.n)),0), As=(size&&n>0&&w>0)?n*Ab/w:0;
++  return {mode:'qty',size,Ab,db,w,c,span,n,As,AsTot:n*Ab,spc:(n>1&&span>0)?span/(n-1):0};
++ }
++ const spc=num(m.spc), As=barAreaPerFt(size,m.spc);
++ return {mode:'spacing',size,Ab,db,w,c,span,spc,As,AsTot:As*w,n:(size&&spc>0&&span>=0)?Math.floor(span/spc+1e-9)+1:0};
++}
++/* text of a mat as entered and derived: "#8 @ 9.00 in → 10 bars" / "12 #8 → s = 8.20 in" */
++function sfdMatTxt(k){const e=sfdMat(k);if(!e.size)return 'none';
++ return e.mode==='qty'?e.n+' #'+e.size+' → s = '+f2(e.spc)+' in':(e.spc>0?'#'+e.size+' @ '+f2(e.spc)+' in → '+e.n+' bars':'#'+e.size+', s = 0');}
++/* Pedestal longitudinal bars (perimeter layout of pedBarCoords: nx bars on each face parallel to x (length b_x),
++   ny on each face parallel to y, corners shared, n = 2(nx + ny) - 4).
++     'faces' (default; older projects): nx, ny as entered (unchanged).
++     'total': N bars; an odd N is raised to N + 1 (the layout is symmetric); N >= 4. nx + ny = N/2 + 2, split so the
++       centre-to-centre spacings on the two faces are as equal as possible (ties: fewer bars on the x-faces).
++     'spacing': s centre-to-centre along each face; bars per face = ceil(L_c/s) + 1 (>= 2), so the spacing provided
++       does not exceed s. L_c = b - 2 cover - d_b, the corner-bar centre span (the same cover basis as the bar-fit
++       clear-spacing check of the Pedestal Design tab).
++   Returns { mode, nx, ny, n, Lx, Ly (in), sx, sy (in, c-c), entered text, note }. */
++function sfdPedBars(i){
++ const p=state.peds[i]||{}, rf=p.reinf||{}, mode=rf.longMode||'faces', db=BAR_DIA[rf.longSize]||0, cov=num(rf.cover);
++ const Lx=num(p.bx)*12-2*cov-db, Ly=num(p.by)*12-2*cov-db;
++ const sp=(L,n)=>n>1?L/(n-1):0;
++ if(mode==='total'){
++  const Nin=Math.round(num(rf.nTot));let N=Math.max(Nin,4),note='';
++  if(N%2){N+=1;note='odd total raised to '+N+' (symmetric perimeter layout)';}
++  if(Nin<4)note='fewer than 4 bars entered: 4 used (minimum for a perimeter layout)';
++  const S=N/2+2;let best=null;
++  for(let nx=2;nx<=S-2;nx++){const ny=S-nx,d=Math.abs(sp(Lx,nx)-sp(Ly,ny));if(!best||d<best.d-1e-9)best={nx,ny,d};}
++  return {mode,nx:best.nx,ny:best.ny,n:N,Lx,Ly,sx:sp(Lx,best.nx),sy:sp(Ly,best.ny),entered:Nin+' bars',note};
++ }
++ if(mode==='spacing'){
++  const s=num(rf.longSpc), f=L=>(s>0&&L>0)?Math.max(Math.ceil(L/s-1e-9),1)+1:2, nx=f(Lx), ny=f(Ly);
++  return {mode,nx,ny,n:2*(nx+ny)-4,Lx,Ly,sx:sp(Lx,nx),sy:sp(Ly,ny),entered:'s = '+f2(s)+' in',note:s>0?'':'no spacing entered: 2 bars per face'};
++ }
++ return {mode:'faces',nx:rf.nx,ny:rf.ny,n:2*(rf.nx+rf.ny)-4,Lx,Ly,sx:sp(Lx,rf.nx),sy:sp(Ly,rf.ny),entered:rf.nx+' per x-face, '+rf.ny+' per y-face',note:''};
++}
++function sfdPedBarTxt(i){const b=sfdPedBars(i),sz=(state.peds[i].reinf||{}).longSize;
++ return b.mode==='faces'?b.n+' #'+sz+' ('+b.nx+' per x-face, '+b.ny+' per y-face)':(b.mode==='total'?'total '+b.entered.replace(' bars','')+' #'+sz:'#'+sz+' at '+b.entered)+' → '+b.n+' bars ('+b.nx+' per x-face at '+f2(b.sx)+' in, '+b.ny+' per y-face at '+f2(b.sy)+' in)'+(b.note?'; '+b.note:'');}
+@@ -933 +1006 @@ function sfdRebarInfo(){
+-  const m=fr[k]||{},sz=m.size,spc=num(m.spc),Ab=BAR_AREA[sz]||0,As=barAreaPerFt(sz,spc);
++  const e=sfdMat(k),sz=e.size,spc=e.spc,Ab=e.Ab,As=e.As;   /* SFRQ: spacing or quantity */
+@@ -937 +1010,4 @@ function sfdRebarInfo(){
+-  q('sfdRbAs').innerHTML=(sz&&spc>0)?Ab.toFixed(2)+'&middot;12/'+f2(spc)+' = <b>'+As.toFixed(3)+'</b>':(sz?'\u2014 (s = 0)':'\u2014 (no mat)');
++  q('sfdRbAs').innerHTML=e.mode==='qty'?((sz&&e.n>0)?e.n+'&middot;'+Ab.toFixed(2)+'/'+f2(e.w)+' = <b>'+As.toFixed(3)+'</b>':(sz?'\u2014 (n = 0)':'\u2014 (no mat)'))
++   :((sz&&spc>0)?Ab.toFixed(2)+'&middot;12/'+f2(spc)+' = <b>'+As.toFixed(3)+'</b>':(sz?'\u2014 (s = 0)':'\u2014 (no mat)'));
++  const dv=q('sfdRbD');if(dv)dv.innerHTML=sz?(e.mode==='qty'?'\u2192 s = '+f2(spc)+' in':(spc>0?'\u2192 '+e.n+' bars':'')):'';
++  const isQ=(e.mode==='qty');q('sfdRbSpc').style.display=isQ?'none':'';q('sfdRbN').style.display=isQ?'':'none';
+@@ -948 +1024 @@ function sfdRebarInfo(){
+- if(n)n.innerHTML='A<sub>b</sub> from the bar table (#3\u2013#11); A<sub>s</sub> per ft of width is the value used in the footing design. s<sub>max</sub> = min(3h, 18 in) (ACI 318-19 7.7.2.3 / 13.3.4); top mats are checked only where hogging makes them flexural mats.'+
++ if(n)n.innerHTML='A<sub>b</sub> from the bar table (#3\u2013#11); A<sub>s</sub> per ft of width is the value used in the footing design: A<sub>b</sub>&middot;12/s (spacing) or n&middot;A<sub>b</sub>/w (quantity; w = L for x-bars, B for y-bars). With a quantity, s = (12w &minus; 2c &minus; d<sub>b</sub>)/(n &minus; 1), c = side/end cover (Materials; blank = bottom cover), is used for the s<sub>max</sub> check and for c<sub>b</sub> of &ell;<sub>d</sub>; with a spacing, the bar count shown is floor((12w &minus; 2c &minus; d<sub>b</sub>)/s) + 1. s<sub>max</sub> = min(3h, 18 in) (ACI 318-19 7.7.2.3 / 13.3.4); top mats are checked only where hogging makes them flexural mats.'+
+@@ -950,0 +1027,8 @@ function sfdRebarInfo(){
++/* SFRQ: pedestal cards: which longitudinal-bar inputs apply, and the bars they give */
++function sfdPedBarInfo(){
++ $$('.sfdPbInfo').forEach(d=>{const i=+d.dataset.ped;if(!state.peds[i])return;const b=sfdPedBars(i),card=d.closest('.pedbody');
++  const show=(path,on)=>{const x=card.querySelector('[data-path="peds.'+i+'.reinf.'+path+'"]');if(x)x.disabled=!on;};
++  show('nx',b.mode==='faces');show('ny',b.mode==='faces');show('nTot',b.mode==='total');show('longSpc',b.mode==='spacing');
++  d.innerHTML='Longitudinal bars: '+sfEsc(sfdPedBarTxt(i))+'. Corner-bar centre span L<sub>c</sub> = b \u2212 2&middot;cover \u2212 d<sub>b</sub> = '+f2(b.Lx)+' in (x-face), '+f2(b.Ly)+' in (y-face).'+
++   (b.mode==='spacing'?' Bars per face = ceil(L<sub>c</sub>/s) + 1.':b.mode==='total'?' Split so the two faces have spacings as equal as possible.':'');});
++}
+@@ -1179,0 +1264,4 @@ function computeAll(){
++ /* SFRQ: bars entered as a quantity */
++ [['botX','bottom x'],['botY','bottom y'],['topX','top x'],['topY','top y']].forEach(([k,lab])=>{const m=(state.freinf||{})[k]||{};
++  if(m.mode==='qty'&&m.size&&Math.round(num(m.n))<2)W.push({lvl:'warn',msg:'Footing reinforcement, '+lab+' mat: entered as a quantity of '+Math.round(num(m.n))+' bar(s); at least 2 are needed to define a spacing.'});});
++ state.peds.forEach((p,i)=>{const b=sfdPedBars(i);if(b.note&&num(p.h)>0)W.push({lvl:'warn',msg:'Pedestal "'+p.label+'" longitudinal bars: '+b.note+'.'});});
+@@ -2807,3 +2895,8 @@ function sfrModel(){
+-   const mt=state.freinf[k]||{},sz=mt.size,s=num(mt.spc);
+-   if(!sz||!(s>0))return;
+-   w.add({id:'As.'+k,label:lab+': #'+sz+' at '+sfrN(s)+' in',sym:'A_{s}',eq:'\\frac{12\\,A_{b}}{s}',sub:'\\frac{12\\cdot'+sfrN(BAR_AREA[sz])+'}{'+sfrN(s)+'}',value:barAreaPerFt(sz,s),unit:'in^{2}/ft',d:3,ref:''});});
++   const e=sfdMat(k),sz=e.size,s=e.spc;   /* SFRQ: spacing or quantity, entered and derived */
++   if(!sz)return;
++   if(e.mode==='qty'){if(!(e.n>0))return;
++    w.add({id:'As.'+k,label:lab+': '+e.n+' #'+sz+' across w = '+sfrN(e.w)+' ft (entered as a quantity)',sym:'A_{s}',eq:'\\frac{n\\,A_{b}}{w}',sub:'\\frac{'+e.n+'\\cdot'+sfrN(e.Ab)+'}{'+sfrN(e.w)+'}',value:e.As,unit:'in^{2}/ft',d:3});
++    w.add({id:'s.'+k,label:lab+': spacing from the quantity (c = side/end cover)',sym:'s',eq:'\\frac{12 w \\minus 2 c \\minus d_{b}}{n \\minus 1}',sub:'\\frac{'+sfrN(e.w*12,1)+' \\minus 2\\cdot'+sfrN(e.c)+' \\minus '+sfrN(e.db,3)+'}{'+(e.n-1)+'}',value:e.spc,unit:'in'});
++    return;}
++   if(!(s>0))return;
++   w.add({id:'As.'+k,label:lab+': #'+sz+' at '+sfrN(s)+' in (entered as a spacing; '+e.n+' bars across '+sfrN(e.w)+' ft)',sym:'A_{s}',eq:'\\frac{12\\,A_{b}}{s}',sub:'\\frac{12\\cdot'+sfrN(BAR_AREA[sz])+'}{'+sfrN(s)+'}',value:e.As,unit:'in^{2}/ft',d:3,ref:''});});
+@@ -2811,2 +2904,2 @@ function sfrModel(){
+-   {type:'table',head:['Mat','Bar','s (in)','A_b (in²)'],rows:[['botX','Bottom, x-bars'],['botY','Bottom, y-bars'],['topX','Top, x-bars'],['topY','Top, y-bars']].map(([k,lab])=>{const mt=state.freinf[k]||{};
+-    return [lab,mt.size?'#'+mt.size:'none',mt.size?sfrCell(num(mt.spc)):'—',mt.size?sfrCell(BAR_AREA[mt.size]):'—'];})},
++   {type:'table',head:['Mat','Bar','Entered as','Entered → derived','A_b (in²)'],rows:[['botX','Bottom, x-bars'],['botY','Bottom, y-bars'],['topX','Top, x-bars'],['topY','Top, y-bars']].map(([k,lab])=>{const e=sfdMat(k);
++    return [lab,e.size?'#'+e.size:'none',e.size?(e.mode==='qty'?'total quantity':'spacing'):'—',e.size?sfdMatTxt(k):'—',e.size?sfrCell(e.Ab):'—'];})},
+@@ -2816 +2909 @@ function sfrModel(){
+-   p.h>1e-9?((2*(rf.nx+rf.ny)-4)+' #'+rf.longSize+'; ties #'+rf.tieSize+' at '+sfrN(num(rf.tieSpc))+' in; cover '+sfrN(num(rf.cover))+' in; dowels '+rf.dowelN+' #'+rf.dowelSize):'bearing patch (h = 0)'];});
++   p.h>1e-9?(sfdPedBarTxt(i)+'; ties #'+rf.tieSize+' at '+sfrN(num(rf.tieSpc))+' in; cover '+sfrN(num(rf.cover))+' in; dowels '+rf.dowelN+' #'+rf.dowelSize):'bearing patch (h = 0)'];});
+@@ -3045 +3138 @@ function sfrModel(){
+-    S({id:'Ast',label:pd.nBars+' #'+rf.longSize+' (perimeter, '+rf.nx+' per x-face, '+rf.ny+' per y-face)',sym:'A_{st}',eq:'n A_{b}',sub:pd.nBars+'\\cdot'+sfrN(BAR_AREA[rf.longSize||0]),value:pd.Ast,unit:'in^{2}'}),
++    S({id:'Ast',label:'Longitudinal bars: '+sfdPedBarTxt(i),sym:'A_{st}',eq:'n A_{b}',sub:pd.nBars+'\\cdot'+sfrN(BAR_AREA[rf.longSize||0]),value:pd.Ast,unit:'in^{2}'}),
+@@ -3239,0 +3333 @@ function recalc(){
++ sfdPedBarInfo();   /* SFRQ */
+@@ -3791,2 +3885,2 @@ function computePhase2(R){
+-  const AsBot=barAreaPerFt((dir==='x')?state.freinf.botX.size:state.freinf.botY.size,(dir==='x')?state.freinf.botX.spc:state.freinf.botY.spc);
+-  const AsTop=barAreaPerFt((dir==='x')?state.freinf.topX.size:state.freinf.topY.size,(dir==='x')?state.freinf.topX.spc:state.freinf.topY.spc);
++  const AsBot=sfdMat(dir==='x'?'botX':'botY').As;   // SFRQ: A_b*12/s (spacing, as before) or n*A_b/w (quantity)
++  const AsTop=sfdMat(dir==='x'?'topX':'topY').As;
+@@ -3834,2 +3928,2 @@ function computePhase2(R){
+-  const spcBot=num((dir==='x')?state.freinf.botX.spc:state.freinf.botY.spc);
+-  const spcTop=num((dir==='x')?state.freinf.topX.spc:state.freinf.topY.spc);
++  const spcBot=sfdMat(dir==='x'?'botX':'botY').spc;   // SFRQ: as entered, or derived from the quantity
++  const spcTop=sfdMat(dir==='x'?'topX':'topY').spc;
+@@ -3998,2 +4092,2 @@ function computePhase2(R){
+-   const AsPerFtX=barAreaPerFt(state.freinf.botX.size,state.freinf.botX.spc);
+-   const AsPerFtY=barAreaPerFt(state.freinf.botY.size,state.freinf.botY.spc);
++   const AsPerFtX=sfdMat('botX').As;   // SFRQ
++   const AsPerFtY=sfdMat('botY').As;
+@@ -4068 +4162,2 @@ function computePhase2(R){
+-  const nBars=2*(rf.nx+rf.ny)-4; // perimeter arrangement
++  const PB=sfdPedBars(i);   // SFRQ: nx, ny as entered, or from a total quantity / a spacing
++  const nBars=2*(PB.nx+PB.ny)-4; // perimeter arrangement
+@@ -4104,2 +4199,2 @@ function computePhase2(R){
+-  const clrX=rf.nx>1?((bx-2*cover-dbL)/(rf.nx-1)-dbL):Infinity; // bx,by already inches here
+-  const clrY=rf.ny>1?((by-2*cover-dbL)/(rf.ny-1)-dbL):Infinity;
++  const clrX=PB.nx>1?((bx-2*cover-dbL)/(PB.nx-1)-dbL):Infinity; // bx,by already inches here
++  const clrY=PB.ny>1?((by-2*cover-dbL)/(PB.ny-1)-dbL):Infinity;
+@@ -4113 +4208 @@ function computePhase2(R){
+-  const pmBars=pedBarCoords(bx,by,cover,rf.nx,rf.ny,BAR_AREA[rf.longSize||0]);
++  const pmBars=pedBarCoords(bx,by,cover,PB.nx,PB.ny,BAR_AREA[rf.longSize||0]);
+@@ -4120 +4215 @@ function computePhase2(R){
+-   pmBars,pmPts,fc,fy};
++   pmBars,pmPts,fc,fy,PB};
+@@ -4282 +4377 @@ function sfdDevData(dir){
+-  const spcD=(dir==='x')?num(state.freinf.botX.spc):num(state.freinf.botY.spc);
++  const spcD=sfdMat(dir==='x'?'botX':'botY').spc;   // SFRQ: as entered, or derived from the quantity
+@@ -4305 +4399,0 @@ function sfdDevData(dir){
+-function sfdBarTxt(m){m=m||{};return (m.size&&num(m.spc)>0)?'#'+m.size+' @ '+f2(num(m.spc))+' in':'none';}
+@@ -4323 +4417 @@ function renderFootingDesign(){
+- intro.appendChild(el('div','wkLink','<a class="wkA sfdInA" href="#sec-rebar" data-intab="rebar" data-insec="sec-rebar"><span class="wkScr">Bars set on the Reinforcement tab (inputs) \u2192 bottom x '+sfdBarTxt(state.freinf.botX)+', bottom y '+sfdBarTxt(state.freinf.botY)+', top x '+sfdBarTxt(state.freinf.topX)+', top y '+sfdBarTxt(state.freinf.topY)+'</span><span class="wkPrt">Bars (Reinforcement input): bottom x '+sfdBarTxt(state.freinf.botX)+', bottom y '+sfdBarTxt(state.freinf.botY)+', top x '+sfdBarTxt(state.freinf.topX)+', top y '+sfdBarTxt(state.freinf.topY)+'</span></a>'));   /* link to the Reinforcement input tab */
++ intro.appendChild(el('div','wkLink','<a class="wkA sfdInA" href="#sec-rebar" data-intab="rebar" data-insec="sec-rebar"><span class="wkScr">Bars set on the Reinforcement tab (inputs) \u2192 bottom x '+sfdMatTxt('botX')+', bottom y '+sfdMatTxt('botY')+', top x '+sfdMatTxt('topX')+', top y '+sfdMatTxt('topY')+'</span><span class="wkPrt">Bars (Reinforcement input): bottom x '+sfdMatTxt('botX')+', bottom y '+sfdMatTxt('botY')+', top x '+sfdMatTxt('topX')+', top y '+sfdMatTxt('topY')+'</span></a>'));   /* link to the Reinforcement input tab */
+@@ -4342,0 +4437 @@ function renderFootingDesign(){
++  {const e=sfdMat(dir==='x'?'botX':'botY');if(e.mode==='qty'&&e.size)b.appendChild(el('div','note','Bottom '+dir+'-bars entered as a quantity: n = '+e.n+' #'+e.size+' across w = '+f2(e.w)+' ft \u2192 A<sub>s</sub> = n&middot;A<sub>b</sub>/w = '+e.n+'&middot;'+f2(e.Ab)+'/'+f2(e.w)+' = '+f3(e.As)+' in\u00b2/ft; s = (12w \u2212 2c \u2212 d<sub>b</sub>)/(n \u2212 1) = ('+f2(e.w*12)+' \u2212 2&middot;'+f2(e.c)+' \u2212 '+f3(e.db)+')/'+(e.n-1)+' = '+f2(e.spc)+' in (c = side/end cover).'));}   /* SFRQ */
+@@ -4614,0 +4710 @@ function renderPedestalDesign(){
++  b.appendChild(el('div','note','Longitudinal bars: '+sfEsc(sfdPedBarTxt(i))+'.'));   /* SFRQ: as entered and as laid out */
+@@ -4934,2 +5030,6 @@ function buildRebar(){
+- mat2('x',fr.botX.size,fr.botX.spc,zBotX);
+- mat2('y',fr.botY.size,fr.botY.spc,zBotY);
++ /* SFRQ: a mat entered as a quantity is drawn as its n bars from the side cover; a spacing mat as before */
++ function matQ(k,dir,z){const e=sfdMat(k);if(!e.size||!(e.n>0))return;const span=(dir==='x'?L:B),st=-span/2+(e.c+e.db/2)/12;
++  for(let j=0;j<e.n;j++){const pos=e.n>1?st+j*e.spc/12:0;if(dir==='x')barX(pos,z,e.size);else barY(pos,z,e.size);}}
++ const mat3=(k,dir,z)=>{if(fr[k].mode==='qty')matQ(k,dir,z);else mat2(dir,fr[k].size,fr[k].spc,z);};
++ mat3('botX','x',zBotX);
++ mat3('botY','y',zBotY);
+@@ -4937,2 +5037,2 @@ function buildRebar(){
+- if(fr.topX.size)mat2('x',fr.topX.size,fr.topX.spc,zTopX);
+- if(fr.topY.size)mat2('y',fr.topY.size,fr.topY.spc,zTopY);
++ if(fr.topX.size)mat3('topX','x',zTopX);
++ if(fr.topY.size)mat3('topY','y',zTopY);
+@@ -4946 +5046 @@ function buildRebar(){
+-  const xs=[],ys=[];const nx=Math.max(rf.nx||2,2),ny=Math.max(rf.ny||2,2);
++  const PB=sfdPedBars(i);const xs=[],ys=[];const nx=Math.max(PB.nx||2,2),ny=Math.max(PB.ny||2,2);   // SFRQ
+```
