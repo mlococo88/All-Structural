@@ -36,9 +36,9 @@ Plan: `docs/REBUILD_PLAN.md` (§3). Rules: `CLAUDE.md` §1, §3, §7, §8.
 | `vehicles.js` | `window.SharedVehicles` | `Moving Load Generator.html`, `apps/steel-bridge/index.html` (engine: `apps/steel-bridge/engine/analysis.js`) |
 | `moving-load.js` | `window.SharedMovingLoad` | `Moving Load Generator.html`, `apps/steel-bridge/index.html` (engine: `apps/steel-bridge/engine/analysis.js`) |
 | `units.js` | `window.SharedUnits` | `apps/steel-bridge/index.html` |
-| `steps.js` | `window.SharedSteps` | `apps/steel-bridge/index.html` (engine: `apps/steel-bridge/engine/sections.js`); `Spread Footing.html` (Report tab); `elastomeric_design_module.html` (Report tab, `edrModel()`) |
+| `steps.js` | `window.SharedSteps` | `apps/steel-bridge/index.html` (engine: `apps/steel-bridge/engine/sections.js`); `Spread Footing.html` (Report tab); `elastomeric_design_module.html` (Report tab, `edrModel()`); `Timber Beam Check.html` (Report tab) |
 | `lldf.js` | `window.SharedLLDF` | `lldf.html`, `apps/steel-bridge/index.html` (adapter: `apps/steel-bridge/engine/lldf.js`). `SharedLLDF.steps`: the LLDF worked-step writer (shared/steps.js format, needs `SharedSteps` at call time), used by the Steel Bridge app (moved from its adapter 2026-11-01) |
-| `report.js` | `window.SharedReport` | `apps/steel-bridge/index.html` (Report tab: `apps/steel-bridge/ui/report.js`, model from `apps/steel-bridge/report/`); `Spread Footing.html` (Report tab, `sfrModel()`); `elastomeric_design_module.html` (Report tab, `edrModel()`) |
+| `report.js` | `window.SharedReport` | `apps/steel-bridge/index.html` (Report tab: `apps/steel-bridge/ui/report.js`, model from `apps/steel-bridge/report/`); `Spread Footing.html` (Report tab, `sfrModel()`); `elastomeric_design_module.html` (Report tab, `edrModel()`); `Timber Beam Check.html` (Report tab, `tbrModel()`) |
 | `dxf.js` | `window.SharedDxf` | `apps/steel-bridge/index.html` (engine: `apps/steel-bridge/engine/drawings.js`). DXF R12 writer (display list → DXF and SVG preview), `validate()`, `download()`. Future: Base Plate, Gusset, Section Properties, Bridge Geometry (`fixlog/shared-dxf.md`); `Spread Footing.html` (Drawings tab, `sfdwBuild()`) |
 
 ## Worked steps (`steps.js`)
