@@ -167,6 +167,48 @@ async function circleChecks(src) {
         out.hand.H3 = { hef: tb.hef, Nb: tb.Nb, ANc: tb.ANc, ANco: tb.ANco, psi_ed: tb.psi_ed, phiNcbg: tb.phiNcbg, altPhi: tb.alt && tb.alt.phiNcbg,
           hef2: tb2.hef, Nb2: tb2.Nb, ANc2: tb2.ANc, psi_ed2: tb2.psi_ed, phiNcbg2: tb2.phiNcbg, Tg: a.res[0].Tg, sbk: a.res[0].sbk, sfbNa: a.res[0].sfb.na,
           checks: a.checks, errs: a.errs.concat(b.errs) }; }
+      /* H4 (BC-3): torsion. 8 × 1 in Gr 55 on BC 20 (θ0 22.5°), 120 in block, h_ef 24, Hilti V/n option (so the torsion
+         governs the per-anchor steel shear), V_x = 5 kip, T = 72 kip·in (6 kip·ft), P = −3, M_x = 960 (comparison case C6).
+         J = Σr² = 8·10² = 800 in²; torsion shear per anchor T·r/J = 72·10/800 = 0.900 kip ⊥ radius; direct V/n = 0.625 kip.
+         The anchors at 247.5° and 292.5° have their torsion vector 22.5° off +x:
+         |V| = √(0.625² + 0.9² + 2·0.625·0.9·cos 22.5°) = √(0.390625 + 0.81 + 1.039336) = √2.239961 = 1.49665 kip
+         (the comparison's LP value, magnitudes added, is 0.625 + 0.900 = 1.525). Pryout demand Σ|V_i| (computed below independently). */
+      { const s = defaultState(); s.anchor.pattern = 'circle'; s.anchor.nCircle = 8; s.anchor.BC = 20; s.anchor.theta0 = 22.5; s.anchor.dia = 1; s.anchor.grade = 'f1554_55'; s.anchor.hef = 24;
+        s.plate.B = 26; s.plate.N = 26; s.conc.Bx = 120; s.conc.By = 120; s.conc.H = 120; s.grout.present = false; s.forceModel.method = 'elastic'; s.shear.hiltiDist = true;
+        s.combos = [{ name: 'H4', P: -3, Vx: 5, Vy: 0, Mx: 960, My: 0, T: 72 }];
+        const r4 = run(s); texCheck('H4');
+        const c = CC.combos[0], cap = comboCapacities(CC, c);
+        let sum = 0; anchorCoords().forEach(p0 => { const vx = 5 / 8 - 72 * p0.y / 800, vy = 72 * p0.x / 800; sum += Math.hypot(vx, vy); });
+        const s0 = JSON.parse(JSON.stringify(s)); s0.combos[0].T = 0; const r0 = run(s0);
+        out.hand.H4 = { Vu: r4.res[0].Vu, sumV: c.tors && c.tors.sumV, sumHand: sum, pryDem: cap.pryDem, sbkDem: cap.sbkDem, sbkDir: cap.sbk.torsion && cap.sbk.torsion.dir.deg,
+          stV: r4.checks.find(x => x[0] === 'Steel Shear'), stV0: r0.checks.find(x => x[0] === 'Steel Shear'), sbk0: r0.res[0].sbk.phiVcbg, errs: r4.errs }; }
+      /* H5 (BC-3): anchorGroup import, sign convention lightPole-v1 → this tool. A push toward +x at the pole top: LP M_x = +40 kip·ft
+         (force × height), P = 5 kip compression, V_x = 3. Here: P = −5, M_y = +480 kip·in, M_x = 0 → the −x anchors in tension.
+         Two groups (two-post sign) imported with the picker; switching keeps each group's inputs; the result payload has both. */
+      { const pay = { _schema: 'bridge-anchor-group', schemaVersion: 1, producer: 'Light Pole and Sign Post', producerFile: 'Light Pole and Sign Post.html', producedAt: '2026-11-01T12:00:00Z',
+          project: { name: 'Sign 12', bridgeId: '' }, units: { length: 'in', force: 'kip', moment: 'kip-ft', stress: 'ksi' }, basis: { factored: true, method: 'LRFD', combos: 'ASCE 7-22 §2.3' },
+          signConvention: 'lightPole-v1', inputsHash: 'abc123', notes: ['test'],
+          groups: [
+            { id: 'post1', label: 'Post 1', anchor: { pattern: 'circle', n: 4, BC: 12 * Math.SQRT2, theta0: 45, dia: 1, grade: 'f1554_55', nut: 'heavyHex', hef: 18, torqued: true },
+              base: { type: 'doubleNut', standoffClear: 1.0, grout: false, plate: { shape: 'circle', D: 22, t: 1.5, Fy: 36 }, pole: { shape: 'round', D: 8.625 } },
+              pier: { shape: 'circle', D: 36, fc: 4, cracked: true, depth: 120 }, combos: [{ name: '1.2D+1.0W az0', P: 5, Vx: 3, Vy: 0, Mx: 40, My: 0, T: 2 }] },
+            { id: 'post2', label: 'Post 2', anchor: { pattern: 'circle', n: 6, BC: 16, theta0: 0, dia: 1, grade: 'f1554_36', nut: 'heavyHex', hef: 15, torqued: false },
+              base: { type: 'doubleNut', standoffClear: 0.75, plate: { shape: 'circle', D: 22, t: 1.25, Fy: 50 }, pole: { shape: 'round', D: 10.75 } },
+              pier: { shape: 'square', D: 30, fc: 4, cracked: true, depth: 96 }, combos: [{ name: '0.9D+1.0W az90', P: 2, Vx: 0, Vy: 2, Mx: 0, My: 25 }] } ] };
+        const chk = bxAg.check(pay);
+        S = mergeState(defaultState()); refreshAll();
+        const ap = bxAg.apply(pay, chk, { mode: 'all' }, 'test'); refreshAll(); CC = computeAll();
+        const c0 = CC.combos[0];
+        const g1 = { P: c0.raw.P, Mx: c0.raw.Mx, My: c0.raw.My, T: c0.raw.T, tensionX: c0.perAnchor.filter(a => a.t > 1e-9).map(a => a.x), shape: S.conc.shape, plate: S.plate.shape, so: S.standoff.type, z: S.standoff.z, col: S.col.shape };
+        texCheck('H5 post1');
+        bpGroupSwitch(1); CC = computeAll(); const c1 = CC.combos[0];
+        const g2 = { n: S.anchor.nCircle, P: c1.raw.P, Mx: c1.raw.Mx, My: c1.raw.My, tensionY: c1.perAnchor.filter(a => a.t > 1e-9).map(a => a.y), shape: S.conc.shape, grade: S.plate.grade, active: S.groupActive };
+        texCheck('H5 post2');
+        bpGroupSwitch(0); const back = { n: S.anchor.nCircle, active: S.groupActive, D: S.conc.D };
+        const res = bxAg.resultPayload();
+        const bad = bxAg.check(Object.assign({}, pay, { signConvention: 'other' })).err.length + bxAg.check(Object.assign({}, pay, { basis: { factored: false } })).err.length;
+        out.hand.H5 = { ok: ap.ok, warn: chk.warn, g1, g2, back, src: S.bxSrc && S.bxSrc.anchorGroup && S.bxSrc.anchorGroup.inputsHash, nGroups: S.groups.length,
+          res: res && res.results.map(x => ({ id: x.groupId, dcr: x.governing && x.governing.dcr, mode: x.governing && x.governing.mode })), resHash: res && res.source.inputsHash, refused: bad, errs: VALIDATION.errs.map(e => e.msg) }; }
       out.texBad = texBad;
       return out;
     }, { CASES, VARIANTS, BUILD });
@@ -215,7 +257,24 @@ if (r.hand.H3) {
   console.log(`  H3 shear breakout (tangent edge): c_a1 ${h.sbk.ca1.toFixed(3)}, c_a2 ${h.sbk.ca2.toFixed(3)}, A_Vc ${h.sbk.AVc.toFixed(2)}, φV_cbg ${h.sbk.phiVcbg.toFixed(3)} (${h.sbk.govEdge}); side-face blowout ${h.sfbNa ? 'N/A' : 'checked'}`);
   console.log('  H3 Summary: ' + h.checks.map(c => c[0] + ' ' + (+c[1]).toFixed(3)).join('; '));
 }
-for (const h of ['H1', 'H2', 'H3'].filter(k => r.hand[k])) if (r.hand[h].errs.length) { fail = true; console.log(`  ${h} validation errors: ${r.hand[h].errs.join(' | ')}`); }
+for (const h of ['H1', 'H2', 'H3', 'H4'].filter(k => r.hand[k])) if (r.hand[h].errs.length) { fail = true; console.log(`  ${h} validation errors: ${r.hand[h].errs.join(' | ')}`); }
+if (r.hand.H4) {
+  const h = r.hand.H4;
+  chk('H4 steel-shear demand max|V_i| (torsion, vector sum)', h.Vu, 1.49665, 5e-5);
+  chk('H4 pryout demand Σ|V_i| (tool vs independent sum)', h.pryDem, h.sumHand, 1e-9);
+  const okS = h.stV && h.stV0 && h.stV[1] > h.stV0[1]; if (!okS) fail = true;
+  console.log(`  ${okS ? 'ok  ' : 'FAIL'} H4 steel shear D/C with T ${h.stV && h.stV[1].toFixed(4)} > without ${h.stV0 && h.stV0[1].toFixed(4)}; breakout demand ${h.sbkDem && h.sbkDem.toFixed(3)} toward ${h.sbkDir}°`);
+}
+if (r.hand.H5) {
+  const h = r.hand.H5, g1 = h.g1, g2 = h.g2;
+  const ok = h.ok && h.nGroups === 2 && g1.P === -5 && Math.abs(g1.My - 480) < 1e-9 && Math.abs(g1.Mx) < 1e-12 && Math.abs(g1.T - 24) < 1e-9 && g1.tensionX.length && g1.tensionX.every(x => x < 0)
+    && g1.shape === 'circle' && g1.plate === 'circle' && g1.so === 'clamp' && g1.z === 1 && g1.col === 'HSS8.625 (round)'
+    && g2.n === 6 && g2.P === -2 && Math.abs(g2.Mx + 300) < 1e-9 && Math.abs(g2.My) < 1e-12 && g2.tensionY.every(y => y < 0) && g2.shape === 'rect' && g2.grade === 'a572_50' && g2.active === 1
+    && h.back.n === 4 && h.back.active === 0 && h.back.D === 36 && h.src === 'abc123' && h.resHash === 'abc123' && h.res && h.res.length === 2 && h.res.every(x => x.dcr > 0) && h.refused === 2;
+  if (!ok) fail = true;
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'} H5 anchorGroup import (lightPole-v1): post 1 P ${g1.P}, My ${g1.My}, Mx ${g1.Mx}, T ${g1.T} kip-in, tension at x = ${g1.tensionX.map(x => x.toFixed(2)).join(', ')}; post 2 Mx ${g2.Mx}, tension at y = ${g2.tensionY.map(y => y.toFixed(2)).join(', ')}; picker back to group 1 (n ${h.back.n}); result ${JSON.stringify(h.res)}; refused bad payloads ${h.refused}/2`);
+  if (h.errs.length) console.log('    validation (group 1): ' + h.errs.join(' | '));
+}
 console.log(`  TeX of the worked steps (KaTeX, throwOnError): ${r.texBad.length ? r.texBad.length + ' line(s) FAIL' : 'all typeset'}`); r.texBad.slice(0, 10).forEach(x => console.log('    ' + x));
 if (r.texBad.length) fail = true;
 console.log(`  console errors ${pe(cc.errs).length}`); pe(cc.errs).slice(0, 5).forEach(e => console.log('    ' + e));
