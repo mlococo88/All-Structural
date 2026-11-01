@@ -5,7 +5,8 @@
 // Cases: default pole (1 group), two-post sign (2 groups), monopost sign. Checks: the payload passes BP's own check() with no
 // error; BP imports every group with every combination; BP's combination 1 equals the Light Pole numbers converted by the
 // lightPole-v1 rule (P = −P_LP, M_y = M_x,LP, M_x = −M_y,LP, kip / kip-in); the anchor pattern and plate arrive; the result
-// payload has a finite governing D/C per group and echoes the inputsHash. Also: the JSON file fallback downloads the same payload.
+// payload has a finite governing D/C per group and echoes the inputsHash. Also: the JSON file fallback downloads the same payload;
+// the result (§4.12) published by BP shows on the Light Pole Summary and Anchors card as 'ok', and as 'stale' after an input change.
 //   node tests/smoke/lightpole-anchor-handoff.mjs
 import fs from 'fs';
 import path from 'path';
@@ -41,6 +42,16 @@ for (const [name, mut] of Object.entries(CASES)) {
       check(ok, `${name} ${g.label}: ${b.n} combinations; combination 1 P ${raw.P?.toFixed(4)} kip, My ${raw.My?.toFixed(2)}, Mx ${raw.Mx?.toFixed(2)} kip-in (expected ${exp.P.toFixed(4)}, ${exp.My.toFixed(2)}, ${exp.Mx.toFixed(2)}); n ${b.nA}, BC ${b.BC}, t ${b.t}, pier ${b.D} in`); });
     check(r.res && r.res.length === pay.groups.length && r.res.every(x => isFinite(x.dcr)) && r.hash === pay.inputsHash,
       `${name}: BP result ${JSON.stringify(r.res)} (hash ${r.hash})`);
+    // §4.12 result back to Light Pole: BP sends, LP shows the governing D/C (Summary + Anchors card), then "stale" after an input change
+    const before = await o.p.evaluate(() => { lppAnchorCardRefresh(); return Array.from(document.querySelectorAll('#lpAnchResult .lpAgChip')).map(e => e.dataset.state); });
+    await bp.evaluate(() => { const r = bxAg.resultPayload(); BridgeXfer.publish('anchorGroupResult', r, 'Base Plate & Anchor Bolt Designer', 'BasePlateAnchorDesigner.html'); });
+    const after = await o.p.evaluate(() => { lppAnchorCardRefresh(); renderSummary(LPP_SUMCTX);
+      return { card: Array.from(document.querySelectorAll('#lpAnchResult .lpAgChip')).map(e => [e.dataset.state, e.textContent]),
+               sum: Array.from(document.querySelectorAll('#page-summary .lpAgChip')).map(e => e.dataset.state) }; });
+    const stale = await o.p.evaluate(() => { const v = document.getElementById('V'); v.value = String(+v.value + 5); v.dispatchEvent(new Event('input', { bubbles: true }));
+      lppAnchorCardRefresh(); return Array.from(document.querySelectorAll('#lpAnchResult .lpAgChip')).map(e => e.dataset.state); });
+    check(before.every(x => x === 'none') && after.card.length === pay.groups.length && after.card.every(c => c[0] === 'ok') && after.sum.every(x => x === 'ok') && stale.every(x => x === 'stale'),
+      `${name}: result chips none → ok → stale after V + 5 (${after.card.map(c => c[1].slice(0, 120)).join(' | ')})`);
     check(!bErr.length && !o.errs.length, `${name}: no page errors (LP ${o.errs.length}, BP ${bErr.length}${bErr.length ? ': ' + bErr[0] : ''})`);
   } finally { await o.b.close(); }
 }
