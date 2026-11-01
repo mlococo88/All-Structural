@@ -222,8 +222,8 @@
       const brg = (t, F) => { let tot = 0; for (let i = 0; i < n; i++) { const Lc = i === 0 ? e0 - dh / 2 : s - dh; tot += Math.min(2.4 * bolt.d * t * F, 1.2 * Lc * t * F); } return PHI.bb * tot; };
       m.brgA = brg(m.t, Fu); m.brgG = brg(tg, Fug); m.brgR = Math.min(m.brgA, m.brgG);
       m.gage = ({ 3: 1.75, 3.5: 2, 4: 2.5, 5: 3, 6: 3.5, 7: 4, 8: 4.5 })[m.b1] || Math.round(m.b1 * 0.55 * 8) / 8; m.edge = m.b1 - m.gage; });
-    const FT = { B: 16, E: 4.5, Ep: 2.6 }[p.fatCat || 'B'], gF = 1.75 * 0.65; Object.values(mem).forEach(m => { m.dP = nm((p.user.Fat || {})[m.k]) || 0; m.df = gF * m.dP / m.A; });
-    const R = { errors: [], p, N, EL, frames, combos, W, SB, emin: bolt.emin.cut, mem, Fy, Fu, n, s, e0, tg, bolt, Fub, thr, dh, S, h, Lb, dft, FT, gF, primary: p.primary === 'yes', E, gWS, UM };
+    const FT = { B: 16, E: 4.5, Ep: 2.6 }[p.fatCat || 'B'], gFI = nm(p.gFI) > 0 ? nm(p.gFI) : 1.75, gF = gFI * 0.65; Object.values(mem).forEach(m => { m.dP = nm((p.user.Fat || {})[m.k]) || 0; m.df = gF * m.dP / m.A; });
+    const R = { errors: [], p, N, EL, frames, combos, W, SB, emin: bolt.emin.cut, mem, Fy, Fu, n, s, e0, tg, bolt, Fub, thr, dh, S, h, Lb, dft, FT, gF, gFI, primary: p.primary === 'yes', E, gWS, UM };
     R.steps = steps(R);
     return R;
   }
@@ -272,7 +272,7 @@
         c.items.push({ loc: 'System, β_T', cells: [f0(S.bT), f0(S.bReq), f2(S.bReq / S.bT)], r: S.bReq / S.bT, st: S.bT >= S.bReq ? 'pass' : 'fail', demand: S.bReq, capacity: S.bT, step: 'cf.sb.bT' }); }
       out.add(c); }
     { const c = { id: 'CF9', grp: 'Members', title: 'Fatigue of cross-frame members', ref: `${ED} Art. 6.6.1.2, Table 3.4.1-1 (Fatigue I factor × 0.65 for cross-frames)`, items: [],
-        note: 'Force ranges from a refined analysis of the fatigue truck (a line-girder analysis gives none). γ = 1.75 × 0.65 for Fatigue I (10th Edition cross-frame provisions, NCHRP 12-113).' };
+        note: `Force ranges from a refined analysis of the fatigue truck (a line-girder analysis gives none). γ = ${f2(R.gFI)} × 0.65 for Fatigue I (Fatigue I γ of the Fatigue & studs inputs; 10th Edition cross-frame provisions, NCHRP 12-113).` };
       const Ms = M.filter(m => m.dP > 0); if (!Ms.length) c.naWhy = 'No fatigue force ranges entered (from a refined analysis).';
       Ms.forEach(m => c.items.push(rc(`${m.l} (${m.name})`, [f2(m.dP), f2(m.df), f2(R.FT), f2(m.df / R.FT)], m.df, R.FT, `cf.${m.k}.fat`))); out.add(c); }
     // diaphragm used: the angle checks CF1 to CF9 do not apply and are not listed (GirderDetail 2026-10-13)
@@ -386,7 +386,7 @@
       w.add({ id: `${id}.sl`, label: `${m.l}: slenderness (CF3, ${R.primary ? 'primary' : 'secondary'} member)`, sym: '\\frac{\\ell}{r_{z}}', eq: '', sub: `\\frac{${n2(m.L)}}{${n3(m.rz)}}`, value: m.slC, unit: '', d: 2, ref: `${ED} Arts. 6.9.3, 6.8.4` });
       w.add({ id: `${id}.bolt`, label: `${m.l}: bolt shear resistance, ${R.n} bolts, single shear (CF4)`, sym: 'n\\phi_{s}R_{n}', eq: 'n(0.80)(0.45\\text{ or }0.56)A_{b}F_{ub}', sub: `${R.n}(0.80)(${n2(R.thr)})(${n4(R.bolt.Ab)})(${n0(R.Fub)})`, value: m.boltR, unit: 'kip', d: 2, ref: `${ED} Eq. 6.13.2.7-1, -2`, ok: ge(m.boltR, m.Fmax) });
       w.add({ id: `${id}.brg`, label: `${m.l}: bolt bearing, angle and gusset (CF5)`, sym: '\\sum\\phi_{bb}\\min(2.4dtF_{u},\\ 1.2L_{c}tF_{u})', eq: '', sub: `\\min(${n2(m.brgA)},\\ ${n2(m.brgG)})`, value: m.brgR, unit: 'kip', d: 2, ref: `${ED} Eqs. 6.13.2.9-1, -2`, ok: ge(m.brgR, m.Fmax) });
-      if (m.dP > 0) w.add({ id: `${id}.fat`, label: `${m.l}: factored stress range (CF9)`, sym: '\\gamma(\\Delta f)', eq: '1.75(0.65)\\frac{\\Delta P}{A_{g}}', sub: `${n4(R.gF)}\\frac{${n2(m.dP)}}{${n3(m.A)}}`, value: m.df, unit: 'ksi', d: 2, ref: `${ED} Table 3.4.1-1, Art. 6.6.1.2`, ok: ge(R.FT, m.df) }); });
+      if (m.dP > 0) w.add({ id: `${id}.fat`, label: `${m.l}: factored stress range (CF9)`, sym: '\\gamma(\\Delta f)', eq: '\\gamma_{Fat\\,I}(0.65)\\frac{\\Delta P}{A_{g}}', sub: `${n2(R.gFI)}(0.65)\\frac{${n2(m.dP)}}{${n3(m.A)}}`, value: m.df, unit: 'ksi', d: 2, ref: `${ED} Table 3.4.1-1, Art. 6.6.1.2`, ok: ge(R.FT, m.df) }); });
     w.add({ id: 'geo', label: 'Connection geometry (CF6)', sym: 's,\\ e_{end},\\ t_{g}', eq: '', sub: `${n3(R.s)},\\ ${n3(R.e0)},\\ ${n3(R.tg)}`, value: R.s, unit: 'in', d: 3, ref: `${ED} Art. 6.13.2.6, Table 6.13.2.6.6-1` });
     return w.steps;
   }
@@ -462,6 +462,7 @@
     const p = JSON.parse(JSON.stringify(c));
     p.S = r2(Math.max(...bays) * 12); p.dg = r2(s0.D + s0.topT + s0.botT); src.S = 'the largest girder spacing'; src.dg = 'D + t_top + t_bot at the first support';
     p.h = c.h === '' || c.h == null ? Math.round(Math.max(D - 8, D * 0.75)) : +c.h; src.h = c.h === '' || c.h == null ? 'round(max(D − 8, 0.75D))' : 'entered';
+    { const v = +(((P.fatigue || {}).gam || {}).fI); p.gFI = v > 0 ? v : 1.75; src.gFI = v > 0 ? 'the Fatigue & studs inputs (γ Fatigue I)' : 'no fatigue inputs: 1.75'; }   // FGAM (2026-11-01)
     p.primary = c.primary === 'auto' ? (skews.some(s => Math.abs(s) > 20) ? 'yes' : 'no') : c.primary;
     p.Lb = L && !L.errors.length ? r2(FRM.lbMax(L.FR, L.FR.girders.map(g => g.i), L.m.sup)) : 25; src.Lb = L && !L.errors.length ? 'the largest unbraced length on any girder (framing)' : 'no framing: 25 ft';
     const A = opt.A && !(opt.A.errors && opt.A.errors.length) ? opt.A : null;
