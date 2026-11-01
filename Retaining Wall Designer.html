@@ -2388,6 +2388,7 @@ function calcAll(inp) {
       V_str_max, Mr_str_max, x_R_brg, e_brg, B_eff, q_ult_A, q_n_A, q_R_A, bearing_ok_A,
       B_eff_Ia, q_ult_Ia, bearing_ok_max, bearing_ok_Ia, bearing_Ia_governs, q_ult_gov, gEH_min,
       quA_toe, quA_heel, quA_front, quA_back, useManualQn, onRock,
+      x_R_tot, e_tot,   // RWETOT (2026-11-01): the Strength I footing-design resultant, returned for the report (exposure only)
       V_str_min_tot, e_Ia, quIa_toe, quIa_heel, quIa_front, quIa_back,
     };
   }
@@ -8979,13 +8980,13 @@ function rwrModel(r) {
       subs.push(sub('Step 9 — Serviceability: crack control and minimum reinforcement', [rwrItem('sa9', T),
         { type: 'note', text: 'n = ' + rwrN(sv.n_modular, 0) + ' (E_c = ' + rwrN(sv.Ec / 1000, 0) + ' ksi, Eq. 5.4.2.4-1). Service I stem moment: ' + (sv.serv_ko ? 'K_0 = ' + rwrN(sv.K_serv, 3) + ' for the earth term, K_a for the surcharge' : 'K_a') + '; heel: full downward load, no upward relief; toe: |M_u| / 1.5 (approximation of the tool). Heel and toe minimum reinforcement are status-bar checks without a card on the tab.' }, onTab('stabServ')])); }
     { const sI = [rwrS({ id: 'V', label: 'Factored vertical load on the footing underside, Strength I maximum (total: water uplift added back, it acts on the same underside)', sym: 'V_{u}', eq: '\\eta(1.25\\,DC + 1.35\\,EV + \\gamma_{EH}\\,P_{a,V} + 1.75\\,LS_{v}) + V_{col}', sub: '', value: a.V_str_max_tot, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-1') })];
-      const eI = a.V_up > 0 ? null : a.e_brg;   // without uplift the footing-design resultant is the bearing-check resultant (same V and M_r, calcAll)
-      sI.push(...rwrTrap('', a.V_str_max_tot, eI, r.B / 2 - (eI == null ? 0 : eI), a.quA_toe, a.quA_heel, a.quA_front, a.quA_back, 'V_{u}'));
+      const eI = a.e_tot;   // RWETOT: the Strength I footing-design eccentricity returned by calcAll (with or without water uplift)
+      sI.push(...rwrTrap('', a.V_str_max_tot, eI, a.x_R_tot, a.quA_toe, a.quA_heel, a.quA_front, a.quA_back, 'V_{u}'));
       const sIa = [rwrS({ id: 'VIa', label: 'Factored vertical load, Strength Ia minimum (total)', sym: 'V_{u}', eq: '0.90\\,DC + 1.00\\,EV + 0.90\\,P_{a,V}', sub: '', value: a.V_str_min_tot, unit: 'lb/ft', d: 0 }),
         rwrS({ id: 'eIa', label: 'Eccentricity of the Strength Ia resultant (total vertical)', sym: 'e', eq: '\\frac{B}{2} \\minus \\bar{x}', sub: '', value: a.e_Ia, unit: 'ft', d: 3 })];
       sIa.push(...rwrTrap('Ia', a.V_str_min_tot, a.e_Ia, r.B / 2 - a.e_Ia, a.quIa_toe, a.quIa_heel, a.quIa_front, a.quIa_back, 'V_{u}', ', Strength Ia'));
       subs.push(sub('Factored bearing for footing design (Strength I / Ia, full width B)', [rwrItem('saf', [{ title: 'Strength I (maximum vertical)', ref: AA('Table 3.4.1-1'), steps: sI }, { title: 'Strength Ia (minimum vertical)', ref: AA('C11.5.6'), steps: sIa }]),
-        { type: 'note', text: 'Report only: the tab uses these values in the heel and toe cards without working them. The trapezoid across the full width B (not the Meyerhof width) is what the heel and toe design use; the envelope takes the case that governs each cantilever.' + (a.V_up > 0 ? ' With water uplift the tool does not return the eccentricity of the Strength I footing-design resultant, so the Strength I toe and heel pressures are shown without substitution.' : '') }])); }
+        { type: 'note', text: 'Report only: the tab uses these values in the heel and toe cards without working them. The trapezoid across the full width B (not the Meyerhof width) is what the heel and toe design use; the envelope takes the case that governs each cantilever.' + '' }])); }
     secs.push({ title: 'Stability (AASHTO LRFD limit states)', subs, key: 'stab' });
   }
   /* column / beam loads (both bases: the tool computes them the same way) and seismic detail (ACI) */
