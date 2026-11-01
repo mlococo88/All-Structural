@@ -795,7 +795,7 @@ function buildPedCards(){
   }
   const rh=el('div','',' <b style="font-size:11px">Pedestal reinforcement (Phase 2)</b>');rh.style.marginTop='6px';b.appendChild(rh);
   const rt=document.createElement('table');rt.className='tbl';rt.style.fontSize='11px';
-  rt.innerHTML='<tr><th>Long. bar</th><th>n along x-face</th><th>n along y-face</th><th>Tie bar</th><th>Tie spc (in)</th><th>Cover (in)</th></tr>';
+  rt.innerHTML='<tr><th>Long. bar</th><th>n along x-face</th><th>n along y-face</th><th>Tie bar</th><th>Tie spc (in)</th><th title="Clear cover to the longitudinal (vertical) bars">Cover (in)</th></tr>';
   const rr=document.createElement('tr');
   function cell(html){const td=document.createElement('td');td.innerHTML=html;return td;}
   const selL=cell('<select data-path="peds.'+i+'.reinf.longSize" class="barsel">'+barOptions()+'</select>');selL.querySelector('select').dataset.filled='1';
@@ -3158,6 +3158,10 @@ function sfrModel(){
     ms.push(S({id:'Pey',label:'Load-offset share of M_ux ('+pd.govMx.name+')',sym:'P_{u,a} e_{y}',eq:'',sub:sfrN(gx.Pa)+'\\cdot'+sfrP(gx.ley,3),value:gx.PeMx,unit:'kip-ft'}),
      S({id:'Pex',label:'Load-offset share of M_uy ('+pd.govMy.name+')',sym:'P_{u,a} e_{x}',eq:'',sub:sfrN(gy.Pa)+'\\cdot'+sfrP(gy.lex,3),value:gy.PeMy,unit:'kip-ft'}));}
    T.push({title:'Moments (biaxial)',ref:'ACI 318-19 R10.5 (strain compatibility contour)',steps:ms});
+   T.push({title:'Bar positions for the P–M interaction',ref:'ACI 318-19 20.5.1.3 (cover), 22.2 (strain compatibility)',steps:[   /* SFPC */
+    S({id:'dpr',label:'Face to longitudinal-bar centre (cover = clear cover to the longitudinal bars)',sym:"d'",eq:'c + \\frac{d_{b}}{2}',sub:sfrN(num(rf.cover))+' + \\frac{'+sfrN(BAR_DIA[rf.longSize]||0,3)+'}{2}',value:pd.dPr,unit:'in',d:3}),
+    S({id:'dx',label:'Depth to the far bar row, bending about y',sym:'d_{x}',eq:"b_{x} \\minus d'",sub:sfrN(pd.bx,1)+' \\minus '+sfrN(pd.dPr,3),value:pd.dX,unit:'in',d:3}),
+    S({id:'dy',label:'Depth to the far bar row, bending about x',sym:'d_{y}',eq:"b_{y} \\minus d'",sub:sfrN(pd.by,1)+' \\minus '+sfrN(pd.dPr,3),value:pd.dY,unit:'in',d:3})]});
    T.push({title:'Ties and slenderness',ref:'ACI 318-19 25.7.2, 6.2.5',steps:[
     S({id:'tmax',label:'Tie spacing limit',sym:'s_{max}',eq:'\\min(16 d_{b},\\, 48 d_{b,tie},\\, b_{min})',sub:'\\min(16\\cdot'+sfrN(BAR_DIA[rf.longSize||8],3)+',\\,48\\cdot'+sfrN(BAR_DIA[rf.tieSize||3],3)+',\\,'+sfrN(pd.bmin)+')',value:pd.tieMax,unit:'in'}),
     S({id:'ties',label:'Ties #'+rf.tieSize+' at s'+(pd.tieSizeOK?'':' (tie bar too small, 25.7.2.2)'),sym:'s',eq:'\\le s_{max}',sub:sfrN(num(rf.tieSpc))+(pd.tieOK?' \\le ':' \\gt ')+sfrN(pd.tieMax),value:num(rf.tieSpc),unit:'in',ok:!!(pd.tieOK&&pd.tieSizeOK)}),
@@ -4471,20 +4475,25 @@ function computePhase2(R){
   // axial-only DCR as primary (P-M interaction shown; magnification deferred)
   const dcrAxial=phiPn_max>0?PuMax/phiPn_max:Infinity;
   // ----- biaxial P-M interaction data -----
-  const pmBars=pedBarCoords(bx,by,cover,PB.nx,PB.ny,BAR_AREA[rf.longSize||0]);
+  /* SFPC (2026-11-01, engineer): the cover input is the clear cover to the longitudinal bars (the
+     bar-fit check, the sfdPedBars layout and the drawings); bar centres are cover + d_b/2 from each
+     face (before: cover to the bar centre). d_x, d_y = depth to the far bar row about each axis. */
+  const dPr=num(cover)+(BAR_DIA[rf.longSize]||0)/2, dX=bx-dPr, dY=by-dPr;
+  const pmBars=pedBarCoords(bx,by,dPr,PB.nx,PB.ny,BAR_AREA[rf.longSize||0]);
   // per-combo demand points
   const pmPts=[];
   combos.forEach(c=>{const pl=c.nr.pl.find(z=>z.idx===i);if(!pl)return;
    pmPts.push({name:c.cb.name,P:pl.P,Mx:pl.mxPed,My:pl.myPed});});
   return{idx:i,label:p.label,isPedestal,Ag,nBars,Ast,rho,P0:P0/1000,Pn_max,phiPn_max,
    PuMax,MuxMax,MuyMax,govMx,govMy,tieMax,tieOK,tieSizeOK,nBarsOK,rhoOK,rhoMin,rhoMax,barFitOK,clrX,clrY,clrMin,r,klu_r,slenderFlag,dcrAxial,bmin,h,bx,by,isPatch,
-   pmBars,pmPts,fc,fy,PB};
+   pmBars,pmPts,fc,fy,PB,dPr,dX,dY};
  });
  return{bandChk,offFooting,dBotX,dBotY,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,bearing,pedDes,pressMomentAbout,pressShearBeyond,pressResultant,
   beamDiagram,pressurePlane,netResultant};
 }
 /* ---- pedestal longitudinal bar coordinates (perimeter arrangement), centered at section center ---- */
 function pedBarCoords(bx,by,coverIn,nx,ny,barArea){
+ // coverIn = face to bar CENTRE (SFPC: the caller passes cover + d_b/2)
  // bx,by in inches; place nx bars along each x-face row, ny along each y-face; perimeter only
  const x0=-bx/2+coverIn, x1=bx/2-coverIn, y0=-by/2+coverIn, y1=by/2-coverIn;
  const nX=Math.max(nx,2), nY=Math.max(ny,2);
@@ -4992,6 +5001,10 @@ function renderPedestalDesign(){
    'P_0 = 0.85 f\'_c (A_g - A_{st}) + f_y A_{st},\\quad \\phi P_{n,max} = 0.65\\cdot0.80 P_0',
    'P_0 = 0.85\\cdot'+f2(P2.fc/1000)+'\\cdot('+f2(pd.Ag)+'-'+f2(pd.Ast)+')+'+f2(P2.fy/1000)+'\\cdot'+f2(pd.Ast)+' = '+f2(pd.P0)+'\\;\\mathrm{k}',
    '\\phi P_{n,max} = '+f2(pd.phiPn_max)+'\\;\\mathrm{k},\\;P_u = '+f2(pd.PuMax)+'\\;\\mathrm{k},\\;\\mathrm{DCR}_{axial}=\\mathbf{'+f2(pd.dcrAxial)+'}'+(pd.dcrAxial<=1?'\\;\\checkmark':'\\;\\text{NG}')));
+  b.appendChild(eqBlock('Bar positions for the P\u2013M interaction','ACI 318-19 20.5.1.3 (cover to the longitudinal bars, as entered), 22.2',   /* SFPC */
+   "d' = c + \\tfrac{d_b}{2},\\qquad d_x = b_x - d',\\qquad d_y = b_y - d'",
+   "d' = "+f2(num(state.peds[i].reinf.cover))+' + \\tfrac{'+f3(BAR_DIA[state.peds[i].reinf.longSize]||0)+"}{2} = "+f3(pd.dPr)+'\\;\\mathrm{in}',
+   'd_x = '+f2(pd.bx)+' - '+f3(pd.dPr)+' = '+f3(pd.dX)+'\\;\\mathrm{in},\\qquad d_y = '+f2(pd.by)+' - '+f3(pd.dPr)+' = '+f3(pd.dY)+'\\;\\mathrm{in}'));
   b.appendChild(eqBlock('Biaxial interaction \u2014 demand vs capacity contour','ACI 318-19 R10.5 / strain compatibility',
    '\\text{Capacity contour } (\\phi M_{nx},\\phi M_{ny}) \\text{ traced at the axial level of each check by strain compatibility.}',
    'M_{ux} = '+f2(pd.MuxMax)+'\\;\\mathrm{k\\text{-}ft},\\;M_{uy} = '+f2(pd.MuyMax)+'\\;\\mathrm{k\\text{-}ft},\\;P_u = '+f2(pd.PuMax)+'\\;\\mathrm{k}',
@@ -5006,7 +5019,7 @@ function renderPedestalDesign(){
    b.appendChild(el('div','note','M at the pedestal base; P<sub>u,a</sub> = factored applied load at the load point (the pedestal self-weight acts at the centroid). The same P\u00b7e reaches the footing as an interface moment (flexure, one-way shear, punching moment transfer).'));
   }
   const pmDiv=el('div','plot');pmDiv.id='plot-pm-'+i;pmDiv.style.height='420px';b.appendChild(pmDiv);
-  b.appendChild(el('div','note','Biaxial load contour: the closed curve is the capacity envelope \u03c6M_nx\u2013\u03c6M_ny computed at the governing axial load by strain compatibility for the entered bar layout (0.85f\u2032c stress block, \u03b5cu = 0.003, \u03c6 by strain). Each point is a factored combination\u2019s (M_ux, M_uy) demand at this pedestal; points inside the contour pass. Because the contour size varies with axial load, points are shown against the contour at the maximum P_u (conservative for gravity-dominated cases). Verify any borderline point at its own axial level.'));
+  b.appendChild(el('div','note','Biaxial load contour: the closed curve is the capacity envelope \u03c6M_nx\u2013\u03c6M_ny computed at the governing axial load by strain compatibility for the entered bar layout, bar centres at d\u2032 = cover + d<sub>b</sub>/2 from each face (0.85f\u2032c stress block, \u03b5cu = 0.003, \u03c6 by strain). Each point is a factored combination\u2019s (M_ux, M_uy) demand at this pedestal; points inside the contour pass. Because the contour size varies with axial load, points are shown against the contour at the maximum P_u (conservative for gravity-dominated cases). Verify any borderline point at its own axial level.'));
   b.appendChild(eqBlock('Tie spacing limit','ACI 318-19 25.7.2.1',
    's_{max} = \\min(16 d_{b,long},\\,48 d_{b,tie},\\,\\text{least dim})',
    's_{max} = \\min(16\\cdot'+f2(BAR_DIA[state.peds[i].reinf.longSize||8])+',\\,48\\cdot'+f2(BAR_DIA[state.peds[i].reinf.tieSize||3])+',\\,'+f2(pd.bmin)+')',
@@ -5305,7 +5318,7 @@ function buildRebar(){
  // pedestal cages + ties + dowels
  R.peds.forEach((p,i)=>{
   const rf=state.peds[i].reinf;const db=BAR_DIA[rf.longSize||0]/12;if(!db)return;
-  const cv=(rf.cover||2)/12;
+  const cv=(rf.cover||2)/12+db/2;   // SFPC: bar centre at cover + d_b/2 from the face (as the P-M check and the drawings)
   const x0=p.x-p.bx/2+cv,x1=p.x+p.bx/2-cv,y0=p.y-p.by/2+cv,y1=p.y+p.by/2-cv;
   const zc0=0.02,zc1=p.h-0.02; // pedestal from z=0 to z=h
   // longitudinal bars: nx along each x-face, ny along each y-face (perimeter)
@@ -5320,7 +5333,8 @@ function buildRebar(){
   // ties (rectangular loops) at tie spacing
   const tie=BAR_DIA[rf.tieSize||0]/12;const spc=(rf.tieSpc||12)/12;
   if(tie>0){const nt=Math.max(1,Math.floor(p.h/spc));
-   for(let k=0;k<=nt;k++){const zt=zc0+k*spc;if(zt>zc1)break;g.add(tieLoop(x0,x1,y0,y1,zt,tie,steel));}}
+   const to=db/2+tie/2;   // SFPC: tie centreline outside the bars (as the drawings)
+   for(let k=0;k<=nt;k++){const zt=zc0+k*spc;if(zt>zc1)break;g.add(tieLoop(x0-to,x1+to,y0-to,y1+to,zt,tie,steel));}}
   // dowels: extend from within footing up into pedestal base, count dowelN around perimeter
   const dwd=BAR_DIA[rf.dowelSize||0]/12,dn=rf.dowelN||0;
   if(dwd>0&&dn>0){const per=uniq.slice(0,Math.min(dn,uniq.length));const embFt=Math.min(t*0.6,1.2);const embPed=Math.min(p.h*0.5,1.5);const hL=embFt+embPed;
@@ -5791,7 +5805,7 @@ manPart("p2","2. Input Reference",[
 {h:"2.6 Footing reinforcement"},
 {p:"Bottom and top mats, each direction: bar size and spacing. \u201c\u2014 none\u201d suppresses a mat. Layer stacking order fixes the per-layer d (\u00a70.3.4). Steel is checked against demand and against the 0.0018A<sub>g</sub> shrinkage/temperature minimum \u2014 which, per ACI 318-19 &sect;7.6.1.1, <i>is</i> the minimum-flexural-reinforcement requirement for one-way footing slabs (the 3&radic;f\u2032c/f<sub>y</sub> beam minimum of &sect;9.6.1.2 does not apply)."},
 {h:"2.7 Pedestals"},
-{p:"Each pedestal card: label; plan position (x, y) of its centroid <i>relative to the footing centroid</i>; plan dimensions b<sub>x</sub> &times; b<sub>y</sub>; height h above the footing top; the load table (per mode); and its reinforcement (long. bar size, bars per face n<sub>x</sub>/n<sub>y</sub>, tie size and spacing, cover, dowel size and count)."},
+{p:"Each pedestal card: label; plan position (x, y) of its centroid <i>relative to the footing centroid</i>; plan dimensions b<sub>x</sub> &times; b<sub>y</sub>; height h above the footing top; the load table (per mode); and its reinforcement (long. bar size, bars per face n<sub>x</sub>/n<sub>y</sub>, tie size and spacing, cover, dowel size and count). The pedestal <b>cover</b> is the clear cover to the longitudinal bars: the bar-fit check, the bar layout, the P\u2013M interaction and the drawings all place the bar centres at cover + d<sub>b</sub>/2 from each face, with the ties outside the bars (clear cover to the ties = cover \u2212 d<sub>tie</sub>)."},
 {key:"n<sub>x</sub> and n<sub>y</sub> are the bar counts along each face, counted as a perimeter arrangement (total = 2(n<sub>x</sub>+n<sub>y</sub>)\u22124). A physical <b>bar-fit check</b> (clear spacing \u2265 max(1.5d<sub>b</sub>, 1.5 in), ACI 25.2.3) guards against a mistyped count that would still pass the 1\u20138% \u03c1 limit \u2014 a real incident from this program\u2019s own validation history."},
 {h:"2.8 Defaults on import"},
 {p:"When an exported JSON predates a setting, the importer backfills it: shearCouple \u2192 include; passive fraction \u2192 0; manual print \u2192 off; and every other stab/soil/EV key at its documented default. Existing values are never overwritten."}
