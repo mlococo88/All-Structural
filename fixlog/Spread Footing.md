@@ -3295,3 +3295,37 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 - **Open items (§9):**
   - The axial cap is handled as ratio = P_u/φP_n,max only above the cap. Below it, the radial ratio does not include the cap's flat top. Where P_u is close to φP_n,max, read the axial DCR with it.
   - Slenderness magnification is still not applied (existing "slender" flag).
+
+## 2026-11-01 — PR: claude/sf-phone — Narrow screens: the input and output panels stack (SFPH; layout only, no calculation change) (PR link added after merge)
+
+### SFPH. Stacked layout below 900 px   [UI only]
+- **Problem (engineer, 2026-11-01):** at 390 px the output panel collapsed to zero width. `.main` is a flex row; `.inp{width:33%;min-width:400px}` took the whole row and `.out{flex:1;min-width:0}` got nothing.
+- **Where:** `<style>`, a new block after the `@media screen and (min-width:900px)` block (anchor `SFPH`), and one link at the top of the input panel (anchor `id="sfdJumpOut"`, just before `<div class="main">`).
+- **Before:** no narrow-screen rule. `.main{display:flex;gap:12px;align-items:flex-start}`, `.inp{width:33%;min-width:400px}`.
+- **After:**
+  ```css
+  #sfdJumpOut{display:none;margin:6px 0 10px 0;text-align:center;color:#1c4e80}
+  @media screen and (max-width:899.98px){
+   .wrap{padding:8px 8px}
+   .main{flex-direction:column;align-items:stretch}
+   .inp{width:100%;min-width:0}
+   .out{width:100%;min-width:0}
+   .titleblock{grid-template-columns:repeat(2,minmax(0,1fr))}
+   table.tbl,table.ldtbl{display:block;max-width:100%;overflow-x:auto}
+   .tabpage{overflow-x:auto}
+   .row label{width:min(170px,45%)}
+   #sfdJumpOut{display:block}
+  }
+  ```
+  - The inputs sit above the outputs.
+  - Wide tables (load tables, result tables) and tab pages scroll inside their own box, so the page has no horizontal scroll.
+  - A link above the input panel (outside it, so the input tabs do not hide it), "Jump to the results (dashboard and output tabs) ↓" (`href="#outputPanel"`), shows on narrow screens only.
+  - The breakpoint is the same 900 px as the existing two-panel rule, so ≥ 900 px is untouched.
+- **How verified (headless Chromium):**
+  - At 1280, 1366 and 900 px the input and output panel rectangles are identical to origin/main.
+  - At 390 and 768 px the panels are stacked (inputs above outputs, both full width).
+  - `document.scrollWidth` ≤ the viewport on every output tab (10) and every input tab (8).
+  - The jump link brings the output panel to the top. It is hidden at 1280. 0 console errors.
+  - `R`, `P2`, dashboard, warnings, consistency, state and storage are identical on 3 projects (layout only).
+  - `tests/smoke/spread-footing-scroll.mjs` passes (it includes the below-900 check).
+  - Screenshots at 390, 768 and 1280.
