@@ -2744,3 +2744,28 @@ Engineer's request: "Each module should allow me to enter forces directly ... I 
 - See the PR (tests, Playwright at 1280 and 390 px).
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: claude/sbd-scroll — scroll check: the Spread Footing "won't let me scroll up" bug (SFSC) is not present here; regression test added (SBSC; test only, no change to the app)
+
+### What was checked
+- Spread Footing (PR #524, fixlog SFSC in `fixlog/Spread Footing.md`): with `html,body{overflow:hidden}` and two scrolling panels, KaTeX's hidden
+  `span.katex-mathml` (`position:absolute`) escaped the unpositioned panels and made the document taller than the window, so `scrollIntoView` /
+  `focus()` / link jumps scrolled the page itself and it could not be scrolled back.
+- `apps/steel-bridge/index.html` has the same frame (`html,body{overflow:hidden}` at ≥ 900 px, `#inputPanel` and `#outputPanel` with `overflow-y:auto`),
+  but both panels are already `position:relative` (anchor `#inputPanel{flex:0 0 33%;…overflow-y:auto;position:relative;` and
+  `#outputPanel{flex:1 1 67%;…overflow-y:auto;position:relative;`), so they contain and clip the MathML spans. Measured with the real KaTeX 0.16.9 and
+  three.js r128 (tests/libs): on every output tab, calculated, with the Report built, the document is exactly the window height (overflow 0 px) and its
+  scroll stays 0 after every scripted scroll.
+- Proof the test catches the bug: a scratch copy with `position:relative` removed from both panels fails it (the Section properties tab 576 px taller than
+  the window; a "see work" link scrolls the page 282 px with the header off screen and not recoverable by the wheel; Constructibility 2147 px, …).
+
+### Change
+- New `tests/smoke/steel-bridge-scroll.mjs` (no app file changed). Headless Chromium, `file://`, 1280×800, 1366×768, 1920×1080: every output tab
+  (calculated with its own button, Report built), every input tab, up to two of each kind of script-scrolling link on every tab (grouped-steps "see §" /
+  "see work", the step links of Fatigue, Cross-frames, Rating, Welds, Shear, Auto design and Drawings, input-tab and output-tab links, Report "see §" and
+  contents links), `scrollIntoView` of the panel bottom and of the last report step, `focus()` on the last input, `window.scrollTo(0,400)`, a 3D canvas
+  drag, touch swipes; the document stays at 0, the panels wheel back to 0 with the header on screen; below 900 px the page still scrolls.
+- Saved data: none. Calculations: none.
+
+### Other copies
+- None.
