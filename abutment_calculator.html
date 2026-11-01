@@ -20,6 +20,9 @@
 <script src="https://unpkg.com/three@0.128.0/build/three.min.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+<!-- ABRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<script src="shared/steps.js"></script>
+<script src="shared/report.js"></script>
 <style>
 /* ================= GLOBAL / THEME ================= */
 :root{
@@ -5995,13 +5998,17 @@ const TABS=[["tab-loads","1 · Geometry & Loads"],["tab-comb","2 · Load Combina
   ["tab-stab","3 · External Stability"],["tab-found","4 · Foundation / Piles"],["tab-struct","5 · Structural Design"],
   ["tab-vm","6 · V &amp; M Diagrams"],["tab-3d","7 · 3D View"],["tab-tables","8 · Detailed Tables"],["tab-wing","9 · Wingwalls"],["tab-iab","10 · Integral / Semi-integral"]];
 function buildTabs(){
+  ABRP.on=false;   /* ABRP: a rebuilt tab bar shows the saved tab */
   document.getElementById("tabbar").innerHTML=TABS.map(([id,l])=>
-    `<div class="tab${S.ui.tab===id?" active":""}" data-tab="${id}">${l}</div>`).join("");
+    `<div class="tab${S.ui.tab===id?" active":""}" data-tab="${id}">${l}</div>`).join("")
+    +`<div class="tab" data-tab="tab-rpt" title="Calculation report: worked steps, navigation, print">Report</div>`;   /* ABRP: Report tab (not in TABS) */
   document.getElementById("tabpages").innerHTML=TABS.map(([id])=>
-    `<div class="tabpage${S.ui.tab===id?" active":""}" id="${id}"></div>`).join("");
+    `<div class="tabpage${S.ui.tab===id?" active":""}" id="${id}"></div>`).join("")+`<div class="tabpage" id="tab-rpt"></div>`;
   document.querySelectorAll("#tabbar .tab").forEach(t=>t.addEventListener("click",()=>activateTab(t.dataset.tab)));
 }
 function activateTab(id){
+  if(id==="tab-rpt"){ abrShow(); return; }   /* ABRP: the Report tab is shown on top of the saved tab and never stored in S.ui.tab */
+  ABRP.on=false;
   S.ui.tab=id; scheduleSave();
   document.querySelectorAll("#tabbar .tab").forEach(t=>t.classList.toggle("active",t.dataset.tab===id));
   document.querySelectorAll(".tabpage").forEach(p=>p.classList.toggle("active",p.id===id));
@@ -9154,6 +9161,291 @@ function addCsvButtons(container){
 </script>
 
 <script>
+/* ================= Report tab (ABRP, 2026-11-01) =================
+   The calculation report in the shared viewer (shared/report.js: navigation tree, numbered sections §n.m, collapse /
+   expand, search, Print with a title block, running header and page numbers). Worked steps are shared/steps.js steps
+   (equation -> substituted values -> result), grouped by topic with SharedSteps.group. Every value shown is a value the
+   tool has already computed (window.LAST_R = computeAll(): R.checks, R.EH, R.LS, R.EV, R.passive, R.wing, R.iab, the
+   dashboard R.dash); only the substitution strings are formatted here. Every dashboard check is in the report: the
+   families below are worked step by step, and any other check (pile structural, punching, dowels, seismic cases, wing
+   reinforcement and stability, integral piles, approach-slab shelf) is given with its D/C, its governing case and a link
+   to the tab panel where it is worked in full. Sections follow the abutment type (conventional, semi-integral,
+   integral) and the foundation (spread, piles). Nothing is saved: the Report tab is not stored in S.ui.tab (ABRP.on,
+   memory only) and the report is rebuilt from LAST_R whenever the tab is shown or the inputs change. */
+const ABRP={on:false,closed:new Set(),api:null,doc:null};
+const abrN=(x,d)=>SharedSteps.n(+x,d==null?2:d);
+const abrP=(x,d)=>(+x<0)?"("+abrN(x,d)+")":abrN(x,d);   // a negative value in parentheses inside a substitution
+const abrPlain=s=>String(s==null?"":s).replace(/<sub>(.*?)<\/sub>/g,"_$1").replace(/<sup>(.*?)<\/sup>/g,"^$1").replace(/<br\s*\/?>/g,"; ").replace(/<[^>]+>/g,"")
+  .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;/g,"'").replace(/&middot;/g,"·").replace(/&nbsp;/g," ").replace(/&amp;/g,"&");
+const abrCell=(v,d)=>({t:(typeof v==="number"&&isFinite(v))?abrN(v,d):String(v==null||v===""?"—":v),n:typeof v==="number"});
+const ABR_AA="AASHTO LRFD 10th Ed. ";
+const ABR_TABTXT={"tab-loads":"Tab 1, Geometry & Loads","tab-comb":"Tab 2, Load Combinations","tab-stab":"Tab 3, External Stability","tab-found":"Tab 4, Foundation / Piles",
+  "tab-struct":"Tab 5, Structural Design","tab-wing":"Tab 9, Wingwalls","tab-iab":"Tab 10, Integral / Semi-integral"};
+/* a link back to a tab (and panel): the text reads in print, the link itself shows on screen only */
+const abrTab=(tab,cid)=>(ABR_TABTXT[tab]||tab)+" [[tab:"+tab+(cid?"~"+cid:"")+"|open]]";
+/* a steps item whose steps are grouped in topics (one topic per list entry, in order) */
+function abrTopics(scope,list,opt){
+  const L=list.filter(t=>t.w.steps.length), steps=[].concat(...L.map(t=>t.w.steps));
+  const topics=L.map(t=>{ const g=SharedSteps.group(t.w.steps,[{key:"k",title:t.title,ref:t.ref,ids:()=>true}],{strip:false})[0];
+    return {title:t.title,ref:t.ref||"",n:t.w.steps.length,cls:g.cls,chip:g.chip,res:g.res}; });
+  return Object.assign({type:"steps",scope,steps,topics},opt||{});
+}
+function abrModel(){
+  const R=window.LAST_R, P=S.proj||{}, g=S.geom, m=S.mat, fn=S.fnd, IT=iabType(), RT=abutRptType(R), DS=dashStatus(R);
+  const B=R.geo.B, Lab=+g.Lab, Lftg=(+g.Lftg||g.Lab), gam=+S.soil.gamma, fc=+m.fc, fy=+m.fy;
+  const dash=id=>R.dash.find(d=>d.id===id), has=id=>!!dash(id);
+  const KEY={}, secs=[];
+  /* the D/C step of dashboard item id: value, OK / NG and governing case are the dashboard's */
+  const dcStep=(w,scope,id,label,eq,sub,ref,note)=>{ const d=dash(id); if(!d) return; KEY[id]=scope+"/"+w.key+".dc."+id;
+    const o={id:"dc."+id,label,sym:"D/C",eq:eq||"",sub:sub||"",unit:"",d:3,ref:ref||"",note:[d.gov,note].filter(Boolean).join("; ")};
+    if(d.txt||!isFinite(d.dc)){ o.value=d.txt||"∞"; o.sym=""; o.eq=""; o.sub=""; }
+    else o.value=d.dc;
+    if(d.pass!==null) o.ok=d.pass; else o.note=(o.note?o.note+"; ":"")+"information, not a pass / fail check";
+    w.add(o); };
+  const topic=(list,key,title,ref)=>{ const w=SharedSteps.work(key); w.key=key; list.push({title,ref,w}); return w; };
+  const refOf=d=>{ const q=/\[([^\]]+)\]\s*$/.exec(d.name); return q?(/^[\dC]/.test(q[1])?ABR_AA+"Art. "+q[1]:q[1]):""; };
+  /* ---------- a reinforced-concrete section (sectionCheck result c): flexure, shear, minimum steel, crack control ---------- */
+  function secTopics(T,scope,key,c,ids,title,tab){
+    const bar=BARS[c.bar]||{Ab:NaN,db:NaN}, lbl=c.lbl||"";
+    let w=topic(T,key+"F",title+": flexure",ABR_AA+"Art. 5.6.3");
+    w.add({id:"As",label:"Steel area per foot, #"+c.bar+" at "+abrN(c.sp,1)+" in",sym:"A_{s}",eq:"\\frac{12\\,A_{b}}{s}",sub:"\\frac{12\\cdot "+abrN(bar.Ab)+"}{"+abrN(c.sp,1)+"}",value:c.As,unit:"in^{2}/ft",d:3});
+    w.add({id:"d",label:"Effective depth",sym:"d",eq:"h \\minus c \\minus \\frac{d_{b}}{2}",sub:abrN(c.hE,1)+" \\minus "+abrN(c.cvE)+" \\minus \\frac{"+abrN(bar.db,3)+"}{2}",value:c.d,unit:"in",d:2});
+    w.add({id:"a",label:"Depth of the compression block",sym:"a",eq:"\\frac{A_{s} f_{y}}{0.85 f^{\\prime}_{c} b}",sub:"\\frac{"+abrN(c.As,3)+"\\cdot "+abrN(fy,1)+"}{0.85\\cdot "+abrN(fc,1)+"\\cdot 12}",value:c.a,unit:"in",d:3});
+    w.add({id:"et",label:"Net tensile strain (c = a/β_1, β_1 = "+abrN(c.beta1,3)+")",sym:"\\epsilon_{t}",eq:"0.003\\frac{d \\minus c}{c}",sub:"0.003\\frac{"+abrN(c.d)+" \\minus "+abrN(c.c,3)+"}{"+abrN(c.c,3)+"}",value:c.epsT,unit:"",d:4,ref:ABR_AA+"Art. 5.6.2.1"});
+    w.add({id:"phi",label:c.tensionCtrl?"Resistance factor, tension-controlled":"Resistance factor, transition (ε_cl = "+abrN(c.eCl,4)+", ε_tl = "+abrN(c.eTl,4)+")",sym:"\\phi_{f}",eq:"",sub:"",value:c.phiF,unit:"",d:3,ref:ABR_AA+"Art. 5.5.4.2"});
+    w.add({id:"Mn",label:"Factored flexural resistance",sym:"\\phi M_{n}",eq:"\\phi_{f} A_{s} f_{y}\\left(d \\minus \\frac{a}{2}\\right)/12",sub:abrN(c.phiF,3)+"\\cdot "+abrN(c.As,3)+"\\cdot "+abrN(fy,1)+"\\left("+abrN(c.d)+" \\minus \\frac{"+abrN(c.a,3)+"}{2}\\right)/12",value:c.phiMn,unit:"kip-ft/ft",d:2,ref:ABR_AA+"Art. 5.6.3.2"});
+    w.add({id:"Mu",label:"Factored moment"+(lbl?" ("+lbl+")":""),sym:"M_{u}",eq:"",sub:"",value:c.Mu,unit:"kip-ft/ft",d:2});
+    dcStep(w,scope,ids.F,"Flexure","\\frac{M_{u}}{\\phi M_{n}}","\\frac{"+abrN(c.Mu)+"}{"+abrN(c.phiMn)+"}",ABR_AA+"Art. 5.6.3");
+    if(ids.V){ w=topic(T,key+"V",title+": shear",ABR_AA+"Art. 5.7.3.3");
+      w.add({id:"dv",label:"Effective shear depth",sym:"d_{v}",eq:"\\max(0.9\\,d,\\,0.72\\,h)",sub:"\\max(0.9\\cdot "+abrN(c.d)+",\\,0.72\\cdot "+abrN(c.hE,1)+")",value:c.dv,unit:"in",d:2,ref:ABR_AA+"Art. 5.7.2.8"});
+      if(c.betaMode==="general") w.add({id:"beta",label:"β, general procedure (s_xe = "+abrN(c.sxe,1)+" in, ε_s = "+abrN(c.epsS,5)+")",sym:"\\beta",eq:"\\frac{4.8}{1 + 750\\,\\epsilon_{s}}\\cdot\\frac{51}{39 + s_{xe}}",sub:"\\frac{4.8}{1 + 750\\cdot "+abrN(c.epsS,5)+"}\\cdot\\frac{51}{39 + "+abrN(c.sxe,1)+"}",value:c.betaV,unit:"",d:3,ref:ABR_AA+"Eq. 5.7.3.4.2-2"});
+      else w.add({id:"beta",label:"β, simplified procedure",sym:"\\beta",eq:"",sub:"",value:c.betaV,unit:"",d:2,ref:ABR_AA+"Art. 5.7.3.4.1"});
+      w.add({id:"Vc",label:"Concrete shear resistance",sym:"V_{c}",eq:"0.0316\\,\\beta\\sqrt{f^{\\prime}_{c}}\\,b\\,d_{v}",sub:"0.0316\\cdot "+abrN(c.betaV,3)+"\\sqrt{"+abrN(fc,1)+"}\\cdot 12\\cdot "+abrN(c.dv),value:c.Vc,unit:"kip/ft",d:2,ref:ABR_AA+"Eq. 5.7.3.3-3"});
+      w.add({id:"Vn",label:"Factored shear resistance (φ_v = 0.90)",sym:"\\phi V_{n}",eq:"0.9\\,V_{c}",sub:"0.9\\cdot "+abrN(c.Vc),value:c.phiVn,unit:"kip/ft",d:2});
+      w.add({id:"Vu",label:"Factored shear",sym:"V_{u}",eq:"",sub:"",value:c.Vu,unit:"kip/ft",d:2});
+      dcStep(w,scope,ids.V,"Shear","\\frac{V_{u}}{\\phi V_{n}}","\\frac{"+abrN(c.Vu)+"}{"+abrN(c.phiVn)+"}",ABR_AA+"Art. 5.7.3"); }
+    if(ids.Min){ w=topic(T,key+"Min",title+": minimum reinforcement",ABR_AA+"Art. 5.6.3.3");
+      w.add({id:"Mcr",label:"Cracking moment (γ_1 = 1.6, γ_3 = "+abrN(c.gam3,2)+", f_r = "+abrN(R.matDer.fr,3)+" ksi, S_c = b h²/6)",sym:"M_{cr}",eq:"\\gamma_{3}\\,\\gamma_{1} f_{r} S_{c}/12",sub:abrN(c.gam3,2)+"\\cdot 1.6\\cdot "+abrN(R.matDer.fr,3)+"\\cdot "+abrN(c.Sc,0)+"/12",value:c.Mcr,unit:"kip-ft/ft",d:2,ref:ABR_AA+"Eq. 5.6.3.3-1"});
+      w.add({id:"MuMin",label:"Moment the minimum steel must resist",sym:"M_{u,min}",eq:"\\min(M_{cr},\\,1.33\\,M_{u})",sub:"\\min("+abrN(c.Mcr)+",\\,1.33\\cdot "+abrN(c.Mu)+")",value:c.MuMin,unit:"kip-ft/ft",d:2});
+      dcStep(w,scope,ids.Min,"Minimum reinforcement","\\frac{M_{u,min}}{\\phi M_{n}}","\\frac{"+abrN(c.MuMin)+"}{"+abrN(c.phiMn)+"}",ABR_AA+"Art. 5.6.3.3"); }
+    if(ids.Crack){ w=topic(T,key+"Cr",title+": crack control",ABR_AA+"Art. 5.6.7");
+      w.add({id:"fss",label:"Service steel stress (j = "+abrN(c.j,3)+", M_s = "+abrN(c.Ms)+" kip-ft/ft), at most 0.6 f_y",sym:"f_{ss}",eq:"\\frac{12\\,M_{s}}{A_{s}\\,j\\,d}",sub:"\\frac{12\\cdot "+abrN(c.Ms)+"}{"+abrN(c.As,3)+"\\cdot "+abrN(c.j,3)+"\\cdot "+abrN(c.d)+"}",value:c.fss,unit:"ksi",d:2});
+      w.add({id:"bs",label:"Ratio of flexural strain at the tension face",sym:"\\beta_{s}",eq:"1 + \\frac{d_{c}}{0.7(h \\minus d_{c})}",sub:"1 + \\frac{"+abrN(c.dcBar,3)+"}{0.7("+abrN(c.hE,1)+" \\minus "+abrN(c.dcBar,3)+")}",value:c.betaS,unit:"",d:3});
+      if(c.fss>0) w.add({id:"smax",label:"Largest spacing (γ_e = "+abrN(c.gE,2)+")",sym:"s_{max}",eq:"\\frac{700\\,\\gamma_{e}}{\\beta_{s} f_{ss}} \\minus 2 d_{c}",sub:"\\frac{700\\cdot "+abrN(c.gE,2)+"}{"+abrN(c.betaS,3)+"\\cdot "+abrN(c.fss)+"} \\minus 2\\cdot "+abrN(c.dcBar,3),value:c.sMax,unit:"in",d:2,ref:ABR_AA+"Eq. 5.6.7-1"});
+      dcStep(w,scope,ids.Crack,"Crack control: s ≤ s_max",c.fss>0?"\\frac{s}{s_{max}}":"",c.fss>0?"\\frac{"+abrN(c.sp,1)+"}{"+abrN(c.sMax)+"}":"",ABR_AA+"Art. 5.6.7"); }
+    return w;
+  }
+  /* ---------- 1. Design summary (filled at the end, when every check's step key is known) ---------- */
+  const sumIdx=secs.length; secs.push(null);
+  /* ---------- 2. Project and inputs ---------- */
+  {
+    const subs=[], own=abutOwner();
+    subs.push({title:"Project",items:[{type:"kv",rows:[["Project",P.name||"—"],["Project number",P.num||"—"],["Calculated by",(P.calcBy||"—")+(P.date?", "+P.date:"")],["Checked by",(P.chkBy||"—")+(P.chkDate?", "+P.chkDate:"")],
+      ["Abutment",RT.cover],["Owner",own==="AASHTO"?"AASHTO LRFD 10th Ed. (2024), no owner rules":ABUT_OWN.owners[own].manual+" (written to AASHTO LRFD "+ABUT_OWN.owners[own].aashto+"), rules on top of AASHTO LRFD 10th Ed. (2024)"],
+      ["Input ID",R.fingerprint||"—"]]},
+      {type:"note",text:"Units: kip, ft, ksf, ksi unless noted; wall and footing actions per foot of wall (kip/ft, kip-ft/ft) where stated. Every value in this report is the value the tool computes on its tabs (Tabs 1 to 10)."}]});
+    const gr=[["Footing: toe L_toe / heel L_heel / thickness t_f",abrN(g.Ltoe)+" / "+abrN(g.Lheel)+" / "+abrN(g.tf),"ft"],["Footing width B = L_toe + t_sb + L_heel",abrCell(B),"ft"],
+      ["Stem: height h_stem / top t_st / bottom t_sb",abrN(g.hstem)+" / "+abrN(g.tst)+" / "+abrN(g.tsb),"ft"],["Backwall: height h_bw / thickness t_bw",abrN(g.hbw)+" / "+abrN(g.tbw),"ft"],
+      ["Bearing setback from the backwall front face",abrCell(+g.brgSetback),"ft"],["Wall length L_ab / footing length L_ftg",abrN(Lab)+" / "+abrN(Lftg),"ft"],
+      ["Soil height over the heel / backfill slope β",abrN(g.soilH)+" ft / "+abrN(+g.beta||0,1)+"°",""],["Water table above the footing base h_w",abrCell(+g.hw||0),"ft"],
+      ["Span length / skew",abrN(g.spanL,1)+" ft / "+abrN(+g.skew||0,1)+"°",""],["Retained height at the heel H",abrCell(R.geo.H),"ft"]];
+    subs.push({title:"Geometry",items:[{type:"table",head:["Quantity","Value","Unit"],rows:gr},{type:"note",text:"Entered on the input tabs; derived values as on "+abrTab("tab-loads")+"."}]});
+    const mr=[["Concrete f′c / unit weight γ_c",abrN(fc,1)+" ksi / "+abrN(m.gc,3)+" kcf",""],["Reinforcement f_y ("+(m.rebar||"A615")+")",abrCell(fy,1),"ksi"],["Cover: footing / walls",abrN(m.coverF,2)+" / "+abrN(m.coverT,2),"in"],
+      ["Backfill γ / φ",abrN(gam,3)+" kcf / "+abrN(S.soil.phi,1)+"°",""],["Earth pressure method / state",(S.soil.method||"rankine")+" / "+(R.Ksel?R.Ksel.eff:"—"),""],
+      ["Foundation",fn.branch==="pile"?"pile-supported":"spread footing on "+fn.matl,""]];
+    if(fn.branch==="spread") mr.push(["φ_b / φ_τ / φ_ep",abrN(fn.phiB)+" / "+abrN(fn.phiTau)+" / "+abrN(fn.phiEP),""],["Nominal bearing resistance q_n",fn.qnMode==="soil"&&fn.matl==="soil"?"computed per 10.6.3.1.2a":abrN(fn.qn,2)+" ksf",""]);
+    else mr.push(["Pile nominal axial R_n / φ_c",abrN(S.piles.Rn,1)+" kip / "+abrN(S.piles.phiC),""]);
+    subs.push({title:"Materials, soil and foundation",items:[{type:"table",head:["Quantity","Value","Unit"],rows:mr}]});
+    const ov=R.overrides||[];
+    subs.push({title:"Constants modified from defaults",items:ov.length?[{type:"table",head:["Constant","Default","In use"],rows:ov.map(o=>({cells:[abrPlain(o.label),abrCell(o.def),abrCell(o.cur)],cls:"gov"}))}]
+      :[{type:"note",text:"All load factors, resistance factors, eccentricity limits and h_eq table values match their AASHTO / tool defaults: no overrides in effect."}]});
+    secs.push({title:"Project and inputs",subs});
+  }
+  /* ---------- 3. Loads (conventional and semi-integral: the lower abutment model) ---------- */
+  if(IT!=="integral"){
+    const T=[], E=R.EH, K=R.Ksel, Lw=R.LS, gamB=gam-GAMMA_W;
+    let w=topic(T,"K","Earth pressure coefficient",ABR_AA+"Art. 3.11.5");
+    w.add({id:"K",label:"Coefficient used ("+K.eff+(K.mode!==K.eff?", rule "+K.mode:"")+"; K_a = "+abrN(K.Ka,4)+", K_0 = 1 − sin φ = "+abrN(K.K0,4)+")",sym:"K",eq:"",sub:"",value:R.ka,unit:"",d:4,ref:ABR_AA+"Art. 3.11.5.2 / 3.11.5.3",note:"inclination ι = "+abrN(R.iota,2)+"°"});
+    w=topic(T,"EH","Horizontal earth pressure EH on the virtual back plane",ABR_AA+"Art. 3.11.5");
+    w.add({id:"P1",label:"Moist layer above the water table (d_1 = "+abrN(E.d1)+" ft)",sym:"P_{1}",eq:"\\frac{1}{2} K\\,\\gamma\\,d_{1}^{2}",sub:"\\frac{1}{2}\\cdot "+abrN(R.ka,4)+"\\cdot "+abrN(gam,3)+"\\cdot "+abrN(E.d1)+"^{2}",value:E.P1,unit:"kip/ft",d:3});
+    if(E.hwE>0){ w.add({id:"P2",label:"Overburden on the submerged layer (h_w = "+abrN(E.hwE)+" ft)",sym:"P_{2}",eq:"K\\,\\gamma\\,d_{1} h_{w}",sub:abrN(R.ka,4)+"\\cdot "+abrN(gam,3)+"\\cdot "+abrN(E.d1)+"\\cdot "+abrN(E.hwE),value:E.P2,unit:"kip/ft",d:3});
+      w.add({id:"P3",label:"Submerged layer (buoyant γ′)",sym:"P_{3}",eq:"\\frac{1}{2} K\\,\\gamma^{\\prime} h_{w}^{2}",sub:"\\frac{1}{2}\\cdot "+abrN(R.ka,4)+"\\cdot "+abrN(gamB,4)+"\\cdot "+abrN(E.hwE)+"^{2}",value:E.P3,unit:"kip/ft",d:3}); }
+    w.add({id:"Pf",label:"Resultant over the retained height H = "+abrN(R.geo.H)+" ft",sym:"P_{a}",eq:E.hwE>0?"P_{1} + P_{2} + P_{3}":"P_{1}",sub:E.hwE>0?abrN(E.P1,3)+" + "+abrN(E.P2,3)+" + "+abrN(E.P3,3):abrN(E.P1,3),value:E.PaFull,unit:"kip/ft",d:3});
+    if(E.hCut>0) w.add({id:"Pa",label:"Semi-integral: pressure above the seat (h = "+abrN(E.hCut)+" ft) goes to the end diaphragm",sym:"P_{a,low}",eq:"P_{a} \\minus P_{cut}",sub:abrN(E.PaFull,3)+" \\minus "+abrN(E.Pcut,3),value:E.PaSum,unit:"kip/ft",d:3});
+    w.add({id:"EHh",label:"Horizontal component on the wall length L_ab (at z = "+abrN(E.zEH)+" ft above the base)",sym:"EH_{h}",eq:"P_{a}\\cos\\iota\\,L_{ab}",sub:abrN(E.PaSum,3)+"\\cdot "+abrN(E.ci,4)+"\\cdot "+abrN(Lab),value:E.EHh,unit:"kip",d:1});
+    if(Math.abs(E.EHv)>1e-9) w.add({id:"EHv",label:"Vertical component",sym:"EH_{v}",eq:"P_{a}\\sin\\iota\\,L_{ab}",sub:abrN(E.PaSum,3)+"\\cdot "+abrN(E.si,4)+"\\cdot "+abrN(Lab),value:E.EHv,unit:"kip",d:1});
+    w=topic(T,"LS","Live-load surcharge LS",ABR_AA+"Art. 3.11.6.4");
+    w.add({id:"heq",label:Lw.lsRem?"Equivalent height of soil (removed: approach slab, final condition)":"Equivalent height of soil (Table 3.11.6.4-1, by H)",sym:"h_{eq}",eq:"",sub:"",value:Lw.heq,unit:"ft",d:2,ref:ABR_AA+"Table 3.11.6.4-1"});
+    w.add({id:"p",label:"Surcharge pressure",sym:"p_{LS}",eq:"K\\,\\gamma\\,h_{eq}",sub:abrN(R.ka,4)+"\\cdot "+abrN(gam,3)+"\\cdot "+abrN(Lw.heq),value:Lw.pLS,unit:"ksf",d:4,ref:ABR_AA+"Eq. 3.11.6.4-1"});
+    w.add({id:"h",label:"Horizontal resultant on L_ab",sym:"LS_{h}",eq:"p_{LS}\\,H_{LS}\\cos\\iota\\,L_{ab}",sub:abrN(Lw.pLS,4)+"\\cdot "+abrN(E.hCut>0?Lw.hLS:R.geo.H)+"\\cdot "+abrN(E.ci,4)+"\\cdot "+abrN(Lab),value:Lw.LSh,unit:"kip",d:1});
+    w.add({id:"v",label:"Vertical surcharge over the heel",sym:"LS_{v}",eq:"\\gamma\\,h_{eq} L_{heel} L_{ab}",sub:abrN(gam,3)+"\\cdot "+abrN(Lw.heq)+"\\cdot "+abrN(g.Lheel)+"\\cdot "+abrN(Lab),value:Lw.LSvW,unit:"kip",d:1});
+    w=topic(T,"EV","Vertical earth load EV over the heel",ABR_AA+"Art. 3.5.1");
+    w.add({id:"W",label:"Soil over the heel (moist "+abrN(R.EV.dry)+" ft, submerged "+abrN(R.EV.sub)+" ft)"+(R.EV.Wwedge>0?" + sloping-backfill wedge":""),sym:"EV",eq:"(\\gamma\\,h_{dry} + \\gamma^{\\prime} h_{sub}) L_{heel} L_{ab}"+(R.EV.Wwedge>0?" + W_{wedge}":""),
+      sub:"("+abrN(gam,3)+"\\cdot "+abrN(R.EV.dry)+" + "+abrN(gamB,4)+"\\cdot "+abrN(R.EV.sub)+")\\cdot "+abrN(g.Lheel)+"\\cdot "+abrN(Lab)+(R.EV.Wwedge>0?" + "+abrN(R.EV.Wwedge,1):""),value:R.EV.W,unit:"kip",d:1});
+    if(R.passive&&R.passive.on){ const pv=R.passive, De=Math.max(0,(+fn.Df||0)-Math.max(0,+fn.dNeg||0));
+      w=topic(T,"Pp","Passive resistance at the toe (sliding only)",ABR_AA+"Art. 10.6.3.4");
+      w.add({id:"kp",label:"Rankine passive coefficient",sym:"k_{p}",eq:"\\tan^{2}(45 + \\phi_{f}/2)",sub:"\\tan^{2}(45 + "+abrN(fn.phiF,1)+"/2)",value:pv.kp,unit:"",d:3});
+      w.add({id:"Pp",label:"Passive force on the footing front (D_e = D_f − d_n = "+abrN(De)+" ft)",sym:"P_{p}",eq:"\\frac{1}{2} k_{p}\\gamma_{f} D_{e}^{2} L_{ftg}",sub:"\\frac{1}{2}\\cdot "+abrN(pv.kp,3)+"\\cdot "+abrN(fn.gammaF,3)+"\\cdot "+abrN(De)+"^{2}\\cdot "+abrN(Lftg),value:pv.Pp,unit:"kip",d:1}); }
+    const parts=R.parts||[];
+    const subs=[{title:"Self-weight of the abutment",items:[{type:"table",head:["Part","Basis","W (kip)","x from toe (ft)"],rows:parts.map(p=>[p.name,p.note||"",abrCell(p.W,1),abrCell(p.x)]).concat([[{t:"Total DC (substructure)"},"",abrCell(parts.reduce((a,p)=>a+p.W,0),1),""]])}]},
+      {title:"Earth pressure, surcharge and soil weight",items:[abrTopics("ld",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab("tab-loads")+". The load combinations, every γ_p permutation and the governing case of each check are on "+abrTab("tab-comb")+"; the governing case is named with each check below."}]}];
+    if(R.seis&&!R.seis.single){ const q=R.seis;
+      subs.push({title:"Seismic earth pressure and inertia (Extreme Event I)",items:[{type:"table",head:["Quantity","Value"],rows:[["k_h / k_v",abrN(q.kh,3)+" / "+abrN(q.kv,3)],["Seismic earth pressure coefficient K_AE",abrN(q.KAE,4)],
+        ["P_AE (kip/ft) / increment ΔP_AE,h (kip/ft)",abrN(q.PAE,3)+" / "+abrN(q.dPAEh,3)],["Wall inertia W_i (kip)",abrN(q.WiW,1)]]},{type:"note",text:"Mononobe–Okabe, AASHTO LRFD 10th Ed. Art. 11.6.5 and Appendix A11; worked on "+abrTab("tab-loads")+"."}]}); }
+    secs.push({title:"Loads",subs});
+  }
+  /* ---------- 4. External stability / foundation (lower abutment) ---------- */
+  if(IT!=="integral"){
+    const T=[], C=R.checks, subs=[];
+    if(fn.branch==="spread"&&C.sliding&&C.sliding.dc>=0){
+      const sl=C.sliding; let w=topic(T,"sl","Sliding",ABR_AA+"Art. 10.6.3.4");
+      w.add({id:"V",label:"Factored vertical load ("+sl.ls+": "+abrPlain(sl.lbl)+")",sym:"V",eq:"",sub:"",value:sl.V,unit:"kip",d:1});
+      if(fn.matl==="soil") w.add({id:"Rn",label:"Nominal sliding resistance, soil (δ_base = "+abrN(fn.deltaB,1)+"°)",sym:"R_{\\tau}",eq:"V\\tan\\delta_{base}",sub:abrN(sl.V,1)+"\\tan "+abrN(fn.deltaB,1)+"^{\\circ}",value:sl.Rn,unit:"kip",d:1,ref:ABR_AA+"Eq. 10.6.3.4-2"});
+      else w.add({id:"Rn",label:"Nominal sliding resistance, rock",sym:"R_{\\tau}",eq:"V\\mu + c_{a} B L_{ftg}",sub:abrN(sl.V,1)+"\\cdot "+abrN(fn.muRock)+" + "+abrN(fn.caRock)+"\\cdot "+abrN(B)+"\\cdot "+abrN(Lftg),value:sl.Rn,unit:"kip",d:1});
+      w.add({id:"RR",label:"Factored resistance"+(sl.pUsed?" with passive":""),sym:"R_{R}",eq:sl.pUsed?"\\phi_{\\tau} R_{\\tau} + \\phi_{ep} P_{p}":"\\phi_{\\tau} R_{\\tau}",sub:sl.pUsed?abrN(sl.phiTau)+"\\cdot "+abrN(sl.Rn,1)+" + "+abrN(fn.phiEP)+"\\cdot "+abrN(R.passive.Pp,1):abrN(sl.phiTau)+"\\cdot "+abrN(sl.Rn,1),value:sl.RR,unit:"kip",d:1,ref:ABR_AA+"Eq. 10.6.3.4-1"});
+      w.add({id:"H",label:"Factored horizontal load",sym:"H_{x}",eq:"",sub:"",value:sl.D,unit:"kip",d:1});
+      w.add({id:"dx",label:"Ratio along the abutment axis",sym:"\\frac{H_{x}}{R_{R}}",eq:"",sub:"\\frac{"+abrN(sl.D,1)+"}{"+abrN(sl.RR,1)+"}",value:sl.dcX,unit:"",d:3});
+      if(sl.Hy>0) w.add({id:"dv",label:"Ratio with the transverse force H_y = "+abrN(sl.Hy,1)+" kip (resultant on the base friction)",sym:"\\frac{\\sqrt{H_{x,net}^{2} + H_{y}^{2}}}{\\phi_{\\tau} R_{\\tau}}",eq:"",sub:"\\frac{\\sqrt{"+abrN(sl.HxN,1)+"^{2} + "+abrN(sl.Hy,1)+"^{2}}}{"+abrN(sl.phiTau)+"\\cdot "+abrN(sl.Rn,1)+"}",value:sl.dcV,unit:"",d:3});
+      dcStep(w,"st","sliding","Sliding (the larger ratio)","","",ABR_AA+"Art. 10.6.3.4");
+      const ec=C.ecc; w=topic(T,"ec","Eccentricity",ABR_AA+"Art. 11.6.3.3");
+      w.add({id:"x",label:"Location of the resultant from the toe ("+ec.ls+": "+abrPlain(ec.lbl)+")",sym:"\\bar{x}",eq:"\\frac{M_{v} \\minus M_{h}}{V}",sub:"\\frac{"+abrN(ec.Mv,1)+" \\minus "+abrN(ec.Mh,1)+"}{"+abrN(ec.V,1)+"}",value:ec.xbar,unit:"ft",d:3});
+      w.add({id:"e",label:"Eccentricity about the footing centre (toward the "+ec.side+")",sym:"e",eq:"\\left|\\frac{B}{2} \\minus \\bar{x}\\right|",sub:"\\left|\\frac{"+abrN(B)+"}{2} \\minus "+abrN(ec.xbar,3)+"\\right|",value:ec.e,unit:"ft",d:3});
+      w.add({id:"lim",label:"Limit",sym:"e_{lim}",eq:"f\\,B",sub:abrN(ec.eLim/B,4)+"\\cdot "+abrN(B),value:ec.eLim,unit:"ft",d:3});
+      w.add({id:"rB",label:"Ratio across the footing",sym:"\\frac{e}{e_{lim}}",eq:"",sub:"\\frac{"+abrN(ec.e,3)+"}{"+abrN(ec.eLim,3)+"}",value:ec.dcB,unit:"",d:3});
+      if(ec.eL>1e-9) w.add({id:"rL",label:"Ratio along the footing length (e_L = |M_t|/V)",sym:"\\frac{e_{L}}{e_{lim,L}}",eq:"",sub:"\\frac{"+abrN(ec.eL,3)+"}{"+abrN(ec.eLimL,3)+"}",value:ec.dcL,unit:"",d:3});
+      dcStep(w,"st","ecc","Eccentricity (the larger ratio)","","",ABR_AA+"Art. 11.6.3.3");
+      const br=C.bearing; if(br&&br.dc>=0){ w=topic(T,"br","Bearing resistance",ABR_AA+"Art. 10.6.3.1");
+        w.add({id:"V",label:"Factored vertical load ("+br.ls+": "+abrPlain(br.lbl)+"), eccentricity e = "+abrN(br.e,3)+" ft",sym:"V",eq:"",sub:"",value:br.V,unit:"kip",d:1});
+        if(br.mode==="uniform"){ w.add({id:"Bp",label:"Effective width",sym:"B^{\\prime}",eq:"B \\minus 2e",sub:abrN(B)+" \\minus 2\\cdot "+abrN(br.e,3),value:br.Bp,unit:"ft",d:3,ref:ABR_AA+"Art. 10.6.1.3"});
+          w.add({id:"Lp",label:"Effective length",sym:"L^{\\prime}",eq:"L_{ftg} \\minus 2e_{L}",sub:abrN(Lftg)+" \\minus 2\\cdot "+abrN(br.eL,3),value:br.Lp,unit:"ft",d:3});
+          w.add({id:"q",label:"Uniform bearing pressure on B′ × L′",sym:"q",eq:"\\frac{V}{B^{\\prime} L^{\\prime}}",sub:"\\frac{"+abrN(br.V,1)+"}{"+abrN(br.Bp,3)+"\\cdot "+abrN(br.Lp,3)+"}",value:br.q,unit:"ksf",d:3}); }
+        else if(br.mode==="trap") w.add({id:"q",label:"Peak pressure, trapezoidal (e ≤ B/6)",sym:"q_{max}",eq:"\\frac{V}{B L_{ftg}}\\left(1 + \\frac{6e}{B}\\right)",sub:"\\frac{"+abrN(br.V,1)+"}{"+abrN(B)+"\\cdot "+abrN(Lftg)+"}\\left(1 + \\frac{6\\cdot "+abrN(br.e,3)+"}{"+abrN(B)+"}\\right)",value:br.q,unit:"ksf",d:3,ref:ABR_AA+"Art. 10.6.5"});
+        else if(br.mode==="tri") w.add({id:"q",label:"Peak pressure, triangular (e > B/6)",sym:"q_{max}",eq:"\\frac{2V}{3 L_{ftg}(B/2 \\minus e)}",sub:"\\frac{2\\cdot "+abrN(br.V,1)+"}{3\\cdot "+abrN(Lftg)+"("+abrN(B)+"/2 \\minus "+abrN(br.e,3)+")}",value:br.q,unit:"ksf",d:3,ref:ABR_AA+"Art. 10.6.5"});
+        else w.add({id:"q",label:"Peak corner pressure, biaxial no-tension plane (e_L = "+abrN(br.eL,3)+" ft)",sym:"q_{max}",eq:"",sub:"",value:br.q,unit:"ksf",d:3,ref:ABR_AA+"Art. 10.6.5"});
+        w.add({id:"qn",label:br.qc?"Nominal bearing resistance, computed for this B′, L′ and load inclination (worked on Tab 3)":"Nominal bearing resistance (input)",sym:"q_{n}",eq:"",sub:"",value:br.qn,unit:"ksf",d:2,ref:br.qc?ABR_AA+"Art. 10.6.3.1.2a":""});
+        w.add({id:"qR",label:"Factored bearing resistance",sym:"q_{R}",eq:"\\phi_{b} q_{n}",sub:abrN(br.phiB)+"\\cdot "+abrN(br.qn),value:br.phiB*br.qn,unit:"ksf",d:3});
+        dcStep(w,"st","bearing","Bearing","\\frac{q}{\\phi_{b} q_{n}}","\\frac{"+abrN(br.q,3)+"}{"+abrN(br.phiB)+"\\cdot "+abrN(br.qn)+"}",ABR_AA+"Art. 10.6.3.1"); }
+      subs.push({title:"Sliding, eccentricity and bearing",items:[abrTopics("st",T,{title:"Worked steps"}),{type:"note",text:"Every strength and extreme-event permutation is checked; the governing one is worked here, as on "+abrTab("tab-stab")+"."}]});
+    }
+    if(fn.branch==="pile"&&C.pileComp){
+      const T2=[], pc=C.pileComp, pu=C.pileUplift; let w=topic(T2,"pc","Pile compression (geotechnical)",ABR_AA+"Art. 10.7");
+      w.add({id:"P",label:"Largest pile reaction (pile "+pc.pile+"; "+pc.ls+": "+abrPlain(pc.lbl)+")",sym:"P_{max}",eq:"",sub:"",value:pc.P,unit:"kip",d:1,note:"rigid cap: P = V/n ± M_y x′/Σx′² ± M_x y′/Σy′² ("+R.pile.n+" piles)"});
+      w.add({id:"RR",label:"Factored geotechnical resistance",sym:"\\phi_{c} R_{n}",eq:"",sub:abrN(pc.phiC)+"\\cdot "+abrN(S.piles.Rn,1),value:pc.RR,unit:"kip",d:1,ref:ABR_AA+"Art. 10.5.5.2.3"});
+      dcStep(w,"fd","pileC","Pile compression","\\frac{P_{max}}{\\phi_{c} R_{n}}","\\frac{"+abrN(pc.P,1)+"}{"+abrN(pc.RR,1)+"}",ABR_AA+"Art. 10.7");
+      w=topic(T2,"pu","Pile uplift",ABR_AA+"Art. 10.7");
+      w.add({id:"P",label:"Smallest pile reaction (pile "+pu.pile+"; "+pu.ls+")",sym:"P_{min}",eq:"",sub:"",value:pu.P,unit:"kip",d:1});
+      if(pu.uplift){ w.add({id:"RR",label:"Factored uplift resistance",sym:"\\phi_{up} R_{n,up}",eq:"",sub:"",value:pu.RR,unit:"kip",d:1});
+        dcStep(w,"fd","pileU","Pile uplift","\\frac{\\minus P_{min}}{\\phi_{up} R_{n,up}}","\\frac{"+abrN(-pu.P,1)+"}{"+abrN(pu.RR,1)+"}",ABR_AA+"Art. 10.7"); }
+      else dcStep(w,"fd","pileU","No uplift: P_min ≥ 0","","",ABR_AA+"Art. 10.7");
+      subs.push({title:"Pile reactions",items:[abrTopics("fd",T2,{title:"Worked steps"}),{type:"note",text:"Pile group, reactions per permutation and the pile plan on "+abrTab("tab-found")+"."}]});
+    }
+    if(subs.length) secs.push({title:fn.branch==="pile"?"Foundation and piles":"External stability",subs});
+  }
+  /* ---------- 5. Structural design (lower abutment) ---------- */
+  if(IT!=="integral"){
+    const C=R.checks, subs=[];
+    { const T=[]; let w;
+      if(has("seat")){ const s=C.seat; w=topic(T,"seat","Minimum support length",ABR_AA+"Art. 4.7.4.4");
+        w.add({id:"N",label:"Support length (L = "+abrN(g.spanL,1)+" ft, H = "+abrN(s.Hsup)+" ft, skew S = "+abrN(+g.skew||0,1)+"°)",sym:"N",eq:"(8 + 0.02L + 0.08H)(1 + 0.000125S^{2})",sub:"(8 + 0.02\\cdot "+abrN(g.spanL,1)+" + 0.08\\cdot "+abrN(s.Hsup)+")(1 + 0.000125\\cdot "+abrN(+g.skew||0,1)+"^{2})",value:s.Nreq,unit:"in",d:2,ref:ABR_AA+"Eq. 4.7.4.4-1"});
+        w.add({id:"Np",label:"Required, "+s.pctN+" % of N (seismic zone "+s.zoneN+", A_s = "+abrN(s.AsN,3)+")",sym:"N_{req}",eq:"\\frac{"+s.pctN+"}{100} N",sub:"\\frac{"+s.pctN+"}{100}\\cdot "+abrN(s.Nreq),value:s.NreqP,unit:"in",d:2,ref:ABR_AA+"Table 4.7.4.4-1"});
+        w.add({id:"Nv",label:"Provided: seat width less the girder-end gap",sym:"N_{prov}",eq:"12\\,b_{seat} \\minus g_{end}",sub:abrN(s.seatIn,1)+" \\minus "+abrN(s.endGap,1),value:s.Nprov,unit:"in",d:2});
+        dcStep(w,"sx","seat","Support length","\\frac{N_{req}}{N_{prov}}","\\frac{"+abrN(s.NreqP)+"}{"+abrN(s.Nprov)+"}",ABR_AA+"Art. 4.7.4.4"); }
+      if(has("bearingSeat")){ const b=C.bearingSeat; w=topic(T,"brgc","Bearing on the concrete seat",ABR_AA+"Art. 5.6.5");
+        w.add({id:"Pu",label:"Factored reaction on one bearing (girder "+b.pgirder+", "+b.pls+(b.nBg>1?", girder reaction / "+b.nBg:"")+")",sym:"P_{u}",eq:"",sub:"",value:b.Pu,unit:"kip",d:1});
+        w.add({id:"qb",label:"Bearing stress on the pad area A_1",sym:"q_{b}",eq:"\\frac{P_{u}}{A_{1}}",sub:"\\frac{"+abrN(b.Pu,1)+"}{"+abrN(b.A1,1)+"}",value:b.qb,unit:"ksi",d:3});
+        w.add({id:"qR",label:"Factored bearing resistance (m = √(A_2/A_1) ≤ 2; c = "+abrN(b.c,1)+" in to the "+b.cBy+")",sym:"q_{R}",eq:"\\phi_{b}\\,0.85 f^{\\prime}_{c} m",sub:abrN(b.phiB)+"\\cdot 0.85\\cdot "+abrN(fc,1)+"\\cdot "+abrN(b.m,3),value:b.qR,unit:"ksi",d:3,ref:ABR_AA+"Eq. 5.6.5-2"});
+        dcStep(w,"sx","bearingSeat","Bearing on concrete","\\frac{q_{b}}{q_{R}}","\\frac{"+abrN(b.qb,3)+"}{"+abrN(b.qR,3)+"}",ABR_AA+"Art. 5.6.5"); }
+      if(has("shearFric")){ const f=C.shearFric, pr=f.prep; w=topic(T,"sf","Shear friction at the stem-to-footing joint",ABR_AA+"Art. 5.7.4");
+        w.add({id:"Pc",label:"Permanent compressive force across the joint (γ_DC = "+abrN(f.gDCc,2)+")",sym:"P_{c}",eq:"",sub:"",value:f.Pc,unit:"kip/ft",d:2});
+        w.add({id:"raw",label:"Nominal interface resistance ("+pr.name+": c = "+pr.c+" ksi, μ = "+pr.mu+")",sym:"V_{ni}",eq:"c\\,A_{cv} + \\mu(A_{vf} f_{y} + P_{c})",sub:pr.c+"\\cdot "+abrN(f.Acv,0)+" + "+pr.mu+"("+abrN(f.Avf,3)+"\\cdot "+abrN(fy,1)+" + "+abrN(f.Pc,2)+")",value:f.Vni_raw,unit:"kip/ft",d:1,ref:ABR_AA+"Eq. 5.7.4.3-3"});
+        w.add({id:"cap",label:"Upper limit",sym:"V_{ni,max}",eq:"\\min(K_{1} f^{\\prime}_{c} A_{cv},\\,K_{2} A_{cv})",sub:"\\min("+pr.K1+"\\cdot "+abrN(fc,1)+"\\cdot "+abrN(f.Acv,0)+",\\,"+pr.K2+"\\cdot "+abrN(f.Acv,0)+")",value:f.Vni_cap,unit:"kip/ft",d:1,ref:ABR_AA+"Eqs. 5.7.4.3-4, -5"});
+        w.add({id:"Vn",label:"Factored resistance",sym:"\\phi V_{ni}",eq:"0.9\\min(V_{ni},\\,V_{ni,max})",sub:"0.9\\min("+abrN(f.Vni_raw,1)+",\\,"+abrN(f.Vni_cap,1)+")",value:f.phiVni,unit:"kip/ft",d:1});
+        w.add({id:"Vu",label:"Factored interface shear ("+f.ls+")",sym:"V_{ui}",eq:"",sub:"",value:f.Vui,unit:"kip/ft",d:2});
+        dcStep(w,"sx","shearFric","Shear friction","\\frac{V_{ui}}{\\phi V_{ni}}","\\frac{"+abrN(f.Vui)+"}{"+abrN(f.phiVni,1)+"}",ABR_AA+"Art. 5.7.4"); }
+      if(T.length) subs.push({title:"Bridge seat and stem-to-footing joint",items:[abrTopics("sx",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab("tab-struct")+"."}]});
+    }
+    [["bw","Backwall",C.bwFlex,{F:"bwFlex",V:"bwShear",Min:"bwFlexMin",Crack:"bwFlexCrack"}],["stem","Stem",C.stemFlex,{F:"stemFlex",V:"stemShear",Min:"stemFlexMin",Crack:"stemFlexCrack"}],
+     ["toe","Toe",C.toeFlex,{F:"toeFlex",V:"toeShear",Min:"toeFlexMin",Crack:"toeFlexCrack"}],["heel","Heel",C.heelFlex,{F:"heelFlex",V:"heelShear",Min:"heelFlexMin",Crack:"heelFlexCrack"}],
+     ["bwf","Backwall front face (approach-slab couple)",C.bwFront,{F:"apBwF",Crack:"apBwFc"}]].forEach(([k,nm,c,ids])=>{
+      if(!c||!has(ids.F)) return; const T=[]; Object.keys(ids).forEach(q=>{ if(!has(ids[q])) delete ids[q]; });
+      const w=secTopics(T,"sx",k,c,ids,nm,"tab-struct");
+      if(k==="heel"&&has("heelMass")){ const h=C.heelMass, w2=topic(T,"heelM","Heel: MassDOT 3.3.2.2 dead-load check","MassDOT LRFD Bridge Manual §3.3.2.2");
+        w2.add({id:"M",label:"Dead-load moment, γ = 1.0 (soil + heel + ES above the heel; no LL, no upward relief)",sym:"M_{DL}",eq:"",sub:"",value:h.MDL,unit:"kip-ft/ft",d:2});
+        w2.add({id:"Mn",label:"Flexural resistance, φ = 1.0",sym:"M_{n}",eq:"",sub:"",value:h.Mn,unit:"kip-ft/ft",d:2});
+        dcStep(w2,"sx","heelMass","Heel, MassDOT dead-load check","\\frac{M_{DL}}{M_{n}}","\\frac{"+abrN(h.MDL)+"}{"+abrN(h.Mn)+"}","MassDOT LRFD Bridge Manual §3.3.2.2"); }
+      subs.push({title:nm,items:[abrTopics("sx",T,{title:"Worked steps"}),{type:"note",text:"Section h = "+abrN(c.h,1)+" in, cover "+abrN(c.cover,2)+" in, #"+c.bar+" at "+abrN(c.sp,1)+" in; demands and the governing case as on "+abrTab("tab-struct","o-str-"+c.name)+"."}]}); });
+    if(R.apDes&&has("apDF")){ const T=[], D=R.apDes; secTopics(T,"sx","apd",D.sec,{F:"apDF",V:"apDV",Min:"apDMin",Crack:"apDCr"},"Approach slab","tab-struct");
+      subs.push({title:"Approach slab",items:[abrTopics("sx",T,{title:"Worked steps"}),{type:"note",text:"Slab span L_s = "+abrN(D.Ls)+" ft; the shear check is information (a slab designed for moment per 4.6.2.3 may be taken as satisfactory for shear, 5.12.2.1). Distribution and S&T reinforcement, and the shelf, with the other checks below; worked on "+abrTab(IT==="integral"?"tab-iab":"tab-struct","o-ap-des")+"."}]}); }
+    if(subs.length) secs.push({title:"Structural design",subs});
+  }
+  /* ---------- 6. Wingwalls ---------- */
+  if(R.wing){ const W=R.wing, ws=W.type==="attached", T=[];
+    secTopics(T,"wg",ws?"wj":"ws",W.sec,ws?{F:"wJflex",V:"wJshear",Min:"wJmin",Crack:"wJcrack"}:{F:"wSflex",V:"wSshear",Min:"wSmin",Crack:"wScrack"},ws?"Wing junction":"Wingwall stem","tab-wing");
+    secs.push({title:"Wingwalls",subs:[{title:(ws?"Attached wingwall: junction with the abutment":"Independent wingwall: stem")+" ("+W.type+")",items:[abrTopics("wg",T,{title:"Worked steps"}),{type:"note",text:"Wingwall loads and the governing limit states as on "+abrTab("tab-wing")+"."}]}]}); }
+  /* ---------- 7. Integral / semi-integral ---------- */
+  if(R.iab){ const Q=R.iab, subs=[];
+    const L=Q.integ?[["c1","Pile cap longitudinal (case 1)",Q.c1,"iabC1"],["c2","Integral wall horizontal (case 2)",Q.c2,"iabC2"],["c3","Pile cap vertical rear face",Q.c3,"iabC3"]]:[["d","End diaphragm horizontal",Q.c2,"iabD"]];
+    L.forEach(([k,nm,c,id])=>{ if(!c||!c.sec||!has(id+"F")) return; const T=[];
+      secTopics(T,"ia",k,c.sec,{F:id+"F",V:id+"V",Min:id+"Min",Crack:id+"Crack"},nm,"tab-iab");
+      subs.push({title:nm,items:[abrTopics("ia",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab("tab-iab","o-str-"+c.sec.name)+"."}]}); });
+    if(subs.length) secs.push({title:Q.integ?"Integral abutment":"Semi-integral end diaphragm",note:"The thermal movement, earth pressure on the moving wall and the member demands are worked on "+abrTab("tab-iab")+".",subs}); }
+  /* ---------- every other dashboard check: its D/C, governing case and the panel where it is worked ---------- */
+  { const left=R.dash.filter(d=>!KEY[d.id]); if(left.length){ const by={}; left.forEach(d=>{ (by[d.tab]||(by[d.tab]=[])).push(d); });
+      const subs=Object.keys(by).map(tb=>{ const T=[]; by[tb].forEach(d=>{ const w=topic(T,"x"+d.id,d.name.replace(/\s*\[[^\]]*\]\s*$/,""),refOf(d)); dcStep(w,"ot",d.id,d.name.replace(/\s*\[[^\]]*\]\s*$/,""),"","",refOf(d)); });
+        return {title:"Worked on "+(ABR_TABTXT[tb]||tb),items:[{type:"note",text:"These checks are worked in full on "+abrTab(tb)+" (each with its own panel); the report gives each check's D/C and governing case."},abrTopics("ot",T,{title:"Checks"})]}; });
+      secs.push({title:"Further checks",subs}); } }
+  /* ---------- owner requirements ---------- */
+  { const O=R.own||{owner:"AASHTO",rows:[]};
+    secs.push({title:"Owner requirements",subs:[{title:O.owner==="AASHTO"?"AASHTO LRFD only":ABUT_OWN.owners[O.owner].short,items:O.rows.length?[
+      {type:"table",head:["Section","Requirement (paraphrased)","Value checked","Required","Result"],rows:O.rows.map(x=>({cells:[abrPlain(x.r.sec),abrPlain(x.r.text),abrPlain(x.val||"—"),abrPlain(x.lim||"—"),{t:(OWN_ST[x.st]||["",x.st])[1],cls:x.st==="fail"?"ng":x.st==="pass"?"ok":x.st==="warn"?"hi":"na"}],cls:x.st==="fail"?"gov":""}))},
+      {type:"note",text:"As on "+abrTab("tab-loads","o-owner")+"."}]:[{type:"note",text:"No owner rules (AASHTO LRFD 10th Ed. only). Choose an owner in panel I-0 to check that owner's requirements."}]}]}); }
+  /* ---------- warnings and assumptions ---------- */
+  secs.push({title:"Warnings and assumptions",subs:[{title:"Warnings",items:WARNINGS.length?WARNINGS.map(x=>({type:"note",warn:true,text:(x.level==="err"?"ERROR: ":"")+abrPlain(x.msg)})):[{type:"note",text:"No active warnings."}]},
+    {title:"Engineering assumptions",items:[{type:"note",text:abrPlain(abutAssumptionsText()||"—")}]}]});
+  /* ---------- references ---------- */
+  { const rows=abutRefsNow().concat(R.wing?WING_REFS:[],R.iab?IAB_REFS:[]);
+    secs.push({title:"References",subs:[{title:"Codes and references cited",items:[{type:"table",head:["Reference","Provisions used"],rows:rows.map(([a,b])=>[a||"",b])}]}]}); }
+  /* ---------- 1. Design summary ---------- */
+  { const nF=R.nFail, why=DS.why;
+    const st=nF?nF+" of "+DS.nChk+" checks FAIL.":DS.inc?"Design incomplete: "+why.length+" required check(s) not evaluated.":"All "+DS.nChk+" checks PASS.";
+    const gov=R.dash.filter(d=>d.pass!==null&&isFinite(d.dc)).sort((a,b)=>b.dc-a.dc)[0];
+    const items=[{type:"note",text:RT.cover+". "+st+(gov?" Governing: "+gov.name+", D/C = "+abrN(gov.dc)+".":"")},
+      {type:"table",head:["Code check","D/C","Result","Governing","Worked in"],rows:R.dash.map(d=>({cells:[d.name,d.txt?{t:d.txt,cls:"ng"}:d.pass===null?{t:"n/a",cls:"na"}:{t:isFinite(d.dc)?abrN(d.dc):"∞",n:true,cls:d.pass===false?"ng":d.dc>=0.9?"hi":"ok"},
+        d.pass===null?"N/A":d.pass?"PASS":"FAIL",abrPlain(d.gov),{t:"",key:KEY[d.id]}],cls:d.pass===false?"gov":""}))}];
+    if(why.length) items.push({type:"note",warn:true,text:"Not evaluated: "+why.map(x=>x.name+" ("+x.txt+")").join("; ")+"."});
+    items.push({type:"note",text:"The same checks as the dashboard. Every check links to the step where its D/C is worked or quoted."});
+    secs[sumIdx]={title:"Design summary",subs:[{title:"Summary of checks",items}]}; }
+  return {title:"Bridge Abutment Design — Calculation Report",subtitle:(P.name||"Untitled")+" · "+RT.subject,code:"AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)"+(abutOwner()!=="AASHTO"?" · "+ABUT_OWN.owners[abutOwner()].short:""),
+    info:[["Project",P.name],["Project No.",P.num],["Calculated by",P.calcBy],["Date",P.date],["Checked by",P.chkBy],["Checked date",P.chkDate]],
+    head:{left:"Project No. "+(P.num||"—")+" — "+String(P.name||"—").slice(0,40),right:"Computed: "+(P.calcBy||"—")+" "+(P.date||"")+" · Checked: "+(P.chkBy||"—")+" "+(P.chkDate||""),foot:(P.name||"Untitled")+" (Bridge Abutment Design Calculator) · Input ID "+(R.fingerprint||"—")},
+    sections:secs};
+}
+function abrRender(){
+  const T=document.getElementById("tab-rpt"); if(!T) return;
+  if(!window.SharedReport||!window.SharedSteps){ T.innerHTML='<div class="note-box">The Report tab needs the shared folder (shared/steps.js, shared/report.js) next to this file.</div>'; ABRP.api=null; ABRP.doc=null; return; }
+  if(!window.LAST_R){ T.innerHTML=""; ABRP.api=null; ABRP.doc=null; return; }
+  let M; try{ M=abrModel(); }catch(e){ console.error(e); T.innerHTML='<div class="note-box">Report error: '+esc(e&&e.message)+'</div>'; ABRP.api=null; ABRP.doc=null; return; }
+  ABRP.api=SharedReport.mount(T,M,{closed:ABRP.closed,onGoto:abrGoto}); ABRP.doc=ABRP.api.doc;
+}
+/* [[tab:<tab id>~<panel id>|…]] links of the report: the tool's tab and panel (gotoPanel) */
+function abrGoto(name){ const [t,c]=String(name).split("~"); gotoPanel(t,c||null); if(!c){ const b=document.getElementById("tabbar"); if(b) window.scrollTo(0,b.getBoundingClientRect().top+window.scrollY-10); } }
+/* the Report tab is shown on top of the saved tab (S.ui.tab is not changed, so nothing new is saved) */
+function abrShow(){
+  ABRP.on=true;
+  document.querySelectorAll("#tabbar .tab").forEach(t=>t.classList.toggle("active",t.dataset.tab==="tab-rpt"));
+  document.querySelectorAll("#tabpages .tabpage").forEach(p=>p.classList.toggle("active",p.id==="tab-rpt"));
+  abrRender();
+}
+/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
+window.addEventListener("beforeprint",()=>{
+  if(!ABRP.on||!ABRP.doc||document.body.classList.contains("rp-printing")) return;
+  abutApplyPageCSS(false);   // the D11 report's page header (left on after its print) would compete with the report's
+  let box=document.getElementById("rp-print"); if(!box){ box=document.createElement("div"); box.id="rp-print"; document.body.appendChild(box); }
+  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(ABRP.doc,{lazy:false})+'</article></div>';
+  document.body.classList.add("rp-printing");
+});
+</script>
+<script>
 /* ============================================================
    SECTION F — EVENTS, PERSISTENCE, REPORT, INIT
    ============================================================ */
@@ -9206,6 +9498,7 @@ function recalcAll(){
   ownTagRefresh(); pxrTagRefresh();   // PXR
   updateDirty();
   const fp=document.getElementById("fpBadge"); if(fp) fp.textContent="Input ID "+(R.fingerprint||"—");
+  if(ABRP.on) abrRender();   /* ABRP: the Report tab follows the inputs while it is shown */
 }
 function updateDerivedInInputs(){
   // refresh derived readouts & computed beam-position cells without rebuilding (keeps focus)
@@ -9863,7 +10156,8 @@ async function generateReport(){
   await buildReport();
   window.print();
 }
-document.getElementById("btnPrint").addEventListener("click",()=>{ syncRptDlg(); document.getElementById("dlgRpt").showModal(); });
+document.getElementById("btnPrint").addEventListener("click",()=>{ if(ABRP.on&&ABRP.api){ ABRP.api.print(); return; }   /* ABRP: on the Report tab the button prints that report */
+  syncRptDlg(); document.getElementById("dlgRpt").showModal(); });
 document.getElementById("dlgRptCancel").addEventListener("click",()=>document.getElementById("dlgRpt").close());
 document.getElementById("rptPresetAudit").addEventListener("click",()=>{ document.querySelectorAll('#rptOptList input[data-ropt]').forEach(cb=>cb.checked=true); });
 document.getElementById("rptPresetSlim").addEventListener("click",()=>{ document.querySelectorAll('#rptOptList input[data-ropt]').forEach(cb=>{ cb.checked=["inputEcho","permFull","detailTables","viz3d","selftest"].indexOf(cb.dataset.ropt)<0; }); });
