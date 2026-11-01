@@ -2585,7 +2585,13 @@ No calculation change: display and inputs only (the engine is the sbd-autodesign
 - `ui/autodesign.js`: input "Minimum overhang" (`data-ad="ohMin"`, ft) next to "Overhangs". Saved as `P.autodesign.ohMin` (new optional field; absent = 2.5 ft).
   An old project's Auto design result can change where an overhang below 2.5 ft was chosen.
 - Governing provision: practice / owner limits, not an AASHTO article (the old 1.5 ft was Preliminary sizing's ws.ohMin).
-- Check case: see "Auto design study" below.
+- Check case (Auto design study, Node, scratch script; builtin_AASHTO of tests/engine/ad-fixture.mjs, the match-legacy settings of
+  autodesign-parity.mjs but the overhang Auto (the SB2-AD12 study run); N_b = 5, W_deck = 3.25 + 4(9.5) + 3.25 = 44.50 ft):
+  - Before (origin/main): overhangs tried 1.5, 2.0, 2.5, 3.0, 3.5 ft; chosen 1.5 ft (S = (44.50 − 2(1.5))/4 = 10.375 ft); best candidate 398,740 lb (all girders),
+    D = 57 in, governing ratio 1.000 (stiffeners TS7 minimum fillet weld size). Same as the earlier study.
+  - After: overhangs tried 2.5, 3.0, 3.5 ft; chosen 2.5 ft (S = (44.50 − 2(2.5))/4 = 9.875 ft); best candidate 419,822 lb, D = 62 in, governing ratio 1.000
+    (stiffeners TS2 projecting width b_f/4). +21,082 lb (+5.3 %) for the 2.5 ft minimum.
+  - Hand check of the candidate list: seq(max(2.5, —), min(4.0, …), 0.5) = 2.5, 3.0, 3.5 (4.0 out: S = 9.125 ft, 0.40S = 3.65 ft < 4.0 ft).
 ### How verified
 - See the PR (tests, Playwright at 1280 and 390 px).
 ### Other copies
