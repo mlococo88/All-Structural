@@ -94,7 +94,7 @@ test('Report: the Welds section (selected girder, both detail levels; every gird
     const g = M.gov.filter(q => q.mod === 'Welds'); assert.equal(g.length, 3);
     g.forEach(q => { assert.ok(q.key && doc.index.has(q.key), q.check); });
     // the governing values are the Welds tab's (its build); the strength checks (FW1, FW2) first, not FW4 at 1.000 (2026-11-01)
-    assert.deepEqual(g.map(q => q.grp), ['Welds: strength (FW1, FW2)', 'Welds: fatigue (FW3, TR1)', 'Welds: detailing limits (FW4, TR2–TR4)']);
+    assert.equal(JSON.stringify(g.map(q => q.grp)), JSON.stringify(['Welds: strength (FW1, FW2)', 'Welds: fatigue (FW3, TR1)', 'Welds: detailing limits (FW4, TR2–TR4)']));
     const fw = B.wd.C.filter(c => /^FW[12]$/.test(c.id)).flatMap(c => c.items).filter(it => typeof it.r === 'number' && isFinite(it.r)).reduce((m, it) => Math.max(m, it.r), -Infinity);
     assert.equal(g[0].r, fw);
     s.subs.forEach(q => q.items.forEach(it => { grab(it.text); (it.head || []).forEach(grab); (it.rows || []).forEach(r => (Array.isArray(r) ? r : r.cells).forEach(c => grab(c && typeof c === 'object' ? c.t : c))); }));

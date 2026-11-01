@@ -184,5 +184,5 @@ test('Welds tab load factors (2026-11-01): the project\'s, not P.welds.gam (kept
   assert.equal(BF.gov.FW1.r, B0.gov.FW1.r);
   // the summary: the strength check (FW1 / FW2) headlines, not FW4 at 1.000 (the minimum weld size)
   assert.equal(B0.gov.FW4.r, 1); const sg = UI.strengthGov(B0.C); assert.equal(sg.c.id, 'FW1'); assert.equal(sg.it, B0.gov.FW1);
-  assert.deepEqual(UI.SUM.flatMap(q => q[2]).sort(), B0.C.map(c => c.id).sort(), 'every check is in a summary group');
+  assert.equal(JSON.stringify(UI.SUM.flatMap(q => q[2]).sort()), JSON.stringify(B0.C.map(c => c.id).sort()), 'every check is in a summary group');
 });
