@@ -3327,7 +3327,7 @@ index 5a65298..c7c5f79 100644
 
 ```diff
 diff --git a/BasePlateAnchorDesigner.html b/BasePlateAnchorDesigner.html
-index 4945cc3..869f273 100644
+index 4945cc3..a0efc62 100644
 --- a/BasePlateAnchorDesigner.html
 +++ b/BasePlateAnchorDesigner.html
 @@ -979,5 +979,6 @@ function defaultState(){
@@ -3516,17 +3516,17 @@ index 4945cc3..869f273 100644
 +    steps:[
 +      {title:"Circular base plate — bending line at the pole face (double-nut base)",ref:"AASHTO LRFDLTS 2nd Ed., base plates of double-nut connections (bending-line method; article to be confirmed)",
 +       lines:[
-+        "m=\frac{BC-D_{pole}}{2}=\frac{"+fmt(BC,3)+"-"+fmt(Dp,3)+"}{2}="+fmt(m,3)+"\ \text{in}",
-+        "b_{eff}=\frac{\pi D_{pole}}{n}=\frac{\pi\times"+fmt(Dp,3)+"}{"+n+"}="+fmt(beff,3)+"\ \text{in}",
-+        "P_{rod}=\max_i|T_i|="+fmt(Prod,3)+"\ \text{kip}\quad(\text{anchor "+(gov?gov.n:"—")+", "+(gov&&gov.t<0?"compression through the leveling nut":"tension")+"})",
-+        "M_u=P_{rod}\,m="+fmt(Prod,3)+"\times"+fmt(m,3)+"="+fmt(Mu,3)+"\ \text{kip-in}",
-+        "t_{req}=\sqrt{\frac{4M_u}{\phi_f F_y b_{eff}}}=\sqrt{\frac{4\times"+fmt(Mu,3)+"}{0.90\times"+fmt(Fy,0)+"\times"+fmt(beff,3)+"}}="+fmt(tReq,3)+"\ \text{in}",
-+        "\text{DCR}=\frac{t_{req}}{t_p}=\frac{"+fmt(tReq,3)+"}{"+fmt(P.t,3)+"}="+fmt(dcr,3)],
++        "m=\\frac{BC-D_{pole}}{2}=\\frac{"+fmt(BC,3)+"-"+fmt(Dp,3)+"}{2}="+fmt(m,3)+"\\ \\text{in}",
++        "b_{eff}=\\frac{\\pi D_{pole}}{n}=\\frac{\\pi\\times"+fmt(Dp,3)+"}{"+n+"}="+fmt(beff,3)+"\\ \\text{in}",
++        "P_{rod}=\\max_i|T_i|="+fmt(Prod,3)+"\\ \\text{kip}\\quad(\\text{anchor "+(gov?gov.n:"—")+", "+(gov&&gov.t<0?"compression through the leveling nut":"tension")+"})",
++        "M_u=P_{rod}\\,m="+fmt(Prod,3)+"\\times"+fmt(m,3)+"="+fmt(Mu,3)+"\\ \\text{kip-in}",
++        "t_{req}=\\sqrt{\\frac{4M_u}{\\phi_f F_y b_{eff}}}=\\sqrt{\\frac{4\\times"+fmt(Mu,3)+"}{0.90\\times"+fmt(Fy,0)+"\\times"+fmt(beff,3)+"}}="+fmt(tReq,3)+"\\ \\text{in}",
++        "\\text{DCR}=\\frac{t_{req}}{t_p}=\\frac{"+fmt(tReq,3)+"}{"+fmt(P.t,3)+"}="+fmt(dcr,3)],
 +       vars:[["BC",fmt(BC,3)+" in","bolt-circle diameter"],
 +             ["D_{pole}",fmt(Dp,3)+" in",round?"pole (round HSS) outside diameter at the base":"pole width at the base: the smaller of b and d (the column is not round — check the bending line for a non-round pole)"],
 +             ["n",String(n),"anchor rods"],
 +             ["P_{rod}",fmt(Prod,3)+" kip","largest rod force, tension or compression (no bearing block: the rods carry the compression through the leveling nuts)"],
-+             ["\phi_f","0.90","flexure of the plate strip (plastic section b_eff·t²/4)"],
++             ["\\phi_f","0.90","flexure of the plate strip (plastic section b_eff·t²/4)"],
 +             ["F_y",fmt(Fy,0)+" ksi","plate yield strength"]]}]};
 +}
  function plateBending(combo, cc){
