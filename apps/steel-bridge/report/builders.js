@@ -323,7 +323,7 @@
       tbl(['Check', 'Item', 'Demand', 'Resistance / limit', 'Ratio', 'Status'], C.flatMap(c => c.items.length ? c.items.map(it => [`${c.id} ${c.title}`, it.loc, isFinite(it.demand) ? N(it.demand, 2) : (it.cells || [])[0] || '', isFinite(it.capacity) ? N(it.capacity, 2) : (it.cells || [])[1] || '',
         isFinite(it.r) ? R3(it.r, lk(it.step)) : { t: '—', key: lk(it.step) }, { pass: 'OK', fail: 'Fail', warn: 'Warning', adv: 'Advisory', na: 'n/a' }[it.st] || it.st]) : [[`${c.id} ${c.title}`, { t: c.naWhy || 'n/a', cls: 'na' }, '', '', '', 'n/a']])),
       note(`References: ${C.map(c => `${c.id} ${c.ref}`).join('; ')}.`)]));
-    if (R.frames) subs.push(sub('mf', 'Member forces (truss model)', [tbl(['Member', 'Length (in)', 'per kip of $F_{w}$', ...R.combos.map(c => `${c.id} T / C (kip)`)], R.frames.map((e, i) => [e.lbl, N(e.L, 2), { ...N(e.unit, 3), key: `cf.tr${i}` }, ...R.combos.map(c => `${f(c.f[i].T, 2)} / ${f(c.f[i].Cc, 2)}`)]))]));
+    if (R.frames) subs.push(sub('mf', 'Member forces (truss model)', [tbl(['Member', 'Length (in)', 'per kip of $F_{w}$', ...R.combos.map(c => `${c.id} T / C (kip)`)], R.frames.map((e, i) => [e.lbl, N(e.L, 2), { ...N(e.unit, 3), key: `cf.tr${i}` }, ...R.combos.map(c => c.off ? 'not used' : `${f(c.f[i].T, 2)} / ${f(c.f[i].Cc, 2)}`)]))]));
     subs.push(sub('w', 'Worked steps', [gsteps('SBDFramingUI:x', '', work)]));
     return { title: 'Framing and cross-frames', subs };
   }

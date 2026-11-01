@@ -94,6 +94,8 @@
   const rtx = c => !c ? '—' : isFinite(c.ratio) ? fmt(c.ratio, 3) : c.ng ? (Number.isNaN(c.ratio) ? esc(c.ng) : `∞ (${esc(c.ng)})`) : '—';
 
   /* ---------- custom demands (added 2026-11-01, custom demands PR; ui/demands.js) ---------- */
+  /* fatI(P): Fatigue I γ of the Fatigue & studs inputs (P.fatigue.gam.fI), the one source for every module (FGAM, 2026-11-01); 1.75 without one */
+  const fatI = P => { const v = +(((P && P.fatigue) || {}).gam || {}).fI; return v > 0 ? v : 1.75; };
   const FAC1 = { dc: 1, dw: 1, dcMin: 1, dwMin: 1, ll: 1, sll: 1, fat: 1 };   // factored rows: every load factor 1 (the values are factored already)
   /* facPl(pl): factored rows (Mu_s, Mu_l, Mu_n, …) as payload moments for fromPayload's region, C_b and nonprismatic data with the
      factors FAC1: M_DC1 = M_u,steel, M_DC2 = M_u,long-term, both LL+IM envelopes = M_u,short-term (so that the Strength I envelope at a
@@ -133,7 +135,7 @@
       const own = (pl.ownerRules || {}).owner;
       // the owner load rules the file states (ownerRules: eta max/min, llMultiplier m; GirderDetail's own checks apply them; sb-ped-owner PR)
       const ro = pl.ownerRules || {}, re = ro.eta || {}, lfF = { eta: +re.max > 0 ? +re.max : 1, etaN: +re.min > 0 ? +re.min : 1, m: ro.llMultiplier && +ro.llMultiplier.m > 0 ? +ro.llMultiplier.m : 1, o: ro.owner || '' };
-      const F = FX.fromPayload(pl, { fl, lf: lfF, ...(own ? { owner: own } : {}), ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) });
+      const F = FX.fromPayload(pl, { fl, lf: lfF, G: { fat: fatI(P) }, ...(own ? { owner: own } : {}), ...(frB ? { braces: frB.braces, lenOf: frB.lenOf } : {}) });
       F.prj.a6.method = meth;
       return { prj: F.prj, locs: F.locs, supports: F.supports, fl, flS: D.flS, frB, D, what: `${esc(plName)}: ${F.locs.length} stations (every station GirderDetail checks); plates, deck and skews from the file; L<sub>b</sub>, C<sub>b</sub> ${frB ? `from this project's framing, girder G${frB.line + 1} (its own bearings and cross-frames; Cross-frames tab)` : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft (the file is not of this project's bridge, or the project has no framing)`}; ${flText(D)}.` };
     }
@@ -150,7 +152,7 @@
       // multiplier m is kept off it; fromPayload does not add M_PL again (SB2-R1). The owner load rules η, m: factorsOwner (OWN6/OWN7)
       const plR = A.pl, sup = (plR.member || {}).supports || [], own = (P.ownerRules || {}).owner || 'AASHTO', lf = OW.loadFactors(own, (P.ownerRules || {}).eta, (P.xs || {}).nb);
       // brace points and f_ℓ: engine/framing.js design() (SB2-W1, SB2-W2): the Spans &amp; framing tab, f_ℓ entered or from skew
-      const D = window.SBDFraming.design(P, gi, { fl: flIn }), fopt = { owner: own, rebar: d.rebar, fl: D.fl, lf };
+      const D = window.SBDFraming.design(P, gi, { fl: flIn }), fopt = { owner: own, rebar: d.rebar, fl: D.fl, lf, G: { fat: fatI(P) } };
       let bTxt;
       if (D.br) { fopt.braces = D.braces; fopt.lenOf = D.lenOf; bTxt = `the Spans &amp; framing tab: G${D.br.line + 1}'s bearings and cross-frames (${D.braces.length} brace points; Cross-frames tab)`; }
       else { const fr = ((P.stiffeners || {}).layout || {}).frames || {};   // no framing (Spans &amp; framing tab) or its layout has errors: the stiffener layout's cross-frames, as before
@@ -175,7 +177,7 @@
     const nr = SEC.modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule);
     const nc = d.composite === false;   // noncomposite: 6.10.8 / App. A6 in both regions, steel section alone (engine/flexure.js)
     const prj = { deck: { composite: !nc, ts: d.ts, tdeck: d.tdeck, haunch: hP, rebar: d.rebar }, mat: { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc },
-      n: nr.n, rebarInPositive: !!d.rebarInPositiveMp, G: lf ? FX.factorsOwner(lf) : FX.factors(), a6: { method: S.method, skews: [S.skew], curved: false } };
+      n: nr.n, rebarInPositive: !!d.rebarInPositiveMp, G: lf ? FX.factorsOwner(lf, { fat: fatI(P) }) : FX.factors({ fat: fatI(P) }), a6: { method: S.method, skews: [S.skew], curved: false } };
     const segAt = x => g.segments.find(s => x >= s.x0 && x < s.x1) || g.segments[g.segments.length - 1];
     const DX = window.SBDFraming.design(P, ctx.g, { fl: flIn });   // f_ℓ entered, else from the project's skews (SB2-W1); L_b, C_b as entered here
     const cont = P.spans.continuity === 'continuous' && P.spans.lengths.length > 1;
@@ -218,7 +220,7 @@
       <div class="fRow"><label for="fx_fl">f<sub>ℓ</sub>, discretely braced flange (first order; blank or 0: from skew, C6.10.1; also used by the Rating tab; saved)</label><input type="number" step="any" min="0" id="fx_fl" value="${flEntered(ctx.P) || ''}" placeholder="${fmt(window.SBDFraming.design(ctx.P, ctx.g).fl, 2)} (skew)"><span class="unit">ksi</span></div>
       ${nc ? `<div class="fRow"><label for="fx_flT">f<sub>ℓ</sub>, top flange (first order)</label><input type="number" step="any" id="fx_flT" value="${S.flT}"><span class="unit">ksi (noncomposite)</span></div>` : ''}
       <div class="fRow"><label for="fx_m">${nc ? 'Flexure (noncomposite)' : 'Negative flexure'}</label><select id="fx_m">${opt('auto', 'Appendix A6 where permitted, else 6.10.8', S.method)}${opt('6108', '6.10.8 only', S.method)}</select></div>
-      <p class="note">Load factors AASHTO LRFD 10th Ed. Tables 3.4.1-1, -2: Strength I γ<sub>DC</sub> 1.25/0.90, γ<sub>DW</sub> 1.50/0.65 by the sign of each moment, LL+IM 1.75; Service II 1.30; Fatigue I 1.75. φ<sub>f</sub> = 1.0. Owner load rules (<a href="#" data-gotab="loads">Loads &amp; LLDF</a>; a file: its ownerRules): η on the Strength I factors (1/η on the minimum ones), m on HL-93 LL+IM at Strength I and Service II, not on the pedestrian load; worked in each location's steps. The demand source and f<sub>ℓ</sub> are saved with the project (a hand-off file is not), the other choices here are not.</p>
+      <p class="note">Load factors AASHTO LRFD 10th Ed. Tables 3.4.1-1, -2: Strength I γ<sub>DC</sub> 1.25/0.90, γ<sub>DW</sub> 1.50/0.65 by the sign of each moment, LL+IM 1.75; Service II 1.30; Fatigue I ${fmt(fatI(ctx.P), 2)} (<a href="#" data-goto="fs">Fatigue &amp; studs inputs</a>; a factored Custom table: as entered). φ<sub>f</sub> = 1.0. Owner load rules (<a href="#" data-gotab="loads">Loads &amp; LLDF</a>; a file: its ownerRules): η on the Strength I factors (1/η on the minimum ones), m on HL-93 LL+IM at Strength I and Service II, not on the pedestrian load; worked in each location's steps. The demand source and f<sub>ℓ</sub> are saved with the project (a hand-off file is not), the other choices here are not.</p>
       <p class="note">Constructibility (deck placement, 6.10.3: GS14–GS16, overhang brackets OH1–OH5) is checked with the construction-stage loads on the <a href="#" data-gotab="cn">Constructibility tab</a>.</p></div></section>`;
     if (src === 'custom' && window.SBDCustomDemands) h += window.SBDCustomDemands.card(ctx.P, 'flex', ctx.g);   // the entered rows (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Flexure results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="fx_calc">Calculate</button></div>`;

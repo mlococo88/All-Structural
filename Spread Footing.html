@@ -1699,6 +1699,11 @@ function renderDashboard(){
   if(!realPeds.length)d.appendChild(chip('Pedestal design','no pedestals \u2014 bearing patches only','na',undefined,{tab:'tab-peddes',sec:'o-pd-intro'}));
   else d.appendChild(chip('Pedestal design',why.length?why.join('; '):'axial DCR '+f2(pedmax)+', ties and bars OK',
    why.length?'fail':'pass',undefined,{tab:'tab-peddes',sec:'o-pd-intro'}));
+  /* SFPM: biaxial P–M ratio of every LRFD combination at its own P_u */
+  if(realPeds.length){const gv=realPeds.filter(z=>z.pmGov&&!isNaN(z.pmGov.ratio)).reduce((a,z)=>(!a||z.pmGov.ratio>a.pmGov.ratio)?z:a,null), nr=realPeds.filter(z=>z.pmRange&&z.pmRange.length);
+   const txt=gv?('max ratio '+f2(gv.pmGov.ratio)+' \u2014 '+gv.label+', '+gv.pmGov.name+' (at its own P_u)'):'not computed';
+   d.appendChild(chip('Pedestal P\u2013M (biaxial)',txt+(nr.length?'; not computed for some combinations ('+nr.map(z=>z.label).join(', ')+')':''),
+    gv&&gv.pmGov.ratio>1?'fail':((nr.length||!gv)?'warn':'pass'),undefined,{tab:'tab-peddes',sec:gv?'o-pd-'+P2.pedDes.indexOf(gv):'o-pd-intro'}));}
   /* SFTC: clear cover to the ties (ACI 318-19 Table 20.5.1.3.1) */
   if(realPeds.length){const tcBad=realPeds.filter(z=>!z.tieCovOK), tcGov=realPeds.reduce((a,z)=>(!a||z.tieCov-z.tieCovMin<a.tieCov-a.tieCovMin)?z:a,null);
    d.appendChild(chip('Pedestal tie cover',tcBad.length?tcBad.map(z=>z.label+' '+f3(z.tieCov)+' < '+f2(z.tieCovMin)+' in').join('; '):'min '+f3(tcGov.tieCov)+' \u2265 '+f2(tcGov.tieCovMin)+' in ('+tcGov.label+')',
@@ -2719,17 +2724,21 @@ function renderPlots(){
    const cx=contour.map(p=>p.phiMny).concat(contour.length?[contour[0].phiMny]:[]);
    const cy=contour.map(p=>p.phiMnx).concat(contour.length?[contour[0].phiMnx]:[]);
    // demand points
-   const dxIn=pd.pmPts.map(p=>p.My), dyIn=pd.pmPts.map(p=>p.Mx), dtext=pd.pmPts.map(p=>p.name+'<br>P='+f2(p.P)+' k');
-   // inside/outside coloring via point-in-polygon on the contour
-   const poly=contour.map(p=>[p.phiMny,p.phiMnx]);
-   const colors=pd.pmPts.map(p=>ptInPoly(p.My,p.Mx,poly)?'#1b8a3a':'#c62828');
+   /* SFPM: points coloured by the ratio at each combination's own P_u (pd.pmRat); the governing combination's own contour dashed */
+   const rat=pd.pmRat||[];
+   const dxIn=pd.pmPts.map(p=>p.My), dyIn=pd.pmPts.map(p=>p.Mx), dtext=pd.pmPts.map((p,k)=>p.name+'<br>P='+f2(p.P)+' k'+(rat[k]?'<br>ratio at own P_u = '+(isNaN(rat[k].ratio)?'n/a':f3(rat[k].ratio)):''));
+   const colors=pd.pmPts.map((p,k)=>!rat[k]||isNaN(rat[k].ratio)?'#b8860b':(rat[k].ratio<=1?'#1b8a3a':'#c62828'));
+   const tr=[];const g=pd.pmGov;
+   if(g&&g.mode==='radial'&&Math.abs(g.P-Pu)>1e-6){const cg=pmContour(pd.pmBars,pd.bx,pd.by,pd.fc,pd.fy,g.P,28);
+    if(cg.length)tr.push({x:cg.map(p=>p.phiMny).concat([cg[0].phiMny]),y:cg.map(p=>p.phiMnx).concat([cg[0].phiMnx]),type:'scatter',mode:'lines',name:'contour @ governing combo P_u='+f2(g.P)+' k',line:{color:'#8e44ad',width:1.5,dash:'dash'}});}
+   if(g&&g.mode==='radial'&&g.Rc)tr.push({x:[0,g.cMy],y:[0,g.cMx],type:'scatter',mode:'lines+markers',name:'governing: ratio '+f3(g.ratio),line:{color:'#8e44ad',width:1,dash:'dot'},marker:{size:[0,7],color:'#8e44ad'},hoverinfo:'skip'});
    Plotly.newPlot(elid,[
-    {x:cx,y:cy,type:'scatter',mode:'lines',name:'\u03c6 capacity contour @ P_u='+f2(Pu)+' k',line:{color:'#4a6f9b',width:2},fill:'toself',fillcolor:'rgba(74,111,155,0.08)'},
+    {x:cx,y:cy,type:'scatter',mode:'lines',name:'\u03c6 capacity contour @ P_u,max='+f2(Pu)+' k (reference)',line:{color:'#4a6f9b',width:2},fill:'toself',fillcolor:'rgba(74,111,155,0.08)'},...tr,
     {x:dxIn,y:dyIn,type:'scatter',mode:'markers+text',name:'Combo demand',text:pd.pmPts.map((p,k)=>k+1),textposition:'top center',textfont:{size:9},
      marker:{color:colors,size:9,line:{color:'#333',width:1}},hovertext:dtext,hoverinfo:'text'}],
-    {font,title:{text:pd.label+' \u2014 biaxial interaction (\u03c6M_nx vs \u03c6M_ny at P_u = '+f2(Pu)+' k)',font:{size:12}},
+    {font,title:{text:pd.label+' \u2014 biaxial interaction (solid contour at P_u,max = '+f2(Pu)+' k; colours: ratio at own P_u)',font:{size:12}},
      margin:{t:34},xaxis:{title:'\u03c6M_ny (k-ft) \u2014 about y',zeroline:true},yaxis:{title:'\u03c6M_nx (k-ft) \u2014 about x',zeroline:true,scaleanchor:'x'},
-     legend:{orientation:'h'}},{responsive:true,displaylogo:false});
+     legend:{orientation:'h',y:-0.22}},{responsive:true,displaylogo:false});
   });
  }
 }
@@ -2812,6 +2821,7 @@ function sfdResultRows(){
   'Dowel development (ℓdc)':()=>['ACI 318-19 §25.4.9.2; D/C = ℓ<sub>dc</sub>/available',mx(real.map(z=>z.availEmb>0?z.Ldc/z.availEmb:Infinity)),['o-fd-bear']],
   'Pedestal design':()=>['ACI 318-19 §22.4.2.1 (axial; D/C shown); §10.6.1.1, §10.7.3.1, §25.7.2',
    mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.dcrAxial)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
+  'Pedestal P\u2013M (biaxial)':()=>['ACI 318-19 §22.4, §22.2; D/C = |M<sub>u</sub>|/|φM<sub>n</sub>|<sub>θ</sub> on the contour at each combination’s own P<sub>u</sub> (P<sub>u</sub>/φP<sub>n,max</sub> above the axial cap)',mx(P2.pedDes.filter(z=>!z.isPatch&&z.pmGov&&!isNaN(z.pmGov.ratio)).map(z=>z.pmGov.ratio)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
   'Pedestal tie cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/(c \u2212 d<sub>b,tie</sub>)',mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.tieCov>0?z.tieCovMin/z.tieCov:Infinity)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)]};
  return $$('#dashboard .chip').map(c=>{
   const name=c.querySelector('.cn').textContent, val=c.querySelector('.cv').textContent;
@@ -3186,6 +3196,17 @@ function sfrModel(){
     ms.push(S({id:'Pey',label:'Load-offset share of M_ux ('+pd.govMx.name+')',sym:'P_{u,a} e_{y}',eq:'',sub:sfrN(gx.Pa)+'\\cdot'+sfrP(gx.ley,3),value:gx.PeMx,unit:'kip-ft'}),
      S({id:'Pex',label:'Load-offset share of M_uy ('+pd.govMy.name+')',sym:'P_{u,a} e_{x}',eq:'',sub:sfrN(gy.Pa)+'\\cdot'+sfrP(gy.lex,3),value:gy.PeMy,unit:'kip-ft'}));}
    T.push({title:'Moments (biaxial)',ref:'ACI 318-19 R10.5 (strain compatibility contour)',steps:ms});
+   if(pd.pmGov&&pd.pmGov.mode==='radial'){const g=pd.pmGov;   /* SFPM */
+    T.push({title:'Biaxial P–M ratio at each combination’s own P_u (governing: '+g.name+')',ref:SFPM_REF,steps:[
+     S({id:'pmP',label:'Factored axial load of the governing combination (the contour is traced at this P_u)',sym:'P_{u}',eq:'',sub:'',value:g.P,unit:'kip',note:g.name}),
+     S({id:'pmMd',label:'Resultant factored moment',sym:'|M_{u}|',eq:'\\sqrt{M_{ux}^{2} + M_{uy}^{2}}',sub:'\\sqrt{'+sfrP(g.Mx)+'^{2} + '+sfrP(g.My)+'^{2}}',value:g.Md,unit:'kip-ft'}),
+     S({id:'pmTh',label:'Direction of the demand in the (M_uy, M_ux) plane',sym:'\\theta',eq:'\\mathrm{atan2}(M_{ux}, M_{uy})',sub:'',value:g.theta,unit:'°',d:2}),
+     S({id:'pmCx',label:'Capacity point on the contour at θ: φM_nx (neutral-axis angle '+sfrN(g.alpha,2)+'°)',sym:'\\phi M_{nx,\\theta}',eq:'',sub:'',value:g.cMx,unit:'kip-ft'}),
+     S({id:'pmCy',label:'Capacity point on the contour at θ: φM_ny',sym:'\\phi M_{ny,\\theta}',eq:'',sub:'',value:g.cMy,unit:'kip-ft'}),
+     S({id:'pmRc',label:'Moment capacity in the direction of the demand',sym:'|\\phi M_{n}|_{\\theta}',eq:'\\sqrt{\\phi M_{nx,\\theta}^{2} + \\phi M_{ny,\\theta}^{2}}',sub:'\\sqrt{'+sfrP(g.cMx)+'^{2} + '+sfrP(g.cMy)+'^{2}}',value:g.Rc,unit:'kip-ft'}),
+     S({id:'pmR',label:'Biaxial P–M ratio (governing combination)',sym:'ratio',eq:'\\frac{|M_{u}|}{|\\phi M_{n}|_{\\theta}}',sub:'\\frac{'+sfrN(g.Md)+'}{'+sfrN(g.Rc)+'}',value:g.ratio,unit:'',d:3,ok:g.ratio<=1+1e-9})]});}
+   else if(pd.pmGov&&pd.pmGov.mode==='axial'){const g=pd.pmGov;
+    T.push({title:'Biaxial P–M ratio (governing: '+g.name+')',ref:'ACI 318-19 22.4.2.1',steps:[S({id:'pmR',label:'P_u above the axial cap: no moment capacity at this P_u',sym:'ratio',eq:'\\frac{P_{u}}{\\phi P_{n,max}}',sub:'\\frac{'+sfrN(g.P)+'}{'+sfrN(pd.phiPn_max)+'}',value:g.ratio,unit:'',d:3,ok:g.ratio<=1+1e-9})]});}
    T.push({title:'Bar positions for the P–M interaction',ref:'ACI 318-19 20.5.1.3 (cover), 22.2 (strain compatibility)',steps:[   /* SFPC */
     S({id:'dpr',label:'Face to longitudinal-bar centre (cover = clear cover to the longitudinal bars)',sym:"d'",eq:'c + \\frac{d_{b}}{2}',sub:sfrN(num(rf.cover))+' + \\frac{'+sfrN(BAR_DIA[rf.longSize]||0,3)+'}{2}',value:pd.dPr,unit:'in',d:3}),
     S({id:'dx',label:'Depth to the far bar row, bending about y',sym:'d_{x}',eq:"b_{x} \\minus d'",sub:sfrN(pd.bx,1)+' \\minus '+sfrN(pd.dPr,3),value:pd.dX,unit:'in',d:3}),
@@ -3198,6 +3219,9 @@ function sfrModel(){
     S({id:'klr',label:'Slenderness (k = 1, ℓ_u = h, r = 0.3 b_min)',sym:'k \\ell_{u}/r',eq:'\\frac{h}{0.3 b_{min}}',sub:'\\frac{'+sfrN(pd.h)+'}{0.3\\cdot'+sfrN(pd.bmin)+'}',value:pd.klu_r,unit:'',d:2}),
     S({id:'sl',label:'Slender (k ℓ_u/r > 22: moment magnification needed, not done here)?',sym:'',eq:'',sub:'',value:pd.slenderFlag?'yes':'no',ok:!pd.slenderFlag})]});
    subs.push({title:pd.label+' ('+(pd.isPedestal?'pedestal':'column')+', '+sfrN(pd.bx,1)+' × '+sfrN(pd.by,1)+' × '+sfrN(pd.h,1)+' in)',items:[sfrTopics('pd'+i,T),
+    ...(pd.pmRat&&pd.pmRat.length?[{type:'table',wide:true,head:['Combination','P_u (kip)','M_ux (kip-ft)','M_uy (kip-ft)','|M_u| (kip-ft)','|φM_n|_θ (kip-ft)','ratio'],   /* SFPM */
+     rows:pd.pmRat.map(z=>({cells:[z.name+(z.mode==='radial'?'':' ('+sfpmModeTxt(z)+')'),sfrCell(z.P),sfrCell(z.Mx),sfrCell(z.My),sfrCell(z.Md),z.Rc==null?sfrCell('—'):sfrCell(z.Rc),isNaN(z.ratio)?sfrCell('n/a'):sfrDC(z.ratio)],cls:z===pd.pmGov?'gov':''}))},
+     {type:'note',text:'Each combination is checked on the contour at its own P_u, in the direction of its moment (same procedure as the governing row, worked above). Combination with no moment: ratio 0 (axial: see Axial strength).'}]:[]),
     {type:'note',text:'Every LRFD combination is plotted against the biaxial capacity contour on the [[tab:peddes|Pedestal Design tab]]. Combination actions: §2.3; dowels and bearing on the footing: [[cbr/cb'+i+'.DCR]].'}]});
   });
   secs.push({title:'Pedestal design',subs});
@@ -4528,9 +4552,13 @@ function computePhase2(R){
   const pmPts=[];
   combos.forEach(c=>{const pl=c.nr.pl.find(z=>z.idx===i);if(!pl)return;
    pmPts.push({name:c.cb.name,P:pl.P,Mx:pl.mxPed,My:pl.myPed});});
+  /* SFPM: interaction ratio of every combination at its own P_u; the governing one (largest ratio) */
+  const pmRat=isPatch?[]:sfpmRatios(pmBars,bx,by,fc,fy,pmPts,phiPn_max);
+  const pmGov=pmRat.reduce((a,z)=>(!a||(isNaN(a.ratio)&&!isNaN(z.ratio))||z.ratio>a.ratio)?z:a,null);
+  const pmRange=pmRat.filter(z=>z.mode==='range').map(z=>z.name);
   return{idx:i,label:p.label,isPedestal,Ag,nBars,Ast,rho,P0:P0/1000,Pn_max,phiPn_max,
    PuMax,MuxMax,MuyMax,govMx,govMy,tieMax,tieOK,tieSizeOK,nBarsOK,rhoOK,rhoMin,rhoMax,barFitOK,clrX,clrY,clrMin,dbL,r,klu_r,slenderFlag,dcrAxial,bmin,h,bx,by,isPatch,
-   pmBars,pmPts,fc,fy,PB,dPr,dX,dY,exposure,cov,tieDb,tieCov,tieCovMin,tieCovOK};
+   pmBars,pmPts,pmRat,pmGov,pmRange,fc,fy,PB,dPr,dX,dY,exposure,cov,tieDb,tieCov,tieCovMin,tieCovOK};
  });
  return{bandChk,offFooting,dBotX,dBotY,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,bearing,pedDes,pressMomentAbout,pressShearBeyond,pressResultant,
   beamDiagram,pressurePlane,netResultant};
@@ -4552,7 +4580,7 @@ function pedBarCoords(bx,by,coverIn,nx,ny,barArea){
 }
 /* ---- biaxial interaction: capacity contour (phiMnx, phiMny) at a target axial load Pu ----
    Sweeps the neutral-axis orientation; for each angle finds the c that yields phiPn = Pu, returns (phiMnx,phiMny). */
-function pmContour(bars,bx,by,fc,fy,Pu_target,nAngles){
+function pmContour(bars,bx,by,fc,fy,Pu_target,nAngles,angList){   // SFPM: angList (optional) = neutral-axis angles (rad) to evaluate instead of the uniform grid
  const Es=29000000,ecu=0.003,b1=beta1(fc);
  const Ag=bx*by;
  function analyze(cDepth,angleRad){
@@ -4615,19 +4643,56 @@ function pmContour(bars,bx,by,fc,fy,Pu_target,nAngles){
  }
  const pts=[];
  const angs=nAngles||24;
- for(let k=0;k<angs;k++){
-  const ang=(k/angs)*2*Math.PI;
+ const nA=angList?angList.length:angs;
+ for(let k=0;k<nA;k++){
+  const ang=angList?angList[k]:(k/angs)*2*Math.PI;
   // bisection on c to hit Pu_target (phiPn)
   let lo=0.05*Math.max(bx,by),hi=4*Math.max(bx,by),found=null;
   for(let it=0;it<40;it++){
    const c=(lo+hi)/2;const r=analyze(c,ang);const phi=phiOf(c,ang);const phiPn=phi*r.Pn;
-   if(Math.abs(phiPn-Pu_target)<0.5){found={phiMnx:phi*r.Mnx,phiMny:phi*r.Mny,c};break;}
+   if(Math.abs(phiPn-Pu_target)<0.5){found={phiMnx:phi*r.Mnx,phiMny:phi*r.Mny,c,phiPn};break;}
    if(phiPn<Pu_target)lo=c;else hi=c;
-   found={phiMnx:phi*r.Mnx,phiMny:phi*r.Mny,c};
+   found={phiMnx:phi*r.Mnx,phiMny:phi*r.Mny,c,phiPn};
   }
   if(found)pts.push(found);
  }
  return pts;
+}
+/* ---- SFPM (2026-11-01, engineer): biaxial P–M demand / capacity of each LRFD combination at its OWN P_u ----
+   Method: constant-axial-load radial ratio on the app's own load contour (the capacity surface cut at P = P_u; the
+   pmContour section analysis: strain compatibility, ACI 318-19 22.2; phi by net tensile strain, 21.2.2). The capacity
+   point is the point of the contour at P_u in the direction of the demand vector (M_uy, M_ux): the neutral-axis angle
+   alpha is found by bisection so that the capacity moment direction equals the demand direction (the bar layout is
+   doubly symmetric, so alpha lies in the demand's quadrant and the direction grows with alpha). Then
+   ratio = |M_u| / |phiM_n| with |M_u| = sqrt(M_ux^2 + M_uy^2), |phiM_n| = sqrt(phiM_nx^2 + phiM_ny^2) at that point.
+   Where P_u > phiP_n,max (ACI 318-19 22.4.2.1: the design axial strength of the tied section is capped) there is no
+   moment capacity at P_u: ratio = P_u/phiP_n,max (mode 'axial'). Where the section cannot reach P_u (the c search
+   does not converge, e.g. tension beyond its range) the ratio is not computed (mode 'range'). */
+const SFPM_REF='ACI 318-19 22.4 and 22.2 (strain compatibility), 21.2.2 (phi); constant-P_u radial ratio on the load contour (Bresler 1960, ACI J. 57(11))';
+function sfpmModeTxt(z){return z.mode==='axial'?'P_u > \u03c6P_n,max: axial cap governs':(z.mode==='range'?'not computed (P_u outside the section range)':'radial');}
+function sfpmPoint(bars,bx,by,fc,fy,P,a){const q=pmContour(bars,bx,by,fc,fy,P,0,[a])[0];return q&&Math.abs(q.phiPn-P)<=1?q:null;}
+function sfpmRatios(bars,bx,by,fc,fy,pts,phiPnMax){
+ const H=Math.PI/2, TWO=2*Math.PI;
+ return pts.map(p=>{
+  const Md=Math.hypot(p.Mx,p.My), o={name:p.name,P:p.P,Mx:p.Mx,My:p.My,Md,mode:'radial',ratio:0,Rc:null,cMx:null,cMy:null,theta:null,alpha:null,it:0};
+  if(p.P>phiPnMax+1e-9){o.mode='axial';o.ratio=p.P/phiPnMax;return o;}
+  let th=Math.atan2(p.Mx,p.My);if(th<0)th+=TWO;if(Md<1e-9)th=0;
+  o.theta=th*180/Math.PI;
+  const q0=Math.min(Math.floor(th/H+1e-12),3), lo0=q0*H;
+  const dir=c=>{let d=Math.atan2(c.phiMnx,c.phiMny);while(d<lo0-H)d+=TWO;while(d>lo0+H+H)d-=TWO;return d;};
+  let lo=lo0, hi=lo0+H, a=lo0, c=sfpmPoint(bars,bx,by,fc,fy,p.P,lo0);
+  if(!c){o.mode='range';o.ratio=NaN;return o;}
+  if(Math.abs(th-lo0)>1e-9){
+   const cH=sfpmPoint(bars,bx,by,fc,fy,p.P,hi);
+   if(!cH){o.mode='range';o.ratio=NaN;return o;}
+   if(Math.abs(th-hi)<1e-9){c=cH;a=hi;}
+   else for(let it=0;it<40;it++){a=(lo+hi)/2;c=sfpmPoint(bars,bx,by,fc,fy,p.P,a);o.it=it+1;
+    if(!c){o.mode='range';o.ratio=NaN;return o;}
+    const d=dir(c);if(Math.abs(d-th)<1e-5)break;if(d<th)lo=a;else hi=a;}
+  }
+  const Rc=Math.hypot(c.phiMnx,c.phiMny);
+  o.alpha=a*180/Math.PI;o.Rc=Rc;o.cMx=c.phiMnx;o.cMy=c.phiMny;o.ratio=Md<1e-9?0:(Rc>0?Md/Rc:Infinity);
+  return o;});
 }
 </script>
 <script>
@@ -5014,14 +5079,15 @@ function renderPedestalDesign(){
  const intro=secPanel(T,'o-pd-intro','6.1  Classification & Reinforcement Summary');
  intro.appendChild(el('p','note','Each pedestal is classified as a pedestal (height \u2264 3\u00d7 least plan dimension) or a column, and checked against axial\u2013moment demand, tie provisions (ACI 318-19 25.7.2), longitudinal steel limits (1\u20138% A_g, min 4 bars), and slenderness. Biaxial interaction is reported via the axial demand ratio with the Bresler framework; moment magnification for slender pedestals is deferred to v2 (flagged).'));
  const t=document.createElement('table');t.className='tbl';
- t.innerHTML='<tr><th>Pedestal</th><th>Class</th><th>b\u2093\u00d7b\u1D67\u00d7h (in)</th><th>n bars</th><th>A_st (in\u00b2)</th><th>\u03c1 (%)</th><th>\u03c6P_n,max (k)</th><th>P_u (k)</th><th>Axial DCR</th><th>Ties</th><th>Tie cover (in)</th><th>Slender?</th></tr>';
+ t.innerHTML='<tr><th>Pedestal</th><th>Class</th><th>b\u2093\u00d7b\u1D67\u00d7h (in)</th><th>n bars</th><th>A_st (in\u00b2)</th><th>\u03c1 (%)</th><th>\u03c6P_n,max (k)</th><th>P_u (k)</th><th>Axial DCR</th><th>P\u2013M ratio (own P_u)</th><th>Ties</th><th>Tie cover (in)</th><th>Slender?</th></tr>';
  P2.pedDes.forEach(pd=>{const tr=document.createElement('tr');
   const tiesTxt=(pd.tieOK&&pd.tieSizeOK)?'OK':'CHECK';
-  [pd.label,pd.isPedestal?'Pedestal':'Column',f2(pd.bx)+'\u00d7'+f2(pd.by)+'\u00d7'+f2(pd.h),pd.nBars,f2(pd.Ast),f2(pd.rho*100),f2(pd.phiPn_max),f2(pd.PuMax),f2(pd.dcrAxial),tiesTxt,pd.isPatch?'\u2014':f3(pd.tieCov)+(pd.tieCovOK?' \u2265 ':' < ')+f2(pd.tieCovMin),pd.slenderFlag?'YES':'No'].forEach((x,k)=>{
+  [pd.label,pd.isPedestal?'Pedestal':'Column',f2(pd.bx)+'\u00d7'+f2(pd.by)+'\u00d7'+f2(pd.h),pd.nBars,f2(pd.Ast),f2(pd.rho*100),f2(pd.phiPn_max),f2(pd.PuMax),f2(pd.dcrAxial),pd.isPatch||!pd.pmGov?'\u2014':(isNaN(pd.pmGov.ratio)?'n/a':f2(pd.pmGov.ratio))+(pd.pmGov&&!pd.isPatch?' ('+pd.pmGov.name+')':''),tiesTxt,pd.isPatch?'\u2014':f3(pd.tieCov)+(pd.tieCovOK?' \u2265 ':' < ')+f2(pd.tieCovMin),pd.slenderFlag?'YES':'No'].forEach((x,k)=>{
    const td=document.createElement('td');td.textContent=x;
    if(k===8&&pd.dcrAxial>1)td.style.color='#b71c1c';
-   if(k===9)td.style.color=tiesTxt==='OK'?'#1b5e20':'#b71c1c';
-   if(k===10&&!pd.isPatch)td.style.color=pd.tieCovOK?'#1b5e20':'#b71c1c';tr.appendChild(td);});
+   if(k===9&&pd.pmGov&&!pd.isPatch)td.style.color=pd.pmGov.ratio<=1?'#1b5e20':'#b71c1c';   /* SFPM */
+   if(k===10)td.style.color=tiesTxt==='OK'?'#1b5e20':'#b71c1c';
+   if(k===11&&!pd.isPatch)td.style.color=pd.tieCovOK?'#1b5e20':'#b71c1c';tr.appendChild(td);});
   if(!pd.rhoOK||!pd.nBarsOK||!pd.barFitOK)tr.style.background='#fff8e1';t.appendChild(tr);});
  intro.appendChild(t);
  intro.appendChild(sfdWorkedIn(P2.pedDes.map((pd,i)=>['o-pd-'+i,pd.label,['tab-peddes','6.'+(i+2)+' '+pd.label+' \u2014 Detailed Checks']])));   /* D11 links */
@@ -5054,7 +5120,26 @@ function renderPedestalDesign(){
   b.appendChild(eqBlock('Biaxial interaction \u2014 demand vs capacity contour','ACI 318-19 R10.5 / strain compatibility',
    '\\text{Capacity contour } (\\phi M_{nx},\\phi M_{ny}) \\text{ traced at the axial level of each check by strain compatibility.}',
    'M_{ux} = '+f2(pd.MuxMax)+'\\;\\mathrm{k\\text{-}ft},\\;M_{uy} = '+f2(pd.MuyMax)+'\\;\\mathrm{k\\text{-}ft},\\;P_u = '+f2(pd.PuMax)+'\\;\\mathrm{k}',
-   '\\text{All LRFD combinations are plotted below against the biaxial capacity contour.}'));
+   '\\text{Each LRFD combination is checked at its own } P_u \\text{ below (ratio table); the plot shows them all.}'));
+  if(pd.pmGov){   /* SFPM: interaction ratio at the governing combination's own P_u, worked */
+   const fp=x=>x<0?'('+f2(x)+')':f2(x);
+   const g=pd.pmGov, tn=x=>String(x).replace(/[\\{}$&#%_^~]/g,'');
+   if(g.mode==='radial')b.appendChild(eqBlock('Biaxial P\u2013M ratio at the combination\u2019s own P_u \u2014 governing: '+g.name,'ACI 318-19 22.4, 22.2, 21.2.2; constant-P_u radial ratio',
+    '\\text{ratio} = \\frac{|M_u|}{|\\phi M_n|_{\\theta}} = \\frac{\\sqrt{M_{ux}^2+M_{uy}^2}}{\\sqrt{\\phi M_{nx,\\theta}^2+\\phi M_{ny,\\theta}^2}},\\quad \\theta = \\mathrm{atan2}(M_{ux},M_{uy}),\\;\\text{contour traced at } P = P_u',
+    '\\text{'+tn(g.name)+'}:\\;P_u = '+f2(g.P)+'\\;\\mathrm{k},\\;M_{ux} = '+f2(g.Mx)+',\\;M_{uy} = '+f2(g.My)+'\\;\\mathrm{k\\text{-}ft},\\;|M_u| = \\sqrt{'+fp(g.Mx)+'^2+'+fp(g.My)+'^2} = '+f2(g.Md)+',\\;\\theta = '+f2(g.theta)+'^{\\circ}',
+    '\\text{capacity at }\\theta\\text{ (N.A. angle }'+f2(g.alpha)+'^{\\circ}\\text{)}:\\;\\phi M_{nx,\\theta} = '+f2(g.cMx)+',\\;\\phi M_{ny,\\theta} = '+f2(g.cMy)+',\\;|\\phi M_n|_{\\theta} = '+f2(g.Rc)+'\\;\\mathrm{k\\text{-}ft}\\;\\Rightarrow\\;\\text{ratio} = \\frac{'+f2(g.Md)+'}{'+f2(g.Rc)+'} = \\mathbf{'+f3(g.ratio)+'}'+(g.ratio<=1?'\\;\\checkmark':'\\;\\text{NG}')));
+   else if(g.mode==='axial')b.appendChild(eqBlock('Biaxial P\u2013M ratio \u2014 governing: '+g.name,'ACI 318-19 22.4.2.1',
+    '\\text{ratio} = P_u/\\phi P_{n,max}\\;\\text{(no moment capacity above the axial cap)}','\\text{ratio} = '+f2(g.P)+'/'+f2(pd.phiPn_max)+' = \\mathbf{'+f3(g.ratio)+'}',g.ratio<=1?'\\checkmark':'\\text{NG}'));
+   if(pd.pmRange.length)b.appendChild(el('div','warnbox','P\u2013M ratio not computed for '+pd.pmRange.map(sfEsc).join(', ')+': the section cannot reach that P<sub>u</sub> (tension beyond the range of the neutral-axis search). Check by hand.'));
+   const rt=document.createElement('table');rt.className='tbl';rt.style.fontSize='11px';
+   rt.innerHTML='<tr><th>#</th><th>Combination</th><th>P_u (k)</th><th>M_ux (k-ft)</th><th>M_uy (k-ft)</th><th>|M_u| (k-ft)</th><th>\u03c6M_nx,\u03b8</th><th>\u03c6M_ny,\u03b8</th><th>|\u03c6M_n|_\u03b8 (k-ft)</th><th>Ratio</th></tr>';
+   pd.pmRat.forEach((z,k)=>{const tr=document.createElement('tr');
+    [k+1,z.name,f2(z.P),f2(z.Mx),f2(z.My),f2(z.Md),z.cMx==null?'\u2014':f2(z.cMx),z.cMy==null?'\u2014':f2(z.cMy),z.Rc==null?'\u2014':f2(z.Rc),(isNaN(z.ratio)?'n/a':f3(z.ratio))+(z.mode==='radial'?'':' ('+sfpmModeTxt(z)+')')].forEach((x,c)=>{const td=document.createElement('td');td.textContent=x;
+     if(c===9)td.style.color=isNaN(z.ratio)?'#8a6d00':(z.ratio<=1?'#1b5e20':'#b71c1c');tr.appendChild(td);});
+    if(z===g)tr.style.fontWeight='bold';rt.appendChild(tr);});
+   b.appendChild(rt);
+   b.appendChild(el('div','note','Ratio of each LRFD combination at its <b>own</b> P<sub>u</sub>: the \u03c6M<sub>nx</sub>\u2013\u03c6M<sub>ny</sub> contour is traced at that P<sub>u</sub> (the same strain-compatibility routine as the plot) and the capacity is read in the direction \u03b8 of the demand (M<sub>uy</sub>, M<sub>ux</sub>) from the origin; ratio = |M<sub>u</sub>| / |\u03c6M<sub>n</sub>|<sub>\u03b8</sub>. Where P<sub>u</sub> &gt; \u03c6P<sub>n,max</sub> the ratio is P<sub>u</sub>/\u03c6P<sub>n,max</sub> (ACI 318-19 22.4.2.1). Combination with no moment: ratio 0 (its axial check is the axial DCR above). Bold row = governing.'));
+  }
   if(pd.govMx&&pd.govMy&&(Math.abs(pd.govMx.pl.ley)>1e-12||Math.abs(pd.govMx.pl.lex)>1e-12)){   /* SFLO: the load-offset part of M_ux, M_uy, worked */
    const gx=pd.govMx.pl, gy=pd.govMy.pl;
    const tn=x=>String(x).replace(/[\\{}$&#%_^~]/g,'');   // combination name inside \text{}
@@ -5065,7 +5150,7 @@ function renderPedestalDesign(){
    b.appendChild(el('div','note','M at the pedestal base; P<sub>u,a</sub> = factored applied load at the load point (the pedestal self-weight acts at the centroid). The same P\u00b7e reaches the footing as an interface moment (flexure, one-way shear, punching moment transfer).'));
   }
   const pmDiv=el('div','plot');pmDiv.id='plot-pm-'+i;pmDiv.style.height='420px';b.appendChild(pmDiv);
-  b.appendChild(el('div','note','Biaxial load contour: the closed curve is the capacity envelope \u03c6M_nx\u2013\u03c6M_ny computed at the governing axial load by strain compatibility for the entered bar layout, bar centres at d\u2032 = cover + d<sub>b</sub>/2 from each face (0.85f\u2032c stress block, \u03b5cu = 0.003, \u03c6 by strain). Each point is a factored combination\u2019s (M_ux, M_uy) demand at this pedestal; points inside the contour pass. Because the contour size varies with axial load, points are shown against the contour at the maximum P_u (conservative for gravity-dominated cases). Verify any borderline point at its own axial level.'));
+  b.appendChild(el('div','note','Biaxial load contour: the closed curve is the capacity envelope \u03c6M_nx\u2013\u03c6M_ny computed at the governing axial load by strain compatibility for the entered bar layout, bar centres at d\u2032 = cover + d<sub>b</sub>/2 from each face (0.85f\u2032c stress block, \u03b5cu = 0.003, \u03c6 by strain). Each point is a factored combination\u2019s (M_ux, M_uy) demand at this pedestal. <b>The solid contour is at P_u,max</b> (for reference); the dashed contour is at the governing combination\u2019s own P_u. <b>Point colours are the ratio at each combination\u2019s own P_u</b> (green \u2264 1, red > 1; the ratio table above).'));
   b.appendChild(eqBlock('Tie spacing limit','ACI 318-19 25.7.2.1',
    's_{max} = \\min(16 d_{b,long},\\,48 d_{b,tie},\\,\\text{least dim})',
    's_{max} = \\min(16\\cdot'+f2(BAR_DIA[state.peds[i].reinf.longSize||8])+',\\,48\\cdot'+f2(BAR_DIA[state.peds[i].reinf.tieSize||3])+',\\,'+f2(pd.bmin)+')',
@@ -5880,6 +5965,7 @@ manPart("p3","3. Output Reference",[
  ["Concrete bearing","Pu/\u03c6Pnb \u2264 1 at each pedestal interface"],
  ["Dowel steel","provided \u2265 0.005A_g (REVIEW when short)"],
  ["Pedestal design","axial DCR, ties, \u03c1 limits, bar fit, min bars \u2014 all pedestals"],
+ ["Pedestal P\u2013M (biaxial)","largest ratio |M<sub>u</sub>|/|\u03c6M<sub>n</sub>|<sub>\u03b8</sub> over the LRFD combinations, each on the \u03c6M<sub>nx</sub>\u2013\u03c6M<sub>ny</sub> contour at its own P<sub>u</sub> (P<sub>u</sub>/\u03c6P<sub>n,max</sub> above the axial cap) \u2264 1; REVIEW where it could not be computed"],
  ["Pedestal tie cover","clear cover to the ties c \u2212 d<sub>b,tie</sub> \u2265 ACI 318-19 Table 20.5.1.3.1 minimum for the pedestal exposure (input on the pedestal card)"]
 ]}},
 {h:"3.2 Report sections"},
