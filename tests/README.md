@@ -92,6 +92,22 @@ node tests/bpad-profis.mjs        # origin/main vs working tree results + export
 
 Compares `computeAll()`, the governing combination, every combination's capacities, the validation messages and the print-report text between `--a` (default `origin/main`) and `--b` (default the working tree) on the default project and every built-in `VALIDATION_CASES` project. Then, on `--b`: exports a design that reproduces `projects/bpad/profis-example.pe` (the engineer's PROFIS file, also the template embedded in the tool) and compares every XML leaf field with it, listing the expected differences; exports a design with no known catalog IDs and checks the "select in PROFIS" list; clicks the dialog's Download button and parses the file. The tool's CDN libraries are not in `libs/` and are blocked; the tool runs without them (KaTeX falls back to plain text, the same on both sides).
 
+## Base Plate & Anchor Designer: bolt circle, circular pier, torsion (`bpad-circle.mjs`)
+
+```bash
+node tests/bpad-circle.mjs        # origin/main vs working tree on 31 rectangular projects + bolt-circle / round-pier / torsion / hand-off checks
+```
+
+Section 1 compares `computeAll()`, every combination's capacities, `allChecks()`, the validation messages, the print-report text and the Report-tab model between `--a` (default `origin/main`; its `shared/` folder is extracted next to it) and `--b` on 31 rectangular projects (default, the PROFIS validation cases, the anchor comparison's C1/C3/C4/C5 in four force-model variants, eleven reinforcement / stand-off / option variants): any difference fails. Section 2, on `--b`: 4 bolts at 45° on BC = 12√2 must equal the 2×2 grid (≤ 1e-9 relative, 16 cases), hand checks H1 (8-bolt elastic group), H2 (circular plate, LRFDLTS bending line), H3 (round pier: A_Nc by clipping, ψ factors, φN_cbg with and without §17.6.2.1.2), H4 (torsion, vector-sum anchor shear), H5 (`anchorGroup` import with the `lightPole-v1` sign mapping, the anchor-group picker, the `anchorGroupResult` payload), and every worked line of those designs must typeset in KaTeX (the test kit's KaTeX 0.16.9 is injected when the tool's version is not in `libs/`).
+
+## Anchor parity, Light Pole vs Base Plate (`anchor-parity.mjs`)
+
+```bash
+node tests/anchor-parity.mjs      # Light Pole anchorBolts() in Node vs the Base Plate & Anchor Designer, 38 pole anchor groups
+```
+
+The Light Pole tool's own `anchorBolts()` (`engine/lp-source.mjs`) and the Base Plate & Anchor Designer (bolt circle, circular plate, double nut, elastic group, V/n per anchor) on the comparison cases C1–C6 and 4 / 6 / 8 / 12 bolts × round / square shaft × T 0 / 6 kip·ft × clear stand-off 0 / 1.5 in. Fails unless T_max and ΣT agree to 1e-9, φN_sa / φN_pn / φV_sa to 0.1 % (A_se table vs formula), the Base Plate shear per bolt equals the vector sum and does not exceed the Light Pole's sum of magnitudes, and no design has a validation error. The concrete modes are listed with their known causes.
+
 ## Suggest panel checks (`suggest.mjs`)
 
 ```bash

@@ -1412,7 +1412,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **How verified:** `node tests/engine/run.mjs lightpole` 18 passed (new arm/torsion test); `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves` (14 cases incl. the new "torsion" case): differences as listed; diff paths filtered.
 - **Open items:** the arm dead load is not separate (part of the fixture weight); arms are taken horizontal at h_f; the arm wind uses the projected area with the force along the wind (the normal-component form of §29.4 for inclined members is not used).
 
-## 2026-11-01 — PR: claude/lp-pr8-vc (LP-8: shaft V_c per ACI 318-19 Table 22.5.5.1 with the A_v,min / size-effect branch, LP-R11; PR link added after merge)
+## 2026-11-01 — PR #573: claude/lp-pr8-vc (LP-8: shaft V_c per ACI 318-19 Table 22.5.5.1 with the A_v,min / size-effect branch, LP-R11)
 
 ### LP8-1. Concrete shear strength of the shaft   [calc change] [more conservative]
 - **Where:** `designRebar()`, block `// ---- concrete shear strength, ACI 318-19 §22.5.5.1` (replaces `// shear capacity of concrete (circular)` through the tie-spacing selection); tie result fields `VcA, VcB, lamS, rhoW, AsT, Av, avMinPerS, sAvMin, sTrial, vcBranch`; `rebarWorkedHTML()` step 4 (A_v,min, both branches, φV_c with the branch used, s for A_v,min).
@@ -1430,3 +1430,106 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
   - Other cases: square shaft 98,359 → 44,117; 60 ft pole (3.5 ft, (16) bars) 105,148 → 38,632; two-post sign 98,359 → 42,455 lb. No case changes its tie spacing or verdict.
 - **How verified:** `node tests/engine/run.mjs lightpole` 19 passed (new V_c test). `node tests/lightpole-compare.mjs --a origin/main`: 14 cases, only φV_c / V_c and the new tie fields differ (13 values per stack; diff paths filtered); cable values identical. No saved data change.
 - **Open items:** ρ_w uses half the longitudinal bars (conservative; the code does not define A_s for a circular section); A_cv = 0.8A_g kept (vs D·0.8D = 1.02A_g); the axial term N_u/6A_g is neglected.
+
+## 2026-11-01 — PR #578: claude/lp-pr9-natgf (LP-9: n₁ and G_f worked steps; display only)
+
+### LP9-1. Natural frequency n₁ and gust-effect factor G_f worked (CLAUDE.md §6; D11 open item)   [display] [no result change]
+- **Where:** `poleNatFreq()` also returns `sWy, sWy2, rows` (the Rayleigh sums and each weight's height, weight and deflection; values unchanged); `lppApplyGf()` keeps `inp.nat`, `inp.gfDims`; new `natGfWorkedHTML(inp)` above `function hssTorsionShear(`; shown in `windWorkedHTML()` (pole, Loading tab), `signWindWorkedHTML()` (sign, Loading tab and the sign report) and the pole report's pole-wind section.
+- **Steps:** table of z_i, W_i, y_i, W_i·y_i, W_i·y_i²; n₁ = (1/2π)·√(g·ΣWy/ΣWy²) with the numbers; rigid/flexible; when flexible, z̄, I_z̄, L_z̄, Q², V̄_z̄, N₁, R_n, R_h, R_B, R_L, R², g_R and G_f (ASCE 7-22 Eq. 26.11-7 … 26.11-16) with the numbers, then G used = max(G, G_f).
+- **Check case (60 ft pole case):** ΣW·y = 7,213.94, ΣW·y² = 61,110.99 → n₁ = √(386.1·7,213.94/61,110.99)/(2π) = 6.751/6.283 = **1.0745 Hz** (rigid; the tool's value).
+- **How verified:** `node tests/engine/run.mjs lightpole` 20 passed (worked-step test, flexible case with n₁ = 0.82 Hz: G_f shown, no NaN). `node tests/lightpole-compare.mjs --a origin/main`: results identical apart from the added fields (`sWy`, `sWy2`, `rows`, `inp.nat`, `inp.gfDims`); cable values identical; text adds the worked steps (Loading tab, report); 0 console errors.
+
+## 2026-11-01 — PR #582: claude/lp-pr10-json (LP-10: JSON export / import of the project; no result change)
+
+### LP10-1. Export JSON / Import JSON   [feature] [no result change] [no storage change]
+- **Where:** project bar: buttons `pbExport`, `pbImport`, hidden `pbImportFile`; new `lppExportJSON()`, `lppImportState(obj)` and handlers above `const DEFAULT_STATE=captureState();`.
+- **File format (new, versioned):** `{ tool:'Light Pole and Sign Post', format:'lpp-project', version:1, name, exported, state }`, where `state` is exactly `captureState()` — the same object already stored under `lpp_projects_v1` / `lpp_session_v1`. No localStorage key or saved format is changed (§5).
+- **Import:** accepts that file or a bare state object (`{inputs, …}`); opens it through `applyState()`, so every migration for fields added later applies (old files open with the old behaviour and the usual notices); the result is an unsaved working state ("Save As" stores it in the browser). A file without `inputs` is refused with a message. Unsaved changes ask for confirmation first.
+- **Saved-project list:** the tool already has one (the Project dropdown with Save / Save As / Rename / Delete / New); unchanged.
+- **How verified (headless Chromium, scratchpad lpjson.mjs):** two-post sign at V 133 exported → New → imported: the Summary text is identical and V = 133; a bare old-format state (no cfPoleMode / anchTq / arm OD …) imports with C_f Manual and anchor reinforcement Provided as stored; a file without `inputs` gives "Import failed: not a Light Pole and Sign Post project file"; localStorage holds only `lpp_session_v1` after the run; no console errors; 390 px: buttons wrap, no horizontal scroll. Calculations untouched (no engine code changed); `node tests/engine/run.mjs lightpole` 20 passed.
+
+## 2026-11-01 — PR #593: claude/lp-pr11-report (LP-11: Report tab in the shared viewer; the D11 calculation sheet kept as "Calc sheet"; display only)
+
+### LP11-1. Report tab (shared/report.js + shared/steps.js)   [display] [no result change]
+- **Coordinator rules applied (scratchpad/report_plan.md):** model builder `lprModel()` whose step values are the tool's own computed numbers (LPP_SUMCTX from `renderSummary`, `LPP_LAST` from `buildReport` / `buildSignReport`; nothing recomputed); steps grouped by topic (`SharedSteps.group`, `lprTopics`); nav tree to topic level; [[tab:…]] links back to the tabs; print with title block (no owner cell, "—" for the fields the tool does not have; no new saved fields), running header, page numbers. KaTeX 0.16.9 (already loaded). Old D11 report kept (engineer decision 2026-11-01: retired later).
+- **Where:**
+  - `<head>`: `<script src="shared/steps.js">`, `<script src="shared/report.js">`.
+  - Tabs: `Report` (data-tab `report`, host `#lprHost` in a new card) is the shared viewer; the former Report card is now the `Calc sheet` tab (data-tab `calcsheet`, page `#page-calcsheet`; content, D11 links, "Print / PDF report" button and its print CSS unchanged — the print rule now targets `#page-calcsheet`). `LPP_TABNAME` + report / calcsheet.
+  - New block `// ================= REPORT TAB (shared viewer, LPRP` before the project-management section: `LPP_LAST`, `LPRP`, `lprModel()`, `lprRender()`, `lprGoto()`, `lprActive()`, `lprRefresh()`.
+  - `switchTab()`: renders the report when the Report tab is shown; `lppReportDoc()` ends with `lprRefresh()` (rebuilt after every calc while shown).
+  - `beforeprint`: Report tab shown → the shared report prints alone (`#rp-print`, `body.rp-printing`); any other tab → the D11 calculation sheet as before.
+  - `shared/README.md`: Light Pole added to the steps.js and report.js "Loaded by" rows (no shared file changed).
+- **Sections:** 1 Project and scope · 2 Design summary (every check of every stack, sorted by D/C) · 3 Wind and ice (velocity pressure, C_f Fig. 29.4-1, mast wind, t_d, fixtures/arms table or sign panel wind with Cases A/C, n₁ and G_f) · 4 Load combinations (pole: every combination; sign: per post) · 5 Pole/post check (section, φM_n, φP_n, B₂·M, torsion, interaction) · 6 Base plate (bending-line steps) — anchors only listed in §2 with a link to the Anchors tab (engineer, 2026-11-01: no new anchor presentation) · 7 Drilled shaft (IBC embedment + iteration table, P–M, V_c branch, ties, bearing, torsion threshold, Broms reference) · 8 Assumptions and references.
+- **How verified (headless Chromium, KaTeX local):** default pole, two-post sign, torsion case, 60 ft pole at 1280 and 390 px: 0 unresolved references, 0 duplicate keys, 0 `.katex-error`, no NaN/undefined/Infinity in `SharedReport.text`, 0 console errors, no horizontal scroll; print PDF (11 pages, default) inspected. 18 report values spot-checked equal to the app's (d, M_u, φM_n, φV_c, V_u, q, A_base, A_s, P, h, post ratio, φM_n post, φP_n, n₁, t_req, b_eff, P_rod, C_f), pole and monopost. `node tests/lightpole-compare.mjs --a origin/main`: results and cable values identical in all 14 cases; the old Report text moved unchanged to the Calc sheet tab (line counts equal). Screenshots and PDFs: scratchpad/shots-lp/pr11-*.
+- **Open items:** Project No. / Computed by / Checked by / dates are not inputs (shown "—"); retire the D11 Calc sheet once the engineer accepts this report.
+
+## 2026-11-01 — PR #597: claude/lp-pr12-drawings (LP-12: Drawings tab with DXF via shared/dxf.js; Geometry elevation to scale; display only)
+
+### LP12-1. Drawings tab and DXF export   [display] [no result change]
+- **Where:** `<head>`: `<script src="shared/dxf.js">`; tab `Drawings` (data-tab `drawings`, card host `#lpdHost`); `switchTab()` renders it when shown; `lppReportDoc()` re-renders it after each calc while shown; new block `// ================= DRAWINGS (LPDW` (before the project-management section): `LPDW_SCALES`, `LPDW`, `lpdLayers`, `lpdShaft`, `lpdElevation`, `lpdPlan`, `lpdSection`, `lpdPlate`, `lpdBuild`, `lpdSheetSVG`, `lpdRender`, `lpdActive`, `lpdElevGeometry`; CSS `.lpdBar`, `.lpdHead`, `.lpdBox`; `LPP_TABNAME` + drawings; `shared/README.md` dxf.js "Loaded by" row (no shared file changed).
+- **Sheets (B-size 17 × 11 in, border and title block without owner cell, smallest standard scale that fits; one DXF R12 file, model space full size in inches, `SharedDxf.validate` before download):** 1 pole or sign elevation (to scale: tapered pole / posts, base plate, arms and fixtures projected on x–z, cable attachments, sign panel, shaft(s) with the designed embedment, bars and ties; dimensions H, d, b, clearance, L_p); 2 plan (shaft, plate, pole, rods, arms and fixtures at θ, cable directions, axes); 3 shaft section (bars at their radius, tie, cover; one per distinct shaft); 4 base plate (plate, pole, bolt circle and holes, thickness / F_y / t_req); 5 general notes. Per-browser UI key `lpp_dwgSheet_v1` (chosen sheet only).
+- **Anchors:** the plate sheet shows the rods as plate geometry only (engineer, 2026-11-01: no new anchor presentation; the anchor design may move to BasePlateAnchorDesigner).
+- **Cables:** drawn for information only (attachment height and direction), no cable value changes.
+
+### LP12-2. Geometry tab elevation to scale (review §5: "the shaft width is clamped to 60–120 px")   [display]
+- **Where:** `drawElev()` first calls `lpdElevGeometry()` (the elevation view of the drawing set, as SVG, to scale); the former schematic is kept as the fallback when shared/dxf.js is not loaded.
+
+### Verification
+- Headless Chromium, default pole / two-post sign / one-arm torsion case: 5 sheets each, `SharedDxf.validate` ok, no NaN/undefined in the DXF, 0 console errors, 390 px without horizontal scroll; every sheet screenshot inspected (scratchpad/shots-lp/pr12-*).
+- `node tests/lightpole-compare.mjs --a origin/main`: results and cable values identical in all 14 cases; the only differences are the Geometry elevation SVG and the new Drawings tab.
+
+## 2026-11-01 — PR #601: claude/lp-pr13-layout (LP-13: masthead at 390 px, wide equations at 1280 px; display only)
+
+### LP13-1. Masthead code tag at narrow widths (review §5)   [UI]
+- **Where:** CSS after the `@media(max-width:900px)` block: `@media(max-width:600px){.masthead .codetag{position:static;text-align:left;margin-top:8px}.masthead .codetag b{display:inline;margin-right:6px}}`.
+- **Before:** the absolutely positioned `.codetag` overlapped the eyebrow and the title at 390 px. **After:** it flows below the subtitle (no overlap, measured).
+
+### LP13-2. Wide worked equations no longer widen the page at desktop widths   [UI]
+- **Where:** `.katex{position:relative}` and `@media screen{.tabpage .katex-display{overflow-x:auto;overflow-y:hidden;max-width:100%}}` (the same rule the tool already applied below 900 px; screen only, so printing is unchanged).
+- **Before (origin/main, 1280 px):** page width 1528 px on Loading, 1303 px on Anchors, 1319 px on Calc sheet (long display equations). **After:** 1280 px on every tab; 390 px unchanged (390).
+- **How verified:** headless Chromium, every output tab at 1280 and 390 px (scratchpad lplayout.mjs; screenshots shots-lp/pr13-*); `node tests/lightpole-compare.mjs --a origin/main`: all 14 cases identical (results, cable values, text, drawings); 0 console errors.
+
+## 2026-11-01 — PR #602: claude/lp-pr14-breakout (LP-14: concrete breakout in the ACI 318-19 group form; engineer answer 2026-11-01)
+
+### LP14-1. Tension breakout: ΣN_ua of the tension anchors ≤ φN_cbg   [calc change] [less conservative = the code form]
+- **Engineer answer (2026-11-01, open question of LP-4):** use the group form with ψ_ec,N for eccentricity instead of T_max·n_T.
+- **Where:** `anchorBolts()`, block above `const tr=`; return fields `trAnc, trBrk`; `collectChecks()`: "Anchor tension" (steel / pullout, the combination with the largest per-anchor ratio) and new "Anchor breakout (group)" (ΣN_ua vs φN_cbg, the combination with the largest group ratio; anchor reinforcement None only); `LPP_CHK2K`; `boltWorkedHTML()` step 7.
+- **Before:**
+  ```js
+  phiNn=Math.min(phiNsa, phiNp, phiNcbg/nT);  const tr=Tmax/phiNn;
+  ```
+- **After:**
+  ```js
+  phiNn=Math.min(phiNsa, phiNp);  const trBrk = hasAnchRe ? 0 : Tsum/phiNcbg;
+  const trAnc=Tmax/phiNn, tr=Math.max(trAnc, trBrk);
+  ```
+  N_cbg already carries ψ_ec,N (eccentricity of the tension resultant from the tension-anchor centroid) and A_Nc of the tension anchors only (F6). The §17.8 interaction uses the governing tension ratio tr.
+- **Governing provision:** ACI 318-19 §17.6.2.1 (group: N_cbg for the anchors in tension, compared with the factored tension of the group, §17.5.1.1 / Table 17.5.2), §17.6.2.3 (ψ_ec,N), §17.8.
+- **Check case (the engineer's: default pole before the arm wind of LP-7, M_u 19,949 lb·ft, 1.2D + 1.0W, wind toward 0°):** ΣT = 19,401 lb, φN_cbg = 22,323 lb → **0.87** (Node test at exactly 0°: 19,405 / 22,408 = 0.866). Before: T_max / (φN_cbg/n_T) = 9,791 / (22,323/3) = 1.32.
+- **Current default (with arm wind, governing combination at the max-moment azimuth):** ΣT = 19,130, φN_cbg = 19,641 → **0.974** OK (before 1.475 NG). Other cases (tension ratio before → after): square shaft 2.257 → 1.493; 1½ in rods 0.843 → 0.515; torsion case 0.870 → 0.573; monopost 2.539 → 1.688 (interaction 2.812 → 1.961); two-post 2.912 → 1.938.
+- **How verified:** `node tests/engine/run.mjs lightpole` 22 passed (2 new tests); `node tests/lightpole-compare.mjs --a origin/main`: only the anchor tension chain changes (phiNn, tr, trAnc, trBrk, tgov, inter, interOK and the check rows); cable values identical; 0 console errors.
+
+## 2026-11-01 — PR #604: claude/lp-pr15-bpnote (LP-15: base-plate "verify method" note; display only; engineer answer 2026-11-01)
+
+### LP15-1. Base-plate verification note   [display] [no result change]
+- **Engineer answer (2026-11-01):** keep b_eff = πD/n; add a clear on-screen and report note "verify method / article (LRFDLTS 2nd Ed.)" on the base-plate check, listing the unverified items.
+- **Where:** new constant `LPP_BP_VERIFY` (above `function lppOffAxisFixtures(`); shown in the Summary "not checked" box (every stack with anchors), in `boltWorkedHTML()` step 8 (Anchors tab and the Calc sheet, as a highlighted box), and in the shared Report (base-plate note, warn; Assumptions).
+- **Text:** "VERIFY the base-plate method against AASHTO LRFDLTS 2nd Ed. — not yet verified: (1) the governing article number; (2) the effective-width rule (b_eff = πD/n at the pole face is used; for square/rectangular poles the same πB/n is used, no flat-face rule); (3) anchor-rod bending in the double-nut standoff is not checked; (4) the minimum plate thickness rules of LRFDLTS are not checked."
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main`: results and cable values identical in all 14 cases; text adds the note (Summary, Anchors, Calc sheet). Report: 0 unresolved references, 0 KaTeX errors, no NaN, 0 console errors (default pole, two-post sign, torsion, 60 ft pole at 1280 / 390 px).
+
+## 2026-11-01 — PR: claude/lp-pr16-signice (LP-16: atmospheric ice on sign panels and posts; engineer answer 2026-11-01; PR link added after merge)
+
+### LP16-1. Ice on signs (LP-R22)   [calc change] [more conservative or equal]
+- **Engineer answer (2026-11-01):** add ice to sign panels: t_d on the panel, ice weight and wind on the iced panel in the ice combinations.
+- **Where:** `signWind()`: block `// ---- atmospheric ice on the sign`, new fields `tdP, qhI, AsI, F_Ai, iceScale, WiPanel, FpostI, MpostI, tdPost, WiPost`, `caseC.FI`, `postStrips[i].FI`; `evalSignComboDir()`: case forces `FI`, `Fp = f.W·share(F) + f.Wi·share(F_i)`, post drag `+ f.Wi·F_post,i`, axial `+ f.Di·(W_i,panel/n + W_i,post)`; `calcSign()`: every combination applies (`SIGN_COMBO_KEYS=COMBO_KEYS.slice()`, was the non-ice ones only); `signPostStress()`: panel ice in N and P_story, post ice above the section, iced post drag strips; ice input card shown in sign mode; sign wind worked step "Ice on the sign"; load-path note and governing-demand step (ice combination); wording in the combination card / report and Manual §2.6.
+- **Expressions:** t_d per §10.4.6 at the panel centroid (panel) and at h/2 (post); panel ice volume = 0.8·A_s·t_d (§10.4.1, flat vertical plate: one side × t_d × 0.8 — as read; verify the factor and whether both faces apply); wind on ice (§10.5): (B + 2t_d)(s + 2t_d), same C_f, q_h at V_ice with the sign K_d and G; Cases B and C keep their eccentricity, scaled by F_A,i/F_A; posts: radial ice on the whole post (weight) and iced width D + 2t_d for the exposed drag at V_ice.
+- **Governing provision:** ASCE 7-22 §10.4.1 (ice on flat plates and cylinders), §10.4.6 (t_d), §10.5 (wind on ice-covered structures), §2.3.4 / §2.4.3 (combinations).
+- **Check case (default monopost: panel 12 × 6 ft, clearance 10 ft, post Ø6 in, t = 0.5 in map, V_ice 50 mph):**
+  - t_d(13 ft) = 0.5·(13/33)^0.1 = 0.4555 in; W_i,panel = 56·0.8·72·0.4555/12 = **122.4 lb**.
+  - Post: t_d(8 ft) = 0.4342 in; W_i,post = 56·π[(3.4342)² − 3²]/144·16 = **54.6 lb**.
+  - Bearing (max-axial ASD): before D + 0.6W, N = 586.4 lb, q = 0.083 ksf; after D + 0.7Di + 0.7Wi, N = 586.4 + 0.7·(122.4 + 54.6) = **710.3 lb**, q = 0.100 ksf.
+  - Wind on ice (50 mph) is well below the bare wind: embedment, M_u, post check, anchors and the plate are unchanged (wind governs).
+  - Two-post default: bearing N 374.8 → 457.8 lb per post (D + 0.7Di + 0.7Wi); all other governing values unchanged. B₂ range now includes the ice combinations (1.000–1.016).
+- **Old saves:** signs saved before this change get the ice too (engineer-directed; their stored t and basis are used: "Uniform" for saves without `iceBasis`). Default monopost / two-post as old saves: same governing values as above.
+- **How verified:** `node tests/engine/run.mjs lightpole` 23 passed (new sign-ice test); `node tests/lightpole-compare.mjs --a origin/main` (and `--old-saves` for the sign cases): pole cases identical (results and cable values); sign cases change only in the ice-combination rows, bearing and the B₂ range (diff paths filtered); 0 console errors.
+- **Open items:** confirm the flat-plate ice factor (0.8, one side) and whether both faces should be iced; the cable C_f row of the ice card shows in sign mode (unused there).

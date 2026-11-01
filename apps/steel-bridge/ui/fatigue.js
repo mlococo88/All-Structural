@@ -75,8 +75,8 @@
      same paths as a file run on it. Shears are magnitudes here (the sign is not used by these checks). Without pitch zones in the project,
      the zones and strength regions are made the way Preliminary sizing makes them for GirderDetail (detailExport): each span in tenths;
      per zone n_r = max(2, min(4, ⌊(b_tf − 2 − d)/4⌋ + 1)), V_f the largest fatigue shear range (V_FAT,pos − V_FAT,neg) of the stations in
-     the zone, pitch p = max(6d, min(24, ⌊2 p_req⌋/2)) with p_req = n_rZ_r/(1.75V_fQ/I), Z_r = 7.0A_sc (Fatigue I); regions from each
-     support to the point of maximum Strength I positive moment of the span. b_eff for the studs: the first exterior girder's of the project
+     the zone, pitch p = max(6d, min(24, ⌊2 p_req⌋/2)) with p_req = n_rZ_r/(γV_fQ/I), γ = Fatigue I of the inputs, Z_r = 7.0A_sc (Fatigue I); regions from each
+     support to the point of maximum Strength I positive moment of the span (the owner's η, m: factorsOwner). b_eff for the studs: the first exterior girder's of the project
      (GirderDetail: the girder type with the largest fatigue shear range, usually the exterior), or this girder's. */
   function fromAnalysis(P, gi) {
     const AN = window.SBDAnalysis, FA = window.SBDFatigue, FX = window.SBDFlexure, Q = P.studs, M = window.SBDModel;
@@ -104,7 +104,7 @@
   /* studsOf(P, gi, stations, sup, spans, h0, cont): the payload's details.studs and details.fatigue made from the stations (split out of
      fromAnalysis unchanged, custom demands PR 2026-11-01, so that custom rows take the same zones and regions; a zone without a row there has
      V_f = 0, as the analysis path gives a zone without stations) */
-  function studsOf(P, gi, stations, sup, spans, h0, cont) {
+  function studsOf(P, gi, stations, sup, spans, h0, cont, pedIn) {
     const FA = window.SBDFatigue, FX = window.SBDFlexure, Q = P.studs, g = P.girders[gi], m = P.materials, d = P.deck, ext = P.girders.find(q => q.position === 'exterior'), beffB = (ext || g).beff;
     const R = { sup, spans, cont };
     const dd = +Q.d, Zr = 7.0 * Math.PI * dd * dd / 4, segAt = x => g.segments.find(s => x >= s.x0 - 1e-9 && x < s.x1) || g.segments[g.segments.length - 1];
@@ -112,9 +112,12 @@
     const vRng = (a, b) => Math.max(0, ...stations.filter(s => s.x >= a - 1e-9 && s.x <= b + 1e-9).map(s => s.V_FATpos - s.V_FATneg));
     const zs = [], qz = [];
     R.spans.forEach((L, k) => { const x0 = R.sup[k]; for (let z = 0; z < 10; z++) { const a = x0 + z * L / 10, b = a + L / 10, s = segAt((a + b) / 2), S = FA.secSet(s.D, s, { ts: d.ts, hh: h0 ? 0 : d.haunch, beff: beffB, n, Ar: 0, dr: 0 }), c = S.cn, Qs = beffB * d.ts / n * (S.ySlab - c.yb);
-      const nr = Math.max(2, Math.min(4, Math.floor((s.topB - 2 - dd) / 4) + 1)), vr = r1(vRng(a, b)), preq = vr > 0 ? nr * Zr / (1.75 * vr * Qs / c.I) : 48, p = Math.max(6 * dd, Math.min(24, Math.floor(preq * 2) / 2));
+      const nr = Math.max(2, Math.min(4, Math.floor((s.topB - 2 - dd) / 4) + 1)), vr = r1(vRng(a, b)), preq = vr > 0 ? nr * Zr / (fatI(P) * vr * Qs / c.I) : 48, p = Math.max(6 * dd, Math.min(24, Math.floor(preq * 2) / 2));   // FONE: Fatigue I γ of the inputs (was 1.75)
       zs.push({ x1: r2(a), x2: r2(b), nr, p }); qz.push({ name: `Span ${k + 1}, ${z / 10}L to ${(z + 1) / 10}L`, Vfr: vr }); } });
-    const G = FX.factors(), Mup = stations.map(s => FX.envelopeStrI({ DC1: s.M_DC1, DC2: s.M_DC2, DW: s.M_DW, LLp: s.M_LLpos, LLn: s.M_LLneg, UT: s.M_UT, UF: s.M_UF }, G).max), ns = R.spans.length, supN = k => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : `Pier ${k}`;
+    // FONE (2026-11-01): the Strength I envelope that places the regions with the owner's η, m (factorsOwner, as the Flexure tab; was FX.factors()); m kept off
+    // the pedestrian part (GD45, as engine/flexure.js fromPayload); pedIn false (Custom rows): M_PL is its own column and is added (before: left out)
+    const own = P.ownerRules || { owner: 'AASHTO', eta: {} }, G = FX.factorsOwner(window.SBDOwners.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0)), mO = G.m > 0 ? G.m : 1, pe = (v, q) => (pedIn === false ? +v || 0 : (+v || 0) - (+q || 0)) + (+q || 0) / mO;   // HL-93 part + pedestrian part / m (pedIn false: M_PL in its own column, added as engine/flexure.js does)
+    const Mup = stations.map(s => FX.envelopeStrI({ DC1: s.M_DC1, DC2: s.M_DC2, DW: s.M_DW, LLp: pe(s.M_LLpos, s.M_PLpos), LLn: pe(s.M_LLneg, s.M_PLneg), UT: s.M_UT, UF: s.M_UF }, G).max), ns = R.spans.length, supN = k => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : `Pier ${k}`;
     const regions = []; R.spans.forEach((L, k) => { const x0 = R.sup[k]; let xm = x0 + L / 2, mx = -Infinity; stations.forEach((s, i) => { if (s.x > x0 && s.x < x0 + L && Mup[i] > mx) { mx = Mup[i]; xm = s.x; } });
       [[x0, k], [x0 + L, k + 1]].forEach(([xs0, ks]) => regions.push({ name: `${supN(ks)} to max. positive, Span ${k + 1}`, kind: ks > 0 && ks < ns && R.cont ? 'pier' : 'end', x1: r2(Math.min(xs0, xm)), x2: r2(Math.max(xs0, xm)) })); });
     return { studs: { d: dd, h: Q.h, Fu: Q.Fu, transverseSpacing: Q.st, zones: zs, results: { zones: qz, regions, gaps: [], beff: beffB, gamI: fatI(P), QnEntered: false } },   // SCGAM: was gamI: Q.gamFat
@@ -131,7 +134,7 @@
     // custom (custom demands PR, 2026-11-01): the rows entered on this tab (ui/demands.js payload), the analysis path; the stud zones and regions
     // made from them (studsOf; enter the pitch zones on the input tab to check a given stud layout); the details between the first and last row, GS17 at the rows (below)
     let CU = null; if (ctx.pl === undefined && src === 'custom') { const CD = window.SBDCustomDemands; if (!CD) return { err: 'ui/demands.js is not loaded.' }; CU = CD.payload(P, g, 'fat'); if (CU.err) return { err: CU.err }; pl = CU.pl;
-      const s0 = pl.member.supports; pl.girderDetail.details = studsOf(P, g, pl.stations, s0, pl.member.spans, pl.ownerRules.haunchInProperties === false, P.spans.continuity !== 'simple' && s0.length > 2); }
+      const s0 = pl.member.supports; pl.girderDetail.details = studsOf(P, g, pl.stations, s0, pl.member.spans, pl.ownerRules.haunchInProperties === false, P.spans.continuity !== 'simple' && s0.length > 2, pl.pedestrianInLL === true); }
     const F = P.fatigue, Q = P.studs, own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OW.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0);
     const set = FA.settings(F), m = P.materials, G = P.girders[g] || P.girders[0];
     let sup = [0]; P.spans.lengths.forEach(L => sup.push(+(sup[sup.length - 1] + +L).toFixed(6)));

@@ -381,12 +381,17 @@ function memberDF(p,geo,Kg,skew,j){
     const shrExt1=l1*fVext, shrExt2=vE*fVext;
     return {j,label,type,S,de,side,mc,We,gWe,fV:fVext,lever1,eV,vE,
       r:{momExt1,momExt2,shrExt1,shrExt2},gM:Math.max(momExt1,momExt2),gV:Math.max(shrExt1,shrExt2),
-      fatM:gWe*skew.scfM,fatV:fat(shrExt1),fatNote:"We/14 used directly for fatigue moment (verify)",method:"We/14 + e-factor"};
+      /* LLDF-D (2026-11-01, engineer's decision; was LLRP-O2): the fatigue moment factor removes the 1.2 multiple presence factor from the
+         one-lane value W_e/14 x r_M, as every other factor here (AASHTO LRFD 10th Ed. Art. 3.6.1.4.3b). Was: fatM = gWe*skew.scfM. */
+      fatM:fat(gWe*skew.scfM),fatV:fat(shrExt1),method:"We/14 + e-factor"};
   }
 
   // cast-in-place slab: equivalent strip
-  const L1=Math.min(p.L,60), W1s=Math.min(geo.roadway,30), W1m=Math.min(geo.roadway,60);
-  const Es=10+5*Math.sqrt(L1*W1s), Em=Math.min(84+1.44*Math.sqrt(L1*W1m),12*geo.roadway/Math.max(1,geo.NL));
+  /* Art. 4.6.2.3 (AASHTO LRFD 10th Ed.), Eqs. 4.6.2.3-1 / -2: W = the physical edge-to-edge width of the bridge (geo.Wdeck),
+     W1 = the lesser of W and 30 ft (one lane) or 60 ft (multiple lanes); N_L from the clear roadway (3.6.1.1.1). Engineer's decision
+     2026-11-01 (LLSW, fixlog/shared-lldf.md): was the clear roadway width geo.roadway for W and W1. */
+  const L1=Math.min(p.L,60), W1s=Math.min(geo.Wdeck,30), W1m=Math.min(geo.Wdeck,60);
+  const Es=10+5*Math.sqrt(L1*W1s), Em=Math.min(84+1.44*Math.sqrt(L1*W1m),12*geo.Wdeck/Math.max(1,geo.NL));
   const dS=12/Es, dM=12/Em;
   return {j,label,type,S,gM:Math.max(dS,dM),gV:Math.max(dS,dM),fatM:fat(dS),fatV:fat(dS),
     method:"strip",r:{dS,dM,Es,Em}};
@@ -579,8 +584,7 @@ const STEPS=(function(){
     w.add({ id: 'gM', label: `${md.label}: live-load distribution factor for moment (${md.method})`, sym: 'g_{M}', eq: '\\max(g_{M,1}, g_{M,2})', sub: `\\max(${n4(M1)}, ${n4(M2)})`, value: md.gM, unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.2` });
     w.add({ id: 'gV', label: `${md.label}: live-load distribution factor for shear`, sym: 'g_{V}', eq: '\\max(g_{V,1}, g_{V,2})', sub: `\\max(${n4(V1)}, ${n4(V2)})`, value: md.gV, unit: '', d: 4, ref: `${ED} Art. 4.6.2.2.3` });
     const FR = `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2`;
-    if (md.fatNote && /We\/14/.test(md.fatNote)) w.add({ id: 'fatM', label: `${md.label}: fatigue factor for moment (W_e/14 used directly)`, sym: 'g_{fat,M}', eq: 'g_{M,1}', sub: n4(M1), value: md.fatM, unit: '', d: 4, ref: FR, note: 'The engine uses W_e/14 with the skew reduction for the fatigue moment, without removing 1.2 (verify).' });
-    else w.add({ id: 'fatM', label: `${md.label}: fatigue factor for moment (one lane, multiple presence 1.2 removed)`, sym: 'g_{fat,M}', eq: '\\frac{g_{M,1}}{1.2}', sub: `\\frac{${n4(M1)}}{1.2}`, value: md.fatM, unit: '', d: 4, ref: FR });
+    w.add({ id: 'fatM', label: `${md.label}: fatigue factor for moment (one lane, multiple presence 1.2 removed)`, sym: 'g_{fat,M}', eq: '\\frac{g_{M,1}}{1.2}', sub: `\\frac{${n4(M1)}}{1.2}`, value: md.fatM, unit: '', d: 4, ref: FR });
     w.add({ id: 'fatV', label: `${md.label}: fatigue factor for shear`, sym: 'g_{fat,V}', eq: '\\frac{g_{V,1}}{1.2}', sub: `\\frac{${n4(V1)}}{1.2}`, value: md.fatV, unit: '', d: 4, ref: FR });
   }
   function other(q, geo, sk, md, w) {
@@ -654,10 +658,10 @@ const STEPS=(function(){
       return md;
     }
     // slab, Art. 4.6.2.3
-    const r = md.r, L1 = Math.min(L, 60), W1 = Math.min(geo.roadway, 30), W1m = Math.min(geo.roadway, 60), FR = `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2`;
-    w.add({ id: 'Es', label: 'Equivalent strip width, one lane loaded (L_1 = min(L, 60 ft), W_1 = min(w, 30 ft))', sym: 'E', eq: '10 + 5\\sqrt{L_{1}W_{1}}', sub: `10 + 5\\sqrt{${n2(L1)}(${n2(W1)})}`, value: r.Es, unit: 'in', d: 1, ref: `${ED} Eq. 4.6.2.3-1` });
-    w.add({ id: 'Em', label: 'Equivalent strip width, two or more lanes loaded (W_1 = min(w, 60 ft))', sym: 'E', eq: '\\min\\left(84 + 1.44\\sqrt{L_{1}W_{1}}, \\frac{12w}{N_{L}}\\right)', sub: `\\min\\left(84 + 1.44\\sqrt{${n2(L1)}(${n2(W1m)})}, \\frac{12(${n2(geo.roadway)})}{${geo.NL}}\\right)`, value: r.Em, unit: 'in', d: 1, ref: `${ED} Eq. 4.6.2.3-2`,
-      note: 'w is the clear roadway width (as the engine takes it).' });
+    const r = md.r, L1 = Math.min(L, 60), W1 = Math.min(geo.Wdeck, 30), W1m = Math.min(geo.Wdeck, 60), FR = `${ED} Art. 3.6.1.4.3b, C3.6.1.1.2`;
+    w.add({ id: 'Es', label: 'Equivalent strip width, one lane loaded (L_1 = min(L, 60 ft), W_1 = min(W, 30 ft), W = edge-to-edge width)', sym: 'E', eq: '10 + 5\\sqrt{L_{1}W_{1}}', sub: `10 + 5\\sqrt{${n2(L1)}(${n2(W1)})}`, value: r.Es, unit: 'in', d: 1, ref: `${ED} Eq. 4.6.2.3-1` });
+    w.add({ id: 'Em', label: 'Equivalent strip width, two or more lanes loaded (W_1 = min(W, 60 ft))', sym: 'E', eq: '\\min\\left(84 + 1.44\\sqrt{L_{1}W_{1}}, \\frac{12W}{N_{L}}\\right)', sub: `\\min\\left(84 + 1.44\\sqrt{${n2(L1)}(${n2(W1m)})}, \\frac{12(${n2(geo.Wdeck)})}{${geo.NL}}\\right)`, value: r.Em, unit: 'in', d: 1, ref: `${ED} Eq. 4.6.2.3-2`,
+      note: `W = ${n2(geo.Wdeck)} ft, the physical edge-to-edge width; N_L = ${geo.NL} from the clear roadway (Art. 3.6.1.1.1).` });
     w.add({ id: 'gM1', label: 'Distribution factor, one lane, per 1-ft strip', sym: 'g_{1}', eq: '\\frac{12}{E}', sub: `\\frac{12}{${n2(r.Es)}}`, value: r.dS, unit: '', d: 4, ref: `${ED} Art. 4.6.2.3` });
     w.add({ id: 'gM2', label: 'Distribution factor, two or more lanes, per 1-ft strip', sym: 'g_{2}', eq: '\\frac{12}{E}', sub: `\\frac{12}{${n2(r.Em)}}`, value: r.dM, unit: '', d: 4, ref: `${ED} Art. 4.6.2.3` });
     w.add({ id: 'gM', label: `${md.label}: distribution factor per 1-ft strip, moment and shear (${md.method})`, sym: 'g', eq: '\\max(g_{1}, g_{2})', sub: `\\max(${n4(r.dS)}, ${n4(r.dM)})`, value: md.gM, unit: '', d: 4, ref: `${ED} Art. 4.6.2.3` });

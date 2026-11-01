@@ -217,3 +217,49 @@ test('Shaft V_c: 3 ft shaft, (12) #6, #3 ties @ 12: A_v 0.22 < A_v,min 0.36 → 
   near(T.VcA, 2 * Math.sqrt(4000) * Acv, 1e-6, 'V_c(a) (former value)');
   assert.equal(T.mode, 'min');
 });
+
+/* ---------- n₁ and G_f worked steps (added 2026-11-01, display only) ---------- */
+test('n₁ / G_f worked step: n₁ = √(386.1·ΣWy/ΣWy²)/2π; flexible case shows G_f from gustFlexible', () => {
+  const lp = lpEngine();
+  // 60 ft pole case of the harness: ΣWy = 7,213.94, ΣWy² = 61,110.99 → n₁ = √(386.1·0.118047)/2π = 1.0745 Hz
+  near(Math.sqrt(386.1 * 7213.935752589796 / 61110.985252095226) / (2 * Math.PI), 1.0745, 0.0001, 'n₁ hand');
+  const gf = lp.call('gustFlexible', 'C', 115, 60, 0.75, 0.75, 0.82, 0.005);
+  const inp = lpDefaultInp({ H: 60, Ginput: 0.85, G: Math.max(0.85, gf.Gf), gf,
+    nat: { n1: 0.82, Wtot: 1000, sWy: 100, sWy2: 2000, rows: [{ z: 60, W: 1000, y: 2 }] } });
+  const h = lp.call('natGfWorkedHTML', inp);
+  assert.ok(h.includes('G_f = 0.925'), 'G_f equation'); assert.ok(h.includes(lp.call('fmt', gf.Gf, 4)), 'G_f value');
+  assert.ok(!/NaN|undefined|ERR/.test(h), 'no NaN/undefined');
+});
+
+/* ---------- breakout in the ACI 318-19 group form (engineer, 2026-11-01) ---------- */
+test('Breakout, group form: ΣN_ua of the tension anchors / φN_cbg (ψ_ec,N in N_cbg); per-anchor steel and pullout separately', () => {
+  const lp = lpEngine();
+  lp.set('anchRe', 'no');
+  const b = lp.call('anchorBolts', lpDefaultInp(), { Mang: 0 }, { Mu: 21957, Pu: 1090, Vu: 877 });
+  near(b.trBrk, b.Tsum / b.phiNcbg, 1e-12, 'group ratio');
+  near(b.trAnc, b.Tmax / Math.min(b.phiNsa, b.phiNp), 1e-12, 'per-anchor ratio');
+  near(b.tr, Math.max(b.trBrk, b.trAnc), 0, 'governing tension ratio');
+  near(b.phiNn, Math.min(b.phiNsa, b.phiNp), 0, 'φN_n per anchor (no breakout/n_T)');
+  // the old form would be T_max/(φN_cbg/n_T) > the group ratio whenever the tension anchors are unequally loaded
+  assert.ok(b.Tmax / (b.phiNcbg / b.nT) > b.trBrk);
+});
+test('Breakout group form, the engineer\'s check case (default before arm wind: M_u 19,949 lb·ft, P_u 1,088 lb, wind toward 0°): ΣT 19,401 ≤ φN_cbg 22,323 → 0.87', () => {
+  const lp = lpEngine();
+  lp.set('anchRe', 'no');
+  const b = lp.call('anchorBolts', lpDefaultInp(), { Mang: 0 }, { Mu: 19949, Pu: 1087.8, Vu: 794 });
+  // at an azimuth of exactly 0°: ΣT = 19,405, φN_cbg = 22,408 → 0.866 (the app's moment azimuth is slightly off 0°: 19,401 / 22,323 = 0.869)
+  near(b.Tsum, 19405, 2, 'ΣT'); near(b.phiNcbg, 22408, 2, 'φN_cbg'); near(b.trBrk, 0.866, 0.001, 'D/C');
+});
+
+/* ---------- ice on sign panels (engineer, 2026-11-01) ---------- */
+test('Sign ice: t_d at the panel centroid; W_i = 56·0.8·72·t_d/12; F_A,i = q_hi·C_f·(B+2t_d)(s+2t_d) at V_ice', () => {
+  const lp = lpEngine();
+  const inp = lpDefaultInp({ mode: 'sign', signPosts: 1, H: 16, poleTaper: false, poleDiaBase: 6.0, poleTwBase: 0.1875, iceBasis: 'map', iceIi: 1, tIce: 0.5 });
+  const sw = lp.call('signWind', inp);
+  // z_c = 13 ft: t_d = 0.5·(13/33)^0.1 = 0.4555 in
+  near(sw.tdP, 0.5 * Math.pow(13 / 33, 0.1), 1e-12, 't_d'); near(sw.tdP, 0.4555, 0.0001, 't_d');
+  near(sw.WiPanel, 56 * 0.8 * 72 * sw.tdP / 12, 1e-9, 'panel ice'); near(sw.WiPanel, 122.4, 0.1, 'panel ice');
+  near(sw.qhI, 0.00256 * sw.Kzh * 0.85 * 0.85 * 50 * 50, 1e-9, 'q_hi');
+  near(sw.F_Ai, sw.qhI * sw.cfAB * (12 + 2 * sw.tdP / 12) * (6 + 2 * sw.tdP / 12), 1e-9, 'F_A,i');
+  assert.ok(sw.F_Ai < 0.3 * sw.F_A, 'wind on ice (50 mph) well below the bare wind');
+});

@@ -1919,8 +1919,7 @@ try{ window.BridgeApps.boot('psbeam'); }catch(e){}
     { id: 'optimize', label: 'Optimize', grp: 'Tools' },
     { id: 'compare', label: 'Compare', grp: 'Tools' },
     { id: 'nomen', label: 'Nomenclature', grp: 'Report' },
-    { id: 'report', label: 'Report', grp: 'Report' },
-    { id: 'rptnew', label: 'Report (new)', grp: 'Report' }   // PSRP 2026-11-01: the shared report viewer, alongside the Report tab
+    { id: 'report', label: 'Report', grp: 'Report' }   // PSRP2 2026-11-01: the shared report viewer (SharedReportTab); the old ReportTab retired
   ];
   PBD.mods = function (inp, mode) {
     return PBD.MODS.filter(function (m) { return (!m.when || m.when(inp)) && (!m.modes || m.modes.indexOf(mode) >= 0); });
@@ -4466,7 +4465,7 @@ function computeAll(inp){
   }
   const checksF=checks.map(c=>({...c,pass:c.r<=1.0001}));
 
-  return {g,cp,ss,lo,refFin,LT,totalLoss,fpe,fpeGain,gains,fpi,pctLoss,lim,grid,flexGrid,flexFull,fMid,MuMid,shearDiag,diagrams,
+  const OUT={g,cp,ss,lo,refFin,LT,totalLoss,fpe,fpeGain,gains,fpi,pctLoss,lim,grid,flexGrid,flexFull,fMid,MuMid,shearDiag,diagrams,
           Mcr,minMr,fcpe,fr,flexGov,minGov,shear,wShear,wLong,ldBonded,ldDebond,iface,wIface,AsSplit,AsSplitProv,splitPr,splitDem,splitDC,splitN_need,splitDir,splitH,splitZone,conf,relSteel,cam,fat,handling,deck,
           rating,svcRating,shrRating,vehRatings,crack,haunch,useExt,ext:useExt?{sel:ext.sel,spanLen:ext.spanLen,nStations:ext.slice.length,
             member:inp.external.member,liveLoadType:inp.external.liveLoadType,
@@ -4477,7 +4476,72 @@ function computeAll(inp){
           checks:checksF,hl,df,dfm,dfv,MLL,VLL,
           wG,wDk,wBar,wDW,L,dfcd,phiV,cont,warns,fpbt,useT,Pdia,nDiaph:diaph.length,strandStages,stationStress,
           ...(ownR?{own:ownR}:{}),error:null};
+  OUT.rv=psbReportVals(inp,OUT);   // PSRF: the report's intermediate values (moved from ReportTab, 2026-11-01)
+  return OUT;
  }catch(err){ return {error:err.message||String(err)}; }
+}
+
+function Aps0(ss,R){ return ss.Aps*R.fpi; }   // P_i at the anchorage (old tab: ss.Aps*R.fpi)
+/* PSRF (2026-11-01): the calculation report's intermediate values, moved unchanged from ReportTab ("recomputed intermediates for
+   display") into the engine so that R holds them (R.rv) and both report tabs read them, nothing recomputed in a report. Same
+   expressions, same inputs (R as computeAll returns it). Values are display intermediates of the engine's own results. */
+function psbReportVals(inp,R){
+  const g=R.g,cp=R.cp,ss=R.ss,m=inp.mat,lo=R.lo,L=R.L,Lin=L*12,ts=+inp.ts,th=+inp.th,Ep=+inp.str.Ep,fpu=+inp.str.fpu;
+  const sh0=R.shear.find(s=>!s.isBearing)||R.shear[0];
+  const row=loc=>R.grid.reduce((b,r)=>Math.abs(r.x-loc)<Math.abs(b.x-loc)?r:b,R.grid[0]);
+  const cf=n=>R.checks.find(c=>c.n===n)||{loc:0,pass:true};
+  const rMid=row(L/2);
+  const Ad=cp.beff*cp.n*ts, yd=g.h+th+ts/2, Ah=g.btf*cp.n*th, yh=g.h+th/2;
+  const Ic2=g.A*(cp.ybc-g.yb)**2, Ic3=cp.beff*cp.n*ts**3/12, Ic4=Ad*(yd-cp.ybc)**2,
+        Ic5=g.btf*cp.n*th**3/12, Ic6=Ah*(yh-cp.ybc)**2;
+  const em=ss.eMid, X1=g.I+em*em*g.A, MgM=R.wG*L*L/8*12;
+  const ktdID=ktdAASHTO(m.td-m.ti,m.fci), ktdIF=ktdAASHTO(m.tfin-m.ti,m.fci),
+        ktdDF=ktdAASHTO(m.tfin-m.td,m.fci), ktdK=12*(100-4*m.fci)/(m.fci+20);
+  const gh=1.7-0.01*m.H, gst=5/(1+m.fci);
+  const cM=(R.fe||R.useExt)&&R.fMid, Mbar=cM?R.fMid.mDC2*12:inp.loads.wBar*L*L/8*12, Mdw=cM?R.fMid.mDW*12:inp.loads.wDW*L*L/8*12, MLLm=R.MLL*12;   // PBD-G: continuous / imported midspan values
+  const PeMid=rMid.Aps*R.fpe;
+  const shx=sh0.x, V_=w=>w*(L/2-shx), Vg=V_(R.wG), Vdk=V_(R.wDk), Vbar=V_(R.wBar), Vdw=V_(R.wDW),
+        Vll=R.VLL*(1-shx/L), apsX=ss.at(shx).Aps, fpo=0.7*fpu,
+        rN=row(shx), MuU=Math.max(rN.Mu,Math.abs(sh0.Vu-sh0.Vp)*sh0.dv),
+        cotT=1/Math.tan(sh0.theta*Math.PI/180),
+        fgN=R.flexGrid.reduce((b,r)=>Math.abs(r.x-shx)<Math.abs(b.x-shx)?r:b,R.flexGrid[0]);
+  const Ps=ss.AsStraight*R.fpi, Ph=ss.AsHarp*R.fpi, eS=g.yb-ss.cgsStraight,
+        eHm=g.yb-(+ss.hp.yMid), eHe=g.yb-(+ss.hp.yEnd), aH=ss.hp.frac*Lin,
+        d1=Ps*eS*Lin*Lin/(8*lo.Eci*g.I),
+        d2=ss.nh>0? Ph*(eHm*Lin*Lin/8-(eHm-eHe)*aH*aH/6)/(lo.Eci*g.I):0;
+  const niT=Ep/lo.Eci;
+  const transAt=r=>{ const cgs=g.yb-r.e, At=g.A+(niT-1)*r.Aps,
+    ybt=(g.A*g.yb+(niT-1)*r.Aps*cgs)/At,
+    It=g.I+g.A*(ybt-g.yb)**2+(niT-1)*r.Aps*(ybt-cgs)**2;
+    return {At,ybt,It,eT:ybt-cgs,Sbt:It/ybt,Stt:It/(g.h-ybt),P0:r.Aps*R.fpbt}; };
+  const tRc=transAt(row(cf('Release comp').loc));
+  /* PSRP2 (2026-11-01): the rest of the old tab's display arithmetic, moved here unchanged (LongTieBody, the continuity steps) */
+  const tie=R.shear.map(r=>({Tps:r.Tcap-r.TsMild, dc:r.Tcap>0?r.Tdem/r.Tcap:0}));
+  let cont=null;
+  if(R.cont){ const fe=R.fe, nl=R.cont.negLL, rr=R.cont.restr;
+    const MwMid=fe?fe.Mw(R.L/2):null;
+    cont={MwMid, Vw0:fe?fe.Vw(0):null, Mdc2Mid:fe?R.wBar*MwMid:null, MdwMid:fe?R.wDW*MwMid:null,
+      negC1:nl?1.33*Math.max(nl.M1,nl.Mtd)+nl.Mln:null, negC2:nl?0.9*(1.33*nl.M2+nl.Mln):null, resV:rr?(rr.MrR-rr.MrL)/R.L:null}; }
+  /* the evaluated terms of the worked stress and resistance lines (the old tab's display arithmetic, same expressions) */
+  const mrA=r=>(r&&r.mrp!=null)?r.mrp:0, mLLo=R.own?R.own.mLL:1, gl=+inp.opt.gLLs3;
+  const rRc=row(cf('Release comp').loc), rRt=row(cf('Release tens').loc), rS1=row(cf('Srv comp (perm)').loc), rS3=row(cf('Srv III tens').loc);
+  const terms={
+    fcgp:[lo.Pi/g.A, lo.Pi*em*em/g.I, MgM*em/g.I],
+    relBot:[rRc.Aps*R.fpi/g.A, rRc.Aps*R.fpi*rRc.e/g.Sb, rRc.Mg/g.Sb], relTop:[rRt.Aps*R.fpi/g.A, rRt.Aps*R.fpi*rRt.e/g.St, rRt.Mg/g.St],
+    relBotT:[tRc.P0/tRc.At, tRc.P0*tRc.eT/tRc.Sbt, rRc.Mg/tRc.Sbt],
+    s1Top:[rS1.Aps*R.fpe/g.A, rS1.Aps*R.fpe*rS1.e/g.St, (rS1.Mg+rS1.Mdk)/g.St, (rS1.Msd+mrA(rS1))/cp.Stg],
+    s3Bot:[rS3.Aps*R.fpe/g.A, rS3.Aps*R.fpe*rS3.e/g.Sb, (rS3.Mg+rS3.Mdk)/g.Sb, (rS3.Msd+mrA(rS3)+gl*(mLLo*rS3.Mll))/cp.Sbc],
+    fcpe:[PeMid/g.A, PeMid*ss.eMid/g.Sb],
+    dv:[fgN.dp-fgN.a/2, 0.9*fgN.dp, 0.72*cp.hc],
+    Vn:[sh0.Vc+sh0.Vs+sh0.Vp, 0.25*m.fc*g.bw*sh0.dv+sh0.Vp],
+    minR:[R.Mcr/12, 1.33*R.MuMid/12],
+    gainPerm:[R.gains.permanent+(+inp.opt.dfpSS), R.fpeGain+(+inp.opt.dfpSS)],
+    Pi:Aps0(ss,R), Ptot:0.04*ss.Aps*R.fpi };
+  /* the neutral axis of the stress diagram at each stage (fiber stresses linear over the girder depth, + compression) */
+  const na=(t,b)=>(t*b<0)?g.h*b/(b-t):null;
+  const naSt={rel:na(rRc.relTop,rRc.relBot), s3:na(rS3.s1Top,rS3.s3Bot)};
+  return {terms,naSt,tie,cont,Ad,yd,Ah,yh,Ic2,Ic3,Ic4,Ic5,Ic6,em,X1,MgM,ktdID,ktdIF,ktdDF,ktdK,gh,gst,Mbar,Mdw,MLLm,PeMid,shx,Vg,Vdk,Vbar,Vdw,Vll,apsX,fpo,rN,MuU,cotT,fgN,
+    Ps,Ph,eS,eHm,eHe,aH,d1,d2,niT,tRc};
 }
 
 /* ================= STRAND OPTIMIZER ================= */
@@ -8114,11 +8178,11 @@ function ReportGraphics({inp,R}){
    collapse / expand, search, Print with a title block, running header and page numbers); worked steps in the shared format
    (shared/steps.js, KaTeX 0.16.9 already loaded by this page). Every step VALUE is a number of R = computeAll(inp), the results the
    other tabs show (R.g, R.cp, R.ss, R.lo, R.refFin, R.df, R.hl, R.fMid, R.wShear, R.cam, R.rating, R.svcRating, R.checks …);
-   nothing is recomputed: the substitutions only format R's numbers and the inputs. The old Report tab (ReportTab, its D11 print)
-   is kept alongside (PSRP-O1). Nothing is saved. */
+   nothing is recomputed: the substitutions only format R's numbers and the inputs. Since 2026-11-01 (PSRP2) this is the Report tab
+   (id 'report'); the old in-app ReportTab is retired. Nothing is saved. */
 function psrModel(inp,R){
   const S=window.SharedSteps, N=(x,d)=>S.n(x,d), G=(x,d)=>S.g(x,d), ED='AASHTO LRFD 10th Ed.', secs=[];
-  const g=R.g, cp=R.cp, ss=R.ss, lo=R.lo, m=inp.mat, L=R.L, fpu=+inp.str.fpu, ts=+inp.ts, th=+inp.th;
+  const g=R.g, cp=R.cp, ss=R.ss, lo=R.lo, m=inp.mat, L=R.L, fpu=+inp.str.fpu, ts=+inp.ts, th=+inp.th; const rv=R.rv;
   const W=()=>S.work('');
   const one=(scope,steps,title,ref,opt)=>{ const t=S.group(steps,[{key:'t',title,ref:ref||'',ids:()=>true}],{strip:false})[0];
     return Object.assign({type:'steps',scope,steps,topics:t?[{title,ref:ref||'',n:steps.length,cls:t.cls,chip:t.chip,res:t.res}]:[]},opt||{}); };
@@ -8133,7 +8197,7 @@ function psrModel(inp,R){
       {type:'kv',rows:[['Girder',plain(inp.girder)],['Span L',N(L,2)+' ft'],['Strands',ss.Ntot+' × '+plain(inp.str.size)],['Total loss',N(R.totalLoss,2)+' ksi ('+N(R.pctLoss,1)+'%)','los/dfT'],
         ['Effective prestress f_pe',N(R.fpe,2)+' ksi','los/fpe'],['DF_m / DF_v',N(R.dfm,3)+' / '+N(R.dfv,3),'lds/dfm'],['φM_n / M_u at midspan',N(R.fMid.phiMn/12,0)+' / '+N(R.MuMid/12,0)+' kip-ft','flx/phiMn'],
         ['Camber at release / final',N(R.cam.rel,2)+' / '+N(R.cam.final,2)+' in','cam/rel']]},
-      {type:'note',text:'The [[tab:report|Report tab]] (the earlier in-app report) is kept alongside this one.'}];
+      {type:'note',text:'This report replaces the earlier in-app Report tab (retired 2026-11-01, PSRP2).'}];
     (R.warns||[]).forEach(w=>items.push({type:'note',warn:true,text:plain(w)}));
     secs.push({title:'Design summary',subs:[{title:'Checks and key quantities',items}]});
   }
@@ -8173,12 +8237,12 @@ function psrModel(inp,R){
     wl.add({id:'dfES',label:'Elastic shortening loss (closed form, midspan)',sym:'\\Delta f_{pES}',eq:'\\frac{A_{ps}f_{pbt}(I_{g} + e_{m}^{2}A_{g}) - e_{m}M_{g}A_{g}}{A_{ps}(I_{g} + e_{m}^{2}A_{g}) + \\frac{A_{g}I_{g}E_{ci}}{E_{p}}}',
       sub:'\\frac{'+N(ss.Aps,3)+'('+N(R.fpbt,2)+')('+G(g.I,0)+' + '+N(ss.eMid,2)+'^{2}('+N(g.A,1)+')) - '+N(ss.eMid,2)+'('+G(R.fMid.mSW*12,0)+')('+N(g.A,1)+')}{'+N(ss.Aps,3)+'('+G(g.I,0)+' + '+N(ss.eMid,2)+'^{2}('+N(g.A,1)+')) + \\frac{'+N(g.A,1)+'('+G(g.I,0)+')('+N(lo.Eci,0)+')}{'+N(lo.Ep,0)+'}}',value:lo.dfES,unit:'ksi',d:2,ref:ED+' Eq. C5.9.3.2.3a-1'});
     wl.add({id:'Pi',label:'Prestress force after transfer',sym:'P_{i}',eq:'A_{ps}(f_{pbt} - \\Delta f_{pES})',sub:N(ss.Aps,3)+'('+N(R.fpbt,2)+' - '+N(lo.dfES,2)+')',value:lo.Pi,unit:'kip',d:1});
-    wl.add({id:'fcgp',label:'Concrete stress at the strand c.g. after transfer',sym:'f_{cgp}',eq:'\\frac{P_{i}}{A_{g}} + \\frac{P_{i}e_{m}^{2}}{I_{g}} - \\frac{M_{g}e_{m}}{I_{g}}',sub:'\\frac{'+N(lo.Pi,1)+'}{'+N(g.A,1)+'} + \\frac{'+N(lo.Pi,1)+'('+N(ss.eMid,2)+')^{2}}{'+G(g.I,0)+'} - \\frac{'+G(R.fMid.mSW*12,0)+'('+N(ss.eMid,2)+')}{'+G(g.I,0)+'}',value:lo.fcgp,unit:'ksi',d:3,ref:ED+' Art. 5.9.3.2.3a'});
+    wl.add({id:'fcgp',label:'Concrete stress at the strand c.g. after transfer',sym:'f_{cgp}',eq:'\\frac{P_{i}}{A_{g}} + \\frac{P_{i}e_{m}^{2}}{I_{g}} - \\frac{M_{g}e_{m}}{I_{g}}',sub:'\\frac{'+N(lo.Pi,1)+'}{'+N(g.A,1)+'} + \\frac{'+N(lo.Pi,1)+'('+N(ss.eMid,2)+')^{2}}{'+G(g.I,0)+'} - \\frac{'+G(R.fMid.mSW*12,0)+'('+N(ss.eMid,2)+')}{'+G(g.I,0)+'}'+' = '+rv.terms.fcgp.map((v,k)=>(k?(k===2?' - ':' + '):'')+N(v,3)).join(''),value:lo.fcgp,unit:'ksi',d:3,ref:ED+' Art. 5.9.3.2.3a'});
     if(refined){ const rf=lo.ref, fn=R.refFin;
-      wl.add({id:'dfSR',label:'Shrinkage loss, transfer to deck placement',sym:'\\Delta f_{pSR}',eq:'\\varepsilon_{bid}E_{p}K_{id}',sub:N(rf.eShID*1e3,4)+'\\times 10^{-3}('+N(lo.Ep,0)+')('+N(rf.Kid,4)+')',value:rf.dfSR,unit:'ksi',d:2,ref:ED+' Eq. 5.9.3.4.2a-1'});
-      wl.add({id:'dfCR',label:'Creep loss, transfer to deck placement',sym:'\\Delta f_{pCR}',eq:'\\frac{E_{p}}{E_{ci}}f_{cgp}\\psi_{b}(t_{d}, t_{i})K_{id}',sub:'\\frac{'+N(lo.Ep,0)+'}{'+N(lo.Eci,0)+'}('+N(lo.fcgp,3)+')('+N(rf.psiBID,4)+')('+N(rf.Kid,4)+')',value:rf.dfCR,unit:'ksi',d:2,ref:ED+' Eq. 5.9.3.4.2b-1'});
-      wl.add({id:'dfR1',label:'Relaxation loss, transfer to deck placement',sym:'\\Delta f_{pR1}',eq:'\\frac{f_{pt}}{K_{L}}\\left(\\frac{f_{pt}}{f_{py}} - 0.55\\right)',sub:'\\frac{'+N(lo.fpt,2)+'}{'+(inp.str.lowlax?30:7)+'}\\left(\\frac{'+N(lo.fpt,2)+'}{'+N(lo.fpy,1)+'} - 0.55\\right)',value:rf.dfR1,unit:'ksi',d:2,ref:ED+' Eq. 5.9.3.4.2c-1'});
-      wl.add({id:'dfSD',label:'Shrinkage loss, deck placement to final',sym:'\\Delta f_{pSD}',eq:'\\varepsilon_{bdf}E_{p}K_{df}',sub:N((rf.eShIF-rf.eShID)*1e3,4)+'\\times 10^{-3}('+N(lo.Ep,0)+')('+N(rf.Kdf,4)+')',value:rf.dfSD,unit:'ksi',d:2,ref:ED+' Eq. 5.9.3.4.3a-1'});
+      wl.add({id:'dfSR',label:'Shrinkage loss, transfer to deck placement',sym:'\\Delta f_{pSR}',eq:'\\varepsilon_{bid}E_{p}K_{id}',sub:N(rf.eShID*1e3,4)+'\\times 10^{-3}('+N(lo.Ep,0)+')('+N(rf.Kid,4)+')',value:rf.dfSR,unit:'ksi',d:3,ref:ED+' Eq. 5.9.3.4.2a-1'});
+      wl.add({id:'dfCR',label:'Creep loss, transfer to deck placement',sym:'\\Delta f_{pCR}',eq:'\\frac{E_{p}}{E_{ci}}f_{cgp}\\psi_{b}(t_{d}, t_{i})K_{id}',sub:'\\frac{'+N(lo.Ep,0)+'}{'+N(lo.Eci,0)+'}('+N(lo.fcgp,3)+')('+N(rf.psiBID,4)+')('+N(rf.Kid,4)+')',value:rf.dfCR,unit:'ksi',d:3,ref:ED+' Eq. 5.9.3.4.2b-1'});
+      wl.add({id:'dfR1',label:'Relaxation loss, transfer to deck placement',sym:'\\Delta f_{pR1}',eq:'\\frac{f_{pt}}{K_{L}}\\left(\\frac{f_{pt}}{f_{py}} - 0.55\\right)',sub:'\\frac{'+N(lo.fpt,2)+'}{'+(inp.str.lowlax?30:7)+'}\\left(\\frac{'+N(lo.fpt,2)+'}{'+N(lo.fpy,1)+'} - 0.55\\right)',value:rf.dfR1,unit:'ksi',d:3,ref:ED+' Eq. 5.9.3.4.2c-1'});
+      wl.add({id:'dfSD',label:'Shrinkage loss, deck placement to final',sym:'\\Delta f_{pSD}',eq:'\\varepsilon_{bdf}E_{p}K_{df}',sub:N((rf.eShIF-rf.eShID)*1e3,4)+'\\times 10^{-3}('+N(lo.Ep,0)+')('+N(rf.Kdf,4)+')',value:rf.dfSD,unit:'ksi',d:3,ref:ED+' Eq. 5.9.3.4.3a-1'});
       wl.add({id:'dfCD',label:'Creep loss, deck placement to final',sym:'\\Delta f_{pCD}',eq:'',sub:'',value:fn.dfCD,unit:'ksi',d:3,ref:ED+' Eq. 5.9.3.4.3b-1'});
       wl.add({id:'dfR2',label:'Relaxation loss, deck placement to final',sym:'\\Delta f_{pR2}',eq:'\\Delta f_{pR1}',sub:N(rf.dfR1,2),value:fn.dfR2,unit:'ksi',d:2,ref:ED+' Eq. 5.9.3.4.3c-1'});
       wl.add({id:'dfSS',label:'Gain from deck shrinkage',sym:'\\Delta f_{pSS}',eq:'',sub:'',value:fn.dfSS,unit:'ksi',d:2,ref:ED+' Eq. 5.9.3.4.3d-1'});
@@ -8214,7 +8278,7 @@ function psrModel(inp,R){
     w.add({id:'VLL',label:'Live-load shear per girder at the support',sym:'V_{LL+IM}',eq:vOk?'V_{HL93}DF_{v}':'',sub:vOk?N(hl.V,2)+'('+N(R.dfv,4)+')':'',value:R.VLL,unit:'kip',d:2});
     secs.push({title:'Loads and live-load distribution',subs:[{title:'Dead loads, HL-93 and distribution factors',items:[S.group?(()=>{ const T=[{key:'dl',title:'Dead loads',ref:'Art. 3.5.1',ids:/^w/},{key:'hl',title:'HL-93 per lane',ref:'Art. 3.6.1.3.1',ids:/^(MHL|VHL)$/},{key:'df',title:'Distribution factors',ref:'Art. 4.6.2.2',ids:/^(Kg|m1|m2|v1|v2|dfm|dfv)$/},{key:'ll',title:'Live load per girder',ref:'',ids:/^(MLL|VLL)$/}];
       const Gs=S.group(w.steps,T,{strip:false}); return {type:'steps',scope:'lds',steps:[].concat(...Gs.map(x=>x.steps)),topics:Gs.map(x=>({title:x.title,ref:x.ref,n:x.steps.length,cls:x.cls,chip:x.chip,res:x.res}))}; })():null,
-      {type:'note',text:'The distribution-factor equations are worked on the [[tab:report|Report tab]] (Loads — Dead, HL-93 & Distribution); the diagrams on the [[tab:diagrams|Diagrams tab]].'}]}]});
+      {type:'note',text:'The distribution-factor equations are worked in the next subsection; the diagrams on the [[tab:diagrams|Diagrams tab]].'}]}]});
   }
   /* ---------- 5. Stress limits and service stresses ---------- */
   {
@@ -8237,7 +8301,7 @@ function psrModel(inp,R){
     w.add({id:'c',label:'Neutral axis depth ('+(f.rect?'rectangular section':'flanged section')+')',sym:'c',eq:f.rect?'\\frac{A_{ps}f_{pu}}{0.85f^{\\prime}_{c}\\beta_{1}b + kA_{ps}\\frac{f_{pu}}{d_{p}}}':'',sub:f.rect&&!f.devGov?'\\frac{'+N(ss.Aps,3)+'('+N(fpu,1)+')}{0.85('+N(fcd,2)+')('+N(f.b1,3)+')('+N(cp.beff,2)+') + '+N(k,2)+'('+N(ss.Aps,3)+')\\frac{'+N(fpu,1)+'}{'+N(f.dp,2)+'}}':'',value:f.c,unit:'in',d:3,ref:ED+' Eq. 5.6.3.1.1-4'});
     w.add({id:'a',label:'Depth of the stress block',sym:'a',eq:'\\beta_{1}c',sub:N(f.b1,3)+'('+N(f.c,3)+')',value:f.a,unit:'in',d:3});
     w.add({id:'fps',label:'Average stress in the strands at nominal resistance'+(f.devGov?' (limited by development, 5.9.4.3.2)':''),sym:'f_{ps}',eq:f.devGov?'':'f_{pu}\\left(1 - k\\frac{c}{d_{p}}\\right)',sub:f.devGov?'':N(fpu,1)+'\\left(1 - '+N(k,2)+'\\frac{'+N(f.c,3)+'}{'+N(f.dp,2)+'}\\right)',value:f.fps,unit:'ksi',d:2,ref:ED+' Eq. 5.6.3.1.1-1'});
-    w.add({id:'Mn',label:'Nominal flexural resistance',sym:'M_{n}',eq:f.rect&&!f.devGov?'\\frac{A_{ps}f_{ps}\\left(d_{p} - \\frac{a}{2}\\right)}{12}':'',sub:f.rect&&!f.devGov?'\\frac{'+N(ss.Aps,3)+'('+N(f.fps,2)+')('+N(f.dp,2)+' - '+N(f.a,3)+'/2)}{12}':'',value:f.Mn/12,unit:'kip-ft',d:1,ref:ED+' Eq. 5.6.3.2.2-1'});
+    w.add({id:'Mn',label:'Nominal flexural resistance',sym:'M_{n}',eq:f.rect&&!f.devGov?'\\frac{A_{ps}f_{ps}\\left(d_{p} - \\frac{a}{2}\\right)}{12}':'',sub:f.rect&&!f.devGov?'\\frac{'+N(ss.Aps,3)+'('+N(f.fps,2)+')('+N(f.dp,2)+' - '+N(f.a,3)+'/2)}{12}':'',value:f.Mn/12,unit:'kip-ft',d:1,ref:ED+' Eq. 5.6.3.2.2-1',note:'M_n = '+N(f.Mn,0)+' kip-in'});
     w.add({id:'phi',label:'Resistance factor (net tensile strain ε_t = '+N(f.et,4)+')',sym:'\\phi',eq:'0.75 \\le 0.75 + \\frac{0.25(\\varepsilon_{t} - 0.002)}{0.003} \\le 1.0',sub:'',value:f.phi,unit:'',d:3,ref:ED+' Art. 5.5.4.2'});
     w.add({id:'phiMn',label:'Factored flexural resistance',sym:'\\phi M_{n}',eq:'\\phi M_{n}',sub:N(f.phi,3)+'('+N(f.Mn/12,1)+')',value:f.phiMn/12,unit:'kip-ft',d:1});
     w.add({id:'r',label:'Flexure, governing station x = '+N(R.flexGov.x,1)+' ft: demand / capacity',sym:'\\frac{M_{u}}{\\phi M_{n}}',eq:'',sub:'\\frac{'+N(R.flexGov.Mu/12,1)+'}{'+N(R.flexGov.phiMn/12,1)+'}',value:R.flexGov.r,unit:'',d:3,ok:R.flexGov.r<=1.0001});
@@ -8285,11 +8349,350 @@ function psrModel(inp,R){
   secs.push({title:'References',subs:[{title:'Codes and references cited',items:[{type:'table',head:['Reference','Provisions used'],rows:[
     ['AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)','Art. 2.5.2.6.2; 3.4.1, 3.5.1, 3.6.1.3.1, 3.6.2.1; 4.6.2.2, 4.6.2.6.1; 5.4.2.4, 5.5.4.2, 5.6.2.2, 5.6.3, 5.7.2.8, 5.7.3, 5.7.3.5, 5.7.4, 5.9.2.2, 5.9.2.3, 5.9.3, 5.9.4.3'],
     ['AASHTO Manual for Bridge Evaluation','Section 6A (LRFR). Edition not stated by the tool: verify.'],['PCI Design Handbook','Long-term camber multipliers. Edition not stated by the tool: verify.']]}]}]});
+  psrMore(inp,R,secs);   // PSRF: the rest of the calculation (2026-11-01)
+  psrPort(inp,R,secs);   // PSRP2: the remaining content of the retired Report tab (2026-11-01)
   return {title:'Prestressed Bridge Design — Calculation Report',subtitle:(p.name||'Untitled')+' · '+(p.girderId?plain(p.girderId)+' · ':'')+plain(inp.girder)+', L = '+N(L,1)+' ft',code:'AASHTO LRFD 10th Ed. (2024)',
     info:[['Project',p.name||''],['Project No.',p.job||''],['Calculated by',p.by||''],['Date',p.date||''],['Checked by',''],['Checked date','']],
     head:{left:'Project No. '+(p.job||'—')+' — '+String(p.name||'—').slice(0,40),right:'Computed: '+(p.by||'—')+' '+(p.date||'')+' · Checked: —',foot:(p.name||'Untitled')+' (Prestressed Bridge Design)'},
     sections:secs};
 }
+/* PSRF (2026-11-01, engineer's decision: the new report self-contained): the rest of the old Report tab's calculation, in the shared
+   format. Every value is R's (R.rv holds the intermediates the old tab used to recompute; psbReportVals). psrMore(inp,R,secs) adds
+   subsections to the sections psrModel built and the sections that follow (fatigue, continuity, handling, deck, owner, output). */
+function psrMore(inp,R,secs){
+  const S=window.SharedSteps, N=(x,d)=>S.n(x,d), G=(x,d)=>S.g(x,d), ED='AASHTO LRFD 10th Ed.', W=()=>S.work('');
+  const g=R.g, cp=R.cp, ss=R.ss, lo=R.lo, rf=lo.ref, fin=R.refFin, m=inp.mat, L=R.L, Lin=L*12, rv=R.rv, df=R.df, hl=R.hl, f=R.fMid, c=R.cam, lim=R.lim;
+  const ts=+inp.ts, th=+inp.th, Ep=+inp.str.Ep, fpu=+inp.str.fpu, mu=inp.opt.mult, refined=inp.opt.lossMethod==='refined';
+  const row=loc=>R.grid.reduce((b,r)=>Math.abs(r.x-loc)<Math.abs(b.x-loc)?r:b,R.grid[0]), cf=n=>R.checks.find(q=>q.n===n)||{loc:0,pass:true};
+  const rMid=row(L/2), sh0=R.shear.find(s=>!s.isBearing)||R.shear[0], if0=R.iface[R.shear.indexOf(sh0)]||R.iface[0];
+  const plain=s=>String(s==null?'':s).replace(/<[^>]*>/g,'').replace(/\$/g,'').replace(/\[\[/g,'[ [');
+  const cell=(v,d,key,cls)=>({t:(typeof v==='number')?(isFinite(v)?N(v,d):'∞'):String(v==null?'—':v),n:typeof v==='number',key,cls});
+  const one=(scope,steps,title,ref)=>{ const t=S.group(steps,[{key:'t',title,ref:ref||'',ids:()=>true}],{strip:false})[0];
+    return {type:'steps',scope,steps,topics:t?[{title,ref:ref||'',n:steps.length,cls:t.cls,chip:t.chip,res:t.res}]:[]}; };
+  const sec=t=>secs.find(s=>s.title===t);
+  const ok=n=>cf(n).pass;
+  const TT=rv.terms, tm=(a,sg)=>' = '+a.map((v,i)=>(i?(sg[i]==='-'?' - ':' + '):'')+N(v,3)).join('');   // PSRP2: the evaluated terms (R.rv.terms)
+  /* graphics: line plots of R's diagrams (display of R.diagrams / R.grid; the interactive charts are on the Diagrams and Stresses tabs) */
+  const plot=(xs,series,yl)=>{ const Wd=640,H=230,l=58,r=12,t=14,b=34, all=series.flatMap(s=>s.y).filter(v=>isFinite(v)); if(!all.length) return '';
+    let y0=Math.min(0,...all), y1=Math.max(0,...all); if(y1-y0<1e-9) y1=y0+1; const X=x=>l+(x-xs[0])/((xs[xs.length-1]-xs[0])||1)*(Wd-l-r), Y=v=>t+(y1-v)/(y1-y0)*(H-t-b);
+    const tk=[0,0.25,0.5,0.75,1].map(k=>y0+k*(y1-y0));
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Wd} ${H}" width="100%" style="max-width:${Wd}px;font:10px sans-serif">`+
+      tk.map(v=>`<line x1="${l}" x2="${Wd-r}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="#e5e7eb"/><text x="${l-4}" y="${(Y(v)+3).toFixed(1)}" text-anchor="end" fill="#475569">${N(v,0)}</text>`).join('')+
+      `<line x1="${l}" x2="${Wd-r}" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" stroke="#64748b"/>`+
+      series.map(s=>`<polyline fill="none" stroke="${s.c}" stroke-width="1.6"${s.dash?' stroke-dasharray="5 3"':''} points="${xs.map((x,i)=>X(x).toFixed(1)+','+Y(s.y[i]).toFixed(1)).join(' ')}"/>`).join('')+
+      series.map((s,i)=>`<rect x="${l+8+i*150}" y="${H-12}" width="12" height="3" fill="${s.c}"/><text x="${l+24+i*150}" y="${H-8}" fill="#334155">${s.n}</text>`).join('')+
+      `<text x="${(l+Wd-r)/2}" y="${H-20}" text-anchor="middle" fill="#475569">x (ft)</text><text x="12" y="${t+6}" fill="#475569">${yl}</text></svg>`; };
+  { const D=R.diagrams||[], xs=D.map(d=>d.x), fl=R.flexFull||[], sd=R.shearDiag||[];
+    const items=[];
+    if(D.length){ items.push({type:'figure',svg:plot(xs,[{n:'M_u Strength I (+)',c:'#1f4e79',y:D.map(d=>d.M_StrI_pos)},{n:'φM_n',c:'#1a8a3a',dash:true,y:xs.map(x=>{ const q=fl.reduce((b,r)=>Math.abs(r.x-x)<Math.abs(b.x-x)?r:b,fl[0]); return q?q.phiMn/12:NaN; })}],'kip-ft'),caption:'Strength I moment and the factored flexural resistance along the girder (R.diagrams, R.flexFull).'});
+      items.push({type:'figure',svg:plot(sd.map(d=>d.x),[{n:'V_u Strength I',c:'#c62828',y:sd.map(d=>d.Vu)},{n:'φV_n',c:'#1a8a3a',dash:true,y:sd.map(d=>d.phiVn)}],'kip'),caption:'Strength I shear and the factored shear resistance (R.shearDiag).'});
+      const gr=R.grid; items.push({type:'figure',svg:plot(gr.map(r=>r.x),[{n:'release top',c:'#7c3aed',y:gr.map(r=>r.relTop)},{n:'release bottom',c:'#b45309',y:gr.map(r=>r.relBot)},{n:'service top (+LL)',c:'#1f4e79',y:gr.map(r=>r.s2Top)},{n:'Service III bottom',c:'#c62828',y:gr.map(r=>r.s3Bot)}],'ksi'),caption:'Fiber stresses along the girder (+ compression; R.grid). Limits: §5.'}); }
+    const snap=(typeof snapStore!=='undefined'&&snapStore&&snapStore.png)?snapStore.png:null;
+    items.push(snap?{type:'figure',svg:`<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 800 450" width="100%"><image href="${snap}" x="0" y="0" width="800" height="450" preserveAspectRatio="xMidYMid meet"/></svg>`,caption:'3D reinforcement cage (snapshot captured on the Section Props tab).'}
+      :{type:'note',text:'3D reinforcement cage: no snapshot captured yet (Section Props tab, "Capture for report").'});
+    secs.splice(1,0,{title:'Graphics',subs:[{title:'Force effects, resistances and stresses',items}]}); }
+  /* section properties: gross moduli, transformed areas and the parallel-axis terms */
+  { const w=W();
+    w.add({id:'Sb',label:'Gross section modulus, bottom',sym:'S_{b}',eq:'\\frac{I_{g}}{y_{b}}',sub:'\\frac{'+G(g.I,0)+'}{'+N(g.yb,2)+'}',value:g.Sb,unit:'in^{3}',d:0});
+    w.add({id:'St',label:'Gross section modulus, top',sym:'S_{t}',eq:'\\frac{I_{g}}{y_{t}}',sub:'\\frac{'+G(g.I,0)+'}{'+N(g.yt,2)+'}',value:g.St,unit:'in^{3}',d:0});
+    w.add({id:'wsw',label:'Girder self-weight',sym:'w_{sw}',eq:'\\frac{A_{g}}{144}w_{c,load}',sub:'\\frac{'+N(g.A,1)+'}{144}('+N(+m.wcLoad||+m.wc,3)+')',value:g.wsw,unit:'klf',d:4});
+    const cons=cp.incHaunch||th===0;
+    if(cons&&!g.isNext&&!g.isBox&&!g.isDeck&&ts>0){
+      w.add({id:'Ad',label:'Transformed deck area (at y_d = '+N(rv.yd,2)+' in)',sym:'A_{d}',eq:'nb_{eff}t_{s}',sub:N(cp.n,4)+'('+N(cp.beff,2)+')('+N(ts,2)+')',value:rv.Ad,unit:'in^{2}',d:1});
+      if(cp.incHaunch) w.add({id:'Ah',label:'Transformed haunch area (at y_h = '+N(rv.yh,2)+' in)',sym:'A_{h}',eq:'nb_{tf}t_{h}',sub:N(cp.n,4)+'('+N(g.btf,2)+')('+N(th,2)+')',value:rv.Ah,unit:'in^{2}',d:1});
+      w.add({id:'Ic2',label:'Parallel-axis term of the girder',sym:'A_{g}(y_{bc} - y_{b})^{2}',eq:'',sub:N(g.A,1)+'('+N(cp.ybc,2)+' - '+N(g.yb,2)+')^{2}',value:rv.Ic2,unit:'in^{4}',d:0});
+      w.add({id:'Ic3',label:'Deck own inertia',sym:'\\frac{nb_{eff}t_{s}^{3}}{12}',eq:'',sub:'\\frac{'+N(cp.n,4)+'('+N(cp.beff,2)+')('+N(ts,2)+')^{3}}{12}',value:rv.Ic3,unit:'in^{4}',d:0});
+      w.add({id:'Ic4',label:'Parallel-axis term of the deck',sym:'A_{d}(y_{d} - y_{bc})^{2}',eq:'',sub:N(rv.Ad,1)+'('+N(rv.yd,2)+' - '+N(cp.ybc,2)+')^{2}',value:rv.Ic4,unit:'in^{4}',d:0});
+      if(cp.incHaunch){ w.add({id:'Ic5',label:'Haunch own inertia',sym:'\\frac{nb_{tf}t_{h}^{3}}{12}',eq:'',sub:'',value:rv.Ic5,unit:'in^{4}',d:0}); w.add({id:'Ic6',label:'Parallel-axis term of the haunch',sym:'A_{h}(y_{h} - y_{bc})^{2}',eq:'',sub:'',value:rv.Ic6,unit:'in^{4}',d:0}); }
+    }
+    sec('Materials and section properties').subs.push({title:'Gross moduli, transformed areas and the parallel-axis terms of I_c',items:[one('sec2',w.steps,'Section property terms',ED+' Art. 4.6.2.6'),
+      ...(cons?[]:[{type:'note',warn:true,text:'Haunch height t_h = '+N(th,2)+' in is not included in the composite properties (input): the deck centroid is at h + t_s/2 (§2.3). The old Report tab shows y_d = h + t_h + t_s/2 and A_h here (PSRF-O2).'}])]}); }
+  /* strands, ES, losses: the remaining terms */
+  { const w=W();
+    w.add({id:'cgs',label:'Strand c.g. at midspan (rows and the harped group)',sym:'\\bar{y}_{ps}',eq:'\\frac{\\sum n_{i}y_{i}}{N}',sub:'\\frac{'+[...ss.rows.map(r=>r.n+'('+N(+r.y,2)+')'),...(ss.nh>0?[ss.nh+'('+N(+ss.hp.yMid,2)+')']:[])].join(' + ')+'}{'+ss.Ntot+'}',value:ss.cgsMid,unit:'in',d:3});
+    if(ss.nh>0) w.add({id:'slope',label:'Harped strand slope',sym:'\\text{slope}',eq:'\\frac{y_{end} - y_{mid}}{a}',sub:'\\frac{'+N(+ss.hp.yEnd,1)+' - '+N(+ss.hp.yMid,1)+'}{'+N(ss.hp.frac*Lin,0)+'}',value:ss.slope,unit:'',d:4});
+    w.add({id:'Mg',label:'Midspan self-weight moment',sym:'M_{g}',eq:'\\frac{w_{sw}L^{2}}{8}',sub:'\\frac{'+N(R.wG,4)+'('+N(L,2)+')^{2}}{8}(12)',value:rv.MgM,unit:'kip-in',d:0});
+    w.add({id:'X1',label:'Term of the closed form',sym:'I_{g} + e_{m}^{2}A_{g}',eq:'',sub:G(g.I,0)+' + ('+N(rv.em,2)+')^{2}('+N(g.A,1)+')',value:rv.X1,unit:'in^{4}',d:0});
+    w.add({id:'fpt',label:'Strand stress after transfer',sym:'f_{pt}',eq:'f_{pbt} - \\Delta f_{pES}',sub:N(R.fpbt,2)+' - '+N(lo.dfES,2),value:lo.fpt,unit:'ksi',d:2});
+    if(refined){
+      w.add({id:'ks',label:'Volume-to-surface factor',sym:'k_{s}',eq:'\\max(1.45 - 0.13V/S, 1.0)',sub:'\\max(1.45 - 0.13('+N(+m.VS,2)+'), 1.0)',value:rf.ks,unit:'',d:3,ref:ED+' Eq. 5.4.2.3.2-2'});
+      w.add({id:'khs',label:'Humidity factor, shrinkage',sym:'k_{hs}',eq:'2.00 - 0.014H',sub:'2.00 - 0.014('+N(+m.H,0)+')',value:rf.khs,unit:'',d:3,ref:ED+' Eq. 5.4.2.3.3-2'});
+      w.add({id:'khc',label:'Humidity factor, creep',sym:'k_{hc}',eq:'1.56 - 0.008H',sub:'1.56 - 0.008('+N(+m.H,0)+')',value:rf.khc,unit:'',d:3,ref:ED+' Eq. 5.4.2.3.2-3'});
+      w.add({id:'kf',label:'Concrete strength factor',sym:'k_{f}',eq:'\\frac{5}{1 + f^{\\prime}_{ci}}',sub:'\\frac{5}{1 + '+N(+m.fci,2)+'}',value:rf.kf,unit:'',d:3,ref:ED+' Eq. 5.4.2.3.2-4'});
+      w.add({id:'ktdK',label:'Time-development constant',sym:'12\\frac{100 - 4f^{\\prime}_{ci}}{f^{\\prime}_{ci} + 20}',eq:'',sub:'12\\frac{100 - 4('+N(+m.fci,2)+')}{'+N(+m.fci,2)+' + 20}',value:rv.ktdK,unit:'',d:2,ref:ED+' Eq. 5.4.2.3.2-5'});
+      w.add({id:'ktdID',label:'Time-development factor, transfer to deck',sym:'k_{td}(t_{d} - t_{i})',eq:'\\frac{t}{K + t}',sub:'\\frac{'+N(m.td-m.ti,0)+'}{'+N(rv.ktdK,2)+' + '+N(m.td-m.ti,0)+'}',value:rv.ktdID,unit:'',d:3,ref:ED+' Eq. 5.4.2.3.2-5'});
+      w.add({id:'ktdIF',label:'Time-development factor, transfer to final',sym:'k_{td}(t_{f} - t_{i})',eq:'\\frac{t}{K + t}',sub:'\\frac{'+N(m.tfin-m.ti,0)+'}{'+N(rv.ktdK,2)+' + '+N(m.tfin-m.ti,0)+'}',value:rv.ktdIF,unit:'',d:3});
+      w.add({id:'eShID',label:'Shrinkage strain, transfer to deck',sym:'\\varepsilon_{bid}',eq:'k_{s}k_{hs}k_{f}k_{td}(0.48\\times 10^{-3})',sub:N(rf.ks,3)+'('+N(rf.khs,3)+')('+N(rf.kf,3)+')('+N(rv.ktdID,3)+')(0.48\\times 10^{-3})',value:rf.eShID*1e6,unit:'\\times 10^{-6}',d:1,ref:ED+' Eq. 5.4.2.3.3-1'});
+      w.add({id:'eShIF',label:'Shrinkage strain, transfer to final',sym:'\\varepsilon_{bif}',eq:'',sub:'',value:rf.eShIF*1e6,unit:'\\times 10^{-6}',d:1});
+      w.add({id:'psiBID',label:'Creep coefficient, transfer to deck',sym:'\\psi_{b}(t_{d}, t_{i})',eq:'1.9k_{s}k_{hc}k_{f}k_{td}t_{i}^{-0.118}',sub:'1.9('+N(rf.ks,3)+')('+N(rf.khc,3)+')('+N(rf.kf,3)+')('+N(rv.ktdID,3)+')('+N(+m.ti,2)+')^{-0.118}',value:rf.psiBID,unit:'',d:3,ref:ED+' Eq. 5.4.2.3.2-1'});
+      w.add({id:'psiBIF',label:'Creep coefficient, transfer to final',sym:'\\psi_{b}(t_{f}, t_{i})',eq:'',sub:'',value:rf.psiBIF,unit:'',d:3});
+      w.add({id:'psiBDF',label:'Creep coefficient, deck to final',sym:'\\psi_{b}(t_{f}, t_{d})',eq:'1.9k_{s}k_{hc}k_{f}k_{td}(t_{f} - t_{d})t_{d}^{-0.118}',sub:'',value:rf.psiBDF,unit:'',d:3});
+      w.add({id:'Kid',label:'Transformed-section coefficient, transfer to deck',sym:'K_{id}',eq:'\\left[1 + \\frac{E_{p}}{E_{ci}}\\frac{A_{ps}}{A_{g}}\\left(1 + \\frac{A_{g}e_{pg}^{2}}{I_{g}}\\right)(1 + 0.7\\psi_{bif})\\right]^{-1}',sub:'',value:rf.Kid,unit:'',d:3,ref:ED+' Eq. 5.9.3.4.2a-2'});
+      w.add({id:'epc',label:'Strand eccentricity on the composite section',sym:'e_{pc}',eq:'y_{bc} - \\bar{y}_{ps}',sub:N(cp.ybc,2)+' - '+N(ss.cgsMid,3),value:rf.epc,unit:'in',d:2});
+      w.add({id:'Kdf',label:'Transformed-section coefficient, deck to final (composite A_c, I_c, e_pc)',sym:'K_{df}',eq:'',sub:'',value:rf.Kdf,unit:'',d:3,ref:ED+' Eq. 5.9.3.4.3a-2'});
+      w.add({id:'dfcd',label:'Change in concrete stress at the strands from deck and superimposed loads',sym:'\\Delta f_{cd}',eq:'-\\left[\\frac{M_{dk}e_{m}}{I_{g}} + \\frac{(M_{bar} + M_{dw})e_{pc}}{I_{c}}\\right]',sub:'-\\left[\\frac{'+N(rMid.Mdk,0)+'('+N(rv.em,2)+')}{'+G(g.I,0)+'} + \\frac{'+N(rv.Mbar+rv.Mdw,0)+'('+N(rf.epc,2)+')}{'+G(cp.Ic,0)+'}\\right]',value:R.dfcd,unit:'ksi',d:3,ref:ED+' Art. 5.9.3.4.3b'});
+    } else {
+      w.add({id:'gh',label:'Humidity correction',sym:'\\gamma_{h}',eq:'1.7 - 0.01H',sub:'1.7 - 0.01('+N(+m.H,0)+')',value:rv.gh,unit:'',d:3,ref:ED+' Eq. 5.9.3.3-2'});
+      w.add({id:'gst',label:'Concrete strength correction',sym:'\\gamma_{st}',eq:'\\frac{5}{1 + f^{\\prime}_{ci}}',sub:'\\frac{5}{1 + '+N(+m.fci,2)+'}',value:rv.gst,unit:'',d:3,ref:ED+' Eq. 5.9.3.3-3'});
+    }
+    w.add({id:'Pe',label:'Effective prestress force',sym:'P_{e}',eq:'A_{ps}f_{pe}',sub:N(ss.Aps,3)+'('+N(R.fpe,2)+')',value:ss.Aps*R.fpe,unit:'kip',d:0});
+    w.add({id:'gPre',label:'Elastic gain from DC1 on the girder',sym:'\\Delta f_{p,precast}',eq:'\\frac{E_{p}}{E_{c}}\\frac{M_{DC1}e_{m}}{I_{g}}',sub:'',value:R.gains.precast,unit:'ksi',d:2,ref:ED+' C5.9.3.4.3'});
+    w.add({id:'gCmp',label:'Elastic gain from DC2 and DW on the composite section',sym:'\\Delta f_{p,comp}',eq:'\\frac{E_{p}}{E_{c}}\\frac{(M_{DC2} + M_{DW})e_{pc}}{I_{c}}',sub:'',value:R.gains.composite,unit:'ksi',d:2});
+    w.add({id:'gPerm',label:'Strand stress with the permanent elastic gains',sym:'f_{pe} + \\Delta f_{p,perm}',eq:'',sub:N(R.fpe,2)+' + '+N(TT.gainPerm[0],2),value:TT.gainPerm[1],unit:'ksi',d:2});
+    w.add({id:'gLL',label:'Elastic gain from live load (transient)',sym:'\\Delta f_{p,LL}',eq:'\\frac{E_{p}}{E_{c}}\\frac{M_{LL}e_{pc}}{I_{c}}',sub:'',value:R.gains.live,unit:'ksi',d:2});
+    const st=R.strandStages;
+    sec('Strands and prestress losses').subs.push({title:'Strand c.g., loss coefficients and elastic gains',items:[one('los2',w.steps,'Terms of the loss calculation',refined?ED+' Art. 5.9.3.4, 5.4.2.3':ED+' Art. 5.9.3.3')]},
+      {title:'Strand force and stress by row and stage',items:[{type:'table',head:['Row y (in)','e (in)','n','f_pt (ksi)','P_rel (kip)','f_pD (ksi)','f_pe (ksi)','P_e (kip)'],rows:st.rows.map(r=>[N(r.y,1)+(r.harped?' (H)':''),cell(r.e,1),String(r.n),cell(r.fpt,1),cell(r.Ppt,0),cell(r.fpDeck,1),cell(r.fpe,1),cell(r.Ppe,0)]).concat([{cells:['Total','',String(st.tot.n),'',cell(st.tot.Ppt,0),'','',cell(st.tot.Ppe,0)],cls:'ok'}])},
+        {type:'note',text:'f_pt at release (after elastic shortening); f_pD after the losses to deck placement; f_pe after all losses; each row at its own eccentricity; (H) harped group. [[tab:losses|Losses tab]].'}]}); }
+  /* loads: moments, HL-93 closed forms, K_g, the distribution-factor equations */
+  { const w=W(), S0=+inp.S;
+    w.add({id:'Mdk',label:'Midspan deck moment (girder, simple span)',sym:'M_{dk}',eq:'\\frac{w_{dk}L^{2}}{8}',sub:'\\frac{'+N(R.wDk,4)+'('+N(L,2)+')^{2}}{8}',value:rMid.Mdk/12,unit:'kip-ft',d:0});
+    w.add({id:'Mbar',label:'Midspan barrier / superimposed moment'+(R.fe?' (continuous unit)':''),sym:'M_{bar}',eq:R.fe||R.useExt?'':'\\frac{w_{bar}L^{2}}{8}',sub:R.fe||R.useExt?'':'\\frac{'+N(+inp.loads.wBar,4)+'('+N(L,2)+')^{2}}{8}',value:rv.Mbar/12,unit:'kip-ft',d:0});
+    w.add({id:'Mdw',label:'Midspan wearing-surface moment'+(R.fe?' (continuous unit)':''),sym:'M_{dw}',eq:R.fe||R.useExt?'':'\\frac{w_{dw}L^{2}}{8}',sub:R.fe||R.useExt?'':'\\frac{'+N(+inp.loads.wDW,4)+'('+N(L,2)+')^{2}}{8}',value:rv.Mdw/12,unit:'kip-ft',d:0});
+    w.add({id:'Mtr',label:'HL-93 design truck, midspan moment'+(L>=28?' (= 18L − 280 for L ≥ 28 ft)':' (enumerated)'),sym:'M_{tr}',eq:L>=28?'18L - 280':'',sub:L>=28?'18('+N(L,2)+') - 280':'',value:hl.Mtr,unit:'kip-ft',d:0,ref:ED+' Art. 3.6.1.2.2'});
+    w.add({id:'Mtd',label:'Design tandem, midspan moment',sym:'M_{td}',eq:'\\left[12.5 + \\frac{25(L/2 - 4)}{L}\\right]\\frac{L}{2}',sub:'\\left[12.5 + \\frac{25('+N(L/2-4,2)+')}{'+N(L,2)+'}\\right]('+N(L/2,2)+')',value:hl.Mtd,unit:'kip-ft',d:0,ref:ED+' Art. 3.6.1.2.3'});
+    w.add({id:'Mln',label:'Design lane, midspan moment',sym:'M_{ln}',eq:'\\frac{0.64L^{2}}{8}',sub:'\\frac{0.64('+N(L,2)+')^{2}}{8}',value:hl.Mln,unit:'kip-ft',d:0,ref:ED+' Art. 3.6.1.2.4'});
+    w.add({id:'eg',label:'Distance between the girder and deck centroids',sym:'e_{g}',eq:'(h + t_{h} + \\frac{t_{s}}{2}) - y_{b}',sub:'('+N(g.h,2)+' + '+N(th,2)+' + '+N(ts/2,2)+') - '+N(g.yb,2),value:df.eg,unit:'in',d:2,ref:ED+' Art. 4.6.2.2.1'});
+    if(df.Kg&&!df.kgOmitted) w.add({id:'Kg',label:'Longitudinal stiffness parameter',sym:'K_{g}',eq:'\\frac{E_{c}}{E_{cd}}(I_{g} + A_{g}e_{g}^{2})',sub:'\\frac{1}{'+N(cp.n,4)+'}('+G(g.I,0)+' + '+N(g.A,1)+'('+N(df.eg,2)+')^{2})',value:df.Kg,unit:'in^{4}',d:0,ref:ED+' Eq. 4.6.2.2.1-1'});
+    const kt='\\left(\\frac{'+G(df.Kg,0)+'}{12('+N(L,2)+')('+N(ts,2)+')^{3}}\\right)^{0.1}';
+    if(!g.isNext&&df.Kg){
+      w.add({id:'m1',label:'Interior moment equation, one lane',sym:'g_{m1}',eq:'0.06 + \\left(\\frac{S}{14}\\right)^{0.4}\\left(\\frac{S}{L}\\right)^{0.3}\\left(\\frac{K_{g}}{12Lt_{s}^{3}}\\right)^{0.1}',sub:'0.06 + \\left(\\frac{'+N(S0,2)+'}{14}\\right)^{0.4}\\left(\\frac{'+N(S0,2)+'}{'+N(L,2)+'}\\right)^{0.3}'+kt,value:df.m1,unit:'',d:4,ref:ED+' Table 4.6.2.2.2b-1'});
+      w.add({id:'m2',label:'Interior moment equation, two or more lanes',sym:'g_{m2}',eq:'0.075 + \\left(\\frac{S}{9.5}\\right)^{0.6}\\left(\\frac{S}{L}\\right)^{0.2}\\left(\\frac{K_{g}}{12Lt_{s}^{3}}\\right)^{0.1}',sub:'0.075 + \\left(\\frac{'+N(S0,2)+'}{9.5}\\right)^{0.6}\\left(\\frac{'+N(S0,2)+'}{'+N(L,2)+'}\\right)^{0.2}'+kt,value:df.m2,unit:'',d:4,ref:ED+' Table 4.6.2.2.2b-1'});
+      w.add({id:'v1',label:'Interior shear equation, one lane',sym:'g_{v1}',eq:'0.36 + \\frac{S}{25}',sub:'0.36 + \\frac{'+N(S0,2)+'}{25}',value:df.v1,unit:'',d:4,ref:ED+' Table 4.6.2.2.3a-1'});
+      w.add({id:'v2',label:'Interior shear equation, two or more lanes',sym:'g_{v2}',eq:'0.2 + \\frac{S}{12} - \\left(\\frac{S}{35}\\right)^{2}',sub:'0.2 + \\frac{'+N(S0,2)+'}{12} - \\left(\\frac{'+N(S0,2)+'}{35}\\right)^{2}',value:df.v2,unit:'',d:4,ref:ED+' Table 4.6.2.2.3a-1'}); }
+    if(df.ext){ const de=+inp.loads.de;
+      w.add({id:'lever',label:'Exterior girder, lever rule, one lane (m = 1.2; wheels at d_e − 2 = '+N(de-2,2)+' and d_e − 8 = '+N(de-8,2)+' ft)',sym:'g_{lever}',eq:'1.2\\sum\\frac{0.5(S + x_{w})}{S}',sub:'',value:df.lever,unit:'',d:4,ref:ED+' Table 4.6.2.2.2d-1'});
+      w.add({id:'eM',label:'Correction factor e for moment',sym:'e_{m}',eq:'0.77 + \\frac{d_{e}}{9.1}',sub:'0.77 + \\frac{'+N(de,2)+'}{9.1}',value:df.eM,unit:'',d:4,ref:ED+' Table 4.6.2.2.2d-1'});
+      w.add({id:'eV',label:'Correction factor e for shear',sym:'e_{v}',eq:'0.6 + \\frac{d_{e}}{10}',sub:'0.6 + \\frac{'+N(de,2)+'}{10}',value:df.eV,unit:'',d:4,ref:ED+' Table 4.6.2.2.3b-1'});
+      w.add({id:'rigid',label:'Rigid cross-section (governing N_L = '+df.rigidNL+')',sym:'g_{rigid}',eq:'m\\left(\\frac{N_{L}}{N_{b}} + \\frac{X_{ext}\\sum e}{\\sum x^{2}}\\right)',sub:'',value:df.rigid,unit:'',d:4,ref:ED+' Eq. C4.6.2.2.2d-1'});
+      w.add({id:'gmx',label:'Exterior moment factor',sym:'g_{m,ext}',eq:'\\max(g_{lever}, e_{m}g_{m2}, g_{rigid})',sub:'\\max('+N(df.lever,4)+', '+N(df.eM*df.m2,4)+', '+N(df.rigid,4)+')',value:df.dfmRaw,unit:'',d:4});
+      w.add({id:'gvx',label:'Exterior shear factor',sym:'g_{v,ext}',eq:'\\max(g_{lever}, e_{v}g_{v2}, g_{rigid})',sub:'\\max('+N(df.lever,4)+', '+N(df.eV*df.v2,4)+', '+N(df.rigid,4)+')',value:df.dfvRaw,unit:'',d:4}); }
+    if(df.th>0){ w.add({id:'skM',label:'Skew reduction for moment (θ = '+N(df.th,1)+'°)',sym:'r_{M}',eq:'1 - c_{1}(\\tan\\theta)^{1.5}',sub:'',value:df.skM,unit:'',d:4,ref:ED+' Table 4.6.2.2.2e-1'});
+      w.add({id:'skV',label:'Skew correction for shear',sym:'r_{V}',eq:'1 + 0.20\\left(\\frac{12Lt_{s}^{3}}{K_{g}}\\right)^{0.3}\\tan\\theta',sub:'1 + 0.20\\left(\\frac{12('+N(L,2)+')('+N(ts,2)+')^{3}}{'+G(df.Kg,0)+'}\\right)^{0.3}\\tan '+N(df.th,1)+'^{\\circ}',value:df.skV,unit:'',d:4,ref:ED+' Table 4.6.2.2.3c-1'}); }
+    sec('Loads and live-load distribution').subs.push({title:'Moments, HL-93 per lane and the distribution-factor equations',items:[one('lds2',w.steps,'Load and distribution terms',ED+' Art. 3.6, 4.6.2.2')]}); }
+  /* the governing service stresses, worked */
+  { const w=W(), rRc=row(cf('Release comp').loc), rRt=row(cf('Release tens').loc), rS1=row(cf('Srv comp (perm)').loc), rS2=row(cf('Srv comp (full)').loc), rS3=row(cf('Srv III tens').loc), rDk=row(cf('Deck comp').loc);
+    const t=rv.tRc;
+    if(R.useT){ w.add({id:'At',label:'Release, transformed section (n_i = E_p/E_ci = '+N(rv.niT,3)+'): area',sym:'A_{t}',eq:'A_{g} + (n_{i} - 1)A_{ps}',sub:N(g.A,1)+' + ('+N(rv.niT-1,3)+')('+N(rRc.Aps,3)+')',value:t.At,unit:'in^{2}',d:1});
+      w.add({id:'ybt',label:'Release, transformed centroid',sym:'y_{bt}',eq:'',sub:'',value:t.ybt,unit:'in',d:2}); w.add({id:'It',label:'Release, transformed moment of inertia',sym:'I_{t}',eq:'',sub:'',value:t.It,unit:'in^{4}',d:0});
+      w.add({id:'P0',label:'Force at f_pbt (elastic shortening implicit)',sym:'P_{0}',eq:'A_{ps}f_{pbt}',sub:N(rRc.Aps,3)+'('+N(R.fpbt,2)+')',value:t.P0,unit:'kip',d:0});
+      w.add({id:'relBot',label:'Release, bottom fiber at x = '+N(rRc.x,2)+' ft (transformed)',sym:'f_{bot}',eq:'\\frac{P_{0}}{A_{t}} + \\frac{P_{0}e_{t}}{S_{bt}} - \\frac{M_{g}}{S_{bt}}',sub:'\\frac{'+N(t.P0,0)+'}{'+N(t.At,1)+'} + \\frac{'+N(t.P0,0)+'('+N(t.eT,2)+')}{'+N(t.Sbt,0)+'} - \\frac{'+N(rRc.Mg,0)+'}{'+N(t.Sbt,0)+'}'+tm(TT.relBotT,'++-'),value:rRc.relBot,unit:'ksi',d:3,ok:ok('Release comp'),note:'≤ '+N(lim.relC,3)+' ksi'}); }
+    else w.add({id:'relBot',label:'Release, bottom fiber at x = '+N(rRc.x,2)+' ft (gross section)',sym:'f_{bot}',eq:'\\frac{P_{i}}{A_{g}} + \\frac{P_{i}e}{S_{b}} - \\frac{M_{g}}{S_{b}}',sub:'\\frac{'+N(rRc.Aps*R.fpi,0)+'}{'+N(g.A,1)+'} + \\frac{'+N(rRc.Aps*R.fpi,0)+'('+N(rRc.e,2)+')}{'+N(g.Sb,0)+'} - \\frac{'+N(rRc.Mg,0)+'}{'+N(g.Sb,0)+'}'+tm(TT.relBot,'++-'),value:rRc.relBot,unit:'ksi',d:3,ok:ok('Release comp'),note:'≤ '+N(lim.relC,3)+' ksi',ref:ED+' Art. 5.9.2.3.1'});
+    w.add({id:'relTop',label:'Release, top fiber at x = '+N(rRt.x,2)+' ft',sym:'f_{top}',eq:R.useT?'':'\\frac{P_{i}}{A_{g}} - \\frac{P_{i}e}{S_{t}} + \\frac{M_{g}}{S_{t}}',sub:R.useT?'':'\\frac{'+N(rRt.Aps*R.fpi,0)+'}{'+N(g.A,1)+'} - \\frac{'+N(rRt.Aps*R.fpi,0)+'('+N(rRt.e,2)+')}{'+N(g.St,0)+'} + \\frac{'+N(rRt.Mg,0)+'}{'+N(g.St,0)+'}'+tm(TT.relTop,'+-+'),value:rRt.relTop,unit:'ksi',d:3,ok:ok('Release tens'),note:'≥ −'+N(lim.relT,3)+' ksi'});
+    w.add({id:'s1Top',label:'Service I, top fiber, permanent loads, x = '+N(rS1.x,2)+' ft',sym:'f_{top}',eq:'\\frac{P_{e}}{A_{g}} - \\frac{P_{e}e}{S_{t}} + \\frac{M_{g} + M_{dk}}{S_{t}} + \\frac{M_{sd}}{S_{tg}}',sub:'\\frac{'+N(rS1.Aps*R.fpe,0)+'}{'+N(g.A,1)+'} - \\frac{'+N(rS1.Aps*R.fpe,0)+'('+N(rS1.e,2)+')}{'+N(g.St,0)+'} + \\frac{'+N(rS1.Mg+rS1.Mdk,0)+'}{'+N(g.St,0)+'} + \\frac{'+N(rS1.Msd+(rS1.mrp||0),0)+'}{'+N(cp.Stg,0)+'}'+tm(TT.s1Top,'+-++'),value:rS1.s1Top,unit:'ksi',d:3,ok:ok('Srv comp (perm)'),note:'P_e = '+N(rS1.Aps*R.fpe,0)+' kip; M_g = '+N(rS1.Mg,0)+', M_dk = '+N(rS1.Mdk,0)+', M_sd = '+N(rS1.Msd,0)+' kip-in; ≤ 0.45f′c = '+N(lim.srvC1,3)+' ksi'+(rS1.mrp!=null?'; includes the restraint moment M_res+':''),ref:ED+' Table 5.9.2.3.2a-1'});
+    w.add({id:'s2Top',label:'Service I, top fiber, full load, x = '+N(rS2.x,2)+' ft',sym:'f_{top}',eq:'f_{perm} + \\frac{m_{LL}M_{LL}}{S_{tg}}',sub:N(rS2.s1Top,3)+' + \\frac{'+(R.own?N(R.own.mLL,2):'1.00')+'('+N(rS2.Mll,0)+')}{'+N(cp.Stg,0)+'}',value:rS2.s2Top,unit:'ksi',d:3,ok:ok('Srv comp (full)'),note:'≤ 0.60f′c = '+N(lim.srvC2,3)+' ksi'});
+    w.add({id:'s3Bot',label:'Service III, bottom fiber, x = '+N(rS3.x,2)+' ft (γ_LL = '+N(+inp.opt.gLLs3,2)+')',sym:'f_{bot}',eq:'\\frac{P_{e}}{A_{g}} + \\frac{P_{e}e}{S_{b}} - \\frac{M_{g} + M_{dk}}{S_{b}} - \\frac{M_{sd} + \\gamma_{LL}m_{LL}M_{LL}}{S_{bc}}',sub:'\\frac{'+N(rS3.Aps*R.fpe,0)+'}{'+N(g.A,1)+'} + \\frac{'+N(rS3.Aps*R.fpe,0)+'('+N(rS3.e,2)+')}{'+N(g.Sb,0)+'} - \\frac{'+N(rS3.Mg+rS3.Mdk,0)+'}{'+N(g.Sb,0)+'} - \\frac{'+N(rS3.Msd+(rS3.mrp||0),0)+' + '+N(+inp.opt.gLLs3,2)+'('+(R.own?N(R.own.mLL,2):'1.00')+')('+N(rS3.Mll,0)+')}{'+N(cp.Sbc,0)+'}'+tm(TT.s3Bot,'++--'),value:rS3.s3Bot,unit:'ksi',d:3,ok:ok('Srv III tens'),note:'≥ −'+N(lim.srvT,3)+' ksi',ref:ED+' Table 3.4.1-4'});
+    w.add({id:'dkC',label:'Deck compression, x = '+N(rDk.x,2)+' ft',sym:'f_{deck}',eq:'\\frac{M_{sd} + m_{LL}M_{LL}}{S_{td}}',sub:'\\frac{'+N(rDk.Msd+(rDk.mrp||0),0)+' + '+(R.own?N(R.own.mLL,2):'1.00')+'('+N(rDk.Mll,0)+')}{'+N(cp.Std,0)+'}',value:rDk.dkC,unit:'ksi',d:3,ok:ok('Deck comp'),note:'≤ 0.60f′c,d = '+N(lim.dkC2,3)+' ksi'});
+    sec('Stress limits and service stresses').subs.push({title:'Governing stresses, worked (+ compression, − tension; moments in kip-in)',items:[one('srs',w.steps,'Fiber stresses at the governing stations',ED+' Art. 5.9.2.3')]}); }
+  /* flexure and shear: the remaining terms */
+  { const w=W(), own=R.own;
+    w.add({id:'MuW',label:'Factored moment at midspan, Strength I',sym:'M_{u}',eq:(own?'\\eta[':'')+'1.25(M_{g} + M_{dk} + M_{bar}) + 1.50M_{dw} + 1.75'+(own?'m_{LL}':'')+'M_{LL}'+(own?']':''),sub:(own?N(own.eta,3)+'[':'')+'1.25('+N(rMid.Mg/12,1)+' + '+N(rMid.Mdk/12,1)+' + '+N(rv.Mbar/12,1)+') + 1.50('+N(rv.Mdw/12,1)+') + 1.75'+(own?'('+N(own.mLL,2)+')':'')+'('+N(R.MLL,1)+')'+(rMid.mrp!=null?' + '+N(rMid.mrp/12,1):'')+(own?']':''),value:R.MuMid/12,unit:'kip-ft',d:1,ref:ED+' Table 3.4.1-1'});
+    w.add({id:'et',label:'Net tensile strain',sym:'\\varepsilon_{t}',eq:'0.003\\left(\\frac{d_{t}}{c} - 1\\right)',sub:'0.003\\left(\\frac{'+N(cp.hc-ss.yLow,2)+'}{'+N(f.c,3)+'} - 1\\right)',value:f.et*1000,unit:'\\times 10^{-3}',d:3,ref:ED+' Art. 5.5.4.2'});
+    w.add({id:'fr',label:'Modulus of rupture',sym:'f_{r}',eq:'0.24\\sqrt{f^{\\prime}_{c}}',sub:'0.24\\sqrt{'+N(+m.fc,2)+'}',value:R.fr,unit:'ksi',d:3,ref:ED+' Art. 5.4.2.6'});
+    w.add({id:'fcpe',label:'Compressive stress from effective prestress at the bottom fiber (midspan)',sym:'f_{cpe}',eq:'\\frac{P_{e}}{A_{g}} + \\frac{P_{e}e_{m}}{S_{b}}',sub:'\\frac{'+N(rv.PeMid,0)+'}{'+N(g.A,1)+'} + \\frac{'+N(rv.PeMid,0)+'('+N(ss.eMid,2)+')}{'+N(g.Sb,0)+'}'+tm(TT.fcpe,'++'),value:R.fcpe,unit:'ksi',d:3});
+    w.add({id:'minR',label:'Minimum reinforcement at midspan: φM_n ≥ the lesser of M_cr and 1.33 M_u',sym:'\\min(M_{cr}, 1.33M_{u})',eq:'',sub:'\\min('+N(TT.minR[0],1)+', '+N(TT.minR[1],1)+')',value:R.minMr/12,unit:'kip-ft',d:1,ok:R.minMr<=f.phiMn*1.0001,ref:ED+' Art. 5.6.3.3'});
+    w.add({id:'Mcr',label:'Cracking moment',sym:'M_{cr}',eq:'\\gamma_{3}\\left[(\\gamma_{1}f_{r} + \\gamma_{2}f_{cpe})S_{bc} - M_{dnc}\\left(\\frac{S_{bc}}{S_{b}} - 1\\right)\\right]',sub:'1.0\\left[(1.6('+N(R.fr,3)+') + 1.1('+N(R.fcpe,3)+'))'+N(cp.Sbc,0)+' - '+N(rMid.Mg+rMid.Mdk,0)+'\\left(\\frac{'+N(cp.Sbc,0)+'}{'+N(g.Sb,0)+'} - 1\\right)\\right]/12',value:R.Mcr/12,unit:'kip-ft',d:1,ref:ED+' Eq. 5.6.3.3-1'});
+    sec('Strength I flexure').subs.push({title:'Factored moment, strain and minimum reinforcement terms',items:[one('flx2',w.steps,'Flexure terms',ED+' Art. 5.6.3')]});
+    const v=W();
+    v.add({id:'Vu',label:'Factored shear at the critical section x = '+N(sh0.x,2)+' ft',sym:'V_{u}',eq:'1.25(V_{g} + V_{dk} + V_{bar}) + 1.50V_{dw} + 1.75'+(own?'m_{LL}':'')+'V_{LL}',sub:'1.25('+N(sh0.vc?sh0.vc.g:rv.Vg,1)+' + '+N(sh0.vc?sh0.vc.dc1:rv.Vdk,1)+' + '+N(sh0.vc?sh0.vc.dc2:rv.Vbar,1)+') + 1.50('+N(sh0.vc?sh0.vc.dw:rv.Vdw,1)+') + 1.75'+(own?'('+N(own.mLL,2)+')':'')+'('+N(sh0.vc?sh0.vc.ll:rv.Vll,1)+')',value:sh0.Vu,unit:'kip',d:1,note:own&&own.eta!==1?'× η = '+N(own.eta,3):''});
+    v.add({id:'es',label:'Longitudinal strain at the critical section',sym:'\\varepsilon_{s}',eq:'\\frac{|M_{u}|/d_{v} + |V_{u} - V_{p}| - A_{ps}f_{po}}{E_{p}A_{ps}}',sub:'\\frac{'+N(rv.MuU,0)+'/'+N(sh0.dv,2)+' + '+N(Math.abs(sh0.Vu-sh0.Vp),1)+' - '+N(rv.apsX,3)+'('+N(rv.fpo,0)+')}{'+N(Ep,0)+'('+N(rv.apsX,3)+')}',value:sh0.es*1000,unit:'\\times 10^{-3}',d:3,ref:ED+' Eq. 5.7.3.4.2-4',note:sh0.esRecomp?'Negative: recomputed with the concrete (E_c A_ct).':''});
+    v.add({id:'dv0',label:'Effective shear depth at the critical section',sym:'d_{v}',eq:'\\max(d_{p} - \\frac{a}{2}, 0.9d_{p}, 0.72h_{c})',sub:'\\max('+TT.dv.map(x=>N(x,2)).join(', ')+')',value:sh0.dv,unit:'in',d:2,ref:ED+' Art. 5.7.2.8'});
+    v.add({id:'beta0',label:'β at the critical section',sym:'\\beta',eq:'\\frac{4.8}{1 + 750\\varepsilon_{s}}',sub:'\\frac{4.8}{1 + 750('+N(sh0.es,6)+')}',value:sh0.beta,unit:'',d:3,ref:ED+' Eq. 5.7.3.4.2-1'});
+    v.add({id:'theta0',label:'θ at the critical section',sym:'\\theta',eq:'29 + 3500\\varepsilon_{s}',sub:'29 + 3500('+N(sh0.es,6)+')',value:sh0.theta,unit:'deg',d:2,ref:ED+' Eq. 5.7.3.4.2-3'});
+    v.add({id:'Vc0',label:'Concrete contribution at the critical section',sym:'V_{c}',eq:'0.0316\\beta\\sqrt{f^{\\prime}_{c}}b_{v}d_{v}',sub:'0.0316('+N(sh0.beta,3)+')\\sqrt{'+N(+m.fc,2)+'}('+N(g.bw,2)+')('+N(sh0.dv,2)+')',value:sh0.Vc,unit:'kip',d:1,ref:ED+' Eq. 5.7.3.3-3'});
+    v.add({id:'Vn0',label:'Nominal shear resistance at the critical section',sym:'V_{n}',eq:'\\min(V_{c} + V_{s} + V_{p}, 0.25f^{\\prime}_{c}b_{v}d_{v} + V_{p})',sub:'\\min('+N(TT.Vn[0],1)+', '+N(TT.Vn[1],1)+')',value:sh0.Vn,unit:'kip',d:1,ref:ED+' Eqs. 5.7.3.3-1, -2'});
+    v.add({id:'cot',label:'cot θ at the critical section',sym:'\\cot\\theta',eq:'',sub:'\\cot '+N(sh0.theta,2)+'^{\\circ}',value:rv.cotT,unit:'',d:3});
+    v.add({id:'Vs',label:'Stirrup contribution at the critical section (s = '+N(sh0.sProv,2)+' in)',sym:'V_{s}',eq:'\\frac{A_{v}f_{y}d_{v}\\cot\\theta}{s}',sub:'\\frac{'+N(+inp.opt.stirAv,3)+'('+N(+inp.opt.fy,1)+')('+N(sh0.dv,2)+')('+N(rv.cotT,3)+')}{'+N(sh0.sProv,2)+'}',value:sh0.Vs,unit:'kip',d:1});
+    v.add({id:'dc',label:'Shear at the critical section: demand / capacity',sym:'\\frac{V_{u}}{\\phi V_{n}}',eq:'',sub:'\\frac{'+N(sh0.Vu,1)+'}{'+N(R.phiV,2)+'('+N(sh0.Vn,1)+')}',value:sh0.dc,unit:'',d:3,ok:sh0.dc<=1.0001});
+    v.add({id:'vui',label:'Interface shear stress at the critical section',sym:'v_{ui}',eq:'\\frac{V_{u}}{b_{vi}d_{vi}}',sub:'\\frac{'+N(sh0.Vu,1)+'}{'+N(g.btf,2)+'('+N(sh0.dv,2)+')}',value:if0.vui,unit:'ksi',d:3,ref:ED+' Art. 5.7.4'});
+    v.add({id:'Avf',label:'Interface reinforcement provided vs. required / minimum (in²/ft)',sym:'A_{vf}',eq:'\\frac{12A_{v}}{s}',sub:'',value:if0.AvfProv,unit:'in^{2}/ft',d:3,ok:!!if0.ok,note:'required '+N(if0.AvfReq,3)+', minimum '+N(if0.AvfMin,3)+(if0.minWaived?' (minimum waived, 5.7.4.2)':'')});
+    v.add({id:'Vni',label:'Interface: upper limit of V_ni vs. V_ui/φ (kip/ft)',sym:'V_{ni,max}',eq:'\\min(K_{1}f^{\\prime}_{c}A_{cv}, K_{2}A_{cv})',sub:'',value:if0.VniCap,unit:'kip/ft',d:0,ok:!!if0.capOK,note:'V_ui/φ = '+N(if0.Vui/R.phiV,0)+' kip/ft; K_1 = 0.3, K_2 = 1.8 ksi (5.7.4.3)'});
+    v.add({id:'AsS',label:'Splitting reinforcement required within h/4 = '+N(g.h/4,1)+' in',sym:'A_{s}',eq:'\\frac{0.04P_{i}}{f_{s}}',sub:'\\frac{0.04('+N(ss.Aps*R.fpi,0)+')}{20}',value:R.AsSplit,unit:'in^{2}',d:2,ref:ED+' Art. 5.9.4.4.1'});
+    v.add({id:'Pr',label:'Splitting resistance provided',sym:'P_{r}',eq:'f_{s}A_{s,prov}',sub:'20('+N(R.AsSplitProv,2)+')',value:R.splitPr,unit:'kip',d:1});
+    v.add({id:'splitDC',label:'Splitting: demand / capacity',sym:'\\frac{0.04P_{i}}{P_{r}}',eq:'',sub:'\\frac{'+N(R.splitDem,1)+'}{'+N(R.splitPr,1)+'}',value:R.splitDC,unit:'',d:3,ok:ok('Splitting steel (5.9.4.4)')});
+    if(R.conf&&!R.conf.exempt){ const cn=R.conf;
+      v.add({id:'confExt',label:'Confinement: extent provided (n − 1)s vs. 1.5d = '+N(cn.reqExt,1)+' in',sym:'(n - 1)s',eq:'',sub:'('+cn.n+' - 1)('+N(cn.s,2)+')',value:cn.provExt,unit:'in',d:1,ok:!!cn.extOK,ref:ED+' Art. 5.9.4.4.2'});
+      v.add({id:'confGov',label:'Confinement: governing item ('+plain(cn.gov.lbl)+')',sym:'D/C',eq:'',sub:'',value:cn.dc,unit:'',d:2,ok:!!cn.pass}); }
+    if(R.relSteel&&inp.opt.relBondedReinf){ const rs=R.relSteel;
+      v.add({id:'relAs',label:'Release-tension bonded steel at x = '+N(rs.x,1)+' ft ('+plain(rs.where)+'): A_s,req = T/f_s',sym:'A_{s,req}',eq:'\\frac{T}{f_{s}}',sub:'\\frac{'+N(rs.T,3)+'}{'+N(rs.fs,1)+'}',value:rs.AsReq,unit:'in^{2}',d:3,ok:!!rs.ok,note:'provided '+N(rs.AsProv,2)+' in², D/C '+N(rs.dc,3),ref:ED+' Art. 5.9.2.3.1b'}); }
+    const lt=R.wLong; if(lt) v.add({id:'tie',label:'Longitudinal tie at x = '+N(lt.x,2)+' ft: demand vs. developed capacity',sym:'\\frac{T_{dem}}{T_{cap}}',eq:'',sub:'\\frac{'+N(lt.Tdem,1)+'}{'+N(lt.Tcap,1)+'}',value:cf('Long. reinf (5.7.3.5)').r,unit:'',d:3,ok:!!lt.longOK,ref:ED+' Art. 5.7.3.5'});
+    sec('Shear').subs.push({title:'Critical section x = '+N(sh0.x,2)+' ft, interface, anchorage zone, confinement, release steel and longitudinal tie',items:[one('shr2',v.steps,'Shear-related checks',ED+' Art. 5.7, 5.9.4.4')]}); }
+  /* camber components */
+  { const w=W();
+    w.add({id:'d1',label:'Prestress camber, straight strands',sym:'\\Delta_{ps,s}',eq:'\\frac{P_{s}e_{s}L^{2}}{8E_{ci}I_{g}}',sub:'\\frac{'+N(rv.Ps,0)+'('+N(rv.eS,2)+')('+N(Lin,0)+')^{2}}{8('+N(lo.Eci,0)+')('+G(g.I,0)+')}',value:rv.d1,unit:'in',d:3});
+    if(ss.nh>0) w.add({id:'d2',label:'Prestress camber, harped strands',sym:'\\Delta_{ps,h}',eq:'\\frac{P_{h}}{E_{ci}I_{g}}\\left[\\frac{e_{hm}L^{2}}{8} - \\frac{(e_{hm} - e_{he})a^{2}}{6}\\right]',sub:'\\frac{'+N(rv.Ph,0)+'}{'+N(lo.Eci,0)+'('+G(g.I,0)+')}\\left[\\frac{'+N(rv.eHm,2)+'('+N(Lin,0)+')^{2}}{8} - \\frac{('+N(rv.eHm,2)+' - '+N(rv.eHe,2)+')('+N(rv.aH,0)+')^{2}}{6}\\right]',value:rv.d2,unit:'in',d:3});
+    w.add({id:'erect',label:'Camber at erection',sym:'\\Delta_{erect}',eq:'m_{psE}\\Delta_{ps} - m_{swE}\\Delta_{sw}',sub:N(mu.psE,2)+'('+N(c.dPS,3)+') - '+N(mu.swE,2)+'('+N(c.dSW,3)+')',value:c.erect,unit:'in',d:3});
+    w.add({id:'afterDeck',label:'Camber after the deck',sym:'\\Delta_{deck}',eq:'\\Delta_{erect} - \\Delta_{dk} - \\Delta_{dia}',sub:N(c.erect,3)+' - '+N(c.dDK,3)+' - '+N(c.dDia,3),value:c.afterDeck,unit:'in',d:3});
+    w.add({id:'dLLw',label:'Live-load deflection (equivalent uniform load)',sym:'\\Delta_{LL}',eq:'\\frac{5M_{LL}L^{2}}{48E_{c}I_{c}}',sub:'\\frac{5('+N((c.MLLd!=null?c.MLLd:R.MLL)*12,0)+')('+N(Lin,0)+')^{2}}{48('+N(cp.Ecg,0)+')('+G(cp.Ic,0)+')}',value:c.dLL,unit:'in',d:3,ref:ED+' Art. 2.5.2.6.2'});
+    sec('Camber and deflection').subs.push({title:'Components and stages',items:[one('cam2',w.steps,'Camber components',ED+' Art. 5.9.3, PCI multipliers')]}); }
+  /* new sections before the references */
+  const add=[], ft=R.fat;
+  if(ft){ const w=W();
+    w.add({id:'Mfat',label:'Fatigue truck moment per lane (IM 15 %, no lane load)',sym:'M_{fat}',eq:'',sub:'',value:ft.Mfat,unit:'kip-ft',d:0,ref:ED+' Art. 3.6.1.4.1'});
+    w.add({id:'dfFat',label:'Fatigue distribution factor (one lane, 1.2 removed)',sym:'DF_{fat}',eq:ft.extDF?'\\frac{\\max(g_{lever}, g_{rigid,1})}{1.2}':'\\frac{g_{m1}}{1.2}',sub:ft.extDF?'\\frac{\\max('+N(df.lever,3)+', '+N(df.rigid1,3)+')}{1.2}':'\\frac{'+N(df.m1,4)+'}{1.2}',value:ft.dfFat,unit:'',d:4});
+    w.add({id:'Mfat1',label:'Fatigue moment per girder (IM 15 %)',sym:'M_{fat,girder}',eq:'M_{fat}(1.15)DF_{fat}',sub:N(ft.Mfat,0)+'(1.15)('+N(ft.dfFat,4)+')',value:ft.Mfat1,unit:'kip-ft',d:0});
+    w.add({id:'fbPerm',label:'Bottom fiber, permanent loads',sym:'f_{b,perm}',eq:'',sub:'',value:ft.fbPerm,unit:'ksi',d:3});
+    w.add({id:'dfb',label:'Bottom fiber, Fatigue I',sym:'\\Delta f_{b}',eq:'\\frac{1.75M_{fat}}{S_{bc}}',sub:'',value:ft.dfbFat,unit:'ksi',d:3});
+    w.add({id:'fbMin',label:'Bottom fiber, permanent + Fatigue I ('+(ft.cracksFat?'cracked: strand fatigue governs':'uncracked')+')',sym:'f_{b,min}',eq:'f_{b,perm} - \\Delta f_{b}',sub:N(ft.fbPerm,3)+' - '+N(ft.dfbFat,3),value:ft.fbMinFat,unit:'ksi',d:3,note:'vs −0.095√f′c = '+N(-ft.frFat,3)+' ksi',ref:ED+' Art. 5.5.3.1'});
+    w.add({id:'cTop',label:'Concrete compression at the top, midspan: ½(f_pe + permanent) + Fatigue I',sym:'f_{c,top}',eq:'\\frac{1}{2}f_{perm} + \\frac{1.75M_{fat,girder}}{S_{tg}}',sub:'\\frac{1}{2}('+N(ft.conc.topPerm,3)+') + '+N(ft.conc.dTop,3),value:ft.conc.top,unit:'ksi',d:3});
+    w.add({id:'cBot',label:'Concrete compression at the bottom, x = '+N(ft.conc.xBot,1)+' ft: ½(f_pe + permanent)',sym:'f_{c,bot}',eq:'\\frac{1}{2}f_{perm}',sub:'\\frac{1}{2}('+N(ft.conc.botPerm,3)+')',value:ft.conc.bot,unit:'ksi',d:3});
+    w.add({id:'conc',label:'Concrete compression, ½(f_pe + permanent) + Fatigue I (governing fiber)',sym:'f_{c}',eq:'',sub:'',value:ft.conc.v,unit:'ksi',d:3,ok:!!ft.conc.ok,note:'≤ 0.40f′c = '+N(ft.conc.lim,3)+' ksi; top '+N(ft.conc.top,3)+', bottom '+N(ft.conc.bot,3),ref:ED+' Art. 5.5.3.1'});
+    w.add({id:'strand',label:'Strand stress range',sym:'\\Delta f_{strand}',eq:'',sub:'',value:ft.dfStrand,unit:'ksi',d:3,ok:!!ft.ok,note:'≤ '+N(ft.fatLimit,3)+' ksi',ref:ED+' Art. 5.5.3.3'});
+    add.push({title:'Fatigue I',subs:[{title:'Strand stress range and concrete compression',items:[one('fat',w.steps,'Fatigue I',ED+' Art. 5.5.3')]}]}); }
+  if(R.cont){ const kv=[]; const ct=R.cont;
+    [['MuN','Factored pier moment per girder M_u (kip-ft)',ct.MuN/12],['phiMnN','Negative-moment capacity φM_n (kip-ft)',ct.phiMnN/12],['dc','Pier: M_u / φM_n',ct.dc],['MLLn','Pier LL+IM per girder (kip-ft)',ct.MLLn],['MDC2n','Pier DC2 (kip-ft)',ct.MDC2n],['MDWn','Pier DW (kip-ft)',ct.MDWn],['As','Deck steel A_s (in²)',ct.As],['dN','d (in)',ct.dN],['aN','a (in)',ct.aN],['phiN','φ',ct.phiN]]
+      .forEach(([k,l,v])=>{ if(typeof v==='number'&&isFinite(v)) kv.push([l,N(v,3)]); });
+    add.push({title:'Continuity (LL + SIDL)',subs:[{title:'Pier region and the continuous unit',items:[{type:'kv',rows:kv},{type:'note',text:'The continuous analysis (influence lines, restraint moments, positive moment connection, service at the supports) is worked on the [[tab:report|Report tab]] (Continuous Analysis) and the [[tab:diagrams|Diagrams tab]] (PSRF-O1).'}]}]}); }
+  if(R.handling){ const h=R.handling, kv=Object.keys(h).filter(k=>typeof h[k]==='number'&&isFinite(h[k])).map(k=>[k,N(h[k],3)]);
+    add.push({title:'Handling (lifting and hauling)',subs:[{title:'Handling results',items:[{type:'kv',rows:kv},{type:'note',text:'Worked on the [[tab:handling|Handling tab]] (screening only).'}]}]}); }
+  if(R.deck){ const dk=R.deck, kv=Object.keys(dk).filter(k=>typeof dk[k]==='number'&&isFinite(dk[k])).map(k=>[k,N(dk[k],3)]);
+    add.push({title:'Deck design (transverse)',subs:[{title:'Deck results',items:[{type:'kv',rows:kv},{type:'note',text:'Worked on the [[tab:deck|Deck tab]].'}]}]}); }
+  if(R.own){ const o=R.own, w=W();
+    w.add({id:'eta',label:'Load modifier (Strength I)',sym:'\\eta',eq:'\\eta_{D}\\eta_{R}\\eta_{I}',sub:N(o.etaD,2)+'('+N(o.etaR,2)+')('+N(o.etaI,2)+')',value:o.eta,unit:'',d:4,ref:ED+' Art. 1.3.2.1'});
+    w.add({id:'mLL',label:'Owner design load multiplier on HL-93 LL+IM (Strength I, Service I / III)',sym:'m_{LL}',eq:'',sub:'',value:o.mLL,unit:'',d:2});
+    if(o.hd) w.add({id:'hd',label:'Hold-down force of the draped strands',sym:'F_{hd}',eq:'2n_{h}f_{pbt}A_{b}\\sin\\alpha',sub:'2('+o.hd.nh+')('+N(R.fpbt,1)+')('+N(o.hd.Ab,3)+')\\sin(\\tan^{-1}'+N(o.hd.slope,4)+')',value:o.hd.Ftot,unit:'kip',d:1,note:'limit '+N(o.hd.lim,1)+' kip'});
+    if(o.contReq) w.add({id:'conn',label:'Positive moment connection: required φM_n',sym:'\\phi M_{n,req}',eq:'f\\,f_{r}S_{bc}/12',sub:N(o.contReq.f,1)+'('+N(o.contReq.fr,3)+')('+N(o.contReq.Sbc,0)+')/12',value:o.contReq.req,unit:'kip-ft',d:0});
+    add.push({title:'Owner requirements ('+plain(o.owner)+')',subs:[{title:'Owner factors and checks',items:[one('own',w.steps,'Owner requirements','owner manual'),{type:'table',head:['Check','Value','Limit','Ratio'],rows:(o.checks||[]).map(q=>[plain(q.n),cell(q.v,3),cell(q.lim,3),{t:N(q.r,2),n:true,cls:q.r>1+1e-9?'ng':'ok'}])}]}]}); }
+  { const tenth=R.grid.filter(r=>Math.abs(r.x*10/L-Math.round(r.x*10/L))<1e-6), f20=R.flexGrid.filter(r=>Math.abs(r.x*20/L-Math.round(r.x*20/L))<1e-6);
+    add.push({title:'Output tables',subs:[
+      {title:'Stresses at the tenth points (ksi, + compression)',items:[{type:'table',head:['x (ft)','e (in)','A_ps','M_g','M_dk','M_sd','M_LL','Rel top','Rel bot','Srv top perm','Srv top +LL','Srv III bot'],rows:tenth.map(r=>[cell(r.x,1),cell(r.e,2),cell(r.Aps,2),cell(r.Mg/12,0),cell(r.Mdk/12,0),cell(r.Msd/12,0),cell(r.Mll/12,0),cell(r.relTop,3),cell(r.relBot,3),cell(r.s1Top,3),cell(r.s2Top,3),cell(r.s3Bot,3)])}]},
+      {title:'Flexure stations (to midspan)',items:[{type:'table',head:['x (ft)','M_u (k-ft)','c (in)','a (in)','f_ps','ε_t ×10³','φ','φM_n (k-ft)','M_u/φM_n'],rows:f20.map(r=>[cell(r.x,1),cell(r.Mu/12,0),cell(r.c,2),cell(r.a,2),cell(r.fps,1),cell(r.et*1000,2),cell(r.phi,3),cell(r.phiMn/12,0),cell(r.Mu/r.phiMn,3)])}]},
+      {title:'Shear stations',items:[{type:'table',head:['x (ft)','d_v','V_u','V_p','ε_s ×10³','β','θ','V_c','V_s','V_n','V_u/φV_n'],rows:R.shear.map(r=>[cell(r.x,1),cell(r.dv,1),cell(r.Vu,1),cell(r.Vp,1),cell(r.es*1000,3),cell(r.beta,2),cell(r.theta,1),cell(r.Vc,1),cell(r.Vs,1),cell(r.Vn,1),cell(r.dc,3)])}]}]}); }
+  const ref=secs.findIndex(s=>s.title==='References'); secs.splice(ref<0?secs.length:ref,0,...add);
+  return secs;
+}
+
+/* PSRP2 (2026-11-01, engineer's decision: every report self-contained): the remaining content of the old Report tab — the stress
+   heat map (as a figure), the longitudinal tie and release-steel bodies, the continuous analysis, handling, deck and the rating
+   derivations — in the shared format. Values: R and R.rv (psbReportVals); nothing recomputed here. */
+function psrPort(inp,R,secs){
+  const S=window.SharedSteps, N=(x,d)=>S.n(x,d), G=(x,d)=>S.g(x,d), ED='AASHTO LRFD 10th Ed.', MBE='AASHTO MBE (edition: verify)', W=()=>S.work('');
+  const g=R.g, cp=R.cp, m=inp.mat, L=R.L, rv=R.rv, lim=R.lim, own=R.own;
+  const cf=n=>R.checks.find(q=>q.n===n)||{loc:0,pass:true,r:0}, row=loc=>R.grid.reduce((b,r)=>Math.abs(r.x-loc)<Math.abs(b.x-loc)?r:b,R.grid[0]);
+  const plain=s=>String(s==null?'':s).replace(/<[^>]*>/g,'').replace(/\$/g,'').replace(/\[\[/g,'[ [');
+  const cell=(v,d,key,cls)=>({t:(typeof v==='number')?(isFinite(v)?N(v,d):'∞'):String(v==null?'—':v),n:typeof v==='number',key,cls});
+  const one=(scope,steps,title,ref)=>{ const t=S.group(steps,[{key:'t',title,ref:ref||'',ids:()=>true}],{strip:false})[0];
+    return {type:'steps',scope,steps,topics:t?[{title,ref:ref||'',n:steps.length,cls:t.cls,chip:t.chip,res:t.res}]:[]}; };
+  const sec=t=>secs.find(s=>s.title===t), mx=own?N(own.mLL,2):null;
+  /* stress heat map: the four stages at their governing stations, linear over the girder depth (+ compression) */
+  { const st=[['Release',row(cf('Release comp').loc),r=>[r.relTop,r.relBot]],['Service I, permanent',row(cf('Srv comp (perm)').loc),r=>[r.s1Top,r.s3Bot]],['Service I, full',row(cf('Srv comp (full)').loc),r=>[r.s2Top,r.s3Bot]],['Service III',row(cf('Srv III tens').loc),r=>[r.s1Top,r.s3Bot]]];
+    const vals=st.map(([,r,f])=>f(r)), M=Math.max(1e-6,...vals.flat().map(Math.abs)), col=v=>{ const t=Math.min(1,Math.abs(v)/M); return v>=0?`rgb(${Math.round(255-200*t)},${Math.round(255-140*t)},255)`:`rgb(255,${Math.round(255-200*t)},${Math.round(255-200*t)})`; };
+    const Wd=640,H=230,pw=110,ph=150,top=34;
+    const svg=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${Wd} ${H}" width="100%" style="max-width:${Wd}px;font:10px sans-serif"><defs>${vals.map(([t,b],i)=>`<linearGradient id="psrhm${i}" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="${col(b)}"/><stop offset="1" stop-color="${col(t)}"/></linearGradient>`).join('')}</defs>`+
+      st.map(([lab,r],i)=>{ const x=20+i*155, [t,b]=vals[i]; return `<text x="${x+pw/2}" y="14" text-anchor="middle" fill="#1e293b" font-weight="600">${lab}</text><text x="${x+pw/2}" y="27" text-anchor="middle" fill="#475569">x = ${N(r.x,1)} ft</text>`+
+        `<rect x="${x}" y="${top}" width="${pw}" height="${ph}" fill="url(#psrhm${i})" stroke="#334155"/><text x="${x+pw/2}" y="${top+14}" text-anchor="middle" fill="#0f172a">top ${N(t,3)}</text><text x="${x+pw/2}" y="${top+ph-6}" text-anchor="middle" fill="#0f172a">bottom ${N(b,3)}</text>`; }).join('')+
+      `<text x="20" y="${H-28}" fill="#475569">Neutral axis above the bottom: release ${rv.naSt.rel!=null?N(rv.naSt.rel,1)+' in':'none (all compression)'}; Service III ${rv.naSt.s3!=null?N(rv.naSt.s3,1)+' in':'none'}.</text>`+`<text x="20" y="${H-14}" fill="#475569">ksi, + compression (blue), − tension (red); girder depth ${N(g.h,1)} in, linear between the fibers.</text></svg>`;
+    const gsec=sec('Graphics'); if(gsec) gsec.subs.push({title:'Stress distribution on the cross-section (governing stations)',items:[{type:'figure',svg,caption:'Fiber stresses of R.grid at the governing station of each stage; the interactive view is on the [[tab:stresses|Stresses tab]].'}]}); }
+  /* longitudinal tie at every station, release-tension steel */
+  { const t=rv.tie||[]; const it=[{type:'table',caption:'Longitudinal reinforcement, shear–flexure tie, every shear station (kip)',head:['x (ft)','T demand','T strands','T mild','T capacity','T/T_cap','Status'],
+      rows:R.shear.map((r,i)=>({cells:[(r.isBearing?'brg ':'')+N(r.x,1),cell(r.Tdem,0),cell(t[i]?t[i].Tps:null,0),cell(r.TsMild,0),cell(r.Tcap,0),cell(t[i]?t[i].dc:null,2),{t:r.longOK?'OK':'NG',cls:r.longOK?'ok':'ng'}],cls:r.longOK?'':'ng'}))},
+      {type:'note',text:'T = |M_u|/(φ_f d_v) + (|V_u|/φ_v − 0.5V_s − |V_p|) cot θ; at the inside edge of the bearing (brg) the flexural term is dropped (Art. 5.7.3.5). Strand capacity from the developed stress; mild steel A_s,bot f_y = '+N(R.shear[0].TsMild,0)+' kip.'}];
+    if(inp.opt.relBondedReinf&&R.relSteel){ const rs=R.relSteel, w=W();
+      w.add({id:'fs',label:'Steel stress for the release tensile force',sym:'f_{s}',eq:'\\min(0.5f_{y}, 30)',sub:'\\min(0.5('+N(+inp.opt.relFy||60,0)+'), 30)',value:rs.fs,unit:'ksi',d:1,ref:ED+' Art. 5.9.2.3.1b'});
+      w.add({id:'T',label:'Concrete tensile force at release ('+plain(rs.where)+', x = '+N(rs.x,1)+' ft)',sym:'T',eq:'',sub:'',value:rs.T,unit:'kip',d:2});
+      w.add({id:'As',label:'Bonded steel required',sym:'A_{s,req}',eq:'\\frac{T}{f_{s}}',sub:'\\frac{'+N(rs.T,2)+'}{'+N(rs.fs,1)+'}',value:rs.AsReq,unit:'in^{2}',d:3,ok:!!rs.ok,note:'provided '+N(rs.AsProv,2)+' in²'});
+      it.push(one('rls',w.steps,'Release-tension bonded steel',ED+' Art. 5.9.2.3.1b')); }
+    sec('Shear').subs.push({title:'Longitudinal tie at every station'+(inp.opt.relBondedReinf?' and release-tension steel':''),items:it}); }
+  /* continuous analysis */
+  if(R.cont){ const ct=R.cont, fe=R.fe, un=ct.unit, rr=ct.restr, cn=ct.conn, sv=ct.svc, rc=rv.cont||{}, subs=[];
+    if(fe){ const w=W();
+      w.add({id:'Mw',label:'SIDL: midspan moment of the continuous unit per klf (three-moment equation; M_A = '+N(fe.MA,1)+', M_B = '+N(fe.MB,1)+')',sym:'M_{w}(L/2)',eq:'\\frac{x(L - x)}{2} + M_{A}\\left(1 - \\frac{x}{L}\\right) + M_{B}\\frac{x}{L}',sub:'',value:rc.MwMid,unit:'kip-ft/klf',d:1,ref:ED+' Art. 5.12.3.3.1',note:'spans '+(un.spans||[]).map(v=>N(v,1)).join(', ')+' ft; this girder in span '+un.s+(un.assumed?' (two equal spans assumed)':'')});
+      w.add({id:'Vw',label:'SIDL: end shear per klf',sym:'V_{w}(0)',eq:'\\frac{L}{2} + \\frac{M_{B} - M_{A}}{L}',sub:'\\frac{'+N(L,2)+'}{2} + \\frac{'+N(fe.MB,1)+' - '+N(fe.MA,1)+'}{'+N(L,2)+'}',value:rc.Vw0,unit:'kip/klf',d:2});
+      w.add({id:'Mdc2',label:'Midspan DC2 moment',sym:'M_{DC2}',eq:'w_{bar}M_{w}',sub:N(R.wBar,3)+'('+N(rc.MwMid,1)+')',value:rc.Mdc2Mid,unit:'kip-ft',d:0});
+      w.add({id:'Mdw',label:'Midspan DW moment',sym:'M_{DW}',eq:'w_{dw}M_{w}',sub:N(R.wDW,3)+'('+N(rc.MwMid,1)+')',value:rc.MdwMid,unit:'kip-ft',d:0});
+      const ll=fe.mid.ll;
+      w.add({id:'MLL',label:'HL-93 at midspan, influence lines (truck '+N(ll.truckMax,0)+', tandem '+N(ll.tanMax,0)+', lane '+N(ll.lanePos,0)+' kip-ft/lane)',sym:'M_{LL}^{+}',eq:'[1.33\\max(M_{tr}, M_{td}) + M_{ln}]DF_{m}',sub:'[1.33('+N(Math.max(ll.truckMax,ll.tanMax),0)+') + '+N(ll.lanePos,0)+']('+N(R.dfm,4)+')',value:R.MLL,unit:'kip-ft',d:0,ref:ED+' Art. 3.6.1.2, 3.6.1.3'});
+      subs.push({title:'Continuous unit, SIDL and live load',items:[one('cfe',w.steps,'Continuous analysis of the composite stage',ED+' Art. 5.12.3.3')]}); }
+    if(rr){ const w=W();
+      w.add({id:'d1',label:'Creep restraint coefficient δ_1',sym:'\\delta_{1}',eq:'\\frac{E_{c}[\\psi_{b}(t_{f}, t_{i}) - \\psi_{b}(t_{d}, t_{i})]}{E_{ci}[1 + 0.7\\psi_{b}(t_{f}, t_{d})]}',sub:'\\frac{'+N(rr.EcG,0)+'('+N(rr.psiBIF,3)+' - '+N(rr.psiBID,3)+')}{'+N(rr.EciG,0)+'(1 + 0.7('+N(rr.psiBDF,3)+'))}',value:rr.d1,unit:'',d:4,ref:ED+' Eq. C5.12.3.3.2-1'});
+      w.add({id:'d2',label:'Creep restraint coefficient δ_2',sym:'\\delta_{2}',eq:'\\frac{E_{c}[\\psi_{b}(t_{f}, t_{i}) - \\psi_{b}(t_{d}, t_{i})]}{E_{ci}[1 + \\psi_{b}(t_{f}, t_{d})]}',sub:'',value:rr.d2,unit:'',d:4,ref:ED+' Eq. C5.12.3.3.2-2'});
+      w.add({id:'phA',label:'Prestress end rotation term φ_A',sym:'\\phi_{A}',eq:'-\\int P_{i}e(1 - x/L)dx',sub:'',value:rr.pL,unit:'kip-ft^{2}',d:0});
+      w.add({id:'phB',label:'Prestress end rotation term φ_B',sym:'\\phi_{B}',eq:'-\\int P_{i}e\\,x/L\\,dx',sub:'',value:rr.pR,unit:'kip-ft^{2}',d:0});
+      [['A',rr.A,un.s>1],['B',rr.B,un.s<un.spans.length]].filter(q=>q[2]).forEach(([k,q])=>{
+        w.add({id:'Mrc'+k,label:'Creep restraint moment at support '+k,sym:'M_{rc}',eq:'\\delta_{1}(M_{g} + M_{ps}) + \\delta_{2}M_{deck}',sub:N(rr.d1,4)+'('+N(q.Mg,0)+' + '+N(q.Mps,0)+') + '+N(rr.d2,4)+'('+N(q.Mdk,0)+')',value:q.Mrc,unit:'kip-ft',d:0,ref:ED+' Art. 5.12.3.3.2'});
+        w.add({id:'Msh'+k,label:'Differential-shrinkage moment at support '+k,sym:'M_{sh}',eq:'',sub:'',value:q.Msh,unit:'kip-ft',d:0});
+        w.add({id:'Mres'+k,label:'Restraint moment at support '+k,sym:'M_{res}',eq:'M_{rc} + M_{sh}',sub:N(q.Mrc,0)+' + '+N(q.Msh,0),value:q.Mres,unit:'kip-ft',d:0}); });
+      w.add({id:'eEff',label:'Effective deck shrinkage strain',sym:'\\varepsilon_{eff}',eq:'\\varepsilon_{ddf}\\frac{A_{d}}{A_{d} + A_{s}(n - 1)}',sub:N(rr.eDdf*1e6,1)+'\\times 10^{-6}\\frac{'+N(rr.Ad,0)+'}{'+N(rr.Ad,0)+' + '+N(rr.AsD,2)+'('+N(rr.nR,2)+' - 1)}',value:rr.eEff*1e6,unit:'\\times 10^{-6}',d:1,ref:ED+' Art. 5.12.3.3.3'});
+      w.add({id:'Nd',label:'Deck shrinkage force',sym:'N_{d}',eq:'\\frac{\\varepsilon_{eff}E_{cd}A_{d}}{1 + 0.7\\psi_{d}}',sub:'',value:rr.Nsh,unit:'kip',d:1,note:'e_d = '+N(rr.edIn,2)+' in'});
+      w.add({id:'Ng',label:'Girder shrinkage force',sym:'N_{g}',eq:'\\frac{\\varepsilon_{bdf}E_{c}A_{g}}{1 + 0.7\\psi_{b}(t_{f}, t_{d})}',sub:'',value:rr.Ngs,unit:'kip',d:1,note:'e_g = y_bc − y_b = '+N(rr.egIn,2)+' in'});
+      w.add({id:'EIk',label:'Shrinkage curvature term',sym:'EI\\kappa',eq:'N_{d}e_{d} - N_{g}e_{g}',sub:'',value:rr.kSh,unit:'kip-ft',d:0});
+      w.add({id:'Vres',label:'Shear from the restraint moments',sym:'V_{res}',eq:'\\frac{M_{res,B} - M_{res,A}}{L}',sub:'\\frac{'+N(rr.MrR,0)+' - '+N(rr.MrL,0)+'}{'+N(L,2)+'}',value:rc.resV,unit:'kip',d:2});
+      subs.push({title:'Restraint moments: creep and differential shrinkage',items:[one('cres',w.steps,'Restraint moments',ED+' Art. 5.12.3.3.2–.4')]}); }
+    if(cn){ const w=W();
+      w.add({id:'M',label:'Positive moment connection at the '+(cn.x===0?'left':'right')+' support: service moment after continuity',sym:'M',eq:'M_{res} + M_{DC2} + M_{DW} + '+(own?'m_{LL}':'')+'M_{LL}^{+}',sub:N(cn.mr,0)+' + ('+N(cn.mdc2,0)+') + ('+N(cn.mdw,0)+') + '+(own?mx+'(':'')+N(cn.mll,0)+(own?')':''),value:cn.M,unit:'kip-ft',d:0,ref:ED+' Art. 5.12.3.3.8a'});
+      if(cn.M>0){ w.add({id:'T',label:'Connection tension (0.9 M over 0.9 h_c)',sym:'T',eq:'\\frac{0.9M}{0.9h_{c}}',sub:'\\frac{0.9('+N(cn.M,0)+')(12)}{0.9('+N(cn.hc,1)+')}',value:cn.T,unit:'kip',d:1});
+        w.add({id:'As',label:'Connection steel required',sym:'A_{s,req}',eq:'\\frac{T}{f_{s}}',sub:'\\frac{'+N(cn.T,1)+'}{36}',value:cn.AsReq,unit:'in^{2}',d:2});
+        if(cn.AsProv>0) w.add({id:'fs',label:'Steel stress with the provided A_s = '+N(cn.AsProv,2)+' in²',sym:'f_{s}',eq:'\\frac{T}{A_{s,pos}}',sub:'\\frac{'+N(cn.T,1)+'}{'+N(cn.AsProv,2)+'}',value:cn.fs,unit:'ksi',d:1,ok:cn.fs<=36+1e-9,note:'≤ 36 ksi'}); }
+      subs.push({title:'Positive moment connection',items:[one('cpos',w.steps,'Positive moment connection',ED+' Art. 5.12.3.3.8')]}); }
+    if(sv){ const w=W();
+      if(!sv.topRC){ w.add({id:'top',label:'Girder top at interior supports, Service (x = '+N(sv.wT.x,1)+' ft)',sym:'f_{top}',eq:'\\frac{P_{e}}{A_{g}} - \\frac{P_{e}e}{S_{t}} + \\frac{M_{g} + M_{dk}}{S_{t}} + \\frac{M_{sd} + M_{res}^{-} + \\gamma_{LL}M_{LL}^{-}}{S_{tg}}',sub:'\\frac{'+N(sv.wT.Aps*R.fpe,0)+'}{'+N(g.A,1)+'} - \\frac{'+N(sv.wT.Aps*R.fpe,0)+'('+N(sv.wT.e,2)+')}{'+N(g.St,0)+'} + \\frac{'+N(sv.wT.Mg+sv.wT.Mdk,0)+'}{'+N(g.St,0)+'} + \\frac{'+N(sv.wT.Msd,0)+' + ('+N(sv.wT.mrn,0)+') + '+N(+inp.opt.gLLs3,2)+'('+(own?mx+'·':'')+N(sv.wT.Mlln,0)+')}{'+N(cp.Stg,0)+'}',value:sv.wT.s3TopN,unit:'ksi',d:3,note:'limit '+N(sv.topLim,3)+' ksi',ref:ED+' Art. 5.12.3.3.5'});
+        if(sv.bonded&&sv.Ttop>0) w.add({id:'As',label:'Top bonded steel at the supports',sym:'A_{s}',eq:'\\frac{T}{\\min(0.5f_{y}, 30)}',sub:'\\frac{'+N(sv.Ttop,1)+'}{'+N(sv.fsT,0)+'}',value:sv.AsTop,unit:'in^{2}',d:2,note:sv.AsTopProv>0?'provided '+N(sv.AsTopProv,2)+' in²':'enter the provided steel on the Continuity card'}); }
+      w.add({id:'bot',label:'Girder bottom at interior supports, Service (x = '+N(sv.wB.x,1)+' ft)',sym:'f_{bot}',eq:'\\frac{P_{e}}{A_{g}} + \\frac{P_{e}e}{S_{b}} - \\frac{M_{g} + M_{dk}}{S_{b}} - \\frac{M_{sd} + M_{res}^{-}'+(sv.bPerm?'':' + M_{LL}^{-}')+'}{S_{bc}}',sub:'',value:sv.fBot,unit:'ksi',d:3,ok:sv.fBot<=sv.limBot+1e-9,note:'≤ '+N(sv.limBot,3)+' ksi; M_sd = '+N(sv.wB.Msd,0)+', M_res− = '+N(sv.wB.mrn,0)+', M_LL− = '+N(sv.wB.Mlln,0)+' kip-in'});
+      subs.push({title:'Girder at interior supports, Service',items:[one('cpsv',w.steps,'Service at the interior supports',ED+' Art. 5.12.3.3.5')]}); }
+    { const w=W();
+      if(ct.pier){ const nd=ct.pier.nd, ll=nd.ll;
+        w.add({id:'Mlane',label:'HL-93 pier moment per lane (influence lines; '+ct.pier.side+' support of span '+un.s+')',sym:'M_{LL/lane}',eq:'\\max[1.33\\max(M_{1tr}, M_{td}) + M_{ln}, 0.9(1.33M_{2tr} + M_{ln})]',sub:'\\max[1.33\\max('+N(-ll.truckMin,0)+', '+N(-ll.tanMin,0)+') + '+N(-ll.laneNeg,0)+', 0.9(1.33('+N(-ll.twoMin,0)+') + '+N(-ll.laneNeg,0)+')]',value:-nd.Mn,unit:'kip-ft',d:0,ref:ED+' Art. 3.6.1.3.1'});
+        w.add({id:'MDC2',label:'Pier DC2 moment',sym:'M_{DC2}',eq:'-w_{bar}M_{w}',sub:'-'+N(R.wBar,3)+'('+N(nd.Mw,1)+')',value:ct.MDC2n,unit:'kip-ft',d:0});
+        w.add({id:'MDW',label:'Pier DW moment',sym:'M_{DW}',eq:'-w_{dw}M_{w}',sub:'-'+N(R.wDW,3)+'('+N(nd.Mw,1)+')',value:ct.MDWn,unit:'kip-ft',d:0}); }
+      else if(ct.negLL){ const n=ct.negLL;
+        w.add({id:'MDC2',label:'Pier DC2 moment (two equal spans)',sym:'M_{DC2}',eq:'\\frac{w_{bar}L^{2}}{8}',sub:'\\frac{'+N(R.wBar,3)+'('+N(L,2)+')^{2}}{8}',value:ct.MDC2n,unit:'kip-ft',d:0});
+        w.add({id:'MDW',label:'Pier DW moment',sym:'M_{DW}',eq:'\\frac{w_{dw}L^{2}}{8}',sub:'\\frac{'+N(R.wDW,3)+'('+N(L,2)+')^{2}}{8}',value:ct.MDWn,unit:'kip-ft',d:0});
+        w.add({id:'c1',label:'Pier LL per lane, case 1 (one truck or tandem + lane; M_1tr '+N(n.M1,0)+', M_td '+N(n.Mtd,0)+', M_ln '+N(n.Mln,0)+')',sym:'M_{1}',eq:'1.33\\max(M_{1tr}, M_{td}) + M_{ln}',sub:'1.33('+N(Math.max(n.M1,n.Mtd),0)+') + '+N(n.Mln,0),value:rc.negC1,unit:'kip-ft',d:0,ref:ED+' Art. 3.6.1.3.1'});
+        w.add({id:'c2',label:'Pier LL per lane, case 2 (two trucks, 90 %)',sym:'M_{2}',eq:'0.9[1.33M_{2tr} + M_{ln}]',sub:'0.9[1.33('+N(n.M2,0)+') + '+N(n.Mln,0)+']',value:rc.negC2,unit:'kip-ft',d:0});
+        w.add({id:'Mlane',label:'Pier LL per lane, governing ('+plain(n.gov)+')',sym:'M_{LL/lane}',eq:'\\max(M_{1}, M_{2})',sub:'',value:n.MLL,unit:'kip-ft',d:0}); }
+      w.add({id:'MLL',label:'Pier LL per girder',sym:'M_{LL}',eq:'M_{LL/lane}DF_{m}',sub:'',value:ct.MLLn,unit:'kip-ft',d:0});
+      w.add({id:'Mu',label:'Factored pier moment per girder',sym:'M_{u}',eq:'1.25M_{DC2} + 1.50M_{DW} + 1.75'+(own?'m_{LL}':'')+'M_{LL}'+(ct.MrnPier>0?' + M_{res}^{-}':''),sub:'1.25('+N(ct.MDC2n,0)+') + 1.50('+N(ct.MDWn,0)+') + 1.75('+(own?mx+'·':'')+N(ct.MLLn,0)+')'+(ct.MrnPier>0?' + '+N(ct.MrnPier,0):''),value:ct.MuN/12,unit:'kip-ft',d:0,note:own&&own.eta!==1?'× η = '+N(own.eta,3):''});
+      w.add({id:'dN',label:'Depth to the deck steel',sym:'d',eq:'h_{c} - d_{top}',sub:N(cp.hc,1)+' - '+N(+inp.cont.dTop,2),value:ct.dN,unit:'in',d:1});
+      w.add({id:'aN',label:'Stress block in the bottom flange',sym:'a',eq:'\\frac{A_{s}f_{y}}{0.85f^{\\prime}_{c}b_{bf}}',sub:'\\frac{'+N(ct.As,2)+'('+N(ct.fyr,0)+')}{0.85('+N(+m.fc,2)+')('+N(g.bbf,1)+')}',value:ct.aN,unit:'in',d:2,ok:!!ct.aOK,note:'≤ t_bf = '+N(ct.tbf,1)+' in'});
+      w.add({id:'cN',label:'Neutral axis',sym:'c',eq:'\\frac{a}{\\beta_{1}}',sub:'\\frac{'+N(ct.aN,2)+'}{'+N(ct.b1g,3)+'}',value:ct.cN,unit:'in',d:2});
+      w.add({id:'phiN',label:'Resistance factor (ε_t = '+N(ct.etN*1000,1)+' × 10⁻³)',sym:'\\phi',eq:'',sub:'',value:ct.phiN,unit:'',d:3,ref:ED+' Art. 5.5.4.2'});
+      w.add({id:'phiMn',label:'Negative-moment capacity',sym:'\\phi M_{n}',eq:'\\phi A_{s}f_{y}\\left(d - \\frac{a}{2}\\right)\\frac{1}{12}',sub:N(ct.phiN,3)+'('+N(ct.As,2)+')('+N(ct.fyr,0)+')\\left('+N(ct.dN,1)+' - \\frac{'+N(ct.aN,2)+'}{2}\\right)\\frac{1}{12}',value:ct.phiMnN/12,unit:'kip-ft',d:0});
+      w.add({id:'dc',label:'Pier flexure: demand / capacity',sym:'\\frac{M_{u}}{\\phi M_{n}}',eq:'',sub:'\\frac{'+N(ct.MuN/12,0)+'}{'+N(ct.phiMnN/12,0)+'}',value:ct.dc,unit:'',d:3,ok:cf('Neg flexure (pier)').pass});
+      subs.push({title:'Negative moment at the pier',items:[one('neg',w.steps,'Pier moment and capacity',ED+' Art. 5.12.3.3')]}); }
+    const i=secs.findIndex(s=>s.title==='Continuity (LL + SIDL)'); const S2={title:'Continuity (LL + SIDL)',subs};
+    if(i>=0) secs[i]=S2; else secs.splice(secs.findIndex(s=>s.title==='References'),0,S2); }
+  /* handling */
+  if(R.handling){ const H=R.handling, w=W(), stg=(k,s)=>{ w.add({id:k+'Msup',label:(k==='l'?'Lifting':'Hauling')+': moment at the support (pick at '+N(s.a,1)+' ft; clear span '+N(s.Ls,1)+' ft)',sym:'M_{sup}',eq:'',sub:'',value:s.Msup,unit:'kip-ft',d:0});
+      w.add({id:k+'Mmid',label:(k==='l'?'Lifting':'Hauling')+': moment at midspan',sym:'M_{mid}',eq:'',sub:'',value:s.Mmid,unit:'kip-ft',d:0});
+      w.add({id:k+'fsT',label:(k==='l'?'Lifting':'Hauling')+': support top / bottom stress',sym:'f_{sup,top}',eq:'',sub:'',value:s.fSupTop,unit:'ksi',d:3,note:'bottom '+N(s.fSupBot,3)+' ksi'});
+      w.add({id:k+'fmT',label:(k==='l'?'Lifting':'Hauling')+': midspan top / bottom stress',sym:'f_{mid,top}',eq:'',sub:'',value:s.fMidTop,unit:'ksi',d:3,note:'bottom '+N(s.fMidBot,3)+' ksi; limits '+N(H.limC,2)+' / −'+N(H.limT,3)+' ksi'}); };
+    stg('l',H.lift); stg('h',H.haul);
+    w.add({id:'Iy',label:'Weak-axis moment of inertia (approximate, from the outline)',sym:'I_{y}',eq:'',sub:'',value:H.Iy,unit:'in^{4}',d:0});
+    w.add({id:'zo',label:'Theoretical lateral deflection of the CG, lifting',sym:'z_{o}',eq:'\\frac{w}{E_{ci}I_{y}}\\left[\\frac{l^{5}}{120} - \\frac{a^{2}l^{3}}{12} + \\frac{a^{4}l}{4} + \\frac{3a^{5}}{20}\\right]\\frac{1}{l + 2a}',sub:'',value:H.zo,unit:'in',d:3});
+    w.add({id:'FSl',label:'Factor of safety against cracking, lifting (screening)',sym:'FS_{crack}',eq:'\\frac{y_{r}}{z_{o} + e_{i}}',sub:'\\frac{'+N(g.yt,1)+'}{'+N(H.zo,3)+' + '+N(H.ei,2)+'}',value:H.FScrLift,unit:'',d:2,note:'≥ 1.0'});
+    w.add({id:'FSh',label:'Factor of safety against cracking, hauling (screening; z_o,h = '+N(H.zoH,3)+' in)',sym:'FS_{crack,haul}',eq:'\\frac{y_{r,h}}{z_{o,h} + e_{i} + y_{r,h}\\theta_{i}}',sub:'',value:H.FScrHaul,unit:'',d:2,note:'≥ 1.0'});
+    const i=secs.findIndex(s=>/^Handling/.test(s.title)), S2={title:'Handling (lifting and hauling)',subs:[{title:'Overhang stresses and stability screening',items:[one('hand',w.steps,'Handling','screening only, not PCI (2016) / Mast'),{type:'note',text:'Screening only: simplified cracking factors of safety; no truck roll stiffness, no FS against failure or rollover. Confirm long or slender girders with the full PCI procedure.'}]}]};
+    if(i>=0) secs[i]=S2; else secs.splice(secs.findIndex(s=>s.title==='References'),0,S2); }
+  /* deck */
+  if(R.deck){ const D=R.deck, w=W(), oc=own?N(own.eta,3):null;
+    w.add({id:'MDCp',label:'Slab dead-load positive moment',sym:'M_{DC,+}',eq:'\\frac{w_{slab}S^{2}}{11}',sub:'\\frac{'+N(D.wDLslab,3)+'('+N(+inp.S,2)+')^{2}}{11}',value:D.MDC_pos,unit:'kip-ft/ft',d:3});
+    w.add({id:'MDWp',label:'Wearing-surface positive moment',sym:'M_{DW,+}',eq:'',sub:'',value:D.MDW_pos,unit:'kip-ft/ft',d:3,note:'w_ws = '+N(D.wDLws,3)+' ksf'});
+    w.add({id:'MDCn',label:'Slab dead-load negative moment',sym:'M_{DC,-}',eq:'',sub:'',value:D.MDC_neg,unit:'kip-ft/ft',d:3});
+    w.add({id:'MDWn',label:'Wearing-surface negative moment',sym:'M_{DW,-}',eq:'',sub:'',value:D.MDW_neg,unit:'kip-ft/ft',d:3});
+    w.add({id:'x',label:'Negative-moment design section from the girder CL ('+plain(D.dsRule)+', '+(D.xnegAuto===false?'entered':'auto')+')',sym:'x',eq:'',sub:'',value:D.xneg,unit:'in',d:2,ref:ED+' Art. 4.6.2.1.6'});
+    w.add({id:'MLLp',label:'Live load +M from Table A4-1 (S = '+N(D.A4.Sused,2)+' ft; MPF and IM included)',sym:'M_{LL+IM,+}',eq:'',sub:'',value:D.MLL_pos,unit:'kip-ft/ft',d:2,ref:ED+' Table A4-1'});
+    w.add({id:'MLLn',label:'Live load −M from Table A4-1 (x = '+N(D.A4.xUsed,1)+' in)',sym:'M_{LL+IM,-}',eq:'',sub:'',value:D.MLL_neg,unit:'kip-ft/ft',d:2});
+    const fac=(id,lab,dc,dw,ll,val)=>w.add({id,label:lab,sym:'M_{u}',eq:'1.25M_{DC} + 1.50M_{DW} + 1.75'+(own?'m_{LL}':'')+'M_{LL}',sub:(own?oc+'[':'')+'1.25('+N(dc,2)+') + 1.50('+N(dw,2)+') + 1.75('+(own?mx+'·':'')+N(ll,2)+')'+(own?']':''),value:val,unit:'kip-ft/ft',d:2});
+    fac('Mup','Factored positive moment',D.MDC_pos,D.MDW_pos,D.MLL_pos,D.Mu_pos); fac('Mun','Factored negative moment',D.MDC_neg,D.MDW_neg,D.MLL_neg,D.Mu_neg);
+    w.add({id:'X',label:'Overhang: wheel 1 ft clear of the railing face',sym:'X',eq:'oh - \\frac{b_{bar}}{12} - 1.0',sub:N(D.oh,2)+' - \\frac{'+N(D.bBar,1)+'}{12} - 1.0',value:D.Xoh,unit:'ft',d:2,ref:ED+' Table 4.6.2.1.3-1'});
+    w.add({id:'SW',label:'Overhang strip width',sym:'SW_{oh}',eq:'45.0 + 10.0X',sub:'45.0 + 10.0('+N(D.Xoh,2)+')',value:D.SWoh,unit:'in',d:1});
+    w.add({id:'MohLL',label:'Overhang live-load moment',sym:'M_{LL+IM,oh}',eq:'\\frac{1.33(1.20)(16)X}{SW_{oh}/12}',sub:'\\frac{1.33(1.20)(16)('+N(D.Xoh,2)+')}{'+N(D.SWoh,1)+'/12}',value:D.MohLL,unit:'kip-ft/ft',d:2});
+    fac('Muoh','Factored overhang moment',D.MohDC,D.MohDW,Math.max(D.MohLL,0),D.Mu_oh);
+    const cap=(k,c,Mu,lab)=>{ w.add({id:k+'phiMn',label:lab+': capacity (A_s '+N(c.As,3)+' in²/ft, d '+N(c.dEff,2)+' in, a '+N(c.a,2)+', c '+N(c.c,2)+' in, φ '+N(c.phi,2)+')',sym:'\\phi M_{n}',eq:'',sub:'',value:c.phiMn,unit:'kip-ft/ft',d:2,ref:ED+' Art. 5.6.3'});
+      w.add({id:k+'dc',label:lab+': demand / capacity',sym:'\\frac{M_{u}}{\\phi M_{n}}',eq:'',sub:'\\frac{'+N(Mu,2)+'}{'+N(c.phiMn,2)+'}',value:c.dc,unit:'',d:3,ok:!!c.ok}); };
+    cap('p',D.pos,D.Mu_pos,'Positive moment (bottom bars)'); cap('n',D.neg,D.Mu_neg,'Negative moment (top bars)'); cap('o',D.ohCap,D.Mu_oh,'Overhang (top bars)');
+    w.add({id:'dist',label:'Distribution reinforcement, % of the positive A_s',sym:'\\%',eq:'',sub:'',value:D.distPct,unit:'%',d:0,ref:ED+' Art. 9.7.3.2'});
+    const i=secs.findIndex(s=>/^Deck design/.test(s.title)), S2={title:'Deck design (transverse)',subs:[{title:'Equivalent strip, Table A4-1, overhang and capacities',items:[one('deck',w.steps,'Deck design',ED+' Art. 4.6.2.1, 9.7.3'),{type:'note',text:'Dead load by simplified continuous-beam moments; the overhang covers gravity + barrier on the 45 + 10X strip only (Extreme Event II collision cases not included).'}]}]};
+    if(i>=0) secs[i]=S2; else secs.splice(secs.findIndex(s=>s.title==='References'),0,S2); }
+  /* rating derivations: shear rating and the Service III components */
+  { const shr=R.shrRating, rt=R.rating, w=W();
+    if(shr){ w.add({id:'RFvi',label:'Shear rating, Inventory (governing x = '+N(shr.x,1)+' ft)',sym:'RF',eq:'\\frac{\\phi_{c}\\phi_{s}\\phi V_{n} - \\gamma_{DC}V_{DC} - \\gamma_{DW}V_{DW}}{\\gamma_{LL}V_{LL+IM}}',sub:'\\frac{'+N(rt.phiCS,2)+'('+N(shr.phiVn,2)+') - 1.25('+N(shr.VDC,2)+') - 1.50('+N(shr.VDW,2)+')}{1.75('+N(shr.VLL,2)+')}',value:shr.RFinv,unit:'',d:3,ref:MBE+' Art. 6A.5.6'});
+      w.add({id:'RFvo',label:'Shear rating, Operating',sym:'RF',eq:'',sub:'\\frac{'+N(rt.phiCS,2)+'('+N(shr.phiVn,1)+') - 1.25('+N(shr.VDC,1)+') - 1.50('+N(shr.VDW,1)+')}{1.35('+N(shr.VLL,1)+')}',value:shr.RFopr,unit:'',d:3}); }
+    w.add({id:'mid',label:'Flexure rating at midspan for comparison (φM_n '+N(rt.mid.Rn,0)+', M_DC '+N(rt.mid.MDC,0)+', M_DW '+N(rt.mid.MDW,0)+', M_LL+IM '+N(rt.mid.MLL,0)+' kip-ft)',sym:'RF_{inv,mid}',eq:'',sub:'',value:rt.mid.RFinv,unit:'',d:3});
+    const r=sec('Load rating (HL-93 design load, LRFR)'); if(r) r.subs.push({title:'Shear rating and the flexure rating at midspan',items:[one('rat2',w.steps,'Rating derivations',MBE+' Art. 6A.4, 6A.5'),{type:'note',text:'Legal and permit vehicles: user-entered factored forces on the [[tab:rating|Rating tab]].'}]}); }
+  return secs;
+}
+
 function SharedReportTab({inp,R}){
   const ref=useRef(null), keep=useRef({closed:new Set()});
   useEffect(()=>{ const T=ref.current; if(!T) return;
@@ -8306,686 +8709,8 @@ function SharedReportTab({inp,R}){
   return <div className="psrp" ref={ref}/>;
 }
 
-function ReportTab({inp,R}){
-  const [,snapBump]=useState(0);
-  useEffect(()=>{const h=()=>snapBump(t=>t+1);window.addEventListener('psbeam-snap',h);return ()=>window.removeEventListener('psbeam-snap',h);},[]);
-  const g=R.g,cp=R.cp,ss=R.ss,m=inp.mat,lo=R.lo,rf=lo.ref,fin=R.refFin,f=R.fMid,c=R.cam,hl=R.hl,df=R.df;
-  const refined=inp.opt.lossMethod==='refined';
-  const L=R.L, Lin=L*12, ck=R.checks, sh0=R.shear.find(s=>!s.isBearing)||R.shear[0], phiV=R.phiV;
-  const if0=R.iface[R.shear.indexOf(sh0)]||R.iface[0];   // interface row at the same station as sh0 (iface[0] is the bearing face)
-  const cf=n=>ck.find(c=>c.n===n)||{loc:0,pass:true};
-  const ts=+inp.ts, th=+inp.th, Ep=+inp.str.Ep, fpu=+inp.str.fpu;
-  const row=loc=>R.grid.reduce((b,r)=>Math.abs(r.x-loc)<Math.abs(b.x-loc)?r:b,R.grid[0]);
-  const rMid=row(L/2);
-
-  /* --- recomputed intermediates for display (mirror the engine) --- */
-  const Ad=cp.beff*cp.n*ts, yd=g.h+th+ts/2, Ah=g.btf*cp.n*th, yh=g.h+th/2;
-  const Ic2=g.A*(cp.ybc-g.yb)**2, Ic3=cp.beff*cp.n*ts**3/12, Ic4=Ad*(yd-cp.ybc)**2,
-        Ic5=g.btf*cp.n*th**3/12, Ic6=Ah*(yh-cp.ybc)**2;
-  const cgsNum=[...ss.rows.map(r=>`${r.n}\\cdot ${r.y}`),...(ss.nh>0?[`${ss.nh}\\cdot ${ss.hp.yMid}`]:[])].join('+');
-  const em=ss.eMid, X1=g.I+em*em*g.A, MgM=R.wG*L*L/8*12;
-  const ktdID=ktdAASHTO(m.td-m.ti,m.fci), ktdIF=ktdAASHTO(m.tfin-m.ti,m.fci),
-        ktdDF=ktdAASHTO(m.tfin-m.td,m.fci), ktdK=12*(100-4*m.fci)/(m.fci+20);
-  const gh=1.7-0.01*m.H, gst=5/(1+m.fci);
-  const cM=(R.fe||R.useExt)&&R.fMid, Mbar=cM?R.fMid.mDC2*12:inp.loads.wBar*L*L/8*12, Mdw=cM?R.fMid.mDW*12:inp.loads.wDW*L*L/8*12, MLLm=R.MLL*12;   // PBD-G: continuous / imported midspan values
-  const PeMid=rMid.Aps*R.fpe;
-  /* shear components at critical section */
-  const shx=sh0.x, V_=w=>w*(L/2-shx), Vg=V_(R.wG), Vdk=V_(R.wDk), Vbar=V_(R.wBar), Vdw=V_(R.wDW),
-        Vll=R.VLL*(1-shx/L), apsX=ss.at(shx).Aps, fpo=0.7*fpu,
-        rN=row(shx), MuU=Math.max(rN.Mu,Math.abs(sh0.Vu-sh0.Vp)*sh0.dv),
-        cotT=1/Math.tan(sh0.theta*Math.PI/180),
-        fgN=R.flexGrid.reduce((b,r)=>Math.abs(r.x-shx)<Math.abs(b.x-shx)?r:b,R.flexGrid[0]);
-  /* camber components */
-  const Ps=ss.AsStraight*R.fpi, Ph=ss.AsHarp*R.fpi, eS=g.yb-ss.cgsStraight,
-        eHm=g.yb-(+ss.hp.yMid), eHe=g.yb-(+ss.hp.yEnd), aH=ss.hp.frac*Lin,
-        d1=Ps*eS*Lin*Lin/(8*lo.Eci*g.I),
-        d2=ss.nh>0? Ph*(eHm*Lin*Lin/8-(eHm-eHe)*aH*aH/6)/(lo.Eci*g.I):0;
-  const mu_=inp.opt.mult;
-  /* limits */
-  const lim=R.lim;
-  /* transformed-release display helper */
-  const niT=Ep/lo.Eci;
-  const transAt=r=>{ const cgs=g.yb-r.e, At=g.A+(niT-1)*r.Aps,
-    ybt=(g.A*g.yb+(niT-1)*r.Aps*cgs)/At,
-    It=g.I+g.A*(ybt-g.yb)**2+(niT-1)*r.Aps*(ybt-cgs)**2;
-    return {At,ybt,It,eT:ybt-cgs,Sbt:It/ybt,Stt:It/(g.h-ybt),P0:r.Aps*R.fpbt}; };
-  const rRc=row(cf('Release comp').loc), rRt=row(cf('Release tens').loc), rS1=row(cf('Srv comp (perm)').loc), rS2=row(cf('Srv comp (full)').loc),
-        rS3=row(cf('Srv III tens').loc), rDk=row(cf('Deck comp').loc);
-  /* tenth-point output rows */
-  const tenth=R.grid.filter(r=>Math.abs(r.x*10/L-Math.round(r.x*10/L))<1e-6);
-  const flex20=R.flexGrid.filter(r=>Math.abs(r.x*20/L-Math.round(r.x*20/L))<1e-6);
-  const ckLL=ck.find(x=>x.n==='LL deflection');
-
-  /* D11 (2026-10-18): print mode (page header/footer, report printed alone) only while this report prints. */
-  const prRef=useRef(null); prRef.current={inp,R};
-  useEffect(()=>{ const on=()=>psbrPrintMode(true,prRef.current.inp,prRef.current.R), off=()=>psbrPrintMode(false);
-    window.addEventListener('beforeprint',on); window.addEventListener('afterprint',off);
-    return ()=>{ window.removeEventListener('beforeprint',on); window.removeEventListener('afterprint',off); psbrPrintMode(false); }; },[]);
-  const p=inp.proj||{}, see={};
-  const refs=[
-    ['AASHTO LRFD','AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Articles cited: 2.5.2.6.2 (live-load deflection); 3.4.1, Tables 3.4.1-1 and 3.4.1-4 (load factors); 3.6.1.2.2–3.6.1.2.4'+(R.cont?', 3.6.1.3.1':'')+' and 3.6.2 (HL-93, dynamic load allowance); 3.6.1.4.1 (fatigue truck); 4.6.2.2.1, Tables 4.6.2.2.2b-1, 4.6.2.2.2d-1 and 4.6.2.2.3a-1, 4.6.2.2.2d, C4.6.2.2.2d, 4.6.2.2.2e, 4.6.2.2.3c (distribution factors); 4.6.2.6.1 (effective flange width); 5.4.2.3, 5.4.2.4 (time-dependent properties, E_c); 5.5.3.1, 5.5.3.3 (fatigue); 5.5.4.2 (φ); 5.6.2.2, 5.6.3.1.1, 5.6.3.2, 5.6.3.3 (flexure); 5.7.2.8, 5.7.3.3, 5.7.3.4.2, 5.7.3.5, 5.7.4 (shear, longitudinal tie, interface shear); Table 5.9.2.2-1, 5.9.2.3.1, 5.9.2.3.2 (stress limits); C5.9.3.2.3a, 5.9.3.3, 5.9.3.4, C5.9.3.4.3 (losses, elastic gains); 5.9.4.3.1 (transfer length); 5.9.4.3.2, 5.9.4.3.3 (development length, debonding); 5.9.4.4.1, 5.9.4.4.2 (anchorage zone)'+(R.cont?'; 5.12.3.3'+(R.fe||R.cont.restr?' (continuity: 5.12.3.3.1, 5.12.3.3.2–.4 and C5.12.3.3.2, C5.12.3.3.3 restraint, 5.12.3.3.5, 5.12.3.3.7, 5.12.3.3.8a); Table 3.4.1-3':' (continuity)'):'')+(R.deck?'; 4.6.2.1, Table 4.6.2.1.3-1, 4.6.2.1.6, Table A4-1, 9.7.3.2, Section 13 (deck)':'')+'.'],
-    ['AASHTO MBE','Manual for Bridge Evaluation, Section 6A (LRFR): 6A.4, Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, Eq. 6A.4.2.1-3, 6A.5.4.1, 6A.5.6 (HL-93 design-load rating). Edition not stated by the tool: verify.'],
-    ['PCI','PCI Design Handbook: long-term camber multipliers. Edition not stated by the tool: verify.']];
-  const {out,toc}=psbrNumber(<React.Fragment>
-
-    {/* ============ DESIGN SUMMARY ============ */}
-    <CalcSec title="Design Summary">
-      <Step d="Design check summary" r={`${inp.girder} · L = ${inp.L} ft · ${R.ss.Ntot}-${inp.str.size} strands`}>
-      <Tbl head={['Check','Location (ft)','Demand','Capacity / Limit','Ratio','Status','Worked in']}
-        rows={R.checks.map(c=>({c:[c.n,fmt(c.loc,1),fmt(Math.abs(c.v),2)+' '+c.u,fmt(Math.abs(c.lim),2)+' '+c.u,fmt(c.r,2),PF(c.pass),<WkCell n={c.n}/>]}))}/>
-    {R.warns&&R.warns.length>0&&<div className="callout warn" style={{marginBottom:14}}>
-      <b>Detailing warnings:</b><ul className="warnlist">{R.warns.map((w,i)=><li key={i}>{w}</li>)}</ul></div>}
-      </Step>
-      <Step d="Key quantities">
-        <KV rows={[['Girder',inp.girder,''],['Span',fmt(R.L,1),'ft'],['Strands',`${R.ss.Ntot} — ${inp.str.size}`,''],
-          ['e mid / end',`${fmt(R.ss.eMid,1)} / ${fmt(R.ss.eEnd,1)}`,'in'],
-          ['f′ci / f′c / f′c,deck',`${inp.mat.fci} / ${inp.mat.fc} / ${inp.mat.fcd}`,'ksi'],
-          ['Total loss',fmt(R.totalLoss,1)+' ksi ('+fmt(R.pctLoss,1)+'%)',''],
-          ['P_e',fmt(R.ss.Aps*R.fpe,0),'kip'],
-          ['DF_m / DF_v ('+(df.ext?'ext':'int')+(df.th>0?`, skew ${fmt(df.th,0)}°`:'')+')',`${fmt(R.dfm,3)} / ${fmt(R.dfv,3)}`,''],
-          ['M_LL+IM / V_LL+IM',`${fmt(R.MLL,0)} k-ft / ${fmt(R.VLL,0)} k`,''],
-          ['φMn / Mu @ mid',`${fmt(R.fMid.phiMn/12,0)} / ${fmt(R.MuMid/12,0)}`,'k-ft'],
-          ['Camber: release / final',`${fmt(R.cam.rel,2)} / ${fmt(R.cam.final,2)}`,'in']]}/>
-        <WkLink it={[{l:'total loss, P_e',s:'pe',tab:'losses',card:'Derivation — '+(refined?'Refined':'Approximate')+' Long-Term Losses'},
-          {l:'DF_m / DF_v, M_LL+IM / V_LL+IM',s:'dfll',tab:'report',card:'Loads — Dead, HL-93 & Distribution'},
-          {l:'φMn / Mu @ mid',s:'fmn',tab:'flexure',card:'Derivation — Strength I Flexure'},
-          {l:'camber',s:'camf',tab:'camber',card:'Derivation — Camber'}]}/>   {/* D11 links */}
-      </Step>
-      <Step d="Assumptions & basis">
-        <div style={{fontSize:12,lineHeight:1.65,color:'var(--ink2)'}}>
-        AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · {R.useExt?<React.Fragment><b>composite-stage demands imported from MIDAS</b> (span {R.ext.sel.idx}, {fmt(R.ext.spanLen,0)} ft; DC2, DW and the LL+IM envelope by station, DF &amp; IM already applied; girder self-weight and DC1 deck/haunch computed by PS-Beam on the non-composite section) · </React.Fragment>:'simple span, '}unshored construction · {R.useT?'transformed section at release (P @ fpbt), gross/composite thereafter':'gross section properties (transformed-section elastic gains not itemized)'} · losses computed at midspan, applied uniformly · {R.useExt?'LL force effects interpolated from the imported station envelope':'LL moment shaped parabolically and shear linearly from envelope values'} · approximate fps method (5.6.3.1.1), deck f′c for the compression block · MCFT general procedure assuming ≥ minimum transverse reinforcement{R.cont?(R.cont.extPier?' · continuity: pier negative moment taken from the MIDAS envelope at the span ends':' · continuity for LL+SIDL: equal adjacent spans, pier negative moment only (positive-moment connection & restraint moments per 5.12.3.3 not computed)'):''} · time-dependent coefficients per 5.4.2.3 · units: kip, in, ksi (ft for span). Verify against jurisdiction-specific requirements (e.g., RIDOT LRFD supplements) before issue.
-        </div>
-      </Step>
-    </CalcSec>
-
-    {/* ============ GRAPHICS ============ */}
-    <CalcSec title="Graphics">
-      <Step d="Force-effect diagrams"><ReportGraphics inp={inp} R={R}/></Step>
-      <Step d="Stress distribution on the cross-section"><StressHeatmap inp={inp} R={R}/></Step>
-      <Step d="3D reinforcement cage">
-    <Card title="3D Reinforcement Cage" refTag={snapStore.png?snapStore.meta:'capture from Section Props tab'}>
-      {snapStore.png
-        ? <img src={snapStore.png} alt="3D reinforcement cage" style={{width:'100%',border:'1px solid var(--line2)',display:'block'}}/>
-        : <div className="callout">No 3D snapshot captured yet. Open the <b>Section Props</b> tab, orient the 3D reinforcement cage how you like, and click <b>“📷 Capture for report”</b>. The image will appear here and in the printed report.</div>}
-    </Card>
-      </Step>
-    </CalcSec>
-
-    {/* ============ ELASTIC MODULI ============ */}
-    <CalcSec title="Materials — Elastic Moduli">
-      <Step d="Girder modulus at release" r="LRFD 5.4.2.4">
-        <ML s={Tx`E_{ci}=120{,}000\,K_1\,w_c^{2.0}\,(f'_{ci})^{0.33}=120{,}000(1.0)(${nx(m.wc,3)})^{2}(${nx(m.fci,2)})^{0.33}=${nx(lo.Eci,0)}\;\mathrm{ksi}`}/>
-      </Step>
-      <Step d="Girder modulus at 28 days">
-        <ML s={Tx`E_{c}=120{,}000(${nx(m.wc,3)})^{2}(${nx(m.fc,2)})^{0.33}=${nx(cp.Ecg,0)}\;\mathrm{ksi}`}/>
-      </Step>
-      <Step d="Deck modulus & modular ratio" r="LRFD 4.6.2.6">
-        <ML s={Tx`E_{cd}=120{,}000(${nx(m.wcd,3)})^{2}(${nx(m.fcd,2)})^{0.33}=${nx(cp.Ecd,0)}\;\mathrm{ksi}\qquad n=\frac{E_{cd}}{E_{c}}=\frac{${nx(cp.Ecd,0)}}{${nx(cp.Ecg,0)}}=${nx(cp.n,4)}`}/>
-      </Step>
-    </CalcSec>
-
-    {/* ============ SECTION PROPERTIES ============ */}
-    <CalcSec title="Section Properties">
-      <Step d="Gross girder (library values)" r={inp.girder}>
-        <ML s={Tx`A_g=${nx(g.A,0)}\;\mathrm{in^2}\qquad I_g=${nx(g.I,0)}\;\mathrm{in^4}\qquad y_b=${nx(g.yb,2)}\;\mathrm{in}\qquad y_t=h-y_b=${nx(g.h,0)}-${nx(g.yb,2)}=${nx(g.yt,2)}\;\mathrm{in}`}/>
-        <ML s={Tx`S_b=\frac{I_g}{y_b}=\frac{${nx(g.I,0)}}{${nx(g.yb,2)}}=${nx(g.Sb,0)}\;\mathrm{in^3}\qquad S_t=\frac{I_g}{y_t}=\frac{${nx(g.I,0)}}{${nx(g.yt,2)}}=${nx(g.St,0)}\;\mathrm{in^3}`}/>
-        <ML s={Tx`w_{sw}=\frac{A_g}{144}\,w_{c,load}=\frac{${nx(g.A,0)}}{144}(${nx(+m.wcLoad||+m.wc,3)})=${nx(g.wsw,3)}\;\mathrm{klf}`}/>
-      </Step>
-      <Step d="Effective flange width" r="LRFD 4.6.2.6.1">
-        <ML s={inp.beffAuto?(cp.extG?Tx`b_{eff}=\tfrac{S}{2}+oh=(${nx(inp.S/2,2)}+${nx(cp.ohT,2)})\;\mathrm{ft}\times 12=${nx(cp.beff,0)}\;\mathrm{in}\;(\text{exterior girder})`:Tx`b_{eff}=S=${nx(inp.S,2)}\;\mathrm{ft}\times 12=${nx(cp.beff,0)}\;\mathrm{in}`):Tx`b_{eff}=${nx(cp.beff,0)}\;\mathrm{in}\;(\text{manual})`}/>
-      </Step>
-      <Step d="Transformed deck & haunch areas">
-        <ML s={Tx`A_d=n\,b_{eff}\,t_s=${nx(cp.n,4)}(${nx(cp.beff,0)})(${nx(ts,2)})=${nx(Ad,1)}\;\mathrm{in^2}\quad\text{at}\;y_d=h+t_h+\tfrac{t_s}{2}=${nx(yd,2)}\;\mathrm{in}`}/>
-        <ML s={Tx`A_h=n\,b_{tf}\,t_h=${nx(cp.n,4)}(${nx(g.btf,0)})(${nx(th,2)})=${nx(Ah,1)}\;\mathrm{in^2}\quad\text{at}\;y_h=h+\tfrac{t_h}{2}=${nx(yh,2)}\;\mathrm{in}`}/>
-      </Step>
-      <Step d="Composite centroid">
-        <ML s={Tx`A_c=A_g+A_d+A_h=${nx(g.A,0)}+${nx(Ad,1)}+${nx(Ah,1)}=${nx(cp.Ac,0)}\;\mathrm{in^2}`}/>
-        <ML s={Tx`y_{bc}=\frac{\sum A\,y}{A_c}=\frac{${nx(g.A,0)}(${nx(g.yb,2)})+${nx(Ad,1)}(${nx(yd,2)})+${nx(Ah,1)}(${nx(yh,2)})}{${nx(cp.Ac,0)}}=${nx(cp.ybc,2)}\;\mathrm{in}`}/>
-      </Step>
-      <Step d="Composite moment of inertia (parallel-axis sum)">
-        <ML s={Tx`I_c=I_g+A_g(y_{bc}-y_b)^2+\tfrac{n\,b_{eff}t_s^3}{12}+A_d(y_d-y_{bc})^2+\tfrac{n\,b_{tf}t_h^3}{12}+A_h(y_h-y_{bc})^2`}/>
-        <ML s={Tx`I_c=${nx(g.I,0)}+${nx(Ic2,0)}+${nx(Ic3,0)}+${nx(Ic4,0)}+${nx(Ic5,0)}+${nx(Ic6,0)}=${nx(cp.Ic,0)}\;\mathrm{in^4}`}/>
-      </Step>
-      <Step d="Composite section moduli" wk="scomp">
-        <ML s={Tx`S_{bc}=\frac{I_c}{y_{bc}}=\frac{${nx(cp.Ic,0)}}{${nx(cp.ybc,2)}}=${nx(cp.Sbc,0)}\quad S_{tg}=\frac{I_c}{h-y_{bc}}=\frac{${nx(cp.Ic,0)}}{${nx(g.h-cp.ybc,2)}}=${nx(cp.Stg,0)}\quad S_{td}=\frac{I_c}{n(h_c-y_{bc})}=${nx(cp.Std,0)}\;\mathrm{in^3}`}/>
-      </Step>
-      <Step d="Deck + haunch dead load (tributary)">
-        <ML s={Tx`w_{dk}=${cp.extG?'\\frac{(S/2+oh)\\cdot 12\\,t_{s,DL}}{144}':'\\frac{S\\cdot 12\\,t_{s,DL}}{144}'}w_{cd,load}+\frac{b_{tf}t_h}{144}w_{cd,load}=\frac{${nx(cp.extG?cp.wdkW:inp.S*12,0)}(${nx(cp.tsLoad,2)})}{144}(${nx(+m.wcdLoad||+m.wcd,3)})+\frac{${nx(g.btf,0)}(${nx(th,2)})}{144}(${nx(+m.wcdLoad||+m.wcd,3)})=${nx(cp.wdk,3)}\;\mathrm{klf}`}/>
-        {inp.tsSeparate&&<div className="hint" style={{marginTop:2}}>t_<sub>s,DL</sub> = <b>{fmt(cp.tsLoad,2)}″</b> (dead-load thickness), not the {fmt(+inp.ts,2)}″ structural thickness used for the section properties.</div>}
-      </Step>
-    </CalcSec>
-
-    {/* ============ STRAND GEOMETRY ============ */}
-    <CalcSec title="Strand Geometry">
-      <Step d="Total strand area">
-        <ML s={Tx`A_{ps}=N\cdot A_b=${nx(ss.Ntot,0)}(${nx(ss.st.Ab,3)})=${nx(ss.Aps,3)}\;\mathrm{in^2}`}/>
-      </Step>
-      <Step d="Strand c.g. at midspan (rows + harped group)">
-        <ML s={Tx`\bar{y}_{ps}=\frac{\sum n_i\,y_i}{N}=\frac{${cgsNum}}{${nx(ss.Ntot,0)}}=${nx(ss.cgsMid,3)}\;\mathrm{in}`}/>
-        <ML s={Tx`e_{mid}=y_b-\bar{y}_{ps}=${nx(g.yb,2)}-${nx(ss.cgsMid,3)}=${nx(ss.eMid,2)}\;\mathrm{in}\qquad e_{end}=${nx(ss.eEnd,2)}\;\mathrm{in}`}/>
-      </Step>
-      <Step d="Transfer length" r="LRFD 5.9.4.3.1">
-        <ML s={Tx`\ell_t=60\,d_b=60(${nx(ss.st.db,1)})=${nx(ss.lt,1)}\;\mathrm{in}=${nx(ss.lt/12,2)}\;\mathrm{ft}`}/>
-      </Step>
-      {ss.nh>0&&<Step d="Harp geometry">
-        <ML s={Tx`\text{slope}=\frac{y_{end}-y_{mid}}{a}=\frac{${nx(+ss.hp.yEnd,1)}-${nx(+ss.hp.yMid,1)}}{${nx(ss.hp.frac*L*12,0)}}=${nx(ss.slope,4)}\qquad P_{harp}\cdot\text{slope}=V_p\;\text{component}`}/>
-      </Step>}
-    </CalcSec>
-
-    {/* ============ PRESTRESS & ELASTIC SHORTENING ============ */}
-    <CalcSec title="Prestress Force & Elastic Shortening">
-      <Step d="Stress immediately before transfer" r="LRFD T.5.9.2.2-1">
-        <ML s={Tx`f_{pbt}=${nx(+inp.str.jack,2)}\,f_{pu}=${nx(+inp.str.jack,2)}(${nx(fpu,0)})=${nx(R.fpbt,2)}\;\mathrm{ksi}`}/>
-      </Step>
-      <Step d="Midspan self-weight moment">
-        <ML s={Tx`M_g=\frac{w_{sw}L^2}{8}=\frac{${nx(R.wG,3)}(${nx(L,0)})^2}{8}=${nx(MgM/12,0)}\;\mathrm{k\text{-}ft}=${nx(MgM,0)}\;\mathrm{k\text{-}in}`}/>
-      </Step>
-      <Step d="Elastic shortening — closed form" r="LRFD C5.9.3.2.3a-1">
-        <ML s={Tx`\Delta f_{pES}=\frac{A_{ps}f_{pbt}\left(I_g+e_m^2A_g\right)-e_m M_g A_g}{A_{ps}\left(I_g+e_m^2A_g\right)+\dfrac{A_g I_g E_{ci}}{E_p}}`}/>
-        <ML s={Tx`I_g+e_m^2A_g=${nx(g.I,0)}+(${nx(em,2)})^2(${nx(g.A,0)})=${nx(X1,0)}\;\mathrm{in^4}`}/>
-        <ML s={Tx`\Delta f_{pES}=\frac{${nx(ss.Aps,3)}(${nx(R.fpbt,2)})(${nx(X1,0)})-${nx(em,2)}(${nx(MgM,0)})(${nx(g.A,0)})}{${nx(ss.Aps,3)}(${nx(X1,0)})+\dfrac{${nx(g.A,0)}(${nx(g.I,0)})(${nx(lo.Eci,0)})}{${nx(Ep,0)}}}=${nx(lo.dfES,2)}\;\mathrm{ksi}`}/>
-      </Step>
-      <Step d="Force & concrete stress at strand c.g. after transfer" wk="pes">
-        <ML s={Tx`f_{pt}=f_{pbt}-\Delta f_{pES}=${nx(R.fpbt,2)}-${nx(lo.dfES,2)}=${nx(lo.fpt,2)}\;\mathrm{ksi}\qquad P_i=A_{ps}f_{pt}=${nx(ss.Aps,3)}(${nx(lo.fpt,2)})=${nx(lo.Pi,0)}\;\mathrm{kip}`}/>
-        <ML s={Tx`f_{cgp}=\frac{P_i}{A_g}+\frac{P_i e_m^2}{I_g}-\frac{M_g e_m}{I_g}=${nx(lo.Pi/g.A,3)}+${nx(lo.Pi*em*em/g.I,3)}-${nx(MgM*em/g.I,3)}=${nx(lo.fcgp,3)}\;\mathrm{ksi}`}/>
-      </Step>
-    </CalcSec>
-
-    {/* ============ LONG-TERM LOSSES ============ */}
-    {refined?
-    <CalcSec title="Long-Term Losses — Refined Method (LRFD 5.9.3.4)">
-      <Step d="Time-development & humidity factors" r="LRFD 5.4.2.3">
-        <ML s={Tx`k_s=\max(1.45-0.13\,V\!/\!S,\;1.0)=\max(1.45-0.13(${nx(m.VS,2)}),1.0)=${nx(rf.ks,3)}`}/>
-        <ML s={Tx`k_{hs}=2.00-0.014H=2.00-0.014(${nx(m.H,0)})=${nx(rf.khs,3)}\qquad k_{hc}=1.56-0.008H=${nx(rf.khc,3)}\qquad k_f=\frac{5}{1+f'_{ci}}=\frac{5}{1+${nx(m.fci,1)}}=${nx(rf.kf,3)}`}/>
-        <ML s={Tx`k_{td}(t)=\frac{t}{12\left(\frac{100-4f'_{ci}}{f'_{ci}+20}\right)+t}:\quad k_{td}(t_d-t_i)=\frac{${nx(m.td-m.ti,0)}}{${nx(ktdK,1)}+${nx(m.td-m.ti,0)}}=${nx(ktdID,3)}\qquad k_{td}(t_f-t_i)=${nx(ktdIF,3)}`}/>
-      </Step>
-      <Step d="Shrinkage strains" r="LRFD 5.4.2.3.3">
-        <ML s={Tx`\varepsilon_{bid}=k_s k_{hs} k_f\,k_{td}(t_d-t_i)\,(0.48\times10^{-3})=${nx(rf.ks,3)}(${nx(rf.khs,3)})(${nx(rf.kf,3)})(${nx(ktdID,3)})(0.48\times10^{-3})=${nx(rf.eShID*1e6,1)}\times10^{-6}`}/>
-        <ML s={Tx`\varepsilon_{bif}=${nx(rf.eShIF*1e6,1)}\times10^{-6}\qquad \varepsilon_{bdf}=\varepsilon_{bif}-\varepsilon_{bid}=${nx((rf.eShIF-rf.eShID)*1e6,1)}\times10^{-6}`}/>
-      </Step>
-      <Step d="Creep coefficients" r="LRFD 5.4.2.3.2">
-        <ML s={Tx`\psi(t,t_i)=1.9\,k_s k_{hc} k_f\,k_{td}\,t_i^{-0.118}:\quad\psi_{bid}=1.9(${nx(rf.ks,3)})(${nx(rf.khc,3)})(${nx(rf.kf,3)})(${nx(ktdID,3)})(${nx(m.ti,2)})^{-0.118}=${nx(rf.psiBID,3)}`}/>
-        <ML s={Tx`\psi_{bif}=${nx(rf.psiBIF,3)}\qquad \psi_{bdf}=1.9\,k_s k_{hc} k_f\,k_{td}(t_f-t_d)\,t_d^{-0.118}=${nx(rf.psiBDF,3)}`}/>
-      </Step>
-      <Step d="Transformed-section coefficients" r="LRFD 5.9.3.4.2/3">
-        <ML s={Tx`K_{id}=\left[1+\frac{E_p}{E_{ci}}\frac{A_{ps}}{A_g}\left(1+\frac{A_g e_{pg}^2}{I_g}\right)\left(1+0.7\,\psi_{bif}\right)\right]^{-1}=\left[1+\tfrac{${nx(Ep,0)}}{${nx(lo.Eci,0)}}\tfrac{${nx(ss.Aps,3)}}{${nx(g.A,0)}}\left(1+\tfrac{${nx(g.A,0)}(${nx(em,2)})^2}{${nx(g.I,0)}}\right)(1+0.7\cdot${nx(rf.psiBIF,3)})\right]^{-1}=${nx(rf.Kid,3)}`}/>
-        <ML s={Tx`e_{pc}=y_{bc}-\bar{y}_{ps}=${nx(cp.ybc,2)}-${nx(ss.cgsMid,3)}=${nx(rf.epc,2)}\;\mathrm{in}\qquad K_{df}=${nx(rf.Kdf,3)}\;(\text{same form, composite } A_c,\,I_c,\,e_{pc})`}/>
-      </Step>
-      <Step d="Transfer → deck placement" r="LRFD 5.9.3.4.2">
-        <ML s={Tx`\Delta f_{pSR}=\varepsilon_{bid}E_p K_{id}=(${nx(rf.eShID*1e6,1)}\times10^{-6})(${nx(Ep,0)})(${nx(rf.Kid,3)})=${nx(rf.dfSR,3)}\;\mathrm{ksi}`}/>
-        <ML s={Tx`\Delta f_{pCR}=\frac{E_p}{E_{ci}}f_{cgp}\,\psi_{bid}K_{id}=\frac{${nx(Ep,0)}}{${nx(lo.Eci,0)}}(${nx(lo.fcgp,3)})(${nx(rf.psiBID,3)})(${nx(rf.Kid,3)})=${nx(rf.dfCR,3)}\;\mathrm{ksi}`}/>
-        <ML s={Tx`\Delta f_{pR1}=\frac{f_{pt}}{K_L}\left(\frac{f_{pt}}{f_{py}}-0.55\right)=\frac{${nx(lo.fpt,2)}}{30}\left(\frac{${nx(lo.fpt,2)}}{${nx(lo.fpy,1)}}-0.55\right)=${nx(rf.dfR1,3)}\;\mathrm{ksi}`}/>
-      </Step>
-      <Step d="Deck placement → final" r="LRFD 5.9.3.4.3">
-        <ML s={Tx`\Delta f_{pSD}=\varepsilon_{bdf}E_p K_{df}=(${nx((rf.eShIF-rf.eShID)*1e6,1)}\times10^{-6})(${nx(Ep,0)})(${nx(rf.Kdf,3)})=${nx(rf.dfSD,3)}\;\mathrm{ksi}`}/>
-        <ML s={Tx`\Delta f_{cd}=-\left[\frac{M_{dk}\,e_m}{I_g}+\frac{(M_{bar}+M_{dw})\,e_{pc}}{I_c}\right]=-\left[\frac{${nx(rMid.Mdk,0)}(${nx(em,2)})}{${nx(g.I,0)}}+\frac{${nx(Mbar+Mdw,0)}(${nx(rf.epc,2)})}{${nx(cp.Ic,0)}}\right]=${nx(R.dfcd,3)}\;\mathrm{ksi}`}/>
-        <ML s={Tx`\Delta f_{pCD}=\frac{E_p}{E_{ci}}f_{cgp}(\psi_{bif}-\psi_{bid})K_{df}+\frac{E_p}{E_c}\Delta f_{cd}\,\psi_{bdf}K_{df}=${nx(fin.dfCD,3)}\;\mathrm{ksi}`}/>
-        <ML s={Tx`\Delta f_{pR2}=\Delta f_{pR1}=${nx(fin.dfR2,3)}\;\mathrm{ksi}\qquad \Delta f_{pSS}=${nx(fin.dfSS,2)}\;\mathrm{ksi}\;(\text{deck shrinkage, 5.9.3.4.3d})`}/>
-      </Step>
-      <Step d="Loss totals & effective prestress" wk="pe">
-        <ML s={Tx`\Delta f_{pLT}=${nx(rf.dfSR,2)}+${nx(rf.dfCR,2)}+${nx(rf.dfR1,2)}+${nx(rf.dfSD,2)}+${nx(fin.dfCD,2)}+${nx(fin.dfR2,2)}-${nx(fin.dfSS,2)}=${nx(fin.total,2)}\;\mathrm{ksi}`}/>
-        <ML s={Tx`f_{pe}=f_{pbt}-\Delta f_{pES}-\Delta f_{pLT}=${nx(R.fpbt,2)}-${nx(lo.dfES,2)}-${nx(R.LT,2)}=${nx(R.fpe,2)}\;\mathrm{ksi}\;(${nx(R.pctLoss,1)}\%\text{ total loss})`}/>
-        <ML s={Tx`P_e=A_{ps}f_{pe}=${nx(ss.Aps,3)}(${nx(R.fpe,2)})=${nx(ss.Aps*R.fpe,0)}\;\mathrm{kip}`}/>
-      </Step>
-    </CalcSec>
-    :
-    <CalcSec title="Long-Term Losses — Approximate Method (LRFD 5.9.3.3)">
-      <Step d="Correction factors">
-        <ML s={Tx`\gamma_h=1.7-0.01H=1.7-0.01(${nx(m.H,0)})=${nx(gh,3)}\qquad \gamma_{st}=\frac{5}{1+f'_{ci}}=\frac{5}{1+${nx(m.fci,1)}}=${nx(gst,3)}`}/>
-      </Step>
-      <Step d="Lump-sum long-term loss" r="LRFD 5.9.3.3-1" wk="pe">
-        <ML s={Tx`\Delta f_{pLT}=10\frac{f_{pi}A_{ps}}{A_g}\gamma_h\gamma_{st}+12\gamma_h\gamma_{st}+\Delta f_{pR}=10\frac{${nx(R.fpbt,1)}(${nx(ss.Aps,3)})}{${nx(g.A,0)}}(${nx(gh,3)})(${nx(gst,3)})+12(${nx(gh,3)})(${nx(gst,3)})+${nx(lo.apx.R,1)}=${nx(lo.apx.total,2)}\;\mathrm{ksi}`}/>
-        <ML s={Tx`f_{pe}=${nx(R.fpbt,2)}-${nx(lo.dfES,2)}-${nx(R.LT,2)}=${nx(R.fpe,2)}\;\mathrm{ksi}\qquad P_e=${nx(ss.Aps*R.fpe,0)}\;\mathrm{kip}`}/>
-      </Step>
-    </CalcSec>}
-
-    {/* ============ ELASTIC GAINS ============ */}
-    <CalcSec title="Elastic Gains (LRFD C5.9.3.4.3)">
-      <Step d="Loads applied after transfer increase strand stress: Δf_p = (E_p/E_c)(M·e/I)">
-        <ML s={Tx`\Delta f_{p,precast}=\frac{E_p}{E_c}\frac{M_{DC1}e_m}{I_g}=+${nx(R.gains.precast,2)}\;\mathrm{ksi}\quad \Delta f_{p,comp}=\frac{E_p}{E_c}\frac{(M_{DC2}+M_{DW})e_{pc}}{I_c}=+${nx(R.gains.composite,2)}\;\mathrm{ksi}`}/>
-        <ML s={Tx`\Delta f_{p,LL}=\frac{E_p}{E_c}\frac{M_{LL}e_{pc}}{I_c}=+${nx(R.gains.live,2)}\;\mathrm{ksi}\;(\text{transient})\qquad f_{pe}+\Delta f_{p,perm}=${nx(R.fpe,2)}+${nx(R.gains.permanent+(+inp.opt.dfpSS),2)}=${nx(R.fpeGain+(+inp.opt.dfpSS),2)}\;\mathrm{ksi}`}/>
-      </Step>
-    </CalcSec>
-
-    {/* ============ STRAND FORCE/STRESS BY ROW & STAGE ============ */}
-    <CalcSec title="Strand Force & Stress by Row and Stage">
-      <table className="eng" style={{width:'100%',fontSize:11}}>
-        <thead>
-          <tr><th>Row y (in)</th><th>e (in)</th><th>n</th><th>f_pt (ksi)</th><th>P_rel (kip)</th><th>f_pD (ksi)</th><th>f_pe (ksi)</th><th>P_e (kip)</th></tr>
-        </thead>
-        <tbody>
-          {R.strandStages.rows.map((r,i)=><tr key={i}>
-            <td>{fmt(r.y,1)}{r.harped?' (H)':''}</td><td style={{textAlign:'right'}}>{fmt(r.e,1)}</td><td style={{textAlign:'right'}}>{r.n}</td>
-            <td style={{textAlign:'right'}}>{fmt(r.fpt,1)}</td><td style={{textAlign:'right'}}>{fmt(r.Ppt,0)}</td>
-            <td style={{textAlign:'right'}}>{fmt(r.fpDeck,1)}</td>
-            <td style={{textAlign:'right'}}>{fmt(r.fpe,1)}</td><td style={{textAlign:'right'}}>{fmt(r.Ppe,0)}</td>
-          </tr>)}
-          <tr style={{fontWeight:700}}><td>Total</td><td></td><td style={{textAlign:'right'}}>{R.strandStages.tot.n}</td>
-            <td></td><td style={{textAlign:'right'}}>{fmt(R.strandStages.tot.Ppt,0)}</td><td></td><td></td>
-            <td style={{textAlign:'right'}}>{fmt(R.strandStages.tot.Ppe,0)}</td></tr>
-        </tbody>
-      </table>
-      <div style={{fontSize:11,color:'var(--ink2)',marginTop:5}}>Stages: f_pt at release (after elastic shortening); f_pD after transfer→deck-placement time-dependent losses (5.9.3.4.2); f_pe permanent after all long-term losses. Each row at its own eccentricity — elastic shortening and creep scale with the concrete stress at that level. “(H)” = harped group. See the Losses tab for the worked single-row derivation.</div>
-    </CalcSec>
-
-    {/* ============ DEAD & LIVE LOADS ============ */}
-    <CalcSec title="Loads — Dead, HL-93 & Distribution">
-      <Step d={R.fe?'Midspan dead-load moments (girder and deck: simple span; barrier and wearing surface: continuous unit)':'Midspan dead-load moments (simple span)'}>
-        {R.fe&&<WkLink lead="Continuity on:" it={[{l:'M_bar, M_dw and the live load used in design (continuous unit)',s:'cfe',tab:'report',card:'Continuous Analysis'}]}/>}
-        <ML s={Tx`M=\frac{wL^2}{8}:\quad M_g=\frac{${nx(R.wG,3)}(${nx(L,0)})^2}{8}=${nx(rMid.Mg/12,0)}\quad M_{dk}=\frac{${nx(R.wDk,3)}(${nx(L,0)})^2}{8}=${nx(rMid.Mdk/12,0)}\quad M_{bar}=${nx(Mbar/12,0)}\quad M_{dw}=${nx(Mdw/12,0)}\;\mathrm{k\text{-}ft}`}/>
-      </Step>
-      <Step d="HL-93 design truck — midspan moment" r="LRFD 3.6.1.2.2" note="Enumerated moving-load envelope at midspan; for L ≥ 28 ft this equals the closed form shown.">
-        <ML s={L>=28?Tx`M_{tr}=18L-280=18(${nx(L,0)})-280=${nx(hl.Mtr,0)}\;\mathrm{k\text{-}ft}`:Tx`M_{tr}=${nx(hl.Mtr,0)}\;\mathrm{k\text{-}ft}\;(\text{enumerated})`}/>
-      </Step>
-      <Step d="HL-93 tandem & lane" r="LRFD 3.6.1.2.3/4">
-        <ML s={Tx`M_{td}=\left[\frac{25(L/2)}{L}+\frac{25(L/2-4)}{L}\right]\frac{L}{2}=\left[12.5+\frac{25(${nx(L/2-4,0)})}{${nx(L,0)}}\right](${nx(L/2,0)})=${nx(hl.Mtd,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`M_{ln}=\frac{0.64L^2}{8}=\frac{0.64(${nx(L,0)})^2}{8}=${nx(hl.Mln,0)}\;\mathrm{k\text{-}ft}`}/>
-      </Step>
-      <Step d="Governing lane moment & shear (IM = 33% on truck/tandem)" r="LRFD 3.6.2">
-        <ML s={Tx`M_{LL/lane}=1.33\max(M_{tr},M_{td})+M_{ln}=1.33(${nx(Math.max(hl.Mtr,hl.Mtd),0)})+${nx(hl.Mln,0)}=${nx(hl.M,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`V_{tr}=32+\frac{32(L-14)}{L}+\frac{8(L-28)}{L}=${nx(hl.Vtr,1)}\quad V_{td}=25+\frac{25(L-4)}{L}=${nx(hl.Vtd,1)}\quad V_{ln}=0.32L=${nx(hl.Vln,1)}\;\mathrm{kip}`}/>
-        <ML s={Tx`V_{LL/lane}=1.33(${nx(Math.max(hl.Vtr,hl.Vtd),1)})+${nx(hl.Vln,1)}=${nx(hl.V,1)}\;\mathrm{kip}`}/>
-      </Step>
-      <Step d="Longitudinal stiffness parameter" r="LRFD 4.6.2.2.1-1">
-        <ML s={Tx`e_g=\left(h+t_h+\tfrac{t_s}{2}\right)-y_b=${nx(g.h+th+ts/2,2)}-${nx(g.yb,2)}=${nx(df.eg,2)}\;\mathrm{in}`}/>
-        <ML s={Tx`K_g=n\left(I_g+A_g e_g^2\right)=\frac{E_c}{E_{cd}}\left[${nx(g.I,0)}+${nx(g.A,0)}(${nx(df.eg,2)})^2\right]=${nx(df.Kg,0)}\;\mathrm{in^4}`}/>
-      </Step>
-      <Step d="Interior moment distribution factor — Type (k)" r="LRFD T.4.6.2.2.2b-1">
-        <ML s={Tx`g_{m1}=0.06+\left(\tfrac{S}{14}\right)^{0.4}\left(\tfrac{S}{L}\right)^{0.3}\left(\tfrac{K_g}{12Lt_s^3}\right)^{0.1}=0.06+\left(\tfrac{${nx(inp.S,2)}}{14}\right)^{0.4}\left(\tfrac{${nx(inp.S,2)}}{${nx(L,0)}}\right)^{0.3}\left(\tfrac{${nx(df.Kg,0)}}{12(${nx(L,0)})(${nx(ts,1)})^3}\right)^{0.1}=${nx(df.m1,4)}`}/>
-        <ML s={Tx`g_{m2}=0.075+\left(\tfrac{S}{9.5}\right)^{0.6}\left(\tfrac{S}{L}\right)^{0.2}\left(\tfrac{K_g}{12Lt_s^3}\right)^{0.1}=${nx(df.m2,4)}\qquad g_{m,int}=\max=${nx(Math.max(df.m1,df.m2),4)}`}/>
-      </Step>
-      <Step d="Interior shear distribution factor" r="LRFD T.4.6.2.2.3a-1">
-        <ML s={Tx`g_{v1}=0.36+\frac{S}{25}=${nx(df.v1,4)}\qquad g_{v2}=0.2+\frac{S}{12}-\left(\frac{S}{35}\right)^2=${nx(df.v2,4)}\qquad g_{v,int}=\max=${nx(Math.max(df.v1,df.v2),4)}`}/>
-      </Step>
-      {df.ext&&<Step d="Exterior girder — lever rule (1 lane, m = 1.2)" r="LRFD T.4.6.2.2.2d-1">
-        <ML s={Tx`g_{lever}=1.2\sum_{wheels}\frac{0.5(S+x_w)}{S},\;x_w=d_e-2,\,d_e-8=${nx(+inp.loads.de-2,2)},\,${nx(+inp.loads.de-8,2)}\;\mathrm{ft}\;\Rightarrow\;g_{lever}=${nx(df.lever,4)}`}/>
-      </Step>}
-      {df.ext&&<Step d="Exterior girder — e-factor (2+ lanes) & rigid cross-section" r="LRFD 4.6.2.2.2d / C4.6.2.2.2d">
-        <ML s={Tx`e_m=0.77+\frac{d_e}{9.1}=0.77+\frac{${nx(+inp.loads.de,2)}}{9.1}=${nx(df.eM,4)}\;\Rightarrow\;e_m\,g_{m2}=${nx(df.eM*df.m2,4)}\qquad e_v=0.6+\frac{d_e}{10}=${nx(df.eV,4)}`}/>
-        <ML s={Tx`R=\frac{N_L}{N_b}+\frac{X_{ext}\sum e}{\sum x^2}\;(\text{governing }N_L=${nx(df.rigidNL,0)},\,m=${nx([1.2,1.0,0.85,0.65][df.rigidNL-1],2)})\;\Rightarrow\;g_{rigid}=${nx(df.rigid,4)}`}/>
-        <ML s={Tx`g_{m,ext}=\max(g_{lever},\,e_m g_{m2},\,g_{rigid})=${nx(df.dfmRaw,4)}\qquad g_{v,ext}=\max(g_{lever},\,e_v g_{v2},\,g_{rigid})=${nx(df.dfvRaw,4)}`}/>
-      </Step>}
-      {df.th>0&&<Step d={`Skew corrections — θ = ${fmt(df.th,0)}°`} r="LRFD 4.6.2.2.2e / 4.6.2.2.3c">
-        <ML s={Tx`c_1=0.25\left(\frac{K_g}{12Lt_s^3}\right)^{0.25}\left(\frac{S}{L}\right)^{0.5}\;(\theta<30°\Rightarrow c_1=0)\qquad \text{moment}\times\left[1-c_1\tan^{1.5}\theta\right]=${nx(df.skM,4)}`}/>
-        <ML s={Tx`\text{shear}\times\left[1+0.20\left(\frac{12Lt_s^3}{K_g}\right)^{0.3}\tan\theta\right]=1+0.20\left(\frac{12(${nx(L,0)})(${nx(ts,1)})^3}{${nx(df.Kg,0)}}\right)^{0.3}\tan ${nx(df.th,0)}°=${nx(df.skV,4)}`}/>
-      </Step>}
-      <Step d="Design live load per girder" wk="dfll">
-        <ML s={Tx`DF_m=${nx(R.dfm,4)}\quad DF_v=${nx(R.dfv,4)}\qquad M_{LL+IM}=${nx(hl.M,0)}(${nx(R.dfm,4)})=${nx(R.MLL,0)}\;\mathrm{k\text{-}ft}\qquad V_{LL+IM}=${nx(hl.V,1)}(${nx(R.dfv,4)})=${nx(R.VLL,1)}\;\mathrm{kip}`}/>
-      </Step>
-    </CalcSec>
-
-    {/* ============ STRESS LIMITS ============ */}
-    <CalcSec title="Stress Limits">
-      <Step d="At transfer" r="LRFD 5.9.2.3.1">
-        <ML s={Tx`f_{c,rel}=${nx(lim.relCfac||0.65,2)}f'_{ci}=${nx(lim.relCfac||0.65,2)}(${nx(m.fci,2)})=${nx(lim.relC,3)}\;\mathrm{ksi}\qquad f_{t,rel}=${inp.opt.relBondedReinf?Tx`0.24\sqrt{f'_{ci}}=0.24\sqrt{${nx(m.fci,2)}}=${nx(lim.relT,3)}`:Tx`\min(0.0948\sqrt{f'_{ci}},0.2)=${nx(lim.relT,3)}`}\;\mathrm{ksi}`}/>
-      </Step>
-      <Step d="At service" r="LRFD 5.9.2.3.2">
-        <ML s={Tx`f_{c1}=0.45f'_c=${nx(lim.srvC1,3)}\qquad f_{c2}=0.60f'_c=${nx(lim.srvC2,3)}\qquad f_t=${inp.opt.corrosion==='severe'?Tx`0.0948\sqrt{f'_c}\le 0.3`:Tx`0.19\sqrt{f'_c}\le 0.6`}=${nx(lim.srvT,3)}\;\mathrm{ksi}\qquad f_{c,deck}=0.60f'_{cd}=${nx(lim.dkC2,3)}\;\mathrm{ksi}`}/>
-      </Step>
-    </CalcSec>
-
-    {/* ============ GOVERNING SERVICE STRESSES ============ */}
-    <CalcSec title="Governing Service Stresses (+ compression, − tension)">
-      {R.useT?
-      <Step d={`Release — transformed section at x = ${fmt(cf('Release comp').loc,1)} ft`} r="P at f_pbt — ES implicit" wk="srel">
-        {(()=>{const t=transAt(rRc);return <React.Fragment>
-          <ML s={Tx`n_i=\frac{E_p}{E_{ci}}=${nx(niT,3)}\quad A_t=A_g+(n_i-1)A_{ps}=${nx(g.A,0)}+(${nx(niT-1,3)})(${nx(rRc.Aps,3)})=${nx(t.At,0)}\;\mathrm{in^2}`}/>
-          <ML s={Tx`y_{bt}=${nx(t.ybt,2)}\;\mathrm{in}\quad I_t=${nx(t.It,0)}\;\mathrm{in^4}\quad e_t=${nx(t.eT,2)}\;\mathrm{in}\quad P_0=A_{ps}f_{pbt}=${nx(t.P0,0)}\;\mathrm{kip}`}/>
-          <ML s={Tx`f_{bot}=\frac{P_0}{A_t}+\frac{P_0 e_t}{S_{bt}}-\frac{M_g}{S_{bt}}=${nx(t.P0/t.At,3)}+${nx(t.P0*t.eT/t.Sbt,3)}-${nx(rRc.Mg/t.Sbt,3)}=${nx(rRc.relBot,3)}\le ${nx(lim.relC,3)}\;\mathrm{ksi}\;${cf('Release comp').pass?'\\checkmark':'\\;\\text{N.G.}'}`}/>
-          <ML s={Tx`f_{top}@${nx(cf('Release tens').loc,1)}\,\mathrm{ft}=\frac{P_0}{A_t}-\frac{P_0 e_t}{S_{tt}}+\frac{M_g}{S_{tt}}=${nx(rRt.relTop,3)}\ge ${nx(-lim.relT,3)}\;\mathrm{ksi}\;${cf('Release tens').pass?'\\checkmark':'\\;\\text{N.G.}'}`}/>
-        </React.Fragment>;})()}
-        <PsbRes R={R} names={['Release comp','Release tens']}/>
-      </Step>
-      :
-      <Step d={`Release stresses — gross section, x = ${fmt(cf('Release comp').loc,1)} / ${fmt(cf('Release tens').loc,1)} ft`} r="LRFD 5.9.2.3.1" wk="srel">
-        <ML s={Tx`P_i=A_{ps}(x)\,f_{pi}=${nx(rRc.Aps,3)}(${nx(R.fpi,2)})=${nx(rRc.Aps*R.fpi,0)}\;\mathrm{kip}\quad e=${nx(rRc.e,2)}\;\mathrm{in}\quad M_g=${nx(rRc.Mg,0)}\;\mathrm{k\text{-}in}`}/>
-        <ML s={Tx`f_{bot}=\frac{P_i}{A_g}+\frac{P_i e}{S_b}-\frac{M_g}{S_b}=\frac{${nx(rRc.Aps*R.fpi,0)}}{${nx(g.A,0)}}+\frac{${nx(rRc.Aps*R.fpi,0)}(${nx(rRc.e,2)})}{${nx(g.Sb,0)}}-\frac{${nx(rRc.Mg,0)}}{${nx(g.Sb,0)}}=${nx(rRc.Aps*R.fpi/g.A,3)}+${nx(rRc.Aps*R.fpi*rRc.e/g.Sb,3)}-${nx(rRc.Mg/g.Sb,3)}=${nx(rRc.relBot,3)}\le ${nx(lim.relC,3)}\;${cf('Release comp').pass?'\\checkmark':'\\text{N.G.}'}`}/>
-        <ML s={Tx`f_{top}@${nx(cf('Release tens').loc,1)}\,\mathrm{ft}=\frac{P_i}{A_g}-\frac{P_i e}{S_t}+\frac{M_g}{S_t}=${nx(rRt.Aps*R.fpi/g.A,3)}-${nx(rRt.Aps*R.fpi*rRt.e/g.St,3)}+${nx(rRt.Mg/g.St,3)}=${nx(rRt.relTop,3)}\ge ${nx(-lim.relT,3)}\;${cf('Release tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
-        <PsbRes R={R} names={['Release comp','Release tens']}/>
-      </Step>}
-      <Step d={`Service I — top fiber, permanent loads, x = ${fmt(cf('Srv comp (perm)').loc,1)} ft`} r="LRFD 5.9.2.3.2a" wk="ss1">
-        <ML s={Tx`P_e=${nx(rS1.Aps*R.fpe,0)}\;\mathrm{kip}\quad M_g=${nx(rS1.Mg,0)}\quad M_{dk}=${nx(rS1.Mdk,0)}\quad M_{sd}=${nx(rS1.Msd,0)}${rS1.mrp!=null?'\\quad M_{res}^+='+nx(rS1.mrp,0):''}\;\mathrm{k\text{-}in}`}/>
-        <ML s={Tx`f=\frac{P_e}{A_g}-\frac{P_e e}{S_t}+\frac{M_g+M_{dk}}{S_t}+\frac{M_{sd}${mrS(rS1)}}{S_{tg}}=${nx(rS1.Aps*R.fpe/g.A,3)}-${nx(rS1.Aps*R.fpe*rS1.e/g.St,3)}+${nx((rS1.Mg+rS1.Mdk)/g.St,3)}+${nx((rS1.Msd+mrA(rS1))/cp.Stg,3)}=${nx(rS1.s1Top,3)}\le 0.45f'_c=${nx(lim.srvC1,3)}\;${cf('Srv comp (perm)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
-        <PsbRes R={R} names={['Srv comp (perm)']}/>
-      </Step>
-      <Step d={`Service I — top fiber, full load, x = ${fmt(cf('Srv comp (full)').loc,1)} ft`} wk="ss2">
-        <ML s={Tx`f=f_{perm}+\frac{${ownTx(R.own,'mS')}M_{LL}}{S_{tg}}=${nx(rS2.s1Top,3)}+\frac{${ownTx(R.own,'mV')}${nx(rS2.Mll,0)}}{${nx(cp.Stg,0)}}=${nx(rS2.s2Top,3)}\le 0.60f'_c=${nx(lim.srvC2,3)}\;\mathrm{ksi}\;${cf('Srv comp (full)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
-        <PsbRes R={R} names={['Srv comp (full)']}/>
-      </Step>
-      <Step d={`Service III — bottom fiber, x = ${fmt(cf('Srv III tens').loc,1)} ft (γLL = ${inp.opt.gLLs3})`} r="LRFD T.3.4.1-4" wk="ss3">
-        <ML s={Tx`f=\frac{P_e}{A_g}+\frac{P_e e}{S_b}-\frac{M_g+M_{dk}}{S_b}-\frac{M_{sd}${mrS(rS3)}+\gamma_{LL}${ownTx(R.own,'mS')}M_{LL}}{S_{bc}}`}/>
-        <ML s={Tx`f=${nx(rS3.Aps*R.fpe/g.A,3)}+${nx(rS3.Aps*R.fpe*rS3.e/g.Sb,3)}-${nx((rS3.Mg+rS3.Mdk)/g.Sb,3)}-${nx((rS3.Msd+mrA(rS3)+inp.opt.gLLs3*((R.own?R.own.mLL:1)*rS3.Mll))/cp.Sbc,3)}=${nx(rS3.s3Bot,3)}\ge ${nx(-lim.srvT,3)}\;\mathrm{ksi}\;${cf('Srv III tens').pass?'\\checkmark':'\\text{N.G.}'}`}/>
-        <PsbRes R={R} names={['Srv III tens']}/>
-      </Step>
-      <Step d={`Deck compression, x = ${fmt(cf('Deck comp').loc,1)} ft`} wk="sdk">
-        <ML s={Tx`f=\frac{M_{sd}${mrS(rDk)}+${ownTx(R.own,'mS')}M_{LL}}{S_{td}}=\frac{${nx(rDk.Msd,0)}${mrV(rDk)}+${ownTx(R.own,'mV')}${nx(rDk.Mll,0)}}{${nx(cp.Std,0)}}=${nx(rDk.dkC,3)}\le 0.60f'_{cd}=${nx(lim.dkC2,3)}\;\mathrm{ksi}\;${cf('Deck comp').pass?'\\checkmark':'\\text{N.G.}'}`}/>
-        <PsbRes R={R} names={['Deck comp']}/>
-      </Step>
-      <Step d="Other fiber-stress checks (governing station of the 61-point grid)" r="LRFD 5.9.2.3.1b / 5.9.2.3.2b">
-        <div className="mnote">Release tension at the bottom fiber (positive-moment region) and Service I tension at the top fiber are checked at every grid station with the same stress expressions as above; the stresses are tabulated (tenth points) in the stresses output table.</div>
-        <PsbRes R={R} names={['Release tens (+M, bot)','Srv tens (top)']}/>
-        <WkLink it={[{l:'stresses at the tenth points',s:'outstress',tab:'stresses',card:'Service Stresses'}]}/>
-      </Step>
-    </CalcSec>
-
-    {/* ============ STRENGTH FLEXURE ============ */}
-    <CalcSec title="Strength I Flexure @ Midspan">
-      <Step d="Factored moment" r="LRFD T.3.4.1-1">
-        <ML s={Tx`M_u=${ownTx(R.own,'eS')}1.25(M_g+M_{dk}+M_{bar})+1.50\,M_{dw}+1.75\,${ownTx(R.own,'mS')}M_{LL}${mrS(rMid)}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(rMid.Mg/12,0)}+${nx(rMid.Mdk/12,0)}+${nx(Mbar/12,0)})+1.50(${nx(Mdw/12,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.MLL,0)})${rMid.mrp!=null?'+'+nx(rMid.mrp/12,0):''}${ownTx(R.own,'ec')}=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}`}/>
-      </Step>
-      <Step d="Stress-block & neutral axis" r="LRFD 5.6.3.1.1 / 5.6.2.2">
-        <ML s={Tx`\beta_1=0.85-0.05(f'_{cd}-4)=0.85-0.05(${nx(m.fcd,1)}-4)=${nx(f.b1,3)}\qquad k=0.28\;(\text{low-relax})\qquad d_p=h_c-\bar{y}_{ps}=${nx(cp.hc,1)}-${nx(ss.cgsMid,2)}=${nx(f.dp,2)}\;\mathrm{in}`}/>
-        {f.rect?
-        <ML s={Tx`c=\frac{A_{ps}f_{pu}}{0.85f'_{cd}\beta_1 b_{eff}+k\,A_{ps}f_{pu}/d_p}=\frac{${nx(rMid.Aps,3)}(${nx(fpu,0)})}{0.85(${nx(m.fcd,1)})(${nx(f.b1,3)})(${nx(cp.beff,0)})+0.28\frac{${nx(rMid.Aps,3)}(${nx(fpu,0)})}{${nx(f.dp,2)}}}=${nx(f.c,2)}\;\mathrm{in}\;(\text{rectangular: }\beta_1c=${nx(f.b1*f.c,2)}\le t_s+t_h=${nx(ts+th,1)})`}/>
-        :
-        <ML s={Tx`\beta_1c>t_s+t_h\Rightarrow\text{T-section: }c=\frac{A_{ps}f_{pu}-0.85f'_{cd}(b_{eff}-b_{tf})h_f}{0.85f'_{cd}\beta_1 b_{tf}+k\,A_{ps}f_{pu}/d_p}=${nx(f.c,2)}\;\mathrm{in}`}/>}
-        <ML s={Tx`a=\beta_1 c=${nx(f.b1,3)}(${nx(f.c,2)})=${nx(f.a,2)}\;\mathrm{in}\qquad f_{ps}=f_{pu}\left(1-k\frac{c}{d_p}\right)=${nx(fpu,0)}\left(1-0.28\frac{${nx(f.c,2)}}{${nx(f.dp,2)}}\right)=${nx(f.fps,1)}\;\mathrm{ksi}`}/>
-      </Step>
-      <Step d="Nominal resistance & φ" r="LRFD 5.6.3.2 / 5.5.4.2" wk="fmn">
-        <ML s={f.rect?
-          Tx`M_n=A_{ps}f_{ps}\left(d_p-\frac{a}{2}\right)=${nx(rMid.Aps,3)}(${nx(f.fps,1)})\left(${nx(f.dp,2)}-\frac{${nx(f.a,2)}}{2}\right)=${nx(f.Mn,0)}\;\mathrm{k\text{-}in}=${nx(f.Mn/12,0)}\;\mathrm{k\text{-}ft}`
-          :Tx`M_n=A_{ps}f_{ps}\left(d_p-\tfrac{a}{2}\right)+0.85f'_{cd}(b_{eff}-b_{tf})h_f\left(\tfrac{a}{2}-\tfrac{h_f}{2}\right)=${nx(f.Mn/12,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`\varepsilon_t=0.003\left(\frac{d_t}{c}-1\right)=0.003\left(\frac{${nx(cp.hc-ss.yLow,2)}}{${nx(f.c,2)}}-1\right)=${nx(f.et*1000,2)}\times10^{-3}\quad\Rightarrow\quad\phi=0.75+0.25\frac{\varepsilon_t-0.002}{0.003}\le 1.0=${nx(f.phi,3)}`}/>
-        <ML s={Tx`\phi M_n=${nx(f.phi,3)}(${nx(f.Mn/12,0)})=${nx(f.phiMn/12,0)}\;\mathrm{k\text{-}ft}\ge M_u=${nx(R.MuMid/12,0)}\;\mathrm{k\text{-}ft}\quad\frac{M_u}{\phi M_n}=${nx(R.MuMid/f.phiMn,3)}\;${(R.MuMid<=f.phiMn*1.0001)?'\\checkmark':'\\text{N.G.}'}`}/>
-        <PsbRes R={R} names={['Flexure']} note="governing station of the flexure grid (midspan worked above; every station in the flexure output table)"/>
-      </Step>
-      <Step d="Minimum reinforcement" r="LRFD 5.6.3.3" wk="fmin">
-        <ML s={Tx`f_r=0.24\sqrt{f'_c}=0.24\sqrt{${nx(m.fc,1)}}=${nx(R.fr,3)}\;\mathrm{ksi}\qquad f_{cpe}=\frac{P_e}{A_g}+\frac{P_e e_m}{S_b}=${nx(PeMid/g.A,3)}+${nx(PeMid*ss.eMid/g.Sb,3)}=${nx(R.fcpe,3)}\;\mathrm{ksi}`}/>
-        <ML s={Tx`M_{cr}=\gamma_3\left[(\gamma_1 f_r+\gamma_2 f_{cpe})S_{bc}-M_{dnc}\left(\frac{S_{bc}}{S_b}-1\right)\right]=1.0\left[(1.6\cdot${nx(R.fr,3)}+1.1\cdot${nx(R.fcpe,3)})${nx(cp.Sbc,0)}-${nx(rMid.Mg+rMid.Mdk,0)}\left(\frac{${nx(cp.Sbc,0)}}{${nx(g.Sb,0)}}-1\right)\right]=${nx(R.Mcr/12,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`\phi M_n\ge\min(M_{cr},\,1.33M_u)=\min(${nx(R.Mcr/12,0)},\,${nx(1.33*R.MuMid/12,0)})=${nx(R.minMr/12,0)}\;\mathrm{k\text{-}ft}\;${(R.minMr<=f.phiMn*1.0001)?'\\checkmark':'\\text{N.G.}'}`}/>
-        <PsbRes R={R} names={['Min reinf']} note="governing station of the flexure grid (midspan worked above)"/>
-      </Step>
-    </CalcSec>
-
-    {/* ============ SHEAR ============ */}
-    <CalcSec title={`Shear — Critical Section @ x = ${fmt(shx,1)} ft (MCFT General Procedure)`}>
-      <Step d="Effective shear depth" r="LRFD 5.7.2.8">
-        <ML s={Tx`d_v=\max\left(d_p-\tfrac{a}{2},\;0.9d_p,\;0.72h_c\right)=\max(${nx(fgN.dp-fgN.a/2,1)},\;${nx(0.9*fgN.dp,1)},\;${nx(0.72*cp.hc,1)})=${nx(sh0.dv,1)}\;\mathrm{in}`}/>
-      </Step>
-      <Step d="Factored shear" r="Strength I">
-        <ML s={Tx`V_u=${ownTx(R.own,'eS')}1.25(V_g+V_{dk}+V_{bar})+1.50V_{dw}${sh0.vc&&sh0.vc.rIn?'+V_{res}':''}+1.75${ownTx(R.own,'mS')}V_{LL}${ownTx(R.own,'ec')}=${ownTx(R.own,'eV')}1.25(${nx(sh0.vc?sh0.vc.g:Vg,1)}+${nx(sh0.vc?sh0.vc.dc1:Vdk,1)}+${nx(sh0.vc?sh0.vc.dc2:Vbar,1)})+1.50(${nx(sh0.vc?sh0.vc.dw:Vdw,1)})${sh0.vc&&sh0.vc.rIn?'+('+nx(sh0.vc.r,1)+')':''}+1.75(${ownTx(R.own,'mV')}${nx(sh0.vc?sh0.vc.ll:Vll,1)})${ownTx(R.own,'ec')}=${nx(sh0.Vu,1)}\;\mathrm{kip}`}/>
-        <ML s={Tx`V_p=P_{harp}\cdot\text{slope}=${nx(sh0.Vp,1)}\;\mathrm{kip}`}/>
-      </Step>
-      <Step d="Longitudinal strain" r="LRFD Eq. 5.7.3.4.2-4">
-        <ML s={Tx`\varepsilon_s=\frac{\dfrac{|M_u|}{d_v}+|V_u-V_p|-A_{ps}f_{po}}{E_p A_{ps}}=\frac{\dfrac{${nx(MuU,0)}}{${nx(sh0.dv,1)}}+${nx(Math.abs(sh0.Vu-sh0.Vp),1)}-${nx(apsX,3)}(${nx(fpo,0)})}{${nx(Ep,0)}(${nx(apsX,3)})}=${nx(sh0.es*1000,3)}\times10^{-3}`}
-        /><div className="mnote">M_u taken ≥ |V_u−V_p|·d_v per 5.7.3.4.2; f_po = 0.7f_pu = {fmt(fpo,0)} ksi; ε_s floor −0.40×10⁻³ with ≥ minimum stirrups.</div>
-      </Step>
-      <Step d="β, θ and concrete contribution" r="LRFD 5.7.3.4.2 / 5.7.3.3">
-        <ML s={Tx`\beta=\frac{4.8}{1+750\varepsilon_s}=\frac{4.8}{1+750(${nx(sh0.es*1000,3)}\times10^{-3})}=${nx(sh0.beta,3)}\qquad\theta=29+3500\varepsilon_s=${nx(sh0.theta,2)}°`}/>
-        <ML s={Tx`V_c=0.0316\,\beta\sqrt{f'_c}\,b_v d_v=0.0316(${nx(sh0.beta,3)})\sqrt{${nx(m.fc,1)}}(${nx(g.bw,0)})(${nx(sh0.dv,1)})=${nx(sh0.Vc,1)}\;\mathrm{kip}`}/>
-      </Step>
-      <Step d={`Steel contribution — trial s = ${sh0.sProv}″`}>
-        <ML s={Tx`V_s=\frac{A_v f_y d_v\cot\theta}{s}=\frac{${nx(+inp.opt.stirAv,2)}(${nx(+inp.opt.fy,0)})(${nx(sh0.dv,1)})\cot ${nx(sh0.theta,2)}°}{${nx(sh0.sProv,0)}}=\frac{${nx(+inp.opt.stirAv,2)}(${nx(+inp.opt.fy,0)})(${nx(sh0.dv,1)})(${nx(cotT,3)})}{${nx(sh0.sProv,0)}}=${nx(sh0.Vs,1)}\;\mathrm{kip}`}/>
-      </Step>
-      <Step d="Nominal resistance & check" r="LRFD 5.7.3.3" wk="vchk">
-        <ML s={Tx`V_n=\min\left(V_c+V_s+V_p,\;0.25f'_c b_v d_v+V_p\right)=\min(${nx(sh0.Vc+sh0.Vs+sh0.Vp,1)},\;${nx(0.25*m.fc*g.bw*sh0.dv+sh0.Vp,1)})=${nx(sh0.Vn,1)}\;\mathrm{kip}`}/>
-        <ML s={Tx`\frac{V_u}{\phi V_n}=\frac{${nx(sh0.Vu,1)}}{0.9(${nx(sh0.Vn,1)})}=${nx(sh0.dc,3)}\;${sh0.dc<=1.0001?'\\checkmark':'\\text{N.G.}'}\qquad(\text{worst station: }x=${nx(R.wShear.x,1)}\,\mathrm{ft},\;D/C=${nx(R.wShear.dc,3)})`}/>
-        <PsbRes R={R} names={['Shear']} note="worst station (every station in the shear output table)"/>
-      </Step>
-      <Step d="Longitudinal reinforcement — shear–flexure tie" r="LRFD 5.7.3.5" wk="vlong">
-        <LongTieBody R={R}/>
-        <PsbRes R={R} names={['Long. reinf (5.7.3.5)']}/>
-      </Step>
-      <Step d="Interface shear (girder/deck) at critical section" r="LRFD 5.7.4 — c = 0.28 ksi, μ = 1.0" wk="vif">
-        <ML s={Tx`v_{ui}=\frac{V_u}{b_{vi}d_{vi}}=\frac{${nx(sh0.Vu,1)}}{${nx(g.btf,0)}(${nx(sh0.dv,1)})}=${nx(if0.vui,3)}\;\mathrm{ksi}\qquad A_{vf,req}=${nx(if0.AvfReq,3)}\;\;A_{vf,min}=${nx(if0.AvfMin,3)}\;\;A_{vf,prov}=\frac{A_v\cdot12}{s}=${nx(if0.AvfProv,3)}\;\mathrm{in^2/ft}\;${if0.ok?'\\checkmark':'\\text{N.G.}'}`}/>
-        <ML s={Tx`V_{ni}\le\min(K_1 f'_c A_{cv},\,K_2 A_{cv})=${nx(if0.VniCap,0)}\;\mathrm{kip/ft}\ge \frac{V_{ui}}{\phi_v}=${nx(if0.Vui/R.phiV,0)}\;${if0.capOK?'\\checkmark':'\\text{N.G.}'}\quad(K_1=0.3,\;K_2=1.8\;\mathrm{ksi},\;5.7.4.3)`}/>
-        <PsbRes R={R} names={['Interface shear (5.7.4)']} note="governing station"/>
-      </Step>
-      <Step d="Pretensioned anchorage zone (splitting / bursting)" r="LRFD 5.9.4.4" wk="split">
-        <ML s={Tx`P_r\ge 0.04P_i=0.04(${nx(ss.Aps*R.fpi,0)})=${nx(0.04*ss.Aps*R.fpi,1)}\;\mathrm{kip}\quad\Rightarrow\quad A_{s,req}=\frac{0.04P_i}{f_s}=\frac{${nx(0.04*ss.Aps*R.fpi,1)}}{20}=${nx(R.AsSplit,2)}\;\mathrm{in^2}\;\text{within}\;h/4=${nx(g.h/4,1)}\;\mathrm{in}`}/>
-        <ML s={Tx`A_{s,prov}=${nx(+inp.opt.splitN,0)}\times${nx(+inp.opt.splitAv,2)}=${nx(R.AsSplitProv,2)}\;\mathrm{in^2}\quad\Rightarrow\quad P_{r,prov}=A_{s,prov}(20)=${nx(R.splitPr,1)}\;\mathrm{kip}\;\ge\;0.04P_i=${nx(R.splitDem,1)}\;\mathrm{kip}\quad\frac{D}{C}=${nx(R.splitDC,2)}\;${(R.checks.find(c=>c.n==='Splitting steel (5.9.4.4)')||{}).pass?'\\checkmark':'\\text{N.G.}'}`}/>
-        <PsbRes R={R} names={['Splitting steel (5.9.4.4)']}/>
-      </Step>
-      <Step d="Confinement reinforcement in the bottom flange" r="LRFD 5.9.4.4.2 — prescriptive detailing rule" wk="conf">
-        {R.conf.exempt
-          ? <div className="callout">Not required — {R.conf.why}. No check is reported.</div>
-          : <div>
-            <ML s={Tx`\text{extent}\ \ge\ 1.5d=1.5(${nx(g.h,1)})=${nx(R.conf.reqExt,1)}\;\mathrm{in}\qquad\text{provided}=(n-1)s=(${nx(R.conf.n,0)}-1)(${nx(R.conf.s,1)})=${nx(R.conf.provExt,1)}\;\mathrm{in}\;${R.conf.extOK?'\\checkmark':'\\text{N.G.}'}`}/>
-            <ML s={Tx`d_b=${nx(R.conf.db,3)}\;\mathrm{in}\ \ge\ 0.375\ (\mathrm{No.}\,3)\;${R.conf.sizeOK?'\\checkmark':'\\text{N.G.}'}\qquad s=${nx(R.conf.s,1)}\ \le\ 6.0\;\mathrm{in}\;${R.conf.spOK?'\\checkmark':'\\text{N.G.}'}`}/>
-            <div className="callout">There is no demand to compute here — 5.9.4.4.2 sets a minimum bar size, a maximum spacing and a minimum extent, nothing more. The governing item is <b>{R.conf.gov.lbl}</b> at D/C {fmt(R.conf.dc,2)}. That the bars are <b>shaped to enclose the strands</b> cannot be verified from the input; confirm it on the detail.</div>
-          </div>}
-        <PsbRes R={R} names={['Confinement steel (5.9.4.4.2)']}/>
-      </Step>
-      {inp.opt.relBondedReinf&&<Step d="Release-tension bonded steel" r="LRFD 5.9.2.3.1b" wk="relst">
-        <RelSteelBody inp={inp} R={R}/>
-        <PsbRes R={R} names={['Release tens. steel (5.9.2.3.1b)']}/>
-      </Step>}
-    </CalcSec>
-
-    {/* ============ CONTINUITY ============ */}
-    {/* PBD-G: continuous analysis of the composite stage, restraint, positive moment connection, service at interior supports */}
-    {R.cont&&(R.fe||R.cont.restr||R.cont.conn||R.cont.svc)&&(()=>{ const fe=R.fe, un=R.cont.unit, rr=R.cont.restr, cn=R.cont.conn, sv=R.cont.svc, f0=v=>nx(v,0), f1=v=>nx(v,1);
-      const sup=un.spans.map((_,k)=>k).slice(1), Lsp=un.spans;
-      return <CalcSec title="Continuous Analysis — LL + SIDL (LRFD 5.12.3.3)" wk="cfe">
-      {fe&&<Step d="Continuous unit and model" r="LRFD 5.12.3.3.1, 4.6.2" wk="cfe0" note={un.assumed?'One span in the bridge bar: two equal spans are assumed (enter the spans of the continuous unit in the bridge bar).':null}>
-        <ML s={Tx`\text{spans }L_k=${Lsp.map(v=>f1(v)).join(',\\;')}\;\mathrm{ft};\;\text{this girder: span }${un.s}\;(L=${f1(R.L)}\;\mathrm{ft})`}/>
-        <div className="psbr-note">Simple-span girders made continuous for the loads applied after continuity (DC2, DW, LL+IM) on the composite section; girder self-weight and DC1 on the simple non-composite span. Constant EI in every span (this girder's composite section), pinned supports. Uniform loads: support moments by the three-moment equation. Live load: influence lines of the line-girder FE model ({fe.nEl} elements, about 1 ft), HL-93 per lane with IM = 33 % on the truck and tandem.</div>
-      </Step>}
-      {fe&&<Step d="SIDL: support moments per klf (three-moment equation)" wk="cfedl">
-        <ML s={Tx`M_{k-1}L_{k-1}+2M_k(L_{k-1}+L_k)+M_{k+1}L_k=-\tfrac{1}{4}\left(L_{k-1}^3+L_k^3\right)\;\;(w=1\;\mathrm{klf},\;M_0=M_n=0)`}/>
-        <ML s={Tx`${sup.map(k=>'M_{'+k+'}='+nx(fe.Mw1[k],1)).join(',\\;')}\;\mathrm{k\text{-}ft/klf}`}/>
-        <ML s={Tx`M_w(x)=\frac{x(L-x)}{2}+M_A\left(1-\frac{x}{L}\right)+M_B\frac{x}{L},\;M_A=${f1(fe.MA)},\;M_B=${f1(fe.MB)}\;\Rightarrow\;M_w(L/2)=${f1(fe.Mw(R.L/2))},\;\;V_w(0)=\frac{L}{2}+\frac{M_B-M_A}{L}=${nx(fe.Vw(0),2)}`}/>
-        <ML s={Tx`M_{DC2}=w_{bar}M_w,\;M_{DW}=w_{dw}M_w:\;\text{midspan }${nx(R.wBar,3)}(${f1(fe.Mw(R.L/2))})=${f0(R.wBar*fe.Mw(R.L/2))},\;${nx(R.wDW,3)}(${f1(fe.Mw(R.L/2))})=${f0(R.wDW*fe.Mw(R.L/2))}\;\mathrm{k\text{-}ft}`}/>
-      </Step>}
-      {fe&&(()=>{ const ll=fe.mid.ll; return <Step d={`HL-93 at midspan (x = ${fmt(fe.mid.x,1)} ft)`} r="LRFD 3.6.1.2, 3.6.1.3" wk="cfell">
-        <ML s={Tx`M_{tr}=${f0(ll.truckMax)},\;M_{td}=${f0(ll.tanMax)},\;M_{ln}=${f0(ll.lanePos)}\;\mathrm{k\text{-}ft/lane}\;(\text{FE influence line; no IM})`}/>
-        <ML s={Tx`M_{LL}^+=\left[1.33\max(M_{tr},M_{td})+M_{ln}\right]DF_m=\left[1.33(${f0(Math.max(ll.truckMax,ll.tanMax))})+${f0(ll.lanePos)}\right](${nx(R.dfm,4)})=${f0(R.MLL)}\;\mathrm{k\text{-}ft}`}/>
-        <div className="psbr-note">Every station uses its own envelope (positive and negative, × DF<sub>m</sub>; shear × DF<sub>v</sub>); the live load deflection and fatigue keep the simple-span estimates (continuity not credited).</div>
-        <WkLink lead="Values from:" it={[{l:'DF_m, DF_v',s:'dfll',tab:'report',card:'Loads — Dead, HL-93 & Distribution'}]}/>
-      </Step>; })()}
-      {rr&&<Step d="Restraint moments: creep (C5.12.3.3.2) and differential shrinkage (initial strain method)" r="LRFD 5.12.3.3.2–.4" wk="cres">
-        <ML s={Tx`\delta_1=\frac{E_c\left[\psi_b(t_f,t_i)-\psi_b(t_d,t_i)\right]}{E_{ci}\left[1+0.7\psi_b(t_f,t_d)\right]}=\frac{${f0(rr.EcG)}(${nx(rr.psiBIF,3)}-${nx(rr.psiBID,3)})}{${f0(rr.EciG)}(1+0.7\cdot${nx(rr.psiBDF,3)})}=${nx(rr.d1,4)}\qquad\delta_2=\frac{E_c\left[\psi_b(t_f,t_i)-\psi_b(t_d,t_i)\right]}{E_{ci}\left[1+\psi_b(t_f,t_d)\right]}=${nx(rr.d2,4)}`}/>
-        <div className="psbr-note">Eqs. C5.12.3.3.2-1 and -2 as printed; creep coefficients of 5.4.2.3.2 (Losses tab) with t<sub>i</sub> = {fmt(rr.ti,0)} d, continuity at deck placement t<sub>d</sub> = {fmt(rr.td,0)} d (5.12.3.3.4), t<sub>f</sub> = {fmt(rr.tf,0)} d.</div>
-        <ML s={Tx`\text{as if continuous: }M_g,\,M_{deck}:\;\phi=\frac{wL^3}{24};\quad M_{ps}:\;\phi_A=-\!\int_0^L\!P_i e\left(1-\tfrac{x}{L}\right)dx=${f0(rr.pL)},\;\phi_B=-\!\int_0^L\!P_i e\,\tfrac{x}{L}\,dx=${f0(rr.pR)}\;\mathrm{k\text{-}ft^2}`}/>
-        <ML s={Tx`P_i=A_{ps}(x)f_{pi},\;f_{pi}=${nx(rr.fpi,2)}\;\mathrm{ksi};\;\text{three-moment: }M_{k-1}L_{k-1}+2M_k(L_{k-1}+L_k)+M_{k+1}L_k=-6(\phi_{B,k-1}+\phi_{A,k})`}/>
-        {[['A',rr.A,un.s>1],['B',rr.B,un.s<un.spans.length]].filter(q=>q[2]).map(([k,q])=><ML key={k} s={Tx`\text{support }${k}:\;M_{rc}=\delta_1(M_g+M_{ps})+\delta_2M_{deck}=${nx(rr.d1,4)}(${f0(q.Mg)}+${f0(q.Mps)})+${nx(rr.d2,4)}(${f0(q.Mdk)})=${f0(q.Mrc)}\;\mathrm{k\text{-}ft}`}/>)}
-        <ML s={Tx`\varepsilon_{eff}=\varepsilon_{ddf}\frac{A_d}{A_d+A_s(n-1)}=${nx(rr.eDdf*1e6,1)}\times10^{-6}\frac{${f0(rr.Ad)}}{${f0(rr.Ad)}+${nx(rr.AsD,2)}(${nx(rr.nR,2)}-1)}=${nx(rr.eEff*1e6,1)}\times10^{-6}\quad N_d=\frac{\varepsilon_{eff}E_{cd}A_d}{1+0.7\psi_d}=${f1(rr.Nsh)}\;\mathrm{kip},\;e_d=${nx(rr.edIn,2)}\;\mathrm{in}`}/>
-        <ML s={Tx`\varepsilon_{bdf}=\varepsilon_{bif}-\varepsilon_{bid}=${nx(rr.eBdf*1e6,1)}\times10^{-6}\quad N_g=\frac{\varepsilon_{bdf}E_cA_g}{1+0.7\psi_b(t_f,t_d)}=${f1(rr.Ngs)}\;\mathrm{kip},\;e_g=y_{bc}-y_b=${nx(rr.egIn,2)}\;\mathrm{in}\quad EI\kappa=N_de_d-N_ge_g=${f0(rr.kSh)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`M_{sh}:\;\phi=EI\kappa\frac{L}{2}\;\text{in the three-moment equation}\;\Rightarrow\;${[['A',rr.A,un.s>1],['B',rr.B,un.s<un.spans.length]].filter(q=>q[2]).map(([k,q])=>'M_{sh,'+k+'}='+f0(q.Msh)+',\\;M_{res,'+k+'}=M_{rc}+M_{sh}='+f0(q.Mres)).join(';\\;')}\;\mathrm{k\text{-}ft}`}/>
-        <div className="psbr-note">Along the span M<sub>res</sub>(x) = M<sub>res,A</sub>(1 − x/L) + M<sub>res,B</sub> x/L, with γ = 1.0 (Table 3.4.1-3). Per 5.12.3.3.2 it is included only where it increases the effect: a positive value in the span's positive-moment combinations (Strength I M<sub>u</sub>, Service I top and deck, Service III bottom), a negative value at the pier (Strength I, Service at interior supports); its shear (M<sub>res,B</sub> − M<sub>res,A</sub>)/L = {nx((rr.MrR-rr.MrL)/R.L,2)} kip where it increases |V<sub>u</sub>|. Every span of the unit is taken with this girder. Temperature gradient is not computed.</div>
-        <WkLink lead="Values from:" it={[{l:'ψ_b, ε_bid, ε_bif',s:'pe',tab:'losses',card:'Derivation — Refined Long-Term Losses'},{l:'y_bc, S_bc',s:'scomp',tab:'section',card:'Derivation — Composite Section'}]}/>
-      </Step>}
-      {cn&&<Step d={`Positive moment connection at the ${cn.x===0?'left':'right'} support`} r="LRFD 5.12.3.3.8a, C5.12.3.3.5" wk="cpos">
-        <ML s={Tx`M=M_{res}+M_{DC2}+M_{DW}+${ownTx(R.own,'mS')}M_{LL}^+=${f0(cn.mr)}+(${f0(cn.mdc2)})+(${f0(cn.mdw)})+${ownTx(R.own,'mV')}${f0(cn.mll)}=${f0(cn.M)}\;\mathrm{k\text{-}ft}`}/>
-        {cn.M>0?<ML s={Tx`T=\frac{0.9M}{0.9h_c}=\frac{0.9(${f0(cn.M)})(12)}{0.9(${f1(cn.hc)})}=${f1(cn.T)}\;\mathrm{kip}\qquad A_{s,req}=\frac{T}{f_s}=\frac{${f1(cn.T)}}{36}=${nx(cn.AsReq,2)}\;\mathrm{in^2}${cn.AsProv>0?`\\qquad f_s=\\frac{T}{A_{s,pos}}=\\frac{${f1(cn.T)}}{${nx(cn.AsProv,2)}}=${f1(cn.fs)}\\le 36\\;\\mathrm{ksi}`:''}`}/>
-          :<div className="psbr-note">No positive moment at the connection{rr?'':' (restraint moments not computed)'}: detail the connection per 5.12.3.3.8 and the owner's requirements.</div>}
-        <div className="psbr-note">Service moment after continuity at the girder end, γ = 1.0; T with the 10 % reduction for cracking at the girder-diaphragm interface and the lever arm 0.9h<sub>c</sub> (h<sub>c</sub> = composite depth); axial restraint forces not computed (bearings free longitudinally). {cn.AsProv>0?'':'Enter A_s,pos on the Continuity card to check it.'}</div>
-        {cn.AsProv>0&&cn.T>0&&<PsbRes R={R} names={['Pos. moment connection (5.12.3.3.8)']}/>}
-      </Step>}
-      {sv&&<Step d="Girder at interior supports — Service" r="LRFD 5.12.3.3.5" wk="cpsv">
-        {sv.topRC?<div className="psbr-note">Top of girder near interior supports designed as reinforced concrete at the strength limit state (Negative Moment @ Pier); the service tension limits do not apply there.</div>
-        :<React.Fragment>
-          <ML s={Tx`f_{top}=\frac{P_e}{A_g}-\frac{P_ee}{S_t}+\frac{M_g+M_{dk}}{S_t}+\frac{M_{sd}+M_{res}^-+\gamma_{LL}${ownTx(R.own,'mS')}M_{LL}^-}{S_{tg}}=${nx(sv.wT.Aps*R.fpe/g.A,3)}-${nx(sv.wT.Aps*R.fpe*sv.wT.e/g.St,3)}+${nx((sv.wT.Mg+sv.wT.Mdk)/g.St,3)}+\frac{${f0(sv.wT.Msd)}+(${f0(sv.wT.mrn)})+${nx(+inp.opt.gLLs3,2)}(${ownTx(R.own,'mV')}${f0(sv.wT.Mlln)})}{${f0(cp.Stg)}}=${nx(sv.wT.s3TopN,3)}\;\mathrm{ksi}`}/>
-          <ML s={Tx`\text{x = ${fmt(sv.wT.x,1)} ft; limit (Table 5.9.2.3.1b-1 with }f'_c):\;${sv.bonded?`0.24\\sqrt{f'_c}=0.24\\sqrt{${nx(+m.fc,2)}}`:`0.0948\\sqrt{f'_c}\\le0.2`}=${nx(sv.topLim,3)}\;\mathrm{ksi}`}/>
-          {sv.bonded&&sv.Ttop>0&&<ML s={Tx`T=${f1(sv.Ttop)}\;\mathrm{kip}\;(\text{uncracked girder})\qquad A_s\ge\frac{T}{\min(0.5f_y,30)}=\frac{${f1(sv.Ttop)}}{${nx(sv.fsT,0)}}=${nx(sv.AsTop,2)}\;\mathrm{in^2}${sv.AsTopProv>0?`\\;\\text{(provided }${nx(sv.AsTopProv,2)})`:'\\;\\text{(enter the provided steel on the Continuity card)}'}`}/>}
-          <PsbRes R={R} names={['Srv III top tens (pier, 5.12.3.3.5)','Top tens. steel (pier, 5.12.3.3.5)']}/>
-        </React.Fragment>}
-        <ML s={Tx`f_{bot}=\frac{P_e}{A_g}+\frac{P_ee}{S_b}-\frac{M_g+M_{dk}}{S_b}-\frac{M_{sd}+M_{res}^-${sv.bPerm?'':'+'+ownTx(R.own,'mS')+'M_{LL}^-'}}{S_{bc}}=${nx(sv.fBot,3)}\le${sv.bPerm?"0.45f'_c":"0.60f'_c"}=${nx(sv.limBot,3)}\;\mathrm{ksi}\;(x=${f1(sv.wB.x)}\;\mathrm{ft};\;M_{sd}=${f0(sv.wB.Msd)},\;M_{res}^-=${f0(sv.wB.mrn)},\;M_{LL}^-=${f0(sv.wB.Mlln)}\;\mathrm{k\text{-}in})`}/>
-        <PsbRes R={R} names={['Srv comp (bot, −M, 5.12.3.3.5)']}/>
-      </Step>}
-    </CalcSec>; })()}
-    {R.cont&&<CalcSec title="Continuity for LL + SIDL — Negative Moment @ Pier">
-      {R.cont.pier?<Step d={`Factored pier moment per girder (${R.cont.pier.side} support of span ${R.cont.unit.s})`} r="LRFD 5.12.3.3.7, 3.6.1.3.1">
-        <ML s={Tx`M_{LL/lane}=\max\big[1.33\max(M_{1tr},M_{td})+M_{ln},\;0.9(1.33M_{2tr}+M_{ln})\big]=\max\big[1.33\max(${nx(-R.cont.pier.nd.ll.truckMin,0)},${nx(-R.cont.pier.nd.ll.tanMin,0)})+${nx(-R.cont.pier.nd.ll.laneNeg,0)},\;0.9(1.33(${nx(-R.cont.pier.nd.ll.twoMin,0)})+${nx(-R.cont.pier.nd.ll.laneNeg,0)})\big]=${nx(-R.cont.pier.nd.Mn,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`M_{DC2}=-w_{bar}M_w=-${nx(R.wBar,3)}(${nx(R.cont.pier.nd.Mw,1)})=${nx(R.cont.MDC2n,0)}\qquad M_{DW}=-${nx(R.wDW,3)}(${nx(R.cont.pier.nd.Mw,1)})=${nx(R.cont.MDWn,0)}\qquad M_{LL}=${nx(-R.cont.pier.nd.Mn,0)}(${nx(R.dfm,4)})=${nx(R.cont.MLLn,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`M_u=${ownTx(R.own,'eV')}1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.cont.MLLn,0)})${R.cont.MrnPier>0?'+'+nx(R.cont.MrnPier,0):''}${ownTx(R.own,'ec')}=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
-        <WkLink lead="Values from:" it={[{l:'M_w, influence lines, M_res',s:'cfe',tab:'report',card:'Continuous Analysis'}]}/>
-      </Step>:<React.Fragment>
-      <Step d="Pier-moment influence line — two equal spans" note="Unit load at ξ in either span; enumerated at 0.5-ft steps for trucks/tandem, both orientations; two-truck case with ≥ 50 ft between trucks per 3.6.1.3.1.">
-        <ML s={Tx`\eta(\xi)=-\frac{\xi\,(L^2-\xi^2)}{4L^2}\;\;(0\le\xi\le L,\;\text{mirrored})\qquad M_{pier}=\sum P_i\,\eta(\xi_i)`}/>
-      </Step>
-      <Step d="Continuous dead loads (composite stage)">
-        <ML s={Tx`M_{DC2}=\frac{w_{bar}L^2}{8}=\frac{${nx(R.wBar,2)}(${nx(L,0)})^2}{8}=${nx(R.cont.MDC2n,0)}\qquad M_{DW}=\frac{${nx(R.wDW,2)}(${nx(L,0)})^2}{8}=${nx(R.cont.MDWn,0)}\;\mathrm{k\text{-}ft}`}/>
-      </Step>
-      <Step d="HL-93 negative moment per lane" r="LRFD 3.6.1.3.1">
-        <ML s={Tx`M_{ln}=\frac{0.64L^2}{8}=${nx(R.cont.negLL.Mln,0)}\qquad M_{1tr}=${nx(R.cont.negLL.M1,0)}\qquad M_{td}=${nx(R.cont.negLL.Mtd,0)}\qquad M_{2tr}=${nx(R.cont.negLL.M2,0)}\;\mathrm{k\text{-}ft}\;(\text{enumerated})`}/>
-        <ML s={Tx`\text{Case 1: }1.33\max(M_{1tr},M_{td})+M_{ln}=1.33(${nx(Math.max(R.cont.negLL.M1,R.cont.negLL.Mtd),0)})+${nx(R.cont.negLL.Mln,0)}=${nx(1.33*Math.max(R.cont.negLL.M1,R.cont.negLL.Mtd)+R.cont.negLL.Mln,0)}`}/>
-        <ML s={Tx`\text{Case 2: }0.9\left[1.33M_{2tr}+M_{ln}\right]=0.9\left[1.33(${nx(R.cont.negLL.M2,0)})+${nx(R.cont.negLL.Mln,0)}\right]=${nx(0.9*(1.33*R.cont.negLL.M2+R.cont.negLL.Mln),0)}\quad\Rightarrow\;M_{LL/lane}=${nx(R.cont.negLL.MLL,0)}\;(\text{${R.cont.negLL.gov}})`}/>
-      </Step>
-      <Step d="Factored pier moment per girder">
-        <ML s={Tx`M_{LL}=${nx(R.cont.negLL.MLL,0)}\,DF_m=${nx(R.cont.negLL.MLL,0)}(${nx(R.dfm,4)})=${nx(R.cont.MLLn,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`M_u=${ownTx(R.own,'eV')}1.25(${nx(R.cont.MDC2n,0)})+1.50(${nx(R.cont.MDWn,0)})+1.75(${ownTx(R.own,'mV')}${nx(R.cont.MLLn,0)})${R.cont.MrnPier>0?'+'+nx(R.cont.MrnPier,0):''}${ownTx(R.own,'ec')}=${nx(R.cont.MuN/12,0)}\;\mathrm{k\text{-}ft}`}/>
-      </Step>
-      </React.Fragment>}
-      <Step d="Negative-moment capacity (deck steel in tension, bottom flange in compression)" r="LRFD 5.12.3.3" wk="neg">
-        <ML s={Tx`d=h_c-d_{top}=${nx(cp.hc,1)}-${nx(+inp.cont.dTop,2)}=${nx(R.cont.dN,1)}\;\mathrm{in}\qquad a=\frac{A_s f_y}{0.85f'_c b_{bf}}=\frac{${nx(R.cont.As,2)}(${nx(R.cont.fyr,0)})}{0.85(${nx(m.fc,1)})(${nx(g.bbf,0)})}=${nx(R.cont.aN,2)}\;\mathrm{in}\;${R.cont.aOK?Tx`\le t_{bf}=${nx(R.cont.tbf,1)}\;\checkmark`:Tx`>t_{bf}=${nx(R.cont.tbf,1)}\;\text{N.G.}`}`}/>
-        <ML s={Tx`c=\frac{a}{\beta_1}=\frac{${nx(R.cont.aN,2)}}{${nx(R.cont.b1g,3)}}=${nx(R.cont.cN,2)}\;\mathrm{in}\qquad\varepsilon_t=0.003\left(\frac{d}{c}-1\right)=${nx(R.cont.etN*1000,1)}\times10^{-3}\;\Rightarrow\;\phi=${nx(R.cont.phiN,3)}`}/>
-        <ML s={Tx`\phi M_n=\phi A_s f_y\left(d-\frac{a}{2}\right)=${nx(R.cont.phiN,3)}(${nx(R.cont.As,2)})(${nx(R.cont.fyr,0)})\left(${nx(R.cont.dN,1)}-\frac{${nx(R.cont.aN,2)}}{2}\right)\frac{1}{12}=${nx(R.cont.phiMnN/12,0)}\;\mathrm{k\text{-}ft}`}/>
-        <ML s={Tx`\frac{M_u}{\phi M_n}=\frac{${nx(R.cont.MuN/12,0)}}{${nx(R.cont.phiMnN/12,0)}}=${nx(R.cont.dc,3)}\;${cf('Neg flexure (pier)').pass?'\\checkmark':'\\text{N.G.}'}`}/>
-        <PsbRes R={R} names={['Neg flexure (pier)']}/>
-      </Step>
-    </CalcSec>}
-
-    {/* ============ FATIGUE (D11: the Stresses-tab steps) ============ */}
-    <CalcSec title="Fatigue I — Strand Stress Range & Concrete Compression">
-      {fatigueSteps(inp,R)}
-      <PsbRes R={R} names={['Fatigue I (concrete, 5.5.3.1)','Fatigue I (strand)']}/>
-    </CalcSec>
-
-    {/* ============ CAMBER ============ */}
-    <CalcSec title="Camber & Deflection (midspan, + = up)">
-      <Step d="Prestress camber — straight strands" r="P·e·L²/8EI">
-        <ML s={Tx`\Delta_{ps,s}=\frac{P_s e_s L^2}{8E_{ci}I_g}=\frac{${nx(Ps,0)}(${nx(eS,2)})(${nx(Lin,0)})^2}{8(${nx(lo.Eci,0)})(${nx(g.I,0)})}=${nx(d1,3)}\;\mathrm{in}\;\uparrow`}/>
-      </Step>
-      {ss.nh>0&&<Step d="Prestress camber — harped strands">
-        <ML s={Tx`\Delta_{ps,h}=\frac{P_h}{E_{ci}I_g}\left[\frac{e_{hm}L^2}{8}-\frac{(e_{hm}-e_{he})a^2}{6}\right]=\frac{${nx(Ph,0)}}{${nx(lo.Eci,0)}(${nx(g.I,0)})}\left[\frac{${nx(eHm,2)}(${nx(Lin,0)})^2}{8}-\frac{(${nx(eHm,2)}-(${nx(eHe,2)}))(${nx(aH,0)})^2}{6}\right]=${nx(d2,3)}\;\mathrm{in}\;\uparrow`}/>
-      </Step>}
-      <Step d="Self-weight, deck, SIDL deflections" r="5wL⁴/384EI">
-        <ML s={Tx`\Delta_{sw}=\frac{5w_{sw}L^4}{384E_{ci}I_g}=\frac{5(${nx(R.wG/12,4)})(${nx(Lin,0)})^4}{384(${nx(lo.Eci,0)})(${nx(g.I,0)})}=${nx(c.dSW,3)}\;\mathrm{in}\;\downarrow`}/>
-        <ML s={Tx`\Delta_{dk}=\frac{5(${nx(R.wDk/12,4)})(${nx(Lin,0)})^4}{384(${nx(cp.Ecg,0)})(${nx(g.I,0)})}=${nx(c.dDK,3)}\;\downarrow\qquad\Delta_{sd}=\frac{5(${nx((R.wBar+R.wDW)/12,4)})(${nx(Lin,0)})^4}{384(${nx(cp.Ecg,0)})(${nx(cp.Ic,0)})}=${nx(c.dSD,3)}\;\mathrm{in}\;\downarrow`}/>
-      </Step>
-      <Step d="Stage history — PCI multipliers" r="PCI Design Handbook" wk="camf">
-        <ML s={Tx`\Delta_{rel}=\Delta_{ps}-\Delta_{sw}=${nx(c.dPS,3)}-${nx(c.dSW,3)}=${nx(c.rel,2)}\;\mathrm{in}`}/>
-        <ML s={Tx`\Delta_{erect}=${nx(mu_.psE,2)}\Delta_{ps}-${nx(mu_.swE,2)}\Delta_{sw}=${nx(mu_.psE,2)}(${nx(c.dPS,3)})-${nx(mu_.swE,2)}(${nx(c.dSW,3)})=${nx(c.erect,2)}\;\mathrm{in}`}/>
-        <ML s={Tx`\Delta_{deck}=\Delta_{erect}-\Delta_{dk}=${nx(c.erect,2)}-${nx(c.dDK,3)}=${nx(c.afterDeck,2)}\;\mathrm{in}`}/>
-        <ML s={Tx`\Delta_{final}=${nx(mu_.psF,2)}\Delta_{ps}-${nx(mu_.swF,2)}\Delta_{sw}-${nx(mu_.dkF,2)}\Delta_{dk}-${nx(mu_.sdF,2)}\Delta_{sd}=${nx(c.final,2)}\;\mathrm{in}`}/>
-      </Step>
-      <Step d="Live-load deflection (equivalent-UDL approximation)" r="LRFD 2.5.2.6.2" wk="lld">
-        {c.MLLd!=null&&<div className="psbr-note">Continuity on: the simple-span HL-93 moment M<sub>LL</sub> = {fmt(c.MLLd,0)} k-ft is used (continuity not credited in the deflection estimate).</div>}
-        <ML s={Tx`\Delta_{LL}\approx\frac{5M_{LL}L^2}{48E_cI_c}=\frac{5(${nx((c.MLLd!=null?c.MLLd:R.MLL)*12,0)})(${nx(Lin,0)})^2}{48(${nx(cp.Ecg,0)})(${nx(cp.Ic,0)})}=${nx(c.dLL,2)}\;\mathrm{in}\le\frac{L}{${(R.own&&R.own.llDen)||800}}=\frac{${nx(Lin,0)}}{${(R.own&&R.own.llDen)||800}}=${nx(c.llLim,2)}\;\mathrm{in}\;${ckLL.pass?'\\checkmark':'\\text{N.G.}'}`}/>
-        <PsbRes R={R} names={['LL deflection']}/>
-      </Step>
-    </CalcSec>
-
-    {/* ============ HANDLING, DECK, RATING (D11: the tab content, unchanged) ============ */}
-    {R.handling&&<CalcSec title="Handling — Lifting & Hauling">
-      <Step d="Overhang stresses and lateral-stability screening (Handling tab)" r="release stage · stability: screening only, not PCI (2016) / Mast" wk="hand">
-        <HandlingTab inp={inp} R={R}/>
-        <PsbRes R={R} names={['Lifting stress','Lifting FS (crack, screening)','Hauling FS (crack, screening)']}/>
-      </Step>
-    </CalcSec>}
-    {R.deck&&<CalcSec title="Deck Design (Transverse)">
-      <Step d="Equivalent-strip moments and capacities (Deck tab)" r="LRFD 4.6.2.1 / 9.7.3" wk="deck">
-        <DeckTab inp={inp} R={R}/>
-        <PsbRes R={R} names={['Deck +M','Deck −M','Deck overhang']}/>
-      </Step>
-    </CalcSec>}
-    <CalcSec title="Load Rating — HL-93 Design Load (LRFR)">
-      {ratingDerivs(inp,R)}
-      <Step d="Rating factors" r="MBE 6A">
-        <PsbRF t="Flexure, governing section" inv={R.rating.RFinv} opr={R.rating.RFopr} ok={R.rating.okInv} refTxt="MBE 6A.4"/>
-        <PsbRF t="Shear, governing section" inv={R.shrRating.RFinv} opr={R.shrRating.RFopr} ok={R.shrRating.okInv} refTxt="MBE 6A.5.6"/>
-        <PsbRF t="Service III tension" inv={R.svcRating.RF} opr={null} ok={R.svcRating.ok} refTxt="MBE 6A.5.4.1"/>
-        <div className="mnote">Legal / permit vehicles: user-entered factored forces on the Rating tab (not in this report).</div>
-      </Step>
-    </CalcSec>
-
-    {/* ============ OUTPUT TABLES ============ */}
-    <CalcSec wk="outstress" title="Output — Stresses at Tenth Points (ksi, + compression)">
-      <div style={{padding:'8px 0 2px'}}>
-      <Tbl head={['x (ft)','e (in)','Aps (in²)','Mg (k-ft)','Mdk (k-ft)','Msd (k-ft)','MLL (k-ft)','Rel top','Rel bot','Srv top perm','Srv top +LL','Srv III bot']}
-        rows={tenth.map(r=>({c:[fmt(r.x,1),fmt(r.e,2),fmt(r.Aps,2),fmt(r.Mg/12,0),fmt(r.Mdk/12,0),fmt(r.Msd/12,0),fmt(r.Mll/12,0),
-          fmt(r.relTop,3),fmt(r.relBot,3),fmt(r.s1Top,3),fmt(r.s2Top,3),fmt(r.s3Bot,3)]}))}/>
-      <div className="mnote" style={{marginTop:6}}>Limits: release {fmt(lim.relC,3)} / −{fmt(lim.relT,3)} ksi · service {fmt(lim.srvC1,3)} / {fmt(lim.srvC2,3)} / −{fmt(lim.srvT,3)} ksi. Transfer-length stations included in governing search (61-point grid).</div>
-      </div>
-    </CalcSec>
-    <CalcSec wk="outflex" title="Output — Flexure Stations (to midspan)">
-      <div style={{padding:'8px 0 2px'}}>
-      <Tbl head={['x (ft)','Mu (k-ft)','c (in)','a (in)','fps (ksi)','εt ×10³','φ','φMn (k-ft)','Mu/φMn']}
-        rows={flex20.map(r=>({c:[fmt(r.x,1),fmt(r.Mu/12,0),fmt(r.c,2),fmt(r.a,2),fmt(r.fps,1),fmt(r.et*1000,2),fmt(r.phi,3),fmt(r.phiMn/12,0),fmt(r.Mu/r.phiMn,3)]}))}/>
-      </div>
-    </CalcSec>
-    <CalcSec wk="outshear" title="Output — Shear Stations">
-      <div style={{padding:'8px 0 2px'}}>
-      <Tbl head={['x (ft)','dv (in)','Vu (k)','Vp (k)','εs ×10³','β','θ (°)','Vc (k)','Vs (k)','Vn (k)','Vu/φVn']}
-        rows={R.shear.map(r=>({c:[fmt(r.x,1),fmt(r.dv,1),fmt(r.Vu,1),fmt(r.Vp,1),fmt(r.es*1000,3),fmt(r.beta,2),fmt(r.theta,1),
-          fmt(r.Vc,1),fmt(r.Vs,1),fmt(r.Vn,1),fmt(r.dc,3)]}))}/>
-      </div>
-    </CalcSec>
-
-    {/* ============ PBD-E: OWNER REQUIREMENTS (owner other than AASHTO only; an AASHTO report is unchanged) ============ */}
-    {R.own&&(()=>{ const P=window.PBD, o=R.own, ow=P.OWN_RULES.owners[o.owner]||{}, defs=P.ownDefaults(inp), hd=o.hd, db=o.db, cr=o.contReq;
-      const KND={'default':'default','shall-check':'check','should-warning':'warning','load':'load rule','report':'requirement'};
-      const ckRow=id=>o.checks.find(c=>c.id===id);
-      return <CalcSec title="Owner Requirements">
-        <Step d={'Owner profile: '+(ow.manual||o.owner)} r={'AASHTO LRFD '+(ow.aashto||'')+' basis'} wk="own">
-          <div className="psbr-note">{P.OWN_RULES.note} The rules are paraphrased; see the manual for the text.</div>
-          <Tbl head={['Section','Requirement','Kind','Where applied']} rows={P.ownRules(o.owner).map(r=>({c:[r.sec,r.text,KND[r.kind]||r.kind,r.where||'']}))}/>
-        </Step>
-        {defs.length>0&&<Step d="Owner input defaults">
-          <Tbl head={['Input','Owner default','Value used','Status']} rows={defs.map(d=>({c:[d.r.lbl+' ('+P.ownCite(d.r)+')',d.r.show,d.cur===true?'on':d.cur===false?'off':String(d.cur),d.over?'overridden by the engineer':'owner default']}))}/>
-        </Step>}
-        <Step d="Load modifier and design load multiplier" r="LRFD 1.3.2.1; owner manual">
-          <ML s={Tx`\eta=\eta_D\,\eta_R\,\eta_I=${nx(o.etaD,2)}\times${nx(o.etaR,2)}\times${nx(o.etaI,2)}=${nx(o.eta,4)}\;\;(\text{Strength I})`}/>
-          <ML s={Tx`m_{LL}=${nx(o.mLL,2)}\;\;(\text{HL-93 LL+IM at Strength I and Service I / III; not the live load deflection, fatigue or load rating})`}/>
-          <div className="psbr-note">Strength I: M<sub>u</sub> = η[1.25 DC + 1.50 DW + 1.75 m<sub>LL</sub>(LL+IM)], and V<sub>u</sub> likewise; Service I and III: the LL+IM term × m<sub>LL</sub>. The worked flexure, shear, stress, pier and deck calculations above use these factors.</div>
-        </Step>
-        {hd&&<Step d={'Hold-down force of the draped strands ('+ckRow('hd.max').cite+')'}>
-          <ML s={Tx`F_{hd}=2\,n_h\,f_{pbt}A_b\sin\alpha=2(${hd.nh})(${nx(R.fpbt,1)})(${nx(hd.Ab,3)})\sin\left(\tan^{-1}${nx(hd.slope,4)}\right)=${nx(hd.Ftot,1)}\;\mathrm{kip}`}/>
-          <ML s={Tx`W=w_{sw}L_g=${nx(hd.wsw,4)}(${nx(hd.Lg,2)})=${nx(hd.W,1)}\;\mathrm{kip}\qquad ${nx(hd.frac,2)}\,W=${nx(hd.lim,1)}\;\mathrm{kip}`}/>
-          <div className="psbr-note">Each draped strand bends at two hold-down points (harp points at {fmt(R.ss.hp.frac,2)}L), with a vertical force f<sub>pbt</sub>A<sub>b</sub> sin α at each, at the jacking stress; L<sub>g</sub> = L + 2 × girder end beyond the bearing.</div>
-          <PsbRes R={R} names={[ckRow('hd.max').n]}/></Step>}
-        {db&&<Step d={'Debonded strands ('+ckRow('db.max').cite+')'}>
-          <ML s={Tx`\frac{n_{db}}{N}=\frac{${db.n}}{${db.N}}=${nx(100*db.pct,1)}\%\le ${nx(100*db.max,0)}\%`}/>
-          <PsbRes R={R} names={[ckRow('db.max').n]}/></Step>}
-        {o.checks.filter(c=>/^f(c|ci)\./.test(c.id)).map(c=><Step key={c.id} d={c.n}>
-          <ML s={c.id.indexOf('fci')===0?Tx`f'_{ci}=${nx(+inp.mat.fci,2)}\;\mathrm{ksi}=${nx((+inp.mat.fci)/(+inp.mat.fc),3)}\,f'_c\;\;(f'_c=${nx(+inp.mat.fc,2)}\;\mathrm{ksi});\;\text{governing limit }${nx(c.lim,2)}\;\mathrm{ksi}`:Tx`f'_c=${nx(+inp.mat.fc,2)}\;\mathrm{ksi};\;\text{governing limit }${nx(c.lim,2)}\;\mathrm{ksi}`}/>
-          <PsbRes R={R} names={[c.n]}/></Step>)}
-        {o.llDen&&<Step d={'Live load deflection limit (MassDOT Part I 3.5.6.1)'}>
-          <ML s={Tx`\Delta_{LL}=${nx(R.cam.dLL,2)}\;\mathrm{in}\le\frac{L}{${o.llDen}}=${nx(R.cam.llLim,2)}\;\mathrm{in}\;\;(${inp.opt.sidewalk===true?'\text{bridge with sidewalks}':'\text{no sidewalks; } L/1000\text{ preferred}'};\;\text{interior girder})`}/>
-          <PsbRes R={R} names={['LL deflection']}/></Step>}
-        {ckRow('cont.age')&&<Step d={ckRow('cont.age').n}>
-          <ML s={Tx`t_d=${nx(+inp.mat.td,0)}\;\mathrm{days}\ge ${nx(ckRow('cont.age').lim,0)}\;\mathrm{days}`}/>
-          <PsbRes R={R} names={[ckRow('cont.age').n]}/></Step>}
-        {cr&&<Step d={'Positive moment connection ('+cr.cite+')'}>
-          <ML s={Tx`f_r=0.24\lambda\sqrt{f'_{c,d}}=0.24(1.0)\sqrt{${nx(cr.fcd,2)}}=${nx(cr.fr,3)}\;\mathrm{ksi}\;\;\text{(5.4.2.6; diaphragm cast with the deck)}`}/>
-          <ML s={Tx`M_{cr}=f_r\,S_{bc}=(${nx(cr.fr,3)})(${nx(cr.Sbc,0)})/12=${nx(cr.Mcr,1)}\;\mathrm{k\text{-}ft}`}/>
-          <ML s={Tx`\phi M_{n,conn}\ge ${nx(cr.f,1)}\,M_{cr}=${nx(cr.f,1)}(${nx(cr.Mcr,1)})=${nx(cr.req,0)}\;\mathrm{k\text{-}ft}`}/>
-          <WkLink lead="Values from:" it={[{l:'S_bc (composite, girder bottom fiber)',s:'scomp',tab:'section',card:'Derivation — Composite Section'}]}/>
-          <div className="psbr-note">The connection resists the moments applied after continuity (SIDL, live load, restraint) on the composite section at the diaphragm face. It cracks at the girder bottom fiber in the diaphragm concrete, which is cast with the deck, so M<sub>cr</sub> uses the deck/diaphragm f′c and the composite S<sub>bc</sub> (basis of the 1.2 M<sub>cr</sub> rule: NCHRP Report 519). Reported, not designed: provide the positive moment connection with at least this resistance.</div></Step>}
-        {(R.warns||[]).some(w=>P.ownRules(o.owner).some(r=>w.indexOf(P.ownCite(r))===0))&&<Step d="Owner warnings">
-          <ul className="warnlist">{R.warns.filter(w=>P.ownRules(o.owner).some(r=>w.indexOf(P.ownCite(r))===0)).map((w,i)=><li key={i}>{w}</li>)}</ul></Step>}
-      </CalcSec>; })()}
-  </React.Fragment>,see);
-
-  return(<PsbrSee.Provider value={see}><div className="psbr-root">
-    <div className="btnrow noprint" style={{marginBottom:12}}>
-      <button className="btn pri" onClick={()=>window.print()}>Print / Save PDF</button>
-    </div>
-    {/* ============ D11: cover, title block, references, contents ============ */}
-    <section className="psbr-cover">
-      <h1>Prestressed Bridge Design</h1>
-      <div className="s">Prestressed concrete girder design · AASHTO LRFD · calculation report</div>
-      <div className="p">{p.name||'—'}</div>
-      <div className="d">{psbrDesc(inp,R)} · {R.ss.Ntot}-{inp.str.size} strands · {R.useExt?'demands imported from MIDAS (span '+R.ext.sel.idx+')':R.cont?'simple span made continuous for LL + SIDL':'simple span'} · {df.ext?'exterior':'interior'} girder</div>
-      <div className="d">Codes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · AASHTO MBE Section 6A (load rating) · PCI Design Handbook (camber multipliers)</div>
-      <table className="psbr-tb"><tbody>
-        <tr><td><span>Project</span>{p.name||'—'}</td><td><span>Project No</span>{p.job||'—'}</td></tr>
-        <tr><td><span>Calculated by</span>{p.by||'—'}</td><td><span>Date</span>{p.date||'—'}</td></tr>
-        <tr><td><span>Checked by</span>—</td><td><span>Checked date</span>—</td></tr>
-      </tbody></table>
-    </section>
-    <section className="psbr-front">
-      <div className="psbr-h">References</div>
-      <table className="psbr-refs"><tbody>{refs.map(([a,b])=><tr key={a}><td>{a}</td><td>{b}</td></tr>)}</tbody></table>
-      <div className="psbr-h">Contents</div>
-      <ol className="psbr-toc">{toc.map(s=><li key={s.id}><a href={'#'+s.id} onClick={e=>psbJump(e,s.id)}>{s.n}. {s.t}</a>
-        {s.subs.length?<ol>{s.subs.map(q=><li key={q.id}><a href={'#'+q.id} onClick={e=>psbJump(e,q.id)}>{q.n} {q.t}</a></li>)}</ol>:null}</li>)}</ol>
-      <div className="psbr-note">Equations are shown symbolically, then with values substituted, then with the result. Each check ends with a result line: D/C = demand / capacity (or limit), PASS when D/C ≤ 1.00; ratings give RF. Units: kip, in, ksi; moments in k-ft; positions along the span in ft. Values quoted away from their derivation read “see §n.k”.</div>
-    </section>
-    {out}
-  </div></PsbrSee.Provider>);
-}
+/* ReportTab: the in-app calculation report, retired 2026-11-01 (PSRP2): its content is in the shared-viewer report (psrModel, psrMore,
+   psrPort; SharedReportTab), its intermediates in the engine (psbReportVals → R.rv). fixlog: PSRP2. */
 /* ================= APP ================= */
 /* ================= PERSISTENCE (localStorage) ================= */
 // Works when the app is served as a real web page (e.g. GitHub Pages). In sandboxed
@@ -9340,6 +9065,8 @@ function App(){
       const find=()=>{ let el=d.wk?document.querySelector('[data-wk="'+d.wk+'"]'):null;
         if(!el&&d.card){ const t=[...document.querySelectorAll('.card-h .t, .calch')].find(x=>x.textContent.includes(d.card));
           el=t&&(t.closest('.card')||t.closest('.calcsec')); }
+        if(!el&&d.card&&d.tab==='report'){ const A={'Loads — Dead, HL-93 & Distribution':'Loads and live-load distribution','Continuous Analysis':'Continuity','Owner Requirements':'Owner requirements'};   // PSRP2: the shared report's headings
+          const k=A[d.card]||d.card, t=[...document.querySelectorAll('.rp-doc .rp-h1, .rp-doc .rp-h2')].find(x=>x.textContent.includes(k)); el=t||null; }
         if(!el){ if(++n<40) setTimeout(find,50); return; }
         psbFlash(el); };
       setTimeout(find,30); };
@@ -9790,7 +9517,7 @@ function App(){
     ['flexure','Flexure'],['shear','Shear'],['anchorage','Anchorage Zone'],['diagrams','Diagrams'],['camber','Camber'],
     ...(inp.handling.on?[['handling','Handling']]:[]),
     ...(inp.deck.on?[['deck','Deck']]:[]),
-    ['rating','Rating'],['optimize','Optimize'],['compare','Compare'],['nomen','Nomenclature'],['report','Report'],['rptnew','Report (new)']];
+    ['rating','Rating'],['optimize','Optimize'],['compare','Compare'],['nomen','Nomenclature'],['report','Report']];
   const nPass=R.error?0:R.checks.filter(c=>c.pass).length;
   const uP=(k,v)=>setInp({...inp,proj:{...inp.proj,[k]:v}});
   /* Shared project info (HANDOFF.md §4.1): title block <-> shared fields. Girder ID is not a bridge ID, so it is not mapped. */
@@ -9965,8 +9692,7 @@ function App(){
         {tab==='optimize'&&<OptimizeTab inp={inp} set={setInp} R={R}/>}
         {tab==='compare'&&<CompareTab inp={inp} R={R}/>}
         {tab==='nomen'&&<NomenclatureTab inp={inp} R={R}/>}
-        {tab==='report'&&<ReportTab inp={inp} R={R}/>}
-        {tab==='rptnew'&&<SharedReportTab inp={inp} R={R}/>}
+        {tab==='report'&&<SharedReportTab inp={inp} R={R}/>}
       </div>}
     </React.Fragment>}
     <div className="footer">

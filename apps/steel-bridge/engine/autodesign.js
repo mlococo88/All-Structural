@@ -245,14 +245,17 @@
       girderDetail: { label: g.label || g.id, girder: gi + 1, position: g.position, materials: { Fyf: M.GRADES[m.steel.top].Fy, Fyw: M.GRADES[m.steel.web].Fy, fc: m.concrete.fc, wc: m.concrete.wc, gradeFlange: m.steel.top, gradeWeb: m.steel.web },
         deck: { ts: d.ts, haunch: d.haunch, beff: g.beff, Ar: (d.rebar.top.A || 0) + (d.rebar.bot.A || 0) }, bracing: { Lb: (P.stiffeners && P.stiffeners.layout.frames.Lb) || 25 },
         skew: { bySupport: ((P.xs || {}).skews || []).slice(), max: Math.max(0, ...((P.xs || {}).skews || []).map(Math.abs)) }, details: {} } };
+    const gFI = (v => v > 0 ? v : 1.75)(+((P.fatigue || {}).gam || {}).fI);   // FONE (2026-11-01): pitch sizing with the Fatigue I γ of the inputs (was 1.75)
     const dd = +Q.d, Zr = 7.0 * Math.PI * dd * dd / 4, segAt = x => g.segments.find(s => x >= s.x0 - 1e-9 && x < s.x1) || g.segments[g.segments.length - 1];
     const n = SEC().modularRatio(m.concrete.fc, m.concrete.wc, m.concrete.K1, m.concrete.nRule).n, r1 = v => +(+v).toFixed(1), r2 = v => +(+v).toFixed(2);
     const vRng = (a, b) => Math.max(0, ...stations.filter(s => s.x >= a - 1e-9 && s.x <= b + 1e-9).map(s => s.V_FATpos - s.V_FATneg));
     const zs = [], qz = [];
     R.spans.forEach((L, k) => { const x0 = R.sup[k]; for (let z = 0; z < 10; z++) { const a = x0 + z * L / 10, b = a + L / 10, s = segAt((a + b) / 2), S = FA_.secSet(s.D, s, { ts: d.ts, hh: h0 ? 0 : d.haunch, beff: beffB, n, Ar: 0, dr: 0 }), c = S.cn, Qs = beffB * d.ts / n * (S.ySlab - c.yb);
-      const nr = Math.max(2, Math.min(4, Math.floor((s.topB - 2 - dd) / 4) + 1)), vr = r1(vRng(a, b)), preq = vr > 0 ? nr * Zr / (1.75 * vr * Qs / c.I) : 48, p = Math.max(6 * dd, Math.min(24, Math.floor(preq * 2) / 2));
+      const nr = Math.max(2, Math.min(4, Math.floor((s.topB - 2 - dd) / 4) + 1)), vr = r1(vRng(a, b)), preq = vr > 0 ? nr * Zr / (gFI * vr * Qs / c.I) : 48, p = Math.max(6 * dd, Math.min(24, Math.floor(preq * 2) / 2));
       zs.push({ x1: r2(a), x2: r2(b), nr, p }); qz.push({ name: `Span ${k + 1}, ${z / 10}L to ${(z + 1) / 10}L`, Vfr: vr }); } });
-    const G = FX_.factors(), Mup = stations.map(s => FX_.envelopeStrI({ DC1: s.M_DC1, DC2: s.M_DC2, DW: s.M_DW, LLp: s.M_LLpos, LLn: s.M_LLneg, UT: s.M_UT, UF: s.M_UF }, G).max), ns = R.spans.length, supN = k => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : `Pier ${k}`;
+    // FONE (2026-11-01): the region envelope with the owner's η, m (factorsOwner, as the Flexure tab; was FX_.factors()); m kept off the pedestrian part (GD45)
+    const own = P.ownerRules || { owner: 'AASHTO', eta: {} }, G = FX_.factorsOwner(OW().loadFactors(own.owner, own.eta, (P.xs || {}).nb)), mO = G.m > 0 ? G.m : 1, pe = (v, q) => v - (+q || 0) + (+q || 0) / mO;
+    const Mup = stations.map(s => FX_.envelopeStrI({ DC1: s.M_DC1, DC2: s.M_DC2, DW: s.M_DW, LLp: pe(s.M_LLpos, s.M_PLpos), LLn: pe(s.M_LLneg, s.M_PLneg), UT: s.M_UT, UF: s.M_UF }, G).max), ns = R.spans.length, supN = k => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : `Pier ${k}`;
     const regions = []; R.spans.forEach((L, k) => { const x0 = R.sup[k]; let xm = x0 + L / 2, mx = -Infinity; stations.forEach((s, i) => { if (s.x > x0 && s.x < x0 + L && Mup[i] > mx) { mx = Mup[i]; xm = s.x; } });
       [[x0, k], [x0 + L, k + 1]].forEach(([xs0, ks]) => regions.push({ name: `${supN(ks)} to max. positive, Span ${k + 1}`, kind: ks > 0 && ks < ns && R.cont ? 'pier' : 'end', x1: r2(Math.min(xs0, xm)), x2: r2(Math.max(xs0, xm)) })); });
     pl.girderDetail.details.studs = { d: dd, h: Q.h, Fu: Q.Fu, transverseSpacing: Q.st, zones: zs, results: { zones: qz, regions, gaps: [], beff: beffB, gamI: (v => v > 0 ? v : 1.75)(+((P.fatigue || {}).gam || {}).fI), QnEntered: false } };   // SCGAM (2026-11-01): was gamI: Q.gamFat

@@ -36,6 +36,9 @@
 
   /* factors(over): deck placement load factors (GirderDetail's Girder section gam.cdc, gam.ccl): γ_DC 1.25 on M_DCc (or M_DC1), 1.50 on the
      construction live load (AASHTO LRFD 10th Ed. 3.4.2.1). */
+  // FONE (2026-11-01): the one source of the deck placement factors; engine/shear.js factors(), the Cross-frames bracing M_u and the Splices
+  // tab take them from here. No owner η or m (the owner load rules OWN6–OWN8, 2026-10-15: η on the Strength limit states of the permanent
+  // structure and m on HL-93 only; not on deck placement).
   function factors(over) { return { cdc: 1.25, ccl: 1.50, ...(over || {}) }; }
   const fAt = (M, sec, y) => -M * 12 * (y - sec.yb) / sec.I;   // tension +
   const plates = q => ({ D: q.D, tw: q.tw, topB: q.topB, topT: q.topT, botB: q.botB, botT: q.botT });
@@ -155,7 +158,7 @@
      secAt(x) -> plates, D, impl (optional fe* functions, for the parity test) }. Returns { LbC, CbC, nprC, seg }. */
   function bracingC(x, env, opt) {
     const F = FX(), I = opt.impl || {}, feCb_ = I.feCb || F.feCb, feNpr_ = I.feNpr || F.feNpr, feGe_ = I.feGe || F.feGe, feGeA_ = I.feGeA || F.feGeA, feGov_ = I.feGov || F.feGov, feAt_ = I.feAt || F.feAt;
-    const xs = env.xs, N = xs.length, Lend = opt.L, Mc = env.Mc || xs.map((_, k) => 1.25 * env.MDC1[k] + 1.5 * env.MCL[k]);
+    const xs = env.xs, N = xs.length, Lend = opt.L, C0 = factors(), Mc = env.Mc || xs.map((_, k) => C0.cdc * env.MDC1[k] + C0.ccl * env.MCL[k]);   // FONE (2026-11-01): γ from factors(), was 1.25, 1.5
     const bp = [...new Set(opt.braces.map(v => +(+v).toFixed(3)))].sort((p1, p2) => p1 - p2).filter((v, k, arr) => k === 0 || v - arr[k - 1] > 0.25);
     const ib = bp.findIndex(v => Math.abs(v - x) < 0.25), Lg = bp[bp.length - 1], segs = [];
     if (ib >= 0) { if (ib > 0) segs.push([bp[ib - 1], bp[ib]]); if (ib < bp.length - 1) segs.push([bp[ib], bp[ib + 1]]); }
@@ -308,7 +311,7 @@
      the station with the largest 1.25M_DC1 + 1.5M_CL strictly inside the span (the first one on a tie), the check location nearest to it
      (the first on a tie), with that location's plates, deck-placement L_b and M_DC1, M_CL. */
   function ohRowsAt(sup, env, locs) {
-    const out = [], Mc = env.xs.map((_, i) => 1.25 * env.MDC1[i] + 1.5 * env.MCL[i]);
+    const C0 = factors(), out = [], Mc = env.xs.map((_, i) => C0.cdc * env.MDC1[i] + C0.ccl * env.MCL[i]);   // FONE: was 1.25, 1.5
     sup.slice(1).forEach((x1, k) => { const x0 = sup[k]; let im = -1; env.xs.forEach((x, i) => { if (x > x0 && x < x1 && (im < 0 || Mc[i] > Mc[im])) im = i; }); if (im < 0) return;
       const xm = env.xs[im], L = locs.reduce((b, q) => Math.abs(+q.x - xm) < Math.abs(+b.x - xm) ? q : b, locs[0]);
       out.push({ name: `Span ${k + 1}, largest deck-placement moment (x = ${(+L.x).toFixed(2)} ft)`, span: k + 1, x: +L.x, ...plates(L.plates), Lb: L.LbC, MDC1: L.M.DC1, MCL: L.M.CL }); });

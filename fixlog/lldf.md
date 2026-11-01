@@ -1790,3 +1790,22 @@ index 219cc2c..a3e337e 100644
 - LLRP-O1 (calc, not changed, CLAUDE.md §4/§9): the slab strip equation 4.6.2.3-2 uses the clear roadway width w for W (12W/N_L) and
   W_1 (min(w, 60 ft)); AASHTO defines W as the physical edge-to-edge width of the bridge. Engineer to confirm.
 - LLRP-O2: the fatigue moment of a type (d) exterior web is W_e/14 × r_M without removing 1.2 (the engine's fatNote says "verify").
+
+## 2026-11-01 — PR: lldf-slab-w (LLSW) — CIP slab strip width with W = edge-to-edge width (CALCULATION CHANGE; was LLRP-O1)
+- Engine change in shared/lldf.js (memberDF slab branch): details, before / after, AASHTO LRFD 10th Ed. Art. 4.6.2.3 Eqs. 4.6.2.3-1/-2
+  and the check case in `fixlog/shared-lldf.md` (LLSW).
+- This file's own sheet steps (`memberSteps`, slab): before `${f0(Math.min(geo.roadway,30))}` and `V("W_1","min(w, 30)",…)`; after
+  `${f0(Math.min(geo.Wdeck,30))}`, `V("W_1","min(W, 30), W = edge-to-edge width",…)`; the "Equivalent strip width — 2+ lanes" step now
+  lists W_1 = min(W, 60), W and N_L and notes the change.
+- Check: L = 35 ft, W = 28 ft, w = 25 ft, N_L = 2: g = 0.0948 before → 0.0930 after (fatigue 0.0633 → 0.0601). Only slab results change.
+
+## 2026-11-01 — PR: lldf-d-fatigue (LLDF-D) — type (d) exterior web fatigue moment factor / 1.2 (CALCULATION CHANGE; was LLRP-O2)
+- Engine change in shared/lldf.js (memberDF, type d exterior): before `fatM:gWe*skew.scfM`, after `fatM:fat(gWe*skew.scfM)` (÷ 1.2,
+  AASHTO LRFD 10th Ed. Art. 3.6.1.4.3b); the "verify" fatNote removed. Details and check case in `fixlog/shared-lldf.md` (LLDF-D).
+- This file: no code change; the sheet's fatigue step now shows g_M,fat = g_M,1/1.20 for the exterior webs (its formula branch).
+- Check: W_e = 7.0 ft, θ = 30°: fatigue g_M 0.4528 → 0.3774.
+- Browser check (type d, 6 webs at 8 ft, d = 72 in, L = 120 ft, θ = 30°): W_e = 8.00 ft, g = 8.00/14 = 0.5714,
+  skew 1.05 − 0.25·tan30° = 0.9057, g_M = 0.5175 (unchanged); exterior fatigue g_M 0.5175 → 0.5175/1.20 = 0.4313 on B1 and B6.
+  Everything else (results JSON, sheet, D11 print) is identical to main; the other 10 harness cases are identical.
+- Hand-off: `governing.exterior.fatM` for type (d) changes the same way. Prestressed Bridge Design (`loads.fatM`) and index.html
+  ("use LL & DL fatM") pick it up only when the user pulls the LLDF values again; their saved values are not changed.
