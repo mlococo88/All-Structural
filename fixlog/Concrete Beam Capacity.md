@@ -1950,3 +1950,52 @@ Follow-up to the standalone `Concrete Beam ASD.html` sweep (#143, its fix log F8
 ### Open items (not changed)
 - **γ3 selector (5.6.3.3):** the options read "0.67 — A615 Gr 60", "0.75 — A706 Gr 60", "0.76 — A615 Gr 75". In the 10th Ed., A615 Gr 75 is 0.75 and 0.76 is A615 Gr 80 (A706 Gr 80 = 0.80 and A1035 Gr 100 = 0.67 are not offered). The 0.76 value is ≥ the Gr 75 value (conservative), but the label names the wrong grade. Relabel to "A615 Gr 80" and/or add options? Engineer decision.
 - Pre-existing (inventory): the dashboard cites "ACI 9.3.3 / 22.2" for flexure in AASHTO mode.
+
+## 2026-11-01 — PR: claude/rpt-cbc — one combined Report tab in the suite shell, a chapter per tab; Development & Splice tab synced with the rebar tool's Report tab (CBRP / RBRP; display only, no calculation change) (PR link added after merge)
+
+The file uses CRLF line endings; keep them. Every code site is tagged `CBRP` (suite shell, Beam Capacity and ASD tabs) or `RBRP` (Development & Splice tab).
+
+### Engineer decision (2026-11-01)
+Concrete Beam Capacity: ONE combined Report tab, a chapter per sub-app. The coordinator's rollout rules apply (shared viewer `shared/report.js`, worked steps `shared/steps.js`, values are the tool's own numbers, D11 print reports kept, no new saved data).
+
+### CBRP-1. Suite shell: "Report" suite tab
+- **Head:** the `#suite-report` CSS (anchor `/* CBRP: the combined Report tab`), then KaTeX 0.16.11 (`katex.min.css`, `katex.min.js`, the same pinned version and URL the Beam Capacity tab already loads; no new library), `shared/steps.js`, `shared/report.js` (classic scripts, relative path).
+- **Nav / stage:** `<button class="suite-tab" id="suite-tab-report" data-target="report">Report</button>` and `<div class="suite-frame-wrap" data-app="report"><div id="suite-report"></div></div>`; the existing `show()` switches to it like the other tabs.
+- **Script** (anchor `/* CBRP (2026-11-01): the suite's combined Report tab`, before BridgeXfer): `model()` asks each tab for its chapter (`cbcRptModel()`, `asdRptModel()`, `rbrModel()`), prefixes every step scope and cross-reference (`cap:`, `asd:`, `dev:`; `[[tab:…]]` → `[[tab:<chapter>/<tab>]]`), groups the Beam Capacity / ASD steps by topic (`SharedSteps.group`), joins the references of all chapters in a last chapter, and mounts the viewer. `go()` follows a tab link: the suite tab, then that tab's own tab (button of its tab bar, or `rbrGoto` on Development & Splice). A `beforeprint` listener prints the report alone while the Report tab is shown. The report is rebuilt each time the tab is shown; the collapsed sections are kept in memory.
+- **Title block / running header:** the Beam Capacity tab's project fields (Project, Project No., Calculated by, Date, Checked by, Checked date); no owner cell.
+- **Chapters:** A. Beam Capacity — Inputs, Summary of checks (`allChecks()`, each D/C linked to its worked step), Flexure / Shear / Torsion (every load combination; an identical combination refers to the first), Serviceability, Detailing (`detEnvelope()`), Validation notices. B. ASD Beam Calcs — Inputs, Analysis and rating. C. Development & Splice — the rebar tool's report (`rbrModel()`). D. References.
+
+### CBRP-2. Beam Capacity tab: `cbcRptModel()` (anchor `SUITE REPORT CHAPTER (CBRP, 2026-11-01)`, before `function refresh(){`)
+- `cbcRptFlex`, `cbcRptShear`, `cbcRptTor` follow `workFlexure`, `workShear`, `workTorsion` equation by equation; serviceability follows `buildServTab` (incl. `fsDeriv` lines and the AASHTO 5.6.3.3 minimum-reinforcement check); detailing uses each check's own `deriv` lines and a provided-vs-required step.
+- **Values:** every step value is the tool's own (`CC.combos[i].F`, `.pf`, `.phiMn`, `.dcM`, `.sh`, `.share`, `.tor`, `.svc`, `.det`; `allChecks`, `detEnvelope`, `serviceSteelStress`). Display-only quantities shown inline exactly as the tabs show them: ε_tl = f_y/E_s + 0.003 (ACI), the AASHTO M_cr factored and min(M_cr, 1.33 M_u) (both computed inline by `buildServTab` and `allChecks` too), combined stress / limit and (A_v/s)_req+2(A_t/s)_req over provided (the ratios `allChecks` uses).
+- Steps are plain objects in the `shared/steps.js` format (this tab does not load shared scripts); references get the edition: "ACI 318-19 …", "AASHTO LRFD 10th Ed. …".
+
+### CBRP-3. ASD Beam Calcs tab: `asdRptModel()` (anchor `SUITE REPORT CHAPTER (CBRP, 2026-11-01)`, before `function refresh(){`)
+- Follows `buildAnalysisTab`: E_c, n, ρ, k / kd (rectangular or T-section), j / z, M_conc, M_steel, M_all per level, RF per level and RF ≥ 1.00; inputs tables as the Input Echo tab; the section drawing (`drawSection`); a rating table linked to the steps. Values from `CC` (`compute()` of the last refresh).
+
+### RBRP (Development & Splice tab): synced from `ACI Rebar Development Length.html` (CLAUDE.md §3)
+- The same edits as PR #536 (fixlog `ACI Rebar Development Length.md`, entry "claude/rpt-acirebar"): shared scripts, the tab's own Report tab button, `render()` / `switchTab()` / `beforeprint` changes, the RBRP block. **Editing method:** the `#suite-frame-dev` srcdoc was decoded (`&quot;` → `"`, `&amp;` → `&`; decode → encode of the unedited file reproduces it byte for byte), the same scripted exact-string replacements as the standalone tool applied (each anchor found once), re-encoded with CRLF kept. The intentional embedded differences (frame layout CSS, no All-tools link / share buttons / BridgeXfer, `rcsuite.rebar_autosave_v1`, `REBAR_RPT_TOOL`) are unchanged. The srcdoc base URL is the suite's, so `shared/` resolves next to the suite file.
+- **Tools that contain this snippet:** `ACI Rebar Development Length.html` and `Concrete Beam Capacity.html` (Development & Splice tab).
+
+### shared/report.js
+- Optional `section.part` (chapter heading): see `fixlog/shared-report.md`, entry "claude/rpt-cbc". Additive; Steel Bridge / Spread Footing report tests pass.
+
+### Saved data / provisions
+- Nothing new is saved; no key or format change (`rcbeam_v2_*`, `asd_v1_*`, `rcsuite.rebar_autosave_v1`, `rebar_aci_*`). The ASD and Beam Capacity tabs' `S.ui.tab` are not touched by the report.
+- **Provision:** none. No formula, factor, unit, code reference or result changed.
+
+### Check case (Beam Capacity default section, ACI, 12 × 18 in., 3 #5 bottom / 3 #5 top, #4 stirrups @ 6 in., f′c 4 ksi, f_y 60 ksi; combination 1: M_u 85 kip-ft, V_u 30 kip, T_u 13.5 kip-ft, A_ℓ 1.2 in²)
+- Report = tab values: torsion T_n,t = 2(86.06)(0.0333)(60.00) cot 45° / 12 = 28.69 kip-ft, T_n,ℓ = 2(86.06)(1.200)(60.00)/42.00 · tan 45° / 12 = 24.59 kip-ft, φT_n = 0.75 × 24.59 = 18.44 kip-ft, DCR = 13.50 / 18.44 = 0.732; cross-sectional limit 423.7 / 474.3 psi = 0.893.
+
+### How verified (headless Chromium; KaTeX 0.16.9 / 0.16.11, Plotly 2.27.0 / 2.32.0, three 0.160.0 from npm pack)
+- 3 cases set in the Beam Capacity tab (ACI default section with three combinations incl. a hogging one, torsion 13.5 kip-ft, A_ℓ 1.2 in², service stresses for ±M_s; AASHTO T-beam 4+2 #9 / 2 #6, f_y 80 ksi, two combinations; ACI without stirrups or torsion, one combination, project fields with quotes): 105–209 steps, 32–58 topics, 35–49 cross-references, 18 numbered sections in 4 chapters; 0 unresolved or duplicate references, 0 KaTeX errors, no NaN / undefined in `SharedReport.text()`; 21–39 spot values per case equal the tabs' values exactly (per combination φM_n, M_n, c, φ, ε_t, DCR, V_c, V_n, φV_n, shear DCR (shared with torsion when it applies), T_th, A_cp, T_n, torsion DCR, A_ℓ,min; M_cr, f_r; ASD k, z, n, M_all, RF; development ℓd, ℓdh, ℓst).
+- Building the report leaves every tab's state (`S` of Beam Capacity and ASD, the Development & Splice inputs and `currentTab`) and localStorage unchanged.
+- main vs branch, same 3 cases: the text of every tab of the three apps (Beam Capacity 9–10 tabs, ASD 4, Development & Splice 6 with dashboard), the Beam Capacity and ASD results (`CC`) and localStorage identical.
+- Tab links open the suite tab and the tab's own tab (Beam Capacity · Shear; Development & Splice · Tension Splice); Ctrl+P on the Report tab prints the combined report alone with the running header and page numbers (default case: 36 letter pages); 1280 and 390 px: no horizontal page scroll. 0 console errors.
+- `node tests/check-syntax.mjs "Concrete Beam Capacity.html"`: the shell scripts pass; the srcdoc scripts fail identically on main (the checker reads entity-encoded text); each decoded tab (capacity, ASD, development) passes.
+- `node tests/engine/run.mjs report steps steps-groups report-wiring`: 14 passed (shared/report.js changed).
+
+### Open items
+- At 390 px the suite's top bar (existing) shows only the first tabs; the Development & Splice and Report buttons are off screen (as Development & Splice is on main). Not changed (390 px layout fixes are a separate task).
+- The Development & Splice tab keeps its own Report tab (synced copy) besides the suite's combined one.
+- Beam Capacity's flexure steps work the layer with the largest moment and give the other layers in the layer table, as the Flexure tab does.

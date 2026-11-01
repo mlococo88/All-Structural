@@ -879,3 +879,391 @@ Hand check #8, f′c = 4 ksi: f′c^0.25 = 1.4142; 1.97 × 1.4142 = 2.786; ℓdb
 3. **#14/#18 hooks:** outside 5.10.8.2.4; the commentary mentions doubling ℓdh after ACI. Not implemented; flagged only.
 4. **AASHTO compression lap splices of #14/#18:** the tool shows "not permitted" in compression too; 5.10.8.4.2a bars only *tension* laps above #11, and 5.10.8.4.5a allows #14/#18 to #11 and smaller in compression (pre-existing).
 5. The ACI-mode references row still reads "AASHTO LRFD 5.10.2.1 (hook geometry; … edition: verify)" (ACI mode left untouched by request; 5.10.2.1 is verified in the 10th Ed.).
+
+## 2026-11-01 — PR: claude/rpt-acirebar — Report output tab in the shared report viewer (RBRP; display only, no calculation change) (PR link added after merge)
+
+The tool file uses CRLF line endings; keep them. Line numbers are approximate; search for the anchor text. Every code site is tagged `RBRP`.
+
+### RBRP. "Report" output tab (shared/report.js, shared/steps.js)   [display only]
+- **Engineer request (2026-11-01, report rollout):** an in-app Report output tab in the shared viewer used by the Steel Bridge app and Spread Footing: navigation tree down to the topics, numbered sections, worked steps (equation → substituted values → result, CLAUDE.md §6) grouped by topic (`SharedSteps.group`), "see §x.y" links and links back to the tool's tabs, and Print with a title block (no owner cell), running header and "Page X of Y".
+- **Loads:** `<script src="shared/steps.js">` and `<script src="shared/report.js">` (classic scripts, relative path) after the CDN libraries. The tool now needs the `shared` folder next to it (it is in the repository). Without it only the Report tab shows a notice; every other tab is unaffected.
+- **New code** (one block before the INIT banner, anchor `REPORT TAB (RBRP, 2026-11-01)`):
+  - `rbrModel()` builds the report model; `rbrTension`, `rbrHook`, `rbrComp`, `rbrTSplice`, `rbrCSplice` write one step per equation card (`eqBlock`) of the tabs and per factor of their variable tables, ACI 318-19 and AASHTO LRFD 10th Ed. branches as on the tabs; `rbAashtoRc` is the λrc card (`aashtoRcBlock`).
+  - `rbTopics()` groups each list into topics with `SharedSteps.group`; `rbrRender()` mounts the viewer; `rbrGoto()` handles the `[[tab:…]]` links (the tab button's `switchTab`).
+  - Print hooks: `rbrWillPrint()` and a `beforeprint` listener (as Spread Footing's SFRP).
+- **Changed lines:** the tab button `<button class="tab" data-tab="report">Report</button>`; `render()` returns early into `rbrRender()` while the Report tab is shown (anchor `if(RBRP.on){ rbrRender();`); `switchTab()` sets `RBRP.on` and keeps `currentTab` on the last result tab, so the Report tab is never saved in the autosave (`rebar_aci_autosave_v1` keeps its format and values); the D11 `beforeprint` listener returns when the Report tab prints itself; three CSS lines keep the report inside the output panel at narrow widths (`.outputpanel:has(.rp){min-width:0;}`).
+- **Sections:** 1 Project and inputs (title block, design inputs, summary of results from `rebarResultRows` with a § link to each derivation, validation notices, assumptions); 2 Tension development (schematic, topics: modification factors, confinement, excess reinforcement, development length; AASHTO: excess, basic length, modification factors, confinement factor with w_c, E_c, n_s, k_tr, λrc, development length); 3 Standard hook (schematic; ACI: factors, ℓdh; AASHTO: hook force, factors, λrc, straight portion, ℓdh); 4 Compression development; 5 Tension lap splice (Class A eligibility, splice length); 6 Compression lap splice; 7 Bar development schedule (the `tabBatch` functions for every size); 8 References (`rebarRefs`).
+- **Values:** every step `value` is the tool's own value (`computeFactors` → `f.*`, `calcTension`, `calcHook`, `calcComp`, `calcTensSplice`, `calcCompSplice`, `classAEligible`, `ktrHSCheck`). Only substitution strings are formatted. Display-only products shown inline as on the tabs: ψt·ψe before the 1.7 cap, F_h/A_b, D = (bend factor)·d_b.
+- **§6 gap closed in the report only:** with the excess-reinforcement reduction on, the tension-splice base ℓd (without λer) was not worked anywhere (open item of the 2026-10-18 entry). The report works it from the same call `calcTensSplice` makes (`computeFactors`/`calcTension` with `useExcess:false`); the tabs are unchanged.
+- **Saved data:** nothing new is saved; no key or format change. The collapsed sections are kept in memory (`RBRP.closed`).
+- **Provision:** none. No formula, factor, unit, code reference or result changed.
+- **Check case (default: ACI, #8, f_y 60,000 psi, f′c 4,000 psi, c_b 1.5 in., K_tr 0, Class B):** report steps ℓd = 47.43 in. (§2.1, step "Tension development length (12 in. minimum)"), ℓdh = 23.92 in., ℓdc = 18.97 in. (expression (a)), ℓst = 1.3 × 47.43 = 61.66 in., ℓsc = 30.00 in. — the tab values. Hand check ℓd: 3/40 × 60,000 × 1.0 × 1.0 × 1.0 / (1.0 × 63.25 × 1.50) × 1.000 = 47.43 in.
+- **How verified (headless Chromium, KaTeX 0.16.9 and plotly.js-dist-min 2.27.0 from npm pack):**
+  - 7 cases (default; ACI #11 Gr 80 lightweight λ 0.85 top epoxy K_tr, spacing 5 in., excess 1.0/2.5, Class A 50 %, confined hook, ψr 0.75; AASHTO #8 top epoxy excess 0.8/1.0 A_tr β_t −0.3; ACI #14 Gr 100 f′c 2,500 Class A; AASHTO #18 f′c 12 ksi lightweight λ 0.7 Gr 80; AASHTO #6 f′c 8 ksi confined coated hook R 1.5 in. Class A excess; ACI #5 f′c 12 ksi excess 1.2/1.0): 35–65 steps, 10–15 topics, 15–20 cross-references per report, 0 unresolved or duplicate references, 0 KaTeX errors, no raw TeX, no NaN / undefined in `SharedReport.text()`; 23–31 spot values per case equal the app's values exactly (ℓd, ℓd,calc, ℓdh, ℓdh,calc, 8d_b, ℓdc, (a), (b), ℓst, ℓst,calc, splice base, class factor, ℓsc, ℓsc,calc, λer, and per code K_tr, (c_b+K_tr)/d_b, ψtψe, ψg, √f′c, ψc, ψr, ψo or ℓdb, E_c, n_s, λrc, λrc,raw, λrlλcf, f′c^0.25, F_h, v, R, hook ℓd, ℓdb, λrc, λrlλcf, √f′c).
+  - Building the report leaves `readInputs()` and the autosave unchanged; the autosave's `currentTab` is never "report".
+  - main vs branch, same 7 cases: the text of the six result tabs, the dashboard, the autosave and the D11 print report (Ctrl+P from a result tab) identical.
+  - § links jump to their step; `[[tab:…]]` links open the result tab; Ctrl+P on the Report tab prints the report alone with the @page running header (no D11 header); Ctrl+P from another tab prints the D11 report as before. 0 console errors. At 390 px the page no longer scrolls sideways on the Report tab (scrollWidth 390).
+  - `node tests/check-syntax.mjs "ACI Rebar Development Length.html"`: all scripts pass. `node tests/engine/run.mjs report steps steps-groups report-wiring`: pass (shared files unchanged).
+- **Other copies:** the Development & Splice tab of `Concrete Beam Capacity.html` (CLAUDE.md §3): synced in the next PR (claude/rpt-cbc). `shared/README.md` lists this tool as a user of `steps.js` and `report.js`.
+- **Open items:** none new. The tabs' own open items (2026-10-19 entry) are unchanged; the report repeats the tabs' citations.
+
+Diff (`ACI Rebar Development Length.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/ACI Rebar Development Length.html b/ACI Rebar Development Length.html
+index be12315..75bfaab 100644
+--- a/ACI Rebar Development Length.html	
++++ b/ACI Rebar Development Length.html	
+@@ -13,0 +14,3 @@
++<!-- RBRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
++<script src="shared/steps.js"></script>
++<script src="shared/report.js"></script>
+@@ -198,0 +202,4 @@ a.wkA:hover{text-decoration:underline;}
++/* RBRP: the Report tab stays within the output panel at narrow widths (its wide equations and tables scroll inside it) */
++.outputpanel:has(.rp){min-width:0;}
++@media(max-width:1000px){#tabcontent .rp-body{grid-template-columns:minmax(0,1fr);} #tabcontent .rp-doc{min-width:0;}}
++
+@@ -263,0 +271 @@ a.wkA:hover{text-decoration:underline;}
++        <button class="tab" data-tab="report">Report</button>
+@@ -1572,0 +1581 @@ function render(){
++  if(RBRP.on){ rbrRender(); fcHintUpdate(inp); updateCodeHint(inp); rebarInputTabMarks(w); autosave(); return; }   // RBRP: the Report tab (shared viewer)
+@@ -1951 +1960,2 @@ function printReport(){
+-window.addEventListener('beforeprint',()=>{ try{ buildReport(); rebarApplyPageCSS(true); }catch(e){} });
++window.addEventListener('beforeprint',()=>{ if(rbrWillPrint()) return;   /* RBRP: the Report tab prints itself (shared/report.js) */
++  try{ buildReport(); rebarApplyPageCSS(true); }catch(e){} });
+@@ -1953,0 +1964,327 @@ window.addEventListener('afterprint',()=>{ try{ rebarApplyPageCSS(false); }catch
++/* =====================================================================
++   REPORT TAB (RBRP, 2026-11-01): the calculation report in the shared viewer (shared/report.js: navigation tree,
++   numbered sections §n.m, collapse / expand, search, Print with a title block, running header and page numbers).
++   Worked steps are shared/steps.js steps (equation → substituted values → result), one step per card equation of
++   the result tabs (eqBlock) and per factor of their tables, grouped by topic with SharedSteps.group.
++   Every value shown is a value the tool has already computed (computeFactors, calcTension, calcHook, calcComp,
++   calcTensSplice, calcCompSplice, classAEligible, ktrHSCheck, rebarResultRows); only the substitution strings are
++   formatted here. Nothing is saved: the Report tab is not stored as currentTab (RBRP.on is in memory only) and the
++   collapsed sections are kept in memory (RBRP.closed). Display only.
++   ===================================================================== */
++const RBRP={on:false,closed:new Set(),api:null,doc:null};
++const rbN=(x,d)=>SharedSteps.n(x,d==null?2:d);
++const rbG=(x,d)=>SharedSteps.g(x,d);
++const rbP=(x,d)=>(typeof x==='number'&&x<0)?'('+rbN(x,d)+')':rbN(x,d);   // a negative value in parentheses inside a substitution
++const RB_FC="f^{\\prime}_{c}";
++/* tab HTML (sub, b, entities) to report text: X<sub>y</sub> -> $X_{y}$ notation, other tags dropped */
++const rbPlain=s=>String(s==null?'':s).replace(/<sub>(.*?)<\/sub>/g,'$$_{$1}$$').replace(/<[^>]+>/g,'')
++  .replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&amp;/g,'&').replace(/&nbsp;/g,' ');
++/* the code reference with its edition, from the tool's own short citation ("§25.4.2.4", "Eq. 5.10.8.2.1a-2") */
++const rbRef=(f,r)=>(f.AASHTO?'AASHTO LRFD 10th Ed. ':'ACI 318-19 ')+String(r||'').replace(/^§/,'');
++/* a steps item whose steps are grouped in topics (one topic per list entry, in order; SharedSteps.group gives each its
++   status and one-line result) */
++function rbTopics(scope,list,opt){
++  const L=list.filter(t=>t&&t.steps&&t.steps.length);
++  const steps=[].concat(...L.map(t=>t.steps));
++  const topics=L.map(t=>{ const g=SharedSteps.group(t.steps,[{key:'k',title:t.title,ref:t.ref,ids:()=>true}],{strip:false})[0];
++    return {title:t.title,ref:t.ref||'',n:t.steps.length,cls:g.cls,chip:g.chip,res:g.res}; });
++  return Object.assign({type:'steps',scope,steps,topics},opt||{});
++}
++const rbS=o=>SharedSteps.step(o);
++
++/* ---------- tension development (tabTension / tabTensionAASHTO) ---------- */
++function rbrTension(inp,f){
++  const t=calcTension(inp,f), T=[];
++  const ex=inp.useExcess?{title:'Excess reinforcement factor',ref:rbRef(f,f.AASHTO?'Eq. 5.10.8.2.1c-4 (λer)':'§25.4.10.1'),steps:[
++    rbS({id:'asReq',label:'Area of steel required by analysis (input)',sym:'A_{s,req}',value:inp.asReq,unit:'in^{2}'}),
++    rbS({id:'asProv',label:'Area of steel provided (input)',sym:'A_{s,prov}',value:inp.asProv,unit:'in^{2}'}),
++    rbS({id:'excess',label:'Excess reinforcement factor (never more than 1.0)',sym:f.AASHTO?'\\lambda_{er}':'\\text{factor}',eq:'\\min(\\frac{A_{s,req}}{A_{s,prov}},\\, 1.0)',
++      sub:'\\min(\\frac{'+rbN(inp.asReq)+'}{'+rbN(inp.asProv)+'},\\, 1.0)',value:f.excess,unit:'',d:3,note:f.excessRaw>1?'A_s,req > A_s,prov: the ratio '+rbN(f.excessRaw,3)+' is held at 1.0 (no reduction)':''})]}:null;
++  if(!f.AASHTO){
++    T.push({title:'Modification factors',ref:'ACI 318-19 Table 25.4.2.5, 25.4.2.4',steps:[
++      rbS({id:'psiT',label:'Casting position factor ('+(inp.topBar?'top bar: more than 12 in. of fresh concrete below':'not a top bar')+')',sym:'\\psi_{t}',value:f.psiT,unit:'',d:1}),
++      rbS({id:'psiE',label:'Epoxy coating factor (as selected)',sym:'\\psi_{e}',value:f.psiE,unit:'',d:1}),
++      rbS({id:'psiS',label:'Bar size factor (#6 and smaller 0.8, else 1.0; #'+inp.barSize+')',sym:'\\psi_{s}',value:f.psiS,unit:'',d:1}),
++      rbS({id:'psiG',label:'Reinforcement grade factor (f_y = '+rbG(inp.fy,0).replace('{,}',',')+' psi: Grade 40/60 1.0, 80 1.15, 100 1.30)',sym:'\\psi_{g}',value:f.psiG,unit:'',d:2}),
++      rbS({id:'lam',label:inp.lightweight?'Lightweight concrete factor (entered, limited to 0.75–1.0)':'Lightweight concrete factor (normal weight)',sym:'\\lambda',value:f.lambda,unit:'',d:2,ref:inp.lightweight?'ACI 318-19 Table 19.2.4.2':''}),
++      rbS({id:'psiTE',label:'Product limit on ψ_t·ψ_e',sym:'\\psi_{t}\\psi_{e}',eq:'\\min(\\psi_{t}\\psi_{e},\\, 1.7)',sub:'\\min('+rbN(f.psiT,1)+'\\times '+rbN(f.psiE,1)+',\\, 1.7)',value:f.psiTEcap,unit:'',d:2,ref:'ACI 318-19 25.4.2.4'})]});
++    const kH=ktrHSCheck(inp,f), cs=[
++      rbS({id:'cb',label:'Lesser of cover and half the center-to-center spacing (input)',sym:'c_{b}',value:inp.cb,unit:'in'}),
++      rbS({id:'db',label:'Bar diameter (#'+inp.barSize+')',sym:'d_{b}',value:f.db,unit:'in',d:3}),
++      rbS({id:'Ktr',label:'Transverse reinforcement index',sym:'K_{tr}',eq:'\\frac{40 A_{tr}}{s\\, n}',
++        sub:(inp.sTr>0&&inp.nBars>0)?'\\frac{40\\times '+rbN(inp.Atr)+'}{'+rbN(inp.sTr)+'\\times '+rbN(inp.nBars,0)+'}':'',value:f.Ktr,unit:'in',d:3,ref:'ACI 318-19 Eq. 25.4.2.4b',
++        note:(inp.sTr>0&&inp.nBars>0)?'':'s or n not entered: K_tr = 0'}),
++      rbS({id:'cbKtr',label:'Confinement term (limited to 2.5)',sym:'\\frac{c_{b}+K_{tr}}{d_{b}}',eq:'\\min(\\frac{c_{b}+K_{tr}}{d_{b}},\\, 2.5)',
++        sub:'\\min(\\frac{'+rbN(inp.cb)+' + '+rbN(f.Ktr,3)+'}{'+rbN(f.db,3)+'},\\, 2.5)',value:f.cbKtr,unit:'',d:2,ref:'ACI 318-19 25.4.2.4',note:f.cbKtrCapped?'limit applied: '+rbN(f.cbKtr_raw)+' > 2.5':''})];
++    if(kH.relevant) cs.push(rbS({id:'ktrHS',label:'K_tr ≥ 0.5 d_b for f_y ≥ 80,000 psi bars spaced closer than 6 in.',sym:'K_{tr}',
++      eq:kH.applies?'\\ge 0.5 d_{b}':'',sub:kH.applies?rbN(f.Ktr,3)+(kH.ok?' \\ge ':' \\lt ')+rbN(kH.req,3):'',value:kH.known?(kH.applies?f.Ktr:'not required (spacing ≥ 6 in.)'):'spacing not entered',unit:kH.applies?'in':'',d:3,
++      ok:kH.known&&kH.ok,ref:'ACI 318-19 25.4.2.2',note:kH.known?(kH.applies?'':'developed-bar spacing '+rbN(inp.barSpc)+' in.'):'enter the developed-bar c-c spacing (panel D) to check'}));
++    T.push({title:'Confinement term',ref:'ACI 318-19 25.4.2.4 (b)',steps:cs});
++    T.push(ex);
++    T.push({title:'Development length',ref:'ACI 318-19 Eq. 25.4.2.4a, 25.4.2.1',steps:[
++      rbS({id:'sqrtFc',label:'Square root of f′c (limited to 100 psi)',sym:'\\sqrt{'+RB_FC+'}',eq:'\\min(\\sqrt{'+RB_FC+'},\\, 100)',sub:'\\min(\\sqrt{'+rbG(inp.fc,0)+'},\\, 100)',value:f.sqrtFc,unit:'psi',d:2,ref:'ACI 318-19 25.4.1.4'}),
++      rbS({id:'ldcalc',label:'Tension development length, general equation',sym:'l_{d,calc}',
++        eq:'\\frac{3}{40}\\, \\frac{f_{y} \\psi_{t}\\psi_{e} \\psi_{s} \\psi_{g}}{\\lambda \\sqrt{'+RB_FC+'} (\\frac{c_{b}+K_{tr}}{d_{b}})}\\, d_{b}'+(inp.useExcess?'\\cdot \\frac{A_{s,req}}{A_{s,prov}}':''),
++        sub:'\\frac{3}{40}\\cdot \\frac{'+rbG(inp.fy,0)+'\\times '+rbN(f.psiTEcap)+'\\times '+rbN(f.psiS,1)+'\\times '+rbN(f.psiG)+'}{'+rbN(f.lambda)+'\\times '+rbN(f.sqrtFc)+'\\times '+rbN(f.cbKtr)+'}\\times '+rbN(f.db,3)+(inp.useExcess?'\\times '+rbN(f.excess,3):''),
++        value:t.ld_calc,unit:'in',ref:'ACI 318-19 Eq. 25.4.2.4a'}),
++      rbS({id:'ld',label:'Tension development length (12 in. minimum)',sym:'l_{d}',eq:'\\max(l_{d,calc},\\, 12\\, \\text{in.})',sub:'\\max('+rbN(t.ld_calc)+',\\, 12)',value:t.ld,unit:'in',ref:'ACI 318-19 25.4.2.1',note:t.governedByMin?'the 12 in. minimum governs':''})]});
++  } else {
++    T.push(ex);
++    T.push({title:'Basic development length',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1a-2',steps:[
++      rbS({id:'fy',label:'Yield strength',sym:'f_{y}',value:f.fy_ksi,unit:'ksi',d:1}),
++      rbS({id:'fcA',label:'Concrete strength used (limited to '+rbN(f.fcLimA,0)+' ksi'+(inp.lightweight?', lightweight':', normal weight')+')',sym:RB_FC,eq:'\\min('+RB_FC+',\\, '+rbN(f.fcLimA,0)+')',sub:'\\min('+rbN(f.fc_ksi)+',\\, '+rbN(f.fcLimA,0)+')',value:f.fcA,unit:'ksi',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1, C5.10.8.2.4'}),
++      rbS({id:'fc4',label:'Fourth root of f′c',sym:'('+RB_FC+')^{0.25}',eq:'',sub:rbN(f.fcA)+'^{0.25}',value:f.fc4,unit:'ksi^{0.25}',d:4}),
++      rbS({id:'db',label:'Bar diameter (#'+inp.barSize+')',sym:'d_{b}',value:f.db,unit:'in',d:3}),
++      rbS({id:'Ab',label:'Bar area',sym:'A_{b}',value:f.Ab,unit:'in^{2}'}),
++      rbS({id:'lam',label:'Concrete density modification factor',sym:'\\lambda',value:f.lambda,unit:'',d:2,ref:'AASHTO LRFD 10th Ed. 5.4.2.8'}),
++      rbS({id:'ldb',label:'Basic tension development length (straight bar: F_h = 0)',sym:'l_{db}',
++        eq:'0.17\\, d_{b} (\\frac{\\lambda_{er} f_{y} \\minus F_{h}/A_{b}}{1.97 \\lambda ('+RB_FC+')^{0.25}})^{2}',
++        sub:'0.17\\times '+rbN(f.db,3)+'\\times (\\frac{'+rbN(f.excess,3)+'\\times '+rbN(f.fy_ksi,1)+' \\minus 0/'+rbN(f.Ab)+'}{1.97\\times '+rbN(f.lambda)+'\\times '+rbN(f.fc4,4)+'})^{2}',
++        value:t.ldb,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1a-2',note:inp.useExcess?'λ_er: see §excess':''})]});
++    T.push({title:'Modification factors',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1b',steps:[
++      rbS({id:'lrl',label:'Reinforcement location factor ('+(inp.topBar?'top bar':'not a top bar')+')',sym:'\\lambda_{rl}',value:f.lam_rl,unit:'',d:1}),
++      rbS({id:'lcf',label:'Coating factor (as selected)',sym:'\\lambda_{cf}',value:f.lam_cf,unit:'',d:1}),
++      rbS({id:'rlcf',label:'Product limit on λ_rl·λ_cf',sym:'\\lambda_{rl}\\lambda_{cf}',eq:'\\min(\\lambda_{rl}\\lambda_{cf},\\, 1.7)',sub:'\\min('+rbN(f.lam_rl,1)+'\\times '+rbN(f.lam_cf,1)+',\\, 1.7)',value:f.lam_rlcf_cap,unit:'',d:2})]});
++    T.push({title:'Confinement factor',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1c',steps:rbAashtoRc(inp,f,f.ktr_a,f.lam_rc_raw,f.lam_rc,false)});
++    T.push({title:'Development length',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1a-1',steps:[
++      rbS({id:'ldcalc',label:'Tension development length',sym:'l_{d,calc}',eq:'l_{db}\\, \\lambda_{rl}\\lambda_{cf}\\, \\lambda_{rc}',sub:rbN(t.ldb)+'\\times '+rbN(f.lam_rlcf_cap)+'\\times '+rbN(f.lam_rc,4),value:t.ld_calc,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1a-1'}),
++      rbS({id:'ld',label:'Tension development length (12 in. minimum)',sym:'l_{d}',eq:'\\max(l_{d,calc},\\, 12\\, \\text{in.})',sub:'\\max('+rbN(t.ld_calc)+',\\, 12)',value:t.ld,unit:'in',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1a',note:t.governedByMin?'the 12 in. minimum governs':''})]});
++  }
++  return T;
++}
++/* λrc of AASHTO 5.10.8.2.1c (aashtoRcBlock): E_c, n_s, k_tr, λ_rc; tie=true: the hook's k_tr = 0 (5.10.8.2.4b), E_c and n_s from §2 */
++function rbAashtoRc(inp,f,k,raw,val,tie){
++  const L=[];
++  if(!tie) L.push(
++    rbS({id:'cb',label:'Lesser of cover to bar center and half the c-c bar spacing (input)',sym:'c_{b}',value:inp.cb,unit:'in',d:3}),
++    rbS({id:'bt',label:'Permanent transverse compression factor (−1 to 0)',sym:'\\beta_{t}',value:f.betaT,unit:'',d:2,note:f.betaTAdj?'entered value outside −1 to 0: limited':''}),
++    rbS({id:'wc',label:'Unit weight of normal weight concrete',sym:'w_{c}',eq:f.fcA<=5?'0.145 \\text{ for } '+RB_FC+' \\le 5\\, \\text{ksi}':'0.140 + 0.001\\, '+RB_FC,sub:f.fcA<=5?'':'0.140 + 0.001\\times '+rbN(f.fcA),value:f.wcA,unit:'kcf',d:4,ref:'AASHTO LRFD 10th Ed. Table 3.5.1-1'}),
++    rbS({id:'Ec',label:'Modulus of elasticity of concrete (K_1 = 1.0)',sym:'E_{c}',eq:'120{,}000\\, K_{1} w_{c}^{2.0} ('+RB_FC+')^{0.33}',sub:'120{,}000\\times 1.0\\times '+rbN(f.wcA,4)+'^{2}\\times '+rbN(f.fcA)+'^{0.33}',value:f.EcA,unit:'ksi',d:0,ref:'AASHTO LRFD 10th Ed. Eq. 5.4.2.4-1'}),
++    rbS({id:'ns',label:'Modular ratio (E_s = 29,000 ksi)',sym:'n_{s}',eq:'\\frac{E_{s}}{E_{c}}',sub:'\\frac{29{,}000}{'+rbG(f.EcA,0)+'}',value:f.nsA,unit:'',d:3,ref:'AASHTO LRFD 10th Ed. 5.4.3.2'}));
++  L.push(rbS({id:tie?'ktr':'ktr',label:'Transverse reinforcement index'+(tie&&f.ktr_a>0?' (taken as 0 with the hook tie reduction, 5.10.8.2.4b)':''),sym:'k_{tr}',eq:'\\frac{A_{tr}}{s\\, n}',
++    sub:(k===0&&f.ktr_a>0)?'':((inp.sTr>0&&inp.nBars>0)?'\\frac{'+rbN(inp.Atr)+'}{'+rbN(inp.sTr)+'\\times '+rbN(inp.nBars,0)+'}':''),value:k,unit:'in',d:4,ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1c-3',
++    note:(k===0&&f.ktr_a>0)?'taken as 0 (hook tie reduction, 5.10.8.2.4b)':((inp.sTr>0&&inp.nBars>0)?'':'s or n not entered: k_tr = 0')}),
++   rbS({id:'rcraw',label:'Confinement factor before its limits',sym:'\\lambda_{rc,raw}',eq:'\\frac{d_{b} c_{b}}{(c_{b}(1 \\minus \\beta_{t}) + 1.67\\, n_{s} k_{tr})^{2}}',
++    sub:inp.cb>0?'\\frac{'+rbN(f.db,3)+'\\times '+rbN(inp.cb,3)+'}{('+rbN(inp.cb,3)+'\\times (1 \\minus '+rbP(f.betaT,2)+') + 1.67\\times '+rbN(f.nsA,3)+'\\times '+rbN(k,4)+')^{2}}':'',value:raw,unit:'',d:4,ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1c-1',note:(inp.cb>0?'':'c_b ≤ 0: no confinement credit (1.0). ')+(tie?'c_b: see §cb; β_t: see §bt; n_s: see §ns':'')}),
++   rbS({id:'rc',label:'Confinement factor (0.3 ≤ λ_rc ≤ 1.0)',sym:'\\lambda_{rc}',eq:'\\min(\\max(\\lambda_{rc,raw},\\, 0.3),\\, 1.0)',sub:'\\min(\\max('+rbN(raw,4)+',\\, 0.3),\\, 1.0)',value:val,unit:'',d:4,ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1c-2'}));
++  return L;
++}
++
++/* ---------- standard hook (tabHook / tabHookAASHTO) ---------- */
++function rbrHook(inp,f){
++  const h=calcHook(inp,f), T=[];
++  const gov=h.gov==='8db'?'8 d_b governs':(h.gov==='6in'?'6 in. governs':'');
++  const exS=inp.useExcess?[rbS({id:'excess',label:'Excess reinforcement factor',sym:f.AASHTO?'\\lambda_{er}':'\\text{factor}',value:f.excess,unit:'',d:3,note:'see §excess'})]:[];
++  if(!f.AASHTO){
++    T.push({title:'Modification factors',ref:'ACI 318-19 Table 25.4.3.2',steps:[
++      rbS({id:'psiE',label:'Epoxy coating factor (as selected)',sym:'\\psi_{e}',value:f.psiE_h,unit:'',d:1}),
++      rbS({id:'psiR',label:'Confining reinforcement factor ('+(inp.hookConfined?'confined':'not confined')+(f.psiRForced?'; #14/#18 take 1.6':'')+')',sym:'\\psi_{r}',value:f.psiR,unit:'',d:1}),
++      rbS({id:'psiO',label:'Location factor (as selected'+(f.psiOForced?'; #14/#18 take 1.25':'')+')',sym:'\\psi_{o}',value:f.psiO,unit:'',d:2}),
++      rbS({id:'psiC',label:'Concrete strength factor',sym:'\\psi_{c}',eq:'\\min(\\frac{'+RB_FC+'}{15{,}000} + 0.6,\\, 1.0)',sub:'\\min(\\frac{'+rbG(inp.fc,0)+'}{15{,}000} + 0.6,\\, 1.0)',value:f.psiC_h,unit:'',d:3}),
++      rbS({id:'lam',label:'Lightweight concrete factor',sym:'\\lambda',value:f.lambda,unit:'',d:2,note:'see §lam'})].concat(exS)});
++    T.push({title:'Hook development length',ref:'ACI 318-19 Eq. 25.4.3.1',steps:[
++      rbS({id:'ldhcalc',label:'Standard hook development length',sym:'l_{dh,calc}',eq:'\\frac{f_{y} \\psi_{e}\\psi_{r}\\psi_{o}\\psi_{c}}{55 \\lambda \\sqrt{'+RB_FC+'}}\\, d_{b}^{1.5}'+(inp.useExcess?'\\cdot \\frac{A_{s,req}}{A_{s,prov}}':''),
++        sub:'\\frac{'+rbG(inp.fy,0)+'\\times '+rbN(f.psiE_h,1)+'\\times '+rbN(f.psiR,1)+'\\times '+rbN(f.psiO)+'\\times '+rbN(f.psiC_h,3)+'}{55\\times '+rbN(f.lambda)+'\\times '+rbN(f.sqrtFc)+'}\\times '+rbN(f.db,3)+'^{1.5}'+(inp.useExcess?'\\times '+rbN(f.excess,3):''),
++        value:h.ldh_calc,unit:'in',note:'√f′c (limited to 100 psi): see §sqrtFc'}),
++      rbS({id:'min1',label:'Minimum 8 d_b',sym:'8 d_{b}',eq:'',sub:'8\\times '+rbN(f.db,3),value:h.min1,unit:'in'}),
++      rbS({id:'ldh',label:'Standard hook development length (minimum 8 d_b and 6 in.)',sym:'l_{dh}',eq:'\\max(l_{dh,calc},\\, 8 d_{b},\\, 6\\, \\text{in.})',sub:'\\max('+rbN(h.ldh_calc)+',\\, '+rbN(h.min1)+',\\, 6)',value:h.ldh,unit:'in',ref:'ACI 318-19 25.4.3.1',note:gov})]});
++  } else {
++    const H=[
++      rbS({id:'D',label:'Minimum finished bend diameter',sym:'D',eq:rbN(h.Dmin,0)+' d_{b}',sub:rbN(h.Dmin,0)+'\\times '+rbN(f.db,3),value:h.Dmin*f.db,unit:'in',d:3,ref:'AASHTO LRFD 10th Ed. Table 5.10.2.3-1'}),
++      h.Rentered?rbS({id:'R',label:'Bend radius to the bar centroid (entered)',sym:'R',value:h.R,unit:'in',d:3,note:h.R<h.Rmin-1e-9?'less than the minimum standard bend R = '+rbN(h.Rmin,3)+' in.':''})
++        :rbS({id:'R',label:'Bend radius to the bar centroid (minimum standard bend)',sym:'R',eq:'\\frac{D}{2} + \\frac{d_{b}}{2}',sub:'\\frac{'+rbN(h.Dmin,0)+'\\times '+rbN(f.db,3)+'}{2} + \\frac{'+rbN(f.db,3)+'}{2}',value:h.R,unit:'in',d:3,ref:'AASHTO LRFD 10th Ed. Table 5.10.2.3-1'}),
++      rbS({id:'fcA',label:'Concrete strength used',sym:RB_FC,value:f.fcA,unit:'ksi',note:'see §fcA'}),
++      rbS({id:'vraw',label:'Concrete efficiency factor, CTT node, before its limits',sym:'v_{raw}',eq:'0.85 \\minus \\frac{'+RB_FC+'}{20}',sub:'0.85 \\minus \\frac{'+rbN(f.fcA)+'}{20}',value:h.v_raw,unit:'',d:3,ref:'AASHTO LRFD 10th Ed. Table 5.8.2.5.3a-1'}),
++      rbS({id:'v',label:'Concrete efficiency factor (0.45 ≤ v ≤ 0.65)',sym:'v',eq:'\\min(\\max(v_{raw},\\, 0.45),\\, 0.65)',sub:'\\min(\\max('+rbN(h.v_raw,3)+',\\, 0.45),\\, 0.65)',value:h.v,unit:'',d:3,ref:'AASHTO LRFD 10th Ed. Table 5.8.2.5.3a-1'}),
++      rbS({id:'Fh',label:'Force developed by the hook',sym:'F_{h}',eq:'d_{b} R\\, v\\, '+RB_FC,sub:rbN(f.db,3)+'\\times '+rbN(h.R,3)+'\\times '+rbN(h.v,3)+'\\times '+rbN(f.fcA),value:h.Fh,unit:'kip',d:3,ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.4a-2'}),
++      rbS({id:'FhAb',label:'Hook force per unit bar area',sym:'F_{h}/A_{b}',eq:'',sub:'\\frac{'+rbN(h.Fh,3)+'}{'+rbN(f.Ab)+'}',value:h.Fh/f.Ab,unit:'ksi'})];
++    T.push({title:'Hook force',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.4a-2',steps:H});
++    T.push({title:'Modification factors',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1b–c, 5.10.8.2.4b',steps:[
++      rbS({id:'lrl',label:'Reinforcement location factor (also for hooks)',sym:'\\lambda_{rl}',value:f.lam_rl,unit:'',d:1}),
++      rbS({id:'lcf',label:'Coating factor, hooked bar (1.2 if coated)',sym:'\\lambda_{cf}',value:h.cf,unit:'',d:1}),
++      rbS({id:'rlcf',label:'Product limit on λ_rl·λ_cf',sym:'\\lambda_{rl}\\lambda_{cf}',eq:'\\min(\\lambda_{rl}\\lambda_{cf},\\, 1.7)',sub:'\\min('+rbN(f.lam_rl,1)+'\\times '+rbN(h.cf,1)+',\\, 1.7)',value:h.rlcf,unit:'',d:2,ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1b'}),
++      rbS({id:'conf',label:'Tie factor (0.8 with ties per 5.10.8.2.4b, #11 and smaller; else 1.0)',sym:'\\text{tie factor}',value:h.conf,unit:'',d:1,ref:'AASHTO LRFD 10th Ed. 5.10.8.2.4b'}),
++      rbS({id:'lam',label:'Concrete density modification factor',sym:'\\lambda',value:f.lambda,unit:'',d:2,note:'see §lam'})].concat(exS)});
++    T.push({title:'Confinement factor'+(h.ties?' (k_tr = 0, tie reduction taken)':''),ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1c',steps:rbAashtoRc(inp,f,h.ties?0:f.ktr_a,h.lam_rc_h_raw,h.lam_rc_h,true)});
++    T.push({title:'Straight portion',ref:'AASHTO LRFD 10th Ed. Eqs. 5.10.8.2.1a-1, -2',steps:[
++      rbS({id:'ldb',label:'Basic development length with the hook force',sym:'l_{db}',eq:'0.17\\, d_{b} (\\frac{\\lambda_{er} f_{y} \\minus F_{h}/A_{b}}{1.97 \\lambda ('+RB_FC+')^{0.25}})^{2}',
++        sub:'0.17\\times '+rbN(f.db,3)+'\\times (\\frac{'+rbN(f.excess,3)+'\\times '+rbN(f.fy_ksi,1)+' \\minus '+rbN(h.Fh,3)+'/'+rbN(f.Ab)+'}{1.97\\times '+rbN(f.lambda)+'\\times '+rbN(f.fc4,4)+'})^{2}',
++        value:h.ldb,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1a-2',note:h.num<=0?'bracket ≤ 0: the hook develops the bar, l_db = 0':'(f′c)^0.25: see §fc4'}),
++      rbS({id:'ld',label:'Straight portion of the hooked bar',sym:'l_{d}',eq:'l_{db}\\, \\lambda_{rl}\\lambda_{cf}\\, \\lambda_{rc}',sub:rbN(h.ldb)+'\\times '+rbN(h.rlcf)+'\\times '+rbN(h.lam_rc_h,4),value:h.ld,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1a-1'})]});
++    T.push({title:'Hook development length',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.4a-1',steps:[
++      rbS({id:'ldhcalc',label:'Hooked bar development length',sym:'l_{dh,calc}',eq:(h.ties?'0.8\\, ':'')+'(l_{d} + R + \\frac{d_{b}}{2})',sub:(h.ties?'0.8\\times ':'')+'('+rbN(h.ld)+' + '+rbN(h.R,3)+' + \\frac{'+rbN(f.db,3)+'}{2})',value:h.ldh_calc,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.4a-1'+(h.ties?', 5.10.8.2.4b':'')}),
++      rbS({id:'min1',label:'Minimum 8 d_b',sym:'8 d_{b}',eq:'',sub:'8\\times '+rbN(f.db,3),value:h.min1,unit:'in'}),
++      rbS({id:'ldh',label:'Hooked bar development length (minimum 8 d_b and 6 in.)',sym:'l_{dh}',eq:'\\max(l_{dh,calc},\\, 8 d_{b},\\, 6\\, \\text{in.})',sub:'\\max('+rbN(h.ldh_calc)+',\\, '+rbN(h.min1)+',\\, 6)',value:h.ldh,unit:'in',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.4a',note:gov})]});
++  }
++  return T;
++}
++
++/* ---------- compression development (tabComp / tabCompAASHTO) ---------- */
++function rbrComp(inp,f){
++  const c=calcComp(inp,f), T=[];
++  const gov=c.gov==='8in'?'the 8 in. minimum governs':(c.gov==='eqA'?'expression (a) governs':'expression (b) governs');
++  const exS=inp.useExcess?[rbS({id:'excess',label:'Excess reinforcement factor',sym:f.AASHTO?'\\lambda_{er}':'\\text{factor}',value:f.excess,unit:'',d:3,note:'see §excess'})]:[];
++  const tail=r=>[
++    rbS({id:'ldccalc',label:'Larger expression'+(inp.useExcess?', times the excess reinforcement factor':''),sym:'l_{dc,calc}',eq:'\\max(l_{dc,a},\\, l_{dc,b})'+(inp.useExcess?'\\cdot \\frac{A_{s,req}}{A_{s,prov}}':''),
++      sub:'\\max('+rbN(c.a)+',\\, '+rbN(c.b)+')'+(inp.useExcess?'\\times '+rbN(f.excess,3):''),value:c.ldc_calc,unit:'in'}),
++    rbS({id:'ldc',label:'Compression development length (8 in. minimum)',sym:'l_{dc}',eq:'\\max(l_{dc,calc},\\, 8\\, \\text{in.})',sub:'\\max('+rbN(c.ldc_calc)+',\\, 8)',value:c.ldc,unit:'in',ref:r,note:gov})];
++  if(!f.AASHTO){
++    T.push({title:'Governing expressions',ref:'ACI 318-19 25.4.9.2',steps:[
++      rbS({id:'psiR',label:'Confining reinforcement factor (as selected)',sym:'\\psi_{r}',value:f.psiR_c,unit:'',d:2,ref:'ACI 318-19 Table 25.4.9.3'}),
++      rbS({id:'lam',label:'Lightweight concrete factor',sym:'\\lambda',value:f.lambda,unit:'',d:2,note:'see §lam'}),
++      rbS({id:'sqrtFc',label:'Square root of f′c (limited to 100 psi)',sym:'\\sqrt{'+RB_FC+'}',value:f.sqrtFc,unit:'psi',note:'see §sqrtFc'})].concat(exS,[
++      rbS({id:'a',label:'Expression (a)',sym:'l_{dc,a}',eq:'\\frac{f_{y} \\psi_{r}}{50 \\lambda \\sqrt{'+RB_FC+'}}\\, d_{b}',sub:'\\frac{'+rbG(inp.fy,0)+'\\times '+rbN(f.psiR_c)+'}{50\\times '+rbN(f.lambda)+'\\times '+rbN(f.sqrtFc)+'}\\times '+rbN(f.db,3),value:c.a,unit:'in',ref:'ACI 318-19 25.4.9.2 (a)'}),
++      rbS({id:'b',label:'Expression (b)',sym:'l_{dc,b}',eq:'0.0003\\, f_{y} \\psi_{r} d_{b}',sub:'0.0003\\times '+rbG(inp.fy,0)+'\\times '+rbN(f.psiR_c)+'\\times '+rbN(f.db,3),value:c.b,unit:'in',ref:'ACI 318-19 25.4.9.2 (b)'})])});
++    T.push({title:'Compression development length',ref:'ACI 318-19 25.4.9.1',steps:tail('ACI 318-19 25.4.9.1')});
++  } else {
++    T.push({title:'Governing expressions',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.2a',steps:[
++      rbS({id:'fy',label:'Yield strength',sym:'f_{y}',value:f.fy_ksi,unit:'ksi',d:1}),
++      rbS({id:'fc',label:'Concrete strength',sym:RB_FC,value:f.fc_ksi,unit:'ksi'}),
++      rbS({id:'sqrtFc',label:'Square root of f′c (f′c limited to 10 ksi)',sym:'\\sqrt{'+RB_FC+'}',eq:'\\min(\\sqrt{'+RB_FC+'},\\, \\sqrt{10})',sub:'\\min(\\sqrt{'+rbN(f.fc_ksi)+'},\\, \\sqrt{10})',value:f.sqrtFc_ksi,unit:'ksi^{0.5}',d:3}),
++      rbS({id:'db',label:'Bar diameter (#'+inp.barSize+')',sym:'d_{b}',value:f.db,unit:'in',d:3})].concat(exS,[
++      rbS({id:'a',label:'Expression (a)',sym:'l_{dc,a}',eq:'\\frac{0.63\\, d_{b} f_{y}}{\\sqrt{'+RB_FC+'}}',sub:'\\frac{0.63\\times '+rbN(f.db,3)+'\\times '+rbN(f.fy_ksi,1)+'}{'+rbN(f.sqrtFc_ksi,3)+'}',value:c.a,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.2a-2'}),
++      rbS({id:'b',label:'Expression (b)',sym:'l_{dc,b}',eq:'0.3\\, d_{b} f_{y}',sub:'0.3\\times '+rbN(f.db,3)+'\\times '+rbN(f.fy_ksi,1),value:c.b,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.2a-3'})])});
++    T.push({title:'Compression development length',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.2a-1',steps:tail('AASHTO LRFD 10th Ed. Eq. 5.10.8.2.2a-1')});
++  }
++  return T;
++}
++
++/* ---------- tension lap splice (tabTSplice + classABlock) ---------- */
++function rbrTSplice(inp,f){
++  const t=calcTension(inp,f), s=calcTensSplice(inp,f,t), e=classAEligible(inp,f), T=[], A=f.AASHTO;
++  const cref=A?'AASHTO LRFD 10th Ed. 5.10.8.4.3a':'ACI 318-19 25.5.2.1';
++  const cl=[];
++  if(e.known){
++    cl.push(rbS({id:'clsRatio',label:'Provided steel at least twice that required',sym:'A_{s,prov}',eq:'\\ge 2 A_{s,req}',sub:rbN(inp.asProv)+(e.ratioOK?' \\ge ':' \\lt ')+'2\\times '+rbN(inp.asReq),value:inp.asProv,unit:'in^{2}',ok:e.ratioOK}),
++      rbS({id:'clsPct',label:'Share of A_s spliced within the lap length (input) at most 50 %',sym:'\\text{spliced}',eq:'\\le 50\\%',sub:rbN(inp.pctSpliced,0)+(e.pctOK?' \\le ':' \\gt ')+'50',value:inp.pctSpliced,unit:'%',d:0,ok:e.pctOK}));
++  }
++  const elig=e.known?(e.eligible?'Class A permitted':'Class A not permitted: Class B'):'cannot be verified (A_s,req / A_s,prov not entered): Class B assumed';
++  cl.push(rbS({id:'clsA',label:'Class A eligibility'+(inp.tensClass==='A'?' (Class A selected)':''),sym:'',value:elig,unit:'',ok:inp.tensClass==='A'?(e.known&&e.eligible):undefined,
++    note:inp.tensClass==='A'&&!(e.known&&e.eligible)?'Class A is selected but is not shown to qualify: the result is unconservative':''}));
++  T.push({title:'Class A eligibility',ref:cref,steps:cl});
++  const L=[];
++  if(inp.useExcess&&f.excess<1){
++    /* splice base: l_d without the excess-reinforcement reduction (calcTensSplice: the same calcTension with useExcess off) */
++    const i0=Object.assign({},inp,{useExcess:false}), f0=computeFactors(i0), t0=calcTension(i0,f0);
++    if(!A) L.push(rbS({id:'ldcalc0',label:'l_d by the general equation without the excess reinforcement factor (factor 1.0)',sym:'l_{d,calc}',
++      eq:'\\frac{3}{40}\\, \\frac{f_{y} \\psi_{t}\\psi_{e} \\psi_{s} \\psi_{g}}{\\lambda \\sqrt{'+RB_FC+'} (\\frac{c_{b}+K_{tr}}{d_{b}})}\\, d_{b}',
++      sub:'\\frac{3}{40}\\cdot \\frac{'+rbG(inp.fy,0)+'\\times '+rbN(f0.psiTEcap)+'\\times '+rbN(f0.psiS,1)+'\\times '+rbN(f0.psiG)+'}{'+rbN(f0.lambda)+'\\times '+rbN(f0.sqrtFc)+'\\times '+rbN(f0.cbKtr)+'}\\times '+rbN(f0.db,3),value:t0.ld_calc,unit:'in',ref:'ACI 318-19 Eq. 25.4.2.4a'}));
++    else L.push(rbS({id:'ldb0',label:'l_db without the excess reinforcement factor (λ_er = 1.0)',sym:'l_{db}',eq:'0.17\\, d_{b} (\\frac{f_{y}}{1.97 \\lambda ('+RB_FC+')^{0.25}})^{2}',
++        sub:'0.17\\times '+rbN(f0.db,3)+'\\times (\\frac{'+rbN(f0.fy_ksi,1)+'}{1.97\\times '+rbN(f0.lambda)+'\\times '+rbN(f0.fc4,4)+'})^{2}',value:t0.ldb,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1a-2'}),
++      rbS({id:'ldcalc0',label:'l_d without the excess reinforcement factor',sym:'l_{d,calc}',eq:'l_{db}\\, \\lambda_{rl}\\lambda_{cf}\\, \\lambda_{rc}',sub:rbN(t0.ldb)+'\\times '+rbN(f0.lam_rlcf_cap)+'\\times '+rbN(f0.lam_rc,4),value:t0.ld_calc,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1a-1'}));
++    L.push(rbS({id:'ldBase',label:'Splice base development length (12 in. minimum; no excess reinforcement reduction for splices)',sym:'l_{d}',eq:'\\max(l_{d,calc},\\, 12\\, \\text{in.})',sub:'\\max('+rbN(t0.ld_calc)+',\\, 12)',value:s.ldBase,unit:'in'}));
++  } else L.push(rbS({id:'ldBase',label:'Tension development length (splice base, without excess reinforcement reduction)',sym:'l_{d}',value:s.ldBase,unit:'in',note:'see §ld'}));
++  L.push(rbS({id:'factor',label:'Splice class factor (Class '+s.cls+': A 1.0, B 1.3)',sym:'\\text{factor}',value:s.factor,unit:'',d:1}),
++    rbS({id:'lstcalc',label:'Lap splice length',sym:'l_{st,calc}',eq:'\\text{factor}\\times l_{d}',sub:rbN(s.factor,1)+'\\times '+rbN(s.ldBase),value:s.lst_calc,unit:'in'}),
++    rbS({id:'lst',label:'Tension lap splice length, Class '+s.cls+' (12 in. minimum)',sym:'l_{st}',eq:'\\max(l_{st,calc},\\, 12\\, \\text{in.})',sub:'\\max('+rbN(s.lst_calc)+',\\, 12)',value:s.lst,unit:'in',ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.3a':'ACI 318-19 25.5.2'}));
++  if(lapProhibited(inp,f)) L.push(rbS({id:'lapOK',label:'Lap splice permitted for #'+inp.barSize+' bars',sym:'',value:'no: use a mechanical or welded splice (the length above is for reference only)',unit:'',ok:false,ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.2a':'ACI 318-19 25.5.1.1'}));
++  T.push({title:'Splice length',ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.3a':'ACI 318-19 25.5.2',steps:L});
++  return T;
++}
++
++/* ---------- compression lap splice (tabCSplice / tabCSpliceAASHTO) ---------- */
++function rbrCSplice(inp,f){
++  const s=calcCompSplice(inp,f), A=f.AASHTO, le=inp.fy<=60000, L=[];
++  if(!A) L.push(rbS({id:'lsccalc',label:'Compression lap splice length (f_y '+(le?'≤':'>')+' 60,000 psi'+(s.lowFc?'; ×4/3 for f′c < 3,000 psi':'')+')',sym:'l_{sc,calc}',
++      eq:(le?'0.0005\\, f_{y} d_{b}':'(0.0009\\, f_{y} \\minus 24)\\, d_{b}')+(s.lowFc?'\\cdot \\frac{4}{3}':''),
++      sub:(le?'0.0005\\times '+rbG(inp.fy,0)+'\\times '+rbN(f.db,3):'(0.0009\\times '+rbG(inp.fy,0)+' \\minus 24)\\times '+rbN(f.db,3))+(s.lowFc?'\\times \\frac{4}{3}':''),value:s.lsc_calc,unit:'in',ref:'ACI 318-19 25.5.5.1'}));
++  else L.push(rbS({id:'m',label:'Modification factor (1.0: no reduction for ties or spirals taken)',sym:'m',value:1.0,unit:'',d:1}),
++    rbS({id:'lsccalc',label:'Compression lap splice length (f_y '+(le?'≤':'>')+' 60 ksi'+(s.lowFc?'; ×4/3 for f′c < 3.0 ksi':'')+')',sym:'l_{sc,calc}',
++      eq:(le?'0.5\\, m\\, f_{y} d_{b}':'m\\, (0.9\\, f_{y} \\minus 24)\\, d_{b}')+(s.lowFc?'\\cdot \\frac{4}{3}':''),
++      sub:(le?'0.5\\times 1.0\\times '+rbN(f.fy_ksi,1)+'\\times '+rbN(f.db,3):'1.0\\times (0.9\\times '+rbN(f.fy_ksi,1)+' \\minus 24)\\times '+rbN(f.db,3))+(s.lowFc?'\\times \\frac{4}{3}':''),value:s.lsc_calc,unit:'in',ref:'AASHTO LRFD 10th Ed. 5.10.8.4.5a'}));
++  L.push(rbS({id:'lsc',label:'Compression lap splice length (12 in. minimum)',sym:'l_{sc}',eq:'\\max(l_{sc,calc},\\, 12\\, \\text{in.})',sub:'\\max('+rbN(s.lsc_calc)+',\\, 12)',value:s.lsc,unit:'in',ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.5a':'ACI 318-19 25.5.5.1'}));
++  if(lapProhibited(inp,f)) L.push(rbS({id:'lapOK',label:'Lap splice of #'+inp.barSize+' to #'+inp.barSize+' permitted',sym:'',value:'no: use a mechanical or welded splice (the length above is for reference only)',unit:'',ok:false,ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.2a':'ACI 318-19 25.5.1.1, 25.5.5.3'}));
++  return [{title:'Splice length',ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.5a':'ACI 318-19 25.5.5.1',steps:L}];
++}
++
++function rbrModel(){
++  const inp=readInputs(), f=computeFactors(inp), w=validate(inp,f), A=f.AASHTO, secs=[];
++  const codeName=A?'AASHTO LRFD 10th Ed. (2024) §5.10.8':'ACI 318-19';
++  const CARD_KEY={tLd:'td/ld',hLdh:'hk/ldh',cLdc:'cd/ldc',tsLen:'ts/lst',tsClassA:'ts/clsA',tConf:'td/ktrHS',csLen:'cs/lsc'};
++  const tabLink=(tab,txt)=>'[[tab:'+tab+'|'+txt+']]';
++  /* 1. Project and inputs */
++  {
++    const subs=[];
++    subs.push({title:'Project',items:[{type:'kv',rows:[['Project',inp.projName||'—'],['Project number',inp.projNo||'—'],
++      ['Calculated by',(inp.calcBy||'—')+(inp.calcDate?', '+inp.calcDate:'')],['Checked by',(inp.chkBy||'—')+(inp.chkDate?', '+inp.chkDate:'')],['Design code',codeName]]},
++      {type:'note',text:'Units: in., psi'+(A?' (ksi in the AASHTO equations)':'')+'. Every value in this report is the value the tool computes on its tabs ('+tabLink('tension','Tension l_d')+', '+tabLink('hook','Hook l_dh')+', '+tabLink('compression','Compression l_dc')+', '+tabLink('tsplice','Tension Splice')+', '+tabLink('csplice','Comp. Splice')+', '+tabLink('batch','Bar Schedule')+').'}]});
++    const yn=b=>b?'yes':'no';
++    const rows=[['Design code',codeName,'–'],['Bar size','#'+inp.barSize+' ($d_{b}$ = '+rbN(f.db,3)+' in., $A_{b}$ = '+rbN(f.Ab)+' in²)','–'],
++      ['Yield strength $f_{y}$',rbG(inp.fy,0).replace('{,}',','),'psi'],['Concrete strength $f^{\\prime}_{c}$',rbG(inp.fc,0).replace('{,}',','),'psi'],
++      ['Lightweight concrete',inp.lightweight?'yes ($\\lambda$ = '+rbN(f.lambda)+')':'no ($\\lambda$ = 1.00)','–'],['Top bar',yn(inp.topBar),'–'],
++      ['Coating factor (tension)',rbN(f.psiE,1),'–'],['$c_{b}$',rbN(inp.cb),'in'],['$A_{tr}$ / s / n',rbN(inp.Atr)+' / '+rbN(inp.sTr)+' / '+rbN(inp.nBars,0),'in² / in / –']];
++    if(A) rows.push(['$\\beta_{t}$',rbN(f.betaT),'–']);
++    rows.push(['Developed-bar c-c spacing',isFinite(inp.barSpc)&&inp.barSpc>0?rbN(inp.barSpc):'not entered','in'],
++      ['Excess reinforcement reduction',inp.useExcess?'on: $A_{s,req}$ = '+rbN(inp.asReq)+', $A_{s,prov}$ = '+rbN(inp.asProv)+' in²':'off','–'],
++      ['Hook: coating / location / confined',rbN(f.psiE_h,1)+' / '+rbN(parseFloat(inp.hookLoc))+' / '+yn(inp.hookConfined),'–']);
++    if(A) rows.push(['Hook bend radius R',isFinite(parseFloat(inp.hookR))&&parseFloat(inp.hookR)>0?rbN(parseFloat(inp.hookR),3):'minimum standard bend','in']);
++    else rows.push(['Compression $\\psi_{r}$',rbN(f.psiR_c),'–']);
++    rows.push(['Tension splice class / % spliced','Class '+inp.tensClass+' / '+rbN(inp.pctSpliced,0)+' %','–']);
++    subs.push({title:'Design inputs',items:[{type:'table',head:['Input','Value','Unit'],rows:rows.map(r=>[r[0],r[1],r[2]])}]});
++    const RR=rebarResultRows(inp,f,null), stc=s=>s==='PASS'?'ok':s==='FAIL'?'ng':s==='CHK'?'hi':'na';
++    subs.push({title:'Summary of results',items:[{type:'table',head:['Length or check','Value','Reference','Status'],
++      rows:RR.map(r=>[rbPlain(r.lab),{t:rbPlain(r.msg),key:r.card?CARD_KEY[r.card]:undefined},rbPlain(r.ref),{t:r.st,cls:stc(r.st)}])},
++      {type:'note',text:'Lengths are required lengths: the tool has no provided-length input, so they carry no pass / fail (—); compare them with the lengths detailed. CHK: needs attention (not checked by the tool, or an input is missing).'}]});
++    if(w.length) subs.push({title:'Validation notices',items:w.map(x=>({type:'note',warn:true,text:rbPlain(x)}))});
++    if(String(inp.assumptions||'').trim()) subs.push({title:'Engineering assumptions',items:[{type:'note',text:String(inp.assumptions).trim()}]});
++    secs.push({title:'Project and inputs',subs});
++  }
++  /* 2.–6. the result tabs */
++  const sch='<svg'+(schematicSVG(inp,f).split('<svg')[1]||'');
++  const hk=hookSchematic(inp,f,calcHook(inp,f)), hsvg=(hk.match(/<svg[\s\S]*<\/svg>/)||[''])[0];
++  secs.push({title:'Tension development',subs:[{title:'Tension development length $l_{d}$',items:[
++    {type:'figure',svg:sch,caption:'Input schematic: bar in section (c_b controls)'},
++    rbTopics('td',rbrTension(inp,f),{title:'Worked steps'}),{type:'note',text:'On screen: '+tabLink('tension','Tension l_d tab')+' (with the sensitivity charts).'}]}]});
++  secs.push({title:'Standard hook',subs:[{title:'Standard hook development length $l_{dh}$',items:[
++    {type:'figure',svg:hsvg,caption:'Hook geometry (90° standard hook, schematic; '+(A?'AASHTO 5.10.2.1':'ACI 318-19 25.3.1')+')'},
++    rbTopics('hk',rbrHook(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:'On screen: '+tabLink('hook','Hook l_dh tab')+'.'}]}]});
++  secs.push({title:'Compression development',subs:[{title:'Compression development length $l_{dc}$',items:[
++    rbTopics('cd',rbrComp(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:'On screen: '+tabLink('compression','Compression l_dc tab')+'.'}]}]});
++  secs.push({title:'Tension lap splice',subs:[{title:'Tension lap splice length $l_{st}$',items:[
++    rbTopics('ts',rbrTSplice(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:'On screen: '+tabLink('tsplice','Tension Splice tab')+'.'}]}]});
++  secs.push({title:'Compression lap splice',subs:[{title:'Compression lap splice length $l_{sc}$',items:[
++    rbTopics('cs',rbrCSplice(inp,f),{title:'Worked steps'}),{type:'note',text:'On screen: '+tabLink('csplice','Comp. Splice tab')+'.'}]}]});
++  /* 7. bar schedule (tabBatch: the same functions for every bar size) */
++  {
++    const rows=BAR_ORDER.map(b=>{
++      const bi=Object.assign({},inp,{barSize:b}), bf=computeFactors(bi);
++      const t=calcTension(bi,bf), h=calcHook(bi,bf), c=calcComp(bi,bf), ts=calcTensSplice(bi,bf,t), cs=calcCompSplice(bi,bf), np=lapProhibited(bi,bf);
++      const n1=v=>({t:rbN(v,1),n:true});
++      return {cells:['#'+b,{t:rbN(BAR[b].d,3),n:true},n1(t.ld),n1(h.ldh),n1(c.ldc),np?{t:'N/P*',n:true}:n1(ts.lst),np?{t:'N/P*',n:true}:n1(cs.lsc)],cls:b===inp.barSize?'gov':''};
++    });
++    secs.push({title:'Bar development schedule',subs:[{title:'Development and splice lengths, all bar sizes',items:[
++      {type:'table',head:['Bar','$d_{b}$ (in.)','Tension $l_{d}$','Hook $l_{dh}$','Comp. $l_{dc}$','Tens. splice ('+inp.tensClass+')','Comp. splice'],rows,wide:true},
++      {type:'note',text:'All lengths in inches, rounded to 0.1 in., computed with the inputs above for each bar size (bold: the selected #'+inp.barSize+'; its lengths are worked in [[td/ld]], [[hk/ldh]], [[cd/ldc]], [[ts/lst]], [[cs/lsc]]). '+(inp.useExcess?'Excess reinforcement reduction (×'+rbN(f.excess,3)+') applied to development lengths, not to splices. ':'')+(A?'*N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).':'*N/P = lap splice not permitted (ACI 318-19 25.5.1.1).')+' On screen: '+tabLink('batch','Bar Schedule tab')+'.'}]}]});
++  }
++  /* 8. references */
++  secs.push({title:'References',subs:[{title:'Codes and articles cited',items:[{type:'table',head:['Reference','Provisions used'],rows:rebarRefs(inp,f).map(r=>[rbPlain(r[0]),rbPlain(r[1])])}]}]});
++  return {title:'Rebar Development & Splice Calculation',subtitle:(inp.projName||'Untitled')+' — #'+inp.barSize+' bar, fy = '+rbG(inp.fy,0).replace('{,}',',')+' psi, f′c = '+rbG(inp.fc,0).replace('{,}',',')+' psi',code:codeName,
++    info:[['Project',inp.projName],['Project No.',inp.projNo],['Calculated by',inp.calcBy],['Date',inp.calcDate],['Checked by',inp.chkBy],['Checked date',inp.chkDate]],
++    head:{left:'Project No. '+(inp.projNo||'—')+' — '+String(inp.projName||'—').slice(0,40),right:'Computed: '+(inp.calcBy||'—')+' '+(inp.calcDate||'')+' · Checked: '+(inp.chkBy||'—')+' '+(inp.chkDate||''),
++      foot:(inp.projName||'Untitled')+' ('+REBAR_RPT_TOOL+')'},
++    sections:secs};
++}
++function rbrRender(){
++  const T=document.getElementById('tabcontent'); if(!T) return;
++  if(!window.SharedReport||!window.SharedSteps){ T.innerHTML='<div class="warnbox"><b>Report not available:</b> shared/report.js or shared/steps.js is not loaded. Keep the shared folder next to this file.</div>'; RBRP.api=null; RBRP.doc=null; return; }
++  let M; try{ M=rbrModel(); }catch(e){ T.innerHTML='<div class="warnbox"><b>Report error:</b> '+escHTML(e&&e.message)+'</div>'; RBRP.api=null; RBRP.doc=null; return; }
++  const top=T.scrollTop;
++  const two=rbrTwoPanel();
++  RBRP.api=SharedReport.mount(T,M,{closed:RBRP.closed,onGoto:rbrGoto,stick:two?-16:0}); RBRP.doc=RBRP.api.doc;   // two-panel layout: the bar sticks at the top of #tabcontent, over its 16 px padding
++  T.scrollTop=top;   // a rebuild while typing keeps the place in the report
++  if(!T.__rbrKeep){ T.__rbrKeep=true;   // two-panel layout: a jump inside the report scrolls #tabcontent only, never the page (as rebarGoto)
++    T.addEventListener('click',()=>{ if(!RBRP.on||!rbrTwoPanel()) return; const x=window.scrollX,y=window.scrollY; setTimeout(()=>{ if(window.scrollY!==y||window.scrollX!==x) window.scrollTo(x,y); },0); },true); }
++}
++function rbrTwoPanel(){ return !!(window.matchMedia&&window.matchMedia('(min-width:981px)').matches); }
++/* [[tab:…]] links of the report: a result tab (as its tab button) */
++function rbrGoto(name){ if(REBAR_CARDS[name]) rebarGoto(name); else switchTab(name); }
++/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
++function rbrPrinting(){ return document.body.classList.contains('rp-printing'); }
++function rbrWillPrint(){ return rbrPrinting()||!!(RBRP.on&&RBRP.doc); }
++window.addEventListener('beforeprint',()=>{
++  if(!RBRP.on||!RBRP.doc||rbrPrinting()) return;
++  let box=document.getElementById('rp-print'); if(!box){ box=document.createElement('div'); box.id='rp-print'; document.body.appendChild(box); }
++  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(RBRP.doc,{lazy:false})+'</article></div>';
++  document.body.classList.add('rp-printing');
++});
++
+@@ -1958 +2295,2 @@ function switchTab(name){
+-  currentTab=name;
++  RBRP.on=name==='report';   // RBRP: the Report tab is not stored as currentTab (not saved)
++  if(!RBRP.on) currentTab=name;
+```
+
+## 2026-11-01 — PR: claude/rpt-cbc — no change to this file
+- The RBRP Report tab of this tool (entry above) is synced to the Development & Splice tab of `Concrete Beam Capacity.html` (CLAUDE.md §3), whose combined Report tab also uses `rbrModel()` as its "C. Development & Splice" chapter. Tools that contain the snippet: `ACI Rebar Development Length.html`, `Concrete Beam Capacity.html`.
