@@ -75,19 +75,44 @@
     document.head.appendChild(st);
   }
   const key = ctx => JSON.stringify([ctx.P, ctx.g]);
+  // the demand source (custom demands PR, 2026-11-01): this project's analysis (the default) or the rows entered on this tab (P.demandSrc.spl)
+  const srcOf = P => (window.SBDCustomDemands && window.SBDCustomDemands.srcGet(P, 'spl')) || 'analysis';
+  /* demOf(row): an entered row as engine/splices.js p.dem (the shape demandsAt gives from the analysis): LL+IM with the pedestrian load,
+     its part in dem.pl (the owner multiplier m kept off it, GD45); shears as magnitudes; the fatigue moments as dMp ≥ 0, dMn ≥ 0 */
+  function demOf(r) {
+    const n = k => (typeof r[k] === 'number' && isFinite(r[k]) ? r[k] : 0), a = k => Math.abs(n(k));
+    const dem = { MDC1: n('M_DC1'), MDC2: n('M_DC2'), MDW: n('M_DW'), MLLp: Math.max(0, n('M_LLpos') + n('M_PLpos')), MLLn: Math.min(0, n('M_LLneg') + n('M_PLneg')), MCL: n('M_CL'),
+      VDC1: a('V_DC1'), VDC2: a('V_DC2'), VDW: a('V_DW'), VLL: a('V_LL') + a('V_PL'), VCL: a('V_CL'), dMp: Math.max(0, n('M_FATpos')), dMn: Math.abs(Math.min(0, n('M_FATneg'))) };
+    if (n('M_UT') || n('M_UF') || n('V_UT') || n('V_UF')) dem.ut = { MUT: n('M_UT'), MUF: n('M_UF'), VUT: a('V_UT'), VUF: a('V_UF') };
+    const o = {}; if (n('M_PLpos') && dem.MLLp > 0) o.MLLp = [n('M_PLpos'), dem.MLLp]; if (n('M_PLneg') && dem.MLLn < 0) o.MLLn = [n('M_PLneg'), dem.MLLn]; if (a('V_PL')) o.VLL = [a('V_PL'), dem.VLL];
+    if (Object.keys(o).length) dem.pl = o;
+    return dem;
+  }
+  /* build(ctx): the splices of girder ctx.g; ctx.src: 'analysis' | 'custom' (else the tab's choice). Returns engine/splices.js girder() plus
+     { AR, env, girder, custom } or { err }. */
+  function build(ctx) {
+    const P = ensure(ctx.P), g = ctx.g || 0, AN = window.SBDAnalysis, src = ctx.src || srcOf(P);
+    if (!((P.framing || {}).splices || []).length) return { err: 'No field splice stations: enter them on the Splices tab.' };
+    const env = envOf(P);
+    if (src === 'custom') { const CD = window.SBDCustomDemands; if (!CD) return { err: 'ui/demands.js is not loaded.' };
+      const RW = CD.rowsOf(P, 'spl', g); if (RW.err.length) return { err: 'Custom demands: ' + RW.err.join(' ') };
+      const sup = CD.supsOf(P), AR = { Lt: sup[sup.length - 1], sup, cont: P.spans.continuity !== 'simple' && sup.length > 2 };
+      const at = x => { const r = RW.rows.filter(q => Math.abs(+q.x - x) <= 0.01 + 1e-9).sort((p, q) => Math.abs(p.x - x) - Math.abs(q.x - x))[0]; return r ? { dem: demOf(r), xi: +r.x, custom: true } : null; };
+      const G = SP().girder(P, g, AR, { env, dem: at });
+      return { ...G, AR, env, girder: P.girders[g], custom: { rows: RW.rows, mode: 'unf' } }; }
+    const AR = AN.analyzeGirder(P, g);
+    if (AR.errors && AR.errors.length) return { err: 'Analysis: ' + AR.errors.join(' ') };
+    const G = SP().girder(P, g, AR, { env });
+    return { ...G, AR, env, girder: P.girders[g] };
+  }
   function calc(ctx) {
     S.err = ''; S.R = null;
-    const P = ensure(ctx.P), g = ctx.g || 0, AN = window.SBDAnalysis;
-    try {
-      if (!((P.framing || {}).splices || []).length) { S.err = 'No field splice stations: enter them on the Splices tab.'; S.key = key(ctx); return; }
-      const AR = AN.analyzeGirder(P, g);
-      if (AR.errors && AR.errors.length) { S.err = 'Analysis: ' + AR.errors.join(' '); S.key = key(ctx); return; }
-      const env = envOf(P), G = SP().girder(P, g, AR, { env });
-      S.R = { ...G, AR, env, girder: P.girders[g] };
-      S.sel = Math.min(S.sel, Math.max(0, G.list.length - 1));
-    } catch (e) { S.err = 'Calculation error: ' + (e && e.message); }
+    try { const R = build(ctx); if (R.err) S.err = R.err; else { S.R = R; S.sel = Math.min(S.sel, Math.max(0, R.list.length - 1)); } }
+    catch (e) { S.err = 'Calculation error: ' + (e && e.message); }
     S.key = key(ctx);
   }
+  /* stepsOf(R, s): the worked steps of splice s; with custom demands the step that names them first */
+  const stepsOf = (R, s) => { const list = SP().steps(s.R).concat(s.CK.steps); return R && R.custom ? [window.SBDCustomDemands.step('spl', R.custom, s.x)].concat(list) : list; };
   const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
   const A = '10th Ed. Art. ', OPEN = new Set(), TPX = (...ks) => ks.map(k => window.SBDFlexureUI.TP[k]).filter(Boolean);
 
@@ -114,8 +139,11 @@
   function render(host, ctx) {
     css();
     const P = ensure(ctx.P), g = P.girders[ctx.g] || P.girders[0], stale = !S.R || S.key !== key(ctx);
+    const src = srcOf(P), CD = window.SBDCustomDemands, opt = (v, t) => `<option value="${v}"${src === v ? ' selected' : ''}>${t}</option>`;
     let h = `<section class="sec"><div class="secHead">Field splices (bolted, AASHTO LRFD 10th Ed. 6.13.6.1)</div><div class="secBody">
-      <p class="note">${esc(g.label || g.id)}: splices at ${((P.framing || {}).splices || []).map(x => fmt(x, 2) + ' ft').join(', ') || '(none entered)'} (Splices or Spans &amp; framing tab). Demands: this project's analysis (<a href="#" data-gotab="an">Analysis tab</a>), moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule). Sections 0.01 ft each side; the smaller one (6.13.6.1.1) carries the design forces.</p></div></section>`;
+      ${CD ? `<div class="fRow"><label for="sp_src">Demands</label><select id="sp_src">${opt('analysis', "This project's analysis (Analysis tab)")}${opt('custom', 'Custom (entered)')}</select><span class="unit">saved with the project</span></div>` : ''}
+      <p class="note">${esc(g.label || g.id)}: splices at ${((P.framing || {}).splices || []).map(x => fmt(x, 2) + ' ft').join(', ') || '(none entered)'} (Splices or Spans &amp; framing tab). ${src === 'custom' ? 'Demands: entered (Custom), the row at each splice station (below).' : `Demands: this project's analysis (<a href="#" data-gotab="an">Analysis tab</a>), moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule).`} Sections 0.01 ft each side; the smaller one (6.13.6.1.1) carries the design forces.</p></div></section>`;
+    if (src === 'custom' && CD) h += CD.card(P, 'spl', ctx.g);   // the entered rows (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Splice results are out of date: inputs changed or nothing calculated yet. The auto-design takes a few seconds per splice.</span><button type="button" class="primary" id="sp_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) {
@@ -135,6 +163,8 @@
     const on = (sel, ev, f) => host.querySelectorAll(sel).forEach(el => el.addEventListener(ev, f));
     const redraw = () => render(host, ctx);
     on('#sp_calc', 'click', () => { calc(ctx); redraw(); });
+    on('#sp_src', 'change', e => { if (CD) CD.srcSet(P, 'spl', e.target.value); if (ctx.changed) ctx.changed(); else redraw(); });   // saved with the project (P.demandSrc.spl)
+    if (src === 'custom' && CD) CD.wire(host, P, 'spl', ctx.g, () => (ctx.changed ? ctx.changed(false) : redraw()));
     on('[data-spsel]', 'click', e => { S.sel = +e.currentTarget.dataset.spsel; redraw(); });
     on('[data-gotab]', 'click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${e.currentTarget.dataset.gotab}"]`); if (b) b.click(); });
     if (S.R && !stale && !S.err && window.SBDTabGfxBUI) window.SBDTabGfxBUI.splice(host, ctx, S.R.list[S.sel]);
@@ -150,7 +180,7 @@
     h += `<div class="kv">${[['M<sub>DC1</sub>', d.MDC1, 'kip-ft'], ['M<sub>DC2</sub>', d.MDC2, 'kip-ft'], ['M<sub>DW</sub>', d.MDW, 'kip-ft'], ['M<sub>LL+IM</sub><sup>+</sup>', d.MLLp, 'kip-ft'], ['M<sub>LL+IM</sub><sup>−</sup>', d.MLLn, 'kip-ft'], ['M<sub>CL</sub>', d.MCL, 'kip-ft'],
       ['V<sub>DC1</sub>', d.VDC1, 'kip'], ['V<sub>DC2</sub>', d.VDC2, 'kip'], ['V<sub>DW</sub>', d.VDW, 'kip'], ['V<sub>LL+IM</sub>', d.VLL, 'kip'], ['V<sub>CL</sub>', d.VCL, 'kip'], ['ΔM<sub>fat</sub> +/−', `${fmt(d.dMp, 1)} / ${fmt(d.dMn, 1)}`, 'kip-ft']]
       .map(([k, v, u]) => `<div><span>${k}</span><span>${typeof v === 'number' ? fmt(v, 1) : v} ${u}</span></div>`).join('')}</div>
-      <p class="note">Unfactored, per girder (LL+IM with the distribution factors); moments at the analysis station x = ${fmt(dm.xi, 2)} ft, shears the largest magnitude of elements ${dm.e} ± 1. ${d.ut ? `Utilities: M<sub>UT</sub> ${fmt(d.ut.MUT, 1)}, M<sub>UF</sub> ${fmt(d.ut.MUF, 1)} kip-ft.` : ''}</p>`;
+      <p class="note">Unfactored, per girder (LL+IM with the distribution factors); ${dm.custom ? `as entered (Custom) in the row x = ${fmt(dm.xi, 3)} ft.` : `moments at the analysis station x = ${fmt(dm.xi, 2)} ft, shears the largest magnitude of elements ${dm.e} ± 1.`} ${d.ut ? `Utilities: M<sub>UT</sub> ${fmt(d.ut.MUT, 1)}, M<sub>UF</sub> ${fmt(d.ut.MUF, 1)} kip-ft.` : ''}</p>`;
     if (s.design) h += `<p class="note"><b>Auto-design${s.design.ok ? '' : ' (not every check passes)'}:</b> ${esc(s.design.msg)}</p>`;
     if (R && !R.errors.length) {
       h += `<p class="note">Top flange: ${plTxt(R.fl.top)}. Bottom flange: ${plTxt(R.fl.bot)}. Web: 2 PL ${X.frac(R.web.hw)} × ${X.frac(R.web.twp)}, ${R.web.nrw} rows × ${R.web.ncw} column${R.web.ncw > 1 ? 's' : ''} each side. Bolts ${X.frac(R.bolt.d)} in ${esc(s.p.bolts.gr)}; plates ${esc(s.p.sec.gP)}. <button type="button" id="sp_keep" title="Copy these plates and bolts to the Splices tab as entered values (auto-design off)">Keep these plates</button></p>`;
@@ -164,9 +194,9 @@
       ${s.CK.map(c => `<details class="sp-ck"><summary>${c.id} ${tt(c.title)}: ${c.items.length} item${c.items.length === 1 ? '' : 's'}, ${ST[c.status]}</summary>${c.note ? `<p class="note">${tt(c.note)}</p>` : ''}
         <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Item</th><th>Demand</th><th>Resistance / limit</th><th>Ratio</th><th>Status</th><th></th></tr></thead><tbody>${c.items.map(it => `<tr><td class="lft">${esc(it.loc)}</td><td>${it.dem != null ? fmt(it.dem, 2) : ''} ${esc(it.unit || '')}</td><td>${it.cap != null ? fmt(it.cap, 2) : ''} ${esc(it.unit || '')}</td><td class="${cls(it.r, it.st)}">${it.r != null ? fmt(it.r, 3) : '—'}</td><td>${ST[it.st]}</td><td><a class="wk" href="#st-${esc(it.step)}">§</a></td></tr>`).join('')}</tbody></table></div></details>`).join('')}
       <p class="note">Advisory items (MT1, TF3/BF3 under the 10th Ed.): the excess moment goes to the web splice (WS1, WS3, WS5) instead of failing the splice.</p></div></section>`;
-    h += `<section class="sec"><div class="secHead">Worked steps, ${esc(s.name)}</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +. The analysis moments and shears are worked on the Analysis tab.</p>${stepsHtml(X.steps(R).concat(s.CK.steps))}</div></section>`;
+    h += `<section class="sec"><div class="secHead">Worked steps, ${esc(s.name)}</div><div class="secBody"><p class="note">AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +. The analysis moments and shears are worked on the Analysis tab.</p>${stepsHtml(stepsOf(Rg, s))}</div></section>`;
     return h;
   }
 
-  window.SBDSplicesUI = { ensure, inputs, onChange, onClick, render, envOf, TOPICS, groups };
+  window.SBDSplicesUI = { ensure, inputs, onChange, onClick, render, envOf, TOPICS, groups, build, stepsOf, demOf };
 })();

@@ -31,7 +31,8 @@
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
   /* the demand source: the one chosen (S.src), else the default: this project's analysis when the project is complete, else the example */
   const rdOf = ctx => (window.SBDAnalysis && window.SBDAnalysis.ready ? window.SBDAnalysis.ready(ctx.P, ctx.P.girders[ctx.g] ? ctx.g : 0) : { ok: false, why: ['The analysis module is not loaded.'] });
-  const srcOf = ctx => S.src || (rdOf(ctx).ok ? 'analysis' : 'example');
+  // the choice made on the tab is saved with the project (P.demandSrc.flex, custom demands PR 2026-11-01; a hand-off file only for the page view)
+  const srcOf = ctx => S.src || (window.SBDCustomDemands && window.SBDCustomDemands.srcGet(ctx.P, 'flex')) || (rdOf(ctx).ok ? 'analysis' : 'example');
   // GirderDetail's built-in Girder section rows (GM.gs.def.rows), unfactored, kip-ft
   const EX = [{ name: 'Span 1, max. positive moment', x: 44, region: 'pos', M: { DC1: 1450, DC2: 210, DW: 240, LLp: 1650, LLn: -400, UT: 0, UF: 0, FATp: 620, FATn: -150 } },
     { name: 'Pier 1', x: 109.99, region: 'neg', M: { DC1: -2300, DC2: -330, DW: -380, LLp: 250, LLn: -2400, UT: 0, UF: 0, FATp: 120, FATn: -520 } }];
@@ -52,7 +53,7 @@
     plPos: { key: 'plPos', title: 'Plastic moment, positive flexure', ref: 'App. D6.1, Table D6.1-1', ids: /^pl\.pos\./, res: /^pl\.pos\.Mp$/, info: /./ },
     plNeg: { key: 'plNeg', title: 'Plastic moment, negative flexure', ref: 'App. D6.1, Table D6.1-2', ids: /^pl\.neg\./, res: /^pl\.neg\.Mp$/, info: /./ },
     dcRh: { key: 'dcRh', title: 'Web depth in compression and hybrid factor', ref: A + '6.10.1.10.1', ids: /^(dc|rh)\./, res: /^rh\./ },
-    dem: { key: 'dem', title: 'Demands: factored moments and stresses', ref: 'Tables 3.4.1-1, -2', ids: /^fx\.(gam\.|Mu$|Ms$|str\.|svc\.)/, res: /^fx\.Mu$/ },
+    dem: { key: 'dem', title: 'Demands: factored moments and stresses', ref: 'Tables 3.4.1-1, -2', ids: /^(fx\.(gam\.|Mu$|Ms$|str\.|svc\.)|cd\.)/, res: /^fx\.Mu$/ },
     web: { key: 'web', title: 'Web bend-buckling resistance', ref: A + '6.10.1.9.1', ids: /^fx\.(DcS|Fcrw)$/, res: /^fx\.Fcrw$/ },
     svc: { key: 'svc', title: 'Service II: permanent deformations', ref: A + '6.10.4.2.2', ids: /^fx\.(svt\.ok|svb\.ok|web\.)/ },
     fat: { key: 'fat', title: 'Fatigue I stress range', ref: A + '6.6.1.2, 6.10.5.1', ids: /^fx\.fat[TB]$/, res: /^fx\.fatT$/ },
@@ -83,6 +84,31 @@
   /* SB2-R2: the ratio of a check as shown; a non-finite ratio that is not "not applicable" carries its reason (c.ng: NG or error) */
   const rtx = c => !c ? '—' : isFinite(c.ratio) ? fmt(c.ratio, 3) : c.ng ? (Number.isNaN(c.ratio) ? esc(c.ng) : `∞ (${esc(c.ng)})`) : '—';
 
+  /* ---------- custom demands (added 2026-11-01, custom demands PR; ui/demands.js) ---------- */
+  const FAC1 = { dc: 1, dw: 1, dcMin: 1, dwMin: 1, ll: 1, sll: 1, fat: 1 };   // factored rows: every load factor 1 (the values are factored already)
+  /* facPl(pl): factored rows (Mu_s, Mu_l, Mu_n, …) as payload moments for fromPayload's region, C_b and nonprismatic data with the
+     factors FAC1: M_DC1 = M_u,steel, M_DC2 = M_u,long-term, both LL+IM envelopes = M_u,short-term (so that the Strength I envelope at a
+     station is the entered total M_u); the location's own demands are then the factored values (cust) */
+  const facPl = pl => ({ ...pl, stations: pl.stations.map(s => ({ ...s, M_DC1: s.Mu_s, M_DC2: s.Mu_l, M_LLpos: s.Mu_n, M_LLneg: s.Mu_n })) });
+  /* cust(locs, C, pl): the locations at the entered stations; C_b where the entered rows do not reach both brace points of the location's
+     unbraced length: 1.0 (6.10.8.2.3: the moment gradient is not known there; C_b = 1.0 is always permitted), with the nonprismatic
+     γ_e of the segment from its local stress (no moment diagram); factored rows: loc.factored (engine/flexure.js: each stage moment
+     factored, on its own section), linear between the entered rows */
+  function cust(locs, C, pl) {
+    const FX = window.SBDFlexure, xs = pl.stations.map(s => s.x), x0 = Math.min(...C.xs), x1 = Math.max(...C.xs), arr = k => pl.stations.map(s => +s[k] || 0);
+    return window.SBDCustomDemands.keepAt(locs, C.xs).map(L => {
+      const o = { ...L }, sg = o.seg;
+      if (o.region === 'neg' && sg && !(x0 <= sg.xa + 0.25 && x1 >= sg.xb - 0.25)) { o.Cb = 1; o.cbParts = null; o.cdCb = true; if (o.npr && o.npr.kind === 'ge') o.npr = { ...o.npr, geA: null, gov: null, K: '' }; }
+      if (C.mode === 'fac') { const at = k => FX.feAt(xs, arr(k), o.x);
+        o.factored = { str: { DC1: at('Mu_s'), DC2: at('Mu_l'), LL: at('Mu_n') }, svc: { DC1: at('Ms_s'), DC2: at('Ms_l'), LL: at('Ms_n') }, fat: { p: at('Mf_p'), n: at('Mf_n') } };
+        delete o.pl; }   // the region: fromPayload's, from the factored M_u (FAC1)
+      return o; });
+  }
+  /* stepsOf(R, r): the worked steps of location r; with custom demands the step that names them first ("Demands: entered (Custom)") */
+  const stepsOf = (R, r) => { if (!R || !R.custom) return r.steps;
+    const C = R.custom, x0 = Math.min(...C.xs), x1 = Math.max(...C.xs), sg = r.seg, s = window.SBDCustomDemands.step('flex', C, r.x);
+    if (r.region === 'neg' && sg && !(x0 <= sg.xa + 0.25 && x1 >= sg.xb - 0.25)) s.note += ` C_b = 1.0: the entered rows do not reach both brace points of this unbraced length (${fmt(sg.xa, 2)} to ${fmt(sg.xb, 2)} ft), so the moment gradient is not known (6.10.8.2.3: C_b = 1.0).`;
+    return [s].concat(r.steps); };
   function inputs(ctx) {
     const P = ctx.P, M = window.SBDModel, G = M.GRADES, m = P.materials, d = P.deck, g = P.girders[ctx.g] || P.girders[0], SEC = window.SBDSections, FX = window.SBDFlexure;
     // ctx.src / ctx.pl / ctx.plName / ctx.fl / ctx.method: the caller's choices (the Report tab, build()), else the tab's own (S)
@@ -102,11 +128,15 @@
       F.prj.a6.method = meth;
       return { prj: F.prj, locs: F.locs, supports: F.supports, fl, flS: D.flS, frB, D, what: `${esc(plName)}: ${F.locs.length} stations (every station GirderDetail checks); plates, deck and skews from the file; L<sub>b</sub>, C<sub>b</sub> ${frB ? `from this project's framing, girder G${frB.line + 1} (its own bearings and cross-frames; Cross-frames tab)` : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft (the file is not of this project's bridge, or the project has no framing)`}; ${flText(D)}.` };
     }
-    if (src === 'analysis') {
+    if (src === 'analysis' || src === 'custom') {
       // as ui/rating.js build() with this app's analysis (the Rating tab's flexure capacities): the same payload, options and project overrides
-      const RUI = window.SBDRatingUI, RT = window.SBDRating, OW = window.SBDOwners, gi = P.girders[ctx.g] ? ctx.g : 0;
-      if (!RUI || !RUI.fromAnalysis) return { err: 'ui/rating.js is not loaded (it puts the analysis in the shape of a hand-off).' };
-      const A = ctx.an || RUI.fromAnalysis(P, gi); if (A.err) return { err: A.err };   // ctx.an: the caller's fromAnalysis (the Rating tab: one analysis)
+      // custom (added 2026-11-01, custom demands PR): the rows entered on this tab (ui/demands.js payload: this project's plates, deck,
+      // materials, skews and owner), the same path; only the locations at the entered stations are kept (cust() below)
+      const RUI = window.SBDRatingUI, RT = window.SBDRating, OW = window.SBDOwners, gi = P.girders[ctx.g] ? ctx.g : 0, CD = window.SBDCustomDemands;
+      if (src === 'custom' && !CD) return { err: 'ui/demands.js is not loaded.' };
+      const C = src === 'custom' ? CD.payload(P, gi, 'flex') : null; if (C && C.err) return { err: C.err };
+      if (!C && (!RUI || !RUI.fromAnalysis)) return { err: 'ui/rating.js is not loaded (it puts the analysis in the shape of a hand-off).' };
+      const A = C ? { pl: C.mode === 'fac' ? facPl(C.pl) : C.pl, R: null } : ctx.an || RUI.fromAnalysis(P, gi); if (A.err) return { err: A.err };   // ctx.an: the caller's fromAnalysis (the Rating tab: one analysis)
       // A.pl as it is (sb-ped-owner PR): LL+IM includes the pedestrian load (pedestrianInLL) and M_PL gives its part, so that the owner
       // multiplier m is kept off it; fromPayload does not add M_PL again (SB2-R1). The owner load rules η, m: factorsOwner (OWN6/OWN7)
       const plR = A.pl, sup = (plR.member || {}).supports || [], own = (P.ownerRules || {}).owner || 'AASHTO', lf = OW.loadFactors(own, (P.ownerRules || {}).eta, (P.xs || {}).nb);
@@ -117,13 +147,17 @@
       else { const fr = ((P.stiffeners || {}).layout || {}).frames || {};   // no framing (Spans &amp; framing tab) or its layout has errors: the stiffener layout's cross-frames, as before
         if (Array.isArray(fr.at) && fr.at.length) fopt.braces = [...new Set([...sup, ...fr.at.map(Number)])].sort((a, b) => a - b); else fopt.Lb = +fr.Lb || 25;
         bTxt = `the cross-frames of the stiffener layout (the project has no framing on the Spans &amp; framing tab, or its layout has errors: ${fopt.braces ? `${fopt.braces.length} brace points` : `L<sub>b</sub> = ${fmt(fopt.Lb, 2)} ft`})`; }
+      if (C && C.mode === 'fac') { delete fopt.lf; fopt.G = FAC1; }   // factored as entered: no load factor, η or m (the region and C_b from the factored M_u)
       const F = FX.fromPayload(plR, fopt);
+      if (C) F.locs = cust(F.locs, C, plR);
       F.prj.mat = { Fyt: G[m.steel.top].Fy, Fyb: G[m.steel.bot].Fy, Fyw: G[m.steel.web].Fy, Fyr: m.rebar.Fyr, fc: m.concrete.fc };
       F.prj.deck = { composite: d.composite !== false, ts: d.ts, tdeck: d.tdeck, haunch: OW.haunchInProps(d.haunch, lf), rebar: d.rebar };
       F.prj.n = SEC.modularRatio(m.concrete.fc, m.concrete.wcE > 0 ? m.concrete.wcE : m.concrete.wc, m.concrete.K1, m.concrete.nRule).n;
       F.prj.rebarInPositive = !!d.rebarInPositiveMp;
       F.prj.a6.method = meth;
       const AR = A.R;
+      if (C) return { prj: F.prj, locs: F.locs, supports: F.supports, fl: D.fl, flS: D.flS, frB: D.br, D, custom: C,
+        what: `Demands: entered (Custom), ${C.mode === 'fac' ? `factored (${esc(CD.SPECS.flex.fac.combo)})` : 'unfactored by load case, with the Strength I and Service II load factors and the owner\'s η and m of this project'}: ${C.rows.length} row(s) on ${esc(P.girders[gi].label || P.girders[gi].id)}, ${F.locs.length} location(s) checked (each entered station; both sides of a support or plate change there); the project's plates, deck and materials at each station; L<sub>b</sub> from ${bTxt}; C<sub>b</sub> from the entered moments where the rows reach both brace points of the unbraced length, else 1.0; ${flText(D)}.` };
       return { prj: F.prj, locs: F.locs, supports: F.supports, fl: D.fl, flS: D.flS, frB: D.br, D,
         what: `This project's analysis of ${esc(P.girders[gi].label || P.girders[gi].id)} (Analysis tab: settings, loads, factors): ${F.locs.length} locations on ${plR.stations.length} stations, ${sup.length - 1} span(s); the project's plates, deck and materials; L<sub>b</sub>, C<sub>b</sub> from ${bTxt}; ${flText(D)}. The same locations and capacities as the Rating tab.${AR && AR.warnings && AR.warnings.length ? '<br>' + AR.warnings.map(esc).join('<br>') : ''}` };
     }
@@ -144,7 +178,7 @@
   function calc(ctx) {
     S.err = ''; S.R = null;
     const I = inputs(ctx); if (I.err) { S.err = I.err; return; }
-    try { const R = window.SBDFlexure.girder(I.locs, I.prj, { supports: I.supports }); S.R = { ...R, what: I.what }; S.sel = R.gov ? R.rows.indexOf(R.gov) : 0; }
+    try { const R = window.SBDFlexure.girder(I.locs, I.prj, { supports: I.supports }); S.R = { ...R, what: I.what, custom: I.custom || null }; S.sel = R.gov ? R.rows.indexOf(R.gov) : 0; }
     catch (e) { S.err = 'Calculation error: ' + (e && e.message); }
     S.key = key(ctx);
   }
@@ -155,7 +189,7 @@
      { err }. */
   function build(ctx) {
     const I = inputs(ctx); if (I.err) return { err: I.err };
-    return { ...window.SBDFlexure.girder(I.locs, I.prj, { supports: I.supports }), prj: I.prj, what: I.what, fl: I.fl, flS: I.flS, frB: I.frB, D: I.D };
+    return { ...window.SBDFlexure.girder(I.locs, I.prj, { supports: I.supports }), prj: I.prj, what: I.what, fl: I.fl, flS: I.flS, frB: I.frB, D: I.D, custom: I.custom || null };
   }
 
   const stepLi = s => `<li id="st-${esc(s.id)}"${s.ok === false ? ' class="no"' : ''}><div class="lbl">${esc(s.label)}${s.ref ? `<span class="ref">${esc(s.ref)}</span>` : ''}</div><div>${window.SharedSteps.line(s, true)}</div>${s.note ? `<div class="nt">${esc(s.note)}</div>` : ''}</li>`;
@@ -165,18 +199,19 @@
     const nc = ctx.P.deck.composite === false && src === 'example';
     const opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
     const AUI = window.SBDAnalysisUI, gl = ctx.P.girders[ctx.g] || ctx.P.girders[0] || {};
-    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src, auto: !S.src, rd, g: gl.label || gl.id, plName: S.plName, example: 'GirderDetail built-in moments at two locations' }) : '')
+    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src, auto: !S.src && !(window.SBDCustomDemands && window.SBDCustomDemands.srcGet(ctx.P, 'flex')), rd, g: gl.label || gl.id, plName: S.plName, example: 'GirderDetail built-in moments at two locations' }) : '')
       + `<section class="sec"><div class="secHead">Flexure: demands and options</div><div class="secBody">
-      <div class="fRow"><label for="fx_src">Demands</label><select id="fx_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', src)}${opt('example', 'Example (GirderDetail built-in moments)', src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', src)}</select></div>
+      <div class="fRow"><label for="fx_src">Demands</label><select id="fx_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', src)}${opt('example', 'Example (GirderDetail built-in moments)', src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', src)}${window.SBDCustomDemands ? opt('custom', 'Custom (entered)', src) : ''}</select></div>
       ${src === 'file' ? `<div class="fRow"><label for="fx_file">File</label><input type="file" id="fx_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>`
-        : src === 'analysis' ? '' : `<div class="fRow"><label for="fx_Lb">L<sub>b</sub>, ${nc ? 'both flanges' : 'bottom flange'}</label><input type="number" step="any" id="fx_Lb" value="${S.Lb}"><span class="unit">ft</span></div>
+        : src === 'analysis' || src === 'custom' ? '' : `<div class="fRow"><label for="fx_Lb">L<sub>b</sub>, ${nc ? 'both flanges' : 'bottom flange'}</label><input type="number" step="any" id="fx_Lb" value="${S.Lb}"><span class="unit">ft</span></div>
            <div class="fRow"><label for="fx_Cb">C<sub>b</sub></label><input type="number" step="any" id="fx_Cb" value="${S.Cb}"><span class="unit"></span></div>
            <div class="fRow"><label for="fx_skew">Largest support skew</label><input type="number" step="any" id="fx_skew" value="${S.skew}"><span class="unit">° (6.10.6.2.3)</span></div>`}
       <div class="fRow"><label for="fx_fl">f<sub>ℓ</sub>, discretely braced flange (first order; blank or 0: from skew, C6.10.1; also used by the Rating tab; saved)</label><input type="number" step="any" min="0" id="fx_fl" value="${flEntered(ctx.P) || ''}" placeholder="${fmt(window.SBDFraming.design(ctx.P, ctx.g).fl, 2)} (skew)"><span class="unit">ksi</span></div>
       ${nc ? `<div class="fRow"><label for="fx_flT">f<sub>ℓ</sub>, top flange (first order)</label><input type="number" step="any" id="fx_flT" value="${S.flT}"><span class="unit">ksi (noncomposite)</span></div>` : ''}
       <div class="fRow"><label for="fx_m">${nc ? 'Flexure (noncomposite)' : 'Negative flexure'}</label><select id="fx_m">${opt('auto', 'Appendix A6 where permitted, else 6.10.8', S.method)}${opt('6108', '6.10.8 only', S.method)}</select></div>
-      <p class="note">Load factors AASHTO LRFD 10th Ed. Tables 3.4.1-1, -2: Strength I γ<sub>DC</sub> 1.25/0.90, γ<sub>DW</sub> 1.50/0.65 by the sign of each moment, LL+IM 1.75; Service II 1.30; Fatigue I 1.75. φ<sub>f</sub> = 1.0. Owner load rules (<a href="#" data-gotab="loads">Loads &amp; LLDF</a>; a file: its ownerRules): η on the Strength I factors (1/η on the minimum ones), m on HL-93 LL+IM at Strength I and Service II, not on the pedestrian load; worked in each location's steps. Choices here are not saved.</p>
+      <p class="note">Load factors AASHTO LRFD 10th Ed. Tables 3.4.1-1, -2: Strength I γ<sub>DC</sub> 1.25/0.90, γ<sub>DW</sub> 1.50/0.65 by the sign of each moment, LL+IM 1.75; Service II 1.30; Fatigue I 1.75. φ<sub>f</sub> = 1.0. Owner load rules (<a href="#" data-gotab="loads">Loads &amp; LLDF</a>; a file: its ownerRules): η on the Strength I factors (1/η on the minimum ones), m on HL-93 LL+IM at Strength I and Service II, not on the pedestrian load; worked in each location's steps. The demand source and f<sub>ℓ</sub> are saved with the project (a hand-off file is not), the other choices here are not.</p>
       <p class="note">Constructibility (deck placement, 6.10.3: GS14–GS16, overhang brackets OH1–OH5) is checked with the construction-stage loads on the <a href="#" data-gotab="cn">Constructibility tab</a>.</p></div></section>`;
+    if (src === 'custom' && window.SBDCustomDemands) h += window.SBDCustomDemands.card(ctx.P, 'flex', ctx.g);   // the entered rows (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Flexure results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="fx_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) {
@@ -199,7 +234,7 @@
           ${r.p7 ? `<div><span>Section</span><span>${r.below ? 'PNA below the web' : r.compact ? 'compact' : 'noncompact'} <a class="wk" href="#st-fx.cmp">§</a></span></div>` : `<div><span>F<sub>nc</sub> (FLB / LTB)</span><span>${fmt(r.lt.FLB, 2)} / ${fmt(r.lt.LTB, 2)} ksi <a class="wk" href="#st-fx.Fnc">§</a></span></div><div><span>App. A6</span><span>${r.A6.ok ? (r.useA6 ? 'permitted, used' : 'permitted, not selected') : 'not permitted'} <a class="wk" href="#st-fx.a6.ok">§</a></span></div>`}
           <div><span>D<sub>c</sub> (Service II)</span><span>${fmt(r.DcS, 3)} in <a class="wk" href="#st-fx.DcS">§</a></span></div><div><span>Fatigue I Δf top / bottom</span><span>${fmt(r.dfT, 2)} / ${fmt(r.dfB, 2)} ksi <a class="wk" href="#st-fx.fatT">§</a></span></div></div></div></section>`;
         h += `<section class="sec"><div class="secHead">Worked steps, ${esc(r.name)}</div><div class="secBody"><p class="note">Flexure steps first, then the section properties of this location (also on the Section properties tab). AASHTO LRFD 10th Ed. (2024); y up from the bottom of the steel; tension +.</p>
-          ${window.SharedSteps.groupsHTML(groups('x', r.steps), { open: OPEN, item: stepLi })}</div></section>`;
+          ${window.SharedSteps.groupsHTML(groups('x', stepsOf(R, r)), { open: OPEN, item: stepLi })}</div></section>`;
       }
     }
     host.innerHTML = h;
@@ -207,7 +242,9 @@
     { const sl = host.querySelector('#gfx_fx'); if (sl && S.R && !stale && !S.err && window.SBDGfxA) window.SBDGfxA.flexure(sl, { P: ctx.P, gi: ctx.g, R: S.R, sel: S.sel, onSelect: k => { S.sel = k; redraw(); } }); }
     const on = (id, ev, f) => { const el = host.querySelector('#' + id); if (el) el.addEventListener(ev, f); };
     const redraw = () => render(host, ctx);
-    on('fx_src', 'change', e => { S.src = e.target.value; redraw(); });
+    on('fx_src', 'change', e => { const v = e.target.value; S.src = v === 'file' ? 'file' : null;   // saved with the project (P.demandSrc.flex), a file for the page view
+      if (window.SBDCustomDemands) window.SBDCustomDemands.srcSet(ctx.P, 'flex', v === 'file' ? null : v); if (ctx.changed && v !== 'file') ctx.changed(); else redraw(); });
+    if (src === 'custom' && window.SBDCustomDemands) window.SBDCustomDemands.wire(host, ctx.P, 'flex', ctx.g, () => (ctx.changed ? ctx.changed() : redraw()));
     on('fx_m', 'change', e => { S.method = e.target.value; redraw(); });
     ['Lb', 'Cb', 'flT', 'skew'].forEach(k => on('fx_' + k, 'change', e => { const v = Number(e.target.value); if (isFinite(v)) S[k] = v; redraw(); }));
     on('fx_fl', 'change', e => { const t = e.target.value, v = t === '' ? 0 : Number(t); if (!(isFinite(v) && v >= 0)) return;   // f_ℓ entered: saved in the project (SB2-W1)
@@ -221,5 +258,5 @@
     const list = host.querySelector('.fx-list'); if (list) list.addEventListener('click', e => { const tr = e.target.closest('[data-fx]'); if (!tr) return; S.sel = +tr.dataset.fx; redraw(); });
   }
 
-  window.SBDFlexureUI = { render, build, TP, TOPICS, groups };
+  window.SBDFlexureUI = { render, build, TP, TOPICS, groups, stepsOf };
 })();

@@ -25,7 +25,8 @@
   /* the demand source (added 2026-10-30, report wiring PR): the one chosen (S.src), else the default: this project's analysis when the
      project is complete (SBDAnalysis.ready), else the example */
   const rdOf = ctx => (window.SBDAnalysis && window.SBDAnalysis.ready ? window.SBDAnalysis.ready(ctx.P, ctx.P.girders[ctx.g] ? ctx.g : 0) : { ok: false, why: ['The analysis module is not loaded.'] });
-  const srcOf = ctx => S.src || (rdOf(ctx).ok ? 'analysis' : 'example');
+  // the choice made on the tab is saved with the project (P.demandSrc.shear, custom demands PR 2026-11-01; a hand-off file only for the page view)
+  const srcOf = ctx => S.src || (window.SBDCustomDemands && window.SBDCustomDemands.srcGet(ctx.P, 'shear')) || (rdOf(ctx).ok ? 'analysis' : 'example');
   // GirderDetail's built-in Girder section rows (GM.gs.def.rows): shears, unfactored, kip
   const EX = [{ name: 'Span 1, max. positive moment', x: 44, V: { DC1: 20, DC2: 3, DW: 3, LL: 40, CL: 3, f: 25, UT: 0, UF: 0 } },
     { name: 'Pier 1', x: 109.99, V: { DC1: 95, DC2: 14, DW: 16, LL: 105, CL: 12, f: 55, UT: 0, UF: 0 } }];
@@ -109,6 +110,8 @@
   }
 
   /* ---------- calculation ---------- */
+  /* inPan(xs, q): an entered station within the panel q (p..q, ft) */
+  const inPan = (xs, q) => xs.some(x => x >= Math.min(q.p, q.q) - 1e-6 && x <= Math.max(q.p, q.q) + 1e-6);
   function build(ctx) {
     const P = ctx.P, M = window.SBDModel, SH = window.SBDShear, SB = window.SBDStiffeners, OW = window.SBDOwners, st = ensure(P), ly = st.layout, g = ctx.g || 0;
     const own = P.ownerRules || { owner: 'AASHTO', eta: {} }, lf = OW.loadFactors(own.owner, own.eta, (P.xs && P.xs.nb) || 0), env = { owner: own.owner, lf };
@@ -117,6 +120,9 @@
     const Fyw = M.GRADES[P.materials.steel.web].Fy, G = SH.factorsOwner(lf);
     if (ctx.pl === undefined && src === 'file' && !pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
     if (ctx.pl === undefined && src === 'analysis') { const A = fromAnalysis(P, g); if (A.err) return A; pl = A.pl; AR = A.R; }
+    // custom (added 2026-11-01, custom demands PR): the rows and reactions entered on this tab (ui/demands.js payload), the same path as a
+    // file or the analysis; only the stations, panels, stiffeners and bearings that the entered rows reach are checked (custom() below)
+    let C = null; if (ctx.pl === undefined && src === 'custom') { if (!window.SBDCustomDemands) return { err: 'ui/demands.js is not loaded.' }; C = window.SBDCustomDemands.payload(P, g, 'shear'); if (C.err) return { err: C.err }; pl = C.pl; }
     const gm = geom(P, g, pl), D = gm.D;
     // sections along a range: both sides of every plate change inside (Preliminary sizing tsSecFns)
     const pts = (p, q) => { const xs = [p, q]; gm.chg.forEach(x => { if (x > p && x < q) xs.push(x - 1e-6, x + 1e-6); }); const Lt = gm.sup[gm.sup.length - 1]; return xs.map(x => Math.min(Math.max(x, 1e-6), Lt - 1e-6)); };
@@ -127,30 +133,36 @@
     let locs;
     if (pl) locs = SH.fromPayload(pl, { G }).locs;
     else locs = EX.filter(e => gm.cont || e.x < gm.sup[1]).map(e => ({ name: e.name, x: e.x, plates: gm.zAt(e.x), V: e.V }));
+    if (C) locs = window.SBDCustomDemands.keepAt(locs, C.xs);   // the entered stations (both sides, ±0.01 ft, of a support there)
     locs = locs.map(L => { const q = panAt(L.x), on = ly.web !== 'unstiffened', Vp = q && gm.dem ? gm.dem.inPanel(q.p, q.q) : null;
       const plT = { ...(L.pl || {}), ...(Vp && Vp.plLL ? { VLLp: [Vp.plLL, Vp.LL] } : {}) };   // GD45: the pedestrian part of the panel's V_LL+IM (sb-ped-owner PR)
       return { ...L, do: q && on ? q.d : 0, end: !!(q && q.end && on), Vpan: Vp, pan: q ? q.i : null, ...(Object.keys(plT).length ? { pl: plT } : {}) }; });
     const stations = locs.map(L => { const r = SH.location(L, { mat: { Fyw }, G }); r.pan = L.pan; return r; });
     // transverse stiffeners: every intermediate stiffener and connection plate of the layout (file), GirderDetail's built-in rows (example)
-    const tsRows = gm.dem ? SB.stiffenerRows(bays, gm.zAt, gm.dem, { label: `G${gm.gNo}` }) : JSON.parse(JSON.stringify(SB.TS_DEFAULT.rows));
+    let tsRows = gm.dem ? SB.stiffenerRows(bays, gm.zAt, gm.dem, { label: `G${gm.gNo}` }) : JSON.parse(JSON.stringify(SB.TS_DEFAULT.rows));
+    if (C) tsRows = tsRows.filter(r => { const a = pans.find(q => Math.abs(q.q - r.x) <= 0.01), b = pans.find(q => Math.abs(q.p - r.x) <= 0.01); return a && b && inPan(C.xs, a) && inPan(C.xs, b); });   // both panels reached
     const TS = tsRows.length ? SB.transverse({ gW: P.materials.steel.web, gS: st.transverse.gS, Fexx: st.transverse.Fexx, gam: { dc: 1.25, dw: 1.50, ll: 1.75, fat: 1.75 }, types: st.transverse.types, rows: tsRows }, env) : null;
     // bearings: one per support
     let bsRows;
     // reactions: the analysis support reactions where the demands come from this app's analysis (SB2-O16); from a file, the jump in shear
     // (DC, DW) and the sum of the two LL+IM shear envelopes (an upper bound, SB2-O16 interim; the file path is kept as it is)
     const rxn = pl && Array.isArray(pl.reactions) && pl.reactions.length === gm.sup.length ? pl.reactions : null;
-    if (gm.dem) bsRows = gm.sup.map((x, k) => { const end = k === 0 || k === gm.sup.length - 1 || !gm.cont, s = gm.zAt(Math.min(Math.max(x + (k === gm.sup.length - 1 ? -0.01 : 0.01), 0), gm.sup[gm.sup.length - 1])), R = rxn ? rxn[k] : gm.dem.reaction(x);
+    if (gm.dem) bsRows = gm.sup.map((x, k) => { const end = k === 0 || k === gm.sup.length - 1 || !gm.cont, s = gm.zAt(Math.min(Math.max(x + (k === gm.sup.length - 1 ? -0.01 : 0.01), 0), gm.sup[gm.sup.length - 1])), R = rxn ? rxn[k] || { DC1: 0, DC2: 0, DW: 0, LL: 0 } : gm.dem.reaction(x);   // custom: a support without reactions entered is dropped below
       return { name: `${k === 0 ? 'Abut. 1' : k === gm.sup.length - 1 ? 'Abut. 2' : 'Pier ' + k}, G${gm.gNo}`, type: end ? 'A' : 'B', tw: s.tw, bft: s.topB, bfb: s.botB, tfb: s.botT, ed: end ? st.bearing.ed : 0,
         RDC1: R.DC1, RDC2: R.DC2, RDW: R.DW, RLL: R.LL, ...(R.UT || R.UF ? { ut: { VUT: R.UT, VUF: R.UF } } : {}), ...(R.PL ? { pl: { RLL: [R.PL, R.LL] } } : {}) }; });   // GD45: R_PL part (sb-ped-owner PR)
     else bsRows = JSON.parse(JSON.stringify(SB.BS_DEFAULT.rows));
-    const BS = SB.bearing({ D, gW: P.materials.steel.web, gS: st.bearing.gS, Fexx: st.bearing.Fexx, gam: { dc: 1.25, dw: 1.50, ll: 1.75 }, types: st.bearing.types, rows: bsRows }, env);
-    const tsC = TS && !TS.errors.length ? SB.transverseChecks(TS) : null, bsC = !BS.errors.length ? SB.bearingChecks(BS) : null;
+    if (C) bsRows = bsRows.filter((r, k) => rxn && rxn[k]);   // the supports with reactions entered
+    if (C) { const keep = panels.rows.filter(q => inPan(C.xs, q)), mp = new Map(keep.map((q, j) => [q.i, j])); keep.forEach((q, j) => { q.i = j; }); stations.forEach(r => { r.pan = mp.has(r.pan) ? mp.get(r.pan) : null; });   // the panels with an entered station
+      panels.rows = keep; panels.gov = keep.reduce((b, q) => (!b || (isFinite(q.r) || q.r == null ? q.r : Infinity) > (isFinite(b.r) || b.r == null ? b.r : Infinity) ? q : b), null); }   // as SH.panels gov (SB2-R2)
+    const BS = C && !bsRows.length ? { rows: [], errors: [], none: true } : SB.bearing({ D, gW: P.materials.steel.web, gS: st.bearing.gS, Fexx: st.bearing.Fexx, gam: { dc: 1.25, dw: 1.50, ll: 1.75 }, types: st.bearing.types, rows: bsRows }, env);   // none: custom, no reactions entered
+    const tsC = TS && !TS.errors.length ? SB.transverseChecks(TS) : null, bsC = BS.none ? [] : !BS.errors.length ? SB.bearingChecks(BS) : null;
     // governing ratio of each list
     const govCk = (C, rowIdx) => { let b = null; (C || []).forEach(c => c.items.forEach(it => { if ((isFinite(it.r) || (typeof it.r === 'number' && it.st === 'fail')) && (it.st === 'pass' || it.st === 'fail') && (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.r))) b = { c, it, i: rowIdx(it) }; })); return b; };
     const tsRowOf = it => TS.rows.findIndex(r => it.loc.startsWith(`${r.name} (Type ${r.type})`)), bsRowOf = it => { const k = BS.rows.findIndex(r => it.loc.startsWith(`${r.name} (Type ${r.type})`)); if (k >= 0) return k; const m = /^Type (\w+),/.exec(it.loc); return m ? Math.max(0, BS.rows.findIndex(r => r.type === m[1])) : 0; };   // BS1 is per stiffener type: its first bearing
     const stGov = stations.reduce((b, r) => (r.gov && (!b || (x => isFinite(x) ? x : Infinity)(r.gov.ratio) > (x => isFinite(x) ? x : Infinity)(b.gov.ratio)) ? r : b), null);
     return { gm, D, Fyw, G, lf, bays, panels, stations, stGov, TS, tsC, tsGov: tsC ? govCk(tsC, tsRowOf) : null, BS, bsC, bsGov: bsC ? govCk(bsC, bsRowOf) : null, rxn: !!rxn, AR,
-      what: pl && pl._schema === 'sbd2-analysis' ? `This project's analysis of ${esc((P.girders[g] || {}).label || '')} (Analysis tab: settings, loads, factors): ${pl.stations.length} stations, ${gm.sup.length - 1} span(s); the project's plates, stiffener layout and plates.${AR && AR.warnings && AR.warnings.length ? '<br>' + AR.warnings.map(esc).join('<br>') : ''}`
+      custom: C, what: C ? `Demands: entered (Custom), unfactored by load case, with the Strength I factors and the owner's η and m of this project: ${C.rows.length} row(s) on ${esc((P.girders[g] || {}).label || '')}, ${stations.length} station(s), ${panels.rows.length} panel(s), ${TS ? TS.rows.length : 0} stiffener(s) / connection plate(s) and ${bsRows.length} bearing(s) reached by the entered rows; the project's plates and stiffener layout.`
+        : pl && pl._schema === 'sbd2-analysis' ? `This project's analysis of ${esc((P.girders[g] || {}).label || '')} (Analysis tab: settings, loads, factors): ${pl.stations.length} stations, ${gm.sup.length - 1} span(s); the project's plates, stiffener layout and plates.${AR && AR.warnings && AR.warnings.length ? '<br>' + AR.warnings.map(esc).join('<br>') : ''}`
         : pl ? `${esc(S.plName)}: ${pl.stations.length} stations, ${gm.sup.length - 1} span(s), G${gm.gNo}; plates and shears from the file; the project's stiffener layout and plates.` : `Example: GirderDetail's built-in shears (Girder section, Transverse stiffeners and Bearing stiffeners rows) with this project's plates (${esc((P.girders[g] || {}).label || '')}) and stiffener inputs. Load a hand-off file for the shear in every panel.` };
   }
   const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(ctx), S.plName]);
@@ -167,17 +179,20 @@
     css();
     const stale = !S.R || S.key !== key(ctx), opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
     const AUI = window.SBDAnalysisUI, gl = ctx.P.girders[ctx.g] || ctx.P.girders[0] || {}, src = srcOf(ctx);
-    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src, auto: !S.src, rd: rdOf(ctx), g: gl.label || gl.id, plName: S.plName, example: 'GirderDetail built-in shears' }) : '')
+    let h = (AUI && AUI.srcBar ? AUI.srcBar({ src, auto: !S.src && !(window.SBDCustomDemands && window.SBDCustomDemands.srcGet(ctx.P, 'shear')), rd: rdOf(ctx), g: gl.label || gl.id, plName: S.plName, example: 'GirderDetail built-in shears' }) : '')
       + `<section class="sec"><div class="secHead">Shear &amp; stiffeners: demands</div><div class="secBody">
-      <div class="fRow"><label for="sh_src">Demands</label><select id="sh_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', src)}${opt('example', 'Example (GirderDetail built-in shears)', src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', src)}</select></div>
+      <div class="fRow"><label for="sh_src">Demands</label><select id="sh_src">${opt('analysis', 'This project\'s analysis (Analysis tab)', src)}${opt('example', 'Example (GirderDetail built-in shears)', src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', src)}${window.SBDCustomDemands ? opt('custom', 'Custom (entered)', src) : ''}</select></div>
       ${src === 'file' ? `<div class="fRow"><label for="sh_file">File</label><input type="file" id="sh_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
-      <p class="note">Strength I γ<sub>DC</sub> 1.25, γ<sub>DW</sub> 1.50, LL+IM 1.75 (shears are magnitudes: the maximum factors; with the owner's η and m, Loads &amp; LLDF tab); special fatigue loading 6.10.5.3: permanent shear + 1.75 V<sub>fat</sub>; deck placement 1.25 V<sub>DC1</sub> + 1.50 V<sub>CL</sub>. φ<sub>v</sub> = 1.0. Stiffener inputs: Stiffeners tab.</p></div></section>`;
+      <p class="note">Strength I γ<sub>DC</sub> 1.25, γ<sub>DW</sub> 1.50, LL+IM 1.75 (shears are magnitudes: the maximum factors; with the owner's η and m, Loads &amp; LLDF tab); special fatigue loading 6.10.5.3: permanent shear + 1.75 V<sub>fat</sub>; deck placement 1.25 V<sub>DC1</sub> + 1.50 V<sub>CL</sub>. φ<sub>v</sub> = 1.0. Stiffener inputs: Stiffeners tab. The demand source is saved with the project (a hand-off file is not).</p></div></section>`;
+    if (src === 'custom' && window.SBDCustomDemands) h += window.SBDCustomDemands.card(ctx.P, 'shear', ctx.g);   // the entered rows and reactions (ui/demands.js)
     h += `<div class="alert stale"${stale ? '' : ' hidden'}><span>Shear results are out of date: inputs changed or nothing calculated yet.</span><button type="button" class="primary" id="sh_calc">Calculate</button></div>`;
     if (S.err && !stale) h += `<div class="alert err">${esc(S.err)}</div>`;
     else if (S.R && !stale) h += results(S.R);
     host.innerHTML = h;
     const on = (id, ev, f) => { const el = host.querySelector('#' + id); if (el) el.addEventListener(ev, f); }, redraw = () => render(host, ctx);
-    on('sh_src', 'change', e => { S.src = e.target.value; redraw(); });
+    on('sh_src', 'change', e => { const v = e.target.value; S.src = v === 'file' ? 'file' : null;   // saved with the project (P.demandSrc.shear), a file for the page view
+      if (window.SBDCustomDemands) window.SBDCustomDemands.srcSet(ctx.P, 'shear', v === 'file' ? null : v); if (ctx.changed && v !== 'file') ctx.changed(); else redraw(); });
+    if (src === 'custom' && window.SBDCustomDemands) window.SBDCustomDemands.wire(host, ctx.P, 'shear', ctx.g, () => (ctx.changed ? ctx.changed() : redraw()));
     on('sh_calc', 'click', () => { S.err = ''; S.R = null; try { const R = build(ctx); if (R.err) S.err = R.err; else { S.R = R; S.sel = defaultSel(R); } } catch (er) { S.err = 'Calculation error: ' + (er && er.message); } S.key = key(ctx); redraw(); });
     on('sh_file', 'change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
       rd.onload = () => { try { const j = JSON.parse(String(rd.result)), pl = j.payload || j; if (!pl || pl._schema !== 'stgirder-external-demands' || !Array.isArray(pl.stations)) throw new Error('not a GirderDetail → ST-Girder hand-off file (schema stgirder-external-demands)');
@@ -212,7 +227,7 @@
   const A = '10th Ed. Art. ';
   const TOPICS = {
     ts: [{ key: 'geo', title: 'Projecting width of the plate', ref: A + '6.10.11.1.2', ids: /^(bmin|bmax|bf4)$/ },
-      { key: 'dem', title: 'Demands: Strength I shear at the stiffener', ref: 'Tables 3.4.1-1, -2', ids: /^(pl\.|Vu)/, res: /^Vu$/ },
+      { key: 'dem', title: 'Demands: Strength I shear at the stiffener', ref: 'Tables 3.4.1-1, -2', ids: /^(pl\.|Vu|src$|cd\.src$)/, res: /^Vu$/ },
       { key: 'lim', title: 'Panel spacing limits', ref: A + '6.10.9.1', ids: /^p[12]\.lim$/ },
       { key: 'pan', title: 'Web shear resistance of the two adjacent panels', ref: A + '6.10.9.3', ids: /^p[12]\./ },
       { key: 'It', title: 'Moment of inertia of the stiffener', ref: A + '6.10.11.1.3', ids: /^(It|J|It1|Fcrs|rhot|It2|rhow|Ireq)$/ },
@@ -221,18 +236,18 @@
       { key: 'own', title: 'Owner requirements', ref: '', ids: /^own$/ }],
     bs: [{ key: 'geo', title: 'Projecting width of the plates', ref: A + '6.10.11.2.2', ids: /^b$/ },
       { key: 'det', title: 'Plate width and flange connection', ref: A + '6.10.11.2.1', ids: /^(bw|conn)$/ },
-      { key: 'dem', title: 'Demands: Strength I reaction', ref: 'Tables 3.4.1-1, -2', ids: /^(pl\.|Ru$)/, res: /^Ru$/ },
+      { key: 'dem', title: 'Demands: Strength I reaction', ref: 'Tables 3.4.1-1, -2', ids: /^(pl\.|Ru$|src$|cd\.src$)/, res: /^Ru$/ },
       { key: 'brg', title: 'Bearing resistance', ref: A + '6.10.11.2.3', ids: /^(bEff|Apn|Rsb|Rsb\.ok)$/ },
       { key: 'sec', title: 'Effective column section', ref: A + '6.10.11.2.4', ids: /^(strip|sEnd|Lw|A|I|rs)$/ },
       { key: 'col', title: 'Axial resistance of the effective column', ref: A + '6.10.11.2.4, 6.9.4.1.1, 6.9.2.1', ids: /^(sl|Po|Pe|Pn|Pr|Pr\.ok)$/ },
       { key: 'weld', title: 'Stiffener-to-web welds', ref: A + '6.13.3.2.4b, 6.13.3.4', ids: /^(weld|weld\.ok|wmin)$/ },
       { key: 'own', title: 'Owner requirements', ref: '', ids: /^own$/ }],
     pan: [{ key: 'geo', title: 'Panel geometry', ref: '', ids: /^d$/ },
-      { key: 'dem', title: 'Demand: Strength I shear in the panel', ref: A + '6.10.9.3.1', ids: /^Vu$/ },
+      { key: 'dem', title: 'Demand: Strength I shear in the panel', ref: A + '6.10.9.3.1', ids: /^(Vu|src|cd\.src)$/ },
       { key: 'res', title: 'Nominal shear resistance', ref: A + '6.10.9.2, 6.10.9.3', ids: /^v\./ },
       { key: 'chk', title: 'Check', ref: A + '6.10.9.1', ids: /^ok$/ }],
     loc: [{ key: 'sec', title: 'Section: flange areas', ref: '', ids: /^flgA$/ },
-      { key: 'dem', title: 'Demands: Strength I shear', ref: 'Tables 3.4.1-1, -2', ids: /^(Vu|VuPan|VuP)$/, res: /^VuP$/ },
+      { key: 'dem', title: 'Demands: Strength I shear', ref: 'Tables 3.4.1-1, -2', ids: /^(Vu|VuPan|VuP|src|cd\.src)$/, res: /^VuP$/ },
       { key: 'res', title: 'Nominal shear resistance of the panel', ref: A + '6.10.9.2, 6.10.9.3', ids: /^pan\./ },
       { key: 'chk', title: 'Check, Strength I', ref: A + '6.10.9.1', ids: /^ok$/ },
       { key: 'cn', title: 'Deck placement (constructibility)', ref: A + '6.10.3.3', ids: /^(VuC|okC)$/ },
@@ -273,17 +288,17 @@
         ${R.TS.rows.map((r, i) => `<tr data-sh="ts:${i}" class="${S.sel && S.sel.k === 'ts' && S.sel.i === i ? 'sel' : ''}${R.tsGov && R.tsGov.i === i ? ' fx-gov' : ''}"><td class="lft">${esc(r.name)} (Type ${esc(r.type)})${r.end === 'yes' ? ', end panel 1' : ''}</td><td>${fmt(r.do1, 2)} / ${fmt(r.do2, 2)}</td><td>${fmt(r.It, 2)} / ${fmt(r.Ireq, 2)}</td><td>${esc(byRow[i].id)}</td><td class="${byRow[i].st === 'fail' ? 'fx-ng' : cls(byRow[i].r)}">${fmt(byRow[i].r, 3)}</td></tr>`).join('')}
         </tbody></table></div></div></section>`; }
     // bearing stiffeners
-    if (!R.BS.errors.length) h += `<section class="sec"><div class="secHead">Bearing stiffeners (6.10.11.2)</div><div class="secBody"><p class="note">${R.rxn ? `One bearing per support (Type A at the abutments, Type B at the piers). Reactions: the support reactions of this project's analysis (DC1, DC2, DW${R.AR && R.AR.st.UT ? ', UT' : ''}${R.AR && R.AR.st.UF ? ', UF' : ''}; LL+IM the reaction envelope g<sub>V</sub>R<sub>HL93</sub>, the larger g<sub>V</sub> of the adjacent spans), worked on the Analysis tab (an.R.LL.k, an.eq.*).`
+    if (!R.BS.errors.length) h += `<section class="sec"><div class="secHead">Bearing stiffeners (6.10.11.2)</div><div class="secBody"><p class="note">${R.custom ? (R.BS.none ? 'No support reactions entered in the Custom table: the bearing stiffeners are not checked.' : 'The supports with reactions entered in the Custom table (Type A at the abutments, Type B at the piers).') : R.rxn ? `One bearing per support (Type A at the abutments, Type B at the piers). Reactions: the support reactions of this project's analysis (DC1, DC2, DW${R.AR && R.AR.st.UT ? ', UT' : ''}${R.AR && R.AR.st.UF ? ', UF' : ''}; LL+IM the reaction envelope g<sub>V</sub>R<sub>HL93</sub>, the larger g<sub>V</sub> of the adjacent spans), worked on the Analysis tab (an.R.LL.k, an.eq.*).`
       : R.gm.dem ? 'One bearing per support (Type A at the abutments, Type B at the piers). Reactions from the hand-off shears: DC, DW the jump in shear; LL+IM the sum of the two shear envelopes beside the support, an upper bound of the reaction envelope (GirderDetail uses the reaction envelope of its analysis). Choose "This project\'s analysis" for the analysis reactions.' : 'GirderDetail\'s built-in rows.'}</p>
       <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Bearing</th><th>R<sub>u</sub> (kip)</th><th>(R<sub>sb</sub>)<sub>r</sub> (kip)</th><th>P<sub>r</sub> (kip)</th><th>Welds R<sub>r</sub> (kip)</th><th>Ratio</th></tr></thead><tbody>
       ${R.BS.rows.map((r, i) => { const q = Math.max(r.Ru / r.Rsb, r.Ru / r.Pr, r.Ru / r.Rweld); return `<tr data-sh="bs:${i}" class="${S.sel && S.sel.k === 'bs' && S.sel.i === i ? 'sel' : ''}${R.bsGov && R.bsGov.i === i ? ' fx-gov' : ''}"><td class="lft">${esc(r.name)} (Type ${esc(r.type)})</td><td>${fmt(r.Ru, 1)}</td><td>${fmt(r.Rsb, 1)}</td><td>${fmt(r.Pr, 1)}</td><td>${fmt(r.Rweld, 1)}</td><td class="${cls(q)}">${fmt(q, 3)}</td></tr>`; }).join('')}
       </tbody></table></div><p class="note">Checks: ${R.bsC.map(c => `${esc(c.id)} ${tt(c.title)} (${esc(c.status)})`).join('; ')}.</p></div></section>`;
     // worked steps of the selection
     const sel = S.sel || { k: 'pan', i: 0 }; let title = '', list = [];
-    if (sel.k === 'pan' && R.panels.rows[sel.i]) { const q = R.panels.rows[sel.i]; title = `panel ${fmt(q.p, 2)}–${fmt(q.q, 2)} ft`; list = q.steps; }
-    else if (sel.k === 'loc' && R.stations[sel.i]) { const r = R.stations[sel.i]; title = r.name; list = r.steps; }
-    else if (sel.k === 'ts' && R.TS && R.TS.rows[sel.i]) { const r = R.TS.rows[sel.i]; title = `${r.name} (Type ${r.type})`; list = window.SBDStiffeners.transverseSteps(R.TS, r); }
-    else if (sel.k === 'bs' && R.BS.rows[sel.i]) { const r = R.BS.rows[sel.i]; title = `${r.name} (Type ${r.type})`; list = window.SBDStiffeners.bearingSteps(R.BS, r); }
+    if (sel.k === 'pan' && R.panels.rows[sel.i]) { const q = R.panels.rows[sel.i]; title = `panel ${fmt(q.p, 2)}–${fmt(q.q, 2)} ft`; list = stepsOf(R, 'pan', q); }
+    else if (sel.k === 'loc' && R.stations[sel.i]) { const r = R.stations[sel.i]; title = r.name; list = stepsOf(R, 'loc', r); }
+    else if (sel.k === 'ts' && R.TS && R.TS.rows[sel.i]) { const r = R.TS.rows[sel.i]; title = `${r.name} (Type ${r.type})`; list = stepsOf(R, 'ts', r); }
+    else if (sel.k === 'bs' && R.BS.rows[sel.i]) { const r = R.BS.rows[sel.i]; title = `${r.name} (Type ${r.type})`; list = stepsOf(R, 'bs', r); }
     if (list.length) { const SS = window.SharedSteps, an = R.AR ? ' <a href="#" class="sg-see" data-gotab="an">worked on the Analysis tab</a>' : '';
       // "see" links (CLAUDE.md §6): the shears and reactions of the demand topics are worked on the Analysis tab when the analysis is the source
       h += `<section class="sec"><div class="secHead">Worked steps, ${esc(title)}</div><div class="secBody"><p class="note">Click a row above, or a location on the graphic, to show its work. AASHTO LRFD 10th Ed. (2024); E = 29,000 ksi. Topics in the order of the check: geometry, demands, intermediate values by sub-article, resistance, ratio.</p>
@@ -291,5 +306,14 @@
     return h;
   }
 
-  window.SBDShearUI = { fromAnalysis, ensure, inputs, onClick, render, build, TOPICS, groups };
+  /* stepsOf(R, kind, o): the worked steps of a panel ('pan'), station ('loc'), transverse stiffener ('ts') or bearing ('bs'); with custom
+     demands the step that names them first ("Demands: entered (Custom)", custom demands PR) */
+  function stepsOf(R, kind, o) {
+    const SB = window.SBDStiffeners, list = kind === 'ts' ? SB.transverseSteps(R.TS, o) : kind === 'bs' ? SB.bearingSteps(R.BS, o) : o.steps;
+    if (!R.custom) return list;
+    const CD = window.SBDCustomDemands, sup = R.gm.sup, k = kind === 'bs' ? sup.findIndex(x => (o.name || '').startsWith((x === 0 ? 'Abut. 1' : x === sup[sup.length - 1] ? 'Abut. 2' : `Pier ${sup.indexOf(x)}`) + ',')) : -1;
+    return [CD.step('shear', R.custom, kind === 'pan' ? (o.p + o.q) / 2 : o.x != null ? o.x : 0, kind === 'bs' ? { sup: k } : kind === 'pan' ? { range: [o.p, o.q] } : null)].concat(list);
+  }
+
+  window.SBDShearUI = { fromAnalysis, ensure, inputs, onClick, render, build, TOPICS, groups, stepsOf };
 })();

@@ -30,7 +30,7 @@
       <button type="button" id="rp_build"${built ? '' : ' class="primary"'}>${built ? 'Rebuild' : 'Build report'}</button>`;
     return `${sc}<div class="rp-chips" role="group" aria-label="Report sections">${SEC.map(([k, t]) => `<label class="rp-chip"><input type="checkbox" data-rpinc="${k}"${inc[k] ? ' checked' : ''}>${esc(t)}</label>`).join('')}</div>
       <label>Detail <select id="rp_detail">${opt('gov', 'Governing location of each check', o.detail)}${opt('all', 'Every station (steps open on demand)', o.detail)}</select></label>
-      <label>Demands <select id="rp_src">${opt('analysis', "This project's analysis", S.src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', S.src)}</select></label>
+      <label>Demands <select id="rp_src">${opt('analysis', "This project's analysis", S.src)}${opt('tabs', "Each tab's choice (Custom where entered; else this project's analysis)", S.src)}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', S.src)}</select></label>
       ${S.src === 'file' ? `<input type="file" id="rp_file" accept=".json,application/json" aria-label="Hand-off file"><span class="note">${esc(S.plName)}</span>` : ''}
       <button type="button" id="rp_build"${built ? '' : ' class="primary"'}>${built ? 'Rebuild' : 'Build report'}</button>`;
   }
@@ -117,7 +117,7 @@
     S.busy = true; S.err = ''; render(host, ctx);
     setTimeout(() => {
       try { S.B = window.SBDReportData.compute(ctx.P, ctx.g, { src: S.src, pl: S.pl, plName: S.plName }); if (S.B.err.all) S.err = S.B.err.all;
-        else if (S.src === 'analysis' && window.SBDReportBuild.govRows) { const r = window.SBDReportBuild.govRows(S.B); S.rows.set(rowKey(ctx.P, ctx.g), { rows: r.rows, err: r.err }); } }
+        else if (S.src === 'analysis' && !S.B.custom && window.SBDReportBuild.govRows) { const r = window.SBDReportBuild.govRows(S.B); S.rows.set(rowKey(ctx.P, ctx.g), { rows: r.rows, err: r.err }); } }
       catch (e) { S.B = null; S.err = 'Report error: ' + (e && e.message); }
       S.key = keyOf(ctx); S.busy = false; render(host, ctx);
     }, 30);

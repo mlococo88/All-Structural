@@ -27,14 +27,14 @@
    the output tabs (Analysis, Flexure, Shear, Fatigue, Constructibility, Cross-frames, Splices, Rating, Welds) and the report share one
    analysis per project state, girder and options, so switching tabs does not run the analysis again.
 
-   compute(P, g, opt) -> bundle; opt = { src: 'analysis' (default) | 'file', pl (hand-off payload, src 'file'), plName, want: { key: true }
+   compute(P, g, opt) -> bundle; opt = { src: 'analysis' (default) | 'file' | 'tabs' (each module's tab choice: Custom where chosen, else 'analysis'), pl (hand-off payload, src 'file'), plName, want: { key: true }
    (the sections to compute; default all) }. Each module's failure is caught and reported in bundle.err[key]; the rest still build. */
 (function () {
   'use strict';
   const W = () => window;
   /* the analysis cache (LRU, at most 2 entries per girder + 4): key = project state | girder | options */
   const CACHE = new Map();
-  const pkOf = P => JSON.stringify({ ...P, rating: undefined, flexure: undefined });   // the rating factors (P.rating) and the f_ℓ entered on the Flexure tab (P.flexure) are not read by the analysis
+  const pkOf = P => JSON.stringify({ ...P, rating: undefined, flexure: undefined, custom: undefined, demandSrc: undefined });   // the rating factors (P.rating), the f_ℓ entered on the Flexure tab (P.flexure), the custom demands and the demand choices (P.custom, P.demandSrc) are not read by the analysis
   let RAW = null;   // engine/analysis.js analyzeGirder itself, once install() has put the cache in front of it
   function analysis(P, gi, o, pk, orig) {
     const AN = W().SBDAnalysis, run = orig || RAW || AN.analyzeGirder, k = (pk || pkOf(P)) + '|' + gi + '|' + JSON.stringify(o || {});
@@ -51,7 +51,10 @@
   function compute(P, g, opt) {
     opt = opt || {}; g = g || 0;
     const src = opt.src === 'file' ? 'file' : 'analysis', pl = src === 'file' ? opt.pl : null, want = opt.want || null, on = k => !want || !!want[k];
-    const B = { P, g, src, pl, plName: opt.plName || '', err: {}, girder: P.girders[g] || P.girders[0], t: {} };
+    // opt.src 'tabs' (custom demands PR, 2026-11-01): a module whose tab has "Custom (entered)" chosen (P.demandSrc) takes its entered rows,
+    // the rest this project's analysis
+    const CD = W().SBDCustomDemands, cu = k => opt.src === 'tabs' && !!CD && CD.srcGet(P, k) === 'custom';
+    const B = { P, g, src, pl, plName: opt.plName || '', err: {}, girder: P.girders[g] || P.girders[0], t: {}, custom: ['flex', 'shear', 'cn', 'fat', 'rt', 'spl', 'wt'].filter(cu).length ? { flex: cu('flex'), shear: cu('shear'), cn: cu('cn'), fat: cu('fat'), rt: cu('rt'), spl: cu('spl'), wt: cu('wt') } : null };
     if (src === 'file' && !pl) { B.err.all = 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).'; return B; }
     const AN = W().SBDAnalysis, orig = AN && AN.analyzeGirder, memo = new Map();
     const pk = AN ? pkOf(P) : '';
@@ -63,19 +66,20 @@
       if (on('loads') || on('proj')) B.loads = run('loads', () => { const R = W().SBDUiLoads.calc(P, g); return R.errors && R.errors.length ? { err: R.errors.map(e => e.msg || e).join(' ') } : R; });
       if (src === 'analysis' && (on('an') || on('spl') || on('flex') || on('rt') || on('shear') || on('fat') || on('sum'))) B.an = run('an', () => { const A = AN.analyzeGirder(P, g); return A.errors && A.errors.length ? { err: 'Analysis: ' + A.errors.map(e => e.msg || e).join(' ') } : A; });
       if (on('sec')) B.sec = run('sec', () => sections(P, g, B.an ? B.an.sup : pl ? (pl.member || {}).supports : sup0));
-      if (on('rt') || on('flex') || on('sum')) B.rating = run('rt', () => W().SBDRatingUI.build(src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
+      if (on('rt') || on('flex') || on('sum')) B.rating = run('rt', () => W().SBDRatingUI.build(cu('rt') ? { P, g, src: 'custom' } : src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
       // flexure: the Flexure module (f_ℓ and brace points as the tab: engine/framing.js design); with the analysis the rating's flexure is
       // that module's build already (ui/rating.js, paths PR): the same object, not built twice
-      if (on('flex') || on('sum')) B.flex = src === 'file' ? run('flex', () => W().SBDFlexureUI.build({ P, g, src: 'file', pl, plName: B.plName, method: 'auto' }))
-        : run('flex', () => (B.rating && B.rating.flex ? B.rating.flex : W().SBDFlexureUI.build({ P, g, src: 'analysis', method: 'auto' })));
-      if (src === 'analysis' && B.flex && B.rating) B.flexSame = linkRating(B.rating, B.flex);
-      if (on('shear') || on('sum')) B.shear = run('shear', () => W().SBDShearUI.build(src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
-      if (on('fat') || on('sum')) B.fat = run('fat', () => W().SBDFatigueUI.build(src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
-      if (on('cn') || on('sum')) B.cn = run('cn', () => W().SBDConstrUI.build(src === 'file' ? { P, g, src: 'file', pl, plName: B.plName } : { P, g, src: 'project' }));
+      if (on('flex') || on('sum')) B.flex = cu('flex') ? run('flex', () => W().SBDFlexureUI.build({ P, g, src: 'custom', method: 'auto' })) : src === 'file' ? run('flex', () => W().SBDFlexureUI.build({ P, g, src: 'file', pl, plName: B.plName, method: 'auto' }))
+        : run('flex', () => (B.rating && B.rating.flex && !cu('rt') ? B.rating.flex : W().SBDFlexureUI.build({ P, g, src: 'analysis', method: 'auto' })));
+      if (src === 'analysis' && B.flex && B.rating && !cu('rt')) B.flexSame = linkRating(B.rating, B.flex);
+      if (on('shear') || on('sum')) B.shear = run('shear', () => W().SBDShearUI.build(cu('shear') ? { P, g, src: 'custom' } : src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
+      if (on('fat') || on('sum')) B.fat = run('fat', () => W().SBDFatigueUI.build(cu('fat') ? { P, g, src: 'custom' } : src === 'file' ? { P, g, pl } : { P, g, src: 'analysis' }));
+      if (on('cn') || on('sum')) B.cn = run('cn', () => W().SBDConstrUI.build(cu('cn') ? { P, g, src: 'custom' } : src === 'file' ? { P, g, src: 'file', pl, plName: B.plName } : { P, g, src: 'project' }));
       if (on('frm') || on('sum')) B.frm = run('frm', () => W().SBDFramingUI.build({ P, g }));
-      if ((on('spl') || on('sum')) && src === 'analysis') B.spl = run('spl', () => { if (!((P.framing || {}).splices || []).length) return { err: 'No field splice stations: enter them on the Splices tab.' };
+      if ((on('spl') || on('sum')) && cu('spl')) B.spl = run('spl', () => W().SBDSplicesUI.build({ P, g, src: 'custom' }));
+      else if ((on('spl') || on('sum')) && src === 'analysis') B.spl = run('spl', () => { if (!((P.framing || {}).splices || []).length) return { err: 'No field splice stations: enter them on the Splices tab.' };
         if (!B.an) return { err: B.err.an || 'No analysis.' }; return W().SBDSplices.girder(P, g, B.an, { env: W().SBDSplicesUI.envOf(P) }); });
-      if (on('wd') || on('sum')) B.wd = run('wd', () => W().SBDWeldsUI.build(src === 'file' ? { P, g, src: 'file', pl, plName: B.plName } : { P, g, src: 'analysis' }));
+      if (on('wd') || on('sum')) B.wd = run('wd', () => W().SBDWeldsUI.build(cu('wt') ? { P, g, src: 'custom' } : src === 'file' ? { P, g, src: 'file', pl, plName: B.plName } : { P, g, src: 'analysis' }));
     } finally { if (AN) AN.analyzeGirder = orig; }
     B.sup = B.an ? B.an.sup : pl ? ((pl.member || {}).supports || []).map(Number) : null;
     return B;

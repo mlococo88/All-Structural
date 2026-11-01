@@ -817,7 +817,7 @@
     if (ms.top !== ms.bot) warn.push(`Top and bottom flange grades differ (${ms.top} / ${ms.bot}): the splice module takes one flange grade, the top flange's.`);
     const reb = d.rebar || {}, At = +((reb.top || {}).A) || 0, Ab = +((reb.bot || {}).A) || 0, Ar = At + Ab;
     const dr = Ar > 0 ? (At * (+(reb.top || {}).c || 0) + Ab * (d.ts - (+(reb.bot || {}).c || 0))) / Ar : 0;
-    const p = clone(DEF), A = arraysFromAnalysis(AR), dm = demandsAt(A, x);
+    const p = clone(DEF), dm = opt.dem ? opt.dem(x) : demandsAt(arraysFromAnalysis(AR), x);   // opt.dem(x): demands given (custom demands PR: { dem, xi, custom })
     const pick = q => ({ tw: q.tw, topB: q.topB, topT: q.topT, botB: q.botB, botT: q.botT });
     const GR = (window.SBDModel && window.SBDModel.GRADES) || GD_GR, smP = (() => { const a = steelProps(sc.L.D, sc.L), b = steelProps(sc.L.D, sc.R); return a.I <= b.I ? sc.L : sc.R; })();
     let Rh = 1; const SEC = window.SBDSections;
@@ -836,13 +836,15 @@
     return { p, dm, warn, own: !!own };
   }
   /* girder(P, gi, AR, opt): every splice of girder gi: inputs, auto-design (settings.auto and no entered plates), compute, checks.
-     opt.env: { owner, lf, minPlate }. Returns { list: [{ x, name, p, R, CK, gov, design, warn }], errors }. */
+     opt.env: { owner, lf, minPlate }. opt.dem(x) (custom demands PR, 2026-11-01): the demands at station x as p.dem takes them, or null
+     (that splice is not checked); AR then only needs { Lt, sup, cont } (no analysis arrays are read). Returns { list: [{ x, name, p, R, CK, gov, design, warn }], errors }. */
   function girder(P, gi, AR, opt) {
     opt = opt || {};
     const S = settings(P), E = env0(opt.env), Lt = AR.Lt, out = [], errors = [];
     S.x.forEach((x, k) => {
       const name = `FS${k + 1} at ${f2(x)} ft`;
       if (!(x > 0 && x < Lt)) { errors.push(`${name}: the station must lie between 0 and ${f2(Lt)} ft.`); return; }
+      if (opt.dem && !opt.dem(x)) { errors.push(`${name}: no demands entered at this station (Custom table): not checked.`); return; }
       const I = inputsAt(P, gi, AR, x, opt); let p = I.p, design = null;
       if (S.auto && !I.own) { design = autoDesign(p, E); p = design.p; }
       const R = compute(p, E);
