@@ -1344,7 +1344,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **How verified:** `node tests/engine/run.mjs lightpole` 15 passed (new test). `node tests/lightpole-compare.mjs --a origin/main --old-saves`: every case identical except the new inputs and `ar` objects (+ the 3 new check rows); `node tests/lightpole-compare.mjs --a origin/main` (new projects): the cases that were on the old default change from "breakout carried" to breakout checked (Condition B); cable values identical in all 26 runs.
 - **Open items:** (1) the per-anchor breakout comparison T_max ≤ φN_cbg/n_T (conservative; ACI compares the group tension with φN_cbg) now governs the default new project (1.32 vs group 0.87) — engineer to decide whether to compare the group; (2) hooked/headed anchor-reinforcement bars, and bars lapped with hooks, are not modelled (straight bars only); (3) the 0.5h_ef zone and the 1:1.5 cone geometry follow R17.5.2.1 and A_Nco; confirm.
 
-## 2026-11-01 — PR: claude/lp-pr5-baseplate (LP-5: base plate by the AASHTO LRFDLTS bending-line method, double-nut; F_y and provided-thickness inputs; engineer decision 2026-11-01; PR link added after merge)
+## 2026-11-01 — PR #561: claude/lp-pr5-baseplate (LP-5: base plate by the AASHTO LRFDLTS bending-line method, double-nut; F_y and provided-thickness inputs; engineer decision 2026-11-01)
 
 ### LP5-1. Base-plate thickness (LP-R4)   [calc change] [more conservative] [new check]
 - **Engineer decision (2026-11-01):** AASHTO LRFDLTS bending-line method with a double-nut (leveling-nut) base; plate F_y input; provided-thickness input and check; effective width at the pole face. This method is used in both modes until the LTS 2nd Ed. mode is added.
@@ -1369,3 +1369,64 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Saved data:** new fields `bpFy`, `bpT`; old saves open with F_y 36 ksi (the former fixed value) and t = 1.25 in. t_req changes for every project (method change, above) and the new check is added; nothing else changes (diff paths checked: only tpReq, beff, Fyp, Cmax, Prod, tpProv, tpOK and byCheck.BP).
 - **How verified:** `node tests/engine/run.mjs lightpole` 16 passed (new base-plate test). `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: only the base-plate values above differ; cable values identical; 0 console errors.
 - **Open items:** (1) confirm the LTS 2nd Ed. article and effective-width rule (πD/n vs a chord/45° rule); (2) for square/rect poles the same b_eff = πB/n is used (no flat-face bending line); (3) the anchor-rod standoff (rod bending, LP-R17) is not checked; (4) LTS minimum plate thickness rules (e.g. ≥ rod diameter) are not checked.
+
+## 2026-11-01 — PR #564: claude/lp-pr6-ice (LP-6: ASCE 7-22 Ch. 10 design ice thickness by height; 0.9D + Di + Wi and 0.6D + 0.7Di + 0.7Wi; engineer decision 2026-11-01)
+
+### LP6-1. Design ice thickness t_d(z) (LP-R8)   [calc change] [mixed: less ice below 33 ft, more above]
+- **Engineer decision (2026-11-01):** the entered thickness is the ASCE 7 map value; apply the Chapter 10 height factor and the importance factor to get the design thickness per height. Cables: engineer decision of the same day — no change to anything cable-related, so the **cables keep the entered t** (reported).
+- **Where:** input card 5: `tIce` note; new `iceBasis` (Map value → t_d(z) / Uniform design t_d) and `iceIi` (I_i, default 1.0, shown for Map) with notes `iceNote`, `iceMigNote`; `lppApplyIceUI()`; `INPUT_IDS`; `calc()` inputs. New `iceTd(inp,z)`, `iceFz(z)`, `iceWorkedHTML(inp,pw,fxs)` above `function poleWindNominal(`. `poleWindNominal()`: each strip uses t_d(z_i) for the iced width and ice weight (`strips[i].td`, `.Wi`), `WiceMast` = Σ strips (Map) or the former mean-diameter form (Uniform), new `iceAbove(z)`, `tdTop`; `poleStress()` uses `pw.WiceMast` / `pw.iceAbove(z)` (was `pw.wIceMast·H`, `·(H − z)`). `fixtureComponents()`: t_d at the mount height (`td`), used for the iced EPA and the ice weight; `fixtureWorkedHTML()` shows it. Worked step in the Loading tab (wind) and the report (pole wind section).
+- **Before:** t used at every height for mast, fixtures and cables.
+- **After (Map):** t_d(z) = t·f_z·K_zt^0.35·I_i, f_z = (z/33)^0.10 (0 < z ≤ 900 ft); mast per strip, fixtures at h_f; cables t (unchanged).
+- **Governing provision:** ASCE 7-22 §10.4.6 (Eq. 10.4-4 f_z, Eq. 10.4-5 t_d). **Question for the engineer:** in ASCE 7-22 the ice maps are given per Risk Category and the 7-16 importance factor I_i (and the 2.0 factor of 7-16 Eq. 10.4-5) are not in Eq. 10.4-5 as I read it; the tool therefore offers I_i as an input with default 1.0 ("1.0 when t is read from the 7-22 map for the structure's Risk Category"). Confirm the form against your copy.
+- **Saved data:** new fields `iceBasis`, `iceIi`. Saves without `iceBasis` open as **Uniform** (the old behaviour) with a notice → identical results (verified). New projects start on Map.
+- **Check case (default pole, t = 0.5 in, K_zt 1.0, I_i 1.0):**
+  - t_d(35 ft) = 0.5·(35/33)^0.10 = 0.5·1.00590 = **0.5030 in** (fixtures at 35 ft: W_ice 13.37 → 13.45 lb, iced EPA 1.818 → 1.819 ft²).
+  - Mast ice: before 0.5 in uniform: π(4.5² − 4²)/144·56·35 = **181.7 lb**; after Σ strips with t_d(z) (f_z < 1 below 33 ft): **163.6 lb**.
+  - Bearing (ASD D + 0.7Di, max axial): 1,116.5 → 1,104.0 lb; q 0.158 → 0.156 ksf. No other governing value changes in the default (wind governs).
+  - Node test: t 0.75, z 35, K_zt 1.2: 0.75·1.00590·1.2^0.35 (1.06589) = 0.8041 in.
+
+### LP6-2. Ice combinations 0.9D + 1.0Di + 1.0Wi (LRFD) and 0.6D + 0.7Di + 0.7Wi (ASD) (LP-R9)   [calc change] [more conservative or equal]
+- **Where:** `COMBOS`: `L5`, `A5`; the combination selector (`comboSel`) options; wording "all ten combinations" (combination card hint, report caption, manual QA row).
+- **Governing provision:** ASCE 7-22 §2.3.4 (LRFD, atmospheric ice: 0.9D + 1.0D_i + 1.0W_i) and §2.4.3 (ASD: 0.6D + 0.7D_i + 0.7W_i) — section numbers as in 7-16; verify the 7-22 numbering.
+- **Effect:** every pole-mode envelope now includes them (signs carry no ice and skip all ice combinations, as before). Default pole: L5 M = 6,428 lb·ft, N = 1,098 lb; A5 M = 4,494 lb·ft, N = 741 lb — neither governs (L1/L4, A1). The cables carry their existing loads in the new combinations (the cable model is unchanged); every existing combination's cable values are identical (harness check, keyed by combination).
+- **How verified:** `node tests/engine/run.mjs lightpole` 17 passed (new ice test: t_d, uniform = old mast ice, cable ice unchanged, L5/A5 factors). `node tests/lightpole-compare.mjs --a origin/main --old-saves`: every Summary/foundation/anchor/post value identical in all 13 cases (only the combination arrays gain L5/A5 and the new fields); new projects: ice values as above, governing results unchanged in all 13 cases except the bearing axial (D + 0.7Di). Cable values identical for L1–L4, A1–A4.
+- **Open items:** the 7-22 form of t_d (I_i and the 2.0 factor; see above); V_ice concurrent-wind map and its height factor are unchanged; ice on sign panels (LP-R22) unchanged.
+
+## 2026-11-01 — PR #570: claude/lp-pr7-torsion (LP-7: fixture torsion and arm wind in light-pole mode, LP-R5)
+
+### LP7-1. Wind on the arms   [calc change] [more conservative]
+- **Where:** fixture rows: new field `armD` (arm outside diameter, in; new rows 2.375 in; `fixTbl` column "Arm OD"); `renderFixtures()`, `addFix`; `applyState()` sets `armD = 0` on rows saved without it (no arm wind, the old behaviour) with notice `armMigNote`. `fixtureComponents()`: block `// ---- wind on the arm itself`, return fields `armDin, cfArm, armRow, armHD, armDsq, FarmMax, FarmMaxI`. `evalComboDir()` and `poleStress()` add the arm force for each azimuth.
+- **Expressions:** round arm of OD D and length a, horizontal at h_f along θ; wind toward φ: F_arm = q_z(h_f)·K_d·G·C_f·D·a·|sin(θ − φ)| along the wind at the arm mid-length (iced: D + 2t_d, V_ice). C_f from ASCE 7-22 Fig. 29.4-1 (round): D√q_z > 2.5 → moderately smooth row, else the D√q_z ≤ 2.5 row; h/D = a/D.
+- **Provision:** ASCE 7-22 §29.4 (Eq. 29.4-1), Fig. 29.4-1.
+
+### LP7-2. Torsion from the fixture and arm wind   [calc change] [more conservative]
+- **Where:** `evalComboDir()`: `Tz += F_w·(e_x·sin φ − e_y·cos φ) + ½F_arm·(e_x·sin φ − e_y·cos φ)`, returned `Tz, T` (|T| < 10⁻⁶ lb·ft → 0, the round-off of cancelling arms); `evalCombo()`: `Tmax` over the four directions; `lrfdCands` carry `T: r.Tmax`, so `anchorsAllCombos()` adds T/(n·R) to each bolt's shear (the existing sign-mode path); `poleStress()`: torsion above each section and AISC 360-16 §H3.2 (Eq. H3-6 when T_r > 0.2T_c, `hssTorsionShear`, as for the sign post), row field `tv`; new `lppShaftTorsion(inp,cands)` (the ACI 318-19 §22.7.1.1 threshold of `designFoundationStack`) in the pole Summary stack (`found.Tu, phiTth, Acp, pcp`) → the existing "Shaft torsion ≤ φT_th" check; worked in the Shaft tab (`lppTorsionHTML`) and the anchors table note; `fixtureWorkedHTML()` steps 5 (arm wind) and 6 (torsion); Manual §2.4 item; Summary warning wording (pole: "Torsion from the wind on offset fixtures and arms").
+- **Expression:** T = Σ (F_w,i + ½F_arm,i)·a_i·sin(φ − θ_i) (plan cross product r × F). T at the max-torsion azimuth is combined with the max-moment azimuth for the anchors and the shaft (conservative).
+- **Provision:** statics; AISC 360-16 §H3.1, §H3.2 (Eq. H3-6); ACI 318-19 §17.7 (bolt shear), §22.7.1.1 / Table 22.7.4.1(a).
+- **Check case (Node test):** fixture at θ 0°, a 6 ft, EPA 1.6, arm OD 2.375 in, 1.2D + 1.0W, wind toward 90°: q₀ = 0.00256·1.0147·13,225 = 34.35 psf, D√q₀ = 0.198·5.86 = 1.16 ≤ 2.5, h/D = 6/0.198 = 30.3 → C_f 1.2; F_arm = 29.20·1.2·0.198·6 = 41.6 lb; T = (51.4 + ½·41.6)·6 = 433 lb·ft. Wind toward 0°: T = 0. Arms at 0° and 180°: T = 0.
+- **Results (harness):**
+  - Default pole, new project (two arms at 0°/180°, OD 2.375 in): no torsion (arms cancel); arm wind at 90°/270° raises the governing LRFD M_u 19,949 → 21,957 lb·ft, embedment 6.244 → 6.464 ft; anchor tension 9,791 → 9,656 lb at the new governing azimuth.
+  - Old saves (no arm OD): default and symmetric cases identical; the "arms" case (fixtures at 45° and 200°) gets torsion from the fixture wind: T_u = 369 lb·ft vs φT_th 36,212 lb·ft; bolt shear 134 → 226 lb.
+  - One 10 ft arm at 90° (OD 3.5 in, no cables): embedment 5.17 → 5.45 ft, T_u = 1,427 lb·ft.
+  - Signs: identical. Cable values identical in every case.
+- **How verified:** `node tests/engine/run.mjs lightpole` 18 passed (new arm/torsion test); `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves` (14 cases incl. the new "torsion" case): differences as listed; diff paths filtered.
+- **Open items:** the arm dead load is not separate (part of the fixture weight); arms are taken horizontal at h_f; the arm wind uses the projected area with the force along the wind (the normal-component form of §29.4 for inclined members is not used).
+
+## 2026-11-01 — PR: claude/lp-pr8-vc (LP-8: shaft V_c per ACI 318-19 Table 22.5.5.1 with the A_v,min / size-effect branch, LP-R11; PR link added after merge)
+
+### LP8-1. Concrete shear strength of the shaft   [calc change] [more conservative]
+- **Where:** `designRebar()`, block `// ---- concrete shear strength, ACI 318-19 §22.5.5.1` (replaces `// shear capacity of concrete (circular)` through the tie-spacing selection); tie result fields `VcA, VcB, lamS, rhoW, AsT, Av, avMinPerS, sAvMin, sTrial, vcBranch`; `rebarWorkedHTML()` step 4 (A_v,min, both branches, φV_c with the branch used, s for A_v,min).
+- **Before:**
+  ```js
+  const Acv=0.8*Ag; const Vc=2*Math.sqrt(fc)*Acv; const phiVc=0.75*Vc;
+  ```
+  always (branch (a)), also when the ties are below A_v,min.
+- **After:** with the ties as detailed (A_v = 2 legs, s = the §25.7.2.1 spacing or the manual s): A_v ≥ A_v,min = max(0.75√f′c, 50)·b_w·s/f_yt → V_c = 2λ√f′c·A_cv (a); otherwise V_c = min(8λ_s·λ·ρ_w^(1/3)·√f′c, 5λ√f′c)·A_cv (c, §22.5.5.1.1 cap), λ_s = √(2/(1 + d/10)) ≤ 1, d = 0.8b, ρ_w = (A_s/2)/(b_w·d) (bars of the tension half). Where V_u > ½φV_c the ties are designed for shear and must give A_v ≥ A_v,min (§10.6.2.1), so branch (a) applies and the spacing is also limited to s ≤ A_v/(A_v,min/s). A_cv = 0.8A_g (the tool's b_w·d) and the neglected N_u/6A_g term are unchanged.
+- **Governing provision:** ACI 318-19 §22.5.5.1 (Table 22.5.5.1 (a) and (c)), §22.5.5.1.1, §22.5.5.1.3 (λ_s), §22.5.2.2 (circular sections), §10.6.2.1 / §10.6.2.2 and Table 9.6.3.4 (A_v,min).
+- **Check case (default: 3 ft shaft, (12) #6, #3 ties @ 12 in, f′c 4,000, f_y 60,000):**
+  - A_v = 2·0.11 = 0.22 in² < A_v,min = 50·36·12/60,000 = 0.36 in² → branch (c).
+  - d = 0.8·36 = 28.8 in; λ_s = √(2/3.88) = 0.718; ρ_w = 2.64/(36·28.8) = 0.00255, ρ_w^(1/3) = 0.1366; A_cv = 0.8·1,017.9 = 814.3 in².
+  - V_c = 8·0.718·0.1366·63.25·814.3 = 40,393 lb; φV_c = **30,295 lb** (before: 0.75·2·63.25·814.3 = **77,251 lb**). V_u = 877 lb ≤ ½φV_c → minimum ties, spacing unchanged.
+  - Other cases: square shaft 98,359 → 44,117; 60 ft pole (3.5 ft, (16) bars) 105,148 → 38,632; two-post sign 98,359 → 42,455 lb. No case changes its tie spacing or verdict.
+- **How verified:** `node tests/engine/run.mjs lightpole` 19 passed (new V_c test). `node tests/lightpole-compare.mjs --a origin/main`: 14 cases, only φV_c / V_c and the new tie fields differ (13 values per stack; diff paths filtered); cable values identical. No saved data change.
+- **Open items:** ρ_w uses half the longitudinal bars (conservative; the code does not define A_s for a circular section); A_cv = 0.8A_g kept (vs D·0.8D = 1.02A_g); the axial term N_u/6A_g is neglected.

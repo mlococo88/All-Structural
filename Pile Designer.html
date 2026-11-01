@@ -14,6 +14,9 @@
 <!-- KaTeX -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+<!-- PDRP: shared worked steps and the shared report viewer for the Report tab (classic scripts, relative path: keep the shared folder next to this file) -->
+<script src="shared/steps.js"></script>
+<script src="shared/report.js"></script>
 <!-- Plotly -->
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
 
@@ -473,6 +476,15 @@
      sub-tab strip; Plotly charts. No calculation is touched.
   ========================================================== */
   .main-col[data-otab-active="latgfx"] > [data-otab]:not([data-otab="latgfx"]) { display: none; }
+  /* PDRP: Report output tab (shared/report.js viewer); guards against the Tailwind preflight resets inside the viewer */
+  .main-col[data-otab-active="report"] > [data-otab]:not([data-otab="report"]) { display: none; }
+  .pd-rpt .rp-bar button { border: 1px solid #cbd5e1; border-radius: 5px; padding: 2px 10px; background: #fff; color: #1e293b; font-size: 9pt; line-height: 1.5; }
+  .pd-rpt .rp-bar button.primary { background: var(--navy-800, #16304F); border-color: var(--navy-800, #16304F); color: #fff; }
+  .pd-rpt .rp-q { border: 1px solid #cbd5e1; border-radius: 5px; padding: 2px 6px; font-size: 9pt; }
+  .pd-rpt .rp-chip input { margin: 0; } .pd-rpt .rp-ptoc ol, .pd-rpt .rp-doc ol { list-style: none; }
+  .pd-rpt .rp-fig svg { display: block; max-width: 100%; height: auto; } .pd-rpt .rp-doc sub, .pd-rpt .rp-doc sup { font-size: 75%; line-height: 0; }
+  .pd-rpt .rp-doc p { margin: 3pt 0 7pt; } .pd-rpt .rp-tbl th, .pd-rpt .rp-tbl td { border: 0.6pt solid #000; }
+  .pd-rpt-err { color: #B91C1C; font-size: 12px; padding: 8px; }
   #pd-latgfx { scroll-margin-top: calc(var(--ci-h) + var(--ot-h, 40px) + 12px); }
   .pd-lg-sub { display: flex; flex-wrap: wrap; gap: 4px; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--pd-line); font-family: var(--f-ui); }
   .pd-lg-sub button { font-family: var(--f-ui); font-size: 12px; padding: 4px 11px; border: 1px solid #C6CFDA; background: #fff; color: #41546E; border-radius: 14px; cursor: pointer; white-space: nowrap; }
@@ -15590,6 +15602,371 @@ function LayerStrip({
     }, L.type === "sand" ? `sand n_h=${fmt(L.nh, 0)}` : `clay k_h=${fmt(L.kh, 0)}`);
   })));
 }
+/* ============================================================
+   REPORT OUTPUT TAB (PDRP, 2026-11-01)
+   ------------------------------------------------------------
+   The calculation report in the shared viewer (shared/report.js: navigation tree, numbered sections §n.m, collapse / expand,
+   search, Print with a title block, running header and page numbers). Worked steps are shared/steps.js steps (equation ->
+   substituted values -> result), grouped by module topic. Every step value is a field of the tool's results (r, pyRes, pcr)
+   as the printed report (PrintReport) shows it; the equations and substitutions are the PrintReport's own TeX. Input echo
+   tables and the SVG figures are read from the hidden PrintReport (the same rows and drawings it prints). The report sections
+   follow the print-section groups (RPT_GRP_ORDER) and the chips in the report bar are the print chooser's selection
+   (micropile_lrfd_printSel_v1, shared with the "Print / Preview" chooser; no new key). Nothing is saved; the Print preview
+   overlay and its print path are unchanged.
+============================================================ */
+const PDRP = { closed: new Set() };
+const pdrN = (x, d) => (typeof x === "number" && isFinite(x)) ? SharedSteps.n(x, d == null ? 2 : d) : "\u2014";
+const pdrS = (id, label, sym, eq, sub, value, unit, d, extra) => SharedSteps.step(Object.assign({ id, label, sym: sym || "", eq: eq || "", sub: sub || "", value: value === undefined ? null : value, unit: unit || "", d: d == null ? 2 : d }, extra || {}));
+/* a steps item; with more than one topic the steps are grouped (SharedSteps.group, one topic per list entry, in order) */
+function pdrItem(scope, list, opt) {
+  const L = list.filter(t => t && t.steps && t.steps.filter(Boolean).length).map(t => Object.assign({}, t, { steps: t.steps.filter(Boolean) }));
+  const steps = [].concat(...L.map(t => t.steps));
+  const it = Object.assign({ type: "steps", scope, steps }, opt || {});
+  if (L.length > 1) it.topics = L.map(t => { const g = SharedSteps.group(t.steps, [{ key: "k", title: t.title, ref: t.ref, ids: () => true }], { strip: false })[0];
+    return { title: t.title, ref: t.ref || "", n: t.steps.length, cls: g.cls, chip: g.chip, res: g.res }; });
+  return it;
+}
+/* the hidden PrintReport (rendered by the app for printing): input echo tables and figures are read from it */
+function pdrD11() { return [...document.querySelectorAll(".print-only")].find(e => !e.closest(".report-preview-show")) || null; }
+function pdrInputs(root, title) {
+  if (!root) return null;
+  const h = [...root.querySelectorAll(".rpt-sub[data-sk]")].find(e => e.getAttribute("data-sk") === title);
+  const t = h && h.nextElementSibling && h.nextElementSibling.tagName === "TABLE" ? h.nextElementSibling : null;
+  if (!t) return null;
+  const rows = [...t.querySelectorAll("tr")].map(tr => [...tr.children].map(td => td.textContent.trim()));
+  return rows.length ? { type: "table", head: ["Quantity", "Value", "Unit", "Basis / source"], rows: rows.map(r => [r[0] || "", { t: r[1] || "", n: true }, r[2] || "", r[3] || ""]) } : null;
+}
+function pdrFig(root, captionStart) {
+  if (!root) return null;
+  const f = [...root.querySelectorAll('[data-pd-gfx="rpt"]')].find(e => (e.lastElementChild && e.lastElementChild.textContent || "").indexOf(captionStart) === 0);
+  const svg = f && f.querySelector("svg");
+  return svg ? { type: "figure", svg: svg.outerHTML, caption: f.lastElementChild.textContent.trim() } : null;
+}
+
+function pdrModel(I, r, pyRes, pcr, sel) {
+  const root = pdrD11(), isMP = I.pileType === "micropile", isHP = I.pileType === "hpile", isIAB = I.pileType === "iab";
+  const AA = s => "AASHTO LRFD 10th Ed. " + s;
+  const secs = {};   // group -> subs
+  const add = (g, sub) => { if (!sub) return; (secs[g] = secs[g] || []).push(sub); };
+  const sub = (title, items) => ({ title, items: items.filter(Boolean) });
+  const note = (text, warn) => ({ type: "note", text, warn: !!warn });
+  const goto = (tab, txt) => note("[[tab:" + tab + "|On screen: " + txt + "]]");
+  const nc = !!r.lateralNoConv;
+
+  /* ---------- results rows (as PrintReport / the Summary of results) ---------- */
+  const rows = isIAB ? (() => { const b = r.iab; if (!b) return []; const o = [];
+      o.push(["Simplified Method \u2014 gravity capacity", b.Pu, "kip", b.demand, b.cap_pass, "MassDOT \u00a73.10.11.4", "simp/c.dc"]);
+      o.push(["Simplified-Method eligibility", 1, "", b.simplifiedApplies ? 0 : 1, b.simplifiedApplies, "\u00a73.10.11.1", null]);
+      o.push(["Required pile length (tip elev.)", b.reqLength, "ft", b.reqLength, true, "\u00a73.10.11.2", "simp/d.req"]);
+      if (b.lenChk) o.push(["Designed pile length \u2265 required", b.lenChk.des, "ft", b.lenChk.req, b.lenChk.pass, "\u00a73.10.11.2", "simp/d.len"]);
+      if (b.tier2) o.push(["Tier 2 \u2014 \u03b4\u1d1b modified interaction", 1.0, "", b.tier2.interaction, b.tier2.t2_pass, "\u00a73.10.11.3", "t2/int"]);
+      if (b.geo) { o.push(["Geotechnical axial (tip + skin), integral pile", b.geo.phiRn_comp, "kip", b.geo.STL, b.geo.comp_pass, "AASHTO 10.7.3.8.6", "geo/dc"]);
+        if (b.geo.drive && b.geo.drive.minPen) o.push(["Geotechnical minimum penetration (toe vs z_min)", b.geo.drive.minPen.toeNow, "ft", b.geo.drive.minPen.zMin, b.geo.drive.minPen.pass, "AASHTO 10.7.6", null]); }
+      return o; })()
+    : isHP ? (() => { const g = r.hpileGeo, hs = r.hpileStruct, o = [];
+      if (g) { o.push(["Geotechnical axial (tip + skin)", g.phiRn_comp, "kip", g.STL, g.comp_pass, "AASHTO 10.7.3.8.6", "geo/dc"]);
+        if (g.enableTension) o.push(["Geotechnical uplift (skin only)", g.phiRn_up, "kip", g.Tu, g.up_pass, "AASHTO 10.5.5.2.3-1", "geo/up"]); }
+      if (hs) { if (hs.phiPn_axial != null) o.push(["Structural axial (compression)", hs.phiPn_axial, "kip", hs.STL, hs.axial_pass, "AASHTO 6.9.4.1", "hs/ax"]);
+        if (hs.drag) o.push(["Structural axial at the neutral plane (STL + \u03b3DR\u00b7DR)", hs.drag.phiPo, "kip", hs.drag.Pu, hs.drag.pass, "AASHTO 3.11.8, 6.9.4.1", "hs/drag"]);
+        o.push(["Flexure (elastic)", hs.phiMn, "kip\u00b7ft", hs.Mu, hs.flex_pass, "AASHTO 6.12", "hs/flex"]);
+        if (hs.comb_ratio != null) o.push(["Combined axial + flexure (D/C)", 1.0, "", hs.comb_ratio, hs.comb_pass2, "AASHTO 6.9.2.2.1", "hs/comb"]);
+        o.push(["Shear", hs.phiVn, "kip", hs.Vu, hs.shear_pass, hs.axisStrong ? "AASHTO 6.10.9" : "AASHTO 6.12.1.2.3a", "hs/shear"]);
+        if (hs.enableTension) o.push(["Structural tension", hs.phiPn_tension, "kip", hs.Tu, hs.strTension_pass, "AASHTO 6.8", "hs/ten"]); }
+      if (r.hpileHeadFix && r.hpileHeadFix.isFixedHead) o.push(["Head fixity \u2014 cap embedment", r.hpileHeadFix.capEmbed_in, "in", r.hpileHeadFix.embedReq_in, r.hpileHeadFix.develops, "Detailing (" + fmt(r.hpileHeadFix.kFix, 1) + "\u00d7d)", "cap/fix"]);
+      if (r.stability && r.stability.checked) o.push(["Combined-loading stability", r.stability.converged ? 1 : 0, "", r.stability.pass ? 0 : 1, r.stability.pass, "AASHTO 6.9.4 / p-y", null]);
+      return o; })()
+    : [["Geotechnical bond resistance", r.geo.phiPn_geo, "kip", r.geo.demand, r.geo.pass, "AASHTO 10.9.3.5", "geo/dc"], ["Structural axial \u2014 cased", r.axial.phiRn_cased, "kip", I.STL, r.axial.cased_pass, "AASHTO 10.9.3.10.2a", "ax/cdc"], ["Structural axial \u2014 uncased", r.axial.phiRn_ucased, "kip", r.axial.Pu_unc != null ? r.axial.Pu_unc : I.STL, r.axial.ucased_pass, "AASHTO 10.9.3.10.2b", "ax/udc"], ["Casing flexure at joints", r.flex.phiMn, "kip\u00b7ft", r.flex.Mmax, r.flex.pass, "AASHTO 6.12.2.2.3", "fl/dc"], ["Combined loading (casing-only D/C)", 1.0, "", r.comb.interaction, r.comb.pass, "AASHTO 6.9.2.2.1", "cb/dc"], ...(r.cfst.enable && r.cfst.qualifies ? [["Combined loading (CFST axial)", r.cfst.Pr_cfst, "kip", r.cfst.Pu_cfst, r.cfst.cfst_axial_pass, "AASHTO 6.9.6.3.2", "cf/ax"], ["Combined loading (CFST P-M)", r.cfst.Mr_cfst, "kip\u00b7ft", r.cfst.Mmax, r.cfst.cfst_pm_pass, "AASHTO 6.9.6.3.4", "cf/pm"]] : []), ["Pile head bearing", r.bearing.phiPn, "kip", I.STL, r.bearing.pass, "AASHTO 5.6.5", "cap/brg"], ["Pile head punching shear", r.punch.phiVn, "kip", I.STL, r.punch.pass, "AASHTO 5.12.8.6.3", "pun/dc"], ...(r.tension.enable ? [["Geotechnical uplift", r.tension.phiPn_up, "kip", r.tension.Tu, r.tension.geoUp_pass, "AASHTO 10.5.5.2.5", "ten/geo"], ["Structural tension", r.tension.phiPn_tension_total, "kip", r.tension.Tu, r.tension.strUp_pass, "AASHTO 10.9.3.10.3", "ten/str"]] : []), ...(r.buckling.enable ? [["Buckling \u2014 unsupported length", r.buckling.phiPn_buck, "kip", I.STL, r.buckling.buck_pass, "AASHTO 6.9.4", "bk/dc"]] : []), ...(r.stability && r.stability.checked ? [["Combined-loading stability", r.stability.converged ? 1 : 0, "", r.stability.pass ? 0 : 1, r.stability.pass, "AASHTO 6.9.4 / p-y", null]] : []), ...(r.casingExt.checked ? [["Casing past active moment zone", r.casingExt.tipBelowGrade, "ft", r.casingExt.zDecay, r.casingExt.pass, "FHWA NHI-05-039", "lat/cx"]] : []), ...(r.headFix && r.headFix.isFixedHead ? [["Head fixity \u2014 cap embedment", r.headFix.capEmbed_in, "in", r.headFix.embedReq_in, r.headFix.develops, "AASHTO 10.9 / detailing (" + fmt(r.headFix.kFix, 1) + "\u00d7D)", null]] : []), ["Load test \u2014 verification bar", r.tests.Pt_verf, "kip", r.tests.Pn_geo, r.tests.verf_pass, "FHWA NHI-05-039", "lt/verf"], ["Load test \u2014 proof bar", r.tests.Pt_proof, "kip", r.tests.STL, r.tests.proof_pass, "FHWA NHI-05-039", "lt/proof"]];
+  if (!isIAB && !isHP && r.geoChecks) rows.push(["Uncased flexure (below casing tip)", r.geoChecks.phiMn_uncased, "kip\u00b7ft", r.geoChecks.M_belowTip, r.geoChecks.uncasedFlex_pass, "AASHTO 10.9 / FHWA NHI-05-039", "gc/unc"]);
+  if (!isIAB && r.group && r.group.enable) { const gRef = (r.group.capBasis === "hpile" || !!r.group.aashtoMP) ? "AASHTO 10.7.3.9" : "FHWA NHI-05-039";
+    rows.push(["Group efficiency (\u03b7)", r.group.phiPn_geo_group, "kip", I.STL, r.group.geoGroup_pass, gRef, "grp/etadc"]);
+    if (r.group.block_pass !== undefined && r.group.blockComputed !== false) rows.push(["Group block", r.group.phiGroupBond, "kip", r.group.groupDemand, r.group.block_pass, gRef, "grp/blk"]); }
+
+  /* ---------- inputs (the PrintReport input echo tables) ---------- */
+  ["Project", "Casing & section", "Micropile geometry", "H-pile section", "H-pile geometry & driving", "IAB pile & abutment", "IAB thermal & loads", "Design loads \u00b7 active case", "Soil model", "Lateral analysis \u00b7 solver settings", "Buckling \u00b7 unsupported length", "Resistance factors \u00b7 micropile", "Resistance factors \u00b7 H-pile", "Pile group"]
+    .forEach(t => { const tb = pdrInputs(root, t); if (tb) add("inputs", sub(t, [tb])); });
+  if (Array.isArray(I.soilLayers) && I.soilLayers.length) add("inputs", sub("Soil profile \u00b7 layers", [{ type: "table", head: ["Top (ft)", "Model", "\u03b3 (pcf)", "\u03c6 (\u00b0)", "k (pci)", "s_u (psf)", "\u03b5_50", "n_h", "k_h"],
+    rows: [...I.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0)).map(ly => [{ t: fmt(ly.topDepth, 1), n: true }, ly.type === "sand" ? "Reese sand (1974)" : ly.type === "stiffclay" ? "Welch\u2013Reese stiff clay" : ly.type === "weakrock" ? "Reese weak rock (1997)" : "Matlock soft clay (1970)",
+      ly.gamma != null ? fmt(ly.gamma, 0) : "\u2014", ly.type === "sand" ? fmt(ly.phi, 0) : "\u2014", ly.type === "sand" ? fmt(ly.k, 0) : "\u2014", (ly.type === "clay" || ly.type === "stiffclay") ? fmt(ly.su, 0) : "\u2014", (ly.type === "clay" || ly.type === "stiffclay") ? fmt(ly.eps50, 3) : "\u2014", ly.nh != null ? fmt(ly.nh, 0) : "\u2014", ly.kh != null ? fmt(ly.kh, 0) : "\u2014"]) }]));
+  add("basis", sub("References", [{ type: "table", head: ["Reference", "Provisions used"], rows: pileRefs(I).map(([a, b]) => [a, b]) }]));
+  add("basis", sub("Scope", [note(isIAB ? "Integral abutment pile design by the MassDOT Simplified Method (Bridge Manual Part I \u00a73.10.11), with the supplementary Tier 2 and geotechnical checks the tool runs." : isHP ? "Driven steel H-pile: geotechnical axial resistance (tip + skin), structural checks (AASHTO LRFD Section 6), lateral analysis (nonlinear p-y), cap connection, group and buckling as enabled." : "Cased drilled micropile: grout-to-ground bond, cased and uncased structural resistance, casing flexure and combined loading, cap bearing and punching, load testing, lateral analysis (nonlinear p-y), buckling and group as enabled."),
+    goto("summary", "Summary tab; the full scope, assumptions and design notes are in the Print preview report")]));
+
+  /* ---------- IAB ---------- */
+  if (isIAB && r.iab) { const b = r.iab, s = b.sect;
+    add("simp", sub("01a Simplified-Method eligibility", [{ type: "table", head: ["", "Boundary condition (MassDOT \u00a73.10.11.1)", "Value"], rows: b.bc.map(c => [{ t: c.ok ? "\u2713" : "\u2717", cls: c.ok ? "ok" : "ng" }, c.label, String(c.val == null ? "" : c.val)]) },
+      note(b.simplifiedApplies ? "All boundary conditions satisfied: the Simplified Method applies." : "Boundary condition(s) not met: 3D space-frame analysis required (\u00a73.10.11.5), outside this package.", !b.simplifiedApplies)]));
+    add("simp", sub("01b Section and soil", [{ type: "kv", rows: [["Section", s.label + ": A_g = " + fmt(s.Ag, 1) + " in\u00b2, Z_x = " + fmt(s.Zx, 0) + " in\u00b3, Z_y = " + fmt(s.Zy, 1) + " in\u00b3, r_y = " + fmt(s.ry, 2) + " in (webs \u2225 abutment: weak-axis bending)"],
+      ["Soil type " + b.si, b.soil.name + ": \u03b3 = " + b.soil.gamma + " pcf, " + (b.soil.phi != null ? "\u03c6 = " + b.soil.phi + "\u00b0" : "c = " + b.soil.c + " psf, \u03b5_50 = " + b.soil.e50) + ", k = " + b.soil.k + " pci"]] }, pdrFig(root, "Figure G-1")]));
+    const it = b.interp;
+    add("simp", sub("01c Gravity capacity check", [pdrItem("simp", [{ title: "Tabulated capacity", ref: "MassDOT Tables 3.10.11-2/-3", steps: [
+        pdrS("c.Pu", "Maximum factored axial load from the table (" + s.label + ", " + b.soil.name + ")" + (it.exact ? ", table value" : ", linear interpolation " + it.skLo + "\u00b0\u2013" + it.skHi + "\u00b0"), "P_{u}", it.exact ? "" : "P_{u,lo} + t(P_{u,hi} \\minus P_{u,lo})", it.exact ? "" : pdrN(it.PuLo, 0) + " + " + pdrN(it.t, 2) + "(" + pdrN(it.PuHi, 0) + " \\minus " + pdrN(it.PuLo, 0) + ")", b.Pu, "kip", 1, { note: "table row " + it.row.map((v, i) => v + " @ " + (i * 10) + "\u00b0").join(", ") + " kip; skew " + fmt(b.skew, 1) + "\u00b0" })] },
+      { title: "Demand and check", ref: "MassDOT \u00a73.10.11.4", steps: [
+        pdrS("c.dem", "Factored gravity demand (Strength I)", "P_{u,demand}", (b.DW > 0 || b.eta !== 1) ? "\\eta(\\gamma_{DC}DC + \\gamma_{DW}DW + \\gamma_{LL}LL)" : "\\gamma_{DC}DL + \\gamma_{LL}LL", (b.DW > 0 || b.eta !== 1) ? pdrN(b.eta, 2) + "[" + pdrN(b.gDC, 2) + "(" + pdrN(b.DL, 1) + ") + " + pdrN(b.gDW, 2) + "(" + pdrN(b.DW, 1) + ") + " + pdrN(b.gLL, 2) + "(" + pdrN(b.LL, 1) + ")]" : pdrN(b.gDC, 2) + "(" + pdrN(b.DL, 0) + ") + " + pdrN(b.gLL, 2) + "(" + pdrN(b.LL, 0) + ")", b.demand, "kip", 1),
+        pdrS("c.dc", "Gravity capacity: P_u,demand \u2264 P_u", "\\frac{P_{u,demand}}{P_{u}}", "", "\\frac{" + pdrN(b.demand, 1) + "}{" + pdrN(b.Pu, 1) + "}", b.dcr, "", 3, { ok: !!b.cap_pass })] }])]));
+    const d = [pdrS("d.Lf", "Depth to fixity (Table 3.10.11-4)", "L_{f}", "", "", b.Lf, "ft", 0, { note: "L_f + 5 = " + fmt(b.LfPlus5, 0) + " ft; equivalent length L_e = " + fmt(b.Le, 1) + " ft (reference)" }),
+      pdrS("d.geo", "Geotechnically required length", "L_{geo}", "", "", b.geoLength, "ft", 0),
+      pdrS("d.req", "Required pile length (governs: " + b.tipGovern + ")", "L_{req}", "\\max(L_{geo},\\; L_{f} + 5)", "\\max(" + pdrN(b.geoLength, 0) + ",\\; " + pdrN(b.LfPlus5, 0) + ")", b.reqLength, "ft", 0, { ref: "MassDOT \u00a73.10.11.2" })];
+    if (b.lenChk) d.push(pdrS("d.len", "Designed pile length below the cap \u2265 required", "\\frac{L_{req}}{L_{des}}", "", "\\frac{" + pdrN(b.lenChk.req, 1) + "}{" + pdrN(b.lenChk.des, 1) + "}", b.lenChk.des > 0 ? b.lenChk.req / b.lenChk.des : Infinity, "", 3, { ok: !!b.lenChk.pass }));
+    if (b.embedChk) d.push(pdrS("d.emb", "Pile embedment into the cap (" + b.embedChk.src + ")", "\\ell_{prov}", "\\ge \\ell_{req}", pdrN(b.embedChk.prov, 1) + " \\ge " + pdrN(b.embedChk.req, 1), b.embedChk.prov, "in", 1, { ok: !!b.embedChk.pass }));
+    if (b.spacingChk) d.push(pdrS("d.sp", "Pile spacing (" + b.spacingChk.src + ")", "s", "\\ge s_{min}", pdrN(b.spacingChk.s * 12, 1) + " \\ge " + pdrN(b.spacingChk.sMin_in, 1), b.spacingChk.s * 12, "in", 1, { ok: !!b.spacingChk.pass }));
+    add("simp", sub("01d Pile tip elevation and fixity", [pdrItem("simp", [{ title: "Tip elevation and detailing", ref: "MassDOT \u00a73.10.11.2, Table 3.10.11-4", steps: d }])]));
+    if (b.tier2) { const t = b.tier2, st = [
+        pdrS("dT", "Thermal head displacement" + (t.deltaSource === "compute" ? " (\u00bd\u00b7\u03b1\u00b7\u0394T\u00b7L, \u03b3_TU = 1.0)" : " (direct)"), "\\delta_{T}", "", "", t.deltaT, "in", 3),
+        pdrS("Muy", "Weak-axis moment from the displacement-controlled p-y solve (fixed head)", "M_{uy}", "", "", t.Muy, "kip-ft", 1, { note: "M_ux = " + fmt(t.Mux, 1) + " kip-ft; EI_y = " + fmt(t.EIy / 1000, 0) + "k kip-in\u00b2, L = " + fmt(t.pileLen, 1) + " ft" }),
+        pdrS("Pr", "Factored axial resistance", "P_{r}", "\\phi_{c} F_{y} A_{g}", "0.70(" + pdrN(s.Fy, 0) + ")(" + pdrN(s.Ag, 1) + ")", t.Pr, "kip", 0, { note: "M_ry = " + fmt(t.Mry, 1) + ", M_rx = " + fmt(t.Mrx, 1) + " kip-ft" }),
+        pdrS("int", "Modified interaction (\u03b8_i = " + fmt(t.theta_i, 2) + ")", "\\frac{P_{u}}{P_{r}} + \\frac{8}{9}\\left[\\frac{M_{uy}}{\\theta_{i,w}M_{ry}} + \\frac{M_{ux}}{\\theta_{i,s}M_{rx}}\\right]", "", "\\frac{" + pdrN(t.Pu_dem, 0) + "}{" + pdrN(t.Pr, 0) + "} + \\frac{8}{9}\\left[\\frac{" + pdrN(t.Muy, 1) + "}{" + pdrN(t.thetaWeak, 2) + "(" + pdrN(t.Mry, 1) + ")} + \\frac{" + pdrN(t.Mux, 1) + "}{" + pdrN(t.thetaStrong, 2) + "(" + pdrN(t.Mrx, 1) + ")}\\right]", t.interaction, "", 3, { ok: !!t.t2_pass, ref: "MassDOT \u00a73.10.11.3" })];
+      if (t.checkFlood) st.push(pdrS("flood", "Scour check flood (Extreme Event II, axial only): P_u \u2264 1.0\u00b7P_n", "\\frac{P_{u}}{P_{n}}", "", "\\frac{" + pdrN(t.checkFlood.Pu, 1) + "}{" + pdrN(t.checkFlood.Pr, 1) + "}", t.checkFlood.Pr > 0 ? t.checkFlood.Pu / t.checkFlood.Pr : Infinity, "", 3, { ok: !!t.checkFlood.pass }));
+      add("tier2", sub("12 Tier 2 \u2014 \u03b4T-driven modified interaction", [pdrItem("t2", [{ title: "Tier 2", ref: "MassDOT \u00a73.10.11.3", steps: st }]), goto("tier2", "Tier 2 tab (p-y solve detail and the nonlinear check)")])); }
+    if (b.geo) add("geo", pdrGeoSub(b.geo, "13 Integral pile \u2014 geotechnical axial resistance", "P_{u}", note));
+  }
+
+  /* ---------- H-pile ---------- */
+  if (isHP) {
+    const hp = hpileSection({ d: I.hpD, bf: I.hpBf, tf: I.hpTf, tw: I.hpTw, Fy: I.hpFy, E: I.E || 29000, shape: I.hpShape });
+    add("geom", sub("G Materials, section and geometry", [{ type: "kv", rows: [["Section", "HP " + fmt(I.hpD, 2) + "\u00d7" + fmt(I.hpBf, 2) + " (" + (I.hpGrade || "\u2014") + "), d = " + fmt(I.hpD, 2) + ", b_f = " + fmt(I.hpBf, 2) + ", t_f = " + fmt(I.hpTf, 3) + ", t_w = " + fmt(I.hpTw, 3) + " in"],
+      ["Steel", "F_y = " + fmt(I.hpFy, 0) + " ksi, F_u = " + fmt(I.hpFu, 0) + " ksi, E = " + fmt(I.E || 29000, 0) + " ksi; bending axis " + (I.hpAxis === "weak" ? "weak (y-y)" : "strong (x-x)")],
+      ["Section properties", "A = " + fmt(hp.A, 2) + " in\u00b2, I_x / I_y = " + fmt(hp.Ix, 1) + " / " + fmt(hp.Iy, 1) + " in\u2074, S_x / S_y = " + fmt(hp.Sx, 1) + " / " + fmt(hp.Sy, 1) + " in\u00b3, r_x / r_y = " + fmt(hp.rx, 2) + " / " + fmt(hp.ry, 2) + " in"],
+      ["Geometry and demand", "embedded " + fmt(Math.max(I.solverLembed || 30, 1), 1) + " ft, stickup " + fmt(I.solverFree, 1) + " ft; STL = " + fmt(I.STL, 0) + " kip, lateral " + fmt(pyHeadV(I, pyRes), 0) + " kip, M_u = " + fmt(r.hpileStruct ? r.hpileStruct.Mu : 0, 1) + " kip-ft"]] }, pdrFig(root, "Figure G-1")]));
+    if (r.hpileGeo) add("geo", pdrGeoSub(r.hpileGeo, "01 Geotechnical axial resistance \u2014 tip + skin", "STL", note));
+    if (r.hpileStruct) { const hs = r.hpileStruct;
+      let Pn = hs.Pn_axial, phiPn = hs.phiPn_axial, axPass = hs.axial_pass, Pr = hs.Pr, cRatio = hs.comb_ratio, cBranch = hs.comb_branch, cPass = hs.comb_pass2;
+      if (hs.hasStickup && hs.buckMethod === "pcrit" && pcr && pcr.ok) {   // as PrintReport (module 10 P-crit governs the column)
+        const Pe = pcr.Pcr; Pn = (r.buckling && r.buckling.weakGov) ? hs.Pn_axial : hpColPn(hs.hp, hs.Es, hs.Fy, Pe).Pn; phiPn = hs.phi_c_axial * Pn; axPass = phiPn >= hs.STL;
+        Pr = hs.phi_c_comb * Pn; const PuPr = hs.STL / Pr, MuMr = hs.biax ? (hs.biax.mx || 0) + (hs.biax.my || 0) : (hs.Mr > 0 ? hs.Mu / hs.Mr : 0);
+        const it = hpInteract(PuPr, MuMr, !!(hs.mnd && hs.mnd.compact)); cBranch = it.branch; cRatio = it.ratio; cPass = cRatio <= 1.0; }
+      if (nc) cPass = false;
+      const ax = [pdrS("Po", "Squash load" + (hs.corr ? " (corroded section, A = " + fmt(hs.Ag, 2) + " in\u00b2)" : ""), "P_{o}", "F_{y}A", "", hs.Po, "kip", 0)];
+      if (Pn != null) ax.push(pdrS("Pn", "Nominal compressive resistance (" + (hs.hasStickup ? ({ davisson: "Davisson", deflmatch: "deflection-matched", pcrit: "nonlinear P-crit" }[r.buckling.bklTab] || "Davisson") : "fully braced") + ")", "P_{n}", "", "", Pn, "kip", 0));
+      if (phiPn != null) ax.push(pdrS("ax", "Axial: \u03c6_c P_n \u2265 STL (\u03c6_c = " + fmt(hs.phi_c_axial, 2) + ")", "\\frac{STL}{\\phi_{c}P_{n}}", "", "\\frac{" + pdrN(hs.STL, 0) + "}{" + pdrN(phiPn, 0) + "}", phiPn > 0 ? hs.STL / phiPn : Infinity, "", 3, { ok: !!axPass, ref: AA("Art. 6.9.4.1") }));
+      if (hs.drag) ax.push(pdrS("drag", "Axial at the neutral plane with drag load: \u03c6_c P_o \u2265 STL + \u03b3_DR\u00b7DR", "\\frac{STL + \\gamma_{DR}DR}{\\phi_{c}P_{o}}", "", "\\frac{" + pdrN(hs.drag.STL, 1) + " + " + pdrN(hs.drag.gDR, 2) + "(" + pdrN(hs.drag.DR, 1) + ")}{" + pdrN(hs.drag.phiPo, 0) + "}", hs.drag.phiPo > 0 ? hs.drag.Pu / hs.drag.phiPo : Infinity, "", 3, { ok: !!hs.drag.pass, ref: AA("Art. 3.11.8, 6.9.4.1") }));
+      const fl = [pdrS("Mn", "Nominal flexural resistance (" + (hs.axisStrong ? "strong axis, App. A6" : "weak axis, 6.12.2.2.1") + ")", "M_{n}", "", "", hs.Mn, "kip-ft", 1, { note: hpMnTxt(hs.mnd) }),
+        pdrS("flex", "Flexure: \u03c6_f M_n \u2265 M_u (\u03c6_f = " + fmt(hs.phi_f, 2) + ")" + (nc ? ": p-y did not converge" : ""), "\\frac{M_{u}}{\\phi_{f}M_{n}}", "", "\\frac{" + pdrN(hs.Mu, 1) + "}{" + pdrN(hs.phiMn, 1) + "}", hs.phiMn > 0 ? Math.abs(hs.Mu) / hs.phiMn : Infinity, "", 3, { ok: !!hs.flex_pass, ref: AA("Art. 6.12") })];
+      if (cRatio != null) fl.push(pdrS("comb", "Combined " + (hs.biax ? "biaxial " : "") + "axial and flexure (" + hpEqLbl(cBranch) + ")" + (nc ? ": p-y did not converge" : ""), "D/C", "", "P_{r} = " + pdrN(Pr, 0) + "\\;\\text{kip}", cRatio, "", 3, { ok: !!cPass, ref: AA("Art. 6.9.2.2.1") }));
+      if (hs.biax && !nc) fl.push(pdrS("bflex", "Biaxial: flexure both axes, max M_u/\u03c6M_n", "\\max(M_{ux}/\\phi M_{nx},\\, M_{uy}/\\phi M_{ny})", "", pdrN(hs.biax.flexRx, 3) + ",\\; " + pdrN(hs.biax.flexRy, 3), Math.max(hs.biax.flexRx, hs.biax.flexRy), "", 3, { ok: !!hs.biax.flexPass }));
+      const sh = [pdrS("shear", "Shear: \u03c6_v V_n \u2265 V_u (\u03c6_v = " + fmt(hs.phi_v, 2) + ")", "\\frac{V_{u}}{\\phi_{v}V_{n}}", "", "\\frac{" + pdrN(hs.Vu, 1) + "}{" + pdrN(hs.phiVn, 1) + "}", hs.phiVn > 0 ? Math.abs(hs.Vu) / hs.phiVn : Infinity, "", 3, { ok: !!hs.shear_pass, ref: hs.axisStrong ? AA("Art. 6.10.9") : AA("Art. 6.12.1.2.3a") })];
+      if (hs.biax) sh.push(pdrS("bshear", "Biaxial: shear both axes", "V_{ux}/\\phi V_{nx},\\; V_{uy}/\\phi V_{ny}", "", pdrN(hs.biax.Vux, 1) + "/" + pdrN(hs.biax.phiVnx, 1) + ",\\; " + pdrN(hs.biax.Vuy, 1) + "/" + pdrN(hs.biax.phiVny, 1), Math.max(hs.biax.phiVnx > 0 ? hs.biax.Vux / hs.biax.phiVnx : 0, hs.biax.phiVny > 0 ? hs.biax.Vuy / hs.biax.phiVny : 0), "", 3, { ok: !!(hs.biax.shearX && hs.biax.shearY) }));
+      if (hs.enableTension) sh.push(pdrS("ten", "Tension: \u03c6 P_n \u2265 T_u", "\\frac{T_{u}}{\\phi P_{n}}", "", "\\frac{" + pdrN(hs.Tu, 0) + "}{" + pdrN(hs.phiPn_tension, 0) + "}", hs.phiPn_tension > 0 ? hs.Tu / hs.phiPn_tension : Infinity, "", 3, { ok: !!hs.strTension_pass, ref: AA("Art. 6.8") }));
+      const det = []; const D = r.hpileDetail;
+      if (D) { det.push(pdrS("emb", "Detailing (10.7.1.2): projection into the cap \u2265 12 in", "\\ell_{emb}", "\\ge 12", D.embed.entered ? pdrN(D.embed.prov, 1) + " \\ge 12.0" : "\\text{not entered}", D.embed.entered ? D.embed.prov : "not entered", D.embed.entered ? "in" : "", 1, { ok: !!D.embed.pass }));
+        if (D.spacing) det.push(pdrS("sp", "Detailing (10.7.1.2): spacing \u2265 max(30 in, 2.5D), D = max(d, b_f) = " + fmt(D.Dpl, 2) + " in", "s_{min}", "\\ge s_{req}", pdrN(D.spacing.sMin, 1) + " \\ge " + pdrN(D.spacing.req, 1), D.spacing.sMin, "in", 1, { ok: !!D.spacing.pass }));
+        if (D.edge) det.push(pdrS("edge", "Detailing (10.7.1.2): pile centre to cap edge \u2265 9 in + D/2 (P" + D.edge.id + ")", "e_{min}", "\\ge e_{req}", pdrN(D.edge.eMin, 1) + " \\ge " + pdrN(D.edge.req, 1), D.edge.eMin, "in", 1, { ok: !!D.edge.pass })); }
+      add("struct", sub("03\u201309 Structural checks", [pdrFig(root, "Figure S-1"), pdrItem("hs", [{ title: "Axial", ref: AA("Art. 6.9.4"), steps: ax }, { title: "Flexure and combined loading", ref: AA("Art. 6.12, 6.9.2.2.1"), steps: fl }, { title: "Shear and tension", steps: sh }, { title: "Detailing", ref: AA("Art. 10.7.1.2"), steps: det }]),
+        hs.corr ? note("Section loss " + fmt(hs.corr.loss, 4) + " in per exposed face (" + fmt(hs.corr.top, 1) + "\u2013" + fmt(hs.corr.bot, 1) + " ft below head): corroded d \u00d7 b_f = " + fmt(hs.corr.d, 3) + " \u00d7 " + fmt(hs.corr.bf, 3) + " in; A = " + fmt(hs.Ag, 2) + " in\u00b2, S = " + fmt(hs.S_sel, 1) + " in\u00b3 (all structural checks; p-y EI nominal).") : null,
+        (pyRes && pyRes.ok && I.lateralSource === "py") ? note("M_u: from the lateral analysis, [[lat/Mmax]].") : null, goto("struct", "Structural tab")])); }
+    if (r.hpileHeadFix && r.hpileHeadFix.isFixedHead) { const f = r.hpileHeadFix;
+      add("cap", sub("06 Head fixity \u2014 cap embedment", [pdrItem("cap", [{ title: "Head fixity", steps: [pdrS("fix", "Embedment \u2113_prov \u2265 \u2113_req = " + fmt(f.kFix, 1) + "\u00d7d", "\\ell_{prov}", "\\ge \\ell_{req}", pdrN(f.capEmbed_in, 1) + " \\ge " + pdrN(f.embedReq_in, 1), f.capEmbed_in, "in", 1, { ok: !!f.pass })] }])])); }
+  }
+
+  /* ---------- micropile ---------- */
+  if (isMP) {
+    add("geom", sub("G Materials, geometry and loads", [{ type: "kv", rows: [["Casing / bar yield", "F_yc = " + fmt(I.fyc, 0) + " ksi, F_yb = " + fmt(I.fyb, 0) + " ksi, E = " + fmt(I.E, 0) + " ksi"],
+      ["Grout / cap concrete", "f\u2032c grout = " + fmt(I.fcGrout, 0) + " psi, f\u2032c cap = " + fmt(I.fc, 0) + " psi"],
+      ["Casing", "OD = " + fmt(I.OD, 3) + " in, t = " + fmt(I.tc, 3) + " in, corrosion " + fmt(I.corr, 4) + " in, OD_r = " + fmt(r.axial.OD_r, 3) + " in; bar A_b = " + fmt(I.Ab, 2) + " in\u00b2"],
+      ["Loads", "STL = " + fmt(I.STL, 0) + " kip, SVL = " + fmt(I.SVL, 0) + " kip, P_lat = " + fmt(I.Plat, 1) + " kip, M_max = " + fmt(r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, 1) + " kip-ft"],
+      ["Bond and lengths", "\u03b2 = " + fmt(I.beta, 2) + " ksf, cased length " + fmt(r.geo.L_cased, 0) + " ft, plunge " + fmt(r.geo.L_plunge, 0) + " ft, bond length " + fmt(r.geo.L_bond, 0) + " ft, \u03c6_geo = " + fmt((r.phiUsed || I).phiGeo, 2)]] }, pdrFig(root, "Figure G-1")]));
+    const gc = r.geoChecks;
+    if (gc) { const st = [
+        pdrS("Z", "Bar plastic modulus", "Z_{bar}", "\\frac{d_{b}^{3}}{6}", "\\frac{" + pdrN(gc.db_un, 3) + "^{3}}{6}", gc.Z_bar, "in^{3}", 3),
+        pdrS("phiMn", "Nominal capacity below the casing tip (bar only)", "\\phi M_{n}", "0.90\\,f_{yb}\\,Z_{bar}/12", "0.90(" + pdrN(I.fyb || 75, 0) + ")(" + pdrN(gc.Z_bar, 3) + ")/12", gc.phiMn_uncased, "kip-ft", 2),
+        pdrS("Mu", "Demand below the casing tip", "M_{u,unc}", "\\max_{z \\ge z_{tip}}|M|", "", gc.M_belowTip, "kip-ft", 1, { note: belowTipSrcText(gc) }),
+        pdrS("unc", "Uncased flexure: \u03c6M_n,uncased \u2265 M_u,unc" + (nc ? ": p-y did not converge" : ""), "\\frac{M_{u,unc}}{\\phi M_{n}}", "", "\\frac{" + pdrN(gc.M_belowTip, 1) + "}{" + pdrN(gc.phiMn_uncased, 2) + "}", gc.phiMn_uncased > 0 ? Math.abs(gc.M_belowTip) / gc.phiMn_uncased : Infinity, "", 3, { ok: !!gc.uncasedFlex_pass }),
+        pdrS("Lb", "Effective bond length \u2265 required bond length", "L_{b,eff}", "\\ge L_{b,req}", pdrN(gc.Lb_eff, 1) + " \\ge " + pdrN(gc.Lb_req, 1), gc.Lb_eff, "ft", 1, { ok: !!gc.Lb_geoReq_ok }),
+        pdrS("Lbmin", "Effective bond length \u2265 FHWA practical minimum", "L_{b,eff}", "\\ge L_{b,min}", pdrN(gc.Lb_eff, 1) + " \\ge " + pdrN(gc.Lb_min_ft, 0), gc.Lb_eff, "ft", 1, { ok: !!gc.Lb_min_ok }),
+        pdrS("dh", "Bond-zone diameter vs the typical range (advisory, not in the status)", "d_{h}", "", pdrN(gc.Db_min_in, 0) + " \\le " + pdrN(gc.dh, 2) + " \\le " + pdrN(gc.Db_max_in, 0), gc.dh, "in", 2, { note: gc.dia_ok ? "within the typical range" : "outside the typical range (advisory)" }),
+        pdrS("pl", "Casing plunge develops the cased load", "L_{plunge}", "\\ge L_{plunge,min}", pdrN(gc.L_plunge, 1) + " \\ge " + pdrN(Math.min(gc.plungeMin_dev, gc.L_bond), 1), gc.L_plunge, "ft", 1, { ok: !!gc.plungeDev_ok }),
+        pdrS("cov", "Grout cover around the bar", "\\frac{d_{h} \\minus d_{b}}{2}", "\\ge 0.5", pdrN(gc.grout_cover_in, 2) + " \\ge 0.5", gc.grout_cover_in, "in", 2, { ok: !!gc.cover_ok })];
+      if (gc.casingPastActive !== null) st.push(pdrS("tip", "Casing tip below the moment-decay depth", "z_{tip}", "\\ge z_{M \\to 0}", pdrN(gc.tipBelowGrade, 1) + " \\ge " + pdrN(gc.zDecay, 1), gc.tipBelowGrade, "ft", 1, { ok: !!gc.casingPastActive }));
+      st.push(pdrS("geo", "Geometry consistency (plunge \u2264 bond, cased \u2265 plunge)", "", "", "", gc.geomValid ? "consistent" : "inconsistent", "", 2, { ok: !!gc.geomValid }));
+      add("geom", sub("G Code-limit checks", [pdrItem("gc", [{ title: "Uncased flexure", ref: "AASHTO 10.9 / FHWA NHI-05-039", steps: st.slice(0, 4) }, { title: "Bond, plunge, cover and casing length", ref: "FHWA NHI-05-039", steps: st.slice(4) }]), goto("geom", "Geometry & limits tab")])); }
+    const g = r.geo;
+    add("geo", sub("01 Geotechnical bond resistance", [pdrItem("geo", [{ title: "Bond resistance", ref: AA("Art. 10.9.3.5"), steps: [
+      pdrS("beta", "Bond stress (Table C10.9.3.5.2-1)", "\\beta", "", "", g.beta_ksf, "ksf", 2, { note: "= " + fmt(g.beta_ksf * 1000 / 144, 1) + " psi" }),
+      pdrS("qb", "Nominal bond per unit length", "q_{b}", "d_{h}\\,\\pi\\,\\beta", pdrN(g.dh, 3) + "\\,\\pi\\,(" + pdrN(g.beta_ksi, 4) + ")", g.perFt_bond, "kip/ft", 2),
+      pdrS("Lreq", "Required bond length", "L_{b,req}", "\\frac{STL}{\\phi_{geo}\\,q_{b}}", "\\frac{" + pdrN(I.STL, 0) + "}{" + pdrN(g.phi_geo, 2) + "(" + pdrN(g.perFt_bond, 2) + ")}", g.Lb_req, "ft", 1, { ref: AA("Eq. 10.9.3.5.2-1") }),
+      pdrS("Leff", "Effective bond length" + (g.Lb_scour > 0 ? " (bond above the design scour line removed, 10.7.3.6)" : " (plunge included, 10.9.3.10.4)"), "L_{b,eff}", g.Lb_scour > 0 ? "L_{bond} \\minus L_{scour}" : "L_{bond}", g.Lb_scour > 0 ? pdrN(g.Lb_total, 1) + " \\minus " + pdrN(g.Lb_scour, 1) : "", g.Lb_eff, "ft", 1),
+      pdrS("Pn", "Nominal resistance", "P_{n}", "d_{h}\\,\\pi\\,\\beta\\,L_{b,eff}", "", g.Pn_geo, "kip", 1),
+      pdrS("dc", "Geotechnical: \u03c6_geo P_n \u2265 STL", "\\frac{STL}{\\phi_{geo}P_{n}}", "", "\\frac{" + pdrN(g.demand, 0) + "}{" + pdrN(g.phiPn_geo, 1) + "}", g.phiPn_geo > 0 ? g.demand / g.phiPn_geo : Infinity, "", 3, { ok: !!g.pass })] }]), goto("geo", "Geotechnical tab")]));
+    const lat = [pdrS("M", "Maximum moment (" + (I.lateralSource === "py" ? "built-in nonlinear p-y" : I.lateralSource === "input" ? "external LPILE" : "linear estimate") + ")", "M_{max}", "", "", r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, "kip-ft", 1)];
+    if (r.casingExt.checked) { lat.push(pdrS("tip", "Casing tip below grade", "L_{cased} \\minus e_{stickup}", "", pdrN(I.Lcased, 1) + " \\minus " + pdrN(I.solverFree, 1), r.casingExt.tipBelowGrade, "ft", 1),
+      pdrS("z", "Moment-decay depth (|M| \u2264 5% M_max)", "z_{M \\to 0}", "", "", r.casingExt.zDecay || 0, "ft", 1, { note: r.casingExt.Mtip != null ? "moment at the casing tip \u2248 " + fmt(r.casingExt.Mtip, 1) + " kip-ft (" + fmt((r.casingExt.MtipFrac || 0) * 100, 0) + "% M_max)" : "" }),
+      pdrS("cx", "Casing past the active moment zone" + (nc ? ": p-y did not converge" : ""), "L_{tip}", "\\ge z_{M \\to 0}", pdrN(r.casingExt.tipBelowGrade, 1) + " \\ge " + pdrN(r.casingExt.zDecay || 0, 1), r.casingExt.tipBelowGrade, "ft", 1, { ok: !!r.casingExt.pass, ref: "FHWA NHI-05-039" })); }
+    add("lat", sub("02 Lateral analysis", [pdrItem("lat", [{ title: "Lateral demand", steps: lat }])]));
+    const A = r.axial, pU = r.phiUsed || I;
+    add("struct", sub("03 Structural axial resistance", [pdrFig(root, "Figure S-1"), pdrItem("ax", [{ title: "Cased section", ref: AA("Art. 10.9.3.10.2a"), steps: [
+        pdrS("Acas", "Corroded casing area", "A_{cas}", "\\frac{\\pi}{4}(OD_{r}^{2} \\minus ID^{2})", "\\frac{\\pi}{4}(" + pdrN(A.OD_r, 3) + "^{2} \\minus " + pdrN(A.ID, 3) + "^{2})", A.Acas, "in^{2}", 2),
+        pdrS("Agc", "Cased grout area", "A_{g}", "\\frac{\\pi}{4}ID^{2} \\minus A_{b}", "\\frac{\\pi}{4}(" + pdrN(A.ID, 3) + ")^{2} \\minus " + pdrN(A.Ab, 2), A.Ag_cas, "in^{2}", 1),
+        pdrS("fy", "Yield strength", "f_{y}", "\\min(f_{yc},\\, f_{yb},\\, 0.003E)", "\\min(" + pdrN(I.fyc, 0) + ",\\, " + pdrN(I.fyb, 0) + ",\\, " + pdrN(A.fy003, 0) + ")", A.fy, "ksi", 0, { ref: AA("Eq. 10.9.3.10.2a-2") }),
+        pdrS("Rnc", "Cased nominal resistance", "R_{n}", "0.85[0.85 f^{\\prime}_{c} A_{g} + f_{y}(A_{b} + A_{cas})]", "0.85[0.85(" + pdrN(A.fcGrout, 2) + ")(" + pdrN(A.Ag_cas, 1) + ") + " + pdrN(A.fy, 0) + "(" + pdrN(A.Ab, 2) + " + " + pdrN(A.Acas, 2) + ")]", A.Rn_cased, "kip", 1, { ref: AA("Eq. 10.9.3.10.2a-2") }),
+        pdrS("phiRnc", "Factored cased resistance", "\\phi_{cc}R_{n}", "", pdrN(pU.phiCC, 2) + "(" + pdrN(A.Rn_cased, 1) + ")", A.phiRn_cased, "kip", 1),
+        pdrS("cdc", "Cased: \u03c6_cc R_n \u2265 STL", "\\frac{STL}{\\phi_{cc}R_{n}}", "", "\\frac{" + pdrN(I.STL, 0) + "}{" + pdrN(A.phiRn_cased, 1) + "}", A.phiRn_cased > 0 ? I.STL / A.phiRn_cased : Infinity, "", 3, { ok: !!A.cased_pass })] },
+      { title: "Uncased section", ref: AA("Art. 10.9.3.10.2b"), steps: [
+        pdrS("Agu", "Uncased grout area", "A_{g}", "\\frac{\\pi}{4}d_{h}^{2} \\minus A_{b}", "\\frac{\\pi}{4}(" + pdrN(g.dh, 3) + ")^{2} \\minus " + pdrN(A.Ab, 2), A.Ag_ucas, "in^{2}", 1),
+        pdrS("Rnu", "Uncased nominal resistance (f_y = min(f_yb, 0.003E) = " + fmt(A.fyU, 0) + " ksi)", "R_{n}", "0.85[0.85 f^{\\prime}_{c} A_{g} + f_{y} A_{b}]", "0.85[0.85(" + pdrN(A.fcGrout, 2) + ")(" + pdrN(A.Ag_ucas, 1) + ") + " + pdrN(A.fyU, 0) + "(" + pdrN(A.Ab, 2) + ")]", A.Rn_ucased, "kip", 1, { ref: AA("Eq. 10.9.3.10.2b-2") }),
+        pdrS("Puu", "Demand on the uncased section (load transferred by the plunge removed)", "P_{u}", "STL \\minus P_{t}", pdrN(I.STL, 0) + " \\minus " + pdrN(A.Pt_c, 1), A.Pu_unc, "kip", 1),
+        pdrS("udc", "Uncased: \u03c6_cu R_n \u2265 P_u", "\\frac{P_{u}}{\\phi_{cu}R_{n}}", "", "\\frac{" + pdrN(A.Pu_unc, 1) + "}{" + pdrN(A.phiRn_ucased, 1) + "}", A.phiRn_ucased > 0 ? A.Pu_unc / A.phiRn_ucased : Infinity, "", 3, { ok: !!A.ucased_pass, note: "\u03c6_cu = " + fmt(pU.phiCU, 2) })] }]),
+      note("The outer 0.85 factor and f_y = min(f_yc, f_yb) are a conservative deviation from AASHTO 10.9.3.10.2 / FHWA NHI-05-039 Eq. 5-13 (verify), as on the Structural tab."), goto("struct", "Structural tab")]));
+    const F = r.flex;
+    add("struct", sub("04 Casing flexural resistance", [pdrItem("fl", [{ title: "Casing flexure at the joints", ref: AA("Art. 6.12.2.2.3"), steps: [
+      pdrS("S", "Elastic section modulus at the joint", "S", "\\frac{\\pi(OD_{r}^{4} \\minus ID_{j}^{4})}{32\\,OD_{r}}", "", F.Sj, "in^{3}", 2, { note: "Z = (OD_r\u00b3 \u2212 ID_j\u00b3)/6 = " + fmt(F.Zj, 2) + " in\u00b3" }),
+      pdrS("Dt", "Slenderness (governing mode: " + (F.flexMode || "\u2014") + ")", "D/t", "OD_{r}/(t_{r}/2)", pdrN(F.OD_r, 3) + "/(" + pdrN(F.tc_r, 3) + "/2)", F.Dt_ref, "", 1),
+      pdrS("MnY", "Yielding moment", "M_{n,Y}", "f_{yc}Z/12", pdrN(F.fyc, 0) + "(" + pdrN(F.Zj, 2) + ")/12", F.Mn_j1, "kip-ft", 1),
+      F.flexMode === "Local Buckling (slender)" ? pdrS("Mn3", "Slender local-buckling moment (F_cr = 0.33E/(D/t) = " + fmt(F.Fcr_j3, 1) + " ksi)", "M_{n}", "F_{cr}S/12", "", F.Mn_j3, "kip-ft", 1) : null,
+      pdrS("Mn", "Nominal flexural resistance" + (F.flexNotPermitted ? " (" + F.flexMsg + ")" : ""), "M_{n}", "", "", F.Mn_j, "kip-ft", 1),
+      pdrS("dc", "Casing flexure: \u03c6_f M_n \u2265 M_max" + (nc ? ": p-y did not converge" : ""), "\\frac{M_{max}}{\\phi_{f}M_{n}}", "", "\\frac{" + pdrN(F.Mmax, 1) + "}{" + pdrN(F.phiMn, 1) + "}", F.phiMn > 0 ? Math.abs(F.Mmax) / F.phiMn : Infinity, "", 3, { ok: !!F.pass })] }]), note("M_max: [[lat/M]].")]));
+    const C = r.comb;
+    add("struct", sub("05 Combined axial and flexure \u2014 casing only", [pdrItem("cb", [{ title: "Column resistance", ref: AA("Art. 6.9.4.1"), steps: [
+        pdrS("I", "Moment of inertia (casing)", "I", "\\frac{\\pi}{64}(OD_{r}^{4} \\minus ID^{4})", "\\frac{\\pi}{64}(" + pdrN(C.OD_r, 3) + "^{4} \\minus " + pdrN(C.ID, 3) + "^{4})", C.Icas, "in^{4}", 1),
+        pdrS("A", "Cross-sectional area (casing)", "A", "\\frac{\\pi}{4}(OD_{r}^{2} \\minus ID^{2})", "", C.Acas, "in^{2}", 2),
+        pdrS("rg", "Radius of gyration", "r", "\\sqrt{I/A}", "\\sqrt{" + pdrN(C.Icas, 1) + "/" + pdrN(C.Acas, 2) + "}", C.rg, "in", 3),
+        pdrS("sl", "Slenderness ratio (" + (C.slender_ok ? "below the 120 limit" : "exceeds 120 \u2014 revise") + ")", "KL_{c}/r", "", "(" + pdrN(C.K, 1) + ")(" + pdrN(C.Lc, 1) + "\\times 12)/" + pdrN(C.rg, 3), C.slender, "", 1),
+        pdrS("Pe", "Elastic critical (Euler) load", "P_{e}", "\\frac{\\pi^{2}E}{(KL_{c}/r)^{2}}A", "\\frac{\\pi^{2}(" + pdrN(I.E, 0) + ")}{" + pdrN(C.slender, 1) + "^{2}}(" + pdrN(C.Acas, 2) + ")", C.Pe, "kip", 0, { ref: AA("Eq. 6.9.4.1.2-1") }),
+        pdrS("Po", "Squash load", "P_{o}", "f_{yc}A", pdrN(I.fyc, 0) + "(" + pdrN(C.Acas, 2) + ")", C.Po, "kip", 1),
+        pdrS("Pn", "Nominal compressive resistance", "P_{n}", C.ratio <= 2.25 ? "0.658^{(P_{o}/P_{e})}P_{o}" : "0.877P_{e}", "", C.Pn_col, "kip", 1, { ref: AA("Eq. 6.9.4.1.1-1/-2") }),
+        pdrS("Pr", "Factored axial resistance" + (C.phi_c < 0.90 ? " (\u03c6_c conservative; AASHTO 6.5.4.2: 0.90 composite / 0.95 steel \u2014 verify)" : ""), "P_{r}", "\\phi_{c}P_{n}", pdrN(C.phi_c, 2) + "(" + pdrN(C.Pn_col, 1) + ")", C.Pr_col, "kip", 1)] },
+      { title: "Interaction", ref: AA("Art. 6.9.2.2.1"), steps: [
+        pdrS("Mr", "Factored flexural resistance (M_n from module 04)", "M_{r}", "\\phi_{f}M_{n}", pdrN(pU.phiF, 2) + "(" + pdrN(C.Mn_comb, 1) + ")", C.Mr_comb, "kip-ft", 1),
+        pdrS("PuPr", "Axial ratio (" + (C.isCompact ? (C.PuPr >= 0.2 ? "compact, \u2265 0.2: Eq. 6.9.2.2.1-2" : "compact, < 0.2: Eq. 6.9.2.2.1-1") : "casing not compact for flexure: additive Eq. 6.9.2.2.1-3") + ")", "P_{u}/P_{r}", "", pdrN(C.Pu, 0) + "/" + pdrN(C.Pr_col, 1), C.PuPr, "", 3),
+        pdrS("dc", "Interaction (Eq. " + C.eqUsed + ")" + (nc ? ": p-y did not converge" : ""), "D/C", C.eqUsed === "6.9.2.2.1-3" ? "\\frac{P_{u}}{P_{r}} + \\frac{M_{u}}{M_{r}}" : C.eqUsed === "6.9.2.2.1-2" ? "\\frac{P_{u}}{P_{r}} + \\frac{8}{9}\\frac{M_{u}}{M_{r}}" : "\\frac{P_{u}}{2P_{r}} + \\frac{M_{u}}{M_{r}}", "", C.interaction, "", 3, { ok: !!C.pass })] }]), note("M_n: [[fl/Mn]].")]));
+    const CF = r.cfst;
+    if (CF.enable) add("struct", sub("05b Combined loading \u2014 CFST composite", [pdrItem("cf", [{ title: "Applicability (Art. 6.9.6.2)", steps: [
+        pdrS("Dt", "D/t \u2264 0.15E/F_y = " + fmt(CF.Dt_lim, 1), "D/t", "", "", CF.Dt_act, "", 1, { ok: !!CF.Dt_ok }),
+        pdrS("fc", "f\u2032c \u2265 max(3, 0.075F_y) = " + fmt(CF.fc_min, 1) + " ksi", "f^{\\prime}_{c}", "", "", CF.fcGrout, "ksi", 1, { ok: !!CF.fc_ok })] },
+      CF.qualifies ? { title: "Composite resistance", ref: AA("Art. 6.9.6.3"), steps: [
+        pdrS("Po", "Composite plastic axial", "P_{o}", "0.95f^{\\prime}_{c}A_{c} + F_{yst}A_{st} + F_{yb}A_{sb}", "", CF.Po_cfst, "kip", 0, { ref: AA("Eq. 6.9.6.3.2-4") }),
+        pdrS("EI", "Effective stiffness", "EI_{eff}", "", "", CF.EIeff, "kip-in^{2}", 0, { ref: AA("Eq. 6.9.6.3.2-6") }),
+        pdrS("Pn", "Nominal compressive resistance", "P_{n}", "", "", CF.Pn_cfst, "kip", 0),
+        pdrS("ax", "CFST axial: \u03c6_c P_n \u2265 P_u", "\\frac{P_{u}}{\\phi_{c}P_{n}}", "", "\\frac{" + pdrN(CF.Pu_cfst, 0) + "}{" + pdrN(CF.Pr_cfst, 0) + "}", CF.Pr_cfst > 0 ? CF.Pu_cfst / CF.Pr_cfst : Infinity, "", 3, { ok: !!CF.cfst_axial_pass }),
+        pdrS("pm", "CFST P-M: M_r = \u03c6_c M_SB(P_u) \u2265 M_u" + (nc ? ": p-y did not converge" : ""), "\\frac{M_{u}}{M_{r}}", "", "\\frac{" + pdrN(CF.Mmax, 1) + "}{" + pdrN(CF.Mr_cfst, 1) + "}", CF.Mr_cfst > 0 ? Math.abs(CF.Mmax) / CF.Mr_cfst : Infinity, "", 3, { ok: !!CF.cfst_pm_pass, ref: AA("Art. 6.9.6.3.4") })] } : null]),
+      note(CF.qualifies ? "The section satisfies the limits of Art. 6.9.6.2; the composite method is applied." : "The section does not satisfy the limits of Art. 6.9.6.2: composite results for reference only; the casing-only method (05) governs.", !CF.qualifies)]));
+    const B = r.bearing, P = r.punch;
+    add("cap", sub("06 Pile head bearing on concrete", [pdrItem("cap", [{ title: "Bearing", ref: AA("Art. 5.6.5"), steps: [
+      pdrS("A1", "Loaded bearing area", "A_{1}", "\\frac{\\pi}{4}OD^{2}", "\\frac{\\pi}{4}(" + pdrN(I.OD, 3) + ")^{2}", B.A1, "in^{2}", 1),
+      pdrS("A2", "Supporting spread area", "A_{2}", "", "", B.A2, "in^{2}", 1),
+      pdrS("m", "Confinement modifier", "m", "\\min(\\sqrt{A_{2}/A_{1}},\\, 2)", "\\min(\\sqrt{" + pdrN(B.A2, 1) + "/" + pdrN(B.A1, 1) + "},\\, 2)", B.m, "", 2, { ref: AA("Eq. 5.6.5-3") }),
+      pdrS("Pn", "Nominal bearing resistance", "P_{n}", "0.85f^{\\prime}_{c}A_{1}m", "0.85(" + pdrN(I.fc / 1000, 2) + ")(" + pdrN(B.A1, 1) + ")(" + pdrN(B.m, 2) + ")", B.Pn_brg, "kip", 1, { ref: AA("Eq. 5.6.5-2") }),
+      pdrS("brg", "Bearing: \u03c6_b P_n \u2265 STL", "\\frac{STL}{\\phi_{b}P_{n}}", "", "\\frac{" + pdrN(I.STL, 0) + "}{" + pdrN(B.phiPn, 1) + "}", B.phiPn > 0 ? I.STL / B.phiPn : Infinity, "", 3, { ok: !!B.pass })] }])]));
+    add("cap", sub("07 Pile head punching shear", [pdrItem("pun", [{ title: "Punching", ref: AA("Art. 5.12.8.6.3"), steps: [
+      pdrS("dv", "Effective shear depth", "d_{v}", "\\max(0.9d_{e},\\, 0.72t)", "\\max(0.9(" + pdrN(P.de_p, 1) + "),\\, 0.72(" + pdrN(B.tcap, 1) + "))", P.dv, "in", 1),
+      pdrS("bo", "Critical perimeter", "b_{o}", "\\min(\\pi(OD + d_{v}),\\; \\frac{\\pi(OD + d_{v})}{4} + 2d_{edge})", "\\min(" + pdrN(P.bo1, 1) + ",\\, " + pdrN(P.bo2, 1) + ")", P.bo, "in", 1),
+      pdrS("Vn", "Nominal shear resistance", "V_{n}", "0.126\\lambda\\sqrt{f^{\\prime}_{c}}\\,b_{o}d_{v}", "0.126(1.0)\\sqrt{" + pdrN(I.fc / 1000, 2) + "}(" + pdrN(P.bo, 1) + ")(" + pdrN(P.dv, 1) + ")", P.Vn, "kip", 1, { ref: AA("Eq. 5.12.8.6.3-1") }),
+      pdrS("dc", "Punching: \u03c6_v V_n \u2265 STL", "\\frac{STL}{\\phi_{v}V_{n}}", "", "\\frac{" + pdrN(I.STL, 0) + "}{" + pdrN(P.phi_v, 2) + "(" + pdrN(P.Vn, 1) + ")}", P.phiVn > 0 ? I.STL / P.phiVn : Infinity, "", 3, { ok: !!P.pass })] }]), goto("cap", "Cap & connection tab")]));
+    const T = r.tests;
+    add("test", sub("08 Load testing", [pdrItem("lt", [{ title: "Test bars", ref: "FHWA NHI-05-039", steps: [
+      pdrS("verf", "Verification test bar: P_t,verf = 0.8 A_b f_yb \u2265 P_n,geo", "\\frac{P_{n,geo}}{P_{t,verf}}", "", "\\frac{" + pdrN(T.Pn_geo, 0) + "}{" + pdrN(T.Pt_verf, 0) + "}", T.Pt_verf > 0 ? T.Pn_geo / T.Pt_verf : Infinity, "", 3, { ok: !!T.verf_pass }),
+      pdrS("proof", "Proof test bar: P_t,proof = 0.8 A_b f_yb \u2265 STL", "\\frac{STL}{P_{t,proof}}", "", "\\frac{" + pdrN(T.STL, 0) + "}{" + pdrN(T.Pt_proof, 0) + "}", T.Pt_proof > 0 ? T.STL / T.Pt_proof : Infinity, "", 3, { ok: !!T.proof_pass })] }]), note("P_n,geo: [[geo/Pn]].")]));
+    const TN = r.tension;
+    if (TN.enable) add("struct", sub("09 Tension / uplift resistance", [pdrItem("ten", [{ title: "Uplift", ref: AA("Art. 10.5.5.2.5, 10.9.3.10.3"), steps: [
+      pdrS("geo", "Geotechnical uplift: \u03c6_up P_n \u2265 T_u", "\\frac{T_{u}}{\\phi_{up}P_{n}}", "", "\\frac{" + pdrN(TN.Tu, 0) + "}{" + pdrN(TN.phiPn_up, 1) + "}", TN.phiPn_up > 0 ? TN.Tu / TN.phiPn_up : Infinity, "", 3, { ok: !!TN.geoUp_pass }),
+      pdrS("str", "Structural tension: cased " + fmt(TN.phiPn_tension_cased, 1) + " \u2265 T_u = " + fmt(TN.Tu, 1) + "; uncased " + fmt(TN.phiPn_tension, 1) + " \u2265 T_u \u2212 P_t = " + fmt(TN.Tu_unc, 1) + " kip", "\\phi_{t}\\min[f_{y}(A_{b} + A_{ct}),\\, f_{yb}A_{b}]", "", pdrN(TN.phi_t, 2) + "\\min[" + pdrN(TN.fyT_cas, 0) + "(" + pdrN(TN.Ab, 2) + " + " + pdrN(TN.casJointEff * 100, 0) + "\\%\\times" + pdrN(r.axial.Acas, 2) + "),\\, " + pdrN(TN.Pn_tension_bar, 1) + "]", TN.phiPn_tension_total, "kip", 1, { ok: !!TN.strUp_pass, note: TN.casJointEff > 0 ? "casing counted at " + fmt(TN.casJointEff * 100, 0) + "% (threaded-joint efficiency entered)" : "casing neglected in tension (joint efficiency 0%)" })] }])]));
+  }
+
+  /* ---------- buckling (micropile and H-pile) ---------- */
+  if (!isIAB && r.buckling && r.buckling.enable) { const K = r.buckling, st = [];
+    st.push(pdrS("Ldav", "Preliminary fixity (Davisson 1965), " + (K.bklSoilIsSand ? "L_f = 1.8T, T = (EI/n_h)^1/5" : "L_f = 1.4R, R = (EI/k_h)^1/4") + "; soil basis " + (K.bklSoilSrc || "\u2014"), "L_{f}", "", "", K.Lf_davisson, "ft", 1, { ref: AA("Eqs. C10.7.3.13.4-1, -2") }));
+    if (K.lpileMatchOk) st.push(pdrS("Lmatch", "Deflection-matched fixity (" + (K.deflSrc || "lateral analysis") + ", " + (K.deflHeadBasis === "fixed" ? "fixed" : "free") + " head)", "L_{f}", "L_{equiv} \\minus L_{u}", pdrN(K.L_equiv_lpile, 2) + " \\minus L_{u}", K.Lf_lpile, "ft", 1));
+    st.push(pdrS("Lf", "Selected fixity basis: " + K.lfGoverning.src + (K.resultIsFallback ? " (selected method has no result: Davisson used)" : ""), "L_{f}", "", "", K.Lf_buck, "ft", 1, { note: K.mostConsIsOther ? "another method is more conservative (\u03c6_cP_n = " + fmt(K.mostConsPhiPn, 0) + " kip); not substituted" : "" }));
+    if (K.rampGov) st.push(pdrS("KLeq", "Effective length back-computed from the nonlinear ramp (K = 1.0)", "KL_{eq}", "\\pi\\sqrt{EI/P_{cr}}", "", K.methods.pcrit ? K.methods.pcrit.KLeq_ft : null, "ft", 1));
+    else { st.push(pdrS("L", "Unbraced length", "L", "L_{u} + L_{f}", pdrN(K.Lu_free, 1) + " + " + pdrN(K.Lf_buck, 1), K.Le_buck, "ft", 1));
+      st.push(pdrS("KL", "Effective length", "KL", "", pdrN(K.Kb, 2) + "(" + pdrN(K.Le_buck, 1) + ")", K.Kb * K.Le_buck, "ft", 1, { ref: "AASHTO Table C4.6.2.5-1" }));
+      st.push(pdrS("sl", "Slenderness (limit 120, 6.9.3)", "KL/r", "", pdrN(K.Kb * K.Le_buck, 1) + "(12)/" + pdrN(K.rg, 2), K.slender_b, "", 1, { note: K.slender_ok ? "within the limit of 120" : "exceeds the limit of 120" })); }
+    st.push(pdrS("Pe", K.rampGov ? "Critical load from the nonlinear ramp (P_e = P_cr)" : "Elastic critical (Euler) load", "P_{e}", K.rampGov ? "P_{cr}" : "\\frac{\\pi^{2}EA}{(KL/r)^{2}}", K.rampGov ? "" : "\\frac{\\pi^{2}(" + pdrN(I.E, 0) + ")(" + pdrN(K.Acas, 2) + ")}{(" + pdrN(K.slender_b, 1) + ")^{2}}", K.Pe_b, "kip", 0, { ref: K.rampGov ? "" : AA("Eq. 6.9.4.1.2-1") }));
+    st.push(pdrS("Pn", "Nominal compressive resistance (P_o/P_e = " + fmt(K.ratio_b, 2) + (K.ratio_b <= 2.25 ? " \u2264 2.25, inelastic" : " > 2.25, elastic") + ")", "P_{n}", K.ratio_b <= 2.25 ? "\\left[0.658^{P_{o}/P_{e}}\\right]P_{o}" : "0.877P_{e}", "", K.Pn_buck, "kip", 1, { ref: K.ratio_b <= 2.25 ? AA("Eq. 6.9.4.1.1-1") : AA("Eq. 6.9.4.1.1-2"), note: "P_o = " + fmt(K.Po, 0) + " kip" }));
+    st.push(pdrS("dc", "Buckling: \u03c6_c P_n \u2265 STL", "\\frac{STL}{\\phi_{c}P_{n}}", "", "\\frac{" + pdrN(I.STL, 0) + "}{" + pdrN(K.phiPn_buck, 1) + "}", K.phiPn_buck > 0 ? I.STL / K.phiPn_buck : Infinity, "", 3, { ok: !!K.buck_pass }));
+    const cmp = [["davisson", "Davisson (closed form)"], ["deflmatch", "Deflection-matched"], ["pcrit", "Nonlinear P-crit"]].map(([k, nm]) => { const mm = K.methods[k];
+      return [k === K.bklTab ? "\u25b8 " + nm : nm, ...(mm ? [k === "pcrit" ? fmt(mm.KLeq_ft, 1) + "*" : fmt(mm.Lf, 1), fmt(mm.KL, 1), fmt(mm.slender, 0), fmt(mm.Pe, 0), fmt(mm.Pn, 0), fmt(mm.phiPn, 0), { t: mm.pass ? "OK" : "NG", cls: mm.pass ? "ok" : "ng" }] : ["\u2014", "\u2014", "\u2014", "\u2014", "\u2014", "\u2014", { t: "n/a", cls: "na" }])]; });
+    add("struct", sub("10 Buckling \u2014 unsupported length", [{ type: "table", caption: "All three methods: \u03c6_c P_n vs STL = " + fmt(K.STL, 0) + " kip (\u25b8 = selected; * KL_eq of the ramp)", head: ["Method", "L_f (ft)", "KL (ft)", "KL/r", "P_e (kip)", "P_n (kip)", "\u03c6_cP_n (kip)", ""], rows: cmp },
+      pdrInputs(root, "Column section \u00b7 buckling basis"), pdrItem("bk", [{ title: "Selected method", ref: AA("Art. 6.9.4"), steps: st }]),
+      pcr && pcr.ok ? note("Soil-supported critical buckling (nonlinear p-y ramp cross-check): P_cr = " + fmt(pcr.Pcr, 0) + " kip" + (pcr.phiPn_pcr != null ? ", \u03c6_cP = " + fmt(pcr.phiPn_pcr, 0) + " kip" : "") + ", FS vs STL = " + fmt(pcr.FS, 1) + ". Ramp, fit and bisection detail: Print preview report and the Structural tab.") : null]));
+  }
+
+  /* ---------- lateral results (p-y) ---------- */
+  if (!isIAB && I.lateralSource === "py" && pyRes && pyRes.noConv) add("lat", sub("02R Lateral analysis \u2014 did not converge (NG)", [note("The nonlinear p-y solve did not converge: no valid moment demand. The flexure and combined checks are NG.", true)]));
+  if (!isIAB && I.lateralSource === "py" && pyRes && pyRes.ok) {
+    const st = [pdrS("Mmax", "Maximum bending moment (flows to all structural checks), at " + fmt(pyRes.MmaxAboveGrade ? Math.abs(pyRes.zMmax) : pyRes.zMmax, 1) + " ft " + (pyRes.MmaxAboveGrade ? "above grade (stickup)" : "below the mudline"), "M_{max}", "", "", pyRes.Mmax_kft, "kip-ft", 1),
+      pdrS("y0", "Pile-head deflection", "y_{0}", "", "", pyRes.headDefl_in, "in", 3),
+      pdrS("zd", "Moment decays to 5% at", "z_{M \\to 0}", "", "", pyRes.zMomentDecay, "ft", 1),
+      pdrS("eq", "Equilibrium closure (force / moment residual)", "\\Sigma F", "", "", pyRes.eq ? pyRes.eq.fPct : null, "%", 2, { note: pyRes.eq ? "\u03a3M = " + fmt(pyRes.eq.mPct, 2) + "%; converged in " + pyRes.iters + " iterations" : "" })];
+    if (pyRes.zFix2 != null) st.push(pdrS("zfix", "Geotechnical depth to fixity (first moment reversal below M_max; reference only, not used in any check)", "z_{fix}", "", "", pyRes.zFix2, "ft", 1));
+    add("lat", sub("02R Lateral analysis \u2014 results and diagnostics", [pdrItem("lat", [{ title: "Governing result, active case", ref: "nonlinear p-y, " + (I.solverHead === "fixed" ? "fixed head" : "free head") + (I.pyCyclic ? ", cyclic" : ", static"), steps: st }], { see: "lat" }),
+      pdrInputs(root, "Model setup \u00b7 as solved"), pdrFig(root, "Figure F-4"), goto("latgfx", "Lateral graphs tab (deflection, moment, shear and soil reaction profiles)")]));
+  }
+
+  /* ---------- group ---------- */
+  if (!isIAB && r.group && r.group.enable) { const g = r.group, hp = g.capBasis === "hpile" || !!g.aashtoMP, st = [
+      pdrS("eta", "Axial group efficiency used", "\\eta", "", "", g.eta, "", 3, { note: g.nPiles + " piles (" + g.nRows + "\u00d7" + g.nCols + "), spacing " + fmt(g.s_dia, 1) + "\u00d7 " + g.Blbl + " (" + fmt(g.s_in, 1) + " in); \u03b7 override " + (I.groupEtaOverride ? "on" : "off") }),
+      pdrS("etadc", "Group efficiency: " + (hp ? "\u03b7 \u03c6R_n" : "\u03c6\u03b7 P_n,bond") + " \u2265 STL", "\\frac{STL}{\\eta\\phi R_{n}}", "", "\\frac{" + pdrN(I.STL, 0) + "}{" + pdrN(g.phiPn_geo_group, 1) + "}", g.phiPn_geo_group > 0 ? I.STL / g.phiPn_geo_group : Infinity, "", 3, { ok: !!g.geoGroup_pass })];
+    if (g.block_pass !== undefined && g.blockComputed !== false) st.push(pdrS("blk", "Group block: min(block, \u03a3 individual \u00d7 \u03b7) \u2265 \u03a3STL", "\\frac{\\Sigma STL}{\\phi P_{n,group}}", "", "\\frac{" + pdrN(g.groupDemand, 0) + "}{" + pdrN(g.phiGroupBond, 0) + "}", g.phiGroupBond > 0 ? g.groupDemand / g.phiGroupBond : Infinity, "", 3, { ok: !!g.block_pass, note: g.blockGoverns ? "block governs" : "individual piles govern" }));
+    add("group", sub("11 Pile group \u2014 axial efficiency and block failure", [pdrItem("grp", [{ title: "Group", ref: hp ? AA("Art. 10.7.3.9") : "FHWA NHI-05-039", steps: st }]), goto("group", "Group tab (rigid-cap load distribution and p-multipliers)")]));
+  }
+
+  /* ---------- summary of checks (first) and the section list ---------- */
+  const sumRows = rows.map(rw => { const [name, cap, unit, dem, pass, ref, key] = rw;
+    return { cells: [name, { t: fmt(cap, name.includes("D/C") ? 2 : 1) + (unit ? " " + unit : ""), n: true }, { t: fmt(dem, name.includes("D/C") ? 3 : 2) + (unit ? " " + unit : ""), n: true }, { t: rptResText(rw, I, r), n: true }, ref, { t: pass ? "PASS" : "FAIL", cls: pass ? "ok" : "ng" }, key ? { t: "", key } : "\u2014"], cls: pass ? "" : "gov" }; });
+  add("summary", sub(r.allPass ? "All checks satisfied" : "One or more checks not satisfied", [{ type: "table", wide: true, head: ["Check", "Capacity", "Demand", "Result", "Basis", "Status", "Worked in"], rows: sumRows },
+    note("The rows of the Summary of results (D/C = |demand| / capacity). " + (isIAB ? "MassDOT Simplified Method." : "Active load case only; the load-case envelope is on the Summary tab.")), goto("summary", "Summary tab")]));
+  const order = ["summary"].concat(RPT_GRP_ORDER.filter(g => g !== "summary"));
+  const sections = order.filter(g => secs[g] && secs[g].length && !(sel && sel[g] === false)).map(g => ({ title: RPT_GRP_LABEL[g], subs: secs[g], grp: g }));
+  const present = order.filter(g => secs[g] && secs[g].length);
+  const pileT = isIAB ? "Integral Abutment H-Pile \u2014 MassDOT Simplified Method" : isHP ? "Driven Steel H-Pile \u2014 Structural & Geotechnical Design" : "Drilled Micropile \u2014 Structural & Geotechnical Design";
+  const basis = isIAB ? "MassDOT Bridge Manual Part I \u00a73.10; AASHTO LRFD BDS 10th Ed. (2024)" : isHP ? "AASHTO LRFD BDS 10th Ed. (2024); FHWA-NHI-16-009" : "AASHTO LRFD BDS 10th Ed. (2024); FHWA NHI-05-039";
+  const v = x => (x != null && String(x).trim()) ? String(x).trim() : "";
+  return { present, model: { title: pileT, subtitle: v(I.projName) || "Untitled project", code: basis + (v(I.projSubject) ? " \u00b7 " + v(I.projSubject) : ""),
+    info: [["Project", v(I.projName)], ["Project No.", v(I.projNum)], ["Calculated by", v(I.projBy)], ["Date", v(I.projDate)], ["Checked by", v(I.projChk)], ["Checked date", ""]],
+    head: { left: "Project No. " + (v(I.projNum) || "\u2014") + " \u2014 " + (v(I.projSubject) || v(I.projName) || "\u2014").slice(0, 40), right: "Computed: " + (v(I.projBy) || "\u2014") + " " + v(I.projDate) + " \u00b7 Checked: " + (v(I.projChk) || "\u2014"), foot: (v(I.projName) || "Untitled") + " (Pile Designer)" },
+    sections } };
+}
+/* geotechnical axial resistance of an H-pile (module 01) or the integral pile (module 13): r.hpileGeo / r.iab.geo */
+function pdrGeoSub(g, title, dem, note) {
+  const st = [pdrS("perim", "Box perimeter and tip area", "A_{s}", "2(d + b_{f})", "", g.boxPerim_ft, "ft/ft", 3, { note: "box tip area A_p = " + fmt(g.boxArea_ft2, 3) + " ft\u00b2" })];
+  if (g.tipSpt) st.push(pdrS("qpraw", "Tip resistance from SPT (N1,60 = " + fmt(g.tipSpt.N160, 2) + ")", "q_{p}", "0.8\\,N_{1,60}\\,D_{b}/D \\le q_{L}", "0.8(" + pdrN(g.tipSpt.N160, 2) + ")(" + pdrN(g.Db, 2) + ")/" + pdrN(g.tipSpt.D, 3), g.tipSpt.qpRaw, "ksf", 2, { note: "q_L = " + fmt(g.qL, 1) + " ksf" }));
+  st.push(pdrS("qp", "Unit tip resistance (" + g.tipModel + ")", "q_{p}", "", "", g.qp, "ksf", 2),
+    pdrS("Rp", "Tip resistance (\u03c6 tip = " + fmt(g.phi_tip_stat, 2) + ")", "R_{p}", "q_{p}A_{p}", "", g.Rp, "kip", 1),
+    pdrS("Rs", "Side resistance (sum of the layers in the table)", "\\Sigma R_{s}", "", "", g.Rs_comp, "kip", 1),
+    pdrS("Rn", "Nominal resistance", "R_{n}", "R_{s} + R_{p}", pdrN(g.Rs_comp, 1) + " + " + pdrN(g.Rp, 1), g.Rn_comp, "kip", 1),
+    pdrS("dc", "Compression: \u03c6_stat R_n \u2265 " + (dem === "STL" ? "STL" : "P_u") + (g.drv && g.drv.phiDyn ? " (pile-length estimate, Eq. C10.7.3.3-1)" : ""), "\\frac{" + dem + "}{\\phi_{stat}R_{n}}", "", "\\frac{" + pdrN(g.STL, 1) + "}{" + pdrN(g.phiRn_comp, 1) + "}", g.phiRn_comp > 0 ? g.STL / g.phiRn_comp : Infinity, "", 3, { ok: !!g.comp_pass, ref: "AASHTO LRFD 10th Ed. Art. 10.7.3.8.6" }));
+  if (g.enableTension) st.push(pdrS("up", "Uplift (skin only): \u03c6_up R_s \u2265 T_u", "\\frac{T_{u}}{\\phi_{up}R_{s}}", "", "\\frac{" + pdrN(g.Tu, 0) + "}{" + pdrN(g.phiRn_up, 1) + "}", g.phiRn_up > 0 ? g.Tu / g.phiRn_up : Infinity, "", 3, { ok: !!g.up_pass }));
+  else if (g.Rn_up != null) st.push(pdrS("Rnup", "Uplift resistance (side only; no uplift demand)", "\\phi_{up}R_{s}", "", "", g.phiRn_up, "kip", 1, { note: "R_n,up = " + fmt(g.Rn_up, 1) + " kip" }));
+  return { title, items: [{ type: "table", caption: "Side resistance by layer", head: ["Layer", "z (ft)", "N1,60", "q_s (ksf)", "A_s (ft\u00b2)", "R_s (kip)", "\u03c6"], rows: g.rows.map(row => [row.type, fmt(row.zTop, 1) + "\u2013" + fmt(row.zBot, 1), row.spt ? fmt(row.spt.N160, 1) : "\u2014", { t: fmt(row.qs, 3), n: true }, { t: fmt(row.As, 1), n: true }, { t: fmt(row.Rs_layer, 1), n: true }, { t: fmt(row.phi_stat, 2), n: true }]) },
+    pdrItem("geo", [{ title: "Tip and side resistance", ref: "AASHTO LRFD 10th Ed. Art. 10.7.3.8.6, Table 10.5.5.2.3-1", steps: st }]),
+    g.zScour > 0 ? note("Design scour " + fmt(g.zScour, 1) + " ft: no side resistance above it; tip penetration D_b counted below it (AASHTO LRFD 10th Ed. 10.7.3.6).") : null,
+    note("Drivability, minimum penetration and the field method (when entered): Geotechnical tab and the Print preview report."),
+    note("[[tab:geo|On screen: Geotechnical tab]]")].filter(Boolean) };
+}
+/* the Report output tab: mounts the shared viewer when the tab is shown and whenever the results change while it is shown;
+   chips = the print-section chooser groups (same selection as Print / Preview) */
+function PdReportTab({ I, r, pyRes, pcr, sel, setSel }) {
+  const host = React.useRef(null);
+  const [tick, setTick] = React.useState(0);
+  React.useEffect(() => {   // re-render when the output tab changes (the strip sets data-otab-active on .main-col)
+    const main = host.current && host.current.closest(".main-col"); if (!main || !("MutationObserver" in window)) return;
+    const mo = new MutationObserver(() => setTick(t => t + 1)); mo.observe(main, { attributes: true, attributeFilter: ["data-otab-active"] }); return () => mo.disconnect();
+  }, []);
+  React.useEffect(() => {
+    const el = host.current; if (!el) return;
+    const main = el.closest(".main-col"); if (!main || main.getAttribute("data-otab-active") !== "report") return;
+    const box = el.querySelector(".pd-rpt-host");
+    if (!window.SharedReport || !window.SharedSteps) { box.innerHTML = '<div class="pd-rpt-err">shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</div>'; return; }
+    const t = setTimeout(() => {   // after the hidden PrintReport has rendered with the same results
+      let M; try { M = pdrModel(I, r, pyRes, pcr, sel); } catch (e) { console.error(e); box.innerHTML = '<div class="pd-rpt-err">Report error: ' + String(e && e.message).replace(/</g, "&lt;") + "</div>"; return; }
+      const chips = '<span class="rp-chips" aria-label="Report sections">' + M.present.map(g => '<label class="rp-chip"><input type="checkbox" data-pdgrp="' + g + '"' + (sel && sel[g] === false ? "" : " checked") + "> " + RPT_GRP_LABEL[g] + "</label>").join("") + "</span>";
+      const api = SharedReport.mount(box, M.model, { closed: PDRP.closed, controls: chips, stick: (() => { const cs = getComputedStyle(document.documentElement); return (parseFloat(cs.getPropertyValue("--ci-h")) || 0) + (parseFloat(cs.getPropertyValue("--ot-h")) || 0); })(), onGoto: name => { if (window.__pdSetOutTab) window.__pdSetOutTab(name); window.scrollTo({ top: Math.max(0, main.getBoundingClientRect().top + window.scrollY - 60), behavior: "auto" }); } });
+      PDRP.doc = api.doc; PDRP.last = { I, r, pyRes };   // in memory only (tests read the results the report was built from)
+      box.querySelectorAll("[data-pdgrp]").forEach(cb => cb.addEventListener("change", () => { const n = Object.assign({}, sel || {}); if (cb.checked) delete n[cb.dataset.pdgrp]; else n[cb.dataset.pdgrp] = false; setSel(n); }));
+    }, 0);
+    return () => clearTimeout(t);
+  }, [I, r, pyRes, pcr, sel, tick]);
+  return React.createElement("div", { ref: host, "data-otab-fixed": "report", id: "pd-report-tab", style: { order: 999 }, className: "pd-rpt no-print bg-white border border-slate-200 rounded-md px-3 py-2" },
+    React.createElement("div", { className: "pd-rpt-host" }));
+}
+/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
+function pdrWillPrint() { const m = document.querySelector(".app-shell .main-col"); return !!(PDRP.doc && m && m.getAttribute("data-otab-active") === "report" && !document.querySelector(".report-preview-show")); }
+window.addEventListener("beforeprint", () => {
+  if (!pdrWillPrint() || document.body.classList.contains("rp-printing")) return;
+  let box = document.getElementById("rp-print"); if (!box) { box = document.createElement("div"); box.id = "rp-print"; document.body.appendChild(box); }
+  box.innerHTML = '<div class="rp"><article class="rp-doc">' + SharedReport.html(PDRP.doc, { lazy: false }) + "</article></div>";
+  document.body.classList.add("rp-printing");
+});
+
 function App() {
   const [I, setI] = useState(() => loadSavedInputs() || DEFAULT_INPUTS);
   const [loadNotes, setLoadNotes] = useState(() => LAST_LOAD_NOTES.slice());
@@ -18420,6 +18797,7 @@ function App() {
       className: "text-[10px] text-slate-500 mt-1.5 leading-snug"
     }, "Integral abutment pile mode — MassDOT Bridge Manual Part I \u00a73.10 Simplified Method. Single row of vertical H-piles (HP10\u00d757 or HP12\u00d784, Grade 50), webs parallel to the abutment, bending about the weak axis under thermal movement. Capacity is read from MassDOT's pre-computed tables (thermal + skew effects already embedded) \u2014 no p-y analysis required for the non-scour case. Sanity-check aid only \u2014 independent PE review required.")),
   /*#__PURE__*/React.createElement(OutTabs, { pileType: I.pileType }),
+  /*#__PURE__*/React.createElement(PdReportTab, { I: I, r: r, pyRes: pyRes, pcr: pcr, sel: rptSel, setSel: setRptSel }),   // PDRP: Report output tab
   /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(LoadCasesCard, { variant: "summary", cases: cases, updCases: updCases, applyCase: applyCase, runAllCases: runAllCases, caseRes: caseRes, I: I, activeIdx: activeIdx, setActive: i => set('activeCase', i), onEdit: () => gotoLoadsTab(setRailTab, "cases") }),
   /*#__PURE__*/React.createElement(UtilizationDashboard, { r: r, I: I, pyRes: pyRes }),
   /*#__PURE__*/React.createElement(Module, {
@@ -21108,7 +21486,7 @@ function LatGraphsCard({ I, set, pyRes, solved, activeLayers, pyDepths, setPyDep
    remembered per browser in micropile_lrfd_outTab_v1 (not project data).
 ============================================================ */
 const OUT_TAB_KEY = "micropile_lrfd_outTab_v1";
-const OUT_TABS = [["summary", "Summary"], ["geom", "Geometry & limits"], ["geo", "Geotechnical"], ["simp", "Simplified Method"], ["tier2", "Tier 2"], ["lat", "Lateral (p-y)"], ["latgfx", "Lateral graphs"], ["struct", "Structural"], ["cap", "Cap & connection"], ["test", "Load test"], ["group", "Group"]];
+const OUT_TABS = [["summary", "Summary"], ["geom", "Geometry & limits"], ["geo", "Geotechnical"], ["simp", "Simplified Method"], ["tier2", "Tier 2"], ["lat", "Lateral (p-y)"], ["latgfx", "Lateral graphs"], ["struct", "Structural"], ["cap", "Cap & connection"], ["test", "Load test"], ["group", "Group"], ["report", "Report"]];   // PDRP: Report output tab
 function outTabFor(el, pileType) {
   const fx = el.getAttribute("data-otab-fixed"); if (fx) return fx;
   const idx = el.getAttribute("data-module"); if (!idx) return null; // pile-type card, footer: always shown

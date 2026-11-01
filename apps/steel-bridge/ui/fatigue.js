@@ -33,6 +33,11 @@
 
   /* ---------- input tab ---------- */
   function ensure(P) { const M = window.SBDModel; if (!P.fatigue) P.fatigue = M.defaultFatigue(); if (!P.studs) P.studs = M.defaultStuds(); return P; }
+  /* fatI(P) (SCGAM, 2026-11-01, engineer's "one source", as Welds #525 and Splices #545): Fatigue I γ of the studs = the Fatigue & studs input
+     fatigue.gam.fI (1.75 without one). oldGamFat(P): the saved studs.gamFat (this tab's former "γ Fatigue I (studs)" input; kept in the file,
+     not used) when it differs from it, else null */
+  const fatI = P => { const v = +(((P && P.fatigue) || {}).gam || {}).fI; return v > 0 ? v : 1.75; };
+  const oldGamFat = P => { const v = ((P && P.studs) || {}).gamFat; return v != null && v !== '' && !(Math.abs(+v - fatI(P)) <= 1e-9) ? { was: v, now: fatI(P) } : null; };
   function inputs(P, h) {
     ensure(P); const Z = P.studs.zones || [];
     return h.card('Traffic and fatigue limit state (6.6.1.2)', `${h.sel('fatigue.limit', 'Fatigue limit state', [['auto', 'By ADTT (Fatigue I where ADTT_SL ≥ the infinite-life equivalent)'], ['I', 'Fatigue I (infinite life) for every detail'], ['II', 'Fatigue II (finite life) for every detail']])}
@@ -45,7 +50,8 @@
         ${h.sel('fatigue.dist.lat', 'Lateral bracing', [['no', 'None'], ['yes', 'Yes']])}${h.sel('fatigue.dist.latLoc', 'Lateral connection plates on', [['flange', 'Flange'], ['web', 'Web']])}
         ${h.sel('fatigue.dist.latStiff', 'Web stiffened at the plate', [['yes', 'Yes'], ['no', 'No']])}${h.num('fatigue.dist.latDist', 'Vertical distance from flange', 'in')}${h.num('fatigue.dist.latBf', 'Flange width at the plate', 'in')}`)
       + h.card('Shear connectors: studs (6.10.10)', `${h.sel('studs.d', 'Stud diameter', [[0.75, '3/4 in'], [0.875, '7/8 in'], [1, '1 in']])}${h.num('studs.h', 'Stud height h', 'in')}${h.num('studs.st', 'Transverse spacing s<sub>t</sub>', 'in')}${h.num('studs.Fu', 'Stud F<sub>u</sub>', 'ksi')}
-        ${h.num('studs.Qn10', 'Q<sub>n</sub> entered (0 = Eq. 6.10.10.4.3-1)', 'kip')}${h.num('studs.gamFat', 'γ Fatigue I (studs)', '')}
+        ${h.num('studs.Qn10', 'Q<sub>n</sub> entered (0 = Eq. 6.10.10.4.3-1)', 'kip')}<div class="fRow"><label>γ Fatigue I (studs)</label><span style="display:inline-block;min-width:5em;font-weight:600">${fmt(fatI(P), 2)}</span><span class="unit"><a href="#" data-fsgo="fatigue.gam.fI">γ Fatigue I above</a> (one source, Table 3.4.1-1)</span></div>
+        ${oldGamFat(P) ? `<div class="alert">This project has a γ Fatigue I for the studs saved from this tab's former input that differs from the project's and is <b>no longer used</b>: ${esc(oldGamFat(P).was)} (now ${fmt(oldGamFat(P).now, 2)}). It stays in the project file unchanged.</div>` : ''}
         ${h.sel('studs.skew', 'Radial term F<sub>fat</sub> = F<sub>rc</sub>/w', [['auto', 'Auto: a support skewed more than 20°'], ['yes', 'Yes (skewed > 20° or curved)'], ['no', 'No']])}${h.num('studs.Frc', 'Cross-frame force range F<sub>rc</sub>', 'kip')}${h.num('studs.wv', 'Effective deck length w', 'in')}
         ${h.num('studs.splX', 'Field splice stations (no studs over the plates)', 'ft', { text: true })}${h.num('studs.splL', 'Top splice plate length', 'ft')}${h.num('studs.splC', 'Clearance at each plate end', 'in')}
         ${h.sel('studs.beffMode', 'b<sub>eff</sub> for the studs', [['girder', 'Each girder its own b_eff (6.10.10; default)'], ['bridge', 'Bridge-wide, as GirderDetail (one set of zones)']])}
@@ -60,6 +66,7 @@
     if (t.id === 'fz_add') { const L = (P.spans.lengths || []).reduce((a, b) => a + (+b || 0), 0), x1 = Z.length ? Z[Z.length - 1].x2 : 0; Z.push({ x1, x2: Math.min(L || x1 + 10, x1 + 10), nr: 3, p: 12 }); return true; }
     if (t.id === 'fz_clear') { P.studs.zones = []; return true; }
     const d = t.closest && t.closest('[data-fzdel]'); if (d) { Z.splice(+d.dataset.fzdel, 1); return true; }
+    const go = t.closest && t.closest('[data-fsgo]'); if (go) { e.preventDefault(); const f = document.querySelector(`#inPanes [data-path="${go.dataset.fsgo}"]`); if (f) { f.scrollIntoView({ block: 'center' }); f.focus(); } return false; }   // SCGAM: a link, no input change
     return false;
   }
 
@@ -110,7 +117,7 @@
     const G = FX.factors(), Mup = stations.map(s => FX.envelopeStrI({ DC1: s.M_DC1, DC2: s.M_DC2, DW: s.M_DW, LLp: s.M_LLpos, LLn: s.M_LLneg, UT: s.M_UT, UF: s.M_UF }, G).max), ns = R.spans.length, supN = k => k === 0 ? 'Abut. 1' : k === ns ? 'Abut. 2' : `Pier ${k}`;
     const regions = []; R.spans.forEach((L, k) => { const x0 = R.sup[k]; let xm = x0 + L / 2, mx = -Infinity; stations.forEach((s, i) => { if (s.x > x0 && s.x < x0 + L && Mup[i] > mx) { mx = Mup[i]; xm = s.x; } });
       [[x0, k], [x0 + L, k + 1]].forEach(([xs0, ks]) => regions.push({ name: `${supN(ks)} to max. positive, Span ${k + 1}`, kind: ks > 0 && ks < ns && R.cont ? 'pier' : 'end', x1: r2(Math.min(xs0, xm)), x2: r2(Math.max(xs0, xm)) })); });
-    return { studs: { d: dd, h: Q.h, Fu: Q.Fu, transverseSpacing: Q.st, zones: zs, results: { zones: qz, regions, gaps: [], beff: beffB, gamI: Q.gamFat, QnEntered: false } },
+    return { studs: { d: dd, h: Q.h, Fu: Q.Fu, transverseSpacing: Q.st, zones: zs, results: { zones: qz, regions, gaps: [], beff: beffB, gamI: fatI(P), QnEntered: false } },   // SCGAM: was gamI: Q.gamFat
       fatigue: { ADTT: P.fatigue.ADTT, p: P.fatigue.p, life: P.fatigue.life, limit: P.fatigue.limit } };
   }
 
@@ -149,10 +156,10 @@
       gs17 = Gr.rows.map(r => ({ r, o: FA.flange(r, { set, B, catT: F.catT, catB: F.catB }) })); }
     // ---- studs (SC1–SC7)
     let scIn, scEnv = env;
-    if (pl) { const d0 = SC.fromPayload(pl, { beffMode: Q.beffMode }); if (!d0) return { err: 'The hand-off file has no stud results (GirderDetail Shear connectors, S2-6): re-export it from GirderDetail.' }; scIn = d0.p; }
+    if (pl) { const d0 = SC.fromPayload(pl, { beffMode: Q.beffMode, fI: fatI(P) }); if (!d0) return { err: 'The hand-off file has no stud results (GirderDetail Shear connectors, S2-6): re-export it from GirderDetail.' }; scIn = d0.p; }
     else { scIn = JSON.parse(JSON.stringify(SC.DEFAULT)); Object.assign(scIn, { ts: P.deck.ts, hh: P.deck.haunch, tdeck: P.deck.tdeck, fc: m.concrete.fc, wc: m.concrete.wc, K1: m.concrete.K1, nRule: m.concrete.nRule, gF: m.steel.top, gW: m.steel.web,
       beff: Math.max(...P.girders.map(q => +q.beff || 0)) || G.beff, ...(Q.beffMode === 'girder' ? { beffMode: 'girder', beffG: G.beff } : {}) }); }
-    Object.assign(scIn, { d: String(Q.d), h: Q.h, st: Q.st, Fu: Q.Fu, Qn10: Q.Qn10, gam: { fat: Q.gamFat }, Frc: Q.Frc, wv: Q.wv });
+    Object.assign(scIn, { d: String(Q.d), h: Q.h, st: Q.st, Fu: Q.Fu, Qn10: Q.Qn10, gam: { fat: fatI(P) }, Frc: Q.Frc, wv: Q.wv });   // SCGAM (2026-11-01): was gam: { fat: Q.gamFat }; every path (analysis, file, Custom, example)
     if (Q.skew !== 'auto') scIn.skew = Q.skew; else if (!pl) scIn.skew = (P.xs && (P.xs.skews || []).some(s => Math.abs(s) > 20)) ? 'yes' : 'no';
     if (splX.length) Object.assign(scIn, { splX: splX.join(', '), splL: Q.splL, splC: Q.splC });
     if ((Q.zones || []).length) { const zAt = pl ? window.SBDShear.demands(pl).zAt : (x => { const s = G.segments.find(q => x >= q.x0 - 1e-9 && x < q.x1) || G.segments[G.segments.length - 1]; return { D: s.D, tw: s.tw, topB: s.topB, topT: s.topT, botB: s.botB, botT: s.botT }; });
@@ -166,7 +173,7 @@
     // governing of each list
     const gov = (C, skip) => { let b = null; (C || []).forEach(c => c.items.forEach((it, i) => { if (skip && skip(c, it)) return; if ((isFinite(it.r) || (typeof it.r === 'number' && it.st === 'fail')) && it.r != null && (it.st === 'pass' || it.st === 'fail') && (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r))) b = { c, it, i }; })); return b; };
     const g17 = gs17 ? gs17.reduce((b, q, i) => { q.o.items.forEach(it => { if (!b || (x => isFinite(x) ? x : Infinity)(it.r) > (x => isFinite(x) ? x : Infinity)(b.it.r)) b = { it, i }; }); return b; }, null) : null;
-    return { pl: !!pl, set, B, cats: { T: F.catT, B: F.catB }, FR, FC, faGov: gov(FC, c => c.id === 'FA4'), gs17, g17, SR, SCC, scGov: gov(SCC, c => c.id === 'SC6' && false), alt, env,
+    return { pl: !!pl, set, B, cats: { T: F.catT, B: F.catB }, oldFat: oldGamFat(P), FR, FC, faGov: gov(FC, c => c.id === 'FA4'), gs17, g17, SR, SCC, scGov: gov(SCC, c => c.id === 'SC6' && false), alt, env,
       custom: CU ? { rows: CU.rows, mode: 'unf' } : null,
       what: CU ? `Demands: entered (Custom), unfactored, on ${esc((pg || {}).label || '')}: ${CU.rows.length} row(s); GS17 at each entered station (${gs17 ? gs17.length : 0} location(s)); the fatigue details of the layout between the first and last row (${(FR.rows || []).length}; moments linear between the rows); ${(Q.zones || []).length ? 'the pitch zones of this project' : 'pitch zones (span tenths) and strength regions made from the rows as Preliminary sizing makes them (a zone with no row has V<sub>f</sub> = 0: enter the pitch zones on the Fatigue &amp; studs input tab to check a given stud layout)'}; the project's plates, deck and materials; b<sub>eff</sub> for the studs ${Q.beffMode === 'girder' ? 'this girder\'s' : 'the exterior girder\'s (bridge-wide)'}.`
         : pl && pl._schema === 'sbd2-analysis' ? `This project's analysis of ${esc((pg || {}).label || '')} (engine/analysis.js): ${(pl.stations || []).length} stations, ${sup.length - 1} span(s); fatigue moments and shears per girder (fatigue truck, IM, single-lane factors); ${(Q.zones || []).length ? 'the pitch zones of this project' : 'pitch zones and strength regions made as Preliminary sizing makes them for GirderDetail (span tenths)'}; b<sub>eff</sub> for the studs ${Q.beffMode === 'girder' ? 'this girder\'s' : 'the exterior girder\'s (bridge-wide)'}.`
@@ -274,7 +281,8 @@
     // studs
     if (!R.SR.errors.length) { const Sr = R.SR, C = R.SCC, ck = id => C.find(c => c.id === id) || { items: [] };
       h += `<section class="sec"><div class="secHead">Shear connectors (6.10.10): ${Sr.zones.length} pitch zones, ${Sr.regions.length} strength regions</div><div class="secBody">
-        <p class="note">Studs ${fmt(Sr.d, 3)} × ${fmt(Sr.h, 2)} in: Q<sub>r</sub> = ${fmt(Sr.Qr, 2)} kip ${go('sc', 0, 'sc.Qr')}, Z<sub>r</sub> (Fatigue I) = ${fmt(Sr.Zr, 3)} kip ${go('sc', 0, 'sc.ZrI')}; b<sub>eff</sub> = ${fmt(Sr.dk.beff, 2)} in (${Sr.beffMode === 'girder' ? 'this girder\'s own, 6.10.10 (default)' : 'bridge-wide, as GirderDetail (option)'}) ${go('sc', 0, 'sc.beff')}; F<sub>fat</sub> = ${fmt(Sr.Ffat, 4)} kip/in.</p>
+        <p class="note">Studs ${fmt(Sr.d, 3)} × ${fmt(Sr.h, 2)} in: Q<sub>r</sub> = ${fmt(Sr.Qr, 2)} kip ${go('sc', 0, 'sc.Qr')}, Z<sub>r</sub> (Fatigue I) = ${fmt(Sr.Zr, 3)} kip ${go('sc', 0, 'sc.ZrI')}; b<sub>eff</sub> = ${fmt(Sr.dk.beff, 2)} in (${Sr.beffMode === 'girder' ? 'this girder\'s own, 6.10.10 (default)' : 'bridge-wide, as GirderDetail (option)'}) ${go('sc', 0, 'sc.beff')}; F<sub>fat</sub> = ${fmt(Sr.Ffat, 4)} kip/in; γ Fatigue I = ${fmt(Sr.gf, 2)} (the Fatigue &amp; studs input, one source).</p>
+        ${R.oldFat ? `<div class="alert">The saved γ Fatigue I (studs) ${esc(R.oldFat.was)} is no longer used (now ${fmt(R.oldFat.now, 2)}, the Fatigue &amp; studs input γ Fatigue I).</div>` : ''}
         ${R.alt ? `<p class="note">For comparison: with ${Sr.beffMode === 'girder' ? 'the bridge-wide (GirderDetail)' : 'this girder\'s own'} b<sub>eff</sub> = ${fmt(R.alt.beff, 2)} in the largest SC1 ratio would be ${fmt(R.alt.sc1, 3)} (now ${fmt(R.alt.sc1o, 3)}) and the largest SC2 ratio ${fmt(R.alt.sc2, 3)} (now ${fmt(R.alt.sc2o, 3)}).</p>` : ''}
         <div class="tscroll fx-list"><table class="tbl"><thead><tr><th class="lft">Zone</th><th>Studs</th><th>V<sub>f</sub> (kip)</th><th>Limit state</th><th>Z<sub>r</sub> (kip)</th><th>V<sub>sr</sub> (kip/in)</th><th>p<sub>max</sub> (in)</th><th>SC1</th><th>SC3</th><th>SC4</th></tr></thead><tbody>
         ${Sr.zones.map((z, i) => { const a = ck('SC1').items[i], b = ck('SC3').items[i], c4 = ck('SC4').items.filter(it => it.step && it.step.startsWith(`scz${z.i}.`)), w4 = c4.reduce((x, it) => it.st === 'fail' ? 'fail' : x, 'pass');
@@ -299,5 +307,5 @@
     const list = kind === 'fa' ? window.SBDFatigue.steps(R.FR, o) : kind === 'gs' ? o.o.steps : window.SBDStuds.steps(R.SR);
     return R.custom ? [window.SBDCustomDemands.step('fat', R.custom, kind === 'sc' ? NaN : kind === 'gs' ? o.r.x : +o.x)].concat(list) : list;
   }
-  window.SBDFatigueUI = { ensure, inputs, onClick, render, build, fromAnalysis, studsOf, stepsOf, TOPICS, groups };
+  window.SBDFatigueUI = { fatI, oldGamFat, ensure, inputs, onClick, render, build, fromAnalysis, studsOf, stepsOf, TOPICS, groups };
 })();

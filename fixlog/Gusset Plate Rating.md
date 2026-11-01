@@ -2660,3 +2660,209 @@ Built-in validation model (Validation tab):
 
 ### SBD1-a. Comment: GirderDetail's file name   [comment only]
 - Anchor `Gusset Plate Rating: user interface (layout and calc-sheet style follow GirderDetail,`: before `Steel Bridge Beam Modules.html)`, after `Steel Bridge Design.html)`. No code changed.
+
+## 2026-11-01 — PR: claude/rpt-gusset — "Report (shared viewer)" tab: the calculation report in the shared viewer, next to the existing Report tab (GPRP; display only, no calculation change) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `GPRP`.
+
+### GPRP. "Report (shared viewer)" output tab (shared/report.js, shared/steps.js; KaTeX 0.16.9)   [display only]
+- **Task (report rollout, 2026-11-01):** migrate this tool's report (the in-app viewer `shared/report.js` was modelled on) to the shared viewer, keeping its look and every feature; compare the two side by side; replace the old viewer only if equivalent.
+- **Engineer decisions (2026-11-01):** KaTeX 0.16.9 is added for the shared-viewer report (the other tabs keep MathJax 3.2.2); old reports stay for now and are retired tool by tool after the engineer accepts the new ones. So the existing **Report** tab is **not** replaced: the shared-viewer report is a second tab, "Report (shared viewer)", for the side-by-side review. The old tab, its Print and the header "Print report" button are unchanged.
+- **Loads:** after the Google Fonts links: KaTeX 0.16.9 css and js (cdnjs, `defer`; the same files as `apps/steel-bridge/index.html`), `shared/steps.js`, `shared/report.js` (classic scripts, relative path).
+- **Tab:** button `data-tab="report2"` after Report; panel `#tab-report2`; `renderTab` maps `report2` to `renderReport2Tab` (always rebuilt, no MathJax pass); `crMarkStale` rebuilds it 600 ms after an input change while it is shown.
+- **Content (nothing recomputed):** `gprModel()` takes the existing report, `buildReport(crOpts())` (the same HTML as the Report tab, before MathJax), and walks it:
+  - `section.cr-sec` → section; `.cr-sub` with its `.cr-h2row` → subsection (title, the right-hand reference such as "contains parameters to verify", and its id as key); text before the first subsection → "Overview";
+  - each `.eq-block` → one worked step per `\[…\]` line (label: the block title, "(k of n)" when it has several lines; reference on the first; the TeX is the tool's own, set by KaTeX); its "where" list → a table (Symbol, Description, Value, Source);
+  - the "Lowest rating factor" / "Advisory result" line → a result step; for a limit state its value is the tool's `minRF(c).r.RF` with OK / NG as the old line's "RF ≥ 1.00" / "RF < 1.00" (ERROR and ADVISORY lines keep their text);
+  - tables → tables (governing rows bold, RF colour classes kept, longer than 14 rows lazy), alerts / paragraphs / lists → notes, the drawing SVG and the 3D snapshot → figures with their captions;
+  - inline TeX `\(…\)` and `<sub>` / `<sup>` in text and cells → the shared notation (built-in renderer).
+- **Features kept (side by side):**
+  - section chooser chips (Inputs, Code parameters, Derived geometry, Limit states worked, Rating summary, Drawing, Validation, Appendix: method) and the 3D snapshot chip, through the viewer's `controls` slot: they write `P.ui.rpt` / the 3D setting exactly as the Report tab does (the two tabs share the choice);
+  - the Detail selector (every rating case worked / lowest rating case only), same field;
+  - navigation tree, numbering n / n.m, collapse per heading, Expand all / Collapse all, collapsed headings kept between rebuilds (in memory);
+  - title block (Project No / Computed by / Date / Description / Checked by / Date, 3 per row), cover (joint, project, bridge), References table and contents in the front matter;
+  - print: the report alone, @page running header in three boxes of two lines (Project No / Description; Computed By / Checked By; Date / Date), footer "<project>, <joint> (Gusset Plate Rating)" and "Page X of Y"; Ctrl+P on this tab prints it.
+  - New in the shared viewer: search, "see §" links (keys), the topic look of worked steps.
+  - Not carried over: the Checks tab's "Open in the report" links still open the old Report tab (they will point here when the old tab is retired; the subsections already carry the same keys, `cr-chk-<id>`).
+- **Shared file:** `shared/report.js` gains optional `subs[].ref`, `sections[].key` / `subs[].key`, `refs` (front-matter references) and `head.center` / `head.lines` (see `fixlog/shared-report.md`).
+- **Saved data:** nothing new. `P.ui.otab` may be `"report2"` (existing field, new value: an older copy of the tool shows no output tab until one is clicked). The chips and Detail write the existing `P.ui.rpt`.
+- **How verified (headless Chromium; KaTeX 0.16.9 and MathJax 3.2.2 served locally):** 3 projects (default 5-member example, LRFR + LFR; LRFR only, spliced chord, 12 % / 8 % section loss, Detail = lowest case, title block filled; LFR only with live load × 2.2 and the method appendix):
+  - side by side with the old report: the same sections in the same order; every old subsection in the same section; every equation line and result line is a worked step (172/172 + 25/25; 107/107 + 39/39; 86/86 + 25/25); the same number of tables (155, 144, 95); every number in the old report's text is in the new one as often (multiset; drawing labels excluded, the figure is the same SVG);
+  - 17 / 27 / 17 lowest-RF result steps = the tool's `minRF`;
+  - offline (every CDN blocked): the same structure with the built-in renderer (0 KaTeX spans), MathJax tabs unaffected;
+  - 0 unresolved or duplicate references, 0 KaTeX errors, no NaN / undefined, 0 console errors;
+  - main vs branch: the text of every other tab, the old Report tab included, is identical;
+  - Ctrl+P on the new tab: the report alone, the three-box two-line header with the title-block values (PDF checked; old and new PDFs saved side by side).
+  - `node tests/check-syntax.mjs "Gusset Plate Rating.html"` passes; `node tests/engine/run.mjs report steps steps-groups report-wiring` passes.
+- **Other copies:** none. `shared/README.md` lists the tool as a user of `steps.js` and `report.js`.
+- **Open items:** retiring the old Report tab (and pointing "Open in the report" and the header Print button at the new tab) waits for the engineer's acceptance. At 390 px the tool's layout is unchanged (separate PR).
+
+Diff (`Gusset Plate Rating.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/Gusset Plate Rating.html b/Gusset Plate Rating.html
+index 916bda6..024cf69 100644
+--- a/Gusset Plate Rating.html	
++++ b/Gusset Plate Rating.html	
+@@ -6,0 +7,6 @@
++<!-- GPRP: KaTeX 0.16.9 for the "Report (shared viewer)" tab only (engineer-approved 2026-11-01; same pinned files as apps/steel-bridge/index.html; the other tabs keep MathJax),
++     and the shared worked steps and report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
++<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
++<script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
++<script src="shared/steps.js"></script>
++<script src="shared/report.js"></script>
+@@ -1198 +1204 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
+-    <button type="button" class="tab-btn active" data-tab="summary">Summary</button><button type="button" class="tab-btn" data-tab="drawing">Drawing</button><button type="button" class="tab-btn" data-tab="3d">3D</button><button type="button" class="tab-btn" data-tab="checks">Checks</button><button type="button" class="tab-btn" data-tab="rating">Rating</button><button type="button" class="tab-btn" data-tab="params">Code parameters</button><button type="button" class="tab-btn" data-tab="validation">Validation</button><button type="button" class="tab-btn" data-tab="report">Report</button><button type="button" class="tab-btn" data-tab="method">Method</button>
++    <button type="button" class="tab-btn active" data-tab="summary">Summary</button><button type="button" class="tab-btn" data-tab="drawing">Drawing</button><button type="button" class="tab-btn" data-tab="3d">3D</button><button type="button" class="tab-btn" data-tab="checks">Checks</button><button type="button" class="tab-btn" data-tab="rating">Rating</button><button type="button" class="tab-btn" data-tab="params">Code parameters</button><button type="button" class="tab-btn" data-tab="validation">Validation</button><button type="button" class="tab-btn" data-tab="report">Report</button><button type="button" class="tab-btn" data-tab="report2">Report (shared viewer)</button><button type="button" class="tab-btn" data-tab="method">Method</button>
+@@ -1201 +1207 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
+-    <div class="tab-panel active" id="tab-summary"></div><div class="tab-panel" id="tab-drawing"></div><div class="tab-panel" id="tab-3d"></div><div class="tab-panel" id="tab-checks"></div><div class="tab-panel" id="tab-rating"></div><div class="tab-panel" id="tab-params"></div><div class="tab-panel" id="tab-validation"></div><div class="tab-panel" id="tab-report"></div><div class="tab-panel" id="tab-method"></div>
++    <div class="tab-panel active" id="tab-summary"></div><div class="tab-panel" id="tab-drawing"></div><div class="tab-panel" id="tab-3d"></div><div class="tab-panel" id="tab-checks"></div><div class="tab-panel" id="tab-rating"></div><div class="tab-panel" id="tab-params"></div><div class="tab-panel" id="tab-validation"></div><div class="tab-panel" id="tab-report"></div><div class="tab-panel" id="tab-report2"></div><div class="tab-panel" id="tab-method"></div>
+@@ -3153,2 +3159,2 @@ function recompute() {
+-function renderTab(t) { if (!R) return; if (R.errors.length) return; const f = { summary: renderSummary, drawing: renderDrawing, checks: renderChecks, rating: renderRating, params: renderParams, validation: renderValidation, method: renderMethod, report: renderReportTab, '3d': GP3D.render }[t]; if (!f) return;
+-  if (t === 'report' || t === '3d') { f(); return; } if (DIRTY.has(t) || !$('#tab-' + t).innerHTML) { f(); DIRTY.delete(t); applyCollapse(); typeset($('#tab-' + t)); } }
++function renderTab(t) { if (!R) return; if (R.errors.length) return; const f = { summary: renderSummary, drawing: renderDrawing, checks: renderChecks, rating: renderRating, params: renderParams, validation: renderValidation, method: renderMethod, report: renderReportTab, report2: renderReport2Tab, '3d': GP3D.render }[t]; if (!f) return;   /* report2: GPRP */
++  if (t === 'report' || t === 'report2' || t === '3d') { f(); return; } if (DIRTY.has(t) || !$('#tab-' + t).innerHTML) { f(); DIRTY.delete(t); applyCollapse(); typeset($('#tab-' + t)); } }
+@@ -3599 +3605 @@ function crOpts() { const r = P.ui.rpt || {}; const o = {}; CR_OPTS.forEach(([k]
+-function crMarkStale() { CR_STALE = true; if (P && P.ui.otab === 'report') { clearTimeout(CR_T); CR_T = setTimeout(() => renderReportTab(), 600); } }
++function crMarkStale() { CR_STALE = true; if (P && P.ui.otab === 'report') { clearTimeout(CR_T); CR_T = setTimeout(() => renderReportTab(), 600); } if (P && P.ui.otab === 'report2') { clearTimeout(CR_T); CR_T = setTimeout(() => renderReport2Tab(), 600); } }   /* report2: GPRP */
+@@ -3687,0 +3694,139 @@ window.addEventListener('resize', () => crSizeBar());
++/* ---------- Report tab in the shared viewer (GPRP, 2026-11-01) ----------
++   The calculation report in shared/report.js (the viewer modelled on this tool's own report): navigation tree, numbered
++   sections §n.m, collapse / expand, search, the same section chooser and Detail selector (P.ui.rpt, as the Report tab),
++   Print with the title block, the three-box two-line running header and page numbers. Shown on its own tab ("Report
++   (shared)") next to the existing Report tab, which is unchanged, until the engineer accepts it (2026-11-01 decision).
++   Nothing is computed here: the content is the existing report, buildReport(crOpts()), walked in order:
++     section (h2.cr-h1) -> section, subsection (cr-h2row: title and reference) -> subsection,
++     equation block (eq-block: title, reference, each \[…\] line) -> worked steps (KaTeX via SharedSteps; the TeX is the
++     tool's own), "where" table and every other table -> table, the "Lowest rating factor" line -> a result step (value:
++     the tool's minRF), paragraph / alert / list -> note, drawing and 3D snapshot -> figure.
++   KaTeX 0.16.9 (engineer-approved for this tab) sets the steps; the other tabs keep MathJax. Offline, the steps are set
++   by the shared built-in renderer. Nothing new is saved: the chooser writes P.ui.rpt as the Report tab does, and
++   collapsed sections are kept in memory (GPRP.closed). */
++const GPRP = { closed: new Set(), api: null, doc: null };
++/* TeX for running text (notes, cells): the shared built-in renderer's subset */
++function gprTex(t) {
++  let s = String(t == null ? '' : t);
++  for (let k = 0; k < 3; k++) s = s.replace(/\\(?:mathbf|boldsymbol|mathit|bm)\{([^{}]*)\}/g, '$1').replace(/\\(?:mathrm|mathsf|textrm|textbf|textit|operatorname)\{([^{}]*)\}/g, '\\text{$1}');
++  return s.replace(/\\[dt]frac/g, '\\frac').replace(/\\(?:q?quad|enspace|;|:|!)/g, '\\,').replace(/\\(?:big|Big|bigg|Bigg)[lr]?/g, '')
++    .replace(/\\neq\b/g, '\\ne').replace(/\\leq\b/g, '\\le').replace(/\\geq\b/g, '\\ge').replace(/\\(?:Rightarrow|rightarrow)\b/g, '\\to').replace(/\\displaystyle/g, '')
++    .replace(/\\(Phi|nu|kappa|xi|zeta|Gamma|Lambda|Omega|Pi|Theta|varphi|epsilon|varepsilon)\b/g, (m, x) => ({ Phi: 'Φ', nu: 'ν', kappa: 'κ', xi: 'ξ', zeta: 'ζ', Gamma: 'Γ', Lambda: 'Λ', Omega: 'Ω', Pi: 'Π', Theta: 'Θ', varphi: 'φ', epsilon: 'ε', varepsilon: 'ε' }[x]))
++    .replace(/\\%/g, '%').replace(/\$/g, '');
++}
++/* the text of an inline run: \( … \) as $…$, <sub>/<sup> as _{…}/^{…} */
++function gprInline(n) {
++  if (n.nodeType === 3) return n.textContent.replace(/\$/g, '').replace(/\[\[/g, '[ [').replace(/\\\(([\s\S]*?)\\\)/g, (m, x) => '$' + gprTex(x) + '$');
++  if (n.nodeType !== 1) return '';
++  const e = n, tag = e.tagName;
++  if (/^(SELECT|INPUT|BUTTON|TEXTAREA|SCRIPT|STYLE|svg|SVG|IMG)$/.test(tag) || e.classList.contains('badge')) return '';
++  if (tag === 'BR') return ' ';
++  if (tag === 'SUB' || tag === 'SUP') { const t = e.textContent.replace(/[$\\{}]/g, '').trim(); return t ? '$' + (tag === 'SUB' ? '_' : '^') + '{\\text{' + t + '}}$' : ''; }
++  return (e.classList.contains('wunit') && e.textContent.trim() ? ' ' : '') + [...e.childNodes].map(gprInline).join('');   // value and unit of a "where" row
++}
++const gprClean = s => String(s || '').replace(/\s+/g, ' ').replace(/\$\s*\$/g, '').trim();
++const GPR_INLINE = /^(B|I|EM|STRONG|SPAN|A|SUB|SUP|CODE|SMALL|U|BR|LABEL)$/;
++function gprTable(t) {
++  const cell = c => { const o = { t: gprClean(gprInline(c)) }; if (c.classList.contains('val') || c.classList.contains('n') || c.classList.contains('right') || c.classList.contains('wval')) o.n = true;
++    if (c.classList.contains('n-fail') || c.querySelector('.n-fail')) o.cls = 'ng'; else if (c.classList.contains('n-warn') || c.querySelector('.n-warn')) o.cls = 'hi'; else if (c.classList.contains('n-ok') || c.querySelector('.n-ok')) o.cls = 'ok';
++    if (c.colSpan > 1) o.span = c.colSpan; return o; };
++  const hr = t.tHead ? [...t.tHead.rows] : [], body = [...t.querySelectorAll(':scope>tbody>tr,:scope>tfoot>tr,:scope>tr')];
++  let head = hr.length ? [...hr[hr.length - 1].cells].map(cell) : [], rows = [];
++  hr.slice(0, -1).forEach(r => rows.push({ cells: [...r.cells].map(cell), cls: 'gov' }));
++  body.forEach(r => { const cs = [...r.cells].map(cell); if (cs.length) rows.push(r.classList.contains('gov') ? { cells: cs, cls: 'gov' } : cs); });
++  if (!head.length && !rows.length) return null;
++  return { type: 'table', head, rows, wide: (head.length || (rows[0] && (rows[0].cells || rows[0]).length) || 0) > 4 };
++}
++/* one section or subsection body -> items */
++function gprItems(root, scope, st) {
++  const items = []; let buf = '', run = null;
++  const push = it => { if (it.type !== 'steps') run = null; items.push(it); return it; };
++  const flush = () => { const t = gprClean(buf); buf = ''; if (t) push({ type: 'note', text: t }); };
++  const addStep = s => { flush(); if (!run) { run = { type: 'steps', scope, steps: [] }; items.push(run); } run.steps.push(s); };
++  const sid = lab => { const b = String(lab || 'eq').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 36) || 'eq', n = (st.ids.get(scope + '|' + b) || 0) + 1; st.ids.set(scope + '|' + b, n); return b + (n > 1 ? '-' + n : ''); };
++  const walk = el => {
++    for (const n of [...el.childNodes]) {
++      if (n.nodeType !== 1) { buf += gprInline(n); continue; }
++      const e = n, cl = e.classList, tag = e.tagName;
++      if (/^(SELECT|INPUT|BUTTON|TEXTAREA|SCRIPT|STYLE)$/.test(tag) || cl.contains('rpt-jump')) continue;
++      if (cl.contains('eq-block')) {
++        flush(); const tt = e.querySelector('.eq-title'), lab = gprClean(tt && tt.firstElementChild ? gprInline(tt.firstElementChild) : ''), ref = gprClean((e.querySelector('.eq-ref') || {}).textContent || '');
++        const lines = [...e.querySelectorAll(':scope>.eq-math')].map(m => m.textContent.trim().replace(/^\\\[/, '').replace(/\\\]$/, '').trim());
++        lines.forEach((tx, k) => addStep(SharedSteps.step({ id: sid(lab), label: (lab.replace(/\$[^$]*\$/g, m => SharedSteps.toText(m.slice(1, -1))) || 'Equation') + (lines.length > 1 ? ` (${k + 1} of ${lines.length})` : ''), sym: tx, eq: '', sub: '', value: null, unit: '', ref: k ? '' : ref })));
++        const wt = e.querySelector(':scope>.eq-where table'); if (wt) { const t = gprTable(wt); if (t) { t.caption = 'where'; t.head = ['Symbol', 'Description', 'Value', 'Source']; t.rows = t.rows.map(r => { const c = Array.isArray(r) ? r : r.cells; return [c[0], c[1], c[2], c[3] || '']; }); push(t); } }
++        continue; }
++      if (cl.contains('cr-res')) { flush();
++        const d = gprClean((e.querySelector('.cr-d') || {}).textContent || '').replace(/:$/, ''), m = gprClean(gprInline(e.querySelector('.cr-m') || e)), r = gprClean((e.querySelector('.cr-r') || {}).textContent || '');
++        const v = st.res ? st.res() : null;
++        addStep(SharedSteps.step({ id: sid(d), label: d || 'Result', sym: '', eq: '', sub: '', value: v != null ? v : (m || r), unit: '', d: 2, note: (v != null ? m.replace(/^[\d.]+\s*/, '') + ' ' : '') + r, ok: /fail|ERROR/i.test(e.querySelector('.cr-r') ? e.querySelector('.cr-r').className + ' ' + r : '') ? false : /≥|ADVISORY/.test(r) || v != null ? (r === 'ADVISORY' ? undefined : true) : undefined }));
++        continue; }
++      if (tag === 'TABLE') { flush(); const t = gprTable(e); if (t) { if (t.rows.length > 14) { t.lazy = true; t.title = 'Table (' + (st.title || '') + ')'; } push(t); } continue; }
++      if (tag === 'IMG' && e.src) { flush(); push({ type: 'figure', svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${e.naturalWidth || 1000} ${e.naturalHeight || 600}"><image href="${e.src}" width="${e.naturalWidth || 1000}" height="${e.naturalHeight || 600}"/></svg>`, caption: '' }); continue; }
++      if (tag === 'svg' || tag === 'SVG') { flush(); const c = e.cloneNode(true); c.removeAttribute('id'); c.setAttribute('style', 'width:100%;height:auto'); push({ type: 'figure', svg: c.outerHTML, caption: '' }); continue; }
++      if (cl.contains('cap')) { const t = gprClean(gprInline(e)); const f = items[items.length - 1]; if (f && f.type === 'figure' && !f.caption) f.caption = t; else push({ type: 'note', text: t }); continue; }
++      if (cl.contains('alert')) { flush(); const t = gprClean(gprInline(e)); if (t) push({ type: 'note', text: t, warn: cl.contains('fail') || cl.contains('warn') }); continue; }
++      if (tag === 'UL' || tag === 'OL') { flush(); [...e.children].forEach((li, i) => { const t = gprClean(gprInline(li)); if (t) push({ type: 'note', text: (tag === 'OL' ? (i + 1) + '. ' : '• ') + t }); }); continue; }
++      if (/^H[3-6]$/.test(tag)) { flush(); const t = gprClean(gprInline(e)); if (t) push({ type: 'note', text: t.toUpperCase() === t ? t : t }); const last = items[items.length - 1]; if (last) last.head = true; continue; }
++      if (GPR_INLINE.test(tag)) { buf += gprInline(e); continue; }
++      if (tag === 'P' || cl.contains('note-p') || cl.contains('cr-asm') || tag === 'PRE') { flush(); const t = gprClean(gprInline(e)); if (t) push({ type: 'note', text: t }); continue; }
++      flush(); walk(e); flush();
++    }
++  };
++  walk(root); flush();
++  return items;
++}
++/* the report model: the existing report (buildReport) walked into sections */
++function gprModel() {
++  const o = crOpts(), html = buildReport(o), mt = P.meta, box = document.createElement('div');
++  box.innerHTML = html;
++  const st = { ids: new Map() }, secs = [];
++  // the "Lowest rating factor" result line of a limit-state subsection is the tool's minRF of that check
++  const chk = id => R.checks.find(c => 'cr-chk-' + c.id === id);
++  box.querySelectorAll(':scope>section.cr-sec').forEach(sec => {
++    const h1 = sec.querySelector(':scope>h2.cr-h1'); if (!h1) return;
++    const title = gprClean(h1.textContent).replace(/^\d+\.\s*/, '').replace(/:$/, ''), subs = [], k1 = h1.id || '';
++    const lead = document.createElement('div');
++    [...sec.childNodes].forEach(n => { if (n === h1) return; if (n.nodeType === 1 && n.classList.contains('cr-sub')) { if (lead.childNodes.length) { const it = gprItems(lead, 'g.' + k1 + '.0', st); if (it.length) subs.push({ title: subs.length ? 'Notes' : 'Overview', items: it }); lead.innerHTML = ''; }
++        const hr = n.querySelector(':scope>.cr-h2row'), stitle = hr ? gprClean((hr.querySelector('.cr-h2') || hr).textContent).replace(/^\d+\.\d+\.\s*/, '').replace(/:$/, '') : title, ref = hr ? gprClean((hr.querySelector('.cr-r') || {}).textContent || '') : '';
++        const c = hr ? chk(hr.id) : null, m = c ? minRF(c) : null;
++        st.res = () => (m && m.r && !m.r.err && typeof m.r.RF === 'number' ? m.r.RF : null); st.title = stitle;
++        const kids = document.createElement('div'); [...n.childNodes].forEach(k => { if (k !== hr) kids.appendChild(k.cloneNode(true)); });
++        const items = gprItems(kids, 'g.' + (hr && hr.id ? hr.id : k1 + '.' + subs.length), st); st.res = null;
++        subs.push({ title: stitle, ref, key: hr && hr.id ? hr.id : undefined, items });
++      } else lead.appendChild(n.cloneNode(true)); });
++    if (lead.childNodes.length) { const it = gprItems(lead, 'g.' + k1 + '.z', st); if (it.length) subs.push({ title: subs.length ? 'Notes' : title, items: it }); }
++    if (subs.length) secs.push({ title, subs });
++  });
++  return { title: 'Gusset Plate Rating', subtitle: [mt.joint, mt.projectName ? mt.projectName + (mt.bridgeId ? ', Bridge ' + mt.bridgeId : '') : ''].filter(Boolean).join(' · '),
++    code: activeMeth().map(m => m === 'lrfr' ? 'LRFR (AASHTO MBE 3rd Ed. 6A.6.12.6)' : 'LFR (AASHTO MBE 3rd Ed. 6B, FHWA-IF-09-014)').join(' · ') + '. Equations are shown symbolically, then with values substituted, then with the result. Units: kip, in, ksi unless noted.',
++    refs: CR_REFS.map(([a, b]) => [a, b]),
++    info: [['Project No', mt.jobNo], ['Computed by', mt.preparedBy], ['Date', mt.prepDate], ['Description', mt.subject || mt.joint], ['Checked by', mt.checkedBy], ['Date', mt.chkDate]],
++    head: { lines: true, left: `Project No: ${mt.jobNo || '—'}\nDescription: ${mt.subject || mt.joint || '—'}`, center: `Computed By: ${mt.preparedBy || '—'}\nChecked By: ${mt.checkedBy || '—'}`, right: `Date: ${mt.prepDate || '—'}\nDate: ${mt.chkDate || '—'}`,
++      foot: `${mt.projectName || ''}, ${mt.joint || ''} (Gusset Plate Rating)` },
++    sections: secs };
++}
++async function renderReport2Tab() {
++  const host = $('#tab-report2'); if (!host) return;
++  if (!window.SharedReport || !window.SharedSteps) { host.innerHTML = `<div class="alert fail"><b>shared/report.js or shared/steps.js is not loaded:</b> keep the shared folder next to this file.</div>`; return; }
++  if (!R || R.errors.length) { host.innerHTML = `<div class="alert fail"><b>The report is unavailable until the input errors are fixed.</b></div>`; GPRP.api = null; GPRP.doc = null; return; }
++  let M; try { M = gprModel(); } catch (e) { console.error(e); host.innerHTML = `<div class="alert fail"><b>Report error:</b> ${esc(e && e.message)}</div>`; GPRP.api = null; GPRP.doc = null; return; }
++  const o = crOpts(), chip = ([k, l]) => `<label class="crv-chip"><input type="checkbox" data-gprtog="${k}" ${o[k] ? 'checked' : ''}>${l}</label>`;
++  const controls = `<div class="crv-tog" role="group" aria-label="Report sections">${CR_OPTS.map(chip).join('')}${GP3D.reportChip()}</div><label class="crv-det">Detail <select data-gprdet="1"><option value="full"${o.detail === 'full' ? ' selected' : ''}>Every rating case worked</option><option value="gov"${o.detail === 'gov' ? ' selected' : ''}>Lowest rating case only</option></select></label>`;
++  const sc = $('.tab-panels'), keep = sc ? sc.scrollTop : 0;
++  GPRP.api = SharedReport.mount(host, M, { closed: GPRP.closed, controls, onGoto: name => setOTab(name) });
++  GPRP.doc = GPRP.api.doc; if (sc) sc.scrollTop = keep;
++}
++document.addEventListener('change', e => {
++  const t = e.target.closest && e.target.closest('[data-gprtog]'); if (t) { P.ui.rpt[t.dataset.gprtog] = t.checked; autosave(); CR_STALE = true; renderReport2Tab(); return; }
++  if (e.target.dataset && e.target.dataset.gprdet) { P.ui.rpt.detail = e.target.value; autosave(); CR_STALE = true; renderReport2Tab(); return; }
++  if (e.target.matches && e.target.matches('#tab-report2 [data-v3rpt]')) setTimeout(renderReport2Tab, 0);   // the 3D snapshot chip (GP3D keeps its state)
++});
++/* Ctrl+P while this tab is shown prints the shared report alone (its running header); the Report tab's own print is unchanged */
++window.addEventListener('beforeprint', () => {
++  if (!P || P.ui.otab !== 'report2' || !GPRP.doc || document.body.classList.contains('rp-printing') || document.body.classList.contains('printing-calc')) return;
++  let box = document.getElementById('rp-print'); if (!box) { box = document.createElement('div'); box.id = 'rp-print'; document.body.appendChild(box); }
++  box.innerHTML = '<div class="rp"><article class="rp-doc">' + SharedReport.html(GPRP.doc, { lazy: false }) + '</article></div>';
++  document.body.classList.add('rp-printing');
++});
++window.__gprForTest = () => ({ doc: GPRP.doc, R, minRF, P });   /* tests only */
++
+```

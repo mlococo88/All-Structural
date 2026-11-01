@@ -12,6 +12,9 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<!-- IDRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<script src="shared/steps.js"></script>
+<script src="shared/report.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -1747,8 +1750,8 @@ const ROLLED_SHAPES = {
   'S36X150': {d:36.00, bf:8.00, tf:0.625, tw:0.625, Fy:36},
 };
 
-const STEPS=["Project","Geometry","Sections","Loads","Moving Loads","Combos","Generate","3D View","Results","AASHTO Rating","AREMA Rating"];
-const STEP_ICONS=["📋","📐","🔩","⬇","🚛","🔗","📄","🧊","📊","⚖","🚂"];
+const STEPS=["Project","Geometry","Sections","Loads","Moving Loads","Combos","Generate","3D View","Results","AASHTO Rating","AREMA Rating","Report"];   // IDRP 2026-11-01: "Report" (shared viewer)
+const STEP_ICONS=["📋","📐","🔩","⬇","🚛","🔗","📄","🧊","📊","⚖","🚂","🗎"];
 
 // Compute equivalent MIDAS H-section from AREMA built-up section.
 //
@@ -20010,6 +20013,106 @@ function idxGotoEl(id){
   setTimeout(t,60);
 }
 
+/* ================= IDRP (2026-11-01): REPORT STEP — the shared report viewer, display only =================
+   The model and the AASHTO rating as a calculation report in the suite's shared viewer (shared/report.js: navigation tree to the
+   topics, numbered sections §n.m, collapse / expand, search, Print with a title block, running header and page numbers); worked
+   steps in the shared format (shared/steps.js, KaTeX 0.16.9 already loaded by this page). Every value is the app's own: cfg (the
+   model as entered), the MIDAS rows as pasted, and reportState (pushed up by the Results / AASHTO Rating step: ratingData per node
+   with C, RF and the governing action, the factors, capAt, legalPosting). Nothing is recomputed. The two print reports ("Generate
+   Report", "Print AREMA Report") are kept. Nothing is saved. */
+function idxrModel(cfg, rs, rows, zones, combos){
+  const S=window.SharedSteps, N=(x,d)=>S.n(x,d), secs=[];
+  const plain=s=>String(s==null?'':s).replace(/<[^>]*>/g,'').replace(/\$/g,'').replace(/\[\[/g,'[ [');
+  const cell=(v,d,key,cls)=>({t:(typeof v==='number')?(isFinite(v)?N(v,d):'—'):String(v==null||v===''?'—':v),n:typeof v==='number',key,cls});
+  const one=(scope,steps,title,ref,res)=>{ const t=S.group(steps,[{key:'t',title,ref:ref||'',ids:()=>true,res}],{strip:false})[0];
+    return {type:'steps',scope,steps,topics:t?[{title,ref:ref||'',n:steps.length,cls:t.cls,chip:t.chip,res:t.res}]:[]}; };
+  const gfs=(cfg.geomMode||'beam')==='gfs', MBE='AASHTO MBE (edition: verify)';
+  /* ---------- 1. Project and model ---------- */
+  {
+    const kv=[['Project',plain(cfg.projectName)],['Bridge ID',plain(cfg.projectBridgeId)],['Engineer',plain(cfg.projectUser)],['Date',plain(cfg.projectDate)],['Revision',plain(cfg.projectRevision)],
+      ['Description',plain(cfg.projectDesc)],['Model',gfs?'Girder–floorbeam–stringer grillage ('+((cfg.gfs&&cfg.gfs.nGirders)||2)+' girders, span '+N(+((cfg.gfs&&cfg.gfs.span)||0),2)+' ft)':'Single beam line']];
+    if(!gfs) kv.push(['Spans',(cfg.spans||[]).map(s=>N(+s,2)).join(', ')+' ft (total '+N((cfg.spans||[]).reduce((a,b)=>a+(+b),0),2)+' ft)'],['Elements per span',String(cfg.elemsPerSpan)]);
+    kv.push(['Material grade',plain(cfg.materialGrade)],['Moving-load code',plain(cfg.movingLoadCode)],['Vehicles',(cfg.selectedVehicles||[]).map(plain).join(', ')||'—'],
+      ['Dynamic load allowance',cfg.useGlobalDLA?('global '+N(+cfg.globalDLA,0)+'%'):'per vehicle (as entered)']);
+    const items=[{type:'kv',rows:kv},{type:'note',text:'As entered on the [[tab:Project|Project]], [[tab:Geometry|Geometry]] and [[tab:Moving Loads|Moving Loads]] steps.'}];
+    const subs=[{title:'Project and model',items}];
+    if(!gfs&&(cfg.sectionZones||[]).length) subs.push({title:'Section zones',items:[{type:'table',head:['Zone','From (ft)','To (ft)','Type','Section'],rows:cfg.sectionZones.map((z,i)=>[String(i+1),cell(+z.startX,2),cell(+z.endX,2),plain(z.type),plain(z.name)])},{type:'note',text:'From the [[tab:Sections|Sections step]].'}]});
+    if((cfg.deadLoads||[]).length) subs.push({title:'Dead loads',items:[{type:'table',head:['Load','Type','w (klf)'],rows:cfg.deadLoads.map(d=>[plain(d.name),plain(d.type),cell(+d.value,4)])},{type:'note',text:'From the [[tab:Loads|Loads step]].'}]});
+    const cb=(cfg.loadCombos||[]).filter(c=>c.active);
+    if(cb.length) subs.push({title:'Load combinations written to the MCT file (active)',items:[{type:'table',head:['Name','Kind','DC','DW','LL'],rows:cb.map(c=>[plain(c.name),plain(c.kind),cell(c.dcFactor,2),cell(c.dwFactor,2),cell(c.llFactor,2)])},{type:'note',text:'From the [[tab:Combos|Combos step]].'}]});
+    secs.push({title:'Project and model',subs});
+  }
+  /* ---------- 2. Analysis results ---------- */
+  {
+    const lcs=[...new Set((rows||[]).map(r=>r.load))], nodes=new Set((rows||[]).map(r=>r.node));
+    const items=rows&&rows.length?[{type:'kv',rows:[['Result rows (MIDAS beam forces, pasted)',String(rows.length)],['Nodes',String(nodes.size)],['Load cases',String(lcs.length)]]},
+      {type:'table',head:['Load case','Rows'],rows:lcs.map(l=>[plain(l),String(rows.filter(r=>r.load===l).length)])},{type:'note',text:'Diagrams and envelopes: [[tab:Results|Results step]].'}]
+      :[{type:'note',warn:true,text:'No MIDAS results yet: paste them on the [[tab:Results|Results step]].'}];
+    secs.push({title:'Analysis results (MIDAS)',subs:[{title:'Result cases',items}]});
+  }
+  /* ---------- 3. AASHTO load rating ---------- */
+  const rd=(rs&&rs.ratingData)||[];
+  if(rd.length){
+    const g=rs.govRating||rd.reduce((a,b)=>a.rfGov<b.rfGov?a:b,rd[0]), lev=(rs.ratingMethod||'LRFR')+' · '+(rs.ratingLimitState||'')+' · '+(rs.ratingLevel||'')+(rs.ratingCategory?' · '+rs.ratingCategory:'');
+    const w=S.work('');
+    w.add({id:'phiCS',label:'Condition and system factors',sym:'\\phi_{c}\\phi_{s}',eq:'',sub:N(rs.phiC,2)+'('+N(rs.phiS,2)+')',value:rs.phiC*rs.phiS,unit:'',d:3,ref:MBE+' Tables 6A.4.2.3-1, 6A.4.2.4-1'});
+    w.add({id:'LLs',label:'Live-load scale on the MIDAS LL case (moment, positive)',sym:'k_{LL}',eq:'',sub:plain(rs.ratingLLScaleExpr||''),value:rs.ratingLLScale,unit:'',d:4,note:(rs.ratingLLScaleMn!=null&&rs.ratingLLScaleMn!==rs.ratingLLScale?'Negative moment: '+N(rs.ratingLLScaleMn,4)+'. ':'')+(rs.ratingLLScaleV!=null&&rs.ratingLLScaleV!==rs.ratingLLScale?'Shear: '+N(rs.ratingLLScaleV,4)+'.':'')});
+    const x=g.pos, cap=typeof rs.capAt==='function'?rs.capAt(x):null, wg=S.work('');
+    const C=(id,lab,sym,Mn,phi,val)=>wg.add({id,label:lab,sym,eq:'\\phi_{c}\\phi_{s}\\phi\\,R_{n}',sub:cap?N(rs.phiC,2)+'('+N(rs.phiS,2)+')('+N(phi,2)+')('+N(Mn,1)+')':'',value:val,unit:id==='Cv'?'kip':'kip-ft',d:1,ref:MBE+' Eq. 6A.4.2.1-1'});
+    C('Cp','Capacity, positive moment','C_{M+}',cap&&cap.MnPos,rs.ratingPhiF,g.CmnPos); C('Cn','Capacity, negative moment','C_{M-}',cap&&cap.MnNeg,rs.ratingPhiF,g.CmnNeg); C('Cv','Capacity, shear','C_{V}',cap&&cap.Vn,rs.ratingPhiV,g.Cvn);
+    const RF=(id,lab,Cv,D,W,L,k,val,u)=>{ if(val==null) return; wg.add({id,label:lab,sym:'RF',eq:'\\frac{C - \\gamma_{DC}DC - \\gamma_{DW}DW}{\\gamma_{LL}(LL)}',sub:'\\frac{'+N(Cv,1)+' - '+N(rs.gamDC,2)+'('+N(D,2)+') - '+N(rs.gamDW,2)+'('+N(W,2)+')}{'+N(rs.gamLL,2)+'('+N(L,2)+')('+N(k,4)+')}',value:val,unit:'',d:3,ref:MBE+' Eq. 6A.4.2.1-1',note:val>=1?'RF ≥ 1.0':'RF < 1.0'}); };
+    RF('RFp','Rating factor, positive moment',g.CmnPos,g.Mdc,g.Mdw,g.Mllpos,rs.ratingLLScale,g.rfMpos);
+    RF('RFn','Rating factor, negative moment',g.CmnNeg,g.Mdc,g.Mdw,g.Mllneg,rs.ratingLLScaleMn!=null?rs.ratingLLScaleMn:rs.ratingLLScale,g.rfMneg);
+    RF('RFv','Rating factor, shear',g.Cvn,g.Vdc,g.Vdw,g.Vll,rs.ratingLLScaleV!=null?rs.ratingLLScaleV:rs.ratingLLScale,g.rfV);
+    wg.add({id:'RF',label:'Governing rating factor at node '+g.node+' ('+g.governs+')',sym:'RF',eq:'\\min(RF_{M+}, RF_{M-}, RF_{V})',sub:'',value:g.rfGov,unit:'',d:3,note:g.rfGov>=1?'RF ≥ 1.0':'RF < 1.0: below the rating level'});
+    wg.add({id:'RT',label:'Rating in tons ('+plain(rs.ratingVehicleName)+', '+N(rs.ratingVehicleTon,1)+' tons)',sym:'RT',eq:'RF\\,W',sub:N(g.rfGov,4)+'('+N(rs.ratingVehicleTon,1)+')',value:g.rfTons,unit:'tons',d:2});
+    const subs=[{title:'Rating parameters ('+plain(lev)+')',items:[{type:'kv',rows:[['Load factors γ_DC / γ_DW / γ_LL',N(rs.gamDC,2)+' / '+N(rs.gamDW,2)+' / '+N(rs.gamLL,2)],['Resistance factors φ (flexure / shear)',N(rs.ratingPhiF,2)+' / '+N(rs.ratingPhiV,2)],
+        ['Load cases DC / DW / LL+ / LL−',[rs.ratingDcLC,rs.ratingDwLC,rs.ratingLLposLC,rs.ratingLLnegLC].map(v=>plain(v)||'—').join(' / ')]]},one('par',w.steps,'Factors',MBE+' Art. 6A.4.2')]},
+      {title:'Governing node '+g.node+' (x = '+N(x,2)+' ft)',items:[one('gov',wg.steps,'Capacity and rating factors',MBE+' Art. 6A.4.2.1',/^RF$/),{type:'note',text:'Moments in kip-ft, shears in kip, as pasted from MIDAS. Every node: §3.3; the [[tab:AASHTO Rating|AASHTO Rating step]] (Summary, Demand vs. Cap).'}]},
+      {title:'Rating factors at every node',items:[{type:'table',caption:'Demands (kip-ft, kip; LL as pasted, before the LL scale)',head:['Node','x (ft)','M_DC','M_DW','M_LL+','M_LL−','V_DC','V_DW','V_LL'],
+        rows:rd.map(r=>[String(r.node),cell(r.pos,2),cell(r.Mdc,1),cell(r.Mdw,1),cell(r.Mllpos,1),cell(r.Mllneg,1),cell(r.Vdc,1),cell(r.Vdw,1),cell(r.Vll,1)])},
+        {type:'table',caption:'Capacities C = φ_c φ_s φ R_n and rating factors',head:['Node','x (ft)','C_M+','C_M−','C_V','RF M+','RF M−','RF V','RF','Gov.'],
+        rows:rd.map(r=>({cells:[String(r.node),cell(r.pos,2),cell(r.CmnPos,1),cell(r.CmnNeg,1),cell(r.Cvn,1),cell(r.rfMpos,3),cell(r.rfMneg,3),cell(r.rfV,3),
+          {t:N(r.rfGov,3),n:true,cls:r.rfGov<1?'ng':(r.rfGov<1.1?'hi':'ok'),key:r===g?'gov/RF':undefined},r.governs],cls:r===g?'ok':''}))}]}];
+    const post=(rs.legalPosting||[]).filter(o=>o.st!=='none');
+    if(post.length){ const wp=S.work('');
+      post.filter(o=>o.st==='post').forEach(o=>wp.add({id:'P.'+String(o.name).replace(/[^A-Za-z0-9]+/g,'_'),label:'Posting load, '+plain(o.label),sym:'P',eq:'\\frac{W}{0.7}(RF - 0.3)',sub:'\\frac{'+N(o.W,1)+'}{0.7}('+N(o.RF,3)+' - 0.3)',value:o.P,unit:'tons',d:1,ref:MBE+' Eq. 6A.8.3-1'}));
+      const it=[{type:'table',head:['Vehicle','W (tons)','RF (operating)','Posting'],rows:post.map(o=>[plain(o.label),cell(o.W,1),cell(o.RF,3),o.st==='ok'?'none (RF ≥ 1)':o.st==='post'?{t:N(o.P,1)+' tons',n:true,key:'post/P.'+String(o.name).replace(/[^A-Za-z0-9]+/g,'_')}:o.st==='close'?'close the bridge (RF ≤ 0.3)':o.st==='lfr'?'LFR: not posted by MBE 6A.8':'not a legal load'])}];
+      if(wp.steps.length) it.push(one('post',wp.steps,'Posting loads',MBE+' Art. 6A.8.3'));
+      subs.push({title:'Load posting (legal loads)',items:it}); }
+    secs.push({title:'AASHTO load rating',subs});
+  } else secs.push({title:'AASHTO load rating',subs:[{title:'Rating',items:[{type:'note',warn:true,text:'No rating yet: paste the MIDAS results and open the [[tab:AASHTO Rating|AASHTO Rating step]] (load cases and capacity zones); the report then shows the rating.'}]}]});
+  /* ---------- 4. Capacity zones ---------- */
+  if((zones||[]).length) secs.push({title:'Capacity zones',subs:[{title:'Nominal resistances by zone',items:[{type:'table',head:['From (ft)','To (ft)','Type','M_n+ (kip-ft)','M_n− (kip-ft)','V_n (kip)','F_y (ksi)'],rows:zones.map(z=>[cell(+z.startX,2),cell(+z.endX,2),plain(z.type),cell(+z.MnPos,1),cell(+z.MnNeg,1),cell(+z.Vn,1),cell(+z.Fy,0)])},
+    {type:'note',text:'Zones of a computed type (quick-calc, AREMA, design hand-off) show their entered values here; the resistance used at a node is C/(φ_c φ_s φ) in §3. Entered on the [[tab:AASHTO Rating|AASHTO Rating step]].'}]}]});
+  /* ---------- 5. Notes and references ---------- */
+  secs.push({title:'Notes and references',subs:[{title:'Notes',items:[{type:'note',text:'The printed reports "Generate Report" (sidebar) and "Print AREMA Report" (AREMA Rating step) are unchanged; Service II, fatigue, PS checks, multi-vehicle and AREMA ratings are worked there and on their steps.'}]},
+    {title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:[['AASHTO Manual for Bridge Evaluation','Section 6A: Art. 6A.4.2.1 (rating equation), Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, Art. 6A.8.3 (posting). Edition: verify.'],
+      ['AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)','Art. 3.6.1.2, 3.6.2.1 (HL-93, IM), 4.6.2.2 (distribution factor g), Table 3.4.1-1'],['MIDAS Civil','Analysis results (beam forces) pasted from the model built from this project\'s MCT file']]}]}]});
+  return {title:'Bridge Rating & MCT — Calculation Report',subtitle:(cfg.projectName||'Untitled')+(cfg.projectBridgeId?' · '+cfg.projectBridgeId:''),code:'AASHTO MBE Section 6A (LRFR) · AASHTO LRFD 10th Ed. (2024)',
+    info:[['Project',cfg.projectName||''],['Bridge ID',cfg.projectBridgeId||''],['Calculated by',cfg.projectUser||''],['Date',cfg.projectDate||''],['Checked by',''],['Checked date','']],
+    head:{left:'Bridge '+(cfg.projectBridgeId||'—')+' — '+String(cfg.projectName||'—').slice(0,40),right:'Computed: '+(cfg.projectUser||'—')+' '+(cfg.projectDate||'')+' · Checked: —',foot:(cfg.projectName||'Untitled')+' (Bridge Rating & MCT)'},
+    sections:secs};
+}
+function StepReport({cfg, rows, reportState, zones, combos, setStep}){
+  const ref=React.useRef(null), keep=React.useRef({closed:new Set()});
+  useEffect(()=>{ const T=ref.current; if(!T) return;
+    if(!window.SharedReport||!window.SharedSteps){ T.innerHTML='<div style="color:#b91c1c">shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</div>'; window.IDRP=null; return; }
+    let M; try{ M=idxrModel(cfg, reportState, rows, zones, combos); }catch(e){ T.innerHTML='<div style="color:#b91c1c">Report error: '+String(e&&e.message).replace(/[<>&]/g,'')+'</div>'; window.IDRP=null; console.warn('idrp',e); return; }
+    const api=SharedReport.mount(T,M,{closed:keep.current.closed,onGoto:name=>{ const i=STEPS.indexOf(name); if(i>=0&&setStep) setStep(i); }});
+    window.IDRP={doc:api.doc,api,model:M};
+  },[cfg, rows, reportState, zones, combos]);
+  /* Ctrl+P while this step shows: the report alone (shared/report.js print layout, running header, page numbers) */
+  useEffect(()=>{ const on=()=>{ const P=window.IDRP; if(!P||document.body.classList.contains('rp-printing')) return;
+      let box=document.getElementById('rp-print'); if(!box){ box=document.createElement('div'); box.id='rp-print'; document.body.appendChild(box); }
+      box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(P.doc,{lazy:false})+'</article></div>'; document.body.classList.add('rp-printing'); };
+    window.addEventListener('beforeprint',on); return ()=>{ window.removeEventListener('beforeprint',on); window.IDRP=null; }; },[]);
+  return (<div>
+    {!(reportState&&reportState.ratingData&&reportState.ratingData.length)&&<div style={{margin:'0 0 10px',padding:'8px 12px',border:'1px solid #fde68a',background:'#fffbeb',borderRadius:'6px',fontSize:'12px',color:'#92400e'}}>
+      The rating section fills in once the MIDAS results are pasted and the AASHTO Rating step has been opened in this session.</div>}
+    <div ref={ref}/></div>);
+}
+
 // ── Report Generator ─────────────────────────────────────────────────────────
 function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
     ratingCapZones, resultsCombos, capAt, phiC, phiS, ratingPhiF, ratingPhiV,
@@ -22059,6 +22162,7 @@ function App() {
     <StepResults {...ratingStepProps} ratingMode="results"/>,
     <StepResults {...ratingStepProps} ratingMode="aashto"/>,
     <StepResults {...ratingStepProps} ratingMode="arema"/>,
+    <StepReport cfg={cfg} rows={resultsRows} reportState={reportState} zones={ratingCapZones} combos={resultsCombos} setStep={setStep}/>,   // IDRP
   ];
 
   return (

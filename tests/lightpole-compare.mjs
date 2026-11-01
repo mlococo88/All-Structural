@@ -47,6 +47,7 @@ export const CASES = {
   ice: { inputs: { tIce: '1.0', Vice: '60' }, top: { anchRe: 'no' } },
   bolts15: { inputs: { boltDia: '1.500', boltQty: '8', boltBC: '20', b: '3.5', fc: '5000' }, top: { anchRe: 'no', anchTq: 'untorqued' } },
   arms: { fixtures: [{ hf: 30, th: 45, a: 8, epa: 2.4, aIce: 2.4, tIce: 0.5, W: 70 }, { hf: 35, th: 200, a: 4, epa: 1.2, aIce: 1.2, tIce: 0.5, W: 40 }] },
+  torsion: { fixtures: [{ hf: 30, th: 90, a: 10, epa: 3.0, aIce: 3.0, tIce: 0.5, W: 80, armD: 3.5 }], top: { cablesEnabled: false } },
   sign1: { top: { appMode: 'sign', signPosts: 1 } },
   sign1sq: { inputs: { poleShape: 'square', poleDiaTop: '8', poleTwTop: '0.3125', signCfMode: 'manual', signCfMan: '1.5', shaftShape: 'square' }, top: { appMode: 'sign', signPosts: 1 } },
   sign2: { inputs: { V: '130', shaftShape: 'square', signB: '16', signS: '5' }, top: { appMode: 'sign', signPosts: 2 } },
@@ -114,9 +115,10 @@ const PAGE_FN = async ({ mut, state, shots }) => {
     const pick = (o, ks) => { const r = {}; ks.forEach(k => { r[k] = o[k]; }); return r; };
     cablesOut = ser({
       components: comps.map(cp => pick(cp, ['wIce', 'KzC', 'qW', 'qWI', 'D_v', 'Di_v', 'W_h', 'Wi_h', 'A_cable'])),
-      combos: allCombos.map(r => ({ key: r.key, dirs: (r.dirs || [r]).map(d => ({ phi: d.phi,
+      // keyed by combination, so a combination added by a later version shows as new, not as a shift of the others
+      combos: Object.fromEntries(allCombos.map(r => [r.key, { dirs: (r.dirs || [r]).map(d => ({ phi: d.phi,
         ...pick(d, ['cableRes', 'cableAng', 'hcEff', 'sV', 'cableWindH', 'cableWindM', 'M_cable']),
-        per: (d.per || []).map(x => pick(x, ['wv', 'wh', 'Ht', 'Hpull', 'Vc', 'Hw', 'Hx', 'Hy', 'wRes'])) })) })),
+        per: (d.per || []).map(x => pick(x, ['wv', 'wh', 'Ht', 'Hpull', 'Vc', 'Hw', 'Hx', 'Hy', 'wRes'])) })) }])),
     }, 'cables');
   }
   const text = {}, svgs = {};

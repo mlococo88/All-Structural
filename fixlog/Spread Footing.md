@@ -3405,3 +3405,88 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - Class B for the tension lap (all dowels spliced at one section); the pedestal cover used as the top cover for the projection; c_b from the pedestal cover; ψ_r = 1.6 and ψ_o = 1.0 for the hook. Each is stated on screen.
   - Shear friction across the interface (22.9) for V_u is not part of this PR (not requested).
   - With a hook, ℓ_dc must fit in the straight part above the bend. The existing ℓ_dc check uses the full available depth (unchanged); a note says so.
+
+## 2026-11-01 — PR: claude/sf-shear-friction — Shear friction across the pedestal–footing interface, ACI 318-19 22.9 (SFSF; new check, existing results unchanged) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SFSF`.
+
+### SFSF. Interface shear friction per pedestal and per LRFD combination   [new check; CLAUDE.md §4]
+- **Engineer request (2026-11-01).** Check shear friction across the interface (22.9), using:
+  - V_u per combination in both directions and as the resultant;
+  - μ for not-roughened vs roughened (a new input, with a stated default);
+  - A_vf = the dowels, less the area needed for tension;
+  - the 22.9.4.4 limits;
+  - the permanent net compression.
+- **Input (new):** `peds[i].reinf.sfJoint` on the pedestal card, dowel row, "Joint surface":
+  - `'smooth'` (default): placed against hardened concrete, not intentionally roughened, μ = 0.6λ.
+  - `'rough'`: intentionally roughened to about 1/4 in amplitude, μ = 1.0λ (Table 22.9.4.2).
+  - The default is the conservative row; the engineer selects "roughened" where the drawings require it. `migrateState` sets the default for old saves.
+- **Engine:** `sfdShearFriction(i,p,Wped,pd,dw,combos,fc,fy,lam)`, placed before `computePhase2`. `computePhase2` returns `shearFr` (a new key, display only).
+  - **V_u:** V_ux and V_uy are the factored applied shears at the pedestal (the pedestal self-weight adds no shear). V_u = √(V_ux² + V_uy²): the shear plane is the whole interface.
+  - **A_vf** = A_s,dow − A_s,req,ten, ≥ 0. A_s,req,ten is the area the dowels need for tension at the interface (SFDO, governing combination, applied to every combination: conservative). Per 22.9.4.6, tension reinforcement is in addition to the shear-friction reinforcement.
+  - **f_y** ≤ 60 ksi for shear friction (20.2.2.4).
+  - **N_u** (22.9.4.5, permanent net compression) = the combination's dead factor × (pedestal D load + pedestal self-weight), limited to P_u and ≥ 0. Direct mode has no dead/live split, so only the pedestal self-weight counts.
+  - **V_n** = μ(A_vf f_y + N_u) (22.9.4.2).
+  - **Upper limit** V_n,max (22.9.4.4), A_c = b_x b_y:
+    - normalweight and roughened: min(0.2f′c, 480 + 0.08f′c, 1600)·A_c;
+    - other cases (not roughened, or lightweight): min(0.2f′c, 800)·A_c.
+  - **φ** = 0.75 (Table 21.2.1). DCR = V_u / (0.75 min(V_n, V_n,max)).
+- **Shown (§6):**
+  - Footing Design 5.6: a summary table, then per pedestal a worked block for the governing combination (symbolic → values → DCR) and a table of every combination.
+  - Dashboard chip "Interface shear friction" (printed D/C); user manual 3.1 row.
+  - Report §5: subsection "Shear friction across the pedestal–footing interface" (steps + tables).
+  - Drawings: a general note on the construction-joint surface and μ per pedestal.
+- **Hand check:** `uplift_partial`, Ped 1, governing combination 0.9D + 1.0(+Wx).
+  - Demand: V_u = √(40² + 0²) = 40.00 k.
+  - μ = 0.6·1.0 = 0.60.
+  - A_vf = 6.32 − 4.03 = 2.29 in².
+  - N_u = min(0.9·(120 + 0.675), 108.61) = 108.61 k.
+  - V_n = 0.60(2.29·60 + 108.61) = 147.76 k. V_n,max = min(800, 800)·324/1000 = 259.2 k.
+  - φV_n = 0.75·147.76 = 110.82 k. **DCR = 40/110.82 = 0.361**. Before: no check.
+- **Results on the 12 projects:** no new failures. Largest DCR:
+  - uplift_partial 0.361 (Ped 1);
+  - offsets 0.131 (Ped 2: A_vf = 0, because the dowels are all needed for tension, so φV_n = 0.75·0.6·135.61);
+  - direct modes 0.05 (N_u = self-weight only);
+  - all others 0.02–0.05.
+- **Proof nothing else changes:** headless Chromium, origin/main vs the branch, 12 projects.
+  - Every value of `R` and `P2`, the warnings, consistency, state and storage are identical. New keys only: `P2.shearFr`, `reinf.sfJoint`.
+  - The dashboard line diff only adds the new chip. An old save loads and migrates with identical results.
+  - Report: 0 unresolved references, 0 KaTeX errors, values = app values. Drawings: DXF valid, no overlaps.
+  - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
+- **Open items:**
+  - Default μ = 0.6λ (not intentionally roughened): engineer to confirm, or set "roughened" where the drawings specify it.
+  - In direct mode the permanent compression is only the pedestal self-weight.
+  - A_s,req,ten from the governing tension combination is deducted in every combination (conservative).
+
+## 2026-11-01 — PR: claude/sf-agg — Aggregate size input and the (4/3)·d_agg clear-spacing term; minimum clear spacing of the footing mats (SFAG; calculation change, no change at the default) (PR link added after merge)
+
+Line numbers are approximate; search for the anchor text. Every code site is tagged `SFAG`.
+
+### SFAG. d_agg (default 3/4 in) in every minimum-clear-spacing check   [calculation change + new check; CLAUDE.md §4]
+- **Engineer request (2026-11-01):** add an aggregate-size input (default 3/4 in) and the (4/3)·d_agg clear-spacing term in every bar-spacing check that uses the minimum clear spacing (footing mats and pedestal bars).
+- **Input:** `state.mat.dagg` (in), Materials tab, "Max. aggregate size d_agg". `defaultState` = 0.75; `migrateState` backfills 0.75 for old saves. Helper `sfdDagg()`.
+- **Pedestal bars** (`computePhase2` → `pedDes`, anchor `const clrMin=`):
+  - Before: `const clrMin=Math.max(1.5*dbL,1.5);`
+  - After: `const clrMin=Math.max(1.5*dbL,1.5,4/3*sfdDagg());`
+  - Provision: ACI 318-19 25.2.3, minimum clear spacing of column/pedestal longitudinal bars: the greatest of 1.5 in, 1.5d_b and (4/3)d_agg.
+- **Footing mats** (new check, `directionDesign`, after the anchor `const spcTopOK=`):
+  - Each mat entered: clear spacing s − d_b ≥ max(1 in, d_b, (4/3)d_agg) (ACI 318-19 25.2.1), with s as entered or derived from a quantity (SFRQ).
+  - The app had no minimum-spacing check for the mats before, only s_max.
+  - New keys: `desX/desY.clrMinB, clrB, clrBotOK, clrMinT, clrT, clrTopOK, dagg, dbB, dbT`.
+- **Shown:**
+  - Footing Design 5.2 / 5.3: block "Minimum clear spacing, x/y-bars" (worked).
+  - Pedestal Design 6.x "Bar count and fit" and the report step now include the 4/3 d_agg term and its value.
+  - Report §5 "Bar spacing" topic: new steps for bottom / top clear spacing.
+  - Dashboard: new chip "Footing bar clear spacing"; user manual 3.1 row.
+  - Drawings, general note 4: "MAX. AGGREGATE 3/4"".
+- **Check cases (hand):**
+  - Default, d_agg = 3/4 in → (4/3)(0.75) = 1.00 in. That is never more than 1.5 in (pedestal) and never more than max(1 in, d_b) (mats), so **every result at the default is identical to before**.
+  - d_agg = 1.5 in → (4/3)(1.5) = **2.00 in**:
+    - pedestal 18 in, cover 2 in, #8, 6 per x-face: s_clear = (18 − 4 − 1)/5 − 1 = **1.60 in**. Before: ≥ 1.50 → OK. After: < 2.00 → **NG** (Pedestal design chip: "bars do not fit").
+    - pedestal 5 per face: (13)/4 − 1 = 2.25 ≥ 2.00 → OK.
+    - mat #8 @ 3 in: s − d_b = 3 − 1 = **2.00 ≥ max(1, 1, 2.00) → OK** (margin 0).
+- **Comparison (12 projects + `agg_tight`):**
+  - The 12 projects use the default: `R` and `P2` are identical to before (new keys only). New chip PASS; the smallest mat margin is 6.13 in.
+  - `agg_tight` (d_agg = 1.5 in): only `pedDes[0..1].clrMin` 1.5 → 2.0 and `pedDes[1].barFitOK` true → false (the flip shown above) change.
+  - Report: 0 unresolved references, 0 KaTeX errors. Drawings valid.
+  - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
