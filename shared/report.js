@@ -249,7 +249,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
 .rp-doc .katex{font-size:1.05em;} .rp-doc .katex .katex-error{color:#DC2626;}
 .st-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:92%;margin:0 2px;} .st-frac>.st-num{border-bottom:1px solid currentColor;padding:0 2px;} .st-frac>.st-den{padding:0 2px;} .st-bar{text-decoration:overline;}
 #rp-print{display:none;}
-@media (max-width:1000px){.rp-body{grid-template-columns:1fr;} .rp-toc{position:static;max-height:220px;} .rp-doc{padding:14px;}}
+@media (max-width:1000px){.rp-body{grid-template-columns:minmax(0,1fr);} .rp-toc{position:static;max-height:220px;} .rp-doc{padding:14px;}}
 @media print{
   body.rp-printing>*:not(#rp-print){display:none!important;}
   html:has(body.rp-printing),body.rp-printing{height:auto!important;overflow:visible!important;background:#fff!important;}
