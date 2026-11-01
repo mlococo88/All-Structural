@@ -45,7 +45,9 @@
      mount(host, model, opt)    -> the viewer in host: bar (opt.controls HTML + search, Expand all, Collapse all, Print), nav tree, doc.
                                    opt.onGoto(name) for [[tab:…]] links; opt.stick: the height of the host page's own sticky header
                                    above the viewer (the bar sticks below it); opt.closed (a Set of closed heading ids, kept between mounts).
-                                   Returns { doc, print(), jump(key) }.
+                                   opt.spy (2026-11-01, optional): the nav tree highlights the heading being read and keeps it in view
+                                   (scroll-spy on the scrolling column that holds the viewer, else the page).
+                                   Returns { doc, print(), jump(key), go(anchorId) } (go: a section / subsection / step anchor id, e.g. 'rp-s3-2').
      print(doc)                 -> prints the whole report (every section open, lazy items filled), alone on the page
      ref(doc, key)              -> '§x.y' or null
      css()                      -> injects the viewer's styles (mount and print do it themselves)
@@ -376,8 +378,19 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
         if (w.length && show) sec.classList.remove('rp-closed');
       });
     }
+    if (opt.spy) {   // scroll-spy: the last nav entry whose target is above the top of the reading area
+      const toc = root.querySelector('.rp-toc'), links = Array.from(toc.querySelectorAll('a[data-rpto]'));
+      let sc = host.parentElement; while (sc && sc !== document.body && !/(auto|scroll)/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement;
+      const tgt = sc && sc !== document.body ? sc : window; let raf = 0;
+      const spy = () => { if (raf) return; raf = requestAnimationFrame(() => { raf = 0; if (!root.isConnected) { tgt.removeEventListener('scroll', spy); return; }
+        const lim = (tgt === window ? 0 : tgt.getBoundingClientRect().top) + (parseFloat(getComputedStyle(root).getPropertyValue('--rp-stick')) || 0) + (parseFloat(getComputedStyle(root).getPropertyValue('--rp-top')) || 64) + 12;
+        let cur = null; for (const a of links) { const h = document.getElementById(a.dataset.rpto); if (!h || !h.offsetParent) continue; if (h.getBoundingClientRect().top <= lim) cur = a; else break; }
+        links.forEach(a => { if (a !== cur) a.classList.remove('on'); });
+        if (cur && !cur.classList.contains('on')) { cur.classList.add('on'); const nr = toc.getBoundingClientRect(), cr = cur.getBoundingClientRect(); if (cr.top < nr.top || cr.bottom > nr.bottom) toc.scrollTop += cr.top - nr.top - toc.clientHeight / 3; } }); };
+      tgt.addEventListener('scroll', spy, { passive: true }); spy();
+    }
     LIVE = { host, doc, art };
-    return { doc, print: () => print(doc), jump };
+    return { doc, print: () => print(doc), jump, go };
   }
   /* print(doc): the whole report alone on the page (every section open, every lazy item filled), the running header and page numbers
      as @page margin boxes (Chromium-based browsers print them; others print the page without). */
