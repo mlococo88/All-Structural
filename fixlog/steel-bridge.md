@@ -3182,3 +3182,23 @@ Zone "Span 2, 0.1L to 0.2L": V_f = 45.8 kip, Q = 1714.009 in³, I = 106168.02 in
   default (GS14–GS16 11–19 % low), D-2 stud zones and regions not imported (SC2 fails on 8 xsA exterior girders). No app code changed.
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: sbd-ad-adv — Auto design: advisory module items are warnings, not failures (the CTDOT TF3 open item of sbd-ad8)
+### Finding
+- The open item of sbd-ad8 (CTDOT built-in project: no Auto design candidate, "splices TF3 Slip resistance — SvN 1.076") is not a splice
+  search limit: the splice auto-design passes every check (design ok), and TF3 at FS4 (278 ft) has status 'adv' in engine/splices.js:
+  under the 10th Ed. the flange slip force above the slip resistance is advisory, the excess moment goes to the web (WS3, C6.13.6.1.3b),
+  which is checked. Auto design's full check (`evaluate`, `lists`) took the item's ratio 1.076 > 1 as a failure regardless of its status.
+### Change
+- `engine/autodesign.js evaluate`, `lists`: an item with status 'adv' and a ratio above 1 is added to the warnings (`adv: true`) and not
+  counted (before: `take(o)` pushed it to the failures because `o.r > 1`). Items 'adv' with ratio ≤ 1, and every other status, as before.
+### §4 callout
+- Provision: AASHTO LRFD 10th Ed. Art. 6.13.6.1.3b and C6.13.6.1.3b (flange slip; the excess flange force to the web), 6.13.2.8 (slip).
+  Auto design's acceptance now follows each module's own status, as the Field splices tab does.
+- Before: CTDOT built-in, Refine: 0 candidates ("governing splices TF3 … 1.076"). After: 1 candidate, which passes the full check
+  (every module, every splice without a 'fail'; DT4 passes, AD8). Other projects: the tests' candidates are unchanged (no 'adv' item above 1).
+### Tests
+- tests/engine/autodesign.test.mjs (CTDOT test): candidates ≥ 1, each passes the full check, splices without failures, DT4 passing, bolt fit
+  held; the current design still fails DT3/DT7 (narrow flanges).
+### Other copies
+- None.
