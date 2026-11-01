@@ -3480,30 +3480,49 @@ function designRebar(inp,Mu,Pu,Vu,demands){
   const tieBar = manual ? choice.manTie : tieAuto;
   const dShaft=b_in, dEff=0.8*b_in;
   // (shape carried out on the result below for drawings & worked calcs)
-  // shear capacity of concrete (circular): Acv = 0.8 Ag
+  // ---- concrete shear strength, ACI 318-19 §22.5.5.1, Table 22.5.5.1 (2026-11-01, LP-R11: size-effect branch) ----
+  // A_cv = 0.8·A_g is the tool's b_w·d (unchanged). d = 0.8·b (§22.5.2.2). The axial term N_u/6A_g is neglected (conservative).
+  //  (a) A_v ≥ A_v,min:  V_c = 2λ√f'c·A_cv
+  //  (c) A_v < A_v,min:  V_c = 8λ_s·λ·(ρ_w)^(1/3)·√f'c·A_cv,  λ_s = √(2/(1 + d/10)) ≤ 1 (§22.5.5.1.3), ρ_w = A_s/(b_w·d) with
+  //      A_s = the bars in the tension half (half the longitudinal bars, conservative for a circular/square section);
+  //  V_c ≤ 5λ√f'c·A_cv (§22.5.5.1.1).
+  //  A_v,min = max(0.75√f'c, 50)·b_w·s/f_yt (§10.6.2.2 / Table 9.6.3.4), b_w = b; required where V_u > 0.5φV_c (§10.6.2.1).
+  // Before 2026-11-01: V_c = 2√f'c·A_cv always (branch (a) even when the ties are below A_v,min).
   const Acv=0.8*Ag;
-  const Vc=2*Math.sqrt(fc)*Acv;             // lb
-  const phiVc=0.75*Vc;
-  let tieMode, Vs=0, sShear=Infinity;
-  if(Vu<=0.5*phiVc){tieMode='min';}
-  else{
-    tieMode='shear';
-    Vs=Math.max(0, Vu/0.75 - Vc);
-    const Av=2*tieBar.a;                     // two legs
-    sShear=Vs>0? Av*fy*dEff/Vs : Infinity;  // lb-in -> in
-  }
+  const sqfc=Math.sqrt(fc), bw=b_in;
+  const VcA=2*sqfc*Acv;                                   // lb, Table 22.5.5.1(a)
+  const lamS=Math.min(1, Math.sqrt(2/(1+dEff/10)));
+  const AsT=choice.As/2, rhoW=AsT/(bw*dEff);
+  const VcB=Math.min(8*lamS*Math.cbrt(rhoW)*sqfc*Acv, 5*sqfc*Acv);   // lb, Table 22.5.5.1(c), capped by §22.5.5.1.1
+  const Av=2*tieBar.a;                                    // two legs
+  const avMinPerS=Math.max(0.75*sqfc,50)*bw/fy;           // in²/in
   // ACI §25.7.2.1 spacing limits
   const sLimit=Math.min(16*dLong, 48*tieBar.d, dShaft);
+  const sTrial = manual ? inp.manTieS : Math.max(3, Math.floor(sLimit));   // ties as detailed (no shear design)
+  const avOK0 = Av >= avMinPerS*sTrial - 1e-12;
+  let Vc = avOK0 ? VcA : VcB;
+  let vcBranch = avOK0 ? 'a' : 'c';
+  let phiVc=0.75*Vc;
+  let tieMode, Vs=0, sShear=Infinity, sAvMin=Infinity;
+  if(Vu<=0.5*phiVc){tieMode='min';}
+  else{
+    // shear reinforcement required (§10.6.2.1): A_v ≥ A_v,min, so branch (a) applies
+    tieMode='shear';
+    Vc=VcA; vcBranch='a'; phiVc=0.75*Vc;
+    Vs=Math.max(0, Vu/0.75 - Vc);
+    sShear=Vs>0? Av*fy*dEff/Vs : Infinity;  // lb-in -> in
+    sAvMin=Av/avMinPerS;                     // in, spacing at which A_v = A_v,min
+  }
   let sTie, tieChecks=null;
   if(manual){
     // check the PROVIDED spacing against both limits instead of choosing one
     sTie=inp.manTieS;
     tieChecks={ limit: sTie<=sLimit+1e-9,
-                shear: (tieMode==='min') || sTie<=sShear+1e-9,
+                shear: (tieMode==='min') || (sTie<=sShear+1e-9 && sTie<=sAvMin+1e-9),
                 sizeMin: tieBar.d >= tieAuto.d };            // §25.7.2.2 minimum tie size for the longitudinal bar
     tieChecks.ok = tieChecks.limit && tieChecks.shear && tieChecks.sizeMin;
   } else {
-    sTie=Math.min(sLimit, sShear);
+    sTie=Math.min(sLimit, sShear, sAvMin);
     sTie=Math.max(3, Math.floor(sTie));     // round down to whole inch, min 3"
   }
   // top confinement zone (anchor bolt region)
@@ -3512,7 +3531,7 @@ function designRebar(inp,Mu,Pu,Vu,demands){
 
   return {b_in,Ag,rhoMin,AsMin,AsMax,fc,fy,cover,shape,sq,
           manual,
-          long:choice, tie:{bar:tieBar,mode:tieMode,Vc,phiVc,Vs,sShear,sLimit,s:sTie,
+          long:choice, tie:{bar:tieBar,mode:tieMode,Vc,phiVc,Vs,sShear,sLimit,s:sTie,VcA,VcB,lamS,rhoW,AsT,Av,avMinPerS,sAvMin,sTrial,vcBranch,
                             manual, checks:tieChecks, tieAuto,
                             zoneH,sTop,dEff,Acv}};
 }
@@ -5134,13 +5153,17 @@ function rebarWorkedHTML(reo, inp, Mu, Pu, Vu){
   H+=`<p class="eq-result">${L.over?`Even (${L.n}) ${L.bar.n} does not reach M_u — increase shaft diameter.`:`Provide (${L.n}) ${L.bar.n} longitudinal bars — φM_n = ${fmt(L.phiMn,0)} lb·ft ≥ M_u = ${fmt(Mu,0)} lb·ft.`}</p>`;
 
   H+=step(`4 · Transverse ties / shear ${ref('§22.5, §25.7.2')}`);
-  H+=`<p class="eq-why">Concrete shear capacity of the circular section (effective shear area ≈ 0.8A<sub>g</sub>):</p>`;
-  H+=g(`\\phi V_c = 0.75\\cdot 2\\sqrt{f'_c}\\,(0.8A_g) = ${fmt(T.phiVc,0)}\\ \\text{lb}\\ ${T.phiVc>=Vu?'\\ge':'\\lt'}\\ V_u = ${fmt(Vu,0)}\\ \\text{lb}`);
+  H+=`<p class="eq-why">Concrete shear strength, ACI 318-19 Table 22.5.5.1 (effective shear area b<sub>w</sub>d ≈ 0.8A<sub>g</sub> = ${fmt(T.Acv,0)} in², d = 0.8b; axial term neglected). Branch (a) applies when the ties provide A<sub>v</sub> ≥ A<sub>v,min</sub>, branch (c) (size effect λ<sub>s</sub>) when they do not. ρ<sub>w</sub> uses the bars of the tension half (half of the longitudinal bars).</p>`;
+  H+=g(`A_{v,min} = \\max(0.75\\sqrt{f'_c},\\,50)\\frac{b_w\\,s}{f_{yt}} = ${fmt(Math.max(0.75*Math.sqrt(reo.fc),50),1)}\\frac{(${fmt(reo.b_in,1)})(${fmt(T.sTrial,1)})}{${fmt(reo.fy,0)}} = ${fmt(T.avMinPerS*T.sTrial,3)}\\ \\text{in}^2\\qquad A_v = 2A_{tie} = ${fmt(T.Av,3)}\\ \\text{in}^2\\ (${T.bar.n}\\ @\\ ${fmt(T.sTrial,1)}\\ \\text{in})`);
+  H+=g(`V_{c,(a)} = 2\\lambda\\sqrt{f'_c}\\,b_wd = 2(1.0)\\sqrt{${fmt(reo.fc,0)}}(${fmt(T.Acv,0)}) = ${fmt(T.VcA,0)}\\ \\text{lb}`);
+  H+=g(`\\lambda_s = \\sqrt{\\frac{2}{1+d/10}} = \\sqrt{\\frac{2}{1+${fmt(T.dEff,2)}/10}} = ${fmt(T.lamS,3)}\\qquad \\rho_w = \\frac{A_s/2}{b_wd} = \\frac{${fmt(T.AsT,2)}}{${fmt(reo.b_in,1)}(${fmt(T.dEff,2)})} = ${fmt(T.rhoW,5)}`);
+  H+=g(`V_{c,(c)} = \\min\\!\\left(8\\lambda_s\\lambda\\,\\rho_w^{1/3}\\sqrt{f'_c}\\,b_wd,\\ 5\\lambda\\sqrt{f'_c}\\,b_wd\\right) = ${fmt(T.VcB,0)}\\ \\text{lb}`);
+  H+=g(`\\phi V_c = 0.75\\,V_{c,(${T.vcBranch})} = ${fmt(T.phiVc,0)}\\ \\text{lb}\\ ${T.phiVc>=Vu?'\\ge':'\\lt'}\\ V_u = ${fmt(Vu,0)}\\ \\text{lb}\\quad(${T.vcBranch==='a'?'A_v \\ge A_{v,min}\\text{ or shear ties designed}':'A_v < A_{v,min}'})`);
   if(T.mode==='min'){
     H+=`<p class="eq-why">V<sub>u</sub> ≤ ½φV<sub>c</sub>, so only minimum ties are required. Spacing is governed by the §25.7.2.1 limits (16 d<sub>b,long</sub>, 48 d<sub>b,tie</sub>, and the shaft dimension):</p>`;
   } else {
     H+=`<p class="eq-why">V<sub>u</sub> exceeds ½φV<sub>c</sub>, so shear reinforcement is designed; the tie spacing is the smaller of the shear requirement and the §25.7.2.1 detailing limits:</p>`;
-    H+=g(`V_s = \\frac{V_u}{0.75}-V_c\\quad\\Rightarrow\\quad s = \\frac{A_v f_y d}{V_s} = ${T.sShear===Infinity?'\\infty':fmt(T.sShear,1)}\\ \\text{in}`);
+    H+=g(`V_s = \\frac{V_u}{0.75}-V_c\\quad\\Rightarrow\\quad s = \\frac{A_v f_y d}{V_s} = ${T.sShear===Infinity?'\\infty':fmt(T.sShear,1)}\\ \\text{in}\\qquad s_{A_{v,min}} = \\frac{A_v}{A_{v,min}/s} = ${fmt(T.sAvMin,1)}\\ \\text{in}\\ (\\S10.6.2.1)`);
   }
   H+=g(`s_{limit} = \\min(16d_{b},\\,48d_{tie},\\,b) = ${fmt(T.sLimit,1)}\\ \\text{in}`);
   H+=`<p class="eq-result">Ties: ${T.bar.n} @ ${fmt(T.s,0)} in o.c., tightened to ${T.bar.n} @ ${fmt(T.sTop,0)} in within the top ${fmt(T.zoneH,0)} in (anchorage zone).</p>`;
