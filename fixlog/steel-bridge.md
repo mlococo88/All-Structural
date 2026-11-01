@@ -3020,3 +3020,26 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: claude/sbd-cf-note — Cross-frames member-force note: Strength I and Strength III / V are separate load combinations (CFNOTE; text only, no calculation change)
+
+Line numbers are approximate; search for the anchor text.
+
+### What changed (engineer decision 2026-11-01: fix the note text only)
+- `ui/framing.js` `render`, the "Member forces (truss model)" card note. Before:
+  `Analysis force ± |wind force| (Strength III, V) and ± brace force (Constructibility); the top chord work points are held by the deck.`
+  After: `Each load combination is a separate case (AASHTO LRFD 10th Ed. Table 3.4.1-1), checked on its own; each member is designed for the largest.
+  Strength I: the entered member forces (nothing is computed for Strength I); Strength III and V: ± |wind force| f_wF_w alone (not added to the Strength I
+  forces); Constructibility: the entered forces ± brace force f_brM_br. The top chord work points are held by the deck.` (followed by `umNote(R)` as before).
+- `engine/crossframes.js` `steps`, step `cf.<m>.forces` label (same misstatement, text only). Before: `<member>: largest tension and compression (analysis force ±
+  wind and brace forces)`; after: `<member>: largest tension and compression of the separate combinations (Strength I: the entered forces; Strength III, V: ± wind
+  force alone; Constructibility: the entered forces ± brace force)`.
+- What the code does (unchanged, `compute`, `combos`): Strength I T = max(0, u), C = max(0, −u) with u the entered Strength force; Strength III and V
+  T = C = |f_w F_w| (u = 0); Constructibility T = max(0, u + |f_br M_br|), C = max(0, −u + |f_br M_br|); T_u, C_u the largest over the four (AASHTO LRFD
+  10th Ed. Table 3.4.1-1: Strength I, III and V are separate load combinations).
+- Governing provision: AASHTO LRFD 10th Ed. Table 3.4.1-1, Art. 4.6.2.7.1, 6.7.4.2. No formula, factor or value changed.
+- Check case: default project, G1, Cross-frames tab; before = after for every member force, T_u, C_u, check and ratio (Node, `SBDFramingUI.build`
+  at the default and with RIDOT η = 1.05, m = 1.2: 0 differences other than the step label).
+
+### Other copies
+- None.
