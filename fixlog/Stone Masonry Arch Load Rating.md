@@ -1043,3 +1043,61 @@ index 6ad01f0..62d34a2 100644
 +window.__archVehForTest=()=>ARCH.ALL_VEHICLES;   /* tests only (read-only) */
 +
 ```
+
+## 2026-11-02 — PR: claude/phone-print-arch — Phone layout, k_loc matrix row spacing, raw TeX in two report topic titles (PHN; display only, no calculation change)
+
+Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Every code site is tagged `PHN`.
+
+### PHN-1. One column that never grows past the window (below 1050 px)   [display only]
+- **Problem:** below the tool's own 1050 px breakpoint the panels stack, but the grid column was `1fr`, which grows to the widest table. Live Load, Vehicles, Earth Pressure, Influence Lines, Rating, Rating Summary and Nodal Results made both panels 988–1,711 px wide, so the page scrolled sideways: by 102–825 px at 900 px, 234–957 px at 768 px, and 612–1,335 px at 390 px. The title block (`#tblk{min-width:420px}`, four columns) also scrolled 144 px sideways at 390 px on every tab.
+- **Where:** the `@media(max-width:1050px)` rule, anchor `#inPanel,#outPanel{height:auto;overflow:visible;}`.
+- **Before:**
+```css
+@media(max-width:1050px){
+  html,body{height:auto;overflow:visible;display:block;}
+  #wrap{grid-template-columns:1fr;min-height:0;}
+  #inPanel,#outPanel{height:auto;overflow:visible;}
+}
+```
+- **After:**
+```css
+@media(max-width:1050px){
+  html,body{height:auto;overflow:visible;display:block;}
+  #wrap{grid-template-columns:1fr;min-height:0;}
+  #inPanel,#outPanel{height:auto;overflow:visible;}
+  /* PHN (2026-11-02): the one column never grows past the window (a wide table scrolls in its own box, below) */
+  #wrap{grid-template-columns:minmax(0,1fr);}
+  div.tw,.pnl>.bd{overflow-x:auto;}
+}
+@media(max-width:700px){
+  #tblk{min-width:0;flex:1 1 100%;grid-template-columns:repeat(2,minmax(0,1fr));}
+  #appTitle{min-width:0;}
+}
+```
+- Wide tables (the Rating Summary matrix, influence-line and nodal tables) now scroll inside their panel. The page scrolls as one column, as before, and the panels never scroll by themselves, so the KaTeX page-scroll trap (#524) does not apply. Above 1050 px nothing changes. Between 900 and 1050 px only the seven tabs listed above change: on origin/main they scrolled sideways at 900 px; on this branch they do not.
+
+### PHN-2. k_loc stiffness matrix: row spacing   [display only]
+- **Problem (engineer):** in the "Local stiffness matrix, plane frame element" equation (Influence Lines tab, and the Report), the fraction rows were crowded: the L³ of one row touched the next row's numerator.
+- **Where:** the `eqLine("Local stiffness matrix, plane frame element", …)` call, anchor `"\\mathbf{k}_{loc}=\\begin{bmatrix}"`.
+- **Before:** each of rows 1–5 ends with `\\\\"+` (the TeX row break `\\`), e.g.
+  `"0&\\frac{12EI}{L^3}&\\frac{6EI}{L^2}&0&-\\frac{12EI}{L^3}&\\frac{6EI}{L^2}\\\\"+`
+- **After:** each of rows 1–5 ends with `\\\\[6pt]"+` (TeX `\\[6pt]`, 6 pt extra space below the row), e.g.
+  `"0&\\frac{12EI}{L^3}&\\frac{6EI}{L^2}&0&-\\frac{12EI}{L^3}&\\frac{6EI}{L^2}\\\\[6pt]"+`
+- The matrix entries are unchanged. The Report reads the same string. In print the step grows by about 0.4 in, and the end of §9 moves one page down (107 pages, was 106).
+
+### PHN-3. Report: raw TeX in two topic titles   [display only]
+- **Problem:** the topic headings "k$_{\text{loc}}$ for element 1, evaluated (kip, ft)" and "k$_{\text{glob}}$ for element 1 (kip, ft)" printed their TeX source. The report builder turns the tab's `<h4>k<sub>loc</sub> …</h4>` into `$_{\text{loc}}$`, but the shared viewer shows a topic title as plain text.
+- **Where:** `arptPanel`, anchor `if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx));continue;}`.
+- **After:**
+```js
+if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{}$]*)\}\}\$/g,"$1$2"));continue;}
+```
+  The titles now read "k_loc for element 1, evaluated (kip, ft)" and "k_glob for element 1 (kip, ft)". These were the only two topic titles with `$` or `\`, checked on the print box of the default project.
+
+### Smoke test
+- `tests/smoke/phone-layout.mjs` gains the key `arch` (5 input tabs + 14 output tabs). It fails on origin/main and passes on this branch.
+
+### How verified (no computed result, saved key or hand-off changed)
+- origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 19 tabs is identical, except the Report tab's two topic titles above. The whole-document `textContent` differs only by the ten inserted `[6pt]` (five in the inline script source, five in the KaTeX annotation of the k_loc matrix). localStorage after load is identical.
+- Screenshots at 1280 px are pixel-identical (0 differing pixels) on load and on all 19 tabs. At 900 px only the seven overflowing tabs differ (see PHN-1).
+- Report print: 0 elements past the 7.5 in text width.

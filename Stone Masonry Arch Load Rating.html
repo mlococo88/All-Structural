@@ -65,6 +65,13 @@ body{margin:0;background:var(--paper);color:var(--ink);
   html,body{height:auto;overflow:visible;display:block;}
   #wrap{grid-template-columns:1fr;min-height:0;}
   #inPanel,#outPanel{height:auto;overflow:visible;}
+  /* PHN (2026-11-02): the one column never grows past the window (a wide table scrolls in its own box, below) */
+  #wrap{grid-template-columns:minmax(0,1fr);}
+  div.tw,.pnl>.bd{overflow-x:auto;}
+}
+@media(max-width:700px){
+  #tblk{min-width:0;flex:1 1 100%;grid-template-columns:repeat(2,minmax(0,1fr));}
+  #appTitle{min-width:0;}
 }
 
 /* ---------- panels / collapsibles ---------- */
@@ -4610,11 +4617,11 @@ function pane(p,M,selEl,selCase,selSec){
       res:`EA=${num(E*A,0)}\\ \\text{kip},\\ EI=${num(E*I,0)}\\ \\text{kip}\\cdot\\text{ft²}`})+
     eqLine("Local stiffness matrix, plane frame element",
       "\\mathbf{k}_{loc}=\\begin{bmatrix}"+
-      "\\frac{EA}{L}&0&0&-\\frac{EA}{L}&0&0\\\\"+
-      "0&\\frac{12EI}{L^3}&\\frac{6EI}{L^2}&0&-\\frac{12EI}{L^3}&\\frac{6EI}{L^2}\\\\"+
-      "0&\\frac{6EI}{L^2}&\\frac{4EI}{L}&0&-\\frac{6EI}{L^2}&\\frac{2EI}{L}\\\\"+
-      "-\\frac{EA}{L}&0&0&\\frac{EA}{L}&0&0\\\\"+
-      "0&-\\frac{12EI}{L^3}&-\\frac{6EI}{L^2}&0&\\frac{12EI}{L^3}&-\\frac{6EI}{L^2}\\\\"+
+      "\\frac{EA}{L}&0&0&-\\frac{EA}{L}&0&0\\\\[6pt]"+
+      "0&\\frac{12EI}{L^3}&\\frac{6EI}{L^2}&0&-\\frac{12EI}{L^3}&\\frac{6EI}{L^2}\\\\[6pt]"+
+      "0&\\frac{6EI}{L^2}&\\frac{4EI}{L}&0&-\\frac{6EI}{L^2}&\\frac{2EI}{L}\\\\[6pt]"+
+      "-\\frac{EA}{L}&0&0&\\frac{EA}{L}&0&0\\\\[6pt]"+
+      "0&-\\frac{12EI}{L^3}&-\\frac{6EI}{L^2}&0&\\frac{12EI}{L^3}&-\\frac{6EI}{L^2}\\\\[6pt]"+
       "0&\\frac{6EI}{L^2}&\\frac{2EI}{L}&0&-\\frac{6EI}{L^2}&\\frac{4EI}{L}"+
       "\\end{bmatrix}","Standard direct stiffness formulation")+
     `<h4>k<sub>loc</sub> for element ${selEl+1}, evaluated (kip, ft)</h4>`+
@@ -13271,7 +13278,7 @@ function arptItems(body,scope,cap,ctx){
         if(e.id)ctx.cards.push(e.id);
         const bd=e.querySelector(":scope>.bd"); if(bd)walk(bd); flushTxt(); continue;}
       if(/^H[56]$/.test(tag)&&e.nextElementSibling&&(e.nextElementSibling.tagName==="TABLE"||e.nextElementSibling.querySelector(":scope>table"))){flushTxt();endRun();capt=arptClean(arptInline(e,ctx));continue;}   /* a minor heading over a table: its caption */
-      if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx));continue;}
+      if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{}$]*)\}\}\$/g,"$1$2"));continue;}   /* PHN: a topic title is plain text in the shared viewer: <sub>loc</sub> as _loc, not raw TeX */
       if(tag==="TABLE"){flushTxt();endRun();const t=arptTable(e,ctx);if(t){if(capt){t.caption=capt;capt="";}if(t.rows.length>14){t.lazy=true;t.title=(t.caption||(tp?tp.title:"Table"))+" (table)";}push(t);}continue;}
       if(tag==="FIGURE"){flushTxt();endRun();const sv=e.querySelector("svg"), fc=e.querySelector("figcaption");
         if(sv&&sv.childNodes.length){const c=sv.cloneNode(true);c.removeAttribute("id");c.setAttribute("style","width:100%;height:auto");
