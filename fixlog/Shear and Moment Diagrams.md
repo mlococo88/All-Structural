@@ -1417,7 +1417,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - origin/main vs this branch, headless Chromium, file://, template "3-span w/ point load": the page text (`innerText`) on load and on both view tabs at 1280 px, the whole-document `textContent`, and localStorage after load are identical; screenshots at 900 and 1280 px are pixel-identical (0 differing pixels) on load and on both tabs.
 - Report view (shared viewer) printed: same 8 pages, same text (pdftotext) before and after.
 
-## 2026-11-02 — PR: claude/smd-report-consolidate (SMRX: the 📄 Report (D11 calculation sheet) retired after porting what the Report view lacked; 🖨 Print / Ctrl+P print the Report from either view; display only, no result change)
+## 2026-11-02 — PR: claude/smd-report-consolidate, PR #672: https://github.com/mlococo88/All-Structural/pull/672 (SMRX: the 📄 Report (D11 calculation sheet) retired after porting what the Report view lacked; 🖨 Print / Ctrl+P print the Report from either view; display only, no result change)
 
 ### SMRX-1. Content of the 📄 Report ported into the Report view   [display] [no result change]
 - **Engineer request (2026-11-02):** retire the old print reports tool by tool where the Report tab is complete, as for lldf (#623) and Light Pole (#625): compare every number and section of the old report against the Report on the tool's test cases, port what is missing (the tool's own values, no recomputation), then remove the old report and print the Report from every tab.
