@@ -1123,3 +1123,33 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
   Undo / Redo / Ctrl+Z / Ctrl+Y exact (an output-tab change is not a step); dialog rename / duplicate / delete byte-identical, quota
   refusal leaves storage byte-identical; 390 px; no console errors beyond main's. `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
+
+## 2026-11-02 — PR: claude/list-input-stonearch — paste boxes show a table of what was read; track offsets are a table (LIST)   [display only]
+- **Why:** engineer decision 2026-11-02: no comma-separated inputs; multi-line paste boxes stay, each with an editable table of
+  what was read next to it (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
+- **Where (1):** script tags, anchor `<script src="shared/projects-ui.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
+- **Where (2):** the four places that rebuild the input panel (anchor `archInputTabs($("inPanel"));`): `listTables();` added after it.
+- **Where (3):** new `pasteTable()` and `listTables()` before `function readP(){`:
+  - `#measPts` (survey points): table "Survey points as read", x (ft), y (ft); each line split as `parsePairs()` splits it
+    (`/[\s,;]+/`).
+  - `#dOver` (ring-depth overrides): table "Depth overrides as read", Station (ft), Depth (in) (must be > 0, as `readOverrides()`).
+  - `#sdlItems` (SDL line items): table "Line items as read", Description, Weight (plf); split at the LAST comma, as `readSdl()`.
+  - The boxes stay visible and work as before. A table edit rewrites its box, one "a, b" line per row, and fires the box's
+    `input` (render + autosave, as typing). Typing or pasting in the box refreshes the table; a script that sets the box's value
+    (load, undo, unit change, mode switch) refreshes it too (the instance's value setter is wrapped).
+  - `#tracks` (track centerline offsets, railroad): one box per track (`bindInput`, `rowSplit: /\n+/`, `rowSep: "\n"`); the
+    textarea stays, hidden, as the text, one value per line.
+  CSS: `.sliPaste{margin:4px 0 8px;}`.
+- **Deterioration (`deter`):** unchanged; it already has its row editor (one labelled row per area) over the hidden field.
+- **Saved data:** every field stays text in its own format, one entry per line: `measPts` / `dOver` "x, y" per line,
+  `sdlItems` "description, weight" per line, `tracks` one value per line. A box is rewritten only when its table is edited
+  (spaces / semicolons become ", "); the readers `parsePairs`, `readOverrides`, `readSdl`, `readTracks` are unchanged and read the
+  same values (`tests/engine/list-input.test.mjs`, the readers copied verbatim).
+- **Check case:** default project switched to Railroad; SDL "Sidewalks (2), 800 / Railings (2), 120" and override "18, 19" pasted
+  into the tables, tracks -6 / 6 → the saved text is "Sidewalks (2), 800\nRailings (2), 120", "18, 19", "-6\n6", identical to
+  typing the same text in the boxes on origin/main; every output tab identical.
+- **How verified:** `node tests/smoke/list-input.mjs --part stonearch`: origin/main vs this branch, default project and the case
+  above: the stored autosave and the text of every output tab (except the printed report tab; "Computed in x s" normalised)
+  identical; 0 console errors; 390 px no sideways scroll; screenshots at 1400 and 390 px looked at.
+  `node tests/check-syntax.mjs` passes.
+- **Formulas, factors, units, code references:** none (§4 does not apply).

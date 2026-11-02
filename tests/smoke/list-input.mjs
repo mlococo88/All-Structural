@@ -202,7 +202,7 @@ TOOLS.gusset = {   // Gusset Plate Rating: members[i].fast.g, saved as text ("3.
     await p.waitForTimeout(1500);
     const out = await p.evaluate(() => ({ P: JSON.parse(JSON.stringify(P)), R: JSON.parse(JSON.stringify(R)), stored: JSON.parse(localStorage.getItem(KEY_AS) || 'null') }));
     for (const o of [out.P, out.stored && out.stored.data]) if (o && o.ui) delete o.ui.otab;
-    const ids = await p.$$eval('.tab-btn', e => e.map(b => b.dataset.tab).filter(t => t && t !== 'v3d' && t !== 'view3d')); out.tabs = {};
+    const ids = await p.$$eval('.tab-btn', e => e.map(b => b.dataset.tab).filter(t => t && !['v3d', 'view3d', 'report', 'report2'].includes(t))); out.tabs = {};
     for (const id of ids) { await p.evaluate(id => setOTab(id), id); await p.waitForTimeout(400);
       out.tabs[id] = await p.evaluate(id => { const e = document.getElementById('tab-' + id); if (!e) return null; const k = e.cloneNode(true);
         k.querySelectorAll('[data-sli],script,style').forEach(x => x.remove()); return k.innerText; }, id); }
@@ -252,7 +252,8 @@ TOOLS.stonearch = {   // Stone Masonry Arch: SDL line items and depth overrides 
     const tabs = await p.$$eval('#outPanel button[data-tab]', e => e.map(b => b.getAttribute('data-tab'))); out.tabs = {};
     for (const t of tabs) { if (t === 'rpt') continue; await p.click(`#outPanel button[data-tab="${t}"]`); await p.waitForTimeout(800);
       out.tabs[t] = await p.evaluate(t => { const e = document.getElementById('pane_' + t); if (!e) return null; const k = e.cloneNode(true);
-        k.querySelectorAll('[data-sli],script,style,canvas,.js-plotly-plot').forEach(x => x.remove()); return k.innerText; }, t); }
+        k.querySelectorAll('[data-sli],script,style,canvas,.js-plotly-plot').forEach(x => x.remove());
+        return k.innerText.replace(/ ?Computed in [\d.]+ s;[^.]*\./g, '').replace(/\s+/g, ' '); }, t); }   // a timing note, shown only when the sweep was not cached
     return out;
   },
   tableSel: '#sdlItems + .sliPaste',
@@ -298,6 +299,12 @@ async function typeTable(p, sel, v) {
   for (let i = 0; i < vals.length; i++) { await p.keyboard.type(vals[i]); if (i < vals.length - 1) await p.keyboard.press('Enter'); }
   await p.keyboard.press('Tab');
 }
+// two values for the log: for two strings, the text around the first difference
+function showDiff(x, y) {
+  if (typeof x === 'string' && typeof y === 'string') { let i = 0; while (i < x.length && x[i] === y[i]) i++;
+    return `@${i}: ${JSON.stringify(x.slice(Math.max(0, i - 40), i + 80))} -> ${JSON.stringify(y.slice(Math.max(0, i - 40), i + 80))}`; }
+  return `${String(JSON.stringify(x)).slice(0, 120)} -> ${String(JSON.stringify(y)).slice(0, 120)}`;
+}
 async function tool(key) {
   const T = TOOLS[key]; console.log(`${key}: ${T.file}`);
   const A = refDir(args.a || T.a || 'origin/main', T.file), B = path.join(REPO, T.file);
@@ -333,7 +340,7 @@ async function tool(key) {
     const sa = JSON.parse(JSON.stringify({ ...ra, errs: 0, over: 0, blocked: 0 })), sb = JSON.parse(JSON.stringify({ ...rb, errs: 0, over: 0, blocked: 0 }));
     if (rb.blocked.length) console.log('       (blocked offline: ' + rb.blocked.join(', ') + ')');
     const d = diff(sa, sb);
-    ok(!d.length, `${kase}: results, page text and saved data identical (hash ${hash(sa)} / ${hash(sb)})` + (d.length ? '\n       ' + d.slice(0, 8).map(x => `${x[0]}: ${String(JSON.stringify(x[1])).slice(0, 120)} -> ${String(JSON.stringify(x[2])).slice(0, 120)}`).join('\n       ') : ''));
+    ok(!d.length, `${kase}: results, page text and saved data identical (hash ${hash(sa)} / ${hash(sb)})` + (d.length ? '\n       ' + d.slice(0, 8).map(x => `${x[0]}: ` + showDiff(x[1], x[2])).join('\n       ') : ''));
     const want = T.expect || T.values;
     if (kase === 'custom') ok(ra.savedText === want && rb.savedText === want, `custom: saved text "${rb.savedText}" (A "${ra.savedText}")`);
     if (rb.over != null) ok(rb.over <= (T.over || 1), `390 px: page does not scroll sideways (${rb.over}` + (T.over ? `; ${T.over} px on main before the change` : '') + ')');
