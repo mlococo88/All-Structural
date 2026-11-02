@@ -260,3 +260,10 @@ test('Steel Bridge: cross-frame x:P loads, pours a-b and station windows keep th
   for (const t of ['70-90, 135-150', '70 to 90; 135–150', '']) assert.deepEqual(P(sbWin(L.toText(L.fromText(t, win), win))), P(sbWin(t)), t);
   assert.equal(L.toText(L.fromText('70-90, 135-150', win), win), '70-90, 135-150');
 });
+
+// Section Property Calculator.html: the Rename dialog shows the entry's tags ARRAY one per row (fromNumbers) and saves
+// toText(rows).split(',').map(trim).filter(Boolean): an unedited dialog saves the same array.
+test('Section Property Calculator: Rename dialog, tags array -> rows -> the same array', () => {
+  const back = a => L.toText(L.fromNumbers(a)).split(',').map(t => t.trim()).filter(Boolean);
+  for (const a of [[], ['crane'], ['crane', 'runway', 'W21 + C15'], ['2016 job']]) assert.deepEqual(P(back(a)), a);
+});

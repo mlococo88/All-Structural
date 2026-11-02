@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge,secpropren] [--a origin/main] [--shots <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
 // smd (one key per tool in TOOLS): the tool from --a (default: the entry's `a`, the main commit before its table landed, else
@@ -16,7 +16,7 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge').split(',');
+const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge,secpropren').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
@@ -364,6 +364,33 @@ TOOLS.sbridge = {   // apps/steel-bridge: spans, girder spacings, skews (arrays)
   },
   tableSel: '#i_spans + [data-sli="host"]',
   shotPrep: async p => { await p.click('#inTabs [data-itab="spans"]'); await p.waitForTimeout(500); },
+};
+TOOLS.secpropren = {   // Section Property Calculator: Rename = one dialog (name, description, tags table) in place of three prompts.
+  // A: the prompts, each accepted with its default (the test kit accepts every dialog); B: the dialog saved unchanged -> the same library.
+  file: 'Section Property Calculator.html', a: 'a325909', values: 'crane, runway, W21', expect: '[["crane","runway","W21"]]',
+  setup: TOOLS.secprop.setup,
+  typeOld: async (p, v) => { await TOOLS.secprop.typeNew(p, v); await p.waitForTimeout(500); await p.click('#spcLib .libRow button:has-text("Rename")'); await p.waitForTimeout(500); },
+  typeNew: async (p, v) => { await TOOLS.secprop.typeNew(p, v); await p.waitForTimeout(500); await p.click('#spcLib .libRow button:has-text("Rename")'); await p.waitForTimeout(300);
+    await p.click('#libRenSave'); await p.waitForTimeout(500); },
+  saved: TOOLS.secprop.saved, read: TOOLS.secprop.read, tableSel: '.libTagsHost',
+  extra: async p => {   // the dialog: prefilled, a tag added and one removed, a new name and description -> saved as an array; Cancel / Escape change nothing
+    await TOOLS.secprop.typeNew(p, 'crane, runway'); await p.waitForTimeout(500);
+    await p.click('#spcLib .libRow button:has-text("Rename")'); await p.waitForTimeout(300);
+    const pre = await p.evaluate(() => [...document.querySelectorAll('#libRenOverlay input.sli-in')].map(i => i.value));
+    ok(JSON.stringify(pre) === '["crane","runway"]', 'rename dialog: the tags are shown one per row');
+    await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+    ok(!(await p.$('#libRenOverlay')), 'rename dialog: Escape closes it');
+    await p.click('#spcLib .libRow button:has-text("Rename")'); await p.waitForTimeout(300);
+    await p.fill('#libRenOverlay input[aria-label="Name"]', 'Runway girder'); await p.fill('#libRenOverlay input[aria-label="Description"]', ' W21 + C15 ');
+    await p.click('#libRenOverlay button[data-sli-del="0"]'); await p.click('#libRenOverlay button.sli-add');
+    await p.keyboard.type('W21 + C15'); await p.click('#libRenSave'); await p.waitForTimeout(500);
+    const e = await p.evaluate(() => { const x = JSON.parse(localStorage.getItem(LS_LIB)).entries[0]; return { name: x.name, desc: x.desc, tags: x.tags }; });
+    ok(JSON.stringify(e) === '{"name":"Runway girder","desc":"W21 + C15","tags":["runway","W21 + C15"]}', 'rename dialog: saved ' + JSON.stringify(e));
+    await p.click('#spcLib .libRow button:has-text("Rename")'); await p.waitForTimeout(300);
+    await p.fill('#libRenOverlay input[aria-label="Name"]', ''); await p.click('#libRenSave');
+    ok(!!(await p.$('#libRenOverlay')) && /Enter a name/.test(await p.$eval('#libRenOverlay .errBox', x => x.textContent)), 'rename dialog: a blank name is refused in the dialog');
+    await p.click('#libRenOverlay button:has-text("Cancel")');
+  },
 };
 async function clickText(p, sel, text) { await p.locator(sel, { hasText: text }).first().click(); }
 // replace the rows of a table with the values ("a, b, c"): row by row (Enter adds a row from the last one), extra rows removed
