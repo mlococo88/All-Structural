@@ -100,7 +100,10 @@
                   bb, tb, trans, spl, splPl, tsSp, tsA_b, tsA_t, tsB_b, tsB_t, bsA_n, bsA_b, bsA_t, bsB_n, bsB_b, bsB_t, scP, scN, cf, weld);
                   undo also keeps stiffeners, crossframes, studs, welds (null: absent before the Apply),
                   -- added 2026-11-01, optional: absent = 2.5 ft --
-                  ohMin (ft, the minimum overhang Auto and Range may choose; ohSym: 'sym' | 'asym') }
+                  ohMin (ft, the minimum overhang Auto and Range may choose; ohSym: 'sym' | 'asym'),
+                  -- added 2026-11-02 (field splice locations as a variable), optional: absent = Lock and the defaults of engine/splplace.js rules() --
+                  vars.spl / vars['spl#<span, 1-based>']: { mode, min, max (splices in the span), win (text, station windows 'a-b, c-d', ft; vars.spl only) },
+                  splRules: { shipLen (ft), shipWt (kip), minLen, minSup, minXf, minTr (ft) } ('' = the owner's rule or the stated default) }
      -- added 2026-10-29 (load rating PR), optional: a version 1 project without it reads as defaultRating() --
      rating:    { phiC (condition factor, MBE Table 6A.4.2.3-1), phiS (system factor, MBE Table 6A.4.2.4-1) }
      -- added 2026-10-30 (legacy import PR), optional, written only by an import of an old project (engine/legacy.js) --

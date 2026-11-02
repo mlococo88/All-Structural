@@ -18,7 +18,7 @@ const E = p => path.join(ROOT, 'apps/steel-bridge', p);
 export function adWindow() {
   return loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-load.js', ...['engine/model.js', 'engine/sections.js', 'engine/flexure.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js',
     'engine/shear.js', 'engine/stiffeners.js', 'engine/analysis.js', 'engine/fatigue.js', 'engine/studs.js', 'engine/framing.js', 'engine/crossframes.js', 'engine/constructibility.js', 'engine/splices.js',
-    'engine/rating.js', 'engine/welds.js', 'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/welds.js', 'engine/autodesign.js'].map(E));   // rating and welds: in the full check (PR 2)
+    'engine/rating.js', 'engine/welds.js', 'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/welds.js', 'engine/splplace.js', 'engine/autodesign.js'].map(E));   // rating and welds: in the full check (PR 2)
 }
 const W = adWindow(), AD = W.SBDAutoDesign, M = W.SBDModel;
 const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b}`);
@@ -66,7 +66,7 @@ test('The full check uses the Fatigue & studs tab\'s own payload (ui/fatigue.js 
 test('The full check\'s shear, stiffeners, flexure and deck placement equal the Shear, Flexure and Constructibility tabs (LL+IM, f_ℓ entered)', () => {
   const T = loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-load.js', ...['engine/model.js', 'engine/sections.js', 'engine/flexure.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js',
     'engine/shear.js', 'engine/stiffeners.js', 'engine/analysis.js', 'engine/fatigue.js', 'engine/studs.js', 'engine/framing.js', 'engine/crossframes.js', 'engine/constructibility.js', 'engine/splices.js', 'engine/rating.js',
-    'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/constructibility.js', 'engine/autodesign.js'].map(E));
+    'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/constructibility.js', 'engine/splplace.js', 'engine/autodesign.js'].map(E));
   const P = T.SBDModel.defaultProject(); P.flexure = { fl: 3 }; P.constr = { ...(P.constr || {}), flC: 2 };   // f_ℓ entered on both tabs (ksi)
   const ev = T.SBDAutoDesign.evaluate(P, { level: 'full' }), A = ev.mods.shear0;
   const S = T.SBDShearUI.build({ P, g: 0, src: 'analysis' }), FX = T.SBDFlexureUI.build({ P, g: 0, src: 'analysis' }), CN = T.SBDConstrUI.build({ P, g: 0, src: 'project' });
