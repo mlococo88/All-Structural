@@ -2920,7 +2920,7 @@ index 56a8a3f..13f8372 100644
 - **No other change:** no value, step or calculation changed. No saved data changed.
 - **Verified:** headless Chromium, box2c project. The print text has "on the Properties tab." and "on the Calc detail tab."; all earlier report checks still pass (references, KaTeX, values, main vs branch).
 
-## 2026-11-02 — PR: PRLINK — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete)   [display and storage only]
+## 2026-11-02 — PR: [#687](https://github.com/mlococo88/All-Structural/pull/687) — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete)   [display and storage only]
 - **Before:** Project tab → Saved projects (this browser): Save (under Project name), drop-down + Open / Delete (`spc_projects_v1`,
   `{ name: { t, d } }`); header Open file… / Save file; Undo / Redo (geometry). No rename, no duplicate.
 - **Where:**
