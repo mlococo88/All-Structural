@@ -15211,7 +15211,7 @@ index cedb10f..5b89752 100644
 +  }
 ```
 
-## 2026-11-02 — PR: PRLINK — PLIB: Redo, Ctrl+Z / Ctrl+Y, and Rename / Duplicate in the Projects dialog   [display and storage only]
+## 2026-11-02 — PR: [#679](https://github.com/mlococo88/All-Structural/pull/679) — PLIB: Redo, Ctrl+Z / Ctrl+Y, and Rename / Duplicate in the Projects dialog   [display and storage only]
 - **Before:** Save Project (prompt), Projects… (own dialog: Load, Overwrite, Delete; `abutcalc_v1_projects`, `{ name: { state, ts } }`),
   Export / Import JSON, ↶ Undo (40 steps, `pushUndo` / `doUndo`, no Redo, no keyboard shortcut).
 - **Where:**
