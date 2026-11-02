@@ -13,6 +13,7 @@
 <!-- PLIB (2026-11-02): saved-project list dialog (Open / Rename / Duplicate / Delete), shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/list-input.js"></script>
 <style>
 :root{
   --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB;
@@ -2514,9 +2515,13 @@ function rebuildInputs(){
   /* ---------- Analysis options ---------- */
   if(typeof extraInputSections==='function')extraInputSections(P,'B');
   mkSection('inOpts','Output Stations',body=>{
-    const ux=txtInput(()=>S.disp.userX,v=>{S.disp.userX=v;},'userX');
-    ux.placeholder='e.g. 5, 12.5, 31';
-    fRow(body,'Custom stations x',ux,'ft');
+    /* one box per station (shared/list-input.js); S.disp.userX stays the saved text "5, 12.5, 31" */
+    const ux=el('div','uxHost');
+    fRow(body,'Custom stations x',ux,'');
+    uxCtl=SharedListInput.mount(ux,{label:'Custom stations x',rows:SharedListInput.fromText(S.disp.userX),
+      columns:[{label:'x',unit:'ft',min:0,max:()=>totalL(),rangeNote:'outside the beam, not used',lenient:true,placeholder:'5',width:'6em'}],
+      cellAttrs:(inp,r)=>tagField(inp,'userX.'+r),
+      onChange:rows=>{S.disp.userX=SharedListInput.toText(rows);schedule();}});
     body.appendChild(el('div','hint','Results are always reported at span tenth-points, supports, load points, and V=0 stations; add extra stations here.'));
   },P,{noNum:true});
   /* ---------- Assumptions ---------- */
@@ -2736,12 +2741,14 @@ function renderTab(){
   }
 }
 let schedT=null;
+let uxCtl=null;   /* the Custom stations x table (Output Stations) */
 function schedule(structural){
   $('updDot').classList.add('show');
   clearTimeout(schedT);
   schedT=setTimeout(()=>{
     computeAll();
     if(structural)rebuildInputs();
+    else if(uxCtl)uxCtl.relabel();   /* Custom stations x: re-check against the beam length */
     renderTab();
     sbdInputTabMarks();   /* refresh the input-tab error dots */
     autosave();pushHist();
