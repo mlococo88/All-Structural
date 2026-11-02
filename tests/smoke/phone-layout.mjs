@@ -15,6 +15,7 @@ const TOOLS = {
   smd: { file: 'Shear and Moment Diagrams.html', tabs: '#smdViewTabs button',
     init: async p => { await p.selectOption('#tplSel', '3s'); await p.waitForTimeout(2000); } },
   asce7: { file: 'ASCE7-16 Load Generator.html', tabs: '#tabs .tab', tabWait: 900 },
+  mlg: { file: 'Moving Load Generator.html', tabs: '#mlgInTabs button, #mlgOutTabs button', wait: 4000, tabWait: 1000 },
 };
 
 const keys = args.tool ? String(args.tool).split(',') : Object.keys(TOOLS);

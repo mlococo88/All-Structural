@@ -1448,3 +1448,25 @@ index 5d77b0e..a819a1e 100644
 +window.__mlrForTest=()=>({doc:MLRP.doc,RES,DEF,X:RES?extremes(RES,envData(RES,true).F):null});   /* tests only */
 +</script>
 ```
+
+## 2026-11-02 — PR: claude/phone-print-mlg — Report tables wrap: kv values and the last envelope column were off the page (PHN; display only, no calculation change)
+
+Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Code site tagged `PHN`.
+
+### PHN-1. The Report's tables follow the shared viewer's wrapping   [display only]
+- **Problem:** the tool's page-wide rules `th{…text-align:right;white-space:nowrap}` and `td{…text-align:right;…white-space:nowrap}` also applied to the tables of the Report tab (shared/report.js viewer). The settings table (§1.1, `rp-kv`) became one line per row, 1,845 px wide. On screen its values were off to the right at every window width. In print (Report → Print report) every value of §1.1 was cut off at the page edge: only the labels printed. The envelope table (§5.1, tenth points) was 778 px against the 720 px text width, so its last column, MAX |V|, was cut off.
+- **Where:** after the rule `th:first-child,td:first-child{text-align:left}` (top `<style>`).
+- **Added:**
+```css
+.rp td,.rp th{white-space:normal}.rp .rp-kv td{text-align:left}   /* PHN (2026-11-02): … */
+```
+- Only the Report viewer (`.rp`, on screen and in its print box) is affected. The tool's own tables (Results tab, inputs, the 🖨 Print Report document) keep their rules.
+- **Check case:** default project → Report → Print report. Before: 10 pages, §1.1 labels only, envelope table without its MAX |V| column. After: 11 pages; §1.1 shows "Spans 100 + 100 = 200 ft, pinned supports" … "Code basis AASHTO LRFD … (edition per owner)." in full, and the envelope table shows all 11 columns (MAX |V| 197.2, 166.1, …).
+
+### Phone layout
+- Already correct: at 390 and 768 px the page does not scroll sideways on any input or output tab (the 900 px breakpoint stacks the panels, and the header and tab bars wrap). No change. `tests/smoke/phone-layout.mjs` gains the key `mlg` (6 input tabs + Results + Report).
+- The 🖨 Print Report document (popup, all presets, 52 pages) was checked as well. Nothing was clipped and nothing was changed.
+
+### How verified (no computed result, saved key or hand-off changed)
+- origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 8 tabs, the whole-document `textContent` (196,736 chars) and localStorage after load are identical. The run time ("Solved in … ms") is masked.
+- Screenshots at 900 / 1280 px: every non-Report tab differs only in the "Solved in … ms" label (119–206 px). The Report tab differs because the §1.1 table now wraps.
