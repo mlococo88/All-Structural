@@ -32,6 +32,13 @@ const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel
   await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
   return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
 export const TOOLS = {
+  spreadfooting: {
+    file: 'Spread Footing.html', list: 'sfd_projects', auto: 'sfd_auto', ownUndo: true,   // the tool's own Undo / Redo (U-2) is unchanged and not re-tested here
+    ready: p => p.waitForFunction(() => typeof R !== 'undefined' && R),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(R, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
+    change: p => bump(p, '#inputPanel input[type=number][data-path]', 0.5),
+    save: async (p, name) => { await p.evaluate(n => { document.getElementById('projName').value = n; document.getElementById('btnSaveProj').click(); }, name); await p.waitForTimeout(300); }
+  },
   baseplate: {
     file: 'BasePlateAnchorDesigner.html', list: 'bpad_projects_v1', auto: 'bpad_autosave_v1',
     ready: p => p.waitForFunction(() => typeof computeAll === 'function' && document.querySelector('#inputPanel input')),
@@ -122,17 +129,18 @@ B2.errs.length && console.log('  B2 console: ' + B2.errs.join(' | ')); await B2.
 // ---------- 2. Undo / Redo (B) ----------
 const p = B.p; const shot = async n => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await p.screenshot({ path: path.join(SHOTS, n + '.png') }); } };
 await shot('header');
-const bu = p.locator('[data-sp] >> text=Undo').first(), br = p.locator('[data-sp] >> text=Redo').first();
-ok(!(await bu.isDisabled()), 'Undo is enabled after a change');
-const back = T.view ? await T.view(p) : null;
-await bu.click(); await p.waitForTimeout(900); if (back) await back(); same(await T.results(p), b0, 'Undo: results back to those before the change (a view change was not a step)');
-ok(await bu.isDisabled(), 'Undo disabled at the start of the history');
-await br.click(); await p.waitForTimeout(900); same(await T.results(p), b1, 'Redo: results after the change again');
-await p.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
-await p.keyboard.press('Control+z'); await p.waitForTimeout(900); same(await T.results(p), b0, 'Ctrl+Z');
-await p.keyboard.press('Control+y'); await p.waitForTimeout(900); same(await T.results(p), b1, 'Ctrl+Y');
-const autoAfter = await p.evaluate(k => localStorage.getItem(k), T.auto); ok(autoAfter && JSON.stringify(JSON.parse(autoAfter)) !== '{}', 'autosave written after undo / redo');
-
+if (!T.ownUndo) {
+  const bu = p.locator('[data-sp] >> text=Undo').first(), br = p.locator('[data-sp] >> text=Redo').first();
+  ok(!(await bu.isDisabled()), 'Undo is enabled after a change');
+  const back = T.view ? await T.view(p) : null;
+  await bu.click(); await p.waitForTimeout(900); if (back) await back(); same(await T.results(p), b0, 'Undo: results back to those before the change (a view change was not a step)');
+  ok(await bu.isDisabled(), 'Undo disabled at the start of the history');
+  await br.click(); await p.waitForTimeout(900); same(await T.results(p), b1, 'Redo: results after the change again');
+  await p.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {});
+  await p.keyboard.press('Control+z'); await p.waitForTimeout(900); same(await T.results(p), b0, 'Ctrl+Z');
+  await p.keyboard.press('Control+y'); await p.waitForTimeout(900); same(await T.results(p), b1, 'Ctrl+Y');
+  const autoAfter = await p.evaluate(k => localStorage.getItem(k), T.auto); ok(autoAfter && JSON.stringify(JSON.parse(autoAfter)) !== '{}', 'autosave written after undo / redo');
+}
 // ---------- 3. dialog (B) ----------
 await T.save(p, 'Job 1'); await p.waitForTimeout(400); await T.save(p, 'Job 2'); await p.waitForTimeout(400);
 const L0 = await lsAll(p), item = n => JSON.stringify(JSON.parse(L0[T.list])[n]);
