@@ -4263,3 +4263,46 @@ The basis line on the zone card and in the report's capacity table now works out
 - Headless (scratchpad `rpt/idx/rp.mjs`), 5 variants: 0 unresolved / duplicate refs, 0 KaTeX errors (every lazy item filled), no NaN;
   every worked value of every node (base: 328 steps, 41 nodes) found in the app's own text (AASHTO Rating step / Generate Report);
   every number of the capacities / RF table too; no console errors; print fills every node.
+
+## 2026-11-02 — PR: claude/phone-print-index — Phone / tablet layout below 900 px (PHN; display only, no calculation change)
+
+Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Code site tagged `PHN`.
+
+### PHN-1. One column below 900 px   [display only]
+- **Problem:** the MCT File Generator had no small-screen layout. Its boxes are styled inline by React: a one-row header, a 196 px section list, and the form with `overflow:hidden`.
+  - At 390 px the header's right-hand group (design-beam chip, model summary, ↓ Download MCT) was 567 px wide, so the page scrolled 451 px sideways. The section list took half the width, the form was squeezed to about 190 px, and "Next →" was cut off.
+  - At 768 px the page scrolled 73 px sideways.
+- **Where:** the first `<style>`, after `.idx-wkA:hover{…} @media print{.idx-wk{display:none!important;}}`.
+- **Added:**
+```css
+@media screen and (max-width:899px){
+  #root>div>header{flex-wrap:wrap!important;height:auto!important;padding:8px 12px!important;row-gap:6px!important;}
+  #root>div>header>div[style*="margin-left: auto"]{margin-left:0!important;flex-wrap:wrap!important;gap:6px!important;}
+  #root>div>header+div{flex-direction:column!important;overflow:visible!important;}
+  #root>div>header+div>nav{width:auto!important;flex-direction:row!important;flex-wrap:wrap!important;align-items:center!important;gap:4px!important;border-right:none!important;border-bottom:1px solid #e5e7eb!important;padding:8px!important;}
+  #root>div>header+div>nav>button{width:auto!important;}
+  #root>div>header+div>nav>div[style*="text-transform: uppercase"]{flex-basis:100%!important;margin:4px 0 0!important;}
+  #root>div>header+div>nav+div{overflow:visible!important;min-width:0!important;}
+  #root>div>header+div>nav+div>div[style*="overflow-y: auto"]{overflow:visible!important;padding:14px 12px!important;}
+  #root>div>header+div>nav+div>div[style*="overflow-y: auto"] div[style*="display: flex"]:not([style*="flex-direction: column"]){flex-wrap:wrap!important;}
+}
+```
+- **How it works:** the app's boxes have no classes, so the rules select them by structure (header, the header's following box, nav) and by their inline style text. `!important` is needed to beat inline styles.
+- **Result:**
+  - The header wraps.
+  - The section list becomes a wrapping row of buttons above the form, with its group labels (Configuration / Rating / Design hand-off) on their own lines.
+  - The page scrolls as one column.
+  - Flex rows inside the form wrap; on the Sections step a row with a fixed 160 px drawing had pushed the page 44 px wide.
+- Screen and below 900 px only; desktop and print are unchanged.
+
+### Checked, no change
+- At 390 and 768 px none of the 15 sections scrolls sideways.
+- Report → Print report: 6 pages with the default (no MIDAS results), with the running header and page numbers. Nothing extends past the text width.
+
+### Smoke test
+- `tests/smoke/phone-layout.mjs`: new key `index` (15 sections). It fails on origin/main (451 / 73 px) and passes on this branch.
+
+### How verified (no computed result, saved key or hand-off changed)
+- origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 15 sections is identical.
+- The whole-document `textContent` and localStorage differ only by the times written when the page publishes its hand-offs (`producedAt`, `setAt`, `seenAt`, the "received … 05:05" line) and by `appPaths.mct.file`. That value is the name of the file opened, which was a temporary copy for origin/main.
+- Screenshots at 900 and 1280 px are identical, except about 70 px on the LL & DL Distribution sections (the same time line) and 8–9 px of anti-aliasing.
