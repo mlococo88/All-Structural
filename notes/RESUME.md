@@ -109,3 +109,4 @@ Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcl
 - PSBD old Report tab retired #599; lldf type d fatigue ÷1.2 #609.
 - LTS mode: plan merged #619 (docs/lts-mode-plan.md). Basis = LRFDLTS 1st Ed. + interims through 2022 (LRFDLTS-1-I5), NOT 2nd Ed. Engineer will add the LRFDLTS PDF to mlococo88/Structural_References on 2026-11-02 (tomorrow); then send its path to the LTS agent and start Phase B (9 PRs). Owner amendments scan running (docs only).
 - lldf two-panel layout merged #618. LP anchor hand-off #610 #612 #616 #617. Shared report #607 #614. BP cage #611 #613.
+- Steel Bridge: blockers done (#576 CLL import, #579 studs import + SC2 layout, #585 TF3 advisory, #586 sidewalk override, #615 fatigue shear range at supports, #621 doc). Verdict: ready. Engineer 2026-11-02: KEEP BOTH APPS for now (no redirect); ask again later. η on deck placement still running.
