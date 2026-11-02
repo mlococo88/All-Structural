@@ -67,11 +67,12 @@ IDENT.push(
   { id: 'noclamp', patch: { 'standoff.type': 'noclamp', 'standoff.z': 2 } },
   { id: 'case-c2-welded', patch: { 'shear.caseOverride': 'c2', 'shear.weldedPlate': true, 'anchor.nx': 3 } },
   { id: 'uncracked-lb', patch: { 'conc.cracked': false, 'ui.units': 'lb', 'ui.momentUnits': 'kip-ft', 'anchor.head': 'platewasher' } },
-  /* round pier with the pier cage (BC-5), compared on the computed results only (calcOnly: drawings in the report text may differ) */
+  /* round pier with the pier cage (BC-5), compared on the computed results only (calcOnly: drawings in the report text may differ).
+     circHefReduce is pinned to true (the default before BC-6, 2026-11-02) so the comparison with origin/main stays like for like. */
   { id: 'cage-supp', calcOnly: true, case: CASES[0], patch: { 'anchor.pattern': 'circle', 'anchor.nCircle': 8, 'anchor.BC': 20, 'anchor.theta0': 22.5, 'anchor.hef': 36,
-    'conc.shape': 'circle', 'conc.D': 42, 'conc.Bx': 42, 'conc.By': 42, 'conc.cage': { present: true, nBars: 10, barSize: '#9', grade: 'gr60', cover: 3, angle0: 0, topCover: 3, topHook: false, tieType: 'spiral', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 3, ackDetail: false } } },
+    'conc.shape': 'circle', 'conc.D': 42, 'conc.Bx': 42, 'conc.By': 42, 'conc.circHefReduce': true, 'conc.cage': { present: true, nBars: 10, barSize: '#9', grade: 'gr60', cover: 3, angle0: 0, topCover: 3, topHook: false, tieType: 'spiral', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 3, ackDetail: false } } },
   { id: 'cage-subst', calcOnly: true, case: CASES[0], patch: { 'anchor.pattern': 'circle', 'anchor.nCircle': 4, 'anchor.BC': 16.970562748477143, 'anchor.theta0': 45, 'anchor.hef': 36,
-    'conc.shape': 'circle', 'conc.D': 36, 'conc.Bx': 36, 'conc.By': 36, 'conc.cage': { present: true, nBars: 8, barSize: '#8', grade: 'gr60', cover: 3, angle0: 45, topCover: 3, topHook: false, tieType: 'tie', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 4, ackDetail: true } } },
+    'conc.shape': 'circle', 'conc.D': 36, 'conc.Bx': 36, 'conc.By': 36, 'conc.circHefReduce': true, 'conc.cage': { present: true, nBars: 8, barSize: '#8', grade: 'gr60', cover: 3, angle0: 45, topCover: 3, topHook: false, tieType: 'tie', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 4, ackDetail: true } } },
   { id: 'narrow', patch: { 'conc.Bx': 14, 'conc.By': 40, 'conc.H': 16, 'plate.B': 12, 'anchor.hef': 10, 'anchor.torqued': true } },
 );
 
@@ -215,6 +216,28 @@ async function circleChecks(src) {
         const bad = bxAg.check(Object.assign({}, pay, { signConvention: 'other' })).err.length + bxAg.check(Object.assign({}, pay, { basis: { factored: false } })).err.length;
         out.hand.H5 = { ok: ap.ok, warn: chk.warn, g1, g2, back, src: S.bxSrc && S.bxSrc.anchorGroup && S.bxSrc.anchorGroup.inputsHash, nGroups: S.groups.length,
           res: res && res.results.map(x => ({ id: x.groupId, dcr: x.governing && x.governing.dcr, mode: x.governing && x.governing.mode })), resHash: res && res.source.inputsHash, refused: bad, errs: VALIDATION.errs.map(e => e.msg) }; }
+      /* H7 (LPAS, 2026-11-02): square and rectangular posts, square plate. 6 × 1 in Gr 55 on BC 16 (θ0 0), double nut (clamp 1 in),
+         circular plate Ø22 × 1.5 in A36, basePlate-v1 M_y = −600 kip·in, P = 0 → |T|max = 600·8/192 = 25.0 kip (as H2).
+         Square post B 8 → column HSS8X8, D_pole = 8: m = (16 − 8)/2 = 4, b_eff = π·8/6 = 4.18879, M_u = 100 kip·in,
+           t_req = √(400/(0.90·36·4.18879)) = 1.71678 in.
+         Rectangular post B_x 8 × B_y 6 → custom 8 (x) × 6 (y) column, D_pole = min = 6: m = 5, b_eff = π, M_u = 125,
+           t_req = √(500/(0.90·36·π)) = 2.21634 in. B_x 6 × B_y 8 → the listed HSS8X6 (b 6 along x, d 8 along y).
+         Square plate 22 × 22 under the square post: imported as a rectangular plate (its own method, AISC DG1), no blocking message.
+         Refused with the reason: a rectangular post with only D (payload before LPAS), an unknown shape, a circular plate without a pole. */
+      { const base0 = { _schema: 'bridge-anchor-group', schemaVersion: 1, producer: 'Light Pole and Sign Post', producerFile: 'Light Pole and Sign Post.html', producedAt: '2026-11-02T12:00:00Z',
+          project: { name: 'Sign 14', bridgeId: '' }, units: { length: 'in', force: 'kip', moment: 'kip-in', stress: 'ksi' }, basis: { factored: true, method: 'LRFD' }, signConvention: 'basePlate-v1', inputsHash: 'h7', notes: [] };
+        const grp = (pole, plate) => ({ id: 'post1', label: 'Post 1', anchor: { pattern: 'circle', n: 6, BC: 16, theta0: 0, dia: 1, grade: 'f1554_55', nut: 'heavyHex', hef: 18, torqued: true },
+          base: { type: 'doubleNut', standoffClear: 1.0, grout: false, plate: plate || { shape: 'circle', D: 22, t: 1.5, Fy: 36 }, pole }, pier: { shape: 'circle', D: 36, fc: 4, cracked: true, depth: 120 },
+          combos: [{ name: 'M', P: 0, Vx: 0, Vy: 0, Mx: 0, My: -600 }] });
+        const one = (pole, plate) => { const pay = Object.assign({}, base0, { groups: [grp(pole, plate)] }); const chk = bxAg.check(pay);
+          if (chk.err.length) return { err: chk.err };
+          S = mergeState(defaultState()); refreshAll(); bxAg.apply(pay, chk, { mode: 'all' }, 'test'); refreshAll(); CC = computeAll(); validateInputs();
+          const pb = plateBending(CC.combos[0], CC), cd = colDims();
+          return { err: [], warn: chk.warn, col: S.col.custom ? 'custom' : S.col.shape, b: cd.b, d: cd.d, plate: S.plate.shape, lts: !!pb.lts, Dp: pb.Dp, m: pb.m, beff: pb.beff, tReq: pb.tReq, dcr: pb.dcr,
+            blocks: VALIDATION.errs.map(e => e.msg) }; };
+        out.hand.H7 = { sq: one({ shape: 'square', B: 8 }), sqOld: one({ shape: 'square', D: 8 }), rect: one({ shape: 'rect', Bx: 8, By: 6 }), rect2: one({ shape: 'rect', Bx: 6, By: 8 }),
+          sqPl: one({ shape: 'square', B: 8 }, { shape: 'rect', B: 22, N: 22, t: 1.5, Fy: 36 }), rdPl: one({ shape: 'round', D: 8.625 }, { shape: 'rect', B: 22, N: 22, t: 1.5, Fy: 36 }),
+          rectOld: one({ shape: 'rect', D: 8 }).err, hex: one({ shape: 'hex', D: 8 }).err, none: one(undefined).err }; }
       /* H6 (BC-5): pier cage as anchor reinforcement. C2 geometry with h_ef = 36 in: 4 × 1 in at (±6, ±6), Ø36 pier,
          H 120, M_x = 480 kip·in, P = 5 kip compression, V_y = 3 kip. Cage: 8 #8 Gr 60 at 45° + k·45°, clear cover 3 in to
          #4 ties at 3 in + 4 in, bar tops 3 in below the surface, straight.
@@ -241,6 +264,44 @@ async function circleChecks(src) {
           phiTbA: capA.tb.phi, tbInA: capA.tensionModes.some(m => /breakout/.test(m.label)), tbInB: capB.tensionModes.some(m => /Concrete breakout/.test(m.label)),
           cageModeB: capB.tensionModes.some(m => /pier cage/.test(m.label)) && capB.shearModes.some(m => /pier cage/.test(m.label)),
           checksB: b.checks.map(x => x[0]), errs: a.errs.concat(b.errs) }; }
+      /* H8 (BC-6, 2026-11-02): the §17.6.2.1.2 analogy for a round pier is NOT applied by default. Audit case C: 4 × 1 in Gr 55
+         on BC 13 (θ0 0), Ø36 pier, h_ef 18, f'c 4 ksi cracked, heavy hex. Without: h_ef 18, A_Nc = π·18² = 1017.876, A_Nco = 2916,
+         ψ_ed = 0.7 + 0.3·11.5/27 = 0.82778, N_b = 16·√4000·18^(5/3) = 125.104 kip → φN_cbg = 0.70·0.349066·0.82778·125.104 = 25.304 kip.
+         With (the old default): h'_ef = (18 − 6.5·cos45°)/1.5 = 8.93587, A_Nco = 718.648, ψ_ed = 0.95739, N_b = 40.546 → 38.487 kip.
+         Saved data: a save without the field keeps the reduction (migration, active design and anchor groups); a stored false or
+         true is kept. Hand-off: into a new project → not applied; into a migrated rectangular save → not applied; into a round
+         pier design that applies it → kept. */
+      { const mkC = () => { const s = defaultState(); s.plate.B = 24; s.plate.N = 24; s.plate.t = 1.5; s.plate.shape = 'circle';
+          s.anchor.dia = 1; s.anchor.grade = 'f1554_55'; s.anchor.hef = 18; s.anchor.head = 'hvyhexhead'; s.anchor.torqued = true;
+          s.anchor.pattern = 'circle'; s.anchor.nCircle = 4; s.anchor.BC = 13; s.anchor.theta0 = 0;
+          s.conc.fc = 4; s.conc.shape = 'circle'; s.conc.D = 36; s.conc.Bx = 36; s.conc.By = 36; s.conc.H = 120; s.conc.cracked = true;
+          s.grout.present = false; s.standoff.type = 'clamp'; s.standoff.z = 1; s.forceModel.method = 'elastic'; s.combos = [{ name: 'T', P: 20, Vx: 0, Vy: 0, Mx: 0, My: 0 }]; return s; };
+        const def = defaultState().conc.circHefReduce;
+        const a = run(mkC()), ta = a.res[0].tb;
+        const old = mkC(); delete old.conc.circHefReduce; old.proj.name = 'BC6 legacy';
+        old.groups = [{ id: 'g1', label: 'A', data: { conc: JSON.parse(JSON.stringify(old.conc)) } }, { id: 'g2', label: 'B', data: { conc: { shape: 'rect' } } }, { id: 'g3', label: 'C', data: { conc: { shape: 'circle', circHefReduce: false } } }];
+        old.groupActive = 0;
+        const m = mergeState(JSON.parse(JSON.stringify(old)));
+        const mig = { act: m.conc.circHefReduce, g: m.groups.map(g => g.data.conc.circHefReduce) };
+        S = m; refreshAll(); CC = computeAll(); const tOld = comboCapacities(CC, CC.combos[0]).tb;
+        let note = false; try { buildInputPanel(); note = /saved before 2026-11-02/.test(document.body.innerHTML); } catch (e) { note = 'ERR ' + e; }
+        const kept = [false, true].map(v => { const k = mkC(); k.conc.circHefReduce = v; return mergeState(JSON.parse(JSON.stringify(k))).conc.circHefReduce; });
+        const pay = { _schema: 'bridge-anchor-group', schemaVersion: 1, producer: 'Light Pole and Sign Post', producedAt: '2026-11-02T12:00:00Z', project: { name: 'P' },
+          units: { length: 'in', force: 'kip', moment: 'kip-in', stress: 'ksi' }, basis: { factored: true, method: 'LRFD' }, signConvention: 'basePlate-v1', notes: [],
+          groups: [{ id: 'p1', label: 'Post 1', anchor: { pattern: 'circle', n: 4, BC: 13, theta0: 0, dia: 1, grade: 'f1554_55', nut: 'heavyHex', hef: 18 },
+            base: { type: 'doubleNut', standoffClear: 1, plate: { shape: 'circle', D: 24, t: 1.5, Fy: 36 }, pole: { shape: 'round', D: 8.625 } },
+            pier: { shape: 'circle', D: 36, fc: 4, cracked: true, depth: 120 }, combos: [{ name: 'T', P: -20, Vx: 0, Vy: 0, Mx: 0, My: 0 }] }] };
+        const imp = base => { S = mergeState(base); refreshAll(); bxAg.apply(pay, bxAg.check(pay), { mode: 'all' }, 'test'); return S.conc.circHefReduce; };
+        const legacyRect = defaultState(); delete legacyRect.conc.circHefReduce;
+        const roundOn = mkC(); roundOn.conc.circHefReduce = true;
+        const hand = { fresh: imp(defaultState()), legacyRect: imp(legacyRect), roundOn: imp(roundOn) };
+        /* the Pier shape input: a migrated rectangular save switched to a round pier takes the new default */
+        let sw = null; try { S = mergeState(JSON.parse(JSON.stringify(legacyRect))); const before = S.conc.circHefReduce; buildInputPanel();
+          const sel = [...document.querySelectorAll('select')].find(x => [...x.options].some(o => /Circular \(drilled shaft/.test(o.textContent)));
+          sel.selectedIndex = [...sel.options].findIndex(o => /Circular \(drilled shaft/.test(o.textContent)); sel.dispatchEvent(new Event('change', { bubbles: true }));
+          sw = { before, after: S.conc.circHefReduce, shape: S.conc.shape }; } catch (e) { sw = 'ERR ' + e; }
+        out.hand.H8 = { def, hef: ta.hef, ANc: ta.ANc, ANco: ta.ANco, psi_ed: ta.psi_ed, Nb: ta.Nb, phiNcbg: ta.phiNcbg, altPhi: ta.alt && ta.alt.phiNcbg,
+          oldHef: tOld.hef, oldPhi: tOld.phiNcbg, mig, note, kept, hand, sw, errs: a.errs }; }
       out.texBad = texBad;
       return out;
     }, { CASES, VARIANTS, BUILD });
@@ -307,6 +368,21 @@ if (r.hand.H5) {
   console.log(`  ${ok ? 'ok  ' : 'FAIL'} H5 anchorGroup import (lightPole-v1): post 1 P ${g1.P}, My ${g1.My}, Mx ${g1.Mx}, T ${g1.T} kip-in, tension at x = ${g1.tensionX.map(x => x.toFixed(2)).join(', ')}; post 2 Mx ${g2.Mx}, tension at y = ${g2.tensionY.map(y => y.toFixed(2)).join(', ')}; picker back to group 1 (n ${h.back.n}); result ${JSON.stringify(h.res)}; refused bad payloads ${h.refused}/2`);
   if (h.errs.length) console.log('    validation (group 1): ' + h.errs.join(' | '));
 }
+if (r.hand.H7) {
+  const h = r.hand.H7;
+  chk('H7 square post: t_req (D_pole 8)', h.sq.tReq, 1.71678, 5e-5);
+  chk('H7 square post: b_eff', h.sq.beff, 4.18879, 5e-5);
+  chk('H7 rect. post 8 × 6: t_req (D_pole = min 6)', h.rect.tReq, 2.21634, 5e-5);
+  chk('H7 square post, old payload (D for B): t_req', h.sqOld.tReq, 1.71678, 5e-5);
+  const ok = h.sq.col === 'HSS8X8' && h.sq.lts && h.rect.col === 'custom' && h.rect.b === 8 && h.rect.d === 6 && h.rect2.col === 'HSS8X6' && h.rect2.b === 6 && h.rect2.d === 8
+    && h.sqPl.plate === 'rect' && !h.sqPl.lts && isFinite(h.sqPl.dcr) && h.rdPl.plate === 'rect' && isFinite(h.rdPl.dcr)
+    && [h.sq, h.sqOld, h.rect, h.rect2, h.sqPl, h.rdPl].every(x => !x.err.length && !x.blocks.length)
+    && h.rectOld.some(e => /Bx/.test(e) && /before 2026-11-02/.test(e)) && h.hex.some(e => /not supported \(round, square, rect\)/.test(e)) && h.none.some(e => /circular plate needs base\.pole/.test(e));
+  if (!ok) fail = true;
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'} H7 posts: square → ${h.sq.col}; rect 8×6 → ${h.rect.col} ${h.rect.b}×${h.rect.d}; rect 6×8 → ${h.rect2.col}; square plate (square post) DG1 DCR ${h.sqPl.dcr && h.sqPl.dcr.toFixed(4)}, (round post) ${h.rdPl.dcr && h.rdPl.dcr.toFixed(4)}; blocking ${[h.sq, h.rect, h.rect2, h.sqPl, h.rdPl].map(x => (x.blocks || x.err).length).join('/')}`);
+  console.log('    refused: ' + [h.rectOld[0], h.hex[0], h.none[0]].map(x => (x || '—').slice(0, 140)).join(' || '));
+  console.log('    warnings (rect. post): ' + (h.rect.warn || []).join(' | ').slice(0, 400));
+}
 if (r.hand.H6) {
   const h = r.hand.H6;
   chk('H6 ℓ_d #8 (§25.4.2.4)', h.ld, 28.4605, 5e-3);
@@ -321,6 +397,24 @@ if (r.hand.H6) {
   if (!ok) fail = true;
   console.log(`  ${ok ? 'ok  ' : 'FAIL'} H6 bars ${h.effBars}; not confirmed: breakout φ ${h.phiTbA} (Condition A) and still checked; confirmed: breakout replaced by the cage (Summary: ${h.checksB.join(', ')})`);
   if (h.errs.length) { fail = true; console.log('    H6 validation errors: ' + h.errs.join(' | ')); }
+}
+if (r.hand.H8) {
+  const h = r.hand.H8;
+  chk('H8 new project: default circHefReduce', h.def === false ? 0 : 1, 0, 0);
+  chk('H8 round pier default: h_ef (no reduction)', h.hef, 18, 1e-9);
+  chk('H8 A_Nc (full disc)', h.ANc, Math.PI * 324, 1e-6);
+  chk('H8 A_Nco', h.ANco, 2916, 1e-9);
+  chk('H8 ψ_ed,N', h.psi_ed, 0.82778, 5e-5);
+  chk('H8 N_b (16√f\'c h_ef^5/3)', h.Nb, 125.104, 5e-4);
+  chk('H8 φN_cbg (default, not applied)', h.phiNcbg, 25.304, 5e-4);
+  chk('H8 φN_cbg shown as the alternative (applied)', h.altPhi, 38.487, 5e-4);
+  chk('H8 older save (no field): h\'_ef kept', h.oldHef, 8.93587, 5e-5);
+  chk('H8 older save: φN_cbg kept', h.oldPhi, 38.487, 5e-4);
+  const ok = h.mig.act === true && JSON.stringify(h.mig.g) === '[true,true,false]' && h.note === true && JSON.stringify(h.kept) === '[false,true]'
+    && h.hand.fresh === false && h.hand.legacyRect === false && h.hand.roundOn === true && !h.errs.length
+    && h.sw && h.sw.before === true && h.sw.after === false && h.sw.shape === 'circle';
+  if (!ok) fail = true;
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'} H8 migration: active ${h.mig.act}, groups ${JSON.stringify(h.mig.g)}, input note ${h.note}; stored false/true kept ${JSON.stringify(h.kept)}; hand-off into new ${h.hand.fresh}, migrated rect. save ${h.hand.legacyRect}, round pier applying it ${h.hand.roundOn}; migrated rect. save switched to a round pier ${JSON.stringify(h.sw)}${h.errs.length ? '; errors ' + h.errs.join(' | ') : ''}`);
 }
 console.log(`  TeX of the worked steps (KaTeX, throwOnError): ${r.texBad.length ? r.texBad.length + ' line(s) FAIL' : 'all typeset'}`); r.texBad.slice(0, 10).forEach(x => console.log('    ' + x));
 if (r.texBad.length) fail = true;

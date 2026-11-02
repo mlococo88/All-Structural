@@ -1250,3 +1250,77 @@ index 13f0165..656e0f1 100644
 +</script>
 +<script>
 ```
+
+## 2026-11-02 — PR: claude/edm-report-consolidate, PR #676: https://github.com/mlococo88/All-Structural/pull/676 (EDRX: the "Print / PDF Report" calculation sheet (D11, #report) retired after porting what the Report tab lacked; Print prints the Report from every tab; display only, no result change)
+
+### EDRX-1. Content of the D11 print report ported into the Report tab   [display] [no result change]
+- **Engineer request (2026-11-02):** retire the old print reports where the Report tab is complete, the same method as lldf #623 and Light Pole #625. Compare every number and section of the old report against the Report on the tool's test cases, and port what is missing (the tool's own values, no recomputation). Then remove the old report and print the Report from every tab.
+- **Compared:** the D11 report (`buildReport()` → `#report`, print media) on origin/main against the Report tab (`edrModel()`, Print report → `#rp-print`) on the branch. Three cases: circular steel-reinforced (the default example), rectangular steel-reinforced with the pad anchored / doweled, and a plain pad.
+  - A number counts as present when the Report shows the same value, either with the same digits or with more digits that round to it.
+  - Before the port, every computed number was already in the Report. The gaps were notes, two input-echo groups (plain pad) and one citation.
+- **Ported (the old report's own text, as notes on the matching steps of `edrModel()`):**
+  - Rotational shear strain, step `θ_st`: the circular / rectangular rotation note ("Circular: rotation about any axis gives the same strain." / "Rectangular: longitudinal rotation about L … applied once, to the longitudinal rotation [§3.5.7.6].").
+  - Restraint (Eq. 14.7.5.4-1), step `θ_s/n`: "n = number of internal layers (not increased for the cover layers); θ_st includes the construction tolerance …; a bearing with bonded external plates is secured per 14.8.3.1: tick "anchored / doweled" in I-5."
+  - Anchorage, step `0.2 P_min`: "friction coefficient 0.2 between elastomer and clean concrete or steel (C14.8.3.1); Δ_s taken as the factored shear deformation; P_min = minimum vertical force due to permanent loads", plus "(taken as P_DL; enter P_min in I-4 if lower)" when P_min is blank.
+  - Horizontal force H_bu: "Use the upper-bound G of the durometer range for the substructure force if G is specified by hardness."
+  - One-way thermal movement: "Use this as Δ_s, adding creep / shrinkage".
+  - Plain pad, inputs table (§1): the old input echo listed n, the cover, the steel laminate, the edge cover and F_y for every pad type. They are now listed for a plain pad too, marked "(input; not used for a plain pad)".
+  - Plain pad, Compressive stress topic reference: "AASHTO LRFD 10th Ed. Art. 14.7.6.3.2" → "AASHTO LRFD 10th Ed. Art. 14.7.6.3.2 / MassDOT LRFD Bridge Manual §3.5.7.9". This is the citation the Design Checks tab and the old report give; only the citation text changed, not a value.
+  - Report cover code line: "(written to the AASHTO LRFD 9th Ed.)" added after "MassDOT LRFD Bridge Manual Part I §3.5.7", as the old cover had it.
+- **Not ported (the same information is already in the Report):**
+  - the old report's section numbers, contents, time stamp and "Equations are shown symbolically …" line;
+  - input-echo labels the Report words differently ("Design method B" = Summary "Method B");
+  - "Da = 1.0 for circular and 1.4 for rectangular" (the Report's coefficient table and the D_a step);
+  - "θ_long includes profile grade, DL, camber, 1% seat slope and LL" (the Report's θ_long,st step lists them);
+  - the circular-as-square note (the Report's stability step label "square with W = L = 0.8D" and value).
+  - Figures: the pad schematic is in both.
+- **After the port:** in all three cases, no number of the old report is missing from the Report, apart from its section numbers and time stamp.
+
+### EDRX-2. Old print report removed; Print prints the Report from every tab   [display]
+- **Removed:**
+  - `<div id="report"></div>`;
+  - the CSS from `/* print report */` / `#report{display:none;}` through `#report .tblock{font-size:10pt;}` (the old `@media print` page layout and every `#report …` D11 rule), replaced by a one-line EDRX comment;
+  - `#report a.wkA{…} #report .wkLink{…}`;
+  - JS `inputEcho()`, `edmPageCSS()`, `edmApplyPageCSS(on)`, `buildReport()`;
+  - the old `beforeprint` handler (it built `#report`) and the `afterprint` handler (it cleared the @page style).
+- **Kept:**
+  - `EDM_REFS` (the Report's references).
+  - `EDM_RPT`, `edmResLine` and `edmRefTxt`: the tab renderers still test `EDM_RPT`, which now always stays false, so the tabs render exactly as before.
+  - The two `closest("#report")` guards in click handlers: harmless, the element is gone.
+- **Changed:**
+  - `#btnPrint` handler. Before: `if(EDR.on&&EDR.api){ EDR.api.print(); return; } buildReport(); edmApplyPageCSS(true); window.print();`. After: `edrPrintAny()`.
+  - New `edrPrintAny()`, before the Report's `beforeprint` handler. From another tab it sets `EDR_BACK`, then `EDR.on=true; renderAll()`. Then `EDR.api.print()` (shared/report.js), or `window.print()` with no results.
+  - The Report's `beforeprint` handler (Ctrl+P / the browser's Print). Before, it returned unless the Report tab was shown. After: `if(edrPrinting())return; if(!EDR.on&&LAST){ EDR_BACK=true; EDR.on=true; renderAll(); } if(!EDR.on||!EDR.doc)return;`, then fills `#rp-print` as before.
+  - New `afterprint` handler: `if(EDR_BACK){ EDR_BACK=false; EDR.on=false; renderAll(); }`. The tab of before comes back.
+  - The Report tab is never saved (`EDR.on` only; `S.ui.tab` is unchanged), so there is no remembered tab to redirect.
+- **Governing provision:** no formula, factor, unit or computed value changed (CLAUDE.md §4). The one citation addition (plain pad, MassDOT §3.5.7.9) repeats the tab's own citation.
+- **How verified:**
+  - `node tests/check-syntax.mjs elastomeric_design_module.html`: pass.
+  - Results and storage, origin/main vs branch, three cases: `S` and `LAST` (computeEDM) identical. localStorage identical (one key). Page text identical apart from the autosave time. Console errors identical (blocked CDN fonts in the test kit).
+  - Print routing, headless, from each of the six tabs (Geometry & Schematic, Design Checks, Rotation & Movement, Girder Run, Warnings & Assumptions, Report):
+    - via `beforeprint` and via the "Print / PDF Report" button, `body.rp-printing` is set and `#rp-print` holds the Report (13,472 characters);
+    - after `afterprint`, the tab of before is shown again;
+    - 0 console errors beyond the blocked CDN.
+    - This tool has no Ctrl+P key handler: the browser's own Ctrl+P raises `beforeprint`, the path tested.
+- **Other copies:** none. The abutment app opens this page by link; it calls none of the removed functions (checked with grep).
+
+## 2026-11-02 — PR: [#678](https://github.com/mlococo88/All-Structural/pull/678) — PLIB: Rename / Duplicate in the Projects dialog, and Undo / Redo   [display and storage only]
+- **Before:** Save Project (prompt), Projects… (the tool's own dialog: name, date, Load, Delete; `edm_v1_projects`, `{ name: { state, ts } }`),
+  Export / Import JSON, Reset. No rename, no duplicate, no undo.
+- **Where:**
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `scheduleSave()`, anchor `function scheduleSave(){`: first statement `if(window.EDPL) EDPL.soon();   /* PLIB: one undo step per change (debounced) */`.
+  - `renderProjList()`: each row gains `Rename` and `Duplicate` buttons (`data-a="ren"` / `"dup"`, between Load and Delete); the click
+    handler calls the new `edmPlibAct(a, n)` (anchor `/* PLIB (2026-11-02): Rename / Duplicate in the Projects dialog`), which uses
+    `SharedProjects.mapStore(localStorage, PROJKEY)`: the stored item moves / is copied unchanged, a name in use asks before replacing, a
+    refused write shows its message, and the list is redrawn. The dialog itself is unchanged otherwise.
+  - after `document.addEventListener("DOMContentLoaded",init);`: a second listener (anchor `/* PLIB (2026-11-02): Undo / Redo`): history over
+    `S` without `S.ui`; `set` = the Import path (`S=Object.assign(defaultState(), step); migrate(); buildInputs(); recalc();`) with the
+    current `S.ui`; buttons ↶ Undo and ↷ Redo before Export JSON.
+- **Saved data:** keys `edm_v1_projects`, `edm_v1_autosave` and their formats unchanged; no new key. The Abutment hand-off is unchanged.
+- **How verified:** `node tests/smoke/project-library.mjs --tool edm`: ALL PASS (`LAST`, every computed result, identical to origin/main on
+  load, after an input change, reopened on main's storage and loaded from the dialog; Undo / Redo / Ctrl+Z / Ctrl+Y exact; rename /
+  duplicate / delete byte-identical; quota message; no new console errors). `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** the service loads, rotations and movements are entered directly (or filled by the Abutment hand-off and still
+  editable). Nothing added.

@@ -10,6 +10,9 @@
 <!-- EDRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): saved-project rename / duplicate and Undo / Redo, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <style>
 :root{--navy:#1f3a5f;--navy-lt:#33517a;--panel:#f4f5f0;--panel-h:#e7e9e0;--line:#c9ccc0;--ok:#1a7f37;--bad:#c62828;--amber:#b8860b;}
 *{box-sizing:border-box;}
@@ -107,47 +110,10 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
 .tblock{border:2px solid #000;border-collapse:collapse;width:100%;margin:4px 0 10px;font-size:12.5px;}
 .tblock td{border:1px solid #000;padding:3px 7px;}
 .tblock .lbl{font-size:10px;color:#333;display:block;font-variant:small-caps;}
-/* print report */
-#report{display:none;}
-@media print{
-  body,.wrap{background:#fff;box-shadow:none;max-width:none;}
-  header,.toolbar,.layout,#inputPanel{display:none !important;}
-  #report{display:block;padding:0;font-size:11pt;color:#000;}
-  #report h1{font-size:16pt;text-align:center;margin:4px 0;}
-  #report h2{font-size:13pt;border-bottom:1.5px solid #000;margin-top:16px;break-after:avoid;}
-  #report .eqb{break-inside:avoid;}
-  .pagebreak{break-before:page;}
-  @page{size:letter;margin:0.75in 0.7in;}
-}
-/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format); #report shows only in print */
-#report.crdoc{font:11pt/1.35 "Times New Roman",Times,serif;color:#000;}
-#report.crdoc a{color:#000;text-decoration:none;}
-#report .cr-cover{min-height:8.4in;display:flex;flex-direction:column;justify-content:center;break-after:page;}
-#report .cr-cover-t{text-align:center;margin-bottom:28pt;}
-#report .cr-cover h1{font:700 25pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt;text-align:center;}
-#report .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt;}
-#report .cr-cover .cr-cover-p{font-weight:400;font-size:11pt;}
-#report .rptHdrGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 14px;border:1px solid #000;padding:6px 8px;font-size:10pt;}
-#report .cr-front{break-after:page;}
-#report .cr-break{break-before:page;}
-#report h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;border:0;margin:0 0 8pt;break-after:avoid;}
-#report .cr-front h2.cr-h1{margin-top:10pt;}
-#report h3.cr-h2{font:700 11pt "Times New Roman",Times,serif;margin:12pt 0 4pt;break-after:avoid;}
-#report .cr-refs{border-collapse:collapse;margin:0 0 14pt;} #report .cr-refs td{padding:1pt 16pt 1pt 0;vertical-align:top;}
-#report .cr-toc,#report .cr-toc ol{list-style:none;margin:0;padding:0;} #report .cr-toc>li{margin:3pt 0;} #report .cr-toc ol{padding-left:18pt;font-size:10.5pt;}
-#report .cr-p{margin:0 0 7pt;} #report .cr-small{font-size:9.5pt;margin-top:18pt;}
-#report .cr-resh{font:700 11pt "Times New Roman",Times,serif;margin:12pt 0 2pt;}
-#report .cr-line{display:grid;grid-template-columns:2.4in 1fr 0.8in;gap:0 12pt;align-items:center;padding:3pt 0;break-inside:avoid;font-size:10.5pt;}
-#report .cr-res{border-top:0.6pt solid #000;}
-#report .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt;}
-#report .cr-r{text-align:right;} #report .cr-st-fail{text-decoration:underline;}
-#report .cr-refi{font-size:9pt;font-style:italic;}
-#report .eqb .eqtitle{font-weight:normal;}
-#report .tblock{font-size:10pt;}
+/* EDRX (2026-11-02): the print report (#report, D11 calculation sheet) is retired: its CSS removed; Print prints the Report tab */
 /* D11 links (CLAUDE.md §6): "Worked in: → Tab · Card" on screen, "see §n.k" in the report */
 .wkLink{font-size:11.5px;color:#555;margin:3px 0 2px;} a.wkA{color:var(--navy);text-decoration:none;cursor:pointer;} a.wkA:hover{text-decoration:underline;}
 .wkFlash{animation:wkflash 1.4s ease-out;} @keyframes wkflash{from{background:#dde9f6;}to{background:transparent;}}
-#report a.wkA{color:#000;font-style:italic;} #report .wkLink{font-size:9.5pt;}
 @media (prefers-reduced-motion: reduce){.wkFlash{animation:none;}}
 @media print{html{background:#fff;}}
 /* EDRP: Report tab below 1000 px: the viewer's single column may shrink below its widest equation (the equation scrolls inside its step), so the page does not scroll sideways */
@@ -296,7 +262,6 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
     <div id="tabs"></div>
   </div>
 </div>
-<div id="report"></div>
 </div>
 
 <!-- project dialog -->
@@ -1018,15 +983,28 @@ function drawCharts(R){
 /* ---- persistence ---- */
 const AUTOSAVE="edm_v1_autosave", PROJKEY="edm_v1_projects";
 let saveT=null;
-function scheduleSave(){ clearTimeout(saveT); saveT=setTimeout(()=>{ try{localStorage.setItem(AUTOSAVE,JSON.stringify(S));document.getElementById("saveStatus").textContent="autosaved "+new Date().toLocaleTimeString();}catch(e){} },500); }
+function scheduleSave(){ if(window.EDPL) EDPL.soon();   /* PLIB: one undo step per change (debounced) */
+  clearTimeout(saveT); saveT=setTimeout(()=>{ try{localStorage.setItem(AUTOSAVE,JSON.stringify(S));document.getElementById("saveStatus").textContent="autosaved "+new Date().toLocaleTimeString();}catch(e){} },500); }
 function getProjects(){ try{return JSON.parse(localStorage.getItem(PROJKEY))||{};}catch(e){return {};} }
 function setProjects(o){ try{ localStorage.setItem(PROJKEY,JSON.stringify(o)); return true; }catch(e){ alert("Could not save to this browser's local storage ("+e.message+"). Use Export JSON for a backup."); return false; } }
 document.getElementById("btnSaveProj").addEventListener("click",()=>{ const n=prompt("Project name:",S.proj.name||"Bearing"); if(!n)return; const all=getProjects(); all[n]={state:clone(S),ts:Date.now()}; if(setProjects(all)) document.getElementById("saveStatus").textContent=`saved "${n}"`; });
 document.getElementById("btnManageProj").addEventListener("click",()=>{ renderProjList(); document.getElementById("dlgProj").showModal(); });
 document.getElementById("dlgProjClose").addEventListener("click",()=>document.getElementById("dlgProj").close());
 function renderProjList(){ const all=getProjects(),el=document.getElementById("projList"); const names=Object.keys(all).sort((a,b)=>all[b].ts-all[a].ts);
-  el.innerHTML=names.length?names.map(n=>`<div class="prow"><span class="pname">${esc(n)}</span><span class="pdate">${new Date(all[n].ts).toLocaleString()}</span><button class="mini-btn" data-a="load" data-n="${esc(n)}">Load</button><button class="mini-btn" data-a="del" data-n="${esc(n)}">Delete</button></div>`).join(""):"<i>No saved projects.</i>";
-  el.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ const n=b.dataset.n,all=getProjects(); if(b.dataset.a==="load"){S=all[n].state;migrate();buildInputs();recalc();document.getElementById("dlgProj").close();} if(b.dataset.a==="del"){delete all[n];setProjects(all);renderProjList();} })); }
+  el.innerHTML=names.length?names.map(n=>`<div class="prow"><span class="pname">${esc(n)}</span><span class="pdate">${new Date(all[n].ts).toLocaleString()}</span><button class="mini-btn" data-a="load" data-n="${esc(n)}">Load</button><button class="mini-btn" data-a="ren" data-n="${esc(n)}" data-sp="1">Rename</button><button class="mini-btn" data-a="dup" data-n="${esc(n)}" data-sp="1">Duplicate</button><button class="mini-btn" data-a="del" data-n="${esc(n)}">Delete</button></div>`).join(""):"<i>No saved projects.</i>";
+  el.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ const n=b.dataset.n,all=getProjects(); if(b.dataset.a==="load"){S=all[n].state;migrate();buildInputs();recalc();document.getElementById("dlgProj").close();} if(b.dataset.a==="del"){delete all[n];setProjects(all);renderProjList();}
+    if(b.dataset.a==="ren"||b.dataset.a==="dup") edmPlibAct(b.dataset.a,n); })); }
+/* PLIB (2026-11-02): Rename / Duplicate in the Projects dialog, over the tool's own key edm_v1_projects ({ name: { state, ts } }) with
+   shared/projects.js: the stored item moves / is copied unchanged; a name already in use asks first; a refused write shows the message. */
+function edmPlibAct(a,n){
+  if(!window.SharedProjects) return;
+  const L=SharedProjects.mapStore(localStorage,PROJKEY);
+  const to=prompt(a==="ren"?`Rename the saved project "${n}" to:`:"Name for the copy:",a==="ren"?n:L.copyName(n)); if(to==null) return;
+  let r=a==="ren"?L.rename(n,to):L.duplicate(n,to);
+  if(!r.ok&&r.error==="exists"){ if(!confirm(`A saved project named "${to.trim()}" already exists. Replace it?`)) return; r=a==="ren"?L.rename(n,to,{replace:true}):L.duplicate(n,to,{replace:true}); }
+  if(!r.ok) alert(r.message||r.error);
+  renderProjList();
+}
 document.getElementById("btnExport").addEventListener("click",()=>{ const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=(S.proj.name||"bearing").replace(/[^\w]+/g,"_")+"_edm.json"; a.click(); URL.revokeObjectURL(a.href); });
 document.getElementById("btnImport").addEventListener("click",()=>document.getElementById("importFile").click());
 document.getElementById("importFile").addEventListener("change",ev=>{ const f=ev.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ S=Object.assign(defaultState(),JSON.parse(rd.result)); migrate(); buildInputs(); recalc(); }catch(e){alert("Import failed: "+e.message);} ev.target.value=""; }; rd.readAsText(f); });
@@ -1046,19 +1024,8 @@ document.addEventListener("click",ev=>{ const head=ev.target.closest(".p-head");
   const di=ev.target.closest(".dash-item"); if(di&&di.dataset.goto){ if(di.dataset.chk){ edmGoto(di.dataset.goto,di.dataset.chk); return; } EDR.on=false; S.ui.tab=di.dataset.goto; renderAll(); } });
 /* ---- print report ---- */
 /* D11: the report is (re)built for the button and for Ctrl+P (was: Ctrl+P printed a stale or empty report); the page header/footer apply only while printing */
-document.getElementById("btnPrint").addEventListener("click",()=>{ if(EDR.on&&EDR.api){ EDR.api.print(); return; }   /* EDRP: on the Report tab the button prints that report */
-  buildReport(); edmApplyPageCSS(true); window.print(); });
-window.addEventListener("beforeprint",()=>{ if(typeof edrWillPrint==="function"&&edrWillPrint())return;   /* EDRP: the Report tab prints itself (shared/report.js) */
-  buildReport(); edmApplyPageCSS(true); });
-window.addEventListener("afterprint",()=>edmApplyPageCSS(false));
-function inputEcho(){ const g=S.geom,m=S.mat,L=S.loads;
-  const rows=[["Pad type",S.padType,""],["Design method",S.method,""],
-    isCirc()?["Diameter D",g.D,"in"]:["Length × Width",g.L+" × "+g.W,"in"],["Internal layer hri",g.hri,"in"],["Internal layers n",g.nLayer,""],["Cover",g.cover,"in"],["Steel laminate",g.tSteel,"in"],["Edge cover",g.edge,"in"],
-    ["Shear modulus G",m.G,"ksi"],["Laminate Fy",m.Fy,"ksi"],
-    ["P_DL",L.Pdl,"kip"],["P_LL",L.Pll,"kip"],["P_min (anchorage)",(+L.Pmin>0)?L.Pmin:"= P_DL","kip"],["Pad anchored / doweled",S.tog.anchored?"yes — anchorage force H = "+fmt(LAST&&LAST.anc?LAST.anc.H:NaN):"no",S.tog.anchored?"kip · "+edmLink("anc","H"):""],["Δs",L.deltaS,"in"],
-    ["Combined limit",S.tog.combLimit,""],["Rotation tolerance",S.tog.rotTol,"rad"]];
-  return `<table class="tblock">${rows.map(r=>`<tr><td style="width:45%">${r[0]}</td><td><b>${r[1]}</b> ${r[2]}</td></tr>`).join("")}</table>`;
-}
+/* EDRX (2026-11-02): the button, Ctrl+P and the browser's Print print the Report tab's report from every tab (edrPrintAny, below) */
+document.getElementById("btnPrint").addEventListener("click",()=>edrPrintAny());
 /* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format —
    cover with title block, references, numbered table of contents (links), numbered sections n and
    subsections n.k (the tabs' own worked blocks, built by the same render functions: symbolic →
@@ -1070,114 +1037,8 @@ const EDM_REFS=[
   ["","Art. 14.7.6, Method A: 14.7.6.1 (cover layer), 14.7.6.2 (shear modulus), 14.7.6.3.2 (compressive stress), 14.7.6.3.4 (shear deformation), 14.7.6.3.5 (compression and rotation), 14.7.6.3.6 (stability), 14.7.6.3.7 (reinforcement)"],
   ["","Art. 14.4.2.1 (design rotation, construction tolerance); Art. 14.6.3.1 (horizontal force H_bu); Table 6.6.1.2.5-3 (ΔF_TH, Category A); Art. 14.8.3.1 / C14.8.3.1 (anchorage; slip check with friction coefficient 0.2: H ≤ P_min/5, all pad types)"],
   ["MassDOT LRFD Bridge Manual (written to the AASHTO LRFD 9th Ed.)","Part I §3.5.7, elastomeric bearings (§3.5.7.2 to §3.5.7.10; Figs 3.5.7-2 to 3.5.7-5); edition: verify"]];
-function edmPageCSS(){
-  const p=S.proj||{}, q=v=>String(v==null||v===""?"—":v).replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/\n/g," ");
-  const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
-  return '@page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
-    ' @top-left { content: "Project No: '+q(p.num)+'\\A Description: '+q((p.name||"Elastomeric bearing").slice(0,38))+'"; '+box+' text-align: left; }'+
-    ' @top-center { content: "Computed By: '+q(p.calcBy)+'\\A Checked By: '+q(p.chkBy)+'"; '+box+' text-align: left; }'+
-    ' @top-right { content: "Date: '+q(p.date)+'\\A Date: '+q(p.chkDate)+'"; '+box+' text-align: right; }'+
-    ' @bottom-left { content: "'+q(p.name||"Untitled")+' (Elastomeric Bearing Design Module)"; font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; }'+
-    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; } }';
-}
-function edmApplyPageCSS(on){
-  let st=document.getElementById("edm-page");
-  if(!st){ st=document.createElement("style"); st.id="edm-page"; document.head.appendChild(st); }
-  st.textContent=on?edmPageCSS():"";
-}
-function buildReport(){ const R=LAST; if(!R)return; const P=S.proj;
-  const rp=document.getElementById("report"); rp.className="crdoc"; rp.innerHTML="";
-  const mk=(tag,cls,html)=>{ const e=document.createElement(tag); if(cls)e.className=cls; if(html!=null)e.innerHTML=html; return e; };
-  const frag=html=>mk("div",null,html);
-  const body=mk("div","cr-bodyall"), toc=[], cardMap={}; let secN=0;
-  /* a numbered section n with subsections n.k; keys: the card / check-block ids a "Worked in" link can point to */
-  function addSection(title,intro,subs,after){
-    const n=++secN, id="crp-"+n, sec=mk("section","cr-sec"+(n>1?" cr-break":""));
-    const h=mk("h2","cr-h1",n+". "+esc(title)); h.id=id; sec.appendChild(h);
-    (intro||[]).forEach(x=>sec.appendChild(x));
-    const tsubs=[];
-    subs.forEach((sb,k)=>{ const sid=id+"-"+(k+1), num=n+"."+(k+1), d=mk("div","cr-sub");
-      const hh=mk("h3","cr-h2",num+" "+esc(sb.title)); hh.id=sid; d.appendChild(hh);
-      sb.nodes.forEach(x=>d.appendChild(x)); sec.appendChild(d);
-      (sb.keys||[]).forEach(k2=>{ if(k2&&!cardMap[k2]) cardMap[k2]={num,id:sid}; });
-      tsubs.push({t:sb.title,id:sid,num}); });
-    if(after) sec.appendChild(after);
-    body.appendChild(sec); toc.push({n,t:title,id,subs:tsubs});
-  }
-  const headTitle=hd=>hd.textContent.replace("▼","").replace(/^\s*[\d.]+\s*/,"").trim();   // the tab's own "1.1" number is replaced by n.k
-  /* a tab's panels -> subsections (a nested panel becomes its own subsection) */
-  function panelSubs(html){
-    return [...frag(html).querySelectorAll(".panel")].map(pn=>{
-      const bd=pn.querySelector(":scope>.p-body"); bd.querySelectorAll(".panel").forEach(x=>x.remove());
-      return {title:headTitle(pn.querySelector(":scope>.p-head")),keys:[pn.dataset.cid],nodes:[...bd.childNodes]};
-    });
-  }
-  const kind=S.padType==="circRein"?"circular steel-reinforced":S.padType==="rectRein"?"rectangular steel-reinforced":"plain";
-  const meth=isPlain()?"A (plain)":S.method;
-  const nChk=R.dash.filter(d=>d.pass!==null).length, gov=Math.max(...R.dash.map(d=>d.dc||0));
-  EDM_RPT=true;
-  try{
-    /* 1. Design summary (the dashboard) */
-    const sumP=mk("p","cr-p",`${kind.charAt(0).toUpperCase()+kind.slice(1)} pad, Method ${meth}. ${R.nInErr?"<b>"+R.nInErr+" input error(s) — results not valid (see Warnings).</b> ":""}${R.nFail===0?"All "+nChk+" checks PASS.":"<b>"+R.nFail+" of "+nChk+" checks FAIL.</b>"} Governing D/C = <b>${fmt(gov)}</b>.`);
-    const tbl=frag(`<table class="tblock"><tr><td><b>Check</b></td><td><b>D/C</b></td><td><b>Result</b></td><td><b>Worked in</b></td></tr>${R.dash.map(d=>`<tr><td>${d.name}</td><td>${d.dc!=null?fmt(d.dc):"—"}</td><td><b>${d.pass===null?"INFO":d.pass?"PASS":"FAIL"}</b></td><td>${EDM_DASH2CHK[d.id]?edmLink(EDM_DASH2CHK[d.id]):""}</td></tr>`).join("")}</table>`);
-    addSection("Design Summary",null,[{title:"Summary of checks",nodes:[sumP,tbl]}]);
-    /* 2. Input data */
-    addSection("Input Data",null,[{title:"Input echo",nodes:[frag(inputEcho())]}]);
-    /* 3. Geometry */
-    addSection("Geometry & Schematic",null,panelSubs(renderGeom(R).replace('id="padSvg"','id="rptPadSvg"')));
-    /* 4. Design checks: one subsection per worked block (a check's result line follows its block) */
-    const dp=frag(renderDesign(R)).querySelector(".panel");
-    const intro=[mk("p","cr-p","<b>"+esc(headTitle(dp.querySelector(".p-head")))+"</b>")], dsubs=[]; let cur=null;
-    [...dp.querySelector(".p-body").childNodes].forEach(nd=>{
-      if(nd.nodeType===3&&!nd.textContent.trim())return;
-      if(nd.classList&&nd.classList.contains("eqb")){
-        const t=nd.querySelector(".eqtitle"), tx=[...t.childNodes].filter(c=>c.nodeType===3);
-        cur={title:tx.map(c=>c.textContent).join("").trim(),keys:[nd.dataset.chk],nodes:[]}; dsubs.push(cur);
-        tx.forEach(c=>c.remove());   // the title moves to the n.k heading; the [ref] stays with the block
-      }
-      (cur?cur.nodes:intro).push(nd);
-    });
-    const res=mk("div","cr-results");
-    R.dash.forEach(d=>{ const m=/^(.*?)\s*\[([^\]]+)\](.*)$/.exec(d.name), k=EDM_DASH2CHK[d.id];
-      res.insertAdjacentHTML("beforeend",edmResLine(m?(m[1]+m[3]).trim():d.name,d.dc==null?null:fmt(d.dc),m?m[2]:d.ref,d.pass===null?"INFO":d.pass?"PASS":"FAIL",k?" "+edmLink(k):"")); });
-    const after=mk("div"); after.appendChild(mk("div","cr-resh","Results — Design Checks")); after.appendChild(res);
-    addSection("Design Checks",intro,dsubs,after);
-    /* 5. Rotation & movement */
-    addSection("Rotation & Movement",null,panelSubs(renderRot(R).replace('id="thermEq"','')));
-    /* 6. Girder run (only when a girder set is loaded, as before) */
-    if(S.girders&&S.girders.length) addSection("Girder Run",null,panelSubs(renderGird(R)));
-    /* 7. Warnings & assumptions */
-    addSection("Warnings & Assumptions",null,panelSubs(renderWarn(R)));
-  } finally { EDM_RPT=false; }
-  /* D11 links: "→ Tab · Card" becomes "see §n.k" */
-  body.querySelectorAll("a.wkA").forEach(a=>{ const hit=cardMap[a.dataset.card], pre=a.dataset.txt?a.dataset.txt+": ":"";
-    if(hit){ a.textContent=pre+"see §"+hit.num; a.href="#"+hit.id; }
-    else { a.textContent=pre+"see the "+EDM_TABNAME[a.dataset.tab]+" tab ("+EDM_CARDS[a.dataset.card][1]+"; not in this printout)"; a.removeAttribute("href"); } });
-  body.querySelectorAll(".wkLink").forEach(d=>{ if(d.firstChild&&d.firstChild.nodeType===3) d.firstChild.textContent=""; });
-  /* input boxes of the thermal reference calc print as their values */
-  body.querySelectorAll(".in-row input").forEach(i=>{ const b=mk("b"); b.textContent=i.value; i.replaceWith(b); });
-  /* front matter: cover with title block, references, table of contents */
-  const front=mk("div","cr-frontall"), cover=mk("section","cr-cover"), ct=mk("div","cr-cover-t");
-  ct.appendChild(mk("h1",null,"Elastomeric Bearing Design"));
-  ct.appendChild(mk("p",null,esc(P.name)||"Untitled"));
-  ct.appendChild(mk("p","cr-cover-p",esc(kind.charAt(0).toUpperCase()+kind.slice(1))+" pad, Method "+esc(meth)));
-  ct.appendChild(mk("p","cr-cover-p","AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · MassDOT LRFD Bridge Manual, Part I §3.5.7 (written to the AASHTO LRFD 9th Ed.)"));
-  ct.appendChild(mk("p","cr-cover-p","Elastomeric Bearing Design Module v1.0, by Mario Lococo · "+esc(new Date().toLocaleString())));
-  cover.appendChild(ct);
-  const hg=mk("div","rptHdrGrid");
-  [["Project",P.name],["Project No.",P.num],["Calculated by",P.calcBy],["Date",P.date],["Checked by",P.chkBy],["Checked date",P.chkDate]].forEach(([k,v])=>hg.appendChild(mk("div",null,"<b>"+k+":</b> "+(esc(v)||"—"))));
-  cover.appendChild(hg); front.appendChild(cover);
-  const fm=mk("section","cr-front");
-  fm.appendChild(mk("h2","cr-h1","References:"));
-  const rt=mk("table","cr-refs"); EDM_REFS.forEach(([x,y])=>rt.appendChild(mk("tr",null,"<td>"+esc(x)+"</td><td>"+esc(y)+"</td>"))); fm.appendChild(rt);
-  fm.appendChild(mk("h2","cr-h1","Table of contents:"));
-  fm.appendChild(mk("ol","cr-toc",toc.map(sc=>`<li><a href="#${sc.id}">${sc.n}. ${esc(sc.t)}</a>${sc.subs.length?`<ol>${sc.subs.map(q=>`<li><a href="#${q.id}">${q.num}. ${esc(q.t)}</a></li>`).join("")}</ol>`:""}</li>`).join("")));
-  fm.appendChild(mk("p","cr-p cr-small","Equations are shown symbolically, then with values substituted, then with the result; each check ends with its result line, and the Design Checks section ends with the results of every check. Units: kip, in, ksi, rad unless noted; loads are service loads per bearing."));
-  front.appendChild(fm);
-  rp.appendChild(front); rp.appendChild(body);
-  const sv=document.getElementById("rptPadSvg"), live=document.getElementById("padSvg"); if(sv&&live) sv.innerHTML=live.innerHTML;
-  renderMathIn(rp); renderInlineMath(rp);
-}
+/* EDRX (2026-11-02): edmPageCSS / edmApplyPageCSS / buildReport (the D11 print report built into #report) and inputEcho are retired;
+   EDM_REFS above is kept (the Report uses it). EDM_RPT stays false (no report renders the tabs any more). */
 </script>
 <script>
 /* ================= Report tab (EDRP, 2026-11-01) =================
@@ -1224,6 +1085,7 @@ function edrModel(){
     gr.push(["Internal layer thickness h_ri",edrCell(+g.hri,3),"in"]);
     if(!plain) gr.push(["Number of internal layers n",edrCell(R.n,0),"–"],["Cover layer thickness c",edrCell(+g.cover,3),"in"],["Steel laminate thickness h_s",edrCell(+g.tSteel,4),"in"],["Edge cover of the steel laminates c_e",edrCell(+g.edge,3),"in"]);
     gr.push(["Shear modulus G",edrCell(+m.G,3),"ksi"]); if(!plain) gr.push(["Laminate yield F_y",edrCell(+m.Fy,1),"ksi"]); gr.push(["Seat concrete f′c",edrCell(+m.fc,1),"ksi"]);
+    if(plain) gr.push(["Number of internal layers n (input; not used for a plain pad)",edrCell(+g.nLayer,0),"–"],["Cover layer thickness c (input; not used for a plain pad)",edrCell(+g.cover,3),"in"],["Steel laminate thickness h_s (input; not used for a plain pad)",edrCell(+g.tSteel,4),"in"],["Edge cover c_e (input; not used for a plain pad)",edrCell(+g.edge,3),"in"],["Laminate yield F_y (input; not used for a plain pad)",edrCell(+m.Fy,1),"ksi"]);   /* EDRX: the retired print report echoed these inputs for every pad type */
     subs.push({title:"Pad geometry and materials",items:[{type:"table",head:["Quantity","Value","Unit"],rows:gr}]});
     subs.push({title:"Loads and movements (service, per bearing)",items:[{type:"table",head:["Quantity","Value","Unit"],rows:[
       ["Dead-load reaction P_DL",edrCell(+L.Pdl),"kip"],["Live-load reaction P_LL",edrCell(+L.Pll),"kip"],["Minimum permanent load P_min (anchorage)",(+L.Pmin>0)?edrCell(+L.Pmin):"= P_DL","kip"],
@@ -1272,7 +1134,7 @@ function edrModel(){
     const th=S.thermal||{span:75,alpha:6.5e-6,dT:100}, f=isFinite(+tg.thermalFactor)&&+tg.thermalFactor>0?+tg.thermalFactor:1.2;
     w=topic(T,"tm","One-way thermal movement (reference)",EDR_MD+"§3.5.7.6, Fig. 3.5.7-2");
     w.add({id:"D",label:"One-way thermal movement, half span (midspan neutral)",sym:"\\Delta",eq:"f\\cdot 0.5\\,\\alpha\\,(12 L_{span})\\,\\Delta T",sub:edrN(f,2)+"\\cdot 0.5\\cdot "+edrN(+th.alpha,7)+"\\cdot (12\\cdot "+edrN(+th.span)+")\\cdot "+edrN(+th.dT,0),value:thermalMovement(+th.span,+th.alpha,+th.dT,f),unit:"in",d:3,
-      note:"reference calculation; the design shear movement Δ_s = "+edrN(+L.deltaS,3)+" in is the input of panel I-4"});
+      note:"reference calculation; the design shear movement Δ_s = "+edrN(+L.deltaS,3)+" in is the input of panel I-4. Use this as Δ_s, adding creep / shrinkage"});   /* EDRX: the retired print report's note */
     secs.push({title:"Rotation and movement",subs:[{title:"Design rotation and thermal movement",items:[edrTopics("rot",T,{title:"Worked steps"}),{type:"note",text:"As on the Rotation & Movement tab [[tab:rot:o-rot|open]]."}]}]});
   }
   /* ---------- 5. Design checks ---------- */
@@ -1295,15 +1157,16 @@ function edrModel(){
     const anc=(w,id)=>{
       w.add({id:"H",label:"Shear force on the pad",sym:"H",eq:"\\frac{G\\,A\\,\\Delta_{s}}{h_{rt}}",sub:"\\frac{"+edrN(a.G,3)+"\\cdot "+edrN(R.A,1)+"\\cdot "+edrN(+L.deltaS,3)+"}{"+edrN(R.hrt,3)+"}",value:a.H,unit:"kip",d:2,ref:EDR_AA+"Art. 14.8.3.1",
         note:a.mB?"G = specified shear modulus (Method B), Art. 14.7.5.2":"G = highest value of the durometer range (least favourable for the shear force), Art. 14.7.6.2"});
-      w.add({id:"Pf",label:"Friction resistance, coefficient 0.2"+(a.PminFromDL?" (P_min taken as P_DL)":""),sym:"0.2\\,P_{min}",eq:"\\frac{P_{min}}{5}",sub:"\\frac{"+edrN(a.Pmin,1)+"}{5}",value:a.Pmin/5,unit:"kip",d:2,ref:EDR_AA+"Art. C14.8.3.1"});
+      w.add({id:"Pf",label:"Friction resistance, coefficient 0.2"+(a.PminFromDL?" (P_min taken as P_DL)":""),sym:"0.2\\,P_{min}",eq:"\\frac{P_{min}}{5}",sub:"\\frac{"+edrN(a.Pmin,1)+"}{5}",value:a.Pmin/5,unit:"kip",d:2,ref:EDR_AA+"Art. C14.8.3.1",
+        note:"friction coefficient 0.2 between elastomer and clean concrete or steel (C14.8.3.1); Δ_s taken as the factored shear deformation; P_min = minimum vertical force due to permanent loads"+(a.PminFromDL?" (taken as P_DL; enter P_min in I-4 if lower)":"")});   /* EDRX: note of the retired print report */
       if(a.anchored){ KEY[id]="chk/"+w.key+".info"; w.add({id:"info",label:"Pad anchored / doweled (panel I-5): design the anchorage for H; H / (P_min/5) = "+edrN(a.dc)+" for reference",sym:"",eq:"",sub:"",value:"anchorage designed for H",unit:"",ref:EDR_AA+"Art. "+a.ref}); }
       else dcStep(w,id,"Slip: H ≤ P_min/5","\\frac{H}{P_{min}/5}","\\frac{"+edrN(a.H,2)+"}{"+edrN(a.Pmin/5,2)+"}",EDR_AA+"Art. "+a.ref); };
     const hbu=()=>{ const w=topic(T,"hbu","Horizontal force for substructure design (report only)",EDR_AA+"Art. 14.6.3.1");
-      w.add({id:"H",label:"Horizontal force per bearing (input G, Δ_u = Δ_s)",sym:"H_{bu}",eq:"\\frac{G\\,A\\,\\Delta_{u}}{h_{rt}}",sub:"\\frac{"+edrN(+m.G,3)+"\\cdot "+edrN(R.A,1)+"\\cdot "+edrN(+L.deltaS,3)+"}{"+edrN(R.hrt,3)+"}",value:R.Hbu,unit:"kip",d:2,ref:EDR_AA+"Art. 14.6.3.1"}); };
+      w.add({id:"H",label:"Horizontal force per bearing (input G, Δ_u = Δ_s)",sym:"H_{bu}",eq:"\\frac{G\\,A\\,\\Delta_{u}}{h_{rt}}",sub:"\\frac{"+edrN(+m.G,3)+"\\cdot "+edrN(R.A,1)+"\\cdot "+edrN(+L.deltaS,3)+"}{"+edrN(R.hrt,3)+"}",value:R.Hbu,unit:"kip",d:2,ref:EDR_AA+"Art. 14.6.3.1",note:"Use the upper-bound G of the durometer range for the substructure force if G is specified by hardness."}); };   /* EDRX: note of the retired print report */
     let w, intro;
     if(plain){
       intro="Plain pad, Method A [14.7.6.3].";
-      SUB="Compressive stress and shear deformation"; w=topic(T,"sig","Compressive stress",EDR_AA+"Art. 14.7.6.3.2");
+      SUB="Compressive stress and shear deformation"; w=topic(T,"sig","Compressive stress",EDR_AA+"Art. 14.7.6.3.2 / "+EDR_MD+"§3.5.7.9");   /* EDRX: the MassDOT section cited on the Design Checks tab and in the retired print report */
       w.add({id:"GS",label:"Stress limit from G·S (G = lowest of the durometer range)",sym:"\\sigma_{GS}",eq:"c\\,G\\,S",sub:edrN(+cf.GSplainA)+"\\cdot "+edrN(ma.GminA,3)+"\\cdot "+edrN(R.S),value:ma.sigGS,unit:"ksi",d:3,ref:EDR_AA+"Eq. 14.7.6.3.2-1"});
       w.add({id:"cap",label:"Stress cap, plain pad",sym:"\\sigma_{cap}",eq:"",sub:"",value:+cf.sigCapPlainA,unit:"ksi",d:2});
       dcStep(w,"sigP","Compressive stress","\\frac{\\sigma_{s}}{\\min(\\sigma_{GS},\\,\\sigma_{cap})}","\\frac{"+edrN(R.sigTL,3)+"}{\\min("+edrN(ma.sigGS,3)+",\\,"+edrN(+cf.sigCapPlainA)+")}",EDR_AA+"Art. 14.7.6.3.2");
@@ -1319,7 +1182,8 @@ function edrModel(){
       dcStep(w,"gast","Static axial strain: γ_a,st ≤ 3.0","\\frac{\\gamma_{a,st}}{3.0}","\\frac{"+edrN(st.ga_st,3)+"}{3.0}",EDR_AA+"Art. 14.7.5.3.3");
       w=topic(T,"rot","Rotational shear strain",EDR_AA+"Eq. 14.7.5.3.3-6");
       w.add({id:"th",label:circ?"Static rotation (resultant of longitudinal and transverse + tolerance)":"Static longitudinal rotation (+ tolerance)",sym:"\\theta_{st}",eq:circ?"\\sqrt{\\theta_{long,st}^{2} + \\theta_{t}^{2}} + \\theta_{tol}":"\\theta_{long,st} + \\theta_{tol}",
-        sub:circ?"\\sqrt{"+edrN(R.rot.thLongStatic,4)+"^{2} + "+edrN(R.rot.thTrans,4)+"^{2}} + "+edrN(R.rot.tol,3):edrN(R.rot.thLongStatic,4)+" + "+edrN(R.rot.tol,3),value:st.thSt,unit:"rad",d:4});
+        sub:circ?"\\sqrt{"+edrN(R.rot.thLongStatic,4)+"^{2} + "+edrN(R.rot.thTrans,4)+"^{2}} + "+edrN(R.rot.tol,3):edrN(R.rot.thLongStatic,4)+" + "+edrN(R.rot.tol,3),value:st.thSt,unit:"rad",d:4,
+        note:circ?"Circular: rotation about any axis gives the same strain.":"Rectangular: longitudinal rotation about L (with the construction tolerance) and transverse rotation θ_t about W are checked separately; the larger combined strain governs. With the AASHTO 0.005-rad tolerance it is also added to θ_t [14.4.2.1]; the MassDOT 0.03 rad is applied once, to the longitudinal rotation [§3.5.7.6]."});   /* EDRX: note of the retired print report */
       w.add({id:"st",label:"Rotational shear strain, static",sym:"\\gamma_{r,st}",eq:"D_{r}\\left(\\frac{"+B+"}{h_{ri}}\\right)^{2}\\frac{\\theta_{st}}{n}",sub:edrN(R.DrUsed,3)+"\\left(\\frac{"+edrN(R.Bdim)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(st.thSt,4)+"}{"+R.n+"}",value:st.gr_st,unit:"",d:3,ref:EDR_AA+"Eq. 14.7.5.3.3-6"});
       w.add({id:"cy",label:"Rotational shear strain, cyclic",sym:"\\gamma_{r,cy}",eq:"D_{r}\\left(\\frac{"+B+"}{h_{ri}}\\right)^{2}\\frac{\\theta_{cy}}{n}",sub:edrN(R.DrUsed,3)+"\\left(\\frac{"+edrN(R.Bdim)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(st.thCy,4)+"}{"+R.n+"}",value:st.gr_cy,unit:"",d:3});
       if(!circ) w.add({id:"W",label:"Rotational shear strain, transverse rotation about W",sym:"\\gamma_{r,st,W}",eq:"D_{r}\\left(\\frac{W}{h_{ri}}\\right)^{2}\\frac{\\theta_{t,W}}{n}",sub:edrN(R.DrUsed,3)+"\\left(\\frac{"+edrN(R.planW)+"}{"+edrN(+g.hri,3)+"}\\right)^{2}\\frac{"+edrN(R.rot.thTransW,4)+"}{"+R.n+"}",value:st.grW_st,unit:"",d:3});
@@ -1351,7 +1215,8 @@ function edrModel(){
         w.add({id:"eps",label:"Axial strain (B_a = 1.6)",sym:"\\epsilon_{a}",eq:"\\frac{\\sigma_{s}}{3\\,B_{a}\\,G\\,S_{i}^{2}}",sub:"\\frac{"+edrN(r.sigS,4)+"}{3\\cdot "+edrN(r.Ba,1)+"\\cdot "+edrN(+m.G,3)+"\\cdot "+edrN(R.S,3)+"^{2}}",value:r.epsA,unit:"",d:5,ref:EDR_AA+"Eqs. 14.7.5.3.3-15 to -17"});
         w.add({id:"thL",label:"Rotation, static + 1.75 × cyclic",sym:"\\theta_{s,L}",eq:"\\theta_{st} + 1.75\\,\\theta_{cy}",sub:edrN(st.thSt,4)+" + 1.75\\cdot "+edrN(st.thCy,4),value:r.thSL,unit:"rad",d:4});
         if(!circ) w.add({id:"th",label:"Governing rotation (larger of θ_s,L and θ_t,W)",sym:"\\theta_{s}",eq:"\\max(\\theta_{s,L},\\,\\theta_{t,W})",sub:"\\max("+edrN(r.thSL,4)+",\\,"+edrN(r.thSW,4)+")",value:r.thS,unit:"rad",d:4});
-        w.add({id:"lhs",label:"Rotation per internal layer",sym:"\\frac{\\theta_{s}}{n}",eq:"",sub:"\\frac{"+edrN(r.thS,4)+"}{"+R.n+"}",value:r.lhs,unit:"",d:5});
+        w.add({id:"lhs",label:"Rotation per internal layer",sym:"\\frac{\\theta_{s}}{n}",eq:"",sub:"\\frac{"+edrN(r.thS,4)+"}{"+R.n+"}",value:r.lhs,unit:"",d:5,
+          note:"n = number of internal layers (not increased for the cover layers); θ_st includes the construction tolerance (rotation build-up). A bearing with bonded external plates is secured per 14.8.3.1: tick “anchored / doweled” in I-5."});   /* EDRX: note of the retired print report */
         w.add({id:"rhs",label:"Restraint threshold",sym:"\\frac{3\\,\\epsilon_{a}}{S_{i}}",eq:"",sub:"\\frac{3\\cdot "+edrN(r.epsA,5)+"}{"+edrN(R.S,3)+"}",value:r.rhs,unit:"",d:5});
         if(r.anchored){ KEY.res="chk/res.info"; w.add({id:"info",label:"Pad anchored / doweled (panel I-5): restraint provided; ratio "+edrN(r.dc)+" for reference",sym:"",eq:"",sub:"",value:"restraint provided",unit:"",ref:EDR_AA+"Art. 14.7.5.4"}); }
         else dcStep(w,"res","Restraint: a restraint system is required when θ_s/n ≥ 3ε_a/S_i","\\frac{\\theta_{s}/n}{3\\,\\epsilon_{a}/S_{i}}","\\frac{"+edrN(r.lhs,5)+"}{"+edrN(r.rhs,5)+"}",EDR_AA+"Art. 14.7.5.4"); }
@@ -1398,7 +1263,7 @@ function edrModel(){
     {type:"table",head:["Check","D/C","Result","Worked in"],rows:R.dash.map(d=>({cells:[d.name,d.dc!=null?{t:edrN(d.dc),n:true,cls:d.pass===false?"ng":d.dc>=0.9?"hi":"ok"}:"—",d.pass===null?"INFO":d.pass?"PASS":"FAIL",KEY[d.id]?{t:"",key:KEY[d.id]}:"—"],cls:d.pass===false?"gov":""}))},
     {type:"note",text:"The same checks as the dashboard and the Design Checks tab [[tab:des|open]]."}]}]};
   const wi=secs.findIndex(s=>s&&s.title==="Warnings and assumptions")+1; secs[sumIdx].subs[0].items[0].text=secs[sumIdx].subs[0].items[0].text.replace("(see §6)","(see §"+wi+")");
-  return {title:"Elastomeric Bearing Design — Calculation Report",subtitle:P.name||"Untitled",code:"AASHTO LRFD 10th Ed. (2024) Art. 14.7 · MassDOT LRFD Bridge Manual Part I §3.5.7",
+  return {title:"Elastomeric Bearing Design — Calculation Report",subtitle:P.name||"Untitled",code:"AASHTO LRFD 10th Ed. (2024) Art. 14.7 · MassDOT LRFD Bridge Manual Part I §3.5.7 (written to the AASHTO LRFD 9th Ed.)",   /* EDRX: as the retired print report's cover */
     info:[["Project",P.name],["Project No.",P.num],["Calculated by",P.calcBy],["Date",P.date],["Checked by",P.chkBy],["Checked date",P.chkDate]],
     head:{left:"Project No. "+(P.num||"—")+" — "+String(P.name||"—").slice(0,40),right:"Computed: "+(P.calcBy||"—")+" "+(P.date||"")+" · Checked: "+(P.chkBy||"—")+" "+(P.chkDate||""),foot:(P.name||"Untitled")+" (Elastomeric Bearing Design Module)"},
     sections:secs};
@@ -1422,12 +1287,23 @@ function edrShow(){
 /* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
 function edrPrinting(){ return document.body.classList.contains("rp-printing"); }
 function edrWillPrint(){ return edrPrinting()||!!(EDR.on&&EDR.doc); }
+/* EDRX (2026-11-02): from any other tab, the Report tab is shown for the print and the tab of before comes back after it
+   (EDR.on only, so nothing is saved). With no results (LAST) the page prints as shown. */
+let EDR_BACK=false;
+function edrPrintAny(){
+  if(!EDR.on&&LAST){ EDR_BACK=true; EDR.on=true; renderAll(); }
+  if(EDR.on&&EDR.api){ EDR.api.print(); return; }
+  window.print();
+}
 window.addEventListener("beforeprint",()=>{
-  if(!EDR.on||!EDR.doc||edrPrinting())return;
+  if(edrPrinting())return;
+  if(!EDR.on&&LAST){ EDR_BACK=true; EDR.on=true; renderAll(); }
+  if(!EDR.on||!EDR.doc)return;
   let box=document.getElementById("rp-print"); if(!box){ box=document.createElement("div"); box.id="rp-print"; document.body.appendChild(box); }
   box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(EDR.doc,{lazy:false})+'</article></div>';
   document.body.classList.add("rp-printing");
 });
+window.addEventListener("afterprint",()=>{ if(EDR_BACK){ EDR_BACK=false; EDR.on=false; renderAll(); } });
 </script>
 <script>
 /* ---- postMessage linkage with the Abutment app ---- */
@@ -1484,6 +1360,20 @@ function init(){
   if(window.opener&&!window.opener.closed){ try{ window.opener.postMessage({app:"abutment-edm",type:"EDM_READY"},"*"); document.getElementById("linkStatus").textContent="Linked to Abutment"; document.getElementById("linkStatus").classList.add("on"); }catch(e){} }
 }
 document.addEventListener("DOMContentLoaded",init);
+/* PLIB (2026-11-02): Undo / Redo (shared/projects.js history, shared/projects-ui.js buttons and Ctrl+Z / Ctrl+Y). Snapshots of S
+   without S.ui (tabs and collapsed panels are not steps), session only; set = the Import path (Object.assign(defaultState(), step),
+   migrate(), buildInputs(), recalc()) with the current S.ui. Load, Import and Reset are one step each. */
+document.addEventListener("DOMContentLoaded",()=>{
+  if(!window.SharedProjects||!window.SharedProjectsUI) return;
+  const h=SharedProjects.history({ get:()=>JSON.stringify(Object.assign({},S,{ui:undefined})),
+    set:t=>{ const ui=S.ui; S=Object.assign(defaultState(),JSON.parse(t)); S.ui=ui; migrate(); buildInputs(); recalc(); } });
+  let tm=null; const soon=()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); };
+  const B=(t,ti)=>SharedProjectsUI.button(t,ti);
+  const bu=B("\u21b6 Undo","Undo the last input change (Ctrl+Z)"), br=B("\u21b7 Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)");
+  const ref=document.getElementById("btnExport"); if(ref){ ref.parentNode.insertBefore(bu,ref); ref.parentNode.insertBefore(br,ref); }
+  SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
+  h.reset(); window.EDPL={h,soon};
+});
 </script>
 </body>
 </html>
