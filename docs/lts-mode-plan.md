@@ -365,7 +365,7 @@ The PRs:
    
    **LTS-3b** adds multi-sided sections (geometry, C_d, classes).
 4. **LTS-5** (done, 2026-11-02) Deflection (Art. 10.4.2.1); the fatigue-not-required step and the ≥ 55 ft warning; the breakaway checklist.
-5. **LTS-6** Base plate (label per Q-C3; the four "2nd Ed." texts corrected) and the base weld (Q-B5).
+5. **LTS-6** (done, 2026-11-02) Base plate (label per Q-C3; the four "2nd Ed." texts corrected) and the base weld (Q-B5).
 6. **LTS-7** Foundation: Broms with factored loads as the design check; ACI structural check with LTS loads (Q-C4); the 3 in cover check.
 7. **LTS-8** Export of the LTS combinations to the Anchorage app.
 8. **LTS-9** Report, drawings, manual.

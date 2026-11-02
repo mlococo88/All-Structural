@@ -160,3 +160,20 @@ test('LTS-5: fatigue not required < 55 ft and for roadside signs; required (HMLT
   const secs = roundSecs(40, 4.5, 8, 0.1793, 490), d = L.deflection({ ...HC1, DCpole: secs[0].Wabove, taper: true }, { V: 130, Vsvc: 76, tIce: 0 }, secs, 55);
   assert.equal(d.checks.find(c => c.key === 'slope').applies, true); near(d.checks.find(c => c.key === 'lum').limit, 48, 1e-9, '0.10H');
 });
+
+/* ---------- LTS-6: base plate (bending line, engineering method; Q-C3) and base weld (AWS D1.1 / AISC 360-16 §J2, Q-B5) ----------
+   HC-1 by hand: 4 × 1 in rods on BC 13 in at 0/90/180/270°, Σy² = 2·6.5² = 84.5 in²; Extreme I max, wind toward 90°: M_y = 18,739.6 × B₂ 1.0299186
+   = 19,300.3 lb·ft = 231,603 lb-in; P = 1.1·(465.44 + 55) = 572.48 lb. Compression rod (0, +6.5): 231,603·6.5/84.5 + 572.48/4 = 17,815.6 + 143.1
+   = 17,958.7 lb. m = (13 − 8)/2 = 2.5 in, b_eff = π·8/4 = 6.2832 in: t_req = √(4·17,958.7·2.5/(0.9·36,000·6.2832)) = 0.9392 in ≤ 1.25 OK.
+   Weld (fillet 5/16 in, E70, D 8 in): φR_n = 0.75·0.60·70·0.707·0.3125 = 6.9596 kip/in; governing load case 3 (0.75·0° + 0.75·90°):
+   M = 18,816.7 × 1.0299186 = 19,379.6 lb·ft = 232.555 kip-in → M/S_w = 232.555/50.265 = 4.6266, P/(πD) = 0.0228; V = √(530.9² + 578.5²) = 785.2 lb
+   → 2V/(πD) = 0.0625; T = 0.75·541.0 = 405.7 lb·ft = 4.869 kip-in → 2T/(πD²) = 0.0484; q = √(4.6494² + 0.1109²) = 4.6507 kip/in → 0.6682. */
+test('LTS-6 HC-1: base plate P_rod 17,959 lb, t_req 0.939 in ≤ 1.25 in; fillet weld q 4.651 / φR_n 6.960 kip/in = 0.668', () => {
+  const L = ltsEngine(), secs = roundSecs(40, 4.5, 8, 0.1793, 490), g = { ...HC1, DCpole: secs[0].Wabove, taper: true }, LL = { V: 130, Vsvc: 76, tIce: 0 };
+  const ba = L.baseActions(g, LL), mc = L.memberCheck(g, LL, secs, 55);
+  const bp = L.basePlate(ba, mc.Bs, { n: 4, BC: 13, theta0: 0, D: 8, Fy: 36, t: 1.25 });
+  near(bp.gov.Prod, 17958.7, 1.0, 'P_rod'); near(bp.m, 2.5, 1e-12, 'm'); near(bp.beff, 6.28319, 1e-4, 'b_eff'); near(bp.tReq, 0.9392, 2e-4, 't_req'); assert.equal(bp.ok, true);
+  const wd = L.baseWeld(ba, mc.Bs, { type: 'fillet', size: 0.3125, Fexx: 70, D: 8 });
+  near(wd.phiRn, 6.9596, 1e-3, 'φRn'); near(wd.gov.q, 4.6507, 2e-3, 'q'); near(wd.ratio, 0.6682, 5e-4, 'ratio'); assert.ok(['d45', 'd315'].includes(wd.gov.lc));
+  assert.equal(L.baseWeld(ba, mc.Bs, { type: 'cjp' }).ok, true);
+});
