@@ -1763,7 +1763,7 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - **tests/smoke/lightpole-anchor-handoff.mjs:** a 300 ms wait before reading the returned-result chips (the occasional timing failure noted in LPA-3; 3/3 passes after).
 - **How verified:** check-syntax pass; `node tests/engine/run.mjs lightpole` 39 passed; `tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL; anchor hand-off smoke ALL PASS (3 runs); LTS Report (pole, two-post) 23 headings, no unresolved references, 0 console errors; Summary / Loading at 1280 and 390 px: no overflow.
 
-## 2026-11-02 — PR #PRNUM: claude/lp-lts-release (LTS release: engineer's answers Q-B4, Q-B5, Q-C9/Q-C10; known limits stated; "not for design" banner removed; IBC mode unchanged)
+## 2026-11-02 — PR #658 (https://github.com/mlococo88/All-Structural/pull/658): claude/lp-lts-release (LTS release: engineer's answers Q-B4, Q-B5, Q-C9/Q-C10; known limits stated; "not for design" banner removed; IBC mode unchanged)
 
 ### LTSR-1. Deflection limits 2.5 % H and 0.35 in/ft: information only (engineer, 2026-11-02, Q-B4)   [verdict change, LTS mode only]
 - **Where:** `apps/light-pole/lts-engine.js` `deflection()`: the `trans` (2.5 % H) and `slope` (0.35 in/ft) entries get `applies: false` (shown with value, limit and ratio; never a failure); the `lum` (10 % H, luminaire supports, Service I) entry stays a check.
