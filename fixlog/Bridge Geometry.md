@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: none (route-surveying geometry; no design code governs this tool). EPSG registry for State Plane codes.
 
-## 2026-10-04 — PR: claude/fix-bridge-geometry (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-bridge-geometry (PR #25: https://github.com/mlococo88/All-Structural/pull/25)
 
 Check cases were run by loading the whole page in jsdom (CDN libraries absent) and calling the tool's own `buildEngine()`, `buildCrossSection()`, `applyProject()` and table builders, before and after.
 
@@ -321,7 +321,7 @@ Check cases were run by loading the whole page in jsdom (CDN libraries absent) a
 - O6. **Datum and scale factor.** NAD83 is treated as WGS84 (≈1–1.5 m in New England), there is no combined grid/elevation scale factor, and there is no SPCS2022. This affects the map overlay only. — Decide whether to add `+towgs84`/NADCON and a CSF input.
 - O7. `projectToPGL` takes the first sign change of the along-tangent residual, which may not be the nearest station on reverse curves or near a curve centre. Not changed.
 
-## 2026-10-04 — PR: claude/step1-group1 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group1 (PR #28: https://github.com/mlococo88/All-Structural/pull/28)
 
 Feature (no result change): "← All tools" link to `tools.html` (`target="_top"`, class `noprint`, hidden by the existing print rule). **No title block:** this tool has no project / bridge ID / engineer / date fields (only the saved-library entry name), so the shared project info buttons and BridgeXfer were not added.
 
@@ -344,7 +344,7 @@ Feature (no result change): "← All tools" link to `tools.html` (`target="_top"
 - **How verified:** `node --check` on the inline script; page loaded in jsdom; link found. `git diff` is a single added line.
 - **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
 
-## 2026-10-04 — PR: claude/conn-geometry-lldf (PR link added after merge)
+## 2026-10-04 — PR: claude/conn-geometry-lldf (PR #35: https://github.com/mlococo88/All-Structural/pull/35)
 
 Feature (no result change): Bridge Geometry becomes a sender on `bridgeSuite.v1.lldfGeom` (HANDOFF.md §4.2) for the LL & DL Distribution tool (lldf.html).
 
@@ -593,7 +593,7 @@ HUNK 2 (≈ line 4615 of the old file)
   - O-H1. Deck thickness (`d_slab`) and beam depth are not sent; lldf's t_s and d stay as entered. Send them too?
   - O-H2. When skews differ between supports, lldf can only take one θ. The default is the largest |θ|: it is conservative for the shear correction, but it gives the largest moment reduction. Please confirm the default.
 
-## 2026-10-05 — PR: claude/bridge-geometry-dxf (PR link added after merge)
+## 2026-10-05 — PR: claude/bridge-geometry-dxf (PR #51: https://github.com/mlococo88/All-Structural/pull/51)
 
 Feature (**no calculation changes**): an **Export DXF** button that downloads the plan, and optionally the profile, as an ASCII DXF R12 drawing.
 
@@ -1044,7 +1044,7 @@ Feature (**no calculation changes**): an **Export DXF** button that downloads th
 </script>
   ```
 
-## 2026-10-06 — PR: claude/bridge-geometry-datum (PR link added after merge)
+## 2026-10-06 — PR: claude/bridge-geometry-datum (PR #52: https://github.com/mlococo88/All-Structural/pull/52)
 
 Feature (**no calculation changes**): a **Vertical datum** label on the Alignment tab, shown on the output tables, prints, the profile graphic and the DXF export. Engineer's decisions 2026-10-06: add the field; keep the profile labels PVI / BVC / EVC (closes O-X2 as "keep"; O-X4 is resolved by this entry).
 
@@ -1146,7 +1146,7 @@ Feature (**no calculation changes**): a **Vertical datum** label on the Alignmen
   - O-D2. The datum is not written to the CSV exports (see above). If wanted, it could go in an extra column or in the file name; say which.
   - O-D3. The heatmap, cross-section, 3D and Site Map views show elevations without the datum label; the table captions on the same tabs carry it.
 
-## 2026-10-12 — PR: claude/sweep-bridgegeom (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-bridgegeom (PR #148: https://github.com/mlococo88/All-Structural/pull/148)
 
 Open-item sweep (inventory section 24). Engineer's instruction 2026-10-12: work through the open items using best judgement, and list what needs the engineer. Changes: the LL & DL hand-off skew (BG-OH2, **calc: hand-off value**), deck thickness and beam depth in the hand-off (BG-OH1), `projectToPGL` nearest root (BG-O7, bug), datum labels on the views and in the CSV file names (BG-OD2/OD3). **No Top-of-Deck, Beam Seat, derived-geometry or saved-project result changes** on any of the tested bridges (see "How verified"). `lldf.html` is not changed.
 
@@ -1331,7 +1331,7 @@ Open-item sweep (inventory section 24). Engineer's instruction 2026-10-12: work 
 - **BG-O4 (degree of curve, spiral reports, station equations):** not done (L; a feature on request).
 - **HANDOFF.md §4.2 (docs):** add `basis.skew:'moment'`, the optional `skewDetail` field, and the `ts`/`depth` fields (inches) that Bridge Geometry now sends. Not edited here (tool file and fix log only).
 
-## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR #166: https://github.com/mlococo88/All-Structural/pull/166)
 
 Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
 
@@ -1359,7 +1359,7 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - **How verified:** headless Chromium, main vs branch: `bgxBuildLldfGeom({skewRule:'moment'})` (only the note text differs), `bgxOpenLldfGeom()` (select value, Send state); screenshot `bg_dialog_br.png` looked at. No page errors.
 - **Closes:** the HANDOFF.md §4.2 open item from the 2026-10-12 sweep entry (now documented in this PR).
 
-## 2026-10-19 — PR: claude/aashto-ed-geometry — AASHTO LRFD edition stated as 10th Ed. (2024) in the skew notes (wording only, no result change; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto-ed-geometry — AASHTO LRFD edition stated as 10th Ed. (2024) in the skew notes (wording only, no result change; PR #324: https://github.com/mlococo88/All-Structural/pull/324)
 
 Engineer decision 2026-10-19 ("follow the owner"): tools without an owner setting state AASHTO LRFD **10th Ed. (2024)**. Bridge Geometry has no owner setting and stated no edition.
 

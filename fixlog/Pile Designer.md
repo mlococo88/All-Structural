@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024); ASTM A722; FHWA NHI-05-039 (micropiles). The file's own article numbers were carried over from the 9th Ed.; the articles cited below have the same numbers in the 9th and 10th Eds. as far as checked.
 
-## 2026-10-04 — PR: claude/fix-pile-designer (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-pile-designer (PR #4: https://github.com/mlococo88/All-Structural/pull/4)
 
 All check-case numbers below came from running the real `computeAll()` (and the loaders) from the file in node, before (origin/main) and after the change. The harness loads the single inline `<script>` into a `vm` context with React/three/Plotly stubbed out. A second harness renders the whole `App` tree with stubbed hooks (micropile, H-pile, IAB, slender casing, D/t over the limit, bad inputs, legacy H-pile save, fyb = 150). It reported no render exceptions before or after. Line numbers are approximate, as of this fix.
 
@@ -510,7 +510,7 @@ All check-case numbers below came from running the real `computeAll()` (and the 
 - **Other copies:** BridgeXfer v1 and `ProjMetaUI` are duplicated (CLAUDE.md §3) in Pile Designer.html, Spread Footing.html, BasePlateAnchorDesigner.html, Concrete Anchor.html and Timber Beam Check.html (this PR), plus any other tools that received BridgeXfer in their own step-1 PRs.
 - **`ProjMetaUI`:** given in full in the After code of the helper insertion above; the copy is identical in every tool listed.
 
-## 2026-10-05 — PR: claude/conn-foundation-loads (PR link added after merge)
+## 2026-10-05 — PR: claude/conn-foundation-loads (PR #40: https://github.com/mlococo88/All-Structural/pull/40)
 
 ### F11. Pull foundation loads from the abutment calculator / SubLoads (HANDOFF.md §4.6, channel `foundationLoads`)   [feature: hand-off (no result change)]
 - **Where:** (1) a new plain `<script>` before the main application script; anchor text `<script>\nconst {\n  useState,` (inserted just before it, after the `pileProjShareValues` script). (2) `PrintReport`, "Project" input rows; anchor `["Checked by", I.projChk, "", ""],`. (3) `App`, Project Info panel, after the "Share project info" button; anchor `"Share project info"))))`.
@@ -862,7 +862,7 @@ All check-case numbers below came from running the real `computeAll()` (and the 
 - **Other copies:** `check()`, `mapAxes()` and `candidates()` are duplicated in Spread Footing.html (CLAUDE.md §3). BridgeXfer v1 unchanged.
 - **Open items:** the reference point defaults to the pile-group centroid (assumes the footing centre coincides with it); single-pile mode enters |M| with the sense of the lateral load.
 
-## 2026-10-10 — PR: claude/pile-restyle (PR link added after merge)
+## 2026-10-10 — PR: claude/pile-restyle (PR #99: https://github.com/mlococo88/All-Structural/pull/99)
 
 ### F12. Screen restyle to match the recent tools ("GirderDetail look"); title block moved to the header   [UI only] [no calculation change]
 - **Date:** 2026-10-10. **Type:** UI only (presentation). The engineer asked for a review and a formatting cleanup "to make it look more like the more recent apps". The review is summarised in the PR; new open items O16–O21 are below.
@@ -1292,7 +1292,7 @@ index 445a319..7c4fca1 100644
          className: "panel-head px-3 py-2 border-b border-slate-100",
 ```
 
-## 2026-10-10 — PR: claude/pile-output-print (PR link added after merge)
+## 2026-10-10 — PR: claude/pile-output-print (PR #101: https://github.com/mlococo88/All-Structural/pull/101)
 
 ### F13. Output tabs; printed report in the recent tools' look with a print-section chooser   [UI only] [no calculation change]
 - **Date:** 2026-10-10. **Type:** UI only (presentation). Engineer's approval 2026-10-10: "Continue with output and print style" (review proposals U7 / U8 / item 14 of F12).
@@ -2385,7 +2385,7 @@ index 7c4fca1..266eea6 100644
          /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn", onClick: onPreview, "aria-pressed": !!previewing }, previewing ? "Close preview" : "Preview report"),
 ```
 
-## 2026-10-10 — PR: claude/pile-graphics (PR link added after merge)
+## 2026-10-10 — PR: claude/pile-graphics (PR #103: https://github.com/mlococo88/All-Structural/pull/103)
 
 ### F14. New graphics: soil profile beside the pile, p-y curves (Figure F-3), pile cross-sections; Soil profile input tab   [UI only] [no calculation change]
 - **Date:** 2026-10-10. **Type:** UI only (presentation). Engineer's decision 2026-10-10: "Do 1, 3, 5" (soil profile beside the pile, p-y curves, pile cross-sections), and the addition the same day: "Can we make the soil profile its own input tab rather than buried inside of a tab." Two commits: (a) the graphics, (b) the input tab (see "F14, part b" below).
@@ -3449,7 +3449,7 @@ index 26e16f1..660bc9b 100644
        key: t.id, type: "button", role: "tab", "aria-selected": tab === t.id,
 ```
 
-## 2026-10-10 — PR: claude/pile-loads-tab (PR link added after merge)
+## 2026-10-10 — PR: claude/pile-loads-tab (PR #105: https://github.com/mlococo88/All-Structural/pull/105)
 
 ### F15. "Loads & group" input tab: single pile or pile group, load cases, group workspace and hand-off in one place   [UI / workflow only] [no calculation change]
 - **Date:** 2026-10-10. Engineer: "I think the pile group workspace and loading should be a new input tab. It should allow for a single pile and manual entry of loading as well as the pile group."
@@ -4163,7 +4163,7 @@ index 660bc9b..c478a46 100644
    { id: "checks", label: "Checks" },
 ```
 
-## 2026-10-10 — PR: claude/pile-o24-o26 (PR link added after merge)
+## 2026-10-10 — PR: claude/pile-o24-o26 (PR #107: https://github.com/mlococo88/All-Structural/pull/107)
 
 Engineer's decision 2026-10-10 on O24–O26: "Yes go ahead with the others and merge". Basis as stated in `fixlog/README.md`, plus Reese (1997) for weak rock.
 
@@ -4300,7 +4300,7 @@ Engineer's decision 2026-10-10 on O24–O26: "Yes go ahead with the others and m
 - **Other copies of this code:** none.
 - **Not changed (see O31):** the H-pile static axial capacity and Module G's "Pile toe depth" line use a third datum.
 
-## 2026-10-11 — PR: claude/pile-o29-o32 (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-o29-o32 (PR #109: https://github.com/mlococo88/All-Structural/pull/109)
 
 Engineer's decision 2026-10-10 on O29, O31, O32 (and O33 if trivial): "Go ahead". Basis as stated in `fixlog/README.md` (AASHTO LRFD 10th Ed. (2024)). O33 was looked at and left open: see O33 below.
 
@@ -4461,7 +4461,7 @@ Engineer's decision 2026-10-10 on O29, O31, O32 (and O33 if trivial): "Go ahead"
 - **How verified:** headless Chromium, main vs branch (`grp.mjs`), each row made active in turn, reading `R.capDist` and the printed section 11 text; screenshots of Module 11 for a manual row and both Group rows looked at. Saved data unchanged (`capCaseId` is passed at run time, not stored).
 - **Other copies of this code:** none.
 
-## 2026-10-11 — PR: claude/pile-o33-o34 (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-o33-o34 (PR #111: https://github.com/mlococo88/All-Structural/pull/111)
 
 Engineer's decision 2026-10-11: "Go ahead with O33 and O34". For O33 the approved behaviour is to keep treating a solve that needs the retry as failed unless the retried solution is a sound, converged equilibrium, and to replace the JavaScript error with a deliberate "did not converge" outcome that makes the lateral-dependent checks NG. Basis as stated in `fixlog/README.md` (AASHTO LRFD 10th Ed. (2024)). No AASHTO formula, load or resistance factor, unit or code reference changes in F22 or F23.
 
@@ -4731,7 +4731,7 @@ Engineer's decision 2026-10-11: "Go ahead with O33 and O34". For O33 the approve
 - **How verified:** headless Chromium, main vs branch: `env.mjs` / `envcmp.py` (Run all, then each case made active), `env2.mjs` / `env2cmp.py` (Run all re-run with each case active), `timing.mjs`; screenshot of the envelope with a did-not-converge row, a service row and a converged row looked at (screen and print). No console errors.
 - **Other copies of this code:** none.
 
-## 2026-10-11 — PR: claude/pile-lateral-graphs (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-lateral-graphs (PR #112: https://github.com/mlococo88/All-Structural/pull/112)
 
 ### F24. "Lateral graphs" output tab: every lateral-analysis graph on its own tab, larger, in Plotly; Figure F-3 redrawn in Plotly   [UI only] [no calculation change]
 - **Date:** 2026-10-11. **Type:** UI only (presentation). Engineer's requests 2026-10-11: "I want to add output tabs just for the graphs due to lateral analysis" and, the same day, "those new graphs should be using plotly".
@@ -6137,7 +6137,7 @@ index 9235f4e..2e32ece 100644
            biM = solved.Mmax_kft;
 ```
 
-## 2026-10-11 — PR: claude/pile-o37 (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-o37 (PR #113: https://github.com/mlococo88/All-Structural/pull/113)
 
 Engineer's decision 2026-10-11 on O37: "The deflection limit will be much smaller than 1D, I don't know what it is, but probably a couple inches. I suggest just leaving it off or maybe an input for the warning with default at .25D." Implemented: the deflection bound is removed from the acceptance of a retried p-y solve, and a new warning input (default 0.25 D) flags a large head deflection everywhere the lateral result is shown. Basis as stated in `fixlog/README.md` (AASHTO LRFD 10th Ed. (2024)). No AASHTO formula, load or resistance factor, unit or code reference changes.
 
@@ -6236,7 +6236,7 @@ Engineer's decision 2026-10-11 on O37: "The deflection limit will be much smalle
 - **Other copies of this code:** none.
 - **Not changed:** the first-attempt acceptance (O36 stays open; now flagged by the warning), the service deflection limit, the Pcr ramp, closure and branch tests.
 
-## 2026-10-11 — PR: claude/pile-elev-scale (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-elev-scale (PR #114: https://github.com/mlococo88/All-Structural/pull/114)
 
 ### F26. Elevation: the pile drawn to scale beside the moment diagram (screen and report); H-pile shows no micropile labels (O19)   [UI only] [no calculation change]
 - **Date:** 2026-10-11. **Type:** UI only (presentation). Engineer's request 2026-10-11: "The elevation graphic that shows the pile should show the pile more to scale." Also closes O19.
@@ -7541,7 +7541,7 @@ index 80fa334..1701bae 100644
          ["First yield M_y", "not computed by the tool"]] }));
 ```
 
-## 2026-10-11 — PR: claude/pile-o36 (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-o36 (PR #115: https://github.com/mlococo88/All-Structural/pull/115)
 
 ### F26, part c. Depth to fixity z_fix: wording says what the depth is (first moment reversal below M_max, and which zero of the moment diagram that is for the head condition); every depth-to-fixity line labelled on the elevation; H-pile section label moved off the lines   [UI only] [no calculation change]
 - **Date:** 2026-10-11. **Type:** display / wording only. Engineer's comment 2026-10-11 (via the coordinator): the label "z_fix 15.8 ft (2nd M zero)" is confusing, because on a free-head pile the line sits at the FIRST zero crossing below grade (the head's M = 0 is the "1st zero"); in the H-pile elevation the 5 % decay dashed line (≈ 14.6 ft) had no label and the "HP 13.83×14.70 (strong axis)…" label sat on it.
@@ -7987,7 +7987,7 @@ index d816926..81efdda 100644
          sweepTruncated: (() => {
 ```
 
-## 2026-10-11 — PR: claude/pile-o38 (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-o38 (PR #116: https://github.com/mlococo88/All-Structural/pull/116)
 
 ### F28. Equilibrium closure from the soil reaction the solver applied (O38); Soil reaction graph and Figure F-3 points show that reaction   [diagnostic + display] [no result change: y, M, V, M_max, y₀ and every D/C are bit-identical; the displayed closure changes, and so does the closure the retry acceptance test (b) reads — no accept / reject outcome changed in 326 solves]
 - **Date:** 2026-10-11. **Type:** diagnostic (closure measure) + display (graphs). No formula, load or resistance factor, unit or code reference changes.
@@ -8364,7 +8364,7 @@ index 6165412..a18a6e1 100644
      const soilKeys = [
 ```
 
-## 2026-10-11 — PR: claude/pile-pmult (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-pmult (PR #118: https://github.com/mlococo88/All-Structural/pull/118)
 
 Engineer's decisions 2026-10-11 (group p-multipliers): (1) AASHTO LRFD 10th Ed. Table 10.7.2.4-1 becomes the default p-multiplier source, the old curve stays selectable as "Rollins / FHWA (legacy curve)" with its exact behaviour; (2) "Apply group p-multipliers automatically (per row)" is a toggle; on, the lateral analysis runs once per row and the governing row drives the checks; (3) "Run all cases" runs every row of every case when the toggle is on.
 
@@ -9062,7 +9062,7 @@ index a18a6e1..5d79b4e 100644
 \ No newline at end of file
 ```
 
-## 2026-10-11 — PR: claude/pile-o41 (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-o41 (PR #119: https://github.com/mlococo88/All-Structural/pull/119)
 
 Engineer's decision 2026-10-11 (O41): the group spacing ratio s/B for the p-multipliers (AASHTO and legacy) and for the axial group efficiency η uses B = the pile width the p-y analysis uses for that pile type. Micropile unchanged.
 
@@ -9316,7 +9316,7 @@ index 5d79b4e..8471707 100644
          items: [["\u03b7 override", I.groupEtaOverride ? "on, \u03b7 = " + fmt(I.groupEta, 3) : "off", ""]] }),
 ```
 
-## 2026-10-11 — PR: claude/pile-group3 (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-group3 (PR #120: https://github.com/mlococo88/All-Structural/pull/120)
 
 Engineer's decisions 2026-10-11 (O42, O43 and the H-pile "spacing × dia"): "yes go ahead with all three, only when group is used." All three apply only in Pile group mode (`groupEnable` on); single-pile results are bit-identical (proven, see How verified). F33 applies only with "Apply group p-multipliers automatically (per row)" on.
 
@@ -10229,7 +10229,7 @@ function groupWsSpacing(I) {
          pyRes.Mcr_kft_u != null ? ["M_cr uncased (M-φ knee)", latFmt(pyRes.Mcr_kft_u, 1) + " kip·ft"] : null,
 ```
 
-## 2026-10-11 — PR: claude/pile-o45 (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-o45 (PR #121: https://github.com/mlococo88/All-Structural/pull/121)
 
 Engineer's decision 2026-10-11 on O45–O48: "Fix all" — apply the recommended resolutions. All four changes act only in Pile group mode; single pile, integral abutment and the per-row toggle off are unchanged (F34 acts on H-pile groups with the toggle on or off; F35 / F36 only with the per-row toggle on).
 
@@ -11017,7 +11017,7 @@ index 9e691f9..638e8e4 100644
        /*#__PURE__*/React.createElement("div", { className: "mt-2" }, /*#__PURE__*/React.createElement(CheckRow, {
 ```
 
-## 2026-10-11 — PR: claude/pile-o49-o50 (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-o49-o50 (PR #126: https://github.com/mlococo88/All-Structural/pull/126)
 
 O49 fixed (F38); O53, found in F38, fixed in the same PR (F38, part b). O50 not changed: stopped on an ambiguous input mapping (see O50 below, and the F39 note).
 
@@ -11527,7 +11527,7 @@ index 0eab727..72019dc 100644
 
 F39 (the number reserved here for O50) is the entry of PR claude/pile-o50 below.
 
-## 2026-10-12 — PR: claude/pile-o50 (PR link added after merge)
+## 2026-10-12 — PR: claude/pile-o50 (PR #133: https://github.com/mlococo88/All-Structural/pull/133)
 
 O50 fixed (F39). Engineer's decision 2026-10-11: new input "H-pile web parallel to plan x / plan y".
 
@@ -12476,7 +12476,7 @@ index 72019dc..2daae73 100644
 +</html>
 ```
 
-## 2026-10-11 — PR: claude/pile-report-o52 (PR link added after merge)
+## 2026-10-11 — PR: claude/pile-report-o52 (PR #125: https://github.com/mlococo88/All-Structural/pull/125)
 
 Engineer's decision 2026-10-11 on O52 / O23 / O22 / O18 / O40: "Fix whatever you recommend and merge". Report and display only: no computed value changes (proven, see How verified).
 
@@ -12860,7 +12860,7 @@ index 638e8e4..53816e5 100644
        /*#__PURE__*/React.createElement("div", { className: "text-[9px] text-slate-400 mt-1 leading-snug" }, "\u03b8\u1d62 = 1.75 applies to compact sections in weak-axis bending with no unbraced length (non-scour). The linear p\u2013y solve uses a constant subgrade k per Table 3.10.11-1, matching MassDOT's basis; the nonlinear solve uses the full Reese/Matlock curves. Both are displacement-controlled (imposed \u03b4\u1d1b, fixed head). For the non-scour case they should agree and reproduce the tabulated Pu closely; the nonlinear result is the appropriate refined check under scour. Sanity-check aid \u2014 independent PE review required."));
 ```
 
-## 2026-10-12 — PR: claude/pile-calc2 (PR link added after merge)
+## 2026-10-12 — PR: claude/pile-calc2 (PR #144: https://github.com/mlococo88/All-Structural/pull/144)
 
 Engineer's instruction 2026-10-12: "continue making updates and fixes until it's completed. Use your best judgment ... note anything that absolutely needs my input." The decisions below (O1–O5, O14, O16, O20, O35, O44, O51) were made by the coordinator under that delegation. Each entry is a CLAUDE.md §4 callout. Basis: AASHTO LRFD 10th Ed. (2024) unless stated; article / table numbers marked "verify" were taken from memory of the edition and must be checked against the printed spec.
 
@@ -13765,7 +13765,7 @@ index 72019dc..18c9432 100644
        // cohesionless: no block check (eta = 1.0). The micropile grout-bond block is not used for H-piles.
 ```
 
-## 2026-10-12 — PR: claude/pile-ui2 (PR link added after merge)
+## 2026-10-12 — PR: claude/pile-ui2 (PR #157: https://github.com/mlococo88/All-Structural/pull/157)
 
 Engineer's instruction 2026-10-12: "continue ... use your best judgment"; the decisions per item were made by the coordinator under that delegation (listed in each entry). One calculation change (F58, opt-in: its default of 0 gives bit-identical results); everything else is display, input UI or the LPILE import.
 
@@ -13947,7 +13947,7 @@ Engineer's instruction 2026-10-12: "continue ... use your best judgment"; the de
   - Block footprint (d_h) and its resistance: unchanged in every case.
 - **How verified:** origin/main (with F45) vs branch: the check cases above (toggle off and on); the full parity set (no project enters d_h separately): every numeric value bit-identical; the differences are the label `R.group.Blbl` ("bond dia" → "casing OD (p-y width)"), the new keys `dEta_in` / `sEta_dia` / `etaBlbl`, and the texts that print them.
 
-## 2026-10-12 — PR: claude/pile-xd6 (PR link added after merge)
+## 2026-10-12 — PR: claude/pile-xd6 (PR #164: https://github.com/mlococo88/All-Structural/pull/164)
 
 Engineer's delegation 2026-10-12: open inventory items X-D6 / PILE-D6, X-C5 / PILE-C5 and PILE-A2. No calculation, factor, unit or saved-data change.
 
@@ -14124,7 +14124,7 @@ Engineer's delegation 2026-10-12: open inventory items X-D6 / PILE-D6, X-C5 / PI
 - **Module 09 layout question (ENGINEER_CHECKS B8): decided 2026-10-12 (F60).** Micropile Module 09 stays on the Geotechnical tab (it holds the geotechnical pullout); the Structural tab has a link card to it. The H-pile Module 09 (structural tension) is on the Structural tab, as before.
 - **Proposals (ENGINEER_CHECKS B8): Client / Date fields and blank title-block defaults done in F59; "one save path" was already done on main (both save buttons call `exportProject`), not changed further.**
 
-## 2026-10-18 — PR: claude/pile-d11-report (PR link added after merge)
+## 2026-10-18 — PR: claude/pile-d11-report (PR #282: https://github.com/mlococo88/All-Structural/pull/282)
 
 ### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
 - **Engineer request:** 2026-10-14 / 2026-10-18 (AUDIT.md D11). The tool already had a full report builder (`PrintReport`, F13 / F40 and later); this entry closes the gaps to the house format instead of rewriting it. Every section's worked content (symbolic → substituted → result) is the existing one.
@@ -14678,7 +14678,7 @@ index 1ffcec3..839cdb5 100644
  
 ```
 
-## 2026-10-19 — PR: claude/aashto10-pile (PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-pile (PR #333: https://github.com/mlococo88/All-Structural/pull/333)
 
 AASHTO LRFD 10th Ed. (2024) gap fixes from the 2026-10-19 edition inventory (section "Pile Designer"). Every provision below was checked against the 10th Ed. text (Section 10, pp. 10-117 / 10-118; Section 6, Art. 6.5.4.2).
 
@@ -14896,7 +14896,7 @@ index 839cdb5..3fe2706 100644
          /*#__PURE__*/React.createElement("div", { className: "text-[10px] font-mono-tech leading-relaxed mt-2", style: { color: "#334155" } },
 ```
 
-## 2026-10-19 — PR: claude/aashto10-pile-2 (PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-pile-2 (PR #343: https://github.com/mlococo88/All-Structural/pull/343)
 
 ### ET4. H-pile groups in cohesionless soil below 2.5B: warning (display only, η unchanged)
 - **Request:** follow-up to ET1 (open item "Cohesionless groups below 2.5B" of the claude/aashto10-pile entry). The engineer is still to decide on φ_c 0.80 (O20) and the S_u < 0.50 ksf "soft" limit; both are unchanged.
@@ -14935,7 +14935,7 @@ index 839cdb5..3fe2706 100644
   - Headless Chromium, main vs branch, with React 18.2.0 and Plotly 2.27.0 served from `tests/libs` (the tool pins 18.3.1 / 2.32.0, which the kit does not hold). I compared Module 11 text, the report text and `computeAll` η.
 - **Other copies:** none.
 
-## 2026-10-20 — PR: claude/aashto10-pile-ee (EEP: cap / stem self-weight at 1.00 in Extreme Event group cases; engineer direction 2026-10-20 "accurate, not overly conservative"; PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-pile-ee (EEP: cap / stem self-weight at 1.00 in Extreme Event group cases; engineer direction 2026-10-20 "accurate, not overly conservative"; PR #359: https://github.com/mlococo88/All-Structural/pull/359)
 
 ### EEP. Rigid-cap distribution: γDC = 1.00 on the cap and stem self-weight for an Extreme Event group case   [calc change] [less conservative for EE compression, more for EE uplift]
 - **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Table 3.4.1-1 (p. 3-16): the permanent-load column (DC, DW, EH, EV, ES, …) reads 1.00 for Extreme Event I and Extreme Event II, not γp; C3.4.1 (p. 3-10): γp > 1.0 in extreme events was dropped in 2015.
@@ -14991,7 +14991,7 @@ index 5f59029..366d5c6 100644
 +            /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec. Extreme Event group cases use 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1).")),
 ```
 
-## 2026-10-20 — PR: claude/aashto10-pile-dl (PDL: cap / stem self-weight factor by group-case type, Service 1.00, Strength max / min; engineer direction 2026-10-20 "accuracy"; follow-up to EEP; PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-pile-dl (PDL: cap / stem self-weight factor by group-case type, Service 1.00, Strength max / min; engineer direction 2026-10-20 "accuracy"; follow-up to EEP; PR #362: https://github.com/mlococo88/All-Structural/pull/362)
 
 ### PDL. Rigid-cap distribution: γDC on the cap and stem self-weight by case type, maximum where it adds to compression, minimum where it resists uplift   [calc change] [Service less conservative; Strength uplift more conservative]
 - **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Table 3.4.1-1 (Service I: permanent loads 1.00; Strength: γp) and Table 3.4.1-2 (γp for DC: maximum 1.25, minimum 0.90; the factor that gives the extreme effect is used).
@@ -15081,7 +15081,7 @@ index 366d5c6..a94a9c6 100644
 +            /*#__PURE__*/React.createElement("div", { className: "col-span-2 flex items-end text-[8.5px] text-slate-400 leading-snug pb-0.5" }, "Applied to cap + stem self-weight in the distribution of a Strength group case where the weight adds to compression. AASHTO LRFD Strength I max \u03b3DC = 1.25 (Table 3.4.1-2); override per project spec. Where the weight resists uplift (uplift on the governing pile, or a tension case) 0.90; Extreme Event and Service group cases 1.00 (AASHTO LRFD 10th Ed. Tables 3.4.1-1, 3.4.1-2).")),
 ```
 
-## 2026-10-20 — PR: claude/aashto10-pile-uplift (PUP: every Strength group case also checks its most uplifted pile with the cap / stem weight at γDC 0.90; engineer decision 2026-10-20 after PDL; PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-pile-uplift (PUP: every Strength group case also checks its most uplifted pile with the cap / stem weight at γDC 0.90; engineer decision 2026-10-20 after PDL; PR #363: https://github.com/mlococo88/All-Structural/pull/363)
 
 ### PUP. Strength group case: second row, the pile in net uplift at γDC min 0.90   [calc change] [MORE conservative: an uplift check that was missing]
 - **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Table 3.4.1-2: γp for DC is 1.25 maximum and 0.90 minimum, and the factor giving the extreme effect is used. Where the cap and stem weight resists uplift, the minimum applies. Table 3.4.1-1, Strength limit states.
@@ -15167,7 +15167,7 @@ index a94a9c6..4be0aa6 100644
 +      capDlMin: !!(cases[activeIdx] && cases[activeIdx]._dlMin)   // PUP: the active Group row is an uplift row at γDC 0.90
 ```
 
-## 2026-10-20 — PR: claude/aashto10-pile-uplift-ee (PUPE: Extreme Event group cases also check their most uplifted pile, weight at 1.00; engineer decision 2026-10-20 after PUP; PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-pile-uplift-ee (PUPE: Extreme Event group cases also check their most uplifted pile, weight at 1.00; engineer decision 2026-10-20 after PUP; PR #364: https://github.com/mlococo88/All-Structural/pull/364)
 
 ### PUPE. Extreme Event group case: second row, the pile in net uplift at γDC 1.00, with the Extreme Event resistance factors   [calc change] [MORE conservative: an uplift check that was missing]
 - **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Table 3.4.1-1 (Extreme Event I and II: permanent loads 1.00); resistance factors as F44 (EXTREME_PHI: φ = 1.0, uplift 0.80; Art. 10.5.5.3.3 / 6.5.5, as already used for Extreme rows).
@@ -15220,7 +15220,7 @@ index 4be0aa6..e4f8552 100644
 +      extremePhi: !!(cases[activeIdx] && (cases[activeIdx].type === "extreme" || cases[activeIdx]._ee)),   // PUPE
 ```
 
-## 2026-10-20 — PR: claude/aashto10-pile-ee-main (PUPEM: an Extreme Event case whose governing pile is in uplift keeps the Extreme Event resistance factors; engineer decision 2026-10-20 after PUPE; PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-pile-ee-main (PUPEM: an Extreme Event case whose governing pile is in uplift keeps the Extreme Event resistance factors; engineer decision 2026-10-20 after PUPE; PR #365: https://github.com/mlococo88/All-Structural/pull/365)
 
 ### PUPEM. Extreme Event group case, governing pile in uplift: its tension row uses φ = 1.0, uplift 0.80   [calc change] [LESS conservative; was the Strength φ]
 - **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 10.5.5.3.3 (extreme limit states: resistance factors 1.0; uplift resistance of piles and shafts 0.80 or less). Checked against the 10th Ed. text, p. 10-51. The tool's set is `EXTREME_PHI` (F44): φ 1.0 throughout, φ_up 0.80 (micropile) / hpPhiUp 0.80 (H-pile).
@@ -15255,7 +15255,7 @@ index e4f8552..ac9f965 100644
 ```
 
 
-## 2026-10-20 — PR: claude/abut-pile-handoff (ABPX: foundation-load hand-off from the abutment calculator, payload revision 2: pile layout, per-pile governing loads, integral-abutment data; PR link added after merge)
+## 2026-10-20 — PR: claude/abut-pile-handoff (ABPX: foundation-load hand-off from the abutment calculator, payload revision 2: pile layout, per-pile governing loads, integral-abutment data; PR #376: https://github.com/mlococo88/All-Structural/pull/376)
 
 Cross-tool connection (CLAUDE.md §7 exception): the same PR changes the sender, `abutment_calculator.html` (fixlog/abutment_calculator.md ABPX), and HANDOFF.md §4.6.
 
@@ -15781,7 +15781,7 @@ index ac9f965..d08a911 100644
 ```
 
 
-## 2026-10-20 — PR: claude/abut-pile-handoff-2 (ABPX2: integral demand with DW at γDW and η; CTDOT weak axis; group spacing in the load direction; drag load; tabulated AISC HP properties; engineer decisions 2026-10-20 after ABPX; PR link added after merge)
+## 2026-10-20 — PR: claude/abut-pile-handoff-2 (ABPX2: integral demand with DW at γDW and η; CTDOT weak axis; group spacing in the load direction; drag load; tabulated AISC HP properties; engineer decisions 2026-10-20 after ABPX; PR #377: https://github.com/mlococo88/All-Structural/pull/377)
 
 Cross-tool connection (CLAUDE.md §7 exception): the same PR changes `abutment_calculator.html` (fixlog/abutment_calculator.md ABPX2: Σx'y' in its pile distribution, drag load per pile sent) and HANDOFF.md §4.6.
 
@@ -16095,7 +16095,7 @@ index d08a911..db4feca 100644
 ```
 
 
-## 2026-10-20 — PR: claude/pile-hp-aeff (HPAE: H-pile slender elements by the full effective-width method of 6.9.4.2.2, as the abutment calculator; engineer decision 2026-10-20 after ABPX2; PR link added after merge)
+## 2026-10-20 — PR: claude/pile-hp-aeff (HPAE: H-pile slender elements by the full effective-width method of 6.9.4.2.2, as the abutment calculator; engineer decision 2026-10-20 after ABPX2; PR #378: https://github.com/mlococo88/All-Structural/pull/378)
 
 ### HPAE. H-pile axial resistance: unified effective width / effective area (6.9.4.2.2) instead of the first-pass b_e   [calc change] [LESS conservative for a slender flange; unchanged for a nonslender section]
 - **Where:**
@@ -16293,7 +16293,7 @@ index db4feca..31a97eb 100644
 +      if (pcr && pcr.ok) { const Pe = pcr.Pcr; Pn = hpColPn(hs.hp, hs.Es, hs.Fy, Pe).Pn; /* HPAE */ Pr = hs.phi_c_comb * Pn; const PuPr = hs.STL / Pr, MuMr = hs.biax ? (hs.biax.mx || 0) + (hs.biax.my || 0) : (hs.Mr > 0 ? hs.Mu / hs.Mr : 0); /* F39: biaxial sum */ if (PuPr < 0.2) { branch = "<0.2"; ratio = PuPr / 2 + MuMr; } else { branch = "\u22650.2"; ratio = PuPr + (8 / 9) * MuMr; } pass = ratio <= 1.0; }
 ```
 
-## 2026-10-20 — PR: claude/aashto10-pile-rev-a (PDA, part A: AASHTO LRFD 10th Ed. review fixes D1, D2, D3, D12, D5, D4 — the unconservative items of the 2026-10-20 review; engineer direction "accuracy, not extra conservatism"; PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-pile-rev-a (PDA, part A: AASHTO LRFD 10th Ed. review fixes D1, D2, D3, D12, D5, D4 — the unconservative items of the 2026-10-20 review; engineer direction "accuracy, not extra conservatism"; PR #379: https://github.com/mlococo88/All-Structural/pull/379)
 
 Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024); MassDOT Bridge Manual Part I (Hundredth Anniversary Ed.) for the integral-abutment rules. Every factor and equation below was checked against the 10th Ed. text. Saved data: new optional fields only (`pdaRev`, `scourDepth`, `hpSptBasis`, `iabKb`, `iabScourCheck`, `iabCheckGammaLL`); no key or format change. `mergeSavedInputs` runs a one-time migration for a project saved without `pdaRev` (see "Saved data" at the end of this entry).
 
@@ -16930,7 +16930,7 @@ index 31a97eb..49701cd 100644
 +          r.buckling.scourBkl > 0 ? [" (\u2265 stickup + design scour ", fmt(r.buckling.scourBkl, 1), " ft, 10.7.3.6)"] : "",   // PDA-D12
 ```
 
-## 2026-10-20 — PR: claude/aashto10-pile-rev-b (PDA, part B: D6 H-pile M_n and interaction form, D9 micropile f_y, D10 φ presets / labels, D11 n_h presets / units, D13 / D14 detailing, punching, S_u note; IAB scour M_r; C_N averaged over each layer; follow-up to part A #379; PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-pile-rev-b (PDA, part B: D6 H-pile M_n and interaction form, D9 micropile f_y, D10 φ presets / labels, D11 n_h presets / units, D13 / D14 detailing, punching, S_u note; IAB scour M_r; C_N averaged over each layer; follow-up to part A #379; PR #381: https://github.com/mlococo88/All-Structural/pull/381)
 
 Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024); MassDOT Bridge Manual Part I (Hundredth Ed.); CTDOT BDM (02/24). Verified against the 10th Ed. text. Saved data: new optional field `iabEmbed` (default 24 in); `pdaRev` 2; a one-time migration note (see the end of this entry).
 
@@ -17435,7 +17435,7 @@ index 49701cd..843f9ce 100644
 +    tex: `V_n=0.126\\lambda\\sqrt{f'_c}\\,b_o d_v=0.126(1.0)\\sqrt{${fmt(I.fc / 1000, 2)}}(${fmt(r.punch.bo, 1)})(${fmt(r.punch.dv, 1)})=${fmt(r.punch.Vn, 1)}\\text{ kip}\\quad\\text{(Eq. 5.12.8.6.3-1: }\\beta_c=1\\Rightarrow 0.126\\text{ limit; }\\lambda=1.0)`   // PDA-D14
 ```
 
-## 2026-10-20 — PR: claude/aashto10-pile-rev-c (PDA, part C: M1 resistance determination method and R_ndr, D7 micropile group per 10.7.3.9, D8 plunge length and transfer load, IAB pile spacing, H-pile C_b input; engineer decisions "follow AASHTO"; PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-pile-rev-c (PDA, part C: M1 resistance determination method and R_ndr, D7 micropile group per 10.7.3.9, D8 plunge length and transfer load, IAB pile spacing, H-pile C_b input; engineer decisions "follow AASHTO"; PR #382: https://github.com/mlococo88/All-Structural/pull/382)
 
 Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024); RIDOT BDM (2026); CTDOT BDM (02/24); MassDOT Bridge Manual Part I (Hundredth Ed.). Verified against the texts. Saved data: new optional fields `hpResMethod` ("static"), `hpDriveOwner` ("aashto"), `hpScourBias` (1.0), `hpRsDD` (0), `hpCb` (1.0) and `hpCbMmax/MA/MB/MC` (blank), `iabSpacing` (0), `iabDetailRule` ("auto"); `pdaRev` 3 with a one-time note. No key or format change.
 
@@ -17841,7 +17841,7 @@ index 843f9ce..ccfeab7 100644
 +          "block footprint ≈ ", fmt(r.group.Bx_ft, 1), " × ", fmt(r.group.By_ft, 1), (r.group.aashtoMP ? " ft (c/c + B); Σ individual micropile φP" : " ft (c/c + B); Σ individual H-pile φR"), /*#__PURE__*/React.createElement("sub", null, "n"), " = ", fmt(r.group.sumPhiIndiv, 0), " kip; total factored group demand ", fmt(r.group.groupDemand, 0), " kip")))
 ```
 
-## 2026-10-20 — PR: claude/aashto10-pile-rev-d (PDA-DR: drivability per 10.7.8, hammer capability vs the EOD driving resistance, set-up / relaxation per 10.7.3.4; follow-up to part C #382; PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-pile-rev-d (PDA-DR: drivability per 10.7.8, hammer capability vs the EOD driving resistance, set-up / relaxation per 10.7.3.4; follow-up to part C #382; PR #384: https://github.com/mlococo88/All-Structural/pull/384)
 
 ### PDA-DR. H-pile drivability   [new checks; no change to existing results]
 - **Provision (AASHTO LRFD 10th Ed., verified):** 10.7.8 (drivability analysis by wave equation; steel piles in compression and tension σ_dr ≤ 0.9 φ_da f_y, Eq. 10.7.8-1; analysis based on the maximum driving resistance needed, including soil subject to scour or downdrag); 6.5.4.2 (resistance during pile driving φ_da = 1.00; Table 10.5.5.2.3-1 refers to it); 10.7.3.4.1–.3 (set-up and relaxation; relaxation → restrike; set-up used only when verified by restrike); C10.7.3.4.3 (driving-formula φ developed for EOD and assuming set-up).
@@ -17923,7 +17923,7 @@ index ccfeab7..95be8bb 100644
 +        g.drive.hammer && /*#__PURE__*/React.createElement(RptCheck, { pass: g.drive.hammer.pass, eq: `R_{hammer}=${fmt(g.drive.hammer.Rh, 1)}\\ ${g.drive.hammer.pass ? "\\ge" : "<"}\\ R_{ndr,EOD}=${fmt(g.drive.RndrEOD, 1)}\\ \\text{kip (maximum driving resistance needed, 10.7.8)}` })),
 ```
 
-## 2026-10-20 — PR: claude/aashto10-pile-rev-e (PDA-MP / PDA-BC: minimum penetration per 10.7.6 as a driving-resistance and tip-elevation case, and the blow-count limit per C10.7.8; closes the open items of claude/aashto10-pile-rev-d #384; PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-pile-rev-e (PDA-MP / PDA-BC: minimum penetration per 10.7.6 as a driving-resistance and tip-elevation case, and the blow-count limit per C10.7.8; closes the open items of claude/aashto10-pile-rev-d #384; PR #385: https://github.com/mlococo88/All-Structural/pull/385)
 
 ### PDA-MP. H-pile minimum penetration   [new check; no change to existing results]
 - **Provision (AASHTO LRFD 10th Ed., verified):**
@@ -18040,7 +18040,7 @@ Diff (`Pile Designer.html`, `git diff -U0` against origin/main `e2f882e`):
 ```
 
 
-## 2026-10-20 — PR: claude/pile-abut-return — Pile results to the abutment calculator: "Send pile results to the abutment" (channel pileResults) (PXR) (PR link added after merge)
+## 2026-10-20 — PR: claude/pile-abut-return — Pile results to the abutment calculator: "Send pile results to the abutment" (channel pileResults) (PXR) (PR #388: https://github.com/mlococo88/All-Structural/pull/388)
 
 Cross-tool connection (CLAUDE.md §7 exception): the same PR changes the receiver, `abutment_calculator.html` (fixlog/abutment_calculator.md PXR: "Pull pile results", `contentHash` on foundationLoads), and HANDOFF.md (§4 channel table, §4.6 content hash, new §4.10 `pileResults`). No calculation in this tool changes.
 
@@ -18293,7 +18293,7 @@ index 87a46f5..06ff89e 100644
 ```
 
 
-## 2026-10-20 — PR: claude/pile-abut-return-2 — Follow-ups to PXR (#388): the abutment's H-pile orientation sets the bending axis on import (PXR2) (PR link added after merge)
+## 2026-10-20 — PR: claude/pile-abut-return-2 — Follow-ups to PXR (#388): the abutment's H-pile orientation sets the bending axis on import (PXR2) (PR #389: https://github.com/mlococo88/All-Structural/pull/389)
 
 Cross-tool connection (CLAUDE.md §7 exception): the same PR changes `abutment_calculator.html` (fixlog/abutment_calculator.md PXR2: `orient` on the hand-off, biaxial integral check with Pile Designer's two Tier 2 moments, stale results not used) and HANDOFF.md §4.6 / §4.10.
 
@@ -18328,7 +18328,7 @@ index 06ff89e..6d4f235 100644
 ```
 
 
-## 2026-10-21 — PR: claude/abut-handoffs-iab — Integral / semi-integral hand-offs: integral per-pile foundation loads, R_n / φ into the integral inputs, type-aware SubLoads import (AXI) (PR link added after merge)
+## 2026-10-21 — PR: claude/abut-handoffs-iab — Integral / semi-integral hand-offs: integral per-pile foundation loads, R_n / φ into the integral inputs, type-aware SubLoads import (AXI) (PR #398: https://github.com/mlococo88/All-Structural/pull/398)
 
 Cross-tool connection in one PR (CLAUDE.md §7 exception): abutment_calculator.html (sender of foundationLoads, receiver of pileResults and abutmentLoads), Pile Designer.html and Spread Footing.html (receivers of foundationLoads), HANDOFF.md §4.5, §4.6, §4.10. Every code site is tagged `AXI`. **No calculation changes in any tool:** the abutment's `computeAll` is identical to origin/main (`c729c12`) for conventional, semi-integral and integral projects (with seismic, on piles); the receivers change only what they accept.
 
@@ -18357,7 +18357,7 @@ index 6d4f235..682aa9e 100644
 ```
 
 
-## 2026-10-21 — PR: claude/pile-iab-results — Integral-abutment mode sends the geotechnical axial resistance on pileResults (PDA-IAB) (PR link added after merge)
+## 2026-10-21 — PR: claude/pile-iab-results — Integral-abutment mode sends the geotechnical axial resistance on pileResults (PDA-IAB) (PR #399: https://github.com/mlococo88/All-Structural/pull/399)
 
 Cross-tool connection in one PR (CLAUDE.md §7 exception): `abutment_calculator.html` (fixlog/abutment_calculator.md PDA-IAB) and HANDOFF.md §4.6, §4.10. Every code site is tagged `PDA-IAB`.
 
@@ -18969,7 +18969,7 @@ index 682aa9e..6e4028a 100644
 ```
 
 
-## 2026-10-21 — PR: claude/pile-iab-length — Integral pile: designed length from the abutment, required ≤ designed, unrounded R_n / φ on pileResults (PDA-IAB2) (PR link added after merge)
+## 2026-10-21 — PR: claude/pile-iab-length — Integral pile: designed length from the abutment, required ≤ designed, unrounded R_n / φ on pileResults (PDA-IAB2) (PR #400: https://github.com/mlococo88/All-Structural/pull/400)
 
 Engineer decisions after #399: (1) import the abutment's designed pile length, evaluate the geotechnical resistance at that toe, report the required length max(L_geo, L_f + 5) separately and check required ≤ designed; keep the length-mismatch warning only for a user override; (2) send φ unrounded so both tools agree exactly; (3) clay uplift φ 0.25 (Table 10.5.5.2.3-1, α-method uplift) stays. Cross-tool PR (CLAUDE.md §7 exception): `abutment_calculator.html` (fixlog/abutment_calculator.md PDA-IAB2), HANDOFF.md §4.6, §4.10. Code sites tagged `PDA-IAB2`.
 
@@ -19089,7 +19089,7 @@ index 6e4028a..60b8c05 100644
 ```
 
 
-## 2026-10-21 — PR: claude/pile-iab-t2len — Integral pile: Tier 2 p-y model and the soil drawing at the designed pile length (PDA-IAB3) (PR link added after merge)
+## 2026-10-21 — PR: claude/pile-iab-t2len — Integral pile: Tier 2 p-y model and the soil drawing at the designed pile length (PDA-IAB3) (PR #401: https://github.com/mlococo88/All-Structural/pull/401)
 
 Engineer decision after #400: the Tier 2 p-y model length and the soil drawing use the designed pile length when one is entered (`iabLpile`, PDA-IAB2), else the required length. Pile Designer only. Code sites tagged `PDA-IAB3`.
 
@@ -19148,7 +19148,7 @@ index 60b8c05..9f7a88e 100644
 ```
 
 
-## 2026-11-01 — PR: claude/rpt-pile — Report output tab in the shared report viewer, with the print-section choice (PDRP; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-pile — Report output tab in the shared report viewer, with the print-section choice (PDRP; display only, no calculation change) (PR #567: https://github.com/mlococo88/All-Structural/pull/567)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `PDRP`.
 
@@ -19585,7 +19585,7 @@ index 9f7a88e..06a42e4 100644
 +const OUT_TABS = [["summary", "Summary"], ["geom", "Geometry & limits"], ["geo", "Geotechnical"], ["simp", "Simplified Method"], ["tier2", "Tier 2"], ["lat", "Lateral (p-y)"], ["latgfx", "Lateral graphs"], ["struct", "Structural"], ["cap", "Cap & connection"], ["test", "Load test"], ["group", "Group"], ["report", "Report"]];   // PDRP: Report output tab
 ```
 
-## 2026-11-01 — PR: claude/rpt-pile-full — Report tab self-contained: the print preview's provenance as worked steps, its charts and key-value tables as figures (PDRP2; display only) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-pile-full — Report tab self-contained: the print preview's provenance as worked steps, its charts and key-value tables as figures (PDRP2; display only) (PR #592: https://github.com/mlococo88/All-Structural/pull/592)
 
 Every code site is tagged `PDRP2` (or sits in the PDRP block). Line numbers are approximate; search for the anchor text.
 

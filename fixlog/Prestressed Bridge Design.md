@@ -4,7 +4,7 @@
 
 Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 5 (and 3.6 / 4.6.2.2); AASHTO MBE for rating (unchanged).
 
-## 2026-10-04 — PR: claude/fix-psbeam (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-psbeam (PR #14: https://github.com/mlococo88/All-Structural/pull/14)
 
 Line numbers are for the file **after** this PR. Every calculation change was checked by running
 the real `computeAll()` of the old (origin/main c58cb6d) and new file under node (Babel-standalone
@@ -297,7 +297,7 @@ NEXT 36F with skew; no strands; deck spacing 0; imported demands with DF V = 0) 
   - The worked step on the Shear and Report tabs still prints station [0] (bearing face) with the dv-station Vu. That is a display mismatch from before this PR.
 - O8. Edition: 0.210 ksi (5.7.4.2), Eq. 5.4.2.3.2-5 and 3.6.1.4.1 are as in the 8th/9th Ed. Please confirm them against the 10th Ed. text. The page still says "9th Ed. article numbering" (≈ line 6686); that label was not changed.
 
-## 2026-10-04 — PR: claude/step1-group1 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group1 (PR #28: https://github.com/mlococo88/All-Structural/pull/28)
 
 Feature (no result change): "← All tools" link to `tools.html` (`target="_top"`, hidden in print) and the shared project info buttons. No formula, factor, unit, storage key or saved format changed. New storage written only on "Share project info": `bridgeSuite.v1.projectMeta` and `bridgeSuite.v1.projectMeta.updatedAt` (HANDOFF.md §2/§4.1). Link and buttons sit in the existing `btnrow noprint`, so they do not print. The bridgeSuite bootstrap blocks are unchanged.
 
@@ -410,7 +410,7 @@ Field mapping: projectName ↔ Project (`inp.proj.name`), preparedBy ↔ By (`in
 - **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
 - **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
 
-## 2026-10-04 — PR: claude/conn-reactions-subloads (PR link added after merge)
+## 2026-10-04 — PR: claude/conn-reactions-subloads (PR #37: https://github.com/mlococo88/All-Structural/pull/37)
 
 Feature: hand-off (no result change). PS-Beam sends the **unfactored** DC1, DC2 and DW end reactions of its one girder line to Bridge Substructure Loading on channel `superReactions` (HANDOFF.md §4.4). Nothing is sent automatically: only the new "Send reactions to Substructure Loading" button writes `bridgeSuite.v1.superReactions`, `bridgeSuite.v1.superReactions.updatedAt` and the per-producer copy `bridgeSuite.v1.superReactions.by.psbeam`. "Export hand-off (JSON)" writes the same payload to a file. No formula, factor, default, unit, storage key or saved format changed; the bridgeSuite bootstrap blocks and the BridgeXfer copy are unchanged (BridgeXfer v1 already in this file from step 1).
 
@@ -595,7 +595,7 @@ function computeAll(inp){
   - O-R1. MIDAS mode: the reactions are the imported shears at x = 0 and x = L of the selected span, i.e. exactly what this app uses at those stations. If the MIDAS file has a single station at an interior pier, the value there can belong to the adjacent span; Substructure Loading warns on negative dead-load reactions, but the engineer should check pier values in this mode.
   - O-R2. index.html (MCT) is not a sender yet: its results hold no support reactions per load case (see fixlog/index.md).
 
-## 2026-10-09 — PR: claude/tabs-psbeam (PR link added after merge)
+## 2026-10-09 — PR: claude/tabs-psbeam (PR #71: https://github.com/mlococo88/All-Structural/pull/71)
 
 ### T1. Inputs page split into sub-tabs   [UI only — no calculation change]
 - **Date / type:** 2026-10-09, UI only (no result change). Engineer's request (2026-10-09): "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." In this tool the inputs are not a sidebar: "Inputs" is one of the top-level tabs, a page of 10 cards next to the Live Geometry panel. A sub-tab strip now sits at the top of that page and groups the 10 cards. The page layout (cards column + Live Geometry column) is unchanged.
@@ -708,7 +708,7 @@ function computeAll(inp){
   - O-T1. A blank MIDAS DF / multiple-presence box (taken as 1.0 by `computeAll`) gets a red dot, since the UI does not say blank is allowed there. Say if you want those excluded.
   - O-T2. Clicking a strand in the Live Geometry drawing selects a strand row but does not switch to the Strands sub-tab (it never scrolled before either). Can be added if wanted.
 
-## 2026-10-09 — PR: claude/psbeam-subtab-followup (PR link added after merge)
+## 2026-10-09 — PR: claude/psbeam-subtab-followup (PR #75: https://github.com/mlococo88/All-Structural/pull/75)
 
 Follow-up to T1 (open items O-T1 and O-T2), per the engineer's decisions of 2026-10-09.
 
@@ -837,7 +837,7 @@ Follow-up to T1 (open items O-T1 and O-T2), per the engineer's decisions of 2026
   - O-T3. The "Combined factors (DF×MPF)" line under these boxes uses `(+x||1)`. An *entered 0* therefore shows as 1.000 there, while `computeAll` uses 0 (and warns). This affects the display only. Blank correctly shows 1.000. Say if the line should show 0.
   - O-T4. `lldfMineFor()` reads a blank DF / MPF box as 0 (`+''`), not 1.0. This is used for the "before" values when locking to the LL & DL app and for the unlock snapshot (`BL.saveSnap`). So: a blank box → Lock → Unlock → "Restore the values you had before locking?" → OK would restore **0**, not blank. That zeroes that live-load effect, and the existing warning fires. The confirm dialog does show "… → 0". Found by reading the code, not run. This is pre-existing and not changed here, because it touches the hand-off snapshot. Fix if wanted: snapshot the raw value, or `fac1` it.
 
-## 2026-10-09 — PR: claude/psbeam-lock-blank (PR link added after merge)
+## 2026-10-09 — PR: claude/psbeam-lock-blank (PR #79: https://github.com/mlococo88/All-Structural/pull/79)
 
 Fixes open items O-T4 and O-T3 (above), per the engineer's decision of 2026-10-09.
 
@@ -926,7 +926,7 @@ Fixes open items O-T4 and O-T3 (above), per the engineer's decision of 2026-10-0
   - O-T5. When locking, the "before" values in the lock's change-log entry and toast still come from `lldfMineFor()`, so a blank box is logged as `0.000 → 0.650`. This is text only (nothing is restored from it), and it is produced inside the shared `BL.adopt`. Left as is.
   - O-T6. After a dead-load (`dlLoads`) restore, a DC2 / DW box that was blank shows `0`. Same calculation (blank = 0 there); display only.
 
-## 2026-10-12 — PR: claude/sweep-psbeam (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-psbeam (PR #131: https://github.com/mlococo88/All-Structural/pull/131)
 
 Open-item sweep (engineer, 2026-10-12: "continue making updates and fixes until it's completed … use your best judgment"). It covers every psbeam item in the open-item inventory: O1–O8, OR1, OT5/OT6, AUDIT S7, A1 and A2. Items are listed in priority order: unconservative calc first, then bugs, UI, docs. Basis: AASHTO LRFD 10th Ed. (2024); MBE 3rd Ed. for the rating. Article numbers marked "verify" were not checked against a printed 10th Ed.
 
@@ -1246,7 +1246,7 @@ No storage key was added or changed. The `bridgeSuite.v1.*` bootstrap / BridgeLo
 - Screenshots looked at: `new-rating.png`, `new-ext-geom.png`, `new-opts.png`, `new-fatigue.png`, `new-report-beff-ext.png`, `new-handling-card.png`, `*-ot6-restored.png`.
 - **Other copies:** none. stgirder.html has the same exterior-b_eff and φc·φs items (STG-O4, STG-O3), not changed here (one tool per PR).
 
-## 2026-10-12 — PR: claude/bootstrap-sync (shared `bridgeSuite.v1.*` bootstrap; PR link added after merge)
+## 2026-10-12 — PR: claude/bootstrap-sync (shared `bridgeSuite.v1.*` bootstrap; PR #165: https://github.com/mlococo88/All-Structural/pull/165)
 
 Cross-tool sync of the shared bootstrap blocks. The same change is in index.html, lldf.html, psbeam.html and stgirder.html (CLAUDE.md §3). No engineering formula, factor, unit or code reference changed; no computed value changes. Storage keys and saved formats are unchanged (the hand-off map keeps its key and entry format; it only loses old entries).
 
@@ -1323,7 +1323,7 @@ This is the shared-block part of X-S8 / X-S10 for PS-Beam.
 - Headless Chromium, main vs branch, same steps: index publishes the PS demands payload → psbeam shows "New analysis data available", "Load these demands" adopts it (adopted token `test__beam@2026-10-12T10:00:00.000Z`); index publishes the steel payload → stgirder banner and adoption; lldf boots and resolves `BridgeApps.path('psbeam')`. Same results and the same storage keys on both; key values differ only in timestamps. No page errors (only Babel's "deoptimised styling" notes).
 - **Other copies:** index.html, lldf.html, psbeam.html, stgirder.html (all changed in this PR; lldf.html has no `BridgeHandoff` block, so XS2 and the hand-off call of XS3 are not in it).
 
-## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR #166: https://github.com/mlococo88/All-Structural/pull/166)
 
 Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
 
@@ -1341,7 +1341,7 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.3 (equivalent strip widths for slab-type bridges: the slab DF is per unit width, not per girder). No formula changed.
 - **How verified:** headless Chromium, main vs branch: lldf "Send DFs" for the slab and the girder case, then the resolver called on this tool (`lldfResolveFor({loads:{pos:'interior'}})`). Slab: main applied, branch refused. Girder: identical results (only `producedAt` differs). No page errors.
 
-## 2026-10-18 — PR: claude/psbeam-d11-report — D11: calculation-sheet report and §6 derivation links (Tier 1, display only; PR link added after merge)
+## 2026-10-18 — PR: claude/psbeam-d11-report — D11: calculation-sheet report and §6 derivation links (Tier 1, display only; PR #280: https://github.com/mlococo88/All-Structural/pull/280)
 
 - **Engineer request:** AUDIT.md D11 (2026-10-14; scope 2026-10-18: full report for every design-check tool), CLAUDE.md §6 "show the work and link to it". The tool already had a numbered calculation package: the gaps were closed, the package was not rewritten.
 - **Provision:** none. No formula, factor, unit, code reference or computed result changed (`computeAll` untouched). No saved-data key or format changed (`psbeam.inputs.v1`, `psbeam.ui.v1`, `psbeam.inputTab.v1`, `psbeam.fold.*`, the JSON export, `bridgeSuite.v1.*` untouched); no input field added. The shared `bridgeSuite.v1.*` bootstrap blocks at the top of the file are not touched.
@@ -1402,7 +1402,7 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - D11-O7. **Title-block fields:** no Checked by / Checked date fields; they print "—". Optional tool-prefixed fields (absent from saved data until typed) can be added if wanted.
 - D11-O8. **Edition:** the tool states "AASHTO LRFD BDS (9th Ed. article numbering)"; the fix-log basis is the 10th Ed. (2024). The report says "edition: verify".
 
-## 2026-10-18 — PR: claude/psbeam-pier-status — Flexure tab: continuity pier-check status and d_t substitution (D11-O1, D11-O2; Tier 1, display only; PR link added after merge)
+## 2026-10-18 — PR: claude/psbeam-pier-status — Flexure tab: continuity pier-check status and d_t substitution (D11-O1, D11-O2; Tier 1, display only; PR #297: https://github.com/mlococo88/All-Structural/pull/297)
 
 - **Engineer request:** approved 2026-10-18: fix on the Flexure tab what D11-2.1 and D11-2.2 fixed in the report only (open items D11-O1, D11-O2).
 - **Provision:** none changed. No formula, factor, unit, code reference or computed result changed (`computeAll` untouched; the pier D/C and its pass flag were already right, only the flag *displayed* was wrong). No saved-data key or format changed. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched.
@@ -1443,7 +1443,7 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - D11-O1 and D11-O2 are closed by this entry.
 
 
-## 2026-10-19 — PR: claude/stgirder-disconnect-others (STDISC: ST-Girder removed from the bridge suite on the other tools' side; engineer decision 2026-10-19; cross-tool PR with index.html, psbeam.html, lldf.html, Bridge Substructure Loading.html, tools.html, HANDOFF.md, AUDIT.md, CLAUDE.md §3; ST-Girder's side is claude/stgirder-disconnect; PR link added after merge)
+## 2026-10-19 — PR: claude/stgirder-disconnect-others (STDISC: ST-Girder removed from the bridge suite on the other tools' side; engineer decision 2026-10-19; cross-tool PR with index.html, psbeam.html, lldf.html, Bridge Substructure Loading.html, tools.html, HANDOFF.md, AUDIT.md, CLAUDE.md §3; ST-Girder's side is claude/stgirder-disconnect; PR #310: https://github.com/mlococo88/All-Structural/pull/310)
 
 ### STDISC. PS-Beam: ST-Girder link and sibling entries removed   [no result change, Tier 0/1]
 - **Engineer decision (2026-10-19):** ST-Girder (`stgirder.html`) is completely disconnected from every other bridge tool except GirderDetail (`Steel Bridge Beam Modules.html`): no MIDAS / MCT demands into ST-Girder, MCT's steel rating no longer uses ST-Girder's capacity (it falls back to MCT's own capacity inputs), ST-Girder removed from MCT's combined saved project, no ST-Girder links in the other tools; Substructure Loading reactions from GirderDetail are a later, separate change. CLAUDE.md §3 updated: the shared bootstrap block is now in index.html, lldf.html and psbeam.html only.
@@ -1542,7 +1542,7 @@ The fatigue load (one design truck, constant 30-ft rear axle spacing, IM 15%, no
 
 Check: the Fatigue tab step and the report §15 step show "3.6.1.4.1"; the references table lists it. `node tests/check-syntax.mjs psbeam.html`: all scripts pass. Closes the open item from the D11 entry (#280).
 
-## 2026-10-19 — PR: claude/aashto10-psbeam (AASHTO LRFD 10th Ed. gaps: debonding warnings, Service III γLL wording, 5.9.2.3.1a renumbering, edition label; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-psbeam (AASHTO LRFD 10th Ed. gaps: debonding warnings, Service III γLL wording, 5.9.2.3.1a renumbering, edition label; PR #330: https://github.com/mlococo88/All-Structural/pull/330)
 
 Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Every provision below was checked against the 10th Ed. text. **No computed result changes**: only warning strings, hints, notes, comments and labels. The `bridgeSuite.v1` bootstrap block is untouched. No saved-data key or format changes. Line numbers (≈) are for the file after this PR; hunks below are exact (`-` before, `+` after).
 
@@ -1711,7 +1711,7 @@ Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Every provisio
 - Item (I) shows a reminder for every debonded BT-72 design because b_bf/b_w = 26/6 > 4; the tool cannot check which strands in a row are debonded (it assumes outermost first in the 3-D view only).
 - The MBE and PCI reference rows still have "edition not stated: verify".
 
-## 2026-10-19 — PR: claude/aashto10-psbeam-2 (follow-up to #330; Options input notes, wording only; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-psbeam-2 (follow-up to #330; Options input notes, wording only; PR #342: https://github.com/mlococo88/All-Structural/pull/342)
 
 No computed value changes: only two `sub` texts in `InputsTab` (Options pane). Basis: AASHTO LRFD 10th Ed. (2024). Closes two open items of the claude/aashto10-psbeam entry; the item (I) web-width reminder is kept as is (engineer decision 2026-10-19).
 
@@ -1746,7 +1746,7 @@ No computed value changes: only two `sub` texts in `InputsTab` (Options pane). B
 - **How verified (AE5, AE6):** `computeAll()` of origin/main (ee32a1c) and this branch on the same 9 inputs as AE1 (default, debond cases, γLL = 1.0): every result field, warnings included, identical. `node tests/check-syntax.mjs psbeam.html` passes.
 - **Other copies:** none.
 
-## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR #410: https://github.com/mlococo88/All-Structural/pull/410)
 
 ### SBD1-a. Shared bootstrap block comment (byte-identical in index.html, psbeam.html, lldf.html)   [comment only]
 - **Where:** the bootstrap block's header comment, anchor `This block is byte-identical in index.html / psbeam.html / lldf.html.`
@@ -1764,7 +1764,7 @@ No computed value changes: only two `sub` texts in `InputsTab` (Options pane). B
   ```
 - **Other copies:** index.html, psbeam.html, lldf.html (same text; the block stays byte-identical). No code changed.
 
-## 2026-10-22 — PR: claude/pbd-0b-label (PBD-B: capacity hand-off labels the flexure method actually used; display/label only, no computed value changed; PR link added after merge)
+## 2026-10-22 — PR: claude/pbd-0b-label (PBD-B: capacity hand-off labels the flexure method actually used; display/label only, no computed value changed; PR #415: https://github.com/mlococo88/All-Structural/pull/415)
 
 ### PBD-B1. Capacity payload `basis` / `phiFlex` text: approximate f_ps (5.6.3.1.1), not strain compatibility   [label only] [no result change]
 - **Where:** `App` → `publishCapacity` (the `bridge-design-capacity` payload, channel `bridgeSuite.v1.capacity`). Anchors: `phi:+fr.phi.toFixed(3), basis:`, `phiIncluded:true, phiFlex:`, `basis:'AASHTO LRFD`.
@@ -1791,7 +1791,7 @@ No computed value changes: only two `sub` texts in `InputsTab` (Options pane). B
 - **How verified:** `node tests/ps-compare.mjs` (origin/main vs this branch, all 31 cases): only `ps.pay.capacity` differs, and only in `basis`, `phiFlex` and the station `basis` strings; `tests/baselines/ps.json` updated for that section.
 - **Other copies:** none.
 
-## 2026-10-22 — PR: claude/pbd-1-rename (PBD-C: psbeam.html renamed to Prestressed Bridge Design.html; redirect page with a data download at the old name; engineer decision 2026-10-22; no result change; PR link added after merge)
+## 2026-10-22 — PR: claude/pbd-1-rename (PBD-C: psbeam.html renamed to Prestressed Bridge Design.html; redirect page with a data download at the old name; engineer decision 2026-10-22; no result change; PR #417: https://github.com/mlococo88/All-Structural/pull/417)
 
 ### PBD-C1. File and log renamed   [rename] [no result change]
 - `psbeam.html` → `Prestressed Bridge Design.html` and `fixlog/psbeam.md` → `fixlog/Prestressed Bridge Design.md` (moved with git, content unchanged apart from the lines below).
@@ -1824,7 +1824,7 @@ No computed value changes: only two `sub` texts in `InputsTab` (Options pane). B
 - Shared blocks: compared with origin/main's psbeam.html, the bytes are identical (the diff shows only the lines above).
 - **Other copies:** none.
 
-## 2026-10-22 — PR: claude/pbd-2-shell (PBD-D: bridge shell — working modes, module registry, one title block, bridge model psbeam.bridge.v1 with migration, girder × span selector, project Save / Save as / Open / New; engineer decision 2026-10-22; no result change; PR link added after merge)
+## 2026-10-22 — PR: claude/pbd-2-shell (PBD-D: bridge shell — working modes, module registry, one title block, bridge model psbeam.bridge.v1 with migration, girder × span selector, project Save / Save as / Open / New; engineer decision 2026-10-22; no result change; PR #418: https://github.com/mlococo88/All-Structural/pull/418)
 
 ### PBD-D1. Engines under `window.PBD` (new plain `<script>` block before the JSX)   [new code] [no result change]
 - **Where:** new block, anchor `/* ═══ Prestressed Bridge Design — bridge-level engines (window.PBD)`. Nothing in it computes an engineering value.
@@ -1854,7 +1854,7 @@ Default project, empty storage: the bar reads "Preliminary designer", spans 120,
 - `node tests/check-syntax.mjs "Prestressed Bridge Design.html"`: all scripts pass.
 - **Other copies:** none (Steel Bridge Design's modes and module bar are a different implementation; only the behaviour is mirrored).
 
-## 2026-10-22 — PR: claude/pbd-3-owner (PBD-E: owner selector, Owner Requirements card, owner defaults and checks for RIDOT / MassDOT / CTDOT; engineer decisions 2026-10-22; calculation changes for those owners only, AASHTO unchanged; PR link added after merge)
+## 2026-10-22 — PR: claude/pbd-3-owner (PBD-E: owner selector, Owner Requirements card, owner defaults and checks for RIDOT / MassDOT / CTDOT; engineer decisions 2026-10-22; calculation changes for those owners only, AASHTO unchanged; PR #419: https://github.com/mlococo88/All-Structural/pull/419)
 
 Owner manuals used (verified in the engineer's reference folder; cited, not reproduced): RIDOT Bridge Design Manual (April 2026), MassDOT LRFD Bridge Manual Part I (Hundredth Anniversary Ed.), CTDOT BRSDM Release 1 (2024) Vol. 2. AASHTO LRFD 10th Ed. (2024) remains the basis. MassDOT and the CTDOT BRSDM are written to the 9th Ed.
 
@@ -1913,7 +1913,7 @@ Owner manuals used (verified in the engineer's reference folder; cited, not repr
 - UI script (scratch): owner select sets the defaults of untouched inputs and keeps entered values (flagged), the card lists the rules, η questions and multiplier change the results, switching back to AASHTO restores the defaults; no console errors.
 - `node tests/check-syntax.mjs "Prestressed Bridge Design.html"`: all scripts pass.
 
-## 2026-10-22 — PR: claude/pbd-f-conn-mcr (PBD-F: RIDOT positive moment connection, M_cr on the composite section with the deck/diaphragm modulus of rupture; engineer decision 2026-10-22; RIDOT result only, AASHTO and the other owners unchanged; PR link added after merge)
+## 2026-10-22 — PR: claude/pbd-f-conn-mcr (PBD-F: RIDOT positive moment connection, M_cr on the composite section with the deck/diaphragm modulus of rupture; engineer decision 2026-10-22; RIDOT result only, AASHTO and the other owners unchanged; PR #420: https://github.com/mlococo88/All-Structural/pull/420)
 
 ### PBD-F1. M_cr of the positive moment connection (RIDOT BDM 5.6.3.3; AASHTO LRFD 10th Ed. 5.4.2.6; basis NCHRP Report 519)   [calc change, RIDOT, reported value] [less conservative]
 - **Where:** `computeAll`, owner block, anchor `const rPos=rr('cont.pos');`. Display: report section "Owner Requirements" (anchor `Positive moment connection ('+cr.cite+')`) and the Owner Requirements card (`PbdOwnerCard`, `if(r.kind==='report')`).
@@ -1934,7 +1934,7 @@ Owner manuals used (verified in the engineer's reference folder; cited, not repr
 - **How verified:** `node tests/ps-compare.mjs --baseline tests/baselines/ps.json`: every case identical except owner_RIDOT_cont (sections `ps.R` and `ps.report` only: `own.contReq` and the report text above); the R values read back are f_r 0.480, S_bc 20 230.6, M_cr 809.23, required 971.07 k-ft. That case's baseline was re-recorded from this branch. `node tests/check-syntax.mjs "Prestressed Bridge Design.html"`: all scripts pass.
 - **Other copies:** none.
 
-## 2026-10-22 — PR: claude/pbd-g-continuous (PBD-G: continuous analysis for simple spans made continuous, AASHTO LRFD 10th Ed. 5.12.3.3; restraint moments by C5.12.3.3.2; positive moment connection; service at interior supports; calculation change for designs with continuity on only; PR link added after merge)
+## 2026-10-22 — PR: claude/pbd-g-continuous (PBD-G: continuous analysis for simple spans made continuous, AASHTO LRFD 10th Ed. 5.12.3.3; restraint moments by C5.12.3.3.2; positive moment connection; service at interior supports; calculation change for designs with continuity on only; PR #421: https://github.com/mlococo88/All-Structural/pull/421)
 
 Basis: AASHTO LRFD 10th Ed. (2024) 5.12.3.3.1–.8 with C5.12.3.3.2, C5.12.3.3.3, C5.12.3.3.5; 3.6.1.3.1; Table 3.4.1-3; 5.4.2.3; 5.9.3.4.3a/d. Designs with continuity off give identical results (see How verified).
 
@@ -2059,7 +2059,7 @@ Basis: AASHTO LRFD 10th Ed. (2024) 5.12.3.3.1–.8 with C5.12.3.3.2, C5.12.3.3.3
 - Temperature-gradient (TG) restraint is not computed. Axial restraint forces are not computed (bearings are taken as free longitudinally).
 - The LL deflection and fatigue keep the simple-span estimates.
 
-## 2026-10-22 — PR: claude/pbd-h-mct-removal (PBD-H: the MCT opens this tool in a new tab instead of framing it; shared bootstrap blocks synced; cross-tool connection PR, CLAUDE.md §7 exception; no result change; PR link added after merge)
+## 2026-10-22 — PR: claude/pbd-h-mct-removal (PBD-H: the MCT opens this tool in a new tab instead of framing it; shared bootstrap blocks synced; cross-tool connection PR, CLAUDE.md §7 exception; no result change; PR #424: https://github.com/mlococo88/All-Structural/pull/424)
 
 ### PBD-H2. Shared bootstrap blocks: default path of app `psbeam` and comments (byte-identical in index.html, lldf.html, Prestressed Bridge Design.html)   [default file name; comments] [no result change]
 - **Where:** the shared `appPaths` block, anchor `var DEF={mct:'index.html'`; the header comments of the beam-roster block (anchor `This block is byte-identical in index.html /`) and of the `appPaths` block (anchors `The three apps link to each other by bare file name` and `This block is byte-identical in index.html / Prestressed Bridge Design.html /`).

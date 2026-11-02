@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: NDS 2018 (ANSI/AWC NDS-2018) and NDS Supplement 2018 Ed., ASD; ASCE 7-16 Sec. 2.4.1 ASD load combinations; IBC Table 1604.3 for the deflection limits (user-editable).
 
-## 2026-10-04 — PR: claude/fix-timber (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-timber (PR #6: https://github.com/mlococo88/All-Structural/pull/6)
 
 Scope: the engineer asked for this tool to be **fixed fully**. The calculation engine was rewritten as one pure function, `runTimberCheck(inp)`, placed between `SIZES_DB` and `// --- UI COMPONENTS ---`. The old inline engine in the component (from `// --- CALCULATION ENGINE ---` / `// Safe parsing inputs` down to `const dcr_def = ...`) was replaced by a single call:
 
@@ -613,7 +613,7 @@ Factor tables entered (Table 4A footnotes; Table 4B uses the same Cfu and wet-se
 - **Other copies:** BridgeXfer v1 and `ProjMetaUI` are duplicated (CLAUDE.md §3) in Pile Designer.html, Spread Footing.html, BasePlateAnchorDesigner.html, Concrete Anchor.html and Timber Beam Check.html (this PR), plus any other tools that received BridgeXfer in their own step-1 PRs.
 - **`ProjMetaUI`:** given in full in the After code of the helper insertion above; the copy is identical in every tool listed.
 
-## 2026-10-09 — PR: claude/tabs-timber (PR link added after merge)
+## 2026-10-09 — PR: claude/tabs-timber (PR #67: https://github.com/mlococo88/All-Structural/pull/67)
 
 ### T1. Input panel split into tabs   [UI only — no calculation change]
 - **Date / type:** 2026-10-09, UI only (no result change). Engineer's request of 2026-10-09: "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel."
@@ -737,7 +737,7 @@ Factor tables entered (Table 4A footnotes; Table 4B uses the same Cfu and wet-se
 - **Open items:** at 400 px the existing header (logo, title, Trace / Save / Open / dark buttons) is 557 px wide and causes a horizontal page scroll; this is the same on main and is not caused by the tabs (the tab strip and input panel fit within 400 px). Not changed (UI outside the input panel). The unpinned libraries are already logged as O1.
 - **Other copies:** none (UI code specific to this tool).
 
-## 2026-10-09 — PR: claude/pin-timber (PR link added after merge)
+## 2026-10-09 — PR: claude/pin-timber (PR #73: https://github.com/mlococo88/All-Structural/pull/73)
 
 ### L1. CDN library versions pinned   [libraries — no calculation change]
 - **Engineer's decision (2026-10-09):** pin the libraries (CLAUDE.md §2: exact versions in CDN URLs). Resolves the "pin the versions" half of O1.
@@ -764,7 +764,7 @@ Factor tables entered (Table 4A footnotes; Table 4B uses the same Cfu and wet-se
   - Full-page screenshots (light and dark) compared pixel by pixel: dark identical; light differs only by the timing-dependent "Project saved successfully" toast.
 - **Other copies:** none.
 
-## 2026-10-10 — PR: claude/timber-rebuild-p1 (PR link added after merge)
+## 2026-10-10 — PR: claude/timber-rebuild-p1 (PR #81: https://github.com/mlococo88/All-Structural/pull/81)
 
 ### R1. Rebuild in vanilla JS (Steel Beam layout), Phase 1: same results + continuous beams and cantilevers   [rebuild] [no result change for any case the pre-R1 tool supports] [new calculations for multi-span / cantilever]
 
@@ -873,7 +873,7 @@ Every error, code-limit failure and note of the pre-R1 engine is produced with t
 - R1-h. **Observation (Steel Beam, not changed here):** in `Steel Beam Design - AISC 15th.html`, `evalVM(X, …)` includes the reaction couple of a node at `X` itself, so at x = L with a fixed right end it returns M = 0 instead of the end moment (fixed-pin-fixed 10 + 10 ft, w = 75 plf: 0 vs −2187.5 ft-lb at x = 20 ft). The station just before it is close, so the effect is small but unconservative. For a separate Steel Beam PR if wanted.
 - R1-i. **Fixed supports** are offered (as in Steel Beam) but rare in timber; the bearing check uses the vertical reaction only. *(S1: closed; an advisory is shown whenever a support is fixed; see S1-c.)*
 
-## 2026-10-10 — PR: claude/timber-rebuild-p2 (PR link added after merge)
+## 2026-10-10 — PR: claude/timber-rebuild-p2 (PR #83: https://github.com/mlococo88/All-Structural/pull/83)
 
 ### R2. Engineer's decisions on the R1 open items (2026-10-10): old files open with the bottom edge braced at supports only   [calc change] [more conservative; only old files with negative moment]
 
@@ -1004,7 +1004,7 @@ Material tab: material type (sawn / glulam / SCL); glulam combination, species g
 - O3 (Table 4D, flat use of timbers): **added** for DF-L, HF, SP (verify); SPF not built in (P2-3).
 - O11 (Stud 8 in. and wider), O12 (SP 4" thick 8"+ C<sub>F</sub> 1.1), O14 (C<sub>i</sub> on timbers): unchanged.
 
-## 2026-10-10 — PR: claude/timber-p2-followups (PR link added after merge)
+## 2026-10-10 — PR: claude/timber-p2-followups (PR #85: https://github.com/mlococo88/All-Structural/pull/85)
 
 ### R4. Engineer's decisions on P2-1, P2-2 and P2-7 (2026-10-10): round-off moments ignored; 6x8 / 8x8 to Table 1B; C<sub>r</sub> = 1.04 for SCL   [calc change] [P2-1: removes a false NG; P2-2: less conservative for 6x8 / 8x8; P2-7: less conservative for SCL in repetitive use]
 
@@ -1136,7 +1136,7 @@ Factors tab hint of the Repetitive member box ("Dimension lumber C<sub>r</sub> =
 - **Browser (headless Chromium, `file://`, KaTeX / plotly served locally), main vs branch, every output tab's text, the governing strip and the saved model:** default, glulam (simple, 2-span wet notched, SP LRFD with overhang and uplift), 6x12, SP No.1, LRFD joist: **identical**. R3 LVL (s = 96 in.): identical results and saved data; only the bending "where" row text (C<sub>r</sub> reference). Changed as intended: LVL repetitive ASD (90.0 → 86.5 %) and LRFD (ratio 0.774 → 0.744), 6x8 (85.7 → 80.2 %), 8x8 (90.0 % defl. → 81.3 % bending), rand 108 (bottom-edge NG removed). No console errors, no NaN / undefined, no KaTeX errors. Screenshots reviewed (scratchpad `followups/timber-p2-followups/shots/`).
 - **Other copies of this code:** none (tool-specific).
 
-## 2026-10-10 — PR: claude/timber-open-items (PR link added after merge)
+## 2026-10-10 — PR: claude/timber-open-items (PR #93: https://github.com/mlococo88/All-Structural/pull/93)
 
 ### R5. Engineer's decisions on all pending open items (2026-10-10): top-edge R<sub>B</sub> > 50 only where the top edge is in compression (P2-10); Project / Checked by / Date shared (R1-g); the rest closed as built   [calc change] [P2-10: removes a false NG only; no ratio changes] [R1-g: hand-off fields added]
 
@@ -1236,7 +1236,7 @@ Method & Manual: Bending item ("R<sub>B</sub> ≤ 50 is enforced … for each ed
 - **Project-info round trip (same `file://` origin in one Chromium context):** Timber title block filled (Project, Member, Client, Job #, Designer, Checked by, Date) → "Share project info" → `bridgeSuite.v1.projectMeta.fields` = projectName / client / jobNo / preparedBy / checkedBy / date with the typed values (bridgeId, location blank; producer "Timber Beam Check") → Steel Beam "Use shared project info" fills its Project name, Prepared by, Checked by and Date with them. Reverse: Steel Beam values typed and shared → Timber "Use shared project info" fills Project, Designer, Checked by and Date; Client, Job # and Member keep their values (Steel shares them blank). Project object keys unchanged. No console errors or warnings on any of the three pages.
 - **Other copies of this code:** none (tool-specific). The `ProjMetaUI` helper (shared with other tools) is unchanged.
 
-## 2026-10-12 — PR: claude/sweep-timber (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-timber (PR #150: https://github.com/mlococo88/All-Structural/pull/150)
 
 ### S1. Open-item sweep: every open item of this tool (O4–O8, O11–O14, R1-f, R1-i, P2-3)   [calc change: O4 shear, MORE conservative by default] [notes / advisories / text only for the rest]
 
@@ -1402,7 +1402,7 @@ Method & Manual: Bending item ("R<sub>B</sub> ≤ 50 is enforced … for each ed
 - **Render:** the transpiled app was rendered with React 18.2.0 `react-dom/server` in 6 state variants (analysis tab, report tab, check case, notch + point load + unbraced, timber error, manual mode). There were no React errors, and no NaN, undefined or Infinity in the output.
 - **Load harness:** `loadProject` was extracted verbatim and run with stub setters on a legacy file, a malformed file and a wrong-types file.
 
-## 2026-10-18 — PR: claude/timber-d11-report (PR link added after merge)
+## 2026-10-18 — PR: claude/timber-d11-report (PR #285: https://github.com/mlococo88/All-Structural/pull/285)
 
 The tool file uses CRLF line endings; keep them. Line numbers drift; search for the anchor text.
 
@@ -1452,7 +1452,7 @@ The tool file uses CRLF line endings; keep them. Line numbers drift; search for 
 - **Report length:** 18 pages for the default project (was 16), mostly the cover and contents page. Section ticks are unchanged.
 
 
-## 2026-11-01 — PR: claude/rpt-timber — Report output tab in the shared report viewer (TBRP; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-timber — Report output tab in the shared report viewer (TBRP; display only, no calculation change) (PR #532: https://github.com/mlococo88/All-Structural/pull/532)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `TBRP`.
 

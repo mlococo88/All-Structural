@@ -5,7 +5,7 @@ Governing basis used for fixes: AISC 360-16 (as stated in the tool), Steel Const
 Note: the file uses CRLF line endings. Many functions are defined more than once and the **last
 definition wins** (see O4). Every edit below was checked to be in the live (last) definition, or in a function defined only once.
 
-## 2026-10-04 — PR: claude/fix-steel-beam (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-steel-beam (PR #3: https://github.com/mlococo88/All-Structural/pull/3)
 
 ### F1. E7 effective width of I-shape webs used c1/c2 = 0.22/1.49   [calc change] [more conservative]
 - **Where:** function `compStrength` (≈ line 1708). Anchor: `if(cc.web.cls==='slender'){const r=beOf(p.hClear,p.tw,`. Also the explanatory text in the user manual (≈ line 3928, anchor `with c₁/c₂ = `) and the worked block's `vars` (≈ line 9576, anchor `['c_1,c_2',`).
@@ -127,7 +127,7 @@ definition wins** (see O4). Every edit below was checked to be in the live (last
 - **How verified:** node run of `memberDesignAll`.
 - **Other copies of this code:** batch mode (`batchCheckRow` → `h33Check`) does not show this warning (see O2).
 
-## 2026-10-04 — PR: claude/step1-group4 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group4 (PR #30: https://github.com/mlococo88/All-Structural/pull/30)
 ### S1. "← All tools" link and shared project info   [feature (no result change)]
 - **Date / type:** 2026-10-04, feature (no result change).
 - **Where:** CSS after `#projGrid input::placeholder{color:#8FA3BC}`, `#hdr` markup after `<div class="byline">by Mario Lococo</div>`, new `#projShare` row after `<div id="projGrid"></div>`, and two new `<script>` blocks before `</body>`.
@@ -226,7 +226,7 @@ definition wins** (see O4). Every edit below was checked to be in the live (last
 - **How verified:** Every plain inline script syntax-checked (Node `vm.Script`, same parser as `node --check`); BridgeXfer block compared byte-for-byte with HANDOFF.md §5; page loaded in jsdom (CDN scripts not loaded) before and after the change with no new errors; Share → Use exercised between tools with jsdom localStorage (ASCE7-16 → ACI Rebar, Steel Beam → Shear and Moment, Concrete Beam Capacity shell against stub tab documents), including cancel, empty shared values (field kept), a non-ISO date on a date input (skipped), an empty channel and a wrong `_schema` (refused). `git diff` shows no removed lines other than the ones listed under Before. No calculation code was touched.
 - **Other copies of this code:** none. BridgeXfer v1 is also in: ACI Rebar Development Length.html, ASCE7-16 Load Generator.html, Concrete Beam Capacity.html (shell), Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html.
 
-## 2026-10-04 — PR: claude/conn-asce7-steelbeam (PR link added after merge)
+## 2026-10-04 — PR: claude/conn-asce7-steelbeam (PR #33: https://github.com/mlococo88/All-Structural/pull/33)
 ### C1. Building-load hand-off receiver: "Pull from ASCE 7-16" and "Import hand-off (JSON)"   [feature: hand-off (no result change)]
 - **Date / type:** 2026-10-04, feature: hand-off (no result change).
 - **Where:** header `#projShare` row (anchor `onclick="bxShareProjectInfo()">Share project info</button>`); `loadTable()` (anchor `tdN.innerHTML=(ld.nm||'')`); `buildDeriveTab()` first line (anchor `function buildDeriveTab(pg){`, defined once); `buildPrintReport()` after the title block (anchor `pr.appendChild(tb);` followed by `if(isMember())pr.appendChild(`); one new `<script>` block after the shared-project-info script, before `</body>`. File uses CRLF; the inserted lines use CRLF too. All edited functions are defined once (see O4).
@@ -620,7 +620,7 @@ function buildDeriveTab(pg){
 - **Other copies of this code:** none. BridgeXfer v1 (unchanged) is also in ASCE7-16 Load Generator.html and the other Step 1 tools.
 - **Open items:** C&C (Ch. 30) pressures are not available from the sender and usually govern purlins/girts; snow drift and unbalanced snow are not imported (warning only); LR is not in the default combinations.
 
-## 2026-10-05 — PR: claude/conn-steelbeam-reactions (PR link added after merge)
+## 2026-10-05 — PR: claude/conn-steelbeam-reactions (PR #38: https://github.com/mlococo88/All-Structural/pull/38)
 ### C2. Member-reaction hand-off sender: "Send to other tools" and "Export hand-off (JSON)"   [feature: hand-off (no result change)]
 - **Date / type:** 2026-10-05, feature: hand-off (no result change).
 - **Where:** header `#projShare` row (anchor `onchange="bxImportBuildingLoads(event)">`, followed by `<span id="bxBldSrc"`); one new `<script>` block at the end of the file, just before `</body>` (anchor `Member-reaction hand-off sender`).
@@ -846,7 +846,7 @@ function buildDeriveTab(pg){
 - **Other copies of this code:** none. BridgeXfer v1 (unchanged, from Step 1) is reused.
 - **Open items:** reactions are for each case as loaded (live load on all spans, no pattern loading); the sender adds cases of the same type, so pattern cases must be marked "other".
 
-## 2026-10-09 — PR: claude/steel-beam-input-tabs (PR link added after merge)
+## 2026-10-09 — PR: claude/steel-beam-input-tabs (PR #55: https://github.com/mlococo88/All-Structural/pull/55)
 ### T1. Input panel split into tabs   [UI only — no calculation change]
 - **Date / type:** 2026-10-09, UI only (no result change). Requested by the engineer on 2026-10-08: "I want the input panel to be split up into different tabs. Similar to some of the more recent apps we've built." The pattern follows `Gusset Plate Rating.html` (tab strip at the top of the input sidebar, one pane per tab, collapsible cards inside), drawn in this tool's own style (the same button-tab look as the output `#tabBar`).
 - **How it works:** `rebuildInputs()` still builds every input section into `#inputPanel` exactly as before. At its end, the new `sbdInputTabs(P)` **moves** the finished nodes into one pane per tab. Nothing is rebuilt, so every `data-fkey`, `data-secid`, event handler and bound value is unchanged, and the mode logic (`MSKIP`, `BEAM_HIDDEN`, `MEMBER_HIDDEN`, `BATCH_HIDDEN`, `extraInputSections`) still decides which sections exist. A tab whose pane is empty in the current mode is hidden. A section that is not in the map stays in the tab of the section before it.
@@ -970,7 +970,7 @@ function buildDeriveTab(pg){
 - **How verified:** the same Chromium harness as T1, against the original file (main): `AN` (all results) and the autosave JSON identical in all 13 scenarios; save/load round trip and the reaction hand-off identical; output-tab text identical except the new notes and hints, the SVG titles of the slab band, and the section numbers after the new Schematic section (every decimal number in the M_x tab text is identical; the Schematic tab only gains the echoed slab depths and b_eff). `node --check` on all inline scripts. Screenshots of the Schematic tab (beam schematic, cross section, Composite Slab and Deck) and the M_x tab composite figures for non-composite, solid slab, deck perpendicular, deck parallel (with a 1 in haunch) and member-mode parallel deck were inspected: the orientations are as described above; the non-composite graphics are pixel-identical to before.
 - **Other copies of this code:** none (the dead first `compXsecBlock` keeps its old hint; see O4).
 
-## 2026-10-09 — PR: claude/steel-beam-composite-ac (PR link added after merge)
+## 2026-10-09 — PR: claude/steel-beam-composite-ac (PR #56: https://github.com/mlococo88/All-Structural/pull/56)
 Engineer's decisions of 2026-10-09 on open items O8 (rib concrete in A_c) and O9 (stud cover with a haunch).
 
 ### A1. Rib concrete in A_c follows §I3.2c: ribs perpendicular → neglected; ribs parallel → b_eff·h_r·w_r/s_r (new input s_r)   [calc change] [more conservative]
@@ -1111,7 +1111,7 @@ Engineer's decisions of 2026-10-09 on open items O8 (rib concrete in A_c) and O9
 - **How verified:** as A1; screenshots of the detailing table and drawings in `scratchpad/sbdac/`.
 - **Other copies of this code:** none.
 
-## 2026-10-09 — PR: claude/steel-beam-rib-block (PR link added after merge)
+## 2026-10-09 — PR: claude/steel-beam-rib-block (PR #57: https://github.com/mlococo88/All-Structural/pull/57)
 Engineer's decision of 2026-10-09 on open item O11: compute the concrete compression block through the actual rib concrete.
 
 ### R1. Compression block below the top of the deck uses the rib concrete only (ribs parallel, s_r entered)   [calc change] [more conservative]
@@ -1197,7 +1197,7 @@ Engineer's decision of 2026-10-09 on open item O11: compute the concrete compres
 - **Saved projects whose results change (intended):** composite with ribs parallel, s_r entered, and the block deeper than t (concrete crushing governs, or partial composite with a thin slab). Only possible since A1 added s_r.
 - **Other copies of this code:** none.
 
-## 2026-10-10 — PR: claude/steel-evalvm-fixed-end (PR link added after merge)
+## 2026-10-10 — PR: claude/steel-evalvm-fixed-end (PR #82: https://github.com/mlococo88/All-Structural/pull/82)
 Engineer's decision of 2026-10-10: fix the end-of-beam boundary bug in `evalVM` found during the Timber rebuild, and any other place where the same boundary problem appears. Both functions edited below are defined once (see O4).
 
 ### E1. `evalVM` at x = L returns the value just left of the right end (fixed-end moment and end shear)   [calc change] [more conservative]
@@ -1375,7 +1375,7 @@ Engineer's decision 2026-10-10 on O13 (closes O13). The rule for point loads was
 - **Saved projects whose results change:** round HSS or pipe in beam mode with V_u at an interior support, or at a fixed end next to a support jump. F_cr changes only for HSS26.000X0.313 when the in-span L_v exceeds about 81 ft (A500C) or about 82 ft (A1085).
 - **Other copies of this code:** none.
 
-## 2026-10-12 — PR: claude/sweep-steelbeam (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-steelbeam (PR #153: https://github.com/mlococo88/All-Structural/pull/153)
 Open-item sweep (engineer 2026-10-12: "continue making updates and fixes until it's completed; use your best judgment"). Items from the open-item inventory, section 13: SBD-O1, O3, C1, O6, O2 fixed; O5, C2, O4, O7, O12 closed or left with a reason (see "Sweep decisions" below). Basis: AISC 360-16 and ASCE 7-16, as the tool states.
 
 ### SW1 (SBD-O1). §H3.3(c) buckling limit state is now checked for open-section torsion   [calc change] [more conservative]
@@ -1707,7 +1707,7 @@ Batch rows with an open-section torsion case now run the same buckling check thr
   - Validation tab text identical (all benchmarks pass). No console errors.
 - Screenshots (looked at): import dialog, torque-per-case inputs and torsion tab, H3.3(c) block, Chapter D section and inputs, in `scratchpad/followups/sbdsw/`.
 
-## 2026-10-12 — PR: claude/steelbeam-q3 (PR link added after merge)
+## 2026-10-12 — PR: claude/steelbeam-q3 (PR #154: https://github.com/mlococo88/All-Structural/pull/154)
 Engineer's decision 2026-10-12 on Q3 of the sweep (closes O14).
 
 ### Q3. Default combination set gets 1.2D + 1.6S + 0.5W   [calc change] [more conservative]
@@ -1758,7 +1758,7 @@ Engineer's decision 2026-10-12 on Q3 of the sweep (closes O14).
 - O14. **Resolved 2026-10-12 by Q3** (added to the default set and the preset when S and W cases exist). **New 2026-10-12 (Q3 of the sweep).** `defaultCombos` has 1.2D + 1.0L + 1.6S but not 1.2D + 1.6S + 0.5W (the other half of ASCE 7-16 §2.3.1 combination 3). Not changed; engineer to decide.
 - C1 open items (C&C, drift, Lr): **resolved 2026-10-12 by SW3** (Lr combinations added on import; C&C and drift warned in the dialog and on the dashboard). C2 (pattern loading in the reaction hand-off): kept, documented.
 
-## 2026-10-18 — PR: claude/steelbeam-d11-report (PR link added after merge)
+## 2026-10-18 — PR: claude/steelbeam-d11-report (PR #287: https://github.com/mlococo88/All-Structural/pull/287)
 
 ### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
 - **Engineer request:** 2026-10-14 / 2026-10-18 (AUDIT.md D11). The tool already built its report from the tabs' own builders ("Stage 5", `buildPrintReport`), so this closes the gaps to the house format. The worked content of every section (symbolic → substituted → result) is the tab's own.
@@ -1895,7 +1895,7 @@ Engineer's decision 2026-10-12 on Q3 of the sweep (closes O14).
 - **On-screen links of the Summary chips:** the HSS "Concentrated forces" N/A row carries `tab:'tabComp'`, and the member-mode Deflection row carries `tab:'tabSummary'`. Those chips open the Compression / Summary tab instead of Concentrated Forces / Serviceability. Not changed (outside the report); the report places their result lines correctly.
 - **`1728 = ft³/in³`** (member deflection variable list): the factor's unit is in³/ft³. The text is kept as it was; only the TeX rendering is fixed.
 
-## 2026-10-18 — PR: claude/steelbeam-comp-defl (PR link added after merge)
+## 2026-10-18 — PR: claude/steelbeam-comp-defl (PR #298: https://github.com/mlococo88/All-Structural/pull/298)
 
 ### CD1. Composite live-load deflection inherits the tributary generator's LL (engineer's option C, 2026-10-18)   [calc change] [more conservative]
 - **Problem:** in the default composite project, "Composite live-load deflection" was **0.000 in**, while the 1.0LL service case gave 0.062 in. This was the D11 open item.
@@ -1965,7 +1965,7 @@ Engineer's decision 2026-10-12 on Q3 of the sweep (closes O14).
   - Field tooltips built by `inhHint` show raw `<b>` tags (label `title`). This is pre-existing and also affects the Tributary width tooltip; not changed.
   - The LL used for deflection defaults to 100 %; DG 3 often uses 50 %. Not changed.
 
-## 2026-11-01 — PR: claude/rpt-steelbeam — Report output tab in the shared report viewer, every mode (beam, member check, composite, batch) (SBRP; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-steelbeam — Report output tab in the shared report viewer, every mode (beam, member check, composite, batch) (SBRP; display only, no calculation change) (PR #554: https://github.com/mlococo88/All-Structural/pull/554)
 
 The file uses CRLF line endings; keep them. Every code site is tagged `SBRP`.
 

@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: AASHTO LRFD 10th Ed. (2024); ACI 318-19. MassDOT-specific items are unchanged.
 
-## 2026-10-04 — PR: claude/fix-retaining-wall (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-retaining-wall (PR #9: https://github.com/mlococo88/All-Structural/pull/9)
 
 Line numbers are approximate, as of this fix. Search for the anchor text. The file uses CRLF line endings; keep them.
 
@@ -400,7 +400,7 @@ Line numbers are approximate, as of this fix. Search for the anchor text. The fi
 - **O8:** the barrier in the ACI ΣV_u is RESOLVED 2026-10-12 (F21). The uplift part and the two conservative simplifications are CLOSED.
 - **O4, O5:** still open, waiting for the engineer (N1, N2 in the 2026-10-12 section).
 
-## 2026-10-04 — PR: claude/step1-group2 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group2 (PR #31: https://github.com/mlococo88/All-Structural/pull/31)
 
 ### F15. "← All tools" link + shared project info (HANDOFF.md §4.1)   [feature (no result change)]
 
@@ -516,7 +516,7 @@ Line numbers are approximate, as of this fix. Search for the anchor text. The fi
 - **Other copies:** the BridgeXfer v1 helper is duplicated verbatim in every tool that uses it (CLAUDE.md §3; list in the PR). The glue block is the same in each tool of this PR except `TOOL`/`FILE` and the field map.
 - **Open items:** none.
 
-## 2026-10-09 — PR: claude/pin-retainingwall (PR link added after merge)
+## 2026-10-09 — PR: claude/pin-retainingwall (PR #76: https://github.com/mlococo88/All-Structural/pull/76)
 
 ### F16. Pin MathJax CDN URLs to 3.2.2 (CLAUDE.md §2; engineer's decision 2026-10-09)   [library pin] [no result change]
 
@@ -534,7 +534,7 @@ Line numbers are approximate, as of this fix. Search for the anchor text. The fi
 - **Other copies:** none in this tool. Other tools load their own MathJax tags and are pinned in their own PRs.
 - **Open items:** none.
 
-## 2026-10-12 — PR: claude/sweep-retwall (open-item sweep; PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-retwall (open-item sweep; PR #128: https://github.com/mlococo88/All-Structural/pull/128)
 
 Engineer's instruction 2026-10-12: work through every open item, use best judgment, and list what truly needs the engineer. Line numbers are approximate; search for the anchor text. The tool file uses CRLF line endings; all edits keep CRLF. Saved data: no storage key, field id or format changed and no new fields were added. Only three HTML default values changed (`mu_method`, `aashto_qn_mode`, `aashto_qR`). Every project save, autosave and JSON export stores every sidebar field, so an existing file restores its own stored option values and gives the same result as before, apart from the calculation fixes F18, F20 and F21.
 
@@ -697,7 +697,7 @@ Engineer's instruction 2026-10-12: work through every open item, use best judgme
 ### Remaining open items
 - None. O1, O2, O3, O6 and O8 (barrier) are fixed in F17–F21. O7 and the rest of O8 are closed above. O4 and O5 wait for the engineer (N1, N2).
 
-## 2026-10-18 — PR: claude/rw-d11-report (PR link added after merge)
+## 2026-10-18 — PR: claude/rw-d11-report (PR #281: https://github.com/mlococo88/All-Structural/pull/281)
 
 The tool file uses CRLF line endings; keep them. Line numbers are approximate; search for the anchor text.
 
@@ -827,7 +827,7 @@ The tool file uses CRLF line endings; keep them. Line numbers are approximate; s
 - **Report length:** the report now carries every card of the tabs (default project: 32 pages, was 9). Keep it all, or add section toggles later?
 - **Checked date:** the tool has no checked-date field, so the title block and print header show "—". Add an optional tool-prefixed field?
 
-## 2026-10-19 — PR: claude/rw-status-badges (PR link added after merge)
+## 2026-10-19 — PR: claude/rw-status-badges (PR #316: https://github.com/mlococo88/All-Structural/pull/316)
 
 ### Over-stressed sections: the bar-selection badges, the Overview scorecard and the rebar schedule now use the status-bar condition (engineer-approved 2026-10-19; Tier 1, display only)
 - **Problem:** when a flexural section is over-stressed (R_n so large that 1 − 2R_n/(0.85 f'c) < 0), `calcAll` sets A_s,req = 0 and A_s,des = A_s,min, and the bar picked for A_s,min passes A_s,prov ≥ A_s,des. The status bar marks the flexure check FAIL, because `r.checks.stemFlex / heelFlex / toeFlex` require `!<section>_overstressed`. The Step 3 bar-selection badges (S1, F1, F2), the Overview scorecard and the rebar schedule tested only A_s,prov ≥ A_s,des and showed PASS. A displayed PASS on these now reads FAIL when the section is over-stressed (more conservative display; no value changed).
@@ -881,7 +881,7 @@ The tool file uses CRLF line endings; keep them. Line numbers are approximate; s
 - **Scorecard D/C for an over-stressed section** is A_s,des / A_s,prov with A_s,des = A_s,min, so it reads below 1.0 (0.92 in the stem case) while the row is red. The over-stress is not in the D/C.
 - **Rebar banner wording:** "One or more bars do not satisfy required steel area" also appears when the cause is an over-stressed section.
 
-## 2026-10-19 — PR: claude/rw-count-card-checks (PR link added after merge)
+## 2026-10-19 — PR: claude/rw-count-card-checks (PR #317: https://github.com/mlococo88/All-Structural/pull/317)
 
 ### Card checks counted in the status bar: stem–footing interface shear, S2 and F3 T&S bars (engineer decision 2026-10-19; Tier 2, pass/fail count only)
 - **Decision:** the engineer chose to COUNT the three card checks listed as open items in the claude/rw-status-badges entry, so any FAIL shows in the overall status. No computed value changes; the status bar, the Overview scorecard, the Overview Check Summary and the report summary now include them.
@@ -924,7 +924,7 @@ The tool file uses CRLF line endings; keep them. Line numbers are approximate; s
   - Screenshots of the Step 8 card, the scorecard and the status bar checked.
 - **Other copies:** none.
 
-## 2026-10-19 — PR: claude/aashto10-retwall — AASHTO mode: ℓd and stem hook per AASHTO LRFD 10th Ed. 5.10.8.2.1a / 5.10.8.2.4a; Table 3.11.6.4.1-1/-2 renumbers (PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-retwall — AASHTO mode: ℓd and stem hook per AASHTO LRFD 10th Ed. 5.10.8.2.1a / 5.10.8.2.4a; Table 3.11.6.4.1-1/-2 renumbers (PR #346: https://github.com/mlococo88/All-Structural/pull/346)
 
 The file uses CRLF line endings; keep them. ACI mode unchanged.
 
@@ -978,7 +978,7 @@ The file uses CRLF line endings; keep them. ACI mode unchanged.
 - Straight-bar ℓd in AASHTO mode is now shorter than before in the default case (λrc floor 0.3 instead of 0.4 outweighs the larger ℓdb). That is the 10th Ed. result; confirm.
 - Hook λrc: applied from the stem bar's c_b (see R2 note). Use 1.0 (no cover credit) instead? Then the default AASHTO hook (34.7 in.) does not fit the 18 in. footing.
 
-## 2026-11-01 — PR: claude/rpt-retwall — Report output tab in the shared report viewer (RWRP; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-retwall — Report output tab in the shared report viewer (RWRP; display only, no calculation change) (PR #549: https://github.com/mlococo88/All-Structural/pull/549)
 
 The tool file uses CRLF line endings; keep them. Line numbers are approximate; search for the anchor text. Every code site is tagged `RWRP`.
 
@@ -1570,7 +1570,7 @@ index 147e490..d3de356 100644
 +</script>
 ```
 
-## 2026-11-01 — PR: claude/rpt-retwall-full — Report tab: the factored bearing trapezoids worked (ACI and AASHTO), the tab charts as figures (RWRP2; display only) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-retwall-full — Report tab: the factored bearing trapezoids worked (ACI and AASHTO), the tab charts as figures (RWRP2; display only) (PR #574: https://github.com/mlococo88/All-Structural/pull/574)
 
 Every code site is tagged `RWRP2`. The tool file uses CRLF line endings; keep them.
 
@@ -1664,7 +1664,7 @@ index d3de356..e28171a 100644
 +}
 ```
 
-## 2026-11-01 — PR: claude/rpt-retwall-etot — calcAll returns the Strength I footing-design eccentricity; the report substitutes it with water uplift (RWETOT; exposure only, no result change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-retwall-etot — calcAll returns the Strength I footing-design eccentricity; the report substitutes it with water uplift (RWETOT; exposure only, no result change) (PR #596: https://github.com/mlococo88/All-Structural/pull/596)
 
 The tool file uses CRLF line endings; keep them. Every code site is tagged `RWETOT`.
 
