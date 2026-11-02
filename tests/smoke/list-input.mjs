@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad] [--a origin/main] [--shots <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
 // smd (one key per tool in TOOLS): the tool from --a (default: the entry's `a`, the main commit before its table landed, else
@@ -16,7 +16,7 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd').split(',');
+const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
@@ -281,6 +281,27 @@ TOOLS.index = {   // index.html (MCT generator, React): GFS bay 1 floorbeam spac
     return out;
   },
   tableSel: '[data-sli="react"]:has(caption:text-is("Floorbeam spacing, bay 1"))',
+};
+TOOLS.bpad = {   // BasePlateAnchorDesigner: stacked hairpin depths (S.vRebar.vDepths, text "3, 6.5, 10"), committed when the focus leaves
+  file: 'BasePlateAnchorDesigner.html', a: '0cea448', values: '3, 6.5, 10',
+  setup: async p => { await p.waitForTimeout(3000); },
+  template: async p => { await p.evaluate(() => { Object.assign(S.vRebar, { present: true, layoutMode: 'group', pieceType: 'hairpin', vStack: 3 }); refreshAll();
+      const r = [...document.querySelectorAll('.fRow')].find(e => /Depths of the stacked pieces/.test(e.textContent));
+      const pn = r.closest('.bpadInPane'); document.getElementById(pn.id.replace('bpadInPane_', 'bpadInTab_')).click(); }); await p.waitForTimeout(800); },
+  typeOld: async (p, v) => { await p.evaluate(v => { const r = [...document.querySelectorAll('.fRow')].find(e => /Depths of the stacked pieces/.test(e.textContent));
+    const i = r.querySelector('input[type=text]'); i.focus(); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); i.blur(); }, v); await p.waitForTimeout(800); },
+  typeNew: async (p, v) => { await fillTable(p, '.fRow:has-text("Depths of the stacked pieces") [data-sli="host"]', v); await p.evaluate(() => document.activeElement.blur()); await p.waitForTimeout(800); },
+  saved: p => p.evaluate(() => S.vRebar.vDepths),
+  read: async p => {
+    await p.waitForTimeout(1000);
+    const out = await p.evaluate(() => ({ S: JSON.parse(JSON.stringify(S)), stored: JSON.parse(localStorage.getItem(LS_AUTO) || 'null') }));
+    const n = await p.$$eval('#tabBar button', e => e.length); out.tabs = [];
+    for (let i = 0; i < n; i++) { await p.$$eval('#tabBar button', (e, i) => e[i].click(), i); await p.waitForTimeout(600);
+      out.tabs.push(await p.evaluate(() => { const k = document.getElementById('outputPanel').cloneNode(true); k.querySelectorAll('[data-sli],script,style').forEach(x => x.remove());
+        return k.innerText.replace(/\d+(\.\d+)? ?ms\b/g, 'ms'); })); }
+    return out;
+  },
+  tableSel: '.fRow:has-text("Depths of the stacked pieces") [data-sli="host"]',
 };
 TOOLS.pbd = {   // Prestressed Bridge Design: the bridge bar's span lengths (bridge.spans, an array), committed when the focus leaves the table
   file: 'Prestressed Bridge Design.html', a: '0cea448', values: '100, 120, 100', expect: '[100,120,100]',
