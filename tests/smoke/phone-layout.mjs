@@ -16,6 +16,7 @@ const TOOLS = {
     init: async p => { await p.selectOption('#tplSel', '3s'); await p.waitForTimeout(2000); } },
   asce7: { file: 'ASCE7-16 Load Generator.html', tabs: '#tabs .tab', tabWait: 900 },
   mlg: { file: 'Moving Load Generator.html', tabs: '#mlgInTabs button, #mlgOutTabs button', wait: 4000, tabWait: 1000 },
+  arch: { file: 'Stone Masonry Arch Load Rating.html', tabs: '[id^=inTab_], #tabs [data-tab]', wait: 6000, tabWait: 1200 },
 };
 
 const keys = args.tool ? String(args.tool).split(',') : Object.keys(TOOLS);
