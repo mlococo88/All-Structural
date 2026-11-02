@@ -19,12 +19,28 @@ import { openPage, REPO, diff } from '../lib.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const SHOTS = arg('shots', process.env.SHOTS);
+let A = null;
 const REF = arg('a', 'origin/main');
 
 // Each tool: file, list key and autosave key (the tool's own, unchanged), ready (page is computed), results (what must not change),
 // change (one real input change through the page), view (a view-only change: no undo step), save (the tool's own Save path, name).
 const textOf = sel => `(() => { const r = document.querySelector(${JSON.stringify(sel)}); if (!r) return ''; const c = r.cloneNode(true); c.querySelectorAll('[data-sp]').forEach(e => e.remove()); return c.innerText.replace(/[ \\t]+/g, ' '); })()`;
+// bump(p, sel, d): the first matching input (hidden panes too) + d, with input and change events, as typing does
+const bump = async (p, sel, d) => { const r = await p.evaluate(([sel, d]) => { const i = document.querySelector(sel); if (!i) return null; i.value = String((Number(i.value) || 0) + d); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); return i.id || i.name || sel; }, [sel, d]); if (r == null) throw new Error('no input ' + sel); await p.waitForTimeout(900); return r; };
+// tabView(p, sel, n): click tab n of the tab bar `sel`; returns a function that clicks the tab that was on before
+const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel, on]) => [...document.querySelectorAll(sel)].findIndex(b => b.matches(on)), [sel, onSel]);
+  await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
+  return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
 export const TOOLS = {
+  stonearch: {
+    file: 'Stone Masonry Arch Load Rating.html', list: 'stoneArchLR.projects', auto: 'stoneArchLR.autosave',
+    ready: p => p.waitForFunction(() => document.querySelector('#outPanel') && document.querySelector('#outPanel').innerText.length > 200),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); const M = JSON.parse(JSON.stringify(window.__modelForTest(), (k, v) => typeof v === 'function' ? undefined : (v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v)));
+      const sum = document.querySelector('#pane_sum'); return { M, sum: sum ? sum.textContent.replace(/\s+/g, ' ') : '' }; }),
+    change: p => bump(p, '#inPanel input[type=number]', 5),
+    view: p => tabView(p, '#tabs button', 2, '.on'),
+    save: async (p, name) => { await p.evaluate(n => { document.getElementById('projName').value = n; document.getElementById('bSave').click(); }, name); }
+  },
   asce7: {
     file: 'ASCE7-16 Load Generator.html', list: 'asce7bldg.projects', auto: 'asce7bldg.autosave',
     ready: p => p.waitForFunction(() => typeof R === 'object' && document.querySelector('#outbody') && document.querySelector('#outbody').innerText.length > 50),
@@ -45,7 +61,9 @@ const ADIR = path.join(os.tmpdir(), 'allstruct-tests', 'tree-' + sha);
 if (!fs.existsSync(path.join(ADIR, '.done'))) { fs.mkdirSync(ADIR, { recursive: true }); execFileSync('sh', ['-c', `git -C "${REPO}" archive ${sha} | tar -x -C "${ADIR}"`]); fs.writeFileSync(path.join(ADIR, '.done'), sha); }
 const FA = path.join(ADIR, T.file), FB = path.join(REPO, T.file);
 let fails = 0; const ok = (c, m) => { console.log((c ? '  ok   ' : '  FAIL ') + m); if (!c) fails++; };
-const same = (a, b, m) => { const d = diff(a, b); ok(!d.length, m + (d.length ? ` (${d.length} differences, first: ${JSON.stringify(d.slice(0, 3)).slice(0, 600)})` : '')); };
+const ctxOf = ([k, a, b]) => { if (typeof a !== 'string' || typeof b !== 'string') return JSON.stringify([k, a, b]).slice(0, 400); let i = 0; while (i < a.length && a[i] === b[i]) i++;
+  return `${k} @${i}: A «${a.slice(Math.max(0, i - 80), i + 120)}» B «${b.slice(Math.max(0, i - 80), i + 120)}»`; };
+const same = (a, b, m) => { const d = diff(a, b); ok(!d.length, m + (d.length ? ` (${d.length} differences, first: ${d.slice(0, 2).map(ctxOf).join(' ; ')})` : '')); };
 async function run(file, o) {
   const s = await openPage(file, { vw: 1280, vh: 900, ...o });
   s.dl = []; s.reply = []; s.p.removeAllListeners('dialog');
@@ -56,7 +74,7 @@ const lsAll = p => p.evaluate(() => { const o = {}; for (let i = 0; i < localSto
 
 console.log(`project-library: ${T.file}  A = ${REF} (${sha})  B = working tree`);
 // ---------- 1. A vs B ----------
-const A = await run(FA), B = await run(FB);
+A = await run(FA); const B = await run(FB);
 const a0 = await T.results(A.p), b0 = await T.results(B.p); same(a0, b0, 'on load: results identical');
 await T.change(A.p); await T.change(B.p);
 const a1 = await T.results(A.p), b1 = await T.results(B.p); same(a1, b1, 'after an input change: results identical');
@@ -64,16 +82,17 @@ ok(JSON.stringify(a1) !== JSON.stringify(a0), 'the input change changes the resu
 await T.save(A.p, 'From main'); await A.p.waitForTimeout(500);
 const aLS = await lsAll(A.p); ok(!!aLS[T.list] && !!aLS[T.auto], 'A wrote its autosave and its project list');
 const aErr = A.errs.slice(); await A.b.close();
-// B on A's storage
+// A and B reopened on A's storage (a reload can differ from the live page in a view detail; both sides reload)
+const A2 = await run(FA, { ls: aLS }), a2 = await T.results(A2.p); aErr.push(...A2.errs); await A2.b.close();
 const B2 = await run(FB, { ls: aLS });
-same(await T.results(B2.p), a1, "B opened on A's autosave: results identical to A after the change");
+same(await T.results(B2.p), a2, "B opened on A's autosave: results identical to A reopened on it");
 ok(await B2.p.evaluate(k => localStorage.getItem(k), T.list) === aLS[T.list], "A's project list is unchanged after B opens");
 // open A's saved item through the dialog after going back to the defaults (undo history)
 await B2.p.click('[data-sp] >> text=Saved projects…'); await B2.p.waitForSelector('dialog.spLib[open]');
 const rows = await B2.p.$$eval('dialog.spLib tbody tr', r => r.map(x => x.innerText.replace(/\s+/g, ' ')));
 ok(rows.length === 1 && /From main/.test(rows[0]), 'the dialog lists the project A saved: ' + rows.join(' | '));
 await B2.p.click('dialog.spLib [data-spa=open]'); await B2.p.waitForTimeout(900);
-same(await T.results(B2.p), a1, "A's saved project opened from B's dialog: results identical");
+same(await T.results(B2.p), a2, "A's saved project opened from B's dialog: results identical");
 B2.errs.length && console.log('  B2 console: ' + B2.errs.join(' | ')); await B2.b.close();
 
 // ---------- 2. Undo / Redo (B) ----------
