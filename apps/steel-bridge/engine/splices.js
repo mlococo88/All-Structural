@@ -111,8 +111,9 @@
     const cite = e.cite || (r => r ? (OW && OW.RULES && OW.RULES.owners[r.owner] ? OW.RULES.owners[r.owner].short : r.owner) + ' ' + r.sec : '');
     return { owner, lf, rule, cite, minPlate: +e.minPlate > 0 ? +e.minPlate : 0.375 };
   }
-  const OWN_K = { mx: ['dcMax', 'dwMax'], mn: ['dcMin', 'dwMin'], ll: ['llS'], sv: ['llSv'] };
-  function ownM(L) { const f = {}; OWN_K.mx.forEach(k => f[k] = L.eta); OWN_K.mn.forEach(k => f[k] = L.etaN); OWN_K.ll.forEach(k => f[k] = L.eta * L.m); OWN_K.sv.forEach(k => f[k] = L.m); return k => f[k] ?? 1; }
+  // cn (ETAC, engineer decision 2026-11-01): the deck placement factors × L.etaC (the owner's η; SBDOwners.loadFactors; absent in a GirderDetail lf: 1)
+  const OWN_K = { mx: ['dcMax', 'dwMax'], mn: ['dcMin', 'dwMin'], ll: ['llS'], sv: ['llSv'], cn: ['dc1C', 'clC'] };
+  function ownM(L) { const f = {}; OWN_K.cn.forEach(k => f[k] = +L.etaC > 0 ? +L.etaC : 1); OWN_K.mx.forEach(k => f[k] = L.eta); OWN_K.mn.forEach(k => f[k] = L.etaN); OWN_K.ll.forEach(k => f[k] = L.eta * L.m); OWN_K.sv.forEach(k => f[k] = L.m); return k => f[k] ?? 1; }
   const plq = (s, k) => { const q = s && s.pl && s.pl[k]; return Array.isArray(q) && q.length === 2 && isFinite(+q[0]) && +q[0] !== 0 && Math.abs(num(s[k]) - +q[1]) < 1e-6 ? +q[0] : 0; };
   const utv = (s, k) => { const v = s && s.ut && typeof s.ut === 'object' ? +s.ut[k] : 0; return isFinite(v) ? v : 0; };
 

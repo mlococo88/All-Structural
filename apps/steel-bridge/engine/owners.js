@@ -181,7 +181,11 @@
      m: design load multiplier on HL-93 LL+IM at Strength and Service (RIDOT BDM 3.4.1.2: 1.2);
      eta = max(η_D η_R η_I, 0.95) (Eq. 1.3.2.1-2) on the maximum Strength factors; etaN = min(1/(η_D η_R η_I), 1.0) (Eq. 1.3.2.1-3)
      on the minimum ones; h0: the haunch taken as 0 in the composite section properties (RIDOT BDM 6.5.1, MassDOT 3.5.1.2; OWN8).
-     Returns { v, o, m, eD, eR, eI, eta, etaN, h0, nonred, nb, inI, inD, inR, cite, steps }. */
+     etaC (ETAC, engineer decision 2026-11-01, superseding the 2026-10-15 rule for η only): η on the deck placement / construction factors
+     (γ_DC 1.25, γ construction 1.50; AASHTO LRFD 10th Ed. 3.4.2.1 evaluates construction at the Strength limit state, 1.3.2.1) = eta; m is not
+     applied to construction checks (no owner rule puts it there: RIDOT's m is on HL-93). A load-factor object without etaC (a GirderDetail
+     file's bridge.lf, the parity tests) gives 1: GirderDetail's deck placement without η.
+     Returns { v, o, m, eD, eR, eI, eta, etaN, etaC, h0, nonred, nb, inI, inD, inR, cite, steps }. */
   function loadFactors(owner, eta, nb) {
     const o = norm(owner), E = eta || {}, n = Math.round(Number(nb)) || 0, own = o !== 'AASHTO';
     const rv = id => { const r = own ? rule(o, id) : null; return r && r.value && +r.value.f > 0 ? r : null; }, yn = (v, d) => v === 'yes' ? true : v === 'no' ? false : d;
@@ -190,20 +194,20 @@
     if (own) { if (rD) eD = rD.value.fixed ? +rD.value.f : yn(E.D, false) ? +rD.value.f : 1; if (rR) eR = nonred ? +rR.value.f : 1; if (rI) eI = yn(E.I, false) ? +rI.value.f : 1; }
     else { const e = k => { const v = Number(E[k]); return isFinite(v) && v > 0 ? v : 1; }; eD = e('eD'); eR = e('eR'); eI = e('eI'); }
     const pr = eD * eR * eI;
-    const L = { v: 1, o, m: rM ? +rM.value.f : 1, eD, eR, eI, eta: Math.max(pr, 0.95), etaN: Math.min(1 / pr, 1), h0: !!rH, nonred, nb: n, inI: own && rI ? yn(E.I, false) : null, inD: own && rD && !rD.value.fixed ? yn(E.D, false) : null, inR: E.R === 'yes' || E.R === 'no' ? E.R : 'auto',
+    const L = { v: 1, o, m: rM ? +rM.value.f : 1, eD, eR, eI, eta: Math.max(pr, 0.95), etaN: Math.min(1 / pr, 1), etaC: Math.max(pr, 0.95), h0: !!rH, nonred, nb: n, inI: own && rI ? yn(E.I, false) : null, inD: own && rD && !rD.value.fixed ? yn(E.D, false) : null, inR: E.R === 'yes' || E.R === 'no' ? E.R : 'auto',
       cite: { m: rM ? cite(rM) : '', I: rI ? cite(rI) : 'AASHTO LRFD 1.3.5', R: rR ? cite(rR) : 'AASHTO LRFD 1.3.4', D: rD ? cite(rD) : 'AASHTO LRFD 1.3.3', h: rH ? cite(rH) : '' } };
     const S = window.SharedSteps, w = S.work('own'), f2 = x => S.n(x, 2), ED = 'AASHTO LRFD 10th Ed.';
     w.add({ id: 'eD', label: `Load modifier for ductility (${L.cite.D})`, sym: '\\eta_{D}', eq: '', sub: '', value: eD, unit: '', d: 2, ref: `${ED} Art. 1.3.3`, note: own && rD && rD.value.fixed ? 'Fixed by the owner.' : own && rD ? `Nonductile components: ${yn(E.D, false) ? 'yes' : 'no'}.` : '' });
     w.add({ id: 'eR', label: `Load modifier for redundancy (${L.cite.R})`, sym: '\\eta_{R}', eq: '', sub: '', value: eR, unit: '', d: 2, ref: `${ED} Art. 1.3.4`, note: own && rR ? `Nonredundant: ${nonred ? 'yes' : 'no'}${L.inR === 'auto' ? ` (automatic: ${n} girders, nonredundant with 3 or fewer)` : ''}.` : '' });
     w.add({ id: 'eI', label: `Load modifier for operational importance (${L.cite.I})`, sym: '\\eta_{I}', eq: '', sub: '', value: eI, unit: '', d: 2, ref: `${ED} Art. 1.3.5`, note: own && rI ? `${rI.value.q || 'Owner question'}: ${yn(E.I, false) ? 'yes' : 'no'}.` : '' });
-    w.add({ id: 'eta', label: 'Load modifier on the maximum Strength load factors', sym: '\\eta_{i}', eq: '\\max(\\eta_{D}\\eta_{R}\\eta_{I}, 0.95)', sub: `\\max(${f2(eD)}(${f2(eR)})(${f2(eI)}), 0.95)`, value: L.eta, unit: '', d: 3, ref: `${ED} Eq. 1.3.2.1-2` });
+    w.add({ id: 'eta', label: 'Load modifier on the maximum Strength load factors', sym: '\\eta_{i}', eq: '\\max(\\eta_{D}\\eta_{R}\\eta_{I}, 0.95)', sub: `\\max(${f2(eD)}(${f2(eR)})(${f2(eI)}), 0.95)`, value: L.eta, unit: '', d: 3, ref: `${ED} Eq. 1.3.2.1-2`, note: 'Also on the deck placement / construction factors γ_DC 1.25 and γ construction 1.50 (3.4.2.1, evaluated at the Strength limit state; engineer decision 2026-11-01); m is not.' });
     w.add({ id: 'etaN', label: 'Load modifier on the minimum Strength load factors', sym: '\\eta_{i}', eq: '\\min(\\frac{1}{\\eta_{D}\\eta_{R}\\eta_{I}}, 1.0)', sub: `\\min(\\frac{1}{${f2(eD)}(${f2(eR)})(${f2(eI)})}, 1.0)`, value: L.etaN, unit: '', d: 3, ref: `${ED} Eq. 1.3.2.1-3` });
     w.add({ id: 'm', label: `Design load multiplier on HL-93 LL+IM, Strength and Service${rM ? ` (${L.cite.m})` : ''}`, sym: 'm', eq: '', sub: '', value: L.m, unit: '', d: 2, note: rM ? rM.text : 'No owner multiplier.' });
     w.add({ id: 'h0', label: `Haunch in the composite section properties${rH ? ` (${L.cite.h})` : ''}`, sym: 'h_{prop}', eq: '', sub: '', value: L.h0 ? 'taken as 0' : 'as entered', unit: '', d: 0, note: rH ? rH.text : '' });
     L.steps = w.steps;
     return L;
   }
-  const LF_ONE = { v: 1, o: null, m: 1, eD: 1, eR: 1, eI: 1, eta: 1, etaN: 1, h0: false };
+  const LF_ONE = { v: 1, o: null, m: 1, eD: 1, eR: 1, eI: 1, eta: 1, etaN: 1, etaC: 1, h0: false };
   /* haunchInProps(haunch, lf): the haunch used in the composite section properties (GirderDetail gdHP): 0 under the owner rule OWN8, else as entered */
   const haunchInProps = (h, lf) => lf && lf.h0 ? 0 : h;
 

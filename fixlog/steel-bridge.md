@@ -3353,6 +3353,59 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 ### Tests
 - tests/engine/autodesign.test.mjs (CTDOT test): candidates ≥ 1, each passes the full check, splices without failures, DT4 passing, bolt fit
   held; the current design still fails DT3/DT7 (narrow flanges).
+
+## 2026-11-01 — PR: claude/sbd-eta-constr — The owner's η on deck placement / construction (ETAC; engineer decision 2026-11-01, calculation change for η ≠ 1); overhang bracket factors from the same source (read-only, old values kept and flagged)
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `ETAC`.
+
+### Decision (engineer, 2026-11-01; supersedes the 2026-10-15 owner rule for η only)
+- AASHTO LRFD 10th Ed. Art. 3.4.2.1 evaluates construction at the Strength limit state, so the load modifier of Art. 1.3.2.1 applies:
+  γ_DC = 1.25η, γ_CL = 1.50η (both maximum factors: η = max(η_D η_R η_I, 0.95), Eq. 1.3.2.1-2). What is applied: η (the Project tab's,
+  `SBDOwners.loadFactors`); NOT m (the owner's design load multiplier is on HL-93 LL+IM only: RIDOT BDM 3.4.1.2; no owner rule puts it on
+  construction loads); η_N is not used (no minimum factor in deck placement).
+- Carrier: new field `etaC` of `SBDOwners.loadFactors()` (= eta; `LF_ONE.etaC = 1`). A load-factor object without it (a GirderDetail file's
+  bridge.lf, the GirderDetail parity tests) gives 1 on construction, as GirderDetail computes; so the parity tests are unchanged.
+
+### What changed
+- `engine/owners.js` `loadFactors`: `etaC: Math.max(pr, 0.95)` added to L; LF_ONE `etaC: 1`; the η step's note says it is also on deck placement.
+- `engine/constructibility.js`: new `factorsOwner(lf, over)` = `{ ...factors(over), cdc: cdc × lf.etaC, ccl: ccl × lf.etaC, eta, base }`, `lfOf(P)`,
+  `projFactors(P)` (= `factorsOwner(lfOf(P))`), exported. `fromAnalysis`: before `prj = { mat, G: factors(opt.G) }`; after `G: opt.G ? factors(opt.G) :
+  projFactors(P)`. `fromPayload`: `G: opt.lf ? factorsOwner(opt.lf, opt.G) : factors(opt.G)` (the tab passes the project's lf). Overhang brackets:
+  `fromAnalysis` oh.p before `opt.oh || P.constr.oh || {}`; after `{ ...(that), gam: { dc: prj.G.cdc, cl: prj.G.ccl } }`; `fromPayload` the same when
+  `opt.oh` is given or the file has no stored overhang inputs (a file's stored w_u, F_ℓ, P_ℓ are used as given, as before). Worked steps: the
+  factors shown to 4 decimals when × η (`nf`), and the M_c and V_u steps say "Owner η = … on both: γ_DC = 1.25(η) = …, γ_CL = 1.50(η) = …";
+  the bracket w_u step says the factors are the deck placement factors.
+- `engine/shear.js` `factorsOwner(lf)`: `cdc: G.cdc * eC, ccl: G.ccl * eC` with `eC = lf.etaC || 1` (GS16, V_u = γ_DC V_DC1 + γ_CL V_CL; Shear tab
+  and Rating's shear); the VuC step shows 4 decimals when × η.
+- `engine/crossframes.js` `inputsOf` (stability bracing M_u): `SBDConstr.factors()` → `SBDConstr.projFactors(P)`; source text names η.
+- `engine/splices.js`: `OWN_K.cn = ['dc1C', 'clC']`, `ownM` × `L.etaC` (1 when absent): the deck placement combination of the splice design forces.
+- Auto design: every module above is reached through the tabs' own code (`SBDConstr.fromAnalysis` without opt.G, `SBDShearUI.build`,
+  `CF.inputsOf`, the Splices env), so it takes η there with no change of its own.
+- `ui/constructibility.js` (overhang card, exterior girder): the two inputs `γ_DC / γ construction` (`data-ohg`) and their handler are replaced by a
+  read-only row `${γ_DC} / ${γ_CL}` (the deck placement factors, × η, link to the Project tab, `data-cngoin`); `ohOldGam(P)` lists saved
+  `P.constr.oh.gam` values that differ from what is now used ("no longer used … (now …)"; kept in the file). The demands note shows
+  `M_c = γ_DC M_DCc + γ_CL M_CL` with the project's values and η; the overhang-rows note likewise. File path passes `lf: C.lfOf(P)`.
+- `engine/model.js`: doc comment, `constr.oh.gam` not used since 2026-11-01 (kept). Saved data (§5): no key or format changed.
+
+### Check case (default project, G1, analysis; RIDOT with η_I yes: η = 1.05, m = 1.2; before = origin/main, Node)
+- GS14 (flange buckling) at x = 77.00 ft, the governing deck placement location: M_DCc = 548.020 kip-ft, M_CL = 0 (no construction LL entered):
+  M_c = 1.25(548.020) = 685.02 → 1.3125(548.020) = 719.28 kip-ft; f_bu = 7.3845 → 7.7537 ksi; φF_nc = 9.3877 ksi; ratio 0.7866 → 0.8259.
+  Largest GS14 / GS15 / GS16: 0.7866 / 0.3936 / 0.1556 → 0.8259 / 0.4133 / 0.1634.
+- Overhang brackets (G1 exterior): w_u = γ_DC(0.28125) + γ_CL(0.025 + 0.085 + 0.025 + 0.125 + 0.050) = 1.25(0.28125) + 1.50(0.310) = 0.81656 →
+  1.3125(0.28125) + 1.575(0.310) = 0.85739 kip/ft; P_ℓ = γ_CL P_fm a/h_b = 1.50(3)(36/54) = 3.000 → 3.150 kip; largest OH ratio 0.4848 → 0.5125.
+- Shear GS16 at x = 0.01 ft: V_u = 1.25(54.821) + 1.50(0) = 68.53 → 1.3125(54.821) = 71.95 kip; ratio 0.0861 → 0.0904.
+- Cross-frames stability bracing: M_u = 1.25M_DC1 + 1.5M_CL at x = 321.0 ft = 1339.7 → 1406.7 kip-ft (× 1.05, rounded to 0.1); M_br 117.00 → 129.00 kip-in.
+- Splices, FS1 deck placement combination: γ_DC 1.25 → 1.3125, γ_CL 1.50 → 1.575; M = −307.25 → −322.61 kip-ft.
+- Default (AASHTO, η = 1): every value identical (only the new metadata fields etaC, G.eta, G.base appear). Rating (MBE factors): RF identical.
+- `tests/engine/eta-constr.test.mjs` (new) holds these numbers.
+- Auto design, recorded project builtin_RIDOT (tests/projects/sbd2-autodesign, sbd2FromPL, match-legacy settings as autodesign-parity.mjs), Node:
+  - as recorded (η = 1.00, m = 1.2): η is 1 on construction, so before = after by construction (etaC = 1).
+  - with η_I yes (η = 1.05, m = 1.2): before 439,866 lb, D = 65 in; after 437,046 lb, D = 70 in (both ratio 1.000, stiffeners TS7). Cross-check:
+    every candidate of each run was evaluated with the other code: the after design (437,046 lb, D = 70) also passes every module with the
+    BEFORE code, and the before design (439,866 lb, D = 65) still passes with the after code. So η on deck placement makes no candidate fail
+    here; the lighter result is the search taking another path (the sizing and trim steps follow the governing ratios, which moved), not
+    a lighter requirement. Auto design is a heuristic search, not a proven optimum.
+
 ### Other copies
 - None.
 
