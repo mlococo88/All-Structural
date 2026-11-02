@@ -1770,3 +1770,23 @@ index 2f29ed5..c3246e1 100644
 +});
 +
 ```
+
+## 2026-11-02 — PR: [#682](https://github.com/mlococo88/All-Structural/pull/682) — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+- **Before:** Project tab → Saved projects (this browser): Save (under Project name), drop-down + Open / Delete (`tbc_projects_v1`,
+  `{ name: { t, d: M } }`); Project file: Open file / Save file / New project; header Open file… / Save file. No rename, no duplicate, no undo.
+- **Where:**
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `autosave()`: after the `lsSet` added `if (TBPL) TBPL.soon();`; right after it `var TBPL`, `function tbPlibInit()`, `function tbPlibButton()`
+    (anchor `/* PLIB (2026-11-02): saved-project dialog and Undo / Redo`): history over `M` without `M.ui` (output tab, diagram combination,
+    print options are not steps); `set` = `tbcMigrate()` of the step with the current `M.ui`, then `fullRebuild()`; `mapStore(localStorage,
+    LS_PROJ, { unpack: d, time: t })`; dialog `open` = `loadModel()`; a rename of the open project (Project name = old name) sets Project name
+    to the new name (Save stores under Project name). Header buttons Undo, Redo before Print report.
+  - `buildProjectPane()`, anchor `row.appendChild(sel); row.appendChild(ld); row.appendChild(del);`: after the `if (names.length)` block,
+    `{ const lb = tbPlibButton(); if (lb) row.appendChild(lb); }   /* PLIB */`.
+  - `tbcInit()`: `tbPlibInit();` before `fullRebuild();`, and `if (TBPL) TBPL.h.reset();` after it.
+- **Saved data:** keys `tbc_projects_v1`, `tbc_autosave_v1` and their formats unchanged; no new key.
+- **How verified:** `node tests/smoke/project-library.mjs --tool timber`: ALL PASS (`TBC.res`, every computed result, identical to
+  origin/main on load, after an input change, reopened on main's storage and opened from the dialog; Undo / Redo / Ctrl+Z / Ctrl+Y exact;
+  dialog byte-identical; quota; 390 px; no new console errors). `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** loads are entered directly (D, L, L_r, S, W line loads and point loads); nothing added.

@@ -10,6 +10,9 @@
 <!-- TBRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): saved-project list dialog (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <style>
 :root{
   --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB;
@@ -1491,7 +1494,35 @@ let M = tbcDefaultModel(), R = null;
 function lsGet(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
 function lsSet(k, v) { try { localStorage.setItem(k, v); return true; } catch (e) { return false; } }
 function stampVersion() { M.version = tbcVersionFor(M); return M; }
-function autosave() { lsSet(LS_AUTO, JSON.stringify(stampVersion())); }
+function autosave() { lsSet(LS_AUTO, JSON.stringify(stampVersion())); if (TBPL) TBPL.soon(); }   // PLIB: one undo step per change (debounced)
+/* PLIB (2026-11-02): saved-project dialog and Undo / Redo (shared/projects.js, shared/projects-ui.js). Display and storage only: the list is
+   the tool's own key tbc_projects_v1 ({ name: { t, d: M } }), Rename / Duplicate move / copy the stored item unchanged, Open = loadModel().
+   Undo / Redo: snapshots of M without M.ui (output tab, diagram combination and print options are not steps), session only; set =
+   tbcMigrate() of the step with the current M.ui, then fullRebuild(), as opening a file does. */
+var TBPL = null;
+function tbPlibInit() {
+  if (!window.SharedProjects || !window.SharedProjectsUI) return;
+  const h = SharedProjects.history({ get: () => JSON.stringify(Object.assign({}, M, { ui: undefined })),
+    set: t => { const d = JSON.parse(t); d.ui = M.ui; M = tbcMigrate(d).model; fullRebuild(); } });
+  let tm = null; const soon = () => { clearTimeout(tm); tm = setTimeout(() => h.record(), 400); };
+  let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
+  const store = SharedProjects.mapStore(ST, LS_PROJ, { unpack: i => i && i.d, time: i => i && i.t || null, sort: 'saved' });
+  const dlg = SharedProjectsUI.libraryDialog({ store, storage: ST, title: 'Saved projects (this browser)',
+    current: () => { const n = (M.project.name || '').trim(); return n && store.has(n) ? n : null; },
+    open: n => { const d = store.get(n); return d ? loadModel(d, `Opened "${n}"`) : false; },
+    renamed: (a, b) => { if ((M.project.name || '').trim() === a) { M.project.name = b; buildProjHeader(); rebuildInputs(); autosave(); } },
+    changed: () => rebuildInputs() });
+  const B = (t, ti) => SharedProjectsUI.button(t, ti);
+  const bu = B('Undo', 'Undo the last input change (Ctrl+Z)'), br = B('Redo', 'Redo (Ctrl+Y or Ctrl+Shift+Z)');
+  const ref = $('btnPrint'); if (ref) { ref.parentNode.insertBefore(bu, ref); ref.parentNode.insertBefore(br, ref); }
+  SharedProjectsUI.undoRedo(h, { undo: bu, redo: br });
+  h.reset(); TBPL = { h, store, dlg, soon };
+}
+function tbPlibButton() {
+  if (!TBPL) return null;
+  const b = SharedProjectsUI.button('Saved projects\u2026', 'The projects saved in this browser: open, rename, duplicate, delete', { cls: 'btn sm' });
+  b.addEventListener('click', () => TBPL.dlg.show()); return b;
+}
 function getProjects() { try { const p = JSON.parse(lsGet(LS_PROJ) || '{}'); return (p && typeof p === 'object' && !Array.isArray(p)) ? p : {}; } catch (e) { return {}; } }
 function setProjects(p) { return lsSet(LS_PROJ, JSON.stringify(p)); }
 function compute() {
@@ -1682,6 +1713,7 @@ function buildProjectPane(P) {
       del.addEventListener('click', () => { if (!confirm(`Delete the saved project "${sel.value}"?`)) return; const p = getProjects(); delete p[sel.value]; setProjects(p); rebuildInputs(); });
       row.appendChild(sel); row.appendChild(ld); row.appendChild(del);
     }
+    { const lb = tbPlibButton(); if (lb) row.appendChild(lb); }   /* PLIB */
     body.appendChild(row);
     body.appendChild(el('div', 'hint', `Saved projects and the last session (autosave) are kept in this browser's local storage (keys <code>${LS_PROJ}</code>, <code>${LS_AUTO}</code>). Use <b>Save file</b> for a backup or to move a project to another computer.`));
   }, { noNum: true });
@@ -3344,7 +3376,9 @@ function tbcInit() {
   wireFile();
   const raw = lsGet(LS_AUTO);
   if (raw) { try { M = tbcMigrate(JSON.parse(raw)).model; } catch (e) { M = tbcDefaultModel(); } }
+  tbPlibInit();   /* PLIB */
   fullRebuild();
+  if (TBPL) TBPL.h.reset();   /* PLIB: the history starts at the opened project */
   window.addEventListener('resize', () => { if (typeof Plotly !== 'undefined') document.querySelectorAll('.plotHold.js-plotly-plot').forEach(d => { try { Plotly.Plots.resize(d); } catch (e) { } }); });
 }
 // test / automation hook (read-only use; not part of the saved data)
