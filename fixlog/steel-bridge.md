@@ -3679,7 +3679,7 @@ current design's analysis accepted; **the minimum shipping piece length raised f
 ### Other copies
 - None.
 
-## 2026-11-02 — PR: claude/sb-nb-one-input — Auto design: one girder-count input (the N_b variable row); "Candidates to keep" renamed "Designs to list"
+## 2026-11-02 — PR #695: https://github.com/mlococo88/All-Structural/pull/695 (claude/sb-nb-one-input) — Auto design: one girder-count input (the N_b variable row); "Candidates to keep" renamed "Designs to list"
 ### Why
 - Engineer: two inputs set the girder counts studied ("Girder counts to study", `P.autodesign.nbList`, and the "Girder count N_b" row of the
   design variables, `P.autodesign.vars.nb`); keep the row only. Rename "Candidates to keep" (`topN`) and say what it does.
