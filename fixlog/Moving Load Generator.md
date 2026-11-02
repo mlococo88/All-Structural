@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Table 3.4.1-1 (load factors), Art. 3.6.1.4 / C3.6.1.1.2 (fatigue truck and its distribution). No formula, factor value or analysis result was changed in this PR.
 
-## 2026-10-04 — PR: claude/fix-moving-load (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-moving-load (PR #11: https://github.com/mlococo88/All-Structural/pull/11)
 
 Verification method for every item: the page was loaded in jsdom from origin/main and from this branch, and the analysis results (every tenth point ±M, ±V and every reaction, factored per girder) were compared. For the default 2 × 100 ft HL-93 case and for the Fatigue preset, the results are **identical** before and after. `node --check` passes on the inline script. The file keeps its CRLF line endings.
 
@@ -119,7 +119,7 @@ Verification method for every item: the page was loaded in jsdom from origin/mai
 - O5. **Edition label.** The page does not state the AASHTO edition. Label-only, not changed.
 - O6. **Dead code:** the original `exportCsv` near the end of the file is overridden earlier by the "CSV with |V|" version. Left as is (no behaviour change).
 
-## 2026-10-04 — PR: claude/step1-group1 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group1 (PR #28: https://github.com/mlococo88/All-Structural/pull/28)
 
 Feature (no result change): "← All tools" link to `tools.html` (`target="_top"`, hidden in print) and the shared project info buttons. No formula, factor, unit, storage key or saved format changed. New storage written only on "Share project info": `bridgeSuite.v1.projectMeta` and `bridgeSuite.v1.projectMeta.updatedAt` (HANDOFF.md §2/§4.1). The file keeps its CRLF line endings.
 
@@ -253,7 +253,7 @@ Field mapping: projectName ↔ Project (`rProj`), preparedBy ↔ Computed by (`r
 - **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
 - **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
 
-## 2026-10-04 — PR: claude/conn-lldf-movingload (PR link added after merge)
+## 2026-10-04 — PR: claude/conn-lldf-movingload (PR #32: https://github.com/mlococo88/All-Structural/pull/32)
 
 Feature: hand-off (no result change). Receiver for channel `bridgeSuite.v1.lldf` (`_schema` `bridge-lldf-factors` v1, HANDOFF.md §4.3) from lldf.html. No formula, factor, default, unit, storage key or saved format changed. One new optional field in the saved state: `lldfSource` (top level of the `movingLoadGen.autosave.v1` / Save JSON object). Old saves load unchanged; a save without the field has no source. New storage written: `bridgeSuite.v1.lldf.adopted.movingLoad` (adoption marker, HANDOFF.md §2). The file keeps its CRLF line endings. BridgeXfer v1 was already in the file (step 1) and is reused unchanged.
 
@@ -572,7 +572,7 @@ Default girder: lldf's design beam (`designBeam.index`) if `byBeam` has it, othe
 - **Other copies:** BridgeXfer v1 is also in index.html, lldf.html, psbeam.html, stgirder.html and the other step-1 tools (unchanged here). The receiver block exists only in this file.
 - **Open items:** (1) This tool has one negative-moment DF; lldf's `governingNeg` is the envelope over all interior supports, so for 3–4 spans the larger pier DF is used at every pier (conservative). (2) Fatigue DFs are not applied because the DFs are not per vehicle; a per-vehicle DF would be a separate change.
 
-## 2026-10-09 — PR: claude/tabs-movingload (PR link added after merge)
+## 2026-10-09 — PR: claude/tabs-movingload (PR #61: https://github.com/mlococo88/All-Structural/pull/61)
 
 ### T1. Input panel split into tabs   [UI only — no calculation change]
 - **Date / type:** 2026-10-09, UI only (no result change). Engineer's request of 2026-10-09: "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." Same approach as `Steel Beam Design - AISC 15th.html` T1: build every section exactly as before, then **move** the finished DOM nodes into tab panes.
@@ -722,7 +722,7 @@ Default girder: lldf's design beam (`designBeam.index`) if `byBeam` has it, othe
 - **Other copies of this code:** none.
 - **Open items:** (1) Pre-existing, not changed: at narrow widths (seen at 400 px) the header's buttons wrap beyond its fixed 54 px height; some spill below it and the top ones are cut off above the page. The tab strip is placed below the spill, but the header itself was left as it is. (2) The Spans hint still says the girder is defined "in the Girder Section panel below"; it is now on the Girder tab (text left unchanged).
 
-## 2026-10-12 — PR: claude/sweep-movingload (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-movingload (PR #151: https://github.com/mlococo88/All-Structural/pull/151)
 
 Open-item sweep (inventory section 5: MLG-O1 … O6, MLG-H1, MLG-T1). Engineer's instruction of 2026-10-12: work through every open item, use a defensible default, and list what needs the engineer. The file keeps its CRLF line endings. Exact before/after code of every hunk is in the `diff` blocks below (`-` = before, `+` = after); anchors are given for each.
 
@@ -997,7 +997,7 @@ Open-item sweep (inventory section 5: MLG-O1 … O6, MLG-H1, MLG-T1). Engineer's
 ## Open items (after the 2026-10-12 sweep)
 - Inventory section 5 items MLG-O1, O2, O4, O5, T1 are fixed (F6–F11 above); O3, H1 and O6 are closed. Only the three "Needs engineer" questions above remain.
 
-## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR #166: https://github.com/mlococo88/All-Structural/pull/166)
 
 Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
 
@@ -1015,7 +1015,7 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - **Check case:** lldf slab payload (1 span 120 ft, interior gM = gV = 0.076, fatM = fatV = 0.045) pulled into 2 spans × 100 ft: before and after the same DF inputs are written (dfm0 = dfv0 = 0.076; fatigue 0.045), so the results are identical; after, the dialog shows the slab box, the source line ends with the per-foot note, and the results show the per-foot warning (2 places). Girder payload θ = 30°, θ_V = 40°: same inputs and source line as before; the header now reads "skew 30° (moment), 40° (shear)".
 - **How verified:** headless Chromium, main vs branch, `MLGlldf.openDlg(payload)` / `MLGlldf.apply()`; the per-foot text was found in 2 warning elements after the slab pull; screenshot `mlg_dialog_slab_br.png` looked at. No page errors.
 
-## 2026-10-14 — PR: claude/mlg-absmax (absolute maxima per span; PR link added after merge)
+## 2026-10-14 — PR: claude/mlg-absmax (absolute maxima per span; PR #212: https://github.com/mlococo88/All-Structural/pull/212)
 
 Engineer request 2026-10-14. Display-only addition. No formula, factor, unit, code reference, existing output, export format or saved-data key changed.
 
@@ -1067,7 +1067,7 @@ Engineer request 2026-10-14. Display-only addition. No formula, factor, unit, co
 - **Run time:** the extra passes take about 1–1.5 s for 1–2 spans and about 3–3.5 s for the 3-span case, after the main results are already shown; the page is busy during that time.
 - **Other copies of this code:** none.
 
-## 2026-10-14 — PR: claude/mlg-shear-jump (shear just left / just right of a section; PR link added after merge)
+## 2026-10-14 — PR: claude/mlg-shear-jump (shear just left / just right of a section; PR #214: https://github.com/mlococo88/All-Structural/pull/214)
 
 Engineer decision 2026-10-14. **Changes computed shear envelope values (V+ / V−) only**, always toward the exact influence-line value (larger V+, more negative V−). Moments, reactions, deflections, warnings, saved data and export formats are unchanged.
 
@@ -1163,7 +1163,7 @@ Engineer decision 2026-10-14. **Changes computed shear envelope values (V+ / V�
 - **How verified:** `node --check` on all four inline scripts. Headless Chromium, origin/main vs branch, 22 cases (100 ft simple span: HL-93, truck, tandem, IM 1.33, axle-neglect off, fatigue, HS20 + Std. lane, E80; 110-140-110: HL-93, truck, tandem, IM 1.33, fatigue, HS20, H20, E80, E80-Alt, F40PH, 286K, ES44AC; 120-120 factored; 85-110-110-85 step 0.5) plus the FHWA and closed-form benchmark buttons: every moment and reaction (max, min, governing case and position), every deflection and every warning identical; only shear values changed, and every change is toward the exact value (V+ up, V− down; largest change 2.56 kip, F40PH); CSV export differs only in the +V, −V, |V| and governing-shear cells; the printed report only in shear cells; the absolute-maxima card only in "Max |V|" rows. No page or console errors. GirderDetail (`Steel Bridge Beam Modules.html`, exact engine) vs MLG at every 1 ft section, 9 cases (simple span, 3-span constant and variable EI; no IM, IM, fatigue): MLG V− vs GirderDetail before up to 0.67 kip; after ≤ 1e-6 kip in every case. Run time unchanged (analyze 0.3–0.9 s for 3 spans).
 - **Other copies of this code:** none.
 
-## 2026-10-18 — PR: claude/mlg-d11-report — D11: slim calculation-sheet report and §6 links (Tier 1, display only; PR link added after merge)
+## 2026-10-18 — PR: claude/mlg-d11-report — D11: slim calculation-sheet report and §6 links (Tier 1, display only; PR #292: https://github.com/mlococo88/All-Structural/pull/292)
 
 - **Engineer request:** AUDIT.md D11 (2026-10-14); scope decided 2026-10-18: **slim report** for this tool (inputs → worked results, no D/C section). CLAUDE.md §6 "show the work and link to it".
 - **Provision:** none. No formula, factor, unit, code reference, analysis or computed result changed. No saved-data key or format changed (`movingLoadGen.autosave.v1`, `movingLoadGen.inputTab.v1`, the Save JSON format, `bridgeSuite.v1.*` and the lldf hand-off untouched); no input field added.
@@ -1235,7 +1235,7 @@ Engineer decision 2026-10-14. **Changes computed shear envelope values (V+ / V�
 ### Open items (not changed)
 - PL-O1. The engine-check block in `analyze` indexes theory values for 1–4 spans only (`{1:…,4:…}[ns]`); 5+ spans would throw there. The page allows 1–4 spans, so nothing changes today; see `fixlog/shared-moving-load.md`.
 
-## 2026-11-01 — PR: claude/rpt-mlg — Report output tab in the shared report viewer (MLRP; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-mlg — Report output tab in the shared report viewer (MLRP; display only, no calculation change) (PR #555: https://github.com/mlococo88/All-Structural/pull/555)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `MLRP`.
 

@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002), Art. 8.15 (Service Load Design); AASHTO Manual for Bridge Evaluation (MBE), Part B (ASD/LFR rating), Art. 6B.6.2.3. MassDOT values kept as-is.
 
-## 2026-10-04 — PR: claude/fix-concrete-asd (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-concrete-asd (PR #16: https://github.com/mlococo88/All-Structural/pull/16)
 
 All edits were applied by scripted exact-string replacement (each Before block occurs exactly once in the file). Line endings are CRLF and were preserved.
 
@@ -510,7 +510,7 @@ All edits were applied by scripted exact-string replacement (each Before block o
 - **Finding:** the review said the rebar `<line …` was missing `/>`. The full line does end with `stroke-dasharray="1,5" />` — the review's extract was truncated. jsdom parse of the generated SVG shows a closed `<line>` followed by a separate `<text>Steel</text>` element, before and after this PR.
 - **Action:** none.
 
-## 2026-10-04 — PR: claude/step1-group4 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group4 (PR #30: https://github.com/mlococo88/All-Structural/pull/30)
 ### S1. "← All tools" link   [feature (no result change)]
 - **Date / type:** 2026-10-04, feature (no result change).
 - **Where:** Navbar, left group, after the "AASHTO Std. Specs / MassDOT" subtitle block.
@@ -670,7 +670,7 @@ All edits were applied by scripted exact-string replacement (each Before block o
   - Screenshots of every tab (and Geometry in rectangular mode) at 1400 px and 400 px. The strip fits on one line at both widths.
 - **Other copies:** none.
 
-## 2026-10-09 — PR: claude/pin-concreteasd (PR link added after merge)
+## 2026-10-09 — PR: claude/pin-concreteasd (PR #78: https://github.com/mlococo88/All-Structural/pull/78)
 
 ### L1. CDN library versions pinned   [libraries — no calculation change]
 - **Engineer's decision (2026-10-09):** pin the libraries (CLAUDE.md §2: exact versions in CDN URLs). Resolves O5.
@@ -892,7 +892,7 @@ Inventory items ASD-O1 … ASD-O9, ASD-A2, ASD-C7 (scratchpad `open_inventory.md
 - O8. **Basis line added 2026-10-12 (F11).** — Confirm the editions cited (Needs engineer E5).
 - O9. **Narrow screens (about 400 px)**: the sidebar is a fixed 380 px column beside `<main>`, so `<main>` is squeezed to a sliver and the navbar text wraps. Same before and after the tabs change (the body has `overflow: hidden`, so there is no page scroll). Not changed (UI layout, CLAUDE.md §6). — Decide whether a stacked mobile layout is wanted.
 
-## 2026-10-18 — PR: claude/asd-d11-report — D11: calculation-sheet report and §6 derivation links (Tier 1, display only; PR link added after merge)
+## 2026-10-18 — PR: claude/asd-d11-report — D11: calculation-sheet report and §6 derivation links (Tier 1, display only; PR #286: https://github.com/mlococo88/All-Structural/pull/286)
 
 Line numbers are approximate; search for the anchor text. The tool file uses CRLF line endings (kept). Edits were scripted exact-string replacements (each anchor found once).
 
@@ -944,7 +944,7 @@ Line numbers are approximate; search for the anchor text. The tool file uses CRL
 - The suite's ASD tab cites the RF equation as "AASHTO MBE 6B (ASD)" and E_c as Std. Spec. 8.7.1. This tool cites neither, so its report does not either (adding them would be a code-reference change, CLAUDE.md §4).
 
 
-## 2026-11-01 — PR: claude/retire-cbasd — tool retired: the file is now a redirect page to the ASD tab of Concrete Beam Capacity (CBAR) (PR link added after merge)
+## 2026-11-01 — PR: claude/retire-cbasd — tool retired: the file is now a redirect page to the ASD tab of Concrete Beam Capacity (CBAR) (PR #562: https://github.com/mlococo88/All-Structural/pull/562)
 
 - **Engineer decision (2026-11-01):** retire "Concrete Beam ASD.html". It becomes a small redirect page to the ASD tab of "Concrete Beam Capacity.html", in the same way as `psbeam.html` and `Steel Bridge Beam Modules.html`.
 - **New file content (whole file replaced; the old tool is in git history at the commit before this PR):**

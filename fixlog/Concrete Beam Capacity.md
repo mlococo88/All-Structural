@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: ACI 318-19; AASHTO LRFD 10th Ed. (2024); ASD tab: AASHTO Standard Specifications 17th Ed. (2002) Art. 8.15 and MBE Art. 6B.6.2.3. MassDOT values kept as-is.
 
-## 2026-10-04 — PR: claude/fix-concrete-capacity (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-concrete-capacity (PR #17: https://github.com/mlococo88/All-Structural/pull/17)
 
 This file is a 3-tab shell. Each tab is a full app HTML-escaped inside an iframe srcdoc attribute: Beam Capacity (suite-frame-capacity, lines ≈53–4005), ASD Beam Calcs (suite-frame-asd, ≈4008–5040), Development & Splice (suite-frame-dev, ≈5043–6466). All edits were applied by scripted exact-string replacement restricted to the relevant srcdoc, with `&` → `&amp;` and `"` → `&quot;` escaping; each Before block occurs exactly once in its srcdoc. Line endings are CRLF and were preserved. Lines 5287/5289 (base64 images) untouched.
 
@@ -1268,7 +1268,7 @@ Identical edits to branch claude/fix-rebar-dev (see fixlog/ACI Rebar Development
 - **How verified:** unescaped the Dev srcdoc and ran `node --check` on its inline script: OK. Ran the migration stub test and the jsdom boot test (scratch `w/cbc_mig.js`), with no page errors.
 - **Other copies of this code:** the standalone `ACI Rebar Development Length.html` intentionally keeps the old key `rebar_aci_autosave_v1` (and the shared `rebar_aci_projects_v1`). It is not changed.
 
-## 2026-10-04 — PR: claude/step1-group4 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group4 (PR #30: https://github.com/mlococo88/All-Structural/pull/30)
 ### S1. "← All tools" link and shared project info   [feature (no result change)]
 - **Date / type:** 2026-10-04, feature (no result change).
 - **Where:** Outer shell only: shell `<style>` (after `.suite-frame-wrap iframe{...}`), `#suite-nav` (after the "Development & Splice" tab button), and two new `<script>` blocks before the final `</body>`. **No srcdoc content was changed.**
@@ -1652,7 +1652,7 @@ function asdInputTabMarks(){
   - Screenshots of every tab of the three sub-apps at 1400 px and 400 px.
 - **Other copies:** the Dev tab code is the shared snippet also in `ACI Rebar Development Length.html` (now identical, modulo srcdoc escaping). The Capacity and ASD tab code exists only here (the standalone `Concrete Beam ASD.html` has its own, different tab code, `cbasd_inputTab_v1`, fix log there).
 
-## 2026-10-12 — PR: claude/sweep-cbc-rebar (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-cbc-rebar (PR #140: https://github.com/mlococo88/All-Structural/pull/140)
 
 Open-item sweep of inventory section 10 (engineer 2026-10-12: "continue making updates and fixes until it's completed … use your best judgment"). Basis: ACI 318-19 and AASHTO LRFD 10th Ed. (2024). Article numbers marked "verify" were not checked against a printed copy. Because the Dev tab is the shared ACI Rebar app (CLAUDE.md §3), this PR also changes `ACI Rebar Development Length.html` and its log (coordinator decision under the engineer's delegation).
 
@@ -1768,7 +1768,7 @@ The Rebar sweep R1–R7 (see `fixlog/ACI Rebar Development Length.md`, same date
 ### Remaining open items
 None from section 10 beyond the "Needs engineer" list.
 
-## 2026-10-12 — PR: claude/cbc-asd-beff (PR link added after merge)
+## 2026-10-12 — PR: claude/cbc-asd-beff (PR #158: https://github.com/mlococo88/All-Structural/pull/158)
 
 Follow-up to the standalone `Concrete Beam ASD.html` sweep (#143, its fix log F8–F10). The suite ASD tab has its own engine (`compute()` in the `#suite-frame-asd` srcdoc), so the same rule and notes are ported here. Edits were made on the un-escaped srcdoc by scripted exact-string replacement (each anchor found exactly once), re-escaped (`&` → `&amp;`, `"` → `&quot;`) and put back; CRLF kept. Only this file and this log changed.
 
@@ -1838,7 +1838,7 @@ Follow-up to the standalone `Concrete Beam ASD.html` sweep (#143, its fix log F8
 - O2. **Storage collision (shared rebar keys).** The Dev tab and the standalone `ACI Rebar Development Length.html` both use `rebar_aci_autosave_v1` / `rebar_aci_projects_v1`; on Chromium `file://` they share one origin, so autosaves overwrite each other and simultaneous project saves can race. Keys not changed (CLAUDE.md §5). — Decision needed: keep shared (projects visible in both, as now), or give the suite copy its own prefixed keys with a one-time migration that copies the existing data.
   - **RESOLVED 2026-10-04 (F21):** engineer accepted the recommendation. The Dev tab now has its own autosave key `rcsuite.rebar_autosave_v1`, with a one-time copy from `rebar_aci_autosave_v1` (the old key is left in place). `rebar_aci_projects_v1` stays shared.
 
-## 2026-10-18 — PR: claude/cbc-d11-report — D11: calculation-sheet report and §6 derivation links (Tier 1, display only; PR link added after merge)
+## 2026-10-18 — PR: claude/cbc-d11-report — D11: calculation-sheet report and §6 derivation links (Tier 1, display only; PR #275: https://github.com/mlococo88/All-Structural/pull/275)
 - **Engineer request:** AUDIT.md D11 (2026-10-14, scope decided 2026-10-18: full report for design-check tools) and the CLAUDE.md §6 "show the work and link to it" guideline.
 - **Scope:** the Beam Capacity tab (`#suite-frame-capacity`) and the ASD Beam Calcs tab (`#suite-frame-asd`). The Development & Splice tab (`#suite-frame-dev`, the duplicated ACI rebar app, CLAUDE.md §3) and the suite shell are **byte-identical** to main.
 - **Editing method:** as in the 2026-10-12 entries: each srcdoc was decoded (`&quot;` → `"`, `&amp;` → `&`), edited by exact-string replacement (each anchor found once), re-encoded (`&` → `&amp;`, `"` → `&quot;`) with CRLF kept, and put back. A decode → encode of the unedited file reproduces it byte for byte.
@@ -1901,7 +1901,7 @@ Follow-up to the standalone `Concrete Beam ASD.html` sweep (#143, its fix log F8
 - **Unbounded D/C display on screen:** the dashboard and the status chip print the raw ratio when a detailing "provided" value is zero (e.g. 878431372549.02, "DCR 10000000000.00"); the report prints "≫1". Not changed on screen.
 - The default title block no longer carries "MBTA — Mini-Highs" (blanked by W11); an empty project prints "Untitled" on the cover and in the footer.
 
-## 2026-10-18 — PR: claude/cbc-rebar-sync — Development & Splice tab: D11 calculation-sheet report and §6 links, synced from the rebar tool (Tier 1, display only; PR link added after merge)
+## 2026-10-18 — PR: claude/cbc-rebar-sync — Development & Splice tab: D11 calculation-sheet report and §6 links, synced from the rebar tool (Tier 1, display only; PR #289: https://github.com/mlococo88/All-Structural/pull/289)
 - **Engineer request:** AUDIT.md D11; CLAUDE.md §3 sync of the duplicated ACI rebar app. The change itself is recorded in `fixlog/ACI Rebar Development Length.md`, entry "2026-10-18 — PR: claude/rebar-d11-report" (D11 report, D11 links, the Ctrl+P and hook-title display fixes); this branch contains that commit.
 - **Scope:** only the Development & Splice srcdoc (`#suite-frame-dev`). The suite shell and the Beam Capacity and ASD srcdocs are **byte-identical** to main (everything before and after the dev srcdoc compared byte for byte).
 - **Editing method:** as in the 2026-10-12 and D11 entries: the srcdoc was decoded (`&quot;` → `"`, `&amp;` → `&`), edited by exact-string replacement (the same 9 replacements as the standalone tool, each anchor found once), re-encoded (`&` → `&amp;`, `"` → `&quot;`) with CRLF kept, and put back. A decode → encode of the unedited file reproduced it byte for byte before editing.
@@ -1913,7 +1913,7 @@ Follow-up to the standalone `Concrete Beam ASD.html` sweep (#143, its fix log F8
 - **Other copies:** `ACI Rebar Development Length.html` (same change, branch claude/rebar-d11-report).
 - **Open items:** those of the rebar entry.
 
-## 2026-10-19 — PR: claude/cbc-rebar-sync-compsplice — Development & Splice tab: Comp. Splice cites AASHTO 5.10.8.4.5a in AASHTO mode, m = 1.0 shown, synced from the rebar tool (code reference change, no result change; PR link added after merge)
+## 2026-10-19 — PR: claude/cbc-rebar-sync-compsplice — Development & Splice tab: Comp. Splice cites AASHTO 5.10.8.4.5a in AASHTO mode, m = 1.0 shown, synced from the rebar tool (code reference change, no result change; PR #323: https://github.com/mlococo88/All-Structural/pull/323)
 - **Engineer decision 2026-10-19;** CLAUDE.md §3 sync. The change, the code-text comparison (the AASHTO expressions with m = 1.0 equal the psi expressions the tab uses), before/after and check case are in `fixlog/ACI Rebar Development Length.md`, entry "2026-10-19 — PR: claude/rebar-aashto-compsplice" (C1); this branch contains that commit.
 - **Scope:** only the Development & Splice srcdoc (`#suite-frame-dev`): `calcCompSplice` comments, `tabCSplice` first line, new `tabCSpliceAASHTO`, `rebarRefs` AASHTO rows, `rebarResultRows` compression-splice ref. ACI mode unchanged. The shell and the Beam Capacity and ASD srcdocs are byte-identical to main.
 - **Editing method:** as in the 2026-10-18 sync: decode (`&quot;`, `&amp;`), the same 5 exact-string replacements as the standalone tool (each anchor found once), re-encode with CRLF. The decode → encode of the unedited file reproduced it byte for byte first. The suite-specific differences of the tab (layout CSS, no All-tools link or share buttons, `rcsuite.rebar_autosave_v1`, `REBAR_RPT_TOOL`) are unchanged: the standalone-vs-embedded diff is the same as on main apart from line numbers.
@@ -1921,7 +1921,7 @@ Follow-up to the standalone `Concrete Beam ASD.html` sweep (#143, its fix log F8
 - **Verification:** decoded tab passes `node tests/check-syntax.mjs` (the four srcdoc scripts of the whole file fail identically on main: entity-encoded text). In the suite, main vs branch, 6 cases: every computed value, the dashboard and the autosave identical; tab text differs only on Comp. Splice in the 3 AASHTO cases; report in the frame builds 7 sections, all links resolve, 0 KaTeX errors.
 - **Other copies:** `ACI Rebar Development Length.html` (same change).
 
-## 2026-10-19 — PR: claude/aashto10-cbc-rebar — Development & Splice tab: AASHTO mode to AASHTO LRFD 10th Ed. (2024) §5.10.8, synced from the rebar tool (calculation change; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-cbc-rebar — Development & Splice tab: AASHTO mode to AASHTO LRFD 10th Ed. (2024) §5.10.8, synced from the rebar tool (calculation change; PR #337: https://github.com/mlococo88/All-Structural/pull/337)
 - **Engineer request / CLAUDE.md §3 sync.** The change, before/after code, provisions and check cases are in `fixlog/ACI Rebar Development Length.md`, entry "2026-10-19 — PR: claude/aashto10-rebar" (E1–E5). This branch is based on that branch (not merged yet) and contains its commit.
 - **What changes in this tab (AASHTO mode only; ACI mode unchanged):** tension ℓd per 5.10.8.2.1a (Eqs. 5.10.8.2.1a-1/-2), λrc per 5.10.8.2.1c (new input βt, default 0), hooks per 5.10.8.2.4/.4a/.4b (new input R, default the minimum standard bend), f′c up to 15 ksi (10 ksi lightweight), tension laps with the new ℓd, compression renumbered to 5.10.8.2.2a, label "AASHTO LRFD 10th Ed. (2024) §5.10.8".
 - **Editing method:** as in the earlier syncs: the `#suite-frame-dev` srcdoc was decoded (`&quot;` → `"`, `&amp;` → `&`; decode → encode of the unedited file reproduced it byte for byte), the same 36 exact-string replacements as the standalone tool were applied (each anchor found once), re-encoded with CRLF kept, and put back; the decoded tab read back from the file equals the edited text byte for byte.
@@ -1931,7 +1931,7 @@ Follow-up to the standalone `Concrete Beam ASD.html` sweep (#143, its fix log F8
 - **Verification:** decoded tab passes `node tests/check-syntax.mjs`. In the suite frame (headless Chromium, KaTeX / Plotly from npm pack; the other tabs' CDN libraries blocked), the 11 cases of the rebar entry: every computed value and hero value equal to the standalone branch file; the two ACI cases identical to main's suite (values, notices, dashboard, tab texts, report text); report builds 7 sections, every internal link resolves, 0 KaTeX errors.
 - **Other copies:** `ACI Rebar Development Length.html` (PR claude/aashto10-rebar). Open items: see the rebar entry.
 
-## 2026-10-19 — PR: claude/aashto10-cbc-capacity — Beam Capacity tab: shear φ for lightweight concrete per AASHTO LRFD 10th Ed. 5.5.4.2; AASHTO edition stated as 10th Ed. (2024) (calculation change; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-cbc-capacity — Beam Capacity tab: shear φ for lightweight concrete per AASHTO LRFD 10th Ed. 5.5.4.2; AASHTO edition stated as 10th Ed. (2024) (calculation change; PR #340: https://github.com/mlococo88/All-Structural/pull/340)
 - **Branch:** based on claude/aashto10-cbc-rebar (Development & Splice tab sync, not merged yet) so the two PRs on this file do not conflict; it contains those commits. This entry changes only the `#suite-frame-capacity` srcdoc.
 - **Editing method:** as the earlier entries: decode (`&quot;`, `&amp;`; decode → encode of the unedited file reproduced it byte for byte), 6 exact-string replacements (each anchor found once), re-encode with CRLF kept; the decoded tab read back equals the edited text byte for byte.
 
@@ -1951,7 +1951,7 @@ Follow-up to the standalone `Concrete Beam ASD.html` sweep (#143, its fix log F8
 - **γ3 selector (5.6.3.3):** the options read "0.67 — A615 Gr 60", "0.75 — A706 Gr 60", "0.76 — A615 Gr 75". In the 10th Ed., A615 Gr 75 is 0.75 and 0.76 is A615 Gr 80 (A706 Gr 80 = 0.80 and A1035 Gr 100 = 0.67 are not offered). The 0.76 value is ≥ the Gr 75 value (conservative), but the label names the wrong grade. Relabel to "A615 Gr 80" and/or add options? Engineer decision.
 - Pre-existing (inventory): the dashboard cites "ACI 9.3.3 / 22.2" for flexure in AASHTO mode.
 
-## 2026-11-01 — PR: claude/rpt-cbc — one combined Report tab in the suite shell, a chapter per tab; Development & Splice tab synced with the rebar tool's Report tab (CBRP / RBRP; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-cbc — one combined Report tab in the suite shell, a chapter per tab; Development & Splice tab synced with the rebar tool's Report tab (CBRP / RBRP; display only, no calculation change) (PR #544: https://github.com/mlococo88/All-Structural/pull/544)
 
 The file uses CRLF line endings; keep them. Every code site is tagged `CBRP` (suite shell, Beam Capacity and ASD tabs) or `RBRP` (Development & Splice tab).
 

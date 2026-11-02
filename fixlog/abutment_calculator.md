@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024); MassDOT LRFD Bridge Manual Part I (MassDOT values unchanged)
 
-## 2026-10-04 — PR: claude/fix-abutment (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-abutment (PR #18: https://github.com/mlococo88/All-Structural/pull/18)
 
 How to read this log:
 - Every edit is listed **exactly** in the appendix as replacement pairs R1…R62, in the order they were applied to the original file. Applying them in order reproduces the new file; this was verified with a script.
@@ -1147,7 +1147,7 @@ After:
 "Shear-friction D/C": 0.05702500795507431
 ```
 
-## 2026-10-04 — PR: claude/step1-group2 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group2 (PR #31: https://github.com/mlococo88/All-Structural/pull/31)
 
 ### F11. "← All tools" link + shared project info (HANDOFF.md §4.1)   [feature (no result change)]
 
@@ -1261,7 +1261,7 @@ After:
 - **Other copies:** the BridgeXfer v1 helper is duplicated verbatim in every tool that uses it (CLAUDE.md §3; list in the PR). The glue block is the same in each tool of this PR except `TOOL`/`FILE` and the field map.
 - **Open items:** none.
 
-## 2026-10-05 — PR: claude/conn-subloads-abutment (PR link added after merge)
+## 2026-10-05 — PR: claude/conn-subloads-abutment (PR #39: https://github.com/mlococo88/All-Structural/pull/39)
 
 ### F12. Pull abutment loads from SubLoads (HANDOFF.md §4.5, channel `abutmentLoads`)   [feature: hand-off (no result change)]
 - **Where:** (1) toolbar, after the "↗ Open EDM" button; anchor text `<button id="btnOpenEDM"`. (2) A new `<script>` block at the end of the file, after the "SECTION F — EVENTS, PERSISTENCE, REPORT, INIT" script and before `</body>`; anchor text `/* ---------- SubLoads abutment loads hand-off`.
@@ -1629,7 +1629,7 @@ Not used (listed in the dialog with the reason): the other LL set, lanes loaded 
 - **Other copies:** BridgeXfer v1 is unchanged (already in this file).
 - **Open items:** the calculator and SubLoads still differ on the seismic connection force (0.10 vs 0.15/0.25), wind per limit state, Strength IV and support-length H (AUDIT A33/A34). EQ is not imported; the calculator uses its own. The calculator applies LL+IM (with IM) to the footing as well; not changed.
 
-## 2026-10-05 — PR: claude/conn-foundation-loads (PR link added after merge)
+## 2026-10-05 — PR: claude/conn-foundation-loads (PR #40: https://github.com/mlococo88/All-Structural/pull/40)
 
 ### F13. Send foundation loads (HANDOFF.md §4.6, channel `foundationLoads`)   [feature: hand-off (no result change)]
 - **Where:** (1) toolbar, after the SubLoads hand-off source span; anchor text `<span id="axh-src" class="axh-src"></span>`. (2) A new `<script>` block at the end of the file, after the abutmentLoads receiver script and before `</body>`; anchor text `/* ---------- foundation loads hand-off (HANDOFF.md §4.6`.
@@ -1796,7 +1796,7 @@ Not used (listed in the dialog with the reason): the other LL set, lanes loaded 
 - **Other copies:** BridgeXfer v1 (unchanged) is in all four tools. The sender code exists only here.
 - **Open items:** (1) cases include the vertical LS over the heel even where it helps stability (the calculator's sliding and eccentricity checks leave it out); (2) the transverse axis y is the calculator's beam-offset axis, which is not tied to a bridge direction; (3) the footing is assumed centred on the abutment centreline for Mx (spread branch).
 
-## 2026-10-09 — PR: claude/tabs-abutment (PR link added after merge)
+## 2026-10-09 — PR: claude/tabs-abutment (PR #68: https://github.com/mlococo88/All-Structural/pull/68)
 
 ### F14. Input column split into tabs   [UI only — no calculation change]
 - **Date / type:** 2026-10-09, UI only (no result change). Engineer's request (2026-10-09): "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." Same approach as `Steel Beam Design - AISC 15th.html` (fix log T1).
@@ -1966,7 +1966,7 @@ Not used (listed in the dialog with the reason): the other LL set, lanes loaded 
 - **Other copies:** none (the tab code exists only in this file; the Steel Beam version is a separate implementation).
 - **Open items:** the pre-existing 132 px horizontal overflow at 400 px width (existing content; not changed here).
 
-## 2026-10-12 — PR: claude/sweep-abutment (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-abutment (PR #145: https://github.com/mlococo88/All-Structural/pull/145)
 
 Open-item sweep (inventory §18: ABT-O1…O11, ABT-F12, ABT-F13, ABT-C5, ABT-UI1). Basis: AASHTO LRFD 10th Ed. (2024). Every edit is listed exactly in the appendix as a unified diff of `abutment_calculator.html` against origin/main `0aff3b9` (anchor text = the context lines). All numbers below come from running the real `computeAll()` of the old and new files in headless Chromium (harness `abswp/ev.mjs`, `abswp/cmp.mjs`). "Benchmark" = `benchState()` (B = 13 ft, L_ftg = 44 ft, 6 girders, DC/DW/LL = 85/12/70 kip each, WS Vy = 2.5 kip each).
 
@@ -2420,7 +2420,7 @@ index fcc5211..6c9b39f 100644
          pile? "Moments are about the pile-group centroid. My is + toward the toe here (the calculator's pile table uses ex + toward the heel)." : "Moments are about the footing centre (B/2 from the toe, on the abutment centreline).",
 ```
 
-## 2026-10-12 — PR: claude/abutment-followup (PR link added after merge)
+## 2026-10-12 — PR: claude/abutment-followup (PR #147: https://github.com/mlococo88/All-Structural/pull/147)
 
 Follow-up to the sweep (#145): N4, N2, and the Service I part of the F15 limits. Basis: AASHTO LRFD 10th Ed. (2024). The exact edits are in the appendix as a unified diff of `abutment_calculator.html` against origin/main `1cc655a`. Numbers come from the real `computeAll()` of the old and new files in headless Chromium. "Benchmark" = `benchState()`.
 
@@ -2601,7 +2601,7 @@ index 6c9b39f..ebe0502 100644
      ["Scour condition",f.scour?"ON — passive eliminated; qn at scoured grade":"off",""]]);
 ```
 
-## 2026-10-18 — PR: claude/abutment-d11-report (PR link added after merge)
+## 2026-10-18 — PR: claude/abutment-d11-report (PR #274: https://github.com/mlococo88/All-Structural/pull/274)
 
 ### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
 - **Engineer request:** 2026-10-14 / 2026-10-18 (AUDIT.md D11: "have a report builder, to be reviewed against the format").
@@ -2715,7 +2715,7 @@ index 6c9b39f..ebe0502 100644
   - Tab 3 §3.1 Sliding says "See §3.0 free-body ledger for the force × arm breakdown of the governing case". However, §3.0 is assembled for the governing *bearing/pile* case (its own note says so); the sliding case uses its own permutation with LSv excluded. Not changed (wording only). Should the link say so, or should §3.1 get its own ledger?
   - The "Design basis §x" citations (the tool's own notes) now appear in a report whose sections are also numbered §x. They are labelled "Design basis", but the engineer may prefer a different marker.
 
-## 2026-10-19 — PR: claude/aashto10-abutment — ℓd per AASHTO LRFD 10th Ed. 5.10.8.2.1a; 10th Ed. renumbers (PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-abutment — ℓd per AASHTO LRFD 10th Ed. 5.10.8.2.1a; 10th Ed. renumbers (PR #341: https://github.com/mlococo88/All-Structural/pull/341)
 
 ### A1. Tension development length ℓd   [calculation change (§4)]
 - **Where:** section-check function (the one returning `{...o, As, AsReq, d, …}`), anchor `// development [AASHTO LRFD 10th Ed. 5.10.8.2.1a]`; its display in the Structural tab, anchor `S&T reinforcement (each face, each direction) & tension development length`.
@@ -2760,7 +2760,7 @@ index 6c9b39f..ebe0502 100644
 - 11.6.5.2.1: for walls founded on Site Class A, B or B/C, k_h0 = 1.2·A_s. The tool uses k_h = ratio × A_s with no 1.2 factor. Engineer decision (add a site-class input or a note?).
 - ℓd is still the upper bound (λrc = 1.0). A computed λrc (cover, spacing) would shorten it; not offered.
 
-## 2026-10-19 — PR: claude/abut-defects-factors — load factors, EE limits, drag load and connection force to AASHTO LRFD 10th Ed. (PR link added after merge)
+## 2026-10-19 — PR: claude/abut-defects-factors — load factors, EE limits, drag load and connection force to AASHTO LRFD 10th Ed. (PR #351: https://github.com/mlococo88/All-Structural/pull/351)
 
 Defects from the 2026-10-19 review (H1, H2, H3, H5, H6, H7), approved by the engineer. Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024); every value below was checked against the 10th Ed. text (Table 3.4.1-3 was read from the rendered page). Numbers come from the real `computeAll()` of origin/main `832728d` and of the branch in headless Chromium. "Default project" = the built-in example (B = 13 ft, L = 44 ft, 6 girders, DC/DW/LL = 85/12/70 kip per girder; TU/CR·SH entered 2.5/1.5 kip per girder, floating share 50 %). The exact edits are in the appendix as a unified diff against `832728d`.
 
@@ -3211,7 +3211,7 @@ index 6606efa..453d8aa 100644
      u.push(["Footing width, deck / seat / ground elevations","the calculator derives B = toe + stem + heel and uses heights, not elevations"]);
 ```
 
-## 2026-10-19 — PR: claude/abut-defects-calc — stability live-load case, batter centroid, stem M_s, support length, EDM count, seat A₂ (PR link added after merge)
+## 2026-10-19 — PR: claude/abut-defects-calc — stability live-load case, batter centroid, stem M_s, support length, EDM count, seat A₂ (PR #352: https://github.com/mlococo88/All-Structural/pull/352)
 
 Branched from claude/abut-defects-factors (F27–F32); the numbers "before" below are that branch (`b8da0d5`), "after" this branch. Review defects N1, N2, N3, N5, N6, N9, as the engineer approved. Basis: AASHTO LRFD 10th Ed. (2024), checked against the text (Table 4.7.4.4-1, 5.6.5 and Fig. 5.6.5-1 read from the rendered pages). Results come from the real `computeAll()` in headless Chromium. The exact edits are in the appendix as a unified diff against `b8da0d5`. Default project as in F27.
 
@@ -3702,7 +3702,7 @@ index 453d8aa..08db78f 100644
 ```
 
 
-## 2026-10-20 — PR: claude/abut-followups — EE inertia share, punching depth over the pile heads, bearings per girder, connection force span rule, Strength IV removed (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-followups — EE inertia share, punching depth over the pile heads, bearings per girder, connection force span rule, Strength IV removed (PR #353: https://github.com/mlococo88/All-Structural/pull/353)
 
 Engineer decisions of 2026-10-20 (follow-ups to F27–F38: open items N4, N7 and "2 bearings per girder", plus the review note on the constants list), and two further items the engineer asked for the same day (connection force single-span rule; Strength IV). Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), checked against the text (3.4.1/C3.4.1, 3.10.9.1, 3.10.9.2, 4.7.4.2, 5.12.8.6.1, 5.12.8.6.3). Numbers come from the real `computeAll()` of origin/main `877876b` (before) and of this branch (after) in headless Chromium. "Default project" = the built-in benchmark (`benchState()`: B = 13 ft, L_ab = 44 ft, t_f = 3 ft, 6 girders, DC/DW/LL = 85/12/70 kip per girder; ΣDC + ΣDW = 582 kip; seat z = 17 ft). The exact edits are in the appendix as a unified diff against `877876b`.
 
@@ -4184,7 +4184,7 @@ index 08db78f..51b0834 100644
  }
 ```
 
-## 2026-10-20 — PR: claude/abut-accuracy — pile toe depth over the pile heads, single-span Extreme Event I without M–O (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-accuracy — pile toe depth over the pile heads, single-span Extreme Event I without M–O (PR #355: https://github.com/mlococo88/All-Structural/pull/355)
 
 Engineer decisions of 2026-10-20 on two open items of the previous entry ("Pile-cap one-way shear and toe flexure with the mat over the pile heads"; "C3.10.9.1"). Standing direction: accurate, not overly conservative. Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), checked against the text (C3.10.9.1, 3.10.9.1, 4.7.4.2, 5.6.3.2, 5.6.3.3, 5.6.7, 5.7.2.8, 5.7.3.3, 11.6.5.1). Numbers come from the real `computeAll()` of origin/main `9fa3dee` (before; the abutment file is the same as in `2408b77`) and of this branch (after) in headless Chromium, on the built-in benchmark (`benchState()`: B = 13 ft, L_ab = 44 ft, t_f = 3 ft, L_toe = 3.5 ft, #8 @ 9 in toe bars, f′c = 4 ksi, f_y = 60 ksi, c_F = 3 in; 6 girders, ΣDC + ΣDW = 582 kip; seat z = 17 ft). The exact edits are in the appendix as a unified diff against `9fa3dee`.
 
@@ -4458,7 +4458,7 @@ index 51b0834..f41976d 100644
      ["Branch","Spread footing on "+f.matl,""],
 ```
 
-## 2026-10-20 — PR: claude/abut-pilecap-shear — pile toe one-way shear at d_v with partial piles (5.12.8.6.1); D-region note; sketch (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-pilecap-shear — pile toe one-way shear at d_v with partial piles (5.12.8.6.1); D-region note; sketch (PR #357: https://github.com/mlococo88/All-Structural/pull/357)
 
 Follow-up to the F45 open item ("Pile toe one-way shear now fails in the default pile project (D/C 1.516)"). Standing direction: accurate, not overly conservative. Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), checked against the text and the rendered pages (5.12.8.6.1 and Fig. C5.12.8.6.1-1, 5.7.3.2 / C5.7.3.2, 5.5.1.2.3, 5.8.1, 5.8.2.1 / C5.8.2.2, 5.12.8.2, 5.12.8.4). Numbers come from the real `computeAll()` of origin/main `22c6278` (before) and of this branch (after) in headless Chromium, on `benchState()` with `S.fnd.branch="pile"` (B = 13 ft, L_toe = 3.5 ft, t_f = 3 ft, L_ab = L_ftg = 44 ft, γc = 0.150 kcf; 3 pile rows at x = −4.25 / 0 / +4.25 ft from the footing CL, 12 in piles, e_pile = 12 in, c_top = 3 in; #8 @ 9 in toe bars; f′c = 4 ksi).
 
@@ -4523,7 +4523,7 @@ Follow-up to the F45 open item ("Pile toe one-way shear now fails in the default
 - **5.7.3.2, concentrated load within d_v.** 5.12.8.6.1 places the one-way section at the 5.7.3.2 distance, and 5.7.3.2 moves the section to the face when a concentrated load lies within d_v. Read literally for a pile cap, any pile within d_v would send the section back to the face with the full pile load (the old result), which would leave the 5.12.8.6.1 partial-pile rule nothing to apply to. This entry follows 5.12.8.6.1 (the footing-specific rule; Fig. C5.12.8.6.1-1). Engineer to confirm.
 - **Pile position tolerance (5.12.8.2).** For footing design the 10th Ed. assumes driven piles may be out of position by 6 in or D/4 (unless special equipment is specified). The tool uses planned positions everywhere (pile loads, punching, now the toe shear). Default project with the front row 6 in toward the toe (pile loads held): f = (2.000 − (1.750 − 0.500))/1.000 = 0.75, V_u ≈ 0.75·38.675 − 0.810 = 28.20 kip/ft, D/C ≈ 1.148. Engineer to decide whether to apply the tolerance here and in the punching check.
 
-## 2026-10-20 — PR: claude/aashto10-abut-ee — Extreme Event I permanent loads at 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1); engineer direction 2026-10-20 "accurate, not overly conservative"; supersedes F25 (PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-abut-ee — Extreme Event I permanent loads at 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1); engineer direction 2026-10-20 "accurate, not overly conservative"; supersedes F25 (PR #360: https://github.com/mlococo88/All-Structural/pull/360)
 
 ### F48. Extreme Event I: DC, DW, EV, EH, ES at 1.00, no γp max/min permutation   [calc change] [LESS conservative where EE I governed with γp max; MORE where it governed with γp min]
 - **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Table 3.4.1-1 (p. 3-16): the permanent-load column (DC, DW, EH, EV, ES, EL, PS, CR, SH) reads 1.00 for Extreme Event I and II, not γp. C3.4.1 (p. 3-10): γp > 1.0 in extreme events was dropped in 2015. No wall / abutment exception: 11.5.6 refers to 3.4.1; Fig. C11.5.6-4 (p. 11-13) shows 1.00 DC / EV / P_AE for EE I; 11.5.8 and 10.5.5.3 are resistance factors only. The tool has no Extreme Event II.
@@ -4680,7 +4680,7 @@ index 053d0b9..250ef29 100644
 +    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+(g.HsupMode==="single"?", single-span bridge: static EH + connection force, no M–O / wall inertia [C3.10.9.1]":", kh="+fmt(+S.seismic.khR,2)+"·As, kv="+fmt(+S.seismic.kv,2)+", ΔPAE @ "+fmt(+S.seismic.hEQr,2)+"H")+"; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γDC = γDW = γEV = γES(EE) = 1.00 [T.3.4.1-1], γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"1.00 [T.3.4.1-1]")+", superstructure inertia share "+fmt(+S.seismic.shEQ,0)+"%"):"OFF",""],
 ```
 
-## 2026-10-20 — PR: claude/abut-owner-a — owner selector (AASHTO / MassDOT / RIDOT / CTDOT) with owner requirement checks; no computed result changes (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-owner-a — owner selector (AASHTO / MassDOT / RIDOT / CTDOT) with owner requirement checks; no computed result changes (PR #366: https://github.com/mlococo88/All-Structural/pull/366)
 
 ### F49. Owner selector and "Owner requirements" card (OWNA)   [new checks and notes only] [no result changed]
 - **What:** a new input panel **I-0 Owner** (Geometry tab) with the bridge owner (AASHTO default, MassDOT, RIDOT, CTDOT), the total bridge length for the integral screening (0 = span L) and, while passive resistance is off, the existing input `fnd.Df` (bottom of footing below finished grade) for the frost / embedment rules. A new output panel **Tab 1 §1.0a "Owner Requirements"** lists every rule of the chosen owner: manual section and page, a paraphrase, the kind (Shall = pass/fail, Should = warning, Advisory, Note, Pending reference), the value checked with its worked line, the requirement, the result and a "Worked in" link (CLAUDE.md §6). A chip above the dashboard ("RIDOT: 1 TO CHECK") links to it; a failed Shall adds an error line and a Should a warning line in the warnings box (Tab 1 §1.0a cited). The report includes the card (it is a Tab 1 panel), the owner manual on the cover line and in the references, and an "Owner" block in the input echo.
@@ -4992,7 +4992,7 @@ index 250ef29..dd331d9 100644
 +      <table class="cr-refs">${abutRefsNow().map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
 ```
 
-## 2026-10-20 — PR: claude/abut-owner-b (stacked on claude/abut-owner-a) — owner defaults and owner load rules that change results (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-owner-b (stacked on claude/abut-owner-a) — owner defaults and owner load rules that change results (PR #367: https://github.com/mlococo88/All-Structural/pull/367)
 
 Results under the AASHTO owner are unchanged: identical to origin/main for every tested project (see "How verified"). Under MassDOT, RIDOT and CTDOT the items below change results. Page numbers are the owner manuals'; rules are paraphrased.
 
@@ -5644,7 +5644,7 @@ index dd331d9..96eded2 100644
 +    ["Backwall bars epoxy coated (λcf)",rf.coatBW?"yes":"no",""],
 ```
 
-## 2026-10-20 — PR: claude/abut-coulomb — Coulomb on the virtual back by heel length (AASHTO LRFD 10th Ed. C3.11.5.3); MassDOT Coulomb default; RIDOT at-rest on piles / rock (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-coulomb — Coulomb on the virtual back by heel length (AASHTO LRFD 10th Ed. C3.11.5.3); MassDOT Coulomb default; RIDOT at-rest on piles / rock (PR #368: https://github.com/mlococo88/All-Structural/pull/368)
 
 Note: #367 (F50–F58) was merged into `claude/abut-owner-a` after #366 had already been squash-merged to main, so it never reached main. This branch carries it as its first commit (a cherry-pick of `4803548`, unchanged), followed by the changes below.
 
@@ -5793,7 +5793,7 @@ index 96eded2..42344b9 100644
 +    ["Earth pressure state",{active:"active Ka",atrest:"at-rest K0 = 1 − sin φ",blend:"0.5(K0 + Ka)",massdot:"MassDOT 3.1.6 rule",ridot:"RIDOT: at-rest on piles / rock"}[S.soil.Kmode]||"active Ka",""],
 ```
 
-## 2026-10-20 — PR: claude/abut-checks — added checks: backwall wheel load, stem dowels (development and lap), pile structural resistance, k_h0 = 1.2·A_s on Site Class A/B/B-C, cover advisory, computed spread-footing q_n (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-checks — added checks: backwall wheel load, stem dowels (development and lap), pile structural resistance, k_h0 = 1.2·A_s on Site Class A/B/B-C, cover advisory, computed spread-footing q_n (PR #369: https://github.com/mlococo88/All-Structural/pull/369)
 
 Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), each factor and equation checked in the 10th Ed. text; FHWA LRFD Steel Girder Superstructure Design Example, Abutment and Wingwall Design (Design Step 7.5), cited only. Default project = the built-in project (B = 13 ft, L = 44 ft, 6 girders). All numbers below are from headless `computeAll()` and match the hand checks.
 
@@ -6392,7 +6392,7 @@ index 42344b9..04ae525 100644
 +  if(S.fnd.branch==="spread"&&R.checks.bearing){ key+=`<tr><td class="lft">Max factored bearing pressure vs φ·qn</td><td>${fmt(R.checks.bearing.q)} vs ${fmt(S.fnd.phiB*(R.checks.bearing.qn??S.fnd.qn))} ksf</td><td>${wk("tab-stab","o-brg")}</td></tr>
 ```
 
-## 2026-10-20 — PR: claude/abut-show-work — ℓ_d with λ_rc per Eq. 5.10.8.2.1c-2; worked derivations (§6) and figures (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-show-work — ℓ_d with λ_rc per Eq. 5.10.8.2.1c-2; worked derivations (§6) and figures (PR #370: https://github.com/mlococo88/All-Structural/pull/370)
 
 Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Only F67 changes a computed value (the bar-length ℓ_d); F68 and F69 are display only.
 
@@ -6893,7 +6893,7 @@ index 04ae525..ff84a19 100644
 +    s+=`<text x="${Xc(-Lft/2)}" y="${Yc(B/2)+60}" font-size="9.5" font-family="Times New Roman" fill="#555">arrows: shear per pile H/n = ${fmt(sh.Hres,2)} kip (H_x ${fmt(sh.Hx,2)}, H_y ${fmt(sh.Hy,2)}; ${esc(sh.ls||"")}, §4.5)</text>`; }
 ```
 
-## 2026-10-20 — PR: claude/abut-lrl — top-bar factor λrl on the heel ℓ_d; V&M diagrams match the design values (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-lrl — top-bar factor λrl on the heel ℓ_d; V&M diagrams match the design values (PR #371: https://github.com/mlococo88/All-Structural/pull/371)
 
 ### F70. λrl = 1.3 for top bars (heel / footing top mat) (ABLR-1)   [calc change] [MORE conservative; bar-length estimate only]
 - **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), 5.10.8.2.1b (verified in the text): λrl = 1.3 for horizontal reinforcement with more than 12.0 in of fresh concrete cast below it; the product λrl·λcf need not exceed 1.7.
@@ -6999,7 +6999,7 @@ index ff84a19..92d1cf2 100644
 ```
 
 
-## 2026-10-20 — PR: claude/abut-wingwalls — Wingwall module (input panel I-13, Tab 9) (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-wingwalls — Wingwall module (input panel I-13, Tab 9) (PR #372: https://github.com/mlococo88/All-Structural/pull/372)
 
 **What:** new wingwall design module (WING). Two types:
 
@@ -7731,7 +7731,7 @@ index 92d1cf2..e05d029 100644
 ```
 
 
-## 2026-10-20 — PR: claude/abut-integral — Abutment type: conventional / integral / semi-integral (input panel I-0a, Tab 10) (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-integral — Abutment type: conventional / integral / semi-integral (input panel I-0a, Tab 10) (PR #373: https://github.com/mlococo88/All-Structural/pull/373)
 
 **What:** new abutment-type selector (IAB) with the design of integral and semi-integral abutments per owner. Conventional cantilever stays the default and the existing design (Tabs 1–9) is unchanged.
 
@@ -8387,7 +8387,7 @@ index e05d029..92d9a35 100644
 ```
 
 
-## 2026-10-20 — PR: claude/abut-integral-2 — Integral / semi-integral follow-up: nonlinear mobilization, semi-integral lower-stem pressure, cap stirrups, skew definitions (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-integral-2 — Integral / semi-integral follow-up: nonlinear mobilization, semi-integral lower-stem pressure, cap stirrups, skew definitions (PR #374: https://github.com/mlococo88/All-Structural/pull/374)
 
 Engineer decisions on the open items of the IAB entry above (items 2, 5, 7, 8; items 1, 3, 4, 6 kept as they are).
 
@@ -8620,7 +8620,7 @@ index 92d9a35..f06352c 100644
 +      ["Cap stirrups",String(I.stBar)==="0"?"none":"#"+I.stBar+", "+I.stLegs+" legs @ "+fmt(+I.stSp,1)+" in",""]]:[
 ```
 
-## 2026-10-20 — PR: claude/abut-interactive — Interactive figures (hover / tap values, selectors, click to the worked calculation) (ABINT) (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-interactive — Interactive figures (hover / tap values, selectors, click to the worked calculation) (ABINT) (PR #375: https://github.com/mlococo88/All-Structural/pull/375)
 
 UI only. No formula, factor, unit or code reference changed. `computeAll()` is not edited. The printed calculation report is byte-identical to main (checked below).
 
@@ -9220,7 +9220,7 @@ index f06352c..46f54cc 100644
 ```
 
 
-## 2026-10-20 — PR: claude/abut-pile-handoff — Foundation-load hand-off to Pile Designer: pile layout, per-pile governing loads, integral-abutment data (ABPX) (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-pile-handoff — Foundation-load hand-off to Pile Designer: pile layout, per-pile governing loads, integral-abutment data (ABPX) (PR #376: https://github.com/mlococo88/All-Structural/pull/376)
 
 Cross-tool connection (CLAUDE.md §7 exception): the same PR changes the receiver, `Pile Designer.html` (fixlog/Pile Designer.md ABPX), and HANDOFF.md §4.6.
 
@@ -9363,7 +9363,7 @@ index 46f54cc..a7abcf9 100644
 ```
 
 
-## 2026-10-20 — PR: claude/abut-pile-handoff-2 — Pile distribution with Σx'y'; drag load per pile on the hand-off (ABPX2; engineer decisions 2026-10-20 after ABPX) (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-pile-handoff-2 — Pile distribution with Σx'y'; drag load per pile on the hand-off (ABPX2; engineer decisions 2026-10-20 after ABPX) (PR #377: https://github.com/mlococo88/All-Structural/pull/377)
 
 Cross-tool connection (CLAUDE.md §7 exception): the same PR changes `Pile Designer.html` (fixlog/Pile Designer.md ABPX2) and HANDOFF.md §4.6.
 
@@ -9476,7 +9476,7 @@ index a7abcf9..d58ad55 100644
 +      p.notes.push("Per-pile governing loads (pileDesign): per limit state, the pile with the largest reaction and the pile with the smallest (uplift when < 0) of the calculator's pile table, each with its lateral share H/n and a pinned head. They are factored loads on one pile (Service I: factored:false). The drag load DR = "+fmt(+S.piles.dd||0,1)+" kip per pile is not in P; it is sent on its own (DR, γDR = "+fmt(p.pileLayout.resistance.gDR,2)+" for structural strength, 0.00 for geotechnical) for the structural check at the neutral plane.");
 ```
 
-## 2026-10-20 — PR: claude/aashto10-abut-r1 — 2026-10-20 follow-up review, part 1: wing Extreme Event II at 1.00, wing resultant outside the base, MassDOT semi-integral seismic, stem shear by limit state, backwall inertia arm and Extreme Event checks, f_y above 60 ksi, AASHTO 10.7.1.2 pile checks, labels (ABR1) (PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-abut-r1 — 2026-10-20 follow-up review, part 1: wing Extreme Event II at 1.00, wing resultant outside the base, MassDOT semi-integral seismic, stem shear by limit state, backwall inertia arm and Extreme Event checks, f_y above 60 ksi, AASHTO 10.7.1.2 pile checks, labels (ABR1) (PR #380: https://github.com/mlococo88/All-Structural/pull/380)
 
 Source: the 2026-10-20 follow-up review (items N-1, N-2, N-3, N-6, P1 items 3, 4, 6, 8, 9, P4 items 32, 33). Every factor and equation below was checked against the AASHTO LRFD 10th Ed. (2024) text and, for the owner rules, the MassDOT LRFD Bridge Manual Part I (Hundredth Anniversary Ed.). Engineer direction: accurate results, not extra conservatism.
 
@@ -10129,7 +10129,7 @@ index d58ad55..056bbb3 100644
 +        <span class="rpt-banner-detail">Governing: ${g1?esc(g1.name)+' — '+(g1.txt?esc(g1.txt):'D/C '+fmt(g1.dc)):'—'} · ${R.dash.filter(d=>d.pass!==null).length} coded checks · ${S.fnd.branch==="pile"?"pile-supported":"spread"} footing${S.seismic&&S.seismic.on?" · seismic (Extreme Event I)":""}</span>
 ```
 
-## 2026-10-20 — PR: claude/aashto10-abut-r2 — 2026-10-20 follow-up review, part 2: pile combined axial + flexure and shear, unsupported-length buckling, integral-pile geotechnical checks and 10th Ed. interaction, attached-wing loads on the abutment, semi-integral diaphragm inertia, log-spiral K_PE (ABR2) (PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-abut-r2 — 2026-10-20 follow-up review, part 2: pile combined axial + flexure and shear, unsupported-length buckling, integral-pile geotechnical checks and 10th Ed. interaction, attached-wing loads on the abutment, semi-integral diaphragm inertia, log-spiral K_PE (ABR2) (PR #383: https://github.com/mlococo88/All-Structural/pull/383)
 
 Source: the 2026-10-20 follow-up review (P1 item 1, N-4, N-5), plus the engineer decisions on ABR1 open items 3 and 4 (2026-10-20):
 - compute K_PE by the 10th Ed. method;
@@ -10714,7 +10714,7 @@ index 056bbb3..4bb0c72 100644
 +  if(t.wing) t.wing.toAb=false;   // ABR2: the hand-verified benchmark is the abutment alone (the wing loads on the abutment are not part of it)
 ```
 
-## 2026-10-20 — PR: claude/aashto10-abut-r3 — 2026-10-20 follow-up review, part 3: Matlock–Reese pile moment, skew and transverse loads, 11.6.5.1 nonconcurrency, P_AE distribution and water, semi-integral construction stage and increment, IM on the foundation, integral cap shear at d_v, passive over L_ftg, CTDOT γ_c (ABR3) (PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-abut-r3 — 2026-10-20 follow-up review, part 3: Matlock–Reese pile moment, skew and transverse loads, 11.6.5.1 nonconcurrency, P_AE distribution and water, semi-integral construction stage and increment, IM on the foundation, integral cap shear at d_v, passive over L_ftg, CTDOT γ_c (ABR3) (PR #386: https://github.com/mlococo88/All-Structural/pull/386)
 
 Source: the 2026-10-20 follow-up review (P1 item 2; P2 items 11, 12, 13, 14, 15, 16, 19; P3 item 30, CTDOT γ_c) and the engineer decisions on the ABR2 open items (2026-10-20):
 1. Replace the equivalent cantilever with the elastic solution of a pile in soil whose modulus grows with depth (Matlock–Reese), with a stick-up term; keep the p-y moment as an override.
@@ -11411,7 +11411,7 @@ index 4bb0c72..f530c84 100644
 +    ["Extreme Event I",S.seismic.on?("ON — As="+fmt(+S.seismic.As,3)+(g.HsupMode==="single"?", single-span bridge: static EH + connection force, no M–O / wall inertia [C3.10.9.1]":", kh="+fmt(+S.seismic.khR,2)+"·kh0, kh0 = "+(["A","B","B/C"].includes(S.seismic.siteClass)?"1.2·As":"As")+" (site class "+(S.seismic.siteClass||"not selected")+") [11.6.5.2.1], kv="+fmt(+S.seismic.kv,2)+", ΔPAE "+(S.seismic.hEQmode==="ratio"?"@ "+fmt(+S.seismic.hEQr,2)+"H":"as the static pressure [11.6.5.3]")+(S.seismic.nonConc!==false?", PAE/PIR nonconcurrent [11.6.5.1]":"")+", transverse share "+fmt(+(S.seismic.shEQt??100),0)+"% (100/30, 3.10.8)")+"; φτ/φb/φc(EE)="+fmt(+S.seismic.phiTauEQ,2)+"/"+fmt(+S.seismic.phiBEQ,2)+"/"+fmt(+S.seismic.phiCEQ,2)+", e/B ≤ "+(S.seismic.eLimEQmode==="user"?fmt(+S.seismic.eFracEQ,3)+" (owner rule)":"1/3 + (0.4 − 1/3)·γEQ [11.6.5.1]")+", γDC = γDW = γEV = γES(EE) = 1.00 [T.3.4.1-1], γEH(EE) = "+(eqEHfixed()!==null?fmt(eqEHfixed(),2)+" (agency policy)":"1.00 [T.3.4.1-1]")+", superstructure inertia share "+fmt(+S.seismic.shEQ,0)+"%"):"OFF",""],
 ```
 
-## 2026-10-20 — PR: claude/aashto10-abut-r4 — accuracy follow-ups to ABR3: integral pile gravity load without IM, stem earth pressure with water, passive depth neglected (ABR4) (PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-abut-r4 — accuracy follow-ups to ABR3: integral pile gravity load without IM, stem earth pressure with water, passive depth neglected (ABR4) (PR #387: https://github.com/mlococo88/All-Structural/pull/387)
 
 Source: engineer decisions on the ABR3 open items (2026-10-20). Items 1 (transverse EQ: wall inertia, s_EQ,t 100 %), 2 (MassDOT semi-integral 100 % of P_AE) and the f_IM input for continuous spans are accepted as built. Provisions checked against the AASHTO LRFD 10th Ed. (2024) text and the owner manuals.
 
@@ -11571,7 +11571,7 @@ index f530c84..8cf007d 100644
 ```
 
 
-## 2026-10-20 — PR: claude/pile-abut-return — Pile results back from Pile Designer: "Pull pile results" (channel pileResults) and a content hash on the foundation-load hand-off (PXR) (PR link added after merge)
+## 2026-10-20 — PR: claude/pile-abut-return — Pile results back from Pile Designer: "Pull pile results" (channel pileResults) and a content hash on the foundation-load hand-off (PXR) (PR #388: https://github.com/mlococo88/All-Structural/pull/388)
 
 Cross-tool connection (CLAUDE.md §7 exception): the same PR changes the sender, `Pile Designer.html` (fixlog/Pile Designer.md PXR), and HANDOFF.md (§4 channel table, §4.6 content hash, new §4.10 `pileResults`).
 
@@ -11960,7 +11960,7 @@ index 8cf007d..848fdad 100644
 ```
 
 
-## 2026-10-20 — PR: claude/pile-abut-return-2 — Follow-ups to PXR (#388): H-pile orientation on the hand-off, biaxial integral pile check, stale results not used (PXR2) (PR link added after merge)
+## 2026-10-20 — PR: claude/pile-abut-return-2 — Follow-ups to PXR (#388): H-pile orientation on the hand-off, biaxial integral pile check, stale results not used (PXR2) (PR #389: https://github.com/mlococo88/All-Structural/pull/389)
 
 Engineer decisions on the PXR open items (2026-10-20): 1 carry the orientation and set it in Pile Designer; 2 the integral interaction takes both axis moments (10th Ed. 6.9.2.2.1); 3 stale results are not used (Matlock–Reese and the values entered before the import), shown for reference only; 4 (field-method R_n default) kept. Cross-tool connection (CLAUDE.md §7 exception): the same PR changes `Pile Designer.html` (fixlog/Pile Designer.md PXR2) and HANDOFF.md §4.6 / §4.10.
 
@@ -12125,7 +12125,7 @@ index 848fdad..a8a7ec6 100644
 +      if(LAST&&LAST.level==="stale"){ warn("Pile results from Pile Designer: "+LAST.msg); renderWarnings(); } paint(); }catch(e){} return r; }; }
 ```
 
-## 2026-10-20 — PR: claude/abut-approach-slab — Approach slab: panel I-0b, live-load surcharge removal, slab reaction on the abutment, shelf as a bracket, friction on integral / semi-integral abutments, slab design (APS) (PR link added after merge)
+## 2026-10-20 — PR: claude/abut-approach-slab — Approach slab: panel I-0b, live-load surcharge removal, slab reaction on the abutment, shelf as a bracket, friction on integral / semi-integral abutments, slab design (APS) (PR #391: https://github.com/mlococo88/All-Structural/pull/391)
 
 Basis: AASHTO LRFD BDS 10th Ed. (2024) for the calculation; owner rules on top (MassDOT Bridge Manual Part I 3.3.1.3, 3.10.4; RIDOT BDM 11.3.2, 17.4.2; CTDOT BRSDM V2 11.14.1CT, CT11.1.1.3, 3.11.6.4, legacy BDM 5.8, 5.11.3). Owner manuals are cited by article only. Every code site is tagged `APS`; search for `APS` to find them all. Engineer's direction: accuracy, not extra conservatism.
 
@@ -13099,7 +13099,7 @@ index a8a7ec6..ecd2e6b 100644
 ```
 
 
-## 2026-10-21 — PR: claude/abut-3d-integral — 3D view follows the abutment type: integral and semi-integral geometry (AB3D) (PR link added after merge)
+## 2026-10-21 — PR: claude/abut-3d-integral — 3D view follows the abutment type: integral and semi-integral geometry (AB3D) (PR #393: https://github.com/mlococo88/All-Structural/pull/393)
 
 Display only (Tab 7, 3D view). **No computed value changes; no input, saved-data key or format changes.** Every code site is tagged `AB3D`.
 
@@ -13305,7 +13305,7 @@ Display only (Tab 7, 3D view). **No computed value changes; no input, saved-data
 ```
 
 
-## 2026-10-21 — PR: claude/abut-tabs-1a — Type-aware dashboard counts, design-incomplete flag, integral crack-control rows, owner card, warnings and report front matter (ABT, part 1a) (PR link added after merge)
+## 2026-10-21 — PR: claude/abut-tabs-1a — Type-aware dashboard counts, design-incomplete flag, integral crack-control rows, owner card, warnings and report front matter (ABT, part 1a) (PR #394: https://github.com/mlococo88/All-Structural/pull/394)
 
 Display only. Basis of the audit: the read-only output-tab audit of 2026-10-21 (integral and semi-integral abutments). Every code site is tagged `ABT`; search for `ABT` to find them all. **No computed value changes:** `computeAll()` (every key of `R` except `R.dash` and `R.own`) and the Input ID are identical to origin/main (`4468f47`) for all three types under all four owners (see "How verified"). `R.dash` gains rows only (ABT-2); `R.own` lists fewer owner-default rows for an integral abutment (ABT-3).
 
@@ -13674,7 +13674,7 @@ index d42dc2b..6bda3ab 100644
 ```
 
 
-## 2026-10-21 — PR: claude/abut-tabs-1b — Integral abutment content in Tabs 1–6 and 8, Tab 3 hidden, semi-integral end diaphragm in Tabs 1, 5, 6, 8, integral wing height, dowel lap as information (ABT2, part 1b) (PR link added after merge)
+## 2026-10-21 — PR: claude/abut-tabs-1b — Integral abutment content in Tabs 1–6 and 8, Tab 3 hidden, semi-integral end diaphragm in Tabs 1, 5, 6, 8, integral wing height, dowel lap as information (ABT2, part 1b) (PR #395: https://github.com/mlococo88/All-Structural/pull/395)
 
 Every code site is tagged `ABT2`; search for `ABT2` to find them all. Basis: AASHTO LRFD BDS 10th Ed. (2024); owner methods as in Tab 10. Engineer's decisions of 2026-10-21: the stem dowel lap with no lap entered is information only; integral U-wing height limited to the integral wall height.
 
@@ -14090,7 +14090,7 @@ index 6bda3ab..492087f 100644
 ```
 
 
-## 2026-10-21 — PR: claude/abut-calc-gaps — Integral / semi-integral calculation gaps: wing weight on the integral piles, semi-integral end-diaphragm dead load, bearing shear from movement on by default, integral Extreme Event I, integral wing earth pressure and k_h (ABC) (PR link added after merge)
+## 2026-10-21 — PR: claude/abut-calc-gaps — Integral / semi-integral calculation gaps: wing weight on the integral piles, semi-integral end-diaphragm dead load, bearing shear from movement on by default, integral Extreme Event I, integral wing earth pressure and k_h (ABC) (PR #396: https://github.com/mlococo88/All-Structural/pull/396)
 
 Basis: AASHTO LRFD BDS 10th Ed. (2024); owner rules as in Tab 10. Engineer's decisions of 2026-10-21 (accuracy, not extra conservatism). Every code site is tagged `ABC`; search for `ABC` to find them all. **Conventional abutments: no result changes** (`computeAll` identical to origin/main `eac35f4`, with and without seismic, spread and piles).
 
@@ -14321,7 +14321,7 @@ index 492087f..b8d5942 100644
 ```
 
 
-## 2026-10-21 — PR: claude/abut-handoffs-iab — Integral / semi-integral hand-offs: integral per-pile foundation loads, R_n / φ into the integral inputs, type-aware SubLoads import (AXI) (PR link added after merge)
+## 2026-10-21 — PR: claude/abut-handoffs-iab — Integral / semi-integral hand-offs: integral per-pile foundation loads, R_n / φ into the integral inputs, type-aware SubLoads import (AXI) (PR #398: https://github.com/mlococo88/All-Structural/pull/398)
 
 Cross-tool connection in one PR (CLAUDE.md §7 exception): abutment_calculator.html (sender of foundationLoads, receiver of pileResults and abutmentLoads), Pile Designer.html and Spread Footing.html (receivers of foundationLoads), HANDOFF.md §4.5, §4.6, §4.10. Every code site is tagged `AXI`. **No calculation changes in any tool:** the abutment's `computeAll` is identical to origin/main (`c729c12`) for conventional, semi-integral and integral projects (with seismic, on piles); the receivers change only what they accept.
 
@@ -14433,7 +14433,7 @@ index b8d5942..61e56be 100644
 -      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add("piles.RnUp",g.static.RnUp,"Nominal uplift R_n,up (static, side only)","kip"); add("piles.phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
 +      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add(kp+"RnUp",g.static.RnUp,"Nominal uplift R_n,up (static, side only)","kip"); add(kp+"phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
 ```
-## 2026-10-21 — PR: claude/abut-ap-kh0 — Integral approach-slab inertia with k_h0 (ABK) (PR link added after merge)
+## 2026-10-21 — PR: claude/abut-ap-kh0 — Integral approach-slab inertia with k_h0 (ABK) (PR #397: https://github.com/mlococo88/All-Structural/pull/397)
 
 ### ABK-1. Integral abutment, Extreme Event I: approach-slab inertia with k_h = k_h0   [calc change, integral + approach slab + seismic only] [MORE conservative]
 - **Where:** `computeIAB`, APS block (anchor `const kh=isFinite(R.seis.kh0)? R.seis.kh0 : R.seis.kh, W=AP.RDC+AP.RDW;`).
@@ -14443,7 +14443,7 @@ index b8d5942..61e56be 100644
 - **How verified:** `node tests/check-syntax.mjs` passes; Playwright, origin/main `c729c12` vs branch: conventional (with / without seismic), integral without seismic, integral AASHTO with seismic (no slab) and semi-integral MassDOT: `computeAll` identical; integral MassDOT / CTDOT / RIDOT with seismic and slab: only `apEE` and the §10.5d values above change.
 
 
-## 2026-10-21 — PR: claude/pile-iab-results — Pile Designer's integral-pile geotechnical resistance into panel I-0a (PDA-IAB) (PR link added after merge)
+## 2026-10-21 — PR: claude/pile-iab-results — Pile Designer's integral-pile geotechnical resistance into panel I-0a (PDA-IAB) (PR #399: https://github.com/mlococo88/All-Structural/pull/399)
 
 Cross-tool connection in one PR (CLAUDE.md §7 exception): `Pile Designer.html` (fixlog/Pile Designer.md PDA-IAB: integral mode now computes and sends `geotechnical`) and HANDOFF.md §4.6, §4.10. Code sites tagged `PDA-IAB`. **No calculation change in this tool:** the §10.4 geotechnical check (ABR2) is unchanged; it now receives values.
 
@@ -14513,7 +14513,7 @@ index c180de7..10b01be 100644
 ```
 
 
-## 2026-10-21 — PR: claude/pile-iab-length — Pile length warnings for the integral pile results (PDA-IAB2) (PR link added after merge)
+## 2026-10-21 — PR: claude/pile-iab-length — Pile length warnings for the integral pile results (PDA-IAB2) (PR #400: https://github.com/mlococo88/All-Structural/pull/400)
 
 Cross-tool PR with `Pile Designer.html` (fixlog/Pile Designer.md PDA-IAB2: the designed pile length is imported, Module 13 evaluated at it, required ≤ designed checked, R_n / φ sent unrounded) and HANDOFF.md §4.6, §4.10. **No calculation change here**; the §10.4 check now receives unrounded R_n and φ.
 
@@ -14542,12 +14542,12 @@ index 10b01be..fd977fc 100644
 +        const t1=p.integral&&p.integral.tier1; if(t1&&t1.lengthPass===false) warns.push("Pile Designer: required pile length max(L_geo, L_f + 5) = "+f(t1.reqLength,1)+" ft > the designed "+f(t1.designedLength,1)+" ft (MassDOT 3.10.11.2).");   // PDA-IAB2
 ```
 
-## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR #410: https://github.com/mlococo88/All-Structural/pull/410)
 
 ### SBD1-a. Comment: GirderDetail's file name   [comment only]
 - Anchor `Same pattern as the OWN_RULES table of`: before `Same pattern as the OWN_RULES table of Steel Bridge Beam Modules.html,`, after `Same pattern as the OWN_RULES table of Steel Bridge Design.html (GirderDetail),`. No code changed.
 
-## 2026-11-01 — PR: claude/rpt-abutment — Report output tab in the shared report viewer (ABRP; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-abutment — Report output tab in the shared report viewer (ABRP; display only, no calculation change) (PR #542: https://github.com/mlococo88/All-Structural/pull/542)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `ABRP`.
 
@@ -14955,7 +14955,7 @@ index 1091904..cedb10f 100644
 +  syncRptDlg(); document.getElementById("dlgRpt").showModal(); });
 ```
 
-## 2026-11-01 — PR: claude/rpt-abutment-full — Report: worked steps for every remaining check family (ABRF; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-abutment-full — Report: worked steps for every remaining check family (ABRF; display only, no calculation change) (PR #591: https://github.com/mlococo88/All-Structural/pull/591)
 
 ### ABRF. Report tab: the "Further checks" families worked step by step   [display only]
 - **Engineer decision (2026-11-01):** every report is self-contained, with full worked steps.

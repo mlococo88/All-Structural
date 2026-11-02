@@ -4,7 +4,7 @@ Governing basis used for fixes: ACI 318-19 Chapter 17 (cast-in anchors), Table 1
 
 Units in this tool: lb, psi, in, lb-in.
 
-## 2026-10-04 — PR: claude/fix-concrete-anchor (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-concrete-anchor (PR #7: https://github.com/mlococo88/All-Structural/pull/7)
 
 The engineer asked for this tool to be **fixed fully**. The engine (everything between `// --- CONSTANTS ---` and `// --- COMPONENTS ---`) was rewritten; the full new engine block is reproduced verbatim in **Appendix A** so it can be re-applied to a fresh copy by replacing that block. The UI edits are listed individually in F23–F29 with exact before/after code.
 
@@ -1396,7 +1396,7 @@ Replace everything from the line `    // --- CONSTANTS ---` up to (not including
                      </div>
 ````
 
-## 2026-10-09 — PR: claude/tabs-concreteanchor (PR link added after merge)
+## 2026-10-09 — PR: claude/tabs-concreteanchor (PR #65: https://github.com/mlococo88/All-Structural/pull/65)
 ### T1. Input panel split into tabs   [UI only — no calculation change]
 - **Date / type:** 2026-10-09, UI only (no result change). Requested by the engineer on 2026-10-09: "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel."
 - **How it works (React):** the four existing input groups in the left panel are now the tab panes. All four are **always rendered**. The inactive ones only get the HTML `hidden` attribute (display: none). Nothing is moved, rebuilt or unmounted, so the React state, keys, `value`s and `onChange` handlers of every input are unchanged. The tab strip sits at the bottom of the existing sticky header (under the project fields and the shared-project-info buttons), so it stays visible while the panel scrolls. It uses the tool's own button classes (active = the blue SINGLE/GROUP look `bg-blue-600 border-blue-500`, inactive = `bg-slate-800 border-slate-600`) and wraps onto a second row in the 320 px panel. Clicking a tab scrolls the panel back to the top.
@@ -1535,7 +1535,7 @@ Replace everything from the line `    // --- CONSTANTS ---` up to (not including
   - O15. At 400 px wide the input panel collapses to 1 px, on main and on the branch alike. The three columns do not stack, and the page body has `overflow-hidden`. Not changed: the layout is outside this brief (CLAUDE.md §6). Needs: a decision on whether the tool should get a narrow-screen layout.
   - O1 still applies: React 18 (development UMD), `@babel/standalone` and the Tailwind Play CDN are unpinned. `@babel/standalone` "latest" is now **8.0.7** (Babel 8). The page still renders with it here, but the version can change under the tool without notice. Not changed (CLAUDE.md §2).
 
-## 2026-10-09 — PR: claude/pin-concreteanchor (PR link added after merge)
+## 2026-10-09 — PR: claude/pin-concreteanchor (PR #74: https://github.com/mlococo88/All-Structural/pull/74)
 ### P1. CDN library versions pinned   [no calculation change; resolves the pinning part of O1]
 - **Date / type:** 2026-10-09, library pinning only (CLAUDE.md §2). Engineer's decision 2026-10-09: pin the libraries. No code, formula, UI, storage key or file-format change.
 - **Where:** `<head>`, lines 9–14 (approx.). Anchor text: `<!-- React Framework -->` and `<!-- Tailwind CSS -->`.
@@ -1572,7 +1572,7 @@ Replace everything from the line `    // --- CONSTANTS ---` up to (not including
   - the React development vs production build;
   - Tailwind Play CDN vs a static stylesheet (the Play CDN is meant for development).
 
-## 2026-10-12 — PR: claude/sweep-concanchor (open-item sweep; PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-concanchor (open-item sweep; PR #134: https://github.com/mlococo88/All-Structural/pull/134)
 
 Engineer's instruction 2026-10-12: work through every open item of this tool, use best judgment, and note what needs the engineer. Items in priority order (open-item inventory §9). The complete diff of `Concrete Anchor.html` is in **Appendix C** below, so the whole change can be re-applied by hand. File uses CRLF; the inserted lines use CRLF too.
 

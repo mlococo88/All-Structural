@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: structural mechanics (statics / Euler-Bernoulli beam), IBC 2021 §1604.3 (deflection limits use the span length l), AISC 360-16 / Manual 15th–16th Ed. Spec. G2.1 (web shear area A_w = d·t_w), AISC Shapes Database v16.0 (t_w values).
 
-## 2026-10-04 — PR: claude/fix-shear-moment (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-shear-moment (PR #12: https://github.com/mlococo88/All-Structural/pull/12)
 
 Verification method for every item: the page was loaded in jsdom from origin/main ("before") and from this branch ("after"). The model was set through the page's own globals, and `readIn(); solve(); updStats(); renderKaTeX()` were run. The report (`buildReport`) and CSV (`resultsRows`) were also generated. `node --check` passes on the inline script. CRLF line endings are kept. No console errors.
 
@@ -350,7 +350,7 @@ Verification method for every item: the page was loaded in jsdom from origin/mai
 - **How verified:** jsdom (no errors).
 - **Other copies of this code:** none.
 
-## 2026-10-04 — PR: claude/step1-group4 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group4 (PR #30: https://github.com/mlococo88/All-Structural/pull/30)
 ### S1. "← All tools" link and shared project info   [feature (no result change)]
 - **Date / type:** 2026-10-04, feature (no result change).
 - **Where:** CSS after `#projNm{width:200px;font-size:12px}`, header `.brand` line (replaced: link appended inside it), `#projNm` wrapped in a flex `div` with a two-button column, and two new `<script>` blocks before `</body>`.
@@ -449,7 +449,7 @@ Verification method for every item: the page was loaded in jsdom from origin/mai
 - **How verified:** Every plain inline script syntax-checked (Node `vm.Script`, same parser as `node --check`); BridgeXfer block compared byte-for-byte with HANDOFF.md §5; page loaded in jsdom (CDN scripts not loaded) before and after the change with no new errors; Share → Use exercised between tools with jsdom localStorage (ASCE7-16 → ACI Rebar, Steel Beam → Shear and Moment, Concrete Beam Capacity shell against stub tab documents), including cancel, empty shared values (field kept), a non-ISO date on a date input (skipped), an empty channel and a wrong `_schema` (refused). `git diff` shows no removed lines other than the ones listed under Before. No calculation code was touched.
 - **Other copies of this code:** none. BridgeXfer v1 is also in: ACI Rebar Development Length.html, ASCE7-16 Load Generator.html, Concrete Beam Capacity.html (shell), Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html.
 
-## 2026-10-12 — PR: claude/sweep-sm (open-item sweep; PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-sm (open-item sweep; PR #155: https://github.com/mlococo88/All-Structural/pull/155)
 
 Engineer's instruction (2026-10-12): work through every open item using best judgment, and record anything that needs the engineer. Items handled: O1, O2, O4, O5, O6, O7 (fixed) and O3 (needs the engineer, unchanged). Edits are listed with exact before/after text (each Before occurs once in the file; CRLF line endings kept). Apply them in the order given.
 
@@ -1034,7 +1034,7 @@ function mkRow(x,t){
 - **F14 follow-up:** should combinations carry a "service" flag, so the deflection envelope uses only service combinations?
   - Recommendation: not needed now; every check names the governing combination.
 
-## 2026-10-12 — PR: claude/sm-12w (PR link added after merge)
+## 2026-10-12 — PR: claude/sm-12w (PR #159: https://github.com/mlococo88/All-Structural/pull/159)
 
 ### F15 (O8). Default wind combination "12W" uses 1.0L   [CALCULATION CHANGE — default combination list only] [MORE conservative]
 - **Engineer's decision (2026-10-12, via coordinator):** change the default "12W" row to 1.2D + 1.0L + 0.5S + 1.0W. Apply it to new projects and defaults only; saved projects keep their lists.
@@ -1088,7 +1088,7 @@ The default list's "Unfactored (1.0 All)" row is not a code combination. Its win
 - O7. **Resolved 2026-10-12 (F10, claude/sweep-sm).** **W-shape presets with non-kip force units** keep the previous E (existing behaviour: E is set only when fu = kip). Part of O1.
 - O8. **Resolved 2026-10-12 (F15, claude/sm-12w): default now 1.0L.** (2026-10-12) Default wind combination `12W` uses 0.5L (ASCE 7-16 Sec. 2.3.1 Exception 1). Raised, not changed; see the 2026-10-12 "Needs engineer" list.
 
-## 2026-10-18 — PR: claude/snm-d11-report — D11: calculation-sheet report (format refresh) and §6 links (Tier 1, display only; PR link added after merge)
+## 2026-10-18 — PR: claude/snm-d11-report — D11: calculation-sheet report (format refresh) and §6 links (Tier 1, display only; PR #276: https://github.com/mlococo88/All-Structural/pull/276)
 
 - **Engineer request:** AUDIT.md D11 (2026-10-14); scope decided 2026-10-18: **format refresh only** of the existing report builder for this tool, no new calculation content. CLAUDE.md §6 "show the work and link to it".
 - **Provision:** none. No formula, factor, unit, code reference or computed result changed. No saved-data key or format changed (`smd_saves_v1`, `smd_auto_v1`, the JSON export, `bridgeSuite.v1.*` untouched); no input field was added.
@@ -1143,7 +1143,7 @@ The default list's "Unfactored (1.0 All)" row is not a code combination. Its win
 - O3 (cantilever span length for L/x) is still open: the cantilever check case above uses L = 6 ft for the overhang.
 
 
-## 2026-11-01 — PR: claude/rpt-smd — Report view in the shared report viewer (SMRP; analysis-only report; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-smd — Report view in the shared report viewer (SMRP; analysis-only report; display only, no calculation change) (PR #538: https://github.com/mlococo88/All-Structural/pull/538)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SMRP`.
 
@@ -1381,7 +1381,7 @@ index 320e372..a5c90e0 100644
 +
 ```
 
-## 2026-11-02 — PR: claude/phone-print-smd — Phone layout (header wraps) and a print page-break fix in the 📄 Report (PHN; display only, no calculation change) (PR link added after merge)
+## 2026-11-02 — PR: claude/phone-print-smd — Phone layout (header wraps) and a print page-break fix in the 📄 Report (PHN; display only, no calculation change) (PR #628: https://github.com/mlococo88/All-Structural/pull/628)
 
 Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Every code site is tagged `PHN`.
 
