@@ -1746,7 +1746,7 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - **Saved data:** new input `ltsRi` (default 0 when absent).
 - **How verified:** check-syntax pass; `node tests/engine/run.mjs lightpole` 39 passed (2 new); `tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL; LTS Shaft tab, pole cohesionless (1280) and monopost (390): 0 console errors.
 
-## 2026-11-02 — PR #PRNUM: claude/lp-lts-8 (LTS-8: Anchorage-app hand-off of the LRFDLTS combinations; IBC hand-off unchanged)
+## 2026-11-02 — PR #656 (https://github.com/mlococo88/All-Structural/pull/656): claude/lp-lts-8 (LTS-8: Anchorage-app hand-off of the LRFDLTS combinations; IBC hand-off unchanged)
 
 ### LTS8-1. anchorGroup payload in the LRFDLTS mode   [new, LTS mode only] [schema unchanged]
 - **Where:** new `ltsAnchorPayload()` (before `lppAnchorPayload()`), `lppAnchorPayload()` returns it when `codeMode==='lts'`; CSS shows the Anchorage card `#lpAnchCard` in the LTS mode; `ltsCalc()` refreshes the Anchorage chips after the LTS run; LTS Summary row "Anchors — Anchorage app" (chips); `LTS_STATUS` LTS-8 done; the Anchorage placeholder removed; tests/smoke/lightpole-anchor-handoff.mjs: cases `ltsPole`, `ltsSign2`.
