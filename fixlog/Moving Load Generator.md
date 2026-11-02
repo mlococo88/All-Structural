@@ -1471,7 +1471,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 8 tabs, the whole-document `textContent` (196,736 chars) and localStorage after load are identical. The run time ("Solved in … ms") is masked.
 - Screenshots at 900 / 1280 px: every non-Report tab differs only in the "Solved in … ms" label (119–206 px). The Report tab differs because the §1.1 table now wraps.
 
-## 2026-11-02 — PR: PRLINK — PLIB: saved-project list in this browser (Save / Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+## 2026-11-02 — PR: [#686](https://github.com/mlococo88/All-Structural/pull/686) — PLIB: saved-project list in this browser (Save / Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
 - **Before:** autosave (`movingLoadGen.autosave.v1`), Save JSON / Open JSON (files), New. No list of projects in the browser, no undo.
 - **Where:**
   - after the last `<script src="shared/…">` tag: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
