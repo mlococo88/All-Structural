@@ -208,6 +208,21 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
   .pnl>.hd .car{display:none}
   @page{size:letter portrait;margin:0.55in 0.5in 0.6in 0.5in}
 }
+/* PHN (2026-11-02): phone / tablet (below 900 px): the title block wraps, the input panel stacks above the output panel and the
+   page scrolls as one column (the panels do not scroll on their own, so nothing can leave the page stuck); 900 px and up unchanged */
+@media screen and (max-width:899px){
+  body{height:auto;min-height:100vh;overflow:visible}
+  #titlewrap{flex-wrap:wrap;gap:8px 14px;padding:8px 10px}
+  #appid{flex:1 1 100%;border-right:none;padding-right:0}
+  #tbfields{flex:1 1 100%;grid-template-columns:repeat(2,minmax(0,1fr))}
+  #tbactions,#tbshare{flex:1 1 100%;flex-direction:row;flex-wrap:wrap}
+  #main,#mainwrap,#inpanel,#outpanel{display:block}
+  #inpanel{max-width:none;min-width:0;border-right:none;border-bottom:2px solid var(--navy)}
+  #inbody{overflow:visible;padding-bottom:16px}
+  #outbody{overflow:visible;padding:10px 10px 40px}
+  .pnl>.bd{overflow-x:auto}   /* a wide table scrolls inside its panel */
+}
+@media screen and (max-width:520px){#tbfields{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>

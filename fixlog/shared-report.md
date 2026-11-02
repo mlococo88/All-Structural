@@ -117,3 +117,16 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 - Display only; no calculation, saved-data or markup change.
 - **Check:** Steel Bridge Report at 390 px, "G2: deck slab (DC1)": before, the numerator of 8.50/12 on the wrapped line touches "w_deck =" above; after, clear.
 - **Verified:** `node tests/engine/run.mjs report steps steps-groups report-wiring` 14 passed; headless Chromium, every step of the Steel Bridge, Spread Footing, Prestressed, Stone Arch and abutment reports at 1280 and 390 px: equation boxes whose content extends past the box 3,037 → 6 (none visible: Prestressed 2 per width by ≤1.4 px; Stone Arch 1 per width, the stiffness matrix, whose rendering is the same before and after), wrapped lines overlapping the line above 639 → 22 (Steel Bridge at 390, glyph boxes within 2.2 px, no visible ink overlap), equations overlapping the step label 1,401 → 0.
+
+## 2026-11-02 — PR: claude/phone-print-asce7 — print: a topic heading is not split from its one-line result (PHN; display only)
+
+- **Problem:** printed, a topic heading (`.rp-top`: number, title, reference and the one-line result `.rp-tsum` inside it) could be split across a page: ASCE 7-16 Load Generator, Report, page 7 ended with "4. Seismic response coefficient and base shear", and its result line "Seismic base shear … V = 123.74 kip" and the steps were on page 8. `.rp-top` already has `break-after:avoid`, but nothing stopped a break inside it.
+- **Where:** `CSS` string, `@media print` block, anchor `.rp-h1,.rp-h2,.rp-h3,.rp-cap{break-after:avoid;}`.
+- **Added (one line after the anchor):**
+  ```css
+  .rp-top{break-inside:avoid;}   /* PHN (2026-11-02): a topic heading and its one-line result stay together … */
+  ```
+- Print only. The screen is unchanged, and so is any report without topics (`.rp-top` appears only with `topics` / `topic`). Backward compatible: no API, model or markup change.
+- **Check case:** ASCE 7-16 Load Generator, default project, Report → Print report: before, the heading of topic 4 sits at the foot of page 7 and its result on page 8; after, page 8 starts with the whole heading (9 pages both).
+- **Consumers (CLAUDE.md §3):** ACI Rebar Development Length, ASCE7-16 Load Generator, BasePlateAnchorDesigner, Bridge Substructure Loading, Concrete Beam Capacity, Gusset Plate Rating, Light Pole and Sign Post, Moving Load Generator, Pile Designer, Prestressed Bridge Design, Retaining Wall Designer, Section Property Calculator, Shear and Moment Diagrams, Spread Footing, Steel Beam Design - AISC 15th, Stone Masonry Arch Load Rating, Timber Beam Check, abutment_calculator, elastomeric_design_module, index, lldf (all .html) and apps/steel-bridge (index.html, ui/report.js, report/builders.js).
+- **Verified:** `node tests/engine/run.mjs report steps steps-groups report-wiring`: 4 files, 14 passed, 0 failed.
