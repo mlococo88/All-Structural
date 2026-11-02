@@ -153,3 +153,27 @@ test('Section Property Calculator: tag rows -> LIBF.tags text -> the same tags a
   assert.deepEqual(P(spTags(L.toText([]))), []);
   for (const s of ['crane, runway', 'W21 + C15, 2016 job']) assert.equal(L.toText(L.fromText(s)), s);
 });
+
+// index.html (MCT generator): the four GFS lists (bay1Stations, bay2Stations, stringerOffsets, stringerOffsets2) are ARRAYS; the
+// old NumberListInput read its text with  s.split(/[\s,]+/).map(parseFloat).filter(isFinite). The table reads each cell with
+// parseFloat (toNumbers(rows, 0, parseFloat)). AREMA arema_spacings is TEXT, read by parseSpacings():
+//   input.split(',').map(s => parseFloat(s.trim())).filter(v => v > 0), one value = uniform.
+const nliParse = s => s.split(/[\s,]+/).map(x => parseFloat(x)).filter(x => isFinite(x));
+const aremaVals = s => s.split(',').map(x => parseFloat(x.trim())).filter(v => v > 0);
+test('index.html: GFS number lists stay arrays; cells read with parseFloat give what the old box gave', () => {
+  for (const a of [[10, 20, 30, 40, 50], [2.5, 5.5], [5, 12, 18, 12, 5], []])
+    assert.deepEqual(P(L.toNumbers(L.fromNumbers(a), 0, parseFloat)), a);
+  // the same text typed into the old box, or one value per cell into the table
+  for (const t of ['5, 12, 18', '5 12 18', '2.5ft, 5.5', '1, abc, 7']) {
+    const rows = L.splitPaste(t, 1);            // what a paste / typed separators put into the cells
+    assert.deepEqual(P(L.toNumbers(rows, 0, parseFloat)), P(nliParse(t)), t);
+  }
+});
+test('index.html: AREMA girder spacings text round-trips; parseSpacings() reads the same values', () => {
+  for (const s of ['', '6', '6, 6, 5.5']) assert.equal(L.toText(L.fromText(s)), s, s);
+  for (const s of ['6,6,5.5', ' 6 , 6.5 ', '6,,5.5', '6, 0, 5']) {
+    const t = L.toText(L.fromText(s));
+    assert.deepEqual(P(aremaVals(t)), P(aremaVals(s)), s);
+  }
+  assert.equal(L.toText(L.fromText('6,6,5.5')), '6, 6, 5.5');
+});

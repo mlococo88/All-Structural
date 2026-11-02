@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,stonearch] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch] [--a origin/main] [--shots <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
 // smd (one key per tool in TOOLS): the tool from --a (default: the entry's `a`, the main commit before its table landed, else
@@ -16,7 +16,7 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,stonearch').split(',');
+const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
@@ -256,7 +256,32 @@ TOOLS.stonearch = {   // Stone Masonry Arch: SDL line items and depth overrides 
     return out;
   },
   tableSel: '#sdlItems + .sliPaste',
+  shotPrep: async p => { await p.evaluate(() => { const pn = document.getElementById('sdlItems').closest('[id^="inPane_"]'); document.getElementById(pn.id.replace('inPane_', 'inTab_')).click(); }); await p.waitForTimeout(400); },
 };
+TOOLS.index = {   // index.html (MCT generator, React): GFS bay 1 floorbeam spacings and stringer offsets (arrays). The AREMA girder spacings
+  // (text arema_spacings) are drawn only once MIDAS results are loaded, which the offline kit has no fixture for: Node round trip only.
+  file: 'index.html', a: 'd49d19a', values: { bay1: '12, 18, 24, 18, 12', str: '2.5, 6, 9.5' },
+  expect: '{"bay1":[12,18,24,18,12],"str":[2.5,6,9.5]}',
+  ignore: /^\[BABEL\] Note/, serial: true, timeout: 120000,   // a 1.4 MB page compiled by Babel in the browser: one at a time, a longer load
+  setup: async p => { await p.waitForTimeout(5000); await clickText(p, 'button', 'Geometry'); await clickText(p, 'button', 'Bridge System (GFS)'); await p.waitForTimeout(600); },
+  typeOld: async (p, v) => { await p.fill('input[placeholder="e.g. 5, 12, 18, 12, 5"] >> nth=0', v.bay1); await p.waitForTimeout(300);
+    await p.fill('input[placeholder="e.g. 2.5, 5.5"] >> nth=0', v.str); await p.waitForTimeout(300); },
+  typeNew: async (p, v) => { await fillTable(p, '[data-sli="react"]:has(caption:text-is("Floorbeam spacing, bay 1"))', v.bay1); await p.keyboard.press('Tab'); await p.waitForTimeout(300);
+    await fillTable(p, '[data-sli="react"]:has(caption:text-is("Stringer offsets from the left girder"))', v.str); await p.keyboard.press('Tab'); await p.waitForTimeout(300); },
+  saved: p => p.evaluate(() => { const c = JSON.parse(localStorage.getItem('mct_cfg_v3') || '{}'), find = (o, k) => { if (!o || typeof o !== 'object') return undefined; if (k in o) return o[k];
+    for (const x of Object.values(o)) { const r = find(x, k); if (r !== undefined) return r; } };
+    return JSON.stringify({ bay1: find(c, 'bay1Stations'), str: find(c, 'stringerOffsets') }); }),
+  read: async p => {
+    await p.waitForTimeout(1200); const out = {};
+    for (const t of ['Generate', 'Geometry']) { await clickText(p, 'button', t); await p.waitForTimeout(1500);
+      out[t] = await p.evaluate(() => { const k = document.body.cloneNode(true); k.querySelectorAll('[data-sli],script,style,input,select,textarea').forEach(x => x.remove());
+        return k.innerText.replace(/\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?/g, 'TIME').replace(/\d{4}-\d{2}-\d{2}T[\d:.]+Z/g, 'TS'); }); }
+    out.cfg = await p.evaluate(() => JSON.parse(localStorage.getItem('mct_cfg_v3') || 'null'));
+    return out;
+  },
+  tableSel: '[data-sli="react"]:has(caption:text-is("Floorbeam spacing, bay 1"))',
+};
+async function clickText(p, sel, text) { await p.locator(sel, { hasText: text }).first().click(); }
 // replace the rows of a table with the values ("a, b, c"): row by row (Enter adds a row from the last one), extra rows removed
 async function fillTable(p, sel, v) {
   const vals = String(v).split(',').map(s => s.trim());
@@ -277,7 +302,7 @@ async function tool(key) {
   const T = TOOLS[key]; console.log(`${key}: ${T.file}`);
   const A = refDir(args.a || T.a || 'origin/main', T.file), B = path.join(REPO, T.file);
   const run = async (file, side, kase) => {
-    const { b, p, errs, blocked } = await openPage(file, { vw: 1400, vh: 1000 });
+    const { b, p, errs, blocked } = await openPage(file, { vw: 1400, vh: 1000, timeout: T.timeout });
     try {
       await T.setup(p);
       if (kase === 'custom') {
@@ -287,9 +312,10 @@ async function tool(key) {
       }
       const r = await T.read(p); r.savedText = await T.saved(p);
       // a library request the offline test kit blocks (not in tests/libs) logs "Failed to load resource": listed, not counted
-      r.errs = errs.filter(e => !(blocked.size && /^Failed to load resource/.test(e))); r.blocked = [...blocked];
+      r.errs = errs.filter(e => !(blocked.size && /^Failed to load resource/.test(e)) && !(T.ignore && T.ignore.test(e))); r.blocked = [...blocked];
       if (r.saved && typeof r.saved === 'object') delete r.saved.t;   // autosave time stamp
       if (side === 'B' && shots && kase === 'custom') {
+        if (T.shotPrep) await T.shotPrep(p);   // e.g. open the input tab that holds the table
         const box = p.locator(`${T.tableSel} [data-sli="box"], ${T.tableSel}[data-sli="box"]`).first();
         await box.scrollIntoViewIfNeeded();
         const bx = await box.boundingBox();
@@ -303,7 +329,7 @@ async function tool(key) {
     } finally { await b.close(); }
   };
   for (const kase of ['default', 'custom']) {
-    const [ra, rb] = await Promise.all([run(A, 'A', kase), run(B, 'B', kase)]);
+    const [ra, rb] = T.serial ? [await run(A, 'A', kase), await run(B, 'B', kase)] : await Promise.all([run(A, 'A', kase), run(B, 'B', kase)]);
     const sa = JSON.parse(JSON.stringify({ ...ra, errs: 0, over: 0, blocked: 0 })), sb = JSON.parse(JSON.stringify({ ...rb, errs: 0, over: 0, blocked: 0 }));
     if (rb.blocked.length) console.log('       (blocked offline: ' + rb.blocked.join(', ') + ')');
     const d = diff(sa, sb);
@@ -314,7 +340,7 @@ async function tool(key) {
     ok(!ra.errs.length && !rb.errs.length, `${kase}: no console errors` + (ra.errs.length + rb.errs.length ? ': ' + [...ra.errs, ...rb.errs].join(' | ') : ''));
   }
   if (T.extra) {   // checks of the branch only (e.g. a paste box and its table)
-    const { b, p, errs, blocked } = await openPage(B, { vw: 1400, vh: 1000 });
+    const { b, p, errs, blocked } = await openPage(B, { vw: 1400, vh: 1000, timeout: T.timeout });
     try { await T.setup(p); await T.extra(p);
       const e = errs.filter(e => !(blocked.size && /^Failed to load resource/.test(e)));
       ok(!e.length, 'extra checks: no console errors' + (e.length ? ': ' + e.join(' | ') : ''));
