@@ -3582,3 +3582,21 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
     - explicit "smooth" → kept (μ 0.6);
     - explicit "rough" → kept.
   - Report: 0 unresolved references, 0 KaTeX errors. Drawings valid. `node tests/check-syntax.mjs` and the scroll test pass.
+
+## 2026-11-02 — PR: PRLINK — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete)   [display and storage only]
+- **Before:** Project Manager: name box + Save / Overwrite, drop-down + Load / Delete (`sfd_projects`, `{ name: state }`), Export / Import
+  JSON, Undo / Redo (U-2), Reset. No rename, no duplicate.
+- **Where:**
+  - after `<script src="shared/dxf.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - an IIFE before `$('#btnExport').addEventListener('click',()=>{` (anchor `/* PLIB (2026-11-02): "Saved projects…" dialog`):
+    `mapStore(localStorage,'sfd_projects')`; dialog `open` = the Load button's code without its alert (`state=Object.assign(defaultState(),…);
+    migrateState(); SEL…=null; bindStaticInputs(); buildPedCards(); saveAuto(); recalc();`); a rename of the project named in the name box
+    updates the name box; the drop-down is redrawn after every change. Button "Saved projects…" after Delete.
+- The tool's own Undo / Redo (U-2) is unchanged (Open from the dialog goes through `saveAuto()`, so it is one undo step as Load is).
+- **Saved data:** keys `sfd_projects`, `sfd_auto` and their formats unchanged; no new key.
+- **How verified:** `node tests/smoke/project-library.mjs --tool spreadfooting`: ALL PASS (`R` identical to origin/main on load, after an
+  input change, reopened on main's storage and opened from the dialog; dialog rename / duplicate / delete byte-identical; quota; 390 px;
+  no new console errors). `node tests/smoke/spread-footing-scroll.mjs`: PASS. `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** already entered directly (factored and service column loads per case, and the hand-offs memberReactions /
+  foundationLoads). Nothing added.
