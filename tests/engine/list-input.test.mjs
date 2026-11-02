@@ -153,3 +153,110 @@ test('Section Property Calculator: tag rows -> LIBF.tags text -> the same tags a
   assert.deepEqual(P(spTags(L.toText([]))), []);
   for (const s of ['crane, runway', 'W21 + C15, 2016 job']) assert.equal(L.toText(L.fromText(s)), s);
 });
+
+// index.html (MCT generator): the four GFS lists (bay1Stations, bay2Stations, stringerOffsets, stringerOffsets2) are ARRAYS; the
+// old NumberListInput read its text with  s.split(/[\s,]+/).map(parseFloat).filter(isFinite). The table reads each cell with
+// parseFloat (toNumbers(rows, 0, parseFloat)). AREMA arema_spacings is TEXT, read by parseSpacings():
+//   input.split(',').map(s => parseFloat(s.trim())).filter(v => v > 0), one value = uniform.
+const nliParse = s => s.split(/[\s,]+/).map(x => parseFloat(x)).filter(x => isFinite(x));
+const aremaVals = s => s.split(',').map(x => parseFloat(x.trim())).filter(v => v > 0);
+test('index.html: GFS number lists stay arrays; cells read with parseFloat give what the old box gave', () => {
+  for (const a of [[10, 20, 30, 40, 50], [2.5, 5.5], [5, 12, 18, 12, 5], []])
+    assert.deepEqual(P(L.toNumbers(L.fromNumbers(a), 0, parseFloat)), a);
+  // the same text typed into the old box, or one value per cell into the table
+  for (const t of ['5, 12, 18', '5 12 18', '2.5ft, 5.5', '1, abc, 7']) {
+    const rows = L.splitPaste(t, 1);            // what a paste / typed separators put into the cells
+    assert.deepEqual(P(L.toNumbers(rows, 0, parseFloat)), P(nliParse(t)), t);
+  }
+});
+test('index.html: AREMA girder spacings text round-trips; parseSpacings() reads the same values', () => {
+  for (const s of ['', '6', '6, 6, 5.5']) assert.equal(L.toText(L.fromText(s)), s, s);
+  for (const s of ['6,6,5.5', ' 6 , 6.5 ', '6,,5.5', '6, 0, 5']) {
+    const t = L.toText(L.fromText(s));
+    assert.deepEqual(P(aremaVals(t)), P(aremaVals(s)), s);
+  }
+  assert.equal(L.toText(L.fromText('6,6,5.5')), '6, 6, 5.5');
+});
+
+// Stone Masonry Arch Load Rating.html: the line lists are saved TEXT, one entry per line. The paste boxes stay; their tables
+// read each line as the tool does and write rows back as "a, b" lines. The tool's readers (copied verbatim) read the same values.
+const saPairs = t => { const out = []; for (const ln of (t || '').split(/\n+/)) { const s = ln.trim(); if (!s) continue;
+  const m = s.split(/[\s,;]+/).map(Number); if (m.length < 2 || !isFinite(m[0]) || !isFinite(m[1])) throw new Error('bad ' + s); out.push({ x: m[0], y: m[1] }); } return out; };
+const saSdl = t => { const out = []; for (const ln of (t || '').split(/\n+/)) { const s = ln.trim(); if (!s) continue; const k = s.lastIndexOf(',');
+  out.push({ n: s.slice(0, k).trim() || 'item', w: parseFloat(s.slice(k + 1)) }); } return out; };
+const saTracks = t => { const out = []; for (const ln of (t || '').split(/\n+/)) { const s = ln.trim(); if (!s) continue; out.push(parseFloat(s)); } return out.length ? out : [0]; };
+// the table side, as in the tool's listTables()
+const saRead = (t, line) => String(t || '').split(/\n+/).map(x => x.trim()).filter(Boolean).map(line);
+const saPair = l => { const m = l.split(/[\s,;]+/); return [m[0] || '', m[1] || '']; };
+const saSdlLine = l => { const k = l.lastIndexOf(','); return k < 0 ? [l, ''] : [l.slice(0, k).trim(), l.slice(k + 1).trim()]; };
+const saWrite = rows => L.filled(rows).map(r => r[0] + ', ' + r[1]).join('\n');
+test('Stone Arch: survey points / depth overrides — box text -> table rows -> text reads the same pairs', () => {
+  for (const t of ['0.0, 0.0\n6.5, 5.0\n13.2, 8.4', '18.0, 19', '0 0\n6.5;5\n  13.2 ,8.4 \n\n40, 0']) {
+    const back = saWrite(saRead(t, saPair));
+    assert.deepEqual(P(saPairs(back)), P(saPairs(t)), t);
+    assert.equal(saWrite(saRead(back, saPair)), back);   // stable
+  }
+  assert.equal(saWrite(saRead('0.0, 0.0\n6.5, 5.0', saPair)), '0.0, 0.0\n6.5, 5.0');   // the documented form is unchanged
+});
+test('Stone Arch: SDL line items split at the last comma (descriptions may hold commas)', () => {
+  for (const t of ['Sidewalks (2), 800\nRailings (2), 120', 'Rail, steel, 2 sides, 60\nCurbs (2), 300']) {
+    const back = saWrite(saRead(t, saSdlLine));
+    assert.equal(back, t);
+    assert.deepEqual(P(saSdl(back)), P(saSdl(t)));
+  }
+});
+test('Stone Arch: track offsets stay one value per line', () => {
+  const f = { rowSplit: /\n+/, rowSep: '\n' };
+  for (const t of ['0', '-6\n6', '-6.5\n0\n6.5']) { assert.equal(L.toText(L.fromText(t, f), f), t); assert.deepEqual(P(saTracks(L.toText(L.fromText(t, f), f))), P(saTracks(t))); }
+  assert.equal(L.toText(L.fromText('-6\n\n6\n', f), f), '-6\n6');
+});
+// Prestressed Bridge Design.html: the bridge bar's spans (bridge.spans, an ARRAY). The old box committed
+//   v = text.split(/[,;\s]+/).filter(Boolean).map(Number), kept only when every v is finite and > 0;
+// the table commits rows.map(r => Number(r[0])) with the same rule.
+const pbdOld = t => { const v = t.split(/[,;\s]+/).filter(Boolean).map(Number); return v.length && v.every(x => isFinite(x) && x > 0) ? v : null; };
+const pbdNew = rows => { const v = L.filled(rows).map(r => Number(r[0])); return v.length && v.every(x => isFinite(x) && x > 0) ? v : null; };
+test('Prestressed Bridge Design: spans rows commit the same array as the old box (or nothing)', () => {
+  for (const a of [[100], [100, 120, 100], [87.5, 110.25]]) assert.deepEqual(P(pbdNew(L.fromNumbers(a))), a);
+  for (const t of ['100, 120, 100', '100 120 100', '100;120', '100, 0', '100, abc', '']) {
+    assert.deepEqual(P(pbdNew(L.splitPaste(t, 1))), P(pbdOld(t)), t);
+  }
+});
+
+// BasePlateAnchorDesigner.html: S.vRebar.vDepths is saved TEXT ("3, 6.5, 10"; "" = automatic). The table reads it with the tool's
+// own separators and writes rows joined by ", "; the tool's reader (copied verbatim) reads the same depths.
+const bpDepths = s => String(s || '').split(/[,;\s]+/).map(parseFloat).filter(v => isFinite(v) && v >= 0);
+test('BasePlateAnchorDesigner: stacked hairpin depths text round-trips; the reader gets the same depths', () => {
+  const f = { rowSplit: /[,;\s]+/ };
+  for (const s of ['', '3', '3, 6.5, 10']) assert.equal(L.toText(L.fromText(s, f)), s, s);
+  for (const s of ['3 6.5 10', '3;6.5;10', '3,,6.5', ' 3 , 6.5 ']) {
+    const t = L.toText(L.fromText(s, f));
+    assert.deepEqual(P(bpDepths(t)), P(bpDepths(s)), s);
+  }
+});
+
+// apps/steel-bridge (ui/lists.js): every list keeps its field and format. The tables write the rows back with these formats and
+// the modules' own readers (copied verbatim) read the same values.
+const sbNums = t => t.split(/[,;\s]+/).filter(Boolean).map(Number);                                           // spans, bays, skews
+const sbSpl = t => t.split(/[,;\s]+/).map(Number).filter(v => isFinite(v) && v > 0).sort((a, b) => a - b);    // fr_spl, i_splx
+const sbXf = t => t.split(/[,;]/).map(s => s.trim()).filter(Boolean).map(s => s.split(':').map(Number)).filter(q => q.length === 2 && q.every(isFinite)).map(([x, P_]) => ({ x, P: P_ }));
+const sbSeq = t => String(t || '').split(/[,;]/).map(s => s.trim()).filter(Boolean).map(s => s.split('-').map(Number)).filter(q => q.length === 2 && q.every(isFinite) && q[1] > q[0]);
+const sbWin = t => String(t || '').split(/[,;]+/).map(s => s.trim()).filter(Boolean).map(s => { const m = /^(-?\d+(?:\.\d+)?)\s*(?:-|–|to)\s*(-?\d+(?:\.\d+)?)$/.exec(s); return m ? [Math.min(+m[1], +m[2]), Math.max(+m[1], +m[2])] : null; }).filter(Boolean);
+const sbSplX = t => String(t || '').split(/[,;\s]+/).map(Number).filter(v => isFinite(v) && v > 0);
+test('Steel Bridge: one-number lists (arrays drawn as "a, b") round-trip; the readers get the same arrays', () => {
+  const f = { rowSplit: /[,;\s]+/ };
+  for (const a of [[110, 140, 110], [9.5, 9.5, 9.5], [15, 15, -10, 0], [80.5, 195]]) {
+    const t = a.join(', '); assert.equal(L.toText(L.fromText(t, f)), t);
+    assert.deepEqual(P(sbNums(L.toText(L.fromText(t, f)))), a); assert.deepEqual(P(sbSpl(L.toText(L.fromText(t, f)))), P(sbSpl(t)));
+  }
+  for (const t of ['', '60, 150', '60 150', '60;150']) assert.deepEqual(P(sbSplX(L.toText(L.fromText(t, f)))), P(sbSplX(t)), t);   // studs.splX (text)
+});
+test('Steel Bridge: cross-frame x:P loads, pours a-b and station windows keep their text formats', () => {
+  const xf = { rowSplit: /[,;]/, colSplit: ':', ncol: 2, colSep: ':' }, seq = { rowSplit: /[,;]/, colSplit: '-', ncol: 2, colSep: '-' },
+    win = { rowSplit: /[,;]+/, colSplit: /\s*(?:-|–|to)\s*/, ncol: 2, colSep: '-' };
+  for (const t of ['20:1.5, 40:1.5', '20:-2', '']) { assert.equal(L.toText(L.fromText(t, xf), xf), t); assert.deepEqual(P(sbXf(L.toText(L.fromText(t, xf), xf))), P(sbXf(t))); }
+  assert.deepEqual(P(sbXf(L.toText(L.fromText('20:1.5;40:2', xf), xf))), P(sbXf('20:1.5;40:2')));
+  for (const t of ['0-80, 140-220', '', '0-80;140-220']) assert.deepEqual(P(sbSeq(L.toText(L.fromText(t, seq), seq))), P(sbSeq(t)), t);
+  assert.equal(L.toText(L.fromText('0-80, 140-220', seq), seq), '0-80, 140-220');
+  for (const t of ['70-90, 135-150', '70 to 90; 135–150', '']) assert.deepEqual(P(sbWin(L.toText(L.fromText(t, win), win))), P(sbWin(t)), t);
+  assert.equal(L.toText(L.fromText('70-90, 135-150', win), win), '70-90, 135-150');
+});

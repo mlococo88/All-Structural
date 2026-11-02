@@ -67,3 +67,26 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
 
 ## 2026-11-02 — PR: claude/list-input-secprop, PR #694: https://github.com/mlococo88/All-Structural/pull/694 — loaded by Section Property Calculator.html (no change to the shared file)
 - Library "Save to the library", Tags (`mount`, one text column). `tests/smoke/list-input.mjs` gains the part `secprop`.
+
+## 2026-11-02 — PR: claude/list-input-index, PR #701: https://github.com/mlococo88/All-Structural/pull/701 — loaded by index.html (no change to the shared file)
+- `react(React)` → `ListTable`: `NumberListInput` (4 GFS lists, arrays) and the AREMA girder spacings (text). `tests/smoke/list-input.mjs`
+  gains the part `index` and the entry options `ignore` (a console message to ignore), `serial` (A then B, not in parallel)
+  and `timeout` (page load); `tests/lib.mjs` `openPage()` takes an optional `timeout` (default unchanged).
+
+## 2026-11-02 — PR: claude/list-input-stonearch, PR #704: https://github.com/mlococo88/All-Structural/pull/704 — loaded by Stone Masonry Arch Load Rating.html (no change to the shared file)
+- Paste boxes with a table of what was read (`mount`, the tool's own `pasteTable()`: survey points, depth overrides, SDL line
+  items) and track offsets (`bindInput`, one value per line). `tests/smoke/list-input.mjs` gains the part `stonearch` and the
+  entry option `shotPrep`.
+- Harness: the `gusset` part no longer reads the Report tabs (`report`, `report2`): #702 retired Gusset's old Report tab, so side A
+  (before the gage table) and today's tool differ there for a reason that has nothing to do with the table. The `stonearch` part
+  normalises the rating sweep's timing note and white space. A string difference is printed around its first differing character.
+
+## 2026-11-02 — PR: claude/list-input-pbd, PR #705: https://github.com/mlococo88/All-Structural/pull/705 — loaded by Prestressed Bridge Design.html (no change to the shared file)
+- Bridge bar, span lengths (`react(React)` → `ListTable`, committed when the focus leaves). `tests/smoke/list-input.mjs` gains the part `pbd`.
+
+## 2026-11-02 — PR: claude/list-input-bpad, PR #707: https://github.com/mlococo88/All-Structural/pull/707 — loaded by BasePlateAnchorDesigner.html (no change to the shared file)
+- Reinforcement, depths of the stacked hairpins (`bindInput`). `tests/smoke/list-input.mjs` gains the part `bpad`.
+
+## 2026-11-02 — PR: claude/list-input-steelbridge, PR #708: https://github.com/mlococo88/All-Structural/pull/708 — loaded by apps/steel-bridge/index.html (no change to the shared file)
+- `apps/steel-bridge/ui/lists.js` binds a table (`bindInput`) to nine list inputs as the modules draw them (see `fixlog/steel-bridge.md`).
+  `tests/smoke/list-input.mjs` gains the part `sbridge` and the entry option `archive` (a folder tool's files for side A).

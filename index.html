@@ -15,6 +15,7 @@
 <!-- IDRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<script src="shared/list-input.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -4494,16 +4495,14 @@ function StepGeometry({cfg,set}) {
   </div>);
 }
 
-// Text input for a list of numbers — keeps raw text locally so commas/spaces survive typing
-function NumberListInput({value, onChange, style, placeholder}) {
-  const parse = s => s.split(/[\s,]+/).map(x=>parseFloat(x)).filter(x=>isFinite(x));
-  const [txt, setTxt] = React.useState((value||[]).join(', '));
-  React.useEffect(()=>{
-    // Resync from external value only when it genuinely differs from what's typed
-    if (JSON.stringify(parse(txt)) !== JSON.stringify(value||[])) setTxt((value||[]).join(', '));
-  }, [JSON.stringify(value||[])]);
-  return <input type="text" style={style} placeholder={placeholder} value={txt}
-    onChange={e=>{ setTxt(e.target.value); onChange(parse(e.target.value)); }}/>;
+// List of numbers (LIST, 2026-11-02): a table with one box per value (shared/list-input.js) in place of the comma-separated
+// box. The value stays an ARRAY of numbers, read from the cells with parseFloat as the old box read its text; a cell that is
+// not a number is marked and skipped, as the old parser skipped it.
+const ListTable = window.SharedListInput ? SharedListInput.react(React) : null;
+function NumberListInput({value, onChange, placeholder, label, col = 'Value', unit = 'ft'}) {
+  return <ListTable label={label} rows={SharedListInput.fromNumbers(value||[])}
+    columns={[{label:col, unit, lenient:true, width:'6.5em', placeholder}]}
+    onChange={rows=>onChange(SharedListInput.toNumbers(rows, 0, parseFloat))}/>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -4587,13 +4586,13 @@ function GFSEditor({cfg,set}) {
         <div style={card}>
           <div style={{fontSize:'12px',fontWeight:'700',color:'#15803d',marginBottom:'12px'}}>Floorbeam Spacing (ft increments)</div>
           <label style={lblStyle}>Bay 1 — along Left girder (left↔{nG===3?'center':'right'})</label>
-          <NumberListInput style={{...INP,width:'100%',fontFamily:'monospace'}} value={g.bay1Stations}
-            placeholder="e.g. 5, 12, 18, 12, 5"
+          <NumberListInput label="Floorbeam spacing, bay 1" col="Increment" value={g.bay1Stations}
+            placeholder="5"
             onChange={arr=>setG('bay1Stations',arr)}/>
           {nG===3&&(<>
             <label style={{...lblStyle,marginTop:'12px'}}>Bay 2 — along Center girder (center↔right)</label>
-            <NumberListInput style={{...INP,width:'100%',fontFamily:'monospace'}} value={g.bay2Stations}
-              placeholder="e.g. 5, 12, 18, 12, 5"
+            <NumberListInput label="Floorbeam spacing, bay 2" col="Increment" value={g.bay2Stations}
+              placeholder="5"
               onChange={arr=>setG('bay2Stations',arr)}/>
           </>)}
           <div style={{fontSize:'9px',color:'#9ca3af',fontFamily:'monospace',marginTop:'8px'}}>
@@ -4604,13 +4603,13 @@ function GFSEditor({cfg,set}) {
         <div style={card}>
           <div style={{fontSize:'12px',fontWeight:'700',color:'#be185d',marginBottom:'12px'}}>Stringer Lines</div>
           <label style={lblStyle}>{nG===3?'Bay 1 — ':''}Transverse offsets from Left girder (ft)</label>
-          <NumberListInput style={{...INP,width:'100%',fontFamily:'monospace'}} value={g.stringerOffsets}
-            placeholder="e.g. 2.5, 5.5"
+          <NumberListInput label="Stringer offsets from the left girder" col="Offset" value={g.stringerOffsets}
+            placeholder="2.5"
             onChange={arr=>setG('stringerOffsets',arr)}/>
           {nG===3&&(<>
             <label style={{...lblStyle,marginTop:'12px'}}>Bay 2 — Transverse offsets from Center girder (ft)</label>
-            <NumberListInput style={{...INP,width:'100%',fontFamily:'monospace'}} value={g.stringerOffsets2}
-              placeholder="e.g. 2.5, 5.5"
+            <NumberListInput label="Stringer offsets from the center girder" col="Offset" value={g.stringerOffsets2}
+              placeholder="2.5"
               onChange={arr=>setG('stringerOffsets2',arr)}/>
           </>)}
           <div style={{fontSize:'9px',color:'#9ca3af',fontFamily:'monospace',marginTop:'8px'}}>
@@ -17367,11 +17366,11 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                       )}
                     </div>
                     <div>
-                      <div style={STYLES.monoSmall}>Girder Spacing (ft) — comma-separated</div>
-                      <input type="text" style={{...INP,fontSize:'11px',fontFamily:'monospace'}}
-                        value={R2.arema_spacings||''} 
-                        placeholder="e.g., 6,6,5.5 or 6 (uniform)"
-                        onChange={e=>setRating('arema_spacings',e.target.value)}/>
+                      <div style={STYLES.monoSmall}>Girder Spacing (ft)</div>
+                      {/* LIST (2026-11-02): one box per spacing; R2.arema_spacings stays the saved text "6, 6, 5.5" */}
+                      <ListTable label="Girder spacings (AREMA)" rows={SharedListInput.fromText(R2.arema_spacings||'')}
+                        columns={[{label:'S', unit:'ft', lenient:true, min:0, minExclusive:true, width:'6em', placeholder:'6'}]}
+                        onChange={rows=>setRating('arema_spacings',SharedListInput.toText(rows))}/>
                       <div style={{fontSize:'8px',color:'#9ca3af',marginTop:'2px'}}>
                         Enter {n_gird-1} values for {n_gird} girders, or single value for uniform
                       </div>

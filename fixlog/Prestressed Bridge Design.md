@@ -2184,3 +2184,49 @@ Basis: AASHTO LRFD 10th Ed. (2024) 5.12.3.3.1–.8 with C5.12.3.3.2, C5.12.3.3.3
 - The old tab showed, with t_h > 0 and the haunch NOT in the composite properties, y_d = h + t_h + t_s/2, A_h = n b_tf t_h and their
   parallel-axis terms, which the engine does not use (inconsistent display). The old tab is gone; the new report shows the engine's
   terms (and says the haunch is excluded).
+
+## 2026-11-02 — PR: claude/list-input-pbd, PR #705: https://github.com/mlococo88/All-Structural/pull/705 — bridge bar: "Spans (ft)" is a table with one box per span (LIST)   [display only]
+- **Why:** engineer decision 2026-11-02: no comma-separated inputs (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
+  Small UI change only (the rebuild is on hold).
+- **Where (1):** script tags, anchor `<script src="shared/report.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
+- **Where (2):** `PbdBridgeBar`. **Before:**
+```jsx
+  const [spTxt,setSpTxt]=useState(b.spans.join(', '));
+  useEffect(()=>{ setSpTxt(b.spans.join(', ')); },[spKey]);
+  const commitSpans=()=>{ const v=spTxt.split(/[,;\s]+/).filter(Boolean).map(Number);
+    if(v.length&&v.every(x=>isFinite(x)&&x>0)&&v.join(',')!==spKey) onEdit({spans:v}); else setSpTxt(b.spans.join(', ')); };
+  …
+    <label className="pbd-f" title={ext?'Spans of the imported MIDAS member (from the demands file)':'Span lengths of the bridge, ft, separated by commas (one value per span)'}>Spans (ft)
+      <input style={{width:140}} value={spTxt} disabled={ext} onChange={e=>setSpTxt(e.target.value)} onBlur={commitSpans}
+        onKeyDown={e=>{ if(e.key==='Enter') e.currentTarget.blur(); }}/></label>
+```
+  **After:**
+```jsx
+const PbdListTable = window.SharedListInput ? SharedListInput.react(React) : null;   (before the function)
+  const [spRev,setSpRev]=useState(0); const spBox=useRef(null), spRows=useRef(null);
+  const commitSpans=()=>{ const rows=spRows.current; spRows.current=null; if(!rows) return; const v=rows.map(r=>Number(r[0]));
+    if(v.length&&v.every(x=>isFinite(x)&&x>0)&&v.join(',')!==spKey) onEdit({spans:v}); else setSpRev(n=>n+1); };
+  const spBlur=()=>setTimeout(()=>{ if(spBox.current&&spBox.current.contains(document.activeElement)) return; commitSpans(); },0);
+  …
+    {ext||!PbdListTable?<label className="pbd-f" title="Spans of the imported MIDAS member (from the demands file)">Spans (ft)
+      <input style={{width:140}} value={b.spans.join(', ')} disabled/></label>
+    :<span className="pbd-f pbd-spans" ref={spBox} onBlur={spBlur} title="Span lengths of the bridge, ft, one row per span">Spans
+      <PbdListTable key={spRev} label="Span lengths" rows={SharedListInput.fromNumbers(b.spans)}
+        columns={[{label:'L',unit:'ft',min:0,minExclusive:true,width:'5.5em'}]}
+        onChange={rows=>{ spRows.current=rows; }}/></span>}
+```
+  CSS after `.pbd-f input:disabled{…}`: `.pbd-f.pbd-spans{align-items:flex-start}`.
+- **Behaviour:** the commit rule is the old one: when the focus leaves the table, the rows are committed if every value is a
+  number > 0 and they differ from the bridge's spans; otherwise the table is put back to the bridge's spans (as the old box
+  was). With MIDAS demands imported the spans show in the old disabled box, as before.
+- **Saved data:** `bridge.spans` (`psbeam.bridge.v1`) stays an array of numbers; no key or format changed.
+  `tests/engine/list-input.test.mjs`: the rows commit the same array as the old box, or nothing, for the same input.
+- **Check case:** built-in project, spans 100 ↵ 120 ↵ 100 → `bridge.spans` = [100, 120, 100], three spans in the "Designing" list;
+  every result tab identical to typing "100, 120, 100" in the old box on origin/main.
+- **How verified:** `node tests/smoke/list-input.mjs --part pbd`: origin/main vs this branch (one at a time), built-in project and
+  the case above: the stored `psbeam.*` keys (time stamps normalised) and the text of the Section Props, Losses, Stresses, Flexure,
+  Shear, Camber and Rating tabs identical; 0 console errors (Babel's size note ignored); screenshots at 1400 and 390 px looked at.
+  At 390 px the page scrolls sideways by 212 px on origin/main already (the title-block grid); unchanged here.
+  `node tests/check-syntax.mjs` passes (JSX transpiled).
+- **Formulas, factors, units, code references:** none (§4 does not apply).
+- **Open items:** the 212 px sideways scroll at 390 px is older than this change.

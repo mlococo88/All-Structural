@@ -16,6 +16,7 @@
 <!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/list-input.js"></script>
 <style>
   :root{
     /* ---- primitive tokens (ui-ux-pro-max palette: navy professional) ---- */
@@ -6086,7 +6087,14 @@ function buildInputPanel(){
       {const dt=txtInput(()=>S.vRebar.vDepths||"",v=>{ S.vRebar.vDepths=v; });
        dt.placeholder="auto: depth + k·spacing"; dt.addEventListener("change",()=>refreshAll());
        fRow(body,"Depths of the stacked pieces (optional)",dt,"in",
-         "Top down, comma-separated (e.g. 3, 6.5, 10). Blank = the first depth plus k × the vertical spacing. A listed depth replaces the automatic one for that piece; extra pieces continue automatically.");}
+         "Top down, one per row (e.g. 3, 6.5, 10). Blank = the first depth plus k × the vertical spacing. A listed depth replaces the automatic one for that piece; extra pieces continue automatically.");
+       /* LIST (2026-11-02): one box per depth (shared/list-input.js). The text input stays, hidden, as S.vRebar.vDepths ("3, 6.5, 10");
+          a table edit fires its 'input' (stores the text) and, when the focus leaves the table, its 'change' (refreshAll), as on blur. */
+       if(window.SharedListInput){ let was=dt.value;
+         const lt=SharedListInput.bindInput(dt,{label:"Depths of the stacked pieces",rowSplit:/[,;\s]+/,events:["input"],
+           columns:[{label:"Depth",min:0,lenient:true,width:"6em",placeholder:"auto"}]});
+         lt.el.addEventListener("focusout",()=>setTimeout(()=>{ if(!lt.el.isConnected||lt.el.contains(document.activeElement))return;
+           if(dt.value!==was){ was=dt.value; dt.dispatchEvent(new Event("change",{bubbles:true})); } },0)); }}
       fRow(body,"Gauge: enter instead of automatic",chkInput(()=>!!S.vRebar.gaugeOverride,v=>S.vRebar.gaugeOverride=v),"",
         "Off = the automatic gauge (leading-anchor span + rod Ø + bar Ø + ½″, shown below). On = the gauge entered next.");
       if(S.vRebar.gaugeOverride)
