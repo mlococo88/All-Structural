@@ -2958,7 +2958,7 @@ function gageTables() {
   0 console errors; 390 px no sideways scroll; screenshots at 1400 and 390 px looked at. `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 
-## 2026-11-02 — PR: claude/report-retire-gusset (GPRX: the old Report tab and its calculation-sheet print retired; the shared Report tab is now "Report" and prints from every tab; display only, no result change)
+## 2026-11-02 — PR: claude/report-retire-gusset, PR #702: https://github.com/mlococo88/All-Structural/pull/702 (GPRX: the old Report tab and its calculation-sheet print retired; the shared Report tab is now "Report" and prints from every tab; display only, no result change)
 - **Engineer request (2026-11-02):** retire the old print reports where the Report tab is complete. This uses the same method as lldf #623, Light Pole #625, Shear and Moment #672, elastomeric #676, ACI Rebar #685, Retaining Wall #689 and Timber #696.
 - **Compared:** the calculation sheet (`printCalcReport(crOpts())` → `#calc-rpt`, with every section ticked) against the shared Report tab (`gprModel()` → `#rp-print`), default project, LRFR + LFR.
   - Missing numbers: **0 of 561**.
