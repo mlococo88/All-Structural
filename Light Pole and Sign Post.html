@@ -4947,12 +4947,12 @@ function lppCalcIbc(){
     $('rebarExample').appendChild(tb); if(window.renderMathInElement) renderMathInElement(tb,{delimiters:[{left:'\\[',right:'\\]',display:true}],throwOnError:false}); }
   renderBearingExample(bearing,bearing.axial,inp);
   // Broms reference check — LRFD demands, kip units per AASHTO
-  renderBromsExample(bromsEmbedment(inp, govLRFD.M/1000, govLRFD.P/1000), inp, govLRFD, Mu);
+  renderBromsExample(bromsEmbedment(inp, Mu/1000, Vu/1000), inp, {name:shaftGov.name||govLRFD.name}, Mu);   // the shaft's B₂-amplified M_u and V_u (LPB2)
   // ---- summary tab (reads the same objects the tabs above consume) ----
   renderSummary({inp, mode:'pole',
     stacks:[{label:'', found:{emb,d,ratio,Mu,Pu,Vu,reo,bearing,bolts,...shT},
              pstress, asd:govASD, lrfd:govLRFD, nat, b2:govB2,
-             broms:bromsEmbedment(inp, govLRFD.M/1000, govLRFD.P/1000)}]});
+             broms:bromsEmbedment(inp, Mu/1000, Vu/1000)}]});   // as the Shaft tab (LPB2)
 
   // ---- steps box ----
   $('stepsBox').textContent=
@@ -5393,7 +5393,7 @@ function bromsWorkedHTML(br, inp, govLRFD, MuDesign){
     H+=`<p class="eq-why" style="color:#2f6b3f"><b>Code-faithful basis.</b> With \u03c6 = 1.00 this result is directly comparable to a hand calculation from AASHTO LTS C13.6.1.1. If project conditions or reviewer expectations call for a margin on the soil, lower \u03c6 in the input panel and the comparison table below will show its effect.</p>`;
   }
   H+=step(`2 · Factored demands at groundline ${ref('governing LRFD combination')}`);
-  H+=`<p class="eq-why">Taken from the governing LRFD combination (<b>${govLRFD.name||'—'}</b>) — the same demands that drive the reinforced-concrete shaft design.${br.lambda>1.001?` An additional overload factor λ has been applied on top of these already-factored demands.`:''}</p>`;
+  H+=`<p class="eq-why">Taken from the governing LRFD combination (<b>${govLRFD.name||'—'}</b>) — the same demands that drive the reinforced-concrete shaft design: M<sub>F</sub> is the shaft's M<sub>u</sub>, which includes the P-Δ amplifier B<sub>2</sub> of that combination (AISC 360-16 App. 8; see the shaft P–M design), and V<sub>F</sub> is the largest LRFD base shear (the shaft's V<sub>u</sub>).${br.lambda>1.001?` An additional overload factor λ has been applied on top of these already-factored demands.`:''}</p>`;
   if(br.lambda>1.001){
     H+=g(`V_{F,0} = ${fmt(br.VF0,2)}\\ \\text{kip}\\qquad M_{F,0} = ${fmt(br.MF0,1)}\\ \\text{kip}{\\cdot}\\text{ft}\\qquad \\lambda = ${fmt(br.lambda,2)}`);
     H+=g(`V_F = \\lambda V_{F,0} = ${fmt(br.lambda,2)}(${fmt(br.VF0,2)}) = ${fmt(br.VF,2)}\\ \\text{kip}\\qquad M_F = \\lambda M_{F,0} = ${fmt(br.lambda,2)}(${fmt(br.MF0,1)}) = ${fmt(br.MF,1)}\\ \\text{kip}{\\cdot}\\text{ft}\\qquad D = ${fmt(br.D,2)}\\ \\text{ft}`);
@@ -6026,8 +6026,8 @@ function buildReport(inp,allCombos,gov,embed,struct){
     `The converged depth is the minimum embedment. The depth-to-diameter ratio d/b indicates whether the rigid-pier assumption holds.`,
     `\\boxed{d=${n(embed.d,2)}\\ \\text{ft}}\\qquad \\frac{d}{b}=\\frac{${n(embed.d,2)}}{${n(b,2)}}=${n(ratio,2)}`,
     (ratio>=3&&ratio<=10)?`d/b = ${n(ratio,2)} is within the rigid short-pier range (≈3–10), so the closed-form solution is valid.`:(ratio<3?`d/b = ${n(ratio,2)} is below 3 — the pier is shallow; verify the rigid assumption or deepen the shaft.`:`d/b = ${n(ratio,2)} exceeds 10 — the pier behaves flexibly; a p-y (LPILE) analysis is recommended.`));
-  { const br=bromsEmbedment(inp, govLRFD.M/1000, govLRFD.P/1000);   // D11: the Shaft tab's reference check, same call
-    if(br) H+=`<div class="eq-title">Broms embedment — reference check, not a design check <span class="eq-ref">[AASHTO LTS C13.6.1.1]</span></div>`+bromsWorkedHTML(br,inp,govLRFD,struct.Mu); }
+  { const br=bromsEmbedment(inp, struct.Mu/1000, struct.Vu/1000);   // D11: the Shaft tab's reference check, same call (B₂-amplified, LPB2)
+    if(br) H+=`<div class="eq-title">Broms embedment — reference check, not a design check <span class="eq-ref">[AASHTO LTS C13.6.1.1]</span></div>`+bromsWorkedHTML(br,inp,{name:(struct.reo&&struct.reo.long&&struct.reo.long.govDem&&struct.reo.long.govDem.name)||govLRFD.name},struct.Mu); }
   H+=`</div></details>`;
 
   // ---- 6b. Soil bearing ----

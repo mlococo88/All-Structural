@@ -1925,3 +1925,50 @@ Basis: AASHTO LRFDLTS 1st Ed. (2015) with the 2017 Interim Revisions (the interi
 ### Open items (engineer)
 - **Light-pole IBC mode Broms demand:** the light-pole branch feeds Broms the first-order `govLRFD.M` while its shaft uses `M·B₂`. Should Broms (reference only) use the B₂-amplified moment there too, as the sign branch now does? Not changed.
 - Not in this task's scope and not re-checked against the PDF: the square-tube M_n step just past λ_r noted by the audit (Table 5.8.2-1).
+
+## 2026-11-02 — PR: claude/lp-broms-b2-sqmn (LPB2: light-pole IBC Broms takes the shaft's B₂-amplified demands; square-tube M_n step at λ_r verified)
+
+Engineer's answers to the two open items of PR #671 (LTSV).
+
+### LPB2-1. Light-pole IBC mode: Broms reference check with the B₂-amplified M_u and V_u   [engineer decision] [§4 result change, IBC light-pole mode, Broms reference only]
+- **Engineer (2026-11-02):** Broms (Summary, Shaft tab, report) must use the B₂-amplified moment and shear, as the shaft design and the sign mode (LTSV-4) do.
+- **Where (all in the light-pole branch of `calc()` and in `buildReport()`):**
+  - Shaft tab, anchor `renderBromsExample(bromsEmbedment(inp,`: before `renderBromsExample(bromsEmbedment(inp, govLRFD.M/1000, govLRFD.P/1000), inp, govLRFD, Mu);` → after `renderBromsExample(bromsEmbedment(inp, Mu/1000, Vu/1000), inp, {name:shaftGov.name||govLRFD.name}, Mu);`
+  - Summary, anchor `broms:bromsEmbedment(inp, govLRFD`: before `broms:bromsEmbedment(inp, govLRFD.M/1000, govLRFD.P/1000)}]});` → after `broms:bromsEmbedment(inp, Mu/1000, Vu/1000)}]});`
+  - Report §, anchor `// D11: the Shaft tab's reference check, same call`: before `bromsEmbedment(inp, govLRFD.M/1000, govLRFD.P/1000)` with `bromsWorkedHTML(br,inp,govLRFD,struct.Mu)` → after `bromsEmbedment(inp, struct.Mu/1000, struct.Vu/1000)` with the shaft's governing combination name (`struct.reo.long.govDem.name`, else `govLRFD.name`).
+  - `bromsWorkedHTML()` step 2 text (both modes), anchor `the same demands that drive the reinforced-concrete shaft design`: now adds that M_F is the shaft's M_u including the B₂ of that combination (AISC 360-16 App. 8; see the shaft P–M design) and V_F is the largest LRFD base shear (the shaft's V_u). Wording only.
+- **Demands:** `Mu` = `shaftGov.Mu`, the governing P–M demand of the shaft (each LRFD combination's M × its B₂). `Vu` = `VuMax`, the largest LRFD base shear. These are the same objects the shaft's rebar design, its worked steps and `struct` use.
+- **Governing provision:** LRFDLTS 1st Ed. (2015) C13.6.1.1 (Broms; M_F and V_F are the factored groundline demands), not revised by the 2017 interim. No formula change; only the demand passed. B₂ is the tool's AISC 360-16 App. 8 amplifier, unchanged.
+- **Check case (compare case `broms`: default light pole, cohesive c = 1.2 ksf, D = 3.0 ft, LRFD 1.2D + 1.0W):**
+  - Inputs: V_F = 0.8336 kip (unchanged); M_F,1st = 20.179 kip·ft; B₂ = 1.03379, so M_F = 20.861 kip·ft. q = V_F/(9cD) = 0.8336/32.4 = 0.025728 ft.
+  - Formula: L = 1.5D + q[1 + √(2 + (4H + 6D)/q)].
+  - Before: H = 24.208 ft, L = 4.5 + 0.025728·(1 + √(2 + 114.83/0.025728)) = 4.5 + 0.025728·67.822 = **6.245 ft**. Maximum moment M_u = 23.94 kip·ft.
+  - After: H = 25.026 ft, L = 4.5 + 0.025728·(1 + √(2 + 118.10/0.025728)) = 4.5 + 0.025728·68.767 = **6.269 ft**. Maximum moment M_u = 24.62 kip·ft.
+  - Summary, Shaft tab and report each go from 6.24 to 6.27 ft. The IBC §1807.3 embedment that governs the design is unchanged.
+- **Other copies:** the sign branch already did this (LTSV-4, #671). The LRFDLTS mode applies B to M_F in its own Broms (`bromsEmbedment(inp,B*r.M/1000,r.V/1000)`), unchanged.
+
+### LPB2-2. Square / rectangular tube M_n step just past λ_r (Table 5.8.2-1)   [verified, no change]
+- **Spec:** LRFDLTS 1st Ed. (2015), Art. 5.8.2 and Table 5.8.2-1 (p. 5-18), row "Square and Rectangular". The 2017 interim does not revise pp. 5-17 to 5-19; its Section 5 pages are the notation and 5-33 to 5-35. The row gives, with k = (b/t)/√(E/F_y):
+  - compact (λ ≤ λ_p): M_n = M_p = Z F_y;
+  - noncompact (λ_p < λ ≤ λ_r): M_n = M_p(1.37 − 0.33k);
+  - slender (λ > λ_r): M_n = M_p(1.23 − 0.23k);
+  - λ_p = 1.12√(E/F_y) and λ_r = 1.53√(E/F_y) (Table 5.7.2-1, p. 5-14).
+- **Tool:** `mnOf()` in `apps/light-pole/lts-engine.js`, anchor `Mp * (1.37 - 0.33 * k)` / `Mp * (1.23 - 0.23 * k)`, boundary `l <= cl.lrF`. This is the table as printed. No change.
+- **Why the step exists:** the two printed expressions are separate straight lines. They cross at 1.37 − 0.33k = 1.23 − 0.23k, i.e. k = 0.14/0.10 = **1.40**. That is not the table's λ_r of 1.53, so the curve is discontinuous at λ_r. Between k = 1.40 and 1.53 the noncompact line lies below the slender line, so the tool is conservative there by following the table. Just past λ_r, M_n steps up by about 1.5 %. The step comes from the printed table, not from the tool.
+- **Hand check (F_y = 50 ksi, √(E/F_y) = √580 = 24.083; values as fractions of M_p):**
+
+  | k | λ = b/t | Formula | M_n/M_p |
+  |---|---|---|---|
+  | 1.40 | 33.72 | noncompact | 0.9080 (both lines meet) |
+  | 1.53 (= λ_r) | 36.85 | noncompact | 1.37 − 0.5049 = **0.8651** |
+  | 1.5301 | 36.85 | slender | 1.23 − 0.3519 = **0.8781** |
+
+  The step at λ_r is 0.8781/0.8651 = 1.015. `mnOf()` in Node gives 0.90800, 0.86510 and 0.87808 at these points.
+- **Open item (engineer, not changed):** Art. 5.8.2 (p. 5-17) also caps M_n of multi-sided tubes at M_n of a round tube of equivalent diameter (the outside distance between parallel sides). The tool has no 8-, 12- or 16-sided shapes. Square tubes have their own row in Table 5.8.2-1, and the tool does not apply this cap to them. Should a square tube be treated as "multi-sided" for this cap?
+
+### How verified
+- `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves` (18 cases):
+  - Every case is identical except `broms`: the light-pole Broms in the Summary, Shaft tab and report, 6.24 → 6.27 ft.
+  - The sign cases `signbroms1/2` change only the step-2 wording on the Shaft tab.
+  - **Cable values identical** in all 11 cases with cables; drawings identical; no console errors.
+- `node tests/engine/run.mjs lightpole`: 41 passed. `node tests/check-syntax.mjs`: all pass.
