@@ -107,3 +107,5 @@ Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcl
 - BP round-pier anchorage merged #600 #603 #606 #608 (shared/anchor-geom.js; anchorGroup receiver). Engineer: credit shaft cage as anchor reinforcement (running); round vs square shear difference acceptable; LTS articles stay 'verify'.
 - LP: breakout group form #602, verify note #604, sign ice #605. Running: anchor export, result chip, retire anchor tab (keep inputs).
 - PSBD old Report tab retired #599; lldf type d fatigue ÷1.2 #609.
+- LTS mode: plan merged #619 (docs/lts-mode-plan.md). Basis = LRFDLTS 1st Ed. + interims through 2022 (LRFDLTS-1-I5), NOT 2nd Ed. Engineer will add the LRFDLTS PDF to mlococo88/Structural_References on 2026-11-02 (tomorrow); then send its path to the LTS agent and start Phase B (9 PRs). Owner amendments scan running (docs only).
+- lldf two-panel layout merged #618. LP anchor hand-off #610 #612 #616 #617. Shared report #607 #614. BP cage #611 #613.
