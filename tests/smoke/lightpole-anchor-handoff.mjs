@@ -48,6 +48,7 @@ for (const [name, mut] of Object.entries(CASES)) {
     // §4.12 result back to Light Pole: BP sends, LP shows the governing D/C (Summary + Anchors card), then "stale" after an input change
     const before = await o.p.evaluate(() => { lppAnchorCardRefresh(); return Array.from(document.querySelectorAll('#lpAnchResult .lpAgChip')).map(e => e.dataset.state); });
     await bp.evaluate(() => { const r = bxAg.resultPayload(); BridgeXfer.publish('anchorGroupResult', r, 'Base Plate & Anchor Bolt Designer', 'BasePlateAnchorDesigner.html'); });
+    await o.p.waitForTimeout(300);   // the result reaches LP through localStorage; give the page a moment (an occasional timing failure, LPA-3)
     const after = await o.p.evaluate(lts => { lppAnchorCardRefresh(); if (lts) calc(); else renderSummary(LPP_SUMCTX);
       return { card: Array.from(document.querySelectorAll('#lpAnchResult .lpAgChip')).map(e => [e.dataset.state, e.textContent]),
                sum: Array.from(document.querySelectorAll(lts ? '#ltsSumCard .lpAgChip' : '#page-summary .lpAgChip')).map(e => e.dataset.state) }; }, !!mut.lts);
