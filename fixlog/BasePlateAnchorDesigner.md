@@ -4984,7 +4984,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Entered demands:** already entered directly (load combinations P, V_x, V_y, M_x, M_y, T, and the hand-offs). Nothing added.
 
-## 2026-11-02 — BC-6: the §17.6.2.1.2 h_ef reduction by analogy for a round pier is NOT applied by default (engineer decision 2026-11-02); older saves keep it applied (migration) (PR: claude/bpad-roundpier-default)
+## 2026-11-02 — BC-6: the §17.6.2.1.2 h_ef reduction by analogy for a round pier is NOT applied by default (engineer decision 2026-11-02); older saves keep it applied (migration) (PR: claude/bpad-roundpier-default, PR #673: https://github.com/mlococo88/All-Structural/pull/673)
 
 ### BC-6. Default of `conc.circHefReduce`   [§4: default that feeds a result] [saved data: migration]
 - **Decision (engineer, 2026-11-02):** the option "Apply §17.6.2.1.2 h_ef reduction to the circle" (BC-2, 2026-11-01, default on) is off by default. Independent audit (Nov 2026), section C, item #4: the analogy raised φN_cbg by 52 % in the audit case; the provision's "three or more edges" trigger is applied to a circle only by analogy.
