@@ -21,6 +21,9 @@
 <script src="https://unpkg.com/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://unpkg.com/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
 <!-- ABRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<!-- ABRX (2026-11-02): Ctrl+P and the browser's Print from any tab print the Report. Registered before shared/report.js's own
+     beforeprint listener, so the Report is shown when that listener sets the running header (abrPrintPrep: abutment_calculator.html). -->
+<script>window.addEventListener("beforeprint",()=>{ try{ if(typeof abrPrintPrep==="function") abrPrintPrep(); }catch(e){} });</script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 <!-- PLIB (2026-11-02): saved-project rename / duplicate, Redo and Ctrl+Z / Ctrl+Y, shared with the other tools -->
@@ -272,74 +275,12 @@ dialog h3{margin-top:0;}
 .d3-viewbtns{position:absolute;top:6px;right:8px;display:flex;gap:4px;}
 .d3-viewbtns button{font-size:0.75rem;padding:1px 6px;border:1px solid var(--line);background:rgba(255,255,255,0.85);border-radius:3px;cursor:pointer;}
 
-/* ================= PRINT REPORT ================= */
-#report{display:none;}
+/* ================= PRINT (ABRX, 2026-11-02: the print report and its #report styles are retired; every print is the Report, shared/report.js) ================= */
 @media print{
   @page{size:letter;margin:0.75in 0.7in;}
   body{background:#fff;font-size:11pt;}
-  .wrap,#appmain,header.app-head,.toolbar,#dashboard,#warnbox{display:none !important;}
-  #report{display:block;font-size:11pt;color:#000;}
-  #report .eq-line{margin-left:24px;}
-  #report .panel,#report .eq-block{break-inside:avoid;}
-  #report h2.rpt-sec{break-after:avoid;}
-  #report .pagebreak{break-before:page;}
-  #report table{break-inside:auto;}
-  #report tr{break-inside:avoid;}
   a{color:#000;text-decoration:none;}
 }
-#report .rpt-titleblock{border:2px solid #000;padding:0;margin-bottom:14px;border-collapse:collapse;width:100%;}
-#report .rpt-titleblock td{border:1px solid #000;padding:4px 8px;font-size:10pt;}
-#report .rpt-titleblock .tb-label{font-size:8.5pt;color:#333;display:block;font-variant:small-caps;}
-#report h1.rpt-title{text-align:center;font-size:16pt;margin:4px 0;}
-#report h2.rpt-sec{font-size:13pt;border-bottom:1.5px solid #000;margin-top:18px;}
-#report h3{font-size:11.5pt;}
-#report .rpt-sub{text-align:center;font-size:10.5pt;font-style:italic;margin-bottom:10px;}
-#report .rpt-banner{text-align:center;border:2px solid #000;border-radius:3px;padding:7px 10px;margin:8px auto 14px;max-width:6.6in;}
-#report .rpt-banner.ok{background:#e7f4e9;border-color:#1a7f37;}
-#report .rpt-banner.bad{background:#fbe9e9;border-color:#c62828;}
-#report .rpt-banner.inc{background:#fff4e0;border-color:#b26a00;}   /* ABT: design incomplete */
-#report .rpt-banner.inc .rpt-banner-status{color:#b26a00;}
-#report .rpt-banner-status{display:block;font-size:13pt;font-weight:bold;letter-spacing:.03em;}
-#report .rpt-banner.ok .rpt-banner-status{color:#1a7f37;}
-#report .rpt-banner.bad .rpt-banner-status{color:#c62828;}
-#report .rpt-banner-detail{display:block;font-size:9.5pt;font-style:normal;color:#222;margin-top:2px;}
-#report .panel{border:none;box-shadow:none;margin-bottom:4px;}
-#report .panel>.p-head{background:none;border-bottom:1px solid #999;cursor:default;padding:3px 0;}
-#report .panel>.p-head .tri{display:none;}
-#report .panel>.p-body{display:block !important;padding:4px 0 8px 0;}
-#report .plotimg{max-width:6.6in;display:block;margin:6px auto;}
-/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) */
-#report.crdoc{font-family:"Times New Roman",Times,serif;}
-#report .cr-cover h1,#report h2.cr-h1,#report h3.cr-h2,#report .cr-resh{color:#000;}
-#report .cr-refs td:first-child{white-space:nowrap;}
-#report a{color:#000;text-decoration:none;}
-#report .cr-cover{min-height:8.2in;display:flex;flex-direction:column;justify-content:center;break-after:page;}
-#report .cr-cover-t{text-align:center;margin-bottom:24pt;}
-#report .cr-cover h1{font:700 24pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt;}
-#report .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt;}
-#report .cr-cover p.cr-cover-p{font-weight:400;font-size:11pt;}
-#report .cr-front{break-after:page;}
-#report .cr-break{break-before:page;}
-#report h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;border:0;margin:14pt 0 8pt;break-after:avoid;}
-#report h3.cr-h2{font:700 11pt "Times New Roman",Times,serif;margin:10pt 0 4pt;break-after:avoid;}
-#report .cr-refs{border-collapse:collapse;margin:0 0 10pt;}
-#report .cr-refs td{padding:1pt 14pt 1pt 0;vertical-align:top;font-size:10.5pt;}
-#report .cr-toc,#report .cr-toc ol{list-style:none;margin:0;padding:0;}
-#report .cr-toc>li{margin:3pt 0;}
-#report .cr-toc ol{padding-left:18pt;font-size:10pt;}
-#report .cr-p{margin:0 0 7pt;}
-#report .cr-small{font-size:9.5pt;margin-top:10pt;}
-#report .cr-resh{font:700 11pt "Times New Roman",Times,serif;margin:12pt 0 2pt;break-after:avoid;}
-#report .cr-line{display:grid;grid-template-columns:2.3in 1fr 0.8in;gap:0 12pt;align-items:center;padding:3pt 0;break-inside:avoid;}
-#report .cr-res{border-top:0.6pt solid #000;}
-#report .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt;}
-#report .cr-r{text-align:right;}
-#report .cr-st-fail{text-decoration:underline;}
-#report .cr-refi{font-size:9pt;font-style:italic;}
-#report .xref{font-style:italic;}
-#report .nocase{text-transform:none;}
-#report .wklink{font-size:9pt;}
-#report button{display:none !important;}
 /* "All tools" link + shared project info buttons */
 .bx-all-tools{font-size:0.8rem;color:var(--ref);text-decoration:none;}
 .bx-all-tools:hover{text-decoration:underline;}
@@ -520,7 +461,7 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
     <span class="spacer"></span>
     <span id="fpBadge" title="Fingerprint of the current input set — printed on the report so a reviewer can confirm the PDF matches these exact inputs" style="font-size:0.8rem;color:#555;border:1px dashed #bbb;border-radius:3px;padding:1px 7px;"></span>
     <span id="saveStatus"></span>
-    <button class="primary" id="btnPrint" title="Generate the full engineering calculation report and open the print dialog">Print / PDF Report</button>
+    <button class="primary" id="btnPrint" title="Print / PDF the calculation report (the Report tab), from any tab">Print / PDF Report</button>
   </div>
 
   <!-- ======= MAIN 2-PANEL LAYOUT ======= -->
@@ -543,27 +484,6 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
   <div style="text-align:right;margin-top:8px;"><button id="dlgProjClose">Close</button></div>
 </dialog>
 
-<!-- ======= REPORT-OPTIONS DIALOG ======= -->
-<dialog id="dlgRpt" style="max-width:560px;width:90%;">
-  <h3>Report Contents</h3>
-  <div class="small" style="margin-bottom:8px;">Choose which sections to include, then generate the PDF. An <b>audit set</b> shows every permutation and validation section for a formal review; a <b>slim submittal</b> drops the bulk tables for a shorter package. The summary, key results, warnings, assumptions, stability, foundation and structural sections are always included.</div>
-  <div style="display:flex;gap:8px;margin-bottom:10px;">
-    <button class="mini-btn" id="rptPresetAudit">Audit set (all)</button>
-    <button class="mini-btn" id="rptPresetSlim">Slim submittal</button>
-  </div>
-  <div id="rptOptList" style="display:flex;flex-direction:column;gap:6px;font-size:13px;">
-    <label><input type="checkbox" data-ropt="inputEcho"> Input echo (full)</label>
-    <label><input type="checkbox" data-ropt="permFull"> Load combinations &amp; γp permutation tables</label>
-    <label><input type="checkbox" data-ropt="detailTables"> Detailed force-effect tables (per-load breakdown)</label>
-    <label><input type="checkbox" data-ropt="charts"> Charts &amp; diagrams (pressure, bearing, V&amp;M, sensitivity)</label>
-    <label><input type="checkbox" data-ropt="viz3d"> 3D load visualization snapshot</label>
-    <label><input type="checkbox" data-ropt="selftest"> Validation self-test result</label>
-  </div>
-  <div style="text-align:right;margin-top:12px;">
-    <button id="dlgRptCancel" class="mini-btn">Cancel</button>
-    <button id="dlgRptGo" class="primary">Generate PDF</button>
-  </div>
-</dialog>
 
 <!-- ======= COMPARE DIALOG ======= -->
 <dialog id="dlgCmp" style="max-width:860px;width:90%;">
@@ -578,8 +498,6 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
   <div id="cmpOut" style="max-height:60vh;overflow-y:auto;margin-top:8px;"></div>
 </dialog>
 
-<!-- ======= PRINT REPORT CONTAINER ======= -->
-<div id="report"></div>
 
 <script>
 "use strict";
@@ -5194,7 +5112,7 @@ function checkLine(name,dTex,dc,extra){
 function govNote(txt){ return `<div class="govnote"><b>Governing combination:</b> ${esc(txt)}</div>`; }
 /* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that panel.
    On screen: "Worked in: → Tab · Panel" (an .xlink — the existing click handler opens the tab, scrolls, flashes).
-   In the calculation report buildReport() rewrites every .xlink to "see §n.k" / "§n.k". ---- */
+   In the Report (ABRX, 2026-11-02; before, the print report buildReport()) every .xlink of a ported panel is "see §n.k" / "§n.k". ---- */
 const ABUT_TABNAME={"tab-loads":"Geometry & Loads","tab-comb":"Load Combinations","tab-stab":"External Stability","tab-found":"Foundation / Piles",
   "tab-struct":"Structural Design","tab-vm":"V & M Diagrams","tab-3d":"3D View","tab-tables":"Detailed Tables","tab-wing":"Wingwalls","tab-iab":"Integral / Semi-integral"};
 function abutWorkedIn(items){   /* items: [[tab, panel cid, panel label, quoted value (optional)]] */
@@ -9201,7 +9119,10 @@ const ABR_AA="AASHTO LRFD 10th Ed. ";
 const ABR_TABTXT={"tab-loads":"Tab 1, Geometry & Loads","tab-comb":"Tab 2, Load Combinations","tab-stab":"Tab 3, External Stability","tab-found":"Tab 4, Foundation / Piles",
   "tab-struct":"Tab 5, Structural Design","tab-wing":"Tab 9, Wingwalls","tab-iab":"Tab 10, Integral / Semi-integral"};
 /* a link back to a tab (and panel): the text reads in print, the link itself shows on screen only */
-const abrTab=(tab,cid)=>(ABR_TABTXT[tab]||tab)+" [[tab:"+tab+(cid?"~"+cid:"")+"|open]]";
+const abrTab=(tab,cid)=>(ABR_TABTXT[tab]||tab)+" [[tab:"+tab+(cid?"~"+cid:"")+"|open]]"+abrPorted(tab,cid);
+/* ABRX: the same panel (or tab) in the Report's part "Calculation by tab": " (§n.k)" */
+function abrPorted(tab,cid){ const hv=ABRX.hv; if(!hv||hv.R!==window.LAST_R) return "";
+  if(cid) return abxLive(hv).has(cid)?" ([[abx."+cid+"]])":""; return abxTabLive(hv,tab)?" ([[abx-"+tab+"]])":""; }
 /* a steps item whose steps are grouped in topics (one topic per list entry, in order) */
 function abrTopics(scope,list,opt){
   const L=list.filter(t=>t.w.steps.length), steps=[].concat(...L.map(t=>t.w.steps));
@@ -9209,8 +9130,295 @@ function abrTopics(scope,list,opt){
     return {title:t.title,ref:t.ref||"",n:t.w.steps.length,cls:g.cls,chip:g.chip,res:g.res}; });
   return Object.assign({type:"steps",scope,steps,topics},opt||{});
 }
+/* ---------- ABRX (2026-11-02): what the retired print report printed and the Report lacked ----------
+   The retired print report (buildReport, the "Print / PDF Report" dialog) printed the tabs themselves: a clone of every tab with
+   all panels open (worked equations, tables, figures, charts as images, notes), the approach-slab panels as a section of their
+   own, the 3D snapshot, the input echo, the self-test, the ranked results, the key results and the revision history. Those
+   are ported here, read from the same tabs (the same render functions, the same static figures: figStaticIn), so nothing is
+   computed here: each tab panel becomes a subsection of the part "Calculation by tab" (key "abx.<panel id>"), each equation
+   block a list of worked steps (the tab's own equation strings: symbols → values → result), each table a report table, each
+   note a note. Links between panels ("Worked in: → Tab · Panel") become "see §n.k" links to the ported panel. The dialog's
+   six choices are the report bar's "Include" boxes (the same field S.ui.rptOpts, the same keys and values). */
+const ABRX={hv:null,img:null,back:null};
+const ABRX_SRC=[];   /* source lines of the hand-offs (SubLoads, Pile Designer) for the Report, pushed by those scripts */
+const ABRX_OPTS=[["inputEcho","Input echo"],["permFull","Load combinations and γp permutations"],["detailTables","Detailed force-effect tables"],
+  ["charts","Charts"],["viz3d","3D snapshot"],["selftest","Self-test"]];
+function abxRO(){ return Object.assign({inputEcho:true,permFull:true,detailTables:true,viz3d:true,selftest:true,charts:true},S.ui.rptOpts||{}); }
+/* the tabs the print report printed, in its order, with its section titles */
+function abxTabList(){
+  const IT=iabType(), itg=IT==="integral";
+  return [["tab-loads","Geometry, Self-Weights & Loads"],["tab-comb","Load Combinations & γp Permutations"],["tab-stab","External Stability, Free Body & Notes"],
+    ["tab-found",itg?"Integral Piles — Summary":"Foundation / Pile Group"],["tab-struct","Structural Design (Concrete)"],["tab-wing","Wingwalls"],
+    ["tab-iab",(IT==="semi"?"Semi-integral":"Integral")+" Abutment"],["tab-vm","Shear & Moment Diagrams"],["tab-tables","Detailed Force-Effect Tables"]]
+    .filter(([id])=>!({"tab-wing":!(S.wing&&S.wing.on),"tab-iab":IT==="conv","tab-stab":itg})[id]);
+}
+const ABX_GR={iota:"ι",kappa:"κ",nu:"ν",xi:"ξ",zeta:"ζ",varphi:"φ",varepsilon:"ε",vartheta:"θ",Gamma:"Γ",Omega:"Ω",Phi:"Φ",Psi:"Ψ",Lambda:"Λ",Pi:"Π",Theta:"Θ",partial:"∂",
+  cos:"cos ",sin:"sin ",arctan:"arctan ",log:"log ",ln:"ln ",exp:"exp ",lfloor:"⌊",rfloor:"⌋",lceil:"⌈",rceil:"⌉",cdots:"⋯",dots:"…",leq:"≤",geq:"≥",neq:"≠",Rightarrow:"⇒",rightarrow:"→",checkmark:"✓",
+  quad:"  ",qquad:"   ",displaystyle:"",textstyle:"",bigl:"",bigr:"",Bigl:"",Bigr:"",big:"",Big:"",mid:"|",vert:"|",lvert:"|",rvert:"|",langle:"⟨",rangle:"⟩",square:"□",degree:"°"};
+/* a tab's TeX for the report's running text and table cells (shared/report.js sets those with the built-in renderer, which knows a
+   subset): fractions and text commands mapped to the subset, other symbols to their characters */
+function abxLite(t){
+  return String(t||"").replace(/\\!/g,"").replace(/\{,\}/g,",").replace(/\\[dt]frac/g,"\\frac").replace(/\\(?:mathrm|mathbf|mathit|textbf|textit|operatorname|boldsymbol)\b/g,"\\text").replace(/\\(?:left|right)\b\.?/g,"")
+    .replace(/\\([A-Za-z]+)/g,(m,c)=>ABX_GR[c]!=null?ABX_GR[c]:m).replace(/\$/g,"");
+}
+const ABX_BLK=/^(DIV|P|UL|OL|LI|TABLE|THEAD|TBODY|TR|H1|H2|H3|H4|H5|H6|SECTION|DETAILS|FIGURE|IMG|PRE|HR|DL|DT|DD|BLOCKQUOTE|FORM|FIELDSET|CANVAS|SVG|LABEL)$/i;
+const abxIsBlk=n=>n.nodeType===1&&(ABX_BLK.test(n.tagName)||n.namespaceURI==="http://www.w3.org/2000/svg"&&n.tagName.toLowerCase()==="svg");
+const ABX_SKIP="button,script,style,input,textarea,.tri,.figctl,.csvrow,.d3-viewbtns,.d3-hud,canvas";
+/* the text of an inline subtree. rich: .ktx as $…$ and the panel links as markers (resolved in abxFix once every ported panel is
+   known); plain: .ktx as plain text (labels of steps), links as their text */
+function abxInline(e,rich){
+  let s="";
+  e.childNodes.forEach(n=>{
+    if(n.nodeType===3){ s+=n.textContent.replace(/\$/g,""); return; }
+    if(n.nodeType!==1||n.matches(ABX_SKIP)) return;
+    if(n.matches(".ktx")){ const t=n.dataset.tex||n.textContent; s+=rich?"$"+abxLite(t)+"$":SharedSteps.toText(abxLite(t)); return; }
+    if(n.matches(".xlink[data-jump]")){ s+=rich?"\u0001"+n.dataset.jump+"\u0001"+(n.classList.contains("wk")?"w":n.dataset.rpt?"r":"t")+"\u0001"+(n.dataset.txt||"")+"\u0001"+abxInline(n,false).replace(/[\u0001\u0002]/g,"")+"\u0002":abxInline(n,false); return; }
+    if(n.tagName==="SELECT"){ const o=n.options[n.selectedIndex]; s+=o?o.textContent:""; return; }
+    if(n.tagName==="SUB"){ const t=abxInline(n,false); s+=rich?"$_{"+abxLite(t).replace(/[{}]/g,"")+"}$":"_"+t; return; }
+    if(n.tagName==="SUP"){ const t=abxInline(n,false); s+=rich?"$^{"+abxLite(t).replace(/[{}]/g,"")+"}$":"^"+t; return; }
+    if(n.tagName==="BR"){ s+=" "; return; }
+    s+=abxInline(n,rich);
+  });
+  return s;
+}
+const abxSq=t=>String(t).replace(/\s+/g," ").replace(/\$\s*\$/g,"").trim();
+/* rich text: a subscript after a word is joined to it ("h$_{eq}$" -> "$h_{eq}$") */
+const abxJoin=t=>t.replace(/([A-Za-zΑ-ωφγδ′]+)\$([_^]\{[^$]*\})\$/g,"$$$1$2$$");
+function abxCell(c){
+  const t=c.matches(".ktx")?"$"+abxLite(c.dataset.tex||c.textContent)+"$":abxJoin(abxSq(abxInline(c,true))), o={t:t||""};
+  if(c.colSpan>1) o.span=c.colSpan;
+  if(c.classList.contains("num")||/^[\s\d.,−\-+%/()×]+$/.test(t)&&/\d/.test(t)) o.n=true;
+  const fc=c.querySelector(".flagchip");
+  if(fc) o.cls=fc.classList.contains("fail")?"ng":fc.classList.contains("pass")?"ok":fc.classList.contains("warn")?"hi":"";
+  else if(/^(FAIL|NG|✗)\b/.test(t)) o.cls="ng"; else if(/^(PASS|OK|✓)\b/.test(t)) o.cls="ok";
+  return o;
+}
+function abxTable(t,ctx){
+  const trs=[...t.rows].filter(tr=>tr.cells.length&&tr.closest("table")===t); if(!trs.length) return null;
+  const allTh=tr=>[...tr.cells].every(c=>c.tagName==="TH");
+  let head=[], i=0; if(allTh(trs[0])){ head=[...trs[0].cells].map(abxCell); i=1; }
+  const rows=trs.slice(i).map(tr=>({cells:[...tr.cells].map(abxCell),cls:/\b(gov|failrow|inuse)\b/.test(tr.className)?"gov":""}));
+  if(!rows.length&&!head.length) return null;
+  const nc=Math.max(head.length,...rows.map(r=>r.cells.length)), it={type:"table",head,rows,wide:nc>6||undefined};
+  if(rows.length>30){ it.lazy=true; it.title=(ctx.title||"Table")+" (table "+(++ctx.nt)+")"; }
+  return it;
+}
+/* a long trailing remark of an equation line (\ \text{… words …}) goes to the step's note, so the line fits the page; a leading unit stays */
+function abxEqSplit(tx){
+  const m=/^(.*?)((?:\\[ ,;]|\\q?quad|\s)*)\\text\{([^{}]{36,})\}\s*$/.exec(tx); if(!m) return [tx,""];
+  const u=/^(\S{1,8})\s+(.+)$/.exec(m[3]), keepU=u&&!/[(),;:]/.test(u[1]);
+  return [m[1]+(keepU?m[2]+"\\text{"+u[1]+"}":""),(keepU?u[2]:m[3]).trim()];
+}
+/* an equation block of a tab (eqB): its lines as worked steps (the tab's strings, symbolic → substituted → result), then its note */
+function abxEq(n,out,ctx){
+  const tt=n.querySelector(":scope > .eq-title"); let title="", ref="";
+  if(tt){ const c=tt.cloneNode(true), r=c.querySelector(".ref"); if(r){ ref=r.textContent.replace(/^\s*\[|\]\s*$/g,""); r.remove(); } title=abxSq(abxInline(c,false)); }
+  const steps=[...n.querySelectorAll(":scope > .eq-line")].map(e=>e.dataset.tex).filter(Boolean).map((tx,k)=>{ const [e,nt]=abxEqSplit(tx); return {id:ctx.id+".e"+(++ctx.n),label:k?"":title||"Worked equation",sym:"",eq:window.katex?e:abxLite(e),sub:"",value:null,unit:"",d:2,ref:k?"":ref,note:nt}; });
+  if(steps.length) out.push({type:"steps",scope:"abx",steps});
+  [...n.children].forEach(c=>{ if(c.matches(".eq-title,.eq-line")) return; const w=document.createElement("div"); w.appendChild(c.cloneNode(true)); abxWalk(w,out,ctx); });
+}
+/* a check line (checkLine): the tab's demand / capacity expression and D/C as a test step */
+function abxCheck(n,out,ctx){
+  const k=n.querySelector(".ktx"), chip=n.querySelector(".flagchip");
+  if(!k){ const t=abxJoin(abxSq(abxInline(n,true))); if(t) out.push({type:"note",text:t,warn:n.classList.contains("fail")||undefined}); return; }
+  const c=n.cloneNode(true); c.querySelectorAll(".ktx,.flagchip").forEach(x=>x.remove());
+  const rest=abxSq(abxInline(c,false)), m=/D\/C\s*=\s*(\S+)/.exec(rest);
+  out.push({type:"steps",scope:"abx",steps:[{id:ctx.id+".c"+(++ctx.n),label:(chip?chip.textContent.trim()+": ":"")+(rest.replace(/D\/C\s*=\s*\S+/,"").trim()||"check"),sym:"",eq:window.katex?(k.dataset.tex||""):abxLite(k.dataset.tex),sub:"",
+    value:m?"D/C = "+m[1]:"",unit:"",d:2,ref:"",note:"",ok:n.classList.contains("pass")?true:n.classList.contains("fail")?false:undefined}].map(s=>{ if(s.ok===undefined) delete s.ok; return s; })});
+}
+/* the content of a node as report items, in order */
+function abxWalk(node,out,ctx){
+  let buf="";
+  const flush=()=>{ const t=abxJoin(abxSq(buf)); if(t&&!/^[·•\-–—:,;.\s]*$/.test(t)) out.push({type:"note",text:t}); buf=""; };
+  node.childNodes.forEach(n=>{
+    if(n.nodeType===3){ buf+=n.textContent.replace(/\$/g,""); return; }
+    if(n.nodeType!==1||n.matches(ABX_SKIP)) return;
+    if(!abxIsBlk(n)||n.matches(".ktx")){ const w=document.createElement("span"); w.appendChild(n.cloneNode(true)); buf+=abxInline(w,true); return; }
+    flush();
+    const tg=n.tagName.toUpperCase();
+    if(tg==="TABLE"){ const t=abxTable(n,ctx); if(t) out.push(t); return; }
+    if(n.classList.contains("eq-block")){ abxEq(n,out,ctx); return; }
+    if(n.classList.contains("checkline")){ abxCheck(n,out,ctx); return; }
+    if(tg==="SVG"){ out.push({type:"figure",svg:n.outerHTML,caption:""}); return; }
+    if(tg==="IMG"){ if(n.getAttribute("src")) out.push({type:"figure",svg:'<img src="'+n.getAttribute("src")+'" alt="" style="max-width:100%;height:auto">',caption:""}); return; }
+    if(n.classList.contains("plotbox")){ out.push({type:"figure",plot:n.id,svg:"",caption:""}); return; }
+    if(n.classList.contains("figcap")){ const t=abxJoin(abxSq(abxInline(n,true))), L=out[out.length-1]; if(L&&L.type==="figure"&&!L.caption) L.caption=t; else if(t) out.push({type:"note",text:t}); return; }
+    if(n.classList.contains("p-head")){ const c=n.cloneNode(true); c.querySelectorAll(".tri").forEach(x=>x.remove()); const t=abxSq(abxInline(c,true)); if(t) out.push({type:"note",text:"▸ "+t}); return; }
+    if([...n.childNodes].some(abxIsBlk)){ abxWalk(n,out,ctx); return; }
+    const t=abxJoin(abxSq(abxInline(n,true))); if(!t) return;
+    out.push({type:"note",text:(tg==="LI"?"• ":"")+t,warn:/\b(warn|err|fail|warn-item)\b/.test(n.className)||undefined});
+  });
+  flush();
+}
+/* one tab as report subsections: each top-level panel one subsection (key abx.<panel id>), loose content first */
+function abxTabSubs(root,secTitle,cids,pre){
+  const subs=[]; let loose=null;
+  const walk=el=>{ [...el.children].forEach(c=>{
+    if(c.matches(".panel")){ const h=c.querySelector(":scope > .p-head"), no=h&&h.querySelector(".sec-no"), tt=h&&h.children[2];
+      let t=""; if(tt){ const x=tt.cloneNode(true); x.querySelectorAll(".flagchip").forEach(f=>f.remove()); t=abxSq(abxInline(x,true)); }
+      const cid=c.dataset.cid||"", ctx={id:(cid||pre+"_p"+subs.length).replace(/[^\w-]/g,"_"),n:0,nt:0,title:t}, items=[];
+      const body=c.querySelector(":scope > .p-body")||c; abxWalk(body,items,ctx);
+      subs.push({title:(no&&no.textContent.trim()?"Panel "+no.textContent.trim()+": ":"")+(t||"Panel"),key:cid?"abx."+cid:undefined,items:items.length?items:[{type:"note",text:"(no content)"}]});
+      if(cid) cids.add(cid); loose=null; return; }
+    if(c.matches(ABX_SKIP)) return;
+    if(!c.querySelector(".panel")){ if(!loose){ loose={title:secTitle,items:[]}; subs.push(loose); } const w=document.createElement("div"); w.appendChild(c.cloneNode(true)); abxWalk(w,loose.items,{id:pre+"_x"+subs.length,n:0,nt:0,title:secTitle}); return; }
+    walk(c); }); };
+  walk(root);
+  return subs.filter(q=>q.items.length);
+}
+/* the harvest, once per result: every tab the print report printed, rendered by its own function (renderTabContent, as when the
+   tab is opened), cloned with the static figures (figStaticIn), the approach-slab panels apart */
+function abxHarvest(R){
+  if(ABRX.hv&&ABRX.hv.R===R) return ABRX.hv;
+  const hv={R,tabs:[],ap:[],cids:new Set(),tabOf:{},plots:[],echo:null,self:null,key:null};
+  ABRX.hv=hv;
+  abxTabList().forEach(([id,name])=>{
+    const src=document.getElementById(id); if(!src) return;
+    try{ if(TAB_STALE[id]!==false) renderTabContent(id); }catch(e){ console.warn("report port:",id,e); }
+    const cl=src.cloneNode(true);
+    try{ figStaticIn(cl,R); }catch(e){}
+    cl.querySelectorAll(".plotbox").forEach(pb=>hv.plots.push({tab:id,id:pb.id}));
+    const ap=[]; cl.querySelectorAll('.panel[data-cid="o-ap"], .panel[data-cid="o-ap-shelf"], .panel[data-cid="o-ap-des"], .panel[data-cid="o-str-Approach slab"], .panel[data-cid="o-ap-bars"]').forEach(p=>{ ap.push(p); p.remove(); });
+    const subs=abxTabSubs(cl,name,hv.cids,id); hv.tabs.push({id,name,subs}); subs.forEach(q=>{ if(q.key) hv.tabOf[q.key.slice(4)]=id; });
+    ap.forEach(p=>{ const w=document.createElement("div"); w.appendChild(p); abxTabSubs(w,"Approach slab",hv.cids,"ap"+hv.ap.length).forEach(q=>{ hv.ap.push(q); if(q.key) hv.tabOf[q.key.slice(4)]="ap"; }); });
+  });
+  const frag=(h,t,pre)=>{ const w=document.createElement("div"); w.innerHTML=h; return abxTabSubs(w,t,hv.cids,pre); };
+  try{ hv.echo=frag(inputEchoHTML(),"Input echo","echo"); }catch(e){ hv.echo=null; }
+  try{ hv.self=frag(selfTestHTML(),"Validation self-test result","self"); }catch(e){ hv.self=null; }
+  try{ hv.key=frag(abxKeyHTML(R),"Key results","key"); }catch(e){ console.warn(e); hv.key=null; }
+  return hv;
+}
+/* the print report's key results table (its code, moved here; "§" links are links to the ported panels) */
+function abxKeyHTML(R){
+  const wk=(tab,cid)=>`<span class="xlink" data-jump="${tab}|${cid||""}" data-rpt="1"></span>`;
+  const sorted=R.dash.slice().sort((a,b)=>{ if(a.pass===null&&b.pass===null)return 0; if(a.pass===null)return 1; if(b.pass===null)return -1; return b.dc-a.dc; });
+  const g1=sorted.find(d=>d.pass!==null);
+  let key=`<table class="rtbl"><tr><th style="width:45%">Key result</th><th>Value</th><th>Worked in</th></tr>
+    <tr><td class="lft"><b>Governing check</b></td><td class="lft"><b>${g1?g1.name+" — "+(g1.txt?esc(g1.txt):"D/C "+fmt(g1.dc)+" ("+(g1.pass?"PASS":"FAIL")+")"):"—"}</b></td><td>${g1?wk(g1.tab,DASH_ANCHOR[g1.id]):""}</td></tr>`;
+  if(R.iab&&R.iab.integ){ const Q=R.iab, P=Q.pile;   // IAB: integral key results
+    key+=`<tr><td class="lft">Thermal movement Δ_exp / Δ_con; earth pressure K (expansion)</td><td>${fmt(Q.dExp,3)} / ${fmt(Q.dCon,3)} in; K = ${fmt(Q.Kexp,3)}</td><td>${wk("tab-iab","o-iab-ep")}</td></tr>
+    <tr><td class="lft">Factored gravity load per pile (Strength I)</td><td>${fmt(P.Pg,1)} kip${P.md&&P.md.ok?" vs "+fmt(P.md.PuTab,1)+" kip (MassDOT table)":P.ct?"; P_u = "+fmt(P.ct.Pu,1)+" kip, M_u = "+fmt(P.ct.Mu/12,1)+" kip-ft":""}</td><td>${wk("tab-iab","o-iab-pile")}</td></tr>
+    <tr><td class="lft">Wall (case 2): Mu vs φMn</td><td>${fmt(Q.c2.sec.Mu)} vs ${fmt(Q.c2.sec.phiMn)} kip·ft/ft</td><td>${wk("tab-iab","o-str-"+Q.c2.sec.name)}</td></tr>
+    ${(()=>{ const pr=R.dash.find(d=>d.id==="iabPile"), gr=R.dash.find(d=>d.id==="iabGeo"), cp=R.dash.filter(d=>/^iabC\d/.test(d.id)&&d.pass!==null).sort((a,b)=>b.dc-a.dc)[0], v=d=>d.pass===null?"n/a — "+esc(d.gov):(d.txt?esc(d.txt):"D/C "+fmt(d.dc)+" ("+(d.pass?"PASS":"FAIL")+")");   // ABT: pile and cap results
+      return (pr?`<tr><td class="lft">${pr.name}</td><td>${v(pr)}</td><td>${wk(pr.tab,DASH_ANCHOR[pr.id])}</td></tr>`:"")+(gr?`<tr><td class="lft">${gr.name}</td><td>${v(gr)}</td><td>${wk(gr.tab,DASH_ANCHOR[gr.id])}</td></tr>`:"")
+        +(cp?`<tr><td class="lft">Governing pile cap / wall check: ${cp.name}</td><td>${v(cp)}</td><td>${wk(cp.tab,DASH_ANCHOR[cp.id])}</td></tr>`:""); })()}
+    <tr><td class="lft">Constants modified from defaults</td><td>${(R.overrides||[]).length? "<b>"+R.overrides.length+"</b>":"none"}</td><td>${wk("rpt","ovr")}</td></tr></table>`; }
+  else{
+  if(S.fnd.branch==="spread"&&R.checks.bearing){ key+=`<tr><td class="lft">Max factored bearing pressure vs φ·qn</td><td>${fmt(R.checks.bearing.q)} vs ${fmt(S.fnd.phiB*(R.checks.bearing.qn??S.fnd.qn))} ksf</td><td>${wk("tab-stab","o-brg")}</td></tr>
+    <tr><td class="lft">Eccentricity vs limit</td><td>${fmt(R.checks.ecc.e)} vs ${fmt(R.checks.ecc.eLim)} ft (e ≤ ${fmt(R.checks.ecc.eLim/R.geo.B,3)}·B)</td><td>${wk("tab-stab","o-ecc")}</td></tr>
+    <tr><td class="lft">Sliding demand vs resistance</td><td>${fmt(R.checks.sliding.D)} vs ${fmt(R.checks.sliding.RR)} kip</td><td>${wk("tab-stab","o-slide")}</td></tr>`; }
+  else if(R.checks.pileComp){ key+=`<tr><td class="lft">Max / min pile reaction vs φRn</td><td>${fmt(R.checks.pileComp.P)} / ${fmt(R.checks.pileUplift.P)} vs ${fmt(R.checks.pileComp.RR)} kip</td><td>${wk("tab-found","o-pilecap")}</td></tr>`; }
+  key+=`<tr><td class="lft">Stem base: Mu vs φMn</td><td>${fmt(R.checks.stemFlex.Mu)} vs ${fmt(R.checks.stemFlex.phiMn)} kip·ft/ft</td><td>${wk("tab-struct","o-str-Stem")}</td></tr>
+    <tr><td class="lft">Constants modified from defaults</td><td>${(R.overrides||[]).length? "<b>"+R.overrides.length+"</b>":"none"}</td><td>${wk("rpt","ovr")}</td></tr></table>`;
+  }
+  return key;
+}
+/* the charts as images (Plotly.toImage of each chart, drawn by drawChartsFor while its tab page is laid out for a moment, as the
+   print report did; the aspect ratio of the drawn chart) and the 3D snapshot (captureD3); async, then the Report is rebuilt */
+function abxImages(R){
+  if(ABRX.img&&ABRX.img.R===R) return ABRX.img.p;
+  const tok={R,im:{},d3:null}; ABRX.img=tok;
+  const RO=abxRO(), hv=abxHarvest(R), back=()=>{ if(ABRP.on) document.querySelectorAll("#tabpages .tabpage").forEach(p=>p.classList.toggle("active",p.id==="tab-rpt")); };
+  tok.p=(async()=>{
+    if(RO.charts&&window.Plotly){
+      const jobs=[];
+      [...new Set(hv.plots.map(x=>x.tab))].forEach(tab=>{
+        const pg=document.getElementById(tab); if(!pg) return; const was=pg.classList.contains("active");
+        pg.classList.add("active");
+        try{ drawChartsFor(tab,R); }catch(e){}
+        hv.plots.filter(x=>x.tab===tab).forEach(x=>{ const gd=document.getElementById(x.id); if(!gd||!gd.data) return;
+          const w0=gd.clientWidth||820, h0=(gd.layout&&gd.layout.height)||gd.clientHeight||340, W=820, H=Math.max(240,Math.min(760,Math.round(W*h0/Math.max(w0,1))));
+          let fig; try{ fig=JSON.parse(JSON.stringify({data:gd.data,layout:gd.layout})); }catch(e){ return; }
+          fig.layout=Object.assign({},fig.layout,{width:W,height:H});
+          jobs.push(Plotly.toImage(fig,{format:"png",width:W,height:H,scale:2}).then(u=>{ tok.im[x.id]=u; }).catch(()=>{})); });
+        if(!was) pg.classList.remove("active");
+        back();
+      });
+      await Promise.all(jobs);
+    }
+    if(RO.viz3d&&iabType()!=="integral"){ try{ tok.d3=await captureD3(R); }catch(e){ tok.d3=null; } back(); }
+    if(ABRX.img===tok&&ABRP.on&&!document.body.classList.contains("rp-printing")) abrRender();
+  })();
+  return tok.p;
+}
+/* the panels that are in the Report (a tab left out by the Include boxes is not) */
+function abxLive(hv){ const RO=abxRO(), off={"tab-comb":RO.permFull===false,"tab-tables":RO.detailTables===false}, L=new Set(["ovr"]);
+  hv.cids.forEach(c=>{ if(!off[hv.tabOf[c]]) L.add(c); }); return L; }
+function abxTabLive(hv,tab){ const RO=abxRO(); return hv.tabs.some(t=>t.id===tab)&&!({"tab-comb":RO.permFull===false,"tab-tables":RO.detailTables===false})[tab]; }
+/* the panel-link markers of the ported text: "see §n.k" to a ported panel, else the tab's name with an in-app link */
+function abxFixStr(s,has,plain){
+  return String(s).replace(/\u0001([^\u0001]*)\u0001([wrt])\u0001([^\u0001]*)\u0001([^\u0002]*)\u0002/g,(m,jump,kind,txt,lab)=>{
+    const [tb,cid]=jump.split("|"), ok=cid&&has.has(cid), nm=ABUT_TABNAME[tb]||tb;
+    if(plain) return kind==="w"?(txt?txt+": ":"")+"see the "+nm+" tab":lab;
+    if(kind==="w") return (txt?txt+": ":"")+(ok?"see [["+"abx."+cid+"]]":"see the "+nm+" tab [[tab:"+tb+(cid?"~"+cid:"")+"|open]]");
+    if(kind==="r") return ok?"[[abx."+cid+"]]":"—";
+    if(!ok) return lab;
+    const k="[[abx."+cid+"]]"; let t=lab.replace(/(Tab\s*\d+,?\s*)?§\s*\d+(\.\d+)?[a-z]?/,k);   /* the tab's panel number becomes the Report's (as the print report did) */
+    if(t===lab) t=lab.replace(/Tab\s*\d+/,k); if(t===lab) t=lab+" ("+k+")"; return t;
+  });
+}
+/* on-screen interaction wording, rewritten as the print report did */
+const abxStatic=t=>String(t).replace(/Toggle series in the legend;\s*hover for pile numbers and values\./g,"Series are grouped by limit state; each bar is labeled with its pile number and governing axial value.")
+  .replace(/Diagrams redraw live;\s*hover any point for the value\./g,"Peak values are marked at the critical section of each diagram.").replace(/\s*Drag to orbit,\s*scroll to zoom\./g,"").replace(/\s*Drag to orbit and scroll to zoom\./g,"");
+function abxFixItems(items,has){
+  const F=s=>abxStatic(abxFixStr(s,has,false)), C=c=>c&&typeof c==="object"?Object.assign({},c,{t:F(c.t)}):F(c);
+  return items.map(it=>{
+    if(it.type==="note") return Object.assign({},it,{text:F(it.text)});
+    if(it.type==="table") return Object.assign({},it,{head:(it.head||[]).map(C),rows:it.rows.map(r=>Array.isArray(r)?r.map(C):Object.assign({},r,{cells:r.cells.map(C)}))});
+    if(it.type==="figure") return Object.assign({},it,{caption:F(it.caption||"")});
+    if(it.type==="steps") return Object.assign({},it,{steps:it.steps.map(s=>Object.assign({},s,{label:abxFixStr(s.label,has,true)}))});
+    return it;
+  });
+}
+/* the ported content into the Report model M (abrModel): the key results, ranks, front-matter notes and revision history in their
+   sections, then the part "Calculation by tab" (each tab, the approach slab, the 3D snapshot, the input echo, the self-test)
+   before the References */
+function abxAdd(M,R){
+  const hv=abxHarvest(R), RO=abxRO(), im=ABRX.img&&ABRX.img.R===R?ABRX.img:null;
+  const has=abxLive(hv);
+  const fixSubs=subs=>subs.map(q=>Object.assign({},q,{items:abxFixItems(q.items,has).map(it=>it.type==="figure"&&it.plot?(im&&im.im[it.plot]?Object.assign({},it,{svg:'<img src="'+im.im[it.plot]+'" alt="" style="max-width:100%;height:auto">'}):null):it).filter(Boolean)})).filter(q=>q.items.length);
+  const sec=re=>M.sections.find(s=>s&&re.test(s.title));
+  const S1=sec(/^Design summary/);
+  if(S1&&hv.key) S1.subs.push(...fixSubs(hv.key).map(q=>Object.assign(q,{title:"Key results"})));
+  const ref=M.sections.findIndex(s=>/^References/.test(s.title)), part=[];
+  const RO2={"tab-comb":RO.permFull,"tab-tables":RO.detailTables};
+  /* the D/C result lines the print report put at the end of its stability, foundation, structural, wing, integral and approach-slab sections */
+  const apRow=d=>/^ap(?!Bw)/.test(d.id);
+  const resSub=(tab,title)=>{ const rows=R.dash.filter(d=>tab==="ap"?apRow(d):(d.tab===tab&&!apRow(d))); if(!rows.length) return null;
+    return {title:"Results — "+title,items:[{type:"table",head:["Check","D/C","Result","Reference","Governing","Worked in"],rows:rows.map(d=>{ const m=/^(.*?)\s*\[([^\]]+)\]\s*$/.exec(d.name), a=DASH_ANCHOR[d.id];
+      return {cells:[m?m[1]:d.name,d.txt?{t:d.txt,cls:"ng"}:{t:d.pass===null?"n/a":abrN(d.dc),n:true,cls:d.pass===false?"ng":d.pass===null?"na":"ok"},d.pass===null?"N/A":d.pass?"PASS":"FAIL",m?ABR_AA+"Art. "+m[2]:"",abrPlain(d.gov||""),
+        a&&has.has(a)?"[[abx."+a+"]]":"—"],cls:d.pass===false?"gov":""}; })}]}; };
+  const RES=/^tab-(stab|found|struct|wing|iab)$/;
+  hv.tabs.forEach(t=>{ if(RO2[t.id]===false) return; const subs=fixSubs(t.subs); if(RES.test(t.id)){ const q=resSub(t.id,t.name); if(q) subs.push(q); } if(subs.length) part.push({title:t.name,key:"abx-"+t.id,note:"Every panel of "+(ABR_TABTXT[t.id]||t.name)+" [[tab:"+t.id+"|open]], with its worked equations, tables and figures, as on the tab.",subs}); });
+  if(hv.ap.length){ const subs=fixSubs(hv.ap), q=resSub("ap","Approach Slab"); if(q) subs.push(q); part.push({title:"Approach Slab — Loads on the Abutment, Shelf and Slab Design",subs}); }
+  if(RO.viz3d&&iabType()!=="integral"&&im&&im.d3){ const selLbl=(()=>{for(const[,o]of VM_SEL_GROUPS)for(const[v,l]of o)if(v===(S.ui.d3Sel||"ls:Strength I"))return l;return S.ui.d3Sel;})();
+    part.push({title:"3D Load Visualization",subs:[{title:"Isometric snapshot",items:[{type:"figure",svg:'<img src="'+im.d3+'" alt="" style="max-width:100%;height:auto">',caption:"Load case: "+abrPlain(selLbl||"")+" — isometric schematic (girder reaction components, earth pressure, surcharge)"}]}]}); }
+  if(RO.inputEcho&&hv.echo&&hv.echo.length) part.push({title:"Input Echo",subs:fixSubs(hv.echo)});
+  else part.push({title:"Input Echo",subs:[{title:"Input echo",items:[{type:"note",text:"Omitted from this report set (Include: Input echo is off). Input ID "+(R.fingerprint||"—")+" fixes the complete input set; export JSON for the full echo."}]}]});
+  if(RO.selftest&&hv.self&&hv.self.length) part.push({title:"Validation Self-Test Result",subs:fixSubs(hv.self)});
+  if(part.length) part[0].part="Calculation by tab (the tabs' worked panels)";
+  M.sections.splice(ref<0?M.sections.length:ref,0,...part);
+  return M;
+}
+/* the report bar's "Include" boxes: the print dialog's choices, the same field S.ui.rptOpts (same keys, same values) */
+function abxControls(){ const RO=abxRO(); return '<span class="abx-inc">Include: '+ABRX_OPTS.map(([k,l])=>`<label><input type="checkbox" data-abxopt="${k}"${RO[k]!==false?" checked":""}> ${l}</label>`).join(" ")+'</span>'; }
+function abxWire(T){ T.querySelectorAll("input[data-abxopt]").forEach(cb=>cb.addEventListener("change",()=>{ if(!S.ui.rptOpts) S.ui.rptOpts={}; S.ui.rptOpts[cb.dataset.abxopt]=cb.checked; scheduleSave(); ABRX.img=null; abrRender(); })); }
+/* Print: from any tab the Report is shown (not saved: ABRP.on), printed, and the tab of before comes back after printing */
+function abrPrintPrep(){
+  if(ABRP.on||!window.LAST_R||!window.SharedReport) return false;
+  ABRX.back=S.ui.tab; abrShow(); return true;
+}
+async function abrPrintAny(){
+  if(!window.LAST_R||!window.SharedReport||!window.SharedSteps){ window.print(); return; }
+  abrPrintPrep(); if(!ABRP.on) abrShow();
+  try{ await abxImages(window.LAST_R); }catch(e){}
+  abrRender();
+  if(ABRP.api) ABRP.api.print(); else window.print();
+}
+window.addEventListener("afterprint",()=>{ const b=ABRX.back; ABRX.back=null; if(b) setTimeout(()=>activateTab(b),0); });
 function abrModel(){
   const R=window.LAST_R, P=S.proj||{}, g=S.geom, m=S.mat, fn=S.fnd, IT=iabType(), RT=abutRptType(R), DS=dashStatus(R);
+  abxHarvest(R);   /* ABRX: the tabs' panels first, so the links below can point to them */
   const B=R.geo.B, Lab=+g.Lab, Lftg=(+g.Lftg||g.Lab), gam=+S.soil.gamma, fc=+m.fc, fy=+m.fy;
   const dash=id=>R.dash.find(d=>d.id===id), has=id=>!!dash(id);
   const KEY={}, secs=[];
@@ -9262,7 +9470,10 @@ function abrModel(){
     subs.push({title:"Project",items:[{type:"kv",rows:[["Project",P.name||"—"],["Project number",P.num||"—"],["Calculated by",(P.calcBy||"—")+(P.date?", "+P.date:"")],["Checked by",(P.chkBy||"—")+(P.chkDate?", "+P.chkDate:"")],
       ["Abutment",RT.cover],["Owner",own==="AASHTO"?"AASHTO LRFD 10th Ed. (2024), no owner rules":ABUT_OWN.owners[own].manual+" (written to AASHTO LRFD "+ABUT_OWN.owners[own].aashto+"), rules on top of AASHTO LRFD 10th Ed. (2024)"],
       ["Input ID",R.fingerprint||"—"]]},
-      {type:"note",text:"Units: kip, ft, ksf, ksi unless noted; wall and footing actions per foot of wall (kip/ft, kip-ft/ft) where stated. Every value in this report is the value the tool computes on its tabs (Tabs 1 to 10)."}]});
+      {type:"note",text:"Units: kip, ft, ksf, ksi unless noted; wall and footing actions per foot of wall (kip/ft, kip-ft/ft) where stated. Every value in this report is the value the tool computes on its tabs (Tabs 1 to 10)."},
+      {type:"note",text:"Bridge Abutment Design Calculator v2.1, by Mario Lococo. Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · "+(own==="AASHTO"?"MassDOT LRFD Bridge Manual":ABUT_OWN.owners[own].manual+" (owner; written to AASHTO LRFD "+ABUT_OWN.owners[own].aashto+")")+"."},
+      {type:"note",text:"Printed "+new Date().toLocaleString()+" · Input ID "+(R.fingerprint||"—")+". The Input ID is a fingerprint of the complete input set: a reviewer can confirm this printout corresponds to the model by matching it against the ID shown in the app toolbar."},
+      ...ABRX_SRC.map(f=>{ try{ return f(); }catch(e){ return ""; } }).filter(Boolean).map(t=>({type:"note",text:t}))]});
     const gr=[["Footing: toe L_toe / heel L_heel / thickness t_f",abrN(g.Ltoe)+" / "+abrN(g.Lheel)+" / "+abrN(g.tf),"ft"],["Footing width B = L_toe + t_sb + L_heel",abrCell(B),"ft"],
       ["Stem: height h_stem / top t_st / bottom t_sb",abrN(g.hstem)+" / "+abrN(g.tst)+" / "+abrN(g.tsb),"ft"],["Backwall: height h_bw / thickness t_bw",abrN(g.hbw)+" / "+abrN(g.tbw),"ft"],
       ["Bearing setback from the backwall front face",abrCell(+g.brgSetback),"ft"],["Wall length L_ab / footing length L_ftg",abrN(Lab)+" / "+abrN(Lftg),"ft"],
@@ -9276,7 +9487,7 @@ function abrModel(){
     else mr.push(["Pile nominal axial R_n / φ_c",abrN(S.piles.Rn,1)+" kip / "+abrN(S.piles.phiC),""]);
     subs.push({title:"Materials, soil and foundation",items:[{type:"table",head:["Quantity","Value","Unit"],rows:mr}]});
     const ov=R.overrides||[];
-    subs.push({title:"Constants modified from defaults",items:ov.length?[{type:"table",head:["Constant","Default","In use"],rows:ov.map(o=>({cells:[abrPlain(o.label),abrCell(o.def),abrCell(o.cur)],cls:"gov"}))}]
+    subs.push({title:"Constants modified from defaults",key:"abx.ovr",items:ov.length?[{type:"table",head:["Constant","Default","In use"],rows:ov.map(o=>({cells:[abrPlain(o.label),abrCell(o.def),abrCell(o.cur)],cls:"gov"}))}]
       :[{type:"note",text:"All load factors, resistance factors, eccentricity limits and h_eq table values match their AASHTO / tool defaults: no overrides in effect."}]});
     secs.push({title:"Project and inputs",subs});
   }
@@ -9592,7 +9803,11 @@ function abrModel(){
       {type:"note",text:"As on "+abrTab("tab-loads","o-owner")+"."}]:[{type:"note",text:"No owner rules (AASHTO LRFD 10th Ed. only). Choose an owner in panel I-0 to check that owner's requirements."}]}]}); }
   /* ---------- warnings and assumptions ---------- */
   secs.push({title:"Warnings and assumptions",subs:[{title:"Warnings",items:WARNINGS.length?WARNINGS.map(x=>({type:"note",warn:true,text:(x.level==="err"?"ERROR: ":"")+abrPlain(x.msg)})):[{type:"note",text:"No active warnings."}]},
-    {title:"Engineering assumptions",items:[{type:"note",text:abrPlain(abutAssumptionsText()||"—")}]}]});
+    {title:"Engineering assumptions",items:[{type:"note",text:abrPlain(abutAssumptionsText()||"—")}]},
+    {title:"Load factors",items:[{type:"note",text:"Load factors reflect Tables 3.4.1-1 / 3.4.1-2 as implemented (editable constants; any change from the defaults is listed in [[abx.ovr]]); the engineer of record confirms current values and state-DOT overrides."},
+      {type:"note",text:"Equations are shown symbolically, then with values substituted, then with the result."}]},
+    ...((S.meta&&S.meta.revs&&S.meta.revs.length)?[{title:"Revision history (project saves)",items:[{type:"table",head:["#","Saved as","Date","Input ID at save"],
+      rows:S.meta.revs.map((r2,i)=>[{t:String(i+1),n:true},String(r2.n),new Date(r2.ts).toLocaleString(),String(r2.fp||"—")])}]}]:[])]});
   /* ---------- references ---------- */
   { const rows=abutRefsNow().concat(R.wing?WING_REFS:[],R.iab?IAB_REFS:[]);
     secs.push({title:"References",subs:[{title:"Codes and references cited",items:[{type:"table",head:["Reference","Provisions used"],rows:rows.map(([a,b])=>[a||"",b])}]}]}); }
@@ -9600,23 +9815,27 @@ function abrModel(){
   { const nF=R.nFail, why=DS.why;
     const st=nF?nF+" of "+DS.nChk+" checks FAIL.":DS.inc?"Design incomplete: "+why.length+" required check(s) not evaluated.":"All "+DS.nChk+" checks PASS.";
     const gov=R.dash.filter(d=>d.pass!==null&&isFinite(d.dc)).sort((a,b)=>b.dc-a.dc)[0];
+    /* ABRX: the print report's rank (worst D/C first, information rows last; its sort, unchanged) */
+    const rank=new Map(R.dash.slice().sort((a,b)=>{ if(a.pass===null&&b.pass===null)return 0; if(a.pass===null)return 1; if(b.pass===null)return -1; return b.dc-a.dc; }).map((d,i)=>[d,i+1]));
     const items=[{type:"note",text:RT.cover+". "+st+(gov?" Governing: "+gov.name+", D/C = "+abrN(gov.dc)+".":"")},
-      {type:"table",head:["Code check","D/C","Result","Governing","Worked in"],rows:R.dash.map(d=>({cells:[d.name,d.txt?{t:d.txt,cls:"ng"}:d.pass===null?{t:"n/a",cls:"na"}:{t:isFinite(d.dc)?abrN(d.dc):"∞",n:true,cls:d.pass===false?"ng":d.dc>=0.9?"hi":"ok"},
+      {type:"table",head:["Rank","Code check","D/C","Result","Governing","Worked in"],rows:R.dash.map(d=>({cells:[{t:String(rank.get(d)),n:true},d.name,d.txt?{t:d.txt,cls:"ng"}:d.pass===null?{t:"n/a",cls:"na"}:{t:isFinite(d.dc)?abrN(d.dc):"∞",n:true,cls:d.pass===false?"ng":d.dc>=0.9?"hi":"ok"},
         d.pass===null?"N/A":d.pass?"PASS":"FAIL",abrPlain(d.gov),{t:"",key:KEY[d.id]}],cls:d.pass===false?"gov":""}))}];
     if(why.length) items.push({type:"note",warn:true,text:"Not evaluated: "+why.map(x=>x.name+" ("+x.txt+")").join("; ")+"."});
-    items.push({type:"note",text:"The same checks as the dashboard. Every check links to the step where its D/C is worked or quoted."});
+    items.push({type:"note",text:"The same checks as the dashboard, with the rank by D/C (worst first; information rows last). Every check links to the step where its D/C is worked or quoted."});
+    items.push({type:"note",text:(R.nFail===0?(DS.inc?"DESIGN INCOMPLETE — "+DS.why.length+" NOT CHECKED":"ALL CHECKS PASS"):R.nFail+" CHECK"+(R.nFail>1?"S":"")+" FAIL"+(DS.inc?" · DESIGN INCOMPLETE":""))+". "+DS.nChk+" coded checks"+(DS.nNA?" ("+DS.nNA+" n/a)":"")+" · "+RT.banner+(S.seismic&&S.seismic.on?" · seismic (Extreme Event I)":"")+"."});
     secs[sumIdx]={title:"Design summary",subs:[{title:"Summary of checks",items}]}; }
-  return {title:"Bridge Abutment Design — Calculation Report",subtitle:(P.name||"Untitled")+" · "+RT.subject,code:"AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)"+(abutOwner()!=="AASHTO"?" · "+ABUT_OWN.owners[abutOwner()].short:""),
+  return abxAdd({title:"Bridge Abutment Design — Calculation Report",subtitle:(P.name||"Untitled")+" · "+RT.subject,code:"AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)"+(abutOwner()!=="AASHTO"?" · "+ABUT_OWN.owners[abutOwner()].short:""),
     info:[["Project",P.name],["Project No.",P.num],["Calculated by",P.calcBy],["Date",P.date],["Checked by",P.chkBy],["Checked date",P.chkDate]],
     head:{left:"Project No. "+(P.num||"—")+" — "+String(P.name||"—").slice(0,40),right:"Computed: "+(P.calcBy||"—")+" "+(P.date||"")+" · Checked: "+(P.chkBy||"—")+" "+(P.chkDate||""),foot:(P.name||"Untitled")+" (Bridge Abutment Design Calculator) · Input ID "+(R.fingerprint||"—")},
-    sections:secs};
+    sections:secs},R);
 }
 function abrRender(){
   const T=document.getElementById("tab-rpt"); if(!T) return;
   if(!window.SharedReport||!window.SharedSteps){ T.innerHTML='<div class="note-box">The Report tab needs the shared folder (shared/steps.js, shared/report.js) next to this file.</div>'; ABRP.api=null; ABRP.doc=null; return; }
   if(!window.LAST_R){ T.innerHTML=""; ABRP.api=null; ABRP.doc=null; return; }
   let M; try{ M=abrModel(); }catch(e){ console.error(e); T.innerHTML='<div class="note-box">Report error: '+esc(e&&e.message)+'</div>'; ABRP.api=null; ABRP.doc=null; return; }
-  ABRP.api=SharedReport.mount(T,M,{closed:ABRP.closed,onGoto:abrGoto}); ABRP.doc=ABRP.api.doc;
+  ABRP.api=SharedReport.mount(T,M,{closed:ABRP.closed,onGoto:abrGoto,controls:abxControls()}); ABRP.doc=ABRP.api.doc;
+  abxWire(T); abxImages(window.LAST_R);   /* ABRX: the Include boxes; the chart images and the 3D snapshot (then rebuilt) */
 }
 /* [[tab:<tab id>~<panel id>|…]] links of the report: the tool's tab and panel (gotoPanel) */
 function abrGoto(name){ const [t,c]=String(name).split("~"); gotoPanel(t,c||null); if(!c){ const b=document.getElementById("tabbar"); if(b) window.scrollTo(0,b.getBoundingClientRect().top+window.scrollY-10); } }
@@ -9630,7 +9849,6 @@ function abrShow(){
 /* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
 window.addEventListener("beforeprint",()=>{
   if(!ABRP.on||!ABRP.doc||document.body.classList.contains("rp-printing")) return;
-  abutApplyPageCSS(false);   // the D11 report's page header (left on after its print) would compete with the report's
   let box=document.getElementById("rp-print"); if(!box){ box=document.createElement("div"); box.id="rp-print"; document.body.appendChild(box); }
   box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(ABRP.doc,{lazy:false})+'</article></div>';
   document.body.classList.add("rp-printing");
@@ -9757,7 +9975,7 @@ document.addEventListener("change",ev=>{
 });
 document.addEventListener("click",ev=>{
   const head=ev.target.closest(".p-head");
-  if(head && !ev.target.closest("#report")){
+  if(head && !ev.target.closest("#rp-print")){
     const pn=head.parentElement, id=pn.dataset.cid;
     pn.classList.toggle("closed");
     if(id){ S.ui.collapse[id]=pn.classList.contains("closed"); scheduleSave(); }
@@ -10084,13 +10302,7 @@ function inputEchoHTML(){
       ["Slab design; bottom cover; bars (main / distribution / top)",(A.des?"on":"off")+"; "+fmt(+A.cov,2)+" in; #"+A.aBar+" @ "+fmt(+A.aSp,1)+" / #"+A.dBar+" @ "+fmt(+A.dSp,1)+" / #"+A.tBar+" @ "+fmt(+A.tSp,1)+" in",""]]); }
   return h;
 }
-/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format —
-   cover with title block, references, numbered table of contents (links), numbered sections n and
-   subsections n.k (each tab's panels keep their worked equations: symbolic → substituted → result),
-   a D/C result line per check at the end of the stability, foundation and structural sections, the
-   CLAUDE.md §6 links rewritten to "see §n.k", and the print header / "Page X of Y" footer (@page
-   margin boxes, abutPageCSS; inside @media print, so only while printing). The worked content is the
-   same as the tabs (cloned from them); no value is recomputed. */
+/* references of the Report (ABRX, 2026-11-02: the D11 print report that also used them is retired) */
 const ABUT_REFS=[
   ["AASHTO LRFD","AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Section 3 — 3.4.1 (Tables 3.4.1-1, 3.4.1-2), 3.5.1, 3.6.1.1, 3.6.1.2.2, 3.6.1.2.5, 3.6.2.1, 3.6.4, 3.10.9.2, 3.11.1, 3.11.3, 3.11.5, 3.11.6, 3.12.2"],
   ["","Art. 4.6.2.1.3 (Table 4.6.2.1.3-1, equivalent strip: backwall wheel load); Art. 4.6.2.3 (equivalent strip, slab-type: approach slab); Art. 4.7.4.4 (minimum support length); 3.11.6.5 (reduction of surcharge); 5.8.4.2 (brackets), 5.12.2.1, 9.7.3.2 (approach slab)"],
@@ -10112,36 +10324,6 @@ const IAB_REFS=[["Integral / semi-integral","AASHTO LRFD 10th Ed.: 3.11.1 (Table
 function abutRefsNow(){ const o=abutOwner(); if(o==="AASHTO") return ABUT_REFS; const m=ABUT_OWN.owners[o];
   const row=[o,m.manual+" (written to AASHTO LRFD "+m.aashto+") — owner requirements checked in Tab 1 §1.0a, sections cited there"];
   return o==="MassDOT"? ABUT_REFS.map(r=>r[0]==="MassDOT"?[r[0],r[1]+"; "+row[1]]:r) : ABUT_REFS.slice(0,-1).concat([row,ABUT_REFS[ABUT_REFS.length-1]]); }
-function abutPageCSS(){
-  const P=S.proj||{}, q=v=>String(v==null||v===""?"—":v).replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/[\r\n]+/g," ");
-  const fp=(window.LAST_R&&window.LAST_R.fingerprint)||"—";
-  const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
-  const foot='font: 9pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: top; padding-top: 6pt;';
-  return '@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.75in 0.6in;'+
-    ' @top-left { content: "Project No: '+q(P.num)+'\\A Description: '+q(String(P.name||"Bridge abutment").slice(0,38))+'"; '+box+' text-align: left; }'+
-    ' @top-center { content: "Computed By: '+q(P.calcBy)+'\\A Checked By: '+q(P.chkBy)+'"; '+box+' text-align: left; }'+
-    ' @top-right { content: "Date: '+q(P.date)+'\\A Date: '+q(P.chkDate)+'"; '+box+' text-align: right; }'+
-    ' @bottom-left { content: "'+q(P.name||"Untitled")+' (Bridge Abutment Design Calculator)\\A Input ID '+q(fp)+'"; '+foot+' text-align: left; }'+
-    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); '+foot+' text-align: right; } } }';
-}
-function abutApplyPageCSS(on){
-  let st=document.getElementById("abut-page");
-  if(!st){ st=document.createElement("style"); st.id="abut-page"; document.head.appendChild(st); }
-  st.textContent=on? abutPageCSS() : "";
-}
-/* D/C result lines for one tab's checks (the dashboard values, R.dash) */
-function abutResultBlock(R, tabId, title, map){
-  const apRow=d=>/^ap(?!Bw)/.test(d.id);   // APS: the approach-slab checks go with the approach-slab report section (the backwall front face stays in §5)
-  const rows=R.dash.filter(d=>tabId==="ap"? apRow(d) : (d.tab===tabId&&!apRow(d))); if(!rows.length) return "";
-  return `<div class="cr-resh">Results — ${esc(title)}</div><div class="cr-results">`+rows.map(d=>{
-    const m=/^(.*?)\s*\[([^\]]+)\]\s*$/.exec(d.name), lab=m?m[1]:d.name;
-    const hit=map[DASH_ANCHOR[d.id]];
-    const bits=[m?"AASHTO LRFD 10th Ed. Art. "+esc(m[2]):"", esc(d.gov||""), hit?`<a href="#${hit.id}">§${hit.num}</a>`:""].filter(Boolean).join("; ");
-    return `<div class="cr-line cr-res"><div class="cr-d">${esc(lab)}:</div>`+
-      `<div class="cr-m">${d.txt?"<b>"+esc(d.txt)+"</b>":`D/C = <b>${d.pass===null?"n/a":fmt(d.dc)}</b>`}${bits?` <span class="cr-refi">(${bits})</span>`:""}</div>`+
-      `<div class="cr-r${d.pass===false?" cr-st-fail":""}"><b>${d.pass===null?"N/A":(d.pass?"PASS":"FAIL")}</b></div></div>`;
-  }).join("")+"</div>";
-}
 /* ABT (2026-10-21): report cover, title block and banner by abutment type (panel I-0a) */
 function abutRptType(R){
   const t=iabType(), pf=S.fnd.branch==="pile";
@@ -10161,221 +10343,9 @@ function abutAssumptionsText(){
   const t=iabType(), a=S.assumptions;
   return (t!=="conv"&&a===defaultState().assumptions&&ABUT_ASSUMP_IAB[t])? ABUT_ASSUMP_IAB[t] : a;
 }
-async function buildReport(){
-  const R=window.LAST_R; if(!R) return;
-  const DS=dashStatus(R), IT=iabType(), RT=abutRptType(R);   // ABT: check counts as on the dashboard; type-aware cover and title
-  const rp=document.getElementById("report");
-  const P=S.proj;
-  const RO=Object.assign({inputEcho:true,permFull:true,detailTables:true,viz3d:true,selftest:true,charts:true},S.ui.rptOpts||{});
-  const wk=(tab,cid)=>`<span class="xlink" data-jump="${tab}|${cid||""}" data-rpt="1"></span>`;   /* report-only "§n.k" link */
-  // sorted results table (worst D/C first; informational rows last)
-  const sorted=R.dash.slice().sort((a,b)=>{ if(a.pass===null&&b.pass===null)return 0; if(a.pass===null)return 1; if(b.pass===null)return -1; return b.dc-a.dc; });
-  let dashT=`<table class="rtbl"><tr><th>#</th><th>Code check (sorted by D/C, worst first)</th><th>D/C</th><th>Result</th><th>Governing</th><th>Worked in</th></tr>`;
-  sorted.forEach((d,i)=>{ dashT+=`<tr${d.pass===false?' class="failrow"':''}><td>${i+1}</td><td class="lft">${d.name}</td><td>${d.pass===null?"n/a":(d.txt?esc(d.txt):fmt(d.dc))}</td><td><b>${d.pass===null?"—":(d.pass?"PASS":"FAIL")}</b></td><td class="lft small">${esc(d.gov)}</td><td>${wk(d.tab,DASH_ANCHOR[d.id])}</td></tr>`; });
-  dashT+="</table>";
-  // key results
-  const g1=sorted.find(d=>d.pass!==null);
-  let key=`<table class="rtbl"><tr><th style="width:45%">Key result</th><th>Value</th><th>Worked in</th></tr>
-    <tr><td class="lft"><b>Governing check</b></td><td class="lft"><b>${g1?g1.name+" — "+(g1.txt?esc(g1.txt):"D/C "+fmt(g1.dc)+" ("+(g1.pass?"PASS":"FAIL")+")"):"—"}</b></td><td>${g1?wk(g1.tab,DASH_ANCHOR[g1.id]):""}</td></tr>`;
-  if(R.iab&&R.iab.integ){ const Q=R.iab, P=Q.pile;   // IAB: integral key results
-    key+=`<tr><td class="lft">Thermal movement Δ_exp / Δ_con; earth pressure K (expansion)</td><td>${fmt(Q.dExp,3)} / ${fmt(Q.dCon,3)} in; K = ${fmt(Q.Kexp,3)}</td><td>${wk("tab-iab","o-iab-ep")}</td></tr>
-    <tr><td class="lft">Factored gravity load per pile (Strength I)</td><td>${fmt(P.Pg,1)} kip${P.md&&P.md.ok?" vs "+fmt(P.md.PuTab,1)+" kip (MassDOT table)":P.ct?"; P_u = "+fmt(P.ct.Pu,1)+" kip, M_u = "+fmt(P.ct.Mu/12,1)+" kip-ft":""}</td><td>${wk("tab-iab","o-iab-pile")}</td></tr>
-    <tr><td class="lft">Wall (case 2): Mu vs φMn</td><td>${fmt(Q.c2.sec.Mu)} vs ${fmt(Q.c2.sec.phiMn)} kip·ft/ft</td><td>${wk("tab-iab","o-str-"+Q.c2.sec.name)}</td></tr>
-    ${(()=>{ const pr=R.dash.find(d=>d.id==="iabPile"), gr=R.dash.find(d=>d.id==="iabGeo"), cp=R.dash.filter(d=>/^iabC\d/.test(d.id)&&d.pass!==null).sort((a,b)=>b.dc-a.dc)[0], v=d=>d.pass===null?"n/a — "+esc(d.gov):(d.txt?esc(d.txt):"D/C "+fmt(d.dc)+" ("+(d.pass?"PASS":"FAIL")+")");   // ABT: pile and cap results
-      return (pr?`<tr><td class="lft">${pr.name}</td><td>${v(pr)}</td><td>${wk(pr.tab,DASH_ANCHOR[pr.id])}</td></tr>`:"")+(gr?`<tr><td class="lft">${gr.name}</td><td>${v(gr)}</td><td>${wk(gr.tab,DASH_ANCHOR[gr.id])}</td></tr>`:"")
-        +(cp?`<tr><td class="lft">Governing pile cap / wall check: ${cp.name}</td><td>${v(cp)}</td><td>${wk(cp.tab,DASH_ANCHOR[cp.id])}</td></tr>`:""); })()}
-    <tr><td class="lft">Constants modified from defaults</td><td>${(R.overrides||[]).length? "<b>"+R.overrides.length+"</b>":"none"}</td><td>${wk("rpt","ovr")}</td></tr></table>`; }
-  else{
-  if(S.fnd.branch==="spread"&&R.checks.bearing){ key+=`<tr><td class="lft">Max factored bearing pressure vs φ·qn</td><td>${fmt(R.checks.bearing.q)} vs ${fmt(S.fnd.phiB*(R.checks.bearing.qn??S.fnd.qn))} ksf</td><td>${wk("tab-stab","o-brg")}</td></tr>
-    <tr><td class="lft">Eccentricity vs limit</td><td>${fmt(R.checks.ecc.e)} vs ${fmt(R.checks.ecc.eLim)} ft (e ≤ ${fmt(R.checks.ecc.eLim/R.geo.B,3)}·B)</td><td>${wk("tab-stab","o-ecc")}</td></tr>
-    <tr><td class="lft">Sliding demand vs resistance</td><td>${fmt(R.checks.sliding.D)} vs ${fmt(R.checks.sliding.RR)} kip</td><td>${wk("tab-stab","o-slide")}</td></tr>`; }
-  else if(R.checks.pileComp){ key+=`<tr><td class="lft">Max / min pile reaction vs φRn</td><td>${fmt(R.checks.pileComp.P)} / ${fmt(R.checks.pileUplift.P)} vs ${fmt(R.checks.pileComp.RR)} kip</td><td>${wk("tab-found","o-pilecap")}</td></tr>`; }
-  key+=`<tr><td class="lft">Stem base: Mu vs φMn</td><td>${fmt(R.checks.stemFlex.Mu)} vs ${fmt(R.checks.stemFlex.phiMn)} kip·ft/ft</td><td>${wk("tab-struct","o-str-Stem")}</td></tr>
-    <tr><td class="lft">Constants modified from defaults</td><td>${(R.overrides||[]).length? "<b>"+R.overrides.length+"</b>":"none"}</td><td>${wk("rpt","ovr")}</td></tr></table>`;
-  }
-  const warnT=WARNINGS.length?("<ul>"+WARNINGS.map(w=>`<li><b>${w.level==="err"?"ERROR":"Warning"}:</b> ${esc(w.msg)}</li>`).join("")+"</ul>"):"<p>No active warnings.</p>";
-  const ovT=(R.overrides&&R.overrides.length)?`<p><b>${R.overrides.length} constant(s) differ from code/tool defaults:</b></p>
-    <table class="rtbl"><tr><th>Constant</th><th>Default</th><th>In use</th></tr>
-    ${R.overrides.map(o=>`<tr class="failrow"><td class="lft">${o.label}</td><td>${fmt(o.def)}</td><td><b>${fmt(o.cur)}</b></td></tr>`).join("")}</table>`
-    :"<p>All load factors, resistance factors, eccentricity limits and h_eq table values match their AASHTO / tool defaults — no overrides in effect.</p>";
-
-  /* ---- numbered sections ---- */
-  const secs=[]; let body="";
-  function sec(title, html, o={}){
-    const n=secs.length+1, id="crs-"+n; secs.push({n,title,id,key:o.key||""});
-    body+=`<section class="cr-sec${o.brk?" cr-break":""}" data-key="${o.key||""}"><h2 class="cr-h1" id="${id}">${n}. ${esc(title).replace(/γp/g,'<span class="nocase">γ<sub>p</sub></span>')}</h2>${html}</section>`;
-  }
-  sec("Results Summary (All Code Checks, Ranked)",
-    `<p>${R.nFail===0?"All "+DS.nChk+" code checks PASS"+(DS.nNA?" ("+DS.nNA+" row"+(DS.nNA>1?"s":"")+" n/a, not checked)":"")+".":"<b style='color:#c62828'>"+R.nFail+" check(s) FAIL — see red rows.</b>"+(DS.nNA?" "+DS.nNA+" row"+(DS.nNA>1?"s":"")+" n/a (not checked).":"")}</p>${DS.inc?`<p><b style="color:#b26a00">DESIGN INCOMPLETE — not checked:</b></p><ul>${DS.why.map(w=>`<li>${esc(w.name)}: ${esc(w.txt)} (${wk(w.tab,w.anchor)})</li>`).join("")}</ul>`:""}${dashT}`);
-  sec("Key Results",key);
-  sec("Validation Warnings & Applicability Flags",warnT);
-  sec("Engineering Assumptions & Modified Constants",
-    `<h3>Engineering assumptions (as entered)</h3><div style="white-space:pre-wrap;border:1px solid #999;padding:8px;">${esc(abutAssumptionsText())||"—"}</div>
-    <h3 data-sub="ovr">Constants differing from code / tool defaults</h3>${ovT}
-    ${(S.meta&&S.meta.revs&&S.meta.revs.length)?`<h3>Revision history (project saves)</h3>
-      <table class="rtbl"><tr><th>#</th><th>Saved as</th><th>Date</th><th>Input ID at save</th></tr>
-      ${S.meta.revs.map((r2,i)=>`<tr><td>${i+1}</td><td class="lft">${esc(r2.n)}</td><td>${new Date(r2.ts).toLocaleString()}</td><td>${esc(r2.fp||"—")}</td></tr>`).join("")}</table>`:""}`);
-  sec("Input Echo", RO.inputEcho? inputEchoHTML()
-    : `<p class="small"><i>Omitted from this report set. Input ID <b>${R.fingerprint}</b> fixes the complete input set; export JSON for the full echo.</i></p>`, {brk:true});
-  // the worked tabs, cloned with all panels open
-  const secNames={ "tab-loads":"Geometry, Self-Weights & Loads","tab-comb":"Load Combinations & γp Permutations",
-    "tab-stab":"External Stability, Free Body & Notes","tab-found":iabType()==="integral"?"Integral Piles — Summary":"Foundation / Pile Group","tab-struct":"Structural Design (Concrete)","tab-wing":"Wingwalls",
-    "tab-iab":(iabType()==="semi"?"Semi-integral":"Integral")+" Abutment","tab-vm":"Shear & Moment Diagrams","tab-tables":"Detailed Force-Effect Tables"};
-  const itg=iabType()==="integral";   // IAB: an integral abutment's report leaves out the conventional cantilever sections
-  const SKIP={ "tab-comb":!RO.permFull, "tab-tables":!RO.detailTables, "tab-wing":!(S.wing&&S.wing.on), "tab-iab":iabType()==="conv",
-    "tab-stab":itg };   // ABT2: an integral abutment prints its integral Tabs 2, 4, 5, 6 and 8 (Tab 3: not checked, basis in Tab 10 §10.6)
-  const apPanels=[];   // APS: the approach-slab panels of the tabs get a report section of their own (after the tabs that hold them)
-  for(const [id,name] of Object.entries(secNames)){
-    if(SKIP[id]) continue;
-    const src=document.getElementById(id);
-    const cl=src.cloneNode(true);
-    figStaticIn(cl,R);   // ABINT: figures as printed before — default selection, no controls, no interactive attributes
-    cl.querySelectorAll(".panel").forEach(p=>p.classList.remove("closed"));
-    if(RO.charts){ cl.querySelectorAll(".plotbox").forEach(pb=>{ pb.setAttribute("data-plot-src",pb.id); }); }
-    else{ cl.querySelectorAll(".plotbox").forEach(pb=>pb.remove()); }
-    cl.querySelectorAll('.panel[data-cid="o-ap"], .panel[data-cid="o-ap-shelf"], .panel[data-cid="o-ap-des"], .panel[data-cid="o-str-Approach slab"], .panel[data-cid="o-ap-bars"]').forEach(p=>{ apPanels.push(p.outerHTML); p.remove(); });
-    sec(name,`<div>${cl.innerHTML}</div>`,{brk:true,key:id});
-  }
-  if(apPanels.length) sec("Approach Slab — Loads on the Abutment, Shelf and Slab Design",`<div>${apPanels.join("")}</div>`,{brk:true,key:"ap"});
-  // 3D isometric snapshot
-  if(RO.viz3d&&!itg){
-    let d3url=null; try{ d3url=await captureD3(R); }catch(e){ d3url=null; }
-    if(d3url){ const selLbl=(()=>{for(const[,o]of VM_SEL_GROUPS)for(const[v,l]of o)if(v===(S.ui.d3Sel||"ls:Strength I"))return l;return S.ui.d3Sel;})();
-      sec("3D Load Visualization",`<div class="rpt-sub">Load case: ${esc(selLbl)} — isometric schematic (girder reaction components, earth pressure, surcharge)</div>
-        <img class="plotimg" src="${d3url}" style="max-width:7.0in;">`,{brk:true}); }
-  }
-  if(RO.selftest) sec("Validation Self-Test Result",selfTestHTML());
-  // strip on-screen interaction language so the printed report reads as a static document
-  body=body
-    .replace(/Toggle series in the legend;\s*hover for pile numbers and values\./g,
-             "Series are grouped by limit state; each bar is labeled with its pile number and governing axial value.")
-    .replace(/Diagrams redraw live;\s*hover any point for the value\./g,
-             "Peak values are marked at the critical section of each diagram.")
-    .replace(/\s*Drag to orbit,\s*scroll to zoom\./g,"")
-    .replace(/\s*Drag to orbit and scroll to zoom\./g,"");
-  rp.className="crdoc";
-  rp.innerHTML=`<div id="crFront"></div>`+body;
-
-  /* ---- subsections n.k: each tab panel (its own number is replaced) and each h3 heading ---- */
-  const map={};   /* panel data-cid (or h3 data-sub) → {num:"n.k", id} — for the "see §n.k" links */
-  rp.querySelectorAll("section.cr-sec").forEach(se=>{
-    const h=se.querySelector("h2.cr-h1"), s=secs.find(x=>x.id===h.id); s.subs=[]; let k=0;
-    se.querySelectorAll(".panel, h3").forEach(el=>{
-      if(el.tagName==="H3"){ if(el.closest(".panel")) return; }
-      else if(el.parentElement.closest(".panel")) return;
-      k++; const num=s.n+"."+k, sid=s.id+"-"+k;
-      if(el.tagName==="H3"){
-        const t=el.textContent.trim(); el.id=sid; el.className="cr-h2"; el.textContent=num+" "+t;
-        if(el.dataset.sub) map[el.dataset.sub]={num,id:sid};
-        s.subs.push({t,id:sid});
-      }else{
-        el.id=sid; const no=el.querySelector(".p-head .sec-no"); if(no) no.textContent=num;
-        const tt=el.querySelector(".p-head")?.children[2]; let t="";
-        if(tt){ const c=tt.cloneNode(true); c.querySelectorAll(".flagchip").forEach(f=>f.remove()); t=c.textContent.trim(); }
-        if(el.dataset.cid) map[el.dataset.cid]={num,id:sid};
-        s.subs.push({t,id:sid});
-      }
-    });
-  });
-  /* ---- D/C result line per check at the end of the sections that hold checks ---- */
-  rp.querySelectorAll("section.cr-sec").forEach(se=>{
-    const k=se.dataset.key; if(k==="ap"){ se.insertAdjacentHTML("beforeend",abutResultBlock(R,"ap",se.querySelector("h2").textContent.replace(/^\d+\.\s*/,""),map)); return; }   // APS
-    if(!/^tab-(stab|found|struct|wing|iab)$/.test(k)) return;
-    const s=secs.find(x=>x.key===k);
-    se.insertAdjacentHTML("beforeend",abutResultBlock(R,k,s.title,map));
-  });
-  /* ---- §6 links: "Worked in: → Tab · Panel" / in-text references become "see §n.k" ---- */
-  rp.querySelectorAll(".xlink[data-jump]").forEach(x=>{
-    const [tb,an]=x.dataset.jump.split("|"), hit=map[an];
-    let txt;
-    if(x.classList.contains("wk")) txt=(x.dataset.txt?x.dataset.txt+": ":"")+(hit?"see §"+hit.num:"see the "+(ABUT_TABNAME[tb]||tb)+" tab (not in this printout)");
-    else if(x.dataset.rpt) txt=hit?"§"+hit.num:"—";
-    else{ const t=x.textContent;
-      if(hit){ txt=t.replace(/(Tab\s*\d+,?\s*)?§\s*\d+(\.\d+)?[a-z]?/,"§"+hit.num);
-        if(txt===t) txt=t.replace(/Tab\s*\d+/,"§"+hit.num);
-        if(txt===t) txt=t+" (§"+hit.num+")"; }
-      else txt=t+" (not in this printout)"; }
-    const a=document.createElement(hit?"a":"span"); a.className="xref"; if(hit) a.href="#"+hit.id; a.textContent=txt; x.replaceWith(a);
-  });
-  rp.querySelectorAll(".wklink").forEach(d=>{ if(d.firstChild&&d.firstChild.nodeType===3) d.firstChild.textContent=""; });
-  /* a live <select> prints as a form control: show the selected option as text */
-  rp.querySelectorAll("select").forEach(sl=>{ const o=sl.options[sl.selectedIndex]; const b=document.createElement("b"); b.textContent=o?o.textContent:""; sl.replaceWith(b); });
-
-  /* ---- front matter: cover with title block, references, table of contents ---- */
-  const toc=secs.map(s=>`<li><a href="#${s.id}">${s.n}. ${esc(s.title)}</a>${s.subs.length?`<ol>${s.subs.map((q,k)=>`<li><a href="#${q.id}">${s.n}.${k+1}. ${esc(q.t)}</a></li>`).join("")}</ol>`:""}</li>`).join("");
-  const stabN=(secs.find(s=>s.key==="tab-stab")||{}).n, fndN=(secs.find(s=>s.key==="tab-found")||{}).n, strN=(secs.find(s=>s.key==="tab-struct")||{}).n, resN=secs.filter(s=>/^(tab-(stab|found|struct|wing|iab)|ap)$/.test(s.key)).map(s=>s.n);   // ABT: every section that ends with a D/C result block (integral: Tabs 9, 10 and the approach slab)
-  document.getElementById("crFront").outerHTML=`
-    <section class="cr-cover">
-      <div class="cr-cover-t">
-        <h1>Bridge Abutment Design Calculation</h1>
-        <p>${esc(P.name)||"Untitled"}</p>
-        <p class="cr-cover-p">${esc(RT.cover)}</p>
-        <p class="cr-cover-p">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) · ${abutOwner()==="AASHTO"?"MassDOT LRFD Bridge Manual":esc(ABUT_OWN.owners[abutOwner()].manual)+" (owner; written to AASHTO LRFD "+esc(ABUT_OWN.owners[abutOwner()].aashto)+")"}</p>
-        <p class="cr-cover-p">Bridge Abutment Design Calculator v2.1, by Mario Lococo</p>
-      </div>
-      <table class="rpt-titleblock"><tr>
-        <td style="width:34%"><span class="tb-label">Project</span>${esc(P.name)||"—"}</td>
-        <td style="width:22%"><span class="tb-label">Project No.</span>${esc(P.num)||"—"}</td>
-        <td style="width:22%"><span class="tb-label">Calculated By</span>${esc(P.calcBy)||"—"}</td>
-        <td style="width:22%"><span class="tb-label">Date</span>${esc(P.date)||"—"}</td></tr>
-        <tr><td><span class="tb-label">Subject</span>Bridge Abutment Design — ${esc(RT.subject)}</td>
-        <td><span class="tb-label">Input ID</span><b>${R.fingerprint}</b></td>
-        <td><span class="tb-label">Checked By</span>${esc(P.chkBy)||"—"}</td>
-        <td><span class="tb-label">Checked Date</span>${esc(P.chkDate)||"—"}</td></tr></table>
-      <div class="rpt-banner ${R.nFail===0?(DS.inc?'inc':'ok'):'bad'}">
-        <span class="rpt-banner-status">${R.nFail===0?(DS.inc?'DESIGN INCOMPLETE — '+DS.why.length+' NOT CHECKED':'ALL CHECKS PASS'):R.nFail+' CHECK'+(R.nFail>1?'S':'')+' FAIL'+(DS.inc?' · DESIGN INCOMPLETE':'')}</span>
-        <span class="rpt-banner-detail">Governing: ${g1?esc(g1.name)+' — '+(g1.txt?esc(g1.txt):'D/C '+fmt(g1.dc)):'—'} · ${DS.nChk} coded checks${DS.nNA?" ("+DS.nNA+" n/a)":""} · ${esc(RT.banner)}${S.seismic&&S.seismic.on?" · seismic (Extreme Event I)":""}</span>
-      </div>
-      <div class="rpt-sub">Printed ${new Date().toLocaleString()} · Input ID <b>${R.fingerprint}</b><br>
-      <i>The Input ID is a fingerprint of the complete input set — a reviewer can confirm this printout corresponds to the model by matching it against the ID shown in the app toolbar.</i></div>
-    </section>
-    <section class="cr-front">
-      <h2 class="cr-h1">References:</h2>
-      <table class="cr-refs">${abutRefsNow().concat(S.wing&&S.wing.on?WING_REFS:[]).concat(iabType()!=="conv"?IAB_REFS:[]).map(([a,b])=>`<tr><td>${esc(a)}</td><td>${esc(b)}</td></tr>`).join("")}</table>
-      <p class="cr-p cr-small">Load factors reflect Tables 3.4.1-1 / 3.4.1-2 as implemented (editable constants; any change from the defaults is listed in <a href="#crs-4">§4</a>); the engineer of record confirms current values and state-DOT overrides.</p>
-      <h2 class="cr-h1">Table of contents:</h2>
-      <ol class="cr-toc">${toc}</ol>
-      <p class="cr-p cr-small">Equations are shown symbolically, then with values substituted, then with the result. ${resN.length?resN.map(n=>"§"+n).join(", ")+" end with the D/C result of their checks.":""} Units: kip, ft, in, ksi, ksf unless noted.</p>
-    </section>`;
-  abutApplyPageCSS(true);
-  // swap live Plotly charts for images — preserve each chart's true on-screen aspect ratio
-  const jobs=[];
-  rp.querySelectorAll(".plotbox").forEach(pb=>{
-    const src=document.getElementById(pb.getAttribute("data-plot-src"));
-    if(src && src.data){
-      const w0=src.clientWidth||820, h0=(src.layout&&src.layout.height)||src.clientHeight||340;
-      const W=820, H=Math.max(240,Math.min(760,Math.round(W*h0/Math.max(w0,1))));
-      jobs.push(Plotly.toImage(src,{format:"png",width:W,height:H,scale:2}).then(url=>{
-        pb.outerHTML=`<img class="plotimg" src="${url}" style="max-width:100%;">`;
-      }).catch(()=>{ pb.remove(); }));
-    }
-    else pb.remove();
-  });
-  await Promise.all(jobs);
-}
-function syncRptDlg(){ const o=S.ui.rptOpts||{}; document.querySelectorAll('#rptOptList input[data-ropt]').forEach(cb=>{ cb.checked=o[cb.dataset.ropt]!==false; }); }
-async function generateReport(){
-  const R=window.LAST_R;
-  // ensure all charts exist: momentarily visit each tab
-  const cur=S.ui.tab;
-  for(const [id] of TABS){ activateTab(id); drawChartsFor(id,R); }
-  await new Promise(r=>setTimeout(r,350));
-  activateTab(cur);
-  await buildReport();
-  window.print();
-}
-document.getElementById("btnPrint").addEventListener("click",()=>{ if(ABRP.on&&ABRP.api){ ABRP.api.print(); return; }   /* ABRP: on the Report tab the button prints that report */
-  syncRptDlg(); document.getElementById("dlgRpt").showModal(); });
-document.getElementById("dlgRptCancel").addEventListener("click",()=>document.getElementById("dlgRpt").close());
-document.getElementById("rptPresetAudit").addEventListener("click",()=>{ document.querySelectorAll('#rptOptList input[data-ropt]').forEach(cb=>cb.checked=true); });
-document.getElementById("rptPresetSlim").addEventListener("click",()=>{ document.querySelectorAll('#rptOptList input[data-ropt]').forEach(cb=>{ cb.checked=["inputEcho","permFull","detailTables","viz3d","selftest"].indexOf(cb.dataset.ropt)<0; }); });
-document.getElementById("dlgRptGo").addEventListener("click",async ()=>{
-  if(!S.ui.rptOpts) S.ui.rptOpts={};
-  document.querySelectorAll('#rptOptList input[data-ropt]').forEach(cb=>{ S.ui.rptOpts[cb.dataset.ropt]=cb.checked; });
-  scheduleSave();
-  document.getElementById("dlgRpt").close();
-  await generateReport();
-});
+/* ABRX (2026-11-02): buildReport() (the D11 print report), generateReport() and the report-options dialog are retired; their content
+   is in the Report (abxHarvest / abxAdd) and "Print / PDF Report", Ctrl+P and the browser's Print print the Report from any tab. */
+document.getElementById("btnPrint").addEventListener("click",()=>{ abrPrintAny(); });
 
 /* ---------- INIT ---------- */
 function init(){
@@ -10685,11 +10655,9 @@ document.addEventListener("DOMContentLoaded",init);
   }
   window.addEventListener("storage",paint); window.addEventListener("focus",paint);
   if(typeof recalcAll==="function"){ const rc=recalcAll; recalcAll=function(){ const r=rc.apply(this,arguments); try{ paint(); }catch(e){} return r; }; }
-  if(typeof buildReport==="function"){ const br=buildReport; buildReport=async function(){ const r=await br.apply(this,arguments);
-    try{ const t=srcText(), sub=document.querySelector("#report .rpt-sub"); if(t&&sub){ const s=S.subloadsSrc, ch=s.choices||{}, d=document.createElement("div"); d.className="rpt-sub"; d.id="axh-rpt-src";
-      d.textContent=t+". Choices: "+[ch.ll?"LL+IM "+(ch.ll==="env"?"per-bearing maxima":"concurrent set for the maximum at the seat"):"", ch.ws?"WS "+ch.ws+(ch.windSpeeds?", wind speeds from SubLoads":""):"", ch.wl?"WL "+ch.wl:"", ch.tu?"TU "+ch.tu:"", "transverse "+ch.ySign].filter(Boolean).join("; ")+".";
-      sub.parentNode.insertBefore(d,sub.nextSibling); } }catch(e){}
-    return r; }; }
+  /* ABRX (2026-11-02): the source line the retired print report added under its cover is a note in the Report's Project subsection */
+  if(typeof ABRX_SRC!=="undefined") ABRX_SRC.push(()=>{ const t=srcText(); if(!t) return ""; const s=S.subloadsSrc, ch=s.choices||{};
+      return t+". Choices: "+[ch.ll?"LL+IM "+(ch.ll==="env"?"per-bearing maxima":"concurrent set for the maximum at the seat"):"", ch.ws?"WS "+ch.ws+(ch.windSpeeds?", wind speeds from SubLoads":""):"", ch.wl?"WL "+ch.wl:"", ch.tu?"TU "+ch.tu:"", "transverse "+ch.ySign].filter(Boolean).join("; ")+"."; });
 
   document.addEventListener("click",ev=>{
     const t=ev.target; if(!t||!t.closest) return;
@@ -11236,11 +11204,9 @@ document.addEventListener("DOMContentLoaded",init);
     try{ LAST=statusNow(); const st=!!(LAST&&LAST.level==="stale");
       if(st!==PXR_STALE){ PXR_STALE=st; r=rc.apply(this,arguments); LAST=statusNow(); }
       if(LAST&&LAST.level==="stale"){ warn("Pile results from Pile Designer: "+LAST.msg); renderWarnings(); } paint(); }catch(e){} return r; }; }
-  if(typeof buildReport==="function"){ const br=buildReport; buildReport=async function(){ const r=await br.apply(this,arguments);
-    try{ const s=S.pileRes, sub=document.querySelector("#report .rpt-sub"); if(s&&sub){ const st=statusNow(), d=document.createElement("div"); d.className="rpt-sub"; d.id="pxr-rpt-src"; const ks=Object.keys(s.byLS||{});
-      d.textContent="Pile results from Pile Designer, "+when(s.producedAt)+(s.basis?" (from the foundation loads sent "+when(s.basis.producedAt)+")":"")+": "+[Object.keys(s.fields||{}).length?"inputs "+Object.keys(s.fields).map(k=>k+" = "+s.fields[k]).join(", "):"", ks.length?"p-y pile moment for "+ks.join(", ")+" (see §4.4b)":"", s.integral&&num(s.integral.interaction)?"integral Tier 2 interaction "+fmt(s.integral.interaction,3):""].filter(Boolean).join("; ")+". "+(st?st.msg:"");
-      sub.parentNode.insertBefore(d,sub.nextSibling); } }catch(e){}
-    return r; }; }
+  /* ABRX (2026-11-02): the source line the retired print report added under its cover is a note in the Report's Project subsection */
+  if(typeof ABRX_SRC!=="undefined") ABRX_SRC.push(()=>{ const s=S.pileRes; if(!s) return ""; const st=statusNow(), ks=Object.keys(s.byLS||{});
+      return "Pile results from Pile Designer, "+when(s.producedAt)+(s.basis?" (from the foundation loads sent "+when(s.basis.producedAt)+")":"")+": "+[Object.keys(s.fields||{}).length?"inputs "+Object.keys(s.fields).map(k=>k+" = "+s.fields[k]).join(", "):"", ks.length?"p-y pile moment for "+ks.join(", ")+" (see §4.4b)":"", s.integral&&num(s.integral.interaction)?"integral Tier 2 interaction "+fmt(s.integral.interaction,3):""].filter(Boolean).join("; ")+". "+(st?st.msg:""); });
   document.addEventListener("click",ev=>{
     const t=ev.target; if(!t||!t.closest) return;
     if(t.closest("#pxr-pull")){
