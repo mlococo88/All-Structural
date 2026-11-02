@@ -3443,3 +3443,134 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 - `node tests/engine/final-compare.mjs` re-run on main after #615.
 ### Other copies
 - None.
+
+## 2026-11-02 — PR: sbd-ad-splices — Auto design: field splice locations as a design variable (Lock / Range / Auto), with the old app's placement rule and stated shipping and clearance rules
+**Calculation change (CLAUDE.md §4), limited to Auto design when the user chooses Auto or Range.** No formula, load or resistance factor, unit
+or code reference of any check module changed. New: Auto design may now choose the field splice stations (before: Lock only, "placing splices
+needs shipping-length and erection rules the engine doesn't have"). The variable defaults to **Lock** for every project, old and new, so a
+project's Auto design result is unchanged unless the user picks Auto or Range (tested against origin/main, below).
+Governing provisions: AASHTO LRFD 10th Ed. (2024) Art. 6.13.6.1.3a (splices of continuous spans at or near the points of dead load
+contraflexure; the old app cited 6.13.6.1.1, the 9th Ed. numbering); RIDOT BDM (April 2026) 6.4 (hauling-permit pieces) and 6.7.2 (splice
+location; pieces over 150 ft need a field splice); CTDOT BRSDM V2 2.3.5.1CT, 2.3.5.2CT (permit route length and weight); MassDOT Bridge Manual
+Part I 3.6.5.3 (simple spans at the quarter point) and 3.6.5.5 (stiffeners clear of the splice plates). Cited, not quoted.
+
+### The rule ported (the reference, read in "Steel Bridge Design.html"; the old app is unchanged)
+- Preliminary sizing (pl-src) `spliceLocations(R, extra, shifts)`: continuous units, a splice at each permanent-load point of contraflexure
+  next to each interior support (`R.cf`, from `Mperm = MDC1 + MDC2 + MDW + MUT`), rounded to the foot, ends within 0.5 ft dropped; simple spans,
+  the girder ends at the piers (not field splices); splices closer than `limits.minSeg` merged (the first kept); a piece longer than
+  `limits.shipLen` divided into ceil(L/L_ship) equal pieces, an odd number in a simple span (no splice at midspan), or, with the owner rule
+  `spl.simple` (OWN30, MassDOT 3.6.5.3), a whole simple span at its quarter points when the middle half fits; a symmetric bridge (spans and
+  |skews| mirror, `isSym`) placed on its left half and mirrored. And `sizeForDepth`'s shipping loop: a piece heavier than `limits.shipWt`
+  (plates × (1 + allow/100), 1-ft steps) split at its middle, at its third point in a simple span when the middle is within L/8 of midspan.
+  Note: the engineer's "simple spans at the quarter point" is the MassDOT owner rule in the old app; for AASHTO, RIDOT and CTDOT a simple
+  span longer than the shipping length is cut into an odd number of equal pieces. Ported as written.
+- GirderDetail (gd-src) `spLocSuggest()` ("Suggest splice", Splice tab): the same contraflexure points from the Structural analysis (DC1 +
+  DC2 + DW of G2, the scan from each pier outward to the first station whose moment changes sign, linear between it and its neighbour), and
+  no splice closer than `spl.minSup` (10 ft) to a support (moved out to it).
+- Here: `apps/steel-bridge/engine/splplace.js` (new, `window.SBDSplicePlace`): `contraflexure(R)` (spLocSuggest's scan; M_UT added when the
+  project has utilities, as Preliminary sizing), `reference(P, cf, Ru, segs, allow)` (spliceLocations + the weight split + spLocSuggest's
+  support distance), `rules(P, lim)`, `check(P, spl, Ru, o)`, `layouts(P, o)`, `placeSteps(…)`, `transitions(segs, spl)`, `pieceWt(…)`.
+  The points of contraflexure are taken from the analysis of the current design (the first interior plate girder), not re-derived for each
+  candidate depth (the dead-load moment diagram moves by a fraction of a foot; the stations are rounded to the foot).
+
+### Rules and defaults (inputs on the Auto design tab, saved as `P.autodesign.splRules`; blank = the default)
+| input | default | source |
+|---|---|---|
+| maximum shipping piece length L_ship | RIDOT 100 ft; CTDOT 120 ft; **AASHTO and MassDOT 120 ft (no owner limit: the old app's default, for the engineer to confirm)** | RIDOT BDM 6.4 (engine/owners.js `ship`); CTDOT BRSDM V2 2.3.5.1CT (`ship`); MassDOT Part I 3.6.1.7 leaves it to the designer (no number) |
+| maximum shipping piece weight W_ship | RIDOT 150 kip; CTDOT 120 kip; AASHTO, MassDOT 90 kip (the old default) | the same rows |
+| RIDOT: a piece over 150 ft fails whatever L_ship | 150 ft | RIDOT BDM 6.7.2 (`ship.splice`) |
+| minimum piece length | the Auto design limit "Shortest flange zone" (minSeg, 10 ft) | the old merge rule |
+| minimum distance from a bearing | 10 ft | GirderDetail `spl.minSup` |
+| minimum distance from an intermediate cross-frame / connection plate (every girder line, own stations) | the Spans & framing splice clearance (framing.spliceClear, 2 ft) | Preliminary sizing `limits.spliceClear`; MassDOT 3.6.5.5 cited (new owners.js row `spl.xf`) |
+| minimum distance from a shop flange transition | minSeg (10 ft): a splice nearer leaves a flange zone shorter than allowed | Auto design limits |
+| location (continuous) | the permanent-load points of contraflexure | AASHTO 6.13.6.1.3a; RIDOT BDM 6.7.2 (new owners.js row `spl.loc`) |
+A splice that breaks the cross-frame or transition distance is moved by 1 ft steps (up to 5 ft each way, the nearer first; its mirror too on a
+symmetric bridge) to a station that keeps every rule. engine/owners.js: two rows appended (`spl.loc` RIDOT 6.7.2, `spl.xf` MassDOT 3.6.5.5,
+`dv: 5`, paraphrased); the existing `ship`, `ship.splice`, `spl.simple` rows are read, unchanged (loads.test.mjs row count 125 → 127).
+
+### The variable `spl` (engine/autodesign.js `VARS`, anchor `{ id: 'spl', grp: 'Flanges'`)
+- **Lock** (default; also forced in Refine and Check one change): the stations entered; nothing above runs; the trial list is exactly as before.
+- **Auto** (New design): up to three layouts: the rule's (`reference`), the stations entered when they meet every rule, and the fewest-splice
+  layout the rules allow (per span the rule's count or one fewer; on a symmetric bridge only symmetric layouts).
+- **Range**: min … max splices in every span (`vars.spl`) or per span (`vars['spl#k']`, which may also Lock one span), station windows
+  (`vars.spl.win`, "70-90, 135-150": a splice outside every window moves to the nearest window station of its span); up to four layouts.
+- Each layout is a dimension of the trial list (`run()`, anchor `the field splice variable (New design, Auto or Range`): `relayout(L0, spl)`
+  cuts the current web pieces and flange zones at the new splices (per-piece variables `id#k` then mean piece k of that layout); `design()`
+  sizes the plates per field piece (flange widths, transitions ≥ minSeg from the splices, L/85 of the piece, the splice bolt fit) and a layout
+  whose piece weights or transition distances fail on its plates does not pass; the full check of a finalist adds the rules with its own
+  cross-frames (`splCheck`, a failure listed as "splice placement SPn"); `sizeDetails` turns the Field splices tab's auto-design on at moved
+  stations even with the plates Locked (plates entered at an unchanged station are still used as entered); the cost model counts the layout's
+  splices (`costOf`: $ per field splice × splices × N_b, unchanged). Apply writes `framing.splices`, which the Field splices tab, the
+  framing, the drawings, the DXF and the 3D view read (tested). No layout meeting the rules: the run says so and stops.
+- The worked steps of the placement (each contraflexure point, the rule's stations with the reasons, every rule per piece and per splice) are
+  in the candidate's worked steps; the candidate's details list the rules with their ratios; the compare view adds the stations and the count.
+
+### Hand check: the placement rule on the built-in 110-140-110 ft unit (app's default project, G1, `tests/engine/autodesign-splices.test.mjs`)
+- Pier 1 (110 ft), back span: M(77) = 41.919 + 15.981 + 13.236 = 71.137 kip-ft (DC1 + DC2 + DW), M(78) = −12.832 + 6.418 + 5.316 = −1.098:
+  x = 77 + (78 − 77)(71.137)/(71.137 + 1.098) = 77.985 → **78 ft**.
+- Pier 1, ahead span: M(143) = −21.882 + 10.429 + 8.638 = −2.815, M(144) = 29.772 + 19.573 + 16.212 = 65.557: x = 143 + 2.815/68.372 =
+  143.041 → **143 ft**; pier 2 by symmetry 216.960 → **217 ft**, 282.019 → **282 ft**.
+- From M_DC1 alone (the engineer's request): 77 + 41.919/(41.919 + 12.832) = 77.766 and 143 + 21.882/(21.882 + 29.772) = 143.424 ft: rounded,
+  the same 78 and 143 ft (217 and 282 ft by symmetry). The rule uses the permanent load (DC + DW), as both old functions do.
+- Pieces 78, 65, 74, 65, 78 ft ≤ 120 ft (none split); weights ≤ 90 kip (piece 1: 63.75 in² × 3.403 lb/ft × 78 ft × 1.05 = 17.8 kip);
+  32 and 33 ft from the nearest pier ≥ 10 ft; symmetric. Stations entered: 82, 145, 215, 278 ft (they also meet every rule).
+- Other branches (hand inputs in the test): simple 130 + 130 ft, AASHTO: 3 equal pieces → 43, 87, 173, 217 ft; MassDOT 3.6.5.3: quarter points
+  → 33, 98, 162, 227 ft (32.5 rounds to 33, mirrored); one 100 ft span at W_ship = 20 kip: 248.4 lb/ft × 100 × 1.05 = 26.08 kip > 20 → split
+  at the third points 33, 67 ft (the middle is within L/8 of midspan); a contraflexure point 4 ft from a pier → moved to 10 ft.
+
+### Before / after (Node, the parity settings of tests/engine/autodesign-parity.mjs: New design, N_b and overhang locked, lightest steel, the project's Preliminary sizing limits)
+| project | splice variable | weight (lb) | D (in) | field splices (ft) | transitions | cost ($) | governing (full check) | s |
+|---|---|---|---|---|---|---|---|---|
+| builtin_AASHTO | Lock (before; = the recorded parity design on main) | 406,234 | 70 | 82, 145, 215, 278 | 8 | 1,419,703 | TS7 1.000 | 617 |
+| builtin_AASHTO | Auto | 404,856 (−0.34 %) | 62 | 78, 142, 218, 282 (the rule) | 10 | 1,433,568 | TS2 1.000 | 710 |
+| util_RIDOT | Lock (before; = the recorded parity design on main) | 439,003 | 75 | 82, 145, 215, 278 | 5 | 1,494,759 | TS7 1.000 | 626 |
+| util_RIDOT | Auto | 437,672 (−0.30 %) | 65 | 78, 143, 217, 282 (the rule) | 8 | 1,520,015 | TS7 1.000 | 841 |
+- Module governing ratios, builtin_AASHTO Lock → Auto: flexure GS7 0.967 → 0.978, fatigue FA1 0.972 → 0.988, shear GS11 0.750 → 0.724,
+  constructibility GS15 0.531 → 0.500, stiffeners TS7 1.000 → TS2 1.000, studs SC2 0.947 → SC4 0.875, cross-frames CF3 0.937 → 0.910,
+  splices DT2 1.000 → 1.000, rating RT1 0.940 → 0.960, welds FW4 1.000 → 1.000.
+  util_RIDOT Auto: flexure GS8 0.956, fatigue FA1 0.994, shear GS11 0.739, constructibility OH1 0.461, stiffeners TS7 1.000, studs SC2 0.985,
+  cross-frames CF6 0.875, splices DT2 1.000, rating RT1 0.756, welds FW4 1.000.
+  util_RIDOT Lock (before): flexure GS7 0.984, fatigue FA1 0.944, shear GS11 0.886, constructibility OH4 0.486, stiffeners TS7 1.000, studs SC2
+  0.983, cross-frames CF3 0.954, splices DT2 1.000, rating RT1 0.808, welds FW4 1.000.
+- The fixture projects' contraflexure (their own loads): builtin_AASHTO 78.10, 142.38, 217.62, 281.90 → 78, 142, 218, 282 ft; util_RIDOT
+  (with its utilities, M_UT) 78.01, 142.52, 217.48, 281.99 → 78, 143, 217, 282 ft. Auto sized the rule's layout and the stations entered;
+  the rule's was lighter on both (the objective is weight; on cost both Auto designs are dearer: builtin_AASHTO +2 transitions, +$13,865;
+  util_RIDOT +3 transitions, +$25,256 — choose the cost objective to weigh them).
+- Lock = before: the quick Lock runs (New design with N_b and overhang locked, D 66–70 in, and Refine; screen only) give byte-identical
+  results on origin/main (69a382b) and this branch (`tests/projects/sbd2-autodesign/splvar_lock_ref.json`, recorded on main; test "Saved
+  data …"); the full Lock run of builtin_AASHTO equals the recorded parity design (406,234.24 lb, D 70, ad_builtin_AASHTO.json).
+
+### Saved data (CLAUDE.md §5)
+- New optional fields: `P.autodesign.vars.spl.win`, `P.autodesign.vars['spl#k']`, `P.autodesign.splRules` (engine/model.js header). Absent =
+  Lock and the defaults. No key or format changed. A `vars.spl` saved before this PR could only be absent (the table showed no selector for a
+  Lock-only variable), so every saved project reads Lock.
+
+### Where
+- `apps/steel-bridge/engine/splplace.js` (new); `apps/steel-bridge/index.html` (its script tag before engine/autodesign.js).
+- `apps/steel-bridge/engine/autodesign.js`: `SPP`, `settings()` (`s.splR`), `VARS` spl, `varsOf` (span entries, `win`, Refine / Check lock),
+  `relayout`, `framesOf`, `splCheck`, `splPlan`, `design()` (`base.L0`, `sc`), `run()` (layouts as jobs, the stage-2 rules, `R.spl`),
+  `sizeDetails` (anchor `the splice variable moved the stations`), `cand()` (`spl`, the placement steps).
+- `apps/steel-bridge/ui/autodesign.js`: the variable row (Range: min / max per span, station windows; "each span on its own"), the placement
+  rules box (`splRulesBox`), the layouts sized (results), the candidate's placement rules table, the compare rows (stations, count).
+- `apps/steel-bridge/engine/owners.js` (two rows), `engine/model.js` (header), `docs/steel-bridge-comparison.md` (row F-22).
+- Tests: `tests/engine/autodesign-splices.test.mjs` (new), `autodesign.test.mjs` / `autodesign-vars.test.mjs` (load splplace.js; the saved
+  `spl: auto` entry now reads Auto), `loads.test.mjs` (row count), `tests/projects/sbd2-autodesign/splvar_lock_ref.json` (new).
+
+### Decisions (engineer's rule of 2026-10-29: accurate, not over-conservative) and open questions
+- SB2-AD15. Default Lock (the design changes only when the user chooses Auto or Range).
+- SB2-AD16. Auto offers the rule's layout, the stations entered (when they meet the rules) and the fewest-splice layout; the objective picks.
+  So Auto is never worse than Lock on the objective where the entered stations meet the rules.
+- SB2-AD17. Contraflexure from DC + DW (+ UT), the reference's load, not M_DC1 alone (same stations on the built-in after rounding).
+- **Open (engineer):** the shipping length where no owner limit exists (AASHTO, MassDOT: 120 ft, the old default) and the weight (90 kip);
+  RIDOT: 100 ft is used (6.4, one-piece permit length), though 6.7.2 allows 100–150 ft pieces with an optional splice shown: use 150 ft?;
+  a minimum piece of 10 ft (the old merge rule) is short for a shipping piece: raise it?; the cross-frame clearance (2 ft) is measured from the
+  frame's work point, not the connection plate's edge.
+
+### How verified
+- `node tests/engine/run.mjs autodesign splices model loads ownerdef`; the full suite once before merge (below).
+- Playwright (Chromium, file://) at 1280 and 390 px: the variable table (Auto, Range with windows and per span, the rules box), an Auto run
+  on the built-in project (N_b, D locked: 2 layouts sized, 48 s), the candidate list, the candidate's rules, the compare view; no horizontal
+  page scroll at 390 px; 0 console errors.
+
+### Other copies
+- None (the old app is unchanged).

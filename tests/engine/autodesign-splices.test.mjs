@@ -14,9 +14,12 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { loadShared, test, ROOT, plain } from './harness.mjs';
-import { adWindow } from './autodesign.test.mjs';
 
-const W = adWindow(), AD = W.SBDAutoDesign, M = W.SBDModel, SP = W.SBDSplicePlace, J = o => JSON.parse(JSON.stringify(o));
+// the Auto design window (as autodesign.test.mjs adWindow; not imported from there, which would register its tests a second time)
+const E = p => path.join(ROOT, 'apps/steel-bridge', p);
+const W = loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-load.js', ...['engine/model.js', 'engine/sections.js', 'engine/flexure.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js',
+  'engine/shear.js', 'engine/stiffeners.js', 'engine/analysis.js', 'engine/fatigue.js', 'engine/studs.js', 'engine/framing.js', 'engine/crossframes.js', 'engine/constructibility.js', 'engine/splices.js',
+  'engine/rating.js', 'engine/welds.js', 'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/welds.js', 'engine/splplace.js', 'engine/autodesign.js'].map(E)), AD = W.SBDAutoDesign, M = W.SBDModel, SP = W.SBDSplicePlace, J = o => JSON.parse(JSON.stringify(o));
 const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b}`);
 const ctx = { ll: new Map() };
 
