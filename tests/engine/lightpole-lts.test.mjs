@@ -77,6 +77,13 @@ test('LTS-2 HC-2: sign P_z = 0.00256·0.8562·0.95·1.14·76²·1.162 = 15.93 ps
   assert.equal(L.windForces(two, 76, 'extreme', 0).find(q => q.kind === 'panel').T015, 0);
 });
 
+/* CTDOT preset (2026-11-02): V = 120 mph (CTDOT BDM §14.2.2) in the same equations. HC-2 by hand at 120 mph:
+   P_z = 0.00256·0.8562·0.95·1.14·120²·1.162 = 39.72 psf (= 15.93·(120/76)²); W_p = 39.72·8·5 = 1,588.8 lb; T = 1,588.8·0.15·8 = 1,906.6 lb·ft. */
+test('CTDOT preset HC-2 at V = 120 mph: P_z 39.72 psf, W_p 1,588.8 lb, T 1,906.6 lb·ft (V² scaling of the 76 mph case)', () => {
+  const L = ltsEngine(), pn = L.windForces(HC2, 120, 'extreme', 0).find(q => q.kind === 'panel');
+  near(pn.Pz, 39.72, 0.005, 'Pz'); near(pn.Fx, 1588.8, 0.1, 'Wp'); near(pn.T015, 1906.6, 0.1, 'T');
+});
+
 test('LTS-2: Table 3.9.3-1 case 3 = 0.75 (normal) + 0.75 (transverse); Extreme I DC 1.1/0.9 on P; Strength I 1.25 DC', () => {
   const L = ltsEngine(), ba = L.baseActions(HC1, { V: 130, Vsvc: 76, tIce: 0 });
   const r = k => ba.rows.find(x => x.combo === 'E1max' && x.lc === k);
