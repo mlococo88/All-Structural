@@ -3582,3 +3582,105 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
     - explicit "smooth" → kept (μ 0.6);
     - explicit "rough" → kept.
   - Report: 0 unresolved references, 0 KaTeX errors. Drawings valid. `node tests/check-syntax.mjs` and the scroll test pass.
+
+## 2026-11-02 — PR: claude/sf-dowel-allcombos — Dowels and shear friction: A_s,req over every combination, A_vf developed on both sides, N_u = 0.9D (SFDA; calculation change)
+
+### SFDA. Pier-to-footing dowels and shear friction   [calculation change; CLAUDE.md §4]
+- **Engineer decision (2026-11-02), after the independent audit (discrepancies #1, #2, #3 and #5, cases SF-1 and SF-2):**
+  1. The dowels are checked for every load combination. The worst combination governs both A_s,req and the "dowels in tension" trigger.
+  2. Shear-friction dowels must be developed on both sides of the joint, into the footing and into the pedestal. The case where they are not is handled.
+  3. A_vf is recomputed consistently with 1 and 2.
+  4. Shear friction uses the permanent N_u = 0.9 × D (dead load only, factored 0.9).
+- **Provisions** (read in AASHTO LRFD 10th Ed. (2024); paraphrased):
+  - Art. 5.7.4.1: all reinforcement where interface shear transfer is considered must be fully developed on both sides of the interface (embedment, hooks, mechanical means or welding).
+  - Art. 5.7.4.3, Eq. 5.7.4.3-3: V_ni = cA_cv + μ(A_vf f_y + P_c). P_c is the net compression normal to the shear plane from **unfactored** permanent loads (0 if tensile). The commentary says that neglecting P_c is conservative. Eqs. 5.7.4.3-4 and -5 are the upper limits.
+  - The tool's shear-friction basis stays ACI 318-19 22.9 (V_n = μ(A_vf f_y + N_u), Table 22.9.4.2, 22.9.4.4–22.9.4.6). 0.9D is less than the unfactored permanent load, so it is on the conservative side of the AASHTO P_c definition.
+- **Where** (function + anchor text):
+  - `sfdDowelCheck(i,p,bz,pd,combos,fc,fy,lam,sfPre)`: new last argument (the shear-friction result with A_vf = 0).
+    - Item 1. Before (the combination with the largest ratio at the provided area only):
+      ```
+      const g=o.tenGov;let k;
+      if(ratioAt(0,g)<=1)k=0;
+      else{...bisection on g...}
+      o.kReq=k;
+      ```
+      After (`kOf` = the same bisection, run for every combination in tension; the largest k governs):
+      ```
+      const kOf=g=>{let k; ...same bisection... return k;};
+      o.tenRat.forEach(z=>{z.k=kOf(z);});
+      o.kGov=o.tenRat.reduce((a,z)=>(!a||z.k>a.k)?z:a,null);
+      const k=o.kGov.k;
+      o.kReq=k;
+      ```
+      `o.AsReq=k*AsBase`, `o.tenOK` and `o.tension=k>0` are unchanged in form. `o.tenGov` (largest ratio) is kept for the ratio step.
+    - Item 2. Before: `if(o.tension){ o.ld=...; o.ldh=...; o.LftgReq=...; o.ftgOK=...; ...o.lst=... }else{o.ftgOK=true;if(!o.tenKern){...}}`.
+      After:
+      ```
+      o.sfNeed=!!(sfPre&&!sfPre.isPatch&&sfPre.gov&&!sfPre.ok);o.sfNeedDCR=sfPre&&sfPre.gov?sfPre.gov.ratio:0;
+      o.devTen=o.tension||o.sfNeed;
+      if(db>0){ o.ld=...; o.ldh=...; o.LftgReq=...; ...o.lst=... }   // always computed
+      if(o.devTen){o.ftgOK=o.LftgReq<=bz.availEmb+1e-9;
+      }else{o.ftgOK=true;}
+      if(!o.tenKern){o.tenOK=true;o.kReq=0;o.AsReq=0;}
+      ```
+      `o.Lreq=Math.max(o.lc,o.tension?o.lst:0)` → `o.Lreq=Math.max(o.lc,o.devTen?o.lst:0)`;
+      `o.LpedReq=o.tension?o.ld.Ld:o.Ldc` → `o.LpedReq=o.devTen?o.ld.Ld:o.Ldc`.
+      New, after the projection:
+      ```
+      o.sfDevFtg=db>0&&o.LftgReq<=bz.availEmb+1e-9;
+      o.sfDevPed=db>0&&(o.full?o.ld.Ld<=o.hAvail+1e-9:o.lst<=o.Lprov+1e-9);
+      o.sfDev=nD>0&&o.sfDevFtg&&o.sfDevPed;
+      ```
+  - `sfdShearFriction`:
+    - Item 3. Before: `const AsReqT=dw&&dw.tension&&isFinite(dw.AsReq)?dw.AsReq:0, Avf=Math.max(0,(dw?dw.AsProv:0)-AsReqT);`
+      After:
+      ```
+      const AsReqT=dw&&dw.tension?dw.AsReq:0, AvfNom=isFinite(AsReqT)?Math.max(0,(dw?dw.AsProv:0)-AsReqT):0,
+       dev=!!(dw&&dw.sfDev), Avf=dev?AvfNom:0;
+      ```
+      (A_s,req = ∞ used to count the whole dowel area as A_vf. It now gives 0.)
+    - Item 4. Before: `Pperm=(f.dead||1)*Wped;` (direct mode) and `Pperm=(f.D||0)*(num(p.loads.D.P)+Wped);`.
+      After: `Pperm=o.NUF*Wped;` and `Pperm=o.NUF*(num(p.loads.D.P)+Wped);` with `o.NUF=0.9`. `N_u=Math.max(0,Math.min(Pperm,pl.P))` is unchanged.
+  - `computePhase2`: before `const dowels=peds.map((p,i)=>sfdDowelCheck(i,p,bearing[i],pedDes[i],combos,fc,fy,lam));`. After, a first shear-friction pass with A_vf = 0 decides whether the dowels are relied on:
+    ```
+    const sfPre=peds.map((p,i)=>sfdShearFriction(i,p,R.Wpeds[i],pedDes[i],null,combos,fc,fy,lam));
+    const dowels=peds.map((p,i)=>sfdDowelCheck(i,p,bearing[i],pedDes[i],combos,fc,fy,lam,sfPre[i]));
+    ```
+  - Display (§6), with the work shown:
+    - Report §5.6 (anchor `S({id:q+'AvfN'`): A_s,dow − A_s,req, then the development step on both sides (footing ℓ_d / ℓ_dh vs available; pedestal Class B lap vs projection, or full-height ℓ_d vs h − c), A_vf counted, N_u = min(0.9(P_D + W_ped), P_u).
+    - Report §5.7: A_s,req step names the governing combination (largest k). The table has a k column, and the k-governing row is highlighted. A "shear friction relies on the dowels" step appears where it applies. Tension development and lap steps are shown where `devTen`.
+    - Footing Design 5.6 (`sfsfRender`, `sfdoRender`): the same equations and notes. (2c)/(2d) are shown where `devTen`, and the table has a k column.
+    - Drawings (`sfdwDowelNote`, elevation text): L_D / L_DH and "CLASS B LAP" where `devTen` (before: `tension`).
+- **Problem fixed:**
+  - Items 1/3: A lower-P_u combination (typically 0.9D + W) that needs dowel tension was missed. Tension development was then skipped and the check reported OK. Before, A_vf used the understated A_s,req. Unconservative.
+  - Item 2: A_vf f_y was counted with no check that the dowels are developed in tension. Unconservative.
+  - Item 4: N_u used the combination's own dead factor (1.2 or 1.4). It is now 0.9 in every combination. More conservative.
+- **Check cases.** Ped 1 of the default project: 18 × 18 in, h 24 in, 8 #8 dowels (6.32 in²), #8 verticals, c 2 in, f′c 4 ksi, f_y 60 ksi, footing t 30 in. Available in the footing t − c − d_bx − d_by = 25.0 in, h − c = 22.0 in. ℓ_d(#8) = 28.46 in, ℓ_dc = 18.97 in, ℓ_st = 37.0 in, ℓ_sc = 30.0 in. P_D + W_ped = 120.675 k.
+  - **SF-2** (L: P 60, M_y 40; W_x: P −40, V_x 12, M_y 36):
+    - Item 1. Before: governing 1.2D + 1.0W + L + 0.5S (P 164.81, M 100 k-ft; plain-concrete φM_n ≈ 103 > 100), k = 0, A_s,req = 0, no tension, dowel check OK. After: 0.9D + 1.0(+W_x) (P_u 68.61 k, M_uy 36 + 12·2 = 60 k-ft). Plain concrete: a = (68.61/0.65)/(0.85·4·18) = 1.73 in, φM_n ≈ 0.65·105.55·(9 − 0.86)/12 = 46.5 k-ft < 60, so k = 0.0574 and **A_s,req = 0.36 in²** (audit hand: 0.36). Tension development then governs: ℓ_d 28.46 > 25.0 (footing) and full height ℓ_d 28.46 > 22.0, so the **dowel check is NG**.
+    - Item 3: A_s,dow − A_s,req = 6.32 − 0.36 = 5.96 in². Not developed (above), so **A_vf = 0** (before 6.32).
+    - Item 4 and the shear-friction result. Before: governing 1.2D + 1.0(+W_x) + L + 0.5S, N_u = min(1.2·120.675, 164.81) = 144.81, V_n = 1.0(6.32·60 + 144.81) = 524.0 → V_n,max 259.2 governs, φV_n = 194.4, **DCR 0.062**. After: governing 0.9D + 1.0(+W_x), N_u = min(0.9·120.675 = 108.61, P_u 68.61) = 68.61, V_n = 1.0(0 + 68.61), φV_n = 51.46, **DCR 0.233**.
+  - **SF-1** (e_x 0.25 ft; W_x: P −40, V_x 12, M_y 60). Item 1: A_s,req 0.79 (k 0.125, 1.2D + W + L + 0.5S) → **1.71 in²** (k 0.2708, 0.9D + 1.0(+W_x); audit hand 1.70). Item 3: A_vf 5.53 → nominal 6.32 − 1.71 = 4.61 (audit hand 4.62), not developed, so **0**. Shear friction DCR 0.062 → 0.233. The dowel check was already NG (development) and stays NG.
+  - **Default project**:
+    - Dowel results are unchanged: A_s,req 0, no tension, OK.
+    - Shear friction, Ped 1: A_vf 6.32 → 0 (ℓ_d 28.46 > 25 in the footing, full height 28.46 > 22 in the pedestal). N_u 144.81 → 108.61. φV_n 194.4 → 81.46. DCR **0.041 → 0.098**.
+    - Shear friction, Ped 2: N_u 180.81 → 135.61, φV_n 194.4 → 101.71, DCR **0.041 → 0.079**.
+    - Both stay OK.
+  - **Item 2, dowels relied on** (scratch case: Ped 1 3 × 3 × 1.5 ft, not intentionally roughened μ 0.6, D + 150 k, W_x V_x 115 k; φμN_u alone = 0.45·244.82 = 110.17 < 115):
+    - With 8 #8 dowels: before, A_vf 6.32 counted, V_n = 0.6(379.2 + 244.82) = 374.4, **DCR 0.410 OK**. After, the dowels must be developed: ℓ_d 28.46 > 25 (footing) and full height 28.46 > 16 (pedestal). So A_vf = 0, **DCR 1.044 NG**, and the dowel check is NG.
+    - With 12 #5 dowels: ℓ_d 14.23 ≤ 25 and full height ℓ_d 14.23 ≤ 16, so the dowels are developed and A_vf = 3.72 counts. DCR 0.546 before and after.
+- **How verified:**
+  - Headless Chromium on origin/main vs the branch, using the pinned KaTeX 0.16.11, Plotly 2.35.2 and three 0.160.0 from npm. Cases: default, SF-1, SF-2, the two item-2 cases, and direct mode.
+    - A deep diff of every `P2` value: only `P2.dowels` and `P2.shearFr` differ.
+    - At the default, `P2.dowels` only gains new fields. No existing value changes.
+    - The report text differs only in §5.6, and in §5.7 where the dowels change.
+    - The dashboard differs only in the shear-friction chip (default: max DCR 0.04 → 0.10).
+  - Report on all 6 cases: 0 unresolved or duplicate references, 0 KaTeX errors, no NaN or undefined. Drawings build (`sfdwBuild`).
+  - 0 console errors. `node tests/check-syntax.mjs` passes, as does `tests/smoke/spread-footing-scroll.mjs --libs`.
+  - Cost: `computePhase2` takes about 107 → 236 ms on a case with 7 combinations in tension (one bisection per combination).
+- **Saved data:** no new input, key or format.
+- **Other copies:** none.
+- **Open items:**
+  - ACI 318-19's own article for developing shear-friction steel on both sides was not checked (no ACI copy here). AASHTO 5.7.4.1 is cited.
+  - N_u = 0.9D follows the engineer's decision. AASHTO 5.7.4.3 defines P_c from unfactored permanent loads, so 0.9 is a conservative choice within it.
+  - Partial development (scaling f_y by available/required length) is not taken. Undeveloped dowels count A_vf = 0.
