@@ -1960,7 +1960,7 @@ index 219cc2c..a3e337e 100644
 ### Other copies
 - None (the bootstrap snippet shared with index.html / Prestressed Bridge Design.html is not touched).
 
-## 2026-11-02 — PR: PRLINK — PLIB: Undo / Redo   [display only]
+## 2026-11-02 — PR: [#700](https://github.com/mlococo88/All-Structural/pull/700) — PLIB: Undo / Redo   [display only]
 - **Before:** autosave (`lldf_autosave_v1`, and the active suite project's LLDF slice), Export / Import JSON. Named projects are made, renamed
   and deleted in the MCT app (`index.html`, BridgeProjects registry), by design; this tool shows the active one. No undo.
 - **Where:**
