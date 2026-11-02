@@ -455,4 +455,43 @@
   }
 
   Object.assign(root.LpLts, { deflection, fatigue, breakaway });
+  /* =================== LTS-6 (2026-11-02): base plate and base weld ===================
+     basePlate(ba, Bs, bp): rod forces of a circular double-nut base from the factored base actions (Strength I, Extreme I max/min, every
+     load case; M amplified by that limit state's B), the largest tension or compression rod force, and the plate thickness by the bending
+     line at the pole face: t_req = √(4·P_rod·m/(φ_f·F_y·b_eff)), m = (BC − D)/2, b_eff = πD/n, φ_f = 0.90 (Art. 5.5.3.2). This is an engineering
+     method (common practice), not an LRFDLTS article: Art. 5.6.3 (p. 5-7) only requires the thickness to be considered (engineer, Q-C3).
+     bp: {n, BC (in), theta0 (deg), D (pole base OD, in), Fy (ksi), t (in)}. Sign: P compression +, Mx = moment of a push toward +x
+     (a push toward +x lifts the −x rods). */
+  function basePlate(ba, Bs, bp) {
+    const n = Math.max(3, Math.round(bp.n)), R = bp.BC / 2, rods = Array.from({ length: n }, (_, i) => { const a = ((bp.theta0 || 0) + 360 * i / n) * RAD; return { x: R * Math.cos(a), y: R * Math.sin(a) }; });
+    const Sx2 = rods.reduce((a, r) => a + r.x * r.x, 0), Sy2 = rods.reduce((a, r) => a + r.y * r.y, 0);
+    let gov = null;
+    ba.rows.filter(r => r.combo !== 'SV1').forEach(r => {
+      const B = Bs[r.combo] ? Bs[r.combo].B : 1, Mx = B * r.Mx * 12, My = B * r.My * 12;   // lb-in
+      let Tmax = -Infinity, Cmax = -Infinity;
+      rods.forEach(q => { const tens = Mx * (-q.x) / Sx2 + My * (-q.y) / Sy2 - r.P / n; Tmax = Math.max(Tmax, tens); Cmax = Math.max(Cmax, -tens); });
+      const Prod = Math.max(Tmax, Cmax, 0);
+      if (!gov || Prod > gov.Prod) gov = { ...r, B, Tmax, Cmax, Prod };
+    });
+    const m = Math.max(0, (bp.BC - bp.D) / 2), beff = Math.PI * bp.D / n, tReq = Math.sqrt(4 * gov.Prod * m / (PHI.f * bp.Fy * 1000 * beff));
+    return { gov, m, beff, tReq, tProv: bp.t, ok: tReq <= bp.t, ratio: (tReq / bp.t) ** 2, n, R, Sx2 };
+  }
+  /* baseWeld(ba, Bs, w): socket (fillet-welded) pole-to-plate connection, the weld treated as a line around the tube of diameter D:
+     q = √((M/S_w + P/(πD))² + (2V/(πD) + 2T/(πD²))²), S_w = πD²/4 (in²); capacity per AWS D1.1 / AISC 360-16 §J2.4: φR_n = φ·0.60F_EXX·0.707w,
+     φ = 0.75 (LRFDLTS Art. 5.14 refers to AWS D1.1 and gives no weld strength method: coordinator decision Q-B5); no directional increase.
+     CJP: the base metal governs (the member check at the base); no separate weld check. w: {type 'fillet'|'cjp', size (in), Fexx (ksi), D (in)} */
+  function baseWeld(ba, Bs, w) {
+    if (w.type === 'cjp') return { type: 'cjp', ok: true };
+    const D = w.D, Sw = Math.PI * D * D / 4, phiRn = 0.75 * 0.60 * w.Fexx * 0.707 * w.size;   // kip/in
+    let gov = null;
+    ba.rows.filter(r => r.combo !== 'SV1').forEach(r => {
+      const B = Bs[r.combo] ? Bs[r.combo].B : 1, M = B * r.M * 12 / 1000, P = Math.abs(r.P) / 1000, V = r.V / 1000, T = Math.abs(r.T) * 12 / 1000;
+      const qn = M / Sw + P / (Math.PI * D), qs = 2 * V / (Math.PI * D) + 2 * T / (Math.PI * D * D), q = Math.hypot(qn, qs);
+      if (!gov || q > gov.q) gov = { ...r, B, Mk: M, Pk: P, Vk: V, Tk: T, qn, qs, q };
+    });
+    return { type: 'fillet', gov, Sw, phiRn, ratio: gov.q / phiRn, ok: gov.q <= phiRn };
+  }
+
+  Object.assign(root.LpLts, { basePlate, baseWeld });
+
 })(typeof window !== 'undefined' ? window : globalThis);

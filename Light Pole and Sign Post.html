@@ -398,7 +398,7 @@
   <div class="byline">by Mario Lococo</div>
   <div class="sub" id="appSub">A pole carrying splayed catenary lighting cables plus its own wind. Each cable's dead, wind, ice, and wind-on-ice loads resolve to horizontal and vertical pole reactions; the unbalanced pull drives the IBC §1807.3 embedment and the ACI 318 shaft. Wind is enveloped at the worst direction for each component independently.</div>
   <div class="codetag"><b>IBC 2021 §1807.3</b>ASCE 7-22 wind + ice<br>ACI 318-19 shaft</div>
-  <div class="lppScope" id="lppScope"><b>Scope (this mode):</b> IBC 2021 · ASCE 7-22 · AISC 360-16 · ACI 318-19 — non-highway light poles and sign supports (site, parking, sports and private signs). AASHTO LRFDLTS 2nd Ed. highway supports are a separate mode (coming); do not use this mode for them.</div>
+  <div class="lppScope" id="lppScope"><b>Scope (this mode):</b> IBC 2021 · ASCE 7-22 · AISC 360-16 · ACI 318-19 — non-highway light poles and sign supports (site, parking, sports and private signs). AASHTO LRFDLTS highway supports have their own mode (code switch above the Light pole / Sign switch); do not use this mode for them.</div>
 </header>
 
 <div class="wrap">
@@ -442,6 +442,9 @@
         <div class="row"><label>Service wind speed, V<sub>svc</sub><span class="note">10-yr MRI, Fig. 3.8-4 (Service I)</span></label><div class="ctl"><input id="ltsVsvc" type="number" value="76" step="1"><span class="unit">mph</span></div></div>
         <div class="row"><label>Square / rect. tube corner ratio, r<sub>s</sub><span class="note">corner radius ÷ depth (Table 3.8.7-1); 0 = sharp corners (C<sub>d</sub> 2.0, conservative)</span></label><div class="ctl"><input id="ltsRs" type="number" value="0" step="0.025" min="0"><span class="unit">—</span></div></div>
         <div class="row"><label>Within the clear zone?<span class="note">breakaway checklist, Art. 2.5.2</span></label><div class="ctl"><select id="ltsClearZone" class="combo-sel"><option value="no" selected>No — outside, or behind a barrier</option><option value="yes">Yes — in the clear zone</option></select></div></div>
+        <div class="row"><label>Pole-to-base-plate weld<span class="note">LTS mode; Art. 5.14 → AWS D1.1</span></label><div class="ctl"><select id="ltsWeldType" class="combo-sel"><option value="fillet" selected>Socket, fillet-welded</option><option value="cjp">Full-penetration groove (CJP)</option></select></div></div>
+        <div class="row"><label>Fillet weld size, w</label><div class="ctl"><input id="ltsWeldW" type="number" value="0.3125" step="0.0625" min="0.125"><span class="unit">in</span></div></div>
+        <div class="row"><label>Electrode strength, F<sub>EXX</sub></label><div class="ctl"><input id="ltsFexx" type="number" value="70" step="10"><span class="unit">ksi</span></div></div>
         <div class="row"><label>Atmospheric ice, t<sub>ice</sub><span class="note">Owner-specified (Art. 3.7); 0 = none; Strength I only</span></label><div class="ctl"><input id="ltsIce" type="number" value="0" step="0.25" min="0"><span class="unit">in</span></div></div>
       </div>
     </section>
@@ -655,7 +658,7 @@
         <div class="row"><label>Effective embedment, h<sub>ef</sub></label><div class="ctl"><input id="boltHef" type="number" value="18" step="1"><span class="unit">in</span></div></div>
         <div class="row"><label>Base plate diameter</label><div class="ctl"><input id="bpDia" type="number" value="20" step="1"><span class="unit">in</span></div></div>
         <div class="row"><label>Base plate yield strength, F<sub>y</sub><span class="note">A36: 36 ksi · A572 Gr 50: 50 ksi</span></label><div class="ctl"><input id="bpFy" type="number" value="36" step="1"><span class="unit">ksi</span></div></div>
-        <div class="row"><label>Base plate thickness, provided<span class="note">checked against t<sub>req</sub> (AASHTO LRFDLTS bending line, double-nut)</span></label><div class="ctl"><input id="bpT" type="number" value="1.25" step="0.125"><span class="unit">in</span></div></div>
+        <div class="row"><label>Base plate thickness, provided<span class="note">checked against t<sub>req</sub> (bending line at the pole face, double-nut)</span></label><div class="ctl"><input id="bpT" type="number" value="1.25" step="0.125"><span class="unit">in</span></div></div>
         <div class="row"><label>Anchor reinforcement<span class="note">tie cage developed into the breakout cone (§17.5.2.1)</span></label>
           <div class="ctl"><div class="seg" id="segAnchRe"><button data-v="yes">Provided</button><button data-v="no" class="on">None</button></div></div></div>
         <div class="row arRow"><label>Anchor reinf.: bars per tension anchor<span class="note">vertical bars within 0.5h<sub>ef</sub> of each anchor rod (R17.5.2.1), counted for that anchor only</span></label><div class="ctl"><input id="arBars" type="number" value="2" step="1" min="1"><span class="unit">—</span></div></div>
@@ -2239,7 +2242,8 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
 }
 
 // Base-plate method note (engineer, 2026-11-01): keep b_eff = πD/n; state clearly what is not verified / not checked.
-const LPP_BP_VERIFY='VERIFY the base-plate method against AASHTO LRFDLTS 2nd Ed. — not yet verified: (1) the governing article number; (2) the effective-width rule (b_eff = πD/n at the pole face is used; for square/rectangular poles the same πB/n is used, no flat-face rule); (3) anchor-rod bending in the double-nut standoff is not checked; (4) the minimum plate thickness rules of LRFDLTS are not checked.';
+// LTS-6 (2026-11-02; engineer's answer Q-C3): the bending-line method is an engineering method (common practice), not an LRFDLTS article.
+const LPP_BP_VERIFY='Base-plate method: bending line at the pole face with b_eff = πD/n per rod, double-nut base — an engineering method (common practice), not an AASHTO LRFDLTS article: LRFDLTS 1st Ed. (2015, 2017 Interim) Art. 5.6.3 only requires the base-plate thickness to be considered. Not checked: (1) for square/rectangular poles the same πB/n is used (no flat-face rule); (2) anchor-rod bending in the double-nut standoff; (3) the minimum plate thicknesses of LRFDLTS Table 5.6.3-1 (supports designed for fatigue only).';
 // Fixtures on an arm (a > 0) whose plan azimuth θ is not on one of the four wind axes (2026-11-01, engineer decision on
 // LP-R1: the four directions are kept; a warning is shown instead of a sweep). Arms and fixtures only (cables excluded,
 // engineer 2026-11-01). Returns [{i, th}] (i is 1-based).
@@ -2659,7 +2663,7 @@ manPart("p3","3. Output Reference",[
 {key:"K = 2.1 is the AISC Commentary value for a fixed-base, free-top cantilever. It assumes the foundation genuinely provides fixity. A shaft that rotates measurably at grade does not, and a larger K would be appropriate."},
 
 {h:"3.5 Anchorage tab"},
-{p:"Anchor rod design (ACI 318-19 Chapter 17) is done in the Anchorage app (BasePlateAnchorDesigner.html). This tab keeps the anchor and base plate inputs, the Anchorage card (send the anchor pattern, the shaft and every LRFD combination to the Anchorage app, or export them as JSON; the D/C the app returns is shown there and on the Summary) and the base plate check (AASHTO LRFDLTS bending line, double-nut). Part 4C.3 is kept as background."},
+{p:"Anchor rod design (ACI 318-19 Chapter 17) is done in the Anchorage app (BasePlateAnchorDesigner.html). This tab keeps the anchor and base plate inputs, the Anchorage card (send the anchor pattern, the shaft and every LRFD combination to the Anchorage app, or export them as JSON; the D/C the app returns is shown there and on the Summary) and the base plate check (bending line at the pole face, double-nut; an engineering method, not an LRFDLTS article). Part 4C.3 is kept as background."},
 
 {h:"3.6 Shaft tab"},
 {h3:"3.6.1 Foundation demand"},
@@ -2993,9 +2997,9 @@ function collectChecks(ctx){
   push('Soil bearing','IBC Table 1806.2',found.bearing.q,found.bearing.qAllow,'ksf');
   if(b){
     // anchor rod checks (ACI 318-19 Ch.17) are done in the Anchorage app (retired from this tool 2026-11-01);
-    // base plate (AASHTO LRFDLTS bending line, double-nut), governing LRFD combination (added 2026-11-01)
+    // base plate (bending line at the pole face, double-nut; engineering method), governing LRFD combination (added 2026-11-01)
     { const bP=(b.byCheck&&b.byCheck.BP)||b;
-      if(bP.tpProv>0){ push('Base plate thickness','AASHTO LRFDLTS bending line',bP.tpReq,bP.tpProv,'in',bP.tpOK,Math.pow(bP.tpReq/bP.tpProv,2)); C[C.length-1].dec=3; } }
+      if(bP.tpProv>0){ push('Base plate thickness','bending line at the pole face',bP.tpReq,bP.tpProv,'in',bP.tpOK,Math.pow(bP.tpReq/bP.tpProv,2)); C[C.length-1].dec=3; } }
   }
   if(found.Tu>0) push('Shaft torsion ≤ φT_th (neglect)','ACI 318-19 §22.7.1.1',found.Tu,found.phiTth,'lb·ft');
   if(pstress&&pstress.govRow) push('Post combined stress',pstress.govRow.form==='H3-6'?'AISC 360 §H3.2':'AISC 360 §H1.1',pstress.govRow.ratio,1.0,'—',pstress.govRow.ok);
@@ -3866,13 +3870,13 @@ function anchorBolts(inp,gov,struct){
   else if(tr<=0.2){inter=vr; interOK=vr<=1.0;}
   else{inter=tr+vr; interOK=inter<=1.2;}
 
-  // ---- base plate thickness: AASHTO LRFDLTS bending-line method, double-nut base (2026-11-01, LP-R4; engineer decision) ----
+  // ---- base plate thickness: bending-line method (engineering method, not an LRFDLTS article; LTS-6), double-nut base (2026-11-01, LP-R4; engineer decision) ----
   // Double-nut (leveling-nut) connection: no grout bearing, so the compression side is carried by the anchor rods through the
   // leveling nuts. The governing rod force is the larger of the tension rod T_max and the compression rod
   // C_max = M_u·|y|/Σy² + P_u/n. The plate cantilevers from the bending line at the pole face (tangent to the pole, normal to
   // the radius through the rod) over m = (BC − D)/2 with the effective width per rod taken at the pole face, b_eff = πD/n.
   // M_u = P_rod·m ≤ φ_f·F_y·b_eff·t²/4 (plastic section of the plate strip), φ_f = 0.90 ⇒ t_req = √(4·P_rod·m/(φ_f·F_y·b_eff)).
-  // This method is used in both modes until the AASHTO LRFDLTS 2nd Ed. mode is added. Before: b_eff = πBC/n (at the bolt
+  // The same method is used in the LRFDLTS mode (LTS-6, apps/light-pole/lts-engine.js basePlate()). Before: b_eff = πBC/n (at the bolt
   // circle), tension rod only, F_y = 36 ksi fixed, no provided thickness.
   const Dpole=inp.poleDiaBase;              // in (pole OD / width at base)
   const m=Math.max(0,(BC-Dpole)/2);         // cantilever arm, rod to the pole face (in)
@@ -4391,7 +4395,7 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
     H+=`<div class="eq-title">Soil bearing <span class="eq-ref">[IBC Table 1806.2]</span></div>`+bearingWorkedHTML(F.bearing,(F.bearing.axial!==undefined?F.bearing.axial:asd.axial),inp)+lppRes('bearing',pi);
     H+=`<div class="eq-title">Shaft reinforcement <span class="eq-ref">[ACI 318-19]</span></div>`+rebarWorkedHTML(F.reo,inp,F.Mu,F.Pu,F.Vu)+lppRes('flex asmin asmax spacing ties shear',pi);
     if(F.Tu>0) H+=`<div class="eq-title">Shaft torsion threshold <span class="eq-ref">[ACI 318-19 §22.7.1.1]</span></div>`+lppTorsionHTML(F,inp)+lppRes('torsion',pi);
-    H+=`<div class="eq-title">Base plate <span class="eq-ref">[AASHTO LRFDLTS bending line]</span></div>`;
+    H+=`<div class="eq-title">Base plate <span class="eq-ref">[bending line at the pole face — engineering method]</span></div>`;
     H+=`<p class="eq-why">Anchor rods ((${inp.boltQty}) ${n(inp.boltDia,3)}″ Gr.${inp.boltGrade} on a ${n(F.bolts.BC,0)}″ circle, h_ef ${n(F.bolts.hef,0)}″): designed in the Anchorage app (Base Plate &amp; Anchor Bolt Designer); the base plate is checked here.</p>`;
     H+=basePlateWorkedHTML(F.bolts,inp)+lppRes('anchors',pi);
     H+=`<div class="eq-title">Post combined stress <span class="eq-ref">[AISC 360-16 (LRFD)]</span></div>`;
@@ -5015,7 +5019,7 @@ function basePlateWorkedHTML(bo,inp){
   let H='';
   const bp=(bo.byCheck&&bo.byCheck.BP)||bo;   // the LRFD combination with the largest t_req
   H+=step(`Base-plate thickness — bending line at the pole face, double-nut base ${ref('AASHTO LRFDLTS (bending-line method; article to be confirmed)')}`);
-  H+=`<p class="eq-why">Double-nut (leveling-nut) base: no grout bearing, so the compression side also loads the plate through the leveling nuts. The governing rod force is the larger of the tension rod and the compression rod. The plate cantilevers from the bending line at the pole face (tangent to the pole, normal to the radius through the rod) over m, with the effective width per rod taken at the pole face, b<sub>eff</sub> = πD/n; plastic plate strip, φ<sub>f</sub> = 0.90. This method is used in this mode (and in the AASHTO LRFDLTS 2nd Ed. mode until that mode is added). Combination shown: ${bp.comboName||'—'}.</p>`;
+  H+=`<p class="eq-why">Double-nut (leveling-nut) base: no grout bearing, so the compression side also loads the plate through the leveling nuts. The governing rod force is the larger of the tension rod and the compression rod. The plate cantilevers from the bending line at the pole face (tangent to the pole, normal to the radius through the rod) over m, with the effective width per rod taken at the pole face, b<sub>eff</sub> = πD/n; plastic plate strip, φ<sub>f</sub> = 0.90. The same method is used in the AASHTO LRFDLTS mode (an engineering method, not an LRFDLTS article; LRFDLTS Art. 5.6.3). Combination shown: ${bp.comboName||'—'}.</p>`;
   H+=g(`C_{max} = \\frac{M_u\\,|y|}{\\sum y_i^2}+\\frac{P_u}{n} = ${fmt(bp.Cmax,0)}\\ \\text{lb}\\qquad P_{rod} = \\max(T_{max},C_{max}) = \\max(${fmt(bp.Tmax,0)},\\ ${fmt(bp.Cmax,0)}) = ${fmt(bp.Prod,0)}\\ \\text{lb}`);
   H+=g(`m = \\frac{BC-D_{pole}}{2} = \\frac{${fmt(bp.BC,2)}-${fmt(bp.Dpole,2)}}{2} = ${fmt(bp.m,2)}\\text{ in}\\qquad b_{eff} = \\frac{\\pi\\,D_{pole}}{n} = \\frac{\\pi(${fmt(bp.Dpole,2)})}{${bp.n}} = ${fmt(bp.beff,3)}\\text{ in}`);
   H+=g(`t_{p,req} = \\sqrt{\\frac{4\\,P_{rod}\\,m}{\\phi_f\\,F_y\\,b_{eff}}} = \\sqrt{\\frac{4(${fmt(bp.Prod,0)})(${fmt(bp.m,2)})}{0.9(${fmt(bp.Fyp*1000,0)})(${fmt(bp.beff,3)})}} = ${fmt(bp.tpReq,3)}\\text{ in}`);
@@ -6572,7 +6576,7 @@ function lprModel(){
   /* 6. Base plate (anchor rods: Anchorage app) */
   { const subs=[];
     stacks.forEach((st,si)=>{ const b=st.found.bolts; if(!b) return; const p=(b.byCheck&&b.byCheck.BP)||b;
-      subs.push({title:'Base plate'+lab(st),items:[lprTopics('bp'+si,[{title:'Bending line at the pole face, double-nut base ('+(p.comboName||'')+')',ref:'AASHTO LRFDLTS bending-line method',steps:[
+      subs.push({title:'Base plate'+lab(st),items:[lprTopics('bp'+si,[{title:'Bending line at the pole face, double-nut base ('+(p.comboName||'')+')',ref:'bending line at the pole face (engineering method)',steps:[
         S({id:'P',label:'Governing rod force (tension or leveling-nut compression)',sym:'P_{rod}',eq:'\\max(T_{max},\\,C_{max})',sub:'\\max('+N(p.Tmax,0)+',\\,'+N(p.Cmax,0)+')',value:p.Prod,unit:'lb',d:0}),
         S({id:'m',label:'Cantilever, rod to the pole face',sym:'m',eq:'\\frac{BC \\minus D}{2}',sub:'\\frac{'+N(p.BC)+' \\minus '+N(p.Dpole)+'}{2}',value:p.m,unit:'in'}),
         S({id:'beff',label:'Effective width per rod at the pole face',sym:'b_{eff}',eq:'\\frac{\\pi D}{n}',sub:'\\frac{\\pi('+N(p.Dpole)+')}{'+p.n+'}',value:p.beff,unit:'in',d:3}),
@@ -6623,7 +6627,7 @@ function lprModel(){
       'Wind toward 0°, 90°, 180° and 270° only; arms or fixtures off these axes are flagged (the results may be unconservative).',
       'Cables: catenary pull model as on the Loading tab; cable ice uses the entered thickness t.',
       'Anchor rods (ACI 318-19 Ch. 17) are not checked in this tool; they are designed in the Anchorage app. The soil torsional resistance is not checked.',
-      'Base plate: AASHTO LRFDLTS bending line at the pole face with b_eff = πD/n, double-nut base. '+LPP_BP_VERIFY,
+      LPP_BP_VERIFY,
       'Shaft V_c: A_cv = 0.8A_g; ρ_w from half the longitudinal bars; N_u/6A_g neglected.'].map(t=>({type:'note',text:t}))},
     {title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:LPP_REFS.map(([a,b])=>[lprPlain(a),lprPlain(b)])}]}]});
   return {title:($('appTitle')?$('appTitle').textContent:'Light Pole and Sign Post')+' — Calculation Report',subtitle:activeProject||'Untitled',code:'IBC 2021 · ASCE 7-22 · AISC 360-16 · ACI 318-19',
@@ -6938,7 +6942,7 @@ const LTS_STATUS=[
   ['LTS-2','Wind pressure P_z, K_z, K_d, G, C_d (Arts. 3.8.1–3.8.7), load cases (Table 3.9.3-1), torsion (Art. 3.9.4.2), dead load and ice, factored base actions',true],
   ['LTS-3','Member checks (Section 5: Arts. 5.7, 5.8, 5.10, 5.11, 5.12) and second order (Art. 4.8.1 / Eq. 5.12.1-10)',true],
   ['LTS-5','Deflection (Art. 10.4.2.1), fatigue applicability (Arts. 11.4, 11.7.2), breakaway checklist (Art. 2.5.2, Section 12)',true],
-  ['LTS-6','Base plate and base weld',false],
+  ['LTS-6','Base plate (bending line, engineering method) and base weld (AWS D1.1 / AISC 360-16 §J2)',true],
   ['LTS-7','Foundation (Section 13, Broms)',false],
   ['LTS-8','Anchorage-app export of the LTS combinations',false],
   ['LTS-9','Report, drawings, manual',false]];
@@ -7034,6 +7038,27 @@ function ltsCalc(){
       +ltsStepsHTML(ms)
       +`<p class="tbl-note">Every section from the base to the top (21 sections); the strength limit states of Table 3.4-1 (Strength I, Extreme I max and min) and the 8 load cases of Table 3.9.3-1. The fixture and misc. dead loads are taken above every section (conservative). φ values per Art. 5.5.3.2; kip, kip-in.</p>`
       +`<div style="overflow-x:auto"><table class="tbl"><tr><th>z (ft)</th><th>Section (in)</th><th>λ</th><th>Class</th><th>φM<sub>n</sub></th><th>φP<sub>nc</sub></th><th>φV<sub>n</sub></th><th>φT<sub>n</sub></th><th>Governing</th><th>M<sub>u</sub></th><th>Eq.</th><th>Ratio</th></tr>${mrows}</table></div>`);
+    // LTS-6: base plate (bending line, engineering method; Q-C3) and the pole-to-plate weld (Q-B5)
+    { const bp=LpLts.basePlate(ba,mc.Bs,{n:inp.boltQty,BC:inp.boltBC,theta0:inp.boltTheta,D:inp.poleDiaBase,Fy:inp.bpFy||36,t:inp.bpT});
+      const wt=$('ltsWeldType')?$('ltsWeldType').value:'fillet', wd=LpLts.baseWeld(ba,mc.Bs,{type:wt,size:num('ltsWeldW')||0.3125,Fexx:num('ltsFexx')||70,D:inp.poleDiaBase});
+      lppLtsLast.bp=bp; lppLtsLast.wd=wd;
+      const gb=bp.gov, n2=(x,d)=>SharedSteps.n(x,d);
+      const bpSteps=[
+        {id:'bp.prod',label:`Largest rod force: ${gb.name}, ${gb.lcName} (M × B = ${n2(gb.B,4)}; ${bp.n} rods on BC ${n2(inp.boltBC,2)} in)`,sym:'P_{rod}',eq:'\\max\\left(\\frac{M\\,c}{\\sum c^{2}} - \\frac{P}{n},\\;\\frac{M\\,c}{\\sum c^{2}} + \\frac{P}{n}\\right)',sub:`T_{max} = ${n2(gb.Tmax,0)},\\, C_{max} = ${n2(gb.Cmax,0)}`,value:gb.Prod,unit:'lb',d:0,ref:'double-nut base: the compression rods load the plate through the leveling nuts'},
+        {id:'bp.m',label:'Cantilever from the bending line at the pole face',sym:'m',eq:'(BC - D)/2',sub:`(${n2(inp.boltBC,2)} - ${n2(inp.poleDiaBase,3)})/2`,value:bp.m,unit:'in',d:3,ref:''},
+        {id:'bp.beff',label:'Effective width per rod at the pole face',sym:'b_{eff}',eq:'\\pi D/n',sub:`\\pi\\cdot${n2(inp.poleDiaBase,3)}/${bp.n}`,value:bp.beff,unit:'in',d:3,ref:''},
+        {id:'bp.t',label:'Required plate thickness (plastic plate strip)',sym:'t_{req}',eq:'\\sqrt{\\frac{4P_{rod}m}{\\phi_{f}F_{y}b_{eff}}}',sub:`\\sqrt{\\frac{4\\cdot${n2(gb.Prod,0)}\\cdot${n2(bp.m,3)}}{0.90\\cdot${n2((inp.bpFy||36)*1000,0)}\\cdot${n2(bp.beff,3)}}}`,value:bp.tReq,unit:'in',d:3,ref:LpLts.ref('φ_f, Art. 5.5.3.2 (p. 5-6)'),ok:bp.ok,note:`Provided t = ${n2(inp.bpT,3)} in → ${bp.ok?'OK':'NOT OK'}, (t_req/t)² = ${n2(bp.ratio,3)}.`}];
+      let wSteps='';
+      if(wd.type==='cjp') wSteps=`<p class="tbl-note">Full-penetration groove weld: the base metal governs (the member check at the base, Post tab); no separate weld check (AWS D1.1).</p>`;
+      else { const gw=wd.gov; wSteps=ltsStepsHTML([
+        {id:'wd.q',label:`Weld force per inch around the tube (as a line, D = ${n2(inp.poleDiaBase,3)} in): ${gw.name}, ${gw.lcName}`,sym:'q',eq:'\\sqrt{\\left(\\frac{BM}{S_{w}} + \\frac{P}{\\pi D}\\right)^{2} + \\left(\\frac{2V}{\\pi D} + \\frac{2T}{\\pi D^{2}}\\right)^{2}},\\, S_{w} = \\pi D^{2}/4',
+          sub:`\\sqrt{${n2(gw.qn,3)}^{2} + ${n2(gw.qs,3)}^{2}}`,value:gw.q,unit:'kip/in',d:3,ref:'line-weld section'},
+        {id:'wd.cap',label:'Fillet weld strength per inch',sym:'\\phi R_{n}',eq:'0.75\\cdot 0.60F_{EXX}\\cdot 0.707w',sub:`0.75\\cdot 0.60\\cdot${n2(num('ltsFexx')||70,0)}\\cdot 0.707\\cdot${n2(num('ltsWeldW')||0.3125,4)}`,value:wd.phiRn,unit:'kip/in',d:3,ref:'AWS D1.1 / AISC 360-16 §J2.4 (LRFDLTS Art. 5.14, p. 5-35, 2017, refers to AWS D1.1)',ok:wd.ok,
+          note:`Ratio ${n2(wd.ratio,3)} → ${wd.ok?'OK':'NOT OK'}. LRFDLTS gives no weld strength method; AWS D1.1 / AISC 360-16 §J2 with φ = 0.75 and no directional increase (coordinator decision Q-B5).`}]); }
+      ltsAddCard('anchors','ltsBpCard','7',(g.mode==='sign'?'Post':'Pole')+' base plate and base weld','engineering method · AWS D1.1',
+        basis+`<p class="lts-dev">${lppEsc(LPP_BP_VERIFY)}</p>`+ltsStepsHTML(bpSteps)
+        +`<p class="eq-title" style="margin-top:10px"><b>Pole-to-base-plate weld</b> <span class="lts-flag">engineer to confirm (Q-B5)</span></p>`+wSteps
+        +`<p class="tbl-note">Anchor rods: designed in the Anchorage app (LTS combinations export: LTS-8). LRFDLTS Arts. 5.16–5.16.3: cast-in-place anchor bolts for new work; hooked bolts only with F<sub>y</sub> ≤ 55 ksi; anchorage per ACI 318 (C5.16.3).${g.mode==='sign'&&g.sign.nPost===2?' Values per post.':''}</p>`); }
     // LTS-5: deflection (Section 10), fatigue applicability (Section 11), breakaway (Art. 2.5.2, Section 12)
     const dfl=LpLts.deflection(g,L,secs,Fy,mc.Bs.SV1.B), fat=LpLts.fatigue(g), brk=LpLts.breakaway(L.clearZone);
     lppLtsLast.dfl=dfl; lppLtsLast.fat=fat; lppLtsLast.brk=brk;
@@ -7058,6 +7083,8 @@ function ltsCalc(){
     +`<tr><td>Atmospheric ice</td><td>${L.tIce>0?fmt(L.tIce,2)+' in, Strength I only (decision Q-C1, accepted 2026-11-02)':'none'}</td><td>Art. 3.7, C3.7 (p. 3-4)</td></tr>`
     +`${lppLtsLast&&lppLtsLast.mc?`<tr><td>${appMode==='sign'?'Post':'Pole'} — combined forces</td><td><b>${lppLtsLast.mc.gov.gov.ratio<=1&&lppLtsLast.mc.valid?'OK':'NOT OK'}</b>, ratio ${isFinite(lppLtsLast.mc.gov.gov.ratio)?fmt(lppLtsLast.mc.gov.gov.ratio,3):'∞'} at z = ${fmt(lppLtsLast.mc.gov.sec.z,2)} ft</td><td>Art. 5.12.1, Eq. ${lppLtsLast.mc.gov.gov.eq} (p. 5-33, 2017)</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.dfl?lppLtsLast.dfl.checks.map(c=>`<tr><td>${lppEsc(c.label)}</td><td>${c.applies?`<b>${c.ok?'OK':'NOT OK'}</b>, `:'information, '}${fmt(c.value,c.unit==='in'?2:3)} / ${fmt(c.limit,c.unit==='in'?2:3)} ${c.unit}</td><td>Art. 10.4.2.1 (p. 10-1, 2017)</td></tr>`).join(''):''}`
+    +`${lppLtsLast&&lppLtsLast.bp?`<tr><td>Base plate (bending line, engineering method)</td><td><b>${lppLtsLast.bp.ok?'OK':'NOT OK'}</b>, t<sub>req</sub> ${fmt(lppLtsLast.bp.tReq,3)} / t ${fmt(lppLtsLast.bp.tProv,3)} in</td><td>Art. 5.6.3 (p. 5-7): thickness to be considered; no LRFDLTS method</td></tr>`:''}`
+    +`${lppLtsLast&&lppLtsLast.wd?`<tr><td>Base weld</td><td>${lppLtsLast.wd.type==='cjp'?'CJP: base metal governs':`<b>${lppLtsLast.wd.ok?'OK':'NOT OK'}</b>, ratio ${fmt(lppLtsLast.wd.ratio,3)}`}</td><td>Art. 5.14 → AWS D1.1 / AISC 360-16 §J2</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.fat?`<tr><td>Fatigue</td><td>${lppLtsLast.fat.required?'<b>REQUIRED — outside this tool (high-mast tower)</b>':'not required'}</td><td>Arts. 11.4, 11.7.2 (pp. 11-3, 11-10, 2017)</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.brk?`<tr><td>Breakaway</td><td>${lppLtsLast.brk.needed?'required — see the checklist':'not required (outside the clear zone)'}</td><td>Art. 2.5.2; Section 12</td></tr>`:''}`
     +`</table><p class="tbl-note">Status of the LRFDLTS mode:</p><table class="tbl"><tr><th>Step</th><th>Content</th><th>Status</th></tr>`
@@ -7069,7 +7096,7 @@ function ltsCalc(){
 }
 
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
-const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan','ltsRisk','ltsAdt','ltsV','ltsVsvc','ltsIce','ltsRs','ltsClearZone'];
+const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan','ltsRisk','ltsAdt','ltsV','ltsVsvc','ltsIce','ltsRs','ltsClearZone','ltsWeldType','ltsWeldW','ltsFexx'];
 const LS_PROJECTS='lpp_projects_v1';   // {name: state}
 const LS_SESSION='lpp_session_v1';     // {state, activeName, dirty}
 let activeProject=null;   // name of loaded project, or null (unsaved/new)
@@ -7161,7 +7188,7 @@ function applyState(st){
   appMode = st.appMode || 'pole';
   codeMode = st.codeMode==='lts' ? 'lts' : 'ibc';   // LTS-1: saves made before the code mode open in the IBC mode (identical results)
   // LRFDLTS inputs (LTS-1): saves without them get the new-project defaults
-  { const dv={ltsRisk:'typical',ltsAdt:'1kto10k',ltsV:'130',ltsVsvc:'76',ltsIce:'0',ltsRs:'0',ltsClearZone:'no'};
+  { const dv={ltsRisk:'typical',ltsAdt:'1kto10k',ltsV:'130',ltsVsvc:'76',ltsIce:'0',ltsRs:'0',ltsClearZone:'no',ltsWeldType:'fillet',ltsWeldW:'0.3125',ltsFexx:'70'};
     Object.keys(dv).forEach(k=>{ if($(k) && (!st.inputs || st.inputs[k]===undefined)) $(k).value=dv[k]; }); }
   signPosts = st.signPosts || 1;
   if(Array.isArray(st.cables)) cables=JSON.parse(JSON.stringify(st.cables));
