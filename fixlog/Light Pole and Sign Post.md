@@ -1716,7 +1716,7 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - **Saved data:** new input `ltsClearZone` (default "no" when absent).
 - **How verified:** check-syntax pass; `node tests/engine/run.mjs lightpole` 36 passed (2 new); `tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL; LTS screenshots pole Post tab (1280) and monopost Summary (390): 0 console errors.
 
-## 2026-11-02 — PR #PRNUM: claude/lp-lts-6 (LTS-6: LRFDLTS base plate and base weld; base-plate "2nd Ed." notes relabelled; IBC results unchanged)
+## 2026-11-02 — PR #654 (https://github.com/mlococo88/All-Structural/pull/654): claude/lp-lts-6 (LTS-6: LRFDLTS base plate and base weld; base-plate "2nd Ed." notes relabelled; IBC results unchanged)
 
 ### LTS6-1. Base-plate method relabelled (both modes; engineer's answer Q-C3)   [display] [no result change]
 - **Why:** LRFDLTS 1st Ed. (2015, 2017 Interim) has no base-plate bending method: Art. 5.6.3 (p. 5-7) only requires the base-plate thickness to be considered (Table 5.6.3-1 minimums apply to supports designed for fatigue). Engineer, 2026-11-02: keep the bending-line method, labelled "engineering method (common practice), not an LRFDLTS article".
