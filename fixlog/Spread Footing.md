@@ -3771,3 +3771,39 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
      - The 10th Ed. ℓ_db form (Eq. 5.10.8.2.1a) gives 0.17 · 1.0 · (60/(1.97 · 4^0.25))² = 78.9 in for #8, before λ_rc (0.3 to 1.0, Eq. 5.10.8.2.1c-2).
      - With λ_rc = d_b/(c_b + k_tr) = 0.4 (β_t = 0), ℓ_d ≈ 31.6 in, against ACI's 28.46. This needs a decision on β_t, n_s and the hook factors.
   2. Development of the continuous bars above the joint is taken as satisfied by definition, as instructed. The pedestal height itself (h − c = 22 in < ℓ_d 28.46 for straight #8) is not checked against a bar terminating at the pedestal top.
+
+### SFDC. Dowel area presented as minimum / required for interface tension / governing   [D/C display and dowel-check logic; CLAUDE.md §4]
+- **Engineer request (2026-11-02):**
+  - The step "Dowel area required (smallest k A_s,prov…)" was read as k × A_g.
+  - Show three things: (1) 0.005A_g, substituted; (2) A_s,req in plain words, with k and what k > 1 means; (3) A_s,gov = max of (1) and (2) against A_s,prov, with its D/C.
+- **Where:**
+  - `sfdDowelCheck`, before `return o`:
+    - before: `o.ok=o.tenOK&&o.ftgOK&&o.projOK;`
+    - after:
+      ```
+      o.Ag=A;o.AsMin=0.005*A;o.AsGov=Math.max(o.AsMin,isFinite(o.AsReq)?(o.AsReq||0):Infinity);
+      o.asOK=o.AsGov<=AsProv+1e-9;o.dcAs=AsProv>0?o.AsGov/AsProv:Infinity;
+      o.ok=o.asOK&&o.tenOK&&o.ftgOK&&o.projOK;
+      ```
+  - Summary table row "Dowels (tension, laps)":
+    - before: D/C = `z.tension?(z.AsProv>0?z.AsReq/z.AsProv:Infinity):0`, labelled A_s,req/A_s,prov
+    - after: D/C = `z.dcAs`, labelled A_s,gov/A_s,prov with A_s,gov = max(0.005A_g, A_s,req) (§16.3.4.1 added)
+  - Dashboard chip text: "A_s,gov … > A_s,prov …".
+  - Report §5.7:
+    - A_s,req step reworded: the provided area is scaled by k at the same bar positions until the interface ratio is ≤ 1. "k > 1: the dowels provided are k times short". "k multiplies the dowel area, not A_g".
+    - New steps `AsMin` (0.005 A_g, A_g = b_x b_y substituted) and `AsGov` (max, ≤ / > A_s,prov = n × A_b, D/C).
+  - Footing Design 5.6:
+    - new block (2e);
+    - the same note under (2b);
+    - table column A_s,gov / A_s,prov.
+- **Effect:**
+  - The dowel-check D/C now includes the minimum. Default Ped 1: before 0 (no interface tension), after A_s,gov/A_s,prov = max(0.005·324 = 1.62, 0)/6.32 = **0.256**.
+  - The dowel check's pass/fail now also fails when A_s,prov < 0.005A_g. That case was already a FAIL on the separate "Dowel steel (min 0.005A_g)" chip.
+  - No computed area changes. Checked against the previous commit on default, SF-2, M_y 600 and an old SF-2 save: `P2` differs only by the new fields.
+- **Check case:** M_y(W_x) = 600 k-ft on default Ped 1 (governing 1.2D + 1.0(+W_x) + L + 0.5S, P_u 204.81).
+  - k = 4.276, so A_s,req = 4.276 · 6.32 = 27.03 in².
+  - A_s,min = 1.62, so A_s,gov = 27.03 > 6.32: D/C 4.28, NG ("4.28 times short").
+  - Plausibility: only the 3 bars of the tension face (3/8 of the area) work. M/(φ f_y 0.9d) = 7200/(0.9·60·0.9·15.5) ≈ 9.6 in² on that face, i.e. ≈ 25.6 in² total. That is the same order, so this is not a scaling bug.
+- **Open items:**
+  - k ≈ 15 cannot be reproduced on the default project. It has no interface tension, so no k is shown. The engineer's project is needed.
+  - Observation, not changed: for net uplift with M = 0, `sfpmRatios` reaches its tension limit at about 0.52 f_y per in² of steel. Example: P_u −55.19 k needs 1.78 in², against 55.19/(0.9·60) = 1.02 in² by hand. This is conservative and comes from the shared P–M routine. Raised, not changed.
