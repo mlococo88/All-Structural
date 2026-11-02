@@ -32,6 +32,13 @@ const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel
   await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
   return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
 export const TOOLS = {
+  timber: {
+    file: 'Timber Beam Check.html', list: 'tbc_projects_v1', auto: 'tbc_autosave_v1',
+    ready: p => p.waitForFunction(() => window.TBC && window.TBC.res),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(window.TBC.res, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
+    change: p => bump(p, '#inputPanel input[type=number], input[type=number]', 2),
+    save: async (p, name) => { await p.evaluate(n => { window.TBC.model.project.name = n; const b = [...document.querySelectorAll('button')].find(x => x.textContent === 'Save' && x.closest('[data-secid=inProj], #inProj, section, div')); b.click(); }, name); await p.waitForTimeout(400); }
+  },
   lightpole: {
     file: 'Light Pole and Sign Post.html', list: 'lpp_projects_v1', auto: 'lpp_session_v1',
     ready: p => p.waitForFunction(() => typeof LPP_LAST !== 'undefined' && LPP_LAST),
