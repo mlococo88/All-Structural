@@ -136,3 +136,27 @@ test('LTS-3 HC-2: monopost φM_n 426.38, B 1.00487 (prismatic, Eq. 5.12.1-10), b
   near(mc.Bs.E1max.B, 1.004868, 2e-6, 'B'); assert.equal(mc.Bs.E1max.method, '5.12.1-10');
   near(b.gov.ratio, 0.19125, 2e-4, 'ratio'); assert.ok(['n0', 'n180'].includes(b.gov.lc));
 });
+
+/* ---------- LTS-5: deflection (Art. 10.4.2.1), fatigue applicability (Arts. 11.4, 11.7.2), breakaway (Art. 2.5.2) ----------
+   HC-2 by hand (closed form, Service I, V_svc 76 mph, C_v 1.0): post C_d = 129/(76·0.5521)^1.3 = 1.0021, uniform w = 0.00256·0.8562·0.95·1.14·76²·1.0021·0.5521
+   = 7.586 lb/ft (K_z at 16 ft over the whole post); panel P = 637.3 lb at a = 9.5 ft. EI = 29000·28.14 kip-in².
+   Δ = P a²(3L − a)/(6EI) + wL⁴/(8EI) = 0.53787 + 0.04163 = 0.57950 in; B (Eq. 5.12.1-10, 1.0DC) = 1.00442 → Δ = 0.5821 in ≤ 0.025·144 = 3.60 in.
+   Slope = [Pa²/(2EI) + wL³/(6EI)]·B·12 = 0.0658 in/ft. */
+test('LTS-5 HC-2: Service I top deflection 0.582 in (hand closed form), 2.5 % H limit 3.60 in; slope information only (no moment load)', () => {
+  const L = ltsEngine(), secs = roundSecs(12, 6.625, 6.625, 0.28, 490);
+  const g = { ...HC2, DCpole: secs[0].Wabove, taper: false };
+  const d = L.deflection(g, { V: 76, Vsvc: 76, tIce: 0 }, secs, 42);
+  near(d.B, 1.00442, 2e-5, 'B'); const n0 = d.rows.find(r => r.lc === 'n0');
+  near(n0.d, 0.58206, 0.002, 'Δ'); near(n0.slope, 0.0658, 0.0005, 'slope');
+  const tr = d.checks.find(c => c.key === 'trans'); near(tr.limit, 3.60, 1e-9, 'limit'); assert.equal(tr.ok, true);
+  assert.equal(d.checks.find(c => c.key === 'slope').applies, false); assert.equal(d.checks.some(c => c.key === 'lum'), false);
+});
+test('LTS-5: fatigue not required < 55 ft and for roadside signs; required (HMLT, outside the tool) at ≥ 55 ft; breakaway checklist', () => {
+  const L = ltsEngine();
+  assert.equal(L.fatigue(HC1).required, false); assert.equal(L.fatigue(HC2).required, false);
+  assert.equal(L.fatigue({ ...HC1, H: 55 }).hmlt, true);
+  assert.equal(L.breakaway(false).needed, false); assert.ok(L.breakaway(true).items.length >= 6);
+  // HC-1 has an arm-mounted fixture with an unbalanced dead load: the 0.35 in/ft slope check applies; the luminaire limit is 10 % H = 48 in
+  const secs = roundSecs(40, 4.5, 8, 0.1793, 490), d = L.deflection({ ...HC1, DCpole: secs[0].Wabove, taper: true }, { V: 130, Vsvc: 76, tIce: 0 }, secs, 55);
+  assert.equal(d.checks.find(c => c.key === 'slope').applies, true); near(d.checks.find(c => c.key === 'lum').limit, 48, 1e-9, '0.10H');
+});

@@ -441,6 +441,7 @@
         <div class="row"><label>Basic wind speed, V<span class="note" id="ltsVNote">3-s gust, Exposure C, from the map for the MRI above</span></label><div class="ctl"><input id="ltsV" type="number" value="130" step="1"><span class="unit">mph</span></div></div>
         <div class="row"><label>Service wind speed, V<sub>svc</sub><span class="note">10-yr MRI, Fig. 3.8-4 (Service I)</span></label><div class="ctl"><input id="ltsVsvc" type="number" value="76" step="1"><span class="unit">mph</span></div></div>
         <div class="row"><label>Square / rect. tube corner ratio, r<sub>s</sub><span class="note">corner radius ÷ depth (Table 3.8.7-1); 0 = sharp corners (C<sub>d</sub> 2.0, conservative)</span></label><div class="ctl"><input id="ltsRs" type="number" value="0" step="0.025" min="0"><span class="unit">—</span></div></div>
+        <div class="row"><label>Within the clear zone?<span class="note">breakaway checklist, Art. 2.5.2</span></label><div class="ctl"><select id="ltsClearZone" class="combo-sel"><option value="no" selected>No — outside, or behind a barrier</option><option value="yes">Yes — in the clear zone</option></select></div></div>
         <div class="row"><label>Atmospheric ice, t<sub>ice</sub><span class="note">Owner-specified (Art. 3.7); 0 = none; Strength I only</span></label><div class="ctl"><input id="ltsIce" type="number" value="0" step="0.25" min="0"><span class="unit">in</span></div></div>
       </div>
     </section>
@@ -6936,7 +6937,7 @@ const LTS_STATUS=[
   ['LTS-1','Code mode, basis, MRI (Table 3.8-1), load combinations (Table 3.4-1)',true],
   ['LTS-2','Wind pressure P_z, K_z, K_d, G, C_d (Arts. 3.8.1–3.8.7), load cases (Table 3.9.3-1), torsion (Art. 3.9.4.2), dead load and ice, factored base actions',true],
   ['LTS-3','Member checks (Section 5: Arts. 5.7, 5.8, 5.10, 5.11, 5.12) and second order (Art. 4.8.1 / Eq. 5.12.1-10)',true],
-  ['LTS-5','Deflection (Art. 10.4.2.1), fatigue applicability (Arts. 11.4, 11.7.2), breakaway checklist',false],
+  ['LTS-5','Deflection (Art. 10.4.2.1), fatigue applicability (Arts. 11.4, 11.7.2), breakaway checklist (Art. 2.5.2, Section 12)',true],
   ['LTS-6','Base plate and base weld',false],
   ['LTS-7','Foundation (Section 13, Broms)',false],
   ['LTS-8','Anchorage-app export of the LTS combinations',false],
@@ -6970,7 +6971,7 @@ function ltsSections(inp){
 
 function ltsInputs(){
   return {risk:($('ltsRisk')?$('ltsRisk').value:'typical'), adt:($('ltsAdt')?$('ltsAdt').value:'1kto10k'),
-    V:num('ltsV'), Vsvc:num('ltsVsvc'), tIce:Math.max(0,num('ltsIce')||0), rs:Math.max(0,num('ltsRs')||0), sign:appMode==='sign', signPosts};
+    V:num('ltsV'), Vsvc:num('ltsVsvc'), tIce:Math.max(0,num('ltsIce')||0), rs:Math.max(0,num('ltsRs')||0), clearZone:($('ltsClearZone')&&$('ltsClearZone').value==='yes'), sign:appMode==='sign', signPosts};
 }
 function ltsAddCard(page,id,nm,title,hint,body){
   const pg=$('page-'+page); if(!pg) return null;
@@ -7033,6 +7034,19 @@ function ltsCalc(){
       +ltsStepsHTML(ms)
       +`<p class="tbl-note">Every section from the base to the top (21 sections); the strength limit states of Table 3.4-1 (Strength I, Extreme I max and min) and the 8 load cases of Table 3.9.3-1. The fixture and misc. dead loads are taken above every section (conservative). φ values per Art. 5.5.3.2; kip, kip-in.</p>`
       +`<div style="overflow-x:auto"><table class="tbl"><tr><th>z (ft)</th><th>Section (in)</th><th>λ</th><th>Class</th><th>φM<sub>n</sub></th><th>φP<sub>nc</sub></th><th>φV<sub>n</sub></th><th>φT<sub>n</sub></th><th>Governing</th><th>M<sub>u</sub></th><th>Eq.</th><th>Ratio</th></tr>${mrows}</table></div>`);
+    // LTS-5: deflection (Section 10), fatigue applicability (Section 11), breakaway (Art. 2.5.2, Section 12)
+    const dfl=LpLts.deflection(g,L,secs,Fy,mc.Bs.SV1.B), fat=LpLts.fatigue(g), brk=LpLts.breakaway(L.clearZone);
+    lppLtsLast.dfl=dfl; lppLtsLast.fat=fat; lppLtsLast.brk=brk;
+    const drows=dfl.rows.map(r=>`<tr${r===dfl.gov?' style="font-weight:700;background:#fff7e6"':''}><td>${lppEsc(r.lcName)}</td><td>${fmt(r.dx,2)}</td><td>${fmt(r.dy,2)}</td><td>${fmt(r.d,2)}</td><td>${fmt(r.slope,3)}</td></tr>`).join('');
+    const crow=dfl.checks.map(c=>`<tr><td>${lppEsc(c.label)}</td><td>${fmt(c.value,c.unit==='in'?2:3)} ${c.unit}</td><td>${fmt(c.limit,c.unit==='in'?2:3)} ${c.unit}</td><td>${c.applies?`<b>${c.ok?'OK':'NOT OK'}</b> (${fmt(c.ratio,3)})`:`information (${fmt(c.ratio,3)})`}</td><td>${lppEsc(c.ref)}${c.flag?`<div class="tbl-note">${lppEsc(c.flag)}${/Engineer to confirm/.test(c.flag)?' <span class="lts-flag">engineer to confirm</span>':''}</div>`:''}</td></tr>`).join('');
+    ltsAddCard('post','ltsDeflCard','10',(g.mode==='sign'?'Post':'Pole')+' — deflection and fatigue','Sections 10 and 11',
+      basis+`<p class="tbl-note">Service I (Table 3.4-1): 1.0DC + 1.0W at V<sub>svc</sub> = ${fmt(L.Vsvc,0)} mph (10-yr, Fig. 3.8-4), C<sub>v</sub> = 1.0 (Art. 3.8.7), every load case of Table 3.9.3-1. Elastic deflection by double integration of M/(EI) along the ${g.taper?'tapered ':''}${g.mode==='sign'?'post':'pole'} from the base (Art. 10.4.2.1), times the Service I second-order factor B = ${fmt(dfl.B,4)} (C10.4.2.1; Art. 4.8.1 / Eq. 5.12.1-10). Δ at the top in in; slope at the top in in/ft.${g.mode==='sign'&&g.sign.nPost===2?' Per post.':''}</p>`
+      +`<table class="tbl"><tr><th>Check</th><th>Value</th><th>Limit</th><th>Result</th><th>Reference</th></tr>${crow}</table>`
+      +`<div style="overflow-x:auto"><table class="tbl"><tr><th>Service I load case</th><th>Δ<sub>x</sub></th><th>Δ<sub>y</sub></th><th>Δ</th><th>slope (in/ft)</th></tr>${drows}</table></div>`
+      +`<p class="tbl-note">Dead-load slope at the top from the arm-mounted fixtures alone: ${fmt(dfl.slopeDL,3)} in/ft.</p>`
+      +`<p class="${fat.hmlt?'lts-dev':'lts-basis'}"><b>Fatigue (Section 11):</b> ${lppEsc(fat.text)}</p>`);
+    ltsAddCard('summary','ltsBrkCard','12','Breakaway checklist','Art. 2.5.2; Section 12',
+      basis+`<p class="tbl-note">${L.clearZone?'In the clear zone (input).':'Not in the clear zone (input).'} No calculation: breakaway devices are crash-tested products.</p><ul>${brk.items.map(t=>`<li>${lppEsc(t)}</li>`).join('')}</ul>`);
   }
   // Summary
   ltsAddCard('summary','ltsSumCard','✓','LRFDLTS summary','AASHTO LRFDLTS mode',
@@ -7043,6 +7057,9 @@ function ltsCalc(){
     +`<tr><td>Service I wind</td><td>10 yr (Fig. 3.8-4); V<sub>svc</sub> = ${fmt(L.Vsvc,0)} mph</td><td>Table 3.4-1, Art. 3.8.2 (pp. 3-3, 3-14)</td></tr>`
     +`<tr><td>Atmospheric ice</td><td>${L.tIce>0?fmt(L.tIce,2)+' in, Strength I only (decision Q-C1, accepted 2026-11-02)':'none'}</td><td>Art. 3.7, C3.7 (p. 3-4)</td></tr>`
     +`${lppLtsLast&&lppLtsLast.mc?`<tr><td>${appMode==='sign'?'Post':'Pole'} — combined forces</td><td><b>${lppLtsLast.mc.gov.gov.ratio<=1&&lppLtsLast.mc.valid?'OK':'NOT OK'}</b>, ratio ${isFinite(lppLtsLast.mc.gov.gov.ratio)?fmt(lppLtsLast.mc.gov.gov.ratio,3):'∞'} at z = ${fmt(lppLtsLast.mc.gov.sec.z,2)} ft</td><td>Art. 5.12.1, Eq. ${lppLtsLast.mc.gov.gov.eq} (p. 5-33, 2017)</td></tr>`:''}`
+    +`${lppLtsLast&&lppLtsLast.dfl?lppLtsLast.dfl.checks.map(c=>`<tr><td>${lppEsc(c.label)}</td><td>${c.applies?`<b>${c.ok?'OK':'NOT OK'}</b>, `:'information, '}${fmt(c.value,c.unit==='in'?2:3)} / ${fmt(c.limit,c.unit==='in'?2:3)} ${c.unit}</td><td>Art. 10.4.2.1 (p. 10-1, 2017)</td></tr>`).join(''):''}`
+    +`${lppLtsLast&&lppLtsLast.fat?`<tr><td>Fatigue</td><td>${lppLtsLast.fat.required?'<b>REQUIRED — outside this tool (high-mast tower)</b>':'not required'}</td><td>Arts. 11.4, 11.7.2 (pp. 11-3, 11-10, 2017)</td></tr>`:''}`
+    +`${lppLtsLast&&lppLtsLast.brk?`<tr><td>Breakaway</td><td>${lppLtsLast.brk.needed?'required — see the checklist':'not required (outside the clear zone)'}</td><td>Art. 2.5.2; Section 12</td></tr>`:''}`
     +`</table><p class="tbl-note">Status of the LRFDLTS mode:</p><table class="tbl"><tr><th>Step</th><th>Content</th><th>Status</th></tr>`
     +LTS_STATUS.map(r=>`<tr><td>${r[0]}</td><td>${lppEsc(r[1])}</td><td>${r[2]?'done':'pending'}</td></tr>`).join('')+`</table>`);
   // the other pages: what is still to come
@@ -7052,7 +7069,7 @@ function ltsCalc(){
 }
 
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
-const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan','ltsRisk','ltsAdt','ltsV','ltsVsvc','ltsIce','ltsRs'];
+const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan','ltsRisk','ltsAdt','ltsV','ltsVsvc','ltsIce','ltsRs','ltsClearZone'];
 const LS_PROJECTS='lpp_projects_v1';   // {name: state}
 const LS_SESSION='lpp_session_v1';     // {state, activeName, dirty}
 let activeProject=null;   // name of loaded project, or null (unsaved/new)
@@ -7144,7 +7161,7 @@ function applyState(st){
   appMode = st.appMode || 'pole';
   codeMode = st.codeMode==='lts' ? 'lts' : 'ibc';   // LTS-1: saves made before the code mode open in the IBC mode (identical results)
   // LRFDLTS inputs (LTS-1): saves without them get the new-project defaults
-  { const dv={ltsRisk:'typical',ltsAdt:'1kto10k',ltsV:'130',ltsVsvc:'76',ltsIce:'0',ltsRs:'0'};
+  { const dv={ltsRisk:'typical',ltsAdt:'1kto10k',ltsV:'130',ltsVsvc:'76',ltsIce:'0',ltsRs:'0',ltsClearZone:'no'};
     Object.keys(dv).forEach(k=>{ if($(k) && (!st.inputs || st.inputs[k]===undefined)) $(k).value=dv[k]; }); }
   signPosts = st.signPosts || 1;
   if(Array.isArray(st.cables)) cables=JSON.parse(JSON.stringify(st.cables));
