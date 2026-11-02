@@ -3948,7 +3948,7 @@ Engineer-approved fixes from the independent review of the "Seymour Platform Fou
     ```
     `detail` gets `xbarX`, `xbarY`. Report §6.4 v_u step: a note with J_c,x, c_x, J_c,y, c_y and the centroid offset. Footing Design 5.4: c_x, c_y in the equation, values printed.
 - **Problem:** b_0 already used the truncated faces, but J_c used full-length side faces centred on the column, and the extreme fibre was at a face beyond the footing edge. v_u understated where the perimeter is truncated. Unconservative. Interior perimeters: ext = len1/2, identical result.
-- **Provision:** ACI 318-19 8.4.4.2.2, 8.4.4.2.3 and R8.4.4.2.3 (J_c analogous to the polar moment of the critical section, taken about its centroid).
+- **Provision (checked in ACI 318-19):** 8.4.4.2.2 and 8.4.4.2.3 (γ_vM_sc applied at, and the stress varying linearly about, the centroid of the critical section); R8.4.4.2.3 (J_c analogous to the polar moment of inertia; similar expressions for edge and corner columns).
 - **Check case (review, Ped 2, 32 × 32 in, d = 20.125 in, −y side truncated 6 in from the face):**
   - Closed face at +26.06 in (length 52.13); side faces from −22.0 to +26.06 (length 48.06, centred +2.03).
   - ȳ = (52.13·26.06 + 2·48.06·2.03)/148.25 = 10.48 in.
@@ -3973,7 +3973,7 @@ Engineer-approved fixes from the independent review of the "Seymour Platform Fou
   - Before: `const r=0.3*bmin,klu_r=(1*h)/r,...`
   - After: `const kSl=2.0; const r=0.3*bmin,klu_r=(kSl*h)/r,...` and `kSl` returned.
   - The tool has no input for top restraint, so no input is added. The step states the assumption: fixed at the footing, free at the top (cantilever, sway), k = 2.0; conservative if the top is braced. Report §7 assumption, Pedestal Design screen block and Report §7.x step updated.
-- **Provision:** ACI 318-19 6.2.5.1(a) (not braced against sidesway, kℓ_u/r ≤ 22) and R6.2.5 (k for a free-top cantilever is 2.0).
+- **Provision (checked in ACI 318-19):** 6.2.5.1(a), Eq. 6.2.5.1a (columns not braced against sidesway, kℓ_u/r ≤ 22); 6.2.5.2(b) (r = 0.30 × the dimension, rectangular columns); commentary Fig. R6.2.5.1(b), sway frames: Ψ = 0 at the fixed base and ∞ at the free top gives k = 2.0.
 - **Check case (review):** Ped 1: 2.0·72/(0.3·24) = **20.0** (before 10.0). Ped 2: 2.0·84/(0.3·32) = **17.5** (before 8.75). Both ≤ 22: still "slenderness neglected". Default project: 2.0·24/(0.3·18) = 8.89 (before 4.44).
 
 ### SFPD. Shear friction: proportional development credit   [calculation change; CLAUDE.md §4; all projects]
@@ -4012,3 +4012,12 @@ Engineer-approved fixes from the independent review of the "Seymour Platform Fou
   1. The dowel check (§6.7) still requires full tension development where shear friction relies on the dowels (`sfNeed`), so with proportional credit a joint can pass shear friction while the dowel check reads NG on development. Keep that, or relax it to match SFPD?
   2. Punching: the transferred moment is still taken about the pedestal centroid, not the critical-section centroid (R8.4.4.2.3; review B1, about 10 % of M_ux on Ped 2).
   3. Top mat order: y-bars inner, as the drawings and 3D view. If the field order is the reverse, d_top,x would take the reduction instead.
+
+### SFCI. Citations checked against ACI 318-19 and the IBC references   [citations only; no result change]
+- **Engineer request (2026-11-02):** ACI 318-19, the 2018 IBC and the IBC 2018 → 2021 structural changes summary are now in the reference folder. Verify every ACI article this PR touches or cites, the review's "verify" item, and ACI's own rule for developing shear-friction steel.
+- **Shear-friction development:** ACI 318-19 22.9.5.1 requires reinforcement crossing the shear plane to be anchored to develop f_y on both sides (R22.9.5.1: by bond, a mechanical device, or threaded dowels). The tool cited AASHTO LRFD 10th Ed. 5.7.4.1 (SFDA, #684) because ACI was not available. Changed to ACI 318-19 22.9.5.1 in: Report §6.6 "developed on both sides" step; Report §6.7 "shear friction relies on the dowels" step; Footing Design 5.6 note and the "relies on the dowels" note; the `sfdDowelCheck` / `sfdShearFriction` comments (the comment keeps AASHTO 5.7.4.1 as "the same rule").
+  - Note: SFPD (proportional credit) is an engineering assumption beyond 22.9.5.1, which asks for full development of f_y. The step is labelled so.
+- **IBC combinations:** "IBC 2021 §1605.3" is 2018 IBC numbering (2018 §1605.3 = ASD combinations). In the 2021 IBC, §1605.1 sends the design to the ASCE 7 §2.3 (strength) and §2.4 (ASD) combinations, and §1605.2 holds the alternative ASD combinations (IBC 2018 → 2021 structural changes summary, item 1605.1). Changed to §1605.1 in: the Load Combinations service note, Report §3.2 table note, Report references, the Help references.
+- **Checked, unchanged:** 6.2.5.1(a), 6.2.5.2(b), Fig. R6.2.5.1; 8.4.4.2.2, 8.4.4.2.3, R8.4.4.2.3; 22.9.4.2 (Table 22.9.4.2), 22.9.4.4 (Table 22.9.4.4), 22.9.4.5, 22.9.4.6.
+- **Not changed (raised):** "IBC 2021 1610 overburden" (effective soil cover step and references): IBC 1610 is soil lateral loads (2021: soil lateral and uplift loads), not the weight of soil cover. A dead-load article would fit better, but the full 2021 IBC is not available to confirm its number.
+
