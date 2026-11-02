@@ -2170,7 +2170,7 @@ function listTables() {
   `node tests/smoke/phone-layout.mjs --tool bsl` passes. `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 
-## 2026-11-02 — PR: PRLINK — PLIB: saved-project list in this browser and Undo / Redo   [display and storage only]
+## 2026-11-02 — PR: [#691](https://github.com/mlococo88/All-Structural/pull/691) — PLIB: saved-project list in this browser and Undo / Redo   [display and storage only]
 - **Before:** autosave (`subloads_v1`), header Open / Save (`.subloads.json` files). No list of projects in the browser, no undo.
 - **Where:**
   - after the last `<script src="shared/…">` tag: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.

@@ -36,7 +36,7 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
 - **Tools that load the file and were re-tested:** ASCE7-16 Load Generator (`--tool asce7`), Stone Masonry Arch Load Rating
   (`--tool stonearch`), Gusset Plate Rating (`--tool gusset`): ALL PASS each.
 
-## 2026-11-02 — PR: PRLINK — projects-ui.js: optional "Save the open project…" button in the dialog   [display only]
+## 2026-11-02 — PR: [#691](https://github.com/mlococo88/All-Structural/pull/691) — projects-ui.js: optional "Save the open project…" button in the dialog   [display only]
 - **Why:** Bridge Substructure Loading had no Save-to-browser of its own and no room in its header for another button.
 - **Where:** `libraryDialog(ctx)`: the dialog head shows `<button data-spa="save">` (text `ctx.saveLabel`) only when `ctx.save` is given; the
   click calls `ctx.save()` (the tool asks for the name and returns the `mapStore` result), shows a refused write's message, calls
