@@ -177,3 +177,25 @@ test('LTS-6 HC-1: base plate P_rod 17,959 lb, t_req 0.939 in ≤ 1.25 in; fillet
   near(wd.phiRn, 6.9596, 1e-3, 'φRn'); near(wd.gov.q, 4.6507, 2e-3, 'q'); near(wd.ratio, 0.6682, 5e-4, 'ratio'); assert.ok(['d45', 'd315'].includes(wd.gov.lc));
   assert.equal(L.baseWeld(ba, mc.Bs, { type: 'cjp' }).ok, true);
 });
+
+/* ---------- LTS-7: Broms embedment with the LTS factored groundline actions (Art. 13.6.1.1, C13.6.1.1), the page's bromsEmbedment ----------
+   HC-2 by hand: governing Extreme I max, case 1 (wind toward 0°): V_F = 737.22 lb, M_F = 6,653.9 × B 1.00487 = 6,686.3 lb·ft.
+   Cohesive c = 1.0 ksf, D = 2.5 ft: H = 6.6863/0.73722 = 9.0696 ft; q = 0.73722/(9·1.0·2.5) = 0.032765 ft;
+   L = 1.5·2.5 + 0.032765·[1 + √(2 + (4·9.0696 + 6·2.5)/0.032765)] = 3.75 + 0.032765·40.586 = 5.080 ft;
+   M_u = 0.73722·(9.0696 + 3.75 + 0.5·0.032765) = 9.463 kip-ft. */
+import { lpEngine } from './lp-source.mjs';
+test('LTS-7 HC-2: Broms cohesive L = 5.080 ft, M_u = 9.463 kip-ft from the LTS Extreme I groundline M_F, V_F', () => {
+  const L = ltsEngine(), secs = roundSecs(12, 6.625, 6.625, 0.28, 490), g = { ...HC2, DCpole: secs[0].Wabove, taper: false }, LL = { V: 76, Vsvc: 76, tIce: 0 };
+  const ba = L.baseActions(g, LL), mc = L.memberCheck(g, LL, secs, 42), r = ba.rows.find(x => x.combo === 'E1max' && x.lc === 'n0');
+  near(r.V, 737.22, 0.05, 'V_F'); near(r.M * mc.Bs.E1max.B, 6686.3, 0.5, 'M_F');
+  const lp = lpEngine(), br = lp.call('bromsEmbedment', { bromsSoil: 'cohesive', bromsC: 1.0, b: 2.5, bromsPhiR: 1.0, bromsOL: 1.0 }, r.M * mc.Bs.E1max.B / 1000, r.V / 1000);
+  near(br.H, 9.0696, 5e-4, 'H'); near(br.q, 0.032765, 2e-6, 'q'); near(br.L, 5.080, 0.002, 'L'); near(br.Mu, 9.463, 0.002, 'Mu');
+});
+test('LTS-7 (Q-C9/Q-C10 input): square tube with the inside corner radius r_i: b = (B − 2t) − 2·min(r_i, 4t); k_t by Eq. B.3-1', () => {
+  const L = ltsEngine(), sec = { shape: 'square', B: 6, Ht: 6, t: 0.25, A: 5.59, ri: 0.5 };
+  const cl = L.classify(sec, 46); near(cl.b, 6 - 0.5 - 1.0, 1e-12, 'b'); assert.equal(cl.bRule, 'Eq. 5.7.2-1');
+  assert.equal(L.classify({ ...sec, ri: 0 }, 46).b, 6 - 0.75);
+  // Eq. B.3-1, R = (6 − 0.25)/2 = 2.875, n' = 2: k_t = (t/R)·[(R/(n't) − ½(1 + 3/2))/ln(3/2)] + n't/R = 0.08696·[(5.75 − 1.25)/0.405465] + 0.17391 = 1.1390
+  const st = L.shearTorsion(sec, 46, cl, 144); near(st.kt, 1.1390, 2e-4, 'k_t'); near(st.CtB, 8 * 2.875 ** 2 * 0.25 / 1.1390, 1e-3, 'Ct B.3-1');
+  near(st.Ct, Math.min(st.CtA, st.CtB), 1e-12, 'min');
+});

@@ -239,9 +239,11 @@
       const lam = sec.D / sec.t, lp = 0.07 * E / Fy, lrF = 0.31 * E / Fy, lrC = 0.11 * E / Fy, lmax = 0.45 * E / Fy;
       return { kind: 'D/t', lam, lp, lrF, lrC, lmax };
     }
-    // square/rect.: flat width b = (larger wall) − 3t (corner radius not an input; decision Q-C9, engineer to confirm)
-    const bw = Math.max(sec.B, sec.Ht || sec.B) - 3 * sec.t, lam = bw / sec.t;
-    return { kind: 'b/t', lam, b: bw, lp: 1.12 * r, lrF: 1.53 * r, lrC: 1.53 * r, lmax: 2.14 * r };
+    // square/rect.: flat width. With the inside corner radius r_i (LTS-7 input): b = (B − 2t) − 2·min(r_i, 4t)·tan(180°/4), the rule of
+    // Art. 5.7.2 / Eq. 5.7.2-1 (p. 5-13, 5-14) applied with n = 4; without it: b = (larger wall) − 3t (decision Q-C9, engineer to confirm)
+    const W = Math.max(sec.B, sec.Ht || sec.B), ri = sec.ri > 0 ? sec.ri : 0;
+    const bw = ri > 0 ? W - 2 * sec.t - 2 * Math.min(ri, 4 * sec.t) : W - 3 * sec.t, lam = bw / sec.t;
+    return { kind: 'b/t', lam, b: bw, bRule: ri > 0 ? 'Eq. 5.7.2-1' : 'B-3t', lp: 1.12 * r, lrF: 1.53 * r, lrC: 1.53 * r, lmax: 2.14 * r };
   }
   function mnOf(sec, Z, Fy, cl) {   // kip-in, Table 5.8.2-1
     const Mp = Z * Fy, l = cl.lam, ef = E / Fy;
@@ -281,8 +283,17 @@
     const kv = 5, ht = cl.lam, a = Math.sqrt(kv * E / Fy);
     const Cv = ht <= 1.10 * a ? 1.0 : ht <= 1.37 * a ? 1.10 * a / ht : 1.51 * kv * E / (ht * ht * Fy);
     const Fnv = 0.6 * Fy * Cv, h = cl.b, t = sec.t, B = sec.B, H = sec.Ht || sec.B;
-    const Ct = 2 * (B - t) * (H - t) * t - 4.5 * (4 - Math.PI) * t ** 3;
-    return { Vn: Fnv * 2 * h * t, Tn: Ct * Fnv, Fnv, Fnt: Fnv, Ct, Av: 2 * h * t, Cv };
+    const CtA = 2 * (B - t) * (H - t) * t - 4.5 * (4 - Math.PI) * t ** 3;
+    // with the inside corner radius, a square tube also gets the Table B.3-1 constant 8.00R²t/k_t (p. B-3), k_t by Eq. B.3-1 (p. B-4),
+    // R = mid-wall half-width, n' = r_i/t. Table B.3-1 divides by "k_t s" and Appendix B does not define s: the smaller of this value and the
+    // AISC constant is used (conservative; flagged)
+    let Ct = CtA, kt = null, CtB = null;
+    if (sec.ri > 0 && Math.abs(B - H) < 1e-9) {
+      const Rm = (B - t) / 2, np = sec.ri / t;
+      kt = Math.max(1, (t / Rm) * ((Rm / (np * t) - 0.5 * (1 + (np + 1) / np)) / Math.log((np + 1) / np)) + np * t / Rm);
+      CtB = 8.00 * Rm * Rm * t / kt; Ct = Math.min(CtA, CtB);
+    }
+    return { Vn: Fnv * 2 * h * t, Tn: Ct * Fnv, Fnv, Fnt: Fnv, Ct, CtA, CtB, kt, Av: 2 * h * t, Cv };
   }
   /* Second order. Tapered pole (non-prismatic): Art. 4.8.1, Eq. 4.8.1-1 (p. 4-3), B₂ = 1/(1 − P_eq/P_E,bot) ≥ 1,
      P_eq = (I_B/I_T)^(1/3)·P_T + 0.38·D_P, P_E,bot = π²EI_B/(kL)², k = 2.0, r at 0.5L; valid when kL/r ≥ 2π√(E/F_y).
@@ -359,7 +370,7 @@
     st.push({ id: 'm.phi', label: 'Resistance factors', sym: '\\phi_{f},\\phi_{v},\\phi_{t},\\phi_{c}', eq: '', sub: '', value: '0.90, 0.90, 0.95, 0.90', unit: '', ref: R('Art. 5.5.3.2 (p. 5-6); Art. 5.5.4') });
     st.push({ id: 'm.lam', label: `Width–thickness ratio at z = ${n(s.z, 2)} ft (${rd ? 'round' : s.shape})`, sym: rd ? 'D/t' : 'b/t', eq: rd ? '\\frac{D}{t}' : '\\frac{b}{t},\\,b = B_{max} - 3t',
       sub: rd ? `\\frac{${n(s.D, 3)}}{${n(s.t, 4)}}` : `\\frac{${n(cl.b, 3)}}{${n(s.t, 4)}}`, value: cl.lam, unit: '', d: 2, ref: R('Art. 5.7.2, Table 5.7.2-1 (p. 5-14)'),
-      note: `λp = ${n(cl.lp, 1)}, λr = ${n(cl.lrF, 1)} (flexure), ${n(cl.lrC, 1)} (compression), λmax = ${n(cl.lmax, 1)} → ${r.mx.cls}.` + (rd ? '' : ' Flat width b = B − 3t: the corner radius is not an input (decision Q-C9, engineer to confirm).') });
+      note: `λp = ${n(cl.lp, 1)}, λr = ${n(cl.lrF, 1)} (flexure), ${n(cl.lrC, 1)} (compression), λmax = ${n(cl.lmax, 1)} → ${r.mx.cls}.` + (rd ? '' : cl.bRule === 'B-3t' ? ' Flat width b = B − 3t: no corner radius entered (decision Q-C9, engineer to confirm).' : ` Flat width b = (B − 2t) − 2·min(r_i, 4t) with the entered inside corner radius r_i = ${n(s.ri, 3)} in (Art. 5.7.2, Eq. 5.7.2-1 with n = 4).`) });
     st.push({ id: 'm.mn', label: 'Nominal bending strength', sym: 'M_{n}', eq: rd ? (r.mx.cls === 'compact' ? 'Z F_{y}' : r.mx.cls === 'noncompact' ? 'M_{p}\\left[0.77 + \\frac{0.016(E/F_{y})}{D/t}\\right]' : 'M_{p}\\left[\\frac{0.25(E/F_{y})}{D/t}\\right]') : (r.mx.cls === 'compact' ? 'Z F_{y}' : r.mx.cls === 'noncompact' ? 'M_{p}\\left[1.37 - \\frac{0.33(b/t)}{\\sqrt{E/F_{y}}}\\right]' : 'M_{p}\\left[1.23 - \\frac{0.23(b/t)}{\\sqrt{E/F_{y}}}\\right]'),
       sub: `M_{p} = ${n(s.Zx, 3)}\\cdot${n(Fy, 0)} = ${n(r.mx.Mp, 1)}`, value: r.mx.Mn, unit: 'kip-in', d: 1, ref: R('Art. 5.8.2, Table 5.8.2-1 (pp. 5-17, 5-18)') });
     st.push({ id: 'm.pn', label: 'Nominal compressive strength (cantilever K = 2.1, r at mid-height)', sym: 'P_{nc}', eq: 'A_{g}F_{cr},\\,F_{cr} = Q(0.658)^{QF_{y}/F_{e}}F_{y}\\,\\text{or}\\,0.877F_{e}',
@@ -368,7 +379,7 @@
       sub: `F_{nv} = ${n(r.st.Fnv, 2)},\\,A_{v} = ${n(r.st.Av, 3)}`, value: r.st.Vn, unit: 'kip', d: 1, ref: R(rd ? 'Eqs. 5.11.2.1.1-1 to -3 (pp. 5-30, 5-31)' : 'Art. 5.11.2.2 (pp. 5-31, 5-32)'),
       note: rd ? 'L_v = the full height (decision Q-C8, accepted 2026-11-02).' : '' });
     st.push({ id: 'm.tn', label: 'Nominal torsional strength', sym: 'T_{n}', eq: 'C_{t}F_{nt}', sub: `${n(r.st.Ct, 3)}\\cdot${n(r.st.Fnt, 2)}`, value: r.st.Tn, unit: 'kip-in', d: 1,
-      ref: R(rd ? 'Eqs. 5.11.3-1, 5.11.3.1.1-1/-2 (p. 5-32); Table B.3-1 (C_t = 6.28R²t)' : 'Art. 5.11.3.2 (p. 5-33, 2017)'), note: rd ? '' : 'C_t = 2(B − t)(H − t)t − 4.5(4 − π)t³ (AISC 360-16 §H3.1; decision Q-C10, engineer to confirm).' });
+      ref: R(rd ? 'Eqs. 5.11.3-1, 5.11.3.1.1-1/-2 (p. 5-32); Table B.3-1 (C_t = 6.28R²t)' : 'Art. 5.11.3.2 (p. 5-33, 2017)'), note: rd ? '' : r.st.CtB != null ? `C_t = min(AISC 360-16 §H3.1 ${n(r.st.CtA, 3)}, LRFDLTS Table B.3-1 8.00R²t/k_t ${n(r.st.CtB, 3)} with k_t = ${n(r.st.kt, 3)} by Eq. B.3-1) — Table B.3-1 divides by "k_t s" and s is not defined in Appendix B (engineer to confirm).` : 'C_t = 2(B − t)(H − t)t − 4.5(4 − π)t³ (AISC 360-16 §H3.1; no corner radius entered or rectangular tube; decision Q-C10, engineer to confirm).' });
     const b = res.Bs[gv.combo];
     if (b.method === '4.8.1') {
       st.push({ id: 'm.b2', label: 'Second-order amplification, tapered pole (simplified method)', sym: 'B_{2}', eq: '\\frac{1}{1 - P_{eq}/P_{E,bot}},\\,P_{eq} = \\sqrt[3]{I_{B}/I_{T}}\\,P_{T} + 0.38D_{P}',
