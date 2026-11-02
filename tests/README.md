@@ -66,7 +66,7 @@ node tests/smoke/project-library.mjs --tool asce7 [--a origin/main] [--shots <di
 # Editable list tables (shared/list-input.js, LIST): the widget on a test page (typing, Enter, ",", paste from Excel, remove, checks,
 # labels, bindInput, the React wrapper) and every tool that loads it: main vs the working tree on the default project and one with
 # custom stations (results, page text, saved text identical; 0 console errors); --shots: the table at 1400 and 390 px
-node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,sbridge] [--a origin/main] [--shots <dir>]
+node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge] [--a origin/main] [--shots <dir>]
 
 # Syntax check (Tier 0): every inline script; JSX transpiled with the offline Babel; embedded pages (pl-src, st-src, iframe srcdoc) included
 node tests/check-syntax.mjs                                                   # no arguments: every repo-root tool HTML, apps/*/index.html, apps/**/*.js, shared/*.js

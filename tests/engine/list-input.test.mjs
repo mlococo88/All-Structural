@@ -178,6 +178,62 @@ test('index.html: AREMA girder spacings text round-trips; parseSpacings() reads 
   assert.equal(L.toText(L.fromText('6,6,5.5')), '6, 6, 5.5');
 });
 
+// Stone Masonry Arch Load Rating.html: the line lists are saved TEXT, one entry per line. The paste boxes stay; their tables
+// read each line as the tool does and write rows back as "a, b" lines. The tool's readers (copied verbatim) read the same values.
+const saPairs = t => { const out = []; for (const ln of (t || '').split(/\n+/)) { const s = ln.trim(); if (!s) continue;
+  const m = s.split(/[\s,;]+/).map(Number); if (m.length < 2 || !isFinite(m[0]) || !isFinite(m[1])) throw new Error('bad ' + s); out.push({ x: m[0], y: m[1] }); } return out; };
+const saSdl = t => { const out = []; for (const ln of (t || '').split(/\n+/)) { const s = ln.trim(); if (!s) continue; const k = s.lastIndexOf(',');
+  out.push({ n: s.slice(0, k).trim() || 'item', w: parseFloat(s.slice(k + 1)) }); } return out; };
+const saTracks = t => { const out = []; for (const ln of (t || '').split(/\n+/)) { const s = ln.trim(); if (!s) continue; out.push(parseFloat(s)); } return out.length ? out : [0]; };
+// the table side, as in the tool's listTables()
+const saRead = (t, line) => String(t || '').split(/\n+/).map(x => x.trim()).filter(Boolean).map(line);
+const saPair = l => { const m = l.split(/[\s,;]+/); return [m[0] || '', m[1] || '']; };
+const saSdlLine = l => { const k = l.lastIndexOf(','); return k < 0 ? [l, ''] : [l.slice(0, k).trim(), l.slice(k + 1).trim()]; };
+const saWrite = rows => L.filled(rows).map(r => r[0] + ', ' + r[1]).join('\n');
+test('Stone Arch: survey points / depth overrides — box text -> table rows -> text reads the same pairs', () => {
+  for (const t of ['0.0, 0.0\n6.5, 5.0\n13.2, 8.4', '18.0, 19', '0 0\n6.5;5\n  13.2 ,8.4 \n\n40, 0']) {
+    const back = saWrite(saRead(t, saPair));
+    assert.deepEqual(P(saPairs(back)), P(saPairs(t)), t);
+    assert.equal(saWrite(saRead(back, saPair)), back);   // stable
+  }
+  assert.equal(saWrite(saRead('0.0, 0.0\n6.5, 5.0', saPair)), '0.0, 0.0\n6.5, 5.0');   // the documented form is unchanged
+});
+test('Stone Arch: SDL line items split at the last comma (descriptions may hold commas)', () => {
+  for (const t of ['Sidewalks (2), 800\nRailings (2), 120', 'Rail, steel, 2 sides, 60\nCurbs (2), 300']) {
+    const back = saWrite(saRead(t, saSdlLine));
+    assert.equal(back, t);
+    assert.deepEqual(P(saSdl(back)), P(saSdl(t)));
+  }
+});
+test('Stone Arch: track offsets stay one value per line', () => {
+  const f = { rowSplit: /\n+/, rowSep: '\n' };
+  for (const t of ['0', '-6\n6', '-6.5\n0\n6.5']) { assert.equal(L.toText(L.fromText(t, f), f), t); assert.deepEqual(P(saTracks(L.toText(L.fromText(t, f), f))), P(saTracks(t))); }
+  assert.equal(L.toText(L.fromText('-6\n\n6\n', f), f), '-6\n6');
+});
+// Prestressed Bridge Design.html: the bridge bar's spans (bridge.spans, an ARRAY). The old box committed
+//   v = text.split(/[,;\s]+/).filter(Boolean).map(Number), kept only when every v is finite and > 0;
+// the table commits rows.map(r => Number(r[0])) with the same rule.
+const pbdOld = t => { const v = t.split(/[,;\s]+/).filter(Boolean).map(Number); return v.length && v.every(x => isFinite(x) && x > 0) ? v : null; };
+const pbdNew = rows => { const v = L.filled(rows).map(r => Number(r[0])); return v.length && v.every(x => isFinite(x) && x > 0) ? v : null; };
+test('Prestressed Bridge Design: spans rows commit the same array as the old box (or nothing)', () => {
+  for (const a of [[100], [100, 120, 100], [87.5, 110.25]]) assert.deepEqual(P(pbdNew(L.fromNumbers(a))), a);
+  for (const t of ['100, 120, 100', '100 120 100', '100;120', '100, 0', '100, abc', '']) {
+    assert.deepEqual(P(pbdNew(L.splitPaste(t, 1))), P(pbdOld(t)), t);
+  }
+});
+
+// BasePlateAnchorDesigner.html: S.vRebar.vDepths is saved TEXT ("3, 6.5, 10"; "" = automatic). The table reads it with the tool's
+// own separators and writes rows joined by ", "; the tool's reader (copied verbatim) reads the same depths.
+const bpDepths = s => String(s || '').split(/[,;\s]+/).map(parseFloat).filter(v => isFinite(v) && v >= 0);
+test('BasePlateAnchorDesigner: stacked hairpin depths text round-trips; the reader gets the same depths', () => {
+  const f = { rowSplit: /[,;\s]+/ };
+  for (const s of ['', '3', '3, 6.5, 10']) assert.equal(L.toText(L.fromText(s, f)), s, s);
+  for (const s of ['3 6.5 10', '3;6.5;10', '3,,6.5', ' 3 , 6.5 ']) {
+    const t = L.toText(L.fromText(s, f));
+    assert.deepEqual(P(bpDepths(t)), P(bpDepths(s)), s);
+  }
+});
+
 // apps/steel-bridge (ui/lists.js): every list keeps its field and format. The tables write the rows back with these formats and
 // the modules' own readers (copied verbatim) read the same values.
 const sbNums = t => t.split(/[,;\s]+/).filter(Boolean).map(Number);                                           // spans, bays, skews
