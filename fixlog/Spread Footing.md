@@ -3583,7 +3583,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
     - explicit "rough" → kept.
   - Report: 0 unresolved references, 0 KaTeX errors. Drawings valid. `node tests/check-syntax.mjs` and the scroll test pass.
 
-## 2026-11-02 — PR: PRLINK — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete)   [display and storage only]
+## 2026-11-02 — PR: [#674](https://github.com/mlococo88/All-Structural/pull/674) — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete)   [display and storage only]
 - **Before:** Project Manager: name box + Save / Overwrite, drop-down + Load / Delete (`sfd_projects`, `{ name: state }`), Export / Import
   JSON, Undo / Redo (U-2), Reset. No rename, no duplicate.
 - **Where:**
