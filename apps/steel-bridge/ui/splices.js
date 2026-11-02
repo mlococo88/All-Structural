@@ -50,7 +50,7 @@
   function inputs(P, h) {
     ensure(P); const Q = P.splices, gr = Object.keys(window.SBDModel.GRADES).map(k => [k, k]);
     const yn = [['incl', 'Included'], ['excl', 'Neglected']];
-    let s = h.card('Field splice stations (every girder)', `<div class="fRow"><label for="i_splx">Stations</label><input type="text" id="i_splx" data-kind="splx" value="${esc(((P.framing || {}).splices || []).join(', '))}" style="width:200px"><span class="unit">ft from the left end, comma separated (also on the Spans &amp; framing tab)</span></div>
+    let s = h.card('Field splice stations (every girder)', `<div class="fRow"><label for="i_splx">Stations</label><input type="text" id="i_splx" data-kind="splx" value="${esc(((P.framing || {}).splices || []).join(', '))}" style="width:200px"><span class="unit">from the left end (also on the Spans &amp; framing tab)</span></div>
       <p class="note">AASHTO LRFD 6.13.6.1.1: at or near the points of permanent-load contraflexure in continuous spans. Each splice is designed for the section on each side (0.01 ft left and right of the station) and the demands of this project's analysis there.</p>`)
       + h.card('Design basis', `${h.sel('splices.code', 'Design forces', [['10', 'AASHTO LRFD 10th Ed. (P_fy, flange couple, V_r)'], ['8', '8th Ed. method (controlling / noncontrolling flange, V_uw)']])}
         ${h.sel('splices.auto', 'Plates and bolts', [['true', 'Auto-design each splice (fewest bolts, then least plate)'], ['false', 'Entered below (per station)']])}
