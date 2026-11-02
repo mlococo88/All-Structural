@@ -3806,6 +3806,6 @@ current design's analysis accepted; **the minimum shipping piece length raised f
   project and the case above: the stored project `sbd2.project.current`, the Section properties, Loads & LLDF and Analysis tab text
   and the Spans & framing, Cross-section & loads, Fatigue & studs and Splices input text (tables, units and notes removed)
   identical; 0 console errors; 390 px no sideways scroll; screenshots at 1400 and 390 px looked at.
-  `node tests/smoke/steel-bridge-wiring.mjs` passes. `node tests/check-syntax.mjs` passes. The station-window table (Auto design,
-  a span variable in Range mode) is covered by the Node round trip only.
+  `node tests/smoke/steel-bridge-wiring.mjs` passes. `node tests/check-syntax.mjs` passes. Station windows checked in the browser:
+  Auto design → Field splice locations → Range, "70 ↹ 90 / 135 ↹ 150" pasted into the table → `vars.spl.win` = "70-90, 135-150", 0 console errors.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
