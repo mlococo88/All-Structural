@@ -1732,7 +1732,7 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - **Saved data:** new inputs `ltsWeldType` ('fillet'), `ltsWeldW` (0.3125), `ltsFexx` (70), defaults when absent.
 - **How verified:** check-syntax pass; `node tests/engine/run.mjs lightpole` 37 passed (1 new); compare as LTS6-1; LTS Anchorage-tab screenshots pole (1280) and two-post (390), 0 console errors.
 
-## 2026-11-02 — PR #PRNUM: claude/lp-lts-7 (LTS-7: LRFDLTS foundation — Broms embedment, ACI 318-19 shaft; square-tube corner-radius input; IBC mode unchanged)
+## 2026-11-02 — PR #655 (https://github.com/mlococo88/All-Structural/pull/655): claude/lp-lts-7 (LTS-7: LRFDLTS foundation — Broms embedment, ACI 318-19 shaft; square-tube corner-radius input; IBC mode unchanged)
 
 ### LTS7-1. Drilled-shaft foundation in the LRFDLTS mode   [new, LTS mode only]
 - **Where:** page `ltsFoundation(inp,g,ba,mc)` (before `ltsSections`), Shaft-tab card `#ltsFndCard`, Summary row; `LTS_STATUS` LTS-7 done; the Shaft placeholder removed.
