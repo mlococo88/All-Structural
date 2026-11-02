@@ -4,7 +4,7 @@ Governing basis: AASHTO MBE 3rd Ed. (with interims) Art. 6A.6.12.6 and AASHTO LR
 
 **The reference documents were not available when this tool was written.** Every code coefficient is an editable parameter (Code parameters tab), each with its default, article reference and a "verify" badge. The values flagged "least certain" are listed under "Needs verification" below. The engineer must confirm all of them before using results.
 
-## 2026-10-05 — PR: claude/gusset-phase1 (PR link added after merge)
+## 2026-10-05 — PR: claude/gusset-phase1 (PR #42: https://github.com/mlococo88/All-Structural/pull/42)
 
 ### C1. New tool: Gusset Plate Rating (Phase 1: engine, 2D drawing, calc sheet)   [new tool]
 
@@ -177,7 +177,7 @@ Hand values were computed independently with a short node script of the formulas
   - O7. MIDAS import supports the long table format (Elem, Load, Part, Axial); direct .mct/result-file import is not implemented.
   - O8. All items under "Needs verification".
 
-## 2026-10-05 — PR: claude/gusset-phase2 (PR link added after merge)
+## 2026-10-05 — PR: claude/gusset-phase2 (PR #43: https://github.com/mlococo88/All-Structural/pull/43)
 
 ### C2. 3D view of the connection (Phase 2)   [new feature; no calculation changes]
 
@@ -217,7 +217,7 @@ Hand values were computed independently with a short node script of the formulas
   - O9. The 3D member stubs use nominal element thicknesses and flange widths because Phase 1 stores only the two outer widths and a description of each section. If true section dimensions are wanted in the 3D view, section fields would have to be added to the project data (a format change needing a migration) — not done.
   - O10. Members narrower than the clear space between the plates and without a filler are drawn with the gap (noted under the view); the tool does not check fit-up.
 
-## 2026-10-05 — PR: claude/gusset-phase3 (PR link added after merge)
+## 2026-10-05 — PR: claude/gusset-phase3 (PR #44: https://github.com/mlococo88/All-Structural/pull/44)
 
 ### C3. CAD exchange: DXF templates, export and import (Phase 3)   [new feature; no calculation changes]
 
@@ -275,7 +275,7 @@ Units: inches (the import converts ft, mm, cm, m from `$INSUNITS`). Origin = wor
 
 GP-DATA keys: `FORMAT` (written, ignored), `PROJECT`, `BRIDGE`, `JOINT`, `NP` (plates), `T_PLATE`, `STEEL` (A36, u1905, u1936, u1963, u1964, A572, custom), `FY`, `FU` (only with STEEL=custom), `CHORD` (continuous, spliced); per member `M<n>.NAME`, `.ROLE` (chord, web), `.SECTION` (box, H, W, L), `.DESC`, `.W` (width in the plate plane), `.D2` (width out of plane), `.CUT` (member end from WP), `.FASTENER` (r0, r1, r2, A325, A490), `.D` (fastener diameter), `.HOLE` (standard, oversize; a number = hole diameter, checked only), `.PREP` (drilled, punched), `.THREADS` (excl, incl), `.NS` (1, 2), `.TF` (filler thickness). New member: add layers `GP-M<n>-WL` and `GP-M<n>-BOLT` with the next n.
 
-## 2026-10-05 — PR: claude/gusset-followup1 (PR link added after merge)
+## 2026-10-05 — PR: claude/gusset-followup1 (PR #45: https://github.com/mlococo88/All-Structural/pull/45)
 
 ### C4. Engineer's answers (2026-10-05): 0.85 A_g cap switch, live-load concurrency note, DXF best-fit confirmation, confirmed geometry conventions   [calculation option added; default results unchanged]
 
@@ -421,7 +421,7 @@ Four items from the engineer's answers to the Phase 1–3 open questions. φ_c =
 - **Other copies:** none.
 - **Open items:** O6 (live-load concurrency) is answered: kept as is, with the note (C4.2). O11 (irregular DXF patterns) is now guarded by the confirmation (C4.3); the model still cannot represent irregular patterns.
 
-## 2026-10-05 — PR: claude/gusset-templates2 (PR link added after merge)
+## 2026-10-05 — PR: claude/gusset-templates2 (PR #46: https://github.com/mlococo88/All-Structural/pull/46)
 
 ### C5. DXF templates: heel joint and upper-chord panel points   [new templates; no calculation changes]
 
@@ -479,7 +479,7 @@ Four items from the engineer's answers to the Phase 1–3 open questions. φ_c =
   - O16. (Note added in C6.3; no combined check.) Heel joint shear plane SP1 (top chord fastener line): the demand is the end post's horizontal component only. At a heel the vertical component (≈ 0.77 F of the end post) also crosses this plane as a normal force and is not balanced by another member (it goes to the bearing); the partial-shear-plane check (MBE 6A.6.12.6.6) does not combine shear with normal force (the NCHRP W-197 combined check is listed as out of scope). Engineer to confirm whether a combined check or another plane (e.g. vertical, between the chord end and the end post) is needed for heel joints.
   - O17. (Note added in C6.3.) Heel joint equilibrium: with real forces the joint-equilibrium note always shows a residual (the bearing reaction), as for a panel-point load. The chord member is drawn from the WP (member end ≥ 0 in the input), not from its actual end left of the WP.
 
-## 2026-10-05 — PR: claude/gusset-lmid-fix (PR link added after merge)
+## 2026-10-05 — PR: claude/gusset-lmid-fix (PR #47: https://github.com/mlococo88/All-Structural/pull/47)
 
 ### C6. L_mid at clipped Whitmore ends, checks that cannot be computed, heel-joint notes   [calculation change: L_mid at clipped Whitmore ends; default and validation results unchanged]
 
@@ -743,7 +743,7 @@ Exact before/after (unified diff against main 3fd27e8, zero context lines):
   - O17: note added (C6.3); the chord member is still drawn from the WP.
   - O18 (new; closed by C7, 2026-10-05: the line now stops where the other member's fastener field starts). Along a free bottom/top edge the chord's end length runs under the other chord member's fastener field to the far plate edge (25.5 in in the default geometry), because the field outline is drawn through the hole centres and the edge is outside it. This is the existing rule (unchanged for the lower chord); the engineer may want the line stopped at the other member's outline instead.
 
-## 2026-10-05 — PR: claude/gusset-o18 (PR link added after merge)
+## 2026-10-05 — PR: claude/gusset-o18 (PR #48: https://github.com/mlococo88/All-Structural/pull/48)
 
 ### C7. L_mid along a plate edge stops at the other member's fastener field (O18); clipped-end rule engineer-confirmed (O14)   [calculation change: L_mid of spliced chord members; default and validation results unchanged]
 
@@ -873,7 +873,7 @@ Exact before/after (unified diff against main 98dc651, zero context lines):
   - O18: closed by C7.
   - (Closed by C8, 2026-10-05: the engineer keeps the rule; the tool now warns when the stopping field is not directly beside the edge.) New, for the engineer (not changed): a field "alongside" is any other member's field whose projection on the edge path is ahead of the start, however far it is from the edge, also when another field lies in between (e.g. the continuous chord in the default model stops at the diagonal L2-U3, 14.191 in, although the chord's own field lies between the edge and the diagonal). This only affects continuous chords (L_mid not used) in the models tested. Say if a field should count only when nothing lies between it and the edge.
 
-## 2026-10-05 — PR: claude/gusset-lmid-warn (PR link added after merge)
+## 2026-10-05 — PR: claude/gusset-lmid-warn (PR #49: https://github.com/mlococo88/All-Structural/pull/49)
 
 ### C8. Warning when an L_mid length along a plate edge is stopped by a fastener field that is not directly beside the edge   [warning only; no calculation change]
 
@@ -1015,7 +1015,7 @@ Exact before/after (unified diff against main e831071, zero context lines):
 - **Other copies:** none.
 - **Open items:** none.
 
-## 2026-10-06 — PR: claude/gusset-custom-holes (PR link added after merge)
+## 2026-10-06 — PR: claude/gusset-custom-holes (PR #53: https://github.com/mlococo88/All-Structural/pull/53)
 
 ### C10. Custom (irregular) hole patterns: hole table, DXF import without best fit, limit states generalized to arbitrary holes (s²/4g)   [calculation change for custom patterns only; every grid member computes exactly as before]
 
@@ -1479,7 +1479,7 @@ Exact before/after (unified diff against main 381e299, zero context lines; ancho
 +  if (o.checks) { const ws = [...new Set(R.checks.map(c => c.who))]; ws.forEach(w => { body += `<section class="cr-sec">${H1(w)}`; R.checks.filter(c => c.who === w).forEach(c => { const m = minRF(c); body += `<div class="cr-sub">${H2(`${LSNAME[c.ls]} (${c.id})`, [c.unc.length ? 'contains parameters to verify' : '', c.cust ? 'custom hole pattern: generalized rules, verify' : ''].filter(Boolean).join('; '), 'cr-chk-' + c.id)}<div class="cr-body">${checkBody(c, { gov: o.detail === 'gov' }).replace(/<span class="badge[^"]*"[^>]*>[^<]*<\/span>/g, '')}</div>${c.na ? '' : m && m.r.err ? `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>not determined</b> (could not be computed for ${esc(R.cases[m.j].label)})</div><div class="cr-r cr-st-fail"><b>ERROR</b></div></div>` : `<div class="cr-line cr-res"><div class="cr-d">Lowest rating factor:</div><div class="cr-m"><b>${m ? f2(m.r.RF) : '—'}</b>${m ? ` (${esc(R.cases[m.j].label)})` : ''}</div><div class="cr-r ${m && m.r.RF < 1 ? 'cr-st-fail' : ''}"><b>${m ? (m.r.RF < 1 ? 'RF < 1.00' : 'RF ≥ 1.00') : 'n/a'}</b></div></div>`}</div>`; }); body += `</section>`; }); }
 ```
 
-## 2026-10-06 — PR: claude/gusset-custom-holes-2 (PR link added after merge)
+## 2026-10-06 — PR: claude/gusset-custom-holes-2 (PR #54: https://github.com/mlococo88/All-Structural/pull/54)
 
 ### C11. Engineer's answers to the C10 questions (2026-10-06, amended 2026-10-07): staggered far row for the Whitmore spread (per-hole origins, one-pitch limit); older copies stop with an input error for custom members in browser storage; confirmations recorded   [calculation change: Whitmore section of custom patterns whose far row is staggered; every grid member and every other custom pattern computes exactly as before]
 
@@ -1735,7 +1735,7 @@ Exact before/after: unified diff against main 5add80b, zero context lines. The a
 +const putStore = s => { try { Object.values(s).forEach(d => ((d && d.members) || []).forEach(GPR.blankGrid)); localStorage.setItem(KEY_PR, JSON.stringify(s)); /* C11: as autosave */ return true; } catch (e) { flash('Could not save (browser storage full or blocked). Use Export JSON.', 'fail'); return false; } };
 ```
 
-## 2026-10-10 — PR: claude/gusset-open-items (PR link added after merge)
+## 2026-10-10 — PR: claude/gusset-open-items (PR #90: https://github.com/mlococo88/All-Structural/pull/90)
 
 ### C12. Review of every open item (engineer's instruction 2026-10-10: "fix all pending items with your recommended fix"); decisions recorded; heel-joint wording finished (O15)   [no calculation change]
 
@@ -1863,7 +1863,7 @@ In the atypical pattern D, grouping gives a smaller W_n (10.160 in against 11.39
 - **Other copies:** none.
 - **Open items after C12:** O1, O2, O3, O4, O16 and C11 item 1 (stagger band) are for the engineer to decide. O8 (check the "verify" values against the printed specifications) and O13 (open the DXF in AutoCAD / MicroStation) need the engineer's own action.
 
-## 2026-10-11 — PR: claude/gusset-no-band (PR link added after merge)
+## 2026-10-11 — PR: claude/gusset-no-band (PR #123: https://github.com/mlococo88/All-Structural/pull/123)
 
 ### C13. Stagger search band s_b = 2√(L d_n) removed: the s²/4g search uses every hole of the custom pattern (engineer's decision 2026-10-11; closes C11 open item 1, see C12.3)   [calculation change for custom patterns only, more conservative; every grid member computes exactly as before]
 
@@ -2064,7 +2064,7 @@ The objects `W.stag`, `B.cust.s1/s2/t` and `plane.stag` no longer have a `band` 
 - **Other copies:** none.
 - **Open items:** C11 item 1 (stagger band) is closed by this entry. Text only: when two rows tie, the calc sheet may name the farther row (pattern G). The deduction is the same.
 
-## 2026-10-12 — PR: claude/gusset-missing-checks (PR link added after merge)
+## 2026-10-12 — PR: claude/gusset-missing-checks (PR #130: https://github.com/mlococo88/All-Structural/pull/130)
 
 Engineer's instruction 2026-10-12: "continue making updates and fixes ... use your best judgment ... note anything that absolutely needs my input". Items O1, O2, O3, O4 and O16 of C12.1 are done here, one entry per item (C14 to C18).
 
@@ -2602,7 +2602,7 @@ index ed83d49..df13d08 100644
   - Confirm the advisory formulas and tolerances (C14.4, C16, C17, C18) and whether any should become rating checks.
   - O8 and O13 (engineer's own action) stay open.
 
-## 2026-10-19 — PR: claude/aashto10-gusset (PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-gusset (PR #327: https://github.com/mlococo88/All-Structural/pull/327)
 
 ### C19. Resistance-factor citations: φ<sub>c</sub>, φ<sub>vy</sub> and φ<sub>cs</sub> attributed to MBE 3rd Ed. (rating values) instead of LRFD 10th Ed. 6.5.4.2; filler article renumbered 6.13.6.1.5 → 6.13.6.1.4   [citations and labels only; no φ value and no computed result changes]
 
@@ -2656,12 +2656,12 @@ Built-in validation model (Validation tab):
 - **Other copies:** none.
 - **Open items:** the MBE article numbers keep their existing flags (φ<sub>cs</sub>: Table 6A.6.12.6.2-1 / 6A.6.12.6.9 "verify"); the printed MBE 3rd Ed. was not available to confirm them.
 
-## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR #410: https://github.com/mlococo88/All-Structural/pull/410)
 
 ### SBD1-a. Comment: GirderDetail's file name   [comment only]
 - Anchor `Gusset Plate Rating: user interface (layout and calc-sheet style follow GirderDetail,`: before `Steel Bridge Beam Modules.html)`, after `Steel Bridge Design.html)`. No code changed.
 
-## 2026-11-01 — PR: claude/rpt-gusset — "Report (shared viewer)" tab: the calculation report in the shared viewer, next to the existing Report tab (GPRP; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-gusset — "Report (shared viewer)" tab: the calculation report in the shared viewer, next to the existing Report tab (GPRP; display only, no calculation change) (PR #571: https://github.com/mlococo88/All-Structural/pull/571)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `GPRP`.
 

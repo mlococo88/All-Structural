@@ -4,7 +4,7 @@ Governing basis: mechanics of materials (section properties by exact area integr
 
 **Thin-wall torsion results (J, Cw, shear centre) are approximations and carry a "thin-wall — verify" flag in the tool.**
 
-## 2026-10-10 — PR: claude/section-props-p1 (PR link added after merge)
+## 2026-10-10 — PR: claude/section-props-p1 (PR #84: https://github.com/mlococo88/All-Structural/pull/84)
 
 ### C1. New tool: Section Property Calculator (Phase 1: properties only)   [new tool]
 
@@ -70,7 +70,7 @@ A / Ix / J: W 2.7 % / 4.1 % / 18.7 % (W40X149); M 9.0 % / 9.4 % / 50 % (M3X2.9);
 - O5. Holes are ignored in torsion (gross section), with a note.
 - O6. Flip/rotate of several selected parts acts about the selection's bounding-box centre (one part: about its centroid).
 
-## 2026-10-10 — PR: claude/spc-no-overlap (PR link added after merge)
+## 2026-10-10 — PR: claude/spc-no-overlap (PR #86: https://github.com/mlococo88/All-Structural/pull/86)
 
 ### N1. Parts may not overlap; magnetic snap to each other   [drawing behaviour — no change to any formula or computed property]
 
@@ -254,7 +254,7 @@ How verified (follow-up):
 - N-O4. Resize handles are offered for plates, bars and rectangular tubes only (not holes, round parts or rolled shapes, whose sizes come from a list or a single diameter). **Closed 2026-10-10: confirmed (see R1).**
 
 
-## 2026-10-10 — PR: claude/spc-dxf (PR link added after merge)
+## 2026-10-10 — PR: claude/spc-dxf (PR #87: https://github.com/mlococo88/All-Structural/pull/87)
 
 ### X1. Export DXF, to check the section properties with AutoCAD MASSPROP   [new output only — no change to any formula, computed property, storage key or saved format]
 
@@ -557,7 +557,7 @@ PL 12 × 1 (b = 12, t = 1), centroid at (3, 2), units in, basis = tool origin:
 - X-O4. Units of the export (asked in the PR: display units, or always inches?). **Closed 2026-10-10: keep the display units, no change (see R2).** X-O1 (AutoCAD sign / order check) and X-O3 (AISC tabulated option) stay open.
 
 
-## 2026-10-10 — PR: claude/spc-rotate-warn (PR link added after merge)
+## 2026-10-10 — PR: claude/spc-rotate-warn (PR #88: https://github.com/mlococo88/All-Structural/pull/88)
 
 ### R1. Rotate / flip under Prevent overlap: applied in place with a warning; open items N-O1 to N-O4 closed   [drawing behaviour — no change to any formula, computed property, storage key or saved format]
 
@@ -695,7 +695,7 @@ Setup: PL1 plate 10 × 1 at (0, 0); PL2 plate 4 × 1 at (0, 1.5), above PL1. The
 - R-O1. The Part properties **Rotation** field and **Mirrored** box do **not** carry the holes inside the part; they change only the part's own orientation. The toolbar, menu and key actions do carry them. This was already so before this change, with Prevent overlap on or off. As a result, a hole can be left partly outside its part, and the existing "Hole … is not entirely inside one material part" warning appears. Making these two fields carry holes, as N-O1 implies, would be a further behaviour change. Say if it is wanted. **Closed 2026-10-10: yes, they carry the holes exactly as the toolbar does (see R2).**
 
 
-## 2026-10-10 — PR: claude/spc-hole-carry (PR link added after merge)
+## 2026-10-10 — PR: claude/spc-hole-carry (PR #89: https://github.com/mlococo88/All-Structural/pull/89)
 
 ### R2. Rotation field and Mirrored box carry the holes inside the part (R-O1 closed); DXF units decided (X-O4 closed)   [drawing behaviour — no change to any formula, computed property, storage key or saved format]
 
@@ -808,7 +808,7 @@ Setup: PL1 plate b = 8, t = 4 at (0, 0). H1 is a rectangular hole 2 wide × 1 hi
 
 - R2-O1. The Part properties **Centroid x / y** and **edge** fields move a part without the holes inside it, while drag, nudge, "Move by" and align carry them (with Prevent overlap on). Not changed here, because it is not a rotate / flip path. Say if these fields should carry holes too.
 
-## 2026-10-10 — PR: claude/spc-p2a (PR link added after merge)
+## 2026-10-10 — PR: claude/spc-p2a (PR #92: https://github.com/mlococo88/All-Structural/pull/92)
 
 ### P2a. Weight and coating area, AISC E4/F2 parameters and Wagner β, stresses, kern, Mohr's circle and inertia ellipse   [new outputs — no existing formula, result, storage key or file version changed]
 
@@ -1590,7 +1590,7 @@ Other edits (unified diff, 1 line of context):
 - P2a-O7. r_ts is shown only for doubly symmetric sections (F2); h_o only for a single rolled I or a three-plate I. AISC F2 also covers channels (r_ts with c ≠ 1) — not included.
 - P2a-O8. Opening a P2a file in the older main version and re-saving there drops `rho` and `stress` (no error). Acceptable?
 
-## 2026-10-10 — PR: claude/spc-open-items (PR link added after merge)
+## 2026-10-10 — PR: claude/spc-open-items (PR #94: https://github.com/mlococo88/All-Structural/pull/94)
 
 Engineer's instruction (2026-10-10): "fix all pending items with your recommended fix". This entry covers the false closed cells at face-contact junctions (a **calculation change**, O1 below), R2-O1, X-O3, P2a-O6 and the decisions on every other open item.
 
@@ -2081,7 +2081,7 @@ Browser tests (`open_ui.mjs`, headless Chromium): main gives the "before" values
 - Existing browser suites re-run on the branch: Phase 1 browser tests 49/0; no-overlap 70/0; dimension editing 35/0; live fields 47/0; hole carry (R2) 26/0 for the branch checks (its 2 "main" checks describe main before R2 and no longer apply); rotate/flip parity 45 states identical; DXF export 24 files + 13 UI checks, ezdxf audit 0 errors, worst relative error 2.6e-15; 400 px no horizontal scroll; new tests `open_ui.mjs` 26/0.
 - No console errors.
 
-## 2026-10-10 — PR: claude/spc-print (PR link added after merge)
+## 2026-10-10 — PR: claude/spc-print (PR #95: https://github.com/mlococo88/All-Structural/pull/95)
 
 Engineer's report review (2026-10-10): the PDF printed from Chrome (Letter) of the built-up I (web PL 18 × 1/2 turned 90°, 4 × L6X6X1/2, 2 × PL 12-1/2 × 1/2) showed nine layout problems. All fixes are **display / print layout only**: no formula, computed value, unit, storage key or saved format changed. The report now also contains the P2a sections (Mohr's circle, buckling parameters, Wagner β, kern, weight and paint, Stresses tab) and the open-items torsion fix; all of them are covered.
 
@@ -2288,7 +2288,7 @@ Every number in the report is the same as on main: compared token by token over 
 - PR1-O1. Validation tab: tool values and |Δ| of the checks whose reference is 0 are printed in exponent form (e.g. W14X90 β<sub>x</sub> = −2.201853e-15, |Δ| = 2.2e-15) and the relative differences as e.g. "9.52e-14 %". Left unchanged: they are the evidence that the tool reproduces the closed form to machine precision. Engineer to decide whether to show them as 0 / "< 1e-12".
 - PR1-O2. **Resolved in P2b; re-checked 2026-10-12 (claude/sweep-spc).** On screen, the Q tab "Cut at y" input still shows the raw value (e.g. 6.3869009956e-16) when the cut is at the centroid; only the report shows 0. Changing the input formatting affects every number field; not done without a decision.
 
-## 2026-10-10 — PR: claude/spc-shearflow (PR link added after merge)
+## 2026-10-10 — PR: claude/spc-shearflow (PR #96: https://github.com/mlococo88/All-Structural/pull/96)
 
 ### P2b. Shear flow at every connection, connector check; Q-tab "Cut at" display and τ<sub>avg</sub> with b = 0   [new outputs — no existing formula, result, storage key or file version changed]
 
@@ -2376,7 +2376,7 @@ Units: V kip (kN), q kip/in (N/mm), lengths in (mm), φR<sub>n</sub> kip (kN), F
 - P2b-O3. **Closed 2026-10-12 (claude/sweep-spc): left as flagged.** Thin-wall closed-cell values (centre-line model, extensions into junctions, load corrected per part) are approximate ("thin-wall — verify"); cells with n ≠ 1 and face-contact stacks in a cell are n/a.
 - P2b-O4. Weld check: φ = 0.75 / Ω = 2.00, 0.60F<sub>EXX</sub>, throat 0.707w, no directional increase — verify against AISC 360-16 J2.4; detailing limits not checked (listed on the tab).
 
-## 2026-10-10 — PR: claude/spc-library (PR link added after merge)
+## 2026-10-10 — PR: claude/spc-library (PR #97: https://github.com/mlococo88/All-Structural/pull/97)
 
 ### L1. My sections library (save, insert, place, rename, duplicate, delete, search; JSON import / export of the library, of single or selected entries, and of a project file as an entry)   [new feature — no change to any formula, computed property, project storage key or project file format]
 
@@ -2475,7 +2475,7 @@ None (data management and UI). No engineering value, unit or reference changed.
 
 ---
 
-## 2026-10-11 — PR: claude/spc-hss-contact (PR link added after merge)
+## 2026-10-11 — PR: claude/spc-hss-contact (PR #124: https://github.com/mlococo88/All-Structural/pull/124)
 
 ### H1. Torsion: a plate in face contact with the flat of a rectangular HSS / tube is joined like the other face contacts (open item O1-O1 closed)   [CALCULATION CHANGE — torsion model: J of these sections (C<sub>w</sub> and the shear centre stay n/a for closed cells); no other result, key or file format changed]
 
@@ -2552,7 +2552,7 @@ None new. O1-O1 closed.
 
 ---
 
-## 2026-10-12 — PR: claude/sweep-spc (open-item sweep; PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-spc (open-item sweep; PR #156: https://github.com/mlococo88/All-Structural/pull/156)
 
 Engineer's instruction (2026-10-12): work through every open item using best judgment, and record anything that needs the engineer. Inventory section 26 lists 11 items. One code change (L2 below). Every other item is closed with evidence or left for the engineer, with a recommendation.
 
@@ -2630,7 +2630,7 @@ function autosave() { lsSet(LS_AUTO, JSON.stringify(persistModel(M))); }
 ### Remaining open items
 None besides the "Needs engineer" list above.
 
-## 2026-10-18 — PR: claude/spc-d11-report — D11: slim calculation-sheet report and §6 links (Tier 1, display only; PR link added after merge)
+## 2026-10-18 — PR: claude/spc-d11-report — D11: slim calculation-sheet report and §6 links (Tier 1, display only; PR #290: https://github.com/mlococo88/All-Structural/pull/290)
 
 - **Engineer request:** AUDIT.md D11 (2026-10-14); scope decided 2026-10-18: **slim report** for this tool (inputs → worked results, no D/C section). CLAUDE.md §6 "show the work and link to it". Format copied from Timber Beam Check (`/* D11 (2026-10-18): calculation-sheet report`) and Gusset Plate Rating.
 - **Provision:** none. No formula, factor, unit, code reference or computed result changed. No storage key or saved format changed (`spc_autosave_v1`, `spc_projects_v1`, `spc_inputTab_v1`, `spc_preventOverlap_v1`, the project file, `M.ui.print` keys unchanged); no input field added.
@@ -2673,7 +2673,7 @@ None besides the "Needs engineer" list above.
 - **Values shown with their formula but not worked with numbers anywhere:** I<sub>p</sub> = I<sub>x</sub> + I<sub>y</sub>, r<sub>1</sub>, S<sub>1</sub> = I<sub>1</sub>/c<sub>2,max</sub>, S<sub>2</sub> (c<sub>1,max</sub>, c<sub>2,max</sub> are not shown), the extents and c values (Properties tab). Showing their substitution would add calculation content; not done. Decide whether S<sub>1</sub>, S<sub>2</sub> should be worked on Calc detail.
 - **Report length:** default 19 pages (was 13). The section ticks are unchanged; the Method appendix (ticked by default) is the last 5 pages.
 
-## 2026-10-19 — PR: claude/aashto-ed-secprop — References: AASHTO LRFD stated as 10th Ed. (2024) (wording only, no result change; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto-ed-secprop — References: AASHTO LRFD stated as 10th Ed. (2024) (wording only, no result change; PR #325: https://github.com/mlococo88/All-Structural/pull/325)
 
 Engineer decision 2026-10-19 ("follow the owner"): tools without an owner setting state AASHTO LRFD **10th Ed. (2024)**. This tool has no owner setting; its AASHTO row in the printed references said "edition: verify".
 
@@ -2696,7 +2696,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Open items:** none.
 
 
-## 2026-11-01 — PR: claude/rpt-secprop — Report output tab in the shared report viewer (SPRP; slim report by topic; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-secprop — Report output tab in the shared report viewer (SPRP; slim report by topic; display only, no calculation change) (PR #552: https://github.com/mlococo88/All-Structural/pull/552)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SPRP`.
 

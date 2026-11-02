@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)
 
-## 2026-10-04 — PR: claude/fix-subloads (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-subloads (PR #20: https://github.com/mlococo88/All-Structural/pull/20)
 
 ### F1. Minimum support length: Zone 2 percentage 100% → 150%   [calc change] [more conservative]
 - **Where:** function `supportLength` (≈ line 1945 at time of fix). Anchor text: `pct = Z === 1 ? (As < 0.05 ? 75 : 100)`
@@ -93,7 +93,7 @@ Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th E
 - O3. **EE I EH factor (`gEHEQ`, default 1.0).** Table 3.4.1-1 lists γp for EH in EE I. Not changed (EOR judgment, review item 5).
 - O4. The `combine` monkey-patch chain was not refactored (by instruction).
 
-## 2026-10-04 — PR: claude/step1-group2 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group2 (PR #31: https://github.com/mlococo88/All-Structural/pull/31)
 
 ### F5. "← All tools" link + shared project info (HANDOFF.md §4.1)   [feature (no result change)]
 
@@ -205,7 +205,7 @@ Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th E
 - **Other copies:** the BridgeXfer v1 helper is duplicated verbatim in every tool that uses it (CLAUDE.md §3; list in the PR). The glue block is the same in each tool of this PR except `TOOL`/`FILE` and the field map.
 - **Open items:** none.
 
-## 2026-10-04 — PR: claude/conn-reactions-subloads (PR link added after merge)
+## 2026-10-04 — PR: claude/conn-reactions-subloads (PR #37: https://github.com/mlococo88/All-Structural/pull/37)
 
 ### F6. Pull superstructure reactions from PS-Beam / ST-Girder (HANDOFF.md §4.4, channel `superReactions`)   [feature: hand-off (no result change)]
 - **Where:** new IIFE `patchRxHandoff()` in the main script, directly above `/* ---------- start ---------- */`. Anchor text: `(function patchRxHandoff() {`
@@ -444,7 +444,7 @@ Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th E
 - **Other copies:** none (receiver code is only in this tool). BridgeXfer v1 unchanged.
 - **Open items:** the dialog's "Same position as the source" default applies one designed girder line to every girder of that position; the engineer decides whether that is appropriate (exterior girders usually carry different DC2/DW).
 
-## 2026-10-05 — PR: claude/conn-subloads-abutment (PR link added after merge)
+## 2026-10-05 — PR: claude/conn-subloads-abutment (PR #39: https://github.com/mlococo88/All-Structural/pull/39)
 
 ### F7. Send abutment loads to the abutment calculator (HANDOFF.md §4.5, channel `abutmentLoads`)   [feature: hand-off (no result change)]
 - **Where:** main script, directly after the "Export abutments" click handler. Anchor text: `document.addEventListener('click', e => { if (e.target.id === 'btn-abx') exportAbutments(); });`
@@ -507,7 +507,7 @@ document.addEventListener('click', e => {
 - **Other copies:** BridgeXfer v1 (unchanged) is in both tools. The mapping code is only in the receiver.
 - **Open items:** see the PR (seismic connection force, wind per limit state, `calculatorInput.beams.mode:"positions"` vs the calculator's `"position"`).
 
-## 2026-10-05 — PR: claude/conn-foundation-loads (PR link added after merge)
+## 2026-10-05 — PR: claude/conn-foundation-loads (PR #40: https://github.com/mlococo88/All-Structural/pull/40)
 
 ### F8. Send foundation loads (HANDOFF.md §4.6, channel `foundationLoads`)   [feature: hand-off (no result change)]
 - **Where:** main script, a new IIFE just before the start-up block; anchor text `/* ---------- start ---------- */` (the new code ends immediately before it). The header button is added by the IIFE (inserted before `#btn-dxf`).
@@ -657,7 +657,7 @@ document.addEventListener('click', e => {
 - **Other copies:** BridgeXfer v1 (unchanged). The sender code exists only here.
 - **Open items:** individual footings of multi-column bents ("Footing i" groups have P and M but no shear) are not offered; service sets come from the same `comboEval` concurrency as the strength sets (the Combinations tab shows service as envelopes only).
 
-## 2026-10-12 — PR: claude/sweep-subloads (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-subloads (PR #149: https://github.com/mlococo88/All-Structural/pull/149)
 
 Open-item sweep of inventory section 19 (SUB-PEND, SUB-O1 to O4, SUB-F6, SUB-F8, SUB-USGS, SUB-XLSX). Basis: AASHTO LRFD 10th Ed. (2024). Article numbers marked "verify" were not checked against the printed 10th Ed. text.
 
@@ -824,7 +824,7 @@ Open-item sweep of inventory section 19 (SUB-PEND, SUB-O1 to O4, SUB-F6, SUB-F8,
 - **Strength II** (owner permit vehicle), the vessel Method II, ice jams (3.9.4), vertical ground motion and multimode analysis, the Guide Specifications and the AASHTO-2023 hazard data: each needs an owner or engineer decision.
 - **Foundation hand-off "Footing i" groups and service concurrency (F8):** add on request.
 
-## 2026-10-12 — PR: claude/subloads-eeieh (PR link added after merge)
+## 2026-10-12 — PR: claude/subloads-eeieh (PR #152: https://github.com/mlococo88/All-Structural/pull/152)
 
 ### S4. Extreme Event I static EH: γp max/min by default; fixed value kept as "agency policy" (SUB-O3)   [calc change] [MORE conservative for new projects and for files without the field]
 - **Engineer's decision (2026-10-12):** use γp, and match `abutment_calculator` F25 (#147). This closes SUB-O3 and Needs-engineer item 2 of the claude/sweep-subloads entry.
@@ -879,7 +879,7 @@ Open-item sweep of inventory section 19 (SUB-PEND, SUB-O1 to O4, SUB-F6, SUB-F8,
 - **Not changed:** the superseded early `combine` wrapper in the earth section (`const eh = c.eq ? [nz(br.gEHEQ) || 1, …`) is not used by the final engine and was left as is (O4).
 - **Other copies:** `abutment_calculator.html` F25 has the same rule (separate code; no shared snippet).
 
-## 2026-10-18 — PR: claude/subload-d11-report (PR link added after merge)
+## 2026-10-18 — PR: claude/subload-d11-report (PR #291: https://github.com/mlococo88/All-Structural/pull/291)
 
 Line numbers are approximate; search for the anchor text.
 
@@ -955,7 +955,7 @@ Line numbers are approximate; search for the anchor text.
 - **Description** in the print header is the project name (the tool has no description field). **Checked date** prints "—" (no field; none added).
 
 
-## 2026-10-19 — PR: claude/stgirder-disconnect-others (STDISC: ST-Girder removed from the bridge suite on the other tools' side; engineer decision 2026-10-19; cross-tool PR with index.html, psbeam.html, lldf.html, Bridge Substructure Loading.html, tools.html, HANDOFF.md, AUDIT.md, CLAUDE.md §3; ST-Girder's side is claude/stgirder-disconnect; PR link added after merge)
+## 2026-10-19 — PR: claude/stgirder-disconnect-others (STDISC: ST-Girder removed from the bridge suite on the other tools' side; engineer decision 2026-10-19; cross-tool PR with index.html, psbeam.html, lldf.html, Bridge Substructure Loading.html, tools.html, HANDOFF.md, AUDIT.md, CLAUDE.md §3; ST-Girder's side is claude/stgirder-disconnect; PR #310: https://github.com/mlococo88/All-Structural/pull/310)
 
 ### STDISC. Substructure Loading: ST-Girder no longer a reactions source   [no result change, Tier 0/1]
 - **Engineer decision (2026-10-19):** ST-Girder (`stgirder.html`) is completely disconnected from every other bridge tool except GirderDetail (`Steel Bridge Beam Modules.html`): no MIDAS / MCT demands into ST-Girder, MCT's steel rating no longer uses ST-Girder's capacity (it falls back to MCT's own capacity inputs), ST-Girder removed from MCT's combined saved project, no ST-Girder links in the other tools; Substructure Loading reactions from GirderDetail are a later, separate change. CLAUDE.md §3 updated: the shared bootstrap block is now in index.html, lldf.html and psbeam.html only.
@@ -1028,7 +1028,7 @@ index e93548b..9f9a238 100644
 +<a class="card" href="stgirder.html" target="_blank"><div class="name">ST-Girder</div><div class="desc">Steel plate girder design: flexure, shear, fatigue, stiffeners, studs, rating. Connected to GirderDetail only (demands from Steel Bridge Beam Modules); not linked to the MCT, PS-Girder, LL &amp; DL or Substructure tools.</div><span class="tag">AASHTO LRFD Sec. 6</span></a>
 ```
 
-## 2026-10-19 — PR: claude/gd-superreactions (SRX: steel girder reactions for Bridge Substructure Loading from GirderDetail; engineer decision 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, Bridge Substructure Loading.html, HANDOFF.md §4.4, AUDIT.md, tools.html, ENGINEER_CHECKS GD72; PR link added after merge)
+## 2026-10-19 — PR: claude/gd-superreactions (SRX: steel girder reactions for Bridge Substructure Loading from GirderDetail; engineer decision 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, Bridge Substructure Loading.html, HANDOFF.md §4.4, AUDIT.md, tools.html, ENGINEER_CHECKS GD72; PR #311: https://github.com/mlococo88/All-Structural/pull/311)
 
 ### SRX. Reactions from GirderDetail (every girder, by number)   [RECEIVER CHANGE — PS-Beam and older payloads adopt exactly as before; §4 callout: steel reactions now from GirderDetail]
 - **Engineer decision (2026-10-19):** steel girder reactions come from GirderDetail (Steel Bridge Beam Modules), replacing the ST-Girder source removed in STDISC.
@@ -1136,7 +1136,7 @@ index 1be091f..06e7a50 100644
 +    else if (w === 'byn') { D.byN = t.value === '1'; D.preset = D.byN ? 'bynum' : 'pos'; D.gir = presetGirders(D.preset, D.pos, D.idx); }   // SRX
 ```
 
-## 2026-10-19 — PR: claude/gd-superreactions-util (SRXU: MassDOT utilities carried from GirderDetail into Bridge Substructure Loading; engineer decision GD72a 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, Bridge Substructure Loading.html, HANDOFF.md §4.4, AUDIT.md, ENGINEER_CHECKS GD72 closed; PR link added after merge)
+## 2026-10-19 — PR: claude/gd-superreactions-util (SRXU: MassDOT utilities carried from GirderDetail into Bridge Substructure Loading; engineer decision GD72a 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, Bridge Substructure Loading.html, HANDOFF.md §4.4, AUDIT.md, ENGINEER_CHECKS GD72 closed; PR #312: https://github.com/mlococo88/All-Structural/pull/312)
 
 ### SRXU. MassDOT utilities from GirderDetail adopted as loads   [RESULT CHANGE for payloads with UT / UF — §4 callout; every other payload unchanged]
 - **Engineer decision GD72a (2026-10-19):** UT as DW; UF as DC with 1.25 / 0 if representable, else as DC; shown as their own rows; if they cannot stay separate without a structural change, add them to DW / DC with a visible breakdown.
@@ -1244,7 +1244,7 @@ index 06e7a50..8a2a0af 100644
 +    buildSide(); recompute(); autosave(); flash(`Pasted ${n} utility value${n === 1 ? '' : 's'} into ${esc(P.units[+k].name)}.`); }, true);
 ```
 
-## 2026-10-19 — PR: claude/subloads-uf-loadtype (SRXF: the future utility allowance UF as its own permanent load, 1.25 / 0; engineer decision "merge, then fix UF min" after #312; PR link added after merge)
+## 2026-10-19 — PR: claude/subloads-uf-loadtype (SRXF: the future utility allowance UF as its own permanent load, 1.25 / 0; engineer decision "merge, then fix UF min" after #312; PR #313: https://github.com/mlococo88/All-Structural/pull/313)
 
 ### SRXF. UF: own permanent load in the combinations   [RESULT CHANGE — §4 callout; projects without UF unchanged]
 - **Engineer decision (2026-10-19, after #312):** give UF its own permanent load component: maximum factor where it adds, 0 where it relieves; Service 1.0 / 0; UT stays in DW (DW factors 1.50 / 0.65 already match GirderDetail).
@@ -1317,7 +1317,7 @@ index 8a2a0af..038486a 100644
 +    return `MassDOT utilities from GirderDetail at ${esc(P.units[k].name)}: DW includes the existing utilities UT = ${f2(sum('ut'))} kip${by('ut') ? ` (${by('ut')})` : ''}; the DC2 column of the bearing table below includes the future utility allowance UF = ${f2(sum('uf'))} kip${by('uf') ? ` (${by('uf')})` : ''}. UT takes the DW factors (Strength 1.50 / 0.65, as GirderDetail). In the load cases UF is its own permanent load (not in DC super): the limit state's DC maximum factor where it adds (Strength I 1.25, Service 1.0) and 0 where it relieves, as GirderDetail (MassDOT Part I 3.5.5.2); it is listed separately in the Dead load effects table.`; };
 ```
 
-## 2026-10-19 — PR: claude/aashto10-substructure (AASHTO LRFD 10th Ed. renumbers and MassDOT edition note; wording only; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-substructure (AASHTO LRFD 10th Ed. renumbers and MassDOT edition note; wording only; PR #329: https://github.com/mlococo88/All-Structural/pull/329)
 
 Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Engineer decision 2026-10-19 ("follow the owner"): in MassDOT mode, state that the MassDOT manual is written to the AASHTO LRFD 9th Ed. and that the calculations follow the AASHTO LRFD 10th Ed. (2024). The seismic hazard method (3.10.2 to 3.10.4, site factors) is **not** changed here (engineer decision pending; separate PR).
 
@@ -1350,7 +1350,7 @@ Each number was looked up in the 10th Ed. text; the values the tool uses are the
 - Seismic hazard (3.10.2 to 3.10.4, site factors, operational classes): pending engineer decision; separate PR.
 - In MassDOT mode with Procedure B selected, the Temperature card subtitle reads "Procedure MassDOT 3.1.8, T_MaxDesign and T_MinDesign from Figures 3.12.2.2-1 to -4" (the figure text follows `T.proc !== 'A'`). Pre-existing display wording; the MassDOT ranges are what is used. Not changed.
 
-## 2026-10-19 — PR: claude/aashto10-subloads-seismic (seismic ground motion per AASHTO LRFD 10th Ed. 3.10; engineer decision 2026-10-19, option (a); PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-subloads-seismic (seismic ground motion per AASHTO LRFD 10th Ed. 3.10; engineer decision 2026-10-19, option (a); PR #339: https://github.com/mlococo88/All-Structural/pull/339)
 
 Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 3.10.3.1 (Table 3.10.3.1-1), 3.10.4.1, 3.10.5, 3.10.6 (Table 3.10.6-1), 3.10.7.1 (Tables 3.10.7.1-1, -2), 3.10.9.1, 3.10.9.2, 11.6.5.2.1. Engineer decision 2026-10-19: the engineer enters the 22-period risk-targeted S_a table of the AASHTO-USGS database for the site; the AASHTO-2009 PGA / S_s / S_1 × F_pga / F_a / F_v method (Tables 3.10.3.2-1 to -3, three-point spectrum of 3.10.4.2) is removed. Neither article exists in the 10th Ed.
 
@@ -1477,7 +1477,7 @@ Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 3.10.3.1 
 - **MassDOT rules:** the MassDOT 3.4.4.x SDC A rules still map to Zone 1 / A_s < 0.05 as before; the MassDOT manual is written to the 9th Ed.
 - **4.7.4.5 displacement amplification (S_DS = 0.90 × peak S_a):** not implemented, as before.
 
-## 2026-10-20 — PR: claude/str4-subloads (STR4: Strength IV removed from the substructure combinations; engineer direction 2026-10-20 "accurate, not overly conservative"; same change as abutment_calculator #353 F44; PR link added after merge)
+## 2026-10-20 — PR: claude/str4-subloads (STR4: Strength IV removed from the substructure combinations; engineer direction 2026-10-20 "accurate, not overly conservative"; same change as abutment_calculator #353 F44; PR #354: https://github.com/mlococo88/All-Structural/pull/354)
 
 ### STR4. Strength IV removed   [calc change] [less conservative only where Strength IV governed]
 - **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 3.4.1 (Strength IV: dead-load force effects in bridge superstructures) and C3.4.1 (not applicable to construction stages, substructures, earth-retaining systems or bearing design). Checked against the 10th Ed. text, p. 3-9. Every result of this tool is a substructure, bearing or foundation force, so Strength IV is removed everywhere.
@@ -1533,7 +1533,7 @@ index 9d3d514..895aaeb 100644
 +  rows.push(['Load factors', (ov.length ? 'AASHTO Table 3.4.1-1 except: ' + ov.join('; ') : 'AASHTO Table 3.4.1-1 (no overrides)') + '. Strength IV is not used: it does not apply to substructures (AASHTO LRFD 10th Ed. C3.4.1)' + (str4Old() ? `; saved Strength IV overrides (${esc(str4Old())}) are kept in the file, not used` : '')]);
 ```
 
-## 2026-10-20 — PR: claude/subloads-tu-cr (TUCR: γTU = 1.00 for force effects; γCR/γSH per the 10th Ed. Table 3.4.1-3; engineer direction 2026-10-20 "accurate, not overly conservative"; same change as abutment_calculator #351 F27/F28; PR link added after merge)
+## 2026-10-20 — PR: claude/subloads-tu-cr (TUCR: γTU = 1.00 for force effects; γCR/γSH per the 10th Ed. Table 3.4.1-3; engineer direction 2026-10-20 "accurate, not overly conservative"; same change as abutment_calculator #351 F27/F28; PR #356: https://github.com/mlococo88/All-Structural/pull/356)
 
 ### TUCR-1. γTU = 1.00 for force effects in Strength I, III and V (was 0.50)   [calc change] [MORE conservative]
 - **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Table 3.4.1-1 (TU column of Strength I, II, III, V and Service I to IV = γTU) with Table 3.4.1-6 (γTU = 1.20 for displacements, 1.00 for force effects). Read on the rendered 10th Ed. pages 3-16 and 3-18. The tool's 0.50 for Strength was the earlier-edition "smaller value for force effects".
@@ -1637,7 +1637,7 @@ index 895aaeb..6d5bece 100644
 +  syncSupports(); buildTabs(); recompute(); buildSide(); showTab(P.ui.tab || 'summary'); if (LF_NOTICE) autosave();   // TUCR: keep the migrated load factors so the one-time note does not return
 ```
 
-## 2026-10-20 — PR: claude/aashto10-subloads-ee (EEP: permanent loads 1.00 in Extreme Event I and II; γSH 0.5 migrated to 1.0; engineer direction 2026-10-20 "accurate, not overly conservative"; supersedes SUB-O3 / S4; PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-subloads-ee (EEP: permanent loads 1.00 in Extreme Event I and II; γSH 0.5 migrated to 1.0; engineer direction 2026-10-20 "accurate, not overly conservative"; supersedes SUB-O3 / S4; PR #358: https://github.com/mlococo88/All-Structural/pull/358)
 
 ### EEP-1. Extreme Event I and II: DC, DW, EH, EV, ES at 1.00 (was γp)   [calc change] [LESS conservative for the EE max, MORE for the EE min]
 - **Provision:** AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Table 3.4.1-1 (p. 3-16): the permanent-load column (DC, DW, EH, EV, ES, EL, PS, CR, SH) reads 1.00 for Extreme Event I and Extreme Event II, not γp. C3.4.1 (p. 3-10) explains that γp > 1.0 in the extreme event limit states was dropped in 2015. No wall- or abutment-specific exception: Art. 11.5.6 sends abutments, piers and walls to Art. 3.4.1, Fig. C11.5.6-4 shows 1.00 DC / EV / P_AE for Extreme Event I, and Art. 11.5.8 / 10.5.5.3 set resistance factors only. Checked against the 10th Ed. text (rendered p. 11-13 for the figure).
@@ -1725,7 +1725,7 @@ index 6d5bece..2e97549 100644
 +  if (ab.length) rows.push(['Backfill', ab.join('; ') + `. Factors EH ${f2(nz(b.ehMax) || 1.5)}/${f2(nz(b.ehMin) || 0.9)}${P.units.some(u => u.type === 'abut' && u.earth && u.earth.method === 'atrest') ? ` (at rest ${f2(nz(b.ehAtMax) || 1.35)}/${f2(nz(b.ehAtMin) || 0.9)})` : ''}, EV ${f2(nz(b.evMax) || 1.35)}/${f2(nz(b.evMin) || 1)}, ES ${f2(nz(b.esMax) || 1.5)}/${f2(nz(b.esMin) || 0.75)}; Extreme Event I and II EH, EV, ES 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-1)${eqEHfixed() !== null ? `, except Extreme Event I EH ${f2(eqEHfixed())} (agency policy)` : ''}`]);
 ```
 
-## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR #410: https://github.com/mlococo88/All-Structural/pull/410)
 
 ### SBD1-a. GirderDetail's file name in two texts   [text only]
 - Comment above the Reactions pull code: before `GirderDetail (Steel Bridge Beam Modules) sends every girder`, after `GirderDetail (Steel Bridge Design, formerly Steel Bridge Beam Modules) sends every girder`.
@@ -1739,7 +1739,7 @@ index 6d5bece..2e97549 100644
 - **Check case:** `isST({producer:'ST-Girder', producerFile:'Steel Bridge Design.html'})` → true (before: true); `isST({producer:'ST-Girder | AASHTO LRFD Steel Plate Girder Design', producerFile:'Steel Bridge Design.html'})` → true (before: false); `isST({producer:'GirderDetail', producerFile:'Steel Bridge Design.html'})` → false (before: false); `isST({producer:'X', producerFile:'stgirder.html'})` → true (before: true).
 - **Other copies:** index.html `capFromST`, lldf.html `isST`.
 
-## 2026-11-01 — PR: claude/rpt-subloads — Report output tab in the shared report viewer; KaTeX 0.16.9 added for it (SLRP; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-subloads — Report output tab in the shared report viewer; KaTeX 0.16.9 added for it (SLRP; display only, no calculation change) (PR #553: https://github.com/mlococo88/All-Structural/pull/553)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SLRP`.
 
@@ -1989,7 +1989,7 @@ index 6f6ab6e..b034f69 100644
 +<script>
 ```
 
-## 2026-11-01 — PR: claude/rpt-subloads-full — Report: each unit's unfactored loads, with their sources, and the substructure wind forces (SLRF; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-subloads-full — Report: each unit's unfactored loads, with their sources, and the substructure wind forces (SLRF; display only, no calculation change) (PR #581: https://github.com/mlococo88/All-Structural/pull/581)
 
 ### SLRF. Report tab: unfactored loads at each unit's resultant   [display only]
 - **Engineer decision (2026-11-01):** every report is self-contained, with full worked steps.

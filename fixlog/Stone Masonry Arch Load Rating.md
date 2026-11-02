@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: AASHTO Standard Specifications for Highway Bridges, 17th Ed. (2002), Art. 6.4 (as cited by the tool); AASHTO Manual for Bridge Evaluation (MBE) Art. 6A.4.4.2.1 specialized hauling vehicles (SU4–SU7); MassDOT LRFD Bridge Manual Part I §7.2.7 (procedure, unchanged).
 
-## 2026-10-04 — PR: claude/fix-stone-arch (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-stone-arch (PR #24: https://github.com/mlococo88/All-Structural/pull/24)
 
 Default check model used below: the tool's default inputs (circular arch, span 40 ft, rise 10 ft, ring 24 in, fixed, tws 4 in, f_a = 250 psi), with crown fill cover set to 3.0 ft (H at the crown node = 3.333 ft including the wearing surface). Results come from loading the whole page in jsdom and calling the tool's own `readP()`, `ARCH.buildModel()`, `ARCH.nodalLL()` and `ARCH.rateVehicle()`.
 
@@ -151,7 +151,7 @@ Default check model used below: the tool's default inputs (circular arch, span 4
 - O6. The Verification tab narrative quotes SU4–SU7 and other RFs from a 2021 comparison run. That run used the shallow-fill (tire footprint, concentrated) branch, which this PR does not change, but the SU6/SU7 axle change may move those quoted numbers slightly. They were not re-run.
 - O7. The figure-only cone in the elevation view now starts from the wheel point (literal basis) or the tire length (tire basis). It is a drawing; the solve does not use it.
 
-## 2026-10-04 — PR: claude/step1-group2 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group2 (PR #31: https://github.com/mlococo88/All-Structural/pull/31)
 
 ### F7. "← All tools" link + shared project info (HANDOFF.md §4.1)   [feature (no result change)]
 
@@ -263,7 +263,7 @@ Default check model used below: the tool's default inputs (circular arch, span 4
 - **Other copies:** the BridgeXfer v1 helper is duplicated verbatim in every tool that uses it (CLAUDE.md §3; list in the PR). The glue block is the same in each tool of this PR except `TOOL`/`FILE` and the field map.
 - **Open items:** none.
 
-## 2026-10-09 — PR: claude/tabs-arch (PR link added after merge)
+## 2026-10-09 — PR: claude/tabs-arch (PR #66: https://github.com/mlococo88/All-Structural/pull/66)
 
 ### T1. Input panel split into tabs   [UI only — no calculation change]
 
@@ -303,7 +303,7 @@ Default check model used below: the tool's default inputs (circular arch, span 4
 - **Other copies:** none.
 - **Open items:** none.
 
-## 2026-10-12 — PR: claude/sweep-stonearch (open-item sweep; PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-stonearch (open-item sweep; PR #163: https://github.com/mlococo88/All-Structural/pull/163)
 
 Engineer's instruction (2026-10-12): work through every open item, use best judgment, and list what needs the engineer. Basis as at the top of this log (AASHTO Std. Spec. 17th Ed., MBE, MassDOT BM Pt. I §7.2.7). Provisions I could not confirm against the printed text are marked **verify**. Line numbers are approximate (after the fix). Default model = the tool's defaults (40 ft circular, 10 ft rise, 24 in ring, cover 2 ft + 4 in wearing surface, barrel 24 ft, f_a = 250 psi).
 
@@ -382,7 +382,7 @@ Engineer's instruction (2026-10-12): work through every open item, use best judg
 - Art. 6.4.2 "the total width of distribution shall not exceed the total width of the supporting slab": not applied (one or several trucks). Under very deep fill on a narrow barrel the merged width can exceed the barrel width, which understates the pressure. Recommendation: cap the merged width at the barrel width (a §4 calc change; not done here).
 - The Live Load transverse figure draws one truck; it could draw the adjacent truck when κ > 1.
 
-## 2026-10-18 — PR: claude/arch-d11-report (PR link added after merge)
+## 2026-10-18 — PR: claude/arch-d11-report (PR #278: https://github.com/mlococo88/All-Structural/pull/278)
 
 ### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
 - **Engineer request:** 2026-10-14 / 2026-10-18 (AUDIT.md D11: "have a report builder, to be reviewed against the format").
@@ -529,7 +529,7 @@ Engineer's instruction (2026-10-12): work through every open item, use best judg
   - **Dashboard jumps.** The existing "<vehicle> rating factor" jumps (`data-go`) still use `scrollIntoView`, so the panel header lands under the sticky tab bar. The new links avoid this. Not changed (existing behaviour); they could route through `archGoto`.
   - **Section order.** The report keeps its existing section order: Rating Summary (§15) prints after the Midas verification (§14), and Mesh Convergence after it.
 
-## 2026-10-19 — PR: claude/aashto10-stone-arch (PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-stone-arch (PR #332: https://github.com/mlococo88/All-Structural/pull/332)
 
 Line numbers are approximate, as of this fix. Search for the anchor text.
 
@@ -587,7 +587,7 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
   4. **Assumptions note "No article authorizes a spread at that depth"** (shown when a credit is taken below 2 ft): true for the Std. Spec. framework the tool rates to, but 10th Ed. 3.6.1.2.6a does give a spread for nonconcrete culverts with 1.0–2.0 ft of fill. Reword when the 1.15H option is selected?
 - **Resolved 2026-10-19 (engineer):** 1 not applied; 2 limit to H ≥ 1.0 ft; 3 keep; 4 reword. Done in SA-A10b below.
 
-## 2026-10-19 — PR: claude/aashto10-stone-arch-2 (PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-stone-arch-2 (PR #345: https://github.com/mlococo88/All-Structural/pull/345)
 
 Line numbers are approximate, as of this fix. Search for the anchor text.
 
@@ -673,7 +673,7 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
   - **Node worked calculation (Nodal Results), note on 6.4.1 axles** (anchor `axles land on cover shallower than`). It says those axles are "not dispersed through the fill" even when a credit spreads them. Wording only; already so on main.
   - **Live Load figure with mixed regimes:** the figure still takes the rate of the first 6.4.1 axle for the whole cut, now corrected only by the node's own cover (item 5).
 
-## 2026-11-01 — PR: claude/rpt-stonearch — Report output tab in the shared report viewer (ARPT; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-stonearch — Report output tab in the shared report viewer (ARPT; display only, no calculation change) (PR #547: https://github.com/mlococo88/All-Structural/pull/547)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `ARPT`.
 

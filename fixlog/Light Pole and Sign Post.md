@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: the tool's stated basis — ASCE 7-22 (Ch. 26/29 wind), AISC 360-16, ACI 318-19 (Ch. 17, §22.4), IBC 2021 §1806/§1807.3. (Not an AASHTO LRFDLTS tool.)
 
-## 2026-10-04 — PR: claude/fix-light-pole (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-light-pole (PR #22: https://github.com/mlococo88/All-Structural/pull/22)
 
 Every check case below comes from running the page in node with jsdom. I wrapped the page's own functions (`evalCombo`, `designRebar`, `anchorBolts`, `bearingCheck`, `poleStress`, `signWind`, …) to log their inputs and outputs, and ran each case on the original file and on the fixed file. Units are lb, ft and in. "Default pole" means the tool's default inputs:
 - 35 ft tapered round pole, 10″→6″ diameter, 0.25/0.1875 wall, Fy 50;
@@ -815,7 +815,7 @@ Check cases come from headless Chromium, main (e29761a) vs branch, with the page
   - **RESOLVED 2026-10-09 (F14):** engineer: rename to `lpp_activeTab_v1`. The old value is migrated once if it is a valid output-tab id; the old `activeTab` key is left in place and no longer written.
 - **O2, O3, O4, O5, O6, O9, O11, O12 / LP-A1, LP-A2:** RESOLVED 2026-10-12 (sweep), see F15–F25. The open sub-questions are listed under "Needs engineer" (N1–N7).
 
-## 2026-10-18 — PR: claude/lightpole-d11-report (AUDIT.md D11, display only; PR link added after merge)
+## 2026-10-18 — PR: claude/lightpole-d11-report (AUDIT.md D11, display only; PR #277: https://github.com/mlococo88/All-Structural/pull/277)
 
 ### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
 - **Engineer request:** 2026-10-14; scope decided 2026-10-18 (AUDIT.md D11: full report for every design-check tool).
@@ -1045,7 +1045,7 @@ Check cases come from headless Chromium, main (e29761a) vs branch, with the page
   - Ctrl+P now prints only the calculation report. Before, it printed every output tab, then the report.
   - The Report tab's sections are no longer collapsible.
 
-## 2026-10-19 — PR: claude/lightpole-shaft-phi (shaft flexure φ per ACI 318-19 Table 21.2.2; engineer decision 2026-10-19; PR link added after merge)
+## 2026-10-19 — PR: claude/lightpole-shaft-phi (shaft flexure φ per ACI 318-19 Table 21.2.2; engineer decision 2026-10-19; PR #320: https://github.com/mlococo88/All-Structural/pull/320)
 
 Answers the D11 open item "Calculation (raised only), shaft φ" above. Engineer decision: replace the fixed φ = 0.65 with φ from the net tensile strain, tied row of Table 21.2.2.
 
@@ -1138,7 +1138,7 @@ Transition check (default pole with b = 1.25 ft, V = 150 mph): (6) #6, c = 4.20 
 ### Open items
 - None new.
 
-## 2026-10-21 — PR: claude/lightpole-torqued (anchor installation input and ACI 318-19 §17.9 minimum geometry; PR link added after merge)
+## 2026-10-21 — PR: claude/lightpole-torqued (anchor installation input and ACI 318-19 §17.9 minimum geometry; PR #402: https://github.com/mlococo88/All-Structural/pull/402)
 
 ### TQ1. Anchor installation input (Untorqued / Torqued) and ACI 318-19 §17.9.2 minimum spacing and edge distance checks   [new checks] [no existing result changes]
 - **Where:**
@@ -1178,7 +1178,7 @@ Transition check (default pole with b = 1.25 ft, V = 150 mph): (6) #6, c = 4.20 
   - Untorqued cover is measured to the anchor shank; head/plate-washer and template clearance to the shaft cage are detailing checks, not done.
   - §17.9.3 d_a′ substitution for untorqued anchors that fail the limits is cited, not computed.
 
-## 2026-10-21 — PR: claude/lightpole-splitting (follow-up to #402: §17.9.1 splitting reinforcement input; square-shaft edge distance per bolt; PR link added after merge)
+## 2026-10-21 — PR: claude/lightpole-splitting (follow-up to #402: §17.9.1 splitting reinforcement input; square-shaft edge distance per bolt; PR #404: https://github.com/mlococo88/All-Structural/pull/404)
 
 ### TQ2. "Splitting reinforcement at the shaft top" input waives the §17.9.2 minimums (ACI 318-19 §17.9.1)   [new input] [default: no change]
 - **Where:**
@@ -1624,7 +1624,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **Other copies:** none.
 - **Open items:** `docs/lts-mode-plan.md` (LTS-9 and the LTS-6 rows) still names the "Calc sheet"; the LTS-mode plan's owner may drop it. The Shaft tab's tie line in `rebarWorkedHTML` has a bare `#3` inside TeX, which KaTeX shows as an error on the Shaft tab (and showed on the Calc sheet); the Report escapes it when reading the TeX, the tab is not changed here (display-only fix to ask about).
 
-## 2026-11-02 — LPK-1: Shaft tab tie line, bare `#3` escaped for KaTeX (display only; no result changes) (PR: claude/lp-tie-katex, PR link added after merge)
+## 2026-11-02 — LPK-1: Shaft tab tie line, bare `#3` escaped for KaTeX (display only; no result changes) (PR: claude/lp-tie-katex, PR #627: https://github.com/mlococo88/All-Structural/pull/627)
 
 - **Where:** `rebarWorkedHTML(reo, inp, Mu, Pu, Vu)`, anchor text `A_v = 2A_{tie} = ${fmt(T.Av,3)}` (the A_v,min / A_v line of the shear-tie derivation on the Shaft tab).
 - **Before:** `` ... \\ \\text{in}^2\\ (${T.bar.n}\\ @\\ ${fmt(T.sTrial,1)}\\ \\text{in})`); ``

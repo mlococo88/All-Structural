@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: AASHTO LRFD 10th Ed. (2024) Table 3.4.1-1 (fatigue load factors); AASHTO MBE (3rd Ed. with interims) Eq. 6A.4.2.1-3, Tables 6A.4.2.3-1 / 6A.4.2.4-1, Appendix D6A legal/posting vehicles; FHWA FAST Act emergency-vehicle load-rating memo (Nov. 2016) for EV2/EV3; AISC Shapes Database v16.0 for rolled-shape dimensions.
 
-## 2026-10-04 — PR: claude/fix-index-mct (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-index-mct (PR #5: https://github.com/mlococo88/All-Structural/pull/5)
 
 Line numbers are those of the fixed file. Every fix lists anchor text to search for.
 
@@ -592,7 +592,7 @@ Line numbers are those of the fixed file. Every fix lists anchor text to search 
 - O14. Fatigue rating: no fatigue truck in the library, IM 15 % vs 33 %, no g/1.2 distribution (AUDIT A22 second half) — not in this PR's scope list.
 - O15. Rolled-shape dimensions, vehicle tons and fatigue preset factors already stored in saved projects are user data and are not rewritten; users must re-convert the shape / re-select the vehicle / re-apply the preset.
 
-## 2026-10-04 — PR: claude/step1-group1 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group1 (PR #28: https://github.com/mlococo88/All-Structural/pull/28)
 
 Feature (no result change): "← All tools" link to `tools.html` (`target="_top"`, hidden in print) and the shared project info buttons. No formula, factor, unit, storage key or saved format changed. New storage written only on "Share project info": `bridgeSuite.v1.projectMeta` and `bridgeSuite.v1.projectMeta.updatedAt` (HANDOFF.md §2/§4.1). The BridgeLocks registry already lists the `project` channel → `.projectMeta`; the payload carries a top-level `producedAt`, which `BridgeLocks.producedAt()` / `hasData()` read (checked in jsdom). The bridgeSuite bootstrap blocks are unchanged.
 
@@ -737,13 +737,13 @@ Field mapping: projectName ↔ Project Name (`cfg.projectName`), bridgeId ↔ Br
 - **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
 - **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
 
-## 2026-10-04 — PR: claude/conn-reactions-subloads (PR link added after merge)
+## 2026-10-04 — PR: claude/conn-reactions-subloads (PR #37: https://github.com/mlococo88/All-Structural/pull/37)
 
 No code change in this file.
 
 - **OPEN (superReactions sender, HANDOFF.md §4.4):** index.html (MCT) is listed as a sender of `superReactions`, but its results do not contain support reactions per load case (it writes the MIDAS model and imports member force envelopes; no reaction table is read). It was therefore not connected in this PR. Needed: a MIDAS reaction-table import (DC1/DC2/DW per support per girder) before index.html can send reactions.
 
-## 2026-10-12 — PR: claude/sweep-index (open-item sweep; PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-index (open-item sweep; PR #135: https://github.com/mlococo88/All-Structural/pull/135)
 
 Works through every open item for index.html in the 2026-10-12 inventory (section 1, IDs IDX-…) under the engineer's instruction of 2026-10-12 ("continue making updates and fixes until it's completed; use your best judgment; note what absolutely needs my input"). Basis: AASHTO LRFD 10th Ed. (2024), MBE 3rd Ed. (with interims), AISC Shapes Database v16.0. Article numbers marked "verify" were not checked against the printed edition.
 
@@ -2814,7 +2814,7 @@ O1 → SW14 · O2 → SW12 · O3 → SW13 (+ N5) · O4, O5 → N6 · O6 → SW5,
 - **R3.** Service II reads `origRows` only, so a "Computed Combos" case chosen for Service II finds no rows (it silently drops out). Pre-existing; noted only.
 - **R4.** The printed capacity table labels Composite / PS / AREMA zones "Manual" in the Type column (the basis line from SW2 now follows it). Display only.
 
-## 2026-10-12 — PR: claude/bootstrap-sync (shared `bridgeSuite.v1.*` bootstrap; PR link added after merge)
+## 2026-10-12 — PR: claude/bootstrap-sync (shared `bridgeSuite.v1.*` bootstrap; PR #165: https://github.com/mlococo88/All-Structural/pull/165)
 
 Cross-tool sync of the shared bootstrap blocks. The same change is in index.html, lldf.html, psbeam.html and stgirder.html (CLAUDE.md §3). No engineering formula, factor, unit or code reference changed; no computed value changes. Storage keys and saved formats are unchanged (the hand-off map keeps its key and entry format; it only loses old entries).
 
@@ -2891,7 +2891,7 @@ This closes **R2** (IDX-S10 rest) of the 2026-10-12 sweep entry above.
 - Headless Chromium, main vs branch, same steps: index publishes the PS demands payload → psbeam shows "New analysis data available", "Load these demands" adopts it (adopted token `test__beam@2026-10-12T10:00:00.000Z`); index publishes the steel payload → stgirder banner and adoption; lldf boots and resolves `BridgeApps.path('psbeam')`. Same results and the same storage keys on both; key values differ only in timestamps. No page errors (only Babel's "deoptimised styling" notes).
 - **Other copies:** index.html, lldf.html, psbeam.html, stgirder.html (all changed in this PR; lldf.html has no `BridgeHandoff` block, so XS2 and the hand-off call of XS3 are not in it).
 
-## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR #166: https://github.com/mlococo88/All-Structural/pull/166)
 
 Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
 
@@ -2910,7 +2910,7 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.3 (equivalent strip widths for slab-type bridges: the slab DF is per unit width, not per girder). No formula changed.
 - **How verified:** headless Chromium, main vs branch: lldf "Send DFs" for the slab and the girder case, then the resolver called on this tool (`lldfResolveMCT()`). Slab: main applied, branch refused. Girder: identical results (only `producedAt` differs). No page errors.
 
-## 2026-10-18 — PR: claude/index-d11-report (PR link added after merge)
+## 2026-10-18 — PR: claude/index-d11-report (PR #283: https://github.com/mlococo88/All-Structural/pull/283)
 
 Display only (AUDIT.md D11 and CLAUDE.md §6). No formula, factor, unit, code reference or computed result changed; no saved-data key or format changed. The shared `bridgeSuite.v1.*` bootstrap blocks at the top of the file are not touched.
 
@@ -2985,7 +2985,7 @@ Display only (AUDIT.md D11 and CLAUDE.md §6). No formula, factor, unit, code re
 - **AREMA report settings.** The "Cover" and "TOC" switches still drop the cover / contents. The house format always has them; keep the switches?
 - **AREMA in-app calc sheet:** the "1 + I" row shows the base impact formula while the value includes rocking (the note says "incl. rocking"). Wording only; not changed.
 
-## 2026-10-19 — PR: claude/index-posting (PR link added after merge)
+## 2026-10-19 — PR: claude/index-posting (PR #299: https://github.com/mlococo88/All-Structural/pull/299)
 
 ### Load posting from each legal vehicle's own rating, MBE Eq. 6A.8.3-1 (Tier 2: result change in one module)
 - **Problem (raised in the D11 open items, engineer asked to fix 2026-10-18):** the "⚠ Load Posting Required — MBE Section 6A.8" box (AASHTO Rating → Inputs & Setup, under the RF chart; and the same box in Generate Report §"Rating Factor Results") gave posting tons for Type 3, Type 3-3 and Type 3S2 from the **rated** vehicle's RF (e.g. HL-93), not from each legal vehicle's own legal-load rating. The two places did not even agree:
@@ -3282,7 +3282,7 @@ After:
 - **When the box shows:** still only when the rated vehicle's governing RF < 1. A legal truck with RF < 1 while the rated vehicle passes is visible in Multi-Vehicle but gets no posting box.
 - **Edition:** MBE edition unstated in the tool (verify against the printed edition in use).
 
-## 2026-10-19 — PR: claude/index-legal-match (PR link added after merge)
+## 2026-10-19 — PR: claude/index-legal-match (PR #300: https://github.com/mlococo88/All-Structural/pull/300)
 
 ### Vehicle → MIDAS result-case auto-detect matches whole vehicle names (Tier 2: result change in one module)
 - **Problem (open item 1 of the claude/index-posting entry; engineer approved the fix 2026-10-19):** the auto-detect that maps each selected vehicle to its MIDAS result cases (`vehicleLCMap`, AASHTO Rating → Multi-Vehicle) used `lc.includes(vn)`. "AASHTO Legal Type 3" is a prefix of "AASHTO Legal Type 3-3" and "AASHTO Legal Type 3S2" (and "WORKCONSIST-I" of "-II", "-III", "-IV"), so when the pasted results list a 3-3 or 3S2 case before the Type 3 case, Type 3 got the other truck's case. It was then rated, and since claude/index-posting also posted, with the other truck's forces. The error can go either way: the 3-3 forces are larger in the check case below (posting too low), but a shorter truck's forces would make it unconservative.
@@ -3375,7 +3375,7 @@ Model as in the claude/index-posting check case B: 4 × 20.25 ft, Mn⁻ 700 ft·
 - The saved-project migration above (engineer to decide).
 - **"↺ Auto-detect LCs" drops category and γLL (pre-existing, not changed).** The button writes `{posLC, negLC}` only, so a vehicle's stored category and γLL are dropped. Until the auto-populate effect runs again (new results, vehicle selection, limit state, method or ADTT), `multiVehicleData` falls back to category "Design" and the rating-level γLL. A legal truck is then rated, and its posting reported as "not computed — rated as Design", at the design γLL. Keep category/γLL in the button (a result change)? Engineer to decide.
 
-## 2026-10-19 — PR: claude/index-legal-remap (PR link added after merge)
+## 2026-10-19 — PR: claude/index-legal-remap (PR #301: https://github.com/mlococo88/All-Structural/pull/301)
 
 ### Notice and "Re-map" for result cases stored by the old auto-detect (Tier 1: display + user-initiated change)
 - **Problem (saved-data item of the claude/index-legal-match entry; engineer approved the proposed fix 2026-10-19):** a project saved before the whole-name match can hold `vehicleLCMap["AASHTO Legal Type 3"].posLC/negLC` = a Type 3-3 or 3S2 case. The auto-detect never overwrites a stored case, so after the fix such a project still rates and posts Type 3 with the other truck's forces. An old auto-detected mapping cannot be told apart from a deliberate hand-set one, so nothing is changed silently.
@@ -3485,7 +3485,7 @@ Model as in the claude/index-posting check case B: Mn⁻ 700, γLL 1.45, s = 1.3
 - The "↺ Auto-detect LCs" button still drops category and γLL (pre-existing, see the claude/index-legal-match entry). Re-map does not use it.
 
 
-## 2026-10-19 — PR: claude/stgirder-disconnect-others (STDISC: ST-Girder removed from the bridge suite on the other tools' side; engineer decision 2026-10-19; cross-tool PR with index.html, psbeam.html, lldf.html, Bridge Substructure Loading.html, tools.html, HANDOFF.md, AUDIT.md, CLAUDE.md §3; ST-Girder's side is claude/stgirder-disconnect; PR link added after merge)
+## 2026-10-19 — PR: claude/stgirder-disconnect-others (STDISC: ST-Girder removed from the bridge suite on the other tools' side; engineer decision 2026-10-19; cross-tool PR with index.html, psbeam.html, lldf.html, Bridge Substructure Loading.html, tools.html, HANDOFF.md, AUDIT.md, CLAUDE.md §3; ST-Girder's side is claude/stgirder-disconnect; PR #310: https://github.com/mlococo88/All-Structural/pull/310)
 
 ### STDISC. MCT Generator: ST-Girder embed and steel demands hand-off removed; ST-Girder capacity no longer received, saved ST-Girder zones kept as flagged manual zones   [no result change: ratings identical; Tier 1]
 - **Engineer decision (2026-10-19):** ST-Girder (`stgirder.html`) is completely disconnected from every other bridge tool except GirderDetail (`Steel Bridge Beam Modules.html`): no MIDAS / MCT demands into ST-Girder, MCT's steel rating no longer uses ST-Girder's capacity (it falls back to MCT's own capacity inputs), ST-Girder removed from MCT's combined saved project, no ST-Girder links in the other tools; Substructure Loading reactions from GirderDetail are a later, separate change. CLAUDE.md §3 updated: the shared bootstrap block is now in index.html, lldf.html and psbeam.html only.
@@ -3763,7 +3763,7 @@ index 4402d55..4d6f8bd 100644
 ```
 - **tools.html diff:** see fixlog/Bridge Substructure Loading.md (same PR), last hunk.
 
-## 2026-10-19 — PR: claude/index-autodetect-keep (PR link added after merge)
+## 2026-10-19 — PR: claude/index-autodetect-keep (PR #321: https://github.com/mlococo88/All-Structural/pull/321)
 
 ### "↺ Auto-detect LCs" keeps each vehicle's category and γLL (Tier 2: result change in one module)
 - **Problem (open item of the claude/index-legal-match entry; engineer approved the fix 2026-10-19):** the "↺ Auto-detect LCs" button on the Multi-Vehicle tab rebuilt `vehicleLCMap` from scratch as `{posLC, negLC}` per vehicle, which dropped `category`, `gamLLinv`, `gamLLop` and `customGam`.
@@ -3843,7 +3843,7 @@ index 4402d55..4d6f8bd 100644
   - The `bridgeSuite.v1.*` payloads and all other storage are identical. LFR example: main after the click rated Type 3 at Design Inv γLL 1.30 (the rating level's factor); the branch keeps the vehicle's LFR Inv 2.17, the same as before the click.
 - **Other copies:** none. The shared `bridgeSuite.v1.*` blocks are not touched.
 
-## 2026-10-19 — PR: claude/aashto10-index (PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-index (PR #336: https://github.com/mlococo88/All-Structural/pull/336)
 
 ### Lp for lateral-torsional buckling = 1.1·rt·√(E/Fyc) (AASHTO LRFD 10th Ed.); references row relabelled to the 10th Ed. (Tier 2: result change in the Steel Calc / Composite capacity zones)
 - **Problem:** the compact unbraced length Lp was the 9th Ed. value, Lp = 1.0·rt·√(E/Fyc). This was in two places:
@@ -3983,7 +3983,7 @@ Composite zone: the case-2 steel with tw = 1.0 in, f′c = 4 ksi, beff = 96 in, 
      - (c) brace-point stations per zone, with Cb computed per unbraced length from the governing envelope.
 4. **§6 show the work.** Apart from the new Lp line, the zone card and the report give only the governing check label (e.g. "6.10.8 (LTB)"), not a worked Fnc / Mnc. This gap was there before this change.
 
-## 2026-10-19 — PR: claude/aashto10-index-fyr (PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-index-fyr (PR #347: https://github.com/mlococo88/All-Structural/pull/347)
 
 ### Fyr for LTB and FLB per AASHTO LRFD 10th Ed.; "rolled shape" box (App. A6 Fyr and kc); Cb helper per Eq. 6.10.8.2.3b-1 (Tier 2: result change in the Steel Calc / Composite capacity zones)
 Engineer decision 2026-10-19, relayed by the coordinator. These close open items 1–3 of the claude/aashto10-index entry.
@@ -4136,7 +4136,7 @@ The basis line on the zone card and in the report's capacity table now works out
 - **The 3.0 limit on Cb** is applied only together with Rm, because C6.10.8.2.3b states it right after the Rm definitions. Eq. 6.10.8.2.3b-1 itself has no limit and can reach 5.0 (MA = MB = MC = 0). **Engineer to confirm:** should the helper also cap Cb at 3.0 without Rm?
 - **The zone's single Cb** is used for both Mn⁺ and Mn⁻, as before. The helper says so on the card.
 
-## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR #410: https://github.com/mlococo88/All-Structural/pull/410)
 
 ### SBD1-a. `capFromST`: ST-Girder payloads from Steel Bridge Design   [hand-off] [no result change]
 - **Where:** `capFromST`, anchor `function capFromST(p){`.
@@ -4162,7 +4162,7 @@ The basis line on the zone card and in the report's capacity table now works out
   ```
 - **Other copies:** index.html, psbeam.html, lldf.html (same text; the block stays byte-identical). No code changed.
 
-## 2026-10-22 — PR: claude/pbd-h-mct-removal (PBD-H: the MCT no longer frames PS-Beam / Prestressed Bridge Design; the Design hand-off opens it in a new tab; cross-tool connection PR, CLAUDE.md §7 exception; no result change; PR link added after merge)
+## 2026-10-22 — PR: claude/pbd-h-mct-removal (PBD-H: the MCT no longer frames PS-Beam / Prestressed Bridge Design; the Design hand-off opens it in a new tab; cross-tool connection PR, CLAUDE.md §7 exception; no result change; PR #424: https://github.com/mlococo88/All-Structural/pull/424)
 
 ### PBD-H1. PS-Beam overlay, its switch and `EMBED_META.psbeam` removed; Prestressed Bridge Design opens in a new tab   [UI / navigation] [no result change]
 - **Where:** `App` in index.html.

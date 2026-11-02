@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: ACI 318-19 (Ch. 17, Table 25.4.2.5, §22.8); AISC Design Guide 1, 2nd Ed.; AISC 360-16 J3.10; ASTM A449.
 
-## 2026-10-04 — PR: claude/fix-baseplate (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-baseplate (PR #21: https://github.com/mlococo88/All-Structural/pull/21)
 
 All check cases below were computed by running the page's own script in node
 (`vm` sandbox, DOM stubbed) on the original file and on the fixed file. Units: kip, in, ksi.
@@ -522,7 +522,7 @@ h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout) unless stated.
 - **Other copies:** BridgeXfer v1 and `ProjMetaUI` are duplicated (CLAUDE.md §3) in Pile Designer.html, Spread Footing.html, BasePlateAnchorDesigner.html, Concrete Anchor.html and Timber Beam Check.html (this PR), plus any other tools that received BridgeXfer in their own step-1 PRs.
 - **`ProjMetaUI`:** given in full in the After code of the helper insertion above; the copy is identical in every tool listed.
 
-## 2026-10-05 — PR: claude/conn-steelbeam-reactions (PR link added after merge)
+## 2026-10-05 — PR: claude/conn-steelbeam-reactions (PR #38: https://github.com/mlococo88/All-Structural/pull/38)
 ### C1. Member-reaction hand-off receiver: "Pull from Steel Beam" and "Import hand-off (JSON)"   [feature: hand-off (no result change)]
 - **Date / type:** 2026-10-05, feature: hand-off (no result change).
 - **Where:** header `#projMetaBtns` (anchor `<button id="btnShareProjMeta" title="Make these project fields available to the other tools">Share project info</button>`); `buildPrintReport()` after the title block (anchor `holder.appendChild(hg);`, first occurrence inside `buildPrintReport`); one new `<script>` block at the end of the file, just before `</body>` (anchor `Member-reaction hand-off receiver`).
@@ -840,7 +840,7 @@ h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout) unless stated.
 - O8. Condition A is decided by "the intercept check credits ≥ 1 bar/leg" (F7). If you want a stricter rule (all bars effective) or an explicit "Condition A" input, say so. **Still open: see "Needs engineer" in the 2026-10-12 entry.**
 - O9. F6 (§17.7.2.1.2) and F10 (uniform block) reduce DCRs in some cases. Both follow the code text / the reviewer's instruction, but please confirm. **Still open: see "Needs engineer" in the 2026-10-12 entry.**
 
-## 2026-10-09 — PR: claude/tabs-baseplate (PR link added after merge)
+## 2026-10-09 — PR: claude/tabs-baseplate (PR #60: https://github.com/mlococo88/All-Structural/pull/60)
 ### T1. Input panel split into tabs   [UI only — no calculation change]
 - **Date / type:** 2026-10-09, UI only (no result change). Requested by the engineer on 2026-10-09: "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." Same approach as `Steel Beam Design - AISC 15th.html` T1: build every section as before, then move the built nodes into tab panes. Drawn in this tool's own style (the same button-tab look as the output `#tabBar`).
 - **How it works:** `buildInputPanel()` still builds the 11 numbered input cards into `#inputPanel` exactly as before. At its end the new `bpadInputTabs(P)` **moves** the finished `.sec` nodes into one pane per tab. Nothing is rebuilt or re-templated, so every `data-fkey`, `data-secid`, handler, bound value and collapse state (`S.ui.collapse`) is unchanged. Every caller goes through `buildInputPanel()` (`refreshAll`, `init`, project Load, Import JSON, Restore All, PROFIS import, the member-reaction hand-off), so all of them get the tabs. A tab whose pane is empty is hidden. None is empty today, because all 11 cards are always built. A card not in the map stays in the tab of the card before it.
@@ -962,7 +962,7 @@ h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout) unless stated.
   - O10. Typing a decimal into a number field can lose the decimal point. Typing `5.5` into f'c with Playwright's keyboard gives 55, both on main and on this branch. The panel is rebuilt on every keystroke, and the number input does not keep the intermediate `5.`. Please check this by hand in a browser. Not changed, because it is outside this brief. **Resolved 2026-10-10 by D1** (claude/baseplate-decimal).
   - O11. At 400 px the page scrolls horizontally because of the six-column project header (`#projGrid`, at least 120 px per column). This was there before this change and was not changed. **Resolved 2026-10-12 by S8 (claude/sweep-baseplate).**
 
-## 2026-10-10 — PR: claude/baseplate-decimal (PR link added after merge)
+## 2026-10-10 — PR: claude/baseplate-decimal (PR #91: https://github.com/mlococo88/All-Structural/pull/91)
 ### D1. Number fields keep a typed decimal point (closes O10)   [UI only — no calculation change]
 - **Date / type:** 2026-10-10, input handling only. No formula, factor, unit, code reference, storage key or saved-data change. Engineer's instruction (2026-10-10): fix O10 with the recommended fix.
 - **Problem (reproduced on main in headless Chromium with real key events):** typing `5.5` into an input-panel number field gave `55`; `0.75` gave `75`, `.5` gave `5`, `-1.25` gave `125`, `1e3` gave `3`, and `1.25` into plate t gave `125`. So f'c could silently become 55 ksi. Typing with 120–150 ms between keys gave the same. All 24 number fields in the input-panel tabs failed (168 of 168 typed cases).
@@ -1029,7 +1029,7 @@ h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout) unless stated.
 - **Open items:** none new.
 
 
-## 2026-10-12 — PR: claude/sweep-baseplate (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-baseplate (PR #132: https://github.com/mlococo88/All-Structural/pull/132)
 
 Open-item sweep (engineer, 2026-10-12: "continue making updates and fixes until it's completed … use your best judgment"). Items from the open-item inventory, section 8 (BP-O1 to O9, BP-O11, BP-A1, BP-C5, BP-D6). Basis: ACI 318-19, AISC 360-16, ASCE 7-22 (as the tool states), AISC DG1 2nd Ed. Units: kip, in, ksi. "Default model" = the tool's default state (18×18×1.5 A36 plate, W12X65, 2×2 1″ F1554-36 heavy hex, h_ef 12″, 30×30×36 pedestal, f'c 4 ksi cracked, 1″ grout, three default combinations). All values below were read from the page itself in headless Chromium (main vs branch).
 
@@ -1300,7 +1300,7 @@ Order of work: unconservative calc items (S1, S2, S3), then the conservative cal
 - **Other copies of this code:** none. The generator, anchor checks and import code are local to this tool. The member-reaction receiver's `check()` and unit tables are duplicated in Spread Footing.html, but the removed warning line is in this tool's own `plan()` and is not duplicated.
 
 
-## 2026-10-12 — PR: claude/baseplate-n3 (PR link added after merge)
+## 2026-10-12 — PR: claude/baseplate-n3 (PR #137: https://github.com/mlococo88/All-Structural/pull/137)
 
 Follow-up to the claude/sweep-baseplate entry (#132), on the coordinator's instruction of 2026-10-12: N3 fixed, N4 warning added, the §17.6.2.2.3 N_b basis aligned with Concrete Anchor.html (#134), and the generator note fixed. Units: kip, in, ksi. "Default model" is as defined in the earlier entries.
 
@@ -1407,7 +1407,7 @@ Follow-up to the claude/sweep-baseplate entry (#132), on the coordinator's instr
 - No console errors from the page in either build, apart from the harness-only 3-D `setTimeout` error noted in #132.
 - Screenshots checked: the Summary hairpin warning, the open stand-off rod-compression section (C_u 40.00, DCR 2.08 FAILS), and the generator note in bold.
 
-## 2026-10-16 — PR: claude/bpad-profis-export (Export to Hilti PROFIS Engineering (.pe); PR link added after merge)
+## 2026-10-16 — PR: claude/bpad-profis-export (Export to Hilti PROFIS Engineering (.pe); PR #249: https://github.com/mlococo88/All-Structural/pull/249)
 
 Engineer request 2026-10-16. A new export only: **no input, result, report or saved-data change** (verified below).
 
@@ -3105,7 +3105,7 @@ Engineer request 2026-10-16. A new export only: **no input, result, report or sa
 - **Print:** unchanged — `buildPrintReport()` into `#printReport`, no bar, no tree, nothing collapsed. The printed PDF of the engineer's test project is identical to main's (35 pages, `pdftotext` equal).
 - **Checks (1500 × 1000 mouse, 1180 × 820 touch):** tree entries equal the report headings 1:1 (9 chapters, 39 sections); a tree jump puts the heading just under the tool bar and the tree highlights it; scroll-spy follows; heading tap collapses / expands; Collapse all closes 9 chapters, a jump into one opens it, the rest stay closed after a rebuild, Expand all clears them; "§ in report" from the Summary opens the Report tab at §5.1; "see §3.2" in the report goes to Base Plate; output column never scrolls sideways; 0 page errors. `node tests/bpad-profis.mjs` 5 / 5 `same`; `node tests/check-syntax.mjs` passes.
 
-## 2026-11-01 — RPT-4: the Report tab moves to the shared report viewer (shared/report.js); RPT-1/2/3 kept (display / report only; no result changes) (PR: claude/rpt-baseplate, PR link added after merge)
+## 2026-11-01 — RPT-4: the Report tab moves to the shared report viewer (shared/report.js); RPT-1/2/3 kept (display / report only; no result changes) (PR: claude/rpt-baseplate, PR #580: https://github.com/mlococo88/All-Structural/pull/580)
 - **Engineer request (2026-11-01, report rollout, item 9):** migrate the tool's own in-app Report tab (RPT-2/3, Gusset pattern) to the shared viewer used by the other tools, keeping every feature; replace the old one only if equivalent.
 - **What is unchanged:** the document. `buildPrintReport()` (RPT-2, with the RPT-1 corrections: closed-tie wording and references, plain-text TeX, clipping, combination statements, links) still builds the calculation sheet; Print / PDF (tool bar) still prints `#printReport` with `bpadPageCSS`; Ctrl+P from any other tab is unchanged.
 - **New (anchor `/* RPT-4 (2026-11-01)`, before `/* BP-T1 (2026-10-21)`):**
@@ -3291,7 +3291,7 @@ index 5a65298..c7c5f79 100644
 +    if(!document.getElementById("printReport").innerHTML) buildPrintReport(); bpadApplyPageCSS(true); });
 ```
 
-## 2026-11-01 — RPT-4b: the unused RPT-3 report viewer code removed (pure removal; no behaviour change) (PR: claude/bpad-rpt3-cleanup, PR link added after merge)
+## 2026-11-01 — RPT-4b: the unused RPT-3 report viewer code removed (pure removal; no behaviour change) (PR: claude/bpad-rpt3-cleanup, PR #587: https://github.com/mlococo88/All-Structural/pull/587)
 - **Coordinator request (2026-11-01):** delete the RPT-3 functions that RPT-4 (#580) left in place but no longer calls.
 - **Removed** (anchor before: `/* RPT-2 (2026-10-24): Report tab — the calculation sheet on screen.`, through the `resize` listener that called `bpCrSizeBar`): the RPT-2/RPT-3 comments, `bpCrSpy`, `BP_RPT_CLOSED`, `bpCrKey`, `bpCrSizeBar`, `bpCrJump`, `bpCrSpyOff`, `bpCrSpyOn`, `buildReportTab` and `window.addEventListener("resize", … bpCrSizeBar(pg) …)`. None of them is referenced by any remaining code (checked by search: each name now occurs only in comments).
 - **Kept** (used by RPT-4 `bprReportTab` and the "§ in report" handler): `let bpRptTimer=0, BP_RPT_PENDING=null;` and `bpCrScroller()`, under a new comment `/* RPT-4 (2026-11-01): the Report tab is the shared viewer …`. The `.crv-*` CSS stays: `buildPrintReport(target)` still gives the off-screen sheet the class `crdoc crv-doc` (its drawings are laid out with it).
@@ -4906,13 +4906,13 @@ index c4454e3..b73cbd5 100644
    }
 ```
 
-## 2026-11-01 — BC-6: the pier cage drawn in the 3-D view, the elevations and the DXF (display only; no result changes) (PR: claude/bp-cage-draw, PR link added after merge)
+## 2026-11-01 — BC-6: the pier cage drawn in the 3-D view, the elevations and the DXF (display only; no result changes) (PR: claude/bp-cage-draw, PR #613: https://github.com/mlococo88/All-Structural/pull/613)
 
 - **Where (anchor texts):** `bpCageTieDepths()` (new, before `function bpCageTension(combo){`: the depth of every tie / spiral turn, z₁ = max(tieTop, cover + d_b,t/2), then every pitch, to H − 3 in; used only by the drawings); `build3D()` `/* BC-6 (display only): the pier cage` (bars as rods from 3 in above the bottom to the bar top; ties as circles of radius R_t, a spiral as one helix; layer "Pedestal reinforcement"); `bpExportDxf()` plan: bar circles on BP-PED-BARS and the tie circle on BP-PED-TIES, section: the cage outline (bars at ±R_b, every tie / spiral turn) with a note in the export warnings; `drawElevation()` `/* BC-6 (display only): pier cage outline` (bars at ±R_b, tie lines, a label).
 - **No calculation change.** `tests/bpad-circle.mjs` §1 now also compares two round-pier projects with the cage (supplementary only, and substituted) on the computed results (computeAll, comboCapacities, allChecks, validation): identical to origin/main; the 31 rectangular projects stay identical in every field including the report text. `tests/bpad-profis.mjs` PASS.
 - **Check:** the H6 design exports 8 bar circles, 1 tie circle, 2 bar lines and 29 tie lines (H = 120 in: z = 3.25 + 4k ≤ 117 in → 29 ties).
 
-## 2026-11-02 — OWN-1: optional Owner / Structure supported inputs and a CTDOT note on adhesive anchors for sign, signal and luminaire foundations (display only; no result changes) (PR: claude/bp-ctdot-adhesive, PR link added after merge)
+## 2026-11-02 — OWN-1: optional Owner / Structure supported inputs and a CTDOT note on adhesive anchors for sign, signal and luminaire foundations (display only; no result changes) (PR: claude/bp-ctdot-adhesive, PR #626: https://github.com/mlococo88/All-Structural/pull/626)
 
 - **Where (anchor texts):** `defaultState()` `proj:{name:"Untitled"` (two new fields `owner:""`, `supports:""`); new functions `bpOwner()`, `bpOwnerNoteHtml()`, `bpOwnerNote()` just before `function buildSummary(pg){`; `buildSummary()` first lines `/* OWN-1: the owner warning`; input section `mkSection("inAnchor","2. Anchors (cast-in headed)"` (two selects + the note, above "Diameter").
 - **Saved data (CLAUDE.md §5):** new optional fields `S.proj.owner` (`""` | `"ctdot"`) and `S.proj.supports` (`""` | `"sign"` | `"other"`), default `""` = not stated. `mergeState()` already deep-merges `proj` with the defaults, so a project saved before OWN-1 loads with both `""`: no note, and the two rows are left out of the printed report while both are unset. No key or format changed.

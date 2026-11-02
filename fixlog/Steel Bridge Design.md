@@ -15,7 +15,7 @@ stored as plain HTML text in `<script type="text/plain" id="pl-src">`, not as th
 before it that say "base64-decode `PL_B64`, edit, re-encode" are kept as written; on a current copy, apply their
 decoded-page edits directly to the text in the `pl-src` block (closing script tags written `<\/script>`; see PLSRC).
 
-## 2026-10-04 — PR: claude/fix-girderdetail (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-girderdetail (PR #2: https://github.com/mlococo88/All-Structural/pull/2)
 
 ### F1. SC3 stud pitch: the work string printed "6(d)" next to a 4d value   [display] [no result change]
 - **Where:** `GM.sc.checks`, check `SC3` (≈ line 2444). Anchor: `id: 'SC3', grp: 'Detailing', title: 'Pitch limits'`
@@ -185,7 +185,7 @@ decoded-page edits directly to the text in the `pl-src` block (closing script ta
 - O8. **Splice report "V_r = 1.0(C)(V_p)" line** (≈ line 6349) prints C·V_p even when the tension-field equation is used, so the shown product does not equal the shown V_r for a stiffened web. Display only. — Fix the displayed expression in a later PR.
 - O9. Not addressed here (from the review, out of scope for this PR): GS uses max permanent-load factors only; Service II omits f_ℓ/2; bearing-stiffener hybrid strip double reduction; rolled-diaphragm hard-coded F_ub = 120; postMessage origin checks; PlateLine items (DC1-only noncompact check, 9th Ed. reference list, unguarded profile JSON.parse).
 
-## 2026-10-04 — PR: claude/step1-group2 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group2 (PR #31: https://github.com/mlococo88/All-Structural/pull/31)
 
 ### F8. "← All tools" link + shared project info (HANDOFF.md §4.1)   [feature (no result change)]
 
@@ -294,7 +294,7 @@ decoded-page edits directly to the text in the `pl-src` block (closing script ta
 - **Open items:** none.
 
 
-## 2026-10-04 — PR: claude/conn-lldf-girderdetail (PR link added after merge)
+## 2026-10-04 — PR: claude/conn-lldf-girderdetail (PR #34: https://github.com/mlococo88/All-Structural/pull/34)
 
 ### H1. Pull distribution factors from LL & DL Distribution (lldf.html)   [feature: hand-off (no result change)]
 - **Type:** feature: hand-off (no result change). Spec: HANDOFF.md §4.3 (channel `bridgeSuite.v1.lldf`, `_schema:"bridge-lldf-factors"`, `schemaVersion` 1, receiver id `girderdetail`).
@@ -457,7 +457,7 @@ window.addEventListener('storage', e => { if (!e.key || e.key.indexOf('bridgeSui
 - **Other copies:** the BridgeXfer v1 helper already in this file (from Step 1) is reused unchanged.
 - **Open items:** the manual factors are per girder; after changing the analyzed girder the module shows a "pull again" warning rather than re-mapping automatically. The PlateLine base64 block was not touched.
 
-## 2026-10-09 — PR: claude/pin-girderdetail (PR link added after merge)
+## 2026-10-09 — PR: claude/pin-girderdetail (PR #77: https://github.com/mlococo88/All-Structural/pull/77)
 
 ### P1. MathJax pinned to 3.2.2 (main page and embedded PlateLine)   [no calculation change]
 - **Date / type:** 2026-10-09, library pinning only (CLAUDE.md §2). Engineer's decision 2026-10-09: pin the libraries. No code, formula, UI, storage key or file-format change.
@@ -513,7 +513,7 @@ window.addEventListener('storage', e => { if (!e.key || e.key.indexOf('bridgeSui
 - **Other copies:** none (PlateLine does not use ezdxf).
 - **Open items:** ezdxf's own dependencies are not pinned (they are resolved by micropip); Pyodide itself is already pinned at v0.26.4.
 
-## 2026-10-12 — PR: claude/sweep-sbbm (open-item sweep; PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-sbbm (open-item sweep; PR #146: https://github.com/mlococo88/All-Structural/pull/146)
 
 Engineer's instruction (2026-10-12): work through every open item, use best judgment, and list what needs the engineer. Basis: AASHTO LRFD 10th Ed. (2024). Items whose article number I could not confirm against the printed 10th Ed. are marked **verify**. Line numbers are approximate (main page ≈ line, or `PL:` ≈ line in the decoded PlateLine HTML).
 
@@ -767,7 +767,7 @@ Engineer's instruction (2026-10-12): work through every open item, use best judg
 - **Girder section, constructibility:** M = γ_DC M_DC1 + γ M_CLL still uses the maximum factors on both; a construction live load of the opposite sign to M_DC1 is not checked with 0.90 M_DC1 (rare; recommendation: same sign rule as S1).
 - **Service II reversal** (S1 covers Strength I only) and **Service II f_ℓ input** (S2 uses the Strength I f_ℓ, conservative): recommendation, add an optional Service II f_ℓ per location if the conservatism matters.
 
-## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR #166: https://github.com/mlococo88/All-Structural/pull/166)
 
 Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
 
@@ -795,7 +795,7 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - **Check case:** demo bridge (3 spans, supports up to 15°). Slab payload: before errors = [span count]; after errors also include the slab refusal. Girder payload θ = 30°, θ_V = 40°: before warning "LL & DL 30°, this bridge up to 15°"; after "LL & DL 40° for shear (30° for moment), this bridge up to 15°". Payload without `skewShear`: unchanged.
 - **How verified:** headless Chromium, main vs branch, `gdLldfPlan(payload,'type')` on the lldf slab and girder payloads. No page errors.
 
-## 2026-10-12 — PR: claude/gd-prelim-splice-xframe (engineer's requests; PR link added after merge)
+## 2026-10-12 — PR: claude/gd-prelim-splice-xframe (engineer's requests; PR #168: https://github.com/mlococo88/All-Structural/pull/168)
 
 Engineer's requests (2026-10-12): (1) an edit in Preliminary sizing must not move the page to another tab; (2) excluded field splices must show no splice results, and the splice location and size should be suggested; (3) cross-frames only on girders deep enough, otherwise channel or rolled diaphragms; (4) Suggest the number of girders, spacing, and overhangs from the out-to-out deck width; (5) hide the variable bay spacings when the spacing is Equal. Basis: AASHTO LRFD 10th Ed. (2024). **No check, formula, load or resistance factor, unit, or code reference of an existing check changed.** New computations: the channel diaphragm properties (G3), the new practice check CF10 (G3), and the width study (G4); see the §4 callouts in each item. Every default threshold is listed under "Needs engineer".
 
@@ -1385,7 +1385,7 @@ Engineer's requests (2026-10-12): (1) an edit in Preliminary sizing must not mov
    if (el.dataset.k === 'limits.dot') { /* profile switched: nothing else */ }
 ```
 
-## 2026-10-12 — PR: claude/gd-kframe-kb (auto-designed K-frame is Kb; PR link added after merge)
+## 2026-10-12 — PR: claude/gd-kframe-kb (auto-designed K-frame is Kb; PR #169: https://github.com/mlococo88/All-Structural/pull/169)
 
 Engineer's decision (2026-10-12), on the item raised in G3 ("Raised, not changed"): **"Use Kb for the K-frame."**
 
@@ -1538,7 +1538,7 @@ Engineer's decision (2026-10-12), on the item raised in G3 ("Raised, not changed
 ```
 
 
-## 2026-10-12 — PR: claude/girderdetail-ws-full (engineer's request; PR link added after merge)
+## 2026-10-12 — PR: claude/girderdetail-ws-full (engineer's request; PR #170: https://github.com/mlococo88/All-Structural/pull/170)
 
 Engineer's request (2026-10-12): the girder-count study from the out-to-out deck width (G4) sizes each girder count with Suggest fast mode only; add a step that re-sizes the best 2–3 girder counts with Full design and ranks them on the full-design results, and "make sure there are notes in the app that explain what the app is doing". Basis: AASHTO LRFD 10th Ed. (2024). **This adds a UI/workflow step and explanatory notes only. No formula, load or resistance factor, unit, code reference, or check changed; `suggestLayout`, `suggestFull`, `wsEval`, `wsCase`, `wsRun`, `wsPick` and `wsApply` are unchanged in their computations.** Only PlateLine (`PL:`) changes; the main page differs only in the `PL_B64` string.
 
@@ -1748,7 +1748,7 @@ Engineer's request (2026-10-12): the girder-count study from the out-to-out deck
  
 ```
 
-## 2026-10-12 — PR: claude/girderdetail-four (engineer's approved follow-ups; PR link added after merge)
+## 2026-10-12 — PR: claude/girderdetail-four (engineer's approved follow-ups; PR #171: https://github.com/mlococo88/All-Structural/pull/171)
 
 Engineer's approval (2026-10-12) of four follow-ups: (1) Suggest applies the span-to-depth limits whenever the Limits tab treats them as mandatory; (2) the deck-width study's overhang limits agree with check G6; (3) a warning when field splices are "Included" but Preliminary sizing has none; (4) auto-design splice failure names the cause. Basis: AASHTO LRFD 10th Ed. (2024). Items 1 and 2 change Suggest results (§4 callouts in G7 and G8); items 3 and 4 are messages only.
 
@@ -2132,7 +2132,7 @@ index eab4e8d..2ab3ba4 100644
    const fs = (F, x) => `${x.inner ? 'double shear' : 'single shear'}, ${F.nl} line${F.nl > 1 ? 's' : ''} each side × ${F.nr} rows = ${x.bolts} bolts; outer PL ${frac(F.bo)} × ${frac(F.to)}${F.inner ? `, 2 inner PL ${frac(F.bi)} × ${frac(F.ti)}` : ''}`;
 ```
 
-## 2026-10-12 — PR: claude/girderdetail-cf-diaphragm (engineer's decisions; PR link added after merge)
+## 2026-10-12 — PR: claude/girderdetail-cf-diaphragm (engineer's decisions; PR #172: https://github.com/mlococo88/All-Structural/pull/172)
 
 Engineer's decisions (2026-10-12): when the girder is too shallow for a cross-frame, a channel (or rolled W) diaphragm is designed and used; diaphragm depth at least 0.75 of the girder depth for plate girders (AASHTO LRFD 6.7.4.2); the 48 in minimum girder depth for cross-frames stays. Defaults chosen by the engineer for the open details (assumptions to verify, stated in the UI and the check note): channel/W web bolted to the connection plate with one vertical row of bolts, bolt count and pitch by auto-design; diaphragm centered on the girder depth (no position input added); end (bearing-line) diaphragms unchanged and out of scope. Basis: AASHTO LRFD 10th Ed. (2024). Cross-frames module (`GM.cf`) on the main page only; the PlateLine string `PL_B64` is not touched. Line numbers ≈ branch.
 
@@ -2497,7 +2497,7 @@ index 2ab3ba4..6e70ef9 100644
    const c = counts(), v = c.fail ? { cls: 'fail', ico: '✕', t: `${c.fail} check${c.fail > 1 ? 's' : ''} fail` } : { cls: 'pass', ico: '✓', t: 'All checks pass' };
 ```
 
-## 2026-10-12 — PR: claude/girderdetail-q3 (engineer's approved follow-ups; PR link added after merge)
+## 2026-10-12 — PR: claude/girderdetail-q3 (engineer's approved follow-ups; PR #173: https://github.com/mlococo88/All-Structural/pull/173)
 
 Engineer's approval (2026-10-12) of three follow-ups: (1) the DXF title-block status table and the Girder report carry the G9 warning when field splices are "Included" but Preliminary sizing has none; (2) splice auto-design: when no web layout passes, the fallback fit starts from the largest web bolt group that fits; (3) TS5 (stiffener spacing) is not applicable on a web with connection plates only, and a panel wider than 3D is advisory. Basis: AASHTO LRFD 10th Ed. (2024). Main page only; the PlateLine string `PL_B64` is not touched. Items 1 and 3 change status and message text only (no formula, factor, unit or reference changed); item 2 changes the fallback layout that auto-design returns when nothing passes (no formula or check changed). Line numbers ≈ branch.
 
@@ -2640,7 +2640,7 @@ index e275cbb..415cb51 100644
 +  if (ts5x('warn')) out.push('TS5 warnings: end panels wider than 1.5D (6.10.9.1); TS4 checks them with V_n = CV_p and k from d_o');
    if (panel.length) out.push(`Panel shear or spacing fails at ${[...new Set(panel)].join('; ')}: these depend on the stiffener spacing (Framing tab in Preliminary sizing), not the plate size`);
 
-## 2026-10-13 — PR: claude/plateline-quick-checked (engineer's decisions 2026-10-12; PR link added after merge)
+## 2026-10-13 — PR: claude/plateline-quick-checked (engineer's decisions 2026-10-12; PR #174: https://github.com/mlococo88/All-Structural/pull/174)
 
 All changes are inside the embedded PlateLine (Preliminary sizing) page, the base64 string `const PL_B64 = '...'` of `Steel Bridge Beam Modules.html` (decode, edit, re-encode on one line). The main page code is not changed. The exact changes to the decoded page are the unified diff at the end of this entry; line numbers (PL ≈) refer to the decoded page.
 
@@ -3077,7 +3077,7 @@ All changes are inside the embedded PlateLine (Preliminary sizing) page, the bas
  function altKey() { return JSON.stringify([P.bridge, P.limits, P.suggest, P.framing, P.costs, P.alts, P.girder.gF, P.girder.gW]); }
 ```
 
-## 2026-10-13 — PR: claude/girderdetail-cf-dia2 (engineer's decisions 2026-10-12; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-cf-dia2 (engineer's decisions 2026-10-12; PR #175: https://github.com/mlococo88/All-Structural/pull/175)
 
 Engineer's decisions (2026-10-12), follow-ups to CF-D1 to CF-D7: (1) when the diaphragm is the bracing used, the 6.7.4.2.2 torsional bracing calculation uses the diaphragm's own depth instead of the cross-frame chord depth `cf.h`; (2) the end (bearing-line) frames become diaphragms as well, sized by auto-design (lightest passing at least 0.75 d, same bolting rules, same section as the intermediate or deeper), with actual tabulated depths kept. Basis: AASHTO LRFD 10th Ed. (2024). Cross-frames module (`GM.cf`) on the main page only; the PlateLine string `PL_B64` is not touched. Line numbers ≈ branch.
 
@@ -3444,7 +3444,7 @@ index 3093042..2721ab0 100644
  function renderStatus() { crMarkStale();
    const c = counts(), v = c.fail ? { cls: 'fail', ico: '✕', t: `${c.fail} check${c.fail > 1 ? 's' : ''} fail` } : { cls: 'pass', ico: '✓', t: 'All checks pass' };
 
-## 2026-10-13 — PR: claude/girderdetail-end-panel-k (engineer's decision 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-end-panel-k (engineer's decision 2026-10-13; PR #176: https://github.com/mlococo88/All-Structural/pull/176)
 
 Engineer's decision: an end panel whose stiffener spacing d<sub>o</sub> exceeds 1.5D is not a stiffened end panel, so its shear resistance uses k = 5 (unstiffened), V<sub>n</sub> = CV<sub>p</sub> (Eq. 6.10.9.2-1), no tension field. Interior panels are unchanged (wider than 3D already unstiffened). This closes the open item of Q3. Main page and the embedded PlateLine (`PL_B64`, decoded, edited, re-encoded on one line) are changed; the Cross-frames module (GM.cf) is not touched.
 
@@ -3651,7 +3651,7 @@ index 772181c..eabc23f 100644
      <tr><td class="wsym">t<sub>w</sub></td><td class="wdesc">Smallest thickness on the ${frac(P.limits.incTw)} in increment that satisfies shear, D/t<sub>w</sub> ≤ 150, and the minimum ${frac(P.limits.minTw)} in</td><td class="wval">${frac(W.tw)}<span class="wunit">in</span></td></tr></table></div></div>`);
 ```
 
-## 2026-10-13 — PR: claude/plateline-suggest-compare (engineer's request 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/plateline-suggest-compare (engineer's request 2026-10-13; PR #178: https://github.com/mlococo88/All-Structural/pull/178)
 
 Engineer's request: "in the quick suggest tab, it should show the existing configuration compared with the suggested configuration so we know what is suggested to change". SC1 is inside the embedded PlateLine (Preliminary sizing) page, the base64 string `const PL_B64 = '...'` of `Steel Bridge Beam Modules.html` (decode, edit, re-encode on one line). The exact changes are the unified diffs at the end of this entry; line numbers (PL ≈) refer to the decoded page.
 
@@ -3918,7 +3918,7 @@ index 731db66..6202c96 100644
        out.add(c); }
 ```
 
-## 2026-10-13 — PR: claude/girderdetail-cf-naming (engineer's requests 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-cf-naming (engineer's requests 2026-10-13; PR #179: https://github.com/mlococo88/All-Structural/pull/179)
 
 Engineer's requests (2026-10-13): (1) the Cross-frames module is named for the bracing used: "Diaphragms" wherever the module's name is shown when the diaphragm is the bracing used (`cf.dia.on === 'yes'`), "Cross-frames" exactly as before otherwise; module id `cf`, keys and saved data unchanged; (2) the diaphragm elevations (and the DXF diaphragm details) draw the connection plates the diaphragm bolts to, with the bolt row passing through them, and the cross-frame elevation gets them too; (3) (CF-D12, separate commit) with the diaphragm, the module shows only what applies to the diaphragm. Display only: no formula, factor, resistance, check, or status changed. Cross-frames module (`GM.cf`) and its labels on the main page; `PL_B64`, the Transverse stiffeners module and the Field splice module are not touched. Line numbers ≈ branch.
 
@@ -4307,7 +4307,7 @@ index 6fc90a2..fcacee5 100644
    let h = card('geo-head', 'Geometric proportions and detailing', '', `<p class="note-p">${ks.length ? `${ks.length} checks covering ${items.length} dimensions: ${items.length - nf - nw} satisfied, ${nf} not satisfied, ${nw} warning${nw === 1 ? '' : 's'}. Each check also appears, fully worked, on the Checks tab and in the report.` : 'This module has no geometric proportion limits of its own. Flange and web proportions for the girder are checked in the Girder section module (GS1 to GS3).'}</p>`);
 ```
 
-## 2026-10-13 — PR: claude/girderdetail-q4 (engineer's approved items Q4–Q6, 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-q4 (engineer's approved items Q4–Q6, 2026-10-13; PR #180: https://github.com/mlococo88/All-Structural/pull/180)
 
 Engineer's approval (2026-10-13) of three items: (Q4) Transverse stiffeners TS4 checks each end panel with the largest V<sub>u</sub> in it (at the bearing), not only the shear at the first stiffener; (Q5) for simple spans, PlateLine flags the panels next to an interior support as end panels too (each is a girder end); (Q6) PlateLine Bridge tab, third girder spacing mode "From exterior girders". Main page and the embedded PlateLine (`const PL_B64 = '...'`, decoded, edited, re-encoded on one line, no wrapping) are changed. Basis: AASHTO LRFD 10th Ed. (2024). Line numbers ≈ branch (main page) or decoded PlateLine (PL ≈). Builds on EK1–EK3 (end panel wider than 1.5D is unstiffened, k = 5), Q3 (TS5) and SC1/SC2. No `bridgeSuite.v1.*` code or other shared snippet is touched.
 
@@ -4877,7 +4877,7 @@ index a90f3fa..0aa03a6 100644
    let h = card('geo-head', 'Geometric proportions and detailing', '', `<p class="note-p">${ks.length ? `${ks.length} checks covering ${items.length} dimensions: ${items.length - nf - nw} satisfied, ${nf} not satisfied, ${nw} warning${nw === 1 ? '' : 's'}. Each check also appears, fully worked, on the Checks tab and in the report.` : 'This module has no geometric proportion limits of its own. Flange and web proportions for the girder are checked in the Girder section module (GS1 to GS3).'}</p>`);
 ```
 
-## 2026-10-13 — PR: claude/girderdetail-xs1 (cross-section and dead loads, PR1 of 4: display only; engineer's decisions 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-xs1 (cross-section and dead loads, PR1 of 4: display only; engineer's decisions 2026-10-13; PR #183: https://github.com/mlococo88/All-Structural/pull/183)
 
 LLDF and DLs module (`GM.df`), main page only. The PL_B64 line and the Cross-frames module are not touched. Ported by copying and adapting from `lldf.html` (unchanged; CLAUDE.md §3): `MD.footprints` / `MD.headroom` / `MD.draw` (drawing) and `renderDLCalcs` (worked calculations). **No result changes:** `dfDead`, `dfEdges`, `GM.df.compute`, `dfPayload`, and every input, key, and saved format are unchanged; the new code only reads `R.dead` (the `dfDead` result), `R.b`, `R.base`, and `R.p.dl`.
 
@@ -5081,7 +5081,7 @@ index 2799b7d..68b03a1 100644
      const ms = []; for (let j = 0; j < pp.Nb; j++) ms.push(dfMember(pp, geo, rg.Kg, R.p.skewV === 'ext' && dfType(pp, j) === 'int' ? { ...sk, scfV: 1 } : sk, j));
 ```
 
-## 2026-10-13 — PR: claude/girderdetail-xs2 (cross-section and dead loads, PR2 of 4: inputs, overrides, mountable rule, F6; engineer's decisions 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-xs2 (cross-section and dead loads, PR2 of 4: inputs, overrides, mountable rule, F6; engineer's decisions 2026-10-13; PR #184: https://github.com/mlococo88/All-Structural/pull/184)
 
 LLDF and DLs module (`GM.df`), main page only. The PL_B64 line is not touched (the deck edges stay owned by Preliminary sizing until PR3). `lldf.html` is reference only and unchanged (CLAUDE.md §3). Every new input is optional and stored only when entered (no new default keys, so `deepMerge` of an older project adds nothing). XS4 and XS5 change no result for a project without the new inputs; XS6 and XS7 are §4 changes for the cases they state.
 
@@ -5723,7 +5723,7 @@ index a867bf1..ab2a881 100644
   - The new fields are written only when entered.
 - **Screenshots:** the input tab, cross-section, loads table and Derivations at 1400 px and 1000 px viewport widths were checked. The sidebar inputs, including the overrides table, fit the 343 px sidebar. The labels do not overlap.
 
-## 2026-10-13 — PR: claude/girderdetail-xs3 (cross-section and dead loads, PR3 of 4: the LLDF and DLs module owns the deck edges; engineer's decisions 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-xs3 (cross-section and dead loads, PR3 of 4: the LLDF and DLs module owns the deck edges; engineer's decisions 2026-10-13; PR #185: https://github.com/mlococo88/All-Structural/pull/185)
 
 Main page (LLDF and DLs module `GM.df`) and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited, re-encoded on its one line). Engineer's decision: "this should replace the current barrier input" — the deck edges are now entered in LLDF and DLs → Cross-section and dead loads; Preliminary sizing's Bridge-tab deck-edge fields and its Suggest-tab barrier weight are read-only and written from GirderDetail. `lldf.html` is unchanged. No `bridgeSuite.v1.*` key or payload, no storage key, and no existing saved field is renamed or removed. **Migrated projects give bit-identical results** (checked below); XS9 changes Preliminary sizing's own roadway and d<sub>e</sub> only where GirderDetail's live-load traffic face differs from the deck-edge face (§4 callout in XS9).
 
@@ -6331,7 +6331,7 @@ index 9121d62..fe483bb 100644
 - `node --check` on the main page and the decoded PlateLine; the new `sgDF` run in Node against the old one for the check cases above (values as listed); the lever rule equal to the old closed form in each case.
 - Headless Chromium: the eight XS8–XS9 test projects again (main vs this build). GirderDetail results, `gd-dfx`, Structural analysis, the Checks/Summary/Factors text, and Design all: unchanged. Preliminary sizing: the current-layout checks and demands unchanged where GirderDetail's factors are in use (only the stored built-in factor objects gain fields); the suggestion, Full design and width study change as listed. The Suggest-tab derivation shows the rigid method and the d<sub>e</sub> limit (screenshot). The link from Preliminary sizing now shows the first deck-edge field below the sticky header (screenshot). No console errors.
 
-## 2026-10-13 — PR: claude/girderdetail-xs4 (cross-section and dead loads, PR4 of 4: downstream consumers of the cross-section; engineer's decisions 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-xs4 (cross-section and dead loads, PR4 of 4: downstream consumers of the cross-section; engineer's decisions 2026-10-13; PR #186: https://github.com/mlococo88/All-Structural/pull/186)
 
 Main page only. The PL_B64 line (Preliminary sizing) is not touched, and `lldf.html` is unchanged. **No calculation change:** no formula, factor, load, or default changed, and every module computes the same results (checked below). The Deck overhang inputs change only when the user presses the new button. No storage key, saved field, or `bridgeSuite.v1.*` payload is added, renamed, or removed. The fill undo is kept in memory and is not saved. The 3D layer state is saved in the existing `P.ui.v3b.lay` object, with one new optional key (`app`, default on). It is written when the 3D view is first opened in a project without a stored 3D state, or when the box is changed; a stored state without it reads as on, and an older build ignores it.
 
@@ -6765,7 +6765,7 @@ index bfad74d..7e38858 100644
   - Projects saved by main load here unchanged (above).
   - A project saved here, after a fill and with the 3D elements layer off, opens in main without errors. The filled values and Source line are kept, `P.ui.v3b.lay.app` is kept, and the 3D view opens.
 
-## 2026-10-13 — PR: claude/girderdetail-cleanup1 (clean-up of known open items; engineer offline, "continue to clean up the app and use judgement"; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-cleanup1 (clean-up of known open items; engineer offline, "continue to clean up the app and use judgement"; PR #187: https://github.com/mlococo88/All-Structural/pull/187)
 
 Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line). No storage key, saved field or `bridgeSuite.v1.*` payload is added, renamed or removed. `lldf.html` is unchanged.
 
@@ -7053,7 +7053,7 @@ index 6d16ec4..a6a31f6 100644
 - **Console:** no errors or alerts in any run.
 - **Tools containing shared snippets touched:** none (`bridgeSuite.v1.*` bootstrap and handoff code unchanged; no other tool file changed).
 
-## 2026-10-13 — PR: claude/girderdetail-cleanup2 (clean-up 2: fatigue inventory from Preliminary sizing, help text, end-frame quantities; engineer offline, "clean up the app and use judgement"; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-cleanup2 (clean-up 2: fatigue inventory from Preliminary sizing, help text, end-frame quantities; engineer offline, "clean up the app and use judgement"; PR #188: https://github.com/mlococo88/All-Structural/pull/188)
 
 Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line). No storage key or `bridgeSuite.v1.*` payload is added, renamed or removed. One optional field is added to the Fatigue detail rows (C5). `lldf.html` is unchanged.
 
@@ -7194,7 +7194,7 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
 - The Fatigue module's "Import details from other modules → Girder section" and the Girder-section fallback inventory still build rows without b<sub>eff</sub>, so they use the module's single b<sub>eff</sub> even though each Girder section row has its own. Not changed (outside this item); decide whether those imports should carry the row's b<sub>eff</sub> too.
 - Pier connection-plate rows still take the cross-frame nearest the pier (C4 changes only the span rows).
 
-## 2026-10-13 — PR: claude/girderdetail-cleanup3 (clean-up 3: Fatigue takes the deck from Preliminary sizing, first import replaces the example, C′ basis, per-side traffic faces, Design all rows, wording and small fixes; engineer offline, "clean up the app and use judgement"; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-cleanup3 (clean-up 3: Fatigue takes the deck from Preliminary sizing, first import replaces the example, C′ basis, per-side traffic faces, Design all rows, wording and small fixes; engineer offline, "clean up the app and use judgement"; PR #189: https://github.com/mlococo88/All-Structural/pull/189)
 
 Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line). No storage key or `bridgeSuite.v1.*` payload is added, renamed or removed. `lldf.html` is unchanged.
 
@@ -7468,7 +7468,7 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
 - The DXF camber table (2 decimals) can still print "-0.00" at the supports. Not changed (outside the item).
 - Auto-designed values outlined as overrides (audit item L8): left as is, as instructed.
 
-## 2026-10-13 — PR: claude/girderdetail-cleanup4 (clean-up 4: deck reinforcement to the fatigue and transition rows, one connection-plate station for Transverse stiffeners and Fatigue, pier connection plates by range; engineer offline, "clean up the app and use judgement"; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-cleanup4 (clean-up 4: deck reinforcement to the fatigue and transition rows, one connection-plate station for Transverse stiffeners and Fatigue, pier connection plates by range; engineer offline, "clean up the app and use judgement"; PR #191: https://github.com/mlococo88/All-Structural/pull/191)
 
 Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line). No storage key or `bridgeSuite.v1.*` payload is added, renamed or removed. `lldf.html` is unchanged.
 
@@ -7638,7 +7638,7 @@ Main page and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edi
 - Girder section's deck reinforcement (two layers, A<sub>rt</sub> and A<sub>rb</sub>) is not sent by Preliminary sizing (C19); its own inputs remain. Fatigue rows imported from Girder section use the Fatigue module's A<sub>r</sub>.
 - Carried over: row names from Preliminary sizing still say "cross-frame" in the row editors (C18); auto-designed values outlined as overrides (audit item L8), left as instructed.
 
-## 2026-10-13 — PR: claude/girderdetail-cleanup5 (clean-up 5: cross-frame stations along the girder on skewed bridges, connection-plate candidates per girder type; engineer offline, "clean up the app and use judgement"; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-cleanup5 (clean-up 5: cross-frame stations along the girder on skewed bridges, connection-plate candidates per girder type; engineer offline, "clean up the app and use judgement"; PR #192: https://github.com/mlococo88/All-Structural/pull/192)
 
 Embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line) and one Manual paragraph of the main page. No storage key, saved-data format or `bridgeSuite.v1.*` payload is added, renamed or removed. `lldf.html` is unchanged.
 
@@ -7766,7 +7766,7 @@ Embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded
 - **Transverse stiffeners end panel, unstiffened web:** the "first connection plate" rows use d<sub>o</sub> = the target frame spacing (`FR.sp`), not the station of the first frame on the girder (often shorter: 22.0 ft against 25 ft on the built-in example with stiffeners turned off). Conservative; not changed.
 - Carried over: row names from Preliminary sizing say "cross-frame" in the row editors (C18); Girder section's two-layer deck reinforcement is not sent (C19); auto-designed values outlined as overrides (audit item L8).
 
-## 2026-10-13 — PR: claude/girderdetail-quick1 (quick display fixes Q7 and on: wording, labels, formatting and layout on the main page; engineer offline, "clean up the app and use judgement"; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-quick1 (quick display fixes Q7 and on: wording, labels, formatting and layout on the main page; engineer offline, "clean up the app and use judgement"; PR #193: https://github.com/mlococo88/All-Structural/pull/193)
 
 Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display only: no formula, factor, check, status, storage key, saved-data format or `bridgeSuite.v1.*` payload changes. Verified (light level): `node --check` on every inline script; the built-in example in headless Chromium with no console errors; a hash of every module's check results (id, status, governing index, every item's ratio, demand and capacity) equal to main; screenshots of the changed spots at 1000 px.
 
@@ -7868,7 +7868,7 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. Display o
 - CF10 reference and the "Minimum girder depth for cross-frames" note read "AISC/NSBA G13.1 guidance". The G-series documents are from the AASHTO/NSBA Steel Bridge Collaboration, and the Field splice References list calls G12.1 and G13.1 "bolted splice detailing guidance". This is a code reference, not changed; the engineer to confirm the intended document.
 - Field splice check title "Web splice plates, axial force from H_w" keeps the underscore. Titles also go to plain-text outputs, so it was not changed.
 
-## 2026-10-13 — PR: claude/girderdetail-to-stgirder (cross-tool connection GirderDetail → ST-Girder, HANDOFF.md §4.9; CLAUDE.md §7 exception: sender and receiver in one PR; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-to-stgirder (cross-tool connection GirderDetail → ST-Girder, HANDOFF.md §4.9; CLAUDE.md §7 exception: sender and receiver in one PR; PR #194: https://github.com/mlococo88/All-Structural/pull/194)
 
 Engineer's request: export GirderDetail's input and force results for one girder to ST-Girder, for its checks and LRFR rating (GirderDetail's forces and geometry, not ST-Girder's own analysis). Receiver side: fixlog/stgirder.md GD1–GD4. This tool's computations, results and saved data are unchanged (export only).
 
@@ -7888,7 +7888,7 @@ Engineer's request: export GirderDetail's input and force results for one girder
 - **Other copies:** none (the `BridgeXfer` helper is used as is, not changed).
 - **Open items:** construction live load, deck placement sequence (`saSeq`), wind and f_ℓ are not sent. The bracing sent is the single L_b input of the Cross-frames module, not the per-location L_b/C_b of Girder section.
 
-## 2026-10-13 — PR: claude/girderdetail-fatigue-I-II (one bridge-wide fatigue limit state; PlateLine bearing-stiffener column check; engineer-approved 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-fatigue-I-II (one bridge-wide fatigue limit state; PlateLine bearing-stiffener column check; engineer-approved 2026-10-13; PR #195: https://github.com/mlococo88/All-Structural/pull/195)
 
 Main page (Girder section, Shear connectors, Fatigue module note, Manual) and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line). No GirderDetail storage key or saved-data format changes. PlateLine gains one optional saved field, `P.analysis.fat` (F12-1); it is not echoed in the `gd-bridge` payload, which stays byte-identical. No `bridgeSuite.v1.*` payload changes. `lldf.html` is unchanged. Basis: AASHTO LRFD 10th Ed. (2024) unless stated; the article numbers below were not re-checked against the printed 10th Edition here: verify.
 
@@ -8121,7 +8121,7 @@ Main page (Girder section, Shear connectors, Fatigue module note, Manual) and th
 +    <ul class="dlist"><li>Flexural resistance: Strength I, Service II flange stresses, and constructibility during deck casting (6.10.3, 6.10.4, 6.10.6 to 6.10.8)</li><li>Shear resistance and transverse stiffener spacing (6.10.9, 6.10.11.1)</li><li>Fatigue at flange transitions, stiffener and connection plate welds (6.6.1)</li><li>Refined camber including deck pour sequence and vertical profile (preliminary values are on the Analysis tab)</li><li>Cross-frame members and connections, field splice design (6.7.4, 6.13.6)</li><li>Shear connector design (6.10.10)</li><li>Economy of each flange transition (needs moment demand)</li></ul>`);
 ```
 
-## 2026-10-13 — PR: claude/girderdetail-gs-anywhere (Girder section: check at any location; engineer-approved feature; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-gs-anywhere (Girder section: check at any location; engineer-approved feature; PR #196: https://github.com/mlococo88/All-Structural/pull/196)
 
 Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. New UI plus a wrapper around existing code. No formula, factor, check, status, unit or code reference changed. The module's rows, checks, Design all and report are unchanged (hashes below). Saved data: one new optional UI key, `P.ui.gsAny = { g, x, snap }` (girder, station, snap mode), plus the collapse flags `P.ui.col['ga-…']`. No existing key or format changed and no migration is needed: older files do not have the key, and older versions ignore it. No `bridgeSuite.v1.*` payload changes. Tools containing shared snippets touched: none.
 
@@ -8431,7 +8431,7 @@ Main page only; `PL_B64` (embedded Preliminary sizing) is not touched. New UI pl
 - **Shear between nodes:** shears are the builder's largest of three elements around the station (as for the rows), not interpolated. This is conservative.
 - **Abutment rows:** see wrapper rule 3 above. The engineer may prefer the builder itself to treat zero moment as positive flexure.
 
-## 2026-10-13 — PR: claude/girderdetail-cb-10th (C<sub>b</sub> and nonprismatic unbraced lengths per AASHTO LRFD 10th Ed. 6.10.8.2.3b and 6.10.8.2.3c; text supplied by the engineer 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-cb-10th (C<sub>b</sub> and nonprismatic unbraced lengths per AASHTO LRFD 10th Ed. 6.10.8.2.3b and 6.10.8.2.3c; text supplied by the engineer 2026-10-13; PR #198: https://github.com/mlococo88/All-Structural/pull/198)
 
 Main page (Girder section, Deck overhang reference and Manual text) and the embedded Preliminary sizing (PlateLine, `PL_B64`, decoded, edited and re-encoded on its one line). No storage key changes; no `bridgeSuite.v1.*` payload changes (the ST-Girder payload carries no C<sub>b</sub> or L<sub>b</sub>). Girder section rows gain optional fields (below). Basis: AASHTO LRFD 10th Ed. (2024) 6.10.8.2.3a, b and c as supplied by the engineer; Appendix D6.6 was supplied later the same day, and γ<sub>e</sub> now follows App. D6.6.2 Method A ("CB2 (update)" below), replacing the interim conservative stand-in first committed under CB2.
 
@@ -9013,7 +9013,7 @@ Main page (Girder section, Deck overhang reference and Manual text) and the embe
 - **Not changed:** Preliminary sizing's own checks keep their segments at `spCF` from the nearest support (`seg`), so a pier node takes the segment on its right; Cross-frames M<sub>br</sub> C<sub>b</sub> = 1.0 (conservative); Deck overhang C<sub>b</sub> input (default 1.0); L<sub>b</sub>/C<sub>b</sub> from G1's frames for every girder (LOC1 open item). ST-Girder (`stgirder.html`, other tool) still cites "6.10.8.2.3-9" for r<sub>t</sub> in two comments (10th Ed. Eq. 6.10.8.2.3b-3); it uses C<sub>b</sub> = 1.0 (permitted, conservative).
 - **Other copies:** none (the main page's `feCb` is an unused copy; comment updated only).
 
-## 2026-10-13 — PR: claude/gd-st-open-direct (Send to ST-Girder: open ST-Girder now with this girder loaded; cross-tool connection HANDOFF.md §4.9, sender and receiver in one PR per the CLAUDE.md §7 exception; PR link added after merge)
+## 2026-10-13 — PR: claude/gd-st-open-direct (Send to ST-Girder: open ST-Girder now with this girder loaded; cross-tool connection HANDOFF.md §4.9, sender and receiver in one PR per the CLAUDE.md §7 exception; PR #199: https://github.com/mlococo88/All-Structural/pull/199)
 
 ### OD1. "Send to ST-Girder" offers to open ST-Girder in a new tab with the girder loaded   [hand-off UI] [no computed result, saved data, key, channel or payload changes]
 - **Where:** Structural analysis, section "Send to ST-Girder": the `document.addEventListener('click', …'[data-gdst]'…)` handler (anchor `const w = BridgeXfer.publish(GD_ST.ch, r.payload, GD_ST.producer, GD_ST.file);`), new function `gdStHref()` right after it, and `gdStUi()` (button title and note). About lines 5589–5660.
@@ -9049,7 +9049,7 @@ Main page (Girder section, Deck overhang reference and Manual text) and the embe
 - **Other copies:** the receiving side is in `stgirder.html` (fixlog/stgirder.md OD1). The BridgeApps path rules are mirrored (read only) from the bootstrap block in `index.html`, `lldf.html`, `psbeam.html`, `stgirder.html`; that block is unchanged.
 - **Open items:** whether a browser allows `window.open` after the confirm dialog is up to its popup blocker (Chrome/Edge normally allow it from a click handler; the blocked case falls back to the message and alert). Not testable headless with a real popup blocker.
 
-## 2026-10-13 — PR: claude/gd-stiffener-per-bay (Preliminary sizing: D/t<sub>w</sub> ≤ 150 for stiffened webs; transverse stiffeners designed per cross-frame bay with optional tension-field action; engineer-approved 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/gd-stiffener-per-bay (Preliminary sizing: D/t<sub>w</sub> ≤ 150 for stiffened webs; transverse stiffeners designed per cross-frame bay with optional tension-field action; engineer-approved 2026-10-13; PR #200: https://github.com/mlococo88/All-Structural/pull/200)
 
 All code in this PR except the GirderDetail drawing and Structural analysis hunks is inside the embedded Preliminary sizing page (`const PL_B64 = '…'`, base64 of a UTF-8 HTML file). To re-apply by hand: decode `PL_B64` (base64 → UTF-8), edit the decoded page as below, re-encode it to base64 on one line, and replace the string. Line numbers "PL ~n" are lines of the decoded page.
 
@@ -10461,7 +10461,7 @@ All code in this PR except the GirderDetail drawing and Structural analysis hunk
      { const c = { id: 'GS13', grp: SV, title: 'Permanent deformations: web bend-buckling', ref: 'AASHTO LRFD 6.10.4.2.2, Eq. 6.10.4.2.2-4; 6.10.1.9.1; D6.3.1', src: 'Code', sym: T`f_c \le F_{crw} = \frac{0.9Ek}{(D/t_w)^2}, \quad k = \frac{9}{(D_c/D)^2}`, cols: ['Location', 'f_c (ksi)', 'D_c (in)', 'F_crw (ksi)', 'Ratio'], items: [], note: 'Not required for composite sections in positive flexure with D/t_w ≤ 150. D_c is found from the accumulated Service II flange stresses (D6.3.1).' };
 ````
 
-## 2026-10-13 — PR: claude/gd-stiffener-it-rule (transverse stiffener moment of inertia: the smaller of I<sub>t1</sub> and I<sub>t2</sub> where no panel relies on the tension field; engineer's decision 2026-10-13, ENGINEER_CHECKS GD33; PR link added after merge)
+## 2026-10-13 — PR: claude/gd-stiffener-it-rule (transverse stiffener moment of inertia: the smaller of I<sub>t1</sub> and I<sub>t2</sub> where no panel relies on the tension field; engineer's decision 2026-10-13, ENGINEER_CHECKS GD33; PR #201: https://github.com/mlococo88/All-Structural/pull/201)
 
 ### IT1. Transverse stiffener and connection plate moment of inertia per AASHTO LRFD 10th Ed. 6.10.11.1.3 where neither adjacent panel relies on tension-field action: GirderDetail TS3, Preliminary sizing D3 (per-bay and uniform)   [§4: requirement changed, less conservative where I<sub>t2</sub> < I<sub>t1</sub>; code references corrected] [results: TS3/D3 required I<sub>t</sub> and ratio only where I<sub>t2</sub> < I<sub>t1</sub>; Auto-design (Transverse stiffeners) plate sizes there]
 - **Where (GirderDetail page):** `GM.ts.compute` (anchor `r.Ireq = r.rhow`), TS3 in `GM.ts.checks` (anchor `{ const c = { id: 'TS3', grp: G1, title: 'Moment of inertia'`: `ref`, `sym`, `note`, work line `I_{req} &=`), Manual "Moment of inertia (6.10.11.1.3)". **Where (decoded PL page, `const PL_B64`):** `framingChecks` D3 (anchor `const c = { id: 'D3', grp, title: 'Stiffener and connection plate moment of inertia'`): `ref`, `sym`, `note` (both modes), new helpers `d3Br` / `d3Pre` just before the D3 block, the per-bay loop (anchor `const rw = Math.max(rho(Lp), rho(Rp))`), the uniform loop (anchor `plates.forEach(([n, b, t, dd0]) => pieceInfo.forEach(({ p, tw }) => { const dd = dd0;`), Manual "Detailing checks".
@@ -10607,7 +10607,7 @@ All code in this PR except the GirderDetail drawing and Structural analysis hunk
          cols: ['Location, panel', 'd_o (in)', 'V_u (kip)', 'C', 'φV_n (kip)', 'Ratio'], items: [], note: 'Interior stiffened panels include tension-field action (Eq. 6.10.9.3.2-2 or -8); stiffened end panels (d_o ≤ 1.5D) use V_n = CV_p with k = 5 + 5/(d_o/D)² (Eq. 6.10.9.3.3-1). Interior panels wider than 3D and end panels wider than 1.5D are unstiffened (6.10.9.1): k = 5, V_n = CV_p (Eq. 6.10.9.2-1). V_u is the largest Strength I shear in each panel (6.10.9.3.1), from the location\'s panel 1 and panel 2 shears (sent by Preliminary sizing and Structural analysis); a panel whose shears are blank (rows saved before they existed, or entered by hand) uses the shear at the stiffener (the item says which).' };
 ````
 
-## 2026-10-13 — PR: claude/gd-d3-uniform-tfa (Preliminary sizing D3, uniform stiffener spacing: tension-field requirement Eqs. 6.10.11.1.3-7/-8; engineer's decision 2026-10-13, ENGINEER_CHECKS GD34 (a); PR link added after merge)
+## 2026-10-13 — PR: claude/gd-d3-uniform-tfa (Preliminary sizing D3, uniform stiffener spacing: tension-field requirement Eqs. 6.10.11.1.3-7/-8; engineer's decision 2026-10-13, ENGINEER_CHECKS GD34 (a); PR #202: https://github.com/mlococo88/All-Structural/pull/202)
 
 ### IT2. Preliminary sizing D3, uniform spacing: Eq. 6.10.11.1.3-7 / -8 where an interior stiffened panel relies on tension-field action   [§4: requirement added, more conservative] [results: D3 uniform mode only where the largest V<sub>u</sub> near a field piece exceeds φ<sub>v</sub>V<sub>cr</sub> of an interior stiffened panel]
 - **Where (decoded PL page, `const PL_B64`):** `framingChecks` D3: `ref` (anchor `const c = { id: 'D3', grp, title: 'Stiffener and connection plate moment of inertia', ref:`), uniform `sym` (anchor `: T\`I_t \ge \min(I_{t1}, I_{t2})\ \text{(no panel}`), uniform `note` (anchor `the web does not rely on tension-field action and I_t ≥ the smaller of I_t1 and I_t2`), the uniform helper `uv` and the uniform loop (anchor `const uv = (p, dd) =>`), Manual "Detailing checks" (anchor `D3 takes V<sub>u</sub> from the Analysis tab`). GirderDetail page: only the `PL_B64` line.
@@ -10671,7 +10671,7 @@ All code in this PR except the GirderDetail drawing and Structural analysis hunk
      })); }
 ````
 
-## 2026-10-13 — PR: claude/camber-followups (Send to ST-Girder: optional DC1 split for ST-Girder's camber; cross-tool connection HANDOFF.md §4.9, receiver `stgirder.html` in the same PR; PR link added after merge)
+## 2026-10-13 — PR: claude/camber-followups (Send to ST-Girder: optional DC1 split for ST-Girder's camber; cross-tool connection HANDOFF.md §4.9, receiver `stgirder.html` in the same PR; PR #204: https://github.com/mlococo88/All-Structural/pull/204)
 
 ### CF4. `girderDemands` hand-off: optional per-station DC1 split `M_DC1steel`, `V_DC1steel`, `M_DC1wet`, `V_DC1wet`   [hand-off sender] [no result, saved data, key, channel or schema version changed; new optional fields only]
 - **Where:** `GM.sa.compute` (anchor `const VDC1 = VofB(bS, w1), VDC2 = VofB(b3, wDC2), VDW = VofB(b3, wDW);`, about line 5246, and its `return { … VDC, VS, …`), `gdStPayload()` station row (anchor `M_DC1steel: r3(R.MS[i])`) and its second note (anchor `DC1 split (optional fields)`).
@@ -10704,7 +10704,7 @@ All code in this PR except the GirderDetail drawing and Structural analysis hunk
 - **Other copies:** receiver `stgirder.html`.
 - **Open items:** cross-frame weight is not part of GirderDetail's DC1 (only the plate detail allowance); engineer to decide whether a cross-frame DC1 load should be added by default.
 
-## 2026-10-13 — PR: claude/gd-crossframe-dc1 (DC1 includes the cross-frame and diaphragm weight, computed from the Cross-frames module; engineer's decision 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/gd-crossframe-dc1 (DC1 includes the cross-frame and diaphragm weight, computed from the Cross-frames module; engineer's decision 2026-10-13; PR #208: https://github.com/mlococo88/All-Structural/pull/208)
 
 ### XF1. Cross-frames and diaphragms as DC1 point loads on the steel section   [results change: DC1 and everything fed by it; §4 callout in the PR]
 - **Where (GirderDetail, outer page):**
@@ -11027,7 +11027,7 @@ All code in this PR except the GirderDetail drawing and Structural analysis hunk
    const tenth = [];
 ```
 
-## 2026-10-13 — PR: claude/gd-xf-followup (cross-frame DC1 follow-ups: gusset and bolt allowance default 10%; DC1 recomputed once after the cross-frame auto-design; engineer's decisions 2026-10-13 on GD35; PR link added after merge)
+## 2026-10-13 — PR: claude/gd-xf-followup (cross-frame DC1 follow-ups: gusset and bolt allowance default 10%; DC1 recomputed once after the cross-frame auto-design; engineer's decisions 2026-10-13 on GD35; PR #209: https://github.com/mlococo88/All-Structural/pull/209)
 
 ### XF2a. Gusset plate and bolt allowance on the computed cross-frame weight: default 0% → 10%   [results change: DC1; §4 callout in the PR]
 - **Where:** `GM.df.def.dl` (anchor `medJoint: 'no', xf: 'auto', xfAllow:`); the allowance field note (anchor `'Gusset plates and bolts allowance', 'df.dl.xfAllow'`); the XF1 comment (anchor `allow: % added for gusset plates and bolts`); `gdXfMark` (anchor `function gdXfMark(p, raw)`); the old-project notice in `gdXfAlerts` (anchor `as point loads at each frame, half to each girder`).
@@ -11152,7 +11152,7 @@ All code in this PR except the GirderDetail drawing and Structural analysis hunk
  });
 ```
 
-## 2026-10-14 — PR: claude/gd-ll-fixes (live load fixes found by the comparison with Moving Load Generator; engineer-approved 2026-10-14; PR link added after merge)
+## 2026-10-14 — PR: claude/gd-ll-fixes (live load fixes found by the comparison with Moving Load Generator; engineer-approved 2026-10-14; PR #213: https://github.com/mlococo88/All-Structural/pull/213)
 
 The line-girder engine (`sgBeam`, `sgLLRow`, `sgFatRow`, `feIM`, `feVerify`) is the same code in the main page (Structural analysis) and in the embedded Preliminary sizing (`PL_B64`, decoded, edited and re-encoded on one line). Items LL1 to LL3 change both copies identically; after the change the two copies are still identical (checked by extracting both). Item order in the commits: LL1, LL3, LL2, LL4, LL5, LL6, LL7.
 
@@ -11721,7 +11721,7 @@ The line-girder engine (`sgBeam`, `sgLLRow`, `sgFatRow`, `feIM`, `feVerify`) is 
  
 ```
 
-## 2026-10-14 — PR: claude/gd-ll-followup (live load follow-ups to LL1–LL7: deflection axle neglect, exact section shears; engineer's decisions 2026-10-14; PR link added after merge)
+## 2026-10-14 — PR: claude/gd-ll-followup (live load follow-ups to LL1–LL7: deflection axle neglect, exact section shears; engineer's decisions 2026-10-14; PR #215: https://github.com/mlococo88/All-Structural/pull/215)
 
 The engine is the same code in the main page (Structural analysis) and the embedded Preliminary sizing (`PL_B64`, decoded, edited and re-encoded on one line); both copies are changed identically and remain byte-identical.
 
@@ -11940,7 +11940,7 @@ The engine is the same code in the main page (Structural analysis) and the embed
 ```
 
 
-## 2026-10-14 — PR: claude/gd-xf-race (Get demands: requests sent in order once Preliminary sizing is ready; request IDs so only the reply to an outstanding request is applied and the second pass is labelled on its own reply; engineer's decision 2026-10-14; PR link added after merge)
+## 2026-10-14 — PR: claude/gd-xf-race (Get demands: requests sent in order once Preliminary sizing is ready; request IDs so only the reply to an outstanding request is applied and the second pass is labelled on its own reply; engineer's decision 2026-10-14; PR #216: https://github.com/mlococo88/All-Structural/pull/216)
 
 No engineering formula, factor, unit or code reference is changed. This changes only the messaging between GirderDetail and the embedded Preliminary sizing (`PL_B64`, decoded, edited and re-encoded on one line). Saved data is unchanged: no new storage key, `girderdetail_inbox_v1` keeps its format (the request ID is a field of the message, not of the stored inbox), and project files are unchanged.
 
@@ -12075,7 +12075,7 @@ No engineering formula, factor, unit or code reference is changed. This changes 
 ```
 
 
-## 2026-10-14 — PR: claude/gd-xf-requeue (a user request no longer drops the cross-frame second pass, unless it loads every module; engineer's decision 2026-10-14 on the open item of claude/gd-xf-race; PR link added after merge)
+## 2026-10-14 — PR: claude/gd-xf-requeue (a user request no longer drops the cross-frame second pass, unless it loads every module; engineer's decision 2026-10-14 on the open item of claude/gd-xf-race; PR #217: https://github.com/mlococo88/All-Structural/pull/217)
 
 No engineering formula, factor, unit or code reference is changed, and the embedded Preliminary sizing (`PL_B64`) is unchanged. Saved data is unchanged.
 
@@ -12138,7 +12138,7 @@ No engineering formula, factor, unit or code reference is changed, and the embed
    GD_XF_PASS = pass ? 1 : 0; GD_XF_REQ = { src, tgt, sig: gdXfSig(), pass: !!pass }; }
 ```
 
-## 2026-10-14 — PR: claude/girderdetail-pna-below-web (composite positive flexure with the PNA below the web is outside the scope of the app: Girder section, check at any location, Preliminary sizing; engineer's decision 2026-10-14; PR link added after merge)
+## 2026-10-14 — PR: claude/girderdetail-pna-below-web (composite positive flexure with the PNA below the web is outside the scope of the app: Girder section, check at any location, Preliminary sizing; engineer's decision 2026-10-14; PR #225: https://github.com/mlococo88/All-Structural/pull/225)
 
 ### OOS1. PNA below the web: OUT OF SCOPE, never passing   [BEHAVIOUR CHANGE — results suppressed, layouts rejected] [no formula, factor or unit changed; normal sections unchanged]
 - **Decision (engineer, 2026-10-14):** when the composite positive-flexure plastic force balance puts the plastic neutral axis below the web (P_t > P_s + P_c + P_w, plus P_rt + P_rb when the deck rebar is counted), the section is outside AASHTO LRFD 10th Ed. Table D6.1-1 and Art. D6.3.2 and so outside the scope of the app. Same treatment as ST-Girder (stgirder PR #224), including the whole-span rule: a flagged location blocks the positive-flexure results of its span.
@@ -12512,7 +12512,7 @@ Diff of the embedded Preliminary sizing (`PL_B64`, decoded):
        <p class="note-p">Web: ${F.check.gWeb ? `${F.check.gWeb}, ratio ${f3(F.check.rWeb)} at ${f2(F.check.xWeb)} ft` : 'no bend-buckling demand'}.${F.check.other.length ? ` Also: ${[...new Set(F.check.other.map(o => o.name))].join('; ')} exceeded at some points.` : ''}${(F.check.npW || []).length ? ` <b>Review:</b> outside the D6.6.2.2 step limit, so the conservative γ<sub>e</sub> bound (each section prismatic over L<sub>b</sub> at its largest stress) is used instead of App. D6.6.2 Method A; engineer to review: ${[...new Set(F.check.npW)].map(esc).join('; ')}.` : ''} ${F.check.fat ? `Flange fatigue: ${plFatTxt(P)}, Category B at the flange-to-web welds (extreme fiber)${P.suggest.fat !== 'B' ? ' and Category C′ at the connection plates welded to the flanges (inner flange face, 6.6.1.3.1; checked at every analysis point along the girder, not only at the cross-frames, which is conservative)' : ''} (6.6.1.2), short-term composite section for both signs (minimum reinforcement per 6.10.1.7).` : 'Flange fatigue was not checked (turned off).'} Other fatigue details are checked in the Fatigue module.</p>`); }
 ```
 
-## 2026-10-15 — PR: claude/gd-skew-framing (cross-frame layout at skewed supports and the unbraced lengths taken from it: AASHTO-level fixes approved by the engineer 2026-10-15; owner rules such as "staggered above 20°" are not in this PR; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-skew-framing (cross-frame layout at skewed supports and the unbraced lengths taken from it: AASHTO-level fixes approved by the engineer 2026-10-15; owner rules such as "staggered above 20°" are not in this PR; PR #227: https://github.com/mlococo88/All-Structural/pull/227)
 
 All changes are in the embedded Preliminary sizing page (`const PL_B64`, main file line 2361: decoded, edited, re-encoded on its one line). Nothing else in the main file changed. Basis: AASHTO LRFD 10th Ed. (2024) Art. 6.7.4.2.1 and C6.7.4.2.1 (first intermediate frame offset "by a minimum of the larger of 4b_f or 0.4L_b from the support ... where b_f is the largest girder flange width within the unbraced lengths on either side of the first cross-frame ... and L_b is the unbraced length between the first and the second intermediate cross-frame ... along the girder under consideration"; "maximized at the obtuse corners"; "as large as practicable but not less than 4b_f"; "4b_f is the recommended lower limit for the smallest unbraced lengths, offsets, or stagger distances"), 6.10.8.2.3 (L_b in LTB), 6.10.3.2.1 (deck placement). Diagnosis: problems P2–P7 of the read-only skew study (2026-10-15).
 
@@ -13020,7 +13020,7 @@ Diff of the decoded Preliminary sizing page (`pl_main` = main, `pl` = branch):
    applyCollapse(); typeset(); maybeSuggest(); maybeAlts();
 ```
 
-## 2026-10-15 — PR: claude/gd-pier-frame-spacing (closer cross-frame spacing near interior supports as a design variable, engineer's decision B of 2026-10-15 on the PR #227 follow-ups; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-pier-frame-spacing (closer cross-frame spacing near interior supports as a design variable, engineer's decision B of 2026-10-15 on the PR #227 follow-ups; PR #228: https://github.com/mlococo88/All-Structural/pull/228)
 
 All code changes are in the embedded Preliminary sizing page (`const PL_B64`, main file line 2361: decoded, edited, re-encoded on its one line). Nothing else in the main file changed. Basis: AASHTO LRFD 10th Ed. (2024) Art. 6.7.4.2.1 and C6.7.4.2.1 (cross-frame spacing; closer frames "may be necessary" near interior supports; first-frame offset; 0.4 panel ratio), 6.10.8.2.3 (lateral-torsional buckling with L_b between brace points), 6.10.3.2.1, 6.10.4.2.2. Engineer's decision A of the same day (keep #227's L_b from the spacing built; Full design at 15° accepted; b_f, X5 levels and the > 20° offset rule confirmed) is recorded in ENGINEER_CHECKS GD36; no code change.
 
@@ -13625,7 +13625,7 @@ Diff of the decoded Preliminary sizing page (`pl_main` = main 0929719, `pl` = br
      + card('dw-prof', 'Plate profile along the girder', '', `<div id="plt-prof" class="plt tall"></div><p class="cap">Solid vertical lines are supports; dashed lines are field splices. Click legend entries to toggle series.</p>`);
 ```
 
-## 2026-10-15 — PR: claude/gd-owner-profiles-1 (owner (DOT) profiles, phase 1 of 3: framework and the cross-frame orientation owner rule; engineer's decisions of 2026-10-15; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-owner-profiles-1 (owner (DOT) profiles, phase 1 of 3: framework and the cross-frame orientation owner rule; engineer's decisions of 2026-10-15; PR #229: https://github.com/mlococo88/All-Structural/pull/229)
 
 Changes in the main file (GirderDetail outer page) and in the embedded Preliminary sizing page (`const PL_B64`: decoded, edited, re-encoded on its one line). Basis: AASHTO LRFD 10th Ed. (2024) Art. 6.7.4.2.1 (owner rules applied on top); RIDOT Bridge Design Manual (April 2026) §6.4.3; CTDOT BRSDM Release 1, V2 6.7.4.2 (replaces the 4th and 5th paragraphs of BDS 6.7.4.2); MassDOT LRFD Bridge Manual Part I (Hundredth Anniversary Ed.) 2.3.4.1. Only citations (manual + section) and short paraphrases are in the tool; no manual text is reproduced. Phases 2 (load rules: RIDOT 1.2 multiplier, η, haunch = 0, rating targets) and 3 (owner defaults and checks) are not in this PR; they add rows to the rules table and apply them by rule id.
 
@@ -14159,7 +14159,7 @@ Diff of the decoded Preliminary sizing page (`pl_main` = main 648a0bd, `pl` = br
  
 ```
 
-## 2026-10-15 — PR: claude/gd-npr-fe-gov (nonprismatic unbraced lengths: F_e = γ_e f_bu with f_bu of the governing section; engineer-approved fix 2026-10-15, strict reading; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-npr-fe-gov (nonprismatic unbraced lengths: F_e = γ_e f_bu with f_bu of the governing section; engineer-approved fix 2026-10-15, strict reading; PR #230: https://github.com/mlococo88/All-Structural/pull/230)
 
 Changes in the main file (GirderDetail outer page: Girder section) and in the embedded Preliminary sizing page (`const PL_B64`: decoded, edited, re-encoded on its one line). Basis: AASHTO LRFD 10th Ed. (2024) Art. 6.10.8.2.3c, Eqs. 6.10.8.2.3c-1 to c-3 ("f_bu is calculated at the location where f_bu/R_bR_hF_yc is maximum"; "r_t at the governing cross-section"), Eqs. 6.10.8.2.3a-1 to a-5, 6.10.1.10.2 (R_b), 6.10.3.2.1 (deck placement, R_b = 1.0), C6.10.8.2.3c and Fig. C6.10.8.2.3c-1; App. D6.6.2 (γ_e, unchanged).
 
@@ -14516,7 +14516,7 @@ ENGINEER_CHECKS GD44 (readings (a)–(e) above).
  function crSource() { return P.mod === 'splice' ? P.source : P.mod === 'bstf' ? (P.bs && P.bs.source) : (P[P.mod] && P[P.mod].source); }
 ```
 
-## 2026-10-15 — PR: claude/gd-owner-profiles-2 (owner (DOT) profiles, phase 2 of 3: load-level owner rules — RIDOT design load multiplier, load modifiers η, haunch = 0 in composite properties, design rating targets; engineer's decisions of 2026-10-15; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-owner-profiles-2 (owner (DOT) profiles, phase 2 of 3: load-level owner rules — RIDOT design load multiplier, load modifiers η, haunch = 0 in composite properties, design rating targets; engineer's decisions of 2026-10-15; PR #231: https://github.com/mlococo88/All-Structural/pull/231)
 
 Changes in the main file (GirderDetail outer page) and in the embedded Preliminary sizing page (`const PL_B64`: decoded, edited, re-encoded on its one line; round trip byte-identical). Basis: AASHTO LRFD 10th Ed. (2024) Art. 1.3.2.1 (Eqs. 1.3.2.1-1 to -3), 1.3.3–1.3.5, Table 3.4.1-1; AASHTO MBE Eq. 6A.4.2.1-1 (rating form); RIDOT Bridge Design Manual (April 2026) 1.3.1–1.3.3, 3.4.1.2, 4.3.1, 6.5.1, 9.4.6; MassDOT LRFD Bridge Manual Part I (Hundredth Anniversary Ed.) 3.1.2, 3.1.4.3, 3.1.4.4, 3.5.1.2; CTDOT BRSDM Release 1 V2 1.3.3–1.3.5 and V1B "Load Ratings". Only citations and short paraphrases are in the tool. Owner rows are added to the one table `OWN_RULES` (phase 1); Preliminary sizing turns them into one set of factors for the bridge (`plLF`) and publishes it with the bridge (`bridge.lf`); every GirderDetail module reads it (`gdLF`). **AASHTO (and every owner with the factors at 1) computes exactly as before** (all factors multiply by 1, IEEE-exact; proven below).
 
@@ -15162,7 +15162,7 @@ Diff of the embedded Preliminary sizing page (decoded PL_B64):
  }
 ```
 
-## 2026-10-15 — PR: claude/gd-mode-toggle (working mode toggle "Preliminary designer" / "Design modules", and one project title block; engineer's decisions of 2026-10-15; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-mode-toggle (working mode toggle "Preliminary designer" / "Design modules", and one project title block; engineer's decisions of 2026-10-15; PR #232: https://github.com/mlococo88/All-Structural/pull/232)
 
 No engineering formula, load or resistance factor, unit, unit conversion or code reference is changed. The change is in where the modules take their demands from, when they are reloaded, which inputs are shown, and where the project information is kept. Every module's checks are identical to main for the same demand source (verification below). The embedded Preliminary sizing (`PL_B64`) is decoded, edited and re-encoded on one line.
 
@@ -15736,7 +15736,7 @@ Saved data: no storage key and no existing field is changed. New optional fields
  
 ```
 
-## 2026-10-15 — PR: claude/gd-owner2-followups (owner profiles phase 2 follow-ups: η_I default no, pedestrian load without the RIDOT multiplier, A2 reviewed, neutral elevation colours in Design modules; engineer's decisions of 2026-10-15 on PR #231 and PR #232; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-owner2-followups (owner profiles phase 2 follow-ups: η_I default no, pedestrian load without the RIDOT multiplier, A2 reviewed, neutral elevation colours in Design modules; engineer's decisions of 2026-10-15 on PR #231 and PR #232; PR #233: https://github.com/mlococo88/All-Structural/pull/233)
 
 Changes in the main file (GirderDetail outer page) and in the embedded Preliminary sizing page (`const PL_B64`: decoded, edited, re-encoded on its one line; round trip byte-identical before the edits). Basis: AASHTO LRFD 10th Ed. (2024) Art. 1.3.2.1, 3.6.1.6, Table 3.4.1-1; RIDOT Bridge Design Manual (April 2026) 1.3.3, 3.4.1.2. Base: 9e92c3b (#232).
 
@@ -16223,7 +16223,7 @@ Diff of the decoded Preliminary sizing page (PL_B64):
      + card('dw-xs', 'Typical cross-section', 'To scale', `<div class="dwg-wrap">${x.svg}</div><p class="cap">${x.cap}</p>`)
 ```
 
-## 2026-10-15 — PR: claude/gd-st-owner-rules (GD49: owner load rules carried to ST-Girder; cross-tool PR with stgirder.html and HANDOFF.md §4.9, approved exception of 2026-10-04; engineer decision 2026-10-15; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-st-owner-rules (GD49: owner load rules carried to ST-Girder; cross-tool PR with stgirder.html and HANDOFF.md §4.9, approved exception of 2026-10-04; engineer decision 2026-10-15; PR #234: https://github.com/mlococo88/All-Structural/pull/234)
 
 ### OWN13. Send to ST-Girder carries the owner rules (`ownerRules`)   [HAND-OFF: new optional field; GirderDetail's own results unchanged]
 - **Where:** `gdStPayload` (anchor `const ownerRules = (() => { const lf0 = P.df && P.df.bridge && P.df.bridge.lf;`): new optional payload field `ownerRules` = { owner, manual, codeBasis, llMultiplier { m, cite, liveLoad, limitStates, notApplied }, eta { D, R, I, product, max, min, cite, limitStates, rule }, haunchInProperties, haunchCite, ratingTarget { kind, rf, fatigue, cite, basis } | null }, from `gdLF()` (the factors Preliminary sizing publishes) and `OWN_RULES`; present whenever the bridge has published load rules (every owner, including AASHTO). The owner note line now says the rules are sent in `ownerRules` (and that m is not on the pedestrian load); the Send to ST-Girder help text says ST-Girder applies them.
@@ -16275,7 +16275,7 @@ Diff of the outer file (main → branch):
        deck: { ts: b.tsDeck, haunch: b.haunch, beff: r3(R.beff), rebarPct: nm(R.p.rebar), Ar: r3(R.Ar), rebarAt: 'deck mid-depth' },
 ```
 
-## 2026-10-15 — PR: claude/gd-owner-profiles-3a (owner profiles phase 3a, part 1 of 2: owner defaults infrastructure, dead loads, utilities, deck, deflection and span-to-depth; engineer decisions GD39, GD40, GD42 of 2026-10-15; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-owner-profiles-3a (owner profiles phase 3a, part 1 of 2: owner defaults infrastructure, dead loads, utilities, deck, deflection and span-to-depth; engineer decisions GD39, GD40, GD42 of 2026-10-15; PR #237: https://github.com/mlococo88/All-Structural/pull/237)
 
 Basis: `scratchpad/dotman/owner_spec.md` and the H-priority rows of the RIDOT, MassDOT and CTDOT reviews. Manuals cited, not quoted: RIDOT Bridge Design Manual (April 2026), MassDOT LRFD Bridge Manual Part I, CTDOT BRSDM Release 1 (V2). Code basis AASHTO LRFD 10th Ed. (2024) with the owner rules on top. **AASHTO profile: identical to main** (every module, every Preliminary sizing check and analysis array, Suggest and Full design; see How verified). Part 2 (plates, weathering steel, studs, integral abutments, CTDOT splice/fatigue/refined analysis, MassDOT A6 and sidewalk beam) follows in a second PR.
 
@@ -17162,7 +17162,7 @@ Diff of the embedded Preliminary sizing page (main → branch, decoded):
      card('dw-elev', 'Girder elevation', geo ? 'Plates as defined' : 'Plates colored by check status', `<div class="ctl-row"><label class="dg-chip" style="--chip:#2346c2"><input type="checkbox" id="exag" ${exag ? 'checked' : ''}><span class="dg-dot"></span>Exaggerate vertical scale</label>
 ```
 
-## 2026-10-15 — PR: claude/gd-owner-profiles-3b (owner profiles phase 3a, part 2 of 2: plates and flanges, steel grade and coating, weathering steel, studs, integral abutments, CTDOT splice / Category C / refined analysis, MassDOT A6 and sidewalk beam; engineer decision GD41; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-owner-profiles-3b (owner profiles phase 3a, part 2 of 2: plates and flanges, steel grade and coating, weathering steel, studs, integral abutments, CTDOT splice / Category C / refined analysis, MassDOT A6 and sidewalk beam; engineer decision GD41; PR #238: https://github.com/mlococo88/All-Structural/pull/238)
 
 Basis as part 1 (`owner_spec.md`, H rows of the three reviews; manuals cited, not quoted). Rules are rows of `OWN_RULES` with `dv: 2`; Preliminary sizing `OWN_DEF_V` 1 → 2 and GirderDetail `GD_DEF_V` = 2, so a project saved with part 1 moves only its untouched part-2 inputs, once, with the notice. **AASHTO: identical to main** (see How verified).
 
@@ -17758,7 +17758,7 @@ Diff of the embedded Preliminary sizing page (main → branch, decoded):
      fillInputs(); }
 ```
 
-## 2026-10-15 — PR: claude/gd-pl-plaintext (Preliminary sizing page stored as plain text instead of base64; engineer-approved 2026-10-15; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-pl-plaintext (Preliminary sizing page stored as plain text instead of base64; engineer-approved 2026-10-15; PR #239: https://github.com/mlococo88/All-Structural/pull/239)
 
 ### PLSRC. The embedded Preliminary sizing (PlateLine) page is plain HTML text, not the base64 string `PL_B64`   [storage of the embedded page only] [no result change]
 - **Why:** the base64 string was one ~1 MB line: every Preliminary sizing edit meant decode → edit → re-encode, every such PR conflicted on that one line, and diffs of it were unreadable. Plain text is diffable, editable in place and about 250 KB smaller.
@@ -17799,7 +17799,7 @@ function plShow(bg) {
 - **Saved data:** no key or format changed.
 - **Other copies:** none (no standalone PlateLine file exists).
 
-## 2026-10-15 — PR: claude/gd-testkit (idle signal for headless checks, with the tests/ kit and docs/AGENT_BRIEF.md; engineer-approved 2026-10-15; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-testkit (idle signal for headless checks, with the tests/ kit and docs/AGENT_BRIEF.md; engineer-approved 2026-10-15; PR #240: https://github.com/mlococo88/All-Structural/pull/240)
 
 ### IDLE. `window.gdIdle()`: a Promise that resolves when GirderDetail has finished its automatic work   [test hook] [no result change, no behaviour change]
 - **Why:** opening a project can start automatic work: the bridge publish from Preliminary sizing, the automatic refresh, the cross-frame auto-design and the XF2 second pass. This takes 20–50 s, so headless checks must not read results at fixed times. Until now the wait (`settle()`) lived in each test script. It now lives in the app, so every script waits the same way.
@@ -17822,7 +17822,7 @@ window.gdIdle = function ({ quiet = 8000, max = 150000, step = 500 } = {}) {
 - **How verified (Tier 1):** `node tests/check-syntax.mjs "Steel Bridge Beam Modules.html"` passes (main page and the pl-src page). `node tests/compare.mjs --tool gd` (main 3ef3506 vs branch, built-in project, AASHTO): all 16 sections identical, covering the GirderDetail and Preliminary sizing project data, Preliminary sizing checks and analysis, every module's check items after Get demands, and the girder-1 structural analysis. No console errors. Main was waited on with the external settle logic and the branch with `gdIdle()` (≈23 s each). Also run on xsA × AASHTO/RIDOT and built-in × RIDOT: identical (see PR).
 - **Saved data:** none touched.
 
-## 2026-10-15 — PR: claude/gd-owner3a-followups (engineer decisions 2026-10-15 on #237/#238, ENGINEER_CHECKS GD51–GD64: GD54b utilities as their own loads, GD59 weathering steel in the stiffener modules, GD62 CTDOT splice message; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-owner3a-followups (engineer decisions 2026-10-15 on #237/#238, ENGINEER_CHECKS GD51–GD64: GD54b utilities as their own loads, GD59 weathering steel in the stiffener modules, GD62 CTDOT splice message; PR #241: https://github.com/mlococo88/All-Structural/pull/241)
 
 ### GD54b. MassDOT utilities carried as their own loads in every module's demands, with the exact load factors   [LOAD COMBINATION CHANGE, MassDOT projects with utilities only — §4 callout] [Tier 2]
 - **Engineer decision 2026-10-15 (GD54b):** in the detail modules the utilities were folded into DC1 (1.20 × existing + 1.00 × future), so where they relieve the effect the module's γ<sub>DC,min</sub> = 0.90 was applied to them instead of the exact factors. Fix: carry the utilities as their own load components so every module applies the exact maximum and minimum factors.
@@ -18175,7 +18175,7 @@ window.gdIdle = function ({ quiet = 8000, max = 150000, step = 500 } = {}) {
 - GD51, GD52, GD53, GD55, GD56, GD57, GD58, GD60, GD61, GD63, GD64: engineer-confirmed as implemented (GD63(c): the MassDOT exterior sidewalk beam Case I / Case II stays a warning, DF6). GD62: confirmed; failing CTDOT splices keep failing, with the message above. GD54: (a), (c), (d), (e) confirmed, (b) replaced by GD54b (fixed here). GD59: switch default off; (e) replaced (applied to the stiffener and connection plate modules here).
 - ST-Girder (GD54(d)): not changed; the hand-off note line still lists the utilities. Recommendation in the PR body.
 
-## 2026-10-15 — PR: claude/gd-suggest-panel (Suggest panel, part 1 of 2: the panel, the design inputs and their modes, runs and Apply; engineer-approved design of 2026-10-15; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-suggest-panel (Suggest panel, part 1 of 2: the panel, the design inputs and their modes, runs and Apply; engineer-approved design of 2026-10-15; PR #242: https://github.com/mlococo88/All-Structural/pull/242)
 
 ### SGP. Suggest panel: GirderDetail top bar button, full-screen panel, design inputs with Locked / Range / List / Free, runs with progress and Cancel, options side by side with the current design, Apply   [NEW FEATURE — no result change with the settings as saved] [Tier 2/3]
 - **Engineer-approved design (2026-10-15):** a prominent **Suggest** button in GirderDetail's top bar, Preliminary designer mode only (the #232 mode toggle), opens a full-screen panel inside the app. Suggest is no longer buried in Preliminary sizing's input tabs (the engine is kept; its settings are moved into the panel). The panel lists the design inputs grouped (Bridge layout, Girder plates, Framing, Materials), each with its current value and a mode (Locked, Range, List, Free) and the code and owner limits shown as its bounds; runs the existing engines (Quick suggestion; Full design, about 80 s) with a progress bar and Cancel; lists the options side by side with the current design, each linked to its derivation and checks; Apply writes the chosen option into Preliminary sizing (Preliminary designer then updates the modules). Part 2 (next PR): objectives (lowest cost, lowest steel weight, shallowest depth), the max structure depth constraint, and the short list of distinct options (best per objective plus close alternatives).
@@ -18550,7 +18550,7 @@ window.gdIdle = function ({ quiet = 8000, max = 150000, step = 500 } = {}) {
 +window.addEventListener('message', e => { if (gdFromPL(e) && e.data && e.data.type === 'pl-sgp' && !e.data.open) gdSgpClose(!!e.data.show); });
 ```
 
-## 2026-10-15 — PR: claude/gd-suggest-panel-2 (Suggest panel, part 2 of 2: objectives, maximum structure depth, the short list of options; engineer-approved design of 2026-10-15; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-suggest-panel-2 (Suggest panel, part 2 of 2: objectives, maximum structure depth, the short list of options; engineer-approved design of 2026-10-15; PR #243: https://github.com/mlococo88/All-Structural/pull/243)
 
 Note on the previous entry (SGP, part 1): merged as PR #242 (https://github.com/mlococo88/All-Structural/pull/242).
 
@@ -18798,7 +18798,7 @@ Note on the previous entry (SGP, part 1): merged as PR #242 (https://github.com/
 ```
 
 
-## 2026-10-15 — PR: claude/gd-st-utilities (GD54c: MassDOT utilities sent to ST-Girder as their own loads; cross-tool PR with stgirder.html and HANDOFF.md §4.9; engineer decision GD54(d) "yes"; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-st-utilities (GD54c: MassDOT utilities sent to ST-Girder as their own loads; cross-tool PR with stgirder.html and HANDOFF.md §4.9; engineer decision GD54(d) "yes"; PR #244: https://github.com/mlococo88/All-Structural/pull/244)
 
 ### GD54c. "Send to ST-Girder": the utilities as their own load components   [HAND-OFF CHANGE, optional fields; no GirderDetail result changes]
 - **Where:** `gdStPayload` (anchors `GD54c (engineer decision 2026-10-15, GD54 "yes")`, `Utilities (OWN16, GD54b/GD54c;`, `// GD54c: what the utility fields are`); `gdStUi` note text (`and the MassDOT utilities as their own loads when there are any`).
@@ -18850,7 +18850,7 @@ index 2376a83..419c792 100644
 ```
 
 
-## 2026-10-15 — PR: claude/gd-suggest-followups (Suggest panel follow-ups from #242/#243: SGF-a objective picks the girder counts for Full design, SGF-b help texts, SGF-c defaults recorded; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-suggest-followups (Suggest panel follow-ups from #242/#243: SGF-a objective picks the girder counts for Full design, SGF-b help texts, SGF-c defaults recorded; PR #245: https://github.com/mlococo88/All-Structural/pull/245)
 
 Note on earlier entries: SGP2 merged as PR #243; GD54c (claude/gd-st-utilities) merged as PR #244.
 
@@ -18931,7 +18931,7 @@ Note on earlier entries: SGP2 merged as PR #243; GD54c (claude/gd-st-utilities) 
 ```
 
 
-## 2026-10-16 — PR: claude/gd-owner-profiles-3b-1 (owner phase 3b part 1: MEDIUM owner items of the RIDOT/MassDOT/CTDOT reviews for shipping, splices, flange transitions, spacing, refined analysis, construction wind, extra camber; engineer's decisions 2026-10-15; PR link added after merge)
+## 2026-10-16 — PR: claude/gd-owner-profiles-3b-1 (owner phase 3b part 1: MEDIUM owner items of the RIDOT/MassDOT/CTDOT reviews for shipping, splices, flange transitions, spacing, refined analysis, construction wind, extra camber; engineer's decisions 2026-10-15; PR #246: https://github.com/mlococo88/All-Structural/pull/246)
 
 Note on earlier entries: SGF (claude/gd-suggest-followups) merged as PR #245. Branch name: `claude/gd-owner-profiles-3b` already existed (it carried phase 3a part 2, merged as #238), so phase 3b is on `claude/gd-owner-profiles-3b-1` (this PR) and `-3b-2` (the GirderDetail modules).
 
@@ -19109,7 +19109,7 @@ Items of the three reviews already done before this PR and skipped here: orienta
 +const GD_DEF_V = 2;   // (phase 3b part 1 adds no GirderDetail-side default) version of GirderDetail's own owner defaults (rows with gkey; rule field dv): 1 phase 3a part 1, 2 part 2 (Owner standards minimum plate, negative flexure method)
 ```
 
-## 2026-10-16 — PR: claude/gd-owner-profiles-3b-2 (owner phase 3b part 2: the GirderDetail module items of the RIDOT/MassDOT/CTDOT reviews — bracing type and details, diaphragm depth, bolts, stiffeners, fatigue categories, jacking, CTDOT dead load distribution; engineer's decisions 2026-10-15; PR link added after merge)
+## 2026-10-16 — PR: claude/gd-owner-profiles-3b-2 (owner phase 3b part 2: the GirderDetail module items of the RIDOT/MassDOT/CTDOT reviews — bracing type and details, diaphragm depth, bolts, stiffeners, fatigue categories, jacking, CTDOT dead load distribution; engineer's decisions 2026-10-15; PR #247: https://github.com/mlococo88/All-Structural/pull/247)
 
 Note on earlier entries: phase 3b part 1 (claude/gd-owner-profiles-3b-1) merged as PR #246. This PR was finished from a work-in-progress commit saved after a container restart (9af8f78, unverified); it was reviewed, corrected and squashed. Corrections to the WIP: MassDOT 0.5d keyed on the girder depth d (the WIP used the web depth); CTDOT Table 6.7.4.2-1 by depth ranges (21–24, 27–30, 33–36 in; the WIP took any depth up to 24 in as C12x20.7) and advisory only; CTDOT diaphragm above 4 ft fails (WIP: warning) and RIDOT diaphragm above 40 in passes (WIP: warning); RIDOT X/K outside 1.0–1.5 fails (WIP: warning); a locked cross-frame bolt count below 4 kept by auto-design (the WIP loop skipped it and fell to the largest angles); diaphragm bolt start never below 2; the end-diaphragm auto-design and its messages use the owner depth fraction; owner rows moved after the part 1 rows; GD_DEF_V 4 (dv 4 for both apps); jacking with the pedestrian load, a helper, the DXF table and a worked line; TS8 extended with the owner minimum thicknesses; FA7 shows the limit state used.
 
@@ -19354,7 +19354,7 @@ Items already in main and skipped: skew refined-analysis warnings (RIDOT G13 60�
 ```
 
 
-## 2026-10-19 — PR: claude/gd-ridot-mult-explicit (engineer requests 2026-10-19: the RIDOT design load multiplier m made explicit; the live load distribution factors used by Structural analysis stated; display only; PR link added after merge)
+## 2026-10-19 — PR: claude/gd-ridot-mult-explicit (engineer requests 2026-10-19: the RIDOT design load multiplier m made explicit; the live load distribution factors used by Structural analysis stated; display only; PR #302: https://github.com/mlococo88/All-Structural/pull/302)
 
 Engineer's questions: "where does it say there is an additional 20% added to the live load forces?", then "make sure it's more explicit"; and "Structural analysis, Results tab: state the actual LLDF values used, not only that they come from LLDF and DLs".
 
@@ -19587,7 +19587,7 @@ Each bare γ_LL number (e.g. 2.10) became 1.75(η)(m) under a brace with the pro
 ```
 
 
-## 2026-10-19 — PR: claude/gd-stgirder-load-inputs (GDL: the load inputs of the girder sent to ST-Girder with its demands; engineer request 2026-10-19; cross-tool PR with stgirder.html and HANDOFF.md §4.9; display only; PR link added after merge)
+## 2026-10-19 — PR: claude/gd-stgirder-load-inputs (GDL: the load inputs of the girder sent to ST-Girder with its demands; engineer request 2026-10-19; cross-tool PR with stgirder.html and HANDOFF.md §4.9; display only; PR #303: https://github.com/mlococo88/All-Structural/pull/303)
 
 Engineer's request: "When the analysis is sent from GirderDetail to ST-Girder, bring over the load inputs as well so there is no confusion. Update the load section of the Input tab [in ST-Girder] with the correct inputs from the GirderDetail app."
 
@@ -19654,7 +19654,7 @@ index 32429cc..052e26e 100644
 ```
 
 
-## 2026-10-19 — PR: claude/gd-stgirder-import-all (GDX: the detail-module inputs sent to ST-Girder; engineer decision 2026-10-19 "Whatever can be imported from GirderDetail should be"; cross-tool PR with stgirder.html, HANDOFF.md §4.9 and ENGINEER_CHECKS GD69/GD70; PR link added after merge)
+## 2026-10-19 — PR: claude/gd-stgirder-import-all (GDX: the detail-module inputs sent to ST-Girder; engineer decision 2026-10-19 "Whatever can be imported from GirderDetail should be"; cross-tool PR with stgirder.html, HANDOFF.md §4.9 and ENGINEER_CHECKS GD69/GD70; PR #304: https://github.com/mlococo88/All-Structural/pull/304)
 
 ### GDX. `girderDetail.details` added to the "Send to ST-Girder" payload   [hand-off data; no GirderDetail result change, Tier 1 for this file]
 - **Where:** new `gdStDetails()` above `gdStPayload` (anchor `/* GDX (engineer decision 2026-10-19`); in `gdStPayload` after the GDL line: `const dtIn = gdStDetails(); if (dtIn) p.girderDetail.details = dtIn;`.
@@ -19693,7 +19693,7 @@ index 052e26e..eaf5b08 100644
 ```
 
 
-## 2026-10-19 — PR: claude/gd-stgirder-gd70 (GD70: per-span and per-position detail data for ST-Girder's governing values; engineer decision 2026-10-19; cross-tool PR with stgirder.html, HANDOFF.md §4.9, ENGINEER_CHECKS GD70; PR link added after merge)
+## 2026-10-19 — PR: claude/gd-stgirder-gd70 (GD70: per-span and per-position detail data for ST-Girder's governing values; engineer decision 2026-10-19; cross-tool PR with stgirder.html, HANDOFF.md §4.9, ENGINEER_CHECKS GD70; PR #305: https://github.com/mlococo88/All-Structural/pull/305)
 
 ### GD70. `girderDetail.details` gains `rowsBy`, `supports`, `cyclesBy`   [hand-off data; no GirderDetail result change, Tier 1 for this file]
 - **Where:** `gdStDetails()` (anchor `/* GDX (engineer decision 2026-10-19`): new helpers `spanOf`, `posOf` (from the row names "Span k, …, interior/exterior"); `transverseStiffener.rowsBy` (name, span, pos, do1, do2, end of each type A row); `bearingStiffeners.types[].clip` and `bearingStiffeners.supports` (name and type of each Bearing stiffeners row); `fatigue.cyclesBy` (name, pos, n of each Fatigue row with n > 0).
@@ -19725,7 +19725,7 @@ index eaf5b08..c0f7c07 100644
 +        cyclesBy: (fa.rows || []).map(r => ({ name: r.name, pos: posOf(r.name), n: nm(r.n) })).filter(r => r.n > 0) } : null };
 ```
 
-## 2026-10-19 — PR: claude/ridot-stepped-xf (RIDOT, largest support skew over 20°: intermediate cross-frames stepped on lines parallel to the bearings, as the RIDOT standard framing plan; engineer decision 2026-10-19; PR link added after merge)
+## 2026-10-19 — PR: claude/ridot-stepped-xf (RIDOT, largest support skew over 20°: intermediate cross-frames stepped on lines parallel to the bearings, as the RIDOT standard framing plan; engineer decision 2026-10-19; PR #307: https://github.com/mlococo88/All-Structural/pull/307)
 
 Engineer's decision (2026-10-19), from the RIDOT standard framing plan sheet "Framing plan for skew greater than 20° (simple span), plate girder (G) or rolled sections (S)": end diaphragms D-1 along the skewed bearing line at each abutment; intermediate diaphragms D-2 normal to the girders, one per bay per line, each intermediate diaphragm line parallel to ℄ of bearings (typ.), so across the bridge the D-2s of one line step from bay to bay (offset ≈ S·tan θ, an echelon, not a half-spacing checkerboard); span and diaphragm spacing dimensioned along ℄ roadway; W.P. where ℄ roadway crosses the bearing lines. Governing: RIDOT BDM (Apr. 2026) 6.4.3 and the RIDOT standard framing plan for skew greater than 20°; AASHTO LRFD 10th Ed. (2024) 6.7.4.2 (normal frames at skews over 20°; either arrangement "may") and C6.7.4.2.1 (first-frame offset max(4b_f, 0.4L_b); 4b_f the recommended lower limit for stagger distances).
 
@@ -19943,7 +19943,7 @@ index c0f7c07..6c399ad 100644
 +    { owner: 'RIDOT', id: 'xf.details', kind: 'pending-reference', sec: '6.4.3', ref: 'RIDOT Bridge Standard Details', text: 'Cross-frame spacing and connection details (the layout for skews over 20°, stepped lines parallel to the bearings, is applied from the standard framing plan: xf.orient)' },
 ```
 
-## 2026-10-19 — PR: claude/ridot-xf-followups (follow-ups to #307, RXF: X3 under the RIDOT stepped layout; "Stepped (RIDOT standard)" Normal frames option; engineer decisions 2026-10-19; PR link added after merge)
+## 2026-10-19 — PR: claude/ridot-xf-followups (follow-ups to #307, RXF: X3 under the RIDOT stepped layout; "Stepped (RIDOT standard)" Normal frames option; engineer decisions 2026-10-19; PR #308: https://github.com/mlococo88/All-Structural/pull/308)
 
 Engineer's decisions on the RXF open items (2026-10-19): (2) X3 under RIDOT's stepped layout reports the offset and passes, citing the RIDOT standard framing plan (skew > 20°) instead of the 4b_f recommendation; other owners and arrangements unchanged. (1) Pier s_p default: no change. (3) Add a "Stepped (RIDOT standard)" option to the Normal frames arrangement menu: by hand it gives the same stepped layout for any owner, and X1 under RIDOT > 20° passes with it. (4)–(6): left as logged in RXF.
 
@@ -20006,7 +20006,7 @@ index 6c399ad..e33e8be 100644
 +      ${fld('Normal frames', 'framing.arrange', '', 'sel', { options: [['contiguous', 'Contiguous lines'], ['staggered', 'Staggered by bay'], ['stepped', 'Stepped (RIDOT standard)']] })}${fld('Min. offset if not aligned', 'framing.stagMin', 'ft')}
 ```
 
-## 2026-10-19 — PR: claude/gd-superreactions (SRX: steel girder reactions for Bridge Substructure Loading from GirderDetail; engineer decision 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, Bridge Substructure Loading.html, HANDOFF.md §4.4, AUDIT.md, tools.html, ENGINEER_CHECKS GD72; PR link added after merge)
+## 2026-10-19 — PR: claude/gd-superreactions (SRX: steel girder reactions for Bridge Substructure Loading from GirderDetail; engineer decision 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, Bridge Substructure Loading.html, HANDOFF.md §4.4, AUDIT.md, tools.html, ENGINEER_CHECKS GD72; PR #311: https://github.com/mlococo88/All-Structural/pull/311)
 
 ### SRX. "Send reactions to Substructure Loading" (superReactions sender)   [NEW HAND-OFF — no GirderDetail result changes; §4 callout for the receiver's values, below]
 - **Engineer decision (2026-10-19):** ST-Girder no longer sends bearing reactions to Bridge Substructure Loading (#309/#310); steel girder reactions come from GirderDetail, which has the full continuous staged analysis.
@@ -20118,7 +20118,7 @@ index e33e8be..663ce6b 100644
 +  alert(`Reactions sent to Substructure Loading (unfactored, kip, DC1 / DC2 / DW per girder):\n\n${r.sum}\n\nIn Bridge Substructure Loading, Reactions tab, click "Pull from PS-Beam / GirderDetail".`); });
 ```
 
-## 2026-10-19 — PR: claude/gd-superreactions-util (SRXU: MassDOT utilities carried from GirderDetail into Bridge Substructure Loading; engineer decision GD72a 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, Bridge Substructure Loading.html, HANDOFF.md §4.4, AUDIT.md, ENGINEER_CHECKS GD72 closed; PR link added after merge)
+## 2026-10-19 — PR: claude/gd-superreactions-util (SRXU: MassDOT utilities carried from GirderDetail into Bridge Substructure Loading; engineer decision GD72a 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, Bridge Substructure Loading.html, HANDOFF.md §4.4, AUDIT.md, ENGINEER_CHECKS GD72 closed; PR #312: https://github.com/mlococo88/All-Structural/pull/312)
 
 ### SRXU. Utilities as their own reaction fields (superReactions)   [HAND-OFF CHANGE — additive fields; no GirderDetail result changes]
 - **Engineer decision GD72a (2026-10-19):** carry the MassDOT utilities into Substructure Loading as loads.
@@ -20179,7 +20179,7 @@ index 663ce6b..a57a24a 100644
 ```
 
 
-## 2026-10-19 — PR: claude/aashto10-gd (AASHTO10-SC: shear connectors to AASHTO LRFD 10th Ed. — Q_n, φ_sc, stud fatigue Z_r, h/d; splice references and bearing stiffener comment relabelled; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-gd (AASHTO10-SC: shear connectors to AASHTO LRFD 10th Ed. — Q_n, φ_sc, stud fatigue Z_r, h/d; splice references and bearing stiffener comment relabelled; PR #338: https://github.com/mlococo88/All-Structural/pull/338)
 
 Engineer decision 2026-10-19 ("follow the owner"; the engineering calculation follows the 10th Ed., owner rules stay on top). Every factor and equation below was checked against the AASHTO LRFD BDS 10th Ed. (2024) text (articles cited only).
 
@@ -20316,7 +20316,7 @@ index a57a24a..bb1805a 100644
 ```
 
 
-## 2026-10-19 — PR: claude/aashto10-gd-2 (AASHTO10-GD2: bearing stiffener web strip and cycles per truck passage to AASHTO LRFD 10th Ed.; lightweight h/d note; follow-up to #338; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-gd-2 (AASHTO10-GD2: bearing stiffener web strip and cycles per truck passage to AASHTO LRFD 10th Ed.; lightweight h/d note; follow-up to #338; PR #348: https://github.com/mlococo88/All-Structural/pull/348)
 
 Engineer instruction 2026-10-19 (after #338): keep the "Q_n entered" override (`sc.Qn10`); no lightweight concrete option, a note only; fix the bearing stiffener web strip and the cycles per truck passage to the 10th Ed. Both provisions were checked against the AASHTO LRFD BDS 10th Ed. (2024) text (articles cited only).
 
@@ -20452,7 +20452,7 @@ index bb1805a..7a8003f 100644
 +const FA_SPEC = [['name', 'Name', '', 'text'], ['src', 'Source', '', 'text'], ['x', 'Station', 'ft', 'num', { min: 0 }], ['n', 'Cycles per truck passage n', '', 'sel', { options: [['1', '1.0 (simple span; continuous away from interior supports)'], ['1.5', '1.5 (continuous, within 0.1L of an interior support)'], ['2', '2.0 (entered; not a longitudinal-member value in Table 6.6.1.2.5-1)']] }],
 ```
 
-## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: merge of GirderDetail and ST-Girder, PR 1: file renamed to Steel Bridge Design.html, ST-Girder embedded as the Design & Rating view; engineer decisions 2026-10-22; cross-tool rename approved, with tools.html, index, lldf, psbeam, Bridge Substructure Loading, Gusset Plate Rating, abutment_calculator, tests and docs; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: merge of GirderDetail and ST-Girder, PR 1: file renamed to Steel Bridge Design.html, ST-Girder embedded as the Design & Rating view; engineer decisions 2026-10-22; cross-tool rename approved, with tools.html, index, lldf, psbeam, Bridge Substructure Loading, Gusset Plate Rating, abutment_calculator, tests and docs; PR #410: https://github.com/mlococo88/All-Structural/pull/410)
 
 **No engineering result changes.** No formula, load or resistance factor, unit or code reference was changed; no saved key or format was changed.
 Verified with `tests/compare.mjs`: `--tool gd` against `tests/baselines/gd.json` (PR 0), `--tool sbd` (the view vs `stgirder.html`), and
@@ -20659,7 +20659,7 @@ three help texts (also inside `st-src`); they go with the planned retirement of 
 
 
 
-## 2026-10-22 — PR: claude/sbd-2-link (SBD2: merge of GirderDetail and ST-Girder, PR 2: the Design & Rating (ST-Girder) view live-linked to the modules; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-2-link (SBD2: merge of GirderDetail and ST-Girder, PR 2: the Design & Rating (ST-Girder) view live-linked to the modules; PR #411: https://github.com/mlococo88/All-Structural/pull/411)
 
 **No engineering result changes.** No formula, load or resistance factor, unit or code reference was changed; no saved key or format was changed
 (two optional view fields are added to the project's `ui` object, below). ST-Girder (`st-src`) is unchanged; its frame gets one more shim (state
@@ -20808,7 +20808,7 @@ function stDaHtml() {
 **Open items:** none.
 
 
-## 2026-10-22 — PR: claude/sbd-3-report (SBD3: merge of GirderDetail and ST-Girder, PR 3: one title block, one report; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-3-report (SBD3: merge of GirderDetail and ST-Girder, PR 3: one title block, one report; PR #412: https://github.com/mlococo88/All-Structural/pull/412)
 
 **No engineering result changes.** No formula, load or resistance factor, unit or code reference was changed; no saved key or format was changed
 (one optional view field, `P.ui.rpt.st`, below). ST-Girder (`st-src`) is unchanged; its frame gets six more shims (display and report extract
@@ -20954,7 +20954,7 @@ async function stChapter(g, k) { const wait = (f, ms) => new Promise(res => { co
 **Open items:** none.
 
 
-## 2026-10-22 — PR: claude/sbd-4-refactor (SBD4: merge of GirderDetail and ST-Girder, PLAN steps 4 and 5 in one PR (engineer, 2026-10-22): one project file with migrations; efficiency: one FE engine copy, A610, frameBus, module registry, deriv(), dead code; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-4-refactor (SBD4: merge of GirderDetail and ST-Girder, PLAN steps 4 and 5 in one PR (engineer, 2026-10-22): one project file with migrations; efficiency: one FE engine copy, A610, frameBus, module registry, deriv(), dead code; PR #414: https://github.com/mlococo88/All-Structural/pull/414)
 
 **No engineering result changes.** No formula, load or resistance factor, unit or code reference was changed. Code was moved or shared, never
 rewritten: the FE engine is the same text, character for character; the A610 functions are the same expressions (tests/a610-prop.mjs: 10,000
@@ -21142,7 +21142,7 @@ t_p 0.375 vs 0.4375 before that pass); the project's inputs and every result are
 copy of stgirder.html.
 
 
-## 2026-10-22 — PR: claude/sbd-6-cutover (SBD6: merge of GirderDetail and ST-Girder, cut-over: stgirder.html removed (engineer decision), tools.html one card, docs, test kit; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-6-cutover (SBD6: merge of GirderDetail and ST-Girder, cut-over: stgirder.html removed (engineer decision), tools.html one card, docs, test kit; PR #422: https://github.com/mlococo88/All-Structural/pull/422)
 
 **No engineering result changes.** No formula, load or resistance factor, unit or code reference was changed; no saved key or format was changed
 (ST-Girder's keys `stgirder.session`, `stgirder.ui.v1`, … stay: a session saved by the old file opens in the view). **Display changes:** help
@@ -21247,7 +21247,7 @@ DLs →" (the host switches to the LLDF and DLs module). Full `--tool st --paylo
 **Open items:** `tests/baselines/st_interior.json` is not re-recorded here (its `st.tab.Report` / `st.report.all` were already stale since SBD6; now
 `st.tab.Fatigue` too, display only). It is re-recorded at the next full st-span run (S2-6, which changes results).
 
-## 2026-10-22 — PR: claude/sbd-s2-1-nexact (S2-1: Steel Bridge Design stage 2, item 1: ST-Girder's modular ratio n = E_s/E_c exactly, as GirderDetail; engineer decision 2026-10-22; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-s2-1-nexact (S2-1: Steel Bridge Design stage 2, item 1: ST-Girder's modular ratio n = E_s/E_c exactly, as GirderDetail; engineer decision 2026-10-22; PR #428: https://github.com/mlococo88/All-Structural/pull/428)
 
 Stage 2 of Steel Bridge Design makes ST-Girder's checks (the Design & Rating view, `st-src`) match GirderDetail's (engineer decision 2026-10-22: in every
 item GirderDetail's method, AASHTO LRFD 10th Ed., becomes the method). This entry is item 1. No saved key or format changes; the hand-off is read as before
@@ -21291,7 +21291,7 @@ item GirderDetail's method, AASHTO LRFD 10th Ed., becomes the method). This entr
 - **Other copies:** none (stgirder.html was removed at the cut-over; GirderDetail's `modRatio` already does this).
 - **Open items:** none for this item. The stud checks themselves are stage 2 item 9 (separate PR).
 
-## 2026-10-22 — PR: claude/sbd-s2-2-rb-fcrw (S2-2: Steel Bridge Design stage 2, items 6 and 7: R_b and F_crw through GirderDetail's functions; k = 7.2 with both web edges in compression; engineer decisions 2026-10-22; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-s2-2-rb-fcrw (S2-2: Steel Bridge Design stage 2, items 6 and 7: R_b and F_crw through GirderDetail's functions; k = 7.2 with both web edges in compression; engineer decisions 2026-10-22; PR #429: https://github.com/mlococo88/All-Structural/pull/429)
 
 No saved key or format changes. No result changes on the test payloads (listed in the PR); the changes act on sections the payloads do not have
 (composite +M with 2D_c/t_w > λ_rw; both web edges in compression).
@@ -21344,7 +21344,7 @@ No saved key or format changes. No result changes on the test payloads (listed i
 - **Open items:** (1) `pl-src` Fcrw: same 7.2 case to add if the engineer wants Preliminary sizing in step. (2) λ_rw: both tools use 5.7√(E/F_yc); the 10th Ed.
   definition of λ_rw in Art. 6.10.1.10.2 uses c_rw√(E/F_yc), with the edge-condition coefficient c_rw from a_wc limited to 4.6 ≤ c_rw ≤ 5.7 — not changed here (raise with the engineer).
 
-## 2026-10-22 — PR: claude/sbd-s2-3-loadfactors (S2-3: Steel Bridge Design stage 2, item 2: ST-Girder's Strength I load factors chosen maximum or minimum by sign, V_LL by direction, as GirderDetail; engineer decision 2026-10-22; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-s2-3-loadfactors (S2-3: Steel Bridge Design stage 2, item 2: ST-Girder's Strength I load factors chosen maximum or minimum by sign, V_LL by direction, as GirderDetail; engineer decision 2026-10-22; PR #453: https://github.com/mlococo88/All-Structural/pull/453)
 
 No saved key or format changes.
 
@@ -21401,7 +21401,7 @@ No saved key or format changes.
 - **Other copies:** none in ST-Girder; GirderDetail already uses this rule.
 - **Open items:** the LRFR rating keeps γ_DC = 1.25, γ_DW = 1.50 on |V| and the staged stresses (MBE, not this item).
 
-## 2026-10-22 — PR: claude/sbd-s2-9-neg-flexure (S2-9: Stage 2 item 4, negative flexure: GirderDetail's Appendix A6 permission per 6.10.6.2.3, and ST-Girder's Neg flex / Neg tens checks from GirderDetail's GS7/GS8/GS9 through the hand-off; engineer decisions 2026-10-22; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-s2-9-neg-flexure (S2-9: Stage 2 item 4, negative flexure: GirderDetail's Appendix A6 permission per 6.10.6.2.3, and ST-Girder's Neg flex / Neg tens checks from GirderDetail's GS7/GS8/GS9 through the hand-off; engineer decisions 2026-10-22; PR #454: https://github.com/mlococo88/All-Structural/pull/454)
 
 **Engineering results change (§4 callouts in the PR):**
 1. GirderDetail, Girder section: Appendix A6 is permitted only where every testable condition of 6.10.6.2.3 (10th Ed.) holds (was: F_y of the
@@ -21677,7 +21677,7 @@ The 8 older payloads of `tests/projects/st` (no field) keep ST-Girder's own chec
   girders (the model knows only "curved" from Preliminary sizing).
 - ST-Girder's load rating (−M, `negInv`) still uses its own F_nc (GS20 rating extension, Stage 2 Part 2).
 
-## 2026-10-22 — PR: claude/sbd-s2-4-shear (S2-4: Steel Bridge Design stage 2, item 3a and 3c: ST-Girder's shear with tension-field action in interior and pier panels, the V_cr limit only in end panels at abutments, and the shear rating on the same V_n, as GirderDetail; engineer decision 2026-10-22; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-s2-4-shear (S2-4: Steel Bridge Design stage 2, item 3a and 3c: ST-Girder's shear with tension-field action in interior and pier panels, the V_cr limit only in end panels at abutments, and the shear rating on the same V_n, as GirderDetail; engineer decision 2026-10-22; PR #455: https://github.com/mlococo88/All-Structural/pull/455)
 
 No saved key or format changes.
 
@@ -21743,7 +21743,7 @@ No saved key or format changes.
 
 
 
-## 2026-10-22 — PR: claude/sbd-s2-6-studs-per-zone (S2-6, SBD stage 2 item 9: ST-Girder checks the studs per zone with GirderDetail's Shear connectors results; GirderDetail-demand results change; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-s2-6-studs-per-zone (S2-6, SBD stage 2 item 9: ST-Girder checks the studs per zone with GirderDetail's Shear connectors results; GirderDetail-demand results change; PR #456: https://github.com/mlococo88/All-Structural/pull/456)
 
 **Engineering result change (CLAUDE.md §4), GirderDetail demands only.** Engineer decision (stage 2): the GirderDetail method becomes the method. With a
 GirderDetail payload that carries the new field `girderDetail.details.studs.results`, ST-Girder's stud strength and stud fatigue checks are GirderDetail's
@@ -21818,7 +21818,7 @@ P_n = min(4,837.5, 2,052) = 2,052 kip, n_req = 207.5 ≤ 246 (0.84, still PASS);
 type (or take the smallest Q-producing b_eff conservatively) is a GirderDetail question, not changed here.
 
 
-## 2026-10-23 — PR: claude/sbd-s2-7-defl-camber (S2-7, SBD stage 2 item 10: live load deflection and camber from GirderDetail's Structural analysis; GirderDetail-demand results change; PR link added after merge)
+## 2026-10-23 — PR: claude/sbd-s2-7-defl-camber (S2-7, SBD stage 2 item 10: live load deflection and camber from GirderDetail's Structural analysis; GirderDetail-demand results change; PR #457: https://github.com/mlococo88/All-Structural/pull/457)
 
 **Engineering result change (CLAUDE.md §4), GirderDetail demands only.** Engineer decision (stage 2): the GirderDetail method becomes the method. With
 a GirderDetail payload carrying the new fields, ST-Girder's live load deflection check of the selected span is GirderDetail's check SA3 (Δ, limit and
@@ -21880,7 +21880,7 @@ presence in g_Δ); owner manuals as cited by SA3 (RIDOT BDM 2.4.2.6; MassDOT LRF
 
 **Other copies:** none.
 
-## 2026-10-22 — PR: claude/sbd-s2-8-constructibility (S2-8: Stage 2 item 5, constructibility: the hand-off carries GirderDetail's construction loads (M_CL/V_CL, M_DCc) and its deck-placement results (GS14 to GS16, Deck overhang OH1 to OH5 with f_ℓ); ST-Girder uses them when present; engineer decisions 2026-10-22; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-s2-8-constructibility (S2-8: Stage 2 item 5, constructibility: the hand-off carries GirderDetail's construction loads (M_CL/V_CL, M_DCc) and its deck-placement results (GS14 to GS16, Deck overhang OH1 to OH5 with f_ℓ); ST-Girder uses them when present; engineer decisions 2026-10-22; PR #458 (merged from branch claude/sbd-s2-8-constr): https://github.com/mlococo88/All-Structural/pull/458)
 
 **Engineering results change (§4 callouts in the PR):** ST-Girder (Design & Rating view) with a GirderDetail hand-off that carries the new fields:
 1. its own constructibility check takes M_c = 1.25·M_DCc + 1.5·M_CL (deck-placement sequence envelope; construction live load on the continuous
@@ -22287,7 +22287,7 @@ No saved key or saved format changes. No hand-off field changes (`girderDetail.c
 - **Open items:** Preliminary sizing caps a_wc at 10 in R_b (`Math.min(…, 10)`) and the host does not; not changed (no effect on c_rw; raise if wanted). The
   `st_interior.json` baseline is not re-recorded (not run).
 
-## 2026-10-29 — PR: claude/sbd-df-lldf (DFL: GirderDetail's LLDF and DLs module and Preliminary sizing follow `lldf.html` in the four places of SB2-O6 (of the sbd2-loads-lldf entry in fixlog/steel-bridge.md, renumbered SB2-O19 on 2026-10-29); engineer decision 2026-10-29; PR link added after merge)
+## 2026-10-29 — PR: claude/sbd-df-lldf (DFL: GirderDetail's LLDF and DLs module and Preliminary sizing follow `lldf.html` in the four places of SB2-O6 (of the sbd2-loads-lldf entry in fixlog/steel-bridge.md, renumbered SB2-O19 on 2026-10-29); engineer decision 2026-10-29; PR #472: https://github.com/mlococo88/All-Structural/pull/472)
 
 No saved key changes. Additive field in the GirderDetail → Preliminary sizing factors (`P.dfx`, message `gd-dfx`, stored in Preliminary sizing's project): `span[i].ext.fat1`, `span[i].ext.fat1V`, `pier[k].ext.fat1`
 (the exterior one-lane fatigue basis with skew and m = 1.2). A project saved before this change has no such field: Preliminary sizing then uses `lev`/`levV` as before until GirderDetail sends the factors again (it does on open).
@@ -22474,7 +22474,7 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 ```
 
 
-## 2026-10-29 — PR: claude/sbd-df-pier (DFL5: pier regions lose the moment skew reduction when either adjacent span's support lines differ by more than 10°; engineer decision 2026-10-29; PR link added after merge)
+## 2026-10-29 — PR: claude/sbd-df-pier (DFL5: pier regions lose the moment skew reduction when either adjacent span's support lines differ by more than 10°; engineer decision 2026-10-29; PR #478: https://github.com/mlococo88/All-Structural/pull/478)
 ### DFL5. Moment skew reduction in a pier region (4.6.2.2.2e)   [CALCULATION CHANGE — continuous skewed bridges with a skew change > 10° in a span next to a pier; more conservative]
 - **Problem:** DFL2 (#472) applied 4.6.2.2.2e per span: a span region compares its own two support lines. A pier (negative-moment) region has
   one support line (skA = skB), so it always kept its reduction. The engineer decided (2026-10-29) that a pier region loses the reduction when
@@ -22510,7 +22510,7 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 - **Saved data:** none changed.
 - **Open items:** none new.
 
-## 2026-10-29 — PR: claude/sbd-df-negskew (DFL6: a negative support skew enters the LLDF as |θ|; SB2-O23, engineer decision 2026-10-29; PR link added after merge)
+## 2026-10-29 — PR: claude/sbd-df-negskew (DFL6: a negative support skew enters the LLDF as |θ|; SB2-O23, engineer decision 2026-10-29; PR #480 (merged from branch sb2-o23-skew-abs): https://github.com/mlococo88/All-Structural/pull/480)
 ### DFL6. Negative support skews in the skew factors (4.6.2.2.2e, 4.6.2.2.3c)   [CALCULATION CHANGE — bridges with a negative support skew; shear more conservative, moment reduced as the code allows]
 - **Problem:** the LLDF and DLs module read a negative support skew as no skew: `dfSkew` takes θ = min(θ_A, θ_B) for moment and
   max(θ_A, θ_B) for shear with the signs as entered, so −30° gave tan θ < 0, no moment reduction (θ < 30°) and no shear correction
@@ -22550,7 +22550,7 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 - **Saved data:** none changed (skews are stored as entered, signed).
 - **Open items:** none new.
 
-## 2026-10-30 — PR: claude/sbd-gs-ampfl (SB2-R2: flange lateral bending amplification, 6.10.1.6; f_ℓ = 0 no longer gives NaN, f_bu ≥ F_cr with f_ℓ > 0 fails with its reason; NaN guard in the check list and the summary; PR link added after merge)
+## 2026-10-30 — PR: claude/sbd-gs-ampfl (SB2-R2: flange lateral bending amplification, 6.10.1.6; f_ℓ = 0 no longer gives NaN, f_bu ≥ F_cr with f_ℓ > 0 fails with its reason; NaN guard in the check list and the summary; PR #485 (merged from branch sb2-r2-gd-ampfl): https://github.com/mlococo88/All-Structural/pull/485)
 - **Problem:** `ampFl` (GirderDetail Girder section) returns f_ℓ·AF with AF = ∞ where Eq. 6.10.1.6-4 applies and f_bu ≥ F_cr. With f_ℓ = 0 this
   is 0 × ∞ = NaN: GS7 (and GS9 compression flange, GS14) get ratio NaN. `rc` marks the item failing, but its ratio prints "—" and the
   summary's governing ratio (`gmSummary`, Check at any location `gsaShow`) drops it (`isFinite` filter), so the overstress does not show as

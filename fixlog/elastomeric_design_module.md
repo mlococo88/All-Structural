@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 14; MassDOT LRFD Bridge Manual Part I §3.5.7 (MassDOT values unchanged)
 
-## 2026-10-04 — PR: claude/fix-elastomeric (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-elastomeric (PR #19: https://github.com/mlococo88/All-Structural/pull/19)
 
 Check-case inputs (unless stated): default state — circular steel-reinforced pad D = 16 in, hri = 0.50 in, n = 6, cover 0.25 in, hs = 0.1196 in, G = 0.160 ksi, Fy = 36 ksi, P_DL = 80 kip, P_LL = 55 kip, θ_LL = 0.004, seat slope 0.010, other rotations 0, Δs = 0.35 in, tolerance 0.03 rad, limit 4.75.
 Derived: A = 201.06 in², S = 16/(4·0.5) = 8.00, hrt = 6·0.5 + 2·0.25 = 3.50 in, σDL = 0.3979, σLL = 0.2735, σTL = 0.6714 ksi.
@@ -235,7 +235,7 @@ All "before/after" numbers below were produced by running `computeEDM` from the 
 - O2. **Plain-pad G·S coefficient (F7).** Default 1.00 (FGP). For plain elastomeric pads (PEP), the 10th Ed. coefficient may be lower (older specifications used GS/1.8 ≈ 0.55GS for plain pads). — Engineer to confirm the coefficient for MassDOT 1 × 5 plain pads and set `coef.GSplainA`.
   - **RESOLVED 2026-10-04 (F11):** engineer keeps the coefficient at 1.00. No code change; default already 1.00.
 
-## 2026-10-04 — PR: claude/step1-group2 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group2 (PR #31: https://github.com/mlococo88/All-Structural/pull/31)
 
 ### F12. "← All tools" link + shared project info (HANDOFF.md §4.1)   [feature (no result change)]
 
@@ -343,7 +343,7 @@ All "before/after" numbers below were produced by running `computeEDM` from the 
 - **Other copies:** the BridgeXfer v1 helper is duplicated verbatim in every tool that uses it (CLAUDE.md §3; list in the PR). The glue block is the same in each tool of this PR except `TOOL`/`FILE` and the field map.
 - **Open items:** none.
 
-## 2026-10-09 — PR: claude/tabs-elastomeric (PR link added after merge)
+## 2026-10-09 — PR: claude/tabs-elastomeric (PR #59: https://github.com/mlococo88/All-Structural/pull/59)
 
 ### T1. Input panel split into tabs   [UI only — no calculation change]
 - **Date / type:** 2026-10-09, UI only (no result change). Engineer's request of 2026-10-09: "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." Same approach as `Steel Beam Design - AISC 15th.html` T1. The tab strip uses this tool's own look (the same tab style as the output `#tabbar`: panel-grey tabs, navy active tab, navy rule underneath).
@@ -412,7 +412,7 @@ All "before/after" numbers below were produced by running `computeEDM` from the 
 - **Other copies of this code:** none.
 - **Open items:** none.
 
-## 2026-10-12 — PR: claude/sweep-edm (open-item sweep; PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-edm (open-item sweep; PR #139: https://github.com/mlococo88/All-Structural/pull/139)
 
 Inventory items worked: EDM-O5, EDM-O8, EDM-O6, EDM-O10, EDM-O11 (fixed); EDM-O9 (closed, no change); EDM-O1, EDM-O3, EDM-O4, EDM-O7 (need the engineer; see "Needs engineer" at the end of this entry). Check-case inputs are the default state of the 2026-10-04 entry unless stated (circular D = 16, hri = 0.5, n = 6, cover 0.25, G = 0.160, P_DL = 80, P_LL = 55, θLL = 0.004, seat slope 0.010, Δs = 0.35, tolerance 0.03). Derived: A = 201.06 in², S = 8.00, hrt = 3.50 in, σTL = 0.6714 ksi, θs = 0.014 + 0.03 = 0.044 rad.
 
@@ -560,7 +560,7 @@ Inventory items worked: EDM-O5, EDM-O8, EDM-O6, EDM-O10, EDM-O11 (fixed); EDM-O9
 - EDM-O7: MassDOT 0.03 rad tolerance and 4.75 combined-strain limit. Confirm with MassDOT. Recommendation: keep (conservative).
 - O12 and O13 in "Open items" above (anchorage basis; anchored-pad toggle).
 
-## 2026-10-12 — PR: claude/edm-anchored (follow-up to #139; PR link added after merge)
+## 2026-10-12 — PR: claude/edm-anchored (follow-up to #139; PR #141: https://github.com/mlococo88/All-Structural/pull/141)
 
 Coordinator request after #139: (1) O13, an anchored / doweled toggle; (2) O4, the AASHTO 0.005 tolerance on the rectangular transverse rotation (MassDOT 0.03 unchanged).
 Check-case pad unless stated: rectangular 18 × 24, hri = 0.5, n = 6, cover 0.25, G = 0.160, P_DL = 80, P_LL = 55, θLL = 0.004, seat slope 0.010, Δs = 0.35. Derived: A = 432 in², S = 10.286, hrt = 3.50, σDL = 0.1852, σLL = 0.1273, σTL = 0.3125 ksi; γa,st = 1.4·0.1852/(0.16·10.286) = 0.158, γa,cy = 0.108, γs = 0.100.
@@ -664,7 +664,7 @@ Check-case pad unless stated: rectangular 18 × 24, hri = 0.5, n = 6, cover 0.25
   - No console errors.
 - Screenshots (I-5 with the toggle, the anchored anchorage block, the Method B and Method A transverse lines) inspected: `scratchpad/followups/edm-anchored/`.
 
-## 2026-10-18 — PR: claude/edm-d11-report (AASHTO LRFD 10th Ed. basis; PR link added after merge)
+## 2026-10-18 — PR: claude/edm-d11-report (AASHTO LRFD 10th Ed. basis; PR #273: https://github.com/mlococo88/All-Structural/pull/273)
 
 ### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
 - **Engineer request:** 2026-10-18 (AUDIT.md D11: full report for every design-check tool).
@@ -792,7 +792,7 @@ Check-case pad unless stated: rectangular 18 × 24, hri = 0.5, n = 6, cover 0.25
   - Adding these would be a display change in the app.
 - **Plain-pad stability thickness cites no article** (Method A cites 14.7.6.3.6). The engineer should confirm the article.
 
-## 2026-10-19 — PR: claude/aashto10-elastomeric (AASHTO LRFD 10th Ed. gap fixes; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-elastomeric (AASHTO LRFD 10th Ed. gap fixes; PR #328: https://github.com/mlococo88/All-Structural/pull/328)
 
 Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Owner: MassDOT LRFD Bridge Manual Part I §3.5.7, which is written to the AASHTO LRFD 9th Ed. (engineer decision 2026-10-19, "follow the owner"). The MassDOT manual §3.5.7 sets no cover-layer limit of its own (§3.5.7.8 and Fig. 3.5.7-5 only set how h_ri is computed and exclude tapered layers), so the AASHTO limit applies with both toggle settings; no MassDOT value was changed.
 
@@ -857,7 +857,7 @@ Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Owner: MassDOT
 - **Minimum laminate thickness:** 10th Ed. 14.7.5.3.5 sets hs ≥ 0.0747 in.; the tool warns below the MassDOT 0.1196 in. in all cases (more conservative). No change.
 - **Minimum edge cover ¼ in.** (14.7.5.1 / 14.7.6.1): not checked (the tool has no edge-cover input).
 
-## 2026-10-19 — PR: claude/aashto10-elastomeric-2 (10th Ed. follow-up: 14.7.5.4 restraint, slip check, edge cover; engineer decisions on the #328 open items; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-elastomeric-2 (10th Ed. follow-up: 14.7.5.4 restraint, slip check, edge cover; engineer decisions on the #328 open items; PR #344: https://github.com/mlococo88/All-Structural/pull/344)
 
 Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Art. 14.7.5.4 (Eq. 14.7.5.4-1), Art. 14.7.5.3.3 (Eqs. 14.7.5.3.3-15 to -17), Art. 14.8.3.1 / C14.8.3.1, Art. 14.7.5.1 / 14.7.6.1 (edge cover).
 
@@ -924,7 +924,7 @@ Basis: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024): Art. 14.7.5.4 
 - **Default MassDOT pad:** it now needs restraint by 14.7.5.4. The 0.03 rad construction tolerance makes θs large; with the AASHTO 0.005 tolerance it passes. Should MassDOT designs with the 0.03 tolerance be expected to be anchored, or should the check use another θs basis?
 - **n:** increase by ½ per cover layer ≥ ½ hri (allowed by 14.7.5.4)?
 
-## 2026-11-01 — PR: claude/rpt-elastomeric — Report output tab in the shared report viewer (EDRP; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-elastomeric — Report output tab in the shared report viewer (EDRP; display only, no calculation change) (PR #531: https://github.com/mlococo88/All-Structural/pull/531)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `EDRP`.
 

@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: ACI 318-19; ASCE 7-16 combinations as already implemented (unchanged).
 
-## 2026-10-04 — PR: claude/fix-spread-footing (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-spread-footing (PR #8: https://github.com/mlococo88/All-Structural/pull/8)
 
 Line numbers are approximate, as of this fix. Search for the anchor text.
 
@@ -411,7 +411,7 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
 - **Other copies:** BridgeXfer v1 and `ProjMetaUI` are duplicated (CLAUDE.md §3) in Pile Designer.html, Spread Footing.html, BasePlateAnchorDesigner.html, Concrete Anchor.html and Timber Beam Check.html (this PR), plus any other tools that received BridgeXfer in their own step-1 PRs.
 - **`ProjMetaUI`:** given in full in the After code of the helper insertion above; the copy is identical in every tool listed.
 
-## 2026-10-05 — PR: claude/conn-steelbeam-reactions (PR link added after merge)
+## 2026-10-05 — PR: claude/conn-steelbeam-reactions (PR #38: https://github.com/mlococo88/All-Structural/pull/38)
 ### C1. Member-reaction hand-off receiver: "Pull from Steel Beam" and "Import hand-off (JSON)"   [feature: hand-off (no result change)]
 - **Date / type:** 2026-10-05, feature: hand-off (no result change).
 - **Where:** the row under the title block (anchor `<button id="btnShareProjMeta" title="Make this title block available to the other tools">Share project info</button>`); `renderPrintHeader()` (anchor `+(m.chkDate||'\u2013')+'</td></tr></table>';`); one new `<script>` block at the end of the file, just before `</body>` (anchor `Member-reaction hand-off receiver`).
@@ -738,7 +738,7 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
 - **Other copies of this code:** the receiver logic (`check`, unit tables) is duplicated in BasePlateAnchorDesigner.html (CLAUDE.md §3). BridgeXfer v1 unchanged.
 - **Open items:** the tool has no seismic (E) load type, so E reactions are not imported.
 
-## 2026-10-05 — PR: claude/conn-foundation-loads (PR link added after merge)
+## 2026-10-05 — PR: claude/conn-foundation-loads (PR #40: https://github.com/mlococo88/All-Structural/pull/40)
 
 ### C2. Foundation-load hand-off receiver: "Pull from Abutment / SubLoads" and "Import hand-off (JSON)"   [feature: hand-off (no result change)]
 - **Purpose:** reads channel `bridgeSuite.v1.foundationLoads` (HANDOFF.md §4.6) from the abutment calculator or SubLoads.
@@ -1040,7 +1040,7 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
 - **Other copies:** `check()`, `mapAxes()` and `candidates()` are duplicated in Pile Designer.html (CLAUDE.md §3). BridgeXfer v1 unchanged.
 - **Open items:** Direct mode brackets self-weight with ASCE 7-16 1.2 / 0.9 rather than AASHTO γp, and checks bearing with factored loads against an allowable value (existing behaviour, unchanged); one case per pedestal (no multi-case sweep in Direct mode).
 
-## 2026-10-09 — PR: claude/tabs-spreadfooting (PR link added after merge)
+## 2026-10-09 — PR: claude/tabs-spreadfooting (PR #62: https://github.com/mlococo88/All-Structural/pull/62)
 ### T1. Input panel split into tabs   [UI only — no calculation change]
 - **Date / type:** 2026-10-09, UI only (no result change). Engineer's request (2026-10-09): "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel." Same approach as `Steel Beam Design - AISC 15th.html` T1: the input sections stay in the page exactly as before and are **moved** into tab panes; the tab strip is drawn in this tool's own style (the same button-tab look as the output `.tabbar`).
 - **How it works:** the new `sfdInputTabs()` runs once at start-up, before `loadAuto()`. It moves the nine existing `<details class="sec">` nodes of `#inputPanel` into one `.sfdInPane` per tab and puts the tab strip (`#sfdInTabs`) on top. Nothing is rebuilt or re-templated, so every `data-path`, id and handler is unchanged and `bindStaticInputs()` (which selects `#inputPanel [data-path]`) still finds every field. The pedestal cards (one per pedestal, up to 10) are still built by `buildPedCards()` into `#pedContainer`, which sits inside `sec-peds`, so a pedestal that is added, removed, loaded, undone or imported by a hand-off always lands on the Pedestals & Loads tab. A tab with no section would be hidden (none is mode-dependent in this tool; the rows that show/hide with Bearing basis, q_allow override, friction basis and self-weight mode still do so inside their sections exactly as before).
@@ -1119,7 +1119,7 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
   - Screenshots of every tab at 1400 px and 400 px widths were checked.
 - **Other copies of this code:** none (the same pattern, with its own names, is in `Steel Beam Design - AISC 15th.html`).
 
-## 2026-10-12 — PR: claude/sweep-footing (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-footing (PR #142: https://github.com/mlococo88/All-Structural/pull/142)
 Open-item sweep (engineer, 2026-10-12: "continue making updates and fixes until it's completed. Use your best judgment on the questions you have and just proceed"). Items from the open-item inventory, section 17: SF-O1, SF-O2, SF-O3, SF-O4, SF-O5, SF-C1, SF-C2. Basis: AASHTO LRFD 10th Ed. (2024) for the Vesić form and the eccentricity / sliding articles the tool already cites; ACI 318-19. Article numbers marked "(verify)" were not checked against the printed edition.
 
 Default check case for all entries below ("default inputs"): B 10 × L 8 × t 2.5 ft, Df 4 ft, cover 1.5 ft, c = 0, φ = 32°, γs = 120 pcf, FS = 3, no water table, f'c 4000 psi, f_y 60,000 psi, bottom mats #8 @ 9 in, Ped 1 D 120 / L 60 / Wx Vx 8, Ped 2 D 150 / L 80 / S 20 / Wx Vx 8. Governing bearing combination D + 0.75L + 0.45(+Wx) + 0.75S: ΣP = 434.94 k, H = Hx = 7.20 k (θ = 0), e_x = 0.4883 ft, e_y = 0, B′ = 9.0233 ft, L′ = 8.00 ft, B_eff = 8.00 ft, A_e = 72.19 ft², q_eff = 6.025 ksf, N_q = 23.177, N_γ = 30.215, s_q = 1.5540, s_γ = 0.6454, q = γD_f = 0.480 ksf, γ_eff = 0.120 kcf.
@@ -1261,7 +1261,7 @@ Default check case for all entries below ("default inputs"): B 10 × L 8 × t 2.
 - **F8 note (item 8): surcharge in the structural resultant is less conservative for sagging moment and one-way shear. Keep, revert, or apply only where unfavourable?**
   - **RESOLVED 2026-10-04 (F12):** engineer keeps the surcharge in the structural resultant. No code change.
 
-## 2026-10-18 — PR: claude/sf-d11-report (PR link added after merge)
+## 2026-10-18 — PR: claude/sf-d11-report (PR #284: https://github.com/mlococo88/All-Structural/pull/284)
 
 Line numbers are approximate; search for the anchor text. The file uses LF line endings.
 
@@ -1377,7 +1377,7 @@ Line numbers are approximate; search for the anchor text. The file uses LF line 
 - **3D View no longer prints.** It printed only a live WebGL panel (empty unless the tab had been opened). Confirm it should stay out of the report.
 - **Description** in the print header is the project name (the tool has no description field, and none was added).
 
-## 2026-10-19 — PR: claude/sf-status-chips (PR link added after merge)
+## 2026-10-19 — PR: claude/sf-status-chips (PR #318: https://github.com/mlococo88/All-Structural/pull/318)
 
 Line numbers are approximate; search for the anchor text. The file uses LF line endings.
 
@@ -1422,7 +1422,7 @@ Line numbers are approximate; search for the anchor text. The file uses LF line 
 - **Other copies:** none.
 - **Resolves** the D11 entry's open items "Contact-area chip" and "Sliding chips with no horizontal load".
 
-## 2026-10-19 — PR: claude/aashto10-spread-footing (PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-spread-footing (PR #331: https://github.com/mlococo88/All-Structural/pull/331)
 
 Line numbers are approximate, as of this fix. Search for the anchor text.
 
@@ -1465,7 +1465,7 @@ Line numbers are approximate, as of this fix. Search for the anchor text.
   2. 10th Ed. C10.6.3.1.2a: Eq. 10.6.3.1.2a-10 is verified for φf 32°–42° and Df/B 1–8. The check case (Df/B = 0.5) and most building footings fall below that range.
   3. Inclination exponent: 10th Ed. Eq. 10.6.3.1.2a-9 writes n with the footing B and L; the tool uses the effective B′/L′ (an earlier deliberate change). Not changed here.
 
-## 2026-10-20 — PR: claude/aashto10-sf-direct (SFAD: AASHTO load factors on the tool's own self-weight, EV and surcharge for an imported AASHTO case; engineer direction 2026-10-20 "accuracy"; PR link added after merge)
+## 2026-10-20 — PR: claude/aashto10-sf-direct (SFAD: AASHTO load factors on the tool's own self-weight, EV and surcharge for an imported AASHTO case; engineer direction 2026-10-20 "accuracy"; PR #361: https://github.com/mlococo88/All-Structural/pull/361)
 
 ### SFAD. Direct factored mode, imported AASHTO case: footing / pedestal self-weight, EV and surcharge at that case's AASHTO factors   [calc change] [direct mode with an imported case only]
 - **Problem:** in "Direct factored" mode the tool adds the footing and pedestal self-weight, the soil over the footing (EV) and the dead and live surcharge at its ASCE 7-16 bracket, 1.2 (and 0.9 in a second "min" row), even when the direct set is an AASHTO case imported from Bridge Substructure Loading or the abutment calculator (foundationLoads hand-off, HANDOFF.md §4.6). The case itself was built with AASHTO factors, so the added weights were factored on a different basis.
@@ -1591,7 +1591,7 @@ index 81fdd1e..352c5eb 100644
 ```
 
 
-## 2026-10-21 — PR: claude/abut-handoffs-iab — Integral / semi-integral hand-offs: integral per-pile foundation loads, R_n / φ into the integral inputs, type-aware SubLoads import (AXI) (PR link added after merge)
+## 2026-10-21 — PR: claude/abut-handoffs-iab — Integral / semi-integral hand-offs: integral per-pile foundation loads, R_n / φ into the integral inputs, type-aware SubLoads import (AXI) (PR #398: https://github.com/mlococo88/All-Structural/pull/398)
 
 Cross-tool connection in one PR (CLAUDE.md §7 exception): abutment_calculator.html (sender of foundationLoads, receiver of pileResults and abutmentLoads), Pile Designer.html and Spread Footing.html (receivers of foundationLoads), HANDOFF.md §4.5, §4.6, §4.10. Every code site is tagged `AXI`. **No calculation changes in any tool:** the abutment's `computeAll` is identical to origin/main (`c729c12`) for conventional, semi-integral and integral projects (with seismic, on piles); the receivers change only what they accept.
 
@@ -1619,7 +1619,7 @@ index 352c5eb..23de227 100644
 ```
 
 
-## 2026-11-01 — PR: claude/sf-rebar-tab — Reinforcement input tab (presentation only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-rebar-tab — Reinforcement input tab (presentation only, no calculation change) (PR #514: https://github.com/mlococo88/All-Structural/pull/514)
 
 Line numbers are approximate; search for the anchor text.
 
@@ -1711,7 +1711,7 @@ index 23de227..ed56703 100644
 ```
 
 
-## 2026-11-01 — PR: claude/sf-load-offset — Load location on the pedestal: per-pedestal load offsets e_x, e_y (SFLO, calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-load-offset — Load location on the pedestal: per-pedestal load offsets e_x, e_y (SFLO, calculation change) (PR #515: https://github.com/mlococo88/All-Structural/pull/515)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SFLO`.
 
@@ -1887,7 +1887,7 @@ index ed56703..642e9e3 100644
 ```
 
 
-## 2026-11-01 — PR: claude/sf-report — Report output tab in the shared report viewer (SFRP; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-report — Report output tab in the shared report viewer (SFRP; display only, no calculation change) (PR #518: https://github.com/mlococo88/All-Structural/pull/518)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SFRP`.
 
@@ -2380,7 +2380,7 @@ index 642e9e3..7a5de83 100644
 ```
 
 
-## 2026-11-01 — PR: claude/sf-rebar-qty — Rebar entered as a spacing or a total quantity, for each footing mat and each pedestal (SFRQ; input form only) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-rebar-qty — Rebar entered as a spacing or a total quantity, for each footing mat and each pedestal (SFRQ; input form only) (PR #519: https://github.com/mlococo88/All-Structural/pull/519)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SFRQ`.
 
@@ -2652,7 +2652,7 @@ index 7a5de83..7f96751 100644
 ```
 
 
-## 2026-11-01 — PR: claude/sf-drawings — Drawings output tab with DXF export (SFDW; display and export only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-drawings — Drawings output tab with DXF export (SFDW; display and export only, no calculation change) (PR #521: https://github.com/mlococo88/All-Structural/pull/521)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SFDW`.
 
@@ -2988,7 +2988,7 @@ index 7f96751..84f1b12 100644
 + if(b.dataset.tab==='tab-drawings')renderDrawings();   /* SFDW */
 ```
 
-## 2026-11-01 — PR: claude/sf-ped-cover — Pedestal P–M interaction: bar centres at cover + d_b/2 (cover to the bar face) (SFPC, calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-ped-cover — Pedestal P–M interaction: bar centres at cover + d_b/2 (cover to the bar face) (SFPC, calculation change) (PR #523: https://github.com/mlococo88/All-Structural/pull/523)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SFPC`.
 
@@ -3120,7 +3120,7 @@ index 84f1b12..c822dc3 100644
 +{p:"Each pedestal card: label; plan position (x, y) of its centroid <i>relative to the footing centroid</i>; plan dimensions b<sub>x</sub> &times; b<sub>y</sub>; height h above the footing top; the load table (per mode); and its reinforcement (long. bar size, bars per face n<sub>x</sub>/n<sub>y</sub>, tie size and spacing, cover, dowel size and count). The pedestal <b>cover</b> is the clear cover to the longitudinal bars: the bar-fit check, the bar layout, the P\u2013M interaction and the drawings all place the bar centres at cover + d<sub>b</sub>/2 from each face, with the ties outside the bars (clear cover to the ties = cover \u2212 d<sub>tie</sub>)."},
 ```
 
-## 2026-11-01 — PR: claude/sf-scroll-fix — The page could be scrolled by script and not scrolled back ("won't let me scroll up") (SFSC; UI only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-scroll-fix — The page could be scrolled by script and not scrolled back ("won't let me scroll up") (SFSC; UI only, no calculation change) (PR #524: https://github.com/mlococo88/All-Structural/pull/524)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SFSC`.
 
@@ -3145,7 +3145,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 - **Other copies:** none.
 - **Open items:** at 390 px wide the output panel collapses to zero width (`.inp{min-width:400px}` in the flex row of `.main`). Existing, not related to this fix (the two-panel scroll layout is not active below 900 px), not changed.
 
-## 2026-11-01 — PR: claude/sf-tie-cover — Pedestal clear cover to the ties checked against ACI 318-19 Table 20.5.1.3.1 (SFTC; new check, no existing result changes) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-tie-cover — Pedestal clear cover to the ties checked against ACI 318-19 Table 20.5.1.3.1 (SFTC; new check, no existing result changes) (PR #526: https://github.com/mlococo88/All-Structural/pull/526)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SFTC`.
 
@@ -3190,7 +3190,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - The vertical bars themselves are not checked against Table 20.5.1.3.1 (e.g. #6 and larger, exposed: 2 in to the vertical bar). With c = 2 in that row is met by the input; with a smaller cover it would not be. Raised, not added.
   - The footing's own covers (bottom 3 in warning, top and side) are unchanged.
 
-## 2026-11-01 — PR: claude/sf-barfit-db — Pedestal bar-fit check: bar diameter from the bar table (SFBD; calculation change, #9–#11 only) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-barfit-db — Pedestal bar-fit check: bar diameter from the bar table (SFBD; calculation change, #9–#11 only) (PR #528: https://github.com/mlococo88/All-Structural/pull/528)
 
 Line numbers are approximate; search for the anchor text.
 
@@ -3221,7 +3221,7 @@ Line numbers are approximate; search for the anchor text.
 - **How verified:** headless Chromium, origin/main vs the branch (12 projects); report builds on 12 projects (0 unresolved, 0 KaTeX errors, values = app); `node tests/check-syntax.mjs`; `tests/smoke/spread-footing-scroll.mjs` passes.
 - **Open item (not changed):** ACI 318-19 25.2.3 also has the (4/3)d_agg term; the app takes no aggregate size, so it is not checked (unchanged).
 
-## 2026-11-01 — PR: claude/sf-pm-ratio — Pedestal biaxial P–M ratio of every LRFD combination at its own P_u, reported (SFPM; new check, existing results unchanged) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-pm-ratio — Pedestal biaxial P–M ratio of every LRFD combination at its own P_u, reported (SFPM; new check, existing results unchanged) (PR #541: https://github.com/mlococo88/All-Structural/pull/541)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SFPM`.
 
@@ -3296,7 +3296,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - The axial cap is handled as ratio = P_u/φP_n,max only above the cap. Below it, the radial ratio does not include the cap's flat top. Where P_u is close to φP_n,max, read the axial DCR with it.
   - Slenderness magnification is still not applied (existing "slender" flag).
 
-## 2026-11-01 — PR: claude/sf-phone — Narrow screens: the input and output panels stack (SFPH; layout only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-phone — Narrow screens: the input and output panels stack (SFPH; layout only, no calculation change) (PR #551: https://github.com/mlococo88/All-Structural/pull/551)
 
 ### SFPH. Stacked layout below 900 px   [UI only]
 - **Problem (engineer, 2026-11-01):** at 390 px the output panel collapsed to zero width. `.main` is a flex row; `.inp{width:33%;min-width:400px}` took the whole row and `.out{flex:1;min-width:0}` got nothing.
@@ -3330,7 +3330,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - `tests/smoke/spread-footing-scroll.mjs` passes (it includes the below-900 check).
   - Screenshots at 390, 768 and 1280.
 
-## 2026-11-01 — PR: claude/sf-dowels — Full dowel checks per pedestal: ℓ_dc worked, dowels in tension at the interface, tension development, laps and projection (SFDO; new checks, existing results unchanged) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-dowels — Full dowel checks per pedestal: ℓ_dc worked, dowels in tension at the interface, tension development, laps and projection (SFDO; new checks, existing results unchanged) (PR #558: https://github.com/mlococo88/All-Structural/pull/558)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SFDO`.
 
@@ -3406,7 +3406,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - Shear friction across the interface (22.9) for V_u is not part of this PR (not requested).
   - With a hook, ℓ_dc must fit in the straight part above the bend. The existing ℓ_dc check uses the full available depth (unchanged); a note says so.
 
-## 2026-11-01 — PR: claude/sf-shear-friction — Shear friction across the pedestal–footing interface, ACI 318-19 22.9 (SFSF; new check, existing results unchanged) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-shear-friction — Shear friction across the pedestal–footing interface, ACI 318-19 22.9 (SFSF; new check, existing results unchanged) (PR #568: https://github.com/mlococo88/All-Structural/pull/568)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SFSF`.
 
@@ -3458,7 +3458,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - In direct mode the permanent compression is only the pedestal self-weight.
   - A_s,req,ten from the governing tension combination is deducted in every combination (conservative).
 
-## 2026-11-01 — PR: claude/sf-agg — Aggregate size input and the (4/3)·d_agg clear-spacing term; minimum clear spacing of the footing mats (SFAG; calculation change, no change at the default) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-agg — Aggregate size input and the (4/3)·d_agg clear-spacing term; minimum clear spacing of the footing mats (SFAG; calculation change, no change at the default) (PR #572: https://github.com/mlococo88/All-Structural/pull/572)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SFAG`.
 
@@ -3491,7 +3491,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - Report: 0 unresolved references, 0 KaTeX errors. Drawings valid.
   - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
 
-## 2026-11-01 — PR: claude/sf-cover — Concrete cover of the pedestal vertical bars and of the footing mats vs ACI 318-19 Table 20.5.1.3.1 (SFCV; new checks, existing results unchanged) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-cover — Concrete cover of the pedestal vertical bars and of the footing mats vs ACI 318-19 Table 20.5.1.3.1 (SFCV; new checks, existing results unchanged) (PR #577: https://github.com/mlococo88/All-Structural/pull/577)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `SFCV`.
 
@@ -3529,7 +3529,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass.
 - **Open item:** the default for the footing sides is "cast against earth" (3 in). Engineer to confirm, or set "Formed" per project.
 
-## 2026-11-01 — PR: claude/sf-report-tablinks — Report tab links keep the tab name in print (SFTL; display only) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-report-tablinks — Report tab links keep the tab name in print (SFTL; display only) (PR #583: https://github.com/mlococo88/All-Structural/pull/583)
 
 ### SFTL. `[[tab:x|Name]]` → `Name tab[[tab:x| ↗]]` in the Report notes   [display only]
 - **Problem (coordinator, 2026-11-01):** the shared viewer prints a `[[tab:x|text]]` link as its text only in the app. In print the link (and with it the tab name) is dropped. The other tools adopted `Name[[tab:x| ↗]]`, which keeps the name as plain text.
@@ -3541,7 +3541,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 - **Before / after (example):** `on the [[tab:peddes|Pedestal Design tab]]` → `on the Pedestal Design tab[[tab:peddes| ↗]]`.
 - **How verified:** report on 12 projects (0 unresolved references, 0 KaTeX errors); `R` and `P2` unchanged; the report text keeps the tab names; `node tests/check-syntax.mjs` passes.
 
-## 2026-11-01 — PR: claude/sf-sf-rough — Shear-friction joint surface: default intentionally roughened, μ = 1.0λ (SFSR; calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/sf-sf-rough — Shear-friction joint surface: default intentionally roughened, μ = 1.0λ (SFSR; calculation change) (PR #588: https://github.com/mlococo88/All-Structural/pull/588)
 
 ### SFSR. Default "Joint surface" = intentionally roughened   [calculation change; CLAUDE.md §4]
 - **Engineer decision (2026-11-01):**

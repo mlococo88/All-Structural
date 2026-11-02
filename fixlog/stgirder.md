@@ -7,7 +7,7 @@ entry below to the current code, apply it to the `st-src` text (closing script t
 
 Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 6 (and App. D6); AASHTO MBE for rating (unchanged).
 
-## 2026-10-04 — PR: claude/fix-stgirder (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-stgirder (PR #13: https://github.com/mlococo88/All-Structural/pull/13)
 
 Line numbers below are for the file **after** this PR. Every calculation change was checked by
 running the real `computeAll()` from the old (origin/main c58cb6d) and new file under node
@@ -312,7 +312,7 @@ server-rendered with React 18.2.0 for 6 input variants without error.
 - O11. Report tab "φMn flexure" shows 0 for noncompact sections (display); modular ratio n forced ≥ 6 and rounded while `lldfGeom` sends nRaw — not in this PR's scope.
 - O12. Edition: the 10th Ed. (2024) Section 6 changes were not verified article-by-article. F6–F10 rely on provisions unchanged since the 2009 Fatigue I/II split (6.6.1.2.5, 6.10.10.2, Table 6.6.1.2.3-2 values A 690 … C 1,680 …) and on long-standing 6.10.8.2.3-9 / 6.10.7.1.2 / 6.10.7.3 text; please confirm against your 10th Ed. copy.
 
-## 2026-10-04 — PR: claude/step1-group1 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group1 (PR #28: https://github.com/mlococo88/All-Structural/pull/28)
 
 Feature (no result change): "← All tools" link to `tools.html` (`target="_top"`, hidden in print) and the shared project info buttons. No formula, factor, unit, storage key or saved format changed. New storage written only on "Share project info": `bridgeSuite.v1.projectMeta` and `bridgeSuite.v1.projectMeta.updatedAt` (HANDOFF.md §2/§4.1). Link and buttons sit in the existing `btnrow noprint`, so they do not print. The bridgeSuite bootstrap blocks are unchanged.
 
@@ -425,7 +425,7 @@ Field mapping: projectName ↔ Project (`inp.proj.name`), preparedBy ↔ By (`in
 - **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
 - **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
 
-## 2026-10-04 — PR: claude/conn-reactions-subloads (PR link added after merge)
+## 2026-10-04 — PR: claude/conn-reactions-subloads (PR #37: https://github.com/mlococo88/All-Structural/pull/37)
 
 Feature: hand-off (no result change). ST-Girder sends the **unfactored** DC1, DC2 and DW end reactions of its one girder line to Bridge Substructure Loading on channel `superReactions` (HANDOFF.md §4.4). Nothing is sent automatically: only the new "Send reactions to Substructure Loading" button writes `bridgeSuite.v1.superReactions`, `bridgeSuite.v1.superReactions.updatedAt` and the per-producer copy `bridgeSuite.v1.superReactions.by.stgirder`. "Export hand-off (JSON)" writes the same payload to a file. No formula, factor, default, unit, storage key or saved format changed; the bridgeSuite bootstrap blocks and the BridgeXfer copy are unchanged (BridgeXfer v1 already in this file from step 1).
 
@@ -609,7 +609,7 @@ function computeAll(inp){
   - O-R1. MIDAS mode: the reactions are the imported shears at x = 0 and x = L of the selected span, i.e. exactly what this app uses at those stations. If the MIDAS file has a single station at an interior pier, the value there can belong to the adjacent span; Substructure Loading warns on negative dead-load reactions, but the engineer should check pier values in this mode.
   - O-R2. index.html (MCT) is not a sender yet: its results hold no support reactions per load case (see fixlog/index.md).
 
-## 2026-10-09 — PR: claude/tabs-stgirder (PR link added after merge)
+## 2026-10-09 — PR: claude/tabs-stgirder (PR #69: https://github.com/mlococo88/All-Structural/pull/69)
 ### T1. Inputs page split into sub-tabs   [UI only — no calculation change]
 - **Date / type:** 2026-10-09, UI only (no result change). Engineer's request (2026-10-09): "Go through all the apps and make sure they are all formatted with the input panel having tabs rather than one long scrolling input panel."
 - **How it works:** this tool has no input sidebar: "Inputs" is one of the top-level result tabs, a full-width page of 7 cards next to the Live Geometry column. A sub-tab strip is added at the top of that page (below the imported-demands banner, which stays visible on every sub-tab). Every card is still rendered exactly as before, in the same order; each group of cards is wrapped in a plain `<div className="stgInPane" hidden={...}>` and the inactive ones are hidden with the `hidden` attribute. Nothing unmounts, and no state, handler or value binding changes. The page layout (two columns, full width) is unchanged.
@@ -714,7 +714,7 @@ function InputsTab({inp,set,R}){
 - **Other copies of this code:** none. The bridgeSuite / BridgeXfer shared snippets were not touched.
 - **Open items:** at 400 px the page scrolls sideways because of the title block (`.tb-grid`, 532 px). This happens on main too and was not changed.
 
-## 2026-10-12 — PR: claude/sweep-stgirder (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-stgirder (PR #129: https://github.com/mlococo88/All-Structural/pull/129)
 
 Open-item sweep of inventory section 4 (engineer 2026-10-12: "continue making updates and fixes until it's completed … use your best judgment"). Basis: AASHTO LRFD 10th Ed. (2024) and MBE 3rd Ed. Article numbers marked "verify" were not checked against a printed copy.
 
@@ -1016,7 +1016,7 @@ Saved data (CLAUDE.md §5): no key or format changed. New optional fields, all w
 - **STG-S8 (rest of X-S8):** pruning of `bridgeSuite.v1.handoffs` lives in the shared bootstrap block (index/lldf/psbeam/stgirder) and was not touched here, as instructed.
 - **New, found during this sweep:** (a) the fatigue DFs (m1/1.2, v1/1.2, and the exterior lever/rigid values of W2) carry no skew correction (4.6.2.2.2e / 4.6.2.2.3c); the shear skew factor is > 1, so omitting it is slightly unconservative for skewed bridges. Recommendation: apply skV to the fatigue shear DF and skM to the fatigue moment DF. (b) `hybridRh` uses the short-term composite section for the −M checks too; 6.10.1.10.1 uses the steel + reinforcement section in negative flexure. Hybrid girders only, small. Recommendation: pass the cracked section for `FncNeg` / negative-moment Rh.
 
-## 2026-10-12 — PR: claude/bootstrap-sync (shared `bridgeSuite.v1.*` bootstrap; PR link added after merge)
+## 2026-10-12 — PR: claude/bootstrap-sync (shared `bridgeSuite.v1.*` bootstrap; PR #165: https://github.com/mlococo88/All-Structural/pull/165)
 
 Cross-tool sync of the shared bootstrap blocks. The same change is in index.html, lldf.html, psbeam.html and stgirder.html (CLAUDE.md §3). No engineering formula, factor, unit or code reference changed; no computed value changes. Storage keys and saved formats are unchanged (the hand-off map keeps its key and entry format; it only loses old entries).
 
@@ -1093,7 +1093,7 @@ This closes **STG-S8 (rest of X-S8)** listed in the 2026-10-12 sweep entry above
 - Headless Chromium, main vs branch, same steps: index publishes the PS demands payload → psbeam shows "New analysis data available", "Load these demands" adopts it (adopted token `test__beam@2026-10-12T10:00:00.000Z`); index publishes the steel payload → stgirder banner and adoption; lldf boots and resolves `BridgeApps.path('psbeam')`. Same results and the same storage keys on both; key values differ only in timestamps. No page errors (only Babel's "deoptimised styling" notes).
 - **Other copies:** index.html, lldf.html, psbeam.html, stgirder.html (all changed in this PR; lldf.html has no `BridgeHandoff` block, so XS2 and the hand-off call of XS3 are not in it).
 
-## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR link added after merge)
+## 2026-10-12 — PR: claude/lldf-receivers (cross-tool: lldf DF payload `perFootStrip` / `skewShear` receivers; PR #166: https://github.com/mlococo88/All-Structural/pull/166)
 
 Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuite.v1.lldf` payload honour lldf's new optional fields (fixlog/lldf.md 2026-10-12 SW3 `skewShear`, SW6 `perFootStrip`), and Bridge Geometry's skew note is softened. Tools changed: index.html, psbeam.html, stgirder.html, Moving Load Generator.html, Steel Bridge Beam Modules.html, Bridge Geometry.html; HANDOFF.md §4.2 / §4.3. The shared `bridgeSuite.v1.*` bootstrap blocks are not touched. No formula, factor, unit or code reference changed. Payloads without the new fields give the same results as before (checked).
 
@@ -1111,7 +1111,7 @@ Cross-tool connection PR (CLAUDE.md §7 exception): receivers of the `bridgeSuit
 - **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.6.2.3 (equivalent strip widths for slab-type bridges: the slab DF is per unit width, not per girder). No formula changed.
 - **How verified:** headless Chromium, main vs branch: lldf "Send DFs" for the slab and the girder case, then the resolver called on this tool (`lldfResolveFor({loads:{pos:'interior'}})`). Slab: main applied, branch refused. Girder: identical results (only `producedAt` differs). No page errors.
 
-## 2026-10-13 — PR: claude/girderdetail-to-stgirder (cross-tool connection GirderDetail → ST-Girder, HANDOFF.md §4.9; CLAUDE.md §7 exception: sender and receiver in one PR; PR link added after merge)
+## 2026-10-13 — PR: claude/girderdetail-to-stgirder (cross-tool connection GirderDetail → ST-Girder, HANDOFF.md §4.9; CLAUDE.md §7 exception: sender and receiver in one PR; PR #194: https://github.com/mlococo88/All-Structural/pull/194)
 
 Receiver of one girder's forces, plates and design inputs from GirderDetail (Steel Bridge Beam Modules.html, Structural analysis "Send to ST-Girder", fixlog/Steel Bridge Beam Modules.md EX1). The payload is this tool's existing imported-demands schema (`stgirder-external-demands`, MIDAS station format) with optional fields only. Without such a payload nothing changes (verified: 18 scenarios incl. the MIDAS import, bit-identical). Basis: AASHTO LRFD 10th Ed. (2024).
 
@@ -1200,7 +1200,7 @@ Receiver of one girder's forces, plates and design inputs from GirderDetail (Ste
 - Top flange and deck reinforcement fatigue at interior piers are still not checked here (the imported range is applied to the bottom flange, as before).
 - "Send reactions to Substructure Loading" still labels an imported girder "MIDAS import (ST-Girder)".
 
-## 2026-10-13 — PR: claude/stgirder-lp-10th (L_p = 1.1 r_t per the 10th Ed.; PR link added after merge)
+## 2026-10-13 — PR: claude/stgirder-lp-10th (L_p = 1.1 r_t per the 10th Ed.; PR #197: https://github.com/mlococo88/All-Structural/pull/197)
 
 Engineer's decision 2026-10-13: AASHTO LRFD 10th Ed. Eq. 6.10.8.2.3a-4 is L_p = 1.1 r_t √(E/F_yc) (text supplied by the engineer). Closes the L_p item of GD4 above.
 
@@ -1237,7 +1237,7 @@ Engineer's decision 2026-10-13: AASHTO LRFD 10th Ed. Eq. 6.10.8.2.3a-4 is L_p = 
 - F_e in Eq. 6.10.8.2.3a-3 is taken as C_bπ²E/(L_b/r_t)² (the 9th Ed. F_cr without R_b); confirm against the printed 10th Ed. definition of F_e.
 - The r_t comment still cites "6.10.8.2.3-9" (9th Ed. numbering); the 10th Ed. equation number for r_t was not in the supplied text, so it was not renumbered.
 
-## 2026-10-13 — PR: claude/gd-st-open-direct (open from GirderDetail with the girder loaded; cross-tool connection HANDOFF.md §4.9, sender and receiver in one PR per the CLAUDE.md §7 exception; PR link added after merge)
+## 2026-10-13 — PR: claude/gd-st-open-direct (open from GirderDetail with the girder loaded; cross-tool connection HANDOFF.md §4.9, sender and receiver in one PR per the CLAUDE.md §7 exception; PR #199: https://github.com/mlococo88/All-Structural/pull/199)
 
 ### OD1. `#gdpull=<producedAt>`: apply the GirderDetail hand-off on load without the confirm, with a summary banner   [hand-off receiver] [no computed result, key, channel or schema changes; manual Pull and Import unchanged]
 - **Where:** `App()`: `gdAdopt` (anchor `const gdAdopt=(p,how`), new state and effects after `pullGD` (anchor `/* OD1 (2026-10-13): GirderDetail's "Send to ST-Girder" can open this app`), the banner before `{geomChanges&&!demandsLocked&&(`, and the comment above `const GD_CH='girderDemands'`. About lines 5310–5460.
@@ -1293,7 +1293,7 @@ Engineer's decision 2026-10-13: AASHTO LRFD 10th Ed. Eq. 6.10.8.2.3a-4 is L_p = 
 - **Other copies:** sender in `Steel Bridge Beam Modules.html` (fixlog/Steel Bridge Beam Modules.md OD1).
 - **Open items:** an ST-Girder tab that was already open keeps its own inputs (it shows the new-data dot); all tabs share `stgirder.session`, so its next edit autosaves over the session written by the new tab (existing multi-tab behaviour, not changed). If the MCT demands channel is locked and adopts on the same load, the GirderDetail hand-off is applied after it and replaces the imported demands (the engineer chose it in GirderDetail).
 
-## 2026-10-13 — PR: claude/stgirder-camber-breakdown (Camber tab: dead-load deflection by load, graph and tables; PR link added after merge)
+## 2026-10-13 — PR: claude/stgirder-camber-breakdown (Camber tab: dead-load deflection by load, graph and tables; PR #203: https://github.com/mlococo88/All-Structural/pull/203)
 
 ### CB1. Camber: deflected shape by load (steel self-weight, wet concrete, DC2, DW, total) from the existing double integration   [display only] [no headline value, formula, section, unit, key or payload changed]
 - **Where:** `computeAll()`, Camber block (anchor `/* ---------- Camber — numeric double integration`), about line 2680; new components `camberSeries`, `camberTable`, `CamberBreakdown` before `function CamberTab({R})` (about line 4539); `CamberTab` graph (anchor `<SG n="3">Deflection by load along the span</SG>`); `ReportTab`, new card "Dead-load deflection by load (camber)" after the "Key results" card (anchor `title="Dead-load deflection by load (camber)"`).
@@ -1423,7 +1423,7 @@ function CamberBreakdown({R,fig}){
   - `selfWeightExcluded:true` imports: the self-weight added by ST-Girder is a simple-span moment on the selected span (existing, stated in the import banner). On a continuous span this overstates the self-weight deflection (GirderDetail example span 2 with the flag set: 1.89 in self-weight vs 1.58 in for the imported remainder). Not changed.
   - Diaphragm point loads are grouped with the steel self-weight; Add'l DC1 ("forms, details") with the wet concrete. Engineer to confirm, or ask for a separate column.
 
-## 2026-10-13 — PR: claude/camber-followups (Camber follow-ups CF1, CF3, CF4: fine integration, headline max and location, GirderDetail DC1 split; engineer's decisions 2026-10-13; cross-tool connection HANDOFF.md §4.9, sender `Steel Bridge Beam Modules.html` in the same PR; PR link added after merge)
+## 2026-10-13 — PR: claude/camber-followups (Camber follow-ups CF1, CF3, CF4: fine integration, headline max and location, GirderDetail DC1 split; engineer's decisions 2026-10-13; cross-tool connection HANDOFF.md §4.9, sender `Steel Bridge Beam Modules.html` in the same PR; PR #204: https://github.com/mlococo88/All-Structural/pull/204)
 
 ### CF1. Camber: camber-only fine station set (about 0.5 ft) for the double integration   [§4: calc change] [MORE conservative — larger camber; checks unchanged]
 - **Where:** `computeAll()`, Camber block (anchor `/* ---------- Camber — numeric double integration`), about line 2681. The check stations (`stations`, L/20 plus ±0.01 ft at flange transitions) are not changed; camber gets its own set `camSt`.
@@ -1520,7 +1520,7 @@ function CamberBreakdown({R,fig}){
   - CF2 (self-weight added by ST-Girder on continuous imported spans, `selfWeightExcluded:true`) not implemented: options sent to the engineer (it changes M_DC1 for every check, not only camber).
   - GirderDetail's DC1 has no cross-frame weight unless the user enters a DC1 row (its detail allowance covers stiffeners, connection plates and splices).
 
-## 2026-10-13 — PR: claude/stgirder-restyle (restyle to match GirderDetail: theme, typography, header, cards, inputs, tables, check presentation, equation blocks; engineer's request 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/stgirder-restyle (restyle to match GirderDetail: theme, typography, header, cards, inputs, tables, check presentation, equation blocks; engineer's request 2026-10-13; PR #205: https://github.com/mlococo88/All-Structural/pull/205)
 
 ### RS1. GirderDetail look ("calc-pad" theme) for the whole page   [display only] [no computed result, input, key, saved format or hand-off changed]
 - **Where:** the first `<style>` block (anchor: the new block starts with `/* Theme: GirderDetail "calc-pad" look`), the Google Fonts `<link>` in `<head>`, and these UI primitives / App markup: `Tbl` (anchor `c.v==='PASS'||c.v==='FAIL'`), `RBar` (anchor `const RBar=`), `VarTable` (anchor `className="wsym"`), `Deriv` (anchor `className="sg-block"`), `PLT` (anchor `"Barlow Semi Condensed", Barlow, system-ui`), the status band in `App` (anchor `className="sb-gov"`), `ReportTab` summary table (anchor `<RBar r={c.r}`), header subtitle (anchor `Built-up steel plate girder design`).
@@ -1543,7 +1543,7 @@ function CamberBreakdown({R,fig}){
 - **Other copies:** the theme CSS is copied from `Steel Bridge Beam Modules.html` (GirderDetail); that file is not changed.
 - **Open items:** none. Not matched: GirderDetail's check IDs (ST-Girder checks have none; adding IDs would change the report content) and its left input sidebar layout (ST-Girder keeps its own tab layout as requested).
 
-## 2026-10-13 — PR: claude/stgirder-sw-continuous (self-weight added to `selfWeightExcluded:true` imports analysed on the continuous girder; engineer's decision 2026-10-13, Option B of CF2; PR link added after merge)
+## 2026-10-13 — PR: claude/stgirder-sw-continuous (self-weight added to `selfWeightExcluded:true` imports analysed on the continuous girder; engineer's decision 2026-10-13, Option B of CF2; PR #206: https://github.com/mlococo88/All-Structural/pull/206)
 
 ### SW1. Self-weight on continuous imports: stiffness analysis over all spans, variable EI from `section.zones`   [calculation change: M_DC1 / V_DC1 of affected imports] [less conservative in positive moment, more conservative at the piers]
 - **Applies only when** an imported payload has `M_DC1` **and** `selfWeightExcluded:true` (MCT/MIDAS steel export default) **and** a support layout with two or more spans (`member.supports` with ≥ 3 entries, or `member.spans` with ≥ 2). Built-in (non-imported) designs, imports with `selfWeightExcluded:false` (all GirderDetail payloads), and one-span imports or imports without a support layout are unchanged (simple span kept; that is correct for them).
@@ -1581,7 +1581,7 @@ function CamberBreakdown({R,fig}){
 - **Other copies:** none (the self-weight logic exists only in ST-Girder; PS-Beam has its own import code, not changed).
 - **Open items:** the zones method uses the import's plates for the self-weight even if the user edits the ST-Girder section afterwards (the analysis is of the imported girder); overhangs beyond the end supports, if any, are not loaded (domain is first to last support).
 
-## 2026-10-13 — PR: claude/stgirder-sw-edited-plates (SW1 follow-ups: plates edited in ST-Girder used for the selected span's self-weight; overhang note; engineer's decisions 2026-10-13; PR link added after merge)
+## 2026-10-13 — PR: claude/stgirder-sw-edited-plates (SW1 follow-ups: plates edited in ST-Girder used for the selected span's self-weight; overhang note; engineer's decisions 2026-10-13; PR #207: https://github.com/mlococo88/All-Structural/pull/207)
 
 ### SW2. Continuous self-weight: the selected span uses the plates edited in ST-Girder   [calculation change: M_DC1 / V_DC1 of affected imports, only when the plates were edited or the no-zones import has flange transitions]
 - **Applies only when** SW1 applies (import with `M_DC1`, `selfWeightExcluded:true` and ≥ 2 spans) **and** either (a) the import has `section.zones` and the ST-Girder Section inputs differ from what the import put there for the selected span, or (b) the import has no usable zones and the ST-Girder section has flange transitions (`useSegs`, more than one segment). Unedited imports, uniform-section no-zones imports, and everything SW1 did not touch give results identical to SW1 (main a3cbc4b).
@@ -1622,7 +1622,7 @@ function CamberBreakdown({R,fig}){
 - **Before:** no note. **After:** the continuous self-weight note (Inputs banner, Camber note) adds "Self-weight is applied between the first and last supports only (no overhang beyond the end supports is loaded)." Engineer, 2026-10-13: leave the analysis domain as is, state it on screen.
 - **Governing provision:** none. **Check case:** GirderDetail flag forced, any span: the sentence appears after the reactions.
 
-## 2026-10-14 — PR: claude/stgirder-calc-report (Report tab: full calculation-sheet report in the Gusset Plate Rating / GirderDetail document style; engineer's request 2026-10-14; PR link added after merge)
+## 2026-10-14 — PR: claude/stgirder-calc-report (Report tab: full calculation-sheet report in the Gusset Plate Rating / GirderDetail document style; engineer's request 2026-10-14; PR #210: https://github.com/mlococo88/All-Structural/pull/210)
 
 ### CR1. Tab derivations moved into shared functions   [display only] [refactor: no computed result and no on-screen content changed]
 - **Where:** new top-level functions, each placed just before its tab and built from that tab's JSX unchanged: `secDerivs(R)` → `{trans, plastic, cls}` (SectionTab, anchor `const SD=secDerivs(R);`); `s2Deriv(R,psel,right)` (StressTab, anchor `{psel&&s2Deriv(`); `flexPosLines(R,p)` / `flexNegLines(R,g,hasDem)` (were `renderPos` / `renderNeg` inside FlexTab), `flexWorkedCard(R,fcSel,right)`, `flexPosCard(R)`, `flexNegCard(R)`; `shearResCard(R)`, `shearWorkedCard(R,scSel,right)`; `deckCases(d)`, `deckWorkedDeriv(R,CS,right)`; `constrWorkedDeriv(R,sel,right)`; `camberDeriv(R)`; `fatCards(R,sel,right)` → `{s1,s2,s3,s4,s5,web}` (Fatigue Steps 1–5 and the web special-fatigue card); `stiffTransDeriv(R)`, `stiffBearDeriv(R)`; `connStrDeriv(R)`, `connFatDeriv(R)`; `NOMEN_ROWS` (Nomenclature rows). `right` is the tab's station / case picker (passed by the tab, omitted by the report).
@@ -1644,7 +1644,7 @@ function CamberBreakdown({R,fig}){
 - **Other copies:** the `.cr-*` / `.crv-*` CSS and the print pattern are duplicated from `Gusset Plate Rating.html` (not changed).
 - **Open items:** MBE edition not stated in ST-Girder (the report says "verify"). Plotly charts are not in the report (only the static SVG drawings). The stress-basis +M and the −M rating factors are stated with the result, not substituted (their staged stresses are not in R).
 
-## 2026-10-14 — PR: claude/stgirder-props-location (Section Props: properties by flange segment incl. cracked, properties at any x; report section 4; engineer's request 2026-10-14; PR link added after merge)
+## 2026-10-14 — PR: claude/stgirder-props-location (Section Props: properties by flange segment incl. cracked, properties at any x; report section 4; engineer's request 2026-10-14; PR #218: https://github.com/mlococo88/All-Structural/pull/218)
 
 ### SP1. Section properties by segment and at any location   [display only] [no computed result, check, key or saved format changed; one UI preference added]
 - **Where:** new display helpers before `secDerivs` (anchor `/* Section properties by flange segment and at any location x`): `spMidIdx`, `spSegAt` (same rule as `computeAll`'s `segIdxAt`: first segment with x ≤ x1), `spX0`, `spRange`, `spPlates`, `spGovTags`, `spAs`, `spDtop`, `spRows`, `SP_HEAD`, `spNote`, `SegPropsTable`, `PropsAtX`. `secDerivs(R)` → `secDerivs(R,si0,right)` (anchor `function secDerivs(R,si0,right){`). `SectionTab({R})` → `SectionTab({R,inp})` (App: `{tab==='section'&&<SectionTab R={R} inp={inp}/>}`). Report: `crModel` section 4 (anchor `// 4. Section properties`). CSS: `.sp-*` rules after `table.eng tr.row-fail td`, `.crdoc .cr-sp` after `.crdoc .cr-tbl tr { break-inside: avoid; }`.
@@ -1662,7 +1662,7 @@ function CamberBreakdown({R,fig}){
 - **Other copies:** none.
 - **Open items:** none.
 
-## 2026-10-14 — PR: claude/stgirder-cite-61011c (cite AASHTO LRFD 6.10.1.1.1c for the cracked negative-moment section; note in place of the negative-flexure card when the span has no −M; engineer's requests 2026-10-14; PR link added after merge)
+## 2026-10-14 — PR: claude/stgirder-cite-61011c (cite AASHTO LRFD 6.10.1.1.1c for the cracked negative-moment section; note in place of the negative-flexure card when the span has no −M; engineer's requests 2026-10-14; PR #220: https://github.com/mlococo88/All-Structural/pull/220)
 
 ### CT1. Code reference added: AASHTO LRFD 10th Ed. Art. 6.10.1.1.1c for the cracked section   [display only] [code reference added (CLAUDE.md §4); no number, formula, factor, unit or other citation changed]
 - **Where / Before → After** (citation text only; anchors are the "before" text):
@@ -1693,7 +1693,7 @@ function CamberBreakdown({R,fig}){
 - **How verified:** as CT1 (Node R identical; headless Chromium: built-in Flexure and Report differ from main only by the note lines; GirderDetail span 2 only by the CT1 citations; no console errors); import-without-−M wording checked by evaluating `flexNoNegText({useExt:true})` in Node (no example import without −M at hand). Screenshot of the built-in Flexure tab checked.
 - **Other copies:** none. **Open items:** none.
 
-## 2026-10-14 — PR: claude/stgirder-mp-links (Section Props: M_p fully worked per Table D6.1-1; links from quoted values to their derivations; engineer's requests 2026-10-14; PR link added after merge)
+## 2026-10-14 — PR: claude/stgirder-mp-links (Section Props: M_p fully worked per Table D6.1-1; links from quoted values to their derivations; engineer's requests 2026-10-14; PR #221: https://github.com/mlococo88/All-Structural/pull/221)
 
 ### MP1. Plastic moment M_p worked in full (Table D6.1-1)   [display only] [no computed result changed; code references added to the card (CLAUDE.md §4)]
 - **Where:** `plasticMoment` (anchor `function plasticMoment(sec, mat, deck){`): also returns `Ybar`, `arm` (the moment arms it already computed: `{ds,dc,dt}` Case I, `{ds,dw,dt}` Case II, `{dc,dw,dt}` deck case) and `off` (t_s + t_h, or 0 without a deck). `Mp`, `PNA`, `Dp`, `Dt`, `Dcp` and every expression are unchanged. Before: `let region,PNA,Mp,Dcp;` with `const Ybar=…` and `const ds=…, dc=…` local to each branch, `return {region,PNA,Mp,Dcp,Dp:PNA,Dt,Ps,Pc,Pw,Pt};`. After: `let region,PNA,Mp,Dcp,Ybar,arm;`, `Ybar=…` (same expressions), `arm={ds,dc,dt}` etc. at the end of each branch, `return {region,PNA,Mp,Dcp,Dp:PNA,Dt,Ps,Pc,Pw,Pt,Ybar,arm,off};`.
@@ -1739,7 +1739,7 @@ function CamberBreakdown({R,fig}){
 - **How verified:** headless Chromium, main vs branch, 5 scenarios (built-in, noncomposite, PNA in the deck, PNA in the web, GirderDetail span 2): every tab differs from main only by the added link lines (plus the MP1 card); `stgirder.session` identical and unchanged after clicking every link on Flexure, Stresses, Fatigue and Rating (21 links for GirderDetail span 2: each lands on the named tab with the named card in view and, for Section Props, the named segment picked); every report "see §" link (18–27 per scenario) resolves to the subsection it names; no console errors. Node: `computeAll` and the reactions payload identical (MP1).
 - **Other copies:** none. **Open items:** not linked (worked in place or with no derivation elsewhere): F_nc/FLB/LTB (worked on the card that uses it), M_y and the 1.3R_hM_y limit, f_bu of the Strength I flange stresses card, the distribution factors on the Inputs tab (worked in report §5 only, built-in analysis), the Optimize and Deck tabs.
 
-## 2026-10-14 — PR: claude/stgirder-flexpos-seg (MP1 open items resolved; engineer's decisions 2026-10-14; PR link added after merge)
+## 2026-10-14 — PR: claude/stgirder-flexpos-seg (MP1 open items resolved; engineer's decisions 2026-10-14; PR #222: https://github.com/mlococo88/All-Structural/pull/222)
 
 ### MP1 open item (a) — D_cp of a noncomposite section with the PNA in the top flange: resolved, no change
 - **Decision (engineer, 2026-10-14):** keep D_cp = 0. In positive flexure with the plastic neutral axis in the top (compression) flange, the whole web is in tension, so the depth of web in compression at M_p is physically zero. D6.3.2 (Eqs. D6.3.2-1 / -2) gives D_cp for composite sections with the PNA in the web.
@@ -1755,7 +1755,7 @@ function CamberBreakdown({R,fig}){
 - **How verified:** JSX transpiled. Node: `computeAll` and the reactions payload identical to main for the 9 standard cases. Headless Chromium, main vs branch: built-in example — Section Props, Flexure, Rating and Report text identical; the case above — only the PNA region, D_p, D_t and the ductility box lines differ (Flexure tab and report 8.1); no console errors; Flexure card screenshot checked.
 - **Other copies:** none. **Open items:** none.
 
-## 2026-10-14 — PR: claude/stgirder-dcp-noncomp (D_cp of noncomposite sections per D6.3.2-3/-4; engineer's decision 2026-10-14, reversing the earlier "no change"; PR link added after merge)
+## 2026-10-14 — PR: claude/stgirder-dcp-noncomp (D_cp of noncomposite sections per D6.3.2-3/-4; engineer's decision 2026-10-14, reversing the earlier "no change"; PR #223: https://github.com/mlococo88/All-Structural/pull/223)
 
 ### DC1. D_cp for noncomposite sections per AASHTO LRFD 10th Ed. D6.3.2   [CALC CHANGE — engineer-approved] [composite sections unchanged]
 - **Where:** `plasticMoment` (anchor `// Noncomposite section: D_cp per D6.3.2`), just before `const Dt=`; display in `secDerivs` plastic card, step "Depths D_t, D_p/D_t and D_cp" (anchor `D6.3.2-3`).
@@ -1769,7 +1769,7 @@ function CamberBreakdown({R,fig}){
 - **Other copies:** none.
 - **Open items (not changed, reported to the engineer):** (1) Composite positive flexure: the code gives D_cp = clamp(Ȳ, 0, D); if P_t > P_c + P_s + P_w (PNA below the web, outside Table D6.1-1 Cases I–VII) that is D, whereas D6.3.2 reads "all other composite sections in positive flexure, D_cp = 0". Not reachable with ordinary proportions. (2) Composite negative flexure (Eq. D6.3.2-2 / else D) is not implemented: ST-Girder computes no negative-flexure plastic moment and R_b for −M uses the elastic D_c of the cracked section with the web taken as noncompact (conservative), so D_cp is not used there.
 
-## 2026-10-14 — PR: claude/stgirder-pna-below-web (composite positive flexure with the PNA below the web: outside the scope of the app; engineer's decision 2026-10-14; PR link added after merge)
+## 2026-10-14 — PR: claude/stgirder-pna-below-web (composite positive flexure with the PNA below the web: outside the scope of the app; engineer's decision 2026-10-14; PR #224: https://github.com/mlococo88/All-Structural/pull/224)
 
 ### OOS1. PNA below the web — results that use M_p / D_p / D_cp suppressed, verdict forced to "Not all checks pass"   [BEHAVIOUR CHANGE — result suppressed] [no formula, factor or unit changed; normal sections unchanged]
 - **Where (anchors):**
@@ -1791,7 +1791,7 @@ function CamberBreakdown({R,fig}){
 - **Other copies:** none in this tool. GirderDetail (`Steel Bridge Beam Modules.html`) has its own plastic-moment code with the same gap (reported, not changed: one tool per PR).
 - **Open items:** none for ST-Girder.
 
-## 2026-10-15 — PR: claude/gd-st-owner-rules (GD49: the bridge owner's load rules from GirderDetail applied to ST-Girder's checks; cross-tool PR with Steel Bridge Beam Modules.html and HANDOFF.md §4.9; engineer decision 2026-10-15; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-st-owner-rules (GD49: the bridge owner's load rules from GirderDetail applied to ST-Girder's checks; cross-tool PR with Steel Bridge Beam Modules.html and HANDOFF.md §4.9; engineer decision 2026-10-15; PR #234: https://github.com/mlococo88/All-Structural/pull/234)
 
 ### GD49. Owner load rules from GirderDetail (`ownerRules`)   [LOAD FACTOR AND SECTION PROPERTY CHANGE for GirderDetail imports carrying ownerRules — §4 callout]
 - **Where:** new `LF_ST`, `ownLFOf`, `lfFac`, `lfS`, `lfP`, `llD`, `ownLines`, `OwnBanner` (anchor `/* Owner load rules from GirderDetail (GD49`); `buildExternal` (`hasPL`, `M_PLpos`, `M_PLneg`, `V_PLq`); `computeAll`: `OWN`, `gDC = 1.25η`, `gDW = 1.50η`, `gLL = 1.75ηm`, `gS2 = 1.30m`; `deck` with `haunch: 0` when `OWN.h0` (properties only; `loadsCalc` keeps `inp.deck`); `plOn`; stations `MlD, MlnD, VlD` (= Ml, Mln, Vl without a pedestrian part) and `Mu, Mun, Vu` with the owner factors; `stageF(…, des)`; Service II `stageF(st,1,1,1,gS2,true)`; `yieldMy` (factored permanent with η); `fStg`/`fStr`; `rating.target`; result fields `lf`, `deckIn`. Displays: Stresses (Service II factor), Diagrams (other-span envelopes and callouts), Flexure (factored components), Shear note, Rating tab (target), report (1. Objectives list, 2. Input parameters "Owner load rules (from GirderDetail)" with the factors worked, Demands "Load combinations (owner load rules …)", Rating target line, Appendix), `CrossSection` (drawn with the entered haunch), banner on every tab, pull dialog / auto-load summary line, `gdCheck` validation of `ownerRules` and `M_PL…`/`V_PL…`.
@@ -2255,7 +2255,7 @@ Diff (main → branch):
  
 ```
 
-## 2026-10-15 — PR: claude/stgirder-deck-owner (GD49 deck: the owner load rules from GirderDetail applied to the transverse Deck design; engineer decision 2026-10-15; PR link added after merge)
+## 2026-10-15 — PR: claude/stgirder-deck-owner (GD49 deck: the owner load rules from GirderDetail applied to the transverse Deck design; engineer decision 2026-10-15; PR #235: https://github.com/mlococo88/All-Structural/pull/235)
 
 ### GD49-D. Owner load rules (`ownerRules`) on the transverse deck design   [LOAD FACTOR CHANGE for GirderDetail imports carrying ownerRules — §4 callout]
 - **Problem / decision:** GD49 (#234) applied GirderDetail's owner rules (η, RIDOT design load multiplier m) to the girder checks only; the Deck tab (transverse deck, equivalent strip) kept 1.25 / 1.50 / 1.75. Engineer decision 2026-10-15: RIDOT BDM 3.4.1.2 applies m to "all bridge components" (HL-93 LL+IM, Strength and Service; not deflection, fatigue, rating), and η (AASHTO LRFD 1.3.2.1) applies at Strength, so both apply to the deck design whenever ST-Girder has owner rules from GirderDetail. More conservative (RIDOT and CTDOT with η = 1.05; MassDOT/AASHTO with η = 1, m = 1: unchanged).
@@ -2412,7 +2412,7 @@ index 63575b9..9f357b4 100644
 - **Verification:** Babel transpile OK; headless report text checked for the default project and a RIDOT payload; no page errors. No computed value changed.
 
 
-## 2026-10-15 — PR: claude/gd-st-utilities (GD54c: MassDOT utilities from GirderDetail as their own loads; cross-tool PR with Steel Bridge Beam Modules.html and HANDOFF.md §4.9; engineer decision GD54(d) "yes"; PR link added after merge)
+## 2026-10-15 — PR: claude/gd-st-utilities (GD54c: MassDOT utilities from GirderDetail as their own loads; cross-tool PR with Steel Bridge Beam Modules.html and HANDOFF.md §4.9; engineer decision GD54(d) "yes"; PR #244: https://github.com/mlococo88/All-Structural/pull/244)
 
 ### GD54c. Utilities (`M_UT`, `V_UT`, `M_UF`, `V_UF`) applied with the exact factors   [LOAD COMBINATION CHANGE for GirderDetail payloads carrying utilities (MassDOT) — §4 callout] [Tier 2]
 - **Where:** `buildExternal` (`hasUT`, `hasUF`, `M_UT`, `V_UT`, `M_UF`, `V_UF`); `computeAll`: `UTon`, `UF_`, `uFac`, `uSum` (anchor `/* GD54c (engineer decision 2026-10-15; HANDOFF.md 4.9)`), stations (`if(!UTon){` … `Mu:Mu+uP,Mun:Mun+uN`), `stageF(…, uk)` (`if(UTon&&uk)`), Service II (`stageF(st,1,1,1,gS2,true,'S')`), `sDisp`, `fTop`/`fBot` (`ut`), `yieldMy` (`MD1=UTon? gDC*st.M1+st.uP`), `fStg`/`fStr` (`'U'`), camber (`camUT`, `shUT`), web special fatigue `Vperm`, rating (flexure `mDC`/`mDW`, `'R'`, shear `uT`/`uF`, −M `'R'`, Service `'RS'`, `utR`), result `ut`. Display: `utG`, `utLines`, `utTxM`, `utTxV`, `UtBanner`, `UtCard` (anchor `/* GD54c (engineer decision 2026-10-15): MassDOT utilities from GirderDetail`), `DL_T.ut`, banner after `OwnBanner`, Inputs card after the imported-demands callout, Diagrams traces and other-span lines, Flexure chart trace, `camberSeries`, `CamberBreakdown`, `camberDeriv`, `s2Deriv`, Rating hint, report (2. Input parameters "MassDOT utilities (from GirderDetail)", Load combinations `uM`, `uV`, `uS`, load-effect tables, Imported demands row), `gdCheck` (fields validated as numbers), pull summary line.
@@ -2771,7 +2771,7 @@ index 386e526..7a9a1df 100644
 ```
 
 
-## 2026-10-19 — PR: claude/gd-stgirder-load-inputs (GDL: GirderDetail's load inputs shown on the Inputs tab while its demands are in use; engineer request 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html and HANDOFF.md §4.9; display only; PR link added after merge)
+## 2026-10-19 — PR: claude/gd-stgirder-load-inputs (GDL: GirderDetail's load inputs shown on the Inputs tab while its demands are in use; engineer request 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html and HANDOFF.md §4.9; display only; PR #303: https://github.com/mlococo88/All-Structural/pull/303)
 
 Engineer's request: "When the analysis is sent from GirderDetail to ST-Girder, bring over the load inputs as well so there is no confusion. Update the load section of the Input tab with the correct inputs from the GirderDetail app."
 
@@ -2934,7 +2934,7 @@ index 7a9a1df..c7168cb 100644
 ```
 
 
-## 2026-10-19 — PR: claude/gd-stgirder-import-all (GDX: GirderDetail's inputs transferred and highlighted; GD69 switched; engineer decision 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, HANDOFF.md §4.9 and ENGINEER_CHECKS GD69/GD70; PR link added after merge)
+## 2026-10-19 — PR: claude/gd-stgirder-import-all (GDX: GirderDetail's inputs transferred and highlighted; GD69 switched; engineer decision 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, HANDOFF.md §4.9 and ENGINEER_CHECKS GD69/GD70; PR #304: https://github.com/mlococo88/All-Structural/pull/304)
 
 Engineer decisions (2026-10-19): switch the constructibility construction live load, the live load deflection N_L and the deck overhang inputs to GirderDetail's values (GD69), and "Whatever can be imported from GirderDetail should be. I think the various input sections of the ST-Girder app should be highlighted indicating they were transferred from the GirderDetail app."
 
@@ -3393,7 +3393,7 @@ index 5859151..f81c5e3 100644
 ```
 
 
-## 2026-10-19 — PR: claude/gd-stgirder-gd70 (GD70: d_o, bearing stiffeners, studs and cycles n taken from GirderDetail as the governing value; engineer decision 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, HANDOFF.md §4.9, ENGINEER_CHECKS GD70/GD71; PR link added after merge)
+## 2026-10-19 — PR: claude/gd-stgirder-gd70 (GD70: d_o, bearing stiffeners, studs and cycles n taken from GirderDetail as the governing value; engineer decision 2026-10-19; cross-tool PR with Steel Bridge Beam Modules.html, HANDOFF.md §4.9, ENGINEER_CHECKS GD70/GD71; PR #305: https://github.com/mlococo88/All-Structural/pull/305)
 
 Engineer (2026-10-19, on GD70): "I don't see why it shouldn't all come from the girderdetail app. If they are all preliminary sized in that app then it should be transferred over or at least maybe note in the stgirder app why it's not transferred over." Decision: transfer all four; where GirderDetail has several values and ST-Girder checks one, take the governing (least favourable) one, lock it and say so next to the field.
 
@@ -3523,7 +3523,7 @@ index f81c5e3..95a8076 100644
 ```
 
 
-## 2026-10-19 — PR: claude/stgirder-gd71 (GD71: bearing stiffener plate count worded as the total; engineer approval 2026-10-19; wording only; PR link added after merge)
+## 2026-10-19 — PR: claude/stgirder-gd71 (GD71: bearing stiffener plate count worded as the total; engineer approval 2026-10-19; wording only; PR #306: https://github.com/mlococo88/All-Structural/pull/306)
 
 ### GD71. "Bearing plates" = total plates, both sides of the web   [wording only — no result change, Tier 0]
 - **Where:** InputsTab, Stiffeners / Studs / Fatigue: `<Num l="Bearing plates (…)"` (anchor `v={inp.stiff.bearN}`); `stiffBearDeriv` variable table row `n_b`; report `crModel` row "Bearing stiffeners"; `GD_LBL['stiff.bearN']` (pull summary).
@@ -3555,7 +3555,7 @@ index 95a8076..e297ce6 100644
 ```
 
 
-## 2026-10-19 — PR: claude/stgirder-disconnect (DISC: ST-Girder disconnected from every bridge tool except GirderDetail; engineer decision 2026-10-19; the other tools' side is branch claude/stgirder-disconnect-others; PR link added after merge)
+## 2026-10-19 — PR: claude/stgirder-disconnect (DISC: ST-Girder disconnected from every bridge tool except GirderDetail; engineer decision 2026-10-19; the other tools' side is branch claude/stgirder-disconnect-others; PR #309: https://github.com/mlococo88/All-Structural/pull/309)
 
 ### DISC. ST-Girder takes data from GirderDetail only   [removes cross-tool links; no change to the built-in analysis or to GirderDetail imports; saved MCT / LL & DL data cleared with a notice]
 - **Engineer decision (2026-10-19):** ST-Girder (`stgirder.html`) is completely disconnected from every other bridge tool except GirderDetail (`Steel Bridge Beam Modules.html`). (1) Substructure Loading will take reactions from GirderDetail (separate, later PR; not here). (2) MCT's steel rating no longer uses ST-Girder's capacity. (3) No MIDAS / MCT demand input into ST-Girder: Import accepts only GirderDetail files. (4) ST-Girder's built-in simple-span analysis and its own inputs stay as they are. (5) Saved ST-Girder data that came from MCT or LL & DL is cleared on open, with a one-time visible notice listing exactly what was removed; CLAUDE.md §5 is satisfied by this explicit decision plus the notice, recorded here. (6) ST-Girder is removed from MCT's combined saved project.
@@ -3985,7 +3985,7 @@ index e297ce6..ac2134d 100644
 ```
 
 
-## 2026-10-19 — PR: claude/aashto10-stgirder (A10: stud shear connectors to AASHTO LRFD 10th Ed. (2024), renumbered citations, edition statement follows the owner; inventory 2026-10-19; RESULT CHANGE, awaiting engineer approval; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-stgirder (A10: stud shear connectors to AASHTO LRFD 10th Ed. (2024), renumbered citations, edition statement follows the owner; inventory 2026-10-19; RESULT CHANGE, awaiting engineer approval; PR #335: https://github.com/mlococo88/All-Structural/pull/335)
 
 All provisions below were checked against the AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) text (cited only; nothing copied).
 
@@ -4184,7 +4184,7 @@ index ac2134d..e0b51e9 100644
 ```
 
 
-## 2026-10-19 — PR: claude/aashto10-stgirder-2 (A10b: stud detailing checks per AASHTO LRFD 10th Ed. 6.10.10.1, stud F_u input; follow-up to A10 (#335), engineer request 2026-10-19; new checks, no change to an existing result; PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-stgirder-2 (A10b: stud detailing checks per AASHTO LRFD 10th Ed. 6.10.10.1, stud F_u input; follow-up to A10 (#335), engineer request 2026-10-19; new checks, no change to an existing result; PR #349: https://github.com/mlococo88/All-Structural/pull/349)
 
 All limits below were checked against the AASHTO LRFD 10th Ed. (2024) text (cited only; nothing copied).
 
@@ -4308,7 +4308,7 @@ index e0b51e9..cc33aae 100644
 +      sub(s,'Stud detailing','6.10.10.1 · 6.10.10.3',<CrTab el={connDetDeriv(R)}/>,ck('Studs h/d','Studs p lim','Studs s_t','Studs edge','Studs pen','Studs cover')); }
 ```
 
-## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR #410: https://github.com/mlococo88/All-Structural/pull/410)
 
 ### SBD1. No change to stgirder.html; embedded copy in Steel Bridge Design   [note]
 - `stgirder.html` is not changed in this PR (engineer decision 2026-10-22; it is to be retired in a later PR of the merge).

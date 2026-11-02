@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: ACI 318-19; AASHTO LRFD 10th Ed. (2024)
 
-## 2026-10-04 — PR: claude/fix-rebar-dev (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-rebar-dev (PR #15: https://github.com/mlococo88/All-Structural/pull/15)
 
 All edits were applied by scripted exact-string replacement (each Before block occurs exactly once in the file). Line endings are CRLF and were preserved.
 
@@ -473,7 +473,7 @@ All edits were applied by scripted exact-string replacement (each Before block o
 - **How verified:** jsdom render.
 - **Other copies of this code:** `Concrete Beam Capacity.html`, Dev tab (`suite-frame-dev` srcdoc, ≈ standalone line + 5048). That copy is HTML-escaped (`&` → `&amp;`, `"` → `&quot;`). The same edits are applied there in branch `claude/fix-concrete-capacity` (separate PR).
 
-## 2026-10-04 — PR: claude/step1-group4 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group4 (PR #30: https://github.com/mlococo88/All-Structural/pull/30)
 ### S1. "← All tools" link and shared project info   [feature (no result change)]
 - **Date / type:** 2026-10-04, feature (no result change).
 - **Where:** Title bar markup (`<div class="byline">by Mario Lococo</div>`), CSS (`.titleblock .full{grid-column:1/3;}` and the `@media print` block), `buildInputPanel()` panel A "Title Block" template (anchor `<input id="chkDate" type="date"></div>`), and two new `<script>` blocks just before the final `</body>`.
@@ -628,7 +628,7 @@ All edits were applied by scripted exact-string replacement (each Before block o
   - Screenshots of every tab at 1400 px and 400 px.
 - **Other copies:** a near-verbatim copy of this app is embedded (HTML-escaped `srcdoc`) as the "Development & Splice" sub-app in `Concrete Beam Capacity.html` (`#suite-frame-dev`). It is **not** changed in this PR (one tool per PR, CLAUDE.md §3 and §7). It will be synced in a follow-up PR with the same four insertions (escape `&` → `&amp;`). The embedded copy has the same panels, anchors and validation messages; a dry run of the four insertions on a scratch copy of that file showed the same six tabs and no page errors. Both copies will use the same key `rebar_aci_inputTab_v1`.
 
-## 2026-10-12 — PR: claude/sweep-cbc-rebar (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-cbc-rebar (PR #140: https://github.com/mlococo88/All-Structural/pull/140)
 
 Open-item sweep of inventory section 11 (engineer 2026-10-12: "continue making updates and fixes until it's completed … use your best judgment"). Basis: ACI 318-19 and AASHTO LRFD 10th Ed. (2024). Article numbers marked "verify" were not checked against a printed copy.
 
@@ -729,7 +729,7 @@ None from section 11 beyond the "Needs engineer" list.
 - O10. Project dropdown builds `<option>` with unescaped project names (a name containing `"` or `<` breaks the list). Not in the task list; not changed.
 - O11. **Tabs that open on a collapsed panel.** Panels D2, E, E2, F and G start collapsed by default (unchanged), so the Splices tab, for example, first shows only the "F Splices" header until it is clicked. The collapse state is saved in the autosave and projects, so T1 does not change it. — Decide whether panels should always be expanded once they sit in their own tab (this would change the saved `panels` values).
 
-## 2026-10-18 — PR: claude/rebar-d11-report (PR link added after merge)
+## 2026-10-18 — PR: claude/rebar-d11-report (PR #288: https://github.com/mlococo88/All-Structural/pull/288)
 
 The tool file uses CRLF line endings; keep them. Line numbers drift; search for the anchor text.
 
@@ -774,7 +774,7 @@ The tool file uses CRLF line endings; keep them. Line numbers drift; search for 
 - **§6 gaps:** (a) with the excess-reinforcement reduction on, the splice base l_d (without the factor, e.g. 134.31 in. for case 2) is not worked anywhere — the Tension tab works l_d with the factor; (b) in AASHTO mode k_tr = 40A_tr/(s·n) is used in λ_rc but worked only in the ACI tab. Add a card for each?
 - Pre-existing: KaTeX warns on "×" inside `\text{(×4/3 for }…)` (Comp. Splice, f′c < 3,000 psi); it renders. The Project tab shows a "Calc Date" label above a hidden input (`calcDate2`).
 
-## 2026-10-19 — PR: claude/rebar-aashto-compsplice (PR link added after merge)
+## 2026-10-19 — PR: claude/rebar-aashto-compsplice (PR #322: https://github.com/mlococo88/All-Structural/pull/322)
 
 The tool file uses CRLF line endings; keep them.
 
@@ -789,7 +789,7 @@ The tool file uses CRLF line endings; keep them.
 - **How verified:** `node tests/check-syntax.mjs`: all scripts pass. Main vs branch, headless Chromium (KaTeX / Plotly from npm pack), 6 cases (the 5 of the 2026-10-18 entry plus AASHTO #9 f_y 80 ksi f′c 2,500): inputs, factors, every calc function for all 11 bars, `validate`, dashboard, autosave identical; tab texts identical except the Comp. Splice tab in the three AASHTO cases (citation, units of the displayed inputs, m row, equation text; l_sc values identical). Report: §6.1 and its result line cite 5.10.8.4.5a, no "25.5.5" left in the AASHTO printout, all links resolve, 0 KaTeX errors. The AASHTO ×4/3 step no longer triggers the KaTeX "×" warning (ACI unchanged).
 - **Other copies:** the Development & Splice tab of `Concrete Beam Capacity.html` (branch claude/cbc-rebar-sync-compsplice).
 
-## 2026-10-19 — PR: claude/aashto10-rebar — AASHTO mode to AASHTO LRFD 10th Ed. (2024) §5.10.8 (PR link added after merge)
+## 2026-10-19 — PR: claude/aashto10-rebar — AASHTO mode to AASHTO LRFD 10th Ed. (2024) §5.10.8 (PR #334: https://github.com/mlococo88/All-Structural/pull/334)
 
 The tool file uses CRLF line endings; keep them. **ACI mode unchanged** (verified: every computed value, validation notice, dashboard, tab text and report text identical to main in two ACI cases).
 
@@ -880,7 +880,7 @@ Hand check #8, f′c = 4 ksi: f′c^0.25 = 1.4142; 1.97 × 1.4142 = 2.786; ℓdb
 4. **AASHTO compression lap splices of #14/#18:** the tool shows "not permitted" in compression too; 5.10.8.4.2a bars only *tension* laps above #11, and 5.10.8.4.5a allows #14/#18 to #11 and smaller in compression (pre-existing).
 5. The ACI-mode references row still reads "AASHTO LRFD 5.10.2.1 (hook geometry; … edition: verify)" (ACI mode left untouched by request; 5.10.2.1 is verified in the 10th Ed.).
 
-## 2026-11-01 — PR: claude/rpt-acirebar — Report output tab in the shared report viewer (RBRP; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-acirebar — Report output tab in the shared report viewer (RBRP; display only, no calculation change) (PR #536: https://github.com/mlococo88/All-Structural/pull/536)
 
 The tool file uses CRLF line endings; keep them. Line numbers are approximate; search for the anchor text. Every code site is tagged `RBRP`.
 

@@ -2,7 +2,7 @@
 
 Governing basis used for fixes: AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Art. 4.6.2.2 / 3.6.1.1.2 (the provisions touched here, Tables 4.6.2.2.2d-1, 4.6.2.2.2e-1, 4.6.2.2.3b-1, 4.6.2.2.3c-1, Art. 4.6.2.2.2d and C3.6.1.1.2, are unchanged in substance from the 9th Ed. that the tool was written against). MassDOT Bridge Manual §3.5.3 for the dead-load "two adjacent beams" option.
 
-## 2026-10-04 — PR: claude/fix-lldf (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-lldf (PR #10: https://github.com/mlococo88/All-Structural/pull/10)
 
 Check cases below were run in Node by extracting the engine (`/* ---------- formatting helpers` … end of `computeBridge`) from the old file (origin/main) and the new file and calling `computeBridge` with the same inputs. The full page was also loaded in jsdom (no console errors). Unless stated, the inputs are the fresh-page defaults: 1 span L = 120 ft, t_s = 8 in, 5 beams at 9.75 ft, overhangs 4.0 ft, railing face 1.5 ft from the deck edge (d_e = 2.5 ft), I = 260,730 in⁴, A = 789 in², e_g = 35.5 in, n = 1, no skew.
 
@@ -290,7 +290,7 @@ Check cases below were run in Node by extracting the engine (`/* ---------- form
 - O8. **N_b = 3 lever rule uses 1 and 2 trucks only** (not `leverMulti`). With N_b = 3 and S ≤ 16 ft a third truck rarely fits across two bays; left as is with O2.
 - O9. **Edition label.** The page does not state the AASHTO edition. Not changed here (label-only change; out of scope for this PR).
 
-## 2026-10-04 — PR: claude/step1-group1 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group1 (PR #28: https://github.com/mlococo88/All-Structural/pull/28)
 
 Feature (no result change): "← All tools" link to `tools.html` (`target="_top"`, hidden in print) and the shared project info buttons. No formula, factor, unit, storage key or saved format changed. New storage written only on "Share project info": `bridgeSuite.v1.projectMeta` and `bridgeSuite.v1.projectMeta.updatedAt` (HANDOFF.md §2/§4.1). Link and buttons sit in the existing `noprint` header, so they do not print. The bridgeSuite bootstrap blocks are unchanged.
 
@@ -406,7 +406,7 @@ Field mapping: projectName ↔ Project (`mProject`), bridgeId ↔ Structure No. 
 - **How verified:** `node --check` on every plain inline script and @babel/standalone transpile of the text/babel block; BridgeXfer copy compared byte-for-byte with HANDOFF.md §5; whole page loaded in jsdom (React/ReactDOM/Babel from npm, other CDN scripts blocked); Share → Use round trip between lldf, Moving Load Generator, psbeam, stgirder and index with one shared localStorage; `git diff` shows only additions apart from the one header line that received the link.
 - **Other copies:** BridgeXfer v1 and the `BXProject` glue are also in index.html, lldf.html, psbeam.html, stgirder.html and Moving Load Generator.html (this PR).
 
-## 2026-10-04 — PR: claude/conn-lldf-movingload (PR link added after merge)
+## 2026-10-04 — PR: claude/conn-lldf-movingload (PR #32: https://github.com/mlococo88/All-Structural/pull/32)
 
 Feature: hand-off (no result change). Sender side of lldf → Moving Load Generator (channel `bridgeSuite.v1.lldf`, HANDOFF.md §4.3). No formula, factor, default, unit, storage key or saved format changed. The DF payload keeps every existing field with the same values; new fields are additive and the existing receivers (index, psbeam, stgirder) ignore them. Because of the no-op-republish check, the first send after this change rewrites the key once.
 
@@ -478,7 +478,7 @@ Feature: hand-off (no result change). Sender side of lldf → Moving Load Genera
 - **Other copies:** none (lldf is the only sender on this channel).
 - **Open items:** the payload still has `project` as a string and no `producerFile`, kept for the existing receivers; documented in HANDOFF.md §4.3.
 
-## 2026-10-04 — PR: claude/conn-geometry-lldf (PR link added after merge)
+## 2026-10-04 — PR: claude/conn-geometry-lldf (PR #35: https://github.com/mlococo88/All-Structural/pull/35)
 
 Feature (no result change): lldf receives the `bridgeSuite.v1.lldfGeom` hand-off from **Bridge Geometry** (HANDOFF.md §4.2), in addition to MCT / PS-Beam / ST-Girder. The existing prefill banner is reused and extended. Hunks are listed in file order; the code is exact.
 
@@ -892,7 +892,7 @@ HUNK 11 (≈ line 3605 of the old file)
   - O-H1. The existing prefill for MCT / PS-Beam / ST-Girder calls `applyState({inputs})`, which also clears reference figures, beam-class overrides, load overrides and user loads (the MassDOT module's `applyState` wrapper resets them when absent). Not changed for those producers; the Bridge Geometry path avoids it. Fix for all producers?
   - O-H2. Validation now refuses a negative skew or a non-positive t_s / depth from MCT / PS-Beam / ST-Girder too (they previously applied). Confirm this is wanted.
 
-## 2026-10-04 — PR: claude/fix-lldf-prefill-dataloss (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-lldf-prefill-dataloss (PR #36: https://github.com/mlococo88/All-Structural/pull/36)
 
 ### B1. Geometry prefill wiped figures, beam-class overrides, load overrides and user loads   [bug fix] [no result change for the geometry itself]
 - **Where:** Bridge Suite integration IIFE, function `applyGeom(g,token,silent)` (≈ line 3475). Anchor text: `var full=serialize(false); full.inputs=Object.assign(full.inputs||{},inp);`
@@ -966,7 +966,7 @@ HUNK 11 (≈ line 3605 of the old file)
 - **How verified:** jsdom, with lldf's real prefill button on main vs the fixed file (`railface.js`, `railface2.js`). The earlier data-loss test still passes, except its old-mapping assertion for OL, which now correctly reads 3.75.
 - **Other copies of this code:** none. The open item recorded in #36 is now resolved.
 
-## 2026-10-12 — PR: claude/sweep-lldf (PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-lldf (PR #160: https://github.com/mlococo88/All-Structural/pull/160)
 
 Open-item sweep (inventory section 2). Engineer's instruction 2026-10-12: work through the open items using best judgement, and list what needs the engineer. Basis: AASHTO LRFD **10th Ed. (2024)**.
 
@@ -1291,7 +1291,7 @@ The shared `bridgeSuite.v1.*` bootstrap blocks, BridgeXfer, BridgeLocks and Brid
   - §4.3: add the optional `skewShear` and `perFootStrip` fields to `bridge-lldf-factors`.
   - §4.2: note that lldf reads `skewDetail.moment` / `.shear`.
 
-## 2026-10-12 — PR: claude/bootstrap-sync (shared `bridgeSuite.v1.*` bootstrap; PR link added after merge)
+## 2026-10-12 — PR: claude/bootstrap-sync (shared `bridgeSuite.v1.*` bootstrap; PR #165: https://github.com/mlococo88/All-Structural/pull/165)
 
 Cross-tool sync of the shared bootstrap blocks. The same change is in index.html, lldf.html, psbeam.html and stgirder.html (CLAUDE.md §3). No engineering formula, factor, unit or code reference changed; no computed value changes. Storage keys and saved formats are unchanged (the hand-off map keeps its key and entry format; it only loses old entries).
 
@@ -1368,7 +1368,7 @@ This closes **LLDF-S10** (sweep entry above).
 - Headless Chromium, main vs branch, same steps: index publishes the PS demands payload → psbeam shows "New analysis data available", "Load these demands" adopts it (adopted token `test__beam@2026-10-12T10:00:00.000Z`); index publishes the steel payload → stgirder banner and adoption; lldf boots and resolves `BridgeApps.path('psbeam')`. Same results and the same storage keys on both; key values differ only in timestamps. No page errors (only Babel's "deoptimised styling" notes).
 - **Other copies:** index.html, lldf.html, psbeam.html, stgirder.html (all changed in this PR; lldf.html has no `BridgeHandoff` block, so XS2 and the hand-off call of XS3 are not in it).
 
-## 2026-10-18 — PR: claude/lldf-d11-report (AUDIT.md D11, display only; PR link added after merge)
+## 2026-10-18 — PR: claude/lldf-d11-report (AUDIT.md D11, display only; PR #279: https://github.com/mlococo88/All-Structural/pull/279)
 
 ### D11: calculation-sheet report in the Gusset Plate Rating / ST-Girder format (Tier 1, display only)
 - **Engineer request:** 2026-10-14; scope decided 2026-10-18 (AUDIT.md D11: full report for every design-check tool).
@@ -1540,7 +1540,7 @@ This closes **LLDF-S10** (sweep entry above).
   - The rigid cross-section method is always included for a/e/k exterior girders. The step note says it is required only with cross-frames or diaphragms. This is conservative.
 
 
-## 2026-10-19 — PR: claude/stgirder-disconnect-others (STDISC: ST-Girder removed from the bridge suite on the other tools' side; engineer decision 2026-10-19; cross-tool PR with index.html, psbeam.html, lldf.html, Bridge Substructure Loading.html, tools.html, HANDOFF.md, AUDIT.md, CLAUDE.md §3; ST-Girder's side is claude/stgirder-disconnect; PR link added after merge)
+## 2026-10-19 — PR: claude/stgirder-disconnect-others (STDISC: ST-Girder removed from the bridge suite on the other tools' side; engineer decision 2026-10-19; cross-tool PR with index.html, psbeam.html, lldf.html, Bridge Substructure Loading.html, tools.html, HANDOFF.md, AUDIT.md, CLAUDE.md §3; ST-Girder's side is claude/stgirder-disconnect; PR #310: https://github.com/mlococo88/All-Structural/pull/310)
 
 ### STDISC. LL & DL Distribution: ST-Girder link and receiver removed   [no result change, Tier 0/1]
 - **Engineer decision (2026-10-19):** ST-Girder (`stgirder.html`) is completely disconnected from every other bridge tool except GirderDetail (`Steel Bridge Beam Modules.html`): no MIDAS / MCT demands into ST-Girder, MCT's steel rating no longer uses ST-Girder's capacity (it falls back to MCT's own capacity inputs), ST-Girder removed from MCT's combined saved project, no ST-Girder links in the other tools; Substructure Loading reactions from GirderDetail are a later, separate change. CLAUDE.md §3 updated: the shared bootstrap block is now in index.html, lldf.html and psbeam.html only.
@@ -1662,7 +1662,7 @@ index 219cc2c..a3e337e 100644
 +     PS-Beam — reads the roster and follows the selected beam.
 ```
 
-## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR link added after merge)
+## 2026-10-22 — PR: claude/sbd-1-embed (SBD1: GirderDetail renamed to Steel Bridge Design.html and ST-Girder embedded in it; engineer-approved cross-tool rename; PR #410: https://github.com/mlococo88/All-Structural/pull/410)
 
 ### SBD1-a. `isST`: ST-Girder payloads from Steel Bridge Design   [hand-off] [no result change]
 - **Where:** `isST`, anchor `function isST(g){`.
@@ -1688,7 +1688,7 @@ index 219cc2c..a3e337e 100644
   ```
 - **Other copies:** index.html, psbeam.html, lldf.html (same text; the block stays byte-identical). No code changed.
 
-## 2026-10-22 — PR: claude/pbd-h-mct-removal (PBD-H: shared bootstrap blocks synced with index.html for the MCT change; Prestressed Bridge Design is the default path of app psbeam; cross-tool connection PR, CLAUDE.md §7 exception; no result change; PR link added after merge)
+## 2026-10-22 — PR: claude/pbd-h-mct-removal (PBD-H: shared bootstrap blocks synced with index.html for the MCT change; Prestressed Bridge Design is the default path of app psbeam; cross-tool connection PR, CLAUDE.md §7 exception; no result change; PR #424: https://github.com/mlococo88/All-Structural/pull/424)
 
 ### PBD-H2. Shared bootstrap blocks: default path of app `psbeam` and comments (byte-identical in index.html, lldf.html, Prestressed Bridge Design.html)   [default file name; comments] [no result change]
 - **Where:** the shared `appPaths` block, anchor `var DEF={mct:'index.html'`; the header comments of the beam-roster block (anchor `This block is byte-identical in index.html /`) and of the `appPaths` block (anchors `The three apps link to each other by bare file name` and `This block is byte-identical in index.html / Prestressed Bridge Design.html /`).
@@ -1704,7 +1704,7 @@ index 219cc2c..a3e337e 100644
 - **Other copies:** index.html, lldf.html, Prestressed Bridge Design.html (same text; each is logged in its own fix log).
 
 
-## 2026-10-29 — PR: shared-lldf (the calculation engine moved to shared/lldf.js; refactor, no result change; PR link added after merge)
+## 2026-10-29 — PR: shared-lldf (the calculation engine moved to shared/lldf.js; refactor, no result change; PR #477 (merged from branch lldf-shared): https://github.com/mlococo88/All-Structural/pull/477)
 - **Where:** the inline engine script (anchor `/* ---------- formatting helpers ---------- */`).
   - Before: the functions `multiplePresence` … `memberDF` (anchor `function multiplePresence(nLanes){`, ~350 lines) and `inputErrors`,
     `computeBridge` (anchor `function computeBridge(p){`) were defined here.

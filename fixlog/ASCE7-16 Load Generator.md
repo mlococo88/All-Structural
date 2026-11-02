@@ -4,7 +4,7 @@ Governing basis used for fixes: ASCE/SEI 7-16 (with 780 CMR 10th Ed. where the t
 
 Note on the code below: strings in the file use JavaScript `\uXXXX` escapes for subscripts and symbols, and the code blocks reproduce them exactly. Line numbers are approximate (after the fix).
 
-## 2026-10-04 — PR: claude/fix-asce7 (PR link added after merge)
+## 2026-10-04 — PR: claude/fix-asce7 (PR #23: https://github.com/mlococo88/All-Structural/pull/23)
 
 ### F1. Seismic vertical distribution uses height above the base   [calc change] [more or less conservative, depends on the building; no change when base elevation = 0]
 - **Where:** `solve()`, seismic section (≈ line 1009). Anchor text: `const sumWH=`
@@ -363,7 +363,7 @@ Note on the code below: strings in the file use JavaScript `\uXXXX` escapes for 
 - **How verified:** jsdom.
 - **Other copies of this code:** none known.
 
-## 2026-10-04 — PR: claude/step1-group4 (PR link added after merge)
+## 2026-10-04 — PR: claude/step1-group4 (PR #30: https://github.com/mlococo88/All-Structural/pull/30)
 ### S1. "← All tools" link and shared project info   [feature (no result change)]
 - **Date / type:** 2026-10-04, feature (no result change).
 - **Where:** CSS after `#tbactions{...}`, `#appid` markup (anchor `<span id="appver"></span></div>`), new `#tbshare` column after `#tbactions` (anchor `onclick="doExcel()">Excel calculation</button>`), and two new `<script>` blocks before `</body>` (line ≈ 4448; the scripts that follow `</html>` are unchanged).
@@ -465,7 +465,7 @@ Note on the code below: strings in the file use JavaScript `\uXXXX` escapes for 
 - **How verified:** Every plain inline script syntax-checked (Node `vm.Script`, same parser as `node --check`); BridgeXfer block compared byte-for-byte with HANDOFF.md §5; page loaded in jsdom (CDN scripts not loaded) before and after the change with no new errors; Share → Use exercised between tools with jsdom localStorage (ASCE7-16 → ACI Rebar, Steel Beam → Shear and Moment, Concrete Beam Capacity shell against stub tab documents), including cancel, empty shared values (field kept), a non-ISO date on a date input (skipped), an empty channel and a wrong `_schema` (refused). `git diff` shows no removed lines other than the ones listed under Before. No calculation code was touched.
 - **Other copies of this code:** none. BridgeXfer v1 is also in: ACI Rebar Development Length.html, ASCE7-16 Load Generator.html, Concrete Beam Capacity.html (shell), Steel Beam Design - AISC 15th.html, Shear and Moment Diagrams.html.
 
-## 2026-10-04 — PR: claude/conn-asce7-steelbeam (PR link added after merge)
+## 2026-10-04 — PR: claude/conn-asce7-steelbeam (PR #33: https://github.com/mlococo88/All-Structural/pull/33)
 ### C1. Building-load hand-off sender: "Send to other tools" and "Export hand-off (JSON)"   [feature: hand-off (no result change)]
 - **Date / type:** 2026-10-04, feature: hand-off (no result change).
 - **Where:** two buttons added at the end of `#tbactions` (anchor `onclick="doExcel()">Excel calculation</button>` inside `<div id="tbactions">`), and one new `<script>` block inserted right after the shared-project-info script, before `</body>` (anchor: the line `ch.forEach(function(c){ c.e.value=c.v; ...` followed by `};`, `})();`, `</script>`, `</body>`). The scripts after `</html>` are unchanged.
@@ -632,7 +632,7 @@ Note on the code below: strings in the file use JavaScript `\uXXXX` escapes for 
 - O7. Ch. 29 "Hexagonal or octagonal" is one Fig. 29.4-1 row, now Kd = 1.00. If hexagonal members are common, the row could be split into two (Kd 0.95 / 1.00) with a label migration. — Engineer to decide.
 - O8. Adjacent-structure windward drift: applied only when the Sec. 7.7.2 separation test (s < 20 ft and s < 6h) is met, and not truncated at the lower-roof edge (conservative). Confirm this reading of Sec. 7.7.2.
 
-## 2026-10-12 — PR: claude/sweep-asce7 (open-item sweep; PR link added after merge)
+## 2026-10-12 — PR: claude/sweep-asce7 (open-item sweep; PR #162: https://github.com/mlococo88/All-Structural/pull/162)
 
 Engineer's instruction (2026-10-12): work through every open item, use best judgment, and list what needs the engineer. Basis: ASCE/SEI 7-16 (the edition this tool implements), with 780 CMR 10th Ed. where the tool already applies it. Provisions I could not confirm against the printed standard are marked **verify**. Line numbers are approximate (after the fix). New strings use `\uXXXX` escapes like the rest of the file.
 
@@ -817,7 +817,7 @@ Engineer's instruction (2026-10-12): work through every open item, use best judg
 - **Hexagonal members (O7):** if wanted, add a separate "Hexagonal" Fig. 29.4-1 row with K_d = 0.95 and keep "Hexagonal or octagonal" (K_d = 1.00) for old projects, so no saved label changes.
 - **Observed, not changed:** the unbalanced surcharge length 8h_d√S/3 is not truncated at the eave (L_sur can exceed W on low slopes). This only overstates the displayed extent of a load that cannot exist past the eave (conservative, display).
 
-## 2026-10-18 — PR: claude/asce7-d11-report — D11: slim calculation-sheet report and §6 links (Tier 1, display only; PR link added after merge)
+## 2026-10-18 — PR: claude/asce7-d11-report — D11: slim calculation-sheet report and §6 links (Tier 1, display only; PR #294: https://github.com/mlococo88/All-Structural/pull/294)
 
 - **Engineer request:** AUDIT.md D11 (2026-10-14); scope decided 2026-10-18: **slim report** for this tool (inputs → worked results, no D/C section). The existing report builder (`runPrint`) is refreshed to the calculation-sheet format, not rewritten: the sections are still built by the tabs' own renderers. CLAUDE.md §6 "show the work and link to it". Format from Section Property Calculator (#290) and Gusset Plate Rating.
 - **Provision:** none. No formula, factor, unit, code reference or computed result changed. No storage key, saved format or hand-off payload changed (`asce7bldg.autosave`, `asce7bldg.projects`, `S.print` keys, `bridgeSuite.v1.buildingLoads` unchanged); no input field added (the title block already has Project, Job No., Computed by, Date, Checked by, Chk. Date).
@@ -875,7 +875,7 @@ Display/defaults only; no computed result changes (`R` identical to main for def
    - Only applies when no print selection has been saved; saved choices are kept.
 
 
-## 2026-11-01 — PR: claude/rpt-asce7 — Report output tab in the shared report viewer (A7RP; slim report by topic; display only, no calculation change) (PR link added after merge)
+## 2026-11-01 — PR: claude/rpt-asce7 — Report output tab in the shared report viewer (A7RP; slim report by topic; display only, no calculation change) (PR #559: https://github.com/mlococo88/All-Structural/pull/559)
 
 Line numbers are approximate; search for the anchor text. Every code site is tagged `A7RP`.
 
