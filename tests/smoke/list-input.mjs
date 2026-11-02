@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,stonearch] [--a origin/main] [--shots <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
 // smd (one key per tool in TOOLS): the tool from --a (default: the entry's `a`, the main commit before its table landed, else
@@ -16,7 +16,7 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop').split(',');
+const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,stonearch').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
@@ -230,6 +230,32 @@ TOOLS.secprop = {   // Section Property Calculator: library "Tags" (LIBF.tags te
     });
   },
   tableSel: '.libTagsHost',
+};
+TOOLS.stonearch = {   // Stone Masonry Arch: SDL line items and depth overrides (paste boxes + their tables), track offsets (table); all saved as text
+  file: 'Stone Masonry Arch Load Rating.html', a: 'd49d19a',
+  values: { sdlItems: 'Sidewalks (2), 800\nRailings (2), 120', dOver: '18, 19', tracks: '-6\n6' },
+  expect: JSON.stringify({ sdlItems: 'Sidewalks (2), 800\nRailings (2), 120', dOver: '18, 19', tracks: '-6\n6' }),
+  setup: async p => { await p.waitForTimeout(3000); },
+  template: async p => { await p.evaluate(() => { const s = document.getElementById('loadMode'); s.value = 'rail'; s.dispatchEvent(new Event('change', { bubbles: true })); }); await p.waitForTimeout(2500); },
+  typeOld: async (p, v) => { await p.evaluate(v => { for (const k of ['sdlItems', 'dOver', 'tracks']) { const t = document.getElementById(k); t.value = v[k];
+    t.dispatchEvent(new Event('input', { bubbles: true })); } }, v); },
+  typeNew: async (p, v) => { await p.evaluate(v => {   // paste into the first cell of each table, as from Excel
+    const paste = (sel, text) => { const i = document.querySelector(sel + ' tr[data-sli-r="0"] input[data-sli-c="0"]'), dt = new DataTransfer(); dt.setData('text', text);
+      i.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); };
+    paste('#sdlItems + .sliPaste', v.sdlItems); paste('#dOver + .sliPaste', v.dOver); paste('#tracks + [data-sli="host"]', v.tracks); }, v); },
+  saved: p => p.evaluate(() => { const v = id => { const e = document.getElementById(id); return e ? e.value : null; };
+    return JSON.stringify({ sdlItems: v('sdlItems'), dOver: v('dOver'), tracks: v('tracks') }); }),
+  read: async p => {
+    await p.waitForTimeout(2500);
+    const out = await p.evaluate(() => { const st = JSON.parse(localStorage.getItem('stoneArchLR.autosave') || 'null'); if (st) { delete st.savedAt; delete st.t; delete st.ts; }
+      return { stored: st }; });   // the tool's state is inside a closure: the results are read from every output tab's text
+    const tabs = await p.$$eval('#outPanel button[data-tab]', e => e.map(b => b.getAttribute('data-tab'))); out.tabs = {};
+    for (const t of tabs) { if (t === 'rpt') continue; await p.click(`#outPanel button[data-tab="${t}"]`); await p.waitForTimeout(800);
+      out.tabs[t] = await p.evaluate(t => { const e = document.getElementById('pane_' + t); if (!e) return null; const k = e.cloneNode(true);
+        k.querySelectorAll('[data-sli],script,style,canvas,.js-plotly-plot').forEach(x => x.remove()); return k.innerText; }, t); }
+    return out;
+  },
+  tableSel: '#sdlItems + .sliPaste',
 };
 // replace the rows of a table with the values ("a, b, c"): row by row (Enter adds a row from the last one), extra rows removed
 async function fillTable(p, sel, v) {
