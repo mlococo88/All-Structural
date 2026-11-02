@@ -3810,7 +3810,7 @@ current design's analysis accepted; **the minimum shipping piece length raised f
   Auto design → Field splice locations → Range, "70 ↹ 90 / 135 ↹ 150" pasted into the table → `vars.spl.win` = "70-90, 135-150", 0 console errors.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 
-## 2026-11-02 — PR: claude/sb-drop-twin — Auto design: the 1-gage-line twin that saves nothing is not listed (engineer decision)
+## 2026-11-02 — PR #713: https://github.com/mlococo88/All-Structural/pull/713 (claude/sb-drop-twin) — Auto design: the 1-gage-line twin that saves nothing is not listed (engineer decision)
 ### Why
 - PR #697 found that the second listed design on the default project is the first one with one gage line at the field splices: the same
   plates, transitions and splices, the same weight and cost. The engineer chose to drop such a twin, so the next distinct design moves up, and
