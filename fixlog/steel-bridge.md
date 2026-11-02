@@ -3728,3 +3728,40 @@ current design's analysis accepted; **the minimum shipping piece length raised f
   nbList '', the box is gone, "Designs to list" and its note shown; 0 console errors.
 ### Other copies
 - None.
+
+## 2026-11-02 — PR #697: https://github.com/mlococo88/All-Structural/pull/697 (claude/sb-dup-designs) — Auto design list: "Differs from #1 in" column (the 1-gage-line twin explained; display only)
+### Why
+- Engineer: with Designs to list = 2, the default project lists two designs with the same N_b, D and weight. Are they duplicates?
+### Finding
+- Not true duplicates. Default project, New design, nb Auto, topN 2 (the runs of PR #695, Node, maxIt 3):
+  #1 and #2 are both N_b 5, D 55 in, 424,535 lb, the same cost, splices (82, 145, 215, 278 ft), web and flange plates, transitions, overhang,
+  sized details (`det.rows`) and module ratios. They differ only in the field-splice gage lines: #1 `L.minLines` null (the Splices tab's bolt
+  lines, 2), `boltRaised` true; #2 `L.minLines` 1 (one gage line each side of the web; Apply sets `splices.bolts.minLines = 1`), `boltRaised` false.
+- Why the search makes them: `engine/autodesign.js` `run()` (anchor `if (oneLine) { const best = out.filter(o => o.pass && o.L.boltRaised`) adds a
+  1-gage-line variant of the two best designs whose splice flange widths the bolt fit (DT10) raised, so the objective can choose the lighter one.
+  The pool's de-duplication (`sigOf`) includes `minLines`, so both stay. Here the 1-line variant ends at the same plates as the 2-line design
+  (the raised width is what the design needs anyway), so it saves nothing and ties on weight, cost and ratio. The same twin is listed in
+  the other runs of #695 (N_b 4, D 57 in, 396,846 lb, twice).
+- The list already had a "Gage lines" column ("as set" / "1"), but nothing said the rows are otherwise the same.
+### What changed
+- `ui/autodesign.js`: new `diffFrom(c, c1)` (after `const ohT = …`; exported as `SBDAutoDesignUI.diffFrom` for the test). It names what candidate c changes
+  against #1: N_b, D, overhang, splice stations, splice gage lines, web plates, each flange's transitions (cut points) or plates, and each sized
+  detail by its label; otherwise "nothing listed here (same plates and details)". The candidate list gets a last column "Differs from #1 in"
+  (`—` for #1, blank for the "now" row). Before: `…<th class="lft">What governs</th></tr>`; after: `…<th class="lft">What governs</th><th class="lft">Differs from #1 in</th></tr>`,
+  and each row `<td class="lft">${i ? esc(diffFrom(c, R.cands[0])) : '—'}</td>`.
+- No engine change: which designs are listed, their order and their checks are unchanged.
+### §4 callout
+- None: display only. Before / after list (default project, topN 2): see the PR (same rows; #2 now reads "gage lines at the splices (1 vs as set)").
+### Check case
+- Default project, Designs to list 2, run in the app (Playwright, full settings), origin/main vs branch: the rows are identical apart from the new
+  column. #1 N_b 5, D 67 in, 409,784 lb, $1,427,351, 7 transitions, 4 splices, gage lines "as set", TS2 1.000, Differs "—";
+  #2 the same numbers, gage lines 1, Differs "gage lines at the splices (1 vs as set)". 0 console errors both sides.
+### Note (saved-project list, from PR #695; left as is by the engineer)
+- A project kept in the saved-project list (engine/library.js) with an old "Girder counts to study" list stays in the old text until it is saved
+  again; it is migrated the same way on every open (engine/model.js migrateNbList), so a gap notice repeats on each open until the project is saved.
+  The autosave copy is rewritten once on load, so it does not repeat there.
+### How verified
+- `tests/engine/autodesign.test.mjs`: new test of `diffFrom` (the twin, identical, D + plates + a detail, N_b + transitions); `node tests/check-syntax.mjs`.
+- The app run above, main vs branch (the list read from the page; screenshot checked).
+### Other copies
+- None.
