@@ -3701,3 +3701,73 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - ACI 318-19's own article for developing shear-friction steel on both sides was not checked (no ACI copy here). AASHTO 5.7.4.1 is cited.
   - N_u = 0.9D follows the engineer's decision. AASHTO 5.7.4.3 defines P_c from unfactored permanent loads, so 0.9 is a conservative choice within it.
   - Partial development (scaling f_y by available/required length) is not taken. Undeveloped dowels count A_vf = 0.
+
+### SFDB. Pedestal reinforcement on the Reinforcement tab; "Pedestal longitudinal bars act as the dowels"; "Hooked end in footing"   [calculation change for new projects; CLAUDE.md §4, §5]
+- **Engineer requests (2026-11-02), same PR as SFDA:**
+  1. Move the pedestal reinforcement inputs to the Reinforcement tab. No result change, and the saved fields are unchanged.
+  2. A checkbox "Pedestal longitudinal bars act as the dowels". When ticked, the dowel size, count and layout are those of the longitudinal bars, and the separate dowel inputs are greyed out. New projects: ticked. Old saves: unticked (migration).
+  3. A checkbox "Hooked end in footing" (standard hook at the footing end). Footing side: hooked → ℓ_dh, straight → ℓ_d, against t − c_bot − d_b,x − d_b,y. Pedestal side: continuous bars are developed by definition; separate dowels need the Class B tension lap within the projection (or ℓ_d full height). New projects: ticked. Old saves keep their behaviour.
+- **Where:**
+  - HTML: new section `<details class="sec" id="sec-pedrebar">` ("Pedestal Reinforcement & Dowels", container `#pedRebarContainer`) after `sec-rebar`. `SFD_IN_SEC` gets `'sec-pedrebar':'rebar'`.
+  - `buildPedCards`:
+    - The tables for longitudinal bars, ties, cover, exposure, bar entry mode, bar info, dowels and joint surface are built into a per-pedestal block `div.pedbody.sfdPedRb[data-ped=i]` in `#pedRebarContainer`, instead of the pedestal card. The `data-path`s are unchanged.
+    - New checkbox `data-path="peds.i.reinf.dowelLong"`.
+    - The dowelHook `<select>` (Straight / 90° hook) becomes `<input type="checkbox" data-path="peds.i.reinf.dowelHook" data-on="hook90" data-off="straight">`. The field and its values are unchanged.
+  - `handleFieldChange`, `bindStaticInputs`, the document `input` / `change` listeners: checkboxes (value = `data-on` / `data-off`, else a boolean), handled on `change` only. A label change also renames the block header.
+  - `sfdPedBarInfo`: `dowelSize`, `dowelN` and `dowelProj` are disabled when the longitudinal bars act as the dowels. The info line names those dowels.
+  - `newPed`:
+    - before: `...dowelHook:'straight',dowelProj:'',sfJoint:'rough'}`
+    - after: `...dowelHook:'hook90',dowelProj:'',sfJoint:'rough',dowelLong:true}`
+  - `migrateState`: new `if(p.reinf.dowelLong!==true&&p.reinf.dowelLong!==false)p.reinf.dowelLong=false;`. The existing `dowelHook` line (missing → 'straight') is unchanged. A stored value is never changed.
+  - New `sfdDowelBars(i)`: `{size:longSize, n:sfdPedBars(i).n, fromLong:true}` when `dowelLong===true` and h > 0. Otherwise `{size:dowelSize, n:dowelN}`. It is used in:
+    - the bearing dowel area: before `(reinf.dowelN||0)*BAR_AREA[reinf.dowelSize||0]`, `dSize=reinf.dowelSize||8`;
+    - `sfdDowelCheck` (`nD`);
+    - the Report input table and the §5.5 dowel step label;
+    - the drawings (pedestal note, schedule: the vertical bar row gets the embedment and hook length, and no separate dowel row);
+    - the 3D view.
+  - `sfdDowelCheck`: `o.cont=DB.fromLong`. When `o.cont`:
+    - `o.full=false; o.Lreq=0; o.Lprov=h−c; o.projOK=true` (no lap, no projection check);
+    - `o.sfDevPed` is true.
+  - Display:
+    - The footing-side tension development (ℓ_dh or ℓ_d, with its equation substituted) is shown in Report §5.7 and Footing Design (2c) for every pedestal. It is marked "not required here" when neither interface tension nor shear friction needs it.
+    - Pedestal side, continuous bars: the step "developed in the pedestal by definition; no lap or projection check".
+    - Pedestal side, separate dowels: the Class B lap ℓ_st and the projection, as before.
+- **Formulas:** unchanged. The tool's ACI 318-19 expressions are kept:
+  - ℓ_d per 25.4.2.4;
+  - ℓ_dh per 25.4.3.1(a), with ψ_r = 1.6 and ψ_o = 1.0;
+  - Class B lap per 25.5.2;
+  - ℓ_dc per 25.4.9.2.
+  - The request cites AASHTO LRFD 10th Ed. 5.10.8.2.1 (straight), 5.10.8.2.4 (hooks) and 5.10.8.4.3 (tension laps). These articles were confirmed to exist in the 10th Ed. PDF. Their ℓ_d expression (Eq. 5.10.8.2.1a, with λ_rc from Eq. 5.10.8.2.1c-2) differs from ACI. Switching is left as an open question (below).
+- **Check cases** (Ped 1 18 × 18 × 24 in, #8, f′c 4 ksi, f_y 60 ksi, available 25.0 in):
+  - Hooked ℓ_dh = max(60000 · 1.0 · 1.6 · 1.0 · (4000/15000 + 0.6) / (55 · 1.0 · 63.25) · 1.0^1.5, 8, 6) = max(23.92, 8, 6) = **23.92 in ≤ 25.0 OK**. Straight ℓ_d = 3/40 · 60000/63.25 · 1.0/2.5 · 1.0 = **28.46 in > 25.0**.
+  - **Default (new) project:**
+    - Before (main, and SFDA with straight separate dowels): A_vf 6.32. After SFDA alone: A_vf 0, Ped 1 DCR 0.098.
+    - Now (hooked, continuous bars): footing ℓ_dh 23.92 ≤ 25 and the pedestal developed by definition, so the dowels are developed and **A_vf = 6.32**. N_u = 108.61 (0.9D). V_n = 1.0(6.32 · 60 + 108.61) = 487.8 > V_n,max 259.2, so φV_n = 194.4 and **DCR 0.041** (main 0.041).
+    - Dowel check: OK, with no lap and no projection check (main: compression lap 30 > 22, full height ℓ_dc 18.97 ≤ 22).
+  - **SF-2 with the new defaults:**
+    - A_s,req 0.36 in² (SFDA). Tension development: ℓ_dh 23.92 ≤ 25 in the footing, continuous bars in the pedestal, so the **dowel check is OK**. (With straight separate dowels, SFDA: NG on ℓ_d 28.46 > 25 and full height 28.46 > 22.)
+    - A_vf = 6.32 − 0.36 = 5.96 is counted. Shear friction DCR 0.062 (V_n,max governs).
+  - **SF-1 with the new defaults:** A_s,req 1.71, dowels developed, A_vf 4.61 counted, DCR 0.062, dowel check OK.
+- **Saved data (§5):**
+  - No key or field is renamed.
+  - New field `reinf.dowelLong`. Saves without it get `false`: separate dowels, and the stored `dowelHook` is kept (missing → 'straight', as before).
+  - Checked: old saves (dowelLong false, straight) give `P2` identical to SFDA on default, SF-1, SF-2, the two item-2 cases and direct mode. The only difference is the new field `dowels[i].cont`. Unticking then re-ticking keeps the separate dowel inputs.
+- **How verified:**
+  - Headless Chromium, origin/main vs the branch:
+    - with the new defaults: only `P2.dowels` and `P2.shearFr` differ (default, SF-1, SF-2, direct);
+    - SFDA vs old saves on the branch: identical apart from `cont`.
+  - UI checks:
+    - the inputs are on the Reinforcement tab and not in the card;
+    - the new pedestal has both boxes ticked and the dowel inputs disabled;
+    - long bars #9 give dowels #9 × 8;
+    - unticking restores the #8 dowel inputs and enables them;
+    - the hook checkbox toggles 'hook90' / 'straight';
+    - `migrateState` on a save without the field gives `false`;
+    - a label edit renames the block.
+  - Report: 0 unresolved references, 0 KaTeX errors, no NaN. Drawings build. `node tests/check-syntax.mjs` passes, as does the scroll smoke test.
+- **Other copies:** none.
+- **Open items (questions for the engineer):**
+  1. Should ℓ_d, ℓ_dh and the tension lap switch from ACI 318-19 (the tool's basis) to AASHTO LRFD 10th Ed. 5.10.8.2.1 / 5.10.8.2.4 / 5.10.8.4.3?
+     - The 10th Ed. ℓ_db form (Eq. 5.10.8.2.1a) gives 0.17 · 1.0 · (60/(1.97 · 4^0.25))² = 78.9 in for #8, before λ_rc (0.3 to 1.0, Eq. 5.10.8.2.1c-2).
+     - With λ_rc = d_b/(c_b + k_tr) = 0.4 (β_t = 0), ℓ_d ≈ 31.6 in, against ACI's 28.46. This needs a decision on β_t, n_s and the hook factors.
+  2. Development of the continuous bars above the joint is taken as satisfied by definition, as instructed. The pedestal height itself (h − c = 22 in < ℓ_d 28.46 for straight #8) is not checked against a bar terminating at the pedestal top.
