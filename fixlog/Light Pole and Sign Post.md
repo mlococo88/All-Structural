@@ -1878,3 +1878,50 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: results identical in all 16 cases except the two added inputs `inp.bpShape` / `inp.bpB`; cable values identical; text and drawings identical.
 - `node tests/engine/run.mjs lightpole` 41 passed; `node tests/check-syntax.mjs` all pass.
 - **Open item (engineer):** for a rectangular post this tool takes D = the width along y (`poleDiaBase`), the Anchorage app D = min(width, depth); and for a square plate the Anchorage app uses AISC DG1, not the bending line. Which should govern? (No change made; both are stated in the payload notes.)
+
+## 2026-11-02 — PR: claude/lts-spec-verify (LTSV: four LRFDLTS items checked against the PDFs; Eq. 5.12.1-1 form corrected; IBC sign Summary Broms takes the shaft's B₂-amplified demands)
+
+Basis: AASHTO LRFDLTS 1st Ed. (2015) with the 2017 Interim Revisions (the interims override). Both PDFs were read for each item (base pp. 3-23, 3-24, 5-14, 5-16, 5-28, 5-33; 2017 interim pp. 5-33 to 5-35). The interim's Section 3 pages are 3-17, 3-19 and 3-21 only, and its Section 5 pages are the notation and 5-33 to 5-35, so Art. 3.9.3, Table 5.7.2-1 and Art. 5.10.2.3 are as in the base edition.
+
+### LTSV-1. Table 3.9.3-1 wind load cases (sign "20 % transverse")   [verified, no change]
+- **Spec:** Art. 3.9.3 and Table 3.9.3-1 (base p. 3-24; not revised by the 2017 interim) give three cases: (1) 1.0·BL_n + 0·BL_t, (2) 0·BL_n + 1.0·BL_t, (3) 0.75·BL_n + 0.75·BL_t. BL_n / BL_t are W_v, W_l, W_p and W_h all applied normal / transverse to the plane of the structure. Non-symmetrical single roadside sign supports are designed for both components. There is **no 20 % transverse case** in this edition (a text search of both PDFs finds none); the independent audit's recollection is from an earlier specification.
+- **Tool:** `LOAD_CASES` in `apps/light-pole/lts-engine.js` (anchor `{ key: 'd45', name: 'Case 3: 0.75 (0°) + 0.75 (90°)'`) runs exactly these, both senses, for poles and signs; a wind along y sees the panel edge only (no panel area), so cases 2 and 3 load the sign post with its own transverse wind. Matches. No change.
+
+### LTSV-2. Eq. 5.12.1-1, combined forces when T_u/T_r > 0.20   [bug] [§4 result change, LRFDLTS mode only]
+- **Spec:** Art. 5.12.1, Eq. 5.12.1-1 (base p. 5-33; the 2017 interim reprints p. 5-33 with the same equation): P_u/P_r + BM_u/M_r + (V_u/V_r + T_u/T_r)² ≤ 1.0. Only the shear + torsion sum is squared (the same form as AISC 360 Eq. H3-6). The independent audit's recollection was right; the plan doc's row M10 was not.
+- **Where:** `interaction(d)` in `apps/light-pole/lts-engine.js`, anchor `if (d.Tr > 0.20) return { eq: '5.12.1-1'`; and the worked-step TeX in `memberSteps`, anchor `const eqT = gv.eq === '5.12.1-1'`.
+- **Before:**
+  ```js
+  if (d.Tr > 0.20) return { eq: '5.12.1-1', ratio: pr + (d.BMr + d.Vr + d.Tr) ** 2 };
+  const eqT = gv.eq === '5.12.1-1' ? '\\frac{P_{u}}{P_{r}} + \\left(\\frac{BM_{u}}{M_{r}} + \\frac{V_{u}}{V_{r}} + \\frac{T_{u}}{T_{r}}\\right)^{2}' : ...
+  ```
+- **After:**
+  ```js
+  if (d.Tr > 0.20) return { eq: '5.12.1-1', ratio: pr + d.BMr + (d.Vr + d.Tr) ** 2 };   // only the shear + torsion sum is squared (LTSV-2)
+  const eqT = gv.eq === '5.12.1-1' ? '\\frac{P_{u}}{P_{r}} + \\frac{BM_{u}}{M_{r}} + \\left(\\frac{V_{u}}{V_{r}} + \\frac{T_{u}}{T_{r}}\\right)^{2}' : ...
+  ```
+- **Effect:** with a = BM_u/M_r and s = V_u/V_r + T_u/T_r, before − after = a(a + 2s − 1). The old form was conservative when a + 2s > 1 and unconservative when a + 2s < 1 (e.g. a = 0.50, s = 0.21: before 0.534 + P/P_r term, after 0.574). Only members with T_u/T_r > 0.20 use this equation (typically single-post roadside signs with the 0.15b torsion); Eqs. 5.12.1-2 and -3 are unchanged.
+- **Check case 1 (engine unit test):** P_u/P_r = 0.1, BM_u/M_r = 0.5, V_u/V_r = 0.1, T_u/T_r = 0.3. Before: 0.1 + (0.5 + 0.1 + 0.3)² = 0.1 + 0.81 = **0.910**. After: 0.1 + 0.5 + (0.1 + 0.3)² = 0.1 + 0.5 + 0.16 = **0.760**.
+- **Check case 2 (compare case `ltssign1`: LRFDLTS, single-post sign, V = 115 mph; post Ø6.000 × 0.1875 in, base, Extreme I (DC max), Case 1 normal):** P_u/P_r = 0.0321, BM_u/M_r = 1.5869, V_u/V_r = 0.0630, T_u/T_r = 0.2049 (> 0.20). Before: 0.0321 + (1.5869 + 0.0630 + 0.2049)² = 0.0321 + 1.8548² = **3.472**. After: 0.0321 + 1.5869 + (0.0630 + 0.2049)² = 0.0321 + 1.5869 + 0.0718 = **1.691**. NOT OK either way (the case is deliberately overstressed).
+- **Other copies:** none (the IBC mode uses AISC H1/H3, unchanged). `docs/lts-mode-plan.md` row M10 corrected with a note.
+
+### LTSV-3. Square / rectangular tube λ_r and the effective-width coefficient   [verified, no change]
+- **Spec:** Table 5.7.2-1 (base p. 5-14; not revised by the 2017 interim), row "Flanges of Square/Rectangle", b/t: λ_p = 1.12√(E/F_y), λ_r = 1.53√(E/F_y) (one value, used for flexure and compression), λ_max = 2.14√(E/F_y). Art. 5.10.2.3, Eq. 5.10.2.3-2 (base p. 5-28): b_e = 1.92t√(E/f)[1 − 0.34/(b/t)·√(E/f)] ≤ b, f = F_cr at Q = 1. The coefficient is **0.34** (AISC 360-10 Eq. E7-18 uses 0.38 for HSS walls; LRFDLTS does not).
+- **Tool:** `classify()` (anchor `lp: 1.12 * r, lrF: 1.53 * r, lrC: 1.53 * r, lmax: 2.14 * r`) and the effective width in `compression()` (anchor `1.92 * sec.t * Math.sqrt(E / f1) * (1 - 0.34 /`). Match. No change.
+
+### LTSV-4. IBC sign mode: the Summary's Broms reference check left out B₂   [bug] [§4 result change, IBC sign mode, Broms reference only]
+- **Where:** the sign branch of `calc()`, `renderSummary({inp, mode:'sign', ...})`, anchor `broms:bromsEmbedment(inp, pd.`.
+- **Problem:** the Summary (and the summary stack read by the printed report's Broms row) called `bromsEmbedment(inp, pd.gLRFD.M/1000, pd.gLRFD.P/1000)`: the first-order moment of the max-moment LRFD combination. The shaft is designed for `M·B₂` (the sibling `designFoundationStack(...)` call passes `{M:gLRFD.M*(gLRFD.B2||1)}`), and the Shaft tab's Broms check (`renderShaftResults` → `bromsEmbedment(inp, Mu/1000, Vu/1000)`) and the report's per-post Broms (`bromsEmbedment(inp, F.Mu/1000, F.Vu/1000)`) use the shaft's `found.Mu` / `found.Vu`. So the Summary showed a different, slightly shorter Broms L than the Shaft tab for the same post (unconservative, reference value only; the IBC §1807.3 embedment that governs the design is not affected).
+- **Before:** `broms:bromsEmbedment(inp, pd.gLRFD.M/1000, pd.gLRFD.P/1000)}))});`
+- **After:** `broms:bromsEmbedment(inp, pd.found.Mu/1000, pd.found.Vu/1000)}))});   // the shaft's B₂-amplified M_u and V_u, as the Shaft tab and report (LTSV-4)`
+- **Governing provision:** LRFDLTS C13.6.1.1 (Broms, reference check; base edition, not revised by the 2017 interim). M_F, V_F are the factored groundline demands; the tool takes them as the shaft's LRFD demands with the AISC 360-16 App. 8 B₂ the tool applies to the post moment (no formula changes; only which demand is passed).
+- **Check case (compare case `signbroms1`: IBC sign, one post, defaults, cohesive c = 1.0 ksf, D = 3.0 ft):** V_F = 2.927 kip (unchanged), M_F,1st = 37.368 kip·ft, B₂ = 1.02191 → M_F = 38.186 kip·ft. q = V_F/(9cD) = 2.927/27 = 0.10841 ft. Before: H = 37.368/2.927 = 12.766 ft, L = 1.5D + q[1 + √(2 + (4H + 6D)/q)] = 4.5 + 0.10841·(1 + √(2 + 69.065/0.10841)) = 4.5 + 0.10841·26.280 = **7.349 ft** (Summary 7.35 ft, while the Shaft tab showed 7.37 ft). After: H = 13.046 ft, L = 4.5 + 0.10841·(1 + √(2 + 70.184/0.10841)) = 4.5 + 0.10841·26.483 = **7.371 ft** (Summary = Shaft tab = 7.37 ft). `signbroms2` (two posts, cohesionless, φ 30°, γ 0.115): 4.88 → 4.90 ft per post (V_F there is the largest LRFD shear, as on the Shaft tab).
+- **Other copies:** the light-pole branch passes `govLRFD.M/P` (first order) to all three of its Broms calls (Summary, Shaft tab, report); consistent with each other, not changed (open item below).
+
+### How verified
+- `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves` (18 cases; `signbroms1`, `signbroms2` added to the harness for LTSV-4): every case identical except `ltssign1` (the combined-forces ratio and TeX, LTSV-2) and `signbroms1/2` (the Summary Broms, LTSV-4). **Cable values identical** in every case that has cables (1437 / 699 / 330 numbers); drawings identical; no console errors.
+- `node tests/engine/run.mjs lightpole`: 41 passed (the Eq. 5.12.1-1 unit test now expects 0.76). `node tests/check-syntax.mjs`: all pass. `node tests/smoke/lightpole-anchor-handoff.mjs`: ALL PASS.
+
+### Open items (engineer)
+- **Light-pole IBC mode Broms demand:** the light-pole branch feeds Broms the first-order `govLRFD.M` while its shaft uses `M·B₂`. Should Broms (reference only) use the B₂-amplified moment there too, as the sign branch now does? Not changed.
+- Not in this task's scope and not re-checked against the PDF: the square-tube M_n step just past λ_r noted by the audit (Table 5.8.2-1).
