@@ -188,6 +188,9 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): saved-project list (Save in browser / Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
 (function(){
@@ -1132,7 +1135,7 @@ function printReport() {
   P.ui.tab = prev; const done = () => { document.querySelectorAll('.tab-panel.print').forEach(el => el.classList.remove('print')); window.removeEventListener('afterprint', done); };
   window.addEventListener('afterprint', done); window.print(); setTimeout(done, 1500);
 }
-let _as = null; function autosave() { clearTimeout(_as); _as = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) { } }, 300); }
+let _as = null; function autosave() { clearTimeout(_as); _as = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) { } if (window.SLPL) SLPL.h.record(); /* PLIB: one undo step per change */ }, 300); }
 let _fl = null; function flash(m, c = 'pass') { const f = $('#flash'); f.textContent = m; f.className = 'on' + (c === 'fail' ? ' fail' : ''); clearTimeout(_fl); _fl = setTimeout(() => f.className = '', 3200); }
 
 /* =====================================================================
@@ -4057,6 +4060,41 @@ window.addEventListener('beforeprint', () => {
   P = defP();
   try { const s = localStorage.getItem(KEY); if (s) { const j = JSON.parse(s); if (j && j.app === APP) { migEHEQ(j); const d = defP(); P = { ...d, ...j, meta: { ...d.meta, ...j.meta }, br: { ...d.br, ...j.br }, rx: { ...d.rx, ...j.rx }, ui: { ...d.ui, ...(j.ui || {}), v3: { ...d.ui.v3, ...((j.ui || {}).v3 || {}) } } }; } } } catch (e) { }
   syncSupports(); buildTabs(); recompute(); buildSide(); showTab(P.ui.tab || 'summary'); if (LF_NOTICE) autosave();   // TUCR: keep the migrated load factors so the one-time note does not return
+})();
+</script>
+<script>
+/* PLIB (2026-11-02): saved-project list in this browser and Undo / Redo (shared/projects.js, shared/projects-ui.js). The tool had the
+   autosave (subloads_v1) and Open / Save of .subloads.json files only. New key subloads_projects_v1 (tool-prefixed, CLAUDE.md §5):
+   { name: P }, the same object as the Save file; Open = openProject() (the Open-file path, migrations included). The autosave key and the
+   file format are unchanged. Undo / Redo: P without P.ui (tabs, selection, 3D view are not steps), session only. */
+(function () {
+  if (!window.SharedProjects || !window.SharedProjectsUI) return;
+  const LIB = 'subloads_projects_v1';
+  const h = SharedProjects.history({ get: () => JSON.stringify(Object.assign({}, P, { ui: undefined })),
+    set: t => { const j = JSON.parse(t), ui = P.ui, d = defP(); migEHEQ(j);
+      P = { ...d, ...j, meta: { ...d.meta, ...j.meta }, br: { ...d.br, ...j.br }, rx: { ...d.rx, ...j.rx }, ui };
+      if (!(P.ui.sel >= 0 && P.ui.sel < P.units.length)) P.ui.sel = 0;
+      syncSupports(); buildTabs(); buildSide(); showTab(P.ui.tab); recompute(); autosave(); } });
+  let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
+  const store = SharedProjects.mapStore(ST, LIB);
+  let cur = null;
+  const dlg = SharedProjectsUI.libraryDialog({ store, storage: ST, title: 'Saved projects (this browser)',
+    current: () => cur && store.has(cur) ? cur : null,
+    open: n => { const j = store.get(n); if (!j) return false; openProject(JSON.parse(JSON.stringify(j)), n); cur = n; return true; },
+    renamed: (a, b) => { if (cur === a) cur = b; }, deleted: n => { if (cur === n) cur = null; },
+    save: () => ask(), saveLabel: 'Save the open project in this browser\u2026' });
+  const save = n => { const r = store.save(n, P); if (r.ok) cur = r.name; return r; };
+  const ask = () => { const n = prompt('Save the project in this browser as:', cur || P.meta.name || 'Untitled'); if (n == null) return; if (!n.trim()) { alert('Enter a project name.'); return; }
+    if (store.has(n.trim()) && n.trim() !== cur && !confirm('A saved project named "' + n.trim() + '" already exists. Replace it?')) return;
+    const r = save(n); if (r.ok) flash('Saved "' + r.name + '" in this browser.'); return r; };
+  // header space is full (8 buttons): the three controls sit at the right end of the bridge strip under the header
+  const box = document.createElement('div'); box.setAttribute('data-sp', 'row'); box.style.cssText = 'position:absolute;right:12px;top:6px;display:flex;gap:6px;z-index:2';
+  const B = (t, ti) => SharedProjectsUI.button(t, ti, { cls: 'btn', style: 'font-size:12px;padding:3px 10px' });
+  const bu = B('Undo', 'Undo the last input change (Ctrl+Z)'), br = B('Redo', 'Redo (Ctrl+Y or Ctrl+Shift+Z)'), bl = B('Projects\u2026', 'Save the project in this browser; open, rename, duplicate or delete the projects saved here');
+  bl.addEventListener('click', () => dlg.show()); box.append(bu, br, bl);
+  const strip = document.querySelector('section.strip'); if (strip) { if (getComputedStyle(strip).position === 'static') strip.style.position = 'relative'; strip.appendChild(box); }
+  SharedProjectsUI.undoRedo(h, { undo: bu, redo: br });
+  h.reset(); window.SLPL = { h, store, dlg, save };
 })();
 </script>
 </body>
