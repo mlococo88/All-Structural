@@ -86,6 +86,8 @@
 <script defer src=&quot;https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js&quot;></script>
 <script src=&quot;https://cdn.plot.ly/plotly-2.32.0.min.js&quot;></script>
 <script src=&quot;https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js&quot;></script>
+<script src=&quot;shared/projects.js&quot;></script>
+<script src=&quot;shared/projects-ui.js&quot;></script>
 <style>
 :root{
   --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB;
@@ -577,7 +579,7 @@ let S=defaultState();
 let CC=null;              /* cached computeAll() */
 let VALIDATION={blockers:[],warnings:[],notes:[]};
 
-function autosave(){ lsSet(LS_AUTO,JSON.stringify(S)); }
+function autosave(){ lsSet(LS_AUTO,JSON.stringify(S)); if(PLU) PLU.soon(); /* PLIB: one undo step per change (debounced) */ }
 function loadAutosave(){
   const raw=lsGet(LS_AUTO); if(!raw) return false;
   try{ const st=JSON.parse(raw); mergeState(st); return true; }catch(e){ return false; }
@@ -3903,7 +3905,7 @@ function doLoad(){ openProjDialog(&quot;load&quot;); }
 function loadProject(nm){
   const p=getProjects();
   if(!p[nm]) return false;
-  mergeState(p[nm]); autosave(); refresh(); return true;
+  mergeState(p[nm]); autosave(); refresh(); if(PLU) PLU.h.reset(); /* PLIB: another project, a new undo history */ return true;
 }
 function deleteProject(nm){
   const p=getProjects();
@@ -4084,7 +4086,7 @@ function doExport(){
 }
 function doImport(f){
   const rd=new FileReader();
-  rd.onload=()=>{ try{ mergeState(JSON.parse(rd.result)); autosave(); refresh(); }
+  rd.onload=()=>{ try{ mergeState(JSON.parse(rd.result)); autosave(); refresh(); if(PLU) PLU.h.reset(); /* PLIB */ }
     catch(e){ alert(&quot;Could not read that file: &quot;+e.message); } };
   rd.readAsText(f);
 }
@@ -4554,6 +4556,23 @@ function refresh(){
   autosave();
   restoreUI(st);
 }
+/* PLIB (2026-11-02): Undo / Redo for the Beam Capacity tab (shared/projects.js history, shared/projects-ui.js buttons and Ctrl+Z / Ctrl+Y /
+   Ctrl+Shift+Z). Display only: snapshots of S without S.ui (output tab, collapsed cards, detail combination, print options: views), session only, nothing stored.
+   set = mergeState() (the Open / Import path) of the step with those fields as they are now, then refresh() (which autosaves).
+   Opening a project or importing a file starts a new history; New is a step (it can be undone). */
+var PLU=null;   // var: autosave() may run before this line is reached
+function plibUndoInit(){
+  if(!window.SharedProjects||!window.SharedProjectsUI||PLU) return;
+  const KEEP=['ui'];
+  const snap=()=>{ const o=Object.assign({},S); KEEP.forEach(k=>delete o[k]); return JSON.stringify(o); };
+  const h=SharedProjects.history({ get:snap, set:t=>{ const o=JSON.parse(t); KEEP.forEach(k=>{ if(k in S) o[k]=S[k]; }); mergeState(o); refresh(); } });
+  const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'b'});
+  const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
+  const ref=document.getElementById('btnLoad'); if(ref){ ref.insertAdjacentElement('afterend',br); ref.insertAdjacentElement('afterend',bu); }
+  SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
+  let tm=null; h.reset();
+  PLU={ h, soon:()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); }, full:()=>{ const o=Object.assign({},S); delete o.ui; return JSON.stringify(o); } };
+}
 function init(){
   loadAutosave();
   syncCoverPreset();
@@ -4597,6 +4616,7 @@ function init(){
   window.addEventListener(&quot;beforeprint&quot;,()=>{ const h=document.getElementById(&quot;printReport&quot;); if(h&amp;&amp;!h.innerHTML) buildReport(); cbcApplyPageCSS(true); });
   window.addEventListener(&quot;afterprint&quot;,()=>cbcApplyPageCSS(false));
   refresh();
+  plibUndoInit();   // PLIB: after start-up, so restoring the session is not a step
 }
 if(document.readyState===&quot;loading&quot;) document.addEventListener(&quot;DOMContentLoaded&quot;,init);
 else init();
@@ -4661,6 +4681,8 @@ else init();
 <title>Concrete Beam Rating — ASD (AASHTO 8.15)</title>
 <link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css&quot;>
 <script defer src=&quot;https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js&quot;></script>
+<script src=&quot;shared/projects.js&quot;></script>
+<script src=&quot;shared/projects-ui.js&quot;></script>
 <style>
 :root{
   --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB;
@@ -5138,7 +5160,7 @@ function defaultState(){
 let S=defaultState();
 let CC=null;
 
-function autosave(){ lsSet(LS_AUTO, JSON.stringify(S)); }
+function autosave(){ lsSet(LS_AUTO, JSON.stringify(S)); if(PLU) PLU.soon(); /* PLIB: one undo step per change (debounced) */ }
 function loadAutosave(){ const raw=lsGet(LS_AUTO); if(!raw) return false;
   try{ mergeState(JSON.parse(raw)); return true; }catch(e){ return false; } }
 function mergeState(st){
@@ -5975,7 +5997,7 @@ function renderProjDialog(){
 }
 function projDialogGo(){
   if(!PRJSEL){ closeProjDialog(); return; }
-  const p=getProjects(); if(p[PRJSEL]&amp;&amp;p[PRJSEL].data){ mergeState(p[PRJSEL].data); autosave(); refresh(); }
+  const p=getProjects(); if(p[PRJSEL]&amp;&amp;p[PRJSEL].data){ mergeState(p[PRJSEL].data); autosave(); refresh(); if(PLU) PLU.h.reset(); /* PLIB: another project, a new undo history */ }
   closeProjDialog();
 }
 function closeProjDialog(){ document.getElementById(&quot;prjBg&quot;).classList.remove(&quot;on&quot;); }
@@ -5986,7 +6008,7 @@ function doExport(){
   document.body.appendChild(a); a.click(); a.remove();
 }
 function doImport(file){ const rd=new FileReader();
-  rd.onload=()=>{ try{ mergeState(JSON.parse(rd.result)); autosave(); refresh(); }catch(e){ alert(&quot;Could not read JSON.&quot;); } };
+  rd.onload=()=>{ try{ mergeState(JSON.parse(rd.result)); autosave(); refresh(); if(PLU) PLU.h.reset(); /* PLIB */ }catch(e){ alert(&quot;Could not read JSON.&quot;); } };
   rd.readAsText(file); }
 
 /* =====================================================================
@@ -6060,6 +6082,25 @@ function refresh(){
   autosave();
   restoreUI(st);
 }
+/* PLIB (2026-11-02): Undo / Redo for the ASD rating tab (shared/projects.js history, shared/projects-ui.js buttons and Ctrl+Z / Ctrl+Y /
+   Ctrl+Shift+Z). Display only: snapshots of S without S.ui (views) and S.projFromCap (the title block last received from Beam
+   Capacity). A change relayed from the Beam Capacity tab (section, materials, title block; CBC-O13b) is not a step: it starts a new
+   history, so an undo here never brings back values from before it, session only, nothing stored.
+   set = mergeState() (the Open / Import path) of the step with those fields as they are now, then refresh() (which autosaves).
+   Opening a project or importing a file starts a new history; New is a step (it can be undone). */
+var PLU=null;   // var: autosave() may run before this line is reached
+function plibUndoInit(){
+  if(!window.SharedProjects||!window.SharedProjectsUI||PLU) return;
+  const KEEP=['ui','projFromCap'];
+  const snap=()=>{ const o=Object.assign({},S); KEEP.forEach(k=>delete o[k]); return JSON.stringify(o); };
+  const h=SharedProjects.history({ get:snap, set:t=>{ const o=JSON.parse(t); KEEP.forEach(k=>{ if(k in S) o[k]=S[k]; }); mergeState(o); refresh(); } });
+  const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'b'});
+  const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
+  const ref=document.getElementById('btnLoad'); if(ref){ ref.insertAdjacentElement('afterend',br); ref.insertAdjacentElement('afterend',bu); }
+  SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
+  let tm=null; h.reset();
+  PLU={ h, soon:()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); }, full:()=>{ const o=Object.assign({},S); delete o.ui; return JSON.stringify(o); } };
+}
 function init(){
   loadAutosave();
   document.getElementById(&quot;btnNew&quot;).addEventListener(&quot;click&quot;,()=>{
@@ -6083,12 +6124,14 @@ function init(){
   window.addEventListener(&quot;afterprint&quot;,()=>asdApplyPageCSS(false));
   document.getElementById(&quot;rptAll&quot;).addEventListener(&quot;click&quot;,()=>{ const o=normRptOpts(); reportTabList().forEach(([id])=>o.tabs[id]=true); autosave(); openRptDialog(); });
   refresh();
+  plibUndoInit();   // PLIB: after start-up, so restoring the session is not a step
 
   /* ----- live bridge: receive shared inputs + project identity ----- */
   window.addEventListener(&quot;message&quot;,function(e){
     if(!e || e.source!==window.parent) return;   /* only the suite shell relays Beam Capacity (CBC-S10) */
     const d=e&amp;&amp;e.data; if(!d||d.type!=='sharedInputs'||!d.data) return;
     const p=d.data;
+    const plb=PLU?PLU.full():null;   /* PLIB: a relayed change starts a new undo history (below) */
     const map={fc:'fc',fy:'fy',b_eff:'b_eff',h_f:'h_f',b_w:'b_w',h_total:'h_total',d_eff:'d_eff',as:'as',
                d_pos:'d_pos',as_pos:'as_pos',d_neg:'d_neg',as_neg:'as_neg'};
     Object.keys(map).forEach(k=>{ if(p[k]!==''&amp;&amp;p[k]!=null&amp;&amp;!isNaN(p[k])) S.inherit[k]=+p[k]; });
@@ -6106,6 +6149,7 @@ function init(){
       S.projFromCap={...p.proj};
     }
     refresh();
+    if(PLU&amp;&amp;PLU.full()!==plb){ PLU.h.reset(); }   /* PLIB */
   });
   try{ parent.postMessage({type:'requestShared'},'*'); }catch(e){}
 }
@@ -6132,6 +6176,8 @@ if(document.readyState===&quot;loading&quot;) document.addEventListener(&quot;DO
 <!-- RBRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src=&quot;shared/steps.js&quot;></script>
 <script src=&quot;shared/report.js&quot;></script>
+<script src=&quot;shared/projects.js&quot;></script>
+<script src=&quot;shared/projects-ui.js&quot;></script>
 
 <style>
 :root{
@@ -7818,7 +7864,7 @@ function applyState(st){
   }
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===currentTab));
 }
-function autosave(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(collectState())); }catch(e){} }
+function autosave(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(collectState())); }catch(e){} if(RBPL) RBPL.soon(); /* PLIB: one undo step per change (debounced) */ }
 
 function getProjects(){ try{return JSON.parse(localStorage.getItem(LS_PROJECTS))||{};}catch(e){return {};} }
 function refreshProjectList(){
@@ -7841,6 +7887,7 @@ function loadProject(){
   const name=document.getElementById('projSelect').value;
   if(!name){alert(&quot;Select a project to load.&quot;);return;}
   applyState(getProjects()[name]); render();
+  if(RBPL) RBPL.h.reset();   /* PLIB: another project, a new undo history */
 }
 function deleteProject(){
   const name=document.getElementById('projSelect').value;
@@ -7860,7 +7907,7 @@ function exportJSON(){
 function importJSON(ev){
   const file=ev.target.files[0]; if(!file) return;
   const r=new FileReader();
-  r.onload=e=>{ try{ applyState(JSON.parse(e.target.result)); render(); refreshProjectList(); }
+  r.onload=e=>{ try{ applyState(JSON.parse(e.target.result)); render(); refreshProjectList(); if(RBPL) RBPL.h.reset(); /* PLIB */ }
     catch(err){ alert(&quot;Could not read JSON file.&quot;); } ev.target.value=&quot;&quot;;};
   r.readAsText(file);
 }
@@ -8429,6 +8476,37 @@ function switchTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
   render();
 }
+/* PLIB (2026-11-02): &quot;Saved projects…&quot; dialog (Open / Rename / Duplicate / Delete) over the tool's own key LS_PROJECTS
+   (rebar_aci_projects_v1, { name: state }), and Undo / Redo (shared/projects.js, shared/projects-ui.js). Display and storage only.
+   - Dialog: Rename / Duplicate move / copy the stored item unchanged; Open is the Load path (applyState + render).
+   - Undo / Redo: history over the inputs (collectState().inp; the output tab, chart mode and open panels are views, not steps),
+     session only; set = applyState({ inp }) then render() (which autosaves). Opening a project (Load, the dialog, Import JSON)
+     starts a new history.
+   The standalone tool and the Development &amp; Splice tab of Concrete Beam Capacity.html carry this same block (CLAUDE.md §3). */
+var RBPL=null;   // var: autosave() may run before this line is reached
+function rbPlibInit(){
+  if(!window.SharedProjects||!window.SharedProjectsUI||RBPL) return;
+  let ST=null; try{ ST=window.localStorage; }catch(e){}
+  const store=SharedProjects.mapStore(ST,LS_PROJECTS);
+  const sel=()=>document.getElementById('projSelect');
+  const relist=keep=>{ refreshProjectList(); if(keep&amp;&amp;store.has(keep)) sel().value=keep; };
+  const dlg=SharedProjectsUI.libraryDialog({store,storage:ST,title:'Saved projects (this browser)',
+    current:()=>{ const n=sel()&amp;&amp;sel().value; return n&amp;&amp;store.has(n)?n:null; },
+    open:n=>{ const d=store.get(n); if(!d) return false; applyState(d); render(); relist(n); if(RBPL) RBPL.h.reset(); return true; },
+    renamed:(a,b)=>{ if(sel()&amp;&amp;sel().value===a) relist(b); const sn=document.getElementById('saveName'); if(sn&amp;&amp;sn.value.trim()===a) sn.value=b; },
+    changed:()=>relist(sel()&amp;&amp;sel().value)});
+  const lb=SharedProjectsUI.button('Saved projects…','The projects saved in this browser: open, rename, duplicate, delete',{cls:'btn small'});
+  lb.addEventListener('click',()=>dlg.show());
+  const del=document.querySelector('#inputPanel button[onclick=&quot;deleteProject()&quot;]'); if(del) del.insertAdjacentElement('afterend',lb);
+  const h=SharedProjects.history({ get:()=>JSON.stringify(collectState().inp), set:t=>{ applyState({inp:JSON.parse(t)}); render(); } });
+  const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'btn small',style:'margin-left:8px'});
+  const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
+  const tb=document.querySelector('.titlebar'); const at=tb&amp;&amp;tb.querySelector('.alltools');
+  if(tb){ if(at){ at.insertAdjacentElement('afterend',br); at.insertAdjacentElement('afterend',bu); } else { tb.appendChild(bu); tb.appendChild(br); } }
+  SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
+  let t=null; h.reset();
+  RBPL={ h, dlg, soon:()=>{ clearTimeout(t); t=setTimeout(()=>h.record(),400); } };
+}
 function init(){
   buildInputPanel();
   rebarInputTabs();   // move the input panels into the input tabs (before any state is applied)
@@ -8444,6 +8522,7 @@ function init(){
   document.getElementById('inputPanel').addEventListener('input',render);
   document.getElementById('inputPanel').addEventListener('change',render);
   render();
+  rbPlibInit();   // PLIB: after start-up, so restoring the session is not a step
 }
 window.addEventListener('DOMContentLoaded',()=>{
   // KaTeX auto-render is deferred; wait a tick for it to be defined

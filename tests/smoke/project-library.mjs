@@ -132,6 +132,15 @@ export const TOOLS = {
     // the heatmap legend (.legendbar: lowest / highest deck elevation) is filled only once the Output tab has been drawn: a view detail, left out
     no390: 'the page has no phone layout: at 390 px it is 1086 px wide on origin/main, and the library panel already scrolls sideways there (395 / 310 px)'
   },
+  rebar: {
+    file: 'ACI Rebar Development Length.html', list: 'rebar_aci_projects_v1', auto: 'rebar_aci_autosave_v1',
+    ready: p => p.waitForFunction(() => typeof computeFactors === 'function' && document.getElementById('projSelect') && document.getElementById('dashboard').textContent.length > 20),
+    results: p => p.evaluate(() => { const inp = readInputs(); const seen = new WeakSet(); const f = JSON.parse(JSON.stringify({ inp, f: computeFactors(inp) }, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v)));
+      const d = document.getElementById('dashboard').cloneNode(true); d.querySelectorAll('[data-sp]').forEach(x => x.remove()); return { ...f, dash: d.textContent.replace(/\s+/g, ' ') }; }),
+    change: p => bump(p, '#fc', 500),
+    view: p => tabView(p, '#tabs .tab', 2, '.active'),
+    save: async (p, name) => { await p.evaluate(n => { document.getElementById('saveName').value = n; saveProject(); }, name); await p.waitForTimeout(400); }
+  },
   spreadfooting: {
     file: 'Spread Footing.html', list: 'sfd_projects', auto: 'sfd_auto', ownUndo: true,   // the tool's own Undo / Redo (U-2) is unchanged and not re-tested here
     ready: p => p.waitForFunction(() => typeof R !== 'undefined' && R),
