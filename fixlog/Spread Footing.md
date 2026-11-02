@@ -3807,3 +3807,33 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 - **Open items:**
   - k ≈ 15 cannot be reproduced on the default project. It has no interface tension, so no k is shown. The engineer's project is needed.
   - Observation, not changed: for net uplift with M = 0, `sfpmRatios` reaches its tension limit at about 0.52 f_y per in² of steel. Example: P_u −55.19 k needs 1.78 in², against 55.19/(0.9·60) = 1.02 in² by hand. This is conservative and comes from the shared P–M routine. Raised, not changed.
+
+## 2026-11-02 — PR: claude/sf-show-work-links — Show the work and link to it: report summary of results, section keys instead of hard-coded § numbers, cross-step links (SFLK; display only, no result change) (PR #693: https://github.com/mlococo88/All-Structural/pull/693)
+
+### SFLK. CLAUDE.md §6 links across the Report and the inputs
+- **Engineer request (2026-11-02):** every value quoted away from where it is worked gets an in-app link, and a "see §x.y" in print. This uses the shared `[[key]]` mechanism of `shared/report.js` (as in lldf).
+- **Where:**
+  - `sfrModel`, sections and subsections get anchor keys:
+    - sections: `S-stab`, `S-fd`, `S-pd`, `S-ref`;
+    - subsections: `S-rb` (footing reinforcement), `S-asd`, `S-lrfd`, `S-res`, `S-bp`, `S-qa`, `S-ecc`, `S-st`, `S-fdx`/`S-fdy`, `S-pun`, `S-cbr`, `S-sf`, `S-dow`, `S-cov`, `S-pd<i>`.
+    - When no strength combination exists, "Pedestal design" now gets a "Not computed" section, as "Footing design" already did. This keeps the numbering and the keys.
+  - Hard-coded section numbers in report text become keys. There were 18: "see §8", "used in §5", "(§2.4, §6)", "worked in §2.4" ×2, "(§5, §6)", "§3.2" ×2, "§3.1 and §3.2", "§2.2", "§2.3" ×2, "§1.4", "in §5", "in §4". They print the right number whatever the section order, and they are links on screen.
+  - New first section **Summary of results**: one row per dashboard check (`sfdResultRows`), with the check, the result, D/C, status and "Worked in" (`[[S-…]]`, only keys present in the report).
+  - Cross-step notes (`see:'dow'` on the `cbr` and `sf` step items):
+    - §5.5 dowel area → `§p<i>.AsGov`;
+    - §5.5 ℓ_dc → `§p<i>.ldc`;
+    - shear friction A_s,dow − A_s,req → `§p<i>.AsGov`;
+    - shear friction "developed on both sides" → `§p<i>.Lftg`.
+  - Table rows:
+    - interface-tension table, the k-governing row → `dow/p<i>.AsReq`;
+    - shear-friction table, the governing row → `sf/f<i>.DCR`.
+  - Reinforcement input tab, pedestal block: "Dowels and shear friction worked in" link to Footing Design 5.6.
+- **Effect:**
+  - The report sections are renumbered by one: Summary is §1, Project and inputs §2, and so on.
+  - No computed value changes. A deep diff of `P2` on main vs the branch is empty on 7 cases: default, SF-2, the shear-friction case, direct mode, M_y 600, an old SF-2 save and a large-uplift case.
+  - Report: 0 unresolved or duplicate references, 0 KaTeX errors, no NaN on all 7.
+  - `node tests/check-syntax.mjs` passes, as does the scroll smoke test.
+- **Other copies:** none.
+- **Open items:**
+  - Step-level references print the subsection number (§6.7), as the shared report does elsewhere.
+  - The old print path (`renderPrintHeader`, "see §" on chips) is left to the agent retiring the old print reports.
