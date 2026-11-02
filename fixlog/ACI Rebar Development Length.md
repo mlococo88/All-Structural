@@ -1277,3 +1277,29 @@ index be12315..75bfaab 100644
 - **Applied by script** (scratchpad `onscreen.py`): regex `'( ?)On screen: '\+tabLink\(('…'),'…'\)\+'( \(…\))?\.'` and the literal Project-note replacement.
 - **Other copies (CLAUDE.md §3):** the Development & Splice tab of `Concrete Beam Capacity.html` gets the same edits in the same PR. Tools that contain the snippet: `ACI Rebar Development Length.html`, `Concrete Beam Capacity.html`. Standalone ↔ embedded line diff unchanged (141 lines of intentional differences before and after).
 - **How verified:** printed report text (Ctrl+P on the Report tab, print media): main had "On screen: ." fragments; the branch has none and prints no link fragments. Report checks (7 cases: refs, KaTeX, NaN, spot values) and main-vs-branch tab texts / autosave / D11 print unchanged. **Provision:** none. **Saved data:** none.
+
+## 2026-11-02 — PR: claude/phone-print-aci — Phone: the one column never grows past the window; Bar Schedule scrolls in its box (PHN; display only, no calculation change)
+
+Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Code site tagged `PHN`.
+
+### PHN-1   [display only]
+- **Problem:** below 980 px `.layout{grid-template-columns:1fr}` grows to the panels' min-content width. On the Bar Schedule tab, the `table.vars` (in `.subsec`, no scroll box) made both panels 417 px wide at 390 px, so the page scrolled 43 px sideways and the tab buttons and inputs on the right were cut off.
+- **Where:** after `@media(max-width:980px){.layout{grid-template-columns:1fr; height:auto;}}`.
+- **Added:**
+```css
+@media screen and (max-width:899px){.layout{grid-template-columns:minmax(0,1fr);} .tabcontent .subsec{overflow-x:auto;}}
+```
+- Screen and below 900 px only; desktop and print are unchanged.
+- **Other copies:** the same block went into the embedded copy of this app in `Concrete Beam Capacity.html` (frame `suite-frame-dev`, PR claude/phone-print-cbc, 2026-11-02). There, the frame scrolled 364 px sideways on every tab. The two copies are in step (CLAUDE.md §3).
+
+### Checked, no change
+- At 390 / 768 px the other 13 tabs do not scroll sideways.
+- Report → Print report: 12 pages, with the running header and page numbers. Nothing extends past the text width.
+- The cut-off "Class A eligibility" result on the phone Report tab was fixed in `shared/report.js` (PR claude/phone-shared-report).
+
+### Smoke test
+- `tests/smoke/phone-layout.mjs`: new key `aci`. It fails on origin/main (Bar Schedule 43 px) and passes on this branch.
+
+### How verified (no computed result, saved key or hand-off changed)
+- origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 13 tabs, the whole-document `textContent` and localStorage after load are identical.
+- Screenshots at 900 and 1280 px are identical, except 2–3 px on the Report tab (anti-aliasing).
