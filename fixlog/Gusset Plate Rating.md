@@ -2908,3 +2908,20 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 ### How verified (no computed result, saved key or hand-off changed)
 - origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 15 tabs, the whole-document `textContent` (725,761 chars) and localStorage after load are identical.
 - Screenshots at 900 and 1280 px are identical on load and on every tab, except 1–3 px of the tab-bar underline (a CSS transition caught mid-way).
+
+## 2026-11-02 — PR: PRLINK — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+- **Before:** Project tab → Saved projects: drop-down with Open / Save / Save as… / Delete (`gussetRating.projects.v1`), Export / Import
+  JSON, New from example. No rename, no duplicate. Only the CAD import had an Undo.
+- **Where:**
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `autosave()`, anchor `function autosave() {`: first statement `if (window.GPPL) GPPL.soon();   /* PLIB: one undo step per change (debounced) */`.
+  - a new `<script>` after the boot script (anchor `/* PLIB (2026-11-02): saved-project list and Undo / Redo`): history over `P` without
+    `P.ui`; `set` = `loadData(step with the current P.ui, CUR)` (the tool's own open path, `GPR.normalize` included); `mapStore(localStorage,
+    KEY_PR)`; dialog `open` = `loadData(store.get(n), n)`; rename / delete of the open project update `CUR` and the autosave; the drop-down
+    is redrawn after every change. Buttons Undo, Redo, Saved projects… in a new `header .hdr-group` before the Inputs / Print report group.
+- **Saved data:** keys `gussetRating.autosave.v1`, `gussetRating.projects.v1` and their formats unchanged; no new key. Rename / duplicate
+  move / copy the stored item unchanged (the `blankGrid` form the tool stored).
+- **How verified:** `node tests/smoke/project-library.mjs --tool gusset`: ALL PASS (R and minRF from `__gprForTest()` identical to
+  origin/main on load, after an input change, reopened on main's storage and opened from the dialog; Undo / Redo / Ctrl+Z / Ctrl+Y exact;
+  dialog byte-identical; quota; 390 px; no new console errors). `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).

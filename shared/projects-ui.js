@@ -24,7 +24,7 @@
     if (cssDone || typeof document === 'undefined') return; cssDone = true;
     const s = document.createElement('style'); s.setAttribute('data-sp', 'css');
     s.textContent = [
-      'dialog.spLib{border:1px solid #94a3b8;border-radius:8px;padding:12px 16px;width:min(780px,94vw);max-height:86vh;overflow:auto;font:inherit;font-size:10pt;color:#0f172a;background:#fff;}',
+      'dialog.spLib{position:fixed;inset:0;margin:auto;height:fit-content;box-sizing:border-box;border:1px solid #94a3b8;border-radius:8px;padding:12px 16px;width:min(780px,94vw);max-height:86vh;overflow:auto;font:inherit;font-size:10pt;color:#0f172a;background:#fff;}',
       'dialog.spLib::backdrop{background:rgba(15,23,42,.45);}',
       '.spLib .spHead{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:8px;font-size:12pt;}',
       '.spLib table{border-collapse:collapse;width:100%;font-size:9.5pt;} .spLib th,.spLib td{border-bottom:1px solid #e2e8f0;padding:4px 6px;text-align:left;vertical-align:middle;}',
@@ -35,6 +35,7 @@
       '.spLib .spUse{display:flex;gap:10px;align-items:center;font-size:9pt;color:#475569;margin:8px 0;} .spLib .spBar{flex:0 0 140px;height:10px;border-radius:5px;background:#e2e8f0;overflow:hidden;}',
       '.spLib .spBar i{display:block;height:100%;background:#16a34a;} .spLib .spBar.high i{background:#b45309;} .spLib .spBar.full i{background:#b91c1c;}',
       '.spLib .spScroll{overflow-x:auto;}',
+      '@media (max-width:560px){.spLib td.spAct{white-space:normal;text-align:left;} .spLib td.spAct button{margin:2px 4px 2px 0;} .spLib .spUse{flex-wrap:wrap;} .spLib .spBar{flex:1 1 100%;}}',
       'button[data-sp]:disabled{opacity:.45;cursor:default;}',
       '@media print{dialog.spLib{display:none!important;}}'
     ].join('\n');
