@@ -3487,7 +3487,7 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 ### Other copies
 - None.
 
-## 2026-11-02 — PR: sbd-ad-splices — Auto design: field splice locations as a design variable (Lock / Range / Auto), with the old app's placement rule and stated shipping and clearance rules
+## 2026-11-02 — PR #644: https://github.com/mlococo88/All-Structural/pull/644 (claude/sbd-ad-splices) — Auto design: field splice locations as a design variable (Lock / Range / Auto), with the old app's placement rule and stated shipping and clearance rules
 **Calculation change (CLAUDE.md §4), limited to Auto design when the user chooses Auto or Range.** No formula, load or resistance factor, unit
 or code reference of any check module changed. New: Auto design may now choose the field splice stations (before: Lock only, "placing splices
 needs shipping-length and erection rules the engine doesn't have"). The variable defaults to **Lock** for every project, old and new, so a
