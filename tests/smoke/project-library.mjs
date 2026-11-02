@@ -32,6 +32,14 @@ const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel
   await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
   return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
 export const TOOLS = {
+  retwall: {
+    file: 'Retaining Wall Designer.html', list: 'retaincalcpro.projects.v1', auto: 'retaincalcpro.autosave.v1',
+    ready: p => p.waitForFunction(() => window._R),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(window._R, (k, v) => typeof v === 'function' ? undefined : (v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
+    change: p => bump(p, '#H, .sidebar input[type=number]', 1),
+    view: p => tabView(p, '.tab-btn', 2, '.active'),
+    save: async (p, name) => { await p.evaluate(n => { const pn = document.getElementById('proj_name'); pn.value = n; document.getElementById('proj_save_btn').click(); }, name); await p.waitForTimeout(300); }
+  },
   gusset: {
     file: 'Gusset Plate Rating.html', list: 'gussetRating.projects.v1', auto: 'gussetRating.autosave.v1',
     ready: p => p.waitForFunction(() => window.__gprForTest && window.__gprForTest().R),

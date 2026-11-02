@@ -644,6 +644,9 @@ window.MathJax = {
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
 (function(){
@@ -5396,6 +5399,7 @@ function deleteProject(name) {
 // Autosave (debounced) — called from onInputChange
 let _autoTimer = null;
 function scheduleAutosave() {
+  if (window.RWPL) RWPL.soon();   // PLIB: one undo step per change (debounced)
   if (!LS_OK) return;
   clearTimeout(_autoTimer);
   _autoTimer = setTimeout(() => {
@@ -8702,6 +8706,34 @@ onInputChange();
 })(0);
 </script>
 <script>
+/* PLIB (2026-11-02): saved-project list and Undo / Redo (shared/projects.js, shared/projects-ui.js). Display and storage only:
+   the list is the tool's own key retaincalcpro.projects.v1 in its own format ({ name: { fields, ts } }); the autosave and
+   last-project keys are unchanged. Undo / Redo: snapshots of snapshotFields() (every input of the sidebar), session only;
+   set = restoreFields() + onInputChange(), the tool's own open path. Open and Import JSON are one step each. */
+(function () {
+  if (!window.SharedProjects || !window.SharedProjectsUI) return;
+  const h = SharedProjects.history({ get: () => JSON.stringify(snapshotFields()), set: t => { restoreFields(JSON.parse(t)); onInputChange(); } });
+  let tm = null; const soon = () => { clearTimeout(tm); tm = setTimeout(() => h.record(), 400); };
+  let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
+  const store = SharedProjects.mapStore(ST, PROJ_KEY, { time: i => i && i.ts || null });
+  const last = () => { try { return LS_OK ? localStorage.getItem(LAST_KEY) : null; } catch (e) { return null; } };
+  const dlg = SharedProjectsUI.libraryDialog({ store, storage: ST, title: 'Saved projects (this browser)',
+    current: () => { const n = last(); return n && store.has(n) ? n : null; },
+    open: n => { loadProject(n); return true; },
+    renamed: (a, b) => { if (last() === a) { try { localStorage.setItem(LAST_KEY, b); } catch (e) { /* pointer not moved */ } }
+      const pn = document.getElementById('proj_name'); if (pn && pn.value.trim() === a) { pn.value = b; onInputChange(); } },
+    deleted: n => { if (last() === n) { try { localStorage.removeItem(LAST_KEY); } catch (e) { /* none */ } } },
+    changed: () => refreshProjectList(last() || undefined) });
+  const g = document.createElement('div'); g.className = 'hdr-group'; g.setAttribute('data-sp', 'row');
+  const B = (t, ti) => SharedProjectsUI.button(t, ti, { cls: 'btn' });
+  const bu = B('Undo', 'Undo the last input change (Ctrl+Z)'), br = B('Redo', 'Redo (Ctrl+Y or Ctrl+Shift+Z)'), bl = B('Saved projects\u2026', 'The projects saved in this browser: open, rename, duplicate, delete');
+  bl.addEventListener('click', () => dlg.show()); g.append(bu, br, bl);
+  const grp = document.querySelector('header .hdr-group'); if (grp) grp.parentNode.insertBefore(g, grp);
+  SharedProjectsUI.undoRedo(h, { undo: bu, redo: br });
+  h.reset(); window.RWPL = { h, store, dlg, soon };
+})();
+</script>
+<script>
 // ================================================================
 // REPORT TAB (RWRP, 2026-11-01): the calculation report in the shared viewer
 // (shared/report.js: navigation tree, numbered sections §n.m, collapse / expand, search, Print with a title block,
@@ -9372,4 +9404,4 @@ syncHeaderControls();
 })();
 </script>
 </body>
-</html>
+</html>
