@@ -2102,3 +2102,35 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   f′c + 500 psi; Undo / Redo exact; the dialog lists and opens a project saved by the standalone tool. `node tests/smoke/phone-layout.mjs
   --tool cbc`: pass. `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
+
+## 2026-11-02 — PR: claude/plib-cbc — PLIB: Undo / Redo on the Beam Capacity and ASD Beam Calcs tabs   [display only]
+- **Before:** each tab's header: New, Save Project, Open (its own projects dialog; Beam Capacity's has Rename and Duplicate), Export /
+  Import JSON, Print / PDF. No undo. (The Development & Splice tab got Undo / Redo with the rebar app in PR #712.)
+- **Where** (both in the srcdoc of their frame, `#suite-frame-capacity` and `#suite-frame-asd`; edited by script: decode the srcdoc →
+  exact-string edits → re-encode with `&amp;` / `&quot;`; the file's CRLF kept):
+  - head: after the last library script (capacity: `three@0.160.0/build/three.min.js`; ASD: `katex@0.16.11/dist/katex.min.js`):
+    `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `autosave()`: **Before** `function autosave(){ lsSet(LS_AUTO,JSON.stringify(S)); }` (ASD: `lsSet(LS_AUTO, JSON.stringify(S))`)
+    **After** the same plus `if(PLU) PLU.soon(); /* PLIB: one undo step per change (debounced) */` inside the braces (the step is
+    recorded 400 ms after the last autosave).
+  - before `function init(){`: `var PLU=null; function plibUndoInit(){…}` (anchor `/* PLIB (2026-11-02): Undo / Redo for the`): history
+    over `S` without `S.ui` (output tab, collapsed cards, detail combination, print options: views) and, in ASD, without `S.projFromCap`
+    (bookkeeping of the title block last received from Beam Capacity); `set` = `mergeState()` of the step with those fields as they are
+    now, then `refresh()` (which autosaves; in Beam Capacity it also relays the shared inputs to ASD, as any change does). Buttons Undo,
+    Redo after Open; Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z inside the tab.
+  - `init()`: `plibUndoInit();` after its first `refresh();` (restoring the session is not a step).
+  - opening a project starts a new history: capacity `loadProject()` and `doImport()`; ASD `projDialogGo()` and `doImport()`:
+    `if(PLU) PLU.h.reset();` after their `refresh();`. New is a step (it can be undone).
+  - ASD only, the live-bridge message listener (anchor `const p=d.data;`): `const plb=PLU?PLU.full():null;` before applying, and after
+    its `refresh();` `if(PLU&&PLU.full()!==plb){ PLU.h.reset(); }`: a change relayed from Beam Capacity (section, materials, title
+    block; CBC-O13b) is not an undo step but starts a new ASD history, so an undo in ASD never brings back values from before it (at
+    start-up the first relay also changes the auto allowables, which would otherwise be a step that undoes nothing).
+- **Saved data:** keys `rcbeam_v2_auto`, `rcbeam_v2_projects`, `asd_v1_auto`, `asd_v1_projects` and their formats unchanged; no new key.
+- **How verified (headless, scratch scripts):** origin/main vs this branch, `S` (without `ui`) and `CC` of both tabs identical on load,
+  after Beam Capacity b_w + 2 in, and after ASD M_DL + 50 / M_LL + 30; Beam Capacity: Undo → results before the change, Redo → after,
+  an output-tab change not a step; ASD: two edits, Undo ×2 / Redo ×2 exact, Ctrl+Z one step; a Beam Capacity change relayed to ASD
+  leaves ASD with no undo step; no new console errors. `node tests/smoke/phone-layout.mjs --tool cbc`: pass (console errors as on main).
+  Header screenshot looked at. `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Open item (raised, not changed):** the ASD Beam Calcs tab's own projects dialog has no Rename / Duplicate (Beam Capacity's and the
+  Development & Splice tab's have them).
