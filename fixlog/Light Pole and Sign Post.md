@@ -1682,7 +1682,7 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - **Saved data:** new input `ltsRs` (default 0 when absent). No key or format change.
 - **How verified:** check-syntax pass; `node tests/engine/run.mjs lightpole` 31 passed (5 new); `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL; anchor hand-off smoke ALL PASS; LTS mode pole and monopost at 1280 / 390 px: no overflow, 0 console errors.
 
-## 2026-11-02 — PR #PRNUM: claude/lp-lts-3 (LTS-3: LRFDLTS member checks, Section 5, and second order; IBC mode unchanged)
+## 2026-11-02 — PR #652 (https://github.com/mlococo88/All-Structural/pull/652): claude/lp-lts-3 (LTS-3: LRFDLTS member checks, Section 5, and second order; IBC mode unchanged)
 
 ### LTS3-1. Member checks along the pole / post   [new, LTS mode only] [IBC results unchanged]
 - **Where:** `apps/light-pole/lts-engine.js`, block `LTS-3 (2026-11-02): member checks`: `PHI`, `classify`, `mnOf`, `pnc`, `shearTorsion`, `b2`, `interaction`, `memberCheck`, `memberSteps`. Page: `ltsSections(inp)` (21 sections, the tool's `hssProps`, self-weight above each), `ltsGeom()` gets `taper` and `Ht`, Post-tab card `#ltsMemberCard`, Summary row "Pole/Post — combined forces"; `ltsCalc()` builds the Summary card last (it reads the member result). `windForces`: a rectangular tube shows its depth Ht to a wind along y (before: B in every direction; LTS mode only, LTS-2 results for round/square unchanged).
