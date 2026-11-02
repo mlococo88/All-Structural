@@ -35,3 +35,11 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
   after `'.spLib .spScroll{overflow-x:auto;}',`: `@media (max-width:560px){ .spLib td.spAct{white-space:normal;text-align:left;} … }`.
 - **Tools that load the file and were re-tested:** ASCE7-16 Load Generator (`--tool asce7`), Stone Masonry Arch Load Rating
   (`--tool stonearch`), Gusset Plate Rating (`--tool gusset`): ALL PASS each.
+
+## 2026-11-02 — PR: [#691](https://github.com/mlococo88/All-Structural/pull/691) — projects-ui.js: optional "Save the open project…" button in the dialog   [display only]
+- **Why:** Bridge Substructure Loading had no Save-to-browser of its own and no room in its header for another button.
+- **Where:** `libraryDialog(ctx)`: the dialog head shows `<button data-spa="save">` (text `ctx.saveLabel`) only when `ctx.save` is given; the
+  click calls `ctx.save()` (the tool asks for the name and returns the `mapStore` result), shows a refused write's message, calls
+  `ctx.changed()` and redraws. Tools that do not pass `ctx.save` are unchanged.
+- **Tools that load the file, re-tested:** `tests/smoke/project-library.mjs` with `--tool` asce7, stonearch, gusset, retwall, baseplate,
+  spreadfooting, steelbeam, edm, abutment, lightpole, timber, mlg, spc, bsl: ALL PASS each.
