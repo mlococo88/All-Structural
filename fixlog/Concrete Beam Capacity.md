@@ -2091,3 +2091,14 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Tools that contain this snippet:** `ACI Rebar Development Length.html`, `Concrete Beam Capacity.html` (Development & Splice tab).
 - **How verified:** origin/main vs branch, headless, default suite: the Development & Splice results (`computeFactors`, `calcTension`, `calcHook`, `calcComp`, `calcTensSplice`, `calcCompSplice`) and localStorage (`asd_v1_auto`, `rcbeam_v2_auto`, `rcsuite.rebar_autosave_v1`) identical; the combined Report text differs only in chapter C: 3 lines changed (project note, product limit, schedule note) and 58 added (the commentary, the code-check count); 0 unresolved references. `node tests/check-syntax.mjs "Concrete Beam Capacity.html"` and the decoded dev srcdoc: pass. `node tests/smoke/phone-layout.mjs --tool cbc`: pass.
 - **Provision:** none. **Saved data:** none.
+
+## 2026-11-02 — PR: claude/plib-rebar, PR #712: https://github.com/mlococo88/All-Structural/pull/712 — Development & Splice tab: "Saved projects…" dialog and Undo / Redo, synced from ACI Rebar Development Length.html (PLIB)   [display and storage only]
+- **Where:** the embedded copy of the rebar app (`<iframe id="suite-frame-dev" srcdoc="…">`), same edits and anchors as the standalone tool:
+  see `fixlog/ACI Rebar Development Length.md`, entry "claude/plib-rebar". Applied by script (decode the srcdoc → exact-string edits →
+  re-encode with `&amp;` / `&quot;`; CRLF kept). In this copy the title bar has no "← All tools" link, so Undo and Redo are appended to it.
+- **Saved data:** `rebar_aci_projects_v1` (shared with the standalone tool, unchanged) and this tab's autosave `rcsuite.rebar_autosave_v1`
+  unchanged; no new key. The other two tabs (capacity, ASD) are not changed.
+- **How verified:** headless: the frame's `readInputs()`, `computeFactors()` and dashboard text identical to origin/main on load and after
+  f′c + 500 psi; Undo / Redo exact; the dialog lists and opens a project saved by the standalone tool. `node tests/smoke/phone-layout.mjs
+  --tool cbc`: pass. `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
