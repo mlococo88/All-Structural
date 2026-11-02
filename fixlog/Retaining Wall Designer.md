@@ -1809,3 +1809,30 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Open items (display only, raised, not changed):**
   - Footing tab, Heel Step 3 card (`renderFooting`, anchor `{sym:'d_b', desc:'assumed bar diameter (#7)', val:'0.875', unit:'in'}`; also `{sym:'c_c', desc:'top clear cover', val:'2.00'…}`): the var table shows a fixed #7 / 0.875 in and a 2.00 in cover. The equation beside it uses the selected bar (`r.sel_heel.bar.db`) and the input cover (`inp.cov_ftg`). The same fixed d_b line is in the toe card and a #6 one at about line 4697. The Report uses the actual values.
   - AASHTO Stability tab, Step 6 with q_R from the geotechnical report (`qn_mode = 'manual'`): the var table still lists "q_n nominal bearing resistance = 3 q_a" (9000 psf), which that mode does not use.
+
+## 2026-11-02 — PR: claude/rwall-footing-db-label, PR #699: https://github.com/mlococo88/All-Structural/pull/699 (RWDB: the effective-depth tables show the selected bar's d_b and the input cover; q_n is not listed when q_R is entered; display only, no result change)
+- **Engineer request (2026-11-02):** fix the two display issues raised in RWRX (#689): show the selected bar's d_b and the input cover, and hide q_n = 3 q_a when q_R is entered. No result change.
+- **Problem:** the "where" tables beside three effective-depth equations listed fixed values, while the equation beside each used the real ones:
+  - Stem Step 2: "assumed bar diameter (#6) 0.750";
+  - Heel Step 3: "top clear cover 2.00" and "assumed bar diameter (#7) 0.875";
+  - Toe Step 3: "assumed bar diameter (#7) 0.875".
+  - The heel card subtitle also read "d = t_f − 2.0'' cover − d_b/2".
+  - The equations use `r.sel_stem/heel/toe.bar.db` and `inp.cov_stem` / `inp.cov_ftg`.
+  - In AASHTO mode with q_R from the geotechnical report (`qn_mode = 'manual'`), Step 6 listed "q_n nominal bearing resistance = 3 q_a", which that mode does not use.
+- **Where / before → after (`renderStem`, `renderFooting`, `renderStability`; anchors in the code are tagged `RWDB`):**
+  - Stem Step 2: `{sym:'d_b', desc:'assumed bar diameter (#6)', val:'0.750', …}` → `{sym:'d_b', desc:` + "`diameter of the selected bar (#${r.sel_stem.bar.num})`" + `, val:F(r.sel_stem.bar.db,3), …}`.
+  - Heel Step 3:
+    - card-ref `d = t_f − 2.0'' cover − d_b/2` → `d = t_f − cover − d_b/2 · cover = ${F(inp.cov_ftg,2)} in`;
+    - `{sym:'c_c', desc:'top clear cover', val:'2.00'}` → `{sym:'c_c', desc:'clear cover (footing cover input)', val:F(inp.cov_ftg,2)}`;
+    - d_b row as in the stem, with `r.sel_heel`.
+  - Toe Step 3: d_b row as in the stem, with `r.sel_toe`.
+  - AASHTO Step 6: the q_n row is `...(a.useManualQn ? [] : [{sym:'q_n', desc:'nominal bearing resistance (≈ 3 q_a)', …}])`.
+- **Check case (default wall, ACI):**
+  - Heel: d = 18.0 − 3.00 − 0.250 = 14.750 in (equation unchanged). The table now reads c_c = 3.00 in and d_b (#4) = 0.500 in; before it read 2.00 and 0.875.
+  - Stem: d_b (#4) = 0.500 in; before it read 0.750.
+- **Governing provision:** none. No formula or computed value changed.
+- **How verified:**
+  - `node tests/check-syntax.mjs`: pass.
+  - origin/main vs branch, three cases (ACI default; AASHTO with the default q_R placeholder; AASHTO with manual q_R and footing cover 2.5 in): `window._R` and localStorage identical.
+  - Tab text differs only in the lines above. The stem, heel and toe d_b rows now equal the bars in the equations: #4 / #5 / #3 etc.
+- **Other copies:** none. The Report tab already used the actual values.
