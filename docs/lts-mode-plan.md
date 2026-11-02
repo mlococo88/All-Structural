@@ -368,7 +368,17 @@ The PRs:
 5. **LTS-6** (done, 2026-11-02) Base plate (label per Q-C3; the four "2nd Ed." texts corrected) and the base weld (Q-B5).
 6. **LTS-7** (done, 2026-11-02; with the optional square-tube corner radius for Q-C9/Q-C10) Foundation: Broms with factored loads as the design check; ACI structural check with LTS loads (Q-C4); the 3 in cover check.
 7. **LTS-8** (done, 2026-11-02) Export of the LTS combinations to the Anchorage app.
-8. **LTS-9** Report, drawings, manual.
+8. **LTS-9** (done, 2026-11-02) Report, drawings, manual.
+
+### 5.1 Status after LTS-9 (2026-11-02)
+
+All planned steps are merged (#649, #651, #652, #653, #654, #655, #656, #657). The "in development — not for design" banner stays until the engineer releases the mode. Open items for that decision:
+- Q-B4 (deflection limits under Service I);
+- Q-B5 (base weld per AWS D1.1 / AISC §J2);
+- Q-C9 / Q-C10 (square/rect. flat width and torsional constant without a corner radius) and the undefined "s" of Table B.3-1;
+- soil torsion of the shaft (Art. 13.6 gives no method; open item N2);
+- dimensioned drawings / DXF in the LTS mode (IBC only today);
+- multi-sided (8/12/16) sections (LTS-3b, not built).
 
 ## 6. Owner amendments (RIDOT, MassDOT, CTDOT)
 
