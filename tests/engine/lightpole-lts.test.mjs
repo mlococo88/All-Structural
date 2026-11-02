@@ -85,3 +85,54 @@ test('LTS-2: Table 3.9.3-1 case 3 = 0.75 (normal) + 0.75 (transverse); Extreme I
   near(r('n0').P, 1.1 * (300 + 55), 1e-9, 'P E1max'); near(ba.rows.find(x => x.combo === 'E1min').P, 0.9 * 355, 1e-9, 'P E1min');
   near(ba.rows.find(x => x.combo === 'S1').P, 1.25 * 355, 1e-9, 'P S1');
 });
+
+/* ---------- LTS-3: member checks (Section 5), second order (Art. 4.8.1). HC-1 worked by hand (Python, independent of the engine):
+   base D 8 × t 0.1793, F_y 55: D/t = 44.62 > λp = 0.07E/F_y = 36.91 → noncompact; Z = (8³ − 7.6414³)/6 = 10.969 in³,
+   M_n = 603.27·(0.77 + 0.016·527.27/44.62) = 578.58, φM_n = 520.72 kip-in. Pole weight 465.44 lb.
+   B₂ (Eq. 4.8.1-1): I_B 33.698, I_T 4.5 × 0.1793: P_eq = (I_B/I_T)^(1/3)·1.1·0.055 + 0.38·1.1·0.46544 = 0.30402 kip,
+   P_E,bot = π²·29000·33.698/(2·480)² = 10.4655 kip → B₂ = 1.02992; kL/r = 447.1 ≥ 2π√(E/F_y) = 144.3 (valid).
+   P_nc: KL/r = 2.1·480/2.1475 = 469.4, F_e = 1.2988, F_cr = 0.877F_e = 1.1390 ksi, φP_nc = 0.9·4.4053·1.1390 = 4.516 kip.
+   φV_n = 0.9·33.0·4.4053/2 = 65.42 kip; φT_n = 0.95·(2π·3.91035²·0.1793)·33.0 = 540.04 kip-in.
+   Extreme I max, wind toward 90°: V = 771.4 lb, M_y = 18,739.6 lb·ft, M_x (fixture weight) = 1.1·55·6 = 363 lb·ft,
+   M_u = 224.92 kip-in, P_u = 1.1·(465.44 + 55) = 0.57248 kip, T_u = 6.4916 kip-in (T_u/T_r = 0.012 ≤ 0.20 → shear and torsion ignored);
+   P_u/P_r = 0.12677 < 0.20 → Eq. 5.12.1-3: 0.12677/2 + 1.02992·224.92/520.72 = 0.06338 + 0.44485 = 0.50824.
+   Governing: load case 3 (0.75·0° + 0.75·90°, Table 3.9.3-1): M_x = 0.75·(13,862.08 + 58.384·40) + 363 = 12,511.1, M_y = 0.75·18,739.6
+   = 14,054.7 lb·ft → M_u = 18,816.7 lb·ft = 225.80 kip-in → 0.06338 + 1.02992·225.80/520.72 = 0.50999. ---------- */
+function roundSecs(H, Dt, Db, t, den) {
+  const props = D => { const Di = D - 2 * t, A = Math.PI / 4 * (D * D - Di * Di), I = Math.PI / 64 * (D ** 4 - Di ** 4), Z = (D ** 3 - Di ** 3) / 6;
+    return { A, Ix: I, Iy: I, Sx: I / (D / 2), Sy: I / (D / 2), Zx: Z, Zy: Z, rx: Math.sqrt(I / A), ry: Math.sqrt(I / A) }; };
+  const Dz = z => Dt + (Db - Dt) * (H - z) / H, M = 4000, dz = H / M;
+  const wAbove = z => { let w = 0; for (let i = 0; i < M; i++) { const zm = (i + 0.5) * dz; if (zm > z) w += props(Dz(zm)).A / 144 * dz * den; } return w; };
+  return Array.from({ length: 21 }, (_, k) => { const z = H * k / 20, D = Dz(z); return { z, shape: 'round', D, B: D, Ht: D, t, ...props(D), Wabove: wAbove(z) }; });
+}
+test('LTS-3 HC-1: base φM_n 520.72, φP_nc 4.516, φV_n 65.42, φT_n 540.04 kip(-in); B₂ 1.0299 (Art. 4.8.1, valid); ratio at the base 0.5100 (Eq. 5.12.1-3, load case 3)', () => {
+  const L = ltsEngine(), secs = roundSecs(40, 4.5, 8, 0.1793, 490);
+  const g = { ...HC1, DCpole: secs[0].Wabove, taper: true };
+  const mc = L.memberCheck(g, { V: 130, Vsvc: 76, tIce: 0 }, secs, 55);
+  const b = mc.rows.find(r => r.sec.z === 0);
+  near(secs[0].Wabove, 465.44, 0.05, 'pole W');
+  near(b.Mrx, 520.72, 0.01, 'φMn'); assert.equal(b.mx.cls, 'noncompact');
+  near(b.Pr, 4.516, 0.001, 'φPnc'); near(b.Vr, 65.42, 0.01, 'φVn'); near(b.Tr, 540.04, 0.05, 'φTn');
+  near(mc.Bs.E1max.B, 1.02992, 2e-5, 'B2'); assert.equal(mc.Bs.E1max.valid, true); near(mc.Bs.E1max.klr, 447.08, 0.02, 'kL/r');
+  near(b.gov.ratio, 0.50999, 2e-4, 'ratio'); assert.equal(b.gov.eq, '5.12.1-3'); assert.ok(['d45', 'd315'].includes(b.gov.lc));
+  near(b.gov.Mu, 225.80, 0.01, 'Mu');
+});
+test('LTS-3: Table 5.8.2-1 round branches and λ > λmax not permitted; Eq. 5.12.1-1 used when T_u/T_r > 0.20', () => {
+  const L = ltsEngine(), sec = { shape: 'round', D: 10, t: 0.25 };
+  const cl = L.classify(sec, 50); near(cl.lp, 40.6, 1e-9, 'λp'); near(cl.lrF, 179.8, 1e-9, 'λr');
+  assert.equal(L.mnOf(sec, 10, 50, cl).cls, 'compact');
+  const thin = { shape: 'round', D: 30, t: 0.1 }; assert.equal(L.mnOf(thin, 10, 50, L.classify(thin, 50)).cls, 'exceeds λmax (not permitted)');
+  const it = L.interaction({ Pu: 1, Pr: 10, BMr: 0.5, Vr: 0.1, Tr: 0.3 }); assert.equal(it.eq, '5.12.1-1'); near(it.ratio, 0.1 + 0.9 ** 2, 1e-12, 'Eq. 5.12.1-1');
+});
+/* HC-2 by hand (Python, independent): post 6.625 × 0.280, F_y 42, 12 ft, 227.9 lb; D/t = 23.66 ≤ 48.33 → compact, φM_n = 0.9·Z·F_y = 426.38 kip-in;
+   wind toward 0°, V = 76 mph (10-yr): post 99.92 lb (M 599.5), panel 637.3 lb at 9.5 ft → M_u = 6,653.9 lb·ft = 79.847 kip-in, T = 764.8 lb·ft;
+   KL/r = 2.1·144/2.2455 = 134.67, F_cr = 13.84, φP_nc = 69.52 kip; P_u = 1.1·(227.9 + 160) = 0.42670 kip; B = 1/(1 − P_u/P_e) = 1.00487 (Eq. 5.12.1-10);
+   T_u/T_r = 9.177/423.90 = 0.0216 → Eq. 5.12.1-3: 0.00614/2 + 1.00487·79.847/426.38 = 0.19125. */
+test('LTS-3 HC-2: monopost φM_n 426.38, B 1.00487 (prismatic, Eq. 5.12.1-10), base ratio 0.1912 (Eq. 5.12.1-3, case 1 normal)', () => {
+  const L = ltsEngine(), secs = roundSecs(12, 6.625, 6.625, 0.28, 490);
+  const g = { ...HC2, DCpole: secs[0].Wabove, taper: false };
+  const mc = L.memberCheck(g, { V: 76, Vsvc: 76, tIce: 0 }, secs, 42), b = mc.rows.find(r => r.sec.z === 0);
+  near(secs[0].Wabove, 227.905, 0.01, 'W'); near(b.Mrx, 426.378, 0.01, 'φMn'); near(b.Pr, 69.524, 0.01, 'φPnc'); near(b.Tr, 423.90, 0.05, 'φTn');
+  near(mc.Bs.E1max.B, 1.004868, 2e-6, 'B'); assert.equal(mc.Bs.E1max.method, '5.12.1-10');
+  near(b.gov.ratio, 0.19125, 2e-4, 'ratio'); assert.ok(['n0', 'n180'].includes(b.gov.lc));
+});
