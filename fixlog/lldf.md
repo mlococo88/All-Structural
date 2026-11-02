@@ -1809,3 +1809,76 @@ index 219cc2c..a3e337e 100644
   Everything else (results JSON, sheet, D11 print) is identical to main; the other 10 harness cases are identical.
 - Hand-off: `governing.exterior.fatM` for type (d) changes the same way. Prestressed Bridge Design (`loads.fatM`) and index.html
   ("use LL & DL fatM") pick it up only when the user pulls the LLDF values again; their saved values are not changed.
+
+## 2026-11-02 — PR: lldf-layout (LXL) — two-panel layout: inputs left, results right, each in tabs (UI only; no result change)
+### Problem
+- Engineer: "I want the input to be in the typical left-justified panel like most of the other apps. Then the output is on the
+  right. Split the input and output into organized tabs." Before, the page was one long calculation sheet (inputs in card 1.0, the
+  results below), and the header buttons wrapped into a tall bar at 1280 px.
+### What changed (display only)
+- Layout as Spread Footing, Base Plate and the Steel Bridge app: header bar (title, design-beam chip, actions; project bar below),
+  then the input panel (left, `#inputPanel`, its own scroll and input tabs) and the output panel (right, `#outputPanel`, its own
+  scroll and output tabs). Below 900 px the panels stack (inputs, a "Jump to the results" link, results) and the page scrolls.
+- Input tabs: **Bridge** (Project title-block fields; cross-section type and Table 4.6.2.2.1-1 button; spans, design region, skew θ
+  and θ_V; slab thickness and overhangs) · **Girders** (beam layout N_b / spacing and MassDOT beam types; standard section, depth,
+  shape; K_g section properties or box properties) · **Roadway & lanes** (curbs / railings, sidewalks, a note on w and N_L with links)
+  · **Dead loads** (deck appurtenances: method, wearing surface, unit weights, median, pedestrian LL; the "Loads on the bridge" table
+  with + Add load) · **Options & images** (median joint, special sidewalk beam; 3.9 reference images).
+- Output tabs: **Summary** (2.0 DF table per girder with the girder picker, derived quantities S_avg, d_e, w, N_L, K_g, 3.0
+  cross-section figure) · **LL worked steps** (4.0, girder picker) · **Lever rule** (Figure 2 with truck / gap controls, 4L table;
+  hidden for types without the lever rule) · **Dead load** (3.6 distribution, bars, per-beam table) · **DL worked steps** (4D) ·
+  **Applicability & notes** (5.0, 6.0, basis and limitations) · **Report** (the LLRP shared-viewer report) · **Calc sheet** (the D11
+  print report on screen, built when the tab opens; Rebuild button).
+- The open input / output tab is remembered per browser: new UI keys `lldf_lxInTab_v1`, `lldf_lxOutTab_v1` (try/catch; nothing else
+  stored). No saved-data key or format, project JSON or hand-off payload changes.
+### Where (to re-apply by hand)
+- Body: `<nav class="lldf-views" id="lldfViews">…</nav>`, `<div class="lldf-rptview" id="lldfRptView" style="display:none"></div>` and
+  `<div class="sheet" id="sheet">` replaced by the jump link `#lxJumpOut`, the shell `<div class="lx-shell" id="sheet">` with
+  `<aside class="lx-in noprint" id="inputPanel">` (tab bar `#lxInTabs`), `<main class="lx-out" id="outputPanel">` (tab bar
+  `#lxOutTabs`, `#lldfRptView`), and the former sheet as `<div class="sheet lx-home" id="lxHome">` (hidden on screen); one more
+  `</div>` closes the shell before `<!-- D11: the calculation report …`. The id `sheet` is now the shell, so `#sheet .titleblock`,
+  `#sheet .disclaimer`, `#sheet .tb-id …` (D11, LLRP, geometry-source line) and the hand-off banner (`insertBefore(…, #sheet)`) work
+  as before.
+- CSS: the `.lldf-views` rules removed; `.lldf-rptview` margins 0; new block after `#lldfReport .disclaimer{margin-top:14pt}` anchored
+  `/* ===== LXL (2026-11-01): two-panel screen layout`. Screen ≥ 900 px: `body{height:100vh;overflow:hidden;display:flex;
+  flex-direction:column}`, the panels `position:relative;height:100%;overflow-y:auto` (KaTeX's absolutely positioned MathML spans stay
+  inside the panels: the scroll trap fixed in Spread Footing PR #524), sticky tab bars. Print: the shell hides while the D11 report
+  prints (`body.lldf-rpt .lx-shell{display:none}`).
+- New script before `</body>` anchored `/* ===== LXL (2026-11-01): TWO-PANEL LAYOUT`: builds the tabs, cards and panes, and moves
+  the sheet's cards into them by node (ids, values, listeners kept); each move leaves a comment marker `<!--lxl-->` in the sheet.
+  `restore()` puts every card back at its marker; `window.lldfBuildReport` is wrapped: restore (the sheet off screen at its former
+  940 px width, `body.lx-restored`), build the D11 report exactly as before, put the cards back, run() to redraw the figures at their
+  tab's width. Cards created on the first run (3.6 `#mdDistSec` and its loads table, 4D `#mdDLSec`, `#geomSrcLine`) are placed when
+  they appear, their markers after the geometry / steps card as the sheet had them. `run()` is wrapped last (in the last load
+  handler): place new cards, sync the girder pickers, hide the Lever rule tab when 4L is hidden. A figure drawn while its tab was
+  hidden is redrawn (run()) when the tab opens. In the two-panel layout a page scroll by script is reset to 0. `window.LXL` =
+  { reveal, view, stick, showIn, showOut, restore, apply, cur }.
+- LLRP (Report tab) script: `setView(v)` calls `LXL.view(v)` instead of hiding `#sheet` (the Report is an output tab), and does not
+  `window.scrollTo(0,0)`; `gotoSheet(name)` opens the tab holding the card with `LXL.reveal(card,true)`; `SharedReport.mount(…,
+  {stick: LXL.stick()})` (the report scrolls in the output panel below its tab bar).
+- D11 script, `gotoStep(a)`: before `t.scrollIntoView({behavior:"smooth",block:"center"});` added
+  `if(window.LXL) LXL.reveal(t,false);` (a Worked-in link opens the tab with the worked step).
+### Governing provision
+- None (UI only). No formula, factor, unit or code reference changed (CLAUDE.md §4).
+### How verified
+- Engine: `node tests/engine/lldf-hash.mjs` (1,592 cases, 11,135 outputs, 92,802 worked steps): identical hashes (the engine text
+  is not touched).
+- Browser, main vs this branch (scratchpad `shots-lldf-layout/par.mjs`, the LLRP harness extended), 11 cases (defaults k; a; a with
+  N_b = 3, θ 40°, θ_V 50°; k S = 17 ft 35°; continuous pier region; f; g; b/c; b/c S = 19 ft; d; slab): computeBridge and readInputs
+  JSON identical; the text and shown/hidden state of every result card (2.0 table, derived, 4.0 steps, 4L, figures and captions, 5.0,
+  6.0, 3.6 tables, 4D, beam types, spacing) and every input value identical; the D11 print report identical in text **and HTML**
+  (markers aside: figures drawn at the same width); the Report tab's checks (refs, KaTeX, NaN, step values = app values) pass;
+  localStorage keys and values after load identical (timestamps aside); Send DFs / Send DL payloads (`bridgeSuite.v1.lldf`,
+  `.dlLoads`, `.beamRoster`, `.designBeam`) identical; serialize() identical; 0 console errors. 144 checks, all pass.
+- New smoke test `tests/smoke/lldf-layout.mjs`: layout (no input left on the hidden sheet, every result card in an output tab),
+  D11 report built and cards back in their tabs, Calc sheet tab, Ctrl+P from Calc sheet (D11) and Report (report); at 1280×800,
+  1366×768, 1920×1080 every tab: document no taller / wider than the window, wheel scrolls each panel down and back to 0; Worked-in,
+  report and note links open the right tab with the document at 0; scrollIntoView / focus / window.scrollTo reset; touch swipes;
+  390 px stacked with no horizontal scroll; inside index.html's frame (MCT → LL & DL Distribution) at 1280×800.
+### Other copies
+- None. The `bridgeSuite.v1` bootstrap snippet (shared with index.html and Prestressed Bridge Design.html) is not touched.
+### Open items
+- LXL-O1: the lever-rule truck gaps stay with Figure 2 on the Lever rule tab (they change only that figure's configuration; the
+  Roadway tab links to them). Move them to the input panel if the engineer prefers.
+- LXL-O2: skew corrections are worked inside each girder's LL worked steps (4.0), not in a tab of their own (splitting them out would
+  change the step list the D11 and Report number from).

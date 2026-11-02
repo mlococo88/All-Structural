@@ -105,3 +105,15 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 - Display only; no calculation, saved-data or markup change. Notes that are only a link (Retaining Wall Designer `onTab`: "On screen: Stability tab · …") now print that line instead of an empty note.
 - **Check:** on any tool, Report tab → Print report: e.g. Moving Load Generator, Inputs: "… travel: both directions. On screen: ." → "… On screen: Vehicle Configuration."
 - **Verified:** `node tests/engine/run.mjs report steps steps-groups report-wiring` 14 passed; printed-text check (headless Chromium, print media, "Print report") on 16 tools: links hidden in print 400 → 0; empty-gap fragments 61 → 20, the 20 left being the same in both (KaTeX math lines split by innerText in Base Plate and Concrete Beam Capacity, "axleLs()" in Stone Arch prose), i.e. link gaps 41 → 0.
+
+## 2026-11-01 — PR: claude/shared-report-eq-wrap — on-screen equations: wrapped lines no longer overlap, tall fractions no longer clipped
+- **Where:** `CSS` (anchor: the line before `#rp-print{display:none;}`).
+- **Before:** (no rule) — `.rp-step .rp-m{grid-area:m;padding-left:0.25in;overflow-x:auto;}` only.
+- **After:** added
+  ```
+  @media screen{.rp-step .rp-m{padding-top:2pt;padding-bottom:2pt;} .rp-step .rp-m .katex .base{margin:2pt 0;}}
+  ```
+- **Why:** `overflow-x:auto` on the equation box makes its vertical overflow scroll too, so the part of a tall fraction above the box top (or below its bottom) was cut off; and a KaTeX line that wraps (inline mode breaks between `.base` boxes) sat its next line close enough that a fraction numerator ran into the line above. The vertical margin on each `.base` (an inline-block) makes each line box taller, so wrapped lines clear each other; the padding keeps the fraction ink inside the scroll box. Screen only (`@media screen`): print already sets `overflow:visible` and is unchanged.
+- Display only; no calculation, saved-data or markup change.
+- **Check:** Steel Bridge Report at 390 px, "G2: deck slab (DC1)": before, the numerator of 8.50/12 on the wrapped line touches "w_deck =" above; after, clear.
+- **Verified:** `node tests/engine/run.mjs report steps steps-groups report-wiring` 14 passed; headless Chromium, every step of the Steel Bridge, Spread Footing, Prestressed, Stone Arch and abutment reports at 1280 and 390 px: equation boxes whose content extends past the box 3,037 → 6 (none visible: Prestressed 2 per width by ≤1.4 px; Stone Arch 1 per width, the stiffness matrix, whose rendering is the same before and after), wrapped lines overlapping the line above 639 → 22 (Steel Bridge at 390, glyph boxes within 2.2 px, no visible ink overlap), equations overlapping the step label 1,401 → 0.
