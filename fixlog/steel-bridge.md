@@ -3729,7 +3729,7 @@ current design's analysis accepted; **the minimum shipping piece length raised f
 ### Other copies
 - None.
 
-## 2026-11-02 — PR: claude/sb-dup-designs — Auto design list: "Differs from #1 in" column (the 1-gage-line twin explained; display only)
+## 2026-11-02 — PR #697: https://github.com/mlococo88/All-Structural/pull/697 (claude/sb-dup-designs) — Auto design list: "Differs from #1 in" column (the 1-gage-line twin explained; display only)
 ### Why
 - Engineer: with Designs to list = 2, the default project lists two designs with the same N_b, D and weight. Are they duplicates?
 ### Finding
