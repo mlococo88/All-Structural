@@ -3838,7 +3838,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - Step-level references print the subsection number (§6.7), as the shared report does elsewhere.
   - The old print path (`renderPrintHeader`, "see §" on chips) is left to the agent retiring the old print reports.
 
-## 2026-11-02 — PR: claude/sf-pm-bracket — P–M neutral-axis search: lower bracket expanded; combinations the section cannot reach are NG (SFPB; calculation change)
+## 2026-11-02 — PR: claude/sf-pm-bracket — P–M neutral-axis search: lower bracket expanded; combinations the section cannot reach are NG (SFPB; calculation change) (PR #698: https://github.com/mlococo88/All-Structural/pull/698)
 
 ### SFPB. `pmContour` lower bracket on c   [calculation change; CLAUDE.md §4]
 - **Finding** (independent review of the engineer's "Seymour Platform Foundation" report, item A1; approved 2026-11-02):
