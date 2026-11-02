@@ -116,16 +116,18 @@ test('CTDOT: the splice bolt fit (DT10) is a sizing constraint; details that fai
   // SB2-AD8 (B4, 2026-11-01): the splice auto-design takes CTDOT's 2 in end distances, so DT4 no longer fails in the candidates and is no
   // longer a blocker. The built-in project still has no CTDOT candidate: a candidate's splice fails TF3 (slip, oversized holes K_h = 0.85) on
   // the full check (open item, fixlog sbd-ad8); before AD8 every candidate was "blocked" by DT4 instead.
+  // 2026-11-01: an advisory splice item ('adv': TF3 slip at Service II, the excess moment to the web, WS3 / C6.13.6.1.3b) is a warning in the
+  // full check, not a failure: the built-in project now has a CTDOT candidate (before: none, TF3 1.076 'adv' at FS4 counted as a failure;
+  // before AD8 (#534): every design "blocked" by DT4).
   const R = runAD(P, { mode: 'refine', topN: 1 });
-  assert.equal(R.cands.length, 0); assert.ok(!R.blocked.some(b => b.blockers.includes('splices DT4')), 'DT4 is not a blocker (AD8)');
-  // the narrow flanges show in the splice module as DT3 (inner plate edge, web side) and DT7 (web splice plates) on the current design
-  // (engine/splices.js autoDesign leaves the splice unchanged with the GD62 note: 17 in needed, 18 in on CTDOT's 2 in width increment)
+  assert.ok(R.cands.length >= 1, R.note);
   const cur = new Set(R.current.full.fails.map(f => `${f.mod} ${f.id}`));
   assert.ok(cur.has('splices DT3') && cur.has('splices DT7'), `the current design fails the bolt fit (SB2-SP7): ${[...cur]}`);
-  for (const b of R.blocked) { assert.ok(b.blockers.every(k => cur.has(k)), 'blockers fail in the current design too');
-    ['splices DT3', 'splices DT7', 'splices DT10'].forEach(k => assert.ok(!b.blockers.includes(k), `${k} is not a blocker: Auto design sized the flanges for the splice bolts`));
-    boltFitHeld(b, AD.projectWith(P, b.L)); }
-  assert.ok(!/DT4/.test(R.note), R.note);
+  for (const c of R.cands) { const Q = AD.projectWith(P, c.L, c.det), E2 = AD.evaluate(Q, { level: 'full', ctx: {} });
+    assert.ok(E2.pass, `candidate fails: ${JSON.stringify(E2.fails.slice(0, 3))}`);
+    Object.keys(E2.mods).filter(k => /^spl/.test(k)).forEach(k => E2.mods[k].list.forEach(q => assert.ok(q.CK.every(cc => cc.status !== 'fail'), `${k} ${q.name}`)));
+    assert.ok(!E2.fails.some(f => f.mod === 'splices' && f.id === 'DT4'), 'DT4 passes (AD8)');
+    boltFitHeld(c, Q); }
 });
 
 test('Apply writes the candidate; Undo restores the design before it', () => {
