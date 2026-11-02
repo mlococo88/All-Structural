@@ -3,7 +3,7 @@
 Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input` (Node, the pure helpers) and
 `node tests/smoke/list-input.mjs` (browser: the widget on a test page, and every tool that loads the file, main vs the branch).
 
-## 2026-11-02 — PR: claude/list-input — created (new file): editable list tables in place of comma-separated boxes (LIST)   [display only]
+## 2026-11-02 — PR: claude/list-input, PR #681: https://github.com/mlococo88/All-Structural/pull/681 — created (new file): editable list tables in place of comma-separated boxes (LIST)   [display only]
 - **Why:** engineer decision 2026-11-02: no more comma-separated inputs. The short list inputs (about 25, survey of 33 in all)
   become small tables, one box per value, "+ Add" and "×" per row; multi-column lists (x:P pairs, a–b ranges) get one box per
   column. The multi-line paste boxes (Excel load combinations, USGS Sa table, survey points, hole coordinates, the masonry

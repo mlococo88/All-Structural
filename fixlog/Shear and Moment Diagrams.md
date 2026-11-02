@@ -1459,7 +1459,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
     - 0 console errors beyond the blocked CDN.
 - **Other copies:** none.
 
-## 2026-11-02 — PR: claude/list-input — Custom x: a table with one box per station (LIST)   [display only]
+## 2026-11-02 — PR: claude/list-input, PR #681: https://github.com/mlococo88/All-Structural/pull/681 — Custom x: a table with one box per station (LIST)   [display only]
 - **Why:** engineer decision 2026-11-02: no comma-separated inputs. First user of `shared/list-input.js` (`fixlog/shared-list-input.md`).
 - **Where (1):** the script tags, anchor `<script src="shared/report.js"></script>`. **Added after it:**
 ```html
