@@ -2192,3 +2192,43 @@ index 80ab977..ab363e3 100644
   - The "On screen: … tab" notes are now one link (`[[tab:…|On screen: … tab]]`), so the printed report no longer shows "On screen: ." (the viewer hides tab links in print).
 - **Saved data:** none (images in memory only). **Provision:** none.
 - **How verified (headless Chromium, Plotly 2.35.2 and KaTeX 0.16.11 from npm pack):** beam / composite / member / batch: 16 / 21 / 7 / 1 diagrams, every one an image in the report (all loaded), 0 left as notes; Ctrl+P on the Report tab prints them (16 images in the print box, beam default 47 pages; PDF page with shear and moment diagrams looked at); the earlier checks still pass (0 unresolved references, 0 KaTeX errors, 33 / 38 / 26 / 3 spot values, `S`, storage and other tabs unchanged). `node tests/check-syntax.mjs` passes.
+
+## 2026-11-02 — PR: claude/phone-print-steelbeam — Phone / tablet layout: one column below 900 px (PHN; display only, no calculation change)
+
+Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Every code site is tagged `PHN`.
+
+### PHN-1. One-column layout below 900 px   [display only]
+- **Problem:** the tool had no small-screen layout. `#app` is a fixed full-window box with `overflow:hidden`. Inside it the input panel (`min-width:340px`) sits beside the output panel, and the 7-column title grid has `minmax(105px,1fr)` columns.
+  - At 390 px the output panel was squeezed to about 30 px and cut off: the output tabs, Summary onward, were off-screen and unreachable. The title fields were cut off too.
+  - At 768 px the title grid was cut off at "Checked date".
+  - Nothing widened the page; it was clipped. The page-width check therefore missed it, so `tests/smoke/phone-layout.mjs` now also checks that every tab button can be reached.
+- **Where:** a new block at the end of the first `<style>`, just before `</style>`, anchor `::-webkit-scrollbar-thumb{background:#C4CDD8;border-radius:5px}`.
+- **Added:**
+```css
+@media screen and (max-width:899px){
+  html,body{height:auto;overflow:visible}
+  #app{position:static;overflow:visible;display:block;max-width:none;box-shadow:none}
+  #projGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #main{display:block;overflow:visible}
+  #inputPanel{max-width:none;min-width:0;overflow:visible;border-right:none;border-bottom:2px solid var(--line);padding-bottom:16px}
+  #outputPanel{overflow:visible;padding:0 10px 40px}
+  #inputPanel .secBody{overflow-x:auto}   /* a wide input table (load combinations) scrolls in its box instead of being cut off */
+  #outputPanel .rp-fig img{max-width:100%!important;height:auto}   /* Report diagrams (inline max-width 4.6 in) fit the column */
+}
+```
+- **Result below 900 px:** inputs (with their tab bar) sit above the outputs (with their tab bar); both tab bars already wrap. The page scrolls as one column and the panels do not scroll on their own, so the KaTeX page-scroll trap (#524) cannot occur.
+- **Wide content:** the load-combination input tables, whose ✕ buttons were cut off by `.sec{overflow:hidden}`, now scroll in their box. The Report's diagram images (inline `max-width:4.60in`, 442 px at 390 px, clipped by the viewer's paint containment) now fit the column.
+- **Unchanged:** screen only, so print is unchanged; at 900 px and up nothing changes.
+
+### Checked, no change
+- Report → Print report: 47 pages, with the running header and page numbers. Nothing extends past the 7.5 in text width. The near-empty pages (p10, p29, p33) are section ends: the last "On screen: … tab" note of a section.
+
+### Smoke test
+- `tests/smoke/phone-layout.mjs`: new key `sbeam` (6 input tabs + 17 output tabs). The test also checks now that every visible tab button lies inside the window, or inside a box that scrolls sideways. On origin/main it fails at 390 px (the output tabs are cut off); on this branch it passes, and every earlier tool key still passes.
+
+### How verified (no computed result, saved key or hand-off changed)
+- origin/main vs this branch, headless Chromium, file://, at 1280 px:
+  - The page text on load and on all 23 tabs is identical.
+  - The whole-document `textContent` (912,067 chars) is identical.
+  - localStorage after load is identical.
+- Screenshots at 900 and 1280 px are pixel-identical (0 differing pixels) on load and on all 23 tabs.

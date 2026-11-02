@@ -173,6 +173,18 @@ textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:1
 #updDot.show{opacity:.9}
 ::-webkit-scrollbar{width:10px;height:10px}
 ::-webkit-scrollbar-thumb{background:#C4CDD8;border-radius:5px}
+/* PHN (2026-11-02): phone / tablet (below 900 px): one column, the page scrolls (the panels do not scroll on their own, so
+   nothing can leave the page stuck); the title fields wrap; 900 px and up unchanged */
+@media screen and (max-width:899px){
+  html,body{height:auto;overflow:visible}
+  #app{position:static;overflow:visible;display:block;max-width:none;box-shadow:none}
+  #projGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #main{display:block;overflow:visible}
+  #inputPanel{max-width:none;min-width:0;overflow:visible;border-right:none;border-bottom:2px solid var(--line);padding-bottom:16px}
+  #outputPanel{overflow:visible;padding:0 10px 40px}
+  #inputPanel .secBody{overflow-x:auto}   /* a wide input table (load combinations) scrolls in its box instead of being cut off */
+  #outputPanel .rp-fig img{max-width:100%!important;height:auto}   /* Report diagrams (inline max-width 4.6 in) fit the column */
+}
 </style>
 </head>
 <body>
