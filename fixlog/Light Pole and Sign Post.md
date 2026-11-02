@@ -1973,7 +1973,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
   - **Cable values identical** in all 11 cases with cables; drawings identical; no console errors.
 - `node tests/engine/run.mjs lightpole`: 41 passed. `node tests/check-syntax.mjs`: all pass.
 
-## 2026-11-02 — PR: PRLINK — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+## 2026-11-02 — PR: [#680](https://github.com/mlococo88/All-Structural/pull/680) — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
 - **Before:** project bar: drop-down (load), Save / Save As… / Rename / Delete / New (`lpp_projects_v1`, `{ name: captureState() }`), Export /
   Import JSON. No duplicate, no undo.
 - **Where:**
