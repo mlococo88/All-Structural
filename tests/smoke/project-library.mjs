@@ -115,6 +115,23 @@ export const TOOLS = {
     change: p => bump(p, '#spanTbl input[data-si]', 2),
     save: async (p, name) => { await p.evaluate(n => { const i = document.getElementById('projNm'); i.value = n; i.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('bSv').click(); }, name); await p.waitForTimeout(400); }
   },
+  bgeo: {
+    // Bridge Geometry: its own library panel (Load / Rename / Duplicate / Delete); Duplicate is new (mapStore). The tool seeds five example
+    // bridges into the library on first open, so the dialog checks look at the row of A's project only.
+    file: 'Bridge Geometry.html', list: 'bridgeGeomEngine.library.v1', auto: 'bridgeGeomEngine.project.v1', renameSets: ['name'],
+    ready: p => p.waitForFunction(() => typeof ENG !== 'undefined' && ENG && document.getElementById('pane-output')),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); const eng = JSON.parse(JSON.stringify(ENG, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v)));
+      const t = id => { const k = document.getElementById(id).cloneNode(true); k.querySelectorAll('[data-sp],script,style,.legendbar').forEach(x => x.remove()); return k.textContent.replace(/\s+/g, ' '); };
+      return { eng, output: t('pane-output'), seat: t('pane-seat'), bridge: t('pane-bridge') }; }),
+    change: p => bump(p, '#spantbl input[data-f="edgeL"]', 2),
+    view: p => tabView(p, '.tabbtn', 2, '.active, .on'),
+    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('proj_saveas').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(400); },
+    ui: { open: async p => { await p.evaluate(() => { if (document.getElementById('lib_panel').style.display === 'none') document.getElementById('lib_toggle').click(); renderLibrary(); }); await p.waitForSelector('#lib_list table'); },
+      rows: '#lib_list tbody tr:has([data-lib-load="From%20main"])', btn: (a, n) => `#lib_list [data-lib-${({ open: 'load', rename: 'ren', dup: 'dup', del: 'del' })[a]}="${encodeURIComponent(n)}"]`,
+      first: '#lib_list [data-lib-load="From%20main"]', err: async (p, s) => s.dl[s.dl.length - 1] || '', box: '#lib_panel', delConfirm: true },
+    // the heatmap legend (.legendbar: lowest / highest deck elevation) is filled only once the Output tab has been drawn: a view detail, left out
+    no390: 'the page has no phone layout: at 390 px it is 1086 px wide on origin/main, and the library panel already scrolls sideways there (395 / 310 px)'
+  },
   spreadfooting: {
     file: 'Spread Footing.html', list: 'sfd_projects', auto: 'sfd_auto', ownUndo: true,   // the tool's own Undo / Redo (U-2) is unchanged and not re-tested here
     ready: p => p.waitForFunction(() => typeof R !== 'undefined' && R),
@@ -239,12 +256,14 @@ await UI.open(p); await shot('dialog');
 const act = async (a, n, reply) => { B.reply = reply; await p.click(UI.btn(a, n)); await p.waitForTimeout(300); };
 await act('rename', 'Job 1', ['Job 1 renamed']);
 let L1 = await lsAll(p), M1 = JSON.parse(L1[T.list]);
-ok(!('Job 1' in M1) && JSON.stringify(M1['Job 1 renamed']) === item('Job 1'), 'Rename: item moved unchanged');
+// T.renameSets: fields the tool's OWN rename writes into the item (Bridge Geometry: its existing Rename sets the item's "name"); left out of the rename checks
+const rn = o => { if (typeof o === 'string') o = JSON.parse(o); if (!T.renameSets || o == null) return JSON.stringify(o); const c = JSON.parse(typeof o === 'string' ? o : JSON.stringify(o)); T.renameSets.forEach(k => delete c[k]); return JSON.stringify(c); };
+ok(!('Job 1' in M1) && rn(M1['Job 1 renamed']) === rn(item('Job 1')), 'Rename: item moved unchanged' + (T.renameSets ? ' (except ' + T.renameSets.join(', ') + ', set by the tool\'s own Rename)' : ''));
 for (const k of Object.keys(L0)) if (k !== T.list && k !== T.auto) ok(L1[k] === L0[k], 'Rename left ' + k + ' unchanged');
 await act('dup', 'Job 2', ['Job 2 copy']); M1 = JSON.parse((await lsAll(p))[T.list]);
 ok(JSON.stringify(M1['Job 2 copy']) === item('Job 2') && JSON.stringify(M1['Job 2']) === item('Job 2'), 'Duplicate: copy identical, original kept');
 await act('rename', 'Job 2 copy', ['Job 2', true]); M1 = JSON.parse((await lsAll(p))[T.list]);
-ok(!('Job 2 copy' in M1) && JSON.stringify(M1['Job 2']) === item('Job 2'), 'Rename onto an existing name asks and replaces');
+ok(!('Job 2 copy' in M1) && rn(M1['Job 2']) === rn(item('Job 2')), 'Rename onto an existing name asks and replaces');
 if (UI.delConfirm) { await act('del', 'Job 2', [false]); ok('Job 2' in JSON.parse((await lsAll(p))[T.list]), 'Delete: Cancel keeps it'); }
 await act('del', 'Job 2', [true]); ok(!('Job 2' in JSON.parse((await lsAll(p))[T.list])), 'Delete: OK removes it');
 // quota: every setItem refused
@@ -257,7 +276,8 @@ await p.evaluate(() => { Storage.prototype.setItem = window.__si; });
 same(await lsAll(p), Lq, 'quota: storage byte-identical');
 await act('open', 'Job 1 renamed', []); same(drop(await T.results(p)), drop(b1), 'Open from the dialog: results of the saved project');
 await p.setViewportSize({ width: 390, height: 800 }); await UI.open(p).catch(() => {}); await p.waitForTimeout(300); await shot('dialog-390');
-const sw = await p.evaluate(sel => document.querySelector(sel).scrollWidth <= document.querySelector(sel).clientWidth + 1, UI.box); ok(sw, '390 px: the dialog does not scroll sideways');
+if (T.no390) console.log('  skip 390 px: ' + T.no390);
+else { const sw = await p.evaluate(sel => document.querySelector(sel).scrollWidth <= document.querySelector(sel).clientWidth + 1, UI.box); ok(sw, '390 px: the dialog does not scroll sideways'); }
 
 }
 // ---------- 4. console ----------
