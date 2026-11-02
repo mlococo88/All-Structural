@@ -1438,3 +1438,34 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
   origin/main already (the tab bar and the fieldsets); unchanged here. `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **Open items:** the 78 px sideways scroll at 390 px is older than this change (not fixed here: one task per PR).
+
+## 2026-11-02 — PR: claude/plib-bgeo — PLIB: Duplicate in the saved-bridge library, and Undo / Redo   [display and storage only]
+- **Before:** header Save / Save As New / ▸ Library / New, Export / Import JSON; the library panel (`bridgeGeomEngine.library.v1`,
+  `{ name: project }`) with Load / Rename / Delete; autosave `bridgeGeomEngine.project.v1`. No duplicate, no undo.
+- **Where:**
+  - after `<script src="shared/list-input.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `autosave()`, anchor `function autosave(){`: first statement `if(window.BGPL) BGPL.soon();   /* PLIB: one undo step per change (debounced) */`
+    (the autosave runs on every input, change and button click; `soon` records the step 600 ms after the last one).
+  - `renderLibrary()`: each row gains `Duplicate` (`data-lib-dup`, between Rename and Delete) and its click handler, calling the new
+    `bgPlibDup(n)`; after `renderLibrary()`: `function bgPlibDup(n)` and `function bgPlibInit()` (anchor `/* PLIB (2026-11-02): Duplicate in the
+    saved-bridge library`).
+    - `bgPlibDup`: `SharedProjects.mapStore(localStorage, LIBRARY_KEY).duplicate(n, newName)`: the stored item is copied unchanged (its
+      inner `name` field too: the library is keyed by the list name, and Load sets the current name from the key, so the field is not read);
+      a name in use asks before replacing; a refused write (storage full or blocked) shows its message and storage stays as it was.
+    - `bgPlibInit`: history over `serializeProject()` without `savedAt`, `name`, `activeSta` (the selected station, a view choice) and
+      `overlays` (Site Map plan images: large, not geometry); `set` = `applyProject()` (the Load / Import path) of the step with the current
+      name, station and overlays, then `autosave()`. Buttons Undo, Redo after New.
+  - `libLoad()` and `loadProjectFromFile()`: after a successful load, `if(window.BGPL) BGPL.h.reset();` (another bridge starts a new history,
+    so Undo never brings the previous bridge's data under the loaded name). New stays a step (it can be undone).
+  - boot, after `armAutosave();`: `bgPlibInit();` (after start-up, so restoring the session is not a step).
+- The tool's own Rename (it also sets the item's `name` field) and the rest of the library are unchanged.
+- **Saved data:** keys `bridgeGeomEngine.library.v1`, `bridgeGeomEngine.project.v1` and their formats unchanged; no new key.
+- **How verified:** `node tests/smoke/project-library.mjs --tool bgeo` (new TOOLS entry, with the tool's own library panel): ALL PASS
+  (`ENG` data and the Top of Deck Output, Beam Seat Output and Bridge tab text identical to origin/main on load, after an input change
+  (span 1 left-edge override), reopened on main's storage and loaded from the library; Undo / Redo / Ctrl+Z / Ctrl+Y exact, a tab change
+  not a step; Duplicate byte-identical; Rename identical except the `name` field the tool's own Rename sets; Delete; quota message,
+  storage byte-identical; no new console errors). The heatmap legend (lowest / highest deck elevation) is left out of the comparison: it
+  fills only once the Output tab has been drawn. The 390 px check is skipped: the page has no phone layout (1086 px wide at 390 px on
+  origin/main, the library panel already scrolls sideways there). Number of spans 2 → 3, Undo / Redo exact; Load from the library
+  empties the history. `node tests/smoke/list-input.mjs --part bgeo`: pass. `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).

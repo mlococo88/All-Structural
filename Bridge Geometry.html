@@ -10,6 +10,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
 <script src="https://unpkg.com/plotly.js-basic-dist-min@3.7.0/plotly-basic.min.js"></script>
 <script src="shared/list-input.js"></script>
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <style>
   :root {
     --vellum:#ECE7DA; --vellum-edge:#DED7C5; --ink:#1C1A17; --ink-soft:#5A554B;
@@ -4420,6 +4422,7 @@ function saveNow(){ // immediate, non-debounced write
   }
 }
 function autosave(){
+  if(window.BGPL) BGPL.soon();   /* PLIB: one undo step per change (debounced) */
   if(!_storageOK) return;
   _dirty=true;
   // leading write: persist right away so a fast refresh keeps the change,
@@ -4456,7 +4459,7 @@ function downloadProject(){
 function loadProjectFromFile(file){
   const reader=new FileReader();
   reader.onload=()=>{ try { const p=JSON.parse(reader.result);
-      if(applyProject(p)){ CURRENT_NAME=p.name||null; setStatus('loaded '+file.name); updateNameDisplay(); autosave(); }
+      if(applyProject(p)){ CURRENT_NAME=p.name||null; setStatus('loaded '+file.name); updateNameDisplay(); autosave(); if(window.BGPL) BGPL.h.reset(); /* PLIB */ }
       else setStatus('not a valid project file'); }
     catch(e){ setStatus('could not read file'); } };
   reader.readAsText(file);
@@ -4494,7 +4497,7 @@ function libSave(name){
 }
 function libLoad(name){
   const lib=libRead(); const p=lib[name]; if(!p){ setStatus('not found'); return; }
-  if(applyProject(p)){ CURRENT_NAME=name; updateNameDisplay(); renderLibrary(); saveNow(); setStatus('loaded \u201c'+name+'\u201d'); }
+  if(applyProject(p)){ CURRENT_NAME=name; updateNameDisplay(); renderLibrary(); saveNow(); setStatus('loaded \u201c'+name+'\u201d'); if(window.BGPL) BGPL.h.reset(); /* PLIB: another bridge, a new undo history */ }
 }
 function libDelete(name){
   const lib=libRead(); if(!(name in lib)) return;
@@ -4535,12 +4538,45 @@ function renderLibrary(){
       <td style="white-space:nowrap;">
         <button class="sm" data-lib-load="${encodeURIComponent(n)}">Load</button>
         <button class="sm ghost" data-lib-ren="${encodeURIComponent(n)}">Rename</button>
+        <button class="sm ghost" data-lib-dup="${encodeURIComponent(n)}">Duplicate</button>
         <button class="sm ghost" data-lib-del="${encodeURIComponent(n)}">Delete</button>
       </td></tr>`; });
   h+='</tbody></table>'; host.innerHTML=h;
   host.querySelectorAll('[data-lib-load]').forEach(b=>b.addEventListener('click',()=>libLoad(decodeURIComponent(b.dataset.libLoad))));
   host.querySelectorAll('[data-lib-del]').forEach(b=>b.addEventListener('click',()=>{ const n=decodeURIComponent(b.dataset.libDel); if(confirm('Delete \u201c'+n+'\u201d? This cannot be undone.')) libDelete(n); }));
   host.querySelectorAll('[data-lib-ren]').forEach(b=>b.addEventListener('click',()=>{ const n=decodeURIComponent(b.dataset.libRen); const nn=prompt('Rename bridge:',n); if(nn&&nn.trim()) libRename(n,nn.trim()); }));
+  host.querySelectorAll('[data-lib-dup]').forEach(b=>b.addEventListener('click',()=>bgPlibDup(decodeURIComponent(b.dataset.libDup))));   /* PLIB */
+}
+/* PLIB (2026-11-02): Duplicate in the saved-bridge library, and Undo / Redo (shared/projects.js, shared/projects-ui.js).
+   Display and storage only.
+   - Duplicate: SharedProjects.mapStore over the tool's own key LIBRARY_KEY ({ name: project }); the stored item is copied unchanged
+     (its inner "name" field included: the library is keyed by the list name, and Load sets the current name from the key). A name in
+     use asks before replacing; a refused write (storage full or blocked) shows its message and leaves storage as it was.
+   - Undo / Redo: history over serializeProject() without savedAt, name, activeSta (the selected station: a view choice) and overlays
+     (plan images on the Site Map: large, and not part of the geometry); session only, nothing stored. set = applyProject() (the Load /
+     Import path) of the step with the current name, station and overlays kept, then the autosave. Loading a bridge from the library or
+     a file starts a new history (an undo never brings another bridge's data under the loaded name); New is a step (it can be undone). */
+function bgPlibDup(n){
+  if(!window.SharedProjects) return;
+  let ST=null; try{ ST=window.localStorage; }catch(e){}
+  const store=SharedProjects.mapStore(ST,LIBRARY_KEY);
+  const nn=prompt('Name for the copy:',store.copyName(n)); if(nn==null) return;
+  let r=store.duplicate(n,nn);
+  if(!r.ok && r.error==='exists'){ if(!confirm('\u201c'+nn.trim()+'\u201d exists. Overwrite it?')) return; r=store.duplicate(n,nn,{replace:true}); }
+  if(!r.ok){ alert(r.message||'The bridge was not duplicated.'); setStatus('not duplicated'); return; }
+  renderLibrary(); setStatus('duplicated as \u201c'+r.name+'\u201d');
+}
+function bgPlibInit(){
+  if(!window.SharedProjects||!window.SharedProjectsUI||window.BGPL) return;
+  const snap=()=>{ const o=serializeProject(); delete o.savedAt; delete o.name; delete o.activeSta; delete o.overlays; return JSON.stringify(o); };
+  const h=SharedProjects.history({ get:snap, set:t=>{ const p=JSON.parse(t); p.name=CURRENT_NAME; p.activeSta=ACTIVE_STA; p.overlays=serializeOverlays();
+    applyProject(p); autosave(); } });
+  const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'sm ghost'});
+  const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
+  const ref=document.getElementById('proj_new'); if(ref){ ref.insertAdjacentElement('afterend',br); ref.insertAdjacentElement('afterend',bu); }
+  SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
+  let t=null; h.reset();
+  window.BGPL={ h, soon:()=>{ clearTimeout(t); t=setTimeout(()=>h.record(),600); } };
 }
 
 // hook autosave onto every change/click that mutates state
@@ -4685,6 +4721,7 @@ document.getElementById('crown_ref')?.addEventListener('change', syncCrownRefLab
 syncCrownRefLabels();
 updateNameDisplay(); renderLibrary();
 armAutosave();
+bgPlibInit();   // PLIB: after the start-up has run, so restoring the session is not a step
 // ensure there is always a snapshot in storage from the first moment, so the next refresh restores
 if(_storageOK){ saveNow(); }
 else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON to save.'); }
