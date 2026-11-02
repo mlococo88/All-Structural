@@ -261,7 +261,7 @@ test('owner rules: load factors (η, m, h0) and OWN8 haunch', () => {
   const C = OW.loadFactors('CTDOT', { I: 'no' }, 3); assert.equal(C.eR, 1.05, 'CTDOT nonredundant with 3 girders'); assert.equal(C.h0, false);
   // the recorded bridges: Preliminary sizing's lf = this port's loadFactors for the same owner (the default η answers)
   for (const fx of fixtures) { const b = fx.df.bridge, l = OW.loadFactors(b.owner, {}, b.nb); ['m', 'eD', 'eR', 'eI', 'eta', 'etaN', 'h0'].forEach(k => assert.equal(l[k], b.lf[k], `${fx.project}/${fx.owner} lf.${k}`)); }
-  assert.equal(OW.RULES.rules.length, 125); assert.equal(OW.rule('AASHTO', 'ld.haunch0'), null); assert.equal(OW.cite(OW.rule('MassDOT', 'ld.haunch0')), 'MassDOT Bridge Manual Part I 3.5.1.2');
+  assert.equal(OW.RULES.rules.length, 127); assert.equal(OW.rule('AASHTO', 'ld.haunch0'), null); assert.equal(OW.cite(OW.rule('MassDOT', 'ld.haunch0')), 'MassDOT Bridge Manual Part I 3.5.1.2');
 });
 
 test('model: the default project runs through fromModel; a version 1 project without xs reads the defaults', () => {
