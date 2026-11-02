@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop] [--a origin/main] [--shots <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
 // smd (one key per tool in TOOLS): the tool from --a (default: the entry's `a`, the main commit before its table landed, else
@@ -16,7 +16,7 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset').split(',');
+const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
@@ -212,6 +212,25 @@ TOOLS.gusset = {   // Gusset Plate Rating: members[i].fast.g, saved as text ("3.
   },
   tableSel: 'input[data-k="members.0.fast.g"] + [data-sli="host"]',
 };
+TOOLS.secprop = {   // Section Property Calculator: library "Tags" (LIBF.tags text, split at commas into the entry's tags array on save)
+  file: 'Section Property Calculator.html', a: 'ee4f542', values: 'crane, runway, W21', expect: '[["crane","runway","W21"]]',
+  setup: async p => { await p.waitForTimeout(2500); await p.evaluate(() => showInTab('tpl')); await p.waitForTimeout(400); },
+  typeOld: async (p, v) => { await p.fill('[data-fkey="lib_tags"]', v); await p.click('#spcLib button.primary'); },
+  typeNew: async (p, v) => { await fillTable(p, '.libTagsHost', v); await p.click('#spcLib button.primary'); },
+  saved: p => p.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem(LS_LIB) || '{"entries":[]}').entries.map(e => e.tags))),
+  read: async p => {
+    await p.waitForTimeout(800);
+    return p.evaluate(() => {
+      const lib = JSON.parse(localStorage.getItem(LS_LIB) || 'null'); if (lib) (lib.entries || []).forEach(e => { delete e.id; delete e.created; delete e.modified; (e.parts || []).forEach(q => delete q.id); }); if (lib) delete lib.exported;
+      const strip = id => { const k = document.getElementById(id).cloneNode(true); k.querySelectorAll('[data-sli],script,style,.libTagsHost').forEach(x => x.remove()); return k.innerText; };
+      const noId = v => JSON.parse(JSON.stringify(v, (k, x) => (k === 'id' || k === 'created' || k === 'modified' ? undefined : x)));   // ids and times are made per run
+      let t = JSON.stringify({ M, R }); (M.parts || []).forEach((pt, i) => { t = t.split(pt.id).join('PART' + i); });
+      const mr = noId(JSON.parse(t));
+      return { M: mr.M, R: mr.R, lib, input: strip('inputPanel'), output: strip('outputPanel') };
+    });
+  },
+  tableSel: '.libTagsHost',
+};
 // replace the rows of a table with the values ("a, b, c"): row by row (Enter adds a row from the last one), extra rows removed
 async function fillTable(p, sel, v) {
   const vals = String(v).split(',').map(s => s.trim());
@@ -262,7 +281,7 @@ async function tool(key) {
     const sa = JSON.parse(JSON.stringify({ ...ra, errs: 0, over: 0, blocked: 0 })), sb = JSON.parse(JSON.stringify({ ...rb, errs: 0, over: 0, blocked: 0 }));
     if (rb.blocked.length) console.log('       (blocked offline: ' + rb.blocked.join(', ') + ')');
     const d = diff(sa, sb);
-    ok(!d.length, `${kase}: results, page text and saved data identical (hash ${hash(sa)} / ${hash(sb)})` + (d.length ? '\n       ' + d.slice(0, 8).map(x => `${x[0]}: ${JSON.stringify(x[1]).slice(0, 120)} -> ${JSON.stringify(x[2]).slice(0, 120)}`).join('\n       ') : ''));
+    ok(!d.length, `${kase}: results, page text and saved data identical (hash ${hash(sa)} / ${hash(sb)})` + (d.length ? '\n       ' + d.slice(0, 8).map(x => `${x[0]}: ${String(JSON.stringify(x[1])).slice(0, 120)} -> ${String(JSON.stringify(x[2])).slice(0, 120)}`).join('\n       ') : ''));
     const want = T.expect || T.values;
     if (kase === 'custom') ok(ra.savedText === want && rb.savedText === want, `custom: saved text "${rb.savedText}" (A "${ra.savedText}")`);
     if (rb.over != null) ok(rb.over <= (T.over || 1), `390 px: page does not scroll sideways (${rb.over}` + (T.over ? `; ${T.over} px on main before the change` : '') + ')');

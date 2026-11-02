@@ -143,3 +143,13 @@ test('Gusset Plate Rating: gage text round-trips; gageList() reads the same gage
   }
   assert.equal(L.toText(L.fromText('3 3 5.5', f)), '3, 3, 5.5');
 });
+
+// Section Property Calculator.html: library "Tags". LIBF.tags is screen-only text; libSaveCurrent() saves the ARRAY
+// LIBF.tags.split(',').map(t => t.trim()).filter(Boolean). The table writes its rows joined by ", ".
+const spTags = s => s.split(',').map(t => t.trim()).filter(Boolean);
+test('Section Property Calculator: tag rows -> LIBF.tags text -> the same tags array as the old box', () => {
+  assert.deepEqual(P(spTags(L.toText([['crane'], ['runway'], ['W21']]))), ['crane', 'runway', 'W21']);
+  assert.deepEqual(P(spTags(L.toText([['crane runway'], [''], ['W21 + C15']]))), ['crane runway', 'W21 + C15']);   // spaces kept inside a tag
+  assert.deepEqual(P(spTags(L.toText([]))), []);
+  for (const s of ['crane, runway', 'W21 + C15, 2016 job']) assert.equal(L.toText(L.fromText(s)), s);
+});
