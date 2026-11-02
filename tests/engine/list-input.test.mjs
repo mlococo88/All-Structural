@@ -100,3 +100,30 @@ test('same / filled', () => {
   assert.equal(L.same([['5'], ['6']], [['5']], [{}]), false);
   assert.deepEqual(plain(L.filled([[' 1 ', ''], ['', ' '], [2]])), [['1', ''], ['2']]);
 });
+
+// Bridge Substructure Loading.html: span lengths / girder spacings. The hidden <input data-list> holds b.spans.join(', ');
+// the tool's change handler reads it with  t.value.split(/[,\s]+/).filter(Boolean).map(num)  and stores the ARRAY.
+const bslParse = s => s.split(/[,\s]+/).filter(Boolean).map(Number);
+test('Bridge Substructure Loading: spans / bays arrays round-trip through the table', () => {
+  for (const a of [[110, 140, 110], [9.5, 9.5, 9.5, 9.5], [87.25], [100, 120.125, 100, 80]]) {
+    const text = a.join(', '), rows = L.fromText(text);
+    assert.equal(L.toText(rows), text);
+    assert.deepEqual(P(bslParse(L.toText(rows))), a);
+  }
+  // an older box text typed with spaces only ("110 140") shows one row per value only after the tool re-renders it (the
+  // tool always writes b.spans.join(', ') into the box), so the table never sees it
+  assert.deepEqual(P(bslParse(L.toText([['110'], [''], ['150']]))), [110, 150]);
+});
+
+// Bridge Geometry.html: per-span girder offsets SPAN_OV[s].girders (array, or null = the global set). The table's rows are read
+// with the tool's old box parser:  v.trim()? v.split(',').map(x=>+x.trim()).filter(x=>!isNaN(x)) : null
+const bgParse = v => v.trim() ? v.split(',').map(x => +x.trim()).filter(x => !isNaN(x)) : null;
+test('Bridge Geometry: per-span girder offsets round-trip (array, or null when no rows)', () => {
+  for (const a of [[-18, -6, 6, 18], [-15.5, 0, 15.5], [-3.25]]) {
+    assert.equal(L.toText(L.fromNumbers(a)), a.join(', '));                  // the text the old box showed
+    assert.deepEqual(P(bgParse(L.toText(L.fromNumbers(a)))), a);
+  }
+  assert.equal(bgParse(L.toText(L.fromNumbers([]))), null);                  // no rows -> null (the global set), as a blank box
+  assert.equal(bgParse(L.toText([[''], ['  ']])), null);                     // blank rows are not read
+  assert.deepEqual(P(bgParse(L.toText([['-6'], ['abc'], ['6']]))), [-6, 6]); // an unreadable cell is skipped, as in the old box
+});

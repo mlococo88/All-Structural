@@ -11,6 +11,8 @@
              renamed(old, new) (optional: after a rename; the tool updates its "current" name),
              deleted(name) (optional: after a delete),
              changed() (optional: after any change to the list, e.g. the tool's own drop-down is redrawn),
+             save() (optional: a "Save the open project…" button at the top of the dialog, for a tool with no Save of its own;
+               it asks for the name itself and returns the mapStore result, or nothing when cancelled), saveLabel (its text),
              note (optional HTML under the table) }
    undoRedo(h, { undo, redo, keys }) wires a SharedProjects.history to two buttons and (keys !== false) to Ctrl+Z / Ctrl+Y /
      Ctrl+Shift+Z. While text is being typed in a field (not yet committed), the browser's own undo of that field is left alone.
@@ -51,7 +53,7 @@
   function libraryDialog(ctx) {
     css();
     const dlg = document.createElement('dialog'); dlg.className = 'spLib'; dlg.setAttribute('data-sp', 'dialog'); dlg.id = ctx.id || 'spLibDlg';
-    dlg.innerHTML = `<div class="spHead"><strong>${esc(ctx.title || 'Saved projects')}</strong><button type="button" data-spa="close">Close</button></div><div class="spBody"></div>`;
+    dlg.innerHTML = `<div class="spHead"><strong>${esc(ctx.title || 'Saved projects')}</strong><span>${ctx.save ? `<button type="button" data-spa="save">${esc(ctx.saveLabel || 'Save the open project…')}</button>` : ''}<button type="button" data-spa="close">Close</button></span></div><div class="spBody"></div>`;
     document.body.appendChild(dlg);
     const body = dlg.querySelector('.spBody');
     let msg = '';
@@ -59,6 +61,7 @@
       if (e.target === dlg) { dlg.close(); return; }
       const b = e.target.closest('[data-spa]'); if (!b) return;
       if (b.dataset.spa === 'close') { dlg.close(); return; }
+      if (b.dataset.spa === 'save') { const r = ctx.save(); if (r && r.ok === false && r.message) msg = r.message; else msg = ''; if (ctx.changed) ctx.changed(); draw(); return; }
       act(b.dataset.spa, decodeURIComponent(b.dataset.n || ''));
     });
     function usageHtml() {

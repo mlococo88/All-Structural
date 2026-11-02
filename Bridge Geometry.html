@@ -9,6 +9,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.11.0/proj4.js"></script>
 <script src="https://unpkg.com/plotly.js-basic-dist-min@3.7.0/plotly-basic.min.js"></script>
+<script src="shared/list-input.js"></script>
 <style>
   :root {
     --vellum:#ECE7DA; --vellum-edge:#DED7C5; --ink:#1C1A17; --ink-soft:#5A554B;
@@ -127,6 +128,7 @@
   .subtbl input.ovr { background: transparent; border: 1px dashed var(--graphite); color: var(--ink-soft); font-style: italic; }
   .subtbl input.ovr:focus { color: var(--ink); border-color: var(--cyan); font-style: normal; background: rgba(255,255,255,.5); }
   .subtbl input.ovr.edited { color: var(--oxide); border-style: solid; border-color: var(--oxide); font-style: normal; }
+  .subtbl .sli.edited input.sli-in { color: var(--oxide); border-color: var(--oxide); }
   .subtbl td { padding: 2px 4px; }
   .subtbl .utag { font-size: 9px; text-transform: uppercase; padding: 1px 6px; border-radius: 8px; color: var(--vellum); }
   .utag.abut { background: var(--ink-soft); } .utag.pier { background: var(--cyan); }
@@ -580,6 +582,7 @@
           <legend>arbitrary survey points (optional)</legend>
           <label>Paste points: Name, Northing, Easting[, Desc]</label>
           <textarea id="map_ptsbox" style="width:100%; height:120px; font-family:monospace; font-size:12px;" placeholder="P1, 750123.45, 210987.65, control&#10;P2, 750200.10, 211050.30, nail"></textarea>
+          <div id="map_ptstbl" style="margin-top:6px;"></div>
           <div class="row" style="display:flex; gap:8px; margin-top:6px;">
             <label class="cfg"><input type="checkbox" id="map_flip"> Easting,Northing order</label>
             <button class="sm" id="map_addpts" style="margin-left:auto;">Plot points</button>
@@ -3281,7 +3284,7 @@ function renderSpanTable(){
   const gEdgeL=document.getElementById('edge_l').value, gEdgeR=document.getElementById('edge_r').value;
   let h='<thead><tr>'+
     '<th class="lbl" title="Span number and the two supports it runs between.">Span</th>'+
-    `<th title="Override the girder layout for this span only. Enter offsets (ft from the construction reference line) as a comma-separated list, e.g. -18, -6, 6, 18. Blank = use the global set (${gGird}).">Girder offsets (ft) &mdash; blank uses global</th>`+
+    `<th title="Override the girder layout for this span only. Enter offsets (ft from the construction reference line), one per row, e.g. -18, -6, 6, 18. Blank = use the global set (${gGird}).">Girder offsets (ft) &mdash; blank uses global</th>`+
     '<th title="Override the left deck-edge offset (ft from the construction reference line) for this span. Blank = global.">Edge L</th>'+
     '<th title="Override the right deck-edge offset (ft from the construction reference line) for this span. Blank = global.">Edge R</th>'+
     '<th title="Number of girders in effect for this span (override if set, otherwise global)."># Gird</th>'+
@@ -3292,16 +3295,27 @@ function renderSpanTable(){
     const nGird = ov.girders!=null ? ov.girders.length : GIRDERS.length;
     h+=`<tr>
       <td class="lbl">${s}<div style="font-size:9px;color:var(--ink-soft);">${fromN} \u2192 ${toN}</div></td>
-      <td><input class="ovr${gOver?' edited':''}" data-s="${s}" data-f="girders" value="${ov.girders?ov.girders.join(', '):''}" placeholder="${gGird}" style="width:180px" title="Comma-separated girder offsets for this span. Blank inherits the global set."></td>
+      <td style="text-align:left" title="Girder offsets for this span, one per row. No rows = the global set (${gGird}).">${SharedListInput.slot('girders'+s)}</td>
       <td><input type="number" class="ovr${ov.edgeL!=null?' edited':''}" data-s="${s}" data-f="edgeL" value="${ov.edgeL!=null?ov.edgeL:''}" placeholder="${gEdgeL}" step="0.1" style="width:74px"></td>
       <td><input type="number" class="ovr${ov.edgeR!=null?' edited':''}" data-s="${s}" data-f="edgeR" value="${ov.edgeR!=null?ov.edgeR:''}" placeholder="${gEdgeR}" step="0.1" style="width:74px"></td>
       <td class="lbl" style="text-align:center;color:${gOver?'var(--oxide)':'var(--ink-soft)'}">${nGird}</td>
     </tr>`; }
   h+='</tbody>'; t.innerHTML=h;
-  t.querySelectorAll('input').forEach(el=>el.addEventListener('change',e=>{
+  /* LIST (2026-11-02): the per-span girder offsets are a table, one box per girder (shared/list-input.js). SPAN_OV[s].girders stays
+     an array (or null = the global set), read from the rows' text exactly as the old box was ("a, b, c" -> split(',') -> numbers),
+     and committed when the focus leaves the table, as the old box did on change. */
+  for(let s=1;s<=nSpan;s++){ const ov=SPAN_OV[s]||{};
+    const ctl=SharedListInput.mountSlot(t,'girders'+s,{label:'Girder offsets, span '+s,rows:SharedListInput.fromNumbers(ov.girders||[]),
+      columns:[{label:'Offset',unit:'ft',placeholder:'global',width:'6.5em'}],rowNumbers:true,className:ov.girders!=null?'edited':''});
+    let was=SharedListInput.toText(ctl.get());
+    ctl.el.addEventListener('focusout',()=>setTimeout(()=>{ if(!ctl.el.isConnected||ctl.el.contains(document.activeElement)) return;
+      const v=SharedListInput.toText(ctl.get()); if(v===was) return; was=v; if(!SPAN_OV[s])SPAN_OV[s]={};
+      SPAN_OV[s].girders = v.trim()? v.split(',').map(x=>+x.trim()).filter(x=>!isNaN(x)) : null;
+      renderSpanTable(); if(ENG) compute(); },0));
+  }
+  t.querySelectorAll('input[data-f]').forEach(el=>el.addEventListener('change',e=>{
     const s=+e.target.dataset.s,f=e.target.dataset.f,v=e.target.value; if(!SPAN_OV[s])SPAN_OV[s]={};
-    if(f==='girders') SPAN_OV[s].girders = v.trim()? v.split(',').map(x=>+x.trim()).filter(x=>!isNaN(x)) : null;
-    else SPAN_OV[s][f] = v===''?null:+v;
+    SPAN_OV[s][f] = v===''?null:+v;
     renderSpanTable(); if(ENG) compute();
   }));
 }
@@ -3714,7 +3728,21 @@ function plotSurveyPoints(){
   if(bounds.length){ LMAP.fitBounds(bounds,{padding:[40,40]}); }
   setPtStatus(LPTS.length+' point'+(LPTS.length!==1?'s':'')+' plotted'+(bad?' · '+bad+' skipped':''), bad>0 && LPTS.length===0);
 }
-function clearSurveyPoints(){ LPTS=[]; if(LMAP){ plotBridgeOnMap(); } document.getElementById('map_ptsbox').value=''; setPtStatus('—'); }
+function clearSurveyPoints(){ LPTS=[]; if(LMAP){ plotBridgeOnMap(); } document.getElementById('map_ptsbox').value=''; if(PTS_TBL) PTS_TBL.set([]); setPtStatus('—'); }
+/* LIST (2026-11-02): the paste box stays; the table under it shows each line as plotSurveyPoints() reads it (split at , or tab:
+   name, then the two coordinates, then the description) and can be edited: an edit rewrites the box (cells joined by ", ", one
+   point per line), which "Plot points" reads as before. Nothing here is saved. */
+let PTS_TBL=null;
+function ptsTable(){
+  const box=document.getElementById('map_ptsbox'), host=document.getElementById('map_ptstbl'), flip=document.getElementById('map_flip');
+  if(!box||!host||!window.SharedListInput) return;
+  const read=()=>box.value.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>{ const c=l.split(/[,\t]/).map(x=>x.trim()); return [c[0]||'',c[1]||'',c[2]||'',c[3]||'']; });
+  PTS_TBL=SharedListInput.mount(host,{label:'Survey points as read',showCaption:true,rows:read(),
+    columns:[{label:'Name',type:'text',width:'5.5em'},{label:()=>flip.checked?'Easting':'Northing',width:'8em'},{label:()=>flip.checked?'Northing':'Easting',width:'8em'},{label:'Desc',type:'text',width:'6em'}],
+    onChange:rows=>{ box.value=rows.map(r=>r.slice(0, r[3]?4:3).join(', ')).join('\n'); }});
+  box.addEventListener('input',()=>PTS_TBL.set(read()));
+  flip.addEventListener('change',()=>PTS_TBL.relabel());
+}
 
 /* ---- Pick points: click the map/overlay to drop labeled points; report N/E and Station/Offset ---- */
 let PICKPTS=[], pickN=0, pickMode=false, PICKLAYER=null;
@@ -4068,6 +4096,7 @@ document.getElementById('map_plot').addEventListener('click',()=>{ if(ensureMap(
 document.getElementById('map_base').addEventListener('click',()=>{ if(!ensureMap())return; const nx=LCUR==='street'?'sat':'street'; LMAP.removeLayer(LBASE[LCUR]); LBASE[nx].addTo(LMAP); LCUR=nx; });
 document.getElementById('ly_ov_op').addEventListener('input',()=>{ try{ drawHeatmap(); }catch(e){} });
 document.getElementById('map_addpts').addEventListener('click',plotSurveyPoints);
+ptsTable();
 document.getElementById('map_clrpts').addEventListener('click',clearSurveyPoints);
 document.getElementById('pick_toggle').addEventListener('click',()=>{ if(!ensureMap()){ setMapStatus('Map libraries not loaded — cannot pick points.',true); return; } setPickMode(!pickMode); });
 ['ss_edge','ss_curb','ss_ref','ss_dcl','ss_pgl','ss_crown','ss_pave'].forEach(id=>
