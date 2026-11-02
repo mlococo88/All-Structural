@@ -32,6 +32,17 @@ const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel
   await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
   return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
 export const TOOLS = {
+  abutment: {
+    file: 'abutment_calculator.html', list: 'abutcalc_v1_projects', auto: 'abutcalc_v1_autosave', openIgnore: ['fingerprint'], undoSel: '#btnUndo', redoSel: '#btnRedo',
+    ready: p => p.waitForFunction(() => window.LAST_R),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(window.LAST_R, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
+    change: p => bump(p, 'input[type=number][data-path]', 0.5),
+    view: p => tabView(p, '.tab', 2, '.active, .on'),
+    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('btnSaveProj').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); },
+    ui: { open: async p => { await p.evaluate(() => { const d = document.getElementById('dlgProj'); if (d.open) d.close(); }); await p.click('#btnManageProj'); await p.waitForSelector('#dlgProj[open]'); },
+      rows: '#projList .prow', btn: (a, n) => `#projList [data-act=${({ open: 'load', rename: 'ren', dup: 'dup', del: 'del' })[a]}][data-n="${n}"]`, first: '#projList [data-act=load]',
+      err: async (p, s) => s.dl[s.dl.length - 1] || '', box: '#dlgProj', delConfirm: true }
+  },
   edm: {
     file: 'elastomeric_design_module.html', list: 'edm_v1_projects', auto: 'edm_v1_autosave',
     ready: p => p.waitForFunction(() => typeof LAST !== 'undefined' && LAST),
@@ -145,14 +156,15 @@ await UI.open(B2.p);
 const rows = await B2.p.$$eval(UI.rows, r => r.map(x => x.innerText.replace(/\s+/g, ' ')));
 ok(rows.length === 1 && /From main/.test(rows[0]), 'the dialog lists the project A saved: ' + rows.join(' | '));
 await B2.p.click(UI.first); await B2.p.waitForTimeout(900);
-same(await T.results(B2.p), a2, "A's saved project opened from B's dialog: results identical");
+const drop = o => { if (!T.openIgnore) return o; const c = { ...o }; T.openIgnore.forEach(k => delete c[k]); return c; };   // fields the tool's own Save changes (abutment: the save adds a revision to S.meta, so the input fingerprint differs from the autosave's)
+same(drop(await T.results(B2.p)), drop(a2), "A's saved project opened from B's dialog: results identical" + (T.openIgnore ? ' (except ' + T.openIgnore.join(', ') + ')' : ''));
 B2.errs.length && console.log('  B2 console: ' + B2.errs.join(' | ')); await B2.b.close();
 
 // ---------- 2. Undo / Redo (B) ----------
 const p = B.p; const shot = async n => { if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await p.screenshot({ path: path.join(SHOTS, n + '.png') }); } };
 await shot('header');
 if (!T.ownUndo) {
-  const bu = p.locator('[data-sp] >> text=Undo').first(), br = p.locator('[data-sp] >> text=Redo').first();
+  const bu = T.undoSel ? p.locator(T.undoSel) : p.locator('[data-sp] >> text=Undo').first(), br = T.redoSel ? p.locator(T.redoSel) : p.locator('[data-sp] >> text=Redo').first();
   ok(!(await bu.isDisabled()), 'Undo is enabled after a change');
   const back = T.view ? await T.view(p) : null;
   await bu.click(); await p.waitForTimeout(900); if (back) await back(); same(await T.results(p), b0, 'Undo: results back to those before the change (a view change was not a step)');
@@ -186,7 +198,7 @@ const qmsg = await UI.err(p, B); ok(/storage is full/i.test(qmsg), 'quota: messa
 await shot('dialog-quota');
 await p.evaluate(() => { Storage.prototype.setItem = window.__si; });
 same(await lsAll(p), Lq, 'quota: storage byte-identical');
-await act('open', 'Job 1 renamed', []); same(await T.results(p), b1, 'Open from the dialog: results of the saved project');
+await act('open', 'Job 1 renamed', []); same(drop(await T.results(p)), drop(b1), 'Open from the dialog: results of the saved project');
 await p.setViewportSize({ width: 390, height: 800 }); await UI.open(p).catch(() => {}); await p.waitForTimeout(300); await shot('dialog-390');
 const sw = await p.evaluate(sel => document.querySelector(sel).scrollWidth <= document.querySelector(sel).clientWidth + 1, UI.box); ok(sw, '390 px: the dialog does not scroll sideways');
 
