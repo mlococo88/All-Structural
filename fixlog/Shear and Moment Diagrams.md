@@ -1416,3 +1416,45 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 ### How verified (no computed result, saved key or hand-off changed)
 - origin/main vs this branch, headless Chromium, file://, template "3-span w/ point load": the page text (`innerText`) on load and on both view tabs at 1280 px, the whole-document `textContent`, and localStorage after load are identical; screenshots at 900 and 1280 px are pixel-identical (0 differing pixels) on load and on both tabs.
 - Report view (shared viewer) printed: same 8 pages, same text (pdftotext) before and after.
+
+## 2026-11-02 — PR: claude/smd-report-consolidate (SMRX: the 📄 Report (D11 calculation sheet) retired after porting what the Report view lacked; 🖨 Print / Ctrl+P print the Report from either view; display only, no result change)
+
+### SMRX-1. Content of the 📄 Report ported into the Report view   [display] [no result change]
+- **Engineer request (2026-11-02):** retire the old print reports tool by tool where the Report tab is complete, as for lldf (#623) and Light Pole (#625): compare every number and section of the old report against the Report on the tool's test cases, port what is missing (the tool's own values, no recomputation), then remove the old report and print the Report from every tab.
+- **Compared:** the 📄 Report (`buildReport()` → `#repView`, print media) on origin/main vs the Report view (`smrModel()`, Print report → `#rp-print`) on the branch, two cases built with `applyProject`: c1 = 2 × 12 ft, point 10 kip @ 4 ft (D), UDL 1.5 kip/ft on span 2 (L), UDL 0.8 kip/ft all spans, trapezoid 1→3 kip/ft from 2 to 10 ft on span 2, moment 5 kip·ft @ 6 ft, section on, σ_allow 30, L/360; c2 = envelope mode, LRFD preset, UDL 1.2 (D) all spans, UDL 2 (L) span 1, point 8 kip (L) @ 6 ft on span 2, section on, L/240. A number counts as present when the Report shows the same value (the same digits, or more digits that round to it).
+- **Missing before the port, now in the Report:**
+  - Envelope mode, τ: the 📄 Report's §4 table had "τmax = 1.5|V|/A … 1008.0003 kip/ft²" (`tauOf(vm)` with the envelope |V|); the Report had τ only in single-combination mode. Added to `smrModel()`'s envelope branch (anchor `res.push(['σ envelope = |M| c / I'`): a topic "Shear stress" with step `env.tau` (τ_env = 3|V|_env / 2A, or |V|_env / (d t_w) for a W-shape preset, the same forms as the single-combination step `tau`; value `tauOf(vm).val`) and a summary row "τ envelope = …" linking to it. Check (c2): τ_env = 3 × 33.600 / (2 × 0.05) = 1008.0 kip/ft²; the Report shows 1008.0003 kip/ft², the 📄 Report's value.
+  - The method wording "(2 DOF/node), Gaussian elimination with partial pivoting … double numerical integration of M/EI anchored at the first and last supports" → Summary, Method row (was a shorter wording).
+  - The footer line "Verify all results independently before use in design." → a note at the end of Summary §1.1.
+- **Not ported (same information already in the Report):** the utilization percentage in the σ row ("NG ✗ (4276.7%)") is the D/C shown in the Report (42.768); the 📄 Report's section numbers, contents and print-run time stamp; the "Worked in … see §7.k" lines (the Report links each value to its step). Figures: the 📄 Report had the loading, shear, moment and deflection diagrams; the Report has the same four (§4.1).
+- **After the port:** 0 numbers of the 📄 Report missing from the Report in either case (apart from its section numbers, the percentage above and the time stamp).
+
+### SMRX-2. 📄 Report removed; Print prints the Report from either view   [display]
+- **Removed:**
+  - the header button `<button … id="bRp" …>📄 Report</button>`;
+  - `<div id="repView"></div>`;
+  - CSS from `/* ── report view ── */` (`#repView…`, `body.repMode…`, the D11 `#repView .cr-*` rules) through `@media print{body.repMode{background:#fff!important}}`; a one-line SMRX comment is in its place. Kept: the D11 links CSS (`.wkLink`, `a.wkA`), used on screen;
+  - JS `smdPageCSS(dt)`, `smdApplyPageCSS(on,dt)`, `smdResultBlock(rows)`, `async function buildReport()`, the `g('bRp').onclick` handler and the `afterprint` handler that removed `repMode`. Kept: `SMD_TOOL`, `smdRefs()`, `diagImg(id)`, `smdWkCards()` / `smdWorkedIn()` / `smdGoto()` (used by the Report or on screen).
+- **Changed:**
+  - `g('bPr').onclick=()=>{readIn();window.print();};` → `g('bPr').onclick=()=>{readIn();smrPrint();};`. Ctrl+P already clicks `#bPr`. The tooltip now reads "Print / PDF the calculation report (Ctrl+P), from either view".
+  - New `smrPrint()`, before the `beforeprint` handler: it opens the Report view if needed (`SMRP.back`), waits for `SMRP.ready` (the Plotly diagram images), then `SharedReport.print(SMRP.doc)`. With no report (shared files missing), it calls `window.print()` (page as shown).
+  - The `beforeprint` handler: before, it ran only when the Report view was shown (`if(!SMRP.on||!SMRP.doc||…rp-printing…||…repMode…)return;`). After: `if(rp-printing)return; if(!SMRP.on){SMRP.back=true;smrView(true);} if(!SMRP.doc)return;` and then it fills `#rp-print` as before. This is the browser's own Print menu. It cannot wait for the async Plotly images, so a Plotly diagram not yet captured prints blank on that path only.
+  - New `afterprint` handler: `if(SMRP.back){SMRP.back=false;smrView(false);}`. The Analysis view comes back.
+  - `smrRender()`: the image promises are collected and saved as `SMRP.ready=Promise.all(imgs)`.
+  - The MutationObserver guard: `&&!document.body.classList.contains('repMode')` dropped, because `repMode` no longer exists.
+  - The `a.wkA` click handler: `if(a&&!a.closest('#repView'))` → `if(a)`.
+- **Remembered tab:** none. The view (Analysis / Report) is not saved, so there is nothing to redirect.
+- **Governing provision:** none changed (display only). No formula, factor, unit, code reference or computed value changed (CLAUDE.md §4).
+- **How verified:**
+  - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"`: pass.
+  - Results and storage, origin/main vs branch, cases c1 and c2 plus the default page (`node tests/compare.mjs --tool page`):
+    - `gatherProject()`, `nodeR`, `tabR` and `env` are identical;
+    - localStorage is identical (one key, `smd_auto_v1`, apart from its time stamp);
+    - page text is identical except the removed "📄 Report" button;
+    - console errors are the same (the blocked Plotly CDN in the test kit).
+  - Print routing, headless: from the Analysis view and from the Report view, each by the browser's `beforeprint`, the 🖨 Print button and Ctrl+P:
+    - `body.rp-printing` is set;
+    - `#rp-print` holds the Report (7,465 characters, 4 diagram images);
+    - after `afterprint`, the view shown before is back;
+    - 0 console errors beyond the blocked CDN.
+- **Other copies:** none.
