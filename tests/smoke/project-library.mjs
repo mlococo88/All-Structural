@@ -32,6 +32,14 @@ const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel
   await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
   return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
 export const TOOLS = {
+  lightpole: {
+    file: 'Light Pole and Sign Post.html', list: 'lpp_projects_v1', auto: 'lpp_session_v1',
+    ready: p => p.waitForFunction(() => typeof LPP_LAST !== 'undefined' && LPP_LAST),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(LPP_LAST, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
+    change: p => bump(p, '#V', 10),
+    view: p => tabView(p, '#tabBar button', 2, '.active, [aria-selected=true]'),
+    save: async (p, name) => { await p.evaluate(n => commitSave(n), name); await p.waitForTimeout(300); }
+  },
   abutment: {
     file: 'abutment_calculator.html', list: 'abutcalc_v1_projects', auto: 'abutcalc_v1_autosave', openIgnore: ['fingerprint'], undoSel: '#btnUndo', redoSel: '#btnRedo',
     ready: p => p.waitForFunction(() => window.LAST_R),

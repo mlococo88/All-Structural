@@ -1972,3 +1972,23 @@ Engineer's answers to the two open items of PR #671 (LTSV).
   - The sign cases `signbroms1/2` change only the step-2 wording on the Shaft tab.
   - **Cable values identical** in all 11 cases with cables; drawings identical; no console errors.
 - `node tests/engine/run.mjs lightpole`: 41 passed. `node tests/check-syntax.mjs`: all pass.
+
+## 2026-11-02 — PR: [#680](https://github.com/mlococo88/All-Structural/pull/680) — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+- **Before:** project bar: drop-down (load), Save / Save As… / Rename / Delete / New (`lpp_projects_v1`, `{ name: captureState() }`), Export /
+  Import JSON. No duplicate, no undo.
+- **Where:**
+  - after `<script src="shared/dxf.js"></script>…`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `markDirty()`: after `scheduleAutosave();` added `if(window.LPPL) LPPL.soon();` (debounced 400 ms: typing a number is one step).
+  - an IIFE before `// ---- JSON export / import (added 2026-11-01) ----` (anchor `// ---- PLIB (2026-11-02)`): history over
+    `JSON.stringify(captureState())`, `set` = `applyState()` (the project-load path, migrations included) then marked changed;
+    `mapStore(localStorage, LS_PROJECTS)`; dialog `open` = the drop-down's load (asks first when there are unsaved changes);
+    rename / delete of the active project update `activeProject` and the session; the drop-down is redrawn after every change.
+    Buttons Undo, Redo, Saved projects… before Export JSON. The history starts again after the page's load event.
+- **Saved data:** keys `lpp_projects_v1`, `lpp_session_v1` and their formats unchanged; no new key.
+- **How verified:** `node tests/smoke/project-library.mjs --tool lightpole`: ALL PASS (`LPP_LAST`, the report-builder arguments with every
+  computed result, identical to origin/main on load, after an input change (V +10 mph), reopened on main's storage and opened from the
+  dialog; Undo / Redo / Ctrl+Z / Ctrl+Y exact; dialog byte-identical; quota; 390 px; no new console errors).
+  `node tests/lightpole-compare.mjs`: ALL CASES IDENTICAL. `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** not applicable: the tool's demands are its wind / ice / cable loads, all from entered inputs; the foundation and
+  anchorage take the governing reactions it computes (the Anchorage app takes them through the anchorGroup hand-off). Nothing added.
