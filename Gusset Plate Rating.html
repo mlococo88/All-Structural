@@ -955,6 +955,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--ink); box-shadow
 .crdoc .cr-body .eq-title { display: block; background: none; border: 0; padding: 0; font: 11pt "Times New Roman", Times, serif; text-transform: none; letter-spacing: 0; }
 .crdoc .cr-body .eq-title .eq-ref { display: block; font-size: 9pt; font-style: italic; margin-top: 2pt; }
 .crdoc .cr-body .eq-math { border: 0; background: none; padding: 0; overflow: visible; }
+.crdoc .cr-body .eq-block > .eq-math { grid-column: 2; }   /* PHN (2026-11-02): a second equation of a block stays in the equation column (it fell into the 2.15 in title column and MathJax shrank it to fit) */
 .crdoc .cr-body .eq-where { grid-column: 1 / -1; margin-left: 0.5in; }
 .crdoc .cr-body .note-p, .crdoc .cr-body .note { font-size: 9.5pt; font-style: italic; }
 .crdoc .cr-body .sub-h { font: 700 10.5pt "Times New Roman", Times, serif; margin: 8pt 0 2pt; text-transform: none; }
@@ -1065,6 +1066,16 @@ input.ovr, select.ovr { outline: 2px solid #c98a1b; outline-offset: -1px; backgr
 #cad-msg .hint { margin-top: 2px; }
 #cad-apply:disabled { opacity: .45; cursor: not-allowed; }
 @media (max-width: 700px) { .cad-pair { grid-template-columns: 1fr; } }
+/* PHN (2026-11-02): phone / tablet: nothing widens the page (the one-column input sections, card headers with a long
+   reference, the calc-sheet Report); a wide table keeps scrolling in its own .tscroll box */
+@media (max-width: 1100px) { .crv-body { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) {
+  .sec-body.one-col { grid-template-columns: minmax(0, 1fr); }
+  .proj-row > * { min-width: 0; white-space: normal; }
+  .card-hd { flex-wrap: wrap; }
+  .card-right { flex-shrink: 1; min-width: 0; flex-wrap: wrap; }
+}
+@media screen and (max-width: 600px) { .crv-doc { padding: 16px 14px 24px; overflow-x: auto; } }
 </style>
 <script>
 window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]']], processEscapes: true }, svg: { fontCache: "global", displayAlign: 'left', displayIndent: '0' },
