@@ -1102,7 +1102,7 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
 - Screenshots at 1280 px are pixel-identical (0 differing pixels) on load and on all 19 tabs. At 900 px only the seven overflowing tabs differ (see PHN-1).
 - Report print: 0 elements past the 7.5 in text width.
 
-## 2026-11-02 — PR: PRLINK — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+## 2026-11-02 — PR: [#665](https://github.com/mlococo88/All-Structural/pull/665) — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
 - **Before:** Project tab → Project Files: a list box with Save / Update, Load, Delete (`stoneArchLR.projects`), Export / Import JSON,
   "Start a new calculation". No rename, no duplicate, no undo.
 - **Where:**
