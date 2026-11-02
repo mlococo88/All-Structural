@@ -3444,7 +3444,7 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 ### Other copies
 - None.
 
-## 2026-11-02 — PR: claude/sbd-3d-details — 3D detail views of the field splice and the bearing stiffener (display only)
+## 2026-11-02 — PR #643: https://github.com/mlococo88/All-Structural/pull/643 (claude/sbd-3d-details) — 3D detail views of the field splice and the bearing stiffener (display only)
 ### Request
 - Engineer: "The old app has 3D graphics of the splice connection and the bearing stiffener, do we have them in the new app? If not we
   should add." GirderDetail ("Steel Bridge Design.html", reference only, not changed) has them in its Field splice module
