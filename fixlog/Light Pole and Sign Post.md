@@ -1790,7 +1790,7 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - **tests/lightpole-compare.mjs:** two LRFDLTS cases added (`ltspole`, `ltssign1` with V = 115), both on the map source.
 - **How verified:** check-syntax pass; `node tests/engine/run.mjs lightpole` 40 passed (1 new); `tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL (16 cases incl. the 2 LTS cases); browser (1280, 390, LTS monopost): preset → V 120, source step, report row, summary link to the Loading tab, drawing note; editing V to 125 → source back to the map, step removed; 0 console errors.
 
-## 2026-11-02 — PR #PRNUM (https://github.com/mlococo88/All-Structural/pull/PRNUM): claude/lts-ctdot-max (LTS: CTDOT source uses V = max(map V, 120 mph); map source and IBC mode unchanged)
+## 2026-11-02 — PR #661 (https://github.com/mlococo88/All-Structural/pull/661): claude/lts-ctdot-max (LTS: CTDOT source uses V = max(map V, 120 mph); map source and IBC mode unchanged)
 
 ### LTSC-2. CTDOT source: V never below the LRFDLTS map value (engineer decision 2026-11-02, revises LTSC-1)   [calculation input, LTS mode only, CTDOT source only]
 - **Before (#659):** choosing "CTDOT BDM §14.2.2, 120 mph" wrote `ltsV = 120` (overwriting the map V); V used = 120 mph; editing V away from 120 switched the source back to the map.
