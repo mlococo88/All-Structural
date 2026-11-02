@@ -30,9 +30,9 @@ This PR is docs only. These on-screen texts and code comments still say "LRFDLTS
 | File | Where (anchor) | Text now | Change in |
 |---|---|---|---|
 | `Light Pole and Sign Post.html` | masthead `id="lppScope"` (LP0-1), also printed on the report cover | "… AASHTO LRFDLTS 2nd Ed. highway supports are a separate mode (coming) …" | LTS-1 (mode switch; the scope line becomes mode-dependent) |
-| `Light Pole and Sign Post.html` | `const LPP_BP_VERIFY=` (LP15-1; shown on the base-plate worked block, Summary warnings, Calc sheet and Report) | "VERIFY the base-plate method against AASHTO LRFDLTS 2nd Ed. — not yet verified: …" | **LTS-6** (base plate and welds), with the article confirmed from the uploaded pages |
+| `Light Pole and Sign Post.html` | `const LPP_BP_VERIFY=` (LP15-1; shown on the base-plate worked block, Summary warnings and Report; the Calc sheet was retired in #625) | "VERIFY the base-plate method against AASHTO LRFDLTS 2nd Ed. — not yet verified: …" | **LTS-6** (base plate and welds), with the article confirmed from the uploaded pages |
 | `Light Pole and Sign Post.html` | comment in `anchorBolts()` above the base-plate block: "This method is used in both modes until the AASHTO LRFDLTS 2nd Ed. mode is added." | code comment | LTS-6 |
-| `Light Pole and Sign Post.html` | `basePlateWorkedHTML()`, the `eq-why` line about the double-nut base (shown on the base-plate worked block and in the Calc sheet) | "… This method is used in this mode (and in the AASHTO LRFDLTS 2nd Ed. mode until that mode is added). …" | LTS-6 |
+| `Light Pole and Sign Post.html` | `basePlateWorkedHTML()`, the `eq-why` line about the double-nut base (shown on the base-plate worked block and in the Report; the Calc sheet was retired in #625) | "… This method is used in this mode (and in the AASHTO LRFDLTS 2nd Ed. mode until that mode is added). …" | LTS-6 |
 | `BasePlateAnchorDesigner.html` | the circular base-plate step `ref:"AASHTO LRFDLTS 2nd Ed., base plates of double-nut connections …"` | worked-step reference | **Another tool**: its own one-tool PR (CLAUDE.md §7), after LTS-6 confirms the article. Listed here so it is not forgotten. |
 
 Confidence column key:
@@ -242,7 +242,7 @@ The 2022 interim revised Section 5 substantially; values below are 1st Ed. recol
 
 - **Mode selector:** a second segmented control in the mode card, above Light pole / Sign: **"IBC 2021 / ASCE 7-22"** (default) | **"AASHTO LRFDLTS"**. The masthead code tag and the scope line (LP0-1) change with the mode.
 - **Inputs:** card 1 (wind) shows the LTS wind inputs instead of the ASCE ones; the ice card follows Q5; the cable card is replaced by the "not supported" note; new cards "Fatigue (LTS Section 11)" and "Base weld & handhole"; the soil card makes Broms the design method (IBC soil class hidden).
-- **Output tabs:** same tabs. Loading (LTS P_z worked per component, combinations table of Table 3.4.1-1); Post (Section 5 checks, combined-force equation); new **Fatigue** tab; Anchorage (export of LTS combos); Shaft (Broms design + torsion + ACI structural); Summary (LTS verdict list, with breakaway checklist and deflection); Report / Calc sheet / Drawings (mode-dependent labels and notes).
+- **Output tabs:** same tabs. Loading (LTS P_z worked per component, combinations table of Table 3.4.1-1); Post (Section 5 checks, combined-force equation); new **Fatigue** tab; Anchorage (export of LTS combos); Shaft (Broms design + torsion + ACI structural); Summary (LTS verdict list, with breakaway checklist and deflection); Report / Drawings (mode-dependent labels and notes; the Calc sheet was retired in #625, the Report is the one report).
 - §6 links: every quoted value links to its worked block (in-app) and "see §x.y" in print, as now.
 
 ### 3.4 Report and drawings
@@ -324,7 +324,7 @@ The 2022 interim revised Section 5 substantially; values below are 1st Ed. recol
 6. **LTS-6** Base plate (LP-5 method; `LPP_BP_VERIFY` and the other §0.1 base-plate texts corrected to the 1st Ed. with the 2022 interim; minimum t) and welds / handhole.
 7. **LTS-7** Foundation (Broms design, torsion, φ; shaft structural).
 8. **LTS-8** Export of the LTS combinations to the Anchorage app.
-9. **LTS-9** Report, Calc sheet, Drawings, Manual.
+9. **LTS-9** Report, Drawings, Manual (the Calc sheet was retired in #625).
 
 Each PR: §4 callouts (before/after; for new checks "before: not checked"), the provision with the edition (LRFDLTS 1st Ed. 2015 with interims through 2022) and the article confirmed from the uploaded pages, a hand check (HC-1 / HC-2 parts), the fixlog entry, the IBC-identical compare, screenshots.
 
@@ -393,7 +393,7 @@ These may be in the owners' traffic or lighting standard drawings, standard spec
 - **LTS-1:** the optional `ltsOwner` field (default "none"; saved; old saves open as none). It drives notes and checklist items only. The one possible default is the CTDOT V after Q22.
 - **LTS-6:** CTDOT AWS D1.1 note on the base weld.
 - **LTS-7:** MassDOT borings note; RIDOT galvanized-reinforcement note.
-- **LTS-9:** the owner notes in the Report, Calc sheet and Drawings general notes, each citing the manual section.
+- **LTS-9:** the owner notes in the Report and the Drawings general notes, each citing the manual section.
 - **Anchorage app (separate PR, its own tool):** CTDOT adhesive-anchor prohibition note for sign, signal and luminaire foundations.
 
 
