@@ -1107,7 +1107,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 ### How verified (no computed result, saved key or hand-off changed)
 - origin/main vs this branch, headless Chromium, file://: the page text (`innerText`) at 1280 px on load and on all 13 output tabs, the whole-document `textContent` (425,382 chars) and localStorage after load are identical. Screenshots at 900 and 1280 px are pixel-identical (0 differing pixels) on load and on all 13 tabs.
 
-## 2026-11-02 — PR: PRLINK — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+## 2026-11-02 — PR: [#664](https://github.com/mlococo88/All-Structural/pull/664) — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
 - **Before:** Project tab → Project Files: Save (by name) / Load / Delete in `asce7bldg.projects`, Export / Import JSON, Reset. No rename, no
   duplicate, no undo.
 - **Where:**

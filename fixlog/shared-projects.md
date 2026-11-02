@@ -3,7 +3,7 @@
 Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/run.mjs projects` (Node) and
 `node tests/smoke/project-library.mjs --tool <key>` (browser, one key per tool that loads them).
 
-## 2026-11-02 — PR: PRLINK — created (new files): saved-project list and Undo / Redo for the tools (PLIB)   [display and storage only]
+## 2026-11-02 — PR: [#664](https://github.com/mlococo88/All-Structural/pull/664) — created (new files): saved-project list and Undo / Redo for the tools (PLIB)   [display and storage only]
 - **Why:** engineer-approved 2026-11-02: every tool gets a saved-project list (save / open / rename / duplicate / delete in the browser),
   Export / Import JSON and Undo / Redo, following the Steel Bridge app (`apps/steel-bridge/engine/library.js`, `ui/library.js`, #516).
   The code is shared so each tool's change is a small integration block (CLAUDE.md §3).
