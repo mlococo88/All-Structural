@@ -12,13 +12,16 @@ import fs from 'fs';
 import path from 'path';
 import { openPage, REPO } from '../lib.mjs';
 const LP = path.join(REPO, 'Light Pole and Sign Post.html'), BP = path.join(REPO, 'BasePlateAnchorDesigner.html');
-const CASES = { pole: {}, sign2: { top: { appMode: 'sign', signPosts: 2 } }, sign1: { top: { appMode: 'sign', signPosts: 1 } } };
+const CASES = { pole: {}, sign2: { top: { appMode: 'sign', signPosts: 2 } }, sign1: { top: { appMode: 'sign', signPosts: 1 } },
+  // LTS-8 (2026-11-02): the AASHTO LRFDLTS mode sends its own combinations (Broms soil needed for the LTS shaft depth); the stale check edits ltsV
+  ltsPole: { lts: true, top: { codeMode: 'lts' }, inputs: { bromsSoil: 'cohesionless' } },
+  ltsSign2: { lts: true, top: { codeMode: 'lts', appMode: 'sign', signPosts: 2 }, inputs: { bromsSoil: 'cohesive' } } };
 let fails = 0; const check = (ok, m) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${m}`); if (!ok) fails++; };
 for (const [name, mut] of Object.entries(CASES)) {
   const o = await openPage(LP, { vw: 1280, vh: 900 });
   try {
     await o.p.waitForFunction(() => typeof window.applyState === 'function', null, { timeout: 15000 });
-    const sent = await o.p.evaluate(m => { const st = JSON.parse(JSON.stringify(DEFAULT_STATE)); Object.assign(st, m.top || {}); applyState(st);
+    const sent = await o.p.evaluate(m => { const st = JSON.parse(JSON.stringify(DEFAULT_STATE)); Object.assign(st, m.top || {}); Object.assign(st.inputs, m.inputs || {}); applyState(st);
       document.getElementById('lpAnchSend').click();
       return { raw: localStorage.getItem('bridgeSuite.v1.anchorGroup'), status: document.getElementById('lpAnchStatus').textContent }; }, mut);
     const pay = JSON.parse(sent.raw || 'null');
@@ -45,13 +48,13 @@ for (const [name, mut] of Object.entries(CASES)) {
     // §4.12 result back to Light Pole: BP sends, LP shows the governing D/C (Summary + Anchors card), then "stale" after an input change
     const before = await o.p.evaluate(() => { lppAnchorCardRefresh(); return Array.from(document.querySelectorAll('#lpAnchResult .lpAgChip')).map(e => e.dataset.state); });
     await bp.evaluate(() => { const r = bxAg.resultPayload(); BridgeXfer.publish('anchorGroupResult', r, 'Base Plate & Anchor Bolt Designer', 'BasePlateAnchorDesigner.html'); });
-    const after = await o.p.evaluate(() => { lppAnchorCardRefresh(); renderSummary(LPP_SUMCTX);
+    const after = await o.p.evaluate(lts => { lppAnchorCardRefresh(); if (lts) calc(); else renderSummary(LPP_SUMCTX);
       return { card: Array.from(document.querySelectorAll('#lpAnchResult .lpAgChip')).map(e => [e.dataset.state, e.textContent]),
-               sum: Array.from(document.querySelectorAll('#page-summary .lpAgChip')).map(e => e.dataset.state) }; });
-    const stale = await o.p.evaluate(() => { const v = document.getElementById('V'); v.value = String(+v.value + 5); v.dispatchEvent(new Event('input', { bubbles: true }));
-      lppAnchorCardRefresh(); return Array.from(document.querySelectorAll('#lpAnchResult .lpAgChip')).map(e => e.dataset.state); });
+               sum: Array.from(document.querySelectorAll(lts ? '#ltsSumCard .lpAgChip' : '#page-summary .lpAgChip')).map(e => e.dataset.state) }; }, !!mut.lts);
+    const stale = await o.p.evaluate(lts => { const v = document.getElementById(lts ? 'ltsV' : 'V'); v.value = String(+v.value + 5); v.dispatchEvent(new Event('input', { bubbles: true }));
+      lppAnchorCardRefresh(); return Array.from(document.querySelectorAll('#lpAnchResult .lpAgChip')).map(e => e.dataset.state); }, !!mut.lts);
     check(before.every(x => x === 'none') && after.card.length === pay.groups.length && after.card.every(c => c[0] === 'ok') && after.sum.every(x => x === 'ok') && stale.every(x => x === 'stale'),
-      `${name}: result chips none → ok → stale after V + 5 (${after.card.map(c => c[1].slice(0, 120)).join(' | ')})`);
+      `${name}: result chips none → ok → stale after ${mut.lts ? 'ltsV' : 'V'} + 5 (${after.card.map(c => c[1].slice(0, 120)).join(' | ')})`);
     check(!bErr.length && !o.errs.length, `${name}: no page errors (LP ${o.errs.length}, BP ${bErr.length}${bErr.length ? ': ' + bErr[0] : ''})`);
   } finally { await o.b.close(); }
 }
