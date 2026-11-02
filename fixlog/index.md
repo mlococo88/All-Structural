@@ -4307,7 +4307,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - The whole-document `textContent` and localStorage differ only by the times written when the page publishes its hand-offs (`producedAt`, `setAt`, `seenAt`, the "received … 05:05" line) and by `appPaths.mct.file`. That value is the name of the file opened, which was a temporary copy for origin/main.
 - Screenshots at 900 and 1280 px are identical, except about 70 px on the LL & DL Distribution sections (the same time line) and 8–9 px of anti-aliasing.
 
-## 2026-11-02 — PR: claude/list-input-index — GFS floorbeam spacings, stringer offsets and the AREMA girder spacings are tables with one box per value (LIST)   [display only]
+## 2026-11-02 — PR: claude/list-input-index, PR #701: https://github.com/mlococo88/All-Structural/pull/701 — GFS floorbeam spacings, stringer offsets and the AREMA girder spacings are tables with one box per value (LIST)   [display only]
 - **Why:** engineer decision 2026-11-02: no comma-separated inputs (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
   React without JSX build: `SharedListInput.react(React)` → `ListTable`.
 - **Where (1):** script tags, anchor `<script src="shared/report.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
