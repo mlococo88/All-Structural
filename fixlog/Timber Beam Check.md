@@ -1771,7 +1771,7 @@ index 2f29ed5..c3246e1 100644
 +
 ```
 
-## 2026-11-02 — PR: PRLINK — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+## 2026-11-02 — PR: [#682](https://github.com/mlococo88/All-Structural/pull/682) — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
 - **Before:** Project tab → Saved projects (this browser): Save (under Project name), drop-down + Open / Delete (`tbc_projects_v1`,
   `{ name: { t, d: M } }`); Project file: Open file / Save file / New project; header Open file… / Save file. No rename, no duplicate, no undo.
 - **Where:**
