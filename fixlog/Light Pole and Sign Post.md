@@ -1837,3 +1837,44 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - `node tests/check-syntax.mjs` (no args): all scripts pass. `node tests/engine/run.mjs lightpole`: 41 passed.
 - `node tests/lightpole-compare.mjs --a origin/main`: results identical in all 16 cases; pole cases identical in results, cables, text and drawings; sign cases: only the 3D card text (+2 lines, Geometry) and in ltssign1 the LTS drawings-card sentence. `--old-saves`: results identical in all 16 cases (a first run showed a transient difference in `arms`; the case and the full run repeated identical).
 - `tests/smoke/lightpole-anchor-handoff.mjs`: ALL PASS. New `tests/smoke/lightpole-signviews.mjs` (IBC monopost, two-post, rect post + square shaft, 40 ft two-post; LRFDLTS monopost, two-post, no Broms; pole) at 1280 and 390: sheets fit a standard scale, DXF valid, no NaN, **no text overlaps on any sheet** (tests/engine/overlap.mjs), embedment and cage text = the results, 3D renders, views / toggles / Save PNG work, no horizontal scroll, 0 console errors — ALL PASS.
+
+## 2026-11-02 — PR #PRNUM (https://github.com/mlococo88/All-Structural/pull/PRNUM): claude/lp-anchor-shapes (LPAS: the Anchorage hand-off sends the post and plate this tool designs — square / rectangular HSS posts; square base-plate option; no result change for saved projects)
+
+### LPAS-1. Anchorage hand-off: square / rectangular posts were refused by the Anchorage app   [bug] [hand-off payload; no result change]
+- **Reported (engineer, live site):** "Send anchors" from a sign with square HSS posts → BasePlateAnchorDesigner: "Anchor-group hand-off refused: Post 1: a circular plate needs base.pole {shape:"round", D}. Post 1: base.pole.shape "square" is not supported (round)."
+- **Root cause:** this tool designs every post shape (round / square / rectangular HSS, pole and sign, IBC and LRFDLTS) on its circular plate with the rods on a bolt circle, and sent exactly that (`plate {circle}`, `pole {shape:'square'|'rect', D:poleDiaBase}`), with the note "the Anchorage app takes a round pole on a circular plate". The receiver accepted only a round pole (`base.pole.shape "…" is not supported (round)`), although its own circular-plate check already handles a non-round column (D_pole = the smaller of width and depth, BC-1). A rectangular post was also sent without its depth (D only). The sender's geometry was consistent with what it designs; the receiver's whitelist and the missing depth were the defects.
+- **Where:** new `lppAnchBase(inp)` and `lppAnchBaseNotes(inp)` (before `function lppAnchorPayload(){`); `ltsAnchorPayload()` and `lppAnchorPayload()` use them.
+- **Before (both payload builders):**
+  ```js
+  if(inp.poleShape!=='round') notes.push('The pole is '+inp.poleShape+' (the Anchorage app takes a round pole on a circular plate).');
+  base:{type:'doubleNut', standoffClear:0, grout:false, plate:{shape:'circle', D:inp.bpDia, t:inp.bpT, Fy:(inp.bpFy||36)*1000},
+        pole:{shape:inp.poleShape==='round'?'round':inp.poleShape, D:inp.poleDiaBase}},
+  ```
+- **After:** `lppAnchBaseNotes(inp).forEach(x=>notes.push(x));` and `base:lppAnchBase(inp),` with
+  ```js
+  const plate=inp.bpShape==='square' ? {shape:'rect', B:inp.bpB, N:inp.bpB, t:inp.bpT, Fy:(inp.bpFy||36)*1000}
+                                     : {shape:'circle', D:inp.bpDia, t:inp.bpT, Fy:(inp.bpFy||36)*1000};
+  const pole=inp.poleShape==='square' ? {shape:'square', B:inp.poleDiaBase}
+           : inp.poleShape==='rect' ? {shape:'rect', Bx:inp.poleDepthBase, By:inp.poleDiaBase}
+           : {shape:'round', D:inp.poleDiaBase};
+  return {type:'doubleNut', standoffClear:0, grout:false, plate, pole};
+  ```
+  Bx = the rectangular post's depth along x (panel normal / wind 0°; the "into-wind dimension" input, the depth the drawings put along x), By = its width along y. Square and rectangular posts are prismatic (`inp.poleDepthBase = inp.poleDepthTop`). Notes: square post (both tools use D = the side), rectangular post (this tool D = width along y, the Anchorage app D = min(width, depth)), square plate (this tool: bending line; the Anchorage app: its rectangular-plate method, AISC DG1).
+- **Round post on a circular plate:** the payload is byte-identical (same key order) → same `inputsHash`; a stored Anchorage result stays current.
+- **Check case:** sign, two posts, square HSS 8 in, Ø20 plate, (6) 1 in rods on BC 16: before — refused; after — imported, column HSS8X8, plate circle, 20 combinations per post, combination 1 P −0.6228 kip, M_y 352.24 kip·in (post 1) = −P_LP, M_x,LP converted; governing D/C 1.16 (Combined T–V, 0.9D + 1.0W, wind 0°, Case B).
+
+### LPAS-2. Square base-plate option   [new input; default round, every saved project unchanged]
+- **Engineer request (2026-11-02, via the coordinator):** add a square base plate (round default).
+- **Where:** input card 7: `bpShape` select (Round (circular plate) | Square, default Round) before `bpDia` (now row `rowBpDia`), new row `rowBpB` with `bpB` (side, default 20 in), shown by `lppApplyBpUI()`; `INPUT_IDS` += `bpShape`, `bpB`; `calc()` inputs `bpShape`, `bpB`; `applyState()`: a save without `bpShape` / `bpB` opens round / 20 in; `lppInputErrors()` (end): a square plate needs B > 0 and every rod hole (rod centre on the bolt circle + d/2) inside B/2; `lppBpW()`, `lppBpTxt()`, `LPP_BP_SQ`, `lppBpSqNote()` (after `lppApplyBpUI`).
+- **Anchors:** the rods stay on the existing bolt circle (the only pattern this tool has). (4) rods at θ_b = 45° put one rod on each corner diagonal of the square plate.
+- **Plate check (no formula change, §4):** the existing bending line at the pole face, t_req = √(4·P_rod·m/(0.90·F_y·b_eff)), m = (BC − D)/2, b_eff = πD/n (IBC `anchorBolts()`, LRFDLTS `LpLts.basePlate()`), is used unchanged for the square plate. It is the same method: it uses only BC, D and n, never the plate outline — the strip at the pole face lies inside the plate (a square plate of side B contains the circle of diameter B), the plate outside the bolt circle is not credited (so the square plate's corners add nothing). Labelled an engineering method, as for the circular plate (`LPP_BP_VERIFY` unchanged; the square-plate statement is shown with the worked step, the LRFDLTS base-plate card and both reports).
+  - Hand check (default light pole, square plate 20 × 20 × 1.25 in, A36): P_rod = 10,018 lb (as before), m = (16 − 10)/2 = 3.00 in, b_eff = π·10/6 = 5.236 in, t_req = √(4·10,018·3.00/(0.9·36,000·5.236)) = 0.842 in — identical to the Ø20 circular plate (tool: 0.842 in, both modes).
+- **Display:** Summary "Base plate" row (`square 20.0 in × 1.250 in`), LRFDLTS geometry summary (`plate square 20.00 in × …`; round unchanged), elevation (plate width = B), IBC plan and base-plate sheet (square outline, dimension `PL <> SQ`), sign plan / 3D (box plate) and front-elevation callout `BASE PL 20.00" SQ x …`, Manual input table row.
+- **Hand-off:** sent as `plate {shape:'rect', B, N:B}` (LPAS-1); the Anchorage app imports it as a rectangular plate under the round / square / rectangular post.
+
+### How verified
+- `node tests/smoke/lightpole-anchor-handoff.mjs`: ALL PASS — the 5 earlier cases unchanged (same D/C, same hashes) plus sign2Sq, sign1Sq, sign2Rect, sign1Round, poleSq, poleRect, ltsSign2Sq, ltsSign1Rect, ltsPoleSq (posts) and poleSqPl, sign2SqPlSq, ltsSign1SqPl (square plate): BP accepts, column and plate arrive as sent (b along x, d along y), no blocking message, combination 1 converted exactly, finite D/C, chips none → ok → stale. On origin/main sign2Sq is refused with the engineer's message.
+- `node tests/smoke/lightpole-signviews.mjs` (cases ibc2sqpl, lts1sqpl added): ALL PASS (sheets, DXF valid, no overlaps, 3D renders, 1280 / 390 px).
+- `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: results identical in all 16 cases except the two added inputs `inp.bpShape` / `inp.bpB`; cable values identical; text and drawings identical.
+- `node tests/engine/run.mjs lightpole` 41 passed; `node tests/check-syntax.mjs` all pass.
+- **Open item (engineer):** for a rectangular post this tool takes D = the width along y (`poleDiaBase`), the Anchorage app D = min(width, depth); and for a square plate the Anchorage app uses AISC DG1, not the bending line. Which should govern? (No change made; both are stated in the payload notes.)

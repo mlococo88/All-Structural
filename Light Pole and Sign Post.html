@@ -681,7 +681,9 @@
         <div class="row"><label>Bolt circle dia., BC</label><div class="ctl"><input id="boltBC" type="number" value="16" step="1"><span class="unit">in</span></div></div>
         <div class="row"><label>Group orientation, θ<sub>b</sub><span class="note">azimuth of bolt #1</span></label><div class="ctl"><input id="boltTheta" type="number" value="0" step="15"><span class="unit">°</span></div></div>
         <div class="row"><label>Effective embedment, h<sub>ef</sub></label><div class="ctl"><input id="boltHef" type="number" value="18" step="1"><span class="unit">in</span></div></div>
-        <div class="row"><label>Base plate diameter</label><div class="ctl"><input id="bpDia" type="number" value="20" step="1"><span class="unit">in</span></div></div>
+        <div class="row"><label>Base plate shape<span class="note">rods on the bolt circle above in both cases</span></label><div class="ctl"><select id="bpShape" class="combo-sel"><option value="round" selected>Round (circular plate)</option><option value="square">Square</option></select></div></div>
+        <div class="row" id="rowBpDia"><label>Base plate diameter</label><div class="ctl"><input id="bpDia" type="number" value="20" step="1"><span class="unit">in</span></div></div>
+        <div class="row" id="rowBpB" style="display:none"><label>Base plate side, B<span class="note">square plate B × B, centred on the bolt circle</span></label><div class="ctl"><input id="bpB" type="number" value="20" step="1"><span class="unit">in</span></div></div>
         <div class="row"><label>Base plate yield strength, F<sub>y</sub><span class="note">A36: 36 ksi · A572 Gr 50: 50 ksi</span></label><div class="ctl"><input id="bpFy" type="number" value="36" step="1"><span class="unit">ksi</span></div></div>
         <div class="row"><label>Base plate thickness, provided<span class="note">checked against t<sub>req</sub> (bending line at the pole face, double-nut)</span></label><div class="ctl"><input id="bpT" type="number" value="1.25" step="0.125"><span class="unit">in</span></div></div>
         <div class="row"><label>Anchor reinforcement<span class="note">tie cage developed into the breakout cone (§17.5.2.1)</span></label>
@@ -1189,6 +1191,14 @@ if($('signCfMode')) $('signCfMode').addEventListener('change',()=>{
 
 document.querySelectorAll('#segIso button').forEach(b=>b.onclick=()=>{setSeg('segIso',b.dataset.v);isoFac=+b.dataset.v;markDirty();calc();});
 document.querySelectorAll('#segCon button').forEach(b=>b.onclick=()=>{setSeg('segCon',b.dataset.v);constraint=b.dataset.v;markDirty();calc();});
+// LPAS (2026-11-02): base plate shape — round (diameter) or square (side B); the rows follow the selection
+function lppApplyBpUI(){ const sq=$('bpShape')&&$('bpShape').value==='square'; if($('rowBpDia')) $('rowBpDia').style.display=sq?'none':''; if($('rowBpB')) $('rowBpB').style.display=sq?'':'none'; }
+// plate extent (diameter, or side of a square plate) and its drawing / text label
+function lppBpW(inp){ return inp.bpShape==='square' ? (inp.bpB||0) : (inp.bpDia||0); }
+function lppBpTxt(inp,d){ return inp.bpShape==='square' ? 'square '+fmt(inp.bpB,d==null?2:d)+' in' : 'Ø'+fmt(inp.bpDia,d==null?2:d)+' in'; }
+// the square-plate statement shown with the bending-line check (worked step, report); '' for a circular plate
+const LPP_BP_SQ='Square plate: the rods stay on the bolt circle and the plate is centred on it. The bending line at the pole face and b_eff = πD/n are the same as for a circular plate — the check uses only BC, D and n, so the plate outline does not enter; the strip at the pole face lies inside the plate and the corners beyond the bolt circle are not credited. Engineering method, as for the circular plate.';
+function lppBpSqNote(inp){ return inp&&inp.bpShape==='square' ? LPP_BP_SQ+' Plate '+fmt(inp.bpB,2)+' in × '+fmt(inp.bpB,2)+' in.' : ''; }
 function lppApplyArUI(){ document.querySelectorAll('.arRow').forEach(r=>r.style.display=anchRe==='yes'?'':'none'); }
 document.querySelectorAll('#segAnchRe button').forEach(b=>b.onclick=()=>{setSeg('segAnchRe',b.dataset.v);anchRe=b.dataset.v;lppApplyArUI();markDirty();calc();});
 lppApplyArUI();
@@ -1322,6 +1332,7 @@ document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{appMode=b
 document.querySelectorAll('#codeSeg button').forEach(b=>b.onclick=()=>{codeMode=b.dataset.v==='lts'?'lts':'ibc';applyMode();});
 document.querySelectorAll('#signPostSeg button').forEach(b=>b.onclick=()=>{signPosts=+b.dataset.v;applyMode();});
 if($('poleShape')) $('poleShape').addEventListener('change',()=>{applyShapeUI();markDirty();calc();});
+if($('bpShape')) $('bpShape').addEventListener('change',()=>{lppApplyBpUI();markDirty();calc();});   // LPAS
 // LTS: source of V (2026-11-02, max rule same day). ltsV is always the user's LRFDLTS map V; with the CTDOT source the used V is
 // max(map V, 120 mph) (ltsInputs); nothing overwrites ltsV. The generic input listener recalculates on either change.
 
@@ -2614,6 +2625,7 @@ manPart("p2","2. Input Reference",[
  ["Bolt group orientation, \u03b8\u2080","deg","Which bolts are most heavily loaded relative to the moment vector","Whether a bolt sits <i>on</i> the tension axis or straddles it changes the peak bolt force noticeably."],
  ["Effective embedment, h<sub>ef</sub>","in","Tension breakout, pullout, pryout","Measured from the concrete surface to the bearing face of the head or nut. Deeper embedment increases breakout capacity as h<sub>ef</sub><sup>1.5</sup>."],
  ["Base plate diameter","in","Cantilever arm for the plate thickness estimate","Used with the pole diameter to find the yield-line cantilever."],
+ ["Base plate shape and side B","\u2014 / in","Plate outline (drawings, report, Anchorage hand-off)","Round (diameter) or square (side B, centred on the bolt circle; the rods stay on the bolt circle \u2014 4 rods at \u03b8\u2080 = 45\u00b0 put one on each corner diagonal). The thickness check is the same bending line at the pole face: it uses only BC, the pole width and n, so the plate outline does not enter (the corners of a square plate are not credited)."],
  ["Anchor installation","\u2014","Minimum spacing and edge distance (ACI 318-19 \u00a717.9.2, Table 17.9.2(a))","Torqued (default for new projects): s \u2265 6d<sub>a</sub>, c<sub>a1</sub> \u2265 6d<sub>a</sub>. Untorqued: s \u2265 4d<sub>a</sub>, clear cover to the anchor \u2265 the specified cover (\u00a720.5.1.3). AASHTO LTS practice pretensions anchor rods (snug-tight, then turn-of-nut), so pole and sign anchors are normally torqued. No capacity depends on it; projects saved before this input open as Untorqued."],
  ["Splitting reinforcement at the shaft top","\u2014","Waives the \u00a717.9.2 minimum spacing and edge distance (ACI 318-19 \u00a717.9.1)","Select Provided only where ties or a spiral are detailed at the shaft top to control splitting around the anchors. Separate from the breakout anchor reinforcement (\u00a717.5.2.1). Default None."]
 ]}},
@@ -3103,7 +3115,7 @@ function summaryHTML(ctx){
   drow('Ties',st=>`${st.found.reo.tie.bar.n} @ ${fmt(st.found.reo.tie.s,0)} in (top zone @ ${fmt(st.found.reo.tie.sTop,0)} in for ${fmt(st.found.reo.tie.zoneH,0)} in)`);
   drow('Anchor bolts',st=>st.found.bolts?`(${st.found.bolts.n}) ${fmt(st.found.bolts.d,3)} in Gr.${inp.boltGrade}, BC ${fmt(st.found.bolts.BC,1)} in, h_ef ${fmt(st.found.bolts.hef,1)} in — designed in the Anchorage app ${lppLink('anchorage',stacks.indexOf(st))}`:'—');
   drow('Anchors — Anchorage app',(st)=>{ if(typeof lppAnchorChipHTML!=='function'||!LPP_ANCH) return '—'; const g=LPP_ANCH.groups[Math.min(stacks.indexOf(st),LPP_ANCH.groups.length-1)]; return g?lppAnchorChipHTML(g.id):'—'; });
-  drow('Base plate',st=>{ const b=st.found.bolts; if(!b) return '—'; const bP=(b.byCheck&&b.byCheck.BP)||b; return `Ø${fmt(inp.bpDia,1)} in × ${fmt(inp.bpT,3)} in, F<sub>y</sub> ${fmt(bP.Fyp,0)} ksi; t_req ${fmt(bP.tpReq,3)} in (double-nut, bending line at the pole face) ${lppLink('anchors',stacks.indexOf(st))}`; });
+  drow('Base plate',st=>{ const b=st.found.bolts; if(!b) return '—'; const bP=(b.byCheck&&b.byCheck.BP)||b; return `${lppBpTxt(inp,1)} × ${fmt(inp.bpT,3)} in, F<sub>y</sub> ${fmt(bP.Fyp,0)} ksi; t_req ${fmt(bP.tpReq,3)} in (double-nut, bending line at the pole face) ${lppLink('anchors',stacks.indexOf(st))}`; });
   H+=`</table>`;
   // ---- governing demands ----
   H+=`<div class="step-label" style="margin-top:14px">Governing demands</div>`;
@@ -4494,6 +4506,11 @@ function lppInputErrors(inp){
   pos(inp.fc,'Concrete f′c'); pos(inp.fy,'Reinforcement f_y');
   if(!(inp.boltQty>=1)) e.push('Number of bolts must be at least 1.');
   pos(inp.boltBC,'Bolt circle diameter BC'); pos(inp.boltHef,'Anchor embedment h_ef');
+  // LPAS (2026-11-02): square base plate — side positive, every rod hole inside the plate
+  if(inp.bpShape==='square'){ pos(inp.bpB,'Base plate side B');
+    if(inp.bpB>0 && inp.boltBC>0 && inp.boltQty>=1){ const R=inp.boltBC/2, n=Math.round(inp.boltQty);
+      const ext=Math.max(...Array.from({length:n},(_,j)=>{ const a=(inp.boltTheta+j*360/n)*RAD; return Math.max(Math.abs(R*Math.cos(a)),Math.abs(R*Math.sin(a))); }));
+      if(ext+(inp.boltDia||0)/2>=inp.bpB/2) e.push('Square base plate: a rod hole reaches the plate edge (rod at '+fmt(ext,2)+' in from the centre, half side '+fmt(inp.bpB/2,2)+' in) — increase B or reduce the bolt circle.'); } }
   return e;
 }
 function lppShowInputErrors(errs){
@@ -4546,7 +4563,7 @@ function lppCalcIbc(){
     b:num('b'),S1:num('S1'),qAllow:num('qAllow'),fc:num('fc'),fy:num('fy'),
     cover:num('cover'),minSteel:($('minSteel')?$('minSteel').value:'half'),
     boltDia:parseFloat($('boltDia')?$('boltDia').value:1),boltGrade:parseInt($('boltGrade')?$('boltGrade').value:55),
-    boltQty:num('boltQty'),boltBC:num('boltBC'),boltTheta:num('boltTheta'),boltHef:num('boltHef'),bpDia:num('bpDia'),bpFy:(num('bpFy')||36),bpT:num('bpT'),anchTq:anchTq,arBars:Math.max(1,Math.round(num('arBars')||1)),arBar:($('arBar')?$('arBar').value:'shaft'),arX:num('arX'),splitRe:splitRe,
+    boltQty:num('boltQty'),boltBC:num('boltBC'),boltTheta:num('boltTheta'),boltHef:num('boltHef'),bpDia:num('bpDia'),bpShape:($('bpShape')&&$('bpShape').value==='square'?'square':'round'),bpB:num('bpB'),bpFy:(num('bpFy')||36),bpT:num('bpT'),anchTq:anchTq,arBars:Math.max(1,Math.round(num('arBars')||1)),arBar:($('arBar')?$('arBar').value:'shaft'),arX:num('arX'),splitRe:splitRe,
     // mode + sign
     mode:appMode, signPosts:signPosts,
     signB:num('signB'),signS:num('signS'),signClr:num('signClr'),signWt:num('signWt'),signSpacing:num('signSpacing'),
@@ -5081,6 +5098,7 @@ function basePlateWorkedHTML(bo,inp){
   H+=g(`C_{max} = \\frac{M_u\\,|y|}{\\sum y_i^2}+\\frac{P_u}{n} = ${fmt(bp.Cmax,0)}\\ \\text{lb}\\qquad P_{rod} = \\max(T_{max},C_{max}) = \\max(${fmt(bp.Tmax,0)},\\ ${fmt(bp.Cmax,0)}) = ${fmt(bp.Prod,0)}\\ \\text{lb}`);
   H+=g(`m = \\frac{BC-D_{pole}}{2} = \\frac{${fmt(bp.BC,2)}-${fmt(bp.Dpole,2)}}{2} = ${fmt(bp.m,2)}\\text{ in}\\qquad b_{eff} = \\frac{\\pi\\,D_{pole}}{n} = \\frac{\\pi(${fmt(bp.Dpole,2)})}{${bp.n}} = ${fmt(bp.beff,3)}\\text{ in}`);
   H+=g(`t_{p,req} = \\sqrt{\\frac{4\\,P_{rod}\\,m}{\\phi_f\\,F_y\\,b_{eff}}} = \\sqrt{\\frac{4(${fmt(bp.Prod,0)})(${fmt(bp.m,2)})}{0.9(${fmt(bp.Fyp*1000,0)})(${fmt(bp.beff,3)})}} = ${fmt(bp.tpReq,3)}\\text{ in}`);
+  if(lppBpSqNote(inp)) H+=`<p class="eq-why">${lppEsc(lppBpSqNote(inp))}</p>`;   // LPAS
   H+=`<div class="flag" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0">${lppEsc(LPP_BP_VERIFY)}</div>`;
   H+=`<p class="eq-result">t<sub>req</sub> = ${fmt(bp.tpReq,3)} in ${bp.tpOK?'≤':'&gt;'} t<sub>provided</sub> = ${fmt(bp.tpProv,3)} in → <b>${bp.tpOK?'PASS':'FAIL'}</b> (M<sub>u</sub>/φM<sub>n</sub> = (t<sub>req</sub>/t)² = ${fmt(Math.pow(bp.tpReq/bp.tpProv,2),3)}).</p>`;
 
@@ -6641,6 +6659,7 @@ function lprModel(){
         S({id:'t',label:'Required thickness',sym:'t_{req}',eq:'\\sqrt{\\frac{4P_{rod}m}{\\phi F_{y}b_{eff}}}',sub:'\\sqrt{\\frac{4('+N(p.Prod,0)+')('+N(p.m)+')}{0.9('+N(p.Fyp*1000,0)+')('+N(p.beff,3)+')}}',value:p.tpReq,unit:'in',d:3}),
         S({id:'dc',label:'Provided t = '+N(p.tpProv,3)+' in',sym:'(t_{req}/t)^{2}',eq:'',sub:'',value:Math.pow(p.tpReq/p.tpProv,2),unit:'',d:3,ok:!!p.tpOK})]}]),
         {type:'note',warn:true,text:LPP_BP_VERIFY},
+        ...(lppBpSqNote(inp)?[{type:'note',text:lppBpSqNote(inp)}]:[]),   // LPAS
         {type:'note',text:'Anchor rods (ACI 318-19 Ch. 17) are designed in the Anchorage app: the anchor pattern and every LRFD combination are sent from the [[tab:anchors|Anchorage tab]], and the returned D/C is shown there and on the Summary.'}]});
     });
     subs.push(...(sign?xps('bp','base plate'):xs(['8'])));   // LPRX
@@ -6726,7 +6745,7 @@ function lpdShaft(st, inp){
 function lpdElevation(D, L, k, ctx){
   const inp=ctx.inp, h=0.1*k, sign=ctx.mode==='sign', st0=ctx.stacks[0];
   const posts = sign ? (inp.signPosts===2 ? [-inp.signSpacing*6, inp.signSpacing*6] : [0]) : [0];
-  const H=inp.H*12, tP=inp.bpT>0?inp.bpT:0, bp=inp.bpDia||0;
+  const H=inp.H*12, tP=inp.bpT>0?inp.bpT:0, bp=lppBpW(inp);   // LPAS: diameter or square side (the elevation width)
   const Db=inp.poleDiaBase, Dt=sign?inp.poleDiaBase:inp.poleDiaTop;
   posts.forEach((px,pi)=>{
     const st=ctx.stacks[Math.min(pi,ctx.stacks.length-1)], sh=lpdShaft(st,inp);
@@ -6774,7 +6793,8 @@ function lpdPlan(D, L, k, ctx){
   const posts = sign ? (inp.signPosts===2 ? [-inp.signSpacing*6, inp.signSpacing*6] : [0]) : [0];
   posts.forEach(px=>{ const b=inp.b*12;
     if(inp.shaftShape==='square') D.rect(L.conc, px-b/2, -b/2, px+b/2, b/2); else D.circle(L.conc, px, 0, b/2);
-    if(inp.bpDia>0) D.circle(L.plate, px, 0, inp.bpDia/2);
+    if(inp.bpShape==='square'){ if(inp.bpB>0) D.rect(L.plate, px-inp.bpB/2, -inp.bpB/2, px+inp.bpB/2, inp.bpB/2); }   // LPAS
+    else if(inp.bpDia>0) D.circle(L.plate, px, 0, inp.bpDia/2);
     if(inp.poleShape==='round') D.circle(L.pole, px, 0, inp.poleDiaBase/2);
     else { const w=inp.poleDiaBase, dd=inp.poleShape==='rect'?inp.poleDepthTop:w; D.rect(L.pole, px-dd/2, -w/2, px+dd/2, w/2); }
     const R=inp.boltBC/2; for(let j=0;j<inp.boltQty;j++){ const a=(inp.boltTheta+j*360/inp.boltQty)*RAD; D.circle(L.bolt, px+R*Math.cos(a), R*Math.sin(a), inp.boltDia/2); }
@@ -6808,13 +6828,13 @@ function lpdSection(D, L, k, ctx, si){
 // BASE PLATE (plan of the plate with the rod holes; thickness and grade from the inputs; t_req from the bending-line check)
 function lpdPlate(D, L, k, ctx){
   const inp=ctx.inp, h=0.1*k, b=ctx.stacks[0].found.bolts, p=(b&&b.byCheck&&b.byCheck.BP)||b;
-  const R=inp.boltBC/2, rp=inp.bpDia/2;
-  D.circle(L.plate, 0, 0, rp);
+  const R=inp.boltBC/2, sqP=inp.bpShape==='square', rp=lppBpW(inp)/2;
+  if(sqP) D.rect(L.plate, -rp, -rp, rp, rp); else D.circle(L.plate, 0, 0, rp);   // LPAS: square plate B × B
   if(inp.poleShape==='round') D.circle(L.pole, 0, 0, inp.poleDiaBase/2);
   else { const w=inp.poleDiaBase, dd=(ctx.mode==='sign'&&inp.poleShape==='rect')?inp.poleDepthTop:w; D.rect(L.pole, -dd/2, -w/2, dd/2, w/2); }   // LPSV: a rect. sign post at its depth along x
   D.circle(L.cl, 0, 0, R);
   for(let j=0;j<inp.boltQty;j++){ const a=(inp.boltTheta+j*360/inp.boltQty)*RAD; D.circle(L.bolt, R*Math.cos(a), R*Math.sin(a), inp.boltDia/2+0.0625); }
-  D.dimH(L.dim, -rp, rp, -rp-0.5*k, -rp, 'PL <> DIA');
+  D.dimH(L.dim, -rp, rp, -rp-0.5*k, -rp, sqP?'PL <> SQ':'PL <> DIA');
   D.dimH(L.dim, -R, R, rp+0.5*k, R, 'BC <>');
   const lines=['PLATE '+fmt(inp.bpT,3)+'" THICK, Fy = '+fmt(inp.bpFy||36,0)+' KSI',
     p?'t REQ = '+fmt(p.tpReq,3)+'" ('+(ctx.code==='lts'?'LRFDLTS: PLASTIC PLATE STRIP, b_eff = PI x D / n':'BENDING LINE AT POLE FACE, DOUBLE-NUT')+')':'',
@@ -6838,7 +6858,7 @@ function lpsvGeom(ctx){
   const wY=inp.poleDiaTop, wX=inp.poleShape==='rect'?inp.poleDepthTop:inp.poleDiaTop;   // post width seen in the front (along y) / side (along x) view
   const ang=Array.from({length:Math.max(0,Math.round(inp.boltQty))},(_,j)=>(inp.boltTheta+j*360/Math.round(inp.boltQty))*RAD);
   return {inp, two, Ls, posts:two?[-Ls/2,Ls/2]:[0], B:inp.signB*12, s:inp.signS*12, clr:inp.signClr*12, H:(inp.signClr+inp.signS)*12,
-    wY, wX, tP:inp.bpT>0?inp.bpT:0, bp:inp.bpDia||0, R:inp.boltBC/2, rodD:inp.boltDia, hef:inp.boltHef, rodUp:2.5*inp.boltDia, ang, tPan:1};
+    wY, wX, tP:inp.bpT>0?inp.bpT:0, bp:lppBpW(inp), bpSq:inp.bpShape==='square', R:inp.boltBC/2, rodD:inp.boltDia, hef:inp.boltHef, rodUp:2.5*inp.boltDia, ang, tPan:1};
 }
 function lpsvUniq(v){ const o=[]; v.forEach(x=>{ if(!o.some(y=>Math.abs(y-x)<0.05)) o.push(x); }); return o.sort((a,b)=>a-b); }
 // shaft, bars, rods and plate of one post in an elevation; u = horizontal model coordinate of the post axis; off = rod offsets
@@ -6881,7 +6901,7 @@ function lpsvFront(D,L,k,ctx){
   const xr=Math.max(G.B/2, uL+bmax/2)+0.3*k;
   D.text(L.txt, xr, G.clr*0.55, h, lpsvPostTxt(inp)+(G.two?' (EACH)':''), 0);
   D.line(L.txt, xr-0.05*k, G.clr*0.55+h*0.4, uL+G.wY/2, G.clr*0.55+h*0.4);   // leader to the post
-  D.text(L.txt, xr, G.clr*0.55-0.2*k, h, 'BASE PL Ø'+fmt(inp.bpDia,2)+'" x '+fmt(inp.bpT,3)+'", ('+Math.round(inp.boltQty)+') '+fmt(inp.boltDia,3)+'" RODS', 0);
+  D.text(L.txt, xr, G.clr*0.55-0.2*k, h, 'BASE PL '+(inp.bpShape==='square'?fmt(inp.bpB,2)+'" SQ':'Ø'+fmt(inp.bpDia,2)+'"')+' x '+fmt(inp.bpT,3)+'", ('+Math.round(inp.boltQty)+') '+fmt(inp.boltDia,3)+'" RODS', 0);
   lpsvGrade(D,L,k, xl-1.4*k, Math.max(xr+3*k, uL+bmax/2+2*k), h);
   D.text(L.txt, xl-1.4*k, -dmax-1.2*k, 0.14*k, 'FRONT ELEVATION', 0);
 }
@@ -6912,7 +6932,7 @@ function lpsvPlan(D,L,k,ctx){
   const G=lpsvGeom(ctx), inp=G.inp, h=0.1*k, b=inp.b*12;
   G.posts.forEach(py=>{
     if(inp.shaftShape==='square') D.rect(L.conc, -b/2, py-b/2, b/2, py+b/2); else D.circle(L.conc, 0, py, b/2);
-    if(G.bp>0) D.circle(L.plate, 0, py, G.bp/2);
+    if(G.bp>0){ if(G.bpSq) D.rect(L.plate, -G.bp/2, py-G.bp/2, G.bp/2, py+G.bp/2); else D.circle(L.plate, 0, py, G.bp/2); }   // LPAS
     if(inp.poleShape==='round') D.circle(L.pole, 0, py, G.wX/2); else D.rect(L.pole, -G.wX/2, py-G.wY/2, G.wX/2, py+G.wY/2);
     G.ang.forEach(a=>D.circle(L.bolt, G.R*Math.cos(a), py+G.R*Math.sin(a), G.rodD/2)); });
   const xp=-G.wX/2; D.rect(L.sign, xp-G.tPan, -G.B/2, xp, G.B/2);
@@ -7148,7 +7168,7 @@ function lpsvBuild(d){
   ys.forEach((y,pi)=>{
     const len=H-tP, pgeo=inp.poleShape==='round'?new T.CylinderGeometry(wX/2,wX/2,len,28):new T.BoxGeometry(wX,len,wY);
     add(grp.post, pgeo, M(0x8d99a8,1), 0, y, tP+len/2);
-    if(bp>0){ add(grp.post, new T.CylinderGeometry(bp/2,bp/2,Math.max(tP,0.02),40), M(0x5b6676,1), 0, y, tP/2); }
+    if(bp>0){ add(grp.post, G.bpSq? new T.BoxGeometry(bp,Math.max(tP,0.02),bp) : new T.CylinderGeometry(bp/2,bp/2,Math.max(tP,0.02),40), M(0x5b6676,1), 0, y, tP/2); }   // LPAS: square plate
     G.ang.forEach(a=>{ const rx=Rb*Math.cos(a), ry=y+Rb*Math.sin(a), L=hef+tP+up;
       add(grp.rods, new T.CylinderGeometry(rd/2,rd/2,L,10), M(0x2b3440,1), rx, ry, -hef+L/2);
       add(grp.rods, new T.CylinderGeometry(rd*0.85,rd*0.85,rd*0.9,6), M(0x2b3440,1), rx, ry, tP+rd*0.45);
@@ -7247,7 +7267,7 @@ function ltsAnchorPayload(){
   if(!inp||!X||!X.ba||!X.mc) return {error:'No LRFDLTS results yet (correct any input errors first).'};
   if(!X.fd||!X.fd.gov) return {error:'Select the Broms soil model (Shaft & soil): the LRFDLTS shaft depth comes from Broms (LTS-7).'};
   const notes=[];
-  if(inp.poleShape!=='round') notes.push('The pole is '+inp.poleShape+' (the Anchorage app takes a round pole on a circular plate).');
+  lppAnchBaseNotes(inp).forEach(x=>notes.push(x));   // LPAS
   notes.push('Double-nut base: the leveling-nut standoff is not a Light Pole input (standoffClear sent as 0); set it in the Anchorage app.');
   notes.push('AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions: Table 3.4-1 Strength I (1.25DC) and Extreme I (1.1DC + W, 0.9DC + W) for the load cases of Table 3.9.3-1 (1: normal, 2: transverse, 3: 0.75 of both); M = B·M (Art. 4.8.1 tapered pole / Eq. 5.12.1-10 prismatic post) at the top of the shaft; torsion per Art. 3.9.4.2. Service I and Fatigue are not sent (fatigue design is not required for these supports, Arts. 11.4, 11.7.2).');
   notes.push('LRFDLTS C5.16.3 refers to ACI 318-11 Appendix D for the anchorage; the Anchorage app uses ACI 318-19 Ch. 17. Cast-in anchor bolts for new work (Art. 5.16.1).');
@@ -7256,8 +7276,7 @@ function ltsAnchorPayload(){
     return {name:`LRFDLTS ${r.name}, ${r.lcName}`, P:r.P, Vx:r.Vx, Vy:r.Vy, Mx:B*r.Mx, My:B*r.My, T:r.T}; });
   const groups=Array.from({length:nG},(_,i)=>({id:appMode==='sign'?'post'+(i+1):'pole', label:appMode==='sign'?'Post '+(i+1):'Pole',
     anchor:{pattern:'circle', n:Math.round(inp.boltQty), BC:inp.boltBC, theta0:inp.boltTheta, dia:inp.boltDia, grade:'f1554_'+inp.boltGrade, nut:'heavyHex', hef:inp.boltHef, torqued:inp.anchTq==='torqued'},
-    base:{type:'doubleNut', standoffClear:0, grout:false, plate:{shape:'circle', D:inp.bpDia, t:inp.bpT, Fy:(inp.bpFy||36)*1000},
-          pole:{shape:inp.poleShape==='round'?'round':inp.poleShape, D:inp.poleDiaBase}},
+    base:lppAnchBase(inp),   // LPAS
     pier:{shape:inp.shaftShape==='square'?'square':'circle', D:inp.b*12, fc:inp.fc, cracked:true, depth:X.fd.gov.br.L*12, cover:inp.cover,
           longBars:reo?'('+reo.long.n+') '+reo.long.bar.n:'', ties:reo?reo.tie.bar.n+' @ '+fmt(reo.tie.s,0)+' in':''},
     combos:combos.map(c=>({...c}))}));
@@ -7268,19 +7287,36 @@ function ltsAnchorPayload(){
     basis:{factored:true, method:'LRFD', combos:'AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions, Table 3.4-1: Strength I, Extreme I (DC max/min); load cases 1–3 of Table 3.9.3-1', B2:'LRFDLTS Art. 4.8.1 (tapered pole) / Eq. 5.12.1-10 (prismatic post) B of each limit state applied to M'},
     inputsHash, notes}, body)};
 }
+// LPAS (2026-11-02): the base as this tool designs it — the plate it checks (circular Ø bpDia, or square B × B) and the post at the base:
+// round {D}; square {B}; rectangular {Bx (depth, along x = the wind-0° / panel-normal axis), By (width, along y)}, the axes of every
+// drawing and of the combinations. A round post on a circular plate is sent exactly as before (same inputsHash for those projects).
+function lppAnchBase(inp){
+  const plate=inp.bpShape==='square' ? {shape:'rect', B:inp.bpB, N:inp.bpB, t:inp.bpT, Fy:(inp.bpFy||36)*1000}
+                                     : {shape:'circle', D:inp.bpDia, t:inp.bpT, Fy:(inp.bpFy||36)*1000};
+  const pole=inp.poleShape==='square' ? {shape:'square', B:inp.poleDiaBase}
+           : inp.poleShape==='rect' ? {shape:'rect', Bx:inp.poleDepthBase, By:inp.poleDiaBase}
+           : {shape:'round', D:inp.poleDiaBase};
+  return {type:'doubleNut', standoffClear:0, grout:false, plate, pole};
+}
+function lppAnchBaseNotes(inp){
+  const n=[];
+  if(inp.poleShape==='square') n.push('Square HSS post '+fmt(inp.poleDiaBase,3)+' in at the base: this tool and the Anchorage app take the bending line at the post face with D = the side.');
+  if(inp.poleShape==='rect') n.push('Rectangular HSS post at the base: depth '+fmt(inp.poleDepthBase,3)+' in along x (panel normal / wind 0°), width '+fmt(inp.poleDiaBase,3)+' in along y. This tool takes the bending line with D = the width ('+fmt(inp.poleDiaBase,3)+' in); the Anchorage app takes D = the smaller of the two ('+fmt(Math.min(inp.poleDiaBase,inp.poleDepthBase),3)+' in).');
+  if(inp.bpShape==='square') n.push('Square base plate '+fmt(inp.bpB,2)+' × '+fmt(inp.bpB,2)+' in (sent as a rectangular plate), rods on the bolt circle. This tool checks it by the bending line at the pole face; the Anchorage app checks a rectangular plate by its own rectangular-plate method (AISC Design Guide 1), so the two thicknesses can differ.');
+  return n;
+}
 function lppAnchorPayload(){
   if(codeMode==='lts') return ltsAnchorPayload();   // LTS-8
   const ctx=LPP_SUMCTX, A=LPP_ANCH; if(!ctx||!A) return {error:'No results yet (correct any input errors first).'};
   const inp=ctx.inp, notes=[];
-  if(inp.poleShape!=='round') notes.push('The pole is '+inp.poleShape+' (the Anchorage app takes a round pole on a circular plate).');
+  lppAnchBaseNotes(inp).forEach(x=>notes.push(x));   // LPAS
   notes.push('Double-nut base: the leveling-nut standoff is not a Light Pole input (standoffClear sent as 0); set it in the Anchorage app.');
   notes.push('Moments are second-order (B₂·M, AISC 360-16 App. 8) at the top of the shaft; all LRFD combinations of ASCE 7-22 §2.3 incl. the atmospheric-ice ones, each at wind toward 0°, 90°, 180°, 270°.');
   if(ctx.mode==='sign') notes.push('Sign posts: the post moment and shear act along the wind direction (panel normal); monopost torsion T = |F·x| (sign not carried).');
   const groups=A.groups.map((g,gi)=>{ const st=ctx.stacks[Math.min(gi,ctx.stacks.length-1)], f=st.found, reo=f.reo, b=f.bolts;
     return {id:g.id, label:g.label,
       anchor:{pattern:'circle', n:Math.round(inp.boltQty), BC:inp.boltBC, theta0:inp.boltTheta, dia:inp.boltDia, grade:'f1554_'+inp.boltGrade, nut:'heavyHex', hef:inp.boltHef, torqued:inp.anchTq==='torqued'},
-      base:{type:'doubleNut', standoffClear:0, grout:false, plate:{shape:'circle', D:inp.bpDia, t:inp.bpT, Fy:(inp.bpFy||36)*1000},
-            pole:{shape:inp.poleShape==='round'?'round':inp.poleShape, D:inp.poleDiaBase}},
+      base:lppAnchBase(inp),   // LPAS
       pier:{shape:inp.shaftShape==='square'?'square':'circle', D:inp.b*12, fc:inp.fc, cracked:true, depth:f.d*12, cover:inp.cover,
             longBars:'('+reo.long.n+') '+reo.long.bar.n, ties:reo.tie.bar.n+' @ '+fmt(reo.tie.s,0)+' in'},
       combos:g.combos.map(c=>({name:c.name, P:c.P, Vx:c.Vx, Vy:c.Vy, Mx:c.Mx, My:c.My, T:c.T})),
@@ -7504,7 +7540,7 @@ function ltsCalc(){
         {id:'wd.cap',label:'Fillet weld strength per inch',sym:'\\phi R_{n}',eq:'0.75\\cdot 0.60F_{EXX}\\cdot 0.707w',sub:`0.75\\cdot 0.60\\cdot${n2(num('ltsFexx')||70,0)}\\cdot 0.707\\cdot${n2(num('ltsWeldW')||0.3125,4)}`,value:wd.phiRn,unit:'kip/in',d:3,ref:'AWS D1.1 / AISC 360-16 §J2.4 (LRFDLTS Art. 5.14, p. 5-35, 2017, refers to AWS D1.1)',ok:wd.ok,
           note:`Ratio ${n2(wd.ratio,3)} → ${wd.ok?'OK':'NOT OK'}. LRFDLTS gives no weld strength method; AWS D1.1 / AISC 360-16 §J2 with φ = 0.75 and no directional increase (accepted by the engineer, 2026-11-02).`}]); }
       ltsAddCard('anchors','ltsBpCard','7',(g.mode==='sign'?'Post':'Pole')+' base plate and base weld','engineering method · AWS D1.1',
-        basis+`<p class="lts-dev">${lppEsc(LPP_BP_VERIFY)}</p>`+ltsStepsHTML(bpSteps)
+        basis+`<p class="lts-dev">${lppEsc(LPP_BP_VERIFY)}</p>`+(lppBpSqNote(inp)?`<p class="tbl-note">${lppEsc(lppBpSqNote(inp))}</p>`:'')+ltsStepsHTML(bpSteps)
         +`<p class="eq-title" style="margin-top:10px"><b>Pole-to-base-plate weld</b></p>`+wSteps
         +`<p class="tbl-note">Anchor rods: designed in the Anchorage app — the Anchorage card on this tab sends the LRFDLTS combinations (Strength I, Extreme I; M × B). LRFDLTS Arts. 5.16–5.16.3: cast-in-place anchor bolts for new work; hooked bolts only with F<sub>y</sub> ≤ 55 ksi; anchorage per ACI 318 (C5.16.3).${g.mode==='sign'&&g.sign.nPost===2?' Values per post.':''}</p>`); }
     // LTS-7: foundation
@@ -7577,7 +7613,7 @@ function ltsCalc(){
       +`<table class="tbl"><tr><th>Item</th><th>Value</th></tr><tr><td>Height</td><td>${fmt(X.g.H,2)} ft</td></tr><tr><td>Section</td><td>${lppEsc(gi.poleShape)} ${gi.poleShape==='round'?`OD ${fmt(gi.poleDiaBase,3)} → ${fmt(gi.poleDiaTop,3)} in`:`${fmt(gi.poleDiaBase,2)} in`}, wall ${fmt(gi.poleTwBase,4)}${gi.poleTwTop!==gi.poleTwBase?' → '+fmt(gi.poleTwTop,4):''} in, F<sub>y</sub> ${fmt(gi.poleFy,0)} ksi</td></tr>`
       +`${X.g.mode==='sign'?`<tr><td>Sign panel</td><td>${fmt(gi.signB,2)} × ${fmt(gi.signS,2)} ft, clearance ${fmt(gi.signClr,2)} ft, ${X.g.sign.nPost} post(s)${X.g.sign.nPost===2?' at '+fmt(gi.signSpacing,2)+' ft':''}</td></tr>`:`<tr><td>Fixtures</td><td>${X.g.fixtures.map((x,i)=>`#${i+1}: ${fmt(x.hf,1)} ft, arm ${fmt(x.a,1)} ft at ${fmt(x.th,0)}°, EPA ${fmt(x.epa,2)} ft², ${fmt(x.W,0)} lb`).join('<br>')}</td></tr>`}`
       +`<tr><td>Shaft</td><td>${gi.shaftShape==='square'?'square':'round'} ${fmt(gi.b,2)} ft${X.fd&&X.fd.gov?`, required embedment ${fmt(X.fd.gov.br.L,2)} ft (Broms, Shaft tab)`:''}</td></tr>`
-      +`<tr><td>Base</td><td>${Math.round(gi.boltQty)} × ${fmt(gi.boltDia,3)} in rods on BC ${fmt(gi.boltBC,2)} in; plate ${fmt(gi.bpDia,2)} in × ${fmt(gi.bpT,3)} in</td></tr></table>`);
+      +`<tr><td>Base</td><td>${Math.round(gi.boltQty)} × ${fmt(gi.boltDia,3)} in rods on BC ${fmt(gi.boltBC,2)} in; plate ${gi.bpShape==='square'?lppBpTxt(gi,2):fmt(gi.bpDia,2)+' in'} × ${fmt(gi.bpT,3)} in</td></tr></table>`);
     ltsAddCard('drawings','ltsDwgCard','D','Drawings (LRFDLTS mode)','general notes',basis
       +(X.g.mode==='sign'?`<p class="lts-dev">Sign mode: the dimensioned drawings and the DXF above use the LRFDLTS results (embedment L by Broms and the ACI 318-19 shaft cage of the Shaft tab); these notes are the GENERAL NOTES sheet of that set.</p>`   // LPSV (2026-11-02)
         :`<p class="lts-dev">The dimensioned drawings and DXF of the Drawings tab are produced in the IBC mode only (they show the IBC §1807.3 embedment). In the LRFDLTS mode use the notes below with the Report; the shaft depth is the Broms embedment of the Shaft tab.</p>`)
@@ -7636,7 +7672,7 @@ function ltsReportModel(){
       {title:'Fatigue',items:[{type:'note',text:X.fat.text}]}]});
     flags.push('Deflection: 10 % H for luminaire supports is checked; the 2.5 % H and 0.35 in/ft limits of Art. 10.4.2.1 are shown as information (engineer, 2026-11-02).'); }
   // 5. Base plate and weld
-  if(X.bp){ secs.push({title:'Base plate and base weld',subs:[{title:'Base plate (engineering method)'+post,items:[{type:'note',text:LPP_BP_VERIFY},steps('lts.bp',X.bpSteps)]},
+  if(X.bp){ secs.push({title:'Base plate and base weld',subs:[{title:'Base plate (engineering method)'+post,items:[{type:'note',text:LPP_BP_VERIFY},...(lppBpSqNote(X.inp)?[{type:'note',text:lppBpSqNote(X.inp)}]:[]),steps('lts.bp',X.bpSteps)]},
       {title:'Pole-to-base-plate weld',items:X.wd.type==='cjp'?[{type:'note',text:'Full-penetration groove weld: the base metal governs (member check at the base); no separate weld check (AWS D1.1).'}]:[steps('lts.wd',X.wdSteps)]}]});
     if(X.wd.type!=='cjp') flags.push('Base weld per AWS D1.1 / AISC 360-16 §J2.4, φ = 0.75 (LRFDLTS Art. 5.14 gives no weld strength method; accepted by the engineer, 2026-11-02).'); }
   // 6. Foundation
@@ -7658,7 +7694,7 @@ function ltsReportRender(){
   try{ SharedReport.mount(host,ltsReportModel(),{onGoto:lprGoto}); }catch(e){ host.innerHTML='<div class="flag bad">Report error: '+lppEsc(e&&e.message)+'</div>'; }
 }
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
-const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan','ltsRisk','ltsAdt','ltsV','ltsVSrc','ltsVsvc','ltsIce','ltsRs','ltsClearZone','ltsWeldType','ltsWeldW','ltsFexx','ltsRi'];
+const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpShape','bpB','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan','ltsRisk','ltsAdt','ltsV','ltsVSrc','ltsVsvc','ltsIce','ltsRs','ltsClearZone','ltsWeldType','ltsWeldW','ltsFexx','ltsRi'];
 const LS_PROJECTS='lpp_projects_v1';   // {name: state}
 const LS_SESSION='lpp_session_v1';     // {state, activeName, dirty}
 let activeProject=null;   // name of loaded project, or null (unsaved/new)
@@ -7734,6 +7770,10 @@ function applyState(st){
   // base plate inputs (added 2026-11-01): F_y 36 ksi = the former fixed value; provided t defaults to 1.25 in
   if($('bpFy') && (!st.inputs || st.inputs.bpFy===undefined)) $('bpFy').value='36';
   if($('bpT') && (!st.inputs || st.inputs.bpT===undefined)) $('bpT').value='1.25';
+  // base plate shape (added 2026-11-02, LPAS): saves made before it have no bpShape and open with the circular plate (as before)
+  if($('bpShape') && (!st.inputs || st.inputs.bpShape===undefined)) $('bpShape').value='round';
+  if($('bpB') && (!st.inputs || st.inputs.bpB===undefined)) $('bpB').value='20';
+  lppApplyBpUI();
   if($('arBar') && (!st.inputs || st.inputs.arBar===undefined)) $('arBar').value='shaft';
   if($('arX') && (!st.inputs || st.inputs.arX===undefined)) $('arX').value='3';
   // anchor installation (added 2026-10-21). Saves made before it have no anchTq: they open as
