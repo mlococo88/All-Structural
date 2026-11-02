@@ -4963,7 +4963,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** `node tests/bpad-circle.mjs`: PASS — §1 identity origin/main vs this branch on the 31 rectangular projects (computeAll, comboCapacities, allChecks, validation, report text) identical; H1–H6 unchanged; new H7 (above, plus square plate under a square / round post imported as a rectangular plate with no blocking message, and the three refusals). `node tests/bpad-profis.mjs` PASS; `node tests/anchor-parity.mjs` PASS; `tests/smoke/lightpole-anchor-handoff.mjs` ALL PASS (17 cases, see fixlog/Light Pole and Sign Post.md LPAS).
 - **Open item (engineer):** a square plate under a pole on a double-nut base is checked here by AISC DG1 (this tool's rectangular-plate method), in Light Pole by the bending line at the pole face; should this tool use the bending line (`plateBendingLTS()`) for a square plate on a double-nut pole base? Not changed (it would route an existing method to a new case: needs your decision).
 
-## 2026-11-02 — PR: PRLINK — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+## 2026-11-02 — PR: [#670](https://github.com/mlococo88/All-Structural/pull/670) — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
 - **Before:** header: drop-down with Load / Save / Save As… / Delete (`bpad_projects_v1`, `{ name: S }`), Export / Import JSON, Compare,
   Backup All / Restore All. No rename, no duplicate, no undo.
 - **Where:**
