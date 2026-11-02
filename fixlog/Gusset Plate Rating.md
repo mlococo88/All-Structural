@@ -2925,3 +2925,35 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   origin/main on load, after an input change, reopened on main's storage and opened from the dialog; Undo / Redo / Ctrl+Z / Ctrl+Y exact;
   dialog byte-identical; quota; 390 px; no new console errors). `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
+
+## 2026-11-02 — PR: claude/list-input-gusset, PR #692: https://github.com/mlococo88/All-Structural/pull/692 — Members: "Gage(s) g" is a table with one box per gage (LIST)   [display only]
+- **Why:** engineer decision 2026-11-02: no comma-separated inputs (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
+- **Where (1):** script tags, anchor `<script src="shared/projects-ui.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
+- **Where (2):** `memberBlock()`, anchor `fld('Gage(s) g'`. **Before:** `{ note: 'list' }` **After:** `{ note: 'one per space between lines; the last repeats' }`
+- **Where (3):** end of `fillInputs()`: `gageTables();`, and the new function after it:
+```js
+function gageTables() {
+  if (!window.SharedListInput) return;
+  $$('input[data-k$=".fast.g"]').forEach(el => { if (el._sli) return;
+    el._sli = SharedListInput.bindInput(el, { label: 'Gages g, ' + (((P.members || [])[+el.dataset.k.split('.')[1]] || {}).id || 'member'), rowSplit: /[,;\s]+/,
+      columns: [{ label: 'g', unit: 'in', type: 'text', width: '6em', placeholder: '3' }] }); });
+}
+```
+  CSS after `input[type=text], textarea { … }`: `.ig .sli input.sli-in { height: 30px; padding: 0 8px; }`.
+- **Behaviour:** the `<input data-k="members.i.fast.g">` stays, hidden, as the saved text; a table edit writes the rows back
+  joined by ", " and fires its `input`, which `onInput()` handles as before (`setPath`, recompute). `fillInputs()` (load, undo,
+  Convert to grid) sets the input's value as before and the table redraws. The cells are text, not number-checked, because the
+  tool's `num()` also reads 5-1/2, 3/4 and 3" ; `gageList()` and the input check "gages must be positive numbers" decide what
+  is used, as before. Separators are `gageList()`'s own (`/[,;\s]+/`), so a mixed number typed as "5 1/2" is two gages, as before;
+  "5-1/2" is one.
+- **Hole paste box (custom pattern):** unchanged. The hole table above it already shows the pasted holes and can be edited,
+  which is what the decision asks for.
+- **Saved data:** `members[i].fast.g` stays a string. The forms the tool writes ("4", "3.5, 4, 3.5") are unchanged by the table;
+  older spellings ("3 3 5.5", "3;3;5.5") become "3, 3, 5.5" only when edited, and `gageList()` reads the same gages for any
+  number of gage lines. `tests/engine/list-input.test.mjs`.
+- **Check case:** default project, member L1-L2 (4 gage lines, g "4"): rows 3.5 ↵ 4 ↵ 3.5 → `fast.g` = "3.5, 4, 3.5", gages
+  [3.5, 4, 3.5]; every result identical to typing "3.5, 4, 3.5" in the old box on origin/main.
+- **How verified:** `node tests/smoke/list-input.mjs --part gusset`: origin/main vs this branch, default project and the case
+  above: `P`, `R`, the stored autosave, the text of every output tab and of the Members pane (notes removed) identical;
+  0 console errors; 390 px no sideways scroll; screenshots at 1400 and 390 px looked at. `node tests/check-syntax.mjs` passes.
+- **Formulas, factors, units, code references:** none (§4 does not apply).

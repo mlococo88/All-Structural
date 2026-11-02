@@ -59,3 +59,8 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
 - Per-span girder offsets (`slot` + `mountSlot`, one table per span) and the survey-point paste box's table (`mount`).
   `tests/smoke/list-input.mjs` gains the part `bgeo` and two entry options: `extra` (checks on the branch only, e.g. a paste box
   and its table) and `over` (a sideways scroll at 390 px that main already had).
+
+## 2026-11-02 — PR: claude/list-input-gusset, PR #692: https://github.com/mlococo88/All-Structural/pull/692 — loaded by Gusset Plate Rating.html (no change to the shared file)
+- Members, "Gage(s) g" (`bindInput`, text cells). `tests/smoke/list-input.mjs` gains the part `gusset`.
+- Note for later: a column `check` function (a tool's own number reader, e.g. Gusset's `num()` with fractions) would let such
+  cells be marked; not added here (a shared-file change).

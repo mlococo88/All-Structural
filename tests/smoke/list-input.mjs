@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset] [--a origin/main] [--shots <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
 // smd (one key per tool in TOOLS): the tool from --a (default: the entry's `a`, the main commit before its table landed, else
@@ -16,7 +16,7 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo').split(',');
+const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
@@ -190,6 +190,27 @@ TOOLS.bgeo = {   // Bridge Geometry: per-span girder offsets (SPAN_OV[s].girders
     await p.click('#map_clrpts');
     ok(JSON.stringify(await p.evaluate(() => PTS_TBL.get())) === '[]', 'survey points: Clear points empties the table');
   },
+};
+TOOLS.gusset = {   // Gusset Plate Rating: members[i].fast.g, saved as text ("3.5, 4, 3.5"; one value = every gage); the hole paste is unchanged
+  file: 'Gusset Plate Rating.html', a: '838ef81', values: '3.5, 4, 3.5',
+  setup: async p => { await p.waitForTimeout(3000); await p.evaluate(() => { setITab('members'); P.ui.open.m0 = true; rebuild(['members']); }); await p.waitForTimeout(400); },
+  typeOld: async (p, v) => { await p.evaluate(v => { const i = document.querySelector('input[data-k="members.0.fast.g"]'); i.value = v;
+    i.dispatchEvent(new Event('input', { bubbles: true })); }, v); },
+  typeNew: async (p, v) => { await fillTable(p, 'input[data-k="members.0.fast.g"] + [data-sli="host"]', v); await p.keyboard.press('Tab'); },
+  saved: p => p.evaluate(() => P.members[0].fast.g),
+  read: async p => {
+    await p.waitForTimeout(1500);
+    const out = await p.evaluate(() => ({ P: JSON.parse(JSON.stringify(P)), R: JSON.parse(JSON.stringify(R)), stored: JSON.parse(localStorage.getItem(KEY_AS) || 'null') }));
+    for (const o of [out.P, out.stored && out.stored.data]) if (o && o.ui) delete o.ui.otab;
+    const ids = await p.$$eval('.tab-btn', e => e.map(b => b.dataset.tab).filter(t => t && t !== 'v3d' && t !== 'view3d')); out.tabs = {};
+    for (const id of ids) { await p.evaluate(id => setOTab(id), id); await p.waitForTimeout(400);
+      out.tabs[id] = await p.evaluate(id => { const e = document.getElementById('tab-' + id); if (!e) return null; const k = e.cloneNode(true);
+        k.querySelectorAll('[data-sli],script,style').forEach(x => x.remove()); return k.innerText; }, id); }
+    out.side = await p.evaluate(() => { const k = document.getElementById('ipane-members').cloneNode(true);
+      k.querySelectorAll('[data-sli],script,style,.lbl-note').forEach(x => x.remove()); return k.innerText; });
+    return out;
+  },
+  tableSel: 'input[data-k="members.0.fast.g"] + [data-sli="host"]',
 };
 // replace the rows of a table with the values ("a, b, c"): row by row (Enter adds a row from the last one), extra rows removed
 async function fillTable(p, sel, v) {

@@ -127,3 +127,19 @@ test('Bridge Geometry: per-span girder offsets round-trip (array, or null when n
   assert.equal(bgParse(L.toText([[''], ['  ']])), null);                     // blank rows are not read
   assert.deepEqual(P(bgParse(L.toText([['-6'], ['abc'], ['6']]))), [-6, 6]); // an unreadable cell is skipped, as in the old box
 });
+
+// Gusset Plate Rating.html: members[i].fast.g is saved TEXT. The table reads it with gageList()'s own separators (/[,;\s]+/) and
+// writes rows joined by ", ". gageList() (copied verbatim; num() simplified to plain numbers, blank -> NaN as in the tool) reads the same gages.
+const gpNum = v => (String(v).trim() === '' ? NaN : Number(v));   // the tool's num(): blank -> NaN
+const gpGages = (g, nL) => { if (nL < 2) return []; let a = String(g ?? '').split(/[,;\s]+/).map(gpNum).filter(x => isFinite(x)); if (!a.length) a = [NaN];
+  const out = []; for (let i = 0; i < nL - 1; i++) out.push(a[Math.min(i, a.length - 1)]); return out; };
+test('Gusset Plate Rating: gage text round-trips; gageList() reads the same gages (the last value repeats)', () => {
+  const f = { rowSplit: /[,;\s]+/ };
+  for (const s of ['4', '3.5, 4, 3.5', '3, 5.5']) assert.equal(L.toText(L.fromText(s, f)), s, s);   // the forms the tool writes: unchanged
+  for (const s of ['3 3 5.5', '3;3;5.5', '3,3 ,5.5', ' 4 ']) {                                      // older spellings: same gages after a save
+    const t = L.toText(L.fromText(s, f));
+    for (const nL of [2, 4, 6]) assert.deepEqual(P(gpGages(t, nL)), P(gpGages(s, nL)), s + ' nL ' + nL);
+    assert.equal(L.toText(L.fromText(t, f)), t);
+  }
+  assert.equal(L.toText(L.fromText('3 3 5.5', f)), '3, 3, 5.5');
+});
