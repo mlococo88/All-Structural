@@ -3882,3 +3882,133 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - `node tests/check-syntax.mjs` passes, as does the scroll smoke test.
   - Cost: `sfpmRatios` on the review's points takes 84 → 248 ms. The extra cost is only where the bracket expands.
 - **Other copies:** none. Only `sfpmRatios` → `sfpmPoint` and the pedestal P–M diagram (`pmContour`, two calls) use it.
+
+## 2026-11-02 — PR: claude/sf-calc-fixes — Biaxial middle third; punching J_c from the truncated section; top-mat inner-layer depth; pedestal slenderness k = 2; proportional development credit in shear friction (SFEB, SFPJ, SFTD, SFKS, SFPD; calculation change)
+
+Engineer-approved fixes from the independent review of the "Seymour Platform Foundation" report (items A2, B1, B2, B3), plus the engineer's decision on shear-friction development credit. Code basis unchanged: ACI 318-19 (IBC for stability). Check case "review": the engineer's project rebuilt from the report's input echo (B 5 × L 13 × t 2 ft; Ped 1 2.00 × 9.33 × 6.00 ft at y 1.333, 30 #6, 28 #6 separate straight dowels; Ped 2 2.67 × 2.67 × 7.00 ft at y −4.667, 16 #8, 16 #8 separate straight dowels; mats #7 @ 8 bottom, #6 @ 8 top; covers 3 / 2 in; epoxy). On main it reproduces the report: eccentricity 0.935, Ped 2 punching 58.36 psi / 0.377, φM_n,top,y 313.92, kℓ_u/r 10.0 / 8.75.
+
+### SFEB. Middle-third (full-contact) eccentricity check is biaxial   [calculation change; CLAUDE.md §4]
+- **Where:** `computeAll`, eccentricity limits. Anchor `const ECC={kern:`.
+  - Before:
+    ```
+    const ECC={kern:{f:1/6,set:'asd',lab:'middle third, e ≤ B/6 (full contact)',ref:'kern / classical ASD'},
+    ...
+        dcr:cfg.f>0?Math.max(ratX,ratY)/cfg.f:0};});
+    ```
+  - After:
+    ```
+    const ECC={kern:{f:1/6,set:'asd',biax:true,lab:'middle third, 6eₓ/B + 6eᵧ/L ≤ 1 (full contact)',ref:'kern / classical ASD'},
+    ...
+        dcr:cfg.f>0?(cfg.biax?(ratX+ratY)/cfg.f:Math.max(ratX,ratY)/cfg.f):0};});
+    ```
+    and `eccChk` gets `biax:!!cfg.biax`. The AASHTO options (e ≤ B/3, B/4, 0.45B, 0.33B, 0.40B, custom) stay per axis.
+  - Display: Stability 4.3a equation, table header and failbox; dashboard chip ("6eₓ/B + 6eᵧ/L = …"); warning text; the Stability input option text; Report §5.1 step `DCR` (biaxial form with values substituted) plus a note linking the service combinations.
+- **Problem:** the option is labelled "full contact", but each axis was checked alone (DCR = max). A resultant inside both per-axis limits can be outside the kern diamond, so the base is in partial contact while the check reads OK. Unconservative.
+- **Provision:** statics of a rigid footing on no-tension soil: full contact requires the resultant inside the kern, 6|e_x|/B + 6|e_y|/L ≤ 1 (the same index the tool's own pressure solver uses, `kern` in the base-pressure solution).
+- **Check case (review):**
+  - 0.6D + 0.6(−Wx): e_x = −0.703, e_y = −1.962 ft. 6·0.703/5 + 6·1.962/13 = 0.844 + 0.905 = **1.749 NG** (before max = 0.905).
+  - 0.6D + 0.6(+Wx): 6·0.629/5 + 6·2.027/13 = 0.755 + 0.936 = 1.690 (before 0.936, the governing value).
+  - D + 0.6(+Wx): 6·0.406/5 + 6·1.359/13 = 0.487 + 0.627 = 1.115 (before 0.627).
+  - Governing: before 0.936 OK (0.6D + 0.6(+Wx)); after **1.749 NG** (0.6D + 0.6(−Wx)). §3.3 of the report shows that combination at 87.2 % contact.
+  - Default project: unchanged (e_y = 0 in every combination).
+
+### SFPJ. Two-way shear: J_c and the extreme fibre from the truncated critical section   [calculation change; CLAUDE.md §4]
+- **Where:** `computePhase2`, punching, `function polarAxis`.
+  - Before:
+    ```
+    function polarAxis(len1,len2,openA,openB,perpLen,perpOpenA,perpOpenB){
+     const half=len1/2, segs=[];
+     if(!openA)segs.push({x:+half,L:perpLen,own:0});
+     if(!openB)segs.push({x:-half,L:perpLen,own:0});
+     const ownLen1=d*Math.pow(len1,3)/12 + len1*Math.pow(d,3)/12;
+     if(!perpOpenA)segs.push({x:0,L:len1,own:ownLen1});
+     if(!perpOpenB)segs.push({x:0,L:len1,own:ownLen1});
+     ...
+     const cExt=Math.max(Math.abs(half-xbar),Math.abs(-half-xbar));
+     return{Jc,cExt};
+    }
+    const pa_X=polarAxis(c1,c2,openXpos,openXneg,faceX,openYpos,openYneg);
+    const pa_Y=polarAxis(c2,c1,openYpos,openYneg,faceY,openXpos,openXneg);
+    ```
+  - After:
+    ```
+    function polarAxis(len1,extA,extB,openA,openB,perpLen,perpOpenA,perpOpenB){
+     const half=len1/2, segs=[], parLen=extA+extB, parX=(extA-extB)/2;
+     if(!openA)segs.push({x:+half,L:perpLen,own:0});
+     if(!openB)segs.push({x:-half,L:perpLen,own:0});
+     const ownPar=d*Math.pow(parLen,3)/12 + parLen*Math.pow(d,3)/12;
+     if(!perpOpenA)segs.push({x:parX,L:parLen,own:ownPar});
+     if(!perpOpenB)segs.push({x:parX,L:parLen,own:ownPar});
+     ...
+     const cExt=Math.max(Math.abs(extA-xbar),Math.abs(-extB-xbar));
+     return{Jc,cExt,xbar};
+    }
+    const pa_X=polarAxis(c1,bx/2+sideX1,bx/2+sideX2,openXpos,openXneg,faceX,openYpos,openYneg);
+    const pa_Y=polarAxis(c2,by/2+sideY1,by/2+sideY2,openYpos,openYneg,faceY,openXpos,openXneg);
+    ```
+    `detail` gets `xbarX`, `xbarY`. Report §6.4 v_u step: a note with J_c,x, c_x, J_c,y, c_y and the centroid offset. Footing Design 5.4: c_x, c_y in the equation, values printed.
+- **Problem:** b_0 already used the truncated faces, but J_c used full-length side faces centred on the column, and the extreme fibre was at a face beyond the footing edge. v_u understated where the perimeter is truncated. Unconservative. Interior perimeters: ext = len1/2, identical result.
+- **Provision:** ACI 318-19 8.4.4.2.2, 8.4.4.2.3 and R8.4.4.2.3 (J_c analogous to the polar moment of the critical section, taken about its centroid).
+- **Check case (review, Ped 2, 32 × 32 in, d = 20.125 in, −y side truncated 6 in from the face):**
+  - Closed face at +26.06 in (length 52.13); side faces from −22.0 to +26.06 (length 48.06, centred +2.03).
+  - ȳ = (52.13·26.06 + 2·48.06·2.03)/148.25 = 10.48 in.
+  - J_c,y = 20.125·52.13·15.58² + 2[20.125·48.06³/12 + 48.06·20.125³/12 + 20.125·48.06·8.45²] = 830,492 in⁴ (before 1,020,875). c_y = 10.48 + 22.0 = 32.48 in (before 34.75).
+  - v_moment,y = 0.400·287.25·12000·32.48/830,492 = 53.93 psi (before 46.93). v_u = 10.78 + 0.65 + 53.93 = **65.36 psi**, DCR = 65.36/154.60 = **0.423** (before 58.36 psi, 0.378).
+  - Ped 1: 1.66 → 1.76 psi, DCR 0.066 → 0.067.
+  - Default project: unchanged (interior perimeters).
+- **Not changed (raised):** the moment is still taken about the pedestal centroid, not the critical-section centroid (review B1, V_u·e term, R8.4.4.2.3).
+
+### SFTD. Top mat: the inner layer uses its own depth   [calculation change; CLAUDE.md §4]
+- **Where:** `computePhase2`, effective depths. Anchor `const dTopY=`.
+  - Before: `const dTopY=tin-cvT-BAR_DIA[state.freinf.topY.size||8]/2;`
+  - After: `const dTopY=tin-cvT-(BAR_DIA[state.freinf.topX.size||0]||0)-BAR_DIA[state.freinf.topY.size||8]/2;`
+  - The top y-bars are the inner layer, under the top x-bars, as the drawings (`topY:t-cvT-d('topX')-d('topY')/2`) and the 3D view already place them. `dTopX` is unchanged. With no top x-bars, d_top,y is unchanged.
+  - Display: Report §6.1 steps d_top,x and d_top,y (worked), a worked φM_n,top step in §6.2/§6.3 and a link to the depth; Footing Design 5.1 table rows.
+- **Problem:** both top layers used the outer-layer depth. Unconservative for the inner layer.
+- **Provision:** ACI 318-19 22.2 / 22.3 (d to the centroid of the tension steel).
+- **Check case (review):** d_top,y = 24 − 2 − 0.75 − 0.375 = 20.875 in (before 21.625). a = 3.30·60/(0.85·4·60) = 0.971 in. φM_n = 0.9·3.30·60·(20.875 − 0.485)/12 = **302.79 kip-ft** (before 313.92). DCR = 184.66/302.79 = **0.610** (before 0.588). The x top layer: 816.20, unchanged. Default project: no top mat, unchanged.
+
+### SFKS. Pedestal slenderness: k = 2.0 (free top)   [calculation change; CLAUDE.md §4]
+- **Where:** `computePhase2`, pedestal design. Anchor `klu_r=`.
+  - Before: `const r=0.3*bmin,klu_r=(1*h)/r,...`
+  - After: `const kSl=2.0; const r=0.3*bmin,klu_r=(kSl*h)/r,...` and `kSl` returned.
+  - The tool has no input for top restraint, so no input is added. The step states the assumption: fixed at the footing, free at the top (cantilever, sway), k = 2.0; conservative if the top is braced. Report §7 assumption, Pedestal Design screen block and Report §7.x step updated.
+- **Provision:** ACI 318-19 6.2.5.1(a) (not braced against sidesway, kℓ_u/r ≤ 22) and R6.2.5 (k for a free-top cantilever is 2.0).
+- **Check case (review):** Ped 1: 2.0·72/(0.3·24) = **20.0** (before 10.0). Ped 2: 2.0·84/(0.3·32) = **17.5** (before 8.75). Both ≤ 22: still "slenderness neglected". Default project: 2.0·24/(0.3·18) = 8.89 (before 4.44).
+
+### SFPD. Shear friction: proportional development credit   [calculation change; CLAUDE.md §4; all projects]
+- **Engineer decision (2026-11-02):** dowels not fully developed get proportional shear-friction credit instead of zero: A_vf × min(1, available / required) on each side of the joint; the smaller side governs. It is labelled in the step as an engineering assumption (proportional development credit). Development lengths stay ACI 318-19 (no AASHTO switch).
+- **Where:**
+  - `sfdDowelCheck`, after `o.sfDev=...`, new:
+    ```
+    o.sfFrFtg=(db>0&&o.LftgReq>0)?Math.min(1,bz.availEmb/o.LftgReq):0;
+    o.sfFrPed=db>0?(o.cont?1:(o.full?Math.min(1,o.hAvail/o.ld.Ld):(o.lst>0?Math.min(1,o.Lprov/o.lst):0))):0;
+    o.sfFr=nD>0?(o.sfDev?1:Math.max(0,Math.min(o.sfFrFtg,o.sfFrPed))):0;
+    ```
+    Footing side: t − c − d_b,x − d_b,y against ℓ_dh (hooked) or ℓ_d. Pedestal side: continuous bars 1; full-height dowels (h − c)/ℓ_d; lapped dowels projection/ℓ_st (Class B).
+  - `sfdShearFriction`:
+    - Before: `dev=!!(dw&&dw.sfDev), Avf=dev?AvfNom:0;   // SFDA`
+    - After: `dev=!!(dw&&dw.sfDev), devFr=dw?(dw.sfFr||0):0, Avf=AvfNom*devFr;` and `devFr` stored.
+  - Display: Report §6.6 new step η_dev (both ratios substituted), A_vf = η_dev(A_s,dow − A_s,req,ten); the "developed on both sides" step no longer carries an NG flag (the shear-friction verdict is the DCR; full development is still checked by the dowel check). Footing Design 5.6 equation and note.
+- **Problem / effect:** before, A_vf was zero unless fully developed on both sides (SFDA). More generous than SFDA, by the engineer's decision.
+- **Check case (#684 item-2 case):** default project with Ped 1 3 × 3 × 1.5 ft, P_D 270 k, W_x V_x 115 k, not intentionally roughened (μ = 0.6), 8 #8 straight separate dowels (6.32 in²).
+  - Footing: available 25.00 in, ℓ_d 28.46 → 0.878. Pedestal: lap does not fit, full height h − c = 16.00 against ℓ_d 28.46 → 0.562. η_dev = min(1, 0.878, 0.562) = **0.562**.
+  - A_vf = 0.562·6.32 = 3.55 in². N_u = min(0.9·272.03, P_u) = 244.82 k. V_n = 0.6(3.55·60 + 244.82) = 274.80 k (V_n,max = 800·1296/1000 = 1036.8). φV_n = 206.10 k.
+  - DCR = 115/206.10 = **0.558 OK** (before A_vf = 0, V_n = 0.6·244.82 = 146.89, φV_n = 110.17, **DCR 1.044 NG**).
+  - With 12 #5 dowels (developed): η = 1, unchanged (0.546).
+- **Review case:** Ped 1 η = 19.25/25.61 = 0.752, A_vf = 0.752·12.32 = 9.26 in², DCR 0.223 → 0.018. Ped 2 η = 19.25/42.69 = 0.451, A_vf = 0.451·9.10 = 4.10 in², governing DCR **2.142 NG (0.9D + 1.0(−Wx)) → 0.080 OK** (1.2D + 1.0(+Wx) + L + 0.5S).
+- **Default project:** dowels developed, unchanged.
+- **Saved data:** no input, key or format change. Every saved project with undeveloped dowels gets the new credit on open; no migration (engineer: a result change for all projects, called out).
+
+### How verified (all five items)
+- Headless Chromium, origin/main vs the branch, the tool's pinned KaTeX 0.16.11, Plotly 2.35.2 and three 0.160.0 routed from npm copies (as in SFPB). Deep diff of every `R` and `P2` value on: default, review, the #684 item-2 case with 8 #8 and with 12 #5, direct mode.
+  - Default and direct: only `klu_r` and new fields (`biax`, `kSl`, `xbar*`, `sfFr*`, `devFr`) and the eccentricity label differ.
+  - Review: only `eccChk`, the eccentricity warning, `dTopY` / `desY` top capacity, `punch` J_c / c / v_u / DCR, `klu_r`, `shearFr` A_vf and its rows, and new fields.
+  - Item-2 cases: only `punch` Ped 1 (its perimeter is truncated at the −x edge), `klu_r`, `shearFr` (8 #8 case) and new fields.
+- Report on all cases: 0 KaTeX errors, no NaN / undefined / unresolved `§?` or literal `[[`. 0 console errors.
+- `node tests/check-syntax.mjs` passes, as does `tests/smoke/spread-footing-scroll.mjs --libs`.
+- **Other copies:** none.
+- **Open items (questions for the engineer):**
+  1. The dowel check (§6.7) still requires full tension development where shear friction relies on the dowels (`sfNeed`), so with proportional credit a joint can pass shear friction while the dowel check reads NG on development. Keep that, or relax it to match SFPD?
+  2. Punching: the transferred moment is still taken about the pedestal centroid, not the critical-section centroid (R8.4.4.2.3; review B1, about 10 % of M_ux on Ped 2).
+  3. Top mat order: y-bars inner, as the drawings and 3D view. If the field order is the reverse, d_top,x would take the reduction instead.
