@@ -1747,7 +1747,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   through stability; an entered M_u / V_u or an extra horizontal load would need new terms in the stability equations (a new formula),
   which the brief excludes. Raised for the engineer instead.
 
-## 2026-11-02 — PR: claude/report-retire-rwall (RWRX: the Export report (D11, a separate window) retired after porting what the Report tab lacked; "Export report", Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
+## 2026-11-02 — PR: claude/report-retire-rwall, PR #689: https://github.com/mlococo88/All-Structural/pull/689 (RWRX: the Export report (D11, a separate window) retired after porting what the Report tab lacked; "Export report", Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
 
 ### RWRX-1. Content of the Export report ported into the Report tab   [display] [no result change]
 - **Engineer request (2026-11-02):** retire the old reports where the Report tab is complete. This uses the same method as lldf #623, Light Pole #625, Shear and Moment #672, elastomeric #676 and ACI Rebar #685: compare every number and section, port what is missing (the tool's own values and text, no recomputation), then remove the old report and print the Report from every tab.
