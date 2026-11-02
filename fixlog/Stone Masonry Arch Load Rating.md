@@ -1087,7 +1087,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 
 ### PHN-3. Report: raw TeX in two topic titles   [display only]
 - **Problem:** the topic headings "k$_{\text{loc}}$ for element 1, evaluated (kip, ft)" and "k$_{\text{glob}}$ for element 1 (kip, ft)" printed their TeX source. The report builder turns the tab's `<h4>k<sub>loc</sub> …</h4>` into `$_{\text{loc}}$`, but the shared viewer shows a topic title as plain text.
-- **Where:** `arptPanel`, anchor `if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx));continue;}`.
+- **Where:** `arptItems`, anchor `if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx));continue;}`.
 - **After:**
 ```js
 if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{}$]*)\}\}\$/g,"$1$2"));continue;}
