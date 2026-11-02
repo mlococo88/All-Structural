@@ -93,7 +93,8 @@
      -- added 2026-10-30 (Auto design PR), optional, read by engine/autodesign.js (absent = its DEF) --
      autodesign: { mode: 'new' | 'refine' | 'check', objective: 'weight' | 'depth' | 'cost', topN, cost: { steel ($/lb), trans, splice, stiff ($ each) },
                   limits: { Dmin, Dmax, Dinc, twInc, tfInc, bfInc, twMin, tfMin, bfMin, tfMax, thkRatio, areaRatio, maxTrans, minSeg, lbRatio, topConst, maxDb,
-                  depthRule, sLo, sHi } ('' = the owner's or Preliminary sizing's default), nbList (text), change: { nb, D },
+                  depthRule, sLo, sHi } ('' = the owner's or Preliminary sizing's default), nbList (text; not read since 2026-11-02: the girder
+                  count variable vars.nb alone decides; a list is moved to vars.nb on load by migrateNbList below), change: { nb, D },
                   undo: { girders, xs, framing, splices } (the design before the last Apply; one-step undo), applied: { at, nb, D, w },
                   -- added 2026-10-31 (Auto design PR 2), optional: absent = each variable's default (engine/autodesign.js VARS) --
                   vars: { <id> | <id>#<field piece, 1-based>: { mode: 'auto' | 'lock' | 'range', min, max, step } } (the design variables: nb, D, tw, bt, tt,
@@ -361,6 +362,28 @@
     return p;
   }
 
+  /* migrateNbList(p): one-time move of the Auto design tab's old "Girder counts to study" list (autodesign.nbList, removed 2026-11-02) to the
+     girder count variable (autodesign.vars.nb), which alone decides the counts studied now. Runs on every load (importJSON); acts only on a
+     non-blank nbList and clears it, so it happens once and the project then reads as entered. Returns a one-line notice, or ''.
+       - vars.nb set to Lock or Range by the user: the list was not read before either (engine/autodesign.js nbList: Lock and Range came first),
+         so it is only cleared; nothing else changes.
+       - otherwise (vars.nb absent or Auto, where a list replaced the current count ± 1): vars.nb = Range, min = the smallest and max = the
+         largest whole count >= 2 in the list (the counts the old reader kept), then the list is cleared. A list that skipped counts (e.g.
+         "5, 7") now also studies the counts between: the notice says so.
+       - a list with no whole count >= 2 in it was ignored before (blank behaviour, the current count ± 1): only cleared.
+     Clearing (not keeping) the list: nothing reads it any more, and a kept list would re-run this on the next load and overwrite a later
+     choice of the nb variable (e.g. back to Auto). The list's content lives on in the Range min and max. */
+  function migrateNbList(p) {
+    const a = p && p.autodesign; if (!a || typeof a !== 'object' || a.nbList == null || String(a.nbList).trim() === '') return '';
+    const txt = String(a.nbList).trim(), lst = [...new Set(txt.split(/[\s,;]+/).map(Number).filter(n => n >= 2 && Number.isInteger(n)))].sort((x, y) => x - y);
+    a.nbList = '';
+    const e = a.vars && a.vars.nb, explicit = e && (e.mode === 'lock' || e.mode === 'range');
+    if (explicit || !lst.length) return '';
+    const min = lst[0], max = lst[lst.length - 1];
+    a.vars = { ...(a.vars || {}), nb: { ...(e || {}), mode: 'range', min, max } };
+    return lst.length < max - min + 1 ? `Auto design: the girder counts listed ("${txt}") are now the girder count Range ${min} to ${max}, which also studies ${Array.from({ length: max - min + 1 }, (_, i) => min + i).filter(n => !lst.includes(n)).join(', ')}.` : '';
+  }
+
   /* legacyKind(obj): which older tool wrote obj, or '' (GirderDetail / Steel Bridge Design, PlateLine, ST-Girder). */
   function legacyKind(obj) {
     if (!obj || typeof obj !== 'object') return '';
@@ -378,7 +401,8 @@
     return { ...L.importLegacy(obj, opt), legacy: k };
   }
 
-  /* exportJSON(p): the file text (pretty-printed). importJSON(text): { ok, project, errors, warnings } or { ok: false, error }. */
+  /* exportJSON(p): the file text (pretty-printed). importJSON(text): { ok, project, errors, warnings, notes } or { ok: false, error }
+     (notes: one-line notices of the field migrations run on load, e.g. migrateNbList; [] when none). */
   function exportJSON(p) { return JSON.stringify(p, null, 2); }
   function importJSON(text) {
     let obj;
@@ -386,8 +410,9 @@
     if (legacyKind(obj)) return importLegacy(obj);
     if (!obj || obj.schema !== SCHEMA) return { ok: false, error: 'Not a Steel Bridge Design (sbd2) project file.' };
     let p; try { p = migrate(obj); } catch (e) { return { ok: false, error: e.message }; }
+    const notes = [migrateNbList(p)].filter(Boolean);   // field migrations within version 1 (2026-11-02)
     const v = validate(p);
-    return { ok: true, project: p, errors: v.errors, warnings: v.warnings };
+    return { ok: true, project: p, errors: v.errors, warnings: v.warnings, notes };
   }
 
   /* save(storage, p): writes the project to KEYS.current. Returns true, or false if storage refused (quota, privacy mode). */
@@ -401,7 +426,7 @@
     try { raw = storage.getItem(KEYS.current); } catch (e) { raw = null; }
     if (raw == null) { const p = defaultProject(); return { project: p, ...validate(p), source: 'default', note: '' }; }
     const r = importJSON(raw);
-    if (r.ok) return { project: r.project, errors: r.errors, warnings: r.warnings, source: 'saved', note: '' };
+    if (r.ok) return { project: r.project, errors: r.errors, warnings: r.warnings, source: 'saved', note: '', notes: r.notes };
     const bk = KEYS.backup + (now || new Date().toISOString());
     let kept = true; try { storage.setItem(bk, raw); } catch (e) { kept = false; }
     const p = defaultProject();
@@ -415,5 +440,5 @@
      (ownerRules.owner) when it is not AASHTO, else '' (as before the owner card moved to the Project tab). Display only; nothing computed or saved. */
   const clientName = P => { const t = String(((P || {}).project || {}).owner == null ? '' : P.project.owner).trim(), o = ((P || {}).ownerRules || {}).owner;
     return t || (o && o !== 'AASHTO' ? o : ''); };
-  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, legacyKind, importLegacy, exportJSON, importJSON, save, load };
+  window.SBDModel = { clientName, SCHEMA, VERSION, KEYS, GRADES, OWNERS, defaultProject, defaultXs, defaultStiffeners, defaultFatigue, defaultStuds, defaultFraming, defaultCrossframes, defaultSplices, defaultRating, defaultWelds, validate, migrate, migrateNbList, legacyKind, importLegacy, exportJSON, importJSON, save, load };
 })();

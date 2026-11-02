@@ -1,8 +1,8 @@
 /* apps/steel-bridge/ui/autodesign.js — the Auto design output tab (window.SBDAutoDesignUI), from engine/autodesign.js. Classic script.
    Needs SharedSteps, SharedUnits, SBDModel, SBDAutoDesign and every module the full check runs (see engine/autodesign.js).
 
-   One panel: the inputs (saved in the project, P.autodesign: mode, objective, the price list, the limits, the girder counts, the change to
-   check), Run with progress and Stop (the search runs a trial at a time with setTimeout, so the page stays responsive), the ranked list of
+   One panel: the inputs (saved in the project, P.autodesign: mode, objective, the designs to list (topN), the price list, the limits, the
+   change to check; the girder counts studied are the girder count variable's, in the design variables table), Run with progress and Stop (the search runs a trial at a time with setTimeout, so the page stays responsive), the ranked list of
    candidates (each passing every module on the full check), and Apply with one-step Undo (the design before Apply is kept in
    P.autodesign.undo). The result itself lives in memory for this page view.
 
@@ -35,9 +35,9 @@
     return `<section class="sec"><div class="secHead">Auto design: inputs</div><div class="secBody">
       <div class="ad-grid">${sel('mode', 'Mode', s.mode, [['new', 'New design (girder count, depth, plates, transitions)'], ['refine', 'Refine current design (keep the zones)'], ['check', 'Check one change']])}
       ${sel('objective', 'Objective', s.objective, [['weight', 'Lightest steel'], ['depth', 'Shallowest depth'], ['cost', 'Lowest cost']])}
-      ${num('topN', 'Candidates to keep', v(a, 'topN', D.topN), '')}
-      ${s.mode === 'new' ? num('nbList', 'Girder counts to study', v(a, 'nbList', ''), '', `blank: ${AD().nbList(P, s).join(', ')}`) : ''}
+      ${num('topN', 'Designs to list', v(a, 'topN', D.topN), '')}
       ${s.mode === 'check' ? num('change.nb', 'Change: girder count', v(a.change, 'nb', ''), '', `now ${(P.xs || {}).nb}`) + num('change.D', 'Change: web depth D', v(a.change, 'D', ''), 'in', `now ${AD().layoutOf(P).D}`) : ''}</div>
+      <p class="note"><b>Designs to list:</b> Auto design ranks every trial by the objective, then runs the full check on the best ones until this many pass every module; pick one and Apply.${s.mode === 'new' ? ` The girder counts studied are set by the <b>Girder count N<sub>b</sub></b> row of the design variables (now ${esc(AD().nbList(P, s).join(', '))}).` : ''}</p>
       <p class="note"><b>Price list</b> (lowest cost; per girder line, × the girder count):</p><div class="ad-grid">
       ${num('cost.steel', 'Steel', v(C, 'steel', D.cost.steel), '$/lb')}${num('cost.trans', 'Flange transition', v(C, 'trans', D.cost.trans), '$ each')}
       ${num('cost.splice', 'Field splice', v(C, 'splice', D.cost.splice), '$ each')}${num('cost.stiff', 'Intermediate stiffener', v(C, 'stiff', D.cost.stiff), '$ each')}</div>
