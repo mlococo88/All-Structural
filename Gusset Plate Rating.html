@@ -10,6 +10,9 @@
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3508,7 +3511,8 @@ function renderMethod() { $('#tab-method').innerHTML = methodHtml(); }
 function setOTab(t) { P.ui.otab = t; $$('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === t)); $$('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-' + t)); const tp = $('.tab-panels'); if (tp && setOTab.l !== t) tp.scrollTop = 0; setOTab.l = t; renderTab(t); autosave(); }
 function setITab(t) { P.ui.itab = t; $$('.itab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.pane === t))); $$('.ipane').forEach(p => p.hidden = p.id !== 'ipane-' + t); autosave(); }
 let asT = null;
-function autosave() { if (!LS) return; clearTimeout(asT); asT = setTimeout(() => { try { (P.members || []).forEach(GPR.blankGrid); localStorage.setItem(KEY_AS, JSON.stringify({ data: P, name: CUR })); /* C11: custom members saved with rows / gage lines = 0 */ const d = $('#proj_autosave_dot'); if (d) { d.style.opacity = 1; setTimeout(() => d.style.opacity = .25, 500); } } catch (e) {} }, 300); }
+function autosave() { if (window.GPPL) GPPL.soon();   /* PLIB: one undo step per change (debounced) */
+  if (!LS) return; clearTimeout(asT); asT = setTimeout(() => { try { (P.members || []).forEach(GPR.blankGrid); localStorage.setItem(KEY_AS, JSON.stringify({ data: P, name: CUR })); /* C11: custom members saved with rows / gage lines = 0 */ const d = $('#proj_autosave_dot'); if (d) { d.style.opacity = 1; setTimeout(() => d.style.opacity = .25, 500); } } catch (e) {} }, 300); }
 const store = () => { try { return JSON.parse(localStorage.getItem(KEY_PR) || '{}') || {}; } catch (e) { return {}; } };
 const putStore = s => { try { Object.values(s).forEach(d => ((d && d.members) || []).forEach(GPR.blankGrid)); localStorage.setItem(KEY_PR, JSON.stringify(s)); /* C11: as autosave */ return true; } catch (e) { flash('Could not save (browser storage full or blocked). Use Export JSON.', 'fail'); return false; } };
 function flash(m, c = 'pass') { const el = $('#proj_msg'); if (!el) return; el.textContent = m; el.style.color = c === 'fail' ? 'var(--fail)' : 'var(--pass)'; clearTimeout(flash.t); flash.t = setTimeout(() => el.textContent = '', 4000); }
@@ -3855,6 +3859,36 @@ function boot() {
 }
 window.typesetAll = () => { const a = $('.tab-panel.active'); if (a) typeset(a); };
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
+</script>
+<script>
+/* PLIB (2026-11-02): saved-project list and Undo / Redo (shared/projects.js, shared/projects-ui.js). Display and storage only:
+   the list is the tool's own key gussetRating.projects.v1 in its own format ({ name: P }); the autosave key is unchanged.
+   Undo / Redo: snapshots of P without P.ui (tabs and collapsed sections are not steps), session only; set = loadData() (the tool's
+   own open path, normalize included) with the current P.ui and name. Open, Import JSON and "New from example" are one step each. */
+(function () {
+  function init() {
+    if (!window.SharedProjects || !window.SharedProjectsUI) return;
+    const inputsText = () => JSON.stringify(Object.assign({}, P, { ui: undefined }));
+    const h = SharedProjects.history({ get: inputsText, set: t => { const d = JSON.parse(t); d.ui = P.ui; loadData(d, CUR); refreshList(); } });
+    let tm = null; const soon = () => { clearTimeout(tm); tm = setTimeout(() => h.record(), 400); };
+    let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
+    const store = SharedProjects.mapStore(ST, KEY_PR);
+    const dlg = SharedProjectsUI.libraryDialog({ store, storage: ST, title: 'Saved projects (this browser)',
+      current: () => CUR && store.has(CUR) ? CUR : null,
+      open: n => { const d = store.get(n); if (!d) return false; loadData(d, n); refreshList(); flash(`Opened "${n}".`); return true; },
+      renamed: (a, b) => { if (CUR === a) { CUR = b; autosave(); } },
+      deleted: n => { if (CUR === n) { CUR = ''; autosave(); } },
+      changed: () => refreshList() });
+    const g = document.createElement('div'); g.className = 'hdr-group'; g.setAttribute('data-sp', 'row');
+    const B = (t, ti) => SharedProjectsUI.button(t, ti, { cls: 'btn' });
+    const bu = B('Undo', 'Undo the last input change (Ctrl+Z)'), br = B('Redo', 'Redo (Ctrl+Y or Ctrl+Shift+Z)'), bl = B('Saved projects\u2026', 'The projects saved in this browser: open, rename, duplicate, delete');
+    bl.addEventListener('click', () => dlg.show()); g.append(bu, br, bl);
+    const last = document.querySelector('header .hdr-group'); if (last) last.parentNode.insertBefore(g, last);
+    SharedProjectsUI.undoRedo(h, { undo: bu, redo: br });
+    h.reset(); window.GPPL = { h, store, dlg, soon };
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
+})();
 </script>
 </body>
 </html>
