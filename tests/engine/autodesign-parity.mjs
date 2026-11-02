@@ -45,7 +45,7 @@ function check(P, segs, spl, ctx, cur) {
 function legacySettings(Ppl) {
   const L = Ppl.limits, SG = Ppl.suggest, n = v => +v;
   // the girder count and the overhangs as the project has them (Suggest and Full design change neither): locked (Auto design PR 2 variables)
-  return { mode: 'new', objective: 'weight', topN: 3, nbList: String(Ppl.bridge.nb), matchLegacy: true, vars: { oh: { mode: 'lock' } },
+  return { mode: 'new', objective: 'weight', topN: 3, matchLegacy: true, vars: { nb: { mode: 'lock' }, oh: { mode: 'lock' } },
     cost: { steel: n(Ppl.costs.steel), trans: n(Ppl.costs.trans), splice: n(Ppl.costs.splice), stiff: n(Ppl.costs.stiff) },
     limits: { twMin: n(L.minTw), tfMin: n(L.minTf), bfMin: n(L.minBf), tfMax: n(L.maxTf), Dinc: n(L.incD), twInc: n(L.incTw), bfInc: n(L.incBf), tfInc: n(L.incTf), thkRatio: n(L.thkRatio), areaRatio: n(L.areaRatio),
       minSeg: n(L.minSeg), maxTrans: n(L.maxTrans), lbRatio: n(L.lbRatio), topConst: SG.topConst !== 'off', maxDb: n(SG.maxDb), depthRule: SG.depthRule !== 'off' } };

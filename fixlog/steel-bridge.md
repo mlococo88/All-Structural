@@ -3678,3 +3678,43 @@ current design's analysis accepted; **the minimum shipping piece length raised f
 - Browser (Playwright, 1280 and 390): 0 console errors, no horizontal scroll; 3D card opens framed and stays open on another splice.
 ### Other copies
 - None.
+
+## 2026-11-02 — PR: claude/sb-nb-one-input — Auto design: one girder-count input (the N_b variable row); "Candidates to keep" renamed "Designs to list"
+### Why
+- Engineer: two inputs set the girder counts studied ("Girder counts to study", `P.autodesign.nbList`, and the "Girder count N_b" row of the
+  design variables, `P.autodesign.vars.nb`); keep the row only. Rename "Candidates to keep" (`topN`) and say what it does.
+### What changed
+- `engine/autodesign.js` `nbList(P, S)`: the list is no longer read. Before:
+  `const xs = P.xs || {}, nb0 = xs.nb || 0, W = …, lst = String(S.nbList || '').split(/[\s,;]+/).map(Number).filter(n => n >= 2 && Number.isInteger(n));`
+  … `if (lst.length) return [...new Set(lst)];` (between the Range line and the Auto ± 1 line). After: `lst` and that line removed. Lock = `[nb0]`,
+  Range = min … max, Auto = nb0 − 1, nb0, nb0 + 1 within the spacing limits (unchanged lines). `VARS` nb note: "(or the counts listed)" removed;
+  now "Auto (New design): the current count ± 1 within the spacing limits; Lock: the current count; Range: every count from min to max; …".
+  `DEF.nbList` kept ('' ; not read) with a comment; header comment of the 'new' mode updated.
+- `engine/model.js` new `migrateNbList(p)` (exported), called by `importJSON` after `migrate()` (anchor `const notes = [migrateNbList(p)]`);
+  `importJSON` and `load` now also return `notes` (one-line notices). The migration, on a non-blank `autodesign.nbList` only:
+  the whole counts ≥ 2 in it (as the old reader), sorted, de-duplicated; `nbList` set to ''; if `vars.nb.mode` is not 'lock' or 'range'
+  (absent or 'auto', where the list replaced the ± 1 rule) and the list held a count: `vars.nb = { mode: 'range', min: smallest, max: largest }`;
+  if counts were skipped (e.g. "5, 7"): notice "Auto design: the girder counts listed ("5, 7") are now the girder count Range 5 to 7, which also studies 6."
+  Header doc of `autodesign` updated.
+- **Kept or cleared:** cleared (`nbList: ''`). Nothing reads it now, so neither choice can change a result; but a kept list would make the
+  migration run again on every load and overwrite a later choice of the nb row (e.g. set back to Auto). The list's content is in the Range min
+  and max; only the gaps are not kept, and the notice names them.
+- `engine/library.js` `open()`: passes `notes`. `index.html`: `loadNotes(notes)` toast after the autosave load (the migrated project is written
+  to the autosave once, so the notice shows once), after opening a saved project and after Import JSON.
+- `ui/autodesign.js` `inputsHtml()`: the "Girder counts to study" box removed; `num('topN', 'Candidates to keep', …)` → `num('topN', 'Designs to list', …)`;
+  new note under the grid: "Designs to list: Auto design ranks every trial by the objective, then runs the full check on the best ones until this many
+  pass every module; pick one and Apply." plus, in New design, "The girder counts studied are set by the Girder count N_b row … (now 5, 6)". Header comment.
+- Saved field `topN` unchanged. `tests/engine/autodesign-parity.mjs` `legacySettings`: `nbList: String(Ppl.bridge.nb)` → `vars.nb: { mode: 'lock' }`
+  (the same single count: `xs.nb = round(bridge.nb)`, ad-fixture.mjs).
+### §4 callout
+- None: no formula, factor, unit or reference changed. The counts studied for a saved project are the same after the migration, except a list with
+  a gap, which now also studies the counts between (stated on screen).
+### Check case (default project: N_b = 5, bays 4 × 9.5 = 38 ft, spacing limits 6 … 12 ft)
+- Blank list, nb Auto: 4 → 38/3 = 12.67 ft > 12 (out), 5, 6 → 38/5 = 7.6 ft → counts [5, 6] before and after.
+- "4, 5, 6" (nb Auto) → Range 4 … 6 → [4, 5, 6] before and after. "4, 6" → before [4, 6], after [4, 5, 6] + notice.
+  "4, 6" with nb Lock → before [5] (Lock read first), after [5], list cleared, no notice.
+### How verified
+- New test in `tests/engine/autodesign-vars.test.mjs` (migration cases, once-only, load path).
+- Full New design runs (Node, `AD.run(P, { maxIt: 3, trimTries: 1 })`, topN 2), origin/main vs branch, the project passed through `importJSON`: see the PR.
+### Other copies
+- None.

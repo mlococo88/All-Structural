@@ -2,6 +2,8 @@
 // Rating and Welds in the full check, the framing fallback, saved data. engine/autodesign.js.
 //   1. Saved data: a project saved before this PR (no autodesign.vars) round-trips through export / import unchanged and reads every
 //      variable at its default; a vars entry is read back as entered.
+//   1b. The girder count (2026-11-02): the nb variable alone decides the counts (the "Girder counts to study" list is gone); a saved list is
+//      migrated once on load (engine/model.js migrateNbList): Range min … max unless nb was set to Lock or Range; a gap gets a notice.
 //   2. Locks and ranges are honoured (Refine, the built-in project): locked plates, cross-frames and weld as they were, ranged widths,
 //      stiffener spacing and stiffener thickness within their range; every candidate passes the full check.
 //   3. Applying a candidate gives the tabs' ratios (Flexure, Shear & stiffeners, Fatigue & studs, Cross-frames, Field splices, Rating, Welds)
@@ -44,6 +46,33 @@ test('Saved data: a project without autodesign.vars round-trips unchanged and re
   const DL = AD.depthList(Q, S3, AD.layoutOf(Q)); assert.equal(DL.lo, 60); assert.equal(DL.hi, 72); assert.ok(DL.coarse.every(D => D % 2 === 0 && D >= 60 && D <= 72));
   Q.autodesign.vars.nb = { mode: 'range', min: 4, max: 6 }; assert.equal(JSON.stringify(AD.nbList(Q, AD.settings(Q))), '[4,5,6]');
   Q.autodesign.vars.nb = { mode: 'lock' }; assert.equal(JSON.stringify(AD.nbList(Q, AD.settings(Q))), '[5]');
+});
+
+test('Girder count: the nb variable alone decides; a saved "Girder counts to study" list is migrated once on load (2026-11-02)', () => {
+  const load = ad => { const P = M.defaultProject(); P.autodesign = ad; const R = M.importJSON(M.exportJSON(P)); assert.ok(R.ok, R.error); return R; };
+  const nbs = P => JSON.stringify(AD.nbList(P, AD.settings(P)));
+  // blank list, nb on Auto (the default project: N_b = 5, 4 bays of 9.5 ft = 38 ft): the current count ± 1 within 6 … 12 ft spacing:
+  // N_b = 4: 38/3 = 12.67 ft > 12 (out); 5; 6: 38/5 = 7.6 ft (in) → [5, 6]; nothing migrated, no notice, the file unchanged
+  let R = load({ mode: 'new', nbList: '' }); assert.equal(R.notes.length, 0); assert.equal(nbs(R.project), '[5,6]'); assert.equal(R.project.autodesign.vars, undefined);
+  // a list without gaps (as was studied: 4, 5, 6) → Range 4 … 6, list cleared, no notice
+  R = load({ mode: 'new', nbList: '6, 4,5' }); const v = R.project.autodesign.vars.nb;
+  assert.equal(JSON.stringify([v.mode, v.min, v.max, R.project.autodesign.nbList]), JSON.stringify(['range', 4, 6, ''])); assert.equal(R.notes.length, 0); assert.equal(nbs(R.project), '[4,5,6]');
+  // a list with a gap ("5, 7"): Range 5 … 7, so 6 is now studied too; a one-line notice says so
+  R = load({ mode: 'new', nbList: '5, 7', vars: { D: { mode: 'lock' } } }); assert.equal(nbs(R.project), '[5,6,7]'); assert.equal(R.notes.length, 1); assert.match(R.notes[0], /5, 7.*Range 5 to 7.*also studies 6/);
+  assert.equal(R.project.autodesign.vars.D.mode, 'lock', 'other variables kept');
+  // nb set explicitly to Lock or Range: the list was ignored before; it is only dropped (Lock: the current count; the Range as entered)
+  R = load({ mode: 'new', nbList: '4, 6', vars: { nb: { mode: 'lock' } } }); assert.equal(JSON.stringify(R.project.autodesign.vars.nb), '{"mode":"lock"}'); assert.equal(R.project.autodesign.nbList, ''); assert.equal(R.notes.length, 0); assert.equal(nbs(R.project), '[5]');
+  R = load({ mode: 'new', nbList: '4, 6', vars: { nb: { mode: 'range', min: 5, max: 7 } } }); assert.equal(nbs(R.project), '[5,6,7]'); assert.equal(R.notes.length, 0);
+  // nb explicitly Auto with a list (the list was read): migrated as absent
+  R = load({ mode: 'new', nbList: '4 5', vars: { nb: { mode: 'auto' } } }); assert.equal(nbs(R.project), '[4,5]');
+  // a list with no whole count ≥ 2 was ignored (the current count ± 1): only cleared
+  R = load({ mode: 'new', nbList: 'x, 1, 4.5' }); assert.equal(R.project.autodesign.vars, undefined); assert.equal(R.project.autodesign.nbList, ''); assert.equal(nbs(R.project), '[5,6]');
+  // once: the migrated file loads unchanged; the engine no longer reads nbList (a list passed straight in is ignored)
+  R = load({ mode: 'new', nbList: '5, 7' }); const t = M.exportJSON(R.project), R2 = M.importJSON(t); assert.equal(M.exportJSON(R2.project), t); assert.equal(R2.notes.length, 0);
+  const Q = M.defaultProject(); Q.autodesign = { mode: 'new', nbList: '4, 5, 6, 7' }; assert.equal(nbs(Q), '[5,6]');
+  // the autosave path (load) and the project list (engine/library.js open) carry the notice
+  const st = new Map(), S = { getItem: k => st.has(k) ? st.get(k) : null, setItem: (k, x) => st.set(k, String(x)) }, P1 = M.defaultProject(); P1.autodesign = { nbList: '4,6' };
+  st.set(M.KEYS.current, M.exportJSON(P1)); const Ld = M.load(S); assert.equal(Ld.notes.length, 1); assert.equal(Ld.project.autodesign.vars.nb.mode, 'range');
 });
 
 let RUN = null; const P0 = M.defaultProject();
