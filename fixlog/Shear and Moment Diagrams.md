@@ -1489,7 +1489,7 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
   1400 and 390 px looked at. `node tests/smoke/phone-layout.mjs --tool smd` passes. `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 
-## 2026-11-02 — PR: claude/plib-smd — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete)   [display and storage only]
+## 2026-11-02 — PR: claude/plib-smd, PR #706: https://github.com/mlococo88/All-Structural/pull/706 — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete)   [display and storage only]
 - **Before:** header 📁 Saved… drop-down (load), 💾 Save (under Project name), 🗑 (delete the saved analysis matching Project name),
   key `smd_saves_v1`, `{ name: { t, d: project } }`; Undo / Redo (↩ ↪, Ctrl+Z / Ctrl+Shift+Z). No rename, no duplicate.
 - **Where:**
