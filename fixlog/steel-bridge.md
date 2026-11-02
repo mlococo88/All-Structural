@@ -3766,7 +3766,7 @@ current design's analysis accepted; **the minimum shipping piece length raised f
 ### Other copies
 - None.
 
-## 2026-11-02 — PR: claude/list-input-steelbridge — the list inputs are tables, one box per value (one per column for x:P and from–to) (LIST)   [display only]
+## 2026-11-02 — PR: claude/list-input-steelbridge, PR #708: https://github.com/mlococo88/All-Structural/pull/708 — the list inputs are tables, one box per value (one per column for x:P and from–to) (LIST)   [display only]
 - **Why:** engineer decision 2026-11-02: no comma-separated inputs (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
   `nbList` (girder counts) is not touched: #695 replaced it with one input.
 - **New file `ui/lists.js`** (`window.SBDListsUI`): a table of the list inputs (selector → table name, columns, the module's own text
