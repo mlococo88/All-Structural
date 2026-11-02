@@ -2118,7 +2118,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 22 tabs, the whole-document `textContent` and localStorage after load are identical.
 - Screenshots at 900 and 1280 px are pixel-identical on load and on every tab, except 9 px on the 3D tab (WebGL anti-aliasing).
 
-## 2026-11-02 — PR: claude/list-input-bsl — Bridge tab: span lengths and girder spacings are tables with one box per value (LIST)   [display only]
+## 2026-11-02 — PR: claude/list-input-bsl, PR #688: https://github.com/mlococo88/All-Structural/pull/688 — Bridge tab: span lengths and girder spacings are tables with one box per value (LIST)   [display only]
 - **Why:** engineer decision 2026-11-02: no comma-separated inputs; short lists become tables (`shared/list-input.js`,
   `fixlog/shared-list-input.md`, #681). Phase 2, first tool.
 - **Where (1):** script tags, anchor `<script src="shared/report.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
