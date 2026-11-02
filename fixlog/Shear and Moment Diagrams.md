@@ -1381,7 +1381,7 @@ index 320e372..a5c90e0 100644
 +
 ```
 
-## 2026-11-02 — PR: claude/phone-print-smd — Phone layout (header wraps) and a print page-break fix in the 📄 Report (PHN; display only, no calculation change) (PR link added after merge)
+## 2026-11-02 — PR: claude/phone-print-smd — Phone layout (header wraps) and a print page-break fix in the 📄 Report (PHN; display only, no calculation change) (PR #628: https://github.com/mlococo88/All-Structural/pull/628)
 
 Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Every code site is tagged `PHN`.
 
