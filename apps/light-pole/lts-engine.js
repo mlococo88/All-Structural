@@ -389,4 +389,70 @@
   }
 
   Object.assign(root.LpLts, { E, PHI, classify, mnOf, pnc, shearTorsion, b2, interaction, memberCheck, memberSteps });
+
+  /* =================== LTS-5 (2026-11-02): deflection (Section 10), fatigue applicability (Section 11), breakaway (Art. 2.5.2, Section 12) ===================
+     deflection(g, L, secs): Service I (1.0DC + 1.0W at V_svc, C_v = 1.0; Table 3.4-1) for every load case; elastic double integration of the
+     curvature M/(EI) of the cantilever from the base (Art. 10.4.2.1: "usual methods"), amplified by the Service I B₂ (C10.4.2.1: second-order
+     effects normally included). Δ in in, slope in in/ft. */
+  function deflection(g, L, secs, Fy, Bsvc) {
+    const isSign = g.mode === 'sign', nPost = isSign ? Math.max(1, g.sign.nPost || 1) : 1, share = 1 / nPost, Lin = g.H * 12, N = 200, dz = g.H / N;
+    const sv = COMBOS.find(c => c.key === 'SV1');
+    const B = Bsvc != null ? Bsvc : memberCheck(g, { ...L, tIce: 0 }, secs, Fy).Bs.SV1.B;   // the Service I B (Art. 4.8.1 / Eq. 5.12.1-10)
+    const Iat = (z, k) => { const a = secs.reduce((p, s) => (s.z <= z && (!p || s.z > p.z) ? s : p), null) || secs[0], b = secs.find(s => s.z > a.z) || a;
+      const t = b.z > a.z ? (z - a.z) / (b.z - a.z) : 0; return a[k] + (b[k] - a[k]) * t; };
+    const fixAbove = z => (isSign ? [] : (g.fixtures || [])).filter(x => x.hf >= z);
+    const res = LOAD_CASES.map(lc => {
+      const fr = caseForces(g, L.Vsvc, 'service', lc);
+      let dx = 0, dy = 0, sx = 0, sy = 0;
+      for (let i = 0; i < N; i++) {
+        const z = (i + 0.5) * dz, w = sectionWind(fr, z);
+        let MxD = 0, MyD = 0; fixAbove(z).forEach(x => { MxD += sv.DC * x.W * (x.a || 0) * Math.cos((x.th || 0) * RAD); MyD += sv.DC * x.W * (x.a || 0) * Math.sin((x.th || 0) * RAD); });
+        const Mx = (w.Mx + MxD) * share * 12 / 1000, My = (w.My + MyD) * share * 12 / 1000;   // kip-in
+        const kx = Mx / (E * Iat(z, 'Ix')), ky = My / (E * Iat(z, 'Iy')), dzi = dz * 12, arm = (g.H - z) * 12;
+        dx += kx * arm * dzi; dy += ky * arm * dzi; sx += kx * dzi; sy += ky * dzi;
+      }
+      const d = B * Math.hypot(dx, dy), th = B * Math.hypot(sx, sy);
+      const zz = v => (Math.abs(v) < 1e-9 ? 0 : v);
+      return { lc: lc.key, lcName: lc.name, d, slope: th * 12, dx: zz(B * dx), dy: zz(B * dy) };
+    });
+    // dead load alone (moment-load slope, C10.4.2.1): the eccentric fixture weight
+    let s0x = 0, s0y = 0;
+    for (let i = 0; i < N; i++) { const z = (i + 0.5) * dz; let MxD = 0, MyD = 0;
+      fixAbove(z).forEach(x => { MxD += x.W * (x.a || 0) * Math.cos((x.th || 0) * RAD); MyD += x.W * (x.a || 0) * Math.sin((x.th || 0) * RAD); });
+      s0x += MxD * 12 / 1000 / (E * Iat(z, 'Ix')) * dz * 12; s0y += MyD * 12 / 1000 / (E * Iat(z, 'Iy')) * dz * 12; }
+    const gov = res.reduce((a, r) => (r.d > a.d ? r : a)), govS = res.reduce((a, r) => (r.slope > a.slope ? r : a));
+    const momentLoad = !isSign && (g.fixtures || []).some(x => (x.a || 0) > 0) && Math.hypot(s0x, s0y) > 1e-9;
+    const lim = { lum: 0.10 * Lin, trans: 0.025 * Lin, slope: 0.35 };
+    const checks = [];
+    if (!isSign) checks.push({ key: 'lum', label: 'Luminaire support: top deflection, Service I', value: gov.d, limit: lim.lum, unit: 'in', applies: true, ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 10 % of the height') });
+    checks.push({ key: 'trans', label: 'Vertical support, transverse loads: top deflection, Service I', value: gov.d, limit: lim.trans, unit: 'in', applies: true,
+      ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 2.5 % of the height'), flag: 'Applied under Service I to the vertical supports the article names (coordinator decision Q-B4); the commentary describes it as a dead-load aesthetic limit developed for strain poles. Engineer to confirm.' });
+    checks.push({ key: 'slope', label: 'Vertical support, moment loads: slope at the top, Service I', value: govS.slope, limit: lim.slope, unit: 'in/ft', applies: momentLoad,
+      ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 0.35 in/ft'), flag: momentLoad ? 'Applied: the arm-mounted fixtures put a dead-load moment on the pole (coordinator decision Q-B4). Engineer to confirm.' : 'Information only: no moment-load application (no unbalanced arm-mounted dead load) (coordinator decision Q-B4).' });
+    checks.forEach(c => { c.ratio = c.value / c.limit; c.ok = !c.applies || c.ratio <= 1; });
+    return { B, rows: res, gov, govS, checks, momentLoad, slopeDL: Math.hypot(s0x, s0y) * 12 };
+  }
+  /* fatigue applicability: Art. 11.4 (p. 11-3, 2017) lists the structures needing a fatigue design; Art. 11.7.2 (p. 11-10, 2017):
+     high-mast lighting towers are 55 ft and taller, luminaire supports under 55 ft need none; C11.4: roadside signs and common lighting
+     poles are not included; square lighting poles are more fatigue-prone. */
+  function fatigue(g) {
+    const isSign = g.mode === 'sign';
+    if (isSign) return { required: false, hmlt: false, text: 'Ground-mounted roadside sign support: not among the structure types of Art. 11.4 (C11.4: roadside signs are not included) → fatigue design not required.' };
+    if (g.H >= 55) return { required: true, hmlt: true, text: `Pole height ${f(g.H, 1)} ft ≥ 55 ft: a high-mast lighting tower (Art. 5.2) — fatigue design is required (Arts. 11.4, 11.7.2) and at least eight anchor bolts (Art. 5.16). This tool does not design high-mast towers: design it separately.` };
+    return { required: false, hmlt: false, text: `Luminaire support ${f(g.H, 1)} ft < 55 ft: fatigue design not required (Art. 11.7.2; Art. 11.4 lists cantilevered and non-cantilevered overhead sign and signal structures and high-mast towers only).` + (g.shape !== 'round' ? ' C11.4: square lighting poles are much more prone to fatigue than round or multi-sided ones — use with caution.' : '') };
+  }
+  /* breakaway checklist: Art. 2.5.2, 2.5.2.1, 2.5.2.2 (pp. 2-5, 2-6) and Arts. 12.1, 12.3, 12.4, 12.5.1 (pp. 12-1, 12-2, 2017) */
+  function breakaway(inClearZone) {
+    if (!inClearZone) return { needed: false, items: ['Outside the clear zone or behind a barrier: breakaway hardware not required by Art. 2.5.2 (confirm the clear zone with the roadway designer).'] };
+    return { needed: true, items: [
+      'Breakaway support required for a luminaire or roadside sign support that cannot be placed outside the clear zone or behind a barrier (Art. 2.5.2).',
+      'Use crash-tested breakaway hardware meeting MASH (2009) (Arts. 12.1, 12.5.1); hardware accepted under NCHRP 350 may remain in use (C12.1).',
+      'Manufacturer certification of breakaway and structural adequacy, with calculations or test data when the Owner requests (Art. 12.3).',
+      'Breakaway components carry the Section 3 loads; load tests, when needed, at not less than the Extreme I loads (Art. 12.4).',
+      'Foundation top and anchor projections must not rise enough to snag or impede the breakaway action (Art. 2.5.2.1).',
+      'Impact height consistent with the bumper height used in the qualification tests (Art. 2.5.2.2).',
+      'Consider electrical disconnects for breakaway supports with electrical components (Art. 2.5.2).'] };
+  }
+
+  Object.assign(root.LpLts, { deflection, fatigue, breakaway });
 })(typeof window !== 'undefined' ? window : globalThis);
