@@ -1,10 +1,10 @@
-# Light Pole and Sign Post: AASHTO LRFDLTS mode, plan (Phase A, revised A2 and B-0)
+# Light Pole and Sign Post: AASHTO LRFDLTS mode, plan (Phase A, revised A2, B-0 and B-0b)
 
-Tool: `Light Pole and Sign Post.html`. Status: **plan only; nothing in this document is implemented yet.** Written 2026-11-02 (US Eastern), revised the same day (Phase A2: owner amendments, §6; Phase B-0: basis set to the 1st Edition with the 2017 interim, provision map checked against the 2017 interim packet, pages still needed in §7), for the engineer's request "Start the LTS mode for the sign and pole app".
+Tool: `Light Pole and Sign Post.html`. Status: **plan only; nothing in this document is implemented yet.** Written 2026-11-02 (US Eastern), revised the same day (Phase A2: owner amendments, §6; Phase B-0: 2017 interim packet; B-0b: provision map completed from the full 1st Edition, §0.1 findings, decisions Q-B/Q-C), for the engineer's request "Start the LTS mode for the sign and pole app".
 
 **Decisions so far** (engineer, 2026-11-01 / 2026-11-02, via the coordinator):
 - Add an **AASHTO LRFD Specifications for Structural Supports for Highway Signs, Luminaires, and Traffic Signals (LRFDLTS), 1st Edition (2015) with the 2017 Interim Revisions** mode alongside the existing IBC 2021 / ASCE 7-22 / AISC 360-16 / ACI 318-19 mode.
-- **Design basis (engineer, 2026-11-02):** LRFDLTS **1st Edition (2015) with the 2017 Interim Revisions (LRFDLTS-1-I1)**, "the latest I have". It is not a 2nd Edition, and the later interims (2018–2022) are not applied. The engineer provided the 2017 interim packet; it holds only the replaced pages (§0.1). **Phase B is on hold for the First Edition pages listed in §7.**
+- **Design basis (engineer, 2026-11-02):** LRFDLTS **1st Edition (2015) with the 2017 Interim Revisions**; the full book and the interim packet are in the reference library (§0). Later interims are not applied.
 - The existing mode stays exactly as it is (same results for every saved project).
 - Nothing cable-related changes. Cables stay in the IBC mode only; the LTS mode does not support them and says so on screen.
 - The anchor rods are designed in the Anchorage app (BasePlateAnchorDesigner). The LTS mode exports its own LTS combinations through the existing `bridgeSuite.v1.anchorGroup` hand-off (HANDOFF.md §4.11, #610).
@@ -16,56 +16,59 @@ Tool: `Light Pole and Sign Post.html`. Status: **plan only; nothing in this docu
 
 ## 0. Design basis (read first)
 
-**Design basis: AASHTO LRFDLTS 1st Edition (2015) with the 2017 Interim Revisions (LRFDLTS-1-I1)** (engineer, 2026-11-02). The engineer has provided the 2017 interim. He says it is "the latest I have". The later interims (2018, 2019, 2020, 2022) are **not** part of the basis.
-- The 2022 interim (LRFDLTS-1-I5) revised **Section 5 (steel)** and **Appendix C (fatigue)**, among others. The tool follows the 2017 text. On screen and in the report, the LTS mode will say so: "Basis: AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions. Later interims (2018–2022; the 2022 interim revised Section 5 and Appendix C) are not applied."
-- Public check: FHWA's 2018 rule (Federal Register, 2018-11-01) incorporated the 1st Edition "with 2017 and 2018 Interim Revisions" into 23 CFR 625.4. So the 2017 interim is FHWA-approved; the 2018 interim is also approved but not used here. This bears on RIDOT §1.1.1 (§6.1, Q21).
+**Design basis: AASHTO LRFDLTS 1st Edition (2015) with the 2017 Interim Revisions (LRFDLTS-1-I1).** Where the 2017 interim revises an article, the interim page replaces the book page. The engineer provided both documents on 2026-11-02:
+- `AASHTO LRFD - Signs - Luminaires - Signals.pdf`: the full 1st Edition, 411 pages;
+- `AASHTO LRFD - Signs - Luminaires - Signals - 2017 Interim Revisions.pdf`: the replaced pages, 40 pages.
 
-### 0.1 What the provided document is
+Both are in the private reference library. **They are cited and paraphrased here, never copied.** Coefficients appear only where they are needed to implement and hand-check.
+- Later interims (2018, 2019, 2020, 2022) are **not** applied. The 2022 interim (LRFDLTS-1-I5) revised Section 5 (steel) and Appendix C (fatigue).
+- **Coordinator decision Q-B1 (2026-11-02):** the LTS mode says on screen and in the report: "AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions; later interims not applied."
+- FHWA's 2018 rule (Federal Register 2018-11-01) incorporated the 1st Edition with the 2017 and 2018 interims into 23 CFR 625.4, so the 2017 basis is an FHWA-approved version.
 
-`AASHTO LRFD - Signs - Luminaires - Signals - 2017 Interim Revisions.pdf` (40 pages, © 2016, pub. code LRFDLTS-1-I1-OL), extracted to the scratchpad only.
-- **It is the interim packet only: the replacement pages, not the full specification.** Its instruction page says the packet holds the revised pages that replace the corresponding pages of the First Edition binder.
-- It lists the articles changed in 2017: 3.8.7 / C3.8.7; 5.3, 5.12.1 / C5.12.1; 10.4.2.1 / C10.4.2.1; 11.5.1, 11.7.2, C11.9.3, C11.9.3.1; 12.1 / C12.1; B.2.
-- Because whole pages are replaced, it also contains the unchanged articles that share those pages.
+Page references below are spec page numbers ("p. 3-16"). Pages marked "(2017)" come from the interim packet. Every provision row in §2 has been checked against the page itself; equations were read from rendered page images.
 
-| Spec pages in the packet | Articles on them (complete or partial) |
-|---|---|
-| 3-17 to 3-22 | 3.8.6 Gust effect factor (complete); 3.8.7 Drag coefficients with Table 3.8.7-1 and notes a–g (complete); commentary |
-| 5-1, 5-2 | 5.1 Scope, 5.2 Definitions, 5.3 Notation (first page only; the notation index gives the article numbers of Section 5) |
-| 5-33 to 5-36 | 5.11.3.1.2 (torsion, multi-sided), 5.11.3.2 (torsion, other shapes), **5.12.1 combined forces (complete, incl. the moment magnifier B)**, 5.12.2 (square/rect. diagonal bending), 5.13 cables, 5.14 welded connections, 5.15 bolted connections, 5.16 anchor bolt connections and 5.16.1 types (start) |
-| 10-1, 10-2 | 10.1–10.4.2.2: **deflection limits (complete for vertical supports)** |
-| 11-3, 11-4 | end of 11.3 notation, **11.4 applicable structure types**, 11.5 design criteria, 11.5.1, start of 11.6 (without Table 11.6-1) |
-| 11-9 to 11-18 | 11.7.1.2 natural wind gust, 11.7.1.3 truck gust, **11.7.2 HMLT fatigue** with Table 11.7.2-1, 11.8, 11.9.1, 11.9.2 nominal stress, 11.9.3 resistance, 11.9.3.1 stress-concentration factors (start: Eq. 11.9.3.1-1, parameters) |
-| 11-21, 11-22 | part of Table 11.9.3.1-1: details 3.2 (reinforced handholes) and 4.1–4.7 (groove-welded) |
-| 11-27 | references |
-| 12-1, 12-2 | 12.1–12.5.1 breakaway |
-| B-1, B-2 | B.1 notation, **B.2 Table B.2-1 (approximate tube properties)** |
+### 0.1 Findings that change the earlier plan (read these)
 
-**Not in the packet** (needed from the engineer's First Edition book; list in §7):
-- Section 3 except 3.8.6–3.8.7: load combinations Table 3.4-1, dead/live loads, ice, the wind pressure equation, K_z, K_d, the wind maps and MRIs.
-- Section 4 (analysis; the magnifier B for non-prismatic members).
-- Section 5.4–5.11.3.1.1: materials, resistance factors, details (5.6, incl. base plates 5.6.6), width-thickness (5.7), flexure (5.8), tension (5.9), compression (5.10), shear and round torsion (5.11.2, 5.11.3.1.1).
-- 11.6 Table 11.6-1, 11.7.1.1 galloping, the rest of Table 11.9.3.1-1 and Table 11.9.3.1-2.
-- Section 13 foundations; Section 2 (breakaway location rules).
+1. **No ice-plus-wind combination; ice is not a separate load column.** Table 3.4-1 (p. 3-3) has Strength I (gravity; Arts. 3.5, 3.6, 3.7), Extreme I (wind), Service I, Service III, Fatigue I and II. C3.7 (p. 3-4) says the ice-and-wind combinations were removed because they do not control (NCHRP 796). Art. 3.7 lets atmospheric ice be applied around members (one face of sign panels), with the Owner specifying special icing. It gives no thickness.
+   - **Plan:** ice is an optional, Owner-specified gravity load in Strength I, factored with DC at 1.25, with no wind on ice. Flagged "engineer to confirm" (Q-C1).
+2. **Roadside sign supports use the 10-year MRI** (note to Table 3.8-1, p. 3-5), i.e. the Figure 3.8-4 speed, at Extreme I. Luminaire poles use 300, 700 or 1,700 years by risk category and ADT.
+3. **Wind from any direction** (Art. 3.9.3, Table 3.9.3-1, pp. 3-23, 3-24) uses three load cases: full normal; full transverse; 0.75 × both at once. The tool's 4 azimuths cover cases 1 and 2. **Case 3 is added in the LTS mode** (the four diagonals, each 0.75·BL_n + 0.75·BL_t).
+4. **Torsion for concentric attachments** (Art. 3.9.4.2, p. 3-25): for roadside signs on a single support, pole-top luminaires and high-level poles, the torsion is W × 0.15b (b = out-to-out width of the attachments). Non-concentric attachments use the net torque.
+   - This replaces the IBC mode's ASCE 7 Case B (0.2B) on monoposts in the LTS mode.
+   - Two-post signs are not "single supports", so no eccentric case is required. Decision: follow the article and flag it (Q-C2).
+5. **Second-order effects, Art. 4.8.1 (p. 4-3), simplified method:** B₂ = 1/(1 − P_eq/P_Euler,bottom) ≥ 1.0, where
+   - P_eq = (I_B/I_T)^(1/3)·P_T + 0.38·D_P;
+   - P_Euler,bottom = π²EI_B/(kL)²;
+   - k = 2.0, and r is taken at 0.5L (C4.8.1);
+   - valid when kL/r ≥ 2π√(E/F_y); otherwise the detailed method (Art. 4.8.2) is required.
+   
+   This is the tapered-member magnifier that Art. 5.12.1 (2017) calls for. It replaces the tool's AISC App. 8 B₂ in the LTS mode.
+6. **LRFDLTS 1st Ed. has no base-plate bending method.**
+   - Art. 5.6.3 (p. 5-7) only says the base-plate thickness "shall be considered" in tube-to-plate connections. It sets minimum thicknesses (Table 5.6.3-1: 1.5 in for D ≤ 8 in, 2.0 in for D > 8 in) **only for supports designed for fatigue under Section 11**, which excludes everything in scope.
+   - C5.16.3 (p. 5-37) allows AISC Design Guide 1 for anchor bolts. Section 15's references include Cook et al. (1995), *Design Procedure for Annular Base Plates*.
+   - So the tool's "LTS bending-line method" (LP-5, #561) is **not an LRFDLTS article**. In LTS-6 the "VERIFY … 2nd Ed." note becomes "Method: bending line at the pole face (yield-line, as in AISC DG1 / Cook et al. 1995). LRFDLTS 1st Ed. (2017) Art. 5.6.3 requires the plate thickness to be considered but gives no method — engineer to confirm" (Q-C3).
+7. **Welds:** Art. 5.14 (p. 5-35, 2017) refers to AWS D1.1 (2010) and gives no strength method. **Coordinator decision Q-B5:** check the base weld per AWS D1.1 / AISC 360-16 §J2 with LTS φ, with a note.
+8. **Fatigue is not required in scope** (Art. 11.4, p. 11-3 (2017); Art. 11.7.2, p. 11-10 (2017)). Square cross-sections: Art. 5.6.2 (p. 5-6) requires tubular supports to be round or multi-sided, and C5.6.2 says square or rectangular sections should not be used for highway sign, signal and high-level luminaire supports. **Coordinator decision Q-B6:** warn (do not block), citing Art. 5.6.2 / C5.6.2 and C11.4.
+9. **Foundations, Section 13** (pp. 13-1 to 13-5):
+   - Design follows AASHTO LRFD BDS Section 10, the "preferred method".
+   - Broms' procedures (C13.6.1.1) may be used "in lieu of more detailed procedures", with the **factored** groundline M_F and V_F from Section 3.
+   - Shafts must resist the applied torsion (Art. 13.6), but no method is given.
+   - **Structural design is per AASHTO LRFD BDS** (Art. 13.6.2), not ACI 318.
+   - Details: 3 in minimum cover; diameters in 6 in increments (Art. 13.6.2.1).
+   - So in the LTS mode the tool keeps its ACI 318-19 shaft check, flagged "LRFDLTS Art. 13.6.2 calls for AASHTO LRFD BDS; ACI 318-19 used — engineer to confirm" (Q-C4).
+10. **Anchor bolts** (Art. 5.16, 2017 pages; Arts. 5.16.2–5.16.3, p. 5-37 of the book): F1554 Gr 36/55/105, A706 bars; anchorage design per ACI 318-11 App. D (C5.16.3). In the tool these are designed in the Anchorage app (ACI 318-19 Ch. 17) — noted.
 
-**Consequence.** Phase B cannot start: wind pressure, load combinations and member resistances are all missing. This docs PR (B-0) records what the packet confirms, and §7 lists the pages needed.
-
-### 0.2 "2nd Ed." references in the repo (change in Phase B, not now)
-
-These on-screen texts and code comments still say "LRFDLTS 2nd Ed.". They change to "AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions" in the Phase B PR named against each. Each change is a display change with a fixlog entry. Fixlog entries already merged (LP0-1, LP5-1, LP15-1) are history and stay as written; the Phase B entry records the correction.
+### 0.2 "2nd Ed." references in the repo (corrected in Phase B)
 
 | File | Where (anchor) | Text now | Change in |
 |---|---|---|---|
-| `Light Pole and Sign Post.html` | masthead `id="lppScope"` (LP0-1), also on the report cover | "… AASHTO LRFDLTS 2nd Ed. highway supports are a separate mode (coming) …" | LTS-1 (the scope line becomes mode-dependent) |
-| `Light Pole and Sign Post.html` | `const LPP_BP_VERIFY=` (LP15-1; base-plate worked block, Summary warnings, Report) | "VERIFY the base-plate method against AASHTO LRFDLTS 2nd Ed. — …" | **LTS-6**, with Art. 5.6.6.1 confirmed from the book pages |
+| `Light Pole and Sign Post.html` | masthead `id="lppScope"` (LP0-1), report cover | "… AASHTO LRFDLTS 2nd Ed. highway supports are a separate mode (coming) …" | LTS-1: mode-dependent scope line with the Q-B1 basis text |
+| `Light Pole and Sign Post.html` | `const LPP_BP_VERIFY=` | "VERIFY the base-plate method against AASHTO LRFDLTS 2nd Ed. — …" | LTS-6, per §0.1 item 6 |
 | `Light Pole and Sign Post.html` | comment in `anchorBolts()` above the base-plate block | "… until the AASHTO LRFDLTS 2nd Ed. mode is added." | LTS-6 |
-| `Light Pole and Sign Post.html` | `basePlateWorkedHTML()`, the `eq-why` line on the double-nut base | "… (and in the AASHTO LRFDLTS 2nd Ed. mode until that mode is added) …" | LTS-6 |
-| `BasePlateAnchorDesigner.html` | circular base-plate step `ref:"AASHTO LRFDLTS 2nd Ed., …"` | worked-step reference | **Another tool**: its own one-tool PR (CLAUDE.md §7) after LTS-6 |
+| `Light Pole and Sign Post.html` | `basePlateWorkedHTML()` `eq-why` line | "… (and in the AASHTO LRFDLTS 2nd Ed. mode until that mode is added) …" | LTS-6 |
+| `BasePlateAnchorDesigner.html` | circular base-plate step `ref:"AASHTO LRFDLTS 2nd Ed., …"` | worked-step reference | another tool: its own PR after LTS-6 (CLAUDE.md §7) |
 
-Confidence / status column key (§2):
-- **Confirmed**: from the provided 2017 interim packet, with article / equation / table and spec page.
-- **Index only**: the article number is confirmed by the Section 5 notation index (Art. 5.3, p. 5-2), but its content is not in the packet.
-- **Not in the provided document**: my earlier recollection, kept for orientation. **The engineer must supply the page.**
-- **Tool**: already in the tool and accepted by the engineer (fixlog reference).
+Status key for §2: **Confirmed** = read on the cited page. **Decision** = the provision leaves a choice; the choice is recorded, flagged "engineer to confirm" on screen, and listed in §4.
 
 ---
 ## 1. Scope
@@ -74,9 +77,9 @@ Confidence / status column key (§2):
 
 | Structure | Tool geometry today | LTS mode |
 |---|---|---|
-| **Luminaire pole with arms** (roadway lighting, one or more davit/truss-type arms or a post-top luminaire) | Pole mode: height H; round tapered tube (top and base OD and wall), or square/rect HSS (prismatic); fixtures table: mounting height, azimuth θ, arm length a, EPA, ice EPA, weight, arm OD; arm wind and fixture torsion (LP-7) | **Yes.** Same geometry. Adds a **multi-sided (8-, 12-, 16-sided) tapered section** option (LTS member checks and C_d depend on it). Cables are hidden (see §1.3). |
-| **Monopost sign** (ground-mounted roadside sign on one post) | Sign mode, 1 post: panel B × s, clearance, panel weight, post shape and size; Case A/B/C wind; torsion | **Yes.** LTS sign C_d replaces ASCE 7 Fig. 29.3-1 Cases A/B/C (LTS applies a single drag coefficient by aspect ratio; eccentric/torsion load case to be confirmed, Q7). |
-| **Two-post sign** | Sign mode, 2 posts at spacing L_p, two shafts | **Yes.** Same statics split as the IBC mode. |
+| **Luminaire pole with arms** (roadway lighting, one or more davit/truss-type arms or a post-top luminaire) | Pole mode: height H; round tapered tube (top and base OD and wall), or square/rect HSS (prismatic); fixtures table: mounting height, azimuth θ, arm length a, EPA, ice EPA, weight, arm OD; arm wind and fixture torsion (LP-7) | **Yes.** Same geometry. Multi-sided (8-, 12-, 16-sided) sections are added in LTS-3b. Square/rect. sections get a warning (Art. 5.6.2 / C5.6.2, Q-B6). Cables are hidden (see §1.3). |
+| **Monopost sign** (ground-mounted roadside sign on one post) | Sign mode, 1 post: panel B × s, clearance, panel weight, post shape and size; Case A/B/C wind; torsion | **Yes.** LTS sign C_d (Table 3.8.7-1 by L/W) replaces ASCE 7 Fig. 29.3-1 Cases A/B/C; torsion T = W·0.15b (Art. 3.9.4.2); 10-yr MRI wind (Table 3.8-1 note). |
+| **Two-post sign** | Sign mode, 2 posts at spacing L_p, two shafts | **Yes.** Equal split under normal wind (no eccentric case, Q-C2); 10-yr MRI wind. |
 
 ### 1.2 Later or out of scope
 
@@ -93,161 +96,147 @@ Confidence / status column key (§2):
 ### 1.3 What the tool's geometry can represent (and what it can't)
 
 - **Can:** a vertical cantilever pole or post on a drilled shaft; tapered round tubes (linear taper); prismatic square/rect HSS; point masses and areas at heights (fixtures, arms as short members with projected area and weight); a flat sign panel with clearance; one or two posts; round or square shafts in one soil layer (IBC classes, or Broms cohesive/cohesionless for the reference check); a double-nut base plate (circle of n rods).
-- **Can't (today):** multi-sided sections (added in Phase B); slip-fit or flange splices along the pole; a handhole (added as a detail input in Phase B for fatigue and the strength check); long arms as members; transformer bases; layered soil.
+- **Can't (today):** multi-sided sections (added in Phase B); slip-fit or flange splices along the pole; a handhole (LRFDLTS gives detailing rules only, Art. 5.6.6.1; not modelled); long arms as members; transformer bases; layered soil.
 
 ---
 
-## 2. Provision map (status after the 2017 interim packet, 2026-11-02)
+## 2. Provision map (AASHTO LRFDLTS 1st Ed. 2015 with 2017 Interim Revisions; checked 2026-11-02)
 
-One row per computed check or value. Forms are paraphrased; coefficients are given only where the packet confirms them (needed to implement and to hand-check). "Was" records where my earlier recollection differed.
+Forms are paraphrased; symbols as in the tool. Every row has been read on the cited page. "Was" notes where my earlier recollection differed.
 
-### 2.1 Design life, recurrence, wind speed
+### 2.1 Loads, limit states and wind speed
 
-| # | Computed / value | Article | Form to implement | Default | Status |
-|---|---|---|---|---|---|
-| W1 | Design life and risk category | Section 3 (believed Art. 3.8 / table of design life and MRI) | User selects risk category; MRI shown | Typical | **Not in the provided document** |
-| W2 | Basic wind speed V (3-s gust) by MRI | Art. 3.8.2 and the wind maps (believed) | **Input** V (map value), MRI shown; no maps in the tool | 130 mph placeholder | **Not in the provided document.** C3.8.7 (p. 3-17) confirms that the wind speeds are the ASCE/SEI 7-10-based extreme speeds ("typically 105 mph or greater"). |
-| W3 | Service I wind speed | Section 3 (believed) | **Input** V_svc | placeholder | **Not in the provided document** |
-| W4 | Yearly mean wind speed (fatigue) | Art. 11.7.1.2 (p. 11-9); Art. 11.7.2 and Fig. 11.7.2-1 (pp. 11-10, 11-11) | Natural-wind-gust pressure is based on V_mean = 11.2 mph, with an optional site-specific (V_mean/11.2)² form (Eq. C11.7.1.2-1). HMLT: V_mean from Fig. 11.7.2-1 | — | **Confirmed**, but **not used**: fatigue does not apply to the structures in scope (F1) |
+| # | Computed / value | Article / eq. / table (page) | Form to implement | Status |
+|---|---|---|---|---|
+| L1 | Limit states and load factors | **Table 3.4-1** (p. 3-3) | **Strength I** (gravity): 1.25·DC + 1.6·LL (refs. 3.5, 3.6, 3.7). **Extreme I** (wind): DC at 1.1 (max) and 0.9 (min) + 1.0·W, with V from Figs. 3.8-1/-2/-3. **Service I**: 1.0·DC + 1.0·W, with V from Fig. 3.8-4 (10-yr). Fatigue I: 1.0 × the Section 11 loads. Service III (prestressed concrete) and Fatigue II (evaluation) are not used. | Confirmed. Was "Table 3.4.1-1, with ice combinations". |
+| L2 | Dead load DC | **Art. 3.5** (p. 3-4) | weight of the support, signs, luminaires, signals and permanent attachments (walkways included), applied at their centres of gravity; manufacturers' weights allowed | Confirmed |
+| L3 | Live load LL | **Art. 3.6** (p. 3-4) | 0.5 kip over 2 ft, for walkway and platform members only → **not applicable** in scope (shown as N/A) | Confirmed |
+| L4 | Ice | **Art. 3.7, C3.7** (p. 3-4) | Atmospheric ice may be applied around members, and on one face of sign panels; the Owner specifies special icing. No thickness or pressure is given, and there is no ice-plus-wind combination. **Decision (Q-C1):** an optional Owner-specified ice weight (input t_ice and density, or none) added to the Strength I gravity case at 1.25; no wind on ice. Default: none. | Confirmed; decision flagged |
+| L5 | Wind MRI | **Art. 3.8, Table 3.8-1** (pp. 3-4, 3-5) | Risk category (Typical / High / Low) × ADT → MRI 300 / 700 / 1,700 yr. **Roadside sign supports: 10-yr MRI (Fig. 3.8-4).** The tool shows the MRI and asks for V. | Confirmed. Was "design life by risk category". |
+| L6 | Basic wind speed V | **Art. 3.8.2** (p. 3-14); Figs. 3.8-1 to 3.8-4 (pp. 3-6 to 3-13): 3-s gust at 33 ft, Exposure C; Art. 3.8.2.1 elevated sites; Art. 3.8.3 special regions (never below the maps) | **Input** V (Extreme I) and V_svc (Service I, Fig. 3.8-4). No maps in the tool. | Confirmed |
 
 ### 2.2 Wind pressure
 
-| # | Computed / value | Article | Form to implement | Default | Status |
-|---|---|---|---|---|---|
-| P1 | Design wind pressure P_z | Art. 3.8.1, Eq. 3.8.1-1 (believed) | P_z = 0.00256·K_z·K_d·G·V²·C_d (believed form) | — | **Not in the provided document** (only G and C_d are) |
-| P2 | K_z | Art. 3.8.4 (believed) | from the book | — | **Not in the provided document** |
-| P3 | K_d | Art. 3.8.5 (believed) | from the book | — | **Not in the provided document** |
-| P4 | Gust effect factor G | **Art. 3.8.6** (p. 3-17) | G is taken as no less than 1.14. The commentary treats these structures as wind-sensitive; a rigorous ASCE 7 gust analysis is allowed only with the Owner's permission. The tool uses G = 1.14 (n₁ is still shown, for information). | 1.14 | **Confirmed.** Was "Art. 3.8.5". |
-| P5 | Velocity conversion C_v for the C_d argument | **Art. 3.8.7** (p. 3-17) | C_v = 0.8 at the Extreme limit state, 1.0 otherwise; the Reynolds-type argument is C_v·V·d (mph·ft) | — | **Confirmed** (new to the plan) |
-| P6 | C_d round (cylindrical) | **Table 3.8.7-1** (p. 3-20) | C_v·V·d ≤ 39: 1.10; 39 < C_v·V·d < 78: 129/(C_v·V·d)^1.3; ≥ 78: 0.45 | — | **Confirmed.** Was "≈ 0.45–0.5". |
-| P7 | C_d 16-sided | Table 3.8.7-1 (p. 3-20) | r_c = corner radius / inscribed-circle radius. Low end 1.10. High end 0.83 − 1.08·r_c for 0 ≤ r_c < 0.26, 0.55 for r_c ≥ 0.26. Transition: the two published expressions in C_v·V·d. Note e: interpolation toward the round value between r_m = 0.26 and r_r = 0.63. | — | **Confirmed.** The transition expressions are garbled in the text extract; they are re-read from the PDF page image before LTS-2 (Q-B2). |
-| P8 | C_d 12-sided | Table 3.8.7-1 (p. 3-20) | 1.20 / 10.8/(C_v·V·d)^0.6 / 0.79; note e: r_m 0.50, r_r 0.75 | — | **Confirmed** |
-| P9 | C_d 8-sided | Table 3.8.7-1 (p. 3-20) | 1.20 constant; note e: r_m 0.75, r_r 1.00 | — | **Confirmed.** Was "≈ 1.2–1.4". |
-| P10 | C_d square | Table 3.8.7-1 (p. 3-20) | 2.0 − 6r_s for r_s < 0.125, 1.25 for r_s ≥ 0.125 (r_s = corner radius / depth, wind normal to a face); diamond 1.70 / 1.90 | — | **Confirmed** (the r_s definition is from the table drawing; to confirm, Q-B2) |
-| P11 | C_d flat members (plates, angles) | Table 3.8.7-1 | 1.70 | — | **Confirmed** |
-| P12 | C_d sign panels | Table 3.8.7-1 (p. 3-19) | By L_sign/W_sign: 1.0 → 1.12; 2.0 → 1.19; 5.0 → 1.20; 10.0 → 1.23; 15.0 → 1.30. Linear interpolation between rows (Q-B3). Dynamic message signs 1.70. | — | **Confirmed.** Was "≈ 1.12 … ≈ 1.19". |
-| P13 | Luminaires and attachments | Table 3.8.7-1 (p. 3-19) | Luminaires: 0.50 (rounded surfaces), 1.20 (flat-sided). Attachments: use the manufacturer's EPA (C_d × area) when given; otherwise C_d = 1.0. Traffic signals 1.20. | EPA | **Confirmed.** The tool's EPA input matches: F = P_z/C_d·EPA, i.e. q·EPA with C_d inside the EPA. |
-| P14 | Elliptical members; two members in line | Table 3.8.7-1 | not used (no such members in scope) | — | Confirmed, not used |
-| P15 | Wind directions | — | the 4 tool azimuths (as IBC mode) | — | **Not in the provided document** (any skew rule for signs is in Section 3) |
-
-### 2.3 Ice, dead and live loads
-
-| # | Item | Article | Status |
-|---|---|---|---|
-| I1 | Ice load | Section 3 (believed Art. 3.7) | **Not in the provided document** |
-| I2 | Dead load | Section 3 (believed Art. 3.6) | **Not in the provided document** (self-weight as in the tool) |
-| I3 | Live load | Section 3 | **Not in the provided document** (expected not applicable: no walkways) |
-
-### 2.4 Load combinations and factors
-
-| # | Item | Article | Status |
-|---|---|---|---|
-| C1–C4 | Strength I, Extreme I (wind; wind + ice), Service I load factors | **Table 3.4-1** (the number is confirmed by Arts. 11.5 and 12.4, pp. 11-3, 12-2) | Table **not in the provided document**. Was "Table 3.4.1-1". |
-| C5 | Fatigue I | Table 3.4-1; Art. 11.5 / 11.5.1 (p. 11-3, 11-4): γ·Δf ≤ φ·ΔF with φ = 1.0 and γ from Table 3.4-1 | **Confirmed** (form and φ); γ not in the packet; fatigue not required in scope (F1) |
-| C6 | Second-order effects | **Art. 5.12.1** (p. 5-34): moment magnifier B. Prismatic member in compression: B = 1/(1 − P_u/P_e), P_e = π²EA_g/(KL/r)² (Eqs. 5.12.1-10, -11). Tension: B = 1.0 (Eqs. 5.12.1-12, -13). **Non-prismatic (tapered) member in compression: B per Section 4.** | Prismatic form **Confirmed**. The tapered-pole method (Section 4) is **not in the provided document**. Until it is provided, the plan keeps the tool's present B₂ from the Rayleigh drift, flagged "verify against LRFDLTS Section 4". |
-
-### 2.5 Member design (Section 5, 2017 text)
-
-The notation index (Art. 5.3, p. 5-2) confirms the Section 5 article layout: 5.6 details (5.6.2, 5.6.3, 5.6.5 backing ring, **5.6.6.1** base plate), 5.7 width-thickness (5.7.2 tubes, 5.7.3 Table 5.7.3-1), 5.8 flexure (5.8.2 round/tubes), 5.9 tension, 5.10 compression (5.10.2.1–5.10.2.3, effective area for slender), 5.11 shear and torsion (5.11.2.1.1 round, 5.11.2.1.2 multi-sided, 5.11.2.2, 5.11.3.1.1 round, 5.11.3.1.2 multi-sided), 5.12 combined. E = 29,000 ksi.
-
-| # | Check | Article | Form | Status |
+| # | Computed / value | Article / eq. / table (page) | Form to implement | Status |
 |---|---|---|---|---|
-| M1 | Resistance factors | Art. 5.5 (5.5.3) | — | **Index only**, not in the provided document |
-| M2 | Width-thickness, round | Art. 5.7.2 | — | **Index only** |
-| M3 | Width-thickness, multi-sided / square | Art. 5.7.2, 5.7.3 (Table 5.7.3-1) | — | **Index only** |
-| M4 | Flexure round / multi-sided / square | Art. 5.8.2 (and 5.8.x) | — | **Index only** |
-| M5 | Shear | Art. 5.11.2.1.1 (round), 5.11.2.1.2 (multi-sided), 5.11.2.2 (square/rect: shear buckling C_v) | — | **Index only** |
-| M6 | Torsion, round | Art. 5.11.3.1.1 | — | **Index only** |
-| M7 | Torsion, multi-sided | **Art. 5.11.3.1.2, Eq. 5.11.3.1.2-1** (p. 5-33) | F_nt = 0.6F_y (no buckling within the width-thickness limits) | **Confirmed** |
-| M8 | Torsion, square/rect. | **Art. 5.11.3.2, Eq. 5.11.3.2-1** (p. 5-33) | F_nt = F_nv | **Confirmed** (F_nv from 5.11.2.2, not provided) |
-| M9 | Axial resistance P_r | Art. 5.10 (compression), 5.9 (tension); P_r = φ_c·P_nc or φ_t·P_nt (Eqs. 5.12.1-8, -9) | | Forms of P_r **Confirmed**; P_n **Index only** |
-| M10 | **Combined forces** | **Art. 5.12.1** (pp. 5-33, 5-34) | If T_u/T_r > 0.20: P_u/P_r + (B·M_u/M_r + V_u/V_r + T_u/T_r)² ≤ 1.0 (Eq. 5.12.1-1). If T_u/T_r ≤ 0.20, shear and torsion may be ignored: P_u/P_r ≥ 0.20 → P_u/P_r + (8/9)·B·M_u/M_r ≤ 1.0 (Eq. 5.12.1-2); P_u/P_r < 0.20 → P_u/(2P_r) + B·M_u/M_r ≤ 1.0 (Eq. 5.12.1-3). Vertical luminaire supports: P_u/(2P_r) may be approximated as 0.08. Round and multi-sided: M_u = √(M_ux² + M_uy²), V_u = √(V_ux² + V_uy²) (Eqs. 5.12.1-4, -5). Biaxial on principal axes (square/rect.): B_x·M_ux/M_rx + B_y·M_uy/M_ry, and V_u/V_r = the larger axis ratio (Eqs. 5.12.1-6, -7). | **Confirmed.** Was "Eq. 5.12.2-1, square of the whole sum". The torsion threshold and the AISC-style branches are new. |
-| M11 | Square/rect. tubes, diagonal bending | **Art. 5.12.2, Eq. 5.12.2-1** (pp. 5-34, 5-35) | interaction with an exponent α (1.6 for compact, 1.0 for slender limits) under skewed loading | **Confirmed** (the α limits refer to 5.7 λ_r and λ_max, not provided) |
-| M12 | Tube properties | Art. B.2, Table B.2-1 (p. B-2) | approximate I, S, A, Z/S, r for round, 16-, 12-, 8-sided, square tubes from R (mid-wall radius) and t (e.g. 8-sided I ≈ 3.50R³t, round 3.14R³t; Z/S 1.27 / 1.27 / 1.26 / 1.24 / 1.12) | **Confirmed.** The tool computes exact polygon properties and shows Table B.2-1 as a cross-check. |
+| P1 | Design pressure | **Eq. 3.8.1-1** (p. 3-14) | P_z = 0.00256·K_z·K_d·G·V²·C_d (psf) | Confirmed |
+| P2 | K_z | **Art. 3.8.4, Eq. 3.8.4-1** (p. 3-15); Table C3.8.4-1 (p. 3-16) | K_z = 2.0·(z/z_g)^(2/α), α = 9.5, z_g = 900 ft (Exposure C), z = the larger of the height and 16 ft. Other exposures only with the Owner's permission (C3.8.4). | Confirmed. Note: 2.0, not ASCE's 2.01. |
+| P3 | K_d | **Table 3.8.5-1** (p. 3-16) | Poles (high-mast and pole): round 0.95, square 0.90, 8/12/16-sided 0.95. Traffic signal, dynamic message sign, overhead frame/truss, and supports with horizontal arms or members carrying signs/signals: 0.85. **Decision (Q-C5):** ground-mounted sign panels have no row; the tool uses the **pole value of the post shape for the whole sign structure** (0.95 round), which is conservative against 0.85. Flagged. | Confirmed; decision flagged |
+| P4 | G | **Art. 3.8.6** (p. 3-17 (2017)) | G = 1.14 (minimum); a rigorous ASCE 7 gust analysis only with the Owner's permission | Confirmed |
+| P5 | C_v | **Art. 3.8.7** (p. 3-17 (2017)) | 0.8 at Extreme, 1.0 otherwise (Service, Fatigue) | Confirmed |
+| P6 | C_d round | **Table 3.8.7-1** (p. 3-20 (2017)) | C_v·V·d ≤ 39 mph·ft: 1.10; 39–78: 129/(C_v·V·d)^1.3; ≥ 78: 0.45 (d in ft) | Confirmed |
+| P7 | C_d 16-sided | Table 3.8.7-1 (p. 3-20 (2017)), read from the page image | 0 ≤ r_c < 0.26: 1.10 / 1.37 + 1.08r_c − C_vVd/145 − C_vVd·r_c/36 / 0.83 − 1.08r_c. r_c ≥ 0.26: 1.10 / 0.55 + (78.2 − C_vVd)/71 / 0.55. Note e transition to round between r_m = 0.26 and r_r = 0.63. r_c = outside corner radius / inscribed-circle radius (Art. 3.3). | Confirmed |
+| P8 | C_d 12-sided | Table 3.8.7-1 | 1.20 / 10.8/(C_vVd)^0.6 / 0.79; note e r_m 0.50, r_r 0.75 | Confirmed |
+| P9 | C_d 8-sided | Table 3.8.7-1 | 1.20 throughout; note e r_m 0.75, r_r 1.00 | Confirmed |
+| P10 | C_d square | Table 3.8.7-1 | 2.0 − 6r_s (r_s < 0.125); 1.25 (r_s ≥ 0.125); r_s = corner radius / depth (Art. 3.3, p. 3-2). Wind on the diagonal (diamond): 1.70 / 1.90. **Rectangular** tubes have no row. **Decision (Q-C6):** use the square value (2.0 − 6r_s, r_s from the corner radius) for both faces. Flagged. | Confirmed; decision flagged |
+| P11 | C_d sign panels | Table 3.8.7-1 (p. 3-19 (2017)) | by L_sign/W_sign (longer/shorter side): 1.0 → 1.12, 2.0 → 1.19, 5.0 → 1.20, 10.0 → 1.23, 15.0 → 1.30. **Coordinator decision Q-B3:** linear interpolation between rows. Ratio > 15: 1.30. | Confirmed; decision recorded |
+| P12 | Luminaires, attachments | Table 3.8.7-1 (p. 3-19 (2017)); **Art. 3.9.1** (p. 3-23) | When the EPA is given (= C_d × area), P_z is computed **without** C_d and multiplied by the EPA. Otherwise C_d = 0.50 (rounded) / 1.20 (flat-sided) for luminaires, 1.0 for other attachments. The tool's fixture input is the EPA. | Confirmed |
+| P13 | Load cases for wind from any direction | **Art. 3.9.3, Table 3.9.3-1** (pp. 3-23, 3-24) | (1) 1.0·BL_n; (2) 1.0·BL_t; (3) 0.75·BL_n + 0.75·BL_t together. The tool runs 0/90/180/270° (cases 1 and 2, both senses) plus the four diagonal combinations of case 3. | Confirmed. Was "4 azimuths". |
+| P14 | Unsymmetrical wind: torsion | **Art. 3.9.4.2, C3.9.4.2** (p. 3-25) | Concentric attachments on single-support roadside signs, pole-top luminaires and high-level poles: T = W·0.15b (b = out-to-out width of the attachments). Non-concentric (arm-mounted fixtures): net torque (the tool's LP-7 fixture torsion). Two-post signs: not named; **Decision (Q-C2):** no eccentric case, posts share equally under normal wind. Flagged. | Confirmed; decision flagged |
+| P15 | Wind on the pole / post | Art. 3.9.3 (W_v) | strip integration of P_z(z)·d(z) with C_d(z) per P6–P10 (d changes with taper) | Confirmed (method as IBC mode) |
 
-### 2.6 Connections and welds
+### 2.3 Analysis and second-order effects
 
-| # | Check | Article | Status |
-|---|---|---|---|
-| J1 | Base-plate thickness (double-nut) | **Art. 5.6.6.1** (number confirmed by the notation index; it uses D) | Content **not in the provided document**. The tool keeps the LP-5 method (b_eff = πD/n) flagged "verify" until the page is provided. |
-| J2 | Minimum plate thickness | Art. 5.6.6 (believed) | **Not in the provided document** |
-| J3 | Welds | **Art. 5.14** (p. 5-35): welding design and fabrication to AWS D1.1 (2010) and D1.4 (2011); fatigue in Section 11 | **Confirmed** (by reference). The weld strength rules are those of AWS D1.1, which is not in the library (Q-B5). |
-| J4 | Backing ring (CJP) | Art. 5.6.5 (backing ring height H) | **Index only** |
-| J5 | Handhole (strength) | Section 5.6 (believed) | **Not in the provided document** |
-| J6 | Anchor bolts | **Art. 5.16, 5.16.1** (pp. 5-35, 5-36): new construction uses cast-in-place anchor bolts; headed by a forged head, nut, washer or plate; hooked bolts only with F_y ≤ 55 ksi; deformed bars allowed; **at least eight bolts for HMLTs**; anchorage design in Section 15 (Art. 5.1) | **Confirmed.** The tool's export sends headed cast-in rods (compliant). The Anchorage app designs them (per #616). New check note: hooked rods with F_y > 55 ksi are not permitted. |
-| J7 | Bolted connections | **Art. 5.15**: per AASHTO LRFD BDS (current) | **Confirmed** (none in scope) |
-
-### 2.7 Fatigue (Section 11)
-
-| # | Item | Article | Status / effect |
-|---|---|---|---|
-| F1 | **Applicability** | **Art. 11.4** (p. 11-3): fatigue design is required for overhead cantilevered sign structures, overhead cantilevered traffic-signal structures, high-mast lighting towers, and overhead non-cantilevered sign and signal structures. C11.4: common lighting poles and roadside signs are not included (no fatigue history), except that square lighting poles are much more fatigue-prone and call for caution. **Art. 11.7.2** (p. 11-10): HMLTs are 55 ft or taller; luminaire supports under 55 ft need no fatigue design. | **Confirmed.** **Effect: no fatigue check for any structure in scope** (luminaire poles < 55 ft; ground-mounted monopost and two-post signs). The LTS mode states this, worked: "H = … ft < 55 ft and not an overhead structure → Art. 11.4 / 11.7.2: fatigue design not required". It warns at H ≥ 55 ft (HMLT, out of scope) and shows the C11.4 caution for square poles. Was a planned full fatigue PR (LTS-4); it becomes an applicability step in LTS-5. |
-| F2 | Fatigue importance factor I_F | Art. 11.6, Tables 11.6-1 / 11.6-2 (p. 11-4) | Article confirmed; tables **not in the provided document**; not needed in scope |
-| F3 | Galloping | Art. 11.7.1.1 | **Not in the provided document**; not applicable (no cantilever arms in scope) |
-| F4 | Natural wind gust | **Art. 11.7.1.2, Eq. 11.7.1.2-1** (p. 11-9): P_NW = 5.2·C_d·I_F psf, applied to overhead sign and signal supports | **Confirmed**; not applicable in scope |
-| F5 | Truck-induced gust | **Art. 11.7.1.3, Eq. 11.7.1.3-1** (pp. 11-9, 11-10): P_TG = 18.8·C_d·I_F psf, overhead sign supports, full up to 20 ft, linear to zero at 33 ft | **Confirmed**; not applicable in scope |
-| F6 | HMLT combined wind | **Art. 11.7.2, Eq. 11.7.2-1, Table 11.7.2-1** (pp. 11-10, 11-11): P_CW = P_FLS·C_d; P_FLS 5.8–7.2 psf by V_mean and category; includes vortex shedding | **Confirmed**; HMLT out of scope |
-| F7 | Vortex shedding (non-HMLT) | — | For HMLTs it is included in P_CW (p. 11-11). A separate article for other structures is **not in the provided document**; not needed in scope. |
-| F8 | Infinite-life criterion | **Art. 11.5, 11.5.1, 11.9.3, Eq. 11.9.3-1** (pp. 11-3, 11-4, 11-14): γ·(Δf)_n ≤ φ·(ΔF)_TH, φ = 1.0, infinite life for new design | **Confirmed**; not needed in scope |
-| F9 | Nominal stress rules (handholes K = 4.0 at the root, socket weld toe on the gross tube, …) | **Art. 11.9.2** (pp. 11-13, 11-14) | **Confirmed**; not needed in scope |
-| F10 | Detail table and K_F/K_I | Table 11.9.3.1-1 (rows 3.2 and 4.1–4.7 in the packet); Eq. 11.9.3.1-1; Table 11.9.3.1-2 missing | Partly in the packet; not needed in scope |
-
-### 2.8 Deflection (Section 10)
-
-| # | Check | Article | Form | Status |
+| # | Item | Article (page) | Form | Status |
 |---|---|---|---|---|
-| D1 | **Luminaire supports** | **Art. 10.4.2.1** (p. 10-1) | Service I (dead load + wind): Δ_top ≤ **10 %** of the structure height. The 2017 interim changed it from 15 %. C10.4.2.1: computed with unit load factors, with second-order effects normally included. | **Confirmed.** Was "≈ 0.15H". |
-| D2 | Vertical supports with transverse loads | Art. 10.4.2.1 | Service I: Δ_top ≤ 2.5 % of the height (C10.4.2.1: developed for strain-pole span-wire dead load) | **Confirmed.** Which structures it applies to in scope (signs?) is Q-B4. |
-| D3 | Vertical supports with moment loads | Art. 10.4.2.1 | Service I: slope at the top ≤ 0.35 in/ft (≈ 1°40′; C10.4.2.1: single mast arm luminaire poles with an eccentric dead load) | **Confirmed.** Applied to poles with unbalanced arms (Q-B4). |
-| D4 | Overhead / horizontal supports | Art. 10.4.1 (L/150), 10.4.2.2 | — | Confirmed; out of scope |
-| D5 | Computation | Art. 10.4.2.1 | elastic deflection by the usual methods; the tool's tapered-pole deflection | **Confirmed** (method allowed) |
+| A1 | Analysis | **Art. 4.5** (p. 4-1) | linear elastic analysis satisfying equilibrium and compatibility (the tool's statics) | Confirmed |
+| A2 | Second order (pole-type) | **Arts. 4.6.1, 4.8, 4.8.1, Eq. 4.8.1-1** (pp. 4-2, 4-3) | B₂ = 1/(1 − P_eq/P_E,bot) ≥ 1.0; P_eq = (I_B/I_T)^(1/3)·P_T + 0.38·D_P (factored); P_E,bot = π²EI_B/(kL)², k = 2.0; r at 0.5L. Valid when kL/r ≥ 2π√(E/F_y); otherwise the detailed method (Art. 4.8.2) is required → the tool reports "B₂ simplified method not valid — detailed analysis required" and **fails the member check**. Prismatic posts: the same equation with I_B = I_T. Applied to bending in Eqs. 5.12.1-1 to -3 (B = B₂). Tension (net uplift): B = 1.0 (Eq. 5.12.1-12, -13). | Confirmed |
 
-### 2.9 Breakaway (Section 12)
+### 2.4 Member design (Section 5)
 
-| # | Item | Article | Status |
+| # | Check | Article / eq. / table (page) | Form | Status |
+|---|---|---|---|---|
+| M1 | Resistance factors | **Art. 5.5.3.2** (p. 5-6); Art. 5.5.4 (same at Extreme) | φ_f 0.90, φ_v 0.90, **φ_t (torsion) 0.95**, φ_c 0.90, φ_u (net fracture) 0.75, φ_y (gross yield) 0.90 | Confirmed. Was "torsion 0.90". |
+| M2 | Minimum thickness | **Art. 5.6.1** (p. 5-6) | pole-type members ≥ 0.125 in (10 % tolerance for gauge material); small roadside sign supports may be thinner → **warning** | Confirmed |
+| M3 | Shape rules | **Art. 5.6.2, Eq. 5.6.2-1, C5.6.2** (pp. 5-6, 5-7) | round or multi-sided only; multi-sided n ≥ max(√(5D), 8), inside bend radius ≥ max(5t, 1 in); square/rect.: **warning** (coordinator decision Q-B6) | Confirmed |
+| M4 | Width-thickness | **Art. 5.7.2, Table 5.7.2-1** (p. 5-14); b by Eq. 5.7.2-1/-2, C5.7.2 | Round D/t: λ_p 0.07E/F_y, λ_r 0.11E/F_y (compression) / 0.31E/F_y (flexure), λ_max 0.45E/F_y. 16-, 12-, 8-sided and square/rect. flanges b/t: λ_p 1.12√(E/F_y); λ_r 1.26 / 1.41 / 1.53 / 1.53 √(E/F_y); λ_max 2.14√(E/F_y). λ > λ_max is not permitted → fail. | Confirmed |
+| M5 | Flexure | **Art. 5.8.1 (Eq. 5.8.1-1), 5.8.2, Table 5.8.2-1** (pp. 5-17, 5-18) | Compact: M_n = M_p = Z·F_y. Noncompact / slender as fractions of M_p: round M_p·[0.77 + 0.016(E/F_y)/(D/t)] / M_p·[0.25(E/F_y)/(D/t)]; 16-sided [2.59 − 1.43(b/t)/√(E/F_y)] / [1.12 − 0.26…]; 12-sided [1.77 − 0.69…] / [1.15 − 0.25…]; 8-sided [1.50 − 0.45…] / [1.14 − 0.22…]; square/rect. [1.37 − 0.33…] / [1.23 − 0.23…]. Multi-sided M_n ≤ that of a round tube of the flat-to-flat diameter. | Confirmed |
+| M6 | Compression | **Art. 5.10.1, 5.10.2.1–5.10.2.3, C5.10.2.1** (pp. 5-27, 5-28) | P_nc = A_g·F_cr; F_cr = Q·0.658^(QF_y/F_e)·F_y when KL/r ≤ 4.71√(E/(QF_y)), else 0.877F_e; F_e = π²E/(KL/r)². Q = 1 when λ ≤ λ_r; round slender Q = 0.67 + 0.038(E/F_y)/(D/t) ≤ 1; multi-sided/square slender Q = A_eff/A_g with b_e = 1.92t√(E/f)[1 − 0.34/(b/t)·√(E/f)] ≤ b, f = F_cr at Q = 1. Cantilever K = 2.1 (C5.10.2.1); r at 0.5L for tapered. | Confirmed |
+| M7 | Shear | **Art. 5.11.1, 5.11.2, 5.11.2.1.1, 5.11.2.1.2, 5.11.2.2** (pp. 5-30 to 5-32) | V_n = A_v·F_nv. Round: F_nv = the greater of 1.60E/[√(L_v/D)·(D/t)^(5/4)] and 0.78E/(D/t)^(3/2), ≤ 0.6F_y; A_v = A_g/2; L_v = distance from maximum to zero shear (cantilever: the shear span = the height to the resultant; **decision:** the full height L, which is conservative). Multi-sided: F_nv = 0.6F_y, A_v = A_g/2. Square/rect.: F_nv = 0.6F_y·C_v (k_v = 5; h/t limits 1.10 / 1.37 √(k_vE/F_y)), A_v = 2ht. | Confirmed |
+| M8 | Torsion | **Art. 5.11.3, 5.11.3.1.1** (p. 5-32); 5.11.3.1.2, 5.11.3.2 (p. 5-33 (2017)); **Table B.3-1** (p. B-3) for C_t | T_n = C_t·F_nt. Round: F_nt = the greater of 1.23E/[√(L/D)·(D/t)^(5/4)] and 0.6E/(D/t)^(3/2), ≤ 0.6F_y, with C_t = 2πR²t (R mid-wall radius). Multi-sided: F_nt = 0.6F_y, C_t per Table B.3-1 (e.g. 8-sided 6.63R²t/k_t). Square/rect.: F_nt = F_nv. | Confirmed |
+| M9 | Tension (uplift) | Art. 5.9 (p. 5-25) | P_r = φ_y·A_g·F_y (gross yield) | Confirmed |
+| M10 | Combined forces | **Art. 5.12.1, Eqs. 5.12.1-1 to -13** (pp. 5-33, 5-34 (2017)) | T_u/T_r > 0.20: P_u/P_r + (B·M_u/M_r + V_u/V_r + T_u/T_r)² ≤ 1.0. T_u/T_r ≤ 0.20: P_u/P_r ≥ 0.20 → P_u/P_r + (8/9)·B·M_u/M_r ≤ 1.0; P_u/P_r < 0.20 → P_u/(2P_r) + B·M_u/M_r ≤ 1.0 (luminaire supports may use P_u/2P_r = 0.08; the tool computes it). Round/multi-sided: M_u, V_u as vector sums. Square/rect.: B_x·M_ux/M_rx + B_y·M_uy/M_ry; Art. 5.12.2 diagonal bending (Eq. 5.12.2-1) also checked. | Confirmed |
+| M11 | Check sections | — | base, and every 1 ft up the taper, as the IBC mode (tapered properties) | Tool |
+| M12 | Multi-sided geometry | Art. 5.7.2 / C5.7.2; Table B.2-1 (p. B-2 (2017)) | polygon properties computed exactly; Table B.2-1 shown as a cross-check | Confirmed (LTS-3b) |
+
+### 2.5 Connections
+
+| # | Check | Article (page) | Form | Status |
+|---|---|---|---|---|
+| J1 | Base-plate thickness | **Art. 5.6.3** (p. 5-7); Table 5.6.3-1 (p. 5-8), for fatigue-designed supports only; C5.16.3 (p. 5-37) | no LRFDLTS method → the tool's bending-line method is kept, labelled as **not an LRFDLTS article** (§0.1 item 6, Q-C3); Table 5.6.3-1 minimums shown as information (fatigue not required in scope) | Confirmed (absence); decision flagged |
+| J2 | Base weld | **Art. 5.14** (p. 5-35 (2017)): AWS D1.1 (2010) | **Coordinator decision Q-B5:** fillet (socket) weld per AWS D1.1 / AISC 360-16 §J2.4 (φR_n = 0.75·0.60F_EXX·0.707w per unit length, LTS has no weld φ) against the peak weld force per inch from M, P, V, T on the weld ring; CJP: the base metal governs (no separate check). Note on screen. | Decision flagged |
+| J3 | Handhole | **Art. 5.6.6.1** (p. 5-9): detailing (opening ≤ 40 % of D for Section 11 supports; corner radii); no strength rule | not checked; note | Confirmed |
+| J4 | Anchor bolts | **Arts. 5.16, 5.16.1 (2017), 5.16.2, 5.16.3** (pp. 5-35 to 5-37): cast-in for new work; F1554 36/55/105, A706; hooked ≤ 55 ksi; ACI 318-11 App. D per C5.16.3 | designed in the Anchorage app (ACI 318-19 Ch. 17) from the exported LTS combinations; note | Confirmed |
+
+### 2.6 Fatigue (Section 11)
+
+| # | Item | Article (page) | Effect | Status |
+|---|---|---|---|---|
+| F1 | Applicability | **Art. 11.4, C11.4** (p. 11-3 (2017)); **Art. 11.7.2** (p. 11-10 (2017)); HMLT definition Art. 5.2 (p. 5-1 (2017)) | Fatigue design is required only for overhead cantilevered and non-cantilevered sign and signal structures and for high-mast lighting towers (≥ 55 ft). Luminaire supports under 55 ft and roadside signs are excluded. The LTS mode shows this as a worked step and warns at H ≥ 55 ft ("HMLT: fatigue design and ≥ 8 anchor bolts (Art. 5.16) required — outside this tool"). | Confirmed |
+| F2–F10 | I_F, galloping, natural wind gust, truck gust, HMLT P_CW, CAFT, details | Arts. 11.6–11.9 | not needed in scope (see the B-0 rows kept in git history, #647) | Confirmed, not used |
+
+### 2.7 Deflection (Section 10)
+
+| # | Check | Article (page) | Form | Status |
+|---|---|---|---|---|
+| D1 | Luminaire supports | **Art. 10.4.2.1** (p. 10-1 (2017)) | Service I (DC + W at V_svc): Δ_top ≤ 0.10·H | Confirmed |
+| D2 | Vertical supports with transverse loads | Art. 10.4.2.1 | Service I: Δ_top ≤ 0.025·H. **Coordinator decision Q-B4:** applied, as the article reads, to the vertical supports it names (street lighting poles, traffic-signal and sign structures) under Service I, i.e. to every structure in scope. Flagged "engineer to confirm" (the commentary describes it as a dead-load aesthetic limit for strain poles). | Confirmed; decision flagged |
+| D3 | Vertical supports with moment loads | Art. 10.4.2.1 | Service I: slope at the top ≤ 0.35 in/ft. Applied when the support carries a moment load (arm-mounted fixtures with a net dead-load moment; eccentric sign attachments); otherwise shown as information (Q-B4). | Confirmed; decision flagged |
+| D4 | Computation | Art. 10.4.2.1, C10.4.2.1 | elastic deflection of the tapered cantilever with unit load factors; second-order amplification by B₂ (C10.4.2.1: normally considered) | Confirmed |
+
+### 2.8 Breakaway (Section 12, and Art. 2.5.2)
+
+| # | Item | Article (page) | Form | Status |
+|---|---|---|---|---|
+| B1 | Breakaway checklist | **Arts. 12.1, 12.3, 12.4, 12.5.1** (pp. 12-1, 12-2 (2017)); **Art. 2.5.2** (breakaway supports in the clear zone), 2.5.2.1, 2.5.2.2 | Checklist (in the clear zone? breakaway hardware MASH-tested; Manufacturer certification; structural capacity at Extreme I; foundation and stub-height notes per 2.5.2.1/2.5.2.2). No calculation. | Confirmed |
+
+### 2.9 Foundations (Section 13)
+
+| # | Check | Article (page) | Form | Status |
+|---|---|---|---|---|
+| G1 | Lateral embedment | **Art. 13.6.1.1, C13.6.1.1, Eqs. C13.6.1.1-1 to -7** (pp. 13-3, 13-4) | Broms with **factored** groundline M_F, V_F (Extreme I envelope). Cohesive: L = 1.5D + q[1 + √(2 + (4H + 6D)/q)], H = M_F/V_F, q = V_F/(9cD). Cohesionless: L³ − 2V_F·L/(K_pγD) − 2M_F/(K_pγD) = 0, K_p = tan²(45° + φ/2), γ including load factors ("conservatively a unit load factor"). M_u in the shaft by Eq. C13.6.1.1-4 / -7. No resistance factor is stated. **Decision (Q-C7):** φ = 1.0 (as printed), with the tool's optional margin input kept. | Confirmed; decision flagged |
+| G2 | Torsion | **Art. 13.6** (p. 13-2): shafts shall resist the applied torsion; no method | the IBC mode's torsion warning (open item N2) kept; T_u shown | Confirmed (no method) |
+| G3 | Structural design | **Art. 13.6.2** (p. 13-5): AASHTO LRFD BDS | the tool's ACI 318-19 P–M, shear and torsion threshold with the LTS factored loads, flagged (Q-C4) | Confirmed; decision flagged |
+| G4 | Details | **Art. 13.6.2.1** (p. 13-5) | cover ≥ 3 in (check); shaft diameter in 6-in increments (warning) | Confirmed |
+| G5 | Soil data | **Art. 13.4** (p. 13-2) | note: geotechnical study required unless the waiver conditions apply | Confirmed |
+
+### 2.10 Export to the Anchorage app
+
+| # | Item | Basis | Form |
 |---|---|---|---|
-| B1 | Requirement and testing | **Art. 12.1, 12.3, 12.4, 12.5.1** (pp. 12-1, 12-2): breakaway supports where the location guidelines of Section 2 require them. Breakaway devices meet MASH (2009) impact criteria. Structural adequacy is shown by the Manufacturer (load tests at least at the Extreme I loads when in question). | **Confirmed**. Checklist only, as planned. The location rule (Section 2) is not in the packet. |
-
-### 2.10 Foundations (Section 13)
-
-| # | Item | Status |
-|---|---|---|
-| G1–G5 | Drilled-shaft lateral (Broms), torsion, load and resistance factors, structural design, minimum embedment | **Not in the provided document**. The tool's Broms reference check cites C13.6.1.1 (accepted earlier); its status as a design method needs Section 13. Art. 5.1 places anchorage requirements in **Section 15**, also not provided. |
-
-### 2.11 Export to the Anchorage app
-
-| # | Item | Basis | Status |
-|---|---|---|---|
-| X1 | `bridgeSuite.v1.anchorGroup` in LTS mode | HANDOFF.md §4.11 (#610) | **Tool** (schema unchanged). The combinations come from Table 3.4-1, which is not in the packet. |
+| X1 | `bridgeSuite.v1.anchorGroup` in LTS mode | HANDOFF.md §4.11 (#610); Table 3.4-1 | Same schema and sign convention. `basis.combos` = "AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions, Table 3.4-1: Extreme I (1.1DC + W, 0.9DC + W; load cases 1–3 of Table 3.9.3-1), Strength I (1.25DC)". M = B₂·M with B₂ per Art. 4.8.1. Service and Fatigue are not sent. |
 
 ## 3. Inputs, saved data, UI, report, tests
 
 ### 3.1 Inputs
 
-**Reused unchanged:** pole height, shape, top/base OD and wall, F_y, density; fixtures table (height, θ, a, EPA, weight, arm OD); sign B, s, clearance, weight, post spacing; shaft shape and size, f′c, f_y, cover, rebar; Broms soil inputs; anchor rods (sent to the Anchorage app); base plate D, F_y, t.
+**Reused unchanged:**
+- the pole: height, shape, top/base OD and wall, F_y, density;
+- the fixtures table (height, θ, a, EPA, weight, arm OD);
+- the sign: B, s, clearance, weight, post spacing;
+- the shaft: shape and size, f′c, f_y, cover, rebar;
+- the Broms soil inputs (Broms becomes the design method in LTS mode);
+- the anchor rods (sent to the Anchorage app);
+- the base plate: D, F_y, t.
 
-**New (LTS mode only; ids prefixed `lts`):**
+**New (LTS mode only; ids prefixed `lts`; each with a default applied in `applyState()` when absent):**
 
 | Id | Input | Default |
 |---|---|---|
-| `ltsEd` | Edition label (display only, not an input) | "AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions; later interims not applied" |
-| `ltsOwner` | Owner: none / RIDOT / MassDOT / CTDOT (applies §6 rules: notes, defaults, checklist items) | none |
-| `ltsRisk` | Risk category: Low / Typical / High | Typical |
-| `ltsV` | Basic wind speed V for that MRI (mph) | 130 (placeholder, engineer to set) |
-| `ltsVsvc` | Service wind speed (mph) | 76 (placeholder) |
-| `ltsExpo` | Exposure (C; B/D if allowed) | C |
-| `ltsKdMode` | K_d: table / override | table |
-| `ltsIceMode` | Ice: LTS 3 psf rule / ASCE 7-22 Ch. 10 | per Q5 |
-| `ltsEpaBasis` | Luminaire EPA basis: manufacturer (C_d incl.) / projected × C_d | manufacturer |
-| `ltsSides` | Multi-sided: 8 / 12 / 16 (with shape "Multi-sided" added to `poleShape` **in LTS mode only**) | 16 |
-| `ltsRc` | Multi-sided: corner radius / inscribed radius r_c (Table 3.8.7-1 note e); square: r_s | lowest reasonable value (C3.8.7: conservative when unknown) |
-| `ltsBaseDet` | Pole-to-plate detail: socket fillet / CJP with backing ring (weld strength per Q-B5; no fatigue in scope) | socket fillet |
-| `ltsWeldW` | Socket fillet size, in | 5/16 |
-| `ltsFexx` | Weld F_EXX, ksi | 70 |
-| `ltsHH` | Handhole: none / reinforced; height above base, size | reinforced, 1.5 ft, 4 × 6.5 in |
-| `ltsDefLim` | Deflection limits: code (Art. 10.4.2.1: 10 % H luminaire; 2.5 % H / 0.35 in/ft per Q-B4) or a stricter user value | code |
-| `ltsClearZone` | Breakaway checklist: in the clear zone? | no |
-| `ltsPhiSoil` | Soil resistance factor for Broms | per Q19 |
+| `ltsRisk` | Risk category: Typical / High / Low (Table 3.8-1) | Typical |
+| `ltsAdt` | ADT band: < 100 / 100–1,000 / 1,000–10,000 / > 10,000 (Table 3.8-1) | 1,000–10,000 |
+| `ltsV` | Basic wind speed V for the MRI shown (Figs. 3.8-1 to -3; Fig. 3.8-4 for roadside signs) | 130 mph (placeholder; the map value is the user's) |
+| `ltsVsvc` | Service wind speed, 10-yr (Fig. 3.8-4) | 76 mph (placeholder) |
+| `ltsIce` | Owner-specified ice (Art. 3.7): none / radial thickness t_ice, in (density 57 pcf), Strength I only | none |
+| `ltsRc` | Corner radius ratio: r_c (multi-sided) or r_s (square) | 0 (square: 2.0 C_d), conservative |
+| `ltsSides` | Multi-sided: 8 / 12 / 16 (LTS-3b; adds "Multi-sided" to `poleShape` in LTS mode only) | 16 |
+| `ltsWeld` | Base weld: socket fillet w (in), F_EXX (ksi) / CJP | fillet 0.3125 in, 70 ksi |
+| `ltsClearZone` | Breakaway checklist: in the clear zone? (Art. 2.5.2) | no |
+| `ltsPhiSoil` | Broms resistance factor (Q-C7) | 1.00 |
+
+The basis line is display only: "AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions; later interims not applied".
+
+**Not used in LTS mode** (kept in the saved state, untouched): the ASCE inputs (V, exposure, K_zt, K_d, G/β, ice basis, I_i, V_ice); IBC soil class, S₁ and q_allow; the cables.
 
 ### 3.2 Saved data (CLAUDE.md §5)
 
@@ -261,7 +250,7 @@ The notation index (Art. 5.3, p. 5-2) confirms the Section 5 article layout: 5.6
 ### 3.3 UI
 
 - **Mode selector:** a second segmented control in the mode card, above Light pole / Sign: **"IBC 2021 / ASCE 7-22"** (default) | **"AASHTO LRFDLTS"**. The masthead code tag and the scope line (LP0-1) change with the mode.
-- **Inputs:** card 1 (wind) shows the LTS wind inputs instead of the ASCE ones; the ice card follows Q5; the cable card is replaced by the "not supported" note; a new card "Base weld & handhole"; the soil card makes Broms the design method (IBC soil class hidden).
+- **Inputs:** card 1 (wind) shows the LTS wind inputs instead of the ASCE ones; the ice input follows Q-C1 (Strength I gravity only); the cable card is replaced by the "not supported" note; a new card "Base weld & handhole"; the soil card makes Broms the design method (IBC soil class hidden).
 - **Output tabs:** same tabs. Loading (LTS P_z worked per component, combinations table of Table 3.4-1); Post (Section 5 checks, combined-force equation, deflection and the fatigue-applicability step); Anchorage (export of LTS combos); Shaft (Broms design + torsion + ACI structural); Summary (LTS verdict list, with breakaway checklist and deflection); Report / Drawings (mode-dependent labels and notes; the Calc sheet was retired in #625, the Report is the one report).
 - §6 links: every quoted value links to its worked block (in-app) and "see §x.y" in print, as now.
 
@@ -272,65 +261,104 @@ The notation index (Art. 5.3, p. 5-2) confirms the Section 5 article layout: 5.6
 
 ### 3.5 Test plan
 
-- `tests/engine/lightpole.test.mjs` gains an LTS block per Phase B PR (the harness `tests/engine/lp-source.mjs` already loads the page's functions).
-- Every PR: `node tests/check-syntax.mjs`; `node tests/engine/run.mjs lightpole`; `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves` (**IBC mode identical**, cable values identical); `tests/smoke/lightpole-anchor-handoff.mjs`; one page-load smoke check (0 console errors) and screenshots at 1280 / 390 px.
-- **Hand-check cases** (computed by hand in Phase B, after the engineer's answers fix the coefficients; inputs fixed now):
+- `tests/engine/lightpole.test.mjs` gains an LTS block per Phase B PR. The harness `tests/engine/lp-source.mjs` already loads the page's functions.
+- Every PR runs:
+  - `node tests/check-syntax.mjs`;
+  - `node tests/engine/run.mjs lightpole`;
+  - `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: **IBC mode identical**, cable values identical;
+  - `tests/smoke/lightpole-anchor-handoff.mjs`;
+  - one page-load smoke check (0 console errors) and screenshots at 1280 / 390 px.
+- **Hand-check cases.** Inputs are fixed now; each PR works its part by hand in the fixlog and asserts it in the test.
 
-**HC-1 Luminaire pole.** 40 ft round tapered steel pole, base OD 8.0 in, top OD 4.5 in (taper 0.0875 in/ft), wall 0.1793 in (7 ga), F_y 55 ksi; one 8 ft davit arm at 38 ft, OD 2.375 in; one luminaire at the arm tip, EPA 1.2 ft² (manufacturer, drag included), 55 lb; Risk Typical, V 130 mph, Exposure C, V_svc 76 mph; socket-fillet base weld 5/16 in E70; handhole reinforced at 1.5 ft; base plate D 15 in, t 1.25 in, F_y 36, 4 × 1 in rods on BC 13 in; round shaft 30 in, cohesionless φ = 30°, γ = 115 pcf. Hand values to produce: K_z at 5 ft strips and at 38 ft; C_d (round) at the base and the top, with C_v = 0.8 (Extreme) and 1.0 (Service); P_z; base V, M, T; B; λ and class at the base; φM_n, φV_n, φT_n, φP_n; T_u/T_r and the Art. 5.12.1 branch; combined ratio; t_req; weld stress; fatigue applicability (40 ft < 55 ft → not required); Δ_top (Service I) ≤ 0.10·H = 48 in and the top slope vs 0.35 in/ft (Q-B4); Broms embedment; export combination 1 values.
+**HC-1 Luminaire pole (LTS).**
+- **Pole:** 40 ft round tapered steel, base OD 8.0 in, top OD 4.5 in (taper 0.0875 in/ft), wall 0.1793 in, F_y 55 ksi, 490 pcf.
+- **Fixture:** one luminaire at 40 ft on a 6 ft arm at θ = 0°, EPA 1.2 ft² (manufacturer), 55 lb; arm OD 2.375 in.
+- **Wind:** Typical risk, ADT 1,000–10,000 → MRI 700 yr; V 130 mph; V_svc 76 mph.
+- **Base plate:** D 15 in, t 1.25 in, F_y 36; 4 × 1 in rods on a 13 in BC.
+- **Base weld:** socket fillet 0.3125 in, E70.
+- **Shaft:** round 30 in; cohesionless φ = 30°, γ = 115 pcf.
+- **To produce by hand:** K_z at the strip mid-heights and at 40 ft; C_d (round) along the pole at C_v = 0.8 (Extreme) and 1.0 (Service); P_z; fixture force; base V, M and T for load cases 1–3 (Table 3.9.3-1); B₂ (Art. 4.8.1) and its validity limit; D/t and class at the base; φM_n, φV_n, φT_n and φP_nc; the Art. 5.12.1 branch and ratio; the 0.10H, 0.025H and slope checks; weld stress; Broms L; export combination 1.
+- **Already worked** (§2 values): C_d at the base under Extreme I: C_v·V·d = 0.8·130·0.6667 = 69.33 → 129/69.33^1.3 = 129/247.3 = **0.522**. At the top: 0.8·130·0.375 = 39.0 → **1.10**. K_z(40 ft) = 2.0·(40/900)^(2/9.5) = 2.0·0.5190 = **1.038** (Table C3.8.4-1: 1.04 ✓).
 
-  Already computable from the packet: C_d at the base under Extreme I, with C_v·V·d = 0.8·130·(8/12) = 69.3 mph·ft, in the 39–78 range: C_d = 129/69.33^1.3 = 129/247.3 = 0.522. At the top (4.5 in): 0.8·130·0.375 = 39.0 → C_v·V·d ≤ 39, so the 1.10 branch applies: C_d = 1.10. (The middle-branch formula gives 129/117.05 = 1.102 at 39, so the table is very nearly continuous there.) Service I with V_svc = 76: base 1.0·76·0.667 = 50.67 → 129/164.5 = 0.784.
-
-**HC-2 Monopost sign.** Panel 8 ft wide × 5 ft high, clearance 7 ft (top at 12 ft), panel 4 psf; round post 6.625 × 0.280 in (A500 Gr C, F_y 50; t_des per Q11), one post; Risk Typical, V 130 mph; base plate D 14 in, t 1.25 in, 4 × 1 in rods on BC 11 in; round shaft 30 in, cohesive c_u = 1,000 psf. Hand values: C_d (sign L/W = 8/5 = 1.6 → between 1.12 at 1.0 and 1.19 at 2.0; linear 1.12 + 0.6·0.07 = 1.162, per Q-B3), P_z at the panel centroid, F, torsion from any eccentric case (Q7), M, V, T at the base; post checks; t_req; Broms embedment and shaft torsion; fatigue applicability (roadside sign, Art. 11.4 → not required); deflection 2.5 % H (Q-B4).
+**HC-2 Monopost sign (LTS).**
+- **Sign:** 8 ft wide × 5 ft high panel, clearance 7 ft (top at 12 ft), 4 psf.
+- **Post:** round 6.625 × 0.280 in, F_y 42 ksi (pipe).
+- **Wind:** roadside sign → 10-yr MRI, V = V_svc = 76 mph.
+- **Base plate:** D 14 in, t 1.25 in; 4 × 1 in rods on an 11 in BC.
+- **Shaft:** round 30 in, cohesive c_u = 1,000 psf.
+- **To produce by hand:** C_d (L/W = 1.6 → 1.12 + 0.6·(1.19 − 1.12) = **1.162**), K_z at the panel centroid (9.5 ft → z = 16 ft → K_z = 2.0·(16/900)^0.2105 = **0.856**), P_z, F, T = F·0.15·8 ft, base M, V, T; post checks; B₂; deflection; Broms L (cohesive); export.
 
 ---
 
-## 4. Questions for the engineer: status after the 2017 interim packet
+## 4. Questions: answers from the book, decisions, and what is still open
 
-**Answered from the packet:**
-- **Q0** Basis: 1st Ed. (2015) with the 2017 interim (engineer, 2026-11-02).
-- **Q2 (part)** G = 1.14 minimum (Art. 3.8.6). The P_z equation itself is not in the packet.
-- **Q6** C_d: Table 3.8.7-1 and C_v (Art. 3.8.7): round, 8/12/16-sided, square, flat, signs by L/W, luminaires 0.50/1.20, attachments by EPA or C_d = 1.0 (§2.2 P5–P13). The manufacturer's EPA includes C_d.
-- **Q8 (part)** The table is Table 3.4-1 (its content is not in the packet). Second order: magnifier B per Art. 5.12.1 for prismatic members; Section 4 for tapered ones.
-- **Q10 (part)** Combined-force equations, Art. 5.12.1 (§2.5 M10). Multi-sided torsion F_nt = 0.6F_y. The classes, M_n, V_n, round T_n and P_n are not in the packet.
-- **Q12b (part)** Welds to AWS D1.1 (Art. 5.14).
-- **Q13** Fatigue applicability: not required for luminaire poles < 55 ft or roadside signs (Arts. 11.4, 11.7.2); infinite life only (Art. 11.5).
-- **Q14, Q15, Q16a, Q16b** Moot in scope (no fatigue). Q16b: the Anchorage app needs no fatigue check for these structures.
-- **Q17** Deflection: luminaire supports 10 % H under Service I; 2.5 % H for transverse loads; 0.35 in/ft slope for moment loads (Art. 10.4.2.1).
-- **Q18** Breakaway: checklist, with MASH and Manufacturer certification (Section 12).
-- **Q21 (part)** FHWA incorporated the 1st Ed. with the 2017 and 2018 interims (Federal Register 2018-11-01), so the 2017 basis is FHWA-approved for RIDOT NHS work.
+**Answered from the book (articles in §2):**
+- **Q0** Basis.
+- **Q1** MRI by risk category and ADT, Table 3.8-1; roadside signs 10-yr; maps Figs. 3.8-1 to -4 (ASCE 7-10-based).
+- **Q2** P_z equation; G = 1.14.
+- **Q3** K_z with 2.0, α 9.5, z_g 900 ft, z ≥ 16 ft; Exposure C, others only with the Owner's permission.
+- **Q4** K_d, Table 3.8.5-1.
+- **Q5** Ice: Art. 3.7, no thickness, no ice-plus-wind.
+- **Q6** C_d.
+- **Q7** Torsion 0.15b for single-support signs, Art. 3.9.4.2; three load cases, Table 3.9.3-1.
+- **Q8** Table 3.4-1; B₂ per Art. 4.8.1.
+- **Q9** φ, Art. 5.5.3.2 (torsion 0.95).
+- **Q10** Table 5.7.2-1, Table 5.8.2-1, Arts. 5.10, 5.11, 5.12.1.
+- **Q12a** No base-plate method in LRFDLTS (Art. 5.6.3).
+- **Q12b** AWS D1.1 (Art. 5.14).
+- **Q12c** Handhole: detailing only (Art. 5.6.6.1).
+- **Q13–Q16** Fatigue not required in scope.
+- **Q17** Deflection limits.
+- **Q18** Breakaway checklist.
+- **Q19** Broms with factored loads; structural design per AASHTO LRFD BDS.
+- **Q20** Multi-sided allowed (Art. 5.6.2); square sections discouraged (C5.6.2).
 
-**Still open (need the book pages, §7):** Q1, Q2 (P_z equation), Q3, Q4, Q5, Q7, Q8 (Table 3.4-1), Q9, Q10 (rest), Q11, Q12a, Q12c, Q19, Q20, and the owner questions Q22–Q25.
+**Coordinator decisions (2026-11-02), each recorded and flagged "engineer to confirm" on screen where it affects a result:**
+- **Q-B1** Basis text: "1st Ed. with 2017 Interim Revisions; later interims not applied", on screen and in the report.
+- **Q-B3** Sign C_d interpolated linearly between rows.
+- **Q-B4** 2.5 % H and 0.35 in/ft applied under Service I to the structure types Art. 10.4.2.1 names (vertical supports: street lighting poles, signal and sign structures); shown as information for any other type.
+- **Q-B5** Base weld per AWS D1.1 / AISC 360-16 §J2, with a note (LRFDLTS gives no method).
+- **Q-B6** Square luminaire poles: warning citing Art. 5.6.2 / C5.6.2 and C11.4.
 
-**New questions from the packet:**
-- **Q-B1.** Basis: OK that the tool states "1st Ed. (2015) with 2017 Interim Revisions; later interims not applied" on screen and in the report, even though FHWA also lists the 2018 interim and the 2022 interim revised Section 5 and Appendix C?
-- **Q-B2.** The 16-sided C_d transition expressions (Table 3.8.7-1, p. 3-20) do not extract cleanly from the PDF. I will read them from the page image before LTS-2; please confirm against your book. Also confirm r_s for the square C_d (corner radius / depth?).
-- **Q-B3.** Sign C_d between the tabulated L/W ratios: interpolate linearly, or take the next higher row?
-- **Q-B4.** Deflection, Art. 10.4.2.1: should the 2.5 % (transverse load) and 0.35 in/ft (moment load) limits apply to ground-mounted signs and to luminaire poles with an unbalanced arm, in addition to the 10 % luminaire limit? The commentary describes them as dead-load aesthetic limits (strain poles; single-arm poles), while the article text says Service I.
-- **Q-B5.** Base weld strength: Art. 5.14 points to AWS D1.1. Use the AWS D1.1 (or AISC 360-16 J2) fillet-weld strength with LTS φ, or leave weld strength to the fabricator's shop drawings and note it?
-- **Q-B6.** Square luminaire poles: C11.4 cautions against them even with a fatigue design. Should the LTS mode warn (or block) square poles?
+**New items from the full book (my decisions, flagged on screen; please confirm):**
+- **Q-C1** Ice (Art. 3.7): an optional Owner-specified ice weight in the Strength I gravity case at 1.25, no wind on ice. Default: none.
+- **Q-C2** Two-post signs: no eccentric (torsion) case, since Art. 3.9.4.2 names only single-support signs.
+- **Q-C3** Base plate: LRFDLTS gives no method; the bending-line method is kept and labelled as such.
+- **Q-C4** Shaft structural design: kept on ACI 318-19 (Art. 13.6.2 points to AASHTO LRFD BDS).
+- **Q-C5** K_d for ground-mounted signs: the pole value (0.95 for round posts) instead of 0.85; conservative.
+- **Q-C6** Rectangular tubes: square C_d formula on both faces.
+- **Q-C7** Broms resistance factor φ = 1.0 (none is printed); the optional margin input is kept.
+- **Q-C8** Shear span L_v for round shear (Eq. 5.11.2.1.1-1): the full height (conservative).
 
-## 5. Phase B PR sequence (revised; on hold for the pages in §7)
+**Still open (owner):** Q21–Q25 (§6).
 
-0. **B-0 (this PR, docs):** packet inventory, provision-map status, revised questions.
-1. **LTS-1** Mode switch (`codeMode`), LTS inputs, loads and the Table 3.4-1 combinations; cables hidden with the note; basis line "1st Ed. (2015) with 2017 Interim Revisions; later interims not applied". IBC mode identical. *Needs: Table 3.4-1, Section 3 dead/ice loads.*
-2. **LTS-2** Wind: P_z, K_z, K_d (need Section 3), G = 1.14 (Art. 3.8.6), C_d and C_v (Art. 3.8.7, Table 3.8.7-1, confirmed); multi-sided shapes.
-3. **LTS-3** Members: Section 5 classes and resistances (need 5.5, 5.7–5.11); combined forces Art. 5.12.1 (confirmed); B per Art. 5.12.1 / Section 4.
-4. ~~LTS-4 Fatigue~~ **dropped**: not required in scope (Arts. 11.4, 11.7.2). It becomes the applicability step inside LTS-5.
-5. **LTS-5** Deflection (Art. 10.4.2.1, confirmed), the fatigue-applicability step, the breakaway checklist (Section 12).
-6. **LTS-6** Base plate (Art. 5.6.6.1, need the page) and welds (Art. 5.14 → AWS, Q-B5); the §0.2 "2nd Ed." texts corrected.
-7. **LTS-7** Foundation (need Section 13).
-8. **LTS-8** Export of the LTS combinations to the Anchorage app.
-9. **LTS-9** Report, Drawings, Manual.
+## 5. Phase B PR sequence
 
 Each PR follows the same rules:
-- CLAUDE.md §4 callouts: before/after, or "before: not checked" for a new check.
-- The provision cited as "AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions, Art. x", with the page.
-- A hand check (HC-1 / HC-2 parts).
-- A fixlog entry.
-- The IBC-identical compare.
-- Screenshots.
+- CLAUDE.md §4 callouts: before = "not checked / IBC mode only"; after = the LTS form, with article and page.
+- Hand check (HC-1 / HC-2 parts).
+- **IBC mode identical:** `tests/lightpole-compare.mjs --a origin/main` and `--old-saves`.
+- Cables untouched.
+- `codeMode` defaults to `'ibc'`.
+- A fixlog entry with the PR link.
 
-LTS-5 is the only PR whose provisions are already all confirmed. It could go first, after LTS-1, but LTS-1 itself needs Table 3.4-1. So nothing can start until the §7 pages arrive.
+The PRs:
+1. **LTS-1** Mode switch (`codeMode`), the basis line, LTS inputs, MRI display, Table 3.4-1 combinations (Strength I, Extreme I max/min, Service I), the cable note, the scope line.
+2. **LTS-2** Wind: P_z with K_z, K_d, G, C_v, C_d per shape and along the taper, sign C_d and 0.15b torsion, EPA handling, the Table 3.9.3-1 load cases; ice weight (Q-C1).
+3. **LTS-3** Members, round and square/rect.:
+   - Table 5.7.2-1 classes;
+   - Table 5.8.2-1 M_n;
+   - Arts. 5.10 and 5.11;
+   - Art. 5.12.1 combined forces;
+   - Art. 4.8.1 B₂;
+   - shape and thickness warnings.
+   
+   **LTS-3b** adds multi-sided sections (geometry, C_d, classes).
+4. **LTS-5** Deflection (Art. 10.4.2.1); the fatigue-not-required step and the ≥ 55 ft warning; the breakaway checklist.
+5. **LTS-6** Base plate (label per Q-C3; the four "2nd Ed." texts corrected) and the base weld (Q-B5).
+6. **LTS-7** Foundation: Broms with factored loads as the design check; ACI structural check with LTS loads (Q-C4); the 3 in cover check.
+7. **LTS-8** Export of the LTS combinations to the Anchorage app.
+8. **LTS-9** Report, drawings, manual.
 
 ## 6. Owner amendments (RIDOT, MassDOT, CTDOT)
 
@@ -399,22 +427,21 @@ These may be in the owners' traffic or lighting standard drawings, standard spec
 - **Anchorage app (separate PR, its own tool):** CTDOT adhesive-anchor prohibition note for sign, signal and luminaire foundations.
 
 
-## 7. Pages still needed from the engineer's First Edition (2015) book
+## 7. Source pages used
 
-The 2017 packet replaces only the pages listed in §0.1. To implement Phase B, I need these pages of the **First Edition (2015)** (scans or photos are fine; they stay in the private reference repo, cited only):
+All are from the full 1st Edition, except the pages marked (2017), which come from the 2017 interim packet:
+- Section 3: pp. 3-2 to 3-5, 3-14 to 3-17, 3-19 to 3-25.
+- Section 4: pp. 4-1 to 4-4.
+- Section 5:
+  - pp. 5-1 (2017), 5-6 to 5-9, 5-13, 5-14, 5-17, 5-18, 5-25, 5-27 to 5-32;
+  - pp. 5-33 to 5-35 (2017), 5-37.
+- Section 10: pp. 10-1, 10-2 (2017).
+- Section 11: pp. 11-3, 11-10 (2017).
+- Section 12: pp. 12-1, 12-2 (2017).
+- Section 13: pp. 13-1 to 13-5.
+- Appendix B: pp. B-2 (2017), B-3.
 
-| Priority | Section / articles | For | Blocks |
-|---|---|---|---|
-| 1 | **Art. 3.4 with Table 3.4-1** (limit states, load factors), 3.5–3.6 (dead and live load) | combinations | LTS-1, LTS-8 |
-| 1 | **Art. 3.8–3.8.5** (wind pressure equation, basic wind speed and MRI / risk category / design life, wind maps, K_z, K_d), plus any skew or eccentricity rule for signs | wind | LTS-2 |
-| 1 | **Art. 3.7 / 3.9** (ice load and wind on ice), wherever the 1st Ed. puts them | ice combinations | LTS-1/2 |
-| 1 | **Section 5: Arts. 5.4–5.11.3.1.1** (materials, resistance factors 5.5, details 5.6 incl. **5.6.6.1 base plates** and 5.6.5 backing rings, width-thickness 5.7 with Table 5.7.3-1, flexure 5.8, tension 5.9, compression 5.10, shear 5.11.2, round torsion 5.11.3.1.1) — i.e. book pages 5-3 to 5-32 | member checks, base plate | LTS-3, LTS-6 |
-| 1 | **Section 4** (analysis; the magnifier for non-prismatic members referenced by Art. 5.12.1) | tapered poles | LTS-3 |
-| 2 | **Section 13** (foundations: drilled shafts, Broms, torsion, resistance factors) and **Section 15** (anchorage, referenced by Art. 5.1) | foundation | LTS-7 |
-| 3 | **Section 2** (breakaway location guidelines referenced by Art. 12.1) | checklist | LTS-5 |
-| 3 | Art. 11.6 Tables 11.6-1/11.6-2, the full Table 11.9.3.1-1 and Table 11.9.3.1-2 | only if fatigue is ever wanted (HMLT, mast arms) | none now |
-
-Also helpful: the 2018 interim, if available, since FHWA lists it. The 2022 interim is the one that revised Section 5.
+Nothing further is needed from the engineer to implement Phase B.
 
 ## Sources (public)
 
@@ -429,4 +456,4 @@ Also helpful: the 2018 interim, if available, since FHWA lists it. The 2022 inte
 - RIDOT, *Bridge Design Manual*, April 2026.
 - MassDOT, *Bridge Manual, Part I*, Hundredth Anniversary Edition.
 - CTDOT, *Bridge Design Manual* (2024 revision), and *Bridge and Roadway Structures Design Manual (BRSDM)*, Release 1.
-- AASHTO, *LRFD Specifications for Structural Supports for Highway Signs, Luminaires, and Traffic Signals, 1st Ed., 2017 Interim Revisions* (LRFDLTS-1-I1), the replaced pages only (§0.1).
+- AASHTO, *LRFD Specifications for Structural Supports for Highway Signs, Luminaires, and Traffic Signals*, 1st Ed. (2015), and its *2017 Interim Revisions* (LRFDLTS-1-I1).
