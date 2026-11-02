@@ -1803,7 +1803,7 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - **Saved data:** no new key or field. Map-source projects compute identically. A project saved with the CTDOT source under #659 holds `ltsV = 120` (the preset overwrote the map V): it opens with V = max(120, 120) = 120 (unchanged result); re-enter the site's map V to apply the max rule.
 - **How verified:** check-syntax (no arguments, all files) pass; `node tests/engine/run.mjs lightpole` 41 passed (1 new); `tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL (16 cases); browser (LTS monopost, 1280 and 390): map 76 → V 76 (W_p 1,175 lb, default 12 × 6 ft panel); CTDOT, map 76 → V 120 (CTDOT floor governs, W_p 2,929 lb); CTDOT, map 130 → V 130 (map governs, W_p 3,437 lb), report row; back to map, 130 → V 130; ltsV never overwritten; 0 console errors.
 
-## 2026-11-02 — PR #PRNUM (https://github.com/mlococo88/All-Structural/pull/PRNUM): claude/lp-theme (LPTH: suite theme and two-panel layout; display only)
+## 2026-11-02 — PR #662 (https://github.com/mlococo88/All-Structural/pull/662): claude/lp-theme (LPTH: suite theme and two-panel layout; display only)
 
 ### LPTH-1. Suite look: navy header bar, scrolling input / output panels, suite tabs, cards, buttons, chips and tables   [display only] [no result change]
 - **Engineer request (2026-11-02):** make the pole and sign app look like the recent apps (Spread Footing, BasePlateAnchorDesigner, lldf, apps/steel-bridge): no orange buttons / accents, no "odd" beige theme.
