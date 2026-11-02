@@ -10,8 +10,10 @@
 //   3. the actions that scroll by script (Worked-in links, the Report tab's links back to the cards, [data-lxgo] links, a
 //      scrollIntoView of a deep element, focus() on the last input, window.scrollTo) leave the document at 0, open the right tab
 //      and both panels can be wheeled back to 0;
-//   4. the D11 print report (lldfBuildReport) is built with the sheet put back together and every card returns to its tab;
-//      the Calc sheet tab shows it; Ctrl+P from the Report tab prints the report, from any other tab the D11 report;
+//   4. LXM (2026-11-02): the output tabs are Summary, LL worked steps, Lever rule, Dead load (3.6 results, then the 4D worked
+//      steps), Applicability & notes, Report (the D11 Calc sheet tab and lldfBuildReport are retired); a remembered tab of before
+//      (dlsteps, calc) opens its successor (dl, report); Ctrl+P prints the report from every tab (running header, page numbers)
+//      and the tab shown before comes back;
 //   5. touch: finger swipes scroll the output panel down and back up to 0; the document stays at 0;
 //   6. below the 900 px breakpoint (390 px phone): the panels stack, the page scrolls normally and has no horizontal scroll;
 //   7. inside index.html's frame (MCT Generator → LL & DL Distribution), at 1280x800: the same two-panel layout, the document of
@@ -70,7 +72,7 @@ async function wheelPanel(p, sel, label) {
   check(u.out === 0 && u.inp === 0 && u.doc === 0, `${label}: wheel back up: input ${u.inp}, output ${u.out}, doc ${u.doc}`);
 }
 
-// 1 + 4: layout and the D11 report
+// 1 + 4: layout, the output tabs, printing
 {
   const { b, p, errs } = await open(1280, 800);
   try {
@@ -90,33 +92,23 @@ async function wheelPanel(p, sel, label) {
     check(L.outInputs.every(id => /^(memberSelect|truckSel)$/.test(id)), `inputs in the output panel other than the girder / truck pickers: ${L.outInputs.join(', ')}`);
     check(L.cards.every(c => c[1] === 'out'), `result cards not in an output tab: ${L.cards.filter(c => c[1] !== 'out').map(c => c.join(':')).join(', ')}`);
     check(L.homeText.join('|') === 'titleblock|section|disclaimer', `left on the hidden sheet: ${L.homeText.join(', ')}`);
-    // the D11 report: built with the sheet restored, the cards back in their tabs after
-    const before = await p.evaluate(() => [...document.querySelectorAll('.lx-pane')].map(x => x.id + ':' + x.querySelectorAll('[id]').length).join(','));
-    const r = await p.evaluate(() => { const ok = window.lldfBuildReport(); return { ok, restored: document.body.classList.contains('lx-restored'), len: document.getElementById('lldfReport').textContent.length,
-      secs: (window.LLDF_TOC || []).length }; });
-    const after = await p.evaluate(() => [...document.querySelectorAll('.lx-pane')].map(x => x.id + ':' + x.querySelectorAll('[id]').length).join(','));
-    check(r.ok && !r.restored && r.len > 20000 && r.secs >= 8, `D11 report built (${JSON.stringify(r)})`);
-    check(before === after, `cards back in their tabs after the D11 report: ${before} → ${after}`);
-    // Calc sheet tab shows it; printing from it prints the D11 report
-    await p.click('#lxOutTabs .lx-tab[data-k="calc"]'); await p.waitForTimeout(1500);
-    const c = await p.evaluate(() => { const h = document.getElementById('lldfReport'); return { inTab: !!h.closest('#lxPane_out_calc'), shown: h.offsetHeight > 1000 }; });
-    check(c.inTab && c.shown, `Calc sheet tab shows the D11 report (${JSON.stringify(c)})`);
-    if (args.shots) await p.screenshot({ path: path.join(args.shots, 'lldf-calcsheet-1280.png') });
-    await p.emulateMedia({ media: 'print' });
-    await p.evaluate(() => { window.dispatchEvent(new Event('beforeprint')); });
-    await p.waitForTimeout(300);
-    const pr = await p.evaluate(() => ({ d11: document.body.classList.contains('lldf-rpt'), rp: document.body.classList.contains('rp-printing'), body: document.getElementById('lldfReport').parentNode === document.body,
-      shown: document.getElementById('lldfReport').offsetHeight > 1000, shell: getComputedStyle(document.getElementById('sheet')).display }));
-    check(pr.d11 && !pr.rp && pr.body && pr.shown && pr.shell === 'none', `print from the Calc sheet tab prints the D11 report alone (${JSON.stringify(pr)})`);
-    await p.evaluate(() => window.dispatchEvent(new Event('afterprint')));
-    await p.emulateMedia({ media: 'screen' });
-    await p.click('#lxOutTabs .lx-tab[data-k="report"]'); await p.waitForTimeout(1200);
-    await p.emulateMedia({ media: 'print' });
-    await p.evaluate(() => { window.dispatchEvent(new Event('beforeprint')); });
-    const pr2 = await p.evaluate(() => ({ d11: document.body.classList.contains('lldf-rpt'), rp: document.body.classList.contains('rp-printing') }));
-    check(!pr2.d11 && pr2.rp, `print from the Report tab prints the report (${JSON.stringify(pr2)})`);
-    await p.evaluate(() => window.dispatchEvent(new Event('afterprint')));
-    await p.emulateMedia({ media: 'screen' });
+    // LXM: the tabs; the Dead load tab holds the 3.6 results first, then the 4D worked steps
+    const T = await p.evaluate(() => ({ out: [...document.querySelectorAll('#lxOutTabs .lx-tab')].map(b => b.dataset.k).join(','), build: typeof window.lldfBuildReport, rep: !!document.getElementById('lldfReport'),
+      dl: (() => { const pn = document.getElementById('lxPane_out_dl'), a = document.getElementById('mdDistTable'), s = document.getElementById('dlSteps');
+        return !!(pn && a && s && pn.contains(a) && pn.contains(s) && (a.compareDocumentPosition(s) & Node.DOCUMENT_POSITION_FOLLOWING)); })() }));
+    check(T.out === 'summary,steps,lever,dl,appl,report' && T.build === 'undefined' && !T.rep && T.dl, `output tabs / Dead load tab: ${JSON.stringify(T)}`);
+    // Ctrl+P from every output tab prints the report alone, with the running header and page numbers; the tab comes back after
+    for (const t of await p.$$eval('#lxOutTabs .lx-tab', bs => bs.filter(x => !x.hidden).map(x => x.dataset.k))) {
+      await p.click(`#lxOutTabs .lx-tab[data-k="${t}"]`); await p.waitForTimeout(t === 'report' ? 1200 : 400);
+      await p.emulateMedia({ media: 'print' });
+      await p.evaluate(() => { window.dispatchEvent(new Event('beforeprint')); });
+      const pr = await p.evaluate(() => ({ rp: document.body.classList.contains('rp-printing'), len: ((document.getElementById('rp-print') || {}).innerText || '').length,
+        page: /counter\(pages\)/.test((document.getElementById('rp-page') || {}).textContent || ''), shell: getComputedStyle(document.getElementById('sheet')).display }));
+      await p.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+      await p.emulateMedia({ media: 'screen' });
+      const back = await p.evaluate(() => ({ cur: window.LXL.cur().out, rp: document.body.classList.contains('rp-printing') }));
+      check(pr.rp && pr.len > 10000 && pr.page && pr.shell === 'none' && back.cur === t && !back.rp, `print from the ${t} tab prints the report and returns (${JSON.stringify({ pr, back })})`);
+    }
     // Lever rule tab hides for a type without the lever rule (adjacent boxes, type f)
     await p.click('#lxOutTabs .lx-tab[data-k="lever"]'); await p.waitForTimeout(300);
     await p.selectOption('#bridgeType', 'f'); await p.waitForTimeout(500);
@@ -128,6 +120,22 @@ async function wheelPanel(p, sel, label) {
   } finally { await b.close(); }
 }
 
+// 4: a tab remembered from before the merge (LXM): "dlsteps" opens Dead load, "calc" opens Report
+for (const [old, want] of [['dlsteps', 'dl'], ['calc', 'report']]) {
+  const o = await openPage(SRC.file, { vw: 1280, vh: 800, ls: { lldf_lxOutTab_v1: old } });
+  try {
+    await o.p.waitForSelector('#lxOutTabs .lx-tab[data-k="report"]'); await o.p.waitForTimeout(1500);
+    const c = await o.p.evaluate(() => window.LXL.cur().out);
+    check(c === want, `remembered output tab "${old}" opens ${c} (expected ${want})`);
+    if (args.shots && old === 'dlsteps') {
+      await o.p.screenshot({ path: path.join(args.shots, 'lldf-deadload-1280.png') });
+      await o.p.evaluate(() => { const P = document.getElementById('outputPanel'), s = document.getElementById('mdDLSec'); P.scrollTop += s.getBoundingClientRect().top - P.getBoundingClientRect().top - 40; });
+      await o.p.waitForTimeout(300); await o.p.screenshot({ path: path.join(args.shots, 'lldf-deadload-4d-1280.png') });
+    }
+    check(o.errs.length === 0, `remembered tab ${old}: console errors: ${o.errs.slice(0, 3).join(' | ')}`);
+  } finally { await o.b.close(); }
+}
+
 // 2 + 3: wheel and script scrolls at three window sizes
 for (const [vw, vh] of [[1280, 800], [1366, 768], [1920, 1080]]) {
   console.log(`${vw}x${vh}  ${SRC.label}`);
@@ -135,7 +143,7 @@ for (const [vw, vh] of [[1280, 800], [1366, 768], [1920, 1080]]) {
   try {
     const outs = await p.$$eval('#lxOutTabs .lx-tab', bs => bs.filter(x => !x.hidden).map(x => x.dataset.k));
     for (const t of outs) {
-      await p.click(`#lxOutTabs .lx-tab[data-k="${t}"]`); await p.waitForTimeout(t === 'calc' ? 1500 : 600);
+      await p.click(`#lxOutTabs .lx-tab[data-k="${t}"]`); await p.waitForTimeout(t === 'report' ? 1200 : 600);
       const s = await state(p);
       check(s.over <= 0 && s.doc === 0 && s.overX <= 0, `${t}: document taller / wider than the window by ${s.over} / ${s.overX} px, scroll ${s.doc}`);
       await wheelPanel(p, '#outputPanel', `output tab ${t}`);
@@ -151,17 +159,24 @@ for (const [vw, vh] of [[1280, 800], [1366, 768], [1920, 1080]]) {
       const s = await afterAction(p, `Worked-in link ${i}`);
       check(s.cur.out === 'steps', `Worked-in link ${i} opened the ${s.cur.out} tab (expected steps)`);
     }
-    // DL Worked-in link opens the DL worked steps
-    await p.click('#lxOutTabs .lx-tab[data-k="dl"]'); await p.waitForTimeout(400);
-    await p.evaluate(() => document.querySelector('#lxPane_out_dl a.wkA').click());
-    { const s = await afterAction(p, 'DL Worked-in link'); check(s.cur.out === 'dlsteps', `DL Worked-in link opened ${s.cur.out} (expected dlsteps)`); }
+    // DL Worked-in links land on their worked step (4D) in the same Dead load tab, in view in the output panel
+    for (let i = 0; i < 3; i++) {
+      await p.click('#lxOutTabs .lx-tab[data-k="dl"]'); await p.waitForTimeout(400);
+      const lab = await p.evaluate(i => { const a = document.querySelectorAll('#lxPane_out_dl a.wkA[data-scope="dl"]')[i]; if (!a) return null; a.click(); return a.dataset.m; }, i);
+      if (lab == null) break;
+      await p.waitForTimeout(1200);
+      const v = await p.evaluate(m => { const P = document.getElementById('outputPanel').getBoundingClientRect(); const cs = [...document.querySelectorAll('#dlSteps .calcstep')].find(c => (c.querySelector('.cs-title') || {}).textContent.indexOf(m) >= 0);
+        const r = cs && cs.getBoundingClientRect(); return { found: !!cs, inView: !!r && r.top < P.bottom && r.bottom > P.top }; }, lab);
+      const s = await afterAction(p, `DL Worked-in link ${i}`);
+      check(s.cur.out === 'dl' && v.found && v.inView, `DL Worked-in link ${i} (${lab}) opened ${s.cur.out} (expected dl), step in view: ${JSON.stringify(v)}`);
+    }
     // [data-lxgo] links (Roadway tab note)
     await p.click('#lxInTabs .lx-tab[data-k="roadway"]'); await p.waitForTimeout(300);
     await p.evaluate(() => document.querySelector('a[data-lxgo="fig-lever"]').click());
     { const s = await afterAction(p, 'Roadway → Lever rule link'); check(s.cur.out === 'lever', `Roadway note link opened ${s.cur.out} (expected lever)`); }
     // Report tab links back to the cards ([[tab:name|…]] → a.rp-go[data-rpgoto] → LLRP's gotoSheet): every distinct target
     await p.click('#lxOutTabs .lx-tab[data-k="report"]'); await p.waitForTimeout(1500);
-    const GOTAB = { inputs: 'in', summary: 'summary', xsec: 'summary', steps: 'steps', dl: 'dl', dlsteps: 'dlsteps', appl: 'appl', notes: 'appl' };
+    const GOTAB = { inputs: 'in', summary: 'summary', xsec: 'summary', steps: 'steps', lever: 'lever', dl: 'dl', dlsteps: 'dl', appl: 'appl', notes: 'appl' };
     const gos = await p.$$eval('#lldfRptView a.rp-go[data-rpgoto]', a => [...new Set(a.map(x => x.dataset.rpgoto))]);
     check(gos.length >= 4, `report links to the cards: ${gos.join(', ')}`);
     for (const g of gos) {
@@ -205,12 +220,15 @@ for (const [vw, vh] of [[1280, 800], [1366, 768], [1920, 1080]]) {
     const lay = await p.evaluate(() => { const i = document.getElementById('inputPanel').getBoundingClientRect(), o = document.getElementById('outputPanel').getBoundingClientRect(); return { stacked: o.top >= i.bottom - 1, w: Math.round(o.width) }; });
     check(lay.stacked && lay.w >= 360, `390 px: panels stacked, output width ${lay.w}`);
     for (const t of await p.$$eval('#lxOutTabs .lx-tab', bs => bs.filter(x => !x.hidden).map(x => x.dataset.k))) {
-      await p.click(`#lxOutTabs .lx-tab[data-k="${t}"]`); await p.waitForTimeout(t === 'calc' ? 1500 : 400);
+      await p.click(`#lxOutTabs .lx-tab[data-k="${t}"]`); await p.waitForTimeout(t === 'report' ? 1200 : 400);
       const s = await state(p); check(s.overX <= 0, `390 px, ${t}: page wider than the window by ${s.overX} px`);
     }
     await p.evaluate(() => window.scrollTo(0, 600)); await p.waitForTimeout(300);
     const s = await state(p); check(s.doc > 0, `390 px: page scroll ${s.doc} (expected > 0, the page scrolls normally there)`);
-    if (args.shots) { await p.evaluate(() => window.scrollTo(0, 0)); await p.screenshot({ path: path.join(args.shots, 'lldf-layout-390.png') }); }
+    if (args.shots) { await p.evaluate(() => window.scrollTo(0, 0)); await p.screenshot({ path: path.join(args.shots, 'lldf-layout-390.png') });
+      for (const t of ['dl', 'report']) { await p.click(`#lxOutTabs .lx-tab[data-k="${t}"]`); await p.waitForTimeout(t === 'report' ? 1200 : 500);
+        await p.evaluate(() => document.getElementById('outputPanel').scrollIntoView({ block: 'start' })); await p.waitForTimeout(300);
+        await p.screenshot({ path: path.join(args.shots, `lldf-${t}-390.png`) }); } }
     check(errs.length === 0, `390 px console errors: ${errs.slice(0, 3).join(' | ')}`);
   } finally { await b.close(); }
 }

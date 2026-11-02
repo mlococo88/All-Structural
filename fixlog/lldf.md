@@ -1882,3 +1882,80 @@ index 219cc2c..a3e337e 100644
   Roadway tab links to them). Move them to the input panel if the engineer prefers.
 - LXL-O2: skew corrections are worked inside each girder's LL worked steps (4.0), not in a tab of their own (splitting them out would
   change the step list the D11 and Report number from).
+
+## 2026-11-02 — PR: lldf-merge-tabs (LXM) — Dead load tabs merged; the Calc sheet (D11 print report) retired, the Report is the one report (display only; no result change)
+### Engineer requests (2026-11-02)
+- 1) Merge the "Dead load" and "DL worked steps" output tabs into one "Dead load" tab: the 3.6 results first, the 4D worked steps
+  below; "Worked in" links land there.
+- 2) Keep the Report (shared viewer) as the single report, retire the Calc sheet tab, Print / PDF and Ctrl+P print the Report from
+  every tab. Before retiring, prove the Report holds everything the Calc sheet had (as Prestressed #599 and Base Plate #580 did);
+  port what is missing (values from the app's own results, figures included).
+### What was missing from the Report and is ported (LLRP script, `model()`)
+- Every input, input tab by input tab (the Calc sheet's section 1 printed the whole 1.0 card): new subsections 1.2–1.6 "Inputs —
+  <tab> tab" built by `inputSubs()` from the input panel as it shows (each `.frow` label → value with units, checkboxes ☑ / ☐,
+  selects as the option shown; the beam layout table, the MassDOT beam-type table, the loads-on-the-bridge table; the title-block
+  fields; rows hidden for the type left out). Suite project name and the geometry hand-off source line (`#geomSrcLine`) as notes
+  under 1.1.
+- Figure 2 (lever rule) of every girder: drawn by the Lever rule tab's own `drawLever(p, geo, md, la)` with the governing truck
+  configuration (truckShown "gov", as the Calc sheet did); the figure is put back on the selected girder after (`try … finally`,
+  the same call run() makes).
+- The dead-load card (3.6): the method text (`#mdDistNote`), the per-beam bar figure (`#fig-mddist`) and caption, the assumptions
+  note (`#mdDistAssume`) — subsection 5.1 "Distribution method and the loads on the beams".
+- The 4D tables: beam group x_i, c_i, c_i² (D.c, as `renderDLCalcs`); the distribution rules (equal / pile-cap / two adjacent beams)
+  and the 4D notes (read from the 4D card); the worked load's table P/N_b, P·e·c_i/S, R_i after the no-uplift clip and Σ, and the
+  Σ R_i note (the 4D card's own expressions: `pl.P/N`, `pl.P*pl.e*D.c[i]/D.S`, `pl.r`); the beam self-weight row (D.selfWt, Σ =
+  D.selfWt·N) in the per-beam table.
+- N_b = 3, exterior: the 2+-lane moment as the lesser of e·g_int,2 and the lever rule (md.n3info.eqM, md.n3info.lv2.df; the Report's
+  steps showed only the lesser one).
+- Box beams (f, g), exterior: the four factors before the skew factor, as the LL worked steps tab shows them
+  (md.r.momExt1 / r_M, md.r.momExt2 / r_M, md.r.shrExt1 / r_V, md.r.shrExt2 / r_V; the Report's steps multiply e, g_int and r in one
+  line).
+- Spread boxes (b/c), exterior: the range of applicability of the e-factors, 0 ≤ d_e ≤ 4.5 ft, with d_e.
+- Reference images (Options & images tab) as a "Reference images" section, when there are any.
+- References: Eq. 4.6.2.2.1-2, Art. 4.6.2.3 Eqs. 4.6.2.3-1/-2, Art. 4.6.3, Table 3.5.1-1 and Eq. 5.4.2.4-1, MassDOT Fig. 3.5.3-1,
+  §3.8.1.3, §3.8.2, Fig. 3.8.1-1, Part II Dwg 10.1.5 (the Calc sheet's reference list).
+### Proof (11 browser cases: defaults k; a; a N_b = 3 θ 40° θ_V 50°; k S = 17 ft 35°; continuous pier region; f; g; b/c; b/c S = 19 ft; d; slab)
+- Every number of the Calc sheet's text (origin/main `lldfBuildReport`, KaTeX read as its TeX source, section numbers and "see §"
+  references set aside) looked up in the branch's Report (text and rendered HTML) at the Calc sheet's precision: 0 missing in 10
+  cases; slab: 1, the "11" of the date in the note "LLSW (2026-11-01): W is the physical edge-to-edge width" (the Report says the
+  same: "W = 28.00 ft, the physical edge-to-edge width"). Before the port: 156 missing (12–24 per case; the lists above).
+- Figures: Calc sheet 2–8 per case, Report the same count in every case.
+- Scratchpad harness `shots-lldf-merge/` (`dump2.mjs`, `nm2.py`).
+### Removed (nothing else used it: index.html prints only its own pages; no test but the smoke test called it)
+- D11 script: `staticClone`, `titleOf`, `replaceRef`, `pageCSS` / `applyPageCSS` (`window.lldfPageCSS`, `lldfApplyPageCSS`),
+  `window.lldfBuildReport`, `window.LLDF_TOC`, its beforeprint / afterprint handlers, `LLDF_REFS`. Kept: `window.lldfLinks`,
+  `gotoStep` and the click handler (the "Worked in" links on the result tabs).
+- `<div id="lldfReport" class="crdoc">`, its CSS (`#lldfReport …`, `body.lldf-rpt …`, `.lx-calc …`, `.lx-calcbar`).
+- LXL: the Calc sheet tab and its bar / host, `buildCalc`, the `lldfBuildReport` wrapper, the `#lldfReport` print moves.
+### Where (to re-apply by hand)
+- LXL script: `OUT_TABS` without `["dlsteps","DL worked steps"]` and `["calc","Calc sheet"]`; `var OUT_OLD={dlsteps:"dl",calc:"report"};`
+  and `if(OUT_OLD[k]) k=OUT_OLD[k];` first in `showOut` (a tab remembered in `lldf_lxOutTab_v1` from before opens its successor;
+  the key and its format are unchanged); `placeLazy`: `move(dls,O.dlsteps,stepsSec)` → `move(dls,O.dl,stepsSec)` (4D after 3.6
+  in the Dead load tab; its marker in the sheet as before); the run() wrapper counts `busy` and calls `after()` once, outermost;
+  `after()` ends with `window.lldfReportRefresh()`; `window.LXL.busy`.
+- LLRP script: `window.lldfReportRefresh` returns while `LXL.busy()` (the Report is built after every card of the run is drawn —
+  the dead-load card and the beam tables are drawn by wrappers after the inner run()); `GO.lever = "fig-lever"`; the D11 hand-off
+  `lldfRptWillPrint` removed; new beforeprint handler (anchor `var backTo=null, inPrint=false;`): when the Report tab is not shown
+  and there are results, open it (`LXL.showOut("report",false)`), dispatch beforeprint once more (shared/report.js's own handler,
+  which sets the running header and page numbers, ran before with the report hidden; `inPrint` stops the repeat), and after
+  printing show the tab of before. With input errors (no results) the page prints as shown.
+- Helpers `hiddenIn`, `ctlText`, `tableOf`, `inputSubs` after `var TYPE_NAME=…` (anchor `/* LXM (2026-11-02): the Calc sheet`).
+### Governing provision
+- None changed (display only). No formula, factor, unit or code reference of a calculation changed (CLAUDE.md §4); the report's
+  reference list gained the provisions the Calc sheet listed.
+### How verified
+- Engine: `node tests/engine/lldf-hash.mjs`: 1,592 cases, 11,135 outputs, 92,802 worked steps, hashes identical (0 differ);
+  `node tests/engine/run.mjs lldf` 9 passed; `node tests/check-syntax.mjs` all pass.
+- Browser, origin/main vs this branch (scratchpad `shots-lldf-merge/par2.mjs`, the LXL harness), 11 cases, 141 checks, all pass:
+  computeBridge and readInputs JSON identical; the text and shown / hidden state of every result card and every input value
+  identical, before and after the Report is built (Figure 2 put back on the selected girder); localStorage keys and values after
+  load identical (timestamps aside); Send DFs / Send DL payloads (`bridgeSuite.v1.lldf`, `.dlLoads`, `.beamRoster`,
+  `.designBeam`) identical; serialize() identical; the Report: 0 unresolved / duplicate refs, 0 KaTeX errors (full report), no
+  NaN / undefined, 18–76 step values = app values; Ctrl+P on the Report, Summary and Dead load tabs prints the report with the
+  running header and page numbers and returns to the tab; 0 console errors. Reference images and an input-error case checked
+  separately.
+- Smoke test `tests/smoke/lldf-layout.mjs` updated (tabs, Dead load tab order, print from every tab, remembered old tab values,
+  DL Worked-in links land in the Dead load tab with the step in view): PASS, 313 checks. Screenshots 1280 / 390 in scratchpad
+  `shots-lldf-merge/` and `shots-lldf-merge/smoke/`.
+### Other copies
+- None (the bootstrap snippet shared with index.html / Prestressed Bridge Design.html is not touched).
