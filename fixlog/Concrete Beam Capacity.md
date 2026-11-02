@@ -2026,3 +2026,60 @@ Concrete Beam Capacity: ONE combined Report tab, a chapter per sub-app. The coor
 - **Fix:** every such note is one link whose text is the phrase: Beam Capacity chapter (`cbcRptModel`: Summary of checks note, the per-combination notes, the serviceability and detailing notes), ASD chapter (`asdRptModel` scope note), e.g. `'On screen: [[tab:tabDetail|Detailing tab]].'` → `'[[tab:tabDetail|On screen: Detailing tab]]'`; Development & Splice tab: the rebar tool's RBRP-2 edits (entry in `fixlog/ACI Rebar Development Length.md`, same PR). Applied by the same script to the decoded srcdocs (decode → regex → re-encode, CRLF kept).
 - **§3:** tools that contain the rebar snippet: `ACI Rebar Development Length.html`, `Concrete Beam Capacity.html` (Development & Splice tab); the standalone ↔ embedded diff is unchanged apart from line numbers.
 - **How verified:** printed combined report has no "On screen: ." fragments (main had them); combined-report checks (3 cases) and main-vs-branch tab texts, results and storage unchanged. **Provision:** none. **Saved data:** none.
+
+## 2026-11-02 — PR: claude/phone-print-cbc — Phone / tablet: suite bar wraps, the three tabs go to one column; Report: "see see §" (PHN; display only, no calculation change)
+
+Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Every code site is tagged `PHN`.
+
+### PHN-1. Suite bar wraps below 900 px   [display only]
+- **Problem:** `#suite-nav` is a single 46 px row (`flex:0 0 46px; height:46px`). The page does not scroll, so the tabs that do not fit were cut off: at 390 px "ASD Beam Calcs", "Development & Splice", "Report", "All tools" and the share buttons; at 768 px "Report" and the share buttons. Those tabs could not be opened on a phone.
+- **Where:** the suite page's own `<style>`, after `@media(max-width:1000px){#suite-report .rp-body{…}}`.
+- **Added:**
+```css
+@media screen and (max-width:899px){#suite-nav{flex:0 0 auto;height:auto;flex-wrap:wrap;row-gap:0;padding:0 8px;} .suite-tab{padding:9px 12px;} #suite-brand{border-right:none;} #suite-xfer{margin-left:0;padding:4px 0 6px;flex-wrap:wrap;}}
+```
+
+### PHN-2. Beam Capacity and ASD Beam Calcs frames: one column below 900 px   [display only]
+- **Problem:** both srcdoc frames have no small-screen layout. The input panel (`flex:0 0 33%`) stays beside the output panel, and the 6-column title grid has `minmax(120px,1fr)` columns. At 390 px the input panel was about 110 px wide, the output about 260 px, and the title grid was cut off. Nothing widened the page: it was clipped, with `html,body{overflow:hidden}`.
+- **Where:** in each of the two frames (`suite-frame-capacity`, `suite-frame-asd`), before the `</style>` that follows `input.autoD{background:#F1F5F9;…;cursor:default;}`. The anchor occurs twice, once per frame, and both copies get the same block.
+- **Added (in each frame):**
+```css
+@media screen and (max-width:899px){
+  html,body{height:auto;overflow:visible}
+  #app{height:auto}
+  #projGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #main{display:block}
+  #inputPanel{max-width:none;overflow:visible;border-right:none;border-bottom:1px solid var(--color-border);padding-bottom:16px}
+  #outputPanel{overflow:visible;padding:0 10px 40px}
+}
+```
+- Inputs (with their tab bar) now sit above the outputs (with their tab bar); both bars already wrap. The frame's page scrolls; the panels do not scroll on their own, so the KaTeX page-scroll trap (#524) cannot occur.
+
+### PHN-3. Development & Splice frame: the one column never grows past the window   [display only]
+- **Problem:** below 980 px `.layout{grid-template-columns:1fr}` grew to the min-content width of the panels (738 px), so the frame scrolled sideways 364 px at 390 px on every one of its tabs. The Bar Schedule table (`table.vars` in `.subsec`) added another 24 px.
+- **Where:** in `suite-frame-dev`, after `@media(max-width:980px){.layout{grid-template-columns:1fr; height:auto;}}`.
+- **Added:**
+```css
+@media screen and (max-width:899px){.layout{grid-template-columns:minmax(0,1fr);} .tabcontent .subsec{overflow-x:auto;}}
+```
+- **Other copies:** this frame is the embedded copy of `ACI Rebar Development Length.html` (CLAUDE.md §3, known duplicate). The standalone file gets the same check in its own PR.
+
+### PHN-4. Report: "see see §x" in print   [display only]
+- **Problem:** the note "Same factored actions as Combination 2: see [[key]]" (Flexure, Shear and Torsion sections, combination 3) printed as "… see see §3.2". In print the shared viewer puts "see " in front of every § link in a note item, and the note already said "see".
+- **Where:** the capacity frame's report builder, anchor `text:'Same factored actions as Combination '+(r.sameAs+1)+': see [['`.
+- **Before:** `…+': see [['+pre+r.sameAs+…`
+- **After:** `…+': [['+pre+r.sameAs+…`
+- **Result:** print reads "… Combination 2: see §3.2." (once), and the screen reads "… Combination 2: §3.2" (a link). This is the only "see [[" in the file.
+
+### Checked, no change
+- Report → Print report: 35 pages, with the running header and page numbers. Nothing extends past the 7.5 in text width. The PDF text is unchanged apart from PHN-4.
+
+### Smoke test
+- `tests/smoke/phone-layout.mjs`: new key `cbc`. It now also counts a visible same-origin frame's sideways scroll as page scroll. It fails on origin/main (suite tabs cut off at 390 and 768 px) and passes on this branch.
+- Checked once by hand at 390 and 768 px: every tab inside the three frames (capacity 15, ASD 7, dev 12). The frame never scrolls sideways on this branch. On origin/main the dev frame scrolled 364 px (Bar Schedule 43 px), and the capacity and ASD frames were clipped.
+
+### How verified (no computed result, saved key or hand-off changed)
+- origin/main vs this branch, headless Chromium, file://, at 1280 px:
+  - The text of the suite and of the visible frame, on load and on the 4 suite tabs, is identical. localStorage after load is identical.
+  - The whole-document `textContent` (suite and frames) differs only by PHN-4: the 3 report notes, plus the one source string.
+- Screenshots at 900 and 1280 px are pixel-identical (0 differing pixels) on load and on all 4 suite tabs.
