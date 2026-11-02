@@ -2964,7 +2964,7 @@ index 56a8a3f..13f8372 100644
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **Open items:** the Rename prompt's tags (above).
 
-## 2026-11-02 — PR: claude/spc-rename-dialog — My sections library: Rename opens one dialog (name, description, tags as a table) in place of three prompts (LIST)   [display only]
+## 2026-11-02 — PR: claude/spc-rename-dialog, PR #709: https://github.com/mlococo88/All-Structural/pull/709 — My sections library: Rename opens one dialog (name, description, tags as a table) in place of three prompts (LIST)   [display only]
 - **Why:** engineer decision 2026-11-02 (answer to the open item of PR #694): the Rename button opens a small dialog with the name
   and the tags as a `SharedListInput` table, replacing the comma-separated prompt. There is no separate "Edit tags" prompt; the
   description prompt is folded into the same dialog.

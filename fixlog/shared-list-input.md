@@ -91,5 +91,5 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
 - `apps/steel-bridge/ui/lists.js` binds a table (`bindInput`) to nine list inputs as the modules draw them (see `fixlog/steel-bridge.md`).
   `tests/smoke/list-input.mjs` gains the part `sbridge` and the entry option `archive` (a folder tool's files for side A).
 
-## 2026-11-02 — PR: claude/spc-rename-dialog — Section Property Calculator: the library Rename dialog's tags (`mount`; no change to the shared file)
+## 2026-11-02 — PR: claude/spc-rename-dialog, PR #709: https://github.com/mlococo88/All-Structural/pull/709 — Section Property Calculator: the library Rename dialog's tags (`mount`; no change to the shared file)
 - `tests/smoke/list-input.mjs` gains the part `secpropren`.
