@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl] [--a origin/main] [--shots <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
-// smd (one key per tool in TOOLS): the tool from --a (default origin/main, with its shared/ folder) and from the working tree, each on its default
+// smd (one key per tool in TOOLS): the tool from --a (default: the entry's `a`, the main commit before its table landed, else
+//         origin/main; with its shared/ folder) and from the working tree, each on its default
 //         project and on one project with custom stations (typed into the old box on A, into the table on B): every computed
 //         result and the page text (table elements removed) must be identical, the saved text the same, 0 console errors.
 //         --shots: screenshots of the table at 1400 and 390 px.
@@ -15,7 +16,7 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd,sbeam').split(',');
+const parts = String(args.part || 'widget,smd,sbeam,bsl').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
@@ -99,7 +100,7 @@ ReactDOM.createRoot(document.getElementById('r')).render(React.createElement(App
 /* ---------------- tools ---------------- */
 const TOOLS = {
   smd: {
-    file: 'Shear and Moment Diagrams.html', values: '2.5, 5, 30',
+    file: 'Shear and Moment Diagrams.html', values: '2.5, 5, 30', a: '5ec735f~1',
     setup: async p => { await p.waitForTimeout(1500); },
     template: async p => { await p.selectOption('#tplSel', '3s'); await p.waitForTimeout(1500); },
     typeOld: async (p, v) => { await p.evaluate(v => { const i = document.getElementById('iUX'); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); }, v); },
@@ -110,7 +111,7 @@ const TOOLS = {
     tableSel: '#iUX + [data-sli="host"]',
   },
   sbeam: {
-    file: 'Steel Beam Design - AISC 15th.html', values: '5, 12.5, 31',
+    file: 'Steel Beam Design - AISC 15th.html', values: '5, 12.5, 31', a: '9a645e3~1',
     setup: async p => { await p.waitForTimeout(3500);   // open the input tab that holds "Output Stations"
       await p.evaluate(() => { const pn = document.querySelector('[data-secid="inOpts"]').closest('.sbdInPane'); document.getElementById(pn.id.replace('sbdInPane_', 'sbdInTab_')).click(); });
       await p.waitForTimeout(300); },
@@ -131,7 +132,40 @@ const TOOLS = {
     },
     tableSel: '.uxHost',
   },
+  bsl: {   // Bridge Substructure Loading: span lengths and girder spacings (arrays P.br.spans / P.br.bays), committed when the focus leaves
+    file: 'Bridge Substructure Loading.html', a: 'f4a6996', values: { spans: '110, 150, 120, 95', bays: '9, 9.5, 10' },
+    expect: '{"spans":[110,150,120,95],"bays":[9,9.5,10]}',
+    setup: async p => { await p.waitForTimeout(2500); await p.click('.itab[data-pane="bridge"]'); await p.waitForTimeout(400); },
+    typeOld: async (p, v) => { for (const k of ['spans', 'bays']) { await p.evaluate(([k, v]) => { const i = document.getElementById('f_' + k); i.value = v;
+      i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); }, [k, v[k]]); await p.waitForTimeout(500); } },
+    typeNew: async (p, v) => { for (const k of ['spans', 'bays']) { await fillTable(p, `#f_${k} + [data-sli="host"]`, v[k]); await p.evaluate(() => document.activeElement.blur()); await p.waitForTimeout(500); } },
+    saved: p => p.evaluate(() => JSON.stringify({ spans: P.br.spans, bays: P.br.bays })),
+    read: async p => {
+      const out = await p.evaluate(() => ({ P: JSON.parse(JSON.stringify(P)), C: JSON.parse(JSON.stringify(MODEL.C)),
+        stored: JSON.parse(localStorage.getItem(KEY) || 'null') }));
+      if (out.P.ui) delete out.P.ui.tab; if (out.stored && out.stored.ui) delete out.stored.ui.tab;
+      const ids = await p.$$eval('.tab-btn', e => e.map(b => b.dataset.tab).filter(t => t !== 'v3d')); out.tabs = {};
+      for (const id of ids) { await p.click(`.tab-btn[data-tab="${id}"]`); await p.waitForTimeout(400);
+        out.tabs[id] = await p.evaluate(id => { const e = document.getElementById('tab-' + id); if (!e) return null; const k = e.cloneNode(true);
+          k.querySelectorAll('[data-sli],script,style').forEach(x => x.remove()); return k.innerText; }, id); }
+      await p.click('.itab[data-pane="bridge"]'); await p.waitForTimeout(300);
+      out.side = await p.evaluate(() => { const k = document.getElementById('sidebar').cloneNode(true);
+        k.querySelectorAll('[data-sli],script,style,.note,#f_spans ~ .u,#f_bays ~ .u').forEach(x => x.remove());
+        return k.innerText.replace(/(CL bearing|looking ahead)ft/g, '$1'); });   // the unit moved into the column header
+      return out;
+    },
+    tableSel: '#f_spans + [data-sli="host"]',
+  },
 };
+// replace the rows of a table with the values ("a, b, c"): row by row (Enter adds a row from the last one), extra rows removed
+async function fillTable(p, sel, v) {
+  const vals = String(v).split(',').map(s => s.trim());
+  for (let i = 0; i < vals.length; i++) {
+    if (i === 0) await p.click(`${sel} tr[data-sli-r="0"] input`); else await p.keyboard.press('Enter');
+    await p.keyboard.press('Control+A'); await p.keyboard.type(vals[i]);
+  }
+  while (await p.$$eval(`${sel} tbody tr`, e => e.length) > vals.length) await p.click(`${sel} button[data-sli-del="${vals.length}"]`);
+}
 // type the stations into the table on B: click the first box, type, Enter between values
 async function typeTable(p, sel, v) {
   const vals = v.split(',').map(s => s.trim());
@@ -141,14 +175,14 @@ async function typeTable(p, sel, v) {
 }
 async function tool(key) {
   const T = TOOLS[key]; console.log(`${key}: ${T.file}`);
-  const A = refDir(args.a || 'origin/main', T.file), B = path.join(REPO, T.file);
+  const A = refDir(args.a || T.a || 'origin/main', T.file), B = path.join(REPO, T.file);
   const run = async (file, side, kase) => {
     const { b, p, errs, blocked } = await openPage(file, { vw: 1400, vh: 1000 });
     try {
       await T.setup(p);
       if (kase === 'custom') {
         if (T.template) await T.template(p);
-        if (side === 'A') await T.typeOld(p, T.values); else await typeTable(p, T.tableSel, T.values);
+        if (side === 'A') await T.typeOld(p, T.values); else if (T.typeNew) await T.typeNew(p, T.values); else await typeTable(p, T.tableSel, T.values);
         await p.waitForTimeout(1500);
       }
       const r = await T.read(p); r.savedText = await T.saved(p);
@@ -174,7 +208,8 @@ async function tool(key) {
     if (rb.blocked.length) console.log('       (blocked offline: ' + rb.blocked.join(', ') + ')');
     const d = diff(sa, sb);
     ok(!d.length, `${kase}: results, page text and saved data identical (hash ${hash(sa)} / ${hash(sb)})` + (d.length ? '\n       ' + d.slice(0, 8).map(x => `${x[0]}: ${JSON.stringify(x[1]).slice(0, 120)} -> ${JSON.stringify(x[2]).slice(0, 120)}`).join('\n       ') : ''));
-    if (kase === 'custom') ok(ra.savedText === T.values && rb.savedText === T.values, `custom: saved text "${rb.savedText}" (A "${ra.savedText}")`);
+    const want = T.expect || T.values;
+    if (kase === 'custom') ok(ra.savedText === want && rb.savedText === want, `custom: saved text "${rb.savedText}" (A "${ra.savedText}")`);
     if (rb.over != null) ok(rb.over <= 1, `390 px: page does not scroll sideways (${rb.over})`);
     ok(!ra.errs.length && !rb.errs.length, `${kase}: no console errors` + (ra.errs.length + rb.errs.length ? ': ' + [...ra.errs, ...rb.errs].join(' | ') : ''));
   }
