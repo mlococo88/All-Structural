@@ -1959,3 +1959,19 @@ index 219cc2c..a3e337e 100644
   `shots-lldf-merge/` and `shots-lldf-merge/smoke/`.
 ### Other copies
 - None (the bootstrap snippet shared with index.html / Prestressed Bridge Design.html is not touched).
+
+## 2026-11-02 — PR: [#700](https://github.com/mlococo88/All-Structural/pull/700) — PLIB: Undo / Redo   [display only]
+- **Before:** autosave (`lldf_autosave_v1`, and the active suite project's LLDF slice), Export / Import JSON. Named projects are made, renamed
+  and deleted in the MCT app (`index.html`, BridgeProjects registry), by design; this tool shows the active one. No undo.
+- **Where:**
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `autosave()`, after `status("Autosaved ✓");`: `if(window.LLPL) LLPL.h.record();` (the autosave is already debounced 350 ms).
+  - before `/* -------------------- wiring -------------------- */`: `function lldfPlibInit()` (anchor `/* PLIB (2026-11-02): Undo / Redo`): history
+    over `serialize(false)` without `savedAt`; `set` = `applyState()` (the Import path) then `autosave()`; buttons Undo, Redo before Export JSON.
+  - `initApp()`: last statement `setTimeout(lldfPlibInit,0);` (after start-up, so restoring the session is not a step).
+- **Saved data:** no key or format change; no new key. The suite project registry is unchanged (no list added here, as before).
+- **How verified:** `node tests/smoke/project-library.mjs --tool lldf`: ALL PASS (`window.lldfLast`, every computed result, identical to
+  origin/main on load, after an input change (skew +10°) and reopened on main's autosave; Undo / Redo / Ctrl+Z / Ctrl+Y exact; no new console
+  errors). `node tests/smoke/lldf-layout.mjs --no-index`: PASS (309 checks), as origin/main (the run with the index.html frame timed out in this container on the branch; not re-run on main). `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** not applicable (the tool computes distribution factors; it does not design for demands).
