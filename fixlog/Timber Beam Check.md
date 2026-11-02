@@ -1790,3 +1790,70 @@ index 2f29ed5..c3246e1 100644
   dialog byte-identical; quota; 390 px; no new console errors). `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Entered demands:** loads are entered directly (D, L, L_r, S, W line loads and point loads); nothing added.
+
+## 2026-11-02 — PR: claude/report-retire-timber (TBRX: the D11 print report and its print dialog retired after porting what the Report tab lacked; optional appendices; Print report, Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
+
+### TBRX-1. Content of the print report ported into the Report tab   [display] [no result change]
+- **Engineer decision (2026-11-02):**
+  - port the print dialog's three optional sections (Reference values, Validation, Method and manual) into the Report as optional appendices, with checkboxes that are off by default, as in the dialog;
+  - port the diagrams, the support-reaction sums and the bearing-ratio column;
+  - then retire the old report;
+  - leave `M.ui.print` untouched, or map it to the new checkboxes only if that changes no saved format.
+- **Compared:** the print report (`buildPrintReport({noPrint:true})` → `#printReport`) on origin/main against the Report tab (`tbrModel()`, Print report → `#rp-print`) on the branch.
+  - Cases: def (2x10 DF-L No.2, default); glu (two-span glulam 24F-1.8E, LRFD, 1.5 in. end notch, point load, project fields); sawn2 (2x12 SS, wet, incised, not repetitive, D + S). Each case was run with the dialog's default selection, and def also with all three optional sections ticked.
+  - A number counts as present when the Report shows the same value (the same digits, or more digits that round to it).
+  - Plotly was served from the test kit (plotly.js 2.27.0 in place of plotly-basic 2.35.2, test-only), so that both reports have the diagrams.
+- **Missing before the port:** 15 / 35 / 19 numbers (def / glu / sawn2), not counting the old section numbers. They were:
+  - the all-combinations table with f_b/F′_b, f_v/F′_v and f_c⊥/F′_c⊥ (Summary tab);
+  - the peak values by combination (+M, −M, V design and their x; Analysis Results tab);
+  - ΣF / ΣR shown to 0.1 lb;
+  - "R_B ≤ 50" (the Code limits line);
+  - the tabs' notes (lateral-support rule 2.06 l_u / 1.63 l_u + 3d / 1.84 l_u, the deflection method, uplift, K_cr, …);
+  - the V, M and deflection diagrams;
+  - with the optional sections ticked, the whole Reference values, Validation and Method and manual pages.
+- **Ported (anchor `TBRX (2026-11-02): what the retired print report printed`, before `tbrGoto`):**
+  - **Builders.** New `tbrBuildPage(id)` runs a tab's own builder (`BUILDERS()[id]`, as the print report did) into an off-screen node; `PLOTQ` and `__secNum` are saved and restored, so the live tab is untouched.
+  - **Converters.** New `tbrDomTable`, `tbrDomItems` and `tbrDomSubs` turn the builder output into report items, in order:
+    - tables (`tr.gov` / `.inuse` highlighted);
+    - boxes and paragraphs as notes (`.warnBox` / `.errBox` in warning style);
+    - list items as notes.
+    - Worked equations and plot holders are left out: the Report has its own steps.
+  - **Harvest.** New `tbrHarvest()`, cached per result `R`, collects:
+    - the Summary tab's all-combinations table (card `sumCombos`), added to §1 as its own subsection;
+    - the Analysis Results tab's peak values (card `anaPeaks`), added to §5;
+    - each result tab's `.hint` / `.note` / `.warnBox` texts, prefixed with their card title, added as "Notes on the X tab" subsections. A note is left out when every sentence of it is already in the report.
+  - **Diagrams.** New `tbrImages()` makes `Plotly.toImage` PNGs (900 × 260, as the print report) of `figV(diagCombo())`, `figM(diagCombo())` and `figD()`, cached per result and diagram selection, then rebuilds the Report when shown. They appear in §5 "Shear and moment diagrams" and in Deflection "Deflected shapes".
+  - **Appendices.** New `tbrApx(id)` / `TBR_APX`: "Appendix A — Reference values (built-in tables)", "Appendix B — Validation" and "Appendix C — Method and manual", inserted after "Notes and references" when ticked.
+    - The checkboxes are in the report bar (`opt.controls` of shared/report.js), labelled "Appendices:", and are off by default (`PR_DEFAULT`).
+    - Ticking one writes `M.ui.print.refv` / `.val` / `.man` and autosaves, exactly as the print dialog did: the same field, the same keys and values, so no format change and no migration. An existing save's choices show as ticked.
+    - The other dialog keys (`sum` … `defl`) are left as saved and are no longer read: the Report always has every main section.
+    - References: `tbcRefs({})` → `tbcRefs(tbrApxSel())`, so the AISC Table 3-23 row appears with the Validation appendix, as in the print report.
+  - **Model edits.** `tbrModel()`, Analysis table: `tbrCell(c.sumF, 0), tbrCell(c.sumR, 0)` → `tbrCell(c.sumF, 1), tbrCell(c.sumR, 1)` (0.1 lb, as the Analysis Results tab). Summary: the note "Code limits: none violated (R_B ≤ 50, NDS 2018 3.3.3.7; end-notch depth, NDS 2018 4.4.3.2 / 5.4.4.1)." when there are no failures (the print report's result line). `buildReport(pg)`: `tbrModel()` → `tbrModel(); tbrAddPorted(Mo);` before `tbrRich`.
+- **After the port:** in all cases (and with all appendices on), no number of the print report is missing from the Report apart from:
+  - its section numbers;
+  - the percentage "44.9 %" next to the ratio 0.449;
+  - E′I in scientific notation (1.5829 × 10⁸): the Report shows 158,290,625.
+
+### TBRX-2. Print report and dialog removed; Print prints the Report from every tab   [display]
+- **Removed:**
+  - `PRINT_CSS` (and its injection in `tbcInit`), `PR_LABELS`, `openPrintDialog()`, `tbcPageCSS()`, `tbcApplyPageCSS()`, `tbcResultRows()`, `tbcResultBlock()` and `async buildPrintReport()`;
+  - the CSS rule `#printReport{display:none}`;
+  - `buildPrintReport` from the `window.TBC` test hook. No test uses it: `tests/bpad-*.mjs` call Base Plate's own function.
+- **Kept:** `PR_DEFAULT` (the appendix defaults) and `tbcRefs`.
+- **Changed:**
+  - `$('btnPrint')` ("Print report"): `openPrintDialog` → `tbrPrintAny()`. It shows the Report tab, waits for the diagram images, then calls `TBRP.api.print()`. Without the shared files it calls `window.print()`.
+  - New `tbrPrintPrep()`: from another tab it sets `M.ui.outTab = 'rpt'` without autosaving, so the saved tab never changes, and remembers the tab in `TBRP_BACK`.
+  - New `afterprint` handler: restores that tab.
+  - New inline `<script>` before `shared/steps.js`: `beforeprint` → `tbrPrintPrep()`. It is registered before shared/report.js's own listener, so the running header is set for Ctrl+P and the browser's Print.
+  - The Report's `beforeprint` handler: the `|| $('printReport')` guard dropped.
+  - The `a.wkA` click guard `a.closest('#printReport')` dropped.
+- **Governing provision:** none changed. No formula, factor, unit, code reference or computed value changed (CLAUDE.md §4). ΣF / ΣR are shown to 0.1 lb instead of 1 lb; the values are the same.
+- **Saved data:** no key or format change. `M.ui.print` keeps its keys; only `refv` / `val` / `man` are written, by the checkboxes, as by the dialog before.
+- **How verified:**
+  - `node tests/check-syntax.mjs "Timber Beam Check.html"`: pass.
+  - origin/main vs branch, three cases:
+    - `TBC.res` (JSON), the text of the 11 result tabs, localStorage (`tbc_autosave_v1`) and page text: identical;
+    - console errors: identical (blocked fonts).
+  - Report: 0 unresolved references, no NaN / undefined. All three appendices build (report text 21 k → 54 k characters). The three diagram images are present.
+  - Print routing, headless, from each of the 12 tabs, by `beforeprint` and by the Print report button: `#rp-print` holds the Report, the running header is set, and the tab of before comes back after `afterprint`.
+- **Other copies:** none.
