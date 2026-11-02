@@ -100,3 +100,17 @@ test('same / filled', () => {
   assert.equal(L.same([['5'], ['6']], [['5']], [{}]), false);
   assert.deepEqual(plain(L.filled([[' 1 ', ''], ['', ' '], [2]])), [['1', ''], ['2']]);
 });
+
+// Bridge Substructure Loading.html: span lengths / girder spacings. The hidden <input data-list> holds b.spans.join(', ');
+// the tool's change handler reads it with  t.value.split(/[,\s]+/).filter(Boolean).map(num)  and stores the ARRAY.
+const bslParse = s => s.split(/[,\s]+/).filter(Boolean).map(Number);
+test('Bridge Substructure Loading: spans / bays arrays round-trip through the table', () => {
+  for (const a of [[110, 140, 110], [9.5, 9.5, 9.5, 9.5], [87.25], [100, 120.125, 100, 80]]) {
+    const text = a.join(', '), rows = L.fromText(text);
+    assert.equal(L.toText(rows), text);
+    assert.deepEqual(P(bslParse(L.toText(rows))), a);
+  }
+  // an older box text typed with spaces only ("110 140") shows one row per value only after the tool re-renders it (the
+  // tool always writes b.spans.join(', ') into the box), so the table never sees it
+  assert.deepEqual(P(bslParse(L.toText([['110'], [''], ['150']]))), [110, 150]);
+});
