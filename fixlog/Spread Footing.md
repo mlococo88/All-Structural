@@ -3600,7 +3600,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Entered demands:** already entered directly (factored and service column loads per case, and the hand-offs memberReactions /
   foundationLoads). Nothing added.
-## 2026-11-02 — PR: claude/sf-dowel-allcombos — Dowels and shear friction: A_s,req over every combination, A_vf developed on both sides, N_u = 0.9D (SFDA; calculation change)
+## 2026-11-02 — PR: claude/sf-dowel-allcombos — Dowels and shear friction: A_s,req over every combination, A_vf developed on both sides, N_u = 0.9D; pedestal reinforcement on the Reinforcement tab, longitudinal bars as dowels, hooked end (SFDA, SFDB; calculation change) (PR #684: https://github.com/mlococo88/All-Structural/pull/684)
 
 ### SFDA. Pier-to-footing dowels and shear friction   [calculation change; CLAUDE.md §4]
 - **Engineer decision (2026-11-02), after the independent audit (discrepancies #1, #2, #3 and #5, cases SF-1 and SF-2):**
