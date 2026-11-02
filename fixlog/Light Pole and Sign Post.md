@@ -1655,6 +1655,14 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - **Saved data:** new top-level state field `codeMode` (saves without it open as `'ibc'`); new inputs `ltsRisk`, `ltsAdt`, `ltsV`, `ltsVsvc`, `ltsIce` with defaults applied in `applyState()` when absent. Storage keys and the JSON export format unchanged.
 - **How verified:** `node tests/check-syntax.mjs` pass; `node tests/engine/run.mjs lightpole` 26 passed (3 new in lightpole-lts.test.mjs); `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL (results, cable values, text, drawings; 0 console errors); `tests/smoke/lightpole-anchor-handoff.mjs` ALL PASS; LTS mode pole and two-post sign at 1280 / 390 px: no horizontal overflow, 0 console errors; switching back to IBC removes every LTS card.
 
+## 2026-11-02 — PR: claude/lp-manbar-45 (LPMB: #4 and #5 offered for the shaft longitudinal bars in Check mode; input options only)
+- **Where:** input `#manBarSize` (Shaft card, "Reinforcement mode: Check"), anchor `<select id="manBarSize" class="combo-sel">`; manual Inputs table row "Longitudinal bar size".
+- **Before:** `<option>#6</option>…<option>#11</option>` (manual text: "#6 through #11. Bars below #6 are not offered for shaft longitudinal steel.")
+- **After:** `<option>#4</option><option>#5</option><option>#6</option>…<option>#11</option>` (manual text: "Check mode: #4 through #11. Design mode searches #6 through #11 only.")
+- **Why:** engineer request (2026-11-02): check shaft cages with #4 or #5 longitudinal bars.
+- **Calculation:** no formula changed. Check mode already reads the bar from the bar table (`barByName`, #3–#11 with A_b and d_b) and checks spacing (ACI 318-19 25.2.3), minimum/maximum steel, the P–M interaction and ties with the same functions; Design mode still skips #3–#5 (`if(bar.n==='#3'||bar.n==='#4'||bar.n==='#5') continue;`), unchanged. Default stays #8, so every saved project computes identically.
+- **Check case:** Check mode, 8 #5 longitudinal bars: A_s = 8 × 0.31 = 2.48 in²; the same checks run as for #8 (A_s = 6.32 in²).
+- **Verified:** `node tests/check-syntax.mjs "Light Pole and Sign Post.html"` passes; `node tests/engine/run.mjs lightpole` 26 passed, 0 failed.
 ## 2026-11-02 — PR #PRNUM: claude/lp-lts-2 (LTS-2: LRFDLTS wind, dead load and ice, factored base actions; IBC mode unchanged)
 
 ### LTS2-1. Wind loads, AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions   [new, LTS mode only] [IBC results unchanged]

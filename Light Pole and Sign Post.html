@@ -615,7 +615,7 @@
             </select></div></div>
           <div class="row manRow" style="display:none"><label>Longitudinal bar size</label>
             <div class="ctl"><select id="manBarSize" class="combo-sel">
-              <option>#6</option><option>#7</option><option selected>#8</option><option>#9</option><option>#10</option><option>#11</option>
+              <option>#4</option><option>#5</option><option>#6</option><option>#7</option><option selected>#8</option><option>#9</option><option>#10</option><option>#11</option>
             </select></div></div>
           <div class="row manRow" style="display:none"><label>Number of bars</label>
             <div class="ctl"><input id="manBarN" type="number" value="8" step="1" min="4" max="36"><span class="unit">—</span></div></div>
@@ -2558,7 +2558,7 @@ manPart("p2","2. Input Reference",[
  "<b>Check</b> \u2014 you specify bar size, bar count, tie size, and tie spacing. Nothing is substituted or upsized. Every code check is evaluated against your bars and reported OK or NG in a compliance table."
 ]},
 {tbl:{head:["Input (check mode)","Units","Notes"],rows:[
- ["Longitudinal bar size","\u2014","#6 through #11. Bars below #6 are not offered for shaft longitudinal steel."],
+ ["Longitudinal bar size","\u2014","Check mode: #4 through #11. Design mode searches #6 through #11 only."],
  ["Number of bars","\u2014","Distributed on a bar circle (round) or around the tie perimeter (square). Four corner bars are always placed on a square, with the remainder split evenly along the faces."],
  ["Tie / spiral bar","\u2014","#3, #4, or #5. ACI §25.7.2.2 requires at least #4 when longitudinal bars are #10 or larger \u2014 the program checks this rather than silently correcting it."],
  ["Tie spacing, s","in","Checked against min(16d<sub>b</sub>, 48d<sub>tie</sub>, b) and against the shear requirement."]
