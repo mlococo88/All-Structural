@@ -3765,3 +3765,41 @@ current design's analysis accepted; **the minimum shipping piece length raised f
 - The app run above, main vs branch (the list read from the page; screenshot checked).
 ### Other copies
 - None.
+
+## 2026-11-02 — PR: claude/sb-drop-twin — Auto design: the 1-gage-line twin that saves nothing is not listed (engineer decision)
+### Why
+- PR #697 found that the second listed design on the default project is the first one with one gage line at the field splices: the same
+  plates, transitions and splices, the same weight and cost. The engineer chose to drop such a twin, so the next distinct design moves up, and
+  to keep a 1-gage-line design whenever it actually saves something.
+### What changed
+- `engine/autodesign.js` `run()`, stage 2 (anchor `const cands = [], rejected = [], blocked = [], twins = []`):
+  - new `plSig(L)` (N_b, D, overhangs, splice stations, web plates, flange zones with cut points, widths and thicknesses: everything but the
+    gage lines) and `twinOf(c)`: the listed candidate with the same `plSig`, one of the two `minLines` 1 and the other null ("as set"), and the
+    same objective value (`key`) and cost within 1e-6 (relative).
+  - Before: `if (E.pass && pr.ok) { cands.push({ ...cand(o, E, S, P, det), polished: o.polished || 0 }); continue; }`
+  - After: `if (E.pass && pr.ok) { const c = { ...cand(o, E, S, P, det), polished: o.polished || 0 }, k = twinOf(c);`
+    `if (k < 0) cands.push(c); else if (c.L.minLines === 1) twins.push(c); else { twins.push(cands[k]); cands[k] = c; } continue; }`
+    A twin does not count toward Designs to list (topN), so the loop full-checks the next design of the pool. Whichever of the two passed first,
+    the "as set" one is kept. `run()` returns `twins` as well.
+- `ui/autodesign.js`: the note under the list says how many 1-gage-line designs were not listed and why (N_b, D of each).
+- The "Differs from #1 in" column (#697) is kept.
+### §4 callout
+- No check, formula or factor changed; the designs listed change (a design that saves nothing is left out). Before / after (Node, `AD.run(P, {})`
+  = the app's options, topN 2; the best design's full record hashed):
+  - Default project (nb Auto: 5, 6): before #1 N_b 5, D 55 in, 399,699 lb, $1,397,096, as set, TS2 1.000; #2 the same with 1 gage line.
+    After #1 the same (hash 445c6bc380cf7a8d both); #2 N_b 5, D 60 in, 399,792 lb, $1,395,877, as set, TS2 1.000; twin left out: N_b 5, D 55, 1 line.
+  - "4, 5, 6" (nb Range 4 … 6): before #1 N_b 4, D 72 in, 381,467 lb, $1,301,600, as set, TS7 1.000; #2 the same with 1 gage line.
+    After #1 the same (hash dc030090087e4a84 both); #2 N_b 4, D 57 in, 386,042 lb, $1,342,925, as set, TS2 1.000; twin left out: N_b 4, D 72, 1 line.
+  - The app (Playwright, the page's own project and options; #697 recorded main's list): before #1 N_b 5, D 67 in, 409,784 lb, $1,427,351, 7 transitions,
+    as set, TS2 1.000; #2 the same with 1 gage line. After #1 the same; #2 N_b 5, D 65 in, 411,683 lb, $1,420,299, 6 transitions, as set,
+    TS7 1.000, "Differs from #1 in: D 65.00 in; web plates; top flange transitions; bottom flange transitions; transverse stiffener spacing; …";
+    the note "1 one-gage-line design not listed … (N_b 5, D 67.00 in)". 0 console errors. (The Node runs start from the bare default project, the
+    page from its project after the tabs fill their defaults, hence D 55 there and D 67 here; each compared like with like.)
+  - When no other design passes, the list is shorter than Designs to list: Refine on the built-in project, topN 2, now lists 1 (its twin left out).
+### Check case
+- Default project, Designs to list 2: the list holds two different designs; the note says one 1-gage-line design was not listed.
+### How verified
+- The runs above, origin/main vs branch. `node tests/engine/run.mjs autodesign` (3 files, 23 passed). `tests/engine/autodesign.test.mjs` "Every candidate passes …" (Refine, topN 2) now also asserts that no
+  two listed designs differ only in the gage lines and that each left-out twin has its "as set" design listed. `node tests/check-syntax.mjs`.
+### Other copies
+- None.
