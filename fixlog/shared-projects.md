@@ -24,3 +24,6 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
   `two` in `{"one":…,"two":{"c":"x"},"three":3}` gives keys `one, deux, three` with `deux` byte-identical; a 120-character quota refuses a save
   and storage is byte-identical; `'{not json'` stays as it is after save / remove; undo / redo / max 3 / settle.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
+
+## 2026-11-02 — PR: [#665](https://github.com/mlococo88/All-Structural/pull/665) — loaded by Stone Masonry Arch Load Rating.html (no change to the shared files)
+- `tests/smoke/project-library.mjs` gains `--tool stonearch`, and A vs B reload comparison (both sides reopened on A's storage).
