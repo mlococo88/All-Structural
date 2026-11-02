@@ -110,3 +110,11 @@ Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcl
 - LTS mode: plan merged #619 (docs/lts-mode-plan.md). Basis = LRFDLTS 1st Ed. + interims through 2022 (LRFDLTS-1-I5), NOT 2nd Ed. Engineer will add the LRFDLTS PDF to mlococo88/Structural_References on 2026-11-02 (tomorrow); then send its path to the LTS agent and start Phase B (9 PRs). Owner amendments scan running (docs only).
 - lldf two-panel layout merged #618. LP anchor hand-off #610 #612 #616 #617. Shared report #607 #614. BP cage #611 #613.
 - Steel Bridge: blockers done (#576 CLL import, #579 studs import + SC2 layout, #585 TF3 advisory, #586 sidewalk override, #615 fatigue shear range at supports, #621 doc). Verdict: ready. Engineer 2026-11-02: KEEP BOTH APPS for now (no redirect); ask again later. η on deck placement still running.
+
+## PENDING LIST (engineer)
+- Auto design: widen the search (keep best candidates from more web depths) — path-dependent heuristic found a lighter design after a stricter rule (#622). Pending, not started.
+- Steel Bridge switch-over (redirect + tools.html): engineer said keep both for now.
+- LTS mode Phase B: waiting for the LRFDLTS 1st Ed. + 2022 interim PDF in Structural_References; owner questions Q21–Q25.
+- Light Pole: sign-panel ice (one face ×0.8 vs both faces); base plate LTS article; C_f rect row and q_z height; V_c ρ_w/A_cv; 17.5.2.1 numbering; Fig 29.3-1 s/h=0.7 row; EPA drag; N2–N5, N8.
+- Old print reports/calc sheets: retire per tool after engineer review (lldf being retired now).
+- Phone-layout pass: S&M, ASCE7, MLG, Stone Arch, Gusset, Retaining Wall, SubLoads, Steel Beam, CBC top bar, PSBD header.
