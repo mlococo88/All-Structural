@@ -120,3 +120,5 @@ Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcl
 - Phone-layout pass: S&M, ASCE7, MLG, Stone Arch, Gusset, Retaining Wall, SubLoads, Steel Beam, CBC top bar, PSBD header.
 - PS rebuild plan merged #624 (docs/prestressed-rebuild-plan.md; apps/prestressed/, ~31 PRs to switch-over). ON HOLD: engineer wants Steel Bridge in a better place first. 14 questions in the plan (§ questions) for later.
 - Steel Bridge batch (test speed, AD widen, parity15, X1–X4, jacking/seismic, weathering, LL defl stations, flange plots, design basis, phone): STOPPED by engineer 2026-11-02 before any PR — no Steel Bridge work for now; items stay on the pending list.
+- Light Pole calc sheet retired #625 (Report holds all 7,004 numbers).
+- Overnight 2026-11-02 (engineer-approved): agent 1 phone layouts + report polish per tool (S&M, ASCE7, MLG, Stone Arch, Gusset, RW, SubLoads, Steel Beam, CBC, then check others); agent 2 BP CTDOT adhesive-anchor note, LP Shaft #3 KaTeX fix, fixlog/AUDIT/ENGINEER_CHECKS/tools.html/lts plan tidy-ups, branch cleanup. No Steel Bridge / Prestressed work.
