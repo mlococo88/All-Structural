@@ -355,6 +355,7 @@
   body.lts-mode .ibcOnly{display:none!important}
   body.lts-mode .tabpage:not([data-page=manual]) > *:not(.ltsCard){display:none!important}
   body.lts-mode #postSelBar{display:none!important}
+  body.lts-mode .tabpage > #lpAnchCard{display:block!important}   /* LTS-8: the Anchorage hand-off card serves both modes */
   .lts-basis{font-size:12px;color:#1e3a5f;background:#eef4fb;border:1px solid #9db8d9;border-radius:4px;padding:6px 9px;margin:0 0 8px}
   .lts-dev{font-size:12px;color:#7c2d12;background:#fff4ec;border:1px solid #f0b48a;border-radius:4px;padding:6px 9px;margin:0 0 8px}
   .lts-flag{font-size:11px;font-weight:600;color:#9a3412;background:#ffedd5;border-radius:3px;padding:0 5px;margin-left:4px;white-space:nowrap}
@@ -6855,7 +6856,37 @@ function lpdElevGeometry(){
 // in the Light Pole sign convention (lightPole-v1: P + = compression; Mx = moment of the +x push, My of the +y push; T + CCW).
 let LPP_ANCH=null;
 function lppHash(str){ let h=0x811c9dc5; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return ('00000000'+h.toString(16)).slice(-8); }
+// LTS-8 (2026-11-02): in the LRFDLTS mode the hand-off carries the LTS combinations (HANDOFF.md §4.11 schema unchanged): Table 3.4-1
+// Strength I and Extreme I (max/min DC) for every load case of Table 3.9.3-1, M = B·M (Art. 4.8.1 / Eq. 5.12.1-10), the LTS shaft depth
+// (Broms, LTS-7) and the ACI cage of the LTS run. Service I and Fatigue are not sent.
+function ltsAnchorPayload(){
+  const inp=lppLastInp, X=lppLtsLast;
+  if(!inp||!X||!X.ba||!X.mc) return {error:'No LRFDLTS results yet (correct any input errors first).'};
+  if(!X.fd||!X.fd.gov) return {error:'Select the Broms soil model (Shaft & soil): the LRFDLTS shaft depth comes from Broms (LTS-7).'};
+  const notes=[];
+  if(inp.poleShape!=='round') notes.push('The pole is '+inp.poleShape+' (the Anchorage app takes a round pole on a circular plate).');
+  notes.push('Double-nut base: the leveling-nut standoff is not a Light Pole input (standoffClear sent as 0); set it in the Anchorage app.');
+  notes.push('AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions: Table 3.4-1 Strength I (1.25DC) and Extreme I (1.1DC + W, 0.9DC + W) for the load cases of Table 3.9.3-1 (1: normal, 2: transverse, 3: 0.75 of both); M = B·M (Art. 4.8.1 tapered pole / Eq. 5.12.1-10 prismatic post) at the top of the shaft; torsion per Art. 3.9.4.2. Service I and Fatigue are not sent (fatigue design is not required for these supports, Arts. 11.4, 11.7.2).');
+  notes.push('LRFDLTS C5.16.3 refers to ACI 318-11 Appendix D for the anchorage; the Anchorage app uses ACI 318-19 Ch. 17. Cast-in anchor bolts for new work (Art. 5.16.1).');
+  const nG=appMode==='sign'?(signPosts===2?2:1):1, reo=X.fd.reo;
+  const combos=X.ba.rows.filter(r=>r.combo!=='SV1').map(r=>{ const B=X.mc.Bs[r.combo]?X.mc.Bs[r.combo].B:1;
+    return {name:`LRFDLTS ${r.name}, ${r.lcName}`, P:r.P, Vx:r.Vx, Vy:r.Vy, Mx:B*r.Mx, My:B*r.My, T:r.T}; });
+  const groups=Array.from({length:nG},(_,i)=>({id:appMode==='sign'?'post'+(i+1):'pole', label:appMode==='sign'?'Post '+(i+1):'Pole',
+    anchor:{pattern:'circle', n:Math.round(inp.boltQty), BC:inp.boltBC, theta0:inp.boltTheta, dia:inp.boltDia, grade:'f1554_'+inp.boltGrade, nut:'heavyHex', hef:inp.boltHef, torqued:inp.anchTq==='torqued'},
+    base:{type:'doubleNut', standoffClear:0, grout:false, plate:{shape:'circle', D:inp.bpDia, t:inp.bpT, Fy:(inp.bpFy||36)*1000},
+          pole:{shape:inp.poleShape==='round'?'round':inp.poleShape, D:inp.poleDiaBase}},
+    pier:{shape:inp.shaftShape==='square'?'square':'circle', D:inp.b*12, fc:inp.fc, cracked:true, depth:X.fd.gov.br.L*12, cover:inp.cover,
+          longBars:reo?'('+reo.long.n+') '+reo.long.bar.n:'', ties:reo?reo.tie.bar.n+' @ '+fmt(reo.tie.s,0)+' in':''},
+    combos:combos.map(c=>({...c}))}));
+  const body={groups, units:{length:'in', force:'lb', moment:'lb-ft', stress:'psi'}, signConvention:'lightPole-v1'};
+  const inputsHash=lppHash(JSON.stringify(body));
+  return {payload:Object.assign({_schema:'bridge-anchor-group', schemaVersion:1, producer:'Light Pole and Sign Post', producerFile:'Light Pole and Sign Post.html',
+    project:{name:activeProject||'', bridgeId:''},
+    basis:{factored:true, method:'LRFD', combos:'AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions, Table 3.4-1: Strength I, Extreme I (DC max/min); load cases 1–3 of Table 3.9.3-1', B2:'LRFDLTS Art. 4.8.1 (tapered pole) / Eq. 5.12.1-10 (prismatic post) B of each limit state applied to M'},
+    inputsHash, notes}, body)};
+}
 function lppAnchorPayload(){
+  if(codeMode==='lts') return ltsAnchorPayload();   // LTS-8
   const ctx=LPP_SUMCTX, A=LPP_ANCH; if(!ctx||!A) return {error:'No results yet (correct any input errors first).'};
   const inp=ctx.inp, notes=[];
   if(inp.poleShape!=='round') notes.push('The pole is '+inp.poleShape+' (the Anchorage app takes a round pole on a circular plate).');
@@ -6945,9 +6976,9 @@ const LTS_STATUS=[
   ['LTS-5','Deflection (Art. 10.4.2.1), fatigue applicability (Arts. 11.4, 11.7.2), breakaway checklist (Art. 2.5.2, Section 12)',true],
   ['LTS-6','Base plate (bending line, engineering method) and base weld (AWS D1.1 / AISC 360-16 §J2)',true],
   ['LTS-7','Foundation: Broms embedment (Art. 13.6.1.1), shaft reinforcement (ACI 318-19; Art. 13.6.2 not applied), details (Art. 13.6.2.1)',true],
-  ['LTS-8','Anchorage-app export of the LTS combinations',false],
+  ['LTS-8','Anchorage-app export of the LTS combinations (bridgeSuite.v1.anchorGroup, HANDOFF.md §4.11)',true],
   ['LTS-9','Report, drawings, manual',false]];
-const LTS_PAGE_PR={geometry:'LTS-9',anchors:'LTS-8',drawings:'LTS-9',report:'LTS-9'};
+const LTS_PAGE_PR={geometry:'LTS-9',drawings:'LTS-9',report:'LTS-9'};
 function ltsClear(){ document.querySelectorAll('.ltsCard').forEach(e=>e.remove()); lppLtsLast=null; }
 let lppLtsLast=null;   // LTS-2: the last LRFDLTS run {g, L, ba}
 // LTS-2: the geometry the LTS engine reads, from the IBC inputs of the same run (inp) and the fixture / sign rows
@@ -7072,7 +7103,7 @@ function ltsCalc(){
       ltsAddCard('anchors','ltsBpCard','7',(g.mode==='sign'?'Post':'Pole')+' base plate and base weld','engineering method · AWS D1.1',
         basis+`<p class="lts-dev">${lppEsc(LPP_BP_VERIFY)}</p>`+ltsStepsHTML(bpSteps)
         +`<p class="eq-title" style="margin-top:10px"><b>Pole-to-base-plate weld</b> <span class="lts-flag">engineer to confirm (Q-B5)</span></p>`+wSteps
-        +`<p class="tbl-note">Anchor rods: designed in the Anchorage app (LTS combinations export: LTS-8). LRFDLTS Arts. 5.16–5.16.3: cast-in-place anchor bolts for new work; hooked bolts only with F<sub>y</sub> ≤ 55 ksi; anchorage per ACI 318 (C5.16.3).${g.mode==='sign'&&g.sign.nPost===2?' Values per post.':''}</p>`); }
+        +`<p class="tbl-note">Anchor rods: designed in the Anchorage app — the Anchorage card on this tab sends the LRFDLTS combinations (Strength I, Extreme I; M × B). LRFDLTS Arts. 5.16–5.16.3: cast-in-place anchor bolts for new work; hooked bolts only with F<sub>y</sub> ≤ 55 ksi; anchorage per ACI 318 (C5.16.3).${g.mode==='sign'&&g.sign.nPost===2?' Values per post.':''}</p>`); }
     // LTS-7: foundation
     { const fd=ltsFoundation(inp,g,ba,mc); lppLtsLast.fd=fd;
       const notes=[], bIn=inp.b*12, n2=(x,d)=>SharedSteps.n(x,d);
@@ -7126,6 +7157,7 @@ function ltsCalc(){
     +`${lppLtsLast&&lppLtsLast.bp?`<tr><td>Base plate (bending line, engineering method)</td><td><b>${lppLtsLast.bp.ok?'OK':'NOT OK'}</b>, t<sub>req</sub> ${fmt(lppLtsLast.bp.tReq,3)} / t ${fmt(lppLtsLast.bp.tProv,3)} in</td><td>Art. 5.6.3 (p. 5-7): thickness to be considered; no LRFDLTS method</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.wd?`<tr><td>Base weld</td><td>${lppLtsLast.wd.type==='cjp'?'CJP: base metal governs':`<b>${lppLtsLast.wd.ok?'OK':'NOT OK'}</b>, ratio ${fmt(lppLtsLast.wd.ratio,3)}`}</td><td>Art. 5.14 → AWS D1.1 / AISC 360-16 §J2</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.fd?(lppLtsLast.fd.gov?`<tr><td>Drilled shaft embedment (Broms)</td><td>L = <b>${fmt(lppLtsLast.fd.gov.br.L,2)} ft</b> required; shaft moment ${fmt(lppLtsLast.fd.gm.br.Mu,2)} kip-ft</td><td>Art. 13.6.1.1, C13.6.1.1 (pp. 13-3, 13-4)</td></tr>`:`<tr><td>Drilled shaft</td><td><b>select the Broms soil model</b></td><td>Art. 13.6.1.1</td></tr>`):''}`
+    +`${lppLtsLast&&typeof lppAnchorChipHTML==='function'&&LPP_ANCH?`<tr><td>Anchors — Anchorage app</td><td>${LPP_ANCH.groups.map(gg=>`${lppEsc(gg.label)}: ${lppAnchorChipHTML(gg.id)}`).join('<br>')}</td><td>LRFDLTS combinations sent from the Anchorage tab (HANDOFF.md §4.11)</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.fat?`<tr><td>Fatigue</td><td>${lppLtsLast.fat.required?'<b>REQUIRED — outside this tool (high-mast tower)</b>':'not required'}</td><td>Arts. 11.4, 11.7.2 (pp. 11-3, 11-10, 2017)</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.brk?`<tr><td>Breakaway</td><td>${lppLtsLast.brk.needed?'required — see the checklist':'not required (outside the clear zone)'}</td><td>Art. 2.5.2; Section 12</td></tr>`:''}`
     +`</table><p class="tbl-note">Status of the LRFDLTS mode:</p><table class="tbl"><tr><th>Step</th><th>Content</th><th>Status</th></tr>`
@@ -7133,6 +7165,7 @@ function ltsCalc(){
   // the other pages: what is still to come
   Object.keys(LTS_PAGE_PR).forEach(pg=>ltsAddCard(pg,'ltsTodo_'+pg,'·','LRFDLTS mode','in development',
     basis+`<p class="lts-dev">This tab is not yet available in the LRFDLTS mode (planned: ${LTS_PAGE_PR[pg]}). The IBC 2021 · ASCE 7-22 results are not shown in this mode.</p>`));
+  if(typeof lppAnchorCardRefresh==='function') lppAnchorCardRefresh();   // LTS-8: the Anchorage chips against the LTS hand-off
   document.querySelectorAll('.ltsCard').forEach(c=>{ if(window.renderMathInElement) renderMathInElement(c,{delimiters:[{left:'\\[',right:'\\]',display:true}],throwOnError:false}); });
 }
 
