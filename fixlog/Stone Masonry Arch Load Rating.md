@@ -1101,3 +1101,25 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
 - origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 19 tabs is identical, except the Report tab's two topic titles above. The whole-document `textContent` differs only by the ten inserted `[6pt]` (five in the inline script source, five in the KaTeX annotation of the k_loc matrix). localStorage after load is identical.
 - Screenshots at 1280 px are pixel-identical (0 differing pixels) on load and on all 19 tabs. At 900 px only the seven overflowing tabs differ (see PHN-1).
 - Report print: 0 elements past the 7.5 in text width.
+
+## 2026-11-02 — PR: [#665](https://github.com/mlococo88/All-Structural/pull/665) — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+- **Before:** Project tab → Project Files: a list box with Save / Update, Load, Delete (`stoneArchLR.projects`), Export / Import JSON,
+  "Start a new calculation". No rename, no duplicate, no undo.
+- **Where:**
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `autosave()`, anchor `try{localStorage.setItem(LSA,JSON.stringify(snapshot()));}catch(e){storageOK=false;showAutoInfo();}`: after it
+    `if(PLIB&&PLIB.soon)PLIB.soon();   /* PLIB: one undo step per change (debounced) */` (400 ms debounce: typing a number is one step).
+  - after `window.__restoreForTest=(o)=>{restore(o);render();};`: `var PLIB={}` and `function plibInit()` (anchor `/* PLIB (2026-11-02)`).
+    History over `snapshot()` keeping only `fields`, `title`, `rateBasis`, `midas` (view / focus / chart / collapse fields and the time stamp
+    are not part of a step); `set` = `restore(Object.assign(snapshot(), step)); render(); autosave();`. `mapStore(localStorage, LSK, { time: saved || ts })`
+    (the tool's own key and format). Dialog: `open` selects the name in `#projSel` and clicks Load (the tool's own load path); a rename of
+    the open project updates `curProj`, the name box and the autosave; a delete of the open project clears `curProj` as the Delete button
+    does; the list box is redrawn after every change. Buttons Undo, Redo, Saved projects… in a new `.bx-pm` row under the title.
+  - `boot()`: `plibInit();   /* PLIB */` after `init();`.
+- **Saved data:** keys `stoneArchLR.autosave` and `stoneArchLR.projects` and their formats unchanged; no new key.
+- **How verified:** `node tests/smoke/project-library.mjs --tool stonearch`: ALL PASS. The model (`__modelForTest()`, every computed
+  value) and the Summary text are identical to origin/main on load and after an input change; the branch reopened on main's autosave and
+  list equals main reopened on them, and main's saved project opens from the dialog with the same results (list byte-identical);
+  Undo / Redo / Ctrl+Z / Ctrl+Y exact (an output-tab change is not a step); dialog rename / duplicate / delete byte-identical, quota
+  refusal leaves storage byte-identical; 390 px; no console errors beyond main's. `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).

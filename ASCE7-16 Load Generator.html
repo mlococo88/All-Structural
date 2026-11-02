@@ -304,6 +304,9 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
 <!-- A7RP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <script>
 const APP_VERSION="v1.0";
 /* ==================================================================
@@ -4371,7 +4374,7 @@ function restore(o){
 let saveTimer=null;
 function autosave(){
   clearTimeout(saveTimer);
-  saveTimer=setTimeout(()=>{ try{ localStorage.setItem(LSA, JSON.stringify(snapshot())); autosaveNotice(false); }catch(e){ autosaveNotice(true); } },350);
+  saveTimer=setTimeout(()=>{ try{ localStorage.setItem(LSA, JSON.stringify(snapshot())); autosaveNotice(false); }catch(e){ autosaveNotice(true); } if(window.A7PL) A7PL.h.record(); /* PLIB: one undo step per change */ },350);
 }
 /* a failed autosave (storage full or blocked) is shown on screen rather than swallowed */
 function autosaveNotice(fail){
@@ -4797,6 +4800,33 @@ window.addEventListener("DOMContentLoaded",()=>{
   let boot=null;
   try{ const a=localStorage.getItem(LSA); if(a) boot=JSON.parse(a); }catch(e){}
   if(boot){ restore(boot); } else { buildInputs(); recalc(); }
+});
+</script>
+<script>
+/* PLIB (2026-11-02): saved-project list and Undo / Redo (shared/projects.js, shared/projects-ui.js). Display and storage only:
+   the list is the tool's own key asce7bldg.projects in its own format ({ name: snapshot() }); the autosave key is unchanged.
+   Undo / Redo: whole-input snapshots (the view fields tab / itab / open / manPart are left out, so changing tabs is not a step),
+   session only. Opening a saved project, Import JSON and Reset are one step each (Undo returns to the inputs before them). */
+window.addEventListener("DOMContentLoaded",()=>{
+  if(!window.SharedProjects||!window.SharedProjectsUI) return;
+  const VIEW=["tab","itab","open","manPart"];
+  const inputsText=()=>{ const o=snapshot(); VIEW.forEach(k=>delete o[k]); return JSON.stringify(o); };
+  const h=SharedProjects.history({ get:inputsText, set:t=>{ const o=JSON.parse(t); VIEW.forEach(k=>{ o[k]=S[k]; }); restore(o); } });
+  let LS=null; try{ LS=window.localStorage; }catch(e){}
+  const store=SharedProjects.mapStore(LS,LSK);
+  const cur=()=>{ const e=document.getElementById("savename"); const n=e?e.value.trim():""; return n&&store.has(n)?n:null; };
+  const dlg=SharedProjectsUI.libraryDialog({ store, storage:LS, title:"Saved projects (this browser)", current:cur,
+    open:n=>{ doLoad(n); return true; },
+    renamed:(a,b)=>{ const e=document.getElementById("savename"); if(e&&e.value.trim()===a) e.value=b; },
+    changed:()=>refreshProjects() });
+  const row=document.createElement("div"); row.setAttribute("data-sp","row"); row.style.cssText="display:flex;gap:4px;flex-wrap:wrap";
+  const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:"btn",style:"font-size:9pt;padding:2px 8px"});
+  const bu=B("Undo","Undo the last input change (Ctrl+Z)"), br=B("Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)"), bl=B("Saved projects\u2026","The projects saved in this browser: open, rename, duplicate, delete");
+  bl.onclick=()=>dlg.show(); row.append(bu,br,bl);
+  const host=document.getElementById("tbactions"); if(host) host.appendChild(row);
+  SharedProjectsUI.undoRedo(h,{ undo:bu, redo:br });
+  h.reset();
+  window.A7PL={ h, store, dlg };
 });
 </script>
 <script>

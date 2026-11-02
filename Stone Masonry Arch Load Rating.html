@@ -10,6 +10,9 @@
 <!-- ARPT: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <style>
 :root{
   --ink:#1a1a1a; --soft:#4a4a4a; --line:#c9c4b8; --grid:#e8e4da;
@@ -12482,6 +12485,7 @@ function storageWorks(){
 function autosave(){
   if(!storageWorks())return;
   try{localStorage.setItem(LSA,JSON.stringify(snapshot()));}catch(e){storageOK=false;showAutoInfo();}
+  if(PLIB&&PLIB.soon)PLIB.soon();   /* PLIB: one undo step per change (debounced) */
 }
 function showAutoInfo(){
   const e=$("autoInfo"); if(!e)return;
@@ -12535,6 +12539,34 @@ window.__snapshotForTest=snapshot;
 window.__mctForTest=(o)=>MCT.generate(M,M.p,o||{});
 window.__modelForTest=()=>M;
 window.__restoreForTest=(o)=>{restore(o);render();};
+/* PLIB (2026-11-02): saved-project list and Undo / Redo (shared/projects.js, shared/projects-ui.js). Display and storage only:
+   the list is the tool's own key stoneArchLR.projects in its own format ({ name: snapshot() }); the autosave key is unchanged.
+   Undo / Redo: snapshots of the inputs only (fields, title block, rate basis, Midas text); view and focus fields are kept as they are,
+   so changing a tab, the chart focus or a panel is not a step. Session only. Loading a project, Import JSON and "Start a new
+   calculation" are one step each. plibInit() runs at the end of boot(). */
+var PLIB={};   /* var: autosave() may run before this line */
+const PLIB_KEEP=["fields","title","rateBasis","midas"];
+function plibInit(){
+  if(!window.SharedProjects||!window.SharedProjectsUI)return;
+  const inputsText=()=>{const o=snapshot(),r={};PLIB_KEEP.forEach(k=>{r[k]=o[k];});return JSON.stringify(r);};
+  const h=SharedProjects.history({get:inputsText,set:t=>{const o=Object.assign(snapshot(),JSON.parse(t));restore(o);render();autosave();}});
+  let tm=null; PLIB.soon=()=>{clearTimeout(tm);tm=setTimeout(()=>h.record(),400);};
+  let LS=null; try{LS=window.localStorage;}catch(e){}
+  const store=SharedProjects.mapStore(LS,LSK,{time:i=>i&&(i.saved||i.ts)||null});
+  const dlg=SharedProjectsUI.libraryDialog({store,storage:LS,title:"Saved projects (this browser)",
+    current:()=>curProj&&store.has(curProj)?curProj:null,
+    open:n=>{if(!$("projSel")||!$("bLoad"))return false;refreshProjSel(n);$("projSel").value=n;$("bLoad").click();return curProj===n;},
+    renamed:(a,b)=>{if(curProj===a){curProj=b;if($("projName"))$("projName").value=b;autosave();showAutoInfo();}},
+    deleted:n=>{if(curProj===n){curProj="";autosave();showAutoInfo();}if($("projName")&&($("projName").value||"").trim()===n)$("projName").value="";},
+    changed:()=>refreshProjSel(curProj)});
+  const row=document.createElement("div");row.className="bx-pm";row.setAttribute("data-sp","row");
+  const B=(t,ti)=>SharedProjectsUI.button(t,ti);
+  const bu=B("Undo","Undo the last input change (Ctrl+Z)"),br=B("Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)"),bl=B("Saved projects\u2026","The projects saved in this browser: open, rename, duplicate, delete");
+  bl.onclick=()=>dlg.show();row.append(bu,br,bl);
+  const host=$("appTitle");if(host)host.appendChild(row);
+  SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
+  h.reset(); PLIB.h=h; PLIB.store=store; PLIB.dlg=dlg; window.SAPL=PLIB;
+}
 function projects(){try{return JSON.parse(localStorage.getItem(LSK)||"{}");}catch(e){return {};}}
 function setProjects(o){try{localStorage.setItem(LSK,JSON.stringify(o));}catch(e){alert("Local storage is unavailable in this browser session.");}}
 function refreshProjSel(keep){
@@ -13602,6 +13634,7 @@ function init(){
 function boot(){
   R.setKatexReady();
   init();
+  plibInit();   /* PLIB */
   if(!window.katex){
     let tries=0;
     const iv=setInterval(()=>{
