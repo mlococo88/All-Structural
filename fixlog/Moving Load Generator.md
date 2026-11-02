@@ -1470,3 +1470,21 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 ### How verified (no computed result, saved key or hand-off changed)
 - origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 8 tabs, the whole-document `textContent` (196,736 chars) and localStorage after load are identical. The run time ("Solved in … ms") is masked.
 - Screenshots at 900 / 1280 px: every non-Report tab differs only in the "Solved in … ms" label (119–206 px). The Report tab differs because the §1.1 table now wraps.
+
+## 2026-11-02 — PR: [#686](https://github.com/mlococo88/All-Structural/pull/686) — PLIB: saved-project list in this browser (Save / Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+- **Before:** autosave (`movingLoadGen.autosave.v1`), Save JSON / Open JSON (files), New. No list of projects in the browser, no undo.
+- **Where:**
+  - after the last `<script src="shared/…">` tag: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `mlgAutosave()`: inside the timer, after the `setItem`, `if(window.MLPL)MLPL.h.record(); /* PLIB: one undo step per change */`.
+  - after the start-up line `initSelects(); renderSpans(); … mlgRestore(); run();`: an IIFE (anchor `/* PLIB (2026-11-02): saved-project list in
+    this browser`): new list key **`movingLoadGen.projects.v1`** (tool-prefixed, §5), `{ name: mlgSnapshot() }` = exactly the object Save JSON
+    writes; Open = `mlgApply()` + `run()` (the Open JSON path); header buttons Undo, Redo, Save (prompt for a name; replacing a different
+    saved project asks first), Saved projects… before Save JSON. History over `mlgSnapshot()` without `savedAt` and the `viewMode` toggle;
+    `set` = `mlgApply()` + `run()`.
+- **Saved data:** the autosave key and the JSON file format are unchanged. One new key, `movingLoadGen.projects.v1` (no old data to migrate:
+  the tool had no list before).
+- **How verified:** `node tests/smoke/project-library.mjs --tool mlg`: ALL PASS (`RES`, every computed result including the absolute-maximum
+  search, identical to origin/main on load, after an input change, and reopened on main's autosave; Undo / Redo / Ctrl+Z / Ctrl+Y exact;
+  save, rename / duplicate / delete and open in the dialog; quota; 390 px; no new console errors). `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** not applicable (the tool generates moving-load demands; the vehicles and spans are its inputs).

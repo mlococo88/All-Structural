@@ -9,6 +9,9 @@
 <!-- SPRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): saved-project list dialog (Open / Rename / Duplicate / Delete), shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <style>
 :root{
   --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB;
@@ -4364,6 +4367,25 @@ function buildSetPane(P) {
   });
 }
 
+/* PLIB (2026-11-02): "Saved projects…" dialog over the tool's own key spc_projects_v1 ({ name: { t, d: persistModel(M) } }), shared/projects.js
+   and shared/projects-ui.js. Display and storage only: Rename / Duplicate move / copy the stored item unchanged; Open = loadModel(), as the
+   Open button. A rename of the open project (Project name = old name) sets Project name to the new name (Save stores under Project name).
+   The tool's own Undo / Redo is unchanged. */
+let SPCPL = null;
+function spcPlibButton() {
+  if (!window.SharedProjects || !window.SharedProjectsUI) return null;
+  if (!SPCPL) {
+    let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
+    const store = SharedProjects.mapStore(ST, LS_PROJ, { unpack: i => i && i.d, time: i => i && i.t || null, sort: 'saved' });
+    const dlg = SharedProjectsUI.libraryDialog({ store, storage: ST, title: 'Saved projects (this browser)',
+      current: () => { const n = (M.project.name || '').trim(); return n && store.has(n) ? n : null; },
+      open: n => { const d = store.get(n); return d ? loadModel(d, `Opened "${n}"`) !== false : false; },
+      renamed: (a, b) => { if ((M.project.name || '').trim() === a) { M.project.name = b; buildProjHeader(); autosave(); } },
+      changed: () => rebuildInputs() });
+    SPCPL = { store, dlg };
+  }
+  const b = btn('Saved projects\u2026', 'sm', () => SPCPL.dlg.show(), 'The projects saved in this browser: open, rename, duplicate, delete'); b.setAttribute('data-sp', '1'); return b;
+}
 /* ---- Project tab ---- */
 function buildProjPane(P) {
   mkSec(P, 'inProj', 'Saved projects (this browser)', body => {
@@ -4384,6 +4406,7 @@ function buildProjPane(P) {
       row.appendChild(btn('Open', 'sm', () => { const p = getProjects()[sel.value]; if (!p) return; loadModel(p.d, `Opened "${sel.value}"`); }));
       row.appendChild(btn('Delete', 'sm danger', () => { if (!confirm(`Delete the saved project "${sel.value}"?`)) return; const p = getProjects(); delete p[sel.value]; setProjects(p); rebuildInputs(); }));
     }
+    { const lb = spcPlibButton(); if (lb) row.appendChild(lb); }   /* PLIB */
     body.appendChild(row);
     body.appendChild(el('div', 'hint', `The current session is autosaved in this browser (<code>${LS_AUTO}</code>); named projects are kept in <code>${LS_PROJ}</code>. Use Save file / Open file (header) to keep or move a project.`));
     const r2 = el('div', 'btnRow');

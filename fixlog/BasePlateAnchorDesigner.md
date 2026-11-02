@@ -4962,3 +4962,49 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Calculation (§4):** none changed. The column of a circular plate enters only `plateBendingLTS()` (D_pole = round OD, else min(b, d), unchanged since BC-1); a rectangular plate uses `plateBending()` unchanged. Check case (`tests/bpad-circle.mjs` H7): 6 × 1 in on BC 16, Ø22 × 1.5 in A36 plate, M_y = −600 kip·in → |T|max = 25.0 kip; square post 8 in: m = 4, b_eff = π·8/6 = 4.18879 in, M_u = 100 kip·in, t_req = √(400/(0.90·36·4.18879)) = 1.71678 in (tool 1.71677); rectangular 8 (x) × 6 (y): D_pole 6, m = 5, b_eff = π, t_req = √(500/(0.90·36·π)) = 2.21634 in (tool 2.21635).
 - **How verified:** `node tests/bpad-circle.mjs`: PASS — §1 identity origin/main vs this branch on the 31 rectangular projects (computeAll, comboCapacities, allChecks, validation, report text) identical; H1–H6 unchanged; new H7 (above, plus square plate under a square / round post imported as a rectangular plate with no blocking message, and the three refusals). `node tests/bpad-profis.mjs` PASS; `node tests/anchor-parity.mjs` PASS; `tests/smoke/lightpole-anchor-handoff.mjs` ALL PASS (17 cases, see fixlog/Light Pole and Sign Post.md LPAS).
 - **Open item (engineer):** a square plate under a pole on a double-nut base is checked here by AISC DG1 (this tool's rectangular-plate method), in Light Pole by the bending line at the pole face; should this tool use the bending line (`plateBendingLTS()`) for a square plate on a double-nut pole base? Not changed (it would route an existing method to a new case: needs your decision).
+
+## 2026-11-02 — PR: [#670](https://github.com/mlococo88/All-Structural/pull/670) — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+- **Before:** header: drop-down with Load / Save / Save As… / Delete (`bpad_projects_v1`, `{ name: S }`), Export / Import JSON, Compare,
+  Backup All / Restore All. No rename, no duplicate, no undo.
+- **Where:**
+  - after `<script src="shared/anchor-geom.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `autosave()`, anchor `function autosave(){`: first statement `if(window.BPPL) BPPL.soon();   /* PLIB: one undo step per change (debounced) */`.
+  - `init()`: last statement `bpPlibInit();   /* PLIB */`; new `function bpPlibInit()` right after the `DOMContentLoaded` line (anchor
+    `/* PLIB (2026-11-02)`): history over `S` without `S.ui` (tabs, display units, collapse and print options are not steps);
+    `set` = `S=mergeState(step with the current S.ui); buildProjHeader(); refreshAll();` (as Load does); `mapStore(localStorage, LS_PROJ)`;
+    dialog `open` = the Load path for that name; a rename moves `bpad_lastproject_v1` and, when Project name equals the old name, sets it to
+    the new one (Save uses Project name as the list name); a delete clears the pointer as Delete does; the drop-down is redrawn after every
+    change. Buttons Undo, Redo, Saved projects… in `#hdrBtns` before Export JSON.
+- **Saved data:** keys `bpad_projects_v1`, `bpad_autosave_v1`, `bpad_lastproject_v1` and their formats unchanged; no new key. Backup All /
+  Restore All unchanged (they read and write the same list).
+- **How verified:** `node tests/smoke/project-library.mjs --tool baseplate`: ALL PASS (`computeAll()` identical to origin/main on load,
+  after an input change, reopened on main's storage and opened from the dialog; Undo / Redo / Ctrl+Z / Ctrl+Y exact; dialog byte-identical;
+  quota; 390 px; no new console errors). `node tests/bpad-circle.mjs` (31 projects, origin/main vs branch): PASS.
+  `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** already entered directly (load combinations P, V_x, V_y, M_x, M_y, T, and the hand-offs). Nothing added.
+
+## 2026-11-02 — BC-6: the §17.6.2.1.2 h_ef reduction by analogy for a round pier is NOT applied by default (engineer decision 2026-11-02); older saves keep it applied (migration) (PR: claude/bpad-roundpier-default, PR #673: https://github.com/mlococo88/All-Structural/pull/673)
+
+### BC-6. Default of `conc.circHefReduce`   [§4: default that feeds a result] [saved data: migration]
+- **Decision (engineer, 2026-11-02):** the option "Apply §17.6.2.1.2 h_ef reduction to the circle" (BC-2, 2026-11-01, default on) is off by default. Independent audit (Nov 2026), section C, item #4: the analogy raised φN_cbg by 52 % in the audit case; the provision's "three or more edges" trigger is applied to a circle only by analogy.
+- **Governing provision:** ACI 318-19 §17.6.2.1.2 and R17.6.2.1.2 (reduced h_ef for anchors near three or more edges); §17.6.2.1 (A_Nc, A_Nco), §17.6.2.2.1 and §17.6.2.2.3 (N_b), §17.6.2.4 (ψ_ed,N). No equation changed: only which branch a new project takes.
+- **1. Default.** `defaultState()`, anchor text `shape:"rect", D:36, circHefReduce:`. Before `circHefReduce:true`, after `circHefReduce:false` (comment extended).
+- **2. Migration (saved data, CLAUDE.md §5).** `mergeState()`, after `if(oldHead) out.anchor.head=oldHead;`. Added:
+  ```js
+  const hefMig=c=>{ if(c && typeof c==="object" && c.circHefReduce===undefined){ c.circHefReduce=true; return c.shape==="circle"; } return false; };
+  let hefMigCirc=false;
+  if(st && st.conc && typeof st.conc==="object" && st.conc.circHefReduce===undefined){ out.conc.circHefReduce=true; hefMigCirc=out.conc.shape==="circle"; }
+  if(Array.isArray(out.groups)) out.groups.forEach(g=>{ if(g && g.data && hefMig(g.data.conc)) hefMigCirc=true; });
+  if(hefMigCirc) __bpHefMig=(out.proj&&out.proj.name)||"";
+  ```
+  plus `let __bpHefMig=null;` before `function mergeState`. A save without the field (every save before this change: the active design and each anchor group's data) gets `true` written explicitly, so it keeps its old results; a stored `true` or `false` is kept. Keys and format unchanged (the field already existed; it is only filled in).
+- **3. Notice.** Pedestal input (`buildInputPanel`, after the "Apply §17.6.2.1.2 h_ef reduction to the circle" row): a warning box "This project was saved before 2026-11-02 … keeps the reduction applied … Untick the box above to use the new default", shown while the migrated project (by name) is open with a round pier and the box still ticked. The row's help text and the worked step's "accepted" line now read "engineer decision 2026-11-02: not applied by default".
+- **4. Light Pole hand-off (`bridgeSuite.v1.anchorGroup`).** `dataFor()` in the anchorGroup receiver, anchor text `var d=bpGroupSnap(), wasCirc=`. Added `if(!wasCirc) d.conc.circHefReduce=false;`. Rule: the imported group takes the new default (not applied) unless the receiving design is already a round pier, whose stored choice is kept. A rectangular receiving design (a new project, or an older save migrated to `true` where the option is hidden and has no effect) does not count as a choice. Reason: the migration exists to keep old results, and a rectangular design had no round-pier result to keep.
+- **5. Pier shape input.** A design switched from rectangular to circular takes the new default: `if(v==="circle" && S.conc.shape!=="circle") S.conc.circHefReduce=false;` in the "Pier shape" setter (same reason as 4; a round pier switched to rectangular and back also comes back unticked: the box is right below).
+- **Check case (audit case C):** 4 × 1 in F1554 Gr 55 on BC 13 (θ0 0), Ø36 in pier, h_ef 18 in, f'c 4 ksi cracked, heavy hex, tension group (ψ_ec = ψ_c,N = ψ_cp,N = 1).
+  - Before (applied): c_a,max = 18 − 6.5·cos45° = 13.404 in, s = 13 → h'_ef = max(13.404/1.5, 13/3) = 8.936 in; N_b = 24·√4000·8.936^1.5 = 40.546 kip; A_Nc = π·18² = 1017.88 in² (full disc), A_Nco = 9·8.936² = 718.65 in², ratio 1.4164; ψ_ed,N = 0.7 + 0.3·11.5/13.404 = 0.9574; N_cbg = 1.4164·0.9574·40.546 = 54.98 kip; φN_cbg = 0.70·54.98 = **38.49 kip**.
+  - After (not applied): h_ef = 18; N_b = 16·√4000·18^(5/3) = 125.10 kip (§17.6.2.2.3; the 24-form gives 115.92); A_Nco = 2916, ratio 1017.88/2916 = 0.3491; ψ_ed,N = 0.7 + 0.3·11.5/27 = 0.8278; N_cbg = 0.3491·0.8278·125.10 = 36.15 kip; φN_cbg = **25.30 kip** (−34 %, more conservative). Pryout (k_cp 2) follows N_cbg. Shear breakout unchanged (ℓ_e = 8d_a = 8 in < h'_ef either way).
+  - Comparison case C2 (H3: 4 at (±6, ±6), Ø36, h_ef 18): before 28.22, after 24.63 kip for a new project.
+- **How verified:** `node tests/bpad-circle.mjs`: identity origin/main vs this branch on 33 projects — every result identical; only the two round-pier cage cases differ, and only in the "accepted" sentence (decision date / wording) after their `circHefReduce` was pinned to `true` (before pinning they differed exactly in h_ef / A_Nco / N_b of the default, as intended). H1–H7 unchanged; new H8: new-project default false; audit case C hand values above (tool 25.30405 / alternative 38.48681); an older save without the field keeps h'_ef 8.93587 and φN_cbg 38.487 (active design and groups migrated; a stored false kept); the input notice shows; stored false / true kept; hand-off into a new project → false, into a migrated rectangular save → false, into a round pier applying it → true; switching a migrated rectangular save to circular → false. The suite exits FAIL against origin/main only because of that sentence. `node tests/bpad-profis.mjs` PASS; `node tests/anchor-parity.mjs` PASS (38 cases); `node tests/engine/run.mjs anchor-geom` / `handoffs` / `lightpole` PASS; `tests/smoke/lightpole-anchor-handoff.mjs` ALL PASS; `node tests/check-syntax.mjs` passes.
+- **Other copies:** none (the option exists only in this tool). ENGINEER_CHECKS.md Light Pole line updated ("off by default since 2026-11-02").

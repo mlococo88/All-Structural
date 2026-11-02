@@ -11,6 +11,9 @@
 <script src="shared/steps.js"></script><!-- LPRP: worked steps and the shared report viewer (Report tab) -->
 <script src="shared/report.js"></script>
 <script src="shared/dxf.js"></script><!-- LPDW: DXF writer and drawing preview (Drawings tab, Geometry elevation) -->
+<!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <script src="apps/light-pole/lts-engine.js"></script><!-- LTS-1 (2026-11-02): AASHTO LRFDLTS mode engine (window.LpLts) -->
 <style>
   /* LPTH (2026-11-02): suite theme, as BasePlateAnchorDesigner.html / apps/steel-bridge/index.html (navy header bar with the
@@ -4105,7 +4108,7 @@ function calcSign(inp){
   renderSummary({inp, mode:'sign',
     stacks:postDesigns.map((pd,i)=>({label:'P'+(i+1), found:pd.found, pstress:pd.pstress, nat:pd.nat, b2:pd.b2,
       asd:{...pd.gASD}, lrfd:{...pd.gLRFD},
-      broms:bromsEmbedment(inp, pd.gLRFD.M/1000, pd.gLRFD.P/1000)}))});
+      broms:bromsEmbedment(inp, pd.found.Mu/1000, pd.found.Vu/1000)}))});   // the shaft's B₂-amplified M_u and V_u, as the Shaft tab and report (LTSV-4)
 
   renderSign(inp,sw,pw,allCombos,postDesigns,poleSeg);
 }
@@ -4947,12 +4950,12 @@ function lppCalcIbc(){
     $('rebarExample').appendChild(tb); if(window.renderMathInElement) renderMathInElement(tb,{delimiters:[{left:'\\[',right:'\\]',display:true}],throwOnError:false}); }
   renderBearingExample(bearing,bearing.axial,inp);
   // Broms reference check — LRFD demands, kip units per AASHTO
-  renderBromsExample(bromsEmbedment(inp, govLRFD.M/1000, govLRFD.P/1000), inp, govLRFD, Mu);
+  renderBromsExample(bromsEmbedment(inp, Mu/1000, Vu/1000), inp, {name:shaftGov.name||govLRFD.name}, Mu);   // the shaft's B₂-amplified M_u and V_u (LPB2)
   // ---- summary tab (reads the same objects the tabs above consume) ----
   renderSummary({inp, mode:'pole',
     stacks:[{label:'', found:{emb,d,ratio,Mu,Pu,Vu,reo,bearing,bolts,...shT},
              pstress, asd:govASD, lrfd:govLRFD, nat, b2:govB2,
-             broms:bromsEmbedment(inp, govLRFD.M/1000, govLRFD.P/1000)}]});
+             broms:bromsEmbedment(inp, Mu/1000, Vu/1000)}]});   // as the Shaft tab (LPB2)
 
   // ---- steps box ----
   $('stepsBox').textContent=
@@ -5393,7 +5396,7 @@ function bromsWorkedHTML(br, inp, govLRFD, MuDesign){
     H+=`<p class="eq-why" style="color:#2f6b3f"><b>Code-faithful basis.</b> With \u03c6 = 1.00 this result is directly comparable to a hand calculation from AASHTO LTS C13.6.1.1. If project conditions or reviewer expectations call for a margin on the soil, lower \u03c6 in the input panel and the comparison table below will show its effect.</p>`;
   }
   H+=step(`2 · Factored demands at groundline ${ref('governing LRFD combination')}`);
-  H+=`<p class="eq-why">Taken from the governing LRFD combination (<b>${govLRFD.name||'—'}</b>) — the same demands that drive the reinforced-concrete shaft design.${br.lambda>1.001?` An additional overload factor λ has been applied on top of these already-factored demands.`:''}</p>`;
+  H+=`<p class="eq-why">Taken from the governing LRFD combination (<b>${govLRFD.name||'—'}</b>) — the same demands that drive the reinforced-concrete shaft design: M<sub>F</sub> is the shaft's M<sub>u</sub>, which includes the P-Δ amplifier B<sub>2</sub> of that combination (AISC 360-16 App. 8; see the shaft P–M design), and V<sub>F</sub> is the largest LRFD base shear (the shaft's V<sub>u</sub>).${br.lambda>1.001?` An additional overload factor λ has been applied on top of these already-factored demands.`:''}</p>`;
   if(br.lambda>1.001){
     H+=g(`V_{F,0} = ${fmt(br.VF0,2)}\\ \\text{kip}\\qquad M_{F,0} = ${fmt(br.MF0,1)}\\ \\text{kip}{\\cdot}\\text{ft}\\qquad \\lambda = ${fmt(br.lambda,2)}`);
     H+=g(`V_F = \\lambda V_{F,0} = ${fmt(br.lambda,2)}(${fmt(br.VF0,2)}) = ${fmt(br.VF,2)}\\ \\text{kip}\\qquad M_F = \\lambda M_{F,0} = ${fmt(br.lambda,2)}(${fmt(br.MF0,1)}) = ${fmt(br.MF,1)}\\ \\text{kip}{\\cdot}\\text{ft}\\qquad D = ${fmt(br.D,2)}\\ \\text{ft}`);
@@ -6026,8 +6029,8 @@ function buildReport(inp,allCombos,gov,embed,struct){
     `The converged depth is the minimum embedment. The depth-to-diameter ratio d/b indicates whether the rigid-pier assumption holds.`,
     `\\boxed{d=${n(embed.d,2)}\\ \\text{ft}}\\qquad \\frac{d}{b}=\\frac{${n(embed.d,2)}}{${n(b,2)}}=${n(ratio,2)}`,
     (ratio>=3&&ratio<=10)?`d/b = ${n(ratio,2)} is within the rigid short-pier range (≈3–10), so the closed-form solution is valid.`:(ratio<3?`d/b = ${n(ratio,2)} is below 3 — the pier is shallow; verify the rigid assumption or deepen the shaft.`:`d/b = ${n(ratio,2)} exceeds 10 — the pier behaves flexibly; a p-y (LPILE) analysis is recommended.`));
-  { const br=bromsEmbedment(inp, govLRFD.M/1000, govLRFD.P/1000);   // D11: the Shaft tab's reference check, same call
-    if(br) H+=`<div class="eq-title">Broms embedment — reference check, not a design check <span class="eq-ref">[AASHTO LTS C13.6.1.1]</span></div>`+bromsWorkedHTML(br,inp,govLRFD,struct.Mu); }
+  { const br=bromsEmbedment(inp, struct.Mu/1000, struct.Vu/1000);   // D11: the Shaft tab's reference check, same call (B₂-amplified, LPB2)
+    if(br) H+=`<div class="eq-title">Broms embedment — reference check, not a design check <span class="eq-ref">[AASHTO LTS C13.6.1.1]</span></div>`+bromsWorkedHTML(br,inp,{name:(struct.reo&&struct.reo.long&&struct.reo.long.govDem&&struct.reo.long.govDem.name)||govLRFD.name},struct.Mu); }
   H+=`</div></details>`;
 
   // ---- 6b. Soil bearing ----
@@ -7833,7 +7836,7 @@ function updateStatus(){
   }
   if(!storageOK){ s.textContent='storage unavailable (open the file directly to enable saving)'; s.className='pb-status dirty'; }
 }
-function markDirty(){ dirty=true; updateStatus(); scheduleAutosave(); }
+function markDirty(){ dirty=true; updateStatus(); scheduleAutosave(); if(window.LPPL) LPPL.soon(); }   // PLIB: one undo step per change (debounced)
 
 // ---- autosave (debounced) ----
 let autosaveTimer=null;
@@ -7920,6 +7923,34 @@ $('projSelect').onchange=e=>{
   if(dirty){ confirmModal('Discard changes?','Loading a project will discard your current unsaved changes. Continue?','Load').then(ok=>{ if(ok) load(); else refreshProjectList(); }); }
   else load();
 };
+
+// ---- PLIB (2026-11-02): saved-project list and Undo / Redo (shared/projects.js, shared/projects-ui.js) ----
+// Display and storage only: the list is the tool's own key lpp_projects_v1 in its own format ({ name: captureState() }); the session
+// key is unchanged. Undo / Redo: captureState() snapshots (inputs only; tabs are not in it), session only; set = applyState(), the same
+// path as loading a project, then the project is marked changed. Loading, New and Import are one step each.
+(function(){
+  if(!window.SharedProjects||!window.SharedProjectsUI) return;
+  const h=SharedProjects.history({ get:()=>JSON.stringify(captureState()), set:t=>{ applyState(JSON.parse(t)); dirty=true; updateStatus(); scheduleAutosave(); } });
+  let tm=null; const soon=()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); };
+  let ST=null; try{ ST=window.localStorage; }catch(e){}
+  const store=SharedProjects.mapStore(ST,LS_PROJECTS);
+  const dlg=SharedProjectsUI.libraryDialog({ store, storage:ST, title:'Saved projects (this browser)',
+    current:()=>activeProject&&store.has(activeProject)?activeProject:null,
+    open:n=>{ const st=store.get(n); if(!st) return false;
+      if(dirty&&!confirm('Loading a project will discard your current unsaved changes. Continue?')) return false;
+      applyState(st); activeProject=n; dirty=false; refreshProjectList(n); updateStatus(); saveSession(); toast('Loaded "'+n+'"'); return true; },
+    renamed:(a,b)=>{ if(activeProject===a){ activeProject=b; updateStatus(); saveSession(); } },
+    deleted:n=>{ if(activeProject===n){ activeProject=null; updateStatus(); saveSession(); } },
+    changed:()=>refreshProjectList() });
+  const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'pbtn'});
+  const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)'), bl=B('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete');
+  bl.addEventListener('click',()=>dlg.show());
+  const ref=$('pbExport'); if(ref){ ref.parentNode.insertBefore(bl,ref); ref.parentNode.insertBefore(bu,bl); ref.parentNode.insertBefore(br,bl); }
+  SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
+  window.LPPL={h,store,dlg,soon};
+  window.addEventListener('load',()=>setTimeout(()=>h.reset(),0));
+  h.reset();
+})();
 
 // ---- JSON export / import (added 2026-11-01) ----
 // File = { tool:'Light Pole and Sign Post', format:'lpp-project', version:1, name, exported, state } where state is exactly

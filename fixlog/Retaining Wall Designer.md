@@ -1724,3 +1724,88 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 ### How verified (no computed result, saved key or hand-off changed)
 - origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 15 tabs, the whole-document `textContent` (592,380 chars) and localStorage after load are identical.
 - Screenshots at 900 and 1280 px: 0–22 differing pixels, in different places on each run (input-field and scroll-bar anti-aliasing). Report print text is identical.
+
+## 2026-11-02 — PR: [#669](https://github.com/mlococo88/All-Structural/pull/669) — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+- **Before:** Project tab → Saved projects: drop-down with Open / Save / Save as… / Delete (`retaincalcpro.projects.v1`, `{ name: { fields,
+  ts } }`), Export / Import JSON, Back up all. No rename, no duplicate, no undo.
+- **Where:**
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `scheduleAutosave()`, anchor `function scheduleAutosave() {`: first statement `if (window.RWPL) RWPL.soon();   // PLIB: one undo step per change (debounced)`.
+  - a new `<script>` after the boot script (after `waitPL`), anchor `/* PLIB (2026-11-02): saved-project list and Undo / Redo`: history over
+    `JSON.stringify(snapshotFields())`, `set` = `restoreFields()` + `onInputChange()`; `mapStore(localStorage, PROJ_KEY, { time: ts })`;
+    dialog `open` = `loadProject(n)`; "open now" = the `retaincalcpro.lastproject.v1` name; a rename of that project moves the pointer to the
+    new name (same key, same plain-string format) and, when Project Name equals the old name, sets Project Name to the new one (Save uses
+    Project Name as the list name); a delete clears the pointer as the Delete button does. Buttons Undo, Redo, Saved projects… in a new
+    `header .hdr-group` before the Inputs / Code / Report group.
+- **Saved data:** keys `retaincalcpro.projects.v1`, `retaincalcpro.autosave.v1`, `retaincalcpro.lastproject.v1` and their formats unchanged; no new key.
+- **How verified:** `node tests/smoke/project-library.mjs --tool retwall`: ALL PASS (`window._R`, every computed result, identical to
+  origin/main on load, after an input change, reopened on main's storage and opened from the dialog; Undo / Redo / Ctrl+Z / Ctrl+Y exact;
+  dialog byte-identical; quota; 390 px; no new console errors). `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands (not added):** the tool already takes its external loads directly (column / beam reactions P_DL, P_LL, P_SL, P_WL,
+  surcharge q_s, LS h_eq, barrier, CT collision, seismic k_h). The stem and footing demands are worked from soil pressure and those loads
+  through stability; an entered M_u / V_u or an extra horizontal load would need new terms in the stability equations (a new formula),
+  which the brief excludes. Raised for the engineer instead.
+
+## 2026-11-02 — PR: claude/report-retire-rwall, PR #689: https://github.com/mlococo88/All-Structural/pull/689 (RWRX: the Export report (D11, a separate window) retired after porting what the Report tab lacked; "Export report", Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
+
+### RWRX-1. Content of the Export report ported into the Report tab   [display] [no result change]
+- **Engineer request (2026-11-02):** retire the old reports where the Report tab is complete. This uses the same method as lldf #623, Light Pole #625, Shear and Moment #672, elastomeric #676 and ACI Rebar #685: compare every number and section, port what is missing (the tool's own values and text, no recomputation), then remove the old report and print the Report from every tab.
+- **Compared:** the Export report (`buildReportHTML(r)`, print media) on origin/main against the Report tab (`rwrModel()` + `rwrAddPlots`, Print report → `#rp-print`) on the branch. Three cases:
+  - def: the default wall (ACI);
+  - aci2: ACI with surcharge 250 psf, passive resistance on, k_h 0.15;
+  - aash: AASHTO with LL surcharge and vehicular collision on.
+  - A number counts as present when the Report shows the same value (the same digits, or more digits that round to it).
+- **Missing before the port:** 39 / 42 / 43 numbers (def / aci2 / aash), not counting the old section numbers. They were:
+  - the material quantities (footing, stem and total concrete, ft³/ft and cy/ft);
+  - the development lengths in ft of the General detailing requirements;
+  - the collision resultant x̄;
+  - numbers inside the result tabs' note boxes (P_p, the M-O reference year, the 2013 edition, 45°, …);
+  - every value the old report repeated in kip (3.645 kip/ft = 3645 lb/ft …).
+- **Text missing before the port:**
+  - the tabs' note boxes (`.alert`): "Passive resistance neglected / included", "Why the surcharge and column live/snow loads are left out" (overturning and sliding), "Stem demands use static earth pressure", the mid-height section notes, the heel design basis note, the M-O note, and the AASHTO notes (interface angle, e ≤ B/4, MassDOT §3.3.2.4 collision section, roadway datum, earth pressure dropped under collision);
+  - the Bar notes, General detailing requirements and Approximate material quantities cards;
+  - "No column or beam loads applied." and the closing Engineering note.
+- **Ported:**
+  - New `rwrTabNotes(r)` and `rwrAddNotes(M, N)`, before `rwrGoto`, anchor `RWRX (2026-11-02): what the retired Export report printed`. They read each result tab's HTML from `rwTabSource(tab, r)`, the same source the Export report used. For each tab:
+    - every `.alert` becomes a note, prefixed with its card's title, warn style for `.warn` / `.fail`. Boxes equal to an `r.warnings` entry are skipped: those are already in "Assumptions and warnings";
+    - in the Rebar schedule tab, the Bar Notes table, the General Detailing Requirements rows and the quantities table become report tables.
+  - They are added as subsections at the end of the matching Report sections: "Notes on the Stability / Stem design / Footing design / Rebar schedule tab", "Bar notes", "General detailing requirements (ACI 318-19)" and "Approximate material quantities: concrete and steel (per linear foot of wall)".
+  - `renderRwReport()` caches them per result (`RWRP.notesFor` / `RWRP.notes`), then `rwrAddNotes(M, RWRP.notes)` after `rwrAddPlots`.
+  - Inputs: with no column loads, a subsection "Column / beam loads" with the note "No column or beam loads applied." (`if (!r.hasCol) subs.push(…)`).
+  - Step 7b, step `e` (collision eccentricity): `note: 'x̄ = (M_r − M_o)/V = ' + rwrN(E.x_R_ct, 3) + ' ft from the toe'` (`E.x_R_ct`, the value the Stability tab shows).
+  - Assumptions and warnings: the Export report's closing Engineering note (verbatim wording of the tool).
+  - Wording only: the summary note "with D/C as in the Export report" → "with their D/C"; the crack-control note "(worked in the Export report §7 and here)" → "(worked here only)".
+- **Not ported (already in the Report, or not a value):**
+  - the kip repeats of lb values;
+  - the print date;
+  - the section numbers and contents;
+  - the "Card check" legend (no card checks exist: 0 in all three cases);
+  - the Footing tab's var-table line "d_b assumed bar diameter (#7) 0.875 in" (see open items);
+  - in AASHTO with a manual q_R, the tab's "q_n nominal bearing resistance 9000 psf" line (see open items).
+  - Figures: the Report already has the wall section, the bearing chart and the stem / heel / toe charts (RWRP2).
+- **After the port:** in all three cases, every old-report number is in the Report except the kip repeats, the print date, the section numbers and the two lines above.
+
+### RWRX-2. Export report removed; "Export report", Ctrl+P and the browser's Print print the Report from every tab   [display]
+- **Removed:** `async function generateReport()` and `async function buildReportHTML(r)` (the whole report window: HTML, CSS, MathJax, table of contents, result lines), and `const RW_SEC` (used only there). A one-line RWRX comment is in their place. Kept: `rwTabSource`, `rwPlotImages`, `rwResultRows` (used by the Report).
+- **Changed:**
+  - The header button keeps its label "Export report". `onclick="generateReport()"` → `onclick="rwrPrintAny()"`, with the tooltip "Print / PDF the calculation report (the Report tab), from any tab".
+  - New `rwrPrintPrep()`: from another tab it remembers the active tab (`RWRP_BACK`) and clicks the Report tab button. It runs only with results and with the shared files loaded.
+  - New `async rwrPrintAny()`: `rwrPrintPrep()`, waits for the chart images (`RWRP.imgsP`, the `rwPlotImages()` promise now kept by `renderRwReport`), then `RWRP.api.print()`. With no report, it calls `window.print()`.
+  - New inline `<script>` before `<script src="shared/steps.js">`: `window.addEventListener('beforeprint', … rwrPrintPrep() …)`. It is registered before shared/report.js's own listener, so for Ctrl+P / the browser's Print the Report is already shown when that listener sets the running header and fills lazy items. The existing Report `beforeprint` handler then fills `#rp-print`. On this path the charts print only if their images are ready (they are once the Report has been shown for the current result).
+  - New `afterprint` handler: it clicks the remembered tab's button.
+  - The output tab is not saved, so nothing saved changes.
+- **Governing provision:** none changed. No formula, factor, unit, code reference or computed value changed (CLAUDE.md §4).
+- **How verified:**
+  - `node tests/check-syntax.mjs "Retaining Wall Designer.html"`: pass.
+  - Results and storage, origin/main vs branch, the three cases:
+    - `window._R` (all results, JSON) identical;
+    - the text of the six result tabs identical;
+    - localStorage identical (`retaincalcpro.autosave.v1`, apart from its time stamp);
+    - page text identical;
+    - console errors identical (blocked CDN in the test kit).
+  - Print routing, headless, from every tab: by `beforeprint` and by the "Export report" button. `#rp-print` holds the Report, `body.rp-printing` and the running header `#rp-page` are set, and the tab of before comes back after `afterprint`.
+- **Other copies:** none.
+- **Open items (display only, raised, not changed):**
+  - Footing tab, Heel Step 3 card (`renderFooting`, anchor `{sym:'d_b', desc:'assumed bar diameter (#7)', val:'0.875', unit:'in'}`; also `{sym:'c_c', desc:'top clear cover', val:'2.00'…}`): the var table shows a fixed #7 / 0.875 in and a 2.00 in cover. The equation beside it uses the selected bar (`r.sel_heel.bar.db`) and the input cover (`inp.cov_ftg`). The same fixed d_b line is in the toe card and a #6 one at about line 4697. The Report uses the actual values.
+  - AASHTO Stability tab, Step 6 with q_R from the geotechnical report (`qn_mode = 'manual'`): the var table still lists "q_n nominal bearing resistance = 3 q_a" (9000 psf), which that mode does not use.

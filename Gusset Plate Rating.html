@@ -13,6 +13,7 @@
 <!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/list-input.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -197,6 +198,7 @@ input[type=number], input[type=text], select, textarea {
   -moz-appearance: textfield;
 }
 input[type=text], textarea { font-family: var(--sans); padding: 0 10px; }
+.ig .sli input.sli-in { height: 30px; padding: 0 8px; }
 textarea { height: auto; min-height: 56px; padding: 7px 10px; resize: vertical; line-height: 1.4; }
 input::placeholder, textarea::placeholder { color: #a1aab2; }
 input[type=number]::-webkit-inner-spin-button,
@@ -3017,7 +3019,7 @@ function memberBlock(m, i) {
       ${fld('Hole size', `members.${i}.fast.hole`, '', 'sel', { options: [['standard', 'Standard (d + 1/16)'], ['oversize', 'Oversize']] })}${fld('Hole making', `members.${i}.fast.prep`, '', 'sel', { options: [['drilled', 'Drilled / reamed'], ['punched', 'Punched full size']] })}
       ${patSwitch(m, i)}${m.pattern === 'custom' ? holePane(m, i) : `
       ${fld('Rows (along member)', `members.${i}.fast.nR`, '')}${fld('Gage lines', `members.${i}.fast.nL`, '')}
-      ${fld('Pitch p', `members.${i}.fast.p`, 'in', 'dim')}${fld('Gage(s) g', `members.${i}.fast.g`, 'in', 'text', { note: 'list' })}
+      ${fld('Pitch p', `members.${i}.fast.p`, 'in', 'dim')}${fld('Gage(s) g', `members.${i}.fast.g`, 'in', 'text', { note: 'one per space between lines; the last repeats' })}
       ${fld('WP to inner row', `members.${i}.fast.e`, 'in', 'dim', { note: 'row nearest WP' })}${fld('Transverse offset', `members.${i}.fast.off`, 'in', 'dim', { note: '+ left of member' })}`}
       ${fld('Shear planes per fastener', `members.${i}.fast.Ns`, '', 'sel', { options: [['1', '1 (one per plate)'], ['2', '2 (through both plates)']] })}${fld('Filler thickness', `members.${i}.fast.tf`, 'in', 'dim')}
       <details class="ovr-box full"><summary>Derived geometry overrides <span class="lbl-note">blank = automatic</span></summary><div class="sec-body" style="padding:6px 0 0">
@@ -3117,6 +3119,17 @@ function fillInputs() {
     const v = getPath(P, k); if (t === 'bool') el.checked = v !== false && !!v; else if (t === 'dim') el.value = typeof v === 'number' ? frac(v) : (v ?? ''); else el.value = v ?? '';
     if (t === 'ovr') el.classList.toggle('ovr', v !== '' && v != null); });
   const ps = $('#f_plates_steel'); if (ps) { const custom = P.plates.steel === 'custom'; ['#f_plates_Fy', '#f_plates_Fu'].forEach(s => { const e = $(s); if (e) { e.readOnly = !custom; e.classList.toggle('locked', !custom); } }); }
+  gageTables();
+}
+/* LIST (2026-11-02): each member's "Gage(s) g" is a table, one box per gage (shared/list-input.js). The <input data-k="….fast.g">
+   stays, hidden, as the saved text (members[i].fast.g, e.g. "3, 3, 5.5"); a table edit writes it back and fires its 'input', which
+   onInput() handles as before. Read with gageList()'s own separators; the cells are text (num() reads 5-1/2, 3/4 and 3"), and
+   gageList() / the input checks decide what is used, as before. */
+function gageTables() {
+  if (!window.SharedListInput) return;
+  $$('input[data-k$=".fast.g"]').forEach(el => { if (el._sli) return;
+    el._sli = SharedListInput.bindInput(el, { label: 'Gages g, ' + (((P.members || [])[+el.dataset.k.split('.')[1]] || {}).id || 'member'), rowSplit: /[,;\s]+/,
+      columns: [{ label: 'g', unit: 'in', type: 'text', width: '6em', placeholder: '3' }] }); });
 }
 function onInput(e) {
   const el = e.target; if (!el.dataset || !el.dataset.k) return; cadEdited();

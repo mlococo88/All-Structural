@@ -2117,3 +2117,76 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 ### How verified (no computed result, saved key or hand-off changed)
 - origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 22 tabs, the whole-document `textContent` and localStorage after load are identical.
 - Screenshots at 900 and 1280 px are pixel-identical on load and on every tab, except 9 px on the 3D tab (WebGL anti-aliasing).
+
+## 2026-11-02 — PR: claude/list-input-bsl, PR #688: https://github.com/mlococo88/All-Structural/pull/688 — Bridge tab: span lengths and girder spacings are tables with one box per value (LIST)   [display only]
+- **Why:** engineer decision 2026-11-02: no comma-separated inputs; short lists become tables (`shared/list-input.js`,
+  `fixlog/shared-list-input.md`, #681). Phase 2, first tool.
+- **Where (1):** script tags, anchor `<script src="shared/report.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
+- **Where (2):** `paneBridge()`, anchors `id="f_spans"` and `id="f_bays"`. **Before:**
+```js
+<div class="in"><input id="f_spans" data-list="br.spans" value="${esc(b.spans.join(', '))}"><span class="u">ft</span></div></div>`, { one: true })
+    + `<p class="note">Separate spans with commas. Changing the number of spans adds or removes piers.</p>`
+...
+<div class="in"><input id="f_bays" data-list="br.bays" value="${esc(b.bays.join(', '))}"><span class="u">ft</span></div></div>`
+```
+  **After:**
+```js
+<input id="f_spans" data-list="br.spans" value="${esc(b.spans.join(', '))}"></div>`, { one: true })
+    + `<p class="note">One span per row (Enter adds a row). Changing the number of spans adds or removes piers.</p>`
+...
+<input id="f_bays" data-list="br.bays" value="${esc(b.bays.join(', '))}"></div>`
+```
+  (the `.in` box and the "ft" unit are gone: the unit is in the column header "L (ft)" / "S (ft)").
+- **Where (3):** `buildSide()`, after `sb.innerHTML = …`: `if (pane === 'bridge') listTables();` and the new function after it:
+```js
+function listTables() {
+  [['f_spans', 'Span lengths', 'L'], ['f_bays', 'Girder spacings', 'S']].forEach(([id, label, sym]) => {
+    const inp = document.getElementById(id); if (!inp || !window.SharedListInput) return;
+    let was = inp.value;
+    const ctl = SharedListInput.bindInput(inp, { label, events: ['input'], columns: [{ label: sym, unit: 'ft', min: 0, minExclusive: true, width: '6.5em' }] });
+    ctl.el.addEventListener('focusout', () => setTimeout(() => {   // after the event: a redraw (Enter, ×) moves the focus within the table
+      if (!ctl.el.isConnected || ctl.el.contains(document.activeElement)) return;
+      if (inp.value !== was) { was = inp.value; inp.dispatchEvent(new Event('change', { bubbles: true })); } }, 0));
+  });
+}
+```
+- **Where (4):** CSS after `.fld.bad .in { border-color: var(--fail); }`: `.fld .sli input.sli-in { border: …; }` (the boxes keep the
+  tool's field look) and `.fld.bad .sli { outline: 1px solid var(--fail); … }` (the old red box mark).
+- **Behaviour:** the hidden `<input data-list>` stays the text the tool's own `input` / `change` handlers read, unchanged:
+  every edit fires `input` (the red mark when a value is not > 0), and the commit (`change`: `setK` of the array, supports
+  re-synced, piers added or removed, the pane rebuilt) happens when the focus leaves the table, as the old box committed on
+  blur. Enter and × redraw inside the table and do not commit. A list that is not all positive numbers still shows the old
+  message "Enter positive numbers separated by commas." and is not committed; the cell also shows "Must be > 0" / "Not a number".
+- **Sa paste box (Seismic):** unchanged. The 22 S<sub>a</sub> boxes under "Read pasted table" already show what was read and can be
+  edited, which is what the decision asks for, so nothing was added.
+- **Saved data:** `P.br.spans` / `P.br.bays` stay arrays of numbers; no key or format changed. Round trip:
+  `tests/engine/list-input.test.mjs` (arrays → the box text `join(', ')` → table rows → text → the tool's parser → the same arrays).
+- **Check case:** default project, Bridge tab: spans 110 / 150 / 120 / 95 (a fourth span typed with Enter) and spacings 9 / 9.5 / 10
+  (one row removed with ×) → `P.br.spans` = [110, 150, 120, 95], `P.br.bays` = [9, 9.5, 10], a fourth pier added — identical to
+  typing "110, 150, 120, 95" and "9, 9.5, 10" into the old boxes on origin/main.
+- **How verified:** `node tests/smoke/list-input.mjs --part bsl`: origin/main (old boxes) vs this branch (the tables), default
+  project and the case above: `P`, `MODEL.C`, the stored autosave, the text of every output tab and of the Bridge pane (notes and
+  the moved unit removed) identical; 0 console errors; 390 px no sideways scroll; screenshots at 1400 and 390 px looked at.
+  `node tests/smoke/phone-layout.mjs --tool bsl` passes. `node tests/check-syntax.mjs` passes.
+- **Formulas, factors, units, code references:** none (§4 does not apply).
+
+## 2026-11-02 — PR: [#691](https://github.com/mlococo88/All-Structural/pull/691) — PLIB: saved-project list in this browser and Undo / Redo   [display and storage only]
+- **Before:** autosave (`subloads_v1`), header Open / Save (`.subloads.json` files). No list of projects in the browser, no undo.
+- **Where:**
+  - after the last `<script src="shared/…">` tag: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `autosave()`, anchor `let _as = null; function autosave() {`: inside the timer, after the `setItem`, `if (window.SLPL) SLPL.h.record();`.
+  - a new `<script>` after the start-up script (anchor `/* PLIB (2026-11-02): saved-project list in this browser and Undo / Redo`): new
+    list key **`subloads_projects_v1`** (tool-prefixed, §5) `{ name: P }` (the same object as the Save file); the dialog's "Save the open
+    project in this browser…" asks for a name (replacing a different saved project asks first); Open = `openProject()` (the Open-file path,
+    `migEHEQ` included). History over `P` without `P.ui` (tabs, selected unit, 3D view are not steps); `set` = the `openProject()` merge with
+    the current `P.ui`, then `syncSupports(); buildTabs(); buildSide(); showTab(); recompute(); autosave();`. Buttons Undo, Redo, Projects… at
+    the right end of the bridge strip under the header (the header's 8 buttons already fill it at 1280 px; measured: the header still does not
+    scroll, as on main).
+- **Saved data:** the autosave key and the file format are unchanged. One new key, `subloads_projects_v1` (no old data: the tool had no list).
+- **How verified:** `node tests/smoke/project-library.mjs --tool bsl`: ALL PASS (`MODEL`, every computed result, identical to origin/main on
+  load, after an input change (Pier 1 pedestal height) and reopened on main's autosave; Undo / Redo / Ctrl+Z / Ctrl+Y exact; save, rename,
+  duplicate, delete, open in the dialog; quota; 390 px; no new console errors); the dialog's Save button saves (headless check).
+  `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** the superstructure reactions are already entered directly (Reactions tab, Excel import, superReactions hand-off);
+  nothing added.

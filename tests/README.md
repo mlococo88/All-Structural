@@ -63,6 +63,11 @@ node tests/lightpole-compare.mjs [--cases default,sign1] [--old-saves] [--tol 1e
 # main's autosave and project list), Undo / Redo / Ctrl+Z / Ctrl+Y, the dialog (rename, duplicate, delete, open), quota refusal, 390 px
 node tests/smoke/project-library.mjs --tool asce7 [--a origin/main] [--shots <dir>]
 
+# Editable list tables (shared/list-input.js, LIST): the widget on a test page (typing, Enter, ",", paste from Excel, remove, checks,
+# labels, bindInput, the React wrapper) and every tool that loads it: main vs the working tree on the default project and one with
+# custom stations (results, page text, saved text identical; 0 console errors); --shots: the table at 1400 and 390 px
+node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset] [--a origin/main] [--shots <dir>]
+
 # Syntax check (Tier 0): every inline script; JSX transpiled with the offline Babel; embedded pages (pl-src, st-src, iframe srcdoc) included
 node tests/check-syntax.mjs                                                   # no arguments: every repo-root tool HTML, apps/*/index.html, apps/**/*.js, shared/*.js
 node tests/check-syntax.mjs "Steel Bridge Design.html"                        # one tool: the merged tool includes its embedded pages (pl-src, st-src)

@@ -8125,7 +8125,7 @@ function rbrTension(inp,f){
       rbS({id:'psiS',label:'Bar size factor (#6 and smaller 0.8, else 1.0; #'+inp.barSize+')',sym:'\\psi_{s}',value:f.psiS,unit:'',d:1}),
       rbS({id:'psiG',label:'Reinforcement grade factor (f_y = '+rbG(inp.fy,0).replace('{,}',',')+' psi: Grade 40/60 1.0, 80 1.15, 100 1.30)',sym:'\\psi_{g}',value:f.psiG,unit:'',d:2}),
       rbS({id:'lam',label:inp.lightweight?'Lightweight concrete factor (entered, limited to 0.75–1.0)':'Lightweight concrete factor (normal weight)',sym:'\\lambda',value:f.lambda,unit:'',d:2,ref:inp.lightweight?'ACI 318-19 Table 19.2.4.2':''}),
-      rbS({id:'psiTE',label:'Product limit on ψ_t·ψ_e',sym:'\\psi_{t}\\psi_{e}',eq:'\\min(\\psi_{t}\\psi_{e},\\, 1.7)',sub:'\\min('+rbN(f.psiT,1)+'\\times '+rbN(f.psiE,1)+',\\, 1.7)',value:f.psiTEcap,unit:'',d:2,ref:'ACI 318-19 25.4.2.4'})]});
+      rbS({id:'psiTE',label:'Product limit on ψ_t·ψ_e',sym:'\\psi_{t}\\psi_{e}',eq:'\\min(\\psi_{t}\\psi_{e},\\, 1.7)',sub:'\\min('+rbN(f.psiT,1)+'\\times '+rbN(f.psiE,1)+',\\, 1.7) = \\min('+rbN(f.psiT*f.psiE)+',\\, 1.7)',value:f.psiTEcap,unit:'',d:2,ref:'ACI 318-19 25.4.2.4'})]});
     const kH=ktrHSCheck(inp,f), cs=[
       rbS({id:'cb',label:'Lesser of cover and half the center-to-center spacing (input)',sym:'c_{b}',value:inp.cb,unit:'in'}),
       rbS({id:'db',label:'Bar diameter (#'+inp.barSize+')',sym:'d_{b}',value:f.db,unit:'in',d:3}),
@@ -8162,7 +8162,7 @@ function rbrTension(inp,f){
     T.push({title:'Modification factors',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1b',steps:[
       rbS({id:'lrl',label:'Reinforcement location factor ('+(inp.topBar?'top bar':'not a top bar')+')',sym:'\\lambda_{rl}',value:f.lam_rl,unit:'',d:1}),
       rbS({id:'lcf',label:'Coating factor (as selected)',sym:'\\lambda_{cf}',value:f.lam_cf,unit:'',d:1}),
-      rbS({id:'rlcf',label:'Product limit on λ_rl·λ_cf',sym:'\\lambda_{rl}\\lambda_{cf}',eq:'\\min(\\lambda_{rl}\\lambda_{cf},\\, 1.7)',sub:'\\min('+rbN(f.lam_rl,1)+'\\times '+rbN(f.lam_cf,1)+',\\, 1.7)',value:f.lam_rlcf_cap,unit:'',d:2})]});
+      rbS({id:'rlcf',label:'Product limit on λ_rl·λ_cf',sym:'\\lambda_{rl}\\lambda_{cf}',eq:'\\min(\\lambda_{rl}\\lambda_{cf},\\, 1.7)',sub:'\\min('+rbN(f.lam_rl,1)+'\\times '+rbN(f.lam_cf,1)+',\\, 1.7) = \\min('+rbN(f.lam_rl*f.lam_cf)+',\\, 1.7)',value:f.lam_rlcf_cap,unit:'',d:2})]});
     T.push({title:'Confinement factor',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1c',steps:rbAashtoRc(inp,f,f.ktr_a,f.lam_rc_raw,f.lam_rc,false)});
     T.push({title:'Development length',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1a-1',steps:[
       rbS({id:'ldcalc',label:'Tension development length',sym:'l_{d,calc}',eq:'l_{db}\\, \\lambda_{rl}\\lambda_{cf}\\, \\lambda_{rc}',sub:rbN(t.ldb)+'\\times '+rbN(f.lam_rlcf_cap)+'\\times '+rbN(f.lam_rc,4),value:t.ld_calc,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1a-1'}),
@@ -8220,7 +8220,7 @@ function rbrHook(inp,f){
     T.push({title:'Modification factors',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1b–c, 5.10.8.2.4b',steps:[
       rbS({id:'lrl',label:'Reinforcement location factor (also for hooks)',sym:'\\lambda_{rl}',value:f.lam_rl,unit:'',d:1}),
       rbS({id:'lcf',label:'Coating factor, hooked bar (1.2 if coated)',sym:'\\lambda_{cf}',value:h.cf,unit:'',d:1}),
-      rbS({id:'rlcf',label:'Product limit on λ_rl·λ_cf',sym:'\\lambda_{rl}\\lambda_{cf}',eq:'\\min(\\lambda_{rl}\\lambda_{cf},\\, 1.7)',sub:'\\min('+rbN(f.lam_rl,1)+'\\times '+rbN(h.cf,1)+',\\, 1.7)',value:h.rlcf,unit:'',d:2,ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1b'}),
+      rbS({id:'rlcf',label:'Product limit on λ_rl·λ_cf',sym:'\\lambda_{rl}\\lambda_{cf}',eq:'\\min(\\lambda_{rl}\\lambda_{cf},\\, 1.7)',sub:'\\min('+rbN(f.lam_rl,1)+'\\times '+rbN(h.cf,1)+',\\, 1.7) = \\min('+rbN(f.lam_rl*h.cf)+',\\, 1.7)',value:h.rlcf,unit:'',d:2,ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1b'}),
       rbS({id:'conf',label:'Tie factor (0.8 with ties per 5.10.8.2.4b, #11 and smaller; else 1.0)',sym:'\\text{tie factor}',value:h.conf,unit:'',d:1,ref:'AASHTO LRFD 10th Ed. 5.10.8.2.4b'}),
       rbS({id:'lam',label:'Concrete density modification factor',sym:'\\lambda',value:f.lambda,unit:'',d:2,note:'see §lam'})].concat(exS)});
     T.push({title:'Confinement factor'+(h.ties?' (k_tr = 0, tie reduction taken)':''),ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1c',steps:rbAashtoRc(inp,f,h.ties?0:f.ktr_a,h.lam_rc_h_raw,h.lam_rc_h,true)});
@@ -8315,6 +8315,19 @@ function rbrCSplice(inp,f){
   return [{title:'Splice length',ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.5a':'ACI 318-19 25.5.5.1',steps:L}];
 }
 
+/* RBRX (2026-11-02): the result tabs' own explanatory text, as the retired print report (buildReport) printed it: each
+   .narr paragraph and each &quot;Commentary — why &amp; what&quot; note (paragraph by paragraph, one line per factor), from the same
+   tab functions (tabTension(…,true), tabHook, …), parsed inert (template) and turned into report text by rbPlain. */
+function rbComm(html){
+  const t=document.createElement('template'); t.innerHTML=html; const out=[];
+  const txt=h=>rbPlain(h).replace(/\s+/g,' ').trim();
+  t.content.querySelectorAll('.narr,.note-body').forEach(e=>{
+    if(e.classList.contains('narr')){ if(!e.parentElement||!e.parentElement.closest('.note-body')) out.push(txt(e.innerHTML)); return; }
+    e.childNodes.forEach(n=>out.push(txt(n.nodeType===1?n.innerHTML:String(n.textContent).replace(/&amp;/g,'&amp;amp;').replace(/</g,'&amp;lt;'))));
+  });
+  return out.filter(Boolean).map(text=>({type:'note',text}));
+}
+function rbCommSub(html){ const L=rbComm(html); return L.length?[{title:'Notes and commentary',items:L}]:[]; }
 function rbrModel(){
   const inp=readInputs(), f=computeFactors(inp), w=validate(inp,f), A=f.AASHTO, secs=[];
   const codeName=A?'AASHTO LRFD 10th Ed. (2024) §5.10.8':'ACI 318-19';
@@ -8325,7 +8338,7 @@ function rbrModel(){
     const subs=[];
     subs.push({title:'Project',items:[{type:'kv',rows:[['Project',inp.projName||'—'],['Project number',inp.projNo||'—'],
       ['Calculated by',(inp.calcBy||'—')+(inp.calcDate?', '+inp.calcDate:'')],['Checked by',(inp.chkBy||'—')+(inp.chkDate?', '+inp.chkDate:'')],['Design code',codeName]]},
-      {type:'note',text:'Units: in., psi'+(A?' (ksi in the AASHTO equations)':'')+'. Every value in this report is the value the tool computes on its result tabs (Tension l_d, Hook l_dh, Compression l_dc, Tension Splice, Comp. Splice, Bar Schedule); each section links to its tab.'}]});
+      {type:'note',text:REBAR_RPT_TOOL+', by Mario Lococo. Equations are shown symbolically, then with the values substituted, then with the result. '+'Units: in., psi'+(A?' (ksi in the AASHTO equations)':'')+'. Every value in this report is the value the tool computes on its result tabs (Tension l_d, Hook l_dh, Compression l_dc, Tension Splice, Comp. Splice, Bar Schedule); each section links to its tab.'}]});
     const yn=b=>b?'yes':'no';
     const rows=[['Design code',codeName,'–'],['Bar size','#'+inp.barSize+' ($d_{b}$ = '+rbN(f.db,3)+' in., $A_{b}$ = '+rbN(f.Ab)+' in²)','–'],
       ['Yield strength $f_{y}$',rbG(inp.fy,0).replace('{,}',','),'psi'],['Concrete strength $f^{\\prime}_{c}$',rbG(inp.fc,0).replace('{,}',','),'psi'],
@@ -8342,6 +8355,7 @@ function rbrModel(){
     const RR=rebarResultRows(inp,f,null), stc=s=>s==='PASS'?'ok':s==='FAIL'?'ng':s==='CHK'?'hi':'na';
     subs.push({title:'Summary of results',items:[{type:'table',head:['Length or check','Value','Reference','Status'],
       rows:RR.map(r=>[rbPlain(r.lab),{t:rbPlain(r.msg),key:r.card?CARD_KEY[r.card]:undefined},rbPlain(r.ref),{t:r.st,cls:stc(r.st)}])},
+      {type:'note',text:(()=>{ const nC=RR.filter(r=>r.st!=='—').length, nN=RR.filter(r=>r.st==='FAIL'||r.st==='CHK').length; return 'Code checks: '+(nC-nN)+' of '+nC+' pass'+(nN?', '+nN+' need attention (FAIL / CHK)':'')+'.'; })()},
       {type:'note',text:'Lengths are required lengths: the tool has no provided-length input, so they carry no pass / fail (—); compare them with the lengths detailed. CHK: needs attention (not checked by the tool, or an input is missing).'}]});
     if(w.length) subs.push({title:'Validation notices',items:w.map(x=>({type:'note',warn:true,text:rbPlain(x)}))});
     if(String(inp.assumptions||'').trim()) subs.push({title:'Engineering assumptions',items:[{type:'note',text:String(inp.assumptions).trim()}]});
@@ -8352,16 +8366,16 @@ function rbrModel(){
   const hk=hookSchematic(inp,f,calcHook(inp,f)), hsvg=(hk.match(/<svg[\s\S]*<\/svg>/)||[''])[0];
   secs.push({title:'Tension development',subs:[{title:'Tension development length $l_{d}$',items:[
     {type:'figure',svg:sch,caption:'Input schematic: bar in section (c_b controls)'},
-    rbTopics('td',rbrTension(inp,f),{title:'Worked steps'}),{type:'note',text:tabLink('tension','On screen: Tension l_d tab (with the sensitivity charts)')}]}]});
+    rbTopics('td',rbrTension(inp,f),{title:'Worked steps'}),{type:'note',text:tabLink('tension','On screen: Tension l_d tab (with the sensitivity charts)')}]}].concat(rbCommSub(tabTension(inp,f,true)))});
   secs.push({title:'Standard hook',subs:[{title:'Standard hook development length $l_{dh}$',items:[
     {type:'figure',svg:hsvg,caption:'Hook geometry (90° standard hook, schematic; '+(A?'AASHTO 5.10.2.1':'ACI 318-19 25.3.1')+')'},
-    rbTopics('hk',rbrHook(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('hook','On screen: Hook l_dh tab')}]}]});
+    rbTopics('hk',rbrHook(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('hook','On screen: Hook l_dh tab')}]}].concat(rbCommSub(tabHook(inp,f)))});
   secs.push({title:'Compression development',subs:[{title:'Compression development length $l_{dc}$',items:[
-    rbTopics('cd',rbrComp(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('compression','On screen: Compression l_dc tab')}]}]});
+    rbTopics('cd',rbrComp(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('compression','On screen: Compression l_dc tab')}]}].concat(rbCommSub(tabComp(inp,f)))});
   secs.push({title:'Tension lap splice',subs:[{title:'Tension lap splice length $l_{st}$',items:[
-    rbTopics('ts',rbrTSplice(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('tsplice','On screen: Tension Splice tab')}]}]});
+    rbTopics('ts',rbrTSplice(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('tsplice','On screen: Tension Splice tab')}]}].concat(rbCommSub(tabTSplice(inp,f)))});
   secs.push({title:'Compression lap splice',subs:[{title:'Compression lap splice length $l_{sc}$',items:[
-    rbTopics('cs',rbrCSplice(inp,f),{title:'Worked steps'}),{type:'note',text:tabLink('csplice','On screen: Comp. Splice tab')}]}]});
+    rbTopics('cs',rbrCSplice(inp,f),{title:'Worked steps'}),{type:'note',text:tabLink('csplice','On screen: Comp. Splice tab')}]}].concat(rbCommSub(tabCSplice(inp,f)))});
   /* 7. bar schedule (tabBatch: the same functions for every bar size) */
   {
     const rows=BAR_ORDER.map(b=>{
@@ -8372,7 +8386,7 @@ function rbrModel(){
     });
     secs.push({title:'Bar development schedule',subs:[{title:'Development and splice lengths, all bar sizes',items:[
       {type:'table',head:['Bar','$d_{b}$ (in.)','Tension $l_{d}$','Hook $l_{dh}$','Comp. $l_{dc}$','Tens. splice ('+inp.tensClass+')','Comp. splice'],rows,wide:true},
-      {type:'note',text:'All lengths in inches, rounded to 0.1 in., computed with the inputs above for each bar size (bold: the selected #'+inp.barSize+'; its lengths are worked in [[td/ld]], [[hk/ldh]], [[cd/ldc]], [[ts/lst]], [[cs/lsc]]). '+(inp.useExcess?'Excess reinforcement reduction (×'+rbN(f.excess,3)+') applied to development lengths, not to splices. ':'')+(A?'*N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).':'*N/P = lap splice not permitted (ACI 318-19 25.5.1.1).')+' '+tabLink('batch','On screen: Bar Schedule tab')}]}]});
+      {type:'note',text:'All lengths in inches, rounded to 0.1 in., computed with the inputs above for each bar size (bold: the selected #'+inp.barSize+'; its lengths are worked in [[td/ld]], [[hk/ldh]], [[cd/ldc]], [[ts/lst]], [[cs/lsc]]). '+(inp.useExcess?'Excess reinforcement reduction (×'+rbN(f.excess,3)+') applied to development lengths, not to splices. ':'No excess reinforcement reduction applied. ')+(A?'*N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).':'*N/P = lap splice not permitted for #14/#18 bars (ACI 318-19 25.5.1.1); in compression they may be lapped only to #11 and smaller bars (25.5.5.3).')+' '+tabLink('batch','On screen: Bar Schedule tab')}]}].concat(rbCommSub(tabBatch(inp,f)))});
   }
   /* 8. references */
   secs.push({title:'References',subs:[{title:'Codes and articles cited',items:[{type:'table',head:['Reference','Provisions used'],rows:rebarRefs(inp,f).map(r=>[rbPlain(r[0]),rbPlain(r[1])])}]}]});

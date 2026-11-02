@@ -10,6 +10,10 @@
 <!-- SBRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): saved-project list dialog (Open / Rename / Duplicate / Delete), shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
+<script src="shared/list-input.js"></script>
 <style>
 :root{
   --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB;
@@ -568,6 +572,27 @@ function lsSet(k,v){try{localStorage.setItem(k,v);return true;}catch(e){return f
 function autosave(){lsSet(LS_AUTO,JSON.stringify(S));}
 function getProjects(){try{return JSON.parse(lsGet(LS_PROJ)||'{}');}catch(e){return{};}}
 function setProjects(p){lsSet(LS_PROJ,JSON.stringify(p));}
+/* PLIB (2026-11-02): "Saved projects…" dialog over the tool's own key sbd_projects_v1 ({ name: { t, d: S } }), shared/projects.js and
+   shared/projects-ui.js. Display and storage only: Rename / Duplicate move / copy the stored item unchanged; Open is the Load path
+   (mergeState + fullRebuild). The tool's own Undo / Redo is unchanged. A rename of the open project (Project name = the old name)
+   sets Project name to the new name, because Save stores under Project name. */
+let SBPL=null;
+function sbPlibButton(){
+  if(!window.SharedProjects||!window.SharedProjectsUI)return null;
+  if(!SBPL){
+    let ST=null;try{ST=window.localStorage;}catch(e){}
+    const store=SharedProjects.mapStore(ST,LS_PROJ,{unpack:i=>i&&i.d,time:i=>i&&i.t||null,sort:'saved'});
+    const dlg=SharedProjectsUI.libraryDialog({store,storage:ST,title:'Saved projects (this browser)',
+      current:()=>{const n=S.proj&&S.proj.name;return n&&store.has(n)?n:null;},
+      open:n=>{const d=store.get(n);if(!d)return false;S=mergeState(defaultState(),d);fullRebuild();toast('Loaded \u201C'+n+'\u201D');return true;},
+      renamed:(a,b)=>{if(S.proj&&S.proj.name===a){S.proj.name=b;schedule();}},
+      changed:()=>rebuildInputs()});
+    SBPL={store,dlg};
+  }
+  const b=SharedProjectsUI.button('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete',{cls:'btn sm'});
+  b.addEventListener('click',()=>SBPL.dlg.show());
+  return b;
+}
 /* ---- undo / redo ---- */
 let hist=[],hIdx=-1,histT=null;
 function pushHist(){
@@ -2490,9 +2515,13 @@ function rebuildInputs(){
   /* ---------- Analysis options ---------- */
   if(typeof extraInputSections==='function')extraInputSections(P,'B');
   mkSection('inOpts','Output Stations',body=>{
-    const ux=txtInput(()=>S.disp.userX,v=>{S.disp.userX=v;},'userX');
-    ux.placeholder='e.g. 5, 12.5, 31';
-    fRow(body,'Custom stations x',ux,'ft');
+    /* one box per station (shared/list-input.js); S.disp.userX stays the saved text "5, 12.5, 31" */
+    const ux=el('div','uxHost');
+    fRow(body,'Custom stations x',ux,'');
+    uxCtl=SharedListInput.mount(ux,{label:'Custom stations x',rows:SharedListInput.fromText(S.disp.userX),
+      columns:[{label:'x',unit:'ft',min:0,max:()=>totalL(),rangeNote:'outside the beam, not used',lenient:true,placeholder:'5',width:'6em'}],
+      cellAttrs:(inp,r)=>tagField(inp,'userX.'+r),
+      onChange:rows=>{S.disp.userX=SharedListInput.toText(rows);schedule();}});
     body.appendChild(el('div','hint','Results are always reported at span tenth-points, supports, load points, and V=0 stations; add extra stations here.'));
   },P,{noNum:true});
   /* ---------- Assumptions ---------- */
@@ -2530,6 +2559,7 @@ function rebuildInputs(){
       });
       rowA.appendChild(load);rowA.appendChild(del);
     }
+    if(typeof sbPlibButton==='function'){const lb=sbPlibButton();if(lb)rowA.appendChild(lb);}   /* PLIB */
     body.appendChild(rowA);
     const rowB=el('div','btnRow');
     const ex=el('button','btn sm','\u2b07 Export JSON');
@@ -2711,12 +2741,14 @@ function renderTab(){
   }
 }
 let schedT=null;
+let uxCtl=null;   /* the Custom stations x table (Output Stations) */
 function schedule(structural){
   $('updDot').classList.add('show');
   clearTimeout(schedT);
   schedT=setTimeout(()=>{
     computeAll();
     if(structural)rebuildInputs();
+    else if(uxCtl)uxCtl.relabel();   /* Custom stations x: re-check against the beam length */
     renderTab();
     sbdInputTabMarks();   /* refresh the input-tab error dots */
     autosave();pushHist();

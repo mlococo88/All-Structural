@@ -76,6 +76,8 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 .fld .u { color: var(--muted); font-size: .78rem; padding-right: 7px; white-space: nowrap; }
 .fld.ro .in { background: var(--band); }
 .fld.bad .in { border-color: var(--fail); }
+.fld .sli input.sli-in { border: 1px solid var(--border-hi); border-radius: var(--r); background: var(--surface); padding: 4px 6px; }
+.fld.bad .sli { outline: 1px solid var(--fail); outline-offset: 2px; }
 .note { font-size: .82rem; color: var(--text-dim); padding: 2px 16px 8px; }
 .note.pad { padding: 6px 16px; }
 .seg { display: flex; border: 1px solid var(--border-hi); border-radius: var(--r); overflow: hidden; background: var(--surface); }
@@ -188,6 +190,10 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<script src="shared/list-input.js"></script>
+<!-- PLIB (2026-11-02): saved-project list (Save / Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
 (function(){
@@ -907,11 +913,11 @@ function paneBridge() {
     <td><input data-k="br.skews.${k}" data-kind="num" value="${esc(b.skews[k])}"></td>
     <td><input data-k="br.elev.${k}" data-kind="num" value="${esc(b.elev[k])}"></td>
     <td>${k === 0 || k === n - 1 ? '<span class="note" style="padding:0">end</span>' : `<select data-k="br.joint.${k}"><option value="cont"${b.joint[k] !== 'joint' ? ' selected' : ''}>Continuous</option><option value="joint"${b.joint[k] === 'joint' ? ' selected' : ''}>Exp. joint</option></select>`}</td></tr>`).join('');
-  return sec('Spans', `<div class="fld full"><label for="f_spans">Span lengths along CL bridge, CL bearing to CL bearing</label><div class="in"><input id="f_spans" data-list="br.spans" value="${esc(b.spans.join(', '))}"><span class="u">ft</span></div></div>`, { one: true })
-    + `<p class="note">Separate spans with commas. Changing the number of spans adds or removes piers.</p>`
+  return sec('Spans', `<div class="fld full"><label for="f_spans">Span lengths along CL bridge, CL bearing to CL bearing</label><input id="f_spans" data-list="br.spans" value="${esc(b.spans.join(', '))}"></div>`, { one: true })
+    + `<p class="note">One span per row (Enter adds a row). Changing the number of spans adds or removes piers.</p>`
     + `<div class="sec-h">Supports <small>skew + when the left end of the line is ahead</small></div><div class="sec-body one"><table class="mini-t"><thead><tr><th>Support</th><th>Skew (°)</th><th>Deck El. at CL (ft)</th><th>Superstructure</th></tr></thead><tbody>${rows}</tbody></table></div>`
     + `<p class="note">Deck elevation is the top of deck on CL bridge at CL bearing; the profile is taken straight between supports and the cross slope is not modeled yet.</p>`
-    + sec('Cross-section', `<div class="fld full"><label for="f_bays">Girder spacings, left to right looking ahead</label><div class="in"><input id="f_bays" data-list="br.bays" value="${esc(b.bays.join(', '))}"><span class="u">ft</span></div></div>`
+    + sec('Cross-section', `<div class="fld full"><label for="f_bays">Girder spacings, left to right looking ahead</label><input id="f_bays" data-list="br.bays" value="${esc(b.bays.join(', '))}"></div>`
       + fld('Left overhang', 'br.ohL', 'ft') + fld('Right overhang', 'br.ohR', 'ft') + fld('Left barrier width', 'br.barL', 'ft', 'num', { title: 'Deck edge to the roadway face of the barrier or curb' }) + fld('Right barrier width', 'br.barR', 'ft') + fld('Barrier height', 'br.barH', 'in') + fld('Deck thickness', 'br.ts', 'in') + fld('Haunch', 'br.haunch', 'in') + fld('Girder depth', 'br.d', 'in') + fld('Flange width', 'br.bf', 'in') + fld('Flange thickness', 'br.tf', 'in') + fld('Web thickness', 'br.tw', 'in') + fld('Concrete unit weight', 'br.wc', 'kcf'))
     + `<p class="note">The girder shape is used for the drawings, the 3D view, and exposed depth for wind. Superstructure weight comes from the reactions.</p>`;
 }
@@ -967,8 +973,22 @@ function buildSide() {
   const pane = P.ui.itab; document.querySelectorAll('.itab').forEach(b => b.classList.toggle('active', b.dataset.pane === pane));
   const sb = $('#sidebar'), top = sb.scrollTop;
   sb.innerHTML = pane === 'project' ? paneProject() : pane === 'bridge' ? paneBridge() : pane === 'rx' ? paneRx() : paneUnits();
+  if (pane === 'bridge') listTables();
   sb.scrollTop = top; if (pane === 'units') { const d = $('#derived'); if (d) d.innerHTML = derivedHtml(); }
   markBad();
+}
+/* LIST (2026-11-02): span lengths and girder spacings as tables, one box per value (shared/list-input.js). The <input data-list>
+   stays, hidden, as the text the events below read ("110, 140"); a table edit fires its 'input' (the red mark) and, when the focus
+   leaves the table, its 'change' (the commit, as the old box did on blur). P.br.spans / P.br.bays stay arrays. */
+function listTables() {
+  [['f_spans', 'Span lengths', 'L'], ['f_bays', 'Girder spacings', 'S']].forEach(([id, label, sym]) => {
+    const inp = document.getElementById(id); if (!inp || !window.SharedListInput) return;
+    let was = inp.value;
+    const ctl = SharedListInput.bindInput(inp, { label, events: ['input'], columns: [{ label: sym, unit: 'ft', min: 0, minExclusive: true, width: '6.5em' }] });
+    ctl.el.addEventListener('focusout', () => setTimeout(() => {   // after the event: a redraw (Enter, ×) moves the focus within the table
+      if (!ctl.el.isConnected || ctl.el.contains(document.activeElement)) return;
+      if (inp.value !== was) { was = inp.value; inp.dispatchEvent(new Event('change', { bubbles: true })); } }, 0));
+  });
 }
 function markBad() { document.querySelectorAll('#sidebar [data-kind="num"]').forEach(i => { const bad = i.value.trim() !== '' && !isFinite(num(i.value)); const f = i.closest('.fld'); if (f) f.classList.toggle('bad', bad); i.style.color = bad ? 'var(--fail)' : ''; }); }
 
@@ -1132,7 +1152,7 @@ function printReport() {
   P.ui.tab = prev; const done = () => { document.querySelectorAll('.tab-panel.print').forEach(el => el.classList.remove('print')); window.removeEventListener('afterprint', done); };
   window.addEventListener('afterprint', done); window.print(); setTimeout(done, 1500);
 }
-let _as = null; function autosave() { clearTimeout(_as); _as = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) { } }, 300); }
+let _as = null; function autosave() { clearTimeout(_as); _as = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) { } if (window.SLPL) SLPL.h.record(); /* PLIB: one undo step per change */ }, 300); }
 let _fl = null; function flash(m, c = 'pass') { const f = $('#flash'); f.textContent = m; f.className = 'on' + (c === 'fail' ? ' fail' : ''); clearTimeout(_fl); _fl = setTimeout(() => f.className = '', 3200); }
 
 /* =====================================================================
@@ -4057,6 +4077,41 @@ window.addEventListener('beforeprint', () => {
   P = defP();
   try { const s = localStorage.getItem(KEY); if (s) { const j = JSON.parse(s); if (j && j.app === APP) { migEHEQ(j); const d = defP(); P = { ...d, ...j, meta: { ...d.meta, ...j.meta }, br: { ...d.br, ...j.br }, rx: { ...d.rx, ...j.rx }, ui: { ...d.ui, ...(j.ui || {}), v3: { ...d.ui.v3, ...((j.ui || {}).v3 || {}) } } }; } } } catch (e) { }
   syncSupports(); buildTabs(); recompute(); buildSide(); showTab(P.ui.tab || 'summary'); if (LF_NOTICE) autosave();   // TUCR: keep the migrated load factors so the one-time note does not return
+})();
+</script>
+<script>
+/* PLIB (2026-11-02): saved-project list in this browser and Undo / Redo (shared/projects.js, shared/projects-ui.js). The tool had the
+   autosave (subloads_v1) and Open / Save of .subloads.json files only. New key subloads_projects_v1 (tool-prefixed, CLAUDE.md §5):
+   { name: P }, the same object as the Save file; Open = openProject() (the Open-file path, migrations included). The autosave key and the
+   file format are unchanged. Undo / Redo: P without P.ui (tabs, selection, 3D view are not steps), session only. */
+(function () {
+  if (!window.SharedProjects || !window.SharedProjectsUI) return;
+  const LIB = 'subloads_projects_v1';
+  const h = SharedProjects.history({ get: () => JSON.stringify(Object.assign({}, P, { ui: undefined })),
+    set: t => { const j = JSON.parse(t), ui = P.ui, d = defP(); migEHEQ(j);
+      P = { ...d, ...j, meta: { ...d.meta, ...j.meta }, br: { ...d.br, ...j.br }, rx: { ...d.rx, ...j.rx }, ui };
+      if (!(P.ui.sel >= 0 && P.ui.sel < P.units.length)) P.ui.sel = 0;
+      syncSupports(); buildTabs(); buildSide(); showTab(P.ui.tab); recompute(); autosave(); } });
+  let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
+  const store = SharedProjects.mapStore(ST, LIB);
+  let cur = null;
+  const dlg = SharedProjectsUI.libraryDialog({ store, storage: ST, title: 'Saved projects (this browser)',
+    current: () => cur && store.has(cur) ? cur : null,
+    open: n => { const j = store.get(n); if (!j) return false; openProject(JSON.parse(JSON.stringify(j)), n); cur = n; return true; },
+    renamed: (a, b) => { if (cur === a) cur = b; }, deleted: n => { if (cur === n) cur = null; },
+    save: () => ask(), saveLabel: 'Save the open project in this browser\u2026' });
+  const save = n => { const r = store.save(n, P); if (r.ok) cur = r.name; return r; };
+  const ask = () => { const n = prompt('Save the project in this browser as:', cur || P.meta.name || 'Untitled'); if (n == null) return; if (!n.trim()) { alert('Enter a project name.'); return; }
+    if (store.has(n.trim()) && n.trim() !== cur && !confirm('A saved project named "' + n.trim() + '" already exists. Replace it?')) return;
+    const r = save(n); if (r.ok) flash('Saved "' + r.name + '" in this browser.'); return r; };
+  // header space is full (8 buttons): the three controls sit at the right end of the bridge strip under the header
+  const box = document.createElement('div'); box.setAttribute('data-sp', 'row'); box.style.cssText = 'position:absolute;right:12px;top:6px;display:flex;gap:6px;z-index:2';
+  const B = (t, ti) => SharedProjectsUI.button(t, ti, { cls: 'btn', style: 'font-size:12px;padding:3px 10px' });
+  const bu = B('Undo', 'Undo the last input change (Ctrl+Z)'), br = B('Redo', 'Redo (Ctrl+Y or Ctrl+Shift+Z)'), bl = B('Projects\u2026', 'Save the project in this browser; open, rename, duplicate or delete the projects saved here');
+  bl.addEventListener('click', () => dlg.show()); box.append(bu, br, bl);
+  const strip = document.querySelector('section.strip'); if (strip) { if (getComputedStyle(strip).position === 'static') strip.style.position = 'relative'; strip.appendChild(box); }
+  SharedProjectsUI.undoRedo(h, { undo: bu, redo: br });
+  h.reset(); window.SLPL = { h, store, dlg, save };
 })();
 </script>
 </body>
