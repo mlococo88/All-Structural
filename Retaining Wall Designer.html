@@ -3916,7 +3916,7 @@ function renderStabilityAASHTO(r) {
       ? `q_R = \\phi_b q_n = \\boxed{${F(a.q_R_A/1000,2)}\\ \\text{ksf}}`
       : `q_R = \\phi_b\\,q_n = (${F(A.phi_b,2)})(${F(a.q_n_A,0)}) = \\boxed{${F(a.q_R_A/1000,2)}\\ \\text{ksf}}`,'',
     [{sym:'\\phi_b', desc:'bearing resistance factor', val:F(A.phi_b,2), unit:''},
-     {sym:'q_n', desc:'nominal bearing resistance', val:F(a.q_n_A,0), unit:'psf'},
+     ...(a.useManualQn ? [] : [{sym:'q_n', desc:'nominal bearing resistance (≈ 3 q_a)', val:F(a.q_n_A,0), unit:'psf'}]),   // RWDB (2026-11-02): not listed when q_R is entered (q_n is not used)
      {sym:'q_R', desc:'factored bearing resistance', val:F(a.q_R_A/1000,2), unit:'ksf'}]);
   h += eqCheck('Bearing check \u2014 Strength I (max vertical)',
     `q_u = ${F(a.q_ult_A/1000,2)}\\ \\text{ksf} \\leq q_R = ${F(a.q_R_A/1000,2)}\\ \\text{ksf}`, a.bearing_ok_max);
@@ -4697,7 +4697,7 @@ function renderStem(r) {
     `d = t_{s,bot} - c_c - \\frac{d_b}{2} = ${F(inp.ts_bot,1)} - ${F(inp.cov_stem,2)} - ${F(r.sel_stem.bar.db/2,4)} = \\boxed{${F(r.d_stem,3)}\\ \\text{in}}`,'',
     [{sym:'t_{s,bot}', desc:'stem thickness at base', val:F(inp.ts_bot,1), unit:'in'},
      {sym:'c_c', desc:'clear cover to bar', val:F(inp.cov_stem,2), unit:'in'},
-     {sym:'d_b', desc:'assumed bar diameter (#6)', val:'0.750', unit:'in'},
+     {sym:'d_b', desc:`diameter of the selected bar (#${r.sel_stem.bar.num})`, val:F(r.sel_stem.bar.db,3), unit:'in'},   // RWDB (2026-11-02): was a fixed '#6, 0.750'
      {sym:'d', desc:'effective depth to tension steel', val:F(r.d_stem,3), unit:'in'}]);
   h += `</div></div>`;
 
@@ -5008,13 +5008,13 @@ function renderFooting(r) {
   h += `</div></div>`;
 
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Heel Step 3 — Flexural Steel (${heel_down?'top':'bottom'} face)</span><span class="card-ref">d = t_f − 2.0'' cover − d_b/2</span></div>
+    <div class="card-hd"><span class="card-title">Heel Step 3 — Flexural Steel (${heel_down?'top':'bottom'} face)</span><span class="card-ref">d = t_f − cover − d_b/2 · cover = ${F(inp.cov_ftg,2)} in</span></div>
     <div class="card-body">`;
   h += eq('Effective depth',
     `d = t_f - c_c - \\frac{d_b}{2} = ${F(inp.tf,1)} - ${F(inp.cov_ftg,2)} - ${F(r.sel_heel.bar.db/2,4)} = \\boxed{${F(r.d_heel,3)}\\ \\text{in}}`,'',
     [{sym:'t_f', desc:'footing thickness', val:F(inp.tf,1), unit:'in'},
-     {sym:'c_c', desc:'top clear cover', val:'2.00', unit:'in'},
-     {sym:'d_b', desc:'assumed bar diameter (#7)', val:'0.875', unit:'in'},
+     {sym:'c_c', desc:'clear cover (footing cover input)', val:F(inp.cov_ftg,2), unit:'in'},   // RWDB (2026-11-02): was a fixed '2.00'
+     {sym:'d_b', desc:`diameter of the selected bar (#${r.sel_heel.bar.num})`, val:F(r.sel_heel.bar.db,3), unit:'in'},   // RWDB: was a fixed '#7, 0.875'
      {sym:'d', desc:'effective depth to top steel', val:F(r.d_heel,3), unit:'in'}]);
   h += eq('Flexural resistance factor',
     `R_n = \\frac{M_u}{\\phi b d^2} = \\frac{${F(r.Mu_heel_in,0)}}{(0.90)(12)(${F(r.d_heel,3)})^2} = \\boxed{${F(r.Rn_heel,2)}\\ \\text{psi}}`,'',
@@ -5088,7 +5088,7 @@ function renderFooting(r) {
     `d = t_f - c_c - \\frac{d_b}{2} = ${F(inp.tf,1)} - ${F(inp.cov_ftg,2)} - ${F(r.sel_toe.bar.db/2,4)} = \\boxed{${F(r.d_toe,3)}\\ \\text{in}}`,'',
     [{sym:'t_f', desc:'footing thickness', val:F(inp.tf,1), unit:'in'},
      {sym:'c_c', desc:'bottom clear cover', val:F(inp.cov_ftg,2), unit:'in'},
-     {sym:'d_b', desc:'assumed bar diameter (#7)', val:'0.875', unit:'in'},
+     {sym:'d_b', desc:`diameter of the selected bar (#${r.sel_toe.bar.num})`, val:F(r.sel_toe.bar.db,3), unit:'in'},   // RWDB (2026-11-02): was a fixed '#7, 0.875'
      {sym:'d', desc:'effective depth to bottom steel', val:F(r.d_toe,3), unit:'in'}]);
   h += eq('Flexural resistance factor',
     `R_n = \\frac{M_u}{\\phi b d^2} = \\frac{${F(r.Mu_toe_in,0)}}{(0.90)(12)(${F(r.d_toe,3)})^2} = \\boxed{${F(r.Rn_toe,2)}\\ \\text{psi}}`,'',

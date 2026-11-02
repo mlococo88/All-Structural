@@ -3807,3 +3807,78 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 - **Open items:**
   - k ≈ 15 cannot be reproduced on the default project. It has no interface tension, so no k is shown. The engineer's project is needed.
   - Observation, not changed: for net uplift with M = 0, `sfpmRatios` reaches its tension limit at about 0.52 f_y per in² of steel. Example: P_u −55.19 k needs 1.78 in², against 55.19/(0.9·60) = 1.02 in² by hand. This is conservative and comes from the shared P–M routine. Raised, not changed.
+
+## 2026-11-02 — PR: claude/sf-show-work-links — Show the work and link to it: report summary of results, section keys instead of hard-coded § numbers, cross-step links (SFLK; display only, no result change) (PR #693: https://github.com/mlococo88/All-Structural/pull/693)
+
+### SFLK. CLAUDE.md §6 links across the Report and the inputs
+- **Engineer request (2026-11-02):** every value quoted away from where it is worked gets an in-app link, and a "see §x.y" in print. This uses the shared `[[key]]` mechanism of `shared/report.js` (as in lldf).
+- **Where:**
+  - `sfrModel`, sections and subsections get anchor keys:
+    - sections: `S-stab`, `S-fd`, `S-pd`, `S-ref`;
+    - subsections: `S-rb` (footing reinforcement), `S-asd`, `S-lrfd`, `S-res`, `S-bp`, `S-qa`, `S-ecc`, `S-st`, `S-fdx`/`S-fdy`, `S-pun`, `S-cbr`, `S-sf`, `S-dow`, `S-cov`, `S-pd<i>`.
+    - When no strength combination exists, "Pedestal design" now gets a "Not computed" section, as "Footing design" already did. This keeps the numbering and the keys.
+  - Hard-coded section numbers in report text become keys. There were 18: "see §8", "used in §5", "(§2.4, §6)", "worked in §2.4" ×2, "(§5, §6)", "§3.2" ×2, "§3.1 and §3.2", "§2.2", "§2.3" ×2, "§1.4", "in §5", "in §4". They print the right number whatever the section order, and they are links on screen.
+  - New first section **Summary of results**: one row per dashboard check (`sfdResultRows`), with the check, the result, D/C, status and "Worked in" (`[[S-…]]`, only keys present in the report).
+  - Cross-step notes (`see:'dow'` on the `cbr` and `sf` step items):
+    - §5.5 dowel area → `§p<i>.AsGov`;
+    - §5.5 ℓ_dc → `§p<i>.ldc`;
+    - shear friction A_s,dow − A_s,req → `§p<i>.AsGov`;
+    - shear friction "developed on both sides" → `§p<i>.Lftg`.
+  - Table rows:
+    - interface-tension table, the k-governing row → `dow/p<i>.AsReq`;
+    - shear-friction table, the governing row → `sf/f<i>.DCR`.
+  - Reinforcement input tab, pedestal block: "Dowels and shear friction worked in" link to Footing Design 5.6.
+- **Effect:**
+  - The report sections are renumbered by one: Summary is §1, Project and inputs §2, and so on.
+  - No computed value changes. A deep diff of `P2` on main vs the branch is empty on 7 cases: default, SF-2, the shear-friction case, direct mode, M_y 600, an old SF-2 save and a large-uplift case.
+  - Report: 0 unresolved or duplicate references, 0 KaTeX errors, no NaN on all 7.
+  - `node tests/check-syntax.mjs` passes, as does the scroll smoke test.
+- **Other copies:** none.
+- **Open items:**
+  - Step-level references print the subsection number (§6.7), as the shared report does elsewhere.
+  - The old print path (`renderPrintHeader`, "see §" on chips) is left to the agent retiring the old print reports.
+
+## 2026-11-02 — PR: claude/sf-pm-bracket — P–M neutral-axis search: lower bracket expanded; combinations the section cannot reach are NG (SFPB; calculation change) (PR #698: https://github.com/mlococo88/All-Structural/pull/698)
+
+### SFPB. `pmContour` lower bracket on c   [calculation change; CLAUDE.md §4]
+- **Finding** (independent review of the engineer's "Seymour Platform Foundation" report, item A1; approved 2026-11-02):
+  - Ped 1 is 24 × 112 in. Its dowel A_s,req was 15.36 · 12.32 = 189 in² (the engineer's "k ≈ 15") and its A_vf was 0.
+  - In the pedestal P–M check, 6 of the 15 combinations were "not computed", yet the check was reported OK at 0.017.
+- **Cause:** `pmContour` searched c in [0.05·max(b_x, b_y), 4·max(b_x, b_y)]. For Ped 1 the bottom of that range is c = 5.6 in. Bending about the 24-in side, that c already gives φP_n = 1491 kip, so no P_u below 1491 kip could be reached. `sfpmPoint` then returned "range":
+  - the dowels were taken as "> capacity", and k was bisected up to that threshold;
+  - the pedestal check skipped those combinations.
+- **Where:**
+  - `pmContour`, the bisection on c. Before:
+    ```
+    let lo=0.05*Math.max(bx,by),hi=4*Math.max(bx,by),found=null;
+    ```
+    After: the same line, then
+    ```
+    for(let e=0;e<40&&lo>1e-6;e++){const r0=analyze(lo,ang);if(phiOf(lo,ang)*r0.Pn<=Pu_target)break;lo/=4;}
+    ```
+    The lower bracket is divided by 4 until φP_n(lo) ≤ P_u. Where the old bracket already reached P_u nothing changes: the same lo and the same bisection path.
+  - A combination still out of range is P_u below the net tension the section can carry. That is now **NG**, never skipped:
+    - dashboard chip "Pedestal P–M (biaxial)": FAIL (before: REVIEW);
+    - summary D/C: ∞;
+    - Pedestal Design warning box: "NG";
+    - Report: a step "Combinations beyond the section's tension capacity", marked NG.
+- **Check cases:**
+  - **Review case** (24 × 112 in, 30 #6, c 2 in + d_b/2 = 2.375 in, f′c 4 ksi, f_y 60 ksi), the tool's own `sfpmRatios`:
+    - 0.9D + 1.0Wx (P 47.91, M_x 19.67, M_y 48): before "range" → after ratio **0.0706**, |φM_n|θ = 734.7 kip-ft (review: 0.071 / 734.9).
+    - 1.2D + 1.6S + 0.5Wx (P 70.66, M_x 30.30, M_y 24): before "range" → after **0.0348** (review: 0.035).
+    - Hand: tension face 14 #6 = 6.16 in², T = 370 kip, a = (370 + 70.7)/(0.85·4·112) = 1.16 in, c ≈ 1.4 in (< 5.6). φM_n ≈ 0.9·(370·(21.63 − 0.58) + 70.7·(12 − 0.58))/12 ≈ 645 kip-ft. Ratio < 0.1.
+    - 32 × 32 in section: unchanged (0.2910 before and after).
+  - **Whole tool, 24 × 112 in pedestal** (2 × 9.333 ft, 3 × 14 #6, separate 28 #6 dowels, D 50, W_x P −10, V 8, M_y 24):
+    - dowel A_s,req 171.1 → **0.009 in²**;
+    - A_vf 0 → 12.31 in²;
+    - shear-friction DCR 0.266 → **0.014**;
+    - pedestal P–M: 9 of 9 combinations "range" → all computed.
+  - **Net uplift** (default Ped 1, W_x P −400): governing 1.2D + 1.6S + 0.5(+W_x), P_u −55.19, M 0.
+    - Dowel A_s,req 1.778 → **1.004 in²**. Hand: 55.19/(0.9·60) = 1.02 in². The previously noted "0.52 f_y" conservatism (SFDC open item) was this same bracket.
+    - A_vf 4.54 → 5.32.
+  - **Unchanged** (deep diff of `P2`, main vs branch, empty): default, SF-2, direct mode, M_y 600.
+- **How verified:**
+  - Headless Chromium with the pinned libraries. Report: 0 unresolved or duplicate references, 0 KaTeX errors, no NaN. 0 console errors.
+  - `node tests/check-syntax.mjs` passes, as does the scroll smoke test.
+  - Cost: `sfpmRatios` on the review's points takes 84 → 248 ms. The extra cost is only where the bracket expands.
+- **Other copies:** none. Only `sfpmRatios` → `sfpmPoint` and the pedestal P–M diagram (`pmContour`, two calls) use it.
