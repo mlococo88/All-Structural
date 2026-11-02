@@ -208,6 +208,7 @@
     host.querySelectorAll('[data-gotab]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${a.dataset.gotab}"]`); if (b) b.click(); }));
     window.SharedSteps.wire(host, { onToggle: (k, open) => { if (open) S.open.add(k); else S.open.delete(k); } });
     if (S.R && !stale && !S.err && window.SBDTabGfxBUI) window.SBDTabGfxBUI.shear(host, ctx, S.R, S.sel, v => { S.sel = v; redraw(); });   // the graphics (ui/tabgraphics-b.js): a click selects the same row
+    if (S.R && !stale && !S.err && window.SBDDetail3D) window.SBDDetail3D.bearing(host, ctx, S.R, S.sel, v => { S.sel = v; redraw(); });   // 3D view of the selected / governing bearing stiffener (ui/detail3d.js; display only)
   }
   function defaultSel(R) {
     const c = [];
@@ -270,7 +271,7 @@
       <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Group</th><th class="lft">Governing item</th><th>Ratio</th><th></th></tr></thead><tbody>
       ${gl.map(q => `<tr><td class="lft">${q[3]}</td><td class="lft">${q[1]}</td><td class="${cls(q[0])}">${rt3(q[0])}</td><td>${q[2]}</td></tr>`).join('')}</tbody></table></div>
       ${R.TS && R.TS.errors && R.TS.errors.length ? `<div class="alert err">Transverse stiffeners: ${R.TS.errors.map(esc).join('; ')}</div>` : ''}${R.BS.errors && R.BS.errors.length ? `<div class="alert err">Bearing stiffeners: ${R.BS.errors.map(esc).join('; ')}</div>` : ''}</div></section>`;
-    h += `<section class="sec"><div class="secHead">Shear &amp; stiffeners: graphics</div><div class="secBody"><div data-gfxb="shear"></div><div data-gfxb="shear-detail"></div><div data-gfxb="shear-bearing"></div></div></section>`;   // drawn by ui/tabgraphics-b.js (engine/tabgraphics-b.js) from the results below
+    h += `<section class="sec"><div class="secHead">Shear &amp; stiffeners: graphics</div><div class="secBody"><div data-gfxb="shear"></div><div data-gfxb="shear-detail"></div><div data-gfxb="shear-bearing"></div><div data-d3="bearing"></div></div></section>`;   // drawn by ui/tabgraphics-b.js (engine/tabgraphics-b.js) from the results below
     // panels
     h += `<section class="sec"><div class="secHead">Web panels of the layout (G${R.gm.gNo}, D = ${fmt(R.D, 2)} in, F<sub>yw</sub> = ${fmt(R.Fyw, 0)} ksi)</div><div class="secBody">
       <p class="note">${R.bays.length} bays, ${R.panels.rows.length} panels. V<sub>u</sub>: the largest Strength I shear in the panel (6.10.9.3.1)${R.gm.dem ? '' : ' (needs a hand-off file)'}; t<sub>w</sub> the thinnest web and 2Dt<sub>w</sub>/(b<sub>fc</sub>t<sub>fc</sub> + b<sub>ft</sub>t<sub>ft</sub>) the largest in the panel.</p>

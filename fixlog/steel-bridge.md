@@ -3443,3 +3443,46 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 - `node tests/engine/final-compare.mjs` re-run on main after #615.
 ### Other copies
 - None.
+
+## 2026-11-02 — PR: claude/sbd-3d-details — 3D detail views of the field splice and the bearing stiffener (display only)
+### Request
+- Engineer: "The old app has 3D graphics of the splice connection and the bearing stiffener, do we have them in the new app? If not we
+  should add." GirderDetail ("Steel Bridge Design.html", reference only, not changed) has them in its Field splice module
+  (`function draw3D(R, host) {`, `function render3D() {`) and its Bearing stiffener module (`function draw3DB(R, host) {`,
+  `function bsRender3D() {`). The new app only had the whole-bridge 3D view tab (ui/view3d.js) and its single-girder close-up.
+### Change
+- New `apps/steel-bridge/ui/detail3d.js` (window.SBDDetail3D): `splice(host, ctx, R, sel, onSel)` and `bearing(host, ctx, R, sel, onSel)`
+  fill a `<div data-d3="splice">` / `<div data-d3="bearing">` card (three.js r128 + OrbitControls, the files index.html already loads).
+  - Field splice (the selected splice; a Splice list in the card selects it in the tab): both girder ends with their own flanges and
+    webs (thickness change shown, flanges flush on the inside faces as GirderDetail), outer and inner flange splice plates, fillers on the
+    thinner side, the two web plates, every bolt (shank, heavy-hex head, nut, washer; typical proportions, display only) at the designed
+    gage, pitch, edge distances and web bolt pattern; labels with the plate sizes and both sides' plates. Reads `s.R` of the tab's
+    result (engine/splices.js compute: fl.top/bot, web, bolt, gap, secL/secR); nothing recomputed.
+  - Bearing stiffener (the selected `bs` row of the tab, else the governing bearing; a Bearing list in the card selects it in the tab):
+    the girder over the bearing (top flange at the bearing as the 2D drawing), every pair of stiffener plates with their clips, the
+    fillet welds to the web, the effective column of 6.10.11.2.4 in orange (web strips `strip9` and `sEnd` of the result, a section cut at
+    mid-depth), the girder end at e_d at the abutments, a sole plate / bearing / pedestal schematic, and the support cross-frame stubs on
+    the side(s) with an adjacent girder (the bearing stiffener is the connection plate at the supports, engine/crossframes.js `cfCP`).
+  - Controls in both cards: View (3D, elevation, plan, section; the orthogonal views use a 6° field of view from far away), Reset view,
+    Save PNG, layer check boxes, girder transparency; orbit / pan / zoom (mouse and touch). Choices kept for the page view only (no
+    storage key). Without three.js the card says so; without WebGL it shows the error.
+- Hooks: `ui/splices.js` `splice()` (anchor `h += '<div data-gfxb="splice"></div>';`) adds `<div data-d3="splice"></div>`, and `render()`
+  after `window.SBDTabGfxBUI.splice(host, ctx, S.R.list[S.sel]);` adds
+  `if (S.R && !stale && !S.err && window.SBDDetail3D) window.SBDDetail3D.splice(host, ctx, S.R, S.sel, i => { S.sel = i; redraw(); });`.
+  `ui/shear.js` `results()` (anchor `<div data-gfxb="shear-bearing"></div>`) adds `<div data-d3="bearing"></div>` after it, and `render()`
+  after the `window.SBDTabGfxBUI.shear(...)` line adds
+  `if (S.R && !stale && !S.err && window.SBDDetail3D) window.SBDDetail3D.bearing(host, ctx, S.R, S.sel, v => { S.sel = v; redraw(); });`.
+  `index.html`: `<script src="ui/detail3d.js"></script>` after ui/view3d.js.
+### §4 callout
+- None: display only. No formula, factor, unit, reference or saved-data change; the views read the tabs' results and never write them.
+### Check case
+- Built-in project, G1, FS1 at 82 ft: the tab reports 50 bolts each side; the 3D view draws 100 bolts (56 flange + 44 web), 8 plates
+  (2 outer, 4 inner, 2 web), no filler. Splice at 88 ft (16 × 3/4 / 16 × 1 1/8 to 18 × 1 1/2 / 18 × 2): 62 bolts each side → 124 drawn,
+  fillers 3/4 in (top, 1.5 − 0.75) and 7/8 in (bottom, 2 − 1.125) on the left side.
+- Bearing, Pier 1 G1 (Type B): 2 pairs 8 × 1 at 12 in, effective column 9(0.5625) = 5.06 in each side + 13 in = 23.13 in, as the tab.
+### How verified
+- Results hash before/after (Node, ui/splices.js and ui/shear.js build on the built-in project; splices at 82, 145, 215, 278 ft and at
+  88 ft): identical. `node tests/engine/run.mjs splices shear stiffeners tabgraphics-b`; `node tests/check-syntax.mjs`.
+- Browser (Playwright, 1280 and 390 px): both cards draw, 0 console errors, no horizontal scroll; three.js removed → the message.
+### Other copies
+- None.
