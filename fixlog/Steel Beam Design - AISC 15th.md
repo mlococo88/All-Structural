@@ -2232,3 +2232,30 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   - The whole-document `textContent` (912,067 chars) is identical.
   - localStorage after load is identical.
 - Screenshots at 900 and 1280 px are pixel-identical (0 differing pixels) on load and on all 23 tabs.
+
+## 2026-11-02 — PR: PRLINK — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete)   [display and storage only]
+- **Before:** Project tab → Project Save / Load: Save (under Project name), drop-down + Load / Delete (`sbd_projects_v1`, `{ name: { t, d: S } }`),
+  Export / Import JSON; Undo / Redo (Ctrl+Z / Ctrl+Y). No rename, no duplicate.
+- **Where:**
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - before `/* ---- undo / redo ---- */`: `let SBPL=null; function sbPlibButton()` (anchor `/* PLIB (2026-11-02): "Saved projects…" dialog`):
+    `mapStore(localStorage, LS_PROJ, { unpack: i => i.d, time: i => i.t, sort: 'saved' })`; dialog `open` = the Load code
+    (`S=mergeState(defaultState(), d); fullRebuild();`); a rename of the open project (Project name = old name) sets Project name to the new
+    name (Save stores under Project name); the inputs are rebuilt after every change so the drop-down follows.
+  - `rebuildInputs()` → section `inProj`, anchor `rowA.appendChild(load);rowA.appendChild(del);`: after the `if(names.length){…}` block,
+    `if(typeof sbPlibButton==='function'){const lb=sbPlibButton();if(lb)rowA.appendChild(lb);}   /* PLIB */`.
+- The tool's own Undo / Redo is unchanged.
+- **Saved data:** keys `sbd_projects_v1`, `sbd_autosave_v1` and their formats unchanged; no new key.
+- **How verified:** `node tests/smoke/project-library.mjs --tool steelbeam`: ALL PASS (`AN` and `DZ`, every computed result, identical to
+  origin/main on load, after an input change, reopened on main's storage and opened from the dialog; dialog byte-identical; quota; 390 px;
+  no new console errors). `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** already entered directly (line, point and moment loads by load case, the combination table, and the buildingLoads
+  hand-off). Nothing added.
+- **Open item found (not changed, raised for the engineer):** on main, right after the page loads, typing a span length (Geometry, `spanL0`)
+  or a load-combination factor (`cb0_DL` …) does not change the model: `S.geom.spans[0].L` stays 20 and the results do not update, until
+  something rebuilds the input panel (any structural change, Undo, Load). Cause: `runBenchmarks()` (Validation tab, also built when the tabs
+  are built) ends with `S=mergeState(defaultState(),JSON.parse(saved))`, a NEW state object, without rebuilding the inputs; the span and
+  combination inputs hold the old `sp` / combination objects in their closures (inputs that write through `S.…` keep working).
+  Reproduce: open the tool with empty storage, type 21 in span 1 L → the results still use 20 ft; then e.g. change the support type and
+  type again → it works. Fix candidate: after the restore in `runBenchmarks()`, call `rebuildInputs()` (or restore into the same object).

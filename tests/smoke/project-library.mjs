@@ -32,6 +32,13 @@ const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel
   await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
   return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
 export const TOOLS = {
+  steelbeam: {
+    file: 'Steel Beam Design - AISC 15th.html', list: 'sbd_projects_v1', auto: 'sbd_autosave_v1', ownUndo: true,
+    ready: p => p.waitForFunction(() => typeof AN !== 'undefined' && AN),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify({ AN, DZ }, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
+    change: p => bump(p, '[data-fkey=dsnLcx]', 2),   // not spanL0: see fixlog PLIB open item (span edits ignored after the Validation benchmarks run)
+    save: async (p, name) => { await p.evaluate(n => { S.proj.name = n; const b = [...document.querySelectorAll('#inputPanel button')].find(x => x.textContent === 'Save'); b.click(); }, name); await p.waitForTimeout(400); }
+  },
   spreadfooting: {
     file: 'Spread Footing.html', list: 'sfd_projects', auto: 'sfd_auto', ownUndo: true,   // the tool's own Undo / Redo (U-2) is unchanged and not re-tested here
     ready: p => p.waitForFunction(() => typeof R !== 'undefined' && R),
