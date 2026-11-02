@@ -1701,3 +1701,26 @@ index e28171a..c713832 100644
 -        { type: 'note', text: 'Report only: the tab uses these values in the heel and toe cards without working them. The trapezoid across the full width B (not the Meyerhof width) is what the heel and toe design use; the envelope takes the case that governs each cantilever.' + (a.V_up > 0 ? ' With water uplift the tool does not return the eccentricity of the Strength I footing-design resultant, so the Strength I toe and heel pressures are shown without substitution.' : '') }])); }
 +        { type: 'note', text: 'Report only: the tab uses these values in the heel and toe cards without working them. The trapezoid across the full width B (not the Meyerhof width) is what the heel and toe design use; the envelope takes the case that governs each cantilever.' + '' }])); }
 ```
+
+## 2026-11-02 — PR: claude/phone-print-rwall — Phone: wide equations start at the left edge (their start was cut off) (PHN; display only, no calculation change)
+
+Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Code site tagged `PHN`.
+
+### PHN-1. Equations wider than their box are left-aligned on a phone / tablet screen   [display only]
+- **Problem:** `.eq-math` is a flex box with `justify-content: center` and `overflow-x: auto`. When an equation is wider than the box, which happens on a phone (Stability, Stem design and Footing design tabs), centring pushes its start off the left edge, where the scroll bar cannot reach. At 390 px, "K_a = tan²(45° − φ/2) = …" showed as "n²(45° − φ/2) = …".
+- **Where:** after the `@media (max-width: 900px) { … }` block (anchor `.tab-panel [style*="grid-template-columns:1fr 330px"] { grid-template-columns: 1fr !important; }`).
+- **Added:**
+```css
+@media screen and (max-width: 899px) { .eq-math { justify-content: flex-start; } }
+```
+- Screen only and below 900 px. Desktop and print are unchanged.
+- **Check case:** 390 px, Stability tab, "Active coefficient — level backfill". Before: the equation starts at "n²(45° …". After: it starts at "K_a = tan²(45° …" and scrolls right to "= 0.3333".
+
+### Checked, no change
+- At 390 and 768 px the page does not scroll sideways on any of the 7 input panes or 8 output tabs. The existing 900 px layout stacks the panels, and the header and tab bar wrap or scroll.
+- Report → Print report: 23 pages; the running header and page numbers are present. The Export report window prints 32 pages. Nothing is clipped. Two near-empty pages are section ends (Report p5, a 4-row table continuation; Export p21).
+- `tests/smoke/phone-layout.mjs` gains the key `rwall`. It passes before and after; it guards against page-width regressions.
+
+### How verified (no computed result, saved key or hand-off changed)
+- origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 15 tabs, the whole-document `textContent` (592,380 chars) and localStorage after load are identical.
+- Screenshots at 900 and 1280 px: 0–22 differing pixels, in different places on each run (input-field and scroll-bar anti-aliasing). Report print text is identical.
