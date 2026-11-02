@@ -2233,7 +2233,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   - localStorage after load is identical.
 - Screenshots at 900 and 1280 px are pixel-identical (0 differing pixels) on load and on all 23 tabs.
 
-## 2026-11-02 — PR: PRLINK — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete)   [display and storage only]
+## 2026-11-02 — PR: [#677](https://github.com/mlococo88/All-Structural/pull/677) — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete)   [display and storage only]
 - **Before:** Project tab → Project Save / Load: Save (under Project name), drop-down + Load / Delete (`sbd_projects_v1`, `{ name: { t, d: S } }`),
   Export / Import JSON; Undo / Redo (Ctrl+Z / Ctrl+Y). No rename, no duplicate.
 - **Where:**
