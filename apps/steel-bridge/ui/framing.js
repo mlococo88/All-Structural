@@ -45,7 +45,7 @@
         ${h.sel('framing.orient', 'Orientation', [['auto', 'Automatic: parallel to the skew where both supports ≤ 20°, else normal'], ['parallel', 'Parallel to the skew'], ['normal', 'Normal to the girders']])}
         ${h.sel('framing.arrange', 'Normal frames', [['contiguous', 'Contiguous'], ['staggered', 'Staggered'], ['stepped', 'Stepped (lines parallel to the bearings)']])}
         ${h.num('framing.supClear', 'Clear distance from the bearings', 'ft')}${h.num('framing.stagMin', 'Least offset between frames on one girder', 'ft')}
-        <div class="fRow"><label for="fr_spl">Field splices</label><input type="text" id="fr_spl" data-fr="splices" value="${esc((F.splices || []).join(', '))}" style="width:180px"><span class="unit">ft, comma separated</span></div>
+        <div class="fRow"><label for="fr_spl">Field splices</label><input type="text" id="fr_spl" data-fr="splices" value="${esc((F.splices || []).join(', '))}" style="width:180px"><span class="unit"></span></div>
         ${h.num('framing.spliceClear', 'Frames clear of splices and transitions', 'ft')}
         <p class="note">Girders, spacings and support skews: Cross-section &amp; loads tab. The plates of every girder give the shop transitions. Frames normal to the girders at a support skewed more than 20° start at least max(clear, 4b<sub>f</sub>, 0.4s) from the obtuse bearing (C6.7.4.2.1); corner frames close longer panels. Owner rule xf.orient applies with the automatic orientation.</p>
         ${L && !L.errors.length ? plan(L) : `<div class="alert err">${esc((L && L.errors || []).join(' '))}</div>`}`)

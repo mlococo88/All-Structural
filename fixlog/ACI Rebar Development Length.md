@@ -1342,3 +1342,33 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   - Report: 0 unresolved references, no NaN / undefined in `SharedReport.text()`.
   - Print routing, headless, from each of the seven tabs (Tension l_d, Hook l_dh, Compression l_dc, Tension Splice, Comp. Splice, Bar Schedule, Report), by the browser's `beforeprint` and by the "Print / PDF Report" button: `body.rp-printing` is set, `#rp-print` holds the Report (22,779 characters, default case), the running header style `#rp-page` is set (849 characters), and after `afterprint` the tab of before is shown; 0 console errors beyond the blocked CDN.
 - **Other copies (CLAUDE.md §3):** `Concrete Beam Capacity.html` (Development & Splice tab, `#suite-frame-dev` srcdoc): RBRX-1 applied there by the same script (decode → exact-string edits → re-encode); its `rbrModel()` builds the suite's combined Report chapter C, which now has the same commentary and notes. RBRX-2 is **not** applied to the embedded copy: the suite's print (three frames and the combined Report) is retired in the Concrete Beam Capacity PR. Until then the embedded copy keeps the D11 print report (`buildReport`, `#printroot`, its print CSS); add this to the intentional embedded differences.
+
+## 2026-11-02 — PR: claude/plib-rebar, PR #712: https://github.com/mlococo88/All-Structural/pull/712 — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+- **Before:** Assumptions & Save tab → Project Management: Saved Project drop-down, Save As (name), Save / Load / Delete (`rebar_aci_projects_v1`,
+  `{ name: state }`), Export / Import JSON; autosave `rebar_aci_autosave_v1`. No rename, no duplicate, no undo.
+- **Where** (the file has CRLF line endings; kept):
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `autosave()`: **Before** `function autosave(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(collectState())); }catch(e){} }`
+    **After** `function autosave(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(collectState())); }catch(e){} if(RBPL) RBPL.soon(); /* PLIB: one undo step per change (debounced) */ }`
+    (`render()` autosaves after every input; `soon` records the step 400 ms after the last one).
+  - `loadProject()`: after `applyState(getProjects()[name]); render();` → `if(RBPL) RBPL.h.reset();` (another project, a new undo history);
+    `importJSON()`: the same after `refreshProjectList();`.
+  - before `function init(){`: `var RBPL=null; function rbPlibInit(){…}` (anchor `/* PLIB (2026-11-02): "Saved projects…" dialog`):
+    - dialog over `mapStore(localStorage, LS_PROJECTS)` (item = the state, unchanged); `open` = the Load path (`applyState(d); render();`),
+      the drop-down then shows the opened name; a rename of the selected project re-selects it under the new name (and Save As (name), if
+      it held the old name, takes the new one). Button "Saved projects…" after Delete.
+    - history over `collectState().inp` (the output tab, chart mode and open panels are views, not steps); `set` =
+      `applyState({inp}); render();`. Buttons Undo, Redo after "← All tools" in the title bar; Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z.
+  - `init()`: last statement `rbPlibInit();` (after start-up, so restoring the session is not a step).
+- **Saved data:** keys `rebar_aci_projects_v1`, `rebar_aci_autosave_v1` and their formats unchanged; no new key.
+- **Other copies (CLAUDE.md §3):** the Development & Splice tab of `Concrete Beam Capacity.html` (`#suite-frame-dev` srcdoc) gets the same
+  edits in the same PR, by the same script (decode the srcdoc → the exact-string edits above → re-encode; CRLF kept). The two copies share
+  the list key `rebar_aci_projects_v1`, so a project saved in either shows in both dialogs. Tools that contain the snippet: `ACI Rebar
+  Development Length.html`, `Concrete Beam Capacity.html`.
+- **How verified:** `node tests/smoke/project-library.mjs --tool rebar` (new TOOLS entry): ALL PASS (`readInputs()`, `computeFactors()` and the
+  Summary dashboard text identical to origin/main on load, after an input change (f′c + 500 psi), reopened on main's storage and opened from
+  the dialog; Undo / Redo / Ctrl+Z / Ctrl+Y exact, an output-tab change not a step; rename / duplicate byte-identical; quota; 390 px; no new
+  console errors). Embedded copy (headless, Concrete Beam Capacity, Development & Splice frame): the same results as origin/main on load and
+  after f′c + 500; Undo / Redo exact; the dialog lists a project saved by the standalone tool and opens it (history reset). `node
+  tests/smoke/phone-layout.mjs --tool aci` and `--tool cbc`: pass. Title bar screenshot looked at. `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
