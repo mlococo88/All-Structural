@@ -980,7 +980,8 @@ function generateCombos(){
 
 function defaultState(){
   return {
-    proj:{name:"Untitled",num:"",by:"",date:new Date().toISOString().slice(0,10),chk:"",chkDate:""},
+    proj:{name:"Untitled",num:"",by:"",date:new Date().toISOString().slice(0,10),chk:"",chkDate:"",
+          owner:"", supports:""},   /* OWN-1 (2026-11-02, display only): owner "" | "ctdot"; supports "" | "sign" (sign, traffic signal or luminaire) | "other"; "" = not stated (every save before OWN-1) */
     /* geometry: plate */
     plate:{ B:18, N:18, t:1.5, exc_x:0, exc_y:0, grade:"a36", holeDia:0,
             shape:"rect", D:24 },   /* BC-1 (2026-11-01): shape "rect" (B × N, every save before BC-1) | "circle" (diameter D; double-nut pole base) */   /* B along x (width), N along y (length); holeDia 0 = AISC DG1 Table 2.3 oversized hole */
@@ -5518,6 +5519,17 @@ function buildInputPanel(){
   },P);
 
   mkSection("inAnchor","2. Anchors (cast-in headed)",body=>{
+    /* OWN-1 (2026-11-02, display only): optional owner and supported structure, for the owner note below.
+       Defaults "" (not stated) — a project saved before OWN-1 shows and prints exactly as before. */
+    if(!(S.ui.printing && !bpOwner().owner && !bpOwner().supports)){
+      fRow(body,"Owner (optional)",selInput([["","— not stated —"],["ctdot","CTDOT"]],
+        ()=>bpOwner().owner,v=>{ S.proj.owner=v; },o=>o[1],o=>o[0]),"",
+        "Used only for owner notes on anchor type; no effect on any result.");
+      fRow(body,"Structure supported (optional)",selInput([["","— not stated —"],["sign","Sign, signal or luminaire"],["other","Other"]],
+        ()=>bpOwner().supports,v=>{ S.proj.supports=v; },o=>o[1],o=>o[0]),"",
+        "An anchor group imported from the Light Pole and Sign Post tool counts as a sign / luminaire structure.");
+    }
+    bpOwnerNote(body);
     fRow(body,"Diameter",selInput(LIB.anchorDias,()=>S.anchor.dia,v=>S.anchor.dia=parseFloat(v),o=>fmt(o.d,3)+" in",o=>o.d),"");
     fRow(body,"Grade",selInput(LIB.anchorGrades,()=>S.anchor.grade,v=>S.anchor.grade=v,o=>o.name,o=>o.id),"");
     fRow(body,"Effective embedment hef",numInput(()=>S.anchor.hef,v=>S.anchor.hef=v,0.5),"in");
@@ -7087,8 +7099,37 @@ function buildCompare(pg){
   },pg);
 }
 
+/* OWN-1 (2026-11-02, display only): owner note on adhesive anchors. CTDOT BRSDM (2024) Vol. 2 §5.13.5.2CT does not
+   permit adhesive bonded anchors to connect sign, traffic signal (mast arm / span pole) or luminaire structures to
+   foundations, apart from the few exceptions listed there, nor adhesive anchors into new construction. This tool designs
+   cast-in anchors only, so the note warns against substituting adhesive anchors. No result depends on it. */
+function bpOwner(){
+  const p=S.proj||{}, ag=!!(S.bxSrc&&S.bxSrc.anchorGroup);
+  const owner=p.owner==="ctdot"?"ctdot":"", supports=(p.supports==="sign"||p.supports==="other")?p.supports:"";
+  return {owner, supports, sign: supports==="sign" || (supports==="" && ag), fromLP: supports==="" && ag};
+}
+function bpOwnerNoteHtml(){
+  const o=bpOwner();
+  if(o.owner==="ctdot" && o.sign)
+    return {cls:"warnBox", html:"<b>CTDOT: adhesive anchors not permitted for this structure.</b> CTDOT BRSDM (2024) Vol. 2 &sect;5.13.5.2CT prohibits adhesive bonded anchors "+
+      "connecting sign, traffic signal (mast arm / span pole) or luminaire structures to their foundations, except in the limited cases that section lists "+
+      "(certain small single-post regulatory signs, structure-mounted sign supports on a parapet and luminaires on an existing parapet, each with minimum anchor counts; see the manual). "+
+      "This tool designs <b>cast-in</b> anchors only: specify cast-in anchor rods, and do not substitute post-installed adhesive anchors."+
+      (o.fromLP? " (Taken as a sign / luminaire structure because the anchor group was imported from the Light Pole and Sign Post tool.)" : "")};
+  if(o.owner==="ctdot")
+    return {cls:"note", html:"<b>CTDOT:</b> BRSDM (2024) Vol. 2 &sect;5.13.5.2CT limits adhesive bonded anchors (for example, not into new construction"+
+      (o.supports===""? "; not for sign, signal or luminaire foundations, with limited exceptions — set <i>Structure supported</i> if this is one" : "")+
+      "). This tool designs cast-in anchors only."};
+  if(o.sign)
+    return {cls:"note", html:"<b>Sign / signal / luminaire structure"+(o.fromLP?" (imported from the Light Pole and Sign Post tool)":"")+":</b> some owners do not permit adhesive anchors for these foundations "+
+      "(e.g. CTDOT BRSDM &sect;5.13.5.2CT; select <i>Owner</i> to show the owner note). This tool designs cast-in anchors only."};
+  return null;
+}
+function bpOwnerNote(parent){ const n=bpOwnerNoteHtml(); if(!n) return null; const d=el("div",n.cls); d.innerHTML=n.html; parent.appendChild(d); return d; }
 function buildSummary(pg){
   comboSelector(pg);
+  if(bpOwner().owner==="ctdot" && bpOwner().sign){ const w=bpOwnerNote(pg);   /* OWN-1: the owner warning, also printed with the Summary */
+    const b=el("button","noPrint","Open 2. Anchors \u2197"); b.addEventListener("click",e=>{ e.preventDefault(); bpadGoInSec("inAnchor"); }); w.appendChild(document.createTextNode(" ")); w.appendChild(b); }
   if(S.ped && S.ped.present && S.ped.barsUnconfirmed){   /* VR-2 */
     const w=el("div","errBox noPrint"); w.innerHTML="<b>"+BP_PED_UNCONF+"</b> ";
     const b=el("button",null,"Open 7a. Pedestal Reinforcement \u2197"); b.addEventListener("click",e=>{ e.preventDefault(); bpadGoInSec("inPed"); });
