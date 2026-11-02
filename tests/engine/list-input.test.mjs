@@ -221,3 +221,49 @@ test('Prestressed Bridge Design: spans rows commit the same array as the old box
     assert.deepEqual(P(pbdNew(L.splitPaste(t, 1))), P(pbdOld(t)), t);
   }
 });
+
+// BasePlateAnchorDesigner.html: S.vRebar.vDepths is saved TEXT ("3, 6.5, 10"; "" = automatic). The table reads it with the tool's
+// own separators and writes rows joined by ", "; the tool's reader (copied verbatim) reads the same depths.
+const bpDepths = s => String(s || '').split(/[,;\s]+/).map(parseFloat).filter(v => isFinite(v) && v >= 0);
+test('BasePlateAnchorDesigner: stacked hairpin depths text round-trips; the reader gets the same depths', () => {
+  const f = { rowSplit: /[,;\s]+/ };
+  for (const s of ['', '3', '3, 6.5, 10']) assert.equal(L.toText(L.fromText(s, f)), s, s);
+  for (const s of ['3 6.5 10', '3;6.5;10', '3,,6.5', ' 3 , 6.5 ']) {
+    const t = L.toText(L.fromText(s, f));
+    assert.deepEqual(P(bpDepths(t)), P(bpDepths(s)), s);
+  }
+});
+
+// apps/steel-bridge (ui/lists.js): every list keeps its field and format. The tables write the rows back with these formats and
+// the modules' own readers (copied verbatim) read the same values.
+const sbNums = t => t.split(/[,;\s]+/).filter(Boolean).map(Number);                                           // spans, bays, skews
+const sbSpl = t => t.split(/[,;\s]+/).map(Number).filter(v => isFinite(v) && v > 0).sort((a, b) => a - b);    // fr_spl, i_splx
+const sbXf = t => t.split(/[,;]/).map(s => s.trim()).filter(Boolean).map(s => s.split(':').map(Number)).filter(q => q.length === 2 && q.every(isFinite)).map(([x, P_]) => ({ x, P: P_ }));
+const sbSeq = t => String(t || '').split(/[,;]/).map(s => s.trim()).filter(Boolean).map(s => s.split('-').map(Number)).filter(q => q.length === 2 && q.every(isFinite) && q[1] > q[0]);
+const sbWin = t => String(t || '').split(/[,;]+/).map(s => s.trim()).filter(Boolean).map(s => { const m = /^(-?\d+(?:\.\d+)?)\s*(?:-|–|to)\s*(-?\d+(?:\.\d+)?)$/.exec(s); return m ? [Math.min(+m[1], +m[2]), Math.max(+m[1], +m[2])] : null; }).filter(Boolean);
+const sbSplX = t => String(t || '').split(/[,;\s]+/).map(Number).filter(v => isFinite(v) && v > 0);
+test('Steel Bridge: one-number lists (arrays drawn as "a, b") round-trip; the readers get the same arrays', () => {
+  const f = { rowSplit: /[,;\s]+/ };
+  for (const a of [[110, 140, 110], [9.5, 9.5, 9.5], [15, 15, -10, 0], [80.5, 195]]) {
+    const t = a.join(', '); assert.equal(L.toText(L.fromText(t, f)), t);
+    assert.deepEqual(P(sbNums(L.toText(L.fromText(t, f)))), a); assert.deepEqual(P(sbSpl(L.toText(L.fromText(t, f)))), P(sbSpl(t)));
+  }
+  for (const t of ['', '60, 150', '60 150', '60;150']) assert.deepEqual(P(sbSplX(L.toText(L.fromText(t, f)))), P(sbSplX(t)), t);   // studs.splX (text)
+});
+test('Steel Bridge: cross-frame x:P loads, pours a-b and station windows keep their text formats', () => {
+  const xf = { rowSplit: /[,;]/, colSplit: ':', ncol: 2, colSep: ':' }, seq = { rowSplit: /[,;]/, colSplit: '-', ncol: 2, colSep: '-' },
+    win = { rowSplit: /[,;]+/, colSplit: /\s*(?:-|–|to)\s*/, ncol: 2, colSep: '-' };
+  for (const t of ['20:1.5, 40:1.5', '20:-2', '']) { assert.equal(L.toText(L.fromText(t, xf), xf), t); assert.deepEqual(P(sbXf(L.toText(L.fromText(t, xf), xf))), P(sbXf(t))); }
+  assert.deepEqual(P(sbXf(L.toText(L.fromText('20:1.5;40:2', xf), xf))), P(sbXf('20:1.5;40:2')));
+  for (const t of ['0-80, 140-220', '', '0-80;140-220']) assert.deepEqual(P(sbSeq(L.toText(L.fromText(t, seq), seq))), P(sbSeq(t)), t);
+  assert.equal(L.toText(L.fromText('0-80, 140-220', seq), seq), '0-80, 140-220');
+  for (const t of ['70-90, 135-150', '70 to 90; 135–150', '']) assert.deepEqual(P(sbWin(L.toText(L.fromText(t, win), win))), P(sbWin(t)), t);
+  assert.equal(L.toText(L.fromText('70-90, 135-150', win), win), '70-90, 135-150');
+});
+
+// Section Property Calculator.html: the Rename dialog shows the entry's tags ARRAY one per row (fromNumbers) and saves
+// toText(rows).split(',').map(trim).filter(Boolean): an unedited dialog saves the same array.
+test('Section Property Calculator: Rename dialog, tags array -> rows -> the same array', () => {
+  const back = a => L.toText(L.fromNumbers(a)).split(',').map(t => t.trim()).filter(Boolean);
+  for (const a of [[], ['crane'], ['crane', 'runway', 'W21 + C15'], ['2016 job']]) assert.deepEqual(P(back(a)), a);
+});

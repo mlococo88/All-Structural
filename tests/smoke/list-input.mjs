@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge,secpropren] [--a origin/main] [--shots <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
 // smd (one key per tool in TOOLS): the tool from --a (default: the entry's `a`, the main commit before its table landed, else
@@ -16,16 +16,16 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd').split(',');
+const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge,secpropren').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
 
 // a git ref: the tool and shared/ written to a temp folder (the tools load shared/*.js by relative path)
-function refDir(ref, tool) {
+function refDir(ref, tool, more) {   // more: other paths to take (e.g. a folder tool's whole folder)
   const sha = execSync(`git -C "${REPO}" rev-parse --short ${ref}`, { encoding: 'utf8' }).trim();
   const dir = path.join(os.tmpdir(), 'allstruct-tests', 'li-' + sha); fs.mkdirSync(dir, { recursive: true });
-  execSync(`git -C "${REPO}" archive ${sha} -- "${tool}" shared | tar -x -C "${dir}"`);
+  execSync(`git -C "${REPO}" archive ${sha} -- "${tool}" shared ${(more || []).map(m => `"${m}"`).join(' ')} | tar -x -C "${dir}"`);
   return path.join(dir, tool);
 }
 
@@ -282,6 +282,27 @@ TOOLS.index = {   // index.html (MCT generator, React): GFS bay 1 floorbeam spac
   },
   tableSel: '[data-sli="react"]:has(caption:text-is("Floorbeam spacing, bay 1"))',
 };
+TOOLS.bpad = {   // BasePlateAnchorDesigner: stacked hairpin depths (S.vRebar.vDepths, text "3, 6.5, 10"), committed when the focus leaves
+  file: 'BasePlateAnchorDesigner.html', a: '0cea448', values: '3, 6.5, 10',
+  setup: async p => { await p.waitForTimeout(3000); },
+  template: async p => { await p.evaluate(() => { Object.assign(S.vRebar, { present: true, layoutMode: 'group', pieceType: 'hairpin', vStack: 3 }); refreshAll();
+      const r = [...document.querySelectorAll('.fRow')].find(e => /Depths of the stacked pieces/.test(e.textContent));
+      const pn = r.closest('.bpadInPane'); document.getElementById(pn.id.replace('bpadInPane_', 'bpadInTab_')).click(); }); await p.waitForTimeout(800); },
+  typeOld: async (p, v) => { await p.evaluate(v => { const r = [...document.querySelectorAll('.fRow')].find(e => /Depths of the stacked pieces/.test(e.textContent));
+    const i = r.querySelector('input[type=text]'); i.focus(); i.value = v; i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); i.blur(); }, v); await p.waitForTimeout(800); },
+  typeNew: async (p, v) => { await fillTable(p, '.fRow:has-text("Depths of the stacked pieces") [data-sli="host"]', v); await p.evaluate(() => document.activeElement.blur()); await p.waitForTimeout(800); },
+  saved: p => p.evaluate(() => S.vRebar.vDepths),
+  read: async p => {
+    await p.waitForTimeout(1000);
+    const out = await p.evaluate(() => ({ S: JSON.parse(JSON.stringify(S)), stored: JSON.parse(localStorage.getItem(LS_AUTO) || 'null') }));
+    const n = await p.$$eval('#tabBar button', e => e.length); out.tabs = [];
+    for (let i = 0; i < n; i++) { await p.$$eval('#tabBar button', (e, i) => e[i].click(), i); await p.waitForTimeout(600);
+      out.tabs.push(await p.evaluate(() => { const k = document.getElementById('outputPanel').cloneNode(true); k.querySelectorAll('[data-sli],script,style').forEach(x => x.remove());
+        return k.innerText.replace(/\d+(\.\d+)? ?ms\b/g, 'ms'); })); }
+    return out;
+  },
+  tableSel: '.fRow:has-text("Depths of the stacked pieces") [data-sli="host"]',
+};
 TOOLS.pbd = {   // Prestressed Bridge Design: the bridge bar's span lengths (bridge.spans, an array), committed when the focus leaves the table
   file: 'Prestressed Bridge Design.html', a: '0cea448', values: '100, 120, 100', expect: '[100,120,100]',
   over: 212,   // 212 px at 390 on main before the table: the title-block grid
@@ -304,6 +325,72 @@ TOOLS.pbd = {   // Prestressed Bridge Design: the bridge bar's span lengths (bri
     return out;
   },
   tableSel: '.pbd-spans',
+};
+TOOLS.sbridge = {   // apps/steel-bridge: spans, girder spacings, skews (arrays), cross-frame x:P loads (array of {x, P}), pours a-b (text)
+  file: 'apps/steel-bridge/index.html', archive: ['apps/steel-bridge'], a: '0cea448',
+  values: { spans: '110, 140, 110', bays: '9, 9.5, 9, 9.5', skews: '10, 10, 10, 10', xf: '20:1.5, 45:2', seq: '0-80, 140-220' },
+  expect: '{"spans":[110,140,110],"bays":[9,9.5,9,9.5],"skews":[10,10,10,10],"xf":[{"x":20,"P":1.5},{"x":45,"P":2}],"seq":"0-80, 140-220"}',
+  serial: true, timeout: 120000,
+  setup: async p => { await p.waitForSelector('#tabBar [data-otab="an"]', { timeout: 120000 }); await p.waitForTimeout(2500); },
+  typeOld: async (p, v) => {
+    const put = async (itab, sel, val) => { if (itab) { await p.click(`#inTabs [data-itab="${itab}"]`); await p.waitForTimeout(400); }
+      await p.evaluate(([sel, val]) => { const i = document.querySelector(sel); i.value = val; i.dispatchEvent(new Event('change', { bubbles: true })); }, [sel, val]); await p.waitForTimeout(800); };
+    await put('spans', '#i_spans', v.spans); await put('xs', '[id="i_xs.bays"]', v.bays); await put('xs', '[id="i_xs.skews"]', v.skews);
+    await p.click('#tabBar [data-otab="an"]'); await p.waitForTimeout(1500);
+    await put(null, '#an_l_xf', v.xf); await put(null, '#an_a_seqCustom', v.seq);
+  },
+  typeNew: async (p, v) => {
+    const host = sel => `${sel} + [data-sli="host"]`;
+    const one = async (itab, sel, val) => { await p.click(`#inTabs [data-itab="${itab}"]`); await p.waitForTimeout(400); await fillTable(p, host(sel), val);
+      await p.evaluate(() => document.activeElement.blur()); await p.waitForTimeout(800); };
+    const two = async (sel, val) => { await p.evaluate(([sel, val]) => { const i = document.querySelector(sel + ' tr[data-sli-r="0"] input[data-sli-c="0"]'), dt = new DataTransfer(); dt.setData('text', val);
+      i.focus(); i.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); }, [sel, val]); await p.waitForTimeout(200);
+      await p.evaluate(() => document.activeElement.blur()); await p.waitForTimeout(800); };
+    await one('spans', '#i_spans', v.spans); await one('xs', '[id="i_xs.bays"]', v.bays); await one('xs', '[id="i_xs.skews"]', v.skews);
+    await p.click('#tabBar [data-otab="an"]'); await p.waitForTimeout(1500);
+    await two(host('#an_l_xf'), v.xf.replace(/, /g, '\n').replace(/:/g, '\t')); await two(host('#an_a_seqCustom'), v.seq.replace(/, /g, '\n').replace(/-/g, '\t'));
+  },
+  saved: p => p.evaluate(() => { const j = JSON.parse(localStorage.getItem('sbd2.project.current') || 'null'); if (!j || !j.spans) return 'not saved';
+    return JSON.stringify({ spans: j.spans.lengths, bays: j.xs.bays, skews: j.xs.skews, xf: ((j.girders[0] || {}).loadsManual || {}).xf || [], seq: (j.analysis || {}).seqCustom }); }),
+  read: async p => {
+    await p.waitForTimeout(1500); const out = {};
+    out.stored = await p.evaluate(() => JSON.parse((localStorage.getItem('sbd2.project.current') || 'null').replace(/"(savedAt|ts|at|updatedAt|modified|created|producedAt)":"[^"]*"/g, '"$1":"T"')));
+    for (const t of ['sec', 'loads', 'an']) { await p.click(`#tabBar [data-otab="${t}"]`); await p.waitForTimeout(1500);
+      out[t] = await p.evaluate(() => { const k = document.getElementById('out').cloneNode(true); k.querySelectorAll('[data-sli],script,style,input,select,textarea,.unit').forEach(x => x.remove()); return k.innerText; }); }
+    out.inputs = {};
+    for (const t of ['spans', 'xs', 'fs', 'spl']) { await p.click(`#inTabs [data-itab="${t}"]`); await p.waitForTimeout(500);
+      out.inputs[t] = await p.evaluate(() => { const k = document.getElementById('inPanes').cloneNode(true); k.querySelectorAll('[data-sli],script,style,input,select,textarea,.unit,.note').forEach(x => x.remove()); return k.innerText; }); }
+    return out;
+  },
+  tableSel: '#i_spans + [data-sli="host"]',
+  shotPrep: async p => { await p.click('#inTabs [data-itab="spans"]'); await p.waitForTimeout(500); },
+};
+TOOLS.secpropren = {   // Section Property Calculator: Rename = one dialog (name, description, tags table) in place of three prompts.
+  // A: the prompts, each accepted with its default (the test kit accepts every dialog); B: the dialog saved unchanged -> the same library.
+  file: 'Section Property Calculator.html', a: 'a325909', values: 'crane, runway, W21', expect: '[["crane","runway","W21"]]',
+  setup: TOOLS.secprop.setup,
+  typeOld: async (p, v) => { await TOOLS.secprop.typeNew(p, v); await p.waitForTimeout(500); await p.click('#spcLib .libRow button:has-text("Rename")'); await p.waitForTimeout(500); },
+  typeNew: async (p, v) => { await TOOLS.secprop.typeNew(p, v); await p.waitForTimeout(500); await p.click('#spcLib .libRow button:has-text("Rename")'); await p.waitForTimeout(300);
+    await p.click('#libRenSave'); await p.waitForTimeout(500); },
+  saved: TOOLS.secprop.saved, read: TOOLS.secprop.read, tableSel: '.libTagsHost',
+  extra: async p => {   // the dialog: prefilled, a tag added and one removed, a new name and description -> saved as an array; Cancel / Escape change nothing
+    await TOOLS.secprop.typeNew(p, 'crane, runway'); await p.waitForTimeout(500);
+    await p.click('#spcLib .libRow button:has-text("Rename")'); await p.waitForTimeout(300);
+    const pre = await p.evaluate(() => [...document.querySelectorAll('#libRenOverlay input.sli-in')].map(i => i.value));
+    ok(JSON.stringify(pre) === '["crane","runway"]', 'rename dialog: the tags are shown one per row');
+    await p.keyboard.press('Escape'); await p.waitForTimeout(200);
+    ok(!(await p.$('#libRenOverlay')), 'rename dialog: Escape closes it');
+    await p.click('#spcLib .libRow button:has-text("Rename")'); await p.waitForTimeout(300);
+    await p.fill('#libRenOverlay input[aria-label="Name"]', 'Runway girder'); await p.fill('#libRenOverlay input[aria-label="Description"]', ' W21 + C15 ');
+    await p.click('#libRenOverlay button[data-sli-del="0"]'); await p.click('#libRenOverlay button.sli-add');
+    await p.keyboard.type('W21 + C15'); await p.click('#libRenSave'); await p.waitForTimeout(500);
+    const e = await p.evaluate(() => { const x = JSON.parse(localStorage.getItem(LS_LIB)).entries[0]; return { name: x.name, desc: x.desc, tags: x.tags }; });
+    ok(JSON.stringify(e) === '{"name":"Runway girder","desc":"W21 + C15","tags":["runway","W21 + C15"]}', 'rename dialog: saved ' + JSON.stringify(e));
+    await p.click('#spcLib .libRow button:has-text("Rename")'); await p.waitForTimeout(300);
+    await p.fill('#libRenOverlay input[aria-label="Name"]', ''); await p.click('#libRenSave');
+    ok(!!(await p.$('#libRenOverlay')) && /Enter a name/.test(await p.$eval('#libRenOverlay .errBox', x => x.textContent)), 'rename dialog: a blank name is refused in the dialog');
+    await p.click('#libRenOverlay button:has-text("Cancel")');
+  },
 };
 async function clickText(p, sel, text) { await p.locator(sel, { hasText: text }).first().click(); }
 // replace the rows of a table with the values ("a, b, c"): row by row (Enter adds a row from the last one), extra rows removed
@@ -330,7 +417,7 @@ function showDiff(x, y) {
 }
 async function tool(key) {
   const T = TOOLS[key]; console.log(`${key}: ${T.file}`);
-  const A = refDir(args.a || T.a || 'origin/main', T.file), B = path.join(REPO, T.file);
+  const A = refDir(args.a || T.a || 'origin/main', T.file, T.archive), B = path.join(REPO, T.file);
   const run = async (file, side, kase) => {
     const { b, p, errs, blocked } = await openPage(file, { vw: 1400, vh: 1000, timeout: T.timeout });
     try {
