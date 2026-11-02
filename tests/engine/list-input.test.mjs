@@ -114,3 +114,16 @@ test('Bridge Substructure Loading: spans / bays arrays round-trip through the ta
   // tool always writes b.spans.join(', ') into the box), so the table never sees it
   assert.deepEqual(P(bslParse(L.toText([['110'], [''], ['150']]))), [110, 150]);
 });
+
+// Bridge Geometry.html: per-span girder offsets SPAN_OV[s].girders (array, or null = the global set). The table's rows are read
+// with the tool's old box parser:  v.trim()? v.split(',').map(x=>+x.trim()).filter(x=>!isNaN(x)) : null
+const bgParse = v => v.trim() ? v.split(',').map(x => +x.trim()).filter(x => !isNaN(x)) : null;
+test('Bridge Geometry: per-span girder offsets round-trip (array, or null when no rows)', () => {
+  for (const a of [[-18, -6, 6, 18], [-15.5, 0, 15.5], [-3.25]]) {
+    assert.equal(L.toText(L.fromNumbers(a)), a.join(', '));                  // the text the old box showed
+    assert.deepEqual(P(bgParse(L.toText(L.fromNumbers(a)))), a);
+  }
+  assert.equal(bgParse(L.toText(L.fromNumbers([]))), null);                  // no rows -> null (the global set), as a blank box
+  assert.equal(bgParse(L.toText([[''], ['  ']])), null);                     // blank rows are not read
+  assert.deepEqual(P(bgParse(L.toText([['-6'], ['abc'], ['6']]))), [-6, 6]); // an unreadable cell is skipped, as in the old box
+});
