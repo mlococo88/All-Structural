@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,pbd] [--a origin/main] [--shots <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
 // smd (one key per tool in TOOLS): the tool from --a (default: the entry's `a`, the main commit before its table landed, else
@@ -16,7 +16,7 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index').split(',');
+const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,pbd').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
@@ -253,6 +253,29 @@ TOOLS.index = {   // index.html (MCT generator, React): GFS bay 1 floorbeam spac
     return out;
   },
   tableSel: '[data-sli="react"]:has(caption:text-is("Floorbeam spacing, bay 1"))',
+};
+TOOLS.pbd = {   // Prestressed Bridge Design: the bridge bar's span lengths (bridge.spans, an array), committed when the focus leaves the table
+  file: 'Prestressed Bridge Design.html', a: '0cea448', values: '100, 120, 100', expect: '[100,120,100]',
+  over: 212,   // 212 px at 390 on main before the table: the title-block grid
+  ignore: /^\[BABEL\] Note/, serial: true, timeout: 120000,
+  setup: async p => { await p.waitForTimeout(5000); },
+  typeOld: async (p, v) => { await p.fill('.pbd-bar label.pbd-f input:not([type])', v); await p.evaluate(() => document.activeElement.blur()); await p.waitForTimeout(800); },
+  typeNew: async (p, v) => { await fillTable(p, '.pbd-spans', v); await p.evaluate(() => document.activeElement.blur()); await p.waitForTimeout(800); },
+  saved: p => p.evaluate(() => { const find = (o, k) => { if (!o || typeof o !== 'object') return undefined; if (k in o) return o[k];
+      for (const x of Object.values(o)) { const r = find(x, k); if (r !== undefined) return r; } };
+    for (const k of Object.keys(localStorage)) if (/^psbeam/.test(k)) { try { const r = find(JSON.parse(localStorage.getItem(k)), 'spans'); if (r !== undefined) return JSON.stringify(r); } catch (e) {} }
+    return 'none'; }),
+  read: async p => {
+    await p.waitForTimeout(1500); const out = {};
+    out.ls = await p.evaluate(() => { const o = {}; for (const k of Object.keys(localStorage).sort()) if (/^psbeam/.test(k)) o[k] = JSON.parse(localStorage.getItem(k)
+      .replace(/"(producedAt|savedAt|ts|t|at|updatedAt|modified|created|migrated)":"[^"]*"/g, '"$1":"T"').replace(/"(ts|t|at)":\d+/g, '"$1":0')); return o; });
+    const tabs = await p.$$eval('button', e => e.map(b => b.textContent.trim()).filter(t => ['Section Props', 'Losses', 'Stresses', 'Flexure', 'Shear', 'Camber', 'Rating'].includes(t)));
+    for (const t of tabs) { await p.locator('button', { hasText: t }).first().click(); await p.waitForTimeout(1200);
+      out[t] = await p.evaluate(() => { const k = document.body.cloneNode(true); k.querySelectorAll('[data-sli],script,style,input,select,textarea,.pbd-bar').forEach(x => x.remove());
+        return k.innerText.replace(/\d{1,2}:\d{2}(:\d{2})?\s*(AM|PM)?/g, 'TIME'); }); }
+    return out;
+  },
+  tableSel: '.pbd-spans',
 };
 async function clickText(p, sel, text) { await p.locator(sel, { hasText: text }).first().click(); }
 // replace the rows of a table with the values ("a, b, c"): row by row (Enter adds a row from the last one), extra rows removed

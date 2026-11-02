@@ -177,3 +177,15 @@ test('index.html: AREMA girder spacings text round-trips; parseSpacings() reads 
   }
   assert.equal(L.toText(L.fromText('6,6,5.5')), '6, 6, 5.5');
 });
+
+// Prestressed Bridge Design.html: the bridge bar's spans (bridge.spans, an ARRAY). The old box committed
+//   v = text.split(/[,;\s]+/).filter(Boolean).map(Number), kept only when every v is finite and > 0;
+// the table commits rows.map(r => Number(r[0])) with the same rule.
+const pbdOld = t => { const v = t.split(/[,;\s]+/).filter(Boolean).map(Number); return v.length && v.every(x => isFinite(x) && x > 0) ? v : null; };
+const pbdNew = rows => { const v = L.filled(rows).map(r => Number(r[0])); return v.length && v.every(x => isFinite(x) && x > 0) ? v : null; };
+test('Prestressed Bridge Design: spans rows commit the same array as the old box (or nothing)', () => {
+  for (const a of [[100], [100, 120, 100], [87.5, 110.25]]) assert.deepEqual(P(pbdNew(L.fromNumbers(a))), a);
+  for (const t of ['100, 120, 100', '100 120 100', '100;120', '100, 0', '100, abc', '']) {
+    assert.deepEqual(P(pbdNew(L.splitPaste(t, 1))), P(pbdOld(t)), t);
+  }
+});
