@@ -5008,3 +5008,30 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   - Comparison case C2 (H3: 4 at (±6, ±6), Ø36, h_ef 18): before 28.22, after 24.63 kip for a new project.
 - **How verified:** `node tests/bpad-circle.mjs`: identity origin/main vs this branch on 33 projects — every result identical; only the two round-pier cage cases differ, and only in the "accepted" sentence (decision date / wording) after their `circHefReduce` was pinned to `true` (before pinning they differed exactly in h_ef / A_Nco / N_b of the default, as intended). H1–H7 unchanged; new H8: new-project default false; audit case C hand values above (tool 25.30405 / alternative 38.48681); an older save without the field keeps h'_ef 8.93587 and φN_cbg 38.487 (active design and groups migrated; a stored false kept); the input notice shows; stored false / true kept; hand-off into a new project → false, into a migrated rectangular save → false, into a round pier applying it → true; switching a migrated rectangular save to circular → false. The suite exits FAIL against origin/main only because of that sentence. `node tests/bpad-profis.mjs` PASS; `node tests/anchor-parity.mjs` PASS (38 cases); `node tests/engine/run.mjs anchor-geom` / `handoffs` / `lightpole` PASS; `tests/smoke/lightpole-anchor-handoff.mjs` ALL PASS; `node tests/check-syntax.mjs` passes.
 - **Other copies:** none (the option exists only in this tool). ENGINEER_CHECKS.md Light Pole line updated ("off by default since 2026-11-02").
+
+## 2026-11-02 — PR: claude/list-input-bpad — Reinforcement: "Depths of the stacked pieces" is a table with one box per depth (LIST)   [display only]
+- **Why:** engineer decision 2026-11-02: no comma-separated inputs (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
+- **Where (1):** script tags, anchor `<script src="shared/projects-ui.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
+- **Where (2):** `rebuildInputs()` (vertical rebar, group hairpins), anchor `fRow(body,"Depths of the stacked pieces (optional)"`.
+  The hint "Top down, comma-separated (e.g. 3, 6.5, 10)" reads "Top down, one per row (e.g. 3, 6.5, 10)". **Added after the fRow:**
+```js
+       if(window.SharedListInput){ let was=dt.value;
+         const lt=SharedListInput.bindInput(dt,{label:"Depths of the stacked pieces",rowSplit:/[,;\s]+/,events:["input"],
+           columns:[{label:"Depth",min:0,lenient:true,width:"6em",placeholder:"auto"}]});
+         lt.el.addEventListener("focusout",()=>setTimeout(()=>{ if(!lt.el.isConnected||lt.el.contains(document.activeElement))return;
+           if(dt.value!==was){ was=dt.value; dt.dispatchEvent(new Event("change",{bubbles:true})); } },0)); }
+```
+- **Behaviour:** the text input stays, hidden, as `S.vRebar.vDepths`: a table edit writes the rows joined by ", " and fires its
+  `input` (store + autosave, as typing); when the focus leaves the table its `change` fires (`refreshAll()`), as the old box did on
+  blur. Blank table = automatic depths, as a blank box.
+- **Load-combination paste box:** unchanged. "Import pasted rows" fills the load-combination table above it, which shows what
+  was read and can be edited (the decision's table), as before.
+- **Saved data:** `S.vRebar.vDepths` stays text; "3, 6.5, 10" is unchanged by the table; older "3 6.5 10" / "3;6.5;10" become
+  "3, 6.5, 10" only when edited, and the reader `String(R.vDepths).split(/[,;\s]+/).map(parseFloat)…` reads the same depths
+  (`tests/engine/list-input.test.mjs`).
+- **Check case:** default project, vertical rebar present, group hairpins, 3 stacked: depths 3 ↵ 6.5 ↵ 10 → `vDepths` = "3, 6.5, 10";
+  every output tab identical to typing "3, 6.5, 10" in the old box on origin/main.
+- **How verified:** `node tests/smoke/list-input.mjs --part bpad`: origin/main vs this branch, default project and the case above:
+  `S`, the stored autosave and the text of every output tab identical; 0 console errors; 390 px no sideways scroll; screenshots at
+  1400 and 390 px looked at. `node tests/check-syntax.mjs` passes.
+- **Formulas, factors, units, code references:** none (§4 does not apply).

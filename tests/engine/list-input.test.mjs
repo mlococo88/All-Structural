@@ -177,3 +177,15 @@ test('index.html: AREMA girder spacings text round-trips; parseSpacings() reads 
   }
   assert.equal(L.toText(L.fromText('6,6,5.5')), '6, 6, 5.5');
 });
+
+// BasePlateAnchorDesigner.html: S.vRebar.vDepths is saved TEXT ("3, 6.5, 10"; "" = automatic). The table reads it with the tool's
+// own separators and writes rows joined by ", "; the tool's reader (copied verbatim) reads the same depths.
+const bpDepths = s => String(s || '').split(/[,;\s]+/).map(parseFloat).filter(v => isFinite(v) && v >= 0);
+test('BasePlateAnchorDesigner: stacked hairpin depths text round-trips; the reader gets the same depths', () => {
+  const f = { rowSplit: /[,;\s]+/ };
+  for (const s of ['', '3', '3, 6.5, 10']) assert.equal(L.toText(L.fromText(s, f)), s, s);
+  for (const s of ['3 6.5 10', '3;6.5;10', '3,,6.5', ' 3 , 6.5 ']) {
+    const t = L.toText(L.fromText(s, f));
+    assert.deepEqual(P(bpDepths(t)), P(bpDepths(s)), s);
+  }
+});

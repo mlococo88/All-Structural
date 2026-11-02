@@ -72,3 +72,6 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
 - `react(React)` → `ListTable`: `NumberListInput` (4 GFS lists, arrays) and the AREMA girder spacings (text). `tests/smoke/list-input.mjs`
   gains the part `index` and the entry options `ignore` (a console message to ignore), `serial` (A then B, not in parallel)
   and `timeout` (page load); `tests/lib.mjs` `openPage()` takes an optional `timeout` (default unchanged).
+
+## 2026-11-02 — PR: claude/list-input-bpad — loaded by BasePlateAnchorDesigner.html (no change to the shared file)
+- Reinforcement, depths of the stacked hairpins (`bindInput`). `tests/smoke/list-input.mjs` gains the part `bpad`.
