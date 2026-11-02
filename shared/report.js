@@ -307,6 +307,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   .rp-sec{break-before:page;} .rp-part{break-before:page;break-after:avoid;} .rp-part+.rp-sec{break-before:auto;} .rp-sec.rp-closed>*,.rp-sub.rp-closed>*{display:revert!important;} .rp-hide{display:revert!important;}
   .rp-h1::after,.rp-h2::after{content:none!important;}
   .rp-h1,.rp-h2,.rp-h3,.rp-cap{break-after:avoid;}
+  .rp-top{break-inside:avoid;}   /* PHN (2026-11-02): a topic heading and its one-line result stay together (with break-after:avoid, on the page of its first step) */
   .rp-see{font-family:"Times New Roman",Times,serif;font-size:inherit;color:#000;text-decoration:none;}
   .rp-see::before{content:"see ";} .rp-seen::before{content:none;}
   details.rp-lz>summary{list-style:none;} details.rp-lz>summary::-webkit-details-marker{display:none;}

@@ -1071,3 +1071,38 @@ index cdf1ad0..01963af 100644
 +});
 +
 ```
+
+## 2026-11-02 — PR: claude/phone-print-asce7 — Phone / tablet layout (below 900 px) and a report print break (PHN; display only, no calculation change)
+
+Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Every code site is tagged `PHN`.
+
+### PHN-1. One-column layout below 900 px   [display only]
+- **Problem:** the tool had no small-screen layout. The page is a fixed 100 vh flex column. The title block is one row with eight title fields in a 4-column grid, and the input panel has `min-width:390px` beside the output panel. At 390 px the page scrolled sideways 339 px, the title fields were squeezed to a few pixels, and the output panel was off-screen. At 768 px the title fields overlapped each other and the output panel had about 370 px.
+- **Where:** a new block at the end of the first `<style>`, just before `</style>`, anchor `/* PHN (2026-11-02): phone / tablet (below 900 px)`. It must come after the layout rules, which have the same specificity.
+- **Added:**
+```css
+@media screen and (max-width:899px){
+  body{height:auto;min-height:100vh;overflow:visible}
+  #titlewrap{flex-wrap:wrap;gap:8px 14px;padding:8px 10px}
+  #appid{flex:1 1 100%;border-right:none;padding-right:0}
+  #tbfields{flex:1 1 100%;grid-template-columns:repeat(2,minmax(0,1fr))}
+  #tbactions,#tbshare{flex:1 1 100%;flex-direction:row;flex-wrap:wrap}
+  #main,#mainwrap,#inpanel,#outpanel{display:block}
+  #inpanel{max-width:none;min-width:0;border-right:none;border-bottom:2px solid var(--navy)}
+  #inbody{overflow:visible;padding-bottom:16px}
+  #outbody{overflow:visible;padding:10px 10px 40px}
+  .pnl>.bd{overflow-x:auto}   /* a wide table scrolls inside its panel */
+}
+@media screen and (max-width:520px){#tbfields{grid-template-columns:minmax(0,1fr)}}
+```
+- The input panel (with its tab bar) now sits above the output panel (with its tab bar). Both tab bars already wrap. The page scrolls as one column; the panels do not scroll by themselves, so the KaTeX page-scroll trap (Spread Footing #524) cannot occur. Wide tables (Enclosure 740 px, Wind: Walls 592 px, Seismic, Combinations) scroll inside their panel. At 900 px and up nothing changes (`screen` and `max-width:899px`). Print is unchanged.
+
+### PHN-2. Report print: topic heading split (fixed in shared/report.js)
+- Report → Print report: on page 7 the heading of topic "4. Seismic response coefficient and base shear" was split from its one-line result. Fixed in `shared/report.js` (`.rp-top{break-inside:avoid}` in print); see `fixlog/shared-report.md`.
+- The "Print / PDF" calc sheet (all sections, 69 pages) was checked as well. Nothing is clipped at the page edge: the widest table, the Enclosure test matrix, fits within the 7.5 in text width. Nothing was changed.
+
+### Smoke test
+- `tests/smoke/phone-layout.mjs` gains the tool key `asce7` (every output tab including Report). It fails on origin/main at 390 px (339 px sideways scroll) and passes on this branch.
+
+### How verified (no computed result, saved key or hand-off changed)
+- origin/main vs this branch, headless Chromium, file://: the page text (`innerText`) at 1280 px on load and on all 13 output tabs, the whole-document `textContent` (425,382 chars) and localStorage after load are identical. Screenshots at 900 and 1280 px are pixel-identical (0 differing pixels) on load and on all 13 tabs.

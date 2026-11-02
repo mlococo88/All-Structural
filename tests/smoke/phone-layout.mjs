@@ -14,6 +14,7 @@ for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; con
 const TOOLS = {
   smd: { file: 'Shear and Moment Diagrams.html', tabs: '#smdViewTabs button',
     init: async p => { await p.selectOption('#tplSel', '3s'); await p.waitForTimeout(2000); } },
+  asce7: { file: 'ASCE7-16 Load Generator.html', tabs: '#tabs .tab', tabWait: 900 },
 };
 
 const keys = args.tool ? String(args.tool).split(',') : Object.keys(TOOLS);
