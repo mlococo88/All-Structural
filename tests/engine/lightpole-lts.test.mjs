@@ -136,7 +136,7 @@ test('LTS-3: Table 5.8.2-1 round branches and λ > λmax not permitted; Eq. 5.12
   const cl = L.classify(sec, 50); near(cl.lp, 40.6, 1e-9, 'λp'); near(cl.lrF, 179.8, 1e-9, 'λr');
   assert.equal(L.mnOf(sec, 10, 50, cl).cls, 'compact');
   const thin = { shape: 'round', D: 30, t: 0.1 }; assert.equal(L.mnOf(thin, 10, 50, L.classify(thin, 50)).cls, 'exceeds λmax (not permitted)');
-  const it = L.interaction({ Pu: 1, Pr: 10, BMr: 0.5, Vr: 0.1, Tr: 0.3 }); assert.equal(it.eq, '5.12.1-1'); near(it.ratio, 0.1 + 0.9 ** 2, 1e-12, 'Eq. 5.12.1-1');
+  const it = L.interaction({ Pu: 1, Pr: 10, BMr: 0.5, Vr: 0.1, Tr: 0.3 }); assert.equal(it.eq, '5.12.1-1'); near(it.ratio, 0.1 + 0.5 + 0.4 ** 2, 1e-12, 'Eq. 5.12.1-1: P/Pr + BM/Mr + (V/Vr + T/Tr)^2');
 });
 /* HC-2 by hand (Python, independent): post 6.625 × 0.280, F_y 42, 12 ft, 227.9 lb; D/t = 23.66 ≤ 48.33 → compact, φM_n = 0.9·Z·F_y = 426.38 kip-in;
    wind toward 0°, V = 76 mph (10-yr): post 99.92 lb (M 599.5), panel 637.3 lb at 9.5 ft → M_u = 6,653.9 lb·ft = 79.847 kip-in, T = 764.8 lb·ft;

@@ -1724,3 +1724,25 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 ### How verified (no computed result, saved key or hand-off changed)
 - origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 15 tabs, the whole-document `textContent` (592,380 chars) and localStorage after load are identical.
 - Screenshots at 900 and 1280 px: 0–22 differing pixels, in different places on each run (input-field and scroll-bar anti-aliasing). Report print text is identical.
+
+## 2026-11-02 — PR: [#669](https://github.com/mlococo88/All-Structural/pull/669) — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+- **Before:** Project tab → Saved projects: drop-down with Open / Save / Save as… / Delete (`retaincalcpro.projects.v1`, `{ name: { fields,
+  ts } }`), Export / Import JSON, Back up all. No rename, no duplicate, no undo.
+- **Where:**
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `scheduleAutosave()`, anchor `function scheduleAutosave() {`: first statement `if (window.RWPL) RWPL.soon();   // PLIB: one undo step per change (debounced)`.
+  - a new `<script>` after the boot script (after `waitPL`), anchor `/* PLIB (2026-11-02): saved-project list and Undo / Redo`: history over
+    `JSON.stringify(snapshotFields())`, `set` = `restoreFields()` + `onInputChange()`; `mapStore(localStorage, PROJ_KEY, { time: ts })`;
+    dialog `open` = `loadProject(n)`; "open now" = the `retaincalcpro.lastproject.v1` name; a rename of that project moves the pointer to the
+    new name (same key, same plain-string format) and, when Project Name equals the old name, sets Project Name to the new one (Save uses
+    Project Name as the list name); a delete clears the pointer as the Delete button does. Buttons Undo, Redo, Saved projects… in a new
+    `header .hdr-group` before the Inputs / Code / Report group.
+- **Saved data:** keys `retaincalcpro.projects.v1`, `retaincalcpro.autosave.v1`, `retaincalcpro.lastproject.v1` and their formats unchanged; no new key.
+- **How verified:** `node tests/smoke/project-library.mjs --tool retwall`: ALL PASS (`window._R`, every computed result, identical to
+  origin/main on load, after an input change, reopened on main's storage and opened from the dialog; Undo / Redo / Ctrl+Z / Ctrl+Y exact;
+  dialog byte-identical; quota; 390 px; no new console errors). `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands (not added):** the tool already takes its external loads directly (column / beam reactions P_DL, P_LL, P_SL, P_WL,
+  surcharge q_s, LS h_eq, barrier, CT collision, seismic k_h). The stem and footing demands are worked from soil pressure and those loads
+  through stability; an entered M_u / V_u or an extra horizontal load would need new terms in the stability equations (a new formula),
+  which the brief excludes. Raised for the engineer instead.

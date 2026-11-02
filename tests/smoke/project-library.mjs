@@ -32,6 +32,30 @@ const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel
   await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
   return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
 export const TOOLS = {
+  baseplate: {
+    file: 'BasePlateAnchorDesigner.html', list: 'bpad_projects_v1', auto: 'bpad_autosave_v1',
+    ready: p => p.waitForFunction(() => typeof computeAll === 'function' && document.querySelector('#inputPanel input')),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(computeAll(), (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
+    change: p => bump(p, '#inputPanel input[type=number]', 0.5),
+    view: p => tabView(p, '#tabBar button, .tabBtn, [data-tab]', 2, '.active, [aria-selected=true]'),
+    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('btnSaveAs').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); }
+  },
+  retwall: {
+    file: 'Retaining Wall Designer.html', list: 'retaincalcpro.projects.v1', auto: 'retaincalcpro.autosave.v1',
+    ready: p => p.waitForFunction(() => window._R),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(window._R, (k, v) => typeof v === 'function' ? undefined : (v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
+    change: p => bump(p, '#H, .sidebar input[type=number]', 1),
+    view: p => tabView(p, '.tab-btn', 2, '.active'),
+    save: async (p, name) => { await p.evaluate(n => { const pn = document.getElementById('proj_name'); pn.value = n; document.getElementById('proj_save_btn').click(); }, name); await p.waitForTimeout(300); }
+  },
+  gusset: {
+    file: 'Gusset Plate Rating.html', list: 'gussetRating.projects.v1', auto: 'gussetRating.autosave.v1',
+    ready: p => p.waitForFunction(() => window.__gprForTest && window.__gprForTest().R),
+    results: p => p.evaluate(() => { const t = window.__gprForTest(); const seen = new WeakSet(); return JSON.parse(JSON.stringify({ R: t.R, minRF: t.minRF }, (k, v) => typeof v === 'function' || k === 'ui' ? undefined : (v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
+    change: p => bump(p, '#sidebar input[type=number][data-k^="plates"], #sidebar input[type=number]', 0.125),
+    view: p => tabView(p, 'header ~ * .tab-btn, .tab-btn', 3, '.active'),
+    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; CUR = ''; try { document.getElementById('pb_saveas').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); }
+  },
   stonearch: {
     file: 'Stone Masonry Arch Load Rating.html', list: 'stoneArchLR.projects', auto: 'stoneArchLR.autosave',
     ready: p => p.waitForFunction(() => document.querySelector('#outPanel') && document.querySelector('#outPanel').innerText.length > 200),

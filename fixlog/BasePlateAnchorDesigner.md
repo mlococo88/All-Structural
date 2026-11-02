@@ -4963,6 +4963,27 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** `node tests/bpad-circle.mjs`: PASS — §1 identity origin/main vs this branch on the 31 rectangular projects (computeAll, comboCapacities, allChecks, validation, report text) identical; H1–H6 unchanged; new H7 (above, plus square plate under a square / round post imported as a rectangular plate with no blocking message, and the three refusals). `node tests/bpad-profis.mjs` PASS; `node tests/anchor-parity.mjs` PASS; `tests/smoke/lightpole-anchor-handoff.mjs` ALL PASS (17 cases, see fixlog/Light Pole and Sign Post.md LPAS).
 - **Open item (engineer):** a square plate under a pole on a double-nut base is checked here by AISC DG1 (this tool's rectangular-plate method), in Light Pole by the bending line at the pole face; should this tool use the bending line (`plateBendingLTS()`) for a square plate on a double-nut pole base? Not changed (it would route an existing method to a new case: needs your decision).
 
+## 2026-11-02 — PR: [#670](https://github.com/mlococo88/All-Structural/pull/670) — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+- **Before:** header: drop-down with Load / Save / Save As… / Delete (`bpad_projects_v1`, `{ name: S }`), Export / Import JSON, Compare,
+  Backup All / Restore All. No rename, no duplicate, no undo.
+- **Where:**
+  - after `<script src="shared/anchor-geom.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `autosave()`, anchor `function autosave(){`: first statement `if(window.BPPL) BPPL.soon();   /* PLIB: one undo step per change (debounced) */`.
+  - `init()`: last statement `bpPlibInit();   /* PLIB */`; new `function bpPlibInit()` right after the `DOMContentLoaded` line (anchor
+    `/* PLIB (2026-11-02)`): history over `S` without `S.ui` (tabs, display units, collapse and print options are not steps);
+    `set` = `S=mergeState(step with the current S.ui); buildProjHeader(); refreshAll();` (as Load does); `mapStore(localStorage, LS_PROJ)`;
+    dialog `open` = the Load path for that name; a rename moves `bpad_lastproject_v1` and, when Project name equals the old name, sets it to
+    the new one (Save uses Project name as the list name); a delete clears the pointer as Delete does; the drop-down is redrawn after every
+    change. Buttons Undo, Redo, Saved projects… in `#hdrBtns` before Export JSON.
+- **Saved data:** keys `bpad_projects_v1`, `bpad_autosave_v1`, `bpad_lastproject_v1` and their formats unchanged; no new key. Backup All /
+  Restore All unchanged (they read and write the same list).
+- **How verified:** `node tests/smoke/project-library.mjs --tool baseplate`: ALL PASS (`computeAll()` identical to origin/main on load,
+  after an input change, reopened on main's storage and opened from the dialog; Undo / Redo / Ctrl+Z / Ctrl+Y exact; dialog byte-identical;
+  quota; 390 px; no new console errors). `node tests/bpad-circle.mjs` (31 projects, origin/main vs branch): PASS.
+  `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** already entered directly (load combinations P, V_x, V_y, M_x, M_y, T, and the hand-offs). Nothing added.
+
 ## 2026-11-02 — BC-6: the §17.6.2.1.2 h_ef reduction by analogy for a round pier is NOT applied by default (engineer decision 2026-11-02); older saves keep it applied (migration) (PR: claude/bpad-roundpier-default)
 
 ### BC-6. Default of `conc.circHefReduce`   [§4: default that feeds a result] [saved data: migration]
