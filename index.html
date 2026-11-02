@@ -33,6 +33,19 @@
   /* D11 links (CLAUDE.md §6): "Worked in: → …" flash on arrival */
   .idx-wkFlash{animation:idxwkflash 1.5s ease-out;} @keyframes idxwkflash{from{box-shadow:0 0 0 4px #93c5fd;}to{box-shadow:0 0 0 4px rgba(147,197,253,0);}}
   .idx-wkA:hover{text-decoration:underline !important;} @media print{.idx-wk{display:none!important;}}
+  /* PHN (2026-11-02): phone / tablet (below 900 px): the header wraps, the section list goes above the form as a wrapping row,
+     and the page scrolls as one column (the app's boxes are styled inline, so these rules need !important); 900 px and up unchanged */
+  @media screen and (max-width:899px){
+    #root>div>header{flex-wrap:wrap!important;height:auto!important;padding:8px 12px!important;row-gap:6px!important;}
+    #root>div>header>div[style*="margin-left: auto"]{margin-left:0!important;flex-wrap:wrap!important;gap:6px!important;}
+    #root>div>header+div{flex-direction:column!important;overflow:visible!important;}
+    #root>div>header+div>nav{width:auto!important;flex-direction:row!important;flex-wrap:wrap!important;align-items:center!important;gap:4px!important;border-right:none!important;border-bottom:1px solid #e5e7eb!important;padding:8px!important;}
+    #root>div>header+div>nav>button{width:auto!important;}
+    #root>div>header+div>nav>div[style*="text-transform: uppercase"]{flex-basis:100%!important;margin:4px 0 0!important;}
+    #root>div>header+div>nav+div{overflow:visible!important;min-width:0!important;}
+    #root>div>header+div>nav+div>div[style*="overflow-y: auto"]{overflow:visible!important;padding:14px 12px!important;}
+    #root>div>header+div>nav+div>div[style*="overflow-y: auto"] div[style*="display: flex"]:not([style*="flex-direction: column"]){flex-wrap:wrap!important;}
+  }
 </style>
 <!-- ═══════════════════════════════════════════════════════════════════════════
      Bridge Suite — shared DESIGN BEAM channel (v1)
