@@ -1189,7 +1189,7 @@ function lppApplyCode(){
   if(LPP_IBC_HEAD && tag && sc){
     if(lts){
       tag.innerHTML='<b>AASHTO LRFDLTS</b>1st Ed. (2015) + 2017 Interim<br>highway supports';
-      sc.innerHTML='<b>Scope (this mode):</b> '+lppEsc(LpLts.BASIS)+' — highway luminaire poles and ground-mounted (roadside) sign supports. Cables are not supported in this mode. <b>In development: not for design.</b>';
+      sc.innerHTML='<b>Scope (this mode):</b> '+lppEsc(LpLts.BASIS)+' — highway luminaire poles and ground-mounted (roadside) sign supports. Cables are not supported in this mode.';
     } else { tag.innerHTML=LPP_IBC_HEAD.tag; sc.innerHTML=LPP_IBC_HEAD.scope; }
   }
   const cn=$('ltsCableNote'); if(cn) cn.style.display=sign?'none':'';
@@ -1254,7 +1254,7 @@ function applyMode(){
   }
   if(codeMode==='lts'){   // LTS-1: masthead text of the LRFDLTS mode
     eyebrow=!sign?'Highway Luminaire Pole · AASHTO LRFDLTS':signPosts===1?'Monopost Roadside Sign · AASHTO LRFDLTS':'Two-Post Roadside Sign · AASHTO LRFDLTS';
-    subtxt=(!sign?'A highway luminaire pole with arm-mounted fixtures':'A ground-mounted roadside sign')+' designed to AASHTO LRFDLTS 1st Ed. (2015) with the 2017 Interim Revisions: Table 3.4-1 limit states, Section 3 wind, Section 5 steel members, Section 10 deflection and Section 13 foundations. All planned checks are implemented (LTS-1 to LTS-9); the mode stays marked not for design until the engineer releases it.';
+    subtxt=(!sign?'A highway luminaire pole with arm-mounted fixtures':'A ground-mounted roadside sign')+' designed to AASHTO LRFDLTS 1st Ed. (2015) with the 2017 Interim Revisions: Table 3.4-1 limit states, Section 3 wind, Section 5 steel members, Section 10 deflection and Section 13 foundations. Cables, mast arms, high-mast towers and fatigue design are outside this mode.';
   }
   if($('appEyebrow')) $('appEyebrow').textContent=eyebrow;
   if($('appTitle'))   $('appTitle').textContent=title;
@@ -2916,7 +2916,7 @@ manPart("p5","5. Verification",[
 manPart("pL","L. AASHTO LRFDLTS Mode",[
 {h:"L.1 What it is"},
 {p:"The code switch at the top of the input column selects <b>IBC 2021 · ASCE 7-22</b> (the original mode) or <b>AASHTO LRFDLTS</b>: the AASHTO LRFD Specifications for Structural Supports for Highway Signs, Luminaires, and Traffic Signals, 1st Edition (2015) with the 2017 Interim Revisions; later interims are not applied. The LRFDLTS mode covers highway luminaire poles with arm-mounted fixtures and ground-mounted (roadside) monopost and two-post signs. Cables are not supported in this mode. The mode is saved with the project (older projects open in the IBC mode with identical results)."},
-{warn:"The LRFDLTS mode is marked <b>in development — not for design</b> until the engineer releases it."},
+{note:"Known limits of the LRFDLTS mode (accepted by the engineer, 2026-11-02): the soil torsional resistance of the shaft is not checked (Art. 13.6 gives no method); the dimensioned drawings and DXF are produced in the IBC mode only; 8-, 12- and 16-sided sections are not built; mast arms, high-mast towers (55 ft and taller: warning) and fatigue design are outside the mode."},
 {h:"L.2 Inputs"},
 {ul:["Card 1 <b>LRFDLTS criteria</b>: risk category and ADT (Table 3.8-1 → MRI; roadside signs 10 yr), basic wind speed V for that MRI, service wind speed (10-yr), square-tube corner ratio r<sub>s</sub> (drag) and inside corner radius r<sub>i</sub> (flat width, torsion), clear zone (breakaway checklist), base weld, Owner-specified ice.","The pole/post, fixtures, sign, shaft, Broms soil, anchor and base-plate inputs are shared with the IBC mode. The Broms soil model must be selected: it gives the LRFDLTS embedment."]},
 {h:"L.3 What is computed (articles of the 1st Ed. with the 2017 interim)"},
@@ -2924,7 +2924,7 @@ manPart("pL","L. AASHTO LRFDLTS Mode",[
 ["Load combinations","Table 3.4-1: Strength I (1.25DC), Extreme I (1.1DC + W, 0.9DC + W), Service I (1.0DC + W, 10-yr)"],
 ["Wind","Eq. 3.8.1-1 P<sub>z</sub> = 0.00256K<sub>z</sub>K<sub>d</sub>GV²C<sub>d</sub>; Eq. 3.8.4-1 K<sub>z</sub>; Table 3.8.5-1 K<sub>d</sub>; Art. 3.8.6 G = 1.14; Art. 3.8.7 and Table 3.8.7-1 C<sub>d</sub>, C<sub>v</sub>; Art. 3.9.1 EPA; Table 3.9.3-1 load cases; Art. 3.9.4.2 torsion"],
 ["Members","Arts. 5.5.3.2 (φ), 5.6.1, 5.6.2, Table 5.7.2-1, Table 5.8.2-1, Art. 5.10, Art. 5.11, Art. 5.12.1 (combined forces), Art. 4.8.1 / Eq. 5.12.1-10 (second order)"],
-["Deflection","Art. 10.4.2.1: 10 % H (luminaires), 2.5 % H, 0.35 in/ft (Service I)"],
+["Deflection","Art. 10.4.2.1: 10 % H for luminaire supports (Service I, checked); 2.5 % H and 0.35 in/ft shown as information"],
 ["Fatigue","Arts. 11.4, 11.7.2: not required for luminaire poles under 55 ft or roadside signs; warning at 55 ft and above"],
 ["Base plate","bending line at the pole face (engineering method, not an LRFDLTS article; Art. 5.6.3 only requires the thickness to be considered)"],
 ["Base weld","Art. 5.14 → AWS D1.1; strength per AISC 360-16 §J2.4"],
@@ -2932,7 +2932,7 @@ manPart("pL","L. AASHTO LRFDLTS Mode",[
 ["Anchorage","LRFDLTS combinations sent to the Anchorage app (HANDOFF.md §4.11)"],
 ["Breakaway","Art. 2.5.2 and Section 12: checklist"]]}},
 {h:"L.4 Decisions recorded (docs/lts-mode-plan.md §4)"},
-{ul:["Accepted by the engineer (2026-11-02): ice in Strength I only (Q-C1); no eccentric case for two-post signs (Q-C2); bending-line base plate labelled as an engineering method (Q-C3); Broms + ACI 318-19 shaft (Q-C4); K<sub>d</sub> of the post for a sign (Q-C5); square C<sub>d</sub> for rectangular tubes (Q-C6); Broms φ = 1.0 (Q-C7); shear span = height (Q-C8); pole-top fixture width √EPA.","Still to confirm (flagged on screen): deflection limits applied under Service I (Q-B4); base weld per AWS D1.1 / AISC §J2 (Q-B5); square/rect. flat width and torsional constant without a corner radius (Q-C9, Q-C10); the undefined “s” of Table B.3-1."]},
+{ul:["Accepted by the engineer (2026-11-02): ice in Strength I only (Q-C1); no eccentric case for two-post signs (Q-C2); bending-line base plate labelled as an engineering method (Q-C3); Broms + ACI 318-19 shaft (Q-C4); K<sub>d</sub> of the post for a sign (Q-C5); square C<sub>d</sub> for rectangular tubes (Q-C6); Broms φ = 1.0 (Q-C7); shear span = height (Q-C8); pole-top fixture width √EPA.","Engineer, 2026-11-02: the 2.5 % H and 0.35 in/ft limits are information only, the 10 % H luminaire limit is a check (Q-B4); base weld per AWS D1.1 / AISC 360-16 §J2.4 accepted (Q-B5); square/rect. tubes: with the inside corner radius, Eq. 5.7.2-1 and the smaller of the Table B.3-1 and AISC torsional constants (Table B.3-1 \u2018s\u2019 undefined); without it, b = B − 3t and the AISC constant (Q-C9, Q-C10) — both accepted."]},
 {h:"L.5 Outputs"},
 {p:"Summary (verdicts and status), Loading (MRI, combinations, wind, base actions), Post (member check, deflection, fatigue), Anchorage (hand-off, base plate, weld), Shaft (Broms, ACI cage), Report (the LRFDLTS calculation report), Geometry (input summary) and Drawings (general notes; the dimensioned drawings are produced in the IBC mode only)."}
 ]);
@@ -7000,7 +7000,8 @@ const LTS_STATUS=[
   ['LTS-6','Base plate (bending line, engineering method) and base weld (AWS D1.1 / AISC 360-16 §J2)',true],
   ['LTS-7','Foundation: Broms embedment (Art. 13.6.1.1), shaft reinforcement (ACI 318-19; Art. 13.6.2 not applied), details (Art. 13.6.2.1)',true],
   ['LTS-8','Anchorage-app export of the LTS combinations (bridgeSuite.v1.anchorGroup, HANDOFF.md §4.11)',true],
-  ['LTS-9','Report (shared viewer), drawing notes, manual',true]];
+  ['LTS-9','Report (shared viewer), drawing notes, manual',true],
+  ['Release','Engineer\'s answers applied (2026-11-02); "not for design" banner removed',true]];
 const LTS_PAGE_PR={};
 function ltsClear(){ document.querySelectorAll('.ltsCard').forEach(e=>e.remove()); lppLtsLast=null; }
 let lppLtsLast=null;   // LTS-2: the last LRFDLTS run {g, L, ba}
@@ -7054,9 +7055,10 @@ function ltsAddCard(page,id,nm,title,hint,body){
 function ltsStepsHTML(steps){
   return `<ol class="steps">${steps.map(s=>`<li id="st-lts-${lppEsc(s.id)}"><b>${lppEsc(s.label)}:</b> ${SharedSteps.line(s,true)}${s.ref?` <span class="eq-ref">[${lppEsc(s.ref)}]</span>`:''}${s.note?`<div class="tbl-note">${lppEsc(s.note)}</div>`:''}</li>`).join('')}</ol>`;
 }
+const LTS_LIMITS=['The soil torsional resistance of the shaft is not checked (LRFDLTS Art. 13.6 gives no method).','The dimensioned drawings and DXF are produced in the IBC mode only.','8-, 12- and 16-sided sections are not built.','Mast arms, high-mast towers (55 ft and taller: warning) and fatigue design are outside this mode; cables are not supported.'];
 function ltsDevHTML(){
-  return `<p class="lts-dev"><b>LRFDLTS mode in development — not for design.</b> Implemented: ${LTS_STATUS.filter(r=>r[2]).map(r=>r[0]).join(', ')}. `
-    +`${LTS_STATUS.some(r=>!r[2])?`Not yet: ${LTS_STATUS.filter(r=>!r[2]).map(r=>r[0]).join(', ')}. `:'All planned steps are implemented; the mode stays marked not for design until the engineer releases it. '}The IBC 2021 · ASCE 7-22 results are not shown in this mode; switch the code mode to see them.</p>`;
+  return `<p class="lts-basis"><b>Known limits (accepted by the engineer, 2026-11-02):</b> ${LTS_LIMITS.join(' ')}</p>`;
+
 }
 function ltsCalc(){
   ltsClear();
@@ -7122,10 +7124,10 @@ function ltsCalc(){
         {id:'wd.q',label:`Weld force per inch around the tube (as a line, D = ${n2(inp.poleDiaBase,3)} in): ${gw.name}, ${gw.lcName}`,sym:'q',eq:'\\sqrt{\\left(\\frac{BM}{S_{w}} + \\frac{P}{\\pi D}\\right)^{2} + \\left(\\frac{2V}{\\pi D} + \\frac{2T}{\\pi D^{2}}\\right)^{2}},\\, S_{w} = \\pi D^{2}/4',
           sub:`\\sqrt{${n2(gw.qn,3)}^{2} + ${n2(gw.qs,3)}^{2}}`,value:gw.q,unit:'kip/in',d:3,ref:'line-weld section'},
         {id:'wd.cap',label:'Fillet weld strength per inch',sym:'\\phi R_{n}',eq:'0.75\\cdot 0.60F_{EXX}\\cdot 0.707w',sub:`0.75\\cdot 0.60\\cdot${n2(num('ltsFexx')||70,0)}\\cdot 0.707\\cdot${n2(num('ltsWeldW')||0.3125,4)}`,value:wd.phiRn,unit:'kip/in',d:3,ref:'AWS D1.1 / AISC 360-16 §J2.4 (LRFDLTS Art. 5.14, p. 5-35, 2017, refers to AWS D1.1)',ok:wd.ok,
-          note:`Ratio ${n2(wd.ratio,3)} → ${wd.ok?'OK':'NOT OK'}. LRFDLTS gives no weld strength method; AWS D1.1 / AISC 360-16 §J2 with φ = 0.75 and no directional increase (coordinator decision Q-B5).`}]); }
+          note:`Ratio ${n2(wd.ratio,3)} → ${wd.ok?'OK':'NOT OK'}. LRFDLTS gives no weld strength method; AWS D1.1 / AISC 360-16 §J2 with φ = 0.75 and no directional increase (accepted by the engineer, 2026-11-02).`}]); }
       ltsAddCard('anchors','ltsBpCard','7',(g.mode==='sign'?'Post':'Pole')+' base plate and base weld','engineering method · AWS D1.1',
         basis+`<p class="lts-dev">${lppEsc(LPP_BP_VERIFY)}</p>`+ltsStepsHTML(bpSteps)
-        +`<p class="eq-title" style="margin-top:10px"><b>Pole-to-base-plate weld</b> <span class="lts-flag">engineer to confirm (Q-B5)</span></p>`+wSteps
+        +`<p class="eq-title" style="margin-top:10px"><b>Pole-to-base-plate weld</b></p>`+wSteps
         +`<p class="tbl-note">Anchor rods: designed in the Anchorage app — the Anchorage card on this tab sends the LRFDLTS combinations (Strength I, Extreme I; M × B). LRFDLTS Arts. 5.16–5.16.3: cast-in-place anchor bolts for new work; hooked bolts only with F<sub>y</sub> ≤ 55 ksi; anchorage per ACI 318 (C5.16.3).${g.mode==='sign'&&g.sign.nPost===2?' Values per post.':''}</p>`); }
     // LTS-7: foundation
     { const fd=ltsFoundation(inp,g,ba,mc); lppLtsLast.fd=fd;
@@ -7221,7 +7223,7 @@ function ltsReportModel(){
     ['Specification',LpLts.BASIS],
     ['Other references','ACI 318-19 (shaft reinforcement; LRFDLTS Art. 13.6.2 refers to the AASHTO LRFD BDS — not applied); AWS D1.1 / AISC 360-16 §J2 (base weld); AISC 360-16 §H3.1 (square-tube torsional constant when no corner radius)'],
     ['Units','lb, ft, in, psf, kip, ksi as noted'],['Prepared with','Light Pole and Sign Post, by Mario Lococo · '+new Date().toLocaleString()]]},
-    {type:'note',text:'LRFDLTS mode in development: NOT FOR DESIGN until the engineer releases it.'}]},
+    {type:'note',text:'Known limits (accepted by the engineer, 2026-11-02): '+LTS_LIMITS.join(' ')}]},
     {title:'Wind criteria',items:[steps('lts.mri',X.m.steps),{type:'kv',rows:[['Extreme I basic wind speed V',N(L.V,0)+' mph ('+X.m.fig+')'],['Service I wind speed',N(L.Vsvc,0)+' mph (10-yr, Fig. 3.8-4)'],['Atmospheric ice (Art. 3.7)',L.tIce>0?N(L.tIce,2)+' in, Strength I only (decision Q-C1, accepted)':'none']]}]}]});
   // 2. Loads
   const cb=LpLts.COMBOS.map(c=>[c.name,c.desc,String(c.DC),L.tIce>0&&c.ICE?String(c.ICE):'—',c.W?N(c.W,1):'—',c.wind==='extreme'?X.m.mri+'-yr':c.wind==='service'?'10-yr':'—',c.ref]);
@@ -7237,8 +7239,8 @@ function ltsReportModel(){
     {title:'Governing section'+post,items:[steps('lts.m',X.ms),{type:'note',text:`Result: ${mc.gov.gov.ratio<=1&&mc.valid?'OK':'NOT OK'} — ratio ${isFinite(mc.gov.gov.ratio)?N(mc.gov.gov.ratio,3):'∞'} at z = ${N(mc.gov.sec.z,2)} ft.`}]},
     {title:'All sections',items:[tbl(['z (ft)','λ','Class','φMn','φPnc','φVn','φTn','Governing','Eq.','Ratio'],mrow,{lazy:true,title:'21 sections (kip, kip-in)'})]}]});
   if(inp.poleShape!=='round') flags.push('Square/rect. tube: LRFDLTS Art. 5.6.2 / C5.6.2 (and C11.4 for lighting poles) advise against these sections (warning only, coordinator decision Q-B6).');
-  if(inp.poleShape!=='round' && !(num('ltsRi')>0)) flags.push('Square/rect. tube without the inside corner radius: flat width B − 3t (Q-C9) and the AISC 360-16 §H3.1 torsional constant (Q-C10) — engineer to confirm.');
-  if(inp.poleShape==='square' && num('ltsRi')>0) flags.push('Square tube torsional constant: Table B.3-1 divides by "k_t s"; s is not defined in Appendix B: the smaller of the Table B.3-1 and AISC values is used — engineer to confirm.');
+  if(inp.poleShape!=='round' && !(num('ltsRi')>0)) flags.push('Square/rect. tube without the inside corner radius: flat width B − 3t and the AISC 360-16 §H3.1 torsional constant.');
+  if(inp.poleShape==='square' && num('ltsRi')>0) flags.push('Square tube torsional constant: the smaller of the Table B.3-1 and AISC values (Table B.3-1 divides by "k_t s"; s is not defined in Appendix B).');
   // 4. Deflection and fatigue
   if(X.dfl){ const d=X.dfl;
     secs.push({title:'Deflection (Section 10) and fatigue (Section 11)',subs:[{title:'Service I deflection'+post,items:[
@@ -7246,11 +7248,11 @@ function ltsReportModel(){
       tbl(['Service I load case','Δx (in)','Δy (in)','Δ (in)','slope (in/ft)'],d.rows.map(r=>[r.lcName,N(r.dx,2),N(r.dy,2),N(r.d,2),N(r.slope,3)])),
       {type:'note',text:`Elastic double integration of M/(EI), times the Service I B = ${N(d.B,4)} (C10.4.2.1).`}]},
       {title:'Fatigue',items:[{type:'note',text:X.fat.text}]}]});
-    flags.push('Deflection limits 2.5 % H and 0.35 in/ft applied under Service I to the structure types Art. 10.4.2.1 names (coordinator decision Q-B4) — engineer to confirm.'); }
+    flags.push('Deflection: 10 % H for luminaire supports is checked; the 2.5 % H and 0.35 in/ft limits of Art. 10.4.2.1 are shown as information (engineer, 2026-11-02).'); }
   // 5. Base plate and weld
   if(X.bp){ secs.push({title:'Base plate and base weld',subs:[{title:'Base plate (engineering method)'+post,items:[{type:'note',text:LPP_BP_VERIFY},steps('lts.bp',X.bpSteps)]},
       {title:'Pole-to-base-plate weld',items:X.wd.type==='cjp'?[{type:'note',text:'Full-penetration groove weld: the base metal governs (member check at the base); no separate weld check (AWS D1.1).'}]:[steps('lts.wd',X.wdSteps)]}]});
-    if(X.wd.type!=='cjp') flags.push('Base weld per AWS D1.1 / AISC 360-16 §J2.4, φ = 0.75 (LRFDLTS Art. 5.14 gives no weld strength method; coordinator decision Q-B5) — engineer to confirm.'); }
+    if(X.wd.type!=='cjp') flags.push('Base weld per AWS D1.1 / AISC 360-16 §J2.4, φ = 0.75 (LRFDLTS Art. 5.14 gives no weld strength method; accepted by the engineer, 2026-11-02).'); }
   // 6. Foundation
   if(X.fd){ const it=[{type:'note',text:'Broms (Art. 13.6.1.1, C13.6.1.1) with the factored groundline actions (M × B); shaft reinforcement per ACI 318-19 (engineer, Q-C4); LRFDLTS Art. 13.6.2 refers to the AASHTO LRFD BDS — not applied.'}];
     if(X.fd.gov){ it.push(steps('lts.f',X.fdSteps)); it.push({type:'kv',rows:[['Required embedment L',N(X.fd.gov.br.L,2)+' ft'],['Largest shaft moment',N(X.fd.gm.br.Mu,2)+' kip-ft'],['Shaft reinforcement (ACI 318-19)',X.fd.reo?'('+X.fd.reo.long.n+') '+X.fd.reo.long.bar.n+'; ties '+X.fd.reo.tie.bar.n+' @ '+N(X.fd.reo.tie.s,0)+' in':'—'],['Torsion',`T_u = ${N(X.fd.Tu,0)} lb·ft; φT_th = ${N(X.fd.tor.phiTth,0)} lb·ft (ACI 318-19 §22.7.1.1); soil torsion not checked (Art. 13.6 gives no method; open item N2)`]]}); }
@@ -7260,7 +7262,7 @@ function ltsReportModel(){
   secs.push({title:'Anchorage, breakaway, assumptions',subs:[
     {title:'Anchor rods',items:[{type:'note',text:'Designed in the Anchorage app (Base Plate & Anchor Bolt Designer) from the LRFDLTS combinations sent from the Anchorage tab (HANDOFF.md §4.11): Strength I and Extreme I, M × B. LRFDLTS Arts. 5.16–5.16.3.'}]},
     {title:'Breakaway (Art. 2.5.2, Section 12)',items:[{type:'note',text:X.brk.items.join(' ')}]},
-    {title:'Assumptions and items for the engineer',items:[{type:'note',text:['Cables (catenary spans) are not supported in this mode.','Wind directions: the 8 load cases of Table 3.9.3-1.','Pole-top fixture width for the 0.15b torsion taken as √EPA (accepted).'].concat(flags).join(' • ')}]}]});
+    {title:'Assumptions and decisions',items:[{type:'note',text:['Cables (catenary spans) are not supported in this mode.','Wind directions: the 8 load cases of Table 3.9.3-1.','Pole-top fixture width for the 0.15b torsion taken as √EPA (accepted).'].concat(flags).join(' • ')}]}]});
   return {title:'Light Pole and Sign Post — AASHTO LRFDLTS', subtitle:sign?(g.sign.nPost===2?'Two-post roadside sign':'Monopost roadside sign'):'Highway luminaire pole', code:LpLts.BASIS,
     info:[['Project',activeProject||'Untitled'],['Date',new Date().toLocaleDateString()]], sections:secs};
 }

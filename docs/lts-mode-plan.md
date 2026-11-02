@@ -340,6 +340,8 @@ The basis line is display only: "AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim
 - **Q-C9** Square/rect. tube flat width b = (larger wall) − 3t. The corner radius is not an input (as AISC 360-16 B4.1b). The same b/t is used for both axes, conservatively.
 - **Q-C10** Square/rect. torsional constant C_t = 2(B − t)(H − t)t − 4.5(4 − π)t³ (AISC 360-16 §H3.1). LRFDLTS Table B.3-1 gives the square-tube stress formula with k_t, but no constant usable without the corner radius.
 
+**Engineer's answers to Q-B4, Q-B5, Q-C9, Q-C10 (2026-11-02):** see §5.1.
+
 **Still open (owner):** Q21–Q25 (§6).
 
 ## 5. Phase B PR sequence
@@ -370,15 +372,19 @@ The PRs:
 7. **LTS-8** (done, 2026-11-02) Export of the LTS combinations to the Anchorage app.
 8. **LTS-9** (done, 2026-11-02) Report, drawings, manual.
 
-### 5.1 Status after LTS-9 (2026-11-02)
+### 5.1 Status after LTS-9 and the engineer's answers (2026-11-02)
 
-All planned steps are merged (#649, #651, #652, #653, #654, #655, #656, #657). The "in development — not for design" banner stays until the engineer releases the mode. Open items for that decision:
-- Q-B4 (deflection limits under Service I);
-- Q-B5 (base weld per AWS D1.1 / AISC §J2);
-- Q-C9 / Q-C10 (square/rect. flat width and torsional constant without a corner radius) and the undefined "s" of Table B.3-1;
-- soil torsion of the shaft (Art. 13.6 gives no method; open item N2);
-- dimensioned drawings / DXF in the LTS mode (IBC only today);
-- multi-sided (8/12/16) sections (LTS-3b, not built).
+All planned steps are merged (#649, #651, #652, #653, #654, #655, #656, #657). The engineer's answers of 2026-11-02 are applied, and the "in development — not for design" banner is removed (release PR):
+- **Q-B4:** the 2.5 % H and 0.35 in/ft limits of Art. 10.4.2.1 are **information only** (shown, never a failure). The 10 % H limit for luminaire supports under Service I stays a check.
+- **Q-B5:** the base weld check per AWS D1.1 / AISC 360-16 §J2.4 is accepted; the flag is removed.
+- **Q-C9 / Q-C10:** both paths are accepted.
+  - With an inside corner radius: Eq. 5.7.2-1, and the smaller of the Table B.3-1 and AISC torsional constants.
+  - Without it: b = B − 3t and the AISC constant, with a short note.
+- **Known limits (accepted; stated on screen and in the report, not as flags):**
+  - the soil torsional resistance of the shaft is not checked;
+  - the dimensioned drawings and DXF are IBC-only;
+  - 8/12/16-sided sections are not built;
+  - mast arms, high-mast towers (≥ 55 ft: warning) and fatigue design are out of scope.
 
 ## 6. Owner amendments (RIDOT, MassDOT, CTDOT)
 

@@ -240,7 +240,7 @@
       return { kind: 'D/t', lam, lp, lrF, lrC, lmax };
     }
     // square/rect.: flat width. With the inside corner radius r_i (LTS-7 input): b = (B − 2t) − 2·min(r_i, 4t)·tan(180°/4), the rule of
-    // Art. 5.7.2 / Eq. 5.7.2-1 (p. 5-13, 5-14) applied with n = 4; without it: b = (larger wall) − 3t (decision Q-C9, engineer to confirm)
+    // Art. 5.7.2 / Eq. 5.7.2-1 (p. 5-13, 5-14) applied with n = 4; without it: b = (larger wall) − 3t (decision Q-C9, accepted 2026-11-02)
     const W = Math.max(sec.B, sec.Ht || sec.B), ri = sec.ri > 0 ? sec.ri : 0;
     const bw = ri > 0 ? W - 2 * sec.t - 2 * Math.min(ri, 4 * sec.t) : W - 3 * sec.t, lam = bw / sec.t;
     return { kind: 'b/t', lam, b: bw, bRule: ri > 0 ? 'Eq. 5.7.2-1' : 'B-3t', lp: 1.12 * r, lrF: 1.53 * r, lrC: 1.53 * r, lmax: 2.14 * r };
@@ -279,7 +279,7 @@
       return { Vn: Fnv * sec.A / 2, Tn: Ct * Fnt, Fnv, Fnt, Ct, Av: sec.A / 2 };
     }
     // square/rect. (5.11.2.2): k_v = 5, h = b (flat), A_v = 2ht; F_nt = F_nv (5.11.3.2); C_t: closed-section constant of
-    // AISC 360-16 §H3.1, 2(B−t)(H−t)t − 4.5(4−π)t³ (Table B.3-1 gives the stress form only; decision Q-C10, engineer to confirm)
+    // AISC 360-16 §H3.1, 2(B−t)(H−t)t − 4.5(4−π)t³ (Table B.3-1 needs the corner radius; decision Q-C10, accepted 2026-11-02)
     const kv = 5, ht = cl.lam, a = Math.sqrt(kv * E / Fy);
     const Cv = ht <= 1.10 * a ? 1.0 : ht <= 1.37 * a ? 1.10 * a / ht : 1.51 * kv * E / (ht * ht * Fy);
     const Fnv = 0.6 * Fy * Cv, h = cl.b, t = sec.t, B = sec.B, H = sec.Ht || sec.B;
@@ -370,7 +370,7 @@
     st.push({ id: 'm.phi', label: 'Resistance factors', sym: '\\phi_{f},\\phi_{v},\\phi_{t},\\phi_{c}', eq: '', sub: '', value: '0.90, 0.90, 0.95, 0.90', unit: '', ref: R('Art. 5.5.3.2 (p. 5-6); Art. 5.5.4') });
     st.push({ id: 'm.lam', label: `Width–thickness ratio at z = ${n(s.z, 2)} ft (${rd ? 'round' : s.shape})`, sym: rd ? 'D/t' : 'b/t', eq: rd ? '\\frac{D}{t}' : '\\frac{b}{t},\\,b = B_{max} - 3t',
       sub: rd ? `\\frac{${n(s.D, 3)}}{${n(s.t, 4)}}` : `\\frac{${n(cl.b, 3)}}{${n(s.t, 4)}}`, value: cl.lam, unit: '', d: 2, ref: R('Art. 5.7.2, Table 5.7.2-1 (p. 5-14)'),
-      note: `λp = ${n(cl.lp, 1)}, λr = ${n(cl.lrF, 1)} (flexure), ${n(cl.lrC, 1)} (compression), λmax = ${n(cl.lmax, 1)} → ${r.mx.cls}.` + (rd ? '' : cl.bRule === 'B-3t' ? ' Flat width b = B − 3t: no corner radius entered (decision Q-C9, engineer to confirm).' : ` Flat width b = (B − 2t) − 2·min(r_i, 4t) with the entered inside corner radius r_i = ${n(s.ri, 3)} in (Art. 5.7.2, Eq. 5.7.2-1 with n = 4).`) });
+      note: `λp = ${n(cl.lp, 1)}, λr = ${n(cl.lrF, 1)} (flexure), ${n(cl.lrC, 1)} (compression), λmax = ${n(cl.lmax, 1)} → ${r.mx.cls}.` + (rd ? '' : cl.bRule === 'B-3t' ? ' Flat width b = B − 3t (no corner radius entered).' : ` Flat width b = (B − 2t) − 2·min(r_i, 4t) with the entered inside corner radius r_i = ${n(s.ri, 3)} in (Art. 5.7.2, Eq. 5.7.2-1 with n = 4).`) });
     st.push({ id: 'm.mn', label: 'Nominal bending strength', sym: 'M_{n}', eq: rd ? (r.mx.cls === 'compact' ? 'Z F_{y}' : r.mx.cls === 'noncompact' ? 'M_{p}\\left[0.77 + \\frac{0.016(E/F_{y})}{D/t}\\right]' : 'M_{p}\\left[\\frac{0.25(E/F_{y})}{D/t}\\right]') : (r.mx.cls === 'compact' ? 'Z F_{y}' : r.mx.cls === 'noncompact' ? 'M_{p}\\left[1.37 - \\frac{0.33(b/t)}{\\sqrt{E/F_{y}}}\\right]' : 'M_{p}\\left[1.23 - \\frac{0.23(b/t)}{\\sqrt{E/F_{y}}}\\right]'),
       sub: `M_{p} = ${n(s.Zx, 3)}\\cdot${n(Fy, 0)} = ${n(r.mx.Mp, 1)}`, value: r.mx.Mn, unit: 'kip-in', d: 1, ref: R('Art. 5.8.2, Table 5.8.2-1 (pp. 5-17, 5-18)') });
     st.push({ id: 'm.pn', label: 'Nominal compressive strength (cantilever K = 2.1, r at mid-height)', sym: 'P_{nc}', eq: 'A_{g}F_{cr},\\,F_{cr} = Q(0.658)^{QF_{y}/F_{e}}F_{y}\\,\\text{or}\\,0.877F_{e}',
@@ -379,7 +379,7 @@
       sub: `F_{nv} = ${n(r.st.Fnv, 2)},\\,A_{v} = ${n(r.st.Av, 3)}`, value: r.st.Vn, unit: 'kip', d: 1, ref: R(rd ? 'Eqs. 5.11.2.1.1-1 to -3 (pp. 5-30, 5-31)' : 'Art. 5.11.2.2 (pp. 5-31, 5-32)'),
       note: rd ? 'L_v = the full height (decision Q-C8, accepted 2026-11-02).' : '' });
     st.push({ id: 'm.tn', label: 'Nominal torsional strength', sym: 'T_{n}', eq: 'C_{t}F_{nt}', sub: `${n(r.st.Ct, 3)}\\cdot${n(r.st.Fnt, 2)}`, value: r.st.Tn, unit: 'kip-in', d: 1,
-      ref: R(rd ? 'Eqs. 5.11.3-1, 5.11.3.1.1-1/-2 (p. 5-32); Table B.3-1 (C_t = 6.28R²t)' : 'Art. 5.11.3.2 (p. 5-33, 2017)'), note: rd ? '' : r.st.CtB != null ? `C_t = min(AISC 360-16 §H3.1 ${n(r.st.CtA, 3)}, LRFDLTS Table B.3-1 8.00R²t/k_t ${n(r.st.CtB, 3)} with k_t = ${n(r.st.kt, 3)} by Eq. B.3-1) — Table B.3-1 divides by "k_t s" and s is not defined in Appendix B (engineer to confirm).` : 'C_t = 2(B − t)(H − t)t − 4.5(4 − π)t³ (AISC 360-16 §H3.1; no corner radius entered or rectangular tube; decision Q-C10, engineer to confirm).' });
+      ref: R(rd ? 'Eqs. 5.11.3-1, 5.11.3.1.1-1/-2 (p. 5-32); Table B.3-1 (C_t = 6.28R²t)' : 'Art. 5.11.3.2 (p. 5-33, 2017)'), note: rd ? '' : r.st.CtB != null ? `C_t = min(AISC 360-16 §H3.1 ${n(r.st.CtA, 3)}, LRFDLTS Table B.3-1 8.00R²t/k_t ${n(r.st.CtB, 3)} with k_t = ${n(r.st.kt, 3)} by Eq. B.3-1) (Table B.3-1 divides by "k_t s"; s is not defined in Appendix B, so the smaller value is used).` : 'C_t = 2(B − t)(H − t)t − 4.5(4 − π)t³ (AISC 360-16 §H3.1; no corner radius entered or rectangular tube).' });
     const b = res.Bs[gv.combo];
     if (b.method === '4.8.1') {
       st.push({ id: 'm.b2', label: 'Second-order amplification, tapered pole (simplified method)', sym: 'B_{2}', eq: '\\frac{1}{1 - P_{eq}/P_{E,bot}},\\,P_{eq} = \\sqrt[3]{I_{B}/I_{T}}\\,P_{T} + 0.38D_{P}',
@@ -436,10 +436,11 @@
     const lim = { lum: 0.10 * Lin, trans: 0.025 * Lin, slope: 0.35 };
     const checks = [];
     if (!isSign) checks.push({ key: 'lum', label: 'Luminaire support: top deflection, Service I', value: gov.d, limit: lim.lum, unit: 'in', applies: true, ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 10 % of the height') });
-    checks.push({ key: 'trans', label: 'Vertical support, transverse loads: top deflection, Service I', value: gov.d, limit: lim.trans, unit: 'in', applies: true,
-      ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 2.5 % of the height'), flag: 'Applied under Service I to the vertical supports the article names (coordinator decision Q-B4); the commentary describes it as a dead-load aesthetic limit developed for strain poles. Engineer to confirm.' });
-    checks.push({ key: 'slope', label: 'Vertical support, moment loads: slope at the top, Service I', value: govS.slope, limit: lim.slope, unit: 'in/ft', applies: momentLoad,
-      ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 0.35 in/ft'), flag: momentLoad ? 'Applied: the arm-mounted fixtures put a dead-load moment on the pole (coordinator decision Q-B4). Engineer to confirm.' : 'Information only: no moment-load application (no unbalanced arm-mounted dead load) (coordinator decision Q-B4).' });
+    // engineer, 2026-11-02 (Q-B4): the 2.5 % H and 0.35 in/ft limits are information only (shown, never a failure); the 10 % H luminaire limit is a check
+    checks.push({ key: 'trans', label: 'Vertical support, transverse loads: top deflection, Service I', value: gov.d, limit: lim.trans, unit: 'in', applies: false,
+      ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 2.5 % of the height'), flag: 'Information only (engineer, 2026-11-02): the commentary (C10.4.2.1) describes it as a dead-load appearance limit developed for strain poles.' });
+    checks.push({ key: 'slope', label: 'Vertical support, moment loads: slope at the top, Service I', value: govS.slope, limit: lim.slope, unit: 'in/ft', applies: false,
+      ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 0.35 in/ft'), flag: 'Information only (engineer, 2026-11-02)' + (momentLoad ? '; the arm-mounted fixtures put a dead-load moment on the pole.' : '; no unbalanced arm-mounted dead load.') });
     checks.forEach(c => { c.ratio = c.value / c.limit; c.ok = !c.applies || c.ratio <= 1; });
     return { B, rows: res, gov, govS, checks, momentLoad, slopeDL: Math.hypot(s0x, s0y) * 12 };
   }
