@@ -32,6 +32,14 @@ const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel
   await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
   return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
 export const TOOLS = {
+  mlg: {
+    file: 'Moving Load Generator.html', list: 'movingLoadGen.projects.v1', auto: 'movingLoadGen.autosave.v1', newList: true,
+    ready: p => p.waitForFunction(() => typeof RES !== 'undefined' && RES),
+    results: async p => { await p.waitForFunction(() => RES && RES.abs, null, { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(300); return p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(RES, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }); },
+    change: p => bump(p, 'aside input[type=number]', 5),
+    // main has no list: A's "save" writes nothing; B saves through the new list
+    save: async (p, name) => { await p.evaluate(n => { if (window.MLPL) window.MLPL.save(n); }, name); await p.waitForTimeout(300); }
+  },
   timber: {
     file: 'Timber Beam Check.html', list: 'tbc_projects_v1', auto: 'tbc_autosave_v1',
     ready: p => p.waitForFunction(() => window.TBC && window.TBC.res),
@@ -139,6 +147,7 @@ const FA = path.join(ADIR, T.file), FB = path.join(REPO, T.file);
 const UI = Object.assign({ open: async p => { await p.click('[data-sp] >> text=Saved projects…'); await p.waitForSelector('dialog.spLib[open]'); },
   rows: 'dialog.spLib tbody tr', btn: (a, n) => `dialog.spLib [data-spa=${a}][data-n="${encodeURIComponent(n)}"]`, first: 'dialog.spLib [data-spa=open]',
   err: async (p, s) => p.$eval('dialog.spLib .spErr', e => e.textContent).catch(() => ''), box: 'dialog.spLib', delConfirm: true }, T.ui || {});
+const drop = o => { if (!T.openIgnore) return o; const c = { ...o }; T.openIgnore.forEach(k => delete c[k]); return c; };   // fields the tool's own Save changes (abutment: the save adds a revision to S.meta, so the input fingerprint differs from the autosave's)
 let fails = 0; const ok = (c, m) => { console.log((c ? '  ok   ' : '  FAIL ') + m); if (!c) fails++; };
 const ctxOf = ([k, a, b]) => { if (typeof a !== 'string' || typeof b !== 'string') return JSON.stringify([k, a, b]).slice(0, 400); let i = 0; while (i < a.length && a[i] === b[i]) i++;
   return `${k} @${i}: A «${a.slice(Math.max(0, i - 80), i + 120)}» B «${b.slice(Math.max(0, i - 80), i + 120)}»`; };
@@ -159,20 +168,21 @@ await T.change(A.p); await T.change(B.p);
 const a1 = await T.results(A.p), b1 = await T.results(B.p); same(a1, b1, 'after an input change: results identical');
 ok(JSON.stringify(a1) !== JSON.stringify(a0), 'the input change changes the results (the test change is real)');
 await T.save(A.p, 'From main'); await A.p.waitForTimeout(500);
-const aLS = await lsAll(A.p); ok(!!aLS[T.list] && !!aLS[T.auto], 'A wrote its autosave and its project list');
+const aLS = await lsAll(A.p); ok((T.newList || !!aLS[T.list]) && !!aLS[T.auto], 'A wrote its autosave' + (T.newList ? ' (no project list on main: new in this change)' : ' and its project list'));
 const aErr = A.errs.slice(); await A.b.close();
 // A and B reopened on A's storage (a reload can differ from the live page in a view detail; both sides reload)
 const A2 = await run(FA, { ls: aLS }), a2 = await T.results(A2.p); aErr.push(...A2.errs); await A2.b.close();
 const B2 = await run(FB, { ls: aLS });
 same(await T.results(B2.p), a2, "B opened on A's autosave: results identical to A reopened on it");
+if (!T.newList) {
 ok(await B2.p.evaluate(k => localStorage.getItem(k), T.list) === aLS[T.list], "A's project list is unchanged after B opens");
 // open A's saved item through the dialog after going back to the defaults (undo history)
 await UI.open(B2.p);
 const rows = await B2.p.$$eval(UI.rows, r => r.map(x => x.innerText.replace(/\s+/g, ' ')));
 ok(rows.length === 1 && /From main/.test(rows[0]), 'the dialog lists the project A saved: ' + rows.join(' | '));
 await B2.p.click(UI.first); await B2.p.waitForTimeout(900);
-const drop = o => { if (!T.openIgnore) return o; const c = { ...o }; T.openIgnore.forEach(k => delete c[k]); return c; };   // fields the tool's own Save changes (abutment: the save adds a revision to S.meta, so the input fingerprint differs from the autosave's)
 same(drop(await T.results(B2.p)), drop(a2), "A's saved project opened from B's dialog: results identical" + (T.openIgnore ? ' (except ' + T.openIgnore.join(', ') + ')' : ''));
+}
 B2.errs.length && console.log('  B2 console: ' + B2.errs.join(' | ')); await B2.b.close();
 
 // ---------- 2. Undo / Redo (B) ----------
