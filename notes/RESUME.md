@@ -118,3 +118,5 @@ Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcl
 - Light Pole: sign-panel ice (one face ×0.8 vs both faces); base plate LTS article; C_f rect row and q_z height; V_c ρ_w/A_cv; 17.5.2.1 numbering; Fig 29.3-1 s/h=0.7 row; EPA drag; N2–N5, N8.
 - Old print reports/calc sheets: retire per tool after engineer review (lldf being retired now).
 - Phone-layout pass: S&M, ASCE7, MLG, Stone Arch, Gusset, Retaining Wall, SubLoads, Steel Beam, CBC top bar, PSBD header.
+- PS rebuild plan merged #624 (docs/prestressed-rebuild-plan.md; apps/prestressed/, ~31 PRs to switch-over). ON HOLD: engineer wants Steel Bridge in a better place first. 14 questions in the plan (§ questions) for later.
+- Steel Bridge batch started 2026-11-02: agent 1 = test speed, Auto design widen search, parity 15 projects; agent 2 = X1–X4, jacking/seismic + weathering, LL deflection stations (shared/moving-load option), flange-stress plots, design-basis appendix, phone layout. J (legal/permit vehicles) needs engineer vehicle sources; K paper-space DXF later.
