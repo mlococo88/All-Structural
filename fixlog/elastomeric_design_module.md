@@ -1303,3 +1303,24 @@ index 13f0165..656e0f1 100644
     - 0 console errors beyond the blocked CDN.
     - This tool has no Ctrl+P key handler: the browser's own Ctrl+P raises `beforeprint`, the path tested.
 - **Other copies:** none. The abutment app opens this page by link; it calls none of the removed functions (checked with grep).
+
+## 2026-11-02 — PR: PRLINK — PLIB: Rename / Duplicate in the Projects dialog, and Undo / Redo   [display and storage only]
+- **Before:** Save Project (prompt), Projects… (the tool's own dialog: name, date, Load, Delete; `edm_v1_projects`, `{ name: { state, ts } }`),
+  Export / Import JSON, Reset. No rename, no duplicate, no undo.
+- **Where:**
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `scheduleSave()`, anchor `function scheduleSave(){`: first statement `if(window.EDPL) EDPL.soon();   /* PLIB: one undo step per change (debounced) */`.
+  - `renderProjList()`: each row gains `Rename` and `Duplicate` buttons (`data-a="ren"` / `"dup"`, between Load and Delete); the click
+    handler calls the new `edmPlibAct(a, n)` (anchor `/* PLIB (2026-11-02): Rename / Duplicate in the Projects dialog`), which uses
+    `SharedProjects.mapStore(localStorage, PROJKEY)`: the stored item moves / is copied unchanged, a name in use asks before replacing, a
+    refused write shows its message, and the list is redrawn. The dialog itself is unchanged otherwise.
+  - after `document.addEventListener("DOMContentLoaded",init);`: a second listener (anchor `/* PLIB (2026-11-02): Undo / Redo`): history over
+    `S` without `S.ui`; `set` = the Import path (`S=Object.assign(defaultState(), step); migrate(); buildInputs(); recalc();`) with the
+    current `S.ui`; buttons ↶ Undo and ↷ Redo before Export JSON.
+- **Saved data:** keys `edm_v1_projects`, `edm_v1_autosave` and their formats unchanged; no new key. The Abutment hand-off is unchanged.
+- **How verified:** `node tests/smoke/project-library.mjs --tool edm`: ALL PASS (`LAST`, every computed result, identical to origin/main on
+  load, after an input change, reopened on main's storage and loaded from the dialog; Undo / Redo / Ctrl+Z / Ctrl+Y exact; rename /
+  duplicate / delete byte-identical; quota message; no new console errors). `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** the service loads, rotations and movements are entered directly (or filled by the Abutment hand-off and still
+  editable). Nothing added.

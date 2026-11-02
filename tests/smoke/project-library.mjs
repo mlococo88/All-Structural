@@ -32,6 +32,17 @@ const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel
   await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
   return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
 export const TOOLS = {
+  edm: {
+    file: 'elastomeric_design_module.html', list: 'edm_v1_projects', auto: 'edm_v1_autosave',
+    ready: p => p.waitForFunction(() => typeof LAST !== 'undefined' && LAST),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(LAST, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
+    change: p => bump(p, 'input[type=number][data-path="geom.hri"]', 0.05),
+    view: p => tabView(p, '.tab', 2, '.active, .on'),
+    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('btnSaveProj').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); },
+    ui: { open: async p => { await p.evaluate(() => { const d = document.getElementById('dlgProj'); if (d.open) d.close(); }); await p.click('#btnManageProj'); await p.waitForSelector('#dlgProj[open]'); },
+      rows: '#projList .prow', btn: (a, n) => `#projList [data-a=${({ open: 'load', rename: 'ren', dup: 'dup', del: 'del' })[a]}][data-n="${n}"]`, first: '#projList [data-a=load]',
+      err: async (p, s) => s.dl[s.dl.length - 1] || '', box: '#dlgProj', delConfirm: false }
+  },
   steelbeam: {
     file: 'Steel Beam Design - AISC 15th.html', list: 'sbd_projects_v1', auto: 'sbd_autosave_v1', ownUndo: true,
     ready: p => p.waitForFunction(() => typeof AN !== 'undefined' && AN),
@@ -98,6 +109,10 @@ const sha = execFileSync('git', ['-C', REPO, 'rev-parse', '--short', REF], { enc
 const ADIR = path.join(os.tmpdir(), 'allstruct-tests', 'tree-' + sha);
 if (!fs.existsSync(path.join(ADIR, '.done'))) { fs.mkdirSync(ADIR, { recursive: true }); execFileSync('sh', ['-c', `git -C "${REPO}" archive ${sha} | tar -x -C "${ADIR}"`]); fs.writeFileSync(path.join(ADIR, '.done'), sha); }
 const FA = path.join(ADIR, T.file), FB = path.join(REPO, T.file);
+// the list UI: the shared dialog (default) or the tool's own list with the shared rename / duplicate (T.ui)
+const UI = Object.assign({ open: async p => { await p.click('[data-sp] >> text=Saved projects…'); await p.waitForSelector('dialog.spLib[open]'); },
+  rows: 'dialog.spLib tbody tr', btn: (a, n) => `dialog.spLib [data-spa=${a}][data-n="${encodeURIComponent(n)}"]`, first: 'dialog.spLib [data-spa=open]',
+  err: async (p, s) => p.$eval('dialog.spLib .spErr', e => e.textContent).catch(() => ''), box: 'dialog.spLib', delConfirm: true }, T.ui || {});
 let fails = 0; const ok = (c, m) => { console.log((c ? '  ok   ' : '  FAIL ') + m); if (!c) fails++; };
 const ctxOf = ([k, a, b]) => { if (typeof a !== 'string' || typeof b !== 'string') return JSON.stringify([k, a, b]).slice(0, 400); let i = 0; while (i < a.length && a[i] === b[i]) i++;
   return `${k} @${i}: A «${a.slice(Math.max(0, i - 80), i + 120)}» B «${b.slice(Math.max(0, i - 80), i + 120)}»`; };
@@ -126,10 +141,10 @@ const B2 = await run(FB, { ls: aLS });
 same(await T.results(B2.p), a2, "B opened on A's autosave: results identical to A reopened on it");
 ok(await B2.p.evaluate(k => localStorage.getItem(k), T.list) === aLS[T.list], "A's project list is unchanged after B opens");
 // open A's saved item through the dialog after going back to the defaults (undo history)
-await B2.p.click('[data-sp] >> text=Saved projects…'); await B2.p.waitForSelector('dialog.spLib[open]');
-const rows = await B2.p.$$eval('dialog.spLib tbody tr', r => r.map(x => x.innerText.replace(/\s+/g, ' ')));
+await UI.open(B2.p);
+const rows = await B2.p.$$eval(UI.rows, r => r.map(x => x.innerText.replace(/\s+/g, ' ')));
 ok(rows.length === 1 && /From main/.test(rows[0]), 'the dialog lists the project A saved: ' + rows.join(' | '));
-await B2.p.click('dialog.spLib [data-spa=open]'); await B2.p.waitForTimeout(900);
+await B2.p.click(UI.first); await B2.p.waitForTimeout(900);
 same(await T.results(B2.p), a2, "A's saved project opened from B's dialog: results identical");
 B2.errs.length && console.log('  B2 console: ' + B2.errs.join(' | ')); await B2.b.close();
 
@@ -151,8 +166,8 @@ if (!T.ownUndo) {
 // ---------- 3. dialog (B) ----------
 await T.save(p, 'Job 1'); await p.waitForTimeout(400); await T.save(p, 'Job 2'); await p.waitForTimeout(400);
 const L0 = await lsAll(p), item = n => JSON.stringify(JSON.parse(L0[T.list])[n]);
-await p.click('[data-sp] >> text=Saved projects…'); await p.waitForSelector('dialog.spLib[open]'); await shot('dialog');
-const act = async (a, n, reply) => { B.reply = reply; await p.click(`dialog.spLib [data-spa=${a}][data-n="${encodeURIComponent(n)}"]`); await p.waitForTimeout(300); };
+await UI.open(p); await shot('dialog');
+const act = async (a, n, reply) => { B.reply = reply; await p.click(UI.btn(a, n)); await p.waitForTimeout(300); };
 await act('rename', 'Job 1', ['Job 1 renamed']);
 let L1 = await lsAll(p), M1 = JSON.parse(L1[T.list]);
 ok(!('Job 1' in M1) && JSON.stringify(M1['Job 1 renamed']) === item('Job 1'), 'Rename: item moved unchanged');
@@ -161,19 +176,19 @@ await act('dup', 'Job 2', ['Job 2 copy']); M1 = JSON.parse((await lsAll(p))[T.li
 ok(JSON.stringify(M1['Job 2 copy']) === item('Job 2') && JSON.stringify(M1['Job 2']) === item('Job 2'), 'Duplicate: copy identical, original kept');
 await act('rename', 'Job 2 copy', ['Job 2', true]); M1 = JSON.parse((await lsAll(p))[T.list]);
 ok(!('Job 2 copy' in M1) && JSON.stringify(M1['Job 2']) === item('Job 2'), 'Rename onto an existing name asks and replaces');
-await act('del', 'Job 2', [false]); ok('Job 2' in JSON.parse((await lsAll(p))[T.list]), 'Delete: Cancel keeps it');
+if (UI.delConfirm) { await act('del', 'Job 2', [false]); ok('Job 2' in JSON.parse((await lsAll(p))[T.list]), 'Delete: Cancel keeps it'); }
 await act('del', 'Job 2', [true]); ok(!('Job 2' in JSON.parse((await lsAll(p))[T.list])), 'Delete: OK removes it');
 // quota: every setItem refused
 const Lq = await lsAll(p);
 await p.evaluate(() => { window.__si = Storage.prototype.setItem; Storage.prototype.setItem = function () { const e = new Error('quota'); e.name = 'QuotaExceededError'; throw e; }; });
 await act('dup', 'Job 1 renamed', ['Q']);
-const qmsg = await p.$eval('dialog.spLib .spErr', e => e.textContent).catch(() => ''); ok(/storage is full/i.test(qmsg), 'quota: message shown: ' + qmsg.slice(0, 80));
+const qmsg = await UI.err(p, B); ok(/storage is full/i.test(qmsg), 'quota: message shown: ' + qmsg.slice(0, 80));
 await shot('dialog-quota');
 await p.evaluate(() => { Storage.prototype.setItem = window.__si; });
 same(await lsAll(p), Lq, 'quota: storage byte-identical');
 await act('open', 'Job 1 renamed', []); same(await T.results(p), b1, 'Open from the dialog: results of the saved project');
-await p.setViewportSize({ width: 390, height: 800 }); await p.click('[data-sp] >> text=Saved projects…').catch(() => {}); await p.waitForTimeout(300); await shot('dialog-390');
-const sw = await p.evaluate(() => document.querySelector('dialog.spLib').scrollWidth <= document.querySelector('dialog.spLib').clientWidth + 1); ok(sw, '390 px: the dialog does not scroll sideways');
+await p.setViewportSize({ width: 390, height: 800 }); await UI.open(p).catch(() => {}); await p.waitForTimeout(300); await shot('dialog-390');
+const sw = await p.evaluate(sel => document.querySelector(sel).scrollWidth <= document.querySelector(sel).clientWidth + 1, UI.box); ok(sw, '390 px: the dialog does not scroll sideways');
 
 // ---------- 4. console ----------
 const extra = B.errs.filter(e => !aErr.includes(e)); ok(!extra.length, 'no console errors beyond main\'s' + (extra.length ? ': ' + extra.join(' | ') : ''));
