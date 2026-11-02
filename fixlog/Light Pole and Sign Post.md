@@ -1778,7 +1778,7 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - **Banner removed:** `ltsDevHTML()` now shows the known limits (no "in development — not for design"); masthead scope line and sub-text, report note and manual warning updated; `LTS_STATUS` gets a "Release" row. docs/lts-mode-plan.md §5.1 records the answers.
 - **How verified:** check-syntax pass; `node tests/engine/run.mjs lightpole` 39 passed (LTS-5 tests updated: 2.5 % H and slope `applies: false`, 10 % H a check); `tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL; LTS screenshots (Summary, Post, Report) 0 console errors.
 
-## 2026-11-02 — PR #PRNUM (https://github.com/mlococo88/All-Structural/pull/PRNUM): claude/lts-ctdot-120 (LTS: CTDOT 120 mph wind-speed preset; IBC mode and cables unchanged)
+## 2026-11-02 — PR #659 (https://github.com/mlococo88/All-Structural/pull/659): claude/lts-ctdot-120 (LTS: CTDOT 120 mph wind-speed preset; IBC mode and cables unchanged)
 
 ### LTSC-1. "Source of V" preset: CTDOT BDM §14.2.2, 120 mph (engineer decision 2026-11-02; no owner selector)   [new input, LTS mode only] [default unchanged]
 - **Where:** LRFDLTS criteria card, new select `ltsVSrc` above `ltsV` (options `map` "LRFDLTS map (enter V)", default, and `ctdot` "CTDOT BDM §14.2.2, 120 mph"). Handlers after the `poleShape` listener: choosing `ctdot` writes `ltsV = 120` (`LTS_CTDOT_V`); typing a V other than 120 while `ctdot` is selected returns the select to `map`, so CTDOT is never cited for a speed it does not give. V stays editable.
