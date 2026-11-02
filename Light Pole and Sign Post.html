@@ -10,6 +10,7 @@
 <script src="shared/steps.js"></script><!-- LPRP: worked steps and the shared report viewer (Report tab) -->
 <script src="shared/report.js"></script>
 <script src="shared/dxf.js"></script><!-- LPDW: DXF writer and drawing preview (Drawings tab, Geometry elevation) -->
+<script src="apps/light-pole/lts-engine.js"></script><!-- LTS-1 (2026-11-02): AASHTO LRFDLTS mode engine (window.LpLts) -->
 <style>
   :root{
     --ink:#1a2230;--ink-soft:#5b6676;--paper:#f3f0e9;--panel:#ffffff;
@@ -348,6 +349,16 @@
   .wkFlash{animation:lppWkFlash 1.4s ease-out} @keyframes lppWkFlash{from{background:#dde9f6}to{background:transparent}}
   @media (prefers-reduced-motion: reduce){.wkFlash{animation:none}}
   @media print{ header.masthead,#postSelBar{display:none!important} }
+  /* LTS-1 (2026-11-02): code mode. IBC mode: the LTS cards are hidden. LTS mode: the IBC input cards marked ibcOnly and every
+     output card except the LTS cards and the Manual are hidden (the IBC engine still runs underneath, unchanged). */
+  body:not(.lts-mode) .ltsOnly{display:none!important}
+  body.lts-mode .ibcOnly{display:none!important}
+  body.lts-mode .tabpage:not([data-page=manual]) > *:not(.ltsCard){display:none!important}
+  body.lts-mode #postSelBar{display:none!important}
+  .lts-basis{font-size:12px;color:#1e3a5f;background:#eef4fb;border:1px solid #9db8d9;border-radius:4px;padding:6px 9px;margin:0 0 8px}
+  .lts-dev{font-size:12px;color:#7c2d12;background:#fff4ec;border:1px solid #f0b48a;border-radius:4px;padding:6px 9px;margin:0 0 8px}
+  .lts-flag{font-size:11px;font-weight:600;color:#9a3412;background:#ffedd5;border-radius:3px;padding:0 5px;margin-left:4px;white-space:nowrap}
+  #codeSeg{margin-bottom:10px}
 </style>
 </head>
 <body>
@@ -396,6 +407,10 @@
   <div class="col-in">
     <section class="card" id="modeCard">
       <div class="card-body" style="padding:14px 18px">
+        <div class="mode-seg" id="codeSeg" role="group" aria-label="Design code">
+          <button data-v="ibc" class="on">IBC 2021 · ASCE 7-22</button>
+          <button data-v="lts">AASHTO LRFDLTS</button>
+        </div>
         <div class="mode-seg" id="modeSeg">
           <button data-v="pole" class="on">🔦 Light pole</button>
           <button data-v="sign">🪧 Sign</button>
@@ -407,7 +422,29 @@
       </div>
     </section>
 
-    <section class="card">
+    <section class="card ltsOnly" id="ltsCard">
+      <div class="card-h"><span class="num">1</span><h2>LRFDLTS criteria</h2><span class="hint">AASHTO LRFDLTS 1st Ed. (2015, 2017 Interim)</span></div>
+      <div class="card-body">
+        <p class="lts-basis" id="ltsBasisIn"></p>
+        <div class="row"><label>Risk category<span class="note">Table 3.8-1</span></label><div class="ctl"><select id="ltsRisk" class="combo-sel">
+          <option value="typical" selected>Typical — failure could cross the travelway</option>
+          <option value="high">High — failure could stop a lifeline travelway</option>
+          <option value="low">Low — failure could not cross the travelway</option>
+        </select></div></div>
+        <div class="row" id="rowLtsAdt"><label>Traffic volume<span class="note">Table 3.8-1</span></label><div class="ctl"><select id="ltsAdt" class="combo-sel">
+          <option value="lt100">ADT &lt; 100</option>
+          <option value="100to1k">100 &lt; ADT ≤ 1,000</option>
+          <option value="1kto10k" selected>1,000 &lt; ADT ≤ 10,000</option>
+          <option value="gt10k">ADT &gt; 10,000</option>
+        </select></div></div>
+        <p class="tbl-note" id="ltsMriNote" style="margin:-4px 0 8px 0"></p>
+        <div class="row"><label>Basic wind speed, V<span class="note" id="ltsVNote">3-s gust, Exposure C, from the map for the MRI above</span></label><div class="ctl"><input id="ltsV" type="number" value="130" step="1"><span class="unit">mph</span></div></div>
+        <div class="row"><label>Service wind speed, V<sub>svc</sub><span class="note">10-yr MRI, Fig. 3.8-4 (Service I)</span></label><div class="ctl"><input id="ltsVsvc" type="number" value="76" step="1"><span class="unit">mph</span></div></div>
+        <div class="row"><label>Atmospheric ice, t<sub>ice</sub><span class="note">Owner-specified (Art. 3.7); 0 = none; Strength I only</span></label><div class="ctl"><input id="ltsIce" type="number" value="0" step="0.25" min="0"><span class="unit">in</span></div></div>
+      </div>
+    </section>
+
+    <section class="card ibcOnly">
       <div class="card-h"><span class="num">1</span><h2>Wind &amp; site</h2><span class="hint">ASCE 7 velocity pressure</span></div>
       <div class="card-body">
         <div class="row"><label>Basic wind speed, V<span class="note">3-sec gust</span></label><div class="ctl"><input id="V" type="number" value="115"><span class="unit">mph</span></div></div>
@@ -485,7 +522,7 @@
       </div>
     </section>
 
-    <section class="card" id="cableCard">
+    <section class="card ibcOnly" id="cableCard">
       <div class="card-h"><span class="num">4</span><h2>Catenary cables</h2>
         <label class="card-toggle"><input type="checkbox" id="cablesOn" checked><span>Enabled</span></label>
       </div>
@@ -509,7 +546,12 @@
       </div>
     </section>
 
-    <section class="card" id="iceCard">
+    <section class="card ltsOnly" id="ltsCableNote">
+      <div class="card-h"><span class="num">4</span><h2>Catenary cables</h2><span class="hint">not in the LRFDLTS mode</span></div>
+      <div class="card-body"><p class="tbl-note" style="margin:0">Cables (catenary spans) are not supported in the AASHTO LRFDLTS mode. Switch to the IBC 2021 · ASCE 7-22 mode to design a cabled pole. The cable inputs are kept in the project unchanged and are ignored in this mode.</p></div>
+    </section>
+
+    <section class="card ibcOnly" id="iceCard">
       <div class="card-h"><span class="num">5</span><h2>Ice &amp; wind-on-ice</h2><span class="hint">ASCE 7 Ch.10</span></div>
       <div class="card-body">
         <div class="row"><label>Radial ice thickness, t<span class="note">nominal ice thickness from the ASCE 7-22 ice map (Ch. 10) for the structure's Risk Category</span></label><div class="ctl"><input id="tIce" type="number" value="0.5" step="0.25"><span class="unit">in</span></div></div>
@@ -1125,8 +1167,31 @@ document.querySelectorAll('#segAnchTq button').forEach(b=>b.onclick=()=>{setSeg(
 
 // ---- master mode: 'pole' | 'sign' ; sign posts: 1 | 2 ----
 let appMode='pole', signPosts=1;
+// LTS-1 (2026-11-02): design code. 'ibc' = IBC 2021 / ASCE 7-22 / AISC 360-16 / ACI 318-19 (the original mode, unchanged);
+// 'lts' = AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions (apps/light-pole/lts-engine.js). Saved as state.codeMode;
+// a save without it opens in 'ibc' (identical results).
+let codeMode='ibc';
+// ---- LTS-1 (2026-11-02): code mode (IBC / AASHTO LRFDLTS) ----
+let LPP_IBC_HEAD=null;   // the masthead code tag and scope line of the IBC mode, as written in the HTML
+function lppApplyCode(){
+  const lts=codeMode==='lts', sign=appMode==='sign';
+  document.body.classList.toggle('lts-mode', lts);
+  document.querySelectorAll('#codeSeg button').forEach(x=>x.classList.toggle('on',x.dataset.v===codeMode));
+  const tag=document.querySelector('.masthead .codetag'), sc=$('lppScope');
+  if(!LPP_IBC_HEAD && tag && sc) LPP_IBC_HEAD={tag:tag.innerHTML, scope:sc.innerHTML};
+  if(LPP_IBC_HEAD && tag && sc){
+    if(lts){
+      tag.innerHTML='<b>AASHTO LRFDLTS</b>1st Ed. (2015) + 2017 Interim<br>highway supports';
+      sc.innerHTML='<b>Scope (this mode):</b> '+lppEsc(LpLts.BASIS)+' — highway luminaire poles and ground-mounted (roadside) sign supports. Cables are not supported in this mode. <b>In development (LTS-1 of 9): not for design.</b>';
+    } else { tag.innerHTML=LPP_IBC_HEAD.tag; sc.innerHTML=LPP_IBC_HEAD.scope; }
+  }
+  const cn=$('ltsCableNote'); if(cn) cn.style.display=sign?'none':'';
+  const ra=$('rowLtsAdt'); if(ra) ra.style.display=sign?'none':'';
+  if($('ltsBasisIn')) $('ltsBasisIn').textContent='Basis: '+LpLts.BASIS+'.';
+}
 function applyMode(){
   const sign=appMode==='sign';
+  lppApplyCode();   // LTS-1: code-mode classes, masthead and LTS notes
   // toggle button states
   document.querySelectorAll('#modeSeg button').forEach(x=>x.classList.toggle('on',x.dataset.v===appMode));
   document.querySelectorAll('#signPostSeg button').forEach(x=>x.classList.toggle('on',+x.dataset.v===signPosts));
@@ -1180,6 +1245,10 @@ function applyMode(){
     title='Double-Post Sign Pier Designer';
     subtxt=`Two posts supporting a solid sign panel, each on its own drilled shaft. The ASCE 7-22 Ch. 29 panel wind (Cases A, B, and C where applicable) is distributed to the posts by statics about the post spacing — eccentric cases load one post more without inducing torsion. Each post and foundation is designed independently for its worst case across all four wind directions.`;
   }
+  if(codeMode==='lts'){   // LTS-1: masthead text of the LRFDLTS mode
+    eyebrow=!sign?'Highway Luminaire Pole · AASHTO LRFDLTS':signPosts===1?'Monopost Roadside Sign · AASHTO LRFDLTS':'Two-Post Roadside Sign · AASHTO LRFDLTS';
+    subtxt=(!sign?'A highway luminaire pole with arm-mounted fixtures':'A ground-mounted roadside sign')+' designed to AASHTO LRFDLTS 1st Ed. (2015) with the 2017 Interim Revisions: Table 3.4-1 limit states, Section 3 wind, Section 5 steel members, Section 10 deflection and Section 13 foundations. This mode is being built in steps (LTS-1 to LTS-9) and is not yet for design.';
+  }
   if($('appEyebrow')) $('appEyebrow').textContent=eyebrow;
   if($('appTitle'))   $('appTitle').textContent=title;
   if($('appSub'))     $('appSub').textContent=subtxt;
@@ -1220,6 +1289,7 @@ function applyShapeUI(){
   if($('poleDepthTopLabel'))$('poleDepthTopLabel').innerHTML = `Depth<span class="note">rect. HSS, into-wind dimension</span>`;
 }
 document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{appMode=b.dataset.v;applyMode();});
+document.querySelectorAll('#codeSeg button').forEach(b=>b.onclick=()=>{codeMode=b.dataset.v==='lts'?'lts':'ibc';applyMode();});
 document.querySelectorAll('#signPostSeg button').forEach(b=>b.onclick=()=>{signPosts=+b.dataset.v;applyMode();});
 if($('poleShape')) $('poleShape').addEventListener('change',()=>{applyShapeUI();markDirty();calc();});
 
@@ -4382,7 +4452,14 @@ function kdStr(inp){
   if(inp.mode==='sign') return m+' (post) / '+sg+' (sign panel)'+(inp.KdMode==='override'?' [override]':'');
   return m+(inp.KdMode==='override'?' [override]':' (mast, cables, fixtures)');
 }
+// LTS-1 (2026-11-02): calc() runs the IBC engine exactly as before (lppCalcIbc) and then, in the LRFDLTS mode, the LTS
+// engine on the same inputs. lppLastInp: the inputs of the last IBC run that passed the input checks (null otherwise).
+let lppLastInp=null;
 function calc(){
+  lppCalcIbc();
+  if(codeMode==='lts') ltsCalc(); else ltsClear();
+}
+function lppCalcIbc(){
   const inp={V:num('V'),expo:$('expo').value,Kzt:num('Kzt'),Kd:kdComponents().mast,KdSign:kdComponents().sign,KdMode:kdComponents().mode,G:num('G'),beta:($('lppBeta')?num('lppBeta'):0.005),
     H:num('H'),cfLum:num('cfLum'),poleShape:($('poleShape')?$('poleShape').value:'round'),
     poleDiaTop:num('poleDiaTop'),poleDiaBase:num('poleDiaBase'),
@@ -4425,7 +4502,9 @@ function calc(){
 
   // blocking input errors (LP-O6): a blank or non-positive geometry/material input used to crash
   // calc() (e.g. "Invalid array length" in drawElev) and leave the previous results on screen.
+  lppLastInp=null;
   { const errs=lppInputErrors(inp); lppShowInputErrors(errs); if(errs.length) return; }
+  lppLastInp=inp;   // LTS-1: the LRFDLTS engine reads the same geometry
 
   if(inp.mode==='sign'){
     // post runs from grade to the top of the panel: H = clearance + sign height
@@ -6848,8 +6927,72 @@ if($('lpAnchExport')) $('lpAnchExport').addEventListener('click',()=>{
   BridgeXfer.exportFile('anchorGroup', p); lppAnchorStatus('Exported the hand-off file (import it in the Anchorage app with "Import hand-off (JSON)").');
 });
 
+// ================= AASHTO LRFDLTS MODE — output (LTS-1, added 2026-11-02) =================
+// The LTS engine is apps/light-pole/lts-engine.js (window.LpLts). In the LRFDLTS mode every IBC output card is hidden by
+// CSS (body.lts-mode) and these cards (class ltsCard) are built into the output tabs after each calc(); ltsClear() removes
+// them, so the IBC mode's pages hold exactly what they held before. Plan and status: docs/lts-mode-plan.md.
+const LTS_STATUS=[
+  ['LTS-1','Code mode, basis, MRI (Table 3.8-1), load combinations (Table 3.4-1)',true],
+  ['LTS-2','Wind pressure P_z, K_z, K_d, G, C_d (Arts. 3.8.1–3.8.7), load cases (Table 3.9.3-1), torsion (Art. 3.9.4.2)',false],
+  ['LTS-3','Member checks (Section 5) and second-order B₂ (Art. 4.8.1)',false],
+  ['LTS-5','Deflection (Art. 10.4.2.1), fatigue applicability (Arts. 11.4, 11.7.2), breakaway checklist',false],
+  ['LTS-6','Base plate and base weld',false],
+  ['LTS-7','Foundation (Section 13, Broms)',false],
+  ['LTS-8','Anchorage-app export of the LTS combinations',false],
+  ['LTS-9','Report, drawings, manual',false]];
+const LTS_PAGE_PR={geometry:'LTS-3',post:'LTS-3',anchors:'LTS-8',shaft:'LTS-7',drawings:'LTS-9',report:'LTS-9'};
+function ltsClear(){ document.querySelectorAll('.ltsCard').forEach(e=>e.remove()); }
+function ltsInputs(){
+  return {risk:($('ltsRisk')?$('ltsRisk').value:'typical'), adt:($('ltsAdt')?$('ltsAdt').value:'1kto10k'),
+    V:num('ltsV'), Vsvc:num('ltsVsvc'), tIce:Math.max(0,num('ltsIce')||0), sign:appMode==='sign', signPosts};
+}
+function ltsAddCard(page,id,nm,title,hint,body){
+  const pg=$('page-'+page); if(!pg) return null;
+  const c=document.createElement('section'); c.className='card ltsCard'; c.id=id;
+  c.innerHTML=`<div class="card-h"><span class="num">${nm}</span><h2>${title}</h2><span class="hint">${hint||''}</span></div><div class="card-body">${body}</div>`;
+  pg.insertBefore(c,pg.firstChild); return c;
+}
+function ltsStepsHTML(steps){
+  return `<ol class="steps">${steps.map(s=>`<li id="st-lts-${lppEsc(s.id)}"><b>${lppEsc(s.label)}:</b> ${SharedSteps.line(s,true)}${s.ref?` <span class="eq-ref">[${lppEsc(s.ref)}]</span>`:''}${s.note?`<div class="tbl-note">${lppEsc(s.note)}</div>`:''}</li>`).join('')}</ol>`;
+}
+function ltsDevHTML(){
+  return `<p class="lts-dev"><b>LRFDLTS mode in development — not for design.</b> Implemented: ${LTS_STATUS.filter(r=>r[2]).map(r=>r[0]).join(', ')}. `
+    +`Not yet: ${LTS_STATUS.filter(r=>!r[2]).map(r=>r[0]).join(', ')}. The IBC 2021 · ASCE 7-22 results are not shown in this mode; switch the code mode to see them.</p>`;
+}
+function ltsCalc(){
+  ltsClear();
+  const L=ltsInputs(), m=LpLts.mri(L.risk,L.adt,L.sign);
+  const mriTxt=L.sign?`Roadside sign support → 10-yr MRI (Table 3.8-1 note): V from ${m.fig}.`:`MRI = ${m.mri} yr (Table 3.8-1) → V from ${m.fig}.`;
+  if($('ltsMriNote')) $('ltsMriNote').textContent=mriTxt;
+  if($('ltsVNote')) $('ltsVNote').textContent=`3-s gust at 33 ft, Exposure C, ${m.fig} (${m.mri}-yr MRI)`;
+  const basis=`<p class="lts-basis"><b>Basis:</b> ${lppEsc(LpLts.BASIS)}.</p>`;
+  // Summary
+  ltsAddCard('summary','ltsSumCard','✓','LRFDLTS summary','AASHTO LRFDLTS mode',
+    basis+ltsDevHTML()
+    +`<table class="tbl"><tr><th>Item</th><th>Value</th><th>Reference</th></tr>`
+    +`<tr><td>Structure</td><td>${L.sign?(L.signPosts===2?'Two-post roadside sign':'Monopost roadside sign'):'Luminaire pole'}</td><td>—</td></tr>`
+    +`<tr><td>Extreme I wind MRI</td><td>${m.mri} yr (${m.fig}); V = ${fmt(L.V,0)} mph</td><td>Table 3.8-1 (p. 3-5)</td></tr>`
+    +`<tr><td>Service I wind</td><td>10 yr (Fig. 3.8-4); V<sub>svc</sub> = ${fmt(L.Vsvc,0)} mph</td><td>Table 3.4-1, Art. 3.8.2 (pp. 3-3, 3-14)</td></tr>`
+    +`<tr><td>Atmospheric ice</td><td>${L.tIce>0?fmt(L.tIce,2)+' in, Strength I only <span class="lts-flag">engineer to confirm</span>':'none'}</td><td>Art. 3.7, C3.7 (p. 3-4)</td></tr>`
+    +`</table><p class="tbl-note">Status of the LRFDLTS mode:</p><table class="tbl"><tr><th>Step</th><th>Content</th><th>Status</th></tr>`
+    +LTS_STATUS.map(r=>`<tr><td>${r[0]}</td><td>${lppEsc(r[1])}</td><td>${r[2]?'done':'pending'}</td></tr>`).join('')+`</table>`);
+  // Loading: MRI and Table 3.4-1
+  const rows=LpLts.COMBOS.map(c=>`<tr><td>${lppEsc(c.name)}</td><td>${lppEsc(c.desc)}</td><td>${c.DC}</td><td>${L.tIce>0&&c.ICE?c.ICE:'—'}</td><td>${c.W?fmt(c.W,1):'—'}</td><td>${c.wind==='extreme'?`${m.mri}-yr, V = ${fmt(L.V,0)} mph`:c.wind==='service'?`10-yr, V<sub>svc</sub> = ${fmt(L.Vsvc,0)} mph`:'—'}</td><td>${lppEsc(c.ref)}</td></tr>`).join('');
+  ltsAddCard('loading','ltsComboCard','L','LRFDLTS load combinations','Table 3.4-1',
+    basis+ltsStepsHTML(m.steps)
+    +`<table class="tbl"><tr><th>Limit state</th><th>Use</th><th>γ<sub>DC</sub></th><th>γ<sub>IC</sub></th><th>γ<sub>W</sub></th><th>Wind</th><th>Reference</th></tr>${rows}</table>`
+    +`<p class="tbl-note">LL (Art. 3.6) applies to walkways and service platforms only: not applicable to these supports. There is no ice-plus-wind combination (C3.7). `
+    +`Ice, when the Owner specifies it (Art. 3.7), is applied in Strength I with the dead load factor <span class="lts-flag">engineer to confirm (Q-C1)</span>. `
+    +`Wind from any direction: load cases 1–3 of Table 3.9.3-1 (LTS-2). Service III (prestressed concrete) and Fatigue I/II are not used (fatigue design is not required for these supports, Arts. 11.4 and 11.7.2; LTS-5).</p>`
+    +`<p class="tbl-note">Wind pressures, member forces and checks follow in LTS-2 to LTS-7.</p>`);
+  // the other pages: what is still to come
+  Object.keys(LTS_PAGE_PR).forEach(pg=>ltsAddCard(pg,'ltsTodo_'+pg,'·','LRFDLTS mode','in development',
+    basis+`<p class="lts-dev">This tab is not yet available in the LRFDLTS mode (planned: ${LTS_PAGE_PR[pg]}). The IBC 2021 · ASCE 7-22 results are not shown in this mode.</p>`));
+  document.querySelectorAll('.ltsCard').forEach(c=>{ if(window.renderMathInElement) renderMathInElement(c,{delimiters:[{left:'\\[',right:'\\]',display:true}],throwOnError:false}); });
+}
+
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
-const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan'];
+const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan','ltsRisk','ltsAdt','ltsV','ltsVsvc','ltsIce'];
 const LS_PROJECTS='lpp_projects_v1';   // {name: state}
 const LS_SESSION='lpp_session_v1';     // {state, activeName, dirty}
 let activeProject=null;   // name of loaded project, or null (unsaved/new)
@@ -6861,7 +7004,7 @@ try{const k='__lpp_test';localStorage.setItem(k,'1');localStorage.removeItem(k);
 function captureState(){
   const inputs={};
   INPUT_IDS.forEach(id=>{const el=$(id); if(el) inputs[id]=el.value;});
-  return {inputs, isoFac, constraint, anchRe, anchTq, splitRe, cablesEnabled, appMode, signPosts, cables:JSON.parse(JSON.stringify(cables)),
+  return {inputs, isoFac, constraint, anchRe, anchTq, splitRe, cablesEnabled, appMode, signPosts, codeMode, cables:JSON.parse(JSON.stringify(cables)),
           fixtures:JSON.parse(JSON.stringify(fixtures)), _v:2};
 }
 function applyState(st){
@@ -6939,6 +7082,10 @@ function applyState(st){
       else { mn.style.display='none'; mn.textContent=''; } } }
   cablesEnabled = st.cablesEnabled!==undefined ? !!st.cablesEnabled : true;
   appMode = st.appMode || 'pole';
+  codeMode = st.codeMode==='lts' ? 'lts' : 'ibc';   // LTS-1: saves made before the code mode open in the IBC mode (identical results)
+  // LRFDLTS inputs (LTS-1): saves without them get the new-project defaults
+  { const dv={ltsRisk:'typical',ltsAdt:'1kto10k',ltsV:'130',ltsVsvc:'76',ltsIce:'0'};
+    Object.keys(dv).forEach(k=>{ if($(k) && (!st.inputs || st.inputs[k]===undefined)) $(k).value=dv[k]; }); }
   signPosts = st.signPosts || 1;
   if(Array.isArray(st.cables)) cables=JSON.parse(JSON.stringify(st.cables));
   if(Array.isArray(st.fixtures)) fixtures=JSON.parse(JSON.stringify(st.fixtures));
@@ -7251,7 +7398,7 @@ function lppInputTabs(){
   lppInTabsSync();
 }
 // a card counts as shown unless it (inline style) is display:none
-function lppPaneShown(pn){ return Array.from(pn.children).some(c=>c.style.display!=='none'); }
+function lppPaneShown(pn){ return Array.from(pn.children).some(c=>c.style.display!=='none' && !(c.classList && c.classList.contains(codeMode==='lts'?'ibcOnly':'ltsOnly'))); }   // LTS-1: a card hidden by the code mode does not count
 // called at start-up and by applyMode(): hide empty tabs, relabel Pole/Post, pick the tab to show
 function lppInTabsSync(){
   if(!$('lppInTabs')) return;
