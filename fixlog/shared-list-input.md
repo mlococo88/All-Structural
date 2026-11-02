@@ -64,3 +64,6 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
 - Members, "Gage(s) g" (`bindInput`, text cells). `tests/smoke/list-input.mjs` gains the part `gusset`.
 - Note for later: a column `check` function (a tool's own number reader, e.g. Gusset's `num()` with fractions) would let such
   cells be marked; not added here (a shared-file change).
+
+## 2026-11-02 — PR: claude/list-input-secprop — loaded by Section Property Calculator.html (no change to the shared file)
+- Library "Save to the library", Tags (`mount`, one text column). `tests/smoke/list-input.mjs` gains the part `secprop`.

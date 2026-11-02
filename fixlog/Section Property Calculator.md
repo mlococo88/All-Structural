@@ -2936,3 +2936,30 @@ index 56a8a3f..13f8372 100644
   are normalised before comparing; dialog byte-identical; quota; 390 px; no new console errors). `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Entered demands:** the stress (P, M_x, M_y) and shear-flow (V_x, V_y) loads are entered directly; nothing added.
+
+## 2026-11-02 — PR: claude/list-input-secprop — Templates tab, My sections library, "Save to the library": Tags is a table with one box per tag (LIST)   [display only]
+- **Why:** engineer decision 2026-11-02: no comma-separated inputs (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
+- **Where (1):** script tags, anchor `<script src="shared/projects-ui.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
+- **Where (2):** `buildLibPane()`, section `mkSec(P, 'libSave', …`. **Before:**
+```js
+    fRow(body, 'Tags', ti('lib_tags', 'optional, comma-separated', 'tags', 'Tags'), '');
+```
+  **After:**
+```js
+    const tg = el('div', 'libTagsHost'); fRow(body, 'Tags', tg, '');
+    SharedListInput.mount(tg, { label: 'Tags', rows: SharedListInput.fromText(LIBF.tags), columns: [{ label: 'Tag', type: 'text', width: '12em', placeholder: 'optional' }],
+      rowNumbers: false, cellAttrs: (inp, r) => tagField(inp, 'lib_tags.' + r), onChange: rows => { LIBF.tags = SharedListInput.toText(rows); } });
+```
+- **Behaviour:** `LIBF.tags` (screen only, never stored) stays the text "a, b"; `libSaveCurrent()` splits it at commas into the
+  entry's `tags` array as before. Spaces inside a tag are kept ("crane runway" is one tag). After a save the form clears as before.
+- **Not changed:** the Rename button's third prompt "Tags (optional, comma-separated)" is a browser prompt, not a box on the
+  page; it stays as it is (a table there needs a dialog: question for the engineer).
+- **Saved data:** the library entry's `tags` stays an array of strings (`spc_library_v1`, format unchanged).
+  `tests/engine/list-input.test.mjs`: rows → text → the old split → the same array.
+- **Check case:** default project, tags crane ↵ runway ↵ W21, Save to library → entry tags ["crane", "runway", "W21"], the same as
+  typing "crane, runway, W21" in the old box on origin/main.
+- **How verified:** `node tests/smoke/list-input.mjs --part secprop`: origin/main vs this branch, default project and the case
+  above: the model, the results, the stored library (ids and times removed) and the text of the input and output panels
+  identical; 0 console errors; 390 px no sideways scroll; screenshots looked at. `node tests/check-syntax.mjs` passes.
+- **Formulas, factors, units, code references:** none (§4 does not apply).
+- **Open items:** the Rename prompt's tags (above).

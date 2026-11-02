@@ -12,6 +12,7 @@
 <!-- PLIB (2026-11-02): saved-project list dialog (Open / Rename / Duplicate / Delete), shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/list-input.js"></script>
 <style>
 :root{
   --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB;
@@ -4606,7 +4607,10 @@ function buildLibPane(T) {
     const ti = (key, ph, k, lab) => { const i = document.createElement('input'); i.type = 'text'; i.value = LIBF[k]; i.placeholder = ph; i.setAttribute('aria-label', lab); tagField(i, key); i.addEventListener('input', () => { LIBF[k] = i.value; }); return i; };
     fRow(body, 'Name', ti('lib_name', (M.project.name || '').trim() || 'e.g. Crane runway W21 + C15', 'name', 'Library entry name'), '');
     fRow(body, 'Description', ti('lib_desc', 'optional', 'desc', 'Description'), '');
-    fRow(body, 'Tags', ti('lib_tags', 'optional, comma-separated', 'tags', 'Tags'), '');
+    /* LIST (2026-11-02): one box per tag (shared/list-input.js); LIBF.tags stays the text "a, b" that libSaveCurrent() splits at commas */
+    const tg = el('div', 'libTagsHost'); fRow(body, 'Tags', tg, '');
+    SharedListInput.mount(tg, { label: 'Tags', rows: SharedListInput.fromText(LIBF.tags), columns: [{ label: 'Tag', type: 'text', width: '12em', placeholder: 'optional' }],
+      rowNumbers: false, cellAttrs: (inp, r) => tagField(inp, 'lib_tags.' + r), onChange: rows => { LIBF.tags = SharedListInput.toText(rows); } });
     const ns = SEL.size, s = document.createElement('select'); tagField(s, 'lib_which'); s.setAttribute('aria-label', 'Parts to save');
     [['all', 'All parts (' + M.parts.length + ')'], ['sel', 'Selected parts (' + ns + ')']].forEach(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; if (v === 'sel' && !ns) o.disabled = true; s.appendChild(o); });
     if (LIBF.which === 'sel' && !ns) LIBF.which = 'all';
