@@ -23,6 +23,7 @@ const TOOLS = {
   rwall: { file: 'Retaining Wall Designer.html', tabs: '.itab[data-pane], .tab-bar .tab-btn', wait: 4000, tabWait: 1000 },
   bsl: { file: 'Bridge Substructure Loading.html', tabs: '.itab[data-pane], #tab-bar .tab-btn', wait: 4000, tabWait: 1000 },
   sbeam: { file: 'Steel Beam Design - AISC 15th.html', tabs: '#sbdInTabs .sbdInTab, #tabBar button', wait: 4000, tabWait: 1000 },
+  cbc: { file: 'Concrete Beam Capacity.html', tabs: '.suite-tab', wait: 6000, tabWait: 1500 },   // the frames' own tabs: see the PHN fixlog entry (checked once by hand)
 };
 
 const keys = args.tool ? String(args.tool).split(',') : Object.keys(TOOLS);
@@ -32,7 +33,9 @@ const width = (p, sel) => p.evaluate(sel => { const se = document.scrollingEleme
   const scrolls = e => { for (let a = e.parentElement; a; a = a.parentElement) if (/(auto|scroll)/.test(getComputedStyle(a).overflowX)) return true; return false; };
   const cut = [...document.querySelectorAll(sel)].filter(t => { const r = t.getBoundingClientRect(); return r.width > 0 && r.right > vw + 1 && !scrolls(t); })
     .map(t => (t.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 20));
-  return { over: se.scrollWidth - se.clientWidth, x: se.scrollLeft, cut }; }, sel);
+  let over = se.scrollWidth - se.clientWidth;   // a visible same-origin frame (srcdoc tabs, e.g. Concrete Beam Capacity) counts as a page too
+  for (const f of document.querySelectorAll('iframe')) { if (!f.offsetWidth) continue; try { const fe = f.contentDocument.scrollingElement; over = Math.max(over, fe.scrollWidth - fe.clientWidth); } catch (e) {} }
+  return { over, x: se.scrollLeft, cut }; }, sel);
 for (const key of keys) {
   const T = TOOLS[key]; if (!T) { console.log(`unknown tool ${key}`); failures++; continue; }
   const src = resolveFile(args.file && keys.length === 1 ? args.file : T.file, T.file);

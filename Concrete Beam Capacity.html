@@ -49,6 +49,8 @@
   #suite-report .rp-bar button{font-size:9pt;padding:3px 10px;} .suite-rpt-err{color:#991B1B;font:13px -apple-system,"Segoe UI",Roboto,Arial,sans-serif;}
   #suite-report .rp-fig svg{max-height:420px;}
   @media(max-width:1000px){#suite-report .rp-body{grid-template-columns:minmax(0,1fr);} #suite-report .rp-doc{min-width:0;}}
+  /* PHN (2026-11-02): phone / tablet: the suite bar wraps (the tabs, All tools and the share buttons were cut off at the right) */
+  @media screen and (max-width:899px){#suite-nav{flex:0 0 auto;height:auto;flex-wrap:wrap;row-gap:0;padding:0 8px;} .suite-tab{padding:9px 12px;} #suite-brand{border-right:none;} #suite-xfer{margin-left:0;padding:4px 0 6px;flex-wrap:wrap;}}
 </style>
 <!-- CBRP: the combined Report tab: KaTeX (the version the Beam Capacity tab loads), shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
@@ -412,6 +414,16 @@ a.wkA:hover{text-decoration:underline}
   .eqBlock{break-inside:avoid}
 }
 input.autoD{background:#F1F5F9;color:#0F172A;border-style:dashed;font-variant-numeric:tabular-nums;cursor:default;}
+/* PHN (2026-11-02): phone / tablet (below 900 px): one column, this frame's page scrolls (the panels do not scroll on their own);
+   the title fields wrap; 900 px and up unchanged */
+@media screen and (max-width:899px){
+  html,body{height:auto;overflow:visible}
+  #app{height:auto}
+  #projGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #main{display:block}
+  #inputPanel{max-width:none;overflow:visible;border-right:none;border-bottom:1px solid var(--color-border);padding-bottom:16px}
+  #outputPanel{overflow:visible;padding:0 10px 40px}
+}
 </style>
 </head>
 <body>
@@ -4481,7 +4493,7 @@ function cbcRptModel(){
   /* 3.–5. flexure, shear, torsion: every combination (an identical combination refers to the first) */
   const per=(title,pre,fn,tab,gov)=>{ const subs=CC.combos.map(r=>{
       const sa=r.sameAs!==undefined&amp;&amp;r.sameAs!==r.ci;
-      return {title:cn(r)+(r.ci===gov?' — governs':''),items:sa?[{type:'note',text:'Same factored actions as Combination '+(r.sameAs+1)+': see [['+pre+r.sameAs+'/'+({fx:'Mu',sh:'d',tq:'Acp'}[pre])+']].'}]
+      return {title:cn(r)+(r.ci===gov?' — governs':''),items:sa?[{type:'note',text:'Same factored actions as Combination '+(r.sameAs+1)+': [['+pre+r.sameAs+'/'+({fx:'Mu',sh:'d',tq:'Acp'}[pre])+']].'}]
         :fn(r).map(it=>it.type==='topics'?Object.assign({},it,{scope:pre+r.ci}):it).concat([{type:'note',text:'[[tab:'+tab+'|On screen: '+cbcTabName(tab)+' tab]]'}])}; });
     secs.push({title,subs}); };
   per('Flexure','fx',cbcRptFlex,'tabFlex',CC.govFlexIndex);
@@ -4977,6 +4989,16 @@ a.wkA:hover{text-decoration:underline}
   .eqBlock{break-inside:avoid}
 }
 input.autoD{background:#F1F5F9;color:#0F172A;border-style:dashed;font-variant-numeric:tabular-nums;cursor:default;}
+/* PHN (2026-11-02): phone / tablet (below 900 px): one column, this frame's page scrolls (the panels do not scroll on their own);
+   the title fields wrap; 900 px and up unchanged */
+@media screen and (max-width:899px){
+  html,body{height:auto;overflow:visible}
+  #app{height:auto}
+  #projGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #main{display:block}
+  #inputPanel{max-width:none;overflow:visible;border-right:none;border-bottom:1px solid var(--color-border);padding-bottom:16px}
+  #outputPanel{overflow:visible;padding:0 10px 40px}
+}
 </style>
 <style>
   .grpMini{font-family:var(--font-ui);font-size:7.5pt;font-weight:700;text-transform:uppercase;
@@ -6143,6 +6165,7 @@ input,select,textarea{font-family:inherit; font-size:13px;}
 .layout{display:grid; grid-template-columns:minmax(340px,1fr) 2fr; gap:16px; align-items:start;
   height:calc(100vh - 80px);}
 @media(max-width:980px){.layout{grid-template-columns:1fr; height:auto;}}
+@media screen and (max-width:899px){.layout{grid-template-columns:minmax(0,1fr);} .tabcontent .subsec{overflow-x:auto;}}   /* PHN (2026-11-02): the one column never grows past the window; a wide table (Bar Schedule) scrolls in its box */
 
 .card{background:var(--paper); border:1px solid var(--line); border-radius:3px;}
 .inputpanel{height:100%; overflow-y:auto;}
