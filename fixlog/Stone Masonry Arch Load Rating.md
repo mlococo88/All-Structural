@@ -1124,7 +1124,7 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
   refusal leaves storage byte-identical; 390 px; no console errors beyond main's. `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 
-## 2026-11-02 — PR: claude/list-input-stonearch — paste boxes show a table of what was read; track offsets are a table (LIST)   [display only]
+## 2026-11-02 — PR: claude/list-input-stonearch, PR #704: https://github.com/mlococo88/All-Structural/pull/704 — paste boxes show a table of what was read; track offsets are a table (LIST)   [display only]
 - **Why:** engineer decision 2026-11-02: no comma-separated inputs; multi-line paste boxes stay, each with an editable table of
   what was read next to it (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
 - **Where (1):** script tags, anchor `<script src="shared/projects-ui.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`

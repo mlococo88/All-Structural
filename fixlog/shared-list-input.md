@@ -73,7 +73,7 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
   gains the part `index` and the entry options `ignore` (a console message to ignore), `serial` (A then B, not in parallel)
   and `timeout` (page load); `tests/lib.mjs` `openPage()` takes an optional `timeout` (default unchanged).
 
-## 2026-11-02 — PR: claude/list-input-stonearch — loaded by Stone Masonry Arch Load Rating.html (no change to the shared file)
+## 2026-11-02 — PR: claude/list-input-stonearch, PR #704: https://github.com/mlococo88/All-Structural/pull/704 — loaded by Stone Masonry Arch Load Rating.html (no change to the shared file)
 - Paste boxes with a table of what was read (`mount`, the tool's own `pasteTable()`: survey points, depth overrides, SDL line
   items) and track offsets (`bindInput`, one value per line). `tests/smoke/list-input.mjs` gains the part `stonearch` and the
   entry option `shotPrep`.
