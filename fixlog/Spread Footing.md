@@ -3883,7 +3883,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - Cost: `sfpmRatios` on the review's points takes 84 → 248 ms. The extra cost is only where the bracket expands.
 - **Other copies:** none. Only `sfpmRatios` → `sfpmPoint` and the pedestal P–M diagram (`pmContour`, two calls) use it.
 
-## 2026-11-02 — PR: claude/sf-calc-fixes — Biaxial middle third; punching J_c from the truncated section; top-mat inner-layer depth; pedestal slenderness k = 2; proportional development credit in shear friction (SFEB, SFPJ, SFTD, SFKS, SFPD; calculation change)
+## 2026-11-02 — PR: claude/sf-calc-fixes — Biaxial middle third; punching J_c from the truncated section; top-mat inner-layer depth; pedestal slenderness k = 2; proportional development credit in shear friction; ACI / IBC citations (SFEB, SFPJ, SFTD, SFKS, SFPD, SFCI; calculation change) (PR #710: https://github.com/mlococo88/All-Structural/pull/710)
 
 Engineer-approved fixes from the independent review of the "Seymour Platform Foundation" report (items A2, B1, B2, B3), plus the engineer's decision on shear-friction development credit. Code basis unchanged: ACI 318-19 (IBC for stability). Check case "review": the engineer's project rebuilt from the report's input echo (B 5 × L 13 × t 2 ft; Ped 1 2.00 × 9.33 × 6.00 ft at y 1.333, 30 #6, 28 #6 separate straight dowels; Ped 2 2.67 × 2.67 × 7.00 ft at y −4.667, 16 #8, 16 #8 separate straight dowels; mats #7 @ 8 bottom, #6 @ 8 top; covers 3 / 2 in; epoxy). On main it reproduces the report: eccentricity 0.935, Ped 2 punching 58.36 psi / 0.377, φM_n,top,y 313.92, kℓ_u/r 10.0 / 8.75.
 
