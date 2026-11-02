@@ -292,6 +292,7 @@
 details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{cursor:pointer;font-size:10pt;font-weight:700;padding:2pt 0;} .rp-cnt{font-weight:400;font-size:9pt;color:#555;}
 .rp-doc .katex{font-size:1.05em;} .rp-doc .katex .katex-error{color:#DC2626;}
 .st-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:92%;margin:0 2px;} .st-frac>.st-num{border-bottom:1px solid currentColor;padding:0 2px;} .st-frac>.st-den{padding:0 2px;} .st-bar{text-decoration:overline;}
+@media screen{.rp-step .rp-m{padding-top:2pt;padding-bottom:2pt;} .rp-step .rp-m .katex .base{margin:2pt 0;}}   /* equations on screen: a wrapped line clears the one above; a tall fraction stays inside the scroll box */
 #rp-print{display:none;}
 @media (max-width:1000px){.rp-body{grid-template-columns:minmax(0,1fr);} .rp-toc{position:static;max-height:220px;} .rp-doc{padding:14px;}}
 @media print{
