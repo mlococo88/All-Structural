@@ -49,6 +49,9 @@ node tests/smoke/steel-bridge-report.mjs
 # Spread Footing: the page itself never scrolls in the two-panel layout (links, scrollIntoView, focus, wheel, touch; 3 window sizes)
 node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex, plotly, three>]
 
+# Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
+node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
+
 # LL & DL Distribution (lldf.html): two-panel layout (inputs / results in tabs; page never scrolls; links open the right tab; the
 # Dead load tab with the 4D steps; Ctrl+P prints the Report from every tab; 390 px stacked; inside index.html's frame). ~7 min
 node tests/smoke/lldf-layout.mjs [--shots <dir>] [--no-index]
