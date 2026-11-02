@@ -2169,3 +2169,24 @@ function listTables() {
   the moved unit removed) identical; 0 console errors; 390 px no sideways scroll; screenshots at 1400 and 390 px looked at.
   `node tests/smoke/phone-layout.mjs --tool bsl` passes. `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
+
+## 2026-11-02 — PR: [#691](https://github.com/mlococo88/All-Structural/pull/691) — PLIB: saved-project list in this browser and Undo / Redo   [display and storage only]
+- **Before:** autosave (`subloads_v1`), header Open / Save (`.subloads.json` files). No list of projects in the browser, no undo.
+- **Where:**
+  - after the last `<script src="shared/…">` tag: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `autosave()`, anchor `let _as = null; function autosave() {`: inside the timer, after the `setItem`, `if (window.SLPL) SLPL.h.record();`.
+  - a new `<script>` after the start-up script (anchor `/* PLIB (2026-11-02): saved-project list in this browser and Undo / Redo`): new
+    list key **`subloads_projects_v1`** (tool-prefixed, §5) `{ name: P }` (the same object as the Save file); the dialog's "Save the open
+    project in this browser…" asks for a name (replacing a different saved project asks first); Open = `openProject()` (the Open-file path,
+    `migEHEQ` included). History over `P` without `P.ui` (tabs, selected unit, 3D view are not steps); `set` = the `openProject()` merge with
+    the current `P.ui`, then `syncSupports(); buildTabs(); buildSide(); showTab(); recompute(); autosave();`. Buttons Undo, Redo, Projects… at
+    the right end of the bridge strip under the header (the header's 8 buttons already fill it at 1280 px; measured: the header still does not
+    scroll, as on main).
+- **Saved data:** the autosave key and the file format are unchanged. One new key, `subloads_projects_v1` (no old data: the tool had no list).
+- **How verified:** `node tests/smoke/project-library.mjs --tool bsl`: ALL PASS (`MODEL`, every computed result, identical to origin/main on
+  load, after an input change (Pier 1 pedestal height) and reopened on main's autosave; Undo / Redo / Ctrl+Z / Ctrl+Y exact; save, rename,
+  duplicate, delete, open in the dialog; quota; 390 px; no new console errors); the dialog's Save button saves (headless check).
+  `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** the superstructure reactions are already entered directly (Reactions tab, Excel import, superReactions hand-off);
+  nothing added.
