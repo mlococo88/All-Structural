@@ -1926,7 +1926,7 @@ Basis: AASHTO LRFDLTS 1st Ed. (2015) with the 2017 Interim Revisions (the interi
 - **Light-pole IBC mode Broms demand:** the light-pole branch feeds Broms the first-order `govLRFD.M` while its shaft uses `M·B₂`. Should Broms (reference only) use the B₂-amplified moment there too, as the sign branch now does? Not changed.
 - Not in this task's scope and not re-checked against the PDF: the square-tube M_n step just past λ_r noted by the audit (Table 5.8.2-1).
 
-## 2026-11-02 — PR: claude/lp-broms-b2-sqmn (LPB2: light-pole IBC Broms takes the shaft's B₂-amplified demands; square-tube M_n step at λ_r verified)
+## 2026-11-02 — PR #675 (https://github.com/mlococo88/All-Structural/pull/675): claude/lp-broms-b2-sqmn (LPB2: light-pole IBC Broms takes the shaft's B₂-amplified demands; square-tube M_n step at λ_r verified)
 
 Engineer's answers to the two open items of PR #671 (LTSV).
 
