@@ -2957,3 +2957,39 @@ function gageTables() {
   above: `P`, `R`, the stored autosave, the text of every output tab and of the Members pane (notes removed) identical;
   0 console errors; 390 px no sideways scroll; screenshots at 1400 and 390 px looked at. `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
+
+## 2026-11-02 — PR: claude/report-retire-gusset (GPRX: the old Report tab and its calculation-sheet print retired; the shared Report tab is now "Report" and prints from every tab; display only, no result change)
+- **Engineer request (2026-11-02):** retire the old print reports where the Report tab is complete. This uses the same method as lldf #623, Light Pole #625, Shear and Moment #672, elastomeric #676, ACI Rebar #685, Retaining Wall #689 and Timber #696.
+- **Compared:** the calculation sheet (`printCalcReport(crOpts())` → `#calc-rpt`, with every section ticked) against the shared Report tab (`gprModel()` → `#rp-print`), default project, LRFR + LFR.
+  - Missing numbers: **0 of 561**.
+  - Missing text: none, apart from the cover's contents heading and the "Prepared with Gusset Plate Rating (Phase 3)" line, which the Report words as its own header.
+  - The reason: the Report tab is built by walking the same `buildReport(o)` HTML, with the same section chooser and Detail selector (`P.ui.rpt`). Nothing had to be ported.
+- **Removed:**
+  - The old "Report" tab: its button `<button … data-tab="report">Report</button>` and `<div class="tab-panel" id="tab-report"></div>`.
+  - Its renderer and helpers: `renderReportTab`, `crTitleBlock`, `crSizeBar`, `crJump`, and the click / change / resize handlers for `data-crjump`, `.crv-doc` headings, `crv-exp` / `crv-col` / `crv-print`, `data-crtog` and `crv-detail`.
+  - The calculation-sheet print: `printCalcReport`, `crPageCSS`, its `afterprint` handler, `<div id="calc-rpt">`, the `#calc-rpt` rule and the `body.printing-calc` print rules.
+  - **Kept:** `buildReport(o)`, `crOpts`, `CR_OPTS` and the `.crdoc` / `.crv-*` styles. They are the Report tab's content and controls.
+- **Changed:**
+  - **Tab label:** "Report (shared viewer)" → "Report".
+  - **Older saves:** `setOTab(t)` and `renderTab(t)` map `'report'` to `'report2'`, so a save or link that opened the retired tab now opens the Report. `P.ui.otab` becomes `'report2'` the next time a tab is chosen; the format is unchanged.
+  - **"Open in the report" (Checks tab, `data-rptjump`):** it opens the Report tab and calls `GPRP.api.jump('cr-chk-<id>')`, the subsection key `gprModel` already gives each check. If the Limit states section is unticked, the link ticks it first, as before.
+  - **3D snapshot chip (GP3D):** the reloads after three.js loads now target `renderReport2Tab`.
+  - **`crMarkStale`:** the old tab's branch was dropped.
+  - **`#btn-print`:** before, `setOTab('report'); printCalcReport(crOpts())`. After, `gprPrintAny()`. From another tab it remembers the tab (`GPRP_BACK`) and opens the Report, then calls `GPRP.api.print()`. With input errors it shows the same alert as before.
+  - **Browser Print / Ctrl+P:** a new inline `<script>` before `shared/steps.js` calls `gprPrintPrep()` on `beforeprint`. It is registered before shared/report.js's own listener, so the running header is set.
+  - **Back to the tab:** a new `afterprint` handler returns to the remembered tab. The Report's `beforeprint` handler no longer tests `printing-calc`.
+- **Governing provision:** none changed. No formula, factor, unit, code reference or computed value changed (CLAUDE.md §4).
+- **How verified:**
+  - `node tests/check-syntax.mjs "Gusset Plate Rating.html"`: pass.
+  - `node tests/smoke/phone-layout.mjs --tool gusset`: pass.
+  - origin/main vs branch (LRFR + LFR default and LFR only):
+    - `R` (JSON, 412 k / 292 k characters), the text of the seven result tabs and localStorage (`gussetRating.autosave.v1`): identical.
+    - Page text: identical apart from the removed tab label "Report (shared viewer)".
+    - Console errors: 0.
+  - `node tests/smoke/list-input.mjs --part gusset`:
+    - it reports the removed `tabs.report` as the only difference: intended, since that tab was retired;
+    - saved text and console checks pass.
+  - Print routing, headless, from each of the nine tabs, by `beforeprint` and by the Print button: `#rp-print` holds the Report (140,529 characters), the running header is set, and the tab of before comes back.
+  - "Open in the report" from the Checks tab: opens the Report, and the check's subsection is found and scrolled to.
+  - A save with `ui.otab = 'report'`: opens on the Report tab.
+- **Other copies:** none.
