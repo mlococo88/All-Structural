@@ -642,6 +642,9 @@ window.MathJax = {
      the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<!-- RWRX (2026-11-02): the browser's Print / Ctrl+P from any tab first shows the Report tab (rwrPrintPrep). Registered here, before
+     shared/report.js's own beforeprint listener, so that listener finds the Report shown (running header, every item filled). -->
+<script>window.addEventListener('beforeprint', function () { try { rwrPrintPrep(); } catch (e) { } });</script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 <!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
@@ -783,7 +786,7 @@ window.MathJax = {
       <button type="button" data-basis="ACI" aria-pressed="true">ACI 318-19</button>
       <button type="button" data-basis="AASHTO" aria-pressed="false">AASHTO LRFD</button>
     </div>
-    <button type="button" class="btn btn-primary" onclick="generateReport()"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M4.75 6.75 8 10l3.25-3.25M3 13h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Export report</span></button>
+    <button type="button" class="btn btn-primary" onclick="rwrPrintAny()" title="Print / PDF the calculation report (the Report tab), from any tab"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 2.5v7.5M4.75 6.75 8 10l3.25-3.25M3 13h10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Export report</span></button>
   </div>
 </header>
 
@@ -1455,7 +1458,7 @@ function fmtEqTitle(title) {
 
 /* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
    On screen: "Worked in: <value> → <Tab> · <card>" (opens the tab, scrolls to the card, flashes it).
-   In the calculation report (generateReport) the same link reads "<value>: see §n.k". ---- */
+   In the calculation report (retired 2026-11-02, RWRX) the same link read "<value>: see §n.k"; the Report tab links its own steps. ---- */
 const RW_TABNAME = { stability:'Stability', stem:'Stem design', footing:'Footing design', rebar:'Rebar schedule' };
 // card key → [tab, card-title prefix on the ACI basis, on the AASHTO basis]; null = the card does not exist on that basis
 const RW_CARDS = {
@@ -7710,7 +7713,6 @@ const RW_REFS = {
     ['ASCE 7-22', '§2.3.1 (strength combinations for column / beam loads, when entered)'],
   ],
 };
-const RW_SEC = { stability: 4, stem: 5, footing: 6, rebar: 7 };
 // a result tab's HTML, built by its own render function into a stand-in element (the live tab is untouched)
 function rwTabSource(tab, r) {
   const fn = { stability: renderStability, stem: renderStem, footing: renderFooting, rebar: renderRebar }[tab];
@@ -7793,421 +7795,9 @@ function rwResultRows(r) {
   return rows;
 }
 
-async function generateReport() {
-  const r = window._R;
-  if (!r || r.fatal) { alert('Please fix input errors before generating the report.'); return; }
-  // open the window inside the click (pop-up blockers), fill it when the report is built
-  const win = window.open('', '_blank', 'width=1050,height=850');
-  try { if (win) { win.document.write('<!DOCTYPE html><title>RetainCalc Pro — report</title><p style="font:14px Arial,sans-serif;padding:24px">Building the calculation report…</p>'); win.document.close(); } } catch (e) { /* ignore */ }
-  let html;
-  try { html = await buildReportHTML(r); }
-  catch (e) { console.error(e); if (win) win.close(); alert('Could not build the report: ' + e.message); return; }
-  // Use Blob URL so scripts execute properly in the new window
-  const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  const url  = URL.createObjectURL(blob);
-  if (win) win.location.href = url; else window.open(url, '_blank', 'width=1050,height=850');
-  // Revoke after browser has had time to load
-  setTimeout(() => URL.revokeObjectURL(url), 60000);
-}
-
-async function buildReportHTML(r) {
-  const { inp } = r;
-  const hx = v => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-  // Project info
-  const proj_name = document.getElementById('proj_name').value || 'Unnamed Project';
-  const proj_num  = document.getElementById('proj_num').value  || '—';
-  const proj_eng  = document.getElementById('proj_eng').value  || '—';
-  const proj_chk  = document.getElementById('proj_chk').value  || '—';
-  const proj_notes= document.getElementById('proj_notes').value || '';
-  const today     = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-
-  const fv  = (v, d=3) => (isFinite(v)&&!isNaN(v)) ? v.toFixed(d) : '—';
-  const fdc = v => (v == null || isNaN(v)) ? 'n/a' : (isFinite(v) ? v.toFixed(2) : '∞');
-
-  const geomSvg = buildOverviewSVG(r)
-    .replace(/style="width:100%;/, 'style="width:100%;max-width:520px;');
-  const imgs = await rwPlotImages();
-
-  // ── numbered sections from the result tabs (each card = subsection n.k) ──
-  const cardMap = [];   // {tab, title, num, id}
-  const tabBox = (tab, extraHTML) => {
-    const n = RW_SEC[tab];
-    const box = document.createElement('div');
-    box.innerHTML = rwTabSource(tab, r) + (extraHTML || '');
-    box.querySelectorAll('[id^="plt-"]').forEach(d => {
-      d.outerHTML = imgs[d.id] ? `<img class="rpt-plot" src="${imgs[d.id]}" alt="">`
-                               : '<p class="code-ref">(Chart not included: the charting library is not loaded.)</p>';
-    });
-    box.querySelectorAll('.sec-heading').forEach(d => { d.className = 'grp'; });
-    const subs = [];
-    box.querySelectorAll('.card').forEach((c, k) => {
-      const t = c.querySelector('.card-title');
-      const title = t ? t.textContent.trim() : 'Card ' + (k + 1);
-      const num = n + '.' + (k + 1), id = 's' + n + '-' + (k + 1);
-      c.id = id;
-      cardMap.push({ tab, title, num, id });
-      subs.push({ t: hx(title), id, num });
-      if (t) t.insertAdjacentHTML('afterbegin', `<span class="cr-num">${num}</span> `);
-    });
-    return { n, box, subs };
-  };
-  const crackCard = !r.aciCr ? '' : `<div class="card"><div class="card-hd"><span class="card-title">Crack-Control Bar Spacing</span>
-    <span class="card-ref">ACI 318-19 §24.3.2 · f<sub>s</sub> = ⅔f<sub>y</sub> · values of the calculation (report only)</span></div><div class="card-body">` +
-    [['Stem S1 (back face)', r.aciCr.stem], ['Heel F1', r.aciCr.heel], ['Toe F2', r.aciCr.toe]].map(([nm, x]) => eqCheck(nm + ' — maximum bar spacing',
-      `s_{max} = \\min\\!\\left(15\\,\\frac{40{,}000}{f_s} - 2.5\\,c_c,\\ 12\\,\\frac{40{,}000}{f_s}\\right) = \\min(${f(15*40000/x.fs - 2.5*x.cc,2)},\\ ${f(12*40000/x.fs,2)}) = \\boxed{${f(x.smax,2)}\\ \\text{in}} \\geq s = ${f(x.spacing,2)}\\ \\text{in}`,
-      x.ok, 'ACI 318-19 §24.3.2',
-      [{sym:'f_s', desc:'steel stress at service loads, ⅔f<sub>y</sub>', val:f(x.fs,0), unit:'psi'},
-       {sym:'c_c', desc:'clear cover (input)', val:f(x.cc,2), unit:'in'},
-       {sym:'s', desc:'selected bar spacing', val:f(x.spacing,2), unit:'in'}])).join('') + `</div></div>`;
-  const secs = [
-    { key: 'stability', title: r.isAASHTO ? 'Stability Analysis (AASHTO LRFD Limit States)' : 'Stability Analysis (Service, Unfactored)', ...tabBox('stability') },
-    { key: 'stem',      title: 'Stem Design', ...tabBox('stem') },
-    { key: 'footing',   title: 'Footing Design', ...tabBox('footing') },
-    { key: 'rebar',     title: 'Reinforcement Schedule', ...tabBox('rebar', crackCard) },
-  ];
-  const cardRef = key => {
-    const tab = key === 'rptCrack' ? 'rebar' : (RW_CARDS[key] || [])[0];
-    const t = key === 'rptCrack' ? 'Crack-Control Bar Spacing' : rwCardTitle(key, r.isAASHTO);
-    return (tab && t) ? cardMap.find(c => c.tab === tab && c.title.startsWith(t)) || null : null;
-  };
-  // D11 links: "→ Tab · Card" reads "see §n.k"; an in-text tab reference is replaced by §n.k
-  secs.forEach(s => {
-    s.box.querySelectorAll('a.wkA').forEach(a => {
-      const ref = cardRef(a.dataset.card), sp = a.querySelector('.wkT');
-      if (a.dataset.intext) a.textContent = ref ? '§' + ref.num : a.textContent + ' (not in this printout)';
-      else a.innerHTML = (sp ? sp.outerHTML + ': ' : '') + (ref ? 'see §' + ref.num : 'not in this printout');
-      a.removeAttribute('title');
-      if (ref) a.setAttribute('href', '#' + ref.id); else a.removeAttribute('href');
-    });
-    s.box.querySelectorAll('.wkLink').forEach(d => {
-      if (d.firstChild && d.firstChild.nodeType === 3) d.firstChild.textContent = d.firstChild.textContent.replace(/^\s*Worked in:\s*/, '');
-    });
-  });
-
-  // ── result lines ──
-  const rows = rwResultRows(r).map(x => {
-    const ref = x.card ? cardRef(x.card) : null;
-    const sec = ref ? +ref.num.split('.')[0] : null;
-    return { ...x, ref2: ref, sec };
-  });
-  const seeLink = ref => ref ? `<a href="#${ref.id}">§${ref.num}</a>` : '—';
-  const resultBlock = n => {
-    const rs = rows.filter(x => x.sec === n);
-    if (!rs.length) return '';
-    return `<div class="cr-resh">Results — §${n}</div><div class="cr-results">` + rs.map(x => `<div class="cr-line">
-      <div class="cr-d">${x.label}:</div>
-      <div class="cr-m">D/C = <b>${fdc(x.dc)}</b> <span class="cr-refi">(${x.ref}${x.note ? '; ' + x.note : ''}; ${seeLink(x.ref2)})</span></div>
-      <div class="cr-r${x.ok ? '' : ' cr-st-fail'}"><b>${x.ok ? 'PASS' : 'FAIL'}</b></div></div>`).join('') + `</div>`;
-  };
-  const statusRows = rows.filter(x => x.status);
-  const nFail = statusRows.filter(x => !x.ok).length;
-  const nXFail = rows.filter(x => !x.status && !x.ok).length;
-  const verdict = nFail ? `${nFail} of ${statusRows.length} checks fail` : `All ${statusRows.length} checks pass`;
-
-  // ── table of contents ──
-  const toc = [
-    { n: 1, t: 'Design Summary', id: 's1', subs: [] },
-    { n: 2, t: 'Input Parameters', id: 's2', subs: [
-      { num: '2.1', t: 'Wall Geometry', id: 's2-1' }, { num: '2.2', t: 'Soil Properties &amp; Loading', id: 's2-2' },
-      { num: '2.3', t: 'Column / Beam Loads', id: 's2-3' }, { num: '2.4', t: 'Materials &amp; Cover', id: 's2-4' }] },
-    { n: 3, t: 'Wall Geometry', id: 's3', subs: [] },
-    ...secs.map(s => ({ n: s.n, t: s.title, id: 's' + s.n, subs: s.subs })),
-  ];
-  const tocHTML = `<ol class="cr-toc">` + toc.map(s => `<li><a href="#${s.id}">${s.n}. ${s.t}</a>` +
-    (s.subs.length ? `<ol>` + s.subs.map(q => `<li><a href="#${q.id}">${q.num} ${q.t}</a></li>`).join('') + `</ol>` : '') + `</li>`).join('') + `</ol>`;
-
-  // ── print header / footer (@page margin boxes, only while printing) ──
-  const cssq = v => String(v == null || v === '' ? '—' : v).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ').replace(/</g, '\\3C ');
-  const desc = (proj_notes || proj_name).slice(0, 40);
-  const box = 'font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
-  const pageCSS = '@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;' +
-    ' @top-left { content: "Project No: ' + cssq(proj_num) + '\\A Description: ' + cssq(desc) + '"; ' + box + ' text-align: left; }' +
-    ' @top-center { content: "Computed By: ' + cssq(proj_eng) + '\\A Checked By: ' + cssq(proj_chk) + '"; ' + box + ' text-align: left; }' +
-    ' @top-right { content: "Date: ' + cssq(today) + '\\A Date: —"; ' + box + ' text-align: right; }' +
-    ' @bottom-left { content: "' + cssq(proj_name) + ' (RetainCalc Pro — Retaining Wall Designer)"; font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; }' +
-    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; } } }';
-
-  const codes = r.isAASHTO ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)' : 'ACI 318-19 · IBC 2021 · ASCE 7-22';
-  const sec1Input = `<h2 class="sec" id="s2">2. Input Parameters</h2>
-<h3 class="sub" id="s2-1">2.1 Wall Geometry</h3>
-<table>
-  <tr><th>Parameter</th><th>Symbol</th><th class="r">Value</th><th>Unit</th></tr>
-  <tr><td>Stem height</td><td>$H_s$</td><td class="r">${fv(inp.Hs,2)}</td><td>ft</td></tr>
-  <tr><td>Footing thickness</td><td>$t_f$</td><td class="r">${fv(inp.tf,0)}</td><td>in</td></tr>
-  <tr><td>Stem width — base</td><td>$t_{s,bot}$</td><td class="r">${fv(inp.ts_bot,0)}</td><td>in</td></tr>
-  <tr><td>Stem width — top</td><td>$t_{s,top}$</td><td class="r">${fv(inp.ts_top,0)}</td><td>in</td></tr>
-  <tr><td>Toe length</td><td>$L_t$</td><td class="r">${fv(inp.Lt,2)}</td><td>ft</td></tr>
-  <tr><td>Heel length</td><td>$L_h$</td><td class="r">${fv(inp.Lh,2)}</td><td>ft</td></tr>
-  <tr><td>Toe soil cover (above footing)</td><td>$D_{f,add}$</td><td class="r">${fv(inp.Df_add,2)}</td><td>ft</td></tr>
-  <tr><td>Total toe embedment</td><td>$D_f = t_f + D_{f,add}$</td><td class="r">${fv(r.Df,3)}</td><td>ft</td></tr>
-  <tr><td>Total footing width</td><td>$B$</td><td class="r">${fv(r.B,3)}</td><td>ft</td></tr>
-  <tr><td>Total wall height</td><td>$H = H_s + t_f$</td><td class="r">${fv(r.H,3)}</td><td>ft</td></tr>
-  ${inp.useShearKey?`<tr><td>Shear key depth</td><td>$d_k$</td><td class="r">${fv(inp.dk,0)}</td><td>in</td></tr>`:''}
-</table>
-
-<h3 class="sub" id="s2-2">2.2 Soil Properties &amp; Loading</h3>
-<table>
-  <tr><th>Parameter</th><th>Symbol</th><th class="r">Value</th><th>Unit</th></tr>
-  <tr><td>Soil unit weight</td><td>$\\gamma_s$</td><td class="r">${fv(inp.gamma_s,0)}</td><td>pcf</td></tr>
-  <tr><td>Soil friction angle</td><td>$\\phi$</td><td class="r">${fv(inp.phi,0)}</td><td>°</td></tr>
-  <tr><td>Cohesion</td><td>$c$</td><td class="r">${fv(inp.coh,0)}</td><td>psf</td></tr>
-  <tr><td>Backfill slope</td><td>$\\beta$</td><td class="r">${fv(inp.beta,0)}</td><td>°</td></tr>
-  <tr><td>Surcharge</td><td>$q_s$</td><td class="r">${fv(inp.q_sur,0)}</td><td>psf</td></tr>
-  <tr><td>Allowable bearing</td><td>$q_a$</td><td class="r">${fv(inp.qa,0)}</td><td>psf</td></tr>
-  <tr><td>Base friction coefficient</td><td>$\\mu$</td><td class="r">${fv(inp.mu,4)}</td><td>—</td></tr>
-  ${r.hasWT?`<tr class="warn-row"><td>Water table depth from top</td><td>$d_{WT}$</td><td class="r">${fv(r.wt_d,2)}</td><td>ft</td></tr>
-  <tr class="warn-row"><td>Water height at footing base</td><td>$h_w = H - d_{WT}$</td><td class="r">${fv(r.hw,3)}</td><td>ft</td></tr>
-  <tr class="warn-row"><td>Water unit weight</td><td>$\\gamma_w$</td><td class="r">${fv(r.gamma_w,1)}</td><td>pcf</td></tr>
-  <tr class="warn-row"><td>Buoyant unit weight</td><td>$\\gamma' = \\gamma_{sat} - \\gamma_w$</td><td class="r">${fv(r.gamma_s_sub,1)}</td><td>pcf</td></tr>`:''}
-</table>
-
-<h3 class="sub" id="s2-3">2.3 Column / Beam Loads${r.hasCol?'':' — None'}</h3>
-${r.hasCol ? `<table>
-  <tr><th>Parameter</th><th>Symbol</th><th class="r">Value</th><th>Unit</th></tr>
-  <tr><td>Dead load reaction</td><td>$P_{DL}$</td><td class="r">${fv(inp.col_DL,1)}</td><td>kip</td></tr>
-  <tr><td>Live load reaction</td><td>$P_{LL}$</td><td class="r">${fv(inp.col_LL,1)}</td><td>kip</td></tr>
-  <tr><td>Snow load reaction</td><td>$P_{SL}$</td><td class="r">${fv(inp.col_SL,1)}</td><td>kip</td></tr>
-  <tr><td>Wind load reaction (+ = down)</td><td>$P_{WL}$</td><td class="r">${fv(inp.col_WL,1)}</td><td>kip</td></tr>
-  <tr><td>Distribution length</td><td>$L_{dist}$</td><td class="r">${fv(inp.col_Ldist,2)}</td><td>ft</td></tr>
-  <tr><td>Column position</td><td>—</td><td class="r">${inp.col_pos} of stem</td><td></td></tr>
-  <tr><td>Moment arm from toe</td><td>$x_{col}$</td><td class="r">${fv(r.x_col,3)}</td><td>ft</td></tr>
-  <tr><td>Service load per ft (DL+LL+SL)</td><td>$w_{col,svc}$</td><td class="r">${fv(r.P_col_svc/1000,3)}</td><td>k/ft</td></tr>
-  <tr><td>Max factored per ft (governing combo)</td><td>$w_{col,u}$</td><td class="r">${fv(r.Puf_max/1000,3)}</td><td>k/ft</td></tr>
-</table>
-<div class="calc-block">
-<p><strong>ASCE 7-22 Table 2.3.1 — Load combinations (per ft of wall):</strong></p>
-$$\\text{Combo 2: } 1.2D+1.6L+0.5S = 1.2(${fv(r.pDL/1000,3)})+1.6(${fv(r.pLL/1000,3)})+0.5(${fv(r.pSL/1000,3)}) = ${fv((1.2*r.pDL+1.6*r.pLL+0.5*r.pSL)/1000,3)} \\text{ k/ft}$$
-$$\\text{Combo 3: } 1.2D+1.0L+1.6S = ${fv((1.2*r.pDL+1.0*r.pLL+1.6*r.pSL)/1000,3)} \\text{ k/ft}$$
-$$\\text{Combo 4: } 1.2D+1.0W+1.0L+0.5S = ${fv((1.2*r.pDL+1.0*r.pWL+1.0*r.pLL+0.5*r.pSL)/1000,3)} \\text{ k/ft}$$
-$$\\text{Combo 6: } 0.9D+1.0W = ${fv((0.9*r.pDL+1.0*r.pWL)/1000,3)} \\text{ k/ft}$$
-$$\\boxed{w_{col,u,max} = ${fv(r.Puf_max/1000,3)} \\text{ k/ft (governing downward)}}$$
-$$\\boxed{w_{col,u,min} = ${fv(r.Puf_min/1000,3)} \\text{ k/ft (governing uplift / minimum)}}$$
-</div>` : '<p class="code-ref">No column or beam loads applied.</p>'}
-<h3 class="sub" id="s2-4">2.4 Materials &amp; Cover</h3>
-<table>
-  <tr><th>Parameter</th><th>Symbol</th><th class="r">Value</th><th>Unit</th></tr>
-  <tr><td>Concrete compressive strength</td><td>$f'_c$</td><td class="r">${fv(inp.fc,0)}</td><td>psi</td></tr>
-  <tr><td>Steel yield strength</td><td>$f_y$</td><td class="r">${fv(inp.fy/1000,0)}</td><td>ksi</td></tr>
-  <tr><td>Concrete unit weight</td><td>$\\gamma_c$</td><td class="r">${fv(inp.gamma_c,0)}</td><td>pcf</td></tr>
-  <tr><td>Stem cover (back face)</td><td>$c_{stem}$</td><td class="r">${fv(inp.cov_stem,2)}</td><td>in</td></tr>
-  <tr><td>Footing cover (bottom)</td><td>$c_{ftg}$</td><td class="r">${fv(inp.cov_ftg,2)}</td><td>in</td></tr>
-</table>`;
-
-  const html = `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>RetainCalc Pro — ${hx(proj_name)}</title>
-<script>
-window.MathJax = {
-  tex: {
-    inlineMath:  [['$','$'], ['\\\\(','\\\\)']],
-    displayMath: [['$$','$$']],
-    processEscapes: true,
-    packages: {'[+]': ['boldsymbol']}
-  },
-  options: {
-    skipHtmlTags: ['script','noscript','style','textarea','pre']
-  },
-  startup: {
-    ready() {
-      MathJax.startup.defaultReady();
-      MathJax.startup.promise.then(() => {
-        MathJax.typesetPromise(document.querySelectorAll('.calc-block, .page'));
-      });
-    }
-  }
-};
-<\/script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js" id="MathJax-script"><\/script>
-<style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  body{font-family:'Times New Roman',Times,serif;font-size:11pt;color:#111;background:#fff;line-height:1.45;}
-  @media print{.no-print{display:none!important;}.page-break,.cr-break{break-before:page;}body{padding:0;}.page{padding:0!important;}}
-  a{color:inherit;text-decoration:none;}
-
-  .toolbar{background:#2155c4;color:#fff;padding:10px 20px;display:flex;align-items:center;
-           justify-content:space-between;gap:12px;position:sticky;top:0;z-index:100;}
-  .toolbar h2{font-family:Arial,sans-serif;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;}
-  .toolbar button{background:#fff;color:#2155c4;border:none;border-radius:4px;
-                  padding:7px 18px;font-family:Arial,sans-serif;font-size:12px;font-weight:700;cursor:pointer;}
-  .page{max-width:7.5in;margin:0 auto;padding:0.5in 0;}
-
-  /* Cover, references, contents */
-  .cr-cover{min-height:8.4in;display:flex;flex-direction:column;justify-content:center;break-after:page;}
-  .cr-cover-t{text-align:center;margin-bottom:26pt;}
-  .cr-cover h1{font:700 24pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt;}
-  .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt;}
-  .cr-cover .cr-cover-p{font-weight:400;font-size:11.5pt;}
-  .title-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;font-size:10.5pt;border:1px solid #000;padding:8px 10px;}
-  .cr-banner{margin-top:14pt;text-align:center;font:700 11pt Arial,sans-serif;padding:6px;border:1.5px solid #000;}
-  .cr-front{break-after:page;}
-  .cr-refs{border-collapse:collapse;margin:0 0 14pt;width:100%;font-size:10pt;}
-  .cr-refs td{padding:2pt 14pt 2pt 0;vertical-align:top;border:0;background:none!important;}
-  .cr-refs td:first-child{white-space:nowrap;font-weight:700;}
-  .cr-toc,.cr-toc ol{list-style:none;margin:0;padding:0;}
-  .cr-toc>li{margin:4pt 0;} .cr-toc ol{padding-left:18pt;font-size:10pt;}
-  .cr-small{font-size:9.5pt;margin-top:14pt;}
-
-  h2.sec,h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;margin:0 0 9pt;break-after:avoid;}
-  .cr-front h2.cr-h1{margin-top:10pt;}
-  h3.sub{font-size:11pt;font-weight:700;color:#111;margin:12px 0 5px;break-after:avoid;}
-  h3.sub + table,h3.sub + .calc-block{break-inside:avoid;}
-  .grp{font:700 11pt Arial,sans-serif;margin:14px 0 6px;border-bottom:1px solid #999;padding-bottom:2px;break-after:avoid;}
-
-  .calc-block{border:1px solid #bbb;border-left:3px solid #333;padding:9px 13px;margin:7px 0;font-size:10.5pt;}
-  .calc-block p{margin:3px 0;}
-  .code-ref{font-size:9pt;color:#333;font-style:italic;margin:4px 0;}
-
-  table{width:100%;border-collapse:collapse;font-size:10pt;margin:7px 0;}
-  th{background:#eee;color:#111;padding:4px 8px;text-align:left;border:1px solid #bbb;font-weight:700;}
-  td{padding:4px 8px;border:1px solid #ccc;vertical-align:top;}
-  td.r{text-align:right;font-family:'Courier New',monospace;}
-  td.c{text-align:center;}
-  .warn-row td{background:#fff8e8!important;}
-  .geom-wrap{text-align:center;margin:8px 0 14px;}
-
-  /* Cards cloned from the result tabs */
-  .card{border:1px solid #bbb;margin:0 0 12px;}
-  .card-hd{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:5px 9px;border-bottom:1px solid #bbb;background:#f2f2f2;break-after:avoid;}
-  .card-title{font:700 11pt "Times New Roman",Times,serif;}
-  .card-ref{font-size:8.5pt;color:#444;font-style:italic;text-align:right;}
-  .cr-num{margin-right:4px;}
-  .card-body{padding:6px 9px;}
-  .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
-  .eq-block{border:1px solid #ddd;margin:6px 0;break-inside:avoid;}
-  .eq-block.eq-fail{border-color:#a01010;}
-  .eq-title{display:flex;justify-content:space-between;gap:10px;font-size:10pt;font-weight:700;padding:4px 8px;border-bottom:1px solid #eee;}
-  .eq-num{margin-right:6px;}
-  .eq-ref{font-weight:400;font-style:italic;font-size:8.5pt;color:#444;}
-  .eq-math{display:flex;align-items:center;justify-content:center;gap:12px;padding:4px 10px;font-size:10.5pt;border-left:3px solid #333;overflow:hidden;}
-  .eq-block.eq-fail .eq-math{border-left-color:#a01010;}
-  .eq-math mjx-container[display="true"]{margin:3px 0!important;}
-  .eq-where{padding:3px 10px 6px;}
-  .eq-where-hd{font-size:8.5pt;font-style:italic;color:#444;}
-  .eq-where table{margin:0;font-size:9pt;}
-  .eq-where td{border:0;padding:1px 6px 1px 0;background:none!important;}
-  .eq-where td.wsym{font-style:italic;white-space:nowrap;width:70px;}
-  .eq-where td.wval{text-align:right;white-space:nowrap;font-family:'Courier New',monospace;}
-  .wunit{margin-left:3px;font-size:8.5pt;}
-  .tbl td,.tbl th{font-size:9.5pt;}
-  .tbl .val,.tbl .right{text-align:right;}
-  .fbox{font-family:'Courier New',monospace;font-size:9pt;white-space:pre-wrap;border:1px solid #ddd;padding:5px 8px;margin:4px 0 8px;}
-  .chk-row{display:flex;justify-content:space-between;gap:10px;padding:2px 0;border-bottom:1px solid #eee;font-size:10pt;}
-  .alert{border:1px solid #bbb;border-left:3px solid #666;padding:5px 9px;margin:6px 0;font-size:9.5pt;break-inside:avoid;}
-  .alert.warn{border-left-color:#9a6410;background:#fffaf0;}
-  .alert.fail{border-left-color:#a01010;background:#fdf3f3;}
-  .badge{display:inline-block;padding:1px 7px;border:1px solid #000;font:700 8.5pt Arial,sans-serif;white-space:nowrap;}
-  .badge.fail{text-decoration:underline;}
-  .n-blue,.n-pass,.n-fail,.n-dim{font-family:'Courier New',monospace;}
-  .n-fail{font-weight:700;}
-  .wkLink{font-size:9pt;font-style:italic;margin:2px 0 6px;}
-  .rpt-plot{display:block;width:100%;max-width:6.6in;margin:4px auto;}
-
-  /* Result lines */
-  .cr-resh{font:700 11pt "Times New Roman",Times,serif;margin:14pt 0 2pt;break-after:avoid;}
-  .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt;}
-  .cr-line{display:grid;grid-template-columns:2.0in 1fr 0.7in;gap:0 10pt;align-items:center;padding:3pt 0;border-top:0.6pt solid #000;break-inside:avoid;font-size:10.5pt;}
-  .cr-r{text-align:right;} .cr-st-fail{text-decoration:underline;}
-  .cr-refi{font-size:9pt;font-style:italic;}
-  .summary-tbl td,.summary-tbl th{font-size:9.5pt;}
-
-  .note{background:#fffbe6;border:1px solid #e0c84a;padding:7px 12px;font-size:9.5pt;margin:12px 0;color:#5a4a00;}
-  .rpt-footer{margin-top:24px;padding-top:7px;border-top:1px solid #ccc;font-size:8.5pt;color:#777;display:flex;justify-content:space-between;}
-  @media print{.rpt-footer{display:none;}}
-  ${pageCSS}
-</style>
-</head>
-<body>
-<div class="toolbar no-print">
-  <h2>RetainCalc Pro — ${hx(proj_name)}</h2>
-  <div style="display:flex;gap:8px;">
-    <button onclick="if(window.MathJax)MathJax.typesetPromise();else alert('MathJax still loading — try again in a moment.');"
-      style="background:#e8edf5;color:#2155c4;">⟳ Re-render Math</button>
-    <button onclick="window.print()">&#128438; Print / Save as PDF</button>
-  </div>
-</div>
-<div class="page">
-
-<!-- COVER -->
-<section class="cr-cover">
-  <div class="cr-cover-t">
-    <h1>Cantilever Retaining Wall Design</h1>
-    <p>${hx(proj_name)}</p>
-    ${proj_notes ? `<p class="cr-cover-p">${hx(proj_notes)}</p>` : ''}
-    <p class="cr-cover-p">${codes} · RetainCalc Pro</p>
-  </div>
-  <div class="title-grid">
-    <div><b>Project:</b> ${hx(proj_name)}</div><div><b>Project No.:</b> ${hx(proj_num)}</div><div><b>Calculated by:</b> ${hx(proj_eng)}</div>
-    <div><b>Date:</b> ${today}</div><div><b>Checked by:</b> ${hx(proj_chk)}</div><div><b>Checked date:</b> —</div>
-    <div style="grid-column:1/3"><b>Design basis:</b> ${r.isAASHTO ? 'AASHTO LRFD 10th Ed. (limit states)' : 'ACI 318-19 / IBC 2021 (ASD stability)'}</div><div><b>Units:</b> US customary</div>
-  </div>
-  <div class="cr-banner">${verdict}${nXFail ? ` · ${nXFail} card check${nXFail > 1 ? 's' : ''} not in the status bar fail${nXFail > 1 ? '' : 's'}` : ''}</div>
-</section>
-
-<!-- REFERENCES AND CONTENTS -->
-<section class="cr-front">
-  <h2 class="cr-h1">References:</h2>
-  <table class="cr-refs">${RW_REFS[r.isAASHTO ? 'AASHTO' : 'ACI'].map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>
-  <h2 class="cr-h1">Table of contents:</h2>
-  ${tocHTML}
-  <p class="cr-small">Each subsection of §4–§7 is the matching card of the tool's result tabs: equations are shown symbolically, then with values substituted, then with the result. Each of these sections ends with the D/C result of its checks (status = the check's own PASS/FAIL). D/C of a factor-of-safety check = required FOS / FOS. Units: lb, ft, in, psf, psi unless noted.</p>
-</section>
-
-<!-- SECTION 1 — SUMMARY -->
-<h2 class="sec" id="s1">1. Design Summary</h2>
-<p><b>${verdict}</b> (${r.isAASHTO ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19 / IBC 2021'}).${r.warnings.length ? ` ${r.warnings.length} warning${r.warnings.length > 1 ? 's' : ''}: see the end of <a href="#s4">§4</a>.` : ''}</p>
-<table class="summary-tbl">
-  <tr><th>Check</th><th>Value</th><th class="r">D/C</th><th class="c">Status</th><th>Worked in</th></tr>
-  ${rows.map(x => `<tr><td>${x.label}${x.status ? '' : ' <i>(card check)</i>'}</td><td>${x.val ? hx(x.val) : ''}</td><td class="r">${fdc(x.dc)}</td>
-    <td class="c"><b>${x.ok ? 'PASS' : '<u>FAIL</u>'}</b></td><td>${seeLink(x.ref2)}</td></tr>`).join('')}
-</table>
-<p class="code-ref">"Card check": worked with a PASS/FAIL mark in its card but not counted in the tool's status bar.</p>
-
-<!-- SECTION 2 — INPUTS -->
-<div class="page-break"></div>
-${sec1Input}
-
-<!-- SECTION 3 — GEOMETRY -->
-<div class="page-break"></div>
-<h2 class="sec" id="s3">3. Wall Geometry</h2>
-<div class="geom-wrap">${geomSvg}</div>
-
-${secs.map(s => `<!-- SECTION ${s.n} -->
-<section class="cr-break"><h2 class="sec" id="s${s.n}">${s.n}. ${s.title}</h2>
-${s.box.innerHTML}
-${resultBlock(s.n)}
-</section>`).join('\n')}
-
-<div class="note">⚠ <strong>Engineering Note:</strong> Generated by RetainCalc Pro as a calculation aid only.
-All results must be independently reviewed by a licensed Professional Engineer before use in construction.
-Global slope stability (IBC §1807.2 / ASCE 7 §12.13.5), seismic earth pressure (Mononobe-Okabe),
-drainage design, and site-specific geotechnical conditions require separate evaluation.</div>
-
-<div class="rpt-footer">
-  <span>RetainCalc Pro · ${r.isAASHTO ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19 / IBC 2021'} · ${hx(proj_name)} · ${hx(proj_num)}</span>
-  <span>Generated ${new Date().toLocaleString()}</span>
-</div>
-</div>
-<script>
-// Safety net: typeset after DOM is ready, and again after 2s in case MathJax loaded late
-function doTypeset() {
-  if (window.MathJax && MathJax.typesetPromise) {
-    MathJax.typesetPromise().catch(err => console.warn('MathJax typeset error:', err));
-  }
-}
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => { doTypeset(); setTimeout(doTypeset, 1500); });
-} else {
-  doTypeset();
-  setTimeout(doTypeset, 1500);
-}
-<\/script>
-</body>
-</html>`;
-  return html;
-}
+/* RWRX (2026-11-02): the Export report (generateReport / buildReportHTML, a separate window) was retired; its content is in the
+   Report tab (rwrModel, rwrAddPlots, rwrAddNotes). "Export report", Ctrl+P and the browser's Print print the Report from any tab
+   (rwrPrintAny, rwrPrintPrep). Kept: rwTabSource, rwPlotImages and rwResultRows (used by the Report). */
 
 
 // ================================================================
@@ -8743,7 +8333,7 @@ onInputChange();
 // rwResultRows used by the Export report); only the substitution strings are formatted here. The few products shown
 // on a tab without a field of _R (P_a,1..3, M_u,soil, θ, the column combinations, the crack-control terms) are the
 // tabs' own display expressions, copied. Nothing is saved: the report is rebuilt from _R when the tab is shown and
-// when the inputs change while it is shown. The Export report window (D11) is unchanged.
+// when the inputs change while it is shown. The Export report window (D11) was retired on 2026-11-02 (RWRX).
 // ================================================================
 const RWRP = { closed: new Set(), api: null, doc: null };
 const rwrN = (x, d) => SharedSteps.n(x, d == null ? 2 : d);
@@ -8826,6 +8416,7 @@ function rwrModel(r) {
       ['Shear method', A.shear_method || 'auto', '–'], ['Exposure factors γ_e (footing / stem)', rwrN(A.gamma_e1, 2) + ' / ' + rwrN(A.gamma_e2, 2), '–'],
       ['Vehicular collision (Extreme Event II)', A.ct_enable ? 'on' : 'off', '–'], ['Interface shear check', A.ish_enable ? 'on' : 'off', '–']);
     subs.push(sub('Materials, cover and design options', [{ type: 'table', head: ['Quantity', 'Value', 'Unit'], rows: mat }]));
+    if (!r.hasCol) subs.push(sub('Column / beam loads', [{ type: 'note', text: 'No column or beam loads applied.' }]));   // RWRX: as the Export report §2.3
     if (r.hasCol) subs.push(sub('Column / beam loads', [{ type: 'table', head: ['Quantity', 'Value', 'Unit'], rows: [
       ['Dead / live / snow reaction P_DL / P_LL / P_SL', rwrN(inp.col_DL, 1) + ' / ' + rwrN(inp.col_LL, 1) + ' / ' + rwrN(inp.col_SL, 1), 'kip'], ['Wind reaction P_WL (+ down)', rwrCell(inp.col_WL, 1), 'kip'],
       ['Distribution length L_dist', rwrCell(inp.col_Ldist, 2), 'ft'], ['Column position', inp.col_pos + ' of stem', '–'], ['Moment arm from toe x_col', rwrCell(r.x_col, 3), 'ft']] }]));
@@ -8977,7 +8568,7 @@ function rwrModel(r) {
       const sb = [rwrS({ id: 'Q', label: 'Factored driving force' + (E.ehDropped ? ' (γ_EH = 0, MassDOT §3.3.2.4: the wall pulls away from the backfill)' : ' (γ_EH = 1.0, earth pressure concurrent)'), sym: '\\sum\\gamma Q', eq: '1.0\\,CT' + (E.ehDropped ? '' : ' + 1.0\\,P_{EH}') + ' + ' + rwrN(E.gLS_ct, 2) + '\\,P_{LS}', sub: rwrN(c.CT_h * 1000, 0) + (E.ehDropped ? '' : ' + ' + rwrN(a.P_EH, 0)) + ' + ' + rwrN(E.gLS_ct, 2) + '\\cdot' + rwrN(a.P_LS, 0), value: E.H_drive_ct, unit: 'lb/ft', d: 0 }),
         rwrS({ id: 'V', label: 'Resisting vertical load (DC + EV at γ = 1.0)', sym: 'V', eq: '1.0(W_{ftg} + W_{stem}' + (r.hasBarrier ? ' + W_{bar}' : '') + ') + 1.0(W_{soil} + P_{a,V})', sub: '', value: E.V_ct_min, unit: 'lb/ft', d: 0 }),
         rwrS({ id: 'sl', label: 'Sliding under collision', sym: 'DCR', eq: '\\frac{\\sum\\gamma Q}{\\phi(V\\tan\\delta + P_{p})}', sub: '\\frac{' + rwrN(E.H_drive_ct, 0) + '}{' + rwrN(E.R_ct, 0) + '}', value: E.sliding_dcr_ct, unit: '', d: 3, ok: ok('ctSliding'), note: 'φ = ' + rwrN(E.phi_ct, 2) + ', tan δ = ' + rwrN(a.tanDelta, 3) }),
-        rwrS({ id: 'e', label: 'Resultant location and eccentricity', sym: 'e', eq: '\\frac{B}{2} \\minus \\frac{M_{r} \\minus M_{o}}{V}', sub: '\\frac{' + rwrN(r.B, 2) + '}{2} \\minus \\frac{' + rwrN(E.Mr_ct, 0) + ' \\minus ' + rwrN(E.Mo_ct, 0) + '}{' + rwrN(E.V_ct_min, 0) + '}', value: E.e_ct, unit: 'ft', d: 3 }),
+        rwrS({ id: 'e', label: 'Resultant location and eccentricity', sym: 'e', eq: '\\frac{B}{2} \\minus \\frac{M_{r} \\minus M_{o}}{V}', sub: '\\frac{' + rwrN(r.B, 2) + '}{2} \\minus \\frac{' + rwrN(E.Mr_ct, 0) + ' \\minus ' + rwrN(E.Mo_ct, 0) + '}{' + rwrN(E.V_ct_min, 0) + '}', value: E.e_ct, unit: 'ft', d: 3, note: 'x̄ = (M_r − M_o)/V = ' + rwrN(E.x_R_ct, 3) + ' ft from the toe' }),
         rwrS({ id: 'ec', label: 'Eccentricity limit under collision: |e| ≤ B/' + rwrN(E.eccDiv, 0) + ' = ' + rwrN(E.e_lim_ct, 3) + ' ft', sym: '\\frac{|e|}{e_{lim}}', eq: '', sub: '\\frac{' + rwrN(Math.abs(E.e_ct), 3) + '}{' + rwrN(E.e_lim_ct, 3) + '}', value: dcv('ctEcc'), unit: '', d: 3, ok: ok('ctEcc') }),
         a.onRock ? rwrS({ id: 'qu', label: 'Bearing pressure on rock (linear distribution), e = ' + rwrN(Math.abs(E.e_brg_ct), 3) + ' ft', sym: 'q_{u}', eq: Math.abs(E.e_brg_ct) <= r.B / 6 ? '\\frac{V}{B}\\left(1 + \\frac{6e}{B}\\right)' : '\\frac{2V}{3(B/2 \\minus e)}', sub: '', value: E.q_ult_ct / 1000, unit: 'ksf', d: 2, ref: AA('Art. 10.6.5, Eq. 11.6.3.2-' + (Math.abs(E.e_brg_ct) <= r.B / 6 ? '2' : '3')) })
           : rwrS({ id: 'qu', label: "Effective width B' = B − 2|e| = " + rwrN(E.B_eff_ct, 3) + ' ft and bearing pressure (Meyerhof)', sym: 'q_{u}', eq: '\\frac{V}{B^{\\prime}}', sub: '\\frac{' + rwrN(E.V_ct_min, 0) + '}{' + rwrN(E.B_eff_ct, 3) + '}\\frac{1}{1000}', value: E.q_ult_ct / 1000, unit: 'ksf', d: 2 }),
@@ -9199,7 +8790,7 @@ function rwrModel(r) {
         return { title: nm, ref: 'ACI 318-19 §24.3.2', steps: [
           rwrS({ id: k + '.smax', label: nm + ': maximum bar spacing (f_s = ⅔ f_y = ' + rwrN(x.fs, 0) + ' psi, c_c = ' + rwrN(x.cc, 2) + ' in)', sym: 's_{max}', eq: '\\min\\left(15\\,\\frac{40000}{f_{s}} \\minus 2.5\\,c_{c},\\; 12\\,\\frac{40000}{f_{s}}\\right)', sub: '\\min(' + rwrN(15 * 40000 / x.fs - 2.5 * x.cc, 2) + ',\\; ' + rwrN(12 * 40000 / x.fs, 2) + ')', value: x.smax, unit: 'in', d: 2, ref: 'ACI 318-19 §24.3.2' }),
           rwrS({ id: k + '.dc', label: nm + ': s ≤ s_max', sym: '\\frac{s}{s_{max}}', eq: '', sub: '\\frac{' + rwrN(x.spacing, 2) + '}{' + rwrN(x.smax, 2) + '}', value: dcv('crack' + K), unit: '', d: 3, ok: ok('crack' + K) })] }; });
-      subs.push(sub('Crack-control bar spacing', [rwrItem('crk', T), { type: 'note', text: 'ACI 318-19 §24.3.2 with f_s = ⅔ f_y. Not worked on a result tab (worked in the Export report §7 and here).' }]));
+      subs.push(sub('Crack-control bar spacing', [rwrItem('crk', T), { type: 'note', text: 'ACI 318-19 §24.3.2 with f_s = ⅔ f_y. Not worked on a result tab (worked here only).' }]));
     }
     secs.push({ title: 'Reinforcement schedule', subs });
   }
@@ -9215,6 +8806,7 @@ function rwrModel(r) {
         'Rankine earth pressure; surcharge over the heel and column live / snow loads are excluded from the resisting forces and included in the bearing check.',
         'b = 12 in design strip; no shear reinforcement (ACI 318-19 Table 22.5.5.1(c)).']).forEach(t => items.push({ type: 'note', text: t }));
     (r.warnings || []).forEach(w => items.push({ type: 'note', warn: true, text: 'Warning: ' + rwrPlain(w) }));
+    items.push({ type: 'note', text: 'Engineering note: generated by RetainCalc Pro as a calculation aid only. All results must be independently reviewed by a licensed Professional Engineer before use in construction. Global slope stability (IBC §1807.2 / ASCE 7 §12.13.5), seismic earth pressure (Mononobe-Okabe), drainage design, and site-specific geotechnical conditions require separate evaluation.' });   // RWRX: the Export report's closing note
     secs.push({ title: 'Assumptions and warnings', subs: [sub('Assumptions and warnings', items)] });
     secs.push({ title: 'References', subs: [sub('Codes and references cited', [{ type: 'table', head: ['Reference', 'Provisions used'], rows: RW_REFS[isA ? 'AASHTO' : 'ACI'].map(([x, y]) => [rwrPlain(x), rwrPlain(y)]) }])] });
   }
@@ -9225,7 +8817,7 @@ function rwrModel(r) {
       return { cells: [rwrPlain(c.label), c.val != null ? rwrPlain(c.val) : '—', { t: (typeof dc === 'number' && isFinite(dc)) ? rwrN(dc, 2) : (dc === Infinity ? '∞' : 'n/a'), n: true }, rwrPlain(x.ref || '') + (x.note ? '; ' + rwrPlain(x.note) : ''), { t: c.ok ? 'PASS' : 'FAIL', cls: c.ok ? 'ok' : 'ng' }, CK[k] ? { t: '', key: CK[k] } : '—'], cls: c.ok ? '' : 'gov' }; });
     const nF = Object.values(r.checks).filter(c => !c.ok).length, nT = Object.keys(r.checks).length;
     secs.unshift({ title: 'Design summary', subs: [sub(nF ? nF + ' of ' + nT + ' checks fail' : 'All ' + nT + ' checks pass', [{ type: 'table', wide: true, head: ['Check', 'Value', 'D/C', 'Basis', 'Status', 'Worked in'], rows },
-      { type: 'note', text: 'The checks of the status bar, with D/C as in the Export report (for a factor-of-safety check D/C = 1.5 / FOS). ' + (isA ? '' : 'Crack control (ACI 318-19 §24.3.2) is counted in the status bar. ') + '' }, { type: 'note', text: '[[tab:overview|On screen: Overview tab (scorecard)]]' }])] });
+      { type: 'note', text: 'The checks of the status bar, with their D/C (for a factor-of-safety check D/C = 1.5 / FOS). ' + (isA ? '' : 'Crack control (ACI 318-19 §24.3.2) is counted in the status bar. ') + '' }, { type: 'note', text: '[[tab:overview|On screen: Overview tab (scorecard)]]' }])] });
   }
   const codes = isA ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)' : 'ACI 318-19 · IBC 2021 · ASCE 7-22';
   return { title: 'Cantilever Retaining Wall — Calculation Report', subtitle: meta.name || 'Unnamed project', code: codes,
@@ -9239,10 +8831,12 @@ function renderRwReport() {
   const r = window._R;
   if (!r || r.fatal) { T.innerHTML = (r && r.errors ? r.errors : ['No results.']).map(e => `<div class="alert fail">⚠ ${e}</div>`).join('') + '<div class="alert info">Correct the input errors to see the report.</div>'; RWRP.api = null; RWRP.doc = null; return; }
   if (RWRP.imgsFor !== r) { RWRP.imgsFor = r; RWRP.imgs = null; const tok = r;   // charts: drawn off screen by the tabs' own plot jobs (async), then the report is mounted again
-    rwPlotImages().then(im => { if (RWRP.imgsFor !== tok || !Object.keys(im).length) return; RWRP.imgs = im; const T2 = document.getElementById('tab-report'); if (T2 && T2.classList.contains('active')) renderRwReport(); }).catch(() => {}); }
+    RWRP.imgsP = rwPlotImages().then(im => { if (RWRP.imgsFor !== tok || !Object.keys(im).length) return; RWRP.imgs = im; const T2 = document.getElementById('tab-report'); if (T2 && T2.classList.contains('active')) renderRwReport(); }).catch(() => {}); }
   let M;
   try { M = rwrModel(r); } catch (e) { console.error(e); T.innerHTML = '<div class="alert fail">⚠ Report error: ' + String(e && e.message).replace(/</g, '&lt;') + '</div>'; RWRP.api = null; RWRP.doc = null; return; }
   rwrAddPlots(M, RWRP.imgs || {});
+  if (RWRP.notesFor !== r) { RWRP.notesFor = r; RWRP.notes = rwrTabNotes(r); }   // RWRX: once per result
+  rwrAddNotes(M, RWRP.notes);
   RWRP.api = SharedReport.mount(T, M, { closed: RWRP.closed, onGoto: rwrGoto });
   RWRP.doc = RWRP.api.doc;
 }
@@ -9255,6 +8849,63 @@ function rwrAddPlots(M, im) {
   put(/^Footing design/, /^Heel/, [fig('plt-ftg-loads', 'Factored loads on the footing (Footing design tab chart)'), fig('plt-heel-sm', 'Heel shear and moment diagrams (Footing design tab chart)')]);
   put(/^Footing design/, /^Toe/, [fig('plt-toe-sm', 'Toe shear and moment diagrams (Footing design tab chart)')]);
 }
+/* RWRX (2026-11-02): what the retired Export report printed from the result tabs and the Report lacked, read from the tabs' own
+   HTML (rwTabSource, as the Export report did): each tab's notes (.alert boxes, prefixed with their card's title; the r.warnings
+   boxes are already in "Assumptions and warnings") and the Rebar schedule tab's Bar notes, General detailing requirements and
+   material quantities cards (their tables as shown). No value is computed here. */
+function rwrTabNotes(r) {
+  const txt = e => e ? rwrPlain(e.innerHTML).replace(/\s+/g, ' ').trim() : '';
+  const nrm = x => String(x).toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const warn = new Set((r.warnings || []).map(w => nrm(rwrPlain(w))));
+  const out = {};
+  ['stability', 'stem', 'footing', 'rebar'].forEach(tab => {
+    let h = ''; try { h = rwTabSource(tab, r); } catch (e) { console.warn('report notes:', e); return; }
+    const t = document.createElement('template'); t.innerHTML = h;
+    const notes = [], cards = {};
+    t.content.querySelectorAll('.alert').forEach(e => {
+      const c = e.closest('.card'), ct = c && c.querySelector('.card-title'), x = txt(e);
+      if (!x || warn.has(nrm(x.replace(/^[⚠ℹ✓]\s*/, '')))) return;
+      notes.push({ type: 'note', warn: e.classList.contains('warn') || e.classList.contains('fail'), text: (ct ? txt(ct) + ': ' : '') + x });
+    });
+    t.content.querySelectorAll('.card').forEach(c => { const ct = c.querySelector('.card-title'); if (ct) cards[ct.textContent.trim()] = c; });
+    const tbl = c => { const T = c && c.querySelector('table.tbl'); if (!T) return null;
+      return { type: 'table', head: [...T.querySelectorAll('thead th')].map(txt), rows: [...T.querySelectorAll('tbody tr')].map(tr => [...tr.children].map(txt)) }; };
+    const chk = c => { const L = c ? [...c.querySelectorAll('.chk-row')] : []; return L.length ? { type: 'table', head: ['Item', 'Value'], rows: L.map(x => [txt(x.querySelector('.chk-label')), txt(x.querySelector('.chk-val'))]) } : null; };
+    const ref = c => { const x = c && c.querySelector('.card-ref'); return x ? ' (' + txt(x) + ')' : ''; };
+    const extra = [];
+    if (tab === 'rebar') {
+      const bn = cards['Bar Notes'], gd = cards['General Detailing Requirements'], q = Object.keys(cards).find(k => /^Concrete & Steel/.test(k));
+      if (tbl(bn)) extra.push({ title: 'Bar notes', items: [tbl(bn)] });
+      if (chk(gd)) extra.push({ title: 'General detailing requirements' + ref(gd), items: [chk(gd)] });
+      if (q && tbl(cards[q])) extra.push({ title: 'Approximate material quantities: ' + q.replace(/^Concrete & Steel/, 'concrete and steel'), items: [tbl(cards[q])] });
+    }
+    out[tab] = { notes, extra };
+  });
+  return out;
+}
+function rwrAddNotes(M, N) {
+  if (!N) return;
+  [['stability', /^Stability/], ['stem', /^Stem design/], ['footing', /^Footing design/], ['rebar', /^Reinforcement schedule/]].forEach(([tab, re]) => {
+    const s = M.sections.find(x => re.test(x.title)), n = N[tab]; if (!s || !n) return;
+    n.extra.forEach(q => s.subs.push({ title: q.title, items: q.items.slice() }));
+    if (n.notes.length) s.subs.push({ title: 'Notes on the ' + RW_TABNAME[tab] + ' tab', items: n.notes.slice() });
+  });
+}
+/* RWRX: "Export report" prints the Report tab from any tab (after its chart images are ready); the tab of before comes back */
+let RWRP_BACK = null;
+function rwrShown() { const T = document.getElementById('tab-report'); return !!(T && T.classList.contains('active')); }
+function rwrPrintPrep() {
+  if (document.body.classList.contains('rp-printing') || rwrShown() || !window.SharedReport || !window.SharedSteps || !window._R || window._R.fatal) return;
+  const cur = document.querySelector('.tab-btn.active'); RWRP_BACK = cur ? cur.dataset.tab : null;
+  const b = document.querySelector('.tab-btn[data-tab="report"]'); if (b) b.click();
+}
+async function rwrPrintAny() {
+  rwrPrintPrep();
+  if (rwrShown()) { try { await RWRP.imgsP; } catch (e) { } }
+  if (rwrShown() && RWRP.api) { RWRP.api.print(); return; }
+  window.print();
+}
+window.addEventListener('afterprint', () => { if (RWRP_BACK) { const b = document.querySelector(`.tab-btn[data-tab="${RWRP_BACK}"]`); RWRP_BACK = null; if (b) b.click(); } });
 /* [[tab:…]] links of the report: a result tab, or "card:<key>" (the card on its tab, as the D11 "Worked in" links) */
 function rwrGoto(name) {
   if (name.indexOf('card:') === 0) { rwGoto(name.slice(5)); return; }
