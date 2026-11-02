@@ -11,6 +11,9 @@
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
 <!-- Plotly -->
 <script src="https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.27.0/plotly.min.js"></script>
+<!-- RBRX (2026-11-02): the browser's Print / Ctrl+P from any tab first shows the Report tab (rbrPrintPrep, below). Registered here,
+     before shared/report.js's own beforeprint listener, so that listener finds the Report shown (running header, every item filled). -->
+<script>window.addEventListener('beforeprint',function(){ try{ rbrPrintPrep(); }catch(e){} });</script>
 <!-- RBRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
@@ -204,48 +207,7 @@ a.wkA:hover{text-decoration:underline;}
 .outputpanel:has(.rp){min-width:0;}
 @media(max-width:1000px){#tabcontent .rp-body{grid-template-columns:minmax(0,1fr);} #tabcontent .rp-doc{min-width:0;}}
 
-/* ---- Print ---- */
-#printroot{display:none;}
-@media print{
-  body{background:#fff;}
-  .appwrap{max-width:none; padding:0;}
-  .no-print{display:none!important;}
-  #printroot{display:block!important;}
-  @page{margin:0.7in; size:letter;}
-  .note{break-inside:avoid;}
-  .note > summary{display:none;}
-  .note .note-body{padding-top:2px;}
-  /* D11 calculation sheet (2026-10-18): cover, references, contents, numbered sections, result lines */
-  #printroot a{color:#000; text-decoration:none;}
-  .cr-cover{break-after:page; padding-top:0.9in;}
-  .cr-cover-t{text-align:center; margin:0 0 0.55in;}
-  .cr-cover-t h1{font-size:24pt; line-height:1.2; margin:0 0 12pt;}
-  .cr-cover-t p{font-size:13pt; font-weight:bold; margin:0 0 6pt;}
-  .cr-cover-t p.cr-cover-p{font-weight:normal; font-size:11pt;}
-  .cr-tb{width:100%; border-collapse:collapse; font-size:10pt; margin:0 0 12pt; border:1.4px solid #000;}
-  .cr-tb td{padding:4px 8px; border:.6px solid #999; vertical-align:top; width:50%;}
-  .cr-front{break-after:page;}
-  .cr-break{break-before:page;}
-  .cr-h1{font-size:12pt; text-transform:uppercase; text-decoration:underline; margin:0 0 8pt; break-after:avoid;}
-  .cr-front .cr-h1{margin-top:10pt;}
-  .cr-refs{border-collapse:collapse; margin:0 0 14pt; font-size:10pt;}
-  .cr-refs td{padding:2pt 14pt 2pt 0; vertical-align:top;}
-  .cr-refs td:first-child{white-space:nowrap; font-weight:bold;}
-  .cr-toc,.cr-toc ol{list-style:none; margin:0; padding:0;}
-  .cr-toc>li{margin:4pt 0;}
-  .cr-toc ol{padding-left:18pt; font-size:9.5pt;}
-  .cr-p{margin:0 0 7pt; font-size:9.5pt;}
-  .cr-resw{break-inside:avoid;}
-  .cr-resh{font-size:10.5pt; font-weight:bold; margin:14pt 0 0; break-after:avoid;}
-  .cr-results{margin:3pt 0 6pt; border-top:.8pt solid #000; padding-top:3pt;}
-  .cr-line{display:grid; grid-template-columns:2.3in 1fr .55in; gap:0 10pt; padding:2.5pt 0; break-inside:avoid; font-size:10pt; align-items:baseline;}
-  .cr-line .cr-r{text-align:right; font-weight:bold;}
-  .cr-ng .cr-r{text-decoration:underline;}
-  .cr-refi{font-size:9pt; color:#333;}
-  .wkLink{color:#333;}
-  .eq,table.vars tr,.result-hero{break-inside:avoid;}
-  .alltools{display:none!important;}
-}
+/* RBRX (2026-11-02): the D11 print report and its print CSS were removed; Print prints the Report tab (shared/report.js print layout) */
 </style>
 </head>
 <body>
@@ -276,8 +238,6 @@ a.wkA:hover{text-decoration:underline;}
     </div>
   </div>
 </div>
-
-<div id="printroot"></div>
 
 <script>
 /* =====================================================================
@@ -1459,7 +1419,7 @@ function tabBatch(inp,f){
 
 /* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
    On screen "Worked in: <value> → Tab · Card" opens the tab, scrolls the card into view and flashes it; in the
-   printed report the same link reads "<value>: see §n.k" (buildReport rewrites it). Display only. ---- */
+   printed report (retired 2026-11-02, RBRX) the same link read "<value>: see §n.k"; the Report tab links its own steps. Display only. ---- */
 const REBAR_CARDS={tLd:['tension','Development Length'],tConf:['tension','Confinement Term'],
   tExcess:['tension','Excess Reinforcement Factor'],hLdh:['hook','Hook Development Length'],
   cLdc:['compression','Governing Expressions'],tsLen:['tsplice','Base Development Length'],
@@ -1492,7 +1452,7 @@ function rebarGoto(card){
 }
 document.addEventListener('click',e=>{
   const a=e.target&&e.target.closest?e.target.closest('a.wkA'):null;
-  if(!a||a.closest('#printroot')) return;
+  if(!a) return;
   e.preventDefault(); rebarGoto(a.getAttribute('data-card'));
 });
 
@@ -1797,31 +1757,12 @@ function showRebarTable(){ showRefImage('table'); }
 
 /* =====================================================================
    PRINT / PDF REPORT
+   RBRX (2026-11-02): the D11 calculation sheet (buildReport → #printroot, rebarPageCSS, rebarResultBlock) was retired; its
+   content is in the Report tab (rbrModel). The Print / PDF Report button, Ctrl+P and the browser's Print print the Report
+   from any tab and then show the tab of before (printReport, rbrPrintPrep, below). Kept: REBAR_RPT_TOOL (print footer),
+   rebarRefs (the Report's references) and rebarResultRows (the Report's summary of results).
    ===================================================================== */
-/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / Base Plate format — cover with title
-   block, references, numbered table of contents (links), numbered sections n (1 = summary and inputs, then the
-   result tabs) and subsections n.k (the tabs' own cards, built by the tabs' own functions: symbolic → values
-   substituted → result), a result line per length and per check from the tool's own values, and the print
-   header / "Page X of Y" footer (@page margin boxes, rebarPageCSS, present only while printing).
-   No value is computed differently here. */
 const REBAR_RPT_TOOL = "Rebar Development & Splice Calculator";
-function rebarPageCSS(inp){
-  const q=v=>String(v==null||v===""?"—":v).replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/[\r\n]+/g," ");
-  const desc=("#"+inp.barSize+" bar development and splices").slice(0,40);
-  const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
-  const foot='font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt;';
-  return '@page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'
-    +' @top-left { content: "Project No: '+q(inp.projNo)+'\\A Description: '+q(desc)+'"; '+box+' text-align: left; }'
-    +' @top-center { content: "Computed By: '+q(inp.calcBy)+'\\A Checked By: '+q(inp.chkBy)+'"; '+box+' text-align: left; }'
-    +' @top-right { content: "Date: '+q(inp.calcDate)+'\\A Date: '+q(inp.chkDate)+'"; '+box+' text-align: right; }'
-    +' @bottom-left { content: "'+q(inp.projName||"Untitled")+' ('+q(REBAR_RPT_TOOL)+')"; '+foot+' }'
-    +' @bottom-right { content: "Page " counter(page) " of " counter(pages); '+foot+' } }';
-}
-function rebarApplyPageCSS(on){
-  let st=document.getElementById('rebar-page');
-  if(!st){ st=document.createElement('style'); st.id='rebar-page'; document.head.appendChild(st); }
-  st.textContent = on ? rebarPageCSS(readInputs()) : "";
-}
 /* codes and articles the printed calculation cites (as the tool quotes them); nothing added */
 function rebarRefs(inp,f){
   if(f.AASHTO) return [
@@ -1867,100 +1808,12 @@ function rebarResultRows(inp,f,tab){
   }
   return rows;
 }
-function rebarResultBlock(rows,cardMap){
-  return `<div class="cr-results">`+rows.map(r=>{
-    const c=r.card&&REBAR_CARDS[r.card], hit=c&&cardMap[c[0]+"|"+c[1]];
-    return `<div class="cr-line${(r.st==="FAIL"||r.st==="CHK")?" cr-ng":""}"><span class="cr-d">${r.lab}:</span><span class="cr-m">${r.msg} <span class="cr-refi">(${r.ref}${hit?`; <a href="#${hit.id}">§${hit.num}</a>`:""})</span></span><span class="cr-r">${r.st}</span></div>`;
-  }).join("")+`</div>`;
-}
-function buildReport(){
-  const inp=readInputs(), f=computeFactors(inp);
-  const w=validate(inp,f);
-  const root=document.getElementById('printroot');
-  const codeName = f.AASHTO?"AASHTO LRFD 10th Ed. (2024) §5.10.8":"ACI 318-19";
-  const inputEcho=`
-    <div class="subsec"><div class="sh"><span>Input Summary</span></div>
-    <table class="vars">
-      <tr><th>Design Code</th><td colspan="3">${codeName}</td></tr>
-      <tr><th>Bar Size</th><td>#${inp.barSize} (d_b=${fmt(f.db,3)} in, A_b=${fmt(f.Ab,2)} in²)</td>
-          <th>f_y</th><td>${fmt(inp.fy,0)} psi</td></tr>
-      <tr><th>f'_c</th><td>${fmt(inp.fc,0)} psi</td>
-          <th>Concrete</th><td>${inp.lightweight?"Lightweight (λ="+fmt(f.lambda,2)+")":"Normalweight (λ=1.0)"}</td></tr>
-      <tr><th>Casting</th><td>${inp.topBar?"Top bar":"Other/bottom"}</td>
-          <th>Coating</th><td>${fmt(f.psiE,1)}</td></tr>
-      <tr><th>c_b</th><td>${fmt(inp.cb,2)} in</td>
-          <th>${f.AASHTO?"k_tr":"K_tr"}</th><td>${f.AASHTO?fmt(f.ktr_a,4)+" in ("+rebarLink("tConfA","see","")+")":fmt(f.Ktr,3)+" in ("+rebarLink("tConf","see","")+")"}</td></tr>
-      ${inp.useExcess?`<tr><th>Excess reinf.</th><td>As,req=${fmt(inp.asReq,2)} / As,prov=${fmt(inp.asProv,2)} → ${fmt(f.excess,3)} (${rebarLink("tExcess","see","")})</td>
-          <th>% spliced</th><td>${fmt(inp.pctSpliced,0)}%</td></tr>`:""}
-    </table></div>`;
-  const assum = inp.assumptions ? `<div class="subsec"><div class="sh"><span>Engineering Assumptions</span></div>
-      <div class="narr" style="white-space:pre-wrap">${inp.assumptions.replace(/</g,"&lt;")}</div></div>` : "";
-
-  const SECS=[["tension","Tension Development",()=>tabTension(inp,f,true)],["hook","Standard Hook",()=>tabHook(inp,f)],
-    ["compression","Compression Development",()=>tabComp(inp,f)],["tsplice","Tension Lap Splice",()=>tabTSplice(inp,f)],
-    ["csplice","Compression Lap Splice",()=>tabCSplice(inp,f)],["batch","Bar Development Schedule",()=>tabBatch(inp,f)]];
-  let body = `<section class="cr-sec" data-sec="sum"><h1 class="cr-h1">1. Summary and Inputs</h1>${inputEcho}
-    <div class="subsec"><div class="sh"><span>Summary of Results</span><span class="ref">${codeName}</span></div><div data-res="all"></div></div>
-    ${w.length?`<div class="subsec"><div class="sh"><span>Validation Notices</span></div>${warnHTML(w)}</div>`:""}${assum}</section>`;
-  SECS.forEach(([id,title,fn],i)=>{
-    body += `<section class="cr-sec cr-break" data-sec="${id}"><h1 class="cr-h1">${i+2}. ${title}</h1>${fn()}`
-      + (id==="batch"?"":`<div class="cr-resw"><div class="cr-resh">Results — ${title}</div><div data-res="${id}"></div></div>`)+`</section>`;
-  });
-  root.innerHTML = `<div class="cr-frontall"></div>${body}
-    <div style="margin-top:20px;border-top:1px solid #000;padding-top:6px;text-align:center;font-size:10px">
-      End of Calculation — ${codeName}</div>`;
-  // the tabs' cards become numbered subsections n.k
-  const cardMap={}, toc=[];
-  root.querySelectorAll('section.cr-sec').forEach((sec,i)=>{
-    const n=i+1, sid="rbr-"+n, h=sec.querySelector('h1.cr-h1'), subs=[];
-    h.id=sid;
-    sec.querySelectorAll('.subsec').forEach(ss=>{
-      const sh=ss.querySelector(':scope > .sh'), sp=sh&&sh.querySelector('span'); if(!sp) return;
-      const title=rebarCardTitle(sh), num=n+"."+(subs.length+1), id2=sid+"-"+(subs.length+1);
-      sp.textContent=num+" "+title;   // also drops the screen-only "view bend dimensions" link from the hook schematic title
-      ss.id=id2;
-      const key=sec.getAttribute('data-sec')+"|"+title; if(!cardMap[key]) cardMap[key]={num,id:id2};
-      subs.push({num,id:id2,t:title});
-    });
-    toc.push({n,id:sid,t:h.textContent.replace(/^\d+\.\s*/,""),subs});
-  });
-  // result lines: "<length or check>: <value> (<ref>; §n.k) PASS / FAIL / CHK / —"
-  root.querySelectorAll('[data-res]').forEach(d=>{ const tb=d.getAttribute('data-res'); d.outerHTML=rebarResultBlock(rebarResultRows(inp,f,tb==="all"?null:tb),cardMap); });
-  // D11 links: "→ Tab · Card" reads "see §n.k" in the report
-  root.querySelectorAll('a.wkA').forEach(a=>{
-    const c=REBAR_CARDS[a.getAttribute('data-card')], hit=c&&cardMap[c[0]+"|"+c[1]], pre=a.getAttribute('data-txt');
-    a.removeAttribute('title');
-    if(hit){ a.textContent=(pre?pre+": ":"")+"see §"+hit.num; a.setAttribute('href',"#"+hit.id); }
-    else { a.textContent=(pre?pre+": ":"")+(c?"see "+rebarCardTxt(a.getAttribute('data-card'))+" (not in this printout)":""); a.removeAttribute('href'); }
-  });
-  // front matter: cover with title block, references, table of contents
-  const allRows=rebarResultRows(inp,f,null), nNG=allRows.filter(r=>r.st==="FAIL"||r.st==="CHK").length, nChk=allRows.filter(r=>r.st!=="—").length;
-  const td=(a,b)=>`<td><b>${a}:</b> ${escHTML(b||"—")}</td>`;
-  root.querySelector('.cr-frontall').innerHTML = `<section class="cr-cover"><div class="cr-cover-t">
-      <h1>Rebar Development &amp; Splice Calculation</h1><p>${escHTML(inp.projName||"Untitled")}</p>
-      <p class="cr-cover-p">#${inp.barSize} bar · f<sub>y</sub> = ${fmt(inp.fy,0)} psi · f′<sub>c</sub> = ${fmt(inp.fc,0)} psi</p>
-      <p class="cr-cover-p">${codeName}</p><p class="cr-cover-p">by Mario Lococo</p></div>
-    <table class="cr-tb"><tr>${td("Project",inp.projName)}${td("Project No.",inp.projNo)}</tr>
-      <tr>${td("Calculated by",inp.calcBy)}${td("Date",inp.calcDate)}</tr>
-      <tr>${td("Checked by",inp.chkBy)}${td("Checked date",inp.chkDate)}</tr>
-      <tr>${td("Design code",codeName)}${td("Bar","#"+inp.barSize+" (d_b = "+fmt(f.db,3)+" in., A_b = "+fmt(f.Ab,2)+" in²)")}</tr></table>
-    <p class="cr-p"><b>Code checks:</b> ${nChk-nNG} of ${nChk} pass${nNG?`, ${nNG} need attention (FAIL / CHK)`:""}. Required lengths and all checks: <a href="#${(cardMap["sum|Summary of Results"]||{}).id}">see §${(cardMap["sum|Summary of Results"]||{}).num}</a>.</p></section>
-    <section class="cr-front"><h2 class="cr-h1">References:</h2>
-      <table class="cr-refs">${rebarRefs(inp,f).map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join("")}</table>
-      <h2 class="cr-h1">Table of contents:</h2>
-      <ol class="cr-toc">${toc.map(s=>`<li><a href="#${s.id}">${s.n}. ${escHTML(s.t)}</a>${s.subs.length?`<ol>${s.subs.map(q=>`<li><a href="#${q.id}">${q.num} ${escHTML(q.t)}</a></li>`).join("")}</ol>`:""}</li>`).join("")}</ol>
-      <p class="cr-p">Equations are shown symbolically, then with the values substituted, then with the result. Each section ends with its result lines. Lengths are required lengths: the tool has no provided-length input, so they carry no PASS / FAIL (—); compare them with the lengths detailed. Checks read PASS or FAIL, or CHK where an input the check needs is missing (as on the dashboard). "see §n.k" points to the subsection where a quoted value is worked. Units: in., psi unless noted.</p></section>`;
-  typeset(root);
-}
+/* RBRX: the button prints the Report from any tab (shared/report.js print: whole report, running header, page numbers) */
 function printReport(){
-  buildReport();
-  rebarApplyPageCSS(true);
-  setTimeout(()=>window.print(),350);
+  rbrPrintPrep();
+  if(RBRP.on&&RBRP.api){ RBRP.api.print(); return; }
+  window.print();   // no report (shared files missing): the page as shown
 }
-/* Ctrl+P / the browser's Print also prints the current report (built fresh), with the page header and footer */
-window.addEventListener('beforeprint',()=>{ if(rbrWillPrint()) return;   /* RBRP: the Report tab prints itself (shared/report.js) */
-  try{ buildReport(); rebarApplyPageCSS(true); }catch(e){} });
-window.addEventListener('afterprint',()=>{ try{ rebarApplyPageCSS(false); }catch(e){} });
 
 /* =====================================================================
    REPORT TAB (RBRP, 2026-11-01): the calculation report in the shared viewer (shared/report.js: navigation tree,
@@ -2008,7 +1861,7 @@ function rbrTension(inp,f){
       rbS({id:'psiS',label:'Bar size factor (#6 and smaller 0.8, else 1.0; #'+inp.barSize+')',sym:'\\psi_{s}',value:f.psiS,unit:'',d:1}),
       rbS({id:'psiG',label:'Reinforcement grade factor (f_y = '+rbG(inp.fy,0).replace('{,}',',')+' psi: Grade 40/60 1.0, 80 1.15, 100 1.30)',sym:'\\psi_{g}',value:f.psiG,unit:'',d:2}),
       rbS({id:'lam',label:inp.lightweight?'Lightweight concrete factor (entered, limited to 0.75–1.0)':'Lightweight concrete factor (normal weight)',sym:'\\lambda',value:f.lambda,unit:'',d:2,ref:inp.lightweight?'ACI 318-19 Table 19.2.4.2':''}),
-      rbS({id:'psiTE',label:'Product limit on ψ_t·ψ_e',sym:'\\psi_{t}\\psi_{e}',eq:'\\min(\\psi_{t}\\psi_{e},\\, 1.7)',sub:'\\min('+rbN(f.psiT,1)+'\\times '+rbN(f.psiE,1)+',\\, 1.7)',value:f.psiTEcap,unit:'',d:2,ref:'ACI 318-19 25.4.2.4'})]});
+      rbS({id:'psiTE',label:'Product limit on ψ_t·ψ_e',sym:'\\psi_{t}\\psi_{e}',eq:'\\min(\\psi_{t}\\psi_{e},\\, 1.7)',sub:'\\min('+rbN(f.psiT,1)+'\\times '+rbN(f.psiE,1)+',\\, 1.7) = \\min('+rbN(f.psiT*f.psiE)+',\\, 1.7)',value:f.psiTEcap,unit:'',d:2,ref:'ACI 318-19 25.4.2.4'})]});
     const kH=ktrHSCheck(inp,f), cs=[
       rbS({id:'cb',label:'Lesser of cover and half the center-to-center spacing (input)',sym:'c_{b}',value:inp.cb,unit:'in'}),
       rbS({id:'db',label:'Bar diameter (#'+inp.barSize+')',sym:'d_{b}',value:f.db,unit:'in',d:3}),
@@ -2045,7 +1898,7 @@ function rbrTension(inp,f){
     T.push({title:'Modification factors',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1b',steps:[
       rbS({id:'lrl',label:'Reinforcement location factor ('+(inp.topBar?'top bar':'not a top bar')+')',sym:'\\lambda_{rl}',value:f.lam_rl,unit:'',d:1}),
       rbS({id:'lcf',label:'Coating factor (as selected)',sym:'\\lambda_{cf}',value:f.lam_cf,unit:'',d:1}),
-      rbS({id:'rlcf',label:'Product limit on λ_rl·λ_cf',sym:'\\lambda_{rl}\\lambda_{cf}',eq:'\\min(\\lambda_{rl}\\lambda_{cf},\\, 1.7)',sub:'\\min('+rbN(f.lam_rl,1)+'\\times '+rbN(f.lam_cf,1)+',\\, 1.7)',value:f.lam_rlcf_cap,unit:'',d:2})]});
+      rbS({id:'rlcf',label:'Product limit on λ_rl·λ_cf',sym:'\\lambda_{rl}\\lambda_{cf}',eq:'\\min(\\lambda_{rl}\\lambda_{cf},\\, 1.7)',sub:'\\min('+rbN(f.lam_rl,1)+'\\times '+rbN(f.lam_cf,1)+',\\, 1.7) = \\min('+rbN(f.lam_rl*f.lam_cf)+',\\, 1.7)',value:f.lam_rlcf_cap,unit:'',d:2})]});
     T.push({title:'Confinement factor',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1c',steps:rbAashtoRc(inp,f,f.ktr_a,f.lam_rc_raw,f.lam_rc,false)});
     T.push({title:'Development length',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1a-1',steps:[
       rbS({id:'ldcalc',label:'Tension development length',sym:'l_{d,calc}',eq:'l_{db}\\, \\lambda_{rl}\\lambda_{cf}\\, \\lambda_{rc}',sub:rbN(t.ldb)+'\\times '+rbN(f.lam_rlcf_cap)+'\\times '+rbN(f.lam_rc,4),value:t.ld_calc,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.1a-1'}),
@@ -2103,7 +1956,7 @@ function rbrHook(inp,f){
     T.push({title:'Modification factors',ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1b–c, 5.10.8.2.4b',steps:[
       rbS({id:'lrl',label:'Reinforcement location factor (also for hooks)',sym:'\\lambda_{rl}',value:f.lam_rl,unit:'',d:1}),
       rbS({id:'lcf',label:'Coating factor, hooked bar (1.2 if coated)',sym:'\\lambda_{cf}',value:h.cf,unit:'',d:1}),
-      rbS({id:'rlcf',label:'Product limit on λ_rl·λ_cf',sym:'\\lambda_{rl}\\lambda_{cf}',eq:'\\min(\\lambda_{rl}\\lambda_{cf},\\, 1.7)',sub:'\\min('+rbN(f.lam_rl,1)+'\\times '+rbN(h.cf,1)+',\\, 1.7)',value:h.rlcf,unit:'',d:2,ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1b'}),
+      rbS({id:'rlcf',label:'Product limit on λ_rl·λ_cf',sym:'\\lambda_{rl}\\lambda_{cf}',eq:'\\min(\\lambda_{rl}\\lambda_{cf},\\, 1.7)',sub:'\\min('+rbN(f.lam_rl,1)+'\\times '+rbN(h.cf,1)+',\\, 1.7) = \\min('+rbN(f.lam_rl*h.cf)+',\\, 1.7)',value:h.rlcf,unit:'',d:2,ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1b'}),
       rbS({id:'conf',label:'Tie factor (0.8 with ties per 5.10.8.2.4b, #11 and smaller; else 1.0)',sym:'\\text{tie factor}',value:h.conf,unit:'',d:1,ref:'AASHTO LRFD 10th Ed. 5.10.8.2.4b'}),
       rbS({id:'lam',label:'Concrete density modification factor',sym:'\\lambda',value:f.lambda,unit:'',d:2,note:'see §lam'})].concat(exS)});
     T.push({title:'Confinement factor'+(h.ties?' (k_tr = 0, tie reduction taken)':''),ref:'AASHTO LRFD 10th Ed. 5.10.8.2.1c',steps:rbAashtoRc(inp,f,h.ties?0:f.ktr_a,h.lam_rc_h_raw,h.lam_rc_h,true)});
@@ -2198,6 +2051,19 @@ function rbrCSplice(inp,f){
   return [{title:'Splice length',ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.5a':'ACI 318-19 25.5.5.1',steps:L}];
 }
 
+/* RBRX (2026-11-02): the result tabs' own explanatory text, as the retired print report (buildReport) printed it: each
+   .narr paragraph and each "Commentary — why & what" note (paragraph by paragraph, one line per factor), from the same
+   tab functions (tabTension(…,true), tabHook, …), parsed inert (template) and turned into report text by rbPlain. */
+function rbComm(html){
+  const t=document.createElement('template'); t.innerHTML=html; const out=[];
+  const txt=h=>rbPlain(h).replace(/\s+/g,' ').trim();
+  t.content.querySelectorAll('.narr,.note-body').forEach(e=>{
+    if(e.classList.contains('narr')){ if(!e.parentElement||!e.parentElement.closest('.note-body')) out.push(txt(e.innerHTML)); return; }
+    e.childNodes.forEach(n=>out.push(txt(n.nodeType===1?n.innerHTML:String(n.textContent).replace(/&/g,'&amp;').replace(/</g,'&lt;'))));
+  });
+  return out.filter(Boolean).map(text=>({type:'note',text}));
+}
+function rbCommSub(html){ const L=rbComm(html); return L.length?[{title:'Notes and commentary',items:L}]:[]; }
 function rbrModel(){
   const inp=readInputs(), f=computeFactors(inp), w=validate(inp,f), A=f.AASHTO, secs=[];
   const codeName=A?'AASHTO LRFD 10th Ed. (2024) §5.10.8':'ACI 318-19';
@@ -2208,7 +2074,7 @@ function rbrModel(){
     const subs=[];
     subs.push({title:'Project',items:[{type:'kv',rows:[['Project',inp.projName||'—'],['Project number',inp.projNo||'—'],
       ['Calculated by',(inp.calcBy||'—')+(inp.calcDate?', '+inp.calcDate:'')],['Checked by',(inp.chkBy||'—')+(inp.chkDate?', '+inp.chkDate:'')],['Design code',codeName]]},
-      {type:'note',text:'Units: in., psi'+(A?' (ksi in the AASHTO equations)':'')+'. Every value in this report is the value the tool computes on its result tabs (Tension l_d, Hook l_dh, Compression l_dc, Tension Splice, Comp. Splice, Bar Schedule); each section links to its tab.'}]});
+      {type:'note',text:REBAR_RPT_TOOL+', by Mario Lococo. Equations are shown symbolically, then with the values substituted, then with the result. '+'Units: in., psi'+(A?' (ksi in the AASHTO equations)':'')+'. Every value in this report is the value the tool computes on its result tabs (Tension l_d, Hook l_dh, Compression l_dc, Tension Splice, Comp. Splice, Bar Schedule); each section links to its tab.'}]});
     const yn=b=>b?'yes':'no';
     const rows=[['Design code',codeName,'–'],['Bar size','#'+inp.barSize+' ($d_{b}$ = '+rbN(f.db,3)+' in., $A_{b}$ = '+rbN(f.Ab)+' in²)','–'],
       ['Yield strength $f_{y}$',rbG(inp.fy,0).replace('{,}',','),'psi'],['Concrete strength $f^{\\prime}_{c}$',rbG(inp.fc,0).replace('{,}',','),'psi'],
@@ -2225,6 +2091,7 @@ function rbrModel(){
     const RR=rebarResultRows(inp,f,null), stc=s=>s==='PASS'?'ok':s==='FAIL'?'ng':s==='CHK'?'hi':'na';
     subs.push({title:'Summary of results',items:[{type:'table',head:['Length or check','Value','Reference','Status'],
       rows:RR.map(r=>[rbPlain(r.lab),{t:rbPlain(r.msg),key:r.card?CARD_KEY[r.card]:undefined},rbPlain(r.ref),{t:r.st,cls:stc(r.st)}])},
+      {type:'note',text:(()=>{ const nC=RR.filter(r=>r.st!=='—').length, nN=RR.filter(r=>r.st==='FAIL'||r.st==='CHK').length; return 'Code checks: '+(nC-nN)+' of '+nC+' pass'+(nN?', '+nN+' need attention (FAIL / CHK)':'')+'.'; })()},
       {type:'note',text:'Lengths are required lengths: the tool has no provided-length input, so they carry no pass / fail (—); compare them with the lengths detailed. CHK: needs attention (not checked by the tool, or an input is missing).'}]});
     if(w.length) subs.push({title:'Validation notices',items:w.map(x=>({type:'note',warn:true,text:rbPlain(x)}))});
     if(String(inp.assumptions||'').trim()) subs.push({title:'Engineering assumptions',items:[{type:'note',text:String(inp.assumptions).trim()}]});
@@ -2235,16 +2102,16 @@ function rbrModel(){
   const hk=hookSchematic(inp,f,calcHook(inp,f)), hsvg=(hk.match(/<svg[\s\S]*<\/svg>/)||[''])[0];
   secs.push({title:'Tension development',subs:[{title:'Tension development length $l_{d}$',items:[
     {type:'figure',svg:sch,caption:'Input schematic: bar in section (c_b controls)'},
-    rbTopics('td',rbrTension(inp,f),{title:'Worked steps'}),{type:'note',text:tabLink('tension','On screen: Tension l_d tab (with the sensitivity charts)')}]}]});
+    rbTopics('td',rbrTension(inp,f),{title:'Worked steps'}),{type:'note',text:tabLink('tension','On screen: Tension l_d tab (with the sensitivity charts)')}]}].concat(rbCommSub(tabTension(inp,f,true)))});
   secs.push({title:'Standard hook',subs:[{title:'Standard hook development length $l_{dh}$',items:[
     {type:'figure',svg:hsvg,caption:'Hook geometry (90° standard hook, schematic; '+(A?'AASHTO 5.10.2.1':'ACI 318-19 25.3.1')+')'},
-    rbTopics('hk',rbrHook(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('hook','On screen: Hook l_dh tab')}]}]});
+    rbTopics('hk',rbrHook(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('hook','On screen: Hook l_dh tab')}]}].concat(rbCommSub(tabHook(inp,f)))});
   secs.push({title:'Compression development',subs:[{title:'Compression development length $l_{dc}$',items:[
-    rbTopics('cd',rbrComp(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('compression','On screen: Compression l_dc tab')}]}]});
+    rbTopics('cd',rbrComp(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('compression','On screen: Compression l_dc tab')}]}].concat(rbCommSub(tabComp(inp,f)))});
   secs.push({title:'Tension lap splice',subs:[{title:'Tension lap splice length $l_{st}$',items:[
-    rbTopics('ts',rbrTSplice(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('tsplice','On screen: Tension Splice tab')}]}]});
+    rbTopics('ts',rbrTSplice(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('tsplice','On screen: Tension Splice tab')}]}].concat(rbCommSub(tabTSplice(inp,f)))});
   secs.push({title:'Compression lap splice',subs:[{title:'Compression lap splice length $l_{sc}$',items:[
-    rbTopics('cs',rbrCSplice(inp,f),{title:'Worked steps'}),{type:'note',text:tabLink('csplice','On screen: Comp. Splice tab')}]}]});
+    rbTopics('cs',rbrCSplice(inp,f),{title:'Worked steps'}),{type:'note',text:tabLink('csplice','On screen: Comp. Splice tab')}]}].concat(rbCommSub(tabCSplice(inp,f)))});
   /* 7. bar schedule (tabBatch: the same functions for every bar size) */
   {
     const rows=BAR_ORDER.map(b=>{
@@ -2255,7 +2122,7 @@ function rbrModel(){
     });
     secs.push({title:'Bar development schedule',subs:[{title:'Development and splice lengths, all bar sizes',items:[
       {type:'table',head:['Bar','$d_{b}$ (in.)','Tension $l_{d}$','Hook $l_{dh}$','Comp. $l_{dc}$','Tens. splice ('+inp.tensClass+')','Comp. splice'],rows,wide:true},
-      {type:'note',text:'All lengths in inches, rounded to 0.1 in., computed with the inputs above for each bar size (bold: the selected #'+inp.barSize+'; its lengths are worked in [[td/ld]], [[hk/ldh]], [[cd/ldc]], [[ts/lst]], [[cs/lsc]]). '+(inp.useExcess?'Excess reinforcement reduction (×'+rbN(f.excess,3)+') applied to development lengths, not to splices. ':'')+(A?'*N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).':'*N/P = lap splice not permitted (ACI 318-19 25.5.1.1).')+' '+tabLink('batch','On screen: Bar Schedule tab')}]}]});
+      {type:'note',text:'All lengths in inches, rounded to 0.1 in., computed with the inputs above for each bar size (bold: the selected #'+inp.barSize+'; its lengths are worked in [[td/ld]], [[hk/ldh]], [[cd/ldc]], [[ts/lst]], [[cs/lsc]]). '+(inp.useExcess?'Excess reinforcement reduction (×'+rbN(f.excess,3)+') applied to development lengths, not to splices. ':'No excess reinforcement reduction applied. ')+(A?'*N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).':'*N/P = lap splice not permitted for #14/#18 bars (ACI 318-19 25.5.1.1); in compression they may be lapped only to #11 and smaller bars (25.5.5.3).')+' '+tabLink('batch','On screen: Bar Schedule tab')}]}].concat(rbCommSub(tabBatch(inp,f)))});
   }
   /* 8. references */
   secs.push({title:'References',subs:[{title:'Codes and articles cited',items:[{type:'table',head:['Reference','Provisions used'],rows:rebarRefs(inp,f).map(r=>[rbPlain(r[0]),rbPlain(r[1])])}]}]});
@@ -2282,6 +2149,14 @@ function rbrGoto(name){ if(REBAR_CARDS[name]) rebarGoto(name); else switchTab(na
 /* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
 function rbrPrinting(){ return document.body.classList.contains('rp-printing'); }
 function rbrWillPrint(){ return rbrPrinting()||!!(RBRP.on&&RBRP.doc); }
+/* RBRX: show the Report tab before printing (from another tab; RBRP_BACK brings that tab back after printing). currentTab is
+   not changed by the Report tab, so nothing saved changes. */
+let RBRP_BACK=false;
+function rbrPrintPrep(){
+  if(rbrPrinting()||RBRP.on||!window.SharedReport||!window.SharedSteps) return;
+  RBRP_BACK=true; switchTab('report');
+}
+window.addEventListener('afterprint',()=>{ if(RBRP_BACK){ RBRP_BACK=false; switchTab(currentTab); } });
 window.addEventListener('beforeprint',()=>{
   if(!RBRP.on||!RBRP.doc||rbrPrinting()) return;
   let box=document.getElementById('rp-print'); if(!box){ box=document.createElement('div'); box.id='rp-print'; document.body.appendChild(box); }
