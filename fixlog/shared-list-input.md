@@ -47,5 +47,5 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
 - **Open items:** the other tools (survey list) are converted one per PR after this; React tools (index.html, Prestressed
   Bridge Design.html) use `react(React)`.
 
-## 2026-11-02 — PR: claude/list-input-sbeam — loaded by Steel Beam Design - AISC 15th.html (no change to the shared file)
+## 2026-11-02 — PR: claude/list-input-sbeam, PR #683: https://github.com/mlococo88/All-Structural/pull/683 — loaded by Steel Beam Design - AISC 15th.html (no change to the shared file)
 - Output Stations, Custom stations x (`mount`). `tests/smoke/list-input.mjs` gains the part `sbeam`. The widget and `smd` parts were re-run: all pass.

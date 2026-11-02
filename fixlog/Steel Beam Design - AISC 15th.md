@@ -2260,7 +2260,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   Reproduce: open the tool with empty storage, type 21 in span 1 L → the results still use 20 ft; then e.g. change the support type and
   type again → it works. Fix candidate: after the restore in `runBenchmarks()`, call `rebuildInputs()` (or restore into the same object).
 
-## 2026-11-02 — PR: claude/list-input-sbeam — Output Stations: Custom stations x is a table with one box per station (LIST)   [display only]
+## 2026-11-02 — PR: claude/list-input-sbeam, PR #683: https://github.com/mlococo88/All-Structural/pull/683 — Output Stations: Custom stations x is a table with one box per station (LIST)   [display only]
 - **Why:** engineer decision 2026-11-02: no comma-separated inputs. Second user of `shared/list-input.js` (`fixlog/shared-list-input.md`, #681).
 - **Where (1):** the script tags, anchor `<script src="shared/projects-ui.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
 - **Where (2):** `rebuildInputs()`, section `mkSection('inOpts','Output Stations',…`. **Before:**
