@@ -13,6 +13,7 @@
 <!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/list-input.js"></script>
 <style>
 :root{
   --ink:#1a1a1a; --soft:#4a4a4a; --line:#c9c4b8; --grid:#e8e4da;
@@ -100,6 +101,7 @@ input[type=number],input[type=text],select{font-family:"Times New Roman",Times,s
   padding:2px 5px;border:1px solid var(--line);background:#fff;color:var(--ink);}
 input[type=number]{width:106px;text-align:right;}
 select{max-width:172px;}
+.sliPaste{margin:4px 0 8px;}
 textarea{width:100%;font-family:"Courier New",Courier,monospace;font-size:.92rem;
   border:1px solid var(--line);padding:5px;resize:vertical;background:#fff;color:var(--ink);}
 input:focus,select:focus,textarea:focus{outline:2px solid var(--blue);}
@@ -9971,6 +9973,36 @@ function readOverrides(txt){
   }
   return v;
 }
+/* LIST (2026-11-02): editable tables for the line lists (shared/list-input.js).
+   - Paste boxes (survey points, depth overrides, SDL line items) stay as they are; under each, a table shows every line as
+     the tool reads it (parsePairs: split at spaces, commas or semicolons; readSdl: split at the LAST comma). A table edit
+     rewrites the box, one "a, b" line per row, and fires its 'input' as typing does. Typing or pasting in the box refreshes
+     the table, and so does any script that sets the box's value (load, undo, unit change).
+   - Track offsets (one value per line) become a table with one box per track (bindInput); the field stays the text, one
+     value per line. Every field keeps its saved text format; the readers are unchanged. */
+function pasteTable(id,label,columns,readLine,writeRow){
+  const ta=$(id); if(!ta||!window.SharedListInput||ta._sli)return;
+  const host=document.createElement("div"); host.className="sliPaste"; ta.insertAdjacentElement("afterend",host);
+  let d=null,pr=Object.getPrototypeOf(ta); while(pr&&!(d=Object.getOwnPropertyDescriptor(pr,"value")))pr=Object.getPrototypeOf(pr);
+  const getV=()=>d.get.call(ta), read=t=>String(t||"").split(/\n+/).map(x=>x.trim()).filter(Boolean).map(readLine);
+  let own=false;
+  const ctl=SharedListInput.mount(host,{label,showCaption:true,columns,rows:read(getV()),
+    onChange:rows=>{ const t=rows.map(writeRow).join("\n"); if(t===getV())return; own=true; d.set.call(ta,t);
+      ta.dispatchEvent(new Event("input",{bubbles:true})); own=false; }});
+  ta.addEventListener("input",()=>{ if(!own)ctl.set(read(getV())); });
+  Object.defineProperty(ta,"value",{configurable:true,enumerable:true,get(){return getV();},set(v){d.set.call(ta,v); if(!own)ctl.set(read(getV()));}});
+  ta._sli=ctl;
+}
+function listTables(){
+  if(!window.SharedListInput)return;
+  const pair=l=>{const m=l.split(/[\s,;]+/);return [m[0]||"",m[1]||""];};
+  pasteTable("measPts","Survey points as read",[{label:"x",unit:"ft",width:"6.5em"},{label:"y",unit:"ft",width:"6.5em"}],pair,r=>r[0]+", "+r[1]);
+  pasteTable("dOver","Depth overrides as read",[{label:"Station",unit:"ft",width:"6.5em"},{label:"Depth",unit:"in",width:"6.5em",min:0,minExclusive:true}],pair,r=>r[0]+", "+r[1]);
+  pasteTable("sdlItems","Line items as read",[{label:"Description",type:"text",width:"14em"},{label:"Weight",unit:"plf",width:"6.5em",min:0,lenient:true}],
+    l=>{const k=l.lastIndexOf(",");return k<0?[l,""]:[l.slice(0,k).trim(),l.slice(k+1).trim()];},r=>r[0]+", "+r[1]);
+  const tr=$("tracks"); if(tr&&!tr._sli)tr._sli=SharedListInput.bindInput(tr,{label:"Track centerline offsets",rowSplit:/\n+/,rowSep:"\n",
+    columns:[{label:"Offset",unit:"ft",lenient:true,width:"6.5em",placeholder:"0"}],events:["input"]});
+}
 function readP(){
   const g=id=>$(id)?$(id).value:F[id];
   const n=id=>+g(id);
@@ -12365,7 +12397,7 @@ function restore(o){
   F.truckClr=(o.fields.truckClr!=null)?String(o.fields.truckClr):"4";
   $("inPanel").innerHTML=inputPanel();
   UI.wire($("inPanel"));
-  archInputTabs($("inPanel"));
+  archInputTabs($("inPanel")); listTables();
   /* A session saved before v2026.08.10 may carry shallowRule = "spread", the
      old control that applied the 1.75H spread at every depth. That control is
      gone; the identical result is now a credited spread of 1.75H. Map it, so an
@@ -12603,7 +12635,7 @@ function wireProject(){
     F.lanes="auto"; F.truckClr="4"; twsAuto=false;
     animVehId=null;ndVeh=null;ndPos=null;ndNode=null;xsNode=null;
     impText="";impParsed=null;impCmp=null;impErr="";activeTab="sum";
-    $("inPanel").innerHTML=inputPanel(); UI.wire($("inPanel")); archInputTabs($("inPanel"));
+    $("inPanel").innerHTML=inputPanel(); UI.wire($("inPanel")); archInputTabs($("inPanel")); listTables();
     TB.forEach(t=>{if($(t)&&t!=="tbDate")$(t).value="";});
     if($("tbDate"))$("tbDate").value=new Date().toISOString().slice(0,10);
     bind(); wireProject(); refreshProjSel(); showAutoInfo(); syncCond(); render(); autosave();
@@ -13553,7 +13585,7 @@ let bind=null;
 function init(){
   $("inPanel").innerHTML=inputPanel();
   UI.wire($("inPanel"));
-  archInputTabs($("inPanel"));
+  archInputTabs($("inPanel")); listTables();
   const today=new Date().toISOString().slice(0,10);
   if($("tbDate")&&!$("tbDate").value)$("tbDate").value=today;
 
@@ -13571,7 +13603,7 @@ function init(){
           const snap=snapshot();
           $("inPanel").innerHTML=inputPanel();
           UI.wire($("inPanel"));
-          archInputTabs($("inPanel"));
+          archInputTabs($("inPanel")); listTables();
           for(const k in snap.fields)if($(k)&&k!=="vehicles"&&k!=="loadMode")$(k).value=snap.fields[k];
           $("loadMode").value=e2.value;
           /* A railroad has no pavement by default: the highway default of 4 in would add dead load and

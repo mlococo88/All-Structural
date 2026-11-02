@@ -72,3 +72,11 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
 - `react(React)` → `ListTable`: `NumberListInput` (4 GFS lists, arrays) and the AREMA girder spacings (text). `tests/smoke/list-input.mjs`
   gains the part `index` and the entry options `ignore` (a console message to ignore), `serial` (A then B, not in parallel)
   and `timeout` (page load); `tests/lib.mjs` `openPage()` takes an optional `timeout` (default unchanged).
+
+## 2026-11-02 — PR: claude/list-input-stonearch, PR #704: https://github.com/mlococo88/All-Structural/pull/704 — loaded by Stone Masonry Arch Load Rating.html (no change to the shared file)
+- Paste boxes with a table of what was read (`mount`, the tool's own `pasteTable()`: survey points, depth overrides, SDL line
+  items) and track offsets (`bindInput`, one value per line). `tests/smoke/list-input.mjs` gains the part `stonearch` and the
+  entry option `shotPrep`.
+- Harness: the `gusset` part no longer reads the Report tabs (`report`, `report2`): #702 retired Gusset's old Report tab, so side A
+  (before the gage table) and today's tool differ there for a reason that has nothing to do with the table. The `stonearch` part
+  normalises the rating sweep's timing note and white space. A string difference is printed around its first differing character.
