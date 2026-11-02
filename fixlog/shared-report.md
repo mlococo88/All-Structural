@@ -130,3 +130,21 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 - **Check case:** ASCE 7-16 Load Generator, default project, Report → Print report: before, the heading of topic 4 sits at the foot of page 7 and its result on page 8; after, page 8 starts with the whole heading (9 pages both).
 - **Consumers (CLAUDE.md §3):** ACI Rebar Development Length, ASCE7-16 Load Generator, BasePlateAnchorDesigner, Bridge Substructure Loading, Concrete Beam Capacity, Gusset Plate Rating, Light Pole and Sign Post, Moving Load Generator, Pile Designer, Prestressed Bridge Design, Retaining Wall Designer, Section Property Calculator, Shear and Moment Diagrams, Spread Footing, Steel Beam Design - AISC 15th, Stone Masonry Arch Load Rating, Timber Beam Check, abutment_calculator, elastomeric_design_module, index, lldf (all .html) and apps/steel-bridge (index.html, ui/report.js, report/builders.js).
 - **Verified:** `node tests/engine/run.mjs report steps steps-groups report-wiring`: 4 files, 14 passed, 0 failed.
+
+## 2026-11-02 — PR: claude/phone-shared-report — phone: long tab links wrap; a step's result goes under its equation (PHN; display only)
+
+- **Problem (390 px wide, Report tab of any tool):**
+  - `.rp-go` (an in-app tab link such as "On screen: Lateral (p-y) tab, …") has `white-space:nowrap`. A long link ran 416–510 px wide and was cut off; seen in Pile Designer and Retaining Wall Designer. The viewer's subsections use content-visibility, which clips.
+  - A step's result (`.rp-step .rp-r`, `white-space:nowrap`) sits in an auto-width column beside the equation. A long text result squeezed the equation, and the result was cut off. Example: ACI Rebar Development Length, "Class A eligibility: cannot be verified (A_s,req / A_s,prov not entered): Class B assumed", 388 px wide.
+- **Where:** `CSS` string, after the rule with anchor `@media (max-width:1000px){.rp-body{grid-template-columns:minmax(0,1fr);} .rp-toc{…} .rp-doc{padding:14px;}}`.
+- **Added:**
+  ```css
+  @media screen and (max-width:600px){.rp-go{white-space:normal;} .rp-step{grid-template-columns:minmax(0,1fr);grid-template-areas:"d" "m" "r" "n";} .rp-step .rp-r{white-space:normal;padding-left:0.25in;}}
+  ```
+- Screen and ≤ 600 px only. Desktop, tablet (768 px) and print are unchanged. No API, model or markup change.
+- **Check case:** ACI Rebar Development Length at 390 px, Report, "Class A eligibility":
+  - Before: the label column is squeezed to "Class / A / eligibility", and the result is cut off at "…not entere".
+  - After: the label is on one line, and the result wraps underneath it in full.
+  - Pile Designer at 390 px, Report: the two "On screen: …" links were cut off; now they wrap.
+- **Consumers (CLAUDE.md §3):** ACI Rebar Development Length, ASCE7-16 Load Generator, BasePlateAnchorDesigner, Bridge Substructure Loading, Concrete Beam Capacity, Gusset Plate Rating, Light Pole and Sign Post, Moving Load Generator, Pile Designer, Prestressed Bridge Design, Retaining Wall Designer, Section Property Calculator, Shear and Moment Diagrams, Spread Footing, Steel Beam Design - AISC 15th, Stone Masonry Arch Load Rating, Timber Beam Check, abutment_calculator, elastomeric_design_module, index, lldf (all .html) and apps/steel-bridge (index.html, ui/report.js, report/builders.js).
+- **Verified:** `node tests/engine/run.mjs report steps steps-groups report-wiring`: 4 files, 14 passed, 0 failed. Headless at 390 px: Pile Designer, ACI Rebar and Retaining Wall Designer Report tabs show no cut-off links or results. Because of the 600 px media query, wider screens and print cannot change.
