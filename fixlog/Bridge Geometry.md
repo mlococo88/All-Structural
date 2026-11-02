@@ -1385,7 +1385,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Other copies:** none.
 - **Open items:** none.
 
-## 2026-11-02 — PR: claude/list-input-bgeo — per-span girder offsets are a table with one box per girder; the survey-point paste box shows a table of what was read (LIST)   [display only]
+## 2026-11-02 — PR: claude/list-input-bgeo, PR #690: https://github.com/mlococo88/All-Structural/pull/690 — per-span girder offsets are a table with one box per girder; the survey-point paste box shows a table of what was read (LIST)   [display only]
 - **Why:** engineer decision 2026-11-02: no comma-separated inputs; short lists become tables, paste boxes stay with an editable
   table of what was read next to them (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
 - **Where (1):** script tags, anchor `plotly-basic.min.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
