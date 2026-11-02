@@ -347,6 +347,10 @@
       if (!full) continue;
       // the rest of the shear tab: transverse and bearing stiffeners
       const lists = (C, mod, tab) => (C || []).forEach(c => c.items.forEach(it => { const bad = !OKST.includes(it.st); if (it.st === 'warn') warns.push({ ...gm, mod, id: c.id, title: c.title, loc: it.loc });
+        // an advisory item ('adv') with a ratio above 1 is not a failure of its module (e.g. splices TF3 slip or BF4 flange moment under the 10th Ed.:
+        // the excess goes to the web, WS3 / C6.13.6.1.3b, which is checked): listed as a warning, not counted against the design (2026-11-01;
+        // before, its ratio failed the design, e.g. every CTDOT candidate of the built-in project: TF3 1.076, an 'adv' item, in the splice at 278 ft)
+        if (it.st === 'adv' && isFinite(it.r) && it.r > 1 + 1e-9) { warns.push({ ...gm, mod, id: c.id, title: c.title, loc: it.loc, r: it.r, adv: true }); return; }
         const o = { ...gm, mod, tab, id: c.id, title: `${c.title}${it.loc ? ' — ' + it.loc : ''}`, r: it.r != null && isFinite(it.r) ? it.r : bad ? Infinity : NaN, step: it.step, fail: bad }; if (bad && !isFinite(o.r)) o.r = Infinity; take(o); }));
       lists(SB.tsC, 'stiffeners', 'shear'); lists(SB.bsC, 'stiffeners', 'shear');
       // fatigue details and studs (ui/fatigue.js build on this analysis)

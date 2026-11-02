@@ -242,10 +242,7 @@
   .calcstep.wkFlash{animation:wkflash 1.4s ease-out}
   @keyframes wkflash{from{background:#dde9f6}to{background:transparent}}
   /* LLRP (2026-11-01): Calculation sheet / Report view tabs; the Report tab is the shared viewer (shared/report.js) */
-  .lldf-views{max-width:940px;margin:14px auto -12px;display:flex;gap:4px;padding:0 4px}
-  .lldf-views button{font:600 12.5px var(--body);padding:6px 14px;border:1px solid var(--rule,#cbd5e1);border-bottom:none;border-radius:6px 6px 0 0;background:#e9eef4;color:var(--muted);cursor:pointer}
-  .lldf-views button.on{background:var(--paper,#fff);color:var(--ink);box-shadow:0 -2px 0 var(--accent) inset}
-  .lldf-rptview{max-width:1180px;margin:12px auto 26px;padding:0 12px;background:transparent}
+  .lldf-rptview{max-width:1180px;margin:0 auto;padding:0;background:transparent}
   .lldf-rpterr{background:#fff3f3;border:1px solid #e3a5a5;color:#8a1c1c;padding:10px 14px;border-radius:6px;font:13px var(--body)}
   /* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format); printed instead of the sheet */
   #lldfReport{display:none}
@@ -286,6 +283,94 @@
   #lldfReport .derived{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   #lldfReport .govval,#lldfReport .status,#lldfReport .govtag{-webkit-print-color-adjust:exact;print-color-adjust:exact}
   #lldfReport .disclaimer{margin-top:14pt}
+
+  /* ===== LXL (2026-11-01): two-panel screen layout (inputs left, results right, both in tabs) =====
+     Screens >= 900 px: the header stays on top, the page itself never scrolls (body 100vh, overflow hidden), the input and
+     output panels scroll on their own. The panels are position:relative so absolutely positioned descendants (KaTeX's hidden
+     MathML spans) stay inside them and cannot make the document taller than the window (Spread Footing PR #524). Below 900 px
+     the panels stack (inputs above results) and the page scrolls as usual. Print is unchanged: the D11 report prints. */
+  .toolbar{flex-wrap:wrap;gap:6px 14px;padding:8px 16px}
+  .toolbar .tt{white-space:nowrap}
+  .toolbar .actions{flex-wrap:wrap;justify-content:flex-end;gap:6px 8px}
+  .toolbar .btn,.projbar .btn{padding:4px 9px;font-size:11.5px}
+  .toolbar label{font-size:11.5px}
+  .projbar{padding:4px 16px;gap:4px 14px}
+  .lx-home{display:none}
+  body.lx-restored .lx-home{display:block;position:fixed;left:-30000px;top:0;width:940px;max-width:none;margin:0;visibility:hidden}
+  .lx-shell{display:flex;gap:12px;align-items:flex-start;max-width:1720px;margin:0 auto;padding:10px 14px 0}
+  .lx-in{flex:0 0 clamp(380px,34%,470px);min-width:0}
+  .lx-out{flex:1 1 auto;min-width:0}
+  .lx-tabs{display:flex;flex-wrap:wrap;gap:3px 2px;border-bottom:2px solid #7a8aa0;background:var(--desk);padding-top:2px;margin:0 0 8px}
+  .lx-tab{font:600 12px var(--body);padding:5px 10px;border:1px solid #9aa6b4;border-bottom:none;border-radius:5px 5px 0 0;background:#e2e8ef;color:#2e3a48;cursor:pointer;margin-bottom:-2px}
+  .lx-tab:hover{background:#d6dfea}
+  .lx-tab[aria-selected="true"]{background:#fff;color:var(--ink);border-color:#7a8aa0;border-bottom:2px solid #fff;box-shadow:inset 0 2px 0 var(--accent)}
+  .lx-tab:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+  .lx-tab[hidden],.lx-pane[hidden]{display:none!important}
+  .lx-card{background:var(--paper);border:1px solid #c6c4bd;border-radius:6px;margin:0 0 10px;box-shadow:0 1px 2px rgba(0,0,0,.06)}
+  .lx-card>h2.lx-ch{margin:0;padding:6px 12px;background:#eef1f5;border-bottom:1px solid #d5d9df;border-radius:6px 6px 0 0;font:700 11px var(--body);text-transform:uppercase;letter-spacing:.07em;color:#34404d}
+  .lx-cb{padding:6px 12px 10px}
+  .lx-cb>.igroup:first-child>h3,.lx-cb>div:first-child>.igroup:first-child>h3{margin-top:4px}
+  .lx-in .frow{grid-template-columns:minmax(0,1fr) auto}
+  .lx-in .fval input{width:118px}
+  .lx-in .fval select{width:180px}
+  .lx-in .typerow .fval select{width:100%}
+  .lx-in .frow.chkrow{grid-template-columns:1fr}
+  .lx-in .beamtable td:nth-child(2){white-space:nowrap}
+  .lx-note a{color:var(--accent)}
+  .lx-in .typerow{grid-template-columns:1fr}
+  .lx-in .given{max-width:none}
+  .lx-in .tb-meta{grid-template-columns:1fr 1fr;border:1px solid var(--rule);border-radius:4px}
+  .lx-in .beamtable{margin-top:0;overflow-x:auto}
+  .lx-in #mdClsBody select{max-width:150px}
+  .lx-in .section{margin-top:0}
+  .lx-in .section>h2{font-size:12.5px}
+  .lx-in .lx-loads table.tbl{font-size:12px}
+  .lx-in .lx-loads table.tbl th,.lx-in .lx-loads table.tbl td{padding:4px 4px}
+  .lx-in .lx-loads input[data-f="desc"]{width:96px!important}
+  .lx-in .lx-loads select{max-width:112px!important}
+  .lx-in .lx-loads input[data-f="x"],.lx-in .lx-loads input[data-f="plf"]{width:60px!important}
+  .lx-note{font-size:11.5px;color:var(--muted);margin:4px 0 2px;line-height:1.45}
+  .lx-page{background:var(--paper);border:1px solid #c6c4bd;border-radius:0 0 6px 6px;padding:16px 24px 24px;margin:0 0 10px}
+  .lx-page>.section:first-child,.lx-page>.lx-pick:first-child+.section{margin-top:4px}
+  .lx-pick{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:7px 12px;background:#eef3fa;border:1px solid var(--input-bd);border-radius:5px;font-size:12.5px;margin:0 0 6px}
+  .lx-pick select{font-family:var(--body);font-size:13px;padding:3px 8px;border:1px solid var(--input-bd);border-radius:4px;background:var(--input-bg);cursor:pointer}
+  .lx-pane-report .lldf-rptview{margin:0}
+  .lx-calc{background:#fff;border:1px solid #c6c4bd;padding:24px 32px;margin:0 0 10px}
+  .lx-calc #lldfReport{display:block}
+  .lx-calc #lldfReport .cr-cover{min-height:0;padding:24px 0 12px;border-bottom:1px dashed #bbb;margin-bottom:16px}
+  .lx-calc #lldfReport .cr-break,.lx-calc #lldfReport .cr-front{border-top:1px dashed #bbb;margin-top:22px;padding-top:12px}
+  .lx-calcbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:0 0 8px;font-size:12px;color:var(--muted)}
+  #lxJumpOut{display:none;margin:6px 0 4px;text-align:center;color:var(--accent);font-size:12.5px}
+  @media screen and (min-width:900px){
+    body{height:100vh;overflow:hidden;display:flex;flex-direction:column;padding:0}
+    body>.apphead,body>.noprint{flex:0 0 auto}
+    .lx-shell{flex:1 1 auto;min-height:0;width:100%;overflow:hidden}
+    .lx-in,.lx-out{position:relative;height:100%;overflow-y:auto;overflow-x:hidden;padding-bottom:24px}
+    .lx-in{padding-right:6px}
+    .lx-in::-webkit-scrollbar,.lx-out::-webkit-scrollbar{width:9px}
+    .lx-in::-webkit-scrollbar-thumb,.lx-out::-webkit-scrollbar-thumb{background:#b9b6ae;border-radius:4px}
+    .lx-tabs{position:sticky;top:0;z-index:6}
+    .apphead{position:static}
+  }
+  @media screen and (max-width:899.98px){
+    .apphead{position:static}
+    .lx-shell{flex-direction:column;align-items:stretch;padding:8px 8px 0}
+    .lx-in,.lx-out{flex:0 0 auto;width:100%}
+    .lx-tabs{position:sticky;top:0;z-index:6}
+    .lx-page{padding:12px 12px 18px}
+    .lx-page table.tbl,.lx-page table.appl{display:block;max-width:100%;overflow-x:auto}
+    .lx-calc{padding:12px;overflow-x:auto}
+    .derived{grid-template-columns:1fr 1fr}
+    #lxJumpOut{display:block}
+    .toolbar .tt{white-space:normal}
+  }
+  @media print{
+    .lx-shell{display:block;padding:0;max-width:none}
+    .lx-in,.lx-tabs,#lxJumpOut,.lx-pick{display:none!important}
+    .lx-pane{display:block!important}
+    .lx-page{border:none;padding:0}
+    body.lldf-rpt .lx-shell{display:none!important}
+  }
 </style>
 <!-- ═══════════════════════════════════════════════════════════════════════════
      Bridge Suite — shared DESIGN BEAM channel (v1)
@@ -407,9 +492,16 @@ var st=document.createElement('style'); st.textContent=css;
   </header>
 
   <div class="printhead" id="printHead"></div>
-  <nav class="lldf-views noprint" id="lldfViews" role="tablist" aria-label="View"><button type="button" class="on" data-view="sheet" role="tab" aria-selected="true">Calculation sheet</button><button type="button" data-view="report" role="tab" aria-selected="false">Report</button></nav>
-  <div class="lldf-rptview" id="lldfRptView" style="display:none"></div>
-  <div class="sheet" id="sheet">
+  <!-- LXL (2026-11-01): two-panel screen layout. Inputs on the left, results on the right, each in tabs (the LXL script at the
+       end of the page moves the cards of the calculation sheet below (#lxHome) into the tab panes, and puts them back while
+       the D11 print report is built, so the printout is built from the same sheet as before). -->
+  <a id="lxJumpOut" href="#outputPanel" class="noprint">Jump to the results &darr;</a>
+  <div class="lx-shell" id="sheet">
+    <aside class="lx-in noprint" id="inputPanel" aria-label="Inputs"><div class="lx-tabs" id="lxInTabs" role="tablist" aria-label="Input groups"></div></aside>
+    <main class="lx-out" id="outputPanel" aria-label="Results"><div class="lx-tabs" id="lxOutTabs" role="tablist" aria-label="Results"></div>
+      <div class="lldf-rptview" id="lldfRptView"></div>
+    </main>
+  <div class="sheet lx-home" id="lxHome">
     <div class="titleblock">
       <div class="tb-id">
         <h1>Live Load &amp; Dead Load Distribution</h1>
@@ -639,6 +731,7 @@ var st=document.createElement('style'); st.textContent=css;
       actual (variable) beam positions. Results must be verified against the governing edition of the AASHTO LRFD Bridge Design
       Specifications and confirmed by a licensed professional engineer of record.
     </div>
+  </div>
   </div>
   <!-- D11: the calculation report, built by lldfBuildReport() when printing (only it prints) -->
   <div id="lldfReport" class="crdoc"></div>
@@ -4287,6 +4380,7 @@ function gotoStep(a){
   var t=null;
   each(host.querySelectorAll(".calcstep"),function(cs){ var tt=cs.querySelector(".cs-title"); if(!t&&tt&&tt.textContent.indexOf(m)>=0) t=cs; });
   if(!t) return;
+  if(window.LXL) LXL.reveal(t,false);   /* LXL: open the output tab that holds the step first */
   t.scrollIntoView({behavior:"smooth",block:"center"});
   t.classList.remove("wkFlash"); void t.offsetWidth; t.classList.add("wkFlash");
   setTimeout(function(){ t.classList.remove("wkFlash"); },1500);
@@ -4752,7 +4846,7 @@ function render(){
   if(!window.lldfLast){ T.innerHTML='<div class="lldf-rpterr">No results: correct the input errors shown on the calculation sheet.</div>'; LLRP.api=LLRP.doc=null; return; }
   var M; try{ M=model(); }catch(e){ T.innerHTML='<div class="lldf-rpterr">Report error: '+esc(e&&e.message)+'</div>'; LLRP.api=LLRP.doc=null; console.warn("lldf report",e); return; }
   var ah=document.querySelector(".apphead");
-  LLRP.api=SharedReport.mount(T,M,{closed:LLRP.closed,onGoto:gotoSheet,stick:ah?ah.offsetHeight:0});
+  LLRP.api=SharedReport.mount(T,M,{closed:LLRP.closed,onGoto:gotoSheet,stick:window.LXL?LXL.stick():(ah?ah.offsetHeight:0)});   /* LXL: the report scrolls in the output panel, below its tab bar */
   LLRP.doc=LLRP.api.doc;
 }
 LLRP.model=model; LLRP.render=render;
@@ -4763,13 +4857,15 @@ function gotoSheet(name){
   setView("sheet");
   if(m){ var j=+m[1]; if(j!==selectedMember){ selectedMember=j; pushDesignBeam(); run(); } name="steps"; }
   var t=el(GO[name]||"sheet"); if(!t) return; var s=t.closest(".section")||t;
+  if(window.LXL&&LXL.reveal(s,true)) return;   /* LXL: open the tab that holds the card, scroll its panel */
   var ah=document.querySelector(".apphead"); window.scrollTo(0,s.getBoundingClientRect().top+window.scrollY-(ah?ah.offsetHeight:0)-8);
 }
 function setView(v){
   LLRP.view=v; var sh=el("sheet"), T=host();
-  if(sh) sh.style.display=v==="report"?"none":""; if(T) T.style.display=v==="report"?"":"none";
+  if(window.LXL) LXL.view(v);   /* LXL: the Report is an output tab; the other tabs are the sheet */
+  else { if(sh) sh.style.display=v==="report"?"none":""; if(T) T.style.display=v==="report"?"":"none"; }
   Array.prototype.forEach.call(document.querySelectorAll("#lldfViews button"),function(b){ var on=b.getAttribute("data-view")===v; b.classList.toggle("on",on); b.setAttribute("aria-selected",on?"true":"false"); });
-  if(v==="report"){ render(); window.scrollTo(0,0); }
+  if(v==="report"){ render(); if(!window.LXL) window.scrollTo(0,0); }
 }
 LLRP.setView=setView;
 window.lldfReportRefresh=function(){ if(LLRP.view==="report") render(); };
@@ -5037,6 +5133,237 @@ try{ if(window.BridgeLocks&&BridgeLocks.ok()) BridgeLocks.drawer({app:'lldf'}); 
   if(bu) bu.onclick=function(){ if(!window.BXProject) return;
     BXProject.use(own(), function(upd){ Object.keys(upd).forEach(function(k){ var e=el(MAP[k]); if(!e) return;
       e.value=upd[k]; e.dispatchEvent(new Event('input',{bubbles:true})); }); }); };   // input event -> normal autosave
+})();
+</script>
+<script>
+/* ===== LXL (2026-11-01): TWO-PANEL LAYOUT — inputs on the left, results on the right, each in tabs (display only) =====
+   The calculation sheet (#lxHome, the former #sheet card) stays in the page as the single source of every card: this script
+   moves its cards (by node, with their ids, values and listeners) into the tab panes of the input panel (#inputPanel) and
+   the output panel (#outputPanel). Every moved node leaves a comment marker where it was, so restore() can put the sheet
+   back together exactly. The D11 print report (lldfBuildReport) clones the sheet: it is built with the sheet restored (off
+   screen, at the sheet's former 940 px width) and the cards go back to their panes afterwards, so the printout is the same.
+   Cards that the app creates on its first run (3.6 dead-load card, 4D steps, the geometry-source line) are placed when they
+   appear. Nothing is computed here and nothing is saved except the open input and output tab (per-browser UI keys
+   lldf_lxInTab_v1 / lldf_lxOutTab_v1). */
+(function(){
+"use strict";
+var $=function(id){ return document.getElementById(id); };
+var HOME=$("lxHome"), INP=$("inputPanel"), OUT=$("outputPanel");
+if(!HOME||!INP||!OUT) return;
+var K_IN="lldf_lxInTab_v1", K_OUT="lldf_lxOutTab_v1";
+var MARK=new Map(), PLACED=[], restored=false, building=false, curIn=null, curOut=null, lastOther="summary", calcT=0;
+var mem={};
+function lsGet(k){ try{ return localStorage.getItem(k)||mem[k]||""; }catch(e){ return mem[k]||""; } }
+function lsSet(k,v){ mem[k]=v; try{ localStorage.setItem(k,v); }catch(e){} }
+function mk(tag,cls,html){ var e=document.createElement(tag); if(cls) e.className=cls; if(html!=null) e.innerHTML=html; return e; }
+function row(id){ var e=$(id); return e?e.closest(".frow"):null; }
+function grpWrap(id){ var e=$(id), g=e&&e.closest(".igroup"); return g?g.parentNode:null; }
+function panelLayout(){ return !!(window.matchMedia&&window.matchMedia("screen and (min-width:900px)").matches); }
+
+/* move a sheet node into a pane; its marker keeps its place in the sheet (after: for a card created next to a moved card) */
+function move(node,host,after){
+  if(!node||!host) return null;
+  if(!MARK.has(node)){
+    var m=document.createComment("lxl");
+    if(after&&MARK.has(after)){ var am=MARK.get(after); am.parentNode.insertBefore(m,am.nextSibling); }
+    else if(node.parentNode) node.parentNode.insertBefore(m,node);
+    MARK.set(node,m); PLACED.push({node:node,host:host});
+  }
+  if(!restored) host.appendChild(node);
+  return node;
+}
+function restore(){
+  if(restored) return; restored=true; document.body.classList.add("lx-restored");
+  PLACED.forEach(function(x){ var m=MARK.get(x.node); if(m&&m.parentNode) m.parentNode.insertBefore(x.node,m); });
+}
+function apply(){
+  if(!restored) return;
+  PLACED.forEach(function(x){ x.host.appendChild(x.node); });
+  restored=false; document.body.classList.remove("lx-restored");
+}
+
+/* ---------- tabs ---------- */
+var IN_TABS=[["bridge","Bridge"],["girders","Girders"],["roadway","Roadway & lanes"],["loads","Dead loads"],["options","Options & images"]];
+var OUT_TABS=[["summary","Summary"],["steps","LL worked steps"],["lever","Lever rule"],["dl","Dead load"],["dlsteps","DL worked steps"],
+  ["appl","Applicability & notes"],["report","Report"],["calc","Calc sheet"]];
+var PANE={in:{},out:{}}, BTN={in:{},out:{}};
+function buildTabs(side,list,bar,panel){
+  list.forEach(function(t){
+    var b=mk("button","lx-tab",t[1]); b.type="button"; b.id="lxTab_"+side+"_"+t[0]; b.setAttribute("role","tab"); b.dataset.k=t[0];
+    b.setAttribute("aria-controls","lxPane_"+side+"_"+t[0]);
+    b.addEventListener("click",function(){ side==="in"?showIn(t[0],true):showOut(t[0],true); });
+    b.addEventListener("keydown",function(e){ tabKey(e,side); });
+    bar.appendChild(b); BTN[side][t[0]]=b;
+    var pn=mk("div","lx-pane"+(side==="out"?(t[0]==="report"?" lx-pane-report":t[0]==="calc"?"":" lx-page"):""));
+    pn.id="lxPane_"+side+"_"+t[0]; pn.dataset.side=side; pn.dataset.k=t[0]; pn.setAttribute("role","tabpanel"); pn.setAttribute("aria-labelledby",b.id);
+    panel.appendChild(pn); PANE[side][t[0]]=pn;
+  });
+}
+function tabKey(e,side){
+  var vis=Object.keys(BTN[side]).map(function(k){ return BTN[side][k]; }).filter(function(b){ return !b.hidden; });
+  var i=vis.indexOf(e.currentTarget), j=-1;
+  if(e.key==="ArrowRight"||e.key==="ArrowDown") j=(i+1)%vis.length;
+  else if(e.key==="ArrowLeft"||e.key==="ArrowUp") j=(i-1+vis.length)%vis.length;
+  else if(e.key==="Home") j=0; else if(e.key==="End") j=vis.length-1;
+  if(j<0) return; e.preventDefault(); vis[j].click(); vis[j].focus();
+}
+function setSel(side,k){
+  Object.keys(BTN[side]).forEach(function(x){ var on=(x===k); BTN[side][x].setAttribute("aria-selected",on?"true":"false"); BTN[side][x].tabIndex=on?0:-1; PANE[side][x].hidden=!on; });
+}
+function showIn(k,user){
+  if(!PANE.in[k]||BTN.in[k].hidden) k="bridge";
+  curIn=k; setSel("in",k);
+  if(user){ lsSet(K_IN,k); if(panelLayout()) INP.scrollTop=0; }
+}
+function showOut(k,user){
+  if(!PANE.out[k]||BTN.out[k].hidden) k="summary";
+  var was=curOut; curOut=k; if(k!=="report") lastOther=k; setSel("out",k);
+  if(user){ lsSet(K_OUT,k); if(panelLayout()) OUT.scrollTop=0; }
+  var v=(k==="report")?"report":"sheet";
+  if(window.LLRP&&LLRP.setView&&LLRP.view!==v) LLRP.setView(v);
+  if(k==="calc"&&was!=="calc") buildCalc();
+  if(!building&&!restored&&figStale(PANE.out[k])){ try{ run(); }catch(e){} }   // a figure drawn while its tab was hidden: redraw at its width
+}
+/* the figures take the width of their box when drawn; a box in a hidden tab has none (the drawing uses a default width) */
+function figStale(pn){
+  var st=false;
+  Array.prototype.forEach.call(pn.querySelectorAll(".figbox[id]"),function(h){
+    var s=h.querySelector("svg"), vb=s&&s.viewBox&&s.viewBox.baseVal;
+    if(vb&&h.clientWidth>0&&(Math.abs(vb.width-h.clientWidth)>2||(h.clientHeight>0&&Math.abs(vb.height-h.clientHeight)>2))) st=true;
+  });
+  return st;
+}
+/* show the tab that holds node (input or output) and, with scroll, bring node to the top of its panel */
+function reveal(node,scroll){
+  var pn=node&&node.closest&&node.closest(".lx-pane"); if(!pn) return false;
+  if(pn.dataset.side==="in") showIn(pn.dataset.k,false); else showOut(pn.dataset.k,false);
+  if(scroll){
+    var P=pn.dataset.side==="in"?INP:OUT, bar=P.querySelector(".lx-tabs"), bh=bar?bar.offsetHeight:0;
+    if(panelLayout()) P.scrollTop+=node.getBoundingClientRect().top-P.getBoundingClientRect().top-bh-8;
+    else window.scrollTo(0,node.getBoundingClientRect().top+window.scrollY-bh-8);
+  }
+  return true;
+}
+/* LLRP's view (Calculation sheet / Report) follows the output tab */
+function view(v){ if(v==="report"&&curOut!=="report") showOut("report",false); else if(v==="sheet"&&curOut==="report") showOut(lastOther,false); }
+function stick(){ var b=$("lxOutTabs"); return b?b.offsetHeight:0; }
+
+/* ---------- panes and cards ---------- */
+function card(pn,title,cls){ var c=mk("div","lx-card"+(cls?" "+cls:"")); if(title) c.appendChild(mk("h2","lx-ch",title)); var b=mk("div","lx-cb"); c.appendChild(b); pn.appendChild(c); return b; }
+function picker(pn){
+  var w=mk("div","lx-pick noprint",'<span>Girder:</span>'), s=mk("select","lx-msel"); s.setAttribute("aria-label","Girder");
+  w.appendChild(s); w.appendChild(mk("span","lx-note","the same girder as on the Summary tab and the Design beam chip")); pn.appendChild(w);
+  s.addEventListener("change",function(){ var ms=$("memberSelect"); if(!ms) return; ms.value=s.value; ms.dispatchEvent(new Event("change",{bubbles:true})); });
+  return s;
+}
+function syncPickers(){
+  var ms=$("memberSelect"); if(!ms) return;
+  Array.prototype.forEach.call(document.querySelectorAll(".lx-msel"),function(s){ if(s.innerHTML!==ms.innerHTML) s.innerHTML=ms.innerHTML; s.value=ms.value; });
+}
+
+buildTabs("in",IN_TABS,$("lxInTabs"),INP);
+buildTabs("out",OUT_TABS,$("lxOutTabs"),OUT);
+var given=$("bridgeType").closest(".given");
+/* inputs */
+var P=PANE.in, c;
+c=card(P.bridge,"Project"); move(HOME.querySelector(".titleblock .tb-meta"),c);
+var projCard=c;
+c=card(P.bridge,"Cross-section type"); move($("bridgeType").closest(".typerow"),c); move(given.querySelector(":scope > .tblctl"),c);
+c=card(P.bridge,"Spans & skew"); [row("nSpans"),$("spanRows"),$("regionRow"),row("skew"),row("skewV")].forEach(function(n){ move(n,c); });
+c=card(P.bridge,"Deck & overhangs"); move(row("ts"),c); move(grpWrap("OL"),c);
+c=card(P.girders,"Beam layout"); move(given.querySelector(":scope > .beamtable"),c);
+c=card(P.girders,"Girder section"); [row("stdSection"),row("depth"),row("beamShape")].forEach(function(n){ move(n,c); });
+c=card(P.girders,null); move($("sectRow"),c); move($("boxRow"),c);
+c=card(P.roadway,null); move(grpWrap("curbL"),c);
+c=card(P.roadway,"Sidewalks"); move(row("swIncL"),c); move(row("swIncR"),c);
+c=card(P.roadway,"Design lanes");
+c.appendChild(mk("p","lx-note",'The clear roadway w runs between the interior faces of the railings (or the curbs or sidewalks entered above); '+
+  'the number of design lanes N<sub>L</sub> = INT(w/12) (Art. 3.6.1.1.1). Both are worked under <a href="#" data-lxgo="lxDerivedSec">Summary &rarr; Derived quantities</a>; '+
+  'the truck spacing of the lever rule is entered on the <a href="#" data-lxgo="fig-lever">Lever rule</a> tab.'));
+c=card(P.loads,null); move(grpWrap("mdMethod"),c);
+var loadsCard=card(P.loads,null,"lx-loads");
+loadsCard.appendChild(mk("p","lx-note lx-loadswait","The loads on the bridge appear here after the first calculation."));
+c=card(P.options,"MassDOT beam classification"); move(row("medJoint"),c); move(row("swSpecial"),c);
+c=card(P.options,null); move($("refimgSection"),c);
+/* results */
+var O=PANE.out;
+move($("summaryTable").closest(".section"),O.summary);
+var dsec=mk("div","section lx-sec",'<h2><span>Derived Quantities</span><span class="ref">Art. 3.6.1.1.1 · Eq. 4.6.2.2.1-1</span></h2>'); dsec.id="lxDerivedSec";
+O.summary.appendChild(dsec); move($("derived"),dsec);
+var geomSec=$("fig-xsec").closest(".section"); move(geomSec,O.summary);
+picker(O.steps); var stepsSec=$("steps").closest(".section"); move(stepsSec,O.steps);
+picker(O.lever); move($("fig-lever").closest("figure"),O.lever); move($("leverSection"),O.lever);
+O.dl.appendChild(mk("p","lx-note lx-dlwait","The dead-load distribution appears here after the first calculation."));
+move($("applSection"),O.appl); move($("notesSection"),O.appl);
+var dsc=HOME.querySelector(".disclaimer"); if(dsc){ var dc=dsc.cloneNode(true); dc.removeAttribute("id"); O.appl.appendChild(dc); }
+O.report.appendChild($("lldfRptView"));
+var cb=mk("div","lx-calcbar noprint",'<span>The calculation sheet as Print / PDF prints it (cover, references, contents, every girder worked in its own section). '+
+  'Built from the inputs on screen when this tab opens.</span>');
+var cbBtn=mk("button","btn sm","Rebuild"); cbBtn.type="button"; cbBtn.style.cssText="background:#fff;color:var(--accent);border-color:var(--input-bd)";
+cbBtn.addEventListener("click",function(){ buildCalc(); }); cb.appendChild(cbBtn);
+O.calc.appendChild(cb); var calcHost=mk("div","lx-calc"); calcHost.id="lxCalcHost"; O.calc.appendChild(calcHost);
+
+/* cards the app creates on its first run */
+function placeLazy(){
+  if(restored) return;
+  var gs=$("geomSrcLine"); if(gs&&!MARK.has(gs)) move(gs,projCard);
+  var mdd=$("mdDistSec");
+  if(mdd&&!MARK.has(mdd)){
+    var lt=$("mdLoadsTable"), add=$("mdAddLoad"), ig=mdd.querySelector(".igroup");
+    var w=loadsCard.querySelector(".lx-loadswait"); if(w) w.remove();
+    var d2=O.dl.querySelector(".lx-dlwait"); if(d2) d2.remove();
+    if(ig) move(ig,loadsCard); if(lt) move(lt.parentNode,loadsCard); if(add) move(add.closest(".figctl"),loadsCard);
+    move(mdd,O.dl,geomSec);
+  }
+  var dls=$("mdDLSec"); if(dls&&!MARK.has(dls)) move(dls,O.dlsteps,stepsSec);
+}
+function tabVis(){
+  var ls=$("leverSection"), off=!ls||ls.style.display==="none";
+  BTN.out.lever.hidden=off;
+  if(off&&curOut==="lever") showOut("summary",false);
+}
+function after(){
+  if(restored) return;
+  placeLazy(); syncPickers(); tabVis();
+  if(curOut==="calc"&&!building){ clearTimeout(calcT); calcT=setTimeout(buildCalc,400); }
+}
+
+/* Calc sheet tab: the D11 report (#lldfReport) on screen; it goes back to the end of the page for printing */
+function buildCalc(){
+  if(building) return;
+  clearTimeout(calcT);
+  var h=$("lldfReport"); if(!h) return;
+  try{ window.lldfBuildReport(); }catch(e){ console.warn("lxl calc",e); }
+  if(h.parentNode!==calcHost) calcHost.appendChild(h);
+}
+var origBuild=window.lldfBuildReport;
+if(typeof origBuild==="function") window.lldfBuildReport=function(){
+  var was=building; building=true; restore();
+  try{ return origBuild.apply(this,arguments); }
+  finally{ apply(); try{ placeLazy(); run(); }catch(e){} building=was; }   // the sheet's figures redrawn at the widths of their tabs
+};
+window.addEventListener("beforeprint",function(){ var h=$("lldfReport"); if(h&&h.parentNode!==document.body) document.body.appendChild(h); });
+window.addEventListener("afterprint",function(){ var h=$("lldfReport"); if(h&&curOut==="calc") calcHost.appendChild(h); });
+
+/* links to a card: [data-lxgo] (id) */
+document.addEventListener("click",function(e){
+  var a=e.target&&e.target.closest&&e.target.closest("a[data-lxgo]"); if(!a) return;
+  e.preventDefault(); var t=$(a.getAttribute("data-lxgo")); if(t) reveal(t.closest(".section,figure")||t,true);
+});
+$("lxJumpOut").addEventListener("click",function(e){ e.preventDefault(); OUT.scrollIntoView({block:"start"}); });
+/* two-panel layout: the page itself never scrolls (a scrollIntoView or find-in-page would scroll a page that has no scroll bar) */
+window.addEventListener("scroll",function(){ if(panelLayout()&&(window.scrollY||window.scrollX)) window.scrollTo(0,0); },{passive:true});
+
+window.LXL={reveal:reveal,view:view,stick:stick,showIn:showIn,showOut:showOut,restore:restore,apply:apply,
+  cur:function(){ return {in:curIn,out:curOut}; }};
+showIn(lsGet(K_IN)||"bridge",false);
+var o0=lsGet(K_OUT)||"summary"; showOut(o0==="calc"?"summary":o0,false);
+window.addEventListener("load",function(){
+  /* the last load handler: wrap run() outermost (after the autosave / hand-off / dead-load wrappers) */
+  if(typeof window.run==="function"){ var _r=window.run; window.run=function(){ var r=_r.apply(this,arguments); try{ after(); }catch(e){ console.warn("lxl",e); } return r; }; }
+  after();
+  setTimeout(function(){ after(); if(o0==="calc") showOut("calc",false); else if(figStale(PANE.out[curOut])){ try{ run(); }catch(e){} } },150);
+});
 })();
 </script>
 </body>

@@ -625,8 +625,9 @@
     </section>
 
     <section class="card">
-      <div class="card-h"><span class="num">7</span><h2>Anchor bolts &amp; base plate</h2><span class="hint">ASTM F1554 · ACI 318 Ch.17</span></div>
+      <div class="card-h"><span class="num">7</span><h2>Anchor rods &amp; base plate (sent to the Anchorage app)</h2><span class="hint">ASTM F1554 · base plate checked here</span></div>
       <div class="card-body">
+        <p class="tbl-note" style="margin:0 0 8px 0">The anchor checks (ACI 318-19 Ch. 17) are done in the Anchorage app: these inputs are sent with "Send anchors to the Anchorage app" (Anchorage tab). The base plate is checked here.</p>
         <div class="row"><label>Bolt diameter, d<sub>b</sub></label>
           <div class="ctl"><select id="boltDia" class="combo-sel">
             <option value="0.750">¾ in</option>
@@ -672,7 +673,7 @@
       <button data-tab="summary">Summary</button>
       <button data-tab="loading">Loading</button>
       <button data-tab="post">Post</button>
-      <button data-tab="anchors">Anchors</button>
+      <button data-tab="anchors">Anchorage</button>
       <button data-tab="shaft">Shaft</button>
       <button data-tab="drawings">Drawings</button>
       <button data-tab="report">Report</button>
@@ -915,7 +916,7 @@
 
     <!-- 9. ANCHOR BOLTS -->
     <section class="card" data-tab="anchors" id="lpAnchCard">
-      <div class="card-h"><span class="num">A</span><h2>Anchorage app</h2><span class="hint">BasePlateAnchorDesigner · HANDOFF.md §4.11</span></div>
+      <div class="card-h"><span class="num">A</span><h2>Anchorage</h2><span class="hint">anchor design in the Anchorage app · HANDOFF.md §4.11 / §4.12</span></div>
       <div class="card-body">
         <p class="tbl-note" style="margin-top:0">Send the anchor groups (one per post), the base plate, the shaft and every LRFD combination (ice combinations included; B₂·M; torsion) to the Base Plate &amp; Anchor Bolt Designer, which designs the anchorage. Factored, Light Pole sign convention (lightPole-v1), lb / lb-ft / in / psi.</p>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -925,28 +926,15 @@
         </div>
         <p class="tbl-note" id="lpAnchStatus" style="margin:8px 0 0 0"></p>
         <div id="lpAnchResult" style="margin-top:8px"></div>
+        <p class="tbl-note" style="margin:8px 0 0 0">Anchor design is done in the Anchorage app (Base Plate &amp; Anchor Bolt Designer): send the anchors with the button above and design them there; the governing anchor D/C comes back here. This tool no longer checks the anchor rods (engineer, 2026-11-01). The anchor inputs (card 7) are kept: they are sent to the Anchorage app and feed the base-plate check.</p>
         <div style="margin-top:6px"><button class="btn mini ghost" id="lpAnchImportRes" type="button">Import result (JSON)</button><input type="file" id="lpAnchResFile" accept=".json,application/json" style="display:none"></div>
       </div>
     </section>
     <section class="card poleOnly" data-tab="anchors">
-      <div class="card-h"><span class="num">9</span><h2>Anchor bolt design</h2><span class="hint">ASTM F1554 · ACI 318 Ch.17</span></div>
+      <div class="card-h"><span class="num">9</span><h2>Base plate</h2><span class="hint">double-nut, bending line at the pole face</span></div>
       <div class="card-body">
-        <div class="resrow"><span class="k">Bolt group</span><span class="v" id="oBoltGrp">—</span></div>
-        <div class="resrow"><span class="k">Max bolt tension, T<sub>max</sub></span><span class="v" id="oBoltT">—</span></div>
-        <div class="resrow"><span class="k">Bolt shear, V<sub>b</sub></span><span class="v" id="oBoltV">—</span></div>
-        <div class="pairgrid" style="margin-top:12px">
-          <div>
-            <div class="subhead2">Bolt group — plan</div>
-            <div class="drawwrap"><div id="boltDraw"></div></div>
-          </div>
-          <div>
-            <div class="subhead2">Limit-state check (ACI Ch.17)</div>
-            <table class="tbl" id="boltTbl"></table>
-          </div>
-        </div>
-        <div class="resrow" style="margin-top:10px"><span class="k">Tension–shear interaction (§17.8)</span><span class="v" id="oBoltInt">—</span></div>
-        <div class="resrow"><span class="k">Required base plate thickness</span><span class="v" id="oBoltBp">—</span></div>
-        <details class="calc" open style="margin-top:12px"><summary>ACI 318-19 Ch.17 anchor bolts — worked calculation</summary>
+        <div class="resrow"><span class="k">Base plate thickness</span><span class="v" id="oBoltBp">—</span></div>
+        <details class="calc" open style="margin-top:12px"><summary>Base plate — worked calculation</summary>
           <div id="boltExample" class="example-box"></div>
         </details>
       </div>
@@ -2554,7 +2542,8 @@ manPart("p2","2. Input Reference",[
 ]}},
 {key:"Check mode is the one to use when reviewing someone else's design, or confirming a standard detail works for this load case. The verdict table names every criterion, the provided value, and the limit \u2014 so an NG tells you exactly what to change."},
 
-{h:"2.10 Anchor bolts &amp; base plate"},
+{h:"2.10 Anchor rods &amp; base plate (sent to the Anchorage app)"},
+{p:"The anchor checks are done in the Anchorage app; these inputs are sent to it and also feed the base-plate check in this tool. The Feeds column below describes the Anchorage app\u2019s Chapter 17 checks."},
 {tbl:{head:["Input","Units","Feeds","Notes"],rows:[
  ["Bolt diameter, d<sub>b</sub>","in","A<sub>se</sub>, bearing area for pullout, steel strengths","Net tensile stress area follows the ASME B1.1 UNC thread formula, not the gross area."],
  ["Bolt grade","\u2014","f<sub>uta</sub> for steel tension and shear","ASTM F1554 Grade 36, 55, or 105."],
@@ -2645,20 +2634,8 @@ manPart("p3","3. Output Reference",[
 ]}},
 {key:"K = 2.1 is the AISC Commentary value for a fixed-base, free-top cantilever. It assumes the foundation genuinely provides fixity. A shaft that rotates measurably at grade does not, and a larger K would be appropriate."},
 
-{h:"3.5 Anchors tab"},
-{p:"Anchor bolt group geometry, the force in every bolt, and each ACI 318-19 Chapter 17 limit state."},
-{h3:"3.5.1 Bolt force distribution"},
-{p:"Forces come from a linear-elastic distribution about the bolt circle under the factored moment. The table lists each bolt's angle, its distance from the neutral axis, and its resulting tension \u2014 so you can see which bolts are in tension and which are in compression, and confirm the tension resultant and its eccentricity."},
-{h3:"3.5.2 Limit states"},
-{tbl:{head:["Limit state","Provision","Typical governing case"],rows:[
- ["Steel tension, N<sub>sa</sub>","§17.6.1","Governs with deep embedment and good edge distance"],
- ["Concrete breakout, N<sub>cbg</sub>","§17.6.2","Governs with shallow embedment or close edges; often the critical state"],
- ["Pullout, N<sub>pn</sub>","§17.6.3","Depends on the head or nut bearing area"],
- ["Steel shear, V<sub>sa</sub>","§17.7.1","Usually ample for these structures, where shear is small next to moment"],
- ["Concrete pryout, V<sub>cp</sub>","§17.7.3","Tied to the breakout strength"],
- ["Tension\u2013shear interaction","§17.8","Uncoupled if either ratio \u2264 0.2; otherwise the sum must be \u2264 1.2"]
-]}},
-{warn:"Breakout is the limit state most sensitive to geometry the program cannot see \u2014 real edge distances, adjacent openings, and the actual concrete member thickness. Confirm the projected-area assumptions against your detail."},
+{h:"3.5 Anchorage tab"},
+{p:"Anchor rod design (ACI 318-19 Chapter 17) is done in the Anchorage app (BasePlateAnchorDesigner.html). This tab keeps the anchor and base plate inputs, the Anchorage card (send the anchor pattern, the shaft and every LRFD combination to the Anchorage app, or export them as JSON; the D/C the app returns is shown there and on the Summary) and the base plate check (AASHTO LRFDLTS bending line, double-nut). Part 4C.3 is kept as background."},
 
 {h:"3.6 Shaft tab"},
 {h3:"3.6.1 Foundation demand"},
@@ -2812,6 +2789,7 @@ manPart("p4c","4C. Concrete Shaft &amp; Anchors",[
 {warn:"If you select the 0.5% basis, be prepared to justify that the section is genuinely oversized relative to the demand. A utilisation of 4% on flexure is good evidence; a utilisation of 80% is not."},
 
 {h:"4C.3 Anchor bolts \u2014 ACI 318-19 Chapter 17"},
+{p:"Background only: this tool no longer checks the anchor rods; they are designed in the Anchorage app."},
 {p:"Bolt forces come from a linear-elastic distribution about the bolt circle under the factored moment. The neutral axis is located, each bolt's lever arm found, and tension distributed in proportion to distance. The tension resultant and its eccentricity from the group centroid then feed the group breakout equations."},
 {tbl:{head:["Limit state","Nominal strength","Notes"],rows:[
  ["Steel tension","N<sub>sa</sub> = A<sub>se,N</sub> f<sub>uta</sub>","A<sub>se</sub> is the net tensile stress area from the UNC thread formula, not the gross area"],
@@ -2990,24 +2968,10 @@ function collectChecks(ctx){
   push('Tie spacing','ACI 318-19 §25.7.2.1',T.s,T.sLimit,'in');
   push('Soil bearing','IBC Table 1806.2',found.bearing.q,found.bearing.qAllow,'ksf');
   if(b){
-    // each anchor check from its own governing LRFD combination (byCheck), when available
-    const bT=(b.byCheck&&b.byCheck.T)||b, bV=(b.byCheck&&b.byCheck.V)||b, bI=(b.byCheck&&b.byCheck.I)||b;
-    { const bA=(b.allCombos||[bT]).reduce((a,x)=>((x.trAnc!==undefined?x.trAnc:x.tr)>(a.trAnc!==undefined?a.trAnc:a.tr)?x:a));   // the combination with the largest per-anchor ratio
-      push('Anchor tension','ACI 318-19 §17.6.1, §17.6.3',bA.Tmax,bA.phiNn,'lb'); }
-    if(!b.hasAnchRe){ const bB=(b.allCombos||[b]).reduce((a,x)=>(x.trBrk>a.trBrk?x:a)); push('Anchor breakout (group)','ACI 318-19 §17.6.2',bB.Tsum,bB.phiNcbg,'lb'); }
-    push('Anchor shear','ACI 318-19 Ch.17',bV.Vb,bV.phiVn,'lb');
-    push('Anchor T–V interaction','ACI 318-19 §17.8',bI.inter,(bI.vr>0.2&&bI.tr>0.2)?1.2:1.0,'—',bI.interOK);
+    // anchor rod checks (ACI 318-19 Ch.17) are done in the Anchorage app (retired from this tool 2026-11-01);
     // base plate (AASHTO LRFDLTS bending line, double-nut), governing LRFD combination (added 2026-11-01)
     { const bP=(b.byCheck&&b.byCheck.BP)||b;
       if(bP.tpProv>0){ push('Base plate thickness','AASHTO LRFDLTS bending line',bP.tpReq,bP.tpProv,'in',bP.tpOK,Math.pow(bP.tpReq/bP.tpProv,2)); C[C.length-1].dec=3; } }
-    // anchor reinforcement replacing the breakout (ACI 318-19 §17.5.2.1), when Provided (added 2026-11-01)
-    if(b.ar){ const aT=bT.ar||b.ar;
-      push('Anchor reinforcement, tension','ACI 318-19 §17.5.2.1',bT.Tmax,aT.phiNar,'lb');
-      push('Anchor reinforcement, development','ACI 318-19 §17.5.2.1, §25.4.2.3',b.ar.ld,b.ar.lAvail,'in',b.ar.okLd,b.ar.ld/Math.max(b.ar.lAvail,1e-9)); C[C.length-1].dec=1;
-      push('Anchor reinforcement within 0.5h_ef','ACI 318-19 R17.5.2.1',b.ar.x,b.ar.xLim,'in',b.ar.okX); C[C.length-1].dec=1; }
-    // §17.9.2 minimum geometry (load-independent): required ÷ provided, like the other minimum-type checks
-    if(!b.splitW && b.n>=2){ push('Anchor min. spacing','ACI 318-19 §17.9.2',b.sMinReq,b.sAnch,'in',b.spOK,b.sMinReq/Math.max(b.sAnch,1e-9)); C[C.length-1].dec=2; }
-    if(!b.splitW){ push('Anchor min. edge distance','ACI 318-19 §17.9.2'+(b.torq?'':', §20.5.1.3'),b.edReq,b.edProv,'in',b.edOK,b.edReq/Math.max(b.edProv,1e-9)); C[C.length-1].dec=2; }
   }
   if(found.Tu>0) push('Shaft torsion ≤ φT_th (neglect)','ACI 318-19 §22.7.1.1',found.Tu,found.phiTth,'lb·ft');
   if(pstress&&pstress.govRow) push('Post combined stress',pstress.govRow.form==='H3-6'?'AISC 360 §H3.2':'AISC 360 §H1.1',pstress.govRow.ratio,1.0,'—',pstress.govRow.ok);
@@ -3034,10 +2998,6 @@ function summaryHTML(ctx){
   H+=`</div>`;
   // ---- items this tool does NOT check (never shown as a pass) ----
   const warnL=[];
-  if(stacks.some(st=>st.found&&st.found.bolts)){
-    const sfb=stacks.some(st=>st.found.bolts&&st.found.bolts.sfbApplies);
-    warnL.push('<b>Anchor concrete breakout in shear (ACI 318-19 §17.7.2) is NOT CHECKED</b>'+(sfb?'; <b>side-face blowout (§17.6.4) applies (c<sub>a1</sub> &lt; 0.4h<sub>ef</sub>) and is NOT CHECKED</b>':'')+' — verify separately.');
-  }
   if(stacks.some(st=>st.pstress&&st.pstress.lim&&st.pstress.lim.e7Slender))
     warnL.push('Pole/post wall is a <b>slender compression element</b> (λ &gt; λ<sub>r</sub>, AISC 360-16 Table B4.1a); the §E7 effective-area reduction is <b>not applied</b>, so the axial capacity is unconservative — verify.');
   const natL=stacks.map(st=>st.nat).filter(Boolean);
@@ -3056,8 +3016,7 @@ function summaryHTML(ctx){
   drow('Embedment depth, d',st=>`${fmt(st.found.d,2)} ft`);
   drow('Longitudinal bars',st=>`(${st.found.reo.long.n}) ${st.found.reo.long.bar.n}`);
   drow('Ties',st=>`${st.found.reo.tie.bar.n} @ ${fmt(st.found.reo.tie.s,0)} in (top zone @ ${fmt(st.found.reo.tie.sTop,0)} in for ${fmt(st.found.reo.tie.zoneH,0)} in)`);
-  drow('Anchor bolts',st=>st.found.bolts?`(${st.found.bolts.n}) ${fmt(st.found.bolts.d,3)} in Gr.${inp.boltGrade}, BC ${fmt(st.found.bolts.BC,1)} in, h_ef ${fmt(st.found.bolts.hef,1)} in`:'—');
-  drow('Anchor installation',st=>st.found.bolts?(st.found.bolts.torq?'Torqued (pretensioned)':'Untorqued')+`: s = ${st.found.bolts.n>=2?fmt(st.found.bolts.sAnch,2)+' in':'—'}, c<sub>a,min</sub> = ${fmt(st.found.bolts.ca17,2)} in${st.found.bolts.splitW?'; §17.9.2 minimums waived (splitting reinforcement, §17.9.1)':''} ${lppLink('anchors',stacks.indexOf(st))}`:'—');
+  drow('Anchor bolts',st=>st.found.bolts?`(${st.found.bolts.n}) ${fmt(st.found.bolts.d,3)} in Gr.${inp.boltGrade}, BC ${fmt(st.found.bolts.BC,1)} in, h_ef ${fmt(st.found.bolts.hef,1)} in — designed in the Anchorage app ${lppLink('anchorage',stacks.indexOf(st))}`:'—');
   drow('Anchors — Anchorage app',(st)=>{ if(typeof lppAnchorChipHTML!=='function'||!LPP_ANCH) return '—'; const g=LPP_ANCH.groups[Math.min(stacks.indexOf(st),LPP_ANCH.groups.length-1)]; return g?lppAnchorChipHTML(g.id):'—'; });
   drow('Base plate',st=>{ const b=st.found.bolts; if(!b) return '—'; const bP=(b.byCheck&&b.byCheck.BP)||b; return `Ø${fmt(inp.bpDia,1)} in × ${fmt(inp.bpT,3)} in, F<sub>y</sub> ${fmt(bP.Fyp,0)} ksi; t_req ${fmt(bP.tpReq,3)} in (double-nut, bending line at the pole face) ${lppLink('anchors',stacks.indexOf(st))}`; });
   H+=`</table>`;
@@ -3066,10 +3025,10 @@ function summaryHTML(ctx){
   H+=`<table class="tbl"><tr><th style="text-align:left">Path</th><th>Combination</th><th>Wind</th><th>P (lb)</th><th>M (lb·ft)</th><th>h = M/P (ft)</th><th>N (lb)</th><th style="text-align:left">Worked in</th></tr>`;
   stacks.forEach((st,si)=>{
     if(st.asd) H+=`<tr><td style="text-align:left">Embedment — ASD${st.label?' · '+st.label:''}</td><td>${st.asd.name||'—'}</td><td>${st.asd.phi!==undefined?fmt(st.asd.phi,0)+'°':'—'}</td><td>${fmt(st.asd.P,0)}</td><td>${fmt(st.asd.M,0)}</td><td>${fmt(st.asd.h,2)}</td><td>${fmt(st.asd.axial,0)}</td><td style="text-align:left">${lppLink('dem',si)}</td></tr>`;
-    if(st.lrfd) H+=`<tr><td style="text-align:left">Shaft &amp; anchors — LRFD${st.label?' · '+st.label:''}</td><td>${st.lrfd.name||'—'}</td><td>${st.lrfd.phi!==undefined?fmt(st.lrfd.phi,0)+'°':'—'}</td><td>${fmt(st.lrfd.P,0)}</td><td>${fmt(st.lrfd.M,0)}</td><td>${fmt(st.lrfd.h,2)}</td><td>${fmt(st.lrfd.axial,0)}</td><td style="text-align:left">${lppLink('combo',si)}</td></tr>`;
+    if(st.lrfd) H+=`<tr><td style="text-align:left">Shaft &amp; base plate — LRFD${st.label?' · '+st.label:''}</td><td>${st.lrfd.name||'—'}</td><td>${st.lrfd.phi!==undefined?fmt(st.lrfd.phi,0)+'°':'—'}</td><td>${fmt(st.lrfd.P,0)}</td><td>${fmt(st.lrfd.M,0)}</td><td>${fmt(st.lrfd.h,2)}</td><td>${fmt(st.lrfd.axial,0)}</td><td style="text-align:left">${lppLink('combo',si)}</td></tr>`;
   });
   H+=`</table>`;
-  H+=`<p class="tbl-note">M above is the first-order moment. The LRFD checks (pole/post, anchors, shaft) use the second-order moment B₂·M of each combination (AISC 360-16 App. 8; B₂ in Key design inputs, worked in the pole/post check). The ASD embedment uses the first-order moment.</p>`;
+  H+=`<p class="tbl-note">M above is the first-order moment. The LRFD checks (pole/post, base plate, shaft) and the anchor export use the second-order moment B₂·M of each combination (AISC 360-16 App. 8; B₂ in Key design inputs, worked in the pole/post check). The ASD embedment uses the first-order moment.</p>`;
   // ---- demand vs capacity, sorted by utilization ----
   H+=`<div class="step-label" style="margin-top:14px">Demand vs capacity — sorted by utilization</div>`;
   H+=`<table class="tbl utiltbl"><tr><th style="text-align:left">Limit state</th><th style="text-align:left">Code</th><th>Demand</th><th>Capacity</th><th>Utilization</th><th></th><th>Status</th><th style="text-align:left">Worked in</th></tr>`;
@@ -3939,39 +3898,6 @@ function anchorsAllCombos(inp, cands){
   return Object.assign({}, gov, {byCheck:{T,V,I,BP}, allCombos:res});
 }
 
-// Rows appended to every anchor limit-state table: the ACI Ch.17 modes this tool does NOT
-// compute (shown prominently, never as a pass), and the governing LRFD combination per check.
-// ACI 318-19 §17.9.2 minimum spacing / edge distance rows for the anchor limit-state tables
-// (lengths in in, required vs provided; ratio = required ÷ provided). Worked in boltWorkedHTML step 9.
-function boltMinGeomRows(b){
-  const pill=ok=>`<span class="pill ${ok?'ok':'bad'}">${ok?'OK':'NG'}</span>`, L='text-align:left';
-  if(b.splitW) return `<tr><td style="${L}">Min. spacing / edge distance (§17.9.2)</td><td colspan="4" style="${L}">WAIVED: splitting reinforcement provided at the shaft top (§17.9.1). Provided s = ${b.n>=2?fmt(b.sAnch,2)+' in':'—'}, c<sub>a,min</sub> = ${fmt(b.ca17,2)} in (${b.torq?'torqued':'untorqued'} limits would be s ≥ ${fmt(b.sMinReq,2)} in, ${b.torq?'c ≥ '+fmt(b.edReq,2)+' in':'cover ≥ '+fmt(b.edReq,2)+' in'}).</td></tr>`;
-  let h=`<tr><td colspan="5" style="${L};font-size:11px">Minimum geometry, ACI 318-19 §17.9.2: <b>${b.torq?'torqued':'untorqued'}</b> cast-in anchors (lengths in in: required · provided)</td></tr>`;
-  h+= b.n>=2
-    ? `<tr><td style="${L}">Min. spacing, chord BC·sin(π/n) (§17.9.2)</td><td>${fmt(b.sMinReq,2)} in</td><td>${fmt(b.sAnch,2)} in</td><td>${fmt(b.sMinReq/Math.max(b.sAnch,1e-9),2)}</td><td>${pill(b.spOK)}</td></tr>`
-    : `<tr><td style="${L}">Min. spacing (§17.9.2)</td><td colspan="4" style="${L}">N/A (single anchor)</td></tr>`;
-  h+=`<tr><td style="${L}">Min. edge distance${b.torq?', c<sub>a,min</sub> ≥ 6d<sub>a</sub>':', cover c<sub>a,min</sub> − d<sub>a</sub>/2 (§20.5.1.3)'}${b.sqShaft?' (bolt '+b.caGovK+', nearest face)':''} (§17.9.2)</td><td>${fmt(b.edReq,2)} in</td><td>${fmt(b.edProv,2)} in</td><td>${fmt(b.edReq/Math.max(b.edProv,1e-9),2)}</td><td>${pill(b.edOK)}</td></tr>`;
-  return h;
-}
-// ACI 318-19 §17.5.2.1 anchor reinforcement rows (when Provided); worked in boltWorkedHTML step 3b
-function boltArRows(b){
-  const a=b.ar; if(!a) return '';
-  const bT=(b.byCheck&&b.byCheck.T)||b, aT=bT.ar||a;
-  const pill=ok=>`<span class="pill ${ok?'ok':'bad'}">${ok?'OK':'NG'}</span>`, L='text-align:left';
-  return `<tr><td style="${L}">Anchor reinforcement, tension φA<sub>s</sub>f<sub>y</sub> (§17.5.2.1): ${a.nb} ${a.bar.n} per anchor</td><td>${fmt(bT.Tmax,0)}</td><td>${fmt(aT.phiNar,0)}</td><td>${fmt(bT.Tmax/aT.phiNar,2)}</td><td>${pill(bT.Tmax<=aT.phiNar)}</td></tr>`+
-    `<tr><td style="${L}">Anchor reinforcement, development above the breakout surface (in: l<sub>d</sub> · l<sub>avail</sub>)</td><td>${fmt(a.ld,1)}</td><td>${fmt(a.lAvail,1)}</td><td>${fmt(a.ld/Math.max(a.lAvail,1e-9),2)}</td><td>${pill(a.okLd)}</td></tr>`+
-    `<tr><td style="${L}">Anchor reinforcement within 0.5h<sub>ef</sub> of the rod (in: x · 0.5h<sub>ef</sub>)</td><td>${fmt(a.x,1)}</td><td>${fmt(a.xLim,1)}</td><td>${fmt(a.x/Math.max(a.xLim,1e-9),2)}</td><td>${pill(a.okX)}</td></tr>`;
-}
-function boltNotCheckedRows(b){
-  const red='color:#a02818;font-weight:700;text-align:left';
-  let h=`<tr><td style="text-align:left">Concrete breakout in shear (§17.7.2)</td><td colspan="4" style="${red}">NOT CHECKED — anchors near the shaft face are often governed by shear breakout; verify separately.</td></tr>`;
-  h+= b.sfbApplies
-    ? `<tr><td style="text-align:left">Side-face blowout (§17.6.4)</td><td colspan="4" style="${red}">NOT CHECKED — applies (c<sub>a1</sub> = ${fmt(b.ca1,1)} in &lt; 0.4h<sub>ef</sub> = ${fmt(0.4*b.hef,1)} in); verify separately.</td></tr>`
-    : `<tr><td style="text-align:left">Side-face blowout (§17.6.4)</td><td colspan="4" style="text-align:left">N/A — c<sub>a1</sub> = ${fmt(b.ca1,1)} in ≥ 0.4h<sub>ef</sub> = ${fmt(0.4*b.hef,1)} in (§17.6.4.1)</td></tr>`;
-  if(b.byCheck) h+=`<tr><td colspan="5" style="text-align:left;font-size:11px">Governing LRFD combination (all combinations checked, 0.9D + W included): tension <b>${b.byCheck.T.comboName}</b> · shear <b>${b.byCheck.V.comboName}</b> · interaction <b>${b.byCheck.I.comboName}</b>. Rows above show <b>${b.comboName}</b>; φ<sub>breakout</sub> = ${fmt(b.phiBrk,2)} (${b.brkCond}).</td></tr>`;
-  return h;
-}
-
 // ================= SHARED FOUNDATION STACK =================
 // Given ASD demand (P,M,h,axial) and LRFD demand (Mu,Pu,Vu), run embedment, rebar, bearing,
 // and anchor bolts. Used by both the light-pole path and each sign post.
@@ -4441,9 +4367,9 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
     H+=`<div class="eq-title">Soil bearing <span class="eq-ref">[IBC Table 1806.2]</span></div>`+bearingWorkedHTML(F.bearing,(F.bearing.axial!==undefined?F.bearing.axial:asd.axial),inp)+lppRes('bearing',pi);
     H+=`<div class="eq-title">Shaft reinforcement <span class="eq-ref">[ACI 318-19]</span></div>`+rebarWorkedHTML(F.reo,inp,F.Mu,F.Pu,F.Vu)+lppRes('flex asmin asmax spacing ties shear',pi);
     if(F.Tu>0) H+=`<div class="eq-title">Shaft torsion threshold <span class="eq-ref">[ACI 318-19 §22.7.1.1]</span></div>`+lppTorsionHTML(F,inp)+lppRes('torsion',pi);
-    H+=`<div class="eq-title">Anchor bolts <span class="eq-ref">[ASTM F1554 / ACI 318-19 Ch. 17]</span></div>`;
-    H+=`<p class="eq-why">(${inp.boltQty}) ${n(inp.boltDia,3)}″ Gr.${inp.boltGrade} on a ${n(F.bolts.BC,0)}″ circle, h_ef ${n(F.bolts.hef,0)}″. Every Chapter 17 limit state is derived below with numbers substituted.</p>`;
-    H+=boltWorkedHTML(F.bolts,inp)+lppRes('anchors',pi);
+    H+=`<div class="eq-title">Base plate <span class="eq-ref">[AASHTO LRFDLTS bending line]</span></div>`;
+    H+=`<p class="eq-why">Anchor rods ((${inp.boltQty}) ${n(inp.boltDia,3)}″ Gr.${inp.boltGrade} on a ${n(F.bolts.BC,0)}″ circle, h_ef ${n(F.bolts.hef,0)}″): designed in the Anchorage app (Base Plate &amp; Anchor Bolt Designer); the base plate is checked here.</p>`;
+    H+=basePlateWorkedHTML(F.bolts,inp)+lppRes('anchors',pi);
     H+=`<div class="eq-title">Post combined stress <span class="eq-ref">[AISC 360-16 (LRFD)]</span></div>`;
     H+=poleWorkedBody(ps, inp, ps.govRow)+lppRes('post b2',pi);
     if(ps&&ps.lim&&ps.shape==='round') H+=`<div class="eq-title">Round HSS wall slenderness <span class="eq-ref">[AISC 360-16 §F8 scope]</span></div>`+lppDtHTML(ps).replace(/^<div class="step-label">[\s\S]*?<\/div>/,'')+lppRes('dt',pi);
@@ -4657,7 +4583,7 @@ function calc(){
   if(ratio>10)f+=`<div class="flag bad">d/b = ${fmt(ratio,1)} exceeds the rigid range — run a p-y / LPILE lateral analysis.</div>`;
   else if(ratio<3)f+=`<div class="flag">d/b = ${fmt(ratio,1)} is shallow for rigid-pier behavior; verify assumptions.</div>`;
   else f+=`<div class="flag ok">d/b = ${fmt(ratio,1)} within rigid short-pier range.</div>`;
-  f+=`<div class="flag ok">Embedment governed by ASD <b>${govASD.name}</b>; shaft P–M governed by LRFD <b>${shaftGov.name}</b> (all LRFD combinations checked); soil bearing by ASD <b>${govAxASD.name}</b> (max axial); anchors: tension <b>${bolts.byCheck.T.comboName}</b>, shear <b>${bolts.byCheck.V.comboName}</b>, interaction <b>${bolts.byCheck.I.comboName}</b>.</div>`;
+  f+=`<div class="flag ok">Embedment governed by ASD <b>${govASD.name}</b>; shaft P–M governed by LRFD <b>${shaftGov.name}</b> (all LRFD combinations checked); soil bearing by ASD <b>${govAxASD.name}</b> (max axial); base plate <b>${(bolts.byCheck.BP||bolts).comboName}</b>.</div>`;
   f+=`<div class="flag${govB2.B2max>1.10?' bad':''}">P-Δ (AISC 360-16 App. 8): B<sub>2</sub> = ${fmt(govB2.B2,3)} for ${govB2.name} (range ${fmt(govB2.B2min,3)}–${fmt(govB2.B2max,3)} over the LRFD combinations); each combination's B<sub>2</sub> multiplies its LRFD moments for the pole, anchors and shaft. Pole stress governed by <b>${pstress.comboName}</b>, wind toward ${fmt(pstress.phi,0)}° (all LRFD combinations and azimuths checked).</div>`;
   if(!(nat.n1>=1.0)) f+=`<div class="flag bad">Natural frequency n<sub>1</sub> ≈ ${fmt(nat.n1,2)} Hz &lt; 1 Hz (Rayleigh estimate): the pole is <b>flexible</b> (ASCE 7-22 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} (§26.11.5, β = ${fmt(inp.beta,3)}); G used = max(${fmt(inp.Ginput,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b> for every wind force.</div>`;
   { const oa=lppOffAxisFixtures(fixtures); if(oa.length) f+=`<div class="flag bad">${lppOffAxisMsg(oa)}</div>`; }
@@ -4892,27 +4818,10 @@ function calc(){
   if($('oBearing')) $('oBearing').innerHTML=`${fmt(bearing.q,2)} vs ${fmt(bearing.qAllow,2)} ksf <span class="pill ${bearing.ok?'ok':'bad'}">${bearing.ok?'OK':'NG'}</span>`;
 
   // ---- anchor bolt outputs ----
-  if($('oBoltGrp')){
-    $('oBoltGrp').textContent=`(${bolts.n}) ${['','','',''][0]||''}${(inp.boltDia).toFixed(3)}″ F1554 Gr.${inp.boltGrade}, BC ${fmt(bolts.BC,0)}″, h_ef ${fmt(bolts.hef,0)}″`;
-    $('oBoltT').textContent=fmt(bolts.Tmax,0)+' lb';
-    $('oBoltV').textContent=fmt(bolts.Vb,0)+' lb';
-    // limit-state table
-    const row=(name,dem,cap,ref)=>{const r=cap>0?dem/cap:0;const ok=r<=1.0;
-      return `<tr><td style="text-align:left">${name}</td><td>${fmt(dem,0)}</td><td>${fmt(cap,0)}</td><td>${fmt(r,2)}</td><td><span class="pill ${ok?'ok':'bad'}">${ok?'OK':'NG'}</span></td></tr>`;};
-    let bt=`<tr><th style="text-align:left">Limit state</th><th>Demand<span class="sym">(lb)</span></th><th>φ·Capacity<span class="sym">(lb)</span></th><th>Ratio</th><th>—</th></tr>`;
-    bt+=row('Steel tension, per bolt (§17.6.1)',bolts.Tmax,bolts.phiNsa);
-    if(!bolts.hasAnchRe) bt+=row('Concrete breakout, group (§17.6.2)',bolts.Tsum,bolts.phiNcbg);
-    else bt+=`<tr><td style="text-align:left">Concrete breakout (§17.6.2)</td><td colspan="4" style="text-align:left;color:var(--steel)">replaced by the anchor reinforcement (§17.5.2.1), checked below</td></tr>`+boltArRows(bolts);
-    bt+=row('Pullout, per bolt (§17.6.3)',bolts.Tmax,bolts.phiNp);
-    bt+=row('Steel shear, per bolt (§17.7.1)',bolts.Vb,bolts.phiVsa);
-    bt+=row('Concrete pryout, group (§17.7.3)',bolts.Vu,bolts.phiVcp);
-    if(bolts.VbT>0) bt+=`<tr><td colspan="5" style="text-align:left;font-size:11px">Torsion from the wind on offset fixtures and arms, T<sub>u</sub> = ${fmt(bolts.Tu/12,0)} lb·ft: each bolt's shear includes T<sub>u</sub>/(n·R) = ${fmt(bolts.VbT,0)} lb, added to V<sub>u</sub>/n = ${fmt(bolts.Vu/bolts.n,0)} lb (conservative scalar sum). Shaft torsion check (ACI 318-19 §22.7.1.1): T<sub>u</sub> = ${fmt(shT.Tu,0)} vs φT<sub>th</sub> = ${fmt(shT.phiTth,0)} lb·ft (worked in the Shaft tab). Soil torsional resistance is not checked.</td></tr>`;
-    bt+=boltMinGeomRows(bolts);
-    bt+=boltNotCheckedRows(bolts);
-    $('boltTbl').innerHTML=bt;
-    $('oBoltInt').innerHTML=`${fmt(bolts.inter,2)} ${bolts.vr<=0.2||bolts.tr<=0.2?'(uncoupled)':'≤ 1.2'} <span class="pill ${bolts.interOK?'ok':'bad'}">${bolts.interOK?'OK':'NG'}</span>`;
+  // anchor rods: designed in the Anchorage app (2026-11-01); this tab shows the base plate only (the anchor engine still runs:
+  // its rod forces feed the base-plate check and the anchorGroup hand-off)
+  if($('oBoltBp')){
     { const bP=(bolts.byCheck&&bolts.byCheck.BP)||bolts; $('oBoltBp').textContent=fmt(bP.tpReq,3)+' in required ≤ '+fmt(bP.tpProv,3)+' in provided ('+(bP.tpOK?'OK':'NG')+'; F_y '+fmt(bP.Fyp,0)+' ksi, '+bP.comboName+')'; }
-    drawBoltGroup(bolts,inp);
     renderBoltExample(bolts,inp);
   }
 
@@ -5065,98 +4974,15 @@ function renderPoleStressExample(pstress,inp,sfx){
   }
 }
 
-// ---- ANCHOR BOLT worked example: explicit ACI 318-19 Ch.17 derivation (LRFD) ----
-// Returns the full KaTeX-formatted derivation string for a computed bolt result `bo`.
-function boltWorkedHTML(bo,inp){
+// Base plate worked step (2026-11-01: the Anchorage tab shows the base plate only; the anchor rods are designed in the Anchorage
+// app). Formerly step 8 of the anchor-bolt derivation (removed 2026-11-01, see fixlog LPA4).
+function basePlateWorkedHTML(bo,inp){
   const g=(t)=>`\\[${t}\\]`;
   const step=(txt)=>`<div class="step-label">${txt}</div>`;
   const ref=(s)=>`<span class="eq-ref">[${s}]</span>`;
   let H='';
-
-  // 1 — factored demands & bolt force distribution
-  H+=step(`1 · Factored demands at the base &amp; elastic bolt-force distribution ${ref('ACI 318-19 §17.5.1.2')}`);
-  H+=`<p class="eq-why">The base plate is treated as rigid. The overturning moment M<sub>u</sub> and axial P<sub>u</sub> distribute to the bolts elastically about the group centroid; each bolt at signed distance yᵢ (measured along the moment vector) picks up tension in proportion to yᵢ. Compression is taken by bearing, so only positive (tension) values are retained.</p>`;
-  H+=g(`M_u = ${fmt(bo.Mu/12,0)}\\ \\text{lb}{\\cdot}\\text{ft} = ${fmt(bo.Mu,0)}\\ \\text{lb}{\\cdot}\\text{in}\\qquad P_u = ${fmt(bo.Pu,0)}\\ \\text{lb}\\qquad V_u = ${fmt(bo.Vu,0)}\\ \\text{lb}`);
-  H+=g(`\\textstyle\\sum y_i^2 = ${fmt(bo.sumY2,1)}\\ \\text{in}^2 \\qquad(n=${bo.n}\\ \\text{bolts on a }${fmt(bo.BC,1)}\\text{ in circle})`);
-  H+=g(`T_i = \\frac{M_u\\,y_i}{\\sum y_i^2} - \\frac{P_u}{n}\\quad\\Rightarrow\\quad T_{max} = ${fmt(bo.Tmax,0)}\\ \\text{lb}\\quad V_{ua} = \\frac{V_u}{n} = ${fmt(bo.Vb,0)}\\ \\text{lb/bolt}`);
-  H+=`<p class="eq-result">Critical bolt tension T<sub>max</sub> = ${fmt(bo.Tmax,0)} lb; ${bo.nT} bolt(s) in tension. Per-bolt shear V<sub>ua</sub> = ${fmt(bo.Vb,0)} lb.</p>`;
-
-  // 2 — steel tension
-  H+=step(`2 · Steel strength in tension, N<sub>sa</sub> ${ref('§17.6.1')}`);
-  H+=`<p class="eq-why">The effective tensile (thread-root) stress area times the anchor's specified tensile strength f<sub>uta</sub> gives the nominal steel tension per bolt; φ = 0.75 for ductile steel in tension.</p>`;
-  const nTpi={0.750:10,0.875:9,1.000:8,1.125:7,1.250:7,1.500:6,1.750:5,2.000:4.5}[bo.d]||8;
-  H+=g(`A_{se,N} = \\tfrac{\\pi}{4}\\left(d-\\tfrac{0.9743}{n_t}\\right)^2 = \\tfrac{\\pi}{4}\\left(${fmt(bo.d,3)}-\\tfrac{0.9743}{${nTpi}}\\right)^2 = ${fmt(bo.Ase,3)}\\ \\text{in}^2\\qquad f_{uta} = ${fmt(bo.gr.Fu,0)}\\ \\text{ksi}`);
-  H+=g(`N_{sa} = A_{se,N}\\,f_{uta} = ${fmt(bo.Ase,3)}(${fmt(bo.futa,0)}) = ${fmt(bo.Nsa,0)}\\ \\text{lb}\\quad\\Rightarrow\\quad \\phi N_{sa} = 0.75N_{sa} = ${fmt(bo.phiNsa,0)}\\ \\text{lb}`);
-
-  // 3 — concrete breakout (full group method)
-  H+=step(`3 · Concrete breakout in tension, N<sub>cbg</sub> ${ref('§17.6.2')}`);
-  H+=`<p class="eq-why">Basic single-anchor breakout strength for a cast-in anchor:</p>`;
-  H+=g(`N_b = k_c\\,\\lambda_a\\sqrt{f'_c}\\,h_{ef}^{1.5} = ${bo.kc}(${fmt(bo.lam,1)})\\sqrt{${fmt(bo.fc,0)}}\\,(${fmt(bo.hef,1)})^{1.5} = ${fmt(bo.Nb,0)}\\ \\text{lb}`);
-  H+=`<p class="eq-why">Projected concrete failure areas — a single anchor projects a 1.5h<sub>ef</sub> cone in every direction; the bolt group's projection is capped by the shaft face at radius R<sub>edge</sub>:</p>`;
-  H+=g(`A_{Nco} = 9h_{ef}^2 = 9(${fmt(bo.hef,1)})^2 = ${fmt(bo.ANco,0)}\\ \\text{in}^2`);
-  H+=g(`R_{proj} = R_{bolt}+1.5h_{ef} = ${fmt(bo.R,1)}+${fmt(1.5*bo.hef,1)} = ${fmt(bo.Rproj,1)}\\text{ in},\\ \\ \\text{clip to }R_{edge}=${fmt(bo.Redge,1)}\\text{ in}`);
-  H+=g(`A_{Nc,all} = \\pi\\,[\\min(R_{proj},R_{edge})]^2 = \\pi(${fmt(bo.capR,1)})^2 = ${fmt(bo.ANcAll,0)}\\ \\text{in}^2\\quad(\\text{whole group — pryout only})`);
-  H+=`<p class="eq-why">Tension breakout uses only the anchors <b>in tension</b> (§17.6.2.1): A<sub>Nc</sub> is the union of the 3h<sub>ef</sub> × 3h<sub>ef</sub> squares around the ${bo.tension.length} tension bolt${bo.tension.length===1?'':'s'}, clipped by the shaft face (numerical integration), and capped at n<sub>T</sub>·A<sub>Nco</sub>:</p>`;
-  H+=g(`A_{Nc} = \\min\\left(${fmt(bo.ANcT,0)},\\ ${bo.tension.length||bo.n}\\times${fmt(bo.ANco,0)}\\right) = ${fmt(bo.ANc,0)}\\ \\text{in}^2`);
-  H+=`<p class="eq-why">Modification factors: edge (ψ<sub>ed,N</sub>), eccentricity (ψ<sub>ec,N</sub>), cracking (ψ<sub>c,N</sub>), and cast-in splitting (ψ<sub>cp,N</sub> = 1.0):</p>`;
-  const edEq = bo.ca1>=1.5*bo.hef
-      ? `\\psi_{ed,N} = 1.0\\quad(c_{a,min}=${fmt(bo.ca1,1)}\\ge 1.5h_{ef}=${fmt(1.5*bo.hef,1)})`
-      : `\\psi_{ed,N} = 0.7+0.3\\frac{c_{a,min}}{1.5h_{ef}} = 0.7+0.3\\frac{${fmt(bo.ca1,1)}}{${fmt(1.5*bo.hef,1)}} = ${fmt(bo.psi_ed,3)}`;
-  H+=g(edEq);
-  H+=g(`\\psi_{ec,N} = \\frac{1}{1+\\frac{2e'_{N1}}{3h_{ef}}}\\cdot\\frac{1}{1+\\frac{2e'_{N2}}{3h_{ef}}} = ${fmt(bo.psi_ec,3)}\\ (e'_{N1}=${fmt(bo.eN1,2)},\\ e'_{N2}=${fmt(bo.eN2,2)}\\text{ in, tension anchors})\\qquad \\psi_{c,N} = ${fmt(bo.psi_c,1)}\\qquad \\psi_{cp,N} = ${fmt(bo.psi_cp,1)}`);
-  H+=g(`N_{cbg} = \\frac{A_{Nc}}{A_{Nco}}\\,\\psi_{ec,N}\\psi_{ed,N}\\psi_{c,N}\\psi_{cp,N}\\,N_b = \\frac{${fmt(bo.ANc,0)}}{${fmt(bo.ANco,0)}}(${fmt(bo.psi_ec,2)})(${fmt(bo.psi_ed,3)})(${fmt(bo.psi_c,1)})(${fmt(bo.psi_cp,1)})(${fmt(bo.Nb,0)})`);
-  H+=g(`N_{cbg} = ${fmt(bo.Ncbg,0)}\\ \\text{lb}\\quad\\Rightarrow\\quad \\phi N_{cbg} = ${fmt(bo.phiBrk,2)}N_{cbg} = ${fmt(bo.phiNcbg,0)}\\ \\text{lb}`);
-  H+=`<p class="eq-why">φ = ${fmt(bo.phiBrk,2)} — ${bo.brkCond} (ACI 318-19 Table 17.5.3): ${bo.hasAnchRe?'reinforcement is selected as provided, taken as supplementary reinforcement crossing the failure surface':'no anchor/supplementary reinforcement selected'}.</p>`;
-  if(bo.hasAnchRe){
-    H+=`<p class="eq-result">Anchor reinforcement is provided, so per §17.5.2.1 the design strength of the anchor reinforcement is used instead of the breakout strength; it is checked in step 3b. φN<sub>cbg</sub> = ${fmt(bo.phiNcbg,0)} lb is shown for reference.</p>`;
-    const a=bo.ar;
-    if(a){
-      H+=step(`3b · Anchor reinforcement in tension ${ref('ACI 318-19 §17.5.2.1, R17.5.2.1; §25.4.2.3')}`);
-      H+=`<p class="eq-why">Vertical bars within 0.5h<sub>ef</sub> of each anchor rod, developed on both sides of the breakout surface, carry the anchor tension (φ = 0.75). Input: ${a.nb} ${a.bar.n}${inp.arBar==='shaft'||!inp.arBar?' (the shaft longitudinal bar)':''} per tension anchor at x = ${fmt(a.x,2)} in from the rod. Below the breakout surface the shaft bars run the full shaft depth (developed); above it the straight length to the bar end at the clear cover (c = ${fmt(a.cTop,2)} in) below the shaft top is checked against l<sub>d</sub>. The cone surface reaches the bar at depth h<sub>ef</sub> − x/1.5 (1 : 1.5 slope, as A<sub>Nco</sub>).</p>`;
-      H+=g(`\\phi N_{ar} = 0.75\\,A_s\\,f_y = 0.75(${a.nb}\\times${fmt(a.bar.a,2)})(${fmt(a.fyr,0)}) = ${fmt(a.phiNar,0)}\\ \\text{lb}\\ ${bo.Tmax<=a.phiNar?'\\ge':'<'}\\ N_{ua} = ${fmt(bo.Tmax,0)}\\ \\text{lb}`);
-      H+=g(`x = ${fmt(a.x,2)}\\ ${a.okX?'\\le':'>'}\\ 0.5h_{ef} = ${fmt(a.xLim,2)}\\ \\text{in}`);
-      H+=g(`l_d = \\max\\!\\left(\\frac{f_y\\,\\psi_t\\psi_e\\psi_g}{${a.div}\\,\\lambda\\sqrt{f'_c}}\\,d_b,\\ 12\\right) = \\max\\!\\left(\\frac{${fmt(a.fyr,0)}(1.0)(1.0)(${fmt(a.psiG,2)})}{${a.div}(1.0)\\sqrt{${fmt(bo.fc,0)}}}(${fmt(a.bar.d,3)}),\\ 12\\right) = ${fmt(a.ld,1)}\\ \\text{in}`);
-      H+=g(`l_{avail} = h_{ef}-\\frac{x}{1.5}-c = ${fmt(bo.hef,2)}-\\frac{${fmt(a.x,2)}}{1.5}-${fmt(a.cTop,2)} = ${fmt(a.lAvail,1)}\\ \\text{in}\\ ${a.okLd?'\\ge':'<'}\\ l_d`);
-      H+=`<p class="eq-result">Anchor reinforcement: strength ${bo.Tmax<=a.phiNar?'OK':'NG'} (${fmt(bo.Tmax/a.phiNar,2)}), development ${a.okLd?'OK':'NG'} (${fmt(a.ld/Math.max(a.lAvail,1e-9),2)}), location ${a.okX?'OK':'NG'}${a.okLd?'':' — lengthen h<sub>ef</sub>, move the bars closer, use hooked/headed bars (not modelled) or select None to check concrete breakout instead'}.</p>`;
-    }
-  } else {
-    H+=`<p class="eq-result">Group breakout φN<sub>cbg</sub> = ${fmt(bo.phiNcbg,0)} lb, i.e. ${fmt(bo.phiNcbg/bo.nT,0)} lb per tension bolt (${bo.nT} in tension).</p>`;
-  }
-
-  // 4 — pullout
-  H+=step(`4 · Pullout strength, N<sub>pn</sub> ${ref('§17.6.3')}`);
-  H+=`<p class="eq-why">Cast-in headed anchor: bearing of the head on the concrete. A<sub>brg</sub> is the net bearing area of the heavy-hex head; ψ<sub>c,P</sub> = 1.0 (cracked, conservative).</p>`;
-  H+=`<p class="eq-why">Heavy hex nut at the embedded end of the rod (no plate washer). Width across flats F = 1.5d + 1/8 in (ASME B18.2.2, heavy hex nuts); A<sub>brg</sub> = hex area − rod area.</p>`;
-  H+=g(`F = 1.5d+\\tfrac18 = 1.5(${fmt(bo.d,3)})+0.125 = ${fmt(bo.nutF,4)}\\ \\text{in}\\qquad A_{brg} = \\tfrac{\\sqrt3}{2}F^2-\\tfrac{\\pi}{4}d^2 = 0.866(${fmt(bo.nutF,4)})^2-0.785(${fmt(bo.d,3)})^2 = ${fmt(bo.Abrg,3)}\\ \\text{in}^2`);
-  H+=g(`N_p = 8\\,A_{brg}\\,f'_c = 8(${fmt(bo.Abrg,2)})(${fmt(bo.fc,0)}) = ${fmt(bo.Np,0)}\\ \\text{lb}`);
-  H+=g(`N_{pn} = \\psi_{c,P}\\,N_p = ${fmt(bo.Npn,0)}\\ \\text{lb}\\quad\\Rightarrow\\quad \\phi N_{pn} = 0.70N_{pn} = ${fmt(bo.phiNp,0)}\\ \\text{lb}`);
-
-  // 5 — steel shear
-  H+=step(`5 · Steel strength in shear, V<sub>sa</sub> ${ref('§17.7.1')}`);
-  H+=`<p class="eq-why">Threads in the shear plane → 0.6 factor on A<sub>se</sub>f<sub>uta</sub>; φ = 0.65.</p>`;
-  H+=g(`V_{sa} = 0.6\\,A_{se,V}\\,f_{uta} = 0.6(${fmt(bo.Ase,3)})(${fmt(bo.futa,0)}) = ${fmt(bo.Vsa,0)}\\ \\text{lb}\\quad\\Rightarrow\\quad \\phi V_{sa} = ${fmt(bo.phiVsa,0)}\\ \\text{lb}`);
-
-  // 6 — pryout
-  H+=step(`6 · Concrete pryout in shear, V<sub>cpg</sub> ${ref('§17.7.3')}`);
-  H+=g(`N_{cbg,all} = \\frac{A_{Nc,all}}{A_{Nco}}\\psi_{ed,N}\\psi_{c,N}\\psi_{cp,N}N_b = ${fmt(bo.NcbgAll,0)}\\ \\text{lb}\\quad(\\text{whole group, }\\psi_{ec,N}=1)`);
-  H+=g(`k_{cp} = ${fmt(bo.kcp,1)}\\ (h_{ef}${bo.hef>=2.5?'\\ge':'<'}2.5\\text{ in})\\qquad V_{cpg} = k_{cp}\\,N_{cbg,all} = ${fmt(bo.kcp,1)}(${fmt(bo.NcbgAll,0)}) = ${fmt(bo.Vcp,0)}\\ \\text{lb}`);
-  H+=g(`\\phi V_{cpg} = 0.70V_{cpg} = ${fmt(bo.phiVcp,0)}\\ \\text{lb}`);
-
-  // 7 — governing capacities + interaction
-  H+=step(`7 · Governing capacities &amp; tension–shear interaction ${ref('§17.8')}`);
-  H+=g(`\\phi N_n = \\min(\\phi N_{sa},\\ \\phi N_{pn}) = ${fmt(bo.phiNn,0)}\\ \\text{lb}\\qquad \\phi V_n = \\min(\\phi V_{sa},\\ \\phi V_{cpg}/n) = ${fmt(bo.phiVn,0)}\\ \\text{lb}`);
-  if(!bo.hasAnchRe) H+=g(`\\text{Breakout, group: }\\frac{\\Sigma N_{ua,g}}{\\phi N_{cbg}} = \\frac{${fmt(bo.Tsum,0)}}{${fmt(bo.phiNcbg,0)}} = ${fmt(bo.trBrk,3)}\\qquad \\text{per anchor: }\\frac{N_{ua}}{\\phi N_n} = \\frac{${fmt(bo.Tmax,0)}}{${fmt(bo.phiNn,0)}} = ${fmt(bo.trAnc,3)}`);
-  H+=g(`\\frac{N_{ua}}{\\phi N_n}\\Big|_{gov} = ${fmt(bo.tr,3)}\\qquad \\frac{V_{ua}}{\\phi V_n} = \\frac{${fmt(bo.Vb,0)}}{${fmt(bo.phiVn,0)}} = ${fmt(bo.vr,3)}`);
-  let interEq;
-  if(bo.vr<=0.2) interEq=`V_{ua}/\\phi V_n = ${fmt(bo.vr,2)}\\le 0.2 \\Rightarrow \\text{shear negligible; check tension only: } ${fmt(bo.tr,3)}\\le 1.0`;
-  else if(bo.tr<=0.2) interEq=`N_{ua}/\\phi N_n = ${fmt(bo.tr,2)}\\le 0.2 \\Rightarrow \\text{tension negligible; check shear only: } ${fmt(bo.vr,3)}\\le 1.0`;
-  else interEq=`\\frac{N_{ua}}{\\phi N_n}+\\frac{V_{ua}}{\\phi V_n} = ${fmt(bo.tr,3)}+${fmt(bo.vr,3)} = ${fmt(bo.inter,3)}\\le 1.2`;
-  H+=g(interEq);
-  H+=`<p class="eq-result">Interaction ${fmt(bo.inter,3)} — ${bo.interOK?'≤ limit, the anchor group is adequate':'&gt; limit, increase bolt size, count, or embedment'}.</p>`;
-
-  // 8 — base plate
   const bp=(bo.byCheck&&bo.byCheck.BP)||bo;   // the LRFD combination with the largest t_req
-  H+=step(`8 · Base-plate thickness — bending line at the pole face, double-nut base ${ref('AASHTO LRFDLTS (bending-line method; article to be confirmed)')}`);
+  H+=step(`Base-plate thickness — bending line at the pole face, double-nut base ${ref('AASHTO LRFDLTS (bending-line method; article to be confirmed)')}`);
   H+=`<p class="eq-why">Double-nut (leveling-nut) base: no grout bearing, so the compression side also loads the plate through the leveling nuts. The governing rod force is the larger of the tension rod and the compression rod. The plate cantilevers from the bending line at the pole face (tangent to the pole, normal to the radius through the rod) over m, with the effective width per rod taken at the pole face, b<sub>eff</sub> = πD/n; plastic plate strip, φ<sub>f</sub> = 0.90. This method is used in this mode (and in the AASHTO LRFDLTS 2nd Ed. mode until that mode is added). Combination shown: ${bp.comboName||'—'}.</p>`;
   H+=g(`C_{max} = \\frac{M_u\\,|y|}{\\sum y_i^2}+\\frac{P_u}{n} = ${fmt(bp.Cmax,0)}\\ \\text{lb}\\qquad P_{rod} = \\max(T_{max},C_{max}) = \\max(${fmt(bp.Tmax,0)},\\ ${fmt(bp.Cmax,0)}) = ${fmt(bp.Prod,0)}\\ \\text{lb}`);
   H+=g(`m = \\frac{BC-D_{pole}}{2} = \\frac{${fmt(bp.BC,2)}-${fmt(bp.Dpole,2)}}{2} = ${fmt(bp.m,2)}\\text{ in}\\qquad b_{eff} = \\frac{\\pi\\,D_{pole}}{n} = \\frac{\\pi(${fmt(bp.Dpole,2)})}{${bp.n}} = ${fmt(bp.beff,3)}\\text{ in}`);
@@ -5164,30 +4990,12 @@ function boltWorkedHTML(bo,inp){
   H+=`<div class="flag" style="background:#fdf8ee;border-color:#e0c48a;color:#7a5a1e;margin:8px 0">${lppEsc(LPP_BP_VERIFY)}</div>`;
   H+=`<p class="eq-result">t<sub>req</sub> = ${fmt(bp.tpReq,3)} in ${bp.tpOK?'≤':'&gt;'} t<sub>provided</sub> = ${fmt(bp.tpProv,3)} in → <b>${bp.tpOK?'PASS':'FAIL'}</b> (M<sub>u</sub>/φM<sub>n</sub> = (t<sub>req</sub>/t)² = ${fmt(Math.pow(bp.tpReq/bp.tpProv,2),3)}).</p>`;
 
-  // 9 — minimum spacing and edge distance (geometry; independent of the load combination)
-  H+=step(`9 · Minimum spacing and edge distance, ${bo.torq?'torqued':'untorqued'} cast-in anchors ${ref('ACI 318-19 §17.9.2, Table 17.9.2(a)')}`);
-  H+=`<p class="eq-why">Anchor installation input: <b>${bo.torq?'Torqued':'Untorqued'}</b>. Table 17.9.2(a), cast-in anchors: minimum spacing 4d<sub>a</sub> not torqued, 6d<sub>a</sub> torqued; minimum edge distance = the specified cover per §20.5.1.3 not torqued, 6d<sub>a</sub> torqued. The bolts are equally spaced on the bolt circle, so the spacing is the chord between adjacent bolts; the edge distance is measured from the bolt axis to the nearest shaft face.</p>`;
-  if(bo.n>=2){
-    H+=g(`s = BC\\,\\sin\\frac{\\pi}{n} = ${fmt(bo.BC,2)}\\,\\sin\\frac{\\pi}{${bo.n}} = ${fmt(bo.sAnch,2)}\\text{ in}\\qquad s_{min} = ${bo.torq?6:4}d_a = ${bo.torq?6:4}(${fmt(bo.d,3)}) = ${fmt(bo.sMinReq,2)}\\text{ in}`);
-    H+=`<p class="eq-result">Spacing: s = ${fmt(bo.sAnch,2)} in ${bo.spOK?'≥':'&lt;'} s<sub>min</sub> = ${fmt(bo.sMinReq,2)} in → <b>${bo.splitW?'waived (§17.9.1)':(bo.spOK?'PASS':'FAIL')}</b> (required ÷ provided = ${fmt(bo.sMinReq/Math.max(bo.sAnch,1e-9),2)}).</p>`;
-  } else H+=`<p class="eq-result">Spacing: N/A (single anchor).</p>`;
-  if(bo.sqShaft){
-    H+=`<p class="eq-why">Square shaft: each bolt's distance to the nearest face follows from its plan angle θ<sub>i</sub> (faces normal to 0°, 90°, 180°, 270°); the smallest value governs: ${bo.bolts.map(b=>`bolt ${b.k} (θ = ${fmt(((b.ang%360)+360)%360,1)}°) ${fmt(b.ca,2)} in`).join('; ')}.</p>`;
-    H+=g(`c_{a,i} = \\tfrac{b}{2}-R\\,\\max(|\\cos\\theta_i|,|\\sin\\theta_i|)\\quad\\Rightarrow\\quad c_{a,min} = ${fmt(bo.Redge,2)}-${fmt(bo.R,2)}\\max(|\\cos ${fmt(((bo.caGovAng%360)+360)%360,1)}^\\circ|,|\\sin ${fmt(((bo.caGovAng%360)+360)%360,1)}^\\circ|) = ${fmt(bo.ca17,2)}\\text{ in}\\ (\\text{bolt }${bo.caGovK})`);
-    H+=`<p class="eq-why">ψ<sub>ed,N</sub> (step 3) is a factor on the group breakout and keeps c<sub>a1</sub> = b/2 − R = ${fmt(bo.ca1,2)} in (a bolt on a face normal, ≤ c<sub>a,min</sub>); the side-face blowout flag also keeps c<sub>a1</sub>. The per-bolt value is used only for this §17.9 check.</p>`;
-  } else H+=g(`c_{a,min} = c_{a1} = R_{edge}-\\tfrac{BC}{2} = ${fmt(bo.Redge,2)}-${fmt(bo.R,2)} = ${fmt(bo.ca17,2)}\\text{ in}\\quad(\\text{round shaft: every bolt})`);
-  if(bo.torq) H+=g(`c_{min} = 6d_a = 6(${fmt(bo.d,3)}) = ${fmt(bo.edReq,2)}\\text{ in}\\qquad c_{a,min} = ${fmt(bo.edProv,2)}\\text{ in}`);
-  else H+=g(`c_{c} = c_{a,min}-\\tfrac{d_a}{2} = ${fmt(bo.ca17,2)}-${fmt(bo.d/2,3)} = ${fmt(bo.edProv,2)}\\text{ in}\\qquad c_{c,min} = \\text{specified cover (20.5.1.3)} = ${fmt(bo.edReq,2)}\\text{ in}`);
-  H+=`<p class="eq-result">Edge distance: ${bo.torq?'c<sub>a,min</sub>':'clear cover to the anchor shank'} = ${fmt(bo.edProv,2)} in ${bo.edOK?'≥':'&lt;'} ${fmt(bo.edReq,2)} in → <b>${bo.splitW?'waived (§17.9.1)':(bo.edOK?'PASS':'FAIL')}</b> (required ÷ provided = ${fmt(bo.edReq/Math.max(bo.edProv,1e-9),2)}).</p>`;
-  if(bo.splitW) H+=`<p class="eq-result"><b>WAIVED</b>: splitting reinforcement is provided at the shaft top (input), so per §17.9.1 the §17.9.2 minimum spacing and edge distance above need not be met; the values are shown for information and are not design checks. The ties or spiral must be detailed on the drawings to control splitting around the anchors.</p>`;
-  H+=`<p class="eq-why">${bo.torq?'Torqued = the rods are pretensioned after snug-tight (AASHTO LTS turn-of-nut practice for pole and sign base connections); the larger torqued limits guard against splitting from the pretension.':'Untorqued anchors that do not meet these limits may be designed with a smaller d<sub>a</sub>′ that does, with the anchor forces limited to that diameter (§17.9.3); not computed here.'} §17.9.1 permits lesser values where supplementary reinforcement is provided to control splitting: that is the separate "Splitting reinforcement at the shaft top" input (${bo.splitW?'Provided':'None'}), not the breakout "Anchor reinforcement" input. §17.9.4 (h<sub>ef</sub> limit for post-installed expansion, screw and undercut anchors) does not apply to cast-in anchors. Clearance of the anchor head and of any template plate to the shaft cage is a detailing check, not done here.</p>`;
-
   return H;
 }
 function renderBoltExample(bo,inp,sfx){
   sfx=sfx||'';
   const box=$('boltExample'+sfx); if(!box) return;
-  box.innerHTML=boltWorkedHTML(bo,inp);
+  box.innerHTML=basePlateWorkedHTML(bo,inp);   // 2026-11-01: base plate only (anchor rods: Anchorage app)
   if(window.renderMathInElement){
     renderMathInElement(box,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
   }
@@ -5835,7 +5643,7 @@ function renderSignWindExample(sw,inp){
 // derivation functions shared with the tabs).
 let LPP_SUMCTX=null;   // the Summary context of the last calc() (set by renderSummary)
 const lppEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:'Post',anchors:'Anchors',shaft:'Shaft',drawings:'Drawings',report:'Report',calcsheet:'Calc sheet'};
+const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:'Post',anchors:'Anchorage',shaft:'Shaft',drawings:'Drawings',report:'Report',calcsheet:'Calc sheet'};
 // collectChecks name -> derivation key
 const LPP_CHK2K={'Shaft flexure (P–M)':'flex','Shaft shear':'shear','Longitudinal steel, min':'asmin','Longitudinal steel, max':'asmax',
   'Bar clear spacing':'spacing','Tie spacing':'ties','Soil bearing':'bearing','Anchor tension':'anchors','Anchor shear':'anchors',
@@ -5845,12 +5653,12 @@ const LPP_K2TGT={flex:['shaft','rebarExample','Shaft structural check'],shear:['
   asmin:['shaft','rebarExample','Shaft structural check'],asmax:['shaft','rebarExample','Shaft structural check'],
   spacing:['shaft','rebarExample','Shaft structural check'],ties:['shaft','rebarExample','Shaft structural check'],
   bearing:['shaft','bearingExample','Shaft structural check (soil bearing)'],
-  anchors:['anchors','boltExample','Anchor bolt design'],torsion:['anchors','boltTbl','Anchor bolt design (limit-state table)'],
+  anchors:['anchors','boltExample','Base plate'],torsion:['shaft','rebarExample','Shaft structural check'],anchorage:['anchors','lpAnchCard','Anchorage'],
   post:['post','poleStrExample','Pole combined stress'],dt:['post','poleStressTbl','Pole combined stress'],b2:['post','poleStrExample','Pole combined stress'],
   dem:['shaft','demandExample','Foundation demand & embedment'],combo:['loading','comboMatrixTbl','Load combinations']};
 function lppTgt(k,st){
   const t=LPP_K2TGT[k]; if(!t) return null;
-  if(!(LPP_SUMCTX&&LPP_SUMCTX.mode==='sign')) return {tab:t[0],id:t[1],card:t[2]};
+  if(k==='anchorage'||!(LPP_SUMCTX&&LPP_SUMCTX.mode==='sign')) return {tab:t[0],id:t[1],card:t[2]};
   if(k==='combo') return {tab:'loading',id:'sgComboTbl',card:'Load combinations — per-post demand'};
   const p=(+st||0)+1, two=signPosts===2;
   return {tab:t[0],id:t[1]+'_sp'+p,card:(two?'Post '+p+' · ':'')+t[2].replace('Pole combined','Post combined'),post:two?p:null};
@@ -6264,10 +6072,10 @@ function buildReport(inp,allCombos,gov,embed,struct){
   H+=`</div></details>`;
 
   // ---- 8. Anchor bolts ----
-  H+=`<details class="rpt-sec" data-old="8"><summary><span class="tag">8</span><h3>Anchor bolt design — ASTM F1554 / ACI 318-19 Ch. 17</h3><span class="arw">▶</span></summary><div class="rpt-body">`;
-  H+=`<p class="eq-why">The base plate is fastened by ${bolts.n} equally spaced ASTM F1554 Grade ${inp.boltGrade} anchor bolts on a ${n(bolts.BC,0)} in bolt circle, h_ef = ${n(bolts.hef,0)} in. The overturning moment produces tension in the windward bolts; the base shear is shared among all bolts. Every ACI Chapter 17 limit state — steel strength, concrete breakout (full group method), pullout, pryout — is derived below with numbers substituted, then combined per §17.8.</p>`;
-  H+=boltWorkedHTML(bolts,inp);
-  H+=lppRes('anchors',0,'Governing capacities');
+  H+=`<details class="rpt-sec" data-old="8"><summary><span class="tag">8</span><h3>Base plate (anchor rods: Anchorage app)</h3><span class="arw">▶</span></summary><div class="rpt-body">`;
+  H+=`<p class="eq-why">The base plate is fastened by ${bolts.n} ASTM F1554 Grade ${inp.boltGrade} anchor rods on a ${n(bolts.BC,0)} in bolt circle, h_ef = ${n(bolts.hef,0)} in. The anchor rods are designed in the Anchorage app (Base Plate &amp; Anchor Bolt Designer); this section checks the base plate.</p>`;
+  H+=basePlateWorkedHTML(bolts,inp);
+  H+=lppRes('anchors',0,'Base plate');
   H+=`</div></details>`;
 
   // D11: calculation-sheet layout (cover, references, contents, numbered sections, result lines)
@@ -6368,45 +6176,6 @@ function drawElev(b,d,H,hc,bars,shape){
     <text x="${cx}" y="${(sb+28).toFixed(1)}" font-size="11" fill="#2f6f8f" text-anchor="middle" font-family="ui-monospace">b = ${fmt(b,2)} ft${isSq?' sq':' \u00d8'}</text>
     <text x="${cx}" y="${(mT-4)}" font-size="10" fill="#5b6676" text-anchor="middle" font-family="ui-monospace">pole ${fmt(H,0)} ft</text>`;
   $('elevDraw').innerHTML=`<svg viewBox="0 0 ${W} ${Hh}">${g}</svg>`;
-}
-
-// ---------- ANCHOR BOLT GROUP (plan) ----------
-function drawBoltGroup(bolts,inp,tgt){
-  tgt=tgt||'boltDraw';
-  if(!$(tgt)) return;
-  const W=380,Hh=360,cx=W/2,cy=Hh/2;
-  const Rin=inp.b*12/2;                    // shaft radius (in)
-  const scale=(Math.min(W,Hh)/2-46)/Rin;   // px/in
-  const bc=bolts.R*scale;
-  let g='';
-  // shaft outline (square or round)
-  g+=(inp.shaftShape==='square')
-    ? `<rect x="${(cx-Rin*scale).toFixed(1)}" y="${(cy-Rin*scale).toFixed(1)}" width="${(2*Rin*scale).toFixed(1)}" height="${(2*Rin*scale).toFixed(1)}" fill="#efe9dc" stroke="#8c2f12" stroke-width="1.6"/>`
-    : `<circle cx="${cx}" cy="${cy}" r="${(Rin*scale).toFixed(1)}" fill="#efe9dc" stroke="#8c2f12" stroke-width="1.6"/>`;
-  // base plate
-  const bpR=(inp.bpDia/2)*scale;
-  g+=`<circle cx="${cx}" cy="${cy}" r="${bpR.toFixed(1)}" fill="none" stroke="#6b7480" stroke-width="1" stroke-dasharray="4 3"/>`;
-  // bolt circle
-  g+=`<circle cx="${cx}" cy="${cy}" r="${bc.toFixed(1)}" fill="none" stroke="#9aa3af" stroke-width="0.8" stroke-dasharray="3 3"/>`;
-  // pole outline
-  const pR=(inp.poleDiaBase/2)*scale;
-  g+=`<circle cx="${cx}" cy="${cy}" r="${pR.toFixed(1)}" fill="none" stroke="#1a2230" stroke-width="1.2"/>`;
-  // moment vector direction
-  const ma=bolts.thM*RAD;
-  g+=`<line x1="${cx}" y1="${cy}" x2="${(cx+ (Rin*scale)*Math.cos(ma)).toFixed(1)}" y2="${(cy- (Rin*scale)*Math.sin(ma)).toFixed(1)}" stroke="#c9a15a" stroke-width="1.4" stroke-dasharray="6 3"/>`;
-  g+=`<text x="${(cx+ (Rin*scale+6)*Math.cos(ma)).toFixed(1)}" y="${(cy- (Rin*scale+6)*Math.sin(ma)).toFixed(1)}" font-size="10" fill="#8a6d2f" font-family="ui-monospace">M</text>`;
-  // bolts, colored by tension magnitude
-  const Tmax=Math.max(1,...bolts.bolts.map(b=>b.T));
-  bolts.bolts.forEach(b=>{
-    const a=b.ang*RAD;
-    const bx=cx+bc*Math.cos(a), by=cy-bc*Math.sin(a);
-    const ten=b.T>1;
-    const rad=4+ (b.T/Tmax)*3;
-    g+=`<circle cx="${bx.toFixed(1)}" cy="${by.toFixed(1)}" r="${rad.toFixed(1)}" fill="${ten?'#b8431f':'#2f6f8f'}" stroke="#1a2230" stroke-width="0.6"/>`;
-    g+=`<text x="${bx.toFixed(1)}" y="${(by-rad-3).toFixed(1)}" font-size="10" fill="#5b6676" font-family="ui-monospace" text-anchor="middle">${b.k}${ten?' · '+fmt(b.T,0):''}</text>`;
-  });
-  g+=`<text x="${cx}" y="${Hh-10}" font-size="10" fill="#5b6676" text-anchor="middle" font-family="ui-monospace">● tension  ● compression · BC ${fmt(bolts.BC,0)}″</text>`;
-  $(tgt).innerHTML=`<svg viewBox="0 0 ${W} ${Hh}">${g}</svg>`;
 }
 
 // ---------- SHAFT DETAIL (elevation + two sections) ----------
@@ -6580,18 +6349,10 @@ function detailStackHTML(sfx, titlePrefix){
       </div>
     </section>
     <section class="card" data-disc="anchors">
-      <div class="card-h"><h2>${P}Anchor bolt design</h2><span class="hint">ASTM F1554 · ACI 318 Ch.17</span></div>
+      <div class="card-h"><h2>${P}Base plate</h2><span class="hint">double-nut, bending line at the pole face</span></div>
       <div class="card-body">
-        <div class="resrow"><span class="k">Bolt group</span><span class="v" id="oBoltGrp${sfx}">—</span></div>
-        <div class="resrow"><span class="k">Max bolt tension, T<sub>max</sub></span><span class="v" id="oBoltT${sfx}">—</span></div>
-        <div class="resrow"><span class="k">Bolt shear, V<sub>b</sub></span><span class="v" id="oBoltV${sfx}">—</span></div>
-        <div class="pairgrid" style="margin-top:12px">
-          <div><div class="subhead2">Bolt group — plan</div><div class="drawwrap"><div id="boltDraw${sfx}"></div></div></div>
-          <div><div class="subhead2">Limit-state check (ACI Ch.17)</div><table class="tbl" id="boltTbl${sfx}"></table></div>
-        </div>
-        <div class="resrow" style="margin-top:10px"><span class="k">Tension–shear interaction (§17.8)</span><span class="v" id="oBoltInt${sfx}">—</span></div>
-        <div class="resrow"><span class="k">Required base plate thickness</span><span class="v" id="oBoltBp${sfx}">—</span></div>
-        <details class="calc" open style="margin-top:12px"><summary>ACI 318-19 Ch.17 anchor bolts — worked calculation</summary>
+        <div class="resrow"><span class="k">Base plate thickness</span><span class="v" id="oBoltBp${sfx}">—</span></div>
+        <details class="calc" open style="margin-top:12px"><summary>Base plate — worked calculation</summary>
           <div id="boltExample${sfx}" class="example-box"></div>
         </details>
       </div>
@@ -6656,25 +6417,8 @@ function populateDetailStack(sfx, ctx){
   S('oTiesTop').textContent=`${reo.tie.bar.n} @ ${fmt(reo.tie.sTop,0)} in o.c. within top ${fmt(reo.tie.zoneH,0)} in`;
   S('oShear').innerHTML=`${fmt(Vu,0)} vs ${fmt(reo.tie.phiVc,0)} lb <span class="pill ${shearOK?'ok':'bad'}">${shearOK?'OK':'NG'}</span>`;
   S('oBearing').innerHTML=`${fmt(bearing.q,2)} vs ${fmt(bearing.qAllow,2)} ksf <span class="pill ${bearing.ok?'ok':'bad'}">${bearing.ok?'OK':'NG'}</span>`;
-  // bolts
-  S('oBoltGrp').textContent=`(${bolts.n}) ${(inp.boltDia).toFixed(3)}″ F1554 Gr.${inp.boltGrade}, BC ${fmt(bolts.BC,0)}″, h_ef ${fmt(bolts.hef,0)}″`;
-  S('oBoltT').textContent=fmt(bolts.Tmax,0)+' lb';
-  S('oBoltV').textContent=fmt(bolts.Vb,0)+' lb';
-  const row=(name,dem,cap)=>{const r=cap>0?dem/cap:0;const ok=r<=1.0;return `<tr><td style="text-align:left">${name}</td><td>${fmt(dem,0)}</td><td>${fmt(cap,0)}</td><td>${fmt(r,2)}</td><td><span class="pill ${ok?'ok':'bad'}">${ok?'OK':'NG'}</span></td></tr>`;};
-  let bt=`<tr><th style="text-align:left">Limit state</th><th>Demand<span class="sym">(lb)</span></th><th>φ·Capacity<span class="sym">(lb)</span></th><th>Ratio</th><th>—</th></tr>`;
-  bt+=row('Steel tension, per bolt (§17.6.1)',bolts.Tmax,bolts.phiNsa);
-  if(!bolts.hasAnchRe) bt+=row('Concrete breakout, group (§17.6.2)',bolts.Tsum,bolts.phiNcbg);
-  else bt+=`<tr><td style="text-align:left">Concrete breakout (§17.6.2)</td><td colspan="4" style="text-align:left;color:var(--steel)">replaced by the anchor reinforcement (§17.5.2.1), checked below</td></tr>`+boltArRows(bolts);
-  bt+=row('Pullout, per bolt (§17.6.3)',bolts.Tmax,bolts.phiNp);
-  bt+=row('Steel shear, per bolt (§17.7.1)',bolts.Vb,bolts.phiVsa);
-  bt+=row('Concrete pryout, group (§17.7.3)',bolts.Vu+(bolts.VbT||0)*bolts.n,bolts.phiVcp);
-  if(bolts.VbT>0) bt+=`<tr><td colspan="5" style="text-align:left;font-size:11px">Monopost torsion T<sub>u</sub> = ${fmt(bolts.Tu/12,0)} lb·ft (Case B/C eccentricity): each bolt's shear includes T<sub>u</sub>/(n·R) = ${fmt(bolts.VbT,0)} lb, added to V<sub>u</sub>/n = ${fmt(bolts.Vu/bolts.n,0)} lb (conservative scalar sum). Shaft torsion check (ACI 318-19 §22.7.1.1): T<sub>u</sub> = ${fmt(ctx.found.Tu,0)} vs φT<sub>th</sub> = ${fmt(ctx.found.phiTth,0)} lb·ft. Soil torsional resistance is NOT checked.</td></tr>`;
-  bt+=boltMinGeomRows(bolts);
-  bt+=boltNotCheckedRows(bolts);
-  S('boltTbl').innerHTML=bt;
-  S('oBoltInt').innerHTML=`${fmt(bolts.inter,2)} ${bolts.vr<=0.2||bolts.tr<=0.2?'(uncoupled)':'≤ 1.2'} <span class="pill ${bolts.interOK?'ok':'bad'}">${bolts.interOK?'OK':'NG'}</span>`;
+  // base plate (the anchor rods are designed in the Anchorage app, 2026-11-01)
   { const bP=(bolts.byCheck&&bolts.byCheck.BP)||bolts; S('oBoltBp').textContent=fmt(bP.tpReq,3)+' in required ≤ '+fmt(bP.tpProv,3)+' in provided ('+(bP.tpOK?'OK':'NG')+'; F_y '+fmt(bP.Fyp,0)+' ksi, '+bP.comboName+')'; }
-  drawBoltGroup(bolts,inp,'boltDraw'+sfx);
   renderBoltExample(bolts,inp,sfx);
   // pole stress table + example (AISC LRFD) — prismatic post → base section only
   const slk=pstress.rows[0]?pstress.rows[0].slendKind:'D/t';
@@ -6726,7 +6470,7 @@ function lprModel(){
     ['Scope',$('lppScope')?$('lppScope').textContent.replace(/^Scope \(this mode\):\s*/,''):''],
     ['Codes','IBC 2021 §1807.3 · ASCE/SEI 7-22 (Ch. 2, 10, 26, 29) · AISC 360-16 · ACI 318-19 · AASHTO LRFDLTS (base plate bending-line method)'],
     ['Units','lb, ft, in, psf / ksf unless noted']]},
-    {type:'note',text:'Every value in this report is the value the tool computes on its tabs ([[tab:geometry|Geometry]], [[tab:summary|Summary]], [[tab:loading|Loading]], [[tab:post|Post]], [[tab:anchors|Anchors]], [[tab:shaft|Shaft]]). The former calculation sheet remains in the [[tab:calcsheet|Calc sheet]] tab.'}]}]});
+    {type:'note',text:'Every value in this report is the value the tool computes on its tabs ([[tab:geometry|Geometry]], [[tab:summary|Summary]], [[tab:loading|Loading]], [[tab:post|Post]], [[tab:anchors|Anchorage]], [[tab:shaft|Shaft]]). The former calculation sheet remains in the [[tab:calcsheet|Calc sheet]] tab.'}]}]});
   /* 2. Design summary */
   { const subs=[];
     stacks.forEach((st,si)=>{
@@ -6818,7 +6562,7 @@ function lprModel(){
     });
     if(subs.length) secs.push({title:sign?'Post check':'Pole check',subs});
   }
-  /* 6. Base plate and anchors */
+  /* 6. Base plate (anchor rods: Anchorage app) */
   { const subs=[];
     stacks.forEach((st,si)=>{ const b=st.found.bolts; if(!b) return; const p=(b.byCheck&&b.byCheck.BP)||b;
       subs.push({title:'Base plate'+lab(st),items:[lprTopics('bp'+si,[{title:'Bending line at the pole face, double-nut base ('+(p.comboName||'')+')',ref:'AASHTO LRFDLTS bending-line method',steps:[
@@ -6828,9 +6572,9 @@ function lprModel(){
         S({id:'t',label:'Required thickness',sym:'t_{req}',eq:'\\sqrt{\\frac{4P_{rod}m}{\\phi F_{y}b_{eff}}}',sub:'\\sqrt{\\frac{4('+N(p.Prod,0)+')('+N(p.m)+')}{0.9('+N(p.Fyp*1000,0)+')('+N(p.beff,3)+')}}',value:p.tpReq,unit:'in',d:3}),
         S({id:'dc',label:'Provided t = '+N(p.tpProv,3)+' in',sym:'(t_{req}/t)^{2}',eq:'',sub:'',value:Math.pow(p.tpReq/p.tpProv,2),unit:'',d:3,ok:!!p.tpOK})]}]),
         {type:'note',warn:true,text:LPP_BP_VERIFY},
-        {type:'note',text:'Anchor rods (ACI 318-19 Ch. 17): every limit state, worked, on the [[tab:anchors|Anchors tab]]; the checks are listed in §2.'}]});
+        {type:'note',text:'Anchor rods (ACI 318-19 Ch. 17) are designed in the Anchorage app: the anchor pattern and every LRFD combination are sent from the [[tab:anchors|Anchorage tab]], and the returned D/C is shown there and on the Summary.'}]});
     });
-    if(subs.length) secs.push({title:'Base plate and anchors',subs});
+    if(subs.length) secs.push({title:'Base plate',subs});
   }
   /* 7. Drilled shaft */
   { const subs=[];
@@ -6869,7 +6613,7 @@ function lprModel(){
     {title:'Assumptions',items:[
       'Wind toward 0°, 90°, 180° and 270° only; arms or fixtures off these axes are flagged (the results may be unconservative).',
       'Cables: catenary pull model as on the Loading tab; cable ice uses the entered thickness t.',
-      'Anchor shear breakout (§17.7.2) and side-face blowout (§17.6.4) are not checked; the soil torsional resistance is not checked.',
+      'Anchor rods (ACI 318-19 Ch. 17) are not checked in this tool; they are designed in the Anchorage app. The soil torsional resistance is not checked.',
       'Base plate: AASHTO LRFDLTS bending line at the pole face with b_eff = πD/n, double-nut base. '+LPP_BP_VERIFY,
       'Shaft V_c: A_cv = 0.8A_g; ρ_w from half the longitudinal bars; N_u/6A_g neglected.'].map(t=>({type:'note',text:t}))},
     {title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:LPP_REFS.map(([a,b])=>[lprPlain(a),lprPlain(b)])}]}]});
@@ -7040,12 +6784,12 @@ function lpdBuild(){
   sheet('plate', 'BASE PLATE', k=>lpdPlate(D,L,k,ctx));
   sheet('notes', 'GENERAL NOTES', ()=>{
     const inp=ctx.inp, st=ctx.stacks;
-    const notes=['DESIGN: IBC 2021 §1807.3 (EMBEDMENT), ASCE 7-22 (WIND, ICE, COMBINATIONS), AISC 360-16 (POLE / POST), ACI 318-19 (SHAFT, ANCHORS); BASE PLATE BY THE AASHTO LRFDLTS BENDING-LINE METHOD (DOUBLE-NUT). NOT FOR AASHTO LRFDLTS HIGHWAY SUPPORTS.',
+    const notes=['DESIGN: IBC 2021 §1807.3 (EMBEDMENT), ASCE 7-22 (WIND, ICE, COMBINATIONS), AISC 360-16 (POLE / POST), ACI 318-19 (SHAFT); BASE PLATE BY THE AASHTO LRFDLTS BENDING-LINE METHOD (DOUBLE-NUT). NOT FOR AASHTO LRFDLTS HIGHWAY SUPPORTS.',
       'EMBEDMENT d = '+st.map(s=>fmt(s.found.d,2)+'\'').join(' / ')+' BELOW GRADE (IBC §1807.3, '+(constraint==='non'?'NON-CONSTRAINED':'CONSTRAINED')+'), SHAFT '+(inp.shaftShape==='square'?'':'DIA. ')+fmt(inp.b,2)+'\''+(inp.shaftShape==='square'?' SQUARE':'')+'.',
       'CONCRETE f\'c = '+fmt(inp.fc,0)+' PSI; REINFORCEMENT f_y = '+fmt(inp.fy,0)+' PSI; CLEAR COVER '+fmt(inp.cover,1)+'".',
       'BASIC WIND SPEED V = '+fmt(inp.V,0)+' MPH, EXPOSURE '+inp.expo+'.'+(ctx.mode==='sign'?'':' ICE t = '+fmt(inp.tIce,2)+'" ('+(inp.iceBasis==='map'?'MAP VALUE, t_d BY HEIGHT':'UNIFORM')+'), V_ice = '+fmt(inp.Vice,0)+' MPH.'),
       'ANCHOR RODS ASTM F1554 GR '+inp.boltGrade+', '+(inp.anchTq==='torqued'?'PRETENSIONED (TURN-OF-NUT)':'NOT PRETENSIONED')+'; LEVELING NUTS (DOUBLE-NUT BASE).',
-      'THE SOIL TORSIONAL RESISTANCE, ANCHOR SHEAR BREAKOUT AND SIDE-FACE BLOWOUT ARE NOT CHECKED BY THE TOOL.',
+      'ANCHOR RODS (ACI 318-19 CH. 17) ARE DESIGNED IN THE ANCHORAGE APP. THE SOIL TORSIONAL RESISTANCE IS NOT CHECKED BY THE TOOL.',
       'SEE THE CALCULATION REPORT (REPORT TAB) FOR THE DESIGN; THESE DRAWINGS SHOW THE GEOMETRY AS ENTERED AND THE SHAFT AS DESIGNED / CHECKED BY THE TOOL.'];
     D.text(L.txt, 0, 0.3, 0.16, 'GENERAL NOTES', 0);
     let y=0; const hh=0.11, mx=Math.floor(15/(hh*0.9));
