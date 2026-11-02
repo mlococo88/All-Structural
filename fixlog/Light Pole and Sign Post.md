@@ -1703,7 +1703,7 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - **Saved data:** none added.
 - **How verified:** check-syntax pass; `node tests/engine/run.mjs lightpole` 34 passed (3 new); `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL; LTS Post tab screenshots (pole, monopost, two-post, square pole), 0 console errors.
 
-## 2026-11-02 — PR #PRNUM: claude/lp-lts-5 (LTS-5: LRFDLTS deflection, fatigue applicability, breakaway checklist; IBC mode unchanged)
+## 2026-11-02 — PR #653 (https://github.com/mlococo88/All-Structural/pull/653): claude/lp-lts-5 (LTS-5: LRFDLTS deflection, fatigue applicability, breakaway checklist; IBC mode unchanged)
 
 ### LTS5-1. Deflection (Section 10), fatigue applicability (Section 11), breakaway (Art. 2.5.2, Section 12)   [new, LTS mode only]
 - **Where:** `apps/light-pole/lts-engine.js` block `LTS-5 (2026-11-02)`: `deflection(g, L, secs, Fy, Bsvc)`, `fatigue(g)`, `breakaway(inClearZone)`. Page: new input `ltsClearZone` (LTS card), Post-tab card `#ltsDeflCard`, Summary card `#ltsBrkCard`, Summary rows (deflection checks, fatigue, breakaway); `LTS_STATUS` LTS-5 done.
