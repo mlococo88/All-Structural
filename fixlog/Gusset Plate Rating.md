@@ -2909,7 +2909,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 15 tabs, the whole-document `textContent` (725,761 chars) and localStorage after load are identical.
 - Screenshots at 900 and 1280 px are identical on load and on every tab, except 1–3 px of the tab-bar underline (a CSS transition caught mid-way).
 
-## 2026-11-02 — PR: PRLINK — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+## 2026-11-02 — PR: [#667](https://github.com/mlococo88/All-Structural/pull/667) — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
 - **Before:** Project tab → Saved projects: drop-down with Open / Save / Save as… / Delete (`gussetRating.projects.v1`), Export / Import
   JSON, New from example. No rename, no duplicate. Only the CAD import had an Undo.
 - **Where:**

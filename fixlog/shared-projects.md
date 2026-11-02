@@ -28,7 +28,7 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
 ## 2026-11-02 — PR: [#665](https://github.com/mlococo88/All-Structural/pull/665) — loaded by Stone Masonry Arch Load Rating.html (no change to the shared files)
 - `tests/smoke/project-library.mjs` gains `--tool stonearch`, and A vs B reload comparison (both sides reopened on A's storage).
 
-## 2026-11-02 — PR: PRLINK — projects-ui.js: dialog centred under page CSS resets; actions wrap on phones   [display only]
+## 2026-11-02 — PR: [#667](https://github.com/mlococo88/All-Structural/pull/667) — projects-ui.js: dialog centred under page CSS resets; actions wrap on phones   [display only]
 - **Problem:** in `Gusset Plate Rating.html` (a page whose CSS resets `margin` on every element) the dialog opened at the top-left corner,
   because a modal `<dialog>` is centred by the browser's `margin:auto`. At 390 px the Delete button was cut off (scrolled).
 - **Where:** `css()`, anchor `'dialog.spLib{`: added `position:fixed;inset:0;margin:auto;height:fit-content;box-sizing:border-box;`; new rule
