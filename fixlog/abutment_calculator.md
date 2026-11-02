@@ -15235,3 +15235,52 @@ index cedb10f..5b89752 100644
 - **Entered demands (not added):** the superstructure reactions per girder (DC, DW, LL+IM, BR, WS, …) and the pile results are entered or
   pulled directly. The stem, footing and pile demands are worked from those and the earth pressures; entering them directly would bypass the
   load combinations with new paths (a new formula), which the brief excludes. Raised for the engineer instead.
+
+## 2026-11-02 — PR: claude/report-retire-abutment (ABRX: the print report (D11, "Print / PDF Report" and its report-options dialog) retired after porting everything the Report tab lacked; "Print / PDF Report", Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
+
+### ABRX-1. Content of the print report ported into the Report tab   [display] [no result change]
+- **Engineer request (2026-11-02):** retire each tool's old print report by porting it in full into the Report tab, as lldf #623, Light Pole #625, Shear and Moment #672, elastomeric #676, ACI Rebar #685, Retaining Wall #689, Timber #696 and Gusset #702: compare number by number, port what is missing (the tool's own values, no recomputation, no new formula), then remove the old report.
+- **Compared:** the print report (`buildReport()` with every dialog option on, the default, `#report` in print media) on origin/main against the Report tab (`abrModel()`, print layout `#rp-print`) on the branch. Four cases:
+  - def: the default project (conventional, spread footing, wingwalls);
+  - pile: piles, wingwalls, seismic on, MassDOT;
+  - integ: integral abutment, MassDOT, approach slab;
+  - semi: semi-integral, wingwalls, passive on, water table 4 ft.
+  - A number counts as present when the Report shows the same value (the same digits, or more digits that round to it).
+- **Missing before the port:** 925 / 977 / 299 / 875 of 1413 / 1575 / 751 / 1393 distinct numbers (def / pile / integ / semi). The print report printed the tabs themselves (a clone of every tab, every panel open), so what the Report lacked was most of the tabs:
+  - Tab 1: self-weight and moment tables, the girder-reaction layout and aggregation table, LL surcharge and IM-removal working (f_IM, P_LL,fdn), the unfactored load-group summary, longitudinal loads;
+  - Tab 2: the load combination and γp permutation tables; Tab 8: the detailed force-effect tables;
+  - Tabs 3 to 6, 9, 10: the panels' worked equations, notes, figures and charts (pressure, bearing, pile reactions, V and M, sensitivity);
+  - the approach-slab section, the 3D snapshot, the input echo, the self-test;
+  - the ranked results (#), the key results table, the revision history, the "Printed … · Input ID" line, the load-factor note, the tool / basis line, the D/C result lines at the end of the stability, foundation, structural, wing, integral and approach-slab sections, and the SubLoads / Pile Designer source lines.
+- **Ported (anchor `ABRX (2026-11-02): what the retired print report printed`, before `function abrModel(){`):**
+  - `abxHarvest(R)` (once per result): every tab the print report printed (`abxTabList()`, its order, titles and skip rules), rendered by its own function (`renderTabContent`, as when the tab is opened), cloned, static figures as printed (`figStaticIn`), the approach-slab panels apart (as before).
+  - `abxTabSubs` / `abxWalk`: each top-level panel becomes a subsection "Panel n.k: title" (key `abx.<panel id>`), its content in order:
+    - an equation block (`eqB`) → worked steps, one per line: the tab's own TeX string (symbols → values → result), the block title as label, its reference; a long trailing `\text{…}` remark goes to the step note (`abxEqSplit`), so the line fits the page;
+    - a check line (`checkLine`) → a test step (expression, D/C, OK / NG);
+    - a table → a report table (`.gov` / `.failrow` rows highlighted; tables over 30 rows open on click on screen, print in full);
+    - notes, list items, captions → notes; an inline SVG figure → a figure; a Plotly chart → its image.
+    - Inline TeX in notes and cells is set by the report's built-in renderer, with the few commands it does not know mapped to characters (`abxLite`); without KaTeX (offline), the step lines use the same mapping.
+  - Links: "Worked in: → Tab · Panel" and the tabs' "§x.y" references become "see §n.k" links to the ported panel (`abxFixStr`, the print report's rule); the Report's existing tab links (`abrTab`) get " (§n.k)" to the ported panel or tab (`abrPorted`).
+  - `abxImages(R)`: the charts as PNG (Plotly.toImage of each chart drawn by `drawChartsFor` while its tab page is laid out for a moment, 820 px wide at the drawn aspect ratio, as the print report) and the 3D snapshot (`captureD3`), async, then the Report is rebuilt.
+  - `abxAdd(M,R)` (from `abrModel`'s return): "Key results" (the print report's table; its code moved into `abxKeyHTML`) under Design summary; then a part "Calculation by tab (the tabs' worked panels)" before References: one section per tab (with its "Results — …" D/C table at the end of the stability, foundation, structural, wing and integral sections), "Approach Slab — …", "3D Load Visualization", "Input Echo", "Validation Self-Test Result".
+  - `abrModel()`: summary table: a "Rank" column (the print report's sort: worst D/C first, information rows last) and the banner line ("N CHECK(S) FAIL · n coded checks (k n/a) · type"); Project: the tool / basis line, "Printed … · Input ID …" with the fingerprint note, and the hand-off source lines (`ABRX_SRC`, pushed by the SubLoads and Pile Designer scripts in place of their `buildReport` wrappers); Constants subsection key `abx.ovr`; Warnings and assumptions: "Load factors" notes and "Revision history (project saves)".
+  - The dialog's six choices are the report bar's "Include:" boxes (`abxControls` / `abxWire`): the same field `S.ui.rptOpts`, the same keys and values (default all on, as before), so no format change and no migration.
+- **After the port:** in all four cases every number of the print report is in the Report except the print report's own section numbers ("5.11", "10.11", …) and "120" of "120{,}000" (the Report shows 120,000). The remaining text differences are the print report's section numbers and headings.
+
+### ABRX-2. Print report and dialog removed; Print prints the Report from every tab   [display]
+- **Removed:** `async function buildReport()`, `syncRptDlg()`, `async function generateReport()`, the report-options dialog (`#dlgRpt`, presets, Cancel / Generate PDF) and its handlers, `#report` and its CSS (the D11 calc-sheet styles; the print rule that hid the app is gone too, so a print without the shared files prints the page), `abutPageCSS()`, `abutApplyPageCSS()`, `abutResultBlock()`, the two `buildReport` wrappers of the SubLoads and Pile Designer hand-off scripts. Kept: `ABUT_REFS`, `WING_REFS`, `IAB_REFS`, `abutRefsNow()`, `abutRptType()`, `abutAssumptionsText()` (used by the Report).
+- **Changed:**
+  - `btnPrint` ("Print / PDF Report", tooltip "Print / PDF the calculation report (the Report tab), from any tab"): `abrPrintAny()`: shows the Report (not saved: `ABRP.on`), waits for the chart images, then `ABRP.api.print()`; without the shared files, `window.print()`.
+  - New `abrPrintPrep()`: from another tab, remembers it (`ABRX.back`) and shows the Report; an inline `<script>` before `shared/steps.js` calls it on `beforeprint`, so Ctrl+P / the browser's Print print the Report (registered before shared/report.js's own listener, which sets the running header). On that path the charts print once their images are ready (they are after the Report has been shown for the result).
+  - New `afterprint` handler: back to the tab of before (`activateTab`, the same value of `S.ui.tab`).
+  - The Report's `beforeprint` handler: the `abutApplyPageCSS(false)` line dropped. The panel-header click guard `closest("#report")` → `closest("#rp-print")`.
+- **Governing provision:** none changed. No formula, factor, unit, code reference or computed value changed (CLAUDE.md §4).
+- **Saved data:** no key or format change; `S.ui.rptOpts` keeps its keys and values (written by the Include boxes, as by the dialog).
+- **How verified:**
+  - `node tests/check-syntax.mjs abutment_calculator.html`: pass.
+  - origin/main vs branch, the four cases, after visiting every tab and the Report: `window.LAST_R` (JSON) identical; the text of the 10 tabs identical (apart from the self-test's "Last run" time); `localStorage` identical; page text identical apart from the removed dialog; no console errors.
+  - Report: 0 unresolved references, 0 duplicate keys, no NaN / undefined; with KaTeX loaded, 0 KaTeX errors; charts and the 3D snapshot present (10 / 10 / 0 / 8 images, as the print report).
+  - Print routing, headless, from each of the 10 tabs, by `beforeprint` and by the button: `#rp-print` holds the Report, `body.rp-printing` and the running header are set, and the tab of before comes back after `afterprint`. Include box: writes only `S.ui.rptOpts`.
+  - `node tests/smoke/project-library.mjs`: ALL PASS.
+- **Other copies:** none.
+- **Open items:** the Report is rebuilt (with every tab rendered, about 0.8 s) on each input change while it is shown, as before only the Report itself.
