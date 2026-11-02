@@ -343,7 +343,7 @@ Each PR follows the same rules:
 - A fixlog entry with the PR link.
 
 The PRs:
-1. **LTS-1** Mode switch (`codeMode`), the basis line, LTS inputs, MRI display, Table 3.4-1 combinations (Strength I, Extreme I max/min, Service I), the cable note, the scope line.
+1. **LTS-1** (done, 2026-11-02) Mode switch (`codeMode`), the basis line, LTS inputs, MRI display, Table 3.4-1 combinations (Strength I, Extreme I max/min, Service I), the cable note, the scope line.
 2. **LTS-2** Wind: P_z with K_z, K_d, G, C_v, C_d per shape and along the taper, sign C_d and 0.15b torsion, EPA handling, the Table 3.9.3-1 load cases; ice weight (Q-C1).
 3. **LTS-3** Members, round and square/rect.:
    - Table 5.7.2-1 classes;
