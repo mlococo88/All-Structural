@@ -1,9 +1,10 @@
-# Light Pole and Sign Post: AASHTO LRFDLTS mode, plan (Phase A)
+# Light Pole and Sign Post: AASHTO LRFDLTS mode, plan (Phase A, revised A2)
 
-Tool: `Light Pole and Sign Post.html`. Status: **plan only; nothing in this document is implemented yet.** Written 2026-11-02 (US Eastern) for the engineer's request "Start the LTS mode for the sign and pole app".
+Tool: `Light Pole and Sign Post.html`. Status: **plan only; nothing in this document is implemented yet.** Written 2026-11-02 (US Eastern), revised the same day (Phase A2: design basis corrected to the 1st Edition; owner amendments added, §6), for the engineer's request "Start the LTS mode for the sign and pole app".
 
 **Decisions so far** (engineer, 2026-11-01 / 2026-11-02, via the coordinator):
-- Add an **AASHTO LRFD Specifications for Structural Supports for Highway Signs, Luminaires, and Traffic Signals (LRFDLTS), 2nd Edition** mode alongside the existing IBC 2021 / ASCE 7-22 / AISC 360-16 / ACI 318-19 mode.
+- Add an **AASHTO LRFD Specifications for Structural Supports for Highway Signs, Luminaires, and Traffic Signals (LRFDLTS), 1st Edition (2015) with interim revisions through 2022 (LRFDLTS-1-I5)** mode alongside the existing IBC 2021 / ASCE 7-22 / AISC 360-16 / ACI 318-19 mode.
+- **Design basis (engineer, 2026-11-02, answering Q0):** LRFDLTS **1st Edition (2015) with the 2017, 2018, 2019, 2020 and 2022 interim revisions (LRFDLTS-1-I5)**. It is **not** a 2nd Edition. The engineer will upload the specification pages so every article and value can be confirmed. **Phase B does not start until they arrive.**
 - The existing mode stays exactly as it is (same results for every saved project).
 - Nothing cable-related changes. Cables stay in the IBC mode only; the LTS mode does not support them and says so on screen.
 - The anchor rods are designed in the Anchorage app (BasePlateAnchorDesigner). The LTS mode exports its own LTS combinations through the existing `bridgeSuite.v1.anchorGroup` hand-off (HANDOFF.md §4.11, #610).
@@ -13,14 +14,26 @@ Tool: `Light Pole and Sign Post.html`. Status: **plan only; nothing in this docu
 
 ---
 
-## 0. The edition problem (read first)
+## 0. Design basis (read first)
 
-I could not confirm from public sources that a **2nd Edition** of LRFDLTS has been published, or what its article numbers are. The public record I could reach (2026-11-02) shows:
+**The design basis is LRFDLTS 1st Edition (2015) with interims through 2022 (LRFDLTS-1-I5)** (engineer, 2026-11-02). The first version of this plan was written against a "2nd Edition" that the engineer has now confirmed is not the basis. I had already noted that I could find no published 2nd Edition. Every reference in this plan now names the 1st Edition with interims. The public record agrees (2026-11-02):
 - the **1st Edition (2015)**, item code LRFDLTS-1, with interim revisions 2017, 2018, 2019, 2020 and **2022 (LRFDLTS-1-I5)**. The 2022 interim revised Section 5 (steel), replaced Section 6 (aluminum), and revised Sections 14 and 15 and Appendix C (fatigue). Sources: the AASHTO Store listing of the 2022 interim revisions; the TRID record of LRFDLTS-1;
-- **23 CFR 625.4** (FHWA's incorporation by reference) still names "AASHTO LRFDLTS-1";
+- **23 CFR 625.4** (FHWA's incorporation by reference) names "AASHTO LRFDLTS-1". Which interims FHWA has approved matters for RIDOT (§6.1, Q21);
 - the calibration basis of the LRFD provisions is **NCHRP Report 796** (2014), *Development and Calibration of AASHTO LRFD Specifications for Structural Supports for Highway Signs, Luminaires, and Traffic Signals* (public, National Academies Press).
 
-So **every article, table and equation number below is my recollection of the 1st Edition (2015 + interims) numbering**, and the values are from memory unless a public source is named. They are marked **"Memory — engineer must verify"**. Before Phase B the engineer confirms the edition he designs to (question Q0) and corrects the numbers and values from his copy (§4 list). The code labels in the tool will be taken from his answers, not from this plan.
+**Article numbers and values are still unconfirmed.** Every article, table and equation number below is my recollection of the 1st Edition numbering, and the values are from memory unless a public source is named. They stay marked **"Memory — engineer must verify"** until checked against the pages the engineer uploads. Where the 2022 interim may have changed a Section 5 provision, the row says so. The code labels in the tool will be taken from the uploaded pages, not from this plan.
+
+### 0.1 "2nd Ed." references in the repo (to change in Phase B, not now)
+
+This PR is docs only. These on-screen texts and code comments still say "LRFDLTS 2nd Ed." They change to "LRFDLTS 1st Ed. (2015) with interims through 2022 (LRFDLTS-1-I5)" in the Phase B PR named against each. Each change is a display change with a fixlog entry. The fixlog entries already merged (LP0-1, LP5-1, LP15-1) are history and stay as written; the Phase B entry records the correction.
+
+| File | Where (anchor) | Text now | Change in |
+|---|---|---|---|
+| `Light Pole and Sign Post.html` | masthead `id="lppScope"` (LP0-1), also printed on the report cover | "… AASHTO LRFDLTS 2nd Ed. highway supports are a separate mode (coming) …" | LTS-1 (mode switch; the scope line becomes mode-dependent) |
+| `Light Pole and Sign Post.html` | `const LPP_BP_VERIFY=` (LP15-1; shown on the base-plate worked block, Summary warnings, Calc sheet and Report) | "VERIFY the base-plate method against AASHTO LRFDLTS 2nd Ed. — not yet verified: …" | **LTS-6** (base plate and welds), with the article confirmed from the uploaded pages |
+| `Light Pole and Sign Post.html` | comment in `anchorBolts()` above the base-plate block: "This method is used in both modes until the AASHTO LRFDLTS 2nd Ed. mode is added." | code comment | LTS-6 |
+| `Light Pole and Sign Post.html` | `basePlateWorkedHTML()`, the `eq-why` line about the double-nut base (shown on the base-plate worked block and in the Calc sheet) | "… This method is used in this mode (and in the AASHTO LRFDLTS 2nd Ed. mode until that mode is added). …" | LTS-6 |
+| `BasePlateAnchorDesigner.html` | the circular base-plate step `ref:"AASHTO LRFDLTS 2nd Ed., base plates of double-nut connections …"` | worked-step reference | **Another tool**: its own one-tool PR (CLAUDE.md §7), after LTS-6 confirms the article. Listed here so it is not forgotten. |
 
 Confidence column key:
 - **Public**: confirmed from a public source named in the row.
@@ -67,7 +80,7 @@ One row per computed check or value. **Art.** = the LRFDLTS article / equation /
 | # | Computed / value | Art. (believed) | Form to implement | Default | Confidence |
 |---|---|---|---|---|---|
 | W1 | Design life and risk category of the support | Art. 3.8 (Table 3.8-1, recommended minimum design life and MRI by risk category) | User selects risk category: Low / Typical / High. Design life shown (Typical: 50 yr). | Typical | Memory — engineer must verify |
-| W2 | Basic wind speed V (3-second gust, mph) by mean recurrence interval | Art. 3.8.2; Figs. 3.8.2-1 to 3.8.2-3 (maps for MRI ≈ 300, 700, 1,700 yr, taken from the ASCE 7-10 maps) | **Input** V (map value for the selected risk category), with the MRI shown next to it. No map in the tool (map figures are not copied). | 130 mph (placeholder; the engineer gives the project's map value) | Memory — engineer must verify (the 2nd Ed. may use the ASCE 7-16/7-22 risk-category maps) |
+| W2 | Basic wind speed V (3-second gust, mph) by mean recurrence interval | Art. 3.8.2; Figs. 3.8.2-1 to 3.8.2-3 (maps for MRI ≈ 300, 700, 1,700 yr, taken from the ASCE 7-10 maps) | **Input** V (map value for the selected risk category), with the MRI shown next to it. No map in the tool (map figures are not copied). Owner rules in §6 (CTDOT 120 mph statewide, Q22). | 130 mph (placeholder; the engineer gives the project's map value) | Memory — engineer must verify (map basis and figure numbers) |
 | W3 | Service wind speed (for deflection) | Art. 3.8.2 / Section 10 (10-yr MRI map or V_service) | **Input** V_svc | from the map (placeholder 76 mph) | Memory — engineer must verify |
 | W4 | Fatigue wind basis (yearly mean wind speed for natural wind gust) | Art. 11.7.1.2 | Not an input: the LTS fatigue pressures are given for a reference yearly mean speed (≈ 11.2 mph); an optional site yearly-mean speed V_mean scales the pressure by (V_mean/11.2)² | 11.2 mph (no scaling) | Memory — engineer must verify |
 
@@ -128,7 +141,7 @@ The 2022 interim revised Section 5 substantially; values below are 1st Ed. recol
 
 | # | Check | Art. (believed) | Form to implement | Confidence |
 |---|---|---|---|---|
-| J1 | Base-plate thickness, double-nut | Art. 5.6.6 (1st Ed.; the 2nd Ed. number to confirm) | **Unchanged from the tool (LP-5):** t_req = √(4·P_rod·m / (φ_f·F_y·b_eff)), m = (BC − D)/2, b_eff = πD/n at the pole face, P_rod = max(tension, compression rod force), "VERIFY" box kept | Tool (fixlog LP5-1 / LP15-1); article and b_eff rule to verify |
+| J1 | Base-plate thickness, double-nut | Art. 5.6.6 (1st Ed.; to confirm against the 2022 interim, which revised Section 5) | **Unchanged from the tool (LP-5):** t_req = √(4·P_rod·m / (φ_f·F_y·b_eff)), m = (BC − D)/2, b_eff = πD/n at the pole face, P_rod = max(tension, compression rod force), "VERIFY" box kept | Tool (fixlog LP5-1 / LP15-1); article and b_eff rule to verify |
 | J2 | Minimum base-plate thickness | Art. 5.6.6 / Section 11 (fatigue detail notes) | t_bp ≥ the edition's minimum (believed: ≥ rod diameter for double-nut; a larger minimum for fatigue-sensitive pole-to-plate details, e.g. ≥ 2 in for some full-penetration details on high-mast poles) | Memory — engineer must verify |
 | J3 | Pole-to-base-plate weld, socket (fillet) | Art. 5.14 (welded connections) | Fillet weld strength around the tube: φ_w·0.6F_EXX·0.707w per inch vs the resultant shear flow from M, V, T | Memory — engineer must verify |
 | J4 | Pole-to-base-plate weld, CJP with backing ring | Art. 5.14 | CJP = base metal; no strength check beyond the tube; fatigue governs (F-rows) | Memory — engineer must verify |
@@ -139,10 +152,10 @@ The 2022 interim revised Section 5 substantially; values below are 1st Ed. recol
 
 | # | Item | Art. (believed) | Form to implement | Confidence |
 |---|---|---|---|---|
-| F1 | Applicability by structure type | Art. 11.1 / 11.4 / Table 11.5-1 (or its 2nd Ed. equivalent) | Luminaire poles: natural wind gust and vortex-shedding screening (round tubes with little taper); truck gust only for members over traffic (N/A here); monopost/two-post ground signs: generally **not required** for small roadside signs (owner may require). The tool states which loads apply and why. | Memory — engineer must verify |
-| F2 | Fatigue importance category (Q14) | Art. 11.6 (Table 11.6-1) | Category I / II / III → fatigue importance factor I_F per load type (or the 2nd Ed. replacement) | Memory — engineer must verify |
+| F1 | Applicability by structure type | Art. 11.1 / 11.4 / Table 11.5-1 (1st Ed. with interims; Appendix C revised in 2022) | Luminaire poles: natural wind gust and vortex-shedding screening (round tubes with little taper); truck gust only for members over traffic (N/A here); monopost/two-post ground signs: generally **not required** for small roadside signs (owner may require). The tool states which loads apply and why. | Memory — engineer must verify |
+| F2 | Fatigue importance category (Q14) | Art. 11.6 (Table 11.6-1) | Category I / II / III → fatigue importance factor I_F per load type (check whether the interims changed it) | Memory — engineer must verify |
 | F3 | Galloping | Art. 11.7.1.1 | P_G ≈ 21·I_F psf vertical on the projected horizontal area of arms/signs/signals on cantilever arms. **N/A for the Phase B structures** (no cantilever mast arms); shown as N/A. | Memory — engineer must verify |
-| F4 | Vortex shedding | Art. 11.7.1.? | Critical speed V_c = f_n·d/S_n (S_n ≈ 0.18 round, ≈ 0.15 multi-sided), P_VS = 0.00118·V_c²·C_d·I_F/(2β) with damping β; required for round/low-taper poles when V_c is in the range given | Memory — engineer must verify (whether the 2nd Ed. still requires it and the form) |
+| F4 | Vortex shedding | Art. 11.7.1.? | Critical speed V_c = f_n·d/S_n (S_n ≈ 0.18 round, ≈ 0.15 multi-sided), P_VS = 0.00118·V_c²·C_d·I_F/(2β) with damping β; required for round/low-taper poles when V_c is in the range given | Memory — engineer must verify (whether the 1st Ed. with interims still requires it, and the form) |
 | F5 | Natural wind gust | Art. 11.7.1.2 | P_NW ≈ 5.2·C_d·I_F psf (× (V_mean/11.2)² if the site mean is entered), applied horizontally on all exposed areas, any direction | Memory — engineer must verify |
 | F6 | Truck-induced gust | Art. 11.7.1.3 | P_TG ≈ 18.8·C_d·I_F psf vertical, on members/attachments over the traffic lane, 65 mph trucks, reduced with height above 20 ft. **Applies to structures over traffic** (mast arms, overhead) → **N/A** for poles and roadside signs (shown with the reason) | Memory — engineer must verify |
 | F7 | Detail categories | Table 11.9.3.1-1 (believed) | User picks the pole-to-plate detail (socket fillet / CJP with backing ring / stiffened), handhole detail, anchor rod (snug / pretensioned, double-nut); the tool assigns the category from the edition's table (no table text copied: only "Detail x.y → Category Z" pairs the engineer confirms) | Memory — engineer must verify (numbers and categories) |
@@ -154,7 +167,7 @@ The 2022 interim revised Section 5 substantially; values below are 1st Ed. recol
 
 | # | Check | Art. (believed) | Form to implement | Confidence |
 |---|---|---|---|---|
-| D1 | Luminaire support horizontal deflection | Art. 10.4.2.? | Δ_top (Service I) ≤ the edition's limit (believed: a fraction of the height, ≈ 0.15H in older editions; the 2nd Ed. may differ) | Memory — engineer must verify |
+| D1 | Luminaire support horizontal deflection | Art. 10.4.2.? | Δ_top (Service I) ≤ the edition's limit (believed: a fraction of the height, ≈ 0.15H in older editions; confirm the 1st Ed. value) | Memory — engineer must verify |
 | D2 | Sign support deflection | Art. 10.4.2.? | Δ_top or rotation limit for ground-mounted sign supports, if any | Memory — engineer must verify |
 | D3 | Camera / owner limits | owner | optional user limit (in or % of H) | engineer |
 | D4 | Deflection calculation | Art. 10.4 / 4.8 | the tool's tapered-pole deflection (`poleDeflection`, Rayleigh drift) under Service I, at the top and at each fixture, with second-order amplification | Tool (method); article to verify |
@@ -193,7 +206,8 @@ The 2022 interim revised Section 5 substantially; values below are 1st Ed. recol
 
 | Id | Input | Default |
 |---|---|---|
-| `ltsEd` | Edition label (display) | from Q0 |
+| `ltsEd` | Edition label (display only, not an input) | "AASHTO LRFDLTS 1st Ed. (2015) with interims through 2022 (LRFDLTS-1-I5)" |
+| `ltsOwner` | Owner: none / RIDOT / MassDOT / CTDOT (applies §6 rules: notes, defaults, checklist items) | none |
 | `ltsRisk` | Risk category: Low / Typical / High | Typical |
 | `ltsV` | Basic wind speed V for that MRI (mph) | 130 (placeholder, engineer to set) |
 | `ltsVsvc` | Service wind speed (mph) | 76 (placeholder) |
@@ -251,7 +265,7 @@ The 2022 interim revised Section 5 substantially; values below are 1st Ed. recol
 ## 4. Questions for the engineer (from his copy of LRFDLTS)
 
 **Edition**
-- **Q0.** Which document do you design to: LRFDLTS **2nd Edition** (year, item code) or the 1st Edition (2015) with interims through 2022 (LRFDLTS-1-I5)? I could not find a published 2nd Edition in public sources. Do your owners (RIDOT / MassDOT / CTDOT) amend it?
+- **Q0. Answered (2026-11-02):** LRFDLTS 1st Edition (2015) with interims through 2022 (LRFDLTS-1-I5). The engineer will upload the specification pages. Owner amendments: from the owner manuals already in the reference library (§6; questions Q21–Q25).
 
 **Wind**
 - **Q1.** Risk categories and MRIs (Table 3.8-1?): the categories, their MRIs and the design life. Which map figure gives V for each, and is V the ASCE 7-10 map value or the ASCE 7-16/7-22 one?
@@ -290,23 +304,98 @@ The 2022 interim revised Section 5 substantially; values below are 1st Ed. recol
 **Scope**
 - **Q20.** OK to add multi-sided (8/12/16) sections in the LTS mode only, and to leave mast arms, cantilever sign structures and high-mast towers for a later series?
 
+**Owner amendments (§6)**
+- **Q21. RIDOT** BDM §1.1.1 makes the latest FHWA-approved version govern on NHS projects (23 CFR 625.3(f)(2) / 625.4(d)). Does FHWA's current list include the 2022 interim (LRFDLTS-1-I5)? If it does not, should RIDOT NHS projects use only the interims FHWA lists, or the 2022 interim under a Project Exception?
+- **Q22. CTDOT** BDM §14.1.3, §14.2.2.2 and §14.2.2.3 set **120 mph** for sign supports. That text cites the ASD *Standard Specifications*, and BRSDM C3.8.1.2.5CT says one wind speed is specified statewide for new sign structures. Is 120 mph the LRFDLTS basic wind speed V (the LTS map value for the risk category's MRI) for CTDOT ground-mounted signs and light poles, or an old Standard-Specifications speed that does not apply? Where is the current CTDOT statewide value given (a traffic standard or directive I don't have)?
+- **Q23. MassDOT** Bridge Manual §3.12.3.2 and §3.12.3.3 (sign attachments to bridges) call for "the latest version, including current interims" and the LTS basic wind speed figure. Do you apply that to ground-mounted signs and light poles too? (§6.3.5.1 makes the Contractor design them unless they are pre-approved.)
+- **Q24.** Do RIDOT, MassDOT or CTDOT set a **fatigue importance category**, a deflection limit, standard light-pole or sign foundations, or anchor-rod or base-plate rules for ground-mounted supports in documents other than these four manuals (traffic or lighting standard drawings, standard specifications, special provisions)? The four manuals I searched have none (§6.4).
+- **Q25.** Should the tool get an "Owner" selector (none / RIDOT / MassDOT / CTDOT) that shows the owner's rules as notes and checklist items and sets defaults (e.g. the CTDOT wind speed after Q22)? Owner text would be cited, never copied.
+
 ---
 
 ## 5. Phase B PR sequence (after the answers)
 
+0. **Before LTS-1:** the engineer's specification pages arrive; this plan's provision map is updated (articles, values, Confidence → "Confirmed from the engineer's copy") in a docs PR.
 1. **LTS-1** Mode switch (`codeMode`), LTS inputs, loads (DC, LL = 0) and Table 3.4.1-1 combinations; cables hidden with the note. IBC mode identical.
 2. **LTS-2** Wind (P_z, K_z, K_d, G, C_d per shape, EPA basis) and ice.
 3. **LTS-3** Member checks (round + multi-sided; Section 5), second-order.
 4. **LTS-4** Fatigue (Section 11) incl. anchor-rod fatigue (per Q16b).
 5. **LTS-5** Deflection (Section 10) and the breakaway checklist.
-6. **LTS-6** Base plate (LP-5 method, LTS labels and minimum t) and welds / handhole.
+6. **LTS-6** Base plate (LP-5 method; `LPP_BP_VERIFY` and the other §0.1 base-plate texts corrected to the 1st Ed. with the 2022 interim; minimum t) and welds / handhole.
 7. **LTS-7** Foundation (Broms design, torsion, φ; shaft structural).
 8. **LTS-8** Export of the LTS combinations to the Anchorage app.
 9. **LTS-9** Report, Calc sheet, Drawings, Manual.
 
-Each PR: §4 callouts (before/after; for new checks "before: not checked"), the provision with the edition from Q0, a hand check (HC-1 / HC-2 parts), the fixlog entry, the IBC-identical compare, screenshots.
+Each PR: §4 callouts (before/after; for new checks "before: not checked"), the provision with the edition (LRFDLTS 1st Ed. 2015 with interims through 2022) and the article confirmed from the uploaded pages, a hand check (HC-1 / HC-2 parts), the fixlog entry, the IBC-identical compare, screenshots.
 
 ---
+
+## 6. Owner amendments (RIDOT, MassDOT, CTDOT)
+
+**Source.** The owner manuals in the engineer's reference library, searched 2026-11-02 for sign supports, luminaires and light poles, traffic-signal structures, LRFDLTS, wind speed, fatigue importance category, standard poles and foundations, drilled shafts, base plates and anchor rods. They are cited by section only; no owner text is copied:
+- **RIDOT** *Bridge Design Manual*, April 2026 (`Bridge Design Manual-2026.pdf`);
+- **MassDOT** *Bridge Manual, Part I*, Hundredth Anniversary Edition (`MassDOT Bridge Manual - Hundredth Edition.pdf`);
+- **CTDOT** *Bridge Design Manual*, 2024 revision (`CTDOT Bridge Design Manual 0224 (1).pdf`), and *Bridge and Roadway Structures Design Manual (BRSDM)*, Release 1 (`ctdot_brsdm_r1 (1).pdf`). The BRSDM replaces the BDM; where they differ, the BRSDM governs (Q22).
+
+**Finding in short.** All three owners adopt LRFDLTS for highway sign, luminaire and traffic-signal supports. **None of the four manuals amends an LTS design provision** for ground-mounted poles or signs: there is no fatigue importance category, no deflection limit, no standard pole or foundation, and no base-plate or anchor-rod design rule. The owner rules found are a wind speed (CTDOT), the code version that governs (RIDOT, MassDOT), materials and galvanizing, a ban on adhesive anchors (CTDOT), who designs the support (MassDOT), and borings. The bridge-mounted sign-support rules (truss frames on fascias) are outside this tool's scope and are listed only for completeness.
+
+### 6.1 RIDOT Bridge Design Manual (April 2026)
+
+| Section | What it requires (paraphrased) | How the tool would apply it |
+|---|---|---|
+| §1.1.1 | The manual supplements AASHTO. On NHS projects, the latest version of each document approved by FHWA (23 CFR 625.3(f)(2), 625.4(d)) governs; a version FHWA has not yet approved needs a Project Exception. Deviations need a RIDOT waiver. | Report note in LTS mode with Owner = RIDOT: "edition per the FHWA-approved list; confirm the 2022 interim is approved or covered by a Project Exception" (Q21). No calculation change. |
+| §1.1.3 (reference list) | Lists the AASHTO LRFD Specifications for Structural Supports for Highway Signs, Luminaires, and Traffic Signals among the governing documents. | Confirms the LTS mode is the right basis for RIDOT highway supports. |
+| §3.5 | Wind loads on sign structures, luminaires and traffic signals follow LRFDLTS (not the bridge wind of AASHTO LRFD BDS §3.8). | LTS mode wind (§2.1–2.2) as planned. No RIDOT-specific wind speed: V comes from the LTS map. |
+| §5.2.2 | All reinforcement in sign-structure foundations and drilled shafts is galvanized (AASHTO M 31 Gr 60). | Drawings note and report note when Owner = RIDOT. No calculation change: f_y 60 ksi is unchanged; development of galvanized bars is not changed by galvanizing in ACI 318-19 (coating factor ψ_e applies to epoxy, not zinc). The engineer confirms. |
+| §13.2.3 | Attachments (light standards, sign supports, etc.) to a MASH-compliant barrier that are not part of its tested details need State Bridge Engineer approval. | Checklist item (with the breakaway checklist, §2.9) when a support is mounted on a barrier. The tool designs ground-mounted shafts, so this is a note only. |
+| Table 2-1 | Minimum vertical clearance under an overhead sign. | Overhead signs are out of scope. Not used. |
+
+### 6.2 MassDOT Bridge Manual, Part I (Hundredth Anniversary Edition)
+
+| Section | What it requires (paraphrased) | How the tool would apply it |
+|---|---|---|
+| §1.2.4.2 | Borings are required for high-mast lighting foundations and may be required for sign supports. | Foundation card note when Owner = MassDOT: the Broms soil inputs should come from borings. No calculation change. |
+| §3.12.3.2–§3.12.3.3 | Sign attachments to bridges: design to the latest LTS specifications including current interims (the manual still uses the old "Standard Specifications" title); wind speed from the LTS basic wind speed figure. | Bridge-mounted signs are out of scope. For ground-mounted supports this supports using the current interims and the LTS map V (Q23). |
+| §3.12.3.5–§3.12.3.7 | Bridge-mounted sign supports: AASHTO M 270 Gr 50 steel, galvanized, galvanized hardware; minimum angle and weld sizes; panel spacing. | Out of scope (bridge-mounted frames). Not used. |
+| §6.1.3 (shop drawing categories) | "Steel and Aluminum Highway Structures" (signal and strain poles, highway and high-mast lighting poles, sign structures, with their anchorages) and precast light-pole and luminaire bases are shop-drawing items. | Report note only. |
+| §6.3.5.1 | Unless pre-approved by MassDOT, overhead, cantilever and ground-mounted signs, light standards and traffic-signal assemblies are designed by the Contractor, with complete calculations (structure, foundations, connections) reviewed by the Designer. | The LTS-mode report already covers structure, foundation and connections; the anchor rods are covered by the Anchorage-app report. Report cover note when Owner = MassDOT: "Contractor design submittal: include the Anchorage-app report for the anchor rods." |
+| §6.3.5.2 | Sign supports on bridges or walls are designed by the bridge or wall Designer. | Out of scope. |
+| §6.3.5.3 | High-mast lighting: extra lowering-device requirements. | High-mast is out of scope. |
+
+### 6.3 CTDOT Bridge Design Manual (2024 rev.) and BRSDM (Release 1)
+
+| Section | What it requires (paraphrased) | How the tool would apply it |
+|---|---|---|
+| BDM §1.1.2; BRSDM Vol. 1 reference list and abbreviations | LRFDLTS ("LTS") is a governing document. | Confirms the basis. |
+| BDM §14.1.3 | Structure-mounted sign supports: designed to the LTS specifications (cited by the old Standard Specifications title); **all sign support structures designed for 120 mph**. | **Q22** before any use. If the engineer confirms 120 mph applies to ground-mounted supports under LRFDLTS, Owner = CTDOT sets the default V = 120 mph, shown with the citation and editable. If it is an old Standard-Specifications value, the tool shows only a note. |
+| BDM §14.1.4 | Structure-mounted sign supports: M 270 Gr 36 steel, minimum angle size, galvanizing (ASTM A123), bolts. | Out of scope (bridge-mounted frames). |
+| BDM §14.2.1–§14.2.2.1 | Tubular and truss sign supports (overhead and cantilever) come from CTDOT traffic standard sheets, with standard foundations; no design needed when used as shown. | Out of scope (overhead / cantilever). Note: CTDOT standard sheets are not in the library (Q24). |
+| BDM §14.2.2.2–§14.2.2.3 | Bridge-mounted and special sign supports are designed by the designer to LTS, at 120 mph adjusted for height. | As §14.1.3 (Q22). |
+| BDM §7.1.4; BRSDM §6.13.3.1 and C6.13.3.1 | Welding of sign supports to AWS D1.1 (not D1.5); the commentary points to LTS for sign-support welding. | Report/drawings note on the base weld (LTS-6) when Owner = CTDOT. |
+| BRSDM C3.8.1.2.5CT | Commentary contrast: one wind speed is specified for all new sign structures statewide (the value is not given in the BRSDM). | Supports Q22. |
+| BRSDM §5.13.5.2CT and C5.13.5.2CT | Adhesive-bonded anchors may not connect sign, traffic-signal (mast arm and span pole) or luminaire structures to foundations, with limited exceptions (small single-post regulatory signs on concrete away from travelways; structure-mounted frames on parapets; luminaires on existing parapets; each with a minimum number of anchors). | The Anchorage-app export sends cast-in headed rods (heavy-hex nut), which comply. **Anchorage-app note** when Owner = CTDOT: adhesive anchors are not permitted for these structures (the Anchorage app's own PR; listed here for its owner). |
+| BDM plates 6.2.5a/b, 6.2.6a/b, 6.2.7a | Standard details for sign anchorages and lighting-standard parapet reinforcement on bridges. | Out of scope (bridge-mounted). |
+
+### 6.4 Searched for and not found in these four manuals
+
+Not found anywhere in the four manuals:
+- a fatigue importance category for sign, luminaire or signal supports;
+- galloping, natural wind gust or truck gust amendments;
+- a service deflection limit for poles or signs;
+- standard light-pole or ground-mounted sign foundations (drilled-shaft size and depth tables);
+- base-plate thickness or anchor-rod pretension rules for poles;
+- a breakaway policy beyond the RIDOT barrier-attachment rule.
+
+These may be in the owners' traffic or lighting standard drawings, standard specifications or special provisions, which are not in the library (Q24). Until the engineer answers, the LTS mode uses the LRFDLTS defaults and asks for the fatigue category (§2.7 F2).
+
+### 6.5 What this adds to Phase B
+
+- **LTS-1:** the optional `ltsOwner` field (default "none"; saved; old saves open as none). It drives notes and checklist items only. The one possible default is the CTDOT V after Q22.
+- **LTS-6:** CTDOT AWS D1.1 note on the base weld.
+- **LTS-7:** MassDOT borings note; RIDOT galvanized-reinforcement note.
+- **LTS-9:** the owner notes in the Report, Calc sheet and Drawings general notes, each citing the manual section.
+- **Anchorage app (separate PR, its own tool):** CTDOT adhesive-anchor prohibition note for sign, signal and luminaire foundations.
+
 
 ## Sources (public)
 
@@ -314,3 +403,9 @@ Each PR: §4 callouts (before/after; for new checks "before: not checked"), the 
 - TRID record, LRFDLTS (1st Ed.): https://trid.trb.org/view/1366480
 - 23 CFR 625.4 (FHWA standards incorporated by reference): https://www.ecfr.gov/current/title-23/chapter-I/subchapter-G/part-625/section-625.4
 - NCHRP Report 796 (2014), *Development and Calibration of AASHTO LRFD Specifications for Structural Supports for Highway Signs, Luminaires, and Traffic Signals*: https://nap.nationalacademies.org/catalog/22240
+
+## Owner manuals (engineer's reference library; cited by section, not copied)
+
+- RIDOT, *Bridge Design Manual*, April 2026.
+- MassDOT, *Bridge Manual, Part I*, Hundredth Anniversary Edition.
+- CTDOT, *Bridge Design Manual* (2024 revision), and *Bridge and Roadway Structures Design Manual (BRSDM)*, Release 1.

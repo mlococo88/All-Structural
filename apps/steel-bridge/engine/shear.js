@@ -84,11 +84,13 @@
   /* ---------- load factors ---------- */
   /* factors(over): GirderDetail's Girder section defaults (Strength I γ_DC 1.25, γ_DW 1.50, LL+IM 1.75; Fatigue I 1.75; deck placement
      γ_DC 1.25, construction LL 1.50). factorsOwner(lf): the same with the owner's load rules (OWN_K.gs: η on the maximum γ_DC, γ_DW,
-     η_N on the minimum ones, η·m on γ_LL; Fatigue I and deck placement unchanged), lf = SBDOwners.loadFactors(...) or { eta, m }. */
+     η_N on the minimum ones, η·m on γ_LL; Fatigue I unchanged; deck placement γ_DC, γ_CL × lf.etaC (ETAC, 2026-11-01: η on construction, no m;
+     absent in a GirderDetail lf: 1)), lf = SBDOwners.loadFactors(...) or { eta, m }. */
   function factors(over) { const C = window.SBDConstr && window.SBDConstr.factors ? window.SBDConstr.factors() : { cdc: 1.25, ccl: 1.50 };   // FONE: deck placement from the Constructibility module (one source)
     return { dc: 1.25, dw: 1.50, dcMin: 0.90, dwMin: 0.65, ll: 1.75, fat: 1.75, cdc: C.cdc, ccl: C.ccl, m: 1, ...(over || {}) }; }
   function factorsOwner(lf, over) { const G = factors(over), e = (lf && +lf.eta > 0) ? +lf.eta : 1, eN = (lf && +lf.etaN > 0) ? +lf.etaN : 1, m = (lf && +lf.m > 0) ? +lf.m : 1;
-    return { ...G, dc: G.dc * e, dw: G.dw * e, dcMin: G.dcMin * eN, dwMin: G.dwMin * eN, ll: G.ll * e * m, m }; }
+    const eC = (lf && +lf.etaC > 0) ? +lf.etaC : 1;   // ETAC
+    return { ...G, dc: G.dc * e, dw: G.dw * e, dcMin: G.dcMin * eN, dwMin: G.dwMin * eN, ll: G.ll * e * m, cdc: G.cdc * eC, ccl: G.ccl * eC, m }; }
 
   /* pedestrian part (GirderDetail gdPLe, GD45): the design load multiplier m is on HL-93 LL+IM only. A demand that carries
      pl = { key: [part, value] } has the part divided back by m (V_LL − q + q/m) while it still equals the value given. */
@@ -152,7 +154,7 @@
     const vn = panelSteps(w, 'pan', r.sh, { D: r.D, tw: r.tw, Fyw, doIn: r.do, end: r.end, flgA: r.flgA });
     const V = r.VuP != null ? r.VuP : r.Vu, okv = (d, c) => c >= d - 1e-9;
     w.add({ id: 'ok', label: 'Shear resistance', sym: 'V_{u} \\le \\phi_{v}V_{n}', eq: '', sub: `${n2(V)} ${okv(V, r.sh.Vn) ? '\\le' : '\\gt'} 1.0(${n2(r.sh.Vn)})`, value: V / r.sh.Vn, unit: '', d: 3, ref: `${ED} Eq. 6.10.9.1-1`, ok: okv(V, r.sh.Vn), note: `See §${vn}. φ_v = 1.0 (6.5.4.2).` });
-    w.add({ id: 'VuC', label: 'Deck placement shear', sym: 'V_{u}', eq: '\\gamma_{DC}V_{DC1} + \\gamma_{CL}V_{CL}', sub: `${n2(G.cdc)}(${n2(r.VDC1)}) + ${n2(G.ccl)}(${n2(r.VCL)})`, value: r.VuC, unit: 'kip', d: 2, ref: `${ED} Art. 3.4.2.1` });
+    w.add({ id: 'VuC', label: 'Deck placement shear', sym: 'V_{u}', eq: '\\gamma_{DC}V_{DC1} + \\gamma_{CL}V_{CL}', sub: `${(Math.abs(G.cdc * 100 - Math.round(G.cdc * 100)) < 1e-9 ? n2 : n4)(G.cdc)}(${n2(r.VDC1)}) + ${(Math.abs(G.ccl * 100 - Math.round(G.ccl * 100)) < 1e-9 ? n2 : n4)(G.ccl)}(${n2(r.VCL)})`, value: r.VuC, unit: 'kip', d: 2, ref: `${ED} Art. 3.4.2.1` });
     w.add({ id: 'okC', label: 'Deck placement: web shear (no tension field)', sym: 'V_{u} \\le \\phi_{v}V_{cr}', eq: '', sub: `${n2(r.VuC)} ${okv(r.VuC, r.sh.Vcr) ? '\\le' : '\\gt'} 1.0(${n2(r.sh.Vcr)})`, value: r.VuC / r.sh.Vcr, unit: '', d: 3, ref: `${ED} Eq. 6.10.3.3-1`, ok: okv(r.VuC, r.sh.Vcr) });
     w.add({ id: 'VuF', label: 'Special fatigue loading: unfactored permanent shear plus the Fatigue I shear', sym: 'V_{u}', eq: `V_{DC1} + V_{DC2} + V_{DW}${r.ut ? ' + V_{UT} + V_{UF}' : ''} + \\gamma V_{fat}`,
       sub: `${n2(r.VDC1)} + ${n2(r.VDC2)} + ${n2(r.VDW)}${r.ut ? ` + ${n2(r.VUT + r.VUF)}` : ''} + ${n2(G.fat)}(${n2(r.Vf)})`, value: r.VuF, unit: 'kip', d: 2, ref: `${ED} Art. 6.10.5.3, Table 3.4.1-1` });

@@ -235,9 +235,12 @@
     const FA_ = FA(), FX_ = FX(), Q = P.studs || MD().defaultStuds(), M = MD();
     // as ui/fatigue.js since the sb-ped-owner PR: LL+IM with the pedestrian load once (SBDAnalysis.llPL), M_PL its part
     const g = P.girders[gi], xs = R.x, st = R.st, f = R.fat, ll = AN().llPL ? AN().llPL(R) : R.ll, q = R.pl, A = (o, i) => (o ? o.M[i] : 0);
+    const inner = new Set((R.supIdx || []).slice(1, -1));   // V_FAT at an interior support from one side (as ui/fatigue.js fromAnalysis, 2026-11-01)
+    const vf = i => { if (!inner.has(i)) return [Math.max(f.VRpos[i], f.VLpos[i]), Math.min(f.VRneg[i], f.VLneg[i])];
+      return f.VRpos[i] - f.VRneg[i] >= f.VLpos[i] - f.VLneg[i] ? [f.VRpos[i], f.VRneg[i]] : [f.VLpos[i], f.VLneg[i]]; };
     const stations = xs.map((x, i) => ({ x, M_DC1: st.DC1.M[i], M_DC2: st.DC2.M[i], M_DW: st.DW.M[i], M_LLpos: ll.Mpos[i], M_LLneg: ll.Mneg[i], M_UT: A(st.UT, i), M_UF: A(st.UF, i),
       M_FATpos: f.Mpos[i], M_FATneg: f.Mneg[i], V_DC1: Math.abs(st.DC1.VR[i]), V_DC2: Math.abs(st.DC2.VR[i]), V_DW: Math.abs(st.DW.VR[i]),
-      V_FATpos: Math.max(f.VRpos[i], f.VLpos[i]), V_FATneg: Math.min(f.VRneg[i], f.VLneg[i]), ...(q ? { M_PLpos: q.Mpos[i], M_PLneg: q.Mneg[i] } : {}) }));
+      V_FATpos: vf(i)[0], V_FATneg: vf(i)[1], ...(q ? { M_PLpos: q.Mpos[i], M_PLneg: q.Mneg[i] } : {}) }));
     const zones = g.segments.map(s => ({ startX: s.x0, endX: s.x1, web: { depth: s.D, thickness: s.tw }, topFlange: { width: s.topB, thickness: s.topT }, botFlange: { width: s.botB, thickness: s.botT } }));
     const m = P.materials, d = P.deck, h0 = R.h0, ext = P.girders.find(q => q.position === 'exterior'), beffB = (ext || g).beff;
     const pl = { _schema: 'sbd2-analysis', pedestrianInLL: !!q, stations, member: { supports: R.sup.slice(), spans: R.spans.slice() }, section: { zones },

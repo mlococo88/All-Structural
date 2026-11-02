@@ -467,8 +467,8 @@
     p.Lb = L && !L.errors.length ? r2(FRM.lbMax(L.FR, L.FR.girders.map(g => g.i), L.m.sup)) : 25; src.Lb = L && !L.errors.length ? 'the largest unbraced length on any girder (framing)' : 'no framing: 25 ft';
     const A = opt.A && !(opt.A.errors && opt.A.errors.length) ? opt.A : null;
     let xM = sup[0] + (sup[1] - sup[0]) / 2, Mu = +c.sb.Mu;
-    if (A && A.st && A.st.DC1) { const C0 = window.SBDConstr && window.SBDConstr.factors ? window.SBDConstr.factors() : { cdc: 1.25, ccl: 1.50 }, xs = A.x, Mc = xs.map((_, i) => C0.cdc * A.st.DC1.M[i] + C0.ccl * (A.st.CL ? A.st.CL.M[i] : 0)); let iMx = 0; Mc.forEach((v, i) => { if (v > Mc[iMx]) iMx = i; }); xM = xs[iMx];   // FONE: the deck placement γ of the Constructibility module (was 1.25, 1.5)
-      if (c.sb.Mu === '' || c.sb.Mu == null) { Mu = r1(Mc[iMx]); src.Mu = `analysis: ${C0.cdc}M_DC1 + ${C0.ccl}M_CL at x = ${xM.toFixed(1)} ft (deck placement, the Constructibility tab's factors)`; } }
+    if (A && A.st && A.st.DC1) { const C0 = window.SBDConstr && window.SBDConstr.projFactors ? window.SBDConstr.projFactors(P) : { cdc: 1.25, ccl: 1.50 }, xs = A.x, Mc = xs.map((_, i) => C0.cdc * A.st.DC1.M[i] + C0.ccl * (A.st.CL ? A.st.CL.M[i] : 0)); let iMx = 0; Mc.forEach((v, i) => { if (v > Mc[iMx]) iMx = i; }); xM = xs[iMx];   // FONE: the deck placement γ of the Constructibility module (was 1.25, 1.5)
+      if (c.sb.Mu === '' || c.sb.Mu == null) { Mu = r1(Mc[iMx]); src.Mu = `analysis: ${+C0.cdc.toFixed(4)}M_DC1 + ${+C0.ccl.toFixed(4)}M_CL at x = ${xM.toFixed(1)} ft (deck placement, the Constructibility tab's factors${C0.eta && C0.eta !== 1 ? `, × η = ${C0.eta}` : ''})`; } }   // ETAC (2026-11-01): × the owner's η
     if (!(isFinite(Mu))) { Mu = DEF.sb.Mu; src.Mu = 'no analysis: GirderDetail built-in value'; } else if (!src.Mu) src.Mu = 'entered';
     let k = 0; while (k < sup.length - 2 && sup[k + 1] < xM) k++;
     const nBr = L && !L.errors.length ? Math.min(...L.FR.girders.map(g => g.pts.filter(q => q.f.type === 'int' && q.s > g.bear[k] + 0.5 && q.s < g.bear[k + 1] - 0.5).length)) : Math.max(0, Math.ceil((sup[k + 1] - sup[k]) / 25 - 1e-9) - 1);

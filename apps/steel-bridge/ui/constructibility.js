@@ -40,6 +40,11 @@
     document.head.appendChild(st);
   }
   const ohInputs = P => ({ ...window.SBDConstr.OH_DEF, ...((P.constr && P.constr.oh) || {}) });
+  /* ohOldGam(P) (ETAC, 2026-11-01): the saved bracket factors P.constr.oh.gam (this tab's former inputs; kept in the file, unused) that differ
+     from the deck placement factors now used (SBDConstr.projFactors: 1.25, 1.50 × the owner's η), [{ k, label, was, now }] */
+  function ohOldGam(P) { const g = ((P.constr || {}).oh || {}).gam || {}, G = window.SBDConstr.projFactors(P), now = { dc: G.cdc, cl: G.ccl }, L = { dc: 'γ_DC', cl: 'γ construction' };
+    return ['dc', 'cl'].filter(k => g[k] != null && g[k] !== '' && !(Math.abs(+g[k] - now[k]) <= 1e-9)).map(k => ({ k, label: L[k], was: g[k], now: now[k] })); }
+  const nf = x => Math.abs(x * 100 - Math.round(x * 100)) < 1e-9 ? fmt(x, 2) : fmt(x, 4);
   const key = ctx => JSON.stringify([ctx.P, ctx.g, srcOf(ctx.P), S.plName]);   // f_ℓ is in ctx.P (P.constr.flC)
   /* f_ℓ during deck placement entered (first order, ksi): saved in the project, P.constr.flC; absent, not a number or ≤ 0: none entered
      (the skew value of C6.10.1 is used: engine/framing.js design, SB2-W1) */
@@ -69,7 +74,7 @@
       if (!pl) return { err: 'Choose a hand-off file (GirderDetail → ST-Girder demands, .json).' };
       const gdF = pl.girderDetail || {};
       D = FRM.design(P, g, { sup: (pl.member || {}).supports, line: (+gdF.girder || 1) - 1, skews: (gdF.skew || {}).bySupport || [0], ext: gdF.position === 'exterior', fl: flOf(P) });   // this bridge's framing (SB2-O9), skew f_ℓ (SB2-W1)
-      F = C.fromPayload(pl, { flC: D.fl, ...(D.br ? { braces: D.braces } : {}) });
+      F = C.fromPayload(pl, { flC: D.fl, lf: C.lfOf(P), ...(D.br ? { braces: D.braces } : {}) });   // ETAC: the project's owner η
       what = `${esc(plName)}: ${F.locs.length} stations; plates and materials from the file; M<sub>DCc</sub>${F.locs.some(L => L.M.DCc !== 0) ? ' (GirderDetail\'s pour sequence)' : ' not in the file (M<sub>DC1</sub> used)'}, M<sub>CL</sub>, V<sub>DC1</sub>, V<sub>CL</sub> from the file; L<sub>b</sub> ${D.br ? "from this project's framing (Cross-frames tab)" : `from its cross-frame spacing ${fmt(F.Lb, 2)} ft`}; ${flTxt(D)}.`;
     } else if (src === 'custom') {   // custom demands PR (2026-11-01): the rows entered on this tab, as an analysis (arOf), the project's path
       const CD = window.SBDCustomDemands; if (!CD) return { err: 'ui/demands.js is not loaded.' };
@@ -127,7 +132,7 @@
 
   function render(host, ctx) {
     css();
-    const P = ctx.P, g = P.girders[ctx.g] || P.girders[0], stale = !S.R || S.key !== key(ctx), ext = srcOf(P) === 'file' ? null : g.position === 'exterior', oh = ohInputs(P);
+    const P = ctx.P, g = P.girders[ctx.g] || P.girders[0], stale = !S.R || S.key !== key(ctx), ext = srcOf(P) === 'file' ? null : g.position === 'exterior', oh = ohInputs(P), GP = window.SBDConstr.projFactors(P), OG = ohOldGam(P);
     const opt = (v, t, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${t}</option>`;
     const AUI = window.SBDAnalysisUI, AN = window.SBDAnalysis;
     let h = (AUI && AUI.srcBar ? AUI.srcBar({ src: srcOf(P), auto: !S.src && !(window.SBDCustomDemands && window.SBDCustomDemands.srcGet(P, 'cn')), rd: AN && AN.ready ? AN.ready(P, P.girders[ctx.g] ? ctx.g : 0) : null, g: g.label || g.id, plName: S.plName }) : '')
@@ -135,11 +140,12 @@
       <div class="fRow"><label for="cn_src">Demands</label><select id="cn_src">${opt('project', 'This project (analysis, pour sequence)', srcOf(P))}${opt('file', 'Hand-off file (GirderDetail → ST-Girder)', srcOf(P))}${window.SBDCustomDemands ? opt('custom', 'Custom (entered)', srcOf(P)) : ''}</select></div>
       ${srcOf(P) === 'file' ? `<div class="fRow"><label for="cn_file">File</label><input type="file" id="cn_file" accept=".json,application/json"><span class="unit">${esc(S.plName)}</span></div>` : ''}
       <div class="fRow"><label for="cn_flC">f<sub>ℓ</sub> during deck placement (first order; blank or 0: from skew, C6.10.1)</label><input type="number" step="any" min="0" id="cn_flC" value="${flOf(P) || ''}" placeholder="${fmt(window.SBDFraming.design(P, ctx.g).fl, 2)} (skew)"><span class="unit">ksi (GS14, GS15; saved with the project)</span></div>
-      <p class="note">M<sub>c</sub> = 1.25M<sub>DCc</sub> + 1.50M<sub>CL</sub> and V<sub>u</sub> = 1.25V<sub>DC1</sub> + 1.50V<sub>CL</sub> on the noncomposite steel section (AASHTO LRFD 10th Ed. 3.4.2.1, 6.10.3.4.1); φ<sub>f</sub> = φ<sub>v</sub> = 1.0.
+      <p class="note">M<sub>c</sub> = ${nf(GP.cdc)}M<sub>DCc</sub> + ${nf(GP.ccl)}M<sub>CL</sub> and V<sub>u</sub> = ${nf(GP.cdc)}V<sub>DC1</sub> + ${nf(GP.ccl)}V<sub>CL</sub> on the noncomposite steel section (AASHTO LRFD 10th Ed. 3.4.2.1, 6.10.3.4.1${GP.eta !== 1 ? `; 1.25 and 1.50 × the owner's η = ${fmt(GP.eta, 3)}, <a href="#" data-cngoin="proj">Project tab</a>; m not applied` : ''}); φ<sub>f</sub> = φ<sub>v</sub> = 1.0.
       GS14: Eqs. 6.10.3.2.1-1, -2 (F<sub>nc</sub> from 6.10.8.2 with R<sub>b</sub> = 1.0); GS15: Eq. 6.10.3.2.1-3 and 6.10.3.2.2-1; GS16: Eq. 6.10.3.3-1.${ext ? ' Exterior girder: OH1–OH5 with the overhang bracket loads below (C6.10.3.4).' : ''} The demand source (a hand-off file is not) and f<sub>ℓ</sub> entered is.</p></div></section>`;
     if (ext) h += `<section class="sec"><div class="secHead">Overhang brackets, exterior girder (saved with the project)</div><div class="secBody">
       ${OHF.map(([k, l, u]) => `<div class="fRow"><label for="cn_oh_${k}">${l}</label><input type="number" step="any" id="cn_oh_${k}" data-oh="${k}" value="${esc(oh[k])}"><span class="unit">${u}</span></div>`).join('')}
-      <div class="fRow"><label for="cn_oh_gdc">γ<sub>DC</sub> / γ construction</label><input type="number" step="any" id="cn_oh_gdc" data-ohg="dc" value="${esc(oh.gam.dc)}" style="width:70px"><input type="number" step="any" id="cn_oh_gcl" data-ohg="cl" value="${esc(oh.gam.cl)}" style="width:70px"><span class="unit"></span></div>
+      <div class="fRow"><label>γ<sub>DC</sub> / γ construction</label><span style="display:inline-block;min-width:8em;font-weight:600">${nf(GP.cdc)} / ${nf(GP.ccl)}</span><span class="unit">the deck placement factors above (3.4.2.1${GP.eta !== 1 ? `, × η ${fmt(GP.eta, 3)}` : ''}; <a href="#" data-cngoin="proj">owner η: Project tab</a>)</span></div>
+      ${OG.length ? `<div class="alert">This project has bracket load factors saved from this card's former inputs that differ from the deck placement factors and are <b>no longer used</b>: ${OG.map(q => `${q.label} ${esc(q.was)} (now ${nf(q.now)})`).join('; ')}. They stay in the project file unchanged.</div>` : ''}
       <div class="fRow"><button type="button" id="cn_oh_fill" title="Deck width carried by the brackets, overhang deck thickness and w_c from the Cross-section &amp; loads and Materials &amp; deck tabs">Fill from cross-section</button><span class="unit">${(() => { const F = window.SBDConstr.ohFill(P, ctx.g); return F.err ? esc(F.err) : `from the cross-section: w<sub>OH</sub> ${fmt(F.vals.wOH, 2)} in, t<sub>OH</sub> ${fmt(F.vals.tOH, 2)} in, w<sub>c</sub> ${fmt(F.vals.wc, 3)} kcf <details style="display:inline"><summary class="wk">§ worked</summary>${stepsHtml(F.steps)}</details>`; })()}</span></div>
       <p class="note">GirderDetail's Deck overhang defaults (common planning values; confirm against the contractor's brackets and finishing machine). The deck weight is factored by γ<sub>DC</sub>, all other bracket loads by the construction factor. The deck slab and overhang design are not part of this app; only the girder's flange lateral bending is checked.</p></div></section>`;
     if (srcOf(P) === 'custom' && window.SBDCustomDemands) h += window.SBDCustomDemands.card(P, 'cn', ctx.g);   // the entered rows (ui/demands.js)
@@ -168,7 +174,7 @@
       }
       if (R.oh && !(R.oh.errors && R.oh.errors.length)) { const O = R.oh, q = O.rows[S.ohSel] || O.rows[0];
         h += `<section class="sec"><div class="secHead">Overhang brackets: flange lateral bending (exterior girder, OH1–OH5)</div><div class="secBody">
-          <p class="note">One location per span: the largest ${fmt(window.SBDConstr.factors().cdc, 2)}M<sub>DC1</sub> + ${fmt(window.SBDConstr.factors().ccl, 2)}M<sub>CL</sub> (GirderDetail's placement; deck placement factors, 3.4.2.1), with its plates and deck-placement L<sub>b</sub>. w<sub>u</sub> = ${fmt(O.wu, 4)} kip/ft, F<sub>ℓ</sub> = ${fmt(O.Fl, 4)} kip/ft, P<sub>ℓ</sub> = ${fmt(O.Pl, 3)} kip <a class="wk" href="#st-oh.Fl">§</a>${O.given ? ' (as stored in the hand-off file)' : ''}.</p>
+          <p class="note">One location per span: the largest ${nf(GP.cdc)}M<sub>DC1</sub> + ${nf(GP.ccl)}M<sub>CL</sub> (GirderDetail's placement; deck placement factors, 3.4.2.1), with its plates and deck-placement L<sub>b</sub>. w<sub>u</sub> = ${fmt(O.wu, 4)} kip/ft, F<sub>ℓ</sub> = ${fmt(O.Fl, 4)} kip/ft, P<sub>ℓ</sub> = ${fmt(O.Pl, 3)} kip <a class="wk" href="#st-oh.Fl">§</a>${O.given ? ' (as stored in the hand-off file)' : ''}.</p>
           <div class="tscroll"><table class="tbl"><thead><tr><th class="lft">Location</th><th>M<sub>u</sub> (kip-ft)</th><th>M<sub>ℓ</sub> (kip-in)</th><th class="lft">Governing</th><th>Ratio</th></tr></thead><tbody>
           ${O.rows.map((o, i) => `<tr data-ohsel="${i}" class="${i === S.ohSel ? 'sel' : ''}"><td class="lft">${esc(o.name)}</td><td>${fmt(o.Mu, 1)}</td><td>${fmt(o.Ml, 1)}</td><td class="lft">${esc(o.gov.id)}</td><td class="${cls(o.gov.ratio)}">${rtx(o.gov)}</td></tr>`).join('')}</tbody></table></div>
           ${q ? `<h4 class="sub">${esc(q.name)}</h4><div class="tscroll"><table class="tbl">${ckHead}<tbody>${ckRows(q.checks, q.gov)}</tbody></table></div>${stepsHtml(q.steps)}` : ''}</div></section>`; }
@@ -183,7 +189,7 @@
     if (srcOf(P) === 'custom' && window.SBDCustomDemands) window.SBDCustomDemands.wire(host, P, 'cn', ctx.g, () => (ctx.changed ? ctx.changed() : redraw()));
     on('#cn_flC', 'change', e => { const t = e.target.value, v = t === '' ? 0 : Number(t); if (!(isFinite(v) && v >= 0)) return; P.constr = P.constr || {}; if (v > 0) P.constr.flC = v; else delete P.constr.flC; if (ctx.changed) ctx.changed(); else redraw(); });
     on('[data-oh]', 'change', e => { const v = Number(e.target.value); if (!isFinite(v)) return; P.constr = P.constr || {}; P.constr.oh = { ...ohInputs(P), ...(P.constr.oh || {}), [e.target.dataset.oh]: v }; if (ctx.changed) ctx.changed(); else redraw(); });
-    on('[data-ohg]', 'change', e => { const v = Number(e.target.value); if (!isFinite(v)) return; P.constr = P.constr || {}; const o = { ...ohInputs(P), ...(P.constr.oh || {}) }; o.gam = { ...o.gam, [e.target.dataset.ohg]: v }; P.constr.oh = o; if (ctx.changed) ctx.changed(); else redraw(); });
+    on('[data-cngoin]', 'click', e => { e.preventDefault(); const b = document.querySelector(`#inTabs [data-itab="${e.currentTarget.dataset.cngoin}"]`); if (b) b.click(); });   // ETAC: link to the owner η (no input change)
     on('#cn_calc', 'click', () => { calc(ctx); redraw(); });
     // "Fill from cross-section" (SB2-C2, GirderDetail XS11): with a confirmation, never automatic; the permanent barrier is not a bracket load
     on('#cn_oh_fill', 'click', () => { const F = window.SBDConstr.ohFill(P, ctx.g); if (F.err) { alert('Fill from cross-section\n\n' + F.err); return; }
@@ -201,5 +207,5 @@
 
   /* stepsOf(R, r): the worked steps of location r; with custom demands the step that names them first (custom demands PR) */
   const stepsOf = (R, r) => (R && R.custom ? [window.SBDCustomDemands.step('cn', R.custom, r.x)].concat(r.steps) : r.steps);
-  window.SBDConstrUI = { render, build, TOPICS, groups, stepsOf };
+  window.SBDConstrUI = { ohOldGam, render, build, TOPICS, groups, stepsOf };
 })();
