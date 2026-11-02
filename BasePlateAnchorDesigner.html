@@ -48,6 +48,7 @@
   #hdr .byline{font-size:9pt;font-style:normal;color:#C7D4E4;margin-top:1px;font-family:var(--font-ui);}
   #projGrid{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:4px 10px;margin-top:6px;}
   @media (max-width:600px){ #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));} }
+  @media screen and (min-width:600.02px) and (max-width:899.98px){ #projGrid{grid-template-columns:repeat(3,minmax(0,1fr));} }   /* PHN (2026-11-02): tablet: the six 120 px title fields overran the window (768 px: 16 px) */
   #projGrid label{display:flex;flex-direction:column;font-size:10pt;}
   #projGrid label span{font-weight:bold;font-size:10pt;}
   #projGrid input{font-family:var(--font-ui);font-size:9.5pt;padding:3px 6px;border:1px solid var(--color-border);border-radius:4px;background:#fff;color:var(--color-fg);transition:border-color .15s, box-shadow .15s;}

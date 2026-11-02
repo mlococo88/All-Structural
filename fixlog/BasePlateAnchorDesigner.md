@@ -4921,3 +4921,27 @@ index c4454e3..b73cbd5 100644
 - **Decision recorded (§9):** the tool designs cast-in headed anchors only and has no "adhesive" anchor type, so the condition "anchor type is adhesive" can never be met in the tool. The warning is therefore shown whenever the owner and structure match, worded as "specify cast-in anchors; do not substitute post-installed adhesive anchors". If an adhesive anchor type is ever added, gate the warning on it as well.
 - **No calculation change.** `tests/bpad-circle.mjs` §1: 33 rectangular projects identical to origin/main in computed results and report text (PASS); `tests/bpad-profis.mjs` PASS; `tests/check-syntax.mjs` pass. Browser: old state without the fields merges to `owner:""`, `supports:""`; with CTDOT + sign the warning appears in section 2, the Summary and the Report tab; LP-imported group with structure not stated → warning. Screenshots at 1280 and 390 px.
 - **Check case:** default project → no note (unchanged). Set Owner = CTDOT, Structure supported = "Sign, signal or luminaire" → warning box "CTDOT: adhesive anchors not permitted for this structure." in 2. Anchors and on the Summary; all DCRs unchanged (default project max DCR 1.33 before and after).
+
+## 2026-11-02 — PR: claude/phone-print-bpad — Tablet: the title fields no longer overrun the window (PHN; display only, no calculation change)
+
+Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Code site tagged `PHN`.
+
+### PHN-1   [display only]
+- **Problem:** between 601 and 899 px the title block `#projGrid` keeps its six columns of at least 120 px. Only the ≤600 px rule reduces them to two. At 768 px the last field ("Checked date") ended at 784 px, and the page scrolled 16 px sideways on every tab.
+- **Where:** after `@media (max-width:600px){ #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));} }`.
+- **Added:**
+```css
+@media screen and (min-width:600.02px) and (max-width:899.98px){ #projGrid{grid-template-columns:repeat(3,minmax(0,1fr));} }
+```
+- Screen and 601–899 px only. Phone (≤600 px), desktop and print are unchanged.
+
+### Checked, no change
+- At 390 px no tab scrolls sideways; the existing 900 px layout stacks the panels.
+- Report → Print report: 53 pages, with the running header and page numbers. Nothing extends past the text width.
+
+### Smoke test
+- `tests/smoke/phone-layout.mjs`: new key `bpad`. It fails on origin/main at 768 px (16 px) and passes on this branch.
+
+### How verified (no computed result, saved key or hand-off changed)
+- origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on every tab, the whole-document `textContent` and localStorage after load are identical.
+- Screenshots at 900 and 1280 px are pixel-identical (0 differing pixels).
