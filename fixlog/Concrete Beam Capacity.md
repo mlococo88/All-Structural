@@ -2092,7 +2092,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** origin/main vs branch, headless, default suite: the Development & Splice results (`computeFactors`, `calcTension`, `calcHook`, `calcComp`, `calcTensSplice`, `calcCompSplice`) and localStorage (`asd_v1_auto`, `rcbeam_v2_auto`, `rcsuite.rebar_autosave_v1`) identical; the combined Report text differs only in chapter C: 3 lines changed (project note, product limit, schedule note) and 58 added (the commentary, the code-check count); 0 unresolved references. `node tests/check-syntax.mjs "Concrete Beam Capacity.html"` and the decoded dev srcdoc: pass. `node tests/smoke/phone-layout.mjs --tool cbc`: pass.
 - **Provision:** none. **Saved data:** none.
 
-## 2026-11-02 — PR: claude/plib-rebar — Development & Splice tab: "Saved projects…" dialog and Undo / Redo, synced from ACI Rebar Development Length.html (PLIB)   [display and storage only]
+## 2026-11-02 — PR: claude/plib-rebar, PR #712: https://github.com/mlococo88/All-Structural/pull/712 — Development & Splice tab: "Saved projects…" dialog and Undo / Redo, synced from ACI Rebar Development Length.html (PLIB)   [display and storage only]
 - **Where:** the embedded copy of the rebar app (`<iframe id="suite-frame-dev" srcdoc="…">`), same edits and anchors as the standalone tool:
   see `fixlog/ACI Rebar Development Length.md`, entry "claude/plib-rebar". Applied by script (decode the srcdoc → exact-string edits →
   re-encode with `&amp;` / `&quot;`; CRLF kept). In this copy the title bar has no "← All tools" link, so Undo and Redo are appended to it.
