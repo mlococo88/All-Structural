@@ -1791,7 +1791,7 @@ index 2f29ed5..c3246e1 100644
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Entered demands:** loads are entered directly (D, L, L_r, S, W line loads and point loads); nothing added.
 
-## 2026-11-02 — PR: claude/report-retire-timber (TBRX: the D11 print report and its print dialog retired after porting what the Report tab lacked; optional appendices; Print report, Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
+## 2026-11-02 — PR: claude/report-retire-timber, PR #696: https://github.com/mlococo88/All-Structural/pull/696 (TBRX: the D11 print report and its print dialog retired after porting what the Report tab lacked; optional appendices; Print report, Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
 
 ### TBRX-1. Content of the print report ported into the Report tab   [display] [no result change]
 - **Engineer decision (2026-11-02):**
