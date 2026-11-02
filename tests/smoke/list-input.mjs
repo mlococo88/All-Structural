@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,pbd] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd] [--a origin/main] [--shots <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
 // smd (one key per tool in TOOLS): the tool from --a (default: the entry's `a`, the main commit before its table landed, else
@@ -16,7 +16,7 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,pbd').split(',');
+const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
@@ -202,7 +202,7 @@ TOOLS.gusset = {   // Gusset Plate Rating: members[i].fast.g, saved as text ("3.
     await p.waitForTimeout(1500);
     const out = await p.evaluate(() => ({ P: JSON.parse(JSON.stringify(P)), R: JSON.parse(JSON.stringify(R)), stored: JSON.parse(localStorage.getItem(KEY_AS) || 'null') }));
     for (const o of [out.P, out.stored && out.stored.data]) if (o && o.ui) delete o.ui.otab;
-    const ids = await p.$$eval('.tab-btn', e => e.map(b => b.dataset.tab).filter(t => t && t !== 'v3d' && t !== 'view3d')); out.tabs = {};
+    const ids = await p.$$eval('.tab-btn', e => e.map(b => b.dataset.tab).filter(t => t && !['v3d', 'view3d', 'report', 'report2'].includes(t))); out.tabs = {};
     for (const id of ids) { await p.evaluate(id => setOTab(id), id); await p.waitForTimeout(400);
       out.tabs[id] = await p.evaluate(id => { const e = document.getElementById('tab-' + id); if (!e) return null; const k = e.cloneNode(true);
         k.querySelectorAll('[data-sli],script,style').forEach(x => x.remove()); return k.innerText; }, id); }
@@ -230,6 +230,34 @@ TOOLS.secprop = {   // Section Property Calculator: library "Tags" (LIBF.tags te
     });
   },
   tableSel: '.libTagsHost',
+};
+TOOLS.stonearch = {   // Stone Masonry Arch: SDL line items and depth overrides (paste boxes + their tables), track offsets (table); all saved as text
+  file: 'Stone Masonry Arch Load Rating.html', a: 'd49d19a',
+  values: { sdlItems: 'Sidewalks (2), 800\nRailings (2), 120', dOver: '18, 19', tracks: '-6\n6' },
+  expect: JSON.stringify({ sdlItems: 'Sidewalks (2), 800\nRailings (2), 120', dOver: '18, 19', tracks: '-6\n6' }),
+  setup: async p => { await p.waitForTimeout(3000); },
+  template: async p => { await p.evaluate(() => { const s = document.getElementById('loadMode'); s.value = 'rail'; s.dispatchEvent(new Event('change', { bubbles: true })); }); await p.waitForTimeout(2500); },
+  typeOld: async (p, v) => { await p.evaluate(v => { for (const k of ['sdlItems', 'dOver', 'tracks']) { const t = document.getElementById(k); t.value = v[k];
+    t.dispatchEvent(new Event('input', { bubbles: true })); } }, v); },
+  typeNew: async (p, v) => { await p.evaluate(v => {   // paste into the first cell of each table, as from Excel
+    const paste = (sel, text) => { const i = document.querySelector(sel + ' tr[data-sli-r="0"] input[data-sli-c="0"]'), dt = new DataTransfer(); dt.setData('text', text);
+      i.dispatchEvent(new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true })); };
+    paste('#sdlItems + .sliPaste', v.sdlItems); paste('#dOver + .sliPaste', v.dOver); paste('#tracks + [data-sli="host"]', v.tracks); }, v); },
+  saved: p => p.evaluate(() => { const v = id => { const e = document.getElementById(id); return e ? e.value : null; };
+    return JSON.stringify({ sdlItems: v('sdlItems'), dOver: v('dOver'), tracks: v('tracks') }); }),
+  read: async p => {
+    await p.waitForTimeout(2500);
+    const out = await p.evaluate(() => { const st = JSON.parse(localStorage.getItem('stoneArchLR.autosave') || 'null'); if (st) { delete st.savedAt; delete st.t; delete st.ts; }
+      return { stored: st }; });   // the tool's state is inside a closure: the results are read from every output tab's text
+    const tabs = await p.$$eval('#outPanel button[data-tab]', e => e.map(b => b.getAttribute('data-tab'))); out.tabs = {};
+    for (const t of tabs) { if (t === 'rpt') continue; await p.click(`#outPanel button[data-tab="${t}"]`); await p.waitForTimeout(800);
+      out.tabs[t] = await p.evaluate(t => { const e = document.getElementById('pane_' + t); if (!e) return null; const k = e.cloneNode(true);
+        k.querySelectorAll('[data-sli],script,style,canvas,.js-plotly-plot').forEach(x => x.remove());
+        return k.innerText.replace(/ ?Computed in [\d.]+ s;[^.]*\./g, '').replace(/\s+/g, ' '); }, t); }   // a timing note, shown only when the sweep was not cached
+    return out;
+  },
+  tableSel: '#sdlItems + .sliPaste',
+  shotPrep: async p => { await p.evaluate(() => { const pn = document.getElementById('sdlItems').closest('[id^="inPane_"]'); document.getElementById(pn.id.replace('inPane_', 'inTab_')).click(); }); await p.waitForTimeout(400); },
 };
 TOOLS.index = {   // index.html (MCT generator, React): GFS bay 1 floorbeam spacings and stringer offsets (arrays). The AREMA girder spacings
   // (text arema_spacings) are drawn only once MIDAS results are loaded, which the offline kit has no fixture for: Node round trip only.
@@ -294,6 +322,12 @@ async function typeTable(p, sel, v) {
   for (let i = 0; i < vals.length; i++) { await p.keyboard.type(vals[i]); if (i < vals.length - 1) await p.keyboard.press('Enter'); }
   await p.keyboard.press('Tab');
 }
+// two values for the log: for two strings, the text around the first difference
+function showDiff(x, y) {
+  if (typeof x === 'string' && typeof y === 'string') { let i = 0; while (i < x.length && x[i] === y[i]) i++;
+    return `@${i}: ${JSON.stringify(x.slice(Math.max(0, i - 40), i + 80))} -> ${JSON.stringify(y.slice(Math.max(0, i - 40), i + 80))}`; }
+  return `${String(JSON.stringify(x)).slice(0, 120)} -> ${String(JSON.stringify(y)).slice(0, 120)}`;
+}
 async function tool(key) {
   const T = TOOLS[key]; console.log(`${key}: ${T.file}`);
   const A = refDir(args.a || T.a || 'origin/main', T.file), B = path.join(REPO, T.file);
@@ -311,6 +345,7 @@ async function tool(key) {
       r.errs = errs.filter(e => !(blocked.size && /^Failed to load resource/.test(e)) && !(T.ignore && T.ignore.test(e))); r.blocked = [...blocked];
       if (r.saved && typeof r.saved === 'object') delete r.saved.t;   // autosave time stamp
       if (side === 'B' && shots && kase === 'custom') {
+        if (T.shotPrep) await T.shotPrep(p);   // e.g. open the input tab that holds the table
         const box = p.locator(`${T.tableSel} [data-sli="box"], ${T.tableSel}[data-sli="box"]`).first();
         await box.scrollIntoViewIfNeeded();
         const bx = await box.boundingBox();
@@ -328,7 +363,7 @@ async function tool(key) {
     const sa = JSON.parse(JSON.stringify({ ...ra, errs: 0, over: 0, blocked: 0 })), sb = JSON.parse(JSON.stringify({ ...rb, errs: 0, over: 0, blocked: 0 }));
     if (rb.blocked.length) console.log('       (blocked offline: ' + rb.blocked.join(', ') + ')');
     const d = diff(sa, sb);
-    ok(!d.length, `${kase}: results, page text and saved data identical (hash ${hash(sa)} / ${hash(sb)})` + (d.length ? '\n       ' + d.slice(0, 8).map(x => `${x[0]}: ${String(JSON.stringify(x[1])).slice(0, 120)} -> ${String(JSON.stringify(x[2])).slice(0, 120)}`).join('\n       ') : ''));
+    ok(!d.length, `${kase}: results, page text and saved data identical (hash ${hash(sa)} / ${hash(sb)})` + (d.length ? '\n       ' + d.slice(0, 8).map(x => `${x[0]}: ` + showDiff(x[1], x[2])).join('\n       ') : ''));
     const want = T.expect || T.values;
     if (kase === 'custom') ok(ra.savedText === want && rb.savedText === want, `custom: saved text "${rb.savedText}" (A "${ra.savedText}")`);
     if (rb.over != null) ok(rb.over <= (T.over || 1), `390 px: page does not scroll sideways (${rb.over}` + (T.over ? `; ${T.over} px on main before the change` : '') + ')');
