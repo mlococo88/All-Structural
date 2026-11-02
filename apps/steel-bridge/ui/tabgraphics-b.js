@@ -8,7 +8,7 @@
      fatigue(host, ctx, R, onSel)    names fatigue, fatigue-chart       (k fa, sc)
      crossframe(host, ctx, B)        name crossframe                    (B = SBDFramingUI.build result)
      welds(host, ctx, B, sel, onSel) names welds, weld-detail           (k fw, tr)
-     splice(host, ctx, s)            name splice                        (s = one entry of the splice list)
+     splice(host, ctx, s, list, sel, onSel)  names splice-strip, splice (s = one entry of the splice list, list = all, sel its index; onSel(i))
      rating(host, ctx, B, sel, onSel) name rating                       (sel = the row index; onSel({ k: 'rt', i }))
    ctx = { P, g } as the tab's render; sel is the tab's current selection ({ k, i }, or the row index for the Rating tab). */
 (function () {
@@ -24,13 +24,13 @@
     return { D: g.D, regions: regs, title: g.title, file, note: g.note || (regs.length ? 'Click a location to select it in the tables below.' : ''), pick, readout: v => { const r = find(v); return r && r.lab ? r.lab : ''; },
       selMark: v => { const r = find(v); return r ? { x: (r.x0 + r.x1) / 2, y0: r.y0, y1: r.y1, label: '' } : null; } };
   }
-  function put(host, name, ctx, make, onSel) {
+  function put(host, name, ctx, make, onSel, extra) {   // extra: more SBDGraphics.mount options (maxVh, minPx, phoneZoom)
     const el = host.querySelector(`[data-gfxb="${name}"]`), GRX = GR(), TX = T(); if (!el) return null;
     if (!GRX || !TX) { el.innerHTML = '<p class="note">The graphic needs ui/graphics.js and engine/tabgraphics-b.js.</p>'; return null; }
     // the tab redraws on a selection; a double-click (fit the view) must not: the redraw waits a moment and a double-click cancels it
     let timer = null; const sel = onSel ? v => { if (!v) return; clearTimeout(timer); timer = setTimeout(() => onSel(v), 350); } : null;
     el.addEventListener('dblclick', () => clearTimeout(timer));
-    const H = GRX.mount(el, () => wrap(make(TX), `${slug(ctx.P)}_${name}`), { key: `gfxb-${name}`, onSelect: sel });
+    const H = GRX.mount(el, () => wrap(make(TX), `${slug(ctx.P)}_${name}`), { key: `gfxb-${name}`, onSelect: sel, ...(extra || {}) });
     if (H) (window.SBDTabGfxBUI.handles = window.SBDTabGfxBUI.handles || {})[name] = H;   // the mounted graphics (tests)
     return H;
   }
@@ -51,7 +51,12 @@
     put(host, 'welds', ctx, TX => TX.welds(B, ctx.P, { gi: gi(ctx), sel }), onSel);
     put(host, 'weld-detail', ctx, TX => TX.weldDetail(B, ctx.P, { i: sel && sel.k === 'fw' ? sel.i : undefined }));
   }
-  function splice(host, ctx, s) { if (s) put(host, 'splice', ctx, TX => TX.splice(s, {})); }
+  /* splice (SPLGFX, 2026-11-02): the location strip (all splices, the selected one boxed; a click selects) and the detail of the selected splice, its frame at most
+     60 % of the window high (the drawing is wide: it fits the card width at a reading scale) */
+  function splice(host, ctx, s, list, sel, onSel) {
+    if (list && list.length) put(host, 'splice-strip', ctx, TX => TX.spliceStrip(list, ctx.P, { sel, narrow: window.innerWidth < 700 }), onSel ? v => { if (v && v.k === 'fs') onSel(v.i); } : null, { minPx: 60, phoneZoom: false });
+    if (s) put(host, 'splice', ctx, TX => TX.splice(s, {}), null, { maxVh: 60 });
+  }
   function rating(host, ctx, B, sel, onSel) { put(host, 'rating', ctx, TX => TX.ratingChart(B, ctx.P, { gi: gi(ctx), sel }), onSel); }
 
   window.SBDTabGfxBUI = { shear, fatigue, crossframe, welds, splice, rating, wrap };

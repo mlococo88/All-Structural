@@ -15,7 +15,7 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const fmt = (x, d) => window.SharedUnits.fmt(x, d);
   const SP = () => window.SBDSplices;
-  const S = { R: null, key: '', sel: 0, err: '', open: {} };
+  const S = { R: null, key: '', sel: 0, err: '', open: {}, d3: false };
   const tt = t => esc(t).replace(/_\{?([A-Za-z0-9,]+)\}?/g, '<sub>$1</sub>');
   const cls = (r, st) => st === 'fail' ? 'sp-ng' : st === 'warn' ? 'sp-hi' : st === 'adv' ? 'sp-adv' : !isFinite(r) ? '' : r >= 0.9 ? 'sp-hi' : 'sp-ok';
   const ST = { pass: 'OK', fail: 'NG', warn: 'warning', adv: 'advisory', na: 'n/a' };
@@ -89,7 +89,7 @@
     if (document.getElementById('sp-css')) return;
     const st = document.createElement('style'); st.id = 'sp-css';
     st.textContent = `.sp-ok{background:#e7f4ec;} .sp-hi{background:#fdf3d8;} .sp-adv{background:#eef4fb;} .sp-ng{background:#fbe1dd;font-weight:600;} tr.sp-sel{background:#eef4fb;} .sp-list tr[data-spsel]{cursor:pointer;}
-      details.sp-ck{border-bottom:1px dotted var(--line);padding:2px 0;} details.sp-ck summary{cursor:pointer;font-family:var(--font-ui);font-size:9pt;} .sp-dwg{border:1px solid var(--line);margin:6px 0;padding:4px;background:#fff;}`;
+      details.sp-ck{border-bottom:1px dotted var(--line);padding:2px 0;} details.sp-ck summary{cursor:pointer;font-family:var(--font-ui);font-size:9pt;} details.sp-3d{border:1px solid var(--line);margin:4px 0 10px;background:#fff;} details.sp-3d>summary{cursor:pointer;padding:5px 8px;font-family:var(--font-ui);font-size:10pt;font-weight:600;} details.sp-3d .d3{margin:0;border:0;border-top:1px solid var(--line);} [data-gfxb="splice-strip"] .sdx-btns{display:none!important;}`;
     document.head.appendChild(st);
   }
   const key = ctx => JSON.stringify([ctx.P, ctx.g]);
@@ -186,8 +186,11 @@
     if (src === 'custom' && CD) CD.wire(host, P, 'spl', ctx.g, () => (ctx.changed ? ctx.changed(false) : redraw()));
     on('[data-spsel]', 'click', e => { S.sel = +e.currentTarget.dataset.spsel; redraw(); });
     on('[data-gotab]', 'click', e => { e.preventDefault(); const b = document.querySelector(`#tabBar [data-otab="${e.currentTarget.dataset.gotab}"]`); if (b) b.click(); });
-    if (S.R && !stale && !S.err && window.SBDTabGfxBUI) window.SBDTabGfxBUI.splice(host, ctx, S.R.list[S.sel]);
-    if (S.R && !stale && !S.err && window.SBDDetail3D) window.SBDDetail3D.splice(host, ctx, S.R, S.sel, i => { S.sel = i; redraw(); });   // 3D view of the selected splice (display only)
+    if (S.R && !stale && !S.err && window.SBDTabGfxBUI) window.SBDTabGfxBUI.splice(host, ctx, S.R.list[S.sel], S.R.list, S.sel, i => { S.sel = i; redraw(); });   // strip and detail (SPLGFX)
+    // 3D view of the selected splice (display only), drawn when its card is open (SPLGFX: collapsed by default; open or closed kept for the page view only)
+    const d3 = () => { if (S.R && !stale && !S.err && window.SBDDetail3D) window.SBDDetail3D.splice(host, ctx, S.R, S.sel, i => { S.sel = i; redraw(); }); };
+    on('details.sp-3d', 'toggle', e => { S.d3 = e.currentTarget.open; if (S.d3) d3(); });
+    if (S.d3) d3();
     on('#sp_keep', 'click', () => { const q = S.R && S.R.list[S.sel]; if (!q) return; const Q = P.splices, gi = ctx.g || 0;
       Q.plates = (Q.plates || []).filter(z => !(Math.abs(+z.x - q.x) < 1e-6 && (z.g == null || +z.g === gi)));
       Q.plates.push({ x: q.x, g: gi, top: { ...q.p.top }, bot: { ...q.p.bot }, web: { ...q.p.web } }); Q.auto = false; if (ctx.changed) ctx.changed(true); else redraw(); });
@@ -204,9 +207,11 @@
     if (s.design) h += `<p class="note"><b>Auto-design${s.design.ok ? '' : ' (not every check passes)'}:</b> ${esc(s.design.msg)}</p>`;
     if (R && !R.errors.length) {
       h += `<p class="note">Top flange: ${plTxt(R.fl.top)}. Bottom flange: ${plTxt(R.fl.bot)}. Web: 2 PL ${X.frac(R.web.hw)} × ${X.frac(R.web.twp)}, ${R.web.nrw} rows × ${R.web.ncw} column${R.web.ncw > 1 ? 's' : ''} each side. Bolts ${X.frac(R.bolt.d)} in ${esc(s.p.bolts.gr)}; plates ${esc(s.p.sec.gP)}. <button type="button" id="sp_keep" title="Copy these plates and bolts to the Splices tab as entered values (auto-design off)">Keep these plates</button></p>`;
-      h += '<div data-gfxb="splice"></div>';   // the splice drawing with the governing plate and bolt group highlighted (ui/tabgraphics-b.js)
-      h += '<div data-d3="splice"></div>';   // the 3D view of the splice (ui/detail3d.js)
-      const dw = X.svg(R); if (dw) h += `<div class="sp-dwg">${dw.flange}</div><div class="sp-dwg">${dw.web}</div><p class="note">Plan of the bottom flange splice (outer plate, bolt pattern) and elevation of the web splice; to scale.</p>`;
+      /* SPLGFX (2026-11-02, engineer: the graphics were oversized and drawn twice): one location strip, one 2D detail (flange plans and web elevation, dimensioned,
+         the governing plate and bolt group highlighted; ui/tabgraphics-b.js), the 3D view collapsed until opened (ui/detail3d.js). The simple SVG plan and
+         elevation of engine/splices.js svg() repeated the 2D detail at about 4 x scale (46 px text) and are no longer shown. */
+      h += '<div data-gfxb="splice-strip"></div><div data-gfxb="splice"></div>';
+      h += `<details class="sp-3d"${S.d3 ? ' open' : ''}><summary>3D model (rotate, zoom, layers)</summary><div data-d3="splice"></div></details>`;
     } else if (R) h += `<div class="alert err">${R.errors.map(esc).join('<br>')}</div>`;
     h += '</div></section>';
     if (!s.CK) return h;

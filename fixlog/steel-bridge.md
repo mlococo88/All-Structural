@@ -3486,3 +3486,42 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 - Browser (Playwright, 1280 and 390 px): both cards draw, 0 console errors, no horizontal scroll; three.js removed → the message.
 ### Other copies
 - None.
+
+## 2026-11-02 — PR: claude/sbd-splice-gfx — Field splices tab: one set of graphics, sized like the other tabs (SPLGFX; display only)
+### Why
+- Engineer: "The field [splice] graphics seem to be out of place. They are very large in scale and duplicative of other graphics that are on the sheet."
+- Inventory before (built-in project, FS1, card 804 px wide at 1280): (1) the Drawings-style detail (flange plans + web elevation), frame 822 px
+  high with a band of empty space under it (the bolt note at y = −8h); (2) the 3D card, open, 554 px; (3) a plain SVG plan of the bottom flange
+  splice (engine/splices.js `svg()`), 536 px high, 46 px text cut off at both sides; (4) a plain SVG web elevation, 1,293 px high, 46 px text.
+  (3) and (4) repeated (1) at about 4× scale; (1) also has the notes running over the girder flanges and plate-size dimension text wider than
+  the plate. Report: the same plain SVGs as one figure per splice, 2,858 px high in print. No graphic showed where the splice is on the girder.
+### What changed
+- `ui/splices.js` `splice()` (anchor `h += '<div data-gfxb="splice"></div>';`): the two plain SVGs (`X.svg(R)`, `.sp-dwg`) are no longer shown;
+  now `<div data-gfxb="splice-strip"></div><div data-gfxb="splice"></div>` and the 3D card inside `<details class="sp-3d">` (collapsed by default;
+  open / closed kept in `S.d3` for the page view only, no storage). `render()`: `SBDTabGfxBUI.splice(host, ctx, S.R.list[S.sel], S.R.list, S.sel, onSel)`;
+  `SBDDetail3D.splice(...)` only when the card is open (on its `toggle`), so the 3D view starts framed at its real size. CSS: `.sp-dwg` rule replaced
+  by `details.sp-3d…`, and the strip hides its +/−/Fit buttons (wheel, pinch, double-click still work).
+- `ui/tabgraphics-b.js` `put(..., extra)`: extra mount options; `splice(host, ctx, s, list, sel, onSel)` mounts the strip (`minPx: 60`, `phoneZoom: false`;
+  a click selects the splice in the tab) and the detail (`maxVh: 60`).
+- `ui/graphics.js` `mount()`: two optional options, `minPx` (smallest frame height, default 200 px as before) and `phoneZoom: false` (no reading-scale
+  start at phone width). Defaults unchanged for every other graphic.
+- `engine/tabgraphics-b.js`: new `spliceStrip(list, P, opt)` (girder line, supports S1…, each FS marker in the colour of its governing ratio `s.gov`,
+  labels staggered, selected one boxed; regions `{ k: 'fs', i }`). `splice()`: flange notes start past the girder ends (`xEnd`) and name the outer plate
+  (the plate dimension now shows the length only, `<>`); web plate length dimensioned; the gap dimension (text wider than the gap) replaced by
+  "GAP … BETWEEN THE GIRDER ENDS" in the bottom note; bottom note at `webY0 − 5.6h` (was −8h); plans 8h apart (was 12h); title 2.4h above the note (was 3.8h).
+- `report/builders.js` `spl()`: `splFig()` — the strip once in "Splices of …" and the detail per splice (`tightSvg`, width set for about 11 px text,
+  max 100 %); the plain `SP.svg` figure stays only as the fallback when the graphics modules are not loaded. 3D is screen only.
+- `tests/engine/graphics-overlap.test.mjs`: the strip of every splice, wide and narrow, added.
+- engine/splices.js not changed (`svg()` kept for the fallback).
+### §4 callout
+- None: display only. No formula, factor, unit, reference, key or saved format changed.
+### Check case
+- Built-in project, splices 82, 145, 215, 278 ft, G1: strip shows FS1–FS4 between S1–S4, amber markers (FS1 governing BF4, 0.997); detail of FS1:
+  web 2 PL 57 × 7/16, 11 rows × 2 col., plate 1'-1 1/2"; top outer PL 16 × 7/16 × 1'-7 1/2"; bottom outer PL 16 × 5/8 × 2'-1 1/2", as the tab text.
+  At 1280: strip 134 px, detail 570 px (text 11–12 px), 3D card 27 px closed (was 822 + 554 + 536 + 1,293 px).
+### How verified
+- Results and worked steps hash (Node, `SBDSplicesUI.build` + `stepsOf`, 4 splices, 748 steps), origin/main vs branch: identical sha256.
+- `node tests/engine/run.mjs splices tabgraphics-b graphics-overlap report report-wiring graphics gfxa`; `node tests/check-syntax.mjs`.
+- Browser (Playwright, 1280 and 390): 0 console errors, no horizontal scroll; 3D card opens framed and stays open on another splice.
+### Other copies
+- None.

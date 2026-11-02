@@ -32,7 +32,8 @@
      G.mark(E, label, value) -> adds the selected-station layer (SEL) to E's drawing: used when the graphic is built for a given selection
      G.mount(el, build, opts) -> H: draws a graphic into el with a title, a Download DXF button, the zoom / pan viewer and a legend note.
          build() returns { D, title, file, note, pick(x, y) -> value, selMark(value) -> { x, y0, y1, segs: [[y0, y1] ...] (optional: one line per band), label }, readout(value) -> text }.
-         opts: { key (keeps the zoom and pan across re-draws of the same view), height, selected, onSelect(value), onHover(value), print note }.
+         opts: { key (keeps the zoom and pan across re-draws of the same view), height, selected, onSelect(value), onHover(value), print note, maxVh (the frame's
+         largest height, % of the window), minPx (its smallest, default 200 px), phoneZoom (false: the phone view starts fit, as the desktop: a small strip) }.
          Clicking (not dragging) a location calls opts.onSelect(pick(x, y)); H.select(value) moves the highlight without rebuilding
          (live overlay, not in the DXF); hovering shows readout(value) (mouse only).
          H = { select(v), viewer, el, graphic, dxf() }
@@ -317,7 +318,7 @@
     const fit = measureFit(svg);
     if (fit) svg = svg.replace(/viewBox="[^"]*"/, `viewBox="${fit.map(v => +v.toFixed(3)).join(' ')}"`);
     const bw0 = fit ? fit[2] : b[2] - b[0] + 2 * pad, bh0 = fit ? fit[3] : b[3] - b[1] + 2 * pad, cw = el.clientWidth || 900, maxPx = (opts.maxVh || (mobile ? 62 : 88)) / 100 * (window.innerHeight || 800);
-    const VW = H.viewer = X_().viewer(box, svg, { height: opts.height || `${Math.round(Math.max(200, Math.min(maxPx, cw * bh0 / bw0 + 4)))}px` });
+    const VW = H.viewer = X_().viewer(box, svg, { height: opts.height || `${Math.round(Math.max(opts.minPx != null ? opts.minPx : 200, Math.min(maxPx, cw * bh0 / bw0 + 4)))}px` });
     const sv = H.el = VW.el, ns = 'http://www.w3.org/2000/svg';
     // restore the zoom and pan of the same view (same fit box), by zooming about a chosen point (the viewer's API has no pan)
     const base = sv.getAttribute('viewBox'), kp = opts.key && KEEP[opts.key];
@@ -330,7 +331,7 @@
     } catch (e) { /* the view is just fit */ } }
     // phone width: start at a reading scale (the smaller text of the figure at 9 px or more, at most 8 x), at the top left of the drawing, and pan from there; the desktop view
     // and the print are unchanged (the full view is restored for printing)
-    if (mobile && !(kp && kp.base === base && kp.vb !== base)) { try {
+    if (mobile && opts.phoneZoom !== false && !(kp && kp.base === base && kp.vb !== base)) { try {
       const v0 = base.split(/\s+/).map(Number), r = sv.getBoundingClientRect(), fs = [...sv.querySelectorAll('text')].map(t => +t.getAttribute('font-size')).filter(q => q > 0).sort((a, b) => a - b);
       if (r.width > 0 && r.height > 0 && fs.length) { const k = Math.max(v0[2] / r.width, v0[3] / r.height), f = Math.min(8, 9 * k / fs[Math.floor(fs.length * 0.15)]);
         if (f > 1.05) { VW.zoom(f, r.left, r.top); const bv = sv.getAttribute('viewBox'); H.phoneView = bv;
