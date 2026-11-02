@@ -1304,7 +1304,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 13 tabs, the whole-document `textContent` and localStorage after load are identical.
 - Screenshots at 900 and 1280 px are identical, except 2–3 px on the Report tab (anti-aliasing).
 
-## 2026-11-02 — PR: claude/report-retire-aci (RBRX: the D11 print report retired after porting what the Report tab lacked; Print / PDF Report and the browser's Print print the Report from every tab; display only, no result change; rbrModel synced to Concrete Beam Capacity.html)
+## 2026-11-02 — PR: claude/report-retire-aci, PR #685: https://github.com/mlococo88/All-Structural/pull/685 (RBRX: the D11 print report retired after porting what the Report tab lacked; Print / PDF Report and the browser's Print print the Report from every tab; display only, no result change; rbrModel synced to Concrete Beam Capacity.html)
 
 ### RBRX-1. Content of the D11 print report ported into the Report tab   [display] [no result change]
 - **Engineer request (2026-11-02):** retire the old print reports where the Report tab is complete, the same method as lldf #623, Light Pole #625, Shear and Moment #672 and elastomeric #676: compare every number and section of the old report with the Report on the tool's cases, port what is missing (the tool's own values and text, no recomputation), then remove the old report and print the Report from every tab.
