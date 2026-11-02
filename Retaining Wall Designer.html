@@ -591,6 +591,9 @@ a.wkA:hover { text-decoration: underline; }
   input[type=number], input[type=text], select, textarea { font-size: 16px; height: 40px; }
   .tab-panel [style*="grid-template-columns:1fr 330px"] { grid-template-columns: 1fr !important; }
 }
+/* PHN (2026-11-02): phone / tablet screen: an equation wider than its box starts at the left edge, so all of it can be scrolled
+   to (centred, its left part was cut off and could not be reached); screen only, print unchanged */
+@media screen and (max-width: 899px) { .eq-math { justify-content: flex-start; } }
 
 @media print {
   header, .side, .tab-bar, .status-bar { display: none !important; }
