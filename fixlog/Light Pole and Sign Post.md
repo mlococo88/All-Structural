@@ -1635,7 +1635,7 @@ Basis: the deep review of 2026-11-01 (findings LP-R0…LP-R24) and the engineer'
 - **How verified:** `node tests/lightpole-compare.mjs` (origin/main vs working tree, 14 cases): results identical in all 14, drawings identical, console errors 0/0; the only text difference is this line now appearing on the Shaft tab (it was an error box before, so the harness read no TeX for it): 12 cases +1 line, 2 two-post sign cases +2 lines; no other line differs, Report text identical.
 - **Other copies:** none.
 
-## 2026-11-02 — PR #PRNUM: claude/lp-lts-1 (LTS-1: AASHTO LRFDLTS code mode — basis, MRI, Table 3.4-1 combinations; IBC mode unchanged)
+## 2026-11-02 — PR #649 (https://github.com/mlococo88/All-Structural/pull/649): claude/lp-lts-1 (LTS-1: AASHTO LRFDLTS code mode — basis, MRI, Table 3.4-1 combinations; IBC mode unchanged)
 
 Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AASHTO LRFDLTS 1st Ed. (2015) with the 2017 Interim Revisions, later interims not applied (coordinator decision Q-B1: stated on screen and in the report).
 
