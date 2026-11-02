@@ -6935,13 +6935,13 @@ if($('lpAnchExport')) $('lpAnchExport').addEventListener('click',()=>{
 const LTS_STATUS=[
   ['LTS-1','Code mode, basis, MRI (Table 3.8-1), load combinations (Table 3.4-1)',true],
   ['LTS-2','Wind pressure P_z, K_z, K_d, G, C_d (Arts. 3.8.1–3.8.7), load cases (Table 3.9.3-1), torsion (Art. 3.9.4.2), dead load and ice, factored base actions',true],
-  ['LTS-3','Member checks (Section 5) and second-order B₂ (Art. 4.8.1)',false],
+  ['LTS-3','Member checks (Section 5: Arts. 5.7, 5.8, 5.10, 5.11, 5.12) and second order (Art. 4.8.1 / Eq. 5.12.1-10)',true],
   ['LTS-5','Deflection (Art. 10.4.2.1), fatigue applicability (Arts. 11.4, 11.7.2), breakaway checklist',false],
   ['LTS-6','Base plate and base weld',false],
   ['LTS-7','Foundation (Section 13, Broms)',false],
   ['LTS-8','Anchorage-app export of the LTS combinations',false],
   ['LTS-9','Report, drawings, manual',false]];
-const LTS_PAGE_PR={geometry:'LTS-3',post:'LTS-3',anchors:'LTS-8',shaft:'LTS-7',drawings:'LTS-9',report:'LTS-9'};
+const LTS_PAGE_PR={geometry:'LTS-9',anchors:'LTS-8',shaft:'LTS-7',drawings:'LTS-9',report:'LTS-9'};
 function ltsClear(){ document.querySelectorAll('.ltsCard').forEach(e=>e.remove()); lppLtsLast=null; }
 let lppLtsLast=null;   // LTS-2: the last LRFDLTS run {g, L, ba}
 // LTS-2: the geometry the LTS engine reads, from the IBC inputs of the same run (inp) and the fixture / sign rows
@@ -6951,8 +6951,23 @@ function ltsGeom(inp,L){
   return {mode:sign?'sign':'pole', shape:inp.poleShape||'round', H:inp.H, Dtop:inp.poleDiaTop, Dbase:inp.poleDiaBase, rs:L.rs||0,
     fixtures:sign?[]:fixtures.map(x=>({hf:+x.hf||0, th:+x.th||0, a:+x.a||0, epa:+x.epa||0, W:+x.W||0, armD:+x.armD||0})),
     sign:sign?{B:inp.signB, s:inp.signS, clr:inp.signClr, W:inp.signWt, nPost, spacing:inp.signSpacing}:null,
-    DCpole:ps.totalW*nPost, DL:inp.DL};
+    DCpole:ps.totalW*nPost, DL:inp.DL, taper:!!inp.poleTaper, Ht:(inp.poleShape==='rect'?inp.poleDepthBase:0)};
 }
+// LTS-3: the check sections (z = 0 to H in 20 steps) with their properties (the tool's hssProps) and the self-weight above
+function ltsSections(inp){
+  const H=inp.H, sh=inp.poleShape||'round', taper=!!inp.poleTaper, N=20, den=inp.poleDen;
+  const dimAt=z=>{ const f=taper?(H-z)/H:1;
+    const B=inp.poleDiaTop+(inp.poleDiaBase-inp.poleDiaTop)*f, t=inp.poleTwTop+(inp.poleTwBase-inp.poleTwTop)*f, Ht=inp.poleDepthTop+(inp.poleDepthBase-inp.poleDepthTop)*f;
+    return sh==='round'?{D:B,t}:sh==='square'?{B,t}:{B,Ht,t}; };
+  const M=400, dz=H/M, wAt=[]; let acc=0;   // self-weight above each slice boundary, from the top down
+  for(let i=M;i>=0;i--){ wAt[i]=acc; if(i>0){ const zm=(i-0.5)*dz; acc+=hssProps(sh,dimAt(zm)).A/144*dz*den; } }
+  const secs=[];
+  for(let k=0;k<=N;k++){ const z=H*k/N, d=dimAt(z), p=hssProps(sh,d);
+    secs.push({z, shape:sh, D:(sh==='round'?d.D:undefined), B:(sh==='round'?d.D:d.B), Ht:(sh==='rect'?d.Ht:(sh==='square'?d.B:d.D)), t:d.t,
+      A:p.A, Ix:p.Ix, Iy:p.Iy, Sx:p.Sx, Sy:p.Sy, Zx:p.Zx, Zy:p.Zy, rx:p.rx, ry:p.ry, Wabove:wAt[Math.round(z/dz)]}); }
+  return secs;
+}
+
 function ltsInputs(){
   return {risk:($('ltsRisk')?$('ltsRisk').value:'typical'), adt:($('ltsAdt')?$('ltsAdt').value:'1kto10k'),
     V:num('ltsV'), Vsvc:num('ltsVsvc'), tIce:Math.max(0,num('ltsIce')||0), rs:Math.max(0,num('ltsRs')||0), sign:appMode==='sign', signPosts};
@@ -6977,23 +6992,13 @@ function ltsCalc(){
   if($('ltsMriNote')) $('ltsMriNote').textContent=mriTxt;
   if($('ltsVNote')) $('ltsVNote').textContent=`3-s gust at 33 ft, Exposure C, ${m.fig} (${m.mri}-yr MRI)`;
   const basis=`<p class="lts-basis"><b>Basis:</b> ${lppEsc(LpLts.BASIS)}.</p>`;
-  // Summary
-  ltsAddCard('summary','ltsSumCard','✓','LRFDLTS summary','AASHTO LRFDLTS mode',
-    basis+ltsDevHTML()
-    +`<table class="tbl"><tr><th>Item</th><th>Value</th><th>Reference</th></tr>`
-    +`<tr><td>Structure</td><td>${L.sign?(L.signPosts===2?'Two-post roadside sign':'Monopost roadside sign'):'Luminaire pole'}</td><td>—</td></tr>`
-    +`<tr><td>Extreme I wind MRI</td><td>${m.mri} yr (${m.fig}); V = ${fmt(L.V,0)} mph</td><td>Table 3.8-1 (p. 3-5)</td></tr>`
-    +`<tr><td>Service I wind</td><td>10 yr (Fig. 3.8-4); V<sub>svc</sub> = ${fmt(L.Vsvc,0)} mph</td><td>Table 3.4-1, Art. 3.8.2 (pp. 3-3, 3-14)</td></tr>`
-    +`<tr><td>Atmospheric ice</td><td>${L.tIce>0?fmt(L.tIce,2)+' in, Strength I only <span class="lts-flag">engineer to confirm</span>':'none'}</td><td>Art. 3.7, C3.7 (p. 3-4)</td></tr>`
-    +`</table><p class="tbl-note">Status of the LRFDLTS mode:</p><table class="tbl"><tr><th>Step</th><th>Content</th><th>Status</th></tr>`
-    +LTS_STATUS.map(r=>`<tr><td>${r[0]}</td><td>${lppEsc(r[1])}</td><td>${r[2]?'done':'pending'}</td></tr>`).join('')+`</table>`);
   // Loading: MRI and Table 3.4-1
   const rows=LpLts.COMBOS.map(c=>`<tr><td>${lppEsc(c.name)}</td><td>${lppEsc(c.desc)}</td><td>${c.DC}</td><td>${L.tIce>0&&c.ICE?c.ICE:'—'}</td><td>${c.W?fmt(c.W,1):'—'}</td><td>${c.wind==='extreme'?`${m.mri}-yr, V = ${fmt(L.V,0)} mph`:c.wind==='service'?`10-yr, V<sub>svc</sub> = ${fmt(L.Vsvc,0)} mph`:'—'}</td><td>${lppEsc(c.ref)}</td></tr>`).join('');
   ltsAddCard('loading','ltsComboCard','L','LRFDLTS load combinations','Table 3.4-1',
     basis+ltsStepsHTML(m.steps)
     +`<table class="tbl"><tr><th>Limit state</th><th>Use</th><th>γ<sub>DC</sub></th><th>γ<sub>IC</sub></th><th>γ<sub>W</sub></th><th>Wind</th><th>Reference</th></tr>${rows}</table>`
     +`<p class="tbl-note">LL (Art. 3.6) applies to walkways and service platforms only: not applicable to these supports. There is no ice-plus-wind combination (C3.7). `
-    +`Ice, when the Owner specifies it (Art. 3.7), is applied in Strength I with the dead load factor <span class="lts-flag">engineer to confirm (Q-C1)</span>. `
+    +`Ice, when the Owner specifies it (Art. 3.7), is applied in Strength I with the dead load factor (decision Q-C1, accepted by the engineer 2026-11-02). `
     +`Wind from any direction: load cases 1–3 of Table 3.9.3-1 (LTS-2). Service III (prestressed concrete) and Fatigue I/II are not used (fatigue design is not required for these supports, Arts. 11.4 and 11.7.2; LTS-5).</p>`
     +`<p class="tbl-note">Member forces along the pole and the checks follow in LTS-3 to LTS-7.</p>`);
   // LTS-2: wind, dead load, ice and the factored base actions
@@ -7008,11 +7013,38 @@ function ltsCalc(){
       basis+ltsStepsHTML(ws)
       +`<p class="tbl-note">Dead load DC = ${fmt(gr.W,0)} lb (support self-weight${g.mode==='sign'?', post(s)':''}, misc. dead load${g.mode==='sign'?', panel':', fixtures'}; Art. 3.5, p. 3-4)`
       +`${gr.Mx||gr.My?`; eccentric fixture weight moment ΣW·e: M<sub>x</sub> = ${fmt(gr.Mx,0)}, M<sub>y</sub> = ${fmt(gr.My,0)} lb·ft`:''}. `
-      +`${L.tIce>0?`Ice (t = ${fmt(L.tIce,2)} in, 56 pcf; supports, two faces of each fixture EPA, one face of the panel; Art. 3.7): W<sub>IC</sub> = ${fmt(gr.Wice,0)} lb, Strength I only <span class="lts-flag">engineer to confirm (Q-C1)</span>.`:'No ice (none specified, Art. 3.7).'}</p>`
+      +`${L.tIce>0?`Ice (t = ${fmt(L.tIce,2)} in, 56 pcf; supports, two faces of each fixture EPA, one face of the panel; Art. 3.7): W<sub>IC</sub> = ${fmt(gr.Wice,0)} lb, Strength I only (decision Q-C1, accepted 2026-11-02).`:'No ice (none specified, Art. 3.7).'}</p>`
       +`<p class="tbl-note">Factored base actions${per}, first order (the second-order amplification B<sub>2</sub>, Art. 4.8.1, is applied to the bending in the member checks, LTS-3). Load cases per Table 3.9.3-1 (p. 3-24): 1 normal, 2 transverse, 3 = 0.75 of both together. `
       +`Sign convention as the Anchorage hand-off: P compression +; M<sub>x</sub> = moment of a push toward +x; T torsion about the axis. lb, lb·ft. Largest Extreme I moment in bold.</p>`
       +`<div style="overflow-x:auto"><table class="tbl"><tr><th>Limit state</th><th>Load case</th><th>P</th><th>V<sub>x</sub></th><th>V<sub>y</sub></th><th>M<sub>x</sub></th><th>M<sub>y</sub></th><th>|M|</th><th>T</th></tr>${tr}</table></div>`);
+    // LTS-3: member checks along the pole / post (Section 5), second order (Art. 4.8.1 / Eq. 5.12.1-10)
+    const Fy=inp.poleFy, secs=ltsSections(inp), mc=LpLts.memberCheck(g,L,secs,Fy), ms=LpLts.memberSteps(mc,Fy,g);
+    lppLtsLast.mc=mc;
+    const warn=[];
+    if(inp.poleShape!=='round') warn.push(`Square / rectangular tube: LRFDLTS Art. 5.6.2 (p. 5-6) covers round and multi-sided tubular supports; C5.6.2 advises against square and rectangular sections for highway sign, signal and high-level luminaire supports${g.mode==='pole'?' and C11.4 notes that square lighting poles are much more prone to fatigue':''}. Warning only (coordinator decision Q-B6).`);
+    const tmin=Math.min(inp.poleTwTop,inp.poleTwBase);
+    if(tmin<0.125*0.9) warn.push(`Wall ${fmt(tmin,4)} in is below the 0.125 in minimum for pole-type supports (Art. 5.6.1, p. 5-6; small roadside sign supports may be thinner).`);
+    if(!mc.valid) warn.push('The simplified second-order method of Art. 4.8.1 is not valid for this pole (kL/r below 2π√(E/F<sub>y</sub>), or P reaches the buckling load): a detailed second-order analysis (Art. 4.8.2) is required. The member check is reported as failing.');
+    const mrows=mc.rows.map(r=>`<tr${r===mc.gov?' style="font-weight:700;background:#fff7e6"':''}><td>${fmt(r.sec.z,2)}</td><td>${r.sec.shape==='round'?fmt(r.sec.D,3)+' × '+fmt(r.sec.t,4):fmt(r.sec.B,2)+(r.sec.shape==='rect'?' × '+fmt(r.sec.Ht,2):'')+' × '+fmt(r.sec.t,4)}</td><td>${fmt(r.cl.lam,1)}</td><td>${r.mx.cls}</td><td>${fmt(r.Mrx,1)}</td><td>${fmt(r.Pr,1)}</td><td>${fmt(r.Vr,1)}</td><td>${fmt(r.Tr,1)}</td><td>${lppEsc(r.gov.comboName)}; ${lppEsc(r.gov.lcName)}</td><td>${fmt(r.gov.Mu,1)}</td><td>${r.gov.eq}</td><td>${isFinite(r.gov.ratio)?fmt(r.gov.ratio,3):'λ > λ<sub>max</sub>'}</td></tr>`).join('');
+    const ok=mc.gov.gov.ratio<=1&&mc.valid;
+    ltsAddCard('post','ltsMemberCard','5',(g.mode==='sign'?'Post':'Pole')+' — LRFDLTS member check','Section 5; Arts. 4.8.1, 5.12.1',
+      basis+(warn.length?`<p class="lts-dev">${warn.join('<br>')}</p>`:'')
+      +`<p class="lts-basis"><b>${ok?'OK':'NOT OK'}</b> — governing ratio ${isFinite(mc.gov.gov.ratio)?fmt(mc.gov.gov.ratio,3):'∞'} at z = ${fmt(mc.gov.sec.z,2)} ft (${lppEsc(mc.gov.gov.comboName)}, ${lppEsc(mc.gov.gov.lcName)}${g.mode==='sign'&&g.sign.nPost===2?', per post':''}).</p>`
+      +ltsStepsHTML(ms)
+      +`<p class="tbl-note">Every section from the base to the top (21 sections); the strength limit states of Table 3.4-1 (Strength I, Extreme I max and min) and the 8 load cases of Table 3.9.3-1. The fixture and misc. dead loads are taken above every section (conservative). φ values per Art. 5.5.3.2; kip, kip-in.</p>`
+      +`<div style="overflow-x:auto"><table class="tbl"><tr><th>z (ft)</th><th>Section (in)</th><th>λ</th><th>Class</th><th>φM<sub>n</sub></th><th>φP<sub>nc</sub></th><th>φV<sub>n</sub></th><th>φT<sub>n</sub></th><th>Governing</th><th>M<sub>u</sub></th><th>Eq.</th><th>Ratio</th></tr>${mrows}</table></div>`);
   }
+  // Summary
+  ltsAddCard('summary','ltsSumCard','✓','LRFDLTS summary','AASHTO LRFDLTS mode',
+    basis+ltsDevHTML()
+    +`<table class="tbl"><tr><th>Item</th><th>Value</th><th>Reference</th></tr>`
+    +`<tr><td>Structure</td><td>${L.sign?(L.signPosts===2?'Two-post roadside sign':'Monopost roadside sign'):'Luminaire pole'}</td><td>—</td></tr>`
+    +`<tr><td>Extreme I wind MRI</td><td>${m.mri} yr (${m.fig}); V = ${fmt(L.V,0)} mph</td><td>Table 3.8-1 (p. 3-5)</td></tr>`
+    +`<tr><td>Service I wind</td><td>10 yr (Fig. 3.8-4); V<sub>svc</sub> = ${fmt(L.Vsvc,0)} mph</td><td>Table 3.4-1, Art. 3.8.2 (pp. 3-3, 3-14)</td></tr>`
+    +`<tr><td>Atmospheric ice</td><td>${L.tIce>0?fmt(L.tIce,2)+' in, Strength I only (decision Q-C1, accepted 2026-11-02)':'none'}</td><td>Art. 3.7, C3.7 (p. 3-4)</td></tr>`
+    +`${lppLtsLast&&lppLtsLast.mc?`<tr><td>${appMode==='sign'?'Post':'Pole'} — combined forces</td><td><b>${lppLtsLast.mc.gov.gov.ratio<=1&&lppLtsLast.mc.valid?'OK':'NOT OK'}</b>, ratio ${isFinite(lppLtsLast.mc.gov.gov.ratio)?fmt(lppLtsLast.mc.gov.gov.ratio,3):'∞'} at z = ${fmt(lppLtsLast.mc.gov.sec.z,2)} ft</td><td>Art. 5.12.1, Eq. ${lppLtsLast.mc.gov.gov.eq} (p. 5-33, 2017)</td></tr>`:''}`
+    +`</table><p class="tbl-note">Status of the LRFDLTS mode:</p><table class="tbl"><tr><th>Step</th><th>Content</th><th>Status</th></tr>`
+    +LTS_STATUS.map(r=>`<tr><td>${r[0]}</td><td>${lppEsc(r[1])}</td><td>${r[2]?'done':'pending'}</td></tr>`).join('')+`</table>`);
   // the other pages: what is still to come
   Object.keys(LTS_PAGE_PR).forEach(pg=>ltsAddCard(pg,'ltsTodo_'+pg,'·','LRFDLTS mode','in development',
     basis+`<p class="lts-dev">This tab is not yet available in the LRFDLTS mode (planned: ${LTS_PAGE_PR[pg]}). The IBC 2021 · ASCE 7-22 results are not shown in this mode.</p>`));

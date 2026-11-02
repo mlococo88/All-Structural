@@ -330,6 +330,16 @@ The basis line is display only: "AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim
 - **Q-C7** Broms resistance factor φ = 1.0 (none is printed); the optional margin input is kept.
 - **Q-C8** Shear span L_v for round shear (Eq. 5.11.2.1.1-1): the full height (conservative).
 
+**Engineer's answers (2026-11-02):**
+- **Q-C1** Ice in Strength I only: OK.
+- **Q-C2, Q-C5, Q-C6, Q-C7, Q-C8** and the pole-top fixture width b = √EPA (Art. 3.9.4.2): accepted. The "engineer to confirm" flags are removed (LTS-3); the citations stay.
+- **Q-C3** Base plate: keep the bending-line method in the LTS mode, labelled "engineering method (common practice), not an LRFDLTS article". Art. 5.6.3 only requires the thickness to be considered. To be relabelled in LTS-6.
+- **Q-C4** Shaft: Broms for the embedment and lateral soil resistance (as now). The shaft reinforcement stays on ACI 318-19 as in the IBC mode, with an on-screen note that LRFDLTS Art. 13.6.2 refers to the AASHTO LRFD BDS for the structural design (not applied) (LTS-7).
+
+**New decisions in LTS-3 (flagged "engineer to confirm" on screen):**
+- **Q-C9** Square/rect. tube flat width b = (larger wall) − 3t. The corner radius is not an input (as AISC 360-16 B4.1b). The same b/t is used for both axes, conservatively.
+- **Q-C10** Square/rect. torsional constant C_t = 2(B − t)(H − t)t − 4.5(4 − π)t³ (AISC 360-16 §H3.1). LRFDLTS Table B.3-1 gives the square-tube stress formula with k_t, but no constant usable without the corner radius.
+
 **Still open (owner):** Q21–Q25 (§6).
 
 ## 5. Phase B PR sequence
@@ -345,7 +355,7 @@ Each PR follows the same rules:
 The PRs:
 1. **LTS-1** (done, 2026-11-02) Mode switch (`codeMode`), the basis line, LTS inputs, MRI display, Table 3.4-1 combinations (Strength I, Extreme I max/min, Service I), the cable note, the scope line.
 2. **LTS-2** (done, 2026-11-02) Wind: P_z with K_z, K_d, G, C_v, C_d per shape and along the taper, sign C_d and 0.15b torsion, EPA handling, the Table 3.9.3-1 load cases; ice weight (Q-C1).
-3. **LTS-3** Members, round and square/rect.:
+3. **LTS-3** (done, 2026-11-02) Members, round and square/rect.:
    - Table 5.7.2-1 classes;
    - Table 5.8.2-1 M_n;
    - Arts. 5.10 and 5.11;
