@@ -16,7 +16,7 @@
               V2 2.3.5.1CT 120 ft), else 120 ft (the old app's default; no owner limit: MassDOT, AASHTO). A RIDOT piece over 150 ft fails
               (6.7.2, 'ship.splice').
      shipWt   maximum shipping piece weight (kip): entered, else the owner's ('ship': RIDOT 150, CTDOT 120), else 90 kip (the old default).
-     minLen   minimum piece length (ft): entered, else the shortest flange zone of the Auto design limits (minSeg, 10 ft; the merge rule).
+     minLen   minimum piece length (ft): entered, else 30 ft (engineer decision 2026-11-02; before: minSeg, 10 ft, the old merge rule).
      minSup   minimum distance of a splice from a bearing (ft): entered, else 10 ft (GirderDetail spl.minSup).
      minXf    minimum distance of a splice from an intermediate cross-frame / connection plate (ft): entered, else the Spans & framing tab's
               splice clearance (framing.spliceClear, 2 ft), MassDOT 3.6.5.5 cited (stiffeners not to coincide with the splice plates).
@@ -35,7 +35,7 @@
   const SHIFT = 5;   // ft: the farthest a splice is moved to clear a cross-frame or a transition
 
   /* rules(P, lim): the numbers in use and where each comes from. lim: Auto design's s.lim (minSeg). */
-  const DFLT = { shipLen: 120, shipWt: 90, minSup: 10, minXf: 2 };
+  const DFLT = { shipLen: 120, shipWt: 90, minLen: 30, minSup: 10, minXf: 2 };   // minLen: 30 ft, engineer decision 2026-11-02 (was minSeg, 10 ft)
   function rules(P, lim) {
     const a = ((P && P.autodesign) || {}).splRules || {}, owner = ((P && P.ownerRules) || {}).owner || 'AASHTO', O = OW();
     const R = id => O ? O.rule(owner, id) : null, rSh = R('ship'), rMand = R('ship.splice'), rQ = R('spl.simple'), rLoc = R('spl.loc'), rXf = R('spl.xf');
@@ -45,7 +45,7 @@
       else if (own) { out[k] = own.v; out.src[k] = own.c; } else { out[k] = d; out.src[k] = dsrc; } };
     pick('shipLen', true, rSh && +rSh.value.len > 0 ? { v: +rSh.value.len, c: O.cite(rSh) } : null, DFLT.shipLen, 'default 120 ft (the old app\'s maximum piece length; no owner limit: confirm the route with the fabricator)');
     pick('shipWt', true, rSh && +rSh.value.wt > 0 ? { v: +rSh.value.wt, c: O.cite(rSh) } : null, DFLT.shipWt, 'default 90 kip (the old app\'s maximum piece weight; no owner limit)');
-    pick('minLen', true, null, minSeg, 'the shortest flange zone of the Auto design limits (the old app merges splices closer than it)');
+    pick('minLen', true, null, DFLT.minLen, 'default 30 ft (engineer decision 2026-11-02; was the shortest flange zone, 10 ft, the old app\'s merge rule)');
     pick('minSup', false, null, DFLT.minSup, 'default 10 ft (the old app\'s minimum distance from a support)');
     pick('minXf', false, null, clr != null && clr >= 0 ? clr : DFLT.minXf, `the splice clearance of the Spans & framing tab${rXf ? ` (${O.cite(rXf)})` : ''}`);
     pick('minTr', false, null, minSeg, 'the shortest flange zone of the Auto design limits');

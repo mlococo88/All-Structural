@@ -28,7 +28,7 @@ test('Saved data: an old project reads the splice variable as Lock; export / imp
   const txt = M.exportJSON(P), R = M.importJSON(txt); assert.ok(R.ok, R.error); assert.equal(M.exportJSON(R.project), txt);
   const S = AD.settings(R.project); assert.equal(S.V.spl.mode, 'lock'); assert.equal(S.V.spl.forced, '');
   // the defaults of the rules (AASHTO: no owner limit)
-  assert.equal(JSON.stringify([S.splR.shipLen, S.splR.shipWt, S.splR.minLen, S.splR.minSup, S.splR.minXf, S.splR.minTr]), JSON.stringify([120, 90, 10, 10, 2, 10]));
+  assert.equal(JSON.stringify([S.splR.shipLen, S.splR.shipWt, S.splR.minLen, S.splR.minSup, S.splR.minXf, S.splR.minTr]), JSON.stringify([120, 90, 30, 10, 2, 10]));   // minimum piece 30 ft (engineer decision 2026-11-02; was 10 ft)
   // Refine / Check: Lock whatever is saved
   const Q = J(P); Q.autodesign = { mode: 'refine', vars: { spl: { mode: 'auto' } } }; assert.equal(AD.settings(Q).V.spl.mode, 'lock');
   Q.autodesign.mode = 'check'; assert.equal(AD.settings(Q).V.spl.mode, 'lock');
@@ -104,6 +104,11 @@ test('The rules check: piece length and weight, bearing, cross-frame and transit
   // the weight of piece 1 (0–82 ft) with 5 %: the plates of the built-in G1 (16 × 3/4, 16 × 1 1/8, 60 × 9/16 to 82 ft: 63.75 in² → 216.9 lb/ft)
   const w1 = C.items.find(i => i.id === 'SP3'); near(w1.r * Ru.shipWt, 63.75 * 490 / 144 * 82 * 1.05 / 1000, 1e-6, 'SP3 weight');
   assert.equal(C.ok, false); assert.ok(C.steps.length >= C.items.length);
+  // minimum piece 30 ft (default since 2026-11-02): splices at 78 and 100 ft leave a 22 ft piece: fails, ratio 30/22 = 1.364; the old 10 ft passed it
+  const R30 = AD.settings(P).splR; assert.equal(R30.minLen, 30); assert.match(R30.src.minLen, /30 ft/);
+  const C30 = SP.check(P, [78, 100, 260, 282], R30, {}), p2 = C30.items.find(i => i.id === 'SP2' && i.x === 78);
+  assert.equal(p2.ok, false); near(p2.r, 30 / 22, 1e-12, 'SP2 30 ft');
+  assert.equal(SP.check(P, [78, 100, 260, 282], { ...R30, minLen: 10 }, {}).items.find(i => i.id === 'SP2' && i.x === 78).ok, true);
 });
 
 test('Range and Auto layouts: counts per span, station windows, a span locked, the current stations', () => {

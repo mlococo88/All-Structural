@@ -3617,3 +3617,27 @@ symmetric bridge) to a station that keeps every rule. engine/owners.js: two rows
 
 ### Other copies
 - None (the old app is unchanged).
+
+## 2026-11-02 — PR #645: https://github.com/mlococo88/All-Structural/pull/645 (claude/sbd-splice-minpiece) — Auto design: default minimum shipping piece length 30 ft (engineer decision)
+**Calculation change (CLAUDE.md §4), Auto and Range splice layouts only.** The engineer's answers to the #644 open questions (2026-11-02):
+AASHTO / MassDOT 120 ft and 90 kip kept; RIDOT 100 ft kept; the cross-frame clearance from the work point and the contraflexure from the
+current design's analysis accepted; **the minimum shipping piece length raised from 10 ft to 30 ft** (editable, `P.autodesign.splRules.minLen`).
+### Where
+- `apps/steel-bridge/engine/splplace.js` `rules()`: before
+  `pick('minLen', true, null, minSeg, 'the shortest flange zone of the Auto design limits (the old app merges splices closer than it)');`
+  after `pick('minLen', true, null, DFLT.minLen, 'default 30 ft (engineer decision 2026-11-02; was the shortest flange zone, 10 ft, the old app\'s merge rule)');`
+  with `DFLT = { shipLen: 120, shipWt: 90, minLen: 30, minSup: 10, minXf: 2 }` (minLen added); the header comment.
+- Used by `reference()` (splices closer than L_min merged; a heavy piece split only when longer than 2 L_min) and `check()` SP2.
+### Governing provision
+- No code limit (AASHTO LRFD 10th Ed. 6.13.6.1.3a governs the location only): owner practice, the engineer's decision.
+### Check case
+- Splices at 78 and 100 ft (a 22 ft piece): SP2 before 10/22 = 0.455 (passes), after 30/22 = 1.364 (fails). `tests/engine/autodesign-splices.test.mjs`.
+- Lock (the default): the rules are not applied; unchanged (the test "Saved data …" still matches main's record byte for byte).
+### Before / after (Auto runs, the #644 parity settings)
+- builtin_AASHTO: 404,856 lb, D 62 in, splices 78, 142, 218, 282 ft, TS2 1.000 — identical (plates and every module ratio); 716 s.
+- util_RIDOT: 437,672 lb, D 65 in, splices 78, 143, 217, 282 ft, TS7 1.000 — identical; 829 s.
+- Why: every piece of those layouts is at least 64 ft; the fewer-splice layouts were already ruled out by the shipping length.
+### How verified
+- `node tests/engine/run.mjs autodesign-splices` (6 passed); the two Auto runs above compared with #644's.
+### Other copies
+- None.
