@@ -3808,7 +3808,7 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
   - k ≈ 15 cannot be reproduced on the default project. It has no interface tension, so no k is shown. The engineer's project is needed.
   - Observation, not changed: for net uplift with M = 0, `sfpmRatios` reaches its tension limit at about 0.52 f_y per in² of steel. Example: P_u −55.19 k needs 1.78 in², against 55.19/(0.9·60) = 1.02 in² by hand. This is conservative and comes from the shared P–M routine. Raised, not changed.
 
-## 2026-11-02 — PR: claude/sf-show-work-links — Show the work and link to it: report summary of results, section keys instead of hard-coded § numbers, cross-step links (SFLK; display only, no result change)
+## 2026-11-02 — PR: claude/sf-show-work-links — Show the work and link to it: report summary of results, section keys instead of hard-coded § numbers, cross-step links (SFLK; display only, no result change) (PR #693: https://github.com/mlococo88/All-Structural/pull/693)
 
 ### SFLK. CLAUDE.md §6 links across the Report and the inputs
 - **Engineer request (2026-11-02):** every value quoted away from where it is worked gets an in-app link, and a "see §x.y" in print. This uses the shared `[[key]]` mechanism of `shared/report.js` (as in lldf).
