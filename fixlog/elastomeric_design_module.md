@@ -1304,7 +1304,7 @@ index 13f0165..656e0f1 100644
     - This tool has no Ctrl+P key handler: the browser's own Ctrl+P raises `beforeprint`, the path tested.
 - **Other copies:** none. The abutment app opens this page by link; it calls none of the removed functions (checked with grep).
 
-## 2026-11-02 — PR: PRLINK — PLIB: Rename / Duplicate in the Projects dialog, and Undo / Redo   [display and storage only]
+## 2026-11-02 — PR: [#678](https://github.com/mlococo88/All-Structural/pull/678) — PLIB: Rename / Duplicate in the Projects dialog, and Undo / Redo   [display and storage only]
 - **Before:** Save Project (prompt), Projects… (the tool's own dialog: name, date, Load, Delete; `edm_v1_projects`, `{ name: { state, ts } }`),
   Export / Import JSON, Reset. No rename, no duplicate, no undo.
 - **Where:**
