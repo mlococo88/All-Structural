@@ -341,53 +341,13 @@
     .card{box-shadow:none;break-inside:avoid}
     body{background:#fff}
   }
-  /* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) in the Report tab; printing prints only the report */
-  #reportBody.crdoc{padding:18px 22px 24px;font:13px/1.45 "Times New Roman",Times,serif;color:#000}
-  #reportBody.crdoc a{color:#000;text-decoration:none}
-  #reportBody .cr-cover{display:flex;flex-direction:column;justify-content:center;padding:20px 0 28px;border-bottom:1px solid var(--line);margin-bottom:18px}
-  #reportBody .cr-cover-t{text-align:center;margin-bottom:22px}
-  #reportBody .cr-cover h1{font:700 25px/1.2 Arial,Helvetica,sans-serif;margin:0 0 12px}
-  #reportBody .cr-cover p{font:700 15px Arial,Helvetica,sans-serif;margin:0 0 6px}
-  #reportBody .cr-cover .cr-cover-p{font-weight:400;font-size:13px}
-  #reportBody .rptHdrGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:2px 14px;border:1px solid #000;padding:6px 8px;font-size:12.5px}
-  #reportBody .cr-front{border-bottom:1px solid var(--line);margin-bottom:18px;padding-bottom:12px}
-  #reportBody .cr-sec{border-top:1px solid var(--line);padding-top:14px;margin-top:18px}
-  #reportBody h2.cr-h1{font:700 15px "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;margin:0 0 8px;break-after:avoid}
-  #reportBody h3.cr-h2{font:700 13.5px "Times New Roman",Times,serif;margin:14px 0 4px;break-after:avoid;color:#000}
-  #reportBody .cr-refs{border-collapse:collapse;margin:0 0 14px} #reportBody .cr-refs td{padding:1px 16px 1px 0;vertical-align:top} #reportBody .cr-refs td:first-child{white-space:nowrap}
-  #reportBody .cr-toc,#reportBody .cr-toc ol{list-style:none;margin:0;padding:0} #reportBody .cr-toc>li{margin:3px 0} #reportBody .cr-toc ol{padding-left:20px;font-size:12.5px}
-  #reportBody .cr-p{margin:0 0 7px} #reportBody .cr-small{font-size:12px;margin-top:16px}
-  #reportBody .cr-resh{font:700 13.5px "Times New Roman",Times,serif;margin:14px 0 2px}
-  #reportBody .cr-line{display:grid;grid-template-columns:minmax(0,2.6fr) minmax(0,4fr) minmax(0,0.9fr);gap:0 12px;align-items:center;padding:3px 0;break-inside:avoid;font-size:12.5px}
-  #reportBody .cr-res{border-top:0.6pt solid #000} #reportBody .cr-results{border-bottom:0.8pt solid #000;margin:6px 0 10px}
-  #reportBody .cr-r{text-align:right} #reportBody .cr-st-fail{text-decoration:underline}
-  #reportBody .cr-refi{font-size:11px;font-style:italic}
-  #reportBody .eq-title,#reportBody .step-label{color:#000;break-after:avoid}
-  #reportBody .eqn{overflow-x:auto}
-  .lppRptBtn{float:right;margin-left:auto}
   .lpdBar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:6px} .lpdHead{margin:6px 0} .lpdBox{border:1px solid var(--line);background:#fff}
   /* D11 links (CLAUDE.md §6): "Worked in: → Tab · Card" on screen, "see §n.k" in the report */
   .wkLink{font-size:11.5px;color:#5b6676;margin:4px 0 2px} a.wkA{color:var(--steel);text-decoration:none;cursor:pointer} a.wkA:hover{text-decoration:underline}
   td>a.wkA{font-size:11.5px}
-  #reportBody a.wkA{color:#000;font-style:italic}
   .wkFlash{animation:lppWkFlash 1.4s ease-out} @keyframes lppWkFlash{from{background:#dde9f6}to{background:transparent}}
   @media (prefers-reduced-motion: reduce){.wkFlash{animation:none}}
-  @media print{
-    header.masthead,#postSelBar,.lppRptBtn{display:none!important}
-    .tabpage:not(#page-calcsheet){display:none!important}
-    .wrap{max-width:none;padding:0}.grid2{display:block;margin:0}
-    section.card.report{border:0;margin:0;break-inside:auto}section.card.report>.card-h{display:none}
-    #reportBody.crdoc{padding:0;font-size:10.5pt}
-    #reportBody .cr-cover{min-height:8.2in;border:0;margin:0;padding:0;break-after:page}
-    #reportBody .cr-front{border:0;break-after:page}
-    #reportBody .cr-sec{border:0;padding:0;margin:0}
-    #reportBody .cr-break{break-before:page}
-    #reportBody h2.cr-h1{font-size:12pt} #reportBody h3.cr-h2{font-size:11pt}
-    #reportBody .cr-line,#reportBody .cr-toc ol,#reportBody .rptHdrGrid{font-size:10pt}
-    #reportBody .eqn{overflow:visible}
-    #reportBody table.matrix,#reportBody table.tbl{break-inside:auto}
-    #reportBody a.wkA{font-style:italic}
-  }
+  @media print{ header.masthead,#postSelBar{display:none!important} }
 </style>
 </head>
 <body>
@@ -677,7 +637,6 @@
       <button data-tab="shaft">Shaft</button>
       <button data-tab="drawings">Drawings</button>
       <button data-tab="report">Report</button>
-      <button data-tab="calcsheet">Calc sheet</button>
       <button data-tab="manual">Manual</button>
     </div>
     <div id="lppInErr" role="alert"></div>
@@ -689,7 +648,6 @@
     <div class="tabpage" data-page="shaft" id="page-shaft"></div>
     <div class="tabpage" data-page="drawings" id="page-drawings"></div>
     <div class="tabpage" data-page="report" id="page-report"></div>
-    <div class="tabpage" data-page="calcsheet" id="page-calcsheet"></div>
     <div class="tabpage" data-page="manual" id="page-manual"></div>
     <div id="cardSource" style="display:none">
 
@@ -975,12 +933,6 @@
     <!-- 11. FULL CALCULATION REPORT -->
     <section class="card lpdCard" data-tab="drawings"><div class="card-h"><span class="num">D</span><h2>Drawings</h2><span class="hint">to scale · DXF</span></div><div class="card-body" id="lpdHost"></div></section>
     <section class="card lprCard" data-tab="report"><div class="card-body" id="lprHost"></div></section>
-    <section class="card report" data-tab="calcsheet">
-      <div class="card-h"><span class="num">11</span><h2>Calculation report</h2><span class="hint">every equation, symbolic → numeric</span><button class="btn mini ghost noprint lppRptBtn" id="lppRptPrint" title="Print the calculation report, or save it as PDF">Print / PDF report</button></div>
-      <div class="card-body" id="reportBody">
-        <!-- generated -->
-      </div>
-    </section>
   </div>
 </div>
 </div>
@@ -2649,7 +2601,7 @@ manPart("p3","3. Output Reference",[
 {p:"Bearing compares service axial over the base area against q<sub>allow</sub>. The Broms block, when enabled, is visually separated and labelled reference-only; see Part 4D."},
 
 {h:"3.7 Report tab"},
-{p:"A continuous calculation package in calculation-sheet form: a cover with the title block, the references, a numbered table of contents, then numbered sections and subsections \u2014 Design Summary (with a result line \u201ccheck: D/C = x.xx (code) PASS/FAIL\u201d for every check), inputs, wind derivation, load path, combinations, pole/post, foundation, reinforcement and anchors. Each check ends with its result line. It uses the <b>same generator functions</b> as the discipline tabs, so the two cannot disagree. Print it with the <b>Print / PDF report</b> button (or the browser\u2019s print, from any tab) and choose Save as PDF: only the report prints, with a page header (project no., computed/checked by, dates) and a \u201cPage X of Y\u201d footer. The tool has no project-number, engineer or date fields, so those read \u201c\u2014\u201d."},
+{p:"The calculation package (the one report of this tool; the former Calc sheet tab was merged into it on 2026-11-02): a title block, cover, contents and numbered sections \u00a7n.m with a navigation tree, search, Expand all / Collapse all \u2014 Project and scope (with the design inputs and basis), Design summary (the Summary tab\u2019s verdict, design, governing demands and utilization tables, then every check of every stack sorted by D/C), Wind and ice loads, Load combinations, Pole / Post check, Base plate, Drilled shaft, Assumptions and references. Each section gives the key worked steps first, then the derivation worked in full by the <b>same generator functions</b> as the discipline tabs (same arguments), so the two cannot disagree; each check ends with its result line (D/C, code, PASS/FAIL). Links open the tab and card where a value is worked. Print it with its <b>Print</b> button, the <b>Export PDF / Print</b> button, or the browser\u2019s print (Ctrl+P) from any tab, and choose Save as PDF: only the report prints, with a running header and \u201cPage X of Y\u201d. The tool has no project-number, engineer or date fields, so those read \u201c\u2014\u201d."},
 
 {h:"3.8 Result flags and what to do about them"},
 {tbl:{head:["Flag","Meaning","Action"],rows:[
@@ -4376,8 +4328,7 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
     H+=`</div></details>`;
   });
 
-  // D11: calculation-sheet layout (cover, references, contents, numbered sections, result lines)
-  lppReportDoc(H,{title:$('appTitle')?$('appTitle').textContent:'Sign Pier Designer',sub:$('appEyebrow')?$('appEyebrow').textContent:''});
+  lppReportDone(H);   // LPRX: read into the Report tab
 }
 
 // Wind directionality factor K_d per ASCE 7-22 Table 26.6-1, by component.
@@ -5643,7 +5594,7 @@ function renderSignWindExample(sw,inp){
 // derivation functions shared with the tabs).
 let LPP_SUMCTX=null;   // the Summary context of the last calc() (set by renderSummary)
 const lppEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:'Post',anchors:'Anchorage',shaft:'Shaft',drawings:'Drawings',report:'Report',calcsheet:'Calc sheet'};
+const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:'Post',anchors:'Anchorage',shaft:'Shaft',drawings:'Drawings',report:'Report'};
 // collectChecks name -> derivation key
 const LPP_CHK2K={'Shaft flexure (P–M)':'flex','Shaft shear':'shear','Longitudinal steel, min':'asmin','Longitudinal steel, max':'asmax',
   'Bar clear spacing':'spacing','Tie spacing':'ties','Soil bearing':'bearing','Anchor tension':'anchors','Anchor shear':'anchors',
@@ -5677,13 +5628,8 @@ function lppGoto(k,st){
   e.scrollIntoView({behavior:'smooth',block:'start'});
   e.classList.add('wkFlash'); setTimeout(()=>e.classList.remove('wkFlash'),1400);
 }
-document.addEventListener('click',ev=>{ const a=ev.target.closest&&ev.target.closest('a.wkA'); if(!a||a.closest('#reportBody')) return;
+document.addEventListener('click',ev=>{ const a=ev.target.closest&&ev.target.closest('a.wkA'); if(!a) return;
   ev.preventDefault(); lppGoto(a.dataset.k,a.dataset.st); });
-// calculation-sheet result line: "<check>: D/C = x.xx (<ref>) PASS/FAIL" — the Summary's own ratio and verdict
-function lppResLine(c,st,withLink){
-  const k=LPP_CHK2K[c.name];
-  return `<div class="cr-line cr-res"><div class="cr-d">${lppEsc(c.name)}${c.label?' ('+lppEsc(c.label)+')':''}:</div><div class="cr-m">D/C = <b>${fmt(c.ratio,2)}</b> <span class="cr-refi">(${lppEsc(c.code)})</span>${withLink&&k?' '+lppLink(k,st):''}</div><div class="cr-r${c.ok?'':' cr-st-fail'}"><b>${c.ok?'PASS':'FAIL'}</b></div></div>`;
-}
 const LPP_REFS=[
   ['ASCE/SEI 7-22','Ch. 26 wind: §26.2, Table 26.6-1 (K_d), §26.10 / Table 26.10-1 (K_z), Eq. 26.10-1 (q_z), §26.11.5 (G_f, flexible structures); Ch. 29: §29.3, Fig. 29.3-1, Eq. 29.3-1 (solid freestanding signs, Cases A, B, C), §29.4 (other structures); Ch. 10 (atmospheric ice, wind-on-ice); strength and ASD load combinations (the tool cites no section)'],
   ['IBC 2021','Table 1806.2 (presumptive load-bearing values); §1806.3.3, §1806.3.4 (lateral bearing increases); §1807.3.2.1 (non-constrained) and §1807.3.2.2 (constrained) embedded posts and poles'],
@@ -5692,22 +5638,6 @@ const LPP_REFS=[
   ['ASTM F1554','Anchor rods, Grades 36, 55 and 105'],
   ['ASME B18.2.2','Heavy hex nuts: width across flats F = 1.5d + 1/8 in (pullout bearing area of the embedded nut)'],
   ['AASHTO LTS','Structural Supports for Highway Signs, Luminaires, and Traffic Signals, Commentary C13.6.1.1 (Broms embedment, reference check only); anchor rod tightening (snug-tight, then turn-of-nut pretension), the basis of the Torqued default; edition and article: verify']];
-function lppPageCSS(){
-  const q=v=>String(v==null||v===''?'—':v).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/\n/g,' ');
-  const nm=activeProject||'', ttl=$('appTitle')?$('appTitle').textContent:'Light pole';
-  const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
-  return '@page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
-    ' @top-left { content: "Project No: —\\A Description: '+q((nm||ttl).slice(0,38))+'"; '+box+' text-align: left; }'+
-    ' @top-center { content: "Computed By: —\\A Checked By: —"; '+box+' text-align: left; }'+
-    ' @top-right { content: "Date: —\\A Date: —"; '+box+' text-align: right; }'+
-    ' @bottom-left { content: "'+q(nm||'Untitled')+' (Light Pole and Sign Post)"; font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; }'+
-    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt; } }';
-}
-function lppApplyPageCSS(on){
-  let st=document.getElementById('lpp-page');
-  if(!st){ st=document.createElement('style'); st.id='lpp-page'; document.head.appendChild(st); }
-  st.textContent=on?lppPageCSS():'';
-}
 // old report tag ("2b") quoted in the report text -> becomes "§n" of the renumbered section
 const lppSecRef=old=>`<span class="lppSecRef" data-old="${old}">§${old}</span>`;
 // result lines / link anchors inside the report HTML: k = derivation keys, st = stack (post), sub = subsection title to attach to
@@ -5724,104 +5654,11 @@ function lppTorsionHTML(F,inp){
     eq(`\\phi T_{th} = \\phi\\lambda\\sqrt{f'_c}\\,\\frac{A_{cp}^2}{p_{cp}} = 0.75(1.0)\\sqrt{${fmt(inp.fc,0)}}\\,\\frac{(${fmt(F.Acp,1)})^2}{${fmt(F.pcp,2)}}\\cdot\\frac{1}{12} = ${fmt(F.phiTth,0)}\\ \\text{lb}{\\cdot}\\text{ft}`)+
     eq(`T_u = ${fmt(F.Tu,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\ ${F.Tu<F.phiTth?'\\lt':'\\ge'}\\ \\phi T_{th} = ${fmt(F.phiTth,0)}\\ \\text{lb}{\\cdot}\\text{ft}`);
 }
-// Turn the report HTML (one <details class="rpt-sec"> per section, as the builders write it) into the
-// calculation sheet: cover with title block, references, numbered table of contents, Design Summary
-// (the Summary tab's content and a result line per check), then one numbered section per worked section
-// with subsections n.k at its headings (.eq-title / .subhead; else the .step-label steps).
-function lppReportDoc(H,meta){
-  const box=$('reportBody'); if(!box) return;
-  const mk=(tag,cls,html)=>{ const e=document.createElement(tag); if(cls) e.className=cls; if(html!=null) e.innerHTML=html; return e; };
-  const ctx=LPP_SUMCTX||{stacks:[]}, stacks=ctx.stacks||[];
-  const checks=stacks.map(st=>collectChecks({found:st.found,pstress:st.pstress,inp:ctx.inp,label:st.label}));
-  const body=mk('div','cr-bodyall'), toc=[], cardMap={}, oldMap={}; let secN=0;
-  const isEl=n=>n.nodeType===1;
-  function addSection(title,intro,subs,after,old){
-    const n=++secN, id='crp-'+n, sec=mk('section','cr-sec'+(n>1?' cr-break':''));
-    const h=mk('h2','cr-h1',n+'. '+lppEsc(title)); h.id=id; sec.appendChild(h);
-    intro.forEach(x=>sec.appendChild(x));
-    const tsubs=[];
-    subs.forEach((sb,k)=>{ const sid=id+'-'+(k+1), num=n+'.'+(k+1), d=mk('div','cr-sub');
-      const hh=mk('h3','cr-h2',num+' '+sb.html); hh.id=sid; d.appendChild(hh);
-      sb.nodes.forEach(x=>d.appendChild(x)); sec.appendChild(d);
-      sb.keys.forEach(k2=>{ if(!cardMap[k2]) cardMap[k2]={num,id:sid}; });
-      tsubs.push({t:sb.text,id:sid,num}); });
-    if(after) sec.appendChild(after);
-    if(old!=null) oldMap[old]={num:String(n),id};
-    body.appendChild(sec); toc.push({n,t:title,id,subs:tsubs});
-  }
-  const strip=s=>s.replace(/^\s*\d+[a-z]?\s*·\s*/,'').trim();
-  const head=nd=>({html:strip(nd.innerHTML),text:strip(nd.textContent).replace(/\s+/g,' ')});
-  function subsOf(nodes,title){
-    const kids=nodes.filter(nd=>isEl(nd)||(nd.nodeType===3&&nd.textContent.trim()));
-    const big=nd=>isEl(nd)&&nd.matches('.eq-title,.subhead');
-    const sp=kids.some(big)?big:(nd=>isEl(nd)&&nd.matches('.step-label'));
-    const intro=[], subs=[]; let cur=null;
-    if(!kids.some(sp)){ cur={html:lppEsc(title),text:title,nodes:[],keys:[]}; subs.push(cur); }
-    kids.forEach(nd=>{
-      if(isEl(nd)&&nd.matches('.lppRes')){
-        const st=+nd.dataset.st||0, re=nd.dataset.sub?new RegExp(nd.dataset.sub,'i'):null, ks=(nd.dataset.k||'').split(/\s+/).filter(Boolean);
-        let tg=cur; if(re) for(let i=subs.length-1;i>=0;i--) if(re.test(subs[i].text)){ tg=subs[i]; break; }
-        if(!tg){ tg={html:lppEsc(title),text:title,nodes:[],keys:[]}; subs.push(tg); cur=tg; }
-        ks.forEach(k=>tg.keys.push(k+'|'+st));
-        const L=(checks[st]||[]).filter(c=>ks.indexOf(LPP_CHK2K[c.name])>=0);
-        if(L.length){ const r=mk('div','cr-results'); L.forEach(c=>r.insertAdjacentHTML('beforeend',lppResLine(c,st,false))); tg.nodes.push(r); }
-        return;
-      }
-      if(sp(nd)){
-        if(cur&&!cur.nodes.length&&subs.length){ cur.nodes.push(nd); return; }   // a heading straight after a heading stays inside that subsection
-        const h=head(nd); cur={html:h.html,text:h.text,nodes:[],keys:[]}; subs.push(cur); return; }
-      (cur?cur.nodes:intro).push(nd);
-    });
-    return {intro,subs};
-  }
-  /* 1. Design Summary: the Summary tab's content (same function, same context), and every check's result line */
-  if(stacks.length){
-    const sm=mk('div',null,summaryHTML(ctx)); sm.querySelectorAll('.chipwrap').forEach(x=>x.remove());
-    const s=subsOf([...sm.childNodes],'Summary');
-    if(s.intro.length) s.subs.unshift({html:'Verdict and items not checked',text:'Verdict and items not checked',nodes:s.intro,keys:[]});
-    const after=mk('div'); after.appendChild(mk('div','cr-resh','Results — all checks'));
-    const rb=mk('div','cr-results'); checks.forEach((L,st)=>L.forEach(c=>rb.insertAdjacentHTML('beforeend',lppResLine(c,st,true)))); after.appendChild(rb);
-    addSection('Design Summary',[],s.subs,after);
-  }
-  /* 2… the worked sections, in the order the builder writes them */
-  const src=mk('div',null,H);
-  [...src.children].filter(x=>x.matches('details.rpt-sec')).forEach(dt=>{
-    const t=dt.querySelector(':scope>summary h3'), title=t?t.textContent.trim():'';
-    const bd=dt.querySelector(':scope>.rpt-body');
-    const s=subsOf(bd?[...bd.childNodes]:[],title);
-    addSection(title,s.intro,s.subs,null,dt.dataset.old);
-  });
-  /* old tag references in the text -> the renumbered section */
-  body.querySelectorAll('.lppSecRef').forEach(x=>{ const m=oldMap[x.dataset.old]; if(m){ const a=mk('a',null,'§'+m.num); a.href='#'+m.id; x.replaceWith(a); } });
-  /* D11 links: "→ Tab · Card" becomes "see §n.k" */
-  body.querySelectorAll('a.wkA').forEach(a=>{ const hit=cardMap[a.dataset.k+'|'+(a.dataset.st||0)], pre=a.dataset.txt?a.dataset.txt+': ':'';
-    if(hit){ a.textContent=pre+'see §'+hit.num; a.href='#'+hit.id; }
-    else { const t=lppTgt(a.dataset.k,a.dataset.st); a.textContent=pre+'see the '+(t?LPP_TABNAME[t.tab]+' tab ('+t.card+')':'app')+'; not in this printout'; a.removeAttribute('href'); } });
-  body.querySelectorAll('.wkLink').forEach(d=>{ if(d.firstChild&&d.firstChild.nodeType===3) d.firstChild.textContent=''; });
-  /* front matter: cover with title block, references, table of contents */
-  const front=mk('div','cr-frontall'), cover=mk('section','cr-cover'), ct=mk('div','cr-cover-t');
-  ct.appendChild(mk('h1',null,lppEsc(meta.title)));
-  ct.appendChild(mk('p',null,lppEsc(activeProject||'Untitled')));
-  ct.appendChild(mk('p','cr-cover-p',lppEsc(meta.sub)));
-  ct.appendChild(mk('p','cr-cover-p','IBC 2021 §1807.3 · ASCE/SEI 7-22 · ACI 318-19 · AISC 360-16'));
-  ct.appendChild(mk('p','cr-cover-p',lppEsc($('lppScope')?$('lppScope').textContent:'')));
-  ct.appendChild(mk('p','cr-cover-p','Light Pole and Sign Post, by Mario Lococo · '+lppEsc(new Date().toLocaleString())));
-  cover.appendChild(ct);
-  const hg=mk('div','rptHdrGrid');
-  [['Project',activeProject],['Project No.',''],['Calculated by',''],['Date',''],['Checked by',''],['Checked date','']].forEach(([k,v])=>hg.appendChild(mk('div',null,'<b>'+k+':</b> '+(lppEsc(v)||'—'))));
-  cover.appendChild(hg); front.appendChild(cover);
-  const fm=mk('section','cr-front');
-  fm.appendChild(mk('h2','cr-h1','References:'));
-  const rt=mk('table','cr-refs'); LPP_REFS.forEach(([x,y])=>rt.appendChild(mk('tr',null,'<td>'+lppEsc(x)+'</td><td>'+lppEsc(y)+'</td>'))); fm.appendChild(rt);
-  fm.appendChild(mk('h2','cr-h1','Table of contents:'));
-  fm.appendChild(mk('ol','cr-toc',toc.map(sc=>`<li><a href="#${sc.id}">${sc.n}. ${lppEsc(sc.t)}</a>${sc.subs.length?`<ol>${sc.subs.map(q=>`<li><a href="#${q.id}">${q.num}. ${lppEsc(q.t)}</a></li>`).join('')}</ol>`:''}</li>`).join('')));
-  fm.appendChild(mk('p','cr-p cr-small','Equations are shown symbolically, then with values substituted, then with the result. Each check ends with its result line; Section 1 ends with the result of every check (D/C as in the Summary tab: demand ÷ capacity, or required ÷ provided for minimum-type checks). Units: lb, ft, in, psf / ksf unless noted. The tool has no project-number, engineer or date fields: the title block and the page header show “—” for them (fill in by hand), and the project is the saved project name.'));
-  front.appendChild(fm);
-  box.className='card-body crdoc'; box.innerHTML='';
-  box.appendChild(front); box.appendChild(body);
-  if(window.renderMathInElement){
-    renderMathInElement(box,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
-  }
+// LPRX (2026-11-02): the Calc sheet tab and its calculation-sheet layout (lppReportDoc: cover, references, contents, numbered
+// sections, result lines; lppPageCSS / lppApplyPageCSS) are retired; the Report tab is the one report. The builders' worked
+// sections (H) are kept on LPP_LAST.H and read into the Report (lprxItems); the hooks that ran at the end of lppReportDoc run here.
+function lppReportDone(H){
+  if(LPP_LAST) LPP_LAST.H=H;
   if(typeof lprRefresh==='function') lprRefresh();   // LPRP: rebuild the shared Report tab when it is shown
   if(typeof lpdActive==='function' && lpdActive()) lpdRender();   // LPDW
   if(typeof lppAnchorCardRefresh==='function') lppAnchorCardRefresh();   // anchorGroupResult chips
@@ -6078,8 +5915,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
   H+=lppRes('anchors',0,'Base plate');
   H+=`</div></details>`;
 
-  // D11: calculation-sheet layout (cover, references, contents, numbered sections, result lines)
-  lppReportDoc(H,{title:$('appTitle')?$('appTitle').textContent:'Light Pole Pier Designer',sub:$('appEyebrow')?$('appEyebrow').textContent:''});
+  lppReportDone(H);   // LPRX: read into the Report tab
 }
 
 // ---------- PLAN VIEW ----------
@@ -6445,8 +6281,8 @@ function populateDetailStack(sfx, ctx){
 // The calculation report in the shared viewer (shared/report.js: navigation tree, numbered sections §n.m, collapse / expand,
 // search, Print with a title block (no owner cell), running header and page numbers). Worked steps are shared/steps.js steps
 // grouped by topic. Every value is a value the tool has already computed (LPP_SUMCTX from renderSummary, LPP_LAST from the
-// report builders); only the substitution strings are formatted here. Nothing is saved. The former D11 calculation sheet is kept
-// unchanged in the "Calc sheet" tab (retired later, after the engineer accepts this report).
+// report builders); only the substitution strings are formatted here. Nothing is saved. The former D11 calculation sheet ("Calc
+// sheet" tab) was retired on 2026-11-02 (LPRX); its content is read into this report (lprxItems, below).
 let LPP_LAST=null;                    // the last report-builder arguments (set by buildReport / buildSignReport)
 const LPRP={closed:new Set(),api:null,doc:null};
 const lprN=(x,d)=>SharedSteps.n(x,d==null?2:d);
@@ -6460,17 +6296,102 @@ function lprTopics(scope,list){
     return {title:t.title,ref:t.ref||'',n:t.steps.length,cls:g.cls,chip:g.chip,res:g.res};});
   return {type:'steps',scope,steps,topics};
 }
+/* LPRX (2026-11-02): the Calc sheet (the D11 calculation sheet) is retired; its content is read into this Report. The report
+   builders (buildReport / buildSignReport) still write the worked sections, one <details class="rpt-sec"> per section, with the
+   same worked-derivation functions as the tabs (same arguments); the HTML is kept on LPP_LAST.H and read here into report items:
+   every TeX block \[…\] → a worked step (the TeX as written), .eq-title / .subhead → a topic heading, .step-label → the label of
+   the steps after it, tables → tables (the governing row marked), text → notes (sub- / superscripts as $_{…}$ / $^{…}$),
+   .flag → a warning note, result-line markers (.lppRes) → the result lines of those checks (collectChecks: the Summary's own
+   ratio and verdict), "§2b" references → a § link to the section, "→ Tab · Card" links → in-app links to the card.
+   Nothing is computed here. */
+const lprxPlain=s=>lprPlain(s).replace(/\s+/g,' ').trim();
+function lprxText(el,has){
+  const c=el.cloneNode(true);
+  c.querySelectorAll('.ratiobar,.chipwrap,button,script,style').forEach(x=>x.remove());
+  c.querySelectorAll('.lppSecRef').forEach(x=>x.replaceWith(document.createTextNode(has&&has.has(x.dataset.old)?'[[lpcs:'+x.dataset.old+']]':x.textContent)));
+  c.querySelectorAll('a.wkA').forEach(a=>{ const t=lppTgt(a.dataset.k,a.dataset.st), pre=a.dataset.txt?a.dataset.txt+': ':'';
+    a.replaceWith(document.createTextNode(t?'[[tab:wk:'+a.dataset.k+':'+(+a.dataset.st||0)+'|'+(pre+'→ '+LPP_TABNAME[t.tab]+' · '+t.card).replace(/[\[\]|]/g,'')+']]':a.textContent)); });
+  c.querySelectorAll('sub,sup').forEach(x=>{ const t=x.textContent.replace(/[{}$\\]/g,''); x.replaceWith(document.createTextNode(t?'$'+(x.tagName==='SUB'?'_':'^')+'{'+t+'}$':'')); });
+  c.querySelectorAll('.sym').forEach(x=>x.before(' '));
+  c.querySelectorAll('br,div,li,tr').forEach(x=>x.before(' '));
+  return c.textContent.replace(/\s+/g,' ').trim();
+}
+const LPRX_BLOCK='div.eqn,table,.lppRes,.eq-title,.subhead,.step-label,.flag,.verdict,p,li,.cbl-t,.varsub,.eq-result,.eq-why,.tbl-note';
+// one section body (an element) -> report items; scope: the steps' anchor scope; checks: collectChecks per stack
+function lprxItems(root,scope,checks,has){
+  const items=[]; let run=null, head=null, label='', cur='', tn=0, en=0;
+  const push=it=>{ if(head){ it.topic={title:head.t,ref:head.r,no:++tn}; head=null; } items.push(it); };
+  const flush=()=>{ if(run&&run.length) push({type:'steps',scope,steps:run}); run=null; };
+  const pend=()=>{ const l=label; label=''; return l; };
+  const tex=t=>{ if(!run) run=[]; run.push(SharedSteps.step({id:'e'+(++en),label:label||cur||'Worked equation',eq:t.trim().replace(/(^|[^\\])#/g,'$1\\#')})); label=''; };   // a bare # (bar size "#3") is escaped for KaTeX
+  const note=(t,warn)=>{ if(!t) return; flush(); const l=pend(); if(l) push({type:'note',text:'— '+l+' —'}); push(warn?{type:'note',warn:true,text:t}:{type:'note',text:t}); };
+  const textRun=s=>{ String(s).split(/(\\\[[\s\S]*?\\\])/).forEach(p=>{ if(/^\\\[[\s\S]*\\\]$/.test(p)) tex(p.slice(2,-2)); else { const t=p.replace(/\s+/g,' ').trim(); if(t) note(t); } }); };
+  const table=tb=>{ flush();
+    const rows=Array.from(tb.rows).filter(r=>r.cells.length);
+    let hr=null; if(tb.tHead&&tb.tHead.rows.length) hr=tb.tHead.rows[tb.tHead.rows.length-1]; else if(rows[0]&&Array.from(rows[0].cells).every(c=>c.tagName==='TH')) hr=rows[0];
+    const body=rows.filter(r=>r!==hr&&!(tb.tHead&&tb.tHead.contains(r)));
+    const cell=td=>{ const t=lprxText(td,has); return {t,n:/^[-−]?[\d.,]+(\s|$)/.test(t),cls:td.querySelector('.pill.ok')?'ok':td.querySelector('.pill.bad,.pill.ng,.pill.fail')?'ng':undefined,span:td.colSpan>1?td.colSpan:undefined}; };
+    const cap=[pend(),tb.caption?lprxText(tb.caption,has):''].filter(Boolean).join(' — ');
+    const it={type:'table',head:hr?Array.from(hr.cells).map(c=>lprxText(c,has)):[],rows:body.map(r=>({cells:Array.from(r.cells).map(cell),cls:r.classList.contains('gov')?'gov':''}))};
+    if(cap) it.caption=cap; push(it); };
+  const res=nd=>{ flush(); const st=+nd.dataset.st||0, ks=(nd.dataset.k||'').split(/\s+/).filter(Boolean);
+    const L=(checks[st]||[]).filter(c=>ks.indexOf(LPP_CHK2K[c.name])>=0); if(!L.length) return;
+    push({type:'table',caption:'Result'+(L.length>1?'s':''),head:['Check','D/C','Code','Status'],rows:L.map(c=>[c.name+(c.label?' ('+c.label+')':''),lprDC(c.ratio),c.code,{t:c.ok?'PASS':'FAIL',cls:c.ok?'ok':'ng'}])}); };
+  const walk=node=>{ Array.from(node.childNodes).forEach(ch=>{
+    if(ch.nodeType===3){ textRun(ch.textContent); return; }
+    if(ch.nodeType!==1) return;
+    const cl=ch.classList, tag=ch.tagName;
+    if(cl.contains('chipwrap')||tag==='BUTTON'||tag==='SCRIPT'||tag==='STYLE') return;
+    if(cl.contains('lppRes')){ res(ch); return; }
+    if(cl.contains('eqn')){ textRun(ch.textContent); return; }
+    if(tag==='TABLE'){ table(ch); return; }
+    if(cl.contains('eq-title')||cl.contains('subhead')||cl.contains('cbl-t')){ flush(); label=''; const r=ch.querySelector('.eq-ref'), c2=ch.cloneNode(true); c2.querySelectorAll('.eq-ref').forEach(x=>x.remove());
+      const t=lprxPlain(c2.innerHTML); head={t:(head?head.t+' — ':'')+t,r:r?r.textContent.replace(/^\[|\]$/g,'').trim():(head?head.r:'')}; cur=t; return; }   // a heading straight after a heading: one topic title
+    if(cl.contains('step-label')){ flush(); label=cur=lprxPlain(ch.innerHTML); return; }   // the label of the steps after it, until the next heading
+    if(cl.contains('verdict')){ note(lprxText(ch,has),!cl.contains('ok')); return; }
+    if(cl.contains('flag')){ note(lprxText(ch,has),true); return; }
+    if(ch.querySelector(LPRX_BLOCK)||/\\\[/.test(ch.textContent)){ walk(ch); return; }
+    note(lprxText(ch,has));
+  }); };
+  walk(root); flush();
+  if(head) items.push({type:'note',text:'— '+head.t+(head.r?' ['+head.r+']':'')+' —'});
+  else if(label) items.push({type:'note',text:'— '+label+' —'});
+  return items;
+}
+// the builders' sections: [{old, title, body}]
+function lprxSecs(H){
+  const d=document.createElement('div'); d.innerHTML=H||'';
+  return Array.from(d.children).filter(x=>x.matches('details.rpt-sec')).map(dt=>{ const t=dt.querySelector(':scope>summary h3');
+    return {old:dt.dataset.old||'',title:t?lprxPlain(t.innerHTML):'',body:dt.querySelector(':scope>.rpt-body')||document.createElement('div')}; });
+}
+// a sign post section split at its .eq-title headings: route(title) -> 'post' | 'bp' | 'shaft'; the lead text goes with the shaft
+function lprxSplit(body,route){
+  const out={post:document.createElement('div'),bp:document.createElement('div'),shaft:document.createElement('div')}; let r='shaft';
+  Array.from(body.childNodes).forEach(nd=>{ if(nd.nodeType===1&&nd.classList.contains('eq-title')) r=route(nd.textContent); out[r].appendChild(nd.cloneNode(true)); });
+  return out;
+}
 function lprModel(){
   const ctx=LPP_SUMCTX, L=LPP_LAST; if(!ctx||!L) throw new Error('no results yet');
   const inp=ctx.inp, sign=ctx.mode==='sign', S=o=>SharedSteps.step(o), N=lprN, secs=[];
   const stacks=ctx.stacks, lab=st=>st.label?' — post '+st.label.replace(/^P/,''):'';
+  /* LPRX: the Calc sheet's sections (the builders' worked sections) and the Summary tab's content, read into the sections below */
+  const X=lprxSecs(L.H), has=new Set(X.map(x=>x.old)), checks=stacks.map(st=>collectChecks({found:st.found,pstress:st.pstress,inp,label:st.label}));
+  let xn=0;
+  const xsub=(title,body,key)=>{ const q={title,items:lprxItems(body,'cs'+(++xn),checks,has)}; if(key) q.key=key; if(!q.items.length) q.items=[{type:'note',text:'—'}]; return q; };
+  const xs=olds=>X.filter(x=>olds.indexOf(x.old)>=0).map(x=>xsub(x.title,x.body,'lpcs:'+x.old));
+  const xpost=[];   // sign: each post section split into its post / base plate / foundation parts
+  if(sign) X.filter(x=>/^3/.test(x.old)).forEach(x=>xpost.push(lprxSplit(x.body,t=>/^\s*(Post combined|Round HSS)/.test(t)?'post':/^\s*Base plate/.test(t)?'bp':'shaft')));
+  const xps=(part,suffix)=>X.filter(x=>/^3/.test(x.old)).map((x,i)=>xsub(x.title+' — '+suffix,xpost[i][part])).filter(q=>!(q.items.length===1&&q.items[0].text==='—'));
   /* 1. Project and scope */
   secs.push({title:'Project and scope',subs:[{title:'Project',items:[{type:'kv',rows:[
     ['Project',activeProject||'Untitled'],['Structure',$('appTitle')?$('appTitle').textContent:''],
     ['Scope',$('lppScope')?$('lppScope').textContent.replace(/^Scope \(this mode\):\s*/,''):''],
     ['Codes','IBC 2021 §1807.3 · ASCE/SEI 7-22 (Ch. 2, 10, 26, 29) · AISC 360-16 · ACI 318-19 · AASHTO LRFDLTS (base plate bending-line method)'],
-    ['Units','lb, ft, in, psf / ksf unless noted']]},
-    {type:'note',text:'Every value in this report is the value the tool computes on its tabs ([[tab:geometry|Geometry]], [[tab:summary|Summary]], [[tab:loading|Loading]], [[tab:post|Post]], [[tab:anchors|Anchorage]], [[tab:shaft|Shaft]]). The former calculation sheet remains in the [[tab:calcsheet|Calc sheet]] tab.'}]}]});
+    ['Units','lb, ft, in, psf / ksf unless noted'],
+    ['Mode',$('appEyebrow')?$('appEyebrow').textContent:''],
+    ['Prepared with','Light Pole and Sign Post, by Mario Lococo · '+new Date().toLocaleString()]]},
+    {type:'note',text:'Every value in this report is the value the tool computes on its tabs ([[tab:geometry|Geometry]], [[tab:summary|Summary]], [[tab:loading|Loading]], [[tab:post|Post]], [[tab:anchors|Anchorage]], [[tab:shaft|Shaft]]). The worked sections (“worked in full”) are written by the same functions as the tabs, with the same arguments.'},
+    {type:'note',text:'Equations are shown symbolically, then with values substituted, then with the result. Each check ends with its result line (D/C as in the Summary tab: demand ÷ capacity, or required ÷ provided for minimum-type checks). The tool has no project-number, engineer or date fields: the title block and the page header show “—” for them (fill in by hand), and the project is the saved project name.'}]}].concat(xs(['0']))});
   /* 2. Design summary */
   { const subs=[];
     stacks.forEach((st,si)=>{
@@ -6482,6 +6403,8 @@ function lprModel(){
           const d=c.dec!==undefined?c.dec:(c.unit==='in²'||c.unit==='—'||c.unit==='ksf'?2:0);
           return {cells:[c.name,c.code,{t:lprN(c.demand,d)+' '+c.unit,n:true},{t:lprN(c.cap,d)+' '+c.unit,n:true},lprDC(c.ratio),{t:c.ok?'OK':'NG',cls:c.ok?'ok':'ng'}]};})}]});
     });
+    { const sm=document.createElement('div'); sm.innerHTML=summaryHTML(ctx);   // LPRX: the Summary tab's content (same function, same context), as the Calc sheet printed it
+      subs.unshift(xsub('Verdict, design and governing demands (Summary tab)',sm)); }
     secs.push({title:'Design summary',subs});
   }
   /* 3. Wind and ice */
@@ -6529,6 +6452,7 @@ function lprModel(){
         S({id:'G',label:'G used',sym:'G',eq:'\\max(G,\\,G_{f})',sub:'\\max('+N(inp.Ginput)+',\\,'+N(inp.gf.Gf,3)+')',value:inp.G,unit:'',d:3})]});
       if(T.length) subs.push({title:'Dynamic response',items:[lprTopics('dyn',T),{type:'note',text:'Worked in full on the [[tab:loading|Loading tab]] (weights, deflections, and every G_f term).'}]});
     }
+    subs.push(...xs(sign?['1']:['1','2','2b','3']));   // LPRX: worked in full (pole: 1, 2, 2b, 3; sign: 1)
     secs.push({title:'Wind and ice loads',subs});
   }
   /* 4. Load combinations */
@@ -6541,6 +6465,7 @@ function lprModel(){
       L.postDesigns.forEach((pd,pi)=>subs.push({title:'Post '+(pi+1)+' demand, every combination',items:[{type:'table',head:['Family','Combination','Case','P (lb)','M (lb·ft)','N (lb)','T (lb·ft)'],
         rows:L.allCombos.map(r=>{const g=r.postGov[pi]; return {cells:[r.fam,r.name,g.case,lprCell(g.P,0),lprCell(g.M,0),lprCell(g.axial,0),lprCell(g.Tmax||0,0)],cls:(r.name===pd.gASD.name||r.name===pd.gLRFD.name)?'gov':''};})}]}));
     }
+    subs.push(...xs(sign?['1b','2']:['4','4b']));   // LPRX
     secs.push({title:'Load combinations',subs});
   }
   /* 5. Pole / post */
@@ -6560,6 +6485,7 @@ function lprModel(){
           S({id:'ratio',label:'Interaction ('+r.form+')',sym:'ratio',eq:'',sub:'',value:r.ratio,unit:'',d:3,ok:r.ok})])}];
       subs.push({title:(sign?'Post':'Pole')+lab(st),items:[lprTopics('post'+si,T),{type:'note',text:'Worked in full on the [[tab:post|Post tab]].'}]});
     });
+    subs.push(...(sign?xps('post','post combined stress'):xs(['4c'])));   // LPRX
     if(subs.length) secs.push({title:sign?'Post check':'Pole check',subs});
   }
   /* 6. Base plate (anchor rods: Anchorage app) */
@@ -6574,6 +6500,7 @@ function lprModel(){
         {type:'note',warn:true,text:LPP_BP_VERIFY},
         {type:'note',text:'Anchor rods (ACI 318-19 Ch. 17) are designed in the Anchorage app: the anchor pattern and every LRFD combination are sent from the [[tab:anchors|Anchorage tab]], and the returned D/C is shown there and on the Summary.'}]});
     });
+    subs.push(...(sign?xps('bp','base plate'):xs(['8'])));   // LPRX
     if(subs.length) secs.push({title:'Base plate',subs});
   }
   /* 7. Drilled shaft */
@@ -6606,6 +6533,7 @@ function lprModel(){
         {type:'note',text:'Worked in full on the [[tab:shaft|Shaft tab]].'}]});
       if(st.broms) subs.push({title:'Broms reference check'+lab(st),items:[{type:'kv',rows:[['Broms embedment (AASHTO LTS C13.6.1.1, reference only)',N(st.broms.L)+' ft'],['IBC §1807.3 embedment (governs)',N(f.d)+' ft']]}]});
     });
+    subs.push(...(sign?xps('shaft','demand, embedment, bearing and shaft'):xs(['5','6','6b','7'])));   // LPRX
     secs.push({title:'Drilled shaft',subs});
   }
   /* 8. Assumptions, open items, references */
@@ -6629,7 +6557,8 @@ function lprRender(){
   let M; try{ M=lprModel(); }catch(e){ T.innerHTML='<div class="flag bad">Report error: '+lppEsc(e&&e.message)+'</div>'; LPRP.api=null; LPRP.doc=null; return; }
   LPRP.api=SharedReport.mount(T,M,{closed:LPRP.closed,onGoto:lprGoto}); LPRP.doc=LPRP.api.doc;
 }
-function lprGoto(name){ if(lppOutTabValid(name)){ switchTab(name); const b=document.querySelector('#tabBar'); if(b) window.scrollTo(0,b.getBoundingClientRect().top+window.scrollY-10); } }
+function lprGoto(name){ const w=/^wk:([^:]+):(\d+)$/.exec(name||''); if(w){ lppGoto(w[1],w[2]); return; }   // LPRX: a "→ Tab · Card" link
+  if(lppOutTabValid(name)){ switchTab(name); const b=document.querySelector('#tabBar'); if(b) window.scrollTo(0,b.getBoundingClientRect().top+window.scrollY-10); } }
 function lprActive(){ const p=$('page-report'); return !!(p&&p.classList.contains('on')); }
 function lprRefresh(){ if(lprActive()) lprRender(); }
 
@@ -7216,10 +7145,12 @@ function lppMigrateOutTab(){
     if(lppOutTabValid(old)) localStorage.setItem(LPP_OUT_KEY, old); // copy only a valid output-tab id of THIS tool
   }catch(e){}
 }
-function switchTab(name){
+const LPP_OUT_OLD={calcsheet:'report'};   // LPRX (2026-11-02): a remembered tab that was retired opens its successor (key and format unchanged)
+function switchTab(name,noSave){
+  if(LPP_OUT_OLD[name]) name=LPP_OUT_OLD[name];
   document.querySelectorAll('#tabBar button').forEach(b=>b.classList.toggle('on', b.dataset.tab===name));
   document.querySelectorAll('.tabpage').forEach(p=>p.classList.toggle('on', p.dataset.page===name));
-  try{ localStorage.setItem(LPP_OUT_KEY, name); }catch(e){}
+  if(!noSave){ try{ localStorage.setItem(LPP_OUT_KEY, name); }catch(e){} }
   if(name==='report' && typeof lprRender==='function') lprRender();   // LPRP: the shared Report tab is built when shown
   if(name==='drawings' && typeof lpdRender==='function') lpdRender(); // LPDW: the Drawings tab is built when shown
 }
@@ -7416,7 +7347,7 @@ function lppResetPoleOutputs(mode){ (LPP_MODE_OUT_SNAP[mode]||[]).forEach(x=>{ x
   // honoured; anything else is ignored (a foreign value used to hide every tab page).
   lppMigrateOutTab();
   try{ const t=localStorage.getItem(LPP_OUT_KEY);
-       if(lppOutTabValid(t)) switchTab(t); }catch(e){}
+       if(lppOutTabValid(LPP_OUT_OLD[t]||t)) switchTab(t); }catch(e){}
 })();
 
 // KaTeX loads with defer; re-render once ready
@@ -7428,8 +7359,19 @@ window.addEventListener('load',()=>{
 });
 // safety: flush autosave on unload
 window.addEventListener('beforeunload', saveSession);
-// D11: printing prints the calculation report (print CSS); the page header / "Page X of Y" footer apply only while printing
-if($('lppRptPrint')) $('lppRptPrint').addEventListener('click',()=>{ lppApplyPageCSS(true); window.print(); });
+// LPRX (2026-11-02): Ctrl+P, "Export PDF / Print" or the browser's Print prints the Report alone, from every tab (shared/report.js
+// print layout, running header and page numbers). From another tab the Report tab opens first (not remembered) and the tab shown
+// before comes back after printing; shared/report.js's own beforeprint handler (page header, lazy items) has run by then with the
+// report hidden, so the print handlers run once more with the report on screen (lppInPrint stops the repeat). With input errors
+// (no results) the page prints as shown.
+let lppPrintBack=null, lppInPrint=false;
+window.addEventListener('beforeprint',()=>{
+  if(lppInPrint||document.body.classList.contains('rp-printing')||(typeof lprActive==='function'&&lprActive())) return;
+  if(!LPP_LAST||!LPP_SUMCTX||($('lppInErr')&&$('lppInErr').classList.contains('on'))) return;
+  const on=document.querySelector('#tabBar button.on'); lppPrintBack=on?on.dataset.tab:null;
+  switchTab('report',true);
+  lppInPrint=true; try{ window.dispatchEvent(new Event('beforeprint')); } finally{ lppInPrint=false; }
+});
 window.addEventListener('beforeprint',()=>{
   // LPRP: Ctrl+P while the Report tab is shown prints the shared report alone (shared/report.js layout and running header)
   if(typeof lprActive==='function' && lprActive() && LPRP.doc){
@@ -7438,9 +7380,8 @@ window.addEventListener('beforeprint',()=>{
     box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(LPRP.doc,{lazy:false})+'</article></div>';
     document.body.classList.add('rp-printing'); return;
   }
-  lppApplyPageCSS(true);
 });
-window.addEventListener('afterprint',()=>lppApplyPageCSS(false));
+window.addEventListener('afterprint',()=>{ if(lppPrintBack){ const t=lppPrintBack; lppPrintBack=null; switchTab(t,true); } });
 </script>
 </body>
 </html>
