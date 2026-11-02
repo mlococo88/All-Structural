@@ -3600,3 +3600,210 @@ Line numbers are approximate; search for the anchor text. Every code site is tag
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Entered demands:** already entered directly (factored and service column loads per case, and the hand-offs memberReactions /
   foundationLoads). Nothing added.
+## 2026-11-02 — PR: claude/sf-dowel-allcombos — Dowels and shear friction: A_s,req over every combination, A_vf developed on both sides, N_u = 0.9D; pedestal reinforcement on the Reinforcement tab, longitudinal bars as dowels, hooked end (SFDA, SFDB; calculation change) (PR #684: https://github.com/mlococo88/All-Structural/pull/684)
+
+### SFDA. Pier-to-footing dowels and shear friction   [calculation change; CLAUDE.md §4]
+- **Engineer decision (2026-11-02), after the independent audit (discrepancies #1, #2, #3 and #5, cases SF-1 and SF-2):**
+  1. The dowels are checked for every load combination. The worst combination governs both A_s,req and the "dowels in tension" trigger.
+  2. Shear-friction dowels must be developed on both sides of the joint, into the footing and into the pedestal. The case where they are not is handled.
+  3. A_vf is recomputed consistently with 1 and 2.
+  4. Shear friction uses the permanent N_u = 0.9 × D (dead load only, factored 0.9).
+- **Provisions** (read in AASHTO LRFD 10th Ed. (2024); paraphrased):
+  - Art. 5.7.4.1: all reinforcement where interface shear transfer is considered must be fully developed on both sides of the interface (embedment, hooks, mechanical means or welding).
+  - Art. 5.7.4.3, Eq. 5.7.4.3-3: V_ni = cA_cv + μ(A_vf f_y + P_c). P_c is the net compression normal to the shear plane from **unfactored** permanent loads (0 if tensile). The commentary says that neglecting P_c is conservative. Eqs. 5.7.4.3-4 and -5 are the upper limits.
+  - The tool's shear-friction basis stays ACI 318-19 22.9 (V_n = μ(A_vf f_y + N_u), Table 22.9.4.2, 22.9.4.4–22.9.4.6). 0.9D is less than the unfactored permanent load, so it is on the conservative side of the AASHTO P_c definition.
+- **Where** (function + anchor text):
+  - `sfdDowelCheck(i,p,bz,pd,combos,fc,fy,lam,sfPre)`: new last argument (the shear-friction result with A_vf = 0).
+    - Item 1. Before (the combination with the largest ratio at the provided area only):
+      ```
+      const g=o.tenGov;let k;
+      if(ratioAt(0,g)<=1)k=0;
+      else{...bisection on g...}
+      o.kReq=k;
+      ```
+      After (`kOf` = the same bisection, run for every combination in tension; the largest k governs):
+      ```
+      const kOf=g=>{let k; ...same bisection... return k;};
+      o.tenRat.forEach(z=>{z.k=kOf(z);});
+      o.kGov=o.tenRat.reduce((a,z)=>(!a||z.k>a.k)?z:a,null);
+      const k=o.kGov.k;
+      o.kReq=k;
+      ```
+      `o.AsReq=k*AsBase`, `o.tenOK` and `o.tension=k>0` are unchanged in form. `o.tenGov` (largest ratio) is kept for the ratio step.
+    - Item 2. Before: `if(o.tension){ o.ld=...; o.ldh=...; o.LftgReq=...; o.ftgOK=...; ...o.lst=... }else{o.ftgOK=true;if(!o.tenKern){...}}`.
+      After:
+      ```
+      o.sfNeed=!!(sfPre&&!sfPre.isPatch&&sfPre.gov&&!sfPre.ok);o.sfNeedDCR=sfPre&&sfPre.gov?sfPre.gov.ratio:0;
+      o.devTen=o.tension||o.sfNeed;
+      if(db>0){ o.ld=...; o.ldh=...; o.LftgReq=...; ...o.lst=... }   // always computed
+      if(o.devTen){o.ftgOK=o.LftgReq<=bz.availEmb+1e-9;
+      }else{o.ftgOK=true;}
+      if(!o.tenKern){o.tenOK=true;o.kReq=0;o.AsReq=0;}
+      ```
+      `o.Lreq=Math.max(o.lc,o.tension?o.lst:0)` → `o.Lreq=Math.max(o.lc,o.devTen?o.lst:0)`;
+      `o.LpedReq=o.tension?o.ld.Ld:o.Ldc` → `o.LpedReq=o.devTen?o.ld.Ld:o.Ldc`.
+      New, after the projection:
+      ```
+      o.sfDevFtg=db>0&&o.LftgReq<=bz.availEmb+1e-9;
+      o.sfDevPed=db>0&&(o.full?o.ld.Ld<=o.hAvail+1e-9:o.lst<=o.Lprov+1e-9);
+      o.sfDev=nD>0&&o.sfDevFtg&&o.sfDevPed;
+      ```
+  - `sfdShearFriction`:
+    - Item 3. Before: `const AsReqT=dw&&dw.tension&&isFinite(dw.AsReq)?dw.AsReq:0, Avf=Math.max(0,(dw?dw.AsProv:0)-AsReqT);`
+      After:
+      ```
+      const AsReqT=dw&&dw.tension?dw.AsReq:0, AvfNom=isFinite(AsReqT)?Math.max(0,(dw?dw.AsProv:0)-AsReqT):0,
+       dev=!!(dw&&dw.sfDev), Avf=dev?AvfNom:0;
+      ```
+      (A_s,req = ∞ used to count the whole dowel area as A_vf. It now gives 0.)
+    - Item 4. Before: `Pperm=(f.dead||1)*Wped;` (direct mode) and `Pperm=(f.D||0)*(num(p.loads.D.P)+Wped);`.
+      After: `Pperm=o.NUF*Wped;` and `Pperm=o.NUF*(num(p.loads.D.P)+Wped);` with `o.NUF=0.9`. `N_u=Math.max(0,Math.min(Pperm,pl.P))` is unchanged.
+  - `computePhase2`: before `const dowels=peds.map((p,i)=>sfdDowelCheck(i,p,bearing[i],pedDes[i],combos,fc,fy,lam));`. After, a first shear-friction pass with A_vf = 0 decides whether the dowels are relied on:
+    ```
+    const sfPre=peds.map((p,i)=>sfdShearFriction(i,p,R.Wpeds[i],pedDes[i],null,combos,fc,fy,lam));
+    const dowels=peds.map((p,i)=>sfdDowelCheck(i,p,bearing[i],pedDes[i],combos,fc,fy,lam,sfPre[i]));
+    ```
+  - Display (§6), with the work shown:
+    - Report §5.6 (anchor `S({id:q+'AvfN'`): A_s,dow − A_s,req, then the development step on both sides (footing ℓ_d / ℓ_dh vs available; pedestal Class B lap vs projection, or full-height ℓ_d vs h − c), A_vf counted, N_u = min(0.9(P_D + W_ped), P_u).
+    - Report §5.7: A_s,req step names the governing combination (largest k). The table has a k column, and the k-governing row is highlighted. A "shear friction relies on the dowels" step appears where it applies. Tension development and lap steps are shown where `devTen`.
+    - Footing Design 5.6 (`sfsfRender`, `sfdoRender`): the same equations and notes. (2c)/(2d) are shown where `devTen`, and the table has a k column.
+    - Drawings (`sfdwDowelNote`, elevation text): L_D / L_DH and "CLASS B LAP" where `devTen` (before: `tension`).
+- **Problem fixed:**
+  - Items 1/3: A lower-P_u combination (typically 0.9D + W) that needs dowel tension was missed. Tension development was then skipped and the check reported OK. Before, A_vf used the understated A_s,req. Unconservative.
+  - Item 2: A_vf f_y was counted with no check that the dowels are developed in tension. Unconservative.
+  - Item 4: N_u used the combination's own dead factor (1.2 or 1.4). It is now 0.9 in every combination. More conservative.
+- **Check cases.** Ped 1 of the default project: 18 × 18 in, h 24 in, 8 #8 dowels (6.32 in²), #8 verticals, c 2 in, f′c 4 ksi, f_y 60 ksi, footing t 30 in. Available in the footing t − c − d_bx − d_by = 25.0 in, h − c = 22.0 in. ℓ_d(#8) = 28.46 in, ℓ_dc = 18.97 in, ℓ_st = 37.0 in, ℓ_sc = 30.0 in. P_D + W_ped = 120.675 k.
+  - **SF-2** (L: P 60, M_y 40; W_x: P −40, V_x 12, M_y 36):
+    - Item 1. Before: governing 1.2D + 1.0W + L + 0.5S (P 164.81, M 100 k-ft; plain-concrete φM_n ≈ 103 > 100), k = 0, A_s,req = 0, no tension, dowel check OK. After: 0.9D + 1.0(+W_x) (P_u 68.61 k, M_uy 36 + 12·2 = 60 k-ft). Plain concrete: a = (68.61/0.65)/(0.85·4·18) = 1.73 in, φM_n ≈ 0.65·105.55·(9 − 0.86)/12 = 46.5 k-ft < 60, so k = 0.0574 and **A_s,req = 0.36 in²** (audit hand: 0.36). Tension development then governs: ℓ_d 28.46 > 25.0 (footing) and full height ℓ_d 28.46 > 22.0, so the **dowel check is NG**.
+    - Item 3: A_s,dow − A_s,req = 6.32 − 0.36 = 5.96 in². Not developed (above), so **A_vf = 0** (before 6.32).
+    - Item 4 and the shear-friction result. Before: governing 1.2D + 1.0(+W_x) + L + 0.5S, N_u = min(1.2·120.675, 164.81) = 144.81, V_n = 1.0(6.32·60 + 144.81) = 524.0 → V_n,max 259.2 governs, φV_n = 194.4, **DCR 0.062**. After: governing 0.9D + 1.0(+W_x), N_u = min(0.9·120.675 = 108.61, P_u 68.61) = 68.61, V_n = 1.0(0 + 68.61), φV_n = 51.46, **DCR 0.233**.
+  - **SF-1** (e_x 0.25 ft; W_x: P −40, V_x 12, M_y 60). Item 1: A_s,req 0.79 (k 0.125, 1.2D + W + L + 0.5S) → **1.71 in²** (k 0.2708, 0.9D + 1.0(+W_x); audit hand 1.70). Item 3: A_vf 5.53 → nominal 6.32 − 1.71 = 4.61 (audit hand 4.62), not developed, so **0**. Shear friction DCR 0.062 → 0.233. The dowel check was already NG (development) and stays NG.
+  - **Default project**:
+    - Dowel results are unchanged: A_s,req 0, no tension, OK.
+    - Shear friction, Ped 1: A_vf 6.32 → 0 (ℓ_d 28.46 > 25 in the footing, full height 28.46 > 22 in the pedestal). N_u 144.81 → 108.61. φV_n 194.4 → 81.46. DCR **0.041 → 0.098**.
+    - Shear friction, Ped 2: N_u 180.81 → 135.61, φV_n 194.4 → 101.71, DCR **0.041 → 0.079**.
+    - Both stay OK.
+  - **Item 2, dowels relied on** (scratch case: Ped 1 3 × 3 × 1.5 ft, not intentionally roughened μ 0.6, D + 150 k, W_x V_x 115 k; φμN_u alone = 0.45·244.82 = 110.17 < 115):
+    - With 8 #8 dowels: before, A_vf 6.32 counted, V_n = 0.6(379.2 + 244.82) = 374.4, **DCR 0.410 OK**. After, the dowels must be developed: ℓ_d 28.46 > 25 (footing) and full height 28.46 > 16 (pedestal). So A_vf = 0, **DCR 1.044 NG**, and the dowel check is NG.
+    - With 12 #5 dowels: ℓ_d 14.23 ≤ 25 and full height ℓ_d 14.23 ≤ 16, so the dowels are developed and A_vf = 3.72 counts. DCR 0.546 before and after.
+- **How verified:**
+  - Headless Chromium on origin/main vs the branch, using the pinned KaTeX 0.16.11, Plotly 2.35.2 and three 0.160.0 from npm. Cases: default, SF-1, SF-2, the two item-2 cases, and direct mode.
+    - A deep diff of every `P2` value: only `P2.dowels` and `P2.shearFr` differ.
+    - At the default, `P2.dowels` only gains new fields. No existing value changes.
+    - The report text differs only in §5.6, and in §5.7 where the dowels change.
+    - The dashboard differs only in the shear-friction chip (default: max DCR 0.04 → 0.10).
+  - Report on all 6 cases: 0 unresolved or duplicate references, 0 KaTeX errors, no NaN or undefined. Drawings build (`sfdwBuild`).
+  - 0 console errors. `node tests/check-syntax.mjs` passes, as does `tests/smoke/spread-footing-scroll.mjs --libs`.
+  - Cost: `computePhase2` takes about 107 → 236 ms on a case with 7 combinations in tension (one bisection per combination).
+- **Saved data:** no new input, key or format.
+- **Other copies:** none.
+- **Open items:**
+  - ACI 318-19's own article for developing shear-friction steel on both sides was not checked (no ACI copy here). AASHTO 5.7.4.1 is cited.
+  - N_u = 0.9D follows the engineer's decision. AASHTO 5.7.4.3 defines P_c from unfactored permanent loads, so 0.9 is a conservative choice within it.
+  - Partial development (scaling f_y by available/required length) is not taken. Undeveloped dowels count A_vf = 0.
+
+### SFDB. Pedestal reinforcement on the Reinforcement tab; "Pedestal longitudinal bars act as the dowels"; "Hooked end in footing"   [calculation change for new projects; CLAUDE.md §4, §5]
+- **Engineer requests (2026-11-02), same PR as SFDA:**
+  1. Move the pedestal reinforcement inputs to the Reinforcement tab. No result change, and the saved fields are unchanged.
+  2. A checkbox "Pedestal longitudinal bars act as the dowels". When ticked, the dowel size, count and layout are those of the longitudinal bars, and the separate dowel inputs are greyed out. New projects: ticked. Old saves: unticked (migration).
+  3. A checkbox "Hooked end in footing" (standard hook at the footing end). Footing side: hooked → ℓ_dh, straight → ℓ_d, against t − c_bot − d_b,x − d_b,y. Pedestal side: continuous bars are developed by definition; separate dowels need the Class B tension lap within the projection (or ℓ_d full height). New projects: ticked. Old saves keep their behaviour.
+- **Where:**
+  - HTML: new section `<details class="sec" id="sec-pedrebar">` ("Pedestal Reinforcement & Dowels", container `#pedRebarContainer`) after `sec-rebar`. `SFD_IN_SEC` gets `'sec-pedrebar':'rebar'`.
+  - `buildPedCards`:
+    - The tables for longitudinal bars, ties, cover, exposure, bar entry mode, bar info, dowels and joint surface are built into a per-pedestal block `div.pedbody.sfdPedRb[data-ped=i]` in `#pedRebarContainer`, instead of the pedestal card. The `data-path`s are unchanged.
+    - New checkbox `data-path="peds.i.reinf.dowelLong"`.
+    - The dowelHook `<select>` (Straight / 90° hook) becomes `<input type="checkbox" data-path="peds.i.reinf.dowelHook" data-on="hook90" data-off="straight">`. The field and its values are unchanged.
+  - `handleFieldChange`, `bindStaticInputs`, the document `input` / `change` listeners: checkboxes (value = `data-on` / `data-off`, else a boolean), handled on `change` only. A label change also renames the block header.
+  - `sfdPedBarInfo`: `dowelSize`, `dowelN` and `dowelProj` are disabled when the longitudinal bars act as the dowels. The info line names those dowels.
+  - `newPed`:
+    - before: `...dowelHook:'straight',dowelProj:'',sfJoint:'rough'}`
+    - after: `...dowelHook:'hook90',dowelProj:'',sfJoint:'rough',dowelLong:true}`
+  - `migrateState`: new `if(p.reinf.dowelLong!==true&&p.reinf.dowelLong!==false)p.reinf.dowelLong=false;`. The existing `dowelHook` line (missing → 'straight') is unchanged. A stored value is never changed.
+  - New `sfdDowelBars(i)`: `{size:longSize, n:sfdPedBars(i).n, fromLong:true}` when `dowelLong===true` and h > 0. Otherwise `{size:dowelSize, n:dowelN}`. It is used in:
+    - the bearing dowel area: before `(reinf.dowelN||0)*BAR_AREA[reinf.dowelSize||0]`, `dSize=reinf.dowelSize||8`;
+    - `sfdDowelCheck` (`nD`);
+    - the Report input table and the §5.5 dowel step label;
+    - the drawings (pedestal note, schedule: the vertical bar row gets the embedment and hook length, and no separate dowel row);
+    - the 3D view.
+  - `sfdDowelCheck`: `o.cont=DB.fromLong`. When `o.cont`:
+    - `o.full=false; o.Lreq=0; o.Lprov=h−c; o.projOK=true` (no lap, no projection check);
+    - `o.sfDevPed` is true.
+  - Display:
+    - The footing-side tension development (ℓ_dh or ℓ_d, with its equation substituted) is shown in Report §5.7 and Footing Design (2c) for every pedestal. It is marked "not required here" when neither interface tension nor shear friction needs it.
+    - Pedestal side, continuous bars: the step "developed in the pedestal by definition; no lap or projection check".
+    - Pedestal side, separate dowels: the Class B lap ℓ_st and the projection, as before.
+- **Formulas:** unchanged. The tool's ACI 318-19 expressions are kept:
+  - ℓ_d per 25.4.2.4;
+  - ℓ_dh per 25.4.3.1(a), with ψ_r = 1.6 and ψ_o = 1.0;
+  - Class B lap per 25.5.2;
+  - ℓ_dc per 25.4.9.2.
+  - The request cites AASHTO LRFD 10th Ed. 5.10.8.2.1 (straight), 5.10.8.2.4 (hooks) and 5.10.8.4.3 (tension laps). These articles were confirmed to exist in the 10th Ed. PDF. Their ℓ_d expression (Eq. 5.10.8.2.1a, with λ_rc from Eq. 5.10.8.2.1c-2) differs from ACI. Switching is left as an open question (below).
+- **Check cases** (Ped 1 18 × 18 × 24 in, #8, f′c 4 ksi, f_y 60 ksi, available 25.0 in):
+  - Hooked ℓ_dh = max(60000 · 1.0 · 1.6 · 1.0 · (4000/15000 + 0.6) / (55 · 1.0 · 63.25) · 1.0^1.5, 8, 6) = max(23.92, 8, 6) = **23.92 in ≤ 25.0 OK**. Straight ℓ_d = 3/40 · 60000/63.25 · 1.0/2.5 · 1.0 = **28.46 in > 25.0**.
+  - **Default (new) project:**
+    - Before (main, and SFDA with straight separate dowels): A_vf 6.32. After SFDA alone: A_vf 0, Ped 1 DCR 0.098.
+    - Now (hooked, continuous bars): footing ℓ_dh 23.92 ≤ 25 and the pedestal developed by definition, so the dowels are developed and **A_vf = 6.32**. N_u = 108.61 (0.9D). V_n = 1.0(6.32 · 60 + 108.61) = 487.8 > V_n,max 259.2, so φV_n = 194.4 and **DCR 0.041** (main 0.041).
+    - Dowel check: OK, with no lap and no projection check (main: compression lap 30 > 22, full height ℓ_dc 18.97 ≤ 22).
+  - **SF-2 with the new defaults:**
+    - A_s,req 0.36 in² (SFDA). Tension development: ℓ_dh 23.92 ≤ 25 in the footing, continuous bars in the pedestal, so the **dowel check is OK**. (With straight separate dowels, SFDA: NG on ℓ_d 28.46 > 25 and full height 28.46 > 22.)
+    - A_vf = 6.32 − 0.36 = 5.96 is counted. Shear friction DCR 0.062 (V_n,max governs).
+  - **SF-1 with the new defaults:** A_s,req 1.71, dowels developed, A_vf 4.61 counted, DCR 0.062, dowel check OK.
+- **Saved data (§5):**
+  - No key or field is renamed.
+  - New field `reinf.dowelLong`. Saves without it get `false`: separate dowels, and the stored `dowelHook` is kept (missing → 'straight', as before).
+  - Checked: old saves (dowelLong false, straight) give `P2` identical to SFDA on default, SF-1, SF-2, the two item-2 cases and direct mode. The only difference is the new field `dowels[i].cont`. Unticking then re-ticking keeps the separate dowel inputs.
+- **How verified:**
+  - Headless Chromium, origin/main vs the branch:
+    - with the new defaults: only `P2.dowels` and `P2.shearFr` differ (default, SF-1, SF-2, direct);
+    - SFDA vs old saves on the branch: identical apart from `cont`.
+  - UI checks:
+    - the inputs are on the Reinforcement tab and not in the card;
+    - the new pedestal has both boxes ticked and the dowel inputs disabled;
+    - long bars #9 give dowels #9 × 8;
+    - unticking restores the #8 dowel inputs and enables them;
+    - the hook checkbox toggles 'hook90' / 'straight';
+    - `migrateState` on a save without the field gives `false`;
+    - a label edit renames the block.
+  - Report: 0 unresolved references, 0 KaTeX errors, no NaN. Drawings build. `node tests/check-syntax.mjs` passes, as does the scroll smoke test.
+- **Other copies:** none.
+- **Open items (questions for the engineer):**
+  1. Should ℓ_d, ℓ_dh and the tension lap switch from ACI 318-19 (the tool's basis) to AASHTO LRFD 10th Ed. 5.10.8.2.1 / 5.10.8.2.4 / 5.10.8.4.3?
+     - The 10th Ed. ℓ_db form (Eq. 5.10.8.2.1a) gives 0.17 · 1.0 · (60/(1.97 · 4^0.25))² = 78.9 in for #8, before λ_rc (0.3 to 1.0, Eq. 5.10.8.2.1c-2).
+     - With λ_rc = d_b/(c_b + k_tr) = 0.4 (β_t = 0), ℓ_d ≈ 31.6 in, against ACI's 28.46. This needs a decision on β_t, n_s and the hook factors.
+  2. Development of the continuous bars above the joint is taken as satisfied by definition, as instructed. The pedestal height itself (h − c = 22 in < ℓ_d 28.46 for straight #8) is not checked against a bar terminating at the pedestal top.
+
+### SFDC. Dowel area presented as minimum / required for interface tension / governing   [D/C display and dowel-check logic; CLAUDE.md §4]
+- **Engineer request (2026-11-02):**
+  - The step "Dowel area required (smallest k A_s,prov…)" was read as k × A_g.
+  - Show three things: (1) 0.005A_g, substituted; (2) A_s,req in plain words, with k and what k > 1 means; (3) A_s,gov = max of (1) and (2) against A_s,prov, with its D/C.
+- **Where:**
+  - `sfdDowelCheck`, before `return o`:
+    - before: `o.ok=o.tenOK&&o.ftgOK&&o.projOK;`
+    - after:
+      ```
+      o.Ag=A;o.AsMin=0.005*A;o.AsGov=Math.max(o.AsMin,isFinite(o.AsReq)?(o.AsReq||0):Infinity);
+      o.asOK=o.AsGov<=AsProv+1e-9;o.dcAs=AsProv>0?o.AsGov/AsProv:Infinity;
+      o.ok=o.asOK&&o.tenOK&&o.ftgOK&&o.projOK;
+      ```
+  - Summary table row "Dowels (tension, laps)":
+    - before: D/C = `z.tension?(z.AsProv>0?z.AsReq/z.AsProv:Infinity):0`, labelled A_s,req/A_s,prov
+    - after: D/C = `z.dcAs`, labelled A_s,gov/A_s,prov with A_s,gov = max(0.005A_g, A_s,req) (§16.3.4.1 added)
+  - Dashboard chip text: "A_s,gov … > A_s,prov …".
+  - Report §5.7:
+    - A_s,req step reworded: the provided area is scaled by k at the same bar positions until the interface ratio is ≤ 1. "k > 1: the dowels provided are k times short". "k multiplies the dowel area, not A_g".
+    - New steps `AsMin` (0.005 A_g, A_g = b_x b_y substituted) and `AsGov` (max, ≤ / > A_s,prov = n × A_b, D/C).
+  - Footing Design 5.6:
+    - new block (2e);
+    - the same note under (2b);
+    - table column A_s,gov / A_s,prov.
+- **Effect:**
+  - The dowel-check D/C now includes the minimum. Default Ped 1: before 0 (no interface tension), after A_s,gov/A_s,prov = max(0.005·324 = 1.62, 0)/6.32 = **0.256**.
+  - The dowel check's pass/fail now also fails when A_s,prov < 0.005A_g. That case was already a FAIL on the separate "Dowel steel (min 0.005A_g)" chip.
+  - No computed area changes. Checked against the previous commit on default, SF-2, M_y 600 and an old SF-2 save: `P2` differs only by the new fields.
+- **Check case:** M_y(W_x) = 600 k-ft on default Ped 1 (governing 1.2D + 1.0(+W_x) + L + 0.5S, P_u 204.81).
+  - k = 4.276, so A_s,req = 4.276 · 6.32 = 27.03 in².
+  - A_s,min = 1.62, so A_s,gov = 27.03 > 6.32: D/C 4.28, NG ("4.28 times short").
+  - Plausibility: only the 3 bars of the tension face (3/8 of the area) work. M/(φ f_y 0.9d) = 7200/(0.9·60·0.9·15.5) ≈ 9.6 in² on that face, i.e. ≈ 25.6 in² total. That is the same order, so this is not a scaling bug.
+- **Open items:**
+  - k ≈ 15 cannot be reproduced on the default project. It has no interface tension, so no k is shown. The engineer's project is needed.
+  - Observation, not changed: for net uplift with M = 0, `sfpmRatios` reaches its tension limit at about 0.52 f_y per in² of steel. Example: P_u −55.19 k needs 1.78 in², against 55.19/(0.9·60) = 1.02 in² by hand. This is conservative and comes from the shared P–M routine. Raised, not changed.
