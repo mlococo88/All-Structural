@@ -15236,7 +15236,7 @@ index cedb10f..5b89752 100644
   pulled directly. The stem, footing and pile demands are worked from those and the earth pressures; entering them directly would bypass the
   load combinations with new paths (a new formula), which the brief excludes. Raised for the engineer instead.
 
-## 2026-11-02 — PR: claude/report-retire-abutment (ABRX: the print report (D11, "Print / PDF Report" and its report-options dialog) retired after porting everything the Report tab lacked; "Print / PDF Report", Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
+## 2026-11-02 — PR: claude/report-retire-abutment, PR #715: https://github.com/mlococo88/All-Structural/pull/715 (ABRX: the print report (D11, "Print / PDF Report" and its report-options dialog) retired after porting everything the Report tab lacked; "Print / PDF Report", Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
 
 ### ABRX-1. Content of the print report ported into the Report tab   [display] [no result change]
 - **Engineer request (2026-11-02):** retire each tool's old print report by porting it in full into the Report tab, as lldf #623, Light Pole #625, Shear and Moment #672, elastomeric #676, ACI Rebar #685, Retaining Wall #689, Timber #696 and Gusset #702: compare number by number, port what is missing (the tool's own values, no recomputation, no new formula), then remove the old report.
