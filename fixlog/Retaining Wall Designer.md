@@ -1810,7 +1810,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   - Footing tab, Heel Step 3 card (`renderFooting`, anchor `{sym:'d_b', desc:'assumed bar diameter (#7)', val:'0.875', unit:'in'}`; also `{sym:'c_c', desc:'top clear cover', val:'2.00'…}`): the var table shows a fixed #7 / 0.875 in and a 2.00 in cover. The equation beside it uses the selected bar (`r.sel_heel.bar.db`) and the input cover (`inp.cov_ftg`). The same fixed d_b line is in the toe card and a #6 one at about line 4697. The Report uses the actual values.
   - AASHTO Stability tab, Step 6 with q_R from the geotechnical report (`qn_mode = 'manual'`): the var table still lists "q_n nominal bearing resistance = 3 q_a" (9000 psf), which that mode does not use.
 
-## 2026-11-02 — PR: claude/rwall-footing-db-label (RWDB: the effective-depth tables show the selected bar's d_b and the input cover; q_n is not listed when q_R is entered; display only, no result change)
+## 2026-11-02 — PR: claude/rwall-footing-db-label, PR #699: https://github.com/mlococo88/All-Structural/pull/699 (RWDB: the effective-depth tables show the selected bar's d_b and the input cover; q_n is not listed when q_R is entered; display only, no result change)
 - **Engineer request (2026-11-02):** fix the two display issues raised in RWRX (#689): show the selected bar's d_b and the input cover, and hide q_n = 3 q_a when q_R is entered. No result change.
 - **Problem:** the "where" tables beside three effective-depth equations listed fixed values, while the equation beside each used the real ones:
   - Stem Step 2: "assumed bar diameter (#6) 0.750";
