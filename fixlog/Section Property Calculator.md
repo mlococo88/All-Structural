@@ -2919,3 +2919,20 @@ index 56a8a3f..13f8372 100644
 - **Before → after (one of five):** `'… the same values are on the [[tab:props|Properties]] tab.'` → `'… the same values are on the Properties tab[[tab:props| ↗]].'`
 - **No other change:** no value, step or calculation changed. No saved data changed.
 - **Verified:** headless Chromium, box2c project. The print text has "on the Properties tab." and "on the Calc detail tab."; all earlier report checks still pass (references, KaTeX, values, main vs branch).
+
+## 2026-11-02 — PR: PRLINK — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete)   [display and storage only]
+- **Before:** Project tab → Saved projects (this browser): Save (under Project name), drop-down + Open / Delete (`spc_projects_v1`,
+  `{ name: { t, d } }`); header Open file… / Save file; Undo / Redo (geometry). No rename, no duplicate.
+- **Where:**
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - before `/* ---- Project tab ---- */`: `let SPCPL` and `function spcPlibButton()` (anchor `/* PLIB (2026-11-02): "Saved projects…" dialog`):
+    `mapStore(localStorage, LS_PROJ, { unpack: d, time: t, sort: 'saved' })`; dialog `open` = `loadModel(d)` (the Open button's path); a
+    rename of the open project (Project name = old name) sets Project name to the new name; the inputs are rebuilt after every change.
+  - `buildProjPane()`, after the `if (names.length) { … }` block: `{ const lb = spcPlibButton(); if (lb) row.appendChild(lb); }   /* PLIB */`.
+- The tool's own Undo / Redo is unchanged.
+- **Saved data:** keys `spc_projects_v1`, `spc_autosave_v1` and their formats unchanged; no new key.
+- **How verified:** `node tests/smoke/project-library.mjs --tool spc`: ALL PASS (`SPCUI.res`, every computed result, identical to origin/main
+  on load, after an input change, reopened on main's storage and opened from the dialog; the part ids, made from the clock on each load,
+  are normalised before comparing; dialog byte-identical; quota; 390 px; no new console errors). `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands:** the stress (P, M_x, M_y) and shear-flow (V_x, V_y) loads are entered directly; nothing added.

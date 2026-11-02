@@ -32,6 +32,13 @@ const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel
   await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
   return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
 export const TOOLS = {
+  spc: {
+    file: 'Section Property Calculator.html', list: 'spc_projects_v1', auto: 'spc_autosave_v1', ownUndo: true,   // part ids (time-based, new on every load) are not results and are left out
+    ready: p => p.waitForFunction(() => window.SPCUI && window.SPCUI.res),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(window.SPCUI.res, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v)).replace(/\bp[0-9a-z]{9,}\b/g, 'ID')); }),
+    change: async p => { await p.evaluate(() => { const m = window.SPCUI.model; m.parts[0].x += 1; }); await p.evaluate(() => { fullRebuild(); }); await p.waitForTimeout(900); },
+    save: async (p, name) => { await p.evaluate(n => { window.SPCUI.model.project.name = n; rebuildInputs(); const b = [...document.querySelectorAll('button')].find(x => x.textContent === 'Save' && x.classList.contains('primary')); b.click(); }, name); await p.waitForTimeout(400); }
+  },
   mlg: {
     file: 'Moving Load Generator.html', list: 'movingLoadGen.projects.v1', auto: 'movingLoadGen.autosave.v1', newList: true,
     ready: p => p.waitForFunction(() => typeof RES !== 'undefined' && RES),
@@ -144,7 +151,7 @@ const ADIR = path.join(os.tmpdir(), 'allstruct-tests', 'tree-' + sha);
 if (!fs.existsSync(path.join(ADIR, '.done'))) { fs.mkdirSync(ADIR, { recursive: true }); execFileSync('sh', ['-c', `git -C "${REPO}" archive ${sha} | tar -x -C "${ADIR}"`]); fs.writeFileSync(path.join(ADIR, '.done'), sha); }
 const FA = path.join(ADIR, T.file), FB = path.join(REPO, T.file);
 // the list UI: the shared dialog (default) or the tool's own list with the shared rename / duplicate (T.ui)
-const UI = Object.assign({ open: async p => { await p.click('[data-sp] >> text=Saved projects…'); await p.waitForSelector('dialog.spLib[open]'); },
+const UI = Object.assign({ open: async p => { await p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); [...document.querySelectorAll('button[data-sp]')].find(b => b.textContent === 'Saved projects…').click(); }); await p.waitForSelector('dialog.spLib[open]'); },
   rows: 'dialog.spLib tbody tr', btn: (a, n) => `dialog.spLib [data-spa=${a}][data-n="${encodeURIComponent(n)}"]`, first: 'dialog.spLib [data-spa=open]',
   err: async (p, s) => p.$eval('dialog.spLib .spErr', e => e.textContent).catch(() => ''), box: 'dialog.spLib', delConfirm: true }, T.ui || {});
 const drop = o => { if (!T.openIgnore) return o; const c = { ...o }; T.openIgnore.forEach(k => delete c[k]); return c; };   // fields the tool's own Save changes (abutment: the save adds a revision to S.meta, so the input fingerprint differs from the autosave's)
