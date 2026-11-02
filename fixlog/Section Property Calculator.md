@@ -2937,7 +2937,7 @@ index 56a8a3f..13f8372 100644
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Entered demands:** the stress (P, M_x, M_y) and shear-flow (V_x, V_y) loads are entered directly; nothing added.
 
-## 2026-11-02 — PR: claude/list-input-secprop — Templates tab, My sections library, "Save to the library": Tags is a table with one box per tag (LIST)   [display only]
+## 2026-11-02 — PR: claude/list-input-secprop, PR #694: https://github.com/mlococo88/All-Structural/pull/694 — Templates tab, My sections library, "Save to the library": Tags is a table with one box per tag (LIST)   [display only]
 - **Why:** engineer decision 2026-11-02: no comma-separated inputs (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
 - **Where (1):** script tags, anchor `<script src="shared/projects-ui.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
 - **Where (2):** `buildLibPane()`, section `mkSec(P, 'libSave', …`. **Before:**
