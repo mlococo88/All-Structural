@@ -295,6 +295,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
 @media screen{.rp-step .rp-m{padding-top:2pt;padding-bottom:2pt;} .rp-step .rp-m .katex .base{margin:2pt 0;}}   /* equations on screen: a wrapped line clears the one above; a tall fraction stays inside the scroll box */
 #rp-print{display:none;}
 @media (max-width:1000px){.rp-body{grid-template-columns:minmax(0,1fr);} .rp-toc{position:static;max-height:220px;} .rp-doc{padding:14px;}}
+@media screen and (max-width:600px){.rp-go{white-space:normal;} .rp-step{grid-template-columns:minmax(0,1fr);grid-template-areas:"d" "m" "r" "n";} .rp-step .rp-r{white-space:normal;padding-left:0.25in;}}   /* PHN (2026-11-02): phone: a long tab link wraps, and a step's result goes under its equation instead of beside it (both were cut off) */
 @media print{
   body.rp-printing>*:not(#rp-print){display:none!important;}
   html:has(body.rp-printing),body.rp-printing{height:auto!important;overflow:visible!important;background:#fff!important;}
