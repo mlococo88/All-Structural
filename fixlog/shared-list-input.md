@@ -67,3 +67,8 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
 
 ## 2026-11-02 — PR: claude/list-input-secprop, PR #694: https://github.com/mlococo88/All-Structural/pull/694 — loaded by Section Property Calculator.html (no change to the shared file)
 - Library "Save to the library", Tags (`mount`, one text column). `tests/smoke/list-input.mjs` gains the part `secprop`.
+
+## 2026-11-02 — PR: claude/list-input-index — loaded by index.html (no change to the shared file)
+- `react(React)` → `ListTable`: `NumberListInput` (4 GFS lists, arrays) and the AREMA girder spacings (text). `tests/smoke/list-input.mjs`
+  gains the part `index` and the entry options `ignore` (a console message to ignore), `serial` (A then B, not in parallel)
+  and `timeout` (page load); `tests/lib.mjs` `openPage()` takes an optional `timeout` (default unchanged).

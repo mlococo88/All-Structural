@@ -4306,3 +4306,66 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 15 sections is identical.
 - The whole-document `textContent` and localStorage differ only by the times written when the page publishes its hand-offs (`producedAt`, `setAt`, `seenAt`, the "received … 05:05" line) and by `appPaths.mct.file`. That value is the name of the file opened, which was a temporary copy for origin/main.
 - Screenshots at 900 and 1280 px are identical, except about 70 px on the LL & DL Distribution sections (the same time line) and 8–9 px of anti-aliasing.
+
+## 2026-11-02 — PR: claude/list-input-index — GFS floorbeam spacings, stringer offsets and the AREMA girder spacings are tables with one box per value (LIST)   [display only]
+- **Why:** engineer decision 2026-11-02: no comma-separated inputs (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
+  React without JSX build: `SharedListInput.react(React)` → `ListTable`.
+- **Where (1):** script tags, anchor `<script src="shared/report.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
+- **Where (2):** `NumberListInput`. **Before:**
+```jsx
+// Text input for a list of numbers — keeps raw text locally so commas/spaces survive typing
+function NumberListInput({value, onChange, style, placeholder}) {
+  const parse = s => s.split(/[\s,]+/).map(x=>parseFloat(x)).filter(x=>isFinite(x));
+  const [txt, setTxt] = React.useState((value||[]).join(', '));
+  React.useEffect(()=>{
+    // Resync from external value only when it genuinely differs from what's typed
+    if (JSON.stringify(parse(txt)) !== JSON.stringify(value||[])) setTxt((value||[]).join(', '));
+  }, [JSON.stringify(value||[])]);
+  return <input type="text" style={style} placeholder={placeholder} value={txt}
+    onChange={e=>{ setTxt(e.target.value); onChange(parse(e.target.value)); }}/>;
+}
+```
+  **After:**
+```jsx
+const ListTable = window.SharedListInput ? SharedListInput.react(React) : null;
+function NumberListInput({value, onChange, placeholder, label, col = 'Value', unit = 'ft'}) {
+  return <ListTable label={label} rows={SharedListInput.fromNumbers(value||[])}
+    columns={[{label:col, unit, lenient:true, width:'6.5em', placeholder}]}
+    onChange={rows=>onChange(SharedListInput.toNumbers(rows, 0, parseFloat))}/>;
+}
+```
+- **Where (3):** `GFSEditor`, the four call sites (`bay1Stations`, `bay2Stations`, `stringerOffsets`, `stringerOffsets2`):
+  `style={{...INP,width:'100%',fontFamily:'monospace'}}` → `label="Floorbeam spacing, bay 1" col="Increment"` (bay 2 likewise;
+  stringers `label="Stringer offsets from the left girder" / "… center girder" col="Offset"`); placeholders
+  `"e.g. 5, 12, 18, 12, 5"` → `"5"`, `"e.g. 2.5, 5.5"` → `"2.5"`.
+- **Where (4):** AREMA Rating, anchor `Girder Spacing (ft) — comma-separated`. **Before:**
+```jsx
+                      <div style={STYLES.monoSmall}>Girder Spacing (ft) — comma-separated</div>
+                      <input type="text" style={{...INP,fontSize:'11px',fontFamily:'monospace'}}
+                        value={R2.arema_spacings||''} 
+                        placeholder="e.g., 6,6,5.5 or 6 (uniform)"
+                        onChange={e=>setRating('arema_spacings',e.target.value)}/>
+```
+  **After:**
+```jsx
+                      <div style={STYLES.monoSmall}>Girder Spacing (ft)</div>
+                      <ListTable label="Girder spacings (AREMA)" rows={SharedListInput.fromText(R2.arema_spacings||'')}
+                        columns={[{label:'S', unit:'ft', lenient:true, min:0, minExclusive:true, width:'6em', placeholder:'6'}]}
+                        onChange={rows=>setRating('arema_spacings',SharedListInput.toText(rows))}/>
+```
+- **Saved data:** `cfg.gfs.bay1Stations` / `bay2Stations` / `stringerOffsets` / `stringerOffsets2` stay arrays of numbers
+  (each cell read with parseFloat, as the old box read each token; an unreadable cell is skipped, as before, and marked).
+  `rating.arema_spacings` stays text: "6, 6, 5.5" after an edit (older "6,6,5.5" is shown as rows and kept until edited);
+  `parseSpacings()` (both copies) is unchanged and reads the same values (`tests/engine/list-input.test.mjs`).
+- **Check case:** default project, Geometry → Bridge System (GFS): bay 1 increments 12 ↵ 18 ↵ 24 ↵ 18 ↵ 12 and stringer offsets
+  2.5 ↵ 6 ↵ 9.5 → `bay1Stations` = [12, 18, 24, 18, 12], `stringerOffsets` = [2.5, 6, 9.5]; the Generate (MCT) and Geometry
+  pages identical to typing "12, 18, 24, 18, 12" and "2.5, 6, 9.5" in the old boxes on origin/main.
+- **How verified:** `node tests/smoke/list-input.mjs --part index`: origin/main vs this branch (one at a time: the page is
+  compiled by Babel in the browser), default project and the case above: the stored `mct_cfg_v3`, the Generate and Geometry
+  page text identical; 0 console errors (Babel's size note ignored); 390 px no sideways scroll; screenshots at 1400 and 390 px
+  looked at. The AREMA girder-spacing table appears only after MIDAS results are loaded, which the offline test kit has no
+  fixture for: it is covered by the Node round trip and the JSX syntax check only (an engineer click-check is listed below).
+  `node tests/check-syntax.mjs index.html` passes (JSX transpiled).
+- **Formulas, factors, units, code references:** none (§4 does not apply).
+- **Open items:** engineer check: with results loaded, AREMA Rating → Girder Spacing: type 6 ↵ 6.5 ↵ 6 and confirm the
+  rating uses those spacings (the rating text shows them).
