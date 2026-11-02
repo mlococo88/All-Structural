@@ -277,6 +277,9 @@ tr.pier td{background:#f8fafc;font-weight:600}
 <!-- MLRP: shared worked steps and the shared report viewer (Report tab) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): saved-project list (Save / Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const num=(id,d)=>{const e=$(id);const v=e?parseFloat(e.value):NaN;return isNaN(v)?d:v;};
@@ -1292,7 +1295,7 @@ function mlgApply(d){
   if($('aLF')&&$('aLb'))$('aLF').classList.toggle('hidden',$('aLb').value!=='user');
 }
 let mlgSaveT=null;
-function mlgAutosave(){clearTimeout(mlgSaveT);mlgSaveT=setTimeout(()=>{try{localStorage.setItem(MLG_KEY,JSON.stringify(mlgSnapshot()));}catch(e){}},400);}
+function mlgAutosave(){clearTimeout(mlgSaveT);mlgSaveT=setTimeout(()=>{try{localStorage.setItem(MLG_KEY,JSON.stringify(mlgSnapshot()));}catch(e){} if(window.MLPL)MLPL.h.record(); /* PLIB: one undo step per change */},400);}
 document.addEventListener('input',mlgAutosave); document.addEventListener('change',mlgAutosave);
 {const _runS=run; run=function(){_runS(); mlgAutosave();};}
 $('runBtn').insertAdjacentHTML('beforebegin','<button class="hb" id="mlgSave" title="Save all inputs to a JSON file">Save JSON</button><button class="hb" id="mlgOpen" title="Load inputs from a JSON file">Open JSON</button><button class="hb" id="mlgNew" title="Clear the autosave and start from the default inputs">New</button><input type="file" id="mlgFile" accept=".json,application/json" style="display:none">');
@@ -1315,6 +1318,34 @@ function mlgRestore(){
 }
 
 initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-Truck'); renderSegs(); syncVis(); mlgRestore(); run();
+/* PLIB (2026-11-02): saved-project list in this browser and Undo / Redo (shared/projects.js, shared/projects-ui.js). The tool had only
+   the autosave and JSON files. New key movingLoadGen.projects.v1 (tool-prefixed, CLAUDE.md §5): { name: mlgSnapshot() }, the same object
+   as Save JSON writes, opened through mlgApply() + run() like Open JSON. The autosave key and the file format are unchanged.
+   Undo / Redo: mlgSnapshot() without savedAt and the view toggle viewMode, session only; set = mlgApply() + run(). */
+(function(){
+  if(!window.SharedProjects||!window.SharedProjectsUI)return;
+  const MLG_LIB='movingLoadGen.projects.v1';
+  const inputsText=()=>{const d=mlgSnapshot();delete d.savedAt;delete d.fields.viewMode;return JSON.stringify(d);};
+  const h=SharedProjects.history({get:inputsText,set:t=>{const d=JSON.parse(t);const vm=$('viewMode');if(vm)d.fields.viewMode=vm.value;mlgApply(d);run();}});
+  let ST=null;try{ST=window.localStorage;}catch(e){}
+  const store=SharedProjects.mapStore(ST,MLG_LIB,{time:d=>d&&d.savedAt||null,sort:'saved'});
+  let cur=null;
+  const dlg=SharedProjectsUI.libraryDialog({store,storage:ST,title:'Saved projects (this browser)',
+    current:()=>cur&&store.has(cur)?cur:null,
+    open:n=>{const d=store.get(n);if(!d)return false;try{mlgApply(d);run();cur=n;return true;}catch(err){alert('Could not open the project: '+err.message);return false;}},
+    renamed:(a,b)=>{if(cur===a)cur=b;}, deleted:n=>{if(cur===n)cur=null;}});
+  const save=()=>{const n0=cur||($('rProj')&&$('rProj').value)||'';const n=prompt('Save the inputs in this browser as:',n0||'Untitled');if(n==null)return;
+    if(!n.trim()){alert('Enter a project name.');return;}
+    if(store.has(n.trim())&&n.trim()!==cur&&!confirm('A saved project named "'+n.trim()+'" already exists. Replace it?'))return;
+    const r=store.save(n,mlgSnapshot());if(!r.ok){alert(r.message);return;}cur=r.name;};
+  const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'hb'});
+  const bs=B('Save','Save the inputs in this browser\'s project list'),bl=B('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete'),
+    bu=B('Undo','Undo the last input change (Ctrl+Z)'),br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
+  bs.addEventListener('click',save);bl.addEventListener('click',()=>dlg.show());
+  const ref=$('mlgSave');if(ref){[bu,br,bs,bl].forEach(b=>ref.parentNode.insertBefore(b,ref));}
+  SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
+  h.reset();window.MLPL={h,store,dlg,save:n=>{const r=store.save(n,mlgSnapshot());if(r.ok)cur=r.name;return r;}};
+})();
 </script>
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
