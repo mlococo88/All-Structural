@@ -10,6 +10,7 @@
 <!-- SMRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<script src="shared/list-input.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bl:#2563eb;--bdk:#1d4ed8;--blt:#eff6ff;--pu:#7c3aed;--gn:#059669;--am:#d97706;--rd:#dc2626;--tl:#0891b2;--bd:#e2e8f0;--bg:#f1f5f9;--sf:#fff;--tx:#0f172a;--mu:#64748b;--fa:#94a3b8}
@@ -538,6 +539,9 @@ let stX=[]; // analysis stations (see stationList)
 let shpW=null; // W-shape preset in use: {nm,d,tw} in current length units (null = custom section)
 let hov={s:null,m:null,d:null},rafI={},hitR=[];
 let cT=null,kT=null;
+/* Custom x: a table with one box per station (shared/list-input.js). #iUX stays, hidden, as the saved text "2.5, 5" (userXs). */
+const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events:['input'],
+  columns:[{label:'x',unit:()=>lu,min:0,max:()=>totL>0?totL:undefined,rangeNote:'outside the beam, not used',lenient:true,placeholder:'2.5',width:'6em'}]});
 
 if(!CanvasRenderingContext2D.prototype.roundRect)CanvasRenderingContext2D.prototype.roundRect=function(x,y,w,h,r){this.beginPath();this.moveTo(x+r,y);this.lineTo(x+w-r,y);this.arcTo(x+w,y,x+w,y+r,r);this.lineTo(x+w,y+h-r);this.arcTo(x+w,y+h,x+w-r,y+h,r);this.lineTo(x+r,y+h);this.arcTo(x,y+h,x,y+h-r,r);this.lineTo(x,y+r);this.arcTo(x,y,x+r,y,r);this.closePath();};
 
@@ -1057,6 +1061,7 @@ let dragRow=null;
 
 /* TABLE */
 function renderTable(){
+  uxCtl.relabel(); // unit and beam-length checks of the Custom x table
   const th=g('tHd'),tb=g('tBod');
   th.innerHTML=envOn
     ?`<tr><th>x (${lu})</th><th>Vmax (${fu})</th><th>Vmin (${fu})</th><th>Mmax (${fu}·${lu})</th><th>Mmin (${fu}·${lu})</th>${env&&env.D?`<th>δmax (${lu})</th><th>δmin (${lu})</th>`:''}<th></th></tr>`
