@@ -4022,7 +4022,7 @@ Engineer-approved fixes from the independent review of the "Seymour Platform Fou
 - **Not changed (raised):** "IBC 2021 1610 overburden" (effective soil cover step and references): IBC 1610 is soil lateral loads (2021: soil lateral and uplift loads), not the weight of soil cover. A dead-load article would fit better, but the full 2021 IBC is not available to confirm its number.
 
 
-## 2026-11-02 — PR: claude/sf-dowel-review-punch-centroid — Dowel development REVIEW where it serves shear friction only; punching moment about the critical-section centroid; soil-cover citation; top-mat order confirmed (SFDR, SFPC, SFCJ; calculation change)
+## 2026-11-02 — PR: claude/sf-dowel-review-punch-centroid — Dowel development REVIEW where it serves shear friction only; punching moment about the critical-section centroid; soil-cover citation; top-mat order confirmed (SFDR, SFPC, SFCJ; calculation change) (PR #716: https://github.com/mlococo88/All-Structural/pull/716)
 
 Engineer's answers (2026-11-02) to the questions of PR #710.
 
