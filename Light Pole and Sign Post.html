@@ -439,9 +439,9 @@
           <option value="gt10k">ADT &gt; 10,000</option>
         </select></div></div>
         <p class="tbl-note" id="ltsMriNote" style="margin:-4px 0 8px 0"></p>
-        <div class="row"><label>Source of V<span class="note">CTDOT preset (engineer, 2026-11-02): sets V = 120 mph; V stays editable</span></label><div class="ctl"><select id="ltsVSrc" class="combo-sel">
+        <div class="row"><label>Source of V<span class="note">CTDOT (engineer, 2026-11-02): used V = max(map V below, 120 mph)</span></label><div class="ctl"><select id="ltsVSrc" class="combo-sel">
           <option value="map" selected>LRFDLTS map (enter V)</option>
-          <option value="ctdot">CTDOT BDM §14.2.2, 120 mph</option>
+          <option value="ctdot">CTDOT BDM §14.2.2: max(map V, 120 mph)</option>
         </select></div></div>
         <div class="row"><label>Basic wind speed, V<span class="note" id="ltsVNote">3-s gust, Exposure C, from the map for the MRI above</span></label><div class="ctl"><input id="ltsV" type="number" value="130" step="1"><span class="unit">mph</span></div></div>
         <div class="row"><label>Service wind speed, V<sub>svc</sub><span class="note">10-yr MRI, Fig. 3.8-4 (Service I)</span></label><div class="ctl"><input id="ltsVsvc" type="number" value="76" step="1"><span class="unit">mph</span></div></div>
@@ -1303,10 +1303,8 @@ document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{appMode=b
 document.querySelectorAll('#codeSeg button').forEach(b=>b.onclick=()=>{codeMode=b.dataset.v==='lts'?'lts':'ibc';applyMode();});
 document.querySelectorAll('#signPostSeg button').forEach(b=>b.onclick=()=>{signPosts=+b.dataset.v;applyMode();});
 if($('poleShape')) $('poleShape').addEventListener('change',()=>{applyShapeUI();markDirty();calc();});
-// LTS: source of V (2026-11-02). The CTDOT preset only fills V = 120 mph and records the source; editing V away from 120
-// returns the source to "LRFDLTS map (enter V)" so the report never cites CTDOT for a speed it does not give.
-if($('ltsVSrc')) $('ltsVSrc').addEventListener('input',()=>{ if($('ltsVSrc').value==='ctdot'&&$('ltsV')) $('ltsV').value=String(LTS_CTDOT_V); });
-if($('ltsV')) $('ltsV').addEventListener('input',()=>{ if($('ltsVSrc')&&$('ltsVSrc').value==='ctdot'&&num('ltsV')!==LTS_CTDOT_V) $('ltsVSrc').value='map'; });
+// LTS: source of V (2026-11-02, max rule same day). ltsV is always the user's LRFDLTS map V; with the CTDOT source the used V is
+// max(map V, 120 mph) (ltsInputs); nothing overwrites ltsV. The generic input listener recalculates on either change.
 
 // ---- fixture rows ----
 // Each fixture: mount height hf (ft), plan azimuth th (deg), cantilever arm a (ft),
@@ -2926,7 +2924,7 @@ manPart("pL","L. AASHTO LRFDLTS Mode",[
 {p:"The code switch at the top of the input column selects <b>IBC 2021 · ASCE 7-22</b> (the original mode) or <b>AASHTO LRFDLTS</b>: the AASHTO LRFD Specifications for Structural Supports for Highway Signs, Luminaires, and Traffic Signals, 1st Edition (2015) with the 2017 Interim Revisions; later interims are not applied. The LRFDLTS mode covers highway luminaire poles with arm-mounted fixtures and ground-mounted (roadside) monopost and two-post signs. Cables are not supported in this mode. The mode is saved with the project (older projects open in the IBC mode with identical results)."},
 {note:"Known limits of the LRFDLTS mode (accepted by the engineer, 2026-11-02): the soil torsional resistance of the shaft is not checked (Art. 13.6 gives no method); the dimensioned drawings and DXF are produced in the IBC mode only; 8-, 12- and 16-sided sections are not built; mast arms, high-mast towers (55 ft and taller: warning) and fatigue design are outside the mode."},
 {h:"L.2 Inputs"},
-{ul:["Card 1 <b>LRFDLTS criteria</b>: risk category and ADT (Table 3.8-1 → MRI; roadside signs 10 yr), basic wind speed V for that MRI (or the <b>Source of V</b> preset “CTDOT BDM §14.2.2, 120 mph”, which fills V = 120 mph for CTDOT work and records the source in the steps and the report; V stays editable, and editing it returns the source to the map), service wind speed (10-yr), square-tube corner ratio r<sub>s</sub> (drag) and inside corner radius r<sub>i</sub> (flat width, torsion), clear zone (breakaway checklist), base weld, Owner-specified ice.","The pole/post, fixtures, sign, shaft, Broms soil, anchor and base-plate inputs are shared with the IBC mode. The Broms soil model must be selected: it gives the LRFDLTS embedment."]},
+{ul:["Card 1 <b>LRFDLTS criteria</b>: risk category and ADT (Table 3.8-1 → MRI; roadside signs 10 yr), basic wind speed V for that MRI (or the <b>Source of V</b> “CTDOT BDM §14.2.2”: V stays the map value you enter, and the V used is max(map V, 120 mph), shown in a worked step with the governing value), service wind speed (10-yr), square-tube corner ratio r<sub>s</sub> (drag) and inside corner radius r<sub>i</sub> (flat width, torsion), clear zone (breakaway checklist), base weld, Owner-specified ice.","The pole/post, fixtures, sign, shaft, Broms soil, anchor and base-plate inputs are shared with the IBC mode. The Broms soil model must be selected: it gives the LRFDLTS embedment."]},
 {h:"L.3 What is computed (articles of the 1st Ed. with the 2017 interim)"},
 {tbl:{head:["Item","Provision"],rows:[
 ["Load combinations","Table 3.4-1: Strength I (1.25DC), Extreme I (1.1DC + W, 0.9DC + W), Service I (1.0DC + W, 10-yr)"],
@@ -7056,13 +7054,20 @@ function ltsSections(inp){
 // CTDOT BRSDM Release 1, C3.8.1.2.5CT, says one wind speed is specified for all new sign structures statewide without stating it.
 const LTS_CTDOT_V=120;
 function ltsVSrcStep(L){
-  return {id:'vsrc', label:'Basic wind speed V, owner value (CTDOT preset)', sym:'V', eq:'', sub:'', value:L.V, unit:'mph', d:0,
-    ref:'CTDOT Bridge Design Manual (Rev. 02/24) §14.2.2',
-    note:'Engineer decision 2026-11-02: for CTDOT work V = 120 mph per CTDOT BDM §14.2.2 (structure-mounted and special sign supports are designed for a 120 mph wind). §14.2.2 refers to the older AASHTO Standard Specifications for Structural Supports (ASD edition); CTDOT BRSDM C3.8.1.2.5CT refers to one statewide speed for new sign structures without stating it. The value is used as V in the LRFDLTS equations below in place of the map value (the MRI above does not set V).'};
+  const gov=L.Vmap>=LTS_CTDOT_V?'the LRFDLTS map V governs':'the CTDOT 120 mph floor governs';
+  return {id:'vsrc', label:'Basic wind speed V used (CTDOT source: never below the map value)', sym:'V', eq:'\\max\\left(V_{map},\\;V_{CTDOT}\\right)',
+    sub:`\\max\\left(${fmt(L.Vmap,0)},\\;${LTS_CTDOT_V}\\right)`, value:L.V, unit:'mph', d:0,
+    ref:'CTDOT Bridge Design Manual (Rev. 02/24) §14.2.2; LRFDLTS map V (Arts. 3.8.1, Table 3.8-1)',
+    note:`V_map = ${fmt(L.Vmap,0)} mph (LRFDLTS map, input); V_CTDOT = ${LTS_CTDOT_V} mph (CTDOT BDM §14.2.2): ${gov}. Engineer decisions 2026-11-02: for CTDOT work V = 120 mph per CTDOT BDM §14.2.2, never below the LRFDLTS map value. §14.2.2 refers to the older AASHTO Standard Specifications for Structural Supports (ASD edition), so 120 mph is not on the same basis as the LRFDLTS map speeds; CTDOT BRSDM C3.8.1.2.5CT refers to one statewide speed for new sign structures without stating it. The used V enters the LRFDLTS equations below.`};
+}
+// V used by the LTS mode: the map V (ltsV) with the map source; max(map V, 120 mph) with the CTDOT source (engineer, 2026-11-02)
+function ltsVUsed(){
+  const Vmap=num('ltsV'), ct=$('ltsVSrc')&&$('ltsVSrc').value==='ctdot';
+  return ct?{V:Math.max(Vmap,LTS_CTDOT_V), Vmap, vSrc:'ctdot'}:{V:Vmap, Vmap, vSrc:'map'};
 }
 function ltsInputs(){
   return {risk:($('ltsRisk')?$('ltsRisk').value:'typical'), adt:($('ltsAdt')?$('ltsAdt').value:'1kto10k'),
-    V:num('ltsV'), vSrc:(($('ltsVSrc')&&$('ltsVSrc').value==='ctdot'&&num('ltsV')===LTS_CTDOT_V)?'ctdot':'map'), Vsvc:num('ltsVsvc'), tIce:Math.max(0,num('ltsIce')||0), rs:Math.max(0,num('ltsRs')||0), clearZone:($('ltsClearZone')&&$('ltsClearZone').value==='yes'), sign:appMode==='sign', signPosts};
+    ...ltsVUsed(), Vsvc:num('ltsVsvc'), tIce:Math.max(0,num('ltsIce')||0), rs:Math.max(0,num('ltsRs')||0), clearZone:($('ltsClearZone')&&$('ltsClearZone').value==='yes'), sign:appMode==='sign', signPosts};
 }
 function ltsAddCard(page,id,nm,title,hint,body){
   const pg=$('page-'+page); if(!pg) return null;
@@ -7083,11 +7088,11 @@ function ltsCalc(){
   const L=ltsInputs(), m=LpLts.mri(L.risk,L.adt,L.sign);
   const mriTxt=L.sign?`Roadside sign support → 10-yr MRI (Table 3.8-1 note): V from ${m.fig}.`:`MRI = ${m.mri} yr (Table 3.8-1) → V from ${m.fig}.`;
   if($('ltsMriNote')) $('ltsMriNote').textContent=mriTxt;
-  if($('ltsVNote')) $('ltsVNote').textContent=L.vSrc==='ctdot'?`CTDOT BDM §14.2.2 owner value (in place of ${m.fig}, ${m.mri}-yr MRI)`:`3-s gust at 33 ft, Exposure C, ${m.fig} (${m.mri}-yr MRI)`;
+  if($('ltsVNote')) $('ltsVNote').textContent=L.vSrc==='ctdot'?`LRFDLTS map V, ${m.fig} (${m.mri}-yr MRI); CTDOT floor 120 mph → used V = ${fmt(L.V,0)} mph`:`3-s gust at 33 ft, Exposure C, ${m.fig} (${m.mri}-yr MRI)`;
   const mSteps=L.vSrc==='ctdot'?m.steps.concat([ltsVSrcStep(L)]):m.steps;
   const basis=`<p class="lts-basis"><b>Basis:</b> ${lppEsc(LpLts.BASIS)}.</p>`;
   // Loading: MRI and Table 3.4-1
-  const rows=LpLts.COMBOS.map(c=>`<tr><td>${lppEsc(c.name)}</td><td>${lppEsc(c.desc)}</td><td>${c.DC}</td><td>${L.tIce>0&&c.ICE?c.ICE:'—'}</td><td>${c.W?fmt(c.W,1):'—'}</td><td>${c.wind==='extreme'?(L.vSrc==='ctdot'?`CTDOT BDM §14.2.2, V = ${fmt(L.V,0)} mph`:`${m.mri}-yr, V = ${fmt(L.V,0)} mph`):c.wind==='service'?`10-yr, V<sub>svc</sub> = ${fmt(L.Vsvc,0)} mph`:'—'}</td><td>${lppEsc(c.ref)}</td></tr>`).join('');
+  const rows=LpLts.COMBOS.map(c=>`<tr><td>${lppEsc(c.name)}</td><td>${lppEsc(c.desc)}</td><td>${c.DC}</td><td>${L.tIce>0&&c.ICE?c.ICE:'—'}</td><td>${c.W?fmt(c.W,1):'—'}</td><td>${c.wind==='extreme'?(L.vSrc==='ctdot'?`${m.mri}-yr map ${fmt(L.Vmap,0)} / CTDOT 120 → V = ${fmt(L.V,0)} mph`:`${m.mri}-yr, V = ${fmt(L.V,0)} mph`):c.wind==='service'?`10-yr, V<sub>svc</sub> = ${fmt(L.Vsvc,0)} mph`:'—'}</td><td>${lppEsc(c.ref)}</td></tr>`).join('');
   ltsAddCard('loading','ltsComboCard','L','LRFDLTS load combinations','Table 3.4-1',
     basis+ltsStepsHTML(mSteps)
     +`<table class="tbl"><tr><th>Limit state</th><th>Use</th><th>γ<sub>DC</sub></th><th>γ<sub>IC</sub></th><th>γ<sub>W</sub></th><th>Wind</th><th>Reference</th></tr>${rows}</table>`
@@ -7193,7 +7198,7 @@ function ltsCalc(){
     basis+ltsDevHTML()
     +`<table class="tbl"><tr><th>Item</th><th>Value</th><th>Reference</th></tr>`
     +`<tr><td>Structure</td><td>${L.sign?(L.signPosts===2?'Two-post roadside sign':'Monopost roadside sign'):'Luminaire pole'}</td><td>—</td></tr>`
-    +`<tr><td>Extreme I wind MRI</td><td>${m.mri} yr (${m.fig}); V = ${fmt(L.V,0)} mph${L.vSrc==='ctdot'?' — CTDOT BDM §14.2.2 owner value (<a href="#" onclick="switchTab(\'loading\');const e=document.getElementById(\'st-lts-vsrc\');if(e)e.scrollIntoView({block:\'center\'});return false">→ Loading · combinations card</a>)':''}</td><td>Table 3.8-1 (p. 3-5)${L.vSrc==='ctdot'?'; CTDOT BDM §14.2.2':''}</td></tr>`
+    +`<tr><td>Extreme I wind MRI</td><td>${m.mri} yr (${m.fig}); V = ${fmt(L.V,0)} mph${L.vSrc==='ctdot'?' = max(map '+fmt(L.Vmap,0)+', CTDOT BDM §14.2.2 120) (<a href="#" onclick="switchTab(\'loading\');const e=document.getElementById(\'st-lts-vsrc\');if(e)e.scrollIntoView({block:\'center\'});return false">→ Loading · combinations card</a>)':''}</td><td>Table 3.8-1 (p. 3-5)${L.vSrc==='ctdot'?'; CTDOT BDM §14.2.2':''}</td></tr>`
     +`<tr><td>Service I wind</td><td>10 yr (Fig. 3.8-4); V<sub>svc</sub> = ${fmt(L.Vsvc,0)} mph</td><td>Table 3.4-1, Art. 3.8.2 (pp. 3-3, 3-14)</td></tr>`
     +`<tr><td>Atmospheric ice</td><td>${L.tIce>0?fmt(L.tIce,2)+' in, Strength I only (decision Q-C1, accepted 2026-11-02)':'none'}</td><td>Art. 3.7, C3.7 (p. 3-4)</td></tr>`
     +`${lppLtsLast&&lppLtsLast.mc?`<tr><td>${appMode==='sign'?'Post':'Pole'} — combined forces</td><td><b>${lppLtsLast.mc.gov.gov.ratio<=1&&lppLtsLast.mc.valid?'OK':'NOT OK'}</b>, ratio ${isFinite(lppLtsLast.mc.gov.gov.ratio)?fmt(lppLtsLast.mc.gov.gov.ratio,3):'∞'} at z = ${fmt(lppLtsLast.mc.gov.sec.z,2)} ft</td><td>Art. 5.12.1, Eq. ${lppLtsLast.mc.gov.gov.eq} (p. 5-33, 2017)</td></tr>`:''}`
@@ -7221,7 +7226,7 @@ function ltsCalc(){
       +`<tr><td>Base</td><td>${Math.round(gi.boltQty)} × ${fmt(gi.boltDia,3)} in rods on BC ${fmt(gi.boltBC,2)} in; plate ${fmt(gi.bpDia,2)} in × ${fmt(gi.bpT,3)} in</td></tr></table>`);
     ltsAddCard('drawings','ltsDwgCard','D','Drawings (LRFDLTS mode)','general notes',basis
       +`<p class="lts-dev">The dimensioned drawings and DXF of the Drawings tab are produced in the IBC mode only (they show the IBC §1807.3 embedment). In the LRFDLTS mode use the notes below with the Report; the shaft depth is the Broms embedment of the Shaft tab.</p>`
-      +`<ol><li>DESIGN: ${lppEsc(LpLts.BASIS.toUpperCase())}.</li><li>WIND: ${X.L.vSrc==='ctdot'?`V = ${fmt(X.L.V,0)} MPH (CTDOT BRIDGE DESIGN MANUAL §14.2.2)`:`${X.m.mri}-YR MRI, V = ${fmt(X.L.V,0)} MPH (${X.m.fig})`}, EXPOSURE C; SERVICE 10-YR, V = ${fmt(X.L.Vsvc,0)} MPH.</li>`
+      +`<ol><li>DESIGN: ${lppEsc(LpLts.BASIS.toUpperCase())}.</li><li>WIND: ${X.L.vSrc==='ctdot'?`V = ${fmt(X.L.V,0)} MPH = MAX(${X.m.mri}-YR MAP ${fmt(X.L.Vmap,0)} MPH, CTDOT BRIDGE DESIGN MANUAL §14.2.2 120 MPH)`:`${X.m.mri}-YR MRI, V = ${fmt(X.L.V,0)} MPH (${X.m.fig})`}, EXPOSURE C; SERVICE 10-YR, V = ${fmt(X.L.Vsvc,0)} MPH.</li>`
       +`<li>STEEL ${X.g.mode==='sign'?'POST':'POLE'}: F<sub>y</sub> = ${fmt(gi.poleFy,0)} KSI; POLE-TO-BASE-PLATE WELD PER AWS D1.1 (LRFDLTS ART. 5.14).</li><li>ANCHOR RODS: CAST-IN-PLACE (LRFDLTS ART. 5.16.1), ASTM F1554 GR ${gi.boltGrade}, DESIGNED IN THE ANCHORAGE APP.</li>`
       +`<li>DRILLED SHAFT: ${fmt(gi.b,2)} FT ${gi.shaftShape==='square'?'SQUARE':'DIA.'}${X.fd&&X.fd.gov?`, EMBEDMENT ≥ ${fmt(Math.ceil(X.fd.gov.br.L*2)/2,1)} FT (BROMS, LRFDLTS C13.6.1.1)`:''}; COVER ≥ 3 IN (LRFDLTS ART. 13.6.2.1); REINFORCEMENT PER ACI 318-19.</li>`
       +`${X.brk&&X.brk.needed?'<li>BREAKAWAY SUPPORT REQUIRED: CRASH-TESTED HARDWARE (MASH), LRFDLTS SECTION 12.</li>':''}</ol>`); }
@@ -7243,9 +7248,9 @@ function ltsReportModel(){
     ['Other references','ACI 318-19 (shaft reinforcement; LRFDLTS Art. 13.6.2 refers to the AASHTO LRFD BDS — not applied); AWS D1.1 / AISC 360-16 §J2 (base weld); AISC 360-16 §H3.1 (square-tube torsional constant when no corner radius)'],
     ['Units','lb, ft, in, psf, kip, ksi as noted'],['Prepared with','Light Pole and Sign Post, by Mario Lococo · '+new Date().toLocaleString()]]},
     {type:'note',text:'Known limits (accepted by the engineer, 2026-11-02): '+LTS_LIMITS.join(' ')}]},
-    {title:'Wind criteria',items:[steps('lts.mri',X.mSteps||X.m.steps),{type:'kv',rows:[['Extreme I basic wind speed V',N(L.V,0)+' mph ('+(L.vSrc==='ctdot'?'CTDOT BDM §14.2.2, owner value; see the step above':X.m.fig)+')'],['Service I wind speed',N(L.Vsvc,0)+' mph (10-yr, Fig. 3.8-4)'],['Atmospheric ice (Art. 3.7)',L.tIce>0?N(L.tIce,2)+' in, Strength I only (decision Q-C1, accepted)':'none']]}]}]});
+    {title:'Wind criteria',items:[steps('lts.mri',X.mSteps||X.m.steps),{type:'kv',rows:[['Extreme I basic wind speed V',N(L.V,0)+' mph ('+(L.vSrc==='ctdot'?'max of the LRFDLTS map V '+N(L.Vmap,0)+' mph ('+X.m.fig+') and CTDOT BDM §14.2.2 120 mph; see the step above':X.m.fig)+')'],['Service I wind speed',N(L.Vsvc,0)+' mph (10-yr, Fig. 3.8-4)'],['Atmospheric ice (Art. 3.7)',L.tIce>0?N(L.tIce,2)+' in, Strength I only (decision Q-C1, accepted)':'none']]}]}]});
   // 2. Loads
-  const cb=LpLts.COMBOS.map(c=>[c.name,c.desc,String(c.DC),L.tIce>0&&c.ICE?String(c.ICE):'—',c.W?N(c.W,1):'—',c.wind==='extreme'?(L.vSrc==='ctdot'?'CTDOT, '+N(L.V,0)+' mph':X.m.mri+'-yr'):c.wind==='service'?'10-yr':'—',c.ref]);
+  const cb=LpLts.COMBOS.map(c=>[c.name,c.desc,String(c.DC),L.tIce>0&&c.ICE?String(c.ICE):'—',c.W?N(c.W,1):'—',c.wind==='extreme'?(L.vSrc==='ctdot'?'max(map '+N(L.Vmap,0)+', CTDOT 120) = '+N(L.V,0)+' mph':X.m.mri+'-yr'):c.wind==='service'?'10-yr':'—',c.ref]);
   const ba=X.ba.rows.map(r=>[r.name,r.lcName,N(r.P,0),N(r.Vx,0),N(r.Vy,0),N(r.Mx,0),N(r.My,0),N(r.M,0),N(r.T,0)]);
   secs.push({title:'Loads and load combinations',subs:[
     {title:'Load combinations (Table 3.4-1)',items:[tbl(['Limit state','Use','γDC','γIC','γW','Wind','Reference'],cb),{type:'note',text:'LL (Art. 3.6): walkways only, not applicable. No ice-plus-wind combination (C3.7). Wind from any direction: load cases 1–3 of Table 3.9.3-1.'}]},

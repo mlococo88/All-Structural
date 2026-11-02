@@ -84,6 +84,13 @@ test('CTDOT preset HC-2 at V = 120 mph: P_z 39.72 psf, W_p 1,588.8 lb, T 1,906.6
   near(pn.Pz, 39.72, 0.005, 'Pz'); near(pn.Fx, 1588.8, 0.1, 'Wp'); near(pn.T015, 1906.6, 0.1, 'T');
 });
 
+/* CTDOT source, max rule (engineer, 2026-11-02): used V = max(map V, 120 mph). Map V = 130 → 130 governs (#659 used 120).
+   HC-2 by hand at 130 mph: P_z = 15.93·(130/76)² = 46.62 psf; W_p = 46.62·40 = 1,864.7 lb; T = 1,864.7·0.15·8 = 2,237.6 lb·ft. */
+test('CTDOT max rule HC-2 with map V = 130 mph: V = max(130, 120) = 130; P_z 46.62 psf, W_p 1,864.7 lb, T 2,237.6 lb·ft', () => {
+  const L = ltsEngine(), V = Math.max(130, 120), pn = L.windForces(HC2, V, 'extreme', 0).find(q => q.kind === 'panel');
+  near(pn.Pz, 46.62, 0.005, 'Pz'); near(pn.Fx, 1864.7, 0.1, 'Wp'); near(pn.T015, 2237.6, 0.1, 'T');
+});
+
 test('LTS-2: Table 3.9.3-1 case 3 = 0.75 (normal) + 0.75 (transverse); Extreme I DC 1.1/0.9 on P; Strength I 1.25 DC', () => {
   const L = ltsEngine(), ba = L.baseActions(HC1, { V: 130, Vsvc: 76, tIce: 0 });
   const r = k => ba.rows.find(x => x.combo === 'E1max' && x.lc === k);
