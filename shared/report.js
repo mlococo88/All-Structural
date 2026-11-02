@@ -305,9 +305,10 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   .rp-body{display:block;} .rp-sub{content-visibility:visible;}
   .rp-doc{border:0;padding:0;max-width:none;box-shadow:none;}
   .rp-ptoc{display:block;break-after:page;}
-  .rp-sec{break-before:page;} .rp-part{break-before:page;break-after:avoid;} .rp-part+.rp-sec{break-before:auto;} .rp-sec.rp-closed>*,.rp-sub.rp-closed>*{display:revert!important;} .rp-hide{display:revert!important;}
+  .rp-sec{break-before:auto;} .rp-part{break-before:page;break-after:avoid;} .rp-part+.rp-sec{break-before:auto;} .rp-sec.rp-closed>*,.rp-sub.rp-closed>*{display:revert!important;} .rp-hide{display:revert!important;}
   .rp-h1::after,.rp-h2::after{content:none!important;}
   .rp-h1,.rp-h2,.rp-h3,.rp-cap{break-after:avoid;}
+  .rp-h1{break-inside:avoid;padding-bottom:2.35in;margin-bottom:-2.35in;}   /* PGB (2026-11-02): no forced page per section; a section starts on a new page only when less than ~25 % of the page (2.35 in of the 9.45 in body) is left: the heading reserves that height (padding, unbreakable) and the negative margin lets its content flow back into it */
   .rp-top{break-inside:avoid;}   /* PHN (2026-11-02): a topic heading and its one-line result stay together (with break-after:avoid, on the page of its first step) */
   .rp-see{font-family:"Times New Roman",Times,serif;font-size:inherit;color:#000;text-decoration:none;}
   .rp-see::before{content:"see ";} .rp-seen::before{content:none;}

@@ -12,6 +12,9 @@
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 <script src="shared/dxf.js"></script><!-- SFDW: DXF writer and drawing preview (Drawings tab) -->
+<!-- PLIB (2026-11-02): saved-project list dialog (Open / Rename / Duplicate / Delete), shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <style>
 *{box-sizing:border-box}
 body{font-family:"Times New Roman",Times,serif;font-size:12px;color:#111;background:#fafafa;margin:0}
@@ -3801,6 +3804,24 @@ $('#btnDelProj').addEventListener('click',()=>{
  const n=$('#projList').value;if(!n)return;
  if(!confirm('Delete project "'+n+'"?'))return;
  const p=projStore();delete p[n];localStorage.setItem('sfd_projects',JSON.stringify(p));refreshProjList();});
+/* PLIB (2026-11-02): "Saved projects…" dialog over the tool's own key sfd_projects ({ name: state }), shared/projects.js and
+   shared/projects-ui.js. Display and storage only: Rename / Duplicate move / copy the stored item unchanged; Open is the Load
+   path without its alert. The tool's own Undo / Redo (U-2) is unchanged. */
+(function(){
+ if(!window.SharedProjects||!window.SharedProjectsUI)return;
+ let ST=null;try{ST=window.localStorage;}catch(e){}
+ const store=SharedProjects.mapStore(ST,'sfd_projects');
+ const dlg=SharedProjectsUI.libraryDialog({store,storage:ST,title:'Saved projects (this browser)',
+  current:()=>{const n=$('#projName').value.trim();return n&&store.has(n)?n:null;},
+  open:n=>{const o=store.get(n);if(!o)return false;state=Object.assign(defaultState(),JSON.parse(JSON.stringify(o)));migrateState();
+   SEL.asd=null;SEL.lrfd=null;$('#projName').value=n;bindStaticInputs();buildPedCards();saveAuto();recalc();refreshProjList();$('#projList').value=n;return true;},
+  renamed:(a,b)=>{if($('#projName').value.trim()===a)$('#projName').value=b;},
+  changed:()=>{const v=$('#projList').value;refreshProjList();if(v&&store.has(v))$('#projList').value=v;}});
+ const b=SharedProjectsUI.button('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete');
+ b.addEventListener('click',()=>dlg.show());
+ const ref=$('#btnDelProj');if(ref)ref.parentNode.insertBefore(b,ref.nextSibling);
+ window.SFPL={store,dlg};
+})();
 $('#btnExport').addEventListener('click',()=>{
  const blob=new Blob([JSON.stringify(state,null,1)],{type:'application/json'});
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
