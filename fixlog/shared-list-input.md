@@ -54,3 +54,8 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
 - Bridge tab, span lengths and girder spacings (`bindInput` on `#f_spans` / `#f_bays`, `events: ['input']`, commit on leaving the
   table). `tests/smoke/list-input.mjs` gains the part `bsl` and two hooks for any tool: `typeNew` (fill the table a tool's own
   way) and `expect` (the saved form when it is not the typed text, e.g. an array), plus `fillTable()` (replace a table's rows).
+
+## 2026-11-02 — PR: claude/list-input-bgeo, PR #690: https://github.com/mlococo88/All-Structural/pull/690 — loaded by Bridge Geometry.html (no change to the shared file)
+- Per-span girder offsets (`slot` + `mountSlot`, one table per span) and the survey-point paste box's table (`mount`).
+  `tests/smoke/list-input.mjs` gains the part `bgeo` and two entry options: `extra` (checks on the branch only, e.g. a paste box
+  and its table) and `over` (a sideways scroll at 390 px that main already had).

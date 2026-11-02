@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo] [--a origin/main] [--shots <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
 // smd (one key per tool in TOOLS): the tool from --a (default: the entry's `a`, the main commit before its table landed, else
@@ -16,7 +16,7 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd,sbeam,bsl').split(',');
+const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
@@ -157,6 +157,40 @@ const TOOLS = {
     tableSel: '#f_spans + [data-sli="host"]',
   },
 };
+TOOLS.bgeo = {   // Bridge Geometry: per-span girder offsets (SPAN_OV[s].girders, array or null), committed when the focus leaves
+  file: 'Bridge Geometry.html', a: '01f3bee', values: '-15, -5, 5, 15', expect: '[-15,-5,5,15]',
+  over: 78,   // 78 px at 390 on main before the table: the tab bar and the fieldsets
+  setup: async p => { await p.waitForTimeout(2500); await p.click('.tabbtn[data-tab="bridge"]'); await p.waitForTimeout(400); },
+  typeOld: async (p, v) => { await p.evaluate(v => { const i = document.querySelector('input[data-f="girders"][data-s="2"]'); i.value = v;
+    i.dispatchEvent(new Event('change', { bubbles: true })); }, v); },
+  typeNew: async (p, v) => { await fillTable(p, '[data-sli-slot="girders2"]', v); await p.evaluate(() => document.activeElement.blur()); },
+  saved: p => p.evaluate(() => JSON.stringify((SPAN_OV[2] || {}).girders || null)),
+  read: async p => {
+    await p.waitForTimeout(1500);
+    const out = await p.evaluate(() => { const st = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); if (st) { delete st.savedAt; delete st.t; }
+      return { SPAN_OV: JSON.parse(JSON.stringify(SPAN_OV)), stored: st }; });
+    out.panes = {};
+    for (const id of ['output', 'seat', 'bridge']) { await p.click(`.tabbtn[data-tab="${id}"]`); await p.waitForTimeout(500);
+      out.panes[id] = await p.evaluate(id => { const k = document.getElementById('pane-' + id).cloneNode(true);
+        k.querySelectorAll('[data-sli],script,style,#spantbl thead').forEach(x => x.remove()); return k.innerText; }, id); }
+    await p.click('.tabbtn[data-tab="bridge"]'); await p.waitForTimeout(300);
+    return out;
+  },
+  tableSel: '[data-sli-slot="girders2"]',
+  // survey points: the paste box fills the table; a table edit rewrites the box; the flip relabels the columns
+  extra: async p => {
+    await p.click('.tabbtn[data-tab="map"]'); await p.waitForTimeout(300);
+    await p.fill('#map_ptsbox', 'P1, 750123.45, 210987.65, control\nP2\t750200.10\t211050.30');
+    const rows = await p.evaluate(() => PTS_TBL.get());
+    ok(JSON.stringify(rows) === '[["P1","750123.45","210987.65","control"],["P2","750200.10","211050.30",""]]', 'survey points: the table shows the lines as read');
+    await p.fill('#map_ptstbl tr[data-sli-r="1"] input[data-sli-c="1"]', '750201');
+    ok(await p.$eval('#map_ptsbox', e => e.value) === 'P1, 750123.45, 210987.65, control\nP2, 750201, 211050.30', 'survey points: a table edit rewrites the box');
+    await p.check('#map_flip');
+    ok(await p.$eval('#map_ptstbl th[data-sli-h="1"]', e => e.textContent) === 'Easting', 'survey points: the flip relabels the columns');
+    await p.click('#map_clrpts');
+    ok(JSON.stringify(await p.evaluate(() => PTS_TBL.get())) === '[]', 'survey points: Clear points empties the table');
+  },
+};
 // replace the rows of a table with the values ("a, b, c"): row by row (Enter adds a row from the last one), extra rows removed
 async function fillTable(p, sel, v) {
   const vals = String(v).split(',').map(s => s.trim());
@@ -210,8 +244,15 @@ async function tool(key) {
     ok(!d.length, `${kase}: results, page text and saved data identical (hash ${hash(sa)} / ${hash(sb)})` + (d.length ? '\n       ' + d.slice(0, 8).map(x => `${x[0]}: ${JSON.stringify(x[1]).slice(0, 120)} -> ${JSON.stringify(x[2]).slice(0, 120)}`).join('\n       ') : ''));
     const want = T.expect || T.values;
     if (kase === 'custom') ok(ra.savedText === want && rb.savedText === want, `custom: saved text "${rb.savedText}" (A "${ra.savedText}")`);
-    if (rb.over != null) ok(rb.over <= 1, `390 px: page does not scroll sideways (${rb.over})`);
+    if (rb.over != null) ok(rb.over <= (T.over || 1), `390 px: page does not scroll sideways (${rb.over}` + (T.over ? `; ${T.over} px on main before the change` : '') + ')');
     ok(!ra.errs.length && !rb.errs.length, `${kase}: no console errors` + (ra.errs.length + rb.errs.length ? ': ' + [...ra.errs, ...rb.errs].join(' | ') : ''));
+  }
+  if (T.extra) {   // checks of the branch only (e.g. a paste box and its table)
+    const { b, p, errs, blocked } = await openPage(B, { vw: 1400, vh: 1000 });
+    try { await T.setup(p); await T.extra(p);
+      const e = errs.filter(e => !(blocked.size && /^Failed to load resource/.test(e)));
+      ok(!e.length, 'extra checks: no console errors' + (e.length ? ': ' + e.join(' | ') : ''));
+    } finally { await b.close(); }
   }
 }
 
