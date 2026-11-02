@@ -72,3 +72,7 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
 - `react(React)` → `ListTable`: `NumberListInput` (4 GFS lists, arrays) and the AREMA girder spacings (text). `tests/smoke/list-input.mjs`
   gains the part `index` and the entry options `ignore` (a console message to ignore), `serial` (A then B, not in parallel)
   and `timeout` (page load); `tests/lib.mjs` `openPage()` takes an optional `timeout` (default unchanged).
+
+## 2026-11-02 — PR: claude/list-input-steelbridge — loaded by apps/steel-bridge/index.html (no change to the shared file)
+- `apps/steel-bridge/ui/lists.js` binds a table (`bindInput`) to nine list inputs as the modules draw them (see `fixlog/steel-bridge.md`).
+  `tests/smoke/list-input.mjs` gains the part `sbridge` and the entry option `archive` (a folder tool's files for side A).
