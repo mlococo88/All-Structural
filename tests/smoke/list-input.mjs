@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam] [--a origin/main] [--shots <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
 // smd (one key per tool in TOOLS): the tool from --a (default origin/main, with its shared/ folder) and from the working tree, each on its default
@@ -15,7 +15,7 @@ import { openPage, REPO, diff, hash } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
-const parts = String(args.part || 'widget,smd').split(',');
+const parts = String(args.part || 'widget,smd,sbeam').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
@@ -108,6 +108,28 @@ const TOOLS = {
       const strip = () => { const c = document.body.cloneNode(true); c.querySelectorAll('[data-sli],script,style').forEach(e => e.remove()); return c.innerText; };
       return { tabR, userX, shD, moD, deD, env, nodeR, saved: JSON.parse(localStorage.getItem('smd_auto_v1') || 'null'), text: strip() }; }),
     tableSel: '#iUX + [data-sli="host"]',
+  },
+  sbeam: {
+    file: 'Steel Beam Design - AISC 15th.html', values: '5, 12.5, 31',
+    setup: async p => { await p.waitForTimeout(3500);   // open the input tab that holds "Output Stations"
+      await p.evaluate(() => { const pn = document.querySelector('[data-secid="inOpts"]').closest('.sbdInPane'); document.getElementById(pn.id.replace('sbdInPane_', 'sbdInTab_')).click(); });
+      await p.waitForTimeout(300); },
+    typeOld: async (p, v) => { await p.fill('[data-fkey="userX"]', v); },
+    saved: p => p.evaluate(() => S.disp.userX),
+    read: async p => {
+      const out = await p.evaluate(() => ({ AN, userX: userXList(), S: JSON.parse(JSON.stringify(S)) }));
+      const n = await p.$$eval('#tabBar button', e => e.length); out.tabs = [];
+      for (let i = 0; i < n; i++) {
+        await p.$$eval('#tabBar button', (e, i) => e[i].click(), i); await p.waitForTimeout(700);
+        out.tabs.push(await p.evaluate(() => { const c = document.getElementById('outputPanel');   // the results (the input panel holds the changed field)
+          const k = c.cloneNode(true); k.querySelectorAll('[data-sli],script,style').forEach(e => e.remove()); return k.innerText.replace(/\d+(\.\d+)? ?ms\b/g, 'ms'); }));
+      }
+      out.inputText = await p.evaluate(() => { const k = document.getElementById('inputPanel').cloneNode(true);
+        k.querySelectorAll('[data-sli],script,style,.uxHost').forEach(e => e.remove());
+        k.querySelectorAll('.fRow').forEach(r => { if (/Custom stations x/.test(r.textContent)) r.remove(); }); return k.innerText; });
+      return out;
+    },
+    tableSel: '.uxHost',
   },
 };
 // type the stations into the table on B: click the first box, type, Enter between values
