@@ -52,6 +52,9 @@ export const CASES = {
   sign1sq: { inputs: { poleShape: 'square', poleDiaTop: '8', poleTwTop: '0.3125', signCfMode: 'manual', signCfMan: '1.5', shaftShape: 'square' }, top: { appMode: 'sign', signPosts: 1 } },
   sign2: { inputs: { V: '130', shaftShape: 'square', signB: '16', signS: '5' }, top: { appMode: 'sign', signPosts: 2 } },
   sign2bs: { inputs: { signB: '40', signS: '3', signClr: '8', signSpacing: '20', poleDiaTop: '8', poleTwTop: '0.322' }, top: { appMode: 'sign', signPosts: 2 } },
+  // LRFDLTS mode (added 2026-11-02 with the CTDOT wind-speed preset): the map / entered V, as saved projects open
+  ltspole: { top: { codeMode: 'lts' } },
+  ltssign1: { inputs: { ltsV: '115' }, top: { codeMode: 'lts', appMode: 'sign', signPosts: 1 } },
 };
 
 if (args.list) { console.log(Object.keys(CASES).join('\n')); process.exit(0); }
