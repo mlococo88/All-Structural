@@ -2963,3 +2963,40 @@ index 56a8a3f..13f8372 100644
   identical; 0 console errors; 390 px no sideways scroll; screenshots looked at. `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **Open items:** the Rename prompt's tags (above).
+
+## 2026-11-02 — PR: claude/spc-rename-dialog, PR #709: https://github.com/mlococo88/All-Structural/pull/709 — My sections library: Rename opens one dialog (name, description, tags as a table) in place of three prompts (LIST)   [display only]
+- **Why:** engineer decision 2026-11-02 (answer to the open item of PR #694): the Rename button opens a small dialog with the name
+  and the tags as a `SharedListInput` table, replacing the comma-separated prompt. There is no separate "Edit tags" prompt; the
+  description prompt is folded into the same dialog.
+- **Where (1):** `buildLibPane()`, the Rename button. **Before:**
+```js
+        br.appendChild(btn('Rename', 'sm', () => {
+          const nm = prompt('New name for "' + en.name + '":', en.name); if (nm == null) return; const n2 = nm.trim(); if (!n2) return;
+          const all = libRead().entries; if (all.some(x => x.id !== en.id && libKey(x.name) === libKey(n2))) { alert('The library already has an entry named "' + n2 + '".'); return; }
+          const d2 = prompt('Description (optional):', en.desc); const t2 = prompt('Tags (optional, comma-separated):', en.tags.join(', '));
+          const out = all.map(x => x.id === en.id ? Object.assign({}, x, { name: n2, desc: d2 == null ? x.desc : d2.trim(), tags: t2 == null ? x.tags : t2.split(',').map(t => t.trim()).filter(Boolean), modified: libNow() }) : x);
+          if (libWrite(out)) { toast('Saved "' + n2 + '"'); rebuildInputs(); }
+        }, 'Rename (and edit the description and tags)'));
+```
+  **After:**
+```js
+        br.appendChild(btn('Rename', 'sm', () => libRenameDialog(en), 'Rename (and edit the description and tags)'));
+```
+- **Where (2):** new `libRenameDialog(en)` before `// insert an entry as a group:` (the overlay style of the Export DXF dialog):
+  Name (selected on open), Description, Tags (one text box per tag, "+ Add", "×"), Save / Cancel. Enter in Name or Description
+  saves; Escape, Cancel or a click outside closes without a change; the focus returns to the Rename button. Save applies the old
+  rules: a blank name or a name another entry already has is refused (the message now shows in the dialog instead of an alert),
+  description trimmed, `tags = toText(rows).split(',').map(t => t.trim()).filter(Boolean)` (the same array the old prompt gave),
+  `modified = libNow()`.
+- **Behaviour change (small):** with the prompts, cancelling the description or tags prompt kept that field and still renamed;
+  in the dialog, Cancel changes nothing and Save writes the three fields as shown (prefilled with the entry's values).
+- **Saved data:** `spc_library_v1` entries unchanged in format: `name`, `desc` strings, `tags` an array of strings.
+  `tests/engine/list-input.test.mjs`: an unedited dialog saves the same tags array.
+- **Check case:** an entry with tags crane, runway: Rename → the dialog shows two tag rows; name "Runway girder", description
+  " W21 + C15 ", first tag removed, "W21 + C15" added → saved { name: "Runway girder", desc: "W21 + C15", tags: ["runway",
+  "W21 + C15"] }. Saving the dialog unchanged gives the same library as accepting the three old prompts unchanged on origin/main.
+- **How verified:** `node tests/smoke/list-input.mjs --part secpropren` (origin/main with the prompts accepted vs this branch with the
+  dialog saved: model, results, stored library and panel text identical; the check case above; Escape closes; a blank name is
+  refused; 0 console errors) and `--part secprop` (still passes). Screenshots of the dialog at 1400 and 390 px looked at (no
+  sideways scroll). `node tests/check-syntax.mjs` passes.
+- **Formulas, factors, units, code references:** none (§4 does not apply).

@@ -15,6 +15,7 @@
 <!-- PSRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<script src="shared/list-input.js"></script>
 <style>
 :root{
   --paper:#E9EDF1;        /* cool vellum */
@@ -458,6 +459,7 @@ a.wk-a:hover{text-decoration:underline}
 .pbd-f input,.pbd-f select{font-family:var(--mono);font-size:12px;border:1.3px solid var(--line);padding:2px 4px;background:var(--sheet);color:var(--ink)}
 .pbd-f input{width:62px}
 .pbd-f input:disabled{background:var(--paper);color:var(--ink2)}
+.pbd-f.pbd-spans{align-items:flex-start}
 .pbd-sel{margin-left:auto}
 .pbd-grp{align-self:center;font-family:var(--mono);font-size:9.5px;letter-spacing:1px;text-transform:uppercase;color:var(--ink2);padding:0 2px 0 12px;margin-left:6px;border-left:1px solid var(--line)}
 .pbd-grp:first-child{border-left:none;padding-left:2px;margin-left:0}
@@ -9000,13 +9002,17 @@ function PbdOwnerCard({inp,R,set}){
   </div>;
 }
 
+/* LIST (2026-11-02): the bridge bar's span lengths are a table, one box per span (shared/list-input.js). bridge.spans stays an
+   array; the rows are committed when the focus leaves the table, with the old rule (every value a number > 0, else the spans
+   shown are put back), as the old box committed on blur. */
+const PbdListTable = window.SharedListInput ? SharedListInput.react(React) : null;
 function PbdBridgeBar({bridge,inp,onMode,onSelect,onEdit,onOwner,ownOpen,setOwnOpen}){
   const PB=window.PBD, b=bridge, ext=PB.extActive(inp);
   const spKey=b.spans.join(',');
-  const [spTxt,setSpTxt]=useState(b.spans.join(', '));
-  useEffect(()=>{ setSpTxt(b.spans.join(', ')); },[spKey]);
-  const commitSpans=()=>{ const v=spTxt.split(/[,;\s]+/).filter(Boolean).map(Number);
-    if(v.length&&v.every(x=>isFinite(x)&&x>0)&&v.join(',')!==spKey) onEdit({spans:v}); else setSpTxt(b.spans.join(', ')); };
+  const [spRev,setSpRev]=useState(0); const spBox=useRef(null), spRows=useRef(null);
+  const commitSpans=()=>{ const rows=spRows.current; spRows.current=null; if(!rows) return; const v=rows.map(r=>Number(r[0]));
+    if(v.length&&v.every(x=>isFinite(x)&&x>0)&&v.join(',')!==spKey) onEdit({spans:v}); else setSpRev(n=>n+1); };
+  const spBlur=()=>setTimeout(()=>{ if(spBox.current&&spBox.current.contains(document.activeElement)) return; commitSpans(); },0);
   const has=(g,s)=>!!b.designs[PB.key(g,s)];
   const gl=[...Array(b.nGirders)].map((_,i)=>i+1), sl=b.spans.map((_,i)=>i+1);
   const tip={pl:'Preliminary designer: the bridge model drives every girder design. Span length, girder spacing, number of girders, interior / exterior position and the title block are set from this bar, in the open design and in each girder × span you open. Editing the span, spacing or girder count of the open design updates the bridge model.',
@@ -9016,9 +9022,12 @@ function PbdBridgeBar({bridge,inp,onMode,onSelect,onEdit,onOwner,ownOpen,setOwnO
       {['pl','mod'].map(m=><button key={m} type="button" role="radio" aria-checked={b.mode===m} title={tip[m]}
         onClick={()=>{ if(b.mode!==m) onMode(m); }}><b>{PB.MODES[m].label}</b><span>{PB.MODES[m].sub}</span></button>)}
     </div>
-    <label className="pbd-f" title={ext?'Spans of the imported MIDAS member (from the demands file)':'Span lengths of the bridge, ft, separated by commas (one value per span)'}>Spans (ft)
-      <input style={{width:140}} value={spTxt} disabled={ext} onChange={e=>setSpTxt(e.target.value)} onBlur={commitSpans}
-        onKeyDown={e=>{ if(e.key==='Enter') e.currentTarget.blur(); }}/></label>
+    {ext||!PbdListTable?<label className="pbd-f" title="Spans of the imported MIDAS member (from the demands file)">Spans (ft)
+      <input style={{width:140}} value={b.spans.join(', ')} disabled/></label>
+    :<span className="pbd-f pbd-spans" ref={spBox} onBlur={spBlur} title="Span lengths of the bridge, ft, one row per span">Spans
+      <PbdListTable key={spRev} label="Span lengths" rows={SharedListInput.fromNumbers(b.spans)}
+        columns={[{label:'L',unit:'ft',min:0,minExclusive:true,width:'5.5em'}]}
+        onChange={rows=>{ spRows.current=rows; }}/></span>}
     <label className="pbd-f" title="Number of girders in the cross-section">Girders
       <input type="number" min={2} step={1} value={b.nGirders} onChange={e=>{ const n=Math.round(+e.target.value); if(n>=2&&n<=40) onEdit({nGirders:n}); }}/></label>
     <label className="pbd-f" title="Girder spacing, ft">Spacing (ft)

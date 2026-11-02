@@ -3766,6 +3766,50 @@ current design's analysis accepted; **the minimum shipping piece length raised f
 ### Other copies
 - None.
 
+## 2026-11-02 — PR: claude/list-input-steelbridge, PR #708: https://github.com/mlococo88/All-Structural/pull/708 — the list inputs are tables, one box per value (one per column for x:P and from–to) (LIST)   [display only]
+- **Why:** engineer decision 2026-11-02: no comma-separated inputs (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
+  `nbList` (girder counts) is not touched: #695 replaced it with one input.
+- **New file `ui/lists.js`** (`window.SBDListsUI`): a table of the list inputs (selector → table name, columns, the module's own text
+  format) and a MutationObserver that binds a table (`SharedListInput.bindInput`) to each of those inputs whenever a module draws
+  it. The input stays, hidden, with its id, data attributes and value text, so every module's own `change` handler reads it
+  unchanged; a table edit writes the rows back in the module's format and fires `input`; when the focus leaves the table the
+  input's `change` fires (the commit), as the old box did on blur. CSS: `.bad + [data-sli="host"] .sli{outline:…}` shows the
+  module's error mark (e.g. `#i_spans.bad`) on the table.
+
+  | Input (module) | Table | Format written | Field (unchanged) |
+  |---|---|---|---|
+  | `#i_spans` (index.html, Spans) | L (ft) | "a, b" | `P.spans.lengths` (array) |
+  | `#i_xs.bays` (ui/loads.js) | S (ft) | "a, b" | `P.xs.bays` (array) |
+  | `#i_xs.skews` (ui/loads.js) | Skew (°) | "a, b" | `P.xs.skews` (array) |
+  | `#fr_spl` (ui/framing.js) | Station (ft) | "a, b" | `P.framing.splices` (array) |
+  | `#i_splx` (ui/splices.js) | Station (ft) | "a, b" | `P.framing.splices` (array) |
+  | `#i_studs.splX` (ui/fatigue.js) | Station (ft) | "a, b" | `P.studs.splX` (text) |
+  | `#an_l_xf` (ui/analysis.js) | x (ft), P (kip) | "20:1.5, 40:1.5" | `girders[i].loadsManual.xf` (array of {x, P}) |
+  | `#an_a_seqCustom` (ui/analysis.js) | From, To (ft) | "0-80, 140-220" | `P.analysis.seqCustom` (text) |
+  | `#ad_win` (ui/autodesign.js) | From, To (ft) | "70-90, 135-150" (reads "70 to 90" too) | `P.autodesign.vars[…].win` (text) |
+- **index.html:** `<script src="../../shared/list-input.js"></script>` after `shared/steps.js`; `<script src="ui/lists.js"></script>` after
+  `ui/handoffs.js`; Spans card: unit text "ft, comma separated" → "" and the note starts "One span per row (Enter adds a row)."
+- **Unit texts** (the unit is in the column header now): ui/loads.js bays "ft, left to right" → "left to right", skews
+  "°, one per support line" → "one per support line"; ui/framing.js "ft, comma separated" → ""; ui/splices.js "ft from the left
+  end, comma separated (also on …)" → "from the left end (also on …)"; ui/analysis.js pours "ft, e.g. 0-80, 140-220 (blank:
+  automatic)" → "from–to per row (none: automatic)", loads "x:P (ft:kip), comma separated" → "one load per row";
+  ui/autodesign.js "ft; blank: anywhere in the span" → "none: anywhere in the span"; ui/fatigue.js studs.splX unit "ft" → "".
+- **Saved data:** no field, key or format changed (table above). The modules' readers are unchanged; `tests/engine/list-input.test.mjs`
+  (readers copied verbatim) shows each text written by a table reads the same values, and that the forms the modules draw
+  ("a, b", "x:P, …", "a-b, …") come back byte for byte.
+- **Check case:** built-in project: spans 110 / 140 / 110, spacings 9 / 9.5 / 9 / 9.5, skews 10 ×4 (tables), and on the Analysis tab
+  cross-frame loads 20:1.5 and 45:2 and pours 0-80 and 140-220 (pasted into the two-column tables) → the saved project has
+  `spans.lengths` [110, 140, 110], `xs.bays` [9, 9.5, 9, 9.5], `xs.skews` [10, 10, 10, 10], `loadsManual.xf`
+  [{x:20, P:1.5}, {x:45, P:2}], `analysis.seqCustom` "0-80, 140-220" — identical to typing the same text in the old boxes on
+  origin/main.
+- **How verified:** `node tests/smoke/list-input.mjs --part sbridge`: origin/main vs this branch (the whole app folder), built-in
+  project and the case above: the stored project `sbd2.project.current`, the Section properties, Loads & LLDF and Analysis tab text
+  and the Spans & framing, Cross-section & loads, Fatigue & studs and Splices input text (tables, units and notes removed)
+  identical; 0 console errors; 390 px no sideways scroll; screenshots at 1400 and 390 px looked at.
+  `node tests/smoke/steel-bridge-wiring.mjs` passes. `node tests/check-syntax.mjs` passes. Station windows checked in the browser:
+  Auto design → Field splice locations → Range, "70 ↹ 90 / 135 ↹ 150" pasted into the table → `vars.spl.win` = "70-90, 135-150", 0 console errors.
+- **Formulas, factors, units, code references:** none (§4 does not apply).
+
 ## 2026-11-02 — PR: claude/sb-drop-twin — Auto design: the 1-gage-line twin that saves nothing is not listed (engineer decision)
 ### Why
 - PR #697 found that the second listed design on the default project is the first one with one gage line at the field splices: the same

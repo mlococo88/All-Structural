@@ -12,6 +12,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <script src="../../shared/units.js"></script>
 <script src="../../shared/steps.js"></script>
+<script src="../../shared/list-input.js"></script>
 <script src="engine/model.js"></script>
 <script src="engine/demandfile.js"></script>
 <script src="engine/library.js"></script>
@@ -58,6 +59,7 @@
 <script src="ui/report.js"></script>
 <script src="ui/bridgexfer.js"></script>
 <script src="ui/handoffs.js"></script>
+<script src="ui/lists.js"></script>
 <!-- three.js for the 3D view: the same pinned files as GirderDetail ("Steel Bridge Design.html"), r128 + OrbitControls (CLAUDE.md §2) -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" defer></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js" defer></script>
@@ -247,8 +249,8 @@
         + UL.ownerCard(P, { num, sel, card, esc })   // moved here from the Cross-section & loads tab (UI only)
         + (window.SBDHandoffUI ? window.SBDHandoffUI.card(P, ui) : ''),   // B2: hand-offs to and from the other tools (ui/handoffs.js)
       spans: card('Spans', `${sel('spans.continuity', 'Continuity', [['continuous', 'Continuous'], ['simple', 'Simple spans']])}
-        <div class="fRow"><label for="i_spans">Span lengths</label><input type="text" id="i_spans" data-kind="spans" value="${esc(P.spans.lengths.join(', '))}" style="width:180px"><span class="unit">ft, comma separated</span></div>
-        <p class="note">Total ${U.fmt(P.spans.lengths.reduce((a, b) => a + (+b || 0), 0), 2)} ft. The last plate segment of each girder must end there.</p>`) + window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui),   // Spans & framing tab: the Spans card, then the framing cards
+        <div class="fRow"><label for="i_spans">Span lengths</label><input type="text" id="i_spans" data-kind="spans" value="${esc(P.spans.lengths.join(', '))}" style="width:180px"><span class="unit"></span></div>
+        <p class="note">One span per row (Enter adds a row). Total ${U.fmt(P.spans.lengths.reduce((a, b) => a + (+b || 0), 0), 2)} ft. The last plate segment of each girder must end there.</p>`) + window.SBDFramingUI.inputs(P, { num, sel, card, esc }, ui),   // Spans & framing tab: the Spans card, then the framing cards
       mat: card('Steel (ASTM A709)', `${sel('materials.steel.top', 'Top flange', grades)}${sel('materials.steel.bot', 'Bottom flange', grades)}${sel('materials.steel.web', 'Web', grades)}${num('materials.Es', 'E<sub>s</sub>', 'ksi')}`)
         + card('Deck concrete and reinforcement', `${sel('deck.composite', 'Composite', [['true', 'Yes'], ['false', 'No (noncomposite)']])}${num('materials.concrete.fc', 'f′<sub>c</sub>', 'ksi')}${num('materials.concrete.wc', 'w<sub>c</sub>', 'kcf')}${num('materials.concrete.K1', 'K<sub>1</sub>', '')}
           ${sel('materials.concrete.nRule', 'Modular ratio n', [['exact', 'Exact (E_s/E_c)'], ['round', 'Rounded to an integer']])}${num('deck.ts', 'Structural slab t<sub>s</sub>', 'in')}${num('deck.tdeck', 'Total deck thickness', 'in')}${num('deck.haunch', 'Haunch', 'in')}

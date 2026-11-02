@@ -1488,3 +1488,24 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
   text (table removed) identical; saved text `"2.5, 5, 30"` on both; 0 console errors; 390 px: no sideways scroll; screenshots at
   1400 and 390 px looked at. `node tests/smoke/phone-layout.mjs --tool smd` passes. `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
+
+## 2026-11-02 — PR: claude/plib-smd, PR #706: https://github.com/mlococo88/All-Structural/pull/706 — PLIB: "Saved projects…" dialog (Open / Rename / Duplicate / Delete)   [display and storage only]
+- **Before:** header 📁 Saved… drop-down (load), 💾 Save (under Project name), 🗑 (delete the saved analysis matching Project name),
+  key `smd_saves_v1`, `{ name: { t, d: project } }`; Undo / Redo (↩ ↪, Ctrl+Z / Ctrl+Shift+Z). No rename, no duplicate.
+- **Where:**
+  - after `<script src="shared/list-input.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - right after the startup IIFE of SAVED ANALYSES (anchor `if(a&&a.d){applyProject(a.d);setTimeout(()=>toast('Restored last session'),350);}`,
+    after its `})();`): `let SMPL=null; function smdPlibInit(){…} smdPlibInit();` (anchor `/* PLIB (2026-11-02): "Saved projects…" dialog`):
+    `mapStore(localStorage, LSK, { unpack: i => i.d, time: i => i.t, sort: 'saved' })`; dialog `open` = the drop-down's load code
+    (`applyProject(JSON.parse(JSON.stringify(d)))`, toast `Loaded "…"`); a rename of the open analysis (Project name = old name) sets Project
+    name to the new name (`readIn(); autoSave();`), because 💾 Save stores under Project name; after every change the drop-down is redrawn
+    (`refreshSaveList(); updateDirty();`). The button "Saved projects…" is inserted after 🗑 (`#bDl2`).
+- The file keeps its CRLF line endings.
+- The tool's own Undo / Redo is unchanged.
+- **Saved data:** keys `smd_saves_v1`, `smd_auto_v1` and their formats unchanged; no new key.
+- **How verified:** `node tests/smoke/project-library.mjs --tool smd` (new TOOLS entry; 3-span template, span 1 length + 2 as the change):
+  ALL PASS (`tabR`, `nodeR`, `shD`, `moD`, `deD`, `env`, `crits`, `totL` identical to origin/main on load, after an input change, reopened on
+  main's storage and opened from the dialog; rename / duplicate byte-identical; quota; 390 px; no new console errors). Rename of the open
+  analysis checked headless: Project name, the autosave's `projName` and the drop-down show the new name. Header and 390 px screenshots
+  looked at. `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).

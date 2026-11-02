@@ -4503,6 +4503,39 @@ function libSaveCurrent() {
   LIBF.name = ''; LIBF.desc = ''; LIBF.tags = '';
   toast(`Saved "${name}" to the library (${sp.length} part${sp.length > 1 ? 's' : ''})`); rebuildInputs();
 }
+/* LIST (2026-11-02, engineer decision): Rename opens one dialog (name, description, tags as a table with one box per tag) in place of
+   the three browser prompts. Saved as before: name trimmed and unique, description trimmed, tags = the rows' text split at commas,
+   trimmed, blanks dropped (an array of strings); modified = now. Cancel (button, Escape, a click outside) changes nothing. */
+function libRenameDialog(en) {
+  const old = $('libRenOverlay'); if (old) old.remove();
+  const back = document.activeElement;
+  const ov = el('div'); ov.id = 'libRenOverlay'; ov.style.cssText = 'position:fixed;inset:0;background:rgba(15,25,40,.45);z-index:60;display:flex;align-items:center;justify-content:center';
+  const box = el('div'); box.style.cssText = 'background:#fff;border-radius:8px;padding:16px 20px;width:min(440px,92vw);max-height:86vh;overflow:auto;font-family:var(--font-ui);box-shadow:0 12px 40px rgba(0,0,0,.3)';
+  box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'libRenTitle');
+  box.appendChild(el('div', null, '<b style="font-size:11pt" id="libRenTitle">Rename library entry</b>'));
+  const stack = (lab, inp) => { const r = el('div'); r.style.cssText = 'margin:8px 0 0'; const l = el('label', null, lab); l.style.cssText = 'display:block;font-size:9.5pt;margin-bottom:2px'; r.appendChild(l); r.appendChild(inp); box.appendChild(r); };
+  const field = (lab, v, ph) => { const i = document.createElement('input'); i.type = 'text'; i.value = v; if (ph) i.placeholder = ph; i.setAttribute('aria-label', lab); i.style.cssText = 'width:100%;box-sizing:border-box'; stack(lab, i); return i; };
+  const nm = field('Name', en.name), ds = field('Description', en.desc, 'optional');
+  const tg = el('div', 'libTagsHost'); stack('Tags', tg);
+  const tags = SharedListInput.mount(tg, { label: 'Tags', rows: SharedListInput.fromNumbers(en.tags), columns: [{ label: 'Tag', type: 'text', width: '14em', placeholder: 'optional' }], rowNumbers: false });
+  const msg = el('div', 'errBox'); msg.style.display = 'none'; msg.setAttribute('role', 'alert'); box.appendChild(msg);
+  const close = () => { ov.remove(); document.removeEventListener('keydown', onKey, true); if (back && back.isConnected) back.focus(); };
+  const save = () => {
+    const n2 = nm.value.trim(); if (!n2) { msg.textContent = 'Enter a name.'; msg.style.display = ''; nm.focus(); return; }
+    const all = libRead().entries; if (all.some(x => x.id !== en.id && libKey(x.name) === libKey(n2))) { msg.textContent = 'The library already has an entry named "' + n2 + '".'; msg.style.display = ''; nm.focus(); return; }
+    const t2 = SharedListInput.toText(tags.get());
+    const out = all.map(x => x.id === en.id ? Object.assign({}, x, { name: n2, desc: ds.value.trim(), tags: t2.split(',').map(t => t.trim()).filter(Boolean), modified: libNow() }) : x);
+    close(); if (libWrite(out)) { toast('Saved "' + n2 + '"'); rebuildInputs(); }
+  };
+  const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); close(); } else if (e.key === 'Enter' && (e.target === nm || e.target === ds)) { e.preventDefault(); save(); } };
+  document.addEventListener('keydown', onKey, true);
+  const row = el('div', 'btnRow'); row.style.marginTop = '10px';
+  const go = el('button', 'btn primary', 'Save'); go.type = 'button'; go.id = 'libRenSave'; go.addEventListener('click', save);
+  const ca = el('button', 'btn', 'Cancel'); ca.type = 'button'; ca.addEventListener('click', close);
+  row.appendChild(go); row.appendChild(ca); box.appendChild(row); ov.appendChild(box);
+  ov.addEventListener('click', e => { if (e.target === ov) close(); });
+  document.body.appendChild(ov); nm.focus(); nm.select();
+}
 // insert an entry as a group: bounding-box centre at `at` (default: the view centre); saved labels kept unless already used in the drawing
 function libInsert(en, at) {
   const d = libClean(en); if (!d) { alert('This library entry has no usable parts.'); return false; }
@@ -4643,13 +4676,7 @@ function buildLibPane(T) {
         const br = el('div', 'btnRow');
         br.appendChild(btn('Insert', 'primary sm', () => libInsert(en), 'Add these parts as a group at the view centre (nearest free position with Prevent overlap on)'));
         br.appendChild(btn('Place…', 'sm', () => libPlaceStart(en.id), 'Then click on the drawing to place the group there'));
-        br.appendChild(btn('Rename', 'sm', () => {
-          const nm = prompt('New name for "' + en.name + '":', en.name); if (nm == null) return; const n2 = nm.trim(); if (!n2) return;
-          const all = libRead().entries; if (all.some(x => x.id !== en.id && libKey(x.name) === libKey(n2))) { alert('The library already has an entry named "' + n2 + '".'); return; }
-          const d2 = prompt('Description (optional):', en.desc); const t2 = prompt('Tags (optional, comma-separated):', en.tags.join(', '));
-          const out = all.map(x => x.id === en.id ? Object.assign({}, x, { name: n2, desc: d2 == null ? x.desc : d2.trim(), tags: t2 == null ? x.tags : t2.split(',').map(t => t.trim()).filter(Boolean), modified: libNow() }) : x);
-          if (libWrite(out)) { toast('Saved "' + n2 + '"'); rebuildInputs(); }
-        }, 'Rename (and edit the description and tags)'));
+        br.appendChild(btn('Rename', 'sm', () => libRenameDialog(en), 'Rename (and edit the description and tags)'));
         br.appendChild(btn('Duplicate', 'sm', () => { const all = libRead().entries.slice(), c = JSON.parse(JSON.stringify(en)); c.id = libId(); c.name = libUnique(en.name + ' (copy)', all); c.created = c.modified = libNow(); all.push(c); if (libWrite(all)) { toast('Duplicated as "' + c.name + '"'); rebuildInputs(); } }));
         br.appendChild(btn('Export', 'sm', () => libExport([en], libFileName(en.name)), 'Save this entry to a library file (.json)'));
         br.appendChild(btn('Delete', 'sm danger', () => { if (!confirm('Delete "' + en.name + '" from the library? This cannot be undone (export it first to keep a copy).')) return; if (libWrite(libRead().entries.filter(x => x.id !== en.id))) { LIBCHK.delete(en.id); toast('Deleted "' + en.name + '"'); rebuildInputs(); } }));
