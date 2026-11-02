@@ -1439,7 +1439,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **Open items:** the 78 px sideways scroll at 390 px is older than this change (not fixed here: one task per PR).
 
-## 2026-11-02 — PR: claude/plib-bgeo — PLIB: Duplicate in the saved-bridge library, and Undo / Redo   [display and storage only]
+## 2026-11-02 — PR: claude/plib-bgeo, PR #711: https://github.com/mlococo88/All-Structural/pull/711 — PLIB: Duplicate in the saved-bridge library, and Undo / Redo   [display and storage only]
 - **Before:** header Save / Save As New / ▸ Library / New, Export / Import JSON; the library panel (`bridgeGeomEngine.library.v1`,
   `{ name: project }`) with Load / Rename / Delete; autosave `bridgeGeomEngine.project.v1`. No duplicate, no undo.
 - **Where:**
