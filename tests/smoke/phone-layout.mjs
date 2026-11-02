@@ -17,6 +17,7 @@ const TOOLS = {
   asce7: { file: 'ASCE7-16 Load Generator.html', tabs: '#tabs .tab', tabWait: 900 },
   mlg: { file: 'Moving Load Generator.html', tabs: '#mlgInTabs button, #mlgOutTabs button', wait: 4000, tabWait: 1000 },
   arch: { file: 'Stone Masonry Arch Load Rating.html', tabs: '[id^=inTab_], #tabs [data-tab]', wait: 6000, tabWait: 1200 },
+  gusset: { file: 'Gusset Plate Rating.html', tabs: '.itab[data-pane], #tab-bar .tab-btn', wait: 4000, tabWait: 1000 },
 };
 
 const keys = args.tool ? String(args.tool).split(',') : Object.keys(TOOLS);

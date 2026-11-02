@@ -2866,3 +2866,45 @@ index 916bda6..024cf69 100644
 +window.__gprForTest = () => ({ doc: GPRP.doc, R, minRF, P });   /* tests only */
 +
 ```
+
+## 2026-11-02 — PR: claude/phone-print-gusset — Phone layout fixes; calc-sheet Report: a block's second equation no longer shrunk into the title column (PHN; display only, no calculation change)
+
+Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Every code site is tagged `PHN`.
+
+### PHN-1. Phone / tablet: nothing widens the page   [display only]
+- **Problem:** at 390 px the page scrolled sideways on three views. Other views and 768 px were already fine.
+  - **Forces input pane, 12 px.** The one-column section grid (`.sec-body.one-col{grid-template-columns:1fr}`) grew to the min-content width of the two "Paste …" buttons in a `.proj-row`.
+  - **Checks tab, 271 px.** Card headers (`.card-hd`) keep the badge and reference in `.card-right{flex-shrink:0}`, which was 310–529 px wide with a long reference (cards 24, 25, …).
+  - **Report tab (calc-sheet viewer), 401 px at 390 and 23 px at 768.** `.crv-body{grid-template-columns:1fr}` grew to the 8.5 in document, and its wide tables (`cr-tbl cr-wide`, `tbl`) widened it further.
+- **Where:** a new block at the end of the first `<style>`, just before `</style>`, anchor `@media (max-width: 700px) { .cad-pair { grid-template-columns: 1fr; } }`.
+- **Added:**
+```css
+@media (max-width: 1100px) { .crv-body { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 900px) {
+  .sec-body.one-col { grid-template-columns: minmax(0, 1fr); }
+  .proj-row > * { min-width: 0; white-space: normal; }
+  .card-hd { flex-wrap: wrap; }
+  .card-right { flex-shrink: 1; min-width: 0; flex-wrap: wrap; }
+}
+@media screen and (max-width: 600px) { .crv-doc { padding: 16px 14px 24px; overflow-x: auto; } }
+```
+- The panels already stack below 900 px (Inputs toggle). Wide tables keep scrolling in their `.tscroll` boxes, and the calc-sheet document scrolls inside its own box on a phone. At 900 px and up, screenshots are unchanged; see the proof below.
+
+### PHN-2. Calc-sheet Report (print and screen): a second equation stays in the equation column   [display only]
+- **Problem:** in the calc sheet (Report tab → Print), an equation block (`.crdoc .cr-body .eq-block`) is a 2-column grid: title 2.15 in | equation. When a block has two equations (e.g. 5.1 "LRFR rating factors": Inventory, then Operating), the second one was auto-placed in row 2, column 1, the 2.15 in title column. MathJax's `svg{max-width:100%}` then shrank it to an unreadable size (about 5 pt type) on page 11 of the default project, and likewise on every block with two equations.
+- **Where:** after the rule `.crdoc .cr-body .eq-math { border: 0; background: none; padding: 0; overflow: visible; }`.
+- **Added:**
+```css
+.crdoc .cr-body .eq-block > .eq-math { grid-column: 2; }
+```
+- **Check case:** default project ("Example through truss"), Report → Print report. Before: page 11, "Operating, HL-93 (γLL = 1.35): RF = … = 307.6/202.5 = 1.52" printed at a fraction of the size of the Inventory line above it. After: printed under the Inventory line at the same scale. Still 56 pages; the PDF text is identical.
+
+### Checked, no change
+- "Report (shared viewer)" print: 46 pages. Long KaTeX substitutions wrap within the page width. Its text is identical before and after.
+
+### Smoke test
+- `tests/smoke/phone-layout.mjs` gains the key `gusset` (5 input panes + 11 output tabs). It fails on origin/main at 390 px and passes on this branch.
+
+### How verified (no computed result, saved key or hand-off changed)
+- origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 15 tabs, the whole-document `textContent` (725,761 chars) and localStorage after load are identical.
+- Screenshots at 900 and 1280 px are identical on load and on every tab, except 1–3 px of the tab-bar underline (a CSS transition caught mid-way).
