@@ -2292,3 +2292,78 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   removed) identical; saved text the same; 0 console errors; 390 px no sideways scroll; screenshots at 1400 and 390 px looked at.
   `node tests/smoke/phone-layout.mjs --tool sbeam` passes. Undo and reload restore the table. `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
+
+## 2026-11-02 — PR: claude/sbd-span-binding — typed span lengths and combination factors reach the model right after load (SBBX)   [input binding; no formula change]
+- **Problem:** on main, right after the page loads (Summary tab, the default), typing a span length (Geometry, `spanL0`) or a
+  load-combination factor (`cb0_DL` …) did not change the model: `S.geom.spans[0].L` stayed 20 ft and the results did not update.
+  After something rebuilt the input panel (Undo, Load, a support change) one edit worked and the next was lost again.
+  Inputs that write through `S.…` (e.g. `dsnLcx`, `trpLL`) were not affected.
+- **Cause (confirmed headless, `runSensitivity` / `runBenchmarks` called on main and `S` compared by identity before / after):**
+  three routines worked on the user's state and then put back a **new** object (`S=JSON.parse(…)` or
+  `S=mergeState(defaultState(),JSON.parse(…))`) without rebuilding the input panel. The span and combination inputs hold the old span /
+  combination objects in their closures, so their edits went to an object the model no longer read.
+  1. `runSensitivity()` (Summary tab, "Sensitivity — What Moves the Answer"; runs on every Summary render whose state changed, so at
+     load and after each edit). **This is the load-time cause.** The PLIB open item (#677) named only `runBenchmarks()`, which runs
+     only when the Validation tab is shown.
+  2. `runBenchmarks()` (Validation tab).
+  3. `printBatchRows()` (batch mode, Build & print).
+- **Fix:** each routine works on a copy and puts the user's own object back (`S=S0`), so the object the inputs hold is the model.
+  - `runBenchmarks()`, anchor `function runBenchmarks(){`. **Before:**
+```js
+function runBenchmarks(){
+  const saved=JSON.stringify(S);
+  …
+  S=mergeState(defaultState(),JSON.parse(saved));
+  syncGenLoads();
+```
+    **After** (the scenarios already each start from their own `mergeState(defaultState(),JSON.parse(saved))` copy and never touch the
+    user's object):
+```js
+function runBenchmarks(){
+  const saved=JSON.stringify(S);
+  const S0=S;   /* SBBX (2026-11-02): … */
+  …
+  S=S0;   /* SBBX: restore the same object … */
+  syncGenLoads();
+```
+  - `runSensitivity()`, anchor `const params=sensParams();`. **Before:**
+```js
+  const baseInfo={dcr:base.dcr,label:base.label,combo:base.combo};
+  const params=sensParams();
+  …
+  S=JSON.parse(key);computeAll();
+```
+    **After** (the probes now scale a copy, `JSON.parse(key)`, the same copy main ended with; `worstCheck()` for the base is still
+    taken on the user's state before the swap):
+```js
+  const baseInfo={dcr:base.dcr,label:base.label,combo:base.combo};
+  /* SBBX (2026-11-02): probe a copy … */
+  const S0=S;S=JSON.parse(key);
+  const params=sensParams();
+  …
+  S=S0;computeAll();
+```
+  - `printBatchRows()`, anchor `const saved=JSON.stringify(S);` followed by `const order=['tabSummary','tabMx',`. **Before:**
+    `const saved=JSON.stringify(S);` … `}finally{ S=JSON.parse(saved); computeAll(); }`. **After:** `const saved=JSON.stringify(S);`
+    then `const S0=S;S=JSON.parse(saved);` (rows are applied to the copy) … `}finally{ S=S0; computeAll(); }`.
+- **Results:** for the same inputs, every computed value is identical to main; what changes is that a typed span or combination factor
+  is now used (results update after typing, as they already did for the other inputs).
+- **Check case:** empty storage, default project (W18X50, one 20 ft span). Type 21 in span 1 L → main: `S.geom.spans[0].L` = 20,
+  `AN.L` = 20 (typed value lost); this branch: 21 / 21, governing flexure DCR on the Summary tab 0.116 × (21/20)² = 0.128. Then
+  `cb0_DL` = 1.7 → main 1.4 (lost), branch 1.7; then span 23.5 → main 20, branch 23.5. Open Validation, type 25 → branch 25.
+- **How verified (scratch scripts, headless):** branch typed vs main with the same values written into `S` and recomputed
+  (`computeAll(); rebuildInputs(); buildTabs()`): `S`, `AN`, `DZ`, the sensitivity rows and the page text identical at load and after
+  each of the four edits (governing strip excluded, see open items); branch vs main both written that way: all identical, strip
+  included. Validation tab: 95 PASS, 0 FAIL on both. Batch mode (W18X50 / W12X26 rows), Build & print: report text and the state and
+  results after printing identical to main. `node tests/check-syntax.mjs`, `node tests/smoke/project-library.mjs --tool steelbeam`,
+  `node tests/smoke/phone-layout.mjs --tool sbeam`, `node tests/smoke/list-input.mjs --part sbeam`: pass; console errors as on main
+  (3 blocked CDN resources in the harness).
+- **Saved data:** none changed (no key, no format).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Open items (not changed, raised for the engineer):**
+  - The governing strip under the header ("Governing: … DCR …") is refreshed only when the tabs are rebuilt (`buildTabs` →
+    `updateGovStrip`), not after a typed edit (`schedule()` calls `renderTab()` only). On main this already shows after any edit that
+    worked (e.g. LL pressure ×2: strip stays 0.116, worst check 0.201). With this fix it also shows after a span edit (strip 0.116,
+    tab 0.128) until a tab is clicked. Fix candidate: call `updateGovStrip()` in `schedule()` after `renderTab()`.
+  - The restores are not in `finally` blocks in `runBenchmarks` / `runSensitivity` (as on main): if a benchmark threw part-way, the
+    benchmark model would stay loaded. Not seen; raised only.
