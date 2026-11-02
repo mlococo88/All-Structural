@@ -2293,7 +2293,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   `node tests/smoke/phone-layout.mjs --tool sbeam` passes. Undo and reload restore the table. `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 
-## 2026-11-02 — PR: claude/sbd-span-binding — typed span lengths and combination factors reach the model right after load (SBBX)   [input binding; no formula change]
+## 2026-11-02 — PR: claude/sbd-span-binding, PR #703: https://github.com/mlococo88/All-Structural/pull/703 — typed span lengths and combination factors reach the model right after load (SBBX)   [input binding; no formula change]
 - **Problem:** on main, right after the page loads (Summary tab, the default), typing a span length (Geometry, `spanL0`) or a
   load-combination factor (`cb0_DL` …) did not change the model: `S.geom.spans[0].L` stayed 20 ft and the results did not update.
   After something rebuilt the input panel (Undo, Load, a support change) one edit worked and the next was lost again.
