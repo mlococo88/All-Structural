@@ -2103,7 +2103,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   --tool cbc`: pass. `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 
-## 2026-11-02 — PR: claude/plib-cbc — PLIB: Undo / Redo on the Beam Capacity and ASD Beam Calcs tabs   [display only]
+## 2026-11-02 — PR: claude/plib-cbc, PR #714: https://github.com/mlococo88/All-Structural/pull/714 — PLIB: Undo / Redo on the Beam Capacity and ASD Beam Calcs tabs   [display only]
 - **Before:** each tab's header: New, Save Project, Open (its own projects dialog; Beam Capacity's has Rename and Duplicate), Export /
   Import JSON, Print / PDF. No undo. (The Development & Splice tab got Undo / Redo with the rebar app in PR #712.)
 - **Where** (both in the srcdoc of their frame, `#suite-frame-capacity` and `#suite-frame-asd`; edited by script: decode the srcdoc →
