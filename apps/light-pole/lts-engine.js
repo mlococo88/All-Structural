@@ -310,7 +310,7 @@
   /* interaction, Art. 5.12.1 (pp. 5-33, 5-34, 2017) */
   function interaction(d) {   // d: {Pu, Pr, BMr (B·Mu/Mr, or the biaxial sum), Vr (Vu/Vr), Tr (Tu/Tr)}
     const pr = d.Pr > 0 ? d.Pu / d.Pr : 0;
-    if (d.Tr > 0.20) return { eq: '5.12.1-1', ratio: pr + (d.BMr + d.Vr + d.Tr) ** 2 };
+    if (d.Tr > 0.20) return { eq: '5.12.1-1', ratio: pr + d.BMr + (d.Vr + d.Tr) ** 2 };   // only the shear + torsion sum is squared (LTSV-2)
     return pr >= 0.20 ? { eq: '5.12.1-2', ratio: pr + 8 / 9 * d.BMr } : { eq: '5.12.1-3', ratio: pr / 2 + d.BMr };
   }
   /* memberCheck(g, L, secs, Fy): every section × limit state × load case; returns the governing row per section, the
@@ -391,7 +391,7 @@
     }
     st.push({ id: 'm.dem', label: `Governing demand: ${gv.comboName}, ${gv.lcName}, z = ${n(s.z, 2)} ft`, sym: 'P_{u}, M_{u}, V_{u}, T_{u}', eq: '', sub: '',
       value: `${n(gv.Pu, 2)} kip, ${n(gv.Mu, 1)} kip-in, ${n(Math.hypot(gv.Vx, gv.Vy), 2)} kip, ${n(gv.T, 1)} kip-in`, unit: '', ref: R('Table 3.4-1; Table 3.9.3-1') });
-    const eqT = gv.eq === '5.12.1-1' ? '\\frac{P_{u}}{P_{r}} + \\left(\\frac{BM_{u}}{M_{r}} + \\frac{V_{u}}{V_{r}} + \\frac{T_{u}}{T_{r}}\\right)^{2}' : gv.eq === '5.12.1-2' ? '\\frac{P_{u}}{P_{r}} + \\frac{8}{9}\\frac{BM_{u}}{M_{r}}' : '\\frac{P_{u}}{2P_{r}} + \\frac{BM_{u}}{M_{r}}';
+    const eqT = gv.eq === '5.12.1-1' ? '\\frac{P_{u}}{P_{r}} + \\frac{BM_{u}}{M_{r}} + \\left(\\frac{V_{u}}{V_{r}} + \\frac{T_{u}}{T_{r}}\\right)^{2}' : gv.eq === '5.12.1-2' ? '\\frac{P_{u}}{P_{r}} + \\frac{8}{9}\\frac{BM_{u}}{M_{r}}' : '\\frac{P_{u}}{2P_{r}} + \\frac{BM_{u}}{M_{r}}';
     st.push({ id: 'm.int', label: `Combined forces (T_u/T_r = ${n(gv.Trat, 3)} ${gv.Trat > 0.2 ? '> 0.20' : '≤ 0.20: shear and torsion ignored'})`, sym: '\\text{ratio}', eq: eqT,
       sub: `P_{u}/P_{r} = ${n(gv.Pu / gv.Pr, 4)},\\,BM_{u}/M_{r} = ${n(gv.BMr, 4)}` + (gv.eq === '5.12.1-1' ? `,\\,V_{u}/V_{r} = ${n(gv.Vrat, 4)},\\,T_{u}/T_{r} = ${n(gv.Trat, 4)}` : ''),
       value: gv.ratio, unit: '', d: 3, ref: R(`Art. 5.12.1, Eq. ${gv.eq} (p. 5-33, 2017)`), ok: gv.ratio <= 1 && res.valid,
