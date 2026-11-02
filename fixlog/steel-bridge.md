@@ -3618,7 +3618,7 @@ symmetric bridge) to a station that keeps every rule. engine/owners.js: two rows
 ### Other copies
 - None (the old app is unchanged).
 
-## 2026-11-02 — PR: claude/sbd-splice-gfx — Field splices tab: one set of graphics, sized like the other tabs (SPLGFX; display only)
+## 2026-11-02 — PR #646: https://github.com/mlococo88/All-Structural/pull/646 (claude/sbd-splice-gfx) — Field splices tab: one set of graphics, sized like the other tabs (SPLGFX; display only)
 ### Why
 - Engineer: "The field [splice] graphics seem to be out of place. They are very large in scale and duplicative of other graphics that are on the sheet."
 - Inventory before (built-in project, FS1, card 804 px wide at 1280): (1) the Drawings-style detail (flange plans + web elevation), frame 822 px
