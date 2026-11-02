@@ -58,11 +58,11 @@
     }
     return { ok: true, id, saved: when, text: body, item: m };
   }
-  /* open(storage, id): { ok, project, errors, warnings, text } (text: the stored file text) or { ok: false, error } */
+  /* open(storage, id): { ok, project, errors, warnings, notes, text } (text: the stored file text; notes: importJSON's load notices) or { ok: false, error } */
   function open(storage, id) {
     const t = text(storage, id); if (t == null) return { ok: false, error: 'That saved project is not in this browser any more.' };
     const r = M().importJSON(t); if (!r.ok) return { ok: false, error: `That saved project could not be read: ${r.error}` };
-    return { ok: true, project: r.project, errors: r.errors, warnings: r.warnings, text: t };
+    return { ok: true, project: r.project, errors: r.errors, warnings: r.warnings, notes: r.notes || [], text: t };
   }
   /* rename(storage, id, name): changes the list name and project.name inside the stored file. The saved date is not changed. */
   function rename(storage, id, name, o) {

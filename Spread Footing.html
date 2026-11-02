@@ -1770,8 +1770,8 @@ function renderDashboard(){
   /* SFPM: biaxial P–M ratio of every LRFD combination at its own P_u */
   if(realPeds.length){const gv=realPeds.filter(z=>z.pmGov&&!isNaN(z.pmGov.ratio)).reduce((a,z)=>(!a||z.pmGov.ratio>a.pmGov.ratio)?z:a,null), nr=realPeds.filter(z=>z.pmRange&&z.pmRange.length);
    const txt=gv?('max ratio '+f2(gv.pmGov.ratio)+' \u2014 '+gv.label+', '+gv.pmGov.name+' (at its own P_u)'):'not computed';
-   d.appendChild(chip('Pedestal P\u2013M (biaxial)',txt+(nr.length?'; not computed for some combinations ('+nr.map(z=>z.label).join(', ')+')':''),
-    gv&&gv.pmGov.ratio>1?'fail':((nr.length||!gv)?'warn':'pass'),undefined,{tab:'tab-peddes',sec:gv?'o-pd-'+P2.pedDes.indexOf(gv):'o-pd-intro'}));}
+   d.appendChild(chip('Pedestal P\u2013M (biaxial)',txt+(nr.length?'; P_u below the section\u2019s tension capacity in some combinations ('+nr.map(z=>z.label).join(', ')+'): NG':''),
+    (gv&&gv.pmGov.ratio>1)||nr.length?'fail':(!gv?'warn':'pass'),undefined,{tab:'tab-peddes',sec:gv?'o-pd-'+P2.pedDes.indexOf(gv):'o-pd-intro'}));}
   /* SFCV: concrete cover, footing and pedestal vertical bars (ACI 318-19 Table 20.5.1.3.1) */
   {const bad=[];(P2.covChk?P2.covChk.rows:[]).filter(z=>z.applies&&!z.ok).forEach(z=>bad.push('footing '+z.k+' '+f2(z.c)+' < '+f2(z.min)+' in'));
    realPeds.filter(z=>!z.vertCovOK).forEach(z=>bad.push(z.label+' vertical bars '+f2(z.cov)+' < '+f2(z.vertCovMin)+' in'));
@@ -2896,7 +2896,7 @@ function sfdResultRows(){
   'Footing bar clear spacing':()=>['ACI 318-19 §25.2.1; D/C = s<sub>clr,min</sub>/(s − d<sub>b</sub>)',mx([P2.desX,P2.desY].flatMap(z=>[z.AsBot>0?z.clrMinB/z.clrB:0,z.AsTop>0?z.clrMinT/z.clrT:0])),['o-fd-x','o-fd-y']],
   'Interface shear friction':()=>['ACI 318-19 §22.9.4.2, Table 22.9.4.2, §22.9.4.4–22.9.4.6; D/C = V<sub>u</sub>/φV<sub>n</sub>',mx((P2.shearFr||[]).filter(z=>!z.isPatch&&z.gov).map(z=>z.gov.ratio)),['o-fd-bear']],
   'Dowels (tension, laps)':()=>['ACI 318-19 §16.3.1.1, §16.3.3, §22.4 (interface tension), §25.4.2 / §25.4.3 (tension development), §25.5.2 / §25.5.5 (laps); §16.3.4.1 (minimum); D/C = A<sub>s,gov</sub>/A<sub>s,prov</sub>, A<sub>s,gov</sub> = max(0.005A<sub>g</sub>, A<sub>s,req</sub>)',mx((P2.dowels||[]).filter(z=>!z.isPatch).map(z=>z.dcAs)),['o-fd-bear']],
-  'Pedestal P\u2013M (biaxial)':()=>['ACI 318-19 §22.4, §22.2; D/C = |M<sub>u</sub>|/|φM<sub>n</sub>|<sub>θ</sub> on the contour at each combination’s own P<sub>u</sub> (P<sub>u</sub>/φP<sub>n,max</sub> above the axial cap)',mx(P2.pedDes.filter(z=>!z.isPatch&&z.pmGov&&!isNaN(z.pmGov.ratio)).map(z=>z.pmGov.ratio)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
+  'Pedestal P\u2013M (biaxial)':()=>['ACI 318-19 §22.4, §22.2; D/C = |M<sub>u</sub>|/|φM<sub>n</sub>|<sub>θ</sub> on the contour at each combination’s own P<sub>u</sub> (P<sub>u</sub>/φP<sub>n,max</sub> above the axial cap)',mx(P2.pedDes.filter(z=>!z.isPatch&&z.pmGov).map(z=>z.pmRange&&z.pmRange.length?Infinity:(isNaN(z.pmGov.ratio)?0:z.pmGov.ratio))),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
   'Concrete cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/c',mx([...(P2.covChk?P2.covChk.rows.filter(z=>z.applies).map(z=>z.c>0?z.min/z.c:Infinity):[]),...P2.pedDes.filter(z=>!z.isPatch).map(z=>z.cov>0?z.vertCovMin/z.cov:Infinity)]),['o-fd-basis']],
   'Pedestal tie cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/(c \u2212 d<sub>b,tie</sub>)',mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.tieCov>0?z.tieCovMin/z.tieCov:Infinity)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)]};
  return $$('#dashboard .chip').map(c=>{
@@ -3325,6 +3325,7 @@ function sfrModel(){
      S({id:'pmR',label:'Biaxial P–M ratio (governing combination)',sym:'ratio',eq:'\\frac{|M_{u}|}{|\\phi M_{n}|_{\\theta}}',sub:'\\frac{'+sfrN(g.Md)+'}{'+sfrN(g.Rc)+'}',value:g.ratio,unit:'',d:3,ok:g.ratio<=1+1e-9})]});}
    else if(pd.pmGov&&pd.pmGov.mode==='axial'){const g=pd.pmGov;
     T.push({title:'Biaxial P–M ratio (governing: '+g.name+')',ref:'ACI 318-19 22.4.2.1',steps:[S({id:'pmR',label:'P_u above the axial cap: no moment capacity at this P_u',sym:'ratio',eq:'\\frac{P_{u}}{\\phi P_{n,max}}',sub:'\\frac{'+sfrN(g.P)+'}{'+sfrN(pd.phiPn_max)+'}',value:g.ratio,unit:'',d:3,ok:g.ratio<=1+1e-9})]});}
+   if(pd.pmRange&&pd.pmRange.length)T.push({title:'Combinations beyond the section’s tension capacity',ref:SFPM_REF,steps:[S({id:'pmRng',label:'P_u is below the net tension the section can carry, so no point of the contour reaches it: '+pd.pmRange.join(', '),sym:'',eq:'',sub:'',value:pd.pmRange.length+' combination(s)',ok:false})]});   /* SFPB: never skipped silently */
    T.push({title:'Bar positions for the P–M interaction',ref:'ACI 318-19 20.5.1.3 (cover), 22.2 (strain compatibility)',steps:[   /* SFPC */
     S({id:'dpr',label:'Face to longitudinal-bar centre (cover = clear cover to the longitudinal bars)',sym:"d'",eq:'c + \\frac{d_{b}}{2}',sub:sfrN(num(rf.cover))+' + \\frac{'+sfrN(BAR_DIA[rf.longSize]||0,3)+'}{2}',value:pd.dPr,unit:'in',d:3}),
     S({id:'dx',label:'Depth to the far bar row, bending about y',sym:'d_{x}',eq:"b_{x} \\minus d'",sub:sfrN(pd.bx,1)+' \\minus '+sfrN(pd.dPr,3),value:pd.dX,unit:'in',d:3}),
@@ -4974,6 +4975,10 @@ function pmContour(bars,bx,by,fc,fy,Pu_target,nAngles,angList){   // SFPM: angLi
   const ang=angList?angList[k]:(k/angs)*2*Math.PI;
   // bisection on c to hit Pu_target (phiPn)
   let lo=0.05*Math.max(bx,by),hi=4*Math.max(bx,by),found=null;
+  /* SFPB (2026-11-02): the lower bracket was fixed at c = 0.05 max(b_x, b_y). On a long, narrow section bent about its short
+     side that c already gives phiPn above a small P_u, so no such P_u could be reached ("range"). Expand it downward
+     (c / 4 each time, down to 1e-6 in) until phiPn(lo) <= P_u; where the old bracket already worked nothing changes. */
+  for(let e=0;e<40&&lo>1e-6;e++){const r0=analyze(lo,ang);if(phiOf(lo,ang)*r0.Pn<=Pu_target)break;lo/=4;}
   for(let it=0;it<40;it++){
    const c=(lo+hi)/2;const r=analyze(c,ang);const phi=phiOf(c,ang);const phiPn=phi*r.Pn;
    if(Math.abs(phiPn-Pu_target)<0.5){found={phiMnx:phi*r.Mnx,phiMny:phi*r.Mny,c,phiPn};break;}
@@ -5554,7 +5559,7 @@ function renderPedestalDesign(){
     '\\text{capacity at }\\theta\\text{ (N.A. angle }'+f2(g.alpha)+'^{\\circ}\\text{)}:\\;\\phi M_{nx,\\theta} = '+f2(g.cMx)+',\\;\\phi M_{ny,\\theta} = '+f2(g.cMy)+',\\;|\\phi M_n|_{\\theta} = '+f2(g.Rc)+'\\;\\mathrm{k\\text{-}ft}\\;\\Rightarrow\\;\\text{ratio} = \\frac{'+f2(g.Md)+'}{'+f2(g.Rc)+'} = \\mathbf{'+f3(g.ratio)+'}'+(g.ratio<=1?'\\;\\checkmark':'\\;\\text{NG}')));
    else if(g.mode==='axial')b.appendChild(eqBlock('Biaxial P\u2013M ratio \u2014 governing: '+g.name,'ACI 318-19 22.4.2.1',
     '\\text{ratio} = P_u/\\phi P_{n,max}\\;\\text{(no moment capacity above the axial cap)}','\\text{ratio} = '+f2(g.P)+'/'+f2(pd.phiPn_max)+' = \\mathbf{'+f3(g.ratio)+'}',g.ratio<=1?'\\checkmark':'\\text{NG}'));
-   if(pd.pmRange.length)b.appendChild(el('div','warnbox','P\u2013M ratio not computed for '+pd.pmRange.map(sfEsc).join(', ')+': the section cannot reach that P<sub>u</sub> (tension beyond the range of the neutral-axis search). Check by hand.'));
+   if(pd.pmRange.length)b.appendChild(el('div','warnbox','<b>NG:</b> P\u2013M ratio cannot be computed for '+pd.pmRange.map(sfEsc).join(', ')+': P<sub>u</sub> is below the net tension the section can carry (no neutral-axis depth reaches it). Treated as failing (SFPB).'));
    const rt=document.createElement('table');rt.className='tbl';rt.style.fontSize='11px';
    rt.innerHTML='<tr><th>#</th><th>Combination</th><th>P_u (k)</th><th>M_ux (k-ft)</th><th>M_uy (k-ft)</th><th>|M_u| (k-ft)</th><th>\u03c6M_nx,\u03b8</th><th>\u03c6M_ny,\u03b8</th><th>|\u03c6M_n|_\u03b8 (k-ft)</th><th>Ratio</th></tr>';
    pd.pmRat.forEach((z,k)=>{const tr=document.createElement('tr');

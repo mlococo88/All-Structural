@@ -1734,6 +1734,9 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
 <!-- LLRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): Undo / Redo (shared with the other tools) -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <script>
 "use strict";
 /* =========================================================================
@@ -2863,6 +2866,7 @@ function autosave(){
   // Contribute to the ACTIVE shared project only. LLDF never creates or renames projects — that's the MCT app's job.
   try{ if(BP()){ const cur=BP().current(); if(cur && BP().get(cur)) BP().saveSlice(cur, undefined, 'lldf', snap); } }catch(e){}
   status("Autosaved ✓");
+  if(window.LLPL) LLPL.h.record();   // PLIB: one undo step per change (the autosave is already debounced)
 }
 // Follow the active project when it's switched from another app (e.g. MCT loads a project).
 let _lastProjId=null;
@@ -2903,6 +2907,18 @@ function projImportFile(ev){
   reader.readAsText(file);
 }
 
+/* PLIB (2026-11-02): Undo / Redo (shared/projects.js history, shared/projects-ui.js buttons and Ctrl+Z / Ctrl+Y). Display only:
+   snapshots of serialize(false) without savedAt (inputs, title block, figures), session only; set = applyState() (the Import path), then
+   the autosave. Named projects stay with the MCT app (BridgeProjects), as before: no list here. */
+function lldfPlibInit(){
+  if(!window.SharedProjects||!window.SharedProjectsUI) return;
+  const h=SharedProjects.history({ get:()=>{ const o=serialize(false); delete o.savedAt; return JSON.stringify(o); }, set:t=>{ applyState(JSON.parse(t)); autosave(); } });
+  const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'btn sm'});
+  const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
+  const ref=$("projExport"); if(ref){ ref.parentNode.insertBefore(bu,ref); ref.parentNode.insertBefore(br,ref); }
+  SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
+  h.reset(); window.LLPL={h};
+}
 /* -------------------- wiring -------------------- */
 function toggleSectional(){ const t=$("bridgeType").value;
   $("sectRow").style.display=BEAM_SLAB.has(t)?"":"none";
@@ -2986,6 +3002,7 @@ function initApp(){
   // If MCT (or another tab) switches the active project, follow it here.
   try{ if(BP()) window.addEventListener("storage",e=>{ if(!e.key||e.key===BP().K_CUR||e.key===BP().K_PROJ) syncActiveProject(false); }); }catch(e){}
   if(!LS.ok) status("Autosave needs browser storage (blocked in this preview). Use Export/Import instead.",true,true);
+  setTimeout(lldfPlibInit,0);   // PLIB: after the start-up has run, so it is not a step
 }
 window.addEventListener("load",initApp);
 </script>

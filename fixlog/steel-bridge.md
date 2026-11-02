@@ -3678,3 +3678,90 @@ current design's analysis accepted; **the minimum shipping piece length raised f
 - Browser (Playwright, 1280 and 390): 0 console errors, no horizontal scroll; 3D card opens framed and stays open on another splice.
 ### Other copies
 - None.
+
+## 2026-11-02 — PR #695: https://github.com/mlococo88/All-Structural/pull/695 (claude/sb-nb-one-input) — Auto design: one girder-count input (the N_b variable row); "Candidates to keep" renamed "Designs to list"
+### Why
+- Engineer: two inputs set the girder counts studied ("Girder counts to study", `P.autodesign.nbList`, and the "Girder count N_b" row of the
+  design variables, `P.autodesign.vars.nb`); keep the row only. Rename "Candidates to keep" (`topN`) and say what it does.
+### What changed
+- `engine/autodesign.js` `nbList(P, S)`: the list is no longer read. Before:
+  `const xs = P.xs || {}, nb0 = xs.nb || 0, W = …, lst = String(S.nbList || '').split(/[\s,;]+/).map(Number).filter(n => n >= 2 && Number.isInteger(n));`
+  … `if (lst.length) return [...new Set(lst)];` (between the Range line and the Auto ± 1 line). After: `lst` and that line removed. Lock = `[nb0]`,
+  Range = min … max, Auto = nb0 − 1, nb0, nb0 + 1 within the spacing limits (unchanged lines). `VARS` nb note: "(or the counts listed)" removed;
+  now "Auto (New design): the current count ± 1 within the spacing limits; Lock: the current count; Range: every count from min to max; …".
+  `DEF.nbList` kept ('' ; not read) with a comment; header comment of the 'new' mode updated.
+- `engine/model.js` new `migrateNbList(p)` (exported), called by `importJSON` after `migrate()` (anchor `const notes = [migrateNbList(p)]`);
+  `importJSON` and `load` now also return `notes` (one-line notices). The migration, on a non-blank `autodesign.nbList` only:
+  the whole counts ≥ 2 in it (as the old reader), sorted, de-duplicated; `nbList` set to ''; if `vars.nb.mode` is not 'lock' or 'range'
+  (absent or 'auto', where the list replaced the ± 1 rule) and the list held a count: `vars.nb = { mode: 'range', min: smallest, max: largest }`;
+  if counts were skipped (e.g. "5, 7"): notice "Auto design: the girder counts listed ("5, 7") are now the girder count Range 5 to 7, which also studies 6."
+  Header doc of `autodesign` updated.
+- **Kept or cleared:** cleared (`nbList: ''`). Nothing reads it now, so neither choice can change a result; but a kept list would make the
+  migration run again on every load and overwrite a later choice of the nb row (e.g. set back to Auto). The list's content is in the Range min
+  and max; only the gaps are not kept, and the notice names them.
+- `engine/library.js` `open()`: passes `notes`. `index.html`: `loadNotes(notes)` toast after the autosave load (the migrated project is written
+  to the autosave once, so the notice shows once), after opening a saved project and after Import JSON.
+- `ui/autodesign.js` `inputsHtml()`: the "Girder counts to study" box removed; `num('topN', 'Candidates to keep', …)` → `num('topN', 'Designs to list', …)`;
+  new note under the grid: "Designs to list: Auto design ranks every trial by the objective, then runs the full check on the best ones until this many
+  pass every module; pick one and Apply." plus, in New design, "The girder counts studied are set by the Girder count N_b row … (now 5, 6)". Header comment.
+- Saved field `topN` unchanged. `tests/engine/autodesign-parity.mjs` `legacySettings`: `nbList: String(Ppl.bridge.nb)` → `vars.nb: { mode: 'lock' }`
+  (the same single count: `xs.nb = round(bridge.nb)`, ad-fixture.mjs).
+### §4 callout
+- None: no formula, factor, unit or reference changed. The counts studied for a saved project are the same after the migration, except a list with
+  a gap, which now also studies the counts between (stated on screen).
+### Check case (default project: N_b = 5, bays 4 × 9.5 = 38 ft, spacing limits 6 … 12 ft)
+- Blank list, nb Auto: 4 → 38/3 = 12.67 ft > 12 (out), 5, 6 → 38/5 = 7.6 ft → counts [5, 6] before and after.
+- "4, 5, 6" (nb Auto) → Range 4 … 6 → [4, 5, 6] before and after. "4, 6" → before [4, 6], after [4, 5, 6] + notice.
+  "4, 6" with nb Lock → before [5] (Lock read first), after [5], list cleared, no notice.
+### How verified
+- New test in `tests/engine/autodesign-vars.test.mjs` (migration cases, once-only, load path).
+- Full New design runs (Node, default project, `AD.run(P, { maxIt: 3, trimTries: 1 })`, topN 2; the saved project passed through `importJSON`;
+  sha256 of every candidate (layout, details, cost, module ratios), the screened list, the rejected and the note), origin/main vs branch:
+  - blank list, nb Auto: counts [5, 6], 27 trials, best N_b 5, D 55 in, 424,535 lb — identical (8b2eb99a78008e30).
+  - "4, 5, 6": main [4, 5, 6] / branch Range 4 … 6 → [4, 5, 6], 42 trials, best N_b 4, D 57 in, 396,846 lb — identical (a8f4a6ea23c90850).
+  - "4,5" with nb explicitly Auto: [4, 5] both, 29 trials — identical (998469cd4966c622).
+  - "4, 6" with nb Lock: [5] both, 14 trials — identical (75b1b81cdb067e4d).
+  - "4, 6" (gap): main [4, 6], 30 trials (a248f732f214f80d); branch [4, 5, 6], 42 trials + the notice (= the "4, 5, 6" run). Same
+    candidates (N_b 4, D 57 in, 396,846 lb); N_b 5 is now screened too (intended).
+- `node tests/engine/run.mjs autodesign` (3 files, 22 passed), `model.test library.test projects.test report-wiring` (29 passed), `node tests/check-syntax.mjs` (all pass).
+- Browser (Playwright, a saved project with "4, 6"): the notice shows once (not after reload), the autosave holds vars.nb Range 4 … 6 and
+  nbList '', the box is gone, "Designs to list" and its note shown; 0 console errors.
+### Other copies
+- None.
+
+## 2026-11-02 — PR #697: https://github.com/mlococo88/All-Structural/pull/697 (claude/sb-dup-designs) — Auto design list: "Differs from #1 in" column (the 1-gage-line twin explained; display only)
+### Why
+- Engineer: with Designs to list = 2, the default project lists two designs with the same N_b, D and weight. Are they duplicates?
+### Finding
+- Not true duplicates. Default project, New design, nb Auto, topN 2 (the runs of PR #695, Node, maxIt 3):
+  #1 and #2 are both N_b 5, D 55 in, 424,535 lb, the same cost, splices (82, 145, 215, 278 ft), web and flange plates, transitions, overhang,
+  sized details (`det.rows`) and module ratios. They differ only in the field-splice gage lines: #1 `L.minLines` null (the Splices tab's bolt
+  lines, 2), `boltRaised` true; #2 `L.minLines` 1 (one gage line each side of the web; Apply sets `splices.bolts.minLines = 1`), `boltRaised` false.
+- Why the search makes them: `engine/autodesign.js` `run()` (anchor `if (oneLine) { const best = out.filter(o => o.pass && o.L.boltRaised`) adds a
+  1-gage-line variant of the two best designs whose splice flange widths the bolt fit (DT10) raised, so the objective can choose the lighter one.
+  The pool's de-duplication (`sigOf`) includes `minLines`, so both stay. Here the 1-line variant ends at the same plates as the 2-line design
+  (the raised width is what the design needs anyway), so it saves nothing and ties on weight, cost and ratio. The same twin is listed in
+  the other runs of #695 (N_b 4, D 57 in, 396,846 lb, twice).
+- The list already had a "Gage lines" column ("as set" / "1"), but nothing said the rows are otherwise the same.
+### What changed
+- `ui/autodesign.js`: new `diffFrom(c, c1)` (after `const ohT = …`; exported as `SBDAutoDesignUI.diffFrom` for the test). It names what candidate c changes
+  against #1: N_b, D, overhang, splice stations, splice gage lines, web plates, each flange's transitions (cut points) or plates, and each sized
+  detail by its label; otherwise "nothing listed here (same plates and details)". The candidate list gets a last column "Differs from #1 in"
+  (`—` for #1, blank for the "now" row). Before: `…<th class="lft">What governs</th></tr>`; after: `…<th class="lft">What governs</th><th class="lft">Differs from #1 in</th></tr>`,
+  and each row `<td class="lft">${i ? esc(diffFrom(c, R.cands[0])) : '—'}</td>`.
+- No engine change: which designs are listed, their order and their checks are unchanged.
+### §4 callout
+- None: display only. Before / after list (default project, topN 2): see the PR (same rows; #2 now reads "gage lines at the splices (1 vs as set)").
+### Check case
+- Default project, Designs to list 2, run in the app (Playwright, full settings), origin/main vs branch: the rows are identical apart from the new
+  column. #1 N_b 5, D 67 in, 409,784 lb, $1,427,351, 7 transitions, 4 splices, gage lines "as set", TS2 1.000, Differs "—";
+  #2 the same numbers, gage lines 1, Differs "gage lines at the splices (1 vs as set)". 0 console errors both sides.
+### Note (saved-project list, from PR #695; left as is by the engineer)
+- A project kept in the saved-project list (engine/library.js) with an old "Girder counts to study" list stays in the old text until it is saved
+  again; it is migrated the same way on every open (engine/model.js migrateNbList), so a gap notice repeats on each open until the project is saved.
+  The autosave copy is rewritten once on load, so it does not repeat there.
+### How verified
+- `tests/engine/autodesign.test.mjs`: new test of `diffFrom` (the twin, identical, D + plates + a detail, N_b + transitions); `node tests/check-syntax.mjs`.
+- The app run above, main vs branch (the list read from the page; screenshot checked).
+### Other copies
+- None.

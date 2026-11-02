@@ -1,8 +1,8 @@
 /* apps/steel-bridge/ui/autodesign.js — the Auto design output tab (window.SBDAutoDesignUI), from engine/autodesign.js. Classic script.
    Needs SharedSteps, SharedUnits, SBDModel, SBDAutoDesign and every module the full check runs (see engine/autodesign.js).
 
-   One panel: the inputs (saved in the project, P.autodesign: mode, objective, the price list, the limits, the girder counts, the change to
-   check), Run with progress and Stop (the search runs a trial at a time with setTimeout, so the page stays responsive), the ranked list of
+   One panel: the inputs (saved in the project, P.autodesign: mode, objective, the designs to list (topN), the price list, the limits, the
+   change to check; the girder counts studied are the girder count variable's, in the design variables table), Run with progress and Stop (the search runs a trial at a time with setTimeout, so the page stays responsive), the ranked list of
    candidates (each passing every module on the full check), and Apply with one-step Undo (the design before Apply is kept in
    P.autodesign.undo). The result itself lives in memory for this page view.
 
@@ -35,9 +35,9 @@
     return `<section class="sec"><div class="secHead">Auto design: inputs</div><div class="secBody">
       <div class="ad-grid">${sel('mode', 'Mode', s.mode, [['new', 'New design (girder count, depth, plates, transitions)'], ['refine', 'Refine current design (keep the zones)'], ['check', 'Check one change']])}
       ${sel('objective', 'Objective', s.objective, [['weight', 'Lightest steel'], ['depth', 'Shallowest depth'], ['cost', 'Lowest cost']])}
-      ${num('topN', 'Candidates to keep', v(a, 'topN', D.topN), '')}
-      ${s.mode === 'new' ? num('nbList', 'Girder counts to study', v(a, 'nbList', ''), '', `blank: ${AD().nbList(P, s).join(', ')}`) : ''}
+      ${num('topN', 'Designs to list', v(a, 'topN', D.topN), '')}
       ${s.mode === 'check' ? num('change.nb', 'Change: girder count', v(a.change, 'nb', ''), '', `now ${(P.xs || {}).nb}`) + num('change.D', 'Change: web depth D', v(a.change, 'D', ''), 'in', `now ${AD().layoutOf(P).D}`) : ''}</div>
+      <p class="note"><b>Designs to list:</b> Auto design ranks every trial by the objective, then runs the full check on the best ones until this many pass every module; pick one and Apply.${s.mode === 'new' ? ` The girder counts studied are set by the <b>Girder count N<sub>b</sub></b> row of the design variables (now ${esc(AD().nbList(P, s).join(', '))}).` : ''}</p>
       <p class="note"><b>Price list</b> (lowest cost; per girder line, × the girder count):</p><div class="ad-grid">
       ${num('cost.steel', 'Steel', v(C, 'steel', D.cost.steel), '$/lb')}${num('cost.trans', 'Flange transition', v(C, 'trans', D.cost.trans), '$ each')}
       ${num('cost.splice', 'Field splice', v(C, 'splice', D.cost.splice), '$ each')}${num('cost.stiff', 'Intermediate stiffener', v(C, 'stiff', D.cost.stiff), '$ each')}</div>
@@ -119,15 +119,33 @@
   }
   const govTxt = g => g ? `${esc(g.mod)} ${esc(g.id)}${g.x != null ? `, x = ${fmt(g.x, 2)} ft` : ''}${g.gl ? `, ${esc(g.gl)}` : ''}` : '—';
 const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R - o.L) > 1e-9 ? ' / ' + fmt(o.R, 2) : ''}` : 'as now'; };
+  /* diffFrom(c, c1): what candidate c changes against candidate #1 (c1), in words, for the list's "Differs from #1" column (2026-11-02, display
+     only): girder count, depth, overhangs, field splice stations, splice gage lines, web and flange plates (thicknesses, widths, cut points),
+     and each sized detail (det.rows, by label). '' = nothing listed here differs. */
+  const diffFrom = (c, c1) => {
+    if (!c1 || c === c1) return '';
+    const A = c.L, B = c1.L, J = v => JSON.stringify(v), out = [];
+    if (A.nb !== B.nb) out.push(`N_b ${A.nb}`); if (Math.abs(A.D - B.D) > 1e-9) out.push(`D ${fmt(A.D, 2)} in`);
+    if (J(A.oh || null) !== J(B.oh || null)) out.push(`overhang ${ohT(A)} ft`);
+    if (J(A.spl) !== J(B.spl)) out.push('splice stations');
+    if ((A.minLines || null) !== (B.minLines || null)) out.push(`gage lines at the splices (${A.minLines || 'as set'} vs ${B.minLines || 'as set'})`);
+    if (J(A.web.map(p => [p.x0, p.x1, p.tw])) !== J(B.web.map(p => [p.x0, p.x1, p.tw]))) out.push('web plates');
+    ['top', 'bot'].forEach(f => { const za = A[f] || [], zb = B[f] || [], nm = f === 'top' ? 'top' : 'bottom';
+      if (J(za.map(z => [z.x0, z.x1])) !== J(zb.map(z => [z.x0, z.x1]))) out.push(`${nm} flange transitions`);
+      else if (J(za.map(z => [z.b, z.t])) !== J(zb.map(z => [z.b, z.t]))) out.push(`${nm} flange plates`); });
+    const ra = (c.det && c.det.rows) || [], rb = (c1.det && c1.det.rows) || [];
+    ra.forEach(r => { const q = rb.find(x => x.label === r.label); if (!q || q.value !== r.value) out.push(r.label.toLowerCase()); });
+    return out.length ? out.join('; ') : 'nothing listed here (same plates and details)';
+  };
   function resultsHtml(P, R) {
     const c0 = R.current, cls = r => r > 0.95 ? 'ad-hi' : 'ad-ok';
     let h = `<section class="sec"><div class="secHead">Candidates (ranked by ${esc({ weight: 'steel weight', depth: 'web depth', cost: 'cost' }[R.S.objective])})</div><div class="secBody">`;
     if (R.note) h += `<div class="alert">${esc(R.note)}</div>`;
     if (R.spl) h += `<p class="note"><b>Field splice layouts sized</b> (the splice variable, ${esc(R.S.V.spl.mode)}): ${R.spl.lays.map((l, i) => `${i + 1}. ${l.spl.map(x => fmt(x, 2)).join(', ') || 'none'} ft (${esc(l.how)})`).join('; ') || 'none'}. The rule's stations (contraflexure on ${esc(R.spl.gl || '')}): ${(R.spl.ref ? R.spl.ref.spl : []).map(x => fmt(x, 2)).join(', ') || 'none'} ft.</p>`;
-    h += `<div class="tscroll"><table class="tbl ad-list"><thead><tr><th>#</th><th>N<sub>b</sub></th><th>D (in)</th><th>Weight (lb, all girders)</th><th>Cost ($)</th><th>Transitions</th><th>Splices</th><th>Gage lines</th><th>Overhang (ft)</th><th>Governing ratio</th><th class="lft">What governs</th></tr></thead><tbody>
-      <tr class="ad-cur"><td>now</td><td>${c0.L.nb}</td><td>${fmt(c0.L.D, 2)}</td><td>${fmt(c0.cost.w, 0)}</td><td>${fmt(c0.cost.total, 0)}</td><td>${c0.cost.nTr}</td><td>${c0.cost.nSpl}</td><td></td><td>${fmt(+(P.xs || {}).ohL, 2)}${Math.abs(+(P.xs || {}).ohR - +(P.xs || {}).ohL) > 1e-9 ? ' / ' + fmt(+(P.xs || {}).ohR, 2) : ''}</td><td>${c0.E ? fmt(c0.E.ratio, 3) : ''}</td><td class="lft">current design${c0.E && !c0.E.pass ? ' (fails the screen)' : ''}</td></tr>
+    h += `<div class="tscroll"><table class="tbl ad-list"><thead><tr><th>#</th><th>N<sub>b</sub></th><th>D (in)</th><th>Weight (lb, all girders)</th><th>Cost ($)</th><th>Transitions</th><th>Splices</th><th>Gage lines</th><th>Overhang (ft)</th><th>Governing ratio</th><th class="lft">What governs</th><th class="lft">Differs from #1 in</th></tr></thead><tbody>
+      <tr class="ad-cur"><td>now</td><td>${c0.L.nb}</td><td>${fmt(c0.L.D, 2)}</td><td>${fmt(c0.cost.w, 0)}</td><td>${fmt(c0.cost.total, 0)}</td><td>${c0.cost.nTr}</td><td>${c0.cost.nSpl}</td><td></td><td>${fmt(+(P.xs || {}).ohL, 2)}${Math.abs(+(P.xs || {}).ohR - +(P.xs || {}).ohL) > 1e-9 ? ' / ' + fmt(+(P.xs || {}).ohR, 2) : ''}</td><td>${c0.E ? fmt(c0.E.ratio, 3) : ''}</td><td class="lft">current design${c0.E && !c0.E.pass ? ' (fails the screen)' : ''}</td><td></td></tr>
       ${R.cands.map((c, i) => `<tr data-adsel="${i}"${i === S.sel ? ' class="sel"' : ''}><td>${i + 1}</td><td>${c.nb}</td><td>${fmt(c.D, 2)}</td><td>${fmt(c.cost.w, 0)}</td><td>${fmt(c.cost.total, 0)}</td><td>${c.nTr}</td><td>${c.nSpl}</td><td>${c.minLines || 'as set'}</td><td>${ohT(c.L)}</td>
-        <td class="${cls(c.ratio)}">${fmt(c.ratio, 3)}</td><td class="lft">${c.gov && c.gov.tab ? `<a href="#" data-adgo="${esc(c.gov.tab)}" title="Open the ${esc(TABN[c.gov.tab] || '')} tab">${govTxt(c.gov)}</a>` : govTxt(c.gov)}${c.gov ? `: ${esc(c.gov.title)}` : ''}</td></tr>`).join('')}</tbody></table></div>
+        <td class="${cls(c.ratio)}">${fmt(c.ratio, 3)}</td><td class="lft">${c.gov && c.gov.tab ? `<a href="#" data-adgo="${esc(c.gov.tab)}" title="Open the ${esc(TABN[c.gov.tab] || '')} tab">${govTxt(c.gov)}</a>` : govTxt(c.gov)}${c.gov ? `: ${esc(c.gov.title)}` : ''}</td><td class="lft">${i ? esc(diffFrom(c, R.cands[0])) : '—'}</td></tr>`).join('')}</tbody></table></div>
       <p class="note">Every candidate listed passed every module on the full check (the analysis with its own stiffness; flexure, shear and stiffeners, fatigue and studs, constructibility, cross-frames, field splices, rating, welds; its details sized first). ${R.rejected.length ? `${R.rejected.length} finalist(s) failed the full check and were dropped (below).` : ''} Click a row for its plates and steps.</p></div></section>`;
     const c = R.cands[S.sel];
     if (c) {
@@ -204,5 +222,5 @@ const ohT = X => { const o = X && X.oh; return o ? `${fmt(o.L, 2)}${Math.abs(o.R
       const r = AD().apply(P, c); ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (r.project[k] === undefined) delete P[k]; else P[k] = r.project[k]; }); S.R = null; if (ctx.changed) ctx.changed(true); else redraw(); });
     on('#ad_undo', 'click', () => { const Q = AD().undo(P); if (!Q) return; ['autodesign', ...AD().APPLY_KEYS].forEach(k => { if (Q[k] === undefined) delete P[k]; else P[k] = Q[k]; }); if (ctx.changed) ctx.changed(true); else redraw(); });
   }
-  window.SBDAutoDesignUI = { render };
+  window.SBDAutoDesignUI = { render, diffFrom };
 })();

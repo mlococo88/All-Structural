@@ -46,6 +46,19 @@ test('Hand checks: weight, cost, proportion limits, bolt-fit width, depth rule',
   const Sc = AD.settings(P); assert.equal(Sc.lim.twMin, 0.375); assert.equal(Sc.lim.Dinc, 2); assert.equal(Sc.lim.bfInc, 2);
 });
 
+test('The list\'s "Differs from #1 in" column (ui/autodesign.js diffFrom, display only): the 1-gage-line twin and real differences named', () => {
+  const U = loadShared('units.js', 'steps.js', E('ui/autodesign.js')), D = U.SBDAutoDesignUI.diffFrom;
+  const L = { nb: 5, D: 55, spl: [82, 145, 215, 278], web: [{ x0: 0, x1: 82, tw: 0.5 }], top: [{ x0: 0, x1: 82, b: 16, t: 1 }], bot: [{ x0: 0, x1: 40, b: 18, t: 1 }, { x0: 40, x1: 82, b: 18, t: 1.5 }], minLines: null, oh: null };
+  const det = { rows: [{ label: 'Stud pitch zones', value: '30 zones' }, { label: 'Cross-frames', value: 'L5x5x3/8' }] }, J = o => JSON.parse(JSON.stringify(o));
+  const c1 = { L, det }, twin = { L: { ...J(L), minLines: 1, boltRaised: false }, det: J(det) };
+  // the default project's #1 and #2 (Designs to list = 2): same plates and details, one gage line at the splices
+  assert.equal(D(twin, c1), 'gage lines at the splices (1 vs as set)'); assert.equal(D(c1, c1), '');
+  assert.equal(D({ L: J(L), det: J(det) }, c1), 'nothing listed here (same plates and details)');
+  const o = { L: { ...J(L), D: 57 }, det: { rows: [{ label: 'Stud pitch zones', value: '28 zones' }, { label: 'Cross-frames', value: 'L5x5x3/8' }] } };
+  o.L.bot[1].t = 1.75; assert.equal(D(o, c1), 'D 57.00 in; bottom flange plates; stud pitch zones');
+  const p = { L: J(L), det: J(det) }; p.L.top = [{ x0: 0, x1: 50, b: 16, t: 1 }, { x0: 50, x1: 82, b: 16, t: 1.25 }]; p.L.nb = 6; assert.equal(D(p, c1), 'N_b 6; top flange transitions');
+});
+
 test('Layout round trip: segmentsOf(layoutOf(P)) = the project plates', () => {
   const P = M.defaultProject(), L = AD.layoutOf(P), segs = AD.segmentsOf(L);
   // the built-in plates change at 88, 128, 232, 272 ft; the splices (82, 145, 215, 278) do not change a plate

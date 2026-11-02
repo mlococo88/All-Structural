@@ -32,6 +32,13 @@ const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel
   await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
   return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
 export const TOOLS = {
+  lldf: {
+    file: 'lldf.html', list: null, auto: 'lldf_autosave_v1', noList: true,
+    ready: p => p.waitForFunction(() => window.lldfLast),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(window.lldfLast, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
+    change: p => bump(p, '#skew', 10),
+    save: async () => {}
+  },
   bsl: {
     file: 'Bridge Substructure Loading.html', list: 'subloads_projects_v1', auto: 'subloads_v1', newList: true,
     ready: p => p.waitForFunction(() => typeof MODEL !== 'undefined' && MODEL && MODEL.G),
@@ -183,13 +190,13 @@ await T.change(A.p); await T.change(B.p);
 const a1 = await T.results(A.p), b1 = await T.results(B.p); same(a1, b1, 'after an input change: results identical');
 ok(JSON.stringify(a1) !== JSON.stringify(a0), 'the input change changes the results (the test change is real)');
 await T.save(A.p, 'From main'); await A.p.waitForTimeout(500);
-const aLS = await lsAll(A.p); ok((T.newList || !!aLS[T.list]) && !!aLS[T.auto], 'A wrote its autosave' + (T.newList ? ' (no project list on main: new in this change)' : ' and its project list'));
+const aLS = await lsAll(A.p); ok((T.newList || T.noList || !!aLS[T.list]) && !!aLS[T.auto], 'A wrote its autosave' + (T.newList ? ' (no project list on main: new in this change)' : ' and its project list'));
 const aErr = A.errs.slice(); await A.b.close();
 // A and B reopened on A's storage (a reload can differ from the live page in a view detail; both sides reload)
 const A2 = await run(FA, { ls: aLS }), a2 = await T.results(A2.p); aErr.push(...A2.errs); await A2.b.close();
 const B2 = await run(FB, { ls: aLS });
 same(await T.results(B2.p), a2, "B opened on A's autosave: results identical to A reopened on it");
-if (!T.newList) {
+if (!T.newList && !T.noList) {
 ok(await B2.p.evaluate(k => localStorage.getItem(k), T.list) === aLS[T.list], "A's project list is unchanged after B opens");
 // open A's saved item through the dialog after going back to the defaults (undo history)
 await UI.open(B2.p);
@@ -215,6 +222,7 @@ if (!T.ownUndo) {
   await p.keyboard.press('Control+y'); await p.waitForTimeout(900); same(await T.results(p), b1, 'Ctrl+Y');
   const autoAfter = await p.evaluate(k => localStorage.getItem(k), T.auto); ok(autoAfter && JSON.stringify(JSON.parse(autoAfter)) !== '{}', 'autosave written after undo / redo');
 }
+if (!T.noList) {
 // ---------- 3. dialog (B) ----------
 await T.save(p, 'Job 1'); await p.waitForTimeout(400); await T.save(p, 'Job 2'); await p.waitForTimeout(400);
 const L0 = await lsAll(p), item = n => JSON.stringify(JSON.parse(L0[T.list])[n]);
@@ -242,6 +250,7 @@ await act('open', 'Job 1 renamed', []); same(drop(await T.results(p)), drop(b1),
 await p.setViewportSize({ width: 390, height: 800 }); await UI.open(p).catch(() => {}); await p.waitForTimeout(300); await shot('dialog-390');
 const sw = await p.evaluate(sel => document.querySelector(sel).scrollWidth <= document.querySelector(sel).clientWidth + 1, UI.box); ok(sw, '390 px: the dialog does not scroll sideways');
 
+}
 // ---------- 4. console ----------
 const extra = B.errs.filter(e => !aErr.includes(e)); ok(!extra.length, 'no console errors beyond main\'s' + (extra.length ? ': ' + extra.join(' | ') : ''));
 await B.b.close();
