@@ -15210,3 +15210,28 @@ index cedb10f..5b89752 100644
 +      if(T.length) addSub(Q.integ?"Integral abutment":"Semi-integral end diaphragm",{title:Q.integ?"Integral piles and the extreme event":"End diaphragm at the extreme event",items:[abrTopics("ia",T,{title:"Worked steps"}),{type:"note",text:"As on "+abrTab("tab-iab")+"."}]}); }
 +  }
 ```
+
+## 2026-11-02 — PR: PRLINK — PLIB: Redo, Ctrl+Z / Ctrl+Y, and Rename / Duplicate in the Projects dialog   [display and storage only]
+- **Before:** Save Project (prompt), Projects… (own dialog: Load, Overwrite, Delete; `abutcalc_v1_projects`, `{ name: { state, ts } }`),
+  Export / Import JSON, ↶ Undo (40 steps, `pushUndo` / `doUndo`, no Redo, no keyboard shortcut).
+- **Where:**
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - header, after `<button id="btnUndo" …>↶ Undo</button>`: `<button id="btnRedo" … disabled data-sp="1">↷ Redo</button>`.
+  - `pushUndo()`: `REDO=[];` after the 40-step trim (a new change ends the redo list); the button state through the new `undoBtns()`.
+  - `doUndo()`: before replacing `S`, `const cur=JSON.stringify(S)`; after, `REDO.push(cur)` (40 kept). New `let REDO=[]`, `doRedo()` (the
+    mirror of `doUndo()`: the current state goes back on `UNDO`), `undoBtns()` (anchor `/* PLIB (2026-11-02): Redo for the existing Undo`).
+  - after `document.getElementById("btnUndo").addEventListener("click",doUndo);`: the Redo click, and `SharedProjectsUI.undoRedo(…)` for
+    Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z over `doUndo` / `doRedo` (left to the browser while text is being typed in a field).
+  - `renderProjList()`: Rename and Duplicate buttons between Overwrite and Delete; new `abPlibAct(a, n)` using
+    `SharedProjects.mapStore(localStorage, PROJ_KEY)` (item moved / copied unchanged; a name in use asks first; a refused write shows its message).
+- **Saved data:** keys `abutcalc_v1_projects`, `abutcalc_v1_autosave` and their formats unchanged; no new key. The EDM and Pile Designer
+  hand-offs are unchanged.
+- **How verified:** `node tests/smoke/project-library.mjs --tool abutment`: ALL PASS (`window.LAST_R`, every computed result, identical to
+  origin/main on load, after an input change, and reopened on main's storage; a saved project loaded from the dialog gives the same
+  results except the input fingerprint, which differs on main too because Save adds a revision to `S.meta` that the autosave does not
+  have yet; Undo / Redo / Ctrl+Z / Ctrl+Y exact; rename / duplicate / delete byte-identical; quota message; no new console errors).
+  `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Entered demands (not added):** the superstructure reactions per girder (DC, DW, LL+IM, BR, WS, …) and the pile results are entered or
+  pulled directly. The stem, footing and pile demands are worked from those and the earth pressures; entering them directly would bypass the
+  load combinations with new paths (a new formula), which the brief excludes. Raised for the engineer instead.

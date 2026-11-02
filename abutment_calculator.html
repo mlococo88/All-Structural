@@ -23,6 +23,9 @@
 <!-- ABRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): saved-project rename / duplicate, Redo and Ctrl+Z / Ctrl+Y, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <style>
 /* ================= GLOBAL / THEME ================= */
 :root{
@@ -501,6 +504,7 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
     <button id="btnImport" title="Load inputs from a JSON backup file">Import JSON</button>
     <input type="file" id="importFile" accept=".json,application/json" style="display:none">
     <button id="btnUndo" title="Undo the last input change" disabled>↶ Undo</button>
+    <button id="btnRedo" title="Redo the last undone change (Ctrl+Y or Ctrl+Shift+Z)" disabled data-sp="1">↷ Redo</button>
     <button id="btnReset" title="Reset all inputs to built-in defaults">Reset Defaults</button>
     <button id="btnCompare" title="Compare two saved projects (inputs + D/C side by side)">Compare…</button>
     <button id="btnSelfTest" title="Re-run the built-in validation benchmark through the live engine">Self-Test</button>
@@ -9103,16 +9107,31 @@ function pushUndo(path){
   if(path===_undoPath && now-_undoTime<1500){ _undoTime=now; return; }   // coalesce rapid same-field edits
   try{ UNDO.push(JSON.stringify(S)); }catch(e){ return; }
   if(UNDO.length>40) UNDO.shift();
+  REDO=[];   // PLIB: a new change ends the redo list
   _undoPath=path; _undoTime=now;
-  const ub=document.getElementById("btnUndo"); if(ub) ub.disabled=false;
+  undoBtns();
 }
 function doUndo(){
   if(!UNDO.length) return;
+  const cur=JSON.stringify(S);   // PLIB: kept for Redo
   try{ S=JSON.parse(UNDO.pop()); }catch(e){ return; }
+  REDO.push(cur); if(REDO.length>40) REDO.shift();
   migrate(); buildTabs(); buildInputs(); recalcAll(); refreshProjHeader();
   _undoPath=null;
-  const ub=document.getElementById("btnUndo"); if(ub) ub.disabled=!UNDO.length;
+  undoBtns();
 }
+/* PLIB (2026-11-02): Redo for the existing Undo (the state before each Undo is kept, session only), and the buttons' enabled state */
+let REDO=[];
+function doRedo(){
+  if(!REDO.length) return;
+  const cur=JSON.stringify(S);
+  try{ S=JSON.parse(REDO.pop()); }catch(e){ return; }
+  UNDO.push(cur); if(UNDO.length>40) UNDO.shift();
+  migrate(); buildTabs(); buildInputs(); recalcAll(); refreshProjHeader();
+  _undoPath=null;
+  undoBtns();
+}
+function undoBtns(){ const ub=document.getElementById("btnUndo"), rb=document.getElementById("btnRedo"); if(ub) ub.disabled=!UNDO.length; if(rb) rb.disabled=!REDO.length; }
 function markSavedFp(){ window.__savedFp=(window.LAST_R&&window.LAST_R.fingerprint)||null; updateDirty(); }
 function updateDirty(){
   const badge=document.getElementById("fpBadge"); if(!badge) return;
@@ -9801,6 +9820,9 @@ document.getElementById("btnSaveProj").addEventListener("click",()=>{
   markSavedFp();
 });
 document.getElementById("btnUndo").addEventListener("click",doUndo);
+document.getElementById("btnRedo").addEventListener("click",doRedo);   // PLIB
+/* PLIB: Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z through shared/projects-ui.js (left to the browser while text is being typed in a field) */
+if(window.SharedProjectsUI) SharedProjectsUI.undoRedo({ undo:doUndo, redo:doRedo, canUndo:()=>UNDO.length>0, canRedo:()=>REDO.length>0, onChange:()=>{} },{});
 document.getElementById("btnManageProj").addEventListener("click",()=>{ renderProjList(); document.getElementById("dlgProj").showModal(); });
 document.getElementById("dlgProjClose").addEventListener("click",()=>document.getElementById("dlgProj").close());
 function renderProjList(){
@@ -9810,6 +9832,8 @@ function renderProjList(){
     <div class="prow"><span class="pname">${esc(n)}</span><span class="pdate">${new Date(all[n].ts).toLocaleString()}</span>
     <button class="mini-btn" data-act="load" data-n="${esc(n)}">Load</button>
     <button class="mini-btn" data-act="ow" data-n="${esc(n)}">Overwrite</button>
+    <button class="mini-btn" data-act="ren" data-n="${esc(n)}" data-sp="1">Rename</button>
+    <button class="mini-btn" data-act="dup" data-n="${esc(n)}" data-sp="1">Duplicate</button>
     <button class="mini-btn" data-act="del" data-n="${esc(n)}">Delete</button></div>`).join("")
     :"<i>No saved projects yet.</i>";
   el.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{
@@ -9817,7 +9841,19 @@ function renderProjList(){
     if(b.dataset.act==="load"){ S=all[n].state; migrate(); buildTabs(); buildInputs(); recalcAll(); scheduleSave(); document.getElementById("dlgProj").close(); refreshProjHeader(); markSavedFp(); }
     if(b.dataset.act==="ow"){ if(confirm(`Overwrite "${n}" with current inputs?`)){ if(!S.meta)S.meta={revs:[]}; S.meta.revs.push({n, ts:Date.now(), fp:(window.LAST_R&&window.LAST_R.fingerprint)||""}); S.meta.revs=S.meta.revs.slice(-10); all[n]={state:clone(S),ts:Date.now()}; setProjects(all); renderProjList(); } }
     if(b.dataset.act==="del"){ if(confirm(`Delete "${n}"?`)){ delete all[n]; setProjects(all); renderProjList(); } }
+    if(b.dataset.act==="ren"||b.dataset.act==="dup") abPlibAct(b.dataset.act,n);   // PLIB
   }));
+}
+/* PLIB (2026-11-02): Rename / Duplicate in the Projects dialog, over the tool's own key abutcalc_v1_projects ({ name: { state, ts } }) with
+   shared/projects.js: the stored item moves / is copied unchanged; a name in use asks first; a refused write shows the message. */
+function abPlibAct(a,n){
+  if(!window.SharedProjects) return;
+  const L=SharedProjects.mapStore(localStorage,PROJ_KEY);
+  const to=prompt(a==="ren"?`Rename the saved project "${n}" to:`:"Name for the copy:",a==="ren"?n:L.copyName(n)); if(to==null) return;
+  let r=a==="ren"?L.rename(n,to):L.duplicate(n,to);
+  if(!r.ok&&r.error==="exists"){ if(!confirm(`A saved project named "${to.trim()}" already exists. Replace it?`)) return; r=a==="ren"?L.rename(n,to,{replace:true}):L.duplicate(n,to,{replace:true}); }
+  if(!r.ok) alert(r.message||r.error);
+  renderProjList();
 }
 function refreshProjHeader(){
   document.querySelectorAll("#projBlock input").forEach(el=>{ el.value=getPath(S,el.dataset.path)??""; });
