@@ -67,11 +67,12 @@ IDENT.push(
   { id: 'noclamp', patch: { 'standoff.type': 'noclamp', 'standoff.z': 2 } },
   { id: 'case-c2-welded', patch: { 'shear.caseOverride': 'c2', 'shear.weldedPlate': true, 'anchor.nx': 3 } },
   { id: 'uncracked-lb', patch: { 'conc.cracked': false, 'ui.units': 'lb', 'ui.momentUnits': 'kip-ft', 'anchor.head': 'platewasher' } },
-  /* round pier with the pier cage (BC-5), compared on the computed results only (calcOnly: drawings in the report text may differ) */
+  /* round pier with the pier cage (BC-5), compared on the computed results only (calcOnly: drawings in the report text may differ).
+     circHefReduce is pinned to true (the default before BC-6, 2026-11-02) so the comparison with origin/main stays like for like. */
   { id: 'cage-supp', calcOnly: true, case: CASES[0], patch: { 'anchor.pattern': 'circle', 'anchor.nCircle': 8, 'anchor.BC': 20, 'anchor.theta0': 22.5, 'anchor.hef': 36,
-    'conc.shape': 'circle', 'conc.D': 42, 'conc.Bx': 42, 'conc.By': 42, 'conc.cage': { present: true, nBars: 10, barSize: '#9', grade: 'gr60', cover: 3, angle0: 0, topCover: 3, topHook: false, tieType: 'spiral', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 3, ackDetail: false } } },
+    'conc.shape': 'circle', 'conc.D': 42, 'conc.Bx': 42, 'conc.By': 42, 'conc.circHefReduce': true, 'conc.cage': { present: true, nBars: 10, barSize: '#9', grade: 'gr60', cover: 3, angle0: 0, topCover: 3, topHook: false, tieType: 'spiral', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 3, ackDetail: false } } },
   { id: 'cage-subst', calcOnly: true, case: CASES[0], patch: { 'anchor.pattern': 'circle', 'anchor.nCircle': 4, 'anchor.BC': 16.970562748477143, 'anchor.theta0': 45, 'anchor.hef': 36,
-    'conc.shape': 'circle', 'conc.D': 36, 'conc.Bx': 36, 'conc.By': 36, 'conc.cage': { present: true, nBars: 8, barSize: '#8', grade: 'gr60', cover: 3, angle0: 45, topCover: 3, topHook: false, tieType: 'tie', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 4, ackDetail: true } } },
+    'conc.shape': 'circle', 'conc.D': 36, 'conc.Bx': 36, 'conc.By': 36, 'conc.circHefReduce': true, 'conc.cage': { present: true, nBars: 8, barSize: '#8', grade: 'gr60', cover: 3, angle0: 45, topCover: 3, topHook: false, tieType: 'tie', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 4, ackDetail: true } } },
   { id: 'narrow', patch: { 'conc.Bx': 14, 'conc.By': 40, 'conc.H': 16, 'plate.B': 12, 'anchor.hef': 10, 'anchor.torqued': true } },
 );
 
@@ -263,6 +264,44 @@ async function circleChecks(src) {
           phiTbA: capA.tb.phi, tbInA: capA.tensionModes.some(m => /breakout/.test(m.label)), tbInB: capB.tensionModes.some(m => /Concrete breakout/.test(m.label)),
           cageModeB: capB.tensionModes.some(m => /pier cage/.test(m.label)) && capB.shearModes.some(m => /pier cage/.test(m.label)),
           checksB: b.checks.map(x => x[0]), errs: a.errs.concat(b.errs) }; }
+      /* H8 (BC-6, 2026-11-02): the §17.6.2.1.2 analogy for a round pier is NOT applied by default. Audit case C: 4 × 1 in Gr 55
+         on BC 13 (θ0 0), Ø36 pier, h_ef 18, f'c 4 ksi cracked, heavy hex. Without: h_ef 18, A_Nc = π·18² = 1017.876, A_Nco = 2916,
+         ψ_ed = 0.7 + 0.3·11.5/27 = 0.82778, N_b = 16·√4000·18^(5/3) = 125.104 kip → φN_cbg = 0.70·0.349066·0.82778·125.104 = 25.304 kip.
+         With (the old default): h'_ef = (18 − 6.5·cos45°)/1.5 = 8.93587, A_Nco = 718.648, ψ_ed = 0.95739, N_b = 40.546 → 38.487 kip.
+         Saved data: a save without the field keeps the reduction (migration, active design and anchor groups); a stored false or
+         true is kept. Hand-off: into a new project → not applied; into a migrated rectangular save → not applied; into a round
+         pier design that applies it → kept. */
+      { const mkC = () => { const s = defaultState(); s.plate.B = 24; s.plate.N = 24; s.plate.t = 1.5; s.plate.shape = 'circle';
+          s.anchor.dia = 1; s.anchor.grade = 'f1554_55'; s.anchor.hef = 18; s.anchor.head = 'hvyhexhead'; s.anchor.torqued = true;
+          s.anchor.pattern = 'circle'; s.anchor.nCircle = 4; s.anchor.BC = 13; s.anchor.theta0 = 0;
+          s.conc.fc = 4; s.conc.shape = 'circle'; s.conc.D = 36; s.conc.Bx = 36; s.conc.By = 36; s.conc.H = 120; s.conc.cracked = true;
+          s.grout.present = false; s.standoff.type = 'clamp'; s.standoff.z = 1; s.forceModel.method = 'elastic'; s.combos = [{ name: 'T', P: 20, Vx: 0, Vy: 0, Mx: 0, My: 0 }]; return s; };
+        const def = defaultState().conc.circHefReduce;
+        const a = run(mkC()), ta = a.res[0].tb;
+        const old = mkC(); delete old.conc.circHefReduce; old.proj.name = 'BC6 legacy';
+        old.groups = [{ id: 'g1', label: 'A', data: { conc: JSON.parse(JSON.stringify(old.conc)) } }, { id: 'g2', label: 'B', data: { conc: { shape: 'rect' } } }, { id: 'g3', label: 'C', data: { conc: { shape: 'circle', circHefReduce: false } } }];
+        old.groupActive = 0;
+        const m = mergeState(JSON.parse(JSON.stringify(old)));
+        const mig = { act: m.conc.circHefReduce, g: m.groups.map(g => g.data.conc.circHefReduce) };
+        S = m; refreshAll(); CC = computeAll(); const tOld = comboCapacities(CC, CC.combos[0]).tb;
+        let note = false; try { buildInputPanel(); note = /saved before 2026-11-02/.test(document.body.innerHTML); } catch (e) { note = 'ERR ' + e; }
+        const kept = [false, true].map(v => { const k = mkC(); k.conc.circHefReduce = v; return mergeState(JSON.parse(JSON.stringify(k))).conc.circHefReduce; });
+        const pay = { _schema: 'bridge-anchor-group', schemaVersion: 1, producer: 'Light Pole and Sign Post', producedAt: '2026-11-02T12:00:00Z', project: { name: 'P' },
+          units: { length: 'in', force: 'kip', moment: 'kip-in', stress: 'ksi' }, basis: { factored: true, method: 'LRFD' }, signConvention: 'basePlate-v1', notes: [],
+          groups: [{ id: 'p1', label: 'Post 1', anchor: { pattern: 'circle', n: 4, BC: 13, theta0: 0, dia: 1, grade: 'f1554_55', nut: 'heavyHex', hef: 18 },
+            base: { type: 'doubleNut', standoffClear: 1, plate: { shape: 'circle', D: 24, t: 1.5, Fy: 36 }, pole: { shape: 'round', D: 8.625 } },
+            pier: { shape: 'circle', D: 36, fc: 4, cracked: true, depth: 120 }, combos: [{ name: 'T', P: -20, Vx: 0, Vy: 0, Mx: 0, My: 0 }] }] };
+        const imp = base => { S = mergeState(base); refreshAll(); bxAg.apply(pay, bxAg.check(pay), { mode: 'all' }, 'test'); return S.conc.circHefReduce; };
+        const legacyRect = defaultState(); delete legacyRect.conc.circHefReduce;
+        const roundOn = mkC(); roundOn.conc.circHefReduce = true;
+        const hand = { fresh: imp(defaultState()), legacyRect: imp(legacyRect), roundOn: imp(roundOn) };
+        /* the Pier shape input: a migrated rectangular save switched to a round pier takes the new default */
+        let sw = null; try { S = mergeState(JSON.parse(JSON.stringify(legacyRect))); const before = S.conc.circHefReduce; buildInputPanel();
+          const sel = [...document.querySelectorAll('select')].find(x => [...x.options].some(o => /Circular \(drilled shaft/.test(o.textContent)));
+          sel.selectedIndex = [...sel.options].findIndex(o => /Circular \(drilled shaft/.test(o.textContent)); sel.dispatchEvent(new Event('change', { bubbles: true }));
+          sw = { before, after: S.conc.circHefReduce, shape: S.conc.shape }; } catch (e) { sw = 'ERR ' + e; }
+        out.hand.H8 = { def, hef: ta.hef, ANc: ta.ANc, ANco: ta.ANco, psi_ed: ta.psi_ed, Nb: ta.Nb, phiNcbg: ta.phiNcbg, altPhi: ta.alt && ta.alt.phiNcbg,
+          oldHef: tOld.hef, oldPhi: tOld.phiNcbg, mig, note, kept, hand, sw, errs: a.errs }; }
       out.texBad = texBad;
       return out;
     }, { CASES, VARIANTS, BUILD });
@@ -358,6 +397,24 @@ if (r.hand.H6) {
   if (!ok) fail = true;
   console.log(`  ${ok ? 'ok  ' : 'FAIL'} H6 bars ${h.effBars}; not confirmed: breakout φ ${h.phiTbA} (Condition A) and still checked; confirmed: breakout replaced by the cage (Summary: ${h.checksB.join(', ')})`);
   if (h.errs.length) { fail = true; console.log('    H6 validation errors: ' + h.errs.join(' | ')); }
+}
+if (r.hand.H8) {
+  const h = r.hand.H8;
+  chk('H8 new project: default circHefReduce', h.def === false ? 0 : 1, 0, 0);
+  chk('H8 round pier default: h_ef (no reduction)', h.hef, 18, 1e-9);
+  chk('H8 A_Nc (full disc)', h.ANc, Math.PI * 324, 1e-6);
+  chk('H8 A_Nco', h.ANco, 2916, 1e-9);
+  chk('H8 ψ_ed,N', h.psi_ed, 0.82778, 5e-5);
+  chk('H8 N_b (16√f\'c h_ef^5/3)', h.Nb, 125.104, 5e-4);
+  chk('H8 φN_cbg (default, not applied)', h.phiNcbg, 25.304, 5e-4);
+  chk('H8 φN_cbg shown as the alternative (applied)', h.altPhi, 38.487, 5e-4);
+  chk('H8 older save (no field): h\'_ef kept', h.oldHef, 8.93587, 5e-5);
+  chk('H8 older save: φN_cbg kept', h.oldPhi, 38.487, 5e-4);
+  const ok = h.mig.act === true && JSON.stringify(h.mig.g) === '[true,true,false]' && h.note === true && JSON.stringify(h.kept) === '[false,true]'
+    && h.hand.fresh === false && h.hand.legacyRect === false && h.hand.roundOn === true && !h.errs.length
+    && h.sw && h.sw.before === true && h.sw.after === false && h.sw.shape === 'circle';
+  if (!ok) fail = true;
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'} H8 migration: active ${h.mig.act}, groups ${JSON.stringify(h.mig.g)}, input note ${h.note}; stored false/true kept ${JSON.stringify(h.kept)}; hand-off into new ${h.hand.fresh}, migrated rect. save ${h.hand.legacyRect}, round pier applying it ${h.hand.roundOn}; migrated rect. save switched to a round pier ${JSON.stringify(h.sw)}${h.errs.length ? '; errors ' + h.errs.join(' | ') : ''}`);
 }
 console.log(`  TeX of the worked steps (KaTeX, throwOnError): ${r.texBad.length ? r.texBad.length + ' line(s) FAIL' : 'all typeset'}`); r.texBad.slice(0, 10).forEach(x => console.log('    ' + x));
 if (r.texBad.length) fail = true;
