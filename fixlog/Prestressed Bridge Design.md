@@ -2185,7 +2185,7 @@ Basis: AASHTO LRFD 10th Ed. (2024) 5.12.3.3.1–.8 with C5.12.3.3.2, C5.12.3.3.3
   parallel-axis terms, which the engine does not use (inconsistent display). The old tab is gone; the new report shows the engine's
   terms (and says the haunch is excluded).
 
-## 2026-11-02 — PR: claude/list-input-pbd — bridge bar: "Spans (ft)" is a table with one box per span (LIST)   [display only]
+## 2026-11-02 — PR: claude/list-input-pbd, PR #705: https://github.com/mlococo88/All-Structural/pull/705 — bridge bar: "Spans (ft)" is a table with one box per span (LIST)   [display only]
 - **Why:** engineer decision 2026-11-02: no comma-separated inputs (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
   Small UI change only (the rebuild is on hold).
 - **Where (1):** script tags, anchor `<script src="shared/report.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
