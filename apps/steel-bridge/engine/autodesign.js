@@ -3,8 +3,8 @@
    Auto design replaces Preliminary sizing's Suggest (quick suggestion, Full design) and Alternatives, and ST-Girder's Optimize.
 
    Modes (settings.mode):
-     'new'     New design: from the spans and the cross-section; chooses the girder count (settings.nbList; blank = the current count ± 1 within
-               the spacing limits), the web depth, the web thickness of each field piece, the flange plates of each zone and the flange thickness
+     'new'     New design: from the spans and the cross-section; chooses the girder count (the variable nb: Auto = the current count ± 1 within
+               the spacing limits, Lock = the current count, Range = min to max), the web depth, the web thickness of each field piece, the flange plates of each zone and the flange thickness
                transitions (a weight-and-transition search in each field piece, as Suggest's sizeFlanges); the field splices are the project's
                (framing.splices).
      'refine'  Refine current design: the current zones kept; each zone's thickness and each field piece's flange width trimmed up or down
@@ -50,7 +50,7 @@
     cost: { steel: 3.00, trans: 1500, splice: 6000, stiff: 150 },   // Preliminary sizing's price list (P.costs): $/lb, $ per transition, field splice, stiffener
     limits: { Dmin: '', Dmax: '', Dinc: '', twInc: 0.0625, tfInc: 0.125, bfInc: '', twMin: '', tfMin: '', bfMin: '', tfMax: 3.0, thkRatio: '', areaRatio: 0.5,
       maxTrans: 2, minSeg: 10, lbRatio: 85, topConst: true, maxDb: 4, depthRule: true, sLo: '', sHi: '' },
-    nbList: '', change: { nb: '', D: '' }
+    nbList: '', change: { nb: '', D: '' }   // nbList: not read since 2026-11-02 (the variable nb alone; engine/model.js migrateNbList moves a saved list on load)
   };
   /* settings(P): DEF merged with P.autodesign, then the owner's plate rules where a limit is blank (OWN14 'default' rows of engine/owners.js:
      limits.minTw, minTf, minBf, incD, incBf, thkRatio, sLo; Preliminary sizing's Limits tab defaults otherwise: t_w ≥ 1/2, t_f ≥ 3/4, b_f ≥ 12 in,
@@ -90,7 +90,7 @@
   const ANGLE_LIST = () => { const A = (window.SBDCrossframes || {}).ANGLES || {}; return Object.entries(A).map(([sec, d]) => ({ sec, b1: d[0], b2: d[1], t: d[2], A: (d[0] + d[1] - d[2]) * d[2] })).sort((a, b) => a.A - b.A || a.b1 - b.b1); };
   const tsUniform = P => { const ly = ((P.stiffeners || {}).layout) || {}; return ly.web !== 'unstiffened' && ly.mode !== 'bays'; };
   const VARS = [
-    { id: 'nb', grp: 'Girders and web', label: 'Girder count N_b', unit: '', int: true, only: ['auto', 'lock', 'range'], note: 'Auto (New design): the current count ± 1 within the spacing limits (or the counts listed); equal spacing over the same out-to-out girder width' },
+    { id: 'nb', grp: 'Girders and web', label: 'Girder count N_b', unit: '', int: true, only: ['auto', 'lock', 'range'], note: 'Auto (New design): the current count ± 1 within the spacing limits; Lock: the current count; Range: every count from min to max; equal spacing over the same out-to-out girder width' },
     { id: 'oh', grp: 'Girders and web', label: 'Deck overhang (exterior girder ℄ to deck edge)', unit: 'ft', step: true, only: ['auto', 'lock', 'range'],
       lockIf: P => !(P.girders || []).some(g => g.position === 'exterior') ? 'no exterior girder among the plate girders, so no check would see the overhang: Lock only (add the fascia girder on the Girders tab)' : !((P.xs || {}).bays || []).length ? 'no cross-section: Lock only' : '', note: 'with N_b and the spacing S closing to the same out-to-out deck width; symmetric unless set otherwise (left and right); Auto: the minimum overhang (Auto design inputs, default 2.5 ft) to min(0.40S, 4.0 ft) on 0.5 ft (its G6 practice limit), the owner\'s limit in its place (RIDOT 9.4.1.4: min(d, S/2, 4 ft; 3 ft if d < 5 ft); CTDOT V2 9.7.1.5: min(4 ft, d)), the owner\'s shall-limit also in a Range; the overhang whose screen of the starting design has the lowest governing ratio' },
     { id: 'D', grp: 'Girders and web', label: 'Web depth D', unit: 'in', step: true, only: ['auto', 'lock', 'range'], note: 'Auto: L/36 to L/18 (or the depth limits entered), the minimum depth of Table 2.5.2.6.3-1 when applied; Range: min, max and step' },
@@ -611,12 +611,13 @@
     if (hi < lo) hi = lo; const step = Math.max(inc, up((hi - lo) / 5, inc)), out = []; for (let D = lo; D <= hi + 1e-9; D += step) out.push(r4(D));
     return { coarse: out, step, lo, hi, inc };
   }
+  /* nbList(P, S): the girder counts New design studies, from the variable nb alone (since 2026-11-02; the "Girder counts to study" list,
+     settings.nbList, is no longer read: engine/model.js migrateNbList turns a saved list into a Range on load) */
   function nbList(P, S) {
-    const xs = P.xs || {}, nb0 = xs.nb || 0, W = (xs.bays || []).reduce((a, v) => a + +v, 0), lst = String(S.nbList || '').split(/[\s,;]+/).map(Number).filter(n => n >= 2 && Number.isInteger(n));
+    const xs = P.xs || {}, nb0 = xs.nb || 0, W = (xs.bays || []).reduce((a, v) => a + +v, 0);
     const q = S.V ? S.V.nb : { mode: 'auto' };
     if (q.mode === 'lock') return [nb0];
     if (q.mode === 'range') { const out = []; for (let n = Math.max(2, Math.round(q.min != null ? q.min : nb0)); n <= Math.round(q.max != null ? q.max : nb0); n++) out.push(n); return out.length ? out : [nb0]; }
-    if (lst.length) return [...new Set(lst)];
     return [nb0 - 1, nb0, nb0 + 1].filter(n => n >= 3 && (n === nb0 || (W / (n - 1) >= S.lim.sLo - 1e-9 && W / (n - 1) <= S.lim.sHi + 1e-9)));
   }
 
@@ -781,7 +782,7 @@
     // the 1-gage-line variant of the best designs whose splice flange widths the bolt fit raised (DT10): the objective then picks
     if (oneLine) { const best = out.filter(o => o.pass && o.L.boltRaised && o.job.minLines == null).sort((a, b) => key(a) - key(b)).slice(0, 2);
       for (let i = 0; i < best.length; i++) { const it = runJob({ ...best[i].job, minLines: 1, coarse: false, maxIt: null }); let s; while (!(s = it.next()).done) yield { f: 0.68, msg: s.value.msg }; } }
-    // stage 2: full checks, best first, until topN pass
+    // stage 2: full checks, best first, until topN pass (topN: "Designs to list" on the tab)
     const seen = new Set(), pool = out.filter(o => o.pass).sort((a, b) => key(a) - key(b)).filter(o => { const s = sigOf(o.L); if (seen.has(s)) return false; seen.add(s); return true; });
     const cands = [], rejected = [], blocked = []; let curFull = null;
     /* a finalist whose every failing check (module and check id) fails in the current design too is "blocked" by those details (a detail input such

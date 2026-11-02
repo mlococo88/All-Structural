@@ -344,6 +344,8 @@
       + (od.same.length ? `<div class="note">Already at the default, not changed: ${od.same.map(c => esc(c.field)).join(', ')}.</div>` : ''), { undo: true });
   }
   function closeToast() { $('toast').hidden = true; }
+  /* loadNotes(notes): the one-line notices of the field migrations run on load (engine/model.js importJSON notes, e.g. migrateNbList) */
+  const loadNotes = n => { if (n && n.length) toast(n.map(t => esc(t)).join('<br>')); };
   $('toast').addEventListener('click', e => { if (e.target.id === 'tClose') closeToast(); else if (e.target.id === 'tUndo') undo(); });
   const loadAs = (proj, id, textFn) => { P = proj; ui.g = 0; ui.seg = 0; autosave = true; undoS = []; redoS = []; closeToast(); changed(true, true); cur = { id, text: textFn ? textFn(P) : null }; LIB.setCur(LS, id); snap = JSON.stringify(P); syncBar(); };   // a different project: the undo history starts again
   function doSave(asNew) {
@@ -365,7 +367,7 @@
   function openSaved(id) {
     if (!guard('open the other project')) return false;
     const r = LIB.open(LS, id); if (!r.ok) { alert(r.error); return false; }
-    loadAs(r.project, id, norm); return true;
+    loadAs(r.project, id, norm); loadNotes(r.notes); return true;
   }
   window.SBDLibraryUI.init({ store: LS, curId: () => cur.id, open: openSaved,
     renamed: (id, name, text) => { P.project.name = name; const q = M.importJSON(text); cur.text = q.ok ? norm(q.project) : cur.text; changed(true); },
@@ -461,7 +463,7 @@
   $('fImport').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
     rd.onload = () => { const r = M.importJSON(String(rd.result)); e.target.value = '';
       if (!r.ok) { alert(r.error); return; } if (!guard('import the file')) return; loadAs(r.project, null, null);
-      if (r.summary) window.SBDLegacyUI.show(r.summary); };   // an old project (engine/legacy.js): its import summary
+      if (r.summary) window.SBDLegacyUI.show(r.summary); else loadNotes(r.notes); };   // an old project (engine/legacy.js): its import summary
     rd.readAsText(f); });
   // the old app's autosaves (girderdetail_autosave_v1, plateline_autosave_v1, stgirder.session): read only, never written or deleted
   $('bOld').addEventListener('click', () => { const r = window.SBDLegacy.fromStorage(store || memStore); if (!r.ok) { alert(r.error); return; }
@@ -474,6 +476,8 @@
     if (L.source === 'saved' && lc) { const r = LIB.open(LS, lc); if (r.ok) cur = { id: lc, text: norm(r.project) }; }
     else if (L.source === 'default') cur = { id: null, text: norm(P) };
     snap = JSON.stringify(P); syncBar(); }
+  if (L.notes && L.notes.length && autosave) { autoFailed = !M.save(LS, P); syncBar(); }   // the migrated project to the autosave, so its notice shows once
+  loadNotes(L.notes);
 })();
 </script>
 </body>
