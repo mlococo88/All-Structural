@@ -19,7 +19,7 @@
 //
 //   node tests/lightpole-compare.mjs [--a origin/main] [--b "Light Pole and Sign Post.html"] [--cases default,sign1,...]
 //        [--old-saves] [--tol 0] [--max-diffs 30] [--out <dir>] [--shots <dir>] [--jobs 4] [--list]
-//   --a / --b    a git ref (the tool and shared/ are extracted from it), "<ref>:<file>", or a file in the working tree
+//   --a / --b    a git ref (the tool, shared/ and apps/light-pole/ are extracted from it), "<ref>:<file>", or a file in the working tree
 //   --old-saves  B opens the project state that A applied (an old saved project, without the fields B adds), instead of
 //                B's own new-project defaults with the case's changes
 //   --tol        relative tolerance for numbers (default 0: exact)
@@ -65,6 +65,8 @@ function side(spec) {
   const dir = path.join(os.tmpdir(), 'allstruct-tests', 'lp-' + sha); fs.mkdirSync(dir, { recursive: true });
   fs.writeFileSync(path.join(dir, path.basename(f)), execFileSync('git', ['-C', REPO, 'show', `${sha}:${f}`], { maxBuffer: 1 << 28 }));
   try { const tar = execFileSync('git', ['-C', REPO, 'archive', sha, 'shared'], { maxBuffer: 1 << 28 }); execFileSync('tar', ['-x', '-C', dir], { input: tar }); } catch (e) { /* no shared/ at that ref */ }
+  // apps/light-pole/ (the LRFDLTS engine, LTS-1 2026-11-02) is loaded by the tool from that ref on
+  try { const tar = execFileSync('git', ['-C', REPO, 'archive', sha, 'apps/light-pole'], { maxBuffer: 1 << 28, stdio: ['pipe', 'pipe', 'ignore'] }); execFileSync('tar', ['-x', '-C', dir], { input: tar }); } catch (e) { /* no apps/light-pole at that ref */ }
   return { file: path.join(dir, path.basename(f)), label: `${ref} (${sha}):${f}` };
 }
 
