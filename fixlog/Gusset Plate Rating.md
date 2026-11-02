@@ -2926,7 +2926,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   dialog byte-identical; quota; 390 px; no new console errors). `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 
-## 2026-11-02 — PR: claude/list-input-gusset — Members: "Gage(s) g" is a table with one box per gage (LIST)   [display only]
+## 2026-11-02 — PR: claude/list-input-gusset, PR #692: https://github.com/mlococo88/All-Structural/pull/692 — Members: "Gage(s) g" is a table with one box per gage (LIST)   [display only]
 - **Why:** engineer decision 2026-11-02: no comma-separated inputs (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
 - **Where (1):** script tags, anchor `<script src="shared/projects-ui.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
 - **Where (2):** `memberBlock()`, anchor `fld('Gage(s) g'`. **Before:** `{ note: 'list' }` **After:** `{ note: 'one per space between lines; the last repeats' }`
