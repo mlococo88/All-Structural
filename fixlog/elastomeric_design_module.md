@@ -1251,7 +1251,7 @@ index 13f0165..656e0f1 100644
 +<script>
 ```
 
-## 2026-11-02 — PR: claude/edm-report-consolidate (EDRX: the "Print / PDF Report" calculation sheet (D11, #report) retired after porting what the Report tab lacked; Print prints the Report from every tab; display only, no result change)
+## 2026-11-02 — PR: claude/edm-report-consolidate, PR #676: https://github.com/mlococo88/All-Structural/pull/676 (EDRX: the "Print / PDF Report" calculation sheet (D11, #report) retired after porting what the Report tab lacked; Print prints the Report from every tab; display only, no result change)
 
 ### EDRX-1. Content of the D11 print report ported into the Report tab   [display] [no result change]
 - **Engineer request (2026-11-02):** retire the old print reports where the Report tab is complete, the same method as lldf #623 and Light Pole #625. Compare every number and section of the old report against the Report on the tool's test cases, and port what is missing (the tool's own values, no recomputation). Then remove the old report and print the Report from every tab.
