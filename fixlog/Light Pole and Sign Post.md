@@ -1663,3 +1663,21 @@ Basis: docs/lts-mode-plan.md (#619, #620, #647, #648); engineer, 2026-11-02: AAS
 - **Calculation:** no formula changed. Check mode already reads the bar from the bar table (`barByName`, #3–#11 with A_b and d_b) and checks spacing (ACI 318-19 25.2.3), minimum/maximum steel, the P–M interaction and ties with the same functions; Design mode still skips #3–#5 (`if(bar.n==='#3'||bar.n==='#4'||bar.n==='#5') continue;`), unchanged. Default stays #8, so every saved project computes identically.
 - **Check case:** Check mode, 8 #5 longitudinal bars: A_s = 8 × 0.31 = 2.48 in²; the same checks run as for #8 (A_s = 6.32 in²).
 - **Verified:** `node tests/check-syntax.mjs "Light Pole and Sign Post.html"` passes; `node tests/engine/run.mjs lightpole` 26 passed, 0 failed.
+## 2026-11-02 — PR #651 (https://github.com/mlococo88/All-Structural/pull/651): claude/lp-lts-2 (LTS-2: LRFDLTS wind, dead load and ice, factored base actions; IBC mode unchanged)
+
+### LTS2-1. Wind loads, AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions   [new, LTS mode only] [IBC results unchanged]
+- **Where:** `apps/light-pole/lts-engine.js`, block `LTS-2 (2026-11-02): wind and dead/ice loads, base actions`: `kz`, `kd`, `cv`, `cdRound`, `cdSquare`, `cdMember`, `cdSign`, `windForces`, `sectionWind`, `LOAD_CASES`, `caseForces`, `gravity`, `baseActions`, `windSteps`. Page: `ltsGeom(inp,L)` and `lppLtsLast` (after `ltsClear()`), the new Loading card `#ltsWindCard` in `ltsCalc()`, input `ltsRs` (LTS card), `LTS_STATUS` LTS-2 done. tests/lightpole-compare.mjs extracts `apps/light-pole/` from the git ref as well as shared/ (the page loads the engine from LTS-1 on).
+- **Provisions (before: none — no LRFDLTS mode loads; after):**
+  - Eq. 3.8.1-1 (p. 3-14): P_z = 0.00256·K_z·K_d·G·V²·C_d (psf).
+  - Eq. 3.8.4-1 (p. 3-15): K_z = 2.0(z/z_g)^(2/α), α = 9.5, z_g = 900 ft (Exposure C), z ≥ 16 ft.
+  - Table 3.8.5-1 (p. 3-16): K_d = 0.95 round pole, 0.90 square (rectangular: square). Ground-mounted sign: the post value for the whole structure (decision Q-C5, flagged).
+  - Art. 3.8.6 (p. 3-17, 2017): G = 1.14. Art. 3.8.7 (p. 3-17, 2017): C_v = 0.8 Extreme, 1.0 Service.
+  - Table 3.8.7-1 (pp. 3-19, 3-20, 2017): round C_d 1.10 (C_vVd ≤ 39) / 129/(C_vVd)^1.3 / 0.45 (≥ 78); square 2.0 − 6r_s (r_s < 0.125) / 1.25 (new input r_s, default 0); sign panel by L/W 1.12 / 1.19 / 1.20 / 1.23 / 1.30 at 1 / 2 / 5 / 10 / 15, linear between (coordinator decision Q-B3); attachments with the manufacturer EPA: P_z without C_d times the EPA (Art. 3.9.1, p. 3-23).
+  - Art. 3.9.3, Table 3.9.3-1 (pp. 3-23, 3-24): load cases 1 (normal), 2 (transverse), 3 (0.75 of both) — 8 cases (both senses).
+  - Art. 3.9.4.2 (p. 3-25): torsion W·0.15b for single-support roadside signs (b = panel width) and concentric pole-top fixtures (b = √EPA, the width is not an input: flagged); arm-mounted fixtures and arms: net torque. Two-post signs: no eccentric case (decision Q-C2, flagged).
+  - Support wind integrated over 100 strips (P_z, C_d and d at each strip); arms: round, projected length a·|sin(θ − ψ)|.
+  - Dead load (Art. 3.5): support self-weight (the tool's `poleSegments`), misc. DL, fixtures (eccentric ΣW·e), sign panel. Ice (Art. 3.7, Owner-specified, Strength I only, decision Q-C1): 56 pcf radial on the support(s), two faces of each fixture EPA, one face of the panel.
+  - Factored base actions per Table 3.4-1 limit state and load case (first order; B₂ in LTS-3); two-post signs per post.
+- **Check cases (hand, tests/engine/lightpole-lts.test.mjs):** HC-1 fixture W_l = 0.00256·1.0384·0.95·1.14·130²·1.2 = 48.65·1.2 = 58.38 lb; arm C_vVd = 0.8·130·0.1979 = 20.6 → C_d 1.10, W_h = 53.52·0.1979·6 = 63.55 lb; T (wind toward 90°) = 6·58.38 + 3·63.55 = 541.0 lb·ft. HC-2 sign: K_z(16) = 0.8562, C_d(L/W 1.6) = 1.162, P_z = 0.00256·0.8562·0.95·1.14·76²·1.162 = 15.93 psf, W_p = 15.93·40 = 637.3 lb, T = 637.3·0.15·8 = 764.8 lb·ft. K_z(20/50/100) = 0.90/1.09/1.26 as Table C3.8.4-1.
+- **Saved data:** new input `ltsRs` (default 0 when absent). No key or format change.
+- **How verified:** check-syntax pass; `node tests/engine/run.mjs lightpole` 31 passed (5 new); `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL; anchor hand-off smoke ALL PASS; LTS mode pole and monopost at 1280 / 390 px: no overflow, 0 console errors.
