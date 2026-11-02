@@ -49,6 +49,10 @@ node tests/smoke/steel-bridge-report.mjs
 # Spread Footing: the page itself never scrolls in the two-panel layout (links, scrollIntoView, focus, wheel, touch; 3 window sizes)
 node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex, plotly, three>]
 
+# LL & DL Distribution (lldf.html): two-panel layout (inputs / results in tabs; page never scrolls; links open the right tab; D11 print
+# report built from the restored sheet; 390 px stacked; inside index.html's frame). ~7 min
+node tests/smoke/lldf-layout.mjs [--shots <dir>] [--no-index]
+
 # Light Pole and Sign Post: every computed result, every cable value, tab text and drawings, origin/main vs the working tree (13 cases)
 node tests/lightpole-compare.mjs [--cases default,sign1] [--old-saves] [--tol 1e-12]
 
