@@ -17,6 +17,7 @@
      crossframe(B, P, opt)                           Cross-frames: X / K elevation sketch, members labelled, governing group highlighted
      welds(B, P, opt), weldDetail(B, P, opt)         Welds: weld locations on the elevation coloured by ratio; fillet weld size detail
      splice(s, opt)                                  Field splices: plan of the flange splice and web splice elevation, governing group
+     spliceStrip(list, P, opt)                       Field splices: where the splices are on the girder (small strip), the selected one boxed
      ratingChart(B, P, opt)                          Rating: RF along the girder (Inventory and Operating, flexure and shear), RF = 1.0
      summary(M, P, opt)                              Report summary: small elevation, governing check per region
    Helpers exposed for the tests: geoOf, ratioClass, hatch. */
@@ -441,15 +442,16 @@
   function splice(s, opt) {
     opt = opt || {}; const R = s.R, { D, L } = newDrawing(3.4), h = D.h; if (!R || (R.errors && R.errors.length) || !R.fl) return base('splice', 'Field splice', D, 0, []);
     const gov = spliceGroup(opt.gov || strGov(s.CK)), gap = R.gap, W = R.web, rb = (R.bolt.dh || R.bolt.d + 0.0625) / 2, hl = g => gov && gov.g === g;
-    const Lw = 2 * (W.ew + (W.ncw - 1) * W.sh + W.ewp) + gap, Lf = Math.max(R.fl.top.Lpl, R.fl.bot.Lpl, Lw), cx = Lf / 2 + 6, ctr = (x0, y0, x1, y1, on) => { D.rect(on ? L.gov : L.pl, x0, y0, x1, y1); if (on) D.rect(L.gov, x0 - 0.25, y0 - 0.25, x1 + 0.25, y1 + 0.25); };
+    const Lw = 2 * (W.ew + (W.ncw - 1) * W.sh + W.ewp) + gap, Lf = Math.max(R.fl.top.Lpl, R.fl.bot.Lpl, Lw), cx = Lf / 2 + 6, xEnd = cx + gap / 2 + Lf / 2 + 2, ctr = (x0, y0, x1, y1, on) => { D.rect(on ? L.gov : L.pl, x0, y0, x1, y1); if (on) D.rect(L.gov, x0 - 0.25, y0 - 0.25, x1 + 0.25, y1 + 0.25); };
     const plan = (F, key, y0, tag) => {   // plan of one flange splice, centre line at y0 + fw/2
       const fw = Math.max(F.bL, F.bR), cy = y0 + fw / 2, on = hl(key); D.text(L.t, 0, y0 + fw + 2 * h, h, tag);
       D.rect(L.p, cx - gap / 2 - (Lf / 2 + 2), cy - F.bL / 2, cx - gap / 2, cy + F.bL / 2); D.rect(L.p, cx + gap / 2, cy - F.bR / 2, cx + gap / 2 + (Lf / 2 + 2), cy + F.bR / 2);
       ctr(cx - F.Lpl / 2, cy - F.bo / 2, cx + F.Lpl / 2, cy + F.bo / 2, on && !gov.inner);
       if (F.inner) { const hid = D.ltype('HIDDEN'); [-1, 1].forEach(sg => D.rect(on && gov.inner ? L.gov : L.pl, cx - F.Lpl / 2, sg > 0 ? cy + F.yiI : cy - F.yiO, cx + F.Lpl / 2, sg > 0 ? cy + F.yiO : cy - F.yiI, hid)); }
       [-1, 1].forEach(sd => { for (let j = 0; j < F.nr; j++) for (let l = 0; l < F.nl; l++) [-1, 1].forEach(sy => D.circle(on ? L.gov : L.bolt, cx + sd * (gap / 2 + F.ef + j * F.s), cy + sy * (F.g0 + l * F.g), rb)); });
-      D.line(L.c, 0, cy, cx * 2, cy, D.ltype('CENTER')); D.dimH(L.d, cx - F.Lpl / 2, cx + F.Lpl / 2, y0 - 2.5 * h, y0, `PL ${frac(F.bo)} x ${frac(F.to)} x <>`);
-      notes(D, L.t, cx + F.Lpl / 2 + 3, cy + 1.2 * h, `${F.nl} LINES EACH SIDE x ${F.nr} ROWS, ${dIn(F.s)} PITCH${F.inner ? `; 2 INNER PL ${frac(F.bi)} x ${frac(F.ti)}` : ''}`, 24, h * 0.8);
+      D.line(L.c, 0, cy, cx * 2, cy, D.ltype('CENTER')); D.dimH(L.d, cx - F.Lpl / 2, cx + F.Lpl / 2, y0 - 2.5 * h, y0, `<>`);
+      // SPLGFX: the notes start past the girder ends (they ran over the flange), the outer plate size moved from the dimension (wider than the plate) to the notes
+      notes(D, L.t, xEnd + 1.5 * h, cy + 1.2 * h, `OUTER PL ${frac(F.bo)} x ${frac(F.to)}; ${F.nl} LINES EACH SIDE x ${F.nr} ROWS, ${dIn(F.s)} PITCH${F.inner ? `; 2 INNER PL ${frac(F.bi)} x ${frac(F.ti)}` : ''}`, 24, h * 0.8);
       return fw; };
     const D0 = R.D, yWeb = 0, yTop = yWeb + D0 + 22 + 0;   // web elevation at the bottom of the layout; top flange plan above it
     // bottom flange plan below the web, top above
@@ -457,17 +459,39 @@
     D.rect(L.p, cx - gap / 2 - (Lf / 2 + 2), webY0, cx - gap / 2, webY0 + D0); D.rect(L.p, cx + gap / 2, webY0, cx + gap / 2 + (Lf / 2 + 2), webY0 + D0);
     const on = hl('web'), py = webY0 + (D0 - W.hw) / 2; ctr(cx - Lw / 2, py, cx + Lw / 2, py + W.hw, on);
     W.bolts.forEach(b => [-1, 1].forEach(sd => D.circle(on ? L.gov : L.bolt, cx + sd * (gap / 2 + W.xbar) + b.dx, py + W.hw / 2 + b.dy, rb)));
-    D.text(L.t, 0, webY0 + D0 + 2 * h, h, `WEB SPLICE (ELEVATION)${on ? ': GOVERNS' : ''}`); notes(D, L.t, cx + Lw / 2 + 3, webY0 + D0 / 2 + 1.2 * h, `2 PL ${frac(W.hw)} x ${frac(W.twp)}; ${W.nrw} ROWS x ${W.ncw} COL. EACH SIDE`, 24, h * 0.8);
-    D.dimV(L.d, py, py + W.hw, cx - Lw / 2 - 5 * h, cx - Lw / 2, `PL <>`); D.dimH(L.d, cx - gap / 2, cx + gap / 2, webY0 - 2.6 * h, webY0, `GAP <>`);
+    D.text(L.t, 0, webY0 + D0 + 2 * h, h, `WEB SPLICE (ELEVATION)${on ? ': GOVERNS' : ''}`); notes(D, L.t, xEnd + 1.5 * h, webY0 + D0 / 2 + 1.2 * h, `2 PL ${frac(W.hw)} x ${frac(W.twp)}; ${W.nrw} ROWS x ${W.ncw} COL. EACH SIDE`, 24, h * 0.8);
+    D.dimV(L.d, py, py + W.hw, cx - Lw / 2 - 5 * h, cx - Lw / 2, `PL <>`);    // SPLGFX: the web plate length dimensioned; the gap (its text wider than the gap, over its own extension lines) is stated in the note below
+    D.dimH(L.d, cx - Lw / 2, cx + Lw / 2, webY0 - 2.6 * h, py, `<>`);
     // two columns: the web splice elevation at the left; the flange plans at its right (top plan above the bottom plan), so the sketch is wide rather than tall
-    const dx = Lf + 12 + 48, yB0 = webY0 + 4, yT0 = yB0 + Math.max(R.fl.bot.bL, R.fl.bot.bR) + 12 * h;
+    const dx = Lf + 12 + 48, yB0 = webY0 + 4, yT0 = yB0 + Math.max(R.fl.bot.bL, R.fl.bot.bR) + 8 * h;   // SPLGFX: 8 h between the plans (was 12 h: empty space)
     const b0 = D.E.length; plan(R.fl.bot, 'bot', 0, `BOTTOM FLANGE SPLICE (PLAN)${hl('bot') ? ': GOVERNS' : ''}`); D.move(b0, dx, yB0);
     const t0 = D.E.length; plan(R.fl.top, 'top', 0, `TOP FLANGE SPLICE (PLAN)${hl('top') ? ': GOVERNS' : ''}`); D.move(t0, dx, yT0);
     const ty = Math.max(webY0 + D0 + 6 * h, yT0 + Math.max(R.fl.top.bL, R.fl.top.bR) + 6 * h);
-    D.text(L.t, 0, ty + 2.4 * h + 1.4 * h, h * 1.3, `${up(s.name || 'FIELD SPLICE')}`);
+    D.text(L.t, 0, ty + 2.4 * h, h * 1.3, `${up(s.name || 'FIELD SPLICE')}`);   // SPLGFX: 2.4 h above the note (was 3.8 h)
     notes(D, gov ? L.gov : L.t, 0, ty, gov ? `GOVERNING STRENGTH CHECK: ${gov.id} ${up(gov.loc)}, RATIO ${f3(gov.r)} (HIGHLIGHTED)` : 'NO STRENGTH CHECK GOVERNS', 60, h * 0.9);
-    D.text(L.t, 0, -8 * h, h * 0.8, `BOLTS ${frac(R.bolt.d)} IN, ${(s.p && s.p.bolts && s.p.bolts.gr) || ''}; SKETCH TO SCALE IN INCHES`);
+    D.text(L.t, 0, webY0 - 5.6 * h, h * 0.8, `BOLTS ${frac(R.bolt.d)} IN, ${(s.p && s.p.bolts && s.p.bolts.gr) || ''}; GAP ${dIn(gap)} BETWEEN THE GIRDER ENDS; SKETCH TO SCALE IN INCHES`);   // SPLGFX: under the web dimension (was at -8h, a band of empty space)
     return base('splice', 'Field splice', D, 0, []);
+  }
+
+  /* spliceStrip(list, P, opt) (SPLGFX, 2026-11-02): where the splices are on the girder, small: the girder as a line (schematic, not to scale vertically), the
+     supports S1… and every field splice FS1… with a marker in the colour of its governing ratio (the Governing column of the tab's table, s.gov), the
+     selected one boxed. Clicks: { k: 'fs', i } (the splice's index in the list). opt.sel: the selected index; opt.narrow: phone width (larger text, labels
+     without the station). The plates, plate sizes and cross-frames are on the Drawings tab and the Spans & framing plan; they are not repeated here. */
+  function spliceStrip(list, P, opt) {
+    opt = opt || {}; const sup = [0]; (P.spans.lengths || []).forEach(Ls => sup.push(+(sup[sup.length - 1] + +Ls).toFixed(6))); const Lt = sup[sup.length - 1] * 12;
+    const { D, L } = newDrawing(Lt / (opt.narrow ? 34 : 70)), h = D.h, reg = [], X = ft => ft * 12, gh = 0.9 * h;
+    D.rect(L.w, 0, 0, Lt, gh); D.line(L.c, -h, gh / 2, Lt + h, gh / 2, D.ltype('CENTER'));
+    sup.forEach((x, k) => { const a = X(x); D.pline(L.b, [[a, 0], [a - 0.55 * h, -0.95 * h], [a + 0.55 * h, -0.95 * h]], true); D.text(L.t, a, -2.2 * h, 0.8 * h, `S${k + 1}`, 1); });
+    const rows = [];   // the right end of the last label on each row (labels staggered upward when they would touch)
+    (list || []).forEach((s, i) => {
+      const a = X(s.x), gv = s.gov, r = gv ? (gv.it.st === 'fail' && !(gv.it.r > 1) ? Infinity : gv.it.r) : NaN, w = 0.5 * h;
+      D.line(L.s, a, -0.3 * h, a, gh + 1.0 * h); ratioSolid(D, L, r, a - w / 2, 0.1 * gh, a + w / 2, 0.9 * gh);
+      const lab = opt.narrow ? `FS${i + 1}` : `FS${i + 1} ${f2(s.x)}'`, tw = TW(lab, 0.8 * h, h); let row = 0; while (rows[row] != null && rows[row] > a - tw / 2 - 0.6 * h) row++; rows[row] = a + tw / 2;
+      const ty = gh + 1.5 * h + row * 1.3 * h; if (row) D.line(L.s, a, gh + 1.0 * h, a, ty - 0.2 * h); D.text(i === opt.sel ? L.sel : L.t, a, ty, 0.8 * h, lab, 1);
+      if (i === opt.sel) D.rect(L.sel, a - tw / 2 - 0.3 * h, ty - 0.3 * h, a + tw / 2 + 0.3 * h, ty + 1.0 * h);
+      reg.push({ k: 'fs', i, x0: a - Math.max(tw / 2, h), y0: -h, x1: a + Math.max(tw / 2, h), y1: ty + h, lab: `${up(s.name)}${gv ? `: GOVERNING ${gv.c.id} ${up(gv.it.loc)}, RATIO ${f3(gv.it.r)}` : ''}` });
+    });
+    return base('splice-strip', 'Splice locations', D, 0, reg, 'Click a splice to select it. Marker colour: the governing ratio of the splice (table below).');
   }
 
   /* ====================================================================================================== */
@@ -527,5 +551,5 @@
     return base('summary', 'Governing checks by region', D, 0, reg);
   }
 
-  window.SBDTabGfxB = { asc, strGov, geoOf, geoProject, ratioClass: rcls, hatch, parseX, studCount, shear, shearDetail, shearBearing, fatigue, fatigueChart, crossframe, welds, weldDetail, splice, ratingChart, summary, _internal: { newDrawing, frame, ratioFill, fitText, scaleBar, legend, base, RLEG, segAt, supName, tsStations } };
+  window.SBDTabGfxB = { asc, strGov, geoOf, geoProject, ratioClass: rcls, hatch, parseX, studCount, shear, shearDetail, shearBearing, fatigue, fatigueChart, crossframe, welds, weldDetail, splice, spliceStrip, ratingChart, summary, _internal: { newDrawing, frame, ratioFill, fitText, scaleBar, legend, base, RLEG, segAt, supName, tsStations } };
 })();

@@ -332,11 +332,17 @@
   function spl(B, X) {
     const G = B.spl, SP = window.SBDSplices, subs = [], STT = { pass: 'OK', fail: 'NG', warn: 'Warning', adv: 'Advisory', na: 'n/a' };
     const strGov = CK => { let b = null; (CK || []).filter(c => /^(TF|BF)[1245]$|^WS[1245]$/.test(c.id)).forEach(c => c.items.forEach(it => { if (it.r != null && isFinite(it.r) && (!b || it.r > b.it.r)) b = { c, it }; })); return b; };
+    /* SPLGFX (2026-11-02): the figures of the Field splices tab, the same reduced set (the location strip once, the 2D detail of each splice; the 3D view is screen
+       only), as static SVG in the Drawings-tab format, at a fixed text size (about 11 px for the drawing's text height) and never wider than the page */
+    const splFig = (make, caption) => { const GB = window.SBDTabGfxB, GR = window.SBDGraphics; if (!GB || !GR || !GR.tightSvg) return null;
+      try { const g = make(GB), bb = g.D.bbox(g.i0, g.i1), px = Math.round((bb[2] - bb[0]) * 1.06 / g.D.h * 11);
+        return { type: 'figure', svg: GR.tightSvg(g.D, { i0: g.i0, i1: g.i1, bg: '#fff', title: g.title, width: isFinite(px) && px > 0 ? `${px}px` : '100%' }), caption }; } catch (e) { return null; } };
     // summary: the splice with the largest strength ratio
     const sg = G.list.reduce((b, s, k) => { const q = strGov(s.CK); return q && (!b || q.it.r > b.q.it.r) ? { s, q, k } : b; }, null);
     if (sg) X.gov.push({ mod: 'Field splices', grp: 'Field splices', check: `${sg.q.c.id} ${tt(sg.q.c.title)}`, loc: `${sg.s.name}, ${sg.q.it.loc}`, r: sg.q.it.r, key: K('spl@' + sg.k, sg.q.it.step) });
     subs.push(sub('list', `Splices of ${gName(B.girder)}`, [G.custom ? note('Demands: entered (Custom) on the Field splices tab, the row at each splice station (table below).') : note("Demands: this project's analysis, moments at the analysis station nearest the splice and shears the largest of the element containing it and its neighbours (GirderDetail's rule); sections 0.01 ft each side, the smaller carries the design forces (6.13.6.1.1). As on the [[tab:spl|Field splices tab]]."),
       G.errors.length ? note(G.errors.join(' '), true) : null,
+      G.list.length ? splFig(GB => GB.spliceStrip(G.list, B.P, {}), `Splice locations on girder ${gName(B.girder)}; marker colour: the governing ratio of each splice`) : null,
       tbl(['Splice', 'Plates and bolts', 'Governing', 'Ratio', 'Largest strength ratio', 'Status'], G.list.map((s, k) => { const fl = s.R && s.R.fl, gv = s.gov, q = strGov(s.CK), bad = s.CK ? s.CK.filter(c => c.status === 'fail').length : 0;
         return [s.name, fl ? `${s.own ? 'entered' : 'auto'}: ${fl.top.n + fl.bot.n + s.R.web.nw} bolts each side` : '—', gv ? `${gv.c.id} ${gv.it.loc}` : s.R && s.R.errors.length ? s.R.errors[0] : '', gv ? R3(gv.it.r, K('spl@' + k, gv.it.step)) : '—',
           q ? { ...R3(q.it.r, K('spl@' + k, q.it.step)), t: `${q.c.id}: ${f(q.it.r, 3)}` } : '—', s.CK ? (bad ? `${bad} check${bad > 1 ? 's' : ''} NG` : 'OK') : 'input error']; }))]));
@@ -347,7 +353,8 @@
       items.push(note(`Unfactored, per girder; ${s.dm.custom ? `as entered (Custom), row x = ${f(s.dm.xi, 3)} ft.` : `moments at the analysis station x = ${f(s.dm.xi, 2)} ft (Analysis section), shears the largest magnitude of elements ${s.dm.e} ± 1.`}${s.design ? ` Auto-design${s.design.ok ? '' : ' (not every check passes)'}: ${s.design.msg}` : ''}`));
       if (R && !R.errors.length) {
         items.push(note(`Top flange: ${R.fl.top.nl} line(s) each side × ${R.fl.top.nr} rows, outer PL ${SP.frac(R.fl.top.bo)} × ${SP.frac(R.fl.top.to)}${R.fl.top.inner ? `, 2 inner PL ${SP.frac(R.fl.top.bi)} × ${SP.frac(R.fl.top.ti)}` : ''}. Bottom flange: ${R.fl.bot.nl} line(s) × ${R.fl.bot.nr} rows, outer PL ${SP.frac(R.fl.bot.bo)} × ${SP.frac(R.fl.bot.to)}${R.fl.bot.inner ? `, 2 inner PL ${SP.frac(R.fl.bot.bi)} × ${SP.frac(R.fl.bot.ti)}` : ''}. Web: 2 PL ${SP.frac(R.web.hw)} × ${SP.frac(R.web.twp)}, ${R.web.nrw} rows × ${R.web.ncw} column(s) each side. Bolts ${SP.frac(R.bolt.d)} in ${s.p.bolts.gr}; plates ${s.p.sec.gP}.`));
-        const dw = SP.svg(R); if (dw) items.push({ type: 'figure', svg: dw.flange + dw.web, caption: 'Plan of the bottom flange splice and elevation of the web splice, to scale' });
+        const fg = splFig(G => G.splice(s, {}), `${s.name}: flange splice plans and web splice elevation, to scale; the governing plate and bolt group highlighted (as the [[tab:spl|Field splices tab]])`);
+        if (fg) items.push(fg); else { const dw = SP.svg(R); if (dw) items.push({ type: 'figure', svg: dw.flange + dw.web, caption: 'Plan of the bottom flange splice and elevation of the web splice, to scale' }); }   // the simple sketch only without the graphics modules
       } else if (R) items.push(note(R.errors.join(' '), true));
       if (s.CK) { items.push(tbl(['ID', 'Check', 'Governing item', 'Ratio', 'Status', ED], s.CK.map(c => { const it = c.gov >= 0 ? c.items[c.gov] : null;
           return [c.id, tt(c.title), it ? it.loc : c.naWhy || '', it && it.r != null ? R3(it.r, K(sc, it.step)) : { t: '—', key: it ? K(sc, it.step) : null }, STT[c.status] || c.status, String(c.ref).replace('AASHTO LRFD 10th Ed. ', '')]; })));

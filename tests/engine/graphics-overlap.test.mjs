@@ -52,6 +52,7 @@ function allGraphics(P, name, pl) {
   const RT = W.SBDRatingUI.build({ P, g: 0, ...(pl ? { pl } : { src: 'analysis' }) }); if (!RT.err) add('rating', GB.ratingChart(RT, P, {}));
   // Field splices, Report summary (built-in project only: the analysis of the payloads takes long)
   if (!pl) { const Gs = W.SBDSplices.girder(P, 0, AR, { env: W.SBDSplicesUI.envOf(P) }); Gs.list.forEach(s => { if (s.R && !(s.R.errors && s.R.errors.length) && s.CK) add(`splice ${s.name}`, GB.splice(s, {})); });
+    Gs.list.forEach((s, i) => [false, true].forEach(narrow => add(`splice strip ${i}${narrow ? ' narrow' : ''}`, GB.spliceStrip(Gs.list, P, { sel: i, narrow }))));   // SPLGFX
     const B = W.SBDReportData.compute(P, 0, { src: 'analysis' }); add('summary', GB.summary(W.SBDReportBuild.model(B, { detail: 'gov' }), P, {})); }
   return out;
 }
