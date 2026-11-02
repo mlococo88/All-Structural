@@ -7,6 +7,7 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" crossorigin="anonymous">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js" crossorigin="anonymous"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script><!-- LPSV (2026-11-02): the sign 3D view (Geometry tab); the suite's pinned r128 -->
 <script src="shared/steps.js"></script><!-- LPRP: worked steps and the shared report viewer (Report tab) -->
 <script src="shared/report.js"></script>
 <script src="shared/dxf.js"></script><!-- LPDW: DXF writer and drawing preview (Drawings tab, Geometry elevation) -->
@@ -366,6 +367,14 @@
   .lts-dev{font-family:var(--font-ui);font-size:9pt;color:#78350F;background:#FFFBEB;border:1px solid var(--line);border-left:4px solid var(--warn);border-radius:4px;padding:5px 9px;margin:0 0 8px}
   .lts-flag{font-family:var(--font-ui);font-size:8pt;font-weight:600;color:#92400E;background:#FEF3C7;border-radius:4px;padding:0 5px;margin-left:4px;white-space:nowrap}
   #codeSeg{margin-bottom:8px}
+  /* LPSV (2026-11-02): sign views — the Drawings card also in the LRFDLTS sign mode; the 3D card (Geometry tab, sign mode, both code modes) */
+  body.lts-mode .tabpage > section.lpdCard.lpdLtsOn{display:block!important}
+  body.lts-mode .tabpage > #lp3dCard{display:block!important}
+  .lp3dBar{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px}
+  .lp3dLay{display:flex;flex-wrap:wrap;gap:4px 14px;font:9pt var(--font-ui);margin-bottom:6px} .lp3dLay label{display:inline-flex;gap:4px;align-items:center;white-space:nowrap;cursor:pointer}
+  .lp3dNarrow{display:none} @media(max-width:600px){.lp3dWide{display:none}.lp3dNarrow{display:inline}}
+  .lp3dWrap{position:relative;border:1px solid var(--line);background:#fff;overflow:hidden;max-width:100%} #lp3dCanvas{display:block;touch-action:none;cursor:grab;max-width:100%}
+  .lp3dHint{position:absolute;left:6px;top:4px;font:8pt var(--font-ui);color:#64748b;background:rgba(255,255,255,.85);padding:1px 4px;border-radius:3px;pointer-events:none}
 </style>
 </head>
 <body>
@@ -4512,6 +4521,7 @@ let lppLastInp=null;
 function calc(){
   lppCalcIbc();
   if(codeMode==='lts') ltsCalc(); else ltsClear();
+  if(typeof lpsvRefresh==='function') lpsvRefresh();   // LPSV (2026-11-02): the sign 3D view, and the sign drawings in the LRFDLTS mode
 }
 function lppCalcIbc(){
   const inp={V:num('V'),expo:$('expo').value,Kzt:num('Kzt'),Kd:kdComponents().mast,KdSign:kdComponents().sign,KdMode:kdComponents().mode,G:num('G'),beta:($('lppBeta')?num('lppBeta'):0.005),
@@ -6800,20 +6810,133 @@ function lpdPlate(D, L, k, ctx){
   const inp=ctx.inp, h=0.1*k, b=ctx.stacks[0].found.bolts, p=(b&&b.byCheck&&b.byCheck.BP)||b;
   const R=inp.boltBC/2, rp=inp.bpDia/2;
   D.circle(L.plate, 0, 0, rp);
-  if(inp.poleShape==='round') D.circle(L.pole, 0, 0, inp.poleDiaBase/2); else D.rect(L.pole, -inp.poleDiaBase/2, -inp.poleDiaBase/2, inp.poleDiaBase/2, inp.poleDiaBase/2);
+  if(inp.poleShape==='round') D.circle(L.pole, 0, 0, inp.poleDiaBase/2);
+  else { const w=inp.poleDiaBase, dd=(ctx.mode==='sign'&&inp.poleShape==='rect')?inp.poleDepthTop:w; D.rect(L.pole, -dd/2, -w/2, dd/2, w/2); }   // LPSV: a rect. sign post at its depth along x
   D.circle(L.cl, 0, 0, R);
   for(let j=0;j<inp.boltQty;j++){ const a=(inp.boltTheta+j*360/inp.boltQty)*RAD; D.circle(L.bolt, R*Math.cos(a), R*Math.sin(a), inp.boltDia/2+0.0625); }
   D.dimH(L.dim, -rp, rp, -rp-0.5*k, -rp, 'PL <> DIA');
   D.dimH(L.dim, -R, R, rp+0.5*k, R, 'BC <>');
   const lines=['PLATE '+fmt(inp.bpT,3)+'" THICK, Fy = '+fmt(inp.bpFy||36,0)+' KSI',
-    p?'t REQ = '+fmt(p.tpReq,3)+'" (BENDING LINE AT POLE FACE, DOUBLE-NUT)':'',
+    p?'t REQ = '+fmt(p.tpReq,3)+'" ('+(ctx.code==='lts'?'LRFDLTS: PLASTIC PLATE STRIP, b_eff = PI x D / n':'BENDING LINE AT POLE FACE, DOUBLE-NUT')+')':'',
     '('+inp.boltQty+') '+fmt(inp.boltDia,3)+'" F1554 GR '+inp.boltGrade+' RODS ON '+fmt(inp.boltBC,2)+'" BC, h_ef = '+fmt(inp.boltHef,1)+'"'];
+  if(ctx.mode==='sign') lines.push('ANCHOR DESIGN: ANCHORAGE APP (ANCHORAGE TAB, ACI 318-19 CH. 17)'+(inp.signPosts===2?'; EACH POST':''));   // LPSV
   lines.filter(Boolean).forEach((s,j)=>D.text(L.txt, rp+0.4*k, 0.2*k-j*0.2*k, h, s, 0));
   D.text(L.txt, -rp, -rp-1.1*k, 0.14*k, 'BASE PLATE', 0);
 }
-function lpdBuild(){
-  const ctx=LPP_SUMCTX; if(!ctx) throw new Error('no results yet');
+// ---- SIGN MODE SHEETS (LPSV, added 2026-11-02): front elevation, side elevation and plan of a monopost / two-post sign in both
+// code modes. Display only: every value is an input or a result of the active code mode (lpsvData: IBC — LPP_SUMCTX / LPP_LAST;
+// LRFDLTS — lppLtsLast: the Broms embedment L and the ACI 318-19 cage). Model inches; eng. axes: x = panel normal (wind 0°), y along
+// the panel (posts at y = ±L_p/2), z up. The panel thickness, the rod projection above the plate and the base-plate standoff are not
+// inputs: drawn nominal (panel 1 in, rod 2.5·d_b above the plate, plate on the shaft top).
+function lpsvPostTxt(inp){ const t=fmt(inp.poleTwTop,3)+'"';
+  return inp.poleShape==='round' ? `POST: Ø${fmt(inp.poleDiaTop,3)}" x ${t} ROUND TUBE, Fy = ${fmt(inp.poleFy,0)} KSI`
+    : inp.poleShape==='square' ? `POST: HSS ${fmt(inp.poleDiaTop,3)} x ${fmt(inp.poleDiaTop,3)} x ${t}, Fy = ${fmt(inp.poleFy,0)} KSI`
+    : `POST: HSS ${fmt(inp.poleDepthTop,3)} x ${fmt(inp.poleDiaTop,3)} x ${t} (DEPTH ALONG x), Fy = ${fmt(inp.poleFy,0)} KSI`; }
+// sign geometry in model inches (the eng. axes above)
+function lpsvGeom(ctx){
+  const inp=ctx.inp, two=inp.signPosts===2, Ls=two?inp.signSpacing*12:0;
+  const wY=inp.poleDiaTop, wX=inp.poleShape==='rect'?inp.poleDepthTop:inp.poleDiaTop;   // post width seen in the front (along y) / side (along x) view
+  const ang=Array.from({length:Math.max(0,Math.round(inp.boltQty))},(_,j)=>(inp.boltTheta+j*360/Math.round(inp.boltQty))*RAD);
+  return {inp, two, Ls, posts:two?[-Ls/2,Ls/2]:[0], B:inp.signB*12, s:inp.signS*12, clr:inp.signClr*12, H:(inp.signClr+inp.signS)*12,
+    wY, wX, tP:inp.bpT>0?inp.bpT:0, bp:inp.bpDia||0, R:inp.boltBC/2, rodD:inp.boltDia, hef:inp.boltHef, rodUp:2.5*inp.boltDia, ang, tPan:1};
+}
+function lpsvUniq(v){ const o=[]; v.forEach(x=>{ if(!o.some(y=>Math.abs(y-x)<0.05)) o.push(x); }); return o.sort((a,b)=>a-b); }
+// shaft, bars, rods and plate of one post in an elevation; u = horizontal model coordinate of the post axis; off = rod offsets
+function lpsvElevStack(D,L,k,G,st,u,rodOff,wPost,embLbl){
+  const sh=lpdShaft(st,G.inp);
+  D.rect(L.conc, u-sh.b/2, -sh.d, u+sh.b/2, 0);
+  D.line(L.bar, u-sh.rbar, -sh.d+sh.cover, u-sh.rbar, -2, D.ltype('HIDDEN')); D.line(L.bar, u+sh.rbar, -sh.d+sh.cover, u+sh.rbar, -2, D.ltype('HIDDEN'));
+  rodOff.forEach(o=>{ D.line(L.bolt, u+o, -G.hef, u+o, 0, D.ltype('HIDDEN')); D.line(L.bolt, u+o, 0, u+o, G.tP+G.rodUp); });
+  if(G.bp>0) D.rect(L.plate, u-G.bp/2, 0, u+G.bp/2, G.tP);
+  D.rect(L.pole, u-wPost/2, G.tP, u+wPost/2, G.H);
+  D.line(L.cl, u, -sh.d-0.3*k, u, G.H+0.3*k, D.ltype('CENTER'));
+  D.dimV(L.dim, -sh.d, 0, u-sh.b/2-0.6*k, u-sh.b/2, embLbl+' = <>');
+  D.dimH(L.dim, u-sh.b/2, u+sh.b/2, -sh.d-0.5*k, -sh.d, (sh.sq?'b = <> SQ':'b = <> DIA'));
+  return sh;
+}
+function lpsvGrade(D,L,k,x0,x1,h){
+  D.line(L.soil, x0, 0, x1, 0);
+  for(let x=x0; x<x1-0.2*k; x+=0.25*k) D.line(L.soil, x, 0, x-0.12*k, -0.12*k);
+  D.text(L.txt, x0, 0.08*k, h, 'GRADE', 0);
+}
+function lpsvCageTxt(sh,each){ return (each?'EACH SHAFT: ':'')+'('+sh.n+') '+sh.bar.n+' VERT., '+sh.tie.n+' TIES @ '+fmt(sh.s,0)+'" ('+fmt(sh.sTop,0)+'" TOP '+fmt(sh.zoneH,0)+'")'; }
+// FRONT ELEVATION (looking along +x at the panel face; horizontal = y)
+function lpsvFront(D,L,k,ctx){
+  const G=lpsvGeom(ctx), inp=G.inp, h=0.1*k, emb=ctx.code==='lts'?'L':'d';
+  const rodOff=lpsvUniq(G.ang.map(a=>G.R*Math.sin(a)));
+  let sh=null; const shs=[];
+  G.posts.forEach((u,pi)=>{ sh=lpsvElevStack(D,L,k,G,ctx.stacks[Math.min(pi,ctx.stacks.length-1)],u,rodOff,G.wY,emb); shs.push(sh); });
+  const same=shs.every(s=>Math.abs(s.d-shs[0].d)<1e-6&&s.n===shs[0].n&&s.bar.n===shs[0].bar.n);
+  const uL=G.posts[G.posts.length-1], bmax=Math.max(...shs.map(s=>s.b)), dmax=Math.max(...shs.map(s=>s.d));
+  D.text(L.txt, uL+bmax/2+0.15*k, -dmax/2, h, lpsvCageTxt(sh, G.two&&same), 0);
+  // panel
+  D.rect(L.sign, -G.B/2, G.clr, G.B/2, G.H);
+  D.text(L.txt, G.two?0:-(G.B/4+G.wY/4), G.clr+G.s/2-h/2, h, 'SIGN PANEL '+fmt(inp.signB,2)+'\' x '+fmt(inp.signS,2)+'\'', 1);
+  const xl=Math.min(-G.B/2, G.posts[0]-bmax/2)-0.8*k;
+  D.dimV(L.dim, 0, G.clr, xl, -G.B/2, 'CLR = <>'); D.dimV(L.dim, G.clr, G.H, xl, -G.B/2, 's = <>');
+  D.dimV(L.dim, 0, G.H, xl-0.8*k, -G.B/2, 'POST HT = <>');
+  D.dimH(L.dim, -G.B/2, G.B/2, G.H+0.6*k, G.H, 'B = <>');
+  if(G.two) D.dimH(L.dim, G.posts[0], G.posts[1], G.H+1.2*k, G.H, 'Lp = <>');
+  // post and plate callouts (right of the last post, above grade)
+  const xr=Math.max(G.B/2, uL+bmax/2)+0.3*k;
+  D.text(L.txt, xr, G.clr*0.55, h, lpsvPostTxt(inp)+(G.two?' (EACH)':''), 0);
+  D.line(L.txt, xr-0.05*k, G.clr*0.55+h*0.4, uL+G.wY/2, G.clr*0.55+h*0.4);   // leader to the post
+  D.text(L.txt, xr, G.clr*0.55-0.2*k, h, 'BASE PL Ø'+fmt(inp.bpDia,2)+'" x '+fmt(inp.bpT,3)+'", ('+Math.round(inp.boltQty)+') '+fmt(inp.boltDia,3)+'" RODS', 0);
+  lpsvGrade(D,L,k, xl-1.4*k, Math.max(xr+3*k, uL+bmax/2+2*k), h);
+  D.text(L.txt, xl-1.4*k, -dmax-1.2*k, 0.14*k, 'FRONT ELEVATION', 0);
+}
+// SIDE ELEVATION (looking along +y; horizontal = x, the panel normal); the post with the deepest shaft is shown
+function lpsvSide(D,L,k,ctx){
+  const G=lpsvGeom(ctx), inp=G.inp, h=0.1*k, emb=ctx.code==='lts'?'L':'d';
+  let si=0; ctx.stacks.forEach((st,i)=>{ if(st.found.d>ctx.stacks[si].found.d) si=i; });
+  const rodOff=lpsvUniq(G.ang.map(a=>G.R*Math.cos(a)));
+  const sh=lpsvElevStack(D,L,k,G,ctx.stacks[si],0,rodOff,G.wX,emb);
+  // panel on the -x face of the post (edge view)
+  const xp=-G.wX/2;
+  D.rect(L.sign, xp-G.tPan, G.clr, xp, G.H);
+  D.dimV(L.dim, 0, G.clr, G.wX/2+0.8*k, G.wX/2, 'CLR = <>'); D.dimV(L.dim, G.clr, G.H, G.wX/2+0.8*k, G.wX/2, 's = <>');
+  D.dimV(L.dim, 0, G.H, G.wX/2+1.6*k, G.wX/2, 'POST HT = <>');
+  D.text(L.txt, sh.b/2+0.15*k, -sh.d/2, h, lpsvCageTxt(sh,false), 0);
+  // wind arrow of the governing case (its x component; along y it is edge-on and drawn as a note)
+  const w=ctx.wind, zc=G.clr+G.s/2, Lw=1.4*k, x1=xp-G.tPan-0.25*k, x0=x1-Lw;
+  if(w){ const cx=Math.cos(w.deg*RAD), dir=cx>=-1e-9?1:-1, a=0.12*k, tip=dir>0?x1:x0, tail=dir>0?x0:x1;
+    if(Math.abs(cx)>0.05){ D.line(L.wind, tail, zc, tip, zc); D.line(L.wind, tip, zc, tip-dir*a, zc+a*0.5); D.line(L.wind, tip, zc, tip-dir*a, zc-a*0.5); }
+    D.text(L.txt, x0-0.1*k, zc+0.05*k, h, 'WIND TOWARD '+fmt(w.deg,0)+'°'+(Math.abs(cx)<=0.05?' (ALONG THE PANEL)':''), 2);
+    D.text(L.txt, x0-0.1*k, zc-0.17*k, 0.08*k, w.short, 2); }
+  D.text(L.txt, xp-G.tPan-0.15*k, G.H+0.15*k, h, 'SIGN PANEL (EDGE)', 1);
+  lpsvGrade(D,L,k, Math.min(x0-4*k, -sh.b/2-1.6*k), G.wX/2+2.4*k, h);
+  D.text(L.txt, Math.min(x0-4*k, -sh.b/2-1.6*k), -sh.d-1.2*k, 0.14*k, 'SIDE ELEVATION'+(G.two?' (POST '+(si+1)+(ctx.stacks.length>1&&ctx.stacks.every(s=>Math.abs(s.found.d-ctx.stacks[0].found.d)<1e-9)?'; POSTS ALIKE)':')'):''), 0);
+}
+// PLAN (looking down; +x to the right = wind 0°, +y up); posts at y = ±L_p/2
+function lpsvPlan(D,L,k,ctx){
+  const G=lpsvGeom(ctx), inp=G.inp, h=0.1*k, b=inp.b*12;
+  G.posts.forEach(py=>{
+    if(inp.shaftShape==='square') D.rect(L.conc, -b/2, py-b/2, b/2, py+b/2); else D.circle(L.conc, 0, py, b/2);
+    if(G.bp>0) D.circle(L.plate, 0, py, G.bp/2);
+    if(inp.poleShape==='round') D.circle(L.pole, 0, py, G.wX/2); else D.rect(L.pole, -G.wX/2, py-G.wY/2, G.wX/2, py+G.wY/2);
+    G.ang.forEach(a=>D.circle(L.bolt, G.R*Math.cos(a), py+G.R*Math.sin(a), G.rodD/2)); });
+  const xp=-G.wX/2; D.rect(L.sign, xp-G.tPan, -G.B/2, xp, G.B/2);
+  const ext=Math.max(b/2, G.B/2, G.Ls/2+b/2)+0.8*k;
+  D.line(L.cl, -b/2-1.0*k, 0, b/2+2.2*k, 0, D.ltype('CENTER')); D.line(L.cl, 0, -ext, 0, ext, D.ltype('CENTER'));
+  if(G.two) G.posts.forEach(py=>D.line(L.cl, -b/2-0.3*k, py, b/2+0.3*k, py, D.ltype('CENTER')));
+  D.text(L.txt, b/2+2.3*k, -h/2, h, '+x (0°)', 0); D.text(L.txt, 0, ext+0.08*k, h, '+y (90°)', 1);
+  D.dimV(L.dim, -G.B/2, G.B/2, xp-G.tPan-0.6*k, xp-G.tPan, 'B = <>');
+  D.text(L.txt, xp-G.tPan/2, G.B/2+0.12*k, h, 'SIGN PANEL', 1);
+  if(G.two) D.dimV(L.dim, G.posts[0], G.posts[1], b/2+0.7*k, 0, 'Lp = <>');
+  const w=ctx.wind;
+  if(w){ const ux=Math.cos(w.deg*RAD), uy=Math.sin(w.deg*RAD), r=Math.max(b/2, G.bp/2, G.wX/2+G.tPan)+0.4*k, Lw=1.2*k, a=0.12*k;
+    const off=G.B/4, nx=-uy*off, ny=ux*off;   // drawn beside the axis (clear of the panel dimension)
+    const p1=[-ux*r+nx, -uy*r+ny], p0=[-ux*(r+Lw)+nx, -uy*(r+Lw)+ny];   // from the upwind side toward the structure
+    D.line(L.wind, p0[0], p0[1], p1[0], p1[1]);
+    D.line(L.wind, p1[0], p1[1], p1[0]-ux*a-uy*a*0.5, p1[1]-uy*a+ux*a*0.5); D.line(L.wind, p1[0], p1[1], p1[0]-ux*a+uy*a*0.5, p1[1]-uy*a-ux*a*0.5);
+    const side=Math.abs(ux)>=0.5, j=side?(ux>0?2:0):1, ty=side?p0[1]-h/2:(uy>0?p0[1]-0.1*k-h:p0[1]+0.1*k);
+    D.text(L.txt, p0[0]-(side?ux*0.1*k:0), ty, h, 'WIND TOWARD '+fmt(w.deg,0)+'°', j); }
+  D.text(L.txt, -ext-1.6*k, -ext-0.4*k, 0.14*k, 'PLAN', 0);
+}
+function lpdBuild(cx){   // cx: the sign context of the active code mode (lpsvData, LPSV 2026-11-02); otherwise the IBC Summary context
+  const ctx=cx||LPP_SUMCTX; if(!ctx) throw new Error('no results yet');
   const D=SharedDxf.drawing({prefix:'S-'}), S=[], L=lpdLayers(D), proj=activeProject||'';
+  if(ctx.mode==='sign') L.wind=D.layer('WIND',1);   // LPSV: the governing wind arrow (sign sheets)
   const AW=LPDW.W-2*LPDW.m-0.5, AH=LPDW.H-2*LPDW.m-LPDW.tbH-0.6;
   let ox=0;
   function sheet(id,title,content,fixedK){
@@ -6839,20 +6962,28 @@ function lpdBuild(){
       x+=cw*k; if(ci<row.length-1) D.line(L.tb, x, yb, x, yb+r); }); });
     const sh={id,title,k,i0,i1:D.mark(),ox,W,H,over,sheetEnt}; S.push(sh); ox+=W+1*k; return sh;
   }
-  sheet('elev', ctx.mode==='sign'?'SIGN ELEVATION':'POLE ELEVATION', k=>lpdElevation(D,L,k,ctx));
+  if(ctx.mode==='sign'){   // LPSV (2026-11-02): front and side elevations and the plan of the sign
+    sheet('elev', 'SIGN FRONT ELEVATION', k=>lpsvFront(D,L,k,ctx));
+    sheet('side', 'SIGN SIDE ELEVATION', k=>lpsvSide(D,L,k,ctx));
+    sheet('plan', 'PLAN', k=>lpsvPlan(D,L,k,ctx));
+  } else {
+  sheet('elev', 'POLE ELEVATION', k=>lpdElevation(D,L,k,ctx));
   sheet('plan', 'PLAN', k=>lpdPlan(D,L,k,ctx));
+  }
   ctx.stacks.forEach((st,si)=>{ if(si>0 && ctx.stacks[0].found.reo.long.n===st.found.reo.long.n && ctx.stacks[0].found.reo.long.bar.n===st.found.reo.long.bar.n) return;
     sheet('sec'+si, 'SHAFT SECTION'+(si?' — POST '+(si+1):''), k=>lpdSection(D,L,k,ctx,si)); });
   sheet('plate', 'BASE PLATE', k=>lpdPlate(D,L,k,ctx));
   sheet('notes', 'GENERAL NOTES', ()=>{
     const inp=ctx.inp, st=ctx.stacks;
-    const notes=['DESIGN: IBC 2021 §1807.3 (EMBEDMENT), ASCE 7-22 (WIND, ICE, COMBINATIONS), AISC 360-16 (POLE / POST), ACI 318-19 (SHAFT); BASE PLATE BY THE AASHTO LRFDLTS BENDING-LINE METHOD (DOUBLE-NUT). NOT FOR AASHTO LRFDLTS HIGHWAY SUPPORTS.',
+    const notes=ctx.code==='lts'?lpsvLtsNotes(ctx):['DESIGN: IBC 2021 §1807.3 (EMBEDMENT), ASCE 7-22 (WIND, ICE, COMBINATIONS), AISC 360-16 (POLE / POST), ACI 318-19 (SHAFT); BASE PLATE BY THE AASHTO LRFDLTS BENDING-LINE METHOD (DOUBLE-NUT). NOT FOR AASHTO LRFDLTS HIGHWAY SUPPORTS.',
       'EMBEDMENT d = '+st.map(s=>fmt(s.found.d,2)+'\'').join(' / ')+' BELOW GRADE (IBC §1807.3, '+(constraint==='non'?'NON-CONSTRAINED':'CONSTRAINED')+'), SHAFT '+(inp.shaftShape==='square'?'':'DIA. ')+fmt(inp.b,2)+'\''+(inp.shaftShape==='square'?' SQUARE':'')+'.',
       'CONCRETE f\'c = '+fmt(inp.fc,0)+' PSI; REINFORCEMENT f_y = '+fmt(inp.fy,0)+' PSI; CLEAR COVER '+fmt(inp.cover,1)+'".',
-      'BASIC WIND SPEED V = '+fmt(inp.V,0)+' MPH, EXPOSURE '+inp.expo+'.'+(ctx.mode==='sign'?'':' ICE t = '+fmt(inp.tIce,2)+'" ('+(inp.iceBasis==='map'?'MAP VALUE, t_d BY HEIGHT':'UNIFORM')+'), V_ice = '+fmt(inp.Vice,0)+' MPH.'),
+      'BASIC WIND SPEED V = '+fmt(inp.V,0)+' MPH, EXPOSURE '+inp.expo+'.'+(' ICE t = '+fmt(inp.tIce,2)+'" ('+(inp.iceBasis==='map'?'MAP VALUE, t_d BY HEIGHT':'UNIFORM')+'), V_ice = '+fmt(inp.Vice,0)+' MPH.'),
       'ANCHOR RODS ASTM F1554 GR '+inp.boltGrade+', '+(inp.anchTq==='torqued'?'PRETENSIONED (TURN-OF-NUT)':'NOT PRETENSIONED')+'; LEVELING NUTS (DOUBLE-NUT BASE).',
       'ANCHOR RODS (ACI 318-19 CH. 17) ARE DESIGNED IN THE ANCHORAGE APP. THE SOIL TORSIONAL RESISTANCE IS NOT CHECKED BY THE TOOL.',
       'SEE THE CALCULATION REPORT (REPORT TAB) FOR THE DESIGN; THESE DRAWINGS SHOW THE GEOMETRY AS ENTERED AND THE SHAFT AS DESIGNED / CHECKED BY THE TOOL.'];
+    if(ctx.mode==='sign' && ctx.code!=='lts') notes.splice(1,0,lpsvGeomNote(inp));   // LPSV: the sign geometry
+    if(ctx.mode==='sign') notes.forEach((t,i)=>{ notes[i]=String(t).replace(/§\s*/g,'SEC. ').replace(/≥/g,'>=').replace(/≤/g,'<='); });   // LPSV: plain ASCII (the preview shows DXF \U+ codes as typed)
     D.text(L.txt, 0, 0.3, 0.16, 'GENERAL NOTES', 0);
     let y=0; const hh=0.11, mx=Math.floor(15/(hh*0.9));
     notes.forEach((s,j)=>{ const words=String(s).split(/\s+/); let line=(j+1)+'. '; const out=[];
@@ -6867,14 +6998,15 @@ function lpdRender(){
   const T=$('lpdHost'); if(!T) return;
   if(!window.SharedDxf){ T.innerHTML='<div class="flag bad">shared/dxf.js is not loaded: keep the shared folder next to this file.</div>'; return; }
   if($('lppInErr')&&$('lppInErr').classList.contains('on')){ T.innerHTML='<div class="flag bad">No drawings: correct the input errors.</div>'; return; }
-  let B; try{ B=lpdBuild(); }catch(e){ T.innerHTML='<div class="flag bad">The drawings could not be drawn: '+lppEsc(e&&e.message)+'</div>'; return; }
+  let cx=null; if(appMode==='sign'){ cx=lpsvData(); if(!cx||cx.error){ T.innerHTML='<div class="flag bad">No drawings: '+lppEsc(cx?cx.error:'no results yet')+'</div>'; return; } }   // LPSV
+  let B; try{ B=lpdBuild(cx); }catch(e){ T.innerHTML='<div class="flag bad">The drawings could not be drawn: '+lppEsc(e&&e.message)+'</div>'; return; }
   LPDW.B=B;
   let want=LPDW.cur; if(!want){ try{ want=localStorage.getItem(LPDW.key)||''; }catch(e){ want=''; } }
   const cur=B.S.find(s=>s.id===want)||B.S[0]; LPDW.cur=cur.id;
   const scName=k=>k===1?'NTS (paper inches)':((LPDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1]);
   T.innerHTML='<div class="lpdBar"><label>Sheet <select id="lpdSheet">'+B.S.map((s,j)=>'<option value="'+s.id+'"'+(s===cur?' selected':'')+'>'+(j+1)+'. '+lppEsc(s.title)+'</option>').join('')+'</select></label> '+
     '<button type="button" class="btn mini ghost" id="lpdDxf">Download DXF ('+B.S.length+' sheets)</button></div>'+
-    '<p class="tbl-note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers S-CONC, S-POLE, S-ARM, S-FIXT, S-CABLE, S-REBAR, S-DIMS, S-TEXT, S-CNTR, S-SOIL, S-PLATE, S-BOLT, S-SIGN, S-TBLK, S-BRDR.</p>'+
+    '<p class="tbl-note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers S-CONC, S-POLE, S-ARM, S-FIXT, S-CABLE, S-REBAR, S-DIMS, S-TEXT, S-CNTR, S-SOIL, S-PLATE, S-BOLT, S-SIGN, S-TBLK, S-BRDR'+(cx?', S-WIND':'')+'.'+(cx?' Values from the '+(cx.code==='lts'?'AASHTO LRFDLTS results (embedment L by Broms, shaft cage per ACI 318-19: Shaft tab)':'IBC 2021 · ASCE 7-22 results (embedment d per IBC §1807.3, shaft cage per ACI 318-19: Shaft tab)')+'; the panel thickness, the rod projection and the plate standoff are not inputs and are drawn nominal.':'')+'</p>'+
     '<div class="lpdHead"><b>'+(B.S.indexOf(cur)+1)+'. '+lppEsc(cur.title)+'</b> · scale '+lppEsc(scName(cur.k))+(cur.over?' · <span style="color:#b71c1c">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
     '<div class="lpdBox"></div><p class="tbl-note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</p>';
   SharedDxf.viewer(T.querySelector('.lpdBox'), lpdSheetSVG(B,cur), {height:'64vh'});
@@ -6894,6 +7026,211 @@ function lpdElevGeometry(){
   const sv=box.querySelector('svg'); if(sv){ sv.style.width='100%'; sv.style.height='auto'; sv.style.maxHeight='520px'; }
   return true;
 }
+
+// ================= SIGN VIEWS: data, 3D view (LPSV, added 2026-11-02) =================
+// Engineer request (2026-11-02): a view of the sign structure and its foundations, 3D and 2D, monopost and two-post, in both code
+// modes. Display only: every value drawn is an input or a result the tool has already computed in the active code mode — IBC:
+// LPP_SUMCTX (each post's embedment d and ACI cage) and LPP_LAST.postDesigns (the governing ASD combination, its wind direction and
+// case); LRFDLTS: lppLtsLast (the Broms embedment L of the governing row, the ACI 318-19 cage, the plate t_req). Nothing is saved.
+// lpsvData(): the sign context of the active code mode in the shape lpdBuild() reads ({mode, inp, stacks[].found.{d, reo, bolts}})
+// plus {code, wind:{deg, short}}; {error} when there is nothing to draw.
+function lpsvData(){
+  if(appMode!=='sign') return null;
+  if(codeMode==='lts'){
+    const X=lppLtsLast; if(!X||!X.mc||!X.inp) return {error:'no LRFDLTS results yet (correct any input errors first).'};
+    const fd=X.fd, base={code:'lts', mode:'sign', inp:X.inp, X};
+    if(!fd||!fd.gov||!fd.reo) return Object.assign(base,{error:'select the Broms soil model (Shaft & soil inputs): in the LRFDLTS mode the shaft embedment comes from Broms (Shaft tab).'});
+    const r=fd.gov.r, deg=((Math.atan2(r.Vy,r.Vx)/RAD)%360+360)%360, found={d:fd.gov.br.L, reo:fd.reo, bolts:X.bp?{tpReq:X.bp.tReq}:null};
+    return Object.assign(base,{stacks:Array.from({length:X.g.sign.nPost},()=>({found})),
+      wind:{deg, short:`GOVERNING FOR THE EMBEDMENT: ${r.name}, ${r.lcName}`.toUpperCase(), long:`${r.name}, ${r.lcName} — the row that governs the Broms embedment L`}});
+  }
+  const ctx=LPP_SUMCTX, P=LPP_LAST;
+  if(!ctx||ctx.mode!=='sign'||!P||P.mode!=='sign'||!P.postDesigns||!P.postDesigns.length) return {error:'no results yet (correct any input errors first).'};
+  const g=P.postDesigns[0].gASD||{}, two=P.postDesigns.length>1;
+  return Object.assign({}, ctx, {code:'ibc', wind:{deg:g.phi||0, short:`GOVERNING ASD ${g.name||''}, CASE ${g.case||'A'}${two?' (POST 1)':''}`.toUpperCase(),
+    long:`governing ASD ${g.name||''}, case ${g.case||'A'}${two?', post 1':''} (embedment)`}});
+}
+function lpsvGeomNote(inp){ return 'SIGN PANEL '+fmt(inp.signB,2)+' FT x '+fmt(inp.signS,2)+' FT, CLEARANCE '+fmt(inp.signClr,2)+' FT GRADE TO PANEL BOTTOM; '+(inp.signPosts===2?'TWO POSTS AT '+fmt(inp.signSpacing,2)+' FT, PANEL CENTERED':'ONE POST')+'; '+lpsvPostTxt(inp).replace(/^POST: /,'POST ')+'.'; }
+function lpsvLtsNotes(ctx){
+  const strip=t=>String(t).replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+  return ltsDwgNotes(ctx.X).map(strip).concat([lpsvGeomNote(ctx.inp),
+    'L ON THE ELEVATIONS = REQUIRED EMBEDMENT BY BROMS FOR THE GOVERNING ROW (SHAFT TAB); THE SHAFT CAGE IS THE ACI 318-19 DESIGN OF THE LRFDLTS RUN.',
+    'SEE THE LRFDLTS CALCULATION REPORT (REPORT TAB) FOR THE DESIGN; THESE DRAWINGS SHOW THE GEOMETRY AS ENTERED AND THE SHAFT AS DESIGNED / CHECKED BY THE TOOL.']);
+}
+// ---- 3D view (three.js r128, the suite's pinned copy). Feet; three axes X = eng. x (panel normal), Y = up, Z = −eng. y ----
+const LPSV={r:null, scene:null, cam:null, root:null, orb:null, home:null, raf:0, lay:{panel:true,post:true,rods:true,shaft:true,cage:true,ground:true,wind:true,labels:true}};
+const LPSV_LAYERS=[['panel','Sign panel'],['post','Posts & base plates'],['rods','Anchor rods'],['shaft','Shaft concrete'],['cage','Reinforcement'],['ground','Grade & soil'],['wind','Wind arrow'],['labels','Labels']];
+function lpsvCardSync(){   // the 3D card exists in sign mode only (the pole views are unchanged)
+  let c=$('lp3dCard'); const sign=appMode==='sign';
+  if(!sign){ if(c){ lpsvDispose(); c.remove(); } return null; }
+  if(!c){ c=document.createElement('section'); c.className='card'; c.id='lp3dCard';
+    c.innerHTML='<div class="card-h"><span class="num">3D</span><h2>Sign structure and foundations — 3D</h2><span class="hint">values from the design · three.js</span></div><div class="card-body" id="lp3dHost"></div>'; }
+  const pg=$('page-geometry'); if(!pg) return c;
+  const ref=codeMode==='lts'?$('ltsGeoCard'):($('elevDraw')&&$('elevDraw').closest('section'));
+  if(ref&&ref.parentElement===pg){ if(ref.nextSibling!==c) ref.after(c); } else if(c.parentElement!==pg) pg.insertBefore(c, pg.firstChild);
+  return c;
+}
+function lpsvGeoActive(){ const p=$('page-geometry'); return !!(p&&p.classList.contains('on')); }
+// after each calc (both code modes): the 3D card, and the Drawings tab in the LRFDLTS sign mode (built after the LTS run)
+function lpsvRefresh(){
+  const sign=appMode==='sign', dc=document.querySelector('.lpdCard');
+  if(dc) dc.classList.toggle('lpdLtsOn', sign&&codeMode==='lts');
+  lpsvCardSync();
+  if(sign&&codeMode==='lts'&&typeof lpdActive==='function'&&lpdActive()) lpdRender();
+  if(sign&&lpsvGeoActive()) lpsv3dRender();
+}
+function lpsvDispose(){ if(LPSV.root){ LPSV.root.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{ if(m.map) m.map.dispose(); m.dispose(); }); } }); }
+  if(LPSV.r){ LPSV.r.dispose(); } LPSV.r=null; LPSV.scene=null; LPSV.root=null; }
+function lpsv3dRender(){
+  const host=$('lp3dHost'); if(!host) return;
+  const d=lpsvData();
+  if(!d||(d.error&&!d.inp)){ lpsvDispose(); host.innerHTML='<div class="flag bad">No 3D view: '+lppEsc(d?d.error:'no results yet')+'</div>'; return; }
+  if(typeof THREE==='undefined'&&document.readyState!=='complete'){ host.innerHTML='<div class="tbl-note">Loading the 3D library…</div>'; window.addEventListener('load',()=>{ if(lpsvGeoActive()) lpsv3dRender(); },{once:true}); return; }
+  if(typeof THREE==='undefined'){ lpsvDispose(); host.innerHTML='<div class="flag">The 3D view needs the three.js library, loaded from the internet (cdnjs, r128) like the equation library: open the tool with a connection. The 2D drawings (Drawings tab) and every result work without it.</div>'; return; }
+  if(!host.querySelector('#lp3dCanvas')||!LPSV.r){
+    host.innerHTML='<div class="lp3dBar">'+['reset:Reset view','front:Front','side:Side','top:Plan','png:Save PNG'].map(x=>{ const [k,t]=x.split(':'); return '<button type="button" class="btn mini ghost" data-v3="'+k+'">'+t+'</button>'; }).join('')+'</div>'
+      +'<div class="lp3dLay">'+LPSV_LAYERS.map(([k,t])=>'<label><input type="checkbox" data-l3="'+k+'"'+(LPSV.lay[k]?' checked':'')+'> '+t+'</label>').join('')+'</div>'
+      +'<div class="lp3dWrap"><canvas id="lp3dCanvas" aria-label="3D view of the sign structure and its foundations"></canvas><div class="lp3dHint"><span class="lp3dWide">drag: orbit · right-drag, shift-drag or two fingers: pan · wheel or pinch: zoom · double-click: reset</span><span class="lp3dNarrow">drag: orbit · two fingers: pan, zoom</span></div></div>'
+      +'<div class="tbl-note" id="lp3dInfo"></div>';
+    try{ LPSV.r=new THREE.WebGLRenderer({canvas:host.querySelector('#lp3dCanvas'), antialias:true, preserveDrawingBuffer:true}); }
+    catch(e){ LPSV.r=null; host.innerHTML='<div class="flag">The 3D view could not start WebGL in this browser ('+lppEsc(e&&e.message)+'). The 2D drawings (Drawings tab) show the same geometry.</div>'; return; }
+    LPSV.r.setClearColor(0xffffff,1); LPSV.r.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+    LPSV.cam=new THREE.PerspectiveCamera(35,1.6,0.1,5000);
+    lpsvWire(host);
+  }
+  lpsvSize(); lpsvBuild(d);
+  lpsvInfo(d);
+  lpsvDraw();
+}
+function lpsvInfo(d){
+  const el=$('lp3dInfo'); if(!el) return;
+  const inp=d.inp, lts=d.code==='lts', st=d.stacks, sh=st?lpdShaft(st[0],inp):null, two=inp.signPosts===2;
+  const same=st&&st.every(s=>Math.abs(s.found.d-st[0].found.d)<1e-9);
+  let t='<b>'+(lts?'AASHTO LRFDLTS':'IBC 2021 · ASCE 7-22')+' results.</b> Panel '+fmt(inp.signB,2)+' × '+fmt(inp.signS,2)+' ft at '+fmt(inp.signClr,2)+' ft clearance; '+lppEsc(lpsvPostTxt(inp).replace(/^POST: /,'post '))+(two?', two posts at '+fmt(inp.signSpacing,2)+' ft':'')+'. ';
+  if(st) t+='Shaft'+(two?(same?'s (each)':'s')+'':'')+': '+(inp.shaftShape==='square'?'':'Ø')+fmt(inp.b,2)+' ft'+(inp.shaftShape==='square'?' square':'')+' × '+(lts?'L':'d')+' = '+st.map(s=>fmt(s.found.d,2)).filter((v,i,a)=>!same||i===0).join(' / ')+' ft'+(lts?' (Broms)':' (IBC §1807.3)')
+    +', ('+sh.n+') '+lppEsc(sh.bar.n)+' vertical, '+lppEsc(sh.tie.n)+' ties @ '+fmt(sh.s,0)+' in ('+fmt(sh.sTop,0)+' in o.c. within the top '+fmt(sh.zoneH,0)+' in), '+fmt(sh.cover,1)+' in cover — <a href="#" data-l3go="shaft">Shaft tab</a>. ';
+  else t+='<b>Shafts not drawn:</b> '+lppEsc(d.error)+' ';
+  if(d.wind) t+='Wind arrow: toward '+fmt(d.wind.deg,0)+'°, '+lppEsc(d.wind.long)+' (<a href="#" data-l3go="'+(lts?'shaft':'loading')+'">'+(lts?'Shaft':'Loading')+' tab</a>). ';
+  t+='Soil: '+lppEsc(lpsvSoilTxt(inp))+'. Not inputs, drawn nominal: panel thickness 1 in, rod projection 2.5 d<sub>b</sub> above the plate, plate on the shaft top (no standoff); ties start 3 in below the top.';
+  el.innerHTML=t;
+}
+function lpsvSoilTxt(inp){
+  const bs=inp.bromsSoil, br=bs==='cohesive'?`Broms cohesive, c = ${fmt(inp.bromsC,2)} ksf`:bs==='cohesionless'?`Broms cohesionless, φ = ${fmt(inp.bromsPhi,0)}°, γ = ${fmt(inp.bromsGam,3)} k/ft³`:'';
+  if(codeMode==='lts') return br||'no Broms soil model';
+  const o=$('soilClass')&&$('soilClass').selectedOptions[0]; return (o?o.textContent.replace(/\s*\(.*\)\s*$/,''):'')+`, S₁ = ${fmt(inp.S1,0)} psf/ft`+(br?'; '+br+' (reference)':'');
+}
+function lpsvLabel(text,hFt,color){   // a text sprite, hFt feet tall
+  const T=THREE, fs=48, pad=10, c=document.createElement('canvas'), x=c.getContext('2d'); x.font='600 '+fs+'px Arial, Helvetica, sans-serif';
+  const lines=String(text).split('\n'), w=Math.ceil(Math.max(...lines.map(l=>x.measureText(l).width)))+2*pad, h=lines.length*(fs+8)+2*pad-8;
+  c.width=w; c.height=h; x.font='600 '+fs+'px Arial, Helvetica, sans-serif'; x.fillStyle='rgba(255,255,255,0.85)'; x.fillRect(0,0,w,h);
+  x.fillStyle=color||'#17212b'; x.textBaseline='top'; lines.forEach((l,i)=>x.fillText(l,pad,pad+i*(fs+8)));
+  const tex=new T.CanvasTexture(c); tex.minFilter=T.LinearFilter;
+  const sp=new T.Sprite(new T.SpriteMaterial({map:tex, depthTest:false, transparent:true})); sp.renderOrder=10;
+  sp.scale.set(hFt*w/(fs+8), hFt*h/(fs+8), 1); return sp;
+}
+function lpsvBuild(d){
+  const T=THREE, inp=d.inp, G=lpsvGeom(d), f=1/12, lay=LPSV.lay;
+  if(LPSV.root){ LPSV.root.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{ if(m.map) m.map.dispose(); m.dispose(); }); } }); }
+  const sc=new T.Scene(), root=new T.Group(); sc.add(root); LPSV.scene=sc; LPSV.root=root;
+  sc.add(new T.AmbientLight(0xffffff,0.62)); const dl=new T.DirectionalLight(0xffffff,0.62); dl.position.set(-30,50,25); sc.add(dl); const dl2=new T.DirectionalLight(0xffffff,0.25); dl2.position.set(30,20,-30); sc.add(dl2);
+  const grp={}; LPSV_LAYERS.forEach(([k])=>{ grp[k]=new T.Group(); grp[k].visible=!!lay[k]; root.add(grp[k]); }); LPSV.grp=grp;
+  const M=(c,o)=>new T.MeshLambertMaterial(Object.assign({color:c}, o<1?{transparent:true, opacity:o, depthWrite:false}:{}));
+  const V=(x,y,z)=>new T.Vector3(x,z,-y);   // eng → three
+  const add=(g,geo,mat,x,y,z)=>{ const m=new T.Mesh(geo,mat); m.position.copy(V(x,y,z)); g.add(m); return m; };
+  const edges=(g,geo,col,x,y,z)=>{ const e=new T.LineSegments(new T.EdgesGeometry(geo), new T.LineBasicMaterial({color:col})); e.position.copy(V(x,y,z)); g.add(e); return e; };
+  const B=G.B*f, s=G.s*f, clr=G.clr*f, H=G.H*f, tP=G.tP*f, bp=G.bp*f, wX=G.wX*f, wY=G.wY*f, tPan=G.tPan*f, Rb=G.R*f, rd=G.rodD*f, hef=G.hef*f, up=G.rodUp*f;
+  const narrow=(LPSV.cam&&LPSV.r&&LPSV.r.domElement.clientWidth<600);   // phone: fewer, larger labels
+  const ys=G.posts.map(p=>p*f), dEst=st0d(d), hL=Math.max(0.5, Math.min(2.4, Math.max(B, H+dEst)/24))*(narrow?1.5:1);   // label height (ft)
+  // sign panel (the face toward −x) with edges; posts; plates; rods
+  const xPan=-wX/2-tPan/2, pg=new T.BoxGeometry(tPan, s, B);
+  add(grp.panel, pg, [0xb0b8c2,0x1f7a46,0x9aa3af,0x9aa3af,0x9aa3af,0x9aa3af].map(c=>M(c,1)), xPan, 0, clr+s/2);   // box faces +x, −x, … : the −x face is the front
+  edges(grp.panel, pg, 0xffffff, xPan, 0, clr+s/2);
+  ys.forEach((y,pi)=>{
+    const len=H-tP, pgeo=inp.poleShape==='round'?new T.CylinderGeometry(wX/2,wX/2,len,28):new T.BoxGeometry(wX,len,wY);
+    add(grp.post, pgeo, M(0x8d99a8,1), 0, y, tP+len/2);
+    if(bp>0){ add(grp.post, new T.CylinderGeometry(bp/2,bp/2,Math.max(tP,0.02),40), M(0x5b6676,1), 0, y, tP/2); }
+    G.ang.forEach(a=>{ const rx=Rb*Math.cos(a), ry=y+Rb*Math.sin(a), L=hef+tP+up;
+      add(grp.rods, new T.CylinderGeometry(rd/2,rd/2,L,10), M(0x2b3440,1), rx, ry, -hef+L/2);
+      add(grp.rods, new T.CylinderGeometry(rd*0.85,rd*0.85,rd*0.9,6), M(0x2b3440,1), rx, ry, tP+rd*0.45);
+      add(grp.rods, new T.CylinderGeometry(rd*0.85,rd*0.85,rd*0.9,6), M(0x2b3440,1), rx, ry, -hef+rd*0.45); });
+  });
+  // shafts and cages (from the design results)
+  const st=d.stacks; let dmax=0, bft=inp.b;
+  if(st) ys.forEach((y,pi)=>{
+    const sh=lpdShaft(st[Math.min(pi,st.length-1)],inp), dd=sh.d*f, b=sh.b*f; dmax=Math.max(dmax,dd);
+    const sg=sh.sq?new T.BoxGeometry(b,dd,b):new T.CylinderGeometry(b/2,b/2,dd,48,1,true);
+    add(grp.shaft, sg, M(0xb9b2a5,0.28), 0, y, -dd/2);
+    { const eg=sh.sq?sg:new T.CylinderGeometry(b/2,b/2,dd,48,1), e=new T.LineSegments(new T.EdgesGeometry(eg,10), new T.LineBasicMaterial({color:0x8c7f6a})); e.position.copy(V(0,y,-dd/2)); grp.shaft.add(e); if(eg!==sg) eg.dispose(); }
+    if(!sh.sq){ [0,-dd].forEach(z=>{ const ring=new T.Mesh(new T.CircleGeometry(b/2,48), M(0xb9b2a5,0.18)); ring.rotation.x=-Math.PI/2; ring.position.copy(V(0,y,z)); grp.shaft.add(ring); }); }
+    const zTop=-2*f, zBot=-dd+sh.cover*f, bl=zTop-zBot;
+    sh.pts.forEach(p=>add(grp.cage, new T.CylinderGeometry(sh.bar.d/2*f,sh.bar.d/2*f,bl,8), M(0xc0392b,1), p.x*f, y+p.y*f, zBot+bl/2));
+    const rt=(sh.rbar+sh.bar.d/2+sh.tie.d/2)*f, tr=Math.max(sh.tie.d/2*f,0.02);
+    let z=-3*f, n=0; const zone=sh.zoneH*f;
+    while(z>zBot-1e-6 && n<400){ let m;
+      if(sh.sq){ m=new T.Mesh(new T.TorusGeometry(rt*Math.SQRT2,tr,4,4), M(0x2f6f8f,1)); m.rotation.set(Math.PI/2,0,Math.PI/4); }
+      else { m=new T.Mesh(new T.TorusGeometry(rt,tr,6,40), M(0x2f6f8f,1)); m.rotation.x=Math.PI/2; }
+      m.position.copy(V(0,y,z)); grp.cage.add(m); n++;
+      z-=((-z)<zone?sh.sTop:sh.s)*f; }
+    { const lb=lpsvLabel((d.code==='lts'?'L':'d')+' = '+fmt(sh.d/12,2)+' ft · '+(sh.sq?'':'Ø')+fmt(sh.b/12,2)+' ft'+(sh.sq?' sq':'')+(narrow?'':'\n('+sh.n+') '+sh.bar.n+' + '+sh.tie.n+' @ '+fmt(sh.s,0)+' in'), hL*0.8, '#7a2e12');
+      lb.position.copy(V(0, y, -dd-hL*1.3)); grp.labels.add(lb); }
+  });
+  const ext=Math.max(B, G.Ls*f+bft)/2+Math.max(3, bft), soilD=Math.max(dmax, hef)+1.5;
+  // grade (semi-transparent) and a soil block hint
+  const gp=new T.Mesh(new T.PlaneGeometry(2*ext,2*ext), new T.MeshLambertMaterial({color:0x7d9a5b, transparent:true, opacity:0.32, side:T.DoubleSide, depthWrite:false}));
+  gp.rotation.x=-Math.PI/2; gp.renderOrder=2; grp.ground.add(gp);
+  const sb=new T.BoxGeometry(2*ext,soilD,2*ext); add(grp.ground, sb, M(0x9c7a4b,0.07), 0,0,-soilD/2); edges(grp.ground, sb, 0xb59a70, 0,0,-soilD/2);
+  const gl=lpsvLabel('GRADE', hL*0.7, '#3f5a2a'); gl.position.copy(V(-ext*0.9, -ext*0.9, hL*0.5)); grp.labels.add(gl);
+  if(!narrow){ const sl=lpsvLabel('SOIL: '+lpsvSoilTxt(inp), hL*0.6, '#6b4f2a'); sl.position.copy(V(ext*0.3, ext, -soilD*0.35)); grp.labels.add(sl); }
+  // wind arrow of the governing case, toward the structure, at the panel centroid
+  if(d.wind){ const a=d.wind.deg*RAD, u=new T.Vector3(Math.cos(a),0,-Math.sin(a)), Lw=Math.max(3,Math.min(0.6*H,0.35*Math.max(B,s))), zc=clr+s/2;
+    const tip=V(0,0,zc).add(u.clone().multiplyScalar(-(Math.max(wX/2+tPan,0.5)+0.6))), org=tip.clone().add(u.clone().multiplyScalar(-Lw));
+    const hl=Lw*0.28, rs=Math.max(0.06,Lw*0.035), wm=M(0xd22222,1), q=new T.Quaternion().setFromUnitVectors(new T.Vector3(0,1,0),u);
+    const sh1=new T.Mesh(new T.CylinderGeometry(rs,rs,Lw-hl,12),wm); sh1.quaternion.copy(q); sh1.position.copy(org.clone().add(u.clone().multiplyScalar((Lw-hl)/2))); grp.wind.add(sh1);
+    const cn=new T.Mesh(new T.ConeGeometry(rs*3,hl,16),wm); cn.quaternion.copy(q); cn.position.copy(org.clone().add(u.clone().multiplyScalar(Lw-hl/2))); grp.wind.add(cn);
+    const wl=lpsvLabel('WIND TOWARD '+fmt(d.wind.deg,0)+'°'+(narrow?'':'\n'+d.wind.long), hL*0.6, '#a11'); wl.position.copy(org.clone().add(new T.Vector3(0,-hL*1.9,0))); grp.labels.add(wl); }
+  // labels: panel, clearance, post
+  const pl=lpsvLabel('SIGN '+fmt(inp.signB,2)+' × '+fmt(inp.signS,2)+' ft', hL, '#14532d'); pl.position.copy(V(xPan, 0, H+hL*1.0)); grp.labels.add(pl);
+  const cyy=-B/2-0.6; const cl=new T.Line(new T.BufferGeometry().setFromPoints([V(xPan,cyy,0),V(xPan,cyy,clr)]), new T.LineBasicMaterial({color:0x1f4fc4})); grp.labels.add(cl);
+  const ct=lpsvLabel('CLR '+fmt(inp.signClr,2)+' ft', hL*0.8, '#1f4fc4'); ct.position.copy(V(xPan, cyy-hL*1.6, clr/2)); grp.labels.add(ct);
+  if(!narrow){ const pt=lpsvLabel(lpsvPostTxt(inp).replace(/, Fy.*$/,'').replace(/^POST: /,'')+(G.two?' (2)':''), hL*0.7, '#334155'); pt.position.copy(V(wX+hL*2.5, ys[ys.length-1], clr*0.45)); grp.labels.add(pt); }
+  LPSV.ext={B, H, dmax:Math.max(dmax, hef), ext, hL};
+  if(!LPSV.orb||LPSV.orb.sig!==lpsvSig(d)){ LPSV.home=lpsvHome(); LPSV.orb=Object.assign({}, LPSV.home, {sig:lpsvSig(d)}); }
+}
+function st0d(d){ return d.stacks?Math.max(...d.stacks.map(s=>s.found.d)):0; }
+function lpsvSig(d){ const i=d.inp; return [i.signB,i.signS,i.signClr,i.signPosts,i.signSpacing,i.b,d.code].join('|'); }   // the view resets when the geometry changes
+function lpsvHome(){ const e=LPSV.ext, tv=Math.tan(17.5*RAD), asp=(LPSV.cam&&LPSV.cam.aspect)||1.6, top=e.H+2.6*e.hL, bot=-e.dmax-2.6*e.hL;
+  const r=Math.max((top-bot)/2/tv*1.12, e.ext*1.45/(tv*asp));   // the height (or the grade width, seen obliquely) fills the view
+  return {az:-Math.PI/2-0.75, el:0.22, r, tx:0, ty:(top+bot)/2, tz:0}; }
+function lpsvView(k){ const h=LPSV.home; if(!h) return; const o=LPSV.orb;
+  Object.assign(o, h); if(k==='front'){ o.az=-Math.PI/2; o.el=0.02; } else if(k==='side'){ o.az=0; o.el=0.02; } else if(k==='top'){ o.az=-Math.PI/2; o.el=1.5607; }
+  lpsvDraw(); }
+function lpsvSize(){ const c=$('lp3dCanvas'); if(!c||!LPSV.r) return; const w=Math.max(200, c.parentElement.clientWidth||600), h=w<600?Math.round(w*0.95):Math.round(Math.min(520, Math.max(380, w*0.58)));
+  LPSV.r.setSize(w,h,false); c.style.width=w+'px'; c.style.height=h+'px'; LPSV.cam.aspect=w/h; LPSV.cam.updateProjectionMatrix(); }
+function lpsvDraw(){ if(LPSV.raf) return; LPSV.raf=requestAnimationFrame(()=>{ LPSV.raf=0; lpsvRenderNow(); }); }
+function lpsvRenderNow(){ if(!LPSV.r||!LPSV.scene) return; const o=LPSV.orb, c=LPSV.cam;
+  c.position.set(o.tx+o.r*Math.cos(o.el)*Math.sin(o.az), o.ty+o.r*Math.sin(o.el), o.tz+o.r*Math.cos(o.el)*Math.cos(o.az));
+  c.up.set(0,1,0); if(o.el>1.55) c.up.set(-Math.sin(o.az),0,-Math.cos(o.az)); c.lookAt(o.tx,o.ty,o.tz); c.near=Math.max(0.05,o.r/200); c.far=o.r*50; c.updateProjectionMatrix();
+  LPSV.r.render(LPSV.scene,c); }
+function lpsvWire(host){
+  host.querySelectorAll('[data-v3]').forEach(b=>b.addEventListener('click',()=>{ const k=b.dataset.v3;
+    if(k==='png'){ lpsvRenderNow(); const a=document.createElement('a'); a.href=$('lp3dCanvas').toDataURL('image/png'); a.download=(activeProject||'sign').replace(/[^\w.-]+/g,'_')+'_3d.png'; document.body.appendChild(a); a.click(); a.remove(); return; }
+    lpsvView(k==='reset'?'home':k); }));
+  host.querySelectorAll('[data-l3]').forEach(cb=>cb.addEventListener('change',()=>{ LPSV.lay[cb.dataset.l3]=cb.checked; if(LPSV.grp&&LPSV.grp[cb.dataset.l3]) LPSV.grp[cb.dataset.l3].visible=cb.checked; lpsvDraw(); }));
+  host.addEventListener('click',e=>{ const a=e.target.closest('[data-l3go]'); if(!a) return; e.preventDefault(); switchTab(a.dataset.l3go); lppOutToTop(); });
+  const cv=host.querySelector('#lp3dCanvas'), P=new Map(); let last=null;
+  const pan=(dx,dy)=>{ const o=LPSV.orb, k=o.r*0.0016, c=LPSV.cam, R=new THREE.Vector3(), U=new THREE.Vector3();
+    c.matrixWorld.extractBasis(R,U,new THREE.Vector3()); o.tx-=(R.x*dx-U.x*dy)*k; o.ty-=(R.y*dx-U.y*dy)*k; o.tz-=(R.z*dx-U.z*dy)*k; lpsvDraw(); };
+  cv.addEventListener('contextmenu',e=>e.preventDefault());
+  cv.addEventListener('pointerdown',e=>{ cv.setPointerCapture&&cv.setPointerCapture(e.pointerId); P.set(e.pointerId,{x:e.clientX,y:e.clientY,b:e.button,s:e.shiftKey}); last=null; });
+  cv.addEventListener('pointermove',e=>{ const q=P.get(e.pointerId); if(!q) return; const dx=e.clientX-q.x, dy=e.clientY-q.y;
+    if(P.size===1){ q.x=e.clientX; q.y=e.clientY; if(q.b===2||q.b===1||q.s) pan(dx,dy); else { const o=LPSV.orb; o.az-=dx*0.008; o.el=Math.max(-1.45,Math.min(1.5607,o.el+dy*0.008)); lpsvDraw(); } return; }
+    q.x=e.clientX; q.y=e.clientY; const [a,b]=[...P.values()], m={x:(a.x+b.x)/2,y:(a.y+b.y)/2}, dd=Math.hypot(a.x-b.x,a.y-b.y);
+    if(last){ pan(m.x-last.m.x, m.y-last.m.y); if(last.d>0&&dd>0){ LPSV.orb.r*=last.d/dd; lpsvDraw(); } } last={m,d:dd}; });
+  const up=e=>{ P.delete(e.pointerId); last=null; }; cv.addEventListener('pointerup',up); cv.addEventListener('pointercancel',up);
+  cv.addEventListener('wheel',e=>{ e.preventDefault(); const o=LPSV.orb; o.r=Math.max(1,Math.min(o.r*Math.exp(Math.max(-300,Math.min(300,e.deltaMode===1?e.deltaY*33:e.deltaY))*0.0012), 4*LPSV.home.r)); lpsvDraw(); },{passive:false});
+  cv.addEventListener('dblclick',()=>lpsvView('home'));
+}
+window.addEventListener('resize',()=>{ if(LPSV.r&&lpsvGeoActive()&&appMode==='sign'){ lpsvSize(); lpsvDraw(); } });
 
 // ================= ANCHORAGE APP HAND-OFF (anchorGroup, HANDOFF.md §4.11; added 2026-11-01) =================
 // "Send anchors to the Anchorage app" publishes bridgeSuite.v1.anchorGroup with BridgeXfer (click only) and offers the same payload as a
@@ -7242,12 +7579,20 @@ function ltsCalc(){
       +`<tr><td>Shaft</td><td>${gi.shaftShape==='square'?'square':'round'} ${fmt(gi.b,2)} ft${X.fd&&X.fd.gov?`, required embedment ${fmt(X.fd.gov.br.L,2)} ft (Broms, Shaft tab)`:''}</td></tr>`
       +`<tr><td>Base</td><td>${Math.round(gi.boltQty)} × ${fmt(gi.boltDia,3)} in rods on BC ${fmt(gi.boltBC,2)} in; plate ${fmt(gi.bpDia,2)} in × ${fmt(gi.bpT,3)} in</td></tr></table>`);
     ltsAddCard('drawings','ltsDwgCard','D','Drawings (LRFDLTS mode)','general notes',basis
-      +`<p class="lts-dev">The dimensioned drawings and DXF of the Drawings tab are produced in the IBC mode only (they show the IBC §1807.3 embedment). In the LRFDLTS mode use the notes below with the Report; the shaft depth is the Broms embedment of the Shaft tab.</p>`
-      +`<ol><li>DESIGN: ${lppEsc(LpLts.BASIS.toUpperCase())}.</li><li>WIND: ${X.L.vSrc==='ctdot'?`V = ${fmt(X.L.V,0)} MPH = MAX(${X.m.mri}-YR MAP ${fmt(X.L.Vmap,0)} MPH, CTDOT BRIDGE DESIGN MANUAL §14.2.2 120 MPH)`:`${X.m.mri}-YR MRI, V = ${fmt(X.L.V,0)} MPH (${X.m.fig})`}, EXPOSURE C; SERVICE 10-YR, V = ${fmt(X.L.Vsvc,0)} MPH.</li>`
-      +`<li>STEEL ${X.g.mode==='sign'?'POST':'POLE'}: F<sub>y</sub> = ${fmt(gi.poleFy,0)} KSI; POLE-TO-BASE-PLATE WELD PER AWS D1.1 (LRFDLTS ART. 5.14).</li><li>ANCHOR RODS: CAST-IN-PLACE (LRFDLTS ART. 5.16.1), ASTM F1554 GR ${gi.boltGrade}, DESIGNED IN THE ANCHORAGE APP.</li>`
-      +`<li>DRILLED SHAFT: ${fmt(gi.b,2)} FT ${gi.shaftShape==='square'?'SQUARE':'DIA.'}${X.fd&&X.fd.gov?`, EMBEDMENT ≥ ${fmt(Math.ceil(X.fd.gov.br.L*2)/2,1)} FT (BROMS, LRFDLTS C13.6.1.1)`:''}; COVER ≥ 3 IN (LRFDLTS ART. 13.6.2.1); REINFORCEMENT PER ACI 318-19.</li>`
-      +`${X.brk&&X.brk.needed?'<li>BREAKAWAY SUPPORT REQUIRED: CRASH-TESTED HARDWARE (MASH), LRFDLTS SECTION 12.</li>':''}</ol>`); }
+      +(X.g.mode==='sign'?`<p class="lts-dev">Sign mode: the dimensioned drawings and the DXF above use the LRFDLTS results (embedment L by Broms and the ACI 318-19 shaft cage of the Shaft tab); these notes are the GENERAL NOTES sheet of that set.</p>`   // LPSV (2026-11-02)
+        :`<p class="lts-dev">The dimensioned drawings and DXF of the Drawings tab are produced in the IBC mode only (they show the IBC §1807.3 embedment). In the LRFDLTS mode use the notes below with the Report; the shaft depth is the Broms embedment of the Shaft tab.</p>`)
+      +`<ol>${ltsDwgNotes(X).map(t=>`<li>${t}</li>`).join('')}</ol>`); }
   document.querySelectorAll('.ltsCard').forEach(c=>{ if(window.renderMathInElement) renderMathInElement(c,{delimiters:[{left:'\\[',right:'\\]',display:true}],throwOnError:false}); });
+}
+
+// LTS-9 drawing notes (HTML items), also the GENERAL NOTES sheet of the sign drawings in the LRFDLTS mode (LPSV, 2026-11-02)
+function ltsDwgNotes(X){ const gi=X.inp;
+  return [`DESIGN: ${lppEsc(LpLts.BASIS.toUpperCase())}.`,
+    `WIND: ${X.L.vSrc==='ctdot'?`V = ${fmt(X.L.V,0)} MPH = MAX(${X.m.mri}-YR MAP ${fmt(X.L.Vmap,0)} MPH, CTDOT BRIDGE DESIGN MANUAL §14.2.2 120 MPH)`:`${X.m.mri}-YR MRI, V = ${fmt(X.L.V,0)} MPH (${X.m.fig})`}, EXPOSURE C; SERVICE 10-YR, V = ${fmt(X.L.Vsvc,0)} MPH.`,
+    `STEEL ${X.g.mode==='sign'?'POST':'POLE'}: F<sub>y</sub> = ${fmt(gi.poleFy,0)} KSI; POLE-TO-BASE-PLATE WELD PER AWS D1.1 (LRFDLTS ART. 5.14).`,
+    `ANCHOR RODS: CAST-IN-PLACE (LRFDLTS ART. 5.16.1), ASTM F1554 GR ${gi.boltGrade}, DESIGNED IN THE ANCHORAGE APP.`,
+    `DRILLED SHAFT: ${fmt(gi.b,2)} FT ${gi.shaftShape==='square'?'SQUARE':'DIA.'}${X.fd&&X.fd.gov?`, EMBEDMENT ≥ ${fmt(Math.ceil(X.fd.gov.br.L*2)/2,1)} FT (BROMS, LRFDLTS C13.6.1.1)`:''}; COVER ≥ 3 IN (LRFDLTS ART. 13.6.2.1); REINFORCEMENT PER ACI 318-19.`]
+    .concat(X.brk&&X.brk.needed?['BREAKAWAY SUPPORT REQUIRED: CRASH-TESTED HARDWARE (MASH), LRFDLTS SECTION 12.']:[]);
 }
 
 // ================= LRFDLTS mode: report (LTS-9, added 2026-11-02) =================
@@ -7622,6 +7967,7 @@ function switchTab(name,noSave){
   if(name==='report' && typeof lprRender==='function') lprRender();   // LPRP: the shared Report tab is built when shown
   if(name==='report' && codeMode==='lts' && typeof ltsReportRender==='function') ltsReportRender();   // LTS-9: the LRFDLTS report
   if(name==='drawings' && typeof lpdRender==='function') lpdRender(); // LPDW: the Drawings tab is built when shown
+  if(name==='geometry' && appMode==='sign' && typeof lpsv3dRender==='function') lpsv3dRender();   // LPSV: the sign 3D view is built when shown
 }
 document.querySelectorAll('#tabBar button').forEach(b=>b.onclick=()=>switchTab(b.dataset.tab));
 
