@@ -11,6 +11,8 @@
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 <script src="shared/list-input.js"></script>
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bl:#2563eb;--bdk:#1d4ed8;--blt:#eff6ff;--pu:#7c3aed;--gn:#059669;--am:#d97706;--rd:#dc2626;--tl:#0891b2;--bd:#e2e8f0;--bg:#f1f5f9;--sf:#fff;--tx:#0f172a;--mu:#64748b;--fa:#94a3b8}
@@ -1861,6 +1863,26 @@ function autoSave(){lsSet(LSA,JSON.stringify({t:Date.now(),d:gatherProject()}));
     if(a&&a.d){applyProject(a.d);setTimeout(()=>toast('Restored last session'),350);}
   }catch(e){}
 })();
+/* PLIB (2026-11-02): "Saved projects…" dialog (Open / Rename / Duplicate / Delete) over the tool's own key smd_saves_v1
+   ({ name: { t, d: project } }), shared/projects.js and shared/projects-ui.js. Display and storage only: Rename / Duplicate move / copy
+   the stored item unchanged; Open is the 📁 Saved… drop-down's load path (applyProject). The tool's own Undo / Redo is unchanged.
+   A rename of the open analysis (Project name = the old name) sets Project name to the new name, because 💾 Save stores under it. */
+let SMPL=null;
+function smdPlibInit(){
+  if(!window.SharedProjects||!window.SharedProjectsUI||SMPL)return;
+  let ST=null;try{ST=window.localStorage;}catch(e){}
+  const store=SharedProjects.mapStore(ST,LSK,{unpack:i=>i&&i.d,time:i=>i&&i.t||null,sort:'saved'});
+  const dlg=SharedProjectsUI.libraryDialog({store,storage:ST,title:'Saved analyses (this browser)',
+    current:()=>{const n=g('projNm').value.trim();return n&&store.has(n)?n:null;},
+    open:n=>{const d=store.get(n);if(!d)return false;applyProject(JSON.parse(JSON.stringify(d)));toast(`Loaded "${n}"`);return true;},
+    renamed:(a,b)=>{if(g('projNm').value.trim()===a){g('projNm').value=b;readIn();autoSave();}},
+    changed:()=>{refreshSaveList();updateDirty();}});
+  const b=SharedProjectsUI.button('Saved projects…','The analyses saved in this browser: open, rename, duplicate, delete',{cls:'btn btn-s',style:'font-size:11px;padding:4px 8px;white-space:nowrap'});
+  b.addEventListener('click',()=>dlg.show());
+  g('bDl2').insertAdjacentElement('afterend',b);
+  SMPL={store,dlg,b};
+}
+smdPlibInit();
 
 /* ── CASES & COMBINATIONS MANAGER ── */
 function refreshDG(){
