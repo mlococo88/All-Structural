@@ -3355,3 +3355,24 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
   held; the current design still fails DT3/DT7 (narrow flanges).
 ### Other copies
 - None.
+
+## 2026-11-01 — PR: sbd-fat-support-shear — Fatigue shear range at interior supports from one side (found in the final comparison)
+### Finding
+- After D-2 (#579) the imported stud zones of the curb and util seeds failed SC1 (1.285, 1.298) in the new app; GirderDetail's own zone rows
+  say V_f = 60.6 kip there, the new app 109.9 kip. Cause: `ui/fatigue.js fromAnalysis` (and its copy `engine/autodesign.js payloadOf`) set a
+  station's `V_FATpos = max(VRpos, VLpos)`, `V_FATneg = min(VRneg, VLneg)`; at an interior support that is the right side's + and the left
+  side's −, a range across the support no section sees (curb G1, x = 110 ft: 55.13 − (−54.77) = 109.90 kip; one side: 55.13 − (−1.73) =
+  56.86 kip). The stud zones (SC1 V_f = the largest V_FAT,pos − V_FAT,neg in the zone) and the app's own pitch layout took it.
+### Change
+- Both functions: at an interior support station (R.supIdx without the ends) V_FATpos and V_FATneg are taken from the side with the larger
+  range (`vf(i)`); every other station unchanged.
+### §4 callout
+- Provision: AASHTO LRFD 10th Ed. Art. 6.10.10.1.2 and 6.10.10.2 (fatigue pitch, V_sr from the fatigue shear range at the section),
+  3.6.1.4 (fatigue load).
+- Before → after (imported projects, G1, the zone ending at the 110 ft pier): curb V_f 109.90 → 61.07 kip, SC1 1.285 → 0.729 (GirderDetail's
+  stored V_f 60.6); util SC1 1.298 → 0.731; built-in project, the app's own layout: pier-zone pitch 6.5 → 12 in, SC2 0.853 → 0.885 (fewer
+  studs, still passing); xsA pier-zone pitch 8 → 12.5 in. Fatigue details (FA) unchanged on these girders.
+- Hand check (curb G1, x = 110 ft): left side V+ = 1.73, V− = −54.77 → range 56.50; right side V+ = 55.13, V− = −1.73 → 56.86; the larger,
+  56.86 kip, is the station's range (before 109.90).
+### Other copies
+- `engine/autodesign.js payloadOf` (kept the same as ui/fatigue.js fromAnalysis): changed alike.

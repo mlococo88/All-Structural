@@ -87,9 +87,16 @@
     // LL+IM: with the pedestrian load added once (SBDAnalysis.llPL; sb-ped-owner PR). Here only the Strength I envelope that places the stud
     // regions uses it; every fatigue check takes the fatigue truck alone (M_FAT, V_FAT: no pedestrian load, 3.6.1.4 / Table 3.4.1-1)
     const g = P.girders[gi], xs = R.x, st = R.st, f = R.fat, ll = AN.llPL ? AN.llPL(R) : R.ll, q = R.pl, A = (o, i) => (o ? o.M[i] : 0);
+    // V_FAT at an interior support (2026-11-01): both values from one side of the support, the side with the larger range (V_FAT,pos − V_FAT,neg).
+    // Before: the larger positive shear of either side and the more negative of either side, i.e. the right side's + and the left side's −, a
+    // range across the support (about twice a side's: curb G1, x = 110 ft: 55.13 + 54.77 = 109.90 kip vs 55.13 + 1.73 = 56.86 kip), which
+    // no section sees. Elsewhere unchanged.
+    const inner = new Set((R.supIdx || []).slice(1, -1));
+    const vf = i => { if (!inner.has(i)) return [Math.max(f.VRpos[i], f.VLpos[i]), Math.min(f.VRneg[i], f.VLneg[i])];
+      return f.VRpos[i] - f.VRneg[i] >= f.VLpos[i] - f.VLneg[i] ? [f.VRpos[i], f.VRneg[i]] : [f.VLpos[i], f.VLneg[i]]; };
     const stations = xs.map((x, i) => ({ x, M_DC1: st.DC1.M[i], M_DC2: st.DC2.M[i], M_DW: st.DW.M[i], M_LLpos: ll.Mpos[i], M_LLneg: ll.Mneg[i], M_UT: A(st.UT, i), M_UF: A(st.UF, i),
       M_FATpos: f.Mpos[i], M_FATneg: f.Mneg[i], V_DC1: Math.abs(st.DC1.VR[i]), V_DC2: Math.abs(st.DC2.VR[i]), V_DW: Math.abs(st.DW.VR[i]),
-      V_FATpos: Math.max(f.VRpos[i], f.VLpos[i]), V_FATneg: Math.min(f.VRneg[i], f.VLneg[i]), ...(q ? { M_PLpos: q.Mpos[i], M_PLneg: q.Mneg[i] } : {}) }));
+      V_FATpos: vf(i)[0], V_FATneg: vf(i)[1], ...(q ? { M_PLpos: q.Mpos[i], M_PLneg: q.Mneg[i] } : {}) }));
     const zones = g.segments.map(s => ({ startX: s.x0, endX: s.x1, web: { depth: s.D, thickness: s.tw }, topFlange: { width: s.topB, thickness: s.topT }, botFlange: { width: s.botB, thickness: s.botT } }));
     const m = P.materials, d = P.deck, h0 = R.h0, ext = P.girders.find(q => q.position === 'exterior'), beffB = (ext || g).beff;
     const pl = { _schema: 'sbd2-analysis', pedestrianInLL: !!q, stations, member: { supports: R.sup.slice(), spans: R.spans.slice() }, section: { zones },
