@@ -4105,7 +4105,7 @@ function calcSign(inp){
   renderSummary({inp, mode:'sign',
     stacks:postDesigns.map((pd,i)=>({label:'P'+(i+1), found:pd.found, pstress:pd.pstress, nat:pd.nat, b2:pd.b2,
       asd:{...pd.gASD}, lrfd:{...pd.gLRFD},
-      broms:bromsEmbedment(inp, pd.gLRFD.M/1000, pd.gLRFD.P/1000)}))});
+      broms:bromsEmbedment(inp, pd.found.Mu/1000, pd.found.Vu/1000)}))});   // the shaft's B₂-amplified M_u and V_u, as the Shaft tab and report (LTSV-4)
 
   renderSign(inp,sw,pw,allCombos,postDesigns,poleSeg);
 }
