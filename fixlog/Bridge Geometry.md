@@ -1384,3 +1384,57 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **How verified (Tier 0):** `node tests/check-syntax.mjs "Bridge Geometry.html"`: all scripts pass. `node tests/compare.mjs --tool page --file "Bridge Geometry.html"`: page text and storage identical to main (the 4 console errors are the CDN libraries the test kit does not serve, the same on main). Headless payload comparison main vs branch as in the check case (only `producedAt` and the two notes differ).
 - **Other copies:** none.
 - **Open items:** none.
+
+## 2026-11-02 — PR: claude/list-input-bgeo, PR #690: https://github.com/mlococo88/All-Structural/pull/690 — per-span girder offsets are a table with one box per girder; the survey-point paste box shows a table of what was read (LIST)   [display only]
+- **Why:** engineer decision 2026-11-02: no comma-separated inputs; short lists become tables, paste boxes stay with an editable
+  table of what was read next to them (`shared/list-input.js`, `fixlog/shared-list-input.md`, #681).
+- **Where (1):** script tags, anchor `plotly-basic.min.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
+- **Where (2):** `renderSpanTable()`, the girder-offsets cell. **Before:**
+```js
+      <td><input class="ovr${gOver?' edited':''}" data-s="${s}" data-f="girders" value="${ov.girders?ov.girders.join(', '):''}" placeholder="${gGird}" style="width:180px" title="Comma-separated girder offsets for this span. Blank inherits the global set."></td>
+```
+  **After:**
+```js
+      <td style="text-align:left" title="Girder offsets for this span, one per row. No rows = the global set (${gGird}).">${SharedListInput.slot('girders'+s)}</td>
+```
+  The header tooltip says "one per row" instead of "as a comma-separated list".
+- **Where (3):** `renderSpanTable()`, after `h+='</tbody>'; t.innerHTML=h;`: one table per span (`mountSlot(t,'girders'+s,…)`, rows
+  `fromNumbers(ov.girders||[])`, column "Offset (ft)", placeholder "global", class `edited` when the span has its own set). When
+  the focus leaves the table and its text changed, the old parser runs on the rows' text, unchanged:
+```js
+      SPAN_OV[s].girders = v.trim()? v.split(',').map(x=>+x.trim()).filter(x=>!isNaN(x)) : null;
+      renderSpanTable(); if(ENG) compute();
+```
+  (`v = SharedListInput.toText(ctl.get())`, i.e. the rows joined by ", "). The edge-offset listener is limited to
+  `input[data-f]` and its `girders` branch is removed (no input has `data-f="girders"` now). **Before:**
+```js
+  t.querySelectorAll('input').forEach(el=>el.addEventListener('change',e=>{
+    …
+    if(f==='girders') SPAN_OV[s].girders = v.trim()? v.split(',').map(x=>+x.trim()).filter(x=>!isNaN(x)) : null;
+    else SPAN_OV[s][f] = v===''?null:+v;
+```
+  **After:**
+```js
+  t.querySelectorAll('input[data-f]').forEach(el=>el.addEventListener('change',e=>{
+    …
+    SPAN_OV[s][f] = v===''?null:+v;
+```
+  CSS added after `.subtbl input.ovr.edited {…}`: `.subtbl .sli.edited input.sli-in { color: var(--oxide); border-color: var(--oxide); }`.
+- **Where (4):** Site Map, "arbitrary survey points": `<div id="map_ptstbl">` under the `#map_ptsbox` textarea, and
+  `ptsTable()` (after `clearSurveyPoints()`, called after the `map_addpts` listener). The table ("Survey points as read":
+  Name, Northing, Easting, Desc; Easting / Northing swapped in the headers when "Easting,Northing order" is ticked) shows each
+  line split as `plotSurveyPoints()` splits it (`/[,\t]/`). Typing or pasting in the box refreshes the table; a table edit
+  rewrites the box (cells joined by ", ", one point per line), which "Plot points" reads as before. `clearSurveyPoints()`
+  also empties the table (`if(PTS_TBL) PTS_TBL.set([]);`). `plotSurveyPoints()` is unchanged.
+- **Saved data:** `SPAN_OV[s].girders` stays an array of numbers, or null for the global set. The survey points were never
+  saved and still are not. No key or format changed. Round trip: `tests/engine/list-input.test.mjs` (array → rows → text → the
+  old parser → the same array; no rows → null).
+- **Check case:** default project, span 2 offsets typed -15 ↵ -5 ↵ 5 ↵ 15 → `SPAN_OV[2].girders` = [-15, -5, 5, 15], "# Gird" 4,
+  top-of-deck and beam-seat outputs identical to typing "-15, -5, 5, 15" in the old box on origin/main.
+- **How verified:** `node tests/smoke/list-input.mjs --part bgeo`: origin/main vs this branch, default project and the case
+  above: `SPAN_OV`, the stored project, the text of Top of Deck Output, Beam Seat Output and Bridge (the tables' own elements and
+  the span table's header removed) identical; 0 console errors; the survey-point table checks (paste → rows, edit → box,
+  flip → headers, Clear → empty). Screenshots at 1400 and 390 px looked at. At 390 px the page scrolls sideways by 78 px on
+  origin/main already (the tab bar and the fieldsets); unchanged here. `node tests/check-syntax.mjs` passes.
+- **Formulas, factors, units, code references:** none (§4 does not apply).
+- **Open items:** the 78 px sideways scroll at 390 px is older than this change (not fixed here: one task per PR).
