@@ -372,7 +372,7 @@ The PRs:
 
 ### 5.1 Status after LTS-9 (2026-11-02)
 
-All planned steps are merged (#649, #651, #652, #653, #654, #655, #656 and LTS-9). The "in development — not for design" banner stays until the engineer releases the mode. Open items for that decision:
+All planned steps are merged (#649, #651, #652, #653, #654, #655, #656, #657). The "in development — not for design" banner stays until the engineer releases the mode. Open items for that decision:
 - Q-B4 (deflection limits under Service I);
 - Q-B5 (base weld per AWS D1.1 / AISC §J2);
 - Q-C9 / Q-C10 (square/rect. flat width and torsional constant without a corner radius) and the undefined "s" of Table B.3-1;
