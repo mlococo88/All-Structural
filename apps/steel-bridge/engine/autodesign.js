@@ -35,7 +35,8 @@
 (function () {
   'use strict';
   const St = () => window.SharedSteps, OW = () => window.SBDOwners, AN = () => window.SBDAnalysis, FX = () => window.SBDFlexure, FA = () => window.SBDFatigue,
-    CN = () => window.SBDConstr, SP = () => window.SBDSplices, FRM = () => window.SBDFraming, MD = () => window.SBDModel, SEC = () => window.SBDSections;
+    CN = () => window.SBDConstr, SP = () => window.SBDSplices, FRM = () => window.SBDFraming, MD = () => window.SBDModel, SEC = () => window.SBDSections,
+    SPP = () => window.SBDSplicePlace;   // field splice placement (engine/splplace.js, 2026-11-02); absent: the splice variable is Lock only
   const ED = 'AASHTO LRFD 10th Ed.';
   const STEEL = 490 / 144;   // lb/ft of girder per in^2 of steel (0.490 kcf)
   const clone = o => JSON.parse(JSON.stringify(o));
@@ -74,6 +75,8 @@
     s.V = varsOf(P, s); s.ohSym = a.ohSym === 'asym' ? 'asym' : 'sym';   // overhangs: symmetric (default) or left and right sized apart
     // the minimum overhang (ft) Auto and Range may choose (added 2026-11-01, engineer decision: default 2.5 ft; absent or not a number ≥ 0 = 2.5 ft)
     s.ohMin = a.ohMin !== '' && a.ohMin != null && isFinite(+a.ohMin) && +a.ohMin >= 0 ? +a.ohMin : OH_MIN;
+    // the field splice placement rules (added 2026-11-02; P.autodesign.splRules, absent = engine/splplace.js rules(): the owner's or the stated defaults)
+    s.splR = SPP() ? SPP().rules(P, s.lim) : null;
     return s;
   }
 
@@ -97,7 +100,8 @@
     { id: 'bb', grp: 'Flanges', label: 'Bottom flange width b_b', unit: 'in', piece: true, only: ['auto', 'lock', 'range'], note: 'per field piece (constant in a piece)' },
     { id: 'tb', grp: 'Flanges', label: 'Bottom flange thickness t_b', unit: 'in', piece: true, only: ['auto', 'lock', 'range'], note: 'every flange zone of the field piece; Lock keeps the piece\'s zones (cut points and thicknesses) as they are' },
     { id: 'trans', grp: 'Flanges', label: 'Flange transition locations', unit: '', only: ['auto', 'lock'], note: 'Auto: the lightest cut points (the shortest zone, the transitions per piece and the owner\'s minimum saving per transition in the limits); Lock: the current cut points' },
-    { id: 'spl', grp: 'Flanges', label: 'Field splice locations', unit: '', only: ['lock'], note: 'an input Auto design does not size (Spans & framing tab): choosing splice locations needs shipping-length and erection rules the engine does not have' },
+    { id: 'spl', grp: 'Flanges', label: 'Field splice locations (splices per span)', unit: 'per span', int: true, span: true, only: ['auto', 'lock', 'range'], dflt: () => 'lock',
+      lockIf: P => !SPP() ? 'engine/splplace.js is not loaded: Lock only' : '', note: 'default Lock (the stations entered on the Spans & framing tab). Auto (New design): the old app\'s rule (at the permanent-load points of contraflexure next to each interior support, AASHTO LRFD 10th Ed. 6.13.6.1.3a; simple spans: the girder ends at the piers, a span longer than the shipping length in an odd number of equal pieces or, MassDOT 3.6.5.3, at its quarter points; pieces over the shipping length or weight divided), and the layout with one splice fewer where the rules allow; Range: min … max splices in each span (or per span) and station windows; every layout kept to the placement rules below (shipping length and weight, minimum piece, distance from bearings, cross-frames and flange transitions)' },
     { id: 'splPl', grp: 'Details', label: 'Field splice plates and bolts', unit: '', only: ['auto', 'lock'], dflt: P => P.splices && P.splices.auto === false ? 'lock' : 'auto', note: 'Auto: the Field splices tab\'s own auto-design of each splice (engine/splices.js); Lock: the plates entered there' },
     { id: 'tsSp', grp: 'Details', label: 'Transverse stiffener spacing d_o/D', unit: '', only: ['auto', 'lock', 'range'], lockIf: P => !tsUniform(P) ? 'the Stiffeners tab sets the spacing per bay, or the web is unstiffened: Lock only' : '', note: 'uniform d_o/D; Auto: the widest of 3.0, 2.5, 2.0, 1.75, 1.5, 1.25, 1.0, 0.75, 0.5 that passes the shear checks (6.10.9), TS4 and TS5' },
     { id: 'tsA_b', grp: 'Details', label: 'Intermediate stiffener width b_t', unit: 'in', only: ['auto', 'lock', 'range'], note: 'type A: with t_p, the least plate area passing TS1–TS3 and TS8 (6.10.11.1); its weld the Table 6.13.3.4-1 minimum (TS7) and the cutoff within 4t_w–6t_w (TS6)' },
@@ -121,11 +125,12 @@
     const one = (V, e, base) => { let mode = e && ['auto', 'lock', 'range'].includes(e.mode) ? e.mode : base ? base.mode : (V.dflt ? V.dflt(P) : 'auto'), forced = V.lockIf ? V.lockIf(P) : '';
       if (forced || V.only.length === 1) { mode = 'lock'; forced = forced || V.note; }
       if (!V.only.includes(mode)) mode = V.only[0];
-      if ((V.id === 'nb' || V.id === 'D' || V.id === 'trans' || V.id === 'oh') && s.mode === 'refine') { mode = 'lock'; forced = 'Refine current design keeps the layout'; }
+      if ((V.id === 'nb' || V.id === 'D' || V.id === 'trans' || V.id === 'oh' || V.id === 'spl') && s.mode === 'refine') { mode = 'lock'; forced = 'Refine current design keeps the layout'; }
+      if (V.id === 'spl' && s.mode === 'check') { mode = 'lock'; forced = 'Check one change: the field splices as entered'; }
       if ((V.id === 'nb' || V.id === 'D' || V.id === 'oh') && s.mode === 'check') { mode = 'lock'; forced = 'Check one change: N_b and D as the change sets them'; }
       const src = e && e.mode ? e : base || {};
-      return { mode, min: num(src.min), max: num(src.max), step: num(src.step), forced }; };
-    VARS.forEach(V => { out[V.id] = one(V, a[V.id]); if (V.piece) Object.keys(a).filter(k => k.startsWith(V.id + '#')).forEach(k => { out[k] = one(V, a[k], out[V.id]); }); });
+      return { mode, min: num(src.min), max: num(src.max), step: num(src.step), forced, ...(V.span ? { win: String(src.win || '') } : {}) }; };
+    VARS.forEach(V => { out[V.id] = one(V, a[V.id]); if (V.piece || V.span) Object.keys(a).filter(k => k.startsWith(V.id + '#')).forEach(k => { out[k] = one(V, a[k], out[V.id]); }); });
     return out;
   }
   /* the bounds of a plate variable for field piece k (0-based): the piece's own entry, else the variable's */
@@ -155,6 +160,15 @@
     xs.slice(1).forEach((x, i) => { const m = (xs[i] + x) / 2, w = at(L.web, m), t = at(L.top, m), b = at(L.bot, m); if (x - xs[i] < 1e-6) return;
       out.push({ x0: xs[i], x1: x, D: L.D, tw: w.tw, topB: t.b, topT: t.t, botB: b.b, botT: b.t }); });
     return merge(out, ['D', 'tw', 'topB', 'topT', 'botB', 'botT']);
+  }
+  /* relayout(L0, spl): layout L0 with other field splices (Auto design, the splice variable; 2026-11-02): the web pieces cut at the new
+     splices (each piece's t_w the thickest of L0 over it), the flange zones of L0 cut at them (their cut points kept). The per-piece plate
+     variables (id#k) then mean piece k of this layout. */
+  function relayout(L0, spl) {
+    const Lt = L0.web[L0.web.length - 1].x1, segs = segmentsOf(L0), pcs = piecesOf(spl, Lt);
+    const web = pcs.map(p => ({ ...p, tw: Math.max(...segs.filter(z => z.x1 > p.x0 + 1e-6 && z.x0 < p.x1 - 1e-6).map(z => +z.tw)) }));
+    const cut = list => { const out = []; pcs.forEach(p => list.forEach(z => { const a = Math.max(z.x0, p.x0), b = Math.min(z.x1, p.x1); if (b > a + 1e-6) out.push({ x0: a, x1: b, b: z.b, t: z.t }); })); return merge(out, ['b', 't']); };
+    return { ...L0, spl: spl.slice(), web, top: cut(L0.top), bot: cut(L0.bot) };
   }
   /* projectWith(P, L): a copy of the project with layout L on every plate girder; a new girder count spaces the girders equally over the same
      out-to-out girder width (Σ bays) and gives each plate girder the tributary b_eff of AASHTO LRFD 10th Ed. 4.6.2.6.1 (interior: the spacing;
@@ -485,6 +499,10 @@
     const okItems = (C, ids, re) => (C || []).every(c => !ids.includes(c.id) || c.items.every(it => (re && !re.test(String(it.loc || ''))) || (OKST.includes(it.st) && !(it.r > 1 + 1e-9))));
     const segs = Q.girders.flatMap(g => g.segments), twMax = Math.max(...segs.map(s => +s.tw)), twMinG = Math.min(...segs.map(s => +s.tw)), tfMaxG = Math.max(...segs.flatMap(s => [+s.topT, +s.botT]));
     // field splice plates and bolts: the Field splices tab's own auto-design
+    // the splice variable moved the stations (Auto / Range, 2026-11-02): the auto-design at the new stations even with the plates Locked
+    // (engine/splices.js uses entered plates only at their own stations, so those kept at unchanged stations are still used as entered)
+    const splNow = ((Q.framing || {}).splices || []).map(Number), splMoved = ctx && ctx.L0 && splNow.length && JSON.stringify(splNow) !== JSON.stringify(ctx.L0.spl.map(Number));
+    if (V.splPl.mode !== 'auto' && splMoved) { Q.splices = Q.splices || M.defaultSplices(); if (Q.splices.auto === false) { Q.splices.auto = true; rows.push({ id: 'splPl', label: 'Field splice plates and bolts', value: 'auto-design at the new stations', how: 'the splice variable moved the stations: the Field splices tab\'s auto-design there (plates entered at an unchanged station kept)' }); } }
     if (V.splPl.mode === 'auto' && ((Q.framing || {}).splices || []).length) { Q.splices = Q.splices || M.defaultSplices(); if (Q.splices.auto === false) { Q.splices.auto = true; rows.push({ id: 'splPl', label: 'Field splice plates and bolts', value: 'auto-design', how: 'the Field splices tab\'s auto-design (engine/splices.js) of each splice' }); } }
     // cross-frames: the angle (one for the top chord, bottom chord and diagonals), and where a check needs it the frame type (X, K) and the bolts per
     // member end; the current type and bolt count first, then the others (the owner rules of CF10 / CF11: RIDOT X or K by S/d, CTDOT 4 bolts, SB2 C-24)
@@ -608,10 +626,31 @@
     const T = ((P.stiffeners || {}).bearing || {}).types || {}, sup = supsOf(P), n = sup.length - 1, cont = P.spans.continuity !== 'simple' && n > 1;
     return (p, tw) => Math.max(0, ...sup.map((x, k) => { if (x < p.x0 - 1e-6 || x > p.x1 + 1e-6) return 0; const end = k === 0 || k === n || !cont, t = T[end ? 'A' : 'B']; return t && +t.bt > 0 ? 2 * +t.bt + tw : 0; }));
   }
+  /* ---------- the field splice variable (Auto / Range; 2026-11-02, engine/splplace.js) ---------- */
+  /* framesOf(Q): the own stations of the intermediate cross-frames of each girder line of project Q (engine/framing.js), or null */
+  function framesOf(Q) { if (!FRM() || !Q.framing) return null; const C = FRM().compute(Q); if (!C || (C.errors && C.errors.length)) return null;
+    return C.FR.girders.map(g => g.pts.filter(q => q.f && q.f.type === 'int').map(q => +q.s)); }
+  /* splCheck(P, S, L, Q): the placement rules for layout L's splices on its plates (piece length and weight, distance from bearings, from
+     the flange transitions of L and, with Q (the project being checked), from its cross-frames) */
+  function splCheck(P, S, L, Q) {
+    const segs = segmentsOf(L); return SPP().check(P, L.spl, S.splR, { segs, allow: +((P.xs || {}).allow) || 0, trans: SPP().transitions(segs, L.spl), frames: Q ? framesOf(Q) : null });
+  }
+  /* splPlan(P, S, ctx, L0): the splice layouts to size (Auto / Range): the points of contraflexure from the analysis of the current design
+     (the first interior plate girder, else the first; the screen's live-load reference, the dead loads exact), the old app's rule (reference),
+     the layouts of the variable (layouts), the worked steps. Returns { gl, cf, ref, lays, steps, err } */
+  function splPlan(P, S, ctx, L0) {
+    const Sp = SPP(), gi = Math.max(0, P.girders.findIndex(g => g.position === 'interior')), gl = P.girders[gi].label || P.girders[gi].id;
+    const R = withLL(ctx, true, () => AN().analyzeGirder(P, gi)); if (R.errors && R.errors.length) return { gl, err: R.errors.join(' '), lays: [], steps: [] };
+    const Ru = S.splR, cf = Sp.contraflexure(R), segs0 = segmentsOf(L0), allow = +((P.xs || {}).allow) || 0, ref = Sp.reference(P, cf, Ru, segs0, allow);
+    const trans = S.V.trans.mode === 'lock' ? Sp.transitions(segs0, L0.spl) : [];
+    const frames = spl => framesOf(projectWith(P, relayout(L0, spl)));
+    const lays = Sp.layouts(P, { cf, ref, Ru, cur: L0.spl, q: S.V.spl, qk: k => S.V[`spl#${k + 1}`] || S.V.spl, segs: segs0, allow, frames, trans });
+    return { gl, cf: cf.pts, ref, lays, steps: Sp.placeSteps(P, cf, ref, Ru, gl) };
+  }
   /* design(P, S, base, ctx): the ratio-driven sizing of one girder count and depth (generator; each yield is one screen trial).
      base: { nb, D, refine (keep zones), minLines (1 for the single-gage-line variant, else null) }. Returns the converged layout and its screen. */
   function* design(P, S, base, ctx) {
-    const lim = S.lim, L0 = ctx.L0, Lt = supsOf(P)[P.spans.lengths.length], spl = L0.spl, D = base.D, nl = base.minLines || minLinesOf(P);
+    const lim = S.lim, L0 = base.L0 || ctx.L0, Lt = supsOf(P)[P.spans.lengths.length], spl = L0.spl, D = base.D, nl = base.minLines || minLinesOf(P);   // base.L0: a splice layout of Auto / Range (relayout)
     const xs = AN().grid(P.spans.lengths.map(Number)).xs;
     let web = webVars(L0.web.map(p => ({ ...p, tw: up(Math.max(lim.twMin, D / 150, base.refine ? p.tw : Math.min(p.tw, D / 150 + 0.25)), lim.twInc) })), L0, S);
     const zLock = base.refine || S.V.trans.mode === 'lock';
@@ -626,7 +665,9 @@
       E = evaluate(Q, { level: 'screen', ctx }); if (ctx.trace) ctx.trace.push({ it, L: clone(L), ratio: E.ratio, gov: E.gov });
       yield { msg: `N_b = ${L.nb}, D = ${D} in${base.minLines === 1 ? ', 1 gage line' : ''}: trial ${it + 1}, governing ${E.gov ? E.gov.r.toFixed(3) : '—'}` };
       // the proportion limits drive plates too: Iyc/Iyt out of range raises the smaller flange, D/t_w the web (through the minimums above)
-      const pass = E.pass && pr.ok, sig = sigOf(L);
+      // a splice layout of Auto / Range (2026-11-02): its piece lengths and weights on these plates, and the flange transitions clear of the splices
+      const sc = base.spl ? splCheck(P, S, L, null) : null;
+      const pass = E.pass && pr.ok && (!sc || sc.ok), sig = sigOf(L);
       if (pass && (!best || lineWeight(L) < lineWeight(best.L) - 1e-6)) { best = { L: clone(L), E, pr }; stall = 0; } else if (best) stall++;
       if ((pass && sig === prev) || stall >= 2 || (!pass && sig === prev)) break;   // no change left to make (every plate held by a lock or a range): stop
       prev = sig;
@@ -710,24 +751,31 @@
     yield { f: 0.01, msg: 'Live load on the current stiffness (the screen reference)…' };
     const E0 = evaluate(P, { level: 'screen', ctx });
     const cur = { L: L0, E: E0, cost: costOf(L0, S, E0.nStiff) };
+    // the field splice variable (New design, Auto or Range; 2026-11-02): the splice layouts to size, each a dimension of the trial list. Lock
+    // (the default): none, every trial on the project's splices exactly as before
+    let SL = null;
+    if (S.mode === 'new' && SPP() && S.V.spl.mode !== 'lock') { yield { f: 0.02, msg: 'Field splice placement (permanent-load points of contraflexure, shipping rules)…' }; SL = splPlan(P, S, ctx, L0); S.splPlan = SL;
+      if (!SL.lays.length) return { S, cands: [], blocked: [], blockers: [], rejected: [], screened: [], current: { ...cur, mods: [] }, spl: SL,
+        note: `No field splice layout meets the placement rules (${SL.err || `shipping length ${S.splR.shipLen} ft, minimum piece ${S.splR.minLen} ft, ${S.splR.minSup} ft from bearings, ${S.splR.minXf} ft from cross-frames, ${S.splR.minTr} ft from transitions`}${S.V.spl.mode === 'range' ? ', with the counts and windows of the Range' : ''}). Widen the Range or change the rules.` }; }
+    const SLs = SL ? SL.lays : [null], splOf = j => j && j.spl ? { spl: j.spl, si: j.si, L0: j.L0 } : {};
     // the trial list: girder counts × depths (coarse, then around the best), both splice gage-line choices where they differ
     let jobs = [];
-    const nl0 = minLinesOf(P), lines = [null], oneLine = !!(P.framing && (P.framing.splices || []).length && nl0 > 1);   // the 1-gage-line variant: added after a design whose splice widths the bolt fit raised
+    const nl0 = minLinesOf(P), lines = [null], oneLine = !!(((P.framing && (P.framing.splices || []).length) || (SL && SL.lays.some(l => l.spl.length))) && nl0 > 1);   // the 1-gage-line variant: added after a design whose splice widths the bolt fit raised
     if (S.mode === 'refine') jobs = lines.map(ml => ({ nb: L0.nb, D: L0.D, refine: true, minLines: ml }));
     else if (S.mode === 'check') { const nb = +S.change.nb >= 2 ? Math.round(+S.change.nb) : L0.nb, D = +S.change.D > 0 ? +S.change.D : L0.D; jobs = lines.map(ml => ({ nb, D, refine: nb === L0.nb, minLines: ml })); }
-    else { const DL = depthList(P, S, L0); nbList(P, S).forEach(nb => DL.coarse.forEach(D => lines.forEach(ml => jobs.push({ nb, D, minLines: ml, coarse: true, maxIt: 5 })))); ctx.DL = DL; }
+    else { const DL = depthList(P, S, L0); nbList(P, S).forEach(nb => DL.coarse.forEach(D => lines.forEach(ml => SLs.forEach((ly, si) => jobs.push({ nb, D, minLines: ml, coarse: true, maxIt: 5, ...(ly ? { spl: ly.spl, si, L0: relayout(L0, ly.spl) } : {}) }))))); ctx.DL = DL; }
     // the overhang of each girder count (when the overhang variable is not locked: New design)
     ctx.ohOf = new Map(); if (S.mode === 'new') for (const nb of [...new Set(jobs.map(j => j.nb))]) { const it = pickOh(P, S, nb, ctx); let s; while (!(s = it.next()).done) yield { f: 0.04, msg: s.value.msg }; if (s.value) ctx.ohOf.set(nb, s.value); }
     const done = new Map(), total = () => jobs.length + 1; let k = 0;
-    const runJob = function* (j) { const id = JSON.stringify([j.nb, j.D, j.minLines, !!j.refine, !!j.coarse]); if (done.has(id)) return done.get(id);
+    const runJob = function* (j) { const id = JSON.stringify([j.nb, j.D, j.minLines, !!j.refine, !!j.coarse, ...(j.spl ? [j.spl] : [])]); if (done.has(id)) return done.get(id);
       let r = yield* design(P, S, j, ctx); if (r.pass && !j.coarse && opt.trimTries !== 0) r = yield* trim(P, S, r, ctx, opt.trimTries || 6);
       const res = { job: j, L: r.L, E: r.E, pass: r.pass, cost: costOf(r.L, S, r.E ? r.E.nStiff : 0) }; done.set(id, res); out.push(res);
       return res; };
     for (let i = 0; i < jobs.length; i++) { const j = jobs[i]; const it = runJob(j); let s; while (!(s = it.next()).done) yield { f: 0.05 + 0.6 * (k + i / jobs.length) / Math.max(1, total()), msg: s.value.msg }; }
     if (S.mode === 'new' && ctx.DL) {   // around the best depth of each girder count: every depth increment within half a coarse step
       const extra = []; nbList(P, S).forEach(nb => out.filter(o => o.pass && o.job.nb === nb).sort((a, b) => key(a) - key(b)).slice(0, 2).forEach(ok => {   // around the two best coarse depths
-        extra.push({ nb, D: ok.L.D, minLines: null });   // the coarse depth again, sized fully and trimmed
-        if (!ctx.DL.locked) for (let D = ok.L.D - ctx.DL.step / 2; D <= ok.L.D + ctx.DL.step / 2 + 1e-9; D += Math.max(ctx.DL.inc, ctx.DL.step / 4)) { const Dr = r4(up(D, ctx.DL.inc)); if (Dr >= ctx.DL.lo - 1e-9 && Dr <= ctx.DL.hi + 1e-9) lines.forEach(ml => extra.push({ nb, D: Dr, minLines: ml })); } }));
+        extra.push({ nb, D: ok.L.D, minLines: null, ...splOf(ok.job) });   // the coarse depth again, sized fully and trimmed
+        if (!ctx.DL.locked) for (let D = ok.L.D - ctx.DL.step / 2; D <= ok.L.D + ctx.DL.step / 2 + 1e-9; D += Math.max(ctx.DL.inc, ctx.DL.step / 4)) { const Dr = r4(up(D, ctx.DL.inc)); if (Dr >= ctx.DL.lo - 1e-9 && Dr <= ctx.DL.hi + 1e-9) lines.forEach(ml => extra.push({ nb, D: Dr, minLines: ml, ...splOf(ok.job) })); } }));
       for (let i = 0; i < extra.length; i++) { const it = runJob(extra[i]); let s; while (!(s = it.next()).done) yield { f: 0.45 + 0.25 * i / Math.max(1, extra.length), msg: s.value.msg }; }
     }
     // the 1-gage-line variant of the best designs whose splice flange widths the bolt fit raised (DT10): the objective then picks
@@ -751,6 +799,7 @@
         Q = projectWith(P, o.L);
         if (opt.details !== false) { const itD = sizeDetails(Q, S, ctx); let sD; while (!(sD = itD.next()).done) yield { f: 0.7 + 0.29 * i / Math.max(1, Math.min(pool.length, S.topN + 2)), msg: `Full check ${i + 1}: sizing the details — ${sD.value.msg}` }; det = sD.value; Q = det.Q; }
         E = evaluate(Q, { level: 'full', ctx }); pr = proportions(o.L, Q, S);
+        if (o.job && o.job.spl) { const sc = splCheck(P, S, o.L, Q); o = { ...o, splC: sc }; if (!sc.ok) E = { ...E, pass: false, fails: [...E.fails, ...sc.items.filter(q => !q.ok).map(q => ({ mod: 'splice placement', id: q.id, title: q.what, r: q.r, x: q.x }))] }; }
         if ((E.pass && pr.ok) || !E.fails.some(plateCk) || pol >= 2 || opt.polish === false) break;
         const ctx2 = { L0: o.L, maxIt: 6, ll: new Map() }, it2 = design(P, S, { nb: o.L.nb, D: o.L.D, refine: true, minLines: o.L.minLines }, ctx2); let s2;
         while (!(s2 = it2.next()).done) yield { f: 0.7 + 0.29 * i / Math.max(1, Math.min(pool.length, S.topN + 2)), msg: `Full check ${i + 1}: resizing with the live load on its own stiffness — ${s2.value.msg}` };
@@ -758,7 +807,7 @@
         let r2 = s2.value; if (opt.trimTries !== 0) { const it3 = trim(P, S, r2, ctx2, 4); let s3; while (!(s3 = it3.next()).done) yield { f: 0.7 + 0.29 * i / Math.max(1, Math.min(pool.length, S.topN + 2)), msg: `Full check ${i + 1}: ${s3.value.msg}` }; r2 = s3.value; }
         o = { ...o, L: r2.L, E: r2.E, cost: costOf(r2.L, S, r2.E.nStiff), polished: pol + 1 };
       }
-      if (E.pass && pr.ok) { cands.push({ ...cand(o, E, S, P, det), polished: o.polished || 0 }); continue; }
+      if (E.pass && pr.ok) { cands.push({ ...cand(o, E, S, P, det), polished: o.polished || 0 }); continue; }   // (a splice layout's placement rules are in E above)
       const fl = E.fails.map(f => ({ mod: f.mod, id: f.id, title: f.title, r: f.r, x: f.x, gl: f.gl })), ck = curKeys();
       if (pr.ok && fl.length && fl.every(f => !plateCk(f) && ck.has(fkey(f)))) blocked.push({ ...cand(o, E, S, P, det), blockers: [...new Set(fl.map(f => `${f.mod} ${f.id}`))], fails: fl.slice(0, 6) });
       else rejected.push({ L: o.L, cost: o.cost, fails: fl.slice(0, 6), pr: pr.ok, notes: det ? det.notes : [] });
@@ -773,7 +822,7 @@
     const note = !cands.length && blockers.length ? `No candidate passes every module: detail checks that fail in the current design too, whatever the plates, block them (${blockers.join(', ')}). Fix those inputs (their tabs), then run again; the designs below pass everything else.`
       : !cands.length && out.some(o => o.pass) ? `No candidate passes the full check${lk ? ` with these locks and ranges (${lk})` : ''}: governing ${rej0 && rej0.fails[0] ? govS(rej0.fails[0]) : '—'}${rej0 && rej0.notes && rej0.notes.length ? '. ' + rej0.notes.join(' ') : ''}. See the dropped list (a detail check, such as a splice, stud or cross-frame, may fail whatever the plates).`
       : !cands.length ? `No candidate passes${lk ? ` with these locks and ranges (${lk})` : ' the screen within the limits'}: governing ${bestScr ? govS(bestScr.E.gov) : '—'}${bestScr ? ` (the best design screened: N_b = ${bestScr.L.nb}, D = ${bestScr.L.D} in)` : ''}. Unlock or widen ${lk ? 'a variable' : 'the depth range or the limits'}.` : '';
-    return { S, cands, blocked, blockers, rejected, screened: out.map(o => ({ nb: o.L.nb, D: o.L.D, minLines: o.L.minLines, pass: o.pass, w: o.cost.w, cost: o.cost.total, ratio: o.E ? o.E.ratio : null })), current: { ...cur, full: fullCur || curFull, mods: modList((fullCur || curFull || {}).modGov) }, note };
+    return { S, cands, blocked, blockers, rejected, screened: out.map(o => ({ nb: o.L.nb, D: o.L.D, minLines: o.L.minLines, pass: o.pass, w: o.cost.w, cost: o.cost.total, ratio: o.E ? o.E.ratio : null, spl: o.L.spl })), current: { ...cur, full: fullCur || curFull, mods: modList((fullCur || curFull || {}).modGov) }, note, ...(SL ? { spl: SL } : {}) };
   }
   /* the locked and ranged variables, as text (the infeasible note) */
   function lockText(S) {
@@ -785,7 +834,8 @@
     const Q = projectWith(P, o.L), pr = proportions(o.L, Q, S), c = costOf(o.L, S, E.nStiff), g = E.gov;
     const bf = o.L.spl.length ? [St().step({ id: 'ad.bolt', label: `Flange width for ${o.L.minLines || minLinesOf(P)} gage line(s) each side of the web at the field splices (DT10; owner edge distance)`, sym: 'b_{f,spl}', eq: '2(g_{0} + (n_{l} - 1)g + e_{min})', sub: '', value: Math.max(...o.L.web.map(p => boltFitWidth(P, p.tw, o.L.minLines || minLinesOf(P)))), unit: 'in', d: 2, ref: 'engine/splices.js autoDesign (DT10)' })] : [];
     return { L: o.L, segments: segmentsOf(o.L), cost: c, nb: o.L.nb, D: o.L.D, nTr: c.nTr, nSpl: c.nSpl, ratio: E.ratio, gov: g ? { mod: g.mod, id: g.id, title: g.title, r: g.r, x: g.x, gl: g.gl, step: g.step, tab: g.tab } : null,
-      warns: E.warns.slice(0, 10), minLines: o.L.minLines, steps: candSteps(o.L, S, c, [...pr.steps, ...bf]), prop: pr.ok, mods: modList(E.modGov),
+      warns: E.warns.slice(0, 10), minLines: o.L.minLines, steps: candSteps(o.L, S, c, [...pr.steps, ...bf, ...(o.job && o.job.spl && S.splPlan ? [...S.splPlan.steps, ...(o.splC ? o.splC.steps : [])] : [])]), prop: pr.ok, mods: modList(E.modGov),
+      ...(o.job && o.job.spl && S.splPlan ? { spl: { how: (S.splPlan.lays[o.job.si] || {}).how || '', ref: S.splPlan.ref.spl, chk: o.splC ? o.splC.items : null } } : {}),
       det: det ? { inputs: Object.fromEntries(DET_KEYS.filter(k => det.Q[k] !== undefined).map(k => [k, clone(det.Q[k])])), rows: det.rows, notes: det.notes } : null };
   }
 
@@ -808,5 +858,5 @@
   }
   function undo(P) { const u = P.autodesign && P.autodesign.undo; if (!u) return null; const Q = clone(P); Object.assign(Q, clone(u)); Object.keys(u).forEach(k => { if (u[k] === null) delete Q[k]; }); delete Q.autodesign.undo; delete Q.autodesign.applied; return Q; }
 
-  window.SBDAutoDesign = { DEF, STEEL, VARS, DET_KEYS, APPLY_KEYS, ohLimit, ohCands, pickOh, varsOf, sizeDetails, lockText, settings, layoutOf, segmentsOf, projectWith, lineWeight, transitions, costOf, proportions, boltFitWidth, payloadOf, evaluate, sizeFlanges, design, trim, run, runChunked, apply, undo, depthList, nbList };
+  window.SBDAutoDesign = { relayout, splPlan, splCheck, framesOf, DEF, STEEL, VARS, DET_KEYS, APPLY_KEYS, ohLimit, ohCands, pickOh, varsOf, sizeDetails, lockText, settings, layoutOf, segmentsOf, projectWith, lineWeight, transitions, costOf, proportions, boltFitWidth, payloadOf, evaluate, sizeFlanges, design, trim, run, runChunked, apply, undo, depthList, nbList };
 })();

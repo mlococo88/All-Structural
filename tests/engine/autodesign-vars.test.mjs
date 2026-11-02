@@ -18,7 +18,7 @@ import { loadShared, test, ROOT, plain } from './harness.mjs';
 const E = p => path.join(ROOT, 'apps/steel-bridge', p);
 const W = loadShared('units.js', 'steps.js', 'lldf.js', 'vehicles.js', 'moving-load.js', ...['engine/model.js', 'engine/sections.js', 'engine/flexure.js', 'engine/owners.js', 'engine/lldf.js', 'engine/loads.js',
   'engine/shear.js', 'engine/stiffeners.js', 'engine/analysis.js', 'engine/fatigue.js', 'engine/studs.js', 'engine/framing.js', 'engine/crossframes.js', 'engine/constructibility.js', 'engine/splices.js', 'engine/rating.js', 'engine/welds.js',
-  'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/welds.js', 'ui/constructibility.js', 'engine/autodesign.js'].map(E));
+  'ui/shear.js', 'ui/fatigue.js', 'ui/framing.js', 'ui/splices.js', 'ui/flexure.js', 'ui/rating.js', 'ui/welds.js', 'ui/constructibility.js', 'engine/splplace.js', 'engine/autodesign.js'].map(E));
 const AD = W.SBDAutoDesign, M = W.SBDModel, J = o => JSON.parse(JSON.stringify(o));
 const near = (a, b, tol, what) => assert.ok(Math.abs(a - b) <= tol, `${what}: ${a} vs ${b}`);
 const runAD = (P, settings) => { const it = AD.run(P, { settings, maxIt: 5, trimTries: 2 }); let s; while (!(s = it.next()).done); return s.value; };
@@ -36,10 +36,11 @@ test('Saved data: a project without autodesign.vars round-trips unchanged and re
   // the defaults follow the tabs' own "automatic" switches: entered stud zones, an entered weld size, splice auto-design off → Lock
   const Q = J(P); Q.studs = { ...M.defaultStuds(), zones: [{ x1: 0, x2: 110, nr: 3, p: 12 }] }; Q.welds = { ...M.defaultWelds(), w: 0.3125 }; Q.splices = { ...M.defaultSplices(), auto: false };
   const S2 = AD.settings(Q); ['scP', 'scN', 'weld', 'splPl'].forEach(id => assert.equal(S2.V[id].mode, 'lock', id));
-  // entries as saved: a variable, a field piece's own entry (overrides the variable there), a Lock-only variable stays locked
+  // entries as saved: a variable, a field piece's own entry (overrides the variable there); the splice variable offers Auto since 2026-11-02
+  // (before: Lock only, and the table showed no selector for it, so no saved project has spl: auto from the page)
   Q.autodesign = { mode: 'new', vars: { tb: { mode: 'range', min: 1, max: 2 }, 'tb#3': { mode: 'lock' }, spl: { mode: 'auto' }, D: { mode: 'range', min: 60, max: 72, step: 2 } } };
   const S3 = AD.settings(Q);
-  assert.equal(JSON.stringify([S3.V.tb.mode, S3.V.tb.min, S3.V.tb.max, S3.V['tb#3'].mode, S3.V.spl.mode, S3.V.D.step]), JSON.stringify(['range', 1, 2, 'lock', 'lock', 2]));
+  assert.equal(JSON.stringify([S3.V.tb.mode, S3.V.tb.min, S3.V.tb.max, S3.V['tb#3'].mode, S3.V.spl.mode, S3.V.D.step]), JSON.stringify(['range', 1, 2, 'lock', 'auto', 2]));
   const DL = AD.depthList(Q, S3, AD.layoutOf(Q)); assert.equal(DL.lo, 60); assert.equal(DL.hi, 72); assert.ok(DL.coarse.every(D => D % 2 === 0 && D >= 60 && D <= 72));
   Q.autodesign.vars.nb = { mode: 'range', min: 4, max: 6 }; assert.equal(JSON.stringify(AD.nbList(Q, AD.settings(Q))), '[4,5,6]');
   Q.autodesign.vars.nb = { mode: 'lock' }; assert.equal(JSON.stringify(AD.nbList(Q, AD.settings(Q))), '[5]');
