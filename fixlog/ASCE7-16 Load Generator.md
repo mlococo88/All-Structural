@@ -1106,3 +1106,28 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 
 ### How verified (no computed result, saved key or hand-off changed)
 - origin/main vs this branch, headless Chromium, file://: the page text (`innerText`) at 1280 px on load and on all 13 output tabs, the whole-document `textContent` (425,382 chars) and localStorage after load are identical. Screenshots at 900 and 1280 px are pixel-identical (0 differing pixels) on load and on all 13 tabs.
+
+## 2026-11-02 — PR: [#664](https://github.com/mlococo88/All-Structural/pull/664) — PLIB: saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo   [display and storage only]
+- **Before:** Project tab → Project Files: Save (by name) / Load / Delete in `asce7bldg.projects`, Export / Import JSON, Reset. No rename, no
+  duplicate, no undo.
+- **Where:**
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - `autosave()`, anchor `saveTimer=setTimeout(()=>{ try{ localStorage.setItem(LSA`: before `},350);` added
+    `if(window.A7PL) A7PL.h.record(); /* PLIB: one undo step per change */` (the step is taken with the debounced autosave, so typing a
+    number is one step).
+  - a new `<script>` after the INIT script (anchor `/* PLIB (2026-11-02): saved-project list and Undo / Redo`): on DOMContentLoaded it makes
+    `SharedProjects.history` over `snapshot()` without the view fields `tab`, `itab`, `open`, `manPart` (changing a tab or folding a panel is
+    not a step; Undo keeps the tab you are on), `set` = `restore()` of the snapshot with the current view fields; `mapStore(localStorage,
+    LSK)` (the tool's own key and format `{ name: snapshot() }`); a "Saved projects (this browser)" dialog (`open` = `doLoad(name)`, the
+    Save-as name follows a rename, the Project Files list is redrawn after every change); buttons Undo, Redo, Saved projects… in a row at the
+    bottom of `#tbactions` (title bar). `window.A7PL = { h, store, dlg }`.
+- **Saved data:** keys `asce7bldg.autosave` and `asce7bldg.projects` and their formats unchanged; no new key. Opening a saved project,
+  Import JSON and Reset are one undo step each.
+- **How verified:** `node tests/smoke/project-library.mjs --tool asce7`: ALL PASS. `R` (every computed result) and the output text are
+  identical to origin/main on load and after an input change (Geometry L_x +7 ft); the branch opened on main's autosave and main's
+  project list gives main's results and leaves the list byte-identical; main's saved project opens from the dialog with the same results;
+  Undo / Redo / Ctrl+Z / Ctrl+Y return exactly the results before / after the change (an output-tab change between them is not a step);
+  rename / duplicate / delete in the dialog (items byte-identical, other keys unchanged); a refused write shows the message and leaves
+  storage byte-identical; 390 px dialog does not scroll sideways; no console errors beyond main's.
+  `node tests/engine/run.mjs projects`: 8 passed. `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
