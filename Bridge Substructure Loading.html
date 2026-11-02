@@ -162,6 +162,7 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
   .hdr-group .btn { padding: 5px 8px; font-size: .8rem; }
   .brand-sub { display: none; }
   header { height: auto; padding: 8px 10px; flex-wrap: wrap; }
+  .hdr-group { flex-wrap: wrap; min-width: 0; }   /* PHN (2026-11-02): the header buttons wrap instead of widening the page */
 }
 @media print {
   header, .strip, .side, .tab-bar, #flash { display: none !important; }

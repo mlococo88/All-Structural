@@ -2094,3 +2094,26 @@ index b034f69..a6aaa23 100644
 +        subs.push({ title: 'Wind on the substructure components', items: [slrTopics('w' + k, Wt, { title: 'Worked steps' }), { type: 'note', text: 'Pressure P_z on each component, resolved on the unit skew into H_n and H_t (the projected-area option uses the projected area); as on the ' + slrTab('wind', k) + '.' }] }); }
 +    }
 ```
+
+## 2026-11-02 — PR: claude/phone-print-bsl — Phone / tablet: the header buttons wrap (PHN; display only, no calculation change)
+
+Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Code site tagged `PHN`.
+
+### PHN-1. Header buttons wrap below 900 px   [display only]
+- **Problem:** `.hdr-group { display: flex; gap: 6px; flex-wrap: nowrap; }` keeps the nine header buttons (Open … Print) on one row 821 px wide. The 900 px rule wraps the header itself but not this group, so the page scrolled sideways on every tab: 441 px at 390 px wide and 63 px at 768 px.
+- **Where:** the `@media (max-width: 900px)` rule, anchor `header { height: auto; padding: 8px 10px; flex-wrap: wrap; }`.
+- **Added (inside that rule):**
+```css
+.hdr-group { flex-wrap: wrap; min-width: 0; }
+```
+- The inputs already stack above the outputs below 900 px, the output tab bar scrolls inside itself, and tables fit. Above 900 px nothing changes.
+
+### Checked, no change
+- Report → Print report (46 pages) and the 🖨 Print dialog's document (all sections, 107 pages): the running header and page numbers are present, and nothing extends past the 7.5 in text width. The near-empty pages are section ends.
+
+### Smoke test
+- `tests/smoke/phone-layout.mjs` gains the key `bsl` (4 input panes + 18 output tabs). It fails on origin/main and passes on this branch.
+
+### How verified (no computed result, saved key or hand-off changed)
+- origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on all 22 tabs, the whole-document `textContent` and localStorage after load are identical.
+- Screenshots at 900 and 1280 px are pixel-identical on load and on every tab, except 9 px on the 3D tab (WebGL anti-aliasing).
