@@ -197,7 +197,9 @@ tbody tr.ud:hover td{background:#dbeafe}
 #bSv{position:relative}
 #bSv.dirty::after{content:'';position:absolute;top:-3px;right:-3px;width:8px;height:8px;border-radius:99px;background:#f59e0b;border:1.5px solid #fff}
 .empty{border:1.5px dashed var(--bd);border-radius:8px}
-@media(max-width:860px){.layout{flex-direction:column;overflow-y:auto}.sb{width:100%;min-width:0;border-right:none;border-bottom:1px solid var(--bd)}.main{overflow:visible}body{overflow-y:auto;height:auto}#projNm{display:none}}
+@media(max-width:860px){.layout{flex-direction:column;overflow-y:auto}.sb{width:100%;min-width:0;border-right:none;border-bottom:1px solid var(--bd)}.main{overflow:visible}body{overflow-y:auto;height:auto}#projNm{display:none}
+  /* PHN (2026-11-02): phone / tablet: the header wraps instead of widening the page */
+  header{height:auto;flex-wrap:wrap;padding:6px 10px;row-gap:6px}header>div{flex-wrap:wrap;min-width:0}}
 /* ── report view ── */
 #repView{display:none;background:#fff;color:#111;font-size:12px;line-height:1.5;padding:0 6px}
 #repView h1{font-size:22px;color:#1e3a8a;margin:0 0 2px}
@@ -252,6 +254,8 @@ tbody tr.ud:hover td{background:#dbeafe}
 #repView .cr-calc .csb{border:0;padding:2pt 0 6pt}
 #repView .cr-calc .keq{overflow:visible}
 #repView .cr-calc .bxg,#repView .cr-calc .bxr,#repView .cr-calc .bxb,#repView .cr-calc .bxo,#repView .cr-calc .keq,#repView .cr-calc .cload{break-inside:avoid}
+/* PHN: in print the card body is a block (not flex), so break-after:avoid keeps a sub-heading with its first box (7.3 was left alone at a page foot) */
+@media print{#repView .cr-calc .csb{display:block}#repView .cr-calc .csb>*+*{margin-top:4px}}
 @media print{body.repMode{background:#fff!important}}
 /* D11 links (CLAUDE.md §6): "Worked in: → Engineering Calculations · <card>" */
 .wkLink{grid-column:1/-1;font-size:10px;color:var(--mu)}

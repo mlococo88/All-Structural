@@ -1380,3 +1380,39 @@ index 320e372..a5c90e0 100644
 +});
 +
 ```
+
+## 2026-11-02 — PR: claude/phone-print-smd — Phone layout (header wraps) and a print page-break fix in the 📄 Report (PHN; display only, no calculation change) (PR link added after merge)
+
+Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and report print polish, one PR per tool. Every code site is tagged `PHN`.
+
+### PHN-1. Header wraps below 860 px   [display only]
+- **Problem:** the header is one 50 px row (`header{height:50px;display:flex}`) holding the brand, the project box, the share buttons and eleven buttons/selects. Below the existing 860 px breakpoint the panels already stack, but the header row did not wrap, so the page scrolled sideways: 518 px at 390 px wide, 140 px at 768 px (the right-hand button group was 672 px wide).
+- **Where:** the `@media(max-width:860px)` rule, anchor `body{overflow-y:auto;height:auto}#projNm{display:none}`.
+- **Before:**
+```css
+@media(max-width:860px){…body{overflow-y:auto;height:auto}#projNm{display:none}}
+```
+- **After:**
+```css
+@media(max-width:860px){…body{overflow-y:auto;height:auto}#projNm{display:none}
+  /* PHN (2026-11-02): phone / tablet: the header wraps instead of widening the page */
+  header{height:auto;flex-wrap:wrap;padding:6px 10px;row-gap:6px}header>div{flex-wrap:wrap;min-width:0}}
+```
+- Above 860 px nothing changes (the rule is inside the existing breakpoint).
+
+### PHN-2. 📄 Report print: a sub-heading no longer sits alone at a page foot   [display only]
+- **Problem:** with the "3-span w/ point load" template, the 📄 Report (D11 calc sheet) printed "7.3 Critical Points" as the last line of page 6 and its content on page 7. `h3.cr-h2` has `break-after:avoid`, but the card body that follows (`.cr-calc .csb`) is a flex column whose first box is `break-inside:avoid`; Chromium did not honour the avoid across the flex container.
+- **Where:** after the rule with anchor `#repView .cr-calc .bxg,#repView .cr-calc .bxr,#repView .cr-calc .bxb,#repView .cr-calc .bxo,#repView .cr-calc .keq,#repView .cr-calc .cload{break-inside:avoid}`.
+- **Added:**
+```css
+@media print{#repView .cr-calc .csb{display:block}#repView .cr-calc .csb>*+*{margin-top:4px}}
+```
+  (4 px = the flex `gap` it replaces.) Only the printed 📄 Report changes. The screen and the Report view tab (shared viewer) are unchanged.
+- **Check case:** template "3-span w/ point load", 📄 Report, print: before, page 6 ends with the heading "7.3 Critical Points"; after, page 7 starts with "7.3 Critical Points" and its boxes (7 pages both).
+
+### Smoke test
+- New `tests/smoke/phone-layout.mjs` (tool key `smd`): at 390 and 768 px, on load and after each view tab, the document is no wider than the window. Fails on origin/main (518 / 140 px), passes on this branch.
+
+### How verified (no computed result, saved key or hand-off changed)
+- origin/main vs this branch, headless Chromium, file://, template "3-span w/ point load": the page text (`innerText`) on load and on both view tabs at 1280 px, the whole-document `textContent`, and localStorage after load are identical; screenshots at 900 and 1280 px are pixel-identical (0 differing pixels) on load and on both tabs.
+- Report view (shared viewer) printed: same 8 pages, same text (pdftotext) before and after.
