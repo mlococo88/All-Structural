@@ -13,6 +13,9 @@
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 <script src="shared/anchor-geom.js"></script>
+<!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <style>
   :root{
     /* ---- primitive tokens (ui-ux-pro-max palette: navy professional) ---- */
@@ -1133,7 +1136,8 @@ let S = defaultState();
 /* ------------------------- PERSISTENCE ------------------------- */
 function lsGet(k){ try{return localStorage.getItem(k);}catch(e){return null;} }
 function lsSet(k,v){ try{localStorage.setItem(k,v);return true;}catch(e){return false;} }
-function autosave(){ if(Array.isArray(S.groups) && S.groups.length && typeof bpGroupSync==="function") bpGroupSync(); lsSet(LS_AUTO, JSON.stringify(S)); }   /* BC-3: the active anchor group's entry follows the live design */
+function autosave(){ if(window.BPPL) BPPL.soon();   /* PLIB: one undo step per change (debounced) */
+  if(Array.isArray(S.groups) && S.groups.length && typeof bpGroupSync==="function") bpGroupSync(); lsSet(LS_AUTO, JSON.stringify(S)); }   /* BC-3: the active anchor group's entry follows the live design */
 function loadAutosave(){
   /* Restore order:
      1. the autosaved working state (what you last had on screen)
@@ -13426,8 +13430,34 @@ function init(){
   window.addEventListener("afterprint",()=>{ const h=document.getElementById("printReport"); if(h)h.innerHTML=""; });
   /* last-ditch save when the tab closes */
   window.addEventListener("beforeunload",()=>{ try{ autosave(); }catch(e){} });
+  bpPlibInit();   /* PLIB */
 }
 document.addEventListener("DOMContentLoaded",()=>{ setTimeout(init, 60); });
+/* PLIB (2026-11-02): saved-project list and Undo / Redo (shared/projects.js, shared/projects-ui.js). Display and storage only:
+   the list is the tool's own key bpad_projects_v1 in its own format ({ name: S }); bpad_autosave_v1 and bpad_lastproject_v1 unchanged.
+   Undo / Redo: snapshots of S without S.ui (tabs, display units, collapse, print options are not steps), session only;
+   set = mergeState() of the step with the current S.ui, then buildProjHeader() + refreshAll(), as Load does. */
+function bpPlibInit(){
+  if(!window.SharedProjects||!window.SharedProjectsUI) return;
+  const h=SharedProjects.history({ get:()=>JSON.stringify(Object.assign({},S,{ui:undefined})),
+    set:t=>{ const o=JSON.parse(t); o.ui=S.ui; S=mergeState(o); buildProjHeader(); refreshAll(); } });
+  let tm=null; const soon=()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); };
+  let ST=null; try{ ST=window.localStorage; }catch(e){}
+  const store=SharedProjects.mapStore(ST,LS_PROJ);
+  const dlg=SharedProjectsUI.libraryDialog({ store, storage:ST, title:"Saved projects (this browser)",
+    current:()=>{ const n=lsGet(LS_LAST); return n&&store.has(n)?n:null; },
+    open:n=>{ const o=store.get(n); if(!o) return false; S=mergeState(o); lsSet(LS_LAST,n); buildProjHeader(); refreshAll(); refreshProjSelect(n); return true; },
+    renamed:(a,b)=>{ if(lsGet(LS_LAST)===a) lsSet(LS_LAST,b); if(S.proj&&S.proj.name===a){ S.proj.name=b; buildProjHeader(); autosave(); } },
+    deleted:n=>{ if(lsGet(LS_LAST)===n) lsSet(LS_LAST,""); },
+    changed:()=>refreshProjSelect(lsGet(LS_LAST)||(S.proj&&S.proj.name)||"") });
+  const B=(t,ti)=>SharedProjectsUI.button(t,ti);
+  const bu=B("Undo","Undo the last input change (Ctrl+Z)"), br=B("Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)"), bl=B("Saved projects\u2026","The projects saved in this browser: open, rename, duplicate, delete");
+  bl.addEventListener("click",()=>dlg.show());
+  const host=document.getElementById("hdrBtns"), ref=document.getElementById("btnExport");
+  if(host){ if(ref&&ref.parentNode===host){ host.insertBefore(bl,ref); host.insertBefore(br,bl); host.insertBefore(bu,br); } else host.append(bu,br,bl); }
+  SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
+  h.reset(); window.BPPL={h,store,dlg,soon};
+}
 
 /* =====================================================================
    VALIDATION WORKSHEET — compares this tool against Hilti PROFIS runs.
