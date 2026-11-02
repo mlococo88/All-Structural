@@ -4946,7 +4946,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - origin/main vs this branch, headless Chromium, file://, at 1280 px: the page text on load and on every tab, the whole-document `textContent` and localStorage after load are identical.
 - Screenshots at 900 and 1280 px are pixel-identical (0 differing pixels).
 
-## 2026-11-02 — LPAS: the `anchorGroup` import accepts square and rectangular HSS posts (round {D}, square {B}, rectangular {Bx, By}) on a circular or a square plate; clear refusals for what is still unsupported (hand-off import only; no calculation change; every existing project unchanged) (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM)
+## 2026-11-02 — LPAS: the `anchorGroup` import accepts square and rectangular HSS posts (round {D}, square {B}, rectangular {Bx, By}) on a circular or a square plate; clear refusals for what is still unsupported (hand-off import only; no calculation change; every existing project unchanged) (PR #666: https://github.com/mlococo88/All-Structural/pull/666)
 
 ### LPAS-R1. Post shapes in the anchorGroup receiver   [bug] [import only]
 - **Reported (engineer, live site):** a sign with square HSS posts sent from Light Pole and Sign Post was refused: "Post 1: a circular plate needs base.pole {shape:"round", D}. Post 1: base.pole.shape "square" is not supported (round)."
