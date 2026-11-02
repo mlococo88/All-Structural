@@ -3376,3 +3376,17 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
   56.86 kip, is the station's range (before 109.90).
 ### Other copies
 - `engine/autodesign.js payloadOf` (kept the same as ui/fatigue.js fromAnalysis): changed alike.
+
+## 2026-11-02 — PR: sbd-final-compare-2 — Final comparison re-run and the engineer's decisions (documentation only)
+### Change
+- docs/steel-bridge-comparison.md: §d gets a re-run after #576, #579, #585, #586 and #615 (100 girders, `tests/engine/final-compare.mjs`)
+  and a new readiness verdict (ready for the engineer's approval; the redirect is not done). §(a) blocker list: D-1 and D-2 marked done.
+  Decision rows recorded: C-3 and C-4 (the old app is never fixed), C-5 (keep the module's members), C-32 (done, #586), C-33 (keep the
+  button), F-12 (later), W-4 (keep the Example source).
+### §4 callout
+- None: no code, formula or computed result changes. Numbers quoted are from the re-run (deck placement unskewed GS14 −0.81..+0.69 %,
+  GS15 −0.95..−0.29 %, GS16 −5.82..−2.76 %; before −11..−19 %).
+### Tests
+- `node tests/engine/final-compare.mjs` re-run on main after #615.
+### Other copies
+- None.

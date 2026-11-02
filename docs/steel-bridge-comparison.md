@@ -15,7 +15,7 @@
 
 ## (a) One-page summary
 
-**Where the two apps stand (updated 2026-11-01, §d).** The new app has every girder check of the old app (GS1–GS4 and GS22 added in #535). On identical demands every module matches GirderDetail (or ST-Girder for the rating) exactly or to round-off. Through the import path (the 20 recorded projects, 100 girders, §d) two new-app gaps remain: the **construction live load is not imported and defaults to 0** (deck placement GS14–GS16 11–19 % low, unconservative), and **GirderDetail's stud zones are not imported** (the app's own stud layout fails SC2 on 8 xsA exterior girders where GirderDetail's passes). The differences that remain are documented and each has a known cause. The largest are:
+**Where the two apps stand (updated 2026-11-02, §d re-run).** The new app has every girder check of the old app (GS1–GS4 and GS22 added in #535). On identical demands every module matches GirderDetail (or ST-Girder for the rating) exactly or to round-off. Through the import path (the 20 recorded projects, 100 girders, §d) the two gaps found on 2026-11-01 are fixed: the construction live load is imported (#576) and GirderDetail's stud zones are imported, with the app's own layout now sized for SC1 and SC2 (#579, #615). The differences that remain are documented and each has a known cause. The largest are:
 
 | Difference | Size | More correct |
 |---|---|---|
@@ -62,11 +62,12 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 - **Also:** Auto design takes f_ℓ = 0 during deck placement on skewed bridges (`flC: 0`) and ignores an entered Flexure f_ℓ.
 - **Consequence:** Auto design is not yet fit to approve a design.
 
-**Switch-over blockers** (updated 2026-11-01; detail in §d):
+**Switch-over blockers** (updated 2026-11-02; detail in §d):
 1. ~~Auto design live load and f_ℓ~~ (#511 area, C-1, C-16: done); ~~GS1–GS4~~ (#535); ~~hand-offs~~ (#529); ~~external demands~~ (#527); ~~AD8~~ (#534); ~~final comparison~~ (§d).
-2. **New (§d, D-1): construction live load** not imported (`gd.df.bridge.cll`, Preliminary sizing `suggest.cll` kept under `legacy.unmapped`) and 0 by default in the new app (only a warning): deck placement GS14/GS15 11–15 % and GS16 16–19 % below GirderDetail on every imported project. Unconservative: must be fixed (calculation PR) before switch-over.
-3. **New (§d, D-2): stud zones and regions** (`gd.sc.zones`, `gd.sc.regions`) not imported; the app's own layout (fatigue pitch per 0.1L) fails SC2 on 8 xsA exterior girders (up to 1.372) where GirderDetail's zones pass. Import them, or make the layout meet SC2.
-4. The engineer's decisions listed in §(b), §(c) and §(d).
+2. ~~D-1: construction live load not imported~~: done (#576). CL = cll × b_eff per girder from GirderDetail's `df.bridge.cll`, else Preliminary sizing's `suggest.cll`.
+3. ~~D-2: stud zones and regions not imported~~: done (#579: zones imported, the app's own layout sized for SC1 and SC2; #615: at an interior support the fatigue shear range comes from one side, not across the support).
+4. ~~The engineer's decisions~~: all recorded (C-3, C-4, C-5, C-32 (#586), C-33, F-12, W-4).
+5. **Left: the engineer's approval of the switch-over itself** (§d, "Switch-over readiness"). The redirect is not done.
 
 ---
 
@@ -78,9 +79,9 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 |---|---|---|---|---|---|---|
 | C-1 | **[CALC] Auto design: shear demands** | Suggest / Full design (PL) and Optimize (ST) check shear with LL+IM | `payloadOf` (engine/autodesign.js:163) builds stations with M_LL and V_FAT but **no V_LL** and no V_PL. `SBDShearUI.build({pl})` reads `V_LLpos`/`V_LLneg` as 0. So the shear checks (GS11, GS16, GS18), the transverse stiffeners (the panel V_u) and the bearing stiffeners (R_LL = 0) run without LL+IM | **old** | **Verified now (Node, built-in project G1):** V_u,max 172.96 vs 395.97 kip; V_LL 0 vs 129.16 kip; shear ratio 0.271 vs 0.437; bearing R_LL 0 vs 107.8/215.3/215.3/107.8 kip. The governing TS/BS ratios were equal (0.667 / 0.692) only because geometric items govern them on this project. 3.4.1, 6.10.9, 6.10.11.2 | **fix-new, blocker.** Build the payload from `ui/shear.js fromAnalysis` (it has V_LL, V_PL and the reactions), or add the V fields. Add a test that the Auto design and Shear tab ratios agree |
 | C-2 | **[CALC] 6.10.2 proportions, 6.10.1.7 minimum deck reinforcement (GS1–GS4)** | GirderDetail Girder section has GS1 web proportions, GS2 flange proportions, GS3 I_yc/I_yt, GS4 minimum negative-flexure deck rebar, and GS22 (owner: App. A6 not used) | Not ported. engine/flexure.js header: "Not ported … GS1 to GS4". The 6.10.2 limits exist only as Auto design sizing rules (`proportions`). The Analysis tab notes the 1 % rebar need as text only | **old** | grep: no GS1–GS4 in ui/, report/ or flexure. A girder entered by hand is never checked against 6.10.2 | **done** (#535, B3: parity 0 differences on 37,110 locations) |
-| C-3 | **[CALC] Deck placement sequence: pour boundaries (SB2-A1)** | `saSeq` loads a node on a pour boundary in both pours (inclusive ends), so about 1 ft of deck is counted twice per boundary | Each pour loaded exactly | **new** | M_DCc up to 1.04 % larger in old near piers (gd_builtin28_MassDOT_G4, x = 250 ft: −2452.4 vs −2426.0 kip-ft); largest GS14/15 ratio change 0.0040 (0.4308 → 0.4268). The engineer chose exact loads for the new app. 6.10.3.4.1 | **keep** new; **ENG**: fix old? (small, conservative) |
-| C-4 | **[CALC] First-pour sliver at an abutment** | `saSeq` treats M_DC1(0) = −3e-12 (round-off) as negative, creating a 0–1 ft "pour" placed after the positive pours | Fixed in #503: relative tolerance 1e-6·max\|M_DC1\| | **new** | Effect ≤ 0.023 % of max M_DCc (built-in G1 x = 1 ft: 59.457 → 60.033 kip-ft); GS14/GS15 ratios change ≤ 1.66e-4; the sliver occurs on 45 of 141 girders | **ENG**: one-line fix in old (own PR), or leave until switch-over |
-| C-5 | **[CALC] Cross-frame/diaphragm weight in DC1** | DC1 point loads from Preliminary sizing's *suggested* K-frame (e.g. L3x3x3/8; 2.80 kip on G1) | Weighs the cross-frame members actually checked (imported Cross-frames inputs, e.g. X with L5x5x3/8 × 3; 4.73 kip) | **new** (consistent) | M_DC1 0.76 % (−2424.4 vs −2406.1 kip-ft, builtin AASHTO G2); negative flexure GS7/GS9/GS8 then 0.26 % / 0.32 % (import entry, fixlog). 3.5.1 | **ENG**: on import, map PL's suggested frame or keep the module members (now)? |
+| C-3 | **[CALC] Deck placement sequence: pour boundaries (SB2-A1)** | `saSeq` loads a node on a pour boundary in both pours (inclusive ends), so about 1 ft of deck is counted twice per boundary | Each pour loaded exactly | **new** | M_DCc up to 1.04 % larger in old near piers (gd_builtin28_MassDOT_G4, x = 250 ft: −2452.4 vs −2426.0 kip-ft); largest GS14/15 ratio change 0.0040 (0.4308 → 0.4268). The engineer chose exact loads for the new app. 6.10.3.4.1 | **decided** (engineer 2026-10-31): the old app is never fixed; the new app keeps exact loads |
+| C-4 | **[CALC] First-pour sliver at an abutment** | `saSeq` treats M_DC1(0) = −3e-12 (round-off) as negative, creating a 0–1 ft "pour" placed after the positive pours | Fixed in #503: relative tolerance 1e-6·max\|M_DC1\| | **new** | Effect ≤ 0.023 % of max M_DCc (built-in G1 x = 1 ft: 59.457 → 60.033 kip-ft); GS14/GS15 ratios change ≤ 1.66e-4; the sliver occurs on 45 of 141 girders | **decided** (engineer 2026-10-31): the old app is never fixed; fixed in the new app (#503) |
+| C-5 | **[CALC] Cross-frame/diaphragm weight in DC1** | DC1 point loads from Preliminary sizing's *suggested* K-frame (e.g. L3x3x3/8; 2.80 kip on G1) | Weighs the cross-frame members actually checked (imported Cross-frames inputs, e.g. X with L5x5x3/8 × 3; 4.73 kip) | **new** (consistent) | M_DC1 0.76 % (−2424.4 vs −2406.1 kip-ft, builtin AASHTO G2); negative flexure GS7/GS9/GS8 then 0.26 % / 0.32 % (import entry, fixlog). 3.5.1 | **decided** (engineer): keep the Cross-frames module's members (the frame actually checked) |
 | C-6 | **[CALC] Steel unit weight (SB2-A2)** | `SA_PLF = 3.4` lb/ft per in² | 490/144 = 3.4028 | **new** | Table 3.5.1-1; girder-steel part +0.0817 %, M_DC1 +0.014 to 0.018 % | **fix-old** optional (ENG); trivial |
 | C-7 | **[CALC] Uniform DL and station shears (SB2-A3)** | Loads lumped at 1-ft nodes; the hand-off V is element shear (about 0.5 ft away) | Consistent loads; exact shear at the station (VL/VR) | **new** | M_DC1steel ≤ 0.2 %, other M ≤ 0.012 %, V_DC 0.72 to 0.84 % (wh/2) | keep |
 | C-8 | **[CALC] DL deflection / camber** | Virtual work by the nodal rule | Exact | **new** | ≤ 0.26 % (D_DC1steel); ≤ 0.055 % for the others | keep |
@@ -107,8 +108,8 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 | C-29 | **[CALC] Fatigue (6.6.1, MBE 7) and welds** | GM.fa, GM.wt | engine/fatigue.js (FA1–FA7, MBE 7.2.4/7.2.5), engine/welds.js | **equal** | Parity exact on 20 recordings + 304 variations; welds bit-identical (18,600 items) | none |
 | C-30 | **[CALC] Distortion-induced fatigue CP2 Δf from the layout (SB2-O18)** | Its own fatigue rows | The rows from the layout had Δf = 0 until the fatigue PR | **?** | Status after #474 not re-verified here | verify in the final comparison |
 | C-31 | **Uncoated weathering steel sacrificial thickness (SB2-O18)** | GirderDetail input | The engine supports `env.ws`; no model input | **old** | grep: no "weathering" in model.js / index.html | port (small) |
-| C-32 | **Owner sidewalk override for LL deflection (SB2-A9, OWN19)** | Limits-tab yes/no override | The cross-section's sidewalks decide; no override | **old** (flexibility) | — | ENG: needed? |
-| C-33 | **Owner defaults on owner change (SB2-O22)** | Untouched inputs move to the owner values automatically (OWN14) | Applied by a button; user values kept | **?** | Import runs PL's `ownMigrate` | ENG: confirm |
+| C-32 | **Owner sidewalk override for LL deflection (SB2-A9, OWN19)** | Limits-tab yes/no override | The cross-section's sidewalks decide; no override | **old** (flexibility) | — | **done** (engineer 2026-11-01: add it): `analysis.deflSidewalk` auto / yes / no, imported from `limits.sidewalk` (#586) |
+| C-33 | **Owner defaults on owner change (SB2-O22)** | Untouched inputs move to the owner values automatically (OWN14) | Applied by a button; user values kept | **?** | Import runs PL's `ownMigrate` | **decided** (engineer 2026-11-01): keep the button (no change) |
 | C-34 | **Simple spans** | Supported (GirderDetail `sgBeam(spans, !cont)`, PL "Simple spans") | Supported (shared/moving-load.js `m.simple`) | **equal** | Not a new-only feature, contrary to earlier notes | none |
 
 ### 2. Features present in only one app
@@ -126,7 +127,7 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 | F-9 | Cross-tool hand-offs (HANDOFF.md) | `bridgeSuite.v1.lldf` pull, `superReactions` send (Substructure Loading), `projectMeta`, `girderDemands`, `appPaths`, inbox | None (grep: no `bridgeSuite` in apps/steel-bridge) | old | — | **done** (#529, B2: projectMeta, lldf pull, superReactions; tested with lldf.html and Bridge Substructure Loading) |
 | F-10 | Saved-project library, undo | `girderdetail_projects_v1`, `plateline_projects_v1`, `stgirder.projects`, `plateline_undo_v1` | One autosaved project (`sbd2.project.current`) + Export/Import JSON; one-step Undo in Auto design only | old | model.js KEYS | **done** (#516) |
 | F-11 | Per-module user manual / design basis | Each GirderDetail module has a "User manual (design basis)" report tab | None (the worked steps carry the article references) | old | `MODS[...].rpt` | port as a report appendix (Sonnet, medium) |
-| F-12 | Paper-space DXF layouts (one per sheet with a viewport) | Pyodide + ezdxf (unpinned), in the browser | Model space with borders, R12 (shared/dxf.js) | old (format) / new (no 10+ MB download) | SB2-DW6 | needs an R2000+ writer in shared/dxf.js (medium–large); ENG: needed? |
+| F-12 | Paper-space DXF layouts (one per sheet with a viewport) | Pyodide + ezdxf (unpinned), in the browser | Model space with borders, R12 (shared/dxf.js) | old (format) / new (no 10+ MB download) | SB2-DW6 | **decided** (engineer): later, after switch-over |
 | F-13 | Plotly charts (zoom, hover) | Plotly 2.27 | SVG/DXF graphics in the Drawings style with wheel zoom, pan, pinch | new (consistent, printable) | #498–#502, #507 | keep |
 | F-14 | Auto design (New / Refine / Check one change; weight, depth, cost) | Suggest + Optimize (separate engines) | engine/autodesign.js on the same check modules; Lock / Range / Auto for every sizable input incl. the overhang; Rating and Welds in the full check | new | #494, sbd-autodesign-vars | done; 15 parity projects pending |
 | F-15 | Several plate girders, a girder line picks its plate girder (SB2-A7) | One layout for every girder | Per plate girder | new | legacy.js mapping ("one layout, as the old app") | keep |
@@ -144,7 +145,7 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 | W-1 | Structure | Three apps with their own inputs; data passed by payloads ("Send to ST-Girder", embedded frames); the same quantity can differ between apps (e.g. GD4) | One project model (`sbd2.project` v1): input tabs Project, Spans & framing, Materials & deck, Girders & plates, Cross-section & loads, Stiffeners, Fatigue & studs, Splices; 15 output tabs | new | keep |
 | W-2 | Recalculation | On every keystroke (React) | "Results are out of date" banner; Calculate. One analysis cache for every tab (#497) | new (for large projects) | keep |
 | W-3 | Validation | Per module | `M.validate`: field errors marked on input tabs (dot), errors block Calculate | new | keep |
-| W-4 | Demand source per tab | Each module its own | Example / this project's analysis / hand-off file; default = analysis when ready (#490) | new | Retire the "Example" source at switch-over? (ENG) |
+| W-4 | Demand source per tab | Each module its own | Example / this project's analysis / hand-off file; default = analysis when ready (#490) | new | **decided** (engineer): keep the "Example" source |
 | W-5 | Saved data | Many keys (see F-10); SBD4 project file | `sbd2.*` keys only; versioned schema with `migrate()` (v1 is the first); old keys read only | new (§5-clean) | keep; add a project library under `sbd2.*` |
 | W-6 | Per-girder vs bridge-wide | Fatigue, studs b_eff and one plate layout bridge-wide | b_eff and plates per plate girder; fatigue settings bridge-wide | new | keep |
 | W-7 | Units | US customary | US customary (shared/units.js) | equal | — |
@@ -215,12 +216,12 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
    - Import each of the 20 recorded projects, run every module, and compare with GirderDetail's own results.
    - Include shear and stiffeners, fatigue, splices, rating and constructibility, not only flexure.
    - List every difference larger than round-off with its cause.
-7. **Engineer's decisions before the redirect.**
-   - C-3 and C-4: fix the old app or not.
-   - C-5: the cross-frame weight on import.
-   - C-32 and C-33: the owner sidewalk override and owner defaults.
-   - F-12: paper space.
-   - W-4: the Example source.
+7. ~~**Engineer's decisions before the redirect.**~~ Recorded 2026-10-31 / 2026-11-01:
+   - C-3 and C-4: the old app is never fixed.
+   - C-5: keep the Cross-frames module's members.
+   - C-32: add the owner sidewalk override (done, #586). C-33: keep the button.
+   - F-12: paper space later, after switch-over.
+   - W-4: keep the Example source.
 8. **Switch-over plumbing** (Sonnet, S).
    - `Steel Bridge Design.html` becomes a redirect that keeps reading the old autosaves through "From old app".
    - Update tools.html and the docs.
@@ -309,23 +310,43 @@ The LLDF, c_rw, pier skew rule, |θ|, 6.10.1.6 amplification and pedestrian-load
 - Auto design under CTDOT: with AD8, the built-in candidates fail TF3 (slip, oversized holes) at 1.076 on the full check (fixlog sbd-ad8).
 - The superReactions copy `by.girderdetail` is shared with the old app during the transition.
 
-### Switch-over readiness (for the engineer)
-**Not ready yet.** Two new-app items must be fixed first, both calculation PRs with §4 callouts:
-- **D-1: construction live load.**
-  - Add the input to the new app (with the owner default: CTDOT 50 psf, OWN `cll`).
-  - Import it from Preliminary sizing's `suggest.cll` / GirderDetail's `df.bridge.cll`.
-  - Analysis: CL = cll × b_eff, as GirderDetail's `wCL`.
-- **D-2: stud zones and regions.**
-  - Import `gd.sc.zones` and `gd.sc.regions`.
-  - Or size the app's own layout for SC1 and SC2, not SC1 only.
+### Switch-over readiness (for the engineer), 2026-11-01 (superseded below)
+**Not ready yet** on 2026-11-01: D-1 (construction live load) and D-2 (stud zones) had to be fixed first. Both are fixed; see the re-run below.
 
-After them, re-run `node tests/engine/final-compare.mjs`. The expected result is that every remaining difference is a known, accepted item (C-3, C-5, C-7, C-9, C-16, C-21).
+### Re-run after the fixes (2026-11-02)
+**Basis:** origin/main after #576 (construction live load on import), #579 (stud zones on import, layout sized for SC1 and SC2), #585 (Auto design: a 10th Ed. advisory TF3 slip item is a warning, not a failure), #586 (owner sidewalk override, C-32) and #615 (fatigue shear range at an interior support from one side). Same method and script as above (`node tests/engine/final-compare.mjs`, 100 girders).
 
-The engineer's decisions from §(b) and §(c) still stand:
-- C-3, C-4 (fix the old app?);
-- C-5 (cross-frame weight on import);
-- C-32, C-33;
-- F-12;
-- W-4 (the Example source).
+| Check group / quantity | > 0.5 % | Largest | Before (2026-11-01) | Cause now | Class |
+|---|---|---|---|---|---|
+| Analysis M_DC1 / V_DC1 | — | 0.76 % / 1.49 % | same | C-5 / C-7 | known, accepted |
+| Analysis M_DC2, M_DW, LL+IM, fatigue, V_LL | — | ≤ 0.01 % | same | round-off | equal |
+| Negative flexure vs GirderDetail recorded (300 spans) | 0 | 0.32 % | same | C-5 | known, accepted |
+| Flexure, proportions | 27 / 60 | 4.69 % | same | GS4 not evaluated on a hand-off file | method, not a difference |
+| Shear (stations, panels), stiffeners | 0–1 | 0.51 % | same | C-7 | known, accepted |
+| Fatigue details, flanges; cross-frames; welds detailing | 0 | 0.00 % | same | — | equal |
+| Welds FW1 / FW3, TR1 | 100 / 60 | 1.29 % / 2.29 % | same | C-7 | known, accepted |
+| Rating Inventory / Operating RF | 0 | 0.44 % | same | C-5 through −M | known, accepted |
+| Constructibility group (OH1 overhang brackets) | 23 | 1.68 % (builtin28 CTDOT G5) | — | C-5 / C-7 through the deck-placement demands | known, accepted |
+| **Deck placement vs GirderDetail recorded, unskewed (240 spans)** | GS16 only | GS14 −0.81 to +0.69 %; GS15 −0.95 to −0.29 %; GS16 −5.82 to −2.76 % | GS14/GS15 −11 to −15 %; GS16 −16 to −19 % (D-1) | D-1 fixed. GS16: V_u agrees within 0.8 %; the capacity uses this project's stiffener panel d_o (52.8 in in the Stiffeners inputs vs GirderDetail's 60 in), so the new ratio is lower with the actual panel | known (input-level, explained) |
+| Deck placement, builtin28 (skew 28°, 60 spans) | all | GS14 +35 to +72 %; GS15 +50 to +58 % | +22 to +67 % (with −CL inside) | C-16: the skew f_ℓ of C6.10.1 during deck placement (GirderDetail f_ℓ = 0); CL now included | known (new more conservative) |
+| **Studs** | 57 | −10.98 % (builtin AASHTO G1: 0.885 vs 0.994) | SC2 1.372 vs 0.956 (xsA G1; D-2) | D-2 fixed. curb and util: GirderDetail's zones imported, ratios equal (SC5 1.094 on both: an input-level failure in both apps). builtin and xsA carry GirderDetail's built-in example zones, which are not imported (note on import), so the app lays out its own: up to 11 % lower. 15 pass/fail flips, all one way: the new app passes where GirderDetail's layout fails marginally (builtin RIDOT G2–G4 0.997 vs 1.007; builtin28 G2–G4 0.996–0.999 vs 1.009–1.011). xsA G1 SC2 now 0.988 | known (new layout, passes both SC1 and SC2) |
+| Field splices; LL deflection SA3 | — | — | same | covered by splices.test; C-9 | known |
 
-The switch-over itself (the redirect page, tools.html, the copy-the-folder note) is **not** done here.
+**No new difference and no new old-app bug was found.** Auto design under CTDOT now gives at least one candidate that passes the full check (#585; the 10th Ed. advisory TF3 slip item is shown as a warning).
+
+### Switch-over readiness (for the engineer), 2026-11-02
+**Ready for the engineer's approval.** Every blocker in §(a) is done, and every remaining difference is a known item with a recorded decision or cause:
+- C-3 (old-app pour-boundary double count; never fixed in the old app, decided);
+- C-5 (cross-frame weight: the module's members, decided);
+- C-7 (exact station shear);
+- C-9 (LL deflection stations, ≤ 0.11 %);
+- C-16 (skew f_ℓ during deck placement, new more conservative);
+- C-20 (studs: each girder's own b_eff);
+- C-21 (rating: ST-Girder's one-station 6.10.8 method, −M RF 1.02–1.07 × ST-Girder);
+- stud layouts on projects that carry GirderDetail's example zones (new layout, passes SC1 and SC2).
+
+The switch-over itself (§(c) item 8: the `Steel Bridge Design.html` redirect, tools.html and the docs) is **not done** and waits for the engineer's approval.
+
+**Open items (not blockers):**
+- The superReactions copy `by.girderdetail` is shared with the old app during the transition.
+- After switch-over: §(c) items 9–18.
