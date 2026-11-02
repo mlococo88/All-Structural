@@ -3715,6 +3715,16 @@ current design's analysis accepted; **the minimum shipping piece length raised f
   "4, 6" with nb Lock → before [5] (Lock read first), after [5], list cleared, no notice.
 ### How verified
 - New test in `tests/engine/autodesign-vars.test.mjs` (migration cases, once-only, load path).
-- Full New design runs (Node, `AD.run(P, { maxIt: 3, trimTries: 1 })`, topN 2), origin/main vs branch, the project passed through `importJSON`: see the PR.
+- Full New design runs (Node, default project, `AD.run(P, { maxIt: 3, trimTries: 1 })`, topN 2; the saved project passed through `importJSON`;
+  sha256 of every candidate (layout, details, cost, module ratios), the screened list, the rejected and the note), origin/main vs branch:
+  - blank list, nb Auto: counts [5, 6], 27 trials, best N_b 5, D 55 in, 424,535 lb — identical (8b2eb99a78008e30).
+  - "4, 5, 6": main [4, 5, 6] / branch Range 4 … 6 → [4, 5, 6], 42 trials, best N_b 4, D 57 in, 396,846 lb — identical (a8f4a6ea23c90850).
+  - "4,5" with nb explicitly Auto: [4, 5] both, 29 trials — identical (998469cd4966c622).
+  - "4, 6" with nb Lock: [5] both, 14 trials — identical (75b1b81cdb067e4d).
+  - "4, 6" (gap): main [4, 6], 30 trials (a248f732f214f80d); branch [4, 5, 6], 42 trials + the notice (= the "4, 5, 6" run). Same
+    candidates (N_b 4, D 57 in, 396,846 lb); N_b 5 is now screened too (intended).
+- `node tests/engine/run.mjs autodesign` (3 files, 22 passed), `model.test library.test projects.test report-wiring` (29 passed), `node tests/check-syntax.mjs` (all pass).
+- Browser (Playwright, a saved project with "4, 6"): the notice shows once (not after reload), the autosave holds vars.nb Range 4 … 6 and
+  nbList '', the box is gone, "Designs to list" and its note shown; 0 console errors.
 ### Other copies
 - None.
