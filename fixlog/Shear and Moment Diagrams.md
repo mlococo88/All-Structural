@@ -1458,3 +1458,33 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
     - after `afterprint`, the view shown before is back;
     - 0 console errors beyond the blocked CDN.
 - **Other copies:** none.
+
+## 2026-11-02 — PR: claude/list-input, PR #681: https://github.com/mlococo88/All-Structural/pull/681 — Custom x: a table with one box per station (LIST)   [display only]
+- **Why:** engineer decision 2026-11-02: no comma-separated inputs. First user of `shared/list-input.js` (`fixlog/shared-list-input.md`).
+- **Where (1):** the script tags, anchor `<script src="shared/report.js"></script>`. **Added after it:**
+```html
+<script src="shared/list-input.js"></script>
+```
+- **Where (2):** after `let cT=null,kT=null;`. **Added:**
+```js
+/* Custom x: a table with one box per station (shared/list-input.js). #iUX stays, hidden, as the saved text "2.5, 5" (userXs). */
+const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events:['input'],
+  columns:[{label:'x',unit:()=>lu,min:0,max:()=>totL>0?totL:undefined,rangeNote:'outside the beam, not used',lenient:true,placeholder:'2.5',width:'6em'}]});
+```
+- **Where (3):** `renderTable()`, first line. **Added:** `uxCtl.relabel(); // unit and beam-length checks of the Custom x table`
+- **What it does:** the `<input id="iUX">` stays in the page, hidden, and is still the field every line of the tool reads and
+  writes (`readIn()` parse, `convertUnits()`, `gatherProject()` → `userXs`, `applyProject()`, the drag handles on the V/M
+  diagrams, undo). The table shows one box per station; an edit writes the same text form `"2.5, 5"` into `#iUX` and fires its
+  `input` event (→ `schedule()` as before). A script that sets `#iUX.value` (unit change, drag, undo, project load) redraws the
+  table. A station outside 0..L is marked "Must be ≤ L (outside the beam, not used)", a value that is not a number "Not a number";
+  both were ignored silently before and still are (the tool's parser is unchanged). The table is in the `.noprint` box, like the
+  old input.
+- **Saved data:** `userXs` stays a string in the same format (`"2.5, 5"`); a project saved before opens unchanged; nothing is
+  re-written until a station is edited. Steel Beam Design's import of a Shear and Moment file reads `userXs` the same way.
+- **Check case:** template "3-span w/ point load" (L = 40 ft), stations typed 2.5 ↵ 5 ↵ 30 → `#iUX` = `"2.5, 5, 30"`, `userX` = [2.5, 5, 30],
+  table rows x = 2.5, 5, 30 marked "User". Length unit ft → in: the boxes read 30, 60 (`"30, 60"`), header "x (in)"; Ctrl+Z: 2.5, 5 ft.
+- **How verified:** `node tests/smoke/list-input.mjs --part smd`: origin/main (old box) vs this branch (typed into the table), default
+  project and the case above: `tabR`, `userX`, `shD`, `moD`, `deD`, `env`, `nodeR`, the autosave (time stamp removed) and the page
+  text (table removed) identical; saved text `"2.5, 5, 30"` on both; 0 console errors; 390 px: no sideways scroll; screenshots at
+  1400 and 390 px looked at. `node tests/smoke/phone-layout.mjs --tool smd` passes. `node tests/check-syntax.mjs` passes.
+- **Formulas, factors, units, code references:** none (§4 does not apply).

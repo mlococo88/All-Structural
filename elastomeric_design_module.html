@@ -10,6 +10,9 @@
 <!-- EDRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<!-- PLIB (2026-11-02): saved-project rename / duplicate and Undo / Redo, shared with the other tools -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <style>
 :root{--navy:#1f3a5f;--navy-lt:#33517a;--panel:#f4f5f0;--panel-h:#e7e9e0;--line:#c9ccc0;--ok:#1a7f37;--bad:#c62828;--amber:#b8860b;}
 *{box-sizing:border-box;}
@@ -980,15 +983,28 @@ function drawCharts(R){
 /* ---- persistence ---- */
 const AUTOSAVE="edm_v1_autosave", PROJKEY="edm_v1_projects";
 let saveT=null;
-function scheduleSave(){ clearTimeout(saveT); saveT=setTimeout(()=>{ try{localStorage.setItem(AUTOSAVE,JSON.stringify(S));document.getElementById("saveStatus").textContent="autosaved "+new Date().toLocaleTimeString();}catch(e){} },500); }
+function scheduleSave(){ if(window.EDPL) EDPL.soon();   /* PLIB: one undo step per change (debounced) */
+  clearTimeout(saveT); saveT=setTimeout(()=>{ try{localStorage.setItem(AUTOSAVE,JSON.stringify(S));document.getElementById("saveStatus").textContent="autosaved "+new Date().toLocaleTimeString();}catch(e){} },500); }
 function getProjects(){ try{return JSON.parse(localStorage.getItem(PROJKEY))||{};}catch(e){return {};} }
 function setProjects(o){ try{ localStorage.setItem(PROJKEY,JSON.stringify(o)); return true; }catch(e){ alert("Could not save to this browser's local storage ("+e.message+"). Use Export JSON for a backup."); return false; } }
 document.getElementById("btnSaveProj").addEventListener("click",()=>{ const n=prompt("Project name:",S.proj.name||"Bearing"); if(!n)return; const all=getProjects(); all[n]={state:clone(S),ts:Date.now()}; if(setProjects(all)) document.getElementById("saveStatus").textContent=`saved "${n}"`; });
 document.getElementById("btnManageProj").addEventListener("click",()=>{ renderProjList(); document.getElementById("dlgProj").showModal(); });
 document.getElementById("dlgProjClose").addEventListener("click",()=>document.getElementById("dlgProj").close());
 function renderProjList(){ const all=getProjects(),el=document.getElementById("projList"); const names=Object.keys(all).sort((a,b)=>all[b].ts-all[a].ts);
-  el.innerHTML=names.length?names.map(n=>`<div class="prow"><span class="pname">${esc(n)}</span><span class="pdate">${new Date(all[n].ts).toLocaleString()}</span><button class="mini-btn" data-a="load" data-n="${esc(n)}">Load</button><button class="mini-btn" data-a="del" data-n="${esc(n)}">Delete</button></div>`).join(""):"<i>No saved projects.</i>";
-  el.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ const n=b.dataset.n,all=getProjects(); if(b.dataset.a==="load"){S=all[n].state;migrate();buildInputs();recalc();document.getElementById("dlgProj").close();} if(b.dataset.a==="del"){delete all[n];setProjects(all);renderProjList();} })); }
+  el.innerHTML=names.length?names.map(n=>`<div class="prow"><span class="pname">${esc(n)}</span><span class="pdate">${new Date(all[n].ts).toLocaleString()}</span><button class="mini-btn" data-a="load" data-n="${esc(n)}">Load</button><button class="mini-btn" data-a="ren" data-n="${esc(n)}" data-sp="1">Rename</button><button class="mini-btn" data-a="dup" data-n="${esc(n)}" data-sp="1">Duplicate</button><button class="mini-btn" data-a="del" data-n="${esc(n)}">Delete</button></div>`).join(""):"<i>No saved projects.</i>";
+  el.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ const n=b.dataset.n,all=getProjects(); if(b.dataset.a==="load"){S=all[n].state;migrate();buildInputs();recalc();document.getElementById("dlgProj").close();} if(b.dataset.a==="del"){delete all[n];setProjects(all);renderProjList();}
+    if(b.dataset.a==="ren"||b.dataset.a==="dup") edmPlibAct(b.dataset.a,n); })); }
+/* PLIB (2026-11-02): Rename / Duplicate in the Projects dialog, over the tool's own key edm_v1_projects ({ name: { state, ts } }) with
+   shared/projects.js: the stored item moves / is copied unchanged; a name already in use asks first; a refused write shows the message. */
+function edmPlibAct(a,n){
+  if(!window.SharedProjects) return;
+  const L=SharedProjects.mapStore(localStorage,PROJKEY);
+  const to=prompt(a==="ren"?`Rename the saved project "${n}" to:`:"Name for the copy:",a==="ren"?n:L.copyName(n)); if(to==null) return;
+  let r=a==="ren"?L.rename(n,to):L.duplicate(n,to);
+  if(!r.ok&&r.error==="exists"){ if(!confirm(`A saved project named "${to.trim()}" already exists. Replace it?`)) return; r=a==="ren"?L.rename(n,to,{replace:true}):L.duplicate(n,to,{replace:true}); }
+  if(!r.ok) alert(r.message||r.error);
+  renderProjList();
+}
 document.getElementById("btnExport").addEventListener("click",()=>{ const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=(S.proj.name||"bearing").replace(/[^\w]+/g,"_")+"_edm.json"; a.click(); URL.revokeObjectURL(a.href); });
 document.getElementById("btnImport").addEventListener("click",()=>document.getElementById("importFile").click());
 document.getElementById("importFile").addEventListener("change",ev=>{ const f=ev.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ S=Object.assign(defaultState(),JSON.parse(rd.result)); migrate(); buildInputs(); recalc(); }catch(e){alert("Import failed: "+e.message);} ev.target.value=""; }; rd.readAsText(f); });
@@ -1344,6 +1360,20 @@ function init(){
   if(window.opener&&!window.opener.closed){ try{ window.opener.postMessage({app:"abutment-edm",type:"EDM_READY"},"*"); document.getElementById("linkStatus").textContent="Linked to Abutment"; document.getElementById("linkStatus").classList.add("on"); }catch(e){} }
 }
 document.addEventListener("DOMContentLoaded",init);
+/* PLIB (2026-11-02): Undo / Redo (shared/projects.js history, shared/projects-ui.js buttons and Ctrl+Z / Ctrl+Y). Snapshots of S
+   without S.ui (tabs and collapsed panels are not steps), session only; set = the Import path (Object.assign(defaultState(), step),
+   migrate(), buildInputs(), recalc()) with the current S.ui. Load, Import and Reset are one step each. */
+document.addEventListener("DOMContentLoaded",()=>{
+  if(!window.SharedProjects||!window.SharedProjectsUI) return;
+  const h=SharedProjects.history({ get:()=>JSON.stringify(Object.assign({},S,{ui:undefined})),
+    set:t=>{ const ui=S.ui; S=Object.assign(defaultState(),JSON.parse(t)); S.ui=ui; migrate(); buildInputs(); recalc(); } });
+  let tm=null; const soon=()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); };
+  const B=(t,ti)=>SharedProjectsUI.button(t,ti);
+  const bu=B("\u21b6 Undo","Undo the last input change (Ctrl+Z)"), br=B("\u21b7 Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)");
+  const ref=document.getElementById("btnExport"); if(ref){ ref.parentNode.insertBefore(bu,ref); ref.parentNode.insertBefore(br,ref); }
+  SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
+  h.reset(); window.EDPL={h,soon};
+});
 </script>
 </body>
 </html>

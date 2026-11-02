@@ -2259,3 +2259,36 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   combination inputs hold the old `sp` / combination objects in their closures (inputs that write through `S.…` keep working).
   Reproduce: open the tool with empty storage, type 21 in span 1 L → the results still use 20 ft; then e.g. change the support type and
   type again → it works. Fix candidate: after the restore in `runBenchmarks()`, call `rebuildInputs()` (or restore into the same object).
+
+## 2026-11-02 — PR: claude/list-input-sbeam, PR #683: https://github.com/mlococo88/All-Structural/pull/683 — Output Stations: Custom stations x is a table with one box per station (LIST)   [display only]
+- **Why:** engineer decision 2026-11-02: no comma-separated inputs. Second user of `shared/list-input.js` (`fixlog/shared-list-input.md`, #681).
+- **Where (1):** the script tags, anchor `<script src="shared/projects-ui.js"></script>`. **Added after it:** `<script src="shared/list-input.js"></script>`
+- **Where (2):** `rebuildInputs()`, section `mkSection('inOpts','Output Stations',…`. **Before:**
+```js
+    const ux=txtInput(()=>S.disp.userX,v=>{S.disp.userX=v;},'userX');
+    ux.placeholder='e.g. 5, 12.5, 31';
+    fRow(body,'Custom stations x',ux,'ft');
+```
+  **After:**
+```js
+    /* one box per station (shared/list-input.js); S.disp.userX stays the saved text "5, 12.5, 31" */
+    const ux=el('div','uxHost');
+    fRow(body,'Custom stations x',ux,'');
+    uxCtl=SharedListInput.mount(ux,{label:'Custom stations x',rows:SharedListInput.fromText(S.disp.userX),
+      columns:[{label:'x',unit:'ft',min:0,max:()=>totalL(),rangeNote:'outside the beam, not used',lenient:true,placeholder:'5',width:'6em'}],
+      cellAttrs:(inp,r)=>tagField(inp,'userX.'+r),
+      onChange:rows=>{S.disp.userX=SharedListInput.toText(rows);schedule();}});
+```
+  (the unit "ft" moved from the row's unit cell to the column header "x (ft)").
+- **Where (3):** before `function schedule(structural){`: `let uxCtl=null;`; inside `schedule()` after `if(structural)rebuildInputs();`:
+  `else if(uxCtl)uxCtl.relabel();` (re-checks the stations against the beam length after a span change).
+- **Saved data:** `S.disp.userX` stays a string in the same format (`"5, 12.5, 31"`, rows joined by ", "); a project saved before
+  opens unchanged; the import of a Shear and Moment file (`d.userXs`) is unchanged. `userXList()` (the parser) is unchanged.
+  Round trip: `tests/engine/list-input.test.mjs`.
+- **Check case:** default beam (L = 20 ft), stations typed 5 ↵ 12.5 ↵ 31 → `S.disp.userX` = `"5, 12.5, 31"`, `userXList()` = [5, 12.5];
+  the box 31 is marked "Must be ≤ 20 (outside the beam, not used)" (it was ignored silently before, and still is).
+- **How verified:** `node tests/smoke/list-input.mjs --part sbeam`: origin/main (old box) vs this branch (typed into the table),
+  default project and the case above: `AN`, `userXList()`, `S`, the text of every output tab and the input panel (the changed row
+  removed) identical; saved text the same; 0 console errors; 390 px no sideways scroll; screenshots at 1400 and 390 px looked at.
+  `node tests/smoke/phone-layout.mjs --tool sbeam` passes. Undo and reload restore the table. `node tests/check-syntax.mjs` passes.
+- **Formulas, factors, units, code references:** none (§4 does not apply).
