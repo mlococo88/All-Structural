@@ -17178,12 +17178,30 @@ function bpGroupResultFor(i){
       else E('base.plate.shape "'+pl.shape+'" is unknown (circle, rect).');
       if(!(isNum(pl.t)&&pl.t>0)) E('base.plate.t must be positive.'); else set.plate.t=pl.t*kl;
       if(isNum(pl.Fy)){ var pg=LIB.plateGrades.find(function(x){ return Math.abs(x.Fy-pl.Fy*ks)<1e-9; }); if(pg) set.plate.grade=pg.id; else E('base.plate.Fy '+pl.Fy+' matches no plate grade (36, 42, 50, 60, 65 ksi).'); }
-      if(base.type==='doubleNut' && pl.shape==='circle' && !(pole.shape==='round' && isNum(pole.D)&&pole.D>0)) E('a circular plate needs base.pole {shape:"round", D}.');
-      if(pole.shape==='round' && isNum(pole.D)){
-        var Dp=pole.D*kl, hs=LIB.hss.find(function(x){ return x.kind==='HSSround' && Math.abs(x.b-Dp)<0.01; });
+      /* LPAS (2026-11-02): the pole / post may be round {D}, square {B} (D accepted for B: payloads sent before LPAS) or rectangular
+         {Bx along x, By along y}; on a circular or a rectangular plate. The plate checks are this tool's own, unchanged: a circular
+         plate by the bending line with D_pole = the round HSS OD, else the smaller of the column width and depth (plateBendingLTS);
+         a rectangular plate by its rectangular-plate method (plateBending, AISC DG1). */
+      var POLEHELP=' Send the anchors again from the current Light Pole and Sign Post tool, or edit the file: base.pole = {shape:"round", D} | {shape:"square", B} | {shape:"rect", Bx, By} (in).';
+      var cx=NaN, cy=NaN;
+      if(pole.shape==='round'){ if(isNum(pole.D)&&pole.D>0) cx=cy=pole.D*kl; else E('base.pole.D (round pole diameter) must be positive.'+POLEHELP); }
+      else if(pole.shape==='square'){ var sB=isNum(pole.B)? pole.B : pole.D; if(isNum(sB)&&sB>0) cx=cy=sB*kl; else E('base.pole.B (square post side) must be positive.'+POLEHELP); }
+      else if(pole.shape==='rect'){ if(isNum(pole.Bx)&&pole.Bx>0&&isNum(pole.By)&&pole.By>0){ cx=pole.Bx*kl; cy=pole.By*kl; }
+        else E('a rectangular post needs base.pole.Bx (along x) and By (along y), both positive'+(isNum(pole.D)? ' (this payload has only D, from a Light Pole version before 2026-11-02)':'')+'.'+POLEHELP); }
+      else if(pole.shape) E('base.pole.shape "'+pole.shape+'" is not supported (round, square, rect).'+POLEHELP);
+      else if(base.type==='doubleNut' && pl.shape==='circle') E('a circular plate needs base.pole (the pole / post at the base).'+POLEHELP);
+      if(pole.shape==='round' && isFinite(cx)){
+        var Dp=cx, hs=LIB.hss.find(function(x){ return x.kind==='HSSround' && Math.abs(x.b-Dp)<0.01; });
         if(hs) set.col={custom:false,shapeType:'HSS',shape:hs.name};
         else { set.col={custom:true,d:Dp,b:Dp}; out.warn.push(lab+': pole Ø'+f(Dp,3)+' in is not a listed round HSS; entered as a custom '+f(Dp,3)+' × '+f(Dp,3)+' in column (the bending line uses D = '+f(Dp,3)+' in; the drawings show a square).'); }
-      } else if(pole.shape) E('base.pole.shape "'+pole.shape+'" is not supported (round).');
+      } else if((pole.shape==='square'||pole.shape==='rect') && isFinite(cx) && isFinite(cy)){
+        /* column b along x, d along y (colDims) */
+        var hr=LIB.hss.find(function(x){ return x.kind==='HSS' && Math.abs(x.b-cx)<0.01 && Math.abs(x.d-cy)<0.01; });
+        if(hr) set.col={custom:false,shapeType:'HSS',shape:hr.name};
+        else { set.col={custom:true,b:cx,d:cy}; out.warn.push(lab+': post '+f(cx,3)+' in (along x) × '+f(cy,3)+' in (along y) is not a listed '+(pole.shape==='square'?'square':'rectangular')+' HSS in this orientation; entered as a custom '+f(cx,3)+' × '+f(cy,3)+' in column.'); }
+        if(pl.shape==='circle') out.warn.push(lab+': '+(pole.shape==='square'?'square':'rectangular')+' post on a circular plate: the bending line uses D_pole = the smaller of the post width and depth ('+f(Math.min(cx,cy),3)+' in)'+(cy>cx+1e-9? '; Light Pole uses the width along y ('+f(cy,3)+' in), so the plate thicknesses can differ' : '')+'.');
+      }
+      if(pl.shape==='rect' && base.type==='doubleNut') out.warn.push(lab+': rectangular (square) plate on a double-nut base: checked by this tool\'s rectangular-plate method (AISC Design Guide 1 with the stand-off), not the bending line Light Pole uses for its plate — the two thicknesses can differ.');
       if(pr.shape!=='circle' && pr.shape!=='square') E('pier.shape "'+pr.shape+'" is unknown (circle, square).');
       if(!(isNum(pr.D)&&pr.D>0)) E('pier.D must be positive.');
       if(!(isNum(pr.fc)&&pr.fc>0)) E('pier.fc must be positive.');

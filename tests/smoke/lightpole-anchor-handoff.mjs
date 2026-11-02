@@ -15,7 +15,21 @@ const LP = path.join(REPO, 'Light Pole and Sign Post.html'), BP = path.join(REPO
 const CASES = { pole: {}, sign2: { top: { appMode: 'sign', signPosts: 2 } }, sign1: { top: { appMode: 'sign', signPosts: 1 } },
   // LTS-8 (2026-11-02): the AASHTO LRFDLTS mode sends its own combinations (Broms soil needed for the LTS shaft depth); the stale check edits ltsV
   ltsPole: { lts: true, top: { codeMode: 'lts' }, inputs: { bromsSoil: 'cohesionless' } },
-  ltsSign2: { lts: true, top: { codeMode: 'lts', appMode: 'sign', signPosts: 2 }, inputs: { bromsSoil: 'cohesive' } } };
+  ltsSign2: { lts: true, top: { codeMode: 'lts', appMode: 'sign', signPosts: 2 }, inputs: { bromsSoil: 'cohesive' } },
+  // LPAS (2026-11-02): every post shape Light Pole supports (round / square / rectangular HSS), sign and pole, IBC and LTS
+  sign2Sq: { top: { appMode: 'sign', signPosts: 2 }, inputs: { poleShape: 'square', poleDiaTop: 8, poleDiaBase: 8 }, pole: { shape: 'square', Bx: 8, By: 8 } },
+  sign1Sq: { top: { appMode: 'sign', signPosts: 1 }, inputs: { poleShape: 'square', poleDiaTop: 8, poleDiaBase: 8 }, pole: { shape: 'square', Bx: 8, By: 8 } },
+  sign2Rect: { top: { appMode: 'sign', signPosts: 2 }, inputs: { poleShape: 'rect', poleDiaTop: 6, poleDiaBase: 6, poleDepthTop: 8, poleDepthBase: 8 }, pole: { shape: 'rect', Bx: 8, By: 6 } },
+  sign1Round: { top: { appMode: 'sign', signPosts: 1 }, inputs: { poleShape: 'round', poleDiaTop: 8.625, poleDiaBase: 8.625 }, pole: { shape: 'round', Bx: 8.625, By: 8.625 } },
+  poleSq: { inputs: { poleShape: 'square', poleDiaTop: 8, poleDiaBase: 8 }, pole: { shape: 'square', Bx: 8, By: 8 } },
+  poleRect: { inputs: { poleShape: 'rect', poleDiaTop: 8, poleDiaBase: 8, poleDepthTop: 6, poleDepthBase: 6 }, pole: { shape: 'rect', Bx: 6, By: 8 } },
+  ltsSign2Sq: { lts: true, top: { codeMode: 'lts', appMode: 'sign', signPosts: 2 }, inputs: { bromsSoil: 'cohesive', poleShape: 'square', poleDiaTop: 8, poleDiaBase: 8 }, pole: { shape: 'square', Bx: 8, By: 8 } },
+  ltsSign1Rect: { lts: true, top: { codeMode: 'lts', appMode: 'sign', signPosts: 1 }, inputs: { bromsSoil: 'cohesionless', poleShape: 'rect', poleDiaTop: 6, poleDiaBase: 6, poleDepthTop: 8, poleDepthBase: 8 }, pole: { shape: 'rect', Bx: 8, By: 6 } },
+  ltsPoleSq: { lts: true, top: { codeMode: 'lts' }, inputs: { bromsSoil: 'cohesionless', poleShape: 'square', poleDiaTop: 8, poleDiaBase: 8 }, pole: { shape: 'square', Bx: 8, By: 8 } },
+  // LPAS: square base plate (B × B, rods on the bolt circle) under a round and a square post, IBC and LTS
+  poleSqPl: { inputs: { bpShape: 'square', bpB: 20 }, pole: { shape: 'round', Bx: 10, By: 10 }, plateB: 20 },
+  sign2SqPlSq: { top: { appMode: 'sign', signPosts: 2 }, inputs: { poleShape: 'square', poleDiaTop: 8, poleDiaBase: 8, bpShape: 'square', bpB: 22 }, pole: { shape: 'square', Bx: 8, By: 8 }, plateB: 22 },
+  ltsSign1SqPl: { lts: true, top: { codeMode: 'lts', appMode: 'sign', signPosts: 1 }, inputs: { bromsSoil: 'cohesive', bpShape: 'square', bpB: 22 }, pole: { shape: 'round', Bx: 6, By: 6 }, plateB: 22 } };
 let fails = 0; const check = (ok, m) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${m}`); if (!ok) fails++; };
 for (const [name, mut] of Object.entries(CASES)) {
   const o = await openPage(LP, { vw: 1280, vh: 900 });
@@ -33,12 +47,21 @@ for (const [name, mut] of Object.entries(CASES)) {
     const bp = await o.ctx.newPage(); const bErr = []; bp.on('pageerror', e => bErr.push(e.message));
     await bp.goto('file://' + BP); await bp.waitForFunction(() => window.bxAg && typeof window.bxPullAnchorGroup === 'function', null, { timeout: 20000 });
     const r = await bp.evaluate(() => { const chk = bxAg.check(JSON.parse(localStorage.getItem('bridgeSuite.v1.anchorGroup')));
+      if (chk.err.length) return { err: chk.err, warn: chk.warn, groups: 0, CCs: [] };
       window.bxPullAnchorGroup(); const all = document.getElementById('bxAgAll'); if (all) all.checked = true; document.getElementById('bxAgGo').click();
-      const CCs = []; for (let i = 0; i < S.groups.length; i++) { bpGroupSwitch(i); const CC = computeAll(); CCs.push({ n: CC.combos.length, raw0: CC.combos[0].raw, nA: S.anchor.nCircle, BC: S.anchor.BC, t: S.plate.t, D: S.conc.D }); }
+      const CCs = []; for (let i = 0; i < S.groups.length; i++) { bpGroupSwitch(i); const CC = computeAll(); const cd = colDims(); validateInputs(); const V = VALIDATION;
+        CCs.push({ n: CC.combos.length, raw0: CC.combos[0].raw, nA: S.anchor.nCircle, BC: S.anchor.BC, t: S.plate.t, D: S.conc.D,
+          colB: cd.b, colD: cd.d, colRound: !S.col.custom && S.col.shapeType !== 'W' && hssOf(S.col.shape).kind === 'HSSround', plShape: S.plate.shape, plB: S.plate.B, plN: S.plate.N,
+          blocks: (V.errs || []).map(e => e.msg) }); }
       bpGroupSwitch(0); const res = bxAg.resultPayload();
       return { err: chk.err, warn: chk.warn, groups: S.groups.length, CCs, res: res && res.results.map(x => ({ id: x.groupId, dcr: x.governing && x.governing.dcr, mode: x.governing && x.governing.mode, combo: x.governing && x.governing.combo })), hash: res && res.source.inputsHash }; });
     check(!r.err.length, `${name}: BP check() accepts the payload (warnings: ${r.warn.length})`);
+    check(!r.err.length || true, `${name}: BP check() errors: ${r.err.join(' | ').slice(0, 300) || 'none'}`);
     check(r.groups === pay.groups.length, `${name}: BP imported ${r.groups} group(s)`);
+    if (mut.pole) pay.groups.forEach((g, i) => { const b = r.CCs[i] || {}, e = mut.pole, sq = !!mut.plateB;
+      const ok = Math.abs(b.colB - e.Bx) < 1e-6 && Math.abs(b.colD - e.By) < 1e-6 && (e.shape === 'round' ? (b.colRound || b.colB === b.colD) : !b.colRound) &&
+        (sq ? b.plShape === 'rect' && Math.abs(b.plB - mut.plateB) < 1e-9 && Math.abs(b.plN - mut.plateB) < 1e-9 : b.plShape === 'circle') && !(b.blocks || []).length;
+      check(ok, `${name} ${g.label}: sent pole ${JSON.stringify(g.base.pole)}, plate ${JSON.stringify(g.base.plate)} → BP column ${b.colB} (x) × ${b.colD} (y)${b.colRound ? ' round' : ''}, plate ${b.plShape} ${b.plB}×${b.plN}; blocking messages: ${(b.blocks || []).join(' | ') || 'none'}`); });
     pay.groups.forEach((g, i) => { const c = g.combos[0], b = r.CCs[i] || {}, raw = b.raw0 || {};
       const exp = { P: -c.P / 1000, My: c.Mx * 12 / 1000, Mx: -c.My * 12 / 1000 };
       const ok = b.n === g.combos.length && Math.abs(raw.P - exp.P) < 1e-9 && Math.abs(raw.My - exp.My) < 1e-9 && Math.abs(raw.Mx - exp.Mx) < 1e-9 && b.nA === g.anchor.n && Math.abs(b.BC - g.anchor.BC) < 1e-9 && Math.abs(b.t - g.base.plate.t) < 1e-9;

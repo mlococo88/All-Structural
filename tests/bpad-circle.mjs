@@ -215,6 +215,28 @@ async function circleChecks(src) {
         const bad = bxAg.check(Object.assign({}, pay, { signConvention: 'other' })).err.length + bxAg.check(Object.assign({}, pay, { basis: { factored: false } })).err.length;
         out.hand.H5 = { ok: ap.ok, warn: chk.warn, g1, g2, back, src: S.bxSrc && S.bxSrc.anchorGroup && S.bxSrc.anchorGroup.inputsHash, nGroups: S.groups.length,
           res: res && res.results.map(x => ({ id: x.groupId, dcr: x.governing && x.governing.dcr, mode: x.governing && x.governing.mode })), resHash: res && res.source.inputsHash, refused: bad, errs: VALIDATION.errs.map(e => e.msg) }; }
+      /* H7 (LPAS, 2026-11-02): square and rectangular posts, square plate. 6 × 1 in Gr 55 on BC 16 (θ0 0), double nut (clamp 1 in),
+         circular plate Ø22 × 1.5 in A36, basePlate-v1 M_y = −600 kip·in, P = 0 → |T|max = 600·8/192 = 25.0 kip (as H2).
+         Square post B 8 → column HSS8X8, D_pole = 8: m = (16 − 8)/2 = 4, b_eff = π·8/6 = 4.18879, M_u = 100 kip·in,
+           t_req = √(400/(0.90·36·4.18879)) = 1.71678 in.
+         Rectangular post B_x 8 × B_y 6 → custom 8 (x) × 6 (y) column, D_pole = min = 6: m = 5, b_eff = π, M_u = 125,
+           t_req = √(500/(0.90·36·π)) = 2.21634 in. B_x 6 × B_y 8 → the listed HSS8X6 (b 6 along x, d 8 along y).
+         Square plate 22 × 22 under the square post: imported as a rectangular plate (its own method, AISC DG1), no blocking message.
+         Refused with the reason: a rectangular post with only D (payload before LPAS), an unknown shape, a circular plate without a pole. */
+      { const base0 = { _schema: 'bridge-anchor-group', schemaVersion: 1, producer: 'Light Pole and Sign Post', producerFile: 'Light Pole and Sign Post.html', producedAt: '2026-11-02T12:00:00Z',
+          project: { name: 'Sign 14', bridgeId: '' }, units: { length: 'in', force: 'kip', moment: 'kip-in', stress: 'ksi' }, basis: { factored: true, method: 'LRFD' }, signConvention: 'basePlate-v1', inputsHash: 'h7', notes: [] };
+        const grp = (pole, plate) => ({ id: 'post1', label: 'Post 1', anchor: { pattern: 'circle', n: 6, BC: 16, theta0: 0, dia: 1, grade: 'f1554_55', nut: 'heavyHex', hef: 18, torqued: true },
+          base: { type: 'doubleNut', standoffClear: 1.0, grout: false, plate: plate || { shape: 'circle', D: 22, t: 1.5, Fy: 36 }, pole }, pier: { shape: 'circle', D: 36, fc: 4, cracked: true, depth: 120 },
+          combos: [{ name: 'M', P: 0, Vx: 0, Vy: 0, Mx: 0, My: -600 }] });
+        const one = (pole, plate) => { const pay = Object.assign({}, base0, { groups: [grp(pole, plate)] }); const chk = bxAg.check(pay);
+          if (chk.err.length) return { err: chk.err };
+          S = mergeState(defaultState()); refreshAll(); bxAg.apply(pay, chk, { mode: 'all' }, 'test'); refreshAll(); CC = computeAll(); validateInputs();
+          const pb = plateBending(CC.combos[0], CC), cd = colDims();
+          return { err: [], warn: chk.warn, col: S.col.custom ? 'custom' : S.col.shape, b: cd.b, d: cd.d, plate: S.plate.shape, lts: !!pb.lts, Dp: pb.Dp, m: pb.m, beff: pb.beff, tReq: pb.tReq, dcr: pb.dcr,
+            blocks: VALIDATION.errs.map(e => e.msg) }; };
+        out.hand.H7 = { sq: one({ shape: 'square', B: 8 }), sqOld: one({ shape: 'square', D: 8 }), rect: one({ shape: 'rect', Bx: 8, By: 6 }), rect2: one({ shape: 'rect', Bx: 6, By: 8 }),
+          sqPl: one({ shape: 'square', B: 8 }, { shape: 'rect', B: 22, N: 22, t: 1.5, Fy: 36 }), rdPl: one({ shape: 'round', D: 8.625 }, { shape: 'rect', B: 22, N: 22, t: 1.5, Fy: 36 }),
+          rectOld: one({ shape: 'rect', D: 8 }).err, hex: one({ shape: 'hex', D: 8 }).err, none: one(undefined).err }; }
       /* H6 (BC-5): pier cage as anchor reinforcement. C2 geometry with h_ef = 36 in: 4 × 1 in at (±6, ±6), Ø36 pier,
          H 120, M_x = 480 kip·in, P = 5 kip compression, V_y = 3 kip. Cage: 8 #8 Gr 60 at 45° + k·45°, clear cover 3 in to
          #4 ties at 3 in + 4 in, bar tops 3 in below the surface, straight.
@@ -306,6 +328,21 @@ if (r.hand.H5) {
   if (!ok) fail = true;
   console.log(`  ${ok ? 'ok  ' : 'FAIL'} H5 anchorGroup import (lightPole-v1): post 1 P ${g1.P}, My ${g1.My}, Mx ${g1.Mx}, T ${g1.T} kip-in, tension at x = ${g1.tensionX.map(x => x.toFixed(2)).join(', ')}; post 2 Mx ${g2.Mx}, tension at y = ${g2.tensionY.map(y => y.toFixed(2)).join(', ')}; picker back to group 1 (n ${h.back.n}); result ${JSON.stringify(h.res)}; refused bad payloads ${h.refused}/2`);
   if (h.errs.length) console.log('    validation (group 1): ' + h.errs.join(' | '));
+}
+if (r.hand.H7) {
+  const h = r.hand.H7;
+  chk('H7 square post: t_req (D_pole 8)', h.sq.tReq, 1.71678, 5e-5);
+  chk('H7 square post: b_eff', h.sq.beff, 4.18879, 5e-5);
+  chk('H7 rect. post 8 × 6: t_req (D_pole = min 6)', h.rect.tReq, 2.21634, 5e-5);
+  chk('H7 square post, old payload (D for B): t_req', h.sqOld.tReq, 1.71678, 5e-5);
+  const ok = h.sq.col === 'HSS8X8' && h.sq.lts && h.rect.col === 'custom' && h.rect.b === 8 && h.rect.d === 6 && h.rect2.col === 'HSS8X6' && h.rect2.b === 6 && h.rect2.d === 8
+    && h.sqPl.plate === 'rect' && !h.sqPl.lts && isFinite(h.sqPl.dcr) && h.rdPl.plate === 'rect' && isFinite(h.rdPl.dcr)
+    && [h.sq, h.sqOld, h.rect, h.rect2, h.sqPl, h.rdPl].every(x => !x.err.length && !x.blocks.length)
+    && h.rectOld.some(e => /Bx/.test(e) && /before 2026-11-02/.test(e)) && h.hex.some(e => /not supported \(round, square, rect\)/.test(e)) && h.none.some(e => /circular plate needs base\.pole/.test(e));
+  if (!ok) fail = true;
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'} H7 posts: square → ${h.sq.col}; rect 8×6 → ${h.rect.col} ${h.rect.b}×${h.rect.d}; rect 6×8 → ${h.rect2.col}; square plate (square post) DG1 DCR ${h.sqPl.dcr && h.sqPl.dcr.toFixed(4)}, (round post) ${h.rdPl.dcr && h.rdPl.dcr.toFixed(4)}; blocking ${[h.sq, h.rect, h.rect2, h.sqPl, h.rdPl].map(x => (x.blocks || x.err).length).join('/')}`);
+  console.log('    refused: ' + [h.rectOld[0], h.hex[0], h.none[0]].map(x => (x || '—').slice(0, 140)).join(' || '));
+  console.log('    warnings (rect. post): ' + (h.rect.warn || []).join(' | ').slice(0, 400));
 }
 if (r.hand.H6) {
   const h = r.hand.H6;
