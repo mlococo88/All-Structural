@@ -141,6 +141,20 @@ export const TOOLS = {
     view: p => tabView(p, '#tabs .tab', 2, '.active'),
     save: async (p, name) => { await p.evaluate(n => { document.getElementById('saveName').value = n; saveProject(); }, name); await p.waitForTimeout(400); }
   },
+  index: {
+    // index.html (MCT generator, React, compiled by Babel in the browser): Undo / Redo only. Its named projects are the shared Bridge
+    // Projects registry (BridgeProjects), unchanged, so there is no list here. Results: the model (cfg, as autosaved) and the page text.
+    file: 'index.html', list: null, auto: 'mct_cfg_v3', noList: true,
+    ready: p => p.waitForFunction(() => document.querySelector('button[data-sp]') || document.body.innerText.includes('Download MCT'), null, { timeout: 120000 }),
+    // the page text depends on the wizard step shown (a view), so the results are the model and the MCT size line ("N vehicles · M lines")
+    results: async p => { await p.waitForTimeout(600); return p.evaluate(() => ({ cfg: JSON.parse(localStorage.getItem('mct_cfg_v3') || 'null'),
+      mct: (document.body.innerText.match(/\d+ vehicles?\s*·\s*\d+ lines/) || [''])[0] })); },
+    // the Geometry step's first number input (a React input: the value is set through the native setter so React sees the change)
+    change: async p => { await p.locator('button', { hasText: 'Geometry' }).first().click(); await p.waitForTimeout(800);
+      await p.evaluate(() => { const i = [...document.querySelectorAll('input[type=number]')].find(x => x.offsetParent && x.value !== '' && !x.disabled);
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, String((+i.value || 0) + 1)); i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); }); await p.waitForTimeout(1500); },
+    save: async () => {}
+  },
   spreadfooting: {
     file: 'Spread Footing.html', list: 'sfd_projects', auto: 'sfd_auto', ownUndo: true,   // the tool's own Undo / Redo (U-2) is unchanged and not re-tested here
     ready: p => p.waitForFunction(() => typeof R !== 'undefined' && R),

@@ -16,6 +16,8 @@
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 <script src="shared/list-input.js"></script>
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -21593,7 +21595,7 @@ function App() {
     if(!window.BridgeProjects) return;
     const slice=window.BridgeProjects.getSlice(id,'mct');
     window.BridgeProjects.setCurrent(id); bpRefresh();
-    if(slice){ loadCfg(slice); }
+    if(slice){ plibNewRef.current=true; loadCfg(slice); }   // PLIB: another project, a new undo history
     else { const e=window.BridgeProjects.get(id);
       setSavedMsg('“'+(e?e.name:'')+'” has no MCT config yet'); setTimeout(()=>setSavedMsg(''),2500); }
   };
@@ -21690,6 +21692,9 @@ function App() {
 
   useEffect(()=>{
     try{localStorage.setItem('mct_cfg_v3',JSON.stringify(cfg));}catch(e){}
+    const P=plibRef.current; if(!P) return;   // PLIB: one undo step per change (debounced 500 ms)
+    const t=setTimeout(()=>{ if(plibNewRef.current){ plibNewRef.current=false; P.h.reset(); } else P.h.record(); },500);
+    return ()=>clearTimeout(t);
   },[cfg]);
   /* ---- Geometry channel lock ----
      Locking turns the one-shot "Send geometry" button into a standing
@@ -21733,6 +21738,17 @@ function App() {
   const geomLockTick=BLU.useLocks?BLU.useLocks():0;
   // Keep cfgRef current for history snapshots (avoids stale closures)
   cfgRef.current = cfg;
+  /* PLIB (2026-11-02): Undo / Redo (shared/projects.js history, shared/projects-ui.js buttons and Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z).
+     Display only: snapshots of cfg (the model inputs; the step, the results and the views are not steps), session only, nothing
+     stored; set = setCfg() of the step. Recorded by the cfg autosave effect (debounced). Opening a Bridge Project or importing a file
+     starts a new history; Reset and a ↺ History restore are steps (they can be undone). The ↺ History checkpoints are unchanged. */
+  const plibRef=useRef(null), plibNewRef=useRef(false), plibUndoRef=useRef(null), plibRedoRef=useRef(null);
+  useEffect(()=>{
+    if(plibRef.current||!window.SharedProjects||!window.SharedProjectsUI||!plibUndoRef.current||!plibRedoRef.current) return;
+    const h=SharedProjects.history({ get:()=>JSON.stringify(cfgRef.current), set:t=>{ const c=JSON.parse(t); cfgRef.current=c; setCfg(c); } });
+    SharedProjectsUI.undoRedo(h,{undo:plibUndoRef.current,redo:plibRedoRef.current});
+    h.reset(); plibRef.current={h};
+  },[]);
   // Snapshot config at step-change checkpoints — natural editing boundaries
   const prevStepRef = React.useRef(step);
   useEffect(()=>{
@@ -21809,6 +21825,7 @@ function App() {
       try{
         const loaded=JSON.parse(ev.target.result);
         pushHistory('before import');
+        plibNewRef.current=true;   // PLIB: an imported file starts a new undo history
         if(loaded._version&&loaded.cfg){
           // ── New bundle format: restore everything ──
           setCfg({...DEFAULT_CFG,...loaded.cfg});
@@ -22364,6 +22381,13 @@ function App() {
                 {cfgHistoryRef.current.length>0&&<span style={{background:'#6b7280',color:'#fff',borderRadius:'99px',
                   fontSize:'9.5px',padding:'1px 5px',fontWeight:'700'}}>{cfgHistoryRef.current.length}</span>}
               </button>
+            </div>
+            {/* PLIB: Undo / Redo (their disabled state is set by SharedProjectsUI.undoRedo), a row of their own under ↺ History */}
+            <div style={{display:'flex',gap:'4px'}}>
+              <button ref={plibUndoRef} data-sp="1" type="button" disabled title="Undo the last input change (Ctrl+Z)"
+                style={{background:'#fff',border:'1px solid #d1d5db',borderRadius:'6px',color:'#374151',padding:'6px 8px',cursor:'pointer',fontSize:'11.5px',flex:1,fontWeight:'500'}}>Undo</button>
+              <button ref={plibRedoRef} data-sp="1" type="button" disabled title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
+                style={{background:'#fff',border:'1px solid #d1d5db',borderRadius:'6px',color:'#374151',padding:'6px 8px',cursor:'pointer',fontSize:'11.5px',flex:1,fontWeight:'500'}}>Redo</button>
             </div>
             {window.BridgeProjects&&(()=>{ void bpTick; const cur=bpCurrent(); const items=window.BridgeProjects.list();
               return (<div style={{border:'1px solid #f0abfc',borderRadius:'6px',padding:'6px 7px',background:'#fdf4ff',display:'flex',flexDirection:'column',gap:'5px'}}>
