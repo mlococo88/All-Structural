@@ -2090,12 +2090,17 @@ function allChecks(){
     detEnvelope().forEach(E=>{
       out.push({label:E.name,ref:E.ref,dcr:E.na?null:E.dcr,
         combo:E.na?&quot;—&quot;:E.combo,na:E.na,tab:&quot;tabDetail&quot;,
-        forceOK:E.na?null:E.allOk,id:E.id,ci:E.ci});
+        forceOK:E.na?null:E.allOk,id:E.id,ci:E.ci,
+        have0:!E.na&amp;&amp;!!E.entry&amp;&amp;E.entry.cmp===&quot;\\ge&quot;&amp;&amp;E.entry.need>0&amp;&amp;!(E.entry.have>1e-12)});   /* CBAZ: D/C shown as cbcDcZero(c) */
     });
   }
   return out;
 }
 
+/* CBAZ (2026-11-03): a detailing check whose provided quantity is zero has D/C = need/1e-12 (detEnvelope), a meaningless
+   large number; it is shown as &quot;\u226b1 (A_\u2113 = 0)&quot; instead (display only: the D/C value and PASS / FAIL are unchanged). */
+const CBAZ_SYM={dTorAlReq:&quot;A_\u2113&quot;,dTorAl:&quot;A_\u2113&quot;,dAvMin:&quot;A_v&quot;};
+function cbcDcZero(c){ return c&amp;&amp;c.have0?&quot;\u226b1 (&quot;+(CBAZ_SYM[c.id]||&quot;provided&quot;)+&quot;\u00a0=\u00a00)&quot;:null; }
 /* smooth green -> amber -> red background for a D/C value */
 function heatColor(v){
   if(v==null||!isFinite(v)) return &quot;&quot;;
@@ -2191,7 +2196,7 @@ function buildSummaryTab(pg){
     const a=el(&quot;a&quot;,null,c.label); a.addEventListener(&quot;click&quot;,()=>{ S.ui.tab=c.tab; autosave(); refresh(); });
     const td0=el(&quot;td&quot;); td0.appendChild(a); tr.appendChild(td0);
     tr.appendChild(el(&quot;td&quot;,null,c.ref));
-    const td2=heatTD(c.na?null:c.dcr); td2.className=&quot;n&quot;; tr.appendChild(td2);
+    const td2=heatTD(c.na?null:c.dcr,(!c.na&amp;&amp;cbcDcZero(c))||undefined); td2.className=&quot;n&quot;; tr.appendChild(td2);   /* CBAZ */
     tr.appendChild(el(&quot;td&quot;,null,c.combo));
     const td4=el(&quot;td&quot;);
     if(c.na) td4.innerHTML='<span class=&quot;pill na&quot;>N/A</span>';
@@ -4079,7 +4084,7 @@ function cbcResultRows(tabId){
     CC.combos.forEach(r=>T.forEach((c,i)=>rows.push([c.label+&quot; — &quot;+nm(r),c.ref,(!r.tor||r.tor.negligible)?null:pk[i](r)])));
   }
   else if(tabId===&quot;tabServ&quot;||tabId===&quot;tabDetail&quot;)
-    chk.filter(x=>x.tab===tabId).forEach(c=>rows.push([c.label,c.ref,c.na?null:c.dcr,c.na?null:c.combo,c.forceOK]));
+    chk.filter(x=>x.tab===tabId).forEach(c=>rows.push([c.label,c.ref,c.na?null:c.dcr,c.na?null:c.combo,c.forceOK,c.na?null:cbcDcZero(c)]));   /* CBAZ: 6th, the D/C text */
   return rows;
 }
 /* =====================================================================
@@ -4131,9 +4136,9 @@ function cbcRxHarvest(){
 /* the result lines buildReport printed at the end of a section (cbcResultRows, the dashboard's PASS / FAIL rule) as a table */
 function cbcRxResults(tabId){
   const rows=cbcResultRows(tabId); if(!rows.length) return null;
-  return {type:'table',head:['Check','D/C','Reference; governing combination','Result'],rows:rows.map(([lab,ref,dcr,cmb,fok])=>{
+  return {type:'table',head:['Check','D/C','Reference; governing combination','Result'],rows:rows.map(([lab,ref,dcr,cmb,fok,dtx])=>{
     const na=(fok==null)&amp;&amp;(dcr==null), ok=(fok!=null)?fok:(dcr!=null&amp;&amp;isFinite(dcr)&amp;&amp;dcr<=1.0001);
-    return [lab,{t:dcr==null?&quot;n/a&quot;:((!isFinite(dcr)||dcr>=1e6)?&quot;≫1&quot;:fmt(dcr,2)),n:true},[ref||&quot;—&quot;,cmb&amp;&amp;cmb!==&quot;—&quot;?&quot;governing combination &quot;+cmb:&quot;&quot;].filter(Boolean).join(&quot;; &quot;),{t:na?&quot;N/A&quot;:(ok?&quot;PASS&quot;:&quot;FAIL&quot;),cls:na?&quot;na&quot;:(ok?&quot;ok&quot;:&quot;ng&quot;)}]; })};
+    return [lab,{t:dcr==null?&quot;n/a&quot;:(dtx||((!isFinite(dcr)||dcr>=1e6)?&quot;≫1&quot;:fmt(dcr,2))),n:true},[ref||&quot;—&quot;,cmb&amp;&amp;cmb!==&quot;—&quot;?&quot;governing combination &quot;+cmb:&quot;&quot;].filter(Boolean).join(&quot;; &quot;),{t:na?&quot;N/A&quot;:(ok?&quot;PASS&quot;:&quot;FAIL&quot;),cls:na?&quot;na&quot;:(ok?&quot;ok&quot;:&quot;ng&quot;)}]; })};
 }
 /* the cover lines, the front-matter note and the footer of the retired print report */
 function cbcRxAbout(){
@@ -4369,7 +4374,7 @@ function cbcRptModel(){
       if(c.tab==='tabServ') return 'sv/minr'; if(c.tab==='tabDetail') return 'dt/'+c.id+'.cmp'; };
     const st=c=>{ if(c.na) return {t:'N/A',cls:'na'}; const ok=c.forceOK!=null?c.forceOK:(c.dcr<=1.0001); return {t:ok?'PASS':'FAIL',cls:ok?(c.dcr>=0.9&amp;&amp;c.forceOK==null?'hi':'ok'):'ng'}; };
     secs.push({title:'Summary of checks',subs:[{title:'All checks, enveloped over the load combinations',items:[{type:'table',head:['Check','Reference','D/C','Governing combination','Status'],
-      rows:K.map(c=>[c.label,cRef(c.ref),{t:c.na||c.dcr==null?'—':(isFinite(c.dcr)?fmt(c.dcr,3):'∞'),n:true,key:keyOf(c)},c.na?'—':c.combo,st(c)])},
+      rows:K.map(c=>[c.label,cRef(c.ref),{t:c.na||c.dcr==null?'—':(cbcDcZero(c)||(isFinite(c.dcr)?fmt(c.dcr,3):'∞')),n:true,key:keyOf(c)},c.na?'—':c.combo,st(c)])},
       {type:'note',text:'Each D/C links to the step where it is worked. [[tab:tabSummary|On screen: Summary tab]]'}]}]});
   }
   /* 3.–5. flexure, shear, torsion: every combination (an identical combination refers to the first) */
