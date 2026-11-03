@@ -2187,7 +2187,7 @@ function natGfWorkedHTML(inp){
   if(!f){ H+=`<p class="eq-result">n<sub>1</sub> ≥ 1 Hz: rigid; G = ${fmt(inp.G,2)} as entered (G<sub>f</sub> not needed).</p>`; return H; }
   const T=GF_TBL[inp.expo]||GF_TBL.C;
   H+=step(`Gust-effect factor G<sub>f</sub>, flexible structure ${ref('ASCE 7-22 §26.11.5, Eq. 26.11-7 to 26.11-16, Table 26.11-1')}`);
-  H+=`<p class="eq-why">Exposure ${inp.expo}: â = ${fmt(T.aa,4)}, b̂ = ${fmt(T.ab,2)}, c = ${fmt(T.c,2)}, ℓ = ${fmt(T.l,0)} ft, ε̄ = ${fmt(T.eps,4)}, z<sub>min</sub> = ${fmt(T.zmin,0)} ft (Table 26.11-1 values as used by the tool). h = ${fmt(f.h,2)} ft, B = ${fmt(f.B,3)} ft, L = ${fmt(f.L,3)} ft, β = ${fmt(f.beta,3)}, V = ${fmt(inp.V,0)} mph.</p>`;
+  H+=`<p class="eq-why">Exposure ${inp.expo}: â = ${fmt(T.aa,4)}, b̂ = ${fmt(T.ab,2)}, c = ${fmt(T.c,2)}, ℓ = ${fmt(T.l,0)} ft, ε̄ = ${fmt(T.eps,4)}, z<sub>min</sub> = ${fmt(T.zmin,0)} ft (Table 26.11-1 values as used by the tool). h = ${inp.mode!=='sign'&&inp.pProj>0?`H + p = ${fmt(inp.H,2)} + ${fmt(inp.pProj,2)} = `:''}${fmt(f.h,2)} ft${inp.mode!=='sign'&&inp.pProj>0?' (height above grade; LPGF)':''}, B = ${fmt(f.B,3)} ft, L = ${fmt(f.L,3)} ft, β = ${fmt(f.beta,3)}, V = ${fmt(inp.V,0)} mph.</p>`;
   H+=g(`\\bar z = \\max(0.6h,\\ z_{min}) = ${fmt(f.zb,2)}\\ \\text{ft}\\qquad I_{\\bar z} = c\\left(\\frac{33}{\\bar z}\\right)^{1/6} = ${fmt(f.Iz,4)}\\qquad L_{\\bar z} = \\ell\\left(\\frac{\\bar z}{33}\\right)^{\\bar\\epsilon} = ${fmt(f.Lz,1)}\\ \\text{ft}`);
   H+=g(`Q^2 = \\frac{1}{1+0.63\\left(\\frac{B+h}{L_{\\bar z}}\\right)^{0.63}} = ${fmt(f.Q2,4)}\\qquad \\bar V_{\\bar z} = \\hat b\\left(\\frac{\\bar z}{33}\\right)^{\\hat\\alpha}V\\,\\frac{88}{60} = ${fmt(f.Vz,2)}\\ \\text{ft/s}`);
   H+=g(`N_1 = \\frac{n_1L_{\\bar z}}{\\bar V_{\\bar z}} = ${fmt(f.N1,4)}\\qquad R_n = \\frac{7.47N_1}{(1+10.3N_1)^{5/3}} = ${fmt(f.Rn,4)}`);
@@ -4836,7 +4836,7 @@ function lppCalcIbc(){
     .concat((cablesEnabled?cables:[]).map(c=>({z:c.hc,W:c.g*c.L/2}))));
   { const Bw=(inp.poleDiaTop+inp.poleDiaBase)/24;
     const Ld=inp.poleShape==='rect'? ((inp.poleDepthTop||0)+(inp.poleDepthBase||0))/24 : Bw;
-    lppApplyGf(inp, nat, {h:inp.H, B:Bw, L:Ld}); }
+    lppApplyGf(inp, nat, {h:inp.H+(inp.pProj>0?inp.pProj:0), B:Bw, L:Ld}); }   // LPGF (2026-11-03, engineer): h above grade, H + p (shaft projection p, LPPJ)
   // total service dead = misc + pole self-weight + sum of fixture weights
   const fixW=fixtures.reduce((s,x)=>s+x.W,0);
   inp.DLtotal=inp.DL+poleSeg.totalW+fixW;
