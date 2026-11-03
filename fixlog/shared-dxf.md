@@ -80,7 +80,7 @@ No drawing, file or engineering value changes: a browser helper for the preview 
 ## 2026-10-31 — PR: sbd-stiffener-tab — SOLID entity (solid fills)
 - `drawing()`: new `D.solid(l, pts)` (3 or 4 corners in polygon order); `write()`: DXF R12 `SOLID` with corners 1, 2, 4, 3 (a triangle repeats its third corner); `toSVG()`: solids drawn first, translucent (`opt.fill`, default 0.4), so lines and text stay on top. No change to existing entities or output of drawings without solids. Verified: `validate()` passes on every Shear & stiffeners graphic (tabgraphics-b test). Reason: the engineer found ratio hatching confusing.
 
-## 2026-11-03 — PR: claude/dxf-print-sheets — print the sheets to 11 × 17 pages at their plot scale (sheetSVG, printSheets; engineer's request)
+## 2026-11-03 — PR: claude/dxf-print-sheets (PR #749: https://github.com/mlococo88/All-Structural/pull/749) — print the sheets to 11 × 17 pages at their plot scale (sheetSVG, printSheets; engineer's request)
 No drawing, file or engineering value changes: a browser print path for the sheet previews, and an option of `toSVG()`.
 ### Where
 - `toSVG(D, opt)`: new `opt.frame = [x0, y0, x1, y1]`: the viewBox is exactly that rectangle (pad ignored).

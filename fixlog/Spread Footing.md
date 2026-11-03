@@ -4497,7 +4497,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 - None.
 
-## 2026-11-03 — PR: claude/dxf-print-sheets — Drawings: Print sheet and Print all sheets (11 × 17 landscape at plot scale) (SFPS; display only, no result change)
+## 2026-11-03 — PR: claude/dxf-print-sheets (PR #749: https://github.com/mlococo88/All-Structural/pull/749) — Drawings: Print sheet and Print all sheets (11 × 17 landscape at plot scale) (SFPS; display only, no result change)
 
 ### SFPS. Print the drawing sheets to PDF   [display only]
 - **Request (engineer):** print the previewed DXF sheets directly to PDF: "Print sheet" (the sheet shown) and "Print all sheets" next to
