@@ -144,3 +144,9 @@ Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcl
 - Other: #703/#720 Steel Beam binding bug + gov strip; library/undo all tools (#706–#721); list-input tables all tools (#681–#709); #736 lists.js Node-safe; #713 SB gage twin dropped.
 - Engineer checks open: index AREMA real-project print vs old; index AREMA girder spacing table; Pile library row at phone width.
 - PENDING (not now): RW/Abutment entered demands; SF hook-direction input (side cover from nearest edge); IBC/ACI "no eccentricity limit" option offered, not requested; Bridge Geometry/PBD phone sideways scroll (engineer: leave).
+
+## 2026-11-03 later (ET)
+- Merged: #743/#744/#745 LP LTS input layout + checks + Broms params; #746 shaft projection p; #747 LP summary panel; #748/#751 G_f h=H+p (cables keep h=H); #749/#750 print sheets SF/LP; #752/#753 sheet layouts BG/SPC; #754 border inset 0.25; #755/#756 SB half-size print (no outer border on half-size).
+- Engineer checks: real-browser print of a sheet in each tool; Pile library row at phone width; index AREMA real-project print; AREMA girder spacing table.
+- Stale remote branch claude/sbd-print-sheets (deletion blocked; engineer may delete).
+- PENDING: LP handhole input, leveling-nut standoff; LTS summary lacks shaft reinforcement/torsion threshold; BG dual-bearing label overlap on profile; RW/Abutment entered demands; SF hook-direction input.
