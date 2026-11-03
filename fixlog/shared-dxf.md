@@ -79,3 +79,47 @@ No drawing, file or engineering value changes: a browser helper for the preview 
 
 ## 2026-10-31 — PR: sbd-stiffener-tab — SOLID entity (solid fills)
 - `drawing()`: new `D.solid(l, pts)` (3 or 4 corners in polygon order); `write()`: DXF R12 `SOLID` with corners 1, 2, 4, 3 (a triangle repeats its third corner); `toSVG()`: solids drawn first, translucent (`opt.fill`, default 0.4), so lines and text stay on top. No change to existing entities or output of drawings without solids. Verified: `validate()` passes on every Shear & stiffeners graphic (tabgraphics-b test). Reason: the engineer found ratio hatching confusing.
+
+## 2026-11-03 — PR: claude/dxf-print-sheets — print the sheets to 11 × 17 pages at their plot scale (sheetSVG, printSheets; engineer's request)
+No drawing, file or engineering value changes: a browser print path for the sheet previews, and an option of `toSVG()`.
+### Where
+- `toSVG(D, opt)`: new `opt.frame = [x0, y0, x1, y1]`: the viewBox is exactly that rectangle (pad ignored).
+  - Before: `const pad = opt.pad != null ? opt.pad : 0.02 * Math.max(b[2] - b[0], b[3] - b[1]), x0 = b[0] - pad, y1 = b[3] + pad, W = b[2] - b[0] + 2 * pad, H = b[3] - b[1] + 2 * pad;`
+  - After: `const pad = …, F = opt.frame;` then `const x0 = F ? F[0] : b[0] - pad, y1 = F ? F[3] : b[3] + pad, W = F ? F[2] - F[0] : b[2] - b[0] + 2 * pad, H = F ? F[3] - F[1] : b[3] - b[1] + 2 * pad;`
+  - Without `frame` the output is the same string as before (600 random drawings × 3 option sets compared with origin/main's file: 0 different).
+- New `sheetSVG(D, s, opt)`: `toSVG` of the sheet's entities `s.i0..s.i1` with `frame: [s.ox, 0, s.ox + s.W, s.H]` (the sheet's outer border;
+  every tool draws its sheets side by side from x = ox, y = 0), `bg: '#fff'`, `title`.
+- New `printSheets(items, opt)` (anchor `function printSheets(items, opt) {`), items = SVG strings or `{ svg, title }`, `opt.paper` = [w, h] in
+  (default [17, 11]):
+  - adds `<div id="sdx-print">` (one `.sdx-sheet` per item, each SVG set to width 17in, height 11in) at the end of body, the class
+    `sdx-printing` on body and `<style id="sdx-print-css">` with `@page sdxsheet { size: 17in 11in !important; margin: 0 !important; every margin box content: none !important }`
+    and, under `@media print` only, rules that hide every other child of body and give each sheet `page: sdxsheet`, 17 × 11 in, a page break after;
+  - calls `window.print()`; on `afterprint` (and, where print() does not block, on the next click / key / focus after 0.5 s) removes the
+    box, the style and the class. On `beforeprint` it moves its style last in the head.
+  - A proportion check: a sheet whose viewBox is not 17:11 (±0.2 %) is printed to fit and a console warning says it is not at its scale.
+- New `PRINT_NOTE`: the UI note (Tabloid / 11 × 17, Landscape, Margins None, Scale 100 %) for the tools to show next to the buttons.
+### Decisions
+- One page per sheet; the sheet's outer border is the page edge (the SVG viewBox is the border, the page has no margin), so a B-size sheet
+  drawn at plot scale k prints at 1:k exactly: 1 in on paper = k in full size.
+- Named page with `!important`, and the style moved last at beforeprint: headless Chromium 153 let a later unnamed `@page` (the Report's
+  `#rp-page` letter page with its running header, added by a tool's beforeprint handler) override an earlier named page, which printed the
+  sheets on letter paper with the Report's header. With `!important` the named page wins in either order (checked both).
+- The tools' own beforeprint / afterprint handlers still run (a capture listener on window does not run before the earlier non-capture ones
+  in Chromium for window-targeted events, so they cannot be stopped reliably). The print rules outrank shared/report.js's
+  `body.rp-printing>*:not(#rp-print)` (`html body.sdx-printing>div#sdx-print#sdx-print`), so a tool preparing its Report print cannot take
+  the pages over; its afterprint restores its own state as after any print.
+- No library added. Nothing is stored.
+### Governing provision
+- None (drawing output; no engineering value).
+### Check case
+- Spread Footing default project, FOOTING PLAN at 1/2" = 1'-0" (k = 24): footing 10 × 8 ft = 120 × 96 in → 5 × 4 in = 360 × 288 pt on the
+  PDF. Measured (pdftocairo -svg of the printed page): 360.00 × 288.00 pt. Page 1224 × 792 pt; the outer border at (0, 0)-(1224, 792) pt.
+- `tests/engine/drawings.test.mjs` "sheetSVG / toSVG frame": a 17 × 11 sheet at k = 24 at x offset 500 → viewBox `0 0 408 264` even with a
+  text past the border; a 120 × 96 rectangle → points `100,214 220,214 220,118 100,118`.
+### How verified
+- `node tests/smoke/dxf-print-sheets.mjs` (new): per tool, Print sheet → 1 page 17 × 11 in, border on the page edge, the known dimension
+  to scale; Print all sheets → one 17 × 11 page per sheet; the print box removed afterwards; then the page's own print (no button) is the
+  Report on letter pages without any sheet; 0 console errors. The PDFs were looked at.
+- Tests of every tool that loads shared/dxf.js (CLAUDE.md §3): Spread Footing, Light Pole and Sign Post, apps/steel-bridge — see the PR.
+### Other copies
+- None.

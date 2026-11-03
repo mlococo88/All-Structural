@@ -72,6 +72,21 @@ test('SharedDxf: a sample drawing is a well-formed R12 file and reads back', () 
   const z = ezdxf(t, 'sample'); if (!z.skipped) { assert.equal(z.v, 'AC1009'); deq(z.errors, []); deq(z.counts, { LINE: 1, POLYLINE: 1, CIRCLE: 1, ARC: 1, TEXT: 1, DIMENSION: 3 }); }
 });
 
+test('SharedDxf: sheetSVG / toSVG frame: the viewBox is the sheet border, so 17 x 11 paper is the sheet at its plot scale (2026-11-03)', () => {
+  // a B-size sheet at k = 24 drawn at x offset 500: border 17·24 = 408 by 11·24 = 264; a text sticking out of it does not move the viewBox
+  const D = X.drawing({ prefix: 'T-' }), l = D.layer('B', 7), k = 24, ox = 500; D.k = k; D.h = 0.1 * k;
+  const i0 = D.mark(); D.rect(l, ox, 0, ox + 17 * k, 11 * k); D.rect(l, ox + 100, 50, ox + 220, 146); D.text(l, ox + 17 * k - 2, 10, 5, 'A LONG NOTE PAST THE BORDER', 0);
+  const s = { i0, i1: D.mark(), ox, W: 17 * k, H: 11 * k, title: 'T' };
+  const vb = svg => svg.match(/viewBox="([^"]+)"/)[1];
+  assert.equal(vb(X.sheetSVG(D, s)), '0 0 408 264');
+  assert.equal(vb(X.toSVG(D, { i0, i1: s.i1, frame: [ox, 0, ox + 408, 264] })), '0 0 408 264');
+  // the footing-like rectangle 120 x 96 in at 1:24 = 5 x 4 in on the sheet: x from 100 to 220, y (down) from 264 - 146 = 118 to 214
+  assert.match(X.sheetSVG(D, s), /<polygon points="100,214 220,214 220,118 100,118"/);
+  // without frame: extents plus pad as before (the text widens the box past the border)
+  assert.notEqual(vb(X.toSVG(D, { i0, i1: s.i1, pad: 0 })), '0 0 408 264');
+  assert.equal(typeof X.printSheets, 'function'); assert.match(X.PRINT_NOTE, /Tabloid \/ 11 × 17.*Landscape.*Margins None.*100 %/);
+});
+
 test('SharedDxf: fractions and feet-inches (hand check)', () => {
   // plate sizes to 1/16 (GirderDetail frac): 1.125 = 1 1/8, 0.5625 = 9/16; dimensions to 1/8 (dxfIn, dxfFI): 0.5625·8 = 4.5 rounds to 5 → 5/8";
   // 148.5 in = 12 ft 4.5 in; 11.99 in rounds to 12 in = 1'-0"

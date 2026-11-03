@@ -46,6 +46,10 @@ node tests/compare.mjs --tool st --a a8bf5e7:stgirder.html --payload all      # 
 # Steel Bridge (apps/steel-bridge) Report tab: browser smoke test with print emulation (0 console errors, 0 KaTeX errors, links, print)
 node tests/smoke/steel-bridge-report.mjs
 
+# Drawings "Print sheet" / "Print all sheets" (shared/dxf.js printSheets): headless print-to-PDF, 17 x 11 in pages, a known dimension
+# measured to scale on the PDF (pdfinfo, pdftocairo), the Report still printed by Ctrl+P (one entry per tool in TOOLS)
+node tests/smoke/dxf-print-sheets.mjs [--tool sf,...] [--out <dir for the PDFs>]
+
 # Spread Footing: the page itself never scrolls in the two-panel layout (links, scrollIntoView, focus, wheel, touch; 3 window sizes)
 node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex, plotly, three; default tests/libs>]
 

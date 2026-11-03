@@ -4496,3 +4496,33 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 
 ### Open items
 - None.
+
+## 2026-11-03 — PR: claude/dxf-print-sheets — Drawings: Print sheet and Print all sheets (11 × 17 landscape at plot scale) (SFPS; display only, no result change)
+
+### SFPS. Print the drawing sheets to PDF   [display only]
+- **Request (engineer):** print the previewed DXF sheets directly to PDF: "Print sheet" (the sheet shown) and "Print all sheets" next to
+  "Download DXF"; each sheet a vector 11 × 17 landscape page at its true plot scale through the browser's print dialog; Ctrl+P and the
+  browser's Print still print the Report.
+- **Where:** `renderDrawings()`:
+  - Bar, anchor `'<button type="button" id="sfdwDxf">Download DXF ('+B.S.length+' sheets)</button>`: before, the bar ended with `</div>'+` after
+    that button; after, two buttons `id="sfdwPrint1"` (Print sheet) and `id="sfdwPrintAll"` (Print all sheets (n)) follow it, then
+    `'<div class="note">'+sfEsc(SharedDxf.PRINT_NOTE)+'</div>'` (Tabloid / 11 × 17, Landscape, Margins None, Scale 100 %).
+  - After the Download DXF handler (anchor `/* SFPS (2026-11-03)`):
+    `const prt=list=>SharedDxf.printSheets(list.map(s=>({svg:SharedDxf.sheetSVG(B.D,s),title:s.title})),{paper:[SFDW.W,SFDW.H]});`
+    `#sfdwPrint1` → `prt([cur])`, `#sfdwPrintAll` → `prt(B.S)`.
+  - SFAC click interception (anchor `const t=e.target.closest&&e.target.closest('#btnPrint,#sfdwDxf,`): before
+    `'#btnPrint,#sfdwDxf,#tab-report [data-rpact="print"]'` and `const sel=t.id==='sfdwDxf'?'#sfdwDxf':'#tab-report [data-rpact="print"]';`;
+    after `'#btnPrint,#sfdwDxf,#sfdwPrint1,#sfdwPrintAll,#tab-report [data-rpact="print"]'` and
+    `const sel=/^sfdw/.test(t.id)?'#'+t.id:'#tab-report [data-rpact="print"]';` (with Auto-calculate off and results out of date, the
+    print buttons re-analyze first and then print, as Download DXF).
+- **Governing provision:** none (drawing output).
+- **Check case:** default project, sheet 1 FOOTING PLAN at 1/2" = 1'-0": the 10 × 8 ft footing measures 5.000 × 4.000 in (360 × 288 pt) on
+  the printed 17 × 11 in page. Print all sheets: 7 pages, all 17 × 11 in.
+- **How verified:** `node tests/smoke/dxf-print-sheets.mjs --tool sf` (headless Chromium page.pdf honoring @page). Report print (page.pdf with no
+  button, from the Drawings tab): 63 letter pages, text identical to origin/main's (pdftotext, diff empty). `node tests/smoke/spread-footing-scroll.mjs`,
+  `node tests/check-syntax.mjs`. No result changes: only the Drawings tab's bar and handlers changed.
+- **Other copies:** the print code is shared (`shared/dxf.js` printSheets, sheetSVG; fixlog/shared-dxf.md).
+
+### Open items
+- The outer border prints on the page edge (the sheet is the page). A physical printer with unprintable edges will clip that outer line
+  (the inner border and title block are inside it); a PDF keeps it.

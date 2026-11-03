@@ -32,11 +32,20 @@
        D.dimH(l, x1, x2, y, yref, txt), D.dimV(l, y1, y2, x, xref, txt), D.chainH(l, xs, y, yref), D.chainV(l, ys, x, xref)
        D.mark(), D.bbox(i0, i1), D.move(i0, dx, dy)
        D.toDXF(opt) -> the DXF text (opt.ltscale: $LTSCALE, default 1)
-     SharedDxf.toSVG(D, opt) -> '<svg ...>' of entities opt.i0..opt.i1 (default all); opt: { width, pad, bg, cls, title }
+     SharedDxf.toSVG(D, opt) -> '<svg ...>' of entities opt.i0..opt.i1 (default all); opt: { width, pad, bg, cls, title, frame }
+                             (frame [x0, y0, x1, y1]: the viewBox is exactly that rectangle instead of the entities' extents plus pad)
      SharedDxf.viewer(host, svg, opt) (browser) the SVG in host with pan and zoom by its viewBox: wheel about the cursor, drag, pinch,
                              double-click / double-tap to fit, on-canvas + / - / Fit; returns { level, set, zoom, fit }
      SharedDxf.viewer(host, svg, opt) (browser) the SVG in host with pan and zoom by its viewBox: wheel about the cursor, drag, pinch,
                              double-click / double-tap to fit, on-canvas + / - / Fit; returns { level, set, zoom, fit }
+     SharedDxf.sheetSVG(D, s, opt)  one sheet as an SVG whose viewBox is exactly its sheet border: s = { i0, i1, ox, W, H, title } (a sheet
+                             drawn at x offset ox, its outer border from (ox, 0) to (ox + W, H)); for printing at the plot scale (2026-11-03)
+     SharedDxf.printSheets(items, opt) (browser) prints sheets through the browser's print dialog, one vector page per sheet, each SVG
+                             filling the page (default 17 x 11 in, landscape, no margins: a B-size sheet drawn at its plot scale prints at
+                             that scale); items = [svg string | { svg, title }]; opt: { paper: [w, h] in inches }. A temporary print box and
+                             a named @page exist only while it prints (after it, Ctrl+P and the browser's Print print the Report as before).
+                             Returns { pages, warn }
+     SharedDxf.PRINT_NOTE    the note for the tools' UI next to the Print buttons (paper, orientation, margins and scale to choose)
      SharedDxf.str(s)        text as DXF R12 accepts it (degree %%d, diameter %%c, x for ×, CL for ℄, HTML tags removed)
      SharedDxf.frac(v, den), fmtIn(inch), fmtFtIn(inch)   9/16 (nearest 1/16 by default), 1 1/8", 12'-4 1/2" (nearest 1/8 in)
      SharedDxf.parse(text)   -> { pairs, sections, tables, blocks, entities } (tests; any DXF this writer makes)
@@ -189,7 +198,8 @@
   function toSVG(D, opt) {
     opt = opt || {}; const i0 = opt.i0 || 0, i1 = opt.i1 == null ? D.E.length : opt.i1, b = bbox(D.E, i0, i1);
     if (!isFinite(b[0])) return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>';
-    const pad = opt.pad != null ? opt.pad : 0.02 * Math.max(b[2] - b[0], b[3] - b[1]), x0 = b[0] - pad, y1 = b[3] + pad, W = b[2] - b[0] + 2 * pad, H = b[3] - b[1] + 2 * pad;
+    const pad = opt.pad != null ? opt.pad : 0.02 * Math.max(b[2] - b[0], b[3] - b[1]), F = opt.frame;
+    const x0 = F ? F[0] : b[0] - pad, y1 = F ? F[3] : b[3] + pad, W = F ? F[2] - F[0] : b[2] - b[0] + 2 * pad, H = F ? F[3] - F[1] : b[3] - b[1] + 2 * pad;
     const X = x => +(x - x0).toFixed(3), Y = y => +(y1 - y).toFixed(3), sw = Math.max(W, H) / 1500;
     const col = l => ACI[(D.L[l] || {}).color] || ACI[7], esc = s => String(s).replace(/%%d/g, '°').replace(/%%c/g, 'Ø').replace(/%%p/g, '±').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
     const dash = lt => { if (!lt || lt === 'CONTINUOUS') return ''; const p = D.lt[lt] || BASE_LT[lt.split('_')[0]] || []; return p.length ? ` stroke-dasharray="${p.map(v => +Math.max(Math.abs(v), sw).toFixed(3)).join(' ')}"` : ''; };
@@ -254,6 +264,64 @@
     return { level, set, zoom, fit, el, box };
   }
 
+  /* ---------- printing the sheets (browser; 2026-11-03, engineer's request) ---------- */
+  /* sheetSVG(D, s, opt): sheet s as an SVG whose viewBox is its outer border, so the SVG scaled to the paper is the sheet at its plot scale */
+  function sheetSVG(D, s, opt) { return toSVG(D, Object.assign({ i0: s.i0, i1: s.i1, bg: '#fff', title: s.title, frame: [s.ox || 0, 0, (s.ox || 0) + s.W, s.H] }, opt || {})); }
+  const PRINT_NOTE = 'Print sheet / Print all sheets: one 11 × 17 in (B-size) landscape page per sheet, each at its plot scale, through the browser\'s print dialog (choose Save as PDF there). '
+    + 'If the dialog does not pick it up, choose paper Tabloid / 11 × 17 (Ledger), Landscape, Margins None and Scale 100 % (Actual size / Default).';
+  const PR = { done: null };
+  const MBOX = ['top-left-corner', 'top-left', 'top-center', 'top-right', 'top-right-corner', 'right-top', 'right-middle', 'right-bottom', 'bottom-right-corner',
+    'bottom-right', 'bottom-center', 'bottom-left', 'bottom-left-corner', 'left-bottom', 'left-middle', 'left-top'];
+  /* printSheets(items, opt): a print box with one page per sheet (#sdx-print, a direct child of body) and a style that, only while printing,
+     shows that box alone on named pages "sdxsheet" (size w × h in, margin 0, no margin boxes; !important and moved last in the head at
+     beforeprint, so the tools' unnamed @page rules, e.g. the Report's letter pages, running header and page numbers, do not apply to
+     them: Chromium lets a later unnamed @page override an earlier named one), and the selectors outrank the Report's print rules
+     (shared/report.js body.rp-printing), so a tool's own beforeprint handler (which prepares its Report) cannot take the pages over. The box,
+     the style and the body class are removed after printing (afterprint). Without printSheets nothing of this is in the page: Ctrl+P and
+     the browser's Print print the Report as before. */
+  function printSheets(items, opt) {
+    opt = opt || {}; const pw = (opt.paper || [17, 11])[0], ph = (opt.paper || [17, 11])[1], warn = [];
+    if (typeof document === 'undefined' || !items || !items.length) return { pages: 0, warn: ['nothing to print'] };
+    if (PR.done) PR.done();
+    const B = 'html body.sdx-printing', css = document.createElement('style'); css.id = 'sdx-print-css';
+    css.textContent = `@page sdxsheet{size:${pw}in ${ph}in!important;margin:0!important;${MBOX.map(m => `@${m}{content:none!important;}`).join('')}}
+#sdx-print{display:none;}
+@media print{
+  ${B}>*:not(#sdx-print):not(#sdx-print){display:none!important;}
+  html:has(body.sdx-printing),${B}{height:auto!important;min-height:0!important;max-height:none!important;overflow:visible!important;margin:0!important;padding:0!important;border:0!important;background:#fff!important;zoom:1!important;transform:none!important;}
+  ${B}>div#sdx-print#sdx-print{display:block!important;visibility:visible!important;position:static!important;margin:0!important;padding:0!important;zoom:1!important;transform:none!important;}
+  ${B}>div#sdx-print#sdx-print>.sdx-sheet{page:sdxsheet;display:block!important;visibility:visible!important;width:${pw}in;height:${ph}in;margin:0;padding:0;overflow:hidden;break-inside:avoid;break-before:auto;break-after:page;background:#fff;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+  ${B}>div#sdx-print#sdx-print>.sdx-sheet:last-child{break-after:auto;}
+  ${B}>div#sdx-print#sdx-print>.sdx-sheet>svg{display:block!important;visibility:visible!important;width:${pw}in!important;height:${ph}in!important;max-width:none!important;}
+}`;
+    const box = document.createElement('div'); box.id = 'sdx-print'; box.setAttribute('aria-hidden', 'true');
+    box.innerHTML = items.map(it => `<div class="sdx-sheet">${typeof it === 'string' ? it : it.svg}</div>`).join('');
+    box.querySelectorAll('.sdx-sheet>svg').forEach((el, i) => {
+      el.setAttribute('width', pw + 'in'); el.setAttribute('height', ph + 'in'); el.setAttribute('preserveAspectRatio', 'xMidYMid meet');
+      const v = (el.getAttribute('viewBox') || '').split(/[\s,]+/).map(Number);
+      if (v.length === 4 && v[2] > 0 && v[3] > 0 && Math.abs(v[2] / v[3] - pw / ph) > 0.002 * pw / ph) warn.push(`sheet ${i + 1}: its proportions (${+(v[2] / v[3]).toFixed(4)}) are not the paper's (${+(pw / ph).toFixed(4)}); printed to fit, not at its plot scale`);
+    });
+    document.head.appendChild(css); document.body.appendChild(box); document.body.classList.add('sdx-printing');
+    let late = null;
+    function done() {
+      PR.done = null; window.removeEventListener('afterprint', after); window.removeEventListener('beforeprint', before);
+      if (late) { ['pointerdown', 'keydown', 'focus'].forEach(t => window.removeEventListener(t, late, true)); late = null; }
+      document.body.classList.remove('sdx-printing'); box.remove(); css.remove();
+    }
+    function after() { setTimeout(() => { if (PR.done === done) done(); }, 0); }
+    /* last in the head when printing starts, after any style a tool's beforeprint handler adds (its @page rules) */
+    function before() { if (css.isConnected) document.head.appendChild(css); }
+    PR.done = done; window.addEventListener('afterprint', after); window.addEventListener('beforeprint', before);
+    if (warn.length && window.console) console.warn('SharedDxf.printSheets: ' + warn.join('; '));
+    try { (opt.print || window.print).call(window); }
+    finally {
+      /* print() returns when the dialog closes in Chrome, Edge and Firefox (afterprint restores the page); where it returns at once, the
+         page is also restored on the next click, key or focus after the dialog */
+      setTimeout(() => { if (PR.done !== done) return; late = () => setTimeout(() => { if (PR.done === done) done(); }, 0); ['pointerdown', 'keydown', 'focus'].forEach(t => window.addEventListener(t, late, true)); }, 500);
+    }
+    return { pages: items.length, warn };
+  }
+
   /* ---------- reading back (tests, self-checks) ---------- */
   function parse(text) {
     const ln = String(text).split(/\r?\n/); if (ln[ln.length - 1] === '') ln.pop();
@@ -312,5 +380,5 @@
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
   }
 
-  window.SharedDxf = { drawing, toSVG, viewer, str, frac, fmtIn, fmtFtIn, num, dimGeo, bbox, parse, validate, download, ACI };
+  window.SharedDxf = { drawing, toSVG, sheetSVG, printSheets, PRINT_NOTE, viewer, str, frac, fmtIn, fmtFtIn, num, dimGeo, bbox, parse, validate, download, ACI };
 })();
