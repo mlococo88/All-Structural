@@ -29,6 +29,9 @@ h3{font-size:13px;margin:8px 0 4px 0}
 .allToolsLink{font-size:10px;color:#1c4e80;text-decoration:none}
 .allToolsLink:hover{text-decoration:underline}
 @media print{.allToolsLink{display:none !important}}
+/* SFPR (2026-11-03; review E6): printed Report: a table's scroll box is not printed as a scroll bar, and the last step of a topic
+   does not go to a page alone */
+@media print{#rp-print .rp-tw{overflow:visible !important;max-height:none !important} #rp-print .rp-steps>.rp-step:last-child,#rp-print .rp-step:has(+ .rp-top){break-before:avoid}}
 .main{display:flex;gap:12px;align-items:flex-start}
 .inp{width:33%;min-width:400px}
 .out{flex:1;min-width:0}
@@ -1434,7 +1437,7 @@ function computeAll(){
  /* resultant per combo */
  function resultant(f){
   let P=0,Hx=0,Hy=0,Mx=0,My=0,MaX=0,MaY=0;
-  const verts=[];
+  const verts=[], maT=[];   // SFPR (2026-11-03): the terms of MaX / MaY, for the report substitution only
   const fD=f.direct?(f.dead||1):(f.D||0);
   const fL=f.direct?(f.ls!=null?f.ls:(f.dead||1)):(f.L||0); // live factor; in direct mode surcharge rides the single envelope (SFAD: an AASHTO case's own live factor)
   const fEV=(f.direct&&f.ev!=null)?f.ev:fD, fES=(f.direct&&f.es!=null)?f.es:fD;   // SFAD: AASHTO γEV / γES of the imported case; otherwise the dead factor
@@ -1451,17 +1454,17 @@ function computeAll(){
     if(Pp!==0){P+=Pp;verts.push({w:Pp,x:p.x+p.lex,y:p.y+p.ley,src:p.label+' (factored)',f:1,mag:Pp});}
     Hx+=vx;Hy+=vy;
     Mx+=(Pp*(p.y+p.ley)+mx+vy*coupleLever(p));My+=(Pp*(p.x+p.lex)+my+vx*coupleLever(p));
-    MaX+=(mx+vy*coupleLever(p));MaY+=(my+vx*coupleLever(p));});
+    MaX+=(mx+vy*coupleLever(p));MaY+=(my+vx*coupleLever(p));maT.push({src:p.label,f:1,mx,my,vx,vy,lev:coupleLever(p)});});
   }else{
    peds.forEach(p=>{TYPES.forEach(tp=>{const ft=f[tp]||0;if(!ft)return;const ld=p.loads[tp];
     const Pp=num(ld.P),vx=num(ld.Vx),vy=num(ld.Vy),mx=num(ld.Mx),my=num(ld.My);
     if(Pp!==0){P+=ft*Pp;verts.push({w:ft*Pp,x:p.x+p.lex,y:p.y+p.ley,src:p.label+' '+tp,f:ft,mag:Pp});}   // SFLO: at the load point
     Hx+=ft*vx;Hy+=ft*vy;
     Mx+=ft*(Pp*(p.y+p.ley)+mx+vy*coupleLever(p));My+=ft*(Pp*(p.x+p.lex)+my+vx*coupleLever(p));
-    MaX+=ft*(mx+vy*coupleLever(p));MaY+=ft*(my+vx*coupleLever(p));});});
+    MaX+=ft*(mx+vy*coupleLever(p));MaY+=ft*(my+vx*coupleLever(p));if(mx||my||vx||vy)maT.push({src:p.label+' '+tp,f:ft,mx,my,vx,vy,lev:coupleLever(p)});});});
   }
   if(U>0){P-=U;verts.push({w:-U,x:0,y:0,src:'Buoyancy U',f:1,mag:-U});}
-  return{P,Hx,Hy,Mx,My,MaX,MaY,verts,ex:Math.abs(P)>1e-9?My/P:0,ey:Math.abs(P)>1e-9?Mx/P:0};
+  return{P,Hx,Hy,Mx,My,MaX,MaY,verts,maT,ex:Math.abs(P)>1e-9?My/P:0,ey:Math.abs(P)>1e-9?Mx/P:0};
  }
  const ctx={B,L,Df,phi,c,gs,gw,dw:dwc===Infinity?Infinity:dwc,FSb,useD:state.soil.sfdDepthF==='on'};
  const mu=(state.stab.muMode==='phi')?Math.tan((2/3)*phi):num(state.stab.mu);
@@ -1882,14 +1885,16 @@ function sectSVG(){
  const Wpx=560,pad=50;
  const totH=Df+Math.max(hped-topDepth,0)+1;
  const sc=Math.min((Wpx-2*pad)/B,(300-2*pad)/totH);
- const w=B*sc+2*pad+60,h=totH*sc+2*pad;
+ const w=Math.max(B*sc+2*pad+60,470),h=totH*sc+2*pad, capH=26;   /* SFPR (review E6): room for the caption (two lines, above the drawing) */
  const gradeY=pad+Math.max(hped-topDepth,0)*sc+0.5*sc;
  const X=x=>pad+(x+B/2)*sc;
  const D=dep=>gradeY+dep*sc;
- let s='<svg class="svgbox" width="'+w+'" height="'+h+'" xmlns="http://www.w3.org/2000/svg" font-family="Times New Roman" font-size="11">';
+ let s='<svg class="svgbox" width="'+w+'" height="'+(h+capH)+'" xmlns="http://www.w3.org/2000/svg" font-family="Times New Roman" font-size="11">';
  s+='<defs><marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#c00"/></marker>';
  s+='<marker id="arg" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#2a7d2a"/></marker></defs>';
- s+='<text x="'+(pad-30)+'" y="12" font-size="10" fill="#555" font-style="italic">Elevation looking along \u2212y (x horizontal, z up). Shows P and V\u2093; V\u1D67 acts out of plane.</text>';
+ s+='<text x="'+(pad-30)+'" y="12" font-size="10" fill="#555" font-style="italic">Elevation looking along \u2212y (x horizontal, z up).</text>';
+ s+='<text x="'+(pad-30)+'" y="24" font-size="10" fill="#555" font-style="italic">Shows P and V\u2093 (service values as labelled); V\u1D67 acts out of plane.</text>';
+ s+='<g transform="translate(0,'+capH+')">';
  s+='<rect x="'+(pad-30)+'" y="'+gradeY+'" width="'+(B*sc+60)+'" height="'+(Df*sc)+'" fill="#f0e6d2"/>';
  s+='<line x1="'+(pad-30)+'" y1="'+gradeY+'" x2="'+(pad+B*sc+30)+'" y2="'+gradeY+'" stroke="#553" stroke-width="1.5"/>';
  s+='<text x="'+(pad-28)+'" y="'+(gradeY-3)+'">grade</text>';
@@ -1906,6 +1911,7 @@ function sectSVG(){
  // compute a representative axial load per pedestal for arrow labeling (governing ASD combo if available)
  const arrowLen=26; // fixed, readable
  peds.forEach((p,i)=>{
+  const near=q=>Math.abs(q.x-p.x)*sc<((q.bx+p.bx)/2*sc+60), j=peds.slice(0,i).filter(near).length, off=13*j, tRef=Math.min(...peds.filter(near).map(q=>D(Df-t)-q.h*sc));   /* SFPR (review E6): labels of pedestals in line with each other stacked, not overprinted */
   s+='<rect x="'+X(p.x-p.bx/2)+'" y="'+(D(Df-t)-p.h*sc)+'" width="'+(p.bx*sc)+'" height="'+(p.h*sc)+'" fill="#d9d9d9" stroke="#333"/>';
   const topY=D(Df-t)-p.h*sc;
   // load arrow: fixed readable length pointing down onto pedestal top
@@ -1916,12 +1922,12 @@ function sectSVG(){
   if(R.directMode&&p.direct){Pdisp=num(p.direct.P);Vxdisp=num(p.direct.Vx);}
   else{const d0=p.loads&&p.loads.D?num(p.loads.D.P):0,l0=p.loads&&p.loads.L?num(p.loads.L.P):0;Pdisp=d0+l0;
    Vxdisp=(p.loads&&p.loads.D?num(p.loads.D.Vx):0)+(p.loads&&p.loads.Wx?num(p.loads.Wx.Vx):0);}
-  if(Pdisp!==null&&Math.abs(Pdisp)>1e-9)s+='<text x="'+(lxp+4)+'" y="'+(topY-arrowLen+4)+'" fill="#c00" font-size="10">P='+f2(Math.abs(Pdisp))+' k'+(Math.abs(p.lex)>1e-12?' (e\u2093='+f2(p.lex)+' ft)':'')+'</text>';
+  if(Pdisp!==null&&Math.abs(Pdisp)>1e-9)s+='<text x="'+(lxp+4)+'" y="'+(tRef-arrowLen+4-off)+'" fill="#c00" font-size="10">'+sfEsc(p.label)+': P'+(R.directMode?' (factored)':' (D + L)')+' = '+f2(Math.abs(Pdisp))+' k'+(Math.abs(p.lex)>1e-12?' (e\u2093='+f2(p.lex)+' ft)':'')+'</text>';
   // horizontal shear Vx arrow (in-plane for this X-Z elevation)
   if(Math.abs(Vxdisp)>1e-9){const dir=Math.sign(Vxdisp);const ax0=X(p.x),ax1=X(p.x)+dir*24;
    s+='<line x1="'+ax0+'" y1="'+(topY+6)+'" x2="'+ax1+'" y2="'+(topY+6)+'" stroke="#2a7d2a" stroke-width="2.5" marker-end="url(#arg)"/>';
-   s+='<text x="'+(ax1+dir*2)+'" y="'+(topY+2)+'" fill="#2a7d2a" font-size="9" text-anchor="'+(dir>0?'start':'end')+'">Vx='+f2(Vxdisp)+' k</text>';}
-  s+='<text x="'+X(p.x)+'" y="'+(topY-arrowLen-4)+'" text-anchor="middle" font-size="9" fill="#555">'+p.label+'</text>';
+   s+='<text x="'+(ax1+dir*2)+'" y="'+(tRef+2+off)+'" fill="#2a7d2a" font-size="9" text-anchor="'+(dir>0?'start':'end')+'">'+sfEsc(p.label)+': V\u2093'+(R.directMode?'':' (D + Wx)')+' = '+f2(Vxdisp)+' k</text>';}
+  if(!(Pdisp!==null&&Math.abs(Pdisp)>1e-9))s+='<text x="'+X(p.x)+'" y="'+(tRef-arrowLen-4-off)+'" text-anchor="middle" font-size="9" fill="#555">'+p.label+'</text>';
  });
  if(covEff>0)s+='<rect x="'+X(-B/2)+'" y="'+D(topDepth-covEff)+'" width="'+(B*sc)+'" height="'+(covEff*sc)+'" fill="#cbb994" opacity="0.7"/>';
  if(dw!==Infinity&&dw<Df+1){s+='<line x1="'+(pad-30)+'" y1="'+D(dw)+'" x2="'+(pad+B*sc+30)+'" y2="'+D(dw)+'" stroke="#06c" stroke-dasharray="8,4" stroke-width="1.5"/>';
@@ -1930,7 +1936,7 @@ function sectSVG(){
  s+='<text x="'+(X(B/2)+11)+'" y="'+D(Df/2)+'">Df='+f2(Df)+' ft</text>';
  s+='<line x1="'+(X(-B/2)-8)+'" y1="'+D(Df-t)+'" x2="'+(X(-B/2)-8)+'" y2="'+D(Df)+'" stroke="#333"/>';
  s+='<text x="'+(X(-B/2)-11)+'" y="'+D(Df-t/2)+'" text-anchor="end">t='+f2(R.t)+' ft</text>';
- s+='</svg>';
+ s+='</g></svg>';
  const d=el('div');d.innerHTML=s;return d;
 }
 function buildInputEcho(){
@@ -3006,7 +3012,28 @@ function sfrTopics(scope,list,opt){
 }
 function sfrW(){const w=SharedSteps.work('');return w;}
 /* SFNG (2026-11-03): a step with the short name of its check (chk) and a REVIEW flag (rev), for the topic badges (sfrTopics) */
-function sfrS(o){const st=SharedSteps.step(o);if(o.chk)st.chk=o.chk;if(o.rev)st.rev=o.rev;return st;}
+function sfrS(o){
+ /* SFPR (2026-11-03; review E1): a test step written as sym + a relation (eq '\\ge A_{s,min}') printed "A_s,prov = ≥ A_s,min = 0.900 ≥ 0.518 = 0.900":
+    the relation now reads "A_s,prov ≥ A_s,min = 0.900 ≥ 0.518 in²/ft" (the value with its unit moves into the substitution; display only). */
+ if(o&&o.sym&&typeof o.eq==='string'&&/^\\(le|ge|lt|gt)\b/.test(o.eq)&&typeof o.value==='number'){
+  const u=o.unit?'\\;'+SharedSteps.unitTeX(o.unit):'';
+  o=Object.assign({},o,{eq:o.sym+' '+o.eq,sym:'',sub:(o.sub?o.sub:sfrN(o.value,o.d==null?2:o.d)+' '+o.eq)+u,value:'',unit:''});}
+ const st=SharedSteps.step(o);if(o.chk)st.chk=o.chk;if(o.rev)st.rev=o.rev;return st;}
+/* SFPR: code basis of the footing slab: a footing with two or more bearing elements is a combined footing (ACI 318-19 13.3.4.1:
+   designed under Chapter 8); one element: a two-way isolated footing (13.3.3.1: Chapters 7 and 8). Citations only. */
+function sfrCombined(){return !!(R&&R.peds&&R.peds.length>1);}
+/* SFPR (review D1, D3): the references the run uses. Vesić / Meyerhof only with the computed bearing (soil mode vesic); AASHTO only for
+   the items in use (10.6.3.1.2a with Vesić, an AASHTO eccentricity limit, 10.6.3.4 with passive resistance credited); ACI with 13.3.4 /
+   8.6.1.1 / 8.7.2.2 for a combined footing. SFD_REFS itself is unchanged (the old print report). */
+function sfrRefs(){
+ const ves=state.soil.mode==='vesic', em=state.stab.eccMode||'kern', aEcc=/^a_/.test(em), pp=num(state.stab.pf)>0;
+ return SFD_REFS.map(([a,b])=>{
+  if(a==='ACI 318-19'&&sfrCombined())return [a,b.replace('§7.6.1.1 / §24.4.3.2 (minimum steel), §7.7.2.3 / §13.3.4 (bar spacing)','§13.3.4.1 (combined footing, designed under Chapter 8), §8.6.1.1 / §24.4.3.2 (minimum steel), §8.7.2.2 (bar spacing), §13.3.3.3 (band steel, isolated footings; for information)').replace(', §13.3.3.3 (band steel)','')];
+  if(a==='AASHTO LRFD'){const it=[ves?'Art. 10.6.3.1.2a (same N, shape and inclination factors as Vesić; use condition for depth factors; its Eq. 10.6.3.1.2a-10 depth factor is not the one used here)':'',aEcc?'10.6.3.3 / 11.6.3.3 and 10.6.4.2 / 11.6.5.1 (eccentricity limit selected)':'',pp?'10.6.3.4 (passive resistance, warning)':''].filter(Boolean);
+   return it.length?[a,'Bridge Design Specifications, 10th Ed. (2024) — '+it.join(', ')]:null;}
+  if((a.indexOf('Vesić')===0||a.indexOf('Meyerhof')===0)&&!ves)return null;
+  return [a,b];}).filter(Boolean);
+}
 const sfrCell=(v,d,cls)=>({t:(typeof v==='number')?(isFinite(v)?sfrN(v,d):(v>0?'∞':'−∞')):String(v==null?'—':v),n:typeof v==='number',cls});
 const sfrDC=v=>({t:(typeof v==='number'&&isFinite(v))?sfrN(v,2):(v===Infinity?'∞':'—'),n:true,cls:(typeof v==='number')?(v>1+1e-9?'ng':(v>=0.9?'hi':'ok')):'na'});
 
@@ -3020,7 +3047,7 @@ function sfrModel(){
   subs.push({title:'Project',items:[{type:'kv',rows:[
    ['Project',m.project||'—'],['Project number',m.number||'—'],['Calculated by',(m.calcBy||'—')+(m.calcDate?', '+m.calcDate:'')],['Checked by',(m.chkBy||'—')+(m.chkDate?', '+m.chkDate:'')],
    ['Load input',R.directMode?'Direct factored (LRFD envelope) per pedestal'+(R.aashtoDirect?'; imported AASHTO case "'+R.aashtoDirect.caseName+'" ('+R.aashtoDirect.ls+')':''):'By load type (D, L, Lr, S, Wx, Wy); ASCE 7-16 combinations generated'],
-   ['Codes','ACI 318-19 (concrete); ASCE 7-16 §2.3.1 / §2.4.1 (combinations); IBC 2021; bearing capacity per Vesić / Meyerhof (see [[S-ref]])'],
+   ['Codes','ACI 318-19 (concrete'+(sfrCombined()?'; combined footing, 13.3.4 with Chapter 8':'; isolated footing, 13.3.3')+'); ASCE 7-16 §2.3.1 / §2.4.1 (combinations); IBC 2021'+(state.soil.mode==='vesic'?'; bearing capacity per Vesić / Meyerhof':'; allowable bearing q_a (geotechnical input)')+' (see [[S-ref]])'],
    ...hand.map(h=>['Hand-off source',h])]},
    {type:'note',text:'Units: kip, ft, ksf unless noted; bar sizes and covers in in, f′c and f_y in psi. Every value in this report is the value the tool computes on its result tabs (Schematic[[tab:schem| ↗]], Load Combinations[[tab:combos| ↗]], Bearing[[tab:bearing| ↗]], Stability[[tab:stab| ↗]], Footing Design[[tab:footdes| ↗]], Pedestal Design[[tab:peddes| ↗]]).'}]});
   subs.push({title:'Geometry and materials',items:[{type:'table',head:['Quantity','Value','Unit'],rows:[
@@ -3032,7 +3059,7 @@ function sfrModel(){
   const soilRows=state.soil.mode==='vesic'
    ?[['Bearing basis','Vesić, computed','–'],['Cohesion c',sfrCell(R.c),'ksf'],['Friction angle φ',sfrCell(R.phiDeg,1),'deg'],['Bearing capacity FS',sfrCell(R.FSb),'–'],['Depth factors',state.soil.sfdDepthF==='on'?'on':'off (d = 1.0)','–'],
      ['Allowable bearing override',state.soil.qaOverride==='on'?sfrN(num(state.soil.qaOverVal))+' ksf':'off','–']]
-   :[['Bearing basis','Direct allowable q_a ('+state.soil.qaBasis+')','–'],['Allowable bearing q_a',sfrCell(num(state.soil.qa)),'ksf']];
+   :[['Bearing basis','Direct allowable q_a ('+state.soil.qaBasis+')','–'],['Allowable bearing q_a',sfrCell(num(state.soil.qa)),'ksf'],['Friction angle φ (base friction tan(2/3 φ), passive K_p)',sfrCell(R.phiDeg,1),'deg']];   /* SFPR (review E7) */
   subs.push({title:'Soil, cover and stability parameters',items:[{type:'table',head:['Quantity','Value','Unit'],rows:soilRows.concat([
    ['Soil unit weight γ_s',sfrCell(R.gs*1000,0),'pcf'],['Water table depth d_w',R.dw===Infinity?'none':sfrN(R.dw),'ft below grade'],
    ['Soil cover over footing (input / effective)',sfrN(num(state.ev.cover))+' / '+sfrN(R.covEff),'ft'],['Cover soil unit weight γ_EV',sfrCell(R.gev*1000,0),'pcf'],
@@ -3096,6 +3123,12 @@ function sfrModel(){
   const G=R.govBear, r=G.r, w2=sfrW(), vt=r.verts;
   const lst=(f)=>vt.map(f).join(' + ');
   w2.add({id:'P',label:'Vertical resultant, '+G.cb.name,sym:'\\sum P',eq:'\\sum w_{i}',sub:lst(v=>sfrP(v.w)),value:r.P,unit:'kip'});
+  {const T=r.maT||[], fm=(f,v)=>(Math.abs(f-1)<1e-12?'':sfrN(f)+'\\cdot')+sfrP(v);   /* SFPR (review E2): ΣM_a itemised */
+   [['Y','my','vx','y','x'],['X','mx','vy','x','y']].forEach(([A,mk,vk,ax,vd])=>{const ap=T.filter(z=>Math.abs(z[mk])>1e-12), cp=T.filter(z=>Math.abs(z[vk])>1e-12&&Math.abs(z.lev)>1e-12);
+    if(!ap.length&&!cp.length)return;
+    const sA=ap.reduce((a,z)=>a+z.f*z[mk],0), sC=cp.reduce((a,z)=>a+z.f*z[vk]*z.lev,0);
+    w2.add({id:'Ma'+A,label:'Applied moments about the '+ax+'-axis: pedestal M_'+ax+' ('+sfrN(sA)+' kip-ft) and the shear couples V_'+vd+'·(t + h) ('+sfrN(sC)+' kip-ft)',sym:'\\sum M_{a,'+ax+'}',eq:'\\sum f M_{'+ax+'} + \\sum f V_{'+vd+'}(t + h)',
+     sub:(ap.length?ap.map(z=>fm(z.f,z[mk])).join(' + '):'0')+' + '+(cp.length?cp.map(z=>fm(z.f,z[vk])+'\\cdot'+sfrN(z.lev,3)).join(' + '):'0'),value:A==='X'?r.MaX:r.MaY,unit:'kip-ft',note:'terms in the order: '+[...ap.map(z=>z.src+' M'),...cp.map(z=>z.src+' V')].join(', ')});});}
   w2.add({id:'My',label:'Moment about the y-axis (shifts the resultant toward +x)',sym:'\\sum M_{y}',eq:'\\sum w_{i} x_{i} + \\sum M_{a,y}',sub:lst(v=>sfrP(v.w)+'\\cdot'+sfrP(v.x,3))+' + '+sfrP(r.MaY),value:r.My,unit:'kip-ft'});
   w2.add({id:'Mx',label:'Moment about the x-axis (shifts the resultant toward +y)',sym:'\\sum M_{x}',eq:'\\sum w_{i} y_{i} + \\sum M_{a,x}',sub:lst(v=>sfrP(v.w)+'\\cdot'+sfrP(v.y,3))+' + '+sfrP(r.MaX),value:r.Mx,unit:'kip-ft'});
   w2.add({id:'Hx',label:'Horizontal resultants',sym:'\\sum H_{x}',eq:'\\sum V_{x}',sub:sfrN(r.Hx),value:r.Hx,unit:'kip',note:'ΣH_y = '+sfrN(r.Hy)+' kip'});
@@ -3174,7 +3207,7 @@ function sfrModel(){
    subs.push({title:'Eccentricity limit',key:'S-ecc',items:[{type:'steps',scope:'ecc',steps:[
     S({id:'lim',label:'Limits: '+sfrPlain(E.lab),sym:'e_{x,lim}',eq:'f\\,B',sub:sfrN(E.f,3)+'\\cdot'+sfrN(R.B),value:E.limX,unit:'ft',d:3,ref:sfrPlain(E.ref),note:'e_y,lim = f L = '+sfrN(E.limY,3)+' ft'}),
     E.biax?S({id:'DCR',label:'Governing: '+E.gov.name+' (biaxial: the resultant must lie inside the kern diamond for full contact)',sym:'DCR',eq:'\\frac{6|e_{x}|}{B} + \\frac{6|e_{y}|}{L}',sub:'\\frac{6\\cdot'+sfrN(Math.abs(E.gov.ex),3)+'}{'+sfrN(R.B)+'} + \\frac{6\\cdot'+sfrN(Math.abs(E.gov.ey),3)+'}{'+sfrN(R.L)+'} = '+sfrN(E.gov.dcrX,3)+' + '+sfrN(E.gov.dcrY,3),value:E.gov.dcr,unit:'',d:3,ok:!!E.ok})   /* SFEB */
-    :S({id:'DCR',label:'Governing: '+E.gov.name,sym:'DCR',eq:'\\max\\left(\\frac{|e_{x}|}{f B}, \\frac{|e_{y}|}{f L}\\right)',sub:'|e_{x}| = '+sfrN(Math.abs(E.gov.ex),3)+',\\; |e_{y}| = '+sfrN(Math.abs(E.gov.ey),3),value:E.gov.dcr,unit:'',d:3,ok:!!E.ok})]},...(E.biax?[{type:'note',text:'e_x, e_y of every service combination: [[S-asd]]. Middle third under biaxial eccentricity: the resultant must lie inside the kern diamond, 6|e_x|/B + 6|e_y|/L ≤ 1, for full contact.'}]:[])]});
+    :S({id:'DCR',label:'Governing: '+E.gov.name,sym:'DCR',eq:'\\max\\left(\\frac{|e_{x}|}{f B}, \\frac{|e_{y}|}{f L}\\right)',sub:'\\max\\left(\\frac{'+sfrN(Math.abs(E.gov.ex),3)+'}{'+sfrN(E.limX,3)+'}, \\frac{'+sfrN(Math.abs(E.gov.ey),3)+'}{'+sfrN(E.limY,3)+'}\\right)',value:E.gov.dcr,unit:'',d:3,ok:!!E.ok})]},...(E.biax?[{type:'note',text:'e_x, e_y of every service combination: [[S-asd]]. Middle third under biaxial eccentricity: the resultant must lie inside the kern diamond, 6|e_x|/B + 6|e_y|/L ≤ 1, for full contact.'}]:[])]});
   }
   const st=[], fr=[];
   if(state.stab.muMode==='phi')fr.push(S({id:'mu',label:'Base friction coefficient',sym:'\\mu',eq:'\\tan(\\tfrac{2}{3}\\phi)'.replace('\\tfrac','\\frac'),sub:'\\tan(\\frac{2}{3}\\cdot'+sfrN(R.phiDeg,1)+'^{\\circ})',value:R.mu,unit:'',d:3,ref:'δ = 2/3 φ (cast on soil)'}));
@@ -3185,8 +3218,9 @@ function sfrModel(){
   if(isFinite(R.govSlx.FSslx))st.push(...sl(R.govSlx,'x',R.govSlx.FSslx,R.govSlx.r.Hx,R.PpX));
   if(isFinite(R.govSly.FSsly))st.push(...sl(R.govSly,'y',R.govSly.FSsly,R.govSly.r.Hy,R.PpY));
   if(isFinite(R.govSlr.FSslr))st.push(...sl(R.govSlr,'r',R.govSlr.FSslr,R.govSlr.Hres,R.govSlr.PpR));
-  const ot=R.govOT.otMin, otS=[S({id:'Mr',label:'Resisting moment about edge '+ot.name+', '+R.govOT.cb.name,sym:'M_{r}',eq:'\\sum W_{i} a_{i}^{+} + |M_{app}^{\\minus}|',sub:'',value:ot.Mr,unit:'kip-ft'}),
-   S({id:'Mo',label:'Overturning moment',sym:'M_{o}',eq:'\\sum |W_{i} a_{i}^{\\minus}| + M_{app}^{+}',sub:'',value:ot.Mo,unit:'kip-ft'}),
+  const ot=R.govOT.otMin, otT=(b)=>{const t=(ot.rows||[]).filter(z=>z.bucket===b&&Math.abs(z.m)>1e-12).map(z=>sfrN(Math.abs(z.w))+'\\cdot'+sfrN(Math.abs(z.arm),3));if(ot.appRow&&ot.appRow.bucket===b)t.push(sfrN(ot.appRow.m));return t.length?t.join(' + '):'0';};   /* SFPR (review E2) */
+  const otS=[S({id:'Mr',label:'Resisting moment about edge '+ot.name+', '+R.govOT.cb.name+' (W_i: the vertical actions of the combination, as in the resultant table; arm a_i = '+ot.armLabel+'; the applied moments and shear couples enter once, as their net value M_app,net = '+sfrN(Math.abs(ot.Ma||0))+' kip-ft, on the side they act)',sym:'M_{r}',eq:'\\sum_{W_{i} a_{i} \\ge 0} W_{i} a_{i}'+(ot.appRow&&ot.appRow.bucket==='r'?' + |M_{app,net}|':''),sub:otT('r'),value:ot.Mr,unit:'kip-ft'}),
+   S({id:'Mo',label:'Overturning moment',sym:'M_{o}',eq:'\\sum_{W_{i} a_{i} < 0} |W_{i} a_{i}|'+(ot.appRow&&ot.appRow.bucket==='o'?' + M_{app,net}':''),sub:otT('o'),value:ot.Mo,unit:'kip-ft'}),
    S({id:'FS',label:'Overturning factor of safety',sym:'FS_{OT}',eq:'\\frac{M_{r}}{M_{o}}',sub:'\\frac{'+sfrN(ot.Mr)+'}{'+sfrN(ot.Mo)+'}',value:ot.FS,unit:'',d:2,note:R.otGate?'':'reported only (the overturning FS does not gate the result; input)'})];
   if(R.otGate&&isFinite(ot.FS))otS.push(S({id:'DC',label:'Demand / capacity (target FS '+sfrN(FSot)+')',sym:'D/C',eq:'\\frac{FS_{target}}{FS_{OT}}',sub:'\\frac{'+sfrN(FSot)+'}{'+sfrN(ot.FS)+'}',value:FSot/ot.FS,unit:'',d:3,ok:ot.FS>=FSot-1e-9}));
   const T=[{title:'Sliding resistance parameters',ref:'',steps:fr},{title:'Sliding',ref:'FS target '+sfrN(FSsl),steps:st},{title:'Overturning (governing edge)',ref:'arm = '+ot.armLabel,steps:otS}];
@@ -3195,6 +3229,7 @@ function sfrModel(){
   else T.push({title:'Flotation',ref:'',steps:[S({id:'flna',label:'No water table at or above the base of the footing (water table depth: '+(R.dw===Infinity?'none entered':sfrN(R.dw)+' ft below grade')+'): no buoyancy, so flotation does not apply. Checked (FS_fl = resisting weight / U) when a water table above the base is entered',sym:'',eq:'',sub:'',value:'not applicable'})]});   /* SFFL (2026-11-03; review C8) */
   if(R.rig&&R.rig.lam!=null)T.push({title:'Rigid-footing verification',ref:'Bowles: λℓ ≤ π/4',steps:[
    S({id:'lam',label:'Characteristic (beam on elastic foundation)',sym:'\\lambda',eq:'\\left(\\frac{3 k_{s}}{E_{c} t^{3}}\\right)^{1/4}',sub:'\\left(\\frac{3\\cdot'+sfrN(R.rig.ks_kcf)+'}{'+sfrN(R.rig.Ec_ksf,0)+'\\cdot'+sfrN(R.t)+'^{3}}\\right)^{1/4}',value:R.rig.lam,unit:'ft^{-1}',d:4}),
+   S({id:'lxy',label:'Characteristic length ℓ in each direction: the larger of the cantilever beyond the outermost pedestal centre and half the distance between adjacent pedestal centres (ℓ_y = '+sfrN(R.rig.ly,3)+' ft)',sym:'\\ell_{x}',eq:'\\max\\left(\\frac{B}{2} \\minus |x_{ped}|_{max},\\; \\frac{\\Delta x_{ped}}{2}\\right)',sub:'',value:R.rig.lx,unit:'ft',d:3}),   /* SFPR (review E2) */
    S({id:'rig',label:'Rigidity, governing direction',sym:'\\lambda \\ell / (\\pi/4)',eq:'\\frac{\\max(\\lambda \\ell_{x}, \\lambda \\ell_{y})}{0.785}',sub:'\\frac{\\max('+sfrN(R.rig.vx,3)+', '+sfrN(R.rig.vy,3)+')}{'+sfrN(R.rig.limit,3)+'}',value:Math.max(R.rig.vx,R.rig.vy)/R.rig.limit,unit:'',d:3,ok:!!R.rig.rigid})]});
   subs.push({title:'Sliding, overturning, flotation and rigidity',key:'S-st',items:[sfrTopics('stab',T),{type:'note',text:'ΣP, ΣH of each combination: [[S-asd]]. Sliding and overturning use the service combinations, with the minimum-dead 0.6D cases.'}]});
   secs.push({title:'Stability',key:'S-stab',subs});
@@ -3226,14 +3261,15 @@ function sfrModel(){
      else fl.push(S({id:'AsTreq',label:'Top steel required (no top mat entered: provide top bars)',sym:'A_{s,top,req}',eq:'',sub:'',value:Math.max(des.reqTop,des.AsMinPerFt),unit:'in^{2}/ft',d:3,note:'A_s,req for M_u⁻ = '+sfrN(des.reqTop,3)+' in²/ft, not less than A_s,min'}));
     }
    T.push({title:'Flexure',ref:'ACI 318-19 22.3, 21.2.2',steps:fl});
-   T.push({title:'Minimum steel',ref:'ACI 318-19 7.6.1.1, 24.4.3.2',steps:[
+   T.push({title:'Minimum steel',ref:sfrCombined()?'ACI 318-19 13.3.4.1, 8.6.1.1, 24.4.3.2':'ACI 318-19 7.6.1.1, 24.4.3.2',steps:[   /* SFPR: combined footing, Chapter 8 */
     S({id:'Asmin',label:'Shrinkage and temperature minimum',sym:'A_{s,min}',eq:'0.0018 \\cdot 12 h',sub:'0.0018\\cdot 12\\cdot'+sfrN(tin),value:des.AsMinPerFt,unit:'in^{2}/ft',d:3}),
     S({id:'Asprov',label:'Provided, bottom (per ft)',sym:'A_{s,prov}',eq:'\\ge A_{s,min}',sub:sfrN(des.AsBot,3)+(des.asMinBotOK?' \\ge ':' \\lt ')+sfrN(des.AsMinPerFt,3),value:des.AsBot,unit:'in^{2}/ft',d:3,ok:!!des.asMinBotOK}),
     ...(des.asMinTopReq&&des.topProvided?[S({id:'AsTprov',label:'Provided, top (a flexural mat: hogging)',sym:'A_{s,top}',eq:'\\ge A_{s,min}',sub:sfrN(des.AsTop,3)+(des.asMinTopOK?' \\ge ':' \\lt ')+sfrN(des.AsMinPerFt,3),value:des.AsTop,unit:'in^{2}/ft',d:3,ok:!!des.asMinTopOK})]:[])]});
-   T.push({title:'Bar spacing',ref:'ACI 318-19 7.7.2.3, 13.3.4, 25.2.1',steps:[
+   T.push({title:'Bar spacing',ref:sfrCombined()?'ACI 318-19 13.3.4.1, 8.7.2.2, 25.2.1':'ACI 318-19 7.7.2.3, 13.3.3.1, 25.2.1',steps:[
     ...(des.AsBot>0?[S({id:'clrB',label:'Bottom bars, clear spacing (min = max(1 in, d_b, 4/3 d_agg) = '+sfrN(des.clrMinB)+' in; d_agg = '+sfrN(des.dagg,3)+' in)',sym:'s \\minus d_{b}',eq:'',sub:sfrN(des.spcBot)+' \\minus '+sfrN(des.dbB,3),value:des.clrB,unit:'in',ok:!!des.clrBotOK,ref:'ACI 318-19 25.2.1'})]:[]),   /* SFAG */
     ...(des.AsTop>0?[S({id:'clrT',label:'Top bars, clear spacing (min '+sfrN(des.clrMinT)+' in)',sym:'s_{top} \\minus d_{b}',eq:'',sub:sfrN(des.spcTop)+' \\minus '+sfrN(des.dbT,3),value:des.clrT,unit:'in',ok:!!des.clrTopOK,ref:'ACI 318-19 25.2.1'})]:[]),
-    S({id:'smax',label:'Maximum spacing',sym:'s_{max}',eq:'\\min(3h,\\, 18)',sub:'\\min(3\\cdot'+sfrN(tin)+',\\,18)',value:des.sMax,unit:'in'}),
+    (sfrCombined()&&2*tin>=18-1e-9)?S({id:'smax',label:'Maximum spacing at the critical sections (8.7.2.2; same value as min(3h, 18) of 7.7.2.3 for h ≥ 9 in)',sym:'s_{max}',eq:'\\min(2h,\\, 18)',sub:'\\min(2\\cdot'+sfrN(tin)+',\\,18)',value:des.sMax,unit:'in',ref:'ACI 318-19 8.7.2.2'})
+    :S({id:'smax',label:'Maximum spacing'+(sfrCombined()?' (7.7.2.3 form; 8.7.2.2 gives min(2h, 18) = '+sfrN(Math.min(2*tin,18))+' in at the critical sections: check by hand)':''),sym:'s_{max}',eq:'\\min(3h,\\, 18)',sub:'\\min(3\\cdot'+sfrN(tin)+',\\,18)',value:des.sMax,unit:'in'}),
     S({id:'s',label:'Bottom bars: #'+(mt.size||0)+' at s',sym:'s',eq:'\\le s_{max}',sub:sfrN(des.spcBot)+(des.spcBotOK?' \\le ':' \\gt ')+sfrN(des.sMax),value:des.spcBot,unit:'in',ok:!!des.spcBotOK}),
     ...(des.asMinTopReq&&des.AsTop>0?[S({id:'sT',label:'Top bars at s',sym:'s_{top}',eq:'\\le s_{max}',sub:sfrN(des.spcTop)+(des.spcTopOK?' \\le ':' \\gt ')+sfrN(des.sMax),value:des.spcTop,unit:'in',ok:!!des.spcTopOK})]:[])]});
    if(des.oneWayOutside)T.push({title:'One-way shear',ref:'ACI 318-19 8.5.3, 22.5',steps:[S({id:'vna',label:'Critical section at d from every face falls outside the footing',sym:'V_{u}',eq:'',sub:'',value:'not applicable'})]});
@@ -3272,9 +3308,13 @@ function sfrModel(){
    const st=[S({id:sc+'.bo',label:'Critical perimeter at d/2 ('+pu.pos+')',sym:'b_{0}',eq:'',sub:'c_{1} = '+sfrN(pu.c1,2)+',\\; c_{2} = '+sfrN(pu.c2,2)+',\\; d = '+sfrN(pu.d,3),value:pu.bo,unit:'in'}),
     S({id:sc+'.vc',label:'Concrete two-way shear stress (least of three)',sym:'v_{c}',eq:'\\min(4,\\; 2 + 4/\\beta,\\; 2 + \\alpha_{s} d/b_{0})\\,\\lambda\\lambda_{s}\\sqrt{'+SFR_FC+'}',sub:'\\min('+sfrN(pu.vc1)+',\\,'+sfrN(pu.vc2)+',\\,'+sfrN(pu.vc3)+')',value:pu.vc,unit:'psi',ref:'ACI 318-19 22.6.5.2',note:'β = '+sfrN(pu.beta)+', α_s = '+pu.alphas+', λ_s = '+sfrN(pu.lam_s,3)}),
     S({id:sc+'.phivc',label:'Design stress',sym:'\\phi v_{c}',eq:'0.75 v_{c}',sub:'0.75\\cdot'+sfrN(pu.vc),value:pu.phiVc,unit:'psi'}),
-    S({id:sc+'.Vu',label:'Shear on the perimeter, '+(pu.govC?pu.govC.cb.name:''),sym:'V_{u}',eq:'P_{u} \\minus \\int q\\,dA_{crit} + W_{body,crit}',sub:'\\minus '+sfrN(d.relief)+' + '+sfrN(d.bodyIn),value:d.Vu,unit:'kip'}),
+    S({id:sc+'.Vu',label:'Shear on the perimeter, '+(pu.govC?pu.govC.cb.name:''),sym:'V_{u}',eq:'P_{u} \\minus \\int q\\,dA_{crit} + W_{body,crit}',sub:sfrN(d.Pu)+' \\minus '+sfrN(d.relief)+' + '+sfrN(d.bodyIn),value:d.Vu,unit:'kip'}),   /* SFPR (review E2): P_u in the substitution */
     S({id:sc+'.Mped',label:'Moments at the pedestal base, about the pedestal centre'+((d.lex||d.ley)?' (include P·e: '+sfrN(d.PeMx)+' and '+sfrN(d.PeMy)+' kip-ft)':''),sym:'M_{x,ped}',eq:'',sub:'',value:d.MxPed,unit:'kip-ft',note:'M_y,ped = '+sfrN(d.MyPed)+' kip-ft'}),   /* SFPC */
     S({id:sc+'.Mu',label:'Moment transferred about the critical-section centroid (ACI 318-19 8.4.4.2.2): centroid offset from the pedestal centre y_c = '+sfrN(d.dyc*12,2)+' in, x_c = '+sfrN(d.dxc*12,2)+' in; soil relief and body forces at the clipped-area centroid y_A = '+sfrN(d.dyA*12,2)+' in, x_A = '+sfrN(d.dxA*12,2)+' in',sym:'M_{ux}',eq:'\\left|M_{x,ped} \\minus P_{u} y_{c} \\minus (P_{u} \\minus N)(y_{A} \\minus y_{c})\\right|',sub:'\\left|'+sfrP(d.MxPed)+' \\minus '+sfrP(d.Pu)+'\\cdot'+sfrP(d.dyc,4)+' \\minus ('+sfrP(d.Pu)+' \\minus '+sfrP(d.Nnet)+')('+sfrP(d.dyA,4)+' \\minus '+sfrP(d.dyc,4)+')\\right|',value:d.MuX,unit:'kip-ft',ref:'ACI 318-19 8.4.4.2.2',note:'offsets in ft in the substitution; N = P_u − relief + body = '+sfrN(d.Nnet)+' kip; M_uy (same form in x) = '+sfrN(d.MuY)+' kip-ft; γ_v,x = '+sfrN(d.gvX,3)+', γ_v,y = '+sfrN(d.gvY,3)}),
+    ...[['X','x',d.paX,d.JcX,d.cExtX],['Y','y',d.paY,d.JcY,d.cExtY]].filter(q=>q[2]&&q[2].segs&&q[2].segs.length).flatMap(([A,ax,pa,Jc,cE])=>[   /* SFPR (review E2): J_c and c substituted */
+     S({id:sc+'.Jc'+A,label:'Polar moment of the critical section about its centroid, bending across '+ax+' (faces as thin rectangles of thickness d = '+sfrN(pu.d,3)+' in at '+ax+' from the pedestal centre, centroid '+ax+'̄ = '+sfrN(pa.xbar,2)+' in)',sym:'J_{c,'+ax+'}',eq:'\\sum \\left[J_{own} + d\\,\\ell\\,('+ax+' \\minus \\bar{'+ax+'})^{2}\\right]',
+      sub:pa.segs.map(g=>(g.own>0?sfrN(g.own,0)+' + ':'')+sfrN(pu.d,3)+'\\cdot'+sfrN(g.L,2)+'\\cdot('+sfrN(g.x-pa.xbar,2)+')^{2}').join(' + '),value:Jc,unit:'in^{4}',d:0,note:'J_own = d ℓ³/12 + ℓ d³/12 for a face along the bending direction (ℓ = its length), 0 for a face across it'}),
+     S({id:sc+'.c'+A,label:'Extreme fibre: the farther end of the section ('+sfrN(pa.extA,2)+' in and −'+sfrN(pa.extB,2)+' in from the pedestal centre) from the centroid',sym:'c_{'+ax+'}',eq:'\\max(|e_{A} \\minus \\bar{'+ax+'}|,\\; |e_{B} + \\bar{'+ax+'}|)',sub:'\\max(|'+sfrN(pa.extA,2)+' \\minus '+sfrP(pa.xbar,2)+'|,\\; |'+sfrN(pa.extB,2)+' + '+sfrP(pa.xbar,2)+'|)',value:cE,unit:'in'})]),
     S({id:sc+'.vu',label:'Factored shear stress (direct + eccentric shear)',sym:'v_{u}',eq:'\\frac{V_{u}}{b_{0} d} + \\frac{\\gamma_{v,x} M_{uy} c_{x}}{J_{c,x}} + \\frac{\\gamma_{v,y} M_{ux} c_{y}}{J_{c,y}}',sub:sfrN(d.vshear)+' + '+sfrN(d.vmomX)+' + '+sfrN(d.vmomY),value:pu.vuMax,unit:'psi',ref:'ACI 318-19 8.4.4.2, R8.4.4.2.3',
      note:'J_c,x = '+sfrN(d.JcX,0)+' in⁴, c_x = '+sfrN(d.cExtX,2)+' in; J_c,y = '+sfrN(d.JcY,0)+' in⁴, c_y = '+sfrN(d.cExtY,2)+' in. J_c and c are taken from the critical section as truncated at the footing edge (faces that close; centroid offset from the pedestal centre x̄ = '+sfrN(d.xbarX,2)+', ȳ = '+sfrN(d.xbarY,2)+' in)'}),   /* SFPJ */
     S({id:sc+'.DCR',label:'Punching: demand / capacity',sym:'DCR',eq:'\\frac{v_{u}}{\\phi v_{c}}',sub:'\\frac{'+sfrN(pu.vuMax)+'}{'+sfrN(pu.phiVc)+'}',value:pu.dcr,unit:'',d:3,ok:pu.dcr<=1+1e-9})];
@@ -3313,9 +3353,9 @@ function sfrModel(){
      sub:z.hook==='hook90'?'\\max(\\frac{'+sfrN(P2.fy,0)+'\\cdot'+sfrN(z.ldh.pe)+'\\cdot'+sfrN(z.ldh.pr)+'\\cdot'+sfrN(z.ldh.po)+'\\cdot'+sfrN(z.ldh.pc,3)+'}{55\\cdot'+sfrN(P2.lam)+'\\cdot'+sfrN(z.ldh.sq)+'}\\cdot'+sfrN(z.db,3)+'^{1.5},\\,'+sfrN(8*z.db)+',\\,6)':'\\frac{3}{40}\\cdot\\frac{'+sfrN(P2.fy,0)+'}{'+sfrN(P2.lam)+'\\cdot'+sfrN(z.ld.sqfc)+'}\\cdot\\frac{'+sfrN(z.ld.psi_te*z.ld.psi_s*z.ld.psi_g,3)+'}{'+sfrN(z.ld.conf,3)+'}\\cdot'+sfrN(z.db,3),value:z.LftgReq,unit:'in',...(z.tension?{ok:!!z.ftgOK}:{}),note:'available '+sfrN(z.availEmb)+' in'+(z.sfNeed&&!z.tension?(z.ftgOK?'; shear friction relies on the dowels: developed':'; REVIEW: shear friction only (no interface tension), so not a pass / fail item; shear friction takes the proportional credit, see §f'+z.idx+'.fr'):'')}));   /* SFDB: shown always; SFDR */
    if(z.cont)st.push(S({id:'p'+z.idx+'.cont',label:'Pedestal side: the dowels are the pedestal longitudinal bars, continuous through the joint (no splice), so they are developed in the pedestal by definition; no lap or projection check',sym:'',eq:'',sub:'',value:'—'}));   /* SFDB */
    if(!z.cont&&z.ld)st.push(S({id:'p'+z.idx+'.lst',label:'Class B tension lap with the vertical bars (all dowels spliced at one section)',sym:'\\ell_{st}',eq:'\\max(1.3\\,\\ell_{d,small},\\,\\ell_{d,large},\\,12)',sub:'\\max(1.3\\cdot'+sfrN(z.lstSmall)+',\\,'+sfrN(z.lstLarge)+',\\,12)',value:z.lst,unit:'in',ref:'ACI 318-19 25.5.2'}));
-    if(z.tenKern)tabs.push({type:'table',head:[z.label+': combination (interface in tension)','P_u (kip)','M_ux','M_uy (kip-ft)','σ_min (ksi)','ratio','k (A_s,req / A_s,prov)'],rows:z.tenRat.map(q=>({cells:[q===z.kGov?{t:q.name,key:'dow/p'+z.idx+'.AsReq'}:q.name,sfrCell(q.P),sfrCell(q.Mx),sfrCell(q.My),sfrCell(q.sig,3),isFinite(q.ratio)?sfrDC(q.ratio):sfrCell('> capacity'),isFinite(q.k)?sfrCell(q.k,3):sfrCell('∞')],cls:q===z.kGov?'gov':''}))});
-   if(!z.cont)st.push(S({id:'p'+z.idx+'.lsc',label:'Compression lap with the vertical bars'+(z.ds!==z.sl?' (sizes differ, 25.5.5.4)':''),sym:'\\ell_{sc}',eq:z.ds!==z.sl?'\\max(\\ell_{dc,large},\\,\\ell_{sc,small})':'\\max(0.0005 f_{y} d_{b},\\, 12)',sub:'',value:z.lc,unit:'in',ref:'ACI 318-19 25.5.5'}),
-    S({id:'p'+z.idx+'.proj',rev:z.sfReview&&!z.projOK?'dowel development for shear friction short (proportional credit)':'',chk:'dowel projection / development in the pedestal',label:'Dowel projection above the footing: required = max(ℓ_sc'+(z.devTen?', ℓ_st':'')+'); available h − c = '+sfrN(z.hAvail)+' in'+(z.full?' (lap does not fit: dowels full height as the pedestal bars; development in the pedestal '+sfrN(z.LpedReq)+' in)':(z.projIn!==null?' (entered '+sfrN(z.projIn)+' in)':'')),sym:'L_{proj}',eq:'',sub:'',value:z.Lreq,unit:'in',ok:!!z.projOKpf,note:z.sfReview&&!z.projOK?'REVIEW: the tension lap / full-height ℓ_d is needed for shear friction only; shear friction takes the proportional credit':''}));   /* SFDR */
+    if(z.tenKern)tabs.push({type:'table',head:[z.label+': combination (interface in tension)','P_u (kip)','M_ux (kip-ft)','M_uy (kip-ft)','σ_min (ksi)','ratio','k (A_s,req / A_s,prov)'],rows:z.tenRat.map(q=>({cells:[q===z.kGov?{t:q.name,key:'dow/p'+z.idx+'.AsReq'}:q.name,sfrCell(q.P),sfrCell(q.Mx),sfrCell(q.My),sfrCell(q.sig,3),isFinite(q.ratio)?sfrDC(q.ratio):sfrCell('> capacity'),isFinite(q.k)?sfrCell(q.k,3):sfrCell('∞')],cls:q===z.kGov?'gov':''}))});
+   if(!z.cont)st.push(S({id:'p'+z.idx+'.lsc',label:'Compression lap with the vertical bars'+(z.ds!==z.sl?' (sizes differ, 25.5.5.4)':''),sym:'\\ell_{sc}',eq:z.ds!==z.sl?'\\max(\\ell_{dc,large},\\,\\ell_{sc,small})':'\\max(0.0005 f_{y} d_{b},\\, 12)',sub:z.ds!==z.sl?'\\max('+sfrN(z.db>z.dl?z.Ldc:z.ldcL)+',\\,'+sfrN(z.db>z.dl?z.lscL:z.lscD)+')':'\\max(0.0005\\cdot'+sfrN(P2.fy,0)+'\\cdot'+sfrN(z.db,3)+',\\,12)'+(P2.fc<3000?'\\cdot\\frac{4}{3}':''),value:z.lc,unit:'in',ref:'ACI 318-19 25.5.5'}),
+    S({id:'p'+z.idx+'.proj',rev:z.sfReview&&!z.projOK?'dowel development for shear friction short (proportional credit)':'',chk:'dowel projection / development in the pedestal',label:'Dowel projection above the footing: required = max(ℓ_sc'+(z.devTen?', ℓ_st':'')+'); available h − c = '+sfrN(z.hAvail)+' in'+(z.full?' (lap does not fit: dowels full height as the pedestal bars; development in the pedestal '+sfrN(z.LpedReq)+' in)':(z.projIn!==null?' (entered '+sfrN(z.projIn)+' in)':'')),sym:'L_{proj}',eq:z.devTen?'\\max(\\ell_{sc},\\,\\ell_{st})':'\\ell_{sc}',sub:z.devTen?'\\max('+sfrN(z.lc)+',\\,'+sfrN(z.lst)+')':sfrN(z.lc),value:z.Lreq,unit:'in',ok:!!z.projOKpf,note:z.sfReview&&!z.projOK?'REVIEW: the tension lap / full-height ℓ_d is needed for shear friction only; shear friction takes the proportional credit':''}));   /* SFDR */
    DT.push({title:z.label+': '+z.nD+' #'+z.ds+(z.cont?' (longitudinal bars)':'')+(z.hook==='hook90'?' hooked':' straight'),ref:'ACI 318-19 16.3, 25.4, 25.5',steps:st});});
    /* SFSF: shear friction, worked */
    {const FT=[],ftab=[];(P2.shearFr||[]).forEach(z=>{if(z.isPatch||!z.gov)return;const g=z.gov,q='f'+z.idx+'.',dw=P2.dowels&&P2.dowels[z.idx];
@@ -3332,12 +3372,12 @@ function sfrModel(){
      S({id:q+'DCR',label:'Shear friction: demand / capacity (φ = 0.75)',sym:'DCR',eq:'\\frac{V_{u}}{0.75 \\min(V_{n}, V_{n,max})}',sub:'\\frac{'+sfrN(g.Vu)+'}{0.75\\cdot'+sfrN(g.Vn)+'}',value:g.ratio,unit:'',d:3,ok:g.ratio<=1+1e-9})]});
     ftab.push({type:'table',head:[z.label+': combination','V_ux','V_uy','V_u (kip)','N_u (kip)','φV_n (kip)','DCR'],rows:z.rows.map(r=>({cells:[r===g?{t:r.name,key:'sf/'+q+'DCR'}:r.name,sfrCell(r.Vx),sfrCell(r.Vy),sfrCell(r.Vu),sfrCell(r.Nu),sfrCell(r.phiVn),sfrDC(r.ratio)],cls:r===g?'gov':''}))});});
     if(FT.length)subs.push({title:'Shear friction across the pedestal–footing interface',key:'S-sf',items:[sfrTopics('sf',FT,{see:'dow'}),...ftab]});}
-   if(DT.length)subs.push({title:'Dowels at the pedestals (tension at the interface, development, laps, projection)',key:'S-dow',items:[sfrTopics('dow',DT,{see:'sf'}),...tabs,{type:'note',text:'A combination puts the interface in tension when P_u < 0 or the resultant is outside the kern (σ_min < 0). For those combinations the dowels are checked as the reinforcement of the interface section with the strain-compatibility routine of the pedestal P–M check. Worked on the Footing Design tab[[tab:footdes| ↗]], 5.6.'}]});}
+   if(DT.length)subs.push({title:'Dowels at the pedestals (tension at the interface, development, laps, projection)',key:'S-dow',items:[sfrTopics('dow',DT,{see:'sf'}),...tabs,{type:'note',text:'A combination puts the interface in tension when P_u < 0 or the resultant is outside the kern (σ_min < 0). For those combinations the dowels are checked as the reinforcement of the interface section with the strain-compatibility routine of the pedestal P–M check. Also shown on the Footing Design tab[[tab:footdes| ↗]], in its card 5.6 "Concrete Bearing & Dowels" (screen numbering; in this report the dowels are this section and shear friction is [[S-sf]]).'}]});}
   const bc=P2.bandChk;
   if(bc&&bc.applies)subs.push({title:'Short-direction band reinforcement (advisory)',items:[{type:'steps',scope:'band',steps:[
    S({id:'gs',label:'Banded fraction',sym:'\\gamma_{s}',eq:'\\frac{2}{\\beta + 1}',sub:'\\frac{2}{'+sfrN(bc.beta,3)+' + 1}',value:bc.gs,unit:'',d:3,ref:'ACI 318-19 13.3.3.3'}),
    S({id:'req',label:'Steel required in the '+sfrN(bc.shortDim)+' ft band',sym:'\\gamma_{s} A_{s}',eq:'',sub:sfrN(bc.gs,3)+'\\cdot'+sfrN(bc.AsTot,3),value:bc.AsBandReq,unit:'in^{2}',note:'uniform layout delivers '+sfrN(bc.AsBandProv,3)+' in² in the band'+(bc.ok?'':' (less: concentrate bars in the band)')})]},
-   {type:'note',text:'Advisory: the tool distributes the bars uniformly and takes no band-steel input.'}]});
+   {type:'note',text:'Advisory: the tool distributes the bars uniformly and takes no band-steel input.'+(sfrCombined()?' 13.3.3.3 is a rule for two-way isolated footings (13.3.3); this footing carries '+R.peds.length+' bearing elements, a combined footing (13.3.4, designed under Chapter 8), so the band is shown for information only.':'')}]});
   if(P2.covChk){const st=P2.covChk.rows.filter(z=>z.applies).map(z=>S({id:'cov'+z.k,label:z.label+' (min '+sfrN(z.min)+' in)',sym:'c_{'+z.k+'}',eq:'',sub:sfrN(z.c)+(z.ok?' \\ge ':' \\lt ')+sfrN(z.min),value:z.c,unit:'in',ok:!!z.ok}));   /* SFCV */
    subs.push({title:'Concrete cover (Table 20.5.1.3.1)',key:'S-cov',items:[sfrTopics('fcov',[{title:'Footing covers',ref:'ACI 318-19 20.5.1.3, Table 20.5.1.3.1',steps:st}])]});}
   secs.push({title:'Footing design',key:'S-fd',subs});
@@ -3423,7 +3463,7 @@ function sfrModel(){
   secs.push({title:'Assumptions and warnings',subs:[{title:'Assumptions',items}]});
  }
  /* ---------- 8. References ---------- */
- secs.push({title:'References',key:'S-ref',subs:[{title:'Codes and references cited',items:[{type:'table',head:['Reference','Provisions used'],rows:SFD_REFS.map(([a,b])=>[sfrPlain(a),sfrPlain(b)])}]}]});
+ secs.push({title:'References',key:'S-ref',subs:[{title:'Codes and references cited',items:[{type:'table',head:['Reference','Provisions used'],rows:sfrRefs().map(([a,b])=>[sfrPlain(a),sfrPlain(b)])}]}]});
  /* SFLK (2026-11-02): summary of results, one row per dashboard check, each linked to the section that works it */
  {const have=new Set();secs.forEach(x=>{if(x.key)have.add(x.key);(x.subs||[]).forEach(q=>{if(q.key)have.add(q.key);});});
   const pd=((P2&&P2.pedDes)||[]).map((z,i)=>'S-pd'+i), xy=['S-fdx','S-fdy'];
@@ -4841,7 +4881,7 @@ function computePhase2(R){
     let Jc=0;
     segs.forEach(g=>{const a=g.L*d;Jc+=g.own+a*Math.pow(g.x-xbar,2);});
     const cExt=Math.max(Math.abs(extA-xbar),Math.abs(-extB-xbar));
-    return{Jc,cExt,xbar};
+    return{Jc,cExt,xbar,segs,extA,extB};   // SFPR: segs, extA, extB for the report substitution only
    }
    // bending across c1 (about y): faces at +/-c1/2 are the y-parallel ones (openXpos/openXneg)
    const pa_X=polarAxis(c1,bx/2+sideX1,bx/2+sideX2,openXpos,openXneg,faceX,openYpos,openYneg);
@@ -4863,7 +4903,7 @@ function computePhase2(R){
    const vmomY=(JcY>0)?gvY*MuX*12*1000*cExtY/JcY:0; // psi, from Mx
    const vmom=vmomX+vmomY; // superposed at the governing corner (conservative)
    const vu=vshear+vmom;
-   if(vu>vuMax){vuMax=vu;govC=c;detail={q,Acrit,AcritFull,Vu,relief,bodyIn,MuX,MuY,Mu:Math.hypot(MuX,MuY),gvX,gvY,JcX,JcY,cExtX,cExtY,xbarX:pa_X.xbar||0,xbarY:pa_Y.xbar||0,MxPed:pl.mxPed,MyPed:pl.myPed,Pu:pl.P,Nnet,dyc:ycG-p.y,dxc:xcG-p.x,dyA:yAG-p.y,dxA:xAG-p.x,vshear,vmomX,vmomY,vmom,
+   if(vu>vuMax){vuMax=vu;govC=c;detail={q,Acrit,AcritFull,Vu,relief,bodyIn,MuX,MuY,Mu:Math.hypot(MuX,MuY),gvX,gvY,JcX,JcY,cExtX,cExtY,xbarX:pa_X.xbar||0,xbarY:pa_Y.xbar||0,paX:pa_X,paY:pa_Y,MxPed:pl.mxPed,MyPed:pl.myPed,Pu:pl.P,Nnet,dyc:ycG-p.y,dxc:xcG-p.x,dyA:yAG-p.y,dxA:xAG-p.x,vshear,vmomX,vmomY,vmom,
     Pa:pl.Pa,lex:pl.lex,ley:pl.ley,PeMx:pl.PeMx,PeMy:pl.PeMy};}   // SFLO: the load-offset part of mxPed / myPed, for display
   });
   // E-3: if fewer than two critical faces close (perimeter cannot form a punching cone within
