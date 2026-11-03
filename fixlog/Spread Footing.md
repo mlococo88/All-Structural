@@ -4344,7 +4344,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 - None.
 
-## 2026-11-03 — PR: claude/sf-dashboard-column — Summary dashboard: compact one-line chips, collapsible; a left column on screens 1500 px and wider (SFDC; display only, no result change)
+## 2026-11-03 — PR: claude/sf-dashboard-column (PR #737: https://github.com/mlococo88/All-Structural/pull/737) — Summary dashboard: compact one-line chips, collapsible; a left column on screens 1500 px and wider (SFDC; display only, no result change)
 
 ### SFDC. Dashboard as a third panel on the left   [display only]
 - **Problem (engineer):** the summary dashboard (26 check chips, 3–5 lines each) filled the top of the output panel: about 500 px tall at 1366 px wide and 440 px at 1920, 1570 px on a phone. At 1920 px and wider the page (max-width 1600 px) left blank space on both sides.
