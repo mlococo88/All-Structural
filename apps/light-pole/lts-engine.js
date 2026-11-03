@@ -88,9 +88,13 @@
   /* windForces(g, V, state, psi): the horizontal wind forces for wind blowing toward bearing psi (deg, the tool's convention:
      0 = +x), as point forces {name, z, Fx, Fy, T, kind}, T = torsion about the pole axis (lb·ft).
      g: {mode:'pole'|'sign', shape, H, Dtop, Dbase (in, face width), rs, fixtures:[{hf, th, a, epa, W, armD}],
-         sign:{B, s, clr, W, nPost, spacing}} */
+         sign:{B, s, clr, W, nPost, spacing}, zp}
+     zp (LPPJ, 2026-11-03): shaft projection above grade p (ft), absent when 0. The structure is raised by p for K_z: a force at z above the
+     pole / post base takes K_z(z + p); its z (the lever arm) stays measured from the base. The sign clearance is measured from grade, so the
+     panel centroid is clr + s/2 above grade and clr + s/2 − p above the post base. */
   function windForces(g, V, state, psi) {
     const c = Math.cos(psi * RAD), sn = Math.sin(psi * RAD), Kd = kd(g.shape), Cv = cv(state), out = [];
+    const zp = g.zp > 0 ? g.zp : 0, kzg = z => kz(zp > 0 ? z + zp : z);   // LPPJ
     const dz = g.H / NSTRIP, isSign = g.mode === 'sign';
     // vertical support(s): strip integration (Art. 3.9.3, W_v); the post of a sign is prismatic
     const nPost = isSign ? Math.max(1, g.sign.nPost || 1) : 1;
@@ -98,27 +102,27 @@
       const z = (i + 0.5) * dz, dB = g.Dtop + (g.Dbase - g.Dtop) * (g.H - z) / g.H;
       // face width seen by the wind: B for a wind along x; a rectangular tube shows its depth Ht to a wind along y (LTS-3)
       const d = g.shape === 'rect' && g.Ht > 0 ? Math.abs(c) * dB + Math.abs(sn) * g.Ht : dB, dft = d / 12;
-      const Cd = cdMember(g.shape, Cv * V * dft, g.rs), Pz = 0.00256 * kz(z) * Kd * G * V * V * Cd, F = Pz * dft * dz * nPost;
+      const Cd = cdMember(g.shape, Cv * V * dft, g.rs), Pz = 0.00256 * kzg(z) * Kd * G * V * V * Cd, F = Pz * dft * dz * nPost;
       out.push({ name: 'support', kind: 'strip', z, Fx: F * c, Fy: F * sn, T: 0, Cd, Pz, d });
     }
     if (!isSign) {
       (g.fixtures || []).forEach((x, k) => {
         const ex = (x.a || 0) * Math.cos((x.th || 0) * RAD), ey = (x.a || 0) * Math.sin((x.th || 0) * RAD);
         // attachment with the manufacturer's EPA: P_z without C_d, times the EPA (Art. 3.9.1, p. 3-23)
-        const q = 0.00256 * kz(x.hf) * Kd * G * V * V, Fw = q * (x.epa || 0);
+        const q = 0.00256 * kzg(x.hf) * Kd * G * V * V, Fw = q * (x.epa || 0);
         // concentric (pole-top, a = 0): torsion 0.15b, b = out-to-out width of the attachment, taken as sqrt(EPA) (Art. 3.9.4.2;
         // the width is not an input: decision accepted by the engineer 2026-11-02); offset fixtures: the net torque of their offset
         const T015 = (x.a || 0) > 0 ? 0 : Fw * 0.15 * Math.sqrt(Math.max(0, x.epa || 0));
         out.push({ name: `fixture ${k + 1}`, kind: 'fixture', z: x.hf, Fx: Fw * c, Fy: Fw * sn, T: ex * Fw * sn - ey * Fw * c, T015, q, ex, ey });
         if ((x.armD || 0) > 0 && (x.a || 0) > 0) {   // the arm: round member, projected area a·D·|sin(theta − psi)| (Art. 3.9.2, W_h)
-          const Dft = x.armD / 12, Cd = cdRound(Cv * V * Dft), Pz = 0.00256 * kz(x.hf) * Kd * G * V * V * Cd;
+          const Dft = x.armD / 12, Cd = cdRound(Cv * V * Dft), Pz = 0.00256 * kzg(x.hf) * Kd * G * V * V * Cd;
           const F = Pz * Dft * x.a * Math.abs(Math.sin(((x.th || 0) - psi) * RAD));
           out.push({ name: `arm ${k + 1}`, kind: 'arm', z: x.hf, Fx: F * c, Fy: F * sn, T: (ex / 2) * F * sn - (ey / 2) * F * c, Cd, Pz });
         }
       });
     } else {
       // sign panel: normal to x (faces the 0°/180° wind); a wind along y sees the panel edge only (no area)
-      const S = g.sign, zc = S.clr + S.s / 2, Cd = cdSign(S.B, S.s), Pz = 0.00256 * kz(zc) * Kd * G * V * V * Cd;
+      const S = g.sign, zg = S.clr + S.s / 2, zc = zp > 0 ? zg - zp : zg, Cd = cdSign(S.B, S.s), Pz = 0.00256 * kz(zg) * Kd * G * V * V * Cd;   // zg above grade, zc above the post base
       const Fn = Pz * S.B * S.s * Math.abs(c);
       // single-support roadside sign: torsion = W·0.15b, b = the panel width (Art. 3.9.4.2); two posts: none (decision Q-C2)
       const T015 = nPost === 1 ? Fn * 0.15 * S.B : 0;
@@ -191,8 +195,8 @@
       note: isSign ? 'A ground-mounted sign has no row of its own; the pole value of the post shape is used for the whole structure (decision Q-C5, conservative against 0.85; accepted by the engineer 2026-11-02).' : '' });
     st.push({ id: 'w.g', label: 'Gust effect factor', sym: 'G', eq: '', sub: '', value: G, unit: '', d: 2, ref: ref('Art. 3.8.6 (p. 3-17, 2017)') });
     st.push({ id: 'w.cv', label: 'Velocity conversion factor, Extreme', sym: 'C_{v}', eq: '', sub: '', value: Cv, unit: '', d: 1, ref: ref('Art. 3.8.7 (p. 3-17, 2017)') });
-    const zt = g.H, KzT = kz(zt);
-    st.push({ id: 'w.kzTop', label: `Height and exposure factor at the top, z = ${f(zt, 1)} ft`, sym: 'K_{z}', eq: '2.0\\left(\\frac{z}{z_{g}}\\right)^{2/\\alpha}',
+    const zt = g.zp > 0 ? g.H + g.zp : g.H, KzT = kz(zt);   // LPPJ: the top above grade
+    st.push({ id: 'w.kzTop', label: `Height and exposure factor at the top, z = ${f(zt, 1)} ft${g.zp > 0 ? ' above grade (H + p)' : ''}`, sym: 'K_{z}', eq: '2.0\\left(\\frac{z}{z_{g}}\\right)^{2/\\alpha}',
       sub: `2.0\\left(\\frac{${f(Math.max(zt, 16), 2)}}{900}\\right)^{2/9.5}`, value: KzT, unit: '', d: 3, ref: ref('Eq. 3.8.4-1 (p. 3-15)'), note: 'Exposure C; z not less than 16 ft.' });
     const dB = g.Dbase / 12, xB = Cv * V * dB, dT = g.Dtop / 12, xT = Cv * V * dT;
     [['base', dB, xB], ['top', dT, xT]].forEach(([w, d, x]) => {
@@ -202,8 +206,8 @@
         sub: g.shape === 'round' ? `C_{v}Vd = ${f(Cv, 1)}\\cdot${f(V, 0)}\\cdot${f(d, 4)} = ${f(x, 2)}` : `r_{s} = ${f(g.rs || 0, 3)}`,
         value: Cd, unit: '', d: 3, ref: ref('Table 3.8.7-1 (p. 3-20, 2017)'), note: g.shape === 'rect' ? 'Rectangular tube: the square-tube value (decision Q-C6, accepted by the engineer 2026-11-02).' : '' });
     });
-    const CdB = cdMember(g.shape, xB, g.rs), KzB = kz(0), PzB = 0.00256 * KzB * Kd * G * V * V * CdB;
-    st.push({ id: 'w.pzBase', label: 'Design wind pressure at the base (heights below 16 ft are taken at 16 ft)', sym: 'P_{z}', eq: '0.00256\\,K_{z}K_{d}GV^{2}C_{d}',
+    const CdB = cdMember(g.shape, xB, g.rs), KzB = kz(g.zp > 0 ? g.zp : 0), PzB = 0.00256 * KzB * Kd * G * V * V * CdB;
+    st.push({ id: 'w.pzBase', label: `Design wind pressure at the base${g.zp > 0 ? ` (p = ${f(g.zp, 2)} ft above grade)` : ''} (heights below 16 ft are taken at 16 ft)`, sym: 'P_{z}', eq: '0.00256\\,K_{z}K_{d}GV^{2}C_{d}',
       sub: `0.00256\\cdot${f(KzB, 3)}\\cdot${f(Kd, 2)}\\cdot${f(G, 2)}\\cdot${f(V, 0)}^{2}\\cdot${f(CdB, 3)}`, value: PzB, unit: 'psf', d: 2, ref: ref('Eq. 3.8.1-1 (p. 3-14)') });
     const fr = windForces(g, V, 'extreme', 0), sup = fr.filter(q => q.kind === 'strip'), Fs = sup.reduce((a, q) => a + q.Fx, 0), Ms = sup.reduce((a, q) => a + q.Fx * q.z, 0);
     st.push({ id: 'w.fsup', label: `Wind on the ${isSign ? 'post(s)' : 'pole'}, integrated over ${NSTRIP} strips (P_z, C_d and d at each strip)`, sym: 'W_{v}', eq: '\\sum P_{z}\\,d\\,\\Delta z',
@@ -217,7 +221,8 @@
       st.push({ id: 'w.cdSign', label: `Drag coefficient of the sign panel, L/W = ${f(r, 2)}`, sym: 'C_{d}', eq: '\\text{Table 3.8.7-1, linear between rows}', sub: '', value: Cd, unit: '', d: 3,
         ref: ref('Table 3.8.7-1 (p. 3-19, 2017)'), note: 'Linear interpolation between the tabulated L/W rows (coordinator decision Q-B3).' });
       st.push({ id: 'w.kzSign', label: `K_z at the panel centroid, z = ${f(zc, 2)} ft`, sym: 'K_{z}', eq: '2.0\\left(\\frac{z}{900}\\right)^{2/9.5}', sub: `z = ${f(Math.max(zc, 16), 2)}\\,\\text{ft}`, value: kz(zc), unit: '', d: 3, ref: ref('Eq. 3.8.4-1 (p. 3-15)') });
-      st.push({ id: 'w.fSign', label: 'Wind on the sign panel (normal)', sym: 'W_{p}', eq: 'P_{z}\\,B\\,s', sub: `${f(Pz, 2)}\\cdot${f(S.B, 2)}\\cdot${f(S.s, 2)}`, value: F, unit: 'lb', d: 0, ref: ref('Eq. 3.8.1-1; Art. 3.9.3 (pp. 3-14, 3-23)') });
+      st.push({ id: 'w.fSign', label: 'Wind on the sign panel (normal)', sym: 'W_{p}', eq: 'P_{z}\\,B\\,s', sub: `${f(Pz, 2)}\\cdot${f(S.B, 2)}\\cdot${f(S.s, 2)}`, value: F, unit: 'lb', d: 0, ref: ref('Eq. 3.8.1-1; Art. 3.9.3 (pp. 3-14, 3-23)'),
+        note: g.zp > 0 ? `Lever arm above the post base (top of the shaft): z̄ − p = ${f(zc, 2)} − ${f(g.zp, 2)} = ${f(zc - g.zp, 2)} ft; the post runs from the shaft top to the top of the panel, H = ${f(g.H, 2)} ft.` : '' });
       if ((S.nPost || 1) === 1) st.push({ id: 'w.tSign', label: 'Torsion, single-support roadside sign', sym: 'T', eq: 'W_{p}\\cdot 0.15\\,b', sub: `${f(F, 0)}\\cdot 0.15\\cdot${f(S.B, 2)}`, value: F * 0.15 * S.B, unit: 'lb-ft', d: 0, ref: ref('Art. 3.9.4.2 (p. 3-25)') });
       else st.push({ id: 'w.tSign', label: 'Torsion, two-post sign', sym: 'T', eq: '', sub: '', value: 0, unit: 'lb-ft', d: 0, ref: ref('Art. 3.9.4.2 (p. 3-25)'), note: 'Art. 3.9.4.2 names single-support roadside signs; no eccentric case for two posts (decision Q-C2, accepted by the engineer 2026-11-02).' });
     }
@@ -225,6 +230,62 @@
   }
 
   Object.assign(root.LpLts, { G, kz, kd, cv, cdRound, cdSquare, cdMember, cdSign, windForces, sectionWind, LOAD_CASES, caseForces, gravity, baseActions, windSteps, NSTRIP, ICE_DEN });
+
+  /* =================== LPPJ (2026-11-03, engineer's decisions): shaft projection above grade, p ===================
+     The base actions above are at the top of the shaft (base plate, anchors, member checks). The foundation (Broms, Art. 13.6.1.1 / C13.6.1.1:
+     M_F and V_F at the groundline) takes them at grade:
+       V_F = V + W_s,  M_F = B·M + V·p + W_s·p/2,  P_F = P + γ_DC·W_c
+     B = that limit state's second-order factor (Art. 4.8.1 / Eq. 5.12.1-10), on the pole / post base moment only; W_s = the wind on the
+     exposed shaft (width b, height p, at p/2) by Eq. 3.8.1-1 with K_z at p/2 (Eq. 3.8.4-1, z not less than 16 ft), the K_d and G of the
+     structure, C_d of Table 3.8.7-1 (round shaft: the cylindrical row at C_v·V·b; square shaft: 2.0), following the load cases of
+     Table 3.9.3-1 (0.75 of each part in case 3) and the wind factor of each limit state; W_c = the concrete of the projection with the DC
+     factor of each limit state. Per shaft: a two-post sign has a shaft under each post (the base actions are already per post). */
+  /* shaftWind(g, V, state, sh): nominal wind on the exposed shaft, wind normal to it. sh: {p (ft), b (ft), square} */
+  function shaftWind(g, V, state, sh) {
+    const zq = sh.p / 2, Kz = kz(zq), Kd = kd(g.shape), Cv = cv(state), x = Cv * V * sh.b, Cd = sh.square ? 2.0 : cdRound(x);
+    const Pz = 0.00256 * Kz * Kd * G * V * V * Cd;
+    return { zq, Kz, Kd, Cv, V, x, Cd, Pz, F: Pz * sh.b * sh.p };
+  }
+  /* groundline(ba, Bs, g, L, sh): the grade actions of every Strength I / Extreme I row of baseActions. sh: {p, b, square, Wc (lb)}.
+     p ≤ 0: M_F = B·M, V_F = V, P_F = P (the former values). */
+  function groundline(ba, Bs, g, L, sh) {
+    const p = sh && sh.p > 0 ? sh.p : 0;
+    return ba.rows.filter(r => r.combo !== 'SV1').map(r => {
+      const B = Bs[r.combo] ? Bs[r.combo].B : 1;
+      if (!(p > 0)) return { r, B, MF: B * r.M, VF: r.V, PF: r.P };
+      const cb = COMBOS.find(c => c.key === r.combo), lc = LOAD_CASES.find(c => c.key === r.lc);
+      let Fx = 0, Fy = 0, sw = null;
+      if (cb.wind && lc) {
+        sw = shaftWind(g, cb.wind === 'extreme' ? L.V : L.Vsvc, cb.wind, sh);
+        lc.parts.forEach(([psi, k]) => { Fx += cb.W * k * sw.F * Math.cos(psi * RAD); Fy += cb.W * k * sw.F * Math.sin(psi * RAD); });
+        if (Math.abs(Fx) < 1e-9) Fx = 0; if (Math.abs(Fy) < 1e-9) Fy = 0;
+      }
+      const Vx = r.Vx + Fx, Vy = r.Vy + Fy, Mx = B * r.Mx + r.Vx * p + Fx * p / 2, My = B * r.My + r.Vy * p + Fy * p / 2;
+      return { r, B, MF: Math.hypot(Mx, My), VF: Math.hypot(Vx, Vy), PF: r.P + cb.DC * sh.Wc, Mx, My, Vx, Vy, Fx, Fy, Ws: cb.DC * sh.Wc, sw };
+    });
+  }
+  /* groundlineSteps(x, g, sh, unitW): worked steps of one groundline row x (lb, lb·ft) */
+  function groundlineSteps(x, g, sh) {
+    if (!x || !x.sw && !(sh && sh.p > 0)) return [];
+    const r = x.r, p = sh.p, st = [], n = f, sw = x.sw;
+    st.push({ id: 'g.wc', label: `Concrete of the projection, ${sh.square ? 'square' : 'round'} shaft b = ${n(sh.b, 2)} ft, p = ${n(p, 2)} ft (150 pcf)`, sym: 'W_{c}', eq: '\\gamma_{c}A\\,p',
+      sub: `0.150\\cdot${n(sh.square ? sh.b * sh.b : Math.PI / 4 * sh.b * sh.b, 3)}\\cdot${n(p, 2)}\\cdot 1000`, value: sh.Wc, unit: 'lb', d: 0, ref: 'AASHTO LRFD 10th Ed. Table 3.5.1-1, C3.5.1 (reinforced concrete 0.150 kcf)' });
+    if (sw) {
+      st.push({ id: 'g.cd', label: `Drag coefficient of the exposed shaft (${sh.square ? 'square: 2.0' : 'cylindrical'})`, sym: 'C_{d}', eq: sh.square ? '2.0' : (sw.x <= 39 ? '1.10' : sw.x < 78 ? '\\frac{129}{(C_{v}Vb)^{1.3}}' : '0.45'),
+        sub: sh.square ? '' : `C_{v}Vb = ${n(sw.Cv, 1)}\\cdot${n(sw.V, 0)}\\cdot${n(sh.b, 2)} = ${n(sw.x, 2)}`, value: sw.Cd, unit: '', d: 3, ref: ref('Table 3.8.7-1 (p. 3-20, 2017)') });
+      st.push({ id: 'g.ws', label: `Wind on the exposed shaft at p/2 = ${n(sw.zq, 2)} ft (K_z at 16 ft below 16 ft)`, sym: 'W_{s}', eq: '0.00256\\,K_{z}K_{d}GV^{2}C_{d}\\cdot b\\,p',
+        sub: `0.00256\\cdot${n(sw.Kz, 3)}\\cdot${n(sw.Kd, 2)}\\cdot${n(G, 2)}\\cdot${n(sw.V, 0)}^{2}\\cdot${n(sw.Cd, 3)}\\cdot${n(sh.b, 2)}\\cdot${n(p, 2)}`, value: sw.F, unit: 'lb', d: 1,
+        ref: ref('Eqs. 3.8.1-1, 3.8.4-1 (pp. 3-14, 3-15); Art. 3.9.3'), note: `${r.name}, ${r.lcName}: factored components W_s,x = ${n(x.Fx, 1)}, W_s,y = ${n(x.Fy, 1)} lb (load case of Table 3.9.3-1 × γ_W).` });
+    }
+    const Bt = Math.abs(x.B - 1) > 1e-12;
+    st.push({ id: 'g.vf', label: 'Factored shear at the groundline', sym: 'V_{F}', eq: '\\left|\\vec V + \\vec W_{s}\\right|', sub: `\\sqrt{(${n(r.Vx, 0)} + ${n(x.Fx, 1)})^{2} + (${n(r.Vy, 0)} + ${n(x.Fy, 1)})^{2}}`, value: x.VF, unit: 'lb', d: 0, ref: ref('C13.6.1.1 (p. 13-3): V_F at the groundline') });
+    st.push({ id: 'g.mf', label: 'Factored moment at the groundline (B on the base moment only)', sym: 'M_{F}', eq: '\\left|' + (Bt ? 'B\\,' : '') + '\\vec M + \\vec V\\,p + \\vec W_{s}\\,p/2\\right|',
+      sub: `M_{x} = ${Bt ? n(x.B, 4) + '\\cdot' : ''}${n(r.Mx, 0)} + ${n(r.Vx, 0)}\\cdot${n(p, 2)} + ${n(x.Fx, 1)}\\cdot${n(p / 2, 2)} = ${n(x.Mx, 0)}\\qquad M_{y} = ${Bt ? n(x.B, 4) + '\\cdot' : ''}${n(r.My, 0)} + ${n(r.Vy, 0)}\\cdot${n(p, 2)} + ${n(x.Fy, 1)}\\cdot${n(p / 2, 2)} = ${n(x.My, 0)}`,
+      value: x.MF, unit: 'lb-ft', d: 0, ref: ref('C13.6.1.1 (p. 13-3): M_F at the groundline; Art. 4.8.1 / Eq. 5.12.1-10 (B)') });
+    st.push({ id: 'g.pf', label: 'Factored axial load at the groundline', sym: 'P_{F}', eq: 'P + \\gamma_{DC}W_{c}', sub: `${n(r.P, 0)} + ${n(x.Ws / Math.max(sh.Wc, 1e-9), 2)}\\cdot${n(sh.Wc, 0)}`, value: x.PF, unit: 'lb', d: 0, ref: ref('Table 3.4-1 (p. 3-3)') });
+    return st;
+  }
+  Object.assign(root.LpLts, { shaftWind, groundline, groundlineSteps });
 
   /* =================== LTS-3 (2026-11-02): member checks, Section 5, and second order, Art. 4.8.1 / 5.12.1 ===================
      sec: a section at height z, {z, shape, D (round OD) | B, Ht (rect./square), t, A, Ix, Iy, Sx, Sy, Zx, Zy, rx, ry, Wabove (lb,

@@ -215,3 +215,30 @@ test('LTS-7 (Q-C9/Q-C10 input): square tube with the inside corner radius r_i: b
   const st = L.shearTorsion(sec, 46, cl, 144); near(st.kt, 1.1390, 2e-4, 'k_t'); near(st.CtB, 8 * 2.875 ** 2 * 0.25 / 1.1390, 1e-3, 'Ct B.3-1');
   near(st.Ct, Math.min(st.CtA, st.CtB), 1e-12, 'min');
 });
+
+/* ---------- LPPJ (2026-11-03): shaft projection above grade p — the groundline actions of the foundation ----------
+   HC-2 sign raised on a shaft p = 2 ft (b = 2.5 ft round): post H = clr + s − p = 7 + 5 − 2 = 10 ft; the panel centroid is 9.5 ft above
+   grade (K_z at 16 ft), its lever arm 9.5 − 2 = 7.5 ft above the post base. Wind on the shaft (Extreme I, V = 76 mph):
+   C_v·V·b = 0.8·76·2.5 = 152 ≥ 78 → C_d = 0.45 (Table 3.8.7-1, cylindrical); K_z(p/2 = 1 ft → 16 ft) = 2.0(16/900)^(2/9.5) = 0.85622;
+   P_z = 0.00256·0.85622·0.95·1.14·76²·0.45 = 6.1701 psf; W_s = 6.1701·2.5·2 = 30.850 lb at p/2.
+   Extreme I max, case 1 (toward 0°), B = 1.01 (given): M_F = 1.01·5,196.10 + 720.57·2 + 30.850·1 = 6,720.05 lb·ft; V_F = 720.57 + 30.85 = 751.42 lb;
+   P_F = 286 + 1.1·(150·π/4·2.5²·2 = 1,472.62) = 1,905.88 lb. */
+test('LPPJ: groundline M_F = B·M + V·p + W_s·p/2, V_F = V + W_s, P_F = P + γ_DC·W_c; K_z raised by p; p = 0 unchanged', () => {
+  const L = ltsEngine(), LL = { V: 76, Vsvc: 76, tIce: 0 }, Bs = { S1: { B: 1 }, E1max: { B: 1.01 }, E1min: { B: 1.0 } };
+  const g = { ...HC2, H: 10, zp: 2 }, ba = L.baseActions(g, LL), r = ba.rows.find(x => x.combo === 'E1max' && x.lc === 'n0');
+  const fr = L.windForces(g, 76, 'extreme', 0), pan = fr.find(q => q.kind === 'panel'), st = fr.find(q => q.kind === 'strip');
+  near(pan.z, 7.5, 1e-12, 'panel arm above the post base'); near(pan.Pz, 0.00256 * L.kz(9.5) * 0.95 * 1.14 * 76 * 76 * pan.Cd, 1e-12, 'panel P_z at 9.5 ft above grade');
+  near(st.Pz, 0.00256 * L.kz(st.z + 2) * 0.95 * 1.14 * 76 * 76 * st.Cd, 1e-12, 'strip P_z at z + p');
+  near(r.Vx, 720.569, 0.001, 'V'); near(r.Mx, 5196.099, 0.001, 'M');
+  const sh = { p: 2, b: 2.5, square: false, Wc: 150 * Math.PI / 4 * 2.5 * 2.5 * 2 }, x = L.groundline(ba, Bs, g, LL, sh).find(y => y.r === r);
+  near(x.sw.Cd, 0.45, 0, 'C_d'); near(x.sw.Kz, 0.85622, 1e-5, 'K_z'); near(x.sw.Pz, 6.1701, 1e-4, 'P_z'); near(x.sw.F, 30.850, 1e-3, 'W_s');
+  near(x.MF, 6720.05, 0.01, 'M_F'); near(x.VF, 751.42, 0.01, 'V_F'); near(x.PF, 1905.88, 0.01, 'P_F');
+  const d = L.groundline(ba, Bs, g, LL, sh).find(y => y.r.combo === 'E1max' && y.r.lc === 'd45');
+  near(d.Fx, 0.75 * x.sw.F, 1e-9, 'case 3, x'); near(d.Fy, 0.75 * x.sw.F, 1e-9, 'case 3, y');
+  assert.equal(L.groundline(ba, Bs, g, LL, sh).find(y => y.r.combo === 'S1').VF, 0);   // Strength I: no wind, V_F = 0 (not a Broms row)
+  assert.ok(L.groundlineSteps(x, g, sh).some(s => s.id === 'g.mf'));
+  // p = 0 (no zp, no shaft): the former values exactly
+  const g0 = { ...HC2 }, ba0 = L.baseActions(g0, LL);
+  L.groundline(ba0, Bs, g0, LL, null).forEach(y => { assert.equal(y.MF, (Bs[y.r.combo] ? Bs[y.r.combo].B : 1) * y.r.M); assert.equal(y.VF, y.r.V); assert.equal(y.PF, y.r.P); });
+  assert.deepEqual(JSON.parse(JSON.stringify(L.windForces({ ...HC2, zp: 0 }, 76, 'extreme', 0))), JSON.parse(JSON.stringify(L.windForces(HC2, 76, 'extreme', 0))));
+});
