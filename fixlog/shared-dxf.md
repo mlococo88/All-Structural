@@ -124,7 +124,7 @@ No drawing, file or engineering value changes: a browser print path for the shee
 ### Other copies
 - None.
 
-## 2026-11-03 — PR: claude/dxf-sheet-inset — the sheets' outer border 0.25 in inside the paper edge (SHEET_INSET, sheetBorder; engineer's decision)
+## 2026-11-03 — PR: claude/dxf-sheet-inset (PR #754: https://github.com/mlococo88/All-Structural/pull/754) — the sheets' outer border 0.25 in inside the paper edge (SHEET_INSET, sheetBorder; engineer's decision)
 No engineering value changes. The drawing geometry and the plot scales are unchanged; only the outer border line of each sheet moves.
 ### Where
 - New `SHEET_INSET = 0.25` and `sheetBorder(D, l, ox, W, H, k)` (anchor `function sheetBorder(D, l, ox, W, H, k) {`):

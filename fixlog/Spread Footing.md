@@ -4527,7 +4527,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - The outer border prints on the page edge (the sheet is the page). A physical printer with unprintable edges will clip that outer line
   (the inner border and title block are inside it); a PDF keeps it.
 
-## 2026-11-03 — PR: claude/dxf-sheet-inset — Drawings: the sheet's outer border 0.25 in inside the paper edge (SFPS-2; display only, no result change)
+## 2026-11-03 — PR: claude/dxf-sheet-inset (PR #754: https://github.com/mlococo88/All-Structural/pull/754) — Drawings: the sheet's outer border 0.25 in inside the paper edge (SFPS-2; display only, no result change)
 
 ### SFPS-2. Outer border inset (engineer's decision)
 - **Problem (engineer):** on a physical printer the outer border, printed on the page edge, is clipped.

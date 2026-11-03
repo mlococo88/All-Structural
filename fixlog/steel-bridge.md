@@ -3868,7 +3868,7 @@ current design's analysis accepted; **the minimum shipping piece length raised f
 ### Other copies
 - None.
 
-## 2026-11-03 — PR: claude/dxf-sheet-inset — Drawings: the sheet's outer border 0.25 in inside the paper edge (SBPS-1; display only, no result change)
+## 2026-11-03 — PR: claude/dxf-sheet-inset (PR #754: https://github.com/mlococo88/All-Structural/pull/754) — Drawings: the sheet's outer border 0.25 in inside the paper edge (SBPS-1; display only, no result change)
 ### Where
 - `engine/sheets.js` `sheet()` (anchor `X_().sheetBorder(D, bd, ox, W, H, k);`): before `D.rect(bd, ox, 0, ox + W, H);`, after
   `X_().sheetBorder(D, bd, ox, W, H, k);` (shared/dxf.js: rect 0.25 k inside the sheet's edge). Inner border, title block, drawing area,

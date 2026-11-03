@@ -1535,7 +1535,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - The tool has no calculation report, so the sheets cite tabs ("as the Beam Seat Output tab") rather than report sections (§6).
 - The plan and framing plans are in the local frame; a State Plane sheet would need a rotated viewport (not in R12 model space).
 
-## 2026-11-03 — PR: claude/dxf-sheet-inset — Drawings: the sheet's outer border 0.25 in inside the paper edge (BGDW-2; display only, no result change)
+## 2026-11-03 — PR: claude/dxf-sheet-inset (PR #754: https://github.com/mlococo88/All-Structural/pull/754) — Drawings: the sheet's outer border 0.25 in inside the paper edge (BGDW-2; display only, no result change)
 
 ### BGDW-2. Outer border inset (engineer's decision)
 - **Problem (engineer):** on a physical printer the outer border, printed on the page edge, is clipped.

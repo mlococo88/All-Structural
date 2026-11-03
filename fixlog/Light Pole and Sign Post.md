@@ -2252,7 +2252,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 ### Manual: the check summary panel (LPDC, #747)
 - Manual §3.1, Summary tab: after the first paragraph ("The Summary is the answer sheet…"), one paragraph was added on the check summary panel. It covers the one-line checks, expanding and click-through, the placement at 1500 px, the collapse button, the code modes and the input-error state, and notes that the panel is not printed. This closes the LPDC open item on the Manual.
 
-## 2026-11-03 — PR: claude/dxf-sheet-inset — Drawings: the sheet's outer border 0.25 in inside the paper edge (LPPS-2; display only, no result change)
+## 2026-11-03 — PR: claude/dxf-sheet-inset (PR #754: https://github.com/mlococo88/All-Structural/pull/754) — Drawings: the sheet's outer border 0.25 in inside the paper edge (LPPS-2; display only, no result change)
 
 ### LPPS-2. Outer border inset (engineer's decision)
 - **Problem (engineer):** on a physical printer the outer border, printed on the page edge, is clipped.

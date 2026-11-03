@@ -3098,7 +3098,7 @@ index 56a8a3f..13f8372 100644
 - Part sizes are given by the part descriptions (labels), not by per-part dimension lines (stacked parts would overlap them).
 - The Report does not include the drawing sheets (they print separately at their scale).
 
-## 2026-11-03 — PR: claude/dxf-sheet-inset — Drawings: the sheet's outer border 0.25 in inside the paper edge (SPDW-2; display only, no result change)
+## 2026-11-03 — PR: claude/dxf-sheet-inset (PR #754: https://github.com/mlococo88/All-Structural/pull/754) — Drawings: the sheet's outer border 0.25 in inside the paper edge (SPDW-2; display only, no result change)
 
 ### SPDW-2. Outer border inset (engineer's decision)
 - **Problem (engineer):** on a physical printer the outer border, printed on the page edge, is clipped.
