@@ -378,6 +378,54 @@
   .lp3dNarrow{display:none} @media(max-width:600px){.lp3dWide{display:none}.lp3dNarrow{display:inline}}
   .lp3dWrap{position:relative;border:1px solid var(--line);background:#fff;overflow:hidden;max-width:100%} #lp3dCanvas{display:block;touch-action:none;cursor:grab;max-width:100%}
   .lp3dHint{position:absolute;left:6px;top:4px;font:8pt var(--font-ui);color:#64748b;background:rgba(255,255,255,.85);padding:1px 4px;border-radius:3px;pointer-events:none}
+  /* LPDC (2026-11-03): check summary panel, one line per check, collapsible; on screens >= 1500 px a 280 px left column that
+     scrolls on its own (as Spread Footing, SFDC / SFDF). Screen only; the printed Report is unchanged. */
+  #lppDashCol{display:none}
+  @media print{#lppDashCol,#lppDashBox{display:none!important}}
+  @media screen{
+    #lppDashBox{font-family:var(--font-ui);padding-top:6px}
+    #lppDashHead{display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap}
+    #lppDashTtl{margin:2px 0;font-size:10pt;letter-spacing:.04em;text-transform:uppercase;color:var(--accent)}
+    #lppDashTgl{margin:0;padding:1px 7px;font:8.5pt var(--font-ui);border:1px solid var(--line-strong);background:var(--slate-100);border-radius:4px;cursor:pointer;color:var(--slate-700)}
+    #lppDashCnt{display:inline-flex;gap:4px;flex-wrap:wrap}
+    #lppDashCnt span{font-size:8pt;font-weight:700;padding:1px 5px;border:1px solid;border-radius:3px;white-space:nowrap}
+    #lppDashCnt .lpdCf{color:#991B1B;background:#FEF2F2;border-color:var(--bad)}
+    #lppDashCnt .lpdCw{color:#92400E;background:#FFFBEB;border-color:var(--warn)}
+    #lppDashCnt .lpdCp{color:#065F46;background:#ECFDF5;border-color:var(--ok)}
+    body.lppDashColl #lppDash{display:none}
+    #lppDash{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(250px,100%),1fr));gap:3px 6px;margin:4px 0 8px;align-items:start}
+    .lpdCh{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:5px;padding:2px 5px 2px 2px;min-width:0;
+      border:1px solid var(--line);border-left:4px solid var(--slate-400);border-radius:3px;background:#fff;font-size:8.5pt;line-height:1.35;cursor:pointer}
+    .lpdCh:hover{background:var(--slate-50)} .lpdCh:focus-visible{outline:2px solid var(--blue-600);outline-offset:-1px}
+    .lpdCh.pass{border-left-color:var(--ok)} .lpdCh.fail{border-left-color:var(--bad);background:#FEF2F2} .lpdCh.warn{border-left-color:var(--warn);background:#FFFBEB}
+    .lpdCh .lpdX{grid-row:1;grid-column:1;margin:0;padding:0 3px;border:none;background:transparent;font-size:9px;color:var(--slate-700);line-height:1.2;cursor:pointer}
+    .lpdCh .lpdN{grid-row:1;grid-column:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .lpdCh .lpdR{grid-row:1;grid-column:3;white-space:nowrap;color:var(--slate-700)}
+    .lpdCh .lpdS{grid-row:1;grid-column:4;font-size:7.5pt;font-weight:700;white-space:nowrap}
+    .lpdCh.pass .lpdS{color:var(--ok)} .lpdCh.fail .lpdS{color:var(--bad)} .lpdCh.warn .lpdS{color:var(--warn)} .lpdCh.na .lpdS{color:var(--slate-600)}
+    .lpdCh .lpdV,.lpdCh .lpdDC,.lpdCh .lpdRef{grid-column:1/-1;display:none;padding-left:16px;overflow-wrap:anywhere}
+    .lpdCh .lpdDC,.lpdCh .lpdRef{color:var(--slate-600);font-size:8pt} .lpdCh .lpdRef{font-style:italic}
+    .lpdCh.lpdOpen .lpdV,.lpdCh.lpdOpen .lpdDC,.lpdCh.lpdOpen .lpdRef{display:block}
+    .lpdCh.lpdOpen .lpdN{white-space:normal}
+    .lpdMsg{grid-column:1/-1;font-size:8.5pt;padding:5px 8px;border:1px solid var(--line);border-left:4px solid var(--bad);background:#FEF2F2;color:#7F1D1D;border-radius:3px}
+    .lpdMsg.none{border-left-color:var(--slate-400);background:var(--slate-50);color:var(--slate-600)}
+  }
+  @media screen and (min-width:1500px){
+    .wrap{max-width:1792px}   /* 1500 + 292 (the column): at 1792 px and wider the input and output panels keep their old widths */
+    body.lppDashWide #lppDashCol{display:block;flex:0 0 292px;width:292px;height:100%;overflow-y:auto;overflow-x:hidden;position:relative;
+      padding:0 6px 24px;border-right:1px solid var(--line);background:var(--slate-50);overscroll-behavior:contain}
+    body.lppDashWide .grid2 .col-in{flex-basis:calc((100% - 292px)*.33);max-width:calc((100% - 292px)*.33)}
+    body.lppDashWide #lppDash{grid-template-columns:minmax(0,1fr)}
+    body.lppDashWide #lppDashHead{position:sticky;top:0;z-index:3;background:var(--slate-50);padding:4px 0}
+    body.lppDashWide.lppDashColl #lppDashCol{flex-basis:42px;width:42px;padding:0}
+    body.lppDashWide.lppDashColl .grid2 .col-in{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
+    body.lppDashWide.lppDashColl #lppDashHead{flex-direction:column;align-items:center}
+    body.lppDashWide.lppDashColl #lppDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);margin:4px 0;white-space:nowrap}
+    body.lppDashWide.lppDashColl #lppDashCnt{flex-direction:column;align-items:center}
+    body.lppDashWide.lppDashColl #lppDashCnt span{font-size:7.5pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
+    body.lppDashWide #lppDashCol::-webkit-scrollbar{width:7px}
+    body.lppDashWide #lppDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+  }
 </style>
 </head>
 <body>
@@ -426,6 +474,7 @@
 
 <div class="wrap">
 <div class="grid2">
+  <aside id="lppDashCol" class="noprint" aria-label="Check summary"></aside><!-- LPDC (2026-11-03): the check summary panel on screens 1500 px and wider -->
   <!-- ================= INPUTS ================= -->
   <div class="col-in">
     <section class="card" id="modeCard">
@@ -713,6 +762,10 @@
 
   <!-- ================= RESULTS (logical top-down order) ================= -->
   <div class="col-out">
+    <div id="lppDashBox" class="noprint"><!-- LPDC: check summary (moved into #lppDashCol on screens 1500 px and wider) -->
+      <div id="lppDashHead"><button type="button" id="lppDashTgl" aria-controls="lppDash"></button><h2 id="lppDashTtl">Check summary</h2><span id="lppDashCnt"></span></div>
+      <div id="lppDash"></div>
+    </div>
     <div class="tabbar" id="tabBar">
       <button data-tab="geometry" class="on">Geometry</button>
       <button data-tab="summary">Summary</button>
@@ -2134,7 +2187,7 @@ function natGfWorkedHTML(inp){
   if(!f){ H+=`<p class="eq-result">n<sub>1</sub> ≥ 1 Hz: rigid; G = ${fmt(inp.G,2)} as entered (G<sub>f</sub> not needed).</p>`; return H; }
   const T=GF_TBL[inp.expo]||GF_TBL.C;
   H+=step(`Gust-effect factor G<sub>f</sub>, flexible structure ${ref('ASCE 7-22 §26.11.5, Eq. 26.11-7 to 26.11-16, Table 26.11-1')}`);
-  H+=`<p class="eq-why">Exposure ${inp.expo}: â = ${fmt(T.aa,4)}, b̂ = ${fmt(T.ab,2)}, c = ${fmt(T.c,2)}, ℓ = ${fmt(T.l,0)} ft, ε̄ = ${fmt(T.eps,4)}, z<sub>min</sub> = ${fmt(T.zmin,0)} ft (Table 26.11-1 values as used by the tool). h = ${fmt(f.h,2)} ft, B = ${fmt(f.B,3)} ft, L = ${fmt(f.L,3)} ft, β = ${fmt(f.beta,3)}, V = ${fmt(inp.V,0)} mph.</p>`;
+  H+=`<p class="eq-why">Exposure ${inp.expo}: â = ${fmt(T.aa,4)}, b̂ = ${fmt(T.ab,2)}, c = ${fmt(T.c,2)}, ℓ = ${fmt(T.l,0)} ft, ε̄ = ${fmt(T.eps,4)}, z<sub>min</sub> = ${fmt(T.zmin,0)} ft (Table 26.11-1 values as used by the tool). h = ${inp.mode!=='sign'&&inp.pProj>0?`H + p = ${fmt(inp.H,2)} + ${fmt(inp.pProj,2)} = `:''}${fmt(f.h,2)} ft${inp.mode!=='sign'&&inp.pProj>0?' (height above grade; LPGF)':''}, B = ${fmt(f.B,3)} ft, L = ${fmt(f.L,3)} ft, β = ${fmt(f.beta,3)}, V = ${fmt(inp.V,0)} mph.</p>`;
   H+=g(`\\bar z = \\max(0.6h,\\ z_{min}) = ${fmt(f.zb,2)}\\ \\text{ft}\\qquad I_{\\bar z} = c\\left(\\frac{33}{\\bar z}\\right)^{1/6} = ${fmt(f.Iz,4)}\\qquad L_{\\bar z} = \\ell\\left(\\frac{\\bar z}{33}\\right)^{\\bar\\epsilon} = ${fmt(f.Lz,1)}\\ \\text{ft}`);
   H+=g(`Q^2 = \\frac{1}{1+0.63\\left(\\frac{B+h}{L_{\\bar z}}\\right)^{0.63}} = ${fmt(f.Q2,4)}\\qquad \\bar V_{\\bar z} = \\hat b\\left(\\frac{\\bar z}{33}\\right)^{\\hat\\alpha}V\\,\\frac{88}{60} = ${fmt(f.Vz,2)}\\ \\text{ft/s}`);
   H+=g(`N_1 = \\frac{n_1L_{\\bar z}}{\\bar V_{\\bar z}} = ${fmt(f.N1,4)}\\qquad R_n = \\frac{7.47N_1}{(1+10.3N_1)^{5/3}} = ${fmt(f.Rn,4)}`);
@@ -4709,6 +4762,7 @@ function calc(){
   lppCalcIbc();
   if(codeMode==='lts') ltsCalc(); else ltsClear();
   if(typeof lpsvRefresh==='function') lpsvRefresh();   // LPSV (2026-11-02): the sign 3D view, and the sign drawings in the LRFDLTS mode
+  lppDashRender();   // LPDC (2026-11-03): the check summary panel, from the results just shown
 }
 function lppCalcIbc(){
   const inp={V:num('V'),expo:$('expo').value,Kzt:num('Kzt'),Kd:kdComponents().mast,KdSign:kdComponents().sign,KdMode:kdComponents().mode,G:num('G'),beta:($('lppBeta')?num('lppBeta'):0.005),
@@ -4782,7 +4836,7 @@ function lppCalcIbc(){
     .concat((cablesEnabled?cables:[]).map(c=>({z:c.hc,W:c.g*c.L/2}))));
   { const Bw=(inp.poleDiaTop+inp.poleDiaBase)/24;
     const Ld=inp.poleShape==='rect'? ((inp.poleDepthTop||0)+(inp.poleDepthBase||0))/24 : Bw;
-    lppApplyGf(inp, nat, {h:inp.H, B:Bw, L:Ld}); }
+    lppApplyGf(inp, nat, {h:inp.H+(inp.pProj>0?inp.pProj:0), B:Bw, L:Ld}); }   // LPGF (2026-11-03, engineer): h above grade, H + p (shaft projection p, LPPJ)
   // total service dead = misc + pole self-weight + sum of fixture weights
   const fixW=fixtures.reduce((s,x)=>s+x.W,0);
   inp.DLtotal=inp.DL+poleSeg.totalW+fixW;
@@ -5977,6 +6031,133 @@ function lppGoto(k,st){
 }
 document.addEventListener('click',ev=>{ const a=ev.target.closest&&ev.target.closest('a.wkA'); if(!a) return;
   ev.preventDefault(); lppGoto(a.dataset.k,a.dataset.st); });
+/* LPDC (2026-11-03, engineer): check summary panel, as Spread Footing's dashboard (SFDC #737, SFDF #740). One line per check:
+   expand button, name, a short value (the D/C, or the condition where the status does not come from the ratio: lppDashCond),
+   status. NG and REVIEW lines start expanded. A line click opens its worked check (lppGoto, D11 links). Built from what the
+   Summary tab (collectChecks, the Anchorage-app chip) and the LRFDLTS summary (lppLtsLast) already hold: no new calculation.
+   On screens >= 1500 px the box is moved into the left column #lppDashCol; below that it sits on top of the output panel.
+   Collapse state: per-browser UI key lpp_dashCollapsed_v1 ('1' = collapsed, '0' or absent = open); not in the project, the
+   autosave or the export. The Summary tab, the Report and printing are unchanged. */
+const LPDC={key:'lpp_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,open:new Map(),coll:false};
+try{LPDC.coll=localStorage.getItem(LPDC.key)==='1';}catch(e){}
+const LPDC_ST={pass:'OK',fail:'NG',warn:'REVIEW',na:'INFO'};
+function lppDashDC(r){ return (r==null||isNaN(r))?'':'D/C '+(isFinite(r)?fmt(r,2):'∞'); }
+// the condition that sets an NG / REVIEW status where the ratio is within its limit (or not a number); [] where the ratio governs
+function lppDashCond(it){
+  if(it.st!=='fail'&&it.st!=='warn') return [];
+  if(it.dc!=null&&!isNaN(it.dc)&&it.dc>1+1e-9) return [];
+  return it.cond||[];
+}
+// a card of the LRFDLTS mode (no D11 key): open its tab, scroll to it and flash it, as lppGoto
+function lppDashGoEl(tab,id){
+  switchTab(tab); const e=$(id); if(!e) return;
+  e.scrollIntoView({behavior:'smooth',block:'start'});
+  e.classList.add('wkFlash'); setTimeout(()=>e.classList.remove('wkFlash'),1400);
+}
+function lppDashItems(){
+  const out=[], post=appMode==='sign'?'Post':'Pole';
+  const anch=()=>{ if(!LPP_ANCH||typeof lppAnchorChip!=='function') return;
+    LPP_ANCH.groups.forEach((g,gi)=>{ const c=lppAnchorChip(g.id);
+      const st=c.state==='ok'?((c.dcr<=1&&c.ok!==false)?'pass':'fail'):(c.state==='stale'||c.state==='error'?'warn':'na');
+      const cond=c.state==='stale'?['stale: send again']:c.state==='error'?['result error']:(c.state==='ok'&&c.ok===false&&!(c.dcr>1)?['NG in the Anchorage app']:[]);
+      out.push({name:'Anchors'+(LPP_ANCH.groups.length>1?' · '+g.label:''),dc:c.state==='none'?null:c.dcr,st,cond,
+        none:c.state==='none'?'not checked':'',text:c.text,ref:'ACI 318-19 Ch. 17, designed in the Anchorage app',go:()=>lppGoto('anchorage',gi),where:lppTgt('anchorage',gi)}); }); };
+  if(codeMode==='lts'){
+    const X=lppLtsLast; if(!X||!X.mc) return null;
+    const card=(tab,id,c)=>({go:()=>lppDashGoEl(tab,id),where:{tab,card:c}});
+    { const gv=X.mc.gov.gov, ok=gv.ratio<=1&&X.mc.valid;
+      out.push(Object.assign({name:post+' — combined forces',dc:gv.ratio,st:ok?'pass':'fail',cond:X.mc.valid?[]:['Art. 4.8.1 not valid'],
+        text:`ratio ${isFinite(gv.ratio)?fmt(gv.ratio,3):'∞'} at z = ${fmt(X.mc.gov.sec.z,2)} ft (${gv.comboName}, ${gv.lcName})`+(X.mc.valid?'':'; the simplified second-order method is not valid: a detailed analysis (Art. 4.8.2) is required'),
+        ref:`LRFDLTS Art. 5.12.1, Eq. ${gv.eq}`},card('post','ltsMemberCard',post+' — LRFDLTS member check'))); }
+    if(X.dfl) X.dfl.checks.forEach(c=>out.push(Object.assign({name:c.label,dc:c.ratio,st:c.applies?(c.ok?'pass':'fail'):'na',cond:[],
+      text:`${fmt(c.value,c.unit==='in'?2:3)} / ${fmt(c.limit,c.unit==='in'?2:3)} ${c.unit}${c.applies?'':' (information)'}`,ref:c.ref},card('post','ltsDeflCard',post+' — deflection and fatigue'))));
+    if(X.bp) out.push(Object.assign({name:'Base plate',dc:X.bp.ratio,st:X.bp.ok?'pass':'fail',cond:[],
+      text:`t_req ${fmt(X.bp.tReq,3)} / t ${fmt(X.bp.tProv,3)} in (D/C = (t_req/t)²)`,ref:'bending line, engineering method; Art. 5.6.3'},card('anchors','ltsBpCard',post+' base plate and base weld')));
+    if(X.wd) out.push(Object.assign(X.wd.type==='cjp'?{name:'Base weld',dc:null,st:'na',none:'CJP',cond:[],text:'CJP: the base metal governs (member check at the base)',ref:'Art. 5.14 → AWS D1.1'}
+      :{name:'Base weld',dc:X.wd.ratio,st:X.wd.ok?'pass':'fail',cond:[],text:`ratio ${fmt(X.wd.ratio,3)}`,ref:'Art. 5.14 → AWS D1.1 / AISC 360-16 §J2'},card('anchors','ltsBpCard',post+' base plate and base weld')));
+    if(X.fd) out.push(Object.assign(X.fd.gov?{name:'Shaft embedment (Broms)',dc:null,st:'na',none:'L = '+fmt(X.fd.gov.br.L,2)+' ft',cond:[],
+        text:`L = ${fmt(X.fd.gov.br.L,2)} ft required; shaft moment ${fmt(X.fd.gm.br.Mu,2)} kip-ft`,ref:'Art. 13.6.1.1, C13.6.1.1'}
+      :{name:'Drilled shaft',dc:null,st:'warn',cond:['select the Broms soil model'],text:'select the Broms soil model',ref:'Art. 13.6.1.1'},card('shaft','ltsFndCard',post+' foundation — drilled shaft')));
+    anch();
+    if(X.fat) out.push(Object.assign({name:'Fatigue',dc:null,st:X.fat.required?'warn':'na',none:'not required',cond:X.fat.required?['outside this tool']:[],
+      text:X.fat.required?'REQUIRED — outside this tool (high-mast tower)':'not required',ref:'Arts. 11.4, 11.7.2'},card('post','ltsDeflCard',post+' — deflection and fatigue')));
+    if(X.brk) out.push(Object.assign({name:'Breakaway',dc:null,st:X.brk.needed?'warn':'na',none:'not required',cond:X.brk.needed?['see the checklist']:[],
+      text:X.brk.needed?'required — see the checklist':'not required (outside the clear zone)',ref:'Art. 2.5.2; Section 12'},card('summary','ltsBrkCard','Breakaway checklist')));
+    return out;
+  }
+  const ctx=LPP_SUMCTX; if(!ctx) return null;
+  const {inp,stacks}=ctx;
+  stacks.forEach((s,si)=>{
+    collectChecks({found:s.found,pstress:s.pstress,inp,label:s.label}).forEach(c=>{
+      const d=c.dec!==undefined?c.dec:(c.unit==='in²'||c.unit==='—'||c.unit==='ksf'?2:0), k=LPP_CHK2K[c.name];
+      const cond=[];
+      if(!c.ok&&!(c.ratio>1)){
+        if(isNaN(c.ratio)) cond.push('not computed');
+        else if(c.name==='Round HSS D/t < 0.45E/Fy') cond.push('D/t ≥ 0.45E/F_y');
+        else cond.push(`${fmt(c.demand,d)} vs ${fmt(c.cap,d)} ${c.unit}`);
+      }
+      out.push({name:c.name+(c.label?' · '+c.label:''),dc:c.ratio,st:c.ok?'pass':'fail',cond,
+        text:`${fmt(c.demand,d)} ${c.unit} vs ${fmt(c.cap,d)} ${c.unit} (utilization ${fmt(100*c.ratio,0)}%)`,ref:c.code,go:()=>lppGoto(k,si),where:lppTgt(k,si)});
+    });
+    if(s.pstress&&s.pstress.lim&&s.pstress.lim.e7Slender)
+      out.push({name:'Slender wall (§E7 not applied)'+(s.label?' · '+s.label:''),dc:null,st:'warn',cond:['verify'],
+        text:'λ > λ_r (Table B4.1a): the §E7 effective-area reduction is not applied, so the axial capacity is unconservative — verify.',ref:'AISC 360-16 §E7, Table B4.1a',go:()=>lppGoto('post',si),where:lppTgt('post',si)});
+  });
+  anch();
+  return out;
+}
+function lppDashRender(){
+  const box=$('lppDash'), cnt=$('lppDashCnt'); if(!box) return;
+  const er=$('lppInErr'), blocked=!!(er&&er.classList.contains('on'));
+  let items=null; if(!blocked){ try{ items=lppDashItems(); }catch(e){ items=null; } }
+  box.innerHTML='';
+  if(blocked||!items){
+    box.innerHTML=blocked?'<div class="lpdMsg">Input error: no results. Correct the inputs listed above the output tabs.</div>':'<div class="lpdMsg none">No results yet.</div>';
+    if(cnt) cnt.innerHTML=blocked?'<span class="lpdCf">input error</span>':'';
+    return;
+  }
+  const n={fail:0,warn:0};
+  items.forEach(it=>{
+    if(n[it.st]!=null) n[it.st]++;
+    let short=lppDashDC(it.dc)||it.none||''; let dcLine='';
+    const cnd=lppDashCond(it); if(cnd.length){ if(lppDashDC(it.dc)) dcLine=lppDashDC(it.dc); short=cnd.join('; '); }
+    const c=document.createElement('div'); c.className='lpdCh '+it.st; c.tabIndex=0; c.setAttribute('role','button');
+    const wh=it.where?'→ '+(LPP_TABNAME[it.where.tab]||it.where.tab)+' · '+it.where.card:'';
+    c.innerHTML=`<button type="button" class="lpdX" title="Show the result and the reference"></button><span class="lpdN">${lppEsc(it.name)}</span>`
+      +`<span class="lpdR">${lppEsc(short)}</span><span class="lpdS">${LPDC_ST[it.st]}</span><div class="lpdV">${lppEsc(it.text)}</div>`
+      +(dcLine?`<div class="lpdDC">${lppEsc(dcLine)} (the ratio is within its limit; the status comes from the condition)</div>`:'')
+      +`<div class="lpdRef">${lppEsc(it.ref||'')}${it.ref&&wh?' · ':''}${lppEsc(wh)}</div>`;
+    c.title=it.name+': '+it.text+(dcLine?'\n'+dcLine:'')+(it.ref?'\nReference: '+it.ref:'')+(wh?'\nClick: '+wh:'');
+    const x=c.querySelector('.lpdX');
+    const setOpen=o=>{ c.classList.toggle('lpdOpen',o); x.setAttribute('aria-expanded',o?'true':'false'); x.textContent=o?'▾':'▸'; };
+    setOpen(LPDC.open.has(it.name)?LPDC.open.get(it.name):(it.st==='fail'||it.st==='warn'));
+    x.addEventListener('click',ev=>{ ev.preventDefault(); ev.stopPropagation(); const o=!c.classList.contains('lpdOpen'); LPDC.open.set(it.name,o); setOpen(o); });
+    if(it.go){ c.addEventListener('click',()=>it.go()); c.addEventListener('keydown',ev=>{ if(ev.key==='Enter'||ev.key===' '){ if(ev.target!==c) return; ev.preventDefault(); it.go(); } }); }
+    box.appendChild(c);
+  });
+  if(cnt) cnt.innerHTML=(n.fail?`<span class="lpdCf">${n.fail} NG</span>`:'')+(n.warn?`<span class="lpdCw">${n.warn} REVIEW</span>`:'')+(items.length&&!n.fail&&!n.warn?'<span class="lpdCp">no NG</span>':'');
+}
+function lppDashPlace(){
+  const box=$('lppDashBox'), col=$('lppDashCol'), out=document.querySelector('.col-out'), bar=$('tabBar'); if(!box||!col||!out) return;
+  const wide=!!(LPDC.mq&&LPDC.mq.matches);
+  document.body.classList.toggle('lppDashWide',wide);
+  if(wide){ if(box.parentNode!==col) col.appendChild(box); }
+  else if(box.parentNode!==out) out.insertBefore(box,bar||out.firstChild);
+  lppDashColl(LPDC.coll,false);
+}
+function lppDashColl(v,save){
+  LPDC.coll=!!v; document.body.classList.toggle('lppDashColl',LPDC.coll);
+  const t=$('lppDashTgl'), wide=document.body.classList.contains('lppDashWide');
+  if(t){ t.setAttribute('aria-expanded',LPDC.coll?'false':'true');
+    t.innerHTML=wide?(LPDC.coll?'&raquo;':'&laquo;'):(LPDC.coll?'&#9656; Show checks':'&#9662; Hide checks');
+    t.title=(LPDC.coll?'Show':'Hide')+' the check list (remembered in this browser)'; }
+  if(save){ try{ localStorage.setItem(LPDC.key,LPDC.coll?'1':'0'); }catch(e){} }
+}
+(function(){
+  const t=$('lppDashTgl'); if(t) t.addEventListener('click',()=>lppDashColl(!LPDC.coll,true));
+  if(LPDC.mq){ if(LPDC.mq.addEventListener) LPDC.mq.addEventListener('change',lppDashPlace); else if(LPDC.mq.addListener) LPDC.mq.addListener(lppDashPlace); }
+  lppDashPlace();
+})();
 const LPP_REFS=[
   ['ASCE/SEI 7-22','Ch. 26 wind: §26.2, Table 26.6-1 (K_d), §26.10 / Table 26.10-1 (K_z), Eq. 26.10-1 (q_z), §26.11.5 (G_f, flexible structures); Ch. 29: §29.3, Fig. 29.3-1, Eq. 29.3-1 (solid freestanding signs, Cases A, B, C), §29.4 (other structures); Ch. 10 (atmospheric ice, wind-on-ice); strength and ASD load combinations (the tool cites no section)'],
   ['IBC 2021','Table 1806.2 (presumptive load-bearing values); §1806.3.3, §1806.3.4 (lateral bearing increases); §1807.3.2.1 (non-constrained) and §1807.3.2.2 (constrained) embedded posts and poles'],
@@ -7559,6 +7740,7 @@ function lppAnchorChipHTML(groupId){
 function lppAnchorCardRefresh(){
   const box=$('lpAnchResult'); if(!box||!LPP_ANCH) return;
   box.innerHTML=LPP_ANCH.groups.map(g=>`<div style="margin:3px 0"><b>${lppEsc(g.label)}:</b> ${lppAnchorChipHTML(g.id)}</div>`).join('');
+  if(typeof lppDashRender==='function') lppDashRender();   // LPDC: the Anchors line follows a new Anchorage-app result
 }
 if($('lpAnchImportRes')) $('lpAnchImportRes').addEventListener('click',()=>$('lpAnchResFile').click());
 if($('lpAnchResFile')) $('lpAnchResFile').addEventListener('change',e=>{
