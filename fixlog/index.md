@@ -4370,7 +4370,7 @@ function NumberListInput({value, onChange, placeholder, label, col = 'Value', un
 - **Open items:** engineer check: with results loaded, AREMA Rating → Girder Spacing: type 6 ↵ 6.5 ↵ 6 and confirm the
   rating uses those spacings (the rating text shows them).
 
-## 2026-11-02 — PR: claude/plib-index — PLIB: Undo / Redo   [display only]
+## 2026-11-02 — PR: claude/plib-index, PR #719: https://github.com/mlococo88/All-Structural/pull/719 — PLIB: Undo / Redo   [display only]
 - **Before:** the model `cfg` is autosaved to `mct_cfg_v3` on every change; named projects are the shared Bridge Projects registry
   (`BridgeProjects`: Save to Project, the project drop-down); ↺ History keeps the last 10 checkpoint snapshots of the session (on step
   changes, before load / import / reset) and restores one. No undo of a single edit.
