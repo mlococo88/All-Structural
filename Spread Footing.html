@@ -34,6 +34,7 @@ h3{font-size:13px;margin:8px 0 4px 0}
 @media print{.allToolsLink{display:none !important}}
 /* SFPR (2026-11-03; review E6): printed Report: the last step of a topic does not go to a page alone (the table scroll-box rule
    moved to shared/report.js, RPTW) */
+td.rp-sfnw{white-space:nowrap}   /* SFDF-N: the condition in a Report D/C cell (sfdRowCond) on one line, screen and print */
 @media print{#rp-print .rp-steps>.rp-step:last-child,#rp-print .rp-step:has(+ .rp-top){break-before:avoid}}
 .main{display:flex;gap:12px;align-items:flex-start}
 .inp{width:33%;min-width:400px}
@@ -1888,7 +1889,7 @@ function sfdRowCond(x){
  if(!x||(x.st!=='fail'&&x.st!=='warn')||(x.dc!=null&&x.dc>1+1e-9))return null;
  let c=[];try{c=sfdChCond(x.name);}catch(e){c=[];}
  if(!c.length)return null;
- const has=x.dc!=null&&!isNaN(x.dc);
+ const has=x.dc!=null&&!isNaN(x.dc)&&!/^\s*DCR\s/.test(String(x.val||''));   /* SFDF-N: no prefix where the text already starts with the DCR */
  return {cond:c.join('; '),ratio:has?'DCR '+(isFinite(x.dc)?x.dc.toFixed(2):'\u221e')+' (within limit)':''};
 }
 function sfdDashPlace(){
@@ -3539,7 +3540,7 @@ function sfrModel(){
   const RR=(typeof sfdResultRows==='function'?sfdResultRows():[]);
   const rows=RR.map(x=>{const ks=(W[x.name]||[]).filter(k=>have.has(k));
    const dc=(x.dc==null||isNaN(x.dc))?'n/a':(isFinite(x.dc)?sfrN(x.dc,2):'\u221e'), cd=sfdRowCond(x);   /* SFDF-R */
-   if(cd)return {cells:[x.name,(cd.ratio?cd.ratio+'; ':'')+String(x.val).replace(/\$/g,''),{t:cd.cond},{t:ST[x.st]||'N/A',cls:x.st==='pass'?'ok':x.st==='fail'?'ng':'na'},ks.length?ks.map(k=>'[['+k+']]').join(', '):'\u2014']};
+   if(cd)return {cells:[x.name,(cd.ratio?cd.ratio+'; ':'')+String(x.val).replace(/\$/g,''),{t:cd.cond,cls:'sfnw'},{t:ST[x.st]||'N/A',cls:x.st==='pass'?'ok':x.st==='fail'?'ng':'na'},ks.length?ks.map(k=>'[['+k+']]').join(', '):'\u2014']};
    return {cells:[x.name,String(x.val).replace(/\$/g,''),{t:dc,n:true},{t:ST[x.st]||'N/A',cls:x.st==='pass'?'ok':x.st==='fail'?'ng':'na'},ks.length?ks.map(k=>'[['+k+']]').join(', '):'\u2014']};});
   /* SFNG (2026-11-03, engineer; review C9): every NG and REVIEW item in one list, each naming what fails, linked to its work */
   const bad=RR.filter(x=>x.st==='fail'||x.st==='warn').sort((a,b)=>(a.st==='fail'?0:1)-(b.st==='fail'?0:1)).map(x=>{const ks=(W[x.name]||[]).filter(k=>have.has(k));
@@ -3673,7 +3674,7 @@ function sfxResults(tab){
  const ST={pass:'PASS',fail:'FAIL',warn:'REVIEW',na:'N/A'},fdc=v=>(v==null||isNaN(v))?'n/a':(isFinite(v)?v.toFixed(2):'∞');
  const rows=(typeof sfdResultRows==='function'?sfdResultRows():[]).filter(x=>x.tab===tab);
  if(!rows.length)return null;
- return {type:'table',wide:true,head:['Check','D/C','Reference; result','Status'],rows:rows.map(x=>{const cd=sfdRowCond(x);return [x.name+':',cd?{t:cd.cond}:{t:fdc(x.dc),n:true},sfrPlain((x.ref?x.ref+'; ':'')+(cd&&cd.ratio?cd.ratio+'; ':'')+String(x.val).replace(/\$/g,'')),{t:ST[x.st],cls:x.st==='pass'?'ok':x.st==='fail'?'ng':'na'}];})};   /* SFDF-R */
+ return {type:'table',wide:true,head:['Check','D/C','Reference; result','Status'],rows:rows.map(x=>{const cd=sfdRowCond(x);return [x.name+':',cd?{t:cd.cond,cls:'sfnw'}:{t:fdc(x.dc),n:true},sfrPlain((x.ref?x.ref+'; ':'')+(cd&&cd.ratio?cd.ratio+'; ':'')+String(x.val).replace(/\$/g,'')),{t:ST[x.st],cls:x.st==='pass'?'ok':x.st==='fail'?'ng':'na'}];})};   /* SFDF-R */
 }
 function sfxApply(model){
  const secs=model.sections;
