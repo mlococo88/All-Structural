@@ -8,6 +8,9 @@
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script src="https://cdn.plot.ly/plotly-basic-2.35.2.min.js" charset="utf-8"></script>
 <!-- SBRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<!-- SBRX (2026-11-03): Ctrl+P / the browser's Print from any tab prints the Report: registered before shared/report.js's own beforeprint
+     listener, so the Report is shown when that listener sets the running header (sbrPrintPrep). -->
+<script>window.addEventListener("beforeprint",()=>{ try{ if(typeof sbrPrintPrep==="function") sbrPrintPrep(); }catch(e){} });</script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 <!-- PLIB (2026-11-02): saved-project list dialog (Open / Rename / Duplicate / Delete), shared with the other tools -->
@@ -4437,7 +4440,8 @@ function setupPrintUI(){
   const hdr=$('hdr');if(!hdr)return;
   const b=el('button','btn primary','\uD83D\uDDB6 Print report');
   b.style.cssText='margin-left:auto;align-self:center';
-  b.addEventListener('click',openPrintDialog);
+  b.title='Print / PDF the calculation report (the Report tab), from any tab; in batch mode, the batch report';
+  b.addEventListener('click',()=>{if(typeof isBatch==='function'&&isBatch()){openBatchPrintDialog();return;}sbrPrintAny();});   /* SBRX: the Report (the print dialog and sbdReportDOM are retired) */
   hdr.appendChild(b);
 }
 function prRunHdr(secName){
@@ -4455,40 +4459,6 @@ function markShortSections(pr){
     const len=(s.textContent||'').replace(/\s+/g,' ').trim().length;
     if(!hasTable&&!hasPlot&&len<600)s.classList.add('short');
   });
-}
-function openPrintDialog(){
-  if(typeof isBatch==='function'&&isBatch()){openBatchPrintDialog();return;}
-  ensurePrintState();
-  const ov=el('div');ov.id='prOverlay';
-  ov.style.cssText='position:fixed;inset:0;background:rgba(15,25,40,.45);z-index:60;display:flex;align-items:center;justify-content:center';
-  const box=el('div');
-  box.style.cssText='background:#fff;border-radius:8px;padding:16px 20px;width:420px;max-height:80vh;overflow:auto;font-family:var(--font-ui);box-shadow:0 12px 40px rgba(0,0,0,.3)';
-  box.appendChild(el('div',null,'<b style="font-size:11pt;color:var(--ink)">Print report \u2014 select contents</b>'));
-  box.appendChild(el('div','hint','The report re-renders the live output (same code path as the tabs), expands every section, and converts diagrams to print-quality images. Identical combinations remain cross-referenced (\u00A77.2).'));
-  const labels={tabSummary:'Summary dashboard & governing results',tabSchem:'Schematic & input echo',
-    tabDerive:'Load derivation',tabAnalysis:'Analysis results (all combinations, worked)',
-    tabMx:'M\u2093 \u2014 major-axis flexure',tabMy:'M\u1D67 \u2014 minor-axis flexure',
-    tabVx:'V\u2093 \u2014 major-axis shear',tabVy:'V\u1D67 \u2014 minor-axis shear',
-    tabComp:'Compression',tabTors:'Torsion',tabJ10:'Concentrated forces (J10)',tabInter:'Interaction',
-    tabService:'Serviceability',tabSection:'Section properties',tabValid:'Validation (benchmarks + AISC examples)',
-    tabManual:'User manual (all parts)',tabBatch:'Batch results'};
-  const availD={};TABS().forEach(t=>availD[t[0]]=1);
-  Object.keys(labels).filter(id=>availD[id]).forEach(id=>{
-    const r=el('label');r.style.cssText='display:flex;gap:8px;align-items:center;padding:3px 0;font-size:9.5pt;cursor:pointer';
-    const c=document.createElement('input');c.type='checkbox';c.checked=!!S.print.secs[id];
-    c.addEventListener('change',()=>{S.print.secs[id]=c.checked;autosave();});
-    r.appendChild(c);r.appendChild(el('span',null,labels[id]));
-    box.appendChild(r);
-  });
-  const row=el('div','btnRow');row.style.marginTop='10px';
-  const go=el('button','btn primary','Build & print');
-  go.addEventListener('click',()=>{document.body.removeChild(ov);buildPrintReport();});
-  const ca=el('button','btn','Cancel');
-  ca.addEventListener('click',()=>document.body.removeChild(ov));
-  row.appendChild(go);row.appendChild(ca);box.appendChild(row);
-  ov.appendChild(box);
-  ov.addEventListener('click',e=>{if(e.target===ov)document.body.removeChild(ov);});
-  document.body.appendChild(ov);
 }
 async function rasterisePlots(pr,c){
   if(typeof Plotly==='undefined'){
@@ -4555,23 +4525,6 @@ function sbdRefs(){
   if(sbrSel().tabValid)r.push(['Validation','AISC Design Examples v15.0; ENERCALC; Hibbeler, Structural Analysis (benchmarks of the Validation section only)']);
   return r;
 }
-function sbdPageCSS(){
-  const f=S.proj||{},q=v=>String(v==null||v===''?'\u2014':v).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/[\r\n]+/g,' ');
-  const desc=f.subject||(AN&&AN.sect?((isMember()?'Steel member ':'Steel beam ')+AN.sect.lbl):'');
-  const box='font: 9pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
-  const ft='font: 9pt "Times New Roman", Times, serif; color: #000; vertical-align: top; padding-top: 6pt;';
-  return '@media print{@page{size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
-    ' @top-left{content: "Project No: '+q(f.num)+'\\A Description: '+q(String(desc).slice(0,40))+'"; '+box+' text-align: left;}'+
-    ' @top-center{content: "Computed By: '+q(f.by||'Mario Lococo')+'\\A Checked By: '+q(f.chk)+'"; '+box+' text-align: left;}'+
-    ' @top-right{content: "Date: '+q(f.date||new Date().toISOString().slice(0,10))+'\\A Date: '+q(f.chkDate)+'"; '+box+' text-align: right;}'+
-    ' @bottom-left{content: "'+q(f.name||'Untitled')+' (Steel Beam Designer)"; '+ft+'}'+
-    ' @bottom-right{content: "Page " counter(page) " of " counter(pages); '+ft+'}}}';
-}
-function sbdApplyPageCSS(on){
-  let st=document.getElementById('sbdPageCss');
-  if(!st){st=document.createElement('style');st.id='sbdPageCss';document.head.appendChild(st);}
-  st.textContent=on?sbdPageCSS():'';
-}
 /* tab where a check is worked (the Summary keeps its own tab ids) */
 function sbdChkTab(ch){
   if(ch.label==='Concentrated forces')return 'tabJ10';
@@ -4595,7 +4548,7 @@ function sbdChkTarget(ch){
 }
 /* ---- D11 links (CLAUDE.md section 6): a value quoted away from where it is worked links to that card.
    On screen: "Worked in: value -> Tab . Card" (opens the tab, opens and scrolls to the card, flashes it).
-   In the printed report the same link reads "value: see section n.k" (sbdReportDOM rewrites it). ---- */
+   In the Report the same link reads "see §n.k" (sbrTab; the print report sbdReportDOM is retired, SBRX). ---- */
 function sbdLink(tab,sec,card,txt){
   const t=TABS().find(x=>x[0]===tab);if(!t)return null;   /* target tab not shown in this mode */
   const a=el('a','wkA');a.href='#';a.textContent=(txt?txt+' \u2192 ':'')+t[1]+' \u00B7 '+card;
@@ -4626,167 +4579,6 @@ function sbdFmtDC(d){
   if(d==null||!isFinite(d))return '\u2014';
   return (d>=0.995&&d<1.005)?fmt(d,3):fmt(d,2);   /* 2 decimals, 3 where 2 would read 1.00 */
 }
-/* the report DOM (synchronous; diagrams are converted afterwards) */
-function sbdReportDOM(){
-  ensurePrintState();
-  const old=document.getElementById('printReport');if(old)old.remove();
-  const pr=el('div','sbd-rpt');pr.id='printReport';document.body.appendChild(pr);
-  const f=S.proj,today=new Date().toISOString().slice(0,10);
-  /* cover with title block (section 16) */
-  const cov=el('div','sbd-cover');
-  cov.appendChild(el('h1',null,isMember()?'Steel Member Capacity Check':'Steel Beam Design'));
-  cov.appendChild(el('p',null,'AISC 360-16 (LRFD)'));
-  cov.appendChild(el('p',null,sbdEsc(f.name||'Untitled')));
-  if(f.subject)cov.appendChild(el('p',null,sbdEsc(f.subject)));
-  cov.appendChild(el('p','sbd-cv-codes','AISC 360-16 \u00B7 AISC Steel Construction Manual, 15th Ed. \u00B7 Steel Beam Designer \u00B7 by Mario Lococo'));
-  const tt=el('table','sbd-tb');
-  [['Project',f.name,'Project No.',f.num,'Computed by',f.by||'Mario Lococo'],
-   ['Date',f.date||today,'Checked by',f.chk,'Checked date',f.chkDate],
-   ['Subject',f.subject,'Task',f.task,'Section',AN&&AN.sect?(AN.sect.lbl+' \u2014 '+AN.sect.mat.name):'']].forEach(r=>{
-    const tr=el('tr');for(let i=0;i<6;i+=2)tr.appendChild(el('td',null,'<b>'+r[i]+':</b> '+(r[i+1]?sbdEsc(r[i+1]):'\u2014')));tt.appendChild(tr);});
-  cov.appendChild(tt);
-  if(typeof bxSourceLine==='function'&&bxSourceLine())cov.appendChild(el('div','note',bxSourceLine()));   /* hand-off source (HANDOFF.md §3.4) */
-  if(isMember())cov.appendChild(el('div','warnBox','<b>MEMBER CHECK MODE \u2014 section capacity only.</b> Demands were entered directly; no structural model was solved. Equilibrium, reactions, moment distribution and deflection are not verified by this document.'));
-  const govAll=(AN.design&&AN.design.checks||[]).filter(c=>!c.na);
-  const worst=govAll.reduce((m,c)=>c.dcr>(m?m.dcr:-1)?c:m,null);
-  if(worst)cov.appendChild(el('div',worst.dcr>1?'errBox':'okBox','<b>Governing: '+worst.label+' \u2014 DCR = '+fmt(worst.dcr,3)+(worst.combo?(' ('+worst.combo+')'):'')+'</b>'+(worst.dcr>1?' \u2014 DESIGN FAILS':' \u2014 all implemented checks pass')));
-  pr.appendChild(cov);
-  const front=el('div','sbd-front');pr.appendChild(front);
-  /* clear app pages so print ids are unique */
-  $('tabPages').innerHTML='';
-  const names={};TABS().forEach(t=>names[t[0]]=t[1]);
-  const avail={};TABS().forEach(t=>avail[t[0]]=1);
-  const order=['tabBatch','tabSummary','tabSchem','tabDerive','tabAnalysis','tabMx','tabMy','tabVx','tabVy',
-    'tabComp','tabTors','tabJ10','tabInter','tabService','tabSection','tabValid','tabManual'];
-  const toc=[],map={},secs={};let n=0;
-  for(const id of order){
-    if(!S.print.secs[id]||!avail[id])continue;
-    n++;
-    const sid='sbdr-'+n,sec=el('div','prSec');
-    const h1=el('h1',null,n+'. '+(names[id]||id));h1.id=sid;sec.appendChild(h1);
-    const holder=el('div');sec.appendChild(holder);
-    resetSecNum();
-    try{
-      if(id==='tabManual'){
-        MANUAL_ORDER.forEach(pid=>{
-          holder.appendChild(el('h2','manH',MANUAL[pid].title));
-          manRender(holder,MANUAL[pid].blocks);
-        });
-      }else{
-        const fn={tabSummary:buildSummaryTab,tabSchem:buildSchemTab,tabDerive:buildDeriveTab,
-          tabAnalysis:buildAnalysisTab,tabMx:buildMxTab,tabMy:buildMyTab,tabVx:buildVxTab,tabVy:buildVyTab,
-          tabComp:buildCompTab,tabTors:buildTorsTab,tabJ10:buildJ10Tab,tabInter:buildInterTab,
-          tabService:buildServiceTab,tabSection:buildSectionTab,tabValid:buildValidTab,tabBatch:buildBatchTab}[id];
-        fn(holder);
-      }
-    }catch(e){holder.appendChild(el('div','errBox','Section failed to build: '+e.message));}
-    /* the tab's cards become subsections n.k (the tab's own card number is replaced) */
-    const subs=[];let k=0;
-    holder.querySelectorAll('.sec').forEach(sc=>{
-      if(sc.parentElement&&sc.parentElement.closest('.sec'))return;
-      const t=sc.querySelector('.secTitle');if(!t)return;
-      k++;const num=n+'.'+k,cid=sid+'-'+k,title=t.textContent.replace(/^\s*\d+\.\s*/,'');
-      t.textContent=num+' '+title;sc.id=cid;
-      const key=id+'|'+sc.getAttribute('data-secid');if(!map[key])map[key]={num,id:cid};
-      subs.push({num,title,id:cid});
-    });
-    toc.push({num:String(n),title:names[id]||id,id:sid,subs});
-    secs[id]={sec,num:String(n),title:names[id]||id};
-    pr.appendChild(sec);
-  }
-  /* result lines: one per check, in the section of the tab where it is worked (else the Summary) */
-  const res={};
-  (AN.design&&AN.design.checks||[]).forEach(ch=>{
-    const tab=sbdChkTab(ch),s=secs[tab]?tab:(secs.tabSummary?'tabSummary':null);if(!s)return;
-    (res[s]=res[s]||[]).push(ch);
-  });
-  Object.keys(res).forEach(tab=>{
-    const s=secs[tab],box=el('div','sbd-res');
-    res[tab].forEach(ch=>{
-      const fail=!ch.na&&ch.dcr>1.0001,g=sbdChkTarget(ch),hit=g?map[g[0]+'|'+g[1]]:null;
-      const ln=el('div','sbd-rl');
-      ln.appendChild(el('div',null,sbdEsc(ch.label)+':'));
-      const ref=[ch.ref,ch.combo,ch.na?(ch.detail||''):''].filter(x=>x).map(sbdEsc).join('; ')+(hit?'; <a href="#'+hit.id+'">\u00A7'+hit.num+'</a>':'');
-      ln.appendChild(el('div',null,(ch.na?'D/C = n/a':'D/C = <b>'+sbdFmtDC(ch.dcr)+'</b>')+' <i>('+ref+')</i>'));
-      ln.appendChild(el('div','r'+(fail?' f':''),ch.na?'N/A':(fail?'FAIL':'PASS')));
-      box.appendChild(ln);
-    });
-    s.sec.appendChild(el('div','sbd-resh','Results \u2014 '+s.num+'. '+s.title));
-    s.sec.appendChild(box);
-  });
-  /* D11 links: "-> Tab . Card" becomes "see section n.k" */
-  pr.querySelectorAll('a.wkA').forEach(a=>{
-    const hit=map[a.dataset.tab+'|'+a.dataset.sec],pre=a.dataset.txt?a.dataset.txt+': ':'';
-    if(hit){a.textContent=pre+'see \u00A7'+hit.num;a.href='#'+hit.id;}
-    else{a.textContent=pre+'see the '+(names[a.dataset.tab]||a.dataset.tab)+' tab ('+a.dataset.card+'; not in this printout)';a.removeAttribute('href');}
-  });
-  pr.querySelectorAll('.wkLink').forEach(d=>{if(d.firstChild&&d.firstChild.nodeType===3)d.firstChild.textContent='';});
-  /* front matter: references and table of contents */
-  front.appendChild(el('h2',null,'References:'));
-  const rt=el('table','sbd-refs');
-  sbdRefs().forEach(([a,b])=>{const tr=el('tr');tr.appendChild(el('td',null,'<b>'+a+'</b>'));tr.appendChild(el('td',null,b));rt.appendChild(tr);});
-  front.appendChild(rt);
-  front.appendChild(el('h2',null,'Table of contents:'));
-  const ol=el('ol','sbd-toc');
-  toc.forEach(s=>{const li=el('li');const a=el('a',null,s.num+'. '+sbdEsc(s.title));a.href='#'+s.id;li.appendChild(a);
-    if(s.subs.length){const o2=el('ol');s.subs.forEach(q=>{const l2=el('li');const a2=el('a',null,q.num+' '+sbdEsc(q.title));a2.href='#'+q.id;l2.appendChild(a2);o2.appendChild(l2);});li.appendChild(o2);}
-    ol.appendChild(li);});
-  front.appendChild(ol);
-  front.appendChild(el('div','sbd-note','Each section is the corresponding tab of the tool, built by the same code. Equations are shown symbolically, then with values substituted, then with the result; identical combinations are cross-referenced (\u00A77.2). Each check section ends with the D/C result of its checks (D/C > 1.0 fails). Units: kip, ft, in, ksi unless noted.'));
-  /* force sections open */
-  pr.querySelectorAll('.secBody').forEach(b=>{b.style.display='block';});
-  pr.appendChild(el('div','prFoot','<span>'+sbdEsc(f.name||'')+' \u2014 '+sbdEsc(f.subject||'')+'</span><span>Steel Beam Designer \u00B7 by Mario Lococo \u00B7 '+today+'</span>'));
-  return pr;
-}
-/* Ctrl+P without the Print report button: the diagrams are drawn as static plots (no async image step) */
-function sbdStaticPlots(pr,c){
-  if(typeof Plotly==='undefined'){
-    pr.querySelectorAll('.plotHold').forEach(h=>h.replaceWith(el('div','hint','[diagram requires the Plotly CDN \u2014 offline print]')));
-    return;
-  }
-  pr.style.setProperty('display','block','important');   /* measurable while plotting */
-  pr.querySelectorAll('.plotHold').forEach(h=>{
-    let fig=null,w=680,ht=230;
-    if(h.id==='plotV'&&c)fig=printFig('V',c);
-    else if(h.id==='plotM'&&c)fig=printFig('M',c);
-    else if(h.id==='plotD')fig=printFig('D',c);
-    else if(PLOTREG[h.id]){fig=PLOTREG[h.id];ht=(fig.layout&&fig.layout.height)||320;w=Math.min(680,Math.round(ht*2.3));}
-    if(!fig){h.remove();return;}
-    const d=el('div','prPlotImg');d.style.width=w+'px';d.style.height=ht+'px';h.replaceWith(d);
-    try{Plotly.newPlot(d,fig.data,Object.assign({},fig.layout,{width:w,height:ht,autosize:false}),{staticPlot:true,displayModeBar:false});}
-    catch(e){d.replaceWith(el('div','hint','[diagram unavailable]'));}
-  });
-  pr.style.removeProperty('display');
-}
-async function buildPrintReport(){
-  toast('Building report\u2026');
-  const pr=sbdReportDOM();
-  /* replace plot holders with static images */
-  await rasterisePlots(pr,isMember()?null:curCombo());
-  markShortSections(pr);
-  sbdApplyPageCSS(true);
-  const cleanup=()=>{pr.remove();sbdApplyPageCSS(false);buildTabs();window.removeEventListener('afterprint',cleanup);};
-  window.addEventListener('afterprint',cleanup);
-  setTimeout(()=>{window.print();setTimeout(()=>{if(document.getElementById('printReport'))cleanup();},1500);},60);
-}
-/* D11: Ctrl+P / the browser's Print printed a blank page (the app is hidden in print and the report
-   existed only after the Print report button). Build the same report for it; batch mode keeps its own path. */
-window.addEventListener('beforeprint',()=>{
-  if(typeof sbrWillPrint==='function'&&sbrWillPrint())return;   /* SBRP: the Report tab prints itself (shared/report.js) */
-  if(typeof isBatch==='function'&&isBatch())return;
-  const cur=document.getElementById('printReport');
-  if(cur){if(cur.classList.contains('sbd-rpt'))sbdApplyPageCSS(true);return;}
-  try{
-    const pr=sbdReportDOM();pr.setAttribute('data-auto','1');
-    sbdStaticPlots(pr,isMember()?null:curCombo());
-    markShortSections(pr);
-    sbdApplyPageCSS(true);
-  }catch(e){}
-});
-window.addEventListener('afterprint',()=>{
-  const pr=document.getElementById('printReport');
-  if(pr&&pr.getAttribute('data-auto')){pr.remove();sbdApplyPageCSS(false);buildTabs();}
-});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setupPrintUI);else setupPrintUI();
 /* =====================================================================
    STAGE 6 — EXCEL EXPORT (styled calc sheet, live formulas + cached values)
@@ -4881,7 +4673,7 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 MANUAL.p1.blocks.push(
 {h:'Deliverables'},
 {ul:[
-'<b>Print report</b> (header button): choose sections in the overlay; the report re-renders the live output \u2014 the same code path as the tabs \u2014 with every section expanded, diagrams converted to print-quality images, the title block and governing-result banner on page 1, and identical combinations cross-referenced rather than repeated. Use the browser print dialog for PDF.',
+'<b>Print report</b> (header button), Ctrl+P or the browser\u2019s Print: prints the <b>Report</b> tab from any tab \u2014 the result tabs re-rendered by the same code, every section expanded, diagrams as images, the title block and governing result first, identical combinations cross-referenced. Choose the sections with the <b>Include</b> boxes on the Report tab. In batch mode the button opens the batch print. Use the browser print dialog for PDF.',
 '<b>Export Excel</b> (header button): writes a styled .xlsx calc sheet (portrait, 80% scale, matched column widths). Section properties and bracing are named input cells; the governing F2/F3 flexure chain (M\u209A, L\u209A, L\u1D63, M\u2099 piecewise), shear, E3 compression, and the interaction equation are <b>live Excel formulas</b> referencing those cells \u2014 change F\u1D67 or Z\u2093 in the sheet and the DCRs recalculate. Routes without an Excel closed form (F7 S\u2091, G5, E7 reductions) export as values explicitly marked \u201Ccomputed by app.\u201D Requires internet once per session (ExcelJS CDN).'
 ]});
 /* =====================================================================
@@ -9575,7 +9367,7 @@ function buildTabs(){
    REPORT TAB (SBRP, 2026-11-01): the calculation report in the shared viewer (shared/report.js: navigation tree,
    numbered sections §n.m, collapse / expand, search, Print with a title block, running header and page numbers).
    The report is made from the result tabs themselves: each tab of the current mode (beam, member check, composite,
-   batch) is built by its own builder into a detached holder, as the D11 print report does (sbdReportDOM), and read
+   batch) is built by its own builder into a detached holder, as the D11 print report did (sbdReportDOM, retired 2026-11-03: SBRX), and read
    back: each card (.sec) becomes a subsection n.m; each worked equation (eqBlock) becomes a worked step whose
    equation lines are the tab's own TeX (read from KaTeX's source annotation) and whose result value is the tab's
    bold result (\mathbf{…}) read back from that line (the number the tool formatted, never recomputed); tables, notes,
