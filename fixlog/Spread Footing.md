@@ -4295,6 +4295,25 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - Line endings unchanged (LF).
 - **Other copies:** none.
 
+## 2026-11-03 — PR: claude/report-print-overflow (PR #733: https://github.com/mlococo88/All-Structural/pull/733) — printed Report: the local table scroll-box rule (SFPR) removed; shared/report.js now does it for every tool (RPTW; display only)
+
+- **Where:** the `<style>` block in the head, anchor `/* SFPR (2026-11-03; review E6)`.
+- **Before:**
+  ```css
+  /* SFPR (2026-11-03; review E6): printed Report: a table's scroll box is not printed as a scroll bar, and the last step of a topic
+     does not go to a page alone */
+  @media print{#rp-print .rp-tw{overflow:visible !important;max-height:none !important} #rp-print .rp-steps>.rp-step:last-child,#rp-print .rp-step:has(+ .rp-top){break-before:avoid}}
+  ```
+- **After:**
+  ```css
+  /* SFPR (2026-11-03; review E6): printed Report: the last step of a topic does not go to a page alone (the table scroll-box rule
+     moved to shared/report.js, RPTW) */
+  @media print{#rp-print .rp-steps>.rp-step:last-child,#rp-print .rp-step:has(+ .rp-top){break-before:avoid}}
+  ```
+- **Why redundant:** `shared/report.js` now prints `.rp-tw{overflow:visible;}` (fixlog/shared-report.md, RPTW). No `.rp-tw` in this tool has a `max-height`. The local rule made wide tables run past the page edge, so Chromium shrank the whole printed report to about 89 %. The shared fix scales only those tables: the resultant table (0.875) and the pedestal table (0.913) on the default project.
+- **Check case:** default project, Report → Print report: before 54 pages at about 89 % scale; after 63 pages at full size, every table inside the page. The same with Ctrl+P.
+- No calculation, saved-data or storage change. The second rule (last step of a topic) is unchanged.
+
 ## 2026-11-03 — PR: claude/sf-autocalc — "Auto-calculate on change" switch, Re-analyze (Ctrl+Enter), out-of-date marking; plots in hidden output tabs drawn when shown (SFAC; display and workflow only, no result change)
 
 ### SFAC. Auto-calculate on change   [no result change]
@@ -4318,7 +4337,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 
 ### How verified
 - `R`, `P2`, dashboard text and the report text (SharedReport.text) compared with origin/main on the default project and the review case (`rev`): harness run with auto on → 0 differences. With auto off, the same edits made through the inputs (bottom-x spacing 10, bottom-y #6, top-x spacing 9, Ped 1 tie spacing 10), then Ctrl+Enter, compared with main making the same edits → 0 differences, identical report and dashboard text, on both cases.
-- Behaviour (headless, 19 checks on each case): out of date after edits with no analysis run; autosave and undo stored; banner and Re-analyze shown; Ctrl+Enter, the button, turning the box on, `beforeprint`, Download DXF and Print report each re-analyze; Undo while off does not analyze; the preference survives a reload and the page analyzes on load. 0 console errors.
+- Behaviour (headless, 21 checks on each case): out of date after edits with no analysis run; autosave and undo stored; banner and Re-analyze shown; Ctrl+Enter, the button, turning the box on, `beforeprint`, Download DXF, the Report's Print report and the header Print-to-PDF Report (from the Bearing tab) each re-analyze; Undo while off does not analyze; the preference survives a reload and the page analyzes on load. 0 console errors.
 - `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
 - **Other copies:** none.
 
