@@ -55,6 +55,9 @@
 <!-- CBRP: the combined Report tab: KaTeX (the version the Beam Capacity tab loads), shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
+<!-- CBRX (2026-11-03): Ctrl+P / the browser's Print from any tab prints the combined Report (CBRP.prep, below). Registered here,
+     before shared/report.js's own beforeprint listener, so that listener finds the Report shown (running header, every item filled). -->
+<script>window.addEventListener('beforeprint',function(){ try{ if(window.CBRP&&CBRP.prep) CBRP.prep(); }catch(e){} });</script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 </head>
@@ -317,20 +320,7 @@ table.cbT button:hover{color:var(--red-600)}
 .rcbInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px}
 .rcbInTab.has-err .rcbInDot{display:inline-block}
 .rcbInTab[hidden],.rcbInPane[hidden]{display:none!important}
-/* ---- print (§11) ---- */
-#printReport{position:absolute;left:-100000px;top:0;width:850px}
-/* report-contents dialog (§11.2) */
-#rptBg{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:400}
-#rptBg.on{display:flex}
-#rptDlg{background:#fff;border:1px solid var(--navy-900);border-radius:8px;width:560px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;font-family:var(--font-ui);box-shadow:0 8px 30px rgba(0,0,0,.25)}
-#rptDlg .dh{padding:9px 13px;background:var(--navy-800);color:#fff;font-weight:600;font-size:10.5pt;border-radius:7px 7px 0 0;display:flex;justify-content:space-between;align-items:center}
-#rptDlg .dh button{background:none;border:none;color:#fff;font-size:13pt;cursor:pointer}
-#rptDlg .db{padding:12px 14px;overflow-y:auto;font-size:9.5pt}
-#rptDlg .df{padding:9px 13px;border-top:1px solid var(--color-border);display:flex;gap:7px;justify-content:flex-end;background:var(--slate-50);border-radius:0 0 7px 7px}
-#rptDlg .grpT{font-weight:600;font-size:8.5pt;text-transform:uppercase;letter-spacing:.05em;color:#475569;margin:9px 0 4px}
-#rptDlg label.opt{display:flex;align-items:center;gap:7px;padding:2px 0;cursor:pointer}
-#rptDlg label.opt.sub{margin-left:22px;color:#334155}
-#rptDlg .fixedNote{font-size:8.5pt;color:#64748b;font-style:italic;margin-top:8px}
+/* CBRX (2026-11-03): the print report (#printReport) and its Report Contents dialog are retired; Print prints the suite's Report tab */
 /* project picker */
 #prjBg{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:420}
 #prjBg.on{display:flex}
@@ -369,49 +359,15 @@ table.cbT button:hover{color:var(--red-600)}
   width:24px;height:22px;cursor:pointer;color:#64748b;font-size:10pt;line-height:1;padding:0}
 .prjActs button:hover{background:var(--slate-100);color:var(--slate-900)}
 .prjActs button:last-child:hover{background:#FEE2E2;color:var(--red-600);border-color:#FCA5A5}
-/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) */
-#printReport.crdoc{background:#fff;color:#000;font:10.5pt/1.35 &quot;Times New Roman&quot;,Times,serif}
-#printReport.crdoc a{color:#000;text-decoration:none}
-#printReport .cr-cover{min-height:8.4in;display:flex;flex-direction:column;justify-content:center;break-after:page}
-#printReport .cr-cover-t{text-align:center;margin-bottom:28pt}
-#printReport .cr-cover h1{font:700 25pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt}
-#printReport .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt}
-#printReport .cr-cover .cr-cover-p{font-weight:400}
-#printReport .rptHdrGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 14px;border:1px solid #000;padding:6px 8px;font-size:10pt}
-#printReport .cr-front{break-after:page}
-#printReport .cr-break{break-before:page}
-#printReport h2.cr-h1{font:700 12pt &quot;Times New Roman&quot;,Times,serif;text-decoration:underline;text-transform:uppercase;border:0;margin:0 0 8pt;break-after:avoid}
-#printReport .cr-front h2.cr-h1{margin-top:10pt}
-#printReport .cr-refs{border-collapse:collapse;margin:0 0 14pt}
-#printReport .cr-refs td{padding:1pt 16pt 1pt 0;vertical-align:top}
-#printReport .cr-refs td:first-child{white-space:nowrap}
-#printReport .cr-toc,#printReport .cr-toc ol{list-style:none;margin:0;padding:0}
-#printReport .cr-toc>li{margin:3pt 0}
-#printReport .cr-toc ol{padding-left:18pt;font-size:10pt}
-#printReport .cr-p{margin:0 0 7pt}
-#printReport .cr-small{font-size:9.5pt;margin-top:18pt}
-#printReport .cr-resh{font:700 11pt &quot;Times New Roman&quot;,Times,serif;margin:12pt 0 2pt}
-#printReport .cr-line{display:grid;grid-template-columns:2.6in 1fr 0.8in;gap:0 12pt;align-items:center;padding:3pt 0;break-inside:avoid}
-#printReport .cr-res{border-top:0.6pt solid #000}
-#printReport .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt}
-#printReport .cr-r{text-align:right}
-#printReport .cr-st-fail{text-decoration:underline}
-#printReport .cr-refi{font-size:9pt;font-style:italic}
-#printReport .caret{display:none}
-#printReport .secHead{break-after:avoid}
-#printReport .foot{margin-top:16px;border-top:1px solid #000;padding-top:6px;font-size:9pt;font-style:italic;color:#444}
 /* D11 links (CLAUDE.md §6): &quot;Worked in: → Tab · Card&quot;; &quot;see §n.k&quot; in the report */
 .wkLink{font-family:var(--font-ui);font-size:8.5pt;color:#64748b;margin:2px 0 8px}
 a.wkA{color:var(--blue-600);text-decoration:none;cursor:pointer}
 a.wkA:hover{text-decoration:underline}
 .sec.wkFlash{animation:wkflash 1.4s ease-out}
 @keyframes wkflash{from{background:#dbeafe}to{background:var(--color-surface)}}
-#printReport a.wkA{color:#000;font-style:italic}
 @media print{
   html,body{overflow:visible;height:auto}
   body{background:#fff}
-  #app{display:none!important}
-  #printReport{position:static!important;left:auto!important;width:auto!important}
   .sec{break-inside:auto}
   .eqBlock{break-inside:avoid}
 }
@@ -457,7 +413,6 @@ input.autoD{background:#F1F5F9;color:#0F172A;border-style:dashed;font-variant-nu
     </div>
   </div>
 </div>
-<div id=&quot;printReport&quot;></div>
 <div id=&quot;prjBg&quot;>
   <div id=&quot;prjDlg&quot;>
     <div class=&quot;dh&quot;><span id=&quot;prjTitle&quot;>Open Project</span><button id=&quot;prjX&quot; title=&quot;Close&quot;>×</button></div>
@@ -465,18 +420,6 @@ input.autoD{background:#F1F5F9;color:#0F172A;border-style:dashed;font-variant-nu
     <div class=&quot;df&quot;>
       <button class=&quot;b&quot; id=&quot;prjCancel&quot;>Cancel</button>
       <button class=&quot;b pri&quot; id=&quot;prjGo&quot;>Open</button>
-    </div>
-  </div>
-</div>
-<div id=&quot;rptBg&quot;>
-  <div id=&quot;rptDlg&quot;>
-    <div class=&quot;dh&quot;><span>Report Contents</span><button id=&quot;rptX&quot; title=&quot;Close&quot;>×</button></div>
-    <div class=&quot;db&quot; id=&quot;rptBody&quot;></div>
-    <div class=&quot;df&quot;>
-      <button class=&quot;b&quot; id=&quot;rptAll&quot;>Select all</button>
-      <button class=&quot;b&quot; id=&quot;rptGov&quot;>Governing combinations only</button>
-      <button class=&quot;b&quot; id=&quot;rptCancel&quot;>Cancel</button>
-      <button class=&quot;b pri&quot; id=&quot;rptGo&quot;>Generate report</button>
     </div>
   </div>
 </div>
@@ -1580,7 +1523,7 @@ function mkSection(id,title,builder,parent,extraCls){
 
 /* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
    On screen: &quot;Worked in: → Tab · Card&quot; (opens the tab, expands the card, scrolls to it and flashes it).
-   In the calculation report the same link reads &quot;see §n.k&quot; (buildReport rewrites it). Display only. ---- */
+   In the suite's Report tab the same value links to its worked step (§n.k). Display only. ---- */
 function cbcTabName(tab){ const t=TABS().find(x=>x[0]===tab); return t?t[1]:null; }
 function cbcComboCi(ci){ const r=CC&amp;&amp;CC.combos[ci]; return (r&amp;&amp;r.sameAs!==undefined)?r.sameAs:ci; }   /* identical combination: its derivation lives in the first one */
 function cbcComboCard(prefix,ci){
@@ -1619,7 +1562,7 @@ function cbcGoto(tab,card){
     e.classList.add(&quot;wkFlash&quot;);
     setTimeout(()=>e.classList.remove(&quot;wkFlash&quot;),1400); },60);
 }
-document.addEventListener(&quot;click&quot;,e=>{ const a=e.target.closest&amp;&amp;e.target.closest(&quot;a.wkA&quot;); if(!a||a.closest(&quot;#printReport&quot;)) return;
+document.addEventListener(&quot;click&quot;,e=>{ const a=e.target.closest&amp;&amp;e.target.closest(&quot;a.wkA&quot;); if(!a) return;
   e.preventDefault(); cbcGoto(a.dataset.tab,a.dataset.card); });
 
 /* =====================================================================
@@ -4092,9 +4035,9 @@ function doImport(f){
 }
 
 /* =====================================================================
-   PRINT REPORT (§11) — renders the same output the screen shows
+   PRINT REPORT (§11) — retired 2026-11-03 (CBRX, below): Print prints the suite's Report tab
    ===================================================================== */
-/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format —
+/* D11 (2026-10-18, retired by CBRX 2026-11-03; kept for the record): calculation-sheet report in the Gusset Plate Rating / ST-Girder format —
    cover with title block, references (the articles this printout cites), numbered table of contents
    (links), numbered sections n (one per output tab) and subsections n.k (the tab's cards, with their
    worked equations: symbolic -> substituted -> result, built by the same functions as the screen),
@@ -4122,21 +4065,6 @@ function cbcRefs(root){
   if(fam.AASHTO.length) rows.push([&quot;AASHTO LRFD&quot;,&quot;AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024). Cited: &quot;+fam.AASHTO.join(&quot;, &quot;)+&quot;.&quot;]);
   return rows;
 }
-function cbcPageCSS(){
-  const p=S.proj||{}, esc=v=>String(v==null||v===&quot;&quot;?&quot;—&quot;:v).replace(/\\/g,&quot;\\\\&quot;).replace(/&quot;/g,'\\&quot;').replace(/\n/g,&quot; &quot;);
-  const box='font: 9.5pt &quot;Times New Roman&quot;, Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
-  return '@page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
-    ' @top-left { content: &quot;Project No: '+esc(p.num)+'\\A Description: '+esc(String(p.subj||p.name||&quot;&quot;).slice(0,40))+'&quot;; '+box+' text-align: left; }'+
-    ' @top-center { content: &quot;Computed By: '+esc(p.by)+'\\A Checked By: '+esc(p.chk)+'&quot;; '+box+' text-align: left; }'+
-    ' @top-right { content: &quot;Date: '+esc(p.date)+'\\A Date: '+esc(p.chkDate)+'&quot;; '+box+' text-align: right; }'+
-    ' @bottom-left { content: &quot;'+esc(p.name||&quot;Untitled&quot;)+' (Concrete Beam Design Suite — Beam Capacity)&quot;; font: 9pt &quot;Times New Roman&quot;, Times, serif; vertical-align: top; padding-top: 6pt; }'+
-    ' @bottom-right { content: &quot;Page &quot; counter(page) &quot; of &quot; counter(pages); font: 9pt &quot;Times New Roman&quot;, Times, serif; vertical-align: top; padding-top: 6pt; } }';
-}
-function cbcApplyPageCSS(on){
-  let st=document.getElementById(&quot;cbc-page&quot;);
-  if(!st){ st=document.createElement(&quot;style&quot;); st.id=&quot;cbc-page&quot;; document.head.appendChild(st); }
-  st.textContent=on?cbcPageCSS():&quot;&quot;;
-}
 /* result lines of one report section: [check, reference, D/C, combination, forceOK] — the values of the
    Summary dashboard (allChecks) and, per combination, the same D/C the tab's tables show */
 function cbcResultRows(tabId){
@@ -4154,109 +4082,95 @@ function cbcResultRows(tabId){
     chk.filter(x=>x.tab===tabId).forEach(c=>rows.push([c.label,c.ref,c.na?null:c.dcr,c.na?null:c.combo,c.forceOK]));
   return rows;
 }
-function cbcResultBlock(rows){
-  if(!rows.length) return null;
-  const box=el(&quot;div&quot;,&quot;cr-results&quot;);
-  rows.forEach(([lab,ref,dcr,cmb,fok])=>{
-    const na=(fok==null)&amp;&amp;(dcr==null);
-    const ok=(fok!=null)?fok:(dcr!=null&amp;&amp;isFinite(dcr)&amp;&amp;dcr<=1.0001);   /* the dashboard's PASS/FAIL rule */
-    const line=el(&quot;div&quot;,&quot;cr-line cr-res&quot;);
-    line.appendChild(el(&quot;div&quot;,&quot;cr-d&quot;,lab+&quot;:&quot;));
-    const m=el(&quot;div&quot;,&quot;cr-m&quot;);
-    m.innerHTML=&quot;D/C = <b>&quot;+(dcr==null?&quot;n/a&quot;:((!isFinite(dcr)||dcr>=1e6)?&quot;≫1&quot;:fmt(dcr,2)))+&quot;</b>&quot;+
-      &quot; <span class='cr-refi'>(&quot;+(ref||&quot;—&quot;)+(cmb&amp;&amp;cmb!==&quot;—&quot;?&quot;; governing combination &quot;+cmb:&quot;&quot;)+&quot;)</span>&quot;;
-    line.appendChild(m);
-    const r=el(&quot;div&quot;,&quot;cr-r&quot;+(!na&amp;&amp;!ok?&quot; cr-st-fail&quot;:&quot;&quot;)); r.innerHTML=&quot;<b>&quot;+(na?&quot;N/A&quot;:(ok?&quot;PASS&quot;:&quot;FAIL&quot;))+&quot;</b>&quot;; line.appendChild(r);
-    box.appendChild(line);
-  });
-  return box;
+/* =====================================================================
+   CBRX (2026-11-03): the D11 print report (buildReport -> #printReport, its &quot;Report Contents&quot; dialog, cbcPageCSS) is retired;
+   what it printed is in the suite's Report tab. The dialog's choices are the Include boxes of the Report bar (the same field
+   S.ui.rptOpts, the same keys and defaults; a change is written through normRptOpts and autosaved, as the dialog's checkboxes).
+   The suite shell (CBRX there) reads: cbcRxSel() the choice, without writing S; cbcRxHarvest() each chosen tab built by
+   buildOutput into a detached holder, as buildReport did (every card open; a deselected combination's derivation replaced by
+   the note); cbcRxResults(tab) the D/C result lines buildReport printed at the end of a section; cbcRxAbout() its cover
+   lines, front note and footer. Nothing is computed here: every value is the tab's own (computeAll / allChecks).
+   Print / PDF and Ctrl+P print the suite's Report (cbcRxPrint). ===================================================================== */
+const CBRX_OMIT=&quot;The fully-worked derivation for this combination was omitted from this report at the user’s selection. Its factored actions and results appear in the summary table above; the on-screen output contains the complete work.&quot;;
+function cbcRxSel(){
+  const o=S.ui&amp;&amp;S.ui.rptOpts, ok=!!(o&amp;&amp;o.tabs), r={tabs:{},combos:{}};   /* as normRptOpts: a missing entry is true; an old boolean map reads as all true */
+  reportTabList().forEach(([id])=>r.tabs[id]=!(ok&amp;&amp;o.tabs[id]===false));
+  S.combos.forEach((c,i)=>r.combos[i]=!(ok&amp;&amp;o.combos&amp;&amp;o.combos[i]===false));
+  return r;
 }
-function buildReport(){
-  const R=document.getElementById(&quot;printReport&quot;); R.innerHTML=&quot;&quot;; R.className=&quot;crdoc&quot;;
-  const opts=normRptOpts();
-  const tabs=reportTabList();
-  const saveTab=S.ui.tab;
-  const body=el(&quot;div&quot;), toc=[], cardMap={};   /* cardMap &quot;tab|cardId&quot; -> {num:&quot;n.k&quot;, id} for the &quot;see §n.k&quot; links */
-  let n=0;
-  tabs.forEach(([id,label])=>{
-    if(opts.tabs[id]===false) return;
-    n++;
-    const sid=&quot;crp-&quot;+n, sec=el(&quot;section&quot;,&quot;cr-sec&quot;+(n>1?&quot; cr-break&quot;:&quot;&quot;));
-    const h=el(&quot;h2&quot;,&quot;cr-h1&quot;,n+&quot;. &quot;+label); h.id=sid; sec.appendChild(h);
-    const holder=el(&quot;div&quot;);
-    S.ui.tab=id;
-    buildOutput(holder);
-    /* expand every section for print */
-    holder.querySelectorAll(&quot;.sec&quot;).forEach(s=>s.classList.remove(&quot;collapsed&quot;));
-    /* §11.2 second tier: strip the worked derivations of deselected combinations */
-    S.combos.forEach((c,ci)=>{
-      if(opts.combos[ci]!==false) return;
-      [&quot;flexC&quot;,&quot;shC&quot;,&quot;torC&quot;].forEach(px=>{
-        const sc=holder.querySelector(&quot;#&quot;+px+ci);
-        if(!sc) return;
-        const bodyEl=sc.querySelector(&quot;.secBody&quot;);
-        if(bodyEl) bodyEl.innerHTML='<div class=&quot;infoBox&quot;>The fully-worked derivation for this combination was omitted from this report at the user’s selection. Its factored actions and results appear in the summary table above; the on-screen output contains the complete work.</div>';
-      });
-    });
-    /* the tab's cards become subsections n.k (a card's own leading &quot;k.&quot; is replaced) */
-    const subs=[];
-    holder.querySelectorAll(&quot;.sec&quot;).forEach(sc=>{
-      const t=sc.querySelector(&quot;.secTitle&quot;); if(!t) return;
-      const k=subs.length+1, nid=sid+&quot;-&quot;+k;
-      if(sc.id) cardMap[id+&quot;|&quot;+sc.id]={num:n+&quot;.&quot;+k,id:nid};
-      sc.id=nid;
-      const tt=t.textContent.replace(/^\s*\d+\.\s*/,&quot;&quot;);
-      subs.push({t:tt,id:nid}); t.textContent=n+&quot;.&quot;+k+&quot; &quot;+tt;
-    });
-    sec.appendChild(holder);
-    const rb=cbcResultBlock(cbcResultRows(id));
-    if(rb){ sec.appendChild(el(&quot;div&quot;,&quot;cr-resh&quot;,&quot;Results — &quot;+label)); sec.appendChild(rb); }
-    body.appendChild(sec); toc.push({n,t:label,id:sid,subs});
-  });
-  S.ui.tab=saveTab;
-  /* D11 links: &quot;→ Tab · Card&quot; becomes &quot;see §n.k&quot; */
-  body.querySelectorAll(&quot;a.wkA&quot;).forEach(a=>{
-    const hit=cardMap[a.dataset.tab+&quot;|&quot;+a.dataset.card], pre=a.dataset.txt?a.dataset.txt+&quot;: &quot;:&quot;&quot;;
-    if(hit){ a.textContent=pre+&quot;see §&quot;+hit.num; a.href=&quot;#&quot;+hit.id; }
-    else { a.textContent=pre+&quot;see the &quot;+(cbcTabName(a.dataset.tab)||a.dataset.tab)+&quot; tab (&quot;+(a.dataset.cname||a.dataset.card)+&quot;; not in this printout)&quot;; a.removeAttribute(&quot;href&quot;); }
-  });
-  body.querySelectorAll(&quot;.wkLink&quot;).forEach(d=>{ if(d.firstChild&amp;&amp;d.firstChild.nodeType===3) d.firstChild.textContent=&quot;&quot;; });
-  /* front matter: cover with title block, references, table of contents */
-  const cover=el(&quot;section&quot;,&quot;cr-cover&quot;);
-  const ct=el(&quot;div&quot;,&quot;cr-cover-t&quot;);
-  ct.appendChild(el(&quot;h1&quot;,null,&quot;Reinforced Concrete Beam Capacity&quot;));
-  ct.appendChild(el(&quot;p&quot;,null,S.proj.name||&quot;Untitled&quot;));
-  if(S.proj.subj) ct.appendChild(el(&quot;p&quot;,&quot;cr-cover-p&quot;,S.proj.subj));
-  ct.appendChild(el(&quot;p&quot;,&quot;cr-cover-p&quot;,cbcCodeLabel()+&quot; · Concrete Beam Design Suite · by Mario Lococo&quot;));
-  cover.appendChild(ct);
-  const grid=el(&quot;div&quot;,&quot;rptHdrGrid&quot;);
-  const gi=(k,v)=>{ const d=el(&quot;div&quot;); d.innerHTML=&quot;<b>&quot;+k+&quot;:</b> &quot;; d.appendChild(document.createTextNode(v||&quot;—&quot;)); grid.appendChild(d); };
-  gi(&quot;Project&quot;,S.proj.name); gi(&quot;Project No.&quot;,S.proj.num); gi(&quot;Subject&quot;,S.proj.subj);
-  gi(&quot;Calculated by&quot;,S.proj.by); gi(&quot;Date&quot;,S.proj.date); gi(&quot;Sheet&quot;,S.proj.sheet);
-  gi(&quot;Checked by&quot;,S.proj.chk); gi(&quot;Checked date&quot;,S.proj.chkDate); gi(&quot;Code&quot;,S.code==='ACI'?&quot;ACI 318-19&quot;:&quot;AASHTO LRFD&quot;);
-  cover.appendChild(grid);
-  const fm=el(&quot;section&quot;,&quot;cr-front&quot;);
-  fm.appendChild(el(&quot;h2&quot;,&quot;cr-h1&quot;,&quot;References:&quot;));
-  const rt=el(&quot;table&quot;,&quot;cr-refs&quot;);
-  cbcRefs(body).forEach(([a,b])=>{ const tr=el(&quot;tr&quot;); tr.appendChild(el(&quot;td&quot;,null,a)); tr.appendChild(el(&quot;td&quot;,null,b)); rt.appendChild(tr); });
-  fm.appendChild(rt);
-  fm.appendChild(el(&quot;h2&quot;,&quot;cr-h1&quot;,&quot;Table of contents:&quot;));
-  const ol=el(&quot;ol&quot;,&quot;cr-toc&quot;);
-  toc.forEach(s=>{ const li=el(&quot;li&quot;); const a=el(&quot;a&quot;,null,s.n+&quot;. &quot;+s.t); a.href=&quot;#&quot;+s.id; li.appendChild(a);
-    if(s.subs.length){ const o2=el(&quot;ol&quot;); s.subs.forEach((q,k)=>{ const l2=el(&quot;li&quot;); const a2=el(&quot;a&quot;,null,s.n+&quot;.&quot;+(k+1)+&quot;. &quot;+q.t); a2.href=&quot;#&quot;+q.id; l2.appendChild(a2); o2.appendChild(l2); }); li.appendChild(o2); }
-    ol.appendChild(li); });
-  fm.appendChild(ol);
-  const omitted=S.combos.map((c,i)=>opts.combos[i]===false?&quot;Combination &quot;+(i+1)+&quot; (&quot;+c.name+&quot;)&quot;:null).filter(Boolean);
-  fm.appendChild(el(&quot;p&quot;,&quot;cr-p cr-small&quot;,&quot;Equations are shown symbolically, then with values substituted, then with the result. &quot;+
-    &quot;The Flexure, Shear, Torsion, Serviceability and Detailing sections end with the D/C result of each check; PASS means D/C ≤ 1.00 &quot;+
-    &quot;(detailing: the limit is met for every combination it applies to). Units: kip, in, ksi unless noted. &quot;+
-    (omitted.length?&quot;The worked derivation is omitted at the user’s selection for: &quot;+omitted.join(&quot;, &quot;)+&quot;; their results are in every summary table.&quot;:&quot;Every load combination is worked.&quot;)));
-  R.appendChild(cover); R.appendChild(fm); R.appendChild(body);
-  const f=el(&quot;div&quot;,&quot;foot&quot;);
-  f.textContent=&quot;This calculation is a computation aid. All results must be independently &quot;+
-    &quot;verified and sealed by the responsible engineer of record. Generated &quot;+new Date().toLocaleString()+&quot;.&quot;;
-  R.appendChild(f);
+/* an Include box (kind 'tab' | 'combo') or the dialog's &quot;Select all&quot; / &quot;Governing combinations only&quot; ('all' | 'gov') */
+function cbcRxSet(kind,key,val){
+  if(S.ui.rptOpts&amp;&amp;S.ui.rptOpts.tabs&amp;&amp;!S.ui.rptOpts.combos) S.ui.rptOpts.combos={};
+  const o=normRptOpts();
+  if(kind===&quot;tab&quot;) o.tabs[key]=!!val;
+  else if(kind===&quot;combo&quot;) o.combos[key]=!!val;
+  else if(kind===&quot;all&quot;){ Object.keys(o.tabs).forEach(k=>o.tabs[k]=true); Object.keys(o.combos).forEach(k=>o.combos[k]=true); }
+  else if(kind===&quot;gov&quot;){   /* union of the overall governor and the per-limit-state governors (the dialog's rule) */
+    const keep=new Set([CC?CC.govIndex:0]);
+    if(CC){ [CC.govFlexIndex,CC.govShearIndex].forEach(i=>{ if(i!=null) keep.add(i); });
+            if(S.tor.present&amp;&amp;S.code==='ACI'&amp;&amp;CC.govTorIndex!=null) keep.add(CC.govTorIndex); }
+    Object.keys(o.combos).forEach(k=>o.combos[k]=keep.has(parseInt(k))); }
+  autosave();
 }
+/* the Include boxes: [id, label] of the tabs, and the combinations (label as the dialog) */
+function cbcRxBoxes(){ return {tabs:reportTabList(),combos:S.combos.map((c,i)=>&quot;Combination &quot;+(i+1)+&quot; — &quot;+c.name+(CC&amp;&amp;i===CC.govIndex?&quot; (governing)&quot;:&quot;&quot;))}; }
+function cbcRxHarvest(){
+  const sel=cbcRxSel(), saveTab=S.ui.tab, out=[];
+  try{
+    reportTabList().forEach(([id,label])=>{
+      if(!sel.tabs[id]) return;
+      const holder=el(&quot;div&quot;); S.ui.tab=id; buildOutput(holder);
+      holder.querySelectorAll(&quot;.sec&quot;).forEach(s=>s.classList.remove(&quot;collapsed&quot;));   /* every card open, as buildReport */
+      S.combos.forEach((c,ci)=>{ if(sel.combos[ci]) return;
+        [&quot;flexC&quot;,&quot;shC&quot;,&quot;torC&quot;].forEach(px=>{ const sc=holder.querySelector(&quot;#&quot;+px+ci), b=sc&amp;&amp;sc.querySelector(&quot;.secBody&quot;); if(b) b.innerHTML='<div class=&quot;infoBox&quot;>'+CBRX_OMIT+'</div>'; }); });
+      out.push({id,label,el:holder});
+    });
+  } finally { S.ui.tab=saveTab; }
+  return out;
+}
+/* the result lines buildReport printed at the end of a section (cbcResultRows, the dashboard's PASS / FAIL rule) as a table */
+function cbcRxResults(tabId){
+  const rows=cbcResultRows(tabId); if(!rows.length) return null;
+  return {type:'table',head:['Check','D/C','Reference; governing combination','Result'],rows:rows.map(([lab,ref,dcr,cmb,fok])=>{
+    const na=(fok==null)&amp;&amp;(dcr==null), ok=(fok!=null)?fok:(dcr!=null&amp;&amp;isFinite(dcr)&amp;&amp;dcr<=1.0001);
+    return [lab,{t:dcr==null?&quot;n/a&quot;:((!isFinite(dcr)||dcr>=1e6)?&quot;≫1&quot;:fmt(dcr,2)),n:true},[ref||&quot;—&quot;,cmb&amp;&amp;cmb!==&quot;—&quot;?&quot;governing combination &quot;+cmb:&quot;&quot;].filter(Boolean).join(&quot;; &quot;),{t:na?&quot;N/A&quot;:(ok?&quot;PASS&quot;:&quot;FAIL&quot;),cls:na?&quot;na&quot;:(ok?&quot;ok&quot;:&quot;ng&quot;)}]; })};
+}
+/* the cover lines, the front-matter note and the footer of the retired print report */
+function cbcRxAbout(){
+  const sel=cbcRxSel(), P=S.proj||{}, om=S.combos.map((c,i)=>sel.combos[i]?null:&quot;Combination &quot;+(i+1)+&quot; (&quot;+c.name+&quot;)&quot;).filter(Boolean);
+  return [{type:'note',text:&quot;Reinforced Concrete Beam Capacity — &quot;+(P.name||&quot;Untitled&quot;)+(P.subj?&quot; — &quot;+P.subj:&quot;&quot;)+&quot;. &quot;+cbcCodeLabel()+&quot; · Concrete Beam Design Suite · by Mario Lococo.&quot;},
+    {type:'note',text:&quot;Title block of the Beam Capacity tab: Subject &quot;+(P.subj||&quot;—&quot;)+&quot;; Sheet &quot;+(P.sheet||&quot;—&quot;)+&quot;; Code &quot;+(S.code==='ACI'?&quot;ACI 318-19&quot;:&quot;AASHTO LRFD&quot;)+&quot;.&quot;},
+    {type:'note',text:&quot;Equations are shown symbolically, then with values substituted, then with the result. &quot;+
+      &quot;The Flexure, Shear, Torsion, Serviceability and Detailing sections end with the D/C result of each check; PASS means D/C ≤ 1.00 &quot;+
+      &quot;(detailing: the limit is met for every combination it applies to). Units: kip, in, ksi unless noted. &quot;+
+      (om.length?&quot;The worked derivation is omitted at the user’s selection for: &quot;+om.join(&quot;, &quot;)+&quot;; their results are in every summary table.&quot;:&quot;Every load combination is worked.&quot;)},
+    {type:'note',text:&quot;This calculation is a computation aid. All results must be independently verified and sealed by the responsible engineer of record.&quot;}];
+}
+/* Print / PDF and Ctrl+P: the suite's Report (the shell's CBRP.printAny); this frame alone only when the shell is not there */
+function cbcRxPrint(){ try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ P.CBRP.printAny(); return; } }catch(e){} window.print(); }
+document.addEventListener(&quot;keydown&quot;,e=>{ if(!(e.ctrlKey||e.metaKey)||e.altKey||String(e.key).toLowerCase()!==&quot;p&quot;) return;
+  try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ e.preventDefault(); P.CBRP.printAny(); } }catch(err){} });
+/* the tabs a report section stands for, and the Include filter: the sections of deselected tabs are left out, a link into one
+   becomes a link to its tab (&quot;not in this report&quot;), and a link into an omitted combination goes to the note that replaces it */
+function cbcRxFilter(secs,sel,TABOF,omit){
+  secs.forEach(s=>{ s.tab=TABOF[s.title]; });
+  const owner={};
+  secs.forEach(s=>(s.subs||[]).forEach(q=>{ if(q.key) owner[q.key]=s.tab; (q.items||[]).forEach(it=>{ if(it.scope) owner[it.scope]=s.tab; }); }));
+  const map=k=>{ const sc=String(k).split(&quot;/&quot;)[0], t=owner[sc];
+    if(t&amp;&amp;sel.tabs[t]===false) return {tab:t};
+    if(omit[sc]&amp;&amp;k!==&quot;omit-&quot;+sc) return {key:&quot;omit-&quot;+sc};
+    return null; };
+  const str=s=>String(s).replace(/\[\[([^\]|]+)((?:\|[^\]]*)?)\]\]/g,(m,k,lab)=>{ if(k.indexOf(&quot;tab:&quot;)===0) return m; const r=map(k); if(!r) return m;
+    return r.key?&quot;[[&quot;+r.key+lab+&quot;]]&quot;:&quot;[[tab:&quot;+r.tab+&quot;|the &quot;+cbcTabName(r.tab)+&quot; tab (not in this report)]]&quot;; });
+  const walk=o=>{ if(Array.isArray(o)){ o.forEach((v,i)=>{ if(typeof v===&quot;string&quot;) o[i]=str(v); else if(v&amp;&amp;typeof v===&quot;object&quot;) walk(v); }); return; }
+    Object.keys(o).forEach(p=>{ const v=o[p];
+      if((p===&quot;key&quot;||p===&quot;see&quot;)&amp;&amp;typeof v===&quot;string&quot;&amp;&amp;!(o.type===&quot;steps&quot;&amp;&amp;p===&quot;key&quot;)){ const r=map(v); if(r){ if(r.key) o[p]=r.key; else delete o[p]; } return; }
+      if(typeof v===&quot;string&quot;) o[p]=str(v); else if(v&amp;&amp;typeof v===&quot;object&quot;) walk(v); }); };
+  const keep=secs.filter(s=>!(s.tab&amp;&amp;sel.tabs[s.tab]===false));
+  walk(keep);
+  return keep;
+}
+
 function reportTabList(){
   const t=[[&quot;tabInputEcho&quot;,&quot;Input Echo&quot;],[&quot;tabSummary&quot;,&quot;Summary &amp; Dashboard&quot;],
     [&quot;tabFlex&quot;,&quot;Flexure&quot;],[&quot;tabShear&quot;,&quot;Shear&quot;]];
@@ -4277,42 +4191,7 @@ function normRptOpts(){
   S.combos.forEach((c,i)=>{ if(o.combos[i]===undefined) o.combos[i]=true; });
   S.ui.rptOpts=o; return o;
 }
-function openRptDialog(){
-  const o=normRptOpts();
-  const body=document.getElementById(&quot;rptBody&quot;); body.innerHTML=&quot;&quot;;
-  body.appendChild(el(&quot;div&quot;,&quot;fixedNote&quot;,
-    &quot;The title block and the disclaimer footer always print and cannot be deselected. &quot;+
-    &quot;Deselected sections are removed and the remaining sections renumber sequentially.&quot;));
-  const g1=el(&quot;div&quot;); g1.appendChild(el(&quot;div&quot;,&quot;grpT&quot;,&quot;Report sections&quot;));
-  reportTabList().forEach(([id,label])=>{
-    const l=el(&quot;label&quot;,&quot;opt&quot;); const c=el(&quot;input&quot;); c.type=&quot;checkbox&quot;; c.checked=o.tabs[id];
-    c.addEventListener(&quot;change&quot;,()=>{ o.tabs[id]=c.checked; autosave(); });
-    l.appendChild(c); l.appendChild(document.createTextNode(label)); g1.appendChild(l);
-  });
-  body.appendChild(g1);
-  const g2=el(&quot;div&quot;); g2.appendChild(el(&quot;div&quot;,&quot;grpT&quot;,&quot;Per-combination worked detail (Flexure / Shear / Torsion)&quot;));
-  S.combos.forEach((c,i)=>{
-    const l=el(&quot;label&quot;,&quot;opt sub&quot;); const cb=el(&quot;input&quot;); cb.type=&quot;checkbox&quot;; cb.checked=o.combos[i];
-    cb.addEventListener(&quot;change&quot;,()=>{ o.combos[i]=cb.checked; autosave(); });
-    l.appendChild(cb);
-    l.appendChild(document.createTextNode(&quot;Combination &quot;+(i+1)+&quot; — &quot;+c.name+
-      (CC&amp;&amp;i===CC.govIndex?&quot;  (governing)&quot;:&quot;&quot;)));
-    g2.appendChild(l);
-  });
-  body.appendChild(g2);
-  body.appendChild(el(&quot;div&quot;,&quot;fixedNote&quot;,
-    &quot;A deselected combination's fully-worked derivation is replaced by a one-line note; &quot;+
-    &quot;its actions and results still appear in every summary table. The selection is saved with the project.&quot;));
-  document.getElementById(&quot;rptBg&quot;).classList.add(&quot;on&quot;);
-}
-function closeRptDialog(){ document.getElementById(&quot;rptBg&quot;).classList.remove(&quot;on&quot;); }
-function doPrint(){ openRptDialog(); }
-function generateReport(){
-  closeRptDialog();
-  buildReport();
-  cbcApplyPageCSS(true);   /* D11: print header / footer, only while printing */
-  setTimeout(()=>{ window.print(); },150);
-}
+/* CBRX: openRptDialog, closeRptDialog, doPrint and generateReport were removed (the dialog is retired; Print: cbcRxPrint) */
 
 /* =====================================================================
    DRIVER
@@ -4468,6 +4347,7 @@ function cbcRptModel(){
   const P=S.proj||{}, secs=[], ACI=S.code==='ACI', codeName=ACI?'ACI 318-19':'AASHTO LRFD 10th Ed. (2024)';
   if(!CC||!CC.combos||!CC.combos.length) return {title:'Beam Capacity',sections:[{title:'Beam capacity',subs:[{title:'No results',items:[{type:'note',warn:true,text:'No results: correct the inputs of the Beam Capacity tab.'}]}]}]};
   const V=VALIDATION||{blockers:[],warnings:[]}, cn=r=>'Combination '+(r.ci+1)+' ('+r.name+')';
+  const RX=cbcRxSel(), RXO={};   /* CBRX: the Include boxes (S.ui.rptOpts) */
   /* 1. inputs */
   { const G=layerGeom(CC.govRow?CC.govRow.neg:false), subs=[];
     subs.push({title:'Section and materials',items:[{type:'table',head:['Item','Value','Unit'],rows:[
@@ -4495,6 +4375,7 @@ function cbcRptModel(){
   /* 3.–5. flexure, shear, torsion: every combination (an identical combination refers to the first) */
   const per=(title,pre,fn,tab,gov)=>{ const subs=CC.combos.map(r=>{
       const sa=r.sameAs!==undefined&amp;&amp;r.sameAs!==r.ci;
+      if(!sa&amp;&amp;!RX.combos[r.ci]){ RXO[pre+r.ci]=1; return {title:cn(r)+(r.ci===gov?' — governs':''),key:'omit-'+pre+r.ci,items:[{type:'note',text:CBRX_OMIT}]}; }   /* CBRX: deselected (the dialog's second tier) */
       return {title:cn(r)+(r.ci===gov?' — governs':''),items:sa?[{type:'note',text:'Same factored actions as Combination '+(r.sameAs+1)+': [['+pre+r.sameAs+'/'+({fx:'Mu',sh:'d',tq:'Acp'}[pre])+']].'}]
         :fn(r).map(it=>it.type==='topics'?Object.assign({},it,{scope:pre+r.ci}):it).concat([{type:'note',text:'[[tab:'+tab+'|On screen: '+cbcTabName(tab)+' tab]]'}])}; });
     secs.push({title,subs}); };
@@ -4543,7 +4424,8 @@ function cbcRptModel(){
   { const W=[].concat((V.blockers||[]).map(x=>({warn:true,text:'Blocker ('+x.code+'): '+x.msg})),(V.warnings||[]).map(x=>({warn:true,text:'Warning ('+x.code+'): '+x.msg})),(V.notes||[]).map(x=>({text:(x.code?x.code+': ':'')+x.msg})));
     if(W.length) secs.push({title:'Validation notices',subs:[{title:'Notices',items:W.map(w=>Object.assign({type:'note'},w,{text:String(w.text).replace(/<[^>]+>/g,'')}))}]});
   }
-  return {title:'Beam Capacity',code:codeName,proj:P,refs:cbcRefs(document.getElementById('pageBody')||document.body),sections:secs};
+  const keep=cbcRxFilter(secs,RX,{'Inputs':'tabInputEcho','Summary of checks':'tabSummary','Flexure':'tabFlex','Shear':'tabShear','Torsion':'tabTor','Serviceability':'tabServ','Detailing':'tabDetail','Validation notices':'tabValid'},RXO);   /* CBRX */
+  return {title:'Beam Capacity',code:codeName,proj:P,refs:cbcRefs(document.getElementById('pageBody')||document.body),sections:keep};
 }
 
 function refresh(){
@@ -4584,7 +4466,7 @@ function init(){
   document.getElementById(&quot;btnImport&quot;).addEventListener(&quot;click&quot;,()=>document.getElementById(&quot;fileIn&quot;).click());
   document.getElementById(&quot;fileIn&quot;).addEventListener(&quot;change&quot;,e=>{
     const f=e.target.files[0]; if(f) doImport(f); e.target.value=&quot;&quot;; });
-  document.getElementById(&quot;btnPrint&quot;).addEventListener(&quot;click&quot;,doPrint);
+  document.getElementById(&quot;btnPrint&quot;).addEventListener(&quot;click&quot;,cbcRxPrint);   /* CBRX: the suite's Report */
   document.getElementById(&quot;statusChip&quot;).addEventListener(&quot;click&quot;,()=>{
     S.ui.tab=&quot;tabSummary&quot;; autosave(); refresh(); });
   document.getElementById(&quot;prjX&quot;).addEventListener(&quot;click&quot;,closeProjDialog);
@@ -4596,25 +4478,7 @@ function init(){
     if(e.key!==&quot;Escape&quot;) return;
     const pb=document.getElementById(&quot;prjBg&quot;);
     if(pb&amp;&amp;pb.classList.contains(&quot;on&quot;)){ closeProjDialog(); return; }
-    const rb=document.getElementById(&quot;rptBg&quot;);
-    if(rb&amp;&amp;rb.classList.contains(&quot;on&quot;)) closeRptDialog();
   });
-  document.getElementById(&quot;rptX&quot;).addEventListener(&quot;click&quot;,closeRptDialog);
-  document.getElementById(&quot;rptCancel&quot;).addEventListener(&quot;click&quot;,closeRptDialog);
-  document.getElementById(&quot;rptAll&quot;).addEventListener(&quot;click&quot;,()=>{
-    const o=normRptOpts(); Object.keys(o.tabs).forEach(k=>o.tabs[k]=true);
-    Object.keys(o.combos).forEach(k=>o.combos[k]=true); autosave(); openRptDialog(); });
-  document.getElementById(&quot;rptGov&quot;).addEventListener(&quot;click&quot;,()=>{
-    const o=normRptOpts();
-    /* union of the overall governor and the per-limit-state governors */
-    const keep=new Set([CC?CC.govIndex:0]);
-    if(CC){ [CC.govFlexIndex,CC.govShearIndex].forEach(i=>{ if(i!=null) keep.add(i); });
-            if(S.tor.present&amp;&amp;S.code==='ACI'&amp;&amp;CC.govTorIndex!=null) keep.add(CC.govTorIndex); }
-    Object.keys(o.combos).forEach(k=>o.combos[k]=keep.has(parseInt(k))); autosave(); openRptDialog(); });
-  document.getElementById(&quot;rptGo&quot;).addEventListener(&quot;click&quot;,generateReport);
-  /* D11: a print started from the browser builds the report if none is built; the page header/footer apply only while printing */
-  window.addEventListener(&quot;beforeprint&quot;,()=>{ const h=document.getElementById(&quot;printReport&quot;); if(h&amp;&amp;!h.innerHTML) buildReport(); cbcApplyPageCSS(true); });
-  window.addEventListener(&quot;afterprint&quot;,()=>cbcApplyPageCSS(false));
   refresh();
   plibUndoInit();   // PLIB: after start-up, so restoring the session is not a step
 }
@@ -4912,20 +4776,7 @@ table.cbT button:hover{color:var(--red-600)}
 .asdInDot{display:none;width:7px;height:7px;border-radius:50%;background:var(--fail);margin-left:6px}
 .asdInTab.has-err .asdInDot{display:inline-block}
 .asdInTab[hidden],.asdInPane[hidden]{display:none!important}
-/* ---- print (§11) ---- */
-#printReport{position:absolute;left:-100000px;top:0;width:850px}
-/* report-contents dialog (§11.2) */
-#rptBg{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:400}
-#rptBg.on{display:flex}
-#rptDlg{background:#fff;border:1px solid var(--navy-900);border-radius:8px;width:560px;max-width:94vw;max-height:86vh;display:flex;flex-direction:column;font-family:var(--font-ui);box-shadow:0 8px 30px rgba(0,0,0,.25)}
-#rptDlg .dh{padding:9px 13px;background:var(--navy-800);color:#fff;font-weight:600;font-size:10.5pt;border-radius:7px 7px 0 0;display:flex;justify-content:space-between;align-items:center}
-#rptDlg .dh button{background:none;border:none;color:#fff;font-size:13pt;cursor:pointer}
-#rptDlg .db{padding:12px 14px;overflow-y:auto;font-size:9.5pt}
-#rptDlg .df{padding:9px 13px;border-top:1px solid var(--color-border);display:flex;gap:7px;justify-content:flex-end;background:var(--slate-50);border-radius:0 0 7px 7px}
-#rptDlg .grpT{font-weight:600;font-size:8.5pt;text-transform:uppercase;letter-spacing:.05em;color:#475569;margin:9px 0 4px}
-#rptDlg label.opt{display:flex;align-items:center;gap:7px;padding:2px 0;cursor:pointer}
-#rptDlg label.opt.sub{margin-left:22px;color:#334155}
-#rptDlg .fixedNote{font-size:8.5pt;color:#64748b;font-style:italic;margin-top:8px}
+/* CBRX (2026-11-03): the print report (#printReport) and its Report Contents dialog are retired; Print prints the suite's Report tab */
 /* project picker */
 #prjBg{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:420}
 #prjBg.on{display:flex}
@@ -4964,49 +4815,15 @@ table.cbT button:hover{color:var(--red-600)}
   width:24px;height:22px;cursor:pointer;color:#64748b;font-size:10pt;line-height:1;padding:0}
 .prjActs button:hover{background:var(--slate-100);color:var(--slate-900)}
 .prjActs button:last-child:hover{background:#FEE2E2;color:var(--red-600);border-color:#FCA5A5}
-/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) */
-#printReport.crdoc{background:#fff;color:#000;font:10.5pt/1.35 &quot;Times New Roman&quot;,Times,serif}
-#printReport.crdoc a{color:#000;text-decoration:none}
-#printReport .cr-cover{min-height:8.4in;display:flex;flex-direction:column;justify-content:center;break-after:page}
-#printReport .cr-cover-t{text-align:center;margin-bottom:28pt}
-#printReport .cr-cover h1{font:700 25pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt}
-#printReport .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt}
-#printReport .cr-cover .cr-cover-p{font-weight:400}
-#printReport .rptHdrGrid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 14px;border:1px solid #000;padding:6px 8px;font-size:10pt}
-#printReport .cr-front{break-after:page}
-#printReport .cr-break{break-before:page}
-#printReport h2.cr-h1{font:700 12pt &quot;Times New Roman&quot;,Times,serif;text-decoration:underline;text-transform:uppercase;border:0;margin:0 0 8pt;break-after:avoid}
-#printReport .cr-front h2.cr-h1{margin-top:10pt}
-#printReport .cr-refs{border-collapse:collapse;margin:0 0 14pt}
-#printReport .cr-refs td{padding:1pt 16pt 1pt 0;vertical-align:top}
-#printReport .cr-refs td:first-child{white-space:nowrap}
-#printReport .cr-toc,#printReport .cr-toc ol{list-style:none;margin:0;padding:0}
-#printReport .cr-toc>li{margin:3pt 0}
-#printReport .cr-toc ol{padding-left:18pt;font-size:10pt}
-#printReport .cr-p{margin:0 0 7pt}
-#printReport .cr-small{font-size:9.5pt;margin-top:18pt}
-#printReport .cr-resh{font:700 11pt &quot;Times New Roman&quot;,Times,serif;margin:12pt 0 2pt}
-#printReport .cr-line{display:grid;grid-template-columns:2.6in 1fr 0.8in;gap:0 12pt;align-items:center;padding:3pt 0;break-inside:avoid}
-#printReport .cr-res{border-top:0.6pt solid #000}
-#printReport .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt}
-#printReport .cr-r{text-align:right}
-#printReport .cr-st-fail{text-decoration:underline}
-#printReport .cr-refi{font-size:9pt;font-style:italic}
-#printReport .caret{display:none}
-#printReport .secHead{break-after:avoid}
-#printReport .foot{margin-top:16px;border-top:1px solid #000;padding-top:6px;font-size:9pt;font-style:italic;color:#444}
 /* D11 links (CLAUDE.md §6): &quot;Worked in: → Tab · Card&quot;; &quot;see §n.k&quot; in the report */
 .wkLink{font-family:var(--font-ui);font-size:8.5pt;color:#64748b;margin:2px 0 8px}
 a.wkA{color:var(--blue-600);text-decoration:none;cursor:pointer}
 a.wkA:hover{text-decoration:underline}
 .sec.wkFlash{animation:wkflash 1.4s ease-out}
 @keyframes wkflash{from{background:#dbeafe}to{background:var(--color-surface)}}
-#printReport a.wkA{color:#000;font-style:italic}
 @media print{
   html,body{overflow:visible;height:auto}
   body{background:#fff}
-  #app{display:none!important}
-  #printReport{position:static!important;left:auto!important;width:auto!important}
   .sec{break-inside:auto}
   .eqBlock{break-inside:avoid}
 }
@@ -5056,7 +4873,6 @@ input.autoD{background:#F1F5F9;color:#0F172A;border-style:dashed;font-variant-nu
     </div>
   </div>
 </div>
-<div id=&quot;printReport&quot;></div>
 <div id=&quot;prjBg&quot;>
   <div id=&quot;prjDlg&quot;>
     <div class=&quot;dh&quot;><span id=&quot;prjTitle&quot;>Open Project</span><button id=&quot;prjX&quot; title=&quot;Close&quot;>×</button></div>
@@ -5064,17 +4880,6 @@ input.autoD{background:#F1F5F9;color:#0F172A;border-style:dashed;font-variant-nu
     <div class=&quot;df&quot;>
       <button class=&quot;b&quot; id=&quot;prjCancel&quot;>Cancel</button>
       <button class=&quot;b pri&quot; id=&quot;prjGo&quot;>Open</button>
-    </div>
-  </div>
-</div>
-<div id=&quot;rptBg&quot;>
-  <div id=&quot;rptDlg&quot;>
-    <div class=&quot;dh&quot;><span>Report Contents</span><button id=&quot;rptX&quot; title=&quot;Close&quot;>×</button></div>
-    <div class=&quot;db&quot; id=&quot;rptBody&quot;></div>
-    <div class=&quot;df&quot;>
-      <button class=&quot;b&quot; id=&quot;rptAll&quot;>Select all</button>
-      <button class=&quot;b&quot; id=&quot;rptCancel&quot;>Cancel</button>
-      <button class=&quot;b pri&quot; id=&quot;rptGo&quot;>Generate report</button>
     </div>
   </div>
 </div>
@@ -5258,7 +5063,7 @@ function mkSection(id,title,builder,parent,extraCls){
 
 /* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
    On screen: &quot;Worked in: → Tab · Card&quot; (opens the tab, expands the card, scrolls to it and flashes it).
-   In the calculation report the same link reads &quot;see §n.k&quot; (buildReport rewrites it). Display only. ---- */
+   In the suite's Report tab the same value links to its worked step (§n.k). Display only. ---- */
 const ASD_CARDS={anProps:&quot;Elastic Section Properties&quot;,anNA:&quot;Neutral Axis&quot;,anZ:&quot;Internal Lever Arm&quot;,
   anCap:&quot;Allowable Moment Capacity&quot;,anRF:&quot;Load Rating&quot;};
 function asdTabName(tab){ const t=TABS().find(x=>x[0]===tab); return t?t[1]:null; }
@@ -5283,7 +5088,7 @@ function asdGoto(tab,card){
     e.classList.add(&quot;wkFlash&quot;);
     setTimeout(()=>e.classList.remove(&quot;wkFlash&quot;),1400); },60);
 }
-document.addEventListener(&quot;click&quot;,e=>{ const a=e.target.closest&amp;&amp;e.target.closest(&quot;a.wkA&quot;); if(!a||a.closest(&quot;#printReport&quot;)) return;
+document.addEventListener(&quot;click&quot;,e=>{ const a=e.target.closest&amp;&amp;e.target.closest(&quot;a.wkA&quot;); if(!a) return;
   e.preventDefault(); asdGoto(a.dataset.tab,a.dataset.card); });
 
 /* =====================================================================
@@ -5833,7 +5638,7 @@ function reportTabList(){ return [[&quot;tabInputEcho&quot;,&quot;Input Echo&quo
 function defaultRptOpts(){ const o={tabs:{}}; reportTabList().forEach(([id])=>o.tabs[id]=true); return o; }
 function normRptOpts(){ let o=S.ui.rptOpts; if(!o||!o.tabs) o=defaultRptOpts();
   reportTabList().forEach(([id])=>{ if(o.tabs[id]===undefined) o.tabs[id]=true; }); S.ui.rptOpts=o; return o; }
-/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format —
+/* D11 (2026-10-18, retired by CBRX 2026-11-03; kept for the record): calculation-sheet report in the Gusset Plate Rating / ST-Girder format —
    cover with title block, references, numbered table of contents (links), numbered sections n (one per
    output tab) and subsections n.k (the tab's cards, with their worked equations, built by the same
    functions as the screen), a result line per rating level, the &quot;see §n.k&quot; form of the D11 links, and
@@ -5842,123 +5647,50 @@ function normRptOpts(){ let o=S.ui.rptOpts; if(!o||!o.tabs) o=defaultRptOpts();
 const ASD_REFS=[
   [&quot;AASHTO Std. Spec.&quot;,&quot;AASHTO Standard Specifications for Highway Bridges — Art. 8.15 (service load design: 8.15.2 allowable stresses, 8.15.3 flexure, 8.15.3.4 modular ratio), 8.7.1 (E_c), 8.10.1.1 / 8.10.1.2 (effective flange width). Edition: verify (the tool’s code notes refer to the 17th Ed., 2002).&quot;],
   [&quot;AASHTO MBE&quot;,&quot;Manual for Bridge Evaluation — Section 6 Part B (allowable stress rating): rating factor RF = (C − M_DL)/M_LL+I; 6B.6.2.3 and Table 6B.6.2.3-1 (allowable stresses). Edition: verify.&quot;]];
-function asdPageCSS(){
-  const p=S.proj||{}, esc=v=>String(v==null||v===&quot;&quot;?&quot;—&quot;:v).replace(/\\/g,&quot;\\\\&quot;).replace(/&quot;/g,'\\&quot;').replace(/\n/g,&quot; &quot;);
-  const box='font: 9.5pt &quot;Times New Roman&quot;, Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
-  return '@page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
-    ' @top-left { content: &quot;Project No: '+esc(p.num)+'\\A Description: '+esc(String(p.subj||p.name||&quot;&quot;).slice(0,40))+'&quot;; '+box+' text-align: left; }'+
-    ' @top-center { content: &quot;Computed By: '+esc(p.by)+'\\A Checked By: '+esc(p.chk)+'&quot;; '+box+' text-align: left; }'+
-    ' @top-right { content: &quot;Date: '+esc(p.date)+'\\A Date: '+esc(p.chkDate)+'&quot;; '+box+' text-align: right; }'+
-    ' @bottom-left { content: &quot;'+esc(p.name||&quot;Untitled&quot;)+' (Concrete Beam Design Suite — ASD Beam Rating)&quot;; font: 9pt &quot;Times New Roman&quot;, Times, serif; vertical-align: top; padding-top: 6pt; }'+
-    ' @bottom-right { content: &quot;Page &quot; counter(page) &quot; of &quot; counter(pages); font: 9pt &quot;Times New Roman&quot;, Times, serif; vertical-align: top; padding-top: 6pt; } }';
-}
-function asdApplyPageCSS(on){
-  let st=document.getElementById(&quot;asd-page&quot;);
-  if(!st){ st=document.createElement(&quot;style&quot;); st.id=&quot;asd-page&quot;; document.head.appendChild(st); }
-  st.textContent=on?asdPageCSS():&quot;&quot;;
+/* =====================================================================
+   CBRX (2026-11-03): the D11 print report (buildReport -> #printReport, its &quot;Report Contents&quot; dialog, asdPageCSS) is retired;
+   what it printed is in the suite's Report tab. The dialog's choices are the Include boxes of the Report bar (the same field
+   S.ui.rptOpts.tabs, the same keys and defaults; a change is written through normRptOpts and autosaved, as the dialog's
+   checkboxes). The suite shell (CBRX there) reads asdRxSel() (without writing S), asdRxHarvest() (each chosen tab built by
+   buildOutput into a detached holder, every card open, as buildReport did), asdRxResults(tab) (the rating result lines, with the
+   Analysis section, else with the Summary, as buildReport) and asdRxAbout() (its cover lines, front note and footer).
+   Nothing is computed here: every value is compute()'s. Print / PDF and Ctrl+P print the suite's Report (asdRxPrint).
+   ===================================================================== */
+function asdRxSel(){ const o=S.ui&amp;&amp;S.ui.rptOpts, ok=!!(o&amp;&amp;o.tabs), r={tabs:{}}; reportTabList().forEach(([id])=>r.tabs[id]=!(ok&amp;&amp;o.tabs[id]===false)); return r; }
+function asdRxSet(kind,key,val){ const o=normRptOpts(); if(kind===&quot;tab&quot;) o.tabs[key]=!!val; else if(kind===&quot;all&quot;) reportTabList().forEach(([id])=>o.tabs[id]=true); autosave(); }
+function asdRxBoxes(){ return {tabs:reportTabList(),combos:[]}; }
+function asdRxHarvest(){
+  const sel=asdRxSel(), saveTab=S.ui.tab, out=[];
+  try{ reportTabList().forEach(([id,label])=>{ if(!sel.tabs[id]) return;
+      const holder=el(&quot;div&quot;); S.ui.tab=id; buildOutput(holder);
+      holder.querySelectorAll(&quot;.sec&quot;).forEach(s=>s.classList.remove(&quot;collapsed&quot;));
+      out.push({id,label,el:holder}); }); }
+  finally{ S.ui.tab=saveTab; }
+  return out;
 }
 /* one result line per rating level shown; PASS when RF >= 1.00 (the Summary's rule, ratePill) */
-function asdResultBlock(){
-  const R=CC; if(!R||R.errors) return null;
+function asdRxResults(tabId){
+  const sel=asdRxSel(), resTab=sel.tabs.tabAnalysis?&quot;tabAnalysis&quot;:&quot;tabSummary&quot;, R=CC;
+  if(tabId!==resTab||!R||R.errors) return null;
   const rows=[]; if(S.mode.inv) rows.push([&quot;Inventory rating&quot;,R.rf_inv,R.M_inv,R.ctrl_inv]);
   if(S.mode.op) rows.push([&quot;Operating rating&quot;,R.rf_op,R.M_op,R.ctrl_op]);
   if(!rows.length) return null;
-  const box=el(&quot;div&quot;,&quot;cr-results&quot;);
-  rows.forEach(([lab,rf,M,ctrl])=>{
-    const na=(rf==null||!isFinite(rf)), ok=!na&amp;&amp;rf>=1.0;
-    const line=el(&quot;div&quot;,&quot;cr-line cr-res&quot;);
-    line.appendChild(el(&quot;div&quot;,&quot;cr-d&quot;,lab+&quot;:&quot;));
-    const m=el(&quot;div&quot;,&quot;cr-m&quot;);
-    m.innerHTML=&quot;RF = <b>&quot;+(na?&quot;n/a&quot;:fmt(rf))+&quot;</b> <span class='cr-refi'>(AASHTO MBE 6B (ASD); M<sub>all</sub> = &quot;+fmt(M)+&quot; k-ft, &quot;+ctrl.toLowerCase()+&quot; controlled)</span>&quot;;
-    line.appendChild(m);
-    const r=el(&quot;div&quot;,&quot;cr-r&quot;+(!na&amp;&amp;!ok?&quot; cr-st-fail&quot;:&quot;&quot;)); r.innerHTML=&quot;<b>&quot;+(na?&quot;N/A&quot;:(ok?&quot;PASS&quot;:&quot;FAIL&quot;))+&quot;</b>&quot;; line.appendChild(r);
-    box.appendChild(line);
-  });
-  return box;
+  return {type:'table',head:['Rating level','RF','Reference; M_all, control','Result'],rows:rows.map(([lab,rf,M,ctrl])=>{ const na=(rf==null||!isFinite(rf)), ok=!na&amp;&amp;rf>=1.0;
+    return [lab,{t:na?&quot;n/a&quot;:fmt(rf),n:true},&quot;AASHTO MBE 6B (ASD); M_all = &quot;+fmt(M)+&quot; k-ft, &quot;+String(ctrl).toLowerCase()+&quot; controlled&quot;,{t:na?&quot;N/A&quot;:(ok?&quot;PASS&quot;:&quot;FAIL&quot;),cls:na?&quot;na&quot;:(ok?&quot;ok&quot;:&quot;ng&quot;)}]; })};
 }
-function buildReport(){
-  const Rp=document.getElementById(&quot;printReport&quot;); Rp.innerHTML=&quot;&quot;; Rp.className=&quot;crdoc&quot;;
-  const opts=normRptOpts(); const saveTab=S.ui.tab;
-  const body=el(&quot;div&quot;), toc=[], cardMap={};   /* cardMap &quot;tab|cardId&quot; -> {num:&quot;n.k&quot;, id} for the &quot;see §n.k&quot; links */
-  const printed=reportTabList().filter(([id])=>opts.tabs[id]!==false);
-  /* the rating result lines go with the Analysis section (where RF is worked), else with the Summary */
-  const resTab=printed.some(([id])=>id===&quot;tabAnalysis&quot;)?&quot;tabAnalysis&quot;:&quot;tabSummary&quot;;
-  let n=0;
-  printed.forEach(([id,label])=>{
-    n++;
-    const sid=&quot;crp-&quot;+n, sec=el(&quot;section&quot;,&quot;cr-sec&quot;+(n>1?&quot; cr-break&quot;:&quot;&quot;));
-    const h=el(&quot;h2&quot;,&quot;cr-h1&quot;,n+&quot;. &quot;+label); h.id=sid; sec.appendChild(h);
-    const holder=el(&quot;div&quot;); S.ui.tab=id; buildOutput(holder);
-    holder.querySelectorAll(&quot;.sec&quot;).forEach(s=>s.classList.remove(&quot;collapsed&quot;));
-    const subs=[];
-    holder.querySelectorAll(&quot;.sec&quot;).forEach(sc=>{
-      const t=sc.querySelector(&quot;.secTitle&quot;); if(!t) return;
-      const k=subs.length+1, nid=sid+&quot;-&quot;+k;
-      if(sc.id) cardMap[id+&quot;|&quot;+sc.id]={num:n+&quot;.&quot;+k,id:nid};
-      sc.id=nid;
-      const tt=t.textContent.replace(/^\s*\d+\.\s*/,&quot;&quot;);   /* the card's own &quot;k.&quot; is replaced by n.k */
-      subs.push({t:tt,id:nid}); t.textContent=n+&quot;.&quot;+k+&quot; &quot;+tt;
-    });
-    sec.appendChild(holder);
-    if(id===resTab){ const rb=asdResultBlock(); if(rb){ sec.appendChild(el(&quot;div&quot;,&quot;cr-resh&quot;,&quot;Results — Load Rating&quot;)); sec.appendChild(rb); } }
-    body.appendChild(sec); toc.push({n,t:label,id:sid,subs});
-  });
-  S.ui.tab=saveTab;
-  /* D11 links: &quot;→ Tab · Card&quot; becomes &quot;see §n.k&quot; */
-  body.querySelectorAll(&quot;a.wkA&quot;).forEach(a=>{
-    const hit=cardMap[a.dataset.tab+&quot;|&quot;+a.dataset.card], pre=a.dataset.txt?a.dataset.txt+&quot;: &quot;:&quot;&quot;;
-    if(hit){ a.textContent=pre+&quot;see §&quot;+hit.num; a.href=&quot;#&quot;+hit.id; }
-    else { a.textContent=pre+&quot;see the &quot;+(asdTabName(a.dataset.tab)||a.dataset.tab)+&quot; tab (&quot;+(ASD_CARDS[a.dataset.card]||a.dataset.card)+&quot;; not in this printout)&quot;; a.removeAttribute(&quot;href&quot;); }
-  });
-  body.querySelectorAll(&quot;.wkLink&quot;).forEach(d=>{ if(d.firstChild&amp;&amp;d.firstChild.nodeType===3) d.firstChild.textContent=&quot;&quot;; });
-  /* front matter: cover with title block, references, table of contents */
-  const cover=el(&quot;section&quot;,&quot;cr-cover&quot;);
-  const ct=el(&quot;div&quot;,&quot;cr-cover-t&quot;);
-  ct.appendChild(el(&quot;h1&quot;,null,&quot;Concrete Beam Load Rating — ASD&quot;));
-  ct.appendChild(el(&quot;p&quot;,null,S.proj.name||&quot;Untitled&quot;));
-  if(S.proj.subj) ct.appendChild(el(&quot;p&quot;,&quot;cr-cover-p&quot;,S.proj.subj));
-  ct.appendChild(el(&quot;p&quot;,&quot;cr-cover-p&quot;,&quot;AASHTO Standard Specifications, §8.15 (Working Stress) · Concrete Beam Design Suite · by M. Lococo&quot;));
-  cover.appendChild(ct);
-  const grid=el(&quot;div&quot;,&quot;rptHdrGrid&quot;);
-  const gi=(k,v)=>{ const dd=el(&quot;div&quot;); dd.innerHTML=&quot;<b>&quot;+k+&quot;:</b> &quot;; dd.appendChild(document.createTextNode(v||&quot;—&quot;)); grid.appendChild(dd); };
-  gi(&quot;Project&quot;,S.proj.name); gi(&quot;Project No.&quot;,S.proj.num); gi(&quot;Subject&quot;,S.proj.subj);
-  gi(&quot;Calculated by&quot;,S.proj.by); gi(&quot;Date&quot;,S.proj.date); gi(&quot;Sheet&quot;,S.proj.sheet);
-  gi(&quot;Checked by&quot;,S.proj.chk); gi(&quot;Checked date&quot;,S.proj.chkDate); gi(&quot;Method&quot;,&quot;AASHTO 8.15 (ASD)&quot;);
-  cover.appendChild(grid);
-  const fm=el(&quot;section&quot;,&quot;cr-front&quot;);
-  fm.appendChild(el(&quot;h2&quot;,&quot;cr-h1&quot;,&quot;References:&quot;));
-  const rt=el(&quot;table&quot;,&quot;cr-refs&quot;); ASD_REFS.forEach(([a,b])=>{ const tr=el(&quot;tr&quot;); tr.appendChild(el(&quot;td&quot;,null,a)); tr.appendChild(el(&quot;td&quot;,null,b)); rt.appendChild(tr); });
-  fm.appendChild(rt);
-  fm.appendChild(el(&quot;h2&quot;,&quot;cr-h1&quot;,&quot;Table of contents:&quot;));
-  const ol=el(&quot;ol&quot;,&quot;cr-toc&quot;);
-  toc.forEach(s=>{ const li=el(&quot;li&quot;); const a=el(&quot;a&quot;,null,s.n+&quot;. &quot;+s.t); a.href=&quot;#&quot;+s.id; li.appendChild(a);
-    if(s.subs.length){ const o2=el(&quot;ol&quot;); s.subs.forEach((q,k)=>{ const l2=el(&quot;li&quot;); const a2=el(&quot;a&quot;,null,s.n+&quot;.&quot;+(k+1)+&quot;. &quot;+q.t); a2.href=&quot;#&quot;+q.id; l2.appendChild(a2); o2.appendChild(l2); }); li.appendChild(o2); }
-    ol.appendChild(li); });
-  fm.appendChild(ol);
-  fm.appendChild(el(&quot;p&quot;,&quot;cr-p cr-small&quot;,&quot;Equations are shown symbolically, then with values substituted, then with the result. &quot;+
-    &quot;The section, f′c, f_y, d and A_s are received from the Beam Capacity tab of the suite (its own calculation report). &quot;+
-    &quot;A rating level passes when RF ≥ 1.00. Units: psi, in, k-ft unless noted.&quot;));
-  Rp.appendChild(cover); Rp.appendChild(fm); Rp.appendChild(body);
-  const f=el(&quot;div&quot;,&quot;foot&quot;);
-  f.textContent=&quot;This calculation is a computation aid. All results must be independently verified and &quot;+
-    &quot;sealed by the responsible engineer of record. Generated &quot;+new Date().toLocaleString()+&quot;.&quot;;
-  Rp.appendChild(f);
+function asdRxAbout(){
+  const P=S.proj||{};
+  return [{type:'note',text:&quot;Concrete Beam Load Rating — ASD — &quot;+(P.name||&quot;Untitled&quot;)+(P.subj?&quot; — &quot;+P.subj:&quot;&quot;)+&quot;. AASHTO Standard Specifications, §8.15 (Working Stress) · Concrete Beam Design Suite · by M. Lococo.&quot;},
+    {type:'note',text:&quot;Title block of the ASD Beam Calcs tab: Subject &quot;+(P.subj||&quot;—&quot;)+&quot;; Sheet &quot;+(P.sheet||&quot;—&quot;)+&quot;; Method AASHTO 8.15 (ASD).&quot;},
+    {type:'note',text:&quot;Equations are shown symbolically, then with values substituted, then with the result. &quot;+
+      &quot;The section, f′c, f_y, d and A_s are received from the Beam Capacity tab of the suite (its own calculation report). &quot;+
+      &quot;A rating level passes when RF ≥ 1.00. Units: psi, in, k-ft unless noted.&quot;},
+    {type:'note',text:&quot;This calculation is a computation aid. All results must be independently verified and sealed by the responsible engineer of record.&quot;}];
 }
-function openRptDialog(){
-  const o=normRptOpts(); const body=document.getElementById(&quot;rptBody&quot;); body.innerHTML=&quot;&quot;;
-  body.appendChild(el(&quot;div&quot;,&quot;fixedNote&quot;,&quot;The title block and disclaimer footer always print. &quot;+
-    &quot;Deselected sections are removed and the rest renumber.&quot;));
-  const g1=el(&quot;div&quot;); g1.appendChild(el(&quot;div&quot;,&quot;grpT&quot;,&quot;Report sections&quot;));
-  reportTabList().forEach(([id,label])=>{
-    const l=el(&quot;label&quot;,&quot;opt&quot;); const c=el(&quot;input&quot;); c.type=&quot;checkbox&quot;; c.checked=o.tabs[id];
-    c.addEventListener(&quot;change&quot;,()=>{ o.tabs[id]=c.checked; autosave(); });
-    l.appendChild(c); l.appendChild(document.createTextNode(label)); g1.appendChild(l);
-  });
-  body.appendChild(g1);
-  document.getElementById(&quot;rptBg&quot;).classList.add(&quot;on&quot;);
-}
-function closeRptDialog(){ document.getElementById(&quot;rptBg&quot;).classList.remove(&quot;on&quot;); }
-function doPrint(){ openRptDialog(); }
+function asdRxPrint(){ try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ P.CBRP.printAny(); return; } }catch(e){} window.print(); }
+document.addEventListener(&quot;keydown&quot;,e=>{ if(!(e.ctrlKey||e.metaKey)||e.altKey||String(e.key).toLowerCase()!==&quot;p&quot;) return;
+  try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ e.preventDefault(); P.CBRP.printAny(); } }catch(err){} });
+/* CBRX: openRptDialog, closeRptDialog, doPrint and buildReport were removed (the dialog is retired; Print: asdRxPrint) */
 
 /* =====================================================================
    PROJECT SAVE / LOAD (localStorage) + JSON import/export
@@ -6101,7 +5833,9 @@ function asdRptModel(){
       S.mode.inv?[['Inventory',{t:F(R.M_inv),n:true,key:'an/inv.M'},R.ctrl_inv,{t:isFinite(R.rf_inv)?F(R.rf_inv):'—',n:true,key:'an/inv.RF'},isFinite(R.rf_inv)?{t:R.rf_inv>=1?'PASS':'FAIL',cls:R.rf_inv>=1?'ok':'ng'}:{t:'N/A',cls:'na'}]]:[],
       S.mode.op?[['Operating',{t:F(R.M_op),n:true,key:'an/op.M'},R.ctrl_op,{t:isFinite(R.rf_op)?F(R.rf_op):'—',n:true,key:'an/op.RF'},isFinite(R.rf_op)?{t:R.rf_op>=1?'PASS':'FAIL',cls:R.rf_op>=1?'ok':'ng'}:{t:'N/A',cls:'na'}]]:[])},
     {type:'note',text:'Scope: singly reinforced flexure only (working stress, AASHTO Std. Spec. 8.15); compression steel (8.15.3) is ignored and ASD shear (8.15.5) is not checked. A rating level passes when RF ≥ 1.00. [[tab:tabAnalysis|On screen: Analysis tab]]'+(R.A.fc_op>0.60*R.fc+1e-9?' Operating $f_{c}$ = '+grp(R.A.fc_op)+' psi is greater than 0.60$f^{\\prime}_{c}$ = '+fmt(0.60*R.fc,1)+' psi (AASHTO MBE 6B.6.2.3): confirm the owner\'s basis.':'')}])}]});
-  return {title:'ASD Beam Rating',code:'AASHTO Std. Spec. 8.15 (working stress); AASHTO MBE 6B',proj:P,refs:ASD_REFS,sections:secs};
+  const RX=asdRxSel(), TABOF={'Inputs':'tabInputEcho','Analysis and rating':'tabAnalysis'};   /* CBRX: the Include boxes (S.ui.rptOpts) */
+  secs.forEach(s=>{ s.tab=TABOF[s.title]; });
+  return {title:'ASD Beam Rating',code:'AASHTO Std. Spec. 8.15 (working stress); AASHTO MBE 6B',proj:P,refs:ASD_REFS,sections:secs.filter(s=>!(s.tab&amp;&amp;RX.tabs[s.tab]===false))};
 }
 
 function refresh(){
@@ -6141,19 +5875,12 @@ function init(){
   document.getElementById(&quot;btnExport&quot;).addEventListener(&quot;click&quot;,doExport);
   document.getElementById(&quot;btnImport&quot;).addEventListener(&quot;click&quot;,()=>document.getElementById(&quot;fileIn&quot;).click());
   document.getElementById(&quot;fileIn&quot;).addEventListener(&quot;change&quot;,e=>{ const f=e.target.files[0]; if(f) doImport(f); e.target.value=&quot;&quot;; });
-  document.getElementById(&quot;btnPrint&quot;).addEventListener(&quot;click&quot;,doPrint);
+  document.getElementById(&quot;btnPrint&quot;).addEventListener(&quot;click&quot;,asdRxPrint);   /* CBRX: the suite's Report */
   document.getElementById(&quot;statusChip&quot;).addEventListener(&quot;click&quot;,()=>{ S.ui.tab=&quot;tabSummary&quot;; autosave(); refresh(); });
   document.getElementById(&quot;prjX&quot;).addEventListener(&quot;click&quot;,closeProjDialog);
   document.getElementById(&quot;prjCancel&quot;).addEventListener(&quot;click&quot;,closeProjDialog);
   document.getElementById(&quot;prjGo&quot;).addEventListener(&quot;click&quot;,projDialogGo);
   document.getElementById(&quot;prjBg&quot;).addEventListener(&quot;mousedown&quot;,e=>{ if(e.target.id===&quot;prjBg&quot;) closeProjDialog(); });
-  document.getElementById(&quot;rptX&quot;).addEventListener(&quot;click&quot;,closeRptDialog);
-  document.getElementById(&quot;rptCancel&quot;).addEventListener(&quot;click&quot;,closeRptDialog);
-  document.getElementById(&quot;rptGo&quot;).addEventListener(&quot;click&quot;,()=>{ closeRptDialog(); buildReport(); asdApplyPageCSS(true); setTimeout(()=>window.print(),60); });
-  /* D11: a print started from the browser builds the report if none is built; the page header/footer apply only while printing */
-  window.addEventListener(&quot;beforeprint&quot;,()=>{ const h=document.getElementById(&quot;printReport&quot;); if(h&amp;&amp;!h.innerHTML) buildReport(); asdApplyPageCSS(true); });
-  window.addEventListener(&quot;afterprint&quot;,()=>asdApplyPageCSS(false));
-  document.getElementById(&quot;rptAll&quot;).addEventListener(&quot;click&quot;,()=>{ const o=normRptOpts(); reportTabList().forEach(([id])=>o.tabs[id]=true); autosave(); openRptDialog(); });
   refresh();
   plibUndoInit();   // PLIB: after start-up, so restoring the session is not a step
 
@@ -6402,48 +6129,7 @@ a.wkA:hover{text-decoration:underline;}
 .outputpanel:has(.rp){min-width:0;}
 @media(max-width:1000px){#tabcontent .rp-body{grid-template-columns:minmax(0,1fr);} #tabcontent .rp-doc{min-width:0;}}
 
-/* ---- Print ---- */
-#printroot{display:none;}
-@media print{
-  html,body{background:#fff; height:auto; overflow:visible;}
-  .appwrap{max-width:none; padding:0; height:auto; display:block;}
-  .layout{height:auto;}
-  .no-print{display:none!important;}
-  #printroot{display:block!important;}
-  @page{margin:0.7in; size:letter;}
-  .note{break-inside:avoid;}
-  .note > summary{display:none;}
-  .note .note-body{padding-top:2px;}
-  /* D11 calculation sheet (2026-10-18): cover, references, contents, numbered sections, result lines */
-  #printroot a{color:#000; text-decoration:none;}
-  .cr-cover{break-after:page; padding-top:0.9in;}
-  .cr-cover-t{text-align:center; margin:0 0 0.55in;}
-  .cr-cover-t h1{font-size:24pt; line-height:1.2; margin:0 0 12pt;}
-  .cr-cover-t p{font-size:13pt; font-weight:bold; margin:0 0 6pt;}
-  .cr-cover-t p.cr-cover-p{font-weight:normal; font-size:11pt;}
-  .cr-tb{width:100%; border-collapse:collapse; font-size:10pt; margin:0 0 12pt; border:1.4px solid #000;}
-  .cr-tb td{padding:4px 8px; border:.6px solid #999; vertical-align:top; width:50%;}
-  .cr-front{break-after:page;}
-  .cr-break{break-before:page;}
-  .cr-h1{font-size:12pt; text-transform:uppercase; text-decoration:underline; margin:0 0 8pt; break-after:avoid;}
-  .cr-front .cr-h1{margin-top:10pt;}
-  .cr-refs{border-collapse:collapse; margin:0 0 14pt; font-size:10pt;}
-  .cr-refs td{padding:2pt 14pt 2pt 0; vertical-align:top;}
-  .cr-refs td:first-child{white-space:nowrap; font-weight:bold;}
-  .cr-toc,.cr-toc ol{list-style:none; margin:0; padding:0;}
-  .cr-toc>li{margin:4pt 0;}
-  .cr-toc ol{padding-left:18pt; font-size:9.5pt;}
-  .cr-p{margin:0 0 7pt; font-size:9.5pt;}
-  .cr-resw{break-inside:avoid;}
-  .cr-resh{font-size:10.5pt; font-weight:bold; margin:14pt 0 0; break-after:avoid;}
-  .cr-results{margin:3pt 0 6pt; border-top:.8pt solid #000; padding-top:3pt;}
-  .cr-line{display:grid; grid-template-columns:2.3in 1fr .55in; gap:0 10pt; padding:2.5pt 0; break-inside:avoid; font-size:10pt; align-items:baseline;}
-  .cr-line .cr-r{text-align:right; font-weight:bold;}
-  .cr-ng .cr-r{text-decoration:underline;}
-  .cr-refi{font-size:9pt; color:#333;}
-  .wkLink{color:#333;}
-  .eq,table.vars tr,.result-hero{break-inside:avoid;}
-}
+/* RBRX (2026-11-02; this embedded copy CBRX 2026-11-03): the D11 print report and its print CSS were removed; Print prints the suite's Report tab */
 </style>
 </head>
 <body>
@@ -6473,8 +6159,6 @@ a.wkA:hover{text-decoration:underline;}
     </div>
   </div>
 </div>
-
-<div id=&quot;printroot&quot;></div>
 
 <script>
 /* =====================================================================
@@ -7686,7 +7370,7 @@ function rebarGoto(card){
 }
 document.addEventListener('click',e=>{
   const a=e.target&amp;&amp;e.target.closest?e.target.closest('a.wkA'):null;
-  if(!a||a.closest('#printroot')) return;
+  if(!a) return;
   e.preventDefault(); rebarGoto(a.getAttribute('data-card'));
 });
 
@@ -7992,31 +7676,12 @@ function showRebarTable(){ showRefImage('table'); }
 
 /* =====================================================================
    PRINT / PDF REPORT
+   RBRX (2026-11-02; this embedded copy CBRX 2026-11-03): the D11 calculation sheet (buildReport → #printroot, rebarPageCSS,
+   rebarResultBlock) was retired; its content is in the suite's combined Report tab (chapter C, rbrModel). The Print / PDF
+   Report button and Ctrl+P print the suite's Report from any tab (printReport, below; the shell's CBRP.printAny). Kept:
+   REBAR_RPT_TOOL (print footer), rebarRefs (the Report's references) and rebarResultRows (the Report's summary of results).
    ===================================================================== */
-/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / Base Plate format — cover with title
-   block, references, numbered table of contents (links), numbered sections n (1 = summary and inputs, then the
-   result tabs) and subsections n.k (the tabs' own cards, built by the tabs' own functions: symbolic → values
-   substituted → result), a result line per length and per check from the tool's own values, and the print
-   header / &quot;Page X of Y&quot; footer (@page margin boxes, rebarPageCSS, present only while printing).
-   No value is computed differently here. */
 const REBAR_RPT_TOOL = &quot;Concrete Beam Design Suite — Development &amp; Splice&quot;;   // suite tab name in the print footer (standalone: &quot;Rebar Development &amp; Splice Calculator&quot;)
-function rebarPageCSS(inp){
-  const q=v=>String(v==null||v===&quot;&quot;?&quot;—&quot;:v).replace(/\\/g,&quot;\\\\&quot;).replace(/&quot;/g,'\\&quot;').replace(/[\r\n]+/g,&quot; &quot;);
-  const desc=(&quot;#&quot;+inp.barSize+&quot; bar development and splices&quot;).slice(0,40);
-  const box='font: 9.5pt &quot;Times New Roman&quot;, Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
-  const foot='font: 9pt &quot;Times New Roman&quot;, Times, serif; vertical-align: top; padding-top: 6pt;';
-  return '@page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'
-    +' @top-left { content: &quot;Project No: '+q(inp.projNo)+'\\A Description: '+q(desc)+'&quot;; '+box+' text-align: left; }'
-    +' @top-center { content: &quot;Computed By: '+q(inp.calcBy)+'\\A Checked By: '+q(inp.chkBy)+'&quot;; '+box+' text-align: left; }'
-    +' @top-right { content: &quot;Date: '+q(inp.calcDate)+'\\A Date: '+q(inp.chkDate)+'&quot;; '+box+' text-align: right; }'
-    +' @bottom-left { content: &quot;'+q(inp.projName||&quot;Untitled&quot;)+' ('+q(REBAR_RPT_TOOL)+')&quot;; '+foot+' }'
-    +' @bottom-right { content: &quot;Page &quot; counter(page) &quot; of &quot; counter(pages); '+foot+' } }';
-}
-function rebarApplyPageCSS(on){
-  let st=document.getElementById('rebar-page');
-  if(!st){ st=document.createElement('style'); st.id='rebar-page'; document.head.appendChild(st); }
-  st.textContent = on ? rebarPageCSS(readInputs()) : &quot;&quot;;
-}
 /* codes and articles the printed calculation cites (as the tool quotes them); nothing added */
 function rebarRefs(inp,f){
   if(f.AASHTO) return [
@@ -8062,100 +7727,14 @@ function rebarResultRows(inp,f,tab){
   }
   return rows;
 }
-function rebarResultBlock(rows,cardMap){
-  return `<div class=&quot;cr-results&quot;>`+rows.map(r=>{
-    const c=r.card&amp;&amp;REBAR_CARDS[r.card], hit=c&amp;&amp;cardMap[c[0]+&quot;|&quot;+c[1]];
-    return `<div class=&quot;cr-line${(r.st===&quot;FAIL&quot;||r.st===&quot;CHK&quot;)?&quot; cr-ng&quot;:&quot;&quot;}&quot;><span class=&quot;cr-d&quot;>${r.lab}:</span><span class=&quot;cr-m&quot;>${r.msg} <span class=&quot;cr-refi&quot;>(${r.ref}${hit?`; <a href=&quot;#${hit.id}&quot;>§${hit.num}</a>`:&quot;&quot;})</span></span><span class=&quot;cr-r&quot;>${r.st}</span></div>`;
-  }).join(&quot;&quot;)+`</div>`;
-}
-function buildReport(){
-  const inp=readInputs(), f=computeFactors(inp);
-  const w=validate(inp,f);
-  const root=document.getElementById('printroot');
-  const codeName = f.AASHTO?&quot;AASHTO LRFD 10th Ed. (2024) §5.10.8&quot;:&quot;ACI 318-19&quot;;
-  const inputEcho=`
-    <div class=&quot;subsec&quot;><div class=&quot;sh&quot;><span>Input Summary</span></div>
-    <table class=&quot;vars&quot;>
-      <tr><th>Design Code</th><td colspan=&quot;3&quot;>${codeName}</td></tr>
-      <tr><th>Bar Size</th><td>#${inp.barSize} (d_b=${fmt(f.db,3)} in, A_b=${fmt(f.Ab,2)} in²)</td>
-          <th>f_y</th><td>${fmt(inp.fy,0)} psi</td></tr>
-      <tr><th>f'_c</th><td>${fmt(inp.fc,0)} psi</td>
-          <th>Concrete</th><td>${inp.lightweight?&quot;Lightweight (λ=&quot;+fmt(f.lambda,2)+&quot;)&quot;:&quot;Normalweight (λ=1.0)&quot;}</td></tr>
-      <tr><th>Casting</th><td>${inp.topBar?&quot;Top bar&quot;:&quot;Other/bottom&quot;}</td>
-          <th>Coating</th><td>${fmt(f.psiE,1)}</td></tr>
-      <tr><th>c_b</th><td>${fmt(inp.cb,2)} in</td>
-          <th>${f.AASHTO?&quot;k_tr&quot;:&quot;K_tr&quot;}</th><td>${f.AASHTO?fmt(f.ktr_a,4)+&quot; in (&quot;+rebarLink(&quot;tConfA&quot;,&quot;see&quot;,&quot;&quot;)+&quot;)&quot;:fmt(f.Ktr,3)+&quot; in (&quot;+rebarLink(&quot;tConf&quot;,&quot;see&quot;,&quot;&quot;)+&quot;)&quot;}</td></tr>
-      ${inp.useExcess?`<tr><th>Excess reinf.</th><td>As,req=${fmt(inp.asReq,2)} / As,prov=${fmt(inp.asProv,2)} → ${fmt(f.excess,3)} (${rebarLink(&quot;tExcess&quot;,&quot;see&quot;,&quot;&quot;)})</td>
-          <th>% spliced</th><td>${fmt(inp.pctSpliced,0)}%</td></tr>`:&quot;&quot;}
-    </table></div>`;
-  const assum = inp.assumptions ? `<div class=&quot;subsec&quot;><div class=&quot;sh&quot;><span>Engineering Assumptions</span></div>
-      <div class=&quot;narr&quot; style=&quot;white-space:pre-wrap&quot;>${inp.assumptions.replace(/</g,&quot;&amp;lt;&quot;)}</div></div>` : &quot;&quot;;
-
-  const SECS=[[&quot;tension&quot;,&quot;Tension Development&quot;,()=>tabTension(inp,f,true)],[&quot;hook&quot;,&quot;Standard Hook&quot;,()=>tabHook(inp,f)],
-    [&quot;compression&quot;,&quot;Compression Development&quot;,()=>tabComp(inp,f)],[&quot;tsplice&quot;,&quot;Tension Lap Splice&quot;,()=>tabTSplice(inp,f)],
-    [&quot;csplice&quot;,&quot;Compression Lap Splice&quot;,()=>tabCSplice(inp,f)],[&quot;batch&quot;,&quot;Bar Development Schedule&quot;,()=>tabBatch(inp,f)]];
-  let body = `<section class=&quot;cr-sec&quot; data-sec=&quot;sum&quot;><h1 class=&quot;cr-h1&quot;>1. Summary and Inputs</h1>${inputEcho}
-    <div class=&quot;subsec&quot;><div class=&quot;sh&quot;><span>Summary of Results</span><span class=&quot;ref&quot;>${codeName}</span></div><div data-res=&quot;all&quot;></div></div>
-    ${w.length?`<div class=&quot;subsec&quot;><div class=&quot;sh&quot;><span>Validation Notices</span></div>${warnHTML(w)}</div>`:&quot;&quot;}${assum}</section>`;
-  SECS.forEach(([id,title,fn],i)=>{
-    body += `<section class=&quot;cr-sec cr-break&quot; data-sec=&quot;${id}&quot;><h1 class=&quot;cr-h1&quot;>${i+2}. ${title}</h1>${fn()}`
-      + (id===&quot;batch&quot;?&quot;&quot;:`<div class=&quot;cr-resw&quot;><div class=&quot;cr-resh&quot;>Results — ${title}</div><div data-res=&quot;${id}&quot;></div></div>`)+`</section>`;
-  });
-  root.innerHTML = `<div class=&quot;cr-frontall&quot;></div>${body}
-    <div style=&quot;margin-top:20px;border-top:1px solid #000;padding-top:6px;text-align:center;font-size:10px&quot;>
-      End of Calculation — ${codeName}</div>`;
-  // the tabs' cards become numbered subsections n.k
-  const cardMap={}, toc=[];
-  root.querySelectorAll('section.cr-sec').forEach((sec,i)=>{
-    const n=i+1, sid=&quot;rbr-&quot;+n, h=sec.querySelector('h1.cr-h1'), subs=[];
-    h.id=sid;
-    sec.querySelectorAll('.subsec').forEach(ss=>{
-      const sh=ss.querySelector(':scope > .sh'), sp=sh&amp;&amp;sh.querySelector('span'); if(!sp) return;
-      const title=rebarCardTitle(sh), num=n+&quot;.&quot;+(subs.length+1), id2=sid+&quot;-&quot;+(subs.length+1);
-      sp.textContent=num+&quot; &quot;+title;   // also drops the screen-only &quot;view bend dimensions&quot; link from the hook schematic title
-      ss.id=id2;
-      const key=sec.getAttribute('data-sec')+&quot;|&quot;+title; if(!cardMap[key]) cardMap[key]={num,id:id2};
-      subs.push({num,id:id2,t:title});
-    });
-    toc.push({n,id:sid,t:h.textContent.replace(/^\d+\.\s*/,&quot;&quot;),subs});
-  });
-  // result lines: &quot;<length or check>: <value> (<ref>; §n.k) PASS / FAIL / CHK / —&quot;
-  root.querySelectorAll('[data-res]').forEach(d=>{ const tb=d.getAttribute('data-res'); d.outerHTML=rebarResultBlock(rebarResultRows(inp,f,tb===&quot;all&quot;?null:tb),cardMap); });
-  // D11 links: &quot;→ Tab · Card&quot; reads &quot;see §n.k&quot; in the report
-  root.querySelectorAll('a.wkA').forEach(a=>{
-    const c=REBAR_CARDS[a.getAttribute('data-card')], hit=c&amp;&amp;cardMap[c[0]+&quot;|&quot;+c[1]], pre=a.getAttribute('data-txt');
-    a.removeAttribute('title');
-    if(hit){ a.textContent=(pre?pre+&quot;: &quot;:&quot;&quot;)+&quot;see §&quot;+hit.num; a.setAttribute('href',&quot;#&quot;+hit.id); }
-    else { a.textContent=(pre?pre+&quot;: &quot;:&quot;&quot;)+(c?&quot;see &quot;+rebarCardTxt(a.getAttribute('data-card'))+&quot; (not in this printout)&quot;:&quot;&quot;); a.removeAttribute('href'); }
-  });
-  // front matter: cover with title block, references, table of contents
-  const allRows=rebarResultRows(inp,f,null), nNG=allRows.filter(r=>r.st===&quot;FAIL&quot;||r.st===&quot;CHK&quot;).length, nChk=allRows.filter(r=>r.st!==&quot;—&quot;).length;
-  const td=(a,b)=>`<td><b>${a}:</b> ${escHTML(b||&quot;—&quot;)}</td>`;
-  root.querySelector('.cr-frontall').innerHTML = `<section class=&quot;cr-cover&quot;><div class=&quot;cr-cover-t&quot;>
-      <h1>Rebar Development &amp;amp; Splice Calculation</h1><p>${escHTML(inp.projName||&quot;Untitled&quot;)}</p>
-      <p class=&quot;cr-cover-p&quot;>#${inp.barSize} bar · f<sub>y</sub> = ${fmt(inp.fy,0)} psi · f′<sub>c</sub> = ${fmt(inp.fc,0)} psi</p>
-      <p class=&quot;cr-cover-p&quot;>${codeName}</p><p class=&quot;cr-cover-p&quot;>by Mario Lococo</p></div>
-    <table class=&quot;cr-tb&quot;><tr>${td(&quot;Project&quot;,inp.projName)}${td(&quot;Project No.&quot;,inp.projNo)}</tr>
-      <tr>${td(&quot;Calculated by&quot;,inp.calcBy)}${td(&quot;Date&quot;,inp.calcDate)}</tr>
-      <tr>${td(&quot;Checked by&quot;,inp.chkBy)}${td(&quot;Checked date&quot;,inp.chkDate)}</tr>
-      <tr>${td(&quot;Design code&quot;,codeName)}${td(&quot;Bar&quot;,&quot;#&quot;+inp.barSize+&quot; (d_b = &quot;+fmt(f.db,3)+&quot; in., A_b = &quot;+fmt(f.Ab,2)+&quot; in²)&quot;)}</tr></table>
-    <p class=&quot;cr-p&quot;><b>Code checks:</b> ${nChk-nNG} of ${nChk} pass${nNG?`, ${nNG} need attention (FAIL / CHK)`:&quot;&quot;}. Required lengths and all checks: <a href=&quot;#${(cardMap[&quot;sum|Summary of Results&quot;]||{}).id}&quot;>see §${(cardMap[&quot;sum|Summary of Results&quot;]||{}).num}</a>.</p></section>
-    <section class=&quot;cr-front&quot;><h2 class=&quot;cr-h1&quot;>References:</h2>
-      <table class=&quot;cr-refs&quot;>${rebarRefs(inp,f).map(r=>`<tr><td>${r[0]}</td><td>${r[1]}</td></tr>`).join(&quot;&quot;)}</table>
-      <h2 class=&quot;cr-h1&quot;>Table of contents:</h2>
-      <ol class=&quot;cr-toc&quot;>${toc.map(s=>`<li><a href=&quot;#${s.id}&quot;>${s.n}. ${escHTML(s.t)}</a>${s.subs.length?`<ol>${s.subs.map(q=>`<li><a href=&quot;#${q.id}&quot;>${q.num} ${escHTML(q.t)}</a></li>`).join(&quot;&quot;)}</ol>`:&quot;&quot;}</li>`).join(&quot;&quot;)}</ol>
-      <p class=&quot;cr-p&quot;>Equations are shown symbolically, then with the values substituted, then with the result. Each section ends with its result lines. Lengths are required lengths: the tool has no provided-length input, so they carry no PASS / FAIL (—); compare them with the lengths detailed. Checks read PASS or FAIL, or CHK where an input the check needs is missing (as on the dashboard). &quot;see §n.k&quot; points to the subsection where a quoted value is worked. Units: in., psi unless noted.</p></section>`;
-  typeset(root);
-}
+/* RBRX / CBRX: the button prints the suite's Report (the shell's CBRP.printAny); without the shell, this tab's own Report */
 function printReport(){
-  buildReport();
-  rebarApplyPageCSS(true);
-  setTimeout(()=>window.print(),350);
+  try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ P.CBRP.printAny(); return; } }catch(e){}
+  if(RBRP.on&amp;&amp;RBRP.api){ RBRP.api.print(); return; }
+  window.print();   // no report: the page as shown
 }
-/* Ctrl+P / the browser's Print also prints the current report (built fresh), with the page header and footer */
-window.addEventListener('beforeprint',()=>{ if(rbrWillPrint()) return;   /* RBRP: the Report tab prints itself (shared/report.js) */
-  try{ buildReport(); rebarApplyPageCSS(true); }catch(e){} });
-window.addEventListener('afterprint',()=>{ try{ rebarApplyPageCSS(false); }catch(e){} });
+document.addEventListener('keydown',e=>{ if(!(e.ctrlKey||e.metaKey)||e.altKey||String(e.key).toLowerCase()!=='p') return;
+  try{ const P=window.parent; if(P&amp;&amp;P!==window&amp;&amp;P.CBRP&amp;&amp;P.CBRP.printAny){ e.preventDefault(); P.CBRP.printAny(); } }catch(err){} });
 
 /* =====================================================================
    REPORT TAB (RBRP, 2026-11-01): the calculation report in the shared viewer (shared/report.js: navigation tree,
@@ -8624,7 +8203,21 @@ window.addEventListener('DOMContentLoaded',()=>{
   function win(app){ try{ var f=document.getElementById('suite-frame-'+app); return f?f.contentWindow:null; }catch(e){ return null; } }
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
   /* [[key]] -> [[pre:key]], [[tab:name|text]] -> [[tab:chapter/name|text]] */
-  function tx(s,id){ return s==null?s:String(s).replace(/\[\[([^\]|]+)((?:\|[^\]]*)?)\]\]/g,function(m,k,lab){ return k.indexOf('tab:')===0?'[[tab:'+id+'/'+k.slice(4)+lab+']]':'[['+id+':'+k+lab+']]'; }); }
+  /* CBRX (2026-11-03): the built-in renderer (shared/steps.js, used for every step without KaTeX and for $…$ in notes and cells
+     always) knows a TeX subset; the tabs' strings also use \dfrac, \left( … \right), \; and a few more. rxLite maps them to the
+     subset (display only: the same symbols and numbers), so offline the Report shows each line legibly instead of "dfrac…". */
+  function rxLite(t){ return String(t==null?'':t).replace(/\\[dt]frac/g,'\\frac').replace(/\\(mathbf|mathrm|boldsymbol|textbf|mathit|operatorname)\{/g,'{').replace(/\\color\{[^}]*\}/g,'')
+    .replace(/\\left\s*\\?([()\[\]|.])/g,function(m,c){ return c==='.'?'':c; }).replace(/\\right\s*\\?([()\[\]|.])/g,function(m,c){ return c==='.'?'':c; })
+    .replace(/\\checkmark/g,'\u2713').replace(/\\q?quad/g,' ').replace(/\\[;:!]/g,' ').replace(/\\(displaystyle|scriptstyle|textstyle|limits)/g,'').replace(/\\Rightarrow/g,'\u21D2').replace(/\\rightarrow|\\to\b/g,'\u2192')
+    .replace(/\\approx/g,'\u2248').replace(/\\infty/g,'\u221E').replace(/\\gg/g,'\u226B').replace(/\\varepsilon/g,'\\epsilon').replace(/\\big[lr]?|\\Big[lr]?/g,'').replace(/\\ /g,' '); }
+  function rxLiteIt(it){
+    var o={}; for(var k in it) o[k]=it[k];
+    var st=function(s){ var q={}; for(var k in s) q[k]=s[k]; ['sym','eq','sub'].forEach(function(f){ if(typeof q[f]==='string') q[f]=rxLite(q[f]); }); return q; };
+    if(it.list) o.list=it.list.map(function(t){ var q={}; for(var k in t) q[k]=t[k]; q.steps=(t.steps||[]).map(st); return q; });
+    if(it.steps) o.steps=it.steps.map(st);
+    return o;
+  }
+  function tx(s,id){ return s==null?s:String(s).replace(/\$([^$]+)\$/g,function(m,q){ return '$'+rxLite(q)+'$'; }).replace(/\[\[([^\]|]+)((?:\|[^\]]*)?)\]\]/g,function(m,k,lab){ return k.indexOf('tab:')===0?'[[tab:'+id+'/'+k.slice(4)+lab+']]':'[['+id+':'+k+lab+']]'; }); }
   function cell(c,id){ if(c&&typeof c==='object'){ var o={}; for(var k in c) o[k]=c[k]; o.t=tx(c.t,id); if(c.key) o.key=id+':'+c.key; return o; } return tx(c,id); }
   function topics(list){
     var L=(list||[]).filter(function(t){ return t&&t.steps&&t.steps.length; }), steps=[];
@@ -8633,6 +8226,7 @@ window.addEventListener('DOMContentLoaded',()=>{
       return {title:t.title,ref:t.ref||'',n:t.steps.length,cls:g.cls,chip:g.chip,res:g.res}; })};
   }
   function item(it,id){
+    if(!window.katex&&(it.type==='topics'||it.type==='steps')) it=rxLiteIt(it);   /* CBRX: offline, the steps in the built-in renderer's subset */
     var o={}; for(var k in it) o[k]=it[k];
     if(it.type==='topics'){ var T=topics(it.list); o={type:'steps',scope:id+':'+it.scope,title:tx(it.title,id),steps:T.steps,topics:T.topics}; if(it.see) o.see=id+':'+it.see; return o; }
     if(it.type==='steps'){ o.scope=id+':'+it.scope; if(it.see) o.see=id+':'+it.see; o.title=tx(it.title,id); return o; }
@@ -8642,6 +8236,118 @@ window.addEventListener('DOMContentLoaded',()=>{
     else if(it.type==='table'){ o.caption=tx(it.caption,id); o.head=(it.head||[]).map(function(c){ return cell(c,id); });
       o.rows=(it.rows||[]).map(function(r){ return Array.isArray(r)?r.map(function(c){ return cell(c,id); }):{cells:r.cells.map(function(c){ return cell(c,id); }),cls:r.cls}; }); }
     return o;
+  }
+  /* ---------- CBRX (2026-11-03): the print reports of the Beam Capacity and ASD Beam Calcs tabs (buildReport, their "Report
+     Contents" dialogs) are retired; this Report prints from every tab. What they printed and the chapters lacked is added here:
+     each chosen tab, built by the tab's own buildOutput (cbcRxHarvest / asdRxHarvest in the frame), is read in order and every
+     table with a number the Report does not show yet (or, for a table that is not a variable list, a row of text it does not
+     have), every equation line with such a number or remark, every note with a sentence or number it does not have yet, and
+     every figure it lacks is added to the section of that tab ("As printed: tables, equations, notes and figures", under the
+     tab's card titles); the D/C result lines go at the end of the section ("Results — <tab>"); the cover lines, front notes and
+     footers go to References. Without KaTeX an equation line is shown as its TeX source. The dialogs' choices are the Include
+     boxes of the report bar (the tabs' own field S.ui.rptOpts, written through the tab's normRptOpts as the dialog did).
+     Nothing is computed here: every value is the tab's own text. ---------- */
+  var RXCH=[{id:'cap',app:'capacity',pre:'cbcRx',name:'Beam Capacity'},{id:'asd',app:'asd',pre:'asdRx',name:'ASD Beam Calcs'}];
+  function rxFn(c,f){ var w=win(c.app); return w&&typeof w[c.pre+f]==='function'?function(){ return w[c.pre+f].apply(w,arguments); }:null; }
+  function rxAbout(){ var out=[];
+    RXCH.forEach(function(c){ var f=rxFn(c,'About'); if(!f) return; try{ out.push({title:'About the '+c.name+' chapter',items:f()}); }catch(e){} });
+    return out; }
+  var rxNums=function(t){ return (String(t).replace(/\{,\}/g,',').replace(/[−–]/g,'-').replace(/(\d),(?=\d{3})/g,'$1').match(/\d+(?:\.\d+)?/g)||[]).map(function(x){ return String(parseFloat(x)); }); };
+  var rxNrm=function(x){ return String(x).toLowerCase().replace(/[^a-z0-9]+/g,''); };
+  function rxRest(M){
+    var txt=''; try{ txt=SharedReport.text(SharedReport.build(M)); }catch(e){ return; }
+    var have=new Set(), all=rxNrm(txt);
+    var addNum=function(x){ have.add(x); var v=parseFloat(x), d=(x.split('.')[1]||'').length; for(var k=0;k<d;k++) have.add(String(parseFloat(v.toFixed(k)))); };
+    rxNums(txt).forEach(addNum);
+    var newNum=function(t){ return rxNums(t).some(function(n){ return !have.has(n); }); };
+    var fresh=function(t){ var ss=String(t).split(/(?<=[.;:])\s+/).map(rxNrm).filter(function(x){ return x.length>15; }); return ss.some(function(x){ return all.indexOf(x)<0; }); };
+    var seen=function(t){ rxNums(t).forEach(addNum); all+=rxNrm(t); };
+    var figs=new Set(); M.sections.forEach(function(s){ (s.subs||[]).forEach(function(q){ (q.items||[]).forEach(function(it){ if(it.type==='figure') figs.add(rxNrm(it.caption)); }); }); });
+    RXCH.forEach(function(c){
+      var hv=rxFn(c,'Harvest'), rs=rxFn(c,'Results'); if(!hv) return;
+      var H; try{ H=hv(); }catch(e){ return; }
+      var last=-1;   /* the index of the last section of this chapter that a harvested tab went into */
+      H.forEach(function(h){
+        var si=-1; M.sections.forEach(function(s,i){ if(si<0&&s._ch===c.id&&s._tab===h.id) si=i; });
+        if(si<0){   /* a tab without a section of its own (ASD: Summary & Rating): a new section after the one before it */
+          var first=-1; M.sections.forEach(function(s,i){ if(first<0&&s._ch===c.id) first=i; });
+          si=last>=0?last+1:(first>=0?first:M.sections.length-1);
+          var ns={title:h.label,_ch:c.id,_tab:h.id,_new:true,subs:[]};
+          if(last<0&&first>=0&&M.sections[first].part){ ns.part=M.sections[first].part; M.sections[first].part=undefined; }
+          M.sections.splice(si,0,ns);
+        }
+        last=si;
+        var sec=M.sections[si], items=rxWalk(h.el,c.id+':rx-'+h.id,{newNum:newNum,fresh:fresh,seen:seen,figs:figs});
+        if(items.length) sec.subs.push({title:'As printed: tables, equations, notes and figures',items:items});
+        var r=null; try{ r=rs?rs(h.id):null; }catch(e){}
+        if(r){ sec.subs.push({title:'Results — '+h.label,items:[r,{type:'note',text:'PASS: D/C ≤ 1.00 (detailing: the limit is met for every combination it applies to; rating: RF ≥ 1.00). Each check is worked in the subsections above.'}]}); seen(JSON.stringify(r.rows)); }
+      });
+    });
+    M.sections=M.sections.filter(function(s){ return !(s._new&&!s.subs.length); });
+  }
+  /* one built tab -> report items, in document order; a card title (.secTitle) becomes the topic heading of its first item */
+  function rxWalk(root,scope,T){
+    var out=[], topic=null, card='', nfig=0, k=0, D=root.ownerDocument;
+    var INL=/^(B|I|EM|STRONG|SPAN|BR|SUB|SUP|A|SMALL|U|CODE|LABEL)$/;
+    var txt=function(e){ var c=e.cloneNode(true);
+      c.querySelectorAll('.katex').forEach(function(x){ var a=x.querySelector('annotation'); x.replaceWith(D.createTextNode(' '+(a?a.textContent:x.textContent)+' ')); });
+      c.querySelectorAll('br').forEach(function(b){ b.replaceWith(D.createTextNode(' ')); });
+      c.querySelectorAll('.wkLink,.caret,button,select,input').forEach(function(x){ x.remove(); });
+      return c.textContent.replace(/\s+/g,' ').trim().replace(/\$/g,''); };
+    var tex=function(l){ var a=l.querySelector('annotation'); return (a?a.textContent:l.textContent).trim(); };
+    var push=function(it){ if(topic){ it.topic={title:topic}; topic=null; } out.push(it); };
+    var cellOf=function(v){ if(/^(PASS|OK)\b/.test(v)) return {t:v,cls:'ok'}; if(/^(FAIL|NG)\b/.test(v)) return {t:v,cls:'ng'}; if(/^N\/A\b/.test(v)) return {t:v,cls:'na'};
+      return /^[-−\d.,e+\s%/×()≫∞—]+$/.test(v)&&/\d/.test(v)?{t:v,n:true}:v; };
+    var table=function(t){
+      var trs=[].slice.call(t.rows); if(!trs.length) return;
+      var all=t.innerText||t.textContent, vt=t.classList.contains('vt');
+      var rowTxt=trs.map(function(r){ return [].slice.call(r.cells).map(txt).join(' '); });
+      if(!(T.newNum(all)||(!vt&&rowTxt.some(T.fresh)))) return;
+      var hd=trs[0].querySelector('th')?[].slice.call(trs[0].cells).map(txt):null, cap=t.querySelector('caption');
+      var body=trs.slice(hd?1:0).map(function(r){ return [].slice.call(r.cells).map(function(c){ return cellOf(txt(c)); }); });
+      push({type:'table',caption:cap?txt(cap):undefined,head:hd||[],rows:body,wide:(trs[0].cells.length>6)||undefined,lazy:trs.length>31||undefined,title:trs.length>31?(cap?txt(cap):'Table'):undefined});
+      rowTxt.forEach(T.seen);
+    };
+    var eqb=function(b){
+      var tt=b.querySelector('.eqTitle'), title=tt?txt(tt):'', steps=[];
+      [].slice.call(b.querySelectorAll('.eqLine')).forEach(function(l,j){
+        var s=tex(l), rem=(s.match(/\\text\{[^}]{20,}\}/g)||[]).join(' ');
+        if(!(T.newNum(s)||(rem&&T.fresh(rem.replace(/\\text\{|\}/g,''))))) return;
+        steps.push(window.katex?{id:'l'+(++k),label:title,eq:s}:{id:'l'+(++k),label:title,note:s});   /* without KaTeX: the TeX source (#724) */
+        T.seen(s+' '+rem);
+      });
+      if(steps.length) push({type:'steps',scope:scope,title:title||undefined,steps:steps});
+      [].slice.call(b.querySelectorAll('table')).forEach(table);
+    };
+    var visit=function(e){
+      if(e.nodeType!==1) return;
+      if(e.matches('.secHead')){ var st=e.querySelector('.secTitle'); topic=st?txt(st):null; card=topic||''; nfig=0; return; }
+      if(e.matches('.wkLink,.caret,button,select,input,script,style,textarea')) return;
+      if(e.matches('svg')){ nfig++; var cap=(card||'Figure')+(nfig>1?' ('+nfig+')':''); if(!T.figs.has(rxNrm(cap))){ T.figs.add(rxNrm(cap)); push({type:'figure',svg:e.outerHTML,caption:cap}); } return; }
+      if(e.matches('table')){ table(e); return; }
+      if(e.matches('.eqBlock')){ eqb(e); return; }
+      var kids=[].slice.call(e.children), leaf=kids.every(function(x){ return INL.test(x.tagName)&&!x.querySelector('table,svg,div,p,ul,ol,li'); });
+      if(leaf){ var t=txt(e); if(t.length>=12&&(T.fresh(t)||T.newNum(t))){ push({type:'note',text:(e.tagName==='LI'?'• ':'')+t}); T.seen(t); } return; }
+      kids.forEach(visit);
+    };
+    [].slice.call(root.children).forEach(visit);
+    return out;
+  }
+  /* the Include boxes: the tabs of each chapter and the Beam Capacity combinations (the dialogs' choices) */
+  function rxControls(){
+    var h='<span class="cbrx-inc" style="display:inline-flex;flex-wrap:wrap;gap:2px 10px;font-size:9pt;align-items:center">';
+    RXCH.forEach(function(c){ var b=rxFn(c,'Boxes'), s=rxFn(c,'Sel'); if(!b||!s) return; var B, Sl; try{ B=b(); Sl=s(); }catch(e){ return; }
+      h+='<b>'+esc(c.name)+':</b>'+B.tabs.map(function(t){ return '<label><input type="checkbox" data-cbrx="'+c.id+'|tab|'+esc(t[0])+'"'+(Sl.tabs[t[0]]?' checked':'')+'> '+esc(t[1])+'</label>'; }).join('');
+      if(B.combos.length) h+='<b>worked detail:</b>'+B.combos.map(function(t,i){ return '<label><input type="checkbox" data-cbrx="'+c.id+'|combo|'+i+'"'+(Sl.combos[i]?' checked':'')+'> '+esc(t)+'</label>'; }).join('')+
+        '<button type="button" data-cbrx="'+c.id+'|all|">Select all</button><button type="button" data-cbrx="'+c.id+'|gov|">Governing combinations only</button>';
+      h+='<span style="width:8px"></span>'; });
+    return h+'</span>';
+  }
+  function rxWire(host){
+    host.querySelectorAll('[data-cbrx]').forEach(function(x){ x.addEventListener(x.tagName==='BUTTON'?'click':'change',function(){
+      var p=x.getAttribute('data-cbrx').split('|'), c=RXCH.filter(function(q){ return q.id===p[0]; })[0], f=c&&rxFn(c,'Set'); if(!f) return;
+      try{ f(p[1],p[1]==='combo'?parseInt(p[2],10):p[2],x.checked); }catch(e){}
+      render(); }); });
   }
   function model(){
     var secs=[], codes=[], letters='ABC', P={}, refRows=[];
@@ -8653,17 +8359,19 @@ window.addEventListener('DOMContentLoaded',()=>{
       if(c.id==='cap'&&m.proj) P=m.proj;
       (m.refs||[]).forEach(function(x){ refRows.push([c.name,String(x[0]).replace(/<[^>]+>/g,''),String(x[1]).replace(/<sub>(.*?)<\/sub>/g,'$$_{$1}$$').replace(/<[^>]+>/g,'')]); });
       var S=(m.sections||[]).filter(function(s){ return !(c.id==='dev'&&/^References$/.test(s.title)); });   /* the references of every chapter are joined at the end */
-      S.forEach(function(s,k){ secs.push({part:k===0?part:undefined,title:s.title,note:tx(s.note,c.id),
-        subs:(s.subs||[]).map(function(q){ return {title:tx(q.title,c.id),items:(q.items||[]).map(function(it){ return item(it,c.id); })}; })}); });
+      S.forEach(function(s,k){ secs.push({part:k===0?part:undefined,title:s.title,note:tx(s.note,c.id),_ch:c.id,_tab:s.tab,
+        subs:(s.subs||[]).map(function(q){ return {title:tx(q.title,c.id),key:q.key?c.id+':'+q.key:undefined,items:(q.items||[]).map(function(it){ return item(it,c.id); })}; })}); });
     });
     /* references: every chapter's own list (cap, asd: m.refs; dev: its References section, rebarRefs) */
     (function(){ var w=win('dev'); try{ var inp=w.readInputs(), r=w.rebarRefs(inp,w.computeFactors(inp)); r.forEach(function(x){ refRows.push(['Development & Splice',String(x[0]).replace(/<[^>]+>/g,''),String(x[1]).replace(/<sub>(.*?)<\/sub>/g,'$$_{$1}$$').replace(/<[^>]+>/g,'')]); }); }catch(e){} })();
-    secs.push({part:'D. References',title:'References',subs:[{title:'Codes and articles cited, by chapter',items:[{type:'table',head:['Chapter','Reference','Provisions used'],rows:refRows}]}]});
+    secs.push({part:'D. References',title:'References',subs:[{title:'Codes and articles cited, by chapter',items:[{type:'table',head:['Chapter','Reference','Provisions used'],rows:refRows}]}].concat(rxAbout())});   /* CBRX: the retired print reports' cover lines, front notes and footers */
     var proj=P.name||'Untitled';
-    return {title:'Concrete Beam Design Suite — Calculation Report',subtitle:proj+(P.subj?' — '+P.subj:''),code:codes.join(' · '),
-      info:[['Project',P.name],['Project No.',P.num],['Calculated by',P.by],['Date',P.date],['Checked by',P.chk],['Checked date',P.chkDate]],
+    var M={title:'Concrete Beam Design Suite — Calculation Report',subtitle:proj+(P.subj?' — '+P.subj:''),code:codes.join(' · '),
+      info:[['Project',P.name],['Project No.',P.num],['Subject',P.subj],['Calculated by',P.by],['Date',P.date],['Sheet',P.sheet],['Checked by',P.chk],['Checked date',P.chkDate]],   /* CBRX: Subject and Sheet, as the print report's title block */
       head:{left:'Project No. '+(P.num||'—')+' — '+String(proj).slice(0,40),right:'Computed: '+(P.by||'—')+' '+(P.date||'')+' · Checked: '+(P.chk||'—')+' '+(P.chkDate||''),foot:proj+' (Concrete Beam Design Suite)'},
       sections:secs};
+    rxRest(M);   /* CBRX: what the retired print reports printed and the chapters lack */
+    return M;
   }
   /* [[tab:<chapter>/<tab>|…]]: the suite tab, then that tab's own result tab */
   function go(name){
@@ -8682,13 +8390,29 @@ window.addEventListener('DOMContentLoaded',()=>{
     if(!window.SharedReport||!window.SharedSteps){ host.innerHTML='<p class="suite-rpt-err">shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</p>'; R.api=null; R.doc=null; return; }
     var M; try{ M=model(); }catch(e){ host.innerHTML='<p class="suite-rpt-err">Report error: '+esc(e&&e.message)+'</p>'; R.api=null; R.doc=null; return; }
     var top=host.scrollTop;
-    R.api=SharedReport.mount(host,M,{closed:R.closed,onGoto:go,stick:-12}); R.doc=R.api.doc; host.scrollTop=top;
+    R.api=SharedReport.mount(host,M,{closed:R.closed,onGoto:go,stick:-12,controls:rxControls()}); R.doc=R.api.doc; host.scrollTop=top;
+    rxWire(host);
   }
   R.render=render; R.model=model;
   function shown(){ var w=document.querySelector('.suite-frame-wrap[data-app="report"]'); return !!(w&&w.classList.contains('active')); }
   document.addEventListener('DOMContentLoaded',function(){
     var b=document.getElementById('suite-tab-report'); if(b) b.addEventListener('click',function(){ setTimeout(render,0); });
   });
+  /* CBRX (2026-11-03): Print / PDF of any tab (the frames call printAny), Ctrl+P and the browser's Print (prep, from the
+     inline script in <head>) print this Report; after printing the suite tab of before comes back. Nothing is saved. */
+  var BACK=null;
+  function activeTab(){ var t=document.querySelector('.suite-tab.active'); return t?t.getAttribute('data-target'):'capacity'; }
+  function showReport(){ if(shown()) return; BACK=activeTab(); var b=document.getElementById('suite-tab-report'); if(b) b.click(); }
+  R.prep=function(){
+    if(shown()||document.body.classList.contains('rp-printing')||!window.SharedReport||!window.SharedSteps) return false;
+    showReport(); render(); return true;
+  };
+  R.printAny=function(){
+    if(!window.SharedReport||!window.SharedSteps){ window.print(); return; }
+    showReport(); render();
+    if(R.api) R.api.print(); else window.print();
+  };
+  window.addEventListener('afterprint',function(){ if(!BACK) return; var t=BACK; BACK=null; setTimeout(function(){ var b=document.getElementById('suite-tab-'+t); if(b) b.click(); },0); });
   /* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
   window.addEventListener('beforeprint',function(){
     if(!R.doc||!shown()||document.body.classList.contains('rp-printing')) return;
