@@ -4123,7 +4123,7 @@ Engineer-approved PR 3 of the independent review of the "Seymour Platform Founda
 
 ### How verified
 - Headless Chromium, origin/main vs the branch, pinned KaTeX 0.16.11 / Plotly 2.35.2 / three 0.160.0. Deep diff of `R` and `P2`: default, review, review with the option on, #684 cases (8 #8, 12 #5, 9 #8 h 2.5 ft), direct mode: only new fields (`dev`, `pedShear`, `xties`, `punchGroup`, `dowels[].countDiff`). Report: 0 KaTeX errors, no NaN / undefined / `§?` / literal `[[`; 0 console errors.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and report text identical to origin/main.
 - **Saved data:** new input `mat.ldExcess` ('off' | 'on'); saves without it read as 'off' (the reduction not taken, as before). No key or format change.
 - **Other copies:** none.
 - **Open items (questions):**
@@ -4175,7 +4175,7 @@ Engineer-approved PR 4 of the independent review of the "Seymour Platform Founda
 - **Deep diff:** headless Chromium, pinned libraries. Origin/main vs the branch on 7 cases: no existing value differs (new display fields only).
 - **Report:** 0 KaTeX errors; no NaN, undefined, `§?` or `[[`; 0 console errors.
 - **Printed PDF of the review case** (`page.pdf` after `beforeprint`): the elevation caption is whole and the labels are stacked; the shear-friction table breaks across pages without a scroll bar.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and report text identical to origin/main.
 - **Other copies:** none. **Saved data:** no change.
 
 ### Open items
@@ -4247,7 +4247,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - New fields: `reqBotFlex`, `AsFlex`, `flexGov`, `AsMin`, `sDow`, `edgeX`, `edgeY`, `cso`, `ldh.sMin`, `ldh.cso`.
   - No other value moved.
 - **Report:** 0 KaTeX errors; no NaN, undefined, `§?` or `[[`; 0 console errors.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and report text identical to origin/main.
 - **Saved data:** no key or format change; no new input.
 - **Other copies:** none.
 
@@ -4273,12 +4273,12 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - Before: `if($('#plot-dcr'))`, `if($('#plot-heat')&&R.govBear…`, `if($('#plot-fs'))`, `const elid='plot-vm-'+dir;if(!$('#'+elid))return;`, `const elid='plot-pm-'+i;if(!$('#'+elid))return;`
   - After: the same with `sfpOn('plot-dcr')`, `sfpOn('plot-heat')`, `sfpOn('plot-fs')`, `if(!sfpOn(elid))return;` (twice), and `SFPLT.skip=false;` at the top of `renderPlots`.
 - **Why:** profiling a single bar-spacing edit (headless Chromium, default project) showed Plotly redrawing every plot in every tab, about 180 ms of the ~300 ms analysis. The tab click already calls `renderPlots()`, so a plot is drawn when its tab is opened. Before printing (not the Report tab's own print) every plot is drawn (`SFPLT.all`), so the printed pages still hold all plots.
-- **Timings** (one bar-spacing edit, analysis + render, median of 3, headless): Schematic tab 308 → 173 ms; Footing Design tab (its own two plots stay) 459 → 273 ms; Report tab 408 → 242 ms. Switching tabs also no longer redraws the plots of the other tabs.
+- **Timings** (bottom-x bar spacing edited through its input, time inside `recalc()` per edit, mean of 4 edits, two runs, headless Chromium, default project; origin/main → this branch): Schematic tab 464 / 485 → 180 / 215 ms (`renderPlots` 274 / 289 → 0.1 ms); Footing Design tab, whose own two plots are still drawn, 613 / 773 → 403 / 405 ms; Report tab 701 / 620 → 351 / 299 ms. The rest of `recalc()` (`computeAll` about 1 ms, `computePhase2` about 40 ms, the HTML renders) is unchanged. Switching tabs also no longer redraws the plots of the other tabs.
 
 ### How verified
 - `R`, `P2`, dashboard text and the report text (SharedReport.text) compared with origin/main on the default project and the review case (`rev`): harness run with auto on → 0 differences. With auto off, the same edits made through the inputs (bottom-x spacing 10, bottom-y #6, top-x spacing 9, Ped 1 tie spacing 10), then Ctrl+Enter, compared with main making the same edits → 0 differences, identical report and dashboard text, on both cases.
 - Behaviour (headless, 19 checks on each case): out of date after edits with no analysis run; autosave and undo stored; banner and Re-analyze shown; Ctrl+Enter, the button, turning the box on, `beforeprint`, Download DXF and Print report each re-analyze; Undo while off does not analyze; the preference survives a reload and the page analyzes on load. Every plot is drawn synchronously by the `beforeprint` listener. 0 console errors.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and report text identical to origin/main.
 - **Other copies:** none.
 
 ### Open items
