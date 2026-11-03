@@ -4255,7 +4255,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 1. The old print report (`SFD_REFS`) still lists "§7.7.2.3 / §13.3.4 (bar spacing)". It is left for the agent porting that report.
 2. For dowels, the side cover normal to the plane of the hook is taken as the smallest plan distance to a footing side (the hook direction is not an input). A hook turned away from a near edge could use the larger cover.
 
-## 2026-11-03 — PR: claude/report-retire-spreadfooting (SFRX: the D11 print report (Print-to-PDF Report / Ctrl+P printing the page in place: `renderPrintHeader`, `sfdPageCSS`) retired after porting what the Report tab lacked; Print-to-PDF Report, Ctrl+P and the browser's Print print the Report from every tab; the manual's "Include this manual" choice kept as an Include box; SFD_REFS bar-spacing citation; display only, no result change)
+## 2026-11-03 — PR: claude/report-retire-spreadfooting, PR #732: https://github.com/mlococo88/All-Structural/pull/732 (SFRX: the D11 print report (Print-to-PDF Report / Ctrl+P printing the page in place: `renderPrintHeader`, `sfdPageCSS`) retired after porting what the Report tab lacked; Print-to-PDF Report, Ctrl+P and the browser's Print print the Report from every tab; the manual's "Include this manual" choice kept as an Include box; SFD_REFS bar-spacing citation; display only, no result change)
 
 ### SFRX-1. What the print report printed and the Report lacked, ported   [display] [no result change]
 - **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #715, #718, #722, #724, #726, #728, #729, #731).
