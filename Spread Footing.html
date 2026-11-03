@@ -9,6 +9,9 @@
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js" charset="utf-8"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <!-- SFRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<!-- SFRX (2026-11-03): Ctrl+P / the browser's Print from any tab first shows the Report tab (sfPrintPrep), registered before the
+     Report's own beforeprint listener -->
+<script>window.addEventListener("beforeprint",function(){try{if(window.sfPrintPrep)window.sfPrintPrep();}catch(e){}});</script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 <script src="shared/dxf.js"></script><!-- SFDW: DXF writer and drawing preview (Drawings tab) -->
@@ -187,11 +190,6 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
 .manTbl td{padding:4px 8px}
 .manDef td{padding:3px 8px;font-size:12px}
 @media print{
- #tab-manual{display:none !important}
- body.printManual #tab-manual{display:block !important}
- .manNav,.manPrintCtl{display:none !important}
-}
-@media print{
  body{background:#fff;font-size:11pt}
  .inp,.tabbar,.noprint{display:none !important}
  .tabpage{display:block !important;border:none;page-break-before:auto}
@@ -209,41 +207,7 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
 a.wkA{color:#1c4e80;text-decoration:none;cursor:pointer}
 a.wkA:hover{text-decoration:underline}
 .wkPrt,.sfdRpt{display:none}
-@media print{
- .wrap>div:first-child,#titleblock,#tab-3d,#tab-report:not(.active),#tab-drawings{display:none !important}   /* screen title row and input title block: the cover replaces them; live 3D view not printed */
- details.sec[open]>summary::before{content:""}                        /* the open-marker printed before every card title */
- .wkScr{display:none}
- .wkPrt{display:inline}
- .sfdRpt{display:block}
- a.wkA,a.sfdA{color:#000;text-decoration:none}
- .wkLink{font-style:italic;color:#000;font-size:9.5pt}
- .chip .wkPrt{display:block;font-size:9pt;font-style:italic}
- .sfdCover{min-height:8.3in;display:flex;flex-direction:column;justify-content:center;break-after:page}
- .sfdCover h1{font:700 22pt/1.2 Arial,Helvetica,sans-serif;text-align:center;margin:0 0 12pt}
- .sfdCover p{text-align:center;font:700 12.5pt Arial,Helvetica,sans-serif;margin:0 0 6pt}
- .sfdCover p.sfdCp{font-weight:400;font-size:11pt}
- .sfdTB{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px 16px;font-size:10.5pt;border:1px solid #000;padding:8px 10px;margin-top:20pt}
- .sfdBanner{margin-top:14pt;text-align:center;font:700 11pt Arial,sans-serif;padding:6px;border:1.5px solid #000}
- .sfdFront{break-after:page}
- .sfdFront h2,h2.sfdRptH{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;margin:10pt 0 8pt}
- h2.sfdRptH{break-before:page;break-after:avoid}
- .sfdRefs{border-collapse:collapse;width:100%;font-size:9.5pt;margin:0 0 10pt}
- .sfdRefs td{padding:2pt 12pt 2pt 0;vertical-align:top;border:0}
- .sfdRefs td:first-child{white-space:nowrap;font-weight:700}
- .sfdToc,.sfdToc ol{list-style:none;margin:0;padding:0}
- .sfdToc li{line-height:1.25}
- .sfdToc>li{margin:1pt 0;font-size:10.5pt}
- .sfdToc ol{padding-left:18pt;font-size:9.5pt;columns:2;column-gap:14pt}
- .sfdSmall{font-size:9pt;margin-top:8pt}
- .comboSel button{display:none}                                       /* the "reset to governing" button */
- .sfdResH{font:700 11pt "Times New Roman",Times,serif;margin:14pt 0 2pt;break-after:avoid}
- .sfdRes{border-bottom:0.8pt solid #000;margin-bottom:8pt}
- .sfdLine{display:grid;grid-template-columns:2.1in 1fr 0.7in;gap:0 10pt;align-items:center;padding:3pt 0;border-top:0.6pt solid #000;break-inside:avoid;font-size:10.5pt}
- .sfdLine .r{text-align:right}
- .sfdLine .f{text-decoration:underline}
- .sfdLine i{font-size:9pt}
- #sfdRptSum{break-before:auto}
-}
+/* SFRX (2026-11-03): the D11 print styles (cover, references, contents, result lines) removed with the print report */
 </style>
 </head>
 <body>
@@ -255,7 +219,7 @@ a.wkA:hover{text-decoration:underline}
   <p class="byline">by Mario Lococo &nbsp;|&nbsp; Loads &amp; Combinations &middot; Bearing &amp; Stability &middot; Footing &amp; Pedestal Design &middot; 3D View &nbsp;|&nbsp; ACI 318-19 / ASCE 7-16 / IBC 2021</p>
  </div>
  <div class="noprint">
-  <button id="btnPrint" title="Print / save as PDF report">Print-to-PDF Report</button>
+  <button id="btnPrint" title="Print / save as PDF: the Report tab, from any tab (Include boxes on the Report tab)">Print-to-PDF Report</button>
  </div>
 </div>
 
@@ -447,7 +411,6 @@ a.wkA:hover{text-decoration:underline}
 </div>
 <!-- ============ OUTPUT PANEL ============ -->
 <div class="out" id="outputPanel">
- <div id="printHeader"></div>
  <h2 style="margin-top:0" id="sfdRptSum">Summary Dashboard</h2>
  <div class="dash" id="dashboard"></div>
  <div id="warnings"></div>
@@ -2846,7 +2809,9 @@ function ptInPoly(px,py,poly){
  return inside;
 }
 /* ---------- print header ---------- */
-/* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format, printed
+/* SFRX (2026-11-03): the D11 print report described below is retired (the Report tab prints from every tab); SFD_REFS and
+   sfdResultRows stay (the Report's references, summary and result lines).
+   D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format, printed
    in place (Print-to-PDF Report / Ctrl+P). renderPrintHeader builds the print-only parts around the
    tabs, which print as on screen: the cover with the title block, the references, a numbered table of
    contents (links), a heading "n. <tab>" before each result tab (its cards are subsections n.k, with
@@ -2854,7 +2819,7 @@ function ptInPoly(px,py,poly){
    checks (the dashboard chips: status = the chip's own PASS/FAIL/REVIEW/N/A). The print header and
    "Page X of Y" footer are @page margin boxes, applied only while printing (sfdPageCSS). */
 const SFD_REFS=[
- ['ACI 318-19','Building Code Requirements for Structural Concrete — §5.3 (load factors), §6.2.5 (slenderness), §7.6.1.1 / §24.4.3.2 (minimum steel), §7.7.2.3 / §13.3.4 (bar spacing), §8.4.2.3 / §8.4.4.2 (moment transfer), §10.6.1.1 / §10.7.3.1 (pedestal steel), §13.2.7.1, §13.3.3.3 (band steel), §16.3.4.1 (dowels), §20.5.1.3 (cover), §21.2.2 (φ), §22.3 (flexure), §22.4.2.1 (axial), Table 22.5.5.1 (one-way shear), §22.6 (two-way shear), §22.8.3.2 (bearing), §25.2.3, §25.4.2.4 / §25.4.9 (development), §25.7.2 (ties)'],
+ ['ACI 318-19','Building Code Requirements for Structural Concrete — §5.3 (load factors), §6.2.5 (slenderness), §7.6.1.1 / §24.4.3.2 (minimum steel), §8.7.2.2 with §13.3.3.1 (bar spacing), §8.4.2.3 / §8.4.4.2 (moment transfer), §10.6.1.1 / §10.7.3.1 (pedestal steel), §13.2.7.1, §13.3.3.3 (band steel), §16.3.4.1 (dowels), §20.5.1.3 (cover), §21.2.2 (φ), §22.3 (flexure), §22.4.2.1 (axial), Table 22.5.5.1 (one-way shear), §22.6 (two-way shear), §22.8.3.2 (bearing), §25.2.3, §25.4.2.4 / §25.4.9 (development), §25.7.2 (ties)'],
  ['ASCE/SEI 7-16','Minimum Design Loads — §2.3.1 (strength combinations), §2.4.1 (allowable stress combinations)'],
  ['IBC 2021','International Building Code — §1605.1 (combinations: ASCE 7 §2.3 / §2.4), §1606 (dead loads: weight of the soil cover), §1807.2.3 (FS 1.5 for retaining walls; quoted for comparison)'],
  ['AASHTO LRFD','Bridge Design Specifications, 10th Ed. (2024) — Art. 10.6.3.1.2a (same N, shape and inclination factors as Vesić; use condition for depth factors; its Eq. 10.6.3.1.2a-10 depth factor is not the one used here), 10.6.3.3 / 11.6.3.3 and 10.6.4.2 / 11.6.5.1 (eccentricity limits, when selected), 10.6.3.4 (passive, warning)'],
@@ -2862,28 +2827,7 @@ const SFD_REFS=[
  ['Meyerhof (1953)','“The Bearing Capacity of Foundations Under Eccentric and Inclined Loads,” 3rd ICSMFE — effective area'],
  ['Bowles','Foundation Analysis and Design, 5th ed. — rigid-footing criterion λℓ ≤ π/4, pressure distributions'],
  ['Rankine','Passive earth-pressure coefficient K<sub>p</sub>']];
-/* §n.k of a card: the number its own title starts with (a nested card takes its parent's) */
-function sfdSecNum(card){
- let d=document.getElementById(card);
- while(d){const s=d.querySelector(':scope>summary'),mm=s&&s.textContent.match(/^\s*(\d+\.\d+[a-z]?)\s/);if(mm)return mm[1];
-  d=d.parentElement&&d.parentElement.closest('details.sec');}
- return null;}
 function sfdEsc(v){return String(v==null?'':v).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
-/* the print header / footer boxes (@page margin boxes), only while printing */
-function sfdPageCSS(on){
- let st=document.getElementById('sfd-page');
- if(!st){st=document.createElement('style');st.id='sfd-page';document.head.appendChild(st);}
- if(!on){st.textContent='';return;}
- const m=state.meta,q=v=>String(v==null||v===''?'—':v).replace(/\\/g,'\\\\').replace(/"/g,'\\"').replace(/[\r\n]+/g,' ');
- const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
- const foot='font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt;';
- st.textContent='@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.7in 0.6in;'+
-  ' @top-left { content: "Project No: '+q(m.number)+'\\A Description: '+q(String(m.project||'').slice(0,40))+'"; '+box+' text-align: left; }'+
-  ' @top-center { content: "Computed By: '+q(m.calcBy)+'\\A Checked By: '+q(m.chkBy)+'"; '+box+' text-align: left; }'+
-  ' @top-right { content: "Date: '+q(m.calcDate)+'\\A Date: '+q(m.chkDate)+'"; '+box+' text-align: right; }'+
-  ' @bottom-left { content: "'+q(m.project||'Untitled')+' (Spread Footing Design Tool)"; '+foot+' }'+
-  ' @bottom-right { content: "Page " counter(page) " of " counter(pages); '+foot+' } } }';
-}
 /* one result line per dashboard chip: D/C from the same values the chip shows, status = the chip's own */
 function sfdResultRows(){
  if(!R||R.fatal)return [];
@@ -2933,52 +2877,8 @@ function sfdResultRows(){
   const tab=(home&&home.closest('.tabpage'))?home.closest('.tabpage').id:(c.dataset.tab||'tab-schem');
   return {name,val,st,ref:v[0],dc:v[1],cards,tab,chip:c};});
 }
-function renderPrintHeader(){
- const m=state.meta,hd=$('#printHeader');
- const fdc=v=>(v==null||isNaN(v))?'n/a':(isFinite(v)?v.toFixed(2):'∞');
- const ST={pass:'PASS',fail:'FAIL',warn:'REVIEW',na:'N/A'};
- const see=k=>{const n=sfdSecNum(k);return n?'<a class="sfdA" href="#'+k+'">§'+n+'</a>':'';};
- /* "Worked in" links and dashboard chips: the §n.k they print */
- $$('a.wkA').forEach(a=>{const n=sfdSecNum(a.dataset.card),w=a.querySelector('.wkN');if(w)w.textContent=n||'? (not in this printout)';});
- const rows=sfdResultRows();
- rows.forEach(x=>{const old=x.chip.querySelector('.wkPrt');if(old)old.remove();
-  const s=x.cards.map(see).filter(Boolean);if(s.length)x.chip.appendChild(el('div','wkPrt','see '+s.join(', ')));});
- /* section headings and result lines around the result tabs */
- $$('.sfdRptH,.sfdRes,.sfdResH,.sfdNone').forEach(e=>e.remove());
- const tabs=$$('#tabbar button').map(b=>({id:b.dataset.tab,n:(b.textContent.match(/^(\d+)\./)||[])[1],t:b.textContent.replace(/^\d+\.\s*/,'')}))
-  .filter(s=>s.n&&s.id!=='tab-3d'&&s.id!=='tab-report'&&s.id!=='tab-drawings'&&(s.id!=='tab-manual'||state.manPrint));
- const toc=[];
- tabs.forEach(s=>{const pg=document.getElementById(s.id);if(!pg)return;
-  const h=el('h2','sfdRpt sfdRptH',s.n+'. '+sfdEsc(s.t));h.id='sfdRpt-'+s.id;pg.parentNode.insertBefore(h,pg);
-  const subs=$$('#'+s.id+'>details.sec').map(d=>{const mm=d.querySelector(':scope>summary').textContent.match(/^\s*(\d+\.\d+[a-z]?)\s+(.*)$/);
-   return mm?{id:d.id,num:mm[1],t:mm[2]}:null;}).filter(Boolean);
-  if(s.id!=='tab-manual'&&!pg.textContent.trim())h.insertAdjacentElement('afterend',el('p','sfdRpt sfdNone note','Not computed: see the input errors in the Summary.'));
-  toc.push({id:h.id,n:s.n,t:s.t,subs});
-  const rs=rows.filter(x=>x.tab===s.id);if(!rs.length)return;
-  const rh=el('div','sfdRpt sfdResH','Results — §'+s.n+' '+sfdEsc(s.t));
-  const rb=el('div','sfdRpt sfdRes',rs.map(x=>{const sl=x.cards.map(see).filter(Boolean);
-   return '<div class="sfdLine"><div>'+sfdEsc(x.name)+':</div>'+
-    '<div>D/C = <b>'+fdc(x.dc)+'</b> <i>('+(x.ref?x.ref+'; ':'')+sfdEsc(x.val)+(sl.length?'; '+sl.join(', '):'')+')</i></div>'+
-    '<div class="r'+(x.st==='fail'?' f':'')+'"><b>'+ST[x.st]+'</b></div></div>';}).join(''));
-  pg.parentNode.insertBefore(rh,pg.nextSibling);rh.parentNode.insertBefore(rb,rh.nextSibling);});
- /* cover, references, contents */
- const cnt={pass:0,fail:0,warn:0,na:0};rows.forEach(x=>cnt[x.st]++);
- const verdict=(R&&R.fatal)?'Input errors: no results (see the Summary)':(cnt.fail?cnt.fail+' of '+rows.length+' checks FAIL':'No check fails')+
-  ' · '+cnt.pass+' PASS'+(cnt.warn?' · '+cnt.warn+' REVIEW':'')+(cnt.na?' · '+cnt.na+' N/A':'');
- const hand=[typeof sfMrSourceLine==='function'?sfMrSourceLine():'',typeof sfFlSourceLine==='function'?sfFlSourceLine():''].filter(Boolean);   /* hand-off sources (HANDOFF.md §3.4) */
- const tb=[['Project',m.project],['Project No.',m.number],['Calculated by',m.calcBy],['Date',m.calcDate],['Checked by',m.chkBy],['Checked date',m.chkDate]];
- const nTab=tabs.filter(s=>s.id!=='tab-manual').length;
- hd.innerHTML='<section class="sfdCover"><h1>Spread Footing Design — Calculation Report</h1>'+
-  '<p>'+sfdEsc(m.project||'Untitled')+'</p>'+
-  '<p class="sfdCp">ACI 318-19 · ASCE 7-16 · IBC 2021 · Spread Footing Design Tool, by Mario Lococo</p>'+
-  '<div class="sfdTB">'+tb.map(([k,v])=>'<div><b>'+k+':</b> '+sfdEsc(v||'—')+'</div>').join('')+'</div>'+
-  hand.map(t=>'<p class="sfdCp" style="font-size:9.5pt;margin-top:8pt">'+sfdEsc(t)+'</p>').join('')+
-  '<div class="sfdBanner">'+verdict+'</div></section>'+
-  '<section class="sfdFront"><h2>References:</h2><table class="sfdRefs">'+SFD_REFS.map(([a,b])=>'<tr><td>'+a+'</td><td>'+b+'</td></tr>').join('')+'</table>'+
-  '<h2>Table of contents:</h2><ol class="sfdToc"><li><a class="sfdA" href="#sfdRptSum">Summary Dashboard</a></li>'+
-  toc.map(s=>'<li><a class="sfdA" href="#'+s.id+'">'+s.n+'. '+sfdEsc(s.t)+'</a>'+(s.subs.length?'<ol>'+s.subs.map(q=>'<li><a class="sfdA" href="#'+q.id+'">'+q.num+' '+sfdEsc(q.t)+'</a></li>').join('')+'</ol>':'')+'</li>').join('')+'</ol>'+
-  '<p class="sfdSmall">Sections 1–'+nTab+' are the result tabs, printed as on screen: each subsection n.k is the card of that number, with the equations shown symbolically, then with values substituted, then with the result. Each section ends with the result lines of its checks (one per dashboard chip; status = the chip’s own PASS / FAIL / REVIEW / N/A). For a factor-of-safety check, D/C = FS<sub>target</sub>/FS. Where a value is used away from where it is worked, “see §n.k” gives the subsection. Units: kips, ft, ksf unless noted.</p></section>';
-}
+/* SFRX (2026-11-03): renderPrintHeader (the print report's cover, references, contents, section headings and result lines),
+   sfdPageCSS and sfdSecNum removed with the print report; sfdResultRows is kept (the Report's summary and result lines) */
 </script>
 <script>
 /* ================= 9. Report tab (SFRP, 2026-11-01) =================
@@ -3024,12 +2924,12 @@ function sfrS(o){
 function sfrCombined(){return !!(R&&R.peds&&R.peds.length>1);}
 /* SFPR (review D1, D3): the references the run uses. Vesić / Meyerhof only with the computed bearing (soil mode vesic); AASHTO only for
    the items in use (10.6.3.1.2a with Vesić, an AASHTO eccentricity limit, 10.6.3.4 with passive resistance credited); ACI with 13.3.4 /
-   8.6.1.1 / 8.7.2.2 for a combined footing. SFD_REFS itself is unchanged (the old print report). */
+   8.6.1.1 / 8.7.2.2 for a combined footing. SFRX (2026-11-03): SFD_REFS itself now cites §8.7.2.2 with §13.3.3.1 for bar spacing (it
+   cited §7.7.2.3 / §13.3.4, the old print report's list), so the isolated-footing replacement (SFSM) is no longer needed. */
 function sfrRefs(){
  const ves=state.soil.mode==='vesic', em=state.stab.eccMode||'kern', aEcc=/^a_/.test(em), pp=num(state.stab.pf)>0;
  return SFD_REFS.map(([a,b])=>{
-  if(a==='ACI 318-19'&&!sfrCombined())return [a,b.replace('§7.7.2.3 / §13.3.4 (bar spacing)','§8.7.2.2 with §13.3.3.1 (bar spacing)')];   /* SFSM */
-  if(a==='ACI 318-19'&&sfrCombined())return [a,b.replace('§7.6.1.1 / §24.4.3.2 (minimum steel), §7.7.2.3 / §13.3.4 (bar spacing)','§13.3.4.1 (combined footing, designed under Chapter 8), §8.6.1.1 / §24.4.3.2 (minimum steel), §8.7.2.2 (bar spacing), §13.3.3.3 (band steel, isolated footings; for information)').replace(', §13.3.3.3 (band steel)','')];
+  if(a==='ACI 318-19'&&sfrCombined())return [a,b.replace('§7.6.1.1 / §24.4.3.2 (minimum steel), §8.7.2.2 with §13.3.3.1 (bar spacing)','§13.3.4.1 (combined footing, designed under Chapter 8), §8.6.1.1 / §24.4.3.2 (minimum steel), §8.7.2.2 (bar spacing), §13.3.3.3 (band steel, isolated footings; for information)').replace(', §13.3.3.3 (band steel)','')];
   if(a==='AASHTO LRFD'){const it=[ves?'Art. 10.6.3.1.2a (same N, shape and inclination factors as Vesić; use condition for depth factors; its Eq. 10.6.3.1.2a-10 depth factor is not the one used here)':'',aEcc?'10.6.3.3 / 11.6.3.3 and 10.6.4.2 / 11.6.5.1 (eccentricity limit selected)':'',pp?'10.6.3.4 (passive resistance, warning)':''].filter(Boolean);
    return it.length?[a,'Bridge Design Specifications, 10th Ed. (2024) — '+it.join(', ')]:null;}
   if((a.indexOf('Vesić')===0||a.indexOf('Meyerhof')===0)&&!ves)return null;
@@ -3494,9 +3394,9 @@ function renderReport(){
  if(!window.SharedReport||!window.SharedSteps){T.innerHTML='<div class="errbox">shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</div>';return;}
  if(!R||R.fatal){T.innerHTML='<div class="errbox">No results: correct the input errors shown in the Summary.</div>';SFRP.api=null;SFRP.doc=null;return;}
  let M;
- try{M=sfrModel();}catch(e){T.innerHTML='<div class="errbox">Report error: '+sfEsc(e&&e.message)+'</div>';SFRP.api=null;SFRP.doc=null;return;}
- SFRP.api=SharedReport.mount(T,M,{closed:SFRP.closed,onGoto:sfrGoto});
- SFRP.doc=SFRP.api.doc;
+ try{M=sfxApply(sfrModel());}catch(e){T.innerHTML='<div class="errbox">Report error: '+sfEsc(e&&e.message)+'</div>';SFRP.api=null;SFRP.doc=null;return;}
+ SFRP.api=SharedReport.mount(T,M,{closed:SFRP.closed,onGoto:sfrGoto,controls:sfxControls()});   /* SFRX: the Include box */
+ SFRP.doc=SFRP.api.doc;sfxWire(T);
 }
 /* [[tab:…]] links of the report: an output tab, or an input tab (in-…) */
 function sfrGoto(name){
@@ -3522,6 +3422,142 @@ window.addEventListener('beforeprint',()=>{
  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(SFRP.doc,{lazy:false})+'</article></div>';
  document.body.classList.add('rp-printing');
 });
+/* ================= SFRX (2026-11-03): the D11 print report retired =================
+   The D11 print report (the whole page printed in place by Print-to-PDF Report / Ctrl+P from a result tab: renderPrintHeader's cover,
+   references, contents, the result tabs as on screen, a result line per dashboard chip after each tab, the User Manual when
+   "Include this manual" was ticked; sfdPageCSS's running header) is retired. The Report tab is the one report: Print-to-PDF Report,
+   Ctrl+P and the browser's Print print it from every tab. What the print report printed and the Report lacked is added here: the
+   dashboard and each result tab as rendered (the same DOM the page printed), read in order (sfxWalk): every table with a number or a
+   row of text the Report does not have, every worked equation line the Report does not show, every note with a sentence or number it
+   lacks, and every figure (drawings, diagrams, Plotly charts) it lacks, under the tab's card titles; then the result lines of the
+   tab's checks (sfdResultRows: same D/C, reference and status). The manual is an Include box (the same saved field state.manPrint).
+   Nothing is computed here: every value is the tab's own text. */
+const SFX={back:null};
+const SFX_TABS=[['dash','Summary of results'],['tab-schem','Project and inputs'],['tab-combos','Loads and combinations'],['tab-bearing','Bearing'],['tab-stab','Stability'],['tab-footdes','Footing design'],['tab-peddes','Pedestal design']];
+const sfxNums=t=>(String(t).replace(/\{,\}/g,',').replace(/[−–]/g,'-').replace(/(\d),(?=\d{3})/g,'$1').match(/\d+(?:\.\d+)?(?:e[-+]?\d+)?/gi)||[]).map(x=>String(parseFloat(x)));
+const sfxNrm=x=>String(x).toLowerCase().replace(/[^a-z0-9]+/g,'');
+/* TeX of a KaTeX formula in the subset of the built-in renderer used for $…$ in report text (display only: same symbols and numbers) */
+const sfxLite=t=>String(t==null?'':t).replace(/\\[dt]frac/g,'\\frac').replace(/\\(mathbf|mathrm|boldsymbol|textbf|mathit|operatorname)\{/g,'{').replace(/\\color\{[^}]*\}/g,'')
+ .replace(/\\left\s*\\?([()\[\]|.])/g,(m,c)=>c==='.'?'':c).replace(/\\right\s*\\?([()\[\]|.])/g,(m,c)=>c==='.'?'':c)
+ .replace(/\\q?quad/g,' ').replace(/\\[;:!,]/g,' ').replace(/\\(displaystyle|scriptstyle|textstyle|limits)/g,'').replace(/\\Rightarrow/g,'⇒').replace(/\\rightarrow|\\to\b/g,'→')
+ .replace(/\\approx/g,'≈').replace(/\\big[lr]?|\\Big[lr]?/g,'').replace(/\\ /g,' ').replace(/\$/g,'');
+/* a Plotly chart as one SVG (its layers stacked), so it prints in the Report as on the page */
+function sfxPlotSvg(d){
+ const L=[...d.querySelectorAll('svg.main-svg')];if(!L.length)return '';
+ const w=parseFloat(L[0].getAttribute('width'))||700,h=parseFloat(L[0].getAttribute('height'))||340;
+ return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;max-width:'+w+'px">'+L.map(s=>{const c=s.cloneNode(true);c.removeAttribute('style');c.setAttribute('x','0');c.setAttribute('y','0');return c.outerHTML;}).join('')+'</svg>';
+}
+/* one rendered tab (a clone) → report items, in document order; a card title (summary) or a heading is the topic of its first item */
+function sfxWalk(root,scope,T){
+ const out=[];let topic=null,card='',nfig=0,k=0,ntp=0;
+ /* a "Worked in" line: as on screen ("<value> → <tab> · <card>"; the Report links the values itself), an input echo link as printed */
+ root.querySelectorAll('.wkLink').forEach(w=>{const c=w.cloneNode(true);c.querySelectorAll('a.wkA:not(.sfdInA) .wkPrt,a.sfdInA .wkScr').forEach(x=>x.remove());
+  const d=document.createElement('div');d.textContent=c.textContent.replace(/\s+/g,' ').trim();w.replaceWith(d);});
+ root.querySelectorAll('.noprint,.wkScr,.wkPrt,.manNav,.manPrintCtl,button,script,style,.modebar-container').forEach(x=>x.remove());
+ root.querySelectorAll('select,input,textarea').forEach(i=>{const t=i.tagName==='SELECT'?(i.selectedIndex>=0?i.options[i.selectedIndex].textContent:'—'):(i.type==='checkbox'||i.type==='radio')?(i.checked?'yes':'no'):(i.value||'—');const s=document.createElement('span');s.textContent=t;i.replaceWith(s);});
+ root.querySelectorAll('.katex-display,.katex').forEach(x=>{if(!root.contains(x)||(x.parentElement&&x.parentElement.closest('.katex,.katex-display')))return;
+  const a=x.querySelector('annotation');const s=document.createElement('span');s.className='sfx-tex';s.dataset.tex=a?a.textContent:x.textContent;s.textContent=' $'+sfxLite(s.dataset.tex)+'$ ';x.replaceWith(s);});
+ const INL=/^(B|I|EM|STRONG|SPAN|BR|SUB|SUP|A|SMALL|U|CODE|LABEL)$/;
+ const txt=e=>{const c=e.cloneNode(true);c.querySelectorAll('br').forEach(b=>b.replaceWith(document.createTextNode(' ')));
+  c.querySelectorAll('sub').forEach(x=>x.replaceWith(document.createTextNode('$_{'+x.textContent+'}$')));c.querySelectorAll('sup').forEach(x=>x.replaceWith(document.createTextNode('$^{'+x.textContent+'}$')));
+  return c.textContent.replace(/\s+/g,' ').trim();};
+ const texOf=e=>{const s=e.querySelector('.sfx-tex');return s&&e.textContent.trim()===s.textContent.trim()?s.dataset.tex:e.textContent.replace(/\$/g,'').replace(/\s+/g,' ').trim();};
+ const push=it=>{if(topic){it.topic={title:topic,no:++ntp};topic=null;}out.push(it);};
+ const cellOf=v=>{if(/^(PASS|OK)\b/.test(v))return {t:v,cls:'ok'};if(/^(FAIL|NG)\b/.test(v))return {t:v,cls:'ng'};if(/^(REVIEW|N\/A)\b/.test(v))return {t:v,cls:'na'};
+  return /^[-−\d.,e+\s%/×()—°|=≤≥∞–]+$/.test(v)&&/\d/.test(v)?{t:v,n:true}:v;};
+ const table=t=>{
+  const trs=[...t.rows];if(!trs.length)return;
+  const rowTxt=trs.map(r=>[...r.cells].map(txt).join(' '));
+  if(!(T.newNum(rowTxt.join(' '))||rowTxt.some(T.fresh)))return;
+  const hd=[...trs[0].cells].every(c=>c.tagName==='TH')?[...trs[0].cells].map(txt):null;
+  const body=trs.slice(hd?1:0).map(r=>{const cs=[...r.cells];if(cs.length===1&&cs[0].colSpan>1)return {cls:'gov',cells:[{t:txt(cs[0]),span:cs[0].colSpan}]};return cs.map(c=>cellOf(txt(c)));});
+  const n=Math.max(...trs.map(r=>r.cells.length));
+  push({type:'table',head:hd||[],rows:body,wide:n>6||undefined,lazy:trs.length>31||undefined,title:trs.length>31?(topic||card||'Table'):undefined});
+  rowTxt.forEach(T.seen);};
+ /* a line the Report already works is not repeated; a line this walk added under another title (e.g. the same check for the y-bars) is */
+ const step=(s,label,ref)=>{const key=sfxNrm(label)+'|'+sfxNrm(s);if(!s||T.hasLine(s)||T.lines.has(key))return null;T.lines.add(key);T.seen(s);return window.katex?{id:'l'+(++k),label,ref,eq:s}:{id:'l'+(++k),label,ref,note:s};};   /* without KaTeX: the TeX source */
+ const eq=b=>{
+  const tt=b.querySelector('.eqt'),rf=b.querySelector('.eqr'),ref=rf?txt(rf):'';let title='';
+  if(tt){const c=tt.cloneNode(true);c.querySelectorAll('.eqr').forEach(x=>x.remove());title=txt(c);}
+  const steps=[...b.querySelectorAll('.eql')].map(l=>step(texOf(l),title,ref)).filter(Boolean);
+  if(steps.length)push({type:'steps',scope,steps});};
+ const dash=e=>{
+  const rows=[...e.querySelectorAll('.chip')].map(c=>{const st=['pass','fail','warn','na'].find(q=>c.classList.contains(q))||'na';
+   return [txt(c.querySelector('.cn')||c),txt(c.querySelector('.cv')||c),txt(c.querySelector('.cs')||c),{t:{pass:'PASS',fail:'FAIL',warn:'REVIEW',na:'N/A'}[st],cls:st==='pass'?'ok':st==='fail'?'ng':'na'}];});
+  const all=rows.map(r=>r.slice(0,3).join(' ')).join(' ');
+  if(rows.length&&(T.newNum(all)||rows.some(r=>T.fresh(r[2]))))push({type:'table',head:['Check','Result','Detail','Status'],rows,wide:true});T.seen(all);};
+ const visit=e=>{
+  if(e.nodeType!==1)return;
+  if(e.matches('summary')){topic=txt(e).replace(/^\d+(\.\d+)*[a-z]?\s+/,'');card=topic;nfig=0;return;}
+  if(e.matches('h1,h2,h3,h4,.manH,.manH3')){topic=txt(e);card=topic;nfig=0;return;}
+  if(e.matches('.js-plotly-plot')){const s=sfxPlotSvg(e);nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(s&&!T.figs.has(key)){T.figs.add(key);push({type:'figure',svg:s,caption:cap});}return;}
+  if(e.matches('svg')){nfig++;const cap=(card||'Figure')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)&&!T.figs.has(e.outerHTML)){T.figs.add(key);const c=e.cloneNode(true);if(!c.getAttribute('viewBox')&&c.getAttribute('width'))c.setAttribute('viewBox','0 0 '+parseFloat(c.getAttribute('width'))+' '+parseFloat(c.getAttribute('height')));c.style.maxWidth='100%';c.style.height='auto';push({type:'figure',svg:c.outerHTML,caption:cap});}return;}
+  if(e.matches('table')){table(e);return;}
+  if(e.matches('.eq')){eq(e);return;}
+  if(e.matches('.manEq')){const s=step(texOf(e),card||'Equation','');if(s)push({type:'steps',scope,steps:[s]});return;}
+  if(e.matches('.dash')){dash(e);return;}
+  const kids=[...e.children],leaf=kids.every(x=>INL.test(x.tagName)&&!x.querySelector('table,svg,div,p,ul,ol,li,h2,h3,details'));
+  if(leaf){const t=txt(e);if(t.length>=8&&(T.fresh(t)||T.newNum(t))){push({type:'note',warn:e.matches('.warnbox,.errbox,.failbox')||undefined,text:(e.tagName==='LI'?'• ':'')+t});T.seen(t);}return;}
+  kids.forEach(visit);};
+ [...root.children].forEach(visit);
+ return out;
+}
+/* the result lines the print report printed after each tab (one per dashboard chip) */
+function sfxResults(tab){
+ const ST={pass:'PASS',fail:'FAIL',warn:'REVIEW',na:'N/A'},fdc=v=>(v==null||isNaN(v))?'n/a':(isFinite(v)?v.toFixed(2):'∞');
+ const rows=(typeof sfdResultRows==='function'?sfdResultRows():[]).filter(x=>x.tab===tab);
+ if(!rows.length)return null;
+ return {type:'table',wide:true,head:['Check','D/C','Reference; result','Status'],rows:rows.map(x=>[x.name+':',{t:fdc(x.dc),n:true},sfrPlain((x.ref?x.ref+'; ':'')+String(x.val).replace(/\$/g,'')),{t:ST[x.st],cls:x.st==='pass'?'ok':x.st==='fail'?'ng':'na'}])};
+}
+function sfxApply(model){
+ const secs=model.sections;
+ let txt='';try{txt=SharedReport.text(SharedReport.build(model));}catch(e){return model;}
+ const have=new Set();let all=sfxNrm(txt);const rep0=all;   /* the Report's own text */
+ const addNum=x=>{have.add(x);const v=parseFloat(x),d=(x.split('.')[1]||'').length;for(let i=0;i<d;i++)have.add(String(parseFloat(v.toFixed(i))));};
+ sfxNums(txt).forEach(addNum);
+ const T={newNum:t=>sfxNums(t).some(n=>!have.has(n)),fresh:t=>String(t).split(/(?<=[.;:])\s+/).map(sfxNrm).filter(x=>x.length>15).some(x=>!all.includes(x)),
+  seen:t=>{sfxNums(t).forEach(addNum);all+=sfxNrm(t);},hasLine:t=>rep0.includes(sfxNrm(t)),lines:new Set(),figs:new Set()};
+ secs.forEach(s=>(s.subs||[]).forEach(q=>(q.items||[]).forEach(it=>{if(it.type==='figure'){T.figs.add(sfxNrm(it.caption));T.figs.add(it.svg);}})));   /* the same drawing is not repeated */
+ const add=(title,els,scope,tab)=>{
+  const s=secs.find(x=>x.title===title);if(!s)return;
+  const root=document.createElement('div');els.filter(Boolean).forEach(e=>root.appendChild(e.cloneNode(true)));
+  root.querySelectorAll('details').forEach(d=>d.open=true);
+  const items=sfxWalk(root,scope,T);
+  if(items.length)s.subs.push({title:'As printed: tables, equations, notes and figures',items});
+  const r=tab?sfxResults(tab):null;
+  if(r){s.subs.push({title:'Results — '+title,items:[r,{type:'note',text:'One line per dashboard check worked in this section; status = the chip’s own PASS / FAIL / REVIEW / N/A. For a factor-of-safety check, D/C = FS_target/FS.'}]});T.seen(JSON.stringify(r.rows));}};
+ SFX_TABS.forEach(([id,title])=>add(title,id==='dash'?[$('#dashboard'),$('#warnings'),$('#consistency')]:[document.getElementById(id)],'sfx-'+id,id==='dash'?null:id));
+ /* the User Manual (Include box: state.manPrint), every part in order, as the print report printed it */
+ if(state.manPrint&&typeof MANUAL_ORDER!=='undefined'){
+  const ms={title:'User manual',subs:[]},U={newNum:()=>true,fresh:()=>true,seen:()=>{},hasLine:()=>false,lines:new Set(),figs:new Set()};
+  MANUAL_ORDER.forEach(id=>{const host=document.createElement('div');manRender(host,MANUAL[id].blocks);const items=sfxWalk(host,'sfx-man-'+id,U);if(items.length)ms.subs.push({title:MANUAL[id].title,items});});   /* one subsection per manual part */
+  const ri=secs.findIndex(x=>x.title==='References');if(ms.subs.length)secs.splice(ri>=0?ri:secs.length,0,ms);
+ }
+ /* the cover lines, the verdict banner and the front note */
+ const ref=secs.find(x=>x.title==='References');
+ if(ref){const RR=(typeof sfdResultRows==='function'?sfdResultRows():[]),cnt={pass:0,fail:0,warn:0,na:0};RR.forEach(x=>cnt[x.st]++);
+  const verdict=(cnt.fail?cnt.fail+' of '+RR.length+' checks FAIL':'No check fails')+' · '+cnt.pass+' PASS'+(cnt.warn?' · '+cnt.warn+' REVIEW':'')+(cnt.na?' · '+cnt.na+' N/A':'');
+  ref.subs.push({title:'About this report',items:[{type:'note',text:'ACI 318-19 · ASCE 7-16 · IBC 2021 · Spread Footing Design Tool, by Mario Lococo.'},{type:'note',text:'Verdict: '+verdict+'.'},
+   {type:'note',text:'Each result section ends with the result lines of its checks (one per dashboard chip; status = the chip’s own PASS / FAIL / REVIEW / N/A). For a factor-of-safety check, D/C = FS_target/FS. Where a value is used away from where it is worked, a § link gives the section where it is worked. Units: kips, ft, ksf unless noted.'}]});}
+ return model;
+}
+/* the report bar's Include box: the manual (state.manPrint, the same field as the Manual tab's "Include this manual" box) */
+function sfxControls(){return '<span class="sfx-inc" style="display:inline-flex;gap:2px 10px;font-size:9pt;align-items:center"><b>Include:</b> <label style="white-space:nowrap"><input type="checkbox" data-sfx="man"'+(state.manPrint?' checked':'')+'> User manual</label></span>';}
+function sfxWire(T){T.querySelectorAll('input[data-sfx="man"]').forEach(x=>x.addEventListener('change',()=>{state.manPrint=x.checked;document.body.classList.toggle('printManual',state.manPrint);const c=$('#manPrintChk');if(c)c.checked=state.manPrint;saveAuto();renderReport();}));}
+/* Print: from any tab the Report is shown (not saved: the tab is not part of the project), printed, and the tab of before comes back */
+function sfxPrintPrep(){
+ const T=document.getElementById('tab-report');
+ if(!T||T.classList.contains('active')||!R||R.fatal||!window.SharedReport||!window.SharedSteps||sfrPrinting())return false;
+ const cur=$$('#tabbar button').find(b=>b.classList.contains('active'));SFX.back=cur?cur.dataset.tab:null;
+ const b=$$('#tabbar button').find(x=>x.dataset.tab==='tab-report');if(b)b.click();return true;
+}
+window.sfPrintPrep=sfxPrintPrep;   /* the inline beforeprint script in <head> */
+function sfxPrintAny(){
+ sfxPrintPrep();
+ const T=document.getElementById('tab-report');
+ if(SFRP.api&&T&&T.classList.contains('active'))SFRP.api.print();else window.print();
+}
+window.addEventListener('afterprint',()=>{const t=SFX.back;SFX.back=null;if(t)setTimeout(()=>{const b=$$('#tabbar button').find(x=>x.dataset.tab===t);if(b)b.click();},0);});
 </script>
 <script>
 /* ================= 10. Drawings tab (SFDW, 2026-11-01) =================
@@ -3910,7 +3946,6 @@ function recalc(){
  if($('#tab-3d').classList.contains('active')||$('#v3dwrap'))renderView3D();
  if($('#tab-report').classList.contains('active'))renderReport();   /* SFRP */
  if($('#tab-drawings').classList.contains('active'))renderDrawings();   /* SFDW */
- renderPrintHeader();
  sfdInputTabMarks();
  sfdRebarInfo();   /* Reinforcement input tab: A_b, A_s per ft, s vs s_max (display only) */
  sfdPedBarInfo();   /* SFRQ */
@@ -4002,17 +4037,8 @@ $('#btnReset').addEventListener('click',()=>{
 $('#btnAddPed').addEventListener('click',()=>{
  if(state.peds.length>=10){alert('Maximum of 10 pedestals.');return;}
  state.peds.push(newPed(state.peds.length+1));buildPedCards();saveAuto();recalc();});
-/* print: open all sections, restore after */
-let printPrev=null;
-window.addEventListener('beforeprint',()=>{
- if(typeof sfrWillPrint==='function'&&sfrWillPrint())return;   /* SFRP: the Report tab prints itself (shared/report.js) */
- printPrev=$$('details').map(d=>[d,d.open]);
- $$('details').forEach(d=>d.open=true);
- renderPrintHeader();sfdPageCSS(true);});   /* D11: report parts (renderPrintHeader) and the print header/footer, only while printing */
-window.addEventListener('afterprint',()=>{
- sfdPageCSS(false);
- if(printPrev)printPrev.forEach(([d,o])=>d.open=o);printPrev=null;});
-$('#btnPrint').addEventListener('click',()=>window.print());
+/* SFRX (2026-11-03): the D11 beforeprint / afterprint handlers (open every card, renderPrintHeader, sfdPageCSS) removed with the print report */
+$('#btnPrint').addEventListener('click',()=>sfxPrintAny());   /* SFRX: the Report, from any tab */
 </script>
 <script>
 /* ================= PHASE 2: structural design engine (LRFD / ACI 318-19) ================= */
@@ -6510,13 +6536,7 @@ function buildManualTab(){
  pg.appendChild(body);
  pg.appendChild(el('div','note','This manual is part of the application file \u2014 it travels with the tool and prints with the report when the checkbox above is ticked.'));
 }
-window.addEventListener('beforeprint',()=>{
- if(!state.manPrint)return;
- const pg=$('#manualHost');if(!pg)return;
- const body=pg.querySelector('.manBody');if(!body)return;
- body.innerHTML='';MANUAL_ORDER.forEach(id=>{manRender(body,MANUAL[id].blocks);});
-});
-window.addEventListener('afterprint',()=>{buildManualTab();});
+/* SFRX (2026-11-03): the manual's own print handlers removed: with "Include this manual" ticked, the Report prints every part (sfxApply) */
 </script>
 <script>
 /* ===== PART 0 — READ THIS FIRST ===== */
