@@ -4294,3 +4294,22 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - `node tests/smoke/spread-footing-scroll.mjs --libs …`: PASS. `node tests/smoke/project-library.mjs --tool spreadfooting`: ALL PASS.
 - Line endings unchanged (LF).
 - **Other copies:** none.
+
+## 2026-11-03 — PR: claude/report-print-overflow — printed Report: the local table scroll-box rule (SFPR) removed; shared/report.js now does it for every tool (RPTW; display only)
+
+- **Where:** the `<style>` block in the head, anchor `/* SFPR (2026-11-03; review E6)`.
+- **Before:**
+  ```css
+  /* SFPR (2026-11-03; review E6): printed Report: a table's scroll box is not printed as a scroll bar, and the last step of a topic
+     does not go to a page alone */
+  @media print{#rp-print .rp-tw{overflow:visible !important;max-height:none !important} #rp-print .rp-steps>.rp-step:last-child,#rp-print .rp-step:has(+ .rp-top){break-before:avoid}}
+  ```
+- **After:**
+  ```css
+  /* SFPR (2026-11-03; review E6): printed Report: the last step of a topic does not go to a page alone (the table scroll-box rule
+     moved to shared/report.js, RPTW) */
+  @media print{#rp-print .rp-steps>.rp-step:last-child,#rp-print .rp-step:has(+ .rp-top){break-before:avoid}}
+  ```
+- **Why redundant:** `shared/report.js` now prints `.rp-tw{overflow:visible;}` (fixlog/shared-report.md, RPTW). No `.rp-tw` in this tool has a `max-height`. The local rule made wide tables run past the page edge, so Chromium shrank the whole printed report to about 89 %. The shared fix scales only those tables: the resultant table (0.875) and the pedestal table (0.913) on the default project.
+- **Check case:** default project, Report → Print report: before 54 pages at about 89 % scale; after 63 pages at full size, every table inside the page. The same with Ctrl+P.
+- No calculation, saved-data or storage change. The second rule (last step of a topic) is unchanged.
