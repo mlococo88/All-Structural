@@ -189,3 +189,35 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 - **Consumers (CLAUDE.md §3):** ACI Rebar Development Length, ASCE7-16 Load Generator, BasePlateAnchorDesigner, Bridge Substructure Loading, Concrete Beam Capacity, Gusset Plate Rating, Light Pole and Sign Post, Moving Load Generator, Pile Designer, Prestressed Bridge Design, Retaining Wall Designer, Section Property Calculator, Shear and Moment Diagrams, Spread Footing, Steel Beam Design - AISC 15th, Stone Masonry Arch Load Rating, Timber Beam Check, abutment_calculator, elastomeric_design_module, index, lldf (.html), apps/steel-bridge.
 - **Verified:** `node tests/check-syntax.mjs` (92 files pass); `node tests/engine/run.mjs report steps steps-groups report-wiring`: 12 passed, 2 failed, and the same 2 fail on origin/main (`steps-groups-tabs`: `apps/steel-bridge/ui/lists.js` uses `document` in Node; not related). `node tests/smoke/steel-bridge-report.mjs`: print 3221 steps, 313 pages, 0 console errors, 0 KaTeX errors. Printed PDF of all 21 page tools (headless Chromium, default project, Report → Print report, print media, letter): tables in a scroll box wider than the box, origin/main → branch, BSL 4 → 0, Stone Arch 20 → 0, abutment 1 → 0; tables past the page edge Spread Footing 2 → 0, all others 0 → 0. Pages: unchanged for 16 tools; BSL 137 → 129, Stone Arch 140 → 136, Timber 14 → 13 (a table no longer takes extra height; one fewer repeated header); Spread Footing 54 → 63 (main printed it shrunk to 89 %; now full size). Ctrl+P with every section collapsed gives the same page counts as the button (BSL, Stone Arch, abutment, Spread Footing), and the sections stay collapsed afterwards. Report text found in the PDF (whitespace ignored): BSL cells missing 420 → 29, Stone Arch 376 → 80; other differences are pdftotext artefacts (a hyphen at a line end dropped, superscripts joined). Pages checked by eye.
 - **Open items:** a scaled table prints smaller type (smallest default case 0.652 × 9.5 pt ≈ 6.2 pt, Bridge Substructure §15); the floor is 0.5. If the engineer prefers, such tables could be split or turned instead.
+
+## 2026-11-03 — PR: claude/report-print-split — print: a wide table is never scaled below 0.80; one that needs more is split into column blocks (RPSP; display only)
+
+- **Engineer decision (2026-11-03, on RPTW #733):** set a scaling floor of 0.80 (about 7.5 pt) and split any table that needs more scaling. Each block repeats the first column (the row label) and the header, and has a caption giving its columns. Print only; the screen and the data stay unchanged.
+- **Where:** `fitTables` (the RPTW block before `function fitBox`), new helpers `fitOf`, `grid`, `colWidths`, `splitTable` after it; `CSS` string: the screen rule `#rp-print{display:none;}` and the `@media print` line after the RPTW rule.
+- **Before (fitTables, last step):**
+  ```js
+  if (m && m[0] > m[1] + 0.5) { t.classList.add('rp-fit'); t.style.setProperty('--rp-fit', String(Math.max(0.5, Math.floor(m[1] / m[0] * 980) / 1000))); }
+  ```
+- **After:** `FIT_MIN = 0.8`. Tables are measured in the same single layout pass as before. If the zoom would be below `FIT_MIN` (`fitOf(avail, need) < FIT_MIN`), the column widths are read (`colWidths`, from one-column cells at `min-content`) and `splitTable` runs:
+  - **Block widths:** each block holds column 1 plus columns a–b, and its width is at most `avail × 0.98 / FIT_MIN`. The block count is the smallest that allows this. Columns are shared out evenly by width: the narrowest limit, in 4 px steps from (column 1 + the rest ÷ k), that still gives k blocks.
+  - **Building a block:** each block is a new `table.rp-tbl.rp-blk` (plus `rp-wide` if the source has it). Every row of the source is cloned, keeping `thead`/`tbody` and the row classes. A cell spanning several columns keeps the part of its span that falls in the block.
+  - **Caption:** `p.rp-cap.rp-blkcap` reads "Columns 1–10 of 19" for the first block and "Columns 1 and 11–19 of 19 (column 1 repeated)" for the next.
+  - **Second pass:** the blocks are measured in a second layout pass. A block that is still wider than the page gets the RPTW zoom; by construction that is 0.80 or more.
+  - **Where the blocks go:** they are added after the table in `div.rp-split`, and the table gets `rp-splitsrc`. A new fit first removes old blocks.
+  - **When there is no split:** a table with fewer than 3 columns, a column of unknown width, or column 1 plus one column too wide for 0.80 is not split. It keeps the RPTW zoom, floor 0.5, so it is never clipped; no default project has such a table. Otherwise the zoom is `max(FIT_MIN, fit)`.
+- **CSS added:** screen `.rp-split{display:none;}` (after `#rp-print{display:none;}`). Print:
+  ```css
+  .rp-tbl.rp-splitsrc{display:none;} .rp-split{display:block;} .rp-blkcap{font-weight:400;font-style:italic;margin:6pt 0 1pt;}
+  ```
+- No calculation, model, API, saved-data or storage change. The screen viewer is unchanged: Bridge Substructure and Stone Arch Report tabs have the same text length and height before and after a Ctrl+P, the same as origin/main, and the blocks are never visible on screen.
+- **Check case:** Bridge Substructure Loading, default project, §15.27 "Load combinations: Abut. 1 (table 1)", 11 columns. Before (RPTW): one table at 0.652 (about 6.2 pt). After: "Columns 1–6 of 11" (Effect, Strength I/III/V, Service I/IV) and "Columns 1 and 7–11 of 11 (column 1 repeated)" (Extreme Event I/II, Construction, envelope, Governs), both at full size. The "Bearings" / "Resultant" group rows span each block. Stone Arch §3 "Results at every section", 18 columns: before 0.754; after columns 1–10 and 1 + 11–18, full size.
+- **Consumers (CLAUDE.md §3):** the same 21 tools and apps/steel-bridge as RPTW.
+- **Verified:**
+  - `node tests/check-syntax.mjs`: all pass.
+  - `node tests/engine/run.mjs report steps steps-groups report-wiring`: 12 passed, 2 failed. The same 2 fail on origin/main (`steps-groups-tabs`, `apps/steel-bridge/ui/lists.js` under Node).
+  - `node tests/smoke/steel-bridge-report.mjs`: print 3221 steps, 313 pages, 0 console errors, 0 KaTeX errors.
+  - Printed PDF of all 21 page tools (default project, Report → Print report): pages unchanged except Bridge Substructure 129 → 134 (4 tables split in 2) and Stone Arch 136 → 144 (19 tables split in 2; one 0.901 zoom left). The other zooms (Light Pole 0.892, Spread Footing 0.875 / 0.913, abutment 0.975) are unchanged.
+  - No table is past the page edge, and no zoom is below 0.80.
+  - Every text cell of the origin/main report is found in the branch PDF, apart from time stamps and paragraphs broken across pages.
+  - Ctrl+P with every section collapsed gives the same pages as the button (134, 144), and the sections stay collapsed.
+  - BSL pp. 67–68 and Stone Arch pp. 15 and 43 were checked by eye.
