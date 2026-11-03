@@ -4186,7 +4186,7 @@ Engineer-approved PR 4 of the independent review of the "Seymour Platform Founda
    - the free-body expression for the footing M_u;
    - numbers in the pedestal M_ux, M_uy formula steps.
 
-## 2026-11-03 — PR: claude/sf-dowel-psi-spacing — Dowel hook factors per Table 25.4.3.2; excess-reinforcement option only where flexure governs A_s,req; dowels get no 25.4.10.1 reduction (stated); s_max = min(2h, 18 in) per 8.7.2.2 (SFDH, SFEX, SFDX, SFSM; calculation change)
+## 2026-11-03 — PR: claude/sf-dowel-psi-spacing — Dowel hook factors per Table 25.4.3.2; excess-reinforcement option only where flexure governs A_s,req; dowels get no 25.4.10.1 reduction (stated); s_max = min(2h, 18 in) per 8.7.2.2 (SFDH, SFEX, SFDX, SFSM; calculation change) (PR #727: https://github.com/mlococo88/All-Structural/pull/727)
 
 These are the engineer's decisions on the open items of #723 (questions 1–3) and #725 (item 2). The code basis is ACI 318-19, read in the ACI 318-19 PDF: Table 25.4.3.2 (printed p. 475), 25.4.10.1, 25.4.10.2, R25.4.10.2 (p. 487–488), 8.7.2.2 (p. 114), and 13.3.3.1 (p. 197). Check cases are in the harness: "review" (the engineer's project, as in #710), "revEx" (review with the ℓ_d option on), the three #684 cases, default, direct mode, and three extra cases. "revHook" is review with every dowel hooked. "edgeHook" is the default with Ped 2 at x = 4.25 ft, flush with the footing edge. "thin" is the default with t = 8 in and bottom x-bars at 17 in.
 
