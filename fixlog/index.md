@@ -4395,7 +4395,7 @@ function NumberListInput({value, onChange, placeholder, label, col = 'Value', un
   drop-down empties the undo history. Sidebar screenshot looked at. `node tests/check-syntax.mjs` (JSX transpiled): pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 
-## 2026-11-03 — PR: claude/ix-report (IXRX: the three report windows — "Generate Report", "Print AREMA Report" and the Report Card's "Print / Export" — retired after porting them in full into the Report step; those buttons, Ctrl+P and the browser's Print print the Report from every step and return to it; the AREMA report's saved section choices kept as Include boxes; display only, no result change)
+## 2026-11-03 — PR: claude/ix-report, PR #739: https://github.com/mlococo88/All-Structural/pull/739 (IXRX: the three report windows — "Generate Report", "Print AREMA Report" and the Report Card's "Print / Export" — retired after porting them in full into the Report step; those buttons, Ctrl+P and the browser's Print print the Report from every step and return to it; the AREMA report's saved section choices kept as Include boxes; display only, no result change)
 
 ### IXRX-1. What the three windows printed and the Report lacked, ported   [display] [no result change]
 - **Engineer request (2026-11-03):** retire each tool's old print reports by porting them in full into the Report (method of #715, #718, #722, #724, #726, #728, #729, #731, #732).
