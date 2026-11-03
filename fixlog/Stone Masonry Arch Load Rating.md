@@ -1154,7 +1154,7 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
   `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 
-## 2026-11-03 — PR: claude/report-retire-stonearch (ARX: the D11 print report ("Print / PDF Report" → "Report contents" dialog → `buildReport` → `#rptHost`) retired after porting what the Report tab lacked; Print / PDF Report, Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
+## 2026-11-03 — PR: claude/report-retire-stonearch, PR #729: https://github.com/mlococo88/All-Structural/pull/729 (ARX: the D11 print report ("Print / PDF Report" → "Report contents" dialog → `buildReport` → `#rptHost`) retired after porting what the Report tab lacked; Print / PDF Report, Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
 
 ### ARX-1. What the print report printed and the Report lacked, ported   [display] [no result change]
 - **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #685, #715, #718, #722, #724).
