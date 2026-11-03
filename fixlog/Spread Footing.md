@@ -4075,7 +4075,7 @@ Engineer's answers (2026-11-02) to the questions of PR #710.
 - Report on all cases: 0 KaTeX errors, no NaN / undefined / `§?` / literal `[[`. 0 console errors. `node tests/check-syntax.mjs` passes, as does the scroll smoke test.
 - **Other copies:** none. **Saved data:** no change.
 
-## 2026-11-03 — PR: claude/sf-missing-checks — Missing checks and the NG summary: footing-bar development (straight, hooked, excess-reinforcement option), top-mat development, pedestal crossties and shear, dowel count, grouped punching statement, flotation statement, NG / REVIEW list and named badges (SFDV, SFVP, SFXT, SFDN, SFPG, SFFL, SFNG; new checks, pass / fail logic)
+## 2026-11-03 — PR: claude/sf-missing-checks — Missing checks and the NG summary: footing-bar development (straight, hooked, excess-reinforcement option), top-mat development, pedestal crossties and shear, dowel count, grouped punching statement, flotation statement, NG / REVIEW list and named badges (SFDV, SFVP, SFXT, SFDN, SFPG, SFFL, SFNG; new checks, pass / fail logic) (PR #723: https://github.com/mlococo88/All-Structural/pull/723)
 
 Engineer-approved PR 3 of the independent review of the "Seymour Platform Foundation" report (items C1–C9, E4). Code basis ACI 318-19 (articles below read in the ACI 318-19 PDF). Check case "review": the engineer's project rebuilt from the report's input echo (as in #710). No existing computed value changes: a deep diff of `R` and `P2` (origin/main vs the branch) on default, review, the three #684 cases and direct mode shows only new fields.
 
