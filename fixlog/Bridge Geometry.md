@@ -1534,3 +1534,19 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
   each layout group only.
 - The tool has no calculation report, so the sheets cite tabs ("as the Beam Seat Output tab") rather than report sections (§6).
 - The plan and framing plans are in the local frame; a State Plane sheet would need a rotated viewport (not in R12 model space).
+
+## 2026-11-03 — PR: claude/dxf-sheet-inset — Drawings: the sheet's outer border 0.25 in inside the paper edge (BGDW-2; display only, no result change)
+
+### BGDW-2. Outer border inset (engineer's decision)
+- **Problem (engineer):** on a physical printer the outer border, printed on the page edge, is clipped.
+- **Where:** the sheet function of the drawing build (anchor `SharedDxf.sheetBorder(D, L.br`): before `D.rect(L.br, ox, 0, ox+W, H);`, after `SharedDxf.sheetBorder(D, L.br, ox, W, H, k);`
+  (shared/dxf.js: a rect 0.25 paper in inside the sheet's edge). The inner border, title block, drawing area, every drawn object and the
+  plot scales are unchanged; the sheet is still 17 × 11 in.
+- **Governing provision:** none (drawing output).
+- **Check case:** PROFILE ALONG PGL (H 1" = 80', V 1" = 4'): profile frame Sta 0+00 to 10+00 × EL 98 to 110 → 12.5 × 3.0 in = 900 × 216 pt, measured 900.00 × 216.00 pt; 1300 entities, 9 sheets. Display list origin/main vs branch: same entity count, scales and offsets; exactly one entity per sheet differs (the
+  outer border, 0.25 in × scale inward on every side). Printed: the outer border at (18, 18)-(1206, 774) pt on the 1224 × 792 pt page.
+- **How verified:** `node tests/smoke/dxf-print-sheets.mjs` (all tools), the display-list comparison, `node tests/check-syntax.mjs`.
+- **Other copies:** shared/dxf.js sheetBorder (fixlog/shared-dxf.md).
+
+### Open items
+- None.

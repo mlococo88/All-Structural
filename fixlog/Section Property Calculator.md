@@ -3097,3 +3097,19 @@ index 56a8a3f..13f8372 100644
 ### Open items
 - Part sizes are given by the part descriptions (labels), not by per-part dimension lines (stacked parts would overlap them).
 - The Report does not include the drawing sheets (they print separately at their scale).
+
+## 2026-11-03 — PR: claude/dxf-sheet-inset — Drawings: the sheet's outer border 0.25 in inside the paper edge (SPDW-2; display only, no result change)
+
+### SPDW-2. Outer border inset (engineer's decision)
+- **Problem (engineer):** on a physical printer the outer border, printed on the page edge, is clipped.
+- **Where:** the sheet function of the drawing build (anchor `SharedDxf.sheetBorder(D, L.br`): before `D.rect(L.br, ox, 0, ox + W, H);`, after `SharedDxf.sheetBorder(D, L.br, ox, W, H, P);`
+  (shared/dxf.js: a rect 0.25 paper in inside the sheet's edge). The inner border, title block, drawing area, every drawn object and the
+  plot scales are unchanged; the sheet is still 17 × 11 in.
+- **Governing provision:** none (drawing output).
+- **Check case:** welded girder (PL 16 × 1 flanges, PL 36 × 1/2 web), SECTION AND PROPERTIES at 1 1/2" = 1'-0" (1:8): top flange 2.000 × 0.125 in = 144 × 9 pt, measured 144.00 × 9.00 pt; 273 entities, 2 sheets. Display list origin/main vs branch: same entity count, scales and offsets; exactly one entity per sheet differs (the
+  outer border, 0.25 in × scale inward on every side). Printed: the outer border at (18, 18)-(1206, 774) pt on the 1224 × 792 pt page.
+- **How verified:** `node tests/smoke/dxf-print-sheets.mjs` (all tools), the display-list comparison, `node tests/check-syntax.mjs`.
+- **Other copies:** shared/dxf.js sheetBorder (fixlog/shared-dxf.md).
+
+### Open items
+- None.
