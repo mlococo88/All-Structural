@@ -315,6 +315,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   details.rp-lz>summary{list-style:none;} details.rp-lz>summary::-webkit-details-marker{display:none;}
   .rp-tbl td.rp-ok,.rp-tbl td.rp-hi,.rp-tbl td.rp-ng,.rp-tbl th{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rp-step .rp-m{overflow:visible;}
+  .rp-tw{overflow:visible;} .rp-tbl.rp-fit{zoom:var(--rp-fit,1);}   /* RPTW (2026-11-03): no scroll bar is printed beside a table; a table wider than the page body is scaled to fit it (fitTables) */
   .katex,.katex *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .katex .frac-line{border-bottom-color:#000!important;min-height:1px;}
 }`;
   function css() {
@@ -397,18 +398,62 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
     LIVE = { host, doc, art };
     return { doc, print: () => print(doc), jump, go };
   }
+  /* RPTW (2026-11-03): print only. A table whose narrowest layout (min-content) is wider than the page body (letter, 0.6 in side
+     margins in pageCss: 7.3 in, less the table's indent in the report) gets class rp-fit and --rp-fit = 0.98 × body width / table width
+     (2 % for rounding in the zoomed layout); the print CSS zooms it by that factor (not below 0.5), so it is scaled to the page instead
+     of clipped (a narrower table wraps its text as before). The screen is unchanged. Sections closed or hidden by the search in the
+     live viewer print open, so they are opened for the measurement and closed again. All tables are measured in one layout pass. */
+  const PAGE_W = 7.3 * 96;
+  function fitTables(root) {
+    if (!root || !root.querySelectorAll) return;
+    (root.matches && root.matches('.rp-doc') ? [root] : Array.from(root.querySelectorAll('.rp-doc'))).forEach(d => {
+      const T = Array.from(d.querySelectorAll('.rp-tw>table.rp-tbl')); if (!T.length) return;
+      const shut = Array.from(d.querySelectorAll('.rp-closed,.rp-hide')).map(e => [e, e.classList.contains('rp-closed'), e.classList.contains('rp-hide')]);
+      shut.forEach(([e]) => e.classList.remove('rp-closed', 'rp-hide'));
+      const w0 = T.map(t => { t.classList.remove('rp-fit'); t.style.removeProperty('--rp-fit'); const w = t.style.width; t.style.width = 'min-content'; return w; });
+      try {
+        const dr = d.getBoundingClientRect(), dc = getComputedStyle(d), x0 = dr.left + (parseFloat(dc.paddingLeft) || 0) + (parseFloat(dc.borderLeftWidth) || 0);
+        const M = T.map(t => t.getClientRects().length ? [t.getBoundingClientRect().width, PAGE_W - Math.max(0, t.parentNode.getBoundingClientRect().left - x0)] : null);
+        T.forEach((t, i) => { t.style.width = w0[i]; const m = M[i];
+          if (m && m[0] > m[1] + 0.5) { t.classList.add('rp-fit'); t.style.setProperty('--rp-fit', String(Math.max(0.5, Math.floor(m[1] / m[0] * 980) / 1000))); } });
+      } finally {
+        T.forEach((t, i) => { t.style.width = w0[i]; });
+        shut.forEach(([e, c, h]) => { if (c) e.classList.add('rp-closed'); if (h) e.classList.add('rp-hide'); });
+      }
+    });
+  }
+  /* fitBox(box): the print box (#rp-print) is display:none on screen, so it is laid out off screen for the measurement, then hidden
+     again. Each tool's own Ctrl+P handler fills #rp-print itself (SharedReport.html) after this file's beforeprint listener has run, so
+     a MutationObserver on the box fits its tables as soon as it is filled (a microtask: before the browser lays out the print). */
+  function fitBox(box) {
+    const doc = box && box.querySelector('.rp-doc'); if (!doc || box._rpFit === doc) return; box._rpFit = doc;
+    const cs = box.style.cssText;
+    box.style.cssText = 'display:block;position:absolute;left:-100000px;top:0;width:7.3in;visibility:hidden;';
+    try { fitTables(doc); } catch (e) { /* print without scaling */ } finally { box.style.cssText = cs; }
+  }
+  function watchBox(box) {
+    if (!box || box._rpWatch || typeof MutationObserver === 'undefined') return; box._rpWatch = true;
+    new MutationObserver(() => fitBox(box)).observe(box, { childList: true });
+  }
+  function watchBody() {
+    const b = document.body; if (!b) return;
+    watchBox(document.getElementById('rp-print'));
+    new MutationObserver(R => { for (const r of R) for (const n of r.addedNodes) if (n.id === 'rp-print') { watchBox(n); fitBox(n); } }).observe(b, { childList: true });
+  }
   /* print(doc): the whole report alone on the page (every section open, every lazy item filled), the running header and page numbers
      as @page margin boxes (Chromium-based browsers print them; others print the page without). */
   function print(doc) {
     css();
     let box = document.getElementById('rp-print'); if (!box) { box = document.createElement('div'); box.id = 'rp-print'; document.body.appendChild(box); }
     box.innerHTML = `<div class="rp"><article class="rp-doc">${html(doc, { lazy: false })}</article></div>`;
+    watchBox(box); fitBox(box);   // RPTW
     setPage(doc); document.body.classList.add('rp-printing');
     if (typeof window.print === 'function') setTimeout(() => window.print(), 50);
   }
   if (typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('beforeprint', () => { if (document.body.classList.contains('rp-printing')) return;   // Ctrl+P while the Report tab shows
-      if (LIVE && LIVE.host.isConnected && LIVE.host.querySelector('.rp') && LIVE.host.offsetParent !== null) { fillLazy(LIVE.art, LIVE.doc); setPage(LIVE.doc); } });
+      if (LIVE && LIVE.host.isConnected && LIVE.host.querySelector('.rp') && LIVE.host.offsetParent !== null) { fillLazy(LIVE.art, LIVE.doc); setPage(LIVE.doc); try { fitTables(LIVE.art); } catch (e) { /* RPTW: print without scaling */ } } });
+    if (typeof document !== 'undefined') { if (document.body) watchBody(); else document.addEventListener('DOMContentLoaded', watchBody); }   // RPTW
     window.addEventListener('afterprint', () => { document.body.classList.remove('rp-printing'); setPage(null); const b = document.getElementById('rp-print'); if (b) b.innerHTML = ''; });
   }
 

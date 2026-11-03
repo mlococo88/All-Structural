@@ -32,9 +32,9 @@ h3{font-size:13px;margin:8px 0 4px 0}
 .allToolsLink{font-size:10px;color:#1c4e80;text-decoration:none}
 .allToolsLink:hover{text-decoration:underline}
 @media print{.allToolsLink{display:none !important}}
-/* SFPR (2026-11-03; review E6): printed Report: a table's scroll box is not printed as a scroll bar, and the last step of a topic
-   does not go to a page alone */
-@media print{#rp-print .rp-tw{overflow:visible !important;max-height:none !important} #rp-print .rp-steps>.rp-step:last-child,#rp-print .rp-step:has(+ .rp-top){break-before:avoid}}
+/* SFPR (2026-11-03; review E6): printed Report: the last step of a topic does not go to a page alone (the table scroll-box rule
+   moved to shared/report.js, RPTW) */
+@media print{#rp-print .rp-steps>.rp-step:last-child,#rp-print .rp-step:has(+ .rp-top){break-before:avoid}}
 .main{display:flex;gap:12px;align-items:flex-start}
 .inp{width:33%;min-width:400px}
 .out{flex:1;min-width:0}
