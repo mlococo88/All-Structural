@@ -399,7 +399,7 @@ input.autoD{background:#F1F5F9;color:#0F172A;border-style:dashed;font-variant-nu
         <button class=&quot;b&quot; id=&quot;btnLoad&quot;>Open</button>
         <button class=&quot;b&quot; id=&quot;btnExport&quot;>Export JSON</button>
         <button class=&quot;b&quot; id=&quot;btnImport&quot;>Import JSON</button>
-        <button class=&quot;pri&quot; id=&quot;btnPrint&quot;>Print / PDF</button>
+        <button class=&quot;pri&quot; id=&quot;btnPrint&quot; title=&quot;Print / PDF the suite's calculation report (the Report tab), from any tab&quot;>Print / PDF</button>
         <input type=&quot;file&quot; id=&quot;fileIn&quot; accept=&quot;.json,application/json&quot; style=&quot;display:none&quot;>
       </div>
     </div>
@@ -4859,7 +4859,7 @@ input.autoD{background:#F1F5F9;color:#0F172A;border-style:dashed;font-variant-nu
         <button class=&quot;b&quot; id=&quot;btnLoad&quot;>Open</button>
         <button class=&quot;b&quot; id=&quot;btnExport&quot;>Export JSON</button>
         <button class=&quot;b&quot; id=&quot;btnImport&quot;>Import JSON</button>
-        <button class=&quot;pri&quot; id=&quot;btnPrint&quot;>Print / PDF</button>
+        <button class=&quot;pri&quot; id=&quot;btnPrint&quot; title=&quot;Print / PDF the suite's calculation report (the Report tab), from any tab&quot;>Print / PDF</button>
         <input type=&quot;file&quot; id=&quot;fileIn&quot; accept=&quot;.json,application/json&quot; style=&quot;display:none&quot;>
       </div>
     </div>
@@ -7337,7 +7337,7 @@ function tabBatch(inp,f){
 
 /* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
    On screen &quot;Worked in: <value> → Tab · Card&quot; opens the tab, scrolls the card into view and flashes it; in the
-   printed report the same link reads &quot;<value>: see §n.k&quot; (buildReport rewrites it). Display only. ---- */
+   printed report (retired 2026-11-02, RBRX) the same link read &quot;<value>: see §n.k&quot;; the Report tab links its own steps. Display only. ---- */
 const REBAR_CARDS={tLd:['tension','Development Length'],tConf:['tension','Confinement Term'],
   tExcess:['tension','Excess Reinforcement Factor'],hLdh:['hook','Hook Development Length'],
   cLdc:['compression','Governing Expressions'],tsLen:['tsplice','Base Development Length'],
@@ -8287,7 +8287,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   }
   /* one built tab -> report items, in document order; a card title (.secTitle) becomes the topic heading of its first item */
   function rxWalk(root,scope,T){
-    var out=[], topic=null, card='', nfig=0, k=0, D=root.ownerDocument;
+    var out=[], topic=null, card='', nfig=0, k=0, ntp=0, D=root.ownerDocument;
     var INL=/^(B|I|EM|STRONG|SPAN|BR|SUB|SUP|A|SMALL|U|CODE|LABEL)$/;
     var txt=function(e){ var c=e.cloneNode(true);
       c.querySelectorAll('.katex').forEach(function(x){ var a=x.querySelector('annotation'); x.replaceWith(D.createTextNode(' '+(a?a.textContent:x.textContent)+' ')); });
@@ -8295,7 +8295,7 @@ window.addEventListener('DOMContentLoaded',()=>{
       c.querySelectorAll('.wkLink,.caret,button,select,input').forEach(function(x){ x.remove(); });
       return c.textContent.replace(/\s+/g,' ').trim().replace(/\$/g,''); };
     var tex=function(l){ var a=l.querySelector('annotation'); return (a?a.textContent:l.textContent).trim(); };
-    var push=function(it){ if(topic){ it.topic={title:topic}; topic=null; } out.push(it); };
+    var push=function(it){ if(topic){ it.topic={title:topic,no:++ntp}; topic=null; } out.push(it); };   /* numbered in the subsection's order */
     var cellOf=function(v){ if(/^(PASS|OK)\b/.test(v)) return {t:v,cls:'ok'}; if(/^(FAIL|NG)\b/.test(v)) return {t:v,cls:'ng'}; if(/^N\/A\b/.test(v)) return {t:v,cls:'na'};
       return /^[-−\d.,e+\s%/×()≫∞—]+$/.test(v)&&/\d/.test(v)?{t:v,n:true}:v; };
     var table=function(t){
