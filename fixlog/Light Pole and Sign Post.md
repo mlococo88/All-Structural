@@ -2122,7 +2122,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **How verified:** `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL (20 cases incl. two new LRFDLTS cases with a Broms model; cable values identical in all 12 cable cases). `node tests/engine/run.mjs lightpole` (42 passed, incl. the new LPPJ engine test). New `node tests/smoke/lightpole-projection.mjs`: ALL PASS. `node tests/smoke/lightpole-anchor-handoff.mjs`: ALL PASS. `node tests/check-syntax.mjs`: all pass. `node tests/smoke/lightpole-signviews.mjs` with two new p = 2 ft cases: pass, except the 4 `ltsNoBroms` checks that fail on origin/main too (since LTS-L2 a missing Broms model is an input error; test expectation not updated here). Screenshots of the Shaft-tab steps, Geometry elevation, 3D and LTS foundation card reviewed.
 - **Open items (questions for the engineer):** (1) γ_c = 150 pcf; (2) t_d(z) raised by p with K_z (map basis only); (3) G_f (flexible) keeps h = H; (4) round shaft always on the rough row (also when D√q_z ≤ 2.5; same 0.7 at h/D ≤ 1); (5) the LTS shaft K_d = the structure's (pole/post shape).
 
-## 2026-11-03 — PR: claude/lpp-dashboard (LPDC: check summary panel, as Spread Footing's dashboard)   [display only; no result change]
+## 2026-11-03 — PR: [#747](https://github.com/mlococo88/All-Structural/pull/747) (LPDC: check summary panel, as Spread Footing's dashboard)   [display only; no result change]
 
 ### LPDC. Check summary panel: one line per check; a left column on screens 1500 px and wider
 - **Request (engineer):** the summary panel Spread Footing got (SFDC #737, SFDF #740), in this tool, both code modes, pole and sign (1 and 2 posts). The Summary output tab is kept.
