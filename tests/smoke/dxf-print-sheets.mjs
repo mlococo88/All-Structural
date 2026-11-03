@@ -49,6 +49,17 @@ const TOOLS = {
     known: p => p.evaluate(() => { const s = SFDW.B.S.find(q => q.id === SFDW.cur); return { what: `footing outline B x L = ${R.B} x ${R.L} ft on ${s.title} at 1:${s.k}`, w: R.B * 12 / s.k, h: R.L * 12 / s.k }; }),
     report: /Spread Footing|FOOTING/i,
   },
+  sbd: {
+    file: 'apps/steel-bridge/index.html', label: 'Steel Bridge Design (apps/steel-bridge)',
+    // the preview on paper D (default): the print uses the B-size layout of the same sheets; the TYPICAL SECTION sheet is printed
+    open: async p => { await p.waitForSelector('#tabBar [data-otab="dwg"]'); await p.click('#tabBar [data-otab="dwg"]'); await p.waitForSelector('#dwg_print1'); await p.selectOption('#dwg_sheet', 'sec'); await p.waitForSelector('#dwg_print1'); },
+    one: '#dwg_print1', all: '#dwg_printAll',
+    n: p => p.evaluate(() => document.querySelectorAll('#dwg_sheet option').length),
+    known: p => p.evaluate(() => { const G = SBDDrawings.model(SBDModel.defaultProject()), s = SBDSheets.build(G, null, { paper: 'B' }).sheets.find(q => q.id === 'sec'), dk = G.deck;
+      const w = G.ys[G.nb - 1] * 12 + (dk.ohL + dk.ohR) * 12; return { what: `deck slab ${w} x ${dk.ts} in (girders ${G.ys.join(', ')} ft, overhangs ${dk.ohL}, ${dk.ohR} ft) on ${s.title} at 1:${s.k} (B layout)`, w: w / s.k, h: dk.ts / s.k }; }),
+    reportOpen: async p => { await p.click('#tabBar [data-otab="rpt"]'); await p.click('#rp_build'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 180000 }); },
+    report: /Steel Bridge|Report/i,
+  },
 };
 
 let fails = 0; const check = (ok, m) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${m}`); if (!ok) fails++; };
@@ -87,6 +98,7 @@ for (const key of want) {
     const gone2 = await o.p.evaluate(() => !document.getElementById('sdx-print') && !document.getElementById('sdx-print-css'));
     check(gone2, 'after printing all: the print box and its style are removed');
     // 3. the page's own print: the Report
+    if (T.reportOpen) await T.reportOpen(o.p);
     const f3 = path.join(OUT, `${key}-report.pdf`);
     await o.p.pdf({ path: f3, preferCSSPageSize: true, printBackground: true });
     const P3 = pages(f3), txt = execFileSync('pdftotext', [f3, '-'], { encoding: 'utf8' });

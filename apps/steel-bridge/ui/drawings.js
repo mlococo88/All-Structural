@@ -62,7 +62,10 @@
       <div class="dwg-bar"><label for="dwg_paper">Paper</label><select id="dwg_paper"><option value="D"${paper === 'D' ? ' selected' : ''}>D, 34 × 22 in</option><option value="B"${paper === 'B' ? ' selected' : ''}>B, 17 × 11 in</option></select>
         <label for="dwg_sheet">Sheet</label><select id="dwg_sheet">${sh.map(s => `<option value="${esc(s.id)}"${s === cur ? ' selected' : ''}>${s.n}. ${esc(s.title)}</option>`).join('')}</select>
         <label for="dwg_z">Preview</label><select id="dwg_z">${ZOOM.map(([k, l]) => `<option value="${k}"${k === z ? ' selected' : ''}>${l}</option>`).join('')}</select>
-        <button type="button" class="primary" id="dwg_dxf">Download DXF (${sh.length} sheets)</button></div>
+        <button type="button" class="primary" id="dwg_dxf">Download DXF (${sh.length} sheets)</button>
+        <button type="button" id="dwg_print1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button>
+        <button type="button" id="dwg_printAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets (${sh.length})</button></div>
+      <p class="note">${esc(window.SharedDxf.PRINT_NOTE)}${paper === 'B' ? '' : ' The prints use the B-size (17 × 11 in) layout of the same sheets: with paper D chosen above, a sheet can print at a smaller plot scale than its D preview; the scale in each printed title block is the one it prints at.'}</p>
       <div class="kv"><div><span>Girders</span><span>${G.nb}</span></div><div><span>Spacing (ft)</span><span>${spc.map(v => fmt(v, 2)).join(', ')}</span></div>
         <div><span>Cross-frames, intermediate / end</span><span>${nInt} / ${nEnd} ${link('cf', 'Cross-frames tab')}</span></div>
         <div><span>Field splices (ft)</span><span>${G.splices.length ? G.splices.map(v => fmt(v, 2)).join(', ') : 'none'}</span></div></div>
@@ -99,6 +102,15 @@
       if (!chk.ok) { alert(`The DXF file failed its structure check:\n${chk.errors.slice(0, 8).join('\n')}`); return; }
       window.SharedDxf.download(txt, `${((P.project && P.project.name) || 'steel-bridge').replace(/[^\w.-]+/g, '_')}_drawings.dxf`);
     });
+    /* SBPS (2026-11-03): Print sheet / Print all sheets, 11 x 17 landscape pages at the plot scale (SharedDxf.printSheets); the B-size
+       layout is built for printing when the preview is on paper D. Display only. */
+    const prt = all => {
+      let PB = B; if (paper !== 'B') { try { PB = window.SBDSheets.build(G, RS, { paper: 'B' }); } catch (e) { alert(`The B-size sheets could not be drawn: ${e.message}`); return; } }
+      const list = all ? PB.sheets : PB.sheets.filter(s => s.id === cur.id);
+      window.SharedDxf.printSheets((list.length ? list : PB.sheets.slice(0, 1)).map(s => ({ svg: window.SharedDxf.sheetSVG(PB.D, s), title: s.title })), { paper: window.SBDSheets.PAPER.B });
+    };
+    host.querySelector('#dwg_print1').addEventListener('click', () => prt(false));
+    host.querySelector('#dwg_printAll').addEventListener('click', () => prt(true));
     const cb = host.querySelector('#dwg_calc');
     cb.addEventListener('click', () => { cb.disabled = true; cb.textContent = 'Calculating…'; setTimeout(() => { calc(P); render(host, ctx); }, 30); });
   }
