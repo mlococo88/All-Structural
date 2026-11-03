@@ -3848,7 +3848,7 @@ current design's analysis accepted; **the minimum shipping piece length raised f
 ### Other copies
 - None.
 
-## 2026-11-03 — PR: claude/lists-js-node-safe — `ui/lists.js` loads without a page (Node test harness); fixes the steps-groups-tabs regression from #708   [test/robustness only]
+## 2026-11-03 — PR #736: https://github.com/mlococo88/All-Structural/pull/736 (claude/lists-js-node-safe) — `ui/lists.js` loads without a page (Node test harness); fixes the steps-groups-tabs regression from #708   [test/robustness only]
 ### Why
 - On main, `node tests/engine/run.mjs steps-groups` failed 2 tests in `steps-groups-tabs.test.mjs` ("worked steps of every output tab are in
   topics …" and "a report note that says "See §x" does not get a second "see" …"). Both loaded the app's scripts in a Node `vm` context with no
