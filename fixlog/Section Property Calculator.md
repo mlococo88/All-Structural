@@ -3046,7 +3046,7 @@ index 56a8a3f..13f8372 100644
   - `node tests/smoke/list-input.mjs --part secprop,secpropren`: all passed.
 - **Other copies:** none.
 
-## 2026-11-03 — PR: claude/spc-sheets — Drawings tab: section and properties on 11 × 17 sheets at plot scale, DXF of the sheets, Print sheet / Print all sheets (SPDW; display only, no result change)
+## 2026-11-03 — PR: claude/spc-sheets (PR #753: https://github.com/mlococo88/All-Structural/pull/753) — Drawings tab: section and properties on 11 × 17 sheets at plot scale, DXF of the sheets, Print sheet / Print all sheets (SPDW; display only, no result change)
 
 ### SPDW. Drawings tab   [display only]
 - **Request (engineer, approved):** sheet layouts as in Light Pole and Spread Footing: a Drawings view with a sheet selector, the zoomable
