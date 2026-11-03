@@ -1469,3 +1469,68 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
   origin/main, the library panel already scrolls sideways there). Number of spans 2 → 3, Undo / Redo exact; Load from the library
   empties the history. `node tests/smoke/list-input.mjs --part bgeo`: pass. `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
+
+## 2026-11-03 — PR: claude/bg-sheets — Drawings tab: drawing sheets on 11 × 17 at plot scale, DXF of the sheets, Print sheet / Print all sheets (BGDW; display only, no result change)
+
+### BGDW. Drawings tab   [display only]
+- **Request (engineer, approved):** sheet layouts as in Light Pole and Spread Footing: a Drawings view with a sheet selector, the zoomable
+  preview, Download DXF (sheets), Print sheet, Print all sheets and the print note; the existing Export DXF (model space) stays as it was.
+- **Sheets** (each a B-size sheet, 17 × 11 in, border and two-row title block, side by side in one DXF R12 file, model space, full size in
+  inches; the scale is the smallest standard scale at which the view fits the drawing area):
+  1. PLAN: PGL (with station ticks and labels, PC/PT/TS/SC/CS/ST, POB/POE), deck edges and ends, girders per span, curbs, construction
+     reference line, support centerlines (station, skew) and bearing lines, north arrow. Local frame: +X along the construction reference
+     line from Abut 1 (as the Export DXF "local" option). Engineering scales 1" = 10' … 1" = 2000'.
+  2. PROFILE ALONG PGL: profile (finished grade), PVI tangents with grades, START/PVI/END, BVC/EVC, bearing lines with FG; horizontal scale
+     from the engineering list, vertical exaggeration 1, 2, 5, 10 or 20 (the largest that keeps the elevation range within 3.5 in); both
+     scales in the title block.
+  3. TYPICAL SECTION (one per distinct girder / deck-edge layout; "SPANS 1, 2" when they share it): cut square to the reference line at
+     midspan of the first span of the group, looking up-station; deck slab, haunch, girder depth and bearing (girders as centerline
+     symbols 1'-0" wide: flange widths are not inputs), TD at girders and edges (as the Cross-section view), girder spacing chain and out-to-out,
+     depth dimensions (deck, haunch + camber, beam, bearing). Architectural scales 1" = 1'-0" … 1/16" = 1'-0", 1" = 10' … 1" = 40'.
+  4. FRAMING PLAN — SPAN n (one per span): girders, deck edges, support CLs, bearing lines with stations, TD / BS at every girder ×
+     bearing point (seatData(), as the Beam Seat Output table), girder spacing chain square to the girders and out-to-out, span length
+     (PGL stations, as the Span summary).
+  5. Tables (NTS, paper inches, paginated): ALIGNMENT AND PROFILE DATA (alignmentRowData(), pviCurveData()), SUPPORTS AND BEARING LINES,
+     BEAM SEAT ELEVATIONS and TOP OF DECK ELEVATIONS (read from the two output tables as shown: their mode, divisions and visible columns).
+  - Title block: PROJECT, PROJECT NO., CALCULATED BY, DATE, CHECKED BY from the shared project info (`bridgeSuite.v1.projectMeta`
+    fields projectName, jobNo, preparedBy, date, checkedBy; read only), CHECKED DATE blank, SCALE, SHEET TITLE, BRIDGE (the library name
+    of the bridge, else the shared bridge ID), DRAWN BY, SHEET n OF N.
+  - Index table under the preview: each sheet with its scale and a link to the tab where its values are worked (Alignment, Bridge, Top of
+    Deck Output, Beam Seat Output).
+- **Where:**
+  - `<head>`: anchor `<script src="shared/projects-ui.js"></script>`, after it `<script src="shared/dxf.js"></script>` (new).
+  - CSS: anchor `.legendbar .grad {`, after it the rules `.bgdwBar`, `.bgdwBox`, `.bgdwHead`, `.bgdwIdx` (new).
+  - Tab strip: after `data-tab="map">Site Map</button>` a button `data-tab="drawings">Drawings</button>`; pane `<section class="tabpane"
+    id="pane-drawings">` with `<div id="bgdwHost">` before `id="pane-map"` (new).
+  - `compute()`: anchor `render3DAlign(); render3DSub();`; before: the next line was `document.getElementById('plan_len')…`; after, between them:
+    `if(typeof bgdwRefresh==='function') bgdwRefresh();   // BGDW: the Drawings tab, when it is open`.
+  - New `<script>` before `</body>` (anchor `/* ===== DRAWINGS tab (BGDW, 2026-11-03)`): `BGDW_ENG`, `BGDW_ARCH` (scale lists), `BGDW`,
+    `bgdwMeta()`, `bgdwBuild()` (the sheets), `bgdwRender()` (the view, buttons: Download DXF → `SharedDxf.validate` then `download`;
+    Print sheet / Print all sheets → `SharedDxf.printSheets(… SharedDxf.sheetSVG(B.D, s) …, {paper:[17, 11]})`), `bgdwRefresh()`,
+    the tab button's click handler.
+  - The Export DXF dialog (`bgDxfBuild`, `bridgeGeomEngine.dxfExport.v1`) is not changed.
+- **Saved data:** one new per-browser key `bridgeGeomEngine.dwgSheet.v1` (the sheet id shown), not in the project, the autosave, the
+  library or the JSON export. No existing key or format changed.
+- **Governing provision:** none (drawing output; every value is an existing engine result).
+- **Check case:** the demo bridge (2 spans, Abut 1 Sta 0+00, Pier 1 5+00 (brg 4+97.50 / 5+02.50), Abut 2 10+00; profile START 0+00
+  EL 100.000, PVI 4+00 EL 108.000 VC 300', END 9+00 EL 104.000): sheets PLAN 1" = 80', PROFILE H 1" = 80' V 1" = 4' (20×), TYPICAL
+  SECTION 1/4" = 1'-0", FRAMING PLAN — SPAN 1 and 2 at 1" = 40', four tables (9 sheets). Profile frame Sta 0+00 to 10+00 × EL 98 to 110:
+  1000 ft × 12 / 960 = 12.5 in and 12 ft × 12 / 48 = 3.0 in = 900 × 216 pt; measured on the printed PDF 900.00 × 216.00 pt.
+- **How verified:**
+  - `node tests/smoke/dxf-print-sheets.mjs --tool bg` (new entry; the tool has no Report, so check 3 checks only that the page's own
+    print has no 17 × 11 sheet page): Print sheet 1 page 1224 × 792 pt, border on the page edge, the profile frame to scale; Print all
+    sheets 9 pages 17 × 11; print box removed; 0 console errors. PDFs and the preview screenshots looked at.
+  - `SharedDxf.validate` passes on the sheets DXF (LINE 355, POLYLINE 44, TEXT 874, CIRCLE 11, DIMENSION 16).
+  - The Export DXF text (three option sets: default, local, State Plane with VE 10), origin/main vs this branch: identical (date stamp removed).
+  - `node tests/smoke/project-library.mjs --tool bgeo` ALL PASS (results, Output / Beam Seat / Bridge tab text and storage as origin/main);
+    `node tests/smoke/list-input.mjs --part bgeo` all passed; `node tests/check-syntax.mjs` passes.
+  - Page width (no phone layout; phone-layout.mjs has no Bridge Geometry entry): 1086 px at 390 and 768 px on load, as origin/main; on the
+    Drawings tab 571 px at 390 px (the tab strip, now 6 tabs) and 768 px at 768 px.
+- **Other copies:** none (Spread Footing / Light Pole have their own sheet builders; the print code is shared/dxf.js).
+
+### Open items
+- PROFILE: the two bearing-line labels of a dual-bearing pier (5 ft apart) overlap at small horizontal scales.
+- TYPICAL SECTION: girders are symbols (flange widths and girder types are not inputs); the section is at midspan of the first span of
+  each layout group only.
+- The tool has no calculation report, so the sheets cite tabs ("as the Beam Seat Output tab") rather than report sections (§6).
+- The plan and framing plans are in the local frame; a State Plane sheet would need a rotated viewport (not in R12 model space).
