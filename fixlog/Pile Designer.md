@@ -19778,3 +19778,37 @@ index 06a42e4..b58d4e3 100644
   kit's 18.2.0; Tailwind is not in the kit, so the panel layout was not checked headless (the header buttons use the page's own
   `.pd-hdrBtns` style). `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
+## 2026-11-02 — PR: claude/report-retire-pile, PR #718: https://github.com/mlococo88/All-Structural/pull/718 (PDRX: the print preview overlay and the print-section chooser retired; Print, Ctrl+P and the browser's Print print the Report from every output tab; the PrintReport component kept, hidden, only as the Report's data source; what the Report lacked ported; display only, no result change)
+
+### PDRX-1. What the old print report showed and the Report lacked, ported   [display] [no result change]
+- **Engineer decision (2026-11-02):** keep `PrintReport` rendered hidden purely as the Report's data source (the Report already read its input echo tables, figures and charts from it); remove only the Print / Preview overlay and its section chooser; Print prints the Report from any tab and returns to the tab of before; port any number the old report shows that the Report still lacks. Same method as #623 … #702 and abutment #715.
+- **Compared:** the hidden PrintReport (`.print-only`, print media, the text as printed) on origin/main against the Report (`#rp-print`, print media) on the branch. Cases: def (micropile, default), hp (driven H-pile), iab (integral abutment pile). Plotly served from the test kit (2.27.0 for 2.32.0, test only), so both sides have the charts.
+- **Missing before:** 103 / 95 / 16 of 367 / 288 / 94 distinct numbers (def / hp / iab):
+  - the deflection profile table (sampled nodes: z, y, M, V);
+  - the p-y points at the selected depths (Figure F-3 table);
+  - A_g / EI (cased, uncased, casing only, EI to the solver; H-pile Z_x / Z_y, EI);
+  - the solver diagnostics (depth to M_max, large-deflection limit, equilibrium closure ΣF / ΣM, M_cr);
+  - the method notes (casing plunge, the built-in nonlinear p-y analysis, layering / M-φ line, IAB notes, the closing note).
+- **Ported:** new `pdrRest(root, M, grpOf, capBox)`, called at the end of `pdrExtras` (anchor `PDRX (2026-11-02): the print preview, its Print / Preview overlay`):
+  - every table of the PrintReport with a number the Report does not show yet → "Tables as printed" in the section of its print group (caption: the line before it; long tables open on click on screen, print in full);
+  - every note (p, li, leaf div) with a sentence or number the Report does not have yet → "Notes as printed".
+  - Skipped: worked equations (`.rpt-calc`, already steps), headings, the cover / contents, result lines, the key-value tables and rigid-cap table already ported (PDRP2), SVG text.
+  - The values are the PrintReport's own text (the same results); nothing is computed.
+- **After:** every number of the old report is in the Report except its section numbers ("1.7", "5.3", …), the Plotly axis ticks and annotations (in the Report as the chart images) and the KaTeX split digits of "29,000" / "83,410" (present as 29,000 / 83,410).
+
+### PDRX-2. Print preview, chooser and their print path removed; Print prints the Report from every output tab   [display]
+- **Removed:** the `previewReport` and `printDlg` states, the preview bar and the preview copy of `PrintReport` (`.report-preview-show`), `doPrint()`, the two `fitPrintReport` effects and `fitPrintReport()`, `PrintChooser` and its element. The CSS no longer shows `.print-only` in print (`display: none !important` always): the kept copy is never shown or printed.
+- **Kept:** the hidden `PrintReport` element (data source; comment at the CSS rule and the PDRX header), `rptSel` / `micropile_lrfd_printSel_v1` (the Report bar's section chips, unchanged).
+- **Changed:**
+  - `printReport()` (header "Print report", input-rail "Print / save PDF report"): → `pdrPrintAny()`: the Report built now for the latest results (`PDRP.cur`, set by `PdReportTab` each render), the chart images awaited, then `SharedReport.print`.
+  - New `pdrPrintPrep()`: from another output tab it sets `data-otab-active="report"` for the print only (the remembered output tab `micropile_lrfd_outTab_v1` is not written) and mounts the Report at once (`pdrBuildNow()`); an inline `<script>` before `shared/report.js` calls it on `beforeprint`, so Ctrl+P / the browser's Print print the Report with the running header. New `afterprint` handler: the tab of before.
+  - "Preview report" (header) → "Report", and "◰ Preview calculation report" (input rail) → "◰ Open the calculation report (Report tab)": both open the Report output tab.
+- **Governing provision:** none changed. No formula, factor, unit, code reference or computed value changed (CLAUDE.md §4).
+- **Saved data:** no key or format change (inputs `micropile_lrfd_inputs_v1`, project library IndexedDB, `micropile_lrfd_printSel_v1`, `micropile_lrfd_outTab_v1`).
+- **How verified:**
+  - `node tests/check-syntax.mjs "Pile Designer.html"`: pass.
+  - origin/main vs branch, three cases: the results the Report is built from (`PDRP.last`, JSON) identical; localStorage identical before and after showing and printing the Report; page text identical apart from the two button labels; no console errors; chart images 11 / 5 / 1 on both sides.
+  - Report: 0 unresolved references, 0 duplicate keys, no NaN / undefined.
+  - `node tests/smoke/pile-library.mjs`: library, Undo / Redo, quota and console checks pass; its two "page text identical to origin/main" checks (on load, after an input change) report the intended difference, the two relabelled buttons ("Report", "◰ Open the calculation report (Report tab)").
+  - Print routing, headless, from each of the 12 output tabs, by `beforeprint` and by "Print report": `#rp-print` holds the Report (with the 3 chart images on the button path), `body.rp-printing` and the running header are set, the output tab of before comes back after `afterprint`.
+- **Other copies:** none.
