@@ -4130,3 +4130,58 @@ Engineer-approved PR 3 of the independent review of the "Seymour Platform Founda
   1. Hook factors: Table 25.4.3.2 gives ψ_r = 1.0 at s ≥ 6d_b and ψ_o = 1.25 for the outermost bar (side cover 3 in < 6d_b). The dowel hook (`sfdLdh`, SFDO) still uses ψ_r 1.6, ψ_o 1.0. Align the dowels with the table?
   2. 25.4.10.1 with A_s,req governed by A_s,min (0.0018): R25.4.10.2 says the factor does not apply to development of shrinkage and temperature reinforcement. Keep A_s,req = max(flexure, A_s,min), or use the flexural requirement only, or disallow the option where A_s,min governs?
   3. Dowels: 25.4.10.1 is not applied to the dowels (22.9.5.1 asks for development of f_y where they serve shear friction, 25.4.10.2(b)). Confirm.
+
+## 2026-11-03 — PR: claude/sf-presentation — Report presentation and code basis: relations, substitutions (ΣM_a, M_r / M_o, J_c and c, V_u, laps), rigidity ℓ, elevation figure, printed tables, φ in the inputs, combined-footing citations (13.3.4, 8.6.1.1, 8.7.2.2), references the run uses (SFPR; display and citations only, no result change)
+
+Engineer-approved PR 4 of the independent review of the "Seymour Platform Foundation" report (section E and items D1, D3). **No computed value changes**: a deep diff of `R` and `P2` (origin/main vs the branch) on default, review, review with the ℓ_d option on, the three #684 cases and direct mode shows only new display fields (`r.maT`, `punch[].detail.paX/paY`). The old print report (`renderPrintHeader`, `SFD_REFS`, `sfdResultRows`) is not touched.
+
+### SFPR. Items
+- **E1, stray "=" before a relation:** `sfrS` (the report's step helper). A step with a symbol and an `eq` starting with ≤ / ≥ / < / > is rewritten for display: before `A_s,prov = ≥ A_s,min = 0.900 ≥ 0.518 = 0.900 in²/ft`; after `A_s,prov ≥ A_s,min = 0.900 ≥ 0.518 in²/ft`. This covers A_s,min, s ≤ s_max (footing and ties), √(A₂/A₁) ≤ 2, A_s,dow ≥ 0.005A_g and ℓ_dc.
+- **E2, substitutions:**
+  - **ΣM_a,x and ΣM_a,y itemised.** New step `res/MaX` / `MaY`. `resultant()` records its terms in `maT`; this is display only, and the sums MaX / MaY are unchanged. Review case: ΣM_a,x = 31.50 + 0.75·35.20 + 0.45·120.20 + (0.50 + 0.75·0.50 + 0.45·15.10)·9.000 = 111.99 + 69.03 = **181.02** kip-ft. ΣM_a,y = **36.84** kip-ft (2.10 + 34.74).
+  - **M_r and M_o substituted** from the edge rows (`ot.rows`, `ot.appRow`). The formula now states that the applied moments and couples enter once, as a net value, on the side they act (as the code does). Review case: M_r = 11.70·6.500 + 4.24·6.712 + 10.08·7.833 + 4.48·1.833 + 21.86·8.433 + 9.00·1.833 = **392.49**. M_o = 6.66·1.833 + 132.06 = **144.27**. FS = 2.72.
+  - **Punching V_u** now shows P_u. Before: `− 76.03 + 18.09 = 26.21`; after: `84.15 − 76.03 + 18.09 = 26.21`.
+  - **J_c and c worked** (new steps `pu<i>.JcX/JcY`, `pu<i>.cX/cY`). `polarAxis` returns its faces (`segs`, `extA`, `extB`). Review case, Ped 2 y: J_c,y = 20.125·52.13·15.58² + 218,844 + 2·20.125·48.06·(−8.45)² + 218,844 = **830,492 in⁴**; c_y = max(|26.06 − 10.48|, |22.00 + 10.48|) = **32.48 in**.
+  - **Dowel ℓ_sc and L_proj** get their expressions, e.g. L_proj = max(ℓ_sc, ℓ_st) = max(22.50, 33.30) = 33.30 in.
+  - **Eccentricity DCR (per-axis options)** now substituted as max(|e_x|/(fB), |e_y|/(fL)).
+  - **Rigidity:** new step ℓ_x, with ℓ defined as the larger of the cantilever beyond the outermost pedestal centre and half the distance between adjacent pedestal centres (`maxSeg`). Review: ℓ_y = 5.167 ft.
+- **E5, dowel note:** "Worked on the Footing Design tab, 5.6" → "Also shown on the Footing Design tab, in its card 5.6 'Concrete Bearing & Dowels' (screen numbering; in this report the dowels are this section and shear friction is [[S-sf]])".
+- **E6, print:**
+  - `sectSVG`:
+    - the caption is on two lines above the drawing, and the SVG is at least 470 px wide, so the caption is no longer clipped;
+    - pedestals in line with each other in the elevation have their labels stacked instead of overprinted;
+    - P and V_x labels name the pedestal and the loads they show ("Ped 1: P (D + L) = 54.58 k", "V_x (D + Wx)").
+  - Print CSS (tool only):
+    - `#rp-print .rp-tw{overflow:visible}`: no scroll bar printed beside a table that breaks across pages;
+    - the last step of a topic does not go to a new page alone.
+  - The §5.7 table's M_ux column gets its unit.
+- **E7:** the inputs table now shows the friction angle φ in direct-bearing mode (it feeds tan(2/3 φ) and K_p).
+- **D1, code basis (ACI 318-19, read):**
+  - 13.3.4.1: combined footings are designed under Chapter 8; 13.3.4.4 points mats to 8.6.1.1; 13.3.2.1 covers one-way combined footings under Chapters 7 and 9.
+  - 8.6.1.1: A_s,min = 0.0018A_g.
+  - 8.7.2.2: s_max = lesser of 2h and 18 in at critical sections, 3h and 18 in elsewhere.
+  - For a footing with two or more bearing elements (`sfrCombined()`), the Report cites:
+    - minimum steel: 13.3.4.1, 8.6.1.1, 24.4.3.2;
+    - bar spacing: 13.3.4.1, 8.7.2.2, 25.2.1, with the s_max step min(2h, 18) shown where 2h ≥ 18 in (the same value as the tool's min(3h, 18));
+    - the band note: 13.3.3.3 is an isolated-footing rule, shown for information;
+    - the Codes row in the inputs.
+  - Single footing: unchanged citations (7.6.1.1, 7.7.2.3 with 13.3.3.1).
+- **D3, references:** the Report lists only what the run uses (`sfrRefs()`):
+  - Vesić and Meyerhof only with the computed bearing;
+  - AASHTO only for the items in use (10.6.3.1.2a with Vesić; the eccentricity articles when an AASHTO limit is selected; 10.6.3.4 when passive resistance is credited).
+  - Review case (direct q_a, middle third, no passive): Vesić, Meyerhof and AASHTO are dropped.
+
+### How verified
+- **Deep diff:** headless Chromium, pinned libraries. Origin/main vs the branch on 7 cases: no existing value differs (new display fields only).
+- **Report:** 0 KaTeX errors; no NaN, undefined, `§?` or `[[`; 0 console errors.
+- **Printed PDF of the review case** (`page.pdf` after `beforeprint`): the elevation caption is whole and the labels are stacked; the shear-friction table breaks across pages without a scroll bar.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- **Other copies:** none. **Saved data:** no change.
+
+### Open items
+1. `shared/report.js` keeps `.rp-tw{overflow-x:auto}` in print, so other tools may print the same scroll bar. Fixed here in the tool's own CSS only (one tool per PR).
+2. **8.7.2.2 vs the tool's s_max.** For a combined footing, 8.7.2.2 gives min(2h, 18 in) at critical sections, but the tool computes min(3h, 18 in). The two are equal for h ≥ 9 in (every footing with d ≥ 6 in per 13.3.1.2). Below 9 in the report says to check by hand. Changing the formula would be a result change and was not made.
+3. **Not in this PR's list:**
+   - the plan view's resultant marker over the "Ped 1" label;
+   - the free-body expression for the footing M_u;
+   - numbers in the pedestal M_ux, M_uy formula steps.
