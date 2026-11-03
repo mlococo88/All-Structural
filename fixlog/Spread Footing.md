@@ -4371,3 +4371,29 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 
 ### Open items
 - The User Manual (§0 "the summary dashboard at the top of the report", §3.1) still describes the dashboard as at the top; left as is so the tab text stays identical. A wording update can follow if the engineer wants it.
+
+## 2026-11-03 — PR: claude/sf-plotly-guard (PR #738: https://github.com/mlococo88/All-Structural/pull/738) — Report renders when Plotly is not loaded; each chart shows a note instead (SFPN; display only, no result change)
+
+### SFPN. "Plotly is not defined" left the Report empty   [display only]
+- **Problem (regression of #734, SFAC-P):** with Plotly not loaded (offline from `file://`, CDN blocked), `renderReport()` calls `sfpDrawHidden()` → `renderPlots()` before it builds the Report, and the first `Plotly.newPlot` threw "Plotly is not defined": the Report tab stayed empty, and so did the printout (`#rp-print`). Before #734 the same throw happened in `recalc()` whenever a chart was on the open tab (it skipped the rest of `recalc()`: the open Report / Drawings tab refresh and the input-tab notes) and on every tab click (after the tab was shown).
+- **Where:** after `function sfpDrawHidden(){…}` (anchor `const SFP_NA='chart unavailable (Plotly not loaded)';`); inside `renderPlots()` the six calls; in `sfxWalk()` (`const visit=e=>{`) one line before `if(e.matches('.js-plotly-plot')){const s=sfxPlotSvg(e);`.
+  - Added:
+    ```js
+    const SFP_NA='chart unavailable (Plotly not loaded)';
+    function sfpPlot(id,data,layout,cfg){
+     if(typeof Plotly==='undefined'||!Plotly.newPlot){const e=document.getElementById(id);
+      if(e){e.classList.add('sfp-na');e.style.height='auto';e.innerHTML='<p class="note">Chart unavailable (Plotly not loaded): the values are in the tables.</p>';}return;}
+     return Plotly.newPlot(id,data,layout,cfg);}
+    ```
+  - `renderPlots()`: before `Plotly.newPlot('plot-dcr',` / `('plot-heat',` / `('plot-fs',` / `(elid,traces,` / `(elid,[],{font,title:{text:'P-M contour unavailable'` / `(elid,[` (P-M); after: the same arguments with `sfpPlot(` (these are every Plotly call in the tool).
+  - `sfxWalk()` `visit`, added:
+    ```js
+    if(e.matches('.sfp-na')){nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)){T.figs.add(key);push({type:'note',text:cap+': '+SFP_NA+'.'});}return;}   /* SFPN */
+    ```
+- **Behaviour:** with Plotly loaded nothing changes (`sfpPlot` is `Plotly.newPlot`). Without it, each chart box (on its tab) shows "Chart unavailable (Plotly not loaded): the values are in the tables." and the Report has, where the figure would be, a note "<card title, as the figure caption>: chart unavailable (Plotly not loaded)." The paths that draw charts (page load / `recalc()`, a tab click, `renderReport()`'s `sfpDrawHidden`, the print path: `beforeprint` → `recalc()` / `sfPrintPrep` → Report, the LRFD combination selector) all go through `renderPlots()`, so none throws.
+- **Check case:** default project, Plotly blocked (KaTeX and three loaded): before, Report tab empty, no printout built, 9 × "pageerror: Plotly is not defined" (load, tab clicks, Report). After, Report tab and printout render (print text 134 k characters with KaTeX blocked as well); the print text differs from the Plotly-loaded one only where the 7 charts were: Bearing DCR by combination, base pressure heat map, stability FS, x and y shear/moment diagrams, Ped 1 and Ped 2 P-M diagrams, each replaced by its note. `R` identical. No page errors.
+- **How verified:** headless Chromium (tests/lib.mjs, libraries from tests/libs): origin/main vs branch with Plotly loaded: `R`, the Report tab text on opening, after visiting every tab, and the printout (`beforeprint` from the dashboard) identical; every chart drawn by Plotly. With Plotly blocked as in the check case. `node tests/check-syntax.mjs` passes; `node tests/smoke/spread-footing-scroll.mjs` passes with tests/libs only (no `--libs`).
+- **Other copies:** none.
+
+### Open items
+- None.

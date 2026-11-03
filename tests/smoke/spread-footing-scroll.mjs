@@ -15,10 +15,11 @@
 //   5b. the dashboard chips (left column from 1500 px wide, SFDC) jump to their worked section and leave the document at 0;
 //   6. below the 900 px breakpoint (single-column layout) the page still scrolls normally (the reset is not active).
 // A hidden absolutely positioned span (like KaTeX's MathML) is added at the bottom of each panel, so the check also holds when
-// the CDN libraries are not available offline (tests/libs does not have the versions this tool pins).
+// the CDN libraries are not available offline. Since 2026-11-03 tests/libs has the versions this tool pins (KaTeX 0.16.11,
+// Plotly 2.35.2, three 0.160.0), served by tests/lib.mjs openPage; --libs is no longer needed.
 //   node tests/smoke/spread-footing-scroll.mjs [--file <file>] [--libs <dir>] [--shots <dir>]
 //   --file: default the working-tree file; another copy must sit next to a shared/ folder (it loads shared/*.js)
-//   --libs: a folder with katex/dist/, plotly/plotly.min.js and three/build/three.min.js for the versions the tool pins (optional)
+//   --libs: a folder with katex/dist/, plotly/plotly.min.js and three/build/three.min.js to serve instead of tests/libs (optional)
 import fs from 'fs';
 import path from 'path';
 import assert from 'assert/strict';

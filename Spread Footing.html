@@ -2790,6 +2790,14 @@ const SFPLT={all:false,skip:false};
 function sfpOn(id){const e=document.getElementById(id);if(!e)return false;if(SFPLT.all)return true;
  const pg=e.closest('.tabpage');if(pg&&!pg.classList.contains('active')){SFPLT.skip=true;return false;}return true;}
 function sfpDrawHidden(){if(!SFPLT.skip||!R||R.fatal)return;SFPLT.all=true;try{renderPlots();}finally{SFPLT.all=false;}}
+/* SFPN (2026-11-03): Plotly not loaded (offline from file://, CDN blocked): each chart shows a short note instead of throwing
+   "Plotly is not defined" (which left the Report empty: renderReport draws the hidden tabs' plots first), and the Report lists
+   the note under the chart's card (sfxWalk, .sfp-na); with Plotly loaded this is Plotly.newPlot unchanged. Display only. */
+const SFP_NA='chart unavailable (Plotly not loaded)';
+function sfpPlot(id,data,layout,cfg){
+ if(typeof Plotly==='undefined'||!Plotly.newPlot){const e=document.getElementById(id);
+  if(e){e.classList.add('sfp-na');e.style.height='auto';e.innerHTML='<p class="note">Chart unavailable (Plotly not loaded): the values are in the tables.</p>';}return;}
+ return Plotly.newPlot(id,data,layout,cfg);}
 function renderPlots(){
  if(R.fatal)return;
  SFPLT.skip=false;
@@ -2797,7 +2805,7 @@ function renderPlots(){
  /* DCR bar */
  const names=R.asd.map((a,i)=>(i+1)+'. '+a.cb.name);
  const dcrs=R.asd.map(a=>a.DCR===null?0:(isFinite(a.DCR)?a.DCR:0));
- if(sfpOn('plot-dcr'))Plotly.newPlot('plot-dcr',[
+ if(sfpOn('plot-dcr'))sfpPlot('plot-dcr',[
   {x:names,y:dcrs,type:'bar',name:'Bearing DCR',marker:{color:dcrs.map(v=>v>1?'#c62828':'#4a6f9b')}},
   {x:names,y:names.map(()=>1),type:'scatter',mode:'lines',name:'DCR = 1.0',line:{color:'#c00',dash:'dash'}}],
   {font,margin:{t:20,b:130},xaxis:{title:'Service combination',tickangle:-40,tickfont:{size:9}},yaxis:{title:'Bearing DCR'},legend:{orientation:'h'}},{responsive:true,displaylogo:false});
@@ -2808,7 +2816,7 @@ function renderPlots(){
   for(let i=0;i<=N;i++)xs.push(-B/2+B*i/N);
   for(let j=0;j<=N;j++)ys.push(-L/2+L*j/N);
   for(let j=0;j<=N;j++){const row=[];for(let i=0;i<=N;i++){row.push(Math.max(0,bp.q0+bp.gx*xs[i]+bp.gy*ys[j]));}z.push(row);}
-  Plotly.newPlot('plot-heat',[{x:xs,y:ys,z:z,type:'heatmap',colorscale:[[0,'#1a9850'],[0.5,'#fee08b'],[1,'#d73027']],reversescale:false,colorbar:{title:'q (ksf)'},hovertemplate:'x=%{x:.2f} ft<br>y=%{y:.2f} ft<br>q=%{z:.2f} ksf<extra></extra>'}],
+  sfpPlot('plot-heat',[{x:xs,y:ys,z:z,type:'heatmap',colorscale:[[0,'#1a9850'],[0.5,'#fee08b'],[1,'#d73027']],reversescale:false,colorbar:{title:'q (ksf)'},hovertemplate:'x=%{x:.2f} ft<br>y=%{y:.2f} ft<br>q=%{z:.2f} ksf<extra></extra>'}],
   {font,title:{text:'Base pressure \u2014 governing combination: '+R.govBear.cb.name+'  (green = min, red = max)',font:{size:12}},margin:{t:30},xaxis:{title:'x (ft)',scaleanchor:'y'},yaxis:{title:'y (ft)'}},{responsive:true,displaylogo:false});
  }
  /* FS chart */
@@ -2817,7 +2825,7 @@ function renderPlots(){
   const fsx=R.asd.map(a=>Math.min(a.FSslx,20));
   const fsy=R.asd.map(a=>Math.min(a.FSsly,20));
   const fsr=R.asd.map(a=>Math.min(a.FSslr,20));
-  Plotly.newPlot('plot-fs',[
+  sfpPlot('plot-fs',[
    {x:names,y:fsot,type:'scatter',mode:'lines+markers',name:'FS overturning (min edge)'},
    {x:names,y:fsx,type:'scatter',mode:'lines+markers',name:'FS sliding x'},
    {x:names,y:fsy,type:'scatter',mode:'lines+markers',name:'FS sliding y'},
@@ -2873,7 +2881,7 @@ function renderPlots(){
    if(flat)annos.push({x:0.5,y:0.5,xref:'paper',yref:'paper',showarrow:false,
     text:'V = 0.00 k, M = 0.00 k-ft throughout \u2014 every bearing element spans the full footing width in '+dir+', so there is no net transverse shear or moment',
     font:{color:'#555',size:10},align:'center'});
-   Plotly.newPlot(elid,traces,
+   sfpPlot(elid,traces,
     {font,title:{text:dir+'-direction shear & moment \u2014 combo: '+gm.cb.name+(isGov?' (governing)':' (selected)'),font:{size:12}},margin:{t:62},
      xaxis:{title:dir+' (ft)'},
      yaxis:{title:'V (k)',side:'left',tickformat:'.2f',range:flat?[-1,1]:undefined,zeroline:true},
@@ -2889,7 +2897,7 @@ function renderPlots(){
    // capacity contour at the governing (max) axial level
    const Pu=Math.max(pd.PuMax,0.1);
    const contour=pmContour(pd.pmBars,pd.bx,pd.by,pd.fc,pd.fy,Pu,28);
-   if(!contour.length){Plotly.newPlot(elid,[],{font,title:{text:'P-M contour unavailable',font:{size:12}}},{responsive:true,displaylogo:false});return;}
+   if(!contour.length){sfpPlot(elid,[],{font,title:{text:'P-M contour unavailable',font:{size:12}}},{responsive:true,displaylogo:false});return;}
    // close the loop
    const cx=contour.map(p=>p.phiMny).concat(contour.length?[contour[0].phiMny]:[]);
    const cy=contour.map(p=>p.phiMnx).concat(contour.length?[contour[0].phiMnx]:[]);
@@ -2902,7 +2910,7 @@ function renderPlots(){
    if(g&&g.mode==='radial'&&Math.abs(g.P-Pu)>1e-6){const cg=pmContour(pd.pmBars,pd.bx,pd.by,pd.fc,pd.fy,g.P,28);
     if(cg.length)tr.push({x:cg.map(p=>p.phiMny).concat([cg[0].phiMny]),y:cg.map(p=>p.phiMnx).concat([cg[0].phiMnx]),type:'scatter',mode:'lines',name:'contour @ governing combo P_u='+f2(g.P)+' k',line:{color:'#8e44ad',width:1.5,dash:'dash'}});}
    if(g&&g.mode==='radial'&&g.Rc)tr.push({x:[0,g.cMy],y:[0,g.cMx],type:'scatter',mode:'lines+markers',name:'governing: ratio '+f3(g.ratio),line:{color:'#8e44ad',width:1,dash:'dot'},marker:{size:[0,7],color:'#8e44ad'},hoverinfo:'skip'});
-   Plotly.newPlot(elid,[
+   sfpPlot(elid,[
     {x:cx,y:cy,type:'scatter',mode:'lines',name:'\u03c6 capacity contour @ P_u,max='+f2(Pu)+' k (reference)',line:{color:'#4a6f9b',width:2},fill:'toself',fillcolor:'rgba(74,111,155,0.08)'},...tr,
     {x:dxIn,y:dyIn,type:'scatter',mode:'markers+text',name:'Combo demand',text:pd.pmPts.map((p,k)=>k+1),textposition:'top center',textfont:{size:9},
      marker:{color:colors,size:9,line:{color:'#333',width:1}},hovertext:dtext,hoverinfo:'text'}],
@@ -3604,6 +3612,7 @@ function sfxWalk(root,scope,T){
   if(e.nodeType!==1)return;
   if(e.matches('summary')){topic=txt(e).replace(/^\d+(\.\d+)*[a-z]?\s+/,'');card=topic;nfig=0;return;}
   if(e.matches('h1,h2,h3,h4,.manH,.manH3')){topic=txt(e);card=topic;nfig=0;return;}
+  if(e.matches('.sfp-na')){nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)){T.figs.add(key);push({type:'note',text:cap+': '+SFP_NA+'.'});}return;}   /* SFPN */
   if(e.matches('.js-plotly-plot')){const s=sfxPlotSvg(e);nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(s&&!T.figs.has(key)){T.figs.add(key);push({type:'figure',svg:s,caption:cap});}return;}
   if(e.matches('svg')){nfig++;const cap=(card||'Figure')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)&&!T.figs.has(e.outerHTML)){T.figs.add(key);const c=e.cloneNode(true);if(!c.getAttribute('viewBox')&&c.getAttribute('width'))c.setAttribute('viewBox','0 0 '+parseFloat(c.getAttribute('width'))+' '+parseFloat(c.getAttribute('height')));c.style.maxWidth='100%';c.style.height='auto';push({type:'figure',svg:c.outerHTML,caption:cap});}return;}
   if(e.matches('table')){table(e);return;}
