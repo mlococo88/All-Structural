@@ -4552,7 +4552,7 @@ function sbdRefs(){
   if(AN&&AN.comp&&!AN.comp.blocked)r.push(['AISC Design Guide 3','construction-stage and composite deflection limits; edition: verify']);
   if(!mem)r.push(['ASCE/SEI 7-16','\u00A72.3.1 LRFD strength combinations (presets; the user manual says to verify the edition)']);
   if(!mem||(S.member.defl&&S.member.defl.on))r.push(['IBC Table 1604.3','deflection limit convention; edition: verify']);
-  if(S.print&&S.print.secs&&S.print.secs.tabValid)r.push(['Validation','AISC Design Examples v15.0; ENERCALC; Hibbeler, Structural Analysis (benchmarks of the Validation section only)']);
+  if(sbrSel().tabValid)r.push(['Validation','AISC Design Examples v15.0; ENERCALC; Hibbeler, Structural Analysis (benchmarks of the Validation section only)']);
   return r;
 }
 function sbdPageCSS(){
@@ -9612,7 +9612,7 @@ function sbrResult(line){
 function sbrStep(eb,id){
   const t=eb.querySelector('.eqTitle'),r=t&&t.querySelector('.eqRef');
   const title=t?Array.from(t.childNodes).filter(x=>x!==r).map(x=>x.textContent).join('').trim():'';
-  const lines=Array.from(eb.querySelectorAll(':scope > .eqLine')).map(l=>sbrAnn(l)).filter(Boolean);
+  const lines=Array.from(eb.querySelectorAll(':scope > .eqLine')).map(l=>sbrAnn(l)||(l.querySelector('.katex')?'':l.textContent.trim())).filter(Boolean);   /* SBRX: without KaTeX the line holds its TeX source */
   const vars=Array.from(eb.querySelectorAll(':scope > .varList > div, :scope > table.cr-where tr')).map(sbrText).filter(Boolean);
   let value=null,unit='',d=2,ok;
   const last=lines.length?lines[lines.length-1]:'';
@@ -9622,7 +9622,7 @@ function sbrStep(eb,id){
     const m=/\\text\{DCR\}[\s\S]*=\s*\\mathbf\{(-?\d+(?:\.\d+)?)\}/.exec(last);
     if(m){value=parseFloat(m[1]);d=(m[1].split('.')[1]||'').length;ok=value<=1.0;}
   }
-  const eq=lines.length>1?'\\begin{gathered}'+lines.join(' \\\\ ')+'\\end{gathered}':(lines[0]||'');
+  const eq=!window.katex?lines.map(sbrLite).join(' ; '):lines.length>1?'\\begin{gathered}'+lines.join(' \\\\ ')+'\\end{gathered}':(lines[0]||'');   /* SBRX: the built-in renderer has no gathered */
   const s={id,label:title||'Worked equation',sym:'',eq,sub:'',value,unit:unit.replace(/\u00B2/g,'^{2}').replace(/\u00B3/g,'^{3}').replace(/\u2074/g,'^{4}').replace(/\u00B7/g,'-'),d,ref:r?sbrRef(r.textContent):'',note:vars.length?('where '+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};   /* a code section "§G2.1" is not a step reference (shared/report.js reads "§<id>" in notes) */
   if(ok!==undefined)s.ok=ok;
   return s;
@@ -9637,6 +9637,10 @@ function sbrTab(tab,holder,links){
       if(ch.nodeType===3){const t=ch.textContent.trim();if(t){flush(c);c.list.push({type:'note',text:t});}return;}
       if(ch.nodeType!==1)return;
       const cl=ch.classList,tag=ch.tagName;
+      if(ch.id==='dash'&&ch.querySelector('.chip')){flush(c);   /* SBRX: the Summary's check tiles (label [reference], result, status), as the print report printed them */
+        const ST={pass:['PASS','ok'],fail:['FAIL','ng'],na:['N/A','na']};
+        c.list.push({type:'table',head:['Check','Result','Status'],rows:Array.from(ch.querySelectorAll(':scope > .chip')).map(x=>{const sp=x.querySelectorAll(':scope > span'),k=['pass','fail','na'].find(q=>x.classList.contains(q))||'';
+          return [sbrText(sp[1]||x),{t:sbrText(sp[2]||x)||(x.title||''),n:false},ST[k]?{t:ST[k][0],cls:ST[k][1]}:''];})});return;}
       if(cl.contains('eqBlock')){if(!c.run)c.run={title:c.head||c.title,steps:[]};c.run.steps.push(sbrStep(ch,'s'+(++c.n)));return;}
       if(tag==='BUTTON'||tag==='SELECT'||tag==='INPUT'||tag==='TEXTAREA'||tag==='SCRIPT'||tag==='STYLE'||cl.contains('btnRow')||cl.contains('fRow')||cl.contains('modeBar')||cl.contains('chip')||cl.contains('svgTools')||cl.contains('noPrint')||cl.contains('secHead'))return;
       if(cl.contains('sec')){const h=ch.querySelector(':scope > .secHead .secTitle');flush(c);c.head=h?h.textContent.replace(/^\s*\d+\.\s*/,''):'';if(c.head)c.list.push({type:'note',text:'— '+c.head+' —'});walk(ch.querySelector(':scope > .secBody')||ch,c);flush(c);c.head='';return;}
@@ -9675,9 +9679,69 @@ function sbrTopics(it){
   const g=SharedSteps.group(it.steps,[{key:'k',title:it.title,ids:()=>true}],{strip:false})[0];
   it.topics=[{title:it.title,ref:'',n:it.steps.length,cls:g.cls,chip:g.chip,res:g.res}];it.title='Worked steps';return it;
 }
+/* ---------- SBRX (2026-11-03): what the retired print report (Print report dialog, sbdReportDOM) printed and the Report lacked ----------
+   Page 1: the codes line, the governing result, the member-check warning and the hand-off source line; at the end of each section the
+   D/C result lines of the checks worked there (with the § link to the card); the front-matter paragraph and the footer line; the
+   Summary's check tiles (#dash); the user manual when chosen; the step lines without KaTeX (offline: the TeX source). The dialog's
+   section choices are the Include boxes of the report bar (the same field S.print.secs, the same keys and defaults). Nothing is
+   computed here: every value is the tool's own (AN.design.checks, the built tabs). */
+const SBRX={back:false};
+const SBRX_LBL={tabSummary:'Summary dashboard & governing results',tabSchem:'Schematic & input echo',tabDerive:'Load derivation',tabAnalysis:'Analysis results (all combinations, worked)',
+  tabMx:'Mₓ — major-axis flexure',tabMy:'Mᵧ — minor-axis flexure',tabVx:'Vₓ — major-axis shear',tabVy:'Vᵧ — minor-axis shear',tabComp:'Compression',tabTors:'Torsion',
+  tabJ10:'Concentrated forces (J10)',tabInter:'Interaction',tabService:'Serviceability',tabSection:'Section properties',tabValid:'Validation (benchmarks + AISC examples)',tabManual:'User manual (all parts)',tabBatch:'Batch results'};
+/* the section choice as ensurePrintState has it, read without writing S */
+function sbrSel(){return Object.assign({tabBatch:true,tabSummary:true,tabSchem:true,tabDerive:true,tabAnalysis:true,tabMx:true,tabMy:true,tabVx:true,tabVy:true,tabComp:true,tabTors:true,
+  tabJ10:true,tabInter:true,tabService:true,tabSection:true,tabValid:true,tabManual:false},(S.print&&S.print.secs)||{});}
+function sbrxCover(secs){
+  if(isBatch())return;
+  const items=[],f=S.proj||{};
+  if(typeof bxSourceLine==='function'&&bxSourceLine())items.push({type:'note',text:sbrText(el('div',null,bxSourceLine()))});
+  if(isMember())items.push({type:'note',warn:true,text:'MEMBER CHECK MODE — section capacity only. Demands were entered directly; no structural model was solved. Equilibrium, reactions, moment distribution and deflection are not verified by this document.'});
+  const govAll=(AN&&AN.design&&AN.design.checks||[]).filter(c=>!c.na),worst=govAll.reduce((m,c)=>c.dcr>(m?m.dcr:-1)?c:m,null);
+  if(worst){const g=sbdChkTarget(worst);items.push({type:'note',warn:worst.dcr>1||undefined,text:'Governing: '+worst.label+' — DCR = '+fmt(worst.dcr,3)+(worst.combo?' ('+worst.combo+')':'')+(worst.dcr>1?' — DESIGN FAILS':' — all implemented checks pass')+(g&&SBRX.first&&SBRX.first[g[0]+'|'+g[1]]?' (worked in [['+SBRX.first[g[0]+'|'+g[1]]+']])':'')});}
+  if(!items.length)return;
+  if(secs.length&&secs[0].title==='Summary of checks')secs[0].subs.unshift({title:'Governing result',items});
+  else secs.push({title:'Governing result',subs:[{title:'Governing result',items}]});
+}
+/* one result line per check, in the section of the tab where it is worked (else the Summary), as the print report */
+function sbrxResults(order,firstKey){
+  SBRX.first=firstKey;
+  const out={},has={};order.forEach(id=>has[id]=1);
+  (AN&&AN.design&&AN.design.checks||[]).forEach(ch=>{
+    const tab=sbdChkTab(ch),s=has[tab]?tab:(has.tabSummary?'tabSummary':null);if(!s)return;
+    const fail=!ch.na&&ch.dcr>1.0001,g=sbdChkTarget(ch),k=g?firstKey[g[0]+'|'+g[1]]:null;
+    ((out[s]=out[s]||{rows:[]}).rows).push([ch.label,{t:ch.na?'n/a':sbdFmtDC(ch.dcr),n:true,key:k||undefined},[ch.ref?sbrRef(ch.ref):'',ch.combo||'',ch.na?(ch.detail||''):''].filter(x=>x).join('; '),{t:ch.na?'N/A':(fail?'FAIL':'PASS'),cls:ch.na?'na':fail?'ng':'ok'}]);
+  });
+  const R={};Object.keys(out).forEach(t=>{R[t]=[{type:'table',head:['Check','D/C','Reference; governing','Result'],rows:out[t].rows},{type:'note',text:'D/C > 1.0 fails. Each D/C links to the card where it is worked.'}];});
+  return R;
+}
+function sbrxAbout(){
+  const f=S.proj||{},today=new Date().toISOString().slice(0,10);
+  return {title:'About this report',items:[{type:'note',text:'Each section is the corresponding tab of the tool, built by the same code. Equations are shown symbolically, then with values substituted, then with the result; identical combinations are cross-referenced. Each check section ends with the D/C result of its checks (D/C > 1.0 fails). Units: kip, ft, in, ksi unless noted.'},
+    {type:'note',text:(f.name||'')+' — '+(f.subject||'')+' · Steel Beam Designer · by Mario Lococo · '+today}]};
+}
+/* the report bar's Include boxes: the print dialog's choices (S.print.secs, written through ensurePrintState as the dialog did) */
+function sbrxControls(){
+  const sel=sbrSel(),av={};TABS().forEach(t=>av[t[0]]=1);
+  return '<span class="sbrx-inc" style="display:inline-flex;flex-wrap:wrap;gap:2px 10px;font-size:9pt;align-items:center">Include:'+Object.keys(SBRX_LBL).filter(id=>av[id]).map(id=>'<label><input type="checkbox" data-sbrx="'+id+'"'+(sel[id]?' checked':'')+'> '+sbdEsc(SBRX_LBL[id])+'</label>').join('')+'</span>';
+}
+function sbrxWire(host){host.querySelectorAll('input[data-sbrx]').forEach(cb=>cb.addEventListener('change',()=>{ensurePrintState().secs[cb.dataset.sbrx]=cb.checked;autosave();const sc=host.closest('#outPanel,#outputPanel')||document.scrollingElement,top=sc?sc.scrollTop:0;renderTab();if(sc)sc.scrollTop=top;}));}
+/* Print: from any tab the Report is shown (SBRP.on, not saved), printed with its diagrams, and the tab of before comes back */
+function sbrPrintPrep(){
+  if(SBRP.on||sbrPrinting()||!window.SharedReport||!window.SharedSteps)return false;
+  SBRX.back=true;SBRP.on=true;buildTabs();return true;
+}
+async function sbrPrintAny(){
+  if(!window.SharedReport||!window.SharedSteps){window.print();return;}
+  if(!SBRP.on){SBRX.back=true;SBRP.on=true;buildTabs();}
+  const t0=Date.now();
+  while(Date.now()-t0<8000){const h=document.querySelector('.sbrHost');if(!h||h.dataset.plots!=='pending')break;await new Promise(r=>setTimeout(r,120));}
+  if(SBRP.api)SBRP.api.print();else window.print();
+}
+window.addEventListener('afterprint',()=>{if(!SBRX.back)return;SBRX.back=false;setTimeout(()=>{SBRP.on=false;buildTabs();},0);});
 function sbrModel(){
   const f=S.proj||{},secs=[],names={};TABS().forEach(t=>names[t[0]]=t[1]);
-  const order=TABS().map(t=>t[0]).filter(id=>id!=='sep'&&id!=='tabManual');
+  const sel=sbrSel(),order=TABS().map(t=>t[0]).filter(id=>id!=='sep'&&sel[id]);   /* SBRX: the sections chosen with the Include boxes (S.print.secs, the dialog's field) */
   const built={},cards={};
   SBRP.figs={};if(SBRP.imgs.size>80)SBRP.imgs.clear();   /* SBRP-2: this build's diagrams; images of earlier inputs dropped past 80 */
   const saveTab=S.ui.tab,saveCol=JSON.stringify(S.ui.collapse||{});
@@ -9686,6 +9750,7 @@ function sbrModel(){
       const fn={tabSummary:buildSummaryTab,tabSchem:buildSchemTab,tabDerive:buildDeriveTab,tabAnalysis:buildAnalysisTab,tabMx:buildMxTab,tabMy:buildMyTab,
         tabVx:buildVxTab,tabVy:buildVyTab,tabComp:buildCompTab,tabTors:buildTorsTab,tabJ10:buildJ10Tab,tabInter:buildInterTab,tabService:buildServiceTab,
         tabSection:buildSectionTab,tabValid:buildValidTab,tabBatch:buildBatchTab}[id];
+      if(id==='tabManual'){const holder=document.createElement('div');MANUAL_ORDER.forEach(pid=>{holder.appendChild(el('h2','manH',MANUAL[pid].title));manRender(holder,MANUAL[pid].blocks);});built[id]=holder;return;}   /* SBRX: the user manual, every part, as the print report */
       if(!fn)return;
       const holder=document.createElement('div');resetSecNum();S.ui.tab=id;
       if(AN&&AN.blockers&&AN.blockers.length&&id!=='tabValid'&&id!=='tabSchem'){holder.appendChild(el('div','errBox','<b>Output withheld \u2014 the model is not valid:</b><br>'+AN.blockers.map(x=>'\u2022 '+x).join('<br>')));}
@@ -9709,12 +9774,16 @@ function sbrModel(){
       rows:chk.map(c=>{const g=sbdChkTarget(c),k=g?firstKey[g[0]+'|'+g[1]]:null;return [c.label,sbrRef(c.ref||''),c.combo||'—',{t:c.na?'n/a':sbdFmtDC(c.dcr),n:true,key:k||undefined},st(c)];})},
       {type:'note',text:'Each D/C links to the card where it is worked. [[tab:tabSummary|On screen: Summary tab]]'}]}]});
   }
+  const resBy=sbrxResults(order,firstKey);
+  sbrxCover(secs);   /* SBRX: the print report's page-1 lines */
   order.forEach(id=>{const C=conv[id];if(!C||!C.subs.length)return;
-    secs.push({title:names[id]||id,subs:C.subs.map(q=>({title:q.title,items:q.c.list.map(it=>it.type==='steps'?sbrTopics(it):it).concat([{type:'note',text:'[[tab:'+id+'|On screen: '+(names[id]||id)+' tab]]'}])}))});});
-  secs.push({title:'References',subs:[{title:'Codes and references cited',items:[{type:'table',head:['Reference','Provisions used'],rows:sbdRefs().map(r=>[r[0],r[1]])}]}]});
+    const subs=C.subs.map(q=>({title:q.title,items:q.c.list.map(it=>it.type==='steps'?sbrTopics(it):it).concat(id==='tabManual'?[]:[{type:'note',text:'[[tab:'+id+'|On screen: '+(names[id]||id)+' tab]]'}])}));
+    if(resBy[id])subs.push({title:'Results \u2014 '+(names[id]||id),items:resBy[id]});   /* SBRX: the D/C result lines the print report put at the end of the section */
+    secs.push({title:id==='tabManual'?'User manual (all parts)':(names[id]||id),subs});});
+  secs.push({title:'References',subs:[{title:'Codes and references cited',items:[{type:'table',head:['Reference','Provisions used'],rows:sbdRefs().map(r=>[r[0],r[1]])}]},sbrxAbout()]});
   const today=new Date().toISOString().slice(0,10),sect=AN&&AN.sect?AN.sect.lbl+' — '+AN.sect.mat.name:'';
-  return {title:isBatch()?'Steel Beam Batch Check':(isMember()?'Steel Member Capacity Check':'Steel Beam Design'),subtitle:(f.name||'Untitled')+(f.subject?' — '+f.subject:'')+(sect&&!isBatch()?' — '+sect:''),code:'AISC 360-16 (LRFD) · AISC Steel Construction Manual, 15th Ed.',
-    info:[['Project',f.name],['Project No.',f.num],['Calculated by',f.by||'Mario Lococo'],['Date',f.date||today],['Checked by',f.chk],['Checked date',f.chkDate]],
+  return {title:isBatch()?'Steel Beam Batch Check':(isMember()?'Steel Member Capacity Check':'Steel Beam Design'),subtitle:(f.name||'Untitled')+(f.subject?' — '+f.subject:'')+(sect&&!isBatch()?' — '+sect:''),code:'AISC 360-16 (LRFD) · AISC Steel Construction Manual, 15th Ed. · Steel Beam Designer · by Mario Lococo',
+    info:[['Project',f.name],['Project No.',f.num],['Calculated by',f.by||'Mario Lococo'],['Date',f.date||today],['Checked by',f.chk],['Checked date',f.chkDate]].concat(isBatch()?[]:[['Subject',f.subject],['Task',f.task],['Section',sect]]),
     head:{left:'Project No. '+(f.num||'—')+' — '+String(f.name||'—').slice(0,40),right:'Computed: '+(f.by||'Mario Lococo')+' '+(f.date||today)+' · Checked: '+(f.chk||'—')+' '+(f.chkDate||''),foot:(f.name||'Untitled')+' (Steel Beam Designer)'},
     sections:secs};
 }
@@ -9723,7 +9792,7 @@ function sbrRender(pg){
   let M;try{M=sbrModel();}catch(e){pg.appendChild(el('div','errBox','Report error: '+sbdEsc(e&&e.message)));SBRP.api=null;SBRP.doc=null;return;}
   const host=el('div','sbrHost');pg.appendChild(host);
   const bar=$('tabBar');
-  SBRP.api=SharedReport.mount(host,M,{closed:SBRP.closed,onGoto:sbrGoto,stick:bar?bar.offsetHeight:0});SBRP.doc=SBRP.api.doc;
+  SBRP.api=SharedReport.mount(host,M,{controls:sbrxControls(),closed:SBRP.closed,onGoto:sbrGoto,stick:bar?bar.offsetHeight:0});SBRP.doc=SBRP.api.doc;sbrxWire(host);
   /* SBRP-2: diagrams not yet drawn are drawn now (Plotly.toImage, PNG, as rasterisePlots), then the report is rebuilt with them */
   const todo=Object.keys(SBRP.figs).filter(k=>!SBRP.imgs.has(k));
   if(todo.length&&typeof Plotly!=='undefined'){const tok=++SBRP.tok;host.dataset.plots='pending';
