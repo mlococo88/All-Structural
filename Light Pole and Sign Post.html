@@ -4557,6 +4557,8 @@ function lppLtsInputErrors(inp){
   pos(num('ltsVsvc'),'Service wind speed V_svc');
   if(!$('ltsWeldType')||$('ltsWeldType').value!=='cjp'){ pos(num('ltsWeldW'),'Fillet weld size w'); pos(num('ltsFexx'),'Electrode strength F_EXX'); }
   if(!inp.bromsSoil||inp.bromsSoil==='none') e.push('Broms soil model (Shaft & soil): choose Cohesive or Cohesionless. In the LRFDLTS mode the shaft embedment is designed by Broms (Art. 13.6.1.1).');
+  else if(inp.bromsSoil==='cohesive') pos(inp.bromsC,'Broms undrained shear strength c');   // LTS-L3 (2026-11-03): the parameters of the chosen model
+  else { pos(inp.bromsPhi,'Broms friction angle φ'); pos(inp.bromsGam,'Broms effective unit weight γ'); }
   return e;
 }
 let lppLtsBlocked=false;   // LTS-L2: an LTS input error: ltsCalc() shows no results
