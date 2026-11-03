@@ -4372,7 +4372,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 - The User Manual (§0 "the summary dashboard at the top of the report", §3.1) still describes the dashboard as at the top; left as is so the tab text stays identical. A wording update can follow if the engineer wants it.
 
-## 2026-11-03 — PR: claude/sf-plotly-guard — Report renders when Plotly is not loaded; each chart shows a note instead (SFPN; display only, no result change)
+## 2026-11-03 — PR: claude/sf-plotly-guard (PR #738: https://github.com/mlococo88/All-Structural/pull/738) — Report renders when Plotly is not loaded; each chart shows a note instead (SFPN; display only, no result change)
 
 ### SFPN. "Plotly is not defined" left the Report empty   [display only]
 - **Problem (regression of #734, SFAC-P):** with Plotly not loaded (offline from `file://`, CDN blocked), `renderReport()` calls `sfpDrawHidden()` → `renderPlots()` before it builds the Report, and the first `Plotly.newPlot` threw "Plotly is not defined": the Report tab stayed empty, and so did the printout (`#rp-print`). Before #734 the same throw happened in `recalc()` whenever a chart was on the open tab (it skipped the rest of `recalc()`: the open Report / Drawings tab refresh and the input-tab notes) and on every tab click (after the tab was shown).
