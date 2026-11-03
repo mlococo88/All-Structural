@@ -2154,7 +2154,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   QuotaExceededError): message shown, storage byte-identical; the renamed project opens with its values. `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 
-## 2026-11-03 — PR: claude/report-retire-cbc (CBRX: the print reports of the Beam Capacity and ASD Beam Calcs tabs (D11, "Print / PDF" and their "Report Contents" dialogs) and the embedded Development & Splice copy's print report retired after porting what the combined Report tab lacked; "Print / PDF", "Print / PDF Report", Ctrl+P and the browser's Print print the suite's Report from every tab; display only, no result change)
+## 2026-11-03 — PR: claude/report-retire-cbc, PR #726: https://github.com/mlococo88/All-Structural/pull/726 (CBRX: the print reports of the Beam Capacity and ASD Beam Calcs tabs (D11, "Print / PDF" and their "Report Contents" dialogs) and the embedded Development & Splice copy's print report retired after porting what the combined Report tab lacked; "Print / PDF", "Print / PDF Report", Ctrl+P and the browser's Print print the suite's Report from every tab; display only, no result change)
 
 ### CBRX-1. What the print reports printed and the combined Report lacked, ported   [display] [no result change]
 - **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #685, #715, #718, #722, #724).
