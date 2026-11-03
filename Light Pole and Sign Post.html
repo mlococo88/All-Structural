@@ -449,7 +449,7 @@
       <div class="card-h"><span class="num">1</span><h2>LRFDLTS criteria</h2><span class="hint">AASHTO LRFDLTS 1st Ed. (2015, 2017 Interim)</span></div>
       <div class="card-body">
         <p class="lts-basis" id="ltsBasisIn"></p>
-        <div class="row"><label>Risk category<span class="note">Table 3.8-1</span></label><div class="ctl"><select id="ltsRisk" class="combo-sel">
+        <div class="row" id="rowLtsRisk"><label>Risk category<span class="note">Table 3.8-1</span></label><div class="ctl"><select id="ltsRisk" class="combo-sel">
           <option value="typical" selected>Typical — failure could cross the travelway</option>
           <option value="high">High — failure could stop a lifeline travelway</option>
           <option value="low">Low — failure could not cross the travelway</option>
@@ -467,13 +467,7 @@
         </select></div></div>
         <div class="row"><label>Basic wind speed, V<span class="note" id="ltsVNote">3-s gust, Exposure C, from the map for the MRI above</span></label><div class="ctl"><input id="ltsV" type="number" value="130" step="1"><span class="unit">mph</span></div></div>
         <div class="row"><label>Service wind speed, V<sub>svc</sub><span class="note">10-yr MRI, Fig. 3.8-4 (Service I)</span></label><div class="ctl"><input id="ltsVsvc" type="number" value="76" step="1"><span class="unit">mph</span></div></div>
-        <div class="row"><label>Square / rect. tube corner ratio, r<sub>s</sub><span class="note">corner radius ÷ depth (Table 3.8.7-1); 0 = sharp corners (C<sub>d</sub> 2.0, conservative)</span></label><div class="ctl"><input id="ltsRs" type="number" value="0" step="0.025" min="0"><span class="unit">—</span></div></div>
-        <div class="row"><label>Square / rect. tube inside corner radius, r<sub>i</sub><span class="note">optional; 0 = not known (flat width B − 3t, AISC torsional constant)</span></label><div class="ctl"><input id="ltsRi" type="number" value="0" step="0.0625" min="0"><span class="unit">in</span></div></div>
         <div class="row"><label>Within the clear zone?<span class="note">breakaway checklist, Art. 2.5.2</span></label><div class="ctl"><select id="ltsClearZone" class="combo-sel"><option value="no" selected>No — outside, or behind a barrier</option><option value="yes">Yes — in the clear zone</option></select></div></div>
-        <div class="row"><label>Pole-to-base-plate weld<span class="note">LTS mode; Art. 5.14 → AWS D1.1</span></label><div class="ctl"><select id="ltsWeldType" class="combo-sel"><option value="fillet" selected>Socket, fillet-welded</option><option value="cjp">Full-penetration groove (CJP)</option></select></div></div>
-        <div class="row"><label>Fillet weld size, w</label><div class="ctl"><input id="ltsWeldW" type="number" value="0.3125" step="0.0625" min="0.125"><span class="unit">in</span></div></div>
-        <div class="row"><label>Electrode strength, F<sub>EXX</sub></label><div class="ctl"><input id="ltsFexx" type="number" value="70" step="10"><span class="unit">ksi</span></div></div>
-        <div class="row"><label>Atmospheric ice, t<sub>ice</sub><span class="note">Owner-specified (Art. 3.7); 0 = none; Strength I only</span></label><div class="ctl"><input id="ltsIce" type="number" value="0" step="0.25" min="0"><span class="unit">in</span></div></div>
       </div>
     </section>
 
@@ -503,7 +497,9 @@
           <option value="square">Square HSS</option>
           <option value="rect">Rectangular HSS</option>
         </select></div></div>
-        <div class="row" id="rowFixCf"><label>Fixture C<sub>f</sub><span class="note">drag coefficient, all fixtures</span></label><div class="ctl"><input id="cfLum" type="number" value="1.1" step="0.1"><span class="unit">—</span></div></div>
+        <div class="row ltsOnly" id="rowLtsRs"><label>Square / rect. tube corner ratio, r<sub>s</sub><span class="note">corner radius ÷ depth (Table 3.8.7-1); 0 = sharp corners (C<sub>d</sub> 2.0, conservative)</span></label><div class="ctl"><input id="ltsRs" type="number" value="0" step="0.025" min="0"><span class="unit">—</span></div></div>
+        <div class="row ltsOnly" id="rowLtsRi"><label>Square / rect. tube inside corner radius, r<sub>i</sub><span class="note">optional; 0 = not known (flat width B − 3t, AISC torsional constant)</span></label><div class="ctl"><input id="ltsRi" type="number" value="0" step="0.0625" min="0"><span class="unit">in</span></div></div>
+        <div class="row ibcOnly" id="rowFixCf"><label>Fixture C<sub>f</sub><span class="note">drag coefficient, all fixtures</span></label><div class="ctl"><input id="cfLum" type="number" value="1.1" step="0.1"><span class="unit">—</span></div></div>
         <div class="row" id="rowDiaTop"><label id="poleDiaTopLabel">Diameter / width — top<span class="note">outside, at top</span></label><div class="ctl"><input id="poleDiaTop" type="number" value="6.0" step="0.5"><span class="unit">in</span></div></div>
         <div class="row" id="rowDiaBase"><label id="poleDiaBaseLabel">Diameter / width — base<span class="note">outside, at grade</span></label><div class="ctl"><input id="poleDiaBase" type="number" value="10.0" step="0.5"><span class="unit">in</span></div></div>
         <div class="row" id="rowDepthTop" style="display:none"><label id="poleDepthTopLabel">Depth — top<span class="note">rect. HSS, into-wind dimension</span></label><div class="ctl"><input id="poleDepthTop" type="number" value="4.0" step="0.5"><span class="unit">in</span></div></div>
@@ -512,29 +508,29 @@
         <div class="row" id="rowTwBase"><label>Wall thickness — base</label><div class="ctl"><input id="poleTwBase" type="number" value="0.25" step="0.0625"><span class="unit">in</span></div></div>
         <div class="row"><label>Yield strength, F<sub>y</sub><span class="note">steel: 50 ksi typ.</span></label><div class="ctl"><input id="poleFy" type="number" value="50" step="5"><span class="unit">ksi</span></div></div>
         <div class="row"><label>Material density<span class="note">steel: 490 pcf</span></label><div class="ctl"><input id="poleDen" type="number" value="490" step="10"><span class="unit">pcf</span></div></div>
-        <div class="row"><label>Pole/post C<sub>f</sub> source<span class="note">auto = ASCE 7-22 Fig. 29.4-1 by shape and h/D</span></label><div class="ctl"><select id="cfPoleMode" class="combo-sel"><option value="auto" selected>Auto — Fig. 29.4-1</option><option value="manual">Manual — enter C_f</option></select></div></div>
-        <div class="row" id="rowCfPoleSurf"><label>Round section, surface / shape<span class="note">for Fig. 29.4-1 (round only)</span></label><div class="ctl"><select id="cfPoleSurf" class="combo-sel"><option value="smooth" selected>Round, moderately smooth (galvanized / painted)</option><option value="rough">Round, rough (D′/D = 0.02)</option><option value="vrough">Round, very rough (D′/D = 0.08)</option><option value="poly">Hexagonal or octagonal (multi-sided)</option></select></div></div>
-        <div class="row" id="rowCfPoleMan"><label id="poleCfLabel">Pole/post C<sub>f</sub><span class="note">manual value (ASCE 7-22 Fig. 29.4-1: h/D ≥ 25 → round smooth 0.7, round D√q<sub>z</sub> ≤ 2.5 → 1.2, hex/oct 1.4, square 2.0)</span></label><div class="ctl"><input id="cfPole" type="number" value="0.7" step="0.1"><span class="unit">—</span></div></div>
-        <p class="tbl-note" id="lppCfNote" style="margin:-4px 0 8px 0"></p>
-        <p class="tbl-note" id="cfMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
+        <div class="row ibcOnly"><label>Pole/post C<sub>f</sub> source<span class="note">auto = ASCE 7-22 Fig. 29.4-1 by shape and h/D</span></label><div class="ctl"><select id="cfPoleMode" class="combo-sel"><option value="auto" selected>Auto — Fig. 29.4-1</option><option value="manual">Manual — enter C_f</option></select></div></div>
+        <div class="row ibcOnly" id="rowCfPoleSurf"><label>Round section, surface / shape<span class="note">for Fig. 29.4-1 (round only)</span></label><div class="ctl"><select id="cfPoleSurf" class="combo-sel"><option value="smooth" selected>Round, moderately smooth (galvanized / painted)</option><option value="rough">Round, rough (D′/D = 0.02)</option><option value="vrough">Round, very rough (D′/D = 0.08)</option><option value="poly">Hexagonal or octagonal (multi-sided)</option></select></div></div>
+        <div class="row ibcOnly" id="rowCfPoleMan"><label id="poleCfLabel">Pole/post C<sub>f</sub><span class="note">manual value (ASCE 7-22 Fig. 29.4-1: h/D ≥ 25 → round smooth 0.7, round D√q<sub>z</sub> ≤ 2.5 → 1.2, hex/oct 1.4, square 2.0)</span></label><div class="ctl"><input id="cfPole" type="number" value="0.7" step="0.1"><span class="unit">—</span></div></div>
+        <p class="tbl-note ibcOnly" id="lppCfNote" style="margin:-4px 0 8px 0"></p>
+        <p class="tbl-note ibcOnly" id="cfMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
         <div class="row"><label>Misc. dead load<span class="note">self-weight added automatically</span></label><div class="ctl"><input id="DL" type="number" value="0" step="50"><span class="unit">lb</span></div></div>
       </div>
     </section>
 
     <section class="card" id="signCard" style="display:none">
-      <div class="card-h"><span class="num">2b</span><h2>Sign panel</h2><span class="hint">ASCE 7 Ch.29 solid sign</span></div>
+      <div class="card-h"><span class="num">2b</span><h2>Sign panel</h2><span class="hint"><span class="ibcOnly">ASCE 7 Ch.29 solid sign</span><span class="ltsOnly">LRFDLTS Table 3.8.7-1 sign panel</span></span></div>
       <div class="card-body">
         <div class="row"><label>Panel width, B</label><div class="ctl"><input id="signB" type="number" value="12" step="0.5"><span class="unit">ft</span></div></div>
         <div class="row"><label>Panel height, s</label><div class="ctl"><input id="signS" type="number" value="6" step="0.5"><span class="unit">ft</span></div></div>
         <div class="row"><label>Clearance to bottom<span class="note">grade to bottom of panel</span></label><div class="ctl"><input id="signClr" type="number" value="10" step="0.5"><span class="unit">ft</span></div></div>
         <div class="row"><label>Panel weight<span class="note">total dead, both faces + frame</span></label><div class="ctl"><input id="signWt" type="number" value="400" step="50"><span class="unit">lb</span></div></div>
-        <div class="row"><label>Force coeff. C<sub>f</sub> mode<span class="note">auto = ASCE 7-22 Fig. 29.3-1</span></label><div class="ctl"><select id="signCfMode" class="combo-sel">
+        <div class="row ibcOnly"><label>Force coeff. C<sub>f</sub> mode<span class="note">auto = ASCE 7-22 Fig. 29.3-1</span></label><div class="ctl"><select id="signCfMode" class="combo-sel">
           <option value="auto" selected>Auto — computed from B/s and s/h</option>
           <option value="manual">Manual — override C_f</option>
         </select></div></div>
-        <div class="row" id="rowSignCfMan" style="display:none"><label>Override C<sub>f</sub><span class="note">applied to Cases A &amp; B</span></label><div class="ctl"><input id="signCfMan" type="number" value="1.20" step="0.05" min="0.1"><span class="unit">—</span></div></div>
-        <div class="row" id="rowSpacing" style="display:none"><label>Post spacing<span class="note">between the two posts, panel centered</span></label><div class="ctl"><input id="signSpacing" type="number" value="8" step="0.5"><span class="unit">ft</span></div></div>
-        <p class="tbl-note" id="signCaseNote" style="margin-top:6px"></p>
+        <div class="row ibcOnly" id="rowSignCfMan" style="display:none"><label>Override C<sub>f</sub><span class="note">applied to Cases A &amp; B</span></label><div class="ctl"><input id="signCfMan" type="number" value="1.20" step="0.05" min="0.1"><span class="unit">—</span></div></div>
+        <div class="row" id="rowSpacing" style="display:none"><label>Post spacing<span class="note">between the two posts, panel centered<span class="ltsOnly">; LRFDLTS mode: drawings only, each post carries half the panel load (decision Q-C2)</span></span></label><div class="ctl"><input id="signSpacing" type="number" value="8" step="0.5"><span class="unit">ft</span></div></div>
+        <p class="tbl-note ibcOnly" id="signCaseNote" style="margin-top:6px"></p>
       </div>
     </section>
 
@@ -543,7 +539,7 @@
       <div class="card-body">
         <div class="lppTblScroll"><table class="cable-tbl" id="fixTbl">
           <thead><tr>
-            <th>#</th><th>Mount<br>ht (ft)</th><th>Plan θ<br>(° from X)</th><th>Arm<br>a (ft)</th><th>EPA<br>(ft²)</th><th>Ice area<br>(ft²)</th><th>Ice depth<br>(ft)</th><th>Weight<br>(lb)</th><th>Arm OD<br>(in)</th><th></th>
+            <th>#</th><th>Mount<br>ht (ft)</th><th>Plan θ<br>(° from X)</th><th>Arm<br>a (ft)</th><th>EPA<br>(ft²)</th><th class="ibcOnly">Ice area<br>(ft²)</th><th class="ibcOnly">Ice depth<br>(ft)</th><th>Weight<br>(lb)</th><th>Arm OD<br>(in)</th><th></th>
           </tr></thead>
           <tbody id="fixBody"></tbody>
         </table></div>
@@ -598,12 +594,19 @@
       </div>
     </section>
 
+    <section class="card ltsOnly" id="ltsIceCard">
+      <div class="card-h"><span class="num">5</span><h2>Atmospheric ice</h2><span class="hint">LRFDLTS Art. 3.7</span></div>
+      <div class="card-body">
+        <div class="row"><label>Atmospheric ice, t<sub>ice</sub><span class="note">Owner-specified (Art. 3.7); 0 = none; Strength I only</span></label><div class="ctl"><input id="ltsIce" type="number" value="0" step="0.25" min="0"><span class="unit">in</span></div></div>
+      </div>
+    </section>
+
     <section class="card">
       <div class="card-h"><span class="num">6</span><h2>Shaft &amp; soil</h2><span class="hint">geotechnical basis</span></div>
       <div class="card-body">
         <div class="row"><label>Shaft shape<span class="note">drilled pier or square pier/pile cap</span></label><div class="ctl"><select id="shaftShape"><option value="round">Round (drilled shaft)</option><option value="square">Square</option></select></div></div>
         <div class="row"><label id="lblShaftB">Shaft diameter, b</label><div class="ctl"><input id="b" type="number" value="3.0" step="0.25"><span class="unit">ft</span></div></div>
-        <div class="row"><label>Soil class<span class="note">IBC Table 1806.2 presumptive values</span></label><div class="ctl"><select id="soilClass" class="combo-sel">
+        <div class="row ibcOnly"><label>Soil class<span class="note">IBC Table 1806.2 presumptive values</span></label><div class="ctl"><select id="soilClass" class="combo-sel">
             <option value="rock1">Crystalline bedrock</option>
             <option value="rock2">Sedimentary &amp; foliated rock</option>
             <option value="gravel">Sandy gravel / gravel (GW, GP)</option>
@@ -611,9 +614,9 @@
             <option value="clay">Clay, sandy/silty clay, clayey silt (CL, ML, MH, CH)</option>
             <option value="custom">Custom — from geotechnical report</option>
           </select></div></div>
-        <p class="tbl-note" id="soilClassNote" style="margin:-4px 0 8px 0"></p>
-        <div class="row"><label>Lateral bearing S₁<span class="note" id="s1Src">psf/ft (IBC Tbl 1806.2)</span></label><div class="ctl"><input id="S1" type="number" value="150" step="10"><span class="unit">psf/ft</span></div></div>
-        <div class="row"><label>Allowable bearing, q<sub>a</sub><span class="note">vertical, base of shaft (IBC Tbl 1806.2)</span></label><div class="ctl"><input id="qAllow" type="number" value="2.0" step="0.5"><span class="unit">ksf</span></div></div>
+        <p class="tbl-note ibcOnly" id="soilClassNote" style="margin:-4px 0 8px 0"></p>
+        <div class="row ibcOnly"><label>Lateral bearing S₁<span class="note" id="s1Src">psf/ft (IBC Tbl 1806.2)</span></label><div class="ctl"><input id="S1" type="number" value="150" step="10"><span class="unit">psf/ft</span></div></div>
+        <div class="row ibcOnly"><label>Allowable bearing, q<sub>a</sub><span class="note">vertical, base of shaft (IBC Tbl 1806.2)</span></label><div class="ctl"><input id="qAllow" type="number" value="2.0" step="0.5"><span class="unit">ksf</span></div></div>
         <div class="subpanel ref" id="bromsPanel">
           <div class="sp-h">Broms reference check — AASHTO LTS C13.6.1.1 <span class="ref-chip">reference only</span></div>
           <p class="tbl-note" style="margin:0 0 8px 0">Optional. These inputs feed only the Broms comparison in the Shaft tab; they do not affect the IBC design. Leave the soil model at "Not evaluated" unless a geotechnical report supplies the parameters.</p>
@@ -628,11 +631,11 @@
         <div class="row" id="rowBromsPhiR" style="display:none"><label>Resistance factor, φ <span class="note">optional margin on soil resistance. φ = 1.00 reproduces AASHTO LTS exactly as printed; the code prescribes no value.</span></label><div class="ctl"><input id="bromsPhiR" type="number" value="1.0" step="0.05" min="0.05" max="1"><span class="unit">—</span></div></div>
         <div class="row" id="rowBromsOL" style="display:none"><label>Overload factor, λ <span class="note">extra multiplier on the factored demands M_F, V_F. λ = 1.00 leaves the LRFD demands unchanged.</span></label><div class="ctl"><input id="bromsOL" type="number" value="1.0" step="0.05" min="1"><span class="unit">—</span></div></div>
         </div>
-        <div class="row"><label>Isolated 2× (§1806.3.4)</label><div class="ctl"><div class="seg" id="segIso"><button data-v="1" class="on">No</button><button data-v="2">Yes ×2</button></div></div></div>
-        <div class="row"><label>Constraint at grade</label><div class="ctl"><div class="seg" id="segCon"><button data-v="non" class="on">Non-constr.</button><button data-v="con">Constrained</button></div></div></div>
+        <div class="row ibcOnly"><label>Isolated 2× (§1806.3.4)</label><div class="ctl"><div class="seg" id="segIso"><button data-v="1" class="on">No</button><button data-v="2">Yes ×2</button></div></div></div>
+        <div class="row ibcOnly"><label>Constraint at grade</label><div class="ctl"><div class="seg" id="segCon"><button data-v="non" class="on">Non-constr.</button><button data-v="con">Constrained</button></div></div></div>
         <div class="row"><label>Concrete f′c</label><div class="ctl"><input id="fc" type="number" value="4000" step="500"><span class="unit">psi</span></div></div>
         <div class="row"><label>Reinf. f<sub>y</sub></label><div class="ctl"><input id="fy" type="number" value="60000" step="5000"><span class="unit">psi</span></div></div>
-        <div class="row"><label>Clear cover<span class="note">3 in for cast-against-earth (ACI §20.5.1.3)</span></label><div class="ctl"><input id="cover" type="number" value="3.0" step="0.5"><span class="unit">in</span></div></div>
+        <div class="row"><label>Clear cover<span class="note"><span class="ibcOnly">3 in for cast-against-earth (ACI §20.5.1.3)</span><span class="ltsOnly">3 in minimum, LRFDLTS Art. 13.6.2.1 (ACI 318-19 §20.5.1.3)</span></span></label><div class="ctl"><input id="cover" type="number" value="3.0" step="0.5"><span class="unit">in</span></div></div>
         <div class="subpanel" id="rebarPanel">
           <div class="sp-h">Shaft reinforcement</div>
           <div class="row"><label>Min. steel basis<span class="note">§10.3.1.2 permits ½·A_g when the section is oversized</span></label>
@@ -689,15 +692,18 @@
         <div class="row" id="rowBpB" style="display:none"><label>Base plate side, B<span class="note">square plate B × B, centred on the bolt circle</span></label><div class="ctl"><input id="bpB" type="number" value="20" step="1"><span class="unit">in</span></div></div>
         <div class="row"><label>Base plate yield strength, F<sub>y</sub><span class="note">A36: 36 ksi · A572 Gr 50: 50 ksi</span></label><div class="ctl"><input id="bpFy" type="number" value="36" step="1"><span class="unit">ksi</span></div></div>
         <div class="row"><label>Base plate thickness, provided<span class="note">checked against t<sub>req</sub> (bending line at the pole face, double-nut)</span></label><div class="ctl"><input id="bpT" type="number" value="1.25" step="0.125"><span class="unit">in</span></div></div>
-        <div class="row"><label>Anchor reinforcement<span class="note">tie cage developed into the breakout cone (§17.5.2.1)</span></label>
+        <div class="row ltsOnly"><label>Pole-to-base-plate weld<span class="note">LTS mode; Art. 5.14 → AWS D1.1</span></label><div class="ctl"><select id="ltsWeldType" class="combo-sel"><option value="fillet" selected>Socket, fillet-welded</option><option value="cjp">Full-penetration groove (CJP)</option></select></div></div>
+        <div class="row ltsOnly" id="rowLtsWeldW"><label>Fillet weld size, w</label><div class="ctl"><input id="ltsWeldW" type="number" value="0.3125" step="0.0625" min="0.125"><span class="unit">in</span></div></div>
+        <div class="row ltsOnly" id="rowLtsFexx"><label>Electrode strength, F<sub>EXX</sub></label><div class="ctl"><input id="ltsFexx" type="number" value="70" step="10"><span class="unit">ksi</span></div></div>
+        <div class="row ibcOnly"><label>Anchor reinforcement<span class="note">tie cage developed into the breakout cone (§17.5.2.1)</span></label>
           <div class="ctl"><div class="seg" id="segAnchRe"><button data-v="yes">Provided</button><button data-v="no" class="on">None</button></div></div></div>
-        <div class="row arRow"><label>Anchor reinf.: bars per tension anchor<span class="note">vertical bars within 0.5h<sub>ef</sub> of each anchor rod (R17.5.2.1), counted for that anchor only</span></label><div class="ctl"><input id="arBars" type="number" value="2" step="1" min="1"><span class="unit">—</span></div></div>
-        <div class="row arRow"><label>Anchor reinf.: bar size<span class="note">straight vertical bars, Grade = reinf. f<sub>y</sub></span></label><div class="ctl"><select id="arBar" class="combo-sel"><option value="shaft" selected>Shaft longitudinal bar</option><option>#4</option><option>#5</option><option>#6</option><option>#7</option><option>#8</option><option>#9</option><option>#10</option><option>#11</option></select></div></div>
-        <div class="row arRow"><label>Anchor reinf.: distance from the rod<span class="note">horizontal, anchor rod axis to the bar axis</span></label><div class="ctl"><input id="arX" type="number" value="3" step="0.5" min="0"><span class="unit">in</span></div></div>
+        <div class="row arRow ibcOnly"><label>Anchor reinf.: bars per tension anchor<span class="note">vertical bars within 0.5h<sub>ef</sub> of each anchor rod (R17.5.2.1), counted for that anchor only</span></label><div class="ctl"><input id="arBars" type="number" value="2" step="1" min="1"><span class="unit">—</span></div></div>
+        <div class="row arRow ibcOnly"><label>Anchor reinf.: bar size<span class="note">straight vertical bars, Grade = reinf. f<sub>y</sub></span></label><div class="ctl"><select id="arBar" class="combo-sel"><option value="shaft" selected>Shaft longitudinal bar</option><option>#4</option><option>#5</option><option>#6</option><option>#7</option><option>#8</option><option>#9</option><option>#10</option><option>#11</option></select></div></div>
+        <div class="row arRow ibcOnly"><label>Anchor reinf.: distance from the rod<span class="note">horizontal, anchor rod axis to the bar axis</span></label><div class="ctl"><input id="arX" type="number" value="3" step="0.5" min="0"><span class="unit">in</span></div></div>
         <div class="row"><label>Anchor installation<span class="note">torqued = rods pretensioned after snug-tight (AASHTO LTS turn-of-nut); sets the ACI 318-19 §17.9.2 minimum spacing and edge distance</span></label>
           <div class="ctl"><div class="seg" id="segAnchTq"><button data-v="untorqued">Untorqued</button><button data-v="torqued" class="on">Torqued</button></div></div></div>
         <p class="tbl-note" id="anchTqMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
-        <div class="row"><label>Splitting reinforcement at the shaft top<span class="note">ties / spiral detailed to control splitting around the anchors (ACI 318-19 §17.9.1); when provided, the §17.9.2 minimum spacing and edge distance are waived. Separate from the breakout anchor reinforcement above.</span></label>
+        <div class="row ibcOnly"><label>Splitting reinforcement at the shaft top<span class="note">ties / spiral detailed to control splitting around the anchors (ACI 318-19 §17.9.1); when provided, the §17.9.2 minimum spacing and edge distance are waived. Separate from the breakout anchor reinforcement above.</span></label>
           <div class="ctl"><div class="seg" id="segSplitRe"><button data-v="yes">Provided</button><button data-v="no" class="on">None</button></div></div></div>
       </div>
     </section>
@@ -1230,6 +1236,7 @@ function lppApplyCode(){
   }
   const cn=$('ltsCableNote'); if(cn) cn.style.display=sign?'none':'';
   const ra=$('rowLtsAdt'); if(ra) ra.style.display=sign?'none':'';
+  const rr=$('rowLtsRisk'); if(rr) rr.style.display=sign?'none':'';   // LTS-L1: a roadside sign takes the 10-yr MRI whatever the risk category (Table 3.8-1 note)
   if($('ltsBasisIn')) $('ltsBasisIn').textContent='Basis: '+LpLts.BASIS+'.';
 }
 function applyMode(){
@@ -1330,7 +1337,16 @@ function applyShapeUI(){
   if($('poleDiaBaseLabel')) $('poleDiaBaseLabel').innerHTML=`${dLabel} — base<span class="note">outside, at grade</span>`;
   if($('poleTwTopLabel'))   $('poleTwTopLabel').innerHTML = tapered ? `Wall thickness — top` : `Wall thickness`;
   if($('poleDepthTopLabel'))$('poleDepthTopLabel').innerHTML = `Depth<span class="note">rect. HSS, into-wind dimension</span>`;
+  lppApplyLtsRowsUI();   // LTS-L1
 }
+// LTS-L1 (2026-11-03): LTS rows that depend on another input (hidden in the IBC mode by .ltsOnly in any case): r_s and r_i for a
+// square / rectangular section only; fillet size and F_EXX for a fillet weld only. Display only: the values stay in the inputs.
+function lppApplyLtsRowsUI(){
+  const show=(id,on)=>{const e=$(id); if(e) e.style.display=on?'':'none';};
+  const nr=!!$('poleShape')&&$('poleShape').value!=='round', fil=!$('ltsWeldType')||$('ltsWeldType').value!=='cjp';
+  show('rowLtsRs',nr); show('rowLtsRi',nr); show('rowLtsWeldW',fil); show('rowLtsFexx',fil);
+}
+if($('ltsWeldType')) $('ltsWeldType').addEventListener('change',lppApplyLtsRowsUI);
 document.querySelectorAll('#modeSeg button').forEach(b=>b.onclick=()=>{appMode=b.dataset.v;applyMode();});
 document.querySelectorAll('#codeSeg button').forEach(b=>b.onclick=()=>{codeMode=b.dataset.v==='lts'?'lts':'ibc';applyMode();});
 document.querySelectorAll('#signPostSeg button').forEach(b=>b.onclick=()=>{signPosts=+b.dataset.v;applyMode();});
@@ -1356,8 +1372,8 @@ function renderFixtures(){
       `<td><input type="number" data-i="${i}" data-k="th" value="${x.th}" step="15"></td>`+
       `<td><input type="number" data-i="${i}" data-k="a" value="${x.a}" step="0.5"></td>`+
       `<td><input type="number" data-i="${i}" data-k="epa" value="${x.epa}" step="0.1"></td>`+
-      `<td><input type="number" data-i="${i}" data-k="aIce" value="${x.aIce}" step="0.1"></td>`+
-      `<td><input type="number" data-i="${i}" data-k="tIce" value="${x.tIce}" step="0.1"></td>`+
+      `<td class="ibcOnly"><input type="number" data-i="${i}" data-k="aIce" value="${x.aIce}" step="0.1"></td>`+
+      `<td class="ibcOnly"><input type="number" data-i="${i}" data-k="tIce" value="${x.tIce}" step="0.1"></td>`+
       `<td><input type="number" data-i="${i}" data-k="W" value="${x.W}" step="5"></td>`+
       `<td><input type="number" data-i="${i}" data-k="armD" value="${x.armD||0}" step="0.25"></td>`+
       `<td><button class="del" data-del="${i}">×</button></td>`;
@@ -8099,7 +8115,7 @@ const LPP_IN_TABS=[['wind','Wind & site'],['pole','Pole'],['fix','Fixtures'],['c
   ['ice','Ice'],['shaft','Shaft & soil'],['anchors','Anchors']];
 // card -> tab, keyed by an element id inside the card
 const LPP_IN_CARD=[['V','wind'],['H','pole'],['signB','pole'],['fixTbl','fix'],['cablesOn','cables'],
-  ['tIce','ice'],['shaftShape','shaft'],['boltDia','anchors']];
+  ['tIce','ice'],['ltsIce','ice'],['shaftShape','shaft'],['boltDia','anchors']];
 const LPP_IN_KEY='lpp_inputTab_v1';
 let lppInTabCur=null;   // in-memory copy, so the tab survives without storage
 function lppInTabGet(){ if(lppInTabCur) return lppInTabCur; try{ return localStorage.getItem(LPP_IN_KEY)||''; }catch(e){ return ''; } }
@@ -8144,6 +8160,10 @@ function lppInTabsSync(){
   LPP_IN_TABS.forEach(([k])=>{ $('lppInTab_'+k).hidden=!lppPaneShown($('lppInPane_'+k)); });
   const lab=$('lppInTab_pole').querySelector('.lppInLab');
   if(lab) lab.textContent=(appMode==='sign')?'Post & sign':'Pole';
+  // LTS-L1: tab labels of the LRFDLTS mode (the tab keys, and so lpp_inputTab_v1, are unchanged)
+  const labW=$('lppInTab_wind').querySelector('.lppInLab'), labA=$('lppInTab_anchors').querySelector('.lppInLab');
+  if(labW) labW.textContent=(codeMode==='lts')?'Criteria & site':'Wind & site';
+  if(labA) labA.textContent=(codeMode==='lts')?'Base & anchors':'Anchors';
   let t=lppInTabGet();
   if(!$('lppInTab_'+t)||$('lppInTab_'+t).hidden){
     const first=LPP_IN_TABS.find(([k])=>!$('lppInTab_'+k).hidden); t=first?first[0]:'wind';
