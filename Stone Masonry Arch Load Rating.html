@@ -8,6 +8,9 @@
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js" charset="utf-8"></script>
 <!-- ARPT: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<!-- ARX (2026-11-03): Ctrl+P / the browser's Print from any tab first shows the Report tab (archPrintPrep), registered before the
+     Report's own beforeprint listener -->
+<script>window.addEventListener("beforeprint",function(){try{if(window.archPrintPrep)window.archPrintPrep();}catch(e){}});</script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 <!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
@@ -258,7 +261,6 @@ figcaption{font-size:.93rem;color:var(--soft);font-style:italic;margin-top:3px;t
 #modal .lvl2{padding-left:20px;font-size:.95rem;}
 
 /* ---------- print ---------- */
-#rptHost{display:none;}
 @media print{
   /* nothing is sticky on paper */
   #outTop{position:static !important;box-shadow:none !important;}
@@ -266,8 +268,7 @@ figcaption{font-size:.93rem;color:var(--soft);font-style:italic;margin-top:3px;t
   html,body{height:auto;overflow:visible;display:block;background:#fff;}
   #wrap{display:block;max-width:none;padding:0;}
   #inPanel,#outPanel{height:auto;overflow:visible;}
-  #hdr,#wrap,#modalBg{display:none !important;}
-  #rptHost{display:block !important;}
+  #modalBg{display:none !important;}
   .rpt-pg{page-break-after:always;}
   .rpt h2{font-size:1.18rem;border-bottom:1.5px solid #000;margin:13px 0 6px;padding-bottom:2px;}
   .rpt h3{font-size:1.05rem;margin:10px 0 4px;}
@@ -321,33 +322,7 @@ figcaption{font-size:.93rem;color:var(--soft);font-style:italic;margin-top:3px;t
 a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue);cursor:pointer;}
 .pnl.wkFlash,.sub.wkFlash{animation:wkflash 1.4s ease-out;}
 @keyframes wkflash{from{box-shadow:0 0 0 3px #9dbbe0;}to{box-shadow:0 0 0 3px transparent;}}
-/* D11 calculation-sheet report (Gusset Plate Rating / ST-Girder format) */
-#rptHost .cr-cover{min-height:8.2in;display:flex;flex-direction:column;justify-content:center;break-after:page;page-break-after:always;}
-#rptHost .cr-cover-t{text-align:center;margin-bottom:28pt;}
-#rptHost .cr-cover h1{font:700 25pt/1.2 Arial,Helvetica,sans-serif;margin:0 0 14pt;border:0;}
-#rptHost .cr-cover p{font:700 13pt Arial,Helvetica,sans-serif;margin:0 0 6pt;}
-#rptHost .cr-cover p.cr-cover-p{font-weight:400;font-size:11pt;}
-#rptHost table.cr-tb{width:100%;border-collapse:collapse;font-size:10pt;table-layout:fixed;}
-#rptHost table.cr-tb td{border:1px solid #000;padding:3pt 6pt;vertical-align:top;white-space:normal;}
-#rptHost .cr-front{break-after:page;page-break-after:always;}
-#rptHost section.cr-sec+section.cr-sec{break-before:page;page-break-before:always;}
-#rptHost h2.cr-h1{font:700 12pt "Times New Roman",Times,serif;text-decoration:underline;text-transform:uppercase;
-  border:0;margin:0 0 8pt;padding:0;}
-#rptHost .cr-front h2.cr-h1{margin-top:10pt;}
-#rptHost table.cr-refs{border-collapse:collapse;margin:0 0 14pt;font-size:10pt;}
-#rptHost table.cr-refs td{padding:1pt 14pt 2pt 0;vertical-align:top;}
-#rptHost table.cr-refs td:first-child{white-space:nowrap;font-weight:700;}
-#rptHost .cr-toc,#rptHost .cr-toc ol{list-style:none;margin:0;padding:0;}
-#rptHost .cr-toc>li{margin:3pt 0;} #rptHost .cr-toc ol{padding-left:18pt;font-size:10pt;}
-#rptHost .cr-small{font-size:9.5pt;margin-top:14pt;}
-#rptHost a{color:#000;text-decoration:none;}
-#rptHost a.wkA{color:#000;border:none;font-style:italic;}
-#rptHost .cr-resh{font:700 11pt "Times New Roman",Times,serif;margin:14pt 0 2pt;}
-#rptHost .cr-results{border-bottom:0.8pt solid #000;margin-bottom:8pt;}
-#rptHost .cr-line{display:grid;grid-template-columns:2.1in 1fr 0.8in;gap:0 12pt;align-items:center;padding:3pt 0;
-  border-top:0.6pt solid #000;break-inside:avoid;page-break-inside:avoid;}
-#rptHost .cr-r{text-align:right;} #rptHost .cr-st-fail{text-decoration:underline;}
-#rptHost .cr-refi{font-size:9pt;font-style:italic;}
+/* ARX (2026-11-03): the D11 print report's styles (#rptHost) removed with it */
 /* "All tools" link + shared project info buttons */
 .bx-all-tools{font-size:.85rem;color:var(--soft);text-decoration:none;}
 .bx-all-tools:hover{text-decoration:underline;}
@@ -482,7 +457,7 @@ a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue
     <div><label>Date</label><input id="tbDate" type="text"></div>
     <div><label>Checked by</label><input id="tbChk" type="text"></div>
     <div><label>Checked date</label><input id="tbChkDate" type="text"></div>
-    <div><label>&nbsp;</label><button id="printBtn" style="width:100%">Print / PDF Report</button></div>
+    <div><label>&nbsp;</label><button id="printBtn" style="width:100%" title="Print / PDF the calculation report (the Report tab), from any tab">Print / PDF Report</button></div>
   </div>
 </div></div>
 
@@ -502,7 +477,6 @@ a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue
 <div id="modalBg"><div id="modal"></div></div>
 <div id="runHead"></div>
 <div id="runFoot"></div>
-<div id="rptHost"></div>
 
 <script>
 
@@ -11501,7 +11475,6 @@ const TABS=[["sum","Summary"],["geo","Model"],["dl","Dead Load"],["ll","Live Loa
             ["veh","Vehicles"],["lat","Earth Pressure"],["diag","Diagrams"],["il","Influence Lines"],["rate","Rating"],["rsum","Rating Summary"],["nodes","Nodal Results"],
             ["ver","Verification"],["rpt","Report"],["man","Manual"]];   /* rpt: ARPT Report tab */
 function render(){
-  renderSeq++;
   let p;
   try{p=readP();}catch(e){
     archInTabMarks(e.message);
@@ -11624,12 +11597,12 @@ function render(){
   if(window.katex&&window.renderMathInElement)try{}catch(e){}
 }
 /* D11 links: open the tab, expand the panel, scroll to it (or to the named heading inside it) and flash it.
-   The report copies (#rptHost) are rewritten to "see §n.k" and are not handled here. */
+   (The retired print report's copies were rewritten to "see §n.k"; ARX 2026-11-03.) */
 function archGoto(tab,card,sub){
   if(!TABS.some(t=>t[0]===tab))return;
   activeTab=tab; render(); autosave();
   setTimeout(()=>{
-    const t=$(card); if(!t||t.closest("#rptHost"))return;
+    const t=$(card); if(!t)return;
     UI.setClp(card,false); t.classList.remove("clp");
     const tw=t.querySelector(".hd .tw"); if(tw)tw.textContent="▾";
     let at=t;
@@ -11645,7 +11618,7 @@ function archGoto(tab,card,sub){
 }
 document.addEventListener("click",e=>{
   const a=e.target.closest&&e.target.closest("a.wkA"); if(!a)return;
-  e.preventDefault(); if(a.closest("#rptHost"))return;
+  e.preventDefault(); if(a.closest(".rp"))return;
   archGoto(a.getAttribute("data-wtab"),a.getAttribute("data-wcard"),a.getAttribute("data-wsub"));
 });
 function postRender(p){
@@ -12722,46 +12695,8 @@ function rptSelDefaults(){
   results.forEach(r=>{if(sel["rv_"+r.id]==null)sel["rv_"+r.id]=true;});
   return sel;
 }
-/* D11 (2026-10-18): the report records which render it was built from. Ctrl+P (or the browser's Print) used
-   to print an empty #rptHost (blank sheet) before the first build, and a stale report after any later change;
-   beforeprint now rebuilds it from the current state with the last report selection. */
-let renderSeq=0, rptBuiltSeq=-1;
-function archBuildReport(sel){
-  window.__buildingReport=true;
-  try{buildReport(sel);rptBuiltSeq=renderSeq;}finally{window.__buildingReport=false;}
-}
-window.addEventListener("beforeprint",()=>{
-  if(!M)return;
-  if(archRptWillPrint())return;   /* ARPT: the Report tab prints itself (shared/report.js) */
-  if(rptBuiltSeq===renderSeq&&$("rptHost").innerHTML)return;
-  try{const sel=rptSelDefaults();rptSel=sel;archBuildReport(sel);}catch(e){}
-});
-function reportModal(){
-  const sel=rptSelDefaults();
-  let h=`<h3>Report contents</h3>
-    <p style="font-size:.96rem">Select what the printed report contains. The title block and the disclaimer
-    footer always print. Deselected sections are removed and the remainder renumber sequentially.</p>`;
-  h+=`<div class="grp">`+RPT_SECTIONS.map(s=>
-    `<label><input type="checkbox" data-r="${s[0]}"${sel[s[0]]?" checked":""}> ${esc(s[1])}</label>`).join("")+`</div>`;
-  if(results.length)h+=`<div class="grp"><b style="font-size:.97rem">Per-vehicle detail</b>`+
-    results.map(r=>{const v=ARCH.ALL_VEHICLES.find(x=>x.id===r.id);
-      return `<label class="lvl2"><input type="checkbox" data-r="rv_${r.id}"${sel["rv_"+r.id]?" checked":""}> ${esc(v.name)} — RF ${nfx(r.rf,3)}</label>`;}).join("")+`</div>`;
-  h+=`<div class="btnrow"><button class="pri" id="mkRpt">Build report &amp; print</button>
-      <button id="mkCancel">Cancel</button></div>`;
-  $("modal").innerHTML=h; $("modalBg").classList.add("on");
-  $("modal").querySelectorAll("[data-r]").forEach(cb=>cb.onchange=()=>{sel[cb.getAttribute("data-r")]=cb.checked;});
-  rptSel=sel;
-  $("mkCancel").onclick=()=>$("modalBg").classList.remove("on");
-  $("mkRpt").onclick=()=>{$("modalBg").classList.remove("on");
-    /* The Rating Summary pane is lazy — it is skipped unless its tab is open,
-       because it costs a position sweep per vehicle. A report must never be
-       lazy, so the flag forces it to build whether or not the operator ever
-       visited the tab. */
-    archBuildReport(sel);
-    window.__archD11Print=true;   /* ARPT: this print is the D11 report, also when the Report tab is shown */
-    setTimeout(()=>window.print(),260);};
-}
-
+/* ARX (2026-11-03): reportModal (the "Report contents" dialog), archBuildReport and the D11 beforeprint rebuild removed; the dialog's
+   choices are the Report's Include boxes (arxControls), the same rptSel */
 /* Every figure container copied into the report is a fresh empty element, so it
    has to be drawn again. Only the vehicle schematics and the earth pressure
    figure were being redrawn, which left the force diagrams, the kern figure, the
@@ -12855,113 +12790,7 @@ const ARCH_REFS=[
     "impact below the base of rail), railroad loading only. Edition: verify."],
   ["Literature","Boothby, T. E., Load Rating of Masonry Arch Bridges, J. Bridge Eng. (elastic frame, zero tension); "+
     "Kåsa, I., A Circle Fitting Procedure and Its Error Analysis, IEEE Trans. Instrum. Meas., 1976 (measured geometry)."]];
-function archPageCSS(){
-  const v=id=>{const e=$(id);return e&&e.value?String(e.value).trim():"";};
-  const q=x=>String(x==null||x===""?"—":x).replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/[\r\n]+/g," ");
-  const prj=v("tbProject"), desc=v("tbSubject")||prj;
-  const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
-  const foot='font: 9pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: top; padding-top: 6pt;';
-  return '@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.8in 0.6in;'+
-    ' @top-left { content: "Project No: —\\A Description: '+q(desc.slice(0,38))+'"; '+box+' text-align: left; }'+
-    ' @top-center { content: "Computed By: '+q(v("tbBy"))+'\\A Checked By: '+q(v("tbChk"))+'"; '+box+' text-align: left; }'+
-    ' @top-right { content: "Date: '+q(v("tbDate"))+'\\A Date: '+q(v("tbChkDate"))+'"; '+box+' text-align: right; }'+
-    ' @bottom-left { content: "'+q(prj||"Untitled")+' (Stone Masonry Arch Load Rating)\\A Stone Arch LR '+q(BUILD_ID)+
-      ' · Inventory level · Allowable Stress · MBE 6A.9.1"; '+foot+' text-align: left; }'+
-    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); '+foot+' text-align: right; } } }';
-}
-function archApplyPageCSS(){
-  let st=document.getElementById("arch-page");
-  if(!st){st=document.createElement("style");st.id="arch-page";document.head.appendChild(st);}
-  st.textContent=archPageCSS();
-}
-/* One result line per rating vehicle: the rating factor as the dashboard computes it, PASS when RF ≥ 1.0. */
-function archResultBlock(title,map){
-  if(!results.length)return "";
-  return `<div class="cr-resh">Results — ${esc(title)}</div><div class="cr-results">`+results.map(r=>{
-    const v=ARCH.ALL_VEHICLES.find(x=>x.id===r.id), ok=r.rf>=1.0, hit=map["veh_"+r.id];
-    return `<div class="cr-line"><div>${esc(v.name)} rating factor:</div>`+
-      `<div>RF = <b>${nfx(r.rf,3)}</b> &rarr; ${nfx(r.tons,1)} tons${v.eRef?`, E${(r.rf*v.eRef).toFixed(0)}`:""} `+
-      `<span class="cr-refi">(MassDOT BM Pt. I §7.2.7.12; MBE 6A.9.1; governs at ${esc(CALC.secTag(M,r.sec))}; `+
-      (hit?`<a href="#${hit.id}">§${hit.num}</a>`:"worked section not in this printout")+`)</span></div>`+
-      `<div class="cr-r${ok?"":" cr-st-fail"}"><b>${ok?"PASS":"FAIL"}</b></div></div>`;
-  }).join("")+`</div>`;
-}
-function archCalcSheet(rh){
-  const doc=rh.querySelector(".rpt"); if(!doc)return;
-  const foot=doc.querySelector("#rptFoot");
-  /* wrap each h2 and what follows it in a numbered section */
-  let cur=null; const secs=[];
-  [...doc.childNodes].forEach(k=>{
-    if(k===foot)return;
-    if(k.nodeType===1&&k.tagName==="H2"){cur=document.createElement("section");cur.className="cr-sec";doc.insertBefore(cur,k);secs.push(cur);}
-    if(cur)cur.appendChild(k);
-  });
-  if(foot)doc.appendChild(foot);
-  const map={}, toc=[];
-  const before=(a,b)=>(a.compareDocumentPosition(b)&Node.DOCUMENT_POSITION_FOLLOWING)?-1:1;
-  secs.forEach(s=>{
-    const h2=s.querySelector("h2"), m=/^(\d+)\.\s*([\s\S]*)$/.exec(h2.textContent.trim());
-    const num=m?m[1]:String(toc.length+1), title=m?m[2]:h2.textContent.trim(), cid=h2.getAttribute("data-cid")||"";
-    h2.className="cr-h1"; h2.id="crs-"+num;
-    if(cid)map[cid]={num,id:h2.id};
-    const subs=[];
-    if(cid!=="man"){   /* the User Manual keeps its own chapter numbering */
-      const free=x=>!x.parentElement.closest(".pnl,.sub");
-      let c=[...s.querySelectorAll(".pnl>.hd,.sub>.hd")].filter(hd=>free(hd.parentElement))
-        .concat([...s.querySelectorAll("h3")].filter(free)).sort(before);
-      if(!c.length)c=[...s.querySelectorAll("h4")].filter(free);
-      c.forEach((x,k)=>{
-        const nk=num+"."+(k+1), id="crs-"+num+"-"+(k+1);
-        let t;
-        if(x.classList.contains("hd")){
-          const sp=x.children[1]; t=(sp?sp.textContent:x.textContent).trim().replace(/^\d+\.\s*/,"");
-          if(sp)sp.textContent=nk+" "+t;
-          const box=x.parentElement; if(box.id)map[box.id]={num:nk,id};
-        }else{
-          t=x.textContent.trim().replace(/^\d+(\.\d+)*\.?\s+/,"").replace(/\s+/g," ");
-          x.textContent=nk+" "+t;
-          if(x.getAttribute("data-cid"))map[x.getAttribute("data-cid")]={num:nk,id};
-          if(cid)map[cid+"|"+t]={num:nk,id};
-        }
-        x.id=id; subs.push({n:nk,t,id});
-      });
-    }
-    toc.push({n:num,t:title,id:h2.id,subs});
-  });
-  /* result lines: at the end of the vehicle-by-vehicle rating, else of the dashboard */
-  const rs=secs.find(s=>s.querySelector("h2[data-cid='rate']"))||secs.find(s=>s.querySelector("h2[data-cid='o_dash']"));
-  if(rs)rs.insertAdjacentHTML("beforeend",archResultBlock("Rating factors",map));
-  /* D11 links: "Worked in: value → Tab · Panel" becomes "value: see §n.k" */
-  const TN=Object.fromEntries(TABS);
-  rh.querySelectorAll("a.wkA").forEach(a=>{
-    const card=a.getAttribute("data-wcard"), sub=a.getAttribute("data-wsub"), txt=a.getAttribute("data-txt");
-    const hit=(sub&&map[card+"|"+sub])||map[card], pre=txt?txt+": ":"";
-    if(hit){a.textContent=pre+"see §"+hit.num;a.setAttribute("href","#"+hit.id);}
-    else{const lab=a.textContent.split(" → ").pop();
-      a.textContent=pre+"see the "+(TN[a.getAttribute("data-wtab")]||"")+" tab ("+lab.replace(/^[^·]*·\s*/,"")+"; not in this printout)";
-      a.removeAttribute("href");}
-  });
-  rh.querySelectorAll(".wkLink").forEach(d=>{if(d.firstChild&&d.firstChild.nodeType===3)d.firstChild.textContent="";});
-  /* the dashboard's "<vehicle> rating factor" jumps point at that vehicle's worked section */
-  rh.querySelectorAll("a.jump[data-go]").forEach(a=>{
-    const hit=map[a.getAttribute("data-go")];
-    a.insertAdjacentHTML("afterend",hit?` <a class="wkA" href="#${hit.id}">(see §${hit.num})</a>`:
-      ` <span class="wkA">(worked section not in this printout)</span>`);
-  });
-  /* front matter: references and the numbered table of contents, after the cover */
-  const li=toc.map(s=>`<li><a href="#${s.id}">${esc(s.n)}. ${esc(s.t)}</a>`+
-    (s.subs.length?`<ol>${s.subs.map(q=>`<li><a href="#${q.id}">${esc(q.n)} ${esc(q.t)}</a></li>`).join("")}</ol>`:"")+`</li>`).join("");
-  const front=`<section class="cr-front"><h2 class="cr-h1">References:</h2><table class="cr-refs">`+
-    ARCH_REFS.map(r=>`<tr><td>${esc(r[0])}</td><td>${esc(r[1])}</td></tr>`).join("")+`</table>`+
-    `<h2 class="cr-h1">Table of contents:</h2><ol class="cr-toc">${li}</ol>`+
-    `<p class="cr-small">Section numbers n and subsection numbers n.k are document level; "see §n.k" refers to them.
-      Headings numbered inside a subsection (the steps of a worked calculation) are set in a lighter face, and the
-      User Manual keeps its own chapter numbering. Equations are shown symbolically, then with values substituted,
-      then with the result. The rating section ends with one result line per vehicle: PASS when RF ≥ 1.0.
-      Units: kip, ft, psi unless noted; forces and moments are per foot of barrel width.</p></section>`;
-  const cov=rh.querySelector(".cr-cover");
-  if(cov)cov.insertAdjacentHTML("afterend",front);else rh.insertAdjacentHTML("afterbegin",front);
-}
+/* ARX (2026-11-03): archPageCSS, archApplyPageCSS, archResultBlock and archCalcSheet removed with the print report */
 /* The input echo: one row per input as entered, {k, v, u} (moved unchanged from buildReport, ARPT 2026-11-01;
    the D11 print report and the Report tab both call it). */
 function archInputRows(p){
@@ -13079,158 +12908,7 @@ function archInputRows(p){
     }else add("Deterioration","none entered","");
   return rows;
 }
-function buildReport(sel){
-  const p=readP();
-  const t=id=>$(id)?esc($(id).value||"—"):"—";
-  let n=0; const N=()=>++n;
-  /* D11 (2026-10-18): cover page with the title block (it was the #rptHead box at the top of page 1).
-     The tool has no project-number field, so Project No. prints "—". The controlling line repeats the
-     dashboard's controlling result (same values). */
-  const gvC=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b):null;
-  const vC=gvC?ARCH.ALL_VEHICLES.find(x=>x.id===gvC.id):null;
-  let h=`<section class="cr-cover"><div class="cr-cover-t">
-      <h1>Stone Masonry Arch Load Rating</h1>
-      <p>${$("tbProject")&&$("tbProject").value?esc($("tbProject").value):"Untitled"}</p>
-      ${$("tbSubject")&&$("tbSubject").value?`<p class="cr-cover-p">${esc($("tbSubject").value)}</p>`:""}
-      <p class="cr-cover-p">Allowable Stress Method, Inventory Level &middot; MassDOT Bridge Manual Part I §7.2.7 &middot;
-        AASHTO MBE Art. 6A.9.1 &middot; ${p.loadMode==="rail"?"AREMA Ch. 8 (railroad loading)":"AASHTO Std. Spec. Art. 6.4, 3.8.2.3"}
-        &middot; by Mario Lococo</p>`+
-    (gvC?`<p class="cr-cover-p">Controlling result: <b>${esc(vC.name)}, RF = ${nfx(gvC.rf,3)}</b>
-        (${nfx(gvC.tons,1)} tons${vC.eRef?`, E${(gvC.rf*vC.eRef).toFixed(0)}`:""}) at section ${esc(CALC.secTag(M,gvC.sec))}
-        &mdash; <b>${gvC.rf>=1?"all selected vehicles rate at or above 1.0":"at least one vehicle rates below 1.0"}</b></p>`:"")+
-    `</div>
-    <table class="cr-tb"><tr><td><b>Project:</b> ${t("tbProject")}</td><td><b>Project No.:</b> —</td><td><b>Subject:</b> ${t("tbSubject")}</td></tr>
-    <tr><td><b>Computed by:</b> ${t("tbBy")}</td><td><b>Date:</b> ${t("tbDate")}</td><td><b>Task:</b> ${t("tbTask")}</td></tr>
-    <tr><td><b>Checked by:</b> ${t("tbChk")}</td><td><b>Checked date:</b> ${t("tbChkDate")}</td><td><b>Program:</b> Stone Arch LR ${BUILD_ID}</td></tr></table>
-    </section><div class="rpt">`;
-
-  const sec=(title,body,cid)=>`<h2${cid?` data-cid="${cid}"`:""}>${N()}. ${title}</h2>${body}`;
-
-  if(sel.r_inputs){
-    const rows=archInputRows(p);   /* ARPT: the input echo rows, shared with the Report tab (moved unchanged) */
-    h+=sec("Input Echo",dtab([{k:"k",h:"Input",txt:1},{k:"v",h:"Value",txt:1},{k:"u",h:"Units",txt:1}],rows));
-  }
-  if(sel.r_dash)h+=sec("Summary Dashboard",dashboard(p),"o_dash");
-  if(sel.r_assume&&p.assume&&p.assume.trim())
-    h+=sec("Engineering Assumptions",`<div style="white-space:pre-wrap">${esc(p.assume)}</div>`);
-  if(sel.r_basis)h+=sec("Design Basis and Sign Conventions",
-    document.getElementById("o_basis")?document.getElementById("o_basis").querySelector(".bd").innerHTML:"");
-  if(sel.r_geo)h+=sec("Geometry, Restraint and Model Definition",CALC.geometrySection(p,M),"o_geo");
-  if(sel.r_fig)h+=sec("Longitudinal Section",
-    `<figure><svg id="rptFig" viewBox="0 0 980 520"></svg>
-     <figcaption>Longitudinal section, to scale, at the governing position of the controlling vehicle.</figcaption></figure>`);
-  if(sel.r_dl)h+=sec("Dead Load",CALC.deadLoadSection(p,M),"o_dl");
-  if(sel.r_ll){
-    const v0=results.length?ARCH.ALL_VEHICLES.find(x=>x.id===results.reduce((a,b)=>a.rf<b.rf?a:b).id):ARCH.vehiclesFor(M.p.loadMode)[1]||ARCH.vehiclesFor(M.p.loadMode)[0];
-    const r0=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b):{pos:M.g.xmin,dir:1};
-    h+=sec("Live Load Distribution Through Fill",CALC.liveLoadSection(p,M,v0,r0.pos,r0.dir));
-  }
-  if(sel.r_veh){
-    const govId=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b).id:null;
-    let body="";
-    let sub=0;
-    for(const r of results){
-      if(!sel["rv_"+r.id])continue;
-      const v=ARCH.ALL_VEHICLES.find(x=>x.id===r.id);
-      body+=`<h3 data-cid="veh_${r.id}">${n+1}.${++sub} ${esc(v.name)}${r.id===govId?" — GOVERNS":""} &nbsp;
-        (RF = ${nfx(r.rf,3)}, ${nfx(r.tons,1)} tons)</h3>`+CALC.vehicleSection(p,M,v,r);
-    }
-    if(!sub)body=msg("inf","No vehicle detail selected","Per-vehicle sections were deselected in the report settings.");
-    h+=sec("Rating — Vehicle by Vehicle",body,"rate");
-  }
-  if(sel.r_veh)h+=sec("Rating Vehicle Configurations",
-    VEHTAB.pane(p,M,ARCH.vehiclesFor(p.loadMode).filter(v=>p.vehicles.includes(v.id)),results));
-    if(sel.r_diag&&dgState&&dgState.__veh)
-    h+=sec("Force Diagrams",DIAG.pane(p,M,Object.assign({},dgState,
-      {veh:dgState.__veh,list:ARCH.vehiclesFor(p.loadMode).filter(v=>p.vehicles.includes(v.id)),
-       rf:dgState.__rf})));
-  if(sel.r_lat){
-    const gv3=results.length?results.reduce((x,y)=>x.rf<y.rf?x:y):null;
-    h+=sec("Lateral Earth Pressure",
-      LATERAL.pane(p,M,gv3?ARCH.ALL_VEHICLES.find(v=>v.id===gv3.id):null,gv3));
-  }
-  if(sel.r_il)h+=sec("Influence Line Development",ILTAB.pane(p,M,ilEl,ilCase,ilSecSel));
-  if(sel.r_nodes&&results.length){
-    const gv2=results.reduce((a,b)=>a.rf<b.rf?a:b);
-    const v2=ARCH.ALL_VEHICLES.find(x=>x.id===gv2.id);
-    h+=sec("Nodal Results",NODAL.section(p,M,v2,gv2.pos,gv2.dir,gv2.sec).html+
-      `<h3>Worked calculation — node ${CALC.secTag(M,gv2.sec)} (governing)</h3>`+
-      NODAL.worked(p,M,v2,gv2.pos,gv2.dir,gv2.sec));
-  }
-  if(sel.r_ver)h+=sec("Independent Verification against Midas Civil",
-    impCmp?comparisonBlock(p):msg("inf","No independent verification performed",
-      "No Midas results were imported for this calculation. Solver evidence rests on the closed-form and "+
-      "equilibrium checks documented in the manual."));
-  /* The mesh study prints whether or not it was run. A package that is silent
-     about discretisation error reads as though there were none. */
-  if(sel.r_rsum)h+=sec("Rating Summary — every section, every vehicle",ratingSummary(p));
-  if(sel.r_ver)h+=sec("Mesh Convergence",MESHCONV.block(M));
-  if(sel.r_man)h+=sec("User Manual and Design Basis",MANUAL.html(true),"man");
-
-  h+=`<div id="rptFoot">This calculation was produced with Stone Arch LR by Mario Lococo. The program is an
-    engineering aid, not a substitute for engineering judgment. The engineer of record is responsible for the
-    inputs, the assumptions, the interpretation of the governing codes, and the design. Results are Inventory
-    level only; AASHTO MBE Art. 6A.9.1 provides no Operating allowable stress for unreinforced masonry.
-    Independent verification of the frame analysis is recommended before the rating is issued.</div></div>`;
-  /* C3 — running header and footer: since D11 (2026-10-18) @page margin boxes (archPageCSS), not the
-     position:fixed #runHead / #runFoot bands. */
-  archApplyPageCSS();
-  $("rptHost").innerHTML=h;
-  /* A panel collapsed on screen carries .clp, and .pnl.clp>.bd is display:none
-     — a rule the print block never cleared. The printed package therefore
-     inherited whatever the operator happened to have closed: in one session
-     that silently dropped the equilibrium check, the degrees-of-freedom and
-     element-stiffness worked examples, the thrust and shear influence tables,
-     and all ten Nodal Results sub-tables, leaving headings with nothing under
-     them. Panel state is a screen-reading convenience; it has no business
-     deciding what a sealed calculation contains. Everything is expanded here,
-     on the report clone only, so the operator's screen is left as it was. */
-  $("rptHost").querySelectorAll(".clp").forEach(el=>el.classList.remove("clp"));
-  /* The twisty glyph is written at build time from isClp(), so an expanded
-     panel would still print "▸". It is a screen affordance with no meaning on
-     paper, so it is emptied rather than flipped. */
-  $("rptHost").querySelectorAll(".tw").forEach(el=>{el.textContent="";});
-  $("rptHost").querySelectorAll("[id^='figVeh_']").forEach(sv=>{
-    const v=ARCH.ALL_VEHICLES.find(q=>q.id===sv.id.replace("figVeh_",""));
-    if(v){try{VEHTAB.draw(sv,v);}catch(e){}}
-  });
-  $("rptHost").querySelectorAll("#figLat,[id='figLat']").forEach(sv=>{
-    try{LATERAL.drawFig(sv,p,M);}catch(e){}
-  });
-  drawReportFigures($("rptHost"),p);
-  /* C4 — a place to sign. A calculation package that cannot be signed is not a
-     deliverable, and the reader should be able to see at a glance whether it has
-     been checked. */
-  {
-    const t2=id=>{const e=$(id);return e&&e.value?esc(e.value):"";};
-    const unsigned=!t2("tbBy")||!t2("tbChk");
-    const sig=`<h2>${N()}. Certification</h2>`+
-      (unsigned?`<div class="msg m-wrn"><b>Not signed</b>This package has blank `+
-        `${!t2("tbBy")?"<i>computed by</i>":""}${(!t2("tbBy")&&!t2("tbChk"))?" and ":""}`+
-        `${!t2("tbChk")?"<i>checked by</i>":""} fields. Complete the title block before issuing.</div>`:"")+
-      `<table class="dt" style="table-layout:fixed"><tbody>
-        <tr><td style="width:22%">Computed by</td><td>${t2("tbBy")||"&nbsp;"}</td>
-            <td style="width:14%">Date</td><td style="width:18%">${t2("tbDate")||"&nbsp;"}</td></tr>
-        <tr><td>Signature</td><td style="height:46px">&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
-        <tr><td>Checked by</td><td>${t2("tbChk")||"&nbsp;"}</td>
-            <td>Date</td><td>${t2("tbChkDate")||"&nbsp;"}</td></tr>
-        <tr><td>Signature</td><td style="height:46px">&nbsp;</td><td>&nbsp;</td><td>&nbsp;</td></tr>
-        <tr><td>Seal</td><td colspan="3" style="height:150px">&nbsp;</td></tr>
-      </tbody></table>`+
-      `<div class="note">The engineer of record is responsible for the inputs, the assumptions, the
-       interpretation of the governing codes and the resulting decision. This program is an engineering aid and
-       its output must be reviewed before it is relied upon. Produced with Stone Arch LR ${BUILD_ID}.</div>`;
-    $("rptHost").querySelector(".rpt").insertAdjacentHTML("beforeend",sig);   /* D11: inside the document, as its last section */
-  }
-  /* C5 — contents. D11 (2026-10-18): numbered sections and subsections, references, linked table of contents,
-     result lines and "see §n.k" links (archCalcSheet). Built from the rendered headings, so it cannot fall out of
-     step with what was actually included. */
-  archCalcSheet($("rptHost"));
-  if($("rptFig")&&M){
-    const gv=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b):null;
-    schematic($("rptFig"),gv?gv.pos:null,{veh:gv?ARCH.ALL_VEHICLES.find(x=>x.id===gv.id):undefined,thrust:true});
-  }
-}
+/* ARX (2026-11-03): buildReport (the D11 print report) removed; its content is in the Report tab (archReportModel, ARX below) */
 
 /* ================= Report tab (ARPT, 2026-11-01) =================
    The calculation report in the shared viewer (shared/report.js: navigation tree, numbered sections §n.m, collapse /
@@ -13293,6 +12971,7 @@ function arptStep(o,id){
   if(u&&!num1){if(sub)sub+="\\ \\text{"+u+"}";else sym+="\\ \\text{"+u+"}";}   /* units of a non-numeric result: as the tab writes them */
   const d=num1?(res.split(".")[1]||"").length:2;
   const nt=document.createElement("div"); nt.innerHTML=o.note||"";
+  if(!window.katex){sym=arptTex(sym);sub=arptTex(sub);}   /* ARX (2026-11-03): without KaTeX the built-in renderer sets the step, so the TeX is written in its subset (as the running text) */
   return SharedSteps.step({id,label:String(o.label||"").trim()||"Step",sym,eq:"",sub,value:num1?+res:null,unit:num1?u:"",d,
     ref:o.ref||"",note:arptClean(nt.textContent).replace(/§(?=[A-Za-z])/g,"§ ")});
 }
@@ -13375,20 +13054,21 @@ function archReportModel(p){
   const cap=[];
   let panes;
   window.__archRptCap=cap;
-  try{panes=buildOutput(p);panes.rsum=ratingSummary(p);}finally{window.__archRptCap=null;}
+  try{panes=buildOutput(p);panes.rsum=ratingSummary(p);Object.assign(panes,arxPanes(p));}finally{window.__archRptCap=null;}   /* ARX: the print report's extra panes */
+  const TB=arxTabs(panes);
   const stage=document.createElement("div");
   stage.setAttribute("aria-hidden","true");
   stage.style.cssText="position:absolute;left:-12000px;top:0;width:1000px;visibility:hidden;";
   document.body.appendChild(stage);
   const secs=[], cardKey={}, ctxAll=[];
   try{
-    stage.innerHTML=ARPT_TABS.map(t=>`<div data-arpt="${t[0]}">${panes[t[0]]||""}</div>`).join("");
+    stage.innerHTML=TB.map(t=>`<div data-arpt="${t[0]}">${panes[t[0]]||""}</div>`).join("");
     /* figures: the same drawing calls as the D11 report (static SVG, no Plotly) */
     stage.querySelectorAll("[id^='figVeh_']").forEach(sv=>{const v=ARCH.ALL_VEHICLES.find(q=>q.id===sv.id.replace("figVeh_",""));if(v){try{VEHTAB.draw(sv,v);}catch(e){}}});
     stage.querySelectorAll("[id='figModel']").forEach(sv=>{try{const veh=ARCH.ALL_VEHICLES.find(v=>v.id===animVehId)||ARCH.vehiclesFor(M.p.loadMode)[0];
       MODELFIG.draw(sv,M.p,M,{layers:mfLayers,veh,pos:(animPos!=null)?animPos:(results[0]?results[0].pos:M.g.xmin),ilSec:mfSec,dir:focusDir});}catch(e){}});
     drawReportFigures(stage,p);
-    ARPT_TABS.forEach(([k,name])=>{
+    TB.forEach(([k,name])=>{
       const box=stage.querySelector(`[data-arpt="${k}"]`); if(!box||!box.innerHTML.trim())return;
       const subs=[]; let loose=document.createElement("div");
       const flushLoose=()=>{if(!loose.childNodes.length)return;const ctx={links:[],cards:[],topics:[],first:null};
@@ -13396,6 +13076,7 @@ function archReportModel(p){
         if(items.length)subs.push({title:subs.length?"Notes":"Overview",items});loose=document.createElement("div");};
       [...box.childNodes].forEach(n=>{
         if(n.nodeType===1&&n.classList&&(n.classList.contains("pnl")||n.classList.contains("sub"))&&n.querySelector(":scope>.hd")){
+          if(!arxPanelOn(k,n.id))return;   /* ARX: an Include box */
           flushLoose();
           const hd=n.querySelector(":scope>.hd"), sp=hd.children[1], tg=hd.querySelector(".tag");
           const title=arptClean((sp?sp.textContent:hd.textContent).replace(/^\d+(\.\d+)*\.\s*/,""));
@@ -13419,10 +13100,11 @@ function archReportModel(p){
     if(it.type==="table"){const c=x=>{if(x&&typeof x==="object")x.t=fix(x.t);};it.head.forEach(c);it.rows.forEach(r=>(Array.isArray(r)?r:r.cells).forEach(c));}
   })));
   /* 1. Project and inputs: the input echo of the D11 report (archInputRows) */
-  const ir=archInputRows(p);
+  const ir=archInputRows(p), echoOn=rptSelDefaults().r_inputs!==false;   /* ARX: Include "Input echo" */
   secs.unshift({title:"Project and inputs",subs:[{title:"Input echo (all inputs as entered)",items:[
-    {type:"table",head:["Input","Value","Units"],rows:ir.map(r=>[String(r.k),String(r.v==null?"":r.v),String(r.u||"")]),wide:true},
+    echoOn?{type:"table",head:["Input","Value","Units"],rows:ir.map(r=>[String(r.k),String(r.v==null?"":r.v),String(r.u||"")]),wide:true}:{type:"note",text:"Input echo left out (Include box)."},
     {type:"note",text:"Units: kip, ft, psi unless noted; forces and moments are per foot of barrel width. Every value in this report is the value the tool shows on its tabs; the worked lines are the tabs' own. The User Manual is on the [[tab:man|Manual tab]]."}]}]});
+  arxAfter(secs,cardKey);   /* ARX: result lines, controlling result, certification */
   secs.push({title:"References",subs:[{title:"Codes and references cited",items:[{type:"table",head:["Reference","Provisions used"],rows:ARCH_REFS.map(r=>[r[0],r[1]]),wide:true}]}]});
   const v=id=>{const e=$(id);return e&&e.value?String(e.value).trim():"";};
   const gv=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b):null, vg=gv?ARCH.ALL_VEHICLES.find(x=>x.id===gv.id):null;
@@ -13442,28 +13124,112 @@ function archRenderReport(p){
   let mdl;
   try{mdl=archReportModel(p);}catch(e){T.innerHTML=msg("err","Report error",esc(e&&e.message));ARPT.api=null;ARPT.doc=null;return;}
   const top=$("outTop");
-  ARPT.api=SharedReport.mount(T,mdl,{closed:ARPT.closed,onGoto:archRptGoto,stick:top?top.offsetHeight:0});
-  ARPT.doc=ARPT.api.doc;
+  ARPT.api=SharedReport.mount(T,mdl,{closed:ARPT.closed,onGoto:archRptGoto,stick:top?top.offsetHeight:0,controls:arxControls()});
+  ARPT.doc=ARPT.api.doc; arxWire(T);
 }
 /* [[tab:name~card~heading|text]] links of the report: the tab, with the panel (archGoto) */
 function archRptGoto(name){const [tab,card,sub]=String(name).split("~");if(card)archGoto(tab,card,sub||null);else{activeTab=tab;render();autosave();const sc=$("outPanel");if(sc)sc.scrollTop=0;}}
-/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header); the
-   D11 report (Print / PDF Report button, or Ctrl+P on any other tab) is unchanged. */
+/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header); ARX: from
+   another tab the inline beforeprint script in <head> shows the Report first (arxPrintPrep), and Print / PDF Report does the same. */
 function archRptPrinting(){return document.body.classList.contains("rp-printing");}
-function archRptWillPrint(){return !window.__archD11Print&&(archRptPrinting()||!!(ARPT.doc&&activeTab==="rpt"));}
-let arptPageCss=null;
+function archRptWillPrint(){return archRptPrinting()||!!(ARPT.doc&&activeTab==="rpt");}
 window.addEventListener("beforeprint",()=>{
   if(!archRptWillPrint())return;
-  const ap=document.getElementById("arch-page"); if(ap){arptPageCss=ap.textContent;ap.textContent="";}   /* the D11 page header would print over the report's */
   if(archRptPrinting())return;
   let box=document.getElementById("rp-print");if(!box){box=document.createElement("div");box.id="rp-print";document.body.appendChild(box);}
   box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(ARPT.doc,{lazy:false})+'</article></div>';
   document.body.classList.add("rp-printing");
 });
-window.addEventListener("afterprint",()=>{
-  if(arptPageCss!=null){const ap=document.getElementById("arch-page");if(ap)ap.textContent=arptPageCss;arptPageCss=null;}
-  window.__archD11Print=false;
-});
+/* ================= ARX (2026-11-03): the D11 print report retired =================
+   The print report (Print / PDF Report → "Report contents" dialog → buildReport → #rptHost, archCalcSheet, archPageCSS) is
+   retired; what it printed and the Report lacked is added to the Report here, from the same functions and the same values:
+   each vehicle worked at its own governing section (CALC.vehicleSection, as the print report's "Rating — Vehicle by Vehicle")
+   where the Rating tab works it at another section; the live load distribution and the nodal results for the governing
+   vehicle at its governing position (CALC.liveLoadSection, NODAL.section / NODAL.worked) where the tabs show another
+   vehicle, position or node; the User Manual (MANUAL.html(true)); one result line per vehicle; the controlling result; the
+   certification block and the closing note. The dialog's choices (RPT_SECTIONS and the per-vehicle detail, rptSel: kept in
+   memory for the session, as before) are the report bar's Include boxes. Nothing is computed here. */
+const ARX={back:null};
+const ARX_TAB={dl:"r_dl",ll:"r_ll",veh:"r_veh",rate:"r_veh",diag:"r_diag",lat:"r_lat",il:"r_il",nodes:"r_nodes",rsum:"r_rsum",ver:"r_ver",
+  rvg:"r_veh",llg:"r_ll",ndg:"r_nodes",manP:"r_man"};
+const ARX_PNL={o_dash:"r_dash",o_assume:"r_assume",o_basis:"r_basis",o_geo:"r_geo",o_fig1:"r_fig"};
+function arxPanelOn(k,id){
+  const s=rptSelDefaults();
+  if(ARX_PNL[id]&&s[ARX_PNL[id]]===false)return false;
+  const m=/^(?:veh|rvg)_(.+)$/.exec(id||"");
+  return !(m&&(k==="rate"||k==="rvg")&&s["rv_"+m[1]]===false);
+}
+/* the extra panes (built while the steps are recorded: window.__archRptCap) */
+function arxPanes(p){
+  const o={}, s=rptSelDefaults();
+  if(s.r_man){const w=document.createElement("div");w.innerHTML=MANUAL.html(true);let h="",cur=null;
+    const out=[];[...w.childNodes].forEach(n=>{if(n.nodeType===1&&n.tagName==="H2"){cur={t:n.innerHTML,b:""};out.push(cur);}else{if(!cur){cur={t:"User Manual",b:""};out.push(cur);}cur.b+=n.nodeType===1?n.outerHTML:(n.textContent||"");}});
+    out.forEach((q,i)=>{h+=UI.pnl("arxman_"+i,null,q.t,q.b,"");});o.manP=h;}
+  if(!M||!results.length)return o;
+  const gv=results.reduce((a,b)=>a.rf<b.rf?a:b), vg=ARCH.ALL_VEHICLES.find(x=>x.id===gv.id);
+  if(s.r_veh&&rateBasis==="sec"){const SR=secResults(p,M,focusNode)||{};
+    o.rvg=results.filter(r=>s["rv_"+r.id]!==false&&SR[r.id]&&SR[r.id].sec!==r.sec).map(r=>{const v=ARCH.ALL_VEHICLES.find(x=>x.id===r.id);
+      return UI.pnl("rvg_"+r.id,null,esc(v.name)+(r.id===gv.id?" &mdash; GOVERNS":"")+" (RF = "+nfx(r.rf,3)+", "+nfx(r.tons,1)+" tons, at "+esc(CALC.secTag(M,r.sec))+")",
+        CALC.vehicleSection(p,M,v,r),"");}).join("");}
+  const v0=ARCH.ALL_VEHICLES.find(v=>v.id===animVehId)||ARCH.vehiclesFor(M.p.loadMode)[0];
+  if(s.r_ll&&(!v0||v0.id!==gv.id))
+    o.llg=UI.pnl("arx_llg",null,"Live load distribution through fill — "+esc(vg.name)+" (governing) at x = "+nfx(gv.pos,2)+" ft",CALC.liveLoadSection(p,M,vg,gv.pos,gv.dir),"");
+  if(s.r_nodes&&!(ndVeh===gv.id&&ndPos===gv.pos&&ndDir===gv.dir&&focusNode===gv.sec))
+    o.ndg=UI.pnl("arx_ndg",null,"Nodal results — "+esc(vg.name)+" (governing) at its governing position",NODAL.section(p,M,vg,gv.pos,gv.dir,gv.sec).html,"")+
+      UI.pnl("arx_ndw",null,"Worked calculation — node "+esc(CALC.secTag(M,gv.sec))+" (governing)",NODAL.worked(p,M,vg,gv.pos,gv.dir,gv.sec),"");
+  return o;
+}
+/* the tabs of the Report in order, as the Include boxes choose, with the extra panes after their tabs */
+function arxTabs(panes){
+  const s=rptSelDefaults(), out=[], EX={rate:["rvg","Rating — each vehicle at its own governing section"],ll:["llg","Live load — governing vehicle at its governing position"],
+    nodes:["ndg","Nodal results — governing vehicle at its governing position"]};
+  ARPT_TABS.forEach(t=>{if(ARX_TAB[t[0]]&&s[ARX_TAB[t[0]]]===false)return;out.push(t);const ex=EX[t[0]];if(ex&&panes[ex[0]])out.push(ex);});
+  if(panes.manP)out.push(["manP","User Manual and Design Basis"]);
+  return out;
+}
+/* the print report's result lines, controlling result and certification */
+function arxAfter(secs,cardKey){
+  const s=rptSelDefaults(), v=id=>{const e=$(id);return e&&e.value?String(e.value).trim():"";};
+  const gv=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b):null, vg=gv?ARCH.ALL_VEHICLES.find(x=>x.id===gv.id):null;
+  const P0=secs.find(x=>x.title==="Project and inputs");
+  if(P0&&gv)P0.subs.push({title:"Controlling result",items:[{type:"note",text:"Controlling result: "+vg.name+", RF = "+nfx(gv.rf,3)+" ("+nfx(gv.tons,1)+" tons"+(vg.eRef?", E"+(gv.rf*vg.eRef).toFixed(0):"")+
+    ") at section "+CALC.secTag(M,gv.sec)+" — "+(gv.rf>=1?"all selected vehicles rate at or above 1.0":"at least one vehicle rates below 1.0")+". Allowable Stress Method, Inventory Level · by Mario Lococo."}]});
+  if(results.length){const tg=secs.find(x=>x.title==="Rating"&&s.r_veh!==false)||secs.find(x=>x.title==="Summary");
+    if(tg)tg.subs.push({title:"Results — rating factors",items:[{type:"table",head:["Vehicle","RF","Capacity","Reference; governing section","Worked in","Result"],rows:results.map(r=>{
+        const vv=ARCH.ALL_VEHICLES.find(x=>x.id===r.id), ok=r.rf>=1, k=cardKey["rvg_"+r.id]||cardKey["veh_"+r.id];
+        return [vv.name,{t:nfx(r.rf,3),n:true},nfx(r.tons,1)+" tons"+(vv.eRef?", E"+(r.rf*vv.eRef).toFixed(0):""),"MassDOT BM Pt. I §7.2.7.12; MBE 6A.9.1; governs at "+CALC.secTag(M,r.sec),k?"[["+k+"]]":"—",{t:ok?"PASS":"FAIL",cls:ok?"ok":"ng"}];})},
+      {type:"note",text:"One result line per vehicle, the rating factor as the dashboard computes it: PASS when RF ≥ 1.0."}]});}
+  if(s.r_fig!==false&&M){const G=secs.find(x=>x.title==="Model");   /* the print report's longitudinal section: the governing position of the controlling vehicle, with the thrust line */
+    if(G){const sv=document.createElementNS("http://www.w3.org/2000/svg","svg");sv.setAttribute("viewBox","0 0 980 520");sv.style.cssText="position:absolute;left:-12000px;width:980px;height:520px";document.body.appendChild(sv);
+      try{schematic(sv,gv?gv.pos:null,{veh:vg||undefined,thrust:true});sv.removeAttribute("style");sv.setAttribute("style","width:100%;height:auto");
+        if(sv.childNodes.length)G.subs.push({title:"Longitudinal section at the governing position",items:[{type:"figure",svg:sv.outerHTML,caption:"Longitudinal section, to scale, at the governing position of the controlling vehicle."}]});}catch(e){}finally{sv.remove();}}}
+  const by=v("tbBy"), ck=v("tbChk"), un=!by||!ck;
+  secs.push({title:"Certification",subs:[{title:"Signatures",items:[].concat(un?[{type:"note",warn:true,text:"Not signed: this package has blank "+[!by?"computed by":"",!ck?"checked by":""].filter(Boolean).join(" and ")+" fields. Complete the title block before issuing."}]:[],
+    [{type:"table",head:["","Name","","Date"],rows:[["Computed by",by||"",'Date',v("tbDate")],["Signature","","",""],["Checked by",ck||"","Date",v("tbChkDate")],["Signature","","",""],["Seal","","",""]]},
+     {type:"note",text:"The engineer of record is responsible for the inputs, the assumptions, the interpretation of the governing codes and the resulting decision. This program is an engineering aid and its output must be reviewed before it is relied upon. Produced with Stone Arch LR "+BUILD_ID+"."},
+     {type:"note",text:"This calculation was produced with Stone Arch LR by Mario Lococo. The program is an engineering aid, not a substitute for engineering judgment. The engineer of record is responsible for the inputs, the assumptions, the interpretation of the governing codes, and the design. Results are Inventory level only; AASHTO MBE Art. 6A.9.1 provides no Operating allowable stress for unreinforced masonry. Independent verification of the frame analysis is recommended before the rating is issued."}])}]});
+}
+/* the report bar's Include boxes: the retired dialog's choices (rptSel) */
+function arxControls(){
+  const s=rptSelDefaults(), cb=(k,l)=>`<label style="white-space:nowrap"><input type="checkbox" data-arxr="${k}"${s[k]!==false?" checked":""}> ${esc(l)}</label>`;
+  return '<span class="arx-inc" style="display:inline-flex;flex-wrap:wrap;gap:2px 10px;font-size:.85rem;align-items:center"><b>Include:</b> '+RPT_SECTIONS.map(x=>cb(x[0],x[1])).join(" ")+
+    (results.length?' <b>Per-vehicle detail:</b> '+results.map(r=>cb("rv_"+r.id,ARCH.ALL_VEHICLES.find(x=>x.id===r.id).name)).join(" "):"")+'</span>';
+}
+function arxWire(T){
+  T.querySelectorAll("input[data-arxr]").forEach(x=>x.addEventListener("change",()=>{const s=rptSelDefaults();s[x.getAttribute("data-arxr")]=x.checked;rptSel=s;render();}));
+}
+/* Print: from any tab the Report is shown (activeTab, not saved), printed, and the tab of before comes back after printing */
+function arxPrintPrep(){
+  if(activeTab==="rpt"||!M||!window.SharedReport||!window.SharedSteps||document.body.classList.contains("rp-printing"))return false;
+  ARX.back=activeTab; activeTab="rpt"; render(); return true;
+}
+window.archPrintPrep=arxPrintPrep;   /* the inline beforeprint script in <head> */
+function arxPrintAny(){
+  if(!M||!window.SharedReport||!window.SharedSteps){window.print();return;}
+  arxPrintPrep();
+  if(ARPT.api)ARPT.api.print();else window.print();
+}
+window.addEventListener("afterprint",()=>{const b=ARX.back;ARX.back=null;if(b){setTimeout(()=>{activeTab=b;render();},0);}});
 window.__archRptForTest=()=>({doc:ARPT.doc,results,M,secResults:node=>secResults(M.p,M,node),focusNode,rateBasis});
 window.__archVehForTest=()=>ARCH.ALL_VEHICLES;   /* tests only (read-only) */
 
@@ -13642,7 +13408,7 @@ function init(){
     clearTimeout(rzT);
     rzT=setTimeout(()=>{if(M)postRender(readPSafe());},220);
   });
-  $("printBtn").onclick=reportModal;
+  $("printBtn").onclick=arxPrintAny;   /* ARX: the Report, from any tab */
   $("modalBg").onclick=e=>{if(e.target===$("modalBg"))$("modalBg").classList.remove("on");};
 
   // Restore the previous session. This runs on every page load, so refreshing

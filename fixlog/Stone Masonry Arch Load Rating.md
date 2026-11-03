@@ -1153,3 +1153,63 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
   identical; 0 console errors; 390 px no sideways scroll; screenshots at 1400 and 390 px looked at.
   `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
+
+## 2026-11-03 — PR: claude/report-retire-stonearch, PR #729: https://github.com/mlococo88/All-Structural/pull/729 (ARX: the D11 print report ("Print / PDF Report" → "Report contents" dialog → `buildReport` → `#rptHost`) retired after porting what the Report tab lacked; Print / PDF Report, Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
+
+### ARX-1. What the print report printed and the Report lacked, ported   [display] [no result change]
+- **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #685, #715, #718, #722, #724).
+- **Compared:** the print report (every dialog choice on, the default; `#rptHost` in print media, KaTeX annotations as TeX) on origin/main against the Report (`#rp-print`, print media) on the branch. Cases (scratch scripts):
+  - def: the default arch (40 ft circular, fixed);
+  - c2: title block filled, parabolic 32 × 7 ft, pinned, cover 3.5 ft, 2 lanes;
+  - c3: railroad loading (AREMA), 28 × 9 ft, ring 30 / 36 in, cover at each springing.
+- **Missing before:** 292 / 809 / 930 of 2135 / 2021 / 2424 distinct numbers (def / c2 / c3):
+  - "Rating — Vehicle by Vehicle": the print report worked each vehicle at its own governing section (`CALC.vehicleSection(p,M,v,r)`). The Rating tab, and so the Report, works it at the selected section when that differs.
+  - "Nodal Results" and the worked node: the print report used the governing vehicle at its governing position and section. The tab uses its own vehicle / position / node selection.
+  - The User Manual (`MANUAL.html(true)`).
+  - The result line per vehicle, the controlling result of the cover, the longitudinal section at the governing position (with the thrust line), the certification block and the closing note.
+- **Ported (anchor `ARX (2026-11-03): the D11 print report retired`, after the Report's `beforeprint` handler):**
+  - `arxPanes(p)` (called while the steps are recorded, in `archReportModel`), each pane built by the print report's own calls:
+    - `rvg`: each vehicle whose Rating-tab section differs from its own governing section, worked at its own section;
+    - `llg`: the live load distribution for the governing vehicle at its governing position, when the Live Load tab shows another vehicle;
+    - `ndg`: the nodal results and the worked node for the governing vehicle, position and section, when the Nodal Results tab shows another;
+    - `manP`: the User Manual, one subsection per chapter.
+    These are added after their tabs (`arxTabs`) and walked by `arptItems` like every tab (steps, tables, figures, links).
+  - `arxAfter(secs, cardKey)`:
+    - "Controlling result" under Project and inputs;
+    - "Results — rating factors" (vehicle, RF, tons / E, reference and governing section, link to the worked vehicle, PASS / FAIL by RF ≥ 1.0) at the end of Rating;
+    - "Longitudinal section at the governing position" (`schematic(…, {thrust:true})`) under Model;
+    - the "Certification" section (signature table, "Not signed" warning, the engineer-of-record note and the print report's closing note).
+  - Include boxes on the report bar (`arxControls` / `arxWire`): the dialog's sections (`RPT_SECTIONS`) and the per-vehicle detail.
+    - They write `rptSel`, the dialog's selection, kept in memory for the session as before; the tool never saved it.
+    - Each box leaves out its tab or panel (`arxPanelOn`, `ARX_TAB`, `ARX_PNL`) and, for Input echo, the echo table.
+- **After:** in all three cases, every number of the print report is in the Report except the print report's section numbers.
+  - This holds with KaTeX and without it (def, c2).
+  - The Report holds 0 unresolved references and 0 duplicate keys.
+  - Figures: 49 / 55 / 48 (the print report: 40 / 40 / 36).
+- **Without KaTeX:** `arptStep` writes a step's TeX in the built-in renderer's subset (`arptTex`, as the running text already was). Before, offline steps showed `\dfrac` / `\kappa` as letters ("kappa=dfracmn…").
+
+### ARX-2. Print report and dialog removed; Print prints the Report from every tab   [display]
+- **Removed:**
+  - `buildReport()`, `reportModal()`, `archBuildReport()` and the D11 `beforeprint` rebuild (`renderSeq` / `rptBuiltSeq`, `window.__archD11Print`);
+  - `archPageCSS()`, `archApplyPageCSS()`, `archResultBlock()`, `archCalcSheet()`;
+  - `#rptHost` and its styles;
+  - the print rule that hid the page (`#hdr`, `#wrap`).
+- **Kept:** `RPT_SECTIONS`, `rptSel`, `rptSelDefaults`, `drawReportFigures`, `ARCH_REFS`, `archInputRows`.
+- **Changed:**
+  - "Print / PDF Report" (tooltip added) → `arxPrintAny()`: shows the Report (`activeTab`, not saved) and prints it.
+  - An inline `beforeprint` script before `shared/steps.js` calls `window.archPrintPrep` (Ctrl+P / the browser's Print from another tab).
+  - `afterprint` brings the tab of before back.
+  - `archRptWillPrint` no longer depends on the D11 flag.
+- **Governing provision:** none changed. No formula, factor, unit, code reference or computed value changed (CLAUDE.md §4).
+- **Saved data:** no key or format change (`stoneArchLR.autosave`, `stoneArchLR.projects`). The report selection was never saved and still is not.
+- **How verified:**
+  - `node tests/check-syntax.mjs`: pass.
+  - origin/main vs branch, def / c2 / c3, with KaTeX:
+    - the model (`__modelForTest`) and the results (JSON) identical;
+    - the text of every tab identical, apart from the "Computed in 0.7 s" timing of Rating Summary;
+    - localStorage identical, apart from the autosave time stamp `ts`, on load, after visiting every tab, and after showing and printing the Report;
+    - no console errors.
+  - Print routing from each of the 14 tabs, by `beforeprint` and by the button (28 paths per case): `#rp-print` holds the Report, `body.rp-printing` is set, and the tab of before comes back.
+  - Include boxes (Nodal results, one vehicle, Input echo, User manual): each leaves out its part, with 0 unresolved references and no storage write.
+  - `node tests/smoke/project-library.mjs --tool stonearch`: ALL PASS.
+- **Other copies:** none.
