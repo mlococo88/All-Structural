@@ -1993,7 +1993,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Entered demands:** not applicable: the tool's demands are its wind / ice / cable loads, all from entered inputs; the foundation and
   anchorage take the governing reactions it computes (the Anchorage app takes them through the anchorGroup hand-off). Nothing added.
 
-## 2026-11-03 — PR: claude/lts-input-layout (LTS-L1: input layout of the LRFDLTS mode)   [display only, no result change]
+## 2026-11-03 — PR: [#743](https://github.com/mlococo88/All-Structural/pull/743) (LTS-L1: input layout of the LRFDLTS mode)   [display only, no result change]
 - **Problem:** in the LRFDLTS mode the "Wind & site" input tab held inputs that belong elsewhere: tube corner ratio r_s and inside corner radius r_i, the pole-to-base-plate weld, and atmospheric ice. The other tabs showed inputs that the LRFDLTS run never reads: the ASCE 7 C_f rows and notes, the fixture ice columns, the IBC soil class / S₁ / q_a / isolated 2× / constraint, and the anchor and splitting reinforcement. Risk category was shown in sign mode, where it has no effect: a roadside sign takes the 10-yr MRI (Table 3.8-1 note; `LpLts.mri()`). The engineer approved the layout of the review on 2026-11-03.
 - **Mechanism:** the existing classes `ibcOnly` (hidden in the LTS mode) and `ltsOnly` (hidden in the IBC mode). No input is deleted, renamed or recreated; ids are unchanged; nodes are moved, not cloned.
 - **Where / before → after (anchor texts):**
