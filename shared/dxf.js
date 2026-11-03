@@ -45,6 +45,9 @@
                              that scale); items = [svg string | { svg, title }]; opt: { paper: [w, h] in inches }. A temporary print box and
                              a named @page exist only while it prints (after it, Ctrl+P and the browser's Print print the Report as before).
                              Returns { pages, warn }
+     SharedDxf.SHEET_INSET   0.25: the sheet's outer border (trim line) is drawn this many paper inches inside the paper edge (2026-11-03,
+                             engineer: printers do not clip it); SharedDxf.sheetBorder(D, l, ox, W, H, k) draws it: rect from
+                             (ox + 0.25 k, 0.25 k) to (ox + W - 0.25 k, H - 0.25 k) for a W x H sheet (model units) at plot scale k
      SharedDxf.PRINT_NOTE    the note for the tools' UI next to the Print buttons (paper, orientation, margins and scale to choose)
      SharedDxf.str(s)        text as DXF R12 accepts it (degree %%d, diameter %%c, x for ×, CL for ℄, HTML tags removed)
      SharedDxf.frac(v, den), fmtIn(inch), fmtFtIn(inch)   9/16 (nearest 1/16 by default), 1 1/8", 12'-4 1/2" (nearest 1/8 in)
@@ -267,6 +270,10 @@
   /* ---------- printing the sheets (browser; 2026-11-03, engineer's request) ---------- */
   /* sheetSVG(D, s, opt): sheet s as an SVG whose viewBox is its outer border, so the SVG scaled to the paper is the sheet at its plot scale */
   function sheetSVG(D, s, opt) { return toSVG(D, Object.assign({ i0: s.i0, i1: s.i1, bg: '#fff', title: s.title, frame: [s.ox || 0, 0, (s.ox || 0) + s.W, s.H] }, opt || {})); }
+  /* the outer border of a sheet, SHEET_INSET paper inches inside the paper edge (the sheet itself stays W x H: sheetSVG prints the whole
+     paper, so the scale is unchanged and the border lands 0.25 in inside the page edge) */
+  const SHEET_INSET = 0.25;
+  function sheetBorder(D, l, ox, W, H, k) { const e = SHEET_INSET * k; return D.rect(l, ox + e, e, ox + W - e, H - e); }
   const PRINT_NOTE = 'Print sheet / Print all sheets: one 11 × 17 in (B-size) landscape page per sheet, each at its plot scale, through the browser\'s print dialog (choose Save as PDF there). '
     + 'If the dialog does not pick it up, choose paper Tabloid / 11 × 17 (Ledger), Landscape, Margins None and Scale 100 % (Actual size / Default).';
   const PR = { done: null };
@@ -380,5 +387,5 @@
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
   }
 
-  window.SharedDxf = { drawing, toSVG, sheetSVG, printSheets, PRINT_NOTE, viewer, str, frac, fmtIn, fmtFtIn, num, dimGeo, bbox, parse, validate, download, ACI };
+  window.SharedDxf = { drawing, toSVG, sheetSVG, sheetBorder, SHEET_INSET, printSheets, PRINT_NOTE, viewer, str, frac, fmtIn, fmtFtIn, num, dimGeo, bbox, parse, validate, download, ACI };
 })();

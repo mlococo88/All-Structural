@@ -63,7 +63,7 @@ function checkSet(P, name) {
   B.sheets.forEach(s => { const k = s.k, b = B.D.bbox(s.i0, s.iC); assert.ok(!s.over, `${name}: ${s.title} fits a scale`);
     assert.ok(b[0] >= s.ox + 1.25 * k - 1e-6 && b[2] <= s.ox + s.W - 1.0 * k + 1e-6 && b[1] >= 3.55 * k - 1e-6 && b[3] <= s.H - 1.0 * k + 1e-6, `${name}: ${s.title} inside its drawing area`);
     const es = inSheet(R, B, s), tb = of(es, 'S-TBLK', 'TEXT').map(e => e.get(1)), bd = of(es, 'S-BRDR', 'POLYLINE').map(box);
-    assert.equal(bd.length, 2, `${name}: ${s.title} borders`); close(bd[0].x1 - bd[0].x0, 34 * k, 1e-6, 'sheet width'); close(bd[0].y1 - bd[0].y0, 22 * k, 1e-6, 'sheet height');
+    assert.equal(bd.length, 2, `${name}: ${s.title} borders`); close(bd[0].x1 - bd[0].x0, (34 - 0.5) * k, 1e-6, 'sheet width'); close(bd[0].y1 - bd[0].y0, (22 - 0.5) * k, 1e-6, 'sheet height'); close(bd[0].x0, s.ox + 0.25 * k, 1e-6, 'outer border 0.25 in inside the edge');
     [String(P.project.name).toUpperCase(), s.title, DW.SCALE_NAME[k], `${s.n} OF ${B.sheets.length}`].forEach(q => assert.ok(tb.includes(X.str(q)), `${name}: ${s.title} title block "${q}" in ${tb.join(' | ')}`));
     stats.sheets++; });
   const sh = id => B.sheets.find(s => s.id === id), esOf = id => inSheet(R, B, sh(id));
