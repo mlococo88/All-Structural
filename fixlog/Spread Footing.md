@@ -4254,3 +4254,43 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 1. The old print report (`SFD_REFS`) still lists "§7.7.2.3 / §13.3.4 (bar spacing)". It is left for the agent porting that report.
 2. For dowels, the side cover normal to the plane of the hook is taken as the smallest plan distance to a footing side (the hook direction is not an input). A hook turned away from a near edge could use the larger cover.
+
+## 2026-11-03 — PR: claude/report-retire-spreadfooting (SFRX: the D11 print report (Print-to-PDF Report / Ctrl+P printing the page in place: `renderPrintHeader`, `sfdPageCSS`) retired after porting what the Report tab lacked; Print-to-PDF Report, Ctrl+P and the browser's Print print the Report from every tab; the manual's "Include this manual" choice kept as an Include box; SFD_REFS bar-spacing citation; display only, no result change)
+
+### SFRX-1. What the print report printed and the Report lacked, ported   [display] [no result change]
+- **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #715, #718, #722, #724, #726, #728, #729, #731).
+- **Compared:** the print report on origin/main (Schematic tab shown, `beforeprint`, print media: the whole body's text plus the KaTeX annotations) against the Report (`#rp-print`, print media) on the branch, with KaTeX and without it. A number counts as present when the Report shows it, or more digits that round to it. Cases (scratch `cases.json`): def (the default project, two pedestals), rev (combined footing B 5 × L 13 × 2 ft, direct qa, epoxy bars, two pedestals with wind loads), sfe (Ped 1 3 × 3 × 1.5 ft, P_D = 270, V_Wx = 115, smooth joint, straight #8 dowels); def again with "Include this manual" ticked.
+- **Missing before:** 78 / 203 / 102 of 505 / 965 / 590 distinct numbers (def / rev / sfe): the result tabs as on screen (tables the Report does not repeat, worked equation blocks of the cards, notes, the Plotly charts and SVG drawings), the dashboard chips, the self-consistency checks, the result line of each dashboard check after each tab (D/C, reference, status), the cover's verdict banner and tool line, the front note, and (when ticked) the User Manual.
+- **Ported (anchor `SFRX (2026-11-03): the D11 print report retired`, after the Report's `beforeprint` handler):**
+  - `sfxWalk(root, scope, T)`: reads a rendered tab (a clone) in order. A KaTeX formula becomes its TeX (`sfxLite`, the built-in renderer's subset). A card title or heading is the topic of its first item. Every worked equation line (`.eq`: title, reference, lines) is added unless the Report already works the line; a line the walk added under another title (the same check for the y-bars) is repeated under its own title. With KaTeX a step equation, without KaTeX its TeX source. A table is added when it has a number or a row of text the Report lacks; a note when it has a sentence or a number the Report lacks; a figure when the Report has none with that caption (Plotly charts as one SVG, `sfxPlotSvg`). A "Worked in" line reads as on screen ("<value> → <tab> · <card>"); the Reinforcement input echo link as printed ("Bars (Reinforcement input): …"). Inputs become static text; buttons and screen-only parts are dropped.
+  - `sfxResults(tab)`: the result lines printed after each tab (`sfdResultRows`, unchanged: same D/C, reference, value and status), a table in subsection "Results — <section>".
+  - `sfxApply(model)` (called by `renderReport`): each tab's items in a subsection "As printed: tables, equations, notes and figures" of its Report section (`SFX_TABS`: dashboard → Summary of results, Schematic → Project and inputs, Load Combinations, Bearing, Stability, Footing Design, Pedestal Design); the User Manual (Include box on), one subsection per part in `MANUAL_ORDER`, before References; "About this report" in References (tool line, verdict, the front note with the units line).
+- **Include box** on the report bar (`sfxControls` / `sfxWire`): "User manual", written to the same saved field `state.manPrint` as the Manual tab's "Include this manual when printing the report" box (kept, and kept in step), with `saveAuto()`. No new key or format, no migration.
+- **After:** in all cases, with and without KaTeX, every number of the print report is in the Report except: the references the Report leaves out by design since SFPR (#725, "references used": AASHTO 11.6.3.3 when no AASHTO eccentricity limit is selected; Vesić 1973/1975, Meyerhof 1953 and AASHTO 10.6.3.1.2a with direct bearing in rev) and one print section number (5.5). Report: 0 unresolved references, 0 duplicate keys. Text not repeated: the print report's contents, section numbers and "see §n.k" labels (the Report has its own contents and § links), the bearing tab's combination list printed from its select (the Report names the governing combination), the Manual tab's footer about the checkbox.
+
+### SFRX-2. Print report removed; Print prints the Report from every tab   [display]
+- **Removed:** `renderPrintHeader()` (and its call in `recalc`), `sfdPageCSS()`, `sfdSecNum()`, `#printHeader`, the D11 `@media print` rules (cover, references, contents, result lines) and the manual's print rules, the page's `beforeprint` / `afterprint` handlers that opened every card, and the manual's own `beforeprint` / `afterprint` handlers.
+- **Kept:** `SFD_REFS`, `sfdResultRows`, `sfdEsc`, the `.wkPrt` / `.wkScr` spans (screen text unchanged), the Manual tab's checkbox.
+- **Changed:**
+  - "Print-to-PDF Report" (tooltip updated) → `sfxPrintAny()`: shows the Report tab (not saved) and prints it (`SFRP.api.print()`).
+  - An inline `beforeprint` script before `shared/report.js` calls `window.sfPrintPrep` (Ctrl+P / the browser's Print from another tab), so the shared viewer's own `beforeprint` handler finds the Report.
+  - `afterprint` brings the tab of before back.
+  - With input errors (no results) there is no Report; Print prints the page as shown.
+- **Saved data:** no key or format change (`sfd_auto`, `sfd_projects`, `bridgeSuite.v1.*`).
+
+### SFRX-3. SFD_REFS bar-spacing citation   [CLAUDE.md §4: code reference; no value change]
+- **Where:** `SFD_REFS`, ACI 318-19 row (anchor `(bar spacing)`), and `sfrRefs()`.
+  - Before: `SFD_REFS` cited "§7.7.2.3 / §13.3.4 (bar spacing)"; `sfrRefs()` replaced it with "§8.7.2.2 with §13.3.3.1 (bar spacing)" for an isolated footing (SFSM, #727) and rebuilt the combined-footing row.
+  - After: `SFD_REFS` cites "§8.7.2.2 with §13.3.3.1 (bar spacing)"; the isolated-footing replacement is removed (no longer needed); the combined-footing replacement anchors on the new text. The Report's references read exactly as before for both footing types.
+- **Provision:** ACI 318-19 8.7.2.2 (s_max = min(2h, 18 in) at critical sections), reached through 13.3.3.1 (isolated two-way footings) and 13.3.4.1 (combined footings). This is the rule the tool computes since #727 (SFSM); the old list's 7.7.2.3 (min(3h, 18 in)) is not used.
+- **Check case (default, h = 24 in):** s_max = min(2·24, 18) = 18.00 in; bottom x-bars #8 @ 9.00 in ≤ 18.00 in OK, before and after. No value changes; only the citation the old list printed.
+
+### How verified
+- `node tests/check-syntax.mjs "Spread Footing.html"`: pass.
+- origin/main vs branch, def / rev / sfe, with KaTeX: `R` and `P2` (JSON) identical; the text of every tab (Schematic, Load Combinations, Bearing, Stability, Footing Design, Pedestal Design, Drawings, Manual, inputs) and the dashboard identical; localStorage identical on load, after visiting every tab, and after showing and printing the Report; no console errors.
+- Print routing from each of the 10 tabs, by `beforeprint` and by the button (20 paths per case): `#rp-print` holds the Report, `body.rp-printing` and the running header are set, the tab of before comes back, localStorage unchanged.
+- Include box: on/off writes only `state.manPrint` (the rest of `sfd_auto` unchanged), adds / removes the User manual section, keeps the Manual tab's box in step; 0 unresolved references either way. One Report build: about 100 ms (def).
+- Screenshots at 1400 and 390 px (no sideways scroll) and the printed PDF (def with the manual, 73 pages) looked at.
+- `node tests/smoke/spread-footing-scroll.mjs --libs …`: PASS. `node tests/smoke/project-library.mjs --tool spreadfooting`: ALL PASS.
+- Line endings unchanged (LF).
+- **Other copies:** none.
