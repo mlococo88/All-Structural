@@ -4185,3 +4185,72 @@ Engineer-approved PR 4 of the independent review of the "Seymour Platform Founda
    - the plan view's resultant marker over the "Ped 1" label;
    - the free-body expression for the footing M_u;
    - numbers in the pedestal M_ux, M_uy formula steps.
+
+## 2026-11-03 — PR: claude/sf-dowel-psi-spacing — Dowel hook factors per Table 25.4.3.2; excess-reinforcement option only where flexure governs A_s,req; dowels get no 25.4.10.1 reduction (stated); s_max = min(2h, 18 in) per 8.7.2.2 (SFDH, SFEX, SFDX, SFSM; calculation change)
+
+These are the engineer's decisions on the open items of #723 (questions 1–3) and #725 (item 2). The code basis is ACI 318-19, read in the ACI 318-19 PDF: Table 25.4.3.2 (printed p. 475), 25.4.10.1, 25.4.10.2, R25.4.10.2 (p. 487–488), 8.7.2.2 (p. 114), and 13.3.3.1 (p. 197). Check cases are in the harness: "review" (the engineer's project, as in #710), "revEx" (review with the ℓ_d option on), the three #684 cases, default, direct mode, and three extra cases. "revHook" is review with every dowel hooked. "edgeHook" is the default with Ped 2 at x = 4.25 ft, flush with the footing edge. "thin" is the default with t = 8 in and bottom x-bars at 17 in.
+
+### SFDH. Dowel hook ℓ_dh, ψ_r and ψ_o per Table 25.4.3.2   [CLAUDE.md §4]
+- **Where:** `sfdLdh` (anchor `function sfdLdh(`), called in `sfdDowelCheck` (anchor `o.ldh=sfdLdh(`). New helper `sfdDowHookTxt(z)`. Report step `p<i>.Lftg` (note and ref); Footing Design 5.6 (2c) note.
+  - Before: `function sfdLdh(db,fy,lam,fc,coating){ … pr=1.6, po=1.0 …}` and `o.ldh=sfdLdh(db,fy,lam,fc,coat);`
+  - After: `function sfdLdh(db,fy,lam,fc,coating,size,sMin,cso){ … sm=size<=11, pr=(sm&&sMin>=6*db-1e-9)?1.0:1.6, po=(sm&&cso>=6*db-1e-9)?1.0:1.25 …}`. In `sfdDowelCheck`:
+    - `o.sDow` is the minimum centre-to-centre spacing of the dowels. Where there is one dowel per vertical-bar position, it is the smaller face spacing, min((b_x − 2d′)/(n_x − 1), (b_y − 2d′)/(n_y − 1)), with d′ = c + d_b/2. Where the dowel count differs, the dowels are spread evenly around the perimeter: 2((b_x − 2d′) + (b_y − 2d′))/n.
+    - `o.cso = 12·min(B/2 − |x| − b_x/2, L/2 − |y| − b_y/2) + c` is the clear plan distance from the outermost dowel to the nearest footing side face. It is used as the side cover normal to the plane of the hook.
+    - ψ_o condition (1) (hook ending inside a column core) does not apply, because the hook ends in the footing. A_th is not considered, as for the footing bars (SFDV).
+- **Effect:** ℓ_dh is multiplied by 1/1.6 where s ≥ 6d_b, and by 1.25 where side cover < 6d_b. It changes results only where the dowels are hooked (`dowelHook` 'hook90'), through `LftgReq`, footing-side development, and the shear-friction development credit. With straight dowels, ℓ_dh is computed but not used.
+- **Check case, default (and dir / sfe / sfe5 / sfe9 Ped 2): #8 hooked, 8 dowels in an 18 in pedestal, c = 2 in, f′c = 4000, uncoated.**
+  - s = (18 − 2·2.5)/2 = **6.50 ≥ 6.00** → ψ_r = 1.0.
+  - Side cover = 12·min(5 − 3 − 0.75, 4 − 0.75) + 2 = **17.0 ≥ 6.0** → ψ_o = 1.0.
+  - ψ_c = 4000/15000 + 0.6 = 0.867.
+  - ℓ_dh = 60000·1.0·ψ_r·1.0·0.867/(55·63.25)·1.0^1.5. Before (ψ_r 1.6): **23.92 in**. After: **14.95 in**.
+  - Available is 25.00 in, so PASS before and after. Default: devTen false. dir: shear-friction credit already 1.0.
+- **Review (straight dowels): no result change.** ℓ_dh, for information:
+  - Ped 1, 28 #6 epoxy: s = 253/28 = 9.04 ≥ 4.50; side cover 6 + 2 = 8.00 ≥ 4.50. ℓ_dh goes from **18.64 to 11.65 in**.
+  - Ped 2, 16 #8 epoxy: s = (32 − 5)/4 = 6.75 ≥ 6.00; side cover 6 + 2 = 8.00 ≥ 6.00. ℓ_dh goes from **28.70 to 17.94 in**.
+- **revHook (review, dowels hooked):** Ped 2 ℓ_dh goes from 28.70 to **17.94 in ≤ 19.25 in available**.
+  - The dowel status changes from FAIL to **PASS**.
+  - Shear friction: development credit 0.671 → 1.0, A_vf 6.10 → 9.10 in², φV_n 289.73 → 424.55 kip, DCR 0.0551 → 0.0376.
+  - Ped 1: ℓ_dh 18.64 → 11.65 in, which passes both before and after.
+- **edgeHook (ψ_o = 1.25):** Ped 2 is flush with the edge, so side cover = 0 + 2 = 2.00 < 6.00 and ψ_o = 1.25. ℓ_dh = 23.92·1.25/1.6 = **18.69 in** (before 23.92).
+
+### SFEX. Excess-reinforcement option (25.4.10.1) only where flexure governs A_s,req   [CLAUDE.md §4]
+- **Where:** `computePhase2` design (anchor `const reqBotFlex=`): new field `des.reqBotFlex`, the flexural A_s per ft alone. `sfdDevAll` (anchor `const AsFlex=`). Report step `ldx`; Footing Design 5.4 equation block and note; input hint; dashboard chip basis.
+  - Before: `rEx=AsProv>0?Math.min(1,AsReq/AsProv):1`, with A_s,req = max(flexure, A_s,min).
+  - After: `flexGov=AsFlex>=des.AsMinPerFt-1e-12` (bottom: `des.reqBotFlex`; top: `des.reqTop`) and `rEx=(flexGov&&AsProv>0)?Math.min(1,AsReq/AsProv):1`. Where A_s,min = 0.0018A_g governs, no reduction is taken, and a step / note cites R25.4.10.2 (the factor does not apply to development of shrinkage and temperature reinforcement).
+- **Provision:** ACI 318-19 25.4.10.1; R25.4.10.2. The option stays off by default.
+- **Check case revEx (#7 epoxy at 8 in bottom, #6 at 8 in top, A_s,min = 0.0018·12·24 = 0.518 in²/ft):**
+  - Bottom x: flexure 0.037 < 0.518, so A_s,min governs. ℓ_d,red goes from 29.88·0.518/0.900 = **17.21 to 29.88 in** (not taken). Status FAIL in both, because ℓ_dh 18.35 > 15.00.
+  - Bottom y: flexure 0.599 ≥ 0.518, so flexure governs. ℓ_d,red = 29.88·0.5985/0.900 = **19.87 in**, unchanged. PASS.
+  - Top x: flexure 0.0007 < 0.518. ℓ_d,red goes from **22.80 to 29.03 in**. REVIEW (hook) in both: ℓ_dh 14.56 ≤ 15.00.
+  - Top y: flexure 0.399 < 0.518. ℓ_d,red goes from **22.80 to 29.03 in** ≤ 35.00, still PASS; D/C 0.651 → 0.829.
+- With the option off (every other case), `rEx` / `LdEx` change in the stored rows only. `LdUse` and the status are unchanged.
+
+### SFDX. Dowels: no 25.4.10.1 reduction   [statement; no change]
+- The dowels were already developed without the excess-reinforcement factor. This is now stated in the report step `p<i>.Lftg` note and the Footing Design 5.6 (2c) note. The dowels serve shear friction and are developed for f_y on both sides of the joint (22.9.5.1), so 25.4.10.2(b) excludes the reduction. The laps are also excluded (25.5.1.4).
+
+### SFSM. Maximum bar spacing s_max = min(2h, 18 in), ACI 318-19 8.7.2.2   [CLAUDE.md §4]
+- **Where:** `computePhase2` design (anchor `const sMax=Math.min(`).
+  - Before: `const sMax=Math.min(3*tin,18);` (7.7.2.3).
+  - After: `const sMax=Math.min(2*tin,18);`, from 8.7.2.2 at critical sections. Footings reach Chapter 8 through 13.3.3.1 (two-way isolated footings: Chapters 7 and 8) and 13.3.4.1 (combined footings). The rule is applied to the whole mat.
+  - Text updated: report step `smax` (one form for all footings; the #725 "check by hand" branch is removed), the Bar-spacing topic ref, Footing Design 5.2 / 5.3 notes, the Reinforcement tab hint, the dashboard chip basis, and `sfrRefs()` for a single footing.
+  - `SFD_REFS` (the old print report's list) is not touched.
+- **Effect:** results change only for h < 9 in (2h < 18).
+- **Check case "thin" (default with t = 8 in, bottom x-bars #8 at 17 in):**
+  - Before: s_max = min(3·8, 18) = **18 in**, 17 ≤ 18 OK.
+  - After: s_max = min(2·8, 18) = **16 in**, 17 > 16 **NG**. The y-bars at 9 in pass both before and after.
+  - In this case the hooked dowels also move (SFDH): ℓ_dh 23.92 → 14.95 in; shear-friction credit 0.125 → 0.201; Ped 1 DCR 0.0683 → 0.0577.
+  - Every case with h ≥ 9 in is unchanged (18 in).
+
+### How verified
+- **Deep diff:** headless Chromium with the pinned libraries (KaTeX 0.16.11, Plotly 2.35.2, three 0.160.0). `R` and `P2` were compared on origin/main and on the branch, for default, review, revEx, sfe, sfe5, sfe9, dir, thin, revHook and edgeHook.
+  - Changed values: only the ones listed above (ℓ_dh and what follows from it for hooked dowels; `rEx`, `LdEx`, `LdUse`, `dc` where A_s,min governs; `sMax`, `spcBotOK` for thin).
+  - New fields: `reqBotFlex`, `AsFlex`, `flexGov`, `AsMin`, `sDow`, `edgeX`, `edgeY`, `cso`, `ldh.sMin`, `ldh.cso`.
+  - No other value moved.
+- **Report:** 0 KaTeX errors; no NaN, undefined, `§?` or `[[`; 0 console errors.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- **Saved data:** no key or format change; no new input.
+- **Other copies:** none.
+
+### Open items
+1. The old print report (`SFD_REFS`) still lists "§7.7.2.3 / §13.3.4 (bar spacing)". It is left for the agent porting that report.
+2. For dowels, the side cover normal to the plane of the hook is taken as the smallest plan distance to a footing side (the hook direction is not an input). A hook turned away from a near edge could use the larger cover.
