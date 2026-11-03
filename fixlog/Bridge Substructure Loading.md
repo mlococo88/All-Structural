@@ -2191,7 +2191,7 @@ function listTables() {
 - **Entered demands:** the superstructure reactions are already entered directly (Reactions tab, Excel import, superReactions hand-off);
   nothing added.
 
-## 2026-11-03 — PR: claude/report-retire-bsl (SLRX: the calculation package (Print → "Print the calculation package": `rptModal`, `rptPrint`, its D11 layout `slReport` / `slPageCSS`) retired after porting what the Report tab lacked; Print, Ctrl+P and the browser's Print print the Report from every tab; the saved chapter / unit choice `P.ui.rpt` kept as the Report's Include boxes; display only, no result change)
+## 2026-11-03 — PR: claude/report-retire-bsl, PR #728: https://github.com/mlococo88/All-Structural/pull/728 (SLRX: the calculation package (Print → "Print the calculation package": `rptModal`, `rptPrint`, its D11 layout `slReport` / `slPageCSS`) retired after porting what the Report tab lacked; Print, Ctrl+P and the browser's Print print the Report from every tab; the saved chapter / unit choice `P.ui.rpt` kept as the Report's Include boxes; display only, no result change)
 
 ### SLRX-1. What the calculation package printed and the Report lacked, ported   [display] [no result change]
 - **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #685, #715, #718, #722, #724); keep the saved section-chooser selection.
