@@ -3917,7 +3917,7 @@ Engineer's decisions: print the Drawings sheets from the app (as Spread Footing,
 - On the half-size print the outer border (0.25 in inside the D sheet's edge, #754) is 0.125 in inside the page edge; the inner border 0.25 in
   (0.375 in on the left). The footer note is 0.04 in text at half size (small); the SCALE cell's "(HALF SIZE)" is the readable marker.
 
-## 2026-11-03 — PR: claude/half-print-no-outer-border — Drawings: no outer border on the half-size print (SBPS-4; display only, no result change)
+## 2026-11-03 — PR: claude/half-print-no-outer-border (PR #756: https://github.com/mlococo88/All-Structural/pull/756) — Drawings: no outer border on the half-size print (SBPS-4; display only, no result change)
 Engineer's decision: on the half-size print of the D sheets (paper D, Print sheet / Print all sheets, #755) the outer border (0.25 in inside
 the 34 × 22 sheet's edge, #754) lands 0.125 in from the 11 × 17 page edge and printers clip it. Leave it out of the half-size print only;
 the inner border (0.25 in from the page edge, 0.375 in on the left) is the visible frame. The D preview, the DXF and paper B are unchanged.
