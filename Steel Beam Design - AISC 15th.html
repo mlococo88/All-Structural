@@ -1445,6 +1445,7 @@ function runBenchmarks(){
   const saved=JSON.stringify(S);
   const S0=S;   /* SBBX (2026-11-02): the user's state object; the input panel's closures hold its span / combination objects */
   const out=[];
+  try{   /* SBBX-2 (2026-11-02): S comes back (finally) even if a scenario throws */
   function scenario(name,setup,checks){
     S=mergeState(defaultState(),JSON.parse(saved));
     S.trib.on=false;S.trib.sw=false;S.loads=[];
@@ -1497,8 +1498,10 @@ function runBenchmarks(){
       S.loads=[{id:'b6',nm:'P',type:'point',lc:'DL',si:0,mag:P,pos:10}];},
     [{q:'M_fix = \u2212PL',exp:-P*10,get:(s,d,f)=>evalVM(1e-6,s.R,f).M,tol:0.01},
      {q:'\u03B4_tip = PL\u00B3/3EI',exp:P*1000/(3*EI),get:(s,d)=>d.d[600],tol:0.015}]);
+  }finally{
   S=S0;   /* SBBX: restore the same object (the scenarios above never touch it), not a copy, so typed spans / factors reach the model */
   syncGenLoads();
+  }
   return out;
 }
 /* =====================================================================
@@ -2751,6 +2754,7 @@ function schedule(structural){
     if(structural)rebuildInputs();
     else if(uxCtl)uxCtl.relabel();   /* Custom stations x: re-check against the beam length */
     renderTab();
+    updateGovStrip();   /* SBGS (2026-11-02): the Governing strip under the header follows every recalculation (it was refreshed only when the tabs were rebuilt) */
     sbdInputTabMarks();   /* refresh the input-tab error dots */
     autosave();pushHist();
     $('updDot').classList.remove('show');
@@ -8063,7 +8067,6 @@ async function printBatchRows(rows,opts){
   }
   /* ---- per member ---- */
   const saved=JSON.stringify(S);
-  const S0=S;S=JSON.parse(saved);   /* SBBX (2026-11-02): rows are applied to a copy; the user's own state object is put back below */
   const order=['tabSummary','tabMx','tabMy','tabVx','tabVy','tabComp','tabTors','tabJ10','tabInter','tabService','tabSection'];
   const names={tabSummary:'Summary',tabMx:'M\u2093 \u2014 Major Flexure',tabMy:'M\u1D67 \u2014 Minor Flexure',
     tabVx:'V\u2093 \u2014 Major Shear',tabVy:'V\u1D67 \u2014 Minor Shear',tabComp:'Compression',
@@ -8072,6 +8075,7 @@ async function printBatchRows(rows,opts){
     tabVy:buildVyTab,tabComp:buildCompTab,tabTors:buildTorsTab,tabJ10:buildJ10Tab,
     tabInter:buildInterTab,tabSection:buildSectionTab};
   let firstDone=!!(opts.front&&(P.summary||P.scope));
+  const S0=S;S=JSON.parse(saved);   /* SBBX (2026-11-02; SBBX-2: moved next to the try, so the finally below always puts it back): rows are applied to a copy; the user's own state object is put back below */
   try{
     for(const r of rows){
       const sec=el('div','prSec'+(firstDone?'':' first'));firstDone=true;
@@ -10830,8 +10834,9 @@ function runSensitivity(){
   /* SBBX (2026-11-02): probe a copy and put the user's own state object back after, not a copy of it: the input panel's
      closures hold its span / combination objects, so a replaced S left typed spans and factors unread */
   const S0=S;S=JSON.parse(key);
-  const params=sensParams();
   const rows=[];
+  try{   /* SBBX-2 (2026-11-02): S comes back (finally) even if a probe throws */
+  const params=sensParams();
   const probe=(pr,f)=>{
     let out={dcr:null,label:null};
     try{
@@ -10855,7 +10860,7 @@ function runSensitivity(){
       flip:(hi.label&&hi.label!==baseInfo.label)||(lo.label&&lo.label!==baseInfo.label),
       crosses:((lo.dcr!=null&&(lo.dcr>1)!==(baseInfo.dcr>1))||(hi.dcr!=null&&(hi.dcr>1)!==(baseInfo.dcr>1)))});
   });
-  S=S0;computeAll();
+  }finally{ S=S0;computeAll(); }
   rows.sort((a,b)=>b.span-a.span);
   SENS_CACHE={key,rows,base:baseInfo};
   return{rows,base:baseInfo};

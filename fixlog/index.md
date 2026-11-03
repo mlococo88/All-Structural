@@ -4369,3 +4369,28 @@ function NumberListInput({value, onChange, placeholder, label, col = 'Value', un
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **Open items:** engineer check: with results loaded, AREMA Rating → Girder Spacing: type 6 ↵ 6.5 ↵ 6 and confirm the
   rating uses those spacings (the rating text shows them).
+
+## 2026-11-02 — PR: claude/plib-index, PR #719: https://github.com/mlococo88/All-Structural/pull/719 — PLIB: Undo / Redo   [display only]
+- **Before:** the model `cfg` is autosaved to `mct_cfg_v3` on every change; named projects are the shared Bridge Projects registry
+  (`BridgeProjects`: Save to Project, the project drop-down); ↺ History keeps the last 10 checkpoint snapshots of the session (on step
+  changes, before load / import / reset) and restores one. No undo of a single edit.
+- **Where** (the Babel script, `function App()`):
+  - after `<script src="shared/list-input.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - the `cfg` autosave effect, anchor `try{localStorage.setItem('mct_cfg_v3',JSON.stringify(cfg));}catch(e){}`: after it,
+    `const P=plibRef.current; if(!P) return;` and a 500 ms timer (cleared by the effect's cleanup, so one step per burst of changes) that
+    calls `P.h.record()`, or `P.h.reset()` when a project was just opened.
+  - after `cfgRef.current = cfg;` (anchor `/* PLIB (2026-11-02): Undo / Redo`): `plibRef`, `plibNewRef`, `plibUndoRef`, `plibRedoRef` and a
+    mount effect: history over `JSON.stringify(cfgRef.current)` (the model inputs; the wizard step, the results and the views are not
+    steps), session only; `set` = `setCfg()` of the step (and `cfgRef.current` at once, so the history reads it before the re-render);
+    `SharedProjectsUI.undoRedo` wires the buttons and Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z.
+  - `loadFromProject()`: `plibNewRef.current=true;` before `loadCfg(slice)`; `importJSON()`: the same after `pushHistory('before import');`
+    (another project or file: a new undo history). Reset to defaults and a ↺ History restore are steps (they can be undone).
+  - sidebar, under the ↺ History row: a new row with Undo and Redo (`data-sp`, the History button's style; disabled state set by
+    `undoRedo`).
+- The ↺ History checkpoints, the Bridge Projects registry and the hand-offs are unchanged.
+- **Saved data:** `mct_cfg_v3`, the Bridge Projects keys and every other key unchanged; no new key.
+- **How verified:** `node tests/smoke/project-library.mjs --tool index` (new TOOLS entry, no list): ALL PASS (the autosaved `cfg` and the
+  "N vehicles · M lines" MCT size identical to origin/main on load, after an input change (Geometry, first number input + 1), and
+  reopened on main's autosave; Undo / Redo / Ctrl+Z / Ctrl+Y exact; no new console errors). Headless: opening a Bridge Project from the
+  drop-down empties the undo history. Sidebar screenshot looked at. `node tests/check-syntax.mjs` (JSX transpiled): pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).

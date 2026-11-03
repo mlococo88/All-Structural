@@ -5966,6 +5966,30 @@ function doPrint(){ openRptDialog(); }
 function getProjects(){ try{return JSON.parse(lsGet(LS_PROJ))||{};}catch(e){return {};} }
 function putProjects(p){ lsSet(LS_PROJ, JSON.stringify(p)); }
 let PRJMODE=&quot;open&quot;, PRJSEL=null;
+/* PLIB (2026-11-02): Rename / Duplicate in this tab's projects dialog, as on the Beam Capacity tab (renameProject / duplicateProject
+   there). The list key LS_PROJ (asd_v1_projects) and its item format { when, data } are unchanged. Rename moves the item unchanged;
+   Duplicate copies it under &quot;<name> (copy)&quot; with &quot;when&quot; set to now (as Beam Capacity stamps its copy). The whole list is one write:
+   a refused write (storage full or blocked) changes nothing and says so. */
+function asdPutProjects(p,what){ if(lsSet(LS_PROJ, JSON.stringify(p))) return true;
+  alert(&quot;The project was not &quot;+what+&quot;: browser storage is full or blocked. Nothing was changed. Use Export JSON to keep it.&quot;); return false; }
+function renameProject(oldNm,newNm){
+  const p=getProjects();
+  if(!p[oldNm]||!newNm||!newNm.trim()) return false;
+  newNm=newNm.trim();
+  if(newNm===oldNm) return true;
+  if(p[newNm] &amp;&amp; !confirm('A project named &quot;'+newNm+'&quot; already exists.\n\nOverwrite it?')) return false;
+  const q={}; Object.keys(p).forEach(k=>{ if(k===oldNm) q[newNm]=p[oldNm]; else if(k!==newNm) q[k]=p[k]; });
+  return asdPutProjects(q,&quot;renamed&quot;);
+}
+function duplicateProject(nm){
+  const p=getProjects();
+  if(!p[nm]) return null;
+  let i=2, cand=nm+&quot; (copy)&quot;;
+  while(p[cand]){ cand=nm+&quot; (copy &quot;+i+&quot;)&quot;; i++; }
+  const rec=JSON.parse(JSON.stringify(p[nm]));
+  rec.when=new Date().toISOString();
+  p[cand]=rec; return asdPutProjects(p,&quot;duplicated&quot;)?cand:null;
+}
 function doSave(){
   const nm=prompt(&quot;Save project as:&quot;, S.proj.name||&quot;ASD Rating&quot;);
   if(!nm) return;
@@ -5987,6 +6011,13 @@ function renderProjDialog(){
     const right=el(&quot;div&quot;,&quot;prjRight&quot;);
     const when=el(&quot;div&quot;,&quot;prjWhen&quot;); try{when.textContent=new Date(p[nm].when).toLocaleDateString();}catch(e){} right.appendChild(when);
     const acts=el(&quot;div&quot;,&quot;prjActs&quot;);
+    /* PLIB: Rename, Duplicate (before Delete, as on the Beam Capacity tab) */
+    const ren=el(&quot;button&quot;,null,&quot;\u270e&quot;); ren.title=&quot;Rename&quot;;
+    ren.addEventListener(&quot;click&quot;,ev=>{ ev.stopPropagation(); const nn=prompt(&quot;Rename project:&quot;,nm); if(nn!==null &amp;&amp; renameProject(nm,nn)){ PRJSEL=nn.trim(); renderProjDialog(); } });
+    acts.appendChild(ren);
+    const dup=el(&quot;button&quot;,null,&quot;\u29c9&quot;); dup.title=&quot;Duplicate&quot;;
+    dup.addEventListener(&quot;click&quot;,ev=>{ ev.stopPropagation(); const c=duplicateProject(nm); if(c){ PRJSEL=c; renderProjDialog(); } });
+    acts.appendChild(dup);
     const del=el(&quot;button&quot;,null,&quot;×&quot;); del.title=&quot;Delete&quot;;
     del.addEventListener(&quot;click&quot;,ev=>{ ev.stopPropagation(); if(confirm(&quot;Delete “&quot;+nm+&quot;”?&quot;)){ const q=getProjects(); delete q[nm]; putProjects(q); if(PRJSEL===nm)PRJSEL=null; renderProjDialog(); } });
     acts.appendChild(del); right.appendChild(acts); it.appendChild(right);
