@@ -7409,7 +7409,10 @@ function lpdRender(){
   const cur=B.S.find(s=>s.id===want)||B.S[0]; LPDW.cur=cur.id;
   const scName=k=>k===1?'NTS (paper inches)':((LPDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1]);
   T.innerHTML='<div class="lpdBar"><label>Sheet <select id="lpdSheet">'+B.S.map((s,j)=>'<option value="'+s.id+'"'+(s===cur?' selected':'')+'>'+(j+1)+'. '+lppEsc(s.title)+'</option>').join('')+'</select></label> '+
-    '<button type="button" class="btn mini ghost" id="lpdDxf">Download DXF ('+B.S.length+' sheets)</button></div>'+
+    '<button type="button" class="btn mini ghost" id="lpdDxf">Download DXF ('+B.S.length+' sheets)</button> '+
+    '<button type="button" class="btn mini ghost" id="lpdPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button> '+
+    '<button type="button" class="btn mini ghost" id="lpdPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets ('+B.S.length+')</button></div>'+
+    '<p class="tbl-note">'+lppEsc(SharedDxf.PRINT_NOTE)+'</p>'+
     '<p class="tbl-note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers S-CONC, S-POLE, S-ARM, S-FIXT, S-CABLE, S-REBAR, S-DIMS, S-TEXT, S-CNTR, S-SOIL, S-PLATE, S-BOLT, S-SIGN, S-TBLK, S-BRDR'+(cx?', S-WIND':'')+'.'+(cx?' Values from the '+(cx.code==='lts'?'AASHTO LRFDLTS results (embedment L by Broms, shaft cage per ACI 318-19: Shaft tab)':'IBC 2021 · ASCE 7-22 results (embedment d per IBC §1807.3, shaft cage per ACI 318-19: Shaft tab)')+'; the panel thickness, the rod projection and the plate standoff are not inputs and are drawn nominal.':'')+'</p>'+
     '<div class="lpdHead"><b>'+(B.S.indexOf(cur)+1)+'. '+lppEsc(cur.title)+'</b> · scale '+lppEsc(scName(cur.k))+(cur.over?' · <span style="color:#b71c1c">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
     '<div class="lpdBox"></div><p class="tbl-note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</p>';
@@ -7418,6 +7421,10 @@ function lpdRender(){
   T.querySelector('#lpdDxf').addEventListener('click',()=>{ const txt=B.D.toDXF({ltscale:1}), chk=SharedDxf.validate(txt);
     if(!chk.ok){ alert('The DXF file failed its structure check:\n'+chk.errors.slice(0,8).join('\n')); return; }
     SharedDxf.download(txt, (activeProject||'light_pole').replace(/[^\w.-]+/g,'_')+'_drawings.dxf'); });
+  // LPPS (2026-11-03): the sheets printed to 11 x 17 landscape pages at their plot scale (SharedDxf.printSheets); display only
+  const prt=list=>SharedDxf.printSheets(list.map(s=>({svg:SharedDxf.sheetSVG(B.D,s),title:s.title})),{paper:[LPDW.W,LPDW.H]});
+  T.querySelector('#lpdPrint1').addEventListener('click',()=>prt([cur]));
+  T.querySelector('#lpdPrintAll').addEventListener('click',()=>prt(B.S));
 }
 function lpdActive(){ const p=$('page-drawings'); return !!(p&&p.classList.contains('on')); }
 // The Geometry tab's elevation, to scale: the same elevation view (no sheet), as SVG
