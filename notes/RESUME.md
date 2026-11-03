@@ -136,3 +136,11 @@ Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcl
 - Queued after SF PR2: SF PR3 (missing checks + NG summary), PR4 (presentation + code basis). Review: notes/sf-review-2026-11-02.md.
 - Decisions: SF stays ACI 318-19 for development; partial shear-friction credit proportional; no top-of-pedestal development check for continuous bars; engineer will add ACI 318-19 + IBC 2021 PDFs to Structural_References.
 - PENDING (not now): RW/Abutment entered stem/footing/pile demands; LP Q: rect post D (width vs min) and square plate DG1 vs bending line in BP; BP non-finite stand-off shear capacity (D/C ERR) on overloaded case; LP multi-sided cap for square tubes (left as not applied).
+
+## 2026-11-03 update (ET)
+- All old print reports retired (full ports): #715 abutment, #718 Pile (old PrintReport hidden as data source), #722 ASCE7, #724 Steel Beam, #726 CBC, #728 BSL, #729 Stone Arch, #731 SPC, #732 SF, #739 index (3 windows). Moving Load Generator keeps its multi-vehicle report.
+- Print: #733 no scrollbar / fit, #735 floor 0.80 + column-block split.
+- SF: #710/#716/#723/#725/#727 review fixes; #734 auto-calc toggle; #737 dashboard left column ≥1500 px; #738 Report w/o Plotly + tests/libs pinned versions; #740/#741/#742 condition shown instead of non-governing D/C.
+- Other: #703/#720 Steel Beam binding bug + gov strip; library/undo all tools (#706–#721); list-input tables all tools (#681–#709); #736 lists.js Node-safe; #713 SB gage twin dropped.
+- Engineer checks open: index AREMA real-project print vs old; index AREMA girder spacing table; Pile library row at phone width.
+- PENDING (not now): RW/Abutment entered demands; SF hook-direction input (side cover from nearest edge); IBC/ACI "no eccentricity limit" option offered, not requested; Bridge Geometry/PBD phone sideways scroll (engineer: leave).
