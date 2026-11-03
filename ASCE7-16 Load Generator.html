@@ -153,7 +153,7 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
 .keybox{border:1px solid var(--outblue);background:#eef4fb;padding:7px 10px;margin:8px 0}
 
 /* ---------- Print ---------- */
-#pdlg,#stdlg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:100}
+#stdlg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;z-index:100}
 #stdlg.on{display:flex}
 #stbox{background:#fff;max-width:760px;width:94%;max-height:88vh;overflow:auto;padding:16px 20px;border:2px solid var(--navy)}
 #stbox h3{margin:0 0 6px;color:var(--navy);font-size:13pt}
@@ -164,37 +164,10 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
 #stgen .g{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px 10px;align-items:end}
 #stgen label{display:block;font-size:10pt;font-style:italic}
 #stgen input{width:100%}
-#pdlg.on{display:flex}
-#pdbox{background:#fff;max-width:640px;width:92%;max-height:86vh;overflow:auto;padding:16px 20px;border:2px solid var(--navy)}
-#pdbox h3{margin:0 0 8px;color:var(--navy);font-size:13pt}
-#pdbox label{display:block;font-size:10.5pt;margin:2px 0}
-#pdbox .ind{margin-left:20px;color:#444;font-size:10pt}
-#report{display:none}
 @media print{
   body{overflow:visible;height:auto;display:block}
-  #titlebar,#inpanel,#tabs,#pdlg,#stdlg,#outbody,.noprint{display:none!important}
+  #titlebar,#inpanel,#tabs,#stdlg,.noprint{display:none!important}
   #main,#mainwrap{display:block;overflow:visible}
-  #report{display:block!important}
-  .rpt-pg{page-break-after:always}
-  /* D11 calculation sheet (2026-10-18): cover, references, contents; the page header / footer is the @page rule
-     of a7PageCSS (style #a7-page, present only while the report exists) */
-  #report a{color:#000;text-decoration:none;border:none}
-  .cr-cover{page-break-after:always;break-after:page;padding-top:0.9in}
-  .cr-cover-t{text-align:center;margin:0 0 0.5in}
-  .cr-cover-t h1{font-size:22pt;color:#1F497D;margin:0 0 12pt}
-  .cr-cover-t p{font-size:13pt;font-weight:700;margin:0 0 6pt}
-  .cr-cover-t p.cr-cover-p{font-weight:400;font-size:11pt}
-  .cr-tb{width:100%;border-collapse:collapse;font-size:10pt;margin:0 0 12pt;border:1.4px solid #1F497D}
-  .cr-tb td{padding:4px 8px;border:.6px solid #B8C2CE;vertical-align:top;width:50%}
-  .cr-front{page-break-after:always;break-after:page}
-  .cr-h1{font-size:12pt;text-transform:uppercase;text-decoration:underline;color:#000;margin:10pt 0 8pt;break-after:avoid}
-  .cr-refs{border-collapse:collapse;margin:0 0 14pt;font-size:10pt}
-  .cr-refs td{padding:2pt 14pt 2pt 0;vertical-align:top}
-  .cr-refs td:first-child{white-space:nowrap;font-weight:700}
-  .cr-toc,.cr-toc ol{list-style:none;margin:0;padding:0}
-  .cr-toc>li{margin:4pt 0;font-size:10.5pt}
-  .cr-toc ol{padding-left:18pt;font-size:9.5pt}
-  .cr-p{margin:0 0 7pt;font-size:10pt}
   .pnl{border:none;margin:0 0 8px}
   .eq,.kx,table.vt,table.dt,table.dash,svg.sch,.pltbox,.note,.keybox,.warnbox{page-break-inside:avoid;break-inside:avoid}
   .pltbox{border:none!important}
@@ -245,7 +218,7 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
       <div class="tbf"><label>Chk. Date</label><input id="tb_chkdate" data-tb></div>
     </div>
     <div id="tbactions">
-      <button class="btn pri" onclick="openPrint()">Print / PDF</button>
+      <button class="btn pri" onclick="a7PrintAny()" title="Print / PDF the calculation report (the Report tab), from any tab">Print / PDF</button>
       <button class="btn" id="xlbtn" onclick="doExcel()">Excel calculation</button>
       <button class="btn" type="button" onclick="bxSendBuildingLoads()" title="Publish the nominal area loads (psf) and seismic parameters for Steel Beam Design (HANDOFF.md, channel buildingLoads)">Send to other tools</button>
       <button class="btn" type="button" onclick="bxExportBuildingLoads()" title="Save the same hand-off as a JSON file">Export hand-off (JSON)</button>
@@ -268,19 +241,6 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
   </div>
 </div></div>
 
-<div id="pdlg"><div id="pdbox">
-  <h3>Report Contents</h3>
-  <div class="hint">The cover with the title block, the references, the contents, the inputs, the results summary and the disclaimer footer always print and cannot be deselected.
-  Deselected sections are removed and the remainder renumbered sequentially.</div>
-  <div id="pdlist"></div>
-  <div class="btnrow" style="margin-top:12px">
-    <button class="btn pri" onclick="runPrint()">Generate</button>
-    <button class="btn" onclick="document.getElementById('pdlg').classList.remove('on')">Cancel</button>
-    <button class="btn" onclick="pdAll(true)">Select all</button>
-    <button class="btn" onclick="pdAll(false)">Select none</button>
-  </div>
-</div></div>
-
 <div id="stdlg"><div id="stbox">
   <h3>Story Schedule</h3>
   <div class="hint">One row per level, measured above the base. The vertical distribution of Sec. 12.8.3 and the story shears
@@ -298,10 +258,12 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
   </div>
 </div></div>
 
-<div id="report"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <!-- A7RP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
+<!-- A7RX (2026-11-03): Ctrl+P / the browser's Print from any tab prints the Report: registered before shared/report.js's own
+     beforeprint listener, so the Report is shown when that listener sets the running header (a7PrintPrep). -->
+<script>window.addEventListener("beforeprint",()=>{ try{ if(typeof a7PrintPrep==="function") a7PrintPrep(); }catch(e){} });</script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 <!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
@@ -1927,10 +1889,10 @@ function buildInputs(){
 
   b=panel(host,"i-out",++n+".","Deliverables","");
   const br2=el("div","btnrow");
-  br2.innerHTML='<button class="btn pri" onclick="openPrint()">Print / PDF report</button>'+
+  br2.innerHTML='<button class="btn pri" onclick="a7PrintAny()" title="Print / PDF the calculation report (the Report tab)">Print / PDF report</button>'+
    '<button class="btn" onclick="doExcel()">Excel calculation</button>';
   b.appendChild(br2);
-  b.appendChild(el("div","hint","The report contents are selectable. The Excel workbook carries live formulas and the code tables at their point of use."));
+  b.appendChild(el("div","hint","The report sections are chosen with the Include boxes on the Report tab. The Excel workbook carries live formulas and the code tables at their point of use."));
   }
 }
 
@@ -1960,7 +1922,7 @@ function goto(a){
 
 /* D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to the panel that works it.
    On screen "Worked in: <values>: \u2192 Tab \u00B7 Panel" opens the tab, expands the panel, scrolls to it and flashes it;
-   in the calculation report runPrint rewrites each link to "see \u00A7n.k". Display only. */
+   in the Report (A7RX, a7xFixStr) each link reads "see \u00A7n.k". Display only. */
 const a7TabName=k=>(TABS.find(t=>t[0]===k)||[k,k])[1];
 function a7WorkedIn(host,items){   /* items: [values quoted, tab, panel key, panel title] */
   host.appendChild(el("div","wkLink","Worked in: "+items.map(i=>i[0]+": <a class=\"jump wkA\" data-wk=\""+i[2]+"\" onclick=\"a7Goto('"+
@@ -4459,43 +4421,12 @@ function printSel(){
   if(!S.print){ S.print={}; RSECS.forEach(s=>{ S.print[s.k]=(s.k!=="man"); if(s.tier2) S.print[s.k+"_d"]=true; }); }
   return S.print;
 }
-function openPrint(){
-  const sel=printSel(), d=document.getElementById("pdlist"); d.innerHTML="";
-  d.innerHTML='<label style="color:#555"><input type="checkbox" checked disabled> Cover with title block, references, contents and disclaimer footer <i>(always printed)</i></label>'+
-    '<label style="color:#555"><input type="checkbox" checked disabled> Inputs <i>(always printed)</i></label>'+
-    '<label style="color:#555"><input type="checkbox" checked disabled> Results summary: status register and governing loads <i>(always printed, after the selected sections)</i></label>';
-  RSECS.forEach(s=>{
-    const empty = s.skip && s.skip();
-    d.innerHTML+='<label'+(empty?' style="color:#999"':'')+'><input type="checkbox" data-pk="'+s.k+'"'+(sel[s.k]?" checked":"")+(empty?" disabled":"")+'> '+esc(s.t)+(empty?' <i>(empty, will not print)</i>':'')+'</label>'+
-      (s.tier2?'<label class="ind"><input type="checkbox" data-pk="'+s.k+'_d"'+(sel[s.k+"_d"]?" checked":"")+'> '+esc(s.tier2)+'</label>':'');
-  });
-  document.getElementById("pdlg").classList.add("on");
-}
-function pdAll(v){ document.querySelectorAll("#pdlist input[data-pk]").forEach(i=>i.checked=v); }
 /* D11 (2026-10-18): slim calculation-sheet report (engineer's scope: inputs -> worked results, no D/C section), in the
    Gusset Plate Rating / Section Property Calculator format: cover with title block, references (only what the printed
    sections cite), numbered table of contents (links), numbered sections n and subsections n.k (the tabs' own panels,
    built by the tabs' own renderers: symbolic -> values substituted -> result), the Results summary (the dashboard's
    status register and governing values, with "see \u00A7n.k"), and the print header / "Page X of Y" footer (@page margin
    boxes, a7PageCSS, present only while the report exists). No value is computed here: every number is the one the tabs show. */
-const A7_TOOL="ASCE 7-16 Building Load Generator";
-function a7PageCSS(tb){
-  const q=v=>String(v==null||v===""?"\u2014":v).replace(/\\/g,"\\\\").replace(/"/g,'\\"').replace(/[\r\n]+/g," ");
-  const desc=(tb.subject||tb.task||"Design loads").slice(0,44);
-  const box='font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;';
-  const foot='font: 9pt "Times New Roman", Times, serif; vertical-align: top; padding-top: 6pt;';
-  return '@media print { @page { size: letter portrait; margin: 0.95in 0.5in 0.7in 0.5in;'+
-    ' @top-left { content: "Project No: '+q(tb.job)+'\\A Description: '+q(desc)+'"; '+box+' text-align: left; }'+
-    ' @top-center { content: "Computed By: '+q(tb.by)+'\\A Checked By: '+q(tb.chk)+'"; '+box+' text-align: left; }'+
-    ' @top-right { content: "Date: '+q(tb.date)+'\\A Date: '+q(tb.chkdate)+'"; '+box+' text-align: right; }'+
-    ' @bottom-left { content: "'+q(tb.project||"Untitled")+' ('+A7_TOOL+')"; '+foot+' }'+
-    ' @bottom-right { content: "Page " counter(page) " of " counter(pages); '+foot+' } } }';
-}
-function a7ApplyPageCSS(css){
-  let st=document.getElementById("a7-page");
-  if(!st){ st=document.createElement("style"); st.id="a7-page"; document.head.appendChild(st); }
-  st.textContent=css||"";
-}
 /* References: the provisions the printed sections actually cite, collected from their text (panel and equation
    references, tables, notes), grouped by chapter. Nothing is added that the sections do not cite. */
 const A7_CH={1:"General",2:"Combinations of Loads",3:"Dead Loads, Soil Loads, and Hydrostatic Pressure",4:"Live Loads",7:"Snow Loads",
@@ -4571,108 +4502,6 @@ function a7InputEcho(h){
      ["Story schedule levels","",String((S.levels||[]).length)+" (listed in the Seismic section)"]]));
   note(b,"Values as entered on the input tabs. Derived values (p<sub>g</sub> used, V, S<sub>s</sub>, S<sub>1</sub>, h, \u03B8, wall areas) are worked in the sections that follow.");
 }
-function runPrint(){
-  const sel=printSel();
-  document.querySelectorAll("#pdlist input[data-pk]").forEach(i=>sel[i.dataset.pk]=i.checked);
-  autosave();
-  const rep=document.getElementById("report"); rep.innerHTML="";
-  const tb={}; document.querySelectorAll("[data-tb]").forEach(i=>tb[i.id.slice(3)]=i.value);
-  const savedTab=S.tab, savedOpen=JSON.parse(JSON.stringify(S.open));
-  Object.keys(S.open).forEach(k=>S.open[k]=true);
-
-  /* ---- numbered sections n; their numbered panels become subsections n.k ---- */
-  const body=el("div"), toc=[], cardMap={};
-  let idx=0;
-  const addSec=(title,fill,flat)=>{
-    idx++; const wrap=el("div","rpt-pg"), sid="rpt-s"+idx;
-    const h=el("h2","sec",idx+".  "+esc(title)); h.id=sid; wrap.appendChild(h);
-    fill(wrap);
-    const subs=[];
-    if(!flat){
-      /* only top-level numbered panels take a number; nested worked-derivation panels are unnumbered
-         and must not consume one, or the sequence develops gaps */
-      const nums=[...wrap.querySelectorAll(".pnl>.hd .num")].filter(n=>n.textContent.trim()!=="");
-      nums.forEach((n,j)=>{ const num=idx+"."+(j+1), pn=n.parentElement.parentElement, id2="rpt-"+idx+"-"+(j+1);
-        n.textContent=num+"."; pn.id=id2;
-        if(pn.dataset.k) cardMap[pn.dataset.k]={num,id:id2};   /* a key used twice ("o-rf0"): the later panel wins, as on screen */
-        const t=pn.querySelector(".hd .ttl"); subs.push({num,id:id2,t:t?t.textContent:""}); });
-    }
-    body.appendChild(wrap); toc.push({n:idx,t:title,id:sid,subs});
-  };
-  addSec("Inputs",a7InputEcho);
-  RSECS.forEach(s=>{
-    if(!sel[s.k] || s.k==="man") return;
-    if(s.skip && s.skip()) return;          /* empty sections drop out and do not consume a number */
-    addSec(s.t,wrap=>{ s.fn(wrap); if(s.tier2 && !sel[s.k+"_d"]) wrap.querySelectorAll(".pnl.sub").forEach(p=>p.remove()); });
-  });
-  /* ---- Results summary, always printed: the dashboard (status register, governing design values, wind envelope) ---- */
-  addSec("Results Summary",renderDash);
-  if(sel.man) addSec("User Manual (design basis)",wrap=>{
-      const saved=S.manPart;
-      MANUAL.forEach((p,i)=>{ S.manPart=i; const c=el("div"); renderManual(c);
-        const nav=c.querySelector("#mannav"); if(nav) nav.remove(); wrap.appendChild(c); });
-      S.manPart=saved; },true);
-
-  /* ---- D11 links: "-> Tab . Panel" reads "see \u00A7n.k" in the report ---- */
-  body.querySelectorAll("a.wkA").forEach(a=>{
-    const hit=cardMap[a.dataset.wk]; a.removeAttribute("onclick");
-    if(hit){ a.textContent="see \u00A7"+hit.num; a.href="#"+hit.id; }
-    else a.textContent="see the "+a.textContent.replace(/^\u2192\s*/,"").replace(" \u00B7 "," tab, ")+" (not in this printout)";
-  });
-
-  /* ---- cover with title block ---- */
-  const cover=el("div","cr-cover"), site=S.jur==="MA"?S.town:(S.customLabel||"Manual entry");
-  cover.appendChild(el("div","cr-cover-t","<h1>"+A7_TOOL+"</h1><p>"+esc(tb.project||"Untitled project")+"</p>"+
-    (tb.subject?'<p class="cr-cover-p">'+esc(tb.subject)+'</p>':"")+(tb.task?'<p class="cr-cover-p">'+esc(tb.task)+'</p>':"")+
-    '<p class="cr-cover-p">Design loads: inputs and worked results</p>'+
-    '<p class="cr-cover-p">Codes: ASCE/SEI 7-16'+(S.jur==="MA"?"; 780 CMR, Massachusetts State Building Code, 10th Ed.":"")+'</p>'+
-    '<p class="cr-cover-p"><i>by Mario Lococo</i> &middot; '+APP_VERSION+'</p>'));
-  const tt=el("table","cr-tb"), mk=(a,b,c,d)=>{ const tr=el("tr"); tr.appendChild(el("td",null,"<b>"+a+":</b> "+esc(b||"\u2014")));
-    tr.appendChild(el("td",null,"<b>"+c+":</b> "+esc(d||"\u2014"))); tt.appendChild(tr); };
-  mk("Project",tb.project,"Project No.",tb.job); mk("Calculated by",tb.by,"Date",tb.date); mk("Checked by",tb.chk,"Checked date",tb.chkdate);
-  mk("Subject",tb.subject,"Task",tb.task); mk("Site",site,"Risk Category",S.risk);
-  cover.appendChild(tt);
-
-  /* ---- references and contents ---- */
-  const fm=el("div","cr-front");
-  fm.appendChild(el("h2","cr-h1","References:"));
-  const rt=el("table","cr-refs");
-  a7Refs(body,sel).forEach(([a,b])=>{ const tr=el("tr"); tr.appendChild(el("td",null,a)); tr.appendChild(el("td",null,b)); rt.appendChild(tr); });
-  fm.appendChild(rt);
-  fm.appendChild(el("h2","cr-h1","Table of contents:"));
-  const ol=el("ol","cr-toc");
-  toc.forEach(s=>{ const li=el("li",null,'<a href="#'+s.id+'">'+s.n+". "+esc(s.t)+"</a>");
-    if(s.subs.length) li.appendChild(el("ol",null,s.subs.map(q=>'<li><a href="#'+q.id+'">'+q.num+" "+esc(q.t)+"</a></li>").join("")));
-    ol.appendChild(li); });
-  fm.appendChild(ol);
-  fm.appendChild(el("p","cr-p","Inputs first, then each load the tool generates, in the order of its tabs. Where the tool works a value, the "+
-    "equation is shown symbolically, then with the values substituted, then with the result; code tables are printed at their point of use. "+
-    "\u201Csee \u00A7n.k\u201D points to the subsection where a quoted value is worked. This tool generates design loads only: there are no "+
-    "demand-to-capacity ratios. Units: ft, psf, lbf, kip, mph, s and g as labelled."));
-  rep.appendChild(cover); rep.appendChild(fm); rep.appendChild(body);
-
-  /* ---- disclaimer footer, always printed ---- */
-  const ft=el("div");
-  ft.style.cssText="border-top:2px solid #1F497D;margin-top:14px;padding-top:6px;font-size:10pt;font-style:italic;color:#333";
-  ft.innerHTML="This calculation was produced by the ASCE 7-16 Building Load Generator, "+APP_VERSION+". The program is an engineering aid and is not a "+
-    "substitute for engineering judgment. It generates design loads only; it performs no structural analysis, no member or connection design, "+
-    "and no code capacity check. Snow drift and sliding snow, partial loading, components and cladding, torsional wind cases, and the seismic "+
-    "provisions beyond base shear, its vertical distribution and the vertical load effect are outside its scope. The engineer of record is responsible for the suitability of every value reproduced here. Refer to the User Manual, Part 1, "+
-    "for the complete statement of scope, exclusions, assumptions and known limitations.";
-  rep.appendChild(ft);
-
-  S.open=savedOpen; S.tab=savedTab;
-  a7ApplyPageCSS(a7PageCSS(tb));
-  document.getElementById("pdlg").classList.remove("on");
-  /* the figures are drawn asynchronously; wait for them to finish before printing */
-  const t0=Date.now();
-  (function waitForPlots(){
-    const pending=(typeof PLOT_PENDING==="number")?PLOT_PENDING:0;
-    if(pending>0 && Date.now()-t0<6000){ setTimeout(waitForPlots,120); return; }
-    setTimeout(()=>{ window.print(); setTimeout(()=>{ rep.innerHTML=""; a7ApplyPageCSS(""); render(); },500); },260);
-  })();
-}
-
 /* ==================================================================
    REPORT tab (A7RP, 2026-11-01): a slim calculation report in the shared viewer (shared/report.js: navigation tree,
    numbered sections §n.m, collapse / expand, search, Print with a title block, running header and page numbers),
@@ -4681,7 +4510,7 @@ function runPrint(){
    show them; only the substitution strings are formatted (R2 / RN, as the tabs). The detailed wind wall, roof and
    component pressures, the story distribution and the combinations stay on their tabs (linked). The Report tab is kept
    out of the saved state (S.tab is not changed by it; A7RP.on is in memory only), so saved projects are unchanged.
-   The D11 "Print / PDF" is unchanged.
+   A7RX (2026-11-03): the D11 "Print / PDF" report is retired; what it printed is ported below and Print prints this Report.
    ================================================================== */
 const A7RP={on:false,closed:new Set(),api:null,doc:null};
 const a7S=o=>SharedSteps.step(o);
@@ -4700,6 +4529,7 @@ const a7Plain=s=>String(s==null?"":s).replace(/<sub>(.*?)<\/sub>/g,(m,a)=>"$_{"+
    tab's own TeX lines: symbols → values → result), each table a report table, each note a note, each figure a figure (the Plotly
    figures as images). The dialog's choices are the report bar's "Include" boxes (the same field S.print, the same keys and values). */
 const A7RX={hv:null,img:null,back:false,cap:null,box:null};
+const A7_TOOL="ASCE 7-16 Building Load Generator";
 /* the section selection as the dialog had it: S.print when it exists (as saved), else the dialog's defaults (S is not written) */
 function a7xSel(){ if(S.print) return S.print; const d={}; RSECS.forEach(s=>{ d[s.k]=(s.k!=="man"); if(s.tier2) d[s.k+"_d"]=true; }); return d; }
 const A7X_GR={iota:"ι",kappa:"κ",nu:"ν",xi:"ξ",zeta:"ζ",varphi:"φ",varepsilon:"ε",vartheta:"θ",Gamma:"Γ",Omega:"Ω",Phi:"Φ",Psi:"Ψ",Lambda:"Λ",Pi:"Π",Theta:"Θ",Sigma:"Σ",Delta:"Δ",partial:"∂",
@@ -5018,9 +4848,10 @@ function renderReport(h){
   A7RP.doc=A7RP.api.doc;
   a7xWire(box); a7xImages();   /* A7RX */
 }
-/* Ctrl+P while the Report tab is shown prints the report alone (the print CSS hides #outbody, so it goes into #rp-print); otherwise unchanged */
+/* Ctrl+P / the browser's Print: the Report alone (the print CSS hides #outbody, so it goes into #rp-print); from another tab a7PrintPrep
+   (the inline script before shared/steps.js) has shown the Report first (A7RX) */
 window.addEventListener("beforeprint",()=>{
-  if(!A7RP.on||!A7RP.doc||document.body.classList.contains("rp-printing")||document.getElementById("report").innerHTML)return;
+  if(!A7RP.on||!A7RP.doc||document.body.classList.contains("rp-printing"))return;
   let box=document.getElementById("rp-print");if(!box){box=document.createElement("div");box.id="rp-print";document.body.appendChild(box);}
   box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(A7RP.doc,{lazy:false})+"</article></div>";
   document.body.classList.add("rp-printing");
