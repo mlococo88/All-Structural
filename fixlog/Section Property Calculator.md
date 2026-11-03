@@ -3045,3 +3045,55 @@ index 56a8a3f..13f8372 100644
   - Screenshots at 1400 and 390 px (no sideways scroll) and the printed PDF (c2, 33 pages) looked at.
   - `node tests/smoke/list-input.mjs --part secprop,secpropren`: all passed.
 - **Other copies:** none.
+
+## 2026-11-03 — PR: claude/spc-sheets — Drawings tab: section and properties on 11 × 17 sheets at plot scale, DXF of the sheets, Print sheet / Print all sheets (SPDW; display only, no result change)
+
+### SPDW. Drawings tab   [display only]
+- **Request (engineer, approved):** sheet layouts as in Light Pole and Spread Footing: a Drawings view with a sheet selector, the zoomable
+  preview, Download DXF (sheets), Print sheet, Print all sheets and the print note; the existing Export DXF (MASSPROP check) stays as it was.
+- **Sheets** (B-size, 17 × 11 in, border and two-row title block, side by side in one DXF R12 file, model space, full size in the display
+  units: inches, or millimetres with metric scales):
+  1. SECTION AND PROPERTIES: the computed geometry (`R.parts[].G.prims`, the same polylines and circles as the MASSPROP DXF; holes and tube
+     voids on SPC-HOLES, parts with n ≠ 1 on SPC-PARTS-N), centroid, principal axes when they are not x / y, dimensions of the overall
+     width and height and of the centroid from the left and bottom extreme fibres (c_left, c_bottom of the Properties tab), part labels
+     (label: description, n, AISC tab.) with leaders; to the right, the section-properties table (the Section tab's key results: A, x̄, ȳ,
+     I_x, I_y, I_xy, I_1, I_2, θ_p, S_x top / bottom, S_y left / right, Z_x, Z_y, r_x, r_y, r_min, J, C_w, shear centre x_o, y_o) with
+     the card that works each one (Calc detail, Plastic, Torsion). Scale: the smallest of FULL SIZE, 6" = 1'-0", 3" = 1'-0", 1 1/2", 1",
+     3/4", 1/2", 3/8", 1/4", 1/8" = 1'-0" (mm: 1:1, 1:2, 1:5, 1:10, 1:20, 1:25, 1:50, 1:100) at which the section and the table fit.
+  2. PARTS (NTS, paginated): the Properties tab's parts table (label, description, centroid x, y, rotation, mirrored, n, A, basis).
+  - Values are formatted as the tabs show them (`nf`, `un`; units as ^2, ^3, ^4, ^6 in the DXF text); dimension text uses `nf` too.
+  - Title block: PROJECT, PROJECT NO. (Job #), CALCULATED BY (Prepared by), DATE, CHECKED BY, CHECKED DATE (blank), SCALE, SHEET TITLE,
+    MEMBER, DRAWN BY, SHEET n OF N, from the Project fields (which "Use shared project info" fills from `bridgeSuite.v1.projectMeta`).
+  - Index table under the preview with links to the Section and Properties tabs, and the "Worked in" links of the Section tab.
+- **Where:**
+  - `<head>`: anchor `<script src="shared/list-input.js"></script>`, after it `<script src="shared/dxf.js"></script>` (new).
+  - CSS: anchor `.tabPage{padding:10px 2px}`, after it `.spdwBar`, `.spdwBox`, `.spdwHead`, `.spdwIdx` (new).
+  - `OUT_TABS`: before `['val', 'Validation'], ['man', 'Method'], ['rpt', 'Report']];   // rpt: SPRP`; after
+    `['val', 'Validation'], ['man', 'Method'], ['dwg', 'Drawings'], ['rpt', 'Report']];   // rpt: SPRP; dwg: SPDW`.
+  - `BUILDERS`: before `… man: buildManual, rpt: buildReport });`; after `… man: buildManual, dwg: buildDwg, rpt: buildReport });`.
+  - New code after `exportDxf()` (anchor `DRAWINGS tab (SPDW, 2026-11-03)`): `SPDW_IN`, `SPDW_MM`, `SPDW`, `spdwU()`, `spdwBuild()`, `buildDwg(pg)`.
+  - `SPCDXF` and the Export DXF dialog are not changed.
+- **Saved data:** one new per-browser key `spc_dwgSheet_v1` (the sheet id shown). `M.ui.outTab` (saved with the project, as for every
+  output tab) can now hold `'dwg'`; an older copy of the tool opens such a project on the Section tab (`curTab()` falls back to 'sec').
+  No existing key or format changed.
+- **Printing:** Ctrl+P and Print report still print the Report from every tab (SPRX), also from the Drawings tab.
+- **Governing provision:** none (drawing output; every value is an existing result).
+- **Check case:** a welded plate girder (flanges PL 16 × 1 at y = ±18.5 in, web PL 1/2 × 36): SECTION AND PROPERTIES at 1 1/2" = 1'-0"
+  (k = 8): the top flange 16 × 1 in → 2.000 × 0.125 in = 144.00 × 9.00 pt, measured on the printed PDF 144.00 × 9.00 pt; overall 16" × 38",
+  c_left 8", c_bottom 19"; A = 50 in^2, I_x = 12,899 in^4. Default project (W21X62 + C15X33.9): 3" = 1'-0" (in), 1:5 (mm).
+- **How verified:**
+  - `node tests/smoke/dxf-print-sheets.mjs --tool spc` (new entry): Print sheet 1 page 1224 × 792 pt, border on the page edge, the flange to
+    scale; Print all sheets 2 pages 17 × 11; print box removed; Ctrl+P prints the Report (22 letter pages, no sheet); 0 console errors. PDFs
+    and the preview screenshots (in and mm) looked at.
+  - `SharedDxf.validate` passes on the sheets DXF (in and mm).
+  - The Export DXF text (in / centroid and mm / origin), origin/main vs this branch: identical (date removed).
+  - `node tests/smoke/project-library.mjs --tool spc`: ALL PASS (results and storage as origin/main).
+  - `node tests/smoke/list-input.mjs --part secprop,secpropren`: the only difference is the new tab button "Drawings" in the output panel's
+    text; with that button left out of the page text, all passed (results, M, saved text identical).
+  - Page width at 390 and 768 px, on load and on the Drawings tab: 390 / 768 px (no sideways scroll), as origin/main.
+  - `node tests/check-syntax.mjs`: passes.
+- **Other copies:** none.
+
+### Open items
+- Part sizes are given by the part descriptions (labels), not by per-part dimension lines (stacked parts would overlap them).
+- The Report does not include the drawing sheets (they print separately at their scale).

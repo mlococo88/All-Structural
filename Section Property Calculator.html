@@ -16,6 +16,7 @@
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
 <script src="shared/list-input.js"></script>
+<script src="shared/dxf.js"></script><!-- SPDW: DXF writer, sheet preview and printing (Drawings tab) -->
 <style>
 :root{
   --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB;
@@ -66,6 +67,12 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 .govBadge{font-weight:700;letter-spacing:.4px;padding:1px 8px;border-radius:4px;background:rgba(0,0,0,.06)}
 .govStrip.pass .govBadge{color:var(--pass)} .govStrip.fail .govBadge{color:var(--fail)}
 .tabPage{padding:10px 2px}
+/* SPDW: Drawings tab */
+.spdwBar{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;margin:2px 0 6px;font-size:9pt}
+.spdwBar select{width:auto;max-width:100%}
+.spdwBox{border:1px solid var(--line);background:#fff;margin:6px 0}
+.spdwHead{margin:8px 0 2px;font-size:9.5pt}
+.spdwIdx tr[data-spdw]{cursor:pointer} .spdwIdx tr.on{background:#EEF4FF}
 .sec{border:1px solid var(--line);border-radius:6px;margin:9px 0;background:var(--paper);overflow:hidden}
 .secHead{display:flex;align-items:center;gap:7px;padding:6px 10px;background:linear-gradient(#F6F8FA,#EDF1F5);cursor:pointer;border-bottom:1px solid var(--line);user-select:none}
 .secHead .caret{width:0;height:0;border-left:6px solid var(--accent);border-top:4px solid transparent;border-bottom:4px solid transparent;transition:transform .12s}
@@ -5509,7 +5516,7 @@ function wireKeys() {
 /* =====================================================================
    OUTPUT (tabs)
    ===================================================================== */
-const OUT_TABS = [['sec', 'Section'], ['props', 'Properties'], ['calc', 'Calc detail'], ['plas', 'Plastic'], ['tors', 'Torsion'], ['q', 'Q & shear flow'], ['stress', 'Stresses'], ['val', 'Validation'], ['man', 'Method'], ['rpt', 'Report']];   // rpt: SPRP
+const OUT_TABS = [['sec', 'Section'], ['props', 'Properties'], ['calc', 'Calc detail'], ['plas', 'Plastic'], ['tors', 'Torsion'], ['q', 'Q & shear flow'], ['stress', 'Stresses'], ['val', 'Validation'], ['man', 'Method'], ['dwg', 'Drawings'], ['rpt', 'Report']];   // rpt: SPRP; dwg: SPDW
 const SPX = { tab: null, back: null };   // SPRX: the Report shown for printing from another tab (not saved; M.ui.outTab unchanged)
 function curTab() { if (SPX.tab) return SPX.tab; const t = M.ui.outTab; return OUT_TABS.some(x => x[0] === t) ? t : 'sec'; }
 function setOutTab(id) { if (curTab() === id) return; M.ui.outTab = id; autosave(); buildTabBar(); renderTab(); }
@@ -5525,7 +5532,7 @@ function buildTabBar() {
     bar.appendChild(b);
   });
 }
-const BUILDERS = () => ({ sec: buildSec, props: buildProps, calc: buildCalc, plas: buildPlas, tors: buildTors, q: buildQ, stress: buildStress, val: buildValid, man: buildManual, rpt: buildReport });   /* rpt: SPRP */
+const BUILDERS = () => ({ sec: buildSec, props: buildProps, calc: buildCalc, plas: buildPlas, tors: buildTors, q: buildQ, stress: buildStress, val: buildValid, man: buildManual, dwg: buildDwg, rpt: buildReport });   /* rpt: SPRP */
 let NUMIN_FOCUS = null;   // key of the field that had the focus when the output tab is rebuilt (qPosDisp)
 function renderTab(light) {
   const pages = $('tabPages'), id = curTab();
@@ -6859,6 +6866,160 @@ function exportDxf(O) {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = dxfFileName();
   document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1500);
   toast('DXF exported' + (w.warnings.length ? ' — see the warnings in its notes' : ''));
+}
+
+/* =====================================================================
+   DRAWINGS tab (SPDW, 2026-11-03): drawing sheets, 11 x 17 (B-size) at plot scale
+   The section and its properties as B-size sheets (17 x 11 in) with border and title block, side by side in one DXF R12 file
+   (shared/dxf.js: SharedDxf.drawing -> toDXF), previewed from the same entities (SharedDxf.sheetSVG, SharedDxf.viewer) and printed
+   one 11 x 17 landscape page per sheet at its plot scale (SharedDxf.printSheets), as Spread Footing (SFDW) and Light Pole (LPDW).
+   Display and export only: the geometry is the computed one (R.parts[].G.prims, as the MASSPROP DXF), every value is the
+   tool's own result (R) formatted as the Section and Properties tabs show it (nf, un). Model space, full size in the display
+   units (in, or mm with metric scales). The Export DXF dialog (MASSPROP check) is unchanged.
+   Saved: the chosen sheet (per browser, key spc_dwgSheet_v1); the open output tab is kept in M.ui.outTab as for the other tabs.
+   Title block: the Project fields (Project, Job #, Prepared by, Date, Checked by), which the shared project info fills.
+   ===================================================================== */
+const SPDW_IN = [[1, 'FULL SIZE'], [2, '6" = 1\'-0"'], [4, '3" = 1\'-0"'], [8, '1 1/2" = 1\'-0"'], [12, '1" = 1\'-0"'], [16, '3/4" = 1\'-0"'], [24, '1/2" = 1\'-0"'], [32, '3/8" = 1\'-0"'], [48, '1/4" = 1\'-0"'], [96, '1/8" = 1\'-0"']];
+const SPDW_MM = [[1, '1:1'], [2, '1:2'], [5, '1:5'], [10, '1:10'], [20, '1:20'], [25, '1:25'], [50, '1:50'], [100, '1:100']];
+const SPDW = { W: 17, H: 11, m: 0.375, tbH: 1.0, key: 'spc_dwgSheet_v1', cur: null, B: null };
+const spdwU = s => String(s == null ? '' : s).replace(/²/g, '^2').replace(/³/g, '^3').replace(/⁴/g, '^4').replace(/⁶/g, '^6').replace(/<[^>]+>/g, '').replace(/·/g, ':').replace(/x̄/g, 'XBAR').replace(/ȳ/g, 'YBAR').replace(/θ/g, 'THETA').replace(/r̄/g, 'R');
+function spdwBuild() {
+  if (!window.SharedDxf) throw new Error('shared/dxf.js is not loaded');
+  if (!R || !R.ok) throw new Error('no results (input errors)');
+  const mm = unitSys() === 'mm', f = mm ? 25.4 : 1, pu = mm ? 25.4 : 1, SC = mm ? SPDW_MM : SPDW_IN, uL = mm ? 'mm' : 'in';
+  const fmtL = v => nf(v / f, 'L') + (mm ? ' mm' : '"');   // dimension text as the tool shows lengths (model units in -> internal in)
+  const D = SharedDxf.drawing({ prefix: 'SPC-', fmt: fmtL }), S = [], p = M.project || {};
+  const L = { part: D.layer('PARTS', 7), partn: D.layer('PARTS-N', 3), hole: D.layer('HOLES', 1), cen: D.layer('CENTROID', 6), ax: D.layer('AXES', 6, 'CENTER'), dim: D.layer('DIMS', 3), txt: D.layer('TEXT', 7), tbl: D.layer('TABLE', 7), tb: D.layer('TBLK', 7), br: D.layer('BRDR', 7) };
+  const scName = k => (SC.find(q => q[0] === k) || [0, '1:' + k])[1];
+  const AW = SPDW.W - 2 * SPDW.m - 0.5, AH = SPDW.H - 2 * SPDW.m - SPDW.tbH - 0.6;
+  let ox = 0;
+  /* one sheet, as Light Pole / Spread Footing: content(k) draws at scale k (model units per paper unit), centred in the drawing area */
+  function sheet(id, title, content, ks, src) {
+    const i0 = D.mark(); let k = null, over = false, ret = null;
+    for (const kk of ks) { D.E.length = i0; D.k = kk * pu; D.h = 0.1 * kk * pu; ret = content(kk * pu) || null; const b = D.bbox(i0);
+      if (!isFinite(b[0]) || ((b[2] - b[0]) / (kk * pu) <= AW && (b[3] - b[1]) / (kk * pu) <= AH)) { k = kk; break; } }
+    if (k === null) { k = ks[ks.length - 1]; over = true; }
+    const P = k * pu, b = D.bbox(i0), W = SPDW.W * P, H = SPDW.H * P, m = SPDW.m * P, tb = SPDW.tbH * P;
+    const cx = ox + W / 2, cy = m + tb + 0.3 * P + (AH * P) / 2;
+    if (isFinite(b[0])) D.move(i0, cx - (b[0] + b[2]) / 2, cy - (b[1] + b[3]) / 2);
+    D.k = P; D.h = 0.1 * P;
+    D.rect(L.br, ox, 0, ox + W, H); D.rect(L.br, ox + m, m, ox + W - m, H - m);
+    const x0 = ox + m, y0 = m, w = (SPDW.W - 2 * SPDW.m) * P, r = tb / 2, sc = (ret && ret.scale) || (k === 1 && ks.length === 1 && ks[0] === 1 && ret && ret.nts ? 'NTS' : scName(k));
+    D.rect(L.tb, x0, y0, x0 + w, y0 + tb); D.line(L.tb, x0, y0 + r, x0 + w, y0 + r);
+    const row1 = [['PROJECT', p.name, 4.25], ['PROJECT NO.', p.job, 2], ['CALCULATED BY', p.designer, 2], ['DATE', p.date, 1.75], ['CHECKED BY', p.checker, 2], ['CHECKED DATE', '', 1.75], ['SCALE', sc, 2.5]];
+    const row2 = [['SHEET TITLE', title, 6.25], ['MEMBER', p.member, 3], ['DRAWN BY', 'SECTION PROPERTY CALCULATOR', 4], ['SHEET', '?', 3]];
+    let sheetEnt = null;
+    [[row1, y0 + r], [row2, y0]].forEach(([row, yb]) => { let x = x0; row.forEach(([lab, val, cw], ci) => {
+      D.text(L.tb, x + 0.05 * P, yb + r - 0.11 * P, 0.065 * P, lab, 0);
+      const mx = Math.floor((cw - 0.12) / (0.13 * 0.9)); D.text(L.tb, x + 0.05 * P, yb + 0.1 * P, 0.13 * P, String(val == null || val === '' ? '—' : val).toUpperCase().slice(0, mx), 0);
+      if (lab === 'SHEET') sheetEnt = D.E[D.E.length - 1];
+      x += cw * P; if (ci < row.length - 1) D.line(L.tb, x, yb, x, yb + r); }); });
+    const sh = { id, title, k, i0, i1: D.mark(), ox, W, H, over, sheetEnt, src, scale: sc, known: ret && ret.known }; S.push(sh); ox += W + 1 * P; return sh;
+  }
+  /* a table at (x0, y0) top left, text height hh (model units); returns its width and height */
+  function table(x0, y0, head, rows, hh, right) {
+    const rh = hh * 2, cw = head.map((hd, c) => Math.max(String(hd).length, ...rows.map(r => String(r[c] == null ? '' : r[c]).length)) * hh * 0.82 + 1.9 * hh);
+    const tot = cw.reduce((a, b) => a + b, 0); let y = y0;
+    const line = yy => D.line(L.tbl, x0, yy, x0 + tot, yy);
+    line(y); [head, ...rows].forEach((r, ri) => { let x = x0; r.forEach((v, c) => { const rt = right && right.includes(c) && ri > 0; D.text(L.tbl, rt ? x + cw[c] - 0.8 * hh : x + 0.8 * hh, y - rh + 0.6 * hh, hh, String(v == null ? '' : v), rt ? 2 : 0); x += cw[c]; });
+      y -= rh; line(y); if (ri === 0) line(y + 0.12 * hh); });
+    let x = x0; [0, ...cw].forEach(w => { x += w; D.line(L.tbl, x, y0, x, y); });
+    return { w: tot, h: y0 - y };
+  }
+  const T = R.tors || {}, V = (v, kk) => isNum(v) ? nf(v, kk) : 'N/A', Un = kk => spdwU(un(kk));
+  const wk = c => spdwU(spcCardTxt(c)).toUpperCase();
+  const props = [['A' + (R.anyN ? ' (TRANSFORMED)' : ''), V(R.A, 'A'), Un('A'), wk('cTab')], ['XBAR (FROM ORIGIN)', V(R.cx, 'L'), Un('L'), wk('cCen')], ['YBAR (FROM ORIGIN)', V(R.cy, 'L'), Un('L'), wk('cCen')],
+    ['Ix', V(R.Ix, 'I'), Un('I'), wk('cI')], ['Iy', V(R.Iy, 'I'), Un('I'), wk('cI')], ['Ixy', V(R.Ixy, 'I'), Un('I'), wk('cI')],
+    ['I1 (MAJOR)', V(R.I1, 'I'), Un('I'), wk('cP')], ['I2 (MINOR)', V(R.I2, 'I'), Un('I'), wk('cP')], ['THETA_P (X TO AXIS 1, CCW)', ang(R.thp), '', wk('cP')],
+    ['Sx TOP', V(R.Sxt, 'S'), Un('S'), wk('cI')], ['Sx BOTTOM', V(R.Sxb, 'S'), Un('S'), wk('cI')], ['Sy LEFT', V(R.Syl, 'S'), Un('S'), wk('cI')], ['Sy RIGHT', V(R.Syr, 'S'), Un('S'), wk('cI')],
+    ['Zx', V(R.Zx, 'S'), Un('S'), wk('plZx')], ['Zy', V(R.Zy, 'S'), Un('S'), wk('plZy')], ['rx', V(R.rx, 'L'), Un('L'), wk('cI')], ['ry', V(R.ry, 'L'), Un('L'), wk('cI')], ['r_MIN (PRINCIPAL)', V(R.r2, 'L'), Un('L'), wk('cP')],
+    ['J' + (isNum(T.J) ? ' (THIN-WALL, VERIFY)' : ''), V(T.J, 'I'), Un('I'), wk('tJ')], ['Cw' + (isNum(T.Cw) ? ' (THIN-WALL, VERIFY)' : ''), V(T.Cw, 'W'), Un('W'), wk('tCw')],
+    ['SHEAR CENTRE xo (FROM CENTROID)', T.sc ? V(T.xo, 'L') : 'N/A', Un('L'), wk('tCw')], ['SHEAR CENTRE yo (FROM CENTROID)', T.sc ? V(T.yo, 'L') : 'N/A', Un('L'), wk('tCw')]];
+  const toM = v => [v[0] * f, v[1] * f];
+
+  /* ---------- 1. SECTION AND PROPERTIES ---------- */
+  sheet('sec', 'SECTION AND PROPERTIES', P => {
+    const h = 0.09 * P, i0 = D.mark();
+    R.parts.forEach(q => { const ly = Math.abs(q.n - 1) > 1e-12 ? L.partn : L.part;
+      q.G.prims.forEach(pr => { const l = pr.s < 0 ? L.hole : ly;
+        if (pr.k === 'circ') { const c = toM(pr.c); D.circle(l, c[0], c[1], pr.r * f); return; }
+        const pts = []; pr.pts.forEach(v => { const w = toM(v), z = pts[pts.length - 1]; if (!z || Math.hypot(w[0] - z[0], w[1] - z[1]) > 1e-9 * f) pts.push(w); });
+        if (pts.length > 2 && Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) <= 1e-9 * f) pts.pop();
+        D.pline(l, pts, true); }); });
+    const bb = R.bbox.map(v => v * f), c = [R.cx * f, R.cy * f], ext = Math.max(bb[2] - bb[0], bb[3] - bb[1]);
+    // centroid and principal axes (when the section's principal axes are not x and y)
+    const cs = 0.12 * P; D.line(L.cen, c[0] - cs, c[1], c[0] + cs, c[1]); D.line(L.cen, c[0], c[1] - cs, c[0], c[1] + cs); D.circle(L.cen, c[0], c[1], 0.04 * P);
+    const th = R.thp || 0, rot = Math.abs(Math.sin(2 * th)) > 1e-6;
+    if (rot) { const a = 0.6 * ext; [[R.u1, '1'], [R.u2, '2']].forEach(([u, n]) => { D.line(L.ax, c[0] - a * u[0], c[1] - a * u[1], c[0] + a * u[0], c[1] + a * u[1], D.ltype('CENTER')); D.text(L.cen, c[0] + (a + 0.12 * P) * u[0], c[1] + (a + 0.12 * P) * u[1] - h / 2, h, n, 1); }); }
+    D.text(L.cen, c[0] + 0.18 * P, c[1] + 0.06 * P, 0.08 * P, 'CENTROID', 0);
+    // dimensions: overall extents, and the centroid from the bottom and the left extreme fibres (c_bottom, c_left, Properties tab)
+    D.dimH(L.dim, bb[0], c[0], bb[1] - 0.45 * P, bb[1], '<> (C LEFT)');
+    D.dimH(L.dim, bb[0], bb[2], bb[1] - 0.85 * P, bb[1]);
+    D.dimV(L.dim, bb[1], c[1], bb[2] + 0.45 * P, bb[2], '<> (C BOTTOM)');
+    D.dimV(L.dim, bb[1], bb[3], bb[2] + 0.85 * P, bb[2]);
+    // part labels: a column to the left, with leaders to each part's centroid
+    const lab = R.parts.map(q => ({ q, c: toM(q.geo.c), s: spdwU(((q.pt.lbl || q.pt.id) + ': ' + partDesc(q.pt) + (Math.abs(q.n - 1) > 1e-12 ? ', n = ' + q.n : '') + (q.use ? ', AISC TAB.' : '')).toUpperCase()) })).sort((a, b) => b.c[1] - a.c[1]);
+    const xl = bb[0] - 0.6 * P, gap = 0.28 * P, yTop = (bb[1] + bb[3]) / 2 + (lab.length - 1) * gap / 2;
+    lab.forEach((o, j) => { const y = yTop - j * gap; D.text(L.txt, xl, y - 0.04 * P, 0.08 * P, o.s, 2); D.line(L.txt, xl + 0.05 * P, y, o.c[0], o.c[1]); D.circle(L.txt, o.c[0], o.c[1], 0.02 * P); });
+    const sb = D.bbox(i0);
+    D.text(L.txt, (sb[0] + sb[2]) / 2, sb[1] - 0.4 * P, 0.16 * P, 'SECTION', 1);
+    D.text(L.txt, (sb[0] + sb[2]) / 2, sb[1] - 0.62 * P, 0.09 * P, ('SCALE ' + scName(P / pu) + ';  ' + (mm ? 'MM' : 'INCHES') + ';  +X RIGHT, +Y UP, AS ENTERED' + (R.anyN ? ';  TRANSFORMED SECTION (n)' : '')).toUpperCase(), 1);
+    // the properties table to the right, at paper size
+    const tx = sb[2] + 0.6 * P, th2 = 0.085 * P;
+    D.text(L.txt, tx, sb[3] + 0.0 * P, 0.14 * P, 'SECTION PROPERTIES (ABOUT THE CENTROID)', 0);
+    const t = table(tx, sb[3] - 0.15 * P, ['PROPERTY', 'VALUE', 'UNIT', 'WORKED IN'], props, th2, [1]);
+    const notes = []; if (isNum(T.J)) notes.push('J, CW AND THE SHEAR CENTRE ARE THIN-WALL APPROXIMATIONS: VERIFY (TORSION TAB).'); if (R.anyN) notes.push('TRANSFORMED SECTION: A, I, S, Z IN UNITS OF THE REFERENCE MATERIAL (n = 1).');
+    notes.push('VALUES AS THE SECTION AND PROPERTIES TABS; WORKED IN THE TABS LISTED.');
+    notes.forEach((s, j) => D.text(L.txt, tx, sb[3] - 0.15 * P - t.h - (0.2 + 0.16 * j) * P, 0.07 * P, s, 0));
+    return { known: { w: (bb[2] - bb[0]) / P, what: 'overall width ' + fmtL(bb[2] - bb[0]) } };
+  }, SC.map(q => q[0]), ['sec', 'Section']);
+
+  /* ---------- 2. PARTS (NTS, paper units) ---------- */
+  const pRows = R.rows.map(r => { const pt = partById(r.id); return [r.lbl, spdwU(partDesc(pt)).toUpperCase(), nf(r.x, 'L'), nf(r.y, 'L'), (+(+pt.rot || 0).toFixed(3)) + '°', pt.mir ? 'YES' : '', String(+(r.n).toPrecision(4)), nf(r.A, 'A'), r.tab ? 'AISC TAB.' : (pt.type === 'shape' ? 'PLATE MODEL' : 'GEOMETRY')]; });
+  const per = Math.max(5, Math.floor((AH - 1.2) / 0.22) - 1), np = Math.max(1, Math.ceil(pRows.length / per));
+  for (let pg = 0; pg < np; pg++) {
+    sheet('parts' + (np > 1 ? '-' + (pg + 1) : ''), 'PARTS' + (np > 1 ? ' (' + (pg + 1) + ' OF ' + np + ')' : ''), P => {
+      D.text(L.txt, 0, 0.35 * P, 0.16 * P, 'PARTS', 0);
+      D.text(L.txt, 0, 0.17 * P, 0.075 * P, ('X, Y = PART CENTROID FROM THE ORIGIN (' + uL + ');  A IN ' + Un('A') + ';  HOLES HAVE NEGATIVE A;  n = MODULUS RATIO.').toUpperCase(), 0);
+      const t = table(0, 0, ['LABEL', 'DESCRIPTION', 'X (CENTROID)', 'Y (CENTROID)', 'ROTATION', 'MIRR.', 'n', 'A', 'BASIS'], pRows.slice(pg * per, (pg + 1) * per), 0.11 * P, [2, 3, 4, 6, 7]);
+      if (pg === np - 1) { const nn = ['THE PLATE MODEL NEGLECTS ROOT FILLETS, TOE RADII AND SLOPED FLANGE FACES OF ROLLED SHAPES (SECTION TAB, AISC COMPARISON).', 'PARTS TABLE AS THE PROPERTIES TAB; PARALLEL-AXIS TABLE IN THE CALC DETAIL TAB.'];
+        nn.forEach((s, j) => D.text(L.txt, 0, -t.h - (0.25 + 0.16 * j) * P, 0.07 * P, s, 0)); }
+      return { nts: true };
+    }, [1], ['props', 'Properties']);
+  }
+  S.forEach((s, j) => { s.sheetEnt.s = SharedDxf.str((j + 1) + ' OF ' + S.length); });
+  return { D, S, mm };
+}
+function buildDwg(pg) {
+  const T = el('div'); pg.appendChild(T);
+  if (!window.SharedDxf) { T.appendChild(el('div', 'errBox', 'shared/dxf.js is not loaded: keep the shared folder next to this file.')); return; }
+  let B; try { B = spdwBuild(); } catch (e) { T.appendChild(el('div', 'errBox', 'The drawings could not be drawn: ' + esc(e && e.message))); return; }
+  SPDW.B = B;
+  let want = SPDW.cur; if (!want) want = lsGet(SPDW.key) || '';
+  const cur = B.S.find(s => s.id === want) || B.S[0]; SPDW.cur = cur.id;
+  const scTxt = s => s.scale === 'NTS' ? 'NTS (paper ' + (B.mm ? 'mm' : 'inches') + ')' : s.scale;
+  T.innerHTML = '<div class="spdwBar"><label>Sheet <select id="spdwSheet">' + B.S.map((s, j) => '<option value="' + s.id + '"' + (s === cur ? ' selected' : '') + '>' + (j + 1) + '. ' + esc(s.title) + '</option>').join('') + '</select></label> ' +
+    '<button type="button" class="btn" id="spdwDxf">Download DXF (' + B.S.length + ' sheets)</button> ' +
+    '<button type="button" class="btn" id="spdwPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button> ' +
+    '<button type="button" class="btn" id="spdwPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets (' + B.S.length + ')</button></div>' +
+    '<div class="hint">' + esc(SharedDxf.PRINT_NOTE) + '</div>' +
+    '<div class="hint">One DXF file (AutoCAD R12, model space, full size in ' + (B.mm ? 'millimetres' : 'inches') + '): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers SPC-PARTS, SPC-PARTS-N, SPC-HOLES, SPC-CENTROID, SPC-AXES, SPC-DIMS, SPC-TEXT, SPC-TABLE, SPC-TBLK, SPC-BRDR. The <b>Export DXF</b> button at the top (the geometry for the AutoCAD MASSPROP check) is unchanged. Title block: the Project fields (Project, Job #, Prepared by, Date, Checked by, Member).</div>' +
+    '<div class="spdwHead"><b>' + (B.S.indexOf(cur) + 1) + '. ' + esc(cur.title) + '</b> · scale ' + esc(scTxt(cur)) + (cur.over ? ' · <span style="color:var(--fail)">does not fit the sheet even at the smallest scale</span>' : '') + '</div>' +
+    '<div class="spdwBox"></div><div class="hint">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>' +
+    '<div class="tscroll"><table class="tbl spdwIdx"><tr><th>No.</th><th class="lft">Sheet</th><th>Scale</th><th class="lft">Worked in</th></tr>' + B.S.map((s, j) =>
+      '<tr data-spdw="' + s.id + '"' + (s === cur ? ' class="on"' : '') + '><td>' + (j + 1) + '</td><td class="lft">' + esc(s.title) + '</td><td>' + esc(scTxt(s)) + '</td><td class="lft">' + (s.src ? '<a href="#" data-spdwgo="' + s.src[0] + '">' + esc(s.src[1]) + ' tab</a>' : '—') + '</td></tr>').join('') + '</table></div>';
+  T.appendChild(spcWorkedIn([['cTab', 'A'], ['cCen', 'x̄, ȳ'], ['cI', 'I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>, S, r<sub>x</sub>, r<sub>y</sub>'], ['cP', 'I<sub>1</sub>, I<sub>2</sub>, θ<sub>p</sub>, r<sub>min</sub>'], ['plZx', 'Z<sub>x</sub>'], ['plZy', 'Z<sub>y</sub>'], ['tJ', 'J'], ['tCw', 'C<sub>w</sub>, shear centre']]));
+  SharedDxf.viewer(T.querySelector('.spdwBox'), SharedDxf.sheetSVG(B.D, cur), { height: '64vh' });
+  const pick = id => { SPDW.cur = id; lsSet(SPDW.key, id); renderTab(); };
+  T.querySelector('#spdwSheet').addEventListener('change', e => pick(e.target.value));
+  T.querySelectorAll('tr[data-spdw]').forEach(tr => tr.addEventListener('click', e => { if (e.target.closest('a')) return; pick(tr.dataset.spdw); }));
+  T.querySelectorAll('a[data-spdwgo]').forEach(a => a.addEventListener('click', e => { e.preventDefault(); setOutTab(a.dataset.spdwgo); }));
+  T.querySelector('#spdwDxf').addEventListener('click', () => { const txt = B.D.toDXF({ ltscale: 1, insunits: B.mm ? 4 : 1 }), chk = SharedDxf.validate(txt);
+    if (!chk.ok) { alert('The DXF file failed its structure check:\n' + chk.errors.slice(0, 8).join('\n')); return; }
+    SharedDxf.download(txt, dxfFileName().replace(/\.dxf$/, '') + '_sheets.dxf'); });
+  const prt = list => SharedDxf.printSheets(list.map(s => ({ svg: SharedDxf.sheetSVG(B.D, s), title: s.title })), { paper: [SPDW.W, SPDW.H] });
+  T.querySelector('#spdwPrint1').addEventListener('click', () => prt([cur]));
+  T.querySelector('#spdwPrintAll').addEventListener('click', () => prt(B.S));
 }
 
 /* =====================================================================

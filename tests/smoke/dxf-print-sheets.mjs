@@ -59,6 +59,17 @@ const TOOLS = {
       return { what: `shaft ${b} in dia. x ${+d.toFixed(3)} in (embedment d = ${c.stacks[0].found.d} ft) on ${s.title} at 1:${s.k}`, w: b / s.k, h: d / s.k }; }),
     report: /Light Pole|POLE/i,
   },
+  spc: {   // SPDW (2026-11-03): a welded plate girder (flanges PL 16 x 1, web PL 36 x 1/2) set up in the test profile; the known rectangle
+           // is the top flange on the SECTION AND PROPERTIES sheet. Ctrl+P prints the Report from any tab (SPRX).
+    file: 'Section Property Calculator.html', label: 'Section Property Calculator',
+    open: async p => { await p.waitForFunction(() => window.SPCUI && window.SPCUI.res, null, { timeout: 30000 });
+      await p.evaluate(() => { M.parts = [newPart('plate', { b: 16, t: 1 }, 0, 18.5), newPart('plate', { b: 0.5, t: 36 }, 0, 0), newPart('plate', { b: 16, t: 1 }, 0, -18.5)]; fullRebuild(); });
+      await p.waitForTimeout(600); await p.click('#tab_dwg'); await p.waitForSelector('#spdwPrint1'); },
+    one: '#spdwPrint1', all: '#spdwPrintAll',
+    n: p => p.evaluate(() => SPDW.B.S.length),
+    known: p => p.evaluate(() => { const s = SPDW.B.S.find(q => q.id === SPDW.cur); return { what: `top flange PL 16 x 1 in on ${s.title} at ${s.scale} (1:${s.k})`, w: 16 / s.k, h: 1 / s.k }; }),
+    report: /Section Propert/i,
+  },
 };
 
 let fails = 0; const check = (ok, m) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${m}`); if (!ok) fails++; };
