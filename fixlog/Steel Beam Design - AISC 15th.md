@@ -2368,7 +2368,7 @@ function runBenchmarks(){
   - The restores are not in `finally` blocks in `runBenchmarks` / `runSensitivity` (as on main): if a benchmark threw part-way, the
     benchmark model would stay loaded. Not seen; raised only.
 
-## 2026-11-02 — PR: claude/sbd-govstrip — the Governing strip follows every recalculation (SBGS); the S restores in try / finally (SBBX-2)   [display and robustness; no result change]
+## 2026-11-02 — PR: claude/sbd-govstrip, PR #720: https://github.com/mlococo88/All-Structural/pull/720 — the Governing strip follows every recalculation (SBGS); the S restores in try / finally (SBBX-2)   [display and robustness; no result change]
 - **Engineer decision (2026-11-02):** both open items of SBBX (#703) approved.
 - **SBGS — Where:** `schedule()`, anchor `renderTab();` followed by `sbdInputTabMarks();`. **Before:** `renderTab();` then
   `sbdInputTabMarks();`. **After:** `renderTab();` `updateGovStrip();` `sbdInputTabMarks();`. **Problem:** the strip under the header
