@@ -4074,3 +4074,59 @@ Engineer's answers (2026-11-02) to the questions of PR #710.
 - Headless Chromium, origin/main vs the branch, pinned libraries (as in #710). Deep diff of `R` and `P2` on default, review, the #684 cases (8 #8, 12 #5, 9 #8 with h 2.5 ft) and direct mode: only `P2.punch` (truncated perimeters only), `P2.dowels[].ok` (9 #8 case) and new fields differ. Default and direct mode: new fields only.
 - Report on all cases: 0 KaTeX errors, no NaN / undefined / `§?` / literal `[[`. 0 console errors. `node tests/check-syntax.mjs` passes, as does the scroll smoke test.
 - **Other copies:** none. **Saved data:** no change.
+
+## 2026-11-03 — PR: claude/sf-missing-checks — Missing checks and the NG summary: footing-bar development (straight, hooked, excess-reinforcement option), top-mat development, pedestal crossties and shear, dowel count, grouped punching statement, flotation statement, NG / REVIEW list and named badges (SFDV, SFVP, SFXT, SFDN, SFPG, SFFL, SFNG; new checks, pass / fail logic)
+
+Engineer-approved PR 3 of the independent review of the "Seymour Platform Foundation" report (items C1–C9, E4). Code basis ACI 318-19 (articles below read in the ACI 318-19 PDF). Check case "review": the engineer's project rebuilt from the report's input echo (as in #710). No existing computed value changes: a deep diff of `R` and `P2` (origin/main vs the branch) on default, review, the three #684 cases and direct mode shows only new fields.
+
+### SFDV. Footing mats: development worked, straight and hooked; excess-reinforcement option   [new check; CLAUDE.md §4]
+- **Where:** new `sfdDevAll()` (after `sfdDevData`), called in `recalc` after `computePhase2` (`P2.dev`). Report: footing x / y subsections, the topic "Development of the bottom bars" is rebuilt from `P2.dev` and a "Development of the top bars" topic is added where the top mat is a flexural mat. Footing Design 5.4 rebuilt from `P2.dev`. Dashboard chip "Footing bar development" (new). Input `mat.ldExcess` (Materials, "ℓ_d reduction for excess A_s"), `'off'` default; `migrateState` sets `'off'` for saves without it.
+  - Before (Report step `ldok`): `label:dd.dv.Ld<=dd.avail?'Straight bars develop':'Hooks required', … ok:dd.dv.Ld<=dd.avail` — straight ℓ_d only, no ℓ_dh, no dashboard item, top mat not checked.
+  - After: per mat (bottom x / y; top x / y where M_u⁻ > 0.01 and a top mat is entered):
+    - ℓ_d = `devLength(size,f′c,f_y,top,{λ, cover (bottom: sfdCbCover(); top: coverTop), s, coating})` (25.4.2.4, Table 25.4.2.5; top bars ψ_t = 1.3);
+    - ℓ_avail = 12(B/2 or L/2 − |section|) − c_end (governing sagging section for the bottom mat, as before; governing hogging section for the top mat);
+    - option on: ℓ_d,red = max(ℓ_d,raw · A_s,req/A_s,prov, 12) (25.4.10.1, 25.4.2.1(b)); A_s,req per ft = `des.reqBot` (flexure, not less than A_s,min) / top: max(A_s,req, A_s,min);
+    - where straight does not develop: ℓ_dh = max(f_y ψ_e ψ_r ψ_o ψ_c /(55 λ √f′c) · d_b^1.5, 8d_b, 6) (25.4.3.1, Table 25.4.3.2): ψ_e 1.2 epoxy / 1.0; ψ_r = 1.0 where c-c spacing s ≥ 6d_b (No. 11 and smaller), else 1.6 (A_th not considered); ψ_o = 1.0 where the side cover of the outermost bar ≥ 6d_b, else 1.25; ψ_c = f′c/15000 + 0.6 below 6000 psi. No excess reduction for hooks (25.4.10.2(d)).
+    - Status: straight (reduced if on) ≤ ℓ_avail PASS; else ℓ_dh ≤ ℓ_avail REVIEW ("hook the bars"); else FAIL.
+- **Provisions read (ACI 318-19):** 25.4.2.4 / Table 25.4.2.5; 25.4.3.1 and Table 25.4.3.2 (ψ_r = 1.0 for s ≥ 6d_b; ψ_o = 1.0 for side cover normal to the plane of the hook ≥ 6d_b); 25.4.10.1 (applies to 25.4.2.1(a), 25.4.6.1(a), 25.4.7.1(a), 25.4.9.1(a) — not 25.4.3.1); 25.4.10.2(d) (not for hooked bars); R25.4.10.2 (not for development of shrinkage and temperature reinforcement).
+- **Check case (review):**
+  - Bottom x #7 at 8 in, epoxy, cover 3 in: ψ_tψ_e = 1.2 (cover 3.0 ≥ 3d_b, clear 7.13 ≥ 6d_b), (c_b + K_tr)/d_b → 2.5. ℓ_d = 0.075·60000/63.25·1.2·1.0·1.0/2.5·0.875 = **29.88 in**; ℓ_avail = 12(2.500 − 1.000) − 3.00 = **15.00 in** → NG.
+  - Hooked: ψ_e 1.2, ψ_r 1.0 (s 8.00 ≥ 6d_b = 5.25), ψ_o 1.25 (side cover 3.00 < 5.25), ψ_c = 4000/15000 + 0.6 = 0.867. ℓ_dh = 60000·1.2·1.0·1.25·0.867/(55·63.25)·0.875^1.5 = 22.42·0.8185 = **18.35 in > 15.00 → FAIL**. (Review: 23.5 in with ψ_r 1.6, ψ_o 1.0; interior bars, ψ_o 1.0: 14.68 in.)
+  - Option on: ℓ_d,red = 29.88·0.518/0.900 = **17.21 in > 15.00** NG; hooks not reduced (25.4.10.2(d)) → still FAIL. (The review's 13.5 in OK applied the factor to the hook, which 25.4.10.2(d) does not permit.)
+  - Top y #6 at 8 in (hogging at y = −3.333 ft, 184.66 kip-ft): ψ_t 1.3 · ψ_e 1.5 (cover 2.0 < 3d_b = 2.25) → 1.7; ψ_s 0.8; conf 2.5. ℓ_d = 0.075·948.7·1.7·0.8/2.5·0.75 = **29.03 in ≤ 35.00** OK (review 29.0 ≤ 35.0).
+  - Top x #6 (M_u⁻,x = 0.88 kip-ft at x = 1.0 ft): ℓ_d 29.03 > 15.00; ℓ_dh = 14.56 ≤ 15.00 → REVIEW (hook the bars).
+  - Default project: bottom x #8 ℓ_d 28.46 > 12.00 in (before: report step "Hooks required" NG, no dashboard item); ℓ_dh = 18.69 > 12.00 → FAIL chip (new).
+
+### SFVP. Pedestal one-way shear   [new check; CLAUDE.md §4]
+- **Where:** new `sfdPedShear(i,p,pd,combos,fc,fy,lam)` (before `computePhase2`), `P2.pedShear`. Report: pedestal topic "Shear (governing …)". Pedestal Design: an equation block. Dashboard chip "Pedestal shear".
+- **Method:** each direction on its own section: V_ux on b_w = b_y, d = b_x − d′ (A_s = the n_y bars on the far face); V_uy on b_w = b_x, d = b_y − d′. Table 22.5.5.1: A_v (2 legs of the perimeter tie) ≥ A_v,min = max(0.75√f′c, 50) b_w s/f_yt (10.6.2.2) → row (a) 2λ√f′c; else row (c) 8λ_sλρ_w^1/3√f′c; + N_u/(6A_g) with net tension only (compression not counted); V_c ≥ 0, ≤ 5λ√f′c b_w d; φ = 0.75; V_s not counted. Biaxial: both ratios > 0.5 → (r_x + r_y)/1.5 ≤ 1 (22.5.1.10, 22.5.1.11). 10.6.2.1: V_u > 0.5φV_c with A_v < A_v,min → NG.
+- **Check case (review):** Ped 2, 1.2D + 1.0(+Wx) + L + 0.5S, V_uy = 15.95 kip: #3 ties at 12 in, A_v = 0.22 < A_v,min = max(47.4, 50)·32·12/60000 = 0.320 → row (c). ρ_w = 3.95/(32·29.5) = 0.00418, λ_s = √(2/(1 + 2.95)) = 0.712: V_c = 8·0.712·0.161·63.25·32·29.5/1000 = 54.8 kip, φV_c = **41.08 kip**, ratio **0.388** (V_u < 0.5φV_c, A_v,min not required). (Review: 89.6 kip with row (a), not available here since A_v < A_v,min.) Ped 1: V_ux = 8.00, φV_c = 99.77 → **0.080**.
+
+### SFXT. Pedestal crossties, ACI 318-19 25.7.2.3   [new check]
+- **Where:** new `sfdCrossties(pd)`, `P2.xties`. Report topic "Lateral support of the vertical bars (crossties)"; Pedestal Design block; chip "Pedestal crossties" (REVIEW where crossties are needed: the tool takes no crosstie input).
+- **Rule (25.7.2.3 (a), (b), read):** per face with n bars at clear spacing s: s ≤ 6 in: ⌊(n − 2)/2⌋ interior bars need support; s > 6 in: n − 2. Crossties per tie set = n_req on the b_x faces + n_req on the b_y faces.
+- **Check case (review):** Ped 1: b_x faces 3 bars at 8.88 in → 1; b_y faces 14 #6 at 7.50 in → 12; **13 crossties** (REVIEW). Ped 2: 5 #8 at 5.75 in → 1 + 1 = **2** (REVIEW). Default: 3 bars per face at 5.50 in clear → 0, PASS.
+
+### SFDN. Dowel count against the vertical bars   [pass / fail logic; CLAUDE.md §4]
+- **Where:** `sfdDowelCheck`, before `return o`. Before: `o.status=!o.ok?'fail':(o.sfReview?'review':'pass');` After: `o.countDiff=!o.cont&&nD>0&&nD!==nPos; o.status=!o.ok?'fail':((o.sfReview||o.countDiff)?'review':'pass');`. Report step `p<i>.cnt`; chip text.
+- **Check case:** review Ped 1, 28 dowels vs 30 bars → REVIEW (status stays FAIL there for A_s,dow < 0.005A_g and the tension development). Not flagged where the dowels are the longitudinal bars (`dowelLong`).
+
+### SFPG. Touching / close pedestals: the grouped section stated   [statement only]
+- `P2.punchGroup` (after `punchWarn`) and `sfdPunchGroupTxt()`: the group's bounding rectangle, edge clearances against d/2; open on both ends of one axis → no closed two-way section, the group acts in one-way shear across the other axis (the existing one-way check). No grouped punching stress is computed. Review: y ends 6.00 in < 10.06 in → open; "one-way shear in x; that section falls outside the footing: not critical". Chip status unchanged (REVIEW).
+
+### SFFL. Flotation statement   [display]
+- Report Stability: topic "Flotation" with "No water table at or above the base … not applicable" when `R.flot` is null; checked (FS_fl) when a water table above the base gives buoyancy (unchanged).
+
+### SFNG. NG / REVIEW list and named badges   [display]
+- Report Summary: new first subsection "Items that fail (NG) or need review (REVIEW)" (key `S-ng`), from the dashboard chips (NG first), each with what fails and the link; "Assumptions and warnings" links to it.
+- `sfrTopics`: the topic badge names the failing check ("NG: dowel area, dowel tension development into the footing") instead of a passing ratio with NG appended ("0.345 NG"); REVIEW steps (`rev`) show "REVIEW: …" in amber. `sfrS` keeps the step's `chk` (short name) and `rev`.
+
+### How verified
+- Headless Chromium, origin/main vs the branch, pinned KaTeX 0.16.11 / Plotly 2.35.2 / three 0.160.0. Deep diff of `R` and `P2`: default, review, review with the option on, #684 cases (8 #8, 12 #5, 9 #8 h 2.5 ft), direct mode: only new fields (`dev`, `pedShear`, `xties`, `punchGroup`, `dowels[].countDiff`). Report: 0 KaTeX errors, no NaN / undefined / `§?` / literal `[[`; 0 console errors.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- **Saved data:** new input `mat.ldExcess` ('off' | 'on'); saves without it read as 'off' (the reduction not taken, as before). No key or format change.
+- **Other copies:** none.
+- **Open items (questions):**
+  1. Hook factors: Table 25.4.3.2 gives ψ_r = 1.0 at s ≥ 6d_b and ψ_o = 1.25 for the outermost bar (side cover 3 in < 6d_b). The dowel hook (`sfdLdh`, SFDO) still uses ψ_r 1.6, ψ_o 1.0. Align the dowels with the table?
+  2. 25.4.10.1 with A_s,req governed by A_s,min (0.0018): R25.4.10.2 says the factor does not apply to development of shrinkage and temperature reinforcement. Keep A_s,req = max(flexure, A_s,min), or use the flexural requirement only, or disallow the option where A_s,min governs?
+  3. Dowels: 25.4.10.1 is not applied to the dowels (22.9.5.1 asks for development of f_y where they serve shear friction, 25.4.10.2(b)). Confirm.
