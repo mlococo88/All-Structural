@@ -72,6 +72,11 @@ node tests/smoke/pile-library.mjs [--a origin/main]
 # custom stations (results, page text, saved text identical; 0 console errors); --shots: the table at 1400 and 390 px
 node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge,secpropren] [--a origin/main] [--shots <dir>]
 
+# MIDAS MCT generator (index.html) Report step (IXRX): seeded MIDAS results (mct_results_v1 → IndexedDB), capacity zones and rating
+# cases (base, lfr, arema); old = the retired window reports as written (main), rep = the Report as printed, state = results, storage
+# and the text of every step / sub-tab, route = Print from every step returns to it. The file must sit in a full copy of the repository.
+node tests/smoke/index-report.mjs --file <index.html> --case base|lfr|arema --mode old|rep|state|route [--nokatex] [--out <json>]
+
 # Syntax check (Tier 0): every inline script; JSX transpiled with the offline Babel; embedded pages (pl-src, st-src, iframe srcdoc) included
 node tests/check-syntax.mjs                                                   # no arguments: every repo-root tool HTML, apps/*/index.html, apps/**/*.js, shared/*.js
 node tests/check-syntax.mjs "Steel Bridge Design.html"                        # one tool: the merged tool includes its embedded pages (pl-src, st-src)
