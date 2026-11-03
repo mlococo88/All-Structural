@@ -3884,7 +3884,7 @@ current design's analysis accepted; **the minimum shipping piece length raised f
 ### Other copies
 - shared/dxf.js sheetBorder (fixlog/shared-dxf.md).
 
-## 2026-11-03 — PR: claude/sbd-print-half — Drawings: Print sheet / Print all sheets; paper D prints half size on 11 × 17 (SBPS-3; display only, no result change)
+## 2026-11-03 — PR: claude/sbd-print-half (PR #755: https://github.com/mlococo88/All-Structural/pull/755) — Drawings: Print sheet / Print all sheets; paper D prints half size on 11 × 17 (SBPS-3; display only, no result change)
 Engineer's decisions: print the Drawings sheets from the app (as Spread Footing, Light Pole, #749/#750); for the D sheets (34 × 22), half size on
 11 × 17, and the print must say so visibly.
 ### Where
