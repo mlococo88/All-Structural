@@ -199,9 +199,10 @@ body.sfdStale .tabbar button:not([data-tab="tab-manual"])::after{content:" \26A0
  .chip .cn{grid-row:1;grid-column:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
  .chip .sfdChR{grid-row:1;grid-column:3;font-size:11px;white-space:nowrap}
  .chip .cs{grid-row:1;grid-column:4;font-size:10.5px;white-space:nowrap}
- .chip .cv,.chip .sfdChRef{grid-column:1/-1;display:none;padding-left:16px;font-size:11px;overflow-wrap:anywhere}
+ .chip .cv,.chip .sfdChRef,.chip .sfdChDC{grid-column:1/-1;display:none;padding-left:16px;font-size:11px;overflow-wrap:anywhere}
  .chip .sfdChRef{color:#444;font-style:italic;font-size:10.5px}
- .chip.sfdOpen .cv,.chip.sfdOpen .sfdChRef{display:block}
+ .chip.sfdOpen .cv,.chip.sfdOpen .sfdChRef,.chip.sfdOpen .sfdChDC{display:block}
+ .chip .sfdChDC{color:#444;font-size:10.5px}   /* SFDF */
  .chip.sfdOpen .cn{white-space:normal}
 }
 @media screen and (min-width:1500px){
@@ -1836,18 +1837,49 @@ function sfdDashDecorate(){
   let short='';
   if(r&&r.dc!=null&&!isNaN(r.dc))short='D/C '+(isFinite(r.dc)?r.dc.toFixed(2):'∞');
   else{const m=/FS = ([\d.]+)/.exec(val);if(m)short='FS '+m[1];}
+  /* SFDF: an NG / REVIEW chip whose D/C is not what fails (D/C <= 1) shows the failing condition instead; the D/C moves to the
+     expanded part (sfdChDC). Where the D/C itself fails (> 1) or the chip passes, the D/C stays. */
+  let dcLine='';
+  if((st==='fail'||st==='warn')&&!(r&&r.dc!=null&&r.dc>1+1e-9)){let cnd=[];try{cnd=sfdChCond(name);}catch(e){cnd=[];}
+   if(cnd.length){if(short)dcLine=short;short=cnd.join('; ');}}
   const x=document.createElement('button');x.type='button';x.className='sfdChX noprint';
   x.title='Show the result, governing combination and reference';
   const sr=el('span','sfdChR',short);
   c.insertBefore(x,c.firstChild);c.insertBefore(sr,c.querySelector('.cs'));
+  if(dcLine)c.insertBefore(el('div','sfdChDC noprint',sfdEsc(dcLine)+' (the ratio is within its limit; the status comes from the condition)'),null);   /* SFDF */
   if(r&&r.ref){const rf=el('div','sfdChRef noprint');rf.innerHTML=r.ref;c.appendChild(rf);}
   const setOpen=o=>{c.classList.toggle('sfdOpen',o);x.setAttribute('aria-expanded',o?'true':'false');x.textContent=o?'▾':'▸';};
   setOpen(SFDC.open.has(name)?SFDC.open.get(name):(st==='fail'||st==='warn'));   /* NG / REVIEW chips open by default: the reason shows */
   x.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();const o=!c.classList.contains('sfdOpen');SFDC.open.set(name,o);setOpen(o);});
-  c.title=name+': '+val+(r&&r.ref?'\nReference: '+plain(r.ref):'')+(c.title?'\n'+c.title:'');
+  c.title=name+': '+val+(dcLine?'\n'+dcLine:'')+(r&&r.ref?'\nReference: '+plain(r.ref):'')+(c.title?'\n'+c.title:'');
  });
  const n=$('#sfdDashCnt'),any=$$('#dashboard .chip').length;
  if(n)n.innerHTML=(cnt.fail?'<span class="sfdCf">'+cnt.fail+' NG</span>':'')+(cnt.warn?'<span class="sfdCw">'+cnt.warn+' REVIEW</span>':'')+(any&&!cnt.fail&&!cnt.warn?'<span class="sfdCp">no NG</span>':'');
+}
+/* SFDF (2026-11-03, engineer): the failing condition of a chip that can be NG / REVIEW for a reason other than its D/C, as a
+   short text. The same flags renderDashboard sets the chip's status and text from (no new calculation). */
+function sfdChCond(name){
+ const out=[],add=(b,t)=>{if(b&&out.indexOf(t)<0)out.push(t);};
+ if(R&&!R.fatal&&name==='Overturning')add(R.asd.some(a=>a.bear.mode==='unstable'||a.r.P<=1e-9),'resultant off footing');
+ if(!P2||P2.noCombo)return out;
+ const XY=[P2.desX,P2.desY],realPeds=P2.pedDes.filter(z=>!z.isPatch);
+ switch(name){
+  case 'Flexure (footing)':
+   {const asMin=XY.some(z=>!z.asMinBotOK||!z.asMinTopOK);
+    add(asMin,'A_s < A_s,min');add(XY.some(z=>!z.spcBotOK||!z.spcTopOK),'s > s_max');
+    add(!asMin&&XY.some(z=>z.topNeeded&&!z.topProvided),'top steel required');}break;   /* as the chip text: A_s,min replaces "top steel required" */
+  case 'Punching shear':add(!!(P2.punchWarn&&P2.punchWarn.length),'perimeters overlap');break;
+  case 'Pedestal design':realPeds.forEach(z=>{add(!z.rhoOK,'ρ outside 1–8%');add(!z.nBarsOK,'<4 bars');add(!z.barFitOK,'bars do not fit');add(!z.tieOK||!z.tieSizeOK,'ties');});break;
+  case 'Dowels (tension, laps)':(P2.dowels||[]).filter(z=>!z.isPatch).forEach(z=>{
+   add(!z.asOK||!z.tenOK,'A_s,gov > A_s,prov');add(!z.ftgOKpf,(z.hook==='hook90'?'ℓ_dh':'ℓ_d')+' > avail');
+   add(!z.projOKpf,z.full?'pedestal development short':'projection short');
+   add(z.ok&&z.sfReview,'shear-friction dev. short');add(z.ok&&z.countDiff,'dowels ≠ bars');});break;
+  case 'Pedestal P–M (biaxial)':add(!realPeds.some(z=>z.pmGov&&!isNaN(z.pmGov.ratio)),'not computed');break;
+  case 'Footing bar development':add(!!(P2.dev&&P2.dev.rows.some(z=>z.status==='review')),'straight ℓ_d > avail');break;
+  case 'Pedestal shear':add((P2.pedShear||[]).some(z=>!z.isPatch&&z.gov&&z.avFail),'A_v < A_v,min');break;
+  case 'Footing bar clear spacing':add(XY.some(z=>!z.clrBotOK||!z.clrTopOK),'s_clr < min');break;
+ }
+ return out;
 }
 function sfdDashPlace(){
  const box=$('#sfdDashBox'),col=$('#sfdDashCol'),out=$('#outputPanel'),bar=$('#sfdAcBar');if(!box||!col||!out)return;
@@ -6775,8 +6807,8 @@ manPart("p0","0. Read This First",[
 /* ===== PART 1 — USING THE PROGRAM ===== */
 manPart("p1","1. Using the Program",[
 {h:"1.1 Layout"},
-{p:"The screen is split into an <b>input panel</b> (left) and an <b>output report</b> (right) organised in numbered tabs: 1&nbsp;Schematic &amp; Input Echo, 2&nbsp;Load Combinations, 3&nbsp;Bearing, 4&nbsp;Stability, 5&nbsp;Footing Design, 6&nbsp;Pedestal Design, 7&nbsp;3D View, and this manual. Every input change recalculates the entire report (debounced ~0.3 s). The <b>summary dashboard</b> at the top of the report shows a pass/fail chip for each check family; each chip names its governing combination."},
-{p:"Report sections are collapsible; the open/closed state persists with your session. The <b>self-consistency panel</b> under the dashboard should read six green checks at all times \u2014 see &sect;0.1."},
+{p:"The screen is split into an <b>input panel</b> (left) and an <b>output report</b> (right) organised in numbered tabs: 1&nbsp;Schematic &amp; Input Echo, 2&nbsp;Load Combinations, 3&nbsp;Bearing, 4&nbsp;Stability, 5&nbsp;Footing Design, 6&nbsp;Pedestal Design, 7&nbsp;3D View, and this manual. Every input change recalculates the entire report (debounced ~0.3 s). The <b>summary dashboard</b> shows a pass/fail chip for each check family (one line each; expanded, a chip names its governing combination). On screens 1500&nbsp;px and wider it is a left column beside the input and output panels; on narrower screens it sits at the top of the output panel, above the tabs (&sect;3.1)."},
+{p:"Report sections are collapsible; the open/closed state persists with your session. The <b>self-consistency panel</b> at the top of the output panel (under the dashboard on screens narrower than 1500&nbsp;px) should read six green checks at all times \u2014 see &sect;0.1."},
 {h:"1.2 Load input modes"},
 {p:"<b>By load type</b> (default): enter unfactored D, L, Lr, S, Wx, Wy loads per pedestal. The program generates the full ASCE 7-16 &sect;2.4.1 service sweep for bearing/stability and the &sect;2.3.1 strength sweep for structural design, brackets dead load (1.0/0.6 service, 1.2/0.9/1.4 strength), and sweeps wind &plusmn;x and &plusmn;y."},
 {p:"<b>Direct factored</b>: enter one already-factored envelope per pedestal. Use when the frame analysis has already produced governing factored reactions. Read &sect;0.3.6 for what this mode gives up."},
@@ -6853,7 +6885,8 @@ manPart("p2","2. Input Reference",[
 /* ===== PART 3 — OUTPUT REFERENCE ===== */
 manPart("p3","3. Output Reference",[
 {h:"3.1 Summary dashboard"},
-{p:"One chip per check family. Each shows the governing value, its threshold, and the governing combination. <b>PASS/FAIL</b> is strictly the printed criterion; <b>REVIEW</b> marks detailing items (e.g. dowel area below 0.005A<sub>g</sub>) that are not strength failures; <b>N/A</b> marks checks that do not apply (e.g. flotation with no water table)."},
+{p:"One chip per check family, on one line: the check, a short value and the status. On screens 1500&nbsp;px and wider the dashboard is a left column beside the input and output panels and scrolls on its own; on narrower screens it sits at the top of the output panel, above the tabs. &laquo; / &raquo; (or Hide / Show checks) collapses it; the choice is remembered in this browser. The short value is the D/C (FS<sub>target</sub>/FS for a factor-of-safety check; the FS itself where overturning is reported, not gated). Where a chip is NG or REVIEW for a reason other than its D/C, the short value is that condition instead (e.g. <i>A_s &lt; A_s,min</i> while the moment D/C is within its limit, or <i>straight &#8467;_d &gt; avail</i>), and the D/C shows when the chip is expanded. &#9656; expands a chip to the governing value, its threshold, the governing combination and the reference (NG and REVIEW chips open expanded); clicking a chip goes to its worked section. "},
+{p:"<b>PASS/FAIL</b> is strictly the printed criterion; <b>REVIEW</b> marks detailing items (e.g. dowel area below 0.005A<sub>g</sub>) that are not strength failures; <b>N/A</b> marks checks that do not apply (e.g. flotation with no water table)."},
 {tbl:{head:["Chip","Criterion"],rows:[
  ["Bearing (service)","max over service combos of qmax/qallow (direct) or qeff/qallow (Vesi\u0107) \u2264 1"],
  ["Overturning","min over combos & edges of Mr/Mo \u2265 target FS"],

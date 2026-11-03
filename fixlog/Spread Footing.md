@@ -4397,3 +4397,52 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 
 ### Open items
 - None.
+## 2026-11-03 — PR: claude/sfdc-fail-condition (PR #740: https://github.com/mlococo88/All-Structural/pull/740) — Dashboard chip short value: the failing condition where the D/C is not what fails; User Manual wording on where the dashboard is (SFDF; display only, no result change)
+
+### SFDF. A chip that fails for a reason other than its ratio showed a passing D/C next to FAIL   [display only]
+- **Problem (engineer):** since #737 (SFDC) each chip's short value is the D/C from `sfdResultRows()`. A chip that is NG or REVIEW for another reason then read e.g. "Flexure (footing) D/C 0.30 FAIL" (default project: it fails because A_s < A_s,min, top x). Engineer's decision: the short value shows the failing condition; the D/C shows when the chip is expanded. Where the ratio itself is what fails or passes, the D/C stays.
+- **Where:**
+  - `sfdDashDecorate()`, after `else{const m=/FS = ([\d.]+)/.exec(val);if(m)short='FS '+m[1];}` added:
+    ```js
+    let dcLine='';
+    if((st==='fail'||st==='warn')&&!(r&&r.dc!=null&&r.dc>1+1e-9)){let cnd=[];try{cnd=sfdChCond(name);}catch(e){cnd=[];}
+     if(cnd.length){if(short)dcLine=short;short=cnd.join('; ');}}
+    ```
+    and before `if(r&&r.ref){const rf=el('div','sfdChRef noprint');`:
+    ```js
+    if(dcLine)c.insertBefore(el('div','sfdChDC noprint',sfdEsc(dcLine)+' (the ratio is within its limit; the status comes from the condition)'),null);
+    ```
+    The chip title (hover) gets the same D/C line: `c.title=name+': '+val+(dcLine?'\n'+dcLine:'')+…`.
+  - New `function sfdChCond(name)` before `function sfdDashPlace(){` (anchor `/* SFDF (2026-11-03, engineer): the failing condition`). It reads the same flags `renderDashboard()` sets each chip's status and text from; no new calculation.
+  - CSS (screen block of SFDC): `.chip .sfdChDC` added to the hidden-until-expanded rules (`.chip .cv,.chip .sfdChRef,.chip .sfdChDC{…display:none…}`, `.chip.sfdOpen … .chip.sfdOpen .sfdChDC{display:block}`), and `.chip .sfdChDC{color:#444;font-size:10.5px}`.
+- **Chips whose status can disagree with their D/C, and the condition shown** (only when the chip is NG / REVIEW and its D/C is ≤ 1 or n/a):
+
+| Chip | Status set by (renderDashboard) | Short text |
+|---|---|---|
+| Overturning | resultant off the footing / no contact in a combination (`anyUnstable`) | resultant off footing |
+| Flexure (footing) | `asMinBotOK` / `asMinTopOK`; `spcBotOK` / `spcTopOK`; top steel needed, none provided (REVIEW; dropped from the text when A_s,min fails, as the chip text) | A_s < A_s,min; s > s_max; top steel required |
+| Punching shear | overlapping perimeters (`P2.punchWarn`, REVIEW) | perimeters overlap |
+| Pedestal design | `rhoOK`, `nBarsOK`, `barFitOK`, `tieOK` / `tieSizeOK` (D/C is the axial ratio) | ρ outside 1–8%; <4 bars; bars do not fit; ties |
+| Dowels (tension, laps) | `asOK`/`tenOK`, `ftgOKpf`, `projOKpf` (NG); `sfReview`, `countDiff` (REVIEW) | A_s,gov > A_s,prov; ℓ_dh (hooked) or ℓ_d > avail; projection short / pedestal development short; shear-friction dev. short; dowels ≠ bars |
+| Pedestal P–M (biaxial) | no P–M ratio computed (REVIEW, D/C 0) | not computed |
+| Footing bar development | straight ℓ_d > available, hook works (REVIEW; D/C is ℓ_dh/available) | straight ℓ_d > avail |
+| Pedestal shear | `avFail` (A_v < A_v,min where V_u > 0.5φV_c) | A_v < A_v,min |
+| Footing bar clear spacing | `clrBotOK` / `clrTopOK` (D/C can be ≤ 0 when s ≤ d_b) | s_clr < min |
+
+  The other chips' status follows their D/C (bearing, eccentricity, sliding, flotation, rigidity, one-way shear, concrete bearing, dowel minimum, ℓ_dc, interface shear friction, cover, tie cover) or they have no D/C (contact area, input validation, crossties, overturning not gated): unchanged.
+- **Check case:** default project, 1920 px. Before: "Flexure (footing) D/C 0.30 FAIL". After: "Flexure (footing) A_s < A_s,min FAIL"; expanded: "DCR 0.30 OK, but A_s < A_s,min (top x)", "D/C 0.30 (the ratio is within its limit; …)", the reference. "Footing bar development D/C 1.56 FAIL" unchanged (the ratio fails). Review case (`rev`): "Punching shear perimeters overlap REVIEW" (D/C 0.39 when expanded). Default with ties at 30 in: "Pedestal design ties FAIL" (D/C 0.42). Default with #11 at 20 in bottom x: "A_s < A_s,min; s > s_max".
+- **Report:** unchanged. It reads the chips by class (`.cn` / `.cv` / `.cs`) and `sfdResultRows()`, which are not changed.
+
+### Manual wording: where the dashboard is
+- §1.1 Layout: "The summary dashboard at the top of the report shows …" → it is a left column on screens 1500 px and wider, at the top of the output panel above the tabs on narrower screens. Same paragraph: the self-consistency panel is "at the top of the output panel (under the dashboard on screens narrower than 1500 px)" (was "under the dashboard").
+- §3.1 Summary dashboard: the first sentence ("Each shows the governing value, its threshold, and the governing combination.") replaced by a paragraph on the one-line chip, the placement (1500 px breakpoint), collapse, the short value (D/C, or the failing condition as above) and the expand button; the PASS/FAIL/REVIEW/N/A sentence is unchanged, now its own paragraph.
+
+### How verified
+- origin/main vs branch, 12 cases (default, review case, 8 saved cases and 2 more: `asmin`, `ped`), headless Chromium, libraries from tests/libs: `R`, `P2` and the full Report text identical, 0 console errors.
+- The short value, status and expanded D/C of every NG / REVIEW chip listed for those cases; `sfdChCond` for each chip with its flags forced in the page (A_v, straight ℓ_d, ρ / bars, P–M, unstable, dowel embedment / projection, clear spacing).
+- `node tests/check-syntax.mjs`; `tests/smoke/spread-footing-scroll.mjs`; `tests/smoke/phone-layout.mjs --tool sf`; screenshot at 1920 px looked at.
+- **Other copies:** none.
+
+### Open items
+- The Report's result rows ("Checks (as on the dashboard)" and each section's "Results — …" table) print the same D/C next to FAIL / REVIEW (e.g. Flexure 0.30 FAIL). Their Result column carries the full chip text, which names the reason ("DCR 0.30 OK, but A_s < A_s,min"). Left unchanged; asked of the engineer.
+- §0.1 says the self-consistency checks "appear at the top of the report"; still true of the output panel, left as is. The "at the top of the report" wording about the dashboard was in §1.1, not §0.
