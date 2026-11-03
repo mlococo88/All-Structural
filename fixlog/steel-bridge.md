@@ -3916,3 +3916,36 @@ Engineer's decisions: print the Drawings sheets from the app (as Spread Footing,
 ### Open items
 - On the half-size print the outer border (0.25 in inside the D sheet's edge, #754) is 0.125 in inside the page edge; the inner border 0.25 in
   (0.375 in on the left). The footer note is 0.04 in text at half size (small); the SCALE cell's "(HALF SIZE)" is the readable marker.
+
+## 2026-11-03 — PR: claude/half-print-no-outer-border — Drawings: no outer border on the half-size print (SBPS-4; display only, no result change)
+Engineer's decision: on the half-size print of the D sheets (paper D, Print sheet / Print all sheets, #755) the outer border (0.25 in inside
+the 34 × 22 sheet's edge, #754) lands 0.125 in from the 11 × 17 page edge and printers clip it. Leave it out of the half-size print only;
+the inner border (0.25 in from the page edge, 0.375 in on the left) is the visible frame. The D preview, the DXF and paper B are unchanged.
+### Where
+- `engine/sheets.js` `sheet()` (anchor `X_().sheetBorder(D, bd, ox, W, H, k);`): before
+  `X_().sheetBorder(D, bd, ox, W, H, k); D.rect(bd, ox + 0.75 * k, 0.5 * k, ox + W - 0.5 * k, H - 0.5 * k);`, after
+  `if (!S.half) X_().sheetBorder(D, bd, ox, W, H, k); D.rect(bd, ox + 0.75 * k, 0.5 * k, ox + W - 0.5 * k, H - 0.5 * k);`.
+  `S.half` is set only by `build(G, RS, { half: true })`, which only the Drawings tab's Print buttons on paper D call (ui/drawings.js, SBPS-3).
+- `build()` header comment: `opt.half` also leaves the outer border out.
+- `tests/smoke/dxf-print-sheets.mjs`, `sbd` entry: `border: 9` (outer border expected at 9 pt) replaced by `frame: { absent: 9, inner: [27, 18, 1206, 774] }`;
+  new `frameCheck()` checks every page of Print sheet and of Print all sheets: no rectangle 9 pt from the page edges, the inner border at
+  (27, 18)-(1206, 774) pt. Other tools keep the 18 pt outer-border check.
+### Governing provision
+- None (drawing output).
+### Check case
+- Half-size print of a D sheet at plot scale k: the page is the sheet scaled 1/2, so 1 sheet inch = 36 pt. Inner border: left 0.75 in × 36 = 27 pt,
+  other sides 0.5 in × 36 = 18 pt → (27, 18)-(1224 − 18, 792 − 18) = (27, 18)-(1206, 774) pt. Outer border before: 0.25 × 36 = 9 pt → (9, 9)-(1215, 783) pt; after: none.
+- TYPICAL SECTION AND NOTES (default project, k = 32): deck slab 534 × 8 in → 534 / 32 / 2 × 72 = 600.75 pt, 8 / 32 / 2 × 72 = 9.00 pt; measured
+  on the printed PDF 600.75 × 9.00 pt (unchanged from #755).
+- Display lists origin/main vs branch (default project, no results): paper D 4014 entities, paper B 4014: DXF text, preview SVG and print SVG
+  byte-identical. Half-size (paper D, `half: true`): 4014 → 3999 entities (one outer border per sheet, 15 sheets); sheet ids, scales,
+  offsets and sizes identical.
+### How verified
+- `node tests/smoke/dxf-print-sheets.mjs` (all tools; sbd: outer border absent on 1 of 1 and 15 of 15 pages, inner border found on each; the same
+  check run against origin/main's sheets.js fails, 2 FAILED), the PDFs rendered and looked at (corner at 300 dpi: one frame line 0.375 in from
+  the left and 0.25 in from the top). `node tests/engine/run.mjs sheets drawings`, `node tests/smoke/steel-bridge-drawings.mjs`,
+  `node tests/check-syntax.mjs`.
+### Other copies
+- None. shared/dxf.js sheetBorder is unchanged (the other tools' sheets keep their outer border).
+### Open items
+- None.
