@@ -2,7 +2,8 @@
 // Light Pole and Sign Post: shaft projection above grade p (LPPJ, added 2026-11-03). Headless Chromium, file://, offline.
 // Checks, in both code modes:
 //   1. cables: with p = 2 ft every cable value (components; reactions in every combination and azimuth) is identical to p = 0
-//      (engineer's hard rule: nothing cable-related changes; cables are not raised by p);
+//      (engineer's hard rule: nothing cable-related changes; cables are not raised by p); 1b: also on a flexible pole, where the
+//      pole's G_f uses h = H + p (LPGF) and the cables keep G_f at h = H (LPGC, 2026-11-03);
 //   2. p = 0 and a save without the field: the Anchorage hand-off payload is byte-identical (no new field, same inputsHash);
 //   3. p = 2 ft: the grade actions recomputed here from the page's own pole-base actions and the inputs, by the engineer's
 //      formulas (V_F = V + F_s, M_F = B·M + V·p + F_s·p/2, N_F = N + γ_D·W_c; the shaft wind by ASCE 7-22 §29.4 / LRFDLTS
@@ -75,6 +76,19 @@ for (const [name, mut] of Object.entries({ default: {}, cable45: { cables: [{ hc
   const a = await run(mut, 0, CABLES), b = await run(mut, 2, CABLES);
   check(a.n > 0 && a.json === b.json, `${name}: ${a.n} cable(s), every cable value identical with p = 2 ft (${a.json.length} chars)`);
   check(!a.errs.length && !b.errs.length, `${name}: no console errors`);
+}
+
+// ===== 1b. flexible pole (n1 < 1 Hz): the cables keep G_f at h = H (LPGC, engineer 2026-11-03); the pole uses h = H + p (LPGF) =====
+console.log('1b · flexible pole: cable values p = 0 vs p = 2 ft; the pole G_f at h = H + p');
+{ const mut = { inputs: { H: '70', poleDiaTop: '5', poleDiaBase: '10', poleTwBase: '0.25', b: '3.5' } };
+  const GF = () => { const i = LPP_LAST.inp; return { n1: i.nat.n1, G: i.G, Gin: i.Ginput, h: i.gf && i.gf.h, Gc: i.Gcable, hc: i.gfCable ? i.gfCable.h : null, H: i.H, gfH: gustFlexible(i.expo, i.V, i.H, i.gfDims.B, i.gfDims.L, i.nat.n1, i.gf.beta).Gf, gfHp: gustFlexible(i.expo, i.V, i.H + 2, i.gfDims.B, i.gfDims.L, i.nat.n1, i.gf.beta).Gf }; };
+  const a = await run(mut, 0, CABLES), b = await run(mut, 2, CABLES), g0 = await run(mut, 0, GF), g2 = await run(mut, 2, GF);
+  check(g0.n1 < 1 && g0.Gc === undefined && near(g0.G, Math.max(g0.Gin, g0.gfH)), `flexible pole: n1 = ${g0.n1.toFixed(4)} Hz; p = 0: G = G_f(h = H) = ${g0.G.toFixed(4)}, no separate cable G`);
+  check(near(g2.h, g2.H + 2) && near(g2.G, Math.max(g2.Gin, g2.gfHp)) && !near(g2.G, g0.G), `p = 2 ft: pole G = G_f(h = H + p = ${g2.h} ft) = ${g2.G.toFixed(4)} (LPGF)`);
+  check(near(g2.hc, g2.H) && g2.Gc === g0.G, `p = 2 ft: cable G = G_f(h = H = ${g2.hc} ft) = ${g2.Gc.toFixed(4)}, equal to the p = 0 G`);
+  const q0 = JSON.parse(a.json).components[0].qW;
+  check(a.n > 0 && a.json === b.json, `flexible pole: ${a.n} cable(s), every cable value identical with p = 2 ft (q_W cable 1 = ${q0.toFixed(2)} psf)`);
+  check(!a.errs.length && !b.errs.length && !g2.errs.length, 'flexible pole: no console errors');
 }
 
 // ===== 2. p = 0 and an old save without the field: the hand-off payload is byte-identical =====

@@ -2174,3 +2174,54 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 
 ### Open items
 - None.
+
+## 2026-11-03 — PR: claude/lpp-gf-cable (LPGC: the cables keep G_f at h = H; Manual: the check summary panel)   [§4: cable G when p > 0 on a flexible pole; p = 0 identical]
+
+### LPGC. Cable wind: G_f with h = H, as before LPGF (#748)   [calculation change]
+- **Decision (engineer, 2026-11-03):** the cables keep the gust factor computed with h = H, exactly as before #748. The pole and fixtures keep G_f with h = H + p (LPGF, #748). The sign has no cables and is unchanged. This answers the question raised with #748, where the cable wind followed the pole's G.
+- **Where:**
+  - `lppCalcIbc()`, pole branch. Anchor: `// LPGC (2026-11-03, engineer): the cables keep G_f at h = H`. After the LPGF `lppApplyGf(…)` call, added:
+    ```js
+    if(inp.gf && inp.pProj>0){ const gc=gustFlexible(inp.expo, inp.V, inp.H, Bw, Ld, nat.n1, inp.gf.beta); inp.gfCable=gc; inp.Gcable=Math.max(inp.Ginput, gc.Gf); }
+    ```
+    `inp.Gcable` is set only when p > 0 and the pole is flexible. That is the only case where it can differ from `inp.G`.
+  - `cableComponents()`:
+    - Before:
+      ```js
+      const qW = qBase*inp.G*inp.V*inp.V; … const qWI= qBase*inp.G*inp.Vice*inp.Vice;
+      ```
+    - After:
+      ```js
+      const Gc=(inp.Gcable!==undefined)?inp.Gcable:inp.G;
+      const qW = qBase*Gc*inp.V*inp.V; … const qWI= qBase*Gc*inp.Vice*inp.Vice;
+      ```
+  - Steps (shown only when `inp.Gcable` is set, so the p = 0 text is unchanged):
+    - `natGfWorkedHTML()`: "for every wind force" gains "except the cables (next line)". A new paragraph gives the cable G_f terms at h = H and its result line "G for the cables = max(entered G, G_f) = …".
+    - `cableWorkedHTML()`: a sentence after "Evaluated per cable below…" gives the cables' G and the pole's G.
+    - Report, Dynamic response: a step `Gc`, "G for the cables (G_f with h = H …)".
+- **Governing provision:** ASCE 7-22 §26.11.5 (Eqs. 26.11-7 to 26.11-16), applied to the cables with h = H.
+- **Check case:** the LPGF case. IBC pole: H = 70 ft, OD 5 → 10 in, base wall 0.25 in, b = 3.5 ft, V = 115 mph, Exp. C, n₁ = 0.6315 Hz, p = 2 ft.
+  - Pole G = G_f(h = 72 ft) = 1.8823 (unchanged from #748).
+  - Cable G = G_f(h = 70 ft) = 1.8955: z̄ 42.0, I_z̄ 0.19212, R² 5.6400. The hand check is the "before" column of LPGF.
+  - q_W (cables 1, 2) = q_W,#748 × 1.8955/1.8823: 69.80 → **70.29 psf**. That equals the p = 0 / pre-#748 value.
+  - Results at p = 2 ft (#748 → this change):
+    - cable resultant (L1 at 270°): 109.11 → 109.87 lb (= pre-#748)
+    - ASD M: 61,326 → 61,403 lb·ft
+    - d: 10.523 → 10.528 ft
+    - LRFD 1.2D + 1.0W M: 96,047 → 96,167 lb·ft
+    - shaft M_u: 122,377 → 122,520 lb·ft
+  - The pole and fixture forces are still those of #748. Only the cable contributions go back.
+- **How verified:**
+  - `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL. That is 20 cases at p = 0, with cable values identical in the 12 cable cases.
+  - `tests/smoke/lightpole-projection.mjs`, new section 1b (the flexible pole above):
+    - at p = 0, G = G_f(h = H) and there is no separate cable G;
+    - at p = 2 ft, the pole G = G_f(h = H + p);
+    - the cable G = G_f(h = H), equal to the p = 0 G;
+    - every cable value at p = 2 ft is identical to p = 0.
+    ALL PASS.
+  - Comparing commit 8818582 (before #748) at p = 2 ft with this branch: q_W and the cable resultant are equal.
+  - `node tests/engine/run.mjs lightpole` passes; `node tests/check-syntax.mjs` passes.
+- **Saved data:** no change.
+
+### Manual: the check summary panel (LPDC, #747)
+- Manual §3.1, Summary tab: after the first paragraph ("The Summary is the answer sheet…"), one paragraph was added on the check summary panel. It covers the one-line checks, expanding and click-through, the placement at 1500 px, the collapse button, the code modes and the input-error state, and notes that the panel is not printed. This closes the LPDC open item on the Manual.
