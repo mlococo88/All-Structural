@@ -2391,3 +2391,68 @@ function runBenchmarks(){
   text and state after printing identical. `tests/smoke/project-library.mjs --tool steelbeam`, `phone-layout.mjs --tool sbeam`,
   `list-input.mjs --part sbeam`, `node tests/check-syntax.mjs`: pass.
 - **Saved data:** none changed. **Formulas, factors, units, code references:** none changed (§4 does not apply).
+
+## 2026-11-03 — PR: claude/report-retire-sbeam, PR #724: https://github.com/mlococo88/All-Structural/pull/724 (SBRX: the print report (header "Print report", its section dialog, `sbdReportDOM`, the Ctrl+P copy) retired after porting what the Report tab lacked; "Print report", Ctrl+P and the browser's Print print the Report from every tab; batch mode keeps its own batch print; display only, no result change)
+
+### SBRX-1. What the print report printed and the Report lacked, ported   [display] [no result change]
+- **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #672 … #718). The input-binding fix this depends on (#703, #720) is on main.
+- **Compared:** `sbdReportDOM()` with the diagrams rasterised (`#printReport`, print media) on origin/main against the Report (`#rp-print`, print media) on the branch, with KaTeX loaded and without it. Cases:
+  - def: the default beam (W18X50, 20 ft);
+  - span2: two spans 25 + 30 ft, W21X44, top flange braced at 8 ft;
+  - mem: member check, W12X40, two cases with P, M_x, M_y and V (one tension case);
+  - comp: composite beam, W16X26, 30 ft.
+- **Missing before** (distinct numbers of the print report not in the Report): with KaTeX, only the print report's section numbers plus the "max err" values of the Summary's check tiles. Without KaTeX (offline), 55 / 66 / 52 / 65: every worked equation line of the Report was empty. Examples: λ_p / λ_r, M_p, r_ts, 0.7F_yS_x, Jc/(S_x h_o), L_p, L_r and F_cr (flexure); A_w, the C_v limits and V_n (major and minor shear); L_c/r, F_e, F_ez, F_y/F_e → F_cr and P_n (compression); the torsion constant a.
+  - Cause: the Report read each step line only from KaTeX's source annotation. Offline, `tex()` leaves the TeX source as text, so there was no annotation to read.
+- **Text missing before:**
+  - the codes line ("Steel Beam Designer · by Mario Lococo");
+  - the governing-result banner ("Governing: … DCR = … — all implemented checks pass / DESIGN FAILS");
+  - the member-check-mode warning;
+  - the hand-off source line;
+  - the Subject, Task and Section of the title block;
+  - the Summary's check tiles (#dash: label [reference], result, status; e.g. model stability, ΣR = ΣF max err, equilibrium);
+  - the D/C result lines at the end of each section;
+  - the front-matter paragraph and the footer line;
+  - the References row "Validation" (it was read from `S.print.secs`, which the Report never set);
+  - the user manual when chosen.
+- **Ported (anchor `SBRX (2026-11-03): what the retired print report`, before `function sbrModel(){`):**
+  - `sbrStep`: an equation line without a KaTeX annotation is read as its text (the TeX source). Without KaTeX, the lines are joined by " ; " and passed through `sbrLite` (the built-in renderer has no `gathered`).
+  - `sbrTab`: `#dash` (the check tiles) becomes a table Check / Result / Status (PASS ok, FAIL ng, N/A na).
+  - `sbrModel`:
+    - only the sections chosen (`sbrSel()`: `S.print.secs` with `ensurePrintState`'s defaults, read without writing `S`), in the tabs' order;
+    - the user manual (`tabManual`, every part via `manRender`) when chosen;
+    - "Governing result" first in Summary of checks (`sbrxCover`: banner with the § link to the governing card, member-mode warning, source line);
+    - "Results — <tab>" at the end of each section (`sbrxResults`: the print report's rule, by `sbdChkTab`, else the Summary): Check, D/C (§ link to the card), reference and governing combination, PASS / FAIL / N/A;
+    - "About this report" in References (front note and footer);
+    - title block: Subject, Task, Section; codes line with the tool and author.
+  - `sbdRefs`: the Validation row follows `sbrSel().tabValid` (the same default as before, true).
+  - Include boxes on the report bar (`sbrxControls` / `sbrxWire`): the dialog's labels; a change writes `S.print.secs` through `ensurePrintState()` and autosaves, as the dialog's checkboxes did. No new key or format.
+- **After:** in all four cases, with and without KaTeX, every number of the print report is in the Report except:
+  - the print report's section numbers;
+  - "0.65" of a KaTeX-split "0.658";
+  - the options of the diagram combination selector, which the print report printed as a list. The Report names the combination in the diagram heading.
+
+### SBRX-2. Print report, dialog and Ctrl+P copy removed; Print prints the Report from every tab   [display]
+- **Removed:** `openPrintDialog()`, `sbdReportDOM()`, `sbdStaticPlots()`, `buildPrintReport()`, `sbdPageCSS()`, `sbdApplyPageCSS()`, the D11 `beforeprint` / `afterprint` handlers.
+- **Kept:**
+  - for batch mode: `PRINT_CSS`, `setupPrintUI`, `rasterisePlots`, `markShortSections`, `printFig`, `ensurePrintState`;
+  - for the Report: `sbdChkTab`, `sbdChkTarget`, `sbdLink`, `sbdWorkedIn`, `sbdGoto`, `sbdFmtDC`, `sbdRefs`.
+- **Batch print kept:** `printBatchRows` re-solves each member (`applyRowToState` + `computeAll`, one separate analysis per row), so it stays as it is. Batch mode's header button opens the batch dialog as before.
+- **Changed:**
+  - header "Print report" (tooltip added): batch mode → `openBatchPrintDialog()` (as before); otherwise `sbrPrintAny()`. That shows the Report (`SBRP.on`, not saved), waits for the diagram images and calls `SBRP.api.print()`.
+  - New `sbrPrintPrep()`, called from an inline `beforeprint` script before `shared/steps.js`: Ctrl+P / the browser's Print from another tab show and print the Report.
+  - New `afterprint` handler: back to the tab of before.
+  - User manual text for "Print report" updated.
+- **Governing provision:** none changed. No formula, factor, unit, code reference or computed value changed (CLAUDE.md §4).
+- **Saved data:** no key or format change (`sbd_autosave_v1`, `sbd_projects_v1`; `S.print.secs` keeps its keys and defaults, written only by an Include box as by the dialog).
+- **How verified:**
+  - `node tests/check-syntax.mjs`: pass.
+  - origin/main vs branch, the four cases, with KaTeX, after showing the Report and every tab:
+    - `AN` (JSON) identical;
+    - the text of every tab identical;
+    - localStorage identical, and unchanged by showing and printing the Report;
+    - no console errors.
+  - Report: 0 unresolved references, 0 duplicate keys; diagram images 16 / 16 / 7 / 21, as the print report.
+  - Print routing from every tab, by `beforeprint` and by the button (32 / 32 / 24 / 32 paths): `#rp-print` holds the Report with its images, `body.rp-printing` is set, and the tab of before comes back.
+  - Include box: writes only `S.print`, and the section leaves the Report.
+  - `node tests/smoke/project-library.mjs --tool steelbeam`: ALL PASS.
+- **Other copies:** none.
