@@ -3883,3 +3883,36 @@ current design's analysis accepted; **the minimum shipping piece length raised f
 - `node tests/engine/run.mjs sheets drawings`, `node tests/smoke/steel-bridge-drawings.mjs`, the display-list comparison (PR).
 ### Other copies
 - shared/dxf.js sheetBorder (fixlog/shared-dxf.md).
+
+## 2026-11-03 — PR: claude/sbd-print-half (PR #755: https://github.com/mlococo88/All-Structural/pull/755) — Drawings: Print sheet / Print all sheets; paper D prints half size on 11 × 17 (SBPS-3; display only, no result change)
+Engineer's decisions: print the Drawings sheets from the app (as Spread Footing, Light Pole, #749/#750); for the D sheets (34 × 22), half size on
+11 × 17, and the print must say so visibly.
+### Where
+- `ui/drawings.js` `render()`:
+  - Bar, anchor `<button type="button" class="primary" id="dwg_dxf">Download DXF (${sh.length} sheets)</button>`: two buttons follow it,
+    `id="dwg_print1"` (Print sheet) and `id="dwg_printAll"` (Print all sheets (n)), then a note: `SharedDxf.PRINT_NOTE` and, on paper D,
+    "the sheets print half size on 11 × 17, each at half its stated scale …; choose paper B for 11 × 17 sheets at full scale".
+  - Handlers (anchor `/* SBPS-3 (2026-11-03)`): paper B → the previewed B set, `SharedDxf.printSheets(… sheetSVG …, { paper: [17, 11] })`
+    (true scale); paper D → `SBDSheets.build(G, RS, { paper: 'D', half: true })`, the 34 × 22 sheets fitted to 17 × 11 (exactly 1/2: same
+    proportions).
+- `engine/sheets.js`:
+  - `sheet()`: SCALE cell before `[24, 'SCALE', scaleName(k)]`, after `[24, 'SCALE', scaleName(k) + (S.half ? ' (HALF SIZE)' : '')]`; the footer
+    note gets, with `S.half`, ` HALF-SIZE PRINT ON 11 X 17: THE SCALES SHOWN ARE FOR THE FULL-SIZE ${pw} X ${ph} SHEET; THIS PRINT IS AT 1:${2 * k}.`
+  - `build()`: `half: !!opt.half` passed to each sheet. Without `opt.half` (the preview and Download DXF) nothing changes.
+### Governing provision
+- None (drawing output).
+### Check case
+- Default project, TYPICAL SECTION AND NOTES on paper D at 3/8" = 1'-0" (k = 32): deck slab 534 × 8 in (girders 0 to 38 ft, overhangs 3.25 ft)
+  → full size 16.6875 × 0.25 in; half size 8.3438 × 0.125 in = 600.75 × 9.00 pt. Measured on the printed PDF: 600.75 × 9.00 pt. The scale
+  cell reads `3/8" = 1'-0" (HALF SIZE)`. Print all sheets: 15 pages, 17 × 11 in, each with the half-size note.
+- `half: true` vs without, paper D: 4014 entities each, same scales; 30 entities differ = the SCALE cell and the footer note of each of 15 sheets.
+- Paper B: DECK OVERHANG prints at 3/4" = 1'-0" (1:16), no half-size text.
+### How verified
+- `node tests/smoke/dxf-print-sheets.mjs --tool sbd` (new entry; the test now opens a tool's Report tab first where the tool prints the open tab:
+  `reportOpen`): Report print 317 letter pages, no sheet. `node tests/engine/run.mjs sheets drawings`, `node tests/smoke/steel-bridge-drawings.mjs`,
+  `node tests/check-syntax.mjs`.
+### Other copies
+- None (the print code is shared/dxf.js printSheets, sheetSVG).
+### Open items
+- On the half-size print the outer border (0.25 in inside the D sheet's edge, #754) is 0.125 in inside the page edge; the inner border 0.25 in
+  (0.375 in on the left). The footer note is 0.04 in text at half size (small); the SCALE cell's "(HALF SIZE)" is the readable marker.

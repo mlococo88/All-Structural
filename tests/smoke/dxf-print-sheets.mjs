@@ -59,6 +59,18 @@ const TOOLS = {
       return { what: `shaft ${b} in dia. x ${+d.toFixed(3)} in (embedment d = ${c.stacks[0].found.d} ft) on ${s.title} at 1:${s.k}`, w: b / s.k, h: d / s.k }; }),
     report: /Light Pole|POLE/i,
   },
+  sbd: {   // SBPS-3 (2026-11-03): paper D (default) prints HALF SIZE on 11 x 17: the TYPICAL SECTION sheet's deck slab measures w / (2 k)
+    file: 'apps/steel-bridge/index.html', label: 'Steel Bridge Design (apps/steel-bridge), paper D half size',
+    open: async p => { await p.waitForSelector('#tabBar [data-otab="dwg"]'); await p.click('#tabBar [data-otab="dwg"]'); await p.waitForSelector('#dwg_print1'); await p.selectOption('#dwg_sheet', 'sec'); await p.waitForSelector('#dwg_print1'); },
+    one: '#dwg_print1', all: '#dwg_printAll',
+    n: p => p.evaluate(() => document.querySelectorAll('#dwg_sheet option').length),
+    known: p => p.evaluate(() => { const G = SBDDrawings.model(SBDModel.defaultProject()), s = SBDSheets.build(G, null, { paper: 'D' }).sheets.find(q => q.id === 'sec'), dk = G.deck;
+      const w = G.ys[G.nb - 1] * 12 + (dk.ohL + dk.ohR) * 12; return { what: `deck slab ${w} x ${dk.ts} in on ${s.title}, D sheet at 1:${s.k}, printed half size (1:${2 * s.k})`, w: w / s.k / 2, h: dk.ts / s.k / 2 }; }),
+    // the printed sheet says it is half size (scale cell and the note under the title block); the outer border at 0.25 / 2 in
+    sheetText: /\(HALF SIZE\)[\s\S]*HALF-SIZE PRINT ON 11 X 17|HALF-SIZE PRINT ON 11 X 17[\s\S]*\(HALF SIZE\)/, border: 9,
+    reportOpen: async p => { await p.click('#tabBar [data-otab="rpt"]'); await p.click('#rp_build'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 180000 }); },
+    report: /Steel Bridge|Report/i,
+  },
   bg: {   // BGDW (2026-11-03): the PROFILE sheet; the known rectangle is the profile frame (station range x elevation range, horizontal
           // scale k, vertical k / VE). The tool has no Report: its own print prints the open tab, so check 3 is the sheets' absence only.
     file: 'Bridge Geometry.html', label: 'Bridge Geometry',
@@ -101,8 +113,9 @@ for (const key of want) {
     const P1 = pages(f1);
     check(P1.length === 1 && P1.every(q => Math.abs(q.w - 1224) < 0.5 && Math.abs(q.h - 792) < 0.5), `Print sheet: ${P1.length} page(s), ${P1.map(q => q.w + ' x ' + q.h).join(', ')} pt (expected 1 page 1224 x 792 = 17 x 11 in)`);
     const Rc = rects(f1, 1), tol = 0.6;
-    const outer = Rc.find(r => Math.abs(r.x0 - 18) < tol && Math.abs(r.y0 - 18) < tol && Math.abs(r.x1 - 1206) < tol && Math.abs(r.y1 - 774) < tol);
-    check(!!outer, `the sheet's outer border 0.25 in inside the page edge: (18, 18)-(1206, 774) pt${outer ? '' : ': not found'}`);
+    const e = T.border || 18, outer = Rc.find(r => Math.abs(r.x0 - e) < tol && Math.abs(r.y0 - e) < tol && Math.abs(r.x1 - 1224 + e) < tol && Math.abs(r.y1 - 792 + e) < tol);
+    check(!!outer, `the sheet's outer border ${e / 72} in inside the page edge: (${e}, ${e})-(${1224 - e}, ${792 - e}) pt${outer ? '' : ': not found'}`);
+    if (T.sheetText) { const t1 = execFileSync('pdftotext', [f1, '-'], { encoding: 'utf8' }); check(T.sheetText.test(t1), `the printed sheet's text matches ${T.sheetText}`); }
     const kw = K.w * 72, kh = K.h * 72, hit = Rc.find(r => Math.abs(r.x1 - r.x0 - kw) < tol && Math.abs(r.y1 - r.y0 - kh) < tol);
     check(!!hit, `to scale: ${K.what}: expected ${kw.toFixed(2)} x ${kh.toFixed(2)} pt (${K.w.toFixed(4)} x ${K.h.toFixed(4)} in)${hit ? `, measured ${(hit.x1 - hit.x0).toFixed(2)} x ${(hit.y1 - hit.y0).toFixed(2)} pt` : ': no such rectangle on the page'}`);
     await o.p.waitForTimeout(100);
@@ -118,6 +131,7 @@ for (const key of want) {
     const gone2 = await o.p.evaluate(() => !document.getElementById('sdx-print') && !document.getElementById('sdx-print-css'));
     check(gone2, 'after printing all: the print box and its style are removed');
     // 3. the page's own print: the Report
+    if (T.reportOpen) await T.reportOpen(o.p);   // a tool that prints the open tab: the Report tab first
     const f3 = path.join(OUT, `${key}-report.pdf`);
     await o.p.pdf({ path: f3, preferCSSPageSize: true, printBackground: true });
     const P3 = pages(f3), txt = execFileSync('pdftotext', [f3, '-'], { encoding: 'utf8' });
