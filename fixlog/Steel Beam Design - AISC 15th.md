@@ -2367,3 +2367,27 @@ function runBenchmarks(){
     tab 0.128) until a tab is clicked. Fix candidate: call `updateGovStrip()` in `schedule()` after `renderTab()`.
   - The restores are not in `finally` blocks in `runBenchmarks` / `runSensitivity` (as on main): if a benchmark threw part-way, the
     benchmark model would stay loaded. Not seen; raised only.
+
+## 2026-11-02 — PR: claude/sbd-govstrip — the Governing strip follows every recalculation (SBGS); the S restores in try / finally (SBBX-2)   [display and robustness; no result change]
+- **Engineer decision (2026-11-02):** both open items of SBBX (#703) approved.
+- **SBGS — Where:** `schedule()`, anchor `renderTab();` followed by `sbdInputTabMarks();`. **Before:** `renderTab();` then
+  `sbdInputTabMarks();`. **After:** `renderTab();` `updateGovStrip();` `sbdInputTabMarks();`. **Problem:** the strip under the header
+  ("Governing: … DCR …") was redrawn only by `buildTabs()` (tab click, Load, Undo), so after a typed edit it showed the old governing
+  check (e.g. LL pressure ×2: strip 0.116, worst check 0.201). Now it is redrawn after each recalculation.
+- **SBBX-2 — Where:**
+  - `runBenchmarks()`: the scenarios (from `function scenario(` to the last `scenario(…)` call) are inside `try{ … }finally{ S=S0;
+    syncGenLoads(); }` (anchor `/* SBBX-2 (2026-11-02): S comes back (finally) even if a scenario throws */`); `return out;` after it.
+  - `runSensitivity()`: after `const S0=S;S=JSON.parse(key); const rows=[];`, the probing (`sensParams()` … `params.forEach(…)`) is inside
+    `try{ … }finally{ S=S0;computeAll(); }`.
+  - `printBatchRows()`: `const S0=S;S=JSON.parse(saved);` moved down to just before its existing `try{` (after `let firstDone=…`), so
+    nothing can throw between the swap and the `finally` that puts `S0` back.
+  - **Problem:** if a benchmark scenario or a sensitivity probe threw, `S` stayed the copy (the benchmark model or a probed copy) and the
+    inputs no longer reached the model. Now the user's own object always comes back; the error is still reported as before.
+- **Check case:** default project, LL pressure ×2 → strip on origin/main "DCR 0.116", this branch "DCR 0.201" (= `worstCheck()`).
+  `evalVM` / `sensParams` patched to throw: `S` afterwards is the user's object on this branch (not on origin/main).
+- **How verified (headless, scratch scripts):** origin/main with values written into `S` and recomputed vs this branch with the values
+  typed (span 21, `cb0_DL` 1.7, span 23.5, Validation tab then span 25): `S`, `AN`, `DZ`, the sensitivity rows, the page text and now the
+  Governing strip identical; both written into `S`: identical; Validation 95 PASS / 0 FAIL on both; batch Build & print (2 rows): report
+  text and state after printing identical. `tests/smoke/project-library.mjs --tool steelbeam`, `phone-layout.mjs --tool sbeam`,
+  `list-input.mjs --part sbeam`, `node tests/check-syntax.mjs`: pass.
+- **Saved data:** none changed. **Formulas, factors, units, code references:** none changed (§4 does not apply).
