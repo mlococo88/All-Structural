@@ -3867,3 +3867,19 @@ current design's analysis accepted; **the minimum shipping piece length raised f
 - The run above; `node tests/check-syntax.mjs`; `node tests/smoke/steel-bridge-report.mjs`; `node tests/smoke/list-input.mjs --part sbridge`.
 ### Other copies
 - None.
+
+## 2026-11-03 — PR: claude/dxf-sheet-inset (PR #754: https://github.com/mlococo88/All-Structural/pull/754) — Drawings: the sheet's outer border 0.25 in inside the paper edge (SBPS-1; display only, no result change)
+### Where
+- `engine/sheets.js` `sheet()` (anchor `X_().sheetBorder(D, bd, ox, W, H, k);`): before `D.rect(bd, ox, 0, ox + W, H);`, after
+  `X_().sheetBorder(D, bd, ox, W, H, k);` (shared/dxf.js: rect 0.25 k inside the sheet's edge). Inner border, title block, drawing area,
+  every drawn object and the plot scales are unchanged.
+### Governing provision
+- None (drawing output).
+### Check case
+- Default project, papers D and B: 4014 entities, 15 sheets each; origin/main vs branch identical except one entity per sheet, the outer border,
+  0.25 k inward (e.g. D sheet at k = 240: (0, 0)-(8160, 5280) → (60, 60)-(8100, 5220) model in).
+- `tests/engine/sheets.test.mjs`: the outer-border check changed from 34 k × 22 k to (34 − 0.5) k × (22 − 0.5) k, starting at ox + 0.25 k.
+### How verified
+- `node tests/engine/run.mjs sheets drawings`, `node tests/smoke/steel-bridge-drawings.mjs`, the display-list comparison (PR).
+### Other copies
+- shared/dxf.js sheetBorder (fixlog/shared-dxf.md).

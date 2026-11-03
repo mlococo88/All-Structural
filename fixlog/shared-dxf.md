@@ -123,3 +123,30 @@ No drawing, file or engineering value changes: a browser print path for the shee
 - Tests of every tool that loads shared/dxf.js (CLAUDE.md §3): Spread Footing, Light Pole and Sign Post, apps/steel-bridge — see the PR.
 ### Other copies
 - None.
+
+## 2026-11-03 — PR: claude/dxf-sheet-inset (PR #754: https://github.com/mlococo88/All-Structural/pull/754) — the sheets' outer border 0.25 in inside the paper edge (SHEET_INSET, sheetBorder; engineer's decision)
+No engineering value changes. The drawing geometry and the plot scales are unchanged; only the outer border line of each sheet moves.
+### Where
+- New `SHEET_INSET = 0.25` and `sheetBorder(D, l, ox, W, H, k)` (anchor `function sheetBorder(D, l, ox, W, H, k) {`):
+  `D.rect(l, ox + 0.25 k, 0.25 k, ox + W - 0.25 k, H - 0.25 k)`.
+- Used by the three tools that draw sheets, in place of their outer-border rect (before `rect(ox, 0, ox + W, H)`):
+  `Spread Footing.html` (SFPS-2), `Light Pole and Sign Post.html` (LPPS-2), `apps/steel-bridge/engine/sheets.js` (SBPS-1),
+  `Bridge Geometry.html` (BGDW-2) and `Section Property Calculator.html` (SPDW-2) (their Drawings tabs, #752 and #753).
+- `sheetSVG` and `printSheets` are unchanged: the printed page is still the whole W × H sheet, so the sheet keeps its scale, and the outer
+  border now prints 0.25 in (18 pt) inside the page edge.
+### Decisions
+- The engineer asked for the inset in print and in the DXF sheet. The border is moved in the DXF as well (one entity per sheet), so the file and
+  the print match. The inner border, title block and drawing area are where they were.
+- Steel Bridge D sheets (34 × 22) get the same 0.25 in on the full-size sheet. A half-size print of a D sheet on 11 × 17 puts it 0.125 in
+  inside the page edge (the half-size print is the next PR; noted there).
+### Governing provision
+- None (drawing output).
+### Check case
+- Spread Footing FOOTING PLAN at k = 24: outer border before (0, 0)-(408, 264) model in, after (6, 6)-(402, 258); printed (18, 18)-(1206, 774) pt
+  on the 1224 × 792 pt page; the 10 × 8 ft footing still measures 360 × 288 pt.
+- Display lists origin/main vs branch (default projects): Spread Footing 502 entities, 7 sheets; Light Pole 276, 5; Steel Bridge 4014, 15, paper D
+  and paper B; Bridge Geometry 1300, 9; Section Property Calculator (welded plate girder) 273, 2. Sheet scales and offsets identical; exactly one entity per sheet differs, the outer border, moved 0.25 k inward on every side.
+### How verified
+- See the PR (tests of every tool that loads this file).
+### Other copies
+- None.

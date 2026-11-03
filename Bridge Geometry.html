@@ -5489,7 +5489,7 @@ function bgdwBuild(){
     const cx=ox+W/2, cy=mm+tb+0.3*k+(AH*k)/2;
     if(isFinite(b[0])) D.move(i0, cx-(b[0]+b[2])/2, cy-(b[1]+b[3])/2);
     D.k=k; D.h=0.1*k;
-    D.rect(L.br, ox, 0, ox+W, H); D.rect(L.br, ox+mm, mm, ox+W-mm, H-mm);
+    SharedDxf.sheetBorder(D, L.br, ox, W, H, k); D.rect(L.br, ox+mm, mm, ox+W-mm, H-mm);   // outer border 0.25 in inside the paper edge (shared sheetBorder, 2026-11-03)
     const x0=ox+mm, y0=mm, w=(BGDW.W-2*BGDW.m)*k, r=tb/2, sc=(ret&&ret.scale)||bgdwScName(k);
     D.rect(L.tb, x0, y0, x0+w, y0+tb); D.line(L.tb, x0, y0+r, x0+w, y0+r);
     const row1=[['PROJECT',meta.projectName,4.25],['PROJECT NO.',meta.jobNo,2],['CALCULATED BY',meta.preparedBy,2],['DATE',meta.date,1.75],['CHECKED BY',meta.checkedBy,2],['CHECKED DATE','',1.75],['SCALE',sc,2.5]];

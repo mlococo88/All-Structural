@@ -2,7 +2,7 @@
 // Print sheets (shared/dxf.js SharedDxf.printSheets, 2026-11-03): each tool's Drawings tab "Print sheet" and "Print all sheets" printed
 // headless to PDF with Chromium page.pdf honoring @page (preferCSSPageSize), window.print stubbed (the dialog cannot open headless).
 // Checks per tool:
-//   1. Print sheet: one page, 1224 x 792 pt (17 x 11 in landscape); the sheet's outer border on the page edges and a known drawn
+//   1. Print sheet: one page, 1224 x 792 pt (17 x 11 in landscape); the sheet's outer border 0.25 in (18 pt) inside the page edges and a known drawn
 //      dimension measured on the PDF (pdftocairo -svg: path coordinates in pt) equal to its full-size value / plot scale k x 72;
 //   2. Print all sheets: one 17 x 11 page per sheet;
 //   3. after printing, the print box and its style are gone; then the page's own print (Ctrl+P / the browser's Print, page.pdf with no
@@ -101,8 +101,8 @@ for (const key of want) {
     const P1 = pages(f1);
     check(P1.length === 1 && P1.every(q => Math.abs(q.w - 1224) < 0.5 && Math.abs(q.h - 792) < 0.5), `Print sheet: ${P1.length} page(s), ${P1.map(q => q.w + ' x ' + q.h).join(', ')} pt (expected 1 page 1224 x 792 = 17 x 11 in)`);
     const Rc = rects(f1, 1), tol = 0.6;
-    const outer = Rc.find(r => Math.abs(r.x0) < tol && Math.abs(r.y0) < tol && Math.abs(r.x1 - 1224) < tol && Math.abs(r.y1 - 792) < tol);
-    check(!!outer, `the sheet's outer border is the page edge (0, 0)-(1224, 792) pt${outer ? '' : ': not found'}`);
+    const outer = Rc.find(r => Math.abs(r.x0 - 18) < tol && Math.abs(r.y0 - 18) < tol && Math.abs(r.x1 - 1206) < tol && Math.abs(r.y1 - 774) < tol);
+    check(!!outer, `the sheet's outer border 0.25 in inside the page edge: (18, 18)-(1206, 774) pt${outer ? '' : ': not found'}`);
     const kw = K.w * 72, kh = K.h * 72, hit = Rc.find(r => Math.abs(r.x1 - r.x0 - kw) < tol && Math.abs(r.y1 - r.y0 - kh) < tol);
     check(!!hit, `to scale: ${K.what}: expected ${kw.toFixed(2)} x ${kh.toFixed(2)} pt (${K.w.toFixed(4)} x ${K.h.toFixed(4)} in)${hit ? `, measured ${(hit.x1 - hit.x0).toFixed(2)} x ${(hit.y1 - hit.y0).toFixed(2)} pt` : ': no such rectangle on the page'}`);
     await o.p.waitForTimeout(100);

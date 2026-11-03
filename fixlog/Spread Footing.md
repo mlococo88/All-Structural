@@ -4526,3 +4526,21 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 - The outer border prints on the page edge (the sheet is the page). A physical printer with unprintable edges will clip that outer line
   (the inner border and title block are inside it); a PDF keeps it.
+
+## 2026-11-03 — PR: claude/dxf-sheet-inset (PR #754: https://github.com/mlococo88/All-Structural/pull/754) — Drawings: the sheet's outer border 0.25 in inside the paper edge (SFPS-2; display only, no result change)
+
+### SFPS-2. Outer border inset (engineer's decision)
+- **Problem (engineer):** on a physical printer the outer border, printed on the page edge, is clipped.
+- **Where:** the sheet function in the drawing build (anchor `SharedDxf.sheetBorder(D`): before
+  `D.rect(L.br,ox,0,ox+W,H);`, after
+  `SharedDxf.sheetBorder(D,L.br,ox,W,H,k);` (shared/dxf.js: a rect 0.25 k inside the sheet's edge).
+  The inner border, title block, drawing area and every drawn object are unchanged; the sheet is still 17 × 11 in at its plot scale.
+- **Governing provision:** none (drawing output).
+- **Check case:** the DXF display list of the default project, origin/main vs branch: same entity count and sheet scales; one entity per sheet
+  differs (the outer border, 0.25 k inward on every side). Printed: the border at 18 pt from each page edge; the known dimension unchanged
+  (see the PR).
+- **How verified:** `node tests/smoke/dxf-print-sheets.mjs`, the display-list comparison, the tool's smoke tests (PR).
+- **Other copies:** shared/dxf.js sheetBorder (fixlog/shared-dxf.md).
+
+### Open items
+- None.

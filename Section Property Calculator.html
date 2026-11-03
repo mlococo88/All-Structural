@@ -6903,7 +6903,7 @@ function spdwBuild() {
     const cx = ox + W / 2, cy = m + tb + 0.3 * P + (AH * P) / 2;
     if (isFinite(b[0])) D.move(i0, cx - (b[0] + b[2]) / 2, cy - (b[1] + b[3]) / 2);
     D.k = P; D.h = 0.1 * P;
-    D.rect(L.br, ox, 0, ox + W, H); D.rect(L.br, ox + m, m, ox + W - m, H - m);
+    SharedDxf.sheetBorder(D, L.br, ox, W, H, P); D.rect(L.br, ox + m, m, ox + W - m, H - m);   // outer border 0.25 in inside the paper edge (shared sheetBorder, 2026-11-03)
     const x0 = ox + m, y0 = m, w = (SPDW.W - 2 * SPDW.m) * P, r = tb / 2, sc = (ret && ret.scale) || (k === 1 && ks.length === 1 && ks[0] === 1 && ret && ret.nts ? 'NTS' : scName(k));
     D.rect(L.tb, x0, y0, x0 + w, y0 + tb); D.line(L.tb, x0, y0 + r, x0 + w, y0 + r);
     const row1 = [['PROJECT', p.name, 4.25], ['PROJECT NO.', p.job, 2], ['CALCULATED BY', p.designer, 2], ['DATE', p.date, 1.75], ['CHECKED BY', p.checker, 2], ['CHECKED DATE', '', 1.75], ['SCALE', sc, 2.5]];
