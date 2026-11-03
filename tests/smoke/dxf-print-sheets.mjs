@@ -59,6 +59,16 @@ const TOOLS = {
       return { what: `shaft ${b} in dia. x ${+d.toFixed(3)} in (embedment d = ${c.stacks[0].found.d} ft) on ${s.title} at 1:${s.k}`, w: b / s.k, h: d / s.k }; }),
     report: /Light Pole|POLE/i,
   },
+  bg: {   // BGDW (2026-11-03): the PROFILE sheet; the known rectangle is the profile frame (station range x elevation range, horizontal
+          // scale k, vertical k / VE). The tool has no Report: its own print prints the open tab, so check 3 is the sheets' absence only.
+    file: 'Bridge Geometry.html', label: 'Bridge Geometry',
+    open: async p => { await p.waitForFunction(() => typeof ENG !== 'undefined' && ENG, null, { timeout: 30000 }); await p.waitForTimeout(1000);
+      await p.click('.tabbtn[data-tab="drawings"]'); await p.waitForSelector('#bgdwPrint1'); await p.selectOption('#bgdwSheet', 'profile'); await p.waitForSelector('#bgdwPrint1'); },
+    one: '#bgdwPrint1', all: '#bgdwPrintAll',
+    n: p => p.evaluate(() => BGDW.B.S.length),
+    known: p => p.evaluate(() => { const s = BGDW.B.S.find(q => q.id === BGDW.cur); return { what: s.known.what + ' on ' + s.title + ' (' + s.scale + ')', w: s.known.w, h: s.known.h }; }),
+    report: null,
+  },
   spc: {   // SPDW (2026-11-03): a welded plate girder (flanges PL 16 x 1, web PL 36 x 1/2) set up in the test profile; the known rectangle
            // is the top flange on the SECTION AND PROPERTIES sheet. Ctrl+P prints the Report from any tab (SPRX).
     file: 'Section Property Calculator.html', label: 'Section Property Calculator',
@@ -111,8 +121,9 @@ for (const key of want) {
     const f3 = path.join(OUT, `${key}-report.pdf`);
     await o.p.pdf({ path: f3, preferCSSPageSize: true, printBackground: true });
     const P3 = pages(f3), txt = execFileSync('pdftotext', [f3, '-'], { encoding: 'utf8' });
-    check(P3.length > 1 && P3.every(q => Math.abs(q.w - 612) < 0.5 && Math.abs(q.h - 792) < 0.5) && T.report.test(txt), `Ctrl+P / Print: the Report, ${P3.length} letter pages`);
-    check(!/PLOT THIS SHEET|SHEET TITLE/.test(txt), 'Ctrl+P / Print: no drawing sheet in the Report print');
+    if (T.report) check(P3.length > 1 && P3.every(q => Math.abs(q.w - 612) < 0.5 && Math.abs(q.h - 792) < 0.5) && T.report.test(txt), `Ctrl+P / Print: the Report, ${P3.length} letter pages`);
+    else check(!P3.some(q => Math.abs(q.w - 1224) < 0.5 && Math.abs(q.h - 792) < 0.5), `Ctrl+P / Print (no Report in this tool): the page as before, ${P3.length} page(s), no 17 x 11 sheet page`);
+    if (T.report) check(!/PLOT THIS SHEET|SHEET TITLE/.test(txt), 'Ctrl+P / Print: no drawing sheet in the Report print');
     check(!o.errs.length, `console errors: ${o.errs.length}${o.errs.length ? ' ' + o.errs.slice(0, 3).join(' | ') : ''}`);
   } catch (e) { check(false, `${T.label}: ${e.message}`); }
   finally { await o.b.close(); }
