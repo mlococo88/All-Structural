@@ -2052,3 +2052,29 @@ Engineer's answers to the two open items of PR #671 (LTSV).
     - Text differs only in the two LTS cases (`ltspole`, `ltssign1`, both "Not evaluated"), whose LTS cards are now replaced by the input error.
   - `node tests/engine/run.mjs lightpole`: 41 passed. `node tests/smoke/lightpole-anchor-handoff.mjs`: ALL PASS. `node tests/check-syntax.mjs`: all pass. Screenshots of each LTS sign-mode input tab were reviewed.
 - **Open items (not built):** handhole input; leveling-nut standoff (sent as 0). Possible follow-up: also check the Broms parameters (c > 0, or φ and γ > 0) for the chosen model.
+
+## 2026-11-03 — PR: [#745](https://github.com/mlococo88/All-Structural/pull/745) (LTS-L3: LRFDLTS input check also requires the Broms parameters)   [behaviour change: when results are shown; no formula change]
+- **Problem:** after LTS-L2 the LRFDLTS mode required a Broms soil model but not its parameters. Cohesive with c = 0, or cohesionless with φ or γ blank or 0, gave no input error. `bromsEmbedment()` then returned null: no embedment, no Anchorage hand-off, and only a "select the Broms soil model" note.
+- **Where:** `lppLtsInputErrors()`, anchor `if(!inp.bromsSoil||inp.bromsSoil==='none') e.push(`.
+  - Before: that line only.
+  - After: that line, then
+    ```
+    else if(inp.bromsSoil==='cohesive') pos(inp.bromsC,'Broms undrained shear strength c');
+    else { pos(inp.bromsPhi,'Broms friction angle φ'); pos(inp.bromsGam,'Broms effective unit weight γ'); }
+    ```
+- **Governing provision:** LRFDLTS 1st Ed. (2015) C13.6.1.1 (Broms: c for cohesive soil; φ and γ for cohesionless soil). No formula changed.
+- **IBC mode:** unchanged; `lppLtsInputErrors()` runs only in the LRFDLTS mode. An LTS-only error stops only the LTS run, so the IBC engine and its cable values are unchanged (LTS-L2).
+- **Check case (default project, LTS mode):**
+
+  | Inputs | Before | After |
+  |---|---|---|
+  | cohesive, c = 0 | no error, no embedment | error "Broms undrained shear strength c must be greater than 0." |
+  | cohesive, c = 1.0 ksf | results | results, unchanged |
+  | cohesionless, φ blank, γ = 0 | no error, no embedment | errors on φ and γ |
+  | cohesionless, φ = 30°, γ = 0.115 k/ft³ | results | results, unchanged |
+
+  IBC mode with the same values: no error, as before.
+- **How verified:**
+  - `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL (18 cases; cable values identical in all 11 cable cases).
+  - `node tests/engine/run.mjs lightpole`: 41 passed. `node tests/smoke/lightpole-anchor-handoff.mjs`: ALL PASS. `node tests/check-syntax.mjs`: all pass.
+  - Headless gate test of the rows above.
