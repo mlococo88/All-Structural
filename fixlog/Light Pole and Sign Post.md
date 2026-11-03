@@ -2150,3 +2150,27 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - Between 1500 and 1792 px the input and output panels are narrower than before (the column takes 292 px), as in Spread Footing.
 - The LRFDLTS summary card does not list the shaft reinforcement (ACI 318 with the LRFDLTS demands) or the torsion threshold, so the panel does not either; adding them would be a change to that card.
 - The User Manual does not yet mention the panel (left so the Manual text is unchanged).
+
+## 2026-11-03 — PR: [#748](https://github.com/mlococo88/All-Structural/pull/748) (LPGF: flexible G_f with h above grade, H + p, IBC pole)   [§4: formula input change when p > 0 and n₁ < 1 Hz; p = 0 identical]
+
+### LPGF. G_f height h = H + p with a shaft projection   [calculation change]
+- **Decision (engineer, 2026-11-03):** with the shaft projection p (LPPJ, #746, open item 3 there: "G_f (flexible) keeps h = H"), the flexible gust-effect factor of the IBC mode uses the height above grade, h = H + p. This closes that open item; the rest of LPPJ is unchanged.
+- **Where:** `lppCalcIbc()`, pole branch, anchor `lppApplyGf(inp, nat, {h:`:
+  - Before: `lppApplyGf(inp, nat, {h:inp.H, B:Bw, L:Ld}); }`
+  - After: `lppApplyGf(inp, nat, {h:inp.H+(inp.pProj>0?inp.pProj:0), B:Bw, L:Ld}); }`
+  - `natGfWorkedHTML()` (anchor `(Table 26.11-1 values as used by the tool). h = `): when p > 0 on a pole, the text reads "h = H + p = 70.00 + 2.00 = 72.00 ft (height above grade; LPGF)"; at p = 0 the text is unchanged.
+  - Sign mode is not changed: its G_f already uses h = clr + s, the top of the panel above grade (the post length is clr + s − p since LPPJ). The LRFDLTS mode does not use G_f.
+  - n₁ (Rayleigh) is not changed: the cantilever is the pole on its base plate (LPPJ).
+- **Governing provision:** ASCE 7-22 §26.11.5, Eqs. 26.11-7 to 26.11-16 (h = mean roof height of the structure, taken here as the height of the top above grade); z̄ = max(0.6h, z_min), Table 26.11-1.
+- **Effect:** only when p > 0 and n₁ < 1 Hz (G_f used). G = max(entered G, G_f) applies to every wind force (pole, fixtures, cables), so in that case the cable wind changes in proportion to G as well. At p = 0, or with a rigid pole, nothing changes.
+- **Check case:** IBC light pole, default inputs except H = 70 ft, pole OD 5 → 10 in, wall 0.25 in at the base, shaft b = 3.5 ft; V = 115 mph, Exp. C, β = 0.005, n₁ = 0.6315 Hz (flexible), B = L = 0.625 ft; p = 2 ft.
+  - Before (h = H = 70 ft): z̄ = 42.0 ft, I_z̄ = 0.19212, L_z̄ = 524.71 ft, Q² = 0.84883, V̄_z̄ = 113.777 ft/s, N₁ = 2.9125, R_n = 0.071123, R_h = 0.40736, R_B = 0.98945, R_L = 0.96531, R² = 5.6400, g_R = 4.0784 → **G_f = 1.8955**.
+  - After (h = 72 ft): z̄ = 0.6·72 = 43.2 ft; I_z̄ = 0.20·(33/43.2)^(1/6) = 0.19122; L_z̄ = 500·(43.2/33)^(1/5) = 527.67 ft; Q² = 1/(1 + 0.63·((0.625 + 72)/527.67)^0.63) = 0.84702; V̄_z̄ = 0.65·(43.2/33)^(1/6.5)·115·88/60 = 114.272 ft/s; N₁ = 0.63155·527.67/114.272 = 2.9163; R_n = 7.47·2.9163/(1 + 10.3·2.9163)^(5/3) = 0.071067; R_h (η = 4.6·0.63155·72/114.272 = 1.8305) = 0.40092; R_B = 0.98949; R_L = 0.96546; R² = (1/0.005)·0.071067·0.40092·0.98949·(0.53 + 0.47·0.96546) = 5.5470; g_R = 4.0784 (unchanged);
+    G_f = 0.925·(1 + 1.7·0.19122·√(3.4²·0.84702 + 4.0784²·5.5470))/(1 + 1.7·3.4·0.19122) = 0.925·(1 + 0.32507·10.1024)/2.10525 = **1.8823**.
+  - Results (p = 2 ft, before → after): G used 1.8955 → 1.8823 (−0.70 %); cable wind pressure q_W (cables 1, 2) 70.29 → 69.80 psf; ASD governing M 61,756 → 61,326 lb·ft; embedment d 10.550 → 10.523 ft; LRFD (1.2D + 1.0W, governing direction) M 96,720 → 96,047 lb·ft; shaft M_u 123,235 → 122,377 lb·ft. Less conservative by the change in G (a taller h lowers I_z̄ and R_h).
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: ALL CASES IDENTICAL (20 cases, all at p = 0; cable values identical in the 12 cable cases). The check case above run in the page on origin/main and this branch (headless Chromium), and G_f recomputed by hand as shown. `node tests/smoke/lightpole-projection.mjs` ALL PASS; `node tests/engine/run.mjs lightpole` passes; `node tests/check-syntax.mjs` passes.
+- **Saved data:** no change.
+- **Other copies:** none.
+
+### Open items
+- None.
