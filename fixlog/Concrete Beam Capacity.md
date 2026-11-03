@@ -2135,7 +2135,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Open item (raised, not changed):** the ASD Beam Calcs tab's own projects dialog has no Rename / Duplicate (Beam Capacity's and the
   Development & Splice tab's have them).
 
-## 2026-11-02 — PR: claude/cbc-asd-rename — ASD Beam Calcs tab: Rename / Duplicate in its projects dialog (PLIB)   [display and storage only]
+## 2026-11-02 — PR: claude/cbc-asd-rename, PR #721: https://github.com/mlococo88/All-Structural/pull/721 — ASD Beam Calcs tab: Rename / Duplicate in its projects dialog (PLIB)   [display and storage only]
 - **Engineer decision (2026-11-02):** add Rename / Duplicate to the ASD tab's projects dialog, as on the Beam Capacity tab (open item of #714).
 - **Before:** the ASD tab's Open dialog (`renderProjDialog()`, frame `#suite-frame-asd`) listed the saved projects (`asd_v1_projects`,
   `{ name: { when, data } }`) with a × Delete button only.
