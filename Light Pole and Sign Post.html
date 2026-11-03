@@ -1511,8 +1511,9 @@ function cableComponents(c,inp){
   const wIce=iceWeight(t,c.D,den);
   const KzC=Kz(c.hc,inp.expo);
   const qBase=0.00256*KzC*inp.Kzt*inp.Kd*inp.cfCable;   // shared, no G, no V
-  const qW = qBase*inp.G*inp.V*inp.V;        // regular wind WITH gust G
-  const qWI= qBase*inp.G*inp.Vice*inp.Vice;  // wind-on-ice, WITH gust G (ASCE 7-22 §10.5 → Ch. 26–29, verify)
+  const Gc=(inp.Gcable!==undefined)?inp.Gcable:inp.G;   // LPGC: the cables' G (G_f at h = H when p > 0 on a flexible pole)
+  const qW = qBase*Gc*inp.V*inp.V;           // regular wind WITH gust G
+  const qWI= qBase*Gc*inp.Vice*inp.Vice;     // wind-on-ice, WITH gust G (ASCE 7-22 §10.5 → Ch. 26–29, verify)
   const D_v  = c.g;                    // dead vertical (lb/ft)
   const Di_v = wIce;                   // ice vertical (lb/ft)
   const W_h  = qW*(c.D/12);            // wind on bare, horizontal (lb/ft)
@@ -2194,7 +2195,10 @@ function natGfWorkedHTML(inp){
   H+=g(`R_\\ell = \\frac{1}{\\eta}-\\frac{1-e^{-2\\eta}}{2\\eta^2}:\\quad R_h(\\eta{=}4.6n_1h/\\bar V_{\\bar z}) = ${fmt(f.Rh,4)},\\ R_B(\\eta{=}4.6n_1B/\\bar V_{\\bar z}) = ${fmt(f.RB,4)},\\ R_L(\\eta{=}15.4n_1L/\\bar V_{\\bar z}) = ${fmt(f.RL,4)}`);
   H+=g(`R^2 = \\frac{1}{\\beta}R_nR_hR_B(0.53+0.47R_L) = ${fmt(f.R2,4)}\\qquad g_R = \\sqrt{2\\ln(3600n_1)}+\\frac{0.577}{\\sqrt{2\\ln(3600n_1)}} = ${fmt(f.gR,4)}`);
   H+=g(`G_f = 0.925\\,\\frac{1+1.7I_{\\bar z}\\sqrt{g_Q^2Q^2+g_R^2R^2}}{1+1.7g_vI_{\\bar z}} = 0.925\\,\\frac{1+1.7(${fmt(f.Iz,4)})\\sqrt{3.4^2(${fmt(f.Q2,4)})+${fmt(f.gR,4)}^2(${fmt(f.R2,4)})}}{1+1.7(3.4)(${fmt(f.Iz,4)})} = ${fmt(f.Gf,4)}`);
-  H+=`<p class="eq-result">G used = max(entered ${fmt(inp.Ginput,2)}, G<sub>f</sub> ${fmt(f.Gf,3)}) = <b>${fmt(inp.G,3)}</b> for every wind force.</p>`;
+  H+=`<p class="eq-result">G used = max(entered ${fmt(inp.Ginput,2)}, G<sub>f</sub> ${fmt(f.Gf,3)}) = <b>${fmt(inp.G,3)}</b> for every wind force${inp.Gcable!==undefined?' except the cables (next line)':''}.</p>`;
+  if(inp.Gcable!==undefined){ const c=inp.gfCable;   // LPGC
+    H+=`<p class="eq-why"><b>Cables (engineer, 2026-11-03):</b> the cable wind keeps G<sub>f</sub> with h = H = ${fmt(inp.H,2)} ft (not H + p), as before the shaft projection changed h: z̄ = ${fmt(c.zb,2)} ft, I<sub>z̄</sub> = ${fmt(c.Iz,4)}, L<sub>z̄</sub> = ${fmt(c.Lz,1)} ft, Q² = ${fmt(c.Q2,4)}, V̄<sub>z̄</sub> = ${fmt(c.Vz,2)} ft/s, N<sub>1</sub> = ${fmt(c.N1,4)}, R<sub>n</sub> = ${fmt(c.Rn,4)}, R<sub>h</sub> = ${fmt(c.Rh,4)}, R<sub>B</sub> = ${fmt(c.RB,4)}, R<sub>L</sub> = ${fmt(c.RL,4)}, R² = ${fmt(c.R2,4)}, g<sub>R</sub> = ${fmt(c.gR,4)} → G<sub>f</sub> = ${fmt(c.Gf,4)}.</p>`;
+    H+=`<p class="eq-result">G for the cables = max(entered ${fmt(inp.Ginput,2)}, G<sub>f</sub> ${fmt(c.Gf,3)}) = <b>${fmt(inp.Gcable,3)}</b>.</p>`; }
   return H;
 }
 // AISC 360-16 §H3.1 torsional strength and §G4/§G5 shear strength of the post (kip-in, kip).
@@ -2739,6 +2743,7 @@ manPart("p2","2. Input Reference",[
 manPart("p3","3. Output Reference",[
 {h:"3.1 Summary tab"},
 {p:"The Summary is the answer sheet. Every number on it is read from the same result objects the discipline tabs consume, so it cannot disagree with them."},
+{p:"<b>Check summary panel</b> (2026-11-03): a short list of every check, one line each \u2014 name, D/C (or the failing condition where the ratio is not what fails) and status, with a count of NG / REVIEW items. NG and REVIEW lines open to show the result and the reference; \u25b8 opens any line, and a click on a line opens the card where that check is worked. On screens 1500 px and wider it is a column on the left (\u00ab shrinks it to a strip); on narrower screens it sits above the output tabs (Hide / Show checks). It lists the same checks as this tab (IBC mode) or the LRFDLTS summary (LRFDLTS mode), shows the input errors instead when there are any, and is not printed."},
 
 {h3:"3.1.1 Verdict banner and strip"},
 {p:"The banner states either <b>ALL CHECKS PASS</b>, naming the governing utilisation, or <b>N CHECKS FAIL</b>, naming each failure. Below it, one chip per check gives a green tick or a red cross. In two-post sign mode each chip is labelled P1 or P2, so a failure is attributed to the post that has it."},
@@ -4836,7 +4841,9 @@ function lppCalcIbc(){
     .concat((cablesEnabled?cables:[]).map(c=>({z:c.hc,W:c.g*c.L/2}))));
   { const Bw=(inp.poleDiaTop+inp.poleDiaBase)/24;
     const Ld=inp.poleShape==='rect'? ((inp.poleDepthTop||0)+(inp.poleDepthBase||0))/24 : Bw;
-    lppApplyGf(inp, nat, {h:inp.H+(inp.pProj>0?inp.pProj:0), B:Bw, L:Ld}); }   // LPGF (2026-11-03, engineer): h above grade, H + p (shaft projection p, LPPJ)
+    lppApplyGf(inp, nat, {h:inp.H+(inp.pProj>0?inp.pProj:0), B:Bw, L:Ld});   // LPGF (2026-11-03, engineer): h above grade, H + p (shaft projection p, LPPJ)
+    // LPGC (2026-11-03, engineer): the cables keep G_f at h = H, as before LPGF (#748); set only when it can differ (p > 0, flexible)
+    if(inp.gf && inp.pProj>0){ const gc=gustFlexible(inp.expo, inp.V, inp.H, Bw, Ld, nat.n1, inp.gf.beta); inp.gfCable=gc; inp.Gcable=Math.max(inp.Ginput, gc.Gf); } }
   // total service dead = misc + pole self-weight + sum of fixture weights
   const fixW=fixtures.reduce((s,x)=>s+x.W,0);
   inp.DLtotal=inp.DL+poleSeg.totalW+fixW;
@@ -5803,7 +5810,7 @@ function cableWorkedHTML(comps,inp){
     'Wind pressure on the cables, q_W and q_Wi',
     `Each cable sees wind pressure computed from the same velocity-pressure form as the pole, evaluated at that cable's attachment height h_c. Two conditions apply from different ASCE 7 maps: the primary wind (bare cable), which carries the gust factor G; and the concurrent wind-on-ice, which uses the lower ice-wind speed V_ice and the same gust factor G (ASCE 7-22 §10.5 → Ch. 26–29, verify). C_f is the cable drag coefficient.`,
     `q_W=0.00256\\,K_z(h_c)K_{zt}K_d\\,G\\,C_{f}\\,V^2\\qquad q_{Wi}=0.00256\\,K_z(h_c)K_{zt}K_d\\,G\\,C_{f}\\,V_{ice}^2`,
-    `Evaluated per cable below. Higher attachment heights give slightly larger K_z and thus pressure.`,
+    `Evaluated per cable below. Higher attachment heights give slightly larger K_z and thus pressure.`+(inp.Gcable!==undefined?` Cables: G = ${n(inp.Gcable,3)}, the flexible G_f with h = H = ${n(inp.H,2)} ft (engineer, 2026-11-03), not the G = ${n(inp.G,3)} (h = H + p) of the pole and fixtures.`:''),
     'ASCE 7 Ch. 26 &amp; 10');
   H+=`<table class="matrix"><thead><tr><th>Cable</th><th>Attachment height<span class="sym">h_c (ft)</span></th><th>Exposure coeff.<span class="sym">K_z(h_c)</span></th><th>Wind pressure, bare<span class="sym">q_W (psf)</span></th><th>Wind pressure, iced<span class="sym">q_Wi (psf)</span></th></tr></thead><tbody>`;
   comps.forEach((cp,i)=>{H+=`<tr><th>C${i+1}</th><td>${n(cp.c.hc,1)}</td><td>${n(cp.KzC,3)}</td><td>${n(cp.qW,2)}</td><td>${n(cp.qWI,2)}</td></tr>`;});
@@ -6981,7 +6988,8 @@ function lprModel(){
         S({id:'n1',label:'First natural frequency',sym:'n_{1}',eq:'\\frac{1}{2\\pi}\\sqrt{\\frac{g\\,\\sum W_{i}y_{i}}{\\sum W_{i}y_{i}^{2}}}',sub:'\\frac{1}{2\\pi}\\sqrt{\\frac{386.1('+N(nat.sWy,4)+')}{'+N(nat.sWy2,6)+'}}',value:nat.n1,unit:'Hz',d:3,note:nat.n1>=1?'rigid (≥ 1 Hz)':'flexible (< 1 Hz)'})]});
       if(inp.gf) T.push({title:'Gust-effect factor, flexible structure',ref:'ASCE 7-22 §26.11.5',steps:[
         S({id:'Gf',label:'Flexible gust-effect factor',sym:'G_{f}',eq:'0.925\\frac{1+1.7I_{\\bar{z}}\\sqrt{g_{Q}^{2}Q^{2}+g_{R}^{2}R^{2}}}{1+1.7g_{v}I_{\\bar{z}}}',sub:'0.925\\frac{1+1.7('+N(inp.gf.Iz,4)+')\\sqrt{3.4^{2}('+N(inp.gf.Q2,4)+')+'+N(inp.gf.gR,3)+'^{2}('+N(inp.gf.R2,4)+')}}{1+1.7(3.4)('+N(inp.gf.Iz,4)+')}',value:inp.gf.Gf,unit:'',d:4}),
-        S({id:'G',label:'G used',sym:'G',eq:'\\max(G,\\,G_{f})',sub:'\\max('+N(inp.Ginput)+',\\,'+N(inp.gf.Gf,3)+')',value:inp.G,unit:'',d:3})]});
+        S({id:'G',label:'G used',sym:'G',eq:'\\max(G,\\,G_{f})',sub:'\\max('+N(inp.Ginput)+',\\,'+N(inp.gf.Gf,3)+')',value:inp.G,unit:'',d:3})].concat(inp.Gcable!==undefined?[
+        S({id:'Gc',label:'G for the cables (G_f with h = H, engineer 2026-11-03)',sym:'G_{cable}',eq:'\\max(G,\\,G_{f}(h = H))',sub:'\\max('+N(inp.Ginput)+',\\,'+N(inp.gfCable.Gf,3)+')',value:inp.Gcable,unit:'',d:3})]:[])});
       if(T.length) subs.push({title:'Dynamic response',items:[lprTopics('dyn',T),{type:'note',text:'Worked in full on the [[tab:loading|Loading tab]] (weights, deflections, and every G_f term).'}]});
     }
     subs.push(...xs(sign?['1']:['1','2','2b','3']));   // LPRX: worked in full (pole: 1, 2, 2b, 3; sign: 1)
