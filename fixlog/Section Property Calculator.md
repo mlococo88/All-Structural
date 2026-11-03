@@ -3000,3 +3000,48 @@ index 56a8a3f..13f8372 100644
   refused; 0 console errors) and `--part secprop` (still passes). Screenshots of the dialog at 1400 and 390 px looked at (no
   sideways scroll). `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
+
+## 2026-11-03 — PR: claude/report-retire-secprop (SPRX: the D11 print report ("Print report" → "Print report — select contents" dialog → `buildPrintReport` → `#printReport`) retired after porting what the Report tab lacked; Print report, Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
+
+### SPRX-1. What the print report printed and the Report lacked, ported   [display] [no result change]
+- **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #715, #718, #722, #724, #726, #728, #729).
+- **Compared:** the print report on origin/main (`SPCUI.buildPrintReport({ noPrint: true })`, `#printReport` in print media, KaTeX annotations read as TeX) against the Report (`#rp-print`, print media) on the branch, with KaTeX and without it. A number counts as present when the Report shows it, or more digits that round to it. Cases (scratch scripts):
+  - def: the default project (W21X62 with a C15X33.9 cap), the dialog's default choice;
+  - c2: title block and notes filled, plate girder PL 16 × 1 / PL 1/2 × 40 / PL 20 × 1-1/4, Q cut at y = 30 in with V = 120 kip, stresses P = 50, M_x = 500, M_y = 20, connection V_y = 120 kip, every dialog box ticked;
+  - c3: mm display, 4 significant figures, L6X4X1/2 with PL 8 × 3/4 (n = 0.5) and a 1 in round hole, vertical Q cut, every box ticked.
+- **Missing before:** 89 / 356 / 379 of 194 / 481 / 576 distinct numbers (def / c2 / c3), besides the print report's section numbers:
+  - the tabs' content the Report does not repeat: the Properties tab (area and centroid, extents, moments of inertia, principal axes, plastic moduli, torsion tables, Mohr's circle values, flexural-torsional and lateral-torsional buckling parameters r̄_o, H, r_ts, kern), the Calc detail tab (parallel-axis tables (a) and (b), centroid, I, section moduli and principal-axes lines, part geometry, weight and coating area, r̄_o / H / r_ts, Wagner β_x, kern), the Plastic tab's PNA lines, the Torsion tab (contacts, J per piece, shear centre and C_w), and, when ticked, the Q & shear flow tab (Q at the cut, Q at stations, shear flow at each connection, connector check), the Stresses tab and the Validation table;
+  - the section drawing (`printSVG`), the Method and assumptions text, the Results summary with the shear-centre rows, the title-block lines Member / description, Client, Parts, Units, the cover line, the front note and the footer;
+  - the references the dialog's choice adds (Roark Table 10.7, AISC 360-16 J2.4 / J3 / Table J2.5, AASHTO LRFD 10th Ed. Art. 6.13.2, Wagner β_x, Megson Eq. 17.14, Boresi & Schmidt).
+- **Ported (anchor `SPRX (2026-11-03): the D11 print report retired`, where the PRINT REPORT block was):**
+  - `spxHarvest(sel)`: each tab the choice includes, built by its own builder exactly as `buildPrintReport` built it (`PRMODE` set: the Parts table once, the parallel-axis table in two parts, every connection; every card open; inputs turned into static text by `printStatic`), in a detached holder.
+  - `spxWalk(root, scope, T)`: reads a built tab in order. A KaTeX formula becomes its TeX (`spxLite`: the built-in renderer's subset, for $…$ in text). Each card title or heading becomes the topic of its first item. Every worked equation line (`.eqb`: title, reference, lines, "where" table, result) is added unless the Report already has the line; with KaTeX it is a step equation, without KaTeX its TeX source (as the tab shows it offline). A table is added when it has a number or a row of text the Report lacks; a note when it has a sentence or a number the Report lacks; a figure when the Report has none with that caption (Mohr's circle is not repeated). Key-value tiles become a two-column table.
+  - `spxRest(model, sel)`: puts each tab's items in a subsection "As printed: <dialog label> — tables, equations, notes and figures" of its Report section (Inputs, Area, centroid and moments of inertia, Plastic moduli, Torsion…), or in a new section in the print report's order (Section drawing, Properties, Q and shear flow, Stresses, Validation, Method and assumptions; `SPX_ORDER`).
+  - `spxResults(keys)`: the Results summary table (same rows, values and format as `spcResultsTable`), each row with a § link to the Report step that works it; the summary notes. In Summary, subsection "Results summary".
+  - `spxAbout(model)`: title block Member / description, Client, Parts, Units; the cover line, the front note ("see §n.k" reads "A § link") and the footer line, in Notes and references → "About this report".
+  - References cited: `spcRefs` for the Report's own topics plus the dialog's choice (Q, stresses, Method).
+  - `spxApply(model)` (called at the end of `sprModel`): the above, then removes a § link into a section an Include box left out (the value stays).
+- **Include boxes** on the report bar (`spxControls` / `spxWire`): the dialog's ten choices (`PR_LABELS`), same defaults (`PR_DEFAULT`: Q, Stresses, Validation off), written to the same saved field `M.ui.print[id]` with `autosave()`, as the dialog did; no new key or format, no migration. A box that is off leaves out that tab's ported content and, for Inputs, Calc detail, Plastic and Torsion, the Report's own sections of that topic (`SPX_OWN`). Summary and Notes and references always print.
+- **After:** in all three cases, with and without KaTeX, every number of the print report is in the Report except the print report's section numbers ("4.2 Centroid" …). Report: 0 unresolved references, 0 duplicate keys, no "NaN" / "undefined". Text the Report does not repeat: "TABLE OF CONTENTS" (the Report has its own contents), the front note's "see §n.k" sentence (reworded), the "Worked in" link labels (the Report links each value), the "Notes and assumptions:" label (the Report says "Project notes (input):").
+
+### SPRX-2. Print report and dialog removed; Print prints the Report from every tab   [display]
+- **Removed:** `openPrintDialog()` (the dialog, `#prOverlay`), `buildPrintReport()`, `printTables()`, `fitPrintWidths()`, `spcPageCSS()`, `spcApplyPageCSS()`, `spcResultsTable()` (replaced by `spxResults`), `PRINT_CSS` and its injection in `spcInit`, the `#printReport{display:none}` rule.
+- **Kept:** `PR_LABELS`, `PR_DEFAULT`, `printSVG`, `PRMODE`, `printStatic`, `SPC_TOOL`, `spcRefs`. The `#prOverlay` print rule and the keydown guard on `$('prOverlay')` stay (no effect now).
+- **Changed:**
+  - "Print report" (header; tooltip updated) → `spxPrintAny()`: shows the Report (`SPX.tab`, not saved: `curTab()` returns it while printing, `M.ui.outTab` is unchanged) and prints it (`SPRP.api.print()`).
+  - An inline `beforeprint` script before `shared/report.js` calls `window.spcPrintPrep` (Ctrl+P / the browser's Print from another tab), so the shared viewer's own `beforeprint` sets the running header and fills the lazy tables.
+  - `afterprint` brings the tab of before back.
+  - The Report's `beforeprint` handler no longer checks `#printReport`.
+  - `buildStress`: the narrow-screen test `!$('printReport')` reads `!PRMODE` (same on screen; the full-size drawing for the Report, as the print report had).
+  - Test hook `SPCUI.buildPrintReport` → `SPCUI.reportModel()` (the Report model).
+  - With input errors (no results) there is no Report; Print prints the page as shown.
+- **Governing provision:** none changed. No formula, factor, unit, code reference or computed value changed (CLAUDE.md §4).
+- **Saved data:** no key or format change (`spc_autosave_v1`, `spc_projects_v1`, `spc_inputTab_v1`, `spc_preventOverlap_v1`). `M.ui.print` keeps its keys and defaults and is written only by an Include box, as by the dialog.
+- **How verified:**
+  - `node tests/check-syntax.mjs "Section Property Calculator.html"`: pass.
+  - origin/main vs branch, def / c2 / c3, with KaTeX: the model and the results `SPCUI.model` / `SPCUI.res` (JSON; part ids normalised in def, they are time-based) identical; the text of all nine output tabs identical; localStorage identical on load, after visiting every tab, and after showing and printing the Report; no console errors.
+  - Print routing from each of the 10 tabs, by `beforeprint` and by the button (20 paths per case): `#rp-print` holds the Report, `body.rp-printing` and the running header are set, the tab of before comes back, localStorage unchanged.
+  - Include boxes: each writes only `M.ui.print` and leaves out its part; 0 unresolved references in every state. One Report build: about 70–90 ms (def).
+  - Screenshots at 1400 and 390 px (no sideways scroll) and the printed PDF (c2, 33 pages) looked at.
+  - `node tests/smoke/list-input.mjs --part secprop,secpropren`: all passed.
+- **Other copies:** none.
