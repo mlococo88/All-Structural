@@ -2079,7 +2079,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
   - `node tests/engine/run.mjs lightpole`: 41 passed. `node tests/smoke/lightpole-anchor-handoff.mjs`: ALL PASS. `node tests/check-syntax.mjs`: all pass.
   - Headless gate test of the rows above.
 
-## 2026-11-03 — PR: claude/lp-shaft-projection (LPPJ: shaft projection above grade p, both code modes)   [§4: new input; formula change at grade when p > 0; p = 0 identical]
+## 2026-11-03 — PR: [#746](https://github.com/mlococo88/All-Structural/pull/746) (LPPJ: shaft projection above grade p, both code modes)   [§4: new input; formula change at grade when p > 0; p = 0 identical]
 - **Engineer's decisions (2026-11-03):** a new input p (ft), the height of the shaft top (base plate) above grade; default 0. In both modes:
   1. Foundation actions at grade: M_F = B·M_base + V_base·p + M_shaftwind, V_F = V_base + V_shaftwind; B (second-order factor) on the pole / post base moment only; used for Broms (H = M_F/V_F), the IBC §1807.3 embedment (P, h), the shaft design, bearing and the drawings. Base plate and anchors keep the actions at the top of the shaft.
   2. The pole / post, fixtures and sign are raised by p for K_z / q_z (IBC) and K_z (LTS). Cables are not raised (heights from the pole base, as before; noted in the steps as slightly unconservative when p > 0).
