@@ -2190,3 +2190,65 @@ function listTables() {
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Entered demands:** the superstructure reactions are already entered directly (Reactions tab, Excel import, superReactions hand-off);
   nothing added.
+
+## 2026-11-03 — PR: claude/report-retire-bsl, PR #728: https://github.com/mlococo88/All-Structural/pull/728 (SLRX: the calculation package (Print → "Print the calculation package": `rptModal`, `rptPrint`, its D11 layout `slReport` / `slPageCSS`) retired after porting what the Report tab lacked; Print, Ctrl+P and the browser's Print print the Report from every tab; the saved chapter / unit choice `P.ui.rpt` kept as the Report's Include boxes; display only, no result change)
+
+### SLRX-1. What the calculation package printed and the Report lacked, ported   [display] [no result change]
+- **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #685, #715, #718, #722, #724); keep the saved section-chooser selection.
+- **Compared:** the package (`rptPrint()` + `slReport()`, `#print-area` in print media) on origin/main against the Report (`#rp-print`, print media) on the branch. Cases (scratch scripts):
+  - full: the default bridge (3 spans, 4 units), every chapter chosen;
+  - c2: project number / names / notes, owner MassDOT, AASHTO-USGS spectrum entered (site class C), Pier 1 in water (design and check floods) with ice; no saved choice;
+  - c3: two spans, Pier 1 a wall pier, every chapter but Ice, Abut. 2 left out;
+  - def: the default bridge, no saved choice.
+- **Missing before:** 1437 / 542 / 137 of 2179 / 1011 / 316 distinct numbers (full / c3 / c2). The Report summarised each unit at its resultant; the package printed the tabs themselves:
+  - the basis table;
+  - Summary, Geometry (and the 3D snapshot), Force distribution;
+  - per unit, every load tab with its load diagrams (Dead load, Earth loads, Live load with the influence line and pedestrian cards, Braking and centrifugal, Wind, Temperature, Water and scour, Ice, Seismic, Vessel and Vehicle collision, Combinations with the concurrent sets);
+  - the governing-effect lines after each unit's Combinations;
+  - the user manual (when chosen);
+  - the cover lines (spans, units in the package, subject, specification line with the MassDOT manual, tool) and the front note on load factors.
+- **Ported:**
+  - `slPkgChapters()` (in place of `rptPrint`, anchor `SLRX (2026-11-03): the calculation package`): the same chapters from the same render functions (`F` map unchanged), in the same order, for the same choice; returns them instead of printing; `P.ui.sel` / `P.ui.tab` restored in `finally`.
+  - `slxSel()` reads the choice from `P.ui.rpt` without writing it. A saved choice is read as the dialog printed it: a chapter missing from `sec` is off, except Governing design forces and Earth loads, which the dialog's wrapper turned on when missing; a missing unit is on. With no saved choice: every chapter but the user manual, every unit. That was the dialog's own default (see Open items).
+  - `slxSet()` (Include box): writes `P.ui.rpt.sec[k]` / `P.ui.rpt.units[i]`, the dialog's field and format, creating it from `slxSel()` when absent, then `autosave()`.
+  - Report script (anchor `SLRX (2026-11-03): the calculation package (Print → "Print the calculation package"`):
+    - `slxAdd(M)`: the part "Calculation package" before References. Each chapter is a section and each unit's chapters one section "(tab chapters)". Each card is a subsection (`slxSubs`). Its content is walked by `slxWalk` into report items: tables (header rows, totals highlighted, long tables open on click and print in full), facts as Item / Value tables, check lines as notes, h3 / h4 as numbered topics, notes and list items, SVG drawings and images as figures.
+    - "Worked in" links and in-text tab references become "see §n.k" to the ported card by the package's rule (`slxFixStr`), else the tab with an in-app link.
+    - Each unit's governing-effect lines (`slResults`) as a table after its Combinations.
+    - Governing design forces keeps the per-unit link to the Combinations.
+    - The cover lines and front note go in "Calculation package" under Project and design basis.
+  - Include boxes on the report bar (`slxControls` / `slxWire`): the dialog's chapters and units.
+- **After:** in all cases every number of the package is in the Report except the package's section numbers. Figures: 34 / 18 / 48 (as the package for full and c3; c2 now carries every chapter). 0 unresolved references, 0 duplicate keys.
+
+### SLRX-2. Package, dialog and its print layout removed; Print prints the Report from every tab   [display]
+- **Removed:**
+  - `rptModal()` and `rptPrint()` (their dialog, `#rpt-modal`, its change / click handlers and `.rpt-cols` CSS);
+  - the package's print CSS (`#print-area`, `.rpt-h1` / `.rpt-h2` / `.rpt-toc`, the `patchReport` print CSS);
+  - the `rptPrint` / `rptModal` wrappers and `splitWideTables()`;
+  - `slReport()`, `slPageCSS()` and its `#print-area` styles;
+  - the first-phase two-tab print (`printReport` body, `#print-head`, `.tab-panel.print` CSS) and the print rule that hid every tab panel.
+- **Kept:** `RPT`, `PER_UNIT`, `SL_REFS`, `slTabName`, `slWk`, `slIn`, `slAppend`, `slGoto`, `slComboLinks`, `slResults`, `govSumHtml`, `v3Snapshot`, `basisExtra`.
+- **Changed:**
+  - Print (header, tooltip added) → `printReport()` → `slrPrintAny()`: shows the Report (`SLR.on`, not saved) and prints it.
+  - An inline `beforeprint` script before `shared/steps.js` calls `slrPrintPrep()`, so Ctrl+P and the browser's Print from another tab print the Report.
+  - `afterprint` brings back the tab of before.
+  - Manual: the Print line now describes the Report.
+- **Governing provision:** none changed. No formula, factor, unit, code reference or computed value changed (CLAUDE.md §4).
+- **Saved data:** no key or format change (`subloads_v1`, `subloads_projects_v1`); `P.ui.rpt` keeps its keys and meaning and is written only by an Include box. The dialog's checkboxes changed `P.ui.rpt` without saving it; an Include box now autosaves it (the same field). `P.ui` is outside Undo.
+- **How verified:**
+  - `node tests/check-syntax.mjs`: pass.
+  - origin/main vs branch, def / c2 / c3:
+    - `combine(k)` of every unit and the input checks identical;
+    - the text of every tab for every unit identical, apart from the Manual's Print sentence;
+    - localStorage identical on load, after visiting every tab and unit, and after showing and printing the Report;
+    - no console errors.
+  - Print routing from each of the 17 tabs and the Report, by `beforeprint` and by the Print button (36 paths per case): `#rp-print` holds the Report, `body.rp-printing` is set, and the tab of before comes back.
+  - Include boxes:
+    - a saved choice from the old dialog (`{govsum, earth, dl}`, Pier 1 off) shows those boxes;
+    - ticking Wind writes only `P.ui.rpt.sec.wind`; ticking a unit writes `units[i]`.
+  - `node tests/smoke/project-library.mjs --tool bsl`: ALL PASS.
+  - `node tests/smoke/phone-layout.mjs --tool bsl`: all passed.
+  - Report render with every chapter: about 0.6 s headless.
+- **Other copies:** none.
+- **Open items (for the engineer):**
+  - On main, a project with no saved choice that opened the Print dialog got the wrapper's default (`sec` = Governing design forces and Earth loads only). Every other chapter was unticked and left out of the package, though the dialog's own default was every chapter but the manual. The Report uses that intended default (every chapter but the manual) when nothing is saved; a saved choice is read exactly as the dialog printed it.
