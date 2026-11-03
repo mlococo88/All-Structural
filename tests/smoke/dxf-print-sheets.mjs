@@ -2,7 +2,8 @@
 // Print sheets (shared/dxf.js SharedDxf.printSheets, 2026-11-03): each tool's Drawings tab "Print sheet" and "Print all sheets" printed
 // headless to PDF with Chromium page.pdf honoring @page (preferCSSPageSize), window.print stubbed (the dialog cannot open headless).
 // Checks per tool:
-//   1. Print sheet: one page, 1224 x 792 pt (17 x 11 in landscape); the sheet's outer border 0.25 in (18 pt) inside the page edges and a known drawn
+//   1. Print sheet: one page, 1224 x 792 pt (17 x 11 in landscape); the sheet's outer border 0.25 in (18 pt) inside the page edges (Steel Bridge
+//      half size: no outer border, the inner border at 18 pt / 27 pt left, on every page) and a known drawn
 //      dimension measured on the PDF (pdftocairo -svg: path coordinates in pt) equal to its full-size value / plot scale k x 72;
 //   2. Print all sheets: one 17 x 11 page per sheet;
 //   3. after printing, the print box and its style are gone; then the page's own print (Ctrl+P / the browser's Print, page.pdf with no
@@ -66,8 +67,10 @@ const TOOLS = {
     n: p => p.evaluate(() => document.querySelectorAll('#dwg_sheet option').length),
     known: p => p.evaluate(() => { const G = SBDDrawings.model(SBDModel.defaultProject()), s = SBDSheets.build(G, null, { paper: 'D' }).sheets.find(q => q.id === 'sec'), dk = G.deck;
       const w = G.ys[G.nb - 1] * 12 + (dk.ohL + dk.ohR) * 12; return { what: `deck slab ${w} x ${dk.ts} in on ${s.title}, D sheet at 1:${s.k}, printed half size (1:${2 * s.k})`, w: w / s.k / 2, h: dk.ts / s.k / 2 }; }),
-    // the printed sheet says it is half size (scale cell and the note under the title block); the outer border at 0.25 / 2 in
-    sheetText: /\(HALF SIZE\)[\s\S]*HALF-SIZE PRINT ON 11 X 17|HALF-SIZE PRINT ON 11 X 17[\s\S]*\(HALF SIZE\)/, border: 9,
+    // the printed sheet says it is half size (scale cell and the note under the title block). SBPS-4 (2026-11-03): no outer border on the
+    // half-size print (it would be 0.25 / 2 in = 9 pt from the page edge); the inner border frames it, 18 pt from the edge (27 pt on the left)
+    sheetText: /\(HALF SIZE\)[\s\S]*HALF-SIZE PRINT ON 11 X 17|HALF-SIZE PRINT ON 11 X 17[\s\S]*\(HALF SIZE\)/,
+    frame: { absent: 9, inner: [27, 18, 1224 - 18, 792 - 18] },
     reportOpen: async p => { await p.click('#tabBar [data-otab="rpt"]'); await p.click('#rp_build'); await p.waitForSelector('.rp-doc .rp-step', { timeout: 180000 }); },
     report: /Steel Bridge|Report/i,
   },
@@ -95,6 +98,15 @@ const TOOLS = {
 };
 
 let fails = 0; const check = (ok, m) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${m}`); if (!ok) fails++; };
+/* T.frame (a print with no outer border): on every page no rectangle at `absent` pt from the page edges, and the inner border at
+   inner = [x0, y0, x1, y1] pt */
+function frameCheck(F, pageRects, what) {
+  const tol = 0.6, e = F.absent, [a, b, c, d] = F.inner;
+  const noOuter = pageRects.filter(Rc => !Rc.some(r => Math.abs(r.x0 - e) < tol && Math.abs(r.y0 - e) < tol && Math.abs(r.x1 - 1224 + e) < tol && Math.abs(r.y1 - 792 + e) < tol)).length;
+  const inner = pageRects.filter(Rc => Rc.some(r => Math.abs(r.x0 - a) < tol && Math.abs(r.y0 - b) < tol && Math.abs(r.x1 - c) < tol && Math.abs(r.y1 - d) < tol)).length;
+  check(noOuter === pageRects.length, `${what}: no outer border at ${e} pt from the page edge on ${noOuter} of ${pageRects.length} page(s)`);
+  check(inner === pageRects.length, `${what}: the inner border at (${a}, ${b})-(${c}, ${d}) pt on ${inner} of ${pageRects.length} page(s)`);
+}
 const want = (arg('--tool') || Object.keys(TOOLS).join(',')).split(',');
 for (const key of want) {
   const T = TOOLS[key]; if (!T) { console.log(`unknown tool ${key}`); fails++; continue; }
@@ -113,8 +125,9 @@ for (const key of want) {
     const P1 = pages(f1);
     check(P1.length === 1 && P1.every(q => Math.abs(q.w - 1224) < 0.5 && Math.abs(q.h - 792) < 0.5), `Print sheet: ${P1.length} page(s), ${P1.map(q => q.w + ' x ' + q.h).join(', ')} pt (expected 1 page 1224 x 792 = 17 x 11 in)`);
     const Rc = rects(f1, 1), tol = 0.6;
-    const e = T.border || 18, outer = Rc.find(r => Math.abs(r.x0 - e) < tol && Math.abs(r.y0 - e) < tol && Math.abs(r.x1 - 1224 + e) < tol && Math.abs(r.y1 - 792 + e) < tol);
-    check(!!outer, `the sheet's outer border ${e / 72} in inside the page edge: (${e}, ${e})-(${1224 - e}, ${792 - e}) pt${outer ? '' : ': not found'}`);
+    if (T.frame) frameCheck(T.frame, [Rc], 'Print sheet');
+    else { const e = T.border || 18, outer = Rc.find(r => Math.abs(r.x0 - e) < tol && Math.abs(r.y0 - e) < tol && Math.abs(r.x1 - 1224 + e) < tol && Math.abs(r.y1 - 792 + e) < tol);
+    check(!!outer, `the sheet's outer border ${e / 72} in inside the page edge: (${e}, ${e})-(${1224 - e}, ${792 - e}) pt${outer ? '' : ': not found'}`); }
     if (T.sheetText) { const t1 = execFileSync('pdftotext', [f1, '-'], { encoding: 'utf8' }); check(T.sheetText.test(t1), `the printed sheet's text matches ${T.sheetText}`); }
     const kw = K.w * 72, kh = K.h * 72, hit = Rc.find(r => Math.abs(r.x1 - r.x0 - kw) < tol && Math.abs(r.y1 - r.y0 - kh) < tol);
     check(!!hit, `to scale: ${K.what}: expected ${kw.toFixed(2)} x ${kh.toFixed(2)} pt (${K.w.toFixed(4)} x ${K.h.toFixed(4)} in)${hit ? `, measured ${(hit.x1 - hit.x0).toFixed(2)} x ${(hit.y1 - hit.y0).toFixed(2)} pt` : ': no such rectangle on the page'}`);
@@ -127,6 +140,7 @@ for (const key of want) {
     await o.p.pdf({ path: f2, preferCSSPageSize: true, printBackground: true });
     const P2 = pages(f2);
     check(P2.length === N && P2.every(q => Math.abs(q.w - 1224) < 0.5 && Math.abs(q.h - 792) < 0.5), `Print all sheets: ${P2.length} pages (sheets ${N}), sizes ${[...new Set(P2.map(q => q.w + ' x ' + q.h))].join(', ')} pt`);
+    if (T.frame) frameCheck(T.frame, P2.map((q, i) => rects(f2, i + 1)), 'Print all sheets');
     await o.p.waitForTimeout(100);
     const gone2 = await o.p.evaluate(() => !document.getElementById('sdx-print') && !document.getElementById('sdx-print-css'));
     check(gone2, 'after printing all: the print box and its style are removed');
