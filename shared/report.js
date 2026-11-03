@@ -293,7 +293,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
 .rp-doc .katex{font-size:1.05em;} .rp-doc .katex .katex-error{color:#DC2626;}
 .st-frac{display:inline-flex;flex-direction:column;vertical-align:middle;text-align:center;font-size:92%;margin:0 2px;} .st-frac>.st-num{border-bottom:1px solid currentColor;padding:0 2px;} .st-frac>.st-den{padding:0 2px;} .st-bar{text-decoration:overline;}
 @media screen{.rp-step .rp-m{padding-top:2pt;padding-bottom:2pt;} .rp-step .rp-m .katex .base{margin:2pt 0;}}   /* equations on screen: a wrapped line clears the one above; a tall fraction stays inside the scroll box */
-#rp-print{display:none;}
+#rp-print{display:none;} .rp-split{display:none;}
 @media (max-width:1000px){.rp-body{grid-template-columns:minmax(0,1fr);} .rp-toc{position:static;max-height:220px;} .rp-doc{padding:14px;}}
 @media screen and (max-width:600px){.rp-go{white-space:normal;} .rp-step{grid-template-columns:minmax(0,1fr);grid-template-areas:"d" "m" "r" "n";} .rp-step .rp-r{white-space:normal;padding-left:0.25in;}}   /* PHN (2026-11-02): phone: a long tab link wraps, and a step's result goes under its equation instead of beside it (both were cut off) */
 @media print{
@@ -315,6 +315,8 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   details.rp-lz>summary{list-style:none;} details.rp-lz>summary::-webkit-details-marker{display:none;}
   .rp-tbl td.rp-ok,.rp-tbl td.rp-hi,.rp-tbl td.rp-ng,.rp-tbl th{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rp-step .rp-m{overflow:visible;}
+  .rp-tw{overflow:visible;} .rp-tbl.rp-fit{zoom:var(--rp-fit,1);}   /* RPTW (2026-11-03): no scroll bar is printed beside a table; a table wider than the page body is scaled to fit it (fitTables) */
+  .rp-tbl.rp-splitsrc{display:none;} .rp-split{display:block;} .rp-blkcap{font-weight:400;font-style:italic;margin:6pt 0 1pt;}   /* RPSP (2026-11-03): a table too wide for 0.80 prints as column blocks (splitTable) */
   .katex,.katex *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .katex .frac-line{border-bottom-color:#000!important;min-height:1px;}
 }`;
   function css() {
@@ -397,18 +399,115 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
     LIVE = { host, doc, art };
     return { doc, print: () => print(doc), jump, go };
   }
+  /* RPTW (2026-11-03): print only. A table whose narrowest layout (min-content) is wider than the page body (letter, 0.6 in side
+     margins in pageCss: 7.3 in, less the table's indent in the report) gets class rp-fit and --rp-fit = 0.98 × body width / table width
+     (2 % for rounding in the zoomed layout); the print CSS zooms it by that factor, so it is scaled to the page instead of clipped (a
+     narrower table wraps its text as before). The screen is unchanged. Sections closed or hidden by the search in the live viewer print
+     open, so they are opened for the measurement and closed again. All tables are measured in one layout pass.
+     RPSP (2026-11-03, engineer): never below FIT_MIN = 0.80 (9.5 pt type → 7.6 pt). A table that would need less is split for print into
+     stacked column blocks (splitTable): each block repeats the first column (the row label) and the header rows, has a caption
+     "Columns 1 and a–b of n (column 1 repeated)", and is as wide as fits at 0.80 or more. The blocks are added after the table
+     (div.rp-split, shown in print only) and the table itself is hidden in print (rp-splitsrc), so the screen and the data are unchanged. */
+  const PAGE_W = 7.3 * 96, FIT_MIN = 0.8;
+  const fitOf = (avail, need) => Math.floor(avail / need * 980) / 1000;
+  function fitTables(root) {
+    if (!root || !root.querySelectorAll) return;
+    (root.matches && root.matches('.rp-doc') ? [root] : Array.from(root.querySelectorAll('.rp-doc'))).forEach(d => {
+      d.querySelectorAll('.rp-tw>.rp-split').forEach(x => x.remove()); d.querySelectorAll('.rp-tw>table.rp-splitsrc').forEach(t => t.classList.remove('rp-splitsrc'));
+      const T = Array.from(d.querySelectorAll('.rp-tw>table.rp-tbl')); if (!T.length) return;
+      const shut = Array.from(d.querySelectorAll('.rp-closed,.rp-hide')).map(e => [e, e.classList.contains('rp-closed'), e.classList.contains('rp-hide')]);
+      shut.forEach(([e]) => e.classList.remove('rp-closed', 'rp-hide'));
+      const w0 = T.map(t => { t.classList.remove('rp-fit'); t.style.removeProperty('--rp-fit'); const w = t.style.width; t.style.width = 'min-content'; return w; });
+      try {
+        const dr = d.getBoundingClientRect(), dc = getComputedStyle(d), x0 = dr.left + (parseFloat(dc.paddingLeft) || 0) + (parseFloat(dc.borderLeftWidth) || 0);
+        const M = T.map(t => { if (!t.getClientRects().length) return null;
+          const need = t.getBoundingClientRect().width, avail = PAGE_W - Math.max(0, t.parentNode.getBoundingClientRect().left - x0);
+          return [need, avail, need > avail + 0.5 && fitOf(avail, need) < FIT_MIN ? colWidths(t) : null]; });
+        const NB = [];   // the column blocks made, [table, avail], measured in a second pass
+        T.forEach((t, i) => { t.style.width = w0[i]; const m = M[i]; if (!m || m[0] <= m[1] + 0.5) return;
+          if (m[2] && splitTable(t, m[2], m[1], NB)) return;
+          t.classList.add('rp-fit'); t.style.setProperty('--rp-fit', String(Math.max(m[2] ? 0.5 : FIT_MIN, fitOf(m[1], m[0])))); });
+        if (NB.length) { NB.forEach(([tb]) => { tb.parentNode.style.display = 'block'; });   // .rp-split is shown in print only
+          const bw = NB.map(([tb]) => { const w = tb.style.width; tb.style.width = 'min-content'; return w; });
+          const need = NB.map(([tb]) => tb.getBoundingClientRect().width);
+          NB.forEach(([tb, avail], k) => { tb.style.width = bw[k]; if (need[k] > avail + 0.5) { tb.classList.add('rp-fit'); tb.style.setProperty('--rp-fit', String(Math.max(0.5, fitOf(avail, need[k])))); } });
+          NB.forEach(([tb]) => { tb.parentNode.style.removeProperty('display'); }); }
+      } finally {
+        T.forEach((t, i) => { t.style.width = w0[i]; });
+        shut.forEach(([e, c, h]) => { if (c) e.classList.add('rp-closed'); if (h) e.classList.add('rp-hide'); });
+      }
+    });
+  }
+  /* the cells of a table row by row with their first column and span; colWidths: each column's width (from its one-column cells) */
+  const grid = t => Array.from(t.rows).map(r => { let c = 0; return Array.from(r.cells).map(td => { const sp = Math.max(1, td.colSpan || 1), o = { td, c, sp }; c += sp; return o; }); });
+  function colWidths(t) {
+    const G = grid(t), n = Math.max(0, ...G.map(r => r.reduce((s, o) => s + o.sp, 0))), w = new Array(n).fill(0);
+    G.forEach(r => r.forEach(o => { if (o.sp === 1) w[o.c] = Math.max(w[o.c], o.td.getBoundingClientRect().width); }));
+    return w;
+  }
+  /* splitTable(t, w, avail, NB): column 1 plus further columns, block after block, each block fitting at FIT_MIN or more; as few blocks as
+     that allows, with the columns shared out evenly by width. false (not split) when the table has fewer than 3 columns, a column of
+     unknown width, or column 1 with one more column does not fit at FIT_MIN. */
+  function splitTable(t, w, avail, NB) {
+    const n = w.length, lim = avail * 0.98 / FIT_MIN; if (n < 3 || w.some(x => !(x > 0))) return false;
+    const cut = L => { const B = []; let a = 1;   // blocks of column 1 + columns a..b, each at most L wide (null if one column alone is wider)
+      while (a < n) { let b = a, sum = w[0] + w[a]; if (sum > L) return null; while (b + 1 < n && sum + w[b + 1] <= L) sum += w[++b]; B.push([a, b]); a = b + 1; }
+      return B; };
+    let B = cut(lim); if (!B || B.length < 2) return false;
+    // balance: the narrowest limit that still gives the same number of blocks, so the last block is not a stub
+    const k = B.length, tot = w.slice(1).reduce((x, y) => x + y, 0);
+    for (let L = w[0] + tot / k; L < lim; L += 4) { const C = cut(L); if (C && C.length <= k) { B = C; break; } }
+    const G = grid(t), box = document.createElement('div'); box.className = 'rp-split';
+    B.forEach(([a, b], k) => {
+      const tb = document.createElement('table'); tb.className = 'rp-tbl rp-blk' + (t.classList.contains('rp-wide') ? ' rp-wide' : '');
+      const sec = { THEAD: null, TBODY: null, TFOOT: null };
+      G.forEach((row, ri) => { const tr0 = t.rows[ri], p = tr0.parentNode, tag = p && /^T(HEAD|BODY|FOOT)$/.test(p.tagName) ? p.tagName : 'TBODY';
+        if (!sec[tag]) { sec[tag] = document.createElement(tag.toLowerCase()); }
+        const tr = document.createElement('tr'); if (tr0.className) tr.className = tr0.className;
+        row.forEach(o => { const ov = (o.c === 0 ? 1 : 0) + Math.max(0, Math.min(b, o.c + o.sp - 1) - Math.max(a, o.c) + 1); if (!ov) return;
+          const td = o.td.cloneNode(true); if (ov > 1) td.colSpan = ov; else td.removeAttribute('colspan'); tr.appendChild(td); });
+        sec[tag].appendChild(tr); });
+      ['THEAD', 'TBODY', 'TFOOT'].forEach(x => { if (sec[x]) tb.appendChild(sec[x]); });
+      NB.push([tb, avail]);
+      const cap = document.createElement('p'); cap.className = 'rp-cap rp-blkcap';
+      cap.textContent = k === 0 ? `Columns 1–${b + 1} of ${n}` : `Columns 1 and ${a + 1 === b + 1 ? a + 1 : (a + 1) + '–' + (b + 1)} of ${n} (column 1 repeated)`;
+      box.appendChild(cap); box.appendChild(tb);
+    });
+    t.classList.add('rp-splitsrc'); t.parentNode.appendChild(box);
+    return true;
+  }
+  /* fitBox(box): the print box (#rp-print) is display:none on screen, so it is laid out off screen for the measurement, then hidden
+     again. Each tool's own Ctrl+P handler fills #rp-print itself (SharedReport.html) after this file's beforeprint listener has run, so
+     a MutationObserver on the box fits its tables as soon as it is filled (a microtask: before the browser lays out the print). */
+  function fitBox(box) {
+    const doc = box && box.querySelector('.rp-doc'); if (!doc || box._rpFit === doc) return; box._rpFit = doc;
+    const cs = box.style.cssText;
+    box.style.cssText = 'display:block;position:absolute;left:-100000px;top:0;width:7.3in;visibility:hidden;';
+    try { fitTables(doc); } catch (e) { /* print without scaling */ } finally { box.style.cssText = cs; }
+  }
+  function watchBox(box) {
+    if (!box || box._rpWatch || typeof MutationObserver === 'undefined') return; box._rpWatch = true;
+    new MutationObserver(() => fitBox(box)).observe(box, { childList: true });
+  }
+  function watchBody() {
+    const b = document.body; if (!b) return;
+    watchBox(document.getElementById('rp-print'));
+    new MutationObserver(R => { for (const r of R) for (const n of r.addedNodes) if (n.id === 'rp-print') { watchBox(n); fitBox(n); } }).observe(b, { childList: true });
+  }
   /* print(doc): the whole report alone on the page (every section open, every lazy item filled), the running header and page numbers
      as @page margin boxes (Chromium-based browsers print them; others print the page without). */
   function print(doc) {
     css();
     let box = document.getElementById('rp-print'); if (!box) { box = document.createElement('div'); box.id = 'rp-print'; document.body.appendChild(box); }
     box.innerHTML = `<div class="rp"><article class="rp-doc">${html(doc, { lazy: false })}</article></div>`;
+    watchBox(box); fitBox(box);   // RPTW
     setPage(doc); document.body.classList.add('rp-printing');
     if (typeof window.print === 'function') setTimeout(() => window.print(), 50);
   }
   if (typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('beforeprint', () => { if (document.body.classList.contains('rp-printing')) return;   // Ctrl+P while the Report tab shows
-      if (LIVE && LIVE.host.isConnected && LIVE.host.querySelector('.rp') && LIVE.host.offsetParent !== null) { fillLazy(LIVE.art, LIVE.doc); setPage(LIVE.doc); } });
+      if (LIVE && LIVE.host.isConnected && LIVE.host.querySelector('.rp') && LIVE.host.offsetParent !== null) { fillLazy(LIVE.art, LIVE.doc); setPage(LIVE.doc); try { fitTables(LIVE.art); } catch (e) { /* RPTW: print without scaling */ } } });
+    if (typeof document !== 'undefined') { if (document.body) watchBody(); else document.addEventListener('DOMContentLoaded', watchBody); }   // RPTW
     window.addEventListener('afterprint', () => { document.body.classList.remove('rp-printing'); setPage(null); const b = document.getElementById('rp-print'); if (b) b.innerHTML = ''; });
   }
 

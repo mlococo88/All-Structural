@@ -47,7 +47,7 @@ node tests/compare.mjs --tool st --a a8bf5e7:stgirder.html --payload all      # 
 node tests/smoke/steel-bridge-report.mjs
 
 # Spread Footing: the page itself never scrolls in the two-panel layout (links, scrollIntoView, focus, wheel, touch; 3 window sizes)
-node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex, plotly, three>]
+node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex, plotly, three; default tests/libs>]
 
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
@@ -197,7 +197,7 @@ None of these contain personal data; they are the tools' own examples.
 
 ## Libraries (`libs/`)
 
-`libs/MANIFEST.json` maps each CDN URL the bridge-suite tools load (index, lldf, psbeam, stgirder, GirderDetail and its Preliminary sizing page) to a local copy at the **exact pinned version**. The copies were taken from the npm package of the same version (`npm pack`). A CDN copy can differ from the npm copy in a header comment or source-map line, but not in code. Total ≈ 14 MB.
+`libs/MANIFEST.json` maps each CDN URL the bridge-suite tools load (index, lldf, psbeam, stgirder, GirderDetail and its Preliminary sizing page) to a local copy at the **exact pinned version**. The copies were taken from the npm package of the same version (`npm pack`). A CDN copy can differ from the npm copy in a header comment or source-map line, but not in code. Total ≈ 31 MB.
 
 | Folder | npm package | License | Used by |
 |---|---|---|---|
@@ -210,7 +210,24 @@ None of these contain personal data; they are the tools' own examples.
 | `katex@0.16.9` | katex 0.16.9 (js, css, woff2 fonts) | MIT | index, psbeam, stgirder |
 | `chart.js@4.4.1` | chart.js 4.4.1 (`dist/chart.umd.js`) | MIT | index |
 
-Each folder has the package's `LICENSE`. Not included: Pyodide and ezdxf (GirderDetail's DXF export only; very large), and libraries of tools outside the bridge suite. To test another tool offline, add its libraries the same way (`npm pack <pkg>@<exact version>`, copy the file, add a route) and keep the version identical to the tool's tag.
+Added 2026-11-03 (the versions the other tools pin, so their headless tests need no copies outside the repository):
+
+| Folder | npm package | License | Used by |
+|---|---|---|---|
+| `plotly.js@2.35.2` | plotly.js-dist-min 2.35.2 | MIT | Spread Footing, abutment_calculator, elastomeric_design_module, ASCE7-16 Load Generator, Retaining Wall Designer |
+| `plotly.js@2.32.0` | plotly.js-dist-min 2.32.0 | MIT | Pile Designer, Concrete Beam Capacity, Base Plate & Anchor Designer |
+| `plotly.js-basic@2.27.0`, `@2.35.2`, `@3.7.0` | plotly.js-basic-dist-min, same versions | MIT | Shear and Moment Diagrams; Timber Beam Check, Steel Beam Design; Bridge Geometry |
+| `katex@0.16.11` | katex 0.16.11 (js, css, woff2 fonts, auto-render) | MIT | Spread Footing, Concrete Beam Capacity, Base Plate, Timber, Steel Beam Design, Section Property Calculator, abutment_calculator, elastomeric_design_module |
+| `three@0.160.0` | three 0.160.0 (`build/three.min.js`) | MIT | Spread Footing, Concrete Beam Capacity, Base Plate |
+| `react@18.3.1`, `react-dom@18.3.1` | react, react-dom 18.3.1 | MIT | Pile Designer |
+| `leaflet@1.9.4`, `proj4@2.11.0` | leaflet 1.9.4 (dist js, css, images), proj4 2.11.0 (`dist/proj4.js`) | BSD-2-Clause, MIT | Bridge Geometry |
+| `exceljs@4.4.0` | exceljs 4.4.0 (`dist/exceljs.min.js`) | MIT | ASCE7-16 Load Generator, Steel Beam Design |
+| `pdfjs-dist@3.11.174` | pdfjs-dist 3.11.174 (`pdf.min.js`, `pdf.worker.min.js`) | Apache-2.0 | Base Plate (jsDelivr), Pile Designer (cdnjs pdf.js) |
+| `xlsx@0.18.5` | xlsx 0.18.5 (`dist/xlsx.full.min.js`) | Apache-2.0 | Bridge Substructure Loading, Gusset Plate Rating |
+
+Also added: `mathjax@3.2.2/es5/tex-chtml.js` with its `output/chtml/fonts/woff-v2` (Retaining Wall Designer), three r128's `CSS2DRenderer.js`, and routes for the other URLs of versions already here (cdn.plot.ly and jsDelivr Plotly 2.27.0, unpkg / jsDelivr three 0.128.0). Still not included: the Tailwind Play CDN script (`cdn.tailwindcss.com/3.4.5`, Pile Designer; not an npm release) and the files MathJax fetches on demand (speech-rule-engine, wicked-good-xpath).
+
+Each folder has the package's `LICENSE`. Not included: Pyodide and ezdxf (GirderDetail's DXF export only; very large), and libraries of tools outside the bridge suite. When a tool pins a new version, add it the same way (`npm pack <pkg>@<exact version>`, copy the file, add a route) and keep the version identical to the tool's tag.
 
 ## Notes
 

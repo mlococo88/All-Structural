@@ -4123,7 +4123,7 @@ Engineer-approved PR 3 of the independent review of the "Seymour Platform Founda
 
 ### How verified
 - Headless Chromium, origin/main vs the branch, pinned KaTeX 0.16.11 / Plotly 2.35.2 / three 0.160.0. Deep diff of `R` and `P2`: default, review, review with the option on, #684 cases (8 #8, 12 #5, 9 #8 h 2.5 ft), direct mode: only new fields (`dev`, `pedShear`, `xties`, `punchGroup`, `dowels[].countDiff`). Report: 0 KaTeX errors, no NaN / undefined / `§?` / literal `[[`; 0 console errors.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
 - **Saved data:** new input `mat.ldExcess` ('off' | 'on'); saves without it read as 'off' (the reduction not taken, as before). No key or format change.
 - **Other copies:** none.
 - **Open items (questions):**
@@ -4175,7 +4175,7 @@ Engineer-approved PR 4 of the independent review of the "Seymour Platform Founda
 - **Deep diff:** headless Chromium, pinned libraries. Origin/main vs the branch on 7 cases: no existing value differs (new display fields only).
 - **Report:** 0 KaTeX errors; no NaN, undefined, `§?` or `[[`; 0 console errors.
 - **Printed PDF of the review case** (`page.pdf` after `beforeprint`): the elevation caption is whole and the labels are stacked; the shear-friction table breaks across pages without a scroll bar.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
 - **Other copies:** none. **Saved data:** no change.
 
 ### Open items
@@ -4247,7 +4247,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - New fields: `reqBotFlex`, `AsFlex`, `flexGov`, `AsMin`, `sDow`, `edgeX`, `edgeY`, `cso`, `ldh.sMin`, `ldh.cso`.
   - No other value moved.
 - **Report:** 0 KaTeX errors; no NaN, undefined, `§?` or `[[`; 0 console errors.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
 - **Saved data:** no key or format change; no new input.
 - **Other copies:** none.
 
@@ -4294,3 +4294,106 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - `node tests/smoke/spread-footing-scroll.mjs --libs …`: PASS. `node tests/smoke/project-library.mjs --tool spreadfooting`: ALL PASS.
 - Line endings unchanged (LF).
 - **Other copies:** none.
+
+## 2026-11-03 — PR: claude/report-print-overflow (PR #733: https://github.com/mlococo88/All-Structural/pull/733) — printed Report: the local table scroll-box rule (SFPR) removed; shared/report.js now does it for every tool (RPTW; display only)
+
+- **Where:** the `<style>` block in the head, anchor `/* SFPR (2026-11-03; review E6)`.
+- **Before:**
+  ```css
+  /* SFPR (2026-11-03; review E6): printed Report: a table's scroll box is not printed as a scroll bar, and the last step of a topic
+     does not go to a page alone */
+  @media print{#rp-print .rp-tw{overflow:visible !important;max-height:none !important} #rp-print .rp-steps>.rp-step:last-child,#rp-print .rp-step:has(+ .rp-top){break-before:avoid}}
+  ```
+- **After:**
+  ```css
+  /* SFPR (2026-11-03; review E6): printed Report: the last step of a topic does not go to a page alone (the table scroll-box rule
+     moved to shared/report.js, RPTW) */
+  @media print{#rp-print .rp-steps>.rp-step:last-child,#rp-print .rp-step:has(+ .rp-top){break-before:avoid}}
+  ```
+- **Why redundant:** `shared/report.js` now prints `.rp-tw{overflow:visible;}` (fixlog/shared-report.md, RPTW). No `.rp-tw` in this tool has a `max-height`. The local rule made wide tables run past the page edge, so Chromium shrank the whole printed report to about 89 %. The shared fix scales only those tables: the resultant table (0.875) and the pedestal table (0.913) on the default project.
+- **Check case:** default project, Report → Print report: before 54 pages at about 89 % scale; after 63 pages at full size, every table inside the page. The same with Ctrl+P.
+- No calculation, saved-data or storage change. The second rule (last step of a topic) is unchanged.
+
+## 2026-11-03 — PR: claude/sf-autocalc (PR #734: https://github.com/mlococo88/All-Structural/pull/734) — "Auto-calculate on change" switch, Re-analyze (Ctrl+Enter), out-of-date marking; plots in hidden output tabs drawn when shown (SFAC; display and workflow only, no result change)
+
+### SFAC. Auto-calculate on change   [no result change]
+- **Problem:** every input edit re-ran the whole analysis and re-render (after the 300 ms typing debounce). Several small edits in a row (e.g. bar sizes and spacings) were slow.
+- **Where:** header (anchor `id="sfdAcChk"`, before `id="btnPrint"`); output panel banner (anchor `id="sfdAcBar"`, before `<h2 … id="sfdRptSum">`); CSS after `.tabpage.active{display:block}` (anchor `#sfdAcBar{`); `recalc()` and `recalcDebounced()` and the new block after it (anchor `const SFAC={key:'sfd_autoCalc_v1'`).
+  - `recalc()`: before `R=computeAll();` added `clearTimeout(rcTimer);sfdSetStale(false);`.
+  - `recalcDebounced()`, before: `clearTimeout(rcTimer);rcTimer=setTimeout(recalc,300);` After: `clearTimeout(rcTimer);if(!SFAC.on){sfdSetStale(true);return;}rcTimer=setTimeout(recalc,300);`
+  - Input edits that called `recalc()` directly now call `sfdAnalyzeReq()` (`recalc()` when on; otherwise mark out of date): pedestal Delete (`state.peds.splice(i,1);buildPedCards();`), Add pedestal (`btnAddPed`), Undo / Redo (`undoApply`), and the two hand-off "Apply" buttons (Steel Beam reactions, foundation loads).
+  - Load, Import JSON, Reset, "Saved projects…" Open and the page load still always analyze.
+- **Behaviour:** checkbox "Auto-calculate on change" (default on = the old behaviour). Off: an edit is still autosaved (`sfd_auto`) and goes on the undo stack; the analysis does not run; `body.sfdStale` is set. That shows the banner "Results out of date — press Re-analyze", enables the header Re-analyze button, and dims / dashes the dashboard chips, warnings, self-consistency checks, every output tab except the User Manual (Schematic … Report, 3D View, Drawings), a ⚠ on those tab buttons, and the Reinforcement-tab A_s / s_max / pedestal bar notes. Re-analyze, Ctrl+Enter (any time) and turning the box back on run `recalc()`.
+- **Print / export while out of date: re-analyze first.** A capture `beforeprint` listener runs `recalc()` before the other print listeners (the `<head>` `sfPrintPrep` listener of #732 and SFRP), so Ctrl+P and the browser's Print print the Report of the new results. A click on the header Print-to-PDF Report runs `recalc()` first and then goes on. "Print report" (Report tab) and "Download DXF" (Drawings tab) are intercepted, re-analyzed, and the click is replayed on the rebuilt button. Export JSON exports inputs only and is unchanged. The tool sends no results hand-off (only the title block, `projectMeta`), so nothing there is marked.
+- **Saved data:** new per-browser UI key `sfd_autoCalc_v1` (`'0'` = off, `'1'` = on, absent = on), named like `sfd_inputTab_v1` / `sfd_dwgSheet_v1`. It is not in the project, the autosave or the export. No existing key or format changed.
+
+### SFAC-P. Plots in hidden output tabs are drawn when their tab or the Report is shown   [display only]
+- **Where:** before `function renderPlots(){` (anchor `const SFPLT={all:false,skip:false};`, `function sfpOn(id)`, `function sfpDrawHidden()`); inside `renderPlots` the five plot guards; in `renderReport()` one line after the `if(!R||R.fatal){…}` line.
+  - Before: `if($('#plot-dcr'))`, `if($('#plot-heat')&&R.govBear…`, `if($('#plot-fs'))`, `const elid='plot-vm-'+dir;if(!$('#'+elid))return;`, `const elid='plot-pm-'+i;if(!$('#'+elid))return;`
+  - After: the same with `sfpOn('plot-dcr')`, `sfpOn('plot-heat')`, `sfpOn('plot-fs')`, `if(!sfpOn(elid))return;` (twice), and `SFPLT.skip=false;` at the top of `renderPlots`.
+  - `renderReport()`: added `sfpDrawHidden();` before `let M;`. Since #732 the Report copies every result tab's Plotly charts (`sfxWalk` → `sfxPlotSvg`), so any skipped plot is drawn (`SFPLT.all`) before the Report reads the tabs; the Report and its printout keep every figure.
+- **Why:** profiling a single bar-spacing edit (headless Chromium, default project) showed Plotly redrawing every plot in every tab, more than half of `recalc()` on a result tab. The tab click already calls `renderPlots()`, so a plot is drawn when its tab is opened.
+- **Timings** (bottom-x bar spacing edited through its input, time inside `recalc()` per edit, mean of 4 edits, two runs, headless Chromium, default project; origin/main → this branch): Schematic tab 431 / 488 → 247 / 200 ms (`renderPlots` 258 / 280 → 0.1 ms); Footing Design tab, whose own two plots are still drawn, 601 → 392 ms (second run; first run noisy, 1159 → 753 ms); Report tab about the same (931 → 905 ms), because the Report needs every plot. With the Report tab open, turning Auto-calculate off is what saves the time. The rest of `recalc()` (`computeAll` about 1 ms, `computePhase2` about 40 ms, the HTML renders) is unchanged.
+
+### How verified
+- `R`, `P2`, dashboard text and the report text (SharedReport.text) compared with origin/main on the default project and the review case (`rev`): harness run with auto on → 0 differences. With auto off, the same edits made through the inputs (bottom-x spacing 10, bottom-y #6, top-x spacing 9, Ped 1 tie spacing 10), then Ctrl+Enter, compared with main making the same edits → 0 differences, identical report and dashboard text, on both cases.
+- Behaviour (headless, 21 checks on each case): out of date after edits with no analysis run; autosave and undo stored; banner and Re-analyze shown; Ctrl+Enter, the button, turning the box on, `beforeprint`, Download DXF, the Report's Print report and the header Print-to-PDF Report (from the Bearing tab) each re-analyze; Undo while off does not analyze; the preference survives a reload and the page analyzes on load. 0 console errors.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
+- **Other copies:** none.
+
+### Open items
+- None.
+
+## 2026-11-03 — PR: claude/sf-dashboard-column (PR #737: https://github.com/mlococo88/All-Structural/pull/737) — Summary dashboard: compact one-line chips, collapsible; a left column on screens 1500 px and wider (SFDC; display only, no result change)
+
+### SFDC. Dashboard as a third panel on the left   [display only]
+- **Problem (engineer):** the summary dashboard (26 check chips, 3–5 lines each) filled the top of the output panel: about 500 px tall at 1366 px wide and 440 px at 1920, 1570 px on a phone. At 1920 px and wider the page (max-width 1600 px) left blank space on both sides.
+- **Where:**
+  - Markup: `<aside id="sfdDashCol" …>` added as the first child of `<div class="main">`. In the output panel, the `<h2 … id="sfdRptSum">Summary Dashboard</h2>` and `<div class="dash" id="dashboard">` are wrapped in `<div id="sfdDashBox">` with a header `<div id="sfdDashHead">` holding the collapse button `#sfdDashTgl`, the same h2 and the NG / REVIEW count `#sfdDashCnt`.
+  - `recalc()`: before `renderDashboard();renderWarnings();renderConsistency();` after `renderDashboard();sfdDashDecorate();renderWarnings();renderConsistency();   /* SFDC */`.
+  - New block before `function renderWarnings(){` (anchor `const SFDC={key:'sfd_dashCollapsed_v1'`): `sfdDashDecorate()`, `sfdDashPlace()`, `sfdDashColl()` and a start-up IIFE.
+  - CSS before `/* ---- user manual ---- */` (anchor `/* SFDC (2026-11-03): compact dashboard`), all under `@media screen`.
+- **Behaviour:**
+  - Each chip is one line: expand button ▸, check name (cut with … if long), a short value, status. The short value is the D/C of the Report summary (`sfdResultRows()`, the same number as the Report's "Summary of results" D/C column; for an FS check D/C = FS_target/FS), or `FS n` from the chip text where there is no D/C (overturning not gated), or nothing (e.g. Contact area, Input validation). Hover (title) shows the name, the full chip text (with the governing combination) and the reference; ▸ expands the chip to show them. NG and REVIEW chips start expanded so the reason is on screen. The expand state is kept by check name for the session (not saved).
+  - A chip click still jumps to its worked section (§6); the ▸ button does not navigate.
+  - Header: "2 NG" / "1 REVIEW" / "no NG" count. The #734 out-of-date styling (dimmed chips) is unchanged and also dims the count.
+  - ≥ 1500 px wide: `sfdDashPlace()` (on load and on a `matchMedia('screen and (min-width:1500px)')` change) moves `#sfdDashBox` into the 280 px left column `#sfdDashCol`, which has the panel height and scrolls on its own (`overflow-y:auto`), so it stays put while the outputs scroll; `.wrap` max-width 1600 → 1892 px (1600 + 280 + 12 gap), and `.inp` width 33 % of the width left after the column, so at 1892 px and wider the input and output panels are exactly as wide as before. The collapse button (« / ») shrinks the column to a 42 px strip with the title written vertically and the NG / REVIEW count.
+  - < 1500 px: the box stays on top of the output panel (after the out-of-date banner); chips in a grid of one-line chips (`minmax(min(250px,100%),1fr)`), "▾ Hide checks" / "▸ Show checks" button. Default project: 186–250 px tall at 1366 (was 504), about 600 px at 390 (was 1569).
+- **Saved data:** new per-browser UI key `sfd_dashCollapsed_v1` (`'1'` = collapsed, `'0'` = open, absent = open), named like `sfd_inputTab_v1` / `sfd_autoCalc_v1`. Not in the project, the autosave or the export. No existing key or format changed.
+- **Report and printing:** unchanged. The chips keep `.cn` / `.cv` / `.cs`, their classes and `data-tab` / `data-sec`; the Report (`sfdResultRows`, the dashboard walk `sfxWalk` → `dash`) reads only those, by class. Printing prints `#rp-print` only (shared/report.js), and the new CSS is screen-only.
+- **Tests:** `tests/smoke/phone-layout.mjs` gets a Spread Footing entry (`sf`: input tabs, output tabs and the Hide / Show checks button at 390 and 768 px). `tests/smoke/spread-footing-scroll.mjs` checks that the dashboard is in the left column at 1920 px and on top below 1500 px, and that chip clicks show the chip's section in the output panel and leave the page scroll at 0.
+
+### How verified
+- Main vs this branch, 10 saved cases (default, review case and 8 others), headless Chromium with the pinned KaTeX / Plotly / three.js, at 1920 and 1366 px: `R`, `P2`, the chip text / status / links, the Report's result rows (`sfdResultRows`), the full Report text, warnings, self-consistency, every output tab's text and every localStorage key and value (apart from the new key) identical; 0 console errors. (Before the max-width was set to 1892 px, Plotly picked other axis ticks on the Pedestal Design P–M plot at 1920 px because the output panel was 5 px wider; that is why the panel widths are kept exact.)
+- Screenshots at 1366, 1600, 1920, 2560 and 390 px, before and after, and collapsed, looked at.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` PASS; `tests/smoke/phone-layout.mjs --tool sf` passes at 390 and 768 px.
+- **Other copies:** none.
+
+### Open items
+- The User Manual (§0 "the summary dashboard at the top of the report", §3.1) still describes the dashboard as at the top; left as is so the tab text stays identical. A wording update can follow if the engineer wants it.
+
+## 2026-11-03 — PR: claude/sf-plotly-guard (PR #738: https://github.com/mlococo88/All-Structural/pull/738) — Report renders when Plotly is not loaded; each chart shows a note instead (SFPN; display only, no result change)
+
+### SFPN. "Plotly is not defined" left the Report empty   [display only]
+- **Problem (regression of #734, SFAC-P):** with Plotly not loaded (offline from `file://`, CDN blocked), `renderReport()` calls `sfpDrawHidden()` → `renderPlots()` before it builds the Report, and the first `Plotly.newPlot` threw "Plotly is not defined": the Report tab stayed empty, and so did the printout (`#rp-print`). Before #734 the same throw happened in `recalc()` whenever a chart was on the open tab (it skipped the rest of `recalc()`: the open Report / Drawings tab refresh and the input-tab notes) and on every tab click (after the tab was shown).
+- **Where:** after `function sfpDrawHidden(){…}` (anchor `const SFP_NA='chart unavailable (Plotly not loaded)';`); inside `renderPlots()` the six calls; in `sfxWalk()` (`const visit=e=>{`) one line before `if(e.matches('.js-plotly-plot')){const s=sfxPlotSvg(e);`.
+  - Added:
+    ```js
+    const SFP_NA='chart unavailable (Plotly not loaded)';
+    function sfpPlot(id,data,layout,cfg){
+     if(typeof Plotly==='undefined'||!Plotly.newPlot){const e=document.getElementById(id);
+      if(e){e.classList.add('sfp-na');e.style.height='auto';e.innerHTML='<p class="note">Chart unavailable (Plotly not loaded): the values are in the tables.</p>';}return;}
+     return Plotly.newPlot(id,data,layout,cfg);}
+    ```
+  - `renderPlots()`: before `Plotly.newPlot('plot-dcr',` / `('plot-heat',` / `('plot-fs',` / `(elid,traces,` / `(elid,[],{font,title:{text:'P-M contour unavailable'` / `(elid,[` (P-M); after: the same arguments with `sfpPlot(` (these are every Plotly call in the tool).
+  - `sfxWalk()` `visit`, added:
+    ```js
+    if(e.matches('.sfp-na')){nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)){T.figs.add(key);push({type:'note',text:cap+': '+SFP_NA+'.'});}return;}   /* SFPN */
+    ```
+- **Behaviour:** with Plotly loaded nothing changes (`sfpPlot` is `Plotly.newPlot`). Without it, each chart box (on its tab) shows "Chart unavailable (Plotly not loaded): the values are in the tables." and the Report has, where the figure would be, a note "<card title, as the figure caption>: chart unavailable (Plotly not loaded)." The paths that draw charts (page load / `recalc()`, a tab click, `renderReport()`'s `sfpDrawHidden`, the print path: `beforeprint` → `recalc()` / `sfPrintPrep` → Report, the LRFD combination selector) all go through `renderPlots()`, so none throws.
+- **Check case:** default project, Plotly blocked (KaTeX and three loaded): before, Report tab empty, no printout built, 9 × "pageerror: Plotly is not defined" (load, tab clicks, Report). After, Report tab and printout render (print text 134 k characters with KaTeX blocked as well); the print text differs from the Plotly-loaded one only where the 7 charts were: Bearing DCR by combination, base pressure heat map, stability FS, x and y shear/moment diagrams, Ped 1 and Ped 2 P-M diagrams, each replaced by its note. `R` identical. No page errors.
+- **How verified:** headless Chromium (tests/lib.mjs, libraries from tests/libs): origin/main vs branch with Plotly loaded: `R`, the Report tab text on opening, after visiting every tab, and the printout (`beforeprint` from the dashboard) identical; every chart drawn by Plotly. With Plotly blocked as in the check case. `node tests/check-syntax.mjs` passes; `node tests/smoke/spread-footing-scroll.mjs` passes with tests/libs only (no `--libs`).
+- **Other copies:** none.
+
+### Open items
+- None.
