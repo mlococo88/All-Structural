@@ -4477,7 +4477,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 - None.
 
-## 2026-11-03 — PR: claude/sfdf-report-nowrap — Report rows: no repeated DCR prefix; the condition on one line (SFDF-N; display only, no result change)
+## 2026-11-03 — PR: claude/sfdf-report-nowrap (PR #742: https://github.com/mlococo88/All-Structural/pull/742) — Report rows: no repeated DCR prefix; the condition on one line (SFDF-N; display only, no result change)
 
 ### SFDF-N. Follow-up to SFDF-R (#741)   [display only]
 - **Problem (engineer):** the Result cell read "DCR 0.30 (within limit); DCR 0.30 OK, but A_s < A_s,min (top x)". The ratio appeared twice.
