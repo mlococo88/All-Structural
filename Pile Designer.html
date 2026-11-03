@@ -17,6 +17,8 @@
 <!-- PDRP: shared worked steps and the shared report viewer for the Report tab (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
 <!-- Plotly -->
 <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
 
@@ -9141,6 +9143,25 @@ async function idbDelete(id) {
     };
   });
 }
+/* PLIB (2026-11-02): Undo / Redo (shared/projects.js history, shared/projects-ui.js buttons and Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z).
+   Display only: snapshots of the inputs I (the LPILE import, the output tab and the open modules are not steps), session only,
+   nothing stored. set = setI() of the step. One step per change: recorded by the input autosave (debounced 500 ms). Opening a
+   project from the library or a file starts a new history; Reset to defaults is a step (it can be undone). PDPL_I mirrors the
+   rendered I so the history reads the inputs outside React. */
+var PDPL = null, PDPL_I = null, PDPL_SET = null, PDPL_NEW = false;
+function pdPlibInit(setI, bu, br) {
+  if (PDPL || !window.SharedProjects || !window.SharedProjectsUI || !bu || !br) return;
+  const h = SharedProjects.history({ get: () => PDPL_I == null ? null : JSON.stringify(PDPL_I),
+    set: t => { PDPL_I = JSON.parse(t); if (PDPL_SET) PDPL_SET(PDPL_I); } });
+  PDPL_SET = setI;
+  SharedProjectsUI.undoRedo(h, { undo: bu, redo: br });
+  h.reset(); PDPL = { h };
+}
+/* PLIB: IndexedDB write errors as text (a full store says so) */
+function pdIdbErr(e, what) {
+  if (window.SharedProjects && SharedProjects.isQuota(e)) return what + " Browser storage is full. Nothing was changed. Use \u2193 Save .json to keep the project, or delete saved projects you no longer need.";
+  return what + " IndexedDB refused the write (private window or blocked site data?). Nothing was changed.";
+}
 function newId() {
   return "p_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 7);
 }
@@ -16131,8 +16152,10 @@ function App() {
   }
 
   // auto-save to localStorage (debounced) on every input change
+  PDPL_I = I;   // PLIB: the history reads the rendered inputs
   useEffect(() => {
     const t = setTimeout(() => {
+      if (PDPL) { if (PDPL_NEW) { PDPL_NEW = false; PDPL.h.reset(); } else PDPL.h.record(); }   // PLIB: one undo step per change
       try {
         if (window.localStorage) {
           window.localStorage.setItem(STORAGE_KEY, JSON.stringify(I));
@@ -16143,6 +16166,9 @@ function App() {
     }, 500);
     return () => clearTimeout(t);
   }, [I]);
+  // PLIB: Undo / Redo buttons (header) wired once to the shared history; React leaves their disabled state to it
+  const pdUndoRef = React.useRef(null), pdRedoRef = React.useRef(null);
+  useEffect(() => { pdPlibInit(setI, pdUndoRef.current, pdRedoRef.current); }, []);
 
   // auto-save the parsed LPILE import (debounced) so plots/comparison/reconciliation
   // survive a reload without re-uploading the file.
@@ -16208,6 +16234,7 @@ function App() {
         if (fmtWarn && !window.confirm(fmtWarn + "\n\nLoad it anyway? Your current inputs will be replaced. (Cancel leaves everything unchanged.)")) return;
         const inc = data && data.inputs ? data.inputs : data; // accept raw or wrapped
         if (inc && typeof inc === "object") {
+          PDPL_NEW = true;   // PLIB: another project, a new undo history
           setI(mergeSavedInputs(inc));
           setLoadNotes(LAST_LOAD_NOTES.slice());
           // restore the LPILE import if the project carried one
@@ -16288,6 +16315,7 @@ function App() {
     const rec = library.find(p => p.id === id);
     if (!rec) return;
     if (window.confirm(`Load "${rec.name}"? This replaces your current inputs (your working session is auto-saved separately).`)) {
+      PDPL_NEW = true;   // PLIB: another project, a new undo history
       setI(mergeSavedInputs(rec.inputs));
       setLoadNotes(LAST_LOAD_NOTES.slice());
       setLpileParse(rec.lpile && rec.lpile.ok ? rec.lpile : null);
@@ -16303,6 +16331,39 @@ function App() {
       await refreshLibrary();
     } catch (e) {
       setLibErr("Could not delete.");
+    }
+    setLibBusy(false);
+  }
+  /* PLIB (2026-11-02): rename / duplicate a saved project. The record is stored again unchanged apart from its name (rename) or its
+     id and name (duplicate: a new id, the same inputs, LPILE import and saved time). Names need not be unique, as before. */
+  async function renameProject(id) {
+    const rec = library.find(p => p.id === id);
+    if (!rec) return;
+    const n = window.prompt(`Rename the saved project "${rec.name}" to:`, rec.name);
+    if (n == null || !n.trim() || n.trim() === rec.name) return;
+    setLibBusy(true);
+    try {
+      await idbPut({ ...rec, name: n.trim() });
+      await refreshLibrary();
+    } catch (e) {
+      setLibErr(pdIdbErr(e, "The project was not renamed."));
+    }
+    setLibBusy(false);
+  }
+  async function duplicateProject(id) {
+    const rec = library.find(p => p.id === id);
+    if (!rec) return;
+    const names = new Set(library.map(p => p.name));
+    let def = rec.name + " (copy)", k = 2;
+    while (names.has(def)) def = rec.name + " (copy " + k++ + ")";
+    const n = window.prompt("Name for the copy:", def);
+    if (n == null || !n.trim()) return;
+    setLibBusy(true);
+    try {
+      await idbPut({ ...JSON.parse(JSON.stringify(rec)), id: newId(), name: n.trim() });
+      await refreshLibrary();
+    } catch (e) {
+      setLibErr(pdIdbErr(e, "The project was not duplicated."));
     }
     setLibBusy(false);
   }
@@ -17947,6 +18008,12 @@ function App() {
   }, /*#__PURE__*/React.createElement("div", {
     className: "pd-hdrBtns no-print"
   }, /*#__PURE__*/React.createElement("button", {
+    type: "button", ref: pdUndoRef, "data-sp": "1", disabled: true,
+    title: "Undo the last input change (Ctrl+Z)"
+  }, "Undo"), /*#__PURE__*/React.createElement("button", {
+    type: "button", ref: pdRedoRef, "data-sp": "1", disabled: true,
+    title: "Redo (Ctrl+Y or Ctrl+Shift+Z)"
+  }, "Redo"), /*#__PURE__*/React.createElement("button", {
     type: "button",
     onClick: () => setDocsOpen(true),
     title: "How this tool checks the pile: methodology and code path"
@@ -18124,6 +18191,16 @@ function App() {
     title: "Load",
     className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
   }, "load"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => renameProject(p.id),
+    title: "Rename",
+    "data-pdlib": "ren",
+    className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
+  }, "ren"), /*#__PURE__*/React.createElement("button", {
+    onClick: () => duplicateProject(p.id),
+    title: "Duplicate",
+    "data-pdlib": "dup",
+    className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-slate-300 text-slate-500 hover:bg-white"
+  }, "dup"), /*#__PURE__*/React.createElement("button", {
     onClick: () => deleteProject(p.id, p.name),
     title: "Delete",
     className: "font-mono-tech text-[9px] px-1.5 py-1 rounded-sm border border-red-200 text-[var(--no)] hover:bg-red-50"
