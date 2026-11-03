@@ -2134,3 +2134,22 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Open item (raised, not changed):** the ASD Beam Calcs tab's own projects dialog has no Rename / Duplicate (Beam Capacity's and the
   Development & Splice tab's have them).
+
+## 2026-11-02 — PR: claude/cbc-asd-rename, PR #721: https://github.com/mlococo88/All-Structural/pull/721 — ASD Beam Calcs tab: Rename / Duplicate in its projects dialog (PLIB)   [display and storage only]
+- **Engineer decision (2026-11-02):** add Rename / Duplicate to the ASD tab's projects dialog, as on the Beam Capacity tab (open item of #714).
+- **Before:** the ASD tab's Open dialog (`renderProjDialog()`, frame `#suite-frame-asd`) listed the saved projects (`asd_v1_projects`,
+  `{ name: { when, data } }`) with a × Delete button only.
+- **Where** (in the srcdoc of `#suite-frame-asd`; edited by script: decode → exact-string edits → re-encode; CRLF kept):
+  - after `let PRJMODE="open", PRJSEL=null;`: `asdPutProjects(p, what)`, `renameProject(oldNm, newNm)`, `duplicateProject(nm)` (anchor
+    `/* PLIB (2026-11-02): Rename / Duplicate in this tab's projects dialog`), the Beam Capacity tab's functions of the same names adapted
+    to this list: Rename moves the item unchanged and keeps its place (a name in use asks before overwriting); Duplicate copies it under
+    "<name> (copy)" (or "(copy 2)" …) with `when` set to now (Beam Capacity stamps its copy's `__savedAt` the same way); a refused write
+    (`lsSet` false: storage full or blocked) shows a message and changes nothing (the whole list is one write).
+  - `renderProjDialog()`, anchor `const acts=el("div","prjActs");`: ✎ Rename and ⧉ Duplicate buttons before × Delete (the row's existing
+    `.prjActs button` style), selecting the renamed / copied item after the change.
+- **Saved data:** `asd_v1_projects` and its item format unchanged; no new key.
+- **How verified (headless, scratch script, two seeded projects):** origin/main vs this branch, the ASD tab's `S` (without `ui`) and `CC`
+  identical on load; Rename: item byte-identical under the new name, the other item unchanged; Duplicate: "Beam B (copy)" with the same
+  `data`, original unchanged; rename onto an existing name asks, Cancel changes nothing; a refused write (setItem throws
+  QuotaExceededError): message shown, storage byte-identical; the renamed project opens with its values. `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
