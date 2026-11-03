@@ -4397,7 +4397,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 
 ### Open items
 - None.
-## 2026-11-03 — PR: claude/sfdc-fail-condition — Dashboard chip short value: the failing condition where the D/C is not what fails; User Manual wording on where the dashboard is (SFDF; display only, no result change)
+## 2026-11-03 — PR: claude/sfdc-fail-condition (PR #740: https://github.com/mlococo88/All-Structural/pull/740) — Dashboard chip short value: the failing condition where the D/C is not what fails; User Manual wording on where the dashboard is (SFDF; display only, no result change)
 
 ### SFDF. A chip that fails for a reason other than its ratio showed a passing D/C next to FAIL   [display only]
 - **Problem (engineer):** since #737 (SFDC) each chip's short value is the D/C from `sfdResultRows()`. A chip that is NG or REVIEW for another reason then read e.g. "Flexure (footing) D/C 0.30 FAIL" (default project: it fails because A_s < A_s,min, top x). Engineer's decision: the short value shows the failing condition; the D/C shows when the chip is expanded. Where the ratio itself is what fails or passes, the D/C stays.
