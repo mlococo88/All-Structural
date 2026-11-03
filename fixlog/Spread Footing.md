@@ -4123,7 +4123,7 @@ Engineer-approved PR 3 of the independent review of the "Seymour Platform Founda
 
 ### How verified
 - Headless Chromium, origin/main vs the branch, pinned KaTeX 0.16.11 / Plotly 2.35.2 / three 0.160.0. Deep diff of `R` and `P2`: default, review, review with the option on, #684 cases (8 #8, 12 #5, 9 #8 h 2.5 ft), direct mode: only new fields (`dev`, `pedShear`, `xties`, `punchGroup`, `dowels[].countDiff`). Report: 0 KaTeX errors, no NaN / undefined / `§?` / literal `[[`; 0 console errors.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and report text identical to origin/main.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
 - **Saved data:** new input `mat.ldExcess` ('off' | 'on'); saves without it read as 'off' (the reduction not taken, as before). No key or format change.
 - **Other copies:** none.
 - **Open items (questions):**
@@ -4175,7 +4175,7 @@ Engineer-approved PR 4 of the independent review of the "Seymour Platform Founda
 - **Deep diff:** headless Chromium, pinned libraries. Origin/main vs the branch on 7 cases: no existing value differs (new display fields only).
 - **Report:** 0 KaTeX errors; no NaN, undefined, `§?` or `[[`; 0 console errors.
 - **Printed PDF of the review case** (`page.pdf` after `beforeprint`): the elevation caption is whole and the labels are stacked; the shear-friction table breaks across pages without a scroll bar.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and report text identical to origin/main.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
 - **Other copies:** none. **Saved data:** no change.
 
 ### Open items
@@ -4247,7 +4247,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - New fields: `reqBotFlex`, `AsFlex`, `flexGov`, `AsMin`, `sDow`, `edgeX`, `edgeY`, `cso`, `ldh.sMin`, `ldh.cso`.
   - No other value moved.
 - **Report:** 0 KaTeX errors; no NaN, undefined, `§?` or `[[`; 0 console errors.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and report text identical to origin/main.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
 - **Saved data:** no key or format change; no new input.
 - **Other copies:** none.
 
@@ -4255,30 +4255,71 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 1. The old print report (`SFD_REFS`) still lists "§7.7.2.3 / §13.3.4 (bar spacing)". It is left for the agent porting that report.
 2. For dowels, the side cover normal to the plane of the hook is taken as the smallest plan distance to a footing side (the hook direction is not an input). A hook turned away from a near edge could use the larger cover.
 
+## 2026-11-03 — PR: claude/report-retire-spreadfooting, PR #732: https://github.com/mlococo88/All-Structural/pull/732 (SFRX: the D11 print report (Print-to-PDF Report / Ctrl+P printing the page in place: `renderPrintHeader`, `sfdPageCSS`) retired after porting what the Report tab lacked; Print-to-PDF Report, Ctrl+P and the browser's Print print the Report from every tab; the manual's "Include this manual" choice kept as an Include box; SFD_REFS bar-spacing citation; display only, no result change)
+
+### SFRX-1. What the print report printed and the Report lacked, ported   [display] [no result change]
+- **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #715, #718, #722, #724, #726, #728, #729, #731).
+- **Compared:** the print report on origin/main (Schematic tab shown, `beforeprint`, print media: the whole body's text plus the KaTeX annotations) against the Report (`#rp-print`, print media) on the branch, with KaTeX and without it. A number counts as present when the Report shows it, or more digits that round to it. Cases (scratch `cases.json`): def (the default project, two pedestals), rev (combined footing B 5 × L 13 × 2 ft, direct qa, epoxy bars, two pedestals with wind loads), sfe (Ped 1 3 × 3 × 1.5 ft, P_D = 270, V_Wx = 115, smooth joint, straight #8 dowels); def again with "Include this manual" ticked.
+- **Missing before:** 78 / 203 / 102 of 505 / 965 / 590 distinct numbers (def / rev / sfe): the result tabs as on screen (tables the Report does not repeat, worked equation blocks of the cards, notes, the Plotly charts and SVG drawings), the dashboard chips, the self-consistency checks, the result line of each dashboard check after each tab (D/C, reference, status), the cover's verdict banner and tool line, the front note, and (when ticked) the User Manual.
+- **Ported (anchor `SFRX (2026-11-03): the D11 print report retired`, after the Report's `beforeprint` handler):**
+  - `sfxWalk(root, scope, T)`: reads a rendered tab (a clone) in order. A KaTeX formula becomes its TeX (`sfxLite`, the built-in renderer's subset). A card title or heading is the topic of its first item. Every worked equation line (`.eq`: title, reference, lines) is added unless the Report already works the line; a line the walk added under another title (the same check for the y-bars) is repeated under its own title. With KaTeX a step equation, without KaTeX its TeX source. A table is added when it has a number or a row of text the Report lacks; a note when it has a sentence or a number the Report lacks; a figure when the Report has none with that caption (Plotly charts as one SVG, `sfxPlotSvg`). A "Worked in" line reads as on screen ("<value> → <tab> · <card>"); the Reinforcement input echo link as printed ("Bars (Reinforcement input): …"). Inputs become static text; buttons and screen-only parts are dropped.
+  - `sfxResults(tab)`: the result lines printed after each tab (`sfdResultRows`, unchanged: same D/C, reference, value and status), a table in subsection "Results — <section>".
+  - `sfxApply(model)` (called by `renderReport`): each tab's items in a subsection "As printed: tables, equations, notes and figures" of its Report section (`SFX_TABS`: dashboard → Summary of results, Schematic → Project and inputs, Load Combinations, Bearing, Stability, Footing Design, Pedestal Design); the User Manual (Include box on), one subsection per part in `MANUAL_ORDER`, before References; "About this report" in References (tool line, verdict, the front note with the units line).
+- **Include box** on the report bar (`sfxControls` / `sfxWire`): "User manual", written to the same saved field `state.manPrint` as the Manual tab's "Include this manual when printing the report" box (kept, and kept in step), with `saveAuto()`. No new key or format, no migration.
+- **After:** in all cases, with and without KaTeX, every number of the print report is in the Report except: the references the Report leaves out by design since SFPR (#725, "references used": AASHTO 11.6.3.3 when no AASHTO eccentricity limit is selected; Vesić 1973/1975, Meyerhof 1953 and AASHTO 10.6.3.1.2a with direct bearing in rev) and one print section number (5.5). Report: 0 unresolved references, 0 duplicate keys. Text not repeated: the print report's contents, section numbers and "see §n.k" labels (the Report has its own contents and § links), the bearing tab's combination list printed from its select (the Report names the governing combination), the Manual tab's footer about the checkbox.
+
+### SFRX-2. Print report removed; Print prints the Report from every tab   [display]
+- **Removed:** `renderPrintHeader()` (and its call in `recalc`), `sfdPageCSS()`, `sfdSecNum()`, `#printHeader`, the D11 `@media print` rules (cover, references, contents, result lines) and the manual's print rules, the page's `beforeprint` / `afterprint` handlers that opened every card, and the manual's own `beforeprint` / `afterprint` handlers.
+- **Kept:** `SFD_REFS`, `sfdResultRows`, `sfdEsc`, the `.wkPrt` / `.wkScr` spans (screen text unchanged), the Manual tab's checkbox.
+- **Changed:**
+  - "Print-to-PDF Report" (tooltip updated) → `sfxPrintAny()`: shows the Report tab (not saved) and prints it (`SFRP.api.print()`).
+  - An inline `beforeprint` script before `shared/report.js` calls `window.sfPrintPrep` (Ctrl+P / the browser's Print from another tab), so the shared viewer's own `beforeprint` handler finds the Report.
+  - `afterprint` brings the tab of before back.
+  - With input errors (no results) there is no Report; Print prints the page as shown.
+- **Saved data:** no key or format change (`sfd_auto`, `sfd_projects`, `bridgeSuite.v1.*`).
+
+### SFRX-3. SFD_REFS bar-spacing citation   [CLAUDE.md §4: code reference; no value change]
+- **Where:** `SFD_REFS`, ACI 318-19 row (anchor `(bar spacing)`), and `sfrRefs()`.
+  - Before: `SFD_REFS` cited "§7.7.2.3 / §13.3.4 (bar spacing)"; `sfrRefs()` replaced it with "§8.7.2.2 with §13.3.3.1 (bar spacing)" for an isolated footing (SFSM, #727) and rebuilt the combined-footing row.
+  - After: `SFD_REFS` cites "§8.7.2.2 with §13.3.3.1 (bar spacing)"; the isolated-footing replacement is removed (no longer needed); the combined-footing replacement anchors on the new text. The Report's references read exactly as before for both footing types.
+- **Provision:** ACI 318-19 8.7.2.2 (s_max = min(2h, 18 in) at critical sections), reached through 13.3.3.1 (isolated two-way footings) and 13.3.4.1 (combined footings). This is the rule the tool computes since #727 (SFSM); the old list's 7.7.2.3 (min(3h, 18 in)) is not used.
+- **Check case (default, h = 24 in):** s_max = min(2·24, 18) = 18.00 in; bottom x-bars #8 @ 9.00 in ≤ 18.00 in OK, before and after. No value changes; only the citation the old list printed.
+
+### How verified
+- `node tests/check-syntax.mjs "Spread Footing.html"`: pass.
+- origin/main vs branch, def / rev / sfe, with KaTeX: `R` and `P2` (JSON) identical; the text of every tab (Schematic, Load Combinations, Bearing, Stability, Footing Design, Pedestal Design, Drawings, Manual, inputs) and the dashboard identical; localStorage identical on load, after visiting every tab, and after showing and printing the Report; no console errors.
+- Print routing from each of the 10 tabs, by `beforeprint` and by the button (20 paths per case): `#rp-print` holds the Report, `body.rp-printing` and the running header are set, the tab of before comes back, localStorage unchanged.
+- Include box: on/off writes only `state.manPrint` (the rest of `sfd_auto` unchanged), adds / removes the User manual section, keeps the Manual tab's box in step; 0 unresolved references either way. One Report build: about 100 ms (def).
+- Screenshots at 1400 and 390 px (no sideways scroll) and the printed PDF (def with the manual, 73 pages) looked at.
+- `node tests/smoke/spread-footing-scroll.mjs --libs …`: PASS. `node tests/smoke/project-library.mjs --tool spreadfooting`: ALL PASS.
+- Line endings unchanged (LF).
+- **Other copies:** none.
+
 ## 2026-11-03 — PR: claude/sf-autocalc — "Auto-calculate on change" switch, Re-analyze (Ctrl+Enter), out-of-date marking; plots in hidden output tabs drawn when shown (SFAC; display and workflow only, no result change)
 
 ### SFAC. Auto-calculate on change   [no result change]
 - **Problem:** every input edit re-ran the whole analysis and re-render (after the 300 ms typing debounce). Several small edits in a row (e.g. bar sizes and spacings) were slow.
-- **Where:** header (anchor `id="sfdAcChk"`, before `id="btnPrint"`); output panel banner (anchor `id="sfdAcBar"`, before `<div id="printHeader">`); CSS after `.tabpage.active{display:block}` (anchor `#sfdAcBar{`); `recalc()` and `recalcDebounced()` and the new block after it (anchor `const SFAC={key:'sfd_autoCalc_v1'`).
+- **Where:** header (anchor `id="sfdAcChk"`, before `id="btnPrint"`); output panel banner (anchor `id="sfdAcBar"`, before `<h2 … id="sfdRptSum">`); CSS after `.tabpage.active{display:block}` (anchor `#sfdAcBar{`); `recalc()` and `recalcDebounced()` and the new block after it (anchor `const SFAC={key:'sfd_autoCalc_v1'`).
   - `recalc()`: before `R=computeAll();` added `clearTimeout(rcTimer);sfdSetStale(false);`.
   - `recalcDebounced()`, before: `clearTimeout(rcTimer);rcTimer=setTimeout(recalc,300);` After: `clearTimeout(rcTimer);if(!SFAC.on){sfdSetStale(true);return;}rcTimer=setTimeout(recalc,300);`
   - Input edits that called `recalc()` directly now call `sfdAnalyzeReq()` (`recalc()` when on; otherwise mark out of date): pedestal Delete (`state.peds.splice(i,1);buildPedCards();`), Add pedestal (`btnAddPed`), Undo / Redo (`undoApply`), and the two hand-off "Apply" buttons (Steel Beam reactions, foundation loads).
   - Load, Import JSON, Reset, "Saved projects…" Open and the page load still always analyze.
 - **Behaviour:** checkbox "Auto-calculate on change" (default on = the old behaviour). Off: an edit is still autosaved (`sfd_auto`) and goes on the undo stack; the analysis does not run; `body.sfdStale` is set. That shows the banner "Results out of date — press Re-analyze", enables the header Re-analyze button, and dims / dashes the dashboard chips, warnings, self-consistency checks, every output tab except the User Manual (Schematic … Report, 3D View, Drawings), a ⚠ on those tab buttons, and the Reinforcement-tab A_s / s_max / pedestal bar notes. Re-analyze, Ctrl+Enter (any time) and turning the box back on run `recalc()`.
-- **Print / export while out of date: re-analyze first.** A capture `beforeprint` listener runs `recalc()` before the other print listeners (Ctrl+P, Print-to-PDF Report). "Print report" (Report tab) and "Download DXF" (Drawings tab) are intercepted, re-analyzed, and the click is replayed on the rebuilt button. Export JSON exports inputs only and is unchanged. The tool sends no results hand-off (only the title block, `projectMeta`), so nothing there is marked.
+- **Print / export while out of date: re-analyze first.** A capture `beforeprint` listener runs `recalc()` before the other print listeners (the `<head>` `sfPrintPrep` listener of #732 and SFRP), so Ctrl+P and the browser's Print print the Report of the new results. A click on the header Print-to-PDF Report runs `recalc()` first and then goes on. "Print report" (Report tab) and "Download DXF" (Drawings tab) are intercepted, re-analyzed, and the click is replayed on the rebuilt button. Export JSON exports inputs only and is unchanged. The tool sends no results hand-off (only the title block, `projectMeta`), so nothing there is marked.
 - **Saved data:** new per-browser UI key `sfd_autoCalc_v1` (`'0'` = off, `'1'` = on, absent = on), named like `sfd_inputTab_v1` / `sfd_dwgSheet_v1`. It is not in the project, the autosave or the export. No existing key or format changed.
 
-### SFAC-P. Plots in hidden output tabs are drawn when their tab is shown   [display only]
-- **Where:** before `function renderPlots(){` (anchor `const SFPLT={all:false,skip:false};`, `function sfpOn(id)`); inside it the five plot guards.
+### SFAC-P. Plots in hidden output tabs are drawn when their tab or the Report is shown   [display only]
+- **Where:** before `function renderPlots(){` (anchor `const SFPLT={all:false,skip:false};`, `function sfpOn(id)`, `function sfpDrawHidden()`); inside `renderPlots` the five plot guards; in `renderReport()` one line after the `if(!R||R.fatal){…}` line.
   - Before: `if($('#plot-dcr'))`, `if($('#plot-heat')&&R.govBear…`, `if($('#plot-fs'))`, `const elid='plot-vm-'+dir;if(!$('#'+elid))return;`, `const elid='plot-pm-'+i;if(!$('#'+elid))return;`
   - After: the same with `sfpOn('plot-dcr')`, `sfpOn('plot-heat')`, `sfpOn('plot-fs')`, `if(!sfpOn(elid))return;` (twice), and `SFPLT.skip=false;` at the top of `renderPlots`.
-- **Why:** profiling a single bar-spacing edit (headless Chromium, default project) showed Plotly redrawing every plot in every tab, about 180 ms of the ~300 ms analysis. The tab click already calls `renderPlots()`, so a plot is drawn when its tab is opened. Before printing (not the Report tab's own print) every plot is drawn (`SFPLT.all`), so the printed pages still hold all plots.
-- **Timings** (bottom-x bar spacing edited through its input, time inside `recalc()` per edit, mean of 4 edits, two runs, headless Chromium, default project; origin/main → this branch): Schematic tab 464 / 485 → 180 / 215 ms (`renderPlots` 274 / 289 → 0.1 ms); Footing Design tab, whose own two plots are still drawn, 613 / 773 → 403 / 405 ms; Report tab 701 / 620 → 351 / 299 ms. The rest of `recalc()` (`computeAll` about 1 ms, `computePhase2` about 40 ms, the HTML renders) is unchanged. Switching tabs also no longer redraws the plots of the other tabs.
+  - `renderReport()`: added `sfpDrawHidden();` before `let M;`. Since #732 the Report copies every result tab's Plotly charts (`sfxWalk` → `sfxPlotSvg`), so any skipped plot is drawn (`SFPLT.all`) before the Report reads the tabs; the Report and its printout keep every figure.
+- **Why:** profiling a single bar-spacing edit (headless Chromium, default project) showed Plotly redrawing every plot in every tab, more than half of `recalc()` on a result tab. The tab click already calls `renderPlots()`, so a plot is drawn when its tab is opened.
+- **Timings** (bottom-x bar spacing edited through its input, time inside `recalc()` per edit, mean of 4 edits, two runs, headless Chromium, default project; origin/main → this branch): Schematic tab 431 / 488 → 247 / 200 ms (`renderPlots` 258 / 280 → 0.1 ms); Footing Design tab, whose own two plots are still drawn, 601 → 392 ms (second run; first run noisy, 1159 → 753 ms); Report tab about the same (931 → 905 ms), because the Report needs every plot. With the Report tab open, turning Auto-calculate off is what saves the time. The rest of `recalc()` (`computeAll` about 1 ms, `computePhase2` about 40 ms, the HTML renders) is unchanged.
 
 ### How verified
 - `R`, `P2`, dashboard text and the report text (SharedReport.text) compared with origin/main on the default project and the review case (`rev`): harness run with auto on → 0 differences. With auto off, the same edits made through the inputs (bottom-x spacing 10, bottom-y #6, top-x spacing 9, Ped 1 tie spacing 10), then Ctrl+Enter, compared with main making the same edits → 0 differences, identical report and dashboard text, on both cases.
-- Behaviour (headless, 19 checks on each case): out of date after edits with no analysis run; autosave and undo stored; banner and Re-analyze shown; Ctrl+Enter, the button, turning the box on, `beforeprint`, Download DXF and Print report each re-analyze; Undo while off does not analyze; the preference survives a reload and the page analyzes on load. Every plot is drawn synchronously by the `beforeprint` listener. 0 console errors.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and report text identical to origin/main.
+- Behaviour (headless, 19 checks on each case): out of date after edits with no analysis run; autosave and undo stored; banner and Re-analyze shown; Ctrl+Enter, the button, turning the box on, `beforeprint`, Download DXF and Print report each re-analyze; Undo while off does not analyze; the preference survives a reload and the page analyzes on load. 0 console errors.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
 - **Other copies:** none.
 
 ### Open items
