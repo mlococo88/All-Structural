@@ -4131,7 +4131,7 @@ Engineer-approved PR 3 of the independent review of the "Seymour Platform Founda
   2. 25.4.10.1 with A_s,req governed by A_s,min (0.0018): R25.4.10.2 says the factor does not apply to development of shrinkage and temperature reinforcement. Keep A_s,req = max(flexure, A_s,min), or use the flexural requirement only, or disallow the option where A_s,min governs?
   3. Dowels: 25.4.10.1 is not applied to the dowels (22.9.5.1 asks for development of f_y where they serve shear friction, 25.4.10.2(b)). Confirm.
 
-## 2026-11-03 — PR: claude/sf-presentation — Report presentation and code basis: relations, substitutions (ΣM_a, M_r / M_o, J_c and c, V_u, laps), rigidity ℓ, elevation figure, printed tables, φ in the inputs, combined-footing citations (13.3.4, 8.6.1.1, 8.7.2.2), references the run uses (SFPR; display and citations only, no result change)
+## 2026-11-03 — PR: claude/sf-presentation — Report presentation and code basis: relations, substitutions (ΣM_a, M_r / M_o, J_c and c, V_u, laps), rigidity ℓ, elevation figure, printed tables, φ in the inputs, combined-footing citations (13.3.4, 8.6.1.1, 8.7.2.2), references the run uses (SFPR; display and citations only, no result change) (PR #725: https://github.com/mlococo88/All-Structural/pull/725)
 
 Engineer-approved PR 4 of the independent review of the "Seymour Platform Foundation" report (section E and items D1, D3). **No computed value changes**: a deep diff of `R` and `P2` (origin/main vs the branch) on default, review, review with the ℓ_d option on, the three #684 cases and direct mode shows only new display fields (`r.maT`, `punch[].detail.paX/paY`). The old print report (`renderPrintHeader`, `SFD_REFS`, `sfdResultRows`) is not touched.
 
