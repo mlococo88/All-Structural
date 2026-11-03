@@ -51,6 +51,7 @@
     upgrade(document);
     new MutationObserver(ms => { if (ms.some(m => m.addedNodes.length)) upgrade(document); }).observe(document.body, { childList: true, subtree: true });
   }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+  if (typeof document === 'undefined') { /* no page (Node test harness): nothing to bind */ }
+  else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
   W.SBDListsUI = { LISTS, upgrade };
 })();

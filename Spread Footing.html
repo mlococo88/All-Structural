@@ -179,6 +179,46 @@ body.sfdStale .tabbar button:not([data-tab="tab-manual"])::after{content:" \26A0
  .row label{width:min(170px,45%)}
  #sfdJumpOut{display:block}
 }
+/* SFDC (2026-11-03): compact dashboard (one line per check), collapsible; on screens >= 1500 px a left column (screen only;
+   the printed Report is built from the Report tab and is unchanged) */
+#sfdDashCol{display:none}
+@media screen{
+ #sfdDashHead{display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap}
+ #sfdDashHead h2{margin:6px 0}
+ #sfdDashTgl{margin:0;padding:1px 7px;font-size:11px}
+ #sfdDashCnt{display:inline-flex;gap:4px;flex-wrap:wrap}
+ #sfdDashCnt span{font-size:10.5px;font-weight:bold;padding:1px 5px;border:1px solid;white-space:nowrap}
+ #sfdDashCnt .sfdCf{color:#b71c1c;background:#fdecea;border-color:#c62828}
+ #sfdDashCnt .sfdCw{color:#8d6e00;background:#fff8e1;border-color:#f9a825}
+ #sfdDashCnt .sfdCp{color:#1b5e20;background:#e8f5e9;border-color:#2e7d32}
+ body.sfdStale #sfdDashCnt{opacity:.45;filter:grayscale(.7)}
+ body.sfdDashColl #dashboard{display:none}
+ .dash{grid-template-columns:repeat(auto-fill,minmax(min(250px,100%),1fr));gap:3px 6px;margin:4px 0 6px 0}
+ .chip{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:5px;padding:2px 5px 2px 2px;min-width:0}
+ .chip .sfdChX{grid-row:1;grid-column:1;margin:0;padding:0 3px;border:none;background:transparent;font-size:10px;color:#345;line-height:1.2}
+ .chip .cn{grid-row:1;grid-column:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+ .chip .sfdChR{grid-row:1;grid-column:3;font-size:11px;white-space:nowrap}
+ .chip .cs{grid-row:1;grid-column:4;font-size:10.5px;white-space:nowrap}
+ .chip .cv,.chip .sfdChRef{grid-column:1/-1;display:none;padding-left:16px;font-size:11px;overflow-wrap:anywhere}
+ .chip .sfdChRef{color:#444;font-style:italic;font-size:10.5px}
+ .chip.sfdOpen .cv,.chip.sfdOpen .sfdChRef{display:block}
+ .chip.sfdOpen .cn{white-space:normal}
+}
+@media screen and (min-width:1500px){
+ .wrap{max-width:1892px}   /* 1600 + 280 + 12: at 1892 px and wider the input and output panels keep their old widths */
+ body.sfdDashWide #sfdDashCol{display:block;flex:0 0 280px;width:280px;height:100%;overflow-y:auto;overflow-x:hidden;position:relative;padding:0 4px 24px 0;box-sizing:border-box}
+ body.sfdDashWide .inp{width:calc((100% - 292px)*.33)}
+ body.sfdDashWide .dash{grid-template-columns:minmax(0,1fr)}
+ body.sfdDashWide #sfdDashHead{position:sticky;top:0;z-index:3;background:#fafafa}
+ body.sfdDashWide.sfdDashColl #sfdDashCol{flex-basis:42px;width:42px;padding-right:0}
+ body.sfdDashWide.sfdDashColl .inp{width:calc((100% - 54px)*.33)}
+ body.sfdDashWide.sfdDashColl #sfdDashHead{flex-direction:column;align-items:center}
+ body.sfdDashWide.sfdDashColl #sfdRptSum{writing-mode:vertical-rl;transform:rotate(180deg);font-size:13px;margin:4px 0;white-space:nowrap}
+ body.sfdDashWide.sfdDashColl #sfdDashCnt{flex-direction:column;align-items:center}
+ body.sfdDashWide.sfdDashColl #sfdDashCnt span{font-size:9.5px;padding:1px 2px;white-space:normal;text-align:center;width:38px}
+ body.sfdDashWide #sfdDashCol::-webkit-scrollbar{width:7px}
+ body.sfdDashWide #sfdDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+}
 /* ---- user manual ---- */
 .manNav{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 14px 0;border-bottom:1px solid #b9c4d0;padding-bottom:8px}
 .manNavBtn{border:1px solid #7a8aa0;background:#e2e8ef;font-size:11.5px;padding:4px 9px;cursor:pointer}
@@ -253,6 +293,7 @@ a.wkA:hover{text-decoration:underline}
 
 <a id="sfdJumpOut" href="#outputPanel" class="noprint">Jump to the results (dashboard and output tabs) &darr;</a>   <!-- SFPH: narrow screens only -->
 <div class="main">
+<aside id="sfdDashCol" class="noprint" aria-label="Summary dashboard"></aside>   <!-- SFDC: wide screens: the dashboard is moved here (sfdDashPlace) -->
 <!-- ============ INPUT PANEL ============ -->
 <div class="inp" id="inputPanel">
 
@@ -421,8 +462,10 @@ a.wkA:hover{text-decoration:underline}
 <!-- ============ OUTPUT PANEL ============ -->
 <div class="out" id="outputPanel">
  <div id="sfdAcBar" class="noprint" role="status">Results out of date &mdash; press Re-analyze (Ctrl+Enter). Auto-calculate is off; the inputs have changed since the results below were computed. <button type="button" id="sfdAcBtn2">Re-analyze</button></div>
- <h2 style="margin-top:0" id="sfdRptSum">Summary Dashboard</h2>
+ <div id="sfdDashBox">   <!-- SFDC: the dashboard and its header; moved into #sfdDashCol on wide screens -->
+ <div id="sfdDashHead"><button type="button" id="sfdDashTgl" class="noprint" aria-controls="dashboard" aria-expanded="true" title="Hide the check list (remembered in this browser)">&laquo;</button><h2 style="margin-top:0" id="sfdRptSum">Summary Dashboard</h2><span id="sfdDashCnt" class="noprint"></span></div>
  <div class="dash" id="dashboard"></div>
+ </div>
  <div id="warnings"></div>
  <div id="consistency"></div>
  <div class="tabbar noprint" id="tabbar">
@@ -1774,6 +1817,59 @@ function renderDashboard(){
   d.appendChild(chip('Structural design','No valid LRFD combo','na',undefined,{tab:'tab-footdes'}));
  }
 }
+/* SFDC (2026-11-03, engineer): compact dashboard; on wide screens (>= 1500 px) a third panel on the LEFT, in the blank space
+   outside the old 1600 px page width; below that it stays on top of the outputs. Display only: the chips (.cn / .cv / .cs, classes,
+   data-tab / data-sec, click-through) are unchanged and the Report reads them as before. Each chip gets an expand button (sfdChX)
+   and a short value (sfdChR: the D/C of the Report summary, sfdResultRows, or the FS shown); the full text (.cv, with the governing
+   combination) and the reference (sfdChRef) show on hover (title) and when expanded (NG / REVIEW chips start expanded). Collapse button: per-browser UI key
+   sfd_dashCollapsed_v1 ('1' = collapsed; absent = open); not in the project, the autosave or the export. */
+const SFDC={key:'sfd_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,open:new Map(),coll:false};
+try{SFDC.coll=localStorage.getItem(SFDC.key)==='1';}catch(e){}
+function sfdDashDecorate(){
+ let rows=[];try{rows=sfdResultRows();}catch(e){rows=[];}
+ const byChip=new Map(rows.map(r=>[r.chip,r]));
+ const plain=h=>{const t=document.createElement('div');t.innerHTML=h||'';return t.textContent;};
+ const cnt={fail:0,warn:0};
+ $$('#dashboard .chip').forEach(c=>{
+  const name=c.querySelector('.cn').textContent,val=c.querySelector('.cv').textContent,r=byChip.get(c);
+  const st=['pass','fail','warn','na'].find(k=>c.classList.contains(k))||'na';if(cnt[st]!=null)cnt[st]++;
+  let short='';
+  if(r&&r.dc!=null&&!isNaN(r.dc))short='D/C '+(isFinite(r.dc)?r.dc.toFixed(2):'∞');
+  else{const m=/FS = ([\d.]+)/.exec(val);if(m)short='FS '+m[1];}
+  const x=document.createElement('button');x.type='button';x.className='sfdChX noprint';
+  x.title='Show the result, governing combination and reference';
+  const sr=el('span','sfdChR',short);
+  c.insertBefore(x,c.firstChild);c.insertBefore(sr,c.querySelector('.cs'));
+  if(r&&r.ref){const rf=el('div','sfdChRef noprint');rf.innerHTML=r.ref;c.appendChild(rf);}
+  const setOpen=o=>{c.classList.toggle('sfdOpen',o);x.setAttribute('aria-expanded',o?'true':'false');x.textContent=o?'▾':'▸';};
+  setOpen(SFDC.open.has(name)?SFDC.open.get(name):(st==='fail'||st==='warn'));   /* NG / REVIEW chips open by default: the reason shows */
+  x.addEventListener('click',ev=>{ev.preventDefault();ev.stopPropagation();const o=!c.classList.contains('sfdOpen');SFDC.open.set(name,o);setOpen(o);});
+  c.title=name+': '+val+(r&&r.ref?'\nReference: '+plain(r.ref):'')+(c.title?'\n'+c.title:'');
+ });
+ const n=$('#sfdDashCnt'),any=$$('#dashboard .chip').length;
+ if(n)n.innerHTML=(cnt.fail?'<span class="sfdCf">'+cnt.fail+' NG</span>':'')+(cnt.warn?'<span class="sfdCw">'+cnt.warn+' REVIEW</span>':'')+(any&&!cnt.fail&&!cnt.warn?'<span class="sfdCp">no NG</span>':'');
+}
+function sfdDashPlace(){
+ const box=$('#sfdDashBox'),col=$('#sfdDashCol'),out=$('#outputPanel'),bar=$('#sfdAcBar');if(!box||!col||!out)return;
+ const wide=!!(SFDC.mq&&SFDC.mq.matches);
+ document.body.classList.toggle('sfdDashWide',wide);
+ if(wide){if(box.parentNode!==col)col.appendChild(box);}
+ else if(box.parentNode!==out)out.insertBefore(box,bar?bar.nextSibling:out.firstChild);
+ sfdDashColl(SFDC.coll,false);
+}
+function sfdDashColl(v,save){
+ SFDC.coll=!!v;document.body.classList.toggle('sfdDashColl',SFDC.coll);
+ const t=$('#sfdDashTgl'),wide=document.body.classList.contains('sfdDashWide');
+ if(t){t.setAttribute('aria-expanded',SFDC.coll?'false':'true');
+  t.innerHTML=wide?(SFDC.coll?'&raquo;':'&laquo;'):(SFDC.coll?'&#9656; Show checks':'&#9662; Hide checks');
+  t.title=(SFDC.coll?'Show':'Hide')+' the check list (remembered in this browser)';}
+ if(save){try{localStorage.setItem(SFDC.key,SFDC.coll?'1':'0');}catch(e){}}
+}
+(function(){
+ const t=$('#sfdDashTgl');if(t)t.addEventListener('click',()=>sfdDashColl(!SFDC.coll,true));
+ if(SFDC.mq){if(SFDC.mq.addEventListener)SFDC.mq.addEventListener('change',sfdDashPlace);else if(SFDC.mq.addListener)SFDC.mq.addListener(sfdDashPlace);}
+ sfdDashPlace();
+})();
 function renderWarnings(){
  const w=$('#warnings');w.innerHTML='';
  R.W.forEach(x=>w.appendChild(el('div',x.lvl==='err'?'errbox':'warnbox',(x.lvl==='err'?'<b>ERROR:</b> ':'<b>Warning:</b> ')+x.msg)));
@@ -3968,7 +4064,7 @@ function recalc(){
  R=computeAll();
  P2=R.fatal?null:computePhase2(R);
  if(P2&&!P2.noCombo)P2.dev=sfdDevAll();   /* SFDV */
- renderDashboard();renderWarnings();renderConsistency();
+ renderDashboard();sfdDashDecorate();renderWarnings();renderConsistency();   /* SFDC */
  if(!R.fatal){renderSchematic();renderCombos();renderBearing();renderStability();renderFootingDesign();renderPedestalDesign();renderPlots();}
  else{['tab-schem','tab-combos','tab-bearing','tab-stab','tab-footdes','tab-peddes'].forEach(id=>{$('#'+id).innerHTML='';});}
  if($('#tab-3d').classList.contains('active')||$('#v3dwrap'))renderView3D();

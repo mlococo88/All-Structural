@@ -26,6 +26,7 @@ const TOOLS = {
   cbc: { file: 'Concrete Beam Capacity.html', tabs: '.suite-tab', wait: 6000, tabWait: 1500 },
   aci: { file: 'ACI Rebar Development Length.html', tabs: '[role=tab], .tab-btn, .itab, .tab, [data-tab]', wait: 3000, tabWait: 600 },
   bpad: { file: 'BasePlateAnchorDesigner.html', tabs: '[role=tab], .tab-btn, .itab, .tab, [data-tab], .otab', wait: 5000, tabWait: 800 },
+  sf: { file: 'Spread Footing.html', tabs: '#sfdInTabs .sfdInTab, #tabbar button, #sfdDashTgl', wait: 3000, tabWait: 800 },   // SFDC (2026-11-03): the dashboard's Hide / Show checks button too
   index: { file: 'index.html', tabs: '#root>div>header+div>nav>button', wait: 8000, tabWait: 1200 },   // the frames' own tabs: see the PHN fixlog entry (checked once by hand)
 };
 
