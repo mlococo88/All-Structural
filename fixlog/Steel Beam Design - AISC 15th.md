@@ -2392,7 +2392,7 @@ function runBenchmarks(){
   `list-input.mjs --part sbeam`, `node tests/check-syntax.mjs`: pass.
 - **Saved data:** none changed. **Formulas, factors, units, code references:** none changed (§4 does not apply).
 
-## 2026-11-03 — PR: claude/report-retire-sbeam (SBRX: the print report (header "Print report", its section dialog, `sbdReportDOM`, the Ctrl+P copy) retired after porting what the Report tab lacked; "Print report", Ctrl+P and the browser's Print print the Report from every tab; batch mode keeps its own batch print; display only, no result change)
+## 2026-11-03 — PR: claude/report-retire-sbeam, PR #724: https://github.com/mlococo88/All-Structural/pull/724 (SBRX: the print report (header "Print report", its section dialog, `sbdReportDOM`, the Ctrl+P copy) retired after porting what the Report tab lacked; "Print report", Ctrl+P and the browser's Print print the Report from every tab; batch mode keeps its own batch print; display only, no result change)
 
 ### SBRX-1. What the print report printed and the Report lacked, ported   [display] [no result change]
 - **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #672 … #718). The input-binding fix this depends on (#703, #720) is on main.
