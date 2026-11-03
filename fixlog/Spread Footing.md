@@ -4314,7 +4314,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Check case:** default project, Report → Print report: before 54 pages at about 89 % scale; after 63 pages at full size, every table inside the page. The same with Ctrl+P.
 - No calculation, saved-data or storage change. The second rule (last step of a topic) is unchanged.
 
-## 2026-11-03 — PR: claude/sf-autocalc — "Auto-calculate on change" switch, Re-analyze (Ctrl+Enter), out-of-date marking; plots in hidden output tabs drawn when shown (SFAC; display and workflow only, no result change)
+## 2026-11-03 — PR: claude/sf-autocalc (PR #734: https://github.com/mlococo88/All-Structural/pull/734) — "Auto-calculate on change" switch, Re-analyze (Ctrl+Enter), out-of-date marking; plots in hidden output tabs drawn when shown (SFAC; display and workflow only, no result change)
 
 ### SFAC. Auto-calculate on change   [no result change]
 - **Problem:** every input edit re-ran the whole analysis and re-render (after the 300 ms typing debounce). Several small edits in a row (e.g. bar sizes and spacings) were slow.
