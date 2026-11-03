@@ -4021,3 +4021,56 @@ Engineer-approved fixes from the independent review of the "Seymour Platform Fou
 - **Checked, unchanged:** 6.2.5.1(a), 6.2.5.2(b), Fig. R6.2.5.1; 8.4.4.2.2, 8.4.4.2.3, R8.4.4.2.3; 22.9.4.2 (Table 22.9.4.2), 22.9.4.4 (Table 22.9.4.4), 22.9.4.5, 22.9.4.6.
 - **Not changed (raised):** "IBC 2021 1610 overburden" (effective soil cover step and references): IBC 1610 is soil lateral loads (2021: soil lateral and uplift loads), not the weight of soil cover. A dead-load article would fit better, but the full 2021 IBC is not available to confirm its number.
 
+
+## 2026-11-02 — PR: claude/sf-dowel-review-punch-centroid — Dowel development REVIEW where it serves shear friction only; punching moment about the critical-section centroid; soil-cover citation; top-mat order confirmed (SFDR, SFPC, SFCJ; calculation change) (PR #716: https://github.com/mlococo88/All-Structural/pull/716)
+
+Engineer's answers (2026-11-02) to the questions of PR #710.
+
+### SFDR. Dowel development: NG only where interface tension needs it   [pass / fail logic; CLAUDE.md §4]
+- **Engineer:** the dowel development check is NG only where tension needs the development (A_s,req > 0, interface tension). Where the dowels serve shear friction only, the shortfall is REVIEW (proportional credit, SFPD) and the shear-friction D/C decides.
+- **Where:** `sfdDowelCheck`, before `return o`.
+  - Before: `o.ok=o.asOK&&o.tenOK&&o.ftgOK&&o.projOK;`
+  - After:
+    ```
+    const LreqPF=o.cont?0:Math.max(o.lc,o.tension?o.lst:0);
+    o.ftgOKpf=o.tension?o.ftgOK:true;
+    o.projOKpf=o.cont?true:(projIn!==null?(projIn>=LreqPF-1e-9&&projIn<=o.hAvail+1e-9):(LreqPF<=o.hAvail+1e-9?true:(o.tension?o.ld.Ld:o.Ldc)<=o.hAvail+1e-9));
+    o.sfReview=!!(o.sfNeed&&!o.tension&&(!o.ftgOK||!o.projOK));
+    o.ok=o.asOK&&o.tenOK&&o.ftgOKpf&&o.projOKpf;
+    o.status=!o.ok?'fail':(o.sfReview?'review':'pass');
+    ```
+    `o.ftgOK` / `o.projOK` (development as detailed, with the tension lap where `devTen`) are unchanged and still drive the displayed lengths and the shear-friction credit. The compression lap / ℓ_dc and an entered projection beyond h − c still fail.
+  - Display: dashboard / summary chip "Dowels (tension, laps)": REVIEW (`warn`) with "shear-friction development short (proportional credit η) — shear-friction D/C decides". Report §6.7: the footing-side step carries a pass / fail flag only with interface tension (else a REVIEW note linking the credit step); the projection step's flag is `projOKpf`, with a REVIEW note. Footing Design 5.6 (2c), (3): "REVIEW (shear friction only: proportional credit)" in place of NG. Drawings: "(REVIEW)" in place of "(NG)" on the footing embedment note when there is no interface tension.
+- **Check cases:**
+  - #684 case with 9 #8 straight separate dowels and h = 2.5 ft (no interface tension; φμN_u alone does not carry V_u): footing ℓ_d 28.46 > 25.00 in; pedestal lap does not fit, full height ℓ_d 28.46 > h − c = 28.00 in; compression ℓ_dc 18.97 ≤ 28.00 OK; A_s 7.11 ≥ 0.005A_g 6.48 OK. η = min(25.00/28.46, 28.00/28.46) = 0.878; shear friction DCR 0.412 OK. Badge: **FAIL → REVIEW** ("Ped 1: shear-friction development short (REVIEW: proportional credit 0.88) — shear-friction D/C decides").
+  - Review case: **FAIL, unchanged.** Both pedestals have interface tension (A_s,req = 0.003 in² at Ped 1, 3.54 in² at Ped 2), so their tension development (ℓ_d 25.61 and 42.69 > 19.25 in) stays NG; Ped 1 also has A_s,dow 12.32 < 0.005A_g 13.44.
+  - Default project: no change (dowels developed).
+
+### SFPC. Punching: transferred moment about the critical-section centroid   [calculation change; CLAUDE.md §4]
+- **Where:** `computePhase2`, punching, after `const JcY=pa_Y.Jc, cExtY=pa_Y.cExt;`.
+  - Before: `const MuY=Math.abs(pl.myPed), MuX=Math.abs(pl.mxPed);`
+  - After:
+    ```
+    const xcG=p.x+(pa_X.xbar||0)/12, ycG=p.y+(pa_Y.xbar||0)/12, xAG=(cx0+cx1)/2, yAG=(cy0+cy1)/2, Nnet=pl.P-relief+bodyIn;
+    const MscX=pl.mxPed+pl.P*(p.y-ycG)-(pl.P-Nnet)*(yAG-ycG), MscY=pl.myPed+pl.P*(p.x-xcG)-(pl.P-Nnet)*(xAG-xcG);
+    const MuY=Math.abs(MscY), MuX=Math.abs(MscX);
+    ```
+    Free body of the region inside the critical section, moments about its centroid (x_c, y_c): the pedestal moment, P_u at the pedestal centre, and the soil relief less the body forces (P_u − N) at the centroid of the clipped critical area. Interior perimeter: y_c = y_A = y_ped, unchanged. `detail` gets `MxPed, MyPed, Pu, Nnet, dyc, dxc, dyA, dxA`. The γ_f flexural-transfer check (`gfChk`) uses the same M_sc.
+  - Display: Report §6.4 steps "Moments at the pedestal base" and "Moment transferred about the critical-section centroid" (worked). Footing Design 5.4 note.
+- **Provision (ACI 318-19, checked):** 8.4.4.2.2 (γ_vM_sc applied at the centroid of the critical section), 8.4.4.2.3, R8.4.4.2.3.
+- **Check case (review, governing combinations unchanged):**
+  - Ped 2 (1.2D + 1.0(+Wx) + L + 0.5S): M_x,ped 287.25, P_u 43.81, N 32.16 kip, y_c = +0.8734 ft, y_A = +0.1693 ft. M_sc = 287.25 − 43.81·0.8734 − (43.81 − 32.16)(0.1693 − 0.8734) = 287.25 − 38.26 + 8.20 = **257.19 kip-ft**. v_m = 0.400·257.19·12000·32.48/830,492 = 48.28 psi. v_u = 10.78 + 0.65 + 48.28 = **59.71 psi**, DCR = 59.71/154.60 = **0.386** (before 65.36 psi, 0.423).
+  - Ped 1 (1.2D + 1.0(−Wx) + L + 0.5S): M_x,ped 38.39, P_u 84.15, N 26.21, y_c = −0.9534 ft, y_A = −0.1693 ft. M_sc = 38.39 + 84.15·0.9534 − 57.94·0.7841 = 38.39 + 80.23 − 45.43 = **73.19 kip-ft**. v_m = 0.536·73.19·12000·73.44/10,324,278 = 3.35 psi. v_u = 4.34 + 1.32 + 3.35 = **9.00 psi**, DCR **0.0815** (before 7.41 psi, 0.0671).
+  - #684 case (Ped 1 truncated at −x): DCR 0.457 → 0.475 (governing combination changes to 1.2D + 1.6L + 0.5S).
+  - Default project: unchanged (interior perimeters).
+
+### SFCJ. Citation: weight of the soil cover → IBC dead loads §1606   [citation only]
+- "IBC 2021 1610 overburden" (Load Combinations, effective soil cover step) and "§1610 (overburden, as cited)" (Report references) → IBC 2021 §1606 (dead loads: weight of the soil cover). Checked: 2018 IBC Section 1606 is Dead Loads; the 2018 → 2021 changes summary keeps 1606 (1606.2 design dead load, 1606.3 fixed service equipment, new 1606.4).
+
+### Top mat order (SFTD, PR #710)
+- Confirmed by the engineer (2026-11-02): the top y-bars are the inner layer. No change.
+
+### How verified
+- Headless Chromium, origin/main vs the branch, pinned libraries (as in #710). Deep diff of `R` and `P2` on default, review, the #684 cases (8 #8, 12 #5, 9 #8 with h 2.5 ft) and direct mode: only `P2.punch` (truncated perimeters only), `P2.dowels[].ok` (9 #8 case) and new fields differ. Default and direct mode: new fields only.
+- Report on all cases: 0 KaTeX errors, no NaN / undefined / `§?` / literal `[[`. 0 console errors. `node tests/check-syntax.mjs` passes, as does the scroll smoke test.
+- **Other copies:** none. **Saved data:** no change.

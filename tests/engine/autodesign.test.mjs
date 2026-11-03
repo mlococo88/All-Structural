@@ -120,6 +120,11 @@ test('Every candidate passes every module on the full check (Refine, the built-i
     }
     boltFitHeld(c, Q);
   }
+  // the 1-gage-line twin (2026-11-02): no two listed designs differ only in the splice gage lines; each twin left out has its "as set" design listed
+  const sig = L => JSON.stringify([L.nb, L.D, L.oh || null, L.spl, L.web.map(p => [p.x0, p.x1, p.tw]), L.top.map(z => [z.x0, z.x1, z.b, z.t]), L.bot.map(z => [z.x0, z.x1, z.b, z.t])]);
+  R.cands.forEach((a, i) => R.cands.slice(i + 1).forEach(b => assert.ok(sig(a.L) !== sig(b.L), `candidates ${i + 1} and a later one differ only in gage lines`)));
+  (R.twins || []).forEach(t => { assert.equal(t.L.minLines, 1); assert.ok(R.cands.some(c => c.L.minLines == null && sig(c.L) === sig(t.L) && Math.abs(c.cost.total - t.cost.total) < 1e-6), 'its as-set twin is listed'); });
+  console.log(`       (Refine, topN 2: ${R.cands.length} listed, ${(R.twins || []).length} 1-gage-line twin(s) left out)`);
 });
 test('CTDOT: the splice bolt fit (DT10) is a sizing constraint; details that fail whatever the plates are reported as blockers', () => {
   // CTDOT BRSDM V2 6.13.6.1: 2 in edges; the built-in 16 in flanges fail DT10 at every splice (SB2-SP7). Auto design widens the flanges at the

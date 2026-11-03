@@ -1758,10 +1758,10 @@ function renderDashboard(){
   else d.appendChild(chip('Pedestal design',why.length?why.join('; '):'axial DCR '+f2(pedmax)+', ties and bars OK',
    why.length?'fail':'pass',undefined,{tab:'tab-peddes',sec:'o-pd-intro'}));
   /* SFDO: dowels in tension, development, laps, projection */
-  {const Dw=(P2.dowels||[]).filter(z=>!z.isPatch);if(Dw.length){const bad=Dw.filter(z=>!z.ok);
-   const why=z=>[!z.asOK||!z.tenOK?'A_s,gov '+(isFinite(z.AsGov)?f2(z.AsGov):'\u221e')+' > A_s,prov '+f2(z.AsProv)+' in\u00b2':'',!z.ftgOK?'tension embed. '+f2(z.LftgReq)+' > '+f2(z.availEmb)+' in':'',!z.projOK?(z.full?'development in pedestal':'projection'):''].filter(Boolean).join(', ');
+  {const Dw=(P2.dowels||[]).filter(z=>!z.isPatch);if(Dw.length){const bad=Dw.filter(z=>!z.ok),rev=Dw.filter(z=>z.ok&&z.sfReview);   /* SFDR */
+   const why=z=>[!z.asOK||!z.tenOK?'A_s,gov '+(isFinite(z.AsGov)?f2(z.AsGov):'\u221e')+' > A_s,prov '+f2(z.AsProv)+' in\u00b2':'',!z.ftgOKpf?'tension embed. '+f2(z.LftgReq)+' > '+f2(z.availEmb)+' in':'',!z.projOKpf?(z.full?'development in pedestal':'projection'):'',z.sfReview?'shear-friction development short (REVIEW: proportional credit '+f2(z.sfFr)+')':''].filter(Boolean).join(', ');
    const nt=Dw.filter(z=>z.tension).length;
-   d.appendChild(chip('Dowels (tension, laps)',bad.length?bad.map(z=>z.label+': '+why(z)).join('; '):(nt?'tension at '+nt+' interface(s): OK':'no interface tension; laps OK'),bad.length?'fail':'pass',undefined,{tab:'tab-footdes',sec:'o-fd-bear'}));}}
+   d.appendChild(chip('Dowels (tension, laps)',bad.length||rev.length?bad.concat(rev).map(z=>z.label+': '+why(z)).join('; ')+(bad.length?'':' \u2014 shear-friction D/C decides'):(nt?'tension at '+nt+' interface(s): OK':'no interface tension; laps OK'),bad.length?'fail':(rev.length?'warn':'pass'),undefined,{tab:'tab-footdes',sec:'o-fd-bear'}));}}
   /* SFSF: interface shear friction */
   {const Sf=(P2.shearFr||[]).filter(z=>!z.isPatch&&z.gov);if(Sf.length){const gv=Sf.reduce((a,z)=>(!a||z.gov.ratio>a.gov.ratio)?z:a,null),bad=Sf.filter(z=>!z.ok);
    d.appendChild(chip('Interface shear friction',bad.length?bad.map(z=>z.label+' DCR '+f2(z.gov.ratio)).join('; '):'max DCR '+f2(gv.gov.ratio)+' \u2014 '+gv.label+', '+gv.gov.name,bad.length?'fail':'pass',undefined,{tab:'tab-footdes',sec:'o-fd-bear'}));}}
@@ -1992,7 +1992,7 @@ function renderCombos(){
   'A_{EV} = B\\,L - \\sum A_{p,i}',
   'A_{EV} = '+f2(R.B*R.L)+' - '+f2(R.Aped),
   'A_{EV} = '+f2(R.Aev)+'\\;\\mathrm{ft^2}'));
- wt.appendChild(eqBlock('Effective soil cover depth over footing','IBC 2021 1610 overburden',
+ wt.appendChild(eqBlock('Effective soil cover depth over footing','IBC 2021 1606 (dead loads: weight of the soil cover)',
   'd_{cover} = \\min\\big(d_{input},\\;\\max(0,\\,D_f - t)\\big)\\;\\Rightarrow\\;d_{dry} + d_{sub}',
   'd_{cover} = '+f2(R.covEff)+'\\;\\mathrm{ft}\\;\\;(d_{dry}='+f2(R.covDry)+',\\;d_{sub}='+f2(R.covSub)+')',
   '\\max(0,\\,D_f - t) = '+f2(Math.max(0,R.topDepth))+'\\;\\mathrm{ft\\;available\\;above\\;footing\\;top}'+(R.topDepth<0?'\\;\\;(D_f-t='+f2(R.topDepth)+'\\;\\mathrm{ft};\\;\\text{footing top is above grade})':'')));
@@ -2838,7 +2838,7 @@ function ptInPoly(px,py,poly){
 const SFD_REFS=[
  ['ACI 318-19','Building Code Requirements for Structural Concrete — §5.3 (load factors), §6.2.5 (slenderness), §7.6.1.1 / §24.4.3.2 (minimum steel), §7.7.2.3 / §13.3.4 (bar spacing), §8.4.2.3 / §8.4.4.2 (moment transfer), §10.6.1.1 / §10.7.3.1 (pedestal steel), §13.2.7.1, §13.3.3.3 (band steel), §16.3.4.1 (dowels), §20.5.1.3 (cover), §21.2.2 (φ), §22.3 (flexure), §22.4.2.1 (axial), Table 22.5.5.1 (one-way shear), §22.6 (two-way shear), §22.8.3.2 (bearing), §25.2.3, §25.4.2.4 / §25.4.9 (development), §25.7.2 (ties)'],
  ['ASCE/SEI 7-16','Minimum Design Loads — §2.3.1 (strength combinations), §2.4.1 (allowable stress combinations)'],
- ['IBC 2021','International Building Code — §1605.1 (combinations: ASCE 7 §2.3 / §2.4), §1610 (overburden, as cited), §1807.2.3 (FS 1.5 for retaining walls; quoted for comparison)'],
+ ['IBC 2021','International Building Code — §1605.1 (combinations: ASCE 7 §2.3 / §2.4), §1606 (dead loads: weight of the soil cover), §1807.2.3 (FS 1.5 for retaining walls; quoted for comparison)'],
  ['AASHTO LRFD','Bridge Design Specifications, 10th Ed. (2024) — Art. 10.6.3.1.2a (same N, shape and inclination factors as Vesić; use condition for depth factors; its Eq. 10.6.3.1.2a-10 depth factor is not the one used here), 10.6.3.3 / 11.6.3.3 and 10.6.4.2 / 11.6.5.1 (eccentricity limits, when selected), 10.6.3.4 (passive, warning)'],
  ['Vesić (1973, 1975)','“Analysis of Ultimate Loads of Shallow Foundations,” JSMFD ASCE 99(1); Foundation Engineering Handbook — bearing capacity'],
  ['Meyerhof (1953)','“The Bearing Capacity of Foundations Under Eccentric and Inclined Loads,” 3rd ICSMFE — effective area'],
@@ -3236,7 +3236,8 @@ function sfrModel(){
     S({id:sc+'.vc',label:'Concrete two-way shear stress (least of three)',sym:'v_{c}',eq:'\\min(4,\\; 2 + 4/\\beta,\\; 2 + \\alpha_{s} d/b_{0})\\,\\lambda\\lambda_{s}\\sqrt{'+SFR_FC+'}',sub:'\\min('+sfrN(pu.vc1)+',\\,'+sfrN(pu.vc2)+',\\,'+sfrN(pu.vc3)+')',value:pu.vc,unit:'psi',ref:'ACI 318-19 22.6.5.2',note:'β = '+sfrN(pu.beta)+', α_s = '+pu.alphas+', λ_s = '+sfrN(pu.lam_s,3)}),
     S({id:sc+'.phivc',label:'Design stress',sym:'\\phi v_{c}',eq:'0.75 v_{c}',sub:'0.75\\cdot'+sfrN(pu.vc),value:pu.phiVc,unit:'psi'}),
     S({id:sc+'.Vu',label:'Shear on the perimeter, '+(pu.govC?pu.govC.cb.name:''),sym:'V_{u}',eq:'P_{u} \\minus \\int q\\,dA_{crit} + W_{body,crit}',sub:'\\minus '+sfrN(d.relief)+' + '+sfrN(d.bodyIn),value:d.Vu,unit:'kip'}),
-    S({id:sc+'.Mu',label:'Moments transferred at the pedestal base'+((d.lex||d.ley)?' (include P·e: '+sfrN(d.PeMx)+' and '+sfrN(d.PeMy)+' kip-ft)':''),sym:'M_{ux}',eq:'',sub:'',value:d.MuX,unit:'kip-ft',note:'M_uy = '+sfrN(d.MuY)+' kip-ft; γ_v,x = '+sfrN(d.gvX,3)+', γ_v,y = '+sfrN(d.gvY,3)}),
+    S({id:sc+'.Mped',label:'Moments at the pedestal base, about the pedestal centre'+((d.lex||d.ley)?' (include P·e: '+sfrN(d.PeMx)+' and '+sfrN(d.PeMy)+' kip-ft)':''),sym:'M_{x,ped}',eq:'',sub:'',value:d.MxPed,unit:'kip-ft',note:'M_y,ped = '+sfrN(d.MyPed)+' kip-ft'}),   /* SFPC */
+    S({id:sc+'.Mu',label:'Moment transferred about the critical-section centroid (ACI 318-19 8.4.4.2.2): centroid offset from the pedestal centre y_c = '+sfrN(d.dyc*12,2)+' in, x_c = '+sfrN(d.dxc*12,2)+' in; soil relief and body forces at the clipped-area centroid y_A = '+sfrN(d.dyA*12,2)+' in, x_A = '+sfrN(d.dxA*12,2)+' in',sym:'M_{ux}',eq:'\\left|M_{x,ped} \\minus P_{u} y_{c} \\minus (P_{u} \\minus N)(y_{A} \\minus y_{c})\\right|',sub:'\\left|'+sfrP(d.MxPed)+' \\minus '+sfrP(d.Pu)+'\\cdot'+sfrP(d.dyc,4)+' \\minus ('+sfrP(d.Pu)+' \\minus '+sfrP(d.Nnet)+')('+sfrP(d.dyA,4)+' \\minus '+sfrP(d.dyc,4)+')\\right|',value:d.MuX,unit:'kip-ft',ref:'ACI 318-19 8.4.4.2.2',note:'offsets in ft in the substitution; N = P_u − relief + body = '+sfrN(d.Nnet)+' kip; M_uy (same form in x) = '+sfrN(d.MuY)+' kip-ft; γ_v,x = '+sfrN(d.gvX,3)+', γ_v,y = '+sfrN(d.gvY,3)}),
     S({id:sc+'.vu',label:'Factored shear stress (direct + eccentric shear)',sym:'v_{u}',eq:'\\frac{V_{u}}{b_{0} d} + \\frac{\\gamma_{v,x} M_{uy} c_{x}}{J_{c,x}} + \\frac{\\gamma_{v,y} M_{ux} c_{y}}{J_{c,y}}',sub:sfrN(d.vshear)+' + '+sfrN(d.vmomX)+' + '+sfrN(d.vmomY),value:pu.vuMax,unit:'psi',ref:'ACI 318-19 8.4.4.2, R8.4.4.2.3',
      note:'J_c,x = '+sfrN(d.JcX,0)+' in⁴, c_x = '+sfrN(d.cExtX,2)+' in; J_c,y = '+sfrN(d.JcY,0)+' in⁴, c_y = '+sfrN(d.cExtY,2)+' in. J_c and c are taken from the critical section as truncated at the footing edge (faces that close; centroid offset from the pedestal centre x̄ = '+sfrN(d.xbarX,2)+', ȳ = '+sfrN(d.xbarY,2)+' in)'}),   /* SFPJ */
     S({id:sc+'.DCR',label:'Punching: demand / capacity',sym:'DCR',eq:'\\frac{v_{u}}{\\phi v_{c}}',sub:'\\frac{'+sfrN(pu.vuMax)+'}{'+sfrN(pu.phiVc)+'}',value:pu.dcr,unit:'',d:3,ok:pu.dcr<=1+1e-9})];
@@ -3271,12 +3272,12 @@ function sfrModel(){
    st.push(S({id:'p'+z.idx+'.AsMin',label:'Minimum dowel area (A_g = b_x b_y = '+sfrN(z.Ag,1)+' in²)',sym:'A_{s,min}',eq:'0.005\\,A_{g}',sub:'0.005\\cdot'+sfrN(z.Ag,1),value:z.AsMin,unit:'in^{2}',ref:'ACI 318-19 16.3.4.1'}),   /* SFDC */
     S({id:'p'+z.idx+'.AsGov',label:'Governing dowel area vs provided ('+z.nD+' #'+z.ds+'): demand / capacity A_s,gov / A_s,prov = '+(isFinite(z.dcAs)?sfrN(z.dcAs,3):'∞'),sym:'A_{s,gov}',eq:'\\max(A_{s,min},\\,A_{s,req})',sub:'\\max('+sfrN(z.AsMin)+',\\,'+(isFinite(z.AsReq)?sfrN(z.AsReq||0):'\\infty')+')',value:isFinite(z.AsGov)?z.AsGov:'∞',unit:'in^{2}',ok:!!z.asOK,note:(z.asOK?'≤':'>')+' A_s,prov = '+z.nD+' × '+sfrN(z.Ab)+' = '+sfrN(z.AsProv)+' in²'}));
    if(z.ld)st.push(S({id:'p'+z.idx+'.Lftg',label:'Footing side: tension development into the footing ('+(z.hook==='hook90'?'standard 90° hook, ℓ_dh, 25.4.3.1':'straight, ℓ_d, 25.4.2.4')+') vs available t − c_bot − d_b,x − d_b,y'+(z.devTen?'':' (not required here: no interface tension and shear friction not relying on the dowels)'),sym:z.hook==='hook90'?'\\ell_{dh}':'\\ell_{d}',eq:z.hook==='hook90'?'\\max(\\frac{f_{y}\\psi_{e}\\psi_{r}\\psi_{o}\\psi_{c}}{55\\lambda\\sqrt{'+SFR_FC+'}}d_{b}^{1.5},\\,8d_{b},\\,6)':'\\frac{3}{40}\\frac{f_{y}}{\\lambda\\sqrt{'+SFR_FC+'}}\\frac{\\psi_{t}\\psi_{e}\\psi_{s}\\psi_{g}}{(c_{b}+K_{tr})/d_{b}}d_{b} \\ge 12',
-     sub:z.hook==='hook90'?'\\max(\\frac{'+sfrN(P2.fy,0)+'\\cdot'+sfrN(z.ldh.pe)+'\\cdot'+sfrN(z.ldh.pr)+'\\cdot'+sfrN(z.ldh.po)+'\\cdot'+sfrN(z.ldh.pc,3)+'}{55\\cdot'+sfrN(P2.lam)+'\\cdot'+sfrN(z.ldh.sq)+'}\\cdot'+sfrN(z.db,3)+'^{1.5},\\,'+sfrN(8*z.db)+',\\,6)':'\\frac{3}{40}\\cdot\\frac{'+sfrN(P2.fy,0)+'}{'+sfrN(P2.lam)+'\\cdot'+sfrN(z.ld.sqfc)+'}\\cdot\\frac{'+sfrN(z.ld.psi_te*z.ld.psi_s*z.ld.psi_g,3)+'}{'+sfrN(z.ld.conf,3)+'}\\cdot'+sfrN(z.db,3),value:z.LftgReq,unit:'in',...(z.devTen?{ok:!!z.ftgOK}:{}),note:'available '+sfrN(z.availEmb)+' in'}));   /* SFDB: shown always */
+     sub:z.hook==='hook90'?'\\max(\\frac{'+sfrN(P2.fy,0)+'\\cdot'+sfrN(z.ldh.pe)+'\\cdot'+sfrN(z.ldh.pr)+'\\cdot'+sfrN(z.ldh.po)+'\\cdot'+sfrN(z.ldh.pc,3)+'}{55\\cdot'+sfrN(P2.lam)+'\\cdot'+sfrN(z.ldh.sq)+'}\\cdot'+sfrN(z.db,3)+'^{1.5},\\,'+sfrN(8*z.db)+',\\,6)':'\\frac{3}{40}\\cdot\\frac{'+sfrN(P2.fy,0)+'}{'+sfrN(P2.lam)+'\\cdot'+sfrN(z.ld.sqfc)+'}\\cdot\\frac{'+sfrN(z.ld.psi_te*z.ld.psi_s*z.ld.psi_g,3)+'}{'+sfrN(z.ld.conf,3)+'}\\cdot'+sfrN(z.db,3),value:z.LftgReq,unit:'in',...(z.tension?{ok:!!z.ftgOK}:{}),note:'available '+sfrN(z.availEmb)+' in'+(z.sfNeed&&!z.tension?(z.ftgOK?'; shear friction relies on the dowels: developed':'; REVIEW: shear friction only (no interface tension), so not a pass / fail item; shear friction takes the proportional credit, see §f'+z.idx+'.fr'):'')}));   /* SFDB: shown always; SFDR */
    if(z.cont)st.push(S({id:'p'+z.idx+'.cont',label:'Pedestal side: the dowels are the pedestal longitudinal bars, continuous through the joint (no splice), so they are developed in the pedestal by definition; no lap or projection check',sym:'',eq:'',sub:'',value:'—'}));   /* SFDB */
    if(!z.cont&&z.ld)st.push(S({id:'p'+z.idx+'.lst',label:'Class B tension lap with the vertical bars (all dowels spliced at one section)',sym:'\\ell_{st}',eq:'\\max(1.3\\,\\ell_{d,small},\\,\\ell_{d,large},\\,12)',sub:'\\max(1.3\\cdot'+sfrN(z.lstSmall)+',\\,'+sfrN(z.lstLarge)+',\\,12)',value:z.lst,unit:'in',ref:'ACI 318-19 25.5.2'}));
     if(z.tenKern)tabs.push({type:'table',head:[z.label+': combination (interface in tension)','P_u (kip)','M_ux','M_uy (kip-ft)','σ_min (ksi)','ratio','k (A_s,req / A_s,prov)'],rows:z.tenRat.map(q=>({cells:[q===z.kGov?{t:q.name,key:'dow/p'+z.idx+'.AsReq'}:q.name,sfrCell(q.P),sfrCell(q.Mx),sfrCell(q.My),sfrCell(q.sig,3),isFinite(q.ratio)?sfrDC(q.ratio):sfrCell('> capacity'),isFinite(q.k)?sfrCell(q.k,3):sfrCell('∞')],cls:q===z.kGov?'gov':''}))});
    if(!z.cont)st.push(S({id:'p'+z.idx+'.lsc',label:'Compression lap with the vertical bars'+(z.ds!==z.sl?' (sizes differ, 25.5.5.4)':''),sym:'\\ell_{sc}',eq:z.ds!==z.sl?'\\max(\\ell_{dc,large},\\,\\ell_{sc,small})':'\\max(0.0005 f_{y} d_{b},\\, 12)',sub:'',value:z.lc,unit:'in',ref:'ACI 318-19 25.5.5'}),
-    S({id:'p'+z.idx+'.proj',label:'Dowel projection above the footing: required = max(ℓ_sc'+(z.devTen?', ℓ_st':'')+'); available h − c = '+sfrN(z.hAvail)+' in'+(z.full?' (lap does not fit: dowels full height as the pedestal bars; development in the pedestal '+sfrN(z.LpedReq)+' in)':(z.projIn!==null?' (entered '+sfrN(z.projIn)+' in)':'')),sym:'L_{proj}',eq:'',sub:'',value:z.Lreq,unit:'in',ok:!!z.projOK}));
+    S({id:'p'+z.idx+'.proj',label:'Dowel projection above the footing: required = max(ℓ_sc'+(z.devTen?', ℓ_st':'')+'); available h − c = '+sfrN(z.hAvail)+' in'+(z.full?' (lap does not fit: dowels full height as the pedestal bars; development in the pedestal '+sfrN(z.LpedReq)+' in)':(z.projIn!==null?' (entered '+sfrN(z.projIn)+' in)':'')),sym:'L_{proj}',eq:'',sub:'',value:z.Lreq,unit:'in',ok:!!z.projOKpf,note:z.sfReview&&!z.projOK?'REVIEW: the tension lap / full-height ℓ_d is needed for shear friction only; shear friction takes the proportional credit':''}));   /* SFDR */
    DT.push({title:z.label+': '+z.nD+' #'+z.ds+(z.cont?' (longitudinal bars)':'')+(z.hook==='hook90'?' hooked':' straight'),ref:'ACI 318-19 16.3, 25.4, 25.5',steps:st});});
    /* SFSF: shear friction, worked */
    {const FT=[],ftab=[];(P2.shearFr||[]).forEach(z=>{if(z.isPatch||!z.gov)return;const g=z.gov,q='f'+z.idx+'.',dw=P2.dowels&&P2.dowels[z.idx];
@@ -3293,7 +3294,7 @@ function sfrModel(){
      S({id:q+'DCR',label:'Shear friction: demand / capacity (φ = 0.75)',sym:'DCR',eq:'\\frac{V_{u}}{0.75 \\min(V_{n}, V_{n,max})}',sub:'\\frac{'+sfrN(g.Vu)+'}{0.75\\cdot'+sfrN(g.Vn)+'}',value:g.ratio,unit:'',d:3,ok:g.ratio<=1+1e-9})]});
     ftab.push({type:'table',head:[z.label+': combination','V_ux','V_uy','V_u (kip)','N_u (kip)','φV_n (kip)','DCR'],rows:z.rows.map(r=>({cells:[r===g?{t:r.name,key:'sf/'+q+'DCR'}:r.name,sfrCell(r.Vx),sfrCell(r.Vy),sfrCell(r.Vu),sfrCell(r.Nu),sfrCell(r.phiVn),sfrDC(r.ratio)],cls:r===g?'gov':''}))});});
     if(FT.length)subs.push({title:'Shear friction across the pedestal–footing interface',key:'S-sf',items:[sfrTopics('sf',FT,{see:'dow'}),...ftab]});}
-   if(DT.length)subs.push({title:'Dowels at the pedestals (tension at the interface, development, laps, projection)',key:'S-dow',items:[sfrTopics('dow',DT),...tabs,{type:'note',text:'A combination puts the interface in tension when P_u < 0 or the resultant is outside the kern (σ_min < 0). For those combinations the dowels are checked as the reinforcement of the interface section with the strain-compatibility routine of the pedestal P–M check. Worked on the Footing Design tab[[tab:footdes| ↗]], 5.6.'}]});}
+   if(DT.length)subs.push({title:'Dowels at the pedestals (tension at the interface, development, laps, projection)',key:'S-dow',items:[sfrTopics('dow',DT,{see:'sf'}),...tabs,{type:'note',text:'A combination puts the interface in tension when P_u < 0 or the resultant is outside the kern (σ_min < 0). For those combinations the dowels are checked as the reinforcement of the interface section with the strain-compatibility routine of the pedestal P–M check. Worked on the Footing Design tab[[tab:footdes| ↗]], 5.6.'}]});}
   const bc=P2.bandChk;
   if(bc&&bc.applies)subs.push({title:'Short-direction band reinforcement (advisory)',items:[{type:'steps',scope:'band',steps:[
    S({id:'gs',label:'Banded fraction',sym:'\\gamma_{s}',eq:'\\frac{2}{\\beta + 1}',sub:'\\frac{2}{'+sfrN(bc.beta,3)+' + 1}',value:bc.gs,unit:'',d:3,ref:'ACI 318-19 13.3.3.3'}),
@@ -3601,7 +3602,7 @@ function sfdwBuild(){
    if(zs.length>1)D.chainV(L.dim,zs,ex+bx/2+0.35*k,ex+bx/2);
    const bz=(P2&&P2.bearing&&P2.bearing[i])||null;
    const dwo=(P2&&P2.dowels&&P2.dowels[i])||null;   /* SFDO: computed projection and embedment */
-   if(bz&&!bz.isPatch)T(L.txt,ex-bx/2,-(t12-LV.topOfBot)-0.3*k,0.09*k,('DOWEL EMBED. AVAILABLE '+sfdwIn(bz.availEmb)+' >= L_DC = '+sfdwIn(bz.Ldc)+(bz.ldcOK?'':' (NG)')+(dwo&&dwo.devTen?', '+(dwo.hook==='hook90'?'L_DH':'L_D')+' = '+sfdwIn(dwo.LftgReq)+(dwo.ftgOK?'':' (NG)'):'')+(dwo?';  PROJ. '+(dwo.cont?'CONTINUOUS':dwo.full?'FULL HEIGHT':sfdwIn(dwo.Lprov)):'')).toUpperCase(),0);
+   if(bz&&!bz.isPatch)T(L.txt,ex-bx/2,-(t12-LV.topOfBot)-0.3*k,0.09*k,('DOWEL EMBED. AVAILABLE '+sfdwIn(bz.availEmb)+' >= L_DC = '+sfdwIn(bz.Ldc)+(bz.ldcOK?'':' (NG)')+(dwo&&dwo.devTen?', '+(dwo.hook==='hook90'?'L_DH':'L_D')+' = '+sfdwIn(dwo.LftgReq)+(dwo.ftgOK?'':(dwo.tension?' (NG)':' (REVIEW)')):'')+(dwo?';  PROJ. '+(dwo.cont?'CONTINUOUS':dwo.full?'FULL HEIGHT':sfdwIn(dwo.Lprov)):'')).toUpperCase(),0);
    T(L.txt,ex,-(t12-LV.topOfBot)-0.7*k,0.14*k,'ELEVATION',1);
    T(L.txt,(ex)/2,-(t12-LV.topOfBot)-1.1*k,0.16*k,'PEDESTAL '+String(p.label).toUpperCase()+';  '+sfdwFI(bx)+' x '+sfdwFI(by)+' x '+sfdwFI(hh),1);
   });});
@@ -4089,7 +4090,16 @@ function sfdDowelCheck(i,p,bz,pd,combos,fc,fy,lam,sfPre){   // sfPre: shear fric
  /* SFDC (2026-11-02): dowel area, minimum / required for interface tension / governing */
  o.Ag=A;o.AsMin=0.005*A;o.AsGov=Math.max(o.AsMin,isFinite(o.AsReq)?(o.AsReq||0):Infinity);
  o.asOK=o.AsGov<=AsProv+1e-9;o.dcAs=AsProv>0?o.AsGov/AsProv:Infinity;
- o.ok=o.asOK&&o.tenOK&&o.ftgOK&&o.projOK;
+ /* SFDR (2026-11-02, engineer): the tension development (footing l_d / l_dh, the Class B lap or full-height l_d in the
+    pedestal) is a pass / fail item only where interface tension needs it (A_s,req > 0). Where the dowels serve shear
+    friction only, a shortfall is REVIEW: shear friction takes the reduced proportional credit (SFPD) and its own D/C
+    decides. The compression lap / l_dc and an entered projection outside h - c still fail. Before: NG whenever devTen. */
+ const LreqPF=o.cont?0:Math.max(o.lc,o.tension?o.lst:0);
+ o.ftgOKpf=o.tension?o.ftgOK:true;
+ o.projOKpf=o.cont?true:(projIn!==null?(projIn>=LreqPF-1e-9&&projIn<=o.hAvail+1e-9):(LreqPF<=o.hAvail+1e-9?true:(o.tension?o.ld.Ld:o.Ldc)<=o.hAvail+1e-9));
+ o.sfReview=!!(o.sfNeed&&!o.tension&&(!o.ftgOK||!o.projOK));
+ o.ok=o.asOK&&o.tenOK&&o.ftgOKpf&&o.projOKpf;
+ o.status=!o.ok?'fail':(o.sfReview?'review':'pass');
  return o;
 }
 /* ---- SFSF (2026-11-01, engineer): shear friction across the pedestal / footing interface, ACI 318-19 22.9 ----
@@ -4728,13 +4738,20 @@ function computePhase2(R){
    const JcY=pa_Y.Jc, cExtY=pa_Y.cExt;
    // Unbalanced moment transferred across the pedestal-to-footing interface: the couple is
    // taken at the top of the footing (pedestal base), lever h — not the footing-base datum.
-   const MuY=Math.abs(pl.myPed), MuX=Math.abs(pl.mxPed); // kip-ft (about y and x respectively)
+   /* SFPC (2026-11-02, engineer): ACI 318-19 8.4.4.2.2 applies gamma_v M_sc at the centroid of the critical section, so the
+      transferred moment is taken about that centroid (x_c, y_c = pedestal centre + xbar, ybar of the truncated section):
+        M_sc = M_ped + P_u (y_ped - y_c) - (P_u - N)(y_A - y_c),  N = P_u - relief + body (net shear on the section),
+      with the soil relief and body forces inside the section taken at the centroid y_A of the clipped critical area.
+      Interior perimeter: y_c = y_A = y_ped, M_sc = M_ped (unchanged). Before: M_sc = M_ped (about the pedestal centre). */
+   const xcG=p.x+(pa_X.xbar||0)/12, ycG=p.y+(pa_Y.xbar||0)/12, xAG=(cx0+cx1)/2, yAG=(cy0+cy1)/2, Nnet=pl.P-relief+bodyIn;
+   const MscX=pl.mxPed+pl.P*(p.y-ycG)-(pl.P-Nnet)*(yAG-ycG), MscY=pl.myPed+pl.P*(p.x-xcG)-(pl.P-Nnet)*(xAG-xcG);
+   const MuY=Math.abs(MscY), MuX=Math.abs(MscX); // kip-ft (about y and x respectively), about the critical-section centroid
    const vshear=Vu*1000/(bo*d); // psi
    const vmomX=(JcX>0)?gvX*MuY*12*1000*cExtX/JcX:0; // psi, from My
    const vmomY=(JcY>0)?gvY*MuX*12*1000*cExtY/JcY:0; // psi, from Mx
    const vmom=vmomX+vmomY; // superposed at the governing corner (conservative)
    const vu=vshear+vmom;
-   if(vu>vuMax){vuMax=vu;govC=c;detail={q,Acrit,AcritFull,Vu,relief,bodyIn,MuX,MuY,Mu:Math.hypot(MuX,MuY),gvX,gvY,JcX,JcY,cExtX,cExtY,xbarX:pa_X.xbar||0,xbarY:pa_Y.xbar||0,vshear,vmomX,vmomY,vmom,
+   if(vu>vuMax){vuMax=vu;govC=c;detail={q,Acrit,AcritFull,Vu,relief,bodyIn,MuX,MuY,Mu:Math.hypot(MuX,MuY),gvX,gvY,JcX,JcY,cExtX,cExtY,xbarX:pa_X.xbar||0,xbarY:pa_Y.xbar||0,MxPed:pl.mxPed,MyPed:pl.myPed,Pu:pl.P,Nnet,dyc:ycG-p.y,dxc:xcG-p.x,dyA:yAG-p.y,dxA:xAG-p.x,vshear,vmomX,vmomY,vmom,
     Pa:pl.Pa,lex:pl.lex,ley:pl.ley,PeMx:pl.PeMx,PeMy:pl.PeMy};}   // SFLO: the load-offset part of mxPed / myPed, for display
   });
   // E-3: if fewer than two critical faces close (perimeter cannot form a punching cone within
@@ -5363,14 +5380,14 @@ function sfdoRender(bb){
    'A_{s,min} = 0.005\\,A_g,\\quad A_g = b_x b_y,\\qquad A_{s,gov} = \\max(A_{s,min},\\;A_{s,req}) \\le A_{s,prov}',
    'A_{s,min} = 0.005\\cdot'+f2(z.Ag)+' = '+f2(z.AsMin)+'\\;\\mathrm{in^2};\\quad A_{s,req} = '+(isFinite(z.AsReq)?f2(z.AsReq||0):'\\infty')+'\\;\\mathrm{in^2}'+(z.tenKern?'\\;(2b)':'\\;(\\text{no interface tension})'),
    'A_{s,gov} = '+(isFinite(z.AsGov)?f2(z.AsGov):'\\infty')+'\\;'+(z.asOK?'\\le':'>')+'\\;A_{s,prov} = '+z.nD+'\\cdot'+f2(z.Ab)+' = '+f2(z.AsProv)+'\\;\\mathrm{in^2},\\;D/C = '+(isFinite(z.dcAs)?f3(z.dcAs):'\\infty')+(z.asOK?'\\;\\checkmark':'\\;\\text{NG}')));
-  if(z.sfNeed&&!z.tension)bb.appendChild(el('div','note','<b>Shear friction relies on the dowels</b>: with A<sub>vf</sub> = 0, \u03c6\u03bcN<sub>u</sub> gives DCR '+f3(z.sfNeedDCR)+' &gt; 1 (shear friction, 5.6). A<sub>vf</sub> must be developed for f<sub>y</sub> on both sides of the joint (ACI 318-19 22.9.5.1), so the dowels are checked in tension below: (2c) into the footing, (2d) and (3) into the pedestal.'));
+  if(z.sfNeed&&!z.tension)bb.appendChild(el('div','note','<b>Shear friction relies on the dowels</b>: with A<sub>vf</sub> = 0, \u03c6\u03bcN<sub>u</sub> gives DCR '+f3(z.sfNeedDCR)+' &gt; 1 (shear friction, 5.6). A<sub>vf</sub> must be developed for f<sub>y</sub> on both sides of the joint (ACI 318-19 22.9.5.1), so the dowels are checked in tension below: (2c) into the footing, (2d) and (3) into the pedestal. With no interface tension, a shortfall there is REVIEW, not NG: shear friction takes the proportional development credit and its own D/C decides (5.6).'));   /* SFDR */
   if(z.ld){   /* SFDB: footing side shown always; required where devTen */
    const L=z.ld,okF=z.LftgReq<=z.availEmb+1e-9;
    bb.appendChild(eqBlock('(2c) Footing side: tension development into the footing \u2014 '+(z.hook==='hook90'?'standard 90\u00b0 hook':'straight')+(z.devTen?'':' (not required here; shear friction counts A_vf only if met)'),z.hook==='hook90'?'ACI 318-19 25.4.3.1(a), 25.4.3.2':'ACI 318-19 25.4.2.4, 25.4.2.5',
     z.hook==='hook90'?'\\ell_{dh} = \\max\\left(\\frac{f_y\\psi_e\\psi_r\\psi_o\\psi_c}{55\\lambda\\sqrt{f\'_c}}d_b^{1.5},\\;8d_b,\\;6\\;\\mathrm{in}\\right)':'\\ell_d = \\frac{3}{40}\\frac{f_y}{\\lambda\\sqrt{f\'_c}}\\frac{\\psi_t\\psi_e\\psi_s\\psi_g}{(c_b+K_{tr})/d_b}\\,d_b \\ge 12\\;\\mathrm{in}',
     z.hook==='hook90'?'\\psi_e = '+f2(z.ldh.pe)+',\\;\\psi_r = '+f2(z.ldh.pr)+',\\;\\psi_o = '+f2(z.ldh.po)+',\\;\\psi_c = '+f3(z.ldh.pc)+':\\;\\frac{'+Math.round(P2.fy)+'\\cdot'+f2(z.ldh.pe)+'\\cdot'+f2(z.ldh.pr)+'\\cdot'+f2(z.ldh.po)+'\\cdot'+f3(z.ldh.pc)+'}{55\\cdot'+lamS+'\\cdot'+f2(z.ldh.sq)+'}\\cdot'+f3(z.db)+'^{1.5} = '+f2(z.ldh.raw)
      :'\\psi_t = '+f2(L.psi_t)+',\\;\\psi_e = '+f2(L.psi_e)+',\\;\\psi_s = '+f2(L.psi_s)+',\\;\\psi_g = '+f2(L.psi_g)+',\\;c_b = '+f3(L.cb)+',\\;K_{tr} = 0,\\;(c_b+K_{tr})/d_b = '+f3(L.conf)+':\\;\\ell_d = \\frac{3}{40}\\cdot\\frac{'+Math.round(P2.fy)+'}{'+lamS+'\\cdot'+f2(L.sqfc)+'}\\cdot\\frac{'+f3(L.psi_te*L.psi_s*L.psi_g)+'}{'+f3(L.conf)+'}\\cdot'+f3(z.db)+' = '+f2(L.LdRaw),
-    (z.hook==='hook90'?'\\ell_{dh}':'\\ell_{d}')+' = '+f2(z.LftgReq)+'\\;\\mathrm{in}\\;'+(okF?'\\le':'>')+'\\;'+f2(z.availEmb)+'\\;\\mathrm{in\\;available}\\;(t - c_{bot} - d_{b,x} - d_{b,y})'+(z.devTen?(z.ftgOK?'\\;\\checkmark':'\\;\\text{NG}'):'')));
+    (z.hook==='hook90'?'\\ell_{dh}':'\\ell_{d}')+' = '+f2(z.LftgReq)+'\\;\\mathrm{in}\\;'+(okF?'\\le':'>')+'\\;'+f2(z.availEmb)+'\\;\\mathrm{in\\;available}\\;(t - c_{bot} - d_{b,x} - d_{b,y})'+(z.devTen?(z.ftgOK?'\\;\\checkmark':(z.tension?'\\;\\text{NG}':'\\;\\text{REVIEW (shear friction only: proportional credit)}')):'')));   /* SFDR */
    bb.appendChild(el('div','note','c<sub>b</sub> from the pedestal cover (dowels in line with the vertical bars; the cover in the footing is larger, so this is conservative) and the dowel c-c spacing around the perimeter; K<sub>tr</sub> = 0; no reduction for excess reinforcement (25.4.10) is taken.'+(z.hook==='hook90'?' \u03c8<sub>r</sub> = 1.6 (no confining reinforcement around the hook in the footing), \u03c8<sub>o</sub> = 1.0 (side cover in the footing \u2265 6d<sub>b</sub>).':'')));
    if(z.cont)bb.appendChild(el('div','note','(2d) Pedestal side: the dowels are the pedestal longitudinal bars, continuous through the joint (no splice), so they are developed in the pedestal by definition. No lap or projection check (3) applies.'));   /* SFDB */
    else bb.appendChild(eqBlock('(2d) Pedestal side: tension lap with the vertical bars in the pedestal \u2014 Class B','ACI 318-19 25.5.2.1 (all dowels spliced at one section: Class B), 25.5.2.2 (different sizes)',
@@ -5381,8 +5398,8 @@ function sfdoRender(bb){
   if(!z.cont)bb.appendChild(eqBlock('(3) Dowel projection above the footing','ACI 318-19 25.5.5.1, 25.5.5.3, 25.5.5.4 (compression lap)'+(z.devTen?'; 25.5.2 (tension lap)':''),
    '\\ell_{sc} = \\max(0.0005 f_y d_b,\\;12\\;\\mathrm{in})\\;(f_y \\le 60\\,000)'+(z.ds!==z.sl?',\\;\\text{sizes differ: } \\max(\\ell_{dc,larger},\\,\\ell_{sc,smaller})':'')+',\\qquad L_{proj,req} = \\max(\\ell_{sc}'+(z.devTen?',\\,\\ell_{st}':'')+')',
    '\\ell_{sc} = '+f2(z.lc)+'\\;\\mathrm{in}'+(z.devTen?',\\;\\ell_{st} = '+f2(z.lst):'')+'\\;\\Rightarrow\\;L_{proj,req} = '+f2(z.Lreq)+'\\;\\mathrm{in};\\quad h - c = '+f2(z.h)+' - '+f2(z.cov)+' = '+f2(z.hAvail)+'\\;\\mathrm{in}',
-   z.full?('\\text{lap does not fit: dowels run full height as the pedestal bars; development into the pedestal }'+f2(z.LpedReq)+(z.projOK?'\\le':'>')+f2(z.hAvail)+(z.projOK?'\\;\\checkmark':'\\;\\text{NG}'))
-    :('L_{proj} = '+f2(z.Lprov)+'\\;\\mathrm{in}\\;'+(z.projIn!==null?'(entered)':'(required, used on the Drawings)')+(z.projOK?'\\;\\checkmark':'\\;\\text{NG}'))));
+   z.full?('\\text{lap does not fit: dowels run full height as the pedestal bars; development into the pedestal }'+f2(z.LpedReq)+(z.projOK?'\\le':'>')+f2(z.hAvail)+(z.projOK?'\\;\\checkmark':(z.projOKpf?'\\;\\text{REVIEW (shear friction only: proportional credit)}':'\\;\\text{NG}')))
+    :('L_{proj} = '+f2(z.Lprov)+'\\;\\mathrm{in}\\;'+(z.projIn!==null?'(entered)':'(required, used on the Drawings)')+(z.projOK?'\\;\\checkmark':(z.projOKpf?'\\;\\text{REVIEW (shear friction only: proportional credit)}':'\\;\\text{NG}')))));
  });
 }
 /* ---- original SVG: two-way (punching) critical perimeter, plan + elevation ---- */
@@ -5528,6 +5545,7 @@ function renderPunching(parent){
    'V_u = '+f2(gov.detail.Vu)+'\\;\\mathrm{k}\\;(P_u - \\textstyle\\int q\\,dA_{crit} + W_{u,body,crit}),\\;\\gamma_{v,x}='+f2(gov.detail.gvX)+',\\;\\gamma_{v,y}='+f2(gov.detail.gvY)+',\\;M_{uy}='+f2(gov.detail.MuY)+',\\;M_{ux}='+f2(gov.detail.MuX)+'\\;\\mathrm{k\\text{-}ft};\\; J_{c,x}='+f2(gov.detail.JcX)+',\\;J_{c,y}='+f2(gov.detail.JcY)+'\\;\\mathrm{in^4},\\;c_x='+f2(gov.detail.cExtX)+',\\;c_y='+f2(gov.detail.cExtY)+'\\;\\mathrm{in}',
    'v_u = '+f2(gov.detail.vshear)+' + '+f2(gov.detail.vmomX)+' + '+f2(gov.detail.vmomY)+' = '+f2(gov.vuMax)+'\\;\\mathrm{psi},\\;\\mathrm{DCR}=\\mathbf{'+f2(gov.dcr)+'}'+(gov.dcr<=1?'\\;\\checkmark':'\\;\\text{NG}')));
   if(Math.abs(gov.detail.lex||0)>1e-12||Math.abs(gov.detail.ley||0)>1e-12)b.appendChild(el('div','note','<b>Load offset on '+sfEsc(gov.label)+':</b> M<sub>ux</sub> and M<sub>uy</sub> above are the moments transferred at the pedestal base and include P<sub>u,a</sub>\u00b7e from the load point: P<sub>u,a</sub>e<sub>y</sub> = '+f2(gov.detail.Pa)+' \u00d7 '+f3(gov.detail.ley)+' = '+f2(gov.detail.PeMx)+' k-ft in M<sub>ux</sub>, P<sub>u,a</sub>e<sub>x</sub> = '+f2(gov.detail.Pa)+' \u00d7 '+f3(gov.detail.lex)+' = '+f2(gov.detail.PeMy)+' k-ft in M<sub>uy</sub> (ACI 318-19 8.4.4.2).'));   /* SFLO */
+  b.appendChild(el('div','note','M<sub>ux</sub>, M<sub>uy</sub> above are taken about the centroid of the critical section (ACI 318-19 8.4.4.2.2): M<sub>ped</sub> + P<sub>u</sub>(y<sub>ped</sub> \u2212 y<sub>c</sub>) \u2212 (P<sub>u</sub> \u2212 N)(y<sub>A</sub> \u2212 y<sub>c</sub>), with the soil relief and body forces inside the section at the clipped-area centroid; for an interior perimeter this is the pedestal moment. Pedestal moments: M<sub>x,ped</sub> = '+f2(gov.detail.MxPed)+', M<sub>y,ped</sub> = '+f2(gov.detail.MyPed)+' k-ft.'));   /* SFPC */
   b.appendChild(el('div','note','J_c and the extreme fibre are built from the critical faces that actually close within the footing (parallel-axis assembly of the thin-wall segments); for an untruncated interior perimeter this reduces identically to the closed form of ACI R8.4.4.2.3. The two eccentric-shear stresses are superposed at the governing corner (conservative). The pressure-relief area is the exact integral of the no-tension pressure solid over the clipped critical area. Edge and corner conditions additionally reduce \u03b1_s (30 / 20) and the flexural-transfer band \u2014 see the checks below.fers from the interior form \u2014 verify governing cases and the \u03b3_f flexural transfer by hand.'));
  }
 }

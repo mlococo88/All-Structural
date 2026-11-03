@@ -19746,6 +19746,38 @@ index 06a42e4..b58d4e3 100644
 +      PDRP.doc = api.doc; PDRP.last = { I, r, pyRes, pcr };   // in memory only (tests read the results the report was built from)
 ```
 
+## 2026-11-02 — PR: claude/plib-pile, PR #717: https://github.com/mlococo88/All-Structural/pull/717 — PLIB: Rename / Duplicate in the Project library, and Undo / Redo   [display and storage only]
+- **Before:** Project file panel (↓ Save .json, ↑ Load .json, Reset to defaults; autosave `micropile_lrfd_inputs_v1`); Project library panel
+  (IndexedDB `micropile_lrfd_db`, store `projects`, records `{ id, name, inputs, lpile, updatedAt }`): + Save as new, ⟳ Overwrite, and per
+  row load / del. No rename, no duplicate, no undo.
+- **Where** (the file has CRLF line endings, and one LF-only line in the BridgeXfer block that is left as it is; edits by exact-string script):
+  - after `<script src="shared/report.js"></script>`: `<script src="shared/projects.js"></script>` and `<script src="shared/projects-ui.js"></script>`.
+  - before `function newId() {` (IndexedDB block): `var PDPL, PDPL_I, PDPL_SET, PDPL_NEW; function pdPlibInit(setI, bu, br)`,
+    `function pdIdbErr(e, what)` (anchor `/* PLIB (2026-11-02): Undo / Redo`): history over `JSON.stringify(I)` (the inputs; the LPILE
+    import, the output tab and the open modules are not steps), session only; `set` = `setI()` of the step. `PDPL_I` mirrors the
+    rendered `I` (set in `App()` just before the autosave effect, and at once in `set`) so the history reads the inputs outside React.
+  - `App()`, the input autosave effect (anchor `window.localStorage.setItem(STORAGE_KEY, JSON.stringify(I));`): at the start of its
+    500 ms timer, `if (PDPL) { if (PDPL_NEW) { PDPL_NEW = false; PDPL.h.reset(); } else PDPL.h.record(); }` (one step per change;
+    after a project is opened the history starts again). After the effect: two refs and `useEffect(() => { pdPlibInit(setI,
+    pdUndoRef.current, pdRedoRef.current); }, [])`.
+  - `importProject()` and `loadProject()`: `PDPL_NEW = true;` before their `setI(mergeSavedInputs(…))` (another project, a new
+    history). Reset to defaults stays a step (it can be undone).
+  - after `deleteProject()`: `renameProject(id)` and `duplicateProject(id)` (anchor `/* PLIB (2026-11-02): rename / duplicate a saved
+    project`): the record is stored again (`idbPut`) unchanged apart from its name (rename) or its id and name (duplicate: `newId()`,
+    default name "<name> (copy)", the same inputs, LPILE import and saved time). Names need not be unique, as before (records are keyed
+    by id). A refused write shows `pdIdbErr` (a full store: "Browser storage is full…") in the panel's error line; nothing is changed.
+  - library rows: `ren` and `dup` buttons between `load` and `del` (`data-pdlib="ren"` / `"dup"`, the row buttons' style).
+  - header `.pd-hdrBtns`: Undo and Redo buttons before "Methodology & code path" (`data-sp`, refs; their disabled state is set by
+    `SharedProjectsUI.undoRedo`); Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z.
+- **Saved data:** IndexedDB `micropile_lrfd_db` / `projects` and its record format, `micropile_lrfd_inputs_v1`, `micropile_lrfd_lpile_v1`
+  unchanged; no new key or store.
+- **How verified:** new `node tests/smoke/pile-library.mjs` (the library is in IndexedDB, so `project-library.mjs` does not apply): ALL PASS
+  (page text and autosaved inputs identical to origin/main on load and after an input change; Undo / Redo / Ctrl+Z / Ctrl+Y exact;
+  Save as new, Rename (record unchanged but its name), Duplicate (new id and name, the rest unchanged), a refused write (message shown,
+  library unchanged), Load starts a new history, Delete Cancel / OK; no new console errors). Test-only: React 18.3.1 served from the
+  kit's 18.2.0; Tailwind is not in the kit, so the panel layout was not checked headless (the header buttons use the page's own
+  `.pd-hdrBtns` style). `node tests/check-syntax.mjs`: pass.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
 ## 2026-11-02 — PR: claude/report-retire-pile (PDRX: the print preview overlay and the print-section chooser retired; Print, Ctrl+P and the browser's Print print the Report from every output tab; the PrintReport component kept, hidden, only as the Report's data source; what the Report lacked ported; display only, no result change)
 
 ### PDRX-1. What the old print report showed and the Report lacked, ported   [display] [no result change]
