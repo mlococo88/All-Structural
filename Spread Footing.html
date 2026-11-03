@@ -3973,7 +3973,10 @@ function renderDrawings(){
  const src=id=>SRC[id]||(/^ped/.test(id)?['peddes','Pedestal Design']:null);
  const scName=k=>k===1?'NTS (paper inches)':((SFDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1]);
  T.innerHTML='<div class="sfdwBar"><label>Sheet <select id="sfdwSheet">'+B.S.map((s,j)=>'<option value="'+s.id+'"'+(s===cur?' selected':'')+'>'+(j+1)+'. '+sfEsc(s.title)+'</option>').join('')+'</select></label>'+
-  '<button type="button" id="sfdwDxf">Download DXF ('+B.S.length+' sheets)</button></div>'+
+  '<button type="button" id="sfdwDxf">Download DXF ('+B.S.length+' sheets)</button>'+
+  '<button type="button" id="sfdwPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button>'+
+  '<button type="button" id="sfdwPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets ('+B.S.length+')</button></div>'+
+  '<div class="note">'+sfEsc(SharedDxf.PRINT_NOTE)+'</div>'+
   '<div class="note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) drawn at its plot scale inside its border and title block, side by side; plot each sheet at its scale. Layers S-CONC, S-PED, S-REBAR, S-DIMS, S-TEXT, S-CNTR, S-LOAD, S-SOIL, S-CUT, S-TBLK, S-BRDR; dimensions are DIMENSION entities. The preview is drawn from the same entities as the file. Geometry and bars as entered; every value is worked on the tab named in the index.</div>'+
   '<div class="sfdwHead"><b>'+(B.S.indexOf(cur)+1)+'. '+sfEsc(cur.title)+'</b> · scale '+sfEsc(scName(cur.k))+(cur.over?' · <span style="color:#b71c1c">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
   '<div class="sfdwBox"></div><div class="note">Wheel: zoom about the cursor · drag: pan · pinch on a touch screen · double-click: fit · + / − / Fit buttons.</div>'+
@@ -3988,6 +3991,10 @@ function renderDrawings(){
   const txt=B.D.toDXF({ltscale:1}),chk=SharedDxf.validate(txt);
   if(!chk.ok){alert('The DXF file failed its structure check:\n'+chk.errors.slice(0,8).join('\n'));return;}
   SharedDxf.download(txt,(state.meta.number||state.meta.project||'spread_footing').replace(/[^\w.-]+/g,'_')+'_drawings.dxf');});
+ /* SFPS (2026-11-03): the sheets printed to 11 x 17 landscape pages at their plot scale (SharedDxf.printSheets); display only */
+ const prt=list=>SharedDxf.printSheets(list.map(s=>({svg:SharedDxf.sheetSVG(B.D,s),title:s.title})),{paper:[SFDW.W,SFDW.H]});
+ T.querySelector('#sfdwPrint1').addEventListener('click',()=>prt([cur]));
+ T.querySelector('#sfdwPrintAll').addEventListener('click',()=>prt(B.S));
 }
 </script>
 <script>
@@ -4140,10 +4147,10 @@ function sfdAnalyzeReq(){if(SFAC.on)recalc();else sfdSetStale(true);}   /* an in
  document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();recalc();}});
  /* outputs taken away from the page re-analyze first (the click is replayed on the rebuilt button) */
  document.addEventListener('click',e=>{
-  const t=e.target.closest&&e.target.closest('#btnPrint,#sfdwDxf,#tab-report [data-rpact="print"]');if(!t||!sfdIsStale())return;
+  const t=e.target.closest&&e.target.closest('#btnPrint,#sfdwDxf,#sfdwPrint1,#sfdwPrintAll,#tab-report [data-rpact="print"]');if(!t||!sfdIsStale())return;
   if(t.id==='btnPrint'){recalc();return;}   /* header button: not rebuilt, its own click goes on */
   e.preventDefault();e.stopPropagation();
-  const sel=t.id==='sfdwDxf'?'#sfdwDxf':'#tab-report [data-rpact="print"]';
+  const sel=/^sfdw/.test(t.id)?'#'+t.id:'#tab-report [data-rpact="print"]';
   recalc();const n=document.querySelector(sel);if(n)n.click();},true);
  /* capture: runs before the other beforeprint listeners (sfPrintPrep in <head>, SFRP), so the Report prints the new results */
  window.addEventListener('beforeprint',()=>{if(sfdIsStale())recalc();},true);
