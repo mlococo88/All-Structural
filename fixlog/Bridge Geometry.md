@@ -1470,7 +1470,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
   empties the history. `node tests/smoke/list-input.mjs --part bgeo`: pass. `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 
-## 2026-11-03 — PR: claude/bg-sheets — Drawings tab: drawing sheets on 11 × 17 at plot scale, DXF of the sheets, Print sheet / Print all sheets (BGDW; display only, no result change)
+## 2026-11-03 — PR: claude/bg-sheets (PR #752: https://github.com/mlococo88/All-Structural/pull/752) — Drawings tab: drawing sheets on 11 × 17 at plot scale, DXF of the sheets, Print sheet / Print all sheets (BGDW; display only, no result change)
 
 ### BGDW. Drawings tab   [display only]
 - **Request (engineer, approved):** sheet layouts as in Light Pole and Spread Footing: a Drawings view with a sheet selector, the zoomable
