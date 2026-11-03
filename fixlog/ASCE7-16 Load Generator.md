@@ -1132,7 +1132,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   `node tests/engine/run.mjs projects`: 8 passed. `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 
-## 2026-11-03 — PR: claude/report-retire-asce (A7RX: the Print / PDF report (D11 calc sheet) and its "Report Contents" dialog retired after porting everything the Report tab lacked; "Print / PDF", Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
+## 2026-11-03 — PR: claude/report-retire-asce, PR #722: https://github.com/mlococo88/All-Structural/pull/722 (A7RX: the Print / PDF report (D11 calc sheet) and its "Report Contents" dialog retired after porting everything the Report tab lacked; "Print / PDF", Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
 
 ### A7RX-1. Content of the Print / PDF report ported into the Report tab   [display] [no result change]
 - **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #623 … #702, abutment #715, Pile Designer #718): compare number by number, port what is missing (the tool's own values, no new formula), then remove the old report.
