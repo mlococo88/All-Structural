@@ -332,7 +332,7 @@ a.wkA:hover{text-decoration:underline}
  <div class="row"><label>Max. aggregate size d<sub>agg</sub></label><input type="number" step="0.125" min="0" data-path="mat.dagg" data-num><span class="unit">in</span><span class="hint">ACI 25.2.1 / 25.2.3: clear spacing &ge; 4/3 d<sub>agg</sub></span></div>   <!-- SFAG -->
  <div class="row"><label>Cover, top (formed)</label><input type="number" step="0.25" data-path="mat.coverTop" data-num><span class="unit">in</span></div>
  <div class="row"><label>Footing sides (cover)</label><select data-path="mat.sideExp"><option value="earth">Cast against earth (3 in)</option><option value="weather">Formed: exposed / in contact with ground</option></select><span class="hint">ACI Table 20.5.1.3.1</span></div>   <!-- SFCV -->
- <div class="row"><label>&ell;<sub>d</sub> reduction for excess A<sub>s</sub></label><select data-path="mat.ldExcess"><option value="off">Off (not taken)</option><option value="on">On: &ell;<sub>d</sub>&middot;A<sub>s,req</sub>/A<sub>s,prov</sub></option></select><span class="hint">ACI 25.4.10.1; footing mats, straight bars only</span></div>   <!-- SFDV -->
+ <div class="row"><label>&ell;<sub>d</sub> reduction for excess A<sub>s</sub></label><select data-path="mat.ldExcess"><option value="off">Off (not taken)</option><option value="on">On: &ell;<sub>d</sub>&middot;A<sub>s,req</sub>/A<sub>s,prov</sub></option></select><span class="hint">ACI 25.4.10.1; footing mats, straight bars, where flexure (not the 0.0018 minimum) governs A<sub>s,req</sub></span></div>   <!-- SFDV -->
  <div class="row"><label>Side/end cover, bottom bars</label><input type="text" data-path="mat.sfdCoverSide" placeholder="blank = bottom"><span class="unit">in</span><span class="hint">c<sub>b</sub> for &ell;<sub>d</sub></span></div>
  <div class="row"><label>Subgrade modulus k<sub>s</sub></label><input type="number" step="10" data-path="mat.ks" data-num><span class="unit">pci</span><span class="hint">(rigidity check)</span></div>
  <div class="row"><label>Footing self-weight</label><select data-path="mat.swMode" id="swMode"><option value="auto">Auto-compute</option><option value="user">User override</option></select></div>
@@ -1083,7 +1083,7 @@ function sfdPedBarTxt(i){const b=sfdPedBars(i),sz=(state.peds[i].reinf||{}).long
  return b.mode==='faces'?b.n+' #'+sz+' ('+b.nx+' per x-face, '+b.ny+' per y-face)':(b.mode==='total'?'total '+b.entered.replace(' bars','')+' #'+sz:'#'+sz+' at '+b.entered)+' → '+b.n+' bars ('+b.nx+' per x-face at '+f2(b.sx)+' in, '+b.ny+' per y-face at '+f2(b.sy)+' in)'+(b.note?'; '+b.note:'');}
 /* Reinforcement input tab (display only): bar area A_b (BAR_AREA), A_s per ft = A_b*12/s
    (barAreaPerFt, the value the footing design uses), and the spacing against s_max from the
-   footing design (P2.desX / desY .sMax = min(3h, 18 in), ACI 318-19 7.7.2.3 / 13.3.4).
+   footing design (P2.desX / desY .sMax = min(2h, 18 in), ACI 318-19 8.7.2.2 with 13.3.3.1 / 13.3.4.1; SFSM).
    Nothing is computed here that the design does not already compute. */
 function sfdRebarInfo(){
  const fr=state.freinf;if(!fr||!document.querySelector('.sfdRbAb'))return;
@@ -1107,7 +1107,7 @@ function sfdRebarInfo(){
   q('sfdRbS').innerHTML=sTxt;
  });
  const n=document.getElementById('sfdRbNote');
- if(n)n.innerHTML='A<sub>b</sub> from the bar table (#3\u2013#11); A<sub>s</sub> per ft of width is the value used in the footing design: A<sub>b</sub>&middot;12/s (spacing) or n&middot;A<sub>b</sub>/w (quantity; w = L for x-bars, B for y-bars). With a quantity, s = (12w &minus; 2c &minus; d<sub>b</sub>)/(n &minus; 1), c = side/end cover (Materials; blank = bottom cover), is used for the s<sub>max</sub> check and for c<sub>b</sub> of &ell;<sub>d</sub>; with a spacing, the bar count shown is floor((12w &minus; 2c &minus; d<sub>b</sub>)/s) + 1. s<sub>max</sub> = min(3h, 18 in) (ACI 318-19 7.7.2.3 / 13.3.4); top mats are checked only where hogging makes them flexural mats.'+
+ if(n)n.innerHTML='A<sub>b</sub> from the bar table (#3\u2013#11); A<sub>s</sub> per ft of width is the value used in the footing design: A<sub>b</sub>&middot;12/s (spacing) or n&middot;A<sub>b</sub>/w (quantity; w = L for x-bars, B for y-bars). With a quantity, s = (12w &minus; 2c &minus; d<sub>b</sub>)/(n &minus; 1), c = side/end cover (Materials; blank = bottom cover), is used for the s<sub>max</sub> check and for c<sub>b</sub> of &ell;<sub>d</sub>; with a spacing, the bar count shown is floor((12w &minus; 2c &minus; d<sub>b</sub>)/s) + 1. s<sub>max</sub> = min(2h, 18 in) (ACI 318-19 8.7.2.2; 13.3.3.1 / 13.3.4.1); top mats are checked only where hogging makes them flexural mats.'+
   ((P2&&P2.desX)?' Worked in: '+sfdLink('o-fd-x','x-bars',['tab-footdes','5.2 Longitudinal (x-direction)'])+' · '+sfdLink('o-fd-y','y-bars',['tab-footdes','5.3 Transverse (y-direction)']):'');
 }
 /* SFRQ: pedestal cards: which longitudinal-bar inputs apply, and the bars they give */
@@ -2905,7 +2905,7 @@ function sfdResultRows(){
   'Contact area':()=>['no-tension soil, rigid footing',null,['o-br-press']],
   'Rigidity (rigid method)':()=>['Bowles: λℓ ≤ π/4; D/C = λℓ/(π/4)',Math.max(R.rig.vx,R.rig.vy)/R.rig.limit,['o-st-rig']],
   'Input validation':()=>['input checks',null,[]],
-  'Flexure (footing)':()=>['ACI 318-19 §22.3; A<sub>s,min</sub> §7.6.1.1 / §24.4.3.2; s<sub>max</sub> §7.7.2.3',
+  'Flexure (footing)':()=>['ACI 318-19 §22.3; A<sub>s,min</sub> §7.6.1.1 / §24.4.3.2; s<sub>max</sub> §8.7.2.2',
    Math.max(P2.desX.dcrBot,P2.desY.dcrBot,...[P2.desX.dcrTop,P2.desY.dcrTop].filter(v=>v!=null)),['o-fd-x','o-fd-y']],
   'One-way shear':()=>[state.mat.vcMode==='a'?'override 2λ√f′<sub>c</sub> (not ACI 318-19 Table 22.5.5.1(c))':'ACI 318-19 Table 22.5.5.1(c), size effect §22.5.5.1.3',
    (P2.desX.oneWayOutside&&P2.desY.oneWayOutside)?null:Math.max(P2.desX.dcrV,P2.desY.dcrV),['o-fd-x','o-fd-y']],
@@ -2920,7 +2920,7 @@ function sfdResultRows(){
   'Dowels (tension, laps)':()=>['ACI 318-19 §16.3.1.1, §16.3.3, §22.4 (interface tension), §25.4.2 / §25.4.3 (tension development), §25.5.2 / §25.5.5 (laps); §16.3.4.1 (minimum); D/C = A<sub>s,gov</sub>/A<sub>s,prov</sub>, A<sub>s,gov</sub> = max(0.005A<sub>g</sub>, A<sub>s,req</sub>)',mx((P2.dowels||[]).filter(z=>!z.isPatch).map(z=>z.dcAs)),['o-fd-bear']],
   'Pedestal P\u2013M (biaxial)':()=>['ACI 318-19 §22.4, §22.2; D/C = |M<sub>u</sub>|/|φM<sub>n</sub>|<sub>θ</sub> on the contour at each combination’s own P<sub>u</sub> (P<sub>u</sub>/φP<sub>n,max</sub> above the axial cap)',mx(P2.pedDes.filter(z=>!z.isPatch&&z.pmGov).map(z=>z.pmRange&&z.pmRange.length?Infinity:(isNaN(z.pmGov.ratio)?0:z.pmGov.ratio))),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
   'Concrete cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/c',mx([...(P2.covChk?P2.covChk.rows.filter(z=>z.applies).map(z=>z.c>0?z.min/z.c:Infinity):[]),...P2.pedDes.filter(z=>!z.isPatch).map(z=>z.cov>0?z.vertCovMin/z.cov:Infinity)]),['o-fd-basis']],
-  'Footing bar development':()=>['ACI 318-19 §25.4.2.4 (straight), §25.4.3.1 / Table 25.4.3.2 (standard hook)'+(state.mat.ldExcess==='on'?', §25.4.10.1 (excess A<sub>s</sub>, straight only)':'')+'; D/C = ℓ<sub>d</sub> (or ℓ<sub>dh</sub> where hooked)/available',mx(((P2&&P2.dev)?P2.dev.rows:[]).map(z=>z.dc)),['o-fd-dev']],
+  'Footing bar development':()=>['ACI 318-19 §25.4.2.4 (straight), §25.4.3.1 / Table 25.4.3.2 (standard hook)'+(state.mat.ldExcess==='on'?', §25.4.10.1 (excess A<sub>s</sub>, straight bars where flexure governs A<sub>s,req</sub>)':'')+'; D/C = ℓ<sub>d</sub> (or ℓ<sub>dh</sub> where hooked)/available',mx(((P2&&P2.dev)?P2.dev.rows:[]).map(z=>z.dc)),['o-fd-dev']],
   'Pedestal shear':()=>['ACI 318-19 Table 22.5.5.1, §22.5.1.10–22.5.1.11 (biaxial), §10.6.2; D/C = V<sub>u</sub>/φV<sub>c</sub>',mx((P2.pedShear||[]).filter(z=>!z.isPatch&&z.gov).map(z=>z.gov.ratio)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
   'Pedestal crossties':()=>['ACI 318-19 §25.7.2.3 (every corner and alternate bar supported; none more than 6 in clear from a supported bar)',null,P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
   'Pedestal tie cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/(c \u2212 d<sub>b,tie</sub>)',mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.tieCov>0?z.tieCovMin/z.tieCov:Infinity)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)]};
@@ -3028,6 +3028,7 @@ function sfrCombined(){return !!(R&&R.peds&&R.peds.length>1);}
 function sfrRefs(){
  const ves=state.soil.mode==='vesic', em=state.stab.eccMode||'kern', aEcc=/^a_/.test(em), pp=num(state.stab.pf)>0;
  return SFD_REFS.map(([a,b])=>{
+  if(a==='ACI 318-19'&&!sfrCombined())return [a,b.replace('§7.7.2.3 / §13.3.4 (bar spacing)','§8.7.2.2 with §13.3.3.1 (bar spacing)')];   /* SFSM */
   if(a==='ACI 318-19'&&sfrCombined())return [a,b.replace('§7.6.1.1 / §24.4.3.2 (minimum steel), §7.7.2.3 / §13.3.4 (bar spacing)','§13.3.4.1 (combined footing, designed under Chapter 8), §8.6.1.1 / §24.4.3.2 (minimum steel), §8.7.2.2 (bar spacing), §13.3.3.3 (band steel, isolated footings; for information)').replace(', §13.3.3.3 (band steel)','')];
   if(a==='AASHTO LRFD'){const it=[ves?'Art. 10.6.3.1.2a (same N, shape and inclination factors as Vesić; use condition for depth factors; its Eq. 10.6.3.1.2a-10 depth factor is not the one used here)':'',aEcc?'10.6.3.3 / 11.6.3.3 and 10.6.4.2 / 11.6.5.1 (eccentricity limit selected)':'',pp?'10.6.3.4 (passive resistance, warning)':''].filter(Boolean);
    return it.length?[a,'Bridge Design Specifications, 10th Ed. (2024) — '+it.join(', ')]:null;}
@@ -3265,11 +3266,10 @@ function sfrModel(){
     S({id:'Asmin',label:'Shrinkage and temperature minimum',sym:'A_{s,min}',eq:'0.0018 \\cdot 12 h',sub:'0.0018\\cdot 12\\cdot'+sfrN(tin),value:des.AsMinPerFt,unit:'in^{2}/ft',d:3}),
     S({id:'Asprov',label:'Provided, bottom (per ft)',sym:'A_{s,prov}',eq:'\\ge A_{s,min}',sub:sfrN(des.AsBot,3)+(des.asMinBotOK?' \\ge ':' \\lt ')+sfrN(des.AsMinPerFt,3),value:des.AsBot,unit:'in^{2}/ft',d:3,ok:!!des.asMinBotOK}),
     ...(des.asMinTopReq&&des.topProvided?[S({id:'AsTprov',label:'Provided, top (a flexural mat: hogging)',sym:'A_{s,top}',eq:'\\ge A_{s,min}',sub:sfrN(des.AsTop,3)+(des.asMinTopOK?' \\ge ':' \\lt ')+sfrN(des.AsMinPerFt,3),value:des.AsTop,unit:'in^{2}/ft',d:3,ok:!!des.asMinTopOK})]:[])]});
-   T.push({title:'Bar spacing',ref:sfrCombined()?'ACI 318-19 13.3.4.1, 8.7.2.2, 25.2.1':'ACI 318-19 7.7.2.3, 13.3.3.1, 25.2.1',steps:[
+   T.push({title:'Bar spacing',ref:sfrCombined()?'ACI 318-19 13.3.4.1, 8.7.2.2, 25.2.1':'ACI 318-19 13.3.3.1, 8.7.2.2, 25.2.1',steps:[   /* SFSM */
     ...(des.AsBot>0?[S({id:'clrB',label:'Bottom bars, clear spacing (min = max(1 in, d_b, 4/3 d_agg) = '+sfrN(des.clrMinB)+' in; d_agg = '+sfrN(des.dagg,3)+' in)',sym:'s \\minus d_{b}',eq:'',sub:sfrN(des.spcBot)+' \\minus '+sfrN(des.dbB,3),value:des.clrB,unit:'in',ok:!!des.clrBotOK,ref:'ACI 318-19 25.2.1'})]:[]),   /* SFAG */
     ...(des.AsTop>0?[S({id:'clrT',label:'Top bars, clear spacing (min '+sfrN(des.clrMinT)+' in)',sym:'s_{top} \\minus d_{b}',eq:'',sub:sfrN(des.spcTop)+' \\minus '+sfrN(des.dbT,3),value:des.clrT,unit:'in',ok:!!des.clrTopOK,ref:'ACI 318-19 25.2.1'})]:[]),
-    (sfrCombined()&&2*tin>=18-1e-9)?S({id:'smax',label:'Maximum spacing at the critical sections (8.7.2.2; same value as min(3h, 18) of 7.7.2.3 for h ≥ 9 in)',sym:'s_{max}',eq:'\\min(2h,\\, 18)',sub:'\\min(2\\cdot'+sfrN(tin)+',\\,18)',value:des.sMax,unit:'in',ref:'ACI 318-19 8.7.2.2'})
-    :S({id:'smax',label:'Maximum spacing'+(sfrCombined()?' (7.7.2.3 form; 8.7.2.2 gives min(2h, 18) = '+sfrN(Math.min(2*tin,18))+' in at the critical sections: check by hand)':''),sym:'s_{max}',eq:'\\min(3h,\\, 18)',sub:'\\min(3\\cdot'+sfrN(tin)+',\\,18)',value:des.sMax,unit:'in'}),
+    S({id:'smax',label:'Maximum spacing: the lesser of 2h and 18 in (8.7.2.2, at the critical sections; applied to the whole mat'+(sfrCombined()?'':'; isolated footing through 13.3.3.1')+')',sym:'s_{max}',eq:'\\min(2h,\\, 18)',sub:'\\min(2\\cdot'+sfrN(tin)+',\\,18)',value:des.sMax,unit:'in',ref:'ACI 318-19 8.7.2.2'}),   /* SFSM: before min(3h, 18) */
     S({id:'s',label:'Bottom bars: #'+(mt.size||0)+' at s',sym:'s',eq:'\\le s_{max}',sub:sfrN(des.spcBot)+(des.spcBotOK?' \\le ':' \\gt ')+sfrN(des.sMax),value:des.spcBot,unit:'in',ok:!!des.spcBotOK}),
     ...(des.asMinTopReq&&des.AsTop>0?[S({id:'sT',label:'Top bars at s',sym:'s_{top}',eq:'\\le s_{max}',sub:sfrN(des.spcTop)+(des.spcTopOK?' \\le ':' \\gt ')+sfrN(des.sMax),value:des.spcTop,unit:'in',ok:!!des.spcTopOK})]:[])]});
    if(des.oneWayOutside)T.push({title:'One-way shear',ref:'ACI 318-19 8.5.3, 22.5',steps:[S({id:'vna',label:'Critical section at d from every face falls outside the footing',sym:'V_{u}',eq:'',sub:'',value:'not applicable'})]});
@@ -3286,7 +3286,8 @@ function sfrModel(){
      sub:'\\frac{3}{40}\\cdot\\frac{'+sfrN(P2.fy,0)+'}{'+sfrN(dv.lam)+'\\cdot'+sfrN(dv.sqfc,2)+'}\\cdot\\frac{'+sfrN(dv.psi_te)+'\\cdot'+sfrN(dv.psi_s)+'\\cdot'+sfrN(dv.psi_g)+'}{'+sfrN(dv.conf,3)+'}\\cdot'+sfrN(dv.db,3),value:dv.Ld,unit:'in',
      note:'ψ_tψ_e = min('+sfrN(dv.psi_t)+'·'+sfrN(dv.psi_e)+', 1.7) = '+sfrN(dv.psi_te)+' (Table 25.4.2.5, coating '+(state.mat.coating==='epoxy'?'epoxy':'none')+'), ψ_s = '+sfrN(dv.psi_s)+', ψ_g = '+sfrN(dv.psi_g)+'; c_b = min(c + d_b/2, s/2) = min('+sfrN(z.cov)+' + '+sfrN(dv.db/2,3)+', '+sfrN(sfdMat(z.k).spc/2,3)+') = '+sfrN(dv.cb,3)+' in, K_tr = 0, (c_b + K_tr)/d_b ≤ 2.5'}));
     st.push(S({id:q+'avail',label:'Available from the governing '+(z.top?'hogging':'sagging')+' section ('+sc+' = '+sfrN(z.sec,3)+' ft) to the nearer edge, less the end cover',sym:'\\ell_{avail}',eq:'12\\left(\\frac{'+BL+'}{2} \\minus |'+sc+'_{sec}|\\right) \\minus c_{end}',sub:'12\\cdot('+sfrN(z.hf,3)+' \\minus '+sfrN(Math.abs(z.sec),3)+') \\minus '+sfrN(z.endC),value:z.avail,unit:'in'}));
-    if(P2.dev.exOn)st.push(S({id:q+'ldx',label:'Reduced for excess reinforcement (option on): A_s,req = '+sfrN(z.AsReq,3)+' in²/ft'+(z.top?' (max of flexure and A_s,min)':' (flexure, not less than A_s,min)')+', A_s,prov = '+sfrN(z.AsProv,3)+' in²/ft',sym:'\\ell_{d,red}',eq:'\\max\\left(\\ell_{d}\\frac{A_{s,req}}{A_{s,prov}},\\,12\\right)',sub:'\\max('+sfrN(dv.LdRaw)+'\\cdot\\frac{'+sfrN(z.AsReq,3)+'}{'+sfrN(z.AsProv,3)+'},\\,12)',value:z.LdEx,unit:'in',ref:'ACI 318-19 25.4.10.1, 25.4.2.1(b)'}));
+    if(P2.dev.exOn&&!z.flexGov)st.push(S({id:q+'ldx',label:'Reduction for excess reinforcement (option on) not taken: A_s,min = 0.0018A_g = '+sfrN(z.AsMin,3)+' in²/ft governs A_s,req (flexure alone '+sfrN(z.AsFlex,3)+' in²/ft); the bars are shrinkage and temperature reinforcement there, to which 25.4.10.1 does not apply (commentary R25.4.10.2)',sym:'\\ell_{d,red}',eq:'\\ell_{d}',sub:sfrN(dv.Ld),value:z.LdEx,unit:'in',ref:'ACI 318-19 25.4.10.1, R25.4.10.2'}));
+    else if(P2.dev.exOn)st.push(S({id:q+'ldx',label:'Reduced for excess reinforcement (option on; flexure governs A_s,req): A_s,req = '+sfrN(z.AsReq,3)+' in²/ft (flexure ≥ A_s,min = '+sfrN(z.AsMin,3)+'), A_s,prov = '+sfrN(z.AsProv,3)+' in²/ft',sym:'\\ell_{d,red}',eq:'\\max\\left(\\ell_{d}\\frac{A_{s,req}}{A_{s,prov}},\\,12\\right)',sub:'\\max('+sfrN(dv.LdRaw)+'\\cdot\\frac{'+sfrN(z.AsReq,3)+'}{'+sfrN(z.AsProv,3)+'},\\,12)',value:z.LdEx,unit:'in',ref:'ACI 318-19 25.4.10.1, 25.4.2.1(b)'}));
     const ls=P2.dev.exOn?'\\ell_{d,red}':'\\ell_{d}';
     st.push(S({id:q+'ldok',label:'Straight bars: '+(z.strOK?'develop':'do not develop'),chk:'straight ℓ_d',sym:'',eq:ls+' \\le \\ell_{avail}',sub:sfrN(z.LdUse)+(z.strOK?' \\le ':' \\gt ')+sfrN(z.avail),value:'',...(z.strOK?{ok:true}:{})}));
     if(!z.strOK){
@@ -3350,7 +3351,7 @@ function sfrModel(){
     S({id:'p'+z.idx+'.AsGov',chk:'dowel area',label:'Governing dowel area vs provided ('+z.nD+' #'+z.ds+'): demand / capacity A_s,gov / A_s,prov = '+(isFinite(z.dcAs)?sfrN(z.dcAs,3):'∞'),sym:'A_{s,gov}',eq:'\\max(A_{s,min},\\,A_{s,req})',sub:'\\max('+sfrN(z.AsMin)+',\\,'+(isFinite(z.AsReq)?sfrN(z.AsReq||0):'\\infty')+')',value:isFinite(z.AsGov)?z.AsGov:'∞',unit:'in^{2}',ok:!!z.asOK,note:(z.asOK?'≤':'>')+' A_s,prov = '+z.nD+' × '+sfrN(z.Ab)+' = '+sfrN(z.AsProv)+' in²'}));
    if(!z.cont)st.push(S({id:'p'+z.idx+'.cnt',chk:'dowel count',rev:z.countDiff?'dowels '+z.nD+' vs vertical bars '+z.nPos:'',label:'Dowels against the vertical bars they lap with (separate dowels): '+z.nD+' dowels, '+z.nPos+' vertical bars'+(z.countDiff?': REVIEW, each vertical bar needs a dowel to lap with; the interface check spreads A_s,dow = '+sfrN(z.AsProv)+' in² over the '+z.nPos+' bar positions':': one dowel per bar'),sym:'',eq:'',sub:'',value:z.countDiff?'differ':'equal'}));   /* SFDN */
    if(z.ld)st.push(S({id:'p'+z.idx+'.Lftg',rev:(z.sfNeed&&!z.tension&&!z.ftgOK)?'dowel development for shear friction short (proportional credit)':'',chk:'dowel tension development into the footing',label:'Footing side: tension development into the footing ('+(z.hook==='hook90'?'standard 90° hook, ℓ_dh, 25.4.3.1':'straight, ℓ_d, 25.4.2.4')+') vs available t − c_bot − d_b,x − d_b,y'+(z.devTen?'':' (not required here: no interface tension and shear friction not relying on the dowels)'),sym:z.hook==='hook90'?'\\ell_{dh}':'\\ell_{d}',eq:z.hook==='hook90'?'\\max(\\frac{f_{y}\\psi_{e}\\psi_{r}\\psi_{o}\\psi_{c}}{55\\lambda\\sqrt{'+SFR_FC+'}}d_{b}^{1.5},\\,8d_{b},\\,6)':'\\frac{3}{40}\\frac{f_{y}}{\\lambda\\sqrt{'+SFR_FC+'}}\\frac{\\psi_{t}\\psi_{e}\\psi_{s}\\psi_{g}}{(c_{b}+K_{tr})/d_{b}}d_{b} \\ge 12',
-     sub:z.hook==='hook90'?'\\max(\\frac{'+sfrN(P2.fy,0)+'\\cdot'+sfrN(z.ldh.pe)+'\\cdot'+sfrN(z.ldh.pr)+'\\cdot'+sfrN(z.ldh.po)+'\\cdot'+sfrN(z.ldh.pc,3)+'}{55\\cdot'+sfrN(P2.lam)+'\\cdot'+sfrN(z.ldh.sq)+'}\\cdot'+sfrN(z.db,3)+'^{1.5},\\,'+sfrN(8*z.db)+',\\,6)':'\\frac{3}{40}\\cdot\\frac{'+sfrN(P2.fy,0)+'}{'+sfrN(P2.lam)+'\\cdot'+sfrN(z.ld.sqfc)+'}\\cdot\\frac{'+sfrN(z.ld.psi_te*z.ld.psi_s*z.ld.psi_g,3)+'}{'+sfrN(z.ld.conf,3)+'}\\cdot'+sfrN(z.db,3),value:z.LftgReq,unit:'in',...(z.tension?{ok:!!z.ftgOK}:{}),note:'available '+sfrN(z.availEmb)+' in'+(z.sfNeed&&!z.tension?(z.ftgOK?'; shear friction relies on the dowels: developed':'; REVIEW: shear friction only (no interface tension), so not a pass / fail item; shear friction takes the proportional credit, see §f'+z.idx+'.fr'):'')}));   /* SFDB: shown always; SFDR */
+     sub:z.hook==='hook90'?'\\max(\\frac{'+sfrN(P2.fy,0)+'\\cdot'+sfrN(z.ldh.pe)+'\\cdot'+sfrN(z.ldh.pr)+'\\cdot'+sfrN(z.ldh.po)+'\\cdot'+sfrN(z.ldh.pc,3)+'}{55\\cdot'+sfrN(P2.lam)+'\\cdot'+sfrN(z.ldh.sq)+'}\\cdot'+sfrN(z.db,3)+'^{1.5},\\,'+sfrN(8*z.db)+',\\,6)':'\\frac{3}{40}\\cdot\\frac{'+sfrN(P2.fy,0)+'}{'+sfrN(P2.lam)+'\\cdot'+sfrN(z.ld.sqfc)+'}\\cdot\\frac{'+sfrN(z.ld.psi_te*z.ld.psi_s*z.ld.psi_g,3)+'}{'+sfrN(z.ld.conf,3)+'}\\cdot'+sfrN(z.db,3),value:z.LftgReq,unit:'in',...(z.tension?{ok:!!z.ftgOK}:{}),ref:z.hook==='hook90'?'ACI 318-19 25.4.3.1, Table 25.4.3.2':'ACI 318-19 25.4.2.4',note:(z.hook==='hook90'?sfdDowHookTxt(z)+'; ':'')+'no reduction for excess reinforcement (25.4.10.1 not applied to dowels: they are developed for f_y, 22.9.5.1, 25.4.10.2(b))'+'; available '+sfrN(z.availEmb)+' in'+(z.sfNeed&&!z.tension?(z.ftgOK?'; shear friction relies on the dowels: developed':'; REVIEW: shear friction only (no interface tension), so not a pass / fail item; shear friction takes the proportional credit, see §f'+z.idx+'.fr'):'')}));   /* SFDB: shown always; SFDR */
    if(z.cont)st.push(S({id:'p'+z.idx+'.cont',label:'Pedestal side: the dowels are the pedestal longitudinal bars, continuous through the joint (no splice), so they are developed in the pedestal by definition; no lap or projection check',sym:'',eq:'',sub:'',value:'—'}));   /* SFDB */
    if(!z.cont&&z.ld)st.push(S({id:'p'+z.idx+'.lst',label:'Class B tension lap with the vertical bars (all dowels spliced at one section)',sym:'\\ell_{st}',eq:'\\max(1.3\\,\\ell_{d,small},\\,\\ell_{d,large},\\,12)',sub:'\\max(1.3\\cdot'+sfrN(z.lstSmall)+',\\,'+sfrN(z.lstLarge)+',\\,12)',value:z.lst,unit:'in',ref:'ACI 318-19 25.5.2'}));
     if(z.tenKern)tabs.push({type:'table',head:[z.label+': combination (interface in tension)','P_u (kip)','M_ux (kip-ft)','M_uy (kip-ft)','σ_min (ksi)','ratio','k (A_s,req / A_s,prov)'],rows:z.tenRat.map(q=>({cells:[q===z.kGov?{t:q.name,key:'dow/p'+z.idx+'.AsReq'}:q.name,sfrCell(q.P),sfrCell(q.Mx),sfrCell(q.My),sfrCell(q.sig,3),isFinite(q.ratio)?sfrDC(q.ratio):sfrCell('> capacity'),isFinite(q.k)?sfrCell(q.k,3):sfrCell('∞')],cls:q===z.kGov?'gov':''}))});
@@ -4100,9 +4101,17 @@ function sfdLsc(db,fy,fc){   // ACI 318-19 25.5.5.1 (and 25.5.5.3 for f'c < 3000
  if(!(db>0))return 0;let v=fy<=60000?Math.max(0.0005*fy*db,12):(fy<=80000?Math.max((0.0009*fy-24)*db,12):NaN);
  if(fc<3000)v*=4/3;return v;}
 function sfdLdc(db,fy,lam,fc){const sq=Math.min(Math.sqrt(fc),100);return Math.max(0.02*db*fy/(lam*sq),0.0003*db*fy,8);}
-function sfdLdh(db,fy,lam,fc,coating){   // ACI 318-19 25.4.3.1(a); psi_r = 1.6 (no confining ties around the hook in the footing), psi_o = 1.0 (side cover in the footing >= 6 d_b)
- const sq=Math.min(Math.sqrt(fc),100), pe=coating==='epoxy'?1.2:1.0, pr=1.6, po=1.0, pc=fc<6000?fc/15000+0.6:1.0;
- const raw=fy*pe*pr*po*pc/(55*lam*sq)*Math.pow(db,1.5);return {Ldh:Math.max(raw,8*db,6),raw,pe,pr,po,pc,sq};}
+/* SFDH (2026-11-03, engineer): dowel hook factors per ACI 318-19 Table 25.4.3.2, as the footing bars (SFDV):
+   psi_r = 1.0 for No. 11 and smaller with the minimum c-c spacing of the hooked dowels s >= 6 d_b, else 1.6 (A_th not
+   considered); psi_o = 1.0 for No. 11 and smaller with the side cover normal to the plane of the hook >= 6 d_b (cso: the
+   clear plan distance from the outermost dowel to the nearest footing side face), else 1.25. The column-core condition
+   (1) of psi_o does not apply: the hook ends in the footing. Before: psi_r = 1.6, psi_o = 1.0 always. */
+function sfdLdh(db,fy,lam,fc,coating,size,sMin,cso){   // ACI 318-19 25.4.3.1(a), Table 25.4.3.2
+ const sq=Math.min(Math.sqrt(fc),100), pe=coating==='epoxy'?1.2:1.0, sm=size<=11,
+  pr=(sm&&sMin>=6*db-1e-9)?1.0:1.6, po=(sm&&cso>=6*db-1e-9)?1.0:1.25, pc=fc<6000?fc/15000+0.6:1.0;
+ const raw=fy*pe*pr*po*pc/(55*lam*sq)*Math.pow(db,1.5);return {Ldh:Math.max(raw,8*db,6),raw,pe,pr,po,pc,sq,sMin,cso};}
+function sfdDowHookTxt(z){const h=z.ldh;if(!h)return '';const lim=6*z.db;   /* SFDH: the Table 25.4.3.2 choices, in words */
+ return 'ψ_e = '+f2(h.pe)+', ψ_r = '+f2(h.pr)+' ('+(z.ds>11?'larger than No. 11':'minimum c-c spacing of the dowels '+(isFinite(h.sMin)?f2(h.sMin):'—')+' in'+(h.pr===1?' ≥ ':' < ')+'6d_b = '+f2(lim)+' in')+'), ψ_o = '+f2(h.po)+' ('+(z.ds>11?'larger than No. 11':'side cover of the outermost dowel to the footing side, normal to the plane of the hook, '+f2(h.cso)+' in'+(h.po===1?' ≥ ':' < ')+'6d_b')+'), ψ_c = '+f3(h.pc);}
 function sfdDowelCheck(i,p,bz,pd,combos,fc,fy,lam,sfPre){   // sfPre: shear friction with A_vf = 0 (SFDA: dowels relied on when it fails)
  const rf=state.peds[i].reinf, o={idx:i,label:p.label,isPatch:!!pd.isPatch};
  if(pd.isPatch)return o;
@@ -4154,7 +4163,13 @@ function sfdDowelCheck(i,p,bz,pd,combos,fc,fy,lam,sfPre){   // sfPre: shear fric
  o.devTen=o.tension||o.sfNeed;
  if(db>0){   // tension development lengths (SFDA: always computed; required only where o.devTen, used for A_vf in SFSF)
   o.ld=devLength(ds,fc,fy,false,{lam,cover:cov,spc:(nD>0?2*((bx-2*cov-db)+(by-2*cov-db))/nD:Infinity),coating:coat,detail:true});
-  o.ldh=sfdLdh(db,fy,lam,fc,coat);
+  /* SFDH: minimum c-c spacing of the dowels (at the vertical-bar positions: the smaller face spacing; a different count:
+     spread evenly around the perimeter at cover + d_b/2) and side cover of the outermost dowel to the footing sides */
+  const nXf=Math.max(PB.nx,2), nYf=Math.max(PB.ny,2);
+  o.sDow=nD>0?(nD===nPos?Math.min((bx-2*dPrD)/(nXf-1),(by-2*dPrD)/(nYf-1)):2*((bx-2*dPrD)+(by-2*dPrD))/nD):Infinity;
+  o.edgeX=(R.B/2-Math.abs(p.x)-p.bx/2)*12;o.edgeY=(R.L/2-Math.abs(p.y)-p.by/2)*12;
+  o.cso=Math.max(0,Math.min(o.edgeX,o.edgeY))+cov;
+  o.ldh=sfdLdh(db,fy,lam,fc,coat,ds,o.sDow,o.cso);
   o.LftgReq=hook==='hook90'?o.ldh.Ldh:o.ld.Ld;
   const ldL=devLength(sl,fc,fy,false,{lam,cover:cov,spc:Math.min(PB.sx,PB.sy),coating:coat,detail:true});
   o.ldL=ldL;const small=db<=dl?o.ld.Ld:ldL.Ld, large=db<=dl?ldL.Ld:o.ld.Ld;
@@ -4719,7 +4734,8 @@ function computePhase2(R){
      minimum.  Applied to the top mat as well whenever hogging requires top steel; where there
      is no hogging the top mat is not a flexural mat and the shrinkage/temperature requirement
      is satisfied by the bottom mat, which is reported rather than silently skipped. */
-  const reqBot=Math.max(reqAs(MuPos*12,bIn,dBot,fc,fy)/wperp,MuPos>0?AsMinPerFt:0); // per ft, not less than min
+  const reqBotFlex=reqAs(MuPos*12,bIn,dBot,fc,fy)/wperp;   // SFEX: flexure alone, per ft (display and the 25.4.10.1 option)
+  const reqBot=Math.max(reqBotFlex,MuPos>0?AsMinPerFt:0); // per ft, not less than min
   const reqTop=reqAs(MuNeg*12,bIn,dTop,fc,fy)/wperp;
   // hogging that needs top steel but none provided -> flag (not a hard fail if within min steel capability)
   const topNeeded=MuNeg>0.01, topProvided=AsTop>0;
@@ -4744,10 +4760,11 @@ function computePhase2(R){
   const asMinBotOK=(AsBot>=AsMinPerFt-1e-9);
   const asMinTopReq=(MuNeg>0.01);                     // top mat is a flexural mat only if hogging
   const asMinTopOK=asMinTopReq?(AsTop>=AsMinPerFt-1e-9):true;
-  /* Maximum spacing of flexural bars: lesser of 3h and 18 in (ACI 318-19 7.7.2.3, applied to
-     footings through 13.3.3 / 13.3.4). Bottom mat always; top mat only where it is a
-     flexural mat (hogging), consistent with the A_s,min treatment above. */
-  const sMax=Math.min(3*tin,18);
+  /* Maximum spacing of flexural bars: lesser of 2h and 18 in (ACI 318-19 8.7.2.2 at critical sections; footings
+     reach Chapter 8 through 13.3.3.1 (isolated) / 13.3.4.1 (combined)), applied to the whole mat. Bottom mat always;
+     top mat only where it is a flexural mat (hogging), consistent with the A_s,min treatment above.
+     SFSM (2026-11-03, engineer): before, min(3h, 18 in) (7.7.2.3); differs only for h < 9 in. */
+  const sMax=Math.min(2*tin,18);
   const spcBot=sfdMat(dir==='x'?'botX':'botY').spc;   // SFRQ: as entered, or derived from the quantity
   const spcTop=sfdMat(dir==='x'?'topX':'topY').spc;
   const spcBotOK=!(AsBot>0)||spcBot<=sMax+1e-9;
@@ -4757,7 +4774,7 @@ function computePhase2(R){
   const clrMinB=Math.max(1,mB.db,4/3*dag), clrB=spcBot-mB.db, clrBotOK=!(mB.size>0&&AsBot>0)||clrB>=clrMinB-1e-9;
   const clrMinT=Math.max(1,mT.db,4/3*dag), clrT=spcTop-mT.db, clrTopOK=!(mT.size>0&&AsTop>0)||clrT>=clrMinT-1e-9;
   return{dir,wperp,dBot,dTop,AsBot,AsTop,capBot,capTop,MuPos,MuNeg,govPos,govNeg,
-   AsMinPerFt,reqBot,reqTop,topNeeded,topProvided,asMinBotOK,asMinTopReq,asMinTopOK,sMax,spcBot,spcTop,spcBotOK,spcTopOK,clrMinB,clrB,clrBotOK,clrMinT,clrT,clrTopOK,dagg:dag,dbB:mB.db,dbT:mT.db,
+   AsMinPerFt,reqBotFlex,reqBot,reqTop,topNeeded,topProvided,asMinBotOK,asMinTopReq,asMinTopOK,sMax,spcBot,spcTop,spcBotOK,spcTopOK,clrMinB,clrB,clrBotOK,clrMinT,clrT,clrTopOK,dagg:dag,dbB:mB.db,dbT:mT.db,
    dcrBot:capBot.phiMn>0?(MuPos*12)/capBot.phiMn:(MuPos>0?Infinity:0),
    dcrTop:topProvided?(capTop.phiMn>0?(MuNeg*12)/capTop.phiMn:Infinity):null,
    maxV,govV,govVloc,govMloc,govNegLoc,lam_s,Vc,phiV,rhoW,vcCoef,vcOverride,vcCapped,VcCap,oneWayOutside:!anyOneWaySection,
@@ -5334,9 +5351,9 @@ function sfdDevData(dir){
 /* SFDV (2026-11-03, engineer; review C2, C3): development of the footing mats, worked for every mat that has a critical
    section (bottom: the governing sagging section; top: the governing hogging section, where the top mat is a flexural mat).
    (1) straight l_d, ACI 318-19 25.4.2.4 (devLength; top bars psi_t = 1.3, c_b from the top cover);
-   (2) optional reduction for excess reinforcement, 25.4.10.1: l_d x (A_s,req / A_s,prov), A_s,req = the required area per ft
-       including A_s,min (des.reqBot; top: max(A_s,req, A_s,min)), not less than 12 in (25.4.2.1(b)); input mat.ldExcess,
-       default 'off'. Not applied to hooks: 25.4.10.2(d) does not permit it for hooked bars;
+   (2) optional reduction for excess reinforcement, 25.4.10.1: l_d x (A_s,req / A_s,prov), A_s,req = the flexural area per ft,
+       not less than 12 in (25.4.2.1(b)); input mat.ldExcess, default 'off'. SFEX: taken only where flexure governs A_s,req;
+       where A_s,min = 0.0018 A_g governs, no reduction (R25.4.10.2). Not applied to hooks: 25.4.10.2(d);
    (3) standard hook l_dh, 25.4.3.1, Table 25.4.3.2: psi_e 1.2 epoxy / 1.0; psi_r 1.0 where the c-c spacing s >= 6 d_b
        (No. 11 and smaller), else 1.6 (confining ties A_th are not considered); psi_o 1.0 where the side cover normal to the
        plane of the hook (the side / end cover of the outermost bar) >= 6 d_b, else 1.25; psi_c = f'c/15000 + 0.6 below
@@ -5359,14 +5376,17 @@ function sfdDevAll(){
   if(!(avail>0))return;
   const cov=top?num(state.mat.coverTop):sfdCbCover();
   const dv=devLength(size,fc,fy,top,{lam,cover:cov,spc:m.spc,coating:coat,detail:true});
-  const AsReq=top?Math.max(des.reqTop,des.AsMinPerFt):des.reqBot, AsProv=m.As, rEx=AsProv>0?Math.min(1,AsReq/AsProv):1;
+  /* SFEX (2026-11-03, engineer): 25.4.10.1 only where flexure governs A_s,req; where the 0.0018 A_g minimum (shrinkage and
+     temperature, 24.4.3.2) governs, no reduction (R25.4.10.2). Before: A_s,req = max(flexure, A_s,min) in the ratio. */
+  const AsFlex=top?des.reqTop:des.reqBotFlex, flexGov=AsFlex>=des.AsMinPerFt-1e-12;
+  const AsReq=top?Math.max(des.reqTop,des.AsMinPerFt):des.reqBot, AsProv=m.As, rEx=(flexGov&&AsProv>0)?Math.min(1,AsReq/AsProv):1;
   const LdEx=Math.max(dv.LdRaw*rEx,12), LdUse=exOn?LdEx:dv.Ld;
   const db=dv.db, pe=coat==='epoxy'?1.2:1.0, pr=(size<=11&&m.spc>=6*db-1e-9)?1.0:1.6, po=(size<=11&&endC>=6*db-1e-9)?1.0:1.25, pc=fc<6000?fc/15000+0.6:1.0;
   const ldhRaw=fy*pe*pr*po*pc/(55*lam*sq)*Math.pow(db,1.5), Ldh=Math.max(ldhRaw,8*db,6);
   const ldhInt=Math.max(fy*pe*pr*1.0*pc/(55*lam*sq)*Math.pow(db,1.5),8*db,6);   // interior bars (side cover large): psi_o = 1.0, information
   const strOK=LdUse<=avail+1e-9, hookOK=Ldh<=avail+1e-9;
   const status=strOK?'pass':(hookOK?'review':'fail');
-  out.rows.push({k,dir,top,size,db,hf,sec,endC,avail,cov,dv,AsReq,AsProv,rEx,LdEx,LdUse,pe,pr,po,pc,sq,ldhRaw,Ldh,ldhInt,strOK,hookOK,status,
+  out.rows.push({k,dir,top,size,db,hf,sec,endC,avail,cov,dv,AsReq,AsFlex,flexGov,AsMin:des.AsMinPerFt,AsProv,rEx,LdEx,LdUse,pe,pr,po,pc,sq,ldhRaw,Ldh,ldhInt,strOK,hookOK,status,
    lab:(top?'Top ':'Bottom ')+dir+'-bars (#'+size+')',dc:(strOK?LdUse:Ldh)/avail});
  });
  out.status=out.rows.some(z=>z.status==='fail')?'fail':(out.rows.some(z=>z.status==='review')?'review':'pass');
@@ -5414,14 +5434,14 @@ function renderFootingDesign(){
   b.appendChild(el('div','note','Minimum flexural steel uses the shrinkage-and-temperature ratio 0.0018A_g (ACI 318-19 7.6.1.1 / 24.4.3.2 for one-way footing slabs), not the beam minimum 3\u221af\u2032_c/f_y\u00b7b_w\u00b7d of 9.6.1.2. Per ACI 318-19 7.6.1.1 the shrinkage/temperature minimum satisfies the footing-slab minimum-reinforcement requirement.'));
   if(!des.asMinBotOK)b.appendChild(el('div','failbox','<b>NG \u2014 A<sub>s</sub> below the code minimum.</b> Provided bottom steel in '+dir+' = '+f2(des.AsBot)+' in\u00b2/ft vs A<sub>s,min</sub> = 0.0018bh = '+f2(des.AsMinPerFt)+' in\u00b2/ft (ACI 318-19 24.4.3.2 via 7.6.1.1). This is a code non-compliance, not an advisory, and it governs this direction irrespective of the moment DCR.'));
   if(des.asMinTopReq&&!des.asMinTopOK)b.appendChild(el('div','failbox','<b>NG \u2014 top mat below the code minimum.</b> Hogging requires top steel in '+dir+' (M<sub>u</sub><sup>\u2212</sup> = '+f2(des.MuNeg)+' k-ft), so the top mat is a flexural mat: provided '+f2(des.AsTop)+' in\u00b2/ft vs A<sub>s,min</sub> = '+f2(des.AsMinPerFt)+' in\u00b2/ft.'));
-  if(!des.spcBotOK)b.appendChild(el('div','failbox','<b>NG \u2014 bottom bar spacing exceeds the maximum.</b> '+dir+'-bars at '+f2(des.spcBot)+' in vs s<sub>max</sub> = min(3h, 18 in) = '+f2(des.sMax)+' in (ACI 318-19 7.7.2.3 / 13.3.4).'));
-  else b.appendChild(el('div','note','Bottom '+dir+'-bar spacing '+f2(des.spcBot)+' in \u2264 s<sub>max</sub> = min(3h, 18 in) = '+f2(des.sMax)+' in (ACI 318-19 7.7.2.3 / 13.3.4) \u2713'));
+  if(!des.spcBotOK)b.appendChild(el('div','failbox','<b>NG \u2014 bottom bar spacing exceeds the maximum.</b> '+dir+'-bars at '+f2(des.spcBot)+' in vs s<sub>max</sub> = min(2h, 18 in) = '+f2(des.sMax)+' in (ACI 318-19 8.7.2.2; 13.3.3.1 / 13.3.4.1).'));
+  else b.appendChild(el('div','note','Bottom '+dir+'-bar spacing '+f2(des.spcBot)+' in \u2264 s<sub>max</sub> = min(2h, 18 in) = '+f2(des.sMax)+' in (ACI 318-19 8.7.2.2; 13.3.3.1 / 13.3.4.1) \u2713'));
   if(des.AsBot>0)b.appendChild(eqBlock('Minimum clear spacing, '+dir+'-bars','ACI 318-19 25.2.1',   /* SFAG */
    's - d_b \\ge \\max(1\\;\\mathrm{in},\\;d_b,\\;\\tfrac{4}{3}d_{agg})',
    '\\text{bottom: }'+f2(des.spcBot)+' - '+f3(des.dbB)+' = '+f2(des.clrB)+'\\;\\mathrm{in}\\;\\text{vs}\\;\\max(1,\\,'+f3(des.dbB)+',\\,\\tfrac{4}{3}\\cdot'+f3(des.dagg)+') = '+f2(des.clrMinB)+(des.AsTop>0?';\\quad\\text{top: }'+f2(des.spcTop)+' - '+f3(des.dbT)+' = '+f2(des.clrT)+'\\;\\text{vs}\\;'+f2(des.clrMinT):''),
    (des.clrBotOK&&des.clrTopOK)?'\\text{clear spacing OK}\\;\\checkmark':'\\text{NG \u2014 bars too close}'));
   {const e=sfdMat(dir==='x'?'botX':'botY');if(e.mode==='qty'&&e.size)b.appendChild(el('div','note','Bottom '+dir+'-bars entered as a quantity: n = '+e.n+' #'+e.size+' across w = '+f2(e.w)+' ft \u2192 A<sub>s</sub> = n&middot;A<sub>b</sub>/w = '+e.n+'&middot;'+f2(e.Ab)+'/'+f2(e.w)+' = '+f3(e.As)+' in\u00b2/ft; s = (12w \u2212 2c \u2212 d<sub>b</sub>)/(n \u2212 1) = ('+f2(e.w*12)+' \u2212 2&middot;'+f2(e.c)+' \u2212 '+f3(e.db)+')/'+(e.n-1)+' = '+f2(e.spc)+' in (c = side/end cover).'));}   /* SFRQ */
-  if(!des.spcTopOK)b.appendChild(el('div','failbox','<b>NG \u2014 top bar spacing exceeds the maximum.</b> '+dir+'-bars at '+f2(des.spcTop)+' in vs s<sub>max</sub> = min(3h, 18 in) = '+f2(des.sMax)+' in (ACI 318-19 7.7.2.3 / 13.3.4).'));
+  if(!des.spcTopOK)b.appendChild(el('div','failbox','<b>NG \u2014 top bar spacing exceeds the maximum.</b> '+dir+'-bars at '+f2(des.spcTop)+' in vs s<sub>max</sub> = min(2h, 18 in) = '+f2(des.sMax)+' in (ACI 318-19 8.7.2.2; 13.3.3.1 / 13.3.4.1).'));
   if(!des.asMinTopReq)b.appendChild(el('div','note','Top mat, '+dir+'-direction: no hogging demand, so the top bars are not a flexural mat and A<sub>s,min</sub> is not applied to them \u2014 the 0.0018A<sub>g</sub> shrinkage-and-temperature requirement is satisfied by the bottom mat (ACI 318-19 7.6.1.1).'));
   if(des.reqBot>des.AsBot+1e-6)b.appendChild(el('div','warnbox','Provided bottom steel in '+dir+' is below that required for flexure ('+f2(des.reqBot)+' in\u00b2/ft needed).'));
   if(des.MuNeg>0.01){
@@ -5466,10 +5486,11 @@ function renderFootingDesign(){
  ((P2.dev&&P2.dev.rows)||[]).forEach(z=>{const dv=z.dv,BL=z.dir==='x'?'B':'L';
   bd.appendChild(eqBlock('Development length, '+z.lab+(z.top?' \u2014 top bars at the hogging section':''),'ACI 318-19 25.4.2.4, Table 25.4.2.5'+(P2.dev.exOn?', 25.4.10.1':''),
    '\\ell_d = \\frac{3}{40}\\frac{f_y}{\\lambda\\sqrt{f\'_c}}\\frac{\\psi_t\\psi_e\\psi_s\\psi_g}{(c_b+K_{tr})/d_b}\\,d_b \\ge 12\\;\\mathrm{in},\\quad c_b=\\min(c+d_b/2,\\;s/2),\\;K_{tr}=0',
-   '\\lambda='+f2(dv.lam)+',\\;\\sqrt{f\'_c}='+f2(dv.sqfc)+',\\;\\psi_t\\psi_e=\\min('+f2(dv.psi_t)+'\\cdot'+f2(dv.psi_e)+',\\,1.7)='+f2(dv.psi_te)+',\\;\\psi_s='+f2(dv.psi_s)+',\\;\\psi_g='+f2(dv.psi_g)+',\\;c_b='+f2(dv.cb)+'\\;\\mathrm{in},\\;(c_b+K_{tr})/d_b='+f2(dv.conf)+'\\;\\Rightarrow\\;\\ell_d = '+f2(dv.Ld)+'\\;\\mathrm{in}'+(P2.dev.exOn?',\\;\\ell_{d,red} = \\max('+f2(dv.LdRaw)+'\\cdot\\tfrac{'+f3(z.AsReq)+'}{'+f3(z.AsProv)+'},\\,12) = '+f2(z.LdEx)+'\\;\\mathrm{in}':''),
+   '\\lambda='+f2(dv.lam)+',\\;\\sqrt{f\'_c}='+f2(dv.sqfc)+',\\;\\psi_t\\psi_e=\\min('+f2(dv.psi_t)+'\\cdot'+f2(dv.psi_e)+',\\,1.7)='+f2(dv.psi_te)+',\\;\\psi_s='+f2(dv.psi_s)+',\\;\\psi_g='+f2(dv.psi_g)+',\\;c_b='+f2(dv.cb)+'\\;\\mathrm{in},\\;(c_b+K_{tr})/d_b='+f2(dv.conf)+'\\;\\Rightarrow\\;\\ell_d = '+f2(dv.Ld)+'\\;\\mathrm{in}'+(P2.dev.exOn?(z.flexGov?',\\;\\ell_{d,red} = \\max('+f2(dv.LdRaw)+'\\cdot\\tfrac{'+f3(z.AsReq)+'}{'+f3(z.AsProv)+'},\\,12) = '+f2(z.LdEx)+'\\;\\mathrm{in}':',\\;\\ell_{d,red}\\text{ not taken (}A_{s,min}\\text{ governs)}'):''),
    '\\ell_{avail} = 12('+BL+'/2-|'+z.dir+'_{sec}|)-c_{end} = 12('+f2(z.hf)+'-'+f2(Math.abs(z.sec))+')-'+f2(z.endC)+' = '+f2(z.avail)+'\\;\\mathrm{in}'+(z.strOK?'':',\\quad \\ell_{dh} = \\max(\\tfrac{'+f2(P2.fy)+'\\cdot'+f2(z.pe)+'\\cdot'+f2(z.pr)+'\\cdot'+f2(z.po)+'\\cdot'+f3(z.pc)+'}{55\\cdot'+f2(P2.lam)+'\\cdot'+f2(z.sq)+'}'+f3(z.db)+'^{1.5},\\,8d_b,\\,6) = '+f2(z.Ldh)+'\\;\\mathrm{in}'),
    z.strOK?'\\text{straight bars develop}\\;\\checkmark':(z.hookOK?'\\text{straight NG};\\;\\ell_{dh} \\le \\ell_{avail}\\Rightarrow\\textbf{hook the bars (REVIEW)}':'\\ell_d\\text{ and }\\ell_{dh} > \\ell_{avail}\\;\\Rightarrow\\;\\textbf{NG}')));
   if(!z.strOK)bd.appendChild(el('div','note','Standard hook, ACI 318-19 25.4.3.1 / Table 25.4.3.2: \u03c8<sub>e</sub> = '+f2(z.pe)+'; \u03c8<sub>r</sub> = '+f2(z.pr)+' (c-c spacing '+f2(sfdMat(z.k).spc)+' in '+(z.pr===1?'\u2265':'<')+' 6d<sub>b</sub> = '+f2(6*z.db)+' in; confining ties not considered); \u03c8<sub>o</sub> = '+f2(z.po)+' (side cover of the outermost bar '+f2(z.endC)+' in '+(z.po===1?'\u2265':'<')+' 6d<sub>b</sub>'+(z.po!==1?'; interior bars with \u03c8<sub>o</sub> = 1.0: \u2113<sub>dh</sub> = '+f2(z.ldhInt)+' in':'')+'); \u03c8<sub>c</sub> = f\u2032<sub>c</sub>/15000 + 0.6 = '+f3(z.pc)+'. No excess-reinforcement reduction for hooks (25.4.10.2(d)).'));
+  if(P2.dev.exOn&&!z.flexGov)bd.appendChild(el('div','note','<b>'+z.lab+': no reduction for excess reinforcement.</b> A<sub>s,min</sub> = 0.0018A<sub>g</sub> = '+f3(z.AsMin)+' in\u00b2/ft governs A<sub>s,req</sub> (flexure alone '+f3(z.AsFlex)+' in\u00b2/ft), so the bars act as shrinkage and temperature reinforcement and the 25.4.10.1 factor is not applied (ACI 318-19 commentary R25.4.10.2).'));   /* SFEX */
  });
  bd.appendChild(el('div','note','Available length is measured from the <b>governing flexural section</b> to the nearer footing edge, less the end cover \u2014 the length over which the bar must develop the stress that section demands. c<sub>b</sub> uses '+(sfdSideCoverIn()===null?'the bottom clear cover (side/end cover not entered, so assumed not less than it)':'the smaller of the bottom cover and the entered side/end cover ('+f2(sfdCbCover())+' in)')+' and half the bar spacing; K<sub>tr</sub> = 0 (no transverse reinforcement); \u03bb is the input lightweight factor; \u03c8<sub>g</sub> follows f<sub>y</sub> (Grade 60 / 80 / 100); \u03c8<sub>e</sub> follows the bar-coating input. Bundled bars are not covered. Where \u2113<sub>d</sub> exceeds the available length, a standard hook <i>is</i> permitted in tension (25.4.3) \u2014 unlike the compression dowels in \u00a75.6.'));
  renderPunching(T);
@@ -5603,7 +5624,7 @@ function sfdoRender(bb){
     z.hook==='hook90'?'\\psi_e = '+f2(z.ldh.pe)+',\\;\\psi_r = '+f2(z.ldh.pr)+',\\;\\psi_o = '+f2(z.ldh.po)+',\\;\\psi_c = '+f3(z.ldh.pc)+':\\;\\frac{'+Math.round(P2.fy)+'\\cdot'+f2(z.ldh.pe)+'\\cdot'+f2(z.ldh.pr)+'\\cdot'+f2(z.ldh.po)+'\\cdot'+f3(z.ldh.pc)+'}{55\\cdot'+lamS+'\\cdot'+f2(z.ldh.sq)+'}\\cdot'+f3(z.db)+'^{1.5} = '+f2(z.ldh.raw)
      :'\\psi_t = '+f2(L.psi_t)+',\\;\\psi_e = '+f2(L.psi_e)+',\\;\\psi_s = '+f2(L.psi_s)+',\\;\\psi_g = '+f2(L.psi_g)+',\\;c_b = '+f3(L.cb)+',\\;K_{tr} = 0,\\;(c_b+K_{tr})/d_b = '+f3(L.conf)+':\\;\\ell_d = \\frac{3}{40}\\cdot\\frac{'+Math.round(P2.fy)+'}{'+lamS+'\\cdot'+f2(L.sqfc)+'}\\cdot\\frac{'+f3(L.psi_te*L.psi_s*L.psi_g)+'}{'+f3(L.conf)+'}\\cdot'+f3(z.db)+' = '+f2(L.LdRaw),
     (z.hook==='hook90'?'\\ell_{dh}':'\\ell_{d}')+' = '+f2(z.LftgReq)+'\\;\\mathrm{in}\\;'+(okF?'\\le':'>')+'\\;'+f2(z.availEmb)+'\\;\\mathrm{in\\;available}\\;(t - c_{bot} - d_{b,x} - d_{b,y})'+(z.devTen?(z.ftgOK?'\\;\\checkmark':(z.tension?'\\;\\text{NG}':'\\;\\text{REVIEW (shear friction only: proportional credit)}')):'')));   /* SFDR */
-   bb.appendChild(el('div','note','c<sub>b</sub> from the pedestal cover (dowels in line with the vertical bars; the cover in the footing is larger, so this is conservative) and the dowel c-c spacing around the perimeter; K<sub>tr</sub> = 0; no reduction for excess reinforcement (25.4.10) is taken.'+(z.hook==='hook90'?' \u03c8<sub>r</sub> = 1.6 (no confining reinforcement around the hook in the footing), \u03c8<sub>o</sub> = 1.0 (side cover in the footing \u2265 6d<sub>b</sub>).':'')));
+   bb.appendChild(el('div','note','c<sub>b</sub> from the pedestal cover (dowels in line with the vertical bars; the cover in the footing is larger, so this is conservative) and the dowel c-c spacing around the perimeter; K<sub>tr</sub> = 0. No reduction for excess reinforcement (25.4.10.1) is taken for the dowels: they are developed for f<sub>y</sub> (shear friction, ACI 318-19 22.9.5.1; 25.4.10.2(b)).'+(z.hook==='hook90'?' Hook factors, Table 25.4.3.2 (confining ties A<sub>th</sub> not considered): '+sfdDowHookTxt(z)+'.':'')));   /* SFDH */
    if(z.cont)bb.appendChild(el('div','note','(2d) Pedestal side: the dowels are the pedestal longitudinal bars, continuous through the joint (no splice), so they are developed in the pedestal by definition. No lap or projection check (3) applies.'));   /* SFDB */
    else bb.appendChild(eqBlock('(2d) Pedestal side: tension lap with the vertical bars in the pedestal \u2014 Class B','ACI 318-19 25.5.2.1 (all dowels spliced at one section: Class B), 25.5.2.2 (different sizes)',
     '\\ell_{st} = \\max(1.3\\,\\ell_{d,smaller},\\;\\ell_{d,larger},\\;12\\;\\mathrm{in})',
