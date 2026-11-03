@@ -3527,6 +3527,7 @@ function plotBox(host,key,build,height,caption){
   d.innerHTML='<div style="padding:14px;font-style:italic;color:#666">Loading the plotting library\u2026</div>';
   host.appendChild(d);
   if(caption) host.appendChild(el("div","cap",caption));
+  if(typeof A7RX!=="undefined"&&A7RX.cap){ A7RX.cap.push({id:d.id,build,height:height||430}); return d; }   /* A7RX: the Report collects the figure, drawn as an image */
   PLOT_PENDING++;
   loadPlotly().then(()=>{
     const t=document.getElementById(d.id); if(!t){PLOT_PENDING--;return;}
@@ -4690,6 +4691,240 @@ function a7Topics(list){
   return {type:"steps",scope:"a7",steps,topics};
 }
 const a7Plain=s=>String(s==null?"":s).replace(/<sub>(.*?)<\/sub>/g,(m,a)=>"$_{"+a+"}$").replace(/<[^>]+>/g,"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">");
+/* ---------- A7RX (2026-11-03): what the retired Print / PDF report printed and the Report lacked ----------
+   The retired Print / PDF report (runPrint, the "Report Contents" dialog) printed the output tabs themselves: the input echo, every
+   selected section (RSECS, rendered by the tab's own function: panels, worked equations, code tables, figures, notes, "Worked in"
+   links as "see §n.k"), the Results Summary (the Dashboard), optionally the User Manual, a cover, a references list and a
+   disclaimer. Those are ported here, read from the same renderers (nothing is computed here): each section becomes a section of the
+   part "Calculation by section", each top-level panel a subsection (key "a7x.<panel key>"), each equation block worked steps (the
+   tab's own TeX lines: symbols → values → result), each table a report table, each note a note, each figure a figure (the Plotly
+   figures as images). The dialog's choices are the report bar's "Include" boxes (the same field S.print, the same keys and values). */
+const A7RX={hv:null,img:null,back:false,cap:null,box:null};
+/* the section selection as the dialog had it: S.print when it exists (as saved), else the dialog's defaults (S is not written) */
+function a7xSel(){ if(S.print) return S.print; const d={}; RSECS.forEach(s=>{ d[s.k]=(s.k!=="man"); if(s.tier2) d[s.k+"_d"]=true; }); return d; }
+const A7X_GR={iota:"ι",kappa:"κ",nu:"ν",xi:"ξ",zeta:"ζ",varphi:"φ",varepsilon:"ε",vartheta:"θ",Gamma:"Γ",Omega:"Ω",Phi:"Φ",Psi:"Ψ",Lambda:"Λ",Pi:"Π",Theta:"Θ",Sigma:"Σ",Delta:"Δ",partial:"∂",
+  cos:"cos ",sin:"sin ",tan:"tan ",arctan:"arctan ",log:"log ",ln:"ln ",exp:"exp ",max:"max",min:"min",lfloor:"⌊",rfloor:"⌋",lceil:"⌈",rceil:"⌉",cdots:"⋯",dots:"…",ldots:"…",leq:"≤",geq:"≥",neq:"≠",approx:"≈",Rightarrow:"⇒",rightarrow:"→",to:"→",checkmark:"✓",infty:"∞",
+  quad:"  ",qquad:"   ",displaystyle:"",textstyle:"",bigl:"",bigr:"",Bigl:"",Bigr:"",big:"",Big:"",mid:"|",vert:"|",lvert:"|",rvert:"|",langle:"⟨",rangle:"⟩",square:"□",degree:"°",pm:"±",mp:"∓"};
+/* a tab's TeX for the report's running text, table cells and (without KaTeX) step lines: the subset of shared/steps.js, other commands as characters */
+function a7xLite(t){
+  return String(t||"").replace(/\\!/g,"").replace(/\{,\}/g,",").replace(/\\[dt]frac/g,"\\frac").replace(/\\(?:mathrm|mathbf|mathit|textbf|textit|textrm|operatorname|boldsymbol)\b/g,"\\text").replace(/\\(?:left|right)\b\.?/g,"")
+    .replace(/\\([A-Za-z]+)/g,(m,c)=>A7X_GR[c]!=null?A7X_GR[c]:m).replace(/\$/g,"");
+}
+const A7X_SKIP="button,script,style,input,textarea,#mannav,.car,.noprint,.btnrow";
+const a7xTeX=n=>{ const a=n.querySelector&&n.querySelector('annotation[encoding="application/x-tex"]'); return n.dataset&&n.dataset.tex?n.dataset.tex:a?a.textContent:n.textContent; };
+/* the text of an inline subtree; rich: KaTeX as $…$, sub/superscripts as notation, the "Worked in" links as markers (resolved in a7xFix) */
+function a7xInline(e,rich){
+  let s="";
+  e.childNodes.forEach(n=>{
+    if(n.nodeType===3){ s+=n.textContent.replace(/\$/g,""); return; }
+    if(n.nodeType!==1||n.matches(A7X_SKIP)) return;
+    if(n.matches(".ke,.katex,.kx")){ const t=a7xTeX(n); s+=rich?"$"+a7xLite(t)+"$":SharedSteps.toText(a7xLite(t)); return; }
+    if(n.matches("a.wkA")){ const m=/a7Goto\('([^']*)'/.exec(n.getAttribute("onclick")||""), lab=n.textContent.replace(/^→\s*/,"");
+      s+=rich?"\u0001"+(n.dataset.wk||"")+"\u0001"+(m?m[1]:"")+"\u0001"+lab+"\u0002":lab; return; }
+    if(n.tagName==="SUB"){ const t=a7xInline(n,false); s+=rich?"$_{"+a7xLite(t).replace(/[{}]/g,"")+"}$":"_"+t; return; }
+    if(n.tagName==="SUP"){ const t=a7xInline(n,false); s+=rich?"$^{"+a7xLite(t).replace(/[{}]/g,"")+"}$":"^"+t; return; }
+    if(n.tagName==="BR"){ s+=" "; return; }
+    if(n.tagName==="SELECT"){ const o=n.options[n.selectedIndex]; s+=o?(/\S$/.test(s)?": ":"")+o.textContent+" ":""; return; }   /* a figure's option: the one shown */
+    s+=a7xInline(n,rich);
+  });
+  return s;
+}
+const a7xSq=t=>String(t).replace(/\s+/g," ").replace(/\$\s*\$/g,"").trim();
+const a7xJoin=t=>t.replace(/([A-Za-zΑ-ωφγδ′]+)\$([_^]\{[^$]*\})\$/g,"$$$1$2$$");
+const a7xRich=n=>a7xJoin(a7xSq(a7xInline(n,true)));
+function a7xCell(c){
+  const t=a7xRich(c), o={t:t||""};
+  if(c.colSpan>1) o.span=c.colSpan;
+  if(c.classList.contains("num")||/^[\s\d.,−\-+%/()×±]+$/.test(t)&&/\d/.test(t)) o.n=true;
+  const bd=c.querySelector(".badge");
+  if(bd) o.cls=bd.classList.contains("b-ok")?"ok":bd.classList.contains("b-e")?"ng":bd.classList.contains("b-w")?"hi":bd.classList.contains("b-na")?"na":"";
+  else if(c.classList.contains("hl")) o.cls="hi";
+  if(!o.cls) delete o.cls;
+  return o;
+}
+function a7xTable(t,ctx,cap){
+  const trs=[...t.rows].filter(tr=>tr.cells.length&&tr.closest("table")===t); if(!trs.length) return null;
+  const allTh=tr=>[...tr.cells].every(c=>c.tagName==="TH");
+  let head=[], i=0; if(allTh(trs[0])){ head=[...trs[0].cells].map(a7xCell); i=1; }
+  const rows=trs.slice(i).map(tr=>[...tr.cells].map(a7xCell));
+  if(!rows.length&&!head.length) return null;
+  const nc=Math.max(head.length,...rows.map(r=>r.length)), it={type:"table",head,rows};
+  if(cap) it.caption=cap; if(nc>6) it.wide=true;
+  if(rows.length>30){ it.lazy=true; it.title=(cap||ctx.title||"Table")+" (table "+(++ctx.nt)+")"; }
+  return it;
+}
+/* a long trailing remark of an equation line (\ \text{… words …}) goes to the step's note, so the line fits the page */
+function a7xEqSplit(tx){
+  const m=/^(.*?)((?:\\[ ,;]|\\q?quad|\s)*)\\text\{([^{}]{36,})\}\s*$/.exec(tx); if(!m) return [tx,""];
+  return [m[1],m[3].trim()];
+}
+/* an equation block of a tab (eq()): its lines as worked steps, one per line (the tab's own strings: symbolic → substituted → result) */
+function a7xEq(n,out,ctx){
+  const tt=n.querySelector(":scope > .eqt"), rr=n.querySelector(":scope > .eqr"), title=tt?a7xSq(a7xInline(tt,false)):"", ref=rr?a7xSq(rr.textContent):"";
+  const steps=[...n.querySelectorAll(":scope > .kx")].map(a7xTeX).filter(Boolean).map((tx,k)=>{ const [e,nt]=a7xEqSplit(tx);
+    return {id:ctx.id+".e"+(++ctx.n),label:k?"":title||"Worked equation",sym:"",eq:window.katex?e:a7xLite(e),sub:"",value:null,unit:"",d:2,ref:k?"":ref,note:nt}; });
+  if(steps.length) out.push({type:"steps",scope:"a7x",steps});
+}
+/* the content of a node as report items, in order (a nested panel: a topic heading over its items) */
+function a7xWalk(node,out,ctx){
+  let buf="", cap="";
+  const flush=()=>{ const t=a7xJoin(a7xSq(buf)); if(t&&!/^[·•\-–—:,;.\s]*$/.test(t)) out.push({type:"note",text:t}); buf=""; };
+  const capOut=()=>{ if(cap){ out.push({type:"note",text:cap}); cap=""; } };
+  node.childNodes.forEach(n=>{
+    if(n.nodeType===3){ buf+=n.textContent.replace(/\$/g,""); return; }
+    if(n.nodeType!==1||n.matches(A7X_SKIP)) return;
+    const tg=n.tagName.toUpperCase(), blk=/^(DIV|P|UL|OL|LI|TABLE|H1|H2|H3|H4|H5|H6|SECTION|DETAILS|FIGURE|IMG|PRE|HR|DL|DT|DD|BLOCKQUOTE|SVG)$/.test(tg)||n.namespaceURI==="http://www.w3.org/2000/svg";
+    if(tg==="SELECT"){ const o=n.options[n.selectedIndex]; if(o) buf+=(/\S$/.test(buf)?": ":"")+o.textContent+" "; return; }
+    if(!blk||n.matches(".ke")){ const w=document.createElement("span"); w.appendChild(n.cloneNode(true)); buf+=a7xInline(w,true); return; }
+    flush();
+    if(n.matches("div.eqt")&&n.nextElementSibling&&n.nextElementSibling.tagName==="TABLE"){ capOut(); cap=a7xRich(n); return; }
+    if(tg==="TABLE"){ const t=a7xTable(n,ctx,cap); cap=""; if(t) out.push(t); return; }
+    capOut();
+    if(n.classList.contains("eq")){ a7xEq(n,out,ctx); return; }
+    if(n.classList.contains("pnl")){ const h=n.querySelector(":scope > .hd"), tl=h&&h.querySelector(".ttl"), rf=h&&h.querySelector(".ref"), items=[];
+      a7xWalk(n.querySelector(":scope > .bd")||n,items,ctx);
+      if(items.length){ items[0]=Object.assign({},items[0],{topic:{title:tl?a7xSq(tl.textContent):"Worked derivation",ref:rf?a7xSq(rf.textContent):""}}); out.push(...items); }
+      return; }
+    if(n.namespaceURI==="http://www.w3.org/2000/svg"||tg==="SVG"){ const c=n.cloneNode(true); if(!c.getAttribute("xmlns")) c.setAttribute("xmlns","http://www.w3.org/2000/svg"); out.push({type:"figure",svg:c.outerHTML,caption:""}); return; }
+    if(tg==="IMG"){ if(n.getAttribute("src")) out.push({type:"figure",svg:'<img src="'+n.getAttribute("src")+'" alt="" style="max-width:100%;height:auto">',caption:""}); return; }
+    if(n.classList.contains("pltbox")){ out.push({type:"figure",plot:n.id,svg:"",caption:""}); return; }
+    if(n.classList.contains("cap")){ const t=a7xRich(n), L=out[out.length-1]; if(L&&L.type==="figure"&&!L.caption) L.caption=t; else if(t) out.push({type:"note",text:t}); return; }
+    if(/^H[1-6]$/.test(tg)){ const t=a7xRich(n); if(t) out.push({type:"note",text:"▸ "+t}); return; }
+    if([...n.children].some(c=>/^(DIV|P|UL|OL|LI|TABLE|H[1-6]|PRE|DL|IMG|SVG|svg)$/.test(c.tagName))){ a7xWalk(n,out,ctx); return; }
+    const t=a7xRich(n); if(!t) return;
+    const ol=tg==="LI"&&n.parentElement&&n.parentElement.tagName==="OL";
+    out.push({type:"note",text:(tg==="LI"?(ol?([...n.parentElement.children].indexOf(n)+1)+". ":"• "):"")+t,warn:(n.matches(".note.w,.note.e,.warnbox"))||undefined});
+  });
+  flush(); capOut();
+}
+/* one section (a wrap the tab's renderer filled) as report subsections: each top-level panel one subsection (key a7x.<panel key>) */
+function a7xSubs(wrap,title,si,keys){
+  const subs=[]; let loose=null, pi=0;
+  [...wrap.children].forEach(c=>{
+    if(c.matches(".pnl")){ const h=c.querySelector(":scope > .hd"), tl=h&&h.querySelector(".ttl"), rf=h&&h.querySelector(".ref"), k=c.dataset.k||"";
+      const ctx={id:"s"+si+"p"+(++pi),n:0,nt:0,title:tl?tl.textContent:""}, items=[]; a7xWalk(c.querySelector(":scope > .bd")||c,items,ctx);
+      const q={title:tl?a7xSq(tl.textContent):"Panel",ref:rf?a7xSq(rf.textContent):"",items:items.length?items:[{type:"note",text:"(no content)"}],pk:k};
+      if(!q.ref) delete q.ref; subs.push(q); loose=null; return; }
+    if(c.matches(A7X_SKIP)) return;
+    if(!loose){ loose={title,items:[]}; subs.push(loose); }
+    const w=document.createElement("div"); w.appendChild(c.cloneNode(true)); a7xWalk(w,loose.items,{id:"s"+si+"x"+subs.length,n:0,nt:0,title});
+  });
+  /* a panel key used twice ("o-rf0" on the Roof tab): the later panel takes the key, as on screen (a7Goto) and in the print report */
+  for(let i=subs.length-1;i>=0;i--){ const k=subs[i].pk; if(k&&!keys.has(k)){ keys.add(k); subs[i].key="a7x."+k; } delete subs[i].pk; }
+  return subs.filter(q=>q.items.length);
+}
+/* the harvest, once per result and selection: the sections the print report printed, rendered by the tabs' own functions into a
+   detached page (the Plotly figures are collected, not drawn: plotBox, A7RX.cap) */
+function a7xHarvest(){
+  const sel=a7xSel(), sig=JSON.stringify(sel)+"|"+(S.cap3d?S.cap3d.length:0);
+  if(A7RX.hv&&A7RX.hv.R===R&&A7RX.hv.sig===sig) return A7RX.hv;
+  const hv={R,sig,sel,secs:[],plots:[],body:el("div"),keys:new Set()};
+  A7RX.cap=hv.plots; const savedMan=S.manPart;
+  const add=(k,title,fill,flat)=>{ const wrap=el("div"); try{ fill(wrap); }catch(e){ console.warn("report port:",k,e); }
+    hv.body.appendChild(wrap); hv.secs.push({k,title,wrap,flat}); };
+  try{
+    add("in","Inputs",a7InputEcho);
+    RSECS.forEach(s=>{ if(!sel[s.k]||s.k==="man") return; if(s.skip&&s.skip()) return;
+      add(s.k,s.t,wrap=>{ s.fn(wrap); if(s.tier2&&!sel[s.k+"_d"]) wrap.querySelectorAll(".pnl.sub").forEach(p=>p.remove()); }); });
+    add("dash","Results Summary",renderDash);
+    if(sel.man) add("man","User Manual (design basis)",wrap=>{ MANUAL.forEach((p,i)=>{ S.manPart=i; const c=el("div"); renderManual(c); c.querySelectorAll("#mannav").forEach(x=>x.remove()); c.dataset.part=p.t; wrap.appendChild(c); }); },true);
+  } finally { A7RX.cap=null; S.manPart=savedMan; }
+  hv.secs.forEach((s,i)=>{
+    if(s.flat) s.subs=[...s.wrap.children].map((c,j)=>{ const items=[]; a7xWalk(c,items,{id:"s"+i+"m"+j,n:0,nt:0,title:c.dataset.part}); return {title:c.dataset.part,items}; }).filter(q=>q.items.length);
+    else s.subs=a7xSubs(s.wrap,s.title,i,hv.keys);
+  });
+  try{ hv.refs=a7Refs(hv.body,sel).map(([a,b])=>[a7Plain(a).replace(/ /g,"  "),a7Plain(b)]); }catch(e){ hv.refs=null; }
+  A7RX.hv=hv; return hv;
+}
+/* the Plotly figures as images (the figure each tab draws, at the print report's page width and the tab's height), async; then the Report is redrawn */
+function a7xImages(){
+  const hv=a7xHarvest(); if(A7RX.img&&A7RX.img.hv===hv) return A7RX.img.p;
+  const tok={hv,im:{}}; A7RX.img=tok;
+  tok.p=(async()=>{
+    if(!hv.plots.length) return;
+    try{ await loadPlotly(); }catch(e){ return; }
+    await Promise.all(hv.plots.map(x=>{ let f; try{ f=x.build(); }catch(e){ return null; }
+      const W=720, H=x.height||430;
+      let fig; try{ fig=JSON.parse(JSON.stringify({data:f.data,layout:f.layout||{}})); }catch(e){ return null; }
+      fig.layout=Object.assign({},fig.layout,{width:W,height:H,autosize:false});
+      return Plotly.toImage(fig,{format:"png",width:W,height:H,scale:2}).then(u=>{ tok.im[x.id]=u; }).catch(()=>{}); }));
+    if(A7RX.img===tok&&A7RP.on&&!document.body.classList.contains("rp-printing")) a7xRemount();
+  })();
+  return tok.p;
+}
+/* the "Worked in" markers: "see §n.k" to a ported panel, else the tab's name with an in-app link */
+function a7xFixStr(s,has){
+  return String(s).replace(/\u0001([^\u0001]*)\u0001([^\u0001]*)\u0001([^\u0002]*)\u0002/g,(m,k,tab,lab)=>has.has(k)?"see [[a7x."+k+"]]":"see the "+lab.replace(" · "," tab, ")+(tab?" [[tab:"+tab+"| ↗]]":"")+" (not in this report)");
+}
+function a7xFixItems(items,has,im){
+  const F=s=>a7xFixStr(s,has), C=c=>c&&typeof c==="object"?Object.assign({},c,{t:F(c.t)}):F(c);
+  return items.map(it=>{
+    let o=it;
+    if(it.type==="note") o=Object.assign({},it,{text:F(it.text)});
+    else if(it.type==="table") o=Object.assign({},it,{caption:it.caption?F(it.caption):it.caption,head:(it.head||[]).map(C),rows:it.rows.map(r=>r.map(C))});
+    else if(it.type==="figure"){ o=Object.assign({},it,{caption:F(it.caption||"")});
+      if(it.plot){ if(!(im&&im.im[it.plot])){ if(!it.topic) return null; return {type:"note",text:"(figure: "+(o.caption||"chart")+"; drawn when the plotting library is loaded)",topic:it.topic}; }
+        o.svg='<img src="'+im.im[it.plot]+'" alt="" style="max-width:100%;height:auto">'; delete o.plot; } }
+    if(o&&o.topic) o.topic=Object.assign({},o.topic,{title:F(o.topic.title)});
+    return o;
+  }).filter(Boolean);
+}
+/* the ported content into the Report model M (a7Model): the cover lines and references, then the part "Calculation by section"
+   (each printed section, in the print report's order) before Notes, the report's scope paragraph and the disclaimer in Notes */
+function a7xAdd(M){
+  const hv=a7xHarvest(), im=A7RX.img&&A7RX.img.hv===hv?A7RX.img:null, has=hv.keys, tabSec={};
+  const part=hv.secs.map(s=>{ tabSec[s.k]=1; const subs=s.subs.map(q=>Object.assign({},q,{items:a7xFixItems(q.items,has,im)})).filter(q=>q.items.length);
+    return subs.length?{title:s.title,key:"a7x-s-"+s.k,subs}:null; }).filter(Boolean);
+  if(part.length) part[0].part="Calculation by section (the tabs' worked panels)";
+  /* the Report's links to a tab gain a link to that tab's ported section */
+  const tl=t=>String(t).replace(/\[\[tab:([\w]+)\|[^\]]*\]\]/g,(m,k)=>tabSec[k]&&part.some(s=>s.key==="a7x-s-"+k)?m+" ([[a7x-s-"+k+"]])":m);
+  M.sections.forEach(s=>s.subs.forEach(q=>q.items.forEach(it=>{ if(it.type==="note") it.text=tl(it.text); })));
+  const ni=M.sections.findIndex(s=>s.title==="Notes");
+  M.sections.splice(ni<0?M.sections.length:ni,0,...part);
+  const nt=M.sections.find(s=>s.title==="Notes");
+  if(nt) nt.subs.push({title:"About this report",items:[{type:"note",text:"Inputs first, then each load the tool generates, in the order of its tabs. Where the tool works a value, the "+
+    "equation is shown symbolically, then with the values substituted, then with the result; code tables are printed at their point of use. "+
+    "“see §n.k” points to the subsection where a quoted value is worked. This tool generates design loads only: there are no "+
+    "demand-to-capacity ratios. Units: ft, psf, lbf, kip, mph, s and g as labelled."}]},
+    {title:"Disclaimer",items:[{type:"note",text:"This calculation was produced by the "+A7_TOOL+", "+APP_VERSION+". The program is an engineering aid and is not a "+
+    "substitute for engineering judgment. It generates design loads only; it performs no structural analysis, no member or connection design, "+
+    "and no code capacity check. Snow drift and sliding snow, partial loading, components and cladding, torsional wind cases, and the seismic "+
+    "provisions beyond base shear, its vertical distribution and the vertical load effect are outside its scope. The engineer of record is responsible for the suitability of every value reproduced here. Refer to the User Manual, Part 1, "+
+    "for the complete statement of scope, exclusions, assumptions and known limitations."}]});
+  if(hv.refs) M.refs=hv.refs;
+  const tb={}; document.querySelectorAll("[data-tb]").forEach(i=>tb[i.id.slice(3)]=i.value); const site=S.jur==="MA"?S.town:(S.customLabel||"Manual entry");
+  M.info=M.info.concat([["Subject",tb.subject],["Task",tb.task],["Site",site],["Risk Category",String(S.risk)]]);
+  M.code="Design loads: inputs and worked results · Codes: ASCE/SEI 7-16"+(S.jur==="MA"?"; 780 CMR, Massachusetts State Building Code, 10th Ed.":"")+" · "+A7_TOOL+", by Mario Lococo · "+APP_VERSION;
+  return M;
+}
+/* the report bar's "Include" boxes: the dialog's choices, the same field S.print (same keys, same values; written only when a box changes) */
+function a7xControls(){
+  const sel=a7xSel();
+  return '<span class="a7x-inc" style="display:inline-flex;flex-wrap:wrap;gap:2px 10px;font-size:9pt;align-items:center">Include:'+RSECS.map(s=>{ const empty=s.skip&&s.skip();
+    return '<label'+(empty?' style="color:#999" title="empty, not in the report"':'')+'><input type="checkbox" data-a7x="'+s.k+'"'+(sel[s.k]?" checked":"")+(empty?" disabled":"")+'> '+esc(s.t)+'</label>'+
+      (s.tier2?'<label style="color:#444"><input type="checkbox" data-a7x="'+s.k+'_d"'+(sel[s.k+"_d"]?" checked":"")+'> '+esc(s.tier2)+'</label>':''); }).join("")+'</span>';
+}
+function a7xWire(box){
+  box.querySelectorAll("input[data-a7x]").forEach(cb=>cb.addEventListener("change",()=>{ printSel()[cb.dataset.a7x]=cb.checked; autosave(); A7RX.hv=null; a7xRemount(); a7xImages(); }));
+}
+/* the Report again in the same place (the images arrived, or a box changed), the scroll position kept */
+function a7xRemount(){
+  const ob=document.getElementById("outbody"), y=ob?ob.scrollTop:0, wy=window.scrollY;
+  if(!A7RP.on) return; render(); if(ob) ob.scrollTop=y; window.scrollTo(0,wy);
+}
+/* Print: from any tab the Report is shown (A7RP.on, not saved), printed, and the tab of before comes back after printing */
+function a7PrintPrep(){
+  if(A7RP.on||document.body.classList.contains("rp-printing")||!window.SharedReport||!R||!R.wind) return false;
+  A7RX.back=true; A7RP.on=true; render(); return true;
+}
+async function a7PrintAny(){
+  if(!window.SharedReport||!window.SharedSteps){ window.print(); return; }
+  if(!A7RP.on){ A7RX.back=true; A7RP.on=true; render(); }
+  try{ await a7xImages(); }catch(e){}
+  if(A7RP.on) render();
+  if(A7RP.api) A7RP.api.print(); else window.print();
+}
+window.addEventListener("afterprint",()=>{ if(!A7RX.back) return; A7RX.back=false; setTimeout(()=>{ A7RP.on=false; render(); },0); });
 function a7Model(){
   const tb={}; document.querySelectorAll("[data-tb]").forEach(i=>tb[i.id.slice(3)]=i.value);
   const sn=R.snow,w=R.wind,g=R.geom,q=R.seis,st=R.site,e=R.enc,secs=[],A="ASCE 7-16 ";
@@ -4757,7 +4992,7 @@ function a7Model(){
   /* ---------- 2. Inputs ---------- */
   secs.push({title:"Project and building",subs:[{title:"Project and site",items:[{type:"kv",rows:[["Project",tb.project||"—"],["Subject",tb.subject||"—"],["Task",tb.task||"—"],["Job No.",tb.job||"—"],
       ["Computed by",(tb.by||"—")+(tb.date?", "+tb.date:"")],["Checked by",(tb.chk||"—")+(tb.chkdate?", "+tb.chkdate:"")],["Risk Category",String(S.risk)],["Exposure category",S.expCat],["Site class",S.siteClass],
-      ["Mean roof height h",R2(g.h)+" ft"],["Roof slope θ",R2(g.theta)+"°"],["Site data",st.source]]},{type:"note",text:"All inputs are listed on the input tabs and in the Print / PDF report; the building geometry is shown on the Design Basis[[tab:basis| ↗]] and 3-D Model[[tab:3d| ↗]] tabs."}]}]});
+      ["Mean roof height h",R2(g.h)+" ft"],["Roof slope θ",R2(g.theta)+"°"],["Site data",st.source]]},{type:"note",text:"All inputs are listed on the input tabs and in [[a7x-s-in]]; the building geometry is shown on the Design Basis[[tab:basis| ↗]] and 3-D Model[[tab:3d| ↗]] tabs."}]}]});
   secs.push({title:"Snow",subs:[{title:"Roof snow loads",items:[a7Topics(SN),{type:"note",text:"Unbalanced, drift and rain-on-snow details: Snow[[tab:snow| ↗]] tab."}]}]});
   secs.push({title:"Wind",subs:[{title:"Velocity pressure",items:[a7Topics(WP),{type:"note",text:"Velocity pressure by height and the wall, roof and component pressures are worked on the Wind: Velocity Pressure[[tab:windp| ↗]], Wind: Walls[[tab:walls| ↗]], Wind: Roof[[tab:roof| ↗]] and Wind: Components[[tab:elem| ↗]] tabs."}]}]});
   secs.push({title:"Seismic",subs:[{title:"Equivalent lateral force",items:(q.Fa===null?[{type:"note",warn:true,text:"No site coefficient is tabulated for Site Class "+S.siteClass+" at these accelerations: a site response analysis is required (Sec. 11.4.8); the seismic results are not computed."}]:[]).concat([a7Topics(SE),{type:"note",text:"Vertical distribution, story shears and overturning: Seismic[[tab:seis| ↗]] tab. Load combinations: Combinations[[tab:comb| ↗]] tab."}])}]});
@@ -4777,10 +5012,11 @@ function a7Model(){
 function renderReport(h){
   if(!window.SharedReport||!window.SharedSteps){note(h,"shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.","e");A7RP.api=null;A7RP.doc=null;return;}
   if(!R.enc||!R.geom||!R.wind||!R.snow||!R.seis){const b=panel(h,"o-rpb","1.","Report not available","");(R.err||[]).forEach(e=>note(b,esc(e),"e"));note(b,"The calculation did not complete; correct the blocking error and the report will be built.","e");A7RP.api=null;A7RP.doc=null;return;}
-  let Mo;try{Mo=a7Model();}catch(e){note(h,"Report error: "+esc(e&&e.message),"e");A7RP.api=null;A7RP.doc=null;console.error(e);return;}
+  let Mo;try{Mo=a7xAdd(a7Model());}catch(e){note(h,"Report error: "+esc(e&&e.message),"e");A7RP.api=null;A7RP.doc=null;console.error(e);return;}
   const box=el("div","");h.appendChild(box);
-  A7RP.api=SharedReport.mount(box,Mo,{closed:A7RP.closed,onGoto:k=>{if(!TABS.some(t=>t[0]===k))return;A7RP.on=false;S.tab=k;autosave();render();document.getElementById("outbody").scrollTop=0;}});
+  A7RP.api=SharedReport.mount(box,Mo,{controls:a7xControls(),closed:A7RP.closed,onGoto:k=>{if(!TABS.some(t=>t[0]===k))return;A7RP.on=false;S.tab=k;autosave();render();document.getElementById("outbody").scrollTop=0;}});
   A7RP.doc=A7RP.api.doc;
+  a7xWire(box); a7xImages();   /* A7RX */
 }
 /* Ctrl+P while the Report tab is shown prints the report alone (the print CSS hides #outbody, so it goes into #rp-print); otherwise unchanged */
 window.addEventListener("beforeprint",()=>{
