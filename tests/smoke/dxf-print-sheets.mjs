@@ -49,6 +49,16 @@ const TOOLS = {
     known: p => p.evaluate(() => { const s = SFDW.B.S.find(q => q.id === SFDW.cur); return { what: `footing outline B x L = ${R.B} x ${R.L} ft on ${s.title} at 1:${s.k}`, w: R.B * 12 / s.k, h: R.L * 12 / s.k }; }),
     report: /Spread Footing|FOOTING/i,
   },
+  lp: {
+    file: 'Light Pole and Sign Post.html', label: 'Light Pole and Sign Post',
+    open: async p => { await p.waitForFunction(() => typeof switchTab === 'function' && typeof LPP_SUMCTX !== 'undefined' && LPP_SUMCTX, null, { timeout: 30000 }); await p.evaluate(() => switchTab('drawings')); await p.waitForSelector('#lpdPrint1'); },
+    one: '#lpdPrint1', all: '#lpdPrintAll',
+    n: p => p.evaluate(() => LPDW.B.S.length),
+    // the shaft in the POLE ELEVATION: diameter b by embedment d (+ projection p above grade)
+    known: p => p.evaluate(() => { const s = LPDW.B.S.find(q => q.id === LPDW.cur), c = LPP_SUMCTX, b = c.inp.b * 12, d = c.stacks[0].found.d * 12 + (c.inp.pProj > 0 ? c.inp.pProj * 12 : 0);
+      return { what: `shaft ${b} in dia. x ${+d.toFixed(3)} in (embedment d = ${c.stacks[0].found.d} ft) on ${s.title} at 1:${s.k}`, w: b / s.k, h: d / s.k }; }),
+    report: /Light Pole|POLE/i,
+  },
 };
 
 let fails = 0; const check = (ok, m) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${m}`); if (!ok) fails++; };
