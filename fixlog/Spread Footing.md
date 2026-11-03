@@ -4447,7 +4447,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - The Report's result rows ("Checks (as on the dashboard)" and each section's "Results — …" table) print the same D/C next to FAIL / REVIEW (e.g. Flexure 0.30 FAIL). Their Result column carries the full chip text, which names the reason ("DCR 0.30 OK, but A_s < A_s,min"). Left unchanged; asked of the engineer.
 - §0.1 says the self-consistency checks "appear at the top of the report"; still true of the output panel, left as is. The "at the top of the report" wording about the dashboard was in §1.1, not §0.
 
-## 2026-11-03 — PR: claude/sfdf-report-cond — Report result rows: the failing condition in the D/C column where the ratio is not what fails (SFDF-R; display only, no result change)
+## 2026-11-03 — PR: claude/sfdf-report-cond (PR #741: https://github.com/mlococo88/All-Structural/pull/741) — Report result rows: the failing condition in the D/C column where the ratio is not what fails (SFDF-R; display only, no result change)
 
 ### SFDF-R. Report rows printed a passing D/C next to FAIL / REVIEW   [display only]
 - **Problem:** the open item of SFDF (#740). The Report's "Checks (as on the dashboard)" table and each section's "Results — …" table printed e.g. "Flexure (footing) | 0.30 | FAIL" on the default project, which fails on A_s < A_s,min. Engineer's decision: show the condition, as on the dashboard.
@@ -4471,3 +4471,8 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - The "Results — Footing design" row changes the same way.
   - "Footing bar development | … | 1.56 | FAIL" is unchanged, because the ratio governs.
 - **Not changed:** the "Items that fail (NG) or need review" table, which has no D/C column; the verdict counts; the dashboard; `sfdResultRows()`.
+- **How verified:** origin/main vs branch, 12 cases. `R` and `P2` are identical. The Report text has the same line count, and only these rows differ. The default project was printed to PDF and the rows checked: §1.2 (page 3) and §6.11 (page 50). check-syntax passes.
+- **Other copies:** none.
+
+### Open items
+- None.
