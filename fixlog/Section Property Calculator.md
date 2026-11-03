@@ -3001,7 +3001,7 @@ index 56a8a3f..13f8372 100644
   sideways scroll). `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 
-## 2026-11-03 — PR: claude/report-retire-secprop (SPRX: the D11 print report ("Print report" → "Print report — select contents" dialog → `buildPrintReport` → `#printReport`) retired after porting what the Report tab lacked; Print report, Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
+## 2026-11-03 — PR: claude/report-retire-secprop, PR #731: https://github.com/mlococo88/All-Structural/pull/731 (SPRX: the D11 print report ("Print report" → "Print report — select contents" dialog → `buildPrintReport` → `#printReport`) retired after porting what the Report tab lacked; Print report, Ctrl+P and the browser's Print print the Report from every tab; display only, no result change)
 
 ### SPRX-1. What the print report printed and the Report lacked, ported   [display] [no result change]
 - **Engineer request (2026-11-03):** retire each tool's old print report by porting it in full into the Report tab (method of #715, #718, #722, #724, #726, #728, #729).
