@@ -3847,3 +3847,23 @@ current design's analysis accepted; **the minimum shipping piece length raised f
   two listed designs differ only in the gage lines and that each left-out twin has its "as set" design listed. `node tests/check-syntax.mjs`.
 ### Other copies
 - None.
+
+## 2026-11-03 — PR #736: https://github.com/mlococo88/All-Structural/pull/736 (claude/lists-js-node-safe) — `ui/lists.js` loads without a page (Node test harness); fixes the steps-groups-tabs regression from #708   [test/robustness only]
+### Why
+- On main, `node tests/engine/run.mjs steps-groups` failed 2 tests in `steps-groups-tabs.test.mjs` ("worked steps of every output tab are in
+  topics …" and "a report note that says "See §x" does not get a second "see" …"). Both loaded the app's scripts in a Node `vm` context with no
+  `document`; `ui/lists.js` (added by #708) touched `document.readyState` at load time and threw `ReferenceError: document is not defined`.
+  Same cause for both. The other ui/*.js files (`demands.js`, `graphics.js`) already guard with `typeof document`.
+### What changed
+- `ui/lists.js`, the last lines of the IIFE (anchor `document.readyState === 'loading'`):
+  - Before: `if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();`
+  - After: `if (typeof document === 'undefined') { /* no page (Node test harness): nothing to bind */ }`
+    `else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();`
+  - `window.SBDListsUI` is still exported in both cases. In a browser `document` always exists, so the page behaves as before.
+- **Formulas, factors, units, code references, saved data:** none (§4, §5 do not apply).
+### Check case
+- `node tests/engine/run.mjs report steps steps-groups report-wiring`: before 12 passed, 2 failed; after 14 passed, 0 failed.
+### How verified
+- The run above; `node tests/check-syntax.mjs`; `node tests/smoke/steel-bridge-report.mjs`; `node tests/smoke/list-input.mjs --part sbridge`.
+### Other copies
+- None.
