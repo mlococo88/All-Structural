@@ -4343,3 +4343,31 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 
 ### Open items
 - None.
+
+## 2026-11-03 — PR: claude/sf-dashboard-column (PR #737: https://github.com/mlococo88/All-Structural/pull/737) — Summary dashboard: compact one-line chips, collapsible; a left column on screens 1500 px and wider (SFDC; display only, no result change)
+
+### SFDC. Dashboard as a third panel on the left   [display only]
+- **Problem (engineer):** the summary dashboard (26 check chips, 3–5 lines each) filled the top of the output panel: about 500 px tall at 1366 px wide and 440 px at 1920, 1570 px on a phone. At 1920 px and wider the page (max-width 1600 px) left blank space on both sides.
+- **Where:**
+  - Markup: `<aside id="sfdDashCol" …>` added as the first child of `<div class="main">`. In the output panel, the `<h2 … id="sfdRptSum">Summary Dashboard</h2>` and `<div class="dash" id="dashboard">` are wrapped in `<div id="sfdDashBox">` with a header `<div id="sfdDashHead">` holding the collapse button `#sfdDashTgl`, the same h2 and the NG / REVIEW count `#sfdDashCnt`.
+  - `recalc()`: before `renderDashboard();renderWarnings();renderConsistency();` after `renderDashboard();sfdDashDecorate();renderWarnings();renderConsistency();   /* SFDC */`.
+  - New block before `function renderWarnings(){` (anchor `const SFDC={key:'sfd_dashCollapsed_v1'`): `sfdDashDecorate()`, `sfdDashPlace()`, `sfdDashColl()` and a start-up IIFE.
+  - CSS before `/* ---- user manual ---- */` (anchor `/* SFDC (2026-11-03): compact dashboard`), all under `@media screen`.
+- **Behaviour:**
+  - Each chip is one line: expand button ▸, check name (cut with … if long), a short value, status. The short value is the D/C of the Report summary (`sfdResultRows()`, the same number as the Report's "Summary of results" D/C column; for an FS check D/C = FS_target/FS), or `FS n` from the chip text where there is no D/C (overturning not gated), or nothing (e.g. Contact area, Input validation). Hover (title) shows the name, the full chip text (with the governing combination) and the reference; ▸ expands the chip to show them. NG and REVIEW chips start expanded so the reason is on screen. The expand state is kept by check name for the session (not saved).
+  - A chip click still jumps to its worked section (§6); the ▸ button does not navigate.
+  - Header: "2 NG" / "1 REVIEW" / "no NG" count. The #734 out-of-date styling (dimmed chips) is unchanged and also dims the count.
+  - ≥ 1500 px wide: `sfdDashPlace()` (on load and on a `matchMedia('screen and (min-width:1500px)')` change) moves `#sfdDashBox` into the 280 px left column `#sfdDashCol`, which has the panel height and scrolls on its own (`overflow-y:auto`), so it stays put while the outputs scroll; `.wrap` max-width 1600 → 1892 px (1600 + 280 + 12 gap), and `.inp` width 33 % of the width left after the column, so at 1892 px and wider the input and output panels are exactly as wide as before. The collapse button (« / ») shrinks the column to a 42 px strip with the title written vertically and the NG / REVIEW count.
+  - < 1500 px: the box stays on top of the output panel (after the out-of-date banner); chips in a grid of one-line chips (`minmax(min(250px,100%),1fr)`), "▾ Hide checks" / "▸ Show checks" button. Default project: 186–250 px tall at 1366 (was 504), about 600 px at 390 (was 1569).
+- **Saved data:** new per-browser UI key `sfd_dashCollapsed_v1` (`'1'` = collapsed, `'0'` = open, absent = open), named like `sfd_inputTab_v1` / `sfd_autoCalc_v1`. Not in the project, the autosave or the export. No existing key or format changed.
+- **Report and printing:** unchanged. The chips keep `.cn` / `.cv` / `.cs`, their classes and `data-tab` / `data-sec`; the Report (`sfdResultRows`, the dashboard walk `sfxWalk` → `dash`) reads only those, by class. Printing prints `#rp-print` only (shared/report.js), and the new CSS is screen-only.
+- **Tests:** `tests/smoke/phone-layout.mjs` gets a Spread Footing entry (`sf`: input tabs, output tabs and the Hide / Show checks button at 390 and 768 px). `tests/smoke/spread-footing-scroll.mjs` checks that the dashboard is in the left column at 1920 px and on top below 1500 px, and that chip clicks show the chip's section in the output panel and leave the page scroll at 0.
+
+### How verified
+- Main vs this branch, 10 saved cases (default, review case and 8 others), headless Chromium with the pinned KaTeX / Plotly / three.js, at 1920 and 1366 px: `R`, `P2`, the chip text / status / links, the Report's result rows (`sfdResultRows`), the full Report text, warnings, self-consistency, every output tab's text and every localStorage key and value (apart from the new key) identical; 0 console errors. (Before the max-width was set to 1892 px, Plotly picked other axis ticks on the Pedestal Design P–M plot at 1920 px because the output panel was 5 px wider; that is why the panel widths are kept exact.)
+- Screenshots at 1366, 1600, 1920, 2560 and 390 px, before and after, and collapsed, looked at.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` PASS; `tests/smoke/phone-layout.mjs --tool sf` passes at 390 and 768 px.
+- **Other copies:** none.
+
+### Open items
+- The User Manual (§0 "the summary dashboard at the top of the report", §3.1) still describes the dashboard as at the top; left as is so the tab text stays identical. A wording update can follow if the engineer wants it.
