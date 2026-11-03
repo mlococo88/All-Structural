@@ -19746,7 +19746,7 @@ index 06a42e4..b58d4e3 100644
 +      PDRP.doc = api.doc; PDRP.last = { I, r, pyRes, pcr };   // in memory only (tests read the results the report was built from)
 ```
 
-## 2026-11-02 — PR: claude/plib-pile — PLIB: Rename / Duplicate in the Project library, and Undo / Redo   [display and storage only]
+## 2026-11-02 — PR: claude/plib-pile, PR #717: https://github.com/mlococo88/All-Structural/pull/717 — PLIB: Rename / Duplicate in the Project library, and Undo / Redo   [display and storage only]
 - **Before:** Project file panel (↓ Save .json, ↑ Load .json, Reset to defaults; autosave `micropile_lrfd_inputs_v1`); Project library panel
   (IndexedDB `micropile_lrfd_db`, store `projects`, records `{ id, name, inputs, lpile, updatedAt }`): + Save as new, ⟳ Overwrite, and per
   row load / del. No rename, no duplicate, no undo.
