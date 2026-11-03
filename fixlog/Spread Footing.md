@@ -4123,7 +4123,7 @@ Engineer-approved PR 3 of the independent review of the "Seymour Platform Founda
 
 ### How verified
 - Headless Chromium, origin/main vs the branch, pinned KaTeX 0.16.11 / Plotly 2.35.2 / three 0.160.0. Deep diff of `R` and `P2`: default, review, review with the option on, #684 cases (8 #8, 12 #5, 9 #8 h 2.5 ft), direct mode: only new fields (`dev`, `pedShear`, `xties`, `punchGroup`, `dowels[].countDiff`). Report: 0 KaTeX errors, no NaN / undefined / `§?` / literal `[[`; 0 console errors.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
 - **Saved data:** new input `mat.ldExcess` ('off' | 'on'); saves without it read as 'off' (the reduction not taken, as before). No key or format change.
 - **Other copies:** none.
 - **Open items (questions):**
@@ -4175,7 +4175,7 @@ Engineer-approved PR 4 of the independent review of the "Seymour Platform Founda
 - **Deep diff:** headless Chromium, pinned libraries. Origin/main vs the branch on 7 cases: no existing value differs (new display fields only).
 - **Report:** 0 KaTeX errors; no NaN, undefined, `§?` or `[[`; 0 console errors.
 - **Printed PDF of the review case** (`page.pdf` after `beforeprint`): the elevation caption is whole and the labels are stacked; the shear-friction table breaks across pages without a scroll bar.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
 - **Other copies:** none. **Saved data:** no change.
 
 ### Open items
@@ -4247,7 +4247,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - New fields: `reqBotFlex`, `AsFlex`, `flexGov`, `AsMin`, `sDow`, `edgeX`, `edgeY`, `cso`, `ldh.sMin`, `ldh.cso`.
   - No other value moved.
 - **Report:** 0 KaTeX errors; no NaN, undefined, `§?` or `[[`; 0 console errors.
-- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
 - **Saved data:** no key or format change; no new input.
 - **Other copies:** none.
 
@@ -4313,3 +4313,33 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Why redundant:** `shared/report.js` now prints `.rp-tw{overflow:visible;}` (fixlog/shared-report.md, RPTW). No `.rp-tw` in this tool has a `max-height`. The local rule made wide tables run past the page edge, so Chromium shrank the whole printed report to about 89 %. The shared fix scales only those tables: the resultant table (0.875) and the pedestal table (0.913) on the default project.
 - **Check case:** default project, Report → Print report: before 54 pages at about 89 % scale; after 63 pages at full size, every table inside the page. The same with Ctrl+P.
 - No calculation, saved-data or storage change. The second rule (last step of a topic) is unchanged.
+
+## 2026-11-03 — PR: claude/sf-autocalc (PR #734: https://github.com/mlococo88/All-Structural/pull/734) — "Auto-calculate on change" switch, Re-analyze (Ctrl+Enter), out-of-date marking; plots in hidden output tabs drawn when shown (SFAC; display and workflow only, no result change)
+
+### SFAC. Auto-calculate on change   [no result change]
+- **Problem:** every input edit re-ran the whole analysis and re-render (after the 300 ms typing debounce). Several small edits in a row (e.g. bar sizes and spacings) were slow.
+- **Where:** header (anchor `id="sfdAcChk"`, before `id="btnPrint"`); output panel banner (anchor `id="sfdAcBar"`, before `<h2 … id="sfdRptSum">`); CSS after `.tabpage.active{display:block}` (anchor `#sfdAcBar{`); `recalc()` and `recalcDebounced()` and the new block after it (anchor `const SFAC={key:'sfd_autoCalc_v1'`).
+  - `recalc()`: before `R=computeAll();` added `clearTimeout(rcTimer);sfdSetStale(false);`.
+  - `recalcDebounced()`, before: `clearTimeout(rcTimer);rcTimer=setTimeout(recalc,300);` After: `clearTimeout(rcTimer);if(!SFAC.on){sfdSetStale(true);return;}rcTimer=setTimeout(recalc,300);`
+  - Input edits that called `recalc()` directly now call `sfdAnalyzeReq()` (`recalc()` when on; otherwise mark out of date): pedestal Delete (`state.peds.splice(i,1);buildPedCards();`), Add pedestal (`btnAddPed`), Undo / Redo (`undoApply`), and the two hand-off "Apply" buttons (Steel Beam reactions, foundation loads).
+  - Load, Import JSON, Reset, "Saved projects…" Open and the page load still always analyze.
+- **Behaviour:** checkbox "Auto-calculate on change" (default on = the old behaviour). Off: an edit is still autosaved (`sfd_auto`) and goes on the undo stack; the analysis does not run; `body.sfdStale` is set. That shows the banner "Results out of date — press Re-analyze", enables the header Re-analyze button, and dims / dashes the dashboard chips, warnings, self-consistency checks, every output tab except the User Manual (Schematic … Report, 3D View, Drawings), a ⚠ on those tab buttons, and the Reinforcement-tab A_s / s_max / pedestal bar notes. Re-analyze, Ctrl+Enter (any time) and turning the box back on run `recalc()`.
+- **Print / export while out of date: re-analyze first.** A capture `beforeprint` listener runs `recalc()` before the other print listeners (the `<head>` `sfPrintPrep` listener of #732 and SFRP), so Ctrl+P and the browser's Print print the Report of the new results. A click on the header Print-to-PDF Report runs `recalc()` first and then goes on. "Print report" (Report tab) and "Download DXF" (Drawings tab) are intercepted, re-analyzed, and the click is replayed on the rebuilt button. Export JSON exports inputs only and is unchanged. The tool sends no results hand-off (only the title block, `projectMeta`), so nothing there is marked.
+- **Saved data:** new per-browser UI key `sfd_autoCalc_v1` (`'0'` = off, `'1'` = on, absent = on), named like `sfd_inputTab_v1` / `sfd_dwgSheet_v1`. It is not in the project, the autosave or the export. No existing key or format changed.
+
+### SFAC-P. Plots in hidden output tabs are drawn when their tab or the Report is shown   [display only]
+- **Where:** before `function renderPlots(){` (anchor `const SFPLT={all:false,skip:false};`, `function sfpOn(id)`, `function sfpDrawHidden()`); inside `renderPlots` the five plot guards; in `renderReport()` one line after the `if(!R||R.fatal){…}` line.
+  - Before: `if($('#plot-dcr'))`, `if($('#plot-heat')&&R.govBear…`, `if($('#plot-fs'))`, `const elid='plot-vm-'+dir;if(!$('#'+elid))return;`, `const elid='plot-pm-'+i;if(!$('#'+elid))return;`
+  - After: the same with `sfpOn('plot-dcr')`, `sfpOn('plot-heat')`, `sfpOn('plot-fs')`, `if(!sfpOn(elid))return;` (twice), and `SFPLT.skip=false;` at the top of `renderPlots`.
+  - `renderReport()`: added `sfpDrawHidden();` before `let M;`. Since #732 the Report copies every result tab's Plotly charts (`sfxWalk` → `sfxPlotSvg`), so any skipped plot is drawn (`SFPLT.all`) before the Report reads the tabs; the Report and its printout keep every figure.
+- **Why:** profiling a single bar-spacing edit (headless Chromium, default project) showed Plotly redrawing every plot in every tab, more than half of `recalc()` on a result tab. The tab click already calls `renderPlots()`, so a plot is drawn when its tab is opened.
+- **Timings** (bottom-x bar spacing edited through its input, time inside `recalc()` per edit, mean of 4 edits, two runs, headless Chromium, default project; origin/main → this branch): Schematic tab 431 / 488 → 247 / 200 ms (`renderPlots` 258 / 280 → 0.1 ms); Footing Design tab, whose own two plots are still drawn, 601 → 392 ms (second run; first run noisy, 1159 → 753 ms); Report tab about the same (931 → 905 ms), because the Report needs every plot. With the Report tab open, turning Auto-calculate off is what saves the time. The rest of `recalc()` (`computeAll` about 1 ms, `computePhase2` about 40 ms, the HTML renders) is unchanged.
+
+### How verified
+- `R`, `P2`, dashboard text and the report text (SharedReport.text) compared with origin/main on the default project and the review case (`rev`): harness run with auto on → 0 differences. With auto off, the same edits made through the inputs (bottom-x spacing 10, bottom-y #6, top-x spacing 9, Ped 1 tie spacing 10), then Ctrl+Enter, compared with main making the same edits → 0 differences, identical report and dashboard text, on both cases.
+- Behaviour (headless, 21 checks on each case): out of date after edits with no analysis run; autosave and undo stored; banner and Re-analyze shown; Ctrl+Enter, the button, turning the box on, `beforeprint`, Download DXF, the Report's Print report and the header Print-to-PDF Report (from the Bearing tab) each re-analyze; Undo while off does not analyze; the preference survives a reload and the page analyzes on load. 0 console errors.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs <pinned libs>` passes. The results harness over all 10 saved cases (default, review case and 8 others) with auto on: `R`, `P2` and the full Report text (with its figure captions) identical to origin/main after #732.
+- **Other copies:** none.
+
+### Open items
+- None.
