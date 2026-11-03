@@ -784,7 +784,14 @@
       for (let i = 0; i < best.length; i++) { const it = runJob({ ...best[i].job, minLines: 1, coarse: false, maxIt: null }); let s; while (!(s = it.next()).done) yield { f: 0.68, msg: s.value.msg }; } }
     // stage 2: full checks, best first, until topN pass (topN: "Designs to list" on the tab)
     const seen = new Set(), pool = out.filter(o => o.pass).sort((a, b) => key(a) - key(b)).filter(o => { const s = sigOf(o.L); if (seen.has(s)) return false; seen.add(s); return true; });
-    const cands = [], rejected = [], blocked = []; let curFull = null;
+    const cands = [], rejected = [], blocked = [], twins = []; let curFull = null;
+    /* the 1-gage-line twin (engineer decision 2026-11-02): a passing 1-gage-line design (minLines 1) with the same girder count, depth, overhangs,
+       field splices, web and flange plates and flange transitions as a passing "as set" design (minLines null), and the same objective value and
+       cost, saves nothing: it is not listed (twins), so the next distinct design takes its place. A 1-line design that differs in anything above
+       (so it saves weight or cost) is kept. Which of the two passed first does not matter: the "as set" one is the one kept. */
+    const plSig = L => JSON.stringify([L.nb, L.D, L.oh || null, L.spl, L.web.map(p => [p.x0, p.x1, p.tw]), L.top.map(z => [z.x0, z.x1, z.b, z.t]), L.bot.map(z => [z.x0, z.x1, z.b, z.t])]);
+    const twinOf = c => cands.findIndex(t => (t.L.minLines === 1) !== (c.L.minLines === 1) && (t.L.minLines == null || t.L.minLines === 1) && (c.L.minLines == null || c.L.minLines === 1)
+      && plSig(t.L) === plSig(c.L) && Math.abs(key(t) - key(c)) <= 1e-6 * Math.max(1, Math.abs(key(c))) && Math.abs(t.cost.total - c.cost.total) <= 1e-6 * Math.max(1, Math.abs(c.cost.total)));
     /* a finalist whose every failing check (module and check id) fails in the current design too is "blocked" by those details (a detail input such
        as a splice end distance or the cross-frame bolts, which the plates do not change): listed apart, never with the passing candidates */
     const fkey = f => `${f.mod}|${f.id}`, curKeys = () => { if (!curFull) curFull = evaluate(P, { level: 'full', ctx }); return new Set(curFull.fails.map(fkey)); };
@@ -808,7 +815,9 @@
         let r2 = s2.value; if (opt.trimTries !== 0) { const it3 = trim(P, S, r2, ctx2, 4); let s3; while (!(s3 = it3.next()).done) yield { f: 0.7 + 0.29 * i / Math.max(1, Math.min(pool.length, S.topN + 2)), msg: `Full check ${i + 1}: ${s3.value.msg}` }; r2 = s3.value; }
         o = { ...o, L: r2.L, E: r2.E, cost: costOf(r2.L, S, r2.E.nStiff), polished: pol + 1 };
       }
-      if (E.pass && pr.ok) { cands.push({ ...cand(o, E, S, P, det), polished: o.polished || 0 }); continue; }   // (a splice layout's placement rules are in E above)
+      if (E.pass && pr.ok) { const c = { ...cand(o, E, S, P, det), polished: o.polished || 0 }, k = twinOf(c);   // (a splice layout's placement rules are in E above)
+        if (k < 0) cands.push(c); else if (c.L.minLines === 1) twins.push(c); else { twins.push(cands[k]); cands[k] = c; }   // the 1-gage-line twin: not listed
+        continue; }
       const fl = E.fails.map(f => ({ mod: f.mod, id: f.id, title: f.title, r: f.r, x: f.x, gl: f.gl })), ck = curKeys();
       if (pr.ok && fl.length && fl.every(f => !plateCk(f) && ck.has(fkey(f)))) blocked.push({ ...cand(o, E, S, P, det), blockers: [...new Set(fl.map(f => `${f.mod} ${f.id}`))], fails: fl.slice(0, 6) });
       else rejected.push({ L: o.L, cost: o.cost, fails: fl.slice(0, 6), pr: pr.ok, notes: det ? det.notes : [] });
@@ -823,7 +832,7 @@
     const note = !cands.length && blockers.length ? `No candidate passes every module: detail checks that fail in the current design too, whatever the plates, block them (${blockers.join(', ')}). Fix those inputs (their tabs), then run again; the designs below pass everything else.`
       : !cands.length && out.some(o => o.pass) ? `No candidate passes the full check${lk ? ` with these locks and ranges (${lk})` : ''}: governing ${rej0 && rej0.fails[0] ? govS(rej0.fails[0]) : '—'}${rej0 && rej0.notes && rej0.notes.length ? '. ' + rej0.notes.join(' ') : ''}. See the dropped list (a detail check, such as a splice, stud or cross-frame, may fail whatever the plates).`
       : !cands.length ? `No candidate passes${lk ? ` with these locks and ranges (${lk})` : ' the screen within the limits'}: governing ${bestScr ? govS(bestScr.E.gov) : '—'}${bestScr ? ` (the best design screened: N_b = ${bestScr.L.nb}, D = ${bestScr.L.D} in)` : ''}. Unlock or widen ${lk ? 'a variable' : 'the depth range or the limits'}.` : '';
-    return { S, cands, blocked, blockers, rejected, screened: out.map(o => ({ nb: o.L.nb, D: o.L.D, minLines: o.L.minLines, pass: o.pass, w: o.cost.w, cost: o.cost.total, ratio: o.E ? o.E.ratio : null, spl: o.L.spl })), current: { ...cur, full: fullCur || curFull, mods: modList((fullCur || curFull || {}).modGov) }, note, ...(SL ? { spl: SL } : {}) };
+    return { S, cands, twins, blocked, blockers, rejected, screened: out.map(o => ({ nb: o.L.nb, D: o.L.D, minLines: o.L.minLines, pass: o.pass, w: o.cost.w, cost: o.cost.total, ratio: o.E ? o.E.ratio : null, spl: o.L.spl })), current: { ...cur, full: fullCur || curFull, mods: modList((fullCur || curFull || {}).modGov) }, note, ...(SL ? { spl: SL } : {}) };
   }
   /* the locked and ranged variables, as text (the infeasible note) */
   function lockText(S) {

@@ -16,6 +16,8 @@
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
 <!-- PDRP: shared worked steps and the shared report viewer for the Report tab (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
+<!-- PDRX (2026-11-02): Ctrl+P / the browser's Print from any output tab print the Report; registered before shared/report.js's own beforeprint listener (pdrPrintPrep: below in this file) -->
+<script>window.addEventListener("beforeprint", function () { try { if (typeof pdrPrintPrep === "function") pdrPrintPrep(); } catch (e) {} });</script>
 <script src="shared/report.js"></script>
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
@@ -75,7 +77,6 @@
   @media print {
     .no-print { display: none !important; }
     .app-shell { display: none !important; }
-    .print-only { display: block !important; }
     body, html { background: #fff !important; }
     @page { margin: 0.75in 0.7in; size: letter; }
     .katex-display { overflow: visible !important; }
@@ -83,9 +84,8 @@
     .rpt-pagebreak { break-before: page; page-break-before: always; }
     .rpt-avoid { break-inside: avoid; page-break-inside: avoid; }
   }
-  .print-only { display: none; }
-  /* On-screen preview wrapper forces its report copy visible */
-  .report-preview-show .print-only { display: block !important; }
+  /* PDRX (2026-11-02): the PrintReport copy (.print-only) is never shown or printed: it is the Report's hidden data source */
+  .print-only { display: none !important; }
   /* D11 links (CLAUDE.md section 6): "Worked in: value -> Tab . Module" under a quoted value */
   .pd-wk { font-size: 11px; color: #5A6B80; margin: 4px 0 2px; line-height: 1.4; }
   .pd-wkA { color: var(--accent, #2a6f97); background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-align: left; }
@@ -9902,42 +9902,7 @@ function loadRptSel() {
   try { const v = JSON.parse(window.localStorage.getItem(RPT_SEL_KEY) || "null"); return v && typeof v === "object" && !Array.isArray(v) ? v : {}; } catch (e) { return {}; }
 }
 function saveRptSel(v) { try { window.localStorage.setItem(RPT_SEL_KEY, JSON.stringify(v)); } catch (e) {} }
-/* Fit the report to the printable width before printing / previewing. The
-   standalone report is display:none on screen, so it is laid out off screen at
-   7.1 in. Tables that are still too wide get a smaller font, equations that
-   run past the right edge are scaled down, and short sections are marked so
-   print keeps them on one page. Attributes / KaTeX nodes only. */
-function fitPrintReport(root) {
-  const R = root || [...document.querySelectorAll(".print-only")].find(e => !e.closest(".report-preview-show"));
-  if (!R) return;
-  const hidden = R.getClientRects().length === 0;
-  if (hidden) R.setAttribute("data-measure", "1");
-  try {
-    R.querySelectorAll("table[data-fit]").forEach(t => t.removeAttribute("data-fit"));
-    R.querySelectorAll(".katex[data-fitk]").forEach(k => { k.style.fontSize = ""; k.removeAttribute("data-fitk"); });
-    R.querySelectorAll("table").forEach(t => {
-      const pw = t.parentElement ? t.parentElement.clientWidth : 0;
-      if (!pw) return;
-      for (const f of ["8", "7", "6"]) { if (t.scrollWidth <= pw + 0.5) break; t.setAttribute("data-fit", f); }
-    });
-    const right = R.getBoundingClientRect().right;
-    R.querySelectorAll(".katex").forEach(k => {
-      if (k.parentElement && k.parentElement.closest(".katex")) return;
-      const box = k.closest("td, .rpt-calc-eq, .rpt-check") || R;
-      const lim = Math.min(right, box.getBoundingClientRect().right) - 2;
-      const kr = k.getBoundingClientRect();
-      if (kr.width > 0 && kr.right > lim) {
-        const room = lim - kr.left, fs = parseFloat(getComputedStyle(k).fontSize) || 12;
-        if (room > 20) { k.style.fontSize = (fs * Math.max(0.6, room / kr.width)).toFixed(2) + "px"; k.setAttribute("data-fitk", "1"); }
-      }
-    });
-    R.querySelectorAll(".rpt-section").forEach(sec => {
-      const h = sec.getBoundingClientRect().height;
-      if (h > 0 && h < 260) sec.setAttribute("data-short", "1"); else sec.removeAttribute("data-short");
-    });
-  } catch (e) { console.error(e); }
-  if (hidden) R.removeAttribute("data-measure");
-}
+/* PDRX (2026-11-02): fitPrintReport (fitting the print preview / printed PrintReport to the page) retired with the print preview. */
 /* D11 (2026-10-18): calculation-sheet report in the Gusset Plate Rating / ST-Girder format --
    cover with title block, references, numbered table of contents (links), numbered sections n
    and subsections n.k, a D/C result line per check, and the print header / "Page X of Y" footer
@@ -16002,6 +15967,42 @@ function pdrExtras(root, M, imgs) {
   const capH = heads.find(h => /Rigid-Cap Load Distribution/.test(h.textContent)), capBox = capH && capH.closest(".rpt-grp");
   if (capBox) capBox.querySelectorAll("table").forEach(t => { const tr = [...t.querySelectorAll("tr")]; if (tr.length < 2) return; const hd = [...tr[0].children].map(c => c.textContent.trim());
     add("group", { type: "table", wide: true, caption: "Rigid-cap load distribution (as printed)", head: hd, rows: tr.slice(1).map(r => [...r.children].map(c => c.textContent.trim())) }); });
+  pdrRest(root, M, grpOf, capBox);
+}
+/* PDRX (2026-11-02): the print preview, its Print / Preview overlay and its section chooser are retired; the PrintReport component is
+   kept, rendered hidden, ONLY as the data source of this Report (engineer decision 2026-11-02: input echo tables, figures, charts and the
+   tables below are read from it; it is never shown or printed). Every table of it with a number the Report does not show yet, and every
+   note of it with a sentence the Report does not have yet, is added to the section of its print group ("Tables as printed", "Notes as
+   printed"): the deflection profile, the p-y points at the selected depths, A_g / EI, the solver diagnostics, the method notes. The
+   values are the PrintReport's own (the same results); nothing is computed here. */
+function pdrRest(root, M, grpOf, capBox) {
+  const numsOf = t => (String(t).replace(/\u2212/g, "-").replace(/(\d),(?=\d{3})/g, "$1").match(/-?\d+(?:\.\d+)?/g) || []);
+  const nrm = x => String(x).toLowerCase().replace(/[^a-z0-9]+/g, "");
+  let txt = ""; try { txt = SharedReport.text(SharedReport.build(M)); } catch (e) { txt = JSON.stringify(M); }
+  const have = new Set(numsOf(txt)), all = nrm(txt);
+  const fresh = t => { const ss = String(t).split(/(?<=[.;:])\s+/).map(nrm).filter(x => x.length > 15); return ss.length ? ss.some(x => !all.includes(x)) : false; };
+  const put = (g, it, title) => { const s = M.sections.find(x => x.grp === g) || M.sections.find(x => x.grp) || M.sections[0]; if (!s) return;
+    let q = s.subs.find(x => x._pdrx === title); if (!q) { q = { title, items: [], _pdrx: title }; s.subs.push(q); } q.items.push(it); };
+  const skip = e => e.closest('svg, .katex, [data-lg-keys], .rpt-calc, .rpt-h, .rpt-cover, .rpt-front, .rpt-toc, .rpt-resline, .rpt-results, .rpt-check, .rpt-sub') || (capBox && capBox.contains(e));
+  const tx = e => e.textContent.replace(/\s+/g, " ").trim();
+  root.querySelectorAll("table").forEach(t => {
+    if (skip(t) || t.parentElement.closest("table")) return;
+    const trs = [...t.rows]; if (!trs.length) return;
+    if (!numsOf(t.innerText || t.textContent).some(n => !have.has(n))) return;
+    const hd = trs[0].querySelector("th") ? [...trs[0].cells].map(tx) : null;
+    let cap = ""; for (let e = t.previousElementSibling; e && !cap; e = e.previousElementSibling) { const x = tx(e); if (x && x.length <= 160 && !e.querySelector("table")) cap = x; break; }
+    put(grpOf(t), { type: "table", wide: (trs[0].cells.length > 6) || undefined, caption: cap || "Table (as printed)", head: hd || [], rows: trs.slice(hd ? 1 : 0).map(r => [...r.cells].map(c => { const v = tx(c); return /^[-\u2212\d.,e+\s%/×()]+$/.test(v) && /\d/.test(v) ? { t: v, n: true } : v; })), lazy: trs.length > 31 || undefined, title: trs.length > 31 ? (cap || "Table (as printed)") : undefined }, "Tables as printed");
+    trs.forEach(r => numsOf(r.textContent).forEach(n => have.add(n)));
+  });
+  const BLK = /^(P|LI|DIV|H3|H4|H5)$/;
+  root.querySelectorAll("p, li, div, h3, h4, h5").forEach(e => {
+    if (skip(e) || e.closest("table") || [...e.children].some(c => BLK.test(c.tagName) || c.tagName === "TABLE" || c.tagName === "UL" || c.tagName === "OL")) return;
+    const t = tx(e); if (t.length < 20) return;
+    const newNum = numsOf(t).some(n => !have.has(n));
+    if (!fresh(t) && !newNum) return;
+    put(grpOf(e), { type: "note", text: (e.tagName === "LI" ? "\u2022 " : "") + t.replace(/\$/g, "") }, "Notes as printed");
+    numsOf(t).forEach(n => have.add(n)); all.length;   /* a note is added once */
+  });
 }
 async function pdrPlotImages(root) {
   const out = []; if (!root || typeof Plotly === "undefined") return out;
@@ -16050,6 +16051,7 @@ function pdrGeoSub(g, title, dem, note) {
 /* the Report output tab: mounts the shared viewer when the tab is shown and whenever the results change while it is shown;
    chips = the print-section chooser groups (same selection as Print / Preview) */
 function PdReportTab({ I, r, pyRes, pcr, sel, setSel }) {
+  PDRP.cur = { I, r, pyRes, pcr, sel, setSel };   /* PDRX: the latest results, for printing from another output tab (memory only) */
   const host = React.useRef(null);
   const [tick, setTick] = React.useState(0);
   React.useEffect(() => {   // re-render when the output tab changes (the strip sets data-otab-active on .main-col)
@@ -16075,6 +16077,34 @@ function PdReportTab({ I, r, pyRes, pcr, sel, setSel }) {
   return React.createElement("div", { ref: host, "data-otab-fixed": "report", id: "pd-report-tab", style: { order: 999 }, className: "pd-rpt no-print bg-white border border-slate-200 rounded-md px-3 py-2" },
     React.createElement("div", { className: "pd-rpt-host" }));
 }
+/* PDRX (2026-11-02): Print from any output tab. pdrPrintPrep() shows the Report output tab for the print only (the data-otab-active
+   attribute; the remembered output tab, micropile_lrfd_outTab_v1, is not written) and mounts the Report now, so shared/report.js's own
+   beforeprint listener (registered after the inline one before it) sets the running header; afterprint puts the tab of before back.
+   pdrPrintAny() (the Print buttons) also waits for the chart images first. */
+function pdrBuildNow() {
+  const c = PDRP.cur, main = document.querySelector(".app-shell .main-col"), box = document.querySelector("#pd-report-tab .pd-rpt-host");
+  if (!c || !main || !box || !window.SharedReport || !window.SharedSteps) return false;
+  const M = pdrModel(c.I, c.r, c.pyRes, c.pcr, c.sel); pdrExtras(pdrD11(), M.model, PDRP.imgsFor === c.r ? PDRP.imgs : null);
+  const api = SharedReport.mount(box, M.model, { closed: PDRP.closed });
+  PDRP.doc = api.doc; PDRP.last = { I: c.I, r: c.r, pyRes: c.pyRes, pcr: c.pcr };
+  return true;
+}
+function pdrPrintPrep() {
+  const main = document.querySelector(".app-shell .main-col"); if (!main || !PDRP.cur || document.body.classList.contains("rp-printing")) return false;
+  const act = main.getAttribute("data-otab-active");
+  if (act !== "report") { PDRP.back = act; main.setAttribute("data-otab-active", "report"); }
+  if (act !== "report" || !PDRP.doc || !PDRP.last || PDRP.last.r !== PDRP.cur.r) { try { pdrBuildNow(); } catch (e) { console.error(e); } }
+  return true;
+}
+async function pdrPrintAny() {
+  if (!window.SharedReport || !window.SharedSteps || !PDRP.cur) { window.print(); return; }
+  pdrPrintPrep();
+  const c = PDRP.cur;
+  if (PDRP.imgsFor !== c.r || !PDRP.imgs) { PDRP.imgsFor = c.r; try { PDRP.imgs = await pdrPlotImages(pdrD11()); } catch (e) { PDRP.imgs = null; } }
+  try { pdrBuildNow(); } catch (e) { console.error(e); }
+  if (PDRP.doc) SharedReport.print(PDRP.doc); else window.print();
+}
+window.addEventListener("afterprint", () => { const b = PDRP.back; PDRP.back = null; const main = document.querySelector(".app-shell .main-col"); if (b && main) main.setAttribute("data-otab-active", b); });
 /* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header) */
 function pdrWillPrint() { const m = document.querySelector(".app-shell .main-col"); return !!(PDRP.doc && m && m.getAttribute("data-otab-active") === "report" && !document.querySelector(".report-preview-show")); }
 window.addEventListener("beforeprint", () => {
@@ -16098,9 +16128,7 @@ function App() {
   // control now lives on the LEFT input panel (an input belongs with the inputs),
   // and the modal must be reachable from there.
   const [cycInfoOpen, setCycInfoOpen] = useState(false);
-  const [previewReport, setPreviewReport] = useState(false);
   // UI: print-section chooser (per-browser selection, not project data)
-  const [printDlg, setPrintDlg] = useState(false);
   const [rptSel, setRptSelState] = useState(() => loadRptSel());
   const setRptSel = v => { setRptSelState(v); saveRptSel(v); };
   // UI: active tab of the left input rail (presentation state, not an input)
@@ -16369,25 +16397,9 @@ function App() {
   }
   const ALL_MODULES = [1, 2, 3, 4, 5, 55, 6, 7, 8, 9, 10, 11];
   function printReport() {
-    // UI: every print button opens the print-section chooser first.
-    setPrintDlg(true);
+    // PDRX (2026-11-02): every print button prints the Report (from any output tab; the tab of before comes back after printing)
+    pdrPrintAny();
   }
-  function doPrint() {
-    // The PrintReport component renders independently of the on-screen modules,
-    // so we can print directly (after the chooser closes and the report is fitted).
-    setPrintDlg(false);
-    setTimeout(() => { fitPrintReport(); window.print(); }, 60);
-  }
-  useEffect(() => {
-    const f = () => fitPrintReport();
-    window.addEventListener("beforeprint", f);
-    return () => window.removeEventListener("beforeprint", f);
-  }, []);
-  useEffect(() => {
-    if (!previewReport) return;
-    const t = setTimeout(() => fitPrintReport(document.querySelector(".report-preview-show .print-only")), 400);
-    return () => clearTimeout(t);
-  }, [previewReport, rptSel]);
 
   // ---- LPILE file import ----
   async function handleLpileFile(file) {
@@ -17894,64 +17906,6 @@ function App() {
   React.useEffect(() => { if (window.PileResultsXfer) PileResultsXfer.note({ I, r, pyRes, caseRes, cases }); });
   return /*#__PURE__*/React.createElement("div", {
     className: "min-h-screen text-[var(--ink)]"
-  }, previewReport && /*#__PURE__*/React.createElement("div", {
-    className: "no-print",
-    style: {
-      position: "sticky",
-      top: 0,
-      zIndex: 40,
-      background: "#14304a",
-      color: "#fff",
-      padding: "8px 16px",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center"
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontFamily: "monospace",
-      fontSize: "12px"
-    }
-  }, "Report preview — this is what prints / saves to PDF"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: "flex",
-      gap: "8px"
-    }
-  }, /*#__PURE__*/React.createElement("button", {
-    onClick: printReport,
-    style: {
-      fontFamily: "monospace",
-      fontSize: "11px",
-      padding: "6px 12px",
-      borderRadius: "3px",
-      background: "var(--accent)",
-      color: "#fff"
-    }
-  }, "↧ Print / Save PDF"), /*#__PURE__*/React.createElement("button", {
-    onClick: () => setPreviewReport(false),
-    style: {
-      fontFamily: "monospace",
-      fontSize: "11px",
-      padding: "6px 12px",
-      borderRadius: "3px",
-      background: "rgba(255,255,255,0.15)",
-      color: "#fff"
-    }
-  }, "✕ Close"))), previewReport && /*#__PURE__*/React.createElement("div", {
-    className: "no-print report-preview-show",
-    style: {
-      background: "#e9eef2",
-      padding: "24px 0",
-      minHeight: "100vh"
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      background: "#fff",
-      maxWidth: "8.5in",
-      margin: "0 auto",
-      padding: "0.75in 0.7in",
-      boxShadow: "0 4px 24px rgba(0,0,0,0.15)"
-    }
   }, /*#__PURE__*/React.createElement(PrintReport, {
     I: I,
     r: r,
@@ -17960,26 +17914,8 @@ function App() {
     pcr: pcr,
     sel: rptSel,
     gfx: { solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, ei: { EI: EI, EI_uncased_kipin2: EI_uncased_kipin2 }, actType: (cases[activeIdx] || {}).type }
-  }))), /*#__PURE__*/React.createElement(PrintReport, {
-    I: I,
-    r: r,
-    caseRes: caseRes,
-    pyRes: pyRes,
-    pcr: pcr,
-    sel: rptSel,
-    gfx: { solved: solved, activeLayers: activeLayers, pyDepths: pyDepths, ei: { EI: EI, EI_uncased_kipin2: EI_uncased_kipin2 }, actType: (cases[activeIdx] || {}).type }
-  }), /*#__PURE__*/React.createElement(PrintChooser, {
-    open: printDlg,
-    sel: rptSel,
-    setSel: setRptSel,
-    onClose: () => setPrintDlg(false),
-    onPrint: doPrint,
-    onPreview: () => { setPrintDlg(false); setPreviewReport(true); window.scrollTo(0, 0); }
   }), /*#__PURE__*/React.createElement("div", {
-    className: "app-shell",
-    style: previewReport ? {
-      display: "none"
-    } : undefined
+    className: "app-shell"
   }, /*#__PURE__*/React.createElement("header", {
     className: "pd-hdr"
   }, /*#__PURE__*/React.createElement("div", {
@@ -18092,8 +18028,7 @@ function App() {
     pileLabel: I.pileType === "iab" ? "Integral abutment pile" : I.pileType === "hpile" ? "Driven H-pile" : "Drilled micropile",
     allPass: r.allPass,
     onSave: exportProject,
-    onPreview: () => setPreviewReport(p => !p),
-    previewing: previewReport,
+    onPreview: () => { if (window.__pdSetOutTab) window.__pdSetOutTab("report"); },
     onPrint: printReport,
     caseLabel: (cases && cases[activeIdx]) ? (cases[activeIdx].name || ("Case " + (activeIdx + 1))) : null
   }), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length) || loadNotes.length || r.blankInputs) ? /*#__PURE__*/React.createElement("div", {
@@ -18928,9 +18863,9 @@ function App() {
   }))), /*#__PURE__*/React.createElement("div", {
     className: "space-y-2"
   }, /*#__PURE__*/React.createElement("button", {
-    onClick: () => setPreviewReport(p => !p),
+    onClick: () => { if (window.__pdSetOutTab) window.__pdSetOutTab("report"); },
     className: "w-full font-mono-tech text-[11px] tracking-wider py-2 rounded-sm border border-[var(--blueprint)] text-[var(--blueprint)] hover:bg-slate-50 transition"
-  }, previewReport ? "✕ Close report preview" : "◰ Preview calculation report"), /*#__PURE__*/React.createElement("button", {
+  }, "◰ Open the calculation report (Report tab)"), /*#__PURE__*/React.createElement("button", {
     onClick: printReport,
     className: "w-full font-mono-tech text-[12px] tracking-wider py-2.5 rounded-sm text-white hover:opacity-90 transition",
     style: {
@@ -21742,51 +21677,7 @@ function OutTabs({ pileType }) {
     }, label(id), ng[id] ? /*#__PURE__*/React.createElement("span", { className: "out-tab-dot", "aria-label": "(not satisfied)" }) : null)));
 }
 
-/* ============================================================
-   PRINT-SECTION CHOOSER (UI only, 2026-10-10)
-   ------------------------------------------------------------
-   Lists the report groups present for this pile type (read from the rendered
-   report headings). The choice is remembered per browser in
-   micropile_lrfd_printSel_v1 ({group: false} for an unticked group; nothing
-   stored = everything, which is what printed before). The title block, seal
-   box and sheet footers always print. Preview uses the same selection.
-============================================================ */
-function PrintChooser({ open, sel, setSel, onClose, onPrint, onPreview }) {
-  const [groups, setGroups] = React.useState([]);
-  const goRef = React.useRef(null);
-  React.useEffect(() => {
-    if (!open) return;
-    const seen = {}, list = [];
-    document.querySelectorAll(".print-only .rpt-h[data-rgrp]").forEach(h => {
-      const g = h.getAttribute("data-rgrp"), n = h.getAttribute("data-n");
-      if (!seen[g]) { seen[g] = { g, ns: [] }; list.push(seen[g]); }
-      if (seen[g].ns.indexOf(n) < 0) seen[g].ns.push(n);
-    });
-    list.sort((a, b) => RPT_GRP_ORDER.indexOf(a.g) - RPT_GRP_ORDER.indexOf(b.g));
-    setGroups(list);
-    const onKey = e => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    setTimeout(() => { if (goRef.current) goRef.current.focus(); }, 0);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
-  if (!open) return null;
-  const setAll = v => { const n = { ...sel }; groups.forEach(x => { if (v) delete n[x.g]; else n[x.g] = false; }); setSel(n); };
-  return /*#__PURE__*/React.createElement("div", { className: "pd-prdlg-ov no-print", onClick: e => { if (e.target === e.currentTarget) onClose(); } },
-    /*#__PURE__*/React.createElement("div", { className: "pd-prdlg", role: "dialog", "aria-modal": "true", "aria-labelledby": "pdPrdlgT" },
-      /*#__PURE__*/React.createElement("h2", { id: "pdPrdlgT" }, "Print report — select contents"),
-      /*#__PURE__*/React.createElement("p", { className: "pd-prdlg-hint" }, "Use the browser’s print dialog to print or save as PDF. Your choice is remembered in this browser; it is not saved with the project."),
-      /*#__PURE__*/React.createElement("div", { className: "pd-prdlg-fixed" }, "Always printed: title block, PE seal box, sheet header and footer."),
-      groups.map(x => /*#__PURE__*/React.createElement("label", { key: x.g },
-        /*#__PURE__*/React.createElement("input", { type: "checkbox", checked: sel[x.g] !== false, onChange: e => { const n = { ...sel }; if (e.target.checked) delete n[x.g]; else n[x.g] = false; setSel(n); } }),
-        /*#__PURE__*/React.createElement("span", null, RPT_GRP_LABEL[x.g] || x.g, " ", /*#__PURE__*/React.createElement("span", { className: "pd-prdlg-ns" }, "(" + x.ns.join(", ") + ")")))),
-      /*#__PURE__*/React.createElement("div", { className: "pd-prdlg-row" },
-        /*#__PURE__*/React.createElement("button", { type: "button", className: "is-quiet", onClick: () => setAll(true) }, "All (default)"),
-        /*#__PURE__*/React.createElement("button", { type: "button", className: "is-quiet", onClick: () => setAll(false) }, "None")),
-      /*#__PURE__*/React.createElement("div", { className: "pd-prdlg-row" },
-        /*#__PURE__*/React.createElement("button", { ref: goRef, type: "button", className: "is-primary", onClick: onPrint }, "Print"),
-        /*#__PURE__*/React.createElement("button", { type: "button", onClick: onPreview }, "Preview report"),
-        /*#__PURE__*/React.createElement("button", { type: "button", onClick: onClose }, "Cancel"))));
-}
+/* PDRX (2026-11-02): the print-section chooser (PrintChooser) is retired; its selection (micropile_lrfd_printSel_v1) is the Report bar's section chips. */
 
 /* ============================================================
    CHECK INDEX -- sticky strip under the title block (UI only)
@@ -21798,7 +21689,7 @@ function PrintChooser({ open, sel, setSel, onClose, onPrint, onPreview }) {
    collapsed. Reads the rendered <section data-module> hooks, so it follows
    whatever modules the active pile type renders; it never touches calc state.
 ============================================================ */
-function CheckIndex({ pileLabel, allPass, onSave, onPreview, previewing, onPrint, caseLabel }) {
+function CheckIndex({ pileLabel, allPass, onSave, onPreview, onPrint, caseLabel }) {
   // Expand / Collapse all act on the modules of the open output tab (on a tab
   // with no modules, e.g. Summary, on every module).
   const setAll = (wantOpen) => {
@@ -21902,7 +21793,7 @@ function CheckIndex({ pileLabel, allPass, onSave, onPreview, previewing, onPrint
         /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn ci-btn-quiet", onClick: () => setAll(true), title: "Open every module on the open output tab (on the Summary tab: every module)" }, "Expand all"),
         /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn ci-btn-quiet", onClick: () => setAll(false), title: "Close every module on the open output tab (on the Summary tab: every module)" }, "Collapse all"),
         /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn", onClick: onSave }, "Save .json"),
-        /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn", onClick: onPreview, "aria-pressed": !!previewing }, previewing ? "Close preview" : "Preview report"),
+        /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn", onClick: onPreview, title: "Open the Report tab" }, "Report"),
         /*#__PURE__*/React.createElement("button", { type: "button", className: "ci-btn ci-btn-primary", onClick: onPrint }, "Print report"))));
 }
 ReactDOM.createRoot(document.getElementById("root")).render(/*#__PURE__*/React.createElement(App, null));
