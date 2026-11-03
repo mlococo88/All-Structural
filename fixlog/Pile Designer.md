@@ -19778,7 +19778,7 @@ index 06a42e4..b58d4e3 100644
   kit's 18.2.0; Tailwind is not in the kit, so the panel layout was not checked headless (the header buttons use the page's own
   `.pd-hdrBtns` style). `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
-## 2026-11-02 — PR: claude/report-retire-pile (PDRX: the print preview overlay and the print-section chooser retired; Print, Ctrl+P and the browser's Print print the Report from every output tab; the PrintReport component kept, hidden, only as the Report's data source; what the Report lacked ported; display only, no result change)
+## 2026-11-02 — PR: claude/report-retire-pile, PR #718: https://github.com/mlococo88/All-Structural/pull/718 (PDRX: the print preview overlay and the print-section chooser retired; Print, Ctrl+P and the browser's Print print the Report from every output tab; the PrintReport component kept, hidden, only as the Report's data source; what the Report lacked ported; display only, no result change)
 
 ### PDRX-1. What the old print report showed and the Report lacked, ported   [display] [no result change]
 - **Engineer decision (2026-11-02):** keep `PrintReport` rendered hidden purely as the Report's data source (the Report already read its input echo tables, figures and charts from it); remove only the Print / Preview overlay and its section chooser; Print prints the Report from any tab and returns to the tab of before; port any number the old report shows that the Report still lacks. Same method as #623 … #702 and abutment #715.
@@ -19809,5 +19809,6 @@ index 06a42e4..b58d4e3 100644
   - `node tests/check-syntax.mjs "Pile Designer.html"`: pass.
   - origin/main vs branch, three cases: the results the Report is built from (`PDRP.last`, JSON) identical; localStorage identical before and after showing and printing the Report; page text identical apart from the two button labels; no console errors; chart images 11 / 5 / 1 on both sides.
   - Report: 0 unresolved references, 0 duplicate keys, no NaN / undefined.
+  - `node tests/smoke/pile-library.mjs`: library, Undo / Redo, quota and console checks pass; its two "page text identical to origin/main" checks (on load, after an input change) report the intended difference, the two relabelled buttons ("Report", "◰ Open the calculation report (Report tab)").
   - Print routing, headless, from each of the 12 output tabs, by `beforeprint` and by "Print report": `#rp-print` holds the Report (with the 3 chart images on the button path), `body.rp-printing` and the running header are set, the output tab of before comes back after `afterprint`.
 - **Other copies:** none.
