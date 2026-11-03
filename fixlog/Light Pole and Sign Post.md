@@ -2053,7 +2053,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
   - `node tests/engine/run.mjs lightpole`: 41 passed. `node tests/smoke/lightpole-anchor-handoff.mjs`: ALL PASS. `node tests/check-syntax.mjs`: all pass. Screenshots of each LTS sign-mode input tab were reviewed.
 - **Open items (not built):** handhole input; leveling-nut standoff (sent as 0). Possible follow-up: also check the Broms parameters (c > 0, or φ and γ > 0) for the chosen model.
 
-## 2026-11-03 — PR: claude/lts-broms-params (LTS-L3: LRFDLTS input check also requires the Broms parameters)   [behaviour change: when results are shown; no formula change]
+## 2026-11-03 — PR: [#745](https://github.com/mlococo88/All-Structural/pull/745) (LTS-L3: LRFDLTS input check also requires the Broms parameters)   [behaviour change: when results are shown; no formula change]
 - **Problem:** after LTS-L2 the LRFDLTS mode required a Broms soil model but not its parameters. Cohesive with c = 0, or cohesionless with φ or γ blank or 0, gave no input error. `bromsEmbedment()` then returned null: no embedment, no Anchorage hand-off, and only a "select the Broms soil model" note.
 - **Where:** `lppLtsInputErrors()`, anchor `if(!inp.bromsSoil||inp.bromsSoil==='none') e.push(`.
   - Before: that line only.
