@@ -227,7 +227,7 @@ Forms are paraphrased; symbols as in the tool. Every row has been read on the ci
 | `ltsAdt` | ADT band: < 100 / 100–1,000 / 1,000–10,000 / > 10,000 (Table 3.8-1) | 1,000–10,000 |
 | `ltsV` | Basic wind speed V for the MRI shown (Figs. 3.8-1 to -3; Fig. 3.8-4 for roadside signs) | 130 mph (placeholder; the map value is the user's) |
 | `ltsVsvc` | Service wind speed, 10-yr (Fig. 3.8-4) | 76 mph (placeholder) |
-| `ltsIce` | Owner-specified ice (Art. 3.7): none / radial thickness t_ice, in (density 57 pcf), Strength I only | none |
+| `ltsIce` | Owner-specified ice (Art. 3.7): none / radial thickness t_ice, in (density 56 pcf, fixed, as the IBC mode; no density input), Strength I only | none |
 | `ltsRc` | Corner radius ratio: r_c (multi-sided) or r_s (square) | 0 (square: 2.0 C_d), conservative |
 | `ltsSides` | Multi-sided: 8 / 12 / 16 (LTS-3b; adds "Multi-sided" to `poleShape` in LTS mode only) | 16 |
 | `ltsWeld` | Base weld: socket fillet w (in), F_EXX (ksi) / CJP | fillet 0.3125 in, 70 ksi |
@@ -235,6 +235,8 @@ Forms are paraphrased; symbols as in the tool. Every row has been read on the ci
 | `ltsPhiSoil` | Broms resistance factor (Q-C7) | 1.00 |
 
 The basis line is display only: "AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions; later interims not applied".
+
+Note (2026-11-03, LTS-L2): this table said "density 57 pcf" for `ltsIce` until 2026-11-03. The engine has always used 56 pcf (`ICE_DEN` in `apps/light-pole/lts-engine.js`), and the engineer decided on 2026-11-03 that it stays 56 pcf. Only the plan text was corrected; no result changed.
 
 **Not used in LTS mode** (kept in the saved state, untouched): the ASCE inputs (V, exposure, K_zt, K_d, G/β, ice basis, I_i, V_ice); IBC soil class, S₁ and q_allow; the cables.
 

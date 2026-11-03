@@ -2015,3 +2015,40 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Formulas, factors, units, code references in results:** none changed (§4 does not apply). The IBC mode shows the same inputs and labels as before.
 - **How verified:** `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: all cases identical (results, tab text, cable values, drawings, no console errors). `node tests/engine/run.mjs lightpole`, `node tests/smoke/lightpole-anchor-handoff.mjs`, `node tests/check-syntax.mjs`: pass. Headless render of each input tab in LTS pole, sign 1-post and sign 2-post: rows as listed above; r_s / r_i appear only for square, weld size / F_EXX hide for CJP, risk category hides in sign mode; IBC tabs and rows unchanged.
 - **Open items (not built):** handhole input (plan §3.3 "Base weld & handhole"); leveling-nut standoff (sent to the Anchorage app as 0 in both modes).
+
+## 2026-11-03 — PR: claude/lts-input-checks (LTS-L2: input checks by code mode; Broms is the LTS design method)   [behaviour change: when results are shown; no formula change]
+- **Problem:** the check that runs before every calculation (`lppInputErrors()`) tested the IBC-only fields (V, β, S₁, q_a) in both modes. In the LRFDLTS mode these are hidden (LTS-L1), so a blank hidden value blocked the LTS results with an error naming a field the user could not see. It tested no LTS input: a blank V or V_svc ran as NaN, and a blank weld size or F_EXX fell back silently to 0.3125 in / 70 ksi. With the Broms soil model at "Not evaluated" the LTS run showed member checks but no foundation, hand-off or sign drawings, and the Broms panel was labelled "reference only".
+- **Where / before → after:**
+  - `lppInputErrors()`: `pos(inp.V,'Basic wind speed V'); if(!(inp.beta>0)) …` → the same two checks inside `if(!lts){ … }` (`lts=codeMode==='lts'`). `pos(inp.S1,…); pos(inp.qAllow,…)` → inside `if(!lts){ … }`. The IBC mode checks exactly as before.
+  - New `lppLtsInputErrors(inp)` (before `lppShowInputErrors`). It requires ltsV > 0 and ltsVsvc > 0; for a fillet weld (not CJP) ltsWeldW > 0 and ltsFexx > 0; and a Broms soil model other than "none". Its message: "Broms soil model (Shaft & soil): choose Cohesive or Cohesionless. In the LRFDLTS mode the shaft embedment is designed by Broms (Art. 13.6.1.1)."
+  - `lppCalcIbc()`, anchor `const errs=lppInputErrors(inp)`:
+    - before: `{ const errs=lppInputErrors(inp); lppShowInputErrors(errs); if(errs.length) return; }`
+    - after: `{ const errs=lppInputErrors(inp), le=(codeMode==='lts')?lppLtsInputErrors(inp):[]; lppLtsBlocked=le.length>0; lppShowInputErrors(errs.concat(le)); if(errs.length) return; }`
+    - An LTS-only error does **not** stop the IBC engine underneath, so its cable values are unchanged (hard rule: nothing cable-related changes).
+  - `ltsCalc()`: `const inp=lppLastInp;` → `const inp=lppLtsBlocked?null:lppLastInp;`. `ltsAnchorPayload()`: `const inp=lppLastInp, X=lppLtsLast;` → `const inp=lppLtsBlocked?null:lppLastInp, X=lppLtsLast;`. While an LTS input is in error, no LTS result is shown or sent.
+  - Broms panel (`#bromsPanel`):
+    - the header becomes ibcOnly "Broms reference check … reference only" plus ltsOnly "Broms embedment — design method, LRFDLTS Art. 13.6.1.1, C13.6.1.1 [required]";
+    - a new ltsOnly note says the panel is required and asks for cohesive or cohesionless with the geotechnical parameters;
+    - the old "Optional…" note becomes ibcOnly.
+  - New `lppBromsPanelPlace(lts)`, called at the end of `lppApplyCode()`. In the LTS mode it moves `#bromsPanel` to the top of the Shaft & soil card; in the IBC mode it puts it back before the "Isolated 2×" row. The node is moved, so ids and values are unchanged.
+  - `lppInputTabMarks()`: an input inside an element hidden by the code mode (`ibcOnly` in LTS, `ltsOnly` in IBC) no longer puts a red dot on its tab.
+  - `docs/lts-mode-plan.md` §3.1: the `ltsIce` row said "density 57 pcf". It now says 56 pcf, with a dated note. The engine has always used 56 pcf (`ICE_DEN`), and the engineer decided on 2026-11-03 to keep it. No result change.
+- **Governing provision:** LRFDLTS 1st Ed. (2015) Art. 13.6.1.1 / C13.6.1.1 (Broms, the LTS embedment method of the tool, plan G1). No formula, factor or reference in a result changed.
+- **Check case:**
+  - Default project in the LTS mode, Broms soil model "Not evaluated":
+    - before: the LTS member, deflection and base-plate cards were shown, the foundation card asked for the soil model, and the hand-off and sign drawings were unavailable;
+    - after: the input error box shows the Broms message and no LTS results are shown.
+  - The same project with Cohesive c = 1.0 ksf: every LTS result (base actions, member checks, Broms L, cage, base plate, weld, deflection, Anchorage payload, report text) is identical to before. This was compared in the page for pole/cohesive, sign 1-post/cohesionless and sign 2-post/cohesive.
+  - LTS mode with the hidden IBC fields V = blank, β = blank, S₁ = 0, q_a = 0:
+    - before: blocked by an error on hidden fields;
+    - after: the LTS results are shown, with no page error.
+  - LTS mode with V_svc = 0 and fillet w blank: an input error names both; with CJP, w and F_EXX are not checked.
+- **Saved data:** unchanged. A saved LTS project with "Not evaluated" opens with the Broms input error until a soil model is chosen. No value is rewritten.
+- **How verified:**
+  - `node tests/lightpole-compare.mjs --a claude/lts-input-layout` and `--old-saves`:
+    - results identical in all 18 cases;
+    - **cable values identical** in all 11 cases with cables;
+    - drawings identical; no console errors.
+    - Text differs only in the two LTS cases (`ltspole`, `ltssign1`, both "Not evaluated"), whose LTS cards are now replaced by the input error.
+  - `node tests/engine/run.mjs lightpole`: 41 passed. `node tests/smoke/lightpole-anchor-handoff.mjs`: ALL PASS. `node tests/check-syntax.mjs`: all pass. Screenshots of each LTS sign-mode input tab were reviewed.
+- **Open items (not built):** handhole input; leveling-nut standoff (sent as 0). Possible follow-up: also check the Broms parameters (c > 0, or φ and γ > 0) for the chosen model.
