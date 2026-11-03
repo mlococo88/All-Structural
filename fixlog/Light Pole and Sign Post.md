@@ -2174,3 +2174,29 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 
 ### Open items
 - None.
+
+## 2026-11-03 — PR: claude/lp-print-sheets (PR #750: https://github.com/mlococo88/All-Structural/pull/750) — Drawings: Print sheet and Print all sheets (11 × 17 landscape at plot scale) (LPPS; display only, no result change)
+
+### LPPS. Print the drawing sheets to PDF   [display only]
+- **Request (engineer):** print the previewed DXF sheets directly to PDF: "Print sheet" (the sheet shown) and "Print all sheets" next to
+  "Download DXF"; each sheet a vector 11 × 17 landscape page at its true plot scale through the browser's print dialog; Ctrl+P and the
+  browser's Print still print the Report.
+- **Where:** `lpdRender()`:
+  - Bar, anchor `'<button type="button" class="btn mini ghost" id="lpdDxf">Download DXF ('+B.S.length+' sheets)</button>`: before, the bar ended
+    with `</div>'+` after that button; after, a space and two buttons `id="lpdPrint1"` (Print sheet) and `id="lpdPrintAll"` (Print all sheets (n))
+    follow it, then `'<p class="tbl-note">'+lppEsc(SharedDxf.PRINT_NOTE)+'</p>'` (Tabloid / 11 × 17, Landscape, Margins None, Scale 100 %).
+  - After the Download DXF handler (anchor `// LPPS (2026-11-03)`):
+    `const prt=list=>SharedDxf.printSheets(list.map(s=>({svg:SharedDxf.sheetSVG(B.D,s),title:s.title})),{paper:[LPDW.W,LPDW.H]});`
+    `#lpdPrint1` → `prt([cur])`, `#lpdPrintAll` → `prt(B.S)`.
+  - The print code is shared: `shared/dxf.js` `printSheets`, `sheetSVG` (PR #749, fixlog/shared-dxf.md).
+- **Governing provision:** none (drawing output).
+- **Check case:** default project (pole, IBC), sheet 1 POLE ELEVATION at 1/8" = 1'-0" (k = 96): the shaft 3'-0" dia. × (d = 6.4636 ft = 77.564 in)
+  is drawn 36/96 × 77.564/96 = 0.3750 × 0.8080 in = 27.00 × 58.17 pt; measured on the printed PDF 27.00 × 58.18 pt. Base plate sheet at
+  3" = 1'-0": bolt circle 1'-4" → 4 in on paper (checked on the page image). Print all sheets: 5 pages, all 17 × 11 in.
+- **How verified:** `node tests/smoke/dxf-print-sheets.mjs --tool lp` (headless Chromium page.pdf honoring @page). Report print (page.pdf with no
+  button, from the Drawings tab): 27 letter pages, text identical to origin/main's apart from the print time stamp. No result changes: only the
+  Drawings tab's bar and handlers changed.
+- **Other copies:** none (Spread Footing has the same two buttons, SFPS, through the same shared function).
+
+### Open items
+- The outer border prints on the page edge (the sheet is the page): a physical printer with unprintable edges clips that outer line; a PDF keeps it.
