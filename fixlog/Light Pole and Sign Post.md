@@ -2175,7 +2175,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 ### Open items
 - None.
 
-## 2026-11-03 — PR: claude/lp-print-sheets — Drawings: Print sheet and Print all sheets (11 × 17 landscape at plot scale) (LPPS; display only, no result change)
+## 2026-11-03 — PR: claude/lp-print-sheets (PR #750: https://github.com/mlococo88/All-Structural/pull/750) — Drawings: Print sheet and Print all sheets (11 × 17 landscape at plot scale) (LPPS; display only, no result change)
 
 ### LPPS. Print the drawing sheets to PDF   [display only]
 - **Request (engineer):** print the previewed DXF sheets directly to PDF: "Print sheet" (the sheet shown) and "Print all sheets" next to
