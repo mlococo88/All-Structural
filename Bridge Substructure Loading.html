@@ -170,14 +170,8 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
   header, .strip, .side, .tab-bar, #flash { display: none !important; }
   body { height: auto; overflow: visible; background: #fff; display: block; }
   .app, .main, .tab-panels { display: block; overflow: visible; padding: 0; }
-  .tab-panel { display: none !important; }
-  .tab-panel.print { display: block !important; max-width: none; break-before: page; }
-  .tab-panel.print:first-of-type { break-before: auto; }
   .card { break-inside: avoid; border-color: #bbb; }
-  #print-head { display: block !important; }
 }
-#print-head { display: none; margin-bottom: 12px; border-bottom: 2px solid var(--text); padding-bottom: 6px; }
-#print-head h1 { font-family: var(--cond); font-size: 1.4rem; }
 /* "All tools" link */
 .bx-all-tools { font-size: .82rem; color: var(--muted); text-decoration: none; white-space: nowrap; }
 .bx-all-tools:hover { color: var(--blue); text-decoration: underline; }
@@ -188,6 +182,9 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 <!-- SLRP: KaTeX for the Report tab (engineer-approved 2026-11-01; same pinned tags as apps/steel-bridge/index.html), then the shared worked steps and report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
+<!-- SLRX (2026-11-03): Ctrl+P / the browser's Print from any tab first shows the Report tab (slrPrintPrep). Registered before the
+     Report's own beforeprint listener, so that listener finds the Report shown. -->
+<script>window.addEventListener('beforeprint', function () { try { if (typeof slrPrintPrep === 'function') slrPrintPrep(); } catch (e) { } });</script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
 <script src="shared/list-input.js"></script>
@@ -315,7 +312,7 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
     <button type="button" class="btn" id="btn-open">Open</button>
     <button type="button" class="btn" id="btn-save">Save</button>
     <button type="button" class="btn" id="btn-dxf">Export DXF</button>
-    <button type="button" class="btn btn-primary" id="btn-print">Print</button>
+    <button type="button" class="btn btn-primary" id="btn-print" title="Print / PDF the calculation report (the Report tab), from any tab">Print</button>
   </div>
   <input type="file" id="file-in" accept=".json,application/json" hidden>
 </header>
@@ -335,7 +332,7 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
   </div>
   <main class="main">
     <nav class="tab-bar" id="tab-bar"></nav>
-    <div class="tab-panels" id="tab-panels"><div id="print-head"></div></div>
+    <div class="tab-panels" id="tab-panels"></div>
   </main>
 </div>
 <div id="flash" role="status" aria-live="polite"></div>
@@ -1146,12 +1143,7 @@ function exportDxf() {
   UG.forEach((R, k) => { const d = unitDwg(G, UG, k), e = d.ext(); parts.push({ d, dx: x - e.x0, dy: unitsY - e.y1 }); x += (e.x1 - e.x0) + gap * 0.6; rowH = Math.max(rowH, e.y1 - e.y0); });
   download(`${fname()}_substructure.dxf`, dxfOf(parts), 'application/dxf'); flash('DXF written: plan, elevation, and every unit, full size in inches.');
 }
-function printReport() {
-  const prev = P.ui.tab; $('#print-head').innerHTML = `<h1>${esc(P.meta.name || 'Bridge')}: substructure definition</h1><div>${esc([P.meta.num, P.meta.by && 'Designed ' + P.meta.by, P.meta.chk && 'Checked ' + P.meta.chk, P.meta.date].filter(Boolean).join(', '))}. AASHTO LRFD 10th Edition.</div>${P.meta.notes ? `<p style="margin-top:6px;white-space:pre-wrap">${esc(P.meta.notes)}</p>` : ''}`;
-  ['summary', 'geometry'].forEach(id => { const el = document.getElementById('tab-' + id); P.ui.tab = id; renderTab(); el.classList.add('print'); });
-  P.ui.tab = prev; const done = () => { document.querySelectorAll('.tab-panel.print').forEach(el => el.classList.remove('print')); window.removeEventListener('afterprint', done); };
-  window.addEventListener('afterprint', done); window.print(); setTimeout(done, 1500);
-}
+function printReport() { slrPrintAny(); }   /* SLRX (2026-11-03): Print prints the Report tab from any tab (the Report script) */
 let _as = null; function autosave() { clearTimeout(_as); _as = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(P)); } catch (e) { } if (window.SLPL) SLPL.h.record(); /* PLIB: one undo step per change */ }, 300); }
 let _fl = null; function flash(m, c = 'pass') { const f = $('#flash'); f.textContent = m; f.className = 'on' + (c === 'fail' ? ' fail' : ''); clearTimeout(_fl); _fl = setTimeout(() => f.className = '', 3200); }
 
@@ -2508,40 +2500,45 @@ function v3Loads() {
 /* ---------- calculation package (Print) ---------- */
 const RPT = [['basis', 'Project and design basis'], ['summary', 'Summary and input checks'], ['govsum', 'Governing design forces'], ['geometry', 'Geometry'], ['dist', 'Force distribution'], ['dl', 'Dead load'], ['earth', 'Earth loads'], ['ll', 'Live load'], ['brce', 'Braking and centrifugal'], ['wind', 'Wind'], ['temp', 'Temperature'], ['water', 'Water and scour'], ['ice', 'Ice'], ['eq', 'Seismic'], ['cv', 'Vessel collision'], ['ct', 'Vehicle collision'], ['combo', 'Combinations'], ['manual', 'User manual and open items']];
 const PER_UNIT = ['dl', 'earth', 'll', 'brce', 'wind', 'temp', 'water', 'ice', 'eq', 'cv', 'ct', 'combo'];
-function rptModal() {
-  const o = P.ui.rpt || (P.ui.rpt = { sec: Object.fromEntries(RPT.map(([k]) => [k, k !== 'manual'])), units: P.units.map(() => true) });
-  while (o.units.length < P.units.length) o.units.push(true);
-  let m = $('#rpt-modal'); if (!m) { m = document.createElement('div'); m.id = 'rpt-modal'; m.className = 'modal'; document.body.appendChild(m); }
-  m.innerHTML = `<div class="modal-box" role="dialog" aria-label="Print the calculation package"><h2>Print the calculation package</h2><p>Choose the chapters and units. Each unit's chapters start on a new page. In the print dialog, choose Save as PDF.</p>
-    <div class="rpt-cols"><div><h3>Chapters</h3>${RPT.map(([k, t]) => `<label><input type="checkbox" data-rs="${k}"${o.sec[k] ? ' checked' : ''}> ${t}</label>`).join('')}</div>
-    <div><h3>Units</h3>${P.units.map((u, i) => `<label><input type="checkbox" data-ru="${i}"${o.units[i] ? ' checked' : ''}> ${esc(u.name)}</label>`).join('')}</div></div>
-    <div class="modal-foot"><button type="button" class="btn" id="rpt-cancel">Cancel</button><button type="button" class="btn btn-primary" id="rpt-go">Print</button></div></div>`;
-  m.hidden = false;
+/* SLRX (2026-11-03): the calculation package (this dialog, rptModal / rptPrint, and its layout slReport) is retired; the Report tab
+   holds what it printed (slxAdd, in the Report script). slxSel() reads the package's chapter and unit choice from the dialog's
+   saved field P.ui.rpt without writing it: a saved choice as the dialog printed it (a chapter missing from P.ui.rpt.sec is off,
+   except Governing design forces and Earth loads, which the dialog turned on when missing); no saved choice: every chapter but the
+   user manual (the dialog's own default) and every unit. */
+function slxSel() {
+  const o = P.ui.rpt, has = !!(o && o.sec), sec = {}, units = P.units.map((u, i) => !(o && Array.isArray(o.units) && o.units[i] === false));
+  RPT.forEach(([k]) => { const v = has ? o.sec[k] : undefined; sec[k] = v != null ? !!v : has ? (k === 'govsum' || k === 'earth') : k !== 'manual'; });
+  return { sec, units };
 }
-function rptPrint() {
-  const o = P.ui.rpt, prevSel = P.ui.sel, prevTab = P.ui.tab, G = MODEL.G; $('#rpt-modal').hidden = true;
+/* an Include box of the Report bar: writes P.ui.rpt (the dialog's field and format; created from slxSel when there is none) and autosaves */
+function slxSet(kind, key, val) {
+  const s0 = slxSel(); if (!P.ui.rpt || !P.ui.rpt.sec) P.ui.rpt = { sec: s0.sec, units: s0.units };
+  const o = P.ui.rpt; if (!Array.isArray(o.units)) o.units = s0.units; while (o.units.length < P.units.length) o.units.push(true);
+  if (kind === 'sec') o.sec[key] = !!val; else o.units[+key] = !!val;
+  autosave();
+}
+/* the package's chapters, as rptPrint built them (the same render functions, order and choice): [{ key, k, title, html }], a unit
+   chapter with parts [{ key, title, html }]; P.ui.sel and P.ui.tab are restored */
+function slPkgChapters() {
+  const o = slxSel(), prevSel = P.ui.sel, prevTab = P.ui.tab, G = MODEL.G;
   const F = { summary: summaryHtml, geometry: () => geometryHtml() + (typeof v3Snapshot === 'function' ? v3Snapshot() : ''), dist: distHtml, dl: dlHtml, earth: earthHtml, ll: () => llHtml() + (typeof ilCard === 'function' ? ilCard(P.ui.sel) : '') + (typeof plCard === 'function' ? plCard(P.ui.sel) : ''), brce: brceHtml, wind: windHtml, temp: tempHtml, water: waterHtml, ice: iceHtml, eq: eqHtml, cv: cvHtml, ct: ctHtml, combo: () => comboHtml() + (typeof concHtml === 'function' ? concHtml(P.ui.sel) : ''), manual: manualHtml };
-  const chap = [], units = P.units.map((u, i) => i).filter(i => o.units[i]); let n = 0;
-  const head = (t, brk = true) => `<h1 class="rpt-h1"${brk ? ' style="break-before:page"' : ''}>${++n}. ${esc(t)}</h1>`;
+  const chap = [], units = P.units.map((u, i) => i).filter(i => o.units[i]);
+  try {
   if (o.sec.basis) { const T = tempRange(), S0 = eqSite(), BL = G && !G.E.length ? brLanes(G) : null;
-    chap.push(`${head('Project and design basis', false)}<div class="card"><div class="card-b"><table class="tbl"><tbody>
+    chap.push({ key: 'basis', k: '', title: 'Project and design basis', html: `<div class="card"><div class="card-b"><table class="tbl"><tbody>
       <tr><td class="lbl">Project</td><td>${esc(P.meta.name)}${P.meta.num ? `, ${esc(P.meta.num)}` : ''}</td></tr><tr><td class="lbl">Designed / checked</td><td>${esc(P.meta.by || '—')} / ${esc(P.meta.chk || '—')}, ${esc(P.meta.date)}</td></tr>
       <tr><td class="lbl">Specification</td><td>AASHTO LRFD Bridge Design Specifications, 10th Edition (2024), Section 3</td></tr>
       ${BL ? `<tr><td class="lbl">Live load</td><td>HL-93, IM ${f0(nz(P.br.IM))}%, ${G.NL} design lanes, braking ${BL.n} lane(s) in one direction, deck to girders by ${P.br.deck === 'cont' ? 'a continuous deck' : 'the lever rule'}</td></tr>` : ''}
       <tr><td class="lbl">Wind</td><td>V = ${f0(nz(P.br.V))} mph (Strength III), exposure ${esc(P.br.exp || 'C')}, G = ${f2(nz(P.br.Gf) || 1)}, C<sub>D</sub> ${f2(nz(P.br.CDsup) || 1.3)} / ${f2(nz(P.br.CDsub) || 1.6)}</td></tr>
       <tr><td class="lbl">Temperature</td><td>Procedure ${T.proc}, ${f0(T.tmin)} to ${f0(T.tmax)} °F, setting ${f0(T.ts)} °F, α ${(T.a * 1e6).toFixed(1)}×10⁻⁶/°F, μ ${f2(nz(P.br.mu))}</td></tr>
       <tr><td class="lbl">Seismic</td><td>${S0.ok ? `AASHTO-USGS risk-targeted S<sub>a</sub> (3.10.4.1), site class ${esc(S0.sc)}: A<sub>s</sub> ${f3(S0.As)}, S<sub>D1</sub> ${f3(S0.SD1)}, Zone ${S0.zone} (${eqLnk('Seismic tab')}), ${esc(OPC_NAME[S0.op])} bridge, γ<sub>EQ</sub> = ${f2(gEQv())}` : S0.legacy ? 'Not entered for the 10th Ed. (older AASHTO-2009 values kept in the file, not used)' : 'Not entered'}</td></tr>${typeof basisExtra === 'function' ? basisExtra() : ''}</tbody></table>
-      ${P.meta.notes ? `<h3 style="font-family:var(--cond);margin:12px 0 4px">Engineering assumptions</h3><p style="white-space:pre-wrap;max-width:90ch">${esc(P.meta.notes)}</p>` : ''}</div></div>`); }
-  ['summary', 'govsum', 'geometry', 'dist'].forEach(k => { if (k === 'govsum') { if (o.sec.govsum !== false && typeof govSumHtml === 'function') chap.push(head('Governing design forces') + govSumHtml()); return; } if (o.sec[k]) chap.push(head(RPT.find(r => r[0] === k)[1]) + F[k]()); });
+      ${P.meta.notes ? `<h3 style="font-family:var(--cond);margin:12px 0 4px">Engineering assumptions</h3><p style="white-space:pre-wrap;max-width:90ch">${esc(P.meta.notes)}</p>` : ''}</div></div>` }); }
+  ['summary', 'govsum', 'geometry', 'dist'].forEach(k => { if (k === 'govsum') { if (o.sec.govsum !== false && typeof govSumHtml === 'function') chap.push({ key: k, k: '', title: 'Governing design forces', html: govSumHtml() }); return; } if (o.sec[k]) chap.push({ key: k, k: '', title: RPT.find(r => r[0] === k)[1], html: F[k]() }); });
   units.forEach(k => { const secs = PER_UNIT.filter(s => o.sec[s]); if (!secs.length) return; P.ui.sel = k; MODEL.cache = MODEL.cache || {};
-    chap.push(head(`${P.units[k].name}: ${TYPE_NAME[P.units[k].type]}`) + secs.map(s => { P.ui.tab = s; let h = F[s](); if (TAB_SETS[s]) h += diagramCard(k, TAB_SETS[s]); return `<h2 class="rpt-h2">${esc(RPT.find(r => r[0] === s)[1])}</h2>${h}`; }).join('')); });
-  if (o.sec.manual) chap.push(head('User manual and open items') + manualHtml());
-  P.ui.sel = prevSel; P.ui.tab = prevTab;
-  let pa = $('#print-area'); if (!pa) { pa = document.createElement('div'); pa.id = 'print-area'; $('#tab-panels').appendChild(pa); }
-  const toc = `<div class="rpt-toc"><h1 class="rpt-h1">${esc(P.meta.name || 'Bridge')}: substructure loads</h1><p>${esc([P.meta.num, P.meta.by && 'Designed ' + P.meta.by, P.meta.chk && 'Checked ' + P.meta.chk, P.meta.date].filter(Boolean).join(', '))}. AASHTO LRFD 10th Edition.</p><ol>${[...chap.join('').matchAll(/<h1 class="rpt-h1"[^>]*>\d+\. ([^<]*)<\/h1>/g)].map(m2 => `<li>${m2[1]}</li>`).join('')}</ol></div>`;
-  pa.innerHTML = toc + chap.join(''); document.body.classList.add('printing');
-  const done = () => { document.body.classList.remove('printing'); pa.innerHTML = ''; window.removeEventListener('afterprint', done); renderTab(); };
-  window.addEventListener('afterprint', done); setTimeout(() => window.print(), 60);
+    chap.push({ key: 'unit', k, title: `${P.units[k].name}: ${TYPE_NAME[P.units[k].type]}`, parts: secs.map(s => { P.ui.tab = s; let h = F[s](); if (TAB_SETS[s]) h += diagramCard(k, TAB_SETS[s]); return { key: s, title: RPT.find(r => r[0] === s)[1], html: h }; }) }); });
+  if (o.sec.manual) chap.push({ key: 'manual', k: '', title: 'User manual and open items', html: manualHtml() });
+  } finally { P.ui.sel = prevSel; P.ui.tab = prevTab; }
+  return chap;
 }
 
 /* ---------- pending items: manual section and download ---------- */
@@ -2555,21 +2552,18 @@ function pendingMd() { const g = {}; PENDING.forEach(([a, t]) => (g[a] = g[a] ||
     .modal[hidden] { display: none; }
     .modal-box { background: var(--surface); border-radius: var(--r-lg); padding: 18px 20px; width: min(620px, 94vw); max-height: 88vh; overflow: auto; }
     .modal-box h2 { font-family: var(--cond); font-size: 1.2rem; margin-bottom: 4px; } .modal-box h3 { font-family: var(--cond); font-size: 1rem; margin: 10px 0 4px; }
-    .modal-box p { color: var(--text-dim); font-size: .9rem; } .rpt-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .rpt-cols label { display: flex; gap: 6px; align-items: center; padding: 2px 0; font-size: .9rem; cursor: pointer; }
+    .modal-box p { color: var(--text-dim); font-size: .9rem; }
     .modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-    #print-area { display: none; } .rpt-h1 { font-family: var(--cond); font-size: 1.45rem; margin: 0 0 10px; } .rpt-h2 { font-family: var(--cond); font-size: 1.15rem; margin: 14px 0 8px; break-after: avoid; }
-    .rpt-toc ol { margin: 8px 0 0 22px; } .rpt-toc { break-after: page; }
-    @media print { body.printing #print-area { display: block !important; } body.printing .tab-panel { display: none !important; } #print-area button, #print-area .dwg-row { display: none !important; } #print-area .card { break-inside: auto; } #print-area svg.dwg { max-height: 7.5in; } }`; document.head.appendChild(css);
+    `; document.head.appendChild(css);   /* SLRX (2026-11-03): the package's print CSS (#print-area, .rpt-*) removed */
   const rt = renderTab; renderTab = function () { rt(); const id = P.ui.tab, el = document.getElementById('tab-' + id); if (el && TAB_SETS[id] && !/Fix the/.test(el.textContent.slice(0, 200))) { try { el.insertAdjacentHTML('beforeend', diagramCard(P.ui.sel, TAB_SETS[id])); } catch (e) { } } };
-  const mh = manualHtml; manualHtml = function () { return mh().replace('<h3>Files</h3>', `<h3>Drawings, 3D, and printing (Phase 7)</h3><ul><li><b>Load diagrams</b> on each load tab show the forces as applied to the selected unit; they come from the same load cases the analysis uses.</li><li><b>Export DXF</b> writes a sheet set: an index and design basis sheet, the plan, the elevation, and for every unit its elevation, its load diagrams, and its governing live load lane arrangements. The file is an AutoCAD 2018 DXF written the same way as GirderDetail's: the app builds the drawing list and an embedded Python writer runs ezdxf in the browser through Pyodide (loaded from the internet on the first export). All drawings are in model space at full size (inches) with real DIMENSION entities. Each sheet is its own layout tab (01, 02, ...) with the 34 × 22 in border and title block in paper space, a locked viewport at the smallest standard scale that fits (stated in the title block), and a DWG To PDF ANSI full-bleed D page setup with monochrome.ctb, ready for Publish. Each unit also gets a factored load summary sheet. Offline, the export falls back to the R12 model-space version (borders drawn around the drawings in model space).</li><li><b>3D</b>: choose a load to show its forces on every unit as arrows sized by magnitude, or <i>Live load lanes</i> to show the arrangement selected on the Live load tab.</li><li><b>Print</b> builds a calculation package with a contents page: choose chapters and units; each unit's chapters start on a new page.</li></ul>${pendingHtml()}<h3>Verification</h3><p>Checked against FHWA's LRFD Steel Girder Superstructure Design Example, Design Step 8 (hammerhead pier, two 120 ft spans, five girders), rebuilt in SubLoads, and against independent calculations. Pier self-weight, braking, wind on the superstructure and live load, the vertical wind couples, and the lever-rule bearing reactions for the published lane positions match the example to the rounding shown; the live load is about 1.4% lower because the example used a nonprismatic girder. The bent frame matches anaStruct exactly; the seismic transverse model matches an independent finite element solution; temperature, water, ice, barge, K<sub>z</sub>, site factors, and the combinations match hand calculations. The full comparison is in the verification report.</p><h3>Files</h3>`); };
+  const mh = manualHtml; manualHtml = function () { return mh().replace('<h3>Files</h3>', `<h3>Drawings, 3D, and printing (Phase 7)</h3><ul><li><b>Load diagrams</b> on each load tab show the forces as applied to the selected unit; they come from the same load cases the analysis uses.</li><li><b>Export DXF</b> writes a sheet set: an index and design basis sheet, the plan, the elevation, and for every unit its elevation, its load diagrams, and its governing live load lane arrangements. The file is an AutoCAD 2018 DXF written the same way as GirderDetail's: the app builds the drawing list and an embedded Python writer runs ezdxf in the browser through Pyodide (loaded from the internet on the first export). All drawings are in model space at full size (inches) with real DIMENSION entities. Each sheet is its own layout tab (01, 02, ...) with the 34 × 22 in border and title block in paper space, a locked viewport at the smallest standard scale that fits (stated in the title block), and a DWG To PDF ANSI full-bleed D page setup with monochrome.ctb, ready for Publish. Each unit also gets a factored load summary sheet. Offline, the export falls back to the R12 model-space version (borders drawn around the drawings in model space).</li><li><b>3D</b>: choose a load to show its forces on every unit as arrows sized by magnitude, or <i>Live load lanes</i> to show the arrangement selected on the Live load tab.</li><li><b>Print</b> (and Ctrl+P or the browser's Print, from any tab) prints the Report tab; its Include boxes choose the calculation package's chapters and units it holds.</li></ul>${pendingHtml()}<h3>Verification</h3><p>Checked against FHWA's LRFD Steel Girder Superstructure Design Example, Design Step 8 (hammerhead pier, two 120 ft spans, five girders), rebuilt in SubLoads, and against independent calculations. Pier self-weight, braking, wind on the superstructure and live load, the vertical wind couples, and the lever-rule bearing reactions for the published lane positions match the example to the rounding shown; the live load is about 1.4% lower because the example used a nonprismatic girder. The bent frame matches anaStruct exactly; the seismic transverse model matches an independent finite element solution; temperature, water, ice, barge, K<sub>z</sub>, site factors, and the combinations match hand calculations. The full comparison is in the verification report.</p><h3>Files</h3>`); };
   const bt = buildTabs; buildTabs = function () { bt(); const bar = $('.v3-bar'); if (bar && !$('#v3-load')) bar.insertAdjacentHTML('beforeend', `<select id="v3-load" aria-label="Show loads"><option value="none">No loads</option><option value="ll">Live load lanes</option><option value="br">Braking</option><option value="ce">Centrifugal</option><option value="ws">Wind, Str. III 0°</option><option value="wl">Wind on live load</option><option value="tu">Temperature rise</option><option value="wa">Water, design flood</option><option value="ic">Ice</option><option value="eqL">Seismic, long.</option><option value="eqT">Seismic, trans.</option><option value="cv">Vessel collision</option><option value="ct">Vehicle collision</option><option value="eh">Earth loads (abutments), soil on footings</option></select>`); const s = $('#v3-load'); if (s) s.value = P.ui.v3.load || 'none'; };
   const vb = v3Build; v3Build = function () { vb(); try { v3Loads(); } catch (e) { } };
 })();
-exportDxf = exportSheets; printReport = rptModal;
+exportDxf = exportSheets;   /* SLRX (2026-11-03): Print prints the Report tab (printReport); the package dialog (rptModal) is retired */
 document.addEventListener('change', e => { if (e.target.id === 'v3-load') { P.ui.v3.load = e.target.value; try { v3Loads(); } catch (err) { } autosave(); }
-  const rs = e.target.dataset && e.target.dataset.rs, ru = e.target.dataset && e.target.dataset.ru; if (rs) P.ui.rpt.sec[rs] = e.target.checked; if (ru != null) P.ui.rpt.units[+ru] = e.target.checked; });
-document.addEventListener('click', e => { if (e.target.id === 'rpt-cancel') $('#rpt-modal').hidden = true; else if (e.target.id === 'rpt-go') rptPrint(); else if (e.target.id === 'pend-dl') download('SubLoads_open_items.md', pendingMd(), 'text/markdown'); });
+  });
+document.addEventListener('click', e => { if (e.target.id === 'pend-dl') download('SubLoads_open_items.md', pendingMd(), 'text/markdown'); });
 
 /* load summary tables on the DXF sheets: combined envelopes at each unit's resultant levels and column bases */
 function loadTableDwg(k) {
@@ -3203,28 +3197,8 @@ function basisExtra() { const b = P.br, G = MODEL.G, rows = [];
   const warns = MODEL.C ? MODEL.C.filter(c => c[0] === 'fail' || c[0] === 'warn') : []; if (warns.length) rows.push(['Open input issues', `<span style="color:var(--fail)">${warns.map(c => esc(c[2]).replace(/&lt;(\/?sub)&gt;/g, '<$1>')).join('<br>')}</span>`]);
   return rows.map(([a, v]) => `<tr><td class="lbl">${a}</td><td>${v}</td></tr>`).join('');
 }
-/* ---------- print layout: split wide tables, keep cards with headers ---------- */
-function splitWideTables(root, maxCols = 7) {
-  root.querySelectorAll('table.tbl').forEach(t => { const hr = t.querySelector('thead tr:last-child') || t.querySelector('tr'); if (!hr) return; const n = [...hr.children].reduce((a, c) => a + (c.colSpan || 1), 0); if (n <= maxCols + 1) return;
-    const data = n - 1, per = Math.ceil(data / Math.ceil(data / maxCols)), frag = document.createDocumentFragment(), parts = Math.ceil(data / per);
-    for (let p = 0; p < parts; p++) { const a = 1 + p * per, b = Math.min(n, a + per), nt = t.cloneNode(false);
-      [...t.children].forEach(sec => { const ns = sec.cloneNode(false); [...sec.children].forEach(tr => { const cells = [...tr.children], nr = tr.cloneNode(false);
-          if (cells.length === 1) { const c = cells[0].cloneNode(true); c.colSpan = b - a + 1; nr.appendChild(c); }
-          else { let col = 0; cells.forEach((c, ci) => { const span = c.colSpan || 1, c0 = col; col += span; if (ci === 0 || (c0 >= a && c0 < b)) nr.appendChild(c.cloneNode(true)); }); }
-          ns.appendChild(nr); }); nt.appendChild(ns); });
-      const wrap = document.createElement('div'); wrap.className = 'tscroll'; if (p) { const cap = document.createElement('p'); cap.className = 'note'; cap.style.cssText = 'padding:6px 0 2px;font-style:italic'; cap.textContent = `(continued, part ${p + 1} of ${parts})`; wrap.appendChild(cap); } wrap.appendChild(nt); frag.appendChild(wrap); }
-    t.replaceWith(frag); });   // replace only the table: a scroll wrapper may hold other tables
-}
 (function patchReport() {
-  const css = document.createElement('style'); css.textContent = `@media print {
-    #print-area .tscroll { overflow: visible !important; }
-    #print-area table.tbl { font-size: 8.2pt; width: 100%; }
-    #print-area table.tbl td.lbl { min-width: 1.5in; }
-    #print-area .card-h, #print-area h2.rpt-h2, #print-area h3 { break-after: avoid; }
-    #print-area .card:has(svg.dwg), #print-area .card:has(img) { break-inside: avoid; }
-    #print-area tr { break-inside: avoid; } }`; document.head.appendChild(css);
-  const rp = rptPrint; rptPrint = function () { rp(); const pa = document.getElementById('print-area'); if (pa) splitWideTables(pa); };
-  const rm = rptModal; rptModal = function () { const o = P.ui.rpt || (P.ui.rpt = { sec: {}, units: P.units.map(() => true) }); o.sec = o.sec || {}; ['govsum', 'earth'].forEach(k => { if (o.sec[k] == null) o.sec[k] = true; }); return rm(); };
+  /* SLRX (2026-11-03): the package's print CSS and its rptPrint / rptModal wrappers (splitWideTables) removed with the package */
   const rt = renderTab; renderTab = function () { rt(); if (P.ui.tab === 'll') { const el = document.getElementById('tab-ll'); if (el && !/Fix the/.test(el.textContent.slice(0, 200))) el.insertAdjacentHTML('beforeend', ilCard(P.ui.sel)); } if (P.ui.tab === 'summary') { const el = document.getElementById('tab-summary'); if (el && !/Fix the/.test(el.textContent.slice(0, 200))) { try { el.insertAdjacentHTML('beforeend', govSumHtml()); } catch (e) { } } } };
 })();
 /* =====================================================================
@@ -3739,6 +3713,8 @@ async function rxImport(file) {
    Combinations (the combination table's own values), the CLAUDE.md §6 links rewritten to
    "see §n.k", and the @page header / "Page X of Y" footer (slPageCSS; only while the package prints).
    Nothing is recomputed. Display only: no formula, factor or saved field changes.
+   SLRX (2026-11-03): the package and this layout (slReport, slPageCSS) are retired; the Report tab holds what they printed
+   (slxAdd). Kept for the tabs and the Report: SL_REFS, slTabName, slWk, slIn, slAppend, slGoto, slComboLinks, slResults.
    ===================================================================== */
 const SL_REFS = [
   ['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 3: 3.4.1 (Tables 3.4.1-1, 3.4.1-2, 3.4.1-3, 3.4.1-6), 3.5, 3.6.1.1.1, 3.6.1.1.2, 3.6.1.3.1, 3.6.1.6, 3.6.2.1, 3.6.3, 3.6.4, 3.6.5'],
@@ -3748,18 +3724,6 @@ const SL_REFS = [
   ['MassDOT', 'MassDOT LRFD Bridge Manual, Part I, Chapter 3 (January 2025; written to the AASHTO LRFD 9th Ed.): 3.1.6, 3.1.8.2, 3.2.10.5, 3.3.1.3, 3.4.1.2, 3.4.3.3, 3.4.4.3 to 3.4.4.5 (applied when the owner is MassDOT)'],
   ['AASHTO-USGS', 'AASHTO-USGS Seismic Design Ground Motion Database (risk-targeted S<sub>a</sub> at 22 periods, C3.10.4.1), values entered by the engineer'],
   ['Other', 'UF/FDOT report 2010/68901 (form of the barge impact equations, as noted on the Vessel collision tab); FHWA LRFD Steel Girder Superstructure Design Example (projected-area wind option and the tool’s verification); edition: verify']];
-function slPageCSS(on) {
-  let st = document.getElementById('sl-page'); if (!st) { st = document.createElement('style'); st.id = 'sl-page'; document.head.appendChild(st); }
-  if (!on) { st.textContent = ''; return; }
-  const m = P.meta || {}, q = v => String(v == null || v === '' ? '—' : v).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ');
-  const box = 'font: 9.5pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: bottom; padding-bottom: 6pt;', foot = 'font: 9pt "Times New Roman", Times, serif; color: #000; white-space: pre; vertical-align: top; padding-top: 6pt;';
-  st.textContent = '@media print { @page { size: letter portrait; margin: 0.95in 0.6in 0.75in 0.6in;'
-    + ` @top-left { content: "Project No: ${q(m.num)}\\A Description: ${q(String(m.name || 'Bridge').slice(0, 40))}"; ${box} text-align: left; }`
-    + ` @top-center { content: "Computed By: ${q(m.by)}\\A Checked By: ${q(m.chk)}"; ${box} text-align: left; }`
-    + ` @top-right { content: "Date: ${q(m.date)}\\A Date: —"; ${box} text-align: right; }`
-    + ` @bottom-left { content: "${q(m.name || 'Bridge')} (SubLoads: Bridge Substructure Loads)"; ${foot} text-align: left; }`
-    + ` @bottom-right { content: "Page " counter(page) " of " counter(pages); ${foot} text-align: right; } } }`;
-}
 /* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
    On screen: "Worked in: <value> → <Tab> · <card>" (a click opens the tab and scrolls to the card). In the
    calculation package every link reads "<value>: see §n.k"; an in-text "Force distribution tab" reads
@@ -3779,7 +3743,7 @@ function slGoto(tb, wu, wc) {
   const h = [...el.querySelectorAll('.card-h h2')].find(x => x.textContent.trim().startsWith(wc || '\u0000')), c = h ? h.closest('.card') : el;
   c.scrollIntoView({ block: 'start' }); c.classList.add('sl-flash'); setTimeout(() => c.classList.remove('sl-flash'), 1600);
 }
-document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('.sl-wk'); if (a && !a.closest('#print-area')) slGoto(a.dataset.wt, a.dataset.wu, a.dataset.wc); });
+document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('.sl-wk'); if (a && !a.closest('.rp')) slGoto(a.dataset.wt, a.dataset.wu, a.dataset.wc); });
 document.addEventListener('keydown', e => { const a = e.target; if (e.key === 'Enter' && a.classList && a.classList.contains('sl-wk')) slGoto(a.dataset.wt, a.dataset.wu, a.dataset.wc); });
 /* the loads the combination table takes, each linked to the card where it is worked (unfactored) */
 function slComboLinks(k) {
@@ -3810,70 +3774,10 @@ function slResults(k, ref) {
     + CV.map(c => line(esc(c.name) + ':', qs.map(([s, q, un]) => `${s} = ${fv(C[c.id].max[q], defs[q].u)} / ${fv(C[c.id].min[q], defs[q].u)} ${un}`).join('; '))).join('')
     + line('<b>Governing (Strength and Extreme Event):</b>', qs.map(([s, q, un]) => `${s} max <b>${fv(C.env.max[q], defs[q].u)}</b> ${un} (${esc(C.env.gmx[q] || '—')}), min <b>${fv(C.env.min[q], defs[q].u)}</b> ${un} (${esc(C.env.gmn[q] || '—')})`).join('; ')) + '</div>';
 }
-function slReport() {
-  const pa = document.getElementById('print-area'); if (!pa || !document.body.classList.contains('printing')) return;
-  const toc0 = pa.querySelector('.rpt-toc'), secs = [], map = {}; let cur = null;
-  [...pa.children].forEach(el => { if (el === toc0) return; if (el.matches('h1.rpt-h1')) { cur = document.createElement('section'); cur.className = 'sl-sec'; el.before(cur); cur.appendChild(el); secs.push({ el: cur, h: el }); } else if (cur) cur.appendChild(el); });
-  const rptKey = t => (RPT.find(x => x[1] === t) || [])[0];
-  secs.forEach(s => { const m = s.h.textContent.match(/^(\d+)\.\s*(.*)$/); s.n = m ? +m[1] : secs.indexOf(s) + 1; s.t = m ? m[2] : s.h.textContent; s.id = 'sl-s' + s.n; s.h.id = s.id; s.subs = [];
-    s.key = s.t === 'User manual and open items' ? 'manual' : rptKey(s.t) || 'unit'; s.k = s.key === 'unit' ? P.units.findIndex(u => `${u.name}: ${TYPE_NAME[u.type]}` === s.t) : '';
-    map[`ch|${s.key}|${s.k}`] = { num: String(s.n), id: s.id };
-    const els = s.key === 'unit' ? [...s.el.querySelectorAll(':scope > h2.rpt-h2')] : s.key === 'govsum' ? [...s.el.querySelectorAll('.card-b > h3')] : s.key === 'manual' ? [...s.el.querySelectorAll('h3')] : [...s.el.querySelectorAll(':scope > .card > .card-h > h2')];
-    els.forEach((h, i) => { const num = `${s.n}.${i + 1}`, id = `${s.id}-${i + 1}`, t = h.textContent.trim(); h.id = id; h.insertAdjacentText('afterbegin', num + ' '); s.subs.push({ t, id, num });
-      if (s.key === 'unit') map[`${rptKey(t)}|${s.k}`] = { num, id };
-      else if (s.key === 'govsum') { const k = P.units.findIndex(u => `${u.name}: ${TYPE_NAME[u.type]}` === t); if (k >= 0) h.insertAdjacentHTML('afterend', slWk([['combo', k, 'Load combinations: ' + P.units[k].name, 'Values (envelopes of the combination table)']])); }
-      else { if (!map[`${s.key}|`]) map[`${s.key}|`] = { num, id }; map[`${s.key}|${t}`] = { num, id }; } }); });
-  /* governing-effect lines at the end of each unit chapter that prints its Combinations */
-  secs.forEach(s => { const hit = s.key === 'unit' && s.k >= 0 && map[`combo|${s.k}`]; if (hit) s.el.insertAdjacentHTML('beforeend', slResults(s.k, `<span class="sl-wk" data-wt="combo" data-wu="${s.k}" data-wc="" data-txt="worked">§${hit.num}</span>`)); });
-  /* §6 links -> "see §n.k" */
-  pa.querySelectorAll('.sl-wk').forEach(x => { const d = x.dataset, wc = (d.wc || '').replace(/^\s+|\s+$/g, ''), hit = (d.wu !== '' && map[`${d.wt}|${d.wu}`]) || map[`${d.wt}|${wc}`] || map[`${d.wt}|`] || map[`ch|${d.wt}|${d.wu}`];
-    let txt; if (x.classList.contains('sl-in')) txt = hit ? `${x.textContent.replace(/ tab$/, '')}, §${hit.num}` : x.textContent + ' (not in this printout)';
-    else if (d.txt === 'worked') txt = hit ? '§' + hit.num : '—';
-    else txt = (d.txt ? d.txt + ': ' : '') + (hit ? 'see §' + hit.num : `see the ${slTabName(d.wt)} tab (not in this printout)`);
-    const a = document.createElement(hit ? 'a' : 'span'); a.className = 'xref'; if (hit) a.href = '#' + hit.id; a.innerHTML = esc(txt).replace(/&lt;(\/?su[bp])&gt;/g, '<$1>'); x.replaceWith(a); });
-  pa.querySelectorAll('.sl-wkl').forEach(d => { if (d.firstChild && d.firstChild.nodeType === 3) d.firstChild.textContent = ''; });
-  pa.querySelectorAll('p.note').forEach(n => { if (/Hover the limit state/.test(n.textContent)) n.innerHTML = n.innerHTML.replace(/\s*Hover the limit state to see the loads and cases it uses\./, ''); });   // a tooltip does not print
-  /* front matter: cover with title block, references, contents */
-  const m = P.meta, G = MODEL.G, o = P.ui.rpt || {}, un = P.units.filter((u, i) => !o.units || o.units[i]).map(u => esc(u.name)).join(', '), tb = (l, v) => `<td><span class="sl-tbl">${l}</span>${esc(v) || '—'}</td>`;
-  const toc = secs.map(s => `<li><a href="#${s.id}">${s.n}. ${esc(s.t)}</a>${s.subs.length ? `<ol>${s.subs.map(q => `<li><a href="#${q.id}">${q.num} ${esc(q.t)}</a></li>`).join('')}</ol>` : ''}</li>`).join('');
-  const front = document.createElement('div'); front.className = 'sl-front-all';
-  front.innerHTML = `<section class="sl-cover"><div class="sl-cover-t"><h1>Bridge Substructure Loads: Calculation</h1><p>${esc(m.name) || 'Untitled'}</p>
-      <p class="sl-cp">${G && !G.E.length ? `${G.spans.length} span${G.spans.length > 1 ? 's' : ''} (${G.spans.map(s => f1(s)).join(' + ')} ft), ${G.nSup} substructure units; ` : ''}units in this package: ${un || '—'}</p>
-      <p class="sl-cp">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 3${isMass() ? ' · MassDOT LRFD Bridge Manual, Part I, Chapter 3 (January 2025; written to the AASHTO LRFD 9th Ed.)' : ''}</p><p class="sl-cp">SubLoads: Bridge Substructure Loads</p></div>
-    <table class="sl-titleblock"><tr>${tb('Project', m.name)}${tb('Project No.', m.num)}${tb('Calculated by', m.by)}${tb('Date', m.date)}</tr>
-      <tr><td colspan="2"><span class="sl-tbl">Subject</span>Substructure loads (unfactored load effects and AASHTO LRFD load combinations)</td>${tb('Checked by', m.chk)}${tb('Checked date', '')}</tr></table></section>
-    <section class="sl-front"><h2 class="sl-fh">References</h2><table class="sl-refs"><tbody>${SL_REFS.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</tbody></table>
-      <p class="sl-small">Load factors are those of Tables 3.4.1-1 to 3.4.1-3 unless overridden on the Bridge tab (listed in ${map['ch|basis|'] ? `<a class="xref" href="#${map['ch|basis|'].id}">§${map['ch|basis|'].num}</a>, Load factors` : 'the Project and design basis chapter, Load factors'}). Article numbers without a prefix are AASHTO LRFD; the MassDOT rows apply only when the owner is MassDOT.</p>
-      <h2 class="sl-fh">Contents</h2><ol class="sl-toc">${toc}</ol></section>`;
-  if (toc0) toc0.replaceWith(front); else pa.prepend(front);
-  pa.classList.add('sl-doc'); slPageCSS(true);
-  const off = () => { slPageCSS(false); window.removeEventListener('afterprint', off); }; window.addEventListener('afterprint', off);
-}
-{ const rp = rptPrint; rptPrint = function () { rp(); try { slReport(); } catch (e) { console.warn('report layout', e); } }; }
 (function slCSS() { const css = document.createElement('style'); css.textContent = `
   .sl-wkl { font-size: .8rem; color: var(--text-dim); margin: 8px 0 0; line-height: 1.5; }
   .sl-wk { color: var(--blue); cursor: pointer; } .sl-wk:hover, .sl-wk:focus { text-decoration: underline; }
-  .card.sl-flash { outline: 2px solid var(--blue); outline-offset: 2px; }
-  #print-area .sl-line { display: grid; grid-template-columns: 2.1in 1fr; gap: 0 12pt; padding: 3pt 0; border-top: 0.6pt solid #000; break-inside: avoid; font-size: 9.5pt; }
-  #print-area .sl-results { border-bottom: 0.8pt solid #000; margin-bottom: 8pt; }
-  #print-area .sl-resh { font: 700 11pt "Times New Roman", Times, serif; margin: 14pt 0 2pt; break-after: avoid; }
-  @media print {
-    #print-area.sl-doc h1.rpt-h1 { font: 700 12pt "Times New Roman", Times, serif; text-transform: uppercase; text-decoration: underline; margin: 0 0 8pt; }
-    #print-area.sl-doc h2.rpt-h2 { font: 700 11pt "Times New Roman", Times, serif; margin: 12pt 0 6pt; }
-    #print-area .sl-cover { min-height: 8.2in; display: flex; flex-direction: column; justify-content: center; break-after: page; }
-    #print-area .sl-cover-t { text-align: center; margin-bottom: 24pt; }
-    #print-area .sl-cover h1 { font: 700 22pt/1.2 Arial, Helvetica, sans-serif; margin: 0 0 14pt; }
-    #print-area .sl-cover p { font: 700 13pt Arial, Helvetica, sans-serif; margin: 0 0 6pt; } #print-area .sl-cover p.sl-cp { font-weight: 400; font-size: 11pt; }
-    #print-area .sl-titleblock { width: 100%; border-collapse: collapse; font-size: 10.5pt; } #print-area .sl-titleblock td { border: 1px solid #000; padding: 4pt 6pt; vertical-align: top; }
-    #print-area .sl-tbl { display: block; font-size: 7.5pt; text-transform: uppercase; color: #333; }
-    #print-area .sl-front { break-after: page; }
-    #print-area h2.sl-fh { font: 700 12pt "Times New Roman", Times, serif; text-decoration: underline; text-transform: uppercase; margin: 0 0 8pt; }
-    #print-area .sl-refs { border-collapse: collapse; margin: 0 0 6pt; } #print-area .sl-refs td { padding: 1pt 14pt 1pt 0; vertical-align: top; font-size: 9.5pt; } #print-area .sl-refs td:first-child { white-space: nowrap; font-weight: 700; }
-    #print-area .sl-small { font-size: 9pt; margin: 0 0 14pt; }
-    #print-area .sl-toc, #print-area .sl-toc ol { list-style: none; margin: 0; padding: 0; } #print-area .sl-toc > li { margin: 3pt 0; font-size: 10.5pt; }
-    #print-area .sl-toc ol { padding-left: 18pt; font-size: 9.5pt; columns: 2; column-gap: 14pt; }
-    #print-area a { color: #000; text-decoration: none; } #print-area .xref { font-style: italic; }
-    #print-area .sl-wkl { font-size: 9pt; color: #000; } }`; document.head.appendChild(css); })();
+  .card.sl-flash { outline: 2px solid var(--blue); outline-offset: 2px; }`; document.head.appendChild(css); })();   /* SLRX (2026-11-03): the package's print styles removed with it */
 </script>
 <script>
 /* =====================================================================
@@ -3887,7 +3791,7 @@ function slReport() {
    centrifugal, wind pressure); each unit's factored effects at its resultant are worked load by load for
    every limit state (the combination table's own components and factors), and the unfactored loads link
    to the tab where they are worked. Nothing is saved: the Report tab is not stored in P.ui.tab (SLR.on,
-   memory only). The calculation package (Print button) is unchanged.
+   memory only). SLRX (2026-11-03): the calculation package is retired into this Report (slxAdd); Print prints this Report.
    ===================================================================== */
 const SLR = { on: false, closed: new Set(), api: null, doc: null };
 const slrN = (x, d) => SharedSteps.n(+x, d == null ? 2 : d);
@@ -4049,11 +3953,179 @@ function slrDoc(secs) {
     head: { left: 'Project No. ' + (m.num || '—') + ' — ' + String(m.name || '—').slice(0, 40), right: 'Computed: ' + (m.by || '—') + ' ' + (m.date || '') + ' · Checked: ' + (m.chk || '—'), foot: (m.name || 'Untitled') + ' (SubLoads: Bridge Substructure Loads)' },
     sections: secs };
 }
+/* =====================================================================
+   SLRX (2026-11-03): the calculation package (Print → "Print the calculation package": rptModal, rptPrint, slReport) is retired.
+   What it printed and this Report lacked is added here, read from the package's own chapters (slPkgChapters: the tabs' render
+   functions, in the package's order, for the chapter and unit choice saved in P.ui.rpt): the part "Calculation package" before
+   References, one section per chapter (each unit's chapters one section), each card a subsection with its tables, notes,
+   check lines, figures and "Worked in" links (to the ported card, as the package's "see §n.k"), each unit's governing-effect
+   lines (slResults) after its Combinations, and the package's cover lines and front note in the first section. Nothing is
+   computed here. The dialog's choices are the report bar's Include boxes (slxControls), written to P.ui.rpt (slxSet).
+   ===================================================================== */
+const SLX_SKIP = 'button,script,style,input,textarea,select,.dwg-row,.caret';
+const SLX_BLK = /^(DIV|P|UL|OL|LI|TABLE|THEAD|TBODY|TR|H1|H2|H3|H4|H5|H6|SECTION|DETAILS|FIGURE|IMG|PRE|HR|DL|DT|DD|BLOCKQUOTE|FORM|FIELDSET|CANVAS|LABEL)$/i;
+const slxIsBlk = n => n.nodeType === 1 && (SLX_BLK.test(n.tagName) || n.tagName.toLowerCase() === 'svg');
+const slxSq = t => String(t).replace(/\s+/g, ' ').trim();
+/* the text of an inline subtree; a "Worked in" link becomes a marker (resolved by slxFix once every ported card is known) */
+function slxInline(e, mark) {
+  let s = '';
+  e.childNodes.forEach(n => {
+    if (n.nodeType === 3) { s += n.textContent.replace(/\$/g, '').replace(/\[\[/g, '[ ['); return; }
+    if (n.nodeType !== 1 || n.matches(SLX_SKIP)) return;
+    if (n.matches('.sl-wk')) { const d = n.dataset; s += mark ? '\u0001' + [d.wt || '', d.wu || '', slxSq(d.wc || ''), d.txt || '', n.classList.contains('sl-in') ? 'in' : 'wk', slxSq(slxInline(n, false))].join('\u0003') + '\u0002' : slxInline(n, false); return; }
+    const tg = n.tagName.toUpperCase();
+    if (tg === 'SUB') { s += '_' + slxInline(n, false); return; }
+    if (tg === 'SUP') { s += '^' + slxInline(n, false); return; }
+    if (tg === 'BR') { s += ' '; return; }
+    if (tg === 'SVG') return;
+    s += slxInline(n, mark);
+  });
+  return s;
+}
+function slxCell(c) {
+  const t = slxSq(slxInline(c, true)), o = { t };
+  if (c.colSpan > 1) o.span = c.colSpan;
+  if (c.classList.contains('val') || /^[\s\d.,−\-+%/()×]+$/.test(t) && /\d/.test(t)) o.n = true;
+  const tag = c.querySelector('.tag,.pill');
+  if (tag && tag.classList.contains('fail') || /^(FAIL|NG|Fix)\b/.test(t)) o.cls = 'ng'; else if (tag && tag.classList.contains('pass') || /^(PASS|OK)\b/.test(t)) o.cls = 'ok';
+  return o;
+}
+function slxTable(t, ctx) {
+  const trs = [...t.rows].filter(tr => tr.cells.length && tr.closest('table') === t); if (!trs.length) return null;
+  const hd = trs.filter(tr => tr.parentElement && tr.parentElement.tagName === 'THEAD'), body = trs.filter(tr => !(tr.parentElement && tr.parentElement.tagName === 'THEAD'));
+  let head = [], pre = [];
+  if (hd.length) { head = [...hd[hd.length - 1].cells].map(slxCell); pre = hd.slice(0, -1); }
+  else if ([...trs[0].cells].every(c => c.tagName === 'TH') && trs.length > 1) { head = [...trs[0].cells].map(slxCell); body.shift(); }
+  const rows = pre.concat(body).map(tr => ({ cells: [...tr.cells].map(slxCell), cls: tr.classList.contains('tot') || pre.includes(tr) ? 'gov' : '' }));
+  if (!rows.length && !head.length) return null;
+  const nc = Math.max(head.length, ...rows.map(r => r.cells.reduce((a, c) => a + (c.span || 1), 0))), it = { type: 'table', head, rows, wide: nc > 6 || undefined };
+  if (rows.length > 30) { it.lazy = true; it.title = (ctx.title || 'Table') + ' (table ' + (++ctx.nt) + ')'; }
+  return it;
+}
+/* the content of a node as report items, in order; an h3 / h4 is the topic heading of the next item */
+function slxWalk(node, out, ctx) {
+  let buf = '';
+  const push = it => { if (ctx.tp) { it.topic = { title: ctx.tp, no: ++ctx.ntp }; ctx.tp = null; } out.push(it); };
+  const flush = () => { const t = slxSq(buf); if (t && !/^[·•\-–—:,;.\s]*$/.test(t)) push({ type: 'note', text: t }); buf = ''; };
+  node.childNodes.forEach(n => {
+    if (n.nodeType === 3) { buf += n.textContent.replace(/\$/g, '').replace(/\[\[/g, '[ ['); return; }
+    if (n.nodeType !== 1 || n.matches(SLX_SKIP)) return;
+    if (!slxIsBlk(n)) { const w = document.createElement('span'); w.appendChild(n.cloneNode(true)); buf += slxInline(w, true); return; }
+    flush();
+    const tg = n.tagName.toUpperCase();
+    if (tg === 'TABLE') { const t = slxTable(n, ctx); if (t) push(t); return; }
+    if (tg === 'SVG') { push({ type: 'figure', svg: n.outerHTML, caption: '' }); return; }
+    if (tg === 'IMG') { if (n.getAttribute('src')) push({ type: 'figure', svg: '<img src="' + n.getAttribute('src') + '" alt="' + esc(n.getAttribute('alt') || '') + '" style="max-width:100%;height:auto">', caption: '' }); return; }
+    if (/^H[1-6]$/.test(tg)) { const t = slxSq(slxInline(n, true)); if (t) { if (ctx.tp) push({ type: 'note', text: '' }); ctx.tp = t; } return; }
+    if (n.classList.contains('facts')) { const rows = [...n.querySelectorAll('.fact')].map(f => { const b = f.querySelector('b'), sp = f.querySelector('span'); return [sp ? slxSq(slxInline(sp, true)) : '', { t: b ? slxSq(slxInline(b, true)) : '', n: true }]; }); if (rows.length) push({ type: 'table', head: ['Item', 'Value'], rows }); return; }
+    if (n.classList.contains('chk')) { const tag = n.querySelector('.tag'), c = n.cloneNode(true); c.querySelectorAll('.tag').forEach(x => x.remove()); const t = slxSq(slxInline(c, true));
+      if (t) push({ type: 'note', text: (tag ? tag.textContent.trim() + ': ' : '') + t, warn: !!(tag && (tag.classList.contains('fail') || tag.classList.contains('warn'))) || undefined }); return; }
+    if (n.classList.contains('sl-wkl')) { const c = n.cloneNode(true); if (c.firstChild && c.firstChild.nodeType === 3) c.firstChild.textContent = ''; const t = slxSq(slxInline(c, true)); if (t) push({ type: 'note', text: t }); return; }   // "Worked in:" reads as the package's links
+    if ([...n.childNodes].some(slxIsBlk)) { slxWalk(n, out, ctx); return; }
+    let t = slxSq(slxInline(n, true)); if (!t) return;
+    t = t.replace(/\s*Hover the limit state to see the loads and cases it uses\./, '');   // a tooltip does not print (as the package)
+    if (t) push({ type: 'note', text: (tg === 'LI' ? '• ' : '') + t, warn: /color:\s*var\(--fail\)/.test(n.getAttribute('style') || '') || undefined });
+  });
+  flush();
+  if (ctx.tp) { push({ type: 'note', text: '' }); }
+}
+/* one chapter's HTML (or one part of a unit chapter) as subsections: each top-level card one subsection, loose content first */
+function slxSubs(html, chTitle, pre, keyOf) {
+  const root = document.createElement('div'); root.innerHTML = html;
+  const subs = []; let loose = null;
+  const walk = el => { [...el.children].forEach(c => {
+    if (c.matches('.card')) { const h = c.querySelector(':scope > .card-h > h2'), sb = c.querySelector(':scope > .card-h > .sub'), t = h ? slxSq(slxInline(h, false)) : '';
+      const ctx = { nt: 0, ntp: 0, tp: null, title: t || chTitle }, items = [];
+      if (sb) { const st = slxSq(slxInline(sb, true)); if (st) items.push({ type: 'note', text: st }); }
+      [...c.children].forEach(b => { if (!b.matches('.card-h')) { const w = document.createElement('div'); w.appendChild(b.cloneNode(true)); slxWalk(w, items, ctx); } });
+      subs.push({ title: t ? (pre ? pre + ': ' : '') + t : (pre || chTitle), key: keyOf(subs.length), cardTitle: t, items: items.length ? items : [{ type: 'note', text: '(no content)' }] }); loose = null; return; }
+    if (c.matches(SLX_SKIP)) return;
+    if (!c.querySelector('.card')) { if (!loose) { loose = { title: pre || chTitle, key: keyOf(subs.length), cardTitle: '', items: [] }; subs.push(loose); } const w = document.createElement('div'); w.appendChild(c.cloneNode(true)); slxWalk(w, loose.items, { nt: 0, ntp: 0, tp: null, title: chTitle }); return; }
+    walk(c); }); };
+  walk(root);
+  return subs.filter(q => q.items.length);
+}
+/* the "Worked in" markers: "see §n.k" to the ported card (the package's rule: the unit's chapter of that tab, else a card of that
+   title, else the chapter), else the tool's tab with an in-app link */
+function slxFixStr(s, map) {
+  return String(s).replace(/\u0001([^\u0002]*)\u0002/g, (m, body) => {
+    const [wt, wu, wc, txt, kind, lab] = body.split('\u0003'), hit = (wu !== '' && map[wt + '|' + wu]) || map[wt + '|' + wc] || map[wt + '|'] || map['ch|' + wt + '|' + wu];
+    const tab = '[[tab:' + wt + (wu !== '' ? '~' + wu : '') + '|open]]';
+    if (kind === 'in') return hit ? lab.replace(/ tab$/, '') + ', [[' + hit + ']]' : lab + ' ' + tab;
+    if (txt === 'worked') return hit ? '[[' + hit + ']]' : '—';
+    return (txt ? txt + ': ' : '') + (hit ? 'see [[' + hit + ']]' : 'see the ' + slTabName(wt) + ' tab ' + tab);
+  });
+}
+function slxFixItems(items, map) {
+  const F = t => slxFixStr(t, map), C = c => c && typeof c === 'object' ? Object.assign({}, c, { t: F(c.t) }) : F(c);
+  return items.map(it => {
+    const o = Object.assign({}, it); if (it.topic) o.topic = Object.assign({}, it.topic, { title: F(it.topic.title).replace(/\[\[[^\]]*\]\]/g, '') });
+    if (it.type === 'note') o.text = F(it.text);
+    if (it.type === 'table') { o.head = (it.head || []).map(C); o.rows = it.rows.map(r => Array.isArray(r) ? r.map(C) : Object.assign({}, r, { cells: r.cells.map(C) })); }
+    return o; }).filter(it => !(it.type === 'note' && !it.text && !it.topic));
+}
+/* the package chapters into the Report model M (before References), the cover lines and front note into its first section */
+function slxAdd(M) {
+  let CH; try { CH = slPkgChapters(); } catch (e) { console.warn('package chapters', e); return M; }
+  const map = {}, secs = [];
+  CH.forEach((ch, ci) => {
+    if (ch.key === 'unit') { const subs = [];
+      ch.parts.forEach(pt => { const ss = slxSubs(pt.html, ch.title, pt.title, i => 'slx.u' + ch.k + '.' + pt.key + '.' + i);
+        if (ss.length && !map[pt.key + '|' + ch.k]) map[pt.key + '|' + ch.k] = ss[0].key; subs.push(...ss); });
+      if (subs.length && !map['ch|unit|' + ch.k]) map['ch|unit|' + ch.k] = subs[0].key;
+      if (map['combo|' + ch.k]) { let h = ''; try { h = slResults(ch.k, `<span class="sl-wk" data-wt="combo" data-wu="${ch.k}" data-wc="" data-txt="worked">worked</span>`); } catch (e) { h = ''; }
+        if (h) { const w = document.createElement('div'); w.innerHTML = h; const hd = w.querySelector('.sl-resh');
+          const rows = [...w.querySelectorAll('.sl-line')].map(l => [...l.children].map(c => slxSq(slxInline(c, true))));
+          subs.push({ title: 'Results: governing effects at the resultant', key: 'slx.u' + ch.k + '.res', items: [{ type: 'note', text: hd ? slxSq(slxInline(hd, true)) : '' }, { type: 'table', head: ['Limit state', 'Factored effects (maximum / minimum)'], rows }] }); } }
+      secs.push({ title: ch.title + ' (tab chapters)', key: 'slx.ch' + ci, subs }); return; }
+    const subs = slxSubs(ch.html, ch.title, '', i => 'slx.' + ch.key + '.' + i);
+    if (ch.key === 'govsum') subs.forEach(q => { q.items = [].concat(...q.items.map(it => { const u = it.topic && P.units.findIndex(x => `${x.name}: ${TYPE_NAME[x.type]}` === it.topic.title);
+      return u >= 0 ? [{ type: 'note', text: '', topic: it.topic }, { type: 'note', text: slxInline(Object.assign(document.createElement('div'), { innerHTML: slWk([['combo', u, 'Load combinations: ' + P.units[u].name, 'Values (envelopes of the combination table)']]) }).firstChild, true).replace(/^\s*Worked in:\s*/, '') }, Object.assign({}, it, { topic: undefined })] : [it]; })); });
+    subs.forEach((q, i) => { if (!map[ch.key + '|']) map[ch.key + '|'] = q.key; if (q.cardTitle && !map[ch.key + '|' + q.cardTitle]) map[ch.key + '|' + q.cardTitle] = q.key; });
+    map['ch|' + ch.key + '|'] = subs.length ? subs[0].key : undefined;
+    secs.push({ title: ch.title, key: 'slx.ch' + ci, subs });
+  });
+  secs.forEach(sc => { sc.subs = sc.subs.map(q => ({ title: q.title, key: q.key, items: slxFixItems(q.items, map) })).filter(q => q.items.length); });
+  const keep = secs.filter(sc => sc.subs.length);
+  if (keep.length) keep[0].part = 'Calculation package (the tabs’ chapters, as the retired Print package printed them)';
+  /* the package's cover lines and front note */
+  const G = MODEL.G, o = slxSel(), un = P.units.filter((u, i) => o.units[i]).map(u => u.name).join(', ');
+  const about = { title: 'Calculation package', key: 'slx.about', items: [
+    { type: 'note', text: (G && !G.E.length ? G.spans.length + ' span' + (G.spans.length > 1 ? 's' : '') + ' (' + G.spans.map(s => f1(s)).join(' + ') + ' ft), ' + G.nSup + ' substructure units; ' : '') + 'units in the calculation package: ' + (un || '—') + '. Chapters: ' + RPT.filter(([k]) => o.sec[k]).map(r => r[1]).join(', ') + ' (Include boxes above).' },
+    { type: 'note', text: 'Subject: substructure loads (unfactored load effects and AASHTO LRFD load combinations). AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Section 3' + (isMass() ? ' · MassDOT LRFD Bridge Manual, Part I, Chapter 3 (January 2025; written to the AASHTO LRFD 9th Ed.)' : '') + '. SubLoads: Bridge Substructure Loads.' },
+    { type: 'note', text: 'Load factors are those of Tables 3.4.1-1 to 3.4.1-3 unless overridden on the Bridge tab (listed in ' + (map['ch|basis|'] ? '[[' + map['ch|basis|'] + ']]' : 'the Project and design basis chapter') + ', Load factors). Article numbers without a prefix are AASHTO LRFD; the MassDOT rows apply only when the owner is MassDOT.' }] };
+  if (M.sections[0]) M.sections[0].subs.push(about);
+  const ref = M.sections.findIndex(s => s && s.title === 'References');
+  M.sections.splice(ref < 0 ? M.sections.length : ref, 0, ...keep);
+  return M;
+}
+/* the report bar's Include boxes: the retired dialog's chapters and units (the same field P.ui.rpt) */
+function slxControls() {
+  const o = slxSel(), cb = (a, v, on, l) => `<label style="white-space:nowrap"><input type="checkbox" ${a}="${v}"${on ? ' checked' : ''}> ${esc(l)}</label>`;
+  return '<span class="slx-inc" style="display:inline-flex;flex-wrap:wrap;gap:2px 10px;font-size:.82rem;align-items:center"><b>Package chapters:</b> ' + RPT.map(([k, t]) => cb('data-slxs', k, o.sec[k], t)).join(' ')
+    + ' <b>Units:</b> ' + P.units.map((u, i) => cb('data-slxu', i, o.units[i], u.name)).join(' ') + '</span>';
+}
+function slxWire(T) {
+  T.querySelectorAll('input[data-slxs],input[data-slxu]').forEach(x => x.addEventListener('change', () => {
+    if (x.dataset.slxs) slxSet('sec', x.dataset.slxs, x.checked); else slxSet('unit', x.dataset.slxu, x.checked); slrRender(); }));
+}
+/* Print: from any tab the Report is shown (not saved: SLR.on), printed, and the tab of before comes back after printing */
+const SLRX = { back: null };
+function slrPrintPrep() {
+  if (SLR.on || !window.SharedReport || !window.SharedSteps || document.body.classList.contains('rp-printing')) return false;
+  SLRX.back = P.ui.tab; showTab('report'); return true;
+}
+function slrPrintAny() {
+  if (!window.SharedReport || !window.SharedSteps) { window.print(); return; }
+  if (!slrPrintPrep()) slrRender();
+  if (SLR.api) SLR.api.print(); else window.print();
+}
+window.addEventListener('afterprint', () => { const b = SLRX.back; SLRX.back = null; if (b) setTimeout(() => showTab(b), 0); });
 function slrRender() {
   const T = document.getElementById('tab-report'); if (!T) return;
   if (!window.SharedReport || !window.SharedSteps) { T.innerHTML = '<div class="card"><div class="card-b">The Report tab needs the shared folder (shared/steps.js, shared/report.js) next to this file.</div></div>'; SLR.api = null; SLR.doc = null; return; }
-  let M; try { M = slrModel(); } catch (e) { console.error(e); T.innerHTML = '<div class="card"><div class="card-b">Report error: ' + esc(e && e.message) + '</div></div>'; SLR.api = null; SLR.doc = null; return; }
-  SLR.api = SharedReport.mount(T, M, { closed: SLR.closed, onGoto: slrGoto }); SLR.doc = SLR.api.doc;
+  let M; try { M = slxAdd(slrModel()); } catch (e) { console.error(e); T.innerHTML = '<div class="card"><div class="card-b">Report error: ' + esc(e && e.message) + '</div></div>'; SLR.api = null; SLR.doc = null; return; }
+  SLR.api = SharedReport.mount(T, M, { closed: SLR.closed, onGoto: slrGoto, controls: slxControls() }); SLR.doc = SLR.api.doc; slxWire(T);
 }
 /* [[tab:<tab>~<unit>|…]] links of the report: the tool's tab, for that unit (slGoto) */
 function slrGoto(name) { const [t, k] = String(name).split('~'); slGoto(t, k == null ? '' : k, ''); }
@@ -4063,7 +4135,8 @@ function slrGoto(name) { const [t, k] = String(name).split('~'); slGoto(t, k == 
   const st = showTab; showTab = function (id) { if (id === 'report') { SLR.on = true; document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === 'report')); document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === 'tab-report')); slrRender(); return; }
     SLR.on = false; st(id); };
   const rt = renderTab; renderTab = function () { rt(); if (SLR.on) slrRender(); }; }
-/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header); the Print button still prints the calculation package */
+/* Ctrl+P while the Report tab is shown prints the report alone (shared/report.js print layout and running header); SLRX: from another tab the
+   inline beforeprint script in <head> shows the Report first (slrPrintPrep), and Print does the same (slrPrintAny) */
 window.addEventListener('beforeprint', () => {
   if (!SLR.on || !SLR.doc || document.body.classList.contains('rp-printing') || document.body.classList.contains('printing')) return;
   let box = document.getElementById('rp-print'); if (!box) { box = document.createElement('div'); box.id = 'rp-print'; document.body.appendChild(box); }
