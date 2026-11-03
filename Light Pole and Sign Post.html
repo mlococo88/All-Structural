@@ -606,6 +606,7 @@
       <div class="card-body">
         <div class="row"><label>Shaft shape<span class="note">drilled pier or square pier/pile cap</span></label><div class="ctl"><select id="shaftShape"><option value="round">Round (drilled shaft)</option><option value="square">Square</option></select></div></div>
         <div class="row"><label id="lblShaftB">Shaft diameter, b</label><div class="ctl"><input id="b" type="number" value="3.0" step="0.25"><span class="unit">ft</span></div></div>
+        <div class="row"><label>Shaft projection above grade, p<span class="note">top of shaft (base plate) above grade; 0 = flush</span></label><div class="ctl"><input id="shaftProj" type="number" value="0" step="0.25" min="0"><span class="unit">ft</span></div></div>
         <div class="row ibcOnly"><label>Soil class<span class="note">IBC Table 1806.2 presumptive values</span></label><div class="ctl"><select id="soilClass" class="combo-sel">
             <option value="rock1">Crystalline bedrock</option>
             <option value="rock2">Sedimentary &amp; foliated rock</option>
@@ -1130,6 +1131,10 @@ try{
 const RAD=Math.PI/180;
 
 function Kz(h,expo){const P={B:[7.0,1200],C:[9.5,900],D:[11.5,700]}[expo];const z=Math.max(h,15);return 2.01*Math.pow(z/P[1],2/P[0]);}
+// LPPJ (2026-11-03, engineer): the pole / post, its fixtures and the sign stand on a shaft that projects p above grade, so the
+// height above grade used for K_z, q_z and the design ice thickness t_d(z) is z + p, z measured from the pole / post base. Member
+// forces and moments stay measured from the base. Cables are NOT raised (heights from the pole base, as before). p = 0: z itself.
+function lppZg(inp,z){ return inp.pProj>0 ? z+inp.pProj : z; }
 
 // ---------- IBC Table 1806.2 presumptive load-bearing values ----------
 // lat  = lateral bearing, psf per foot of depth below natural grade
@@ -1538,7 +1543,7 @@ function cfPoleFig2941(inp){
   const Dm_in = shape==='rect' ? Math.min((inp.poleDiaTop+inp.poleDiaBase)/2,(inp.poleDepthTop+(inp.poleDepthBase!==undefined?inp.poleDepthBase:inp.poleDepthTop))/2)
                                : (inp.poleDiaTop+inp.poleDiaBase)/2;
   const D=Dm_in/12, hD=D>0?h/D:NaN;
-  const zq=h/2, Kzq=Kz(zq,inp.expo), qz=0.00256*Kzq*inp.Kzt*1.0*inp.V*inp.V;   // psf, K_e = 1.0, without K_d
+  const zq=h/2, Kzq=Kz(lppZg(inp,zq),inp.expo), qz=0.00256*Kzq*inp.Kzt*1.0*inp.V*inp.V;   // psf, K_e = 1.0, without K_d; LPPJ: at zq + p above grade
   const Dsq=D*Math.sqrt(qz);
   let row;
   if(shape!=='round') row='square';
@@ -1546,7 +1551,9 @@ function cfPoleFig2941(inp){
   else if(!(Dsq>2.5)) row='lowq';
   else row=({rough:'rough',vrough:'vrough'})[inp.cfPoleSurf]||'smooth';
   const cf=interp1(CF2941.hD, CF2941[row], hD);
-  return {cf,row,lbl:CF2941_LBL[row],vals:CF2941[row],h,D,Dm_in,hD,zq,Kzq,qz,Dsq,shape};
+  const out={cf,row,lbl:CF2941_LBL[row],vals:CF2941[row],h,D,Dm_in,hD,zq,Kzq,qz,Dsq,shape};
+  if(inp.pProj>0) out.zg=lppZg(inp,zq);   // LPPJ: the height above grade of q_z
+  return out;
 }
 // Sets inp.cfPole from Fig. 29.4-1 when the source is Auto; keeps the entered value when Manual. Records inp.cfAuto.
 function lppApplyCfPole(inp){
@@ -1565,7 +1572,7 @@ function cfPoleWorkedHTML(inp){
   let H=`<div class="step-label">Pole/post force coefficient C<sub>f</sub> <span class="eq-ref">[ASCE 7-22 Fig. 29.4-1]</span></div>`;
   H+=`<p class="eq-why">${inp.cfPoleMode==='auto'?'Auto (used):':'Manual C<sub>f</sub> = '+fmt(inp.cfPole,2)+' is used; the Fig. 29.4-1 value is shown for comparison:'} ${a.shape==='round'?(inp.cfPoleSurf==='poly'?'multi-sided section (hexagonal/octagonal row).':'round section; the row depends on D√q<sub>z</sub> (q<sub>z</sub> of Eq. 26.10-1 at mid-height, without K<sub>d</sub>).'):(a.shape==='rect'?'rectangular HSS: the square row with D = least dimension (Fig. 29.4-1 has no rectangle row).':'square HSS, wind normal to a face.')} D = mean outside ${a.shape==='rect'?'least dimension':'width'}; h = ${inp.mode==='sign'?'post height (grade to top of panel)':'pole height'}.</p>`;
   if(a.shape==='round' && inp.cfPoleSurf!=='poly')
-    H+=g(`q_z(h/2) = 0.00256\\,K_z(${fmt(a.zq,1)})\\,K_{zt}K_eV^2 = 0.00256(${fmt(a.Kzq,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2 = ${fmt(a.qz,1)}\\ \\text{psf}\\qquad D\\sqrt{q_z} = ${fmt(a.D,3)}\\sqrt{${fmt(a.qz,1)}} = ${fmt(a.Dsq,2)}\\ ${a.Dsq>2.5?'>':'\\le'}\\ 2.5`);
+    H+=g(`q_z(h/2) = 0.00256\\,K_z(${fmt(a.zg!==undefined?a.zg:a.zq,1)})\\,K_{zt}K_eV^2 = 0.00256(${fmt(a.Kzq,3)})(${fmt(inp.Kzt,2)})(1.00)(${inp.V})^2 = ${fmt(a.qz,1)}\\ \\text{psf}\\qquad D\\sqrt{q_z} = ${fmt(a.D,3)}\\sqrt{${fmt(a.qz,1)}} = ${fmt(a.Dsq,2)}\\ ${a.Dsq>2.5?'>':'\\le'}\\ 2.5`);
   H+=g(`h/D = ${fmt(a.h,2)}/${fmt(a.D,3)} = ${fmt(a.hD,1)}\\qquad C_f(h/D{=}1,7,25) = ${a.vals.map(v=>fmt(v,1)).join(',\\ ')}\\ \\Rightarrow\\ C_f = ${fmt(a.cf,3)}`);
   H+=`<p class="eq-result">C<sub>f</sub> (Fig. 29.4-1, ${a.lbl}) = ${fmt(a.cf,3)}${inp.cfPoleMode==='auto'?' — used':' — not used (manual '+fmt(inp.cfPole,2)+')'}.</p>`;
   return H;
@@ -1593,8 +1600,9 @@ function iceWorkedHTML(inp, pw, fxs){
   const kz=Math.pow(inp.Kzt,0.35), Ii=inp.iceIi>0?inp.iceIi:1.0;
   H+=`<p class="eq-why">The entered t = ${fmt(inp.tIce,3)} in is the nominal (map) ice thickness. It is increased with height by f<sub>z</sub> and for topography by K<sub>zt</sub><sup>0.35</sup>, times the ice importance factor I<sub>i</sub>. The mast uses t<sub>d</sub> at each of its ${pw.NSTRIP} strips (ice weight and the iced width for wind-on-ice); each fixture uses t<sub>d</sub> at its mount height. The cables keep the entered t (cable features unchanged, engineer 2026-11-01).</p>`;
   H+=g(`t_d(z) = t\\,f_z\\,K_{zt}^{0.35}\\,I_i,\\qquad f_z = \\left(\\frac{z}{33}\\right)^{0.10}`);
-  H+=g(`t_d(H{=}${fmt(inp.H,1)}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(inp.H),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(iceTd(inp,inp.H),3)}\\ \\text{in}\\qquad t_d(H/2) = ${fmt(inp.tIce,3)}(${fmt(iceFz(inp.H/2),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(iceTd(inp,inp.H/2),3)}\\ \\text{in}`);
-  (fxs||[]).forEach((fc,i)=>{ H+=g(`\\text{Fixture ${i+1}: } t_d(${fmt(fc.hf,1)}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(fc.hf),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(fc.td,3)}\\ \\text{in}`); });
+  if(inp.pProj>0) H+=`<p class="eq-why">Shaft projection p = ${fmt(inp.pProj,2)} ft: the heights z are above grade, z = (height above the ${inp.mode==='sign'?'post':'pole'} base) + p.</p>`;   // LPPJ
+  H+=g(`t_d(${inp.pProj>0?'H{+}p':'H'}{=}${fmt(lppZg(inp,inp.H),1)}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(lppZg(inp,inp.H)),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(iceTd(inp,lppZg(inp,inp.H)),3)}\\ \\text{in}\\qquad t_d(${inp.pProj>0?'H/2{+}p':'H/2'}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(lppZg(inp,inp.H/2)),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(iceTd(inp,lppZg(inp,inp.H/2)),3)}\\ \\text{in}`);
+  (fxs||[]).forEach((fc,i)=>{ H+=g(`\\text{Fixture ${i+1}: } t_d(${fmt(lppZg(inp,fc.hf),1)}) = ${fmt(inp.tIce,3)}(${fmt(iceFz(lppZg(inp,fc.hf)),3)})(${fmt(kz,3)})(${fmt(Ii,2)}) = ${fmt(fc.td,3)}\\ \\text{in}`); });
   H+=g(`W_{ice,mast} = \\sum_i \\frac{\\pi\\left[(D_i/2+t_{d,i})^2-(D_i/2)^2\\right]}{144}\\,\\gamma_{ice}\\,\\Delta z = ${fmt(pw.WiceMast,1)}\\ \\text{lb}`);
   return H;
 }
@@ -1602,8 +1610,8 @@ function iceWorkedHTML(inp, pw, fxs){
 // pole direct wind (regular wind, with gust). avg diameter = (top+base)/2
 // Fixture wind is now handled separately by fixtureComponents(); this covers the mast only.
 function poleWindNominal(inp){
-  const KzTop=Kz(inp.H,inp.expo), qzTop=0.00256*KzTop*inp.Kzt*inp.Kd*inp.V*inp.V;
-  const KzMid=Kz(inp.H/2,inp.expo), qzMid=0.00256*KzMid*inp.Kzt*inp.Kd*inp.V*inp.V;
+  const KzTop=Kz(lppZg(inp,inp.H),inp.expo), qzTop=0.00256*KzTop*inp.Kzt*inp.Kd*inp.V*inp.V;   // LPPJ: heights above grade (z + p)
+  const KzMid=Kz(lppZg(inp,inp.H/2),inp.expo), qzMid=0.00256*KzMid*inp.Kzt*inp.Kd*inp.V*inp.V;
   // projected wind width: round -> mean dia; square/rect -> mean width B (face into wind)
   const Davg_in=(inp.poleDiaTop+inp.poleDiaBase)/2;   // in
   const Davg=Davg_in/12;                               // ft
@@ -1620,9 +1628,9 @@ function poleWindNominal(inp){
   for(let i=0;i<NSTRIP;i++){
     const z=(i+0.5)*dzs;
     const w_in=inp.poleDiaTop+(inp.poleDiaBase-inp.poleDiaTop)*(inp.H-z)/inp.H;   // in, local width
-    const Kzs=Kz(z,inp.expo);
+    const Kzs=Kz(lppZg(inp,z),inp.expo);   // LPPJ: z above the pole base, z + p above grade
     const F =0.00256*Kzs*inp.Kzt*inp.Kd*inp.V*inp.V*inp.G*inp.cfPole*(w_in/12)*dzs;               // lb
-    const td=iceTd(inp,z);                                                                         // in, design ice at z
+    const td=iceTd(inp,lppZg(inp,z));                                                              // in, design ice at z (+ p, LPPJ)
     const FI=0.00256*Kzs*inp.Kzt*inp.Kd*inp.Vice*inp.Vice*inp.G*inp.cfPole*((w_in+2*td)/12)*dzs; // lb
     const Wi=iceWeight(td, w_in, inp.iceDen)*dzs;                                                  // lb, ice on the strip
     strips.push({z,F,FI,td,Wi});
@@ -1636,7 +1644,7 @@ function poleWindNominal(inp){
   // ice weight above height z (lb)
   const iceAbove=z=> iceMap ? strips.reduce((a,st)=>a+(st.z>z?st.Wi:0),0) : wIceMast*(inp.H-z);
   return {Wpole:Fpole, Mpole, Fpole, FpoleI, MpoleI, strips, NSTRIP, zF:Fpole>0?Mpole/Fpole:inp.H/2,
-          WiceMast, wIceMast, iceAbove, tdTop:iceTd(inp,inp.H), Apole, ApoleI, Davg, Davg_in, qzTop, qzMid, qzMidI, KzTop, KzMid};
+          WiceMast, wIceMast, iceAbove, tdTop:iceTd(inp,lppZg(inp,inp.H)), Apole, ApoleI, Davg, Davg_in, qzTop, qzMid, qzMidI, KzTop, KzMid};
 }
 
 // ================= ASCE 7-22 Ch.29 SOLID SIGN WIND (Fig 29.3-1) =================
@@ -1732,19 +1740,19 @@ function signWind(inp){
   // height in NPS strips (q_z at each strip centroid, ASCE 7-22 §29.4.1 per strip, as the mast in
   // poleWindNominal); it was one force at q_z(clr/2) acting at clr/2.
   const postW_in=(inp.poleDiaBase+inp.poleDiaTop)/2;         // in, mean post width
-  const postExpH=Math.max(0,clr);                            // ft, exposed height = clearance
-  const qzMidPost=0.00256*Kz(clr/2,inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V;  // psf at exposed mid-height (reference)
+  const postExpH=Math.max(0,inp.pProj>0?clr-inp.pProj:clr);  // ft, exposed height = clearance (LPPJ: − p, the post starts on the shaft top)
+  const qzMidPost=0.00256*Kz(lppZg(inp,postExpH/2),inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V;  // psf at exposed mid-height (reference)
   const Apost=(postW_in/12)*postExpH;                        // ft^2 exposed area
   const cfPost=inp.cfPole;                                   // post shape drag coeff
   const NPS=50, dzp=postExpH/NPS, postStrips=[];
   let Fpost=0, Mpost=0;
   for(let i=0;i<NPS && dzp>0;i++){
     const z=(i+0.5)*dzp;
-    const F=0.00256*Kz(z,inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V*cfPost*(postW_in/12)*dzp;   // lb
+    const F=0.00256*Kz(lppZg(inp,z),inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V*cfPost*(postW_in/12)*dzp;   // lb (z above the post base; + p above grade, LPPJ)
     postStrips.push({z,F}); Fpost+=F; Mpost+=F*z;
   }
   const qzPost=Apost>0? Fpost/(cfPost*Apost) : qzMidPost;  // psf, area-average q_z over the exposed height
-  const zPost=Fpost>0? Mpost/Fpost : clr/2;                 // ft, height of the drag resultant
+  const zPost=Fpost>0? Mpost/Fpost : postExpH/2;            // ft, height of the drag resultant above the post base
   // Case A resultant height: centroid, raised 0.05h if s/h==1 (approx: if sh>=0.99)
   const zA = sh>=0.99 ? zc+0.05*h : zc;
   // Case B: same force, resultant offset e=0.2B horizontally toward windward edge
@@ -1791,10 +1799,10 @@ function signWind(inp){
   if(caseC) caseC.FI=caseC.F*iceScale;
   const WiPanel=inp.iceDen*0.8*As*tdPft;                   // lb (total panel ice)
   let FpostI=0, MpostI=0;
-  postStrips.forEach(st=>{ const td=iceTd(inp,st.z);
-    st.FI=0.00256*Kz(st.z,inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.Vice*inp.Vice*cfPost*((postW_in+2*td)/12)*dzp; FpostI+=st.FI; MpostI+=st.FI*st.z; });
-  const tdPost=iceTd(inp, h/2);
-  const WiPost=iceWeight(tdPost, postW_in, inp.iceDen)*h;   // lb per post (whole post, grade to the top of the panel)
+  postStrips.forEach(st=>{ const td=iceTd(inp,lppZg(inp,st.z));
+    st.FI=0.00256*Kz(lppZg(inp,st.z),inp.expo)*inp.Kzt*inp.Kd*inp.G*inp.Vice*inp.Vice*cfPost*((postW_in+2*td)/12)*dzp; FpostI+=st.FI; MpostI+=st.FI*st.z; });
+  const tdPost=iceTd(inp, inp.pProj>0?(h+inp.pProj)/2:h/2);   // at the post mid-height above grade (LPPJ: the post runs from p to h)
+  const WiPost=iceWeight(tdPost, postW_in, inp.iceDen)*(inp.pProj>0?h-inp.pProj:h);   // lb per post (whole post, top of shaft to the top of the panel)
   return {B,s,clr,h,zc,zA,As,bs,sh,Kzh,qh,cfAB,cfAuto,cfManual,F_A,eB,caseC,
           Fpost,Mpost,zPost,postExpH,Apost,qzPost,qzMidPost,postStrips,postW_in,cfPost,
           tdP,qhI,AsI,F_Ai,iceScale,WiPanel,FpostI,MpostI,tdPost,WiPost};
@@ -1809,14 +1817,14 @@ function signWind(inp){
 // The eccentric gravity moment is a FIXED vector along θ; it does not rotate with the wind,
 // which is exactly why two fixtures at 0° and 180° cancel.
 function fixtureComponents(x,inp){
-  const Kzf=Kz(x.hf,inp.expo);
+  const Kzf=Kz(lppZg(inp,x.hf),inp.expo);   // LPPJ: mount height above the pole base + p
   const qz  = 0.00256*Kzf*inp.Kzt*inp.Kd*inp.G*inp.V*inp.V;      // regular wind, WITH gust
   const qzi = 0.00256*Kzf*inp.Kzt*inp.Kd*inp.G*inp.Vice*inp.Vice; // wind-on-ice, WITH gust G (ASCE 7-22 §10.5, verify)
   const Fw  = qz*x.epa*inp.cfLum;                                 // lb, bare fixture
   // iced fixture presents a slightly larger area: grow EPA by a perimeter-based ice band.
   // Approximate the fixture as a square face of side √EPA; radial ice t adds 2t to each side.
   const side = Math.sqrt(Math.max(x.epa,0));                      // ft
-  const td   = iceTd(inp, x.hf);                                  // in, design ice at the mount height (2026-11-01)
+  const td   = iceTd(inp, lppZg(inp,x.hf));                       // in, design ice at the mount height (2026-11-01; + p, LPPJ)
   const tft  = td/12;                                             // ft
   const epaI = side>0 ? Math.pow(side+2*tft,2) : 0;               // ft^2, iced EPA
   const Fwi = qzi*epaI*inp.cfLum;                                 // lb, iced fixture
@@ -2621,6 +2629,7 @@ manPart("p2","2. Input Reference",[
 {tbl:{head:["Input","Units","Feeds","Notes"],rows:[
  ["Shaft shape","\u2014","A<sub>g</sub>, base area, bar layout, compression-block geometry","Round drilled shaft or square pier. Square uses a perimeter bar layout and checks two bending axes."],
  ["Shaft diameter or width, b","ft","Embedment formula, A<sub>g</sub>, bearing area, bar circle, tie perimeter","The most influential geometric input. Embedment falls roughly as 1/b, and P\u2013M capacity rises steeply with b."],
+ ["Shaft projection above grade, p","ft","Grade actions V<sub>F</sub> = V + F<sub>s</sub>, M<sub>F</sub> = B\u00b7M + V\u00b7p + F<sub>s</sub>\u00b7p/2, N<sub>F</sub> = N + \u03b3<sub>D</sub>W<sub>c</sub> for the embedment, bearing, Broms and shaft design; K<sub>z</sub>, q<sub>z</sub>, t<sub>d</sub> heights + p; sign post length clr + s \u2212 p; hand-off pier depth d + p","Both code modes (added 2026-11-03). 0 = shaft flush with grade (every earlier save). The base plate, anchors and pole / post checks keep the actions at the top of the shaft. Cables are not raised (slightly unconservative for p &gt; 0). F<sub>s</sub>: wind on b \u00d7 p at p/2 (IBC: Fig. 29.4-1 rough / square row; LRFDLTS: Table 3.8.7-1 cylindrical / 2.0); W<sub>c</sub> at 150 pcf. Must be less than the sign clearance."],
  ["Soil class","\u2014","Fills S\u2081 and q<sub>allow</sub> together","See §2.7.2."],
  ["Lateral bearing, S\u2081","psf/ft","IBC embedment","Increases linearly with depth; the formula evaluates it at d/3 for the non-constrained case."],
  ["Allowable bearing, q<sub>allow</sub>","ksf","Soil bearing check at the shaft base","Compared against service axial over the base area."],
@@ -3142,6 +3151,7 @@ function summaryHTML(ctx){
   const drow=(k,fn)=>{H+=`<tr><td style="text-align:left">${k}</td>${stacks.map(st=>`<td>${fn(st)}</td>`).join('')}</tr>`;};
   drow('Shaft',st=>`${inp.shaftShape==='square'?'':'Ø'}${fmt(inp.b,2)} ft${inp.shaftShape==='square'?' sq':''}`);
   drow('Embedment depth, d',st=>`${fmt(st.found.d,2)} ft`);
+  if(inp.pProj>0) drow('Shaft projection above grade, p',st=>`${fmt(inp.pProj,2)} ft (shaft length d + p = ${fmt(st.found.d+inp.pProj,2)} ft) ${lppLink('proj',stacks.indexOf(st))}`);   // LPPJ
   drow('Longitudinal bars',st=>`(${st.found.reo.long.n}) ${st.found.reo.long.bar.n}`);
   drow('Ties',st=>`${st.found.reo.tie.bar.n} @ ${fmt(st.found.reo.tie.s,0)} in (top zone @ ${fmt(st.found.reo.tie.sTop,0)} in for ${fmt(st.found.reo.tie.zoneH,0)} in)`);
   drow('Anchor bolts',st=>st.found.bolts?`(${st.found.bolts.n}) ${fmt(st.found.bolts.d,3)} in Gr.${inp.boltGrade}, BC ${fmt(st.found.bolts.BC,1)} in, h_ef ${fmt(st.found.bolts.hef,1)} in — designed in the Anchorage app ${lppLink('anchorage',stacks.indexOf(st))}`:'—');
@@ -3152,10 +3162,12 @@ function summaryHTML(ctx){
   H+=`<div class="step-label" style="margin-top:14px">Governing demands</div>`;
   H+=`<table class="tbl"><tr><th style="text-align:left">Path</th><th>Combination</th><th>Wind</th><th>P (lb)</th><th>M (lb·ft)</th><th>h = M/P (ft)</th><th>N (lb)</th><th style="text-align:left">Worked in</th></tr>`;
   stacks.forEach((st,si)=>{
-    if(st.asd) H+=`<tr><td style="text-align:left">Embedment — ASD${st.label?' · '+st.label:''}</td><td>${st.asd.name||'—'}</td><td>${st.asd.phi!==undefined?fmt(st.asd.phi,0)+'°':'—'}</td><td>${fmt(st.asd.P,0)}</td><td>${fmt(st.asd.M,0)}</td><td>${fmt(st.asd.h,2)}</td><td>${fmt(st.asd.axial,0)}</td><td style="text-align:left">${lppLink('dem',si)}</td></tr>`;
+    if(st.asd) H+=`<tr><td style="text-align:left">Embedment — ASD${st.found&&st.found.proj?' at grade':''}${st.label?' · '+st.label:''}</td><td>${st.asd.name||'—'}</td><td>${st.asd.phi!==undefined?fmt(st.asd.phi,0)+'°':'—'}</td><td>${fmt(st.asd.P,0)}</td><td>${fmt(st.asd.M,0)}</td><td>${fmt(st.asd.h,2)}</td><td>${fmt(st.asd.axial,0)}</td><td style="text-align:left">${lppLink('dem',si)}</td></tr>`;
     if(st.lrfd) H+=`<tr><td style="text-align:left">Shaft &amp; base plate — LRFD${st.label?' · '+st.label:''}</td><td>${st.lrfd.name||'—'}</td><td>${st.lrfd.phi!==undefined?fmt(st.lrfd.phi,0)+'°':'—'}</td><td>${fmt(st.lrfd.P,0)}</td><td>${fmt(st.lrfd.M,0)}</td><td>${fmt(st.lrfd.h,2)}</td><td>${fmt(st.lrfd.axial,0)}</td><td style="text-align:left">${lppLink('combo',si)}</td></tr>`;
+    if(st.found&&st.found.proj){ const l=st.found.proj.lrfd; H+=`<tr><td style="text-align:left">Shaft at grade — LRFD${st.label?' · '+st.label:''}</td><td>${l.name||'—'}</td><td>${l.phi!==undefined?fmt(l.phi,0)+'°':'—'}</td><td>${fmt(l.P,0)}</td><td>${fmt(l.M,0)}</td><td>${fmt(l.h,2)}</td><td>${fmt(l.axial,0)}</td><td style="text-align:left">${lppLink('proj',si)}</td></tr>`; }   // LPPJ
   });
   H+=`</table>`;
+  if(inp.pProj>0) H+=`<p class="tbl-note">Shaft projection p = ${fmt(inp.pProj,2)} ft: the embedment, bearing, Broms and shaft rows are at grade, V<sub>F</sub> = V + F<sub>s</sub>, M<sub>F</sub> = B·M + V·p + F<sub>s</sub>·p/2 (B on the ${mode==='sign'?'post':'pole'} base moment only; ASD first order), N<sub>F</sub> = N + γ<sub>D</sub>W<sub>c</sub>; the base plate and anchors keep the actions at the top of the shaft.</p>`;
   H+=`<p class="tbl-note">M above is the first-order moment. The LRFD checks (pole/post, base plate, shaft) and the anchor export use the second-order moment B₂·M of each combination (AISC 360-16 App. 8; B₂ in Key design inputs, worked in the pole/post check). The ASD embedment uses the first-order moment.</p>`;
   // ---- demand vs capacity, sorted by utilization ----
   H+=`<div class="step-label" style="margin-top:14px">Demand vs capacity — sorted by utilization</div>`;
@@ -3214,6 +3226,9 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   H+=g(`h = \\text{clr} + s = ${fmt(sw.clr,2)}\\ \\text{ft} + ${fmt(sw.s,2)}\\ \\text{ft} = ${fmt(sw.h,2)}\\ \\text{ft}\\qquad A_s = B\\,s = (${fmt(sw.B,2)}\\ \\text{ft})(${fmt(sw.s,2)}\\ \\text{ft}) = ${fmt(sw.As,2)}\\ \\text{ft}^2`);
   H+=g(`\\bar{z} = \\text{clr} + \\tfrac{s}{2} = ${fmt(sw.clr,2)} + \\tfrac{${fmt(sw.s,2)}}{2} = ${fmt(sw.zc,2)}\\ \\text{ft}` + (sw.zA!==sw.zc?`\\qquad z_A = \\bar z + 0.05h = ${fmt(sw.zA,2)}\\ \\text{ft}`:''));
   H+=`<p class="eq-why">z̄ is the panel-area centroid where the Case A/B resultant acts${sw.zA!==sw.zc?' (raised 0.05h for a near-ground panel per Fig. 29.3-1 note)':''}. Case C, when applicable, uses its own band centroid z_C = ${fmt(sw.zc,2)} ft. The post's own drag resultant acts at z<sub>drag</sub> = ${fmt(sw.zPost,2)} ft (step 3).</p>`;
+  const pj=inp.pProj>0?inp.pProj:0, zArm=z=>pj>0?z-pj:z;   // LPPJ: the post stands on a shaft p above grade
+  if(pj>0){ H+=`<p class="eq-why"><b>Shaft projection p = ${fmt(pj,2)} ft.</b> The clearance and the heights above are measured from grade; the steel post runs from the top of the shaft to the top of the panel, H<sub>post</sub> = clr + s − p = ${fmt(sw.clr,2)} + ${fmt(sw.s,2)} − ${fmt(pj,2)} = ${fmt(inp.H,2)} ft. The lever arms of the post moments below are measured from the post base (top of the shaft):</p>`;
+    H+=g(`z_A - p = ${fmt(sw.zA,2)} - ${fmt(pj,2)} = ${fmt(sw.zA-pj,2)}\\ \\text{ft}`+(sw.caseC?`\\qquad z_C - p = ${fmt(sw.zc,2)} - ${fmt(pj,2)} = ${fmt(sw.zc-pj,2)}\\ \\text{ft}`:'')); }
 
   // ---- 2 · dead load path (axial) ----
   const Wp=inp.signWt, selfW=inp.__poleTotalW||0, DLp=inp.DL||0;
@@ -3226,11 +3241,11 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
   H+=step(`3 · Wind cases → post shears ${ref('ASCE 7-22 Fig. 29.3-1 + statics')}`);
   H+=`<p class="eq-why">Wind fully loads the panel only blowing normal to it (front or back); edge-on directions leave only the posts' own drag, so the normal directions always govern. ${two?`For a resultant F at distance x from the post-group centerline, statics about the spacing L<sub>p</sub> = ${fmt(Lp,2)} ft gives the split <b>share = F(½ ± x/L<sub>p</sub>)</b> — the eccentric Cases B/C load the windward post harder without inducing torsion.`:`A single post takes the full resultant of every case; the eccentric Cases B/C also twist the monopost, T = F·|x| (checked in the post, anchors and shaft — see the torsion note above).`}</p>`;
   // build case rows exactly as evalSignComboDir does (nominal, onFace=1, windSign=+1)
-  const cases=[{name:'A',F:sw.F_A,x:0,z:sw.zA}];
-  cases.push({name:'B',F:sw.F_A,x:0.2*sw.B,z:sw.zA});
-  if(sw.caseC) cases.push({name:'C',F:sw.caseC.F,x:sw.caseC.e,z:sw.zc});
+  const cases=[{name:'A',F:sw.F_A,x:0,z:zArm(sw.zA)}];
+  cases.push({name:'B',F:sw.F_A,x:0.2*sw.B,z:zArm(sw.zA)});
+  if(sw.caseC) cases.push({name:'C',F:sw.caseC.F,x:sw.caseC.e,z:zArm(sw.zc)});
   const Fdrag=sw.Fpost, Mdrag=sw.Mpost;
-  H+=`<p class="eq-why"><b>Post drag on the exposed column.</b> Each post is itself a member in the wind stream, but only the length <b>below the panel</b> is exposed \u2014 the strip behind the sign is already accounted for in the panel force above, so applying wind over the full post height would double-count it. The exposed height is the clearance, h<sub>exp</sub> = ${fmt(sw.clr,2)} ft (grade to bottom of panel). The drag is integrated over that height in ${sw.postStrips?sw.postStrips.length:1} strips (q_z at each strip centroid; K_z is constant below 15 ft), so q̄_z below is the area-average and z<sub>drag</sub> = ΣF_i z_i/ΣF_i = ${fmt(sw.zPost,2)} ft:</p>`;
+  H+=`<p class="eq-why"><b>Post drag on the exposed column.</b> Each post is itself a member in the wind stream, but only the length <b>below the panel</b> is exposed \u2014 the strip behind the sign is already accounted for in the panel force above, so applying wind over the full post height would double-count it. The exposed height is the clearance, h<sub>exp</sub> = ${pj>0?`clr − p = ${fmt(sw.clr,2)} − ${fmt(pj,2)} = ${fmt(sw.postExpH,2)} ft (top of the shaft to the bottom of the panel; K<sub>z</sub> at z + p above grade)`:`${fmt(sw.clr,2)} ft (grade to bottom of panel)`}. The drag is integrated over that height in ${sw.postStrips?sw.postStrips.length:1} strips (q_z at each strip centroid; K_z is constant below 15 ft), so q̄_z below is the area-average and z<sub>drag</sub> = ΣF_i z_i/ΣF_i = ${fmt(sw.zPost,2)} ft:</p>`;
   H+=g(`\\overline{q_{z}K_dG} = \\frac{1}{h_{exp}}\\int_0^{h_{exp}} 0.00256\\,K_z(z) K_{zt} K_e V^2\\cdot K_d\\,G\\,dz = ${fmt(sw.qzPost,1)}\\ \\text{psf}\\quad(q_z(clr/2) = ${fmt(sw.qzMidPost!==undefined?sw.qzMidPost:sw.qzPost,1)})\\qquad A_{exp} = w_{post}\\,h_{exp} = \\tfrac{${fmt(sw.postW_in,2)}}{12}(${fmt(sw.postExpH,2)}) = ${fmt(sw.Apost,2)}\\ \\text{ft}^2`);
   H+=g(`F_{drag,post} = \\bar q_z\\,C_f\\,A_{exp} = ${fmt(sw.qzPost,1)}(${fmt(sw.cfPost,2)})(${fmt(sw.Apost,2)}) = ${fmt(Fdrag,0)}\\ \\text{lb (per post, at } z_{drag}=${fmt(sw.zPost,2)}\\text{ ft)}`);
   cases.forEach(cs=>{
@@ -3267,9 +3282,9 @@ function signLoadPathHTML(inp,sw,pw,postGovList){
     const phi=gl.phi||0;
     const faceFactor=Math.max(0,Math.cos(phi*RAD)), faceBack=Math.max(0,-Math.cos(phi*RAD));
     const onFace=faceFactor+faceBack, windSign=Math.cos(phi*RAD)>=0?1:-1;
-    let cF=sw.F_A*onFace, cx=0, cz=sw.zA;
+    let cF=sw.F_A*onFace, cx=0, cz=zArm(sw.zA);
     if(gl.case==='B'){ cx=0.2*sw.B*windSign; }
-    else if(gl.case==='C' && sw.caseC){ cF=sw.caseC.F*onFace; cx=sw.caseC.e*windSign; cz=sw.zc; }
+    else if(gl.case==='C' && sw.caseC){ cF=sw.caseC.F*onFace; cx=sw.caseC.e*windSign; cz=zArm(sw.zc); }
     const shares=signPostSplit(cF,cx,Lp,nP);
     const shv=shares[p];
     H+=`<p class="eq-why" style="margin-top:10px"><b>Post ${p+1}</b> \u2014 governs under <b>${gl.name}</b>, wind toward <b>${fmt(phi,0)}\u00b0</b>, Case <b>${gl.case}</b>${two?` (this direction puts post ${p+1} on the windward side)`:''}:</p>`;
@@ -3342,7 +3357,7 @@ function evalSignComboDir(key,inp,pw,sw,phi){
       const shares=signPostSplit(cs.F, cs.x, Lp, nPost), sharesI=signPostSplit(cs.FI||0, cs.x, Lp, nPost);
       const Fp=f.W*shares[p] + f.Wi*sharesI[p];        // factored wind share on this post (+ wind on the iced panel, 2026-11-01)
       // sign wind acts at zA (Case A/B) or its own height for C (use centroid)
-      const zarm=cs.name==='C'? sw.zc : sw.zA;
+      const zarm=(cs.name==='C'? sw.zc : sw.zA) - (inp.pProj>0?inp.pProj:0);   // LPPJ: arm from the post base (top of the shaft)
       const Vwind=Fp + postWindEach;                   // + post's own drag
       const Mwind=Fp*zarm + postWindMEach;
       const axial=f.D*(perPostDeadSign+postSelfW+(inp.DL||0)) + f.Di*((sw.WiPanel||0)/nPost + (sw.WiPost||0));   // + misc. DL (2026-10-12); + ice (2026-11-01)
@@ -4026,18 +4041,109 @@ function anchorsAllCombos(inp, cands){
   return Object.assign({}, gov, {byCheck:{T,V,I,BP}, allCombos:res});
 }
 
+// ================= SHAFT PROJECTION ABOVE GRADE, p (LPPJ, added 2026-11-03; engineer's decisions) =================
+// The drilled shaft projects p above grade; the base plate sits on its top. The pole / post actions at the plate (the base-plate and
+// anchor checks, the pole / post checks) are unchanged in form. The foundation takes the actions at GRADE:
+//   V_F = V + F_s,   M_F = B·M + V·p + F_s·p/2,   N_F = N + γ_D·W_c (+ γ_Di·W_ice,s)
+// B = the combination's second-order factor (AISC 360-16 App. 8 B₂ in the IBC mode; 1 for the ASD embedment, which is first order as
+// before), applied to the pole base moment only; F_s = factored wind on the exposed shaft (b × p, at p/2, along the wind); W_c = the
+// concrete of the projection. Vectors in the plan frame (pole mode); along the wind (sign posts). Every function returns null / the
+// unchanged inputs when p = 0.
+const LPP_GC=150;   // pcf, reinforced normal-weight concrete: AASHTO LRFD 10th Ed. Table 3.5.1-1 (0.145 kcf, f'c ≤ 5 ksi) + C3.5.1 (+0.005 kcf for the reinforcement)
+// nominal wind and weight of the projection (IBC mode): ASCE 7-22 §29.4 (F = q_z G C_f A_f), q_z by Eq. 26.10-1 at z = p/2 with the
+// pole's K_d (K_z per Table 26.10-1, z < 15 ft taken at 15 ft), C_f by Fig. 29.4-1 at h/D = p/b: a round shaft on the "rough" row
+// (concrete), a square shaft on the square row. Ice (ASCE 7-22 Ch. 10): t_d at p/2 (§10.4.6 when the map basis is used), radial on the
+// shaft faces (weight) and the iced width b + 2t_d (wind on ice at V_ice).
+function lppShaftProj(inp){
+  const p=inp.pProj; if(!(p>0)) return null;
+  const b=inp.b, sq=inp.shaftShape==='square', zq=p/2, Kzq=Kz(zq,inp.expo);
+  const qz=0.00256*Kzq*inp.Kzt*inp.Kd*inp.V*inp.V;                    // psf (K_d of the pole / post)
+  const row=sq?'square':'rough', hD=p/b, cf=interp1(CF2941.hD, CF2941[row], hD);
+  const F=qz*inp.G*cf*b*p;                                            // lb, bare shaft
+  const td=iceTd(inp,zq), tdft=td/12, qzI=0.00256*Kzq*inp.Kzt*inp.Kd*inp.Vice*inp.Vice;
+  const FI=qzI*inp.G*cf*(b+2*tdft)*p;                                 // lb, wind on the iced shaft
+  const A=sq?b*b:Math.PI/4*b*b, Wc=LPP_GC*A*p;                        // ft², lb
+  const AiceIn=sq?(4*b*12*td+Math.PI*td*td):Math.PI*((b*6+td)*(b*6+td)-(b*6)*(b*6));   // in², ice on the faces (corners rounded, square)
+  const Wice=AiceIn/144*inp.iceDen*p;                                 // lb
+  return {p,b,sq,zq,Kzq,qz,row,lbl:CF2941_LBL[row],vals:CF2941[row],hD,cf,G:inp.G,Kd:inp.Kd,F,td,qzI,FI,A,Wc,AiceIn,Wice};
+}
+// grade actions of one combination at one wind direction. dr: {Vx, Vy, Mx, My, axial, phi} (pole base, first order; Mx = moment of
+// the x forces), f: the COMBOS factors, B: the second-order factor of that combination and direction (1 = first order).
+function lppGradeDir(dr,f,sp,B){
+  const c=Math.cos((dr.phi||0)*RAD), s=Math.sin((dr.phi||0)*RAD), p=sp.p, Fs=f.W*sp.F+f.Wi*sp.FI, Ws=f.D*sp.Wc+f.Di*sp.Wice;
+  const Vx=dr.Vx+Fs*c, Vy=dr.Vy+Fs*s, Mx=B*dr.Mx+dr.Vx*p+Fs*c*p/2, My=B*dr.My+dr.Vy*p+Fs*s*p/2;
+  const P=Math.hypot(Vx,Vy), M=Math.hypot(Mx,My);
+  return Object.assign({}, dr, {Vx,Vy,Mx,My,P,M,h:P>0?M/P:0,axial:dr.axial+Ws,Mang:Math.atan2(My,Mx)/RAD,
+    grade:{B,Fs,Ws,fW:f.W,fWi:f.Wi,fD:f.D,fDi:f.Di,V0x:dr.Vx,V0y:dr.Vy,M0x:dr.Mx,M0y:dr.My,P0:Math.hypot(dr.Vx,dr.Vy),M0:Math.hypot(dr.Mx,dr.My),N0:dr.axial}});
+}
+// the combination's grade demand: the wind direction with the largest M_F (Bof(dr): B of that direction)
+function lppGradeCombo(r,sp,Bof){
+  const f=COMBOS[r.key]||COMBOS.L1, dirs=(r.dirs&&r.dirs.length)?r.dirs:[r];
+  return dirs.map(dr=>lppGradeDir(dr,f,sp,Bof?Bof(dr):1)).reduce((a,x)=>x.M>a.M?x:a);
+}
+// sign post (scalars along the wind): x = this post's record {P, M, axial, phi, case}
+function lppGradePost(x,key,sp,B){
+  const r=lppGradeDir({...x, Vx:x.P, Vy:0, Mx:x.M, My:0, phi:0}, COMBOS[key]||COMBOS.L1, sp, B);
+  r.phi=x.phi; r.Mang=x.phi||0; return r;
+}
+// sign: one post's grade demand of a combination r (evalSignCombo), the direction with the largest M_F
+function lppGradeBestPost(r,pi,sp,B){
+  return (r.dirs||[]).map(dr=>lppGradePost(Object.assign({}, dr.posts[pi], {phi:dr.phi, name:r.name, key:r.key}), r.key, sp, B)).reduce((a,x)=>x.M>a.M?x:a);
+}
+// worked steps (Shaft tab and report): the projection's wind and weight, and the grade demands of the embedment (ASD) and the shaft
+// (LRFD) combinations. a, l: lppGradeDir results; sign: scalar form along the wind.
+function lppProjWorkedHTML(sp,inp,a,l,sign,sfx){
+  if(!sp) return '';
+  const g=t=>`\\[${t}\\]`, step=t=>`<div class="step-label">${t}</div>`, ref=x=>`<span class="eq-ref">[${x}]</span>`;
+  let H=`<div${sfx!=null?` id="projWorked${sfx}"`:''} class="lppProj">`;
+  H+=step(`Shaft projection above grade, p = ${fmt(sp.p,2)} ft ${ref('engineer\'s decision 2026-11-03')}`);
+  H+=`<p class="eq-why">The shaft top (base plate) is p above grade. The ${sign?'post':'pole'} actions at the plate (M, V, N, worked above; base plate and anchors) are carried down through the exposed shaft to grade, adding the wind on the exposed shaft (width b × height p, at p/2) and its concrete weight. The embedment, bearing, Broms and the shaft design take the grade values. The heights above grade of the ${sign?'post and the sign':'pole and the fixtures'} for K<sub>z</sub>, q<sub>z</sub> and t<sub>d</sub> are raised by p; ${sign?'the clearance is measured from grade':'cables are not raised (their heights stay measured from the pole base, slightly unconservative when p > 0)'}.</p>`;
+  H+=step(`Wind on the exposed shaft ${ref('ASCE 7-22 §29.4, Eq. 26.10-1, Fig. 29.4-1')}`);
+  H+=g(`q_z(p/2) = 0.00256\\,K_z(${fmt(sp.zq,2)})\\,K_{zt}K_dV^2 = 0.00256(${fmt(sp.Kzq,3)})(${fmt(inp.Kzt,2)})(${fmt(sp.Kd,2)})(${inp.V})^2 = ${fmt(sp.qz,2)}\\ \\text{psf}\\quad(z < 15\\ \\text{ft: }K_z\\text{ at 15 ft})`);
+  H+=g(`h/D = p/b = ${fmt(sp.p,2)}/${fmt(sp.b,2)} = ${fmt(sp.hD,3)}\\qquad C_f(h/D{=}1,7,25) = ${sp.vals.map(v=>fmt(v,1)).join(',\\ ')}\\ \\Rightarrow\\ C_f = ${fmt(sp.cf,3)}`);
+  H+=`<p class="eq-why">C<sub>f</sub> row: ${sp.lbl} (${sp.sq?'square shaft, wind normal to a face':'round concrete shaft, taken as rough'}; h/D below 1 takes the h/D = 1 value).</p>`;
+  H+=g(`F_s = q_z\\,G\\,C_f\\,b\\,p = ${fmt(sp.qz,2)}(${fmt(sp.G,3)})(${fmt(sp.cf,3)})(${fmt(sp.b,2)})(${fmt(sp.p,2)}) = ${fmt(sp.F,1)}\\ \\text{lb at } p/2 = ${fmt(sp.p/2,2)}\\ \\text{ft}`);
+  if(inp.tIce>0){ H+=g(`t_d(p/2) = ${fmt(sp.td,3)}\\ \\text{in}\\qquad q_{z,ice} = 0.00256\\,K_zK_{zt}K_dV_{ice}^2 = ${fmt(sp.qzI,2)}\\ \\text{psf}`);
+    H+=g(`F_{s,ice} = q_{z,ice}\\,G\\,C_f\\,(b+2t_d)\\,p = ${fmt(sp.qzI,2)}(${fmt(sp.G,3)})(${fmt(sp.cf,3)})(${fmt(sp.b,2)}+2\\cdot${fmt(sp.td,3)}/12)(${fmt(sp.p,2)}) = ${fmt(sp.FI,1)}\\ \\text{lb}`); }
+  H+=step(`Weight of the projection ${ref('AASHTO LRFD 10th Ed. Table 3.5.1-1, C3.5.1')}`);
+  H+=g(`W_c = \\gamma_c\\,A\\,p = ${LPP_GC}\\,(${sp.sq?`${fmt(sp.b,2)}^2`:`\\tfrac{\\pi}{4}${fmt(sp.b,2)}^2`})(${fmt(sp.p,2)}) = ${LPP_GC}(${fmt(sp.A,3)})(${fmt(sp.p,2)}) = ${fmt(sp.Wc,0)}\\ \\text{lb}`);
+  if(inp.tIce>0) H+=g(`W_{ice,s} = A_{ice}\\,\\gamma_{ice}\\,p = \\frac{${fmt(sp.AiceIn,2)}}{144}(${fmt(inp.iceDen,0)})(${fmt(sp.p,2)}) = ${fmt(sp.Wice,1)}\\ \\text{lb}`);
+  H+=`<p class="eq-why">γ<sub>c</sub> = 150 pcf (reinforced normal-weight concrete). The factored weight takes the dead-load factor of each combination (1.2 / 0.9 LRFD, 1.0 / 0.6 ASD) and the ice weight its ice factor.</p>`;
+  const z0=v=>Math.abs(v)<1e-6?0:v, pm=(v,d)=>{ v=z0(v); return v<0?`- ${fmt(-v,d)}`:`+ ${fmt(v,d)}`; }, f0=(v,d)=>fmt(z0(v),d);   // signed terms in the sums
+  const blk=(t,x,lab)=>{ if(!x||!x.grade) return ''; const q=x.grade, Bt=q.B!==1;
+    let h=step(`${lab}: ${x.name||''}${x.phi!==undefined&&!sign?`, wind toward ${fmt(x.phi,0)}°`:''}${sign&&x.case?`, case ${x.case}, wind toward ${fmt(x.phi||0,0)}°`:''}`);
+    h+=g(`F_{s,u} = ${fmt(q.fW,1)}F_s${q.fWi?` + ${fmt(q.fWi,1)}F_{s,ice}`:''} = ${fmt(q.Fs,1)}\\ \\text{lb}\\qquad W_{s,u} = ${fmt(q.fD,1)}W_c${q.fDi&&inp.tIce>0?` + ${fmt(q.fDi,1)}W_{ice,s}`:''} = ${fmt(q.Ws,0)}\\ \\text{lb}`);
+    if(sign){
+      h+=g(`V_F = V + F_{s,u} = ${fmt(q.V0x,0)} + ${fmt(q.Fs,1)} = ${fmt(x.P,0)}\\ \\text{lb}`);
+      h+=g(`M_F = ${Bt?'B\\,':''}M + V\\,p + F_{s,u}\\,\\tfrac{p}{2} = ${Bt?`${fmt(q.B,3)}(${fmt(q.M0x,0)})`:fmt(q.M0x,0)} + ${fmt(q.V0x,0)}(${fmt(sp.p,2)}) + ${fmt(q.Fs,1)}(${fmt(sp.p/2,2)}) = ${fmt(x.M,0)}\\ \\text{lb}{\\cdot}\\text{ft}`);
+    } else {
+      h+=`<p class="eq-why">Plan components (x toward 0°, y toward 90°); û = the wind direction, so F<sub>s,u</sub>û = (${f0(x.Vx-q.V0x,1)}, ${f0(x.Vy-q.V0y,1)}) lb.</p>`;
+      h+=g(`V_{F,x} = V_x + F_{s,u}u_x = ${f0(q.V0x,0)} ${pm(x.Vx-q.V0x,1)} = ${f0(x.Vx,0)}\\qquad V_{F,y} = ${f0(q.V0y,0)} ${pm(x.Vy-q.V0y,1)} = ${f0(x.Vy,0)}\\qquad V_F = ${fmt(x.P,0)}\\ \\text{lb}`);
+      h+=g(`M_{F,x} = ${Bt?'B\\,':''}M_x + V_x\\,p + F_{s,u}u_x\\tfrac{p}{2} = ${Bt?`${fmt(q.B,3)}(${f0(q.M0x,0)})`:f0(q.M0x,0)} ${pm(q.V0x,0)}(${fmt(sp.p,2)}) ${pm(x.Vx-q.V0x,1)}(${fmt(sp.p/2,2)}) = ${f0(x.Mx,0)}`);
+      h+=g(`M_{F,y} = ${Bt?'B\\,':''}M_y + V_y\\,p + F_{s,u}u_y\\tfrac{p}{2} = ${Bt?`${fmt(q.B,3)}(${f0(q.M0y,0)})`:f0(q.M0y,0)} ${pm(q.V0y,0)}(${fmt(sp.p,2)}) ${pm(x.Vy-q.V0y,1)}(${fmt(sp.p/2,2)}) = ${f0(x.My,0)}\\qquad M_F = ${fmt(x.M,0)}\\ \\text{lb}{\\cdot}\\text{ft}`);
+    }
+    h+=g(`N_F = N + W_{s,u} = ${fmt(q.N0,0)} + ${fmt(q.Ws,0)} = ${fmt(x.axial,0)}\\ \\text{lb}${t==='asd'?`\\qquad h = M_F/V_F = ${fmt(x.h,2)}\\ \\text{ft}`:''}`);
+    h+=`<p class="eq-result">${t==='asd'?`Embedment (IBC §1807.3) at grade: P = ${fmt(x.P,0)} lb, M = ${fmt(x.M,0)} lb·ft, h = ${fmt(x.h,2)} ft (first order, as the embedment always was).`:`Shaft design and Broms at grade: M<sub>u</sub> = ${fmt(x.M,0)} lb·ft${Bt?` (B = ${fmt(q.B,3)} on the ${sign?'post':'pole'} base moment only)`:''}, V<sub>u</sub> = ${fmt(x.P,0)} lb, P<sub>u</sub> = ${fmt(x.axial,0)} lb.`}</p>`;
+    return h; };
+  H+=blk('asd',a,'Embedment demand at grade (ASD, largest M_F)');
+  H+=blk('lrfd',l,'Shaft demand at grade (LRFD, largest M_F)');
+  if(!sign && cablesEnabled && cables.length) H+=`<p class="eq-why"><b>Cables:</b> the cable wind and ice stay at heights measured from the pole base (not raised by p); with p &gt; 0 this is slightly unconservative for the cable wind pressure.</p>`;
+  return H+`</div>`;
+}
 // ================= SHARED FOUNDATION STACK =================
 // Given ASD demand (P,M,h,axial) and LRFD demand (Mu,Pu,Vu), run embedment, rebar, bearing,
 // and anchor bolts. Used by both the light-pole path and each sign post.
-function designFoundationStack(inp, asd, lrfd, MangLRFD, lrfdAll, asdAll){
+function designFoundationStack(inp, asd, lrfd, MangLRFD, lrfdAll, asdAll, shaftAll){
   const emb=solveEmbed(asd.P, asd.M, asd.h, inp);
   const d=emb.d, ratio=d/inp.b;
   // Shaft P–M and anchors: EVERY LRFD combination (each at its own governing wind direction),
   // governing case per check. lrfdAll omitted → the single max-moment case, as before.
   const cands=(lrfdAll&&lrfdAll.length)? lrfdAll
     : [{name:lrfd.name, M:lrfd.M, axial:lrfd.axial, P:lrfd.P, Mang:(MangLRFD!==undefined?MangLRFD:0)}];
-  const Vu=Math.max(...cands.map(c=>c.P));
-  const reo=designRebar(inp, lrfd.M, lrfd.axial, Vu, cands.map(c=>({Mu:c.M,Pu:c.axial,name:c.name})));
+  // LPPJ: shaftAll = the same combinations at grade (shaft projection p > 0) for the shaft; the anchors keep cands (top of the shaft)
+  const sc=(shaftAll&&shaftAll.length)? shaftAll : cands;
+  const Vu=Math.max(...sc.map(c=>c.P));
+  const reo=designRebar(inp, lrfd.M, lrfd.axial, Vu, sc.map(c=>({Mu:c.M,Pu:c.axial,name:c.name})));
   const gd=reo.long.govDem||{Mu:lrfd.M,Pu:lrfd.axial,name:lrfd.name};
   const Mu=gd.Mu, Pu=gd.Pu;
   // soil bearing: the MAXIMUM-axial ASD combination (not the max-moment one)
@@ -4077,7 +4183,7 @@ function calcSign(inp){
   const pw=poleWindNominal(inp);
   // natural frequency (Rayleigh) and flexible G_f BEFORE the wind forces: post segments + this
   // post's share of the panel at the panel centroid
-  const nat=poleNatFreq(inp, poleSeg.segs.map(s=>({z:s.zMid,W:s.wSeg})).concat([{z:inp.signClr+inp.signS/2,W:(inp.signWt||0)/inp.signPosts}]));
+  const nat=poleNatFreq(inp, poleSeg.segs.map(s=>({z:s.zMid,W:s.wSeg})).concat([{z:inp.signClr+inp.signS/2-(inp.pProj>0?inp.pProj:0),W:(inp.signWt||0)/inp.signPosts}]));   // LPPJ: above the post base
   lppApplyGf(inp, nat, {h:inp.signClr+inp.signS, B:inp.signB, L:(inp.poleDiaTop+inp.poleDiaBase)/24});
   const sw=signWind(inp);
 
@@ -4114,16 +4220,24 @@ function calcSign(inp){
       }
     });
     const pstress=psList.reduce((a,x)=>(isNaN(x.govRow.ratio)||x.govRow.ratio>a.govRow.ratio)?x:a);
+    // LPPJ (2026-11-03): shaft projection p > 0 → embedment, bearing and shaft at grade (each combination at the direction with the
+    // largest M_F, this post; the LRFD ones with the combination's B₂ on the post base moment); the anchors keep the post-base values
+    const sp=lppShaftProj(inp);
+    const asdG=sp? allCombos.filter(r=>r.fam==='ASD').map(r=>lppGradeBestPost(r,p,sp,1)) : null;
+    const lrfdG=sp? allCombos.filter(r=>r.fam==='LRFD').map(r=>{ const x=lrfdCombos.find(y=>y.key===r.key); return lppGradeBestPost(r,p,sp,(x&&x.B2)||1); }) : null;
+    const asdF=sp? asdG.reduce((a,x)=>x.M>a.M?x:a) : gASD, lrfdF=sp? lrfdG.reduce((a,x)=>x.M>a.M?x:a) : null;
     const found=designFoundationStack(inp,
-      {P:gASD.P,M:gASD.M,h:gASD.h,axial:gASD.axial,name:gASD.name},
-      {P:gLRFD.P,M:gLRFD.M*(gLRFD.B2||1),axial:gLRFD.axial,name:gLRFD.name},
+      {P:asdF.P,M:asdF.M,h:asdF.h,axial:asdF.axial,name:asdF.name},
+      sp? {P:lrfdF.P,M:lrfdF.M,axial:lrfdF.axial,name:lrfdF.name} : {P:gLRFD.P,M:gLRFD.M*(gLRFD.B2||1),axial:gLRFD.axial,name:gLRFD.name},
       gLRFD.phi||0,
       lrfdCombos.map(x=>({name:x.name, M:x.M*(x.B2||1), M1:x.M, B2:x.B2||1, axial:x.axial, P:x.P, Mang:x.phi||0, T:x.Tmax||0})),
-      asdCombos.map(x=>({name:x.name, axial:x.axial})));
+      (sp?asdG:asdCombos).map(x=>({name:x.name, axial:x.axial})),
+      sp? lrfdG.map(x=>({name:x.name, M:x.M, P:x.P, axial:x.axial})) : null);
+    if(sp) found.proj={sp, asd:asdF, lrfd:lrfdG.find(x=>x.name===found.shaftCombo)||lrfdF, sign:true};
     // natural frequency (Rayleigh): post segments + this post's share of the panel at the panel centroid
     const b2r=lrfdCombos.map(x=>x.B2||1);
     const b2=Object.assign({}, {name:gLRFD.name, B2:gLRFD.B2||1, B2min:Math.min(...b2r), B2max:Math.max(...b2r)});
-    postDesigns.push({p:p+1,gASD,gLRFD,found,pstress,nat,b2,lrfdB2:Object.fromEntries(lrfdCombos.map(x=>[x.name,x.B2||1]))});
+    postDesigns.push(Object.assign({p:p+1,gASD,gLRFD,found,pstress,nat,b2,lrfdB2:Object.fromEntries(lrfdCombos.map(x=>[x.name,x.B2||1]))}, sp?{gASDF:asdF}:{}));
   }
   window.__signPostGov=postGovList;
   // anchorGroup hand-off (HANDOFF.md §4.11): per post, every LRFD combination at each wind direction; the post moment acts along the
@@ -4135,7 +4249,7 @@ function calcSign(inp){
   renderSignLoadPath(inp,sw,pw,postGovList);
   renderSummary({inp, mode:'sign',
     stacks:postDesigns.map((pd,i)=>({label:'P'+(i+1), found:pd.found, pstress:pd.pstress, nat:pd.nat, b2:pd.b2,
-      asd:{...pd.gASD}, lrfd:{...pd.gLRFD},
+      asd:{...(pd.gASDF||pd.gASD)}, lrfd:{...pd.gLRFD},
       broms:bromsEmbedment(inp, pd.found.Mu/1000, pd.found.Vu/1000)}))});   // the shaft's B₂-amplified M_u and V_u, as the Shaft tab and report (LTSV-4)
 
   renderSign(inp,sw,pw,allCombos,postDesigns,poleSeg);
@@ -4151,7 +4265,7 @@ function signPostStress(inp,poleSeg,pw,gLRFD,sw){
   const Kfac=2.1, phib=0.90, phic=0.90;
   const f=COMBOS[gLRFD.key]||COMBOS.L1;
   const Fsign=gLRFD.Fp||0;                 // factored wind share on this post (lb)
-  const zsign=gLRFD.zarm||sw.zA;           // height of the sign resultant
+  const zsign=gLRFD.zarm||(sw.zA-(inp.pProj>0?inp.pProj:0));   // height of the sign resultant above the post base
   const wMast=(sw.Fpost>0 && sw.postExpH>0)?(f.W*sw.Fpost)/sw.postExpH:0;   // post self-wind per ft over EXPOSED (clearance) height only
   const clrH=sw.clr||0;
   const Tu=gLRFD.T||0;                     // factored torsion on the post (lb-ft), monopost only
@@ -4288,14 +4402,14 @@ function renderSign(inp,sw,pw,allCombos,postDesigns,poleSeg){
     if(F.ratio>=3&&F.ratio<=10){rt='rigid pier';rp='ok';}else if(F.ratio<3){rt='shallow — verify';rp='warn';}else{rt='p-y analysis';rp='warn';}
     html+=`<div class="post-block">
       <div class="post-hd">${label} <span class="pill ${rp}">${rt}</span></div>
-      <div class="resrow"><span class="k">Governing ASD (embedment)</span><span class="v">${pd.gASD.name||'—'} · M = ${fmt(pd.gASD.M,0)} lb·ft, wind toward ${fmt(pd.gASD.phi||0,0)}° · case ${pd.gASD.case||'A'}</span></div>
+      <div class="resrow"><span class="k">Governing ASD (embedment)</span><span class="v">${(pd.gASDF||pd.gASD).name||'—'} · M = ${fmt((pd.gASDF||pd.gASD).M,0)} lb·ft${pd.gASDF?' at grade':''}, wind toward ${fmt((pd.gASDF||pd.gASD).phi||0,0)}° · case ${(pd.gASDF||pd.gASD).case||'A'}</span></div>
       <div class="resrow"><span class="k">Governing LRFD (shaft)</span><span class="v">${pd.gLRFD.name||'—'} · Mu = ${fmt(F.Mu,0)} lb·ft</span></div>
       <div class="headline" style="margin:10px 0">
         <div class="cell"><div class="lab">Embedment d</div><div class="num">${fmt(F.d,2)}<span class="u"> ft</span></div></div>
         <div class="cell"><div class="lab">Diameter b</div><div class="num">${fmt(inp.b,2)}<span class="u"> ft</span></div></div>
         <div class="cell"><div class="lab">d / b</div><div class="num">${fmt(F.ratio,2)}</div></div>
       </div>
-      <div class="resrow"><span class="k">Lateral P / moment M (ASD)</span><span class="v">${fmt(pd.gASD.P,0)} lb · ${fmt(pd.gASD.M,0)} lb·ft</span></div>
+      <div class="resrow"><span class="k">Lateral P / moment M (ASD${pd.gASDF?', at grade':''})</span><span class="v">${fmt((pd.gASDF||pd.gASD).P,0)} lb · ${fmt((pd.gASDF||pd.gASD).M,0)} lb·ft</span></div>
       <div class="resrow"><span class="k">Vertical reinforcement</span><span class="v big">${F.pick}  <span class="pill ${F.reo.long.phiMn>=F.Mu?'ok':'bad'}">${F.reo.long.phiMn>=F.Mu?'OK':'NG'}</span></span></div>
       <div class="resrow"><span class="k">Steel ratio ρ</span><span class="v">${fmt(F.reo.long.rho*100,2)} %</span></div>
       <div class="resrow"><span class="k">Ties</span><span class="v">${F.reo.tie.bar.n} @ ${fmt(F.reo.tie.s,0)}″ o.c. (top zone @ ${fmt(F.reo.tie.sTop,0)}″)</span></div>
@@ -4317,13 +4431,14 @@ function renderSign(inp,sw,pw,allCombos,postDesigns,poleSeg){
     stackWrap.innerHTML = postDesigns.map(pd=>`<div class="post-src" data-post="${pd.p}">${detailStackHTML('_sp'+pd.p,'')}</div>`).join('');
     // build the per-post ctx objects used to populate
     const ctxByPost = postDesigns.map(pd=>{
-      const F=pd.found;
+      const F=pd.found, ga=pd.gASDF||pd.gASD;   // LPPJ: the embedment demand at grade when p > 0
       return {p:pd.p, sfx:'_sp'+pd.p, ctx:{
         inp, found:F, d:F.d, ratio:F.ratio, rows:F.emb.rows, reo:F.reo, bolts:F.bolts, bearing:F.bearing,
         pstress:pd.pstress, Mu:F.Mu, Pu:F.Pu, Vu:F.Vu,
-        asd:{P:pd.gASD.P, M:pd.gASD.M, h:pd.gASD.h, axial:pd.gASD.axial, name:pd.gASD.name},
-        caseLabel:`ASD ${pd.gASD.name||''} (case ${pd.gASD.case||'A'}, wind ${fmt(pd.gASD.phi||0,0)}°) · LRFD ${pd.gLRFD.name||''}`,
-        stepsText:`GOVERNING ASD ${pd.gASD.name||''} — case ${pd.gASD.case||'A'}, wind toward ${fmt(pd.gASD.phi||0,0)}°\n  P = ${fmt(pd.gASD.P,0)} lb   M = ${fmt(pd.gASD.M,0)} lb·ft   h = ${fmt(pd.gASD.h,2)} ft\nGOVERNING LRFD ${pd.gLRFD.name||''}\n  Mu = ${fmt(F.Mu,0)} lb·ft   Vu = ${fmt(F.Vu,0)} lb`
+        asd:{P:ga.P, M:ga.M, h:ga.h, axial:ga.axial, name:ga.name},
+        asdBase:pd.gASDF?{P:pd.gASD.P, M:pd.gASD.M, h:pd.gASD.h, axial:pd.gASD.axial, name:pd.gASD.name}:null,   // LPPJ: the post-base demand (worked) when p > 0
+        caseLabel:`ASD ${ga.name||''} (case ${ga.case||'A'}, wind ${fmt(ga.phi||0,0)}°${pd.gASDF?', at grade':''}) · LRFD ${pd.gLRFD.name||''}`,
+        stepsText:`GOVERNING ASD ${ga.name||''} — case ${ga.case||'A'}, wind toward ${fmt(ga.phi||0,0)}°${pd.gASDF?' (at grade, shaft projection p = '+fmt(inp.pProj,2)+' ft)':''}\n  P = ${fmt(ga.P,0)} lb   M = ${fmt(ga.M,0)} lb·ft   h = ${fmt(ga.h,2)} ft\nGOVERNING LRFD ${pd.gLRFD.name||''}\n  Mu = ${fmt(F.Mu,0)} lb·ft   Vu = ${fmt(F.Vu,0)} lb`
       }};
     });
     // 1) move sections into their tabs, 2) then populate in place
@@ -4382,9 +4497,10 @@ function drawSignSchematic(inp,sw,postDesigns){
       const pcx=X(xf);
       // post stem (grade to panel bottom)
       g+=`<rect x="${(pcx-postWpx/2).toFixed(1)}" y="${Y(sw.clr).toFixed(1)}" width="${postWpx.toFixed(1)}" height="${(Y(0)-Y(sw.clr)).toFixed(1)}" fill="#cdd6db" stroke="#6b7480"/>`;
-      // shaft (grade down to this post's depth), true diameter
-      const d=postDesigns[i].found.d, shW=b*S;
-      g+=`<rect x="${(pcx-shW/2).toFixed(1)}" y="${Y(0).toFixed(1)}" width="${shW.toFixed(1)}" height="${(d*S).toFixed(1)}" fill="#efe9dc" stroke="#8c2f12" stroke-width="1.4"/>`;
+      // shaft (grade down to this post's depth), true diameter; LPPJ: from p above grade when the shaft projects
+      const d=postDesigns[i].found.d, shW=b*S, pj=inp.pProj>0?inp.pProj:0;
+      g+=`<rect x="${(pcx-shW/2).toFixed(1)}" y="${Y(pj).toFixed(1)}" width="${shW.toFixed(1)}" height="${((d+pj)*S).toFixed(1)}" fill="#efe9dc" stroke="#8c2f12" stroke-width="1.4"/>`;
+      if(pj>0&&i===0) g+=`<text x="${(pcx-shW/2-3).toFixed(1)}" y="${(Y(pj/2)+3).toFixed(1)}" font-size="10" fill="#8c2f12" text-anchor="end" font-family="ui-monospace">p=${fmt(pj,2)}'</text>`;
       g+=`<text x="${pcx.toFixed(1)}" y="${(Y(-d)+13).toFixed(1)}" font-size="10" fill="#8c2f12" text-anchor="middle" font-family="ui-monospace">d=${fmt(d,2)}'</text>`;
       if(nPost===2) g+=`<text x="${pcx.toFixed(1)}" y="${(Y(sw.clr)-4).toFixed(1)}" font-size="10" fill="#5b6676" text-anchor="middle" font-family="ui-monospace">P${i+1}</text>`;
     });
@@ -4484,11 +4600,14 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
   //    Anchors / Shaft tabs (populateDetailStack: same functions, same arguments)
   postDesigns.forEach((pd,pi)=>{
     const F=pd.found, ps=pd.pstress;
-    const asd={P:pd.gASD.P, M:pd.gASD.M, h:pd.gASD.h, axial:pd.gASD.axial, name:pd.gASD.name};
+    const ga=pd.gASDF||pd.gASD;   // LPPJ: the embedment demand at grade when p > 0
+    const asd={P:ga.P, M:ga.M, h:ga.h, axial:ga.axial, name:ga.name};
+    const asdB={P:pd.gASD.P, M:pd.gASD.M, h:pd.gASD.h, axial:pd.gASD.axial, name:pd.gASD.name};
     const ttl=nPost===1?'Post and foundation':'Post '+pd.p+' — post and foundation';
     H+=`<details class="rpt-sec" data-old="3${nPost===2?'.'+pd.p:''}" open><summary><span class="tag">3</span><h3>${ttl}</h3><span class="arw">▶</span></summary><div class="rpt-body">`;
-    H+=`<p class="varsub">Governing ASD ${pd.gASD.name||''} (case ${pd.gASD.case||'A'}, wind toward ${n(pd.gASD.phi||0,0)}°): P = ${n(pd.gASD.P,0)} lb, M = ${n(pd.gASD.M,0)} lb·ft, h = ${n(pd.gASD.h,2)} ft. Governing LRFD ${pd.gLRFD.name||''}: Mu = ${n(F.Mu,0)} lb·ft, Vu = ${n(F.Vu,0)} lb.</p>`;
-    H+=`<div class="eq-title">Governing demand assembly</div>`+demandWorkedHTML(asd,inp)+lppRes('dem',pi);
+    H+=`<p class="varsub">Governing ASD ${ga.name||''} (case ${ga.case||'A'}, wind toward ${n(ga.phi||0,0)}°${pd.gASDF?', at grade':''}): P = ${n(ga.P,0)} lb, M = ${n(ga.M,0)} lb·ft, h = ${n(ga.h,2)} ft. Governing LRFD ${pd.gLRFD.name||''}: Mu = ${n(F.Mu,0)} lb·ft, Vu = ${n(F.Vu,0)} lb.</p>`;
+    H+=`<div class="eq-title">Governing demand assembly</div>`+demandWorkedHTML(asdB,inp)+lppRes('dem',pi);
+    if(F.proj) H+=`<div class="eq-title">Demand at grade — shaft projection p = ${n(inp.pProj,2)} ft</div>`+lppProjWorkedHTML(F.proj.sp,inp,F.proj.asd,F.proj.lrfd,true,null);   // LPPJ
     H+=`<div class="eq-title">Embedment <span class="eq-ref">[IBC §1807.3]</span></div>`+embedWorkedHTML({d:F.d,rows:F.emb.rows||[]},inp,asd.P,asd.M,asd.h);
     { const br=bromsEmbedment(inp, F.Mu/1000, F.Vu/1000);
       if(br) H+=`<div class="eq-title">Broms embedment — reference check, not a design check <span class="eq-ref">[AASHTO LTS C13.6.1.1]</span></div>`+bromsWorkedHTML(br,inp,{name:'governing LRFD'},F.Mu); }
@@ -4527,7 +4646,9 @@ function lppInputErrors(inp){
     pos(inp.signB,'Panel width B'); pos(inp.signS,'Panel height s');
     if(!(inp.signClr>=0)) e.push('Clearance to bottom of panel must be 0 or more.');
     if(inp.signPosts===2) pos(inp.signSpacing,'Post spacing');
+    if(inp.pProj>0 && inp.signClr>=0 && inp.pProj>=inp.signClr) e.push('Shaft projection p ('+fmt(inp.pProj,2)+' ft) must be less than the clearance to the bottom of the panel ('+fmt(inp.signClr,2)+' ft): the steel post runs from the top of the shaft to the top of the panel.');   // LPPJ
   } else pos(inp.H,'Pole height H');
+  if($('shaftProj') && num('shaftProj')<0) e.push('Shaft projection above grade p must be 0 or more.');   // LPPJ (2026-11-03)
   const lbl=sign?'Post':'Pole';
   pos(inp.poleDiaTop,lbl+' diameter / width'+(inp.poleTaper?' (top)':''));
   pos(inp.poleTwTop,lbl+' wall thickness'+(inp.poleTaper?' (top)':''));
@@ -4618,6 +4739,9 @@ function lppCalcIbc(){
     signB:num('signB'),signS:num('signS'),signClr:num('signClr'),signWt:num('signWt'),signSpacing:num('signSpacing'),
     signCfMode:($('signCfMode')?$('signCfMode').value:'auto'),
     signCfMan:(num('signCfMan')||1.2)};
+  // LPPJ (2026-11-03): shaft projection above grade p (ft). Set on inp only when p > 0, so a flush shaft (p = 0, every save made
+  // before this input) runs exactly the former code and carries no new field.
+  if($('shaftProj') && num('shaftProj')>0) inp.pProj=num('shaftProj');
   if($('kdUsedNote')) $('kdUsedNote').textContent='K_d used: '+kdStr(inp)+(inp.KdMode==='auto'?' — ASCE 7-22 Table 26.6-1; cables and fixtures take the mast value (conservative).':' — single value applied to every component.');
   // Section is prismatic unless it's a round light pole (only round poles taper). For
   // square/rectangular HSS — and for any sign post — the single (top) dimension & wall are
@@ -4639,7 +4763,8 @@ function lppCalcIbc(){
   if(inp.mode==='sign'){
     // post runs from grade to the top of the panel: H = clearance + sign height
     inp.H = inp.signClr + inp.signS;
-    if($('oSignHt')) $('oSignHt').textContent = fmt(inp.H,2)+' ft  (= '+fmt(inp.signClr,1)+' + '+fmt(inp.signS,1)+')';
+    if(inp.pProj>0) inp.H = inp.signClr + inp.signS - inp.pProj;   // LPPJ: the steel post runs from the top of the shaft (p above grade)
+    if($('oSignHt')) $('oSignHt').textContent = fmt(inp.H,2)+' ft  (= '+fmt(inp.signClr,1)+' + '+fmt(inp.signS,1)+(inp.pProj>0?' − p '+fmt(inp.pProj,2):'')+')';
     lppApplyCfPole(inp);   // post C_f (ASCE 7-22 Fig. 29.4-1 when Auto)
     calcSign(inp); return;
   }
@@ -4668,7 +4793,7 @@ function lppCalcIbc(){
   const comps=cablesEnabled?cables.map(c=>cableComponents(c,inp)):[];
   const fxs=fixtures.map(x=>fixtureComponents(x,inp));
   const pw=poleWindNominal(inp);
-  if($('iceNote')) $('iceNote').textContent = inp.iceBasis==='map' ? `t_d = t·f_z·K_zt^0.35·I_i: ${fmt(iceTd(inp,inp.H),3)} in at the top (${fmt(inp.H,1)} ft), ${fmt(iceTd(inp,inp.H/2),3)} in at mid-height (ASCE 7-22 §10.4.6). Cables use t = ${fmt(inp.tIce,3)} in.` : `Uniform: t_d = t = ${fmt(inp.tIce,3)} in at every height.`;
+  if($('iceNote')) $('iceNote').textContent = inp.iceBasis==='map' ? `t_d = t·f_z·K_zt^0.35·I_i: ${fmt(iceTd(inp,lppZg(inp,inp.H)),3)} in at the top (${fmt(lppZg(inp,inp.H),1)} ft), ${fmt(iceTd(inp,lppZg(inp,inp.H/2)),3)} in at mid-height (ASCE 7-22 §10.4.6). Cables use t = ${fmt(inp.tIce,3)} in.` : `Uniform: t_d = t = ${fmt(inp.tIce,3)} in at every height.`;
   renderWindExample(pw,inp,fxs);
   renderCableExample(comps,inp);
   const allCombos=COMBO_KEYS.map(k=>evalCombo(k,inp,comps,fxs,pw));
@@ -4680,8 +4805,12 @@ function lppCalcIbc(){
   const govASD=asdList.reduce((a,x)=>x.M>a.M?x:a);
   const govLRFD=lrfdList.reduce((a,x)=>x.M>a.M?x:a);
 
+  // LPPJ (2026-11-03): shaft projection p > 0 → the foundation takes the actions at grade (lppGradeCombo); p = 0: sp = null and
+  // fASD = govASD, the former embedment demand
+  const sp=lppShaftProj(inp);
+  const fASD=sp? asdList.map(r=>lppGradeCombo(r,sp,null)).reduce((a,x)=>x.M>a.M?x:a) : govASD;
   // EMBEDMENT is a service/ASD check -> use governing ASD combination
-  const emb=solveEmbed(govASD.P,govASD.M,govASD.h,inp);
+  const emb=solveEmbed(fASD.P,fASD.M,fASD.h,inp);
   const d=emb.d, rows=emb.rows, ratio=d/inp.b;
 
   // SHAFT is a strength/LRFD check -> EVERY LRFD combination (each at its governing wind
@@ -4701,9 +4830,15 @@ function lppCalcIbc(){
   const pstress=psAll.reduce((a,x)=>(isNaN(x.govRow.ratio)||x.govRow.ratio>a.govRow.ratio)?x:a);
   const lrfdCands=lrfdList.map(r=>{ const b2=(b2ByKey[r.key]||{B2:1}).B2;
     return {name:r.name, M:r.M*b2, M1:r.M, B2:b2, axial:r.axial, P:r.P, Mang:r.Mang, T:r.Tmax||0}; });
-  const VuMax=Math.max(...lrfdCands.map(c=>c.P));
-  const reo=designRebar(inp,govLRFD.M,govLRFD.axial,VuMax,lrfdCands.map(c=>({Mu:c.M,Pu:c.axial,name:c.name})));
-  const shaftGov=reo.long.govDem||{Mu:govLRFD.M,Pu:govLRFD.axial,name:govLRFD.name};
+  // LPPJ: the shaft at grade, M_F = B·M + V·p + F_s·p/2 of every LRFD combination (its direction with the largest M_F, that
+  // direction's B₂); the anchors and the base plate keep lrfdCands (top of the shaft)
+  const lrfdG=sp? lrfdList.map(r=>lppGradeCombo(r,sp,dr=>b2Dir[r.key+'@'+dr.phi]||1)) : null;
+  const shaftCands=sp? lrfdG.map(x=>({name:x.name, M:x.M, P:x.P, axial:x.axial})) : lrfdCands;
+  const govLRFDF=sp? lrfdG.reduce((a,x)=>x.M>a.M?x:a) : govLRFD;
+  const VuMax=Math.max(...shaftCands.map(c=>c.P));
+  const reo=designRebar(inp,govLRFDF.M,govLRFDF.axial,VuMax,shaftCands.map(c=>({Mu:c.M,Pu:c.axial,name:c.name})));
+  const shaftGov=reo.long.govDem||{Mu:govLRFDF.M,Pu:govLRFDF.axial,name:govLRFDF.name};
+  const projCtx=sp?{sp, asd:fASD, lrfd:lrfdG.find(x=>x.name===shaftGov.name)||govLRFDF, sign:false}:null;
   const Mu=shaftGov.Mu, Pu=shaftGov.Pu, Vu=VuMax;
   const Ag=reo.Ag, AsMin=reo.AsMin, As=reo.long.As;
   const pick=`(${reo.long.n}) ${reo.long.bar.n}`+(reo.manual?` — checked${(reo.long.ok&&(!reo.tie.checks||reo.tie.checks.ok))?'':' (NG)'}`:'');
@@ -4716,7 +4851,8 @@ function lppCalcIbc(){
 
   // soil bearing (service / ASD gravity) — the MAXIMUM-axial ASD combination, not the
   // max-moment one (e.g. D + 0.7Di carries more axial than D + 0.6W)
-  const govAxASD=asdList.reduce((a,x)=>x.axial>a.axial?x:a);
+  const govAxASD=sp? asdList.map(r=>{ const f=COMBOS[r.key]; return Object.assign({}, r, {axial:r.axial+f.D*sp.Wc+f.Di*sp.Wice}); }).reduce((a,x)=>x.axial>a.axial?x:a)   // LPPJ: + the projection weight
+    : asdList.reduce((a,x)=>x.axial>a.axial?x:a);
   const bearing=bearingCheck(inp, govAxASD.axial); bearing.axial=govAxASD.axial; bearing.comboName=govAxASD.name;
 
   // anchor bolts (LRFD) — every LRFD combination, governing case per check (0.9D + W included)
@@ -4731,11 +4867,11 @@ function lppCalcIbc(){
   $('oDepth').innerHTML=fmt(d,2)+'<span class="u"> ft</span>';
   $('oDia').innerHTML=fmt(inp.b,2)+'<span class="u"> ft</span>';
   $('oRatio').textContent=fmt(ratio,2);
-  $('oCase').textContent='ASD '+govASD.name+'  (embedment) · LRFD '+shaftGov.name+'  (shaft P–M)';
-  $('oP').textContent=fmt(govASD.P,0)+' lb';
-  $('oM').textContent=fmt(govASD.M,0)+' lb·ft';
-  $('oH').textContent=fmt(govASD.h,2)+' ft';
-  $('oN').textContent=fmt(govASD.axial,0)+' lb';
+  $('oCase').textContent='ASD '+fASD.name+'  (embedment) · LRFD '+shaftGov.name+'  (shaft P–M)'+(sp?' — at grade (shaft projection p = '+fmt(sp.p,2)+' ft)':'');
+  $('oP').textContent=fmt(fASD.P,0)+' lb';
+  $('oM').textContent=fmt(fASD.M,0)+' lb·ft';
+  $('oH').textContent=fmt(fASD.h,2)+' ft';
+  $('oN').textContent=fmt(fASD.axial,0)+' lb';
   let rt,rp;if(ratio>=3&&ratio<=10){rt='valid (rigid pier)';rp='ok';}else if(ratio<3){rt='shallow — verify';rp='warn';}else{rt='high — p-y analysis';rp='warn';}
   $('oRigid').innerHTML=`<span class="pill ${rp}">${rt}</span>`;
 
@@ -4743,7 +4879,7 @@ function lppCalcIbc(){
   if(ratio>10)f+=`<div class="flag bad">d/b = ${fmt(ratio,1)} exceeds the rigid range — run a p-y / LPILE lateral analysis.</div>`;
   else if(ratio<3)f+=`<div class="flag">d/b = ${fmt(ratio,1)} is shallow for rigid-pier behavior; verify assumptions.</div>`;
   else f+=`<div class="flag ok">d/b = ${fmt(ratio,1)} within rigid short-pier range.</div>`;
-  f+=`<div class="flag ok">Embedment governed by ASD <b>${govASD.name}</b>; shaft P–M governed by LRFD <b>${shaftGov.name}</b> (all LRFD combinations checked); soil bearing by ASD <b>${govAxASD.name}</b> (max axial); base plate <b>${(bolts.byCheck.BP||bolts).comboName}</b>.</div>`;
+  f+=`<div class="flag ok">Embedment governed by ASD <b>${fASD.name}</b>; shaft P–M governed by LRFD <b>${shaftGov.name}</b> (all LRFD combinations checked); soil bearing by ASD <b>${govAxASD.name}</b> (max axial); base plate <b>${(bolts.byCheck.BP||bolts).comboName}</b>.</div>`;
   f+=`<div class="flag${govB2.B2max>1.10?' bad':''}">P-Δ (AISC 360-16 App. 8): B<sub>2</sub> = ${fmt(govB2.B2,3)} for ${govB2.name} (range ${fmt(govB2.B2min,3)}–${fmt(govB2.B2max,3)} over the LRFD combinations); each combination's B<sub>2</sub> multiplies its LRFD moments for the pole, anchors and shaft. Pole stress governed by <b>${pstress.comboName}</b>, wind toward ${fmt(pstress.phi,0)}° (all LRFD combinations and azimuths checked).</div>`;
   if(!(nat.n1>=1.0)) f+=`<div class="flag bad">Natural frequency n<sub>1</sub> ≈ ${fmt(nat.n1,2)} Hz &lt; 1 Hz (Rayleigh estimate): the pole is <b>flexible</b> (ASCE 7-22 §26.2). G<sub>f</sub> = ${inp.gf?fmt(inp.gf.Gf,3):'—'} (§26.11.5, β = ${fmt(inp.beta,3)}); G used = max(${fmt(inp.Ginput,2)}, G<sub>f</sub>) = <b>${fmt(inp.G,3)}</b> for every wind force.</div>`;
   { const oa=lppOffAxisFixtures(fixtures); if(oa.length) f+=`<div class="flag bad">${lppOffAxisMsg(oa)}</div>`; }
@@ -4988,8 +5124,8 @@ function lppCalcIbc(){
   // ---- shaft detail drawings ----
   drawShaftDetail(inp,d,reo,bolts,govASD);
   // ---- worked calculations: demand assembly + embedment + rebar + bearing ----
-  renderDemandExample(govASD,inp);
-  renderEmbedExample(emb,inp,govASD.P,govASD.M,govASD.h);
+  renderDemandExample(govASD,inp,'',projCtx);   // LPPJ: + the groundline steps when p > 0
+  renderEmbedExample(emb,inp,fASD.P,fASD.M,fASD.h);
   renderRebarExample(reo,inp,Mu,Pu,Vu);
   if(shT.Tu>0 && $('rebarExample')){ const tb=document.createElement('div');
     tb.innerHTML=`<div class="step-label">Shaft torsion threshold <span class="eq-ref">[ACI 318-19 §22.7.1.1]</span></div>`+lppTorsionHTML(shT,inp);
@@ -4999,15 +5135,15 @@ function lppCalcIbc(){
   renderBromsExample(bromsEmbedment(inp, Mu/1000, Vu/1000), inp, {name:shaftGov.name||govLRFD.name}, Mu);   // the shaft's B₂-amplified M_u and V_u (LPB2)
   // ---- summary tab (reads the same objects the tabs above consume) ----
   renderSummary({inp, mode:'pole',
-    stacks:[{label:'', found:{emb,d,ratio,Mu,Pu,Vu,reo,bearing,bolts,...shT},
-             pstress, asd:govASD, lrfd:govLRFD, nat, b2:govB2,
+    stacks:[{label:'', found:Object.assign({emb,d,ratio,Mu,Pu,Vu,reo,bearing,bolts,...shT}, projCtx?{proj:projCtx}:{}),
+             pstress, asd:fASD, lrfd:govLRFD, nat, b2:govB2,
              broms:bromsEmbedment(inp, Mu/1000, Vu/1000)}]});   // as the Shaft tab (LPB2)
 
   // ---- steps box ----
   $('stepsBox').textContent=
-`EMBEDMENT governed by ASD: ${govASD.name}
-  P = ${fmt(govASD.P,0)} lb   M = ${fmt(govASD.M,0)} lb·ft   h = ${fmt(govASD.h,2)} ft   N = ${fmt(govASD.axial,0)} lb
-  cable net ${fmt(govASD.cableRes,0)} lb @ ${fmt(govASD.cableAng,1)}° ; pole wind ${fmt(govASD.poleWind,0)} lb
+`EMBEDMENT governed by ASD: ${fASD.name}${sp?' (at grade, shaft projection p = '+fmt(sp.p,2)+' ft)':''}
+  P = ${fmt(fASD.P,0)} lb   M = ${fmt(fASD.M,0)} lb·ft   h = ${fmt(fASD.h,2)} ft   N = ${fmt(fASD.axial,0)} lb
+  cable net ${fmt(fASD.cableRes,0)} lb @ ${fmt(fASD.cableAng,1)}° ; pole wind ${fmt(fASD.poleWind,0)} lb
   → d = ${fmt(d,2)} ft (d/b = ${fmt(ratio,2)}), IBC §1807.3 ${constraint==='non'?'non-constrained':'constrained'}, S₁·${isoFac}× iso
 SHAFT governed by LRFD: ${govLRFD.name}
   Mu = ${fmt(Mu,0)} lb·ft   Pu = ${fmt(Pu,0)} lb   Vu = ${fmt(Vu,0)} lb`;
@@ -5020,12 +5156,13 @@ SHAFT governed by LRFD: ${govLRFD.name}
 
   window.__summary=
 `CABLED LIGHT POLE PIER — IBC §1807.3 / ASCE 7
-Embedment (ASD ${govASD.name}): P=${fmt(govASD.P,0)} lb M=${fmt(govASD.M,0)} lb·ft h=${fmt(govASD.h,2)} ft
+Embedment (ASD ${fASD.name}): P=${fmt(fASD.P,0)} lb M=${fmt(fASD.M,0)} lb·ft h=${fmt(fASD.h,2)} ft
 Shaft (LRFD ${govLRFD.name}): Mu=${fmt(Mu,0)} lb·ft Vu=${fmt(Vu,0)} lb
 FOUNDATION ${inp.shaftShape==='square'?'':'Ø'}${fmt(inp.b,2)}ft${inp.shaftShape==='square'?' square':''} × ${fmt(d,2)}ft deep (d/b=${fmt(ratio,2)}); steel ${pick}; shear ${shearOK?'OK':'NG'}`;
 
   // report
   const struct={Mu,Pu,Vu,Ag,dEff,As,AsMin,pick,phiVc,shearOK,reo,pstress,bearing,bolts,fxs,pw};
+  if(projCtx) struct.proj=projCtx;   // LPPJ
   buildReport(inp,allCombos,{govASD,govLRFD,pw},{d,rows},struct);
 }
 
@@ -5544,10 +5681,10 @@ function demandWorkedHTML(gov, inp){
   H+=g(`h = \\frac{M}{P} = \\frac{${fmt(gov.M,0)}}{${fmt(gov.P,0)}} = ${fmt(gov.h,2)}\\ \\text{ft}\\qquad N = ${fmt(gov.axial,0)}\\ \\text{lb}`);
   return H;
 }
-function renderDemandExample(gov,inp,sfx){
+function renderDemandExample(gov,inp,sfx,proj){
   sfx=sfx||'';
   const box=$('demandExample'+sfx); if(!box) return;
-  box.innerHTML=demandWorkedHTML(gov,inp);
+  box.innerHTML=demandWorkedHTML(gov,inp)+(proj?lppProjWorkedHTML(proj.sp,inp,proj.asd,proj.lrfd,proj.sign,sfx):'');   // LPPJ: the groundline steps (p > 0)
   if(window.renderMathInElement) renderMathInElement(box,{delimiters:[{left:'\\[',right:'\\]',display:true},{left:'$',right:'$',display:false}],throwOnError:false});
 }
 
@@ -5816,7 +5953,7 @@ const LPP_K2TGT={flex:['shaft','rebarExample','Shaft structural check'],shear:['
   bearing:['shaft','bearingExample','Shaft structural check (soil bearing)'],
   anchors:['anchors','boltExample','Base plate'],torsion:['shaft','rebarExample','Shaft structural check'],anchorage:['anchors','lpAnchCard','Anchorage'],
   post:['post','poleStrExample','Pole combined stress'],dt:['post','poleStressTbl','Pole combined stress'],b2:['post','poleStrExample','Pole combined stress'],
-  dem:['shaft','demandExample','Foundation demand & embedment'],combo:['loading','comboMatrixTbl','Load combinations']};
+  dem:['shaft','demandExample','Foundation demand & embedment'],proj:['shaft','projWorked','Foundation demand at grade (shaft projection)'],combo:['loading','comboMatrixTbl','Load combinations']};
 function lppTgt(k,st){
   const t=LPP_K2TGT[k]; if(!t) return null;
   if(k==='anchorage'||!(LPP_SUMCTX&&LPP_SUMCTX.mode==='sign')) return {tab:t[0],id:t[1],card:t[2]};
@@ -6046,6 +6183,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
     `N=${n(g.axial,0)}\\ \\text{lb}`,
     `This axial load is small relative to the moment, as expected for a laterally-loaded pier — but it is carried into the soil-bearing check (${lppSecRef('6b')}) and the shaft P-M interaction.`);
   H+=lppRes('dem');
+  if(struct.proj) H+=`<div class="eq-title">Demand at grade — shaft projection p = ${n(inp.pProj,2)} ft</div><p class="eq-why">The values above are at the top of the shaft (base plate). The embedment (${lppSecRef('6')}), bearing (${lppSecRef('6b')}) and the shaft (${lppSecRef('7')}) use the values at grade:</p>`+lppProjWorkedHTML(struct.proj.sp,inp,struct.proj.asd,struct.proj.lrfd,false,null);   // LPPJ
   H+=`</div></details>`;
 
   // ---- 6. Embedment ----
@@ -6093,7 +6231,7 @@ function buildReport(inp,allCombos,gov,embed,struct){
   H+=`<p class="eq-why">The concrete shaft is designed as a reinforced-concrete column for the governing strength (LRFD) combination <b>${govLRFD.name}</b>. ${reo.manual?'Check mode: the longitudinal bars and ties are the ones specified in the inputs; every requirement is checked against them, nothing is resized.':'The app auto-sizes the longitudinal bars and transverse ties: it selects a bar size and count that satisfy both the minimum-steel rule and the P-M flexural capacity, then determines tie size and spacing from the shear demand and the ACI detailing limits.'}</p>`;
   H+=eqB(
     'Factored design demands',
-    `The governing LRFD combination gives the factored moment, axial load, and shear at the base of the shaft.`,
+    struct.proj?`The governing LRFD combination gives the factored moment, axial load, and shear at grade (shaft projection p = ${n(inp.pProj,2)} ft: M<sub>u</sub> = B·M + V·p + F<sub>s</sub>·p/2, worked in ${lppSecRef('5')}).`:`The governing LRFD combination gives the factored moment, axial load, and shear at the base of the shaft.`,
     `M_u=${n(struct.Mu,0)}\\ \\text{lb}{\\cdot}\\text{ft}\\qquad P_u=${n(struct.Pu,0)}\\ \\text{lb}\\qquad V_u=${n(struct.Vu,0)}\\ \\text{lb}`,
     null);
   const rL=reo.long;
@@ -6234,21 +6372,22 @@ function drawShaftDetail(inp,d,reo,bolts,gov,sfx){
     const b_in=inp.b*12;
     const shaftW=Math.min(120,Math.max(70,inp.b*30));
     const sx=cx-shaftW/2, top=mT, bot=Hh-40;
-    const depthPx=bot-top, pxPerFt=depthPx/d;
+    // LPPJ (2026-11-03): shaft projection p above grade: the shaft (top = plate) runs from p above grade to d below; p = 0: grade = top
+    const pj=inp.pProj>0?inp.pProj:0, pxPerFt=(bot-top)/(d+pj), gr=pj>0?top+pj*pxPerFt:top, depthPx=bot-gr;
     const scale=shaftW/b_in;                // px/in transverse
     let g='';
     // soil reaction (two-lobe: push upper third one way, reverse below rotation point)
-    const rot=top+depthPx/3;                // rotation point ~ d/3 from top for non-constrained
+    const rot=gr+depthPx/3;                 // rotation point ~ d/3 below grade for non-constrained
     const maxPr=shaftW*0.5;
     // upper lobe (pressure pushing +x, drawn right)
-    g+=`<path d="M ${sx+shaftW} ${top} L ${sx+shaftW+maxPr} ${(top+ (rot-top)*0.5).toFixed(1)} L ${sx+shaftW} ${rot.toFixed(1)} Z" fill="#c9a15a" opacity="0.35"/>`;
+    g+=`<path d="M ${sx+shaftW} ${gr} L ${sx+shaftW+maxPr} ${(gr+ (rot-gr)*0.5).toFixed(1)} L ${sx+shaftW} ${rot.toFixed(1)} Z" fill="#c9a15a" opacity="0.35"/>`;
     // lower lobe (reversed, drawn left)
     g+=`<path d="M ${sx} ${rot.toFixed(1)} L ${(sx-maxPr*0.7).toFixed(1)} ${(rot+(bot-rot)*0.6).toFixed(1)} L ${sx} ${bot} Z" fill="#c9a15a" opacity="0.35"/>`;
     g+=`<text x="${(sx+shaftW+maxPr+2).toFixed(1)}" y="${(top+(rot-top)*0.5).toFixed(1)}" font-size="10" fill="#8a6d2f" font-family="ui-monospace">soil reaction</text>`;
     g+=`<line x1="${sx-30}" y1="${rot.toFixed(1)}" x2="${sx+shaftW+30}" y2="${rot.toFixed(1)}" stroke="#c9a15a" stroke-width="0.8" stroke-dasharray="4 3"/>`;
     g+=`<text x="${sx+shaftW+8}" y="${(rot-3).toFixed(1)}" font-size="10" fill="#8a6d2f" font-family="ui-monospace">rotation pt ≈ d/3</text>`;
     // shaft body
-    g+=`<rect x="${sx}" y="${top}" width="${shaftW}" height="${depthPx}" fill="#efe9dc" stroke="#8c2f12" stroke-width="1.6"/>`;
+    g+=`<rect x="${sx}" y="${top}" width="${shaftW}" height="${bot-top}" fill="#efe9dc" stroke="#8c2f12" stroke-width="1.6"/>`;
     // vertical bars (2 shown at faces)
     const cov=inp.cover*scale;
     g+=`<line x1="${sx+cov}" y1="${top}" x2="${sx+cov}" y2="${bot-6}" stroke="#b8431f" stroke-width="1.6"/>`;
@@ -6274,11 +6413,13 @@ function drawShaftDetail(inp,d,reo,bolts,gov,sfx){
     g+=`<rect x="${cx-16}" y="${top-16}" width="32" height="4" fill="#6b7480"/>`;
     g+=`<rect x="${cx-5}" y="${top-30}" width="10" height="14" fill="#cdd6db" stroke="#6b7480"/>`;
     // grade line
-    g+=`<line x1="18" y1="${top}" x2="${W-18}" y2="${top}" stroke="#6b7480" stroke-width="1.2"/>`;
-    g+=`${[...Array(9)].map((_,i)=>{const gx=24+i*32;return `<line x1="${gx}" y1="${top}" x2="${gx-7}" y2="${top+7}" stroke="#9aa3af"/>`;}).join('')}`;
+    g+=`<line x1="18" y1="${gr}" x2="${W-18}" y2="${gr}" stroke="#6b7480" stroke-width="1.2"/>`;
+    g+=`${[...Array(9)].map((_,i)=>{const gx=24+i*32;return `<line x1="${gx}" y1="${gr}" x2="${gx-7}" y2="${gr+7}" stroke="#9aa3af"/>`;}).join('')}`;
     // dims
-    g+=`<line x1="${sx+shaftW+16}" y1="${top}" x2="${sx+shaftW+16}" y2="${bot}" stroke="#2f6f8f" stroke-width="0.8"/>`;
-    g+=`<text x="${sx+shaftW+20}" y="${((top+bot)/2).toFixed(1)}" font-size="10" fill="#2f6f8f" transform="rotate(-90 ${sx+shaftW+20} ${((top+bot)/2).toFixed(1)})" text-anchor="middle" font-family="ui-monospace">d = ${fmt(d,2)} ft</text>`;
+    g+=`<line x1="${sx+shaftW+16}" y1="${gr}" x2="${sx+shaftW+16}" y2="${bot}" stroke="#2f6f8f" stroke-width="0.8"/>`;
+    g+=`<text x="${sx+shaftW+20}" y="${((gr+bot)/2).toFixed(1)}" font-size="10" fill="#2f6f8f" transform="rotate(-90 ${sx+shaftW+20} ${((gr+bot)/2).toFixed(1)})" text-anchor="middle" font-family="ui-monospace">d = ${fmt(d,2)} ft</text>`;
+    if(pj>0){ g+=`<line x1="${sx+shaftW+16}" y1="${top}" x2="${sx+shaftW+16}" y2="${gr.toFixed(1)}" stroke="#8c2f12" stroke-width="0.8"/>`;
+      g+=`<text x="${sx+shaftW+22}" y="${((top+gr)/2+3).toFixed(1)}" font-size="10" fill="#8c2f12" font-family="ui-monospace">p = ${fmt(pj,2)} ft</text>`; }
     g+=`<text x="${cx}" y="${bot+16}" font-size="10" fill="#5b6676" text-anchor="middle" font-family="ui-monospace">b = ${fmt(inp.b,2)} ft</text>`;
     $(idElev).innerHTML=`<svg viewBox="0 0 ${W} ${Hh}">${g}</svg>`;
   }
@@ -6479,7 +6620,7 @@ function populateDetailStack(sfx, ctx){
   // shaft detail drawing
   drawShaftDetail(inp,d,reo,bolts,asd,sfx);
   // worked calculations: demand + embedment + rebar + bearing
-  renderDemandExample(asd, inp, sfx);
+  renderDemandExample(ctx.asdBase||asd, inp, sfx, ctx.found&&ctx.found.proj);   // LPPJ: post base, then the groundline steps (p > 0)
   renderEmbedExample({d, rows:ctx.rows||[]}, inp, asd.P, asd.M, asd.h, sfx);
   renderRebarExample(reo, inp, Mu, Pu, Vu, sfx);
   renderBearingExample(bearing, (bearing.axial!==undefined?bearing.axial:asd.axial), inp, sfx);
@@ -6794,20 +6935,23 @@ function lpdShaft(st, inp){
 function lpdElevation(D, L, k, ctx){
   const inp=ctx.inp, h=0.1*k, sign=ctx.mode==='sign', st0=ctx.stacks[0];
   const posts = sign ? (inp.signPosts===2 ? [-inp.signSpacing*6, inp.signSpacing*6] : [0]) : [0];
-  const H=inp.H*12, tP=inp.bpT>0?inp.bpT:0, bp=lppBpW(inp);   // LPAS: diameter or square side (the elevation width)
+  // LPPJ (2026-11-03): Pz = shaft projection above grade (in); the shaft top, plate and pole / post move up by Pz (0: as before)
+  const Pz=inp.pProj>0?inp.pProj*12:0;
+  const H=inp.H*12+Pz, tP=(inp.bpT>0?inp.bpT:0)+Pz, bp=lppBpW(inp);   // LPAS: diameter or square side (the elevation width); H, tP: above grade
   const Db=inp.poleDiaBase, Dt=sign?inp.poleDiaBase:inp.poleDiaTop;
   posts.forEach((px,pi)=>{
     const st=ctx.stacks[Math.min(pi,ctx.stacks.length-1)], sh=lpdShaft(st,inp);
     // shaft
-    D.rect(L.conc, px-sh.b/2, -sh.d, px+sh.b/2, 0);
+    D.rect(L.conc, px-sh.b/2, -sh.d, px+sh.b/2, Pz);
     const xr=sh.sq ? sh.rbar : sh.rbar;
-    D.line(L.bar, px-xr, -sh.d+sh.cover, px-xr, -2, D.ltype('HIDDEN')); D.line(L.bar, px+xr, -sh.d+sh.cover, px+xr, -2, D.ltype('HIDDEN'));
+    D.line(L.bar, px-xr, -sh.d+sh.cover, px-xr, Pz-2, D.ltype('HIDDEN')); D.line(L.bar, px+xr, -sh.d+sh.cover, px+xr, Pz-2, D.ltype('HIDDEN'));
     if(pi===posts.length-1) D.text(L.txt, px+sh.b/2+0.15*k, -sh.d/2, h, (posts.length>1?'EACH SHAFT: ':'')+'('+sh.n+') '+sh.bar.n+' VERT., '+sh.tie.n+' TIES @ '+fmt(sh.s,0)+'" ('+fmt(sh.sTop,0)+'" TOP '+fmt(sh.zoneH,0)+'")', 0);
     // base plate and pole / post
-    if(bp>0) D.rect(L.plate, px-bp/2, 0, px+bp/2, tP);
+    if(bp>0) D.rect(L.plate, px-bp/2, Pz, px+bp/2, tP);
     D.pline(L.pole, [[px-Db/2,tP],[px-Dt/2,H],[px+Dt/2,H],[px+Db/2,tP]], true);
     D.line(L.cl, px, -sh.d-0.3*k, px, H+0.3*k, D.ltype('CENTER'));
     D.dimV(L.dim, -sh.d, 0, px-sh.b/2-0.6*k, px-sh.b/2, 'd = <>');
+    if(Pz>0) D.dimV(L.dim, 0, Pz, px-sh.b/2-0.6*k, px-sh.b/2, 'p = <>');
     D.dimH(L.dim, px-sh.b/2, px+sh.b/2, -sh.d-0.5*k, -sh.d, (sh.sq?'b = <> SQ':'b = <> DIA'));
   });
   // grade
@@ -6816,14 +6960,14 @@ function lpdElevation(D, L, k, ctx){
   for(let x=xmin; x<xmax-0.2*k; x+=0.25*k) D.line(L.soil, x, 0, x-0.12*k, -0.12*k);
   D.text(L.txt, xmax, 0.05*k, h, 'GRADE', 2);
   if(!sign){
-    D.dimV(L.dim, 0, H, -Math.max(inp.b*6, 24)-1.2*k, -Db/2, 'H = <>');
+    D.dimV(L.dim, Pz, H, -Math.max(inp.b*6, 24)-1.2*k, -Db/2, 'H = <>');
     // arms and fixtures (projected on the x–z plane: x = a·cosθ)
-    fixtures.forEach((f,i)=>{ const z=f.hf*12, x=f.a*12*Math.cos(f.th*RAD), s=Math.max(Math.sqrt(Math.max(f.epa,0))*12, 6);
+    fixtures.forEach((f,i)=>{ const z=f.hf*12+Pz, x=f.a*12*Math.cos(f.th*RAD), s=Math.max(Math.sqrt(Math.max(f.epa,0))*12, 6);
       if(f.a>0) D.line(L.arm, 0, z, x, z);
       D.rect(L.fix, x-s/2, z-s, x+s/2, z);
       D.text(L.txt, x, z+0.1*k, h, 'F'+(i+1)+' (AZ '+fmt(f.th,0)+'°, a '+fmt(f.a,1)+'\')', 1); });
     // cable attachments (direction projected on x)
-    if(cablesEnabled) cables.forEach((c,i)=>{ const z=c.hc*12, ux=Math.cos(c.th*RAD), len=2.0*k;
+    if(cablesEnabled) cables.forEach((c,i)=>{ const z=c.hc*12+Pz, ux=Math.cos(c.th*RAD), len=2.0*k;
       D.circle(L.cab, 0, z, 0.04*k); D.line(L.cab, 0, z, ux*len, z-0.4*k);
       D.text(L.txt, ux*len+(ux>=0?0.05:-0.05)*k, z-0.45*k, 0.08*k, 'C'+(i+1)+' @ '+fmt(c.hc,1)+'\'', ux>=0?0:2); });
   } else {
@@ -6907,19 +7051,21 @@ function lpsvGeom(ctx){
   const wY=inp.poleDiaTop, wX=inp.poleShape==='rect'?inp.poleDepthTop:inp.poleDiaTop;   // post width seen in the front (along y) / side (along x) view
   const ang=Array.from({length:Math.max(0,Math.round(inp.boltQty))},(_,j)=>(inp.boltTheta+j*360/Math.round(inp.boltQty))*RAD);
   return {inp, two, Ls, posts:two?[-Ls/2,Ls/2]:[0], B:inp.signB*12, s:inp.signS*12, clr:inp.signClr*12, H:(inp.signClr+inp.signS)*12,
-    wY, wX, tP:inp.bpT>0?inp.bpT:0, bp:lppBpW(inp), bpSq:inp.bpShape==='square', R:inp.boltBC/2, rodD:inp.boltDia, hef:inp.boltHef, rodUp:2.5*inp.boltDia, ang, tPan:1};
+    wY, wX, tP:inp.bpT>0?inp.bpT:0, bp:lppBpW(inp), bpSq:inp.bpShape==='square', R:inp.boltBC/2, rodD:inp.boltDia, hef:inp.boltHef, rodUp:2.5*inp.boltDia, ang, tPan:1,
+    Pz:inp.pProj>0?inp.pProj*12:0};   // LPPJ: the shaft top (plate) above grade
 }
 function lpsvUniq(v){ const o=[]; v.forEach(x=>{ if(!o.some(y=>Math.abs(y-x)<0.05)) o.push(x); }); return o.sort((a,b)=>a-b); }
 // shaft, bars, rods and plate of one post in an elevation; u = horizontal model coordinate of the post axis; off = rod offsets
 function lpsvElevStack(D,L,k,G,st,u,rodOff,wPost,embLbl){
-  const sh=lpdShaft(st,G.inp);
-  D.rect(L.conc, u-sh.b/2, -sh.d, u+sh.b/2, 0);
-  D.line(L.bar, u-sh.rbar, -sh.d+sh.cover, u-sh.rbar, -2, D.ltype('HIDDEN')); D.line(L.bar, u+sh.rbar, -sh.d+sh.cover, u+sh.rbar, -2, D.ltype('HIDDEN'));
-  rodOff.forEach(o=>{ D.line(L.bolt, u+o, -G.hef, u+o, 0, D.ltype('HIDDEN')); D.line(L.bolt, u+o, 0, u+o, G.tP+G.rodUp); });
-  if(G.bp>0) D.rect(L.plate, u-G.bp/2, 0, u+G.bp/2, G.tP);
-  D.rect(L.pole, u-wPost/2, G.tP, u+wPost/2, G.H);
+  const sh=lpdShaft(st,G.inp), Pz=G.Pz;   // LPPJ: Pz = 0 → as before
+  D.rect(L.conc, u-sh.b/2, -sh.d, u+sh.b/2, Pz);
+  D.line(L.bar, u-sh.rbar, -sh.d+sh.cover, u-sh.rbar, Pz-2, D.ltype('HIDDEN')); D.line(L.bar, u+sh.rbar, -sh.d+sh.cover, u+sh.rbar, Pz-2, D.ltype('HIDDEN'));
+  rodOff.forEach(o=>{ D.line(L.bolt, u+o, Pz-G.hef, u+o, Pz, D.ltype('HIDDEN')); D.line(L.bolt, u+o, Pz, u+o, Pz+G.tP+G.rodUp); });
+  if(G.bp>0) D.rect(L.plate, u-G.bp/2, Pz, u+G.bp/2, Pz+G.tP);
+  D.rect(L.pole, u-wPost/2, Pz+G.tP, u+wPost/2, G.H);
   D.line(L.cl, u, -sh.d-0.3*k, u, G.H+0.3*k, D.ltype('CENTER'));
   D.dimV(L.dim, -sh.d, 0, u-sh.b/2-0.6*k, u-sh.b/2, embLbl+' = <>');
+  if(Pz>0) D.dimV(L.dim, 0, Pz, u-sh.b/2-0.6*k, u-sh.b/2, 'p = <>');
   D.dimH(L.dim, u-sh.b/2, u+sh.b/2, -sh.d-0.5*k, -sh.d, (sh.sq?'b = <> SQ':'b = <> DIA'));
   return sh;
 }
@@ -6943,7 +7089,7 @@ function lpsvFront(D,L,k,ctx){
   D.text(L.txt, G.two?0:-(G.B/4+G.wY/4), G.clr+G.s/2-h/2, h, 'SIGN PANEL '+fmt(inp.signB,2)+'\' x '+fmt(inp.signS,2)+'\'', 1);
   const xl=Math.min(-G.B/2, G.posts[0]-bmax/2)-0.8*k;
   D.dimV(L.dim, 0, G.clr, xl, -G.B/2, 'CLR = <>'); D.dimV(L.dim, G.clr, G.H, xl, -G.B/2, 's = <>');
-  D.dimV(L.dim, 0, G.H, xl-0.8*k, -G.B/2, 'POST HT = <>');
+  D.dimV(L.dim, G.Pz, G.H, xl-0.8*k, -G.B/2, 'POST HT = <>');
   D.dimH(L.dim, -G.B/2, G.B/2, G.H+0.6*k, G.H, 'B = <>');
   if(G.two) D.dimH(L.dim, G.posts[0], G.posts[1], G.H+1.2*k, G.H, 'Lp = <>');
   // post and plate callouts (right of the last post, above grade)
@@ -6964,7 +7110,7 @@ function lpsvSide(D,L,k,ctx){
   const xp=-G.wX/2;
   D.rect(L.sign, xp-G.tPan, G.clr, xp, G.H);
   D.dimV(L.dim, 0, G.clr, G.wX/2+0.8*k, G.wX/2, 'CLR = <>'); D.dimV(L.dim, G.clr, G.H, G.wX/2+0.8*k, G.wX/2, 's = <>');
-  D.dimV(L.dim, 0, G.H, G.wX/2+1.6*k, G.wX/2, 'POST HT = <>');
+  D.dimV(L.dim, G.Pz, G.H, G.wX/2+1.6*k, G.wX/2, 'POST HT = <>');
   D.text(L.txt, sh.b/2+0.15*k, -sh.d/2, h, lpsvCageTxt(sh,false), 0);
   // wind arrow of the governing case (its x component; along y it is edge-on and drawn as a note)
   const w=ctx.wind, zc=G.clr+G.s/2, Lw=1.4*k, x1=xp-G.tPan-0.25*k, x0=x1-Lw;
@@ -7115,7 +7261,7 @@ function lpsvData(){
   }
   const ctx=LPP_SUMCTX, P=LPP_LAST;
   if(!ctx||ctx.mode!=='sign'||!P||P.mode!=='sign'||!P.postDesigns||!P.postDesigns.length) return {error:'no results yet (correct any input errors first).'};
-  const g=P.postDesigns[0].gASD||{}, two=P.postDesigns.length>1;
+  const g=P.postDesigns[0].gASDF||P.postDesigns[0].gASD||{}, two=P.postDesigns.length>1;   // LPPJ: the embedment combination at grade when p > 0
   return Object.assign({}, ctx, {code:'ibc', wind:{deg:g.phi||0, short:`GOVERNING ASD ${g.name||''}, CASE ${g.case||'A'}${two?' (POST 1)':''}`.toUpperCase(),
     long:`governing ASD ${g.name||''}, case ${g.case||'A'}${two?', post 1':''} (embedment)`}});
 }
@@ -7180,6 +7326,7 @@ function lpsvInfo(d){
     +', ('+sh.n+') '+lppEsc(sh.bar.n)+' vertical, '+lppEsc(sh.tie.n)+' ties @ '+fmt(sh.s,0)+' in ('+fmt(sh.sTop,0)+' in o.c. within the top '+fmt(sh.zoneH,0)+' in), '+fmt(sh.cover,1)+' in cover — <a href="#" data-l3go="shaft">Shaft tab</a>. ';
   else t+='<b>Shafts not drawn:</b> '+lppEsc(d.error)+' ';
   if(d.wind) t+='Wind arrow: toward '+fmt(d.wind.deg,0)+'°, '+lppEsc(d.wind.long)+' (<a href="#" data-l3go="'+(lts?'shaft':'loading')+'">'+(lts?'Shaft':'Loading')+' tab</a>). ';
+  if(inp.pProj>0) t+='The shaft projects p = '+fmt(inp.pProj,2)+' ft above grade (plate on the shaft top; the post runs from there to the top of the panel). ';   // LPPJ
   t+='Soil: '+lppEsc(lpsvSoilTxt(inp))+'. Not inputs, drawn nominal: panel thickness 1 in, rod projection 2.5 d<sub>b</sub> above the plate, plate on the shaft top (no standoff); ties start 3 in below the top.';
   el.innerHTML=t;
 }
@@ -7207,6 +7354,7 @@ function lpsvBuild(d){
   const V=(x,y,z)=>new T.Vector3(x,z,-y);   // eng → three
   const add=(g,geo,mat,x,y,z)=>{ const m=new T.Mesh(geo,mat); m.position.copy(V(x,y,z)); g.add(m); return m; };
   const edges=(g,geo,col,x,y,z)=>{ const e=new T.LineSegments(new T.EdgesGeometry(geo), new T.LineBasicMaterial({color:col})); e.position.copy(V(x,y,z)); g.add(e); return e; };
+  const pz=G.Pz*f;   // LPPJ: shaft top above grade (ft)
   const B=G.B*f, s=G.s*f, clr=G.clr*f, H=G.H*f, tP=G.tP*f, bp=G.bp*f, wX=G.wX*f, wY=G.wY*f, tPan=G.tPan*f, Rb=G.R*f, rd=G.rodD*f, hef=G.hef*f, up=G.rodUp*f;
   const narrow=(LPSV.cam&&LPSV.r&&LPSV.r.domElement.clientWidth<600);   // phone: fewer, larger labels
   const ys=G.posts.map(p=>p*f), dEst=st0d(d), hL=Math.max(0.5, Math.min(2.4, Math.max(B, H+dEst)/24))*(narrow?1.5:1);   // label height (ft)
@@ -7215,31 +7363,31 @@ function lpsvBuild(d){
   add(grp.panel, pg, [0xb0b8c2,0x1f7a46,0x9aa3af,0x9aa3af,0x9aa3af,0x9aa3af].map(c=>M(c,1)), xPan, 0, clr+s/2);   // box faces +x, −x, … : the −x face is the front
   edges(grp.panel, pg, 0xffffff, xPan, 0, clr+s/2);
   ys.forEach((y,pi)=>{
-    const len=H-tP, pgeo=inp.poleShape==='round'?new T.CylinderGeometry(wX/2,wX/2,len,28):new T.BoxGeometry(wX,len,wY);
-    add(grp.post, pgeo, M(0x8d99a8,1), 0, y, tP+len/2);
-    if(bp>0){ add(grp.post, G.bpSq? new T.BoxGeometry(bp,Math.max(tP,0.02),bp) : new T.CylinderGeometry(bp/2,bp/2,Math.max(tP,0.02),40), M(0x5b6676,1), 0, y, tP/2); }   // LPAS: square plate
+    const len=H-pz-tP, pgeo=inp.poleShape==='round'?new T.CylinderGeometry(wX/2,wX/2,len,28):new T.BoxGeometry(wX,len,wY);
+    add(grp.post, pgeo, M(0x8d99a8,1), 0, y, pz+tP+len/2);
+    if(bp>0){ add(grp.post, G.bpSq? new T.BoxGeometry(bp,Math.max(tP,0.02),bp) : new T.CylinderGeometry(bp/2,bp/2,Math.max(tP,0.02),40), M(0x5b6676,1), 0, y, pz+tP/2); }   // LPAS: square plate
     G.ang.forEach(a=>{ const rx=Rb*Math.cos(a), ry=y+Rb*Math.sin(a), L=hef+tP+up;
-      add(grp.rods, new T.CylinderGeometry(rd/2,rd/2,L,10), M(0x2b3440,1), rx, ry, -hef+L/2);
-      add(grp.rods, new T.CylinderGeometry(rd*0.85,rd*0.85,rd*0.9,6), M(0x2b3440,1), rx, ry, tP+rd*0.45);
-      add(grp.rods, new T.CylinderGeometry(rd*0.85,rd*0.85,rd*0.9,6), M(0x2b3440,1), rx, ry, -hef+rd*0.45); });
+      add(grp.rods, new T.CylinderGeometry(rd/2,rd/2,L,10), M(0x2b3440,1), rx, ry, pz-hef+L/2);
+      add(grp.rods, new T.CylinderGeometry(rd*0.85,rd*0.85,rd*0.9,6), M(0x2b3440,1), rx, ry, pz+tP+rd*0.45);
+      add(grp.rods, new T.CylinderGeometry(rd*0.85,rd*0.85,rd*0.9,6), M(0x2b3440,1), rx, ry, pz-hef+rd*0.45); });
   });
   // shafts and cages (from the design results)
   const st=d.stacks; let dmax=0, bft=inp.b;
   if(st) ys.forEach((y,pi)=>{
-    const sh=lpdShaft(st[Math.min(pi,st.length-1)],inp), dd=sh.d*f, b=sh.b*f; dmax=Math.max(dmax,dd);
-    const sg=sh.sq?new T.BoxGeometry(b,dd,b):new T.CylinderGeometry(b/2,b/2,dd,48,1,true);
-    add(grp.shaft, sg, M(0xb9b2a5,0.28), 0, y, -dd/2);
-    { const eg=sh.sq?sg:new T.CylinderGeometry(b/2,b/2,dd,48,1), e=new T.LineSegments(new T.EdgesGeometry(eg,10), new T.LineBasicMaterial({color:0x8c7f6a})); e.position.copy(V(0,y,-dd/2)); grp.shaft.add(e); if(eg!==sg) eg.dispose(); }
-    if(!sh.sq){ [0,-dd].forEach(z=>{ const ring=new T.Mesh(new T.CircleGeometry(b/2,48), M(0xb9b2a5,0.18)); ring.rotation.x=-Math.PI/2; ring.position.copy(V(0,y,z)); grp.shaft.add(ring); }); }
-    const zTop=-2*f, zBot=-dd+sh.cover*f, bl=zTop-zBot;
+    const sh=lpdShaft(st[Math.min(pi,st.length-1)],inp), dd=sh.d*f, b=sh.b*f, ds=dd+pz; dmax=Math.max(dmax,dd);   // ds: the whole shaft (d + p, LPPJ)
+    const sg=sh.sq?new T.BoxGeometry(b,ds,b):new T.CylinderGeometry(b/2,b/2,ds,48,1,true);
+    add(grp.shaft, sg, M(0xb9b2a5,0.28), 0, y, (pz-dd)/2);
+    { const eg=sh.sq?sg:new T.CylinderGeometry(b/2,b/2,ds,48,1), e=new T.LineSegments(new T.EdgesGeometry(eg,10), new T.LineBasicMaterial({color:0x8c7f6a})); e.position.copy(V(0,y,(pz-dd)/2)); grp.shaft.add(e); if(eg!==sg) eg.dispose(); }
+    if(!sh.sq){ [pz,-dd].forEach(z=>{ const ring=new T.Mesh(new T.CircleGeometry(b/2,48), M(0xb9b2a5,0.18)); ring.rotation.x=-Math.PI/2; ring.position.copy(V(0,y,z)); grp.shaft.add(ring); }); }
+    const zTop=pz-2*f, zBot=-dd+sh.cover*f, bl=zTop-zBot;
     sh.pts.forEach(p=>add(grp.cage, new T.CylinderGeometry(sh.bar.d/2*f,sh.bar.d/2*f,bl,8), M(0xc0392b,1), p.x*f, y+p.y*f, zBot+bl/2));
     const rt=(sh.rbar+sh.bar.d/2+sh.tie.d/2)*f, tr=Math.max(sh.tie.d/2*f,0.02);
-    let z=-3*f, n=0; const zone=sh.zoneH*f;
+    let z=pz-3*f, n=0; const zone=sh.zoneH*f;
     while(z>zBot-1e-6 && n<400){ let m;
       if(sh.sq){ m=new T.Mesh(new T.TorusGeometry(rt*Math.SQRT2,tr,4,4), M(0x2f6f8f,1)); m.rotation.set(Math.PI/2,0,Math.PI/4); }
       else { m=new T.Mesh(new T.TorusGeometry(rt,tr,6,40), M(0x2f6f8f,1)); m.rotation.x=Math.PI/2; }
       m.position.copy(V(0,y,z)); grp.cage.add(m); n++;
-      z-=((-z)<zone?sh.sTop:sh.s)*f; }
+      z-=((pz-z)<zone?sh.sTop:sh.s)*f; }
     { const lb=lpsvLabel((d.code==='lts'?'L':'d')+' = '+fmt(sh.d/12,2)+' ft · '+(sh.sq?'':'Ø')+fmt(sh.b/12,2)+' ft'+(sh.sq?' sq':'')+(narrow?'':'\n('+sh.n+') '+sh.bar.n+' + '+sh.tie.n+' @ '+fmt(sh.s,0)+' in'), hL*0.8, '#7a2e12');
       lb.position.copy(V(0, y, -dd-hL*1.3)); grp.labels.add(lb); }
   });
@@ -7266,7 +7414,7 @@ function lpsvBuild(d){
   if(!LPSV.orb||LPSV.orb.sig!==lpsvSig(d)){ LPSV.home=lpsvHome(); LPSV.orb=Object.assign({}, LPSV.home, {sig:lpsvSig(d)}); }
 }
 function st0d(d){ return d.stacks?Math.max(...d.stacks.map(s=>s.found.d)):0; }
-function lpsvSig(d){ const i=d.inp; return [i.signB,i.signS,i.signClr,i.signPosts,i.signSpacing,i.b,d.code].join('|'); }   // the view resets when the geometry changes
+function lpsvSig(d){ const i=d.inp; return [i.signB,i.signS,i.signClr,i.signPosts,i.signSpacing,i.b,d.code].join('|')+(i.pProj>0?'|'+i.pProj:''); }   // the view resets when the geometry changes
 function lpsvHome(){ const e=LPSV.ext, tv=Math.tan(17.5*RAD), asp=(LPSV.cam&&LPSV.cam.aspect)||1.6, top=e.H+2.6*e.hL, bot=-e.dmax-2.6*e.hL;
   const r=Math.max((top-bot)/2/tv*1.12, e.ext*1.45/(tv*asp));   // the height (or the grade width, seen obliquely) fills the view
   return {az:-Math.PI/2-0.75, el:0.22, r, tx:0, ty:(top+bot)/2, tz:0}; }
@@ -7320,13 +7468,14 @@ function ltsAnchorPayload(){
   notes.push('Double-nut base: the leveling-nut standoff is not a Light Pole input (standoffClear sent as 0); set it in the Anchorage app.');
   notes.push('AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions: Table 3.4-1 Strength I (1.25DC) and Extreme I (1.1DC + W, 0.9DC + W) for the load cases of Table 3.9.3-1 (1: normal, 2: transverse, 3: 0.75 of both); M = B·M (Art. 4.8.1 tapered pole / Eq. 5.12.1-10 prismatic post) at the top of the shaft; torsion per Art. 3.9.4.2. Service I and Fatigue are not sent (fatigue design is not required for these supports, Arts. 11.4, 11.7.2).');
   notes.push('LRFDLTS C5.16.3 refers to ACI 318-11 Appendix D for the anchorage; the Anchorage app uses ACI 318-19 Ch. 17. Cast-in anchor bolts for new work (Art. 5.16.1).');
+  if(inp.pProj>0) notes.push('Shaft projection above grade p = '+fmt(inp.pProj,2)+' ft: pier depth = Broms embedment L + p (the full concrete below the plate); the combinations are the actions at the top of the shaft.');   // LPPJ
   const nG=appMode==='sign'?(signPosts===2?2:1):1, reo=X.fd.reo;
   const combos=X.ba.rows.filter(r=>r.combo!=='SV1').map(r=>{ const B=X.mc.Bs[r.combo]?X.mc.Bs[r.combo].B:1;
     return {name:`LRFDLTS ${r.name}, ${r.lcName}`, P:r.P, Vx:r.Vx, Vy:r.Vy, Mx:B*r.Mx, My:B*r.My, T:r.T}; });
   const groups=Array.from({length:nG},(_,i)=>({id:appMode==='sign'?'post'+(i+1):'pole', label:appMode==='sign'?'Post '+(i+1):'Pole',
     anchor:{pattern:'circle', n:Math.round(inp.boltQty), BC:inp.boltBC, theta0:inp.boltTheta, dia:inp.boltDia, grade:'f1554_'+inp.boltGrade, nut:'heavyHex', hef:inp.boltHef, torqued:inp.anchTq==='torqued'},
     base:lppAnchBase(inp),   // LPAS
-    pier:{shape:inp.shaftShape==='square'?'square':'circle', D:inp.b*12, fc:inp.fc, cracked:true, depth:X.fd.gov.br.L*12, cover:inp.cover,
+    pier:{shape:inp.shaftShape==='square'?'square':'circle', D:inp.b*12, fc:inp.fc, cracked:true, depth:(inp.pProj>0?X.fd.gov.br.L+inp.pProj:X.fd.gov.br.L)*12, cover:inp.cover,   // LPPJ
           longBars:reo?'('+reo.long.n+') '+reo.long.bar.n:'', ties:reo?reo.tie.bar.n+' @ '+fmt(reo.tie.s,0)+' in':''},
     combos:combos.map(c=>({...c}))}));
   const body={groups, units:{length:'in', force:'lb', moment:'lb-ft', stress:'psi'}, signConvention:'lightPole-v1'};
@@ -7362,11 +7511,12 @@ function lppAnchorPayload(){
   notes.push('Double-nut base: the leveling-nut standoff is not a Light Pole input (standoffClear sent as 0); set it in the Anchorage app.');
   notes.push('Moments are second-order (B₂·M, AISC 360-16 App. 8) at the top of the shaft; all LRFD combinations of ASCE 7-22 §2.3 incl. the atmospheric-ice ones, each at wind toward 0°, 90°, 180°, 270°.');
   if(ctx.mode==='sign') notes.push('Sign posts: the post moment and shear act along the wind direction (panel normal); monopost torsion T = |F·x| (sign not carried).');
+  if(inp.pProj>0) notes.push('Shaft projection above grade p = '+fmt(inp.pProj,2)+' ft: pier depth = embedment + p (the full concrete below the plate); the combinations are the actions at the top of the shaft.');   // LPPJ
   const groups=A.groups.map((g,gi)=>{ const st=ctx.stacks[Math.min(gi,ctx.stacks.length-1)], f=st.found, reo=f.reo, b=f.bolts;
     return {id:g.id, label:g.label,
       anchor:{pattern:'circle', n:Math.round(inp.boltQty), BC:inp.boltBC, theta0:inp.boltTheta, dia:inp.boltDia, grade:'f1554_'+inp.boltGrade, nut:'heavyHex', hef:inp.boltHef, torqued:inp.anchTq==='torqued'},
       base:lppAnchBase(inp),   // LPAS
-      pier:{shape:inp.shaftShape==='square'?'square':'circle', D:inp.b*12, fc:inp.fc, cracked:true, depth:f.d*12, cover:inp.cover,
+      pier:{shape:inp.shaftShape==='square'?'square':'circle', D:inp.b*12, fc:inp.fc, cracked:true, depth:(inp.pProj>0?f.d+inp.pProj:f.d)*12, cover:inp.cover,   // LPPJ: the full concrete below the plate
             longBars:'('+reo.long.n+') '+reo.long.bar.n, ties:reo.tie.bar.n+' @ '+fmt(reo.tie.s,0)+' in'},
       combos:g.combos.map(c=>({name:c.name, P:c.P, Vx:c.Vx, Vy:c.Vy, Mx:c.Mx, My:c.My, T:c.T})),
       lpRef:b?{Tmax:b.Tmax, phiNn:b.phiNn, inter:b.inter}:undefined}; });
@@ -7454,23 +7604,32 @@ let lppLtsLast=null;   // LTS-2: the last LRFDLTS run {g, L, ba}
 function ltsGeom(inp,L){
   const sign=inp.mode==='sign', nPost=sign?(inp.signPosts===2?2:1):1;
   const ps=poleSegments(inp);
-  return {mode:sign?'sign':'pole', shape:inp.poleShape||'round', H:inp.H, Dtop:inp.poleDiaTop, Dbase:inp.poleDiaBase, rs:L.rs||0,
+  const g={mode:sign?'sign':'pole', shape:inp.poleShape||'round', H:inp.H, Dtop:inp.poleDiaTop, Dbase:inp.poleDiaBase, rs:L.rs||0,
     fixtures:sign?[]:fixtures.map(x=>({hf:+x.hf||0, th:+x.th||0, a:+x.a||0, epa:+x.epa||0, W:+x.W||0, armD:+x.armD||0})),
     sign:sign?{B:inp.signB, s:inp.signS, clr:inp.signClr, W:inp.signWt, nPost, spacing:inp.signSpacing}:null,
     DCpole:ps.totalW*nPost, DL:inp.DL, taper:!!inp.poleTaper, Ht:(inp.poleShape==='rect'?inp.poleDepthBase:0)};
+  if(inp.pProj>0) g.zp=inp.pProj;   // LPPJ: shaft projection above grade (K_z at z + p; the sign clearance from grade)
+  return g;
 }
 // LTS-7: foundation in the LRFDLTS mode. Lateral embedment by Broms (Art. 13.6.1.1, C13.6.1.1) with the factored groundline M_F, V_F of every
 // Strength I / Extreme I row (M × that limit state's B, as the member check); shaft reinforcement by the tool's ACI 318-19 design (engineer,
 // 2026-11-02, Q-C4: LRFDLTS Art. 13.6.2 refers to the AASHTO LRFD BDS, not applied) with the Broms maximum shaft moment of each row.
-function ltsFoundation(inp,g,ba,mc){
+// LPPJ (2026-11-03): with a shaft projection p > 0 the groundline values come from LpLts.groundline (M_F = B·M + V·p + W_s·p/2,
+// V_F = V + W_s, P_F = P + γ_DC·W_c); per[i].gl holds them. p = 0: the former loop, unchanged.
+function ltsFoundation(inp,g,ba,mc,L){
   const per=[];
-  ba.rows.filter(r=>r.combo!=='SV1' && r.V>0).forEach(r=>{ const B=mc.Bs[r.combo]?mc.Bs[r.combo].B:1, br=bromsEmbedment(inp,B*r.M/1000,r.V/1000); if(br) per.push({r,B,br}); });
+  const sh=inp.pProj>0?{p:inp.pProj, b:inp.b, square:inp.shaftShape==='square', Wc:LPP_GC*(inp.shaftShape==='square'?inp.b*inp.b:Math.PI/4*inp.b*inp.b)*inp.pProj}:null;
+  if(sh) LpLts.groundline(ba,mc.Bs,g,L,sh).filter(x=>x.VF>0).forEach(x=>{ const br=bromsEmbedment(inp,x.MF/1000,x.VF/1000); if(br) per.push({r:x.r,B:x.B,br,gl:x}); });
+  else ba.rows.filter(r=>r.combo!=='SV1' && r.V>0).forEach(r=>{ const B=mc.Bs[r.combo]?mc.Bs[r.combo].B:1, br=bromsEmbedment(inp,B*r.M/1000,r.V/1000); if(br) per.push({r,B,br}); });
   if(!per.length) return {per, gov:null};
   const gov=per.reduce((a,x)=>x.br.L>a.br.L?x:a), gm=per.reduce((a,x)=>x.br.Mu>a.br.Mu?x:a);
-  const Vu=Math.max(...per.map(x=>x.r.V));
-  const reo=designRebar(inp, gm.br.Mu*1000, gm.r.P, Vu, per.map(x=>({Mu:x.br.Mu*1000,Pu:x.r.P,name:x.r.name+', '+x.r.lcName})));
+  const Pof=x=>x.gl?x.gl.PF:x.r.P;
+  const Vu=Math.max(...per.map(x=>x.gl?x.gl.VF:x.r.V));
+  const reo=designRebar(inp, gm.br.Mu*1000, Pof(gm), Vu, per.map(x=>({Mu:x.br.Mu*1000,Pu:Pof(x),name:x.r.name+', '+x.r.lcName})));
   const Tu=Math.max(0,...ba.rows.map(r=>Math.abs(r.T))), tor=lppShaftTorsion(inp,[{T:Tu}]);
-  return {per, gov, gm, Vu, reo, Tu, tor};
+  const out={per, gov, gm, Vu, reo, Tu, tor};
+  if(sh) out.sh=sh;
+  return out;
 }
 // LTS-3: the check sections (z = 0 to H in 20 steps) with their properties (the tool's hssProps) and the self-weight above
 function ltsSections(inp){
@@ -7593,17 +7752,19 @@ function ltsCalc(){
         +`<p class="eq-title" style="margin-top:10px"><b>Pole-to-base-plate weld</b></p>`+wSteps
         +`<p class="tbl-note">Anchor rods: designed in the Anchorage app — the Anchorage card on this tab sends the LRFDLTS combinations (Strength I, Extreme I; M × B). LRFDLTS Arts. 5.16–5.16.3: cast-in-place anchor bolts for new work; hooked bolts only with F<sub>y</sub> ≤ 55 ksi; anchorage per ACI 318 (C5.16.3).${g.mode==='sign'&&g.sign.nPost===2?' Values per post.':''}</p>`); }
     // LTS-7: foundation
-    { const fd=ltsFoundation(inp,g,ba,mc); lppLtsLast.fd=fd;
+    { const fd=ltsFoundation(inp,g,ba,mc,L); lppLtsLast.fd=fd;
       const notes=[], bIn=inp.b*12, n2=(x,d)=>SharedSteps.n(x,d);
       if(inp.cover<3) notes.push(`Concrete cover ${fmt(inp.cover,2)} in is less than the 3 in minimum (Art. 13.6.2.1, p. 13-5).`);
       if(Math.abs(bIn/6-Math.round(bIn/6))>1e-6) notes.push(`Shaft ${inp.shaftShape==='square'?'width':'diameter'} ${fmt(bIn,1)} in: LRFDLTS recommends 6-in increments (Art. 13.6.2.1).`);
       let body=basis+`<p class="lts-basis">Lateral embedment: Broms' method (Art. 13.6.1.1 allows it in lieu of more detailed procedures; C13.6.1.1, pp. 13-3, 13-4) with the factored groundline M<sub>F</sub> and V<sub>F</sub> of every Strength I / Extreme I row (M × B of that limit state). Resistance factor φ = ${fmt(inp.bromsPhiR,2)} (decision Q-C7, accepted 2026-11-02). Shaft reinforcement: ACI 318-19, as the IBC mode (engineer, 2026-11-02): LRFDLTS Art. 13.6.2 (p. 13-5) refers to the AASHTO LRFD Bridge Design Specifications for the structural design — <b>not applied</b>.${g.mode==='sign'&&g.sign.nPost===2?' Per post.':''}</p>`;
       if(notes.length) body+=`<p class="lts-dev">${notes.join('<br>')}</p>`;
+      if(fd.sh) body+=`<p class="tbl-note"><b>Shaft projection above grade p = ${fmt(fd.sh.p,2)} ft</b> (engineer, 2026-11-03): the base actions (base plate, weld, anchors) are at the top of the shaft; Broms and the shaft design take the groundline values M<sub>F</sub> = B·M + V·p + W<sub>s</sub>·p/2, V<sub>F</sub> = V + W<sub>s</sub>, P<sub>F</sub> = P + γ<sub>DC</sub>W<sub>c</sub> of every row (worked below for the governing row). The support, fixtures and sign take K<sub>z</sub> at their height above grade (z + p; the sign clearance is measured from grade). Hand-off pier depth = L + p.</p>`;   // LPPJ
       if(!fd.gov){ body+=`<p class="lts-dev"><b>Select the Broms soil model</b> (cohesive or cohesionless) in the Shaft &amp; soil inputs: the LRFDLTS mode designs the embedment by Broms.</p>`; }
       else {
         const b=fd.gov.br, r=fd.gov.r;
-        const st=[{id:'f.dem',label:`Governing groundline demand: ${r.name}, ${r.lcName}`,sym:'M_{F},\\,V_{F}',eq:'',sub:'',value:`${n2(b.MF,2)} kip-ft (M × B = ${n2(fd.gov.B,4)}), ${n2(b.VF,3)} kip`,unit:'',ref:LpLts.ref('Arts. 13.1, 13.6.1.1; Table 3.4-1')},
-          {id:'f.H',label:'Height of the resultant above the groundline',sym:'H',eq:'M_{F}/V_{F}',sub:`${n2(b.MF,2)}/${n2(b.VF,3)}`,value:b.H,unit:'ft',d:3,ref:LpLts.ref('Eq. C13.6.1.1-2 (p. 13-3)')}];
+        const st=(fd.sh?LpLts.groundlineSteps(fd.gov.gl,g,fd.sh):[]).concat([{id:'f.dem',label:`Governing groundline demand: ${r.name}, ${r.lcName}`,sym:'M_{F},\\,V_{F}',eq:'',sub:'',value:fd.sh?`${n2(b.MF,2)} kip-ft (B·M + V·p + W_s·p/2, B = ${n2(fd.gov.B,4)}; shaft projection p = ${n2(fd.sh.p,2)} ft), ${n2(b.VF,3)} kip`:`${n2(b.MF,2)} kip-ft (M × B = ${n2(fd.gov.B,4)}), ${n2(b.VF,3)} kip`,unit:'',ref:LpLts.ref('Arts. 13.1, 13.6.1.1; Table 3.4-1')}]);
+        st.push(
+          {id:'f.H',label:'Height of the resultant above the groundline',sym:'H',eq:'M_{F}/V_{F}',sub:`${n2(b.MF,2)}/${n2(b.VF,3)}`,value:b.H,unit:'ft',d:3,ref:LpLts.ref('Eq. C13.6.1.1-2 (p. 13-3)')});
         if(b.model==='cohesive'){
           st.push({id:'f.q',label:'Coefficient q (cohesive soil)',sym:'q',eq:'\\frac{V_{F}}{9cD}',sub:`\\frac{${n2(b.VF,3)}}{9\\cdot${n2(b.c,3)}\\cdot${n2(b.D,2)}}`,value:b.q,unit:'ft',d:4,ref:LpLts.ref('Eq. C13.6.1.1-3 (p. 13-3)')});
           st.push({id:'f.L',label:'Required embedment (cohesive)',sym:'L',eq:'1.5D + q\\left[1 + \\sqrt{2 + \\frac{4H + 6D}{q}}\\right]',sub:`1.5\\cdot${n2(b.D,2)} + ${n2(b.q,4)}\\left[1 + \\sqrt{2 + \\frac{4\\cdot${n2(b.H,3)} + 6\\cdot${n2(b.D,2)}}{${n2(b.q,4)}}}\\right]`,value:b.L,unit:'ft',d:2,ref:LpLts.ref('Eq. C13.6.1.1-1 (p. 13-3)')});
@@ -7743,7 +7904,7 @@ function ltsReportRender(){
   try{ SharedReport.mount(host,ltsReportModel(),{onGoto:lprGoto}); }catch(e){ host.innerHTML='<div class="flag bad">Report error: '+lppEsc(e&&e.message)+'</div>'; }
 }
 // ================= PROJECT MANAGEMENT + AUTOSAVE =================
-const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpShape','bpB','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan','ltsRisk','ltsAdt','ltsV','ltsVSrc','ltsVsvc','ltsIce','ltsRs','ltsClearZone','ltsWeldType','ltsWeldW','ltsFexx','ltsRi'];
+const INPUT_IDS=['V','expo','Kzt','Kd','KdMode','G','lppBeta','H','cfLum','poleShape','poleDiaTop','poleDiaBase','poleDepthTop','poleDepthBase','poleTwTop','poleTwBase','poleFy','poleDen','cfPole','cfPoleMode','cfPoleSurf','DL','tIce','iceBasis','iceIi','iceDen','Vice','cfCable','cableMethod','cableE','b','shaftShape','soilClass','bromsSoil','bromsC','bromsPhi','bromsGam','bromsPhiR','bromsOL','rebarMode','manBarSize','manBarN','manTieBar','manTieS','S1','qAllow','fc','fy','cover','minSteel','boltDia','boltGrade','boltQty','boltBC','boltTheta','boltHef','bpDia','bpShape','bpB','bpFy','bpT','arBars','arBar','arX','signB','signS','signClr','signWt','signSpacing','signCfMode','signCfMan','ltsRisk','ltsAdt','ltsV','ltsVSrc','ltsVsvc','ltsIce','ltsRs','ltsClearZone','ltsWeldType','ltsWeldW','ltsFexx','ltsRi','shaftProj'];
 const LS_PROJECTS='lpp_projects_v1';   // {name: state}
 const LS_SESSION='lpp_session_v1';     // {state, activeName, dirty}
 let activeProject=null;   // name of loaded project, or null (unsaved/new)
@@ -7788,6 +7949,8 @@ function applyState(st){
     } else if(mn){ mn.style.display='none'; mn.textContent=''; }
     if($('iceIi') && (!st.inputs || st.inputs.iceIi===undefined)) $('iceIi').value='1.0'; }
   // damping ratio for G_f (added 2026-10-12): older saves have none → default 0.005
+  // shaft projection above grade p (added 2026-11-03, LPPJ): older saves have none → 0 (flush shaft, identical results)
+  if($('shaftProj') && (!st.inputs || st.inputs.shaftProj===undefined)) $('shaftProj').value='0';
   if($('lppBeta') && (!st.inputs || st.inputs.lppBeta===undefined)) $('lppBeta').value='0.005';
   // K_d source (added 2026-10). Saves made before it have no KdMode: a stored K_d of 0.85 was the
   // old single default and moves to the per-component ASCE 7-22 values; any other value is kept as an override.

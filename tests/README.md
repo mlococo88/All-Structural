@@ -59,6 +59,11 @@ node tests/smoke/lldf-layout.mjs [--shots <dir>] [--no-index]
 # Light Pole and Sign Post: every computed result, every cable value, tab text and drawings, origin/main vs the working tree (13 cases)
 node tests/lightpole-compare.mjs [--cases default,sign1] [--old-saves] [--tol 1e-12]
 
+# Light Pole and Sign Post, shaft projection above grade p (LPPJ): cable values identical at p = 2 ft, hand-off payload byte-identical at
+# p = 0 / old save, the grade actions M_F = B·M + V·p + F_s·p/2 recomputed from the base actions (IBC pole, LRFDLTS two-post sign), post
+# length clr + s − p and its input errors, DXF / Report with p. ~2 min
+node tests/smoke/lightpole-projection.mjs
+
 # Saved-project list and Undo / Redo (shared/projects.js, PLIB): main vs the working tree (results on load, after an input change, B on
 # main's autosave and project list), Undo / Redo / Ctrl+Z / Ctrl+Y, the dialog (rename, duplicate, delete, open), quota refusal, 390 px
 node tests/smoke/project-library.mjs --tool asce7 [--a origin/main] [--shots <dir>]

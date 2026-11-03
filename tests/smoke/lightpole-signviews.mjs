@@ -27,6 +27,9 @@ const CASES = {
   // LPAS (2026-11-02): square base plate (B × B) — sign IBC two-post with square posts, LRFDLTS monopost
   ibc2sqpl: { inputs: { poleShape: 'square', poleDiaTop: '8', bpShape: 'square', bpB: '22' }, top: { appMode: 'sign', signPosts: 2 } },
   lts1sqpl: { inputs: { bromsSoil: 'cohesive', bromsC: '1.2', bpShape: 'square', bpB: '22' }, top: { codeMode: 'lts', appMode: 'sign', signPosts: 1 } },
+  // LPPJ (2026-11-03): shaft projection above grade p = 2 ft (the shaft, plate and post drawn p above grade)
+  ibc2proj: { inputs: { signB: '16', signS: '5', shaftProj: '2' }, top: { appMode: 'sign', signPosts: 2 } },
+  lts1proj: { inputs: { bromsSoil: 'cohesive', bromsC: '1.2', shaftProj: '2' }, top: { codeMode: 'lts', appMode: 'sign', signPosts: 1 } },
 };
 let fails = 0; const check = (ok, m) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${m}`); if (!ok) fails++; };
 for (const vw of [1280, 390]) for (const [name, mut] of Object.entries(CASES)) {

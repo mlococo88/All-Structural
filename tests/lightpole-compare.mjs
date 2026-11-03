@@ -58,6 +58,9 @@ export const CASES = {
   // LRFDLTS mode (added 2026-11-02 with the CTDOT wind-speed preset): the map / entered V, as saved projects open
   ltspole: { top: { codeMode: 'lts' } },
   ltssign1: { inputs: { ltsV: '115' }, top: { codeMode: 'lts', appMode: 'sign', signPosts: 1 } },
+  // LRFDLTS with a Broms soil model (added 2026-11-03 with the shaft projection p, LPPJ): the groundline / Broms / shaft path at p = 0
+  ltspoleb: { inputs: { bromsSoil: 'cohesive', bromsC: '1.0' }, top: { codeMode: 'lts' } },
+  ltssign2b: { inputs: { signB: '16', signS: '5', bromsSoil: 'cohesionless', bromsPhi: '30', bromsGam: '0.115' }, top: { codeMode: 'lts', appMode: 'sign', signPosts: 2 } },
 };
 
 if (args.list) { console.log(Object.keys(CASES).join('\n')); process.exit(0); }
