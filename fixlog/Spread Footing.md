@@ -4254,3 +4254,32 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 1. The old print report (`SFD_REFS`) still lists "§7.7.2.3 / §13.3.4 (bar spacing)". It is left for the agent porting that report.
 2. For dowels, the side cover normal to the plane of the hook is taken as the smallest plan distance to a footing side (the hook direction is not an input). A hook turned away from a near edge could use the larger cover.
+
+## 2026-11-03 — PR: claude/sf-autocalc — "Auto-calculate on change" switch, Re-analyze (Ctrl+Enter), out-of-date marking; plots in hidden output tabs drawn when shown (SFAC; display and workflow only, no result change)
+
+### SFAC. Auto-calculate on change   [no result change]
+- **Problem:** every input edit re-ran the whole analysis and re-render (after the 300 ms typing debounce). Several small edits in a row (e.g. bar sizes and spacings) were slow.
+- **Where:** header (anchor `id="sfdAcChk"`, before `id="btnPrint"`); output panel banner (anchor `id="sfdAcBar"`, before `<div id="printHeader">`); CSS after `.tabpage.active{display:block}` (anchor `#sfdAcBar{`); `recalc()` and `recalcDebounced()` and the new block after it (anchor `const SFAC={key:'sfd_autoCalc_v1'`).
+  - `recalc()`: before `R=computeAll();` added `clearTimeout(rcTimer);sfdSetStale(false);`.
+  - `recalcDebounced()`, before: `clearTimeout(rcTimer);rcTimer=setTimeout(recalc,300);` After: `clearTimeout(rcTimer);if(!SFAC.on){sfdSetStale(true);return;}rcTimer=setTimeout(recalc,300);`
+  - Input edits that called `recalc()` directly now call `sfdAnalyzeReq()` (`recalc()` when on; otherwise mark out of date): pedestal Delete (`state.peds.splice(i,1);buildPedCards();`), Add pedestal (`btnAddPed`), Undo / Redo (`undoApply`), and the two hand-off "Apply" buttons (Steel Beam reactions, foundation loads).
+  - Load, Import JSON, Reset, "Saved projects…" Open and the page load still always analyze.
+- **Behaviour:** checkbox "Auto-calculate on change" (default on = the old behaviour). Off: an edit is still autosaved (`sfd_auto`) and goes on the undo stack; the analysis does not run; `body.sfdStale` is set. That shows the banner "Results out of date — press Re-analyze", enables the header Re-analyze button, and dims / dashes the dashboard chips, warnings, self-consistency checks, every output tab except the User Manual (Schematic … Report, 3D View, Drawings), a ⚠ on those tab buttons, and the Reinforcement-tab A_s / s_max / pedestal bar notes. Re-analyze, Ctrl+Enter (any time) and turning the box back on run `recalc()`.
+- **Print / export while out of date: re-analyze first.** A capture `beforeprint` listener runs `recalc()` before the other print listeners (Ctrl+P, Print-to-PDF Report). "Print report" (Report tab) and "Download DXF" (Drawings tab) are intercepted, re-analyzed, and the click is replayed on the rebuilt button. Export JSON exports inputs only and is unchanged. The tool sends no results hand-off (only the title block, `projectMeta`), so nothing there is marked.
+- **Saved data:** new per-browser UI key `sfd_autoCalc_v1` (`'0'` = off, `'1'` = on, absent = on), named like `sfd_inputTab_v1` / `sfd_dwgSheet_v1`. It is not in the project, the autosave or the export. No existing key or format changed.
+
+### SFAC-P. Plots in hidden output tabs are drawn when their tab is shown   [display only]
+- **Where:** before `function renderPlots(){` (anchor `const SFPLT={all:false,skip:false};`, `function sfpOn(id)`); inside it the five plot guards.
+  - Before: `if($('#plot-dcr'))`, `if($('#plot-heat')&&R.govBear…`, `if($('#plot-fs'))`, `const elid='plot-vm-'+dir;if(!$('#'+elid))return;`, `const elid='plot-pm-'+i;if(!$('#'+elid))return;`
+  - After: the same with `sfpOn('plot-dcr')`, `sfpOn('plot-heat')`, `sfpOn('plot-fs')`, `if(!sfpOn(elid))return;` (twice), and `SFPLT.skip=false;` at the top of `renderPlots`.
+- **Why:** profiling a single bar-spacing edit (headless Chromium, default project) showed Plotly redrawing every plot in every tab, about 180 ms of the ~300 ms analysis. The tab click already calls `renderPlots()`, so a plot is drawn when its tab is opened. Before printing (not the Report tab's own print) every plot is drawn (`SFPLT.all`), so the printed pages still hold all plots.
+- **Timings** (one bar-spacing edit, analysis + render, median of 3, headless): Schematic tab 308 → 173 ms; Footing Design tab (its own two plots stay) 459 → 273 ms; Report tab 408 → 242 ms. Switching tabs also no longer redraws the plots of the other tabs.
+
+### How verified
+- `R`, `P2`, dashboard text and the report text (SharedReport.text) compared with origin/main on the default project and the review case (`rev`): harness run with auto on → 0 differences. With auto off, the same edits made through the inputs (bottom-x spacing 10, bottom-y #6, top-x spacing 9, Ped 1 tie spacing 10), then Ctrl+Enter, compared with main making the same edits → 0 differences, identical report and dashboard text, on both cases.
+- Behaviour (headless, 19 checks on each case): out of date after edits with no analysis run; autosave and undo stored; banner and Re-analyze shown; Ctrl+Enter, the button, turning the box on, `beforeprint`, Download DXF and Print report each re-analyze; Undo while off does not analyze; the preference survives a reload and the page analyzes on load. Every plot is drawn synchronously by the `beforeprint` listener. 0 console errors.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs --libs` passes.
+- **Other copies:** none.
+
+### Open items
+- None.

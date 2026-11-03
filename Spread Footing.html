@@ -78,6 +78,13 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
 .tabbar button.active{background:#fff;border-bottom:2px solid #fff;font-weight:bold}
 .tabpage{display:none;background:#fff;border:1px solid #7a8aa0;border-top:none;padding:10px}
 .tabpage.active{display:block}
+/* SFAC: Auto-calculate off and inputs changed since the last analysis: every result display is marked out of date */
+#sfdAcBar{display:none;position:sticky;top:0;z-index:6;margin:0 0 6px 0;padding:6px 10px;background:#fff3cd;border:2px solid #c77700;color:#5d3a00;font-weight:bold}
+body.sfdStale #sfdAcBar{display:block}
+body.sfdStale #dashboard,body.sfdStale #warnings,body.sfdStale #consistency,body.sfdStale .tabpage:not(#tab-manual),body.sfdStale .sfdRbS,body.sfdStale .sfdRbD,body.sfdStale .sfdPbInfo,body.sfdStale #sfdRbNote{opacity:.45;filter:grayscale(.7)}
+body.sfdStale .tabpage:not(#tab-manual){outline:3px dashed #c77700;outline-offset:-3px}
+body.sfdStale .tabbar button:not([data-tab="tab-manual"])::after{content:" \26A0";color:#c77700}
+#sfdAcLbl{font-size:12px;margin-right:6px;white-space:nowrap}
 /* input panel tabs (sfdInputTabs) - same look as the output .tabbar */
 #sfdInTabs{position:sticky;top:0;z-index:5;display:flex;flex-wrap:wrap;gap:2px 0;margin:0 0 8px 0;padding-top:2px;background:#fafafa;border-bottom:2px solid #7a8aa0}
 #sfdInTabs .sfdInTab{display:inline-flex;align-items:center;border:1px solid #7a8aa0;border-bottom:none;margin:0 2px -2px 0;background:#e2e8ef;font-size:12px;padding:5px 8px}
@@ -255,6 +262,8 @@ a.wkA:hover{text-decoration:underline}
   <p class="byline">by Mario Lococo &nbsp;|&nbsp; Loads &amp; Combinations &middot; Bearing &amp; Stability &middot; Footing &amp; Pedestal Design &middot; 3D View &nbsp;|&nbsp; ACI 318-19 / ASCE 7-16 / IBC 2021</p>
  </div>
  <div class="noprint">
+  <label id="sfdAcLbl" title="When off, input changes are saved but the analysis waits for Re-analyze (Ctrl+Enter). Remembered in this browser."><input type="checkbox" id="sfdAcChk" checked> Auto-calculate on change</label>
+  <button id="sfdAcBtn" type="button" title="Run the analysis now (Ctrl+Enter)" disabled>Re-analyze</button>
   <button id="btnPrint" title="Print / save as PDF report">Print-to-PDF Report</button>
  </div>
 </div>
@@ -447,6 +456,7 @@ a.wkA:hover{text-decoration:underline}
 </div>
 <!-- ============ OUTPUT PANEL ============ -->
 <div class="out" id="outputPanel">
+ <div id="sfdAcBar" class="noprint" role="status">Results out of date &mdash; press Re-analyze (Ctrl+Enter). Auto-calculate is off; the inputs have changed since the results below were computed. <button type="button" id="sfdAcBtn2">Re-analyze</button></div>
  <div id="printHeader"></div>
  <h2 style="margin-top:0" id="sfdRptSum">Summary Dashboard</h2>
  <div class="dash" id="dashboard"></div>
@@ -762,7 +772,7 @@ function undoApply(dir){
  UNDO.ptr=np;UNDO.busy=true;
  try{
   state=Object.assign(defaultState(),JSON.parse(UNDO.stack[np]));
-  migrateState();bindStaticInputs();buildPedCards();recalc();
+  migrateState();bindStaticInputs();buildPedCards();sfdAnalyzeReq();
   try{localStorage.setItem('sfd_auto',JSON.stringify({state,collapseState}));}catch(e){}
  }finally{UNDO.busy=false;}
  updateUndoButtons();
@@ -896,7 +906,7 @@ function buildPedCards(){
   {const s=dr.querySelector('input[data-path$="dowelHook"]');s.checked=state.peds[i].reinf.dowelHook==='hook90';}
   {const s=dr.querySelector('select[data-path$="sfJoint"]');s.value=state.peds[i].reinf.sfJoint==='smooth'?'smooth':'rough';}
   const del=el('button','danger','Remove pedestal');del.type='button';
-  del.addEventListener('click',()=>{state.peds.splice(i,1);buildPedCards();recalc();saveAuto();});
+  del.addEventListener('click',()=>{state.peds.splice(i,1);buildPedCards();sfdAnalyzeReq();saveAuto();});
   b.appendChild(del);
   d.appendChild(b);c.appendChild(d);
  });
@@ -2715,18 +2725,24 @@ function renderStability(){
  const pfd=el('div','plot');pfd.id='plot-fs';b4.parentElement.parentElement.appendChild(pfd);
 }
 /* ---------- Plotly charts ---------- */
+/* SFAC: a plot in a hidden output tab is not drawn (it is drawn when its tab is opened: the tab click calls renderPlots,
+   and before printing); display only */
+const SFPLT={all:false,skip:false};
+function sfpOn(id){const e=document.getElementById(id);if(!e)return false;if(SFPLT.all)return true;
+ const pg=e.closest('.tabpage');if(pg&&!pg.classList.contains('active')){SFPLT.skip=true;return false;}return true;}
 function renderPlots(){
  if(R.fatal)return;
+ SFPLT.skip=false;
  const font={family:'Times New Roman',size:12};
  /* DCR bar */
  const names=R.asd.map((a,i)=>(i+1)+'. '+a.cb.name);
  const dcrs=R.asd.map(a=>a.DCR===null?0:(isFinite(a.DCR)?a.DCR:0));
- if($('#plot-dcr'))Plotly.newPlot('plot-dcr',[
+ if(sfpOn('plot-dcr'))Plotly.newPlot('plot-dcr',[
   {x:names,y:dcrs,type:'bar',name:'Bearing DCR',marker:{color:dcrs.map(v=>v>1?'#c62828':'#4a6f9b')}},
   {x:names,y:names.map(()=>1),type:'scatter',mode:'lines',name:'DCR = 1.0',line:{color:'#c00',dash:'dash'}}],
   {font,margin:{t:20,b:130},xaxis:{title:'Service combination',tickangle:-40,tickfont:{size:9}},yaxis:{title:'Bearing DCR'},legend:{orientation:'h'}},{responsive:true,displaylogo:false});
  /* heatmap */
- if($('#plot-heat')&&R.govBear&&R.govBear.bear.plane){
+ if(sfpOn('plot-heat')&&R.govBear&&R.govBear.bear.plane){
   const bp=R.govBear.bear.plane,{B,L}=R,N=60;
   const xs=[],ys=[],z=[];
   for(let i=0;i<=N;i++)xs.push(-B/2+B*i/N);
@@ -2736,7 +2752,7 @@ function renderPlots(){
   {font,title:{text:'Base pressure \u2014 governing combination: '+R.govBear.cb.name+'  (green = min, red = max)',font:{size:12}},margin:{t:30},xaxis:{title:'x (ft)',scaleanchor:'y'},yaxis:{title:'y (ft)'}},{responsive:true,displaylogo:false});
  }
  /* FS chart */
- if($('#plot-fs')){
+ if(sfpOn('plot-fs')){
   const fsot=R.asd.map(a=>Math.min(a.otMin.FS,20));
   const fsx=R.asd.map(a=>Math.min(a.FSslx,20));
   const fsy=R.asd.map(a=>Math.min(a.FSsly,20));
@@ -2753,7 +2769,7 @@ function renderPlots(){
  /* Phase 2 shear/moment envelope diagrams */
  if(P2&&!P2.noCombo){
   ['x','y'].forEach(dir=>{
-   const elid='plot-vm-'+dir;if(!$('#'+elid))return;
+   const elid='plot-vm-'+dir;if(!sfpOn(elid))return;
    const des=(dir==='x')?P2.desX:P2.desY;
    let gm=des.govPos||P2.combos[0];
    // if the user selected a specific LRFD combo, plot that one instead
@@ -2809,7 +2825,7 @@ function renderPlots(){
  /* biaxial P-M interaction diagrams (one per pedestal) */
  if(P2&&P2.pedDes){
   P2.pedDes.forEach((pd,i)=>{
-   const elid='plot-pm-'+i;if(!$('#'+elid))return;
+   const elid='plot-pm-'+i;if(!sfpOn(elid))return;
    // capacity contour at the governing (max) axial level
    const Pu=Math.max(pd.PuMax,0.1);
    const contour=pmContour(pd.pmBars,pd.bx,pd.by,pd.fc,pd.fy,Pu,28);
@@ -3901,6 +3917,7 @@ function renderConsistency(){
  det.appendChild(body);host.appendChild(det);
 }
 function recalc(){
+ clearTimeout(rcTimer);sfdSetStale(false);   /* SFAC */
  R=computeAll();
  P2=R.fatal?null:computePhase2(R);
  if(P2&&!P2.noCombo)P2.dev=sfdDevAll();   /* SFDV */
@@ -3917,7 +3934,36 @@ function recalc(){
  if(typeof buildManualTab==='function'&&$('#manualHost')&&!$('#manualHost').childNodes.length)buildManualTab();
 }
 let rcTimer=null;
-function recalcDebounced(){clearTimeout(rcTimer);rcTimer=setTimeout(recalc,300);}
+function recalcDebounced(){clearTimeout(rcTimer);if(!SFAC.on){sfdSetStale(true);return;}rcTimer=setTimeout(recalc,300);}   /* SFAC */
+/* SFAC (2026-11-03): "Auto-calculate on change" (header). Off: an input edit is still saved (autosave, undo) but the analysis does
+   not run; the results are marked out of date (body.sfdStale) until Re-analyze / Ctrl+Enter. Turning it back on re-analyzes.
+   Printing, "Print report" and "Download DXF" re-analyze first when out of date. Load / Import / Reset / Saved projects… always
+   analyze. Per-browser UI key sfd_autoCalc_v1 ('0' = off; absent = on); not in the project. No calculation change. */
+const SFAC={key:'sfd_autoCalc_v1',on:true};
+try{SFAC.on=localStorage.getItem(SFAC.key)!=='0';}catch(e){}
+function sfdSetStale(v){document.body.classList.toggle('sfdStale',!!v);}
+function sfdIsStale(){return document.body.classList.contains('sfdStale');}
+function sfdAnalyzeReq(){if(SFAC.on)recalc();else sfdSetStale(true);}   /* an input edit that used to call recalc() directly */
+(function(){
+ const chk=document.getElementById('sfdAcChk'),btn=document.getElementById('sfdAcBtn'),btn2=document.getElementById('sfdAcBtn2');
+ const sync=()=>{if(chk)chk.checked=SFAC.on;if(btn)btn.disabled=SFAC.on;};
+ sync();
+ if(chk)chk.addEventListener('change',e=>{e.stopPropagation();SFAC.on=chk.checked;try{localStorage.setItem(SFAC.key,SFAC.on?'1':'0');}catch(err){}sync();if(SFAC.on)recalc();});
+ if(btn)btn.addEventListener('click',()=>recalc());
+ if(btn2)btn2.addEventListener('click',()=>recalc());
+ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&e.key==='Enter'){e.preventDefault();recalc();}});
+ /* outputs taken away from the page re-analyze first (the click is replayed on the rebuilt button) */
+ document.addEventListener('click',e=>{
+  const t=e.target.closest&&e.target.closest('#sfdwDxf,#tab-report [data-rpact="print"]');if(!t||!sfdIsStale())return;
+  e.preventDefault();e.stopPropagation();
+  const sel=t.id==='sfdwDxf'?'#sfdwDxf':'#tab-report [data-rpact="print"]';
+  recalc();const n=document.querySelector(sel);if(n)n.click();},true);
+ /* capture: runs before the other beforeprint listeners (SFRP, D11, manual), so they print the new results */
+ window.addEventListener('beforeprint',()=>{
+  if(sfdIsStale())recalc();
+  if(SFPLT.skip&&!(typeof sfrWillPrint==='function'&&sfrWillPrint())){SFPLT.all=true;try{renderPlots();}finally{SFPLT.all=false;}}   /* plots of hidden tabs */
+ },true);
+})();
 /* U-2 wiring */
 document.addEventListener('DOMContentLoaded',()=>{
  const u=document.getElementById('btnUndo'),r=document.getElementById('btnRedo');
@@ -4001,7 +4047,7 @@ $('#btnReset').addEventListener('click',()=>{
  state=defaultState();bindStaticInputs();buildPedCards();saveAuto();recalc();});
 $('#btnAddPed').addEventListener('click',()=>{
  if(state.peds.length>=10){alert('Maximum of 10 pedestals.');return;}
- state.peds.push(newPed(state.peds.length+1));buildPedCards();saveAuto();recalc();});
+ state.peds.push(newPed(state.peds.length+1));buildPedCards();saveAuto();sfdAnalyzeReq();});
 /* print: open all sections, restore after */
 let printPrev=null;
 window.addEventListener('beforeprint',()=>{
@@ -7189,7 +7235,7 @@ buildManualTab();
       var r=apply(p,chk,read(),via);
       if(r.err.length){ refresh(); return; }
       ov.remove();
-      buildPedCards(); saveAuto(); recalc();
+      buildPedCards(); saveAuto(); sfdAnalyzeReq();
       refreshBar();
       if(typeof sfdSetInTab==='function') sfdSetInTab('peds',true);   /* show the pedestal loads just filled */
     });
@@ -7444,7 +7490,7 @@ buildManualTab();
       var r=apply(p,chk,read(),via);
       if(r.err.length){ refresh(); return; }
       ov.remove();
-      bindStaticInputs(); buildPedCards(); saveAuto(); recalc();
+      bindStaticInputs(); buildPedCards(); saveAuto(); sfdAnalyzeReq();
       refreshBar();
       if(typeof sfdSetInTab==='function') sfdSetInTab('peds',true);   /* show the pedestal loads just filled */
     });
