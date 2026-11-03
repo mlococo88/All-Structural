@@ -4295,7 +4295,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - Line endings unchanged (LF).
 - **Other copies:** none.
 
-## 2026-11-03 — PR: claude/report-print-overflow — printed Report: the local table scroll-box rule (SFPR) removed; shared/report.js now does it for every tool (RPTW; display only)
+## 2026-11-03 — PR: claude/report-print-overflow (PR #733: https://github.com/mlococo88/All-Structural/pull/733) — printed Report: the local table scroll-box rule (SFPR) removed; shared/report.js now does it for every tool (RPTW; display only)
 
 - **Where:** the `<style>` block in the head, anchor `/* SFPR (2026-11-03; review E6)`.
 - **Before:**
