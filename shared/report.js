@@ -315,6 +315,7 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
   details.rp-lz>summary{list-style:none;} details.rp-lz>summary::-webkit-details-marker{display:none;}
   .rp-tbl td.rp-ok,.rp-tbl td.rp-hi,.rp-tbl td.rp-ng,.rp-tbl th{-webkit-print-color-adjust:exact;print-color-adjust:exact;}
   .rp-step .rp-m{overflow:visible;}
+  .rp-tw{overflow:visible;} .rp-tbl.rp-fit{zoom:var(--rp-fit,1);}   /* RPTW (2026-11-03): no scroll bar is printed beside a table; a table wider than the page body is scaled to fit it (fitTables) */
   .katex,.katex *{-webkit-print-color-adjust:exact;print-color-adjust:exact;} .katex .frac-line{border-bottom-color:#000!important;min-height:1px;}
 }`;
   function css() {
@@ -397,18 +398,39 @@ details.rp-lz{border-top:0.4pt solid #bbb;padding:2pt 0;} details.rp-lz>summary{
     LIVE = { host, doc, art };
     return { doc, print: () => print(doc), jump, go };
   }
+  /* RPTW (2026-11-03): print only. A table whose narrowest layout (min-content) is wider than the page body (letter, 0.6 in side
+     margins in pageCss: 7.3 in, less the table's indent in the report) gets class rp-fit and --rp-fit = 0.98 × body width / table width (2 % for rounding in the zoomed layout);
+     the print CSS zooms it by that factor (not below 0.5), so it is scaled to the page instead of clipped. The screen is unchanged.
+     A table that is not laid out when this runs (a closed section of the live viewer) is left as it is. */
+  const PAGE_W = 7.3 * 96;
+  function fitTables(root) {
+    if (!root || !root.querySelectorAll) return;
+    (root.matches && root.matches('.rp-doc') ? [root] : Array.from(root.querySelectorAll('.rp-doc'))).forEach(d => {
+      const dr = d.getBoundingClientRect(), dc = getComputedStyle(d), x0 = dr.left + (parseFloat(dc.paddingLeft) || 0) + (parseFloat(dc.borderLeftWidth) || 0);
+      d.querySelectorAll('.rp-tw>table.rp-tbl').forEach(t => {
+        t.classList.remove('rp-fit'); t.style.removeProperty('--rp-fit');
+        if (!t.getClientRects().length) return;
+        const w0 = t.style.width; t.style.width = 'min-content'; const need = t.getBoundingClientRect().width; t.style.width = w0;
+        const avail = PAGE_W - Math.max(0, t.parentNode.getBoundingClientRect().left - x0);
+        if (need > avail + 0.5) { t.classList.add('rp-fit'); t.style.setProperty('--rp-fit', String(Math.max(0.5, Math.floor(avail / need * 980) / 1000))); }
+      });
+    });
+  }
   /* print(doc): the whole report alone on the page (every section open, every lazy item filled), the running header and page numbers
      as @page margin boxes (Chromium-based browsers print them; others print the page without). */
   function print(doc) {
     css();
     let box = document.getElementById('rp-print'); if (!box) { box = document.createElement('div'); box.id = 'rp-print'; document.body.appendChild(box); }
     box.innerHTML = `<div class="rp"><article class="rp-doc">${html(doc, { lazy: false })}</article></div>`;
+    box.style.cssText = 'display:block;position:absolute;left:-100000px;top:0;width:7.3in;visibility:hidden;';   // RPTW: laid out off screen, measured, then hidden again
+    try { fitTables(box); } catch (e) { /* print without scaling */ }
+    box.style.cssText = '';
     setPage(doc); document.body.classList.add('rp-printing');
     if (typeof window.print === 'function') setTimeout(() => window.print(), 50);
   }
   if (typeof window !== 'undefined' && window.addEventListener) {
     window.addEventListener('beforeprint', () => { if (document.body.classList.contains('rp-printing')) return;   // Ctrl+P while the Report tab shows
-      if (LIVE && LIVE.host.isConnected && LIVE.host.querySelector('.rp') && LIVE.host.offsetParent !== null) { fillLazy(LIVE.art, LIVE.doc); setPage(LIVE.doc); } });
+      if (LIVE && LIVE.host.isConnected && LIVE.host.querySelector('.rp') && LIVE.host.offsetParent !== null) { fillLazy(LIVE.art, LIVE.doc); setPage(LIVE.doc); try { fitTables(LIVE.art); } catch (e) { /* RPTW: print without scaling */ } } });
     window.addEventListener('afterprint', () => { document.body.classList.remove('rp-printing'); setPage(null); const b = document.getElementById('rp-print'); if (b) b.innerHTML = ''; });
   }
 
