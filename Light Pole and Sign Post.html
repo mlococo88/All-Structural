@@ -618,8 +618,9 @@
         <div class="row ibcOnly"><label>Lateral bearing S₁<span class="note" id="s1Src">psf/ft (IBC Tbl 1806.2)</span></label><div class="ctl"><input id="S1" type="number" value="150" step="10"><span class="unit">psf/ft</span></div></div>
         <div class="row ibcOnly"><label>Allowable bearing, q<sub>a</sub><span class="note">vertical, base of shaft (IBC Tbl 1806.2)</span></label><div class="ctl"><input id="qAllow" type="number" value="2.0" step="0.5"><span class="unit">ksf</span></div></div>
         <div class="subpanel ref" id="bromsPanel">
-          <div class="sp-h">Broms reference check — AASHTO LTS C13.6.1.1 <span class="ref-chip">reference only</span></div>
-          <p class="tbl-note" style="margin:0 0 8px 0">Optional. These inputs feed only the Broms comparison in the Shaft tab; they do not affect the IBC design. Leave the soil model at "Not evaluated" unless a geotechnical report supplies the parameters.</p>
+          <div class="sp-h"><span class="ibcOnly">Broms reference check — AASHTO LTS C13.6.1.1 <span class="ref-chip">reference only</span></span><span class="ltsOnly">Broms embedment — design method, LRFDLTS Art. 13.6.1.1, C13.6.1.1 <span class="ref-chip">required</span></span></div>
+          <p class="tbl-note ltsOnly" style="margin:0 0 8px 0">Required in the LRFDLTS mode: the shaft embedment is designed by Broms with the factored groundline M<sub>F</sub>, V<sub>F</sub> (Shaft tab). Choose cohesive or cohesionless and enter the soil parameters from the geotechnical report.</p>
+          <p class="tbl-note ibcOnly" style="margin:0 0 8px 0">Optional. These inputs feed only the Broms comparison in the Shaft tab; they do not affect the IBC design. Leave the soil model at "Not evaluated" unless a geotechnical report supplies the parameters.</p>
         <div class="row"><label>Broms soil model</label><div class="ctl"><select id="bromsSoil" class="combo-sel">
             <option value="none">Not evaluated</option>
             <option value="cohesive">Cohesive (clay) — uses c</option>
@@ -1238,6 +1239,17 @@ function lppApplyCode(){
   const ra=$('rowLtsAdt'); if(ra) ra.style.display=sign?'none':'';
   const rr=$('rowLtsRisk'); if(rr) rr.style.display=sign?'none':'';   // LTS-L1: a roadside sign takes the 10-yr MRI whatever the risk category (Table 3.8-1 note)
   if($('ltsBasisIn')) $('ltsBasisIn').textContent='Basis: '+LpLts.BASIS+'.';
+  lppBromsPanelPlace(lts);   // LTS-L2
+}
+// LTS-L2 (2026-11-03): in the LRFDLTS mode the Broms panel (the design method there) is the first item of the Shaft & soil card;
+// in the IBC mode it is back in its place (before "Isolated 2×"). The node is moved, so ids and values are unchanged.
+let LPP_BROMS_HOME=null;
+function lppBromsPanelPlace(lts){
+  const bp=$('bromsPanel'); if(!bp||!bp.parentNode) return;
+  if(!LPP_BROMS_HOME) LPP_BROMS_HOME={parent:bp.parentNode, next:bp.nextElementSibling};
+  const H=LPP_BROMS_HOME;
+  if(lts){ if(H.parent.firstElementChild!==bp) H.parent.insertBefore(bp,H.parent.firstElementChild); }
+  else if(bp.nextElementSibling!==H.next) H.parent.insertBefore(bp,H.next);
 }
 function applyMode(){
   const sign=appMode==='sign';
@@ -4503,10 +4515,14 @@ function buildSignReport(inp,sw,pw,allCombos,postDesigns,poleSeg){
 // ---- blocking input validation (LP-O6, added 2026-10-12) ----
 // Returns a list of messages; any message stops calc() and hides the results (Manual stays open).
 function lppInputErrors(inp){
-  const e=[], sign=inp.mode==='sign';
+  const e=[], sign=inp.mode==='sign', lts=codeMode==='lts';
   const pos=(v,lab)=>{ if(!(v>0)) e.push(lab+' must be greater than 0.'); };
+  // LTS-L2 (2026-11-03): the check follows the code mode. In the LRFDLTS mode the hidden IBC-only fields (V, β, S₁, q_a) are not
+  // checked; the LTS inputs are checked by lppLtsInputErrors(). IBC: as before.
+  if(!lts){
   pos(inp.V,'Basic wind speed V');
   if(!(inp.beta>0)) e.push('Damping ratio β must be greater than 0.');
+  }
   if(sign){
     pos(inp.signB,'Panel width B'); pos(inp.signS,'Panel height s');
     if(!(inp.signClr>=0)) e.push('Clearance to bottom of panel must be 0 or more.');
@@ -4521,7 +4537,7 @@ function lppInputErrors(inp){
   if(!wallOK(inp.poleDiaTop,inp.poleTwTop)||!wallOK(inp.poleDiaBase,inp.poleTwBase)||(inp.poleShape==='rect'&&!wallOK(inp.poleDepthTop,inp.poleTwTop)))
     e.push(lbl+' wall thickness must be less than half the outside dimension.');
   pos(inp.poleFy,lbl+' yield strength Fy');
-  pos(inp.b,'Shaft diameter / width b'); pos(inp.S1,'Lateral bearing S₁'); pos(inp.qAllow,'Allowable bearing q_a');
+  pos(inp.b,'Shaft diameter / width b'); if(!lts){ pos(inp.S1,'Lateral bearing S₁'); pos(inp.qAllow,'Allowable bearing q_a'); }
   pos(inp.fc,'Concrete f′c'); pos(inp.fy,'Reinforcement f_y');
   if(!(inp.boltQty>=1)) e.push('Number of bolts must be at least 1.');
   pos(inp.boltBC,'Bolt circle diameter BC'); pos(inp.boltHef,'Anchor embedment h_ef');
@@ -4532,6 +4548,18 @@ function lppInputErrors(inp){
       if(ext+(inp.boltDia||0)/2>=inp.bpB/2) e.push('Square base plate: a rod hole reaches the plate edge (rod at '+fmt(ext,2)+' in from the centre, half side '+fmt(inp.bpB/2,2)+' in) — increase B or reduce the bolt circle.'); } }
   return e;
 }
+// LTS-L2 (2026-11-03): the inputs the LRFDLTS run reads that the shared check above does not cover: V, V_svc, the fillet weld (w,
+// F_EXX) and the Broms soil model (the LTS embedment is by Broms). An error here stops the LTS run only; the IBC engine underneath
+// (and so its cable values) runs as before.
+function lppLtsInputErrors(inp){
+  const e=[], pos=(v,lab)=>{ if(!(v>0)) e.push(lab+' must be greater than 0.'); };
+  pos(num('ltsV'),'Basic wind speed V (LRFDLTS)');
+  pos(num('ltsVsvc'),'Service wind speed V_svc');
+  if(!$('ltsWeldType')||$('ltsWeldType').value!=='cjp'){ pos(num('ltsWeldW'),'Fillet weld size w'); pos(num('ltsFexx'),'Electrode strength F_EXX'); }
+  if(!inp.bromsSoil||inp.bromsSoil==='none') e.push('Broms soil model (Shaft & soil): choose Cohesive or Cohesionless. In the LRFDLTS mode the shaft embedment is designed by Broms (Art. 13.6.1.1).');
+  return e;
+}
+let lppLtsBlocked=false;   // LTS-L2: an LTS input error: ltsCalc() shows no results
 function lppShowInputErrors(errs){
   const box=$('lppInErr'), wrap=$('tabBar')?$('tabBar').parentElement:null;
   if(!box||!wrap) return;
@@ -4603,7 +4631,7 @@ function lppCalcIbc(){
   // blocking input errors (LP-O6): a blank or non-positive geometry/material input used to crash
   // calc() (e.g. "Invalid array length" in drawElev) and leave the previous results on screen.
   lppLastInp=null;
-  { const errs=lppInputErrors(inp); lppShowInputErrors(errs); if(errs.length) return; }
+  { const errs=lppInputErrors(inp), le=(codeMode==='lts')?lppLtsInputErrors(inp):[]; lppLtsBlocked=le.length>0; lppShowInputErrors(errs.concat(le)); if(errs.length) return; }   // LTS-L2
   lppLastInp=inp;   // LTS-1: the LRFDLTS engine reads the same geometry
 
   if(inp.mode==='sign'){
@@ -7282,7 +7310,7 @@ function lppHash(str){ let h=0x811c9dc5; for(let i=0;i<str.length;i++){ h^=str.c
 // Strength I and Extreme I (max/min DC) for every load case of Table 3.9.3-1, M = B·M (Art. 4.8.1 / Eq. 5.12.1-10), the LTS shaft depth
 // (Broms, LTS-7) and the ACI cage of the LTS run. Service I and Fatigue are not sent.
 function ltsAnchorPayload(){
-  const inp=lppLastInp, X=lppLtsLast;
+  const inp=lppLtsBlocked?null:lppLastInp, X=lppLtsLast;   // LTS-L2
   if(!inp||!X||!X.ba||!X.mc) return {error:'No LRFDLTS results yet (correct any input errors first).'};
   if(!X.fd||!X.fd.gov) return {error:'Select the Broms soil model (Shaft & soil): the LRFDLTS shaft depth comes from Broms (LTS-7).'};
   const notes=[];
@@ -7510,7 +7538,7 @@ function ltsCalc(){
     +`Wind from any direction: load cases 1–3 of Table 3.9.3-1 (LTS-2). Service III (prestressed concrete) and Fatigue I/II are not used (fatigue design is not required for these supports, Arts. 11.4 and 11.7.2; LTS-5).</p>`
     +`<p class="tbl-note">Member forces along the pole and the checks follow in LTS-3 to LTS-7.</p>`);
   // LTS-2: wind, dead load, ice and the factored base actions
-  const inp=lppLastInp;
+  const inp=lppLtsBlocked?null:lppLastInp;   // LTS-L2: no LTS results while an LTS input is in error
   if(inp){
     const g=ltsGeom(inp,L), ba=LpLts.baseActions(g,L), ws=LpLts.windSteps(g,L);
     lppLtsLast={g,L,ba,ws,m,mSteps};
@@ -8198,7 +8226,7 @@ function lppInputTabMarks(){
   document.querySelectorAll('.col-in .lppInPane input').forEach(inp=>{
     if(!(inp.validity&&inp.validity.badInput)) return;
     const pn=inp.closest('.lppInPane'); if(!pn) return;
-    for(let n=inp; n&&n!==pn; n=n.parentElement){ if(n.style&&n.style.display==='none') return; }
+    for(let n=inp; n&&n!==pn; n=n.parentElement){ if(n.style&&n.style.display==='none') return; if(n.classList&&n.classList.contains(codeMode==='lts'?'ibcOnly':'ltsOnly')) return; }   // LTS-L2: nor by the code mode
     bad[pn.id.replace('lppInPane_','')]=1;
   });
   LPP_IN_TABS.forEach(([k])=>{
