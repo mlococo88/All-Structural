@@ -4476,3 +4476,23 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 
 ### Open items
 - None.
+
+## 2026-11-03 — PR: claude/sfdf-report-nowrap (PR #742: https://github.com/mlococo88/All-Structural/pull/742) — Report rows: no repeated DCR prefix; the condition on one line (SFDF-N; display only, no result change)
+
+### SFDF-N. Follow-up to SFDF-R (#741)   [display only]
+- **Problem (engineer):** the Result cell read "DCR 0.30 (within limit); DCR 0.30 OK, but A_s < A_s,min (top x)". The ratio appeared twice.
+- **Where:**
+  - `sfdRowCond(x)` (anchor `/* SFDF-R (2026-11-03, engineer): the Report's result rows`):
+    - Before: `const has=x.dc!=null&&!isNaN(x.dc);`
+    - After: `const has=x.dc!=null&&!isNaN(x.dc)&&!/^\s*DCR\s/.test(String(x.val||''));`
+    - So no "DCR x.xx (within limit); " prefix is added where the chip text already starts with "DCR ".
+  - The condition cell in the summary table and in `sfxResults`: `{t:cd.cond}` → `{t:cd.cond,cls:'sfnw'}`. shared/report.js renders that as class `rp-sfnw`; shared/report.js itself is not changed.
+  - CSS: before `@media print{#rp-print .rp-steps>.rp-step:last-child`, added `td.rp-sfnw{white-space:nowrap}`. It applies on screen and in print.
+- **Check case:** default project. Before: `Flexure (footing) | DCR 0.30 (within limit); DCR 0.30 OK, but A_s < A_s,min (top x) | A_s < A_s,min | FAIL`. After: `Flexure (footing) | DCR 0.30 OK, but A_s < A_s,min (top x) | A_s < A_s,min | FAIL`. Punching shear (review case) changes the same way. Rows whose text starts otherwise keep the prefix, e.g. "DCR 0.91 (within limit); Ped 1: …" for dowels in sfe9 and "DCR 0.42 (within limit); Ped 1: ties".
+- **How verified:**
+  - origin/main vs branch, 12 cases: `R` and `P2` are identical. The Report text has the same line count, and only these cells differ. 0 console errors.
+  - PDFs checked: default project pages 3 and 50, and the sfe9 case pages 4 and 53. The longest condition there, "shear-friction dev. short; dowels ≠ bars", stays on one line. It widens the D/C column, but the tables stay within the page width.
+- **Other copies:** none.
+
+### Open items
+- None.
