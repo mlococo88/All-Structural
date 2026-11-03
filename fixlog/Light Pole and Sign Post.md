@@ -2201,7 +2201,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 ### Open items
 - The outer border prints on the page edge (the sheet is the page): a physical printer with unprintable edges clips that outer line; a PDF keeps it.
 
-## 2026-11-03 — PR: claude/lpp-gf-cable (LPGC: the cables keep G_f at h = H; Manual: the check summary panel)   [§4: cable G when p > 0 on a flexible pole; p = 0 identical]
+## 2026-11-03 — PR: [#751](https://github.com/mlococo88/All-Structural/pull/751) (LPGC: the cables keep G_f at h = H; Manual: the check summary panel)   [§4: cable G when p > 0 on a flexible pole; p = 0 identical]
 
 ### LPGC. Cable wind: G_f with h = H, as before LPGF (#748)   [calculation change]
 - **Decision (engineer, 2026-11-03):** the cables keep the gust factor computed with h = H, exactly as before #748. The pole and fixtures keep G_f with h = H + p (LPGF, #748). The sign has no cables and is unchanged. This answers the question raised with #748, where the cable wind followed the pole's G.
