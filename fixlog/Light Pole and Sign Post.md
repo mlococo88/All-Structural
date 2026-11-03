@@ -2151,7 +2151,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - The LRFDLTS summary card does not list the shaft reinforcement (ACI 318 with the LRFDLTS demands) or the torsion threshold, so the panel does not either; adding them would be a change to that card.
 - The User Manual does not yet mention the panel (left so the Manual text is unchanged).
 
-## 2026-11-03 — PR: claude/lpp-gf-proj (LPGF: flexible G_f with h above grade, H + p, IBC pole)   [§4: formula input change when p > 0 and n₁ < 1 Hz; p = 0 identical]
+## 2026-11-03 — PR: [#748](https://github.com/mlococo88/All-Structural/pull/748) (LPGF: flexible G_f with h above grade, H + p, IBC pole)   [§4: formula input change when p > 0 and n₁ < 1 Hz; p = 0 identical]
 
 ### LPGF. G_f height h = H + p with a shaft projection   [calculation change]
 - **Decision (engineer, 2026-11-03):** with the shaft projection p (LPPJ, #746, open item 3 there: "G_f (flexible) keeps h = H"), the flexible gust-effect factor of the IBC mode uses the height above grade, h = H + p. This closes that open item; the rest of LPPJ is unchanged.
