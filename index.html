@@ -14,7 +14,11 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
 <!-- IDRP: shared worked steps and the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <script src="shared/steps.js"></script>
+<!-- IXRX (2026-11-03): Ctrl+P / the browser's Print from any step first shows the Report step (ixxPrintPrep, set by the app), registered
+     before shared/report.js so its own beforeprint handler finds the Report; after it, ixxPrintFill prints the report alone. -->
+<script>window.addEventListener("beforeprint",function(){try{if(window.ixxPrintPrep)window.ixxPrintPrep();}catch(e){}});</script>
 <script src="shared/report.js"></script>
+<script>window.addEventListener("beforeprint",function(){try{if(window.ixxPrintFill)window.ixxPrintFill();}catch(e){}});</script>
 <script src="shared/list-input.js"></script>
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
@@ -11720,7 +11724,7 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
   }, [queryDist, rows, selectedLoad, nodePositions, totalBridgeLen, effectiveScale]);
 
   // ── NEW state for features 1,3,4,5 ─────────────────────────────────────────
-  const [viewTab,      setViewTab]      = useState('charts');
+  const [viewTab,      setViewTab]      = useState(()=>ixxKept('viewTab','charts'));   // IXRX: kept over a print from this step
   const [envelopeLCs,  setEnvelopeLCs]  = useState([]);
   // Overlay mode
   const [overlayLCs,   setOverlayLCs]   = useState([]);
@@ -12125,7 +12129,8 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
     </div>
   ) : null;
   // Rating sub-tab and D/C chart state — must be at component level (Rules of Hooks)
-  const [ratingSubTab, setRatingSubTab] = useState('inputs');
+  const [ratingSubTab, setRatingSubTab] = useState(()=>ixxKept('ratingSubTab','inputs'));   // IXRX: kept over a print from this step
+  IXX.cur={viewTab, ratingSubTab};
   const [dcMode,  setDcMode]  = useState('moment');
   const [showInv, setShowInv] = useState(true);
   const [showOp,  setShowOp]  = useState(true);
@@ -13364,6 +13369,20 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
       isGFS, gfsMember, gfsMembers, aremaSpan: (_aremaParams&&_aremaParams.span)||0,
     });
   },[ratingData, nodePositions, gfsMember, multiVehicleData]);
+  /* IXRX (2026-11-03): what the retired window reports took from this step, for the Report step (read when it builds; the Report
+     shows while this step is not mounted, so the values are those of the last Results / Rating step shown, as reportState):
+     the Report Card's values (IdxRatingCard), the "Print AREMA Report" arguments (generateAremaReport) and the RF chart's data. */
+  const idxCardP = {cfg, govRating, govOperating, ratingMethod, ratingLimitState, ratingCategory, ratingLevel, ratingDcLC, ratingDwLC, ratingLLposLC,
+    gamDC, gamDW, gamLL, gamLL_op, ratingLLScale, phiC, phiS, ratingPhiF, ratingPhiV, ratingVehicleName, ratingVehicleTon,
+    govAsdN, govAsdX, govAsdM, aremaCalcX, capZones, setStep, setRatingSubTab, setRatingLLOpen};
+  useEffect(()=>{
+    IXX.rx = {
+      card: ratingData.length ? idxCardP : null,
+      arema: aremaAsdData.length>0&&govAsdN ? { ap:_aremaParams, data:aremaAsdData, govN:govAsdN, govX:govAsdX, govM:govAsdM, govFat:govAsdFat,
+        gfsInfo: isGFS ? { isGFS:true, memberKey: gfsMember||'', memberType: gfsMembers.find(m=>m.key===gfsMember)?.type||'' } : null } : null,
+      chart: ratingData.length ? { ratingData, operatingData, nodePositions, yMax:rfYMax } : null,
+    };
+  });
 
   // ── helpers ───────────────────────────────────────────────────────────────
   const toggleEnvLC  = lc => setEnvelopeLCs(p=>p.includes(lc)?p.filter(x=>x!==lc):[...p,lc]);
@@ -17190,26 +17209,10 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
                     Normal (Table 15-1-11) · Maximum &amp; Modified (Table 15-7-1, K=0.80Fy) · Fatigue (§1.7)
                   </div>
                   {aremaAsdData.length>0&&govAsdN&&(<>
-                  <button onClick={()=>{
-                    try {
-                      const html=generateAremaReport({
-                        cfg, ap:_aremaParams, data:aremaAsdData,
-                        govN:govAsdN, govX:govAsdX, govM:govAsdM, govFat:govAsdFat,
-                        settings: cfg.rating?.arema_reportSections,
-                        gfsInfo: isGFS ? {
-                          isGFS:true,
-                          memberKey: gfsMember||'',
-                          memberType: gfsMembers.find(m=>m.key===gfsMember)?.type||'',
-                        } : null,
-                      });
-                      const w=window.open('','_blank','width=960,height=900');
-                      if(w){w.document.write(html);w.document.close();}
-                      else alert('Popup blocked — please allow popups for this page and try again.');
-                    } catch(err) {
-                      alert('Report error: '+err.message);
-                      console.error('generateAremaReport error:',err);
-                    }
-                  }} style={{padding:'6px 14px',background:'#1d4ed8',color:'#fff',border:'none',
+                  {/* IXRX (2026-11-03): prints the Report (its section "AREMA rating report" is generateAremaReport with these values and the
+                      Report Settings below); the report window is retired */}
+                  <button onClick={()=>ixxPrintAny()} title="Print the calculation report (Report step; the AREMA report is its section AREMA rating report)"
+                    style={{padding:'6px 14px',background:'#1d4ed8',color:'#fff',border:'none',
                     borderRadius:'5px',cursor:'pointer',fontSize:'11px',fontFamily:'monospace',
                     fontWeight:'600',flexShrink:0}}>
                     📄 Print AREMA Report
@@ -19060,246 +19063,18 @@ function StepResults({ cfg, set, setStep, mctOutput, rows: origRows, setRows, ra
 
             {ratingSubTab==='card'&&(<div>
               {(()=>{
-                const now = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
-                const govInv = govRating;
-                const govOp  = govOperating;
-                const cardStyle = {background:'#fff',border:'1px solid #e5e7eb',borderRadius:'8px',
-                  padding:'32px 40px',maxWidth:'720px',margin:'0 auto',fontFamily:"'IBM Plex Sans',sans-serif"};
-                const lineStyle = {display:'flex',justifyContent:'space-between',alignItems:'flex-end',
-                  borderBottom:'1px solid #e5e7eb',paddingBottom:'5px',marginBottom:'10px'};
-                const fieldL = {fontSize:'11px',color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.07em'};
-                const fieldV = {fontSize:'13px',fontWeight:'600',color:'#111827',fontFamily:'monospace'};
-                const rfColor = rf=>rf>=1?'#059669':rf>=0.3?'#d97706':'#dc2626';
-
+                /* IXRX (2026-11-03): the card is IdxRatingCard (also rendered, hidden, by the Report step); "Print / Export" prints the Report */
                 return (
                   <div>
                     {/* Print button */}
                     <div style={{display:'flex',justifyContent:'flex-end',marginBottom:'12px',gap:'8px'}}>
-                      <button onClick={()=>{
-                        const el=document.getElementById('rating-report-card');
-                        const w=window.open('','_blank');
-                        w.document.write(`<html><head><title>Rating Report Card</title>
-                          <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
-                          <style>*{box-sizing:border-box}body{font-family:'IBM Plex Sans',sans-serif;padding:20px;max-width:780px;margin:0 auto}
-                          @media print{body{padding:0}button{display:none}} .idx-wk{display:none}</style></head><body>
-                          ${el.innerHTML}
-                          <button onclick="window.print()" style="margin-top:16px;background:#1d4ed8;color:#fff;border:none;padding:10px 24px;border-radius:6px;cursor:pointer;font-size:14px">🖨 Print</button>
-                          </body></html>`);
-                        w.document.close();
-                      }} style={{background:'#1d4ed8',border:'none',borderRadius:'6px',color:'#fff',
+                      <button onClick={()=>ixxPrintAny()} title="Print the calculation report (Report step; the card is its section Rating report card)" style={{background:'#1d4ed8',border:'none',borderRadius:'6px',color:'#fff',
                         padding:'7px 18px',cursor:'pointer',fontSize:'12.5px',fontWeight:'600'}}>
                         🖨 Print / Export
                       </button>
                     </div>
 
-                    <div id="rating-report-card" style={cardStyle}>
-                      {/* Header */}
-                      <div style={{textAlign:'center',marginBottom:'24px',paddingBottom:'18px',borderBottom:'3px solid #1d4ed8'}}>
-                        <div style={{fontSize:'11px',fontFamily:'monospace',color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:'4px'}}>
-                          BRIDGE LOAD RATING — SUMMARY
-                        </div>
-                        <div style={{fontSize:'20px',fontWeight:'700',color:'#111827',marginBottom:'4px'}}>
-                          {cfg?.projectName||'Unnamed Bridge'}
-                        </div>
-                        <div style={{fontSize:'13px',color:'#6b7280'}}>
-                          {cfg?.projectBridgeId||''}{cfg?.projectBridgeId&&cfg?.projectClient?' · ':''}{cfg?.projectClient||''}
-                        </div>
-                      </div>
-
-                      {/* Project info grid */}
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'0',marginBottom:'20px'}}>
-                        {[
-                          ['Engineer',     cfg?.projectUser||'—'],
-                          ['Date',         now],
-                          ['Revision',     cfg?.projectRevision||'0'],
-                          ['Bridge ID',    cfg?.projectBridgeId||'—'],
-                          ['Method',       `${ratingMethod} · ${ratingLimitState}`],
-                          ['Category',     `${ratingCategory} · ${ratingLevel}`],
-                          ['Dead Load DC', ratingDcLC||'—'],
-                          ['Dead Load DW', ratingDwLC||'(none)'],
-                          ['Live Load',    ratingLLposLC||'—'],
-                        ].map(([l,v])=>(
-                          <div key={l} style={{padding:'7px 10px',border:'1px solid #f3f4f6',background:'#fafafa'}}>
-                            <div style={fieldL}>{l}</div>
-                            <div style={{...fieldV,fontSize:'12px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Rating factors summary */}
-                      <div style={{fontSize:'11px',fontFamily:'monospace',color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>
-                        Load Factors & Modifiers
-                      </div>
-                      <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px',marginBottom:'20px'}}>
-                        {[['γ_DC',gamDC],['γ_DW',gamDW],['γ_LL (Inv)',gamLL],['γ_LL (Op)',gamLL_op.toFixed(2)],['LL Scale',ratingLLScale.toFixed(4)],
-                          ['φ_c',phiC],['φ_s',phiS],['φ_f',ratingPhiF],['φ_v',ratingPhiV],['η','not used']
-                        ].map(([l,v])=>(
-                          <div key={l} style={{background:'#f8fafc',border:'1px solid #e5e7eb',borderRadius:'5px',padding:'6px 8px',textAlign:'center'}}>
-                            <div style={{fontSize:'9.5px',color:'#6b7280',fontFamily:'monospace',textTransform:'uppercase'}}>{l}</div>
-                            <div style={{fontSize:'14px',fontWeight:'700',fontFamily:'monospace',color:'#111827'}}>{v}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <IdxWorkedIn sx={{margin:'-14px 0 16px'}} items={[{txt:`LL scale ×${ratingLLScale.toFixed(4)}`, label:'AASHTO Rating · Inputs & Setup · Live Load Scale Factors',
-                        go:()=>{ setRatingSubTab('inputs'); setRatingLLOpen(true); idxGotoEl('idx-ll-scale'); }}]}/>
-
-                      {/* THE RATING BOX */}
-                      <div style={{border:'2px solid #e5e7eb',borderRadius:'8px',overflow:'hidden',marginBottom:'20px'}}>
-                        {/* Column headers */}
-                        <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 1fr',background:'#1d4ed8',color:'#fff',
-                          padding:'8px 12px',fontSize:'10.5px',fontWeight:'600',textTransform:'uppercase',letterSpacing:'0.06em',gap:'0',textAlign:'center'}}>
-                          <div style={{textAlign:'left'}}>Rating Level</div>
-                          <div>RF</div>
-                          <div>Rating<br/>Tons</div>
-                          <div>RF M⁺</div>
-                          <div>RF M⁻</div>
-                          <div>Controls</div>
-                        </div>
-                        {[
-                          {label:'Inventory', rf:govInv?.rfGov, tons:govInv?+(govInv.rfGov*ratingVehicleTon).toFixed(1):null,
-                           rfMpos:govInv?.rfMpos, rfMneg:govInv?.rfMneg, governs:govInv?.governs},
-                          {label:'Operating', rf:govOp?.rfGov,  tons:govOp?+(govOp.rfGov*ratingVehicleTon).toFixed(1):null,
-                           rfMpos:govOp?.rfMpos,  rfMneg:govOp?.rfMneg,  governs:govOp?.governs},
-                        ].map((row,ri)=>(
-                          <div key={row.label} style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 1fr',
-                            padding:'12px 12px',textAlign:'center',gap:'0',
-                            background:ri===0?'#fff':'#fafafa',borderTop:'1px solid #e5e7eb'}}>
-                            <div style={{textAlign:'left',fontWeight:'600',fontSize:'13px',color:'#374151'}}>{row.label}</div>
-                            <div style={{fontSize:'20px',fontWeight:'800',fontFamily:'monospace',color:row.rf!=null?rfColor(row.rf):'#9ca3af'}}>
-                              {row.rf!=null?row.rf.toFixed(3):'—'}
-                            </div>
-                            <div style={{fontSize:'16px',fontWeight:'700',fontFamily:'monospace',color:row.rf!=null?rfColor(row.rf):'#9ca3af'}}>
-                              {row.tons!=null?row.tons+' T':'—'}
-                            </div>
-                            <div style={{fontSize:'13px',fontFamily:'monospace',color:'#374151'}}>{row.rfMpos?.toFixed(3)??'—'}</div>
-                            <div style={{fontSize:'13px',fontFamily:'monospace',color:'#374151'}}>{row.rfMneg?.toFixed(3)??'—'}</div>
-                            <div style={{fontSize:'12px',color:'#6b7280'}}>
-                              {row.governs==='M+'?'M⁺ Flexure':row.governs==='M-'?'M⁻ Flexure':'Shear'}
-                            </div>
-                          </div>
-                        ))}
-                        {/* Status bar */}
-                        <div style={{background:govInv?.rfGov>=1?'#d1fae5':'#fee2e2',padding:'8px 14px',
-                          display:'flex',alignItems:'center',gap:'10px',borderTop:'1px solid #e5e7eb'}}>
-                          <span style={{fontSize:'16px'}}>{govInv?.rfGov>=1?'✅':'❌'}</span>
-                          <span style={{fontSize:'13px',fontWeight:'700',color:govInv?.rfGov>=1?'#065f46':'#991b1b'}}>
-                            {govInv?.rfGov>=1 ? 'ADEQUATE — No Posting Required' : 'POSTING REQUIRED — See Below'}
-                          </span>
-                          <span style={{fontSize:'11px',fontFamily:'monospace',color:'#6b7280',marginLeft:'auto'}}>
-                            Gov. node: N{govInv?.node} · {govInv?.pos?.toFixed(2)} ft
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Vehicle being rated */}
-                      <div style={{display:'flex',gap:'10px',alignItems:'center',marginBottom:'20px',
-                        padding:'8px 14px',background:'#f8fafc',border:'1px solid #e5e7eb',borderRadius:'6px'}}>
-                        <span style={{fontSize:'11px',color:'#6b7280'}}>Rated Vehicle:</span>
-                        <span style={{fontSize:'13px',fontWeight:'600',color:'#111827'}}>{ratingVehicleName}</span>
-                        <span style={{fontSize:'12px',fontFamily:'monospace',color:'#6b7280'}}>{ratingVehicleTon} T GVW</span>
-                        <span style={{fontSize:'10.5px',fontFamily:'monospace',color:'#9ca3af',marginLeft:'auto'}}>
-                          {ratingMethod} · MBE Table 6A.4.2.2-1
-                        </span>
-                      </div>
-
-                      {/* AREMA ASD results (shown when AREMA zones exist) */}
-                      {(govAsdN||govAsdM)&&(
-                      <div style={{marginBottom:'20px',paddingBottom:'16px',borderBottom:'2px solid #fde68a'}}>
-                        <div style={{fontSize:'11px',fontFamily:'monospace',color:'#6b7280',
-                          textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>
-                          🚂 AREMA Chapter 15 — Allowable Stress Design (ASD)
-                        </div>
-                        <div style={{border:'2px solid #fde68a',borderRadius:'8px',overflow:'hidden'}}>
-                          <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr',background:'#d97706',
-                            color:'#fff',padding:'7px 12px',fontSize:'10px',fontWeight:'600',
-                            textTransform:'uppercase',letterSpacing:'0.06em',textAlign:'center'}}>
-                            <div style={{textAlign:'left'}}>Rating Case</div>
-                            <div>RF (gov.)</div>
-                            <div>Controls</div>
-                            <div>Gov. Node</div>
-                          </div>
-                          {[
-                            govAsdN && {
-                              label:'Normal (Standard)',
-                              rf: govAsdN.gN, ctrl: govAsdN.govN,
-                              node: `N${govAsdN.node} @ ${govAsdN.pos.toFixed(1)} ft`, bg:'#fff'
-                            },
-                            govAsdX && {
-                              label:'Maximum (K-factor, +CF)',
-                              rf: govAsdX.gX, ctrl: govAsdX.govX,
-                              node: `N${govAsdX.node} @ ${govAsdX.pos.toFixed(1)} ft`, bg:'#fff7ed'
-                            },
-                            govAsdM && (cfg?.rating?.arema_mod!==false) && {
-                              label:'Modified (+Wind+Rock)',
-                              rf: govAsdM.gM, ctrl: govAsdM.govM,
-                              node: `N${govAsdM.node} @ ${govAsdM.pos.toFixed(1)} ft`, bg:'#fffbeb'
-                            },
-                          ].filter(Boolean).map((row,ri)=>{
-                            const rfc = row.rf>=1?'#059669':row.rf>=0.5?'#d97706':'#dc2626';
-                            return (
-                              <div key={ri} style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr',
-                                padding:'10px 12px',textAlign:'center',background:row.bg,
-                                borderTop:'1px solid #fde68a'}}>
-                                <div style={{textAlign:'left',fontWeight:'600',fontSize:'12px',color:'#92400e'}}>{row.label}</div>
-                                <div style={{fontSize:'20px',fontWeight:'800',fontFamily:'monospace',color:rfc}}>
-                                  {isFinite(row.rf)?row.rf.toFixed(3):'—'}
-                                </div>
-                                <div style={{fontSize:'12px',fontFamily:'monospace',color:'#374151'}}>{row.ctrl}</div>
-                                <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280'}}>{row.node}</div>
-                              </div>
-                            );
-                          })}
-                          <div style={{background:govAsdN?.gN>=1?'#d1fae5':'#fee2e2',padding:'7px 14px',
-                            display:'flex',alignItems:'center',gap:'10px',borderTop:'1px solid #fde68a'}}>
-                            <span style={{fontSize:'15px'}}>{govAsdN?.gN>=1?'✅':'❌'}</span>
-                            <span style={{fontSize:'12px',fontWeight:'700',color:govAsdN?.gN>=1?'#065f46':'#991b1b'}}>
-                              {govAsdN?.gN>=1 ? 'AREMA Normal — ADEQUATE' : 'AREMA Normal — POSTING REQUIRED'}
-                            </span>
-                            <span style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280',marginLeft:'auto'}}>
-                              AREMA Ch.15 §7.3 · ASD
-                            </span>
-                          </div>
-                        </div>
-                        {govAsdN&&aremaCalcX===''&&<IdxWorkedIn items={[{txt:`Normal RF ${govAsdN.gN.toFixed(3)} (N${govAsdN.node})`,
-                          label:'AREMA Rating · AREMA ASD Calculation Sheet', go:()=>{ if(setStep) setStep(10); idxGotoEl('idx-arema-calc'); }}]}/>}
-                        {/* AREMA section props summary */}
-                        {(()=>{
-                          const aremaZone = capZones.find(z=>z.type==='arema');
-                          if (!aremaZone) return null;
-                          const sec  = computeAremaSection(aremaZone, false);
-                          const allo = aremaAllowables(aremaZone, sec);
-                          return (
-                            <div style={{marginTop:'8px',padding:'7px 12px',background:'#fffbeb',
-                              border:'1px solid #fde68a',borderRadius:'6px',
-                              fontSize:'9.5px',fontFamily:'monospace',color:'#92400e',lineHeight:'1.7'}}>
-                              Section: D={sec.totalDepth.toFixed(2)}" · I_x={sec.IxG.toFixed(0)} in⁴ ·
-                              S_top={sec.SxTopG.toFixed(1)} in³ · S_bot_net={sec.SxBotN.toFixed(1)} in³ ·
-                              A_w={sec.Aw.toFixed(3)} in² · r_yc={sec.ryc.toFixed(3)}"
-                              &nbsp;|&nbsp; F_t_N={allo.Ft_N.toFixed(2)} · F_b_N={allo.Fb_N.toFixed(2)} ·
-                              F_s_N={allo.Fs_N.toFixed(2)} ksi (Normal)
-                            </div>
-                          );
-                        })()}
-                      </div>
-                      )}
-
-                      {/* Signature block */}
-                      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'24px',marginTop:'24px',paddingTop:'16px',borderTop:'1px solid #e5e7eb'}}>
-                        {['Prepared By','Checked By','Date'].map((lbl,i)=>(
-                          <div key={lbl}>
-                            <div style={{borderBottom:'1px solid #374151',height:'36px',marginBottom:'4px'}}/>
-                            <div style={{fontSize:'10px',color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.06em'}}>{lbl}</div>
-                            {i===2&&<div style={{fontSize:'11px',fontFamily:'monospace',color:'#9ca3af',marginTop:'2px'}}>{now}</div>}
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* Footer */}
-                      <div style={{marginTop:'16px',paddingTop:'10px',borderTop:'1px solid #f3f4f6',
-                        fontSize:'9.5px',fontFamily:'monospace',color:'#9ca3af',textAlign:'center'}}>
-                        Generated by MCT Rating Tool · {ratingMethod} per AASHTO MBE {ratingLimitState} · {cfg?.projectName||''} · {now}
-                      </div>
-                    </div>
+                    <IdxRatingCard id="rating-report-card" {...idxCardP}/>
                   </div>
                 );
               })()}
@@ -20033,7 +19808,8 @@ function idxGotoEl(id){
    steps in the shared format (shared/steps.js, KaTeX 0.16.9 already loaded by this page). Every value is the app's own: cfg (the
    model as entered), the MIDAS rows as pasted, and reportState (pushed up by the Results / AASHTO Rating step: ratingData per node
    with C, RF and the governing action, the factors, capAt, legalPosting). Nothing is recomputed. The two print reports ("Generate
-   Report", "Print AREMA Report") are kept. Nothing is saved. */
+   Report", "Print AREMA Report") are kept. Nothing is saved.
+   IXRX (2026-11-03): the print reports are retired; their content is added by ixxApply (below), and this report prints from every step. */
 function idxrModel(cfg, rs, rows, zones, combos){
   const S=window.SharedSteps, N=(x,d)=>S.n(x,d), secs=[];
   const plain=s=>String(s==null?'':s).replace(/<[^>]*>/g,'').replace(/\$/g,'').replace(/\[\[/g,'[ [');
@@ -20106,7 +19882,7 @@ function idxrModel(cfg, rs, rows, zones, combos){
   if((zones||[]).length) secs.push({title:'Capacity zones',subs:[{title:'Nominal resistances by zone',items:[{type:'table',head:['From (ft)','To (ft)','Type','M_n+ (kip-ft)','M_n− (kip-ft)','V_n (kip)','F_y (ksi)'],rows:zones.map(z=>[cell(+z.startX,2),cell(+z.endX,2),plain(z.type),cell(+z.MnPos,1),cell(+z.MnNeg,1),cell(+z.Vn,1),cell(+z.Fy,0)])},
     {type:'note',text:'Zones of a computed type (quick-calc, AREMA, design hand-off) show their entered values here; the resistance used at a node is C/(φ_c φ_s φ) in §3. Entered on the [[tab:AASHTO Rating|AASHTO Rating step]].'}]}]});
   /* ---------- 5. Notes and references ---------- */
-  secs.push({title:'Notes and references',subs:[{title:'Notes',items:[{type:'note',text:'The printed reports "Generate Report" (sidebar) and "Print AREMA Report" (AREMA Rating step) are unchanged; Service II, fatigue, PS checks, multi-vehicle and AREMA ratings are worked there and on their steps.'}]},
+  secs.push({title:'Notes and references',subs:[{title:'Notes',items:[{type:'note',text:'The report windows of "Generate Report" (sidebar), "Print AREMA Report" (AREMA Rating step) and the Report Card (AASHTO Rating step) are retired (IXRX, 2026-11-03): what they showed is in the sections before this one, each with an Include box; those buttons print this report. Service II, fatigue, PS checks and multi-vehicle ratings are worked on their steps.'}]},
     {title:'References',items:[{type:'table',head:['Reference','Provisions used'],rows:[['AASHTO Manual for Bridge Evaluation','Section 6A: Art. 6A.4.2.1 (rating equation), Tables 6A.4.2.2-1, 6A.4.2.3-1, 6A.4.2.4-1, Art. 6A.8.3 (posting). Edition: verify.'],
       ['AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)','Art. 3.6.1.2, 3.6.2.1 (HL-93, IM), 4.6.2.2 (distribution factor g), Table 3.4.1-1'],['MIDAS Civil','Analysis results (beam forces) pasted from the model built from this project\'s MCT file']]}]}]});
   return {title:'Bridge Rating & MCT — Calculation Report',subtitle:(cfg.projectName||'Untitled')+(cfg.projectBridgeId?' · '+cfg.projectBridgeId:''),code:'AASHTO MBE Section 6A (LRFR) · AASHTO LRFD 10th Ed. (2024)',
@@ -20114,25 +19890,451 @@ function idxrModel(cfg, rs, rows, zones, combos){
     head:{left:'Bridge '+(cfg.projectBridgeId||'—')+' — '+String(cfg.projectName||'—').slice(0,40),right:'Computed: '+(cfg.projectUser||'—')+' '+(cfg.projectDate||'')+' · Checked: —',foot:(cfg.projectName||'Untitled')+' (Bridge Rating & MCT)'},
     sections:secs};
 }
-function StepReport({cfg, rows, reportState, zones, combos, setStep}){
+function StepReport({cfg, rows, reportState, zones, combos, setStep, mctOutput, set}){
   const ref=React.useRef(null), keep=React.useRef({closed:new Set()});
+  /* IXRX (2026-11-03): the retired window reports are read from hidden copies: the RF chart (RatingChart, the same data as the AASHTO
+     Rating step's) and the Report Card (IdxRatingCard, the same values), both from IXX.rx, set by the last Results / Rating step shown */
+  const chartRef=React.useRef(null), cardRef=React.useRef(null), [incV,setIncV]=useState(0), rx=IXX.rx||{};
   useEffect(()=>{ const T=ref.current; if(!T) return;
     if(!window.SharedReport||!window.SharedSteps){ T.innerHTML='<div style="color:#b91c1c">shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</div>'; window.IDRP=null; return; }
-    let M; try{ M=idxrModel(cfg, reportState, rows, zones, combos); }catch(e){ T.innerHTML='<div style="color:#b91c1c">Report error: '+String(e&&e.message).replace(/[<>&]/g,'')+'</div>'; window.IDRP=null; console.warn('idrp',e); return; }
-    const api=SharedReport.mount(T,M,{closed:keep.current.closed,onGoto:name=>{ const i=STEPS.indexOf(name); if(i>=0&&setStep) setStep(i); }});
+    let M; try{ M=idxrModel(cfg, reportState, rows, zones, combos);
+      ixxApply(M,{cfg, mctOutput, rows, zones, combos, rs:reportState, rx, chart:ixxChartImg(chartRef.current), card:cardRef.current}); }
+    catch(e){ T.innerHTML='<div style="color:#b91c1c">Report error: '+String(e&&e.message).replace(/[<>&]/g,'')+'</div>'; window.IDRP=null; console.warn('idrp',e); return; }
+    const api=SharedReport.mount(T,M,{closed:keep.current.closed,controls:ixxControls(cfg,rx),onGoto:name=>{ const i=STEPS.indexOf(name); if(i>=0&&setStep) setStep(i); }});
+    ixxWire(T,cfg,set,()=>setIncV(v=>v+1));
     window.IDRP={doc:api.doc,api,model:M};
-  },[cfg, rows, reportState, zones, combos]);
-  /* Ctrl+P while this step shows: the report alone (shared/report.js print layout, running header, page numbers) */
-  useEffect(()=>{ const on=()=>{ const P=window.IDRP; if(!P||document.body.classList.contains('rp-printing')) return;
-      let box=document.getElementById('rp-print'); if(!box){ box=document.createElement('div'); box.id='rp-print'; document.body.appendChild(box); }
-      box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(P.doc,{lazy:false})+'</article></div>'; document.body.classList.add('rp-printing'); };
-    window.addEventListener('beforeprint',on); return ()=>{ window.removeEventListener('beforeprint',on); window.IDRP=null; }; },[]);
+  },[cfg, rows, reportState, zones, combos, mctOutput, incV]);
+  /* Ctrl+P / the browser's Print: ixxPrintFill (an inline beforeprint script after shared/report.js) prints the report alone (shared/
+     report.js print layout, running header, page numbers), from this step or, through ixxPrintPrep, from any other step (IXRX) */
+  useEffect(()=>()=>{ window.IDRP=null; },[]);
   return (<div>
     {!(reportState&&reportState.ratingData&&reportState.ratingData.length)&&<div style={{margin:'0 0 10px',padding:'8px 12px',border:'1px solid #fde68a',background:'#fffbeb',borderRadius:'6px',fontSize:'12px',color:'#92400e'}}>
       The rating section fills in once the MIDAS results are pasted and the AASHTO Rating step has been opened in this session.</div>}
-    <div ref={ref}/></div>);
+    <div ref={ref}/>
+    <div aria-hidden="true" style={{position:'fixed',left:'-12000px',top:0,width:'760px',visibility:'hidden',pointerEvents:'none'}}>
+      {rx.chart&&<div ref={chartRef} style={{width:'760px',height:'280px'}}><RatingChart {...rx.chart}/></div>}
+      {rx.card&&<div ref={cardRef}><IdxRatingCard {...rx.card} setStep={()=>{}} setRatingSubTab={()=>{}} setRatingLLOpen={()=>{}}/></div>}
+    </div></div>);
 }
 
+/* ================= IXRX (2026-11-03): the three window reports retired =================
+   "Generate Report" (generateReportHTML), "Print AREMA Report" (generateAremaReport) and the Report Card's "Print / Export" opened
+   report windows. The Report step is the one report: those buttons, Ctrl+P and the browser's Print print it from every step, and the
+   step of before comes back. What the window reports showed and the Report lacked is added (ixxApply), one section per report, each
+   with an Include box: the report built by the tool's own generator with the same arguments (idxGenArgs; the "Print AREMA Report"
+   values and the Report Card's values pushed by the Results / Rating step, IXX.rx; the card rendered hidden from the same JSX,
+   IdxRatingCard), read in order (ixxWalk): every table, worked line, note or figure with a number or a sentence the Report does not
+   have yet, under the report's own headings; the MCT file in full. Nothing is computed here: every value is the generators' own text.
+   Include boxes: the three reports and the MCT file per session (IXX.inc, not saved); the AREMA report's sections are its Report
+   Settings (cfg.rating.arema_reportSections, the same saved field). */
+const IXX={rx:null, inc:{gen:true, mct:true, arema:true, card:true}, back:null, cur:null, keep:null, aOpen:false};
+/* a Results / Rating step's view (sub-tab) is kept over a print from it: ixxPrintPrep keeps IXX.cur, the step reads it once when it
+   comes back; any other mount starts as before */
+function ixxKept(k,d){ const K=IXX.keep; if(K&&K[k]!=null){ const v=K[k]; delete K[k]; return v; } return d; }
+const ixxNums=t=>(String(t).replace(/\{,\}/g,',').replace(/[−–]/g,'-').replace(/(\d),(?=\d{3})/g,'$1').match(/\d+(?:\.\d+)?(?:e[-+]?\d+)?/gi)||[]).map(x=>String(parseFloat(x)));
+const ixxNrm=x=>String(x).toLowerCase().replace(/[^a-z0-9]+/g,'');
+/* TeX of a formula shown inside a table cell or a note, in the subset of the Report's built-in renderer used for $…$ in text (display only:
+   the same symbols and numbers; \tfrac → \frac, \varphi → \phi, \left( → (, \boxed{x} / \underbrace{x}_{…} → x, spacing → a space) */
+const ixxLite=t=>String(t==null?'':t).replace(/\\underbrace\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}_\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}/g,'{$1}')
+ .replace(/\\[dt]frac/g,'\\frac').replace(/\\varphi/g,'\\phi').replace(/\\(mathbf|mathrm|boldsymbol|textbf|mathit|operatorname|boxed)\{/g,'{').replace(/\\color\{[^}]*\}/g,'')
+ .replace(/\\left\s*\\?([()\[\]|.])/g,(m,c)=>c==='.'?'':c).replace(/\\right\s*\\?([()\[\]|.])/g,(m,c)=>c==='.'?'':c)
+ .replace(/\\q?quad/g,' ').replace(/\\[;:!]/g,' ').replace(/\\(displaystyle|scriptstyle|textstyle|limits)/g,'').replace(/\\Rightarrow/g,'⇒').replace(/\\rightarrow/g,'→')
+ .replace(/\\big[lr]?|\\Big[lr]?/g,'').replace(/\\ /g,' ').replace(/\$/g,'');
+/* run a report generator with KaTeX replaced by a marker that keeps the TeX (so the Report renders it with its own KaTeX, or shows the
+   TeX source without KaTeX); the real window.katex is put back at once (synchronous call) */
+function ixxGen(fn){
+  const K=window.katex;
+  window.katex={renderToString:(s,o)=>'<span class="ixx-tex" data-d="'+(o&&o.displayMode?1:0)+'">'+idxEsc(s)+'</span>'};
+  try{ return fn(); } finally { window.katex=K; }
+}
+/* the RF chart of the hidden RatingChart as an image (its animation stopped and drawn at once) */
+function ixxChartImg(host){
+  try{ const cv=host&&host.querySelector('canvas'), ch=cv&&window.Chart&&Chart.getChart(cv); if(!ch) return null;
+    ch.stop(); ch.update('none'); return ch.toBase64Image(); }catch(e){ return null; }
+}
+/* one report (a document body or an element) → subsections [{title, items}], in document order; an h2 starts a subsection, an h1 / h3 /
+   h4 is the topic of the next item */
+function ixxWalk(root,scope,T,first){
+  const subs=[]; let sub={title:first||'Cover and title block',items:[]}, topic=null, nfig=0, k=0, ntp=0;
+  const plain=s=>String(s).replace(/\[\[/g,'[ [');
+  root.querySelectorAll('.no-print,button,script,style,link,.idx-wk,.cr-toc').forEach(x=>x.remove());
+  root.querySelectorAll('h2').forEach(h=>{ if(/^Table of contents/i.test(h.textContent.trim())) h.remove(); });   // the Report has its own contents
+  root.querySelectorAll('a.cr-see').forEach(a=>{ const t=a.dataset.txt||''; a.replaceWith(document.createTextNode(t)); });
+  root.querySelectorAll('input,select,textarea').forEach(i=>{ const s=document.createElement('span'); s.textContent=i.value||'—'; i.replaceWith(s); });
+  const BLK='div,p,table,svg,img,ul,ol,li,h1,h2,h3,h4,section,pre,figure';
+  const INL=/^(B|I|EM|STRONG|SPAN|BR|SUB|SUP|A|SMALL|U|CODE|LABEL)$/;
+  const leafy=e=>[...e.children].every(x=>INL.test(x.tagName)&&!x.querySelector(BLK));
+  const txt=e=>{ const c=e.cloneNode(true);
+    c.querySelectorAll('.ixx-tex').forEach(x=>x.replaceWith(document.createTextNode(' $'+ixxLite(x.textContent)+'$ ')));
+    c.querySelectorAll('span,div').forEach(x=>{ if(x.nextSibling&&x.nextSibling.nodeType===1&&!x.closest('sub,sup')) x.after(' '); });   // boxes set side by side
+    c.querySelectorAll('br').forEach(b=>b.replaceWith(document.createTextNode(' ')));
+    c.querySelectorAll('sub').forEach(x=>x.replaceWith(document.createTextNode('$_{'+x.textContent+'}$')));
+    c.querySelectorAll('sup').forEach(x=>x.replaceWith(document.createTextNode('$^{'+x.textContent+'}$')));
+    return plain(c.textContent.replace(/\(\s*;?\s*\)/g,'').replace(/\s+/g,' ').trim()); };
+  const push=it=>{ if(topic){ it.topic={title:topic,no:++ntp}; topic=null; } sub.items.push(it); };
+  const cellOf=v=>{ if(/^(✓ )?(PASS|OK|Adequate)\b/i.test(v)) return {t:v,cls:'ok'}; if(/^(❌ |⚠ )?(FAIL|NG|Crit|Post)/i.test(v)) return {t:v,cls:'ng'};
+    return /^[-−\d.,e+\s%/×()—°|=≤≥∞–]+$/.test(v)&&/\d/.test(v)?{t:v,n:true}:v; };
+  const want=t=>T.newNum(t)||T.fresh(t);
+  const table=(trs,force,caption)=>{
+    if(!trs.length) return;
+    const rowTxt=trs.map(r=>r.map(c=>c.t).join(' '));
+    if(!force&&!(T.newNum(rowTxt.join(' '))||rowTxt.some(T.fresh))) return;
+    const hd=trs[0].every(c=>c.h)&&trs.length>1?trs[0].map(c=>c.t):null;
+    const body=trs.slice(hd?1:0).map(r=>r.length===1&&r[0].span>1?{cls:'gov',cells:[{t:r[0].t,span:r[0].span}]}:r.map(c=>cellOf(c.t)));
+    const n=Math.max(...trs.map(r=>r.length));
+    push({type:'table',caption,head:hd||[],rows:body,wide:n>6||undefined,lazy:trs.length>31||undefined,title:trs.length>31?(topic||sub.title):undefined});
+    rowTxt.forEach(T.seen); };
+  const htable=t=>table([...t.rows].map(r=>[...r.cells].map(c=>({t:txt(c),h:c.tagName==='TH',span:c.colSpan}))).filter(r=>r.some(c=>c.t)));
+  /* a worked line (a display formula alone in a table cell): a step; without KaTeX its TeX source */
+  const wk=t=>{ const steps=[]; [...t.querySelectorAll('td')].forEach(td=>{ const x=td.querySelector('.ixx-tex'); if(!x) return; const s=x.textContent;
+      if(!want(s)) return; T.seen(s); steps.push(window.katex?{id:'l'+(++k),label:topic||sub.title,eq:s}:{id:'l'+(++k),label:topic||sub.title,note:s}); });
+    if(steps.length) push({type:'steps',scope,steps}); };
+  const kv=rows=>{ rows=rows.filter(r=>r[0]||r[1]); const all=rows.map(r=>r.join(' ')).join(' ');
+    if(rows.length&&(T.newNum(all)||rows.some(r=>T.fresh(r.join(' '))))){ push({type:'kv',rows}); T.seen(all); } };
+  const fig=(html,cap)=>{ nfig++; const c=(cap||'Figure')+(nfig>1?' ('+nfig+')':''); if(T.figs.has(html)) return; T.figs.add(html); push({type:'figure',svg:html,caption:c}); };
+  const visit=e=>{
+    if(e.nodeType!==1) return;
+    if(e.matches('h2')){ const t=txt(e).replace(/^\d+(\.\d+)*[a-z]?\.?\s+/,'').replace(/:$/,''); if(sub.items.length) subs.push(sub); sub={title:t,items:[]}; topic=null; nfig=0; return; }
+    if(e.matches('h1,h3,h4')){ topic=txt(e).replace(/^\d+(\.\d+)*[a-z]?\.?\s+/,''); return; }
+    if(e.matches('img')){ fig('<img src="'+e.getAttribute('src')+'" alt="" style="max-width:100%;height:auto">',topic||sub.title); return; }
+    if(e.matches('svg')){ const c=e.cloneNode(true); c.style.maxWidth='100%'; c.style.height='auto'; fig(c.outerHTML,topic||sub.title); return; }
+    if(e.matches('.mct-block')){ const L=e.textContent.split('\n'); if(IXX.inc.mct) push({type:'table',head:['Line','MCT file (as written)'],rows:L.map((l,i)=>[String(i+1),{t:plain(l)||' '}]),lazy:true,wide:true,title:'Generated MCT file ('+L.length+' lines)'}); return; }
+    if(e.matches('table.cr-wk')){ wk(e); return; }
+    if(e.matches('table')){ htable(e); return; }
+    if(e.matches('.cr-results')){ table([...e.querySelectorAll('.cr-line')].map(l=>[...l.children].map(c=>({t:txt(c)})))); return; }
+    if(e.matches('.kv-grid')){ kv([...e.querySelectorAll('.kv')].map(d=>[txt(d.querySelector('.kv-label')||d),txt(d.querySelector('.kv-val')||d)])); return; }
+    if(e.matches('.cr-tb,.cr-info')){ kv([...e.children].map(d=>{ const b=d.querySelector('b'), l=b?txt(b).replace(/:$/,''):''; if(b) b.remove(); return [l,txt(d)]; })); return; }
+    if(e.matches('.info-grid')||e.querySelector(':scope>.info-row')){ kv([...e.querySelectorAll('.info-row')].map(r=>[txt(r.children[0]||r),r.children[1]?txt(r.children[1]):''])); return; }
+    if(leafy(e)){ const t=txt(e); if(t.length>=3&&want(t)){ push({type:'note',text:(e.tagName==='LI'?'• ':'')+t}); T.seen(t); } return; }
+    /* a CSS grid of label / value boxes (the Report Card): runs of children with the same number of leaf boxes → a key-value list (2) or a table (≥ 3) */
+    const kids=[...e.children], cnt=x=>{ const c=[...x.children]; return c.length>=2&&c.every(y=>leafy(y)&&!INL.test(y.tagName))?c.length:0; };
+    for(let i=0;i<kids.length;){ const n=cnt(kids[i]); let j=i+1; while(n&&j<kids.length&&cnt(kids[j])===n) j++;
+      if(n&&j-i>=2){ const R=kids.slice(i,j).map(x=>[...x.children].map(y=>({t:txt(y)})));
+        if(n===2) kv(R.map(r=>[r[0].t,r[1].t])); else { R[0].forEach(c=>c.h=!/\d/.test(c.t)); table(R); } i=j; }
+      else { visit(kids[i]); i++; } }
+  };
+  [...root.children].forEach(visit);
+  if(sub.items.length) subs.push(sub);
+  return subs;
+}
+function ixxDoc(html){ try{ return new DOMParser().parseFromString(html,'text/html').body; }catch(e){ return null; } }
+/* the Report model (idxrModel) + one section per retired report, before "Notes and references" */
+function ixxApply(M,c){
+  const secs=M.sections; let rep='';
+  try{ rep=SharedReport.text(SharedReport.build(M)); }catch(e){ return M; }
+  const have=new Set(); let all=ixxNrm(rep);
+  const addNum=x=>{ have.add(x); const v=parseFloat(x), d=(x.split('.')[1]||'').length; for(let i=0;i<d;i++) have.add(String(parseFloat(v.toFixed(i)))); };
+  ixxNums(rep).forEach(addNum);
+  const T={newNum:t=>ixxNums(t).some(n=>!have.has(n)), fresh:t=>String(t).split(/(?<=[.;:])\s+/).map(ixxNrm).filter(x=>x.length>15).some(x=>!all.includes(x)),
+    seen:t=>{ ixxNums(t).forEach(addNum); all+=ixxNrm(t); }, figs:new Set()};
+  const add=[], at=secs.findIndex(s=>s.title==='Notes and references');
+  const sec=(title,subs,note)=>{ if(subs&&subs.length) add.push({title,subs:note?[{title:'About this section',items:[{type:'note',text:note}]},...subs]:subs}); };
+  if(IXX.inc.gen){ const b=ixxDoc(ixxGen(()=>generateReportHTML(idxGenArgs(c.cfg,c.mctOutput,c.rows,c.zones,c.combos,c.rs,c.chart?{rating:c.chart}:{}))));
+    if(b) sec('Model and MCT report',ixxWalk(b,'ixg',T),'What the "Generate Report" window printed and the sections above do not show: its title block, the model tables, the generated MCT file, the results overview, the rating inputs, the worked rating factor at the node where each action governs and the RF diagram. Built by the same generator from the same values.'); }
+  const A=c.rx&&c.rx.arema;
+  if(IXX.inc.arema&&A){ const b=ixxDoc(ixxGen(()=>generateAremaReport({cfg:c.cfg, ap:A.ap, data:A.data, govN:A.govN, govX:A.govX, govM:A.govM, govFat:A.govFat, settings:c.cfg.rating?.arema_reportSections, gfsInfo:A.gfsInfo})));
+    if(b) sec('AREMA rating report',ixxWalk(b,'ixa',T),'The "Print AREMA Report" report (AREMA Rating step), built by the same generator from the same values; its sections are chosen by the Include boxes above (the AREMA Rating step\'s Report Settings).'); }
+  if(IXX.inc.card&&c.card){ const b=c.card.cloneNode(true); sec('Rating report card',ixxWalk(b,'ixc',T,'Report card'),'The AASHTO Rating step\'s Report Card (the same card, with the same values).'); }
+  secs.splice(at<0?secs.length:at,0,...add);
+  return M;
+}
+/* the report bar's Include boxes */
+function ixxControls(cfg,rx){
+  const box=(k,l,on,a)=>'<label style="white-space:nowrap"><input type="checkbox" '+(a?'data-ixa':'data-ixx')+'="'+k+'"'+(on?' checked':'')+'> '+l+'</label>';
+  let h='<span class="ixx-inc" style="display:inline-flex;flex-wrap:wrap;gap:2px 10px;font-size:9pt;align-items:center"><b>Include:</b> '+box('gen','Model and MCT report',IXX.inc.gen)+box('mct','MCT file',IXX.inc.mct);
+  if(rx&&rx.arema) h+=box('arema','AREMA report',IXX.inc.arema);
+  if(rx&&rx.card) h+=box('card','Rating report card',IXX.inc.card);
+  h+='</span>';
+  if(rx&&rx.arema&&IXX.inc.arema){ const RS=(cfg.rating&&cfg.rating.arema_reportSections)||{};
+    const L=AREMA_RPT_SECTS.filter(([k])=>k!=='toc');   // the Report has its own contents: the AREMA "Table of Contents" choice is not offered here (kept as saved)
+    h+='<details class="ixx-inc" style="font-size:9pt"'+(IXX.aOpen?' open':'')+'><summary style="cursor:pointer"><b>AREMA report sections</b> ('+L.filter(([k])=>RS[k]!==false).length+'/'+L.length+')</summary><span style="display:inline-flex;flex-wrap:wrap;gap:2px 10px;align-items:center">'+L.map(([k,l])=>box(k,l,RS[k]!==false,true)).join('')+'</span></details>'; }
+  return h;
+}
+function ixxWire(T,cfg,set,rebuild){
+  T.querySelectorAll('input[data-ixx]').forEach(x=>x.addEventListener('change',()=>{ IXX.inc[x.dataset.ixx]=x.checked; rebuild(); }));
+  T.querySelectorAll('details.ixx-inc').forEach(d=>d.addEventListener('toggle',()=>{ IXX.aOpen=d.open; }));   // stays open over a rebuild
+  T.querySelectorAll('input[data-ixa]').forEach(x=>x.addEventListener('change',()=>{ if(typeof set!=='function') return;
+    const RS=(cfg.rating&&cfg.rating.arema_reportSections)||{};
+    set('rating',{...(cfg.rating||{}),arema_reportSections:{...RS,[x.dataset.ixa]:x.checked}}); }));   // as AremaReportSettingsPanel's updRS
+}
+/* Print: the report alone (what StepReport's beforeprint handler did), from the Report step or after ixxPrintPrep showed it */
+function ixxPrintFill(){
+  const P=window.IDRP; if(!P||!window.SharedReport||document.body.classList.contains('rp-printing')) return;
+  let box=document.getElementById('rp-print'); if(!box){ box=document.createElement('div'); box.id='rp-print'; document.body.appendChild(box); }
+  box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(P.doc,{lazy:false})+'</article></div>'; document.body.classList.add('rp-printing');
+}
+window.ixxPrintFill=ixxPrintFill;   /* the inline beforeprint script after shared/report.js */
+/* the buttons that opened a report window: show the Report step (ixxPrintPrep, set by App) and print it */
+function ixxPrintAny(){
+  if(window.ixxPrintPrep) window.ixxPrintPrep();
+  const P=window.IDRP; if(P&&window.SharedReport) SharedReport.print(P.doc); else window.print();
+}
+
+/* IXRX (2026-11-03): the AASHTO Rating "Report Card" sub-tab's card, moved here unchanged from StepResults (the same JSX, the same
+   values: StepResults passes them as idxCardP), so the Report step renders the same card, hidden, and reads it (ixxApply). */
+function IdxRatingCard({id, cfg, govRating, govOperating, ratingMethod, ratingLimitState, ratingCategory, ratingLevel, ratingDcLC, ratingDwLC, ratingLLposLC,
+    gamDC, gamDW, gamLL, gamLL_op, ratingLLScale, phiC, phiS, ratingPhiF, ratingPhiV, ratingVehicleName, ratingVehicleTon,
+    govAsdN, govAsdX, govAsdM, aremaCalcX, capZones, setStep, setRatingSubTab, setRatingLLOpen}){
+  const now = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
+  const govInv = govRating;
+  const govOp  = govOperating;
+  const cardStyle = {background:'#fff',border:'1px solid #e5e7eb',borderRadius:'8px',
+    padding:'32px 40px',maxWidth:'720px',margin:'0 auto',fontFamily:"'IBM Plex Sans',sans-serif"};
+  const lineStyle = {display:'flex',justifyContent:'space-between',alignItems:'flex-end',
+    borderBottom:'1px solid #e5e7eb',paddingBottom:'5px',marginBottom:'10px'};
+  const fieldL = {fontSize:'11px',color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.07em'};
+  const fieldV = {fontSize:'13px',fontWeight:'600',color:'#111827',fontFamily:'monospace'};
+  const rfColor = rf=>rf>=1?'#059669':rf>=0.3?'#d97706':'#dc2626';
+
+  return (
+  <div id={id} style={cardStyle}>
+    {/* Header */}
+    <div style={{textAlign:'center',marginBottom:'24px',paddingBottom:'18px',borderBottom:'3px solid #1d4ed8'}}>
+      <div style={{fontSize:'11px',fontFamily:'monospace',color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.1em',marginBottom:'4px'}}>
+        BRIDGE LOAD RATING — SUMMARY
+      </div>
+      <div style={{fontSize:'20px',fontWeight:'700',color:'#111827',marginBottom:'4px'}}>
+        {cfg?.projectName||'Unnamed Bridge'}
+      </div>
+      <div style={{fontSize:'13px',color:'#6b7280'}}>
+        {cfg?.projectBridgeId||''}{cfg?.projectBridgeId&&cfg?.projectClient?' · ':''}{cfg?.projectClient||''}
+      </div>
+    </div>
+
+    {/* Project info grid */}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'0',marginBottom:'20px'}}>
+      {[
+        ['Engineer',     cfg?.projectUser||'—'],
+        ['Date',         now],
+        ['Revision',     cfg?.projectRevision||'0'],
+        ['Bridge ID',    cfg?.projectBridgeId||'—'],
+        ['Method',       `${ratingMethod} · ${ratingLimitState}`],
+        ['Category',     `${ratingCategory} · ${ratingLevel}`],
+        ['Dead Load DC', ratingDcLC||'—'],
+        ['Dead Load DW', ratingDwLC||'(none)'],
+        ['Live Load',    ratingLLposLC||'—'],
+      ].map(([l,v])=>(
+        <div key={l} style={{padding:'7px 10px',border:'1px solid #f3f4f6',background:'#fafafa'}}>
+          <div style={fieldL}>{l}</div>
+          <div style={{...fieldV,fontSize:'12px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{v}</div>
+        </div>
+      ))}
+    </div>
+
+    {/* Rating factors summary */}
+    <div style={{fontSize:'11px',fontFamily:'monospace',color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>
+      Load Factors & Modifiers
+    </div>
+    <div style={{display:'grid',gridTemplateColumns:'repeat(5,1fr)',gap:'8px',marginBottom:'20px'}}>
+      {[['γ_DC',gamDC],['γ_DW',gamDW],['γ_LL (Inv)',gamLL],['γ_LL (Op)',gamLL_op.toFixed(2)],['LL Scale',ratingLLScale.toFixed(4)],
+        ['φ_c',phiC],['φ_s',phiS],['φ_f',ratingPhiF],['φ_v',ratingPhiV],['η','not used']
+      ].map(([l,v])=>(
+        <div key={l} style={{background:'#f8fafc',border:'1px solid #e5e7eb',borderRadius:'5px',padding:'6px 8px',textAlign:'center'}}>
+          <div style={{fontSize:'9.5px',color:'#6b7280',fontFamily:'monospace',textTransform:'uppercase'}}>{l}</div>
+          <div style={{fontSize:'14px',fontWeight:'700',fontFamily:'monospace',color:'#111827'}}>{v}</div>
+        </div>
+      ))}
+    </div>
+    <IdxWorkedIn sx={{margin:'-14px 0 16px'}} items={[{txt:`LL scale ×${ratingLLScale.toFixed(4)}`, label:'AASHTO Rating · Inputs & Setup · Live Load Scale Factors',
+      go:()=>{ setRatingSubTab('inputs'); setRatingLLOpen(true); idxGotoEl('idx-ll-scale'); }}]}/>
+
+    {/* THE RATING BOX */}
+    <div style={{border:'2px solid #e5e7eb',borderRadius:'8px',overflow:'hidden',marginBottom:'20px'}}>
+      {/* Column headers */}
+      <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 1fr',background:'#1d4ed8',color:'#fff',
+        padding:'8px 12px',fontSize:'10.5px',fontWeight:'600',textTransform:'uppercase',letterSpacing:'0.06em',gap:'0',textAlign:'center'}}>
+        <div style={{textAlign:'left'}}>Rating Level</div>
+        <div>RF</div>
+        <div>Rating<br/>Tons</div>
+        <div>RF M⁺</div>
+        <div>RF M⁻</div>
+        <div>Controls</div>
+      </div>
+      {[
+        {label:'Inventory', rf:govInv?.rfGov, tons:govInv?+(govInv.rfGov*ratingVehicleTon).toFixed(1):null,
+         rfMpos:govInv?.rfMpos, rfMneg:govInv?.rfMneg, governs:govInv?.governs},
+        {label:'Operating', rf:govOp?.rfGov,  tons:govOp?+(govOp.rfGov*ratingVehicleTon).toFixed(1):null,
+         rfMpos:govOp?.rfMpos,  rfMneg:govOp?.rfMneg,  governs:govOp?.governs},
+      ].map((row,ri)=>(
+        <div key={row.label} style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr 1fr 1fr',
+          padding:'12px 12px',textAlign:'center',gap:'0',
+          background:ri===0?'#fff':'#fafafa',borderTop:'1px solid #e5e7eb'}}>
+          <div style={{textAlign:'left',fontWeight:'600',fontSize:'13px',color:'#374151'}}>{row.label}</div>
+          <div style={{fontSize:'20px',fontWeight:'800',fontFamily:'monospace',color:row.rf!=null?rfColor(row.rf):'#9ca3af'}}>
+            {row.rf!=null?row.rf.toFixed(3):'—'}
+          </div>
+          <div style={{fontSize:'16px',fontWeight:'700',fontFamily:'monospace',color:row.rf!=null?rfColor(row.rf):'#9ca3af'}}>
+            {row.tons!=null?row.tons+' T':'—'}
+          </div>
+          <div style={{fontSize:'13px',fontFamily:'monospace',color:'#374151'}}>{row.rfMpos?.toFixed(3)??'—'}</div>
+          <div style={{fontSize:'13px',fontFamily:'monospace',color:'#374151'}}>{row.rfMneg?.toFixed(3)??'—'}</div>
+          <div style={{fontSize:'12px',color:'#6b7280'}}>
+            {row.governs==='M+'?'M⁺ Flexure':row.governs==='M-'?'M⁻ Flexure':'Shear'}
+          </div>
+        </div>
+      ))}
+      {/* Status bar */}
+      <div style={{background:govInv?.rfGov>=1?'#d1fae5':'#fee2e2',padding:'8px 14px',
+        display:'flex',alignItems:'center',gap:'10px',borderTop:'1px solid #e5e7eb'}}>
+        <span style={{fontSize:'16px'}}>{govInv?.rfGov>=1?'✅':'❌'}</span>
+        <span style={{fontSize:'13px',fontWeight:'700',color:govInv?.rfGov>=1?'#065f46':'#991b1b'}}>
+          {govInv?.rfGov>=1 ? 'ADEQUATE — No Posting Required' : 'POSTING REQUIRED — See Below'}
+        </span>
+        <span style={{fontSize:'11px',fontFamily:'monospace',color:'#6b7280',marginLeft:'auto'}}>
+          Gov. node: N{govInv?.node} · {govInv?.pos?.toFixed(2)} ft
+        </span>
+      </div>
+    </div>
+
+    {/* Vehicle being rated */}
+    <div style={{display:'flex',gap:'10px',alignItems:'center',marginBottom:'20px',
+      padding:'8px 14px',background:'#f8fafc',border:'1px solid #e5e7eb',borderRadius:'6px'}}>
+      <span style={{fontSize:'11px',color:'#6b7280'}}>Rated Vehicle:</span>
+      <span style={{fontSize:'13px',fontWeight:'600',color:'#111827'}}>{ratingVehicleName}</span>
+      <span style={{fontSize:'12px',fontFamily:'monospace',color:'#6b7280'}}>{ratingVehicleTon} T GVW</span>
+      <span style={{fontSize:'10.5px',fontFamily:'monospace',color:'#9ca3af',marginLeft:'auto'}}>
+        {ratingMethod} · MBE Table 6A.4.2.2-1
+      </span>
+    </div>
+
+    {/* AREMA ASD results (shown when AREMA zones exist) */}
+    {(govAsdN||govAsdM)&&(
+    <div style={{marginBottom:'20px',paddingBottom:'16px',borderBottom:'2px solid #fde68a'}}>
+      <div style={{fontSize:'11px',fontFamily:'monospace',color:'#6b7280',
+        textTransform:'uppercase',letterSpacing:'0.08em',marginBottom:'8px'}}>
+        🚂 AREMA Chapter 15 — Allowable Stress Design (ASD)
+      </div>
+      <div style={{border:'2px solid #fde68a',borderRadius:'8px',overflow:'hidden'}}>
+        <div style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr',background:'#d97706',
+          color:'#fff',padding:'7px 12px',fontSize:'10px',fontWeight:'600',
+          textTransform:'uppercase',letterSpacing:'0.06em',textAlign:'center'}}>
+          <div style={{textAlign:'left'}}>Rating Case</div>
+          <div>RF (gov.)</div>
+          <div>Controls</div>
+          <div>Gov. Node</div>
+        </div>
+        {[
+          govAsdN && {
+            label:'Normal (Standard)',
+            rf: govAsdN.gN, ctrl: govAsdN.govN,
+            node: `N${govAsdN.node} @ ${govAsdN.pos.toFixed(1)} ft`, bg:'#fff'
+          },
+          govAsdX && {
+            label:'Maximum (K-factor, +CF)',
+            rf: govAsdX.gX, ctrl: govAsdX.govX,
+            node: `N${govAsdX.node} @ ${govAsdX.pos.toFixed(1)} ft`, bg:'#fff7ed'
+          },
+          govAsdM && (cfg?.rating?.arema_mod!==false) && {
+            label:'Modified (+Wind+Rock)',
+            rf: govAsdM.gM, ctrl: govAsdM.govM,
+            node: `N${govAsdM.node} @ ${govAsdM.pos.toFixed(1)} ft`, bg:'#fffbeb'
+          },
+        ].filter(Boolean).map((row,ri)=>{
+          const rfc = row.rf>=1?'#059669':row.rf>=0.5?'#d97706':'#dc2626';
+          return (
+            <div key={ri} style={{display:'grid',gridTemplateColumns:'2fr 1fr 1fr 1fr',
+              padding:'10px 12px',textAlign:'center',background:row.bg,
+              borderTop:'1px solid #fde68a'}}>
+              <div style={{textAlign:'left',fontWeight:'600',fontSize:'12px',color:'#92400e'}}>{row.label}</div>
+              <div style={{fontSize:'20px',fontWeight:'800',fontFamily:'monospace',color:rfc}}>
+                {isFinite(row.rf)?row.rf.toFixed(3):'—'}
+              </div>
+              <div style={{fontSize:'12px',fontFamily:'monospace',color:'#374151'}}>{row.ctrl}</div>
+              <div style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280'}}>{row.node}</div>
+            </div>
+          );
+        })}
+        <div style={{background:govAsdN?.gN>=1?'#d1fae5':'#fee2e2',padding:'7px 14px',
+          display:'flex',alignItems:'center',gap:'10px',borderTop:'1px solid #fde68a'}}>
+          <span style={{fontSize:'15px'}}>{govAsdN?.gN>=1?'✅':'❌'}</span>
+          <span style={{fontSize:'12px',fontWeight:'700',color:govAsdN?.gN>=1?'#065f46':'#991b1b'}}>
+            {govAsdN?.gN>=1 ? 'AREMA Normal — ADEQUATE' : 'AREMA Normal — POSTING REQUIRED'}
+          </span>
+          <span style={{fontSize:'10px',fontFamily:'monospace',color:'#6b7280',marginLeft:'auto'}}>
+            AREMA Ch.15 §7.3 · ASD
+          </span>
+        </div>
+      </div>
+      {govAsdN&&aremaCalcX===''&&<IdxWorkedIn items={[{txt:`Normal RF ${govAsdN.gN.toFixed(3)} (N${govAsdN.node})`,
+        label:'AREMA Rating · AREMA ASD Calculation Sheet', go:()=>{ if(setStep) setStep(10); idxGotoEl('idx-arema-calc'); }}]}/>}
+      {/* AREMA section props summary */}
+      {(()=>{
+        const aremaZone = capZones.find(z=>z.type==='arema');
+        if (!aremaZone) return null;
+        const sec  = computeAremaSection(aremaZone, false);
+        const allo = aremaAllowables(aremaZone, sec);
+        return (
+          <div style={{marginTop:'8px',padding:'7px 12px',background:'#fffbeb',
+            border:'1px solid #fde68a',borderRadius:'6px',
+            fontSize:'9.5px',fontFamily:'monospace',color:'#92400e',lineHeight:'1.7'}}>
+            Section: D={sec.totalDepth.toFixed(2)}" · I_x={sec.IxG.toFixed(0)} in⁴ ·
+            S_top={sec.SxTopG.toFixed(1)} in³ · S_bot_net={sec.SxBotN.toFixed(1)} in³ ·
+            A_w={sec.Aw.toFixed(3)} in² · r_yc={sec.ryc.toFixed(3)}"
+            &nbsp;|&nbsp; F_t_N={allo.Ft_N.toFixed(2)} · F_b_N={allo.Fb_N.toFixed(2)} ·
+            F_s_N={allo.Fs_N.toFixed(2)} ksi (Normal)
+          </div>
+        );
+      })()}
+    </div>
+    )}
+
+    {/* Signature block */}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'24px',marginTop:'24px',paddingTop:'16px',borderTop:'1px solid #e5e7eb'}}>
+      {['Prepared By','Checked By','Date'].map((lbl,i)=>(
+        <div key={lbl}>
+          <div style={{borderBottom:'1px solid #374151',height:'36px',marginBottom:'4px'}}/>
+          <div style={{fontSize:'10px',color:'#6b7280',textTransform:'uppercase',letterSpacing:'0.06em'}}>{lbl}</div>
+          {i===2&&<div style={{fontSize:'11px',fontFamily:'monospace',color:'#9ca3af',marginTop:'2px'}}>{now}</div>}
+        </div>
+      ))}
+    </div>
+
+    {/* Footer */}
+    <div style={{marginTop:'16px',paddingTop:'10px',borderTop:'1px solid #f3f4f6',
+      fontSize:'9.5px',fontFamily:'monospace',color:'#9ca3af',textAlign:'center'}}>
+      Generated by MCT Rating Tool · {ratingMethod} per AASHTO MBE {ratingLimitState} · {cfg?.projectName||''} · {now}
+    </div>
+  </div>
+  );
+}
+/* IXRX (2026-11-03): the arguments App's generateReport() passed to generateReportHTML (moved here unchanged; rows = the MIDAS rows,
+   zones = the capacity zones, combos = the post-processing combinations, rs = reportState, chartImages = {rating: the RF chart image}) */
+function idxGenArgs(cfg, mctOutput, rows, zones, combos, rs, chartImages){
+  rs = rs || {};
+  return {
+    cfg, mctOutput,
+    rows,
+    nodePositions:    rs.nodePositions    || {},
+    ratingData:       rs.ratingData       || [],
+    ratingCapZones: zones,
+    resultsCombos: combos,
+    capAt:            rs.capAt            || null,
+    phiC:             rs.phiC             ?? 1,
+    phiS:             rs.phiS             ?? 1,
+    ratingPhiF:       rs.ratingPhiF       ?? 1,
+    ratingPhiV:       rs.ratingPhiV       ?? 1,
+    gamDC:            rs.gamDC            ?? 1.25,
+    gamDW:            rs.gamDW            ?? 1.50,
+    gamLL:            rs.gamLL            ?? 1.75,
+    ratingLLScale:    rs.ratingLLScale    ?? 1,
+    ratingLLScaleMn:  rs.ratingLLScaleMn  ?? null,
+    ratingLLScaleV:   rs.ratingLLScaleV   ?? null,
+    dfSplit:          !!rs.dfSplit,
+    ratingEta:        rs.ratingEta        ?? 1,
+    ratingVehicleTon: rs.ratingVehicleTon ?? 36,
+    ratingVehicleName:rs.ratingVehicleName|| 'HL-93',
+    ratingDcLC:       rs.ratingDcLC       || '',
+    ratingDwLC:       rs.ratingDwLC       || '',
+    ratingLLposLC:    rs.ratingLLposLC    || '',
+    ratingLLnegLC:    rs.ratingLLnegLC    || '',
+    ratingMethod:     rs.ratingMethod     || 'LRFR',
+    ratingLimitState: rs.ratingLimitState || 'Strength I',
+    ratingLevel:      rs.ratingLevel      || 'Inventory',
+    chartImages,
+    ratingLLScaleExpr: rs.ratingLLScaleExpr || '',
+    legalPosting:     rs.legalPosting     || [],
+  };
+}
 // ── Report Generator ─────────────────────────────────────────────────────────
 function generateReportHTML({ cfg, mctOutput, rows, nodePositions, ratingData,
     ratingCapZones, resultsCombos, capAt, phiC, phiS, ratingPhiF, ratingPhiV,
@@ -20923,10 +21125,9 @@ function SavesModal({ cfg, onLoad, onClose,
   );
 }
 
-function AremaReportSettingsPanel({ cfg, setRating }) {
-  const RS = cfg.rating?.arema_reportSections || {};
-  const updRS = (key,val) => setRating('arema_reportSections',{...RS,[key]:val});
-  const SECTS = [
+/* the AREMA report's sections (cfg.rating.arema_reportSections; a key not stored = included); IXRX (2026-11-03): moved here unchanged
+   from AremaReportSettingsPanel, which still lists them, so the Report step's AREMA Include boxes write the same saved field */
+const AREMA_RPT_SECTS = [
     ['cover','Cover Page'],['toc','Table of Contents'],
     ['summaryTable','Rating Summary Table'],['geometry','Bridge Geometry'],
     ['crossSection','Cross-Section Properties'],['allowables','Allowable Stresses'],
@@ -20934,6 +21135,10 @@ function AremaReportSettingsPanel({ cfg, setRating }) {
     ['sectionLoss','Section Loss Summary'],['ratingCalcs','Detailed Calculations'],
     ['nodeTables','Node-by-Node Tables'],['notes','Notes & Assumptions'],
   ];
+function AremaReportSettingsPanel({ cfg, setRating }) {
+  const RS = cfg.rating?.arema_reportSections || {};
+  const updRS = (key,val) => setRating('arema_reportSections',{...RS,[key]:val});
+  const SECTS = AREMA_RPT_SECTS;   // IXRX (2026-11-03): the list moved to module level (also the Report's AREMA Include boxes)
   return (
     <details style={{marginTop:'8px',border:'1px solid #bfdbfe',borderRadius:'6px',overflow:'hidden'}}>
       <summary style={{padding:'6px 12px',background:'#eff6ff',cursor:'pointer',
@@ -21757,6 +21962,21 @@ function App() {
       prevStepRef.current=step;
     }
   },[step]);
+  /* IXRX (2026-11-03): Print from any step prints the Report step: ixxPrintPrep shows it at once (flushSync, so the report is built
+     before the print layout is taken; called by the inline beforeprint script before shared/report.js and by ixxPrintAny), and
+     afterprint brings the step of before back. Neither move is a history checkpoint. With an embedded app shown, nothing changes. */
+  const ixxStepRef=useRef(step); ixxStepRef.current=step;
+  const ixxEmbedRef=useRef(null); ixxEmbedRef.current=embedApp;
+  useEffect(()=>{
+    const R=STEPS.indexOf('Report');
+    window.ixxPrintPrep=()=>{ const cur=ixxStepRef.current;
+      if(cur===R||ixxEmbedRef.current||document.body.classList.contains('rp-printing')) return false;
+      IXX.back=cur; IXX.keep=(STEPS[cur]==='Results'||/Rating$/.test(STEPS[cur]))&&IXX.cur?{...IXX.cur}:null;
+      prevStepRef.current=R; ReactDOM.flushSync(()=>setStepRaw(R)); return true; };
+    const after=()=>{ const b=IXX.back; IXX.back=null; if(b!=null) setTimeout(()=>{ prevStepRef.current=b; setStepRaw(b); },0); };
+    window.addEventListener('afterprint',after);
+    return ()=>{ window.removeEventListener('afterprint',after); window.ixxPrintPrep=null; };
+  },[]);
 
   // Auto-save results to IndexedDB so they survive page refresh (no quota ceiling)
   useEffect(()=>{
@@ -21865,68 +22085,9 @@ function App() {
     URL.revokeObjectURL(url);
   };
 
-  // Collect chart canvas images from the DOM
-  const captureCharts = () => {
-    const images = {};
-    // Rating chart
-    const ratingCanvas = document.querySelector('[data-chartid="rating-chart"] canvas');
-    if (ratingCanvas) {
-      const chart = Chart.getChart(ratingCanvas);
-      if (chart) images.rating = chart.toBase64Image();
-    }
-    // Any other visible charts (per load case, envelope, etc.)
-    document.querySelectorAll('[data-chartid]').forEach(el => {
-      const id = el.getAttribute('data-chartid');
-      if (id === 'rating-chart') return;
-      const canvas = el.querySelector('canvas');
-      if (canvas) {
-        const chart = Chart.getChart(canvas);
-        if (chart) images[id] = chart.toBase64Image();
-      }
-    });
-    return images;
-  };
-
-  const generateReport = () => {
-    const chartImages = captureCharts();
-    const rs = reportState || {};
-    const html = generateReportHTML({
-      cfg, mctOutput,
-      rows: resultsRows,
-      nodePositions:    rs.nodePositions    || {},
-      ratingData:       rs.ratingData       || [],
-      ratingCapZones,
-      resultsCombos,
-      capAt:            rs.capAt            || null,
-      phiC:             rs.phiC             ?? 1,
-      phiS:             rs.phiS             ?? 1,
-      ratingPhiF:       rs.ratingPhiF       ?? 1,
-      ratingPhiV:       rs.ratingPhiV       ?? 1,
-      gamDC:            rs.gamDC            ?? 1.25,
-      gamDW:            rs.gamDW            ?? 1.50,
-      gamLL:            rs.gamLL            ?? 1.75,
-      ratingLLScale:    rs.ratingLLScale    ?? 1,
-      ratingLLScaleMn:  rs.ratingLLScaleMn  ?? null,
-      ratingLLScaleV:   rs.ratingLLScaleV   ?? null,
-      dfSplit:          !!rs.dfSplit,
-      ratingEta:        rs.ratingEta        ?? 1,
-      ratingVehicleTon: rs.ratingVehicleTon ?? 36,
-      ratingVehicleName:rs.ratingVehicleName|| 'HL-93',
-      ratingDcLC:       rs.ratingDcLC       || '',
-      ratingDwLC:       rs.ratingDwLC       || '',
-      ratingLLposLC:    rs.ratingLLposLC    || '',
-      ratingLLnegLC:    rs.ratingLLnegLC    || '',
-      ratingMethod:     rs.ratingMethod     || 'LRFR',
-      ratingLimitState: rs.ratingLimitState || 'Strength I',
-      ratingLevel:      rs.ratingLevel      || 'Inventory',
-      chartImages,
-      ratingLLScaleExpr: rs.ratingLLScaleExpr || '',
-      legalPosting:     rs.legalPosting     || [],
-    });
-    const win = window.open('', '_blank');
-    if (win) { win.document.write(html); win.document.close(); }
-    else alert('Pop-up blocked — please allow pop-ups for this page and try again.');
-  };
+  /* IXRX (2026-11-03): "Generate Report" prints the Report step. The report window is retired: its content is the Report's section
+     "Model and MCT report" (generateReportHTML with the same arguments, idxGenArgs; the RF chart drawn by the Report step itself). */
+  const generateReport = () => ixxPrintAny();
 
   // ── Design hand-off: publish the external-demands payload to shared storage, open the design app ──
   // Reuses the SAME builder as the JSON export (buildPSBeamExport). PS-Beam reads it from localStorage
@@ -22197,7 +22358,7 @@ function App() {
     <StepResults {...ratingStepProps} ratingMode="results"/>,
     <StepResults {...ratingStepProps} ratingMode="aashto"/>,
     <StepResults {...ratingStepProps} ratingMode="arema"/>,
-    <StepReport cfg={cfg} rows={resultsRows} reportState={reportState} zones={ratingCapZones} combos={resultsCombos} setStep={setStep}/>,   // IDRP
+    <StepReport cfg={cfg} rows={resultsRows} reportState={reportState} zones={ratingCapZones} combos={resultsCombos} setStep={setStep} mctOutput={mctOutput} set={set}/>,   // IDRP; IXRX: mctOutput, set
   ];
 
   return (
