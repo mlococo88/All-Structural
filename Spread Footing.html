@@ -3012,14 +3012,15 @@ function renderPlots(){
   {font,margin:{t:20,b:130},xaxis:{title:'Service combination',tickangle:-40,tickfont:{size:9}},yaxis:{title:'Bearing DCR'},legend:{orientation:'h'}},{responsive:true,displaylogo:false});
  /* heatmap */
  const hv=sfdLrView();   /* SFLS: an LRFD (factored) combination selected on the Bearing tab is plotted instead, reference only */
- if(sfpOn('plot-heat')&&R.govBear&&(hv?hv.bear:R.govBear.bear).plane){
-  const bp=(hv?hv.bear:R.govBear.bear).plane,{B,L}=R,N=60;
+ const hs=R.govBear?selASD(R.govBear):null;   /* SFHS: else the selected service combination (governing by default) */
+ if(sfpOn('plot-heat')&&R.govBear&&(hv?hv.bear:hs.bear).plane){
+  const bp=(hv?hv.bear:hs.bear).plane,{B,L}=R,N=60;
   const xs=[],ys=[],z=[];
   for(let i=0;i<=N;i++)xs.push(-B/2+B*i/N);
   for(let j=0;j<=N;j++)ys.push(-L/2+L*j/N);
   for(let j=0;j<=N;j++){const row=[];for(let i=0;i<=N;i++){row.push(Math.max(0,bp.q0+bp.gx*xs[i]+bp.gy*ys[j]));}z.push(row);}
   sfpPlot('plot-heat',[{x:xs,y:ys,z:z,type:'heatmap',colorscale:[[0,'#1a9850'],[0.5,'#fee08b'],[1,'#d73027']],reversescale:false,colorbar:{title:'q (ksf)'},hovertemplate:'x=%{x:.2f} ft<br>y=%{y:.2f} ft<br>q=%{z:.2f} ksf<extra></extra>'}],
-  {font,title:{text:hv?'Base pressure \u2014 LRFD (factored), reference only: '+hv.cb.name+'  (green = min, red = max)':'Base pressure \u2014 governing combination: '+R.govBear.cb.name+'  (green = min, red = max)',font:{size:12}},margin:{t:30},xaxis:{title:'x (ft)',scaleanchor:'y'},yaxis:{title:'y (ft)'}},{responsive:true,displaylogo:false});
+  {font,title:{text:hv?'Base pressure \u2014 LRFD (factored), reference only: '+hv.cb.name+'  (green = min, red = max)':hs===R.govBear?'Base pressure \u2014 governing combination: '+R.govBear.cb.name+'  (green = min, red = max)':'Base pressure \u2014 selected service combination: '+hs.cb.name+' (governing: '+R.govBear.cb.name+')  (green = min, red = max)',font:{size:12}},margin:{t:30},xaxis:{title:'x (ft)',scaleanchor:'y'},yaxis:{title:'y (ft)'}},{responsive:true,displaylogo:false});
  }
  /* FS chart */
  if(sfpOn('plot-fs')){
