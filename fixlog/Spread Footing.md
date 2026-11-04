@@ -4565,7 +4565,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 - Sliding ratio is (μN + P_p,R)/H, the same resistance as the service sliding check (passive included when the passive fraction is > 0), not H/μN. Asked of the engineer.
 
-## 2026-11-04 — PR: claude/sf-lrfd-select — LRFD (factored) combinations in the Bearing / Stability combination selector, reference only (SFLS; display only, no result change)
+## 2026-11-04 — PR: claude/sf-lrfd-select (PR #758: https://github.com/mlococo88/All-Structural/pull/758) — LRFD (factored) combinations in the Bearing / Stability combination selector, reference only (SFLS; display only, no result change)
 
 ### SFLS. Select an LRFD combination on the Bearing and Stability tabs   [display only]
 - **Request (engineer):** list the LRFD combinations in the combination selector of the Bearing and Stability tabs (`comboSelectorBar('asd',…)`, "Service (ASD) combination:"); when one is selected, the tab's per-combination views show its factored values, under a banner "LRFD (factored) combination — reference only; not used in the checks; no D/C". The governing D/C, the status chips, the dashboard, the NG list, the Report and the "★ governing" star stay ASD. Session only.
