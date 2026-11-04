@@ -716,7 +716,7 @@ function defaultState(){
  ev:{cover:1.5,gev:120,qDsur:0,qLsur:0},
  freinf:{botX:{size:8,spc:9,mode:'spacing'},botY:{size:8,spc:9,mode:'spacing'},topX:{size:0,spc:12,mode:'spacing'},topY:{size:0,spc:12,mode:'spacing'}},
  stab:{muMode:'phi',mu:0.45,pf:0,FSot:2,FSsl:1.5,FSfl:1.25,shearCouple:'on',otGate:'off',eccMode:'kern',eccCustom:0.25},
- manPrint:false,manPart:'p0',
+ manPrint:false,manPart:'p0',lrRefRpt:true,
  assump:'',peds:[p1,p2]};}
 let state=defaultState(), collapseState={};
 function getPath(o,p){return p.split('.').reduce((a,k)=>a&&a[k],o);}
@@ -726,6 +726,7 @@ function migrateState(){
  // backfill fields that may be absent in states saved before a feature existed
  if(!state.loadMode)state.loadMode='type';
  if(state.manPrint===undefined)state.manPrint=false;
+ if(state.lrRefRpt===undefined)state.lrRefRpt=true;   /* SFLR: Report Include box, LRFD reference tables (default on) */
  if(!state.manPart)state.manPart='p0';
  if(!state.freinf)state.freinf=defaultState().freinf;
  ['botX','botY','topX','topY'].forEach(k=>{const m=state.freinf[k];if(m&&!m.mode)m.mode='spacing';});   /* SFRQ: older saves entered a spacing */
@@ -1287,6 +1288,23 @@ function solveBearing(P,ex,ey,B,L){
   plane:{q0:v[0],gx:v[1],gy:v[2]},iter:it,converged:ok,
   resid:[res[0],res[1],res[2]]};
 }
+/* SFLR (2026-11-04): overturning about the 4 edges of a resultant r (r.verts, r.MaX, r.MaY), moved unchanged out of computeAll's
+   ASD loop so the LRFD reference tables (Bearing / Stability, reference only) use the same code. */
+function sfdOTEdges(r,B,L){
+ const edges=[];
+ function edgeCalc(name,arm,Ma,armLabel){
+  let Mr=0,Mo=0;const rows=[];
+  r.verts.forEach(v=>{const a=arm(v);const mm=v.w*a;if(mm>=0)Mr+=mm;else Mo+=-mm;
+   rows.push({src:v.src,w:v.w,arm:a,m:mm,bucket:mm>=0?'r':'o'});});
+  let appRow=null;
+  if(Math.abs(Ma)>1e-9){if(Ma>=0){Mo+=Ma;appRow={m:Ma,bucket:'o'};}else{Mr+=-Ma;appRow={m:-Ma,bucket:'r'};}}
+  edges.push({name,Mr,Mo,FS:Mo>1e-9?Mr/Mo:Infinity,rows,appRow,armLabel,Ma});}
+ edgeCalc('+x (x=+B/2)',v=>B/2-v.x,r.MaY,'B/2 \u2212 x');
+ edgeCalc('\u2212x (x=\u2212B/2)',v=>v.x+B/2,-r.MaY,'x + B/2');
+ edgeCalc('+y (y=+L/2)',v=>L/2-v.y,r.MaX,'L/2 \u2212 y');
+ edgeCalc('\u2212y (y=\u2212L/2)',v=>v.y+L/2,-r.MaX,'y + L/2');
+ return edges;
+}
 /* ================= Vesic bearing capacity ================= */
 function vesicCapacity(ctx,V,H,ex,ey,thetaH){
  const {B,L,Df,phi,c,gs,gw,dw,FSb}=ctx;
@@ -1515,19 +1533,8 @@ function computeAll(){
     DCR=qa>0?qcheck/qa:Infinity;
    }
   }
-  /* overturning about 4 edges */
-  const edges=[];
-  function edgeCalc(name,arm,Ma,armLabel){
-   let Mr=0,Mo=0;const rows=[];
-   r.verts.forEach(v=>{const a=arm(v);const mm=v.w*a;if(mm>=0)Mr+=mm;else Mo+=-mm;
-    rows.push({src:v.src,w:v.w,arm:a,m:mm,bucket:mm>=0?'r':'o'});});
-   let appRow=null;
-   if(Math.abs(Ma)>1e-9){if(Ma>=0){Mo+=Ma;appRow={m:Ma,bucket:'o'};}else{Mr+=-Ma;appRow={m:-Ma,bucket:'r'};}}
-   edges.push({name,Mr,Mo,FS:Mo>1e-9?Mr/Mo:Infinity,rows,appRow,armLabel,Ma});}
-  edgeCalc('+x (x=+B/2)',v=>B/2-v.x,r.MaY,'B/2 \u2212 x');
-  edgeCalc('\u2212x (x=\u2212B/2)',v=>v.x+B/2,-r.MaY,'x + B/2');
-  edgeCalc('+y (y=+L/2)',v=>L/2-v.y,r.MaX,'L/2 \u2212 y');
-  edgeCalc('\u2212y (y=\u2212L/2)',v=>v.y+L/2,-r.MaX,'y + L/2');
+  /* overturning about 4 edges (SFLR: the same code, moved to sfdOTEdges so the LRFD reference tables use it) */
+  const edges=sfdOTEdges(r,B,L);
   const otMin=edges.reduce((a,e)=>e.FS<a.FS?e:a,edges[0]);
   /* sliding */
   const Nn=Math.max(r.P,0);
@@ -2625,6 +2632,7 @@ function renderBearing(){
    f2(cpd.qcheck)+' \\le '+f2(cpd.qa),
    '\\mathrm{DCR} = '+f2(cpd.qcheck)+'/'+f2(cpd.qa)+' = \\mathbf{'+f2(g.DCR)+'}'+(g.DCR<=1?'\\;\\checkmark':'\\;\\text{NG}')));
  }
+ sfdLrBearCard(T);   /* SFLR: reference only */
 }
 </script>
 <script>
@@ -2825,6 +2833,98 @@ function renderStability(){
   '\\lambda\\ell_x = '+f2(R.rig.lam)+'\\cdot'+f2(R.rig.lx)+' = '+f2(R.rig.vx)+',\\qquad \\lambda\\ell_y = '+f2(R.rig.lam)+'\\cdot'+f2(R.rig.ly)+' = '+f2(R.rig.vy),
   '\\tfrac{\\pi}{4} = 0.79 \\;\\Rightarrow\\; '+(R.rig.rigid?'\\text{footing may be treated as rigid}\\;\\checkmark':'\\textbf{flexible \u2014 rigid method questionable}')));
  const pfd=el('div','plot');pfd.id='plot-fs';b4.parentElement.parentElement.appendChild(pfd);
+ sfdLrStabCard(T);   /* SFLR: reference only */
+}
+/* ================= SFLR (2026-11-04, engineer): LRFD (factored) combinations for bearing and stability, REFERENCE ONLY =================
+   The strength set the tool already generates for the footing and pedestal design (R.lrfd: ASCE 7-16 §2.3.1, incl. 0.9D + 1.0W; in direct
+   mode the factored envelopes), run through the same rigid-footing no-tension pressure solution (solveBearing), the same edge overturning
+   sums (sfdOTEdges) and the same base-friction / passive resistance as the service checks (R.mu, R.PpX, R.PpY). Nothing here feeds a D/C, a
+   status, the dashboard, the NG / REVIEW lists or a governing selection: R, P2 and every check are unchanged. No new factor. */
+function sfdLrRef(){
+ if(!R||R.fatal||!R.lrfd)return null;
+ if(sfdLrRef.R===R)return sfdLrRef.v;
+ const B=R.B,L=R.L;
+ const rows=R.lrfd.map((a,i)=>{const r=a.r;
+  const bear=solveBearing(r.P,r.ex,r.ey,B,L);
+  const edges=sfdOTEdges(r,B,L), ot=edges.reduce((x,e)=>e.FS<x.FS?e:x,edges[0]);
+  const N=Math.max(r.P,0), H=Math.hypot(r.Hx,r.Hy), PpR=H>1e-9?(R.PpX*Math.abs(r.Hx)+R.PpY*Math.abs(r.Hy))/H:0;
+  const muN=R.mu*N, sl=H>1e-9?(muN+PpR)/H:Infinity;
+  const ix=B>0?6*Math.abs(r.ex)/B:0, iy=L>0?6*Math.abs(r.ey)/L:0;
+  return {i,a,r,bear,edges,ot,N,H,PpR,muN,sl,ix,iy,ik:ix+iy};});
+ const qOK=rows.filter(z=>(z.bear.mode==='full'||z.bear.mode==='partial')&&isFinite(z.bear.qmax));
+ const gB=qOK.length?qOK.reduce((x,z)=>z.bear.qmax>x.bear.qmax?z:x):null;               // largest factored q_max
+ const oOK=rows.filter(z=>isFinite(z.ot.FS));
+ const gO=oOK.length?oOK.reduce((x,z)=>z.ot.FS<x.ot.FS?z:x):null;                         // smallest M_r / M_o
+ const sOK=rows.filter(z=>isFinite(z.sl));
+ const gS=sOK.length?sOK.reduce((x,z)=>z.sl<x.sl?z:x):null;                               // smallest (μN + P_p,R) / H
+ sfdLrRef.R=R;sfdLrRef.v={rows,gB,gO,gS};
+ return sfdLrRef.v;
+}
+const sfdLrContact=b=>b.mode==='full'?'full':b.mode==='partial'?'partial':b.mode==='unstable'?'off footing':'none (P \u2264 0)';
+const sfdLrLab=()=>['tab-combos',R.directMode?'2.5 Factored Envelope':'2.5 Strength (LRFD) Combinations'];
+function sfdLrTable(head,rows,gov){
+ const t=document.createElement('table');t.className='tbl';
+ t.innerHTML='<tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr>';
+ rows.forEach(z=>{const tr=document.createElement('tr');
+  z.cells.forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});
+  if(z.z===gov)tr.style.fontWeight='bold';t.appendChild(tr);});
+ return t;}
+function sfdLrHead(b,txt){
+ const d=b.parentElement;if(d)d.classList.add('sfLrRef');
+ b.appendChild(el('div','warnbox','<b>LRFD (factored) \u2014 reference only; not used in the checks.</b> '+txt));}
+/* Bearing tab, 3.4 */
+function sfdLrBearCard(T){
+ const X=sfdLrRef();if(!X)return;
+ const b=secPanel(T,'o-br-lrfd','3.4  LRFD (factored) combinations \u2014 reference only; not used in the checks');
+ sfdLrHead(b,'Each '+(R.directMode?'factored envelope':'strength combination (ASCE 7-16 \u00a72.3.1, the set used for the footing and pedestal design)')+' is run through the same rigid-footing, no-tension pressure solution as \u00a73.2. The pressures are factored: they are not compared with the allowable bearing pressure (a service quantity), and no row enters a D/C, a status, the dashboard or the NG / REVIEW list. The service (ASD) checks above are unchanged.');
+ b.appendChild(sfdLrTable(['#','Combination','P<sub>u</sub> (k)','M<sub>x</sub> (k-ft)','M<sub>y</sub> (k-ft)','e<sub>x</sub> (ft)','e<sub>y</sub> (ft)','Contact','q<sub>max</sub> (ksf)','q<sub>min</sub> (ksf)','Contact area (%)'],
+  X.rows.map(z=>{const bp=z.bear,ok=bp.mode==='full'||bp.mode==='partial';
+   return {z,cells:[String(z.i+1),z.a.cb.name,f2(z.r.P),f2(z.r.Mx),f2(z.r.My),f3(z.r.ex),f3(z.r.ey),sfdLrContact(bp),ok?f2(bp.qmax):'\u2013',ok?f2(bp.qmin):'\u2013',ok?f2(100*bp.contactFrac):(bp.mode==='tension'?'0.00':'\u2013')]};}),X.gB));
+ b.appendChild(el('p','note','M<sub>x</sub>, M<sub>y</sub>: factored moments about the footing centroid at the base (\u03a3M of \u00a72.5); e<sub>x</sub> = M<sub>y</sub>/P<sub>u</sub>, e<sub>y</sub> = M<sub>x</sub>/P<sub>u</sub>. Bold: the largest factored q<sub>max</sub>, worked below.'));
+ const g=X.gB;if(!g){b.appendChild(el('p','note','No combination has a pressure distribution (net load not downward or resultant off the footing).'));return;}
+ const r=g.r,bp=g.bear;
+ b.appendChild(el('p','','Worked: <b>'+sfEsc(g.a.cb.name)+'</b> (largest factored q<sub>max</sub>).'));
+ b.appendChild(sfdWorkedIn([['o-cb-lrfd','P<sub>u</sub>, M<sub>x</sub>, M<sub>y</sub> (this combination\u2019s row)',sfdLrLab()],['o-br-press','pressure solution (same procedure)']]));
+ b.appendChild(eqBlock('Eccentricities and kern index (factored)','reference only',
+  'e_x = \\frac{M_y}{P_u},\\; e_y = \\frac{M_x}{P_u},\\qquad k = \\frac{6|e_x|}{B}+\\frac{6|e_y|}{L}',
+  'e_x = \\frac{'+f2(r.My)+'}{'+f2(r.P)+'} = '+f3(r.ex)+',\\; e_y = \\frac{'+f2(r.Mx)+'}{'+f2(r.P)+'} = '+f3(r.ey)+',\\qquad k = \\frac{6\\cdot'+f3(Math.abs(r.ex))+'}{'+f2(R.B)+'}+\\frac{6\\cdot'+f3(Math.abs(r.ey))+'}{'+f2(R.L)+'}',
+  'k = '+f3(bp.kern)+(bp.kern<=1+1e-9?'\\le 1\\;\\Rightarrow\\;\\text{full contact}':'> 1\\;\\Rightarrow\\;\\text{partial contact}')));
+ if(bp.mode==='full')b.appendChild(eqBlock('Corner pressures (factored, full contact)','q = P/A \u00b1 M c / I; reference only',
+  'q_{max,min} = \\frac{P_u}{BL}\\left(1 \\pm \\frac{6|e_x|}{B} \\pm \\frac{6|e_y|}{L}\\right)',
+  'q = \\frac{'+f2(r.P)+'}{'+f2(R.B)+'\\cdot'+f2(R.L)+'}\\left(1 \\pm '+f3(6*Math.abs(r.ex)/R.B)+' \\pm '+f3(6*Math.abs(r.ey)/R.L)+'\\right)',
+  'q_{max} = '+f2(bp.qmax)+'\\;\\mathrm{ksf},\\quad q_{min} = '+f2(bp.qmin)+'\\;\\mathrm{ksf}\\quad(\\text{contact }100\\%)'));
+ else b.appendChild(eqBlock('Maximum pressure (factored, partial contact)','no-tension plane, as \u00a73.2; reference only',
+  'q = q_0 + g_x x + g_y y \\;\\text{over the contact area } A_c',
+  'q_0 = '+f3(bp.plane.q0)+',\\; g_x = '+f3(bp.plane.gx)+',\\; g_y = '+f3(bp.plane.gy)+'\\quad(\\mathrm{ksf},\\;\\mathrm{ksf/ft})',
+  'q_{max} = '+f2(bp.qmax)+'\\;\\mathrm{ksf},\\quad A_c/A = '+f2(100*bp.contactFrac)+'\\,\\%'));
+}
+/* Stability tab, 4.6 */
+function sfdLrStabCard(T){
+ const X=sfdLrRef();if(!X)return;
+ const b=secPanel(T,'o-st-lrfd','4.6  LRFD (factored) combinations \u2014 reference only; not used in the checks');
+ sfdLrHead(b,'Overturning, eccentricity and sliding of each '+(R.directMode?'factored envelope':'strength combination (ASCE 7-16 \u00a72.3.1, incl. 0.9D + 1.0W)')+', computed as in \u00a74.2 and \u00a74.3 (same edges, same resisting / overturning split, same \u03bc and passive). The ratios are reported as ratios only: no target, no factor of safety check, no resistance factor, and no row enters a D/C, a status, the dashboard or the NG / REVIEW list. The service (ASD) checks above and the eccentricity limit of \u00a74.3a are unchanged.');
+ b.appendChild(el('p','','<b>Eccentricity and overturning (factored)</b>'));
+ b.appendChild(sfdLrTable(['#','Combination','P<sub>u</sub> (k)','e<sub>x</sub> (ft)','e<sub>y</sub> (ft)','6|e<sub>x</sub>|/B','6|e<sub>y</sub>|/L','6|e<sub>x</sub>|/B + 6|e<sub>y</sub>|/L','Critical edge','M<sub>o</sub> (k-ft)','M<sub>r</sub> (k-ft)','M<sub>r</sub>/M<sub>o</sub> (ratio)'],
+  X.rows.map(z=>({z,cells:[String(z.i+1),z.a.cb.name,f2(z.r.P),f3(z.r.ex),f3(z.r.ey),f3(z.ix),f3(z.iy),f3(z.ik),isFinite(z.ot.FS)?z.ot.name:'\u2013 (M\u2092 = 0)',f2(z.ot.Mo),f2(z.ot.Mr),f2(z.ot.FS)]})),X.gO));
+ b.appendChild(el('p','','<b>Sliding (factored)</b>'));
+ b.appendChild(sfdLrTable(['#','Combination','H<sub>x</sub> (k)','H<sub>y</sub> (k)','H = \u221a(H<sub>x</sub>\u00b2+H<sub>y</sub>\u00b2) (k)','N = max(P<sub>u</sub>, 0) (k)','\u03bcN (k)','P<sub>p,R</sub> (k)','(\u03bcN + P<sub>p,R</sub>)/H (ratio)'],
+  X.rows.map(z=>({z,cells:[String(z.i+1),z.a.cb.name,f2(z.r.Hx),f2(z.r.Hy),f2(z.H),f2(z.N),f2(z.muN),f2(z.PpR),z.H>1e-9?f2(z.sl):'\u2013 (H = 0)']})),X.gS));
+ b.appendChild(el('p','note','M<sub>o</sub>, M<sub>r</sub>: about the edge with the smallest M<sub>r</sub>/M<sub>o</sub> (\u221e: nothing tips the footing over any edge). \u03bc = '+f2(R.mu)+'; P<sub>p,R</sub> as \u00a74.2 (0 when the passive fraction is 0). Bold: the smallest ratio of each table, worked below.'));
+ b.appendChild(sfdWorkedIn([['o-cb-lrfd','P<sub>u</sub>, H, M (each combination\u2019s row)',sfdLrLab()],['o-st-ot','overturning sums (same procedure)'],['o-st-slide','sliding (same procedure)']]));
+ const g=X.gO;
+ if(g){const oe=g.ot;
+  const sum=bk=>{const t=oe.rows.filter(z=>z.bucket===bk&&Math.abs(z.m)>1e-12).map(z=>f2(Math.abs(z.w))+'\\cdot'+f3(Math.abs(z.arm)));if(oe.appRow&&oe.appRow.bucket===bk)t.push(f2(oe.appRow.m));return t.length?t.join(' + '):'0';};
+  b.appendChild(eqBlock('Overturning ratio (factored) \u2014 '+g.a.cb.name+', edge '+oe.name,'arm = '+oe.armLabel+'; ratio only, reference',
+   '\\frac{M_r}{M_o},\\quad M_r = \\sum_{W_i a_i \\ge 0} W_i a_i'+(oe.appRow&&oe.appRow.bucket==='r'?' + |M_{app}|':'')+',\\quad M_o = \\sum_{W_i a_i < 0} |W_i a_i|'+(oe.appRow&&oe.appRow.bucket==='o'?' + M_{app}':''),
+   'M_r = '+sum('r')+' = '+f2(oe.Mr)+',\\quad M_o = '+sum('o')+' = '+f2(oe.Mo),
+   '\\frac{M_r}{M_o} = \\frac{'+f2(oe.Mr)+'}{'+f2(oe.Mo)+'} = '+f2(oe.FS)+'\\quad(6|e_x|/B + 6|e_y|/L = '+f3(g.ik)+')'));
+ }else b.appendChild(el('p','note','No combination has an overturning moment about any edge.'));
+ const s=X.gS;
+ if(s)b.appendChild(eqBlock('Sliding ratio (factored) \u2014 '+s.a.cb.name,'ratio only, reference; no resistance factor',
+  '\\frac{\\mu N + P_{p,R}}{H},\\quad N = \\max(P_u,0),\\; H = \\sqrt{H_x^2+H_y^2}',
+  '\\frac{'+f3(R.mu)+'\\cdot'+f2(s.N)+' + '+f2(s.PpR)+'}{\\sqrt{'+f2(s.r.Hx)+'^2+'+f2(s.r.Hy)+'^2}} = \\frac{'+f2(s.muN+s.PpR)+'}{'+f2(s.H)+'}',
+  '\\frac{\\mu N + P_{p,R}}{H} = '+f2(s.sl)));
+ else b.appendChild(el('p','note','No combination has a horizontal load: sliding ratios not applicable.'));
 }
 /* ---------- Plotly charts ---------- */
 /* SFAC: a plot in a hidden output tab is not drawn (it is drawn when its tab is opened: the tab click calls renderPlots,
@@ -3560,7 +3660,7 @@ function renderReport(){
  if(!R||R.fatal){T.innerHTML='<div class="errbox">No results: correct the input errors shown in the Summary.</div>';SFRP.api=null;SFRP.doc=null;return;}
  sfpDrawHidden();   /* SFAC: the plots of hidden tabs, which sfxApply reads */
  let M;
- try{M=sfxApply(sfrModel());}catch(e){T.innerHTML='<div class="errbox">Report error: '+sfEsc(e&&e.message)+'</div>';SFRP.api=null;SFRP.doc=null;return;}
+ try{M=sfdLrReport(sfxApply(sfrModel()));}catch(e){T.innerHTML='<div class="errbox">Report error: '+sfEsc(e&&e.message)+'</div>';SFRP.api=null;SFRP.doc=null;return;}
  SFRP.api=SharedReport.mount(T,M,{closed:SFRP.closed,onGoto:sfrGoto,controls:sfxControls()});   /* SFRX: the Include box */
  SFRP.doc=SFRP.api.doc;sfxWire(T);
 }
@@ -3619,7 +3719,7 @@ function sfxWalk(root,scope,T){
  /* a "Worked in" line: as on screen ("<value> → <tab> · <card>"; the Report links the values itself), an input echo link as printed */
  root.querySelectorAll('.wkLink').forEach(w=>{const c=w.cloneNode(true);c.querySelectorAll('a.wkA:not(.sfdInA) .wkPrt,a.sfdInA .wkScr').forEach(x=>x.remove());
   const d=document.createElement('div');d.textContent=c.textContent.replace(/\s+/g,' ').trim();w.replaceWith(d);});
- root.querySelectorAll('.noprint,.wkScr,.wkPrt,.manNav,.manPrintCtl,button,script,style,.modebar-container').forEach(x=>x.remove());
+ root.querySelectorAll('.noprint,.sfLrRef,.wkScr,.wkPrt,.manNav,.manPrintCtl,button,script,style,.modebar-container').forEach(x=>x.remove());
  root.querySelectorAll('select,input,textarea').forEach(i=>{const t=i.tagName==='SELECT'?(i.selectedIndex>=0?i.options[i.selectedIndex].textContent:'—'):(i.type==='checkbox'||i.type==='radio')?(i.checked?'yes':'no'):(i.value||'—');const s=document.createElement('span');s.textContent=t;i.replaceWith(s);});
  root.querySelectorAll('.katex-display,.katex').forEach(x=>{if(!root.contains(x)||(x.parentElement&&x.parentElement.closest('.katex,.katex-display')))return;
   const a=x.querySelector('annotation');const s=document.createElement('span');s.className='sfx-tex';s.dataset.tex=a?a.textContent:x.textContent;s.textContent=' $'+sfxLite(s.dataset.tex)+'$ ';x.replaceWith(s);});
@@ -3708,9 +3808,49 @@ function sfxApply(model){
    {type:'note',text:'Each result section ends with the result lines of its checks (one per dashboard chip; status = the chip’s own PASS / FAIL / REVIEW / N/A). For a factor-of-safety check, D/C = FS_target/FS. Where a value is used away from where it is worked, a § link gives the section where it is worked. Units: kips, ft, ksf unless noted.'}]});}
  return model;
 }
+/* SFLR (2026-11-04): the LRFD reference tables in the Report, at the end of the Bearing and Stability sections under "Reference: LRFD
+   combinations" (Include box, saved field state.lrRefRpt, default on). Added after sfxApply, so the rest of the Report is unchanged. Same
+   values as the tabs' cards 3.4 / 4.6 (sfdLrRef); no status, no D/C. */
+function sfdLrReport(M){
+ const X=sfdLrRef();if(!X||state.lrRefRpt===false||!M||!M.sections)return M;
+ const sec=t=>M.sections.find(x=>x.title===t), S=sfrS, c=sfrCell, gv=(z,g)=>z===g?'gov':'';
+ const what=R.directMode?'factored envelopes':'strength combinations (ASCE 7-16 §2.3.1, the set used for the footing and pedestal design, [[S-lrfd]])';
+ const bs=sec('Bearing');
+ if(bs){const items=[{type:'note',warn:true,text:'LRFD (factored) — reference only; not used in the checks. The '+what+' run through the same rigid-footing, no-tension pressure solution as the service combinations ([[S-bp]]). Factored pressures are not compared with the allowable bearing pressure; no row has a status or a D/C.'},
+   {type:'table',wide:true,head:['Combination','P_u (kip)','M_x (kip-ft)','M_y (kip-ft)','e_x (ft)','e_y (ft)','Contact','q_max (ksf)','q_min (ksf)','Contact area (%)'],
+    rows:X.rows.map(z=>{const bp=z.bear,ok=bp.mode==='full'||bp.mode==='partial';
+     return {cells:[z.a.cb.name,c(z.r.P),c(z.r.Mx),c(z.r.My),c(z.r.ex,3),c(z.r.ey,3),sfdLrContact(bp),ok?c(bp.qmax):'–',ok?c(bp.qmin):'–',ok?c(100*bp.contactFrac,1):(bp.mode==='tension'?c(0,1):'–')],cls:gv(z,X.gB)};})}];
+  const g=X.gB;
+  if(g){const r=g.r,bp=g.bear,st=[
+    S({id:'ex',label:'Eccentricities, '+g.a.cb.name+' (largest factored q_max)',sym:'e_{x}',eq:'\\frac{M_{y}}{P_{u}}',sub:'\\frac{'+sfrP(r.My)+'}{'+sfrN(r.P)+'}',value:r.ex,unit:'ft',d:3,note:'e_y = M_x/P_u = '+sfrN(r.Mx)+'/'+sfrN(r.P)+' = '+sfrN(r.ey,3)+' ft'}),
+    S({id:'k',label:'Kern index',sym:'k',eq:'\\frac{6|e_{x}|}{B} + \\frac{6|e_{y}|}{L}',sub:'\\frac{6\\cdot'+sfrN(Math.abs(r.ex),3)+'}{'+sfrN(R.B)+'} + \\frac{6\\cdot'+sfrN(Math.abs(r.ey),3)+'}{'+sfrN(R.L)+'}',value:bp.kern,unit:'',d:3,note:bp.kern<=1+1e-9?'k ≤ 1: full contact':'k > 1: partial contact'})];
+   if(bp.mode==='full')st.push(S({id:'qmax',label:'Maximum corner pressure (factored)',sym:'q_{max}',eq:'\\frac{P_{u}}{B L}\\left(1 + \\frac{6|e_{x}|}{B} + \\frac{6|e_{y}|}{L}\\right)',sub:'\\frac{'+sfrN(r.P)+'}{'+sfrN(R.B)+'\\cdot'+sfrN(R.L)+'}\\left(1 + '+sfrN(6*Math.abs(r.ex)/R.B,3)+' + '+sfrN(6*Math.abs(r.ey)/R.L,3)+'\\right)',value:bp.qmax,unit:'ksf',d:3}),
+     S({id:'qmin',label:'Minimum corner pressure (factored)',sym:'q_{min}',eq:'\\frac{P_{u}}{B L}\\left(1 \\minus \\frac{6|e_{x}|}{B} \\minus \\frac{6|e_{y}|}{L}\\right)',sub:'\\frac{'+sfrN(r.P)+'}{'+sfrN(R.B)+'\\cdot'+sfrN(R.L)+'}\\left(1 \\minus '+sfrN(6*Math.abs(r.ex)/R.B,3)+' \\minus '+sfrN(6*Math.abs(r.ey)/R.L,3)+'\\right)',value:bp.qmin,unit:'ksf',d:3}));
+   else st.push(S({id:'qmax',label:'Maximum pressure (factored), no-tension plane q = q_0 + g_x x + g_y y over the contact area (A_c/A = '+sfrN(100*bp.contactFrac,1)+' %)',sym:'q_{max}',eq:'q_{0} + g_{x} x_{c} + g_{y} y_{c}',sub:'q_{0} = '+sfrN(bp.plane.q0,3)+',\\; g_{x} = '+sfrN(bp.plane.gx,4)+',\\; g_{y} = '+sfrN(bp.plane.gy,4),value:bp.qmax,unit:'ksf',d:3}));
+   items.push({type:'steps',scope:'lrb',steps:st,title:'Worked: '+g.a.cb.name+' (reference only)'});}
+  items.push({type:'note',text:'Bold: the largest factored q_max, worked above. P_u, M_x, M_y of each combination: [[S-lrfd]]; the procedure: [[S-bp]].'});
+  bs.subs.push({title:'Reference: LRFD combinations',key:'S-brLR',items});}
+ const ss=sec('Stability');
+ if(ss){const items=[{type:'note',warn:true,text:'LRFD (factored) — reference only; not used in the checks. The '+what+', with the overturning sums, eccentricity indices and sliding resistance computed as for the service combinations ([[S-st]]). M_r/M_o and (μN + P_p,R)/H are ratios, not factor-of-safety checks: no target, no resistance factor, no status.'},
+   {type:'table',wide:true,head:['Combination','P_u (kip)','6|e_x|/B','6|e_y|/L','6|e_x|/B + 6|e_y|/L','Critical edge','M_o (kip-ft)','M_r (kip-ft)','M_r/M_o (ratio)'],
+    rows:X.rows.map(z=>({cells:[z.a.cb.name,c(z.r.P),c(z.ix,3),c(z.iy,3),c(z.ik,3),isFinite(z.ot.FS)?z.ot.name:'– (M_o = 0)',c(z.ot.Mo),c(z.ot.Mr),c(z.ot.FS)],cls:gv(z,X.gO)}))},
+   {type:'table',wide:true,head:['Combination','H_x (kip)','H_y (kip)','H (kip)','N = max(P_u, 0) (kip)','μN (kip)','P_p,R (kip)','(μN + P_p,R)/H (ratio)'],
+    rows:X.rows.map(z=>({cells:[z.a.cb.name,c(z.r.Hx),c(z.r.Hy),c(z.H),c(z.N),c(z.muN),c(z.PpR),z.H>1e-9?c(z.sl):'– (H = 0)'],cls:gv(z,X.gS)}))}];
+  const st=[],g=X.gO,s=X.gS;
+  if(g){const oe=g.ot,sum=bk=>{const t=oe.rows.filter(z=>z.bucket===bk&&Math.abs(z.m)>1e-12).map(z=>sfrN(Math.abs(z.w))+'\\cdot'+sfrN(Math.abs(z.arm),3));if(oe.appRow&&oe.appRow.bucket===bk)t.push(sfrN(oe.appRow.m));return t.length?t.join(' + '):'0';};
+   st.push(S({id:'Mr',label:'Resisting moment about edge '+oe.name+', '+g.a.cb.name+' (smallest M_r/M_o; arm a_i = '+oe.armLabel+')',sym:'M_{r}',eq:'\\sum_{W_{i} a_{i} \\ge 0} W_{i} a_{i}'+(oe.appRow&&oe.appRow.bucket==='r'?' + |M_{app,net}|':''),sub:sum('r'),value:oe.Mr,unit:'kip-ft'}),
+    S({id:'Mo',label:'Overturning moment',sym:'M_{o}',eq:'\\sum_{W_{i} a_{i} < 0} |W_{i} a_{i}|'+(oe.appRow&&oe.appRow.bucket==='o'?' + M_{app,net}':''),sub:sum('o'),value:oe.Mo,unit:'kip-ft'}),
+    S({id:'rat',label:'Ratio (reference, not an FS check)',sym:'M_{r}/M_{o}',eq:'',sub:'\\frac{'+sfrN(oe.Mr)+'}{'+sfrN(oe.Mo)+'}',value:oe.FS,unit:'',d:2,note:'6|e_x|/B + 6|e_y|/L = '+sfrN(g.ik,3)}));}
+  if(s)st.push(S({id:'sl',label:'Sliding ratio, '+s.a.cb.name+' (smallest; reference, no resistance factor)',sym:'(\\mu N + P_{p,R})/H',eq:'\\frac{\\mu \\max(P_{u},0) + P_{p,R}}{\\sqrt{H_{x}^{2} + H_{y}^{2}}}',sub:'\\frac{'+sfrN(R.mu,3)+'\\cdot'+sfrN(s.N)+' + '+sfrN(s.PpR)+'}{'+sfrN(s.H)+'}',value:s.sl,unit:'',d:2}));
+  if(st.length)items.push({type:'steps',scope:'lrs',steps:st,title:'Worked (reference only)'});
+  items.push({type:'note',text:'Bold: the smallest ratio of each table, worked above. P_u, H, M of each combination: [[S-lrfd]]; the procedure: [[S-st]].'});
+  ss.subs.push({title:'Reference: LRFD combinations',key:'S-stLR',items});}
+ return M;
+}
 /* the report bar's Include box: the manual (state.manPrint, the same field as the Manual tab's "Include this manual" box) */
-function sfxControls(){return '<span class="sfx-inc" style="display:inline-flex;gap:2px 10px;font-size:9pt;align-items:center"><b>Include:</b> <label style="white-space:nowrap"><input type="checkbox" data-sfx="man"'+(state.manPrint?' checked':'')+'> User manual</label></span>';}
-function sfxWire(T){T.querySelectorAll('input[data-sfx="man"]').forEach(x=>x.addEventListener('change',()=>{state.manPrint=x.checked;document.body.classList.toggle('printManual',state.manPrint);const c=$('#manPrintChk');if(c)c.checked=state.manPrint;saveAuto();renderReport();}));}
+function sfxControls(){return '<span class="sfx-inc" style="display:inline-flex;gap:2px 10px;font-size:9pt;align-items:center"><b>Include:</b> <label style="white-space:nowrap"><input type="checkbox" data-sfx="man"'+(state.manPrint?' checked':'')+'> User manual</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="lr"'+(state.lrRefRpt!==false?' checked':'')+'> LRFD reference tables (bearing, stability)</label></span>';}
+function sfxWire(T){T.querySelectorAll('input[data-sfx="lr"]').forEach(x=>x.addEventListener('change',()=>{state.lrRefRpt=x.checked;saveAuto();renderReport();}));   /* SFLR */
+ T.querySelectorAll('input[data-sfx="man"]').forEach(x=>x.addEventListener('change',()=>{state.manPrint=x.checked;document.body.classList.toggle('printManual',state.manPrint);const c=$('#manPrintChk');if(c)c.checked=state.manPrint;saveAuto();renderReport();}));}
 /* Print: from any tab the Report is shown (not saved: the tab is not part of the project), printed, and the tab of before comes back */
 function sfxPrintPrep(){
  const T=document.getElementById('tab-report');
