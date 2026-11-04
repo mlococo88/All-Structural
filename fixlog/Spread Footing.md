@@ -4545,7 +4545,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 - None.
 
-## 2026-11-04 — PR: claude/sf-lrfd-ref — LRFD (factored) combinations for bearing and stability, reference only (SFLR; display only, no result change)
+## 2026-11-04 — PR: claude/sf-lrfd-ref (PR #757: https://github.com/mlococo88/All-Structural/pull/757) — LRFD (factored) combinations for bearing and stability, reference only (SFLR; display only, no result change)
 
 ### SFLR. Reference tables of the strength combinations on the Bearing and Stability tabs and in the Report   [display only]
 - **Request (engineer):** show the LRFD (ASCE 7-16 §2.3 as the tool cites, §2.3.1) combinations for the bearing and stability calculations, for reference only: not in any D/C, status, dashboard chip, NG / REVIEW list or governing selection; the ASD basis unchanged; no new factors.
