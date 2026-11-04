@@ -147,6 +147,9 @@ body.sfdStale .tabbar button:not([data-tab="tab-manual"])::after{content:" \26A0
 .comboSel select{font-family:inherit;font-size:11px;padding:2px 4px;margin:0 4px;border:1px solid #99a}
 .comboSel button{font-size:10px;padding:2px 6px;margin-left:4px;cursor:pointer}
 .comboSel .selBadge{font-size:10px}
+.comboSel .sfLrSelBan{margin:6px 0 0 0}
+tr.sfLrRow{cursor:pointer}tr.sfLrRow:hover td{background:#f6f1e3}
+tr.sfLrSel td,tr.sfLrSel:hover td{background:#ffe9b3;box-shadow:inset 0 2px 0 #b26a00,inset 0 -2px 0 #b26a00}
 /* screen-only: fixed header, independently scrolling input & output panels */
 @media screen and (min-width:900px){
  body{height:100vh;overflow:hidden}
@@ -935,7 +938,7 @@ function handleFieldChange(inp){
  setPath(state,inp.dataset.path,v);
  if(inp.dataset.path.endsWith('.label')){const card=inp.closest('details');if(card)card.querySelector('summary').textContent=v;
   const mi=inp.dataset.path.match(/^peds\.(\d+)\.label$/),rh=mi&&document.querySelector('.sfdPedRb[data-ped="'+mi[1]+'"] .sfdPedRbH b');if(rh)rh.textContent=v;}   /* SFDB */
- if(inp.dataset.path==='loadMode'){SEL.asd=null;SEL.lrfd=null;buildPedCards();}
+ if(inp.dataset.path==='loadMode'){SEL.asd=null;SEL.lrfd=null;SEL.asdLr=null;buildPedCards();}
  /* SFRQ: switching the input form starts the new field at the value equivalent to the current bars (when empty) */
  {const mm=inp.dataset.path.match(/^freinf\.(\w+)\.mode$/);
   if(mm&&v==='qty'){const m=state.freinf[mm[1]];if(!(num(m.n)>0)){m.mode='spacing';const n0=sfdMat(mm[1]).n;m.mode='qty';m.n=n0||0;bindStaticInputs();}}
@@ -1620,7 +1623,7 @@ function computeAll(){
 /* ================= rendering ================= */
 let R=null;
 /* interactive combo selection: null = follow governing, else explicit index into R.asd / R.lrfd */
-const SEL={asd:null,lrfd:null};
+const SEL={asd:null,lrfd:null,asdLr:null};   /* SFLS: asdLr = index into R.lrfd picked in the Bearing / Stability selector (session only) */
 /* returns the ASD combo object to display for bearing/stability (selected or governing) */
 function selASD(govObj){
  if(SEL.asd!=null&&R.asd[SEL.asd])return R.asd[SEL.asd];
@@ -1634,6 +1637,7 @@ function selLRFDindex(){
 /* keep the 3D view combo in sync with the output-tab ASD selection */
 function syncSelTo3D(basis){
  if(!V3D||!V3D.inited)return;
+ if(basis==='asd'&&sfdLrSel()){V3D.combo='LRFD:'+SEL.asdLr;const s=$('#v3dCombo');if(s){s.value=V3D.combo;rebuildScene();}return;}   /* SFLS */
  if(basis==='asd'&&SEL.asd!=null){V3D.combo='ASD:'+SEL.asd;const s=$('#v3dCombo');if(s){s.value=V3D.combo;rebuildScene();}}
  if(basis==='lrfd'&&SEL.lrfd!=null){V3D.combo='LRFD:'+SEL.lrfd;const s=$('#v3dCombo');if(s){s.value=V3D.combo;rebuildScene();}}
 }
@@ -1643,17 +1647,40 @@ function comboSelectorBar(basis,govIdx,onChange){
  const wrap=el('div','comboSel');
  const lbl=el('span','',basis==='asd'?'Service (ASD) combination: ':'Strength (LRFD) combination: ');
  const sel=document.createElement('select');
- list.forEach((c,i)=>{const o=document.createElement('option');o.value=i;o.textContent=(i+1)+'. '+c.cb.name+(i===govIdx?'  \u2605 governing':'');sel.appendChild(o);});
+ /* SFLS: on the Bearing / Stability selector the LRFD (factored) combinations are a second group, reference only (value 'L<i>') */
+ const lrG=basis==='asd'&&!R.directMode&&R.lrfd&&R.lrfd.length;
+ const asdG=lrG?document.createElement('optgroup'):sel;if(lrG){asdG.label='Service (ASD)';sel.appendChild(asdG);}
+ list.forEach((c,i)=>{const o=document.createElement('option');o.value=i;o.textContent=(i+1)+'. '+c.cb.name+(i===govIdx?'  \u2605 governing':'');asdG.appendChild(o);});
+ if(lrG){const g=document.createElement('optgroup');g.label='LRFD (factored), reference only';
+  R.lrfd.forEach((c,i)=>{const o=document.createElement('option');o.value='L'+i;o.textContent='[LRFD] '+(i+1)+'. '+c.cb.name;g.appendChild(o);});sel.appendChild(g);}
+ const lrOn=lrG&&sfdLrSel();
  const cur=(SEL[basis]!=null)?SEL[basis]:govIdx;
- sel.value=cur;
- sel.addEventListener('change',()=>{SEL[basis]=parseInt(sel.value,10);onChange();});
+ sel.value=lrOn?'L'+SEL.asdLr:cur;
+ sel.addEventListener('change',()=>{if(sel.value.charAt(0)==='L'){SEL.asdLr=parseInt(sel.value.slice(1),10);}else{if(lrG)SEL.asdLr=null;SEL[basis]=parseInt(sel.value,10);}onChange();});
  const govBtn=el('button','',' \u2605 governing');govBtn.type='button';govBtn.title='Reset to governing combination';
- govBtn.addEventListener('click',()=>{SEL[basis]=null;onChange();});
+ govBtn.addEventListener('click',()=>{SEL[basis]=null;if(lrG)SEL.asdLr=null;onChange();});
  const badge=el('span','selBadge');
- if(SEL[basis]!=null&&SEL[basis]!==govIdx)badge.innerHTML=' &nbsp;<b style="color:#b26a00">Showing non-governing case</b> \u2014 governing is #'+(govIdx+1)+' ('+list[govIdx].cb.name+')';
+ if(lrOn)badge.innerHTML=' &nbsp;<b style="color:#8a4b00">Showing an LRFD (factored) combination</b> \u2014 the checks use the service combinations; governing is #'+(govIdx+1)+' ('+sfEsc(list[govIdx].cb.name)+')';
+ else if(SEL[basis]!=null&&SEL[basis]!==govIdx)badge.innerHTML=' &nbsp;<b style="color:#b26a00">Showing non-governing case</b> \u2014 governing is #'+(govIdx+1)+' ('+list[govIdx].cb.name+')';
  else badge.innerHTML=' &nbsp;<span style="color:#1b5e20">Governing case</span>';
  wrap.appendChild(lbl);wrap.appendChild(sel);wrap.appendChild(govBtn);wrap.appendChild(badge);
+ if(lrOn)wrap.appendChild(el('div','warnbox sfLrSelBan','<b>LRFD (factored) combination \u2014 reference only; not used in the checks; no D/C.</b> The per-combination views of this tab show <b>'+sfEsc(R.lrfd[SEL.asdLr].cb.name)+'</b> (factored; the same values as its row in \u00a73.4 / \u00a74.6). The governing D/C, the status chips, the dashboard, the NG list and the Report stay on the service (ASD) combinations.'));
  return wrap;
+}
+/* SFLS (2026-11-04, engineer): the LRFD combination selected in the Bearing / Stability selector, as a view object shaped like an ASD row
+   for the per-combination views ({lr, cb, r, bear, edges, otMin} plus the sfdLrRef row z). Session only (SEL is never saved). */
+function sfdLrSel(){return !!(R&&!R.fatal&&!R.directMode&&SEL.asdLr!=null&&R.lrfd&&R.lrfd[SEL.asdLr]);}
+function sfdLrView(){
+ if(!sfdLrSel())return null;
+ const X=sfdLrRef(),z=X&&X.rows[SEL.asdLr];if(!z)return null;
+ return {lr:true,i:z.i,cb:z.a.cb,r:z.r,bear:z.bear,edges:z.edges,otMin:z.ot,z};
+}
+/* SFLS: re-render the two tabs (and their plots) after an LRFD pick, keeping the scroll position */
+function sfdLrPick(i){
+ SEL.asdLr=i;
+ const P=document.getElementById('outputPanel'),st=P?P.scrollTop:0,wy=window.scrollY;
+ renderBearing();renderStability();renderPlots();syncSelTo3D('asd');
+ if(P)P.scrollTop=st;if(!sfdPanelLayout())window.scrollTo(0,wy);
 }
 function chip(name,val,status,asdIdx,nav){
  const c=el('div','chip '+status);
@@ -2455,6 +2482,7 @@ function contactZoneMap(r,bp){
  wrap.appendChild(ctrl);wrap.appendChild(readout);
  // initial draw at live resultant (deferred so canvas is in DOM)
  setTimeout(()=>update(r.ex,r.ey,true),0);
+ wrap.classList.add('sfdZone');wrap.sfdZoneDraw=()=>update(r.ex,r.ey,true);   /* SFLS: drawn at once when the Report re-renders the tab */
  return wrap;
 }
 function renderBearing(){
@@ -2463,10 +2491,13 @@ function renderBearing(){
  if(!R.govBear){T.appendChild(el('div','errbox','No valid bearing combination (net vertical load not downward, or resultant off the footing in all cases).'));return;}
  const govIdx=R.asd.indexOf(R.govBear);
  // selector bar (skip in direct mode — single envelope)
- if(!R.directMode)T.appendChild(comboSelectorBar('asd',govIdx,()=>{renderBearing();syncSelTo3D('asd');}));
- const g=selASD(R.govBear), r=g.r, bp=g.bear;
- const b0=secPanel(T,'o-br-gov',R.directMode?'3.1  Bearing Check \u2014 Direct Factored Envelope':(g===R.govBear?'3.1  Governing Service Combination':'3.1  Selected Service Combination'));
- if(R.directMode){
+ if(!R.directMode)T.appendChild(comboSelectorBar('asd',govIdx,()=>{sfdLrPick(SEL.asdLr);}));   /* SFLS: both tabs and their plots follow the selection */
+ const lv=sfdLrView(), lvT=!!lv&&lv.bear.mode==='tension';   /* SFLS: an LRFD (factored) combination selected, reference only */
+ const g=lv||selASD(R.govBear), r=g.r, bp=g.bear;
+ const b0=secPanel(T,'o-br-gov',R.directMode?'3.1  Bearing Check \u2014 Direct Factored Envelope':lv?'3.1  Selected LRFD (factored) Combination \u2014 reference only':(g===R.govBear?'3.1  Governing Service Combination':'3.1  Selected Service Combination'));
+ if(lv){
+  b0.appendChild(el('p','','Selected combination: <b>'+sfEsc(g.cb.name)+'</b> &nbsp;['+sfEsc(g.cb.ref)+'], LRFD (factored), #'+(lv.i+1)+' of \u00a72.5 and \u00a73.4. Reference only: its factored resultant and pressure distribution are worked below; they are not compared with the allowable bearing pressure and give no D/C. The bearing check (\u00a73.3) stays on the service combinations (governing = '+sfEsc(R.govBear.cb.name)+').'));
+ }else if(R.directMode){
   b0.appendChild(el('div','warnbox','<b>Conservative check.</b> The entered loads are factored (LRFD/strength), but allowable bearing is a service-level quantity. Checking the factored envelope against q<sub>allow</sub> therefore overstates the demand \u2014 the reported bearing DCR is conservative. For a code-consistent geotechnical check, use by-load-type input so the app evaluates service (ASD) combinations.'));
   b0.appendChild(el('p','','Envelope: <b>'+g.cb.name+'</b>. The full calculation follows.'));
  }else if(g===R.govBear){
@@ -2480,14 +2511,15 @@ function renderBearing(){
   ['\\Sigma M_x,\\;\\Sigma M_y','Base moments about centroid',f2(r.Mx)+', '+f2(r.My),'kip-ft'],
   ['e_x','Eccentricity, x',r.ex,'ft'],
   ['e_y','Eccentricity, y',r.ey,'ft']]));
- b0.appendChild(sfdWorkedIn([['o-cb-asd','\u03a3P, \u03a3H, \u03a3M (this combination\u2019s row)']]));   /* D11 links */
- b0.appendChild(eqBlock('Eccentricities','\u2014',
+ b0.appendChild(sfdWorkedIn(lv?[['o-cb-lrfd','\u03a3P, \u03a3H, \u03a3M (this combination\u2019s row)',sfdLrLab()],['o-br-lrfd','q<sub>max</sub>, q<sub>min</sub>, contact (this combination\u2019s row)',['tab-bearing','3.4 LRFD (factored) combinations']]]:[['o-cb-asd','\u03a3P, \u03a3H, \u03a3M (this combination\u2019s row)']]));   /* D11 links */
+ if(lvT)b0.appendChild(el('div','note','Net factored vertical load is not downward (\u03a3P \u2264 0): no eccentricity and no pressure distribution for this combination.'));
+ else b0.appendChild(eqBlock('Eccentricities','\u2014',
   'e_x = \\frac{\\Sigma M_y}{\\Sigma P}, \\qquad e_y = \\frac{\\Sigma M_x}{\\Sigma P}',
   'e_x = \\frac{'+f2(r.My)+'}{'+f2(r.P)+'}, \\qquad e_y = \\frac{'+f2(r.Mx)+'}{'+f2(r.P)+'}',
   'e_x = '+f2(r.ex)+'\\;\\mathrm{ft}, \\qquad e_y = '+f2(r.ey)+'\\;\\mathrm{ft}'));
  /* pressure distribution */
- const b1=secPanel(T,'o-br-press','3.2  Rigid-Body Base Pressure Distribution (biaxial)');
- b1.appendChild(eqBlock('Kern (middle-third) check for full contact','Rigid footing, linear pressure',
+ const b1=secPanel(T,'o-br-press','3.2  Rigid-Body Base Pressure Distribution (biaxial)'+(lv?' \u2014 LRFD (factored), reference only':''));
+ if(!lvT)b1.appendChild(eqBlock('Kern (middle-third) check for full contact','Rigid footing, linear pressure',
   '\\frac{6|e_x|}{B}+\\frac{6|e_y|}{L} \\le 1 \\;\\Rightarrow\\; \\text{full contact}',
   '\\frac{6\\cdot'+f2(Math.abs(r.ex))+'}{'+f2(R.B)+'}+\\frac{6\\cdot'+f2(Math.abs(r.ey))+'}{'+f2(R.L)+'} = '+f2(bp.kern||0),
   (bp.kern<=1?'\\text{'+f2(bp.kern)+'} \\le 1 \\;\\Rightarrow\\; \\text{full contact}':'\\text{'+f2(bp.kern)+'} > 1 \\;\\Rightarrow\\; \\text{partial contact (edge uplift)}')));
@@ -2557,19 +2589,26 @@ function renderBearing(){
    '\\int_{A_c} q\\,dA = \\Sigma P, \\quad \\int_{A_c} q\\,x\\,dA = \\Sigma P\\,e_x, \\quad \\int_{A_c} q\\,y\\,dA = \\Sigma P\\,e_y',
    'q_0 = '+f2(bp.plane.q0)+'\\;\\mathrm{ksf},\\quad g_x = '+f2(bp.plane.gx)+',\\quad g_y = '+f2(bp.plane.gy)+'\\;\\mathrm{ksf/ft}',
    '\\text{Converged in }'+bp.iter+'\\text{ iterations}'+(bp.converged?'\\;(\\text{residuals}\\approx0)':'\\;(\\textbf{NOT fully converged \u2014 verify})')));
+ }else if(lvT){
+  b1.appendChild(el('div','note','Net factored vertical load is not downward (\u03a3P \u2264 0): no pressure distribution for this combination.'));
  }else{
   b1.appendChild(el('div','errbox','Resultant falls outside the footing footprint \u2014 no equilibrium pressure distribution exists (unstable).'));
  }
  const hm=el('div','plot');hm.id='plot-heat';b1.appendChild(hm);
  if(bp.mode!=='unstable'&&bp.plane)b1.appendChild(pressureBlockSVG(bp,r));
  // interactive biaxial contact-zone map
- if(bp.mode!=='unstable'){
+ if(bp.mode!=='unstable'&&!lvT){
   const bz=secPanel(T,'o-br-zone','3.2a  Biaxial Contact-Zone Map (interactive)');
   bz.appendChild(el('p','note','Where the load resultant (e\u2093, e\u1D67) falls relative to the kern determines the base-contact shape. Inside the green kern diamond (\u00bd-diagonals B/6, L/6) the whole base bears (full 4-corner contact) and q = P/A(1 \u00b1 6e\u2093/B \u00b1 6e\u1D67/L) applies. Outside it, part of the footing lifts off and the contact area becomes a pentagon, trapezoid, or (far corner) a triangle, each with its own closed-form pressure solution. The colored regions are the analytical zone map; drag the sliders to move the resultant. Every reported number (contact %, q_max) comes from the tool\u2019s own no-tension solver at that point, so the map and the design values stay consistent. Screen-only \u2014 the printed report uses the governing resultant.'));
   bz.appendChild(contactZoneMap(r,bp));
  }
  /* capacity */
- if(state.soil.mode==='vesic'){
+ if(lv){   /* SFLS: the bearing check is a service check; with an LRFD row selected it says so instead of mixing two combinations */
+  const b2=secPanel(T,'o-br-cap','3.3  Bearing Check \u2014 service (ASD) combinations only');
+  b2.appendChild(el('div','note','The bearing check compares the service pressure with the allowable bearing pressure, a service quantity, so it applies to the service (ASD) combinations only. An LRFD (factored) combination is selected above: its factored pressures (\u00a73.2, \u00a73.4) are reference values and are not checked. The governing service combination is <b>'+sfEsc(R.govBear.cb.name)+'</b>; its check is on the dashboard and in the Report.'));
+  const bb=el('button','','Show the governing service combination');bb.type='button';bb.addEventListener('click',()=>{SEL.asd=null;sfdLrPick(null);});
+  b2.appendChild(bb);
+ }else if(state.soil.mode==='vesic'){
   const v=g.cap;
   const b2=secPanel(T,'o-br-cap','3.3  Bearing Capacity \u2014 Vesi\u0107 Method (effective area)');
   if(v.fail){b2.appendChild(el('div','errbox','Effective area is non-positive (eccentricity too large) \u2014 capacity cannot be computed.'));}
@@ -2638,7 +2677,7 @@ function renderBearing(){
 <script>
 /* ---------- Tab 4: stability ---------- */
 /* ---- original SVG: overturning free-body, elevation about the critical edge (to scale) ---- */
-function overturningSVG(go,oe){
+function overturningSVG(go,oe,lr){
  // determine axis from edge name: '+x','-x' => tip about x-edge, section along x; '+y','-y' => along y
  const nm=oe.name;
  const alongX = nm.indexOf('x')>=0 && nm.indexOf('y')<0;
@@ -2704,7 +2743,7 @@ function overturningSVG(go,oe){
  s+='<text x="'+padL+'" y="'+(H-22)+'" font-size="8" fill="#1b5e20">\u25BC stabilizing weight</text>';
  s+='<text x="'+(padL+120)+'" y="'+(H-22)+'" font-size="8" fill="#b26a00">\u25B2 buoyancy (uplift)</text>';
  // summary
- s+='<text x="'+padL+'" y="'+(H-8)+'" font-size="9" font-weight="bold">M\u1D63 = '+f2(oe.Mr)+' k-ft,  M\u2092 = '+f2(oe.Mo)+' k-ft,  FS = '+f2(oe.FS)+(oe.FS>=num(state.stab.FSot)?' \u2713':' NG')+'</text>';
+ s+='<text x="'+padL+'" y="'+(H-8)+'" font-size="9" font-weight="bold">M\u1D63 = '+f2(oe.Mr)+' k-ft,  M\u2092 = '+f2(oe.Mo)+' k-ft,  '+(lr?'M\u1D63/M\u2092 = '+f2(oe.FS)+' (LRFD factored, reference only)':'FS = '+f2(oe.FS)+(oe.FS>=num(state.stab.FSot)?' \u2713':' NG'))+'</text>';   /* SFLS: lr = LRFD reference row */
  s+='</svg>';
  const wrap=el('div');wrap.innerHTML=s;return wrap;
 }
@@ -2712,8 +2751,9 @@ function renderStability(){
  const T=$('#tab-stab');T.innerHTML='';
  if(R.fatal)return;
  const govOTidx=R.asd.indexOf(R.govOT);
- if(!R.directMode)T.appendChild(comboSelectorBar('asd',govOTidx,()=>{renderStability();syncSelTo3D('asd');}));
- const selCombo=selASD(R.govOT);
+ if(!R.directMode)T.appendChild(comboSelectorBar('asd',govOTidx,()=>{sfdLrPick(SEL.asdLr);}));   /* SFLS: both tabs and their plots follow the selection */
+ const lv=sfdLrView();   /* SFLS: an LRFD (factored) combination selected: ratios only, reference, no target / check */
+ const selCombo=lv||selASD(R.govOT);
  /* friction & passive */
  const b0=secPanel(T,'o-st-fric','4.1  Sliding Resistance Parameters');
  if(state.stab.muMode==='phi')
@@ -2727,7 +2767,16 @@ function renderStability(){
   'K_p = '+f2(R.Kp)+',\\quad P_{p,x} = '+f2(R.pf)+'\\cdot\\tfrac{1}{2}\\cdot'+f2(R.Kp)+'\\cdot'+f2(R.gs)+'\\cdot'+f2(R.Df)+'^2\\cdot'+f2(R.L),
   'P_{p,x} = '+f2(R.PpX)+'\\;\\mathrm{k},\\qquad P_{p,y} = '+f2(R.PpY)+'\\;\\mathrm{k}'));
  /* sliding */
- const b1=secPanel(T,'o-st-slide','4.2  Sliding \u2014 '+(selCombo===R.govSlx&&selCombo===R.govSly?'Governing Combinations':'Selected Combination'));
+ const b1=secPanel(T,'o-st-slide','4.2  Sliding \u2014 '+(lv?'Selected LRFD (factored) Combination, reference only':selCombo===R.govSlx&&selCombo===R.govSly?'Governing Combinations':'Selected Combination'));
+ if(lv){const z=lv.z;   /* SFLS: the resultant ratio of §4.6 for the selected row; the x / y checks and the FS target are service checks */
+  b1.appendChild(el('p','note','LRFD (factored) combination <b>'+sfEsc(lv.cb.name)+'</b>: the sliding ratio on the horizontal resultant, as in \u00a74.6 (ratio only: no target, no resistance factor, no check). The sliding checks in x, y and on the resultant, with FS_target = '+f2(num(state.stab.FSsl))+', apply to the service combinations (governing resultant sliding: '+sfEsc(R.govSlr.cb.name)+').'));
+  if(z.H>1e-9)b1.appendChild(eqBlock('Sliding ratio on the horizontal resultant (factored) \u2014 '+lv.cb.name,'ratio only, reference; no resistance factor',
+   '\\frac{\\mu N + P_{p,R}}{H},\\quad N = \\max(\\Sigma P,0),\\; H = \\sqrt{\\Sigma H_x^2+\\Sigma H_y^2},\\quad P_{p,R} = \\frac{P_{p,x}|\\Sigma H_x| + P_{p,y}|\\Sigma H_y|}{H}',
+   '\\frac{'+f3(R.mu)+'\\cdot'+f2(z.N)+' + '+f2(z.PpR)+'}{\\sqrt{'+f2(z.r.Hx)+'^2+'+f2(z.r.Hy)+'^2}} = \\frac{'+f2(z.muN+z.PpR)+'}{'+f2(z.H)+'}',
+   '\\frac{\\mu N + P_{p,R}}{H} = \\mathbf{'+f2(z.sl)+'}'));
+  else b1.appendChild(el('p','note','No net horizontal load for '+sfEsc(lv.cb.name)+' \u2014 sliding ratio not applicable.'));
+  b1.appendChild(sfdWorkedIn([['o-cb-lrfd','\u03a3P, \u03a3H (this combination\u2019s row)',sfdLrLab()],['o-st-lrfd','(\u03bcN + P<sub>p,R</sub>)/H (this combination\u2019s row)',['tab-stab','4.6 LRFD (factored) combinations']]]));
+ }else{
  [['x',selCombo,selCombo.FSslx,selCombo.r.Hx,R.PpX,R.govSlx],['y',selCombo,selCombo.FSsly,selCombo.r.Hy,R.PpY,R.govSly]].forEach(([dir,gv,FS,H,Pp,govv])=>{
   if(!isFinite(FS)||Math.abs(H)<1e-9){b1.appendChild(el('p','note','No net horizontal load in '+dir+' for '+gv.cb.name+' \u2014 sliding in '+dir+' not applicable for this combination. (Governing sliding-'+dir+': '+govv.cb.name+', FS = '+f2(dir==='x'?govv.FSslx:govv.FSsly)+'.)'));return;}
   b1.appendChild(eqBlock('Sliding, '+dir+'-direction \u2014 '+gv.cb.name+(gv===govv?' (governing)':''),'FS_target = '+f2(num(state.stab.FSsl)),
@@ -2740,25 +2789,28 @@ function renderStability(){
    'FS_{sl,R} = \\frac{'+f2(R.mu)+'\\cdot'+f2(Math.max(selCombo.r.P,0))+' + '+f2(selCombo.PpR)+'}{'+f2(selCombo.Hres)+'}',
    'FS_{sl,R} = \\mathbf{'+f2(selCombo.FSslr)+'}'+(selCombo.FSslr>=num(state.stab.FSsl)?'\\;\\checkmark':'\\;\\text{NG}')));
  b1.appendChild(sfdWorkedIn([['o-cb-asd','\u03a3P, \u03a3H (this combination\u2019s row)']]));   /* D11 links */
+ }
  /* overturning */
- const b2=secPanel(T,'o-st-ot','4.3  Overturning \u2014 '+(selCombo===R.govOT?'Governing Combination & Edge':'Selected Combination & Edge'));
+ const b2=secPanel(T,'o-st-ot','4.3  Overturning \u2014 '+(lv?'Selected LRFD (factored) Combination & Edge, reference only':selCombo===R.govOT?'Governing Combination & Edge':'Selected Combination & Edge'));
+ const okM=v=>lv?'':(v>=num(state.stab.FSot)?'\\;\\checkmark':'\\;\\text{NG}'), fsS=lv?'\\frac{M_r}{M_o}':'FS_{OT}', fsT=lv?'ratio only, reference; no target, no check':'FS_target = '+f2(num(state.stab.FSot));   /* SFLS */
  b2.appendChild(el('div','note',R.otGate?('The overturning factor of safety is <b>gating</b> in this run against a target of '+f2(num(state.stab.FSot))+'. Note that IBC and ASCE 7 impose no numeric FS on a building spread footing \u2014 confirm the target comes from the geotechnical report, owner criteria or agency policy. See &sect;4.3a.'):'The overturning factor of safety is <b>reported but not gated</b>: IBC and ASCE 7 set no numeric target for a building spread footing, and the stability margin is carried by the 0.6D / 0.9D combinations. Instability (resultant off the footing, or FS &lt; 1) still fails. The gating stability criterion in this run is the eccentricity limit in &sect;4.3a; the FS gate can be re-armed on the Stability tab.'));
  const go=selCombo, oe=go.otMin;
- if(selCombo!==R.govOT)b2.appendChild(el('div','warnbox','Showing <b>'+go.cb.name+'</b> (selected). Governing overturning is <b>'+R.govOT.cb.name+'</b> at edge '+R.govOT.otMin.name+', FS = '+f2(R.govOT.otMin.FS)+'.'));
+ if(lv)b2.appendChild(el('div','warnbox','Showing the LRFD (factored) combination <b>'+sfEsc(go.cb.name)+'</b>, reference only: the ratio M\u1D63/M\u2092 is reported (as in \u00a74.6) and not checked against a target. Governing (service) overturning is <b>'+R.govOT.cb.name+'</b> at edge '+R.govOT.otMin.name+', FS = '+f2(R.govOT.otMin.FS)+'.'));
+ else if(selCombo!==R.govOT)b2.appendChild(el('div','warnbox','Showing <b>'+go.cb.name+'</b> (selected). Governing overturning is <b>'+R.govOT.cb.name+'</b> at edge '+R.govOT.otMin.name+', FS = '+f2(R.govOT.otMin.FS)+'.'));
  b2.appendChild(el('p','','Overturning is evaluated about each footing edge for every service combination: resisting moment M\u1D63 sums stabilizing vertical-load moments (and any counteracting applied moments); overturning moment M\u2092 sums applied moments/shear couples tipping over that edge, destabilizing vertical terms, and buoyancy. Worked case: <b>'+go.cb.name+'</b>, critical edge <b>'+oe.name+'</b>.'));
  const vt=document.createElement('table');vt.className='tbl';
  vt.innerHTML='<tr><th>Vertical load</th><th>W (k)</th><th>x (ft)</th><th>y (ft)</th></tr>';
  go.r.verts.forEach(v=>{const tr=document.createElement('tr');
   [v.src,f2(v.w),f2(v.x),f2(v.y)].forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});vt.appendChild(tr);});
  b2.appendChild(vt);
- b2.appendChild(sfdWorkedIn([['o-cb-weights','self-weights, EV, U (unfactored)'],['o-cb-asd','\u03a3P, \u03a3H, \u03a3M (this combination\u2019s row)']]));   /* D11 links */
- b2.appendChild(overturningSVG(go,oe));
- b2.appendChild(eqBlock('Overturning check about edge '+oe.name,'FS_target = '+f2(num(state.stab.FSot)),
-  'FS_{OT} = \\frac{M_r}{M_o} = \\frac{\\sum W_i\\,a_i^{+} + |M_{app}^{-}|}{\\sum |W_i\\,a_i^{-}| + M_{app}^{+}}',
-  'FS_{OT} = \\frac{'+f2(oe.Mr)+'}{'+f2(oe.Mo)+'}',
-  'FS_{OT} = \\mathbf{'+f2(oe.FS)+'}'+(oe.FS>=num(state.stab.FSot)?'\\;\\checkmark':'\\;\\text{NG}')));
+ b2.appendChild(sfdWorkedIn([['o-cb-weights','self-weights, EV, U (unfactored)'],lv?['o-cb-lrfd','\u03a3P, \u03a3H, \u03a3M (this combination\u2019s row)',sfdLrLab()]:['o-cb-asd','\u03a3P, \u03a3H, \u03a3M (this combination\u2019s row)']].concat(lv?[['o-st-lrfd','M<sub>o</sub>, M<sub>r</sub>, M<sub>r</sub>/M<sub>o</sub> (this combination\u2019s row)',['tab-stab','4.6 LRFD (factored) combinations']]]:[])));   /* D11 links */
+ b2.appendChild(overturningSVG(go,oe,!!lv));
+ b2.appendChild(eqBlock((lv?'Overturning ratio (factored) about edge ':'Overturning check about edge ')+oe.name,fsT,
+  (lv?'':fsS+' = ')+'\\frac{M_r}{M_o} = \\frac{\\sum W_i\\,a_i^{+} + |M_{app}^{-}|}{\\sum |W_i\\,a_i^{-}| + M_{app}^{+}}',
+  fsS+' = \\frac{'+f2(oe.Mr)+'}{'+f2(oe.Mo)+'}',
+  fsS+' = \\mathbf{'+f2(oe.FS)+'}'+okM(oe.FS)));
  const et=document.createElement('table');et.className='tbl';
- et.innerHTML='<tr><th>Edge</th><th>M\u1D63 (k-ft)</th><th>M\u2092 (k-ft)</th><th>FS</th></tr>';
+ et.innerHTML='<tr><th>Edge</th><th>M\u1D63 (k-ft)</th><th>M\u2092 (k-ft)</th><th>'+(lv?'M\u1D63/M\u2092':'FS')+'</th></tr>';
  go.edges.forEach(e=>{const tr=document.createElement('tr');
   [e.name,f2(e.Mr),f2(e.Mo),f2(e.FS)].forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});
   if(e===oe)tr.style.fontWeight='bold';et.appendChild(tr);});
@@ -2785,12 +2837,12 @@ function renderStability(){
   ['Totals','','','',f2(e.Mr),f2(e.Mo)].forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;if(k>=4)td.style.color=(k===4?'#1b5e20':'#b71c1c');trT.appendChild(td);});
   t.appendChild(trT);
   det.appendChild(t);
-  det.appendChild(eqBlock('Factor of safety \u2014 edge '+e.name,'FS_target = '+f2(num(state.stab.FSot)),
-   'FS_{OT} = \\frac{M_r}{M_o} = \\frac{\\Sigma\\,\\text{resisting}}{\\Sigma\\,\\text{overturning}}',
-   'FS_{OT} = \\frac{'+f2(e.Mr)+'}{'+f2(e.Mo)+'}',
-   'FS_{OT} = '+(isFinite(e.FS)?'\\mathbf{'+f2(e.FS)+'}'+(e.FS>=num(state.stab.FSot)?'\\;\\checkmark':'\\;\\text{NG}'):'\\infty\\;(M_o=0)')));
+  det.appendChild(eqBlock((lv?'Overturning ratio (factored) \u2014 edge ':'Factor of safety \u2014 edge ')+e.name,fsT,
+   (lv?'':fsS+' = ')+'\\frac{M_r}{M_o} = \\frac{\\Sigma\\,\\text{resisting}}{\\Sigma\\,\\text{overturning}}',
+   fsS+' = \\frac{'+f2(e.Mr)+'}{'+f2(e.Mo)+'}',
+   fsS+' = '+(isFinite(e.FS)?'\\mathbf{'+f2(e.FS)+'}'+okM(e.FS):'\\infty\\;(M_o=0)')));
  });
- b2.appendChild(el('p','note','Eccentricity ratios for the governing combination: e\u2093/B = '+f2(Math.abs(go.r.ex)/R.B)+', e\u1D67/L = '+f2(Math.abs(go.r.ey)/R.L)+' (e/B = 1/6 marks the kern edge).'));
+ b2.appendChild(el('p','note','Eccentricity ratios for the '+(lv?'selected LRFD (factored)':'governing')+' combination: e\u2093/B = '+f2(Math.abs(go.r.ex)/R.B)+', e\u1D67/L = '+f2(Math.abs(go.r.ey)/R.L)+' (e/B = 1/6 marks the kern edge).'));
  /* flotation */
  /* ---- 4.3a Eccentricity limits ---- */
  if(R.eccChk&&R.eccChk.gov){const E=R.eccChk;
@@ -2867,11 +2919,17 @@ function sfdLrTable(head,rows,gov){
  t.innerHTML='<tr>'+head.map(h=>'<th>'+h+'</th>').join('')+'</tr>';
  rows.forEach(z=>{const tr=document.createElement('tr');
   z.cells.forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});
-  if(z.z===gov)tr.style.fontWeight='bold';t.appendChild(tr);});
+  if(z.z===gov)tr.style.fontWeight='bold';
+  /* SFLS: the row selected in the tab's combination selector is highlighted; a click selects the row there (session only) */
+  if(!R.directMode){tr.classList.add('sfLrRow');tr.title='Show this LRFD combination in the views above (reference only)';
+   if(sfdLrSel()&&SEL.asdLr===z.z.i)tr.classList.add('sfLrSel');
+   tr.addEventListener('click',()=>sfdLrPick(SEL.asdLr===z.z.i?null:z.z.i));}
+  t.appendChild(tr);});
  return t;}
 function sfdLrHead(b,txt){
  const d=b.parentElement;if(d)d.classList.add('sfLrRef');
- b.appendChild(el('div','warnbox','<b>LRFD (factored) \u2014 reference only; not used in the checks.</b> '+txt));}
+ b.appendChild(el('div','warnbox','<b>LRFD (factored) \u2014 reference only; not used in the checks.</b> '+txt));
+ if(!R.directMode)b.appendChild(el('p','note','Click a row to show that combination in this tab\u2019s per-combination views (the combination selector at the top; reference only). The selected row is highlighted; click it again to return to the governing service combination.'));}   /* SFLS */
 /* Bearing tab, 3.4 */
 function sfdLrBearCard(T){
  const X=sfdLrRef();if(!X)return;
@@ -2953,14 +3011,15 @@ function renderPlots(){
   {x:names,y:names.map(()=>1),type:'scatter',mode:'lines',name:'DCR = 1.0',line:{color:'#c00',dash:'dash'}}],
   {font,margin:{t:20,b:130},xaxis:{title:'Service combination',tickangle:-40,tickfont:{size:9}},yaxis:{title:'Bearing DCR'},legend:{orientation:'h'}},{responsive:true,displaylogo:false});
  /* heatmap */
- if(sfpOn('plot-heat')&&R.govBear&&R.govBear.bear.plane){
-  const bp=R.govBear.bear.plane,{B,L}=R,N=60;
+ const hv=sfdLrView();   /* SFLS: an LRFD (factored) combination selected on the Bearing tab is plotted instead, reference only */
+ if(sfpOn('plot-heat')&&R.govBear&&(hv?hv.bear:R.govBear.bear).plane){
+  const bp=(hv?hv.bear:R.govBear.bear).plane,{B,L}=R,N=60;
   const xs=[],ys=[],z=[];
   for(let i=0;i<=N;i++)xs.push(-B/2+B*i/N);
   for(let j=0;j<=N;j++)ys.push(-L/2+L*j/N);
   for(let j=0;j<=N;j++){const row=[];for(let i=0;i<=N;i++){row.push(Math.max(0,bp.q0+bp.gx*xs[i]+bp.gy*ys[j]));}z.push(row);}
   sfpPlot('plot-heat',[{x:xs,y:ys,z:z,type:'heatmap',colorscale:[[0,'#1a9850'],[0.5,'#fee08b'],[1,'#d73027']],reversescale:false,colorbar:{title:'q (ksf)'},hovertemplate:'x=%{x:.2f} ft<br>y=%{y:.2f} ft<br>q=%{z:.2f} ksf<extra></extra>'}],
-  {font,title:{text:'Base pressure \u2014 governing combination: '+R.govBear.cb.name+'  (green = min, red = max)',font:{size:12}},margin:{t:30},xaxis:{title:'x (ft)',scaleanchor:'y'},yaxis:{title:'y (ft)'}},{responsive:true,displaylogo:false});
+  {font,title:{text:hv?'Base pressure \u2014 LRFD (factored), reference only: '+hv.cb.name+'  (green = min, red = max)':'Base pressure \u2014 governing combination: '+R.govBear.cb.name+'  (green = min, red = max)',font:{size:12}},margin:{t:30},xaxis:{title:'x (ft)',scaleanchor:'y'},yaxis:{title:'y (ft)'}},{responsive:true,displaylogo:false});
  }
  /* FS chart */
  if(sfpOn('plot-fs')){
@@ -3658,9 +3717,16 @@ function renderReport(){
  const T=document.getElementById('tab-report');if(!T)return;
  if(!window.SharedReport||!window.SharedSteps){T.innerHTML='<div class="errbox">shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</div>';return;}
  if(!R||R.fatal){T.innerHTML='<div class="errbox">No results: correct the input errors shown in the Summary.</div>';SFRP.api=null;SFRP.doc=null;return;}
- sfpDrawHidden();   /* SFAC: the plots of hidden tabs, which sfxApply reads */
+ /* SFLS: the Report reads the Bearing and Stability tabs as rendered (sfxApply); an LRFD row selected there (reference only) is set
+    aside while the Report is built, so the Report is the one of the service combinations, and put back after */
+ const lrKeep=sfdLrSel()?SEL.asdLr:null;
+ if(lrKeep!=null){SEL.asdLr=null;renderBearing();renderStability();SFPLT.skip=true;
+  document.querySelectorAll('#tab-bearing .sfdZone').forEach(w=>{if(w.sfdZoneDraw)w.sfdZoneDraw();});}   /* the deferred first draw, now */
  let M;
+ try{
+ sfpDrawHidden();   /* SFAC: the plots of hidden tabs, which sfxApply reads */
  try{M=sfdLrReport(sfxApply(sfrModel()));}catch(e){T.innerHTML='<div class="errbox">Report error: '+sfEsc(e&&e.message)+'</div>';SFRP.api=null;SFRP.doc=null;return;}
+ }finally{if(lrKeep!=null){SEL.asdLr=lrKeep;renderBearing();renderStability();SFPLT.skip=true;}}
  SFRP.api=SharedReport.mount(T,M,{closed:SFRP.closed,onGoto:sfrGoto,controls:sfxControls()});   /* SFRX: the Include box */
  SFRP.doc=SFRP.api.doc;sfxWire(T);
 }
@@ -4331,7 +4397,7 @@ $('#btnLoadProj').addEventListener('click',()=>{
  const n=$('#projList').value;if(!n){alert('No saved project selected. Save one first, or use Import JSON.');return;}
  const p=projStore();if(!p[n]){alert('Project "'+n+'" not found in browser storage.');return;}
  state=Object.assign(defaultState(),JSON.parse(JSON.stringify(p[n])));migrateState();
- SEL.asd=null;SEL.lrfd=null;
+ SEL.asd=null;SEL.lrfd=null;SEL.asdLr=null;
  $('#projName').value=n; // auto-populate save-name so Save/Overwrite targets the loaded project
  bindStaticInputs();buildPedCards();saveAuto();recalc();
  alert('Loaded "'+n+'".');});
@@ -4349,7 +4415,7 @@ $('#btnDelProj').addEventListener('click',()=>{
  const dlg=SharedProjectsUI.libraryDialog({store,storage:ST,title:'Saved projects (this browser)',
   current:()=>{const n=$('#projName').value.trim();return n&&store.has(n)?n:null;},
   open:n=>{const o=store.get(n);if(!o)return false;state=Object.assign(defaultState(),JSON.parse(JSON.stringify(o)));migrateState();
-   SEL.asd=null;SEL.lrfd=null;$('#projName').value=n;bindStaticInputs();buildPedCards();saveAuto();recalc();refreshProjList();$('#projList').value=n;return true;},
+   SEL.asd=null;SEL.lrfd=null;SEL.asdLr=null;$('#projName').value=n;bindStaticInputs();buildPedCards();saveAuto();recalc();refreshProjList();$('#projList').value=n;return true;},
   renamed:(a,b)=>{if($('#projName').value.trim()===a)$('#projName').value=b;},
   changed:()=>{const v=$('#projList').value;refreshProjList();if(v&&store.has(v))$('#projList').value=v;}});
  const b=SharedProjectsUI.button('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete');
