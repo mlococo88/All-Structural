@@ -4590,7 +4590,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Card 3.4 missing in the engineer's photo (investigation)
 - On main card 3.4 is built at the end of `renderBearing()` whenever `R.lrfd` exists; `R.lrfd` is computed on every analysis from the inputs (never saved), so a project saved by an older version gets it too (checked with an autosave written by 58204ba). Nothing hides it: not direct mode, a collapsed card (the title line stays), auto-calculate off or the stale state (dimmed only), a narrow window or the two-panel layout (checked at 390, 900, 1400 px). The only way 3.3 renders without 3.4 would be an exception in `sfdLrBearCard`, which would also leave the Stability, Footing and Pedestal tabs empty; none occurred on any case. Most likely the photographed copy predates #757 (merged 2026-11-04).
 
-## 2026-11-04 — PR: claude/sf-heat-sel — 3.2 heat map follows the selected combination, ASD or LRFD (SFHS; display only, no result change)
+## 2026-11-04 — PR: claude/sf-heat-sel (PR #759: https://github.com/mlococo88/All-Structural/pull/759) — 3.2 heat map follows the selected combination, ASD or LRFD (SFHS; display only, no result change)
 
 ### SFHS. The base-pressure heat map shows the selected service combination   [display only]
 - **Request (engineer):** the 3.2 heat map and its title follow any selected combination, ASD or LRFD; governing stays the default. Before, the heat map followed an LRFD selection (SFLS) but always showed the governing combination for an ASD pick.
