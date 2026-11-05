@@ -203,7 +203,7 @@ export const TOOLS = {
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(computeAll(), (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '#inputPanel input[type=number]', 0.5),
     view: p => tabView(p, '#tabBar button, .tabBtn, [data-tab]', 2, '.active, [aria-selected=true]'),
-    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('btnSaveAs').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('btnSaveAs').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); }
   },
   retwall: {
     file: 'Retaining Wall Designer.html', list: 'retaincalcpro.projects.v1', auto: 'retaincalcpro.autosave.v1',

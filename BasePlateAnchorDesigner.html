@@ -354,7 +354,7 @@
         <div class="byline">by Mario Lococo</div>
       </div>
       <div id="hdrBtns"><!-- BPHD (2026-11-05): the project line and the global actions (Undo, Redo, Saved projects… are inserted before Print by bpPlibInit) -->
-        <a id="hdrProj" href="#" title="Project name and number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
+        <a id="hdrProj" hidden href="#" title="Project name and number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
         <button id="btnPrint" class="primary">Print / PDF Report</button>
       </div>
     </div>
@@ -363,19 +363,7 @@
   </div>
   <div id="main">
     <div id="inputPanel"><div id="prjPane" data-secid="prjPane"><!-- BPHD (2026-11-05): the Project input tab, moved here from the header; kept across rebuilds by buildInputPanel() -->
-      <div class="sec"><div class="secHead"><h2 class="secTitle">Title block</h2></div><div class="secBody">
-        <div id="projGrid"></div>
-        <div class="note">Printed on the Report (the project name also on the DXF).</div>
-      </div></div>
-      <div class="sec"><div class="secHead"><h2 class="secTitle">Saved projects and files</h2></div><div class="secBody">
-        <div class="prjRow">
-        <select id="projSelect" style="font-family:inherit;font-size:10pt;"></select>
-        <button id="btnLoad">Load</button>
-        <button id="btnSave" class="primary">Save</button>
-        <button id="btnSaveAs">Save As…</button>
-        <button id="btnDelete" class="danger">Delete</button>
-        </div>
-        <div class="note">Projects saved in this browser (Saved projects… in the header: rename, duplicate, delete).</div>
+      <div class="sec"><div class="secHead"><h2 class="secTitle">Save and open</h2></div><div class="secBody" id="bpSaveCard"><!-- STDS (2026-11-05): the standard card (shared/projects-ui.js projectBar), first in the Project tab; was "Saved projects and files" after the title block -->
         <div class="prjRow">
         <button id="btnExport">Export JSON</button>
         <button id="btnImport">Import JSON</button>
@@ -383,13 +371,14 @@
         <button id="btnBackupAll" title="Save every project + current work to one file, so you can carry it to a new copy of this app">Backup All</button>
         <button id="btnRestoreAll" title="Restore projects from a workspace backup file">Restore All</button>
         <input type="file" id="fileRestoreAll" accept=".json" style="display:none">
-        </div>
-        <div class="note">One project, or every project (Backup All), as a file to keep or carry to another copy of this tool.</div>
-        <div id="restoreStatus" style="font-size:9pt;font-style:italic;margin-top:4px;"></div>
-        <div class="prjRow">
         <button id="btnCompare" title="Save design snapshots and compare their DCRs side by side">Compare</button>
         </div>
-        <div class="note">Design snapshots compared side by side.</div>
+        <div class="note">Backup All / Restore All: every project as one file, to carry to another copy of this tool. Compare: design snapshots side by side.</div>
+        <div id="restoreStatus" style="font-size:9pt;font-style:italic;margin-top:4px;"></div>
+      </div></div>
+      <div class="sec"><div class="secHead"><h2 class="secTitle">Title block</h2></div><div class="secBody">
+        <div id="projGrid"></div>
+        <div class="note">Printed on the Report (the project name also on the DXF).</div>
       </div></div>
       <div class="sec" id="projMetaBtns"><div class="secHead"><h2 class="secTitle">Shared project info and hand-offs</h2></div><div class="secBody">
         <div class="prjGrp"><b>Project info</b><div class="note">Copy the title block from or to the other tools.</div>
@@ -13319,7 +13308,8 @@ function buildOutputInto(id,node){
    PROJECT MANAGEMENT
    ===================================================================== */
 function refreshProjSelect(keepName){
-  const sel=document.getElementById("projSelect"); const p=getProjects();
+  const sel=document.getElementById("projSelect"); if(!sel) return;   /* STDS: no drop-down any more (Saved projects… lists them) */
+  const p=getProjects();
   /* Remember what should stay selected: an explicit name, else whatever is currently
      chosen, else the loaded project. Rebuilding the <select> otherwise drops the
      selection back to the placeholder, which looks like the project was renamed. */
@@ -13394,34 +13384,13 @@ function refreshAll(){
 function refreshOutput(){ buildOutput(); }
 
 function wireHeader(){
-  document.getElementById("btnSave").addEventListener("click",()=>{
-    const nm=S.proj.name||"Untitled";
-    const p=getProjects();
-    const existed=Object.prototype.hasOwnProperty.call(p,nm);
-    if(!existed && Object.keys(p).length){
-      if(!confirm("No saved project named \""+nm+"\" exists.\n\nSave as a NEW project with this name?")) return;
-    }
-    p[nm]=JSON.parse(JSON.stringify(S)); setProjects(p);
-    lsSet(LS_LAST,nm); refreshProjSelect(nm);
-    alert((existed?"Overwrote project: ":"Created project: ")+nm); });
-  document.getElementById("btnSaveAs").addEventListener("click",()=>{
-    const nm=prompt("Save as project name:",S.proj.name||"Untitled"); if(!nm)return;
-    S.proj.name=nm; const p=getProjects(); p[nm]=JSON.parse(JSON.stringify(S)); setProjects(p);
-    lsSet(LS_LAST,nm); refreshProjSelect(nm); buildProjHeader(); });
-  document.getElementById("btnLoad").addEventListener("click",()=>{
-    const nm=document.getElementById("projSelect").value; if(!nm)return; const p=getProjects();
-    if(p[nm]){ S=mergeState(p[nm]); lsSet(LS_LAST,nm); buildProjHeader(); refreshAll(); } });
-  document.getElementById("btnDelete").addEventListener("click",()=>{
-    const nm=document.getElementById("projSelect").value; if(!nm)return;
-    if(confirm("Delete project '"+nm+"'?")){ const p=getProjects(); delete p[nm]; setProjects(p);
-      if(lsGet(LS_LAST)===nm) lsSet(LS_LAST,"");
-      refreshProjSelect(""); } });
+  /* STDS (2026-11-05): Save / Save As… / Load / Delete with the drop-down replaced by the standard save (bpPlibInit, projectBar) */
   document.getElementById("btnExport").addEventListener("click",()=>{
     /* format tag (new optional fields, stripped again on import) */
     const blob=new Blob([JSON.stringify(Object.assign({_bpad:"project",_bpadVersion:1},S),null,2)],{type:"application/json"});
     const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
     a.download=(S.proj.name||"baseplate")+".json"; a.click(); });
-  document.getElementById("btnImport").addEventListener("click",()=>document.getElementById("fileImport").click());
+  document.getElementById("btnImport").addEventListener("click",()=>{ if(window.BPPL&&BPPL.pb) BPPL.pb.importJSON(); else document.getElementById("fileImport").click(); });   /* STDS: asks first on unsaved changes */
   /* Whole-workspace backup: every saved project + the current working state.
      This is how you carry work to a NEW copy of the HTML file, since browsers
      scope localStorage per file location for local (file://) pages. */
@@ -13472,7 +13441,7 @@ function wireHeader(){
         else if(d._bpad===undefined && !looksLike){
           if(!confirm("This file does not look like a BasePlate project"+(d._schema?" (it is a \""+String(d._schema)+"\" file)":"")+". Missing inputs will be set to defaults. Load it anyway?")) return; }
         delete d._bpad; delete d._bpadVersion;
-        S=mergeState(d); buildProjHeader(); refreshAll();
+        S=mergeState(d); buildProjHeader(); refreshAll(); if(window.BPPL&&BPPL.pb) BPPL.pb.setCurrent(null);   /* STDS: an imported file is not a saved project */
       }catch(err){ alert("Invalid JSON."); } };
     rd.readAsText(f); });
   document.getElementById("btnPrint").addEventListener("click",openPrintSettings);
@@ -13524,20 +13493,32 @@ function bpPlibInit(){
   let tm=null; const soon=()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); };
   let ST=null; try{ ST=window.localStorage; }catch(e){}
   const store=SharedProjects.mapStore(ST,LS_PROJ);
-  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'base-plate-anchor',label:'Base Plate & Anchor Designer',space:2,toFile:i=>Object.assign({_bpad:'project',_bpadVersion:1},i),fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j)||(j._bpad!=='project'&&!(j._bpad===undefined&&j.plate&&j.anchor&&j.conc)))throw new Error('not a BasePlate project file');const d=Object.assign({},j);delete d._bpad;delete d._bpadVersion;return d;}},
-    store, storage:ST, title:"Saved projects (this browser)",
-    current:()=>{ const n=lsGet(LS_LAST); return n&&store.has(n)?n:null; },
-    open:n=>{ const o=store.get(n); if(!o) return false; S=mergeState(o); lsSet(LS_LAST,n); buildProjHeader(); refreshAll(); refreshProjSelect(n); return true; },
-    renamed:(a,b)=>{ if(lsGet(LS_LAST)===a) lsSet(LS_LAST,b); if(S.proj&&S.proj.name===a){ S.proj.name=b; buildProjHeader(); autosave(); } },
-    deleted:n=>{ if(lsGet(LS_LAST)===n) lsSet(LS_LAST,""); },
-    changed:()=>refreshProjSelect(lsGet(LS_LAST)||(S.proj&&S.proj.name)||"") });
+  /* STDS (2026-11-05): the standard save (shared/projects-ui.js projectBar) over bpad_projects_v1 ({ name: S }, unchanged); the open
+     name stays in bpad_lastproject_v1 as before. Save writes the item the old Save / Save As wrote (a copy of S, with S.proj.name set
+     to the saved name as Save As did); Open is the old Load. S.ui (tabs, units, print options) is not "unsaved changes". */
   const B=(t,ti)=>SharedProjectsUI.button(t,ti);
-  const bu=B("Undo","Undo the last input change (Ctrl+Z)"), br=B("Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)"), bl=B("Saved projects\u2026","The projects saved in this browser: open, rename, duplicate, delete");
-  bl.addEventListener("click",()=>dlg.show());
-  const host=document.getElementById("hdrBtns"), ref=document.getElementById("btnPrint");   /* BPHD: before Print (was before Export JSON) */
-  if(host){ if(ref&&ref.parentNode===host){ host.insertBefore(bl,ref); host.insertBefore(br,bl); host.insertBefore(bu,br); } else host.append(bu,br,bl); }
+  const bu=B("Undo","Undo the last input change (Ctrl+Z)"), br=B("Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)");
+  const host=document.getElementById("hdrBtns"), ref=document.getElementById("btnPrint");   /* chip · Undo · Redo · Save · Saved projects… · Print */
+  if(host){ if(ref&&ref.parentNode===host){ host.insertBefore(br,ref); host.insertBefore(bu,br); } else host.append(bu,br); }
+  const $=id=>document.getElementById(id);
+  const pb=SharedProjectsUI.projectBar({ store, storage:ST, label:"Base Plate & Anchor Designer", omit:["ui"],
+    getState:()=>S, snapOf:n=>{ const o=store.get(n); return o?SharedProjects.canon(mergeState(JSON.parse(JSON.stringify(o))),["ui"]):null; },
+    current:()=>{ const n=lsGet(LS_LAST); return n||null; }, setCurrent:n=>lsSet(LS_LAST,n||""),
+    save:n=>{ if(S.proj.name!==n){ S.proj.name=n; buildProjHeader(); autosave(); } const p=getProjects(); p[n]=JSON.parse(JSON.stringify(S)); setProjects(p);
+      lsSet(LS_LAST,n); refreshProjSelect(n); return store.has(n)?{ok:true}:{ok:false,message:"The project was not saved (browser storage full or blocked). Use Export JSON."}; },
+    open:n=>{ const o=store.get(n); if(!o) return false; S=mergeState(o); lsSet(LS_LAST,n); buildProjHeader(); refreshAll(); refreshProjSelect(n); return true; },
+    newProject:()=>{ S=mergeState({}); buildProjHeader(); refreshAll(); },
+    displayName:()=>S.proj&&S.proj.name||"",
+    exportFile:n=>SharedProjectsUI.download((n||S.proj.name||"baseplate")+".json",JSON.stringify(Object.assign({_bpad:"project",_bpadVersion:1},S),null,2)),
+    importFile:()=>$("fileImport").click(),
+    fileButtons:[$("btnExport"),$("btnImport")], extras:[$("btnBackupAll"),$("btnRestoreAll"),$("btnCompare")],
+    header:host, chipBefore:bu, headerBefore:ref, card:$("bpSaveCard"),
+    renamed:(a,b)=>{ if(S.proj&&S.proj.name===a){ S.proj.name=b; buildProjHeader(); autosave(); } },
+    deleted:n=>{ if(lsGet(LS_LAST)===n) lsSet(LS_LAST,""); },
+    /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'base-plate-anchor',label:'Base Plate & Anchor Designer',space:2,toFile:i=>Object.assign({_bpad:'project',_bpadVersion:1},i),fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j)||(j._bpad!=='project'&&!(j._bpad===undefined&&j.plate&&j.anchor&&j.conc)))throw new Error('not a BasePlate project file');const d=Object.assign({},j);delete d._bpad;delete d._bpadVersion;return d;}} });
+  const dlg=pb.dialog;
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
-  h.reset(); window.BPPL={h,store,dlg,soon};
+  h.reset(); window.BPPL={h,store,dlg,soon,pb};
 }
 
 /* =====================================================================
