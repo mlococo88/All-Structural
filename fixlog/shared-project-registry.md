@@ -43,3 +43,8 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
 - **Loaded by:** `tools.html` (home page). No tool loads it.
 - **How verified:** `node tests/engine/run.mjs project-registry github-sync projects`: 26 / 26. `node tests/smoke/home-projects.mjs`: ALL PASS. `node tests/smoke/home-sync.mjs`: ALL PASS.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-05 — PR: claude/ghsync-sbd (PR #826: https://github.com/mlococo88/All-Structural/pull/826) (GHS2) — entry for Steel Bridge Design (GirderDetail)   [storage only; no result change]
+- New first entry `{ tool: 'steel-bridge-design', label: 'Steel Bridge Design', name: 'Steel Bridge Design (GirderDetail)', href: 'Steel%20Bridge%20Design.html', key: 'girderdetail_projects_v1', space: 2, toFile: (i, n) => ({ app: 'SteelBridgeDesign', v: 1, name: n, data: i }) }` (the tool's own toFile with its `SBD_V` = 1; `tests/smoke/home-sync.mjs` fails if they ever differ). Card order: first (its card precedes the new app's).
+- `tests/smoke/home-projects.mjs` `FOLDER`: `gd`; `tests/smoke/project-library.mjs`: `gd` entry (`noRun`).
+- **How verified:** `node tests/engine/run.mjs project-registry github-sync projects`; `node tests/smoke/home-projects.mjs`; `node tests/smoke/home-sync.mjs` (see the PR).

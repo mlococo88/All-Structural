@@ -1126,6 +1126,10 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/plotly.js/2.27.0/plotly.min.js" defer onload="window.dispatchEvent(new Event('plotly-ready'))"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<!-- GHS2 (2026-11-05): "Saved projects…" dialog (shared/projects-ui.js) with GitHub sync of the saved projects (shared/github-sync.js; off until set up) -->
+<script src="shared/projects.js"></script>
+<script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
 (function(){
@@ -21237,6 +21241,32 @@ function initProjects() {
   $('#pb_import').onclick = () => $('#pb_file').click();
   $('#pb_file').onchange = ev => { const f = ev.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const j = JSON.parse(r.result); if (j.app === 'PlateLine-splices') { writeInbox(j); renderInbox(); flash('PlateLine data received; see Import from PlateLine.'); } else if (sbdProjectImport(j, f.name)) { /* SBD4: one project file, or a file of one part */ } else if (j.data && (j.data.sec || j.data.bs)) { loadData(j.data, ''); flash(`Imported ${f.name}.`); } else throw 0; } catch (e) { flash('That file is not a Steel Bridge Design, GirderDetail, Preliminary sizing (PlateLine) or ST-Girder project, or a PlateLine splice export.', 'fail'); } }; r.readAsText(f); ev.target.value = ''; };
   $('#pb_new').onclick = () => { if (confirm('Replace the current inputs with the built-in example?')) loadData(GD_FULL(), ''); };
+  gdLibInit();   // GHS2
+}
+/* GHS2 (2026-11-05): "Saved projects…" (shared/projects-ui.js libraryDialog: Open / Rename / Duplicate / Delete, as the other tools) over the
+   tool's own list girderdetail_projects_v1 ({ name: P }, unchanged; shared/projects.js mapStore: Rename moves an item unchanged, Duplicate
+   copies it), with GitHub sync (shared/github-sync.js; docs/github-sync-setup.md; off until set up: with no settings it writes nothing
+   and makes no request). File on GitHub: projects/steel-bridge-design/<name>.json = the Export JSON format of the saved project
+   { app: 'SteelBridgeDesign', v: SBD_V, name, data } (indent 2). A saved project holds the modules' part only (P), so the file has no
+   pl / st parts (Export JSON adds the open Preliminary sizing and ST-Girder parts). A file from GitHub: its modules' part (data, after
+   sbdMigrate), or a GirderDetail file's data; Open = the Open button's path (loadData). */
+function gdLibInit() {
+  if (!window.SharedProjects || !window.SharedProjectsUI || !LS) return;
+  let ST = null; try { ST = window.localStorage; } catch (e) { return; }
+  const ms = SharedProjects.mapStore(ST, KEY_PR);
+  const dlg = SharedProjectsUI.libraryDialog({ /* GHS2 (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud: { tool: 'steel-bridge-design', label: 'Steel Bridge Design', space: 2, toFile: (i, n) => ({ app: 'SteelBridgeDesign', v: SBD_V, name: n, data: i }),
+      fromFile: j => { if (j.app === 'SteelBridgeDesign') { const m = sbdMigrate(j); if (!m || !m.data || typeof m.data !== 'object') throw new Error('not a Steel Bridge Design project file (or a newer version)'); return m.data; }
+        if (j.app === 'GirderDetail' && j.data && typeof j.data === 'object') return j.data; throw new Error('not a Steel Bridge Design project file'); } },
+    store: ms, storage: ST, title: 'Saved projects (this browser)', id: 'gdLibDlg',
+    current: () => CUR && ms.has(CUR) ? CUR : null,
+    open: n => { const s = store(); if (!s[n]) return false; loadData(s[n], n); refreshList(); flash(`Opened "${n}".`); return true; },
+    renamed: (a, b) => { if (CUR === a) { CUR = b; autosave(); } },
+    deleted: n => { if (CUR === n) CUR = ''; },
+    changed: () => refreshList() });
+  const b = SharedProjectsUI.button('Saved projects…', 'Open, rename, duplicate or delete the projects saved in this browser; cloud sync (GitHub)', { cls: 'proj-btn' });
+  b.onclick = () => dlg.show();
+  const row = document.createElement('div'); row.className = 'proj-row'; row.setAttribute('data-sp', 'row'); row.appendChild(b);
+  const del = $('#pb_delete'); if (del && del.parentNode) del.parentNode.after(row);
 }
 /* ---------- One project file (SBD4, 2026-10-22; merge of GirderDetail and ST-Girder, PLAN step 4) ----------
    Export JSON writes every part of the project in one file:
