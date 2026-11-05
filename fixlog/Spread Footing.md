@@ -5080,7 +5080,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Saved data:** no change. **Other copies:** none.
 - **Open item (raised, not changed):** the concrete bearing check itself (card 5.6, `dcr = PuMax/phiPn`) uses the footing's φ0.85f′c A_1√(A_2/A_1) only. 16.3.3.4 takes B_n as the lesser of the supported member and the foundation, and with one f′c the pedestal's 0.85f′c A_1 governs whenever √(A_2/A_1) > 1. Default project: DCR 318.81/1432.08 = 0.22 vs 318.81/716.04 = 0.45. Needs the engineer's decision (pedestal f′c may differ in practice; the tool has one f′c).
 
-## 2026-11-05 — PR: claude/sf-ex-asmin — Excess-reinforcement option (25.4.10.1) for footing bars: A_s,req = A_s,min where the 0.0018A_g minimum governs, instead of no reduction (SFEM; calculation option, default off = no change)
+## 2026-11-05 — PR: claude/sf-ex-asmin (PR #774: https://github.com/mlococo88/All-Structural/pull/774) — Excess-reinforcement option (25.4.10.1) for footing bars: A_s,req = A_s,min where the 0.0018A_g minimum governs, instead of no reduction (SFEM; calculation option, default off = no change)
 
 ### SFEM. ℓ_d reduction with A_s,req = A_s,min where the minimum governs   [CLAUDE.md §4; supersedes the SFEX block (#727)]
 - **Engineer (2026-11-05):** approved. Where the 0.0018 minimum governs A_s,req, use A_s,req = A_s,min in the ratio instead of blocking the reduction. Straight bars only; the hook exclusion (25.4.10.2(d)) stays. The option stays off by default.
