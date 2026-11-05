@@ -116,6 +116,7 @@ async function exportChecks(src) {
     }, { EXAMPLE, EX_IDS });
     /* 4. dialog + download */
     await p.evaluate(() => { S = mergeState(defaultState()); refreshAll(); });
+    await p.evaluate(() => { if (typeof bpadSetInTab === 'function' && document.getElementById('bpadInTab_project')) bpadSetInTab('project', false); });   // BPHD (2026-11-05): the button is on the Project input tab
     await p.click('#btnExportProfis');
     await p.waitForSelector('.modalBox h4');
     const dlg = await p.evaluate(() => document.querySelector('.modalBox').innerText);

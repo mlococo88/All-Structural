@@ -5043,3 +5043,28 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data:** `bpad_projects_v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-05 — PR: claude/header-bpad (BPHD: compact header; title block, project files, hand-offs and PROFIS / DXF buttons moved to a new Project input tab; display only, no result change)
+- **Engineer:** clean up the top of the page: the title-block inputs and the project / hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id, `onclick`, handler and saved field is the same):
+  - `#hdrBtns`: before projSelect, Load, Save, Save As…, Delete, (Undo, Redo, Saved projects…), Export JSON, Import JSON, Compare, Backup All, Restore All, Import PROFIS PDF, Export to Hilti PROFIS (.pe), Export DXF, Print / PDF Report; then `#projGrid` (6 fields), `#projMetaBtns` (Use / Share project info, Pull from Steel Beam, Pull from Light Pole, Import hand-off (JSON)) and `#restoreStatus`. After: `#hdrProj` "Project: <name> · <number>" (link), Undo, Redo, Saved projects…, Print / PDF Report. `#bpGroupBar` (anchor-group picker) stays in the header.
+  - `#inputPanel` starts with `<div id="prjPane" data-secid="prjPane">`, four cards: "Title block" (`#projGrid`, 2 columns); "Saved projects and files" (projSelect, Load, Save, Save As…, Delete; Export / Import JSON, Backup All, Restore All, their file inputs; `#restoreStatus`; Compare); "Shared project info and hand-offs" (`#projMetaBtns`, grouped: Project info; Loads and anchor groups from other tools, with `#bxMrSrc` / `#bxAgSrc`); "Hilti PROFIS and DXF" (Import PROFIS PDF, Export to Hilti PROFIS (.pe), Export DXF). Each group has a one-line hint.
+  - `buildInputPanel()`: `const PJ=document.getElementById("prjPane")` before `P.innerHTML=""`, re-appended first (survives every rebuild).
+  - `BPAD_IN_TABS`: `['project','Project']` first; `BPAD_IN_SEC`: `prjPane:'project'`; the fallback tab (none remembered): `.find(k=>panes[k].childNodes.length)` → `.find(k=>k!=='project'&&panes[k].childNodes.length)` so a first open is still on Plate & Anchors (`bpad_inputTab_v1` unchanged).
+  - `bpPlibInit()`: `ref=document.getElementById("btnExport")` → `ref=document.getElementById("btnPrint")` (Undo, Redo, Saved projects… before Print).
+  - New `bpHdrProj()` (anchor `function bpHdrProj(){`): `S.proj.name · S.proj.num` or "(untitled: enter it in the Project tab)"; called at the end of `buildProjHeader()`, from `buildInputPanel()` and on `input` in `#projGrid`. `#hdrProj` click: `bpadSetInTab("project",true)`, focus Project name (below 900 px the card is scrolled into view first).
+  - CSS (anchor `/* BPHD (2026-11-05)`): `#projMetaBtns` header rules replaced by `#hdrProj`, `#prjPane` and `#inputPanel #projGrid` rules; print hides `#hdrProj`.
+  - `tests/bpad-profis.mjs`: opens the Project tab before clicking `#btnExportProfis` (a hidden tab's button cannot be clicked).
+- **Decisions (pending engineer review):**
+  - Export DXF, Export to Hilti PROFIS and Import PROFIS PDF are per-project file actions, so they moved to the Project tab with Export / Import JSON and Backup / Restore All. The header keeps Undo, Redo, Saved projects… and Print.
+  - The restore notice ("Restored last session…" / "No saved work found…") moved with the saved-project buttons.
+  - The anchor-group picker (`#bpGroupBar`) switches the design every tab shows, so it stays in the header.
+  - First open stays on Plate & Anchors.
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, title typed "Route 6 Bridge", "P-1234", "MJL", "2026-11-05", "ABC", "2026-11-06"):
+  - `computeAll()`, every localStorage key, the Report model `bprModel()` (title block) and the DXF text `bpExportDxf().text`: identical; every typed value in the Report model (the DXF carries the project name, as before);
+  - Share project info: `bridgeSuite.v1.projectMeta` identical; Use shared project info fills the fields; reload on the autosave identical;
+  - header shows "Project: Route 6 Bridge · P-1234"; the link opens the Project tab with Project name focused;
+  - `phone-layout --tool bpad`, `project-library --tool baseplate`, `bpad-profis`, `bpad-circle`, `lightpole-anchor-handoff`, `check-syntax`: pass; 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change.
