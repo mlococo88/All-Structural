@@ -4806,6 +4806,35 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Saved data:** new field `freinf.botOuter`. Absent = 'y' = today's behaviour. No key or format change.
 - **Other copies:** none.
 - **Decision (pending engineer review):** the 3D view drew the x-bars outermost before, which disagreed with the design and the drawings. It now follows the design (display only; no computed value changes).
+## 2026-11-05 — PR: claude/sf-dxf-loads (PR #767: https://github.com/mlococo88/All-Structural/pull/767) — Drawings: pedestal load schedule, pedestal tags and section load arrows (SFDL; display only, no result change)
+
+### SFDL. Drawings tab (DXF / preview / print): the pedestal loads on the FOOTING PLAN and SECTION A-A / B-B sheets   [display only]
+- **Request (engineer):** pedestal tags; a PEDESTAL LOAD SCHEDULE (unfactored, at the top of the pedestal; one row per pedestal x load case, P, Vx, Vy, Mx, My, load point offset; in direct mode the factored envelope, labelled so) with the sign convention and a small axis / arrow legend, on its own layer, inside the border without overlapping the title block or the views, on an extra sheet if it does not fit; on the sections, arrows with values for the governing service combination, labelled with its name.
+- **Where (`sfdwBuild`, anchor `SFDL`):**
+  - Layers: `lt: S-LOAD-TEXT` (7), `lg: S-LOAD-TABLE` (7), `la: S-LOAD-ARW` (1) added to `L`. Before: `...,cut:D.layer('CUT',6)};` After: `...,cut:D.layer('CUT',6),\n  lt:D.layer('LOAD-TEXT',7),lg:D.layer('LOAD-TABLE',7),la:D.layer('LOAD-ARW',1)};`
+  - `sheet(id,title,content,fixedK)` → `sheet(id,title,content,fixedK,post)`. Before: `if(isFinite(b[0]))D.move(i0,cx-(b[0]+b[2])/2,cy-(b[1]+b[3])/2);` After: the same move through `dx`, `dy`, then `if(post){const g=0.15*k;post(k,{i0,dx,dy,ox,W,H,area:[ox+mm+g,mm+tb+g,ox+W-mm-g,H-mm-g]});D.k=k;D.h=0.1*k;}`. `post` runs after the view has been fitted, scaled and placed, so the view's own entities are unchanged; `area` is the drawing area inside the border, above the title block.
+  - New helpers: `sfdlSpot` (first free box in `area`, clear of every entity of the sheet: the corners first, then a grid from the top right), `sfdlV(p,f)` (pedestal-top P, Vx, Vy, Mx, My for factors `f`, or the direct envelope; the same sum as the 3D view's `buildLoads`), `sfdlN`, `sfdlWrap`, `sfdlLay(compact)` (the schedule in a wide layout: tag, pedestal, case, P, Vx, Vy, Mx, My, load point; and a compact one for the side of the plan: tag, case, the five values, with the load points listed under the table), `sfdlTable(Lo,x,y,k)` (title, subtitle, table, sign convention, legend: +x / +y arrows, load-point symbol "+P down", pedestal tag).
+  - Plan sheet `post`: a circled tag P1, P2, ... at each pedestal (inside a corner clear of the plan's text and symbols, else just outside); then the schedule in the first layout that fits a free area of the sheet (wide, then compact). Otherwise a note "PEDESTAL LOAD SCHEDULE: SEE SHEET n OF n (PEDESTAL LOADS)" and a new last sheet `loads` "PEDESTAL LOADS" (k = 1, wide layout). It is added at the end so no other sheet moves; only the "n OF N" sheet numbers change.
+  - Section sheets `post` (`sfdlSec(dir)`): at each pedestal the section cuts, `P = … K` (and `(UPLIFT)` when negative) next to the existing P arrow; `My` (section A) or `Mx` (section B) `= … K-FT` when non-zero; a horizontal V arrow (Vx on A, Vy on B) at the pedestal top, pointing the way it acts, with `Vx = … K`. Under the section title: `LOADS AT PEDESTAL TOP: GOVERNING SERVICE COMBINATION n: <name> (SERVICE LEVEL); +P DOWN, +Vx IN +x; SELF-WEIGHT NOT INCLUDED` (direct mode: `DIRECT FACTORED ENVELOPE (AS ENTERED)`).
+- **Governing provision:** none (display). Values are the entered pedestal loads; the section values use Σ f·(case value) with the governing service combination's factors (`R.govBear.cb.f`).
+- **Decisions (pending engineer review):**
+  1. The schedule goes on the plan sheet only where a free area takes it whole (the plan view keeps its scale and position). Otherwise it goes on an extra PEDESTAL LOADS sheet at the end of the set, with a "see sheet" note on the plan. Default project: extra sheet (8 sheets); Seymour: on the plan, compact layout.
+  2. The section arrows show the governing service (bearing) combination, the same one as the 3D default. Moments are given as text (no curved arrow in the 2D section).
+  3. Values are signed as entered (2 decimals, `0` for zero); the sign convention is printed under the table.
+  4. Direct mode: one row per pedestal, "FACTORED" (wide) / "ENV." (compact), with the subtitle "FACTORED ENVELOPE AS ENTERED (DIRECT MODE)".
+- **Check case:** Seymour, governing D + 0.75L + 0.45(+Wx) + 0.75S. Section B-B: Ped 2 P = 15.9 + 0.75·11.5 + 0.45·11.1 = 29.52 K, Vy = 0.5 + 0.375 + 6.795 = 7.67 K (arrow toward +y), Mx = 31.5 + 26.40 + 54.09 = 111.99 K-FT; Ped 1 P = 47.15 + 0.75·36.3 = 74.38 K. Schedule rows = the entered loads (P1 D 47.15, L 36.30; P2 Wx 11.10, −0.30, 15.10, 120.20, 1.00). Default: section A-A Ped 1 P = 120 + 0.75·60 = 165.00 K, Vx = 0.45·8 = 3.60 K.
+- **How verified:**
+  - DXF entities, origin/main vs branch, for the default, Seymour, "dir" and "rev": every existing entity of every sheet is identical (same order, coordinates, layers; same sheet scale and model-space offset). The only differences are the "n OF N" sheet numbers when the extra sheet is added, plus the new entities on the three new layers, all inside the drawing area.
+  - `SharedDxf.validate` ok.
+  - `tests/smoke/dxf-print-sheets.mjs --tool sf`: all ok (8 pages).
+  - Deep diff over the 10 harness cases: R, P2, the dashboard and the Report identical, 0 errors.
+  - `node tests/check-syntax.mjs`; `tests/smoke/spread-footing-scroll.mjs`.
+  - The printed PDFs of the plan sheet (default and Seymour), the default PEDESTAL LOADS sheet and Seymour section B-B checked by eye.
+- **Saved data:** none (the remembered sheet `sfd_dwgSheet_v1` may now also hold `loads`; an unknown id falls back to the first sheet as before). **Other copies:** none.
+
+### Open items
+- A very large schedule (many pedestals × load cases) on the extra sheet is not split; it is flagged by the existing "does not fit the sheet" marker.
+
 
 ## 2026-11-05 — PR: claude/sf-wall — Element type per pedestal: Pedestal (default) / Wall; wall-foundation dowel minimum per ACI 318-19 16.3.4.2 → 11.6.1 (SFWL; calculation option, default = no change)
 
