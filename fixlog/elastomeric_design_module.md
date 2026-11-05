@@ -1339,7 +1339,7 @@ index 13f0165..656e0f1 100644
 - **Formulas, factors, units, code references:** none.
 - **Other copies:** none.
 
-## 2026-11-05 — PR: claude/header-edm (EDHD: compact toolbar; project-file, Reset, Self-Test and Send Pad buttons moved to the Project input tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-edm (PR #829: https://github.com/mlococo88/All-Structural/pull/829) (EDHD: compact toolbar; project-file, Reset, Self-Test and Send Pad buttons moved to the Project input tab; display only, no result change)
 - **Engineer:** clean up the top of the page (the title block is already in the Project tab here; the toolbar had 10 buttons); the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (nodes moved, not copied: every id, listener and saved field is the same):
   - `.toolbar`: before Save Project, Projects…, Undo / Redo (PLIB, inserted before Export JSON), Export JSON, Import JSON (`#importFile`), Reset, Self-Test, ↩ Send Pad to Abutment, spacer, `#linkStatus`, `#saveStatus`, Print / PDF Report. After: `<a id="hdrProj">` "Project: <name> · <no.>", Projects…, Undo / Redo, spacer, `#linkStatus`, `#saveStatus`, Print / PDF Report.
