@@ -62,6 +62,20 @@
   .pbtn.accent{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.35);color:#fff;font-weight:600}
   .pbtn.accent:hover{background:rgba(255,255,255,.18)}
   .pbtn.danger:hover{background:rgba(220,38,38,.35);border-color:#FCA5A5}
+  /* LPHD (2026-11-05): the saved-project picker and the Save / Save As / Rename / Delete / New / Export / Import buttons are in the
+     Project input tab (#lppPrjCard); the header's project bar keeps a read-only project line (a link to that tab), the status,
+     Undo / Redo and Saved projects */
+  .projbar #hdrProj{font-size:10pt;font-weight:600;color:#fff;text-decoration:none;max-width:28em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .projbar #hdrProj:hover{text-decoration:underline}
+  .projbar #hdrProj .hdrNone{font-weight:400;font-style:italic;color:#C7D4E4}
+  #lppPrjCard .prjGrp{margin:4px 0 10px}
+  #lppPrjCard .prjGrp>b{display:block;font-size:9.5pt}
+  #lppPrjCard .prjGrp .note{display:block;font-size:8.5pt;color:var(--muted,#64748b);margin:1px 0 4px}
+  #lppPrjCard .pb-btns{display:flex;gap:6px;flex-wrap:wrap}
+  #lppPrjCard select{font-family:var(--font-ui);font-size:9.5pt;min-width:200px;max-width:100%;padding:3px 6px}
+  #lppPrjCard .pbtn{background:#fff;color:var(--ink);border-color:var(--slate-300)}
+  #lppPrjCard .pbtn:hover{background:var(--slate-100);border-color:var(--slate-400)}
+  #lppPrjCard .pbtn.danger:hover{background:#FEE2E2;border-color:#FCA5A5}
   /* ---- two panels: inputs left, outputs right; each scrolls on its own (screens wider than 900 px) ---- */
   .wrap{max-width:1500px;margin:0 auto}
   .grid2{display:grid;grid-template-columns:minmax(0,1fr)}
@@ -454,18 +468,9 @@
   </div>
   <div class="projbar noprint">
     <span class="pb-label">Project</span>
-    <select id="projSelect" title="Recall a saved project"></select>
+    <a id="hdrProj" href="#" title="The open saved project: open, save or rename it in the Project input tab"><span id="hdrProjTxt"></span></a>
     <span class="pb-status" id="projStatus">—</span>
-    <div class="pb-btns">
-      <button class="pbtn accent" id="pbSave" title="Save changes to the current project">Save</button>
-      <button class="pbtn" id="pbSaveAs" title="Save as a new project">Save As…</button>
-      <button class="pbtn" id="pbRename" title="Rename current project">Rename</button>
-      <button class="pbtn danger" id="pbDelete" title="Delete current project">Delete</button>
-      <button class="pbtn" id="pbNew" title="Start a fresh blank project">New</button>
-      <button class="pbtn" id="pbExport" title="Download the current inputs as a JSON file (backup, or to send to the checker)">Export JSON</button>
-      <button class="pbtn" id="pbImport" title="Open a JSON file exported from this tool">Import JSON</button>
-      <input type="file" id="pbImportFile" accept=".json,application/json" style="display:none">
-    </div>
+    <div class="pb-btns" id="hdrActs"></div><!-- LPHD (2026-11-05): Undo / Redo / Saved projects… are added here -->
   </div>
   <div class="hdrInfo">
     <div class="sub" id="appSub">A pole carrying splayed catenary lighting cables plus its own wind. Each cable's dead, wind, ice, and wind-on-ice loads resolve to horizontal and vertical pole reactions; the unbalanced pull drives the IBC §1807.3 embedment and the ACI 318 shaft. Wind is enveloped at the worst direction for each component independently.</div>
@@ -757,6 +762,24 @@
         <p class="tbl-note" id="anchTqMigNote" style="margin:0 0 8px 0;display:none;color:#b45309"></p>
         <div class="row ibcOnly"><label>Splitting reinforcement at the shaft top<span class="note">ties / spiral detailed to control splitting around the anchors (ACI 318-19 §17.9.1); when provided, the §17.9.2 minimum spacing and edge distance are waived. Separate from the breakout anchor reinforcement above.</span></label>
           <div class="ctl"><div class="seg" id="segSplitRe"><button data-v="yes">Provided</button><button data-v="no" class="on">None</button></div></div></div>
+      </div>
+    </section>
+    <!-- LPHD (2026-11-05): moved here from the header's project bar (same ids and handlers); its own input tab, Project -->
+    <section class="card" id="lppPrjCard">
+      <div class="card-h"><h2>Project file</h2><span class="hint">saved in this browser</span></div>
+      <div class="card-body">
+        <div class="prjGrp"><b>Saved project</b><span class="note">Recall a project saved in this browser (Saved projects… in the header also renames, duplicates and deletes).</span>
+          <select id="projSelect" title="Recall a saved project"></select></div>
+        <div class="prjGrp"><b>Save</b><span class="note">Save updates the open project; Save As makes a new one.</span><div class="pb-btns">
+          <button class="pbtn accent" id="pbSave" title="Save changes to the current project">Save</button>
+          <button class="pbtn" id="pbSaveAs" title="Save as a new project">Save As…</button>
+          <button class="pbtn" id="pbRename" title="Rename current project">Rename</button>
+          <button class="pbtn danger" id="pbDelete" title="Delete current project">Delete</button>
+          <button class="pbtn" id="pbNew" title="Start a fresh blank project">New</button></div></div>
+        <div class="prjGrp"><b>Project file (JSON)</b><span class="note">A backup of the inputs, or a file to send to the checker.</span><div class="pb-btns">
+          <button class="pbtn" id="pbExport" title="Download the current inputs as a JSON file (backup, or to send to the checker)">Export JSON</button>
+          <button class="pbtn" id="pbImport" title="Open a JSON file exported from this tool">Import JSON</button>
+          <input type="file" id="pbImportFile" accept=".json,application/json" style="display:none"></div></div>
       </div>
     </section>
   </div>
@@ -8242,7 +8265,23 @@ function updateStatus(){
     s.className='pb-status'+(dirty?' dirty':'');
   }
   if(!storageOK){ s.textContent='storage unavailable (open the file directly to enable saving)'; s.className='pb-status dirty'; }
+  lpHdrProj();   /* LPHD */
 }
+/* LPHD (2026-11-05): the header's read-only project line (the open saved project, activeProject); a click opens the Project input
+   tab and focuses the saved-project picker. Display only: nothing is stored. */
+function lpHdrProj(){
+  const t=$('hdrProjTxt'); if(!t) return;
+  t.textContent='';
+  if(activeProject) t.textContent=activeProject;
+  else { const s=document.createElement('span'); s.className='hdrNone'; s.textContent='(not saved: see the Project tab)'; t.appendChild(s); }
+}
+document.addEventListener('click',e=>{
+  const a=e.target&&e.target.closest?e.target.closest('#hdrProj'):null; if(!a) return;
+  e.preventDefault(); lppSetInTab('proj',true);
+  const i=$('projSelect'); if(!i) return;
+  if(window.matchMedia&&window.matchMedia('(max-width:900px)').matches){ const b=$('lppInTabs'); if(b) window.scrollTo(0,b.getBoundingClientRect().top+window.scrollY-4); }
+  i.focus({preventScroll:true});
+});
 function markDirty(){ dirty=true; updateStatus(); scheduleAutosave(); if(window.LPPL) LPPL.soon(); }   // PLIB: one undo step per change (debounced)
 
 // ---- autosave (debounced) ----
@@ -8353,7 +8392,7 @@ $('projSelect').onchange=e=>{
   const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'pbtn'});
   const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)'), bl=B('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete');
   bl.addEventListener('click',()=>dlg.show());
-  const ref=$('pbExport'); if(ref){ ref.parentNode.insertBefore(bl,ref); ref.parentNode.insertBefore(bu,bl); ref.parentNode.insertBefore(br,bl); }
+  const ref=$('hdrActs'); if(ref){ ref.append(bu,br,bl); }   /* LPHD: in the header's project bar */
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   window.LPPL={h,store,dlg,soon};
   window.addEventListener('load',()=>setTimeout(()=>h.reset(),0));
@@ -8395,7 +8434,8 @@ $('pbImportFile').addEventListener('change',e=>{
 const DEFAULT_STATE=captureState();
 
 // ---- main input wiring (mark dirty + recompute + autosave) ----
-document.querySelectorAll('.col-in input, .col-in select').forEach(el=>el.addEventListener('input',()=>{ markDirty(); calc(); }));
+document.querySelectorAll('.col-in input, .col-in select').forEach(el=>{ if(el.closest('#lppPrjCard')) return;   /* LPHD: the project picker and file input (moved from the header) are not design inputs */
+  el.addEventListener('input',()=>{ markDirty(); calc(); }); });
 $('comboSel').addEventListener('change',calc);
 if($('alignAxisBtn')) $('alignAxisBtn').addEventListener('click',()=>{ window.__alignAxis=!window.__alignAxis; calc(); });
 if($('shaftShape')) $('shaftShape').addEventListener('change',()=>{
@@ -8504,10 +8544,10 @@ function applyPostSelection(){
 // browser in localStorage key lpp_inputTab_v1 -- never in the project state, the session
 // autosave or the saved projects.
 const LPP_IN_TABS=[['wind','Wind & site'],['pole','Pole'],['fix','Fixtures'],['cables','Cables'],
-  ['ice','Ice'],['shaft','Shaft & soil'],['anchors','Anchors']];
+  ['ice','Ice'],['shaft','Shaft & soil'],['anchors','Anchors'],['proj','Project']];   // LPHD: + Project (the project file card)
 // card -> tab, keyed by an element id inside the card
 const LPP_IN_CARD=[['V','wind'],['H','pole'],['signB','pole'],['fixTbl','fix'],['cablesOn','cables'],
-  ['tIce','ice'],['ltsIce','ice'],['shaftShape','shaft'],['boltDia','anchors']];
+  ['tIce','ice'],['ltsIce','ice'],['shaftShape','shaft'],['boltDia','anchors'],['projSelect','proj']];
 const LPP_IN_KEY='lpp_inputTab_v1';
 let lppInTabCur=null;   // in-memory copy, so the tab survives without storage
 function lppInTabGet(){ if(lppInTabCur) return lppInTabCur; try{ return localStorage.getItem(LPP_IN_KEY)||''; }catch(e){ return ''; } }

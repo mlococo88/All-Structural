@@ -2277,3 +2277,21 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Saved data:** `lpp_projects_v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-05 — PR: claude/header-lightpole (LPHD: compact header; saved-project picker and project-file buttons moved to a new Project input tab; display only, no result change)
+- **Engineer:** clean up the top of the page (no title block here; the header's project bar had a picker and 10 buttons); the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id and handler is the same):
+  - Header `.projbar`: before "Project" label, `#projSelect`, `#projStatus`, `.pb-btns` (Save, Save As…, Rename, Delete, New, Undo / Redo / Saved projects… (PLIB, inserted before Export JSON), Export JSON, Import JSON, `#pbImportFile`). After: "Project" label, `<a id="hdrProj">` (the open saved project, or "(not saved: see the Project tab)"), `#projStatus`, `<div class="pb-btns" id="hdrActs">` with Undo / Redo / Saved projects….
+  - New last card of `.col-in`, `<section class="card" id="lppPrjCard">` "Project file": Saved project (`#projSelect`), Save (`#pbSave`, `#pbSaveAs`, `#pbRename`, `#pbDelete`, `#pbNew`), Project file (JSON) (`#pbExport`, `#pbImport`, `#pbImportFile`); one-line hints. `LPP_IN_TABS` gets `['proj','Project']` (last; the page still opens on Wind & site) and `LPP_IN_CARD` gets `['projSelect','proj']`.
+  - `.col-in` input wiring (anchor `/* LPHD: the project picker and file input`): elements inside `#lppPrjCard` are skipped (they are not design inputs; picking a project must not mark the state dirty before the load asks about unsaved changes). `captureState()` reads `INPUT_IDS` only, so nothing saved changes.
+  - PLIB block: `const ref=$('pbExport')` (insert before) → `$('hdrActs')` (`append`).
+  - `updateStatus()` ends with `lpHdrProj()`; new `lpHdrProj()` and a click handler on `#hdrProj` (anchor `function lpHdrProj(){`): Project tab, picker focused (at 900 px and below the input tabs are scrolled into view first).
+  - CSS (anchor `/* LPHD (2026-11-05)`): `.projbar #hdrProj`, `#lppPrjCard` (light buttons in the card).
+- **Decisions (pending engineer review):** the project line is the open saved project's name (the tool has no title block); the status ("saved · …" / "● unsaved …") stays beside it; Undo / Redo / Saved projects… stay in the header.
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch):
+  - `node tests/lightpole-compare.mjs --jobs 2` (every case, both codes, pole and sign): results, cable values, text and drawings identical, 0 console errors.
+  - V = 120 mph typed: `captureState()`, every localStorage key and the reload of the session: identical; the header link opens the Project tab with the picker focused (1920 and 390 px).
+  - `phone-layout --tool lp`, `project-library --tool lightpole`, `github-sync-tools --tool lightpole`, `dxf-print-sheets --tool lp`, `lightpole-anchor-handoff`, `check-syntax`: pass; no sideways scroll on any input tab at 390 / 768 px;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change (`lpp_inputTab_v1` may now also hold `proj`, a view setting).
