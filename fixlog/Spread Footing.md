@@ -4836,7 +4836,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - A very large schedule (many pedestals × load cases) on the extra sheet is not split; it is flagged by the existing "does not fit the sheet" marker.
 
 
-## 2026-11-05 — PR: claude/sf-wall — Element type per pedestal: Pedestal (default) / Wall; wall-foundation dowel minimum per ACI 318-19 16.3.4.2 → 11.6.1 (SFWL; calculation option, default = no change)
+## 2026-11-05 — PR: claude/sf-wall (PR #769: https://github.com/mlococo88/All-Structural/pull/769) — Element type per pedestal: Pedestal (default) / Wall; wall-foundation dowel minimum per ACI 318-19 16.3.4.2 → 11.6.1 (SFWL; calculation option, default = no change)
 
 ### SFWL. "Element type: Pedestal (default) / Wall"   [calculation option; CLAUDE.md §4]
 - **Request (engineer, RISAFoundation reconciliation of the Seymour project):** a Wall type per pedestal. The dowel minimum follows the wall rule. Two-way shear and the pedestal-only checks are stated for a wall. No full wall design.
