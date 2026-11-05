@@ -672,7 +672,7 @@ function solve3(M,b){
    On screen: "Worked in: <value> → <Tab> · <card>" (opens the tab and the card, scrolls, flashes it).
    In the printed report the same link reads "<value>: see §n.k" (renderPrintHeader fills n.k from the card title). ---- */
 const SFD_LINKS={'o-cb-weights':['tab-combos','2.2 Self-Weights, Soil Overburden & Buoyancy'],
- 'o-cb-asd':['tab-combos','2.3 Combination resultants'],
+ 'o-cb-asd':['tab-combos','2.3 Combination resultants'],'o-cb-ped':['tab-combos','2.6 Pedestal loads by combination'],
  'o-br-press':['tab-bearing','3.2 Base Pressure Distribution'],'o-br-cap':['tab-bearing','3.3 Bearing Check'],
  'o-st-slide':['tab-stab','4.2 Sliding'],'o-st-ot':['tab-stab','4.3 Overturning']};
 const SFD_TABNAME={'tab-schem':'Schematic','tab-combos':'Load Combinations','tab-bearing':'Bearing','tab-stab':'Stability','tab-footdes':'Footing Design','tab-peddes':'Pedestal Design'};
@@ -722,7 +722,7 @@ function defaultState(){
  ev:{cover:1.5,gev:120,qDsur:0,qLsur:0},
  freinf:{botX:{size:8,spc:9,mode:'spacing'},botY:{size:8,spc:9,mode:'spacing'},topX:{size:0,spc:12,mode:'spacing'},topY:{size:0,spc:12,mode:'spacing'},botOuter:'y'},
  stab:{muMode:'phi',mu:0.45,pf:0,FSot:2,FSsl:1.5,FSfl:1.25,shearCouple:'on',otGate:'off',eccMode:'kern',eccCustom:0.25},
- manPrint:false,manPart:'p0',lrRefRpt:true,
+ manPrint:false,manPart:'p0',lrRefRpt:true,pedCbRpt:true,
  assump:'',peds:[p1,p2]};}
 let state=defaultState(), collapseState={};
 function getPath(o,p){return p.split('.').reduce((a,k)=>a&&a[k],o);}
@@ -733,6 +733,7 @@ function migrateState(){
  if(!state.loadMode)state.loadMode='type';
  if(state.manPrint===undefined)state.manPrint=false;
  if(state.lrRefRpt===undefined)state.lrRefRpt=true;   /* SFLR: Report Include box, LRFD reference tables (default on) */
+ if(state.pedCbRpt===undefined)state.pedCbRpt=true;   /* SFPC: Report Include box, pedestal loads by combination (default on) */
  if(!state.manPart)state.manPart='p0';
  if(!state.freinf)state.freinf=defaultState().freinf;
  ['botX','botY','topX','topY'].forEach(k=>{const m=state.freinf[k];if(m&&!m.mode)m.mode='spacing';});   /* SFRQ: older saves entered a spacing */
@@ -1700,6 +1701,7 @@ function sfdLrPick(i){
  SEL.asdLr=i;
  const P=document.getElementById('outputPanel'),st=P?P.scrollTop:0,wy=window.scrollY;
  renderBearing();renderStability();renderPlots();syncSelTo3D('asd');
+ {const c=document.getElementById('o-cb-ped');if(c)renderPedCb(c.querySelector('.secbody'));}   /* SFPC: card 2.6 follows the selection */
  if(P)P.scrollTop=st;if(!sfdPanelLayout())window.scrollTo(0,wy);
 }
 function chip(name,val,status,asdIdx,nav){
@@ -2225,6 +2227,48 @@ function renderCombos(){
  const pd=el('div','plot');pd.id='plot-dcr';b2.appendChild(pd);
  const b3=secPanel(T,'o-cb-lrfd',R.directMode?'2.5  Factored Envelope \u2014 Dead-Load Brackets (for design & uplift)':'2.5  Strength (LRFD) Combinations \u2014 Resultants (for Phase 2 structural design)');
  b3.appendChild(comboTable(R.lrfd,false));
+ renderPedCb(secPanel(T,'o-cb-ped','2.6  Pedestal Loads by Combination (at Top of Pedestal)'));   /* SFPC */
+}
+/* SFPC (2026-11-05, engineer; CLAUDE.md §6): the pedestal-top loads of a combination, P, V_x, V_y, M_x, M_y of pedestal p = Σ γ_i·Q_i over
+   the load types (γ_i: the combination's factor, Q_i: the entered pedestal load); direct mode: the envelope as entered (γ = 1). These are the
+   values the 3D view labels and the drawings' sections quote. Display only: the engine's resultants (R.asd / R.lrfd .r) are not touched.
+   Returns {P, Vx, Vy, Mx, My, t: {P: [[γ, Q, type], …], …}}. */
+function sfdPedCb(p,f){
+ const o={P:0,Vx:0,Vy:0,Mx:0,My:0,t:{P:[],Vx:[],Vy:[],Mx:[],My:[]}};
+ if(f&&f.direct){const d=p.direct||{};COMP.forEach(c=>{o[c]=num(d[c]);if(o[c]!==0)o.t[c].push([1,o[c],'envelope']);});return o;}
+ TYPES.forEach(tp=>{const g=(f&&f[tp])||0,ld=p.loads[tp];if(!g||!ld)return;COMP.forEach(c=>{const q=num(ld[c]);if(q!==0){o[c]+=g*q;o.t[c].push([g,q,tp]);}});});
+ return o;}
+const SFPC_SYM={P:'P',Vx:'V\u2093',Vy:'V\u1D67',Mx:'M\u2093',My:'M\u1D67'};
+/* the combination card 2.6 shows: an LRFD pick of the Bearing / Stability selector (SFLS), else the selected or governing service combination */
+function sfdPcSel(){
+ if(R.directMode)return {a:R.govBear,basis:'env',i:R.asd.indexOf(R.govBear)};
+ if(sfdLrSel())return {a:R.lrfd[SEL.asdLr],basis:'LRFD',i:SEL.asdLr};
+ const a=selASD(R.govBear);return {a,basis:'ASD',i:R.asd.indexOf(a)};}
+function sfdPcSub(t){return t.length?t.map(([g,q])=>f2(g)+'\u00b7'+(q<0?'('+f2(q)+')':f2(q))).join(' + '):'\u2014';}
+function renderPedCb(b){
+ if(!b)return;b.innerHTML='';
+ if(b.parentElement)b.parentElement.classList.add('sfPcRef');   /* the Report has its own copy (sfdPcReport, Include box), not the card as printed */
+ const gi=R.asd.indexOf(R.govBear);
+ if(!R.directMode)b.appendChild(comboSelectorBar('asd',gi,()=>{sfdLrPick(SEL.asdLr);}));   /* the same selection as Bearing / Stability (SEL) */
+ const s=sfdPcSel(), cb=s.a.cb;
+ const what=s.basis==='env'?'the direct factored envelope (pedestal loads as entered, \u03b3 = 1)':s.basis==='LRFD'?'<b>LRFD (factored) combination '+(s.i+1)+': '+sfEsc(cb.name)+'</b> (reference only)':(s.a===R.govBear?'the governing service combination ':'service combination ')+(s.i+1)+': <b>'+sfEsc(cb.name)+'</b>';
+ b.appendChild(el('p','note','Loads at the top of each pedestal for '+what+'. Each component is <b>\u03a3 \u03b3<sub>i</sub>\u00b7Q<sub>i</sub></b> over the load types: \u03b3<sub>i</sub> is this combination\u2019s factor ('+sfEsc(cb.ref||'')+'), Q<sub>i</sub> the pedestal load entered for type i (Pedestals tab). Pedestal self-weight, soil cover, surcharge and buoyancy act on the footing, not at the pedestal top (2.2). Sign convention: +P downward; +V<sub>x</sub>, +V<sub>y</sub> in +x, +y; +M<sub>x</sub> shifts the resultant toward +y, +M<sub>y</sub> toward +x. These are the values the 3D view labels and the drawings\u2019 sections show.'));
+ const t=document.createElement('table');t.className='tbl';
+ t.innerHTML='<tr><th>Pedestal</th><th>Component</th><th>\u03a3 \u03b3<sub>i</sub>\u00b7Q<sub>i</sub> (terms: '+(s.basis==='env'?'envelope':'type')+')</th><th>Substituted</th><th>Value</th><th>Units</th></tr>';
+ R.peds.forEach((p,i)=>{const v=sfdPedCb(p,cb.f);
+  COMP.forEach((c,j)=>{const tr=document.createElement('tr');if(j===0)tr.style.borderTop='2px solid #889';
+   const terms=v.t[c].map(([g,q,tp])=>'\u03b3<sub>'+tp+'</sub>\u00b7'+c+'<sub>'+tp+'</sub>').join(' + ')||'(no non-zero term)';
+   [j===0?sfEsc(p.label):'',SFPC_SYM[c],terms,sfdPcSub(v.t[c]),'<b>'+f2(v[c])+'</b>',COMP_UNIT[c]].forEach(x=>{const td=document.createElement('td');td.innerHTML=x;tr.appendChild(td);});t.appendChild(tr);});});
+ b.appendChild(t);
+ /* every combination x pedestal */
+ const all=[...R.asd.map((a,i)=>({a,k:R.directMode?'Envelope':'Service',i})),...(R.directMode?[]:R.lrfd.map((a,i)=>({a,k:'LRFD (ref.)',i})))];
+ const t2=document.createElement('table');t2.className='tbl';t2.style.fontSize='11px';
+ t2.innerHTML='<tr><th>Basis</th><th>#</th><th>Combination</th><th>Pedestal</th><th>P (k)</th><th>V\u2093 (k)</th><th>V\u1D67 (k)</th><th>M\u2093 (k-ft)</th><th>M\u1D67 (k-ft)</th></tr>';
+ all.forEach(z=>R.peds.forEach((p,pi)=>{const v=sfdPedCb(p,z.a.cb.f),tr=document.createElement('tr');
+  if(z.a===s.a)tr.style.background='#fff3cd';if(z.a===R.govBear)tr.style.fontWeight='bold';
+  [pi===0?z.k:'',pi===0?String(z.i+1):'',pi===0?sfEsc(z.a.cb.name):'',sfEsc(p.label),f2(v.P),f2(v.Vx),f2(v.Vy),f2(v.Mx),f2(v.My)].forEach(x=>{const td=document.createElement('td');td.innerHTML=x;tr.appendChild(td);});t2.appendChild(tr);}));
+ const d=el('details');d.open=true;d.appendChild(el('summary','','All '+(R.directMode?'envelope brackets':'service and LRFD combinations')+' \u00d7 pedestals (same \u03a3 \u03b3<sub>i</sub>\u00b7Q<sub>i</sub>; bold: governing service, shaded: shown above)'));d.appendChild(t2);
+ b.appendChild(d);
 }
 /* SFMR (2026-11-05): the terms of ΣM_a (r.MaY / r.MaX) itemised for display, one row per pedestal and load type:
    applied pedestal moments (factor × M) and the shear couples V·(t + h), V_x to ΣM_y and V_y to ΣM_x. Display only:
@@ -3802,7 +3846,7 @@ function renderReport(){
  let M;
  try{
  sfpDrawHidden();   /* SFAC: the plots of hidden tabs, which sfxApply reads */
- try{M=sfdLrReport(sfxApply(sfrModel()));}catch(e){T.innerHTML='<div class="errbox">Report error: '+sfEsc(e&&e.message)+'</div>';SFRP.api=null;SFRP.doc=null;return;}
+ try{M=sfdPcReport(sfdLrReport(sfxApply(sfrModel())));}catch(e){T.innerHTML='<div class="errbox">Report error: '+sfEsc(e&&e.message)+'</div>';SFRP.api=null;SFRP.doc=null;return;}
  }finally{if(lrKeep!=null){SEL.asdLr=lrKeep;renderBearing();renderStability();SFPLT.skip=true;}}
  SFRP.api=SharedReport.mount(T,M,{closed:SFRP.closed,onGoto:sfrGoto,controls:sfxControls()});   /* SFRX: the Include box */
  SFRP.doc=SFRP.api.doc;sfxWire(T);
@@ -3862,7 +3906,7 @@ function sfxWalk(root,scope,T){
  /* a "Worked in" line: as on screen ("<value> → <tab> · <card>"; the Report links the values itself), an input echo link as printed */
  root.querySelectorAll('.wkLink').forEach(w=>{const c=w.cloneNode(true);c.querySelectorAll('a.wkA:not(.sfdInA) .wkPrt,a.sfdInA .wkScr').forEach(x=>x.remove());
   const d=document.createElement('div');d.textContent=c.textContent.replace(/\s+/g,' ').trim();w.replaceWith(d);});
- root.querySelectorAll('.noprint,.sfLrRef,.wkScr,.wkPrt,.manNav,.manPrintCtl,button,script,style,.modebar-container').forEach(x=>x.remove());
+ root.querySelectorAll('.noprint,.sfLrRef,.sfPcRef,.wkScr,.wkPrt,.manNav,.manPrintCtl,button,script,style,.modebar-container').forEach(x=>x.remove());
  root.querySelectorAll('select,input,textarea').forEach(i=>{const t=i.tagName==='SELECT'?(i.selectedIndex>=0?i.options[i.selectedIndex].textContent:'—'):(i.type==='checkbox'||i.type==='radio')?(i.checked?'yes':'no'):(i.value||'—');const s=document.createElement('span');s.textContent=t;i.replaceWith(s);});
  root.querySelectorAll('.katex-display,.katex').forEach(x=>{if(!root.contains(x)||(x.parentElement&&x.parentElement.closest('.katex,.katex-display')))return;
   const a=x.querySelector('annotation');const s=document.createElement('span');s.className='sfx-tex';s.dataset.tex=a?a.textContent:x.textContent;s.textContent=' $'+sfxLite(s.dataset.tex)+'$ ';x.replaceWith(s);});
@@ -3990,9 +4034,32 @@ function sfdLrReport(M){
   ss.subs.push({title:'Reference: LRFD combinations',key:'S-stLR',items});}
  return M;
 }
+/* SFPC (2026-11-05): "Pedestal loads by combination (at top of pedestal)" at the end of the Report's "Loads and combinations" section
+   (Include box, saved field state.pedCbRpt, default on): the governing service combination worked per pedestal (Σ γ_i·Q_i, substituted)
+   and the table of every combination x pedestal. Added after the Report is built, so the rest of the Report is unchanged. Display only. */
+function sfdPcReport(M){
+ if(state.pedCbRpt===false||!M||!M.sections||!R||R.fatal)return M;
+ const sec=M.sections.find(x=>x.title==='Loads and combinations');if(!sec)return M;
+ const G=R.govBear;if(!G)return M;
+ const w=sfrW(), sym={P:'P',Vx:'V_{x}',Vy:'V_{y}',Mx:'M_{x}',My:'M_{y}'}, un={P:'kip',Vx:'kip',Vy:'kip',Mx:'kip-ft',My:'kip-ft'};
+ R.peds.forEach((p,i)=>{const v=sfdPedCb(p,G.cb.f);
+  COMP.forEach(c=>{if(!v.t[c].length)return;
+   w.add({id:'pc'+i+c,label:p.label+', '+c+(R.directMode?' (envelope as entered)':' ('+v.t[c].map(z=>z[2]).join(', ')+')'),sym:sym[c],eq:'\\sum \\gamma_{i} Q_{i}',
+    sub:v.t[c].map(([g,q])=>sfrN(g)+'\\cdot'+sfrP(q)).join(' + '),value:v[c],unit:un[c]});});});
+ const c=sfrCell, rows=[];
+ [...R.asd.map(a=>({a,k:R.directMode?'Envelope':'Service'})),...(R.directMode?[]:R.lrfd.map(a=>({a,k:'LRFD (ref.)'})))].forEach(z=>R.peds.forEach((p,pi)=>{const v=sfdPedCb(p,z.a.cb.f);
+  rows.push({cells:[pi===0?z.k:'',pi===0?z.a.cb.name:'',p.label,c(v.P),c(v.Vx),c(v.Vy),c(v.Mx),c(v.My)],cls:z.a===G?'gov':''});}));
+ sec.subs.push({title:'Pedestal loads by combination (at top of pedestal)',key:'S-pcb',items:[
+  {type:'note',text:'Each pedestal-top component is Σ γ_i·Q_i over the load types (γ_i: the combination factor, Q_i: the entered pedestal load)'+(R.directMode?'; direct mode: the envelope as entered (γ = 1)':'')+'. Pedestal self-weight, soil cover, surcharge and buoyancy act on the footing ([[S-res]]), not here. Sign convention as the pedestal load table. Components with no non-zero term are 0 and not listed.'},
+  {type:'steps',scope:'pcb',steps:w.steps,title:(R.directMode?'Direct factored envelope':'Governing service combination: '+G.cb.name)},
+  {type:'table',wide:true,head:['Basis','Combination','Pedestal','P (kip)','V_x (kip)','V_y (kip)','M_x (kip-ft)','M_y (kip-ft)'],rows},
+  {type:'note',text:'Bold: the governing bearing combination, worked above. The 3D view labels and the drawings\u2019 section sheets quote these values.'}]});
+ return M;
+}
 /* the report bar's Include box: the manual (state.manPrint, the same field as the Manual tab's "Include this manual" box) */
-function sfxControls(){return '<span class="sfx-inc" style="display:inline-flex;gap:2px 10px;font-size:9pt;align-items:center"><b>Include:</b> <label style="white-space:nowrap"><input type="checkbox" data-sfx="man"'+(state.manPrint?' checked':'')+'> User manual</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="lr"'+(state.lrRefRpt!==false?' checked':'')+'> LRFD reference tables (bearing, stability)</label></span>';}
-function sfxWire(T){T.querySelectorAll('input[data-sfx="lr"]').forEach(x=>x.addEventListener('change',()=>{state.lrRefRpt=x.checked;saveAuto();renderReport();}));   /* SFLR */
+function sfxControls(){return '<span class="sfx-inc" style="display:inline-flex;gap:2px 10px;font-size:9pt;align-items:center"><b>Include:</b> <label style="white-space:nowrap"><input type="checkbox" data-sfx="man"'+(state.manPrint?' checked':'')+'> User manual</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="lr"'+(state.lrRefRpt!==false?' checked':'')+'> LRFD reference tables (bearing, stability)</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="pcb"'+(state.pedCbRpt!==false?' checked':'')+'> Pedestal loads by combination</label></span>';}   /* SFPC */
+function sfxWire(T){T.querySelectorAll('input[data-sfx="pcb"]').forEach(x=>x.addEventListener('change',()=>{state.pedCbRpt=x.checked;saveAuto();renderReport();}));   /* SFPC */
+ T.querySelectorAll('input[data-sfx="lr"]').forEach(x=>x.addEventListener('change',()=>{state.lrRefRpt=x.checked;saveAuto();renderReport();}));   /* SFLR */
  T.querySelectorAll('input[data-sfx="man"]').forEach(x=>x.addEventListener('change',()=>{state.manPrint=x.checked;document.body.classList.toggle('printManual',state.manPrint);const c=$('#manPrintChk');if(c)c.checked=state.manPrint;saveAuto();renderReport();}));}
 /* Print: from any tab the Report is shown (not saved: the tab is not part of the project), printed, and the tab of before comes back */
 function sfxPrintPrep(){
@@ -4105,10 +4172,7 @@ function sfdwBuild(){
   const sx=(area[2]-area[0])/60, sy=(area[3]-area[1])/40;
   for(let y=area[3]-h;y>=area[1]-1e-9;y-=sy)for(let x=area[2]-w;x>=area[0]-1e-9;x-=sx)c.push([x,y]);
   return c.find(([x,y])=>ok(x,y))||null;};
- const sfdlV=(p,f)=>{let P=0,Vx=0,Vy=0,Mx=0,My=0;   /* pedestal-top loads for factors f (as the 3D view's buildLoads) */
-  if(f&&f.direct){const d=p.direct||{};P=num(d.P);Vx=num(d.Vx);Vy=num(d.Vy);Mx=num(d.Mx);My=num(d.My);}
-  else TYPES.forEach(tp=>{const ft=(f&&f[tp])||0,ld=p.loads[tp];if(!ft||!ld)return;P+=ft*num(ld.P);Vx+=ft*num(ld.Vx);Vy+=ft*num(ld.Vy);Mx+=ft*num(ld.Mx);My+=ft*num(ld.My);});
-  return {P,Vx,Vy,Mx,My};};
+ const sfdlV=(p,f)=>sfdPedCb(p,f);   /* pedestal-top loads for factors f, worked in Load Combinations 2.6 (SFPC) */
  const sfdlN=v=>Math.abs(v)<5e-7?'0':f2(v);
  /* the schedule in two layouts (paper in): wide (one row per pedestal x case, with the pedestal name and load point) and compact (narrow,
     for the side of the plan; load points listed under the table) */
@@ -4251,8 +4315,9 @@ function sfdwBuild(){
   const nm=R.directMode?'DIRECT FACTORED ENVELOPE (AS ENTERED)':'GOVERNING SERVICE COMBINATION '+(R.asd.indexOf(G)+1)+': '+G.cb.name;
   const s='LOADS AT PEDESTAL TOP: '+nm+(R.directMode?'':' (SERVICE LEVEL)')+';  +P DOWN, +V'+(dir==='A'?'x':'y')+' IN +'+(dir==='A'?'x':'y')+'; SELF-WEIGHT NOT INCLUDED';
   const w=s.length*0.085*k*0.9, yy=-1.8*k+c.dy;
-  if(yy>=c.area[1]&&Math.abs(c.dx)<1e30&&w<=c.area[2]-c.area[0])T(L.lt,c.dx,yy,0.085*k,s,1);
-  else{const sp=sfdlSpot(c.i0,c.area,w,0.12*k,0.08*k);if(sp)T(L.lt,sp[0],sp[1],0.085*k,s,0);}
+  const s2='PER-PEDESTAL VALUES WORKED IN: LOAD COMBINATIONS TAB 2.6 / CALC REPORT "PEDESTAL LOADS BY COMBINATION"', w2=s2.length*0.085*k*0.9;   /* SFPC */
+  if(yy-0.2*k>=c.area[1]&&Math.abs(c.dx)<1e30&&Math.max(w,w2)<=c.area[2]-c.area[0]){T(L.lt,c.dx,yy,0.085*k,s,1);T(L.lt,c.dx,yy-0.2*k,0.085*k,s2,1);}
+  else{const ww=Math.max(w,w2),sp=sfdlSpot(c.i0,c.area,ww,0.32*k,0.08*k);if(sp){T(L.lt,sp[0],sp[1]+0.2*k,0.085*k,s,0);T(L.lt,sp[0],sp[1],0.085*k,s2,0);}}
  };}
  sheet('secA','SECTION A-A (ALONG x)',section('A'),null,sfdlSec('A'));
  sheet('secB','SECTION B-B (ALONG y)',section('B'),null,sfdlSec('B'));
@@ -7076,11 +7141,10 @@ function v3dTitle(item){
   :item.env?'Direct factored envelope: <b>'+sfEsc(cb.name)+'</b> (pedestal loads as entered, factored)'
   :item.basis==='LRFD'?'<b style="color:#8a4b00">LRFD (factored) combination '+(item.idx+1)+': '+sfEsc(cb.name)+'</b> \u2014 reference only; the checks use the service combinations'+(cb.ref?' ('+sfEsc(cb.ref)+')':'')
   :(item.gov?'Governing service (bearing) combination ':'Service (ASD) combination ')+(item.idx+1)+': <b>'+sfEsc(cb.name)+'</b>'+(cb.ref?' ('+sfEsc(cb.ref)+')':'');
- d.innerHTML='<b>3D view \u2014 showing:</b> '+what+'. Arrows and labels are the loads at the top of each pedestal'+(item.basis==='CASE'?'':' at this combination\u2019s factors')+' (self-weight, EV and surcharge not included; see '+
-  '<a href="#" class="v3d-jump" data-jump="tab-combos">2. Load Combinations</a>).<br><span style="font-size:11px;color:#445"><b>Sign convention:</b> +P downward (compression); +V<sub>x</sub>, +V<sub>y</sub> act toward +x, +y; '+
+ d.innerHTML='<b>3D view \u2014 showing:</b> '+what+'. Arrows and labels are the loads at the top of each pedestal'+(item.basis==='CASE'?'':' at this combination\u2019s factors')+' (self-weight, EV and surcharge not included; worked in '+
+  sfdLink('o-cb-ped','')+').<br><span style="font-size:11px;color:#445"><b>Sign convention:</b> +P downward (compression); +V<sub>x</sub>, +V<sub>y</sub> act toward +x, +y; '+
   '+M<sub>x</sub> shifts the resultant toward +y, +M<sub>y</sub> toward +x (arcs drawn in that sense). Labels give the signed value; the arrow points the way the load acts; a zero component is not drawn.</span>';
- const a=d.querySelector('[data-jump]');if(a)a.addEventListener('click',e=>{e.preventDefault();const b=[...$$('#tabbar button')].find(x=>x.dataset.tab==='tab-combos');if(b)b.click();});
-}
+ }
 function buildLegend(){
  const lg=$('#v3dLegend');if(!lg)return;
  lg.innerHTML='<b>Legend</b><br>'+
