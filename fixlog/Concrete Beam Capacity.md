@@ -2688,7 +2688,7 @@ function cbcDashColl(v,save){
 })();
 ```
 
-## 2026-11-05 — PR: claude/cbc-dash-asd (ASDC: check summary panel in the ASD Beam Calcs tab, as the Beam Capacity tab (CBDC #788); display only, no result change)
+## 2026-11-05 — PR: claude/cbc-dash-asd, PR #789: https://github.com/mlococo88/All-Structural/pull/789 (ASDC: check summary panel in the ASD Beam Calcs tab, as the Beam Capacity tab (CBDC #788); display only, no result change)
 
 ### ASDC. Check summary panel in the ASD frame   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 2, PR 2 of 3):** the check summary panel of CBDC (#788) in the ASD Beam Calcs frame (`<iframe id="suite-frame-asd" srcdoc=…>`). The Summary tab, the Report and printing are unchanged.
