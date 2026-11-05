@@ -1666,3 +1666,193 @@ function rbCapRpt(inp,k){
 - **How verified:** headless dump of every input and output tab and the Report tab, origin/main vs branch: identical, 0 console errors. `node tests/check-syntax.mjs`: all pass. `node tests/smoke/phone-layout.mjs --tool aci`: all passed. `node tests/smoke/project-library.mjs --tool rebar`: ALL PASS.
 - **Other copies:** the `suite-frame-dev` srcdoc page of `Concrete Beam Capacity.html` (where the button shows).
 - **Open items:** none for this tool.
+
+## 2026-11-05 — PR: claude/cbc-dash-dev, PR #791: https://github.com/mlococo88/All-Structural/pull/791 (RBDC: check summary panel in the Development & Splice tab and in ACI Rebar Development Length.html, kept in step; display only, no result change)
+
+### RBDC. Check summary panel replaces the dashboard box on screen   [display only] [no result change]
+- **Engineer request (2026-11-05, Phase 2, PR 3 of 3):** the check summary panel of CBDC (#788) and ASDC (#789) in the Development & Splice frame (`<iframe id="suite-frame-dev" srcdoc=…>` of `Concrete Beam Capacity.html`) and in the standalone `ACI Rebar Development Length.html`, kept in step (CLAUDE.md §3).
+  - This tool has no Summary tab. Its summary is the "Summary Dashboard — Code Checks" box (`#dashboard`, `buildDashboard`). The panel lists those same checks and takes that box's place on screen. `#dashboard` is still written; it is hidden by the screen CSS.
+- **Where (both copies; the same text unless noted):**
+  - Markup:
+    - `<aside id="rbrDashCol" aria-label="Check summary"></aside>` as the first child of `<div class="layout no-print">`.
+    - In `<div class="card outputpanel">`, before `<div class="tabs" id="tabs">`, `<div id="rbrDashBox">`. Its header `#rbrDashHead` holds `#rbrDashTgl`, `<h2 id="rbrDashTtl">Check summary</h2>` and `#rbrDashCnt`; the list is `#rbrDash`.
+  - `buildDashboard(inp,f)`: before, the function ended with `document.getElementById('dashboard').innerHTML = html;`. After, that line is followed by `rbrDashRender(checks,f);   // RBDC: …`.
+  - CSS: at the end of the first `<style>` block, after `.warnbox{border-radius:0 4px 4px 0; color:#78350F;}` (anchor `/* RBDC (2026-11-05): check summary panel`). It includes `@media screen{#dashboard{display:none!important}}`.
+    - Standalone only: inside the 1500 px rule, `.appwrap{max-width:1792px}` (1500 + 292). At 1792 px and wider, the input and output panels keep their old widths. The suite copy is full width already.
+  - JS: a new block just before `function render(){` (anchor `const RBDC={key:'rebar_dashCollapsed_v1'`). The code is below.
+- **What the lines are (no new calculation):** one line per entry of `buildDashboard`'s `checks`, in its order, with its label and value.
+  - **Status:**
+    - INFO for the lengths and the limits applied in the calculation (`info:true`);
+    - PASS / FAIL from `ok`;
+    - REVIEW where the old box said CHK with the value "verify", "unknown" or "spacing?". These are the Report's CHK rows (`rebarResultRows`): Class A with A_s,req not entered, K_tr spacing not entered, #3 transverse at f′c > 10 ksi, f_y > 75 ksi.
+    - The old box showed every non-OK check as "CHK". The lap-splice "N/P", f′c out of range, Class A not eligible and K_tr < 0.5d_b now read FAIL, as in the Report.
+  - **Short value:** the box's value. For FAIL / REVIEW it is the condition instead: "not permitted", "out of range", "not eligible", "A_s,req not entered", "K_tr < 0.5d_b", "spacing not entered" or "verify".
+  - **Expanded line:** the label with its value, then the reference and "→ Tab · Card". The references are those of `rebarResultRows` and of the worked steps: ACI 318-19 25.4.2.4 for (c_b+K_tr)/d_b ≤ 2.5 and ψ_tψ_e ≤ 1.7; AASHTO 5.10.8.2.1b for λ_rlλ_cf ≤ 1.7; 5.10.8.2.1c for λ_rc.
+  - **Click:** opens the card (`rebarGoto`). The f′c line, which has no card, opens the Tension tab.
+  - **Header count:** "n NG", "n REVIEW" or "no NG".
+- **Layout:** at ≥ 1500 px, `.layout` becomes `292px minmax(340px,1fr) 2fr` and the column scrolls on its own (« collapses it to 42 px). Below 1500 px the box sits above the output tabs, at most 42vh tall, with ▾ Hide checks / ▸ Show checks. On a phone it is above the output tabs.
+- **Saved data:** one new per-browser UI key, `rebar_dashCollapsed_v1` ('1' = collapsed). The standalone tool and the suite's Development & Splice tab share it. It is not in either autosave (`rebar_aci_autosave_v1`, `rcsuite.rebar_autosave_v1`), the saved projects or the export. No existing key or format changed.
+- **Report and printing:** unchanged. The panel and the hidden box are in `.layout.no-print`. The Report uses `rebarResultRows` and `rbrModel`, not `#dashboard`.
+- **Check case:**
+  - Default project: "no NG". It shows 5 INFO lengths (l_d 47.4 in, l_dh 23.9 in, l_dc 19.0 in, l_st 61.7 in, l_sc 30.0 in), "(c_b+K_tr)/d_b 1.50 INFO", "f′c within code range 4000 psi PASS" and "ψ_t·ψ_e 1.00 INFO". These match the old box.
+  - Standalone, AASHTO, #14, f′c 12,000 psi, Class A: "1 NG 2 REVIEW". The lines are "Lap splice permitted (5.10.8.4.2a) not permitted FAIL", "Class A splice eligible A_s,req not entered REVIEW" and "#3 transverse @ 12 in (f′c > 10 ksi) verify REVIEW". The old box showed CHK for all three.
+  - A click on the Class A line opens Tension Splice · Class A Eligibility Check.
+- **How verified:**
+  - Headless Chromium, origin/main (after #790) vs branch. The panel and `#dashboard` were hidden while the tab text was read.
+  - Compared: the dev calculations (`readInputs`, `computeFactors`, `calcTension` … `calcCompSplice`, `rbrModel()`), every tab's text in both copies, the other two suite frames and the suite Report. All identical in 5 cases (default, AASHTO f_yt 100, ACI with torsion, excess reinforcement ACI and AASHTO), with 0 console errors.
+  - `node tests/check-syntax.mjs`, `tests/smoke/phone-layout.mjs --tool cbc,aci` and `tests/smoke/project-library.mjs` pass.
+  - Screenshots before and after at 1920 and 390 px, for both copies, looked at.
+- **Other copies:** `Concrete Beam Capacity.html` (suite-frame-dev) and `ACI Rebar Development Length.html`. The same JS and CSS are in both, except the standalone's `.appwrap` width rule.
+- **Open items:** the old box's heading named the code ("(ACI 318-19)" / "(AASHTO LRFD §5.10.8)"). The panel does not; the code is shown in Code & Material and on every worked card.
+
+#### Code added (re-apply by hand)
+CSS, end of the first `<style>` block (standalone: also `.appwrap{max-width:1792px}` as the first rule inside `@media screen and (min-width:1500px){`):
+```css
+/* RBDC (2026-11-05): check summary panel, as the Beam Capacity and ASD tabs of Concrete Beam Capacity.html (CBDC #788, ASDC #789)
+   and Spread Footing / Light Pole. One line per check of the summary dashboard, collapsible; on screens >= 1500 px a 280 px left
+   column that scrolls on its own; below that a compact grid above the output tabs. It replaces the dashboard box on screen
+   (#dashboard is still written by buildDashboard, hidden). Screen only; the Report and printing are unchanged. */
+#rbrDashCol{display:none}
+@media print{#rbrDashCol,#rbrDashBox{display:none!important}}
+@media screen{
+  #dashboard{display:none!important}
+  #rbrDashBox{flex:0 0 auto;font-family:var(--font-ui);padding:5px 14px 0;background:var(--slate-50);border-bottom:1px solid var(--line);
+    max-height:42vh;overflow-y:auto}
+  #rbrDashHead{display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap}
+  #rbrDashTtl{margin:2px 0;font-family:var(--font-ui);font-size:9pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--navy-800)}
+  #rbrDashTgl{margin:0;padding:1px 7px;font:8.5pt var(--font-ui);border:1px solid #CBD5E1;background:var(--slate-100);border-radius:4px;cursor:pointer;color:#334155}
+  #rbrDashCnt{display:inline-flex;gap:4px;flex-wrap:wrap}
+  #rbrDashCnt span{font-size:8pt;font-weight:700;padding:1px 5px;border:1px solid;border-radius:3px;white-space:nowrap}
+  #rbrDashCnt .rbrdCf{color:#991B1B;background:#FEF2F2;border-color:var(--fail)}
+  #rbrDashCnt .rbrdCw{color:#92400E;background:#FFFBEB;border-color:var(--warn)}
+  #rbrDashCnt .rbrdCp{color:#065F46;background:#ECFDF5;border-color:var(--pass)}
+  #rbrDashCnt .rbrdCn{color:#475569;background:var(--slate-100);border-color:#CBD5E1}
+  body.rbrDashColl #rbrDash{display:none}
+  #rbrDash{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(250px,100%),1fr));gap:3px 6px;margin:4px 0 7px;align-items:start}
+  #rbrDash .rbrdCh{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:5px;padding:2px 5px 2px 2px;min-width:0;
+    border:1px solid var(--line);border-left:4px solid var(--slate-400);border-radius:3px;background:#fff;font-size:8.5pt;line-height:1.35;cursor:pointer}
+  #rbrDash .rbrdCh:hover{background:var(--slate-50)} #rbrDash .rbrdCh:focus-visible{outline:2px solid var(--blue-600);outline-offset:-1px}
+  #rbrDash .rbrdCh.pass{border-left-color:var(--pass)} #rbrDash .rbrdCh.fail{border-left-color:var(--fail);background:#FEF2F2} #rbrDash .rbrdCh.warn{border-left-color:var(--warn);background:#FFFBEB}
+  #rbrDash .rbrdCh .rbrdX{grid-row:1;grid-column:1;margin:0;padding:0 3px;border:none;background:transparent;font-size:9px;color:#334155;line-height:1.2;cursor:pointer}
+  #rbrDash .rbrdCh .rbrdN{grid-row:1;grid-column:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #rbrDash .rbrdCh .rbrdR{grid-row:1;grid-column:3;white-space:nowrap;color:#334155;font-variant-numeric:tabular-nums}
+  #rbrDash .rbrdCh .rbrdS{grid-row:1;grid-column:4;font-size:7.5pt;font-weight:700;white-space:nowrap}
+  #rbrDash .rbrdCh.pass .rbrdS{color:var(--pass)} #rbrDash .rbrdCh.fail .rbrdS{color:var(--fail)} #rbrDash .rbrdCh.warn .rbrdS{color:var(--warn)} #rbrDash .rbrdCh.na .rbrdS{color:#64748b}
+  #rbrDash .rbrdCh .rbrdV,#rbrDash .rbrdCh .rbrdDC,#rbrDash .rbrdCh .rbrdRef{grid-column:1/-1;display:none;padding-left:16px;overflow-wrap:anywhere}
+  #rbrDash .rbrdCh .rbrdDC,#rbrDash .rbrdCh .rbrdRef{color:#475569;font-size:8pt} #rbrDash .rbrdCh .rbrdRef{font-style:italic}
+  #rbrDash .rbrdCh.rbrdOpen .rbrdV,#rbrDash .rbrdCh.rbrdOpen .rbrdDC,#rbrDash .rbrdCh.rbrdOpen .rbrdRef{display:block}
+  #rbrDash .rbrdCh.rbrdOpen .rbrdN{white-space:normal}
+  .rbrdMsg{grid-column:1/-1;font-size:8.5pt;padding:5px 8px;border:1px solid var(--line);border-left:4px solid var(--fail);background:#FEF2F2;color:#7F1D1D;border-radius:3px}
+}
+@media screen and (min-width:1500px){
+  body.rbrDashWide .layout{grid-template-columns:292px minmax(340px,1fr) 2fr}
+  body.rbrDashWide #rbrDashCol{display:block;height:100%;overflow-y:auto;overflow-x:hidden;position:relative;
+    padding:0 6px 24px;border:1px solid var(--line);border-radius:3px;background:var(--slate-50);overscroll-behavior:contain;font-family:var(--font-ui)}
+  body.rbrDashWide #rbrDashBox{padding:0;border-bottom:0;max-height:none;overflow:visible;background:transparent}
+  body.rbrDashWide #rbrDash{grid-template-columns:minmax(0,1fr)}
+  body.rbrDashWide #rbrDashHead{position:sticky;top:0;z-index:3;background:var(--slate-50);padding:5px 0 4px}
+  body.rbrDashWide.rbrDashColl .layout{grid-template-columns:42px minmax(340px,1fr) 2fr}
+  body.rbrDashWide.rbrDashColl #rbrDashCol{padding:0}
+  body.rbrDashWide.rbrDashColl #rbrDashHead{flex-direction:column;align-items:center}
+  body.rbrDashWide.rbrDashColl #rbrDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);margin:4px 0;white-space:nowrap}
+  body.rbrDashWide.rbrDashColl #rbrDashCnt{flex-direction:column;align-items:center}
+  body.rbrDashWide.rbrDashColl #rbrDashCnt span{font-size:7.5pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
+  body.rbrDashWide #rbrDashCol::-webkit-scrollbar{width:7px}
+  body.rbrDashWide #rbrDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+}
+```
+JS, before `function render(){`:
+```js
+/* RBDC (2026-11-05, engineer): check summary panel, as the Beam Capacity and ASD tabs of Concrete Beam Capacity.html (CBDC #788,
+   ASDC #789) and Spread Footing / Light Pole. One line per check of the summary dashboard (buildDashboard's `checks`, the same
+   values and states): expand button, name, a short value, status. Status: INFO for a length or a limit applied in the
+   calculation; PASS / FAIL for a code check; REVIEW where the dashboard says "verify", "unknown" or "spacing?" (the Report's CHK).
+   The short value is the dashboard's value; for a FAIL / REVIEW line, the condition. FAIL and REVIEW lines start expanded. A line
+   click opens the card where it is worked (rebarGoto, the D11 links). No new calculation. The panel replaces the dashboard box
+   on screen (#dashboard is still written, hidden).
+   On screens >= 1500 px the box is moved into the left column #rbrDashCol; below that it sits above the output tabs.
+   Collapse state: per-browser UI key rebar_dashCollapsed_v1 ('1' = collapsed, '0' or absent = open), shared by the standalone
+   tool and the Development & Splice tab of Concrete Beam Capacity.html; not in the autosave, the saved projects or the export.
+   The standalone tool and the Development & Splice tab carry this same block (CLAUDE.md §3). */
+const RBDC={key:'rebar_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,open:new Map(),coll:false};
+try{ RBDC.coll=localStorage.getItem(RBDC.key)==='1'; }catch(e){}
+const RBDC_ST={pass:'PASS',fail:'FAIL',warn:'REVIEW',na:'INFO'};
+/* name, card (REBAR_CARDS), reference and failing condition of each dashboard check, by the start of its label */
+function rbrDashMeta(lbl,f,val){
+  const A=f.AASHTO;
+  const M=[
+    ['Tension l_d',{card:'tLd',ref:A?'AASHTO 5.10.8.2.1a, Eq. 5.10.8.2.1a-1':'ACI 318-19 Eq. 25.4.2.4a, 25.4.2.1'}],
+    ['Hook l_dh',{card:'hLdh',ref:A?'AASHTO 5.10.8.2.4a, Eq. 5.10.8.2.4a-1':'ACI 318-19 Eq. 25.4.3.1'}],
+    ['Comp. l_dc',{card:'cLdc',ref:A?'AASHTO 5.10.8.2.2a':'ACI 318-19 25.4.9.2'}],
+    ['Tension splice',{card:'tsLen',ref:A?'AASHTO 5.10.8.4.3a':'ACI 318-19 25.5.2'}],
+    ['Comp. splice',{card:'csLen',ref:A?'AASHTO 5.10.8.4.5a':'ACI 318-19 25.5.5.1'}],
+    ['λ_rc',{card:'tConfA',ref:'AASHTO 5.10.8.2.1c'}],
+    ['(c_b+K_tr)/d_b',{card:'tConf',ref:'ACI 318-19 25.4.2.4'}],
+    ["f'c within code range",{card:null,tab:'tension',ref:A?'AASHTO 5.10.8.2.1, C5.10.8.2.4':'ACI 318-19 25.4.1.4',cond:'out of range'}],
+    ['λ_rl·λ_cf',{card:'tLd',ref:'AASHTO 5.10.8.2.1b'}],
+    ['ψ_t·ψ_e',{card:'tLd',ref:'ACI 318-19 25.4.2.4'}],
+    ['Class A splice eligible',{card:'tsClassA',ref:A?'AASHTO 5.10.8.4.3a':'ACI 318-19 25.5.2.1',cond:val==='unknown'?'A_s,req not entered':'not eligible'}],
+    ['K_tr ≥ 0.5d_b',{card:'tConf',ref:'ACI 318-19 25.4.2.2',cond:val==='spacing?'?'spacing not entered':'K_tr < 0.5d_b'}],
+    ['Lap splice permitted',{card:'tsLen',ref:lapRef(f),cond:'not permitted'}],
+    ['#3 transverse',{card:'tLd',ref:'AASHTO 5.10.8.2.1, 5.10.8.4.3, 5.10.8.2.4b',cond:'verify'}],
+    ['Transverse reinf.',{card:'tLd',ref:'AASHTO 5.10.8.2.1, 5.10.8.4, 5.10.8.2.4',cond:'verify'}]];
+  const m=M.find(x=>lbl.indexOf(x[0])===0);
+  return m?m[1]:{card:null,tab:'tension',ref:''};
+}
+function rbrDashGo(it){
+  if(it.card) rebarGoto(it.card);
+  else if(it.tab){ switchTab(it.tab); const tc=document.getElementById('tabcontent'); if(tc) tc.scrollTop=0; }
+}
+function rbrDashRender(checks,f){
+  const box=document.getElementById('rbrDash'), cnt=document.getElementById('rbrDashCnt'); if(!box) return;
+  box.innerHTML='';
+  const n={fail:0,warn:0};
+  const tmp=document.createElement('div');
+  const txt=h=>{ tmp.innerHTML=String(h); return tmp.textContent; };
+  (checks||[]).forEach(k=>{
+    const val=txt(k.val), name=txt(k.lbl), m=rbrDashMeta(k.lbl,f,val);
+    const st=k.info?'na':(k.ok?'pass':((val==='verify'||val==='unknown'||val==='spacing?')?'warn':'fail'));
+    if(n[st]!=null) n[st]++;
+    const short=(st==='fail'||st==='warn')&&m.cond?m.cond:val;
+    const wh=m.card&&REBAR_CARDS[m.card]?'→ '+rebarCardTxt(m.card):(m.tab?'→ '+rebarTabName(m.tab):'');
+    const c=document.createElement('div'); c.className='rbrdCh '+st; c.tabIndex=0; c.setAttribute('role','button');
+    const add=(tag,cls,t)=>{ const e=document.createElement(tag); e.className=cls; e.textContent=t; c.appendChild(e); return e; };
+    const x=add('button','rbrdX',''); x.type='button'; x.title='Show the value and the reference';
+    add('span','rbrdN',name); add('span','rbrdR',short); add('span','rbrdS',RBDC_ST[st]);
+    add('div','rbrdV',name+': '+val+(k.info?' (information)':''));
+    add('div','rbrdRef',(m.ref||'')+(m.ref&&wh?' · ':'')+wh);
+    c.title=name+': '+val+(m.ref?'\nReference: '+m.ref:'')+(wh?'\nClick: '+wh:'');
+    const setOpen=o=>{ c.classList.toggle('rbrdOpen',o); x.setAttribute('aria-expanded',o?'true':'false'); x.textContent=o?'▾':'▸'; };
+    setOpen(RBDC.open.has(name)?RBDC.open.get(name):(st==='fail'||st==='warn'));
+    x.addEventListener('click',ev=>{ ev.preventDefault(); ev.stopPropagation(); const o=!c.classList.contains('rbrdOpen'); RBDC.open.set(name,o); setOpen(o); });
+    const go=()=>rbrDashGo({card:m.card,tab:m.tab});
+    c.addEventListener('click',go);
+    c.addEventListener('keydown',ev=>{ if((ev.key==='Enter'||ev.key===' ')&&ev.target===c){ ev.preventDefault(); go(); } });
+    box.appendChild(c);
+  });
+  if(cnt) cnt.innerHTML=(n.fail?'<span class="rbrdCf">'+n.fail+' NG</span>':'')+(n.warn?'<span class="rbrdCw">'+n.warn+' REVIEW</span>':'')
+    +(!n.fail&&!n.warn?'<span class="rbrdCp">no NG</span>':'');
+}
+function rbrDashPlace(){
+  const box=document.getElementById('rbrDashBox'), col=document.getElementById('rbrDashCol'), op=document.querySelector('.outputpanel'), tabs=document.getElementById('tabs');
+  if(!box||!col||!op) return;
+  const wide=!!(RBDC.mq&&RBDC.mq.matches);
+  document.body.classList.toggle('rbrDashWide',wide);
+  if(wide){ if(box.parentNode!==col) col.appendChild(box); }
+  else if(box.parentNode!==op) op.insertBefore(box,tabs||op.firstChild);
+  rbrDashColl(RBDC.coll,false);
+}
+function rbrDashColl(v,save){
+  RBDC.coll=!!v; document.body.classList.toggle('rbrDashColl',RBDC.coll);
+  const t=document.getElementById('rbrDashTgl'), wide=document.body.classList.contains('rbrDashWide');
+  if(t){ t.setAttribute('aria-expanded',RBDC.coll?'false':'true');
+    t.innerHTML=wide?(RBDC.coll?'&raquo;':'&laquo;'):(RBDC.coll?'&#9656; Show checks':'&#9662; Hide checks');
+    t.title=(RBDC.coll?'Show':'Hide')+' the check list (remembered in this browser)'; }
+  if(save){ try{ localStorage.setItem(RBDC.key,RBDC.coll?'1':'0'); }catch(e){} }
+}
+(function(){
+  const t=document.getElementById('rbrDashTgl'); if(t) t.addEventListener('click',()=>rbrDashColl(!RBDC.coll,true));
+  if(RBDC.mq){ if(RBDC.mq.addEventListener) RBDC.mq.addEventListener('change',rbrDashPlace); else if(RBDC.mq.addListener) RBDC.mq.addListener(rbrDashPlace); }
+  rbrDashPlace();
+})();
+```
