@@ -1869,3 +1869,47 @@ function rbrDashColl(v,save){
 - **Check case:** default "CHECKS — ACI 318-19" (upper case by the CSS); AASHTO "CHECKS — AASHTO LRFD 10TH ED. §5.10.8".
 - **How verified:** headless Chromium, origin/main vs branch, 5 cases: calculations, `rbrModel()` identical; the only text difference is the title. `check-syntax`, `phone-layout --tool cbc,aci`, `project-library` pass.
 - **Other copies:** `Concrete Beam Capacity.html` (suite-frame-dev), same edit; see its fixlog (CBRL / RBDT).
+
+## 2026-11-05 — PR: claude/cbc-p3-inputs, PR #794: https://github.com/mlococo88/All-Structural/pull/794 (RBCM: inputs used by one code only are hidden in the other code mode; RBIE: required inputs marked, "Input error: no results" instead of NaN; kept in step with the Development & Splice tab of Concrete Beam Capacity.html)   [behaviour change: when results are shown; no formula change]
+
+### RBCM. Inputs by code mode   [display only]
+- **Problem (audit item 13):** in ACI mode the AASHTO-only inputs β_t (`betaT`, 5.10.8.2.1c) and the bend radius R (`hookR`, 5.10.8.2.4a) were shown. In AASHTO mode the ACI-only inputs were shown: hook location ψ_o (`hookLoc`, Table 25.4.3.2), compression ψ_r (`psiRc`, Table 25.4.9.3) and the developed-bar c-c spacing (`barSpc`, 25.4.2.2). Each is read by its own code branch only (`computeFactors`, `calcHook`, `calcComp`, `ktrHSCheck`).
+- **Mechanism (Light Pole LTS-L1 #743 pattern):** CSS classes only. The nodes stay in the page with their ids and values. `readInputs()` and the autosave read them as before, so a value hidden in one mode reappears in the other.
+- **Where:**
+  - `buildInputPanel()`: `<div class="field" style="margin-top:8px"><label>&beta;<sub>t</sub>` becomes `<div class="field rbAashOnly" …`, and the same for `Bend radius R`.
+  - `<div class="field" style="margin-top:8px"><label>Developed bars c-c spacing` becomes `<div class="field rbAciOnly" …`, and the same for `<div class="field"><label>Location (&psi;<sub>o</sub>)</label>` and `<div class="field"><label>Confining Reinforcement (&psi;<sub>r</sub>, ACI Table 25.4.9.3)</label>`.
+  - `updateCodeHint(inp)` (called on every render): first line added, `document.body.classList.toggle('rbAASHTO',inp.code==="AASHTO");`.
+  - CSS (end of the first `<style>`): `body.rbAASHTO .rbAciOnly{display:none!important}` and `body:not(.rbAASHTO) .rbAashOnly{display:none!important}`.
+  - `rebarInputTabMarks()`: a `badInput` box hidden by the code mode no longer puts a red dot on its tab.
+  - The E2 panel keeps its hint in AASHTO mode: λ_rc and λ are not applied to compression development.
+  - Splices hint: "from the Excess Reinforcement panel:" becomes "from the Excess Reinforcement panel (D2, Tension tab):".
+
+### RBIE. Required inputs   [behaviour change: when results are shown]
+- **Problem:** a blank required box gave NaN or ∞ in the lengths, the dashboard and the Report:
+  - f′c blank: every length "—" or NaN, plus NaN SVG errors;
+  - A_tr blank: NaN;
+  - A_s,req blank with the excess box ticked: NaN;
+  - ACI with c_b = 0 and K_tr = 0: ℓ_d = ∞.
+  
+  Some other blanks silently gave no credit or no reduction: s or n blank with A_tr > 0, and A_s,prov blank with the excess box ticked.
+- **Where:**
+  - New `rbInputErrors(inp,f)`, `rbInputMarks(E)` and `rbInputErrHTML(E)` before `function render(){` (anchor `/* RBIE (2026-11-05, engineer)`). The required inputs are:
+    - f′c > 0;
+    - c_b entered and ≥ 0, and in ACI mode c_b + K_tr > 0 (AASHTO: c_b = 0 is the documented "no λ_rc credit" case and stays valid);
+    - A_tr entered and ≥ 0;
+    - with A_tr > 0, s and n entered;
+    - with the excess box ticked, A_s,req entered and ≥ 0, and A_s,prov entered;
+    - with Class A, % spliced between 0 and 100.
+  - The optional boxes keep their documented blank behaviour: c-c spacing, β_t, R and λ.
+  - `render()`: after `const w = validate(inp,f);` added `const ie = rbInputErrors(inp,f); rbInputMarks(ie);`. Before `let body = "";` added: if `ie.length`, the output tab shows "Input error: no results." with the list, and the chart is not drawn.
+  - `buildDashboard(inp,f)`: on an input error it writes no values and calls `rbrDashRender(null,f,ie)`.
+  - `rbrDashRender(checks,f)` becomes `rbrDashRender(checks,f,ie)`. With `ie` it shows "Input error: no results. … Correct the marked inputs." and the count "input error".
+  - `rbrModel()`: on an input error it returns a one-section model, "No results / Input error, no results: …", instead of printing NaN.
+  - `rebarInputTabMarks()` also marks `.rbInErr`. The CSS adds `.field input.rbInErr`, `.rbInErrMsg`, and at ≤ 600 px `.field input[type=number][placeholder]{width:150px;}`, so the bend radius and spacing labels are not clipped on a phone.
+- **Check case:**
+  - f′c blank: before "Tension l_d — in" (NaN) on the tab and in the panel; after "Input error: no results. f′c must be greater than 0." in the output, the panel and the Report, the box outlined, and a red dot on Code & Material.
+  - ACI, c_b = 0, A_tr = 0: before ℓ_d = Infinity; after "c_b must be greater than 0 when K_tr = 0 …".
+  - AASHTO, c_b = 0: no error, results as before.
+  - Default and valid inputs: identical.
+- **How verified:** see the CBIE entry in `fixlog/Concrete Beam Capacity.md`. Here, standalone: calculations and `rbrModel()` are identical to origin/main in 5 cases. The Report tab with f′c blank shows the input error, and after a valid value it shows results again with no marks left.
+- **Other copies:** `Concrete Beam Capacity.html` (suite-frame-dev), with the same edits.

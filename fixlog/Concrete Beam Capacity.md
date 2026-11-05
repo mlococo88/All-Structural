@@ -3456,6 +3456,167 @@ function rbrDashColl(v,save){
   }
 ```
 
+   CBOV (2026-11-05): the figures of the overview at the start of the suite's Report (the shell's cbovSection): the
+   cross-section of the Input Echo / Visuals tabs (svgSection, the governing sense of bending) and the stirrup elevation
+   (svgElevation), each with a scale bar added below it (one scale across and up: CBOV.sec / CBOV.elev, recorded by those
+   functions), and a snapshot of the Visuals tab's 3-D view (cbc3DScene, the same scene) rendered once more off screen at
+   the view's start camera with every layer on. Display only; nothing is saved (the snapshot is cached in memory until
+   the inputs change). The Include box is S.ui.rptOpts.ov (cbcRxSel / cbcRxSet; absent = on).
+   ===================================================================== */
+/* a scale bar under an svg string drawn at sc px per in, viewBox 0 0 W H: the box grows by 34 px */
+function cbcOvBar(svg,d){
+  if(!svg||!d||!(d.sc>0)) return svg;
+  const want=d.W*0.22/d.sc, L=[1,2,3,4,6,12,18,24,36,48,60,96,120].filter(x=>x<=want).pop()||1, w=L*d.sc, x0=12, y=d.H+14;
+  const lab=L%12===0?(L/12)+' ft ('+L+' in)':L+' in';
+  let b='<g font-family="Arial,Helvetica,sans-serif" font-size="9" fill="#0F172A">';
+  b+='<rect x="'+x0+'" y="'+y+'" width="'+(w/2)+'" height="5" fill="#0F172A"/><rect x="'+(x0+w/2)+'" y="'+y+'" width="'+(w/2)+'" height="5" fill="#fff" stroke="#0F172A" stroke-width="0.8"/>';
+  b+='<rect x="'+x0+'" y="'+y+'" width="'+w+'" height="5" fill="none" stroke="#0F172A" stroke-width="0.8"/>';
+  b+='<text x="'+x0+'" y="'+(y+15)+'">0</text><text x="'+(x0+w)+'" y="'+(y+15)+'" text-anchor="middle">'+lab+'</text>';
+  b+='<text x="'+(x0+w+28)+'" y="'+(y+6)+'">scale bar: the drawing is to scale, the same scale across and up</text></g>';
+  return svg.replace('viewBox="0 0 '+d.W+' '+d.H+'"','viewBox="0 0 '+d.W+' '+(d.H+34)+'"').replace(/<\/svg>\s*$/,b+'</svg>');
+}
+function cbcOvSnap3D(neg){
+  if(!window.THREE) return {note:'three.js could not be loaded from its CDN, so the 3-D view is not included.'};
+  const key=JSON.stringify([S.sec,S.layers,S.stir,S.cover,S.layerClear,neg]);
+  if(CBOV.snapKey===key&&CBOV.snap) return CBOV.snap;
+  let out, R=null;
+  try{
+    const cv=document.createElement('canvas'), W=1000, H=600;
+    R=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});
+    R.setSize(W,H,false); R.setClearColor(0xffffff);
+    const {scene,Lb}=cbc3DScene(neg,0.45,{}), h=S.sec.h;
+    const cam=new THREE.PerspectiveCamera(40,W/H,1,4000), r=Math.max(Lb,h)*1.15, t=0.7, p=0.35;   /* the 3-D view's start angles (VIS3D defaults), closer than its start distance (1.7) so the beam fills the image */
+    cam.position.set(r*Math.cos(p)*Math.sin(t), r*Math.sin(p), r*Math.cos(p)*Math.cos(t)); cam.lookAt(0,0,0);
+    R.render(scene,cam);
+    const url=cv.toDataURL('image/png');
+    out=(url.length>6000)?{url,W,H,Lb}:{note:'the 3-D view rendered blank (WebGL not available in this browser), so it is not included.'};
+  }catch(e){ out={note:'WebGL is not available in this browser, so the 3-D view is not included.'}; }
+  finally{ try{ if(R){ R.dispose(); if(R.forceContextLoss) R.forceContextLoss(); } }catch(e){} }
+  CBOV.snap=out; CBOV.snapKey=key; return out;
+}
+function cbcOvFigs(){
+  if(!CC||!CC.combos||!CC.combos.length) return null;
+  if(VALIDATION&&VALIDATION.blockers&&VALIDATION.blockers.length) return {blocked:true};   /* as the check summary panel: no drawing from invalid input */
+  const neg=CC.govRow?CC.govRow.neg:false, P=S.sec;
+  CBOV.sec=null; CBOV.elev=null;
+  const sec=cbcOvBar(svgSection(neg),CBOV.sec), e=svgElevation(), elev=e?cbcOvBar(e,CBOV.elev):null;
+  return {neg,tee:P.type==='tee',bw:P.bw,h:P.h,bf:P.bf,hf:P.hf,sec,elev,stir:!!S.stir.present,s:S.stir.s,snap:cbcOvSnap3D(neg),
+    gov:CC.govRow?'Combination '+(CC.govRow.ci+1)+' ('+CC.govRow.name+')':''};
+}
+```
+#### Code added — shell
+```js
+  /* ---------- CBOV (2026-11-05): "Overview of the beam", the Report's section 2, after the Summary of results (as Spread
+     Footing SFOV #780): the cross-section with its reinforcement and dimensions, the stirrup elevation (each to scale, with a
+     scale bar) and a snapshot of the Visuals tab's 3-D view, from the Beam Capacity tab (cbcOvFigs). Include box "Overview
+     figures" on the report bar (the tab's S.ui.rptOpts.ov, default on); off, the section stays as one line, so the numbers
+     after it do not move. Display only. ---------- */
+  var CBOV_N=0;
+  function cbovUniq(svg){   /* the copies get their own ids (marker / gradient references resolve inside the copy, also in print) */
+    var n=++CBOV_N, ids=[]; String(svg).replace(/\sid="([^"]+)"/g,function(m,id){ ids.push(id); return m; });
+    ids.forEach(function(id){ var e=id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      svg=svg.replace(new RegExp('id="'+e+'"','g'),'id="'+id+'-ov'+n+'"').replace(new RegExp('url\\(#'+e+'\\)','g'),'url(#'+id+'-ov'+n+')').replace(new RegExp('href="#'+e+'"','g'),'href="#'+id+'-ov'+n+'"'); });
+    return svg;
+  }
+  function cbovSection(){
+    var S0={title:'Overview of the beam',key:'cbov',_ch:'ov',subs:[]}, c=RXCH[0], sl=rxFn(c,'Sel'), on=true, w=win('capacity'), F=null;
+    try{ on=!sl||sl().ov!==false; }catch(e){}
+    if(!on){ S0.note='Not included in this report: the Include box “Overview figures” on the report bar is off.'; return S0; }
+    try{ F=w&&typeof w.cbcOvFigs==='function'?w.cbcOvFigs():null; }catch(e){ F=null; }
+    if(!F){ S0.note='No overview: the Beam Capacity tab has no results (it has not finished loading, or its inputs need correcting).'; return S0; }
+    if(F.blocked){ S0.note='No overview: input invalid on the Beam Capacity tab (see its output panel), so the beam is not drawn.'; return S0; }
+    var f2=function(x){ return (Math.round(x*100)/100).toFixed(2); };
+    var dims='$b_{w}$ × h = '+f2(F.bw)+' × '+f2(F.h)+' in'+(F.tee?', $b_{f}$ × $h_{f}$ = '+f2(F.bf)+' × '+f2(F.hf)+' in (T-beam)':'');
+    var sense=F.neg?'negative moment, top face in tension':'positive moment, bottom face in tension';
+    S0.note='The beam as entered on the Beam Capacity tab, for orientation; the checks are worked in the chapters below.';
+    S0.subs.push({title:'Cross-section',items:[{type:'figure',svg:cbovUniq(F.sec).replace('<svg ','<svg style="max-width:420px" '),caption:'Cross-section, '+dims+': reinforcement as entered, to scale (scale bar), for the governing sense of bending ('+sense+(F.gov?'; '+F.gov:'')+'). Dimensions in inches; d of each layer from the extreme compression fibre. Inputs: [[cbro:cap:tabInputEcho]]. [[tab:cap/tabInputEcho|On screen: Input Echo tab]]'}]});
+    S0.subs.push({title:'Elevation',items:F.elev?[{type:'figure',svg:cbovUniq(F.elev),caption:'Elevation of a short run of the beam: closed stirrups at s = '+f2(F.s)+' in, to scale (scale bar); the green band is the permitted spacing range (s_max; Detailing: [[cbro:cap:tabDetail]]). [[tab:cap/tabInputEcho|On screen: Input Echo tab]]'}]
+      :[{type:'note',text:'No elevation: '+(F.stir?'no results.':'the section has no stirrups (transverse reinforcement), so there is no stirrup layout to draw.')}]});
+    var P=F.snap||{};
+    S0.subs.push({title:'3-D view',items:P.url?[{type:'figure',svg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+P.W+' '+P.H+'"><image href="'+P.url+'" x="0" y="0" width="'+P.W+'" height="'+P.H+'"/></svg>',
+        caption:'3-D view of the Visuals tab at its start angles (closer in): every layer on (concrete 45 % opaque, tension bars red, compression bars blue, stirrups grey). The length shown ('+Math.round(P.Lb)+' in) is illustrative: the tool checks a cross-section, not a span. [[tab:cap/tabVisuals|On screen: Visuals tab]]'}]
+      :[{type:'note',text:'3-D view not included: '+(P.note||'it could not be rendered.')+' The cross-section above shows the same reinforcement to scale.'}]});
+    return S0;
+  }
+```
+=======
+## 2026-11-05 — PR: claude/cbc-p3-inputs, PR #794: https://github.com/mlococo88/All-Structural/pull/794 (Phase 3 input layout: CBIE / ASIE required inputs marked, "Input error: no results" instead of NaN; RBCM inputs by code mode in Development & Splice; RBIE required inputs in Development & Splice; §6 links on the Visuals captions and the ASD "From Beam Capacity" table)   [behaviour change: when results are shown; no formula change]
+
+Engineer request (2026-11-05, Phase 3 of the concrete beam suite update, display / workflow only). The edits to the Development & Splice frame are the same as in `ACI Rebar Development Length.html` (CLAUDE.md §3) and are logged in full in `fixlog/ACI Rebar Development Length.md` (RBCM, RBIE). Results are unchanged whenever the inputs are valid.
+
+### CBIE. Beam Capacity frame: required inputs   [behaviour change: when results are shown]
+- **Problem:** a blank number box is stored as 0 (`numIn`: `set(isNaN(v)?0:v)`). For f′c, f_y, f_yt and λ this was not a blocker. The tab showed results built on 0. Default section, M_u 60 / V_u 20:
+  - f′c = 0: D/C = ∞ for shear and torsion, "9 NG";
+  - f_y = 0: φM_n = 0;
+  - f_yt = 0: combined V+T D/C = ∞;
+  - λ = 0: V_c = 0.
+  
+  The browser console also reported NaN SVG coordinates. A blank b_w was a blocker, but the box was not marked, and the warning "h/b_w = — is unusually slender" was shown beside the blocker.
+- **Where (Beam Capacity srcdoc page):**
+  - `validate()`, after `if(bw<=0||h<=0) B.push({code:"Geometry",msg:"Beam width and depth must be positive."});`, four new blockers with code "Materials":
+    ```js
+    if(!(fc>0)) B.push({code:"Materials",msg:"Concrete strength f′c must be greater than 0."});
+    if(!(fy>0)) B.push({code:"Materials",msg:"Yield strength f_y must be greater than 0."});
+    if(!(S.mat.fyt>0)) B.push({code:"Materials",msg:"Transverse yield strength f_yt must be greater than 0."});
+    if(!(S.mat.lambda>0)) B.push({code:"Materials",msg:"λ must be greater than 0 (1.0 for normal-weight concrete)."});
+    ```
+  - `validate()`: changed `if(h/bw>6) W.push({code:"Proportion",` to `if(bw>0&&h>0&&h/bw>6) W.push({code:"Proportion",`. This changes only the warning list while a geometry blocker stands.
+  - `RCB_IN_BLOCK`: added `[b=>b.code==='Materials','inMat']`, so the Materials & Cover input tab gets the red dot.
+  - `buildInput()`: before `rcbInputTabs(P);`, added `cbcInputMarks(P);`. New functions `cbcInputErrs()` and `cbcInputMarks(P)` follow `buildInput()` (anchor `/* CBIE (2026-11-05, engineer)`).
+    - They check, field by field, the input blockers of `validate()`: b_w, h, b_f and h_f (T-beam), f′c, f_y, f_yt, λ, stirrup spacing s (stirrups present) and each layer depth d.
+    - A failing box gets class `cbcInErr` and `aria-invalid`. Its reason goes in a `div.cbcInErrMsg` under the row (under the layer table for a layer depth).
+    - `validate()` still decides whether results are withheld.
+  - CSS, end of the first `<style>`: `#inputPanel input.cbcInErr{…}`, `.cbcInErrMsg{…}`, and `@media print{.cbcInErrMsg{display:none}}`.
+  - `cbcDashRender()` (CBDC check summary panel), while blocked:
+    - before: "Input invalid: output withheld. See the message in the output panel." with the count "input invalid";
+    - after: "Input error: no results. <the blocker messages> Correct the marked inputs." with the count "input error".
+  - Torsion input card note: "T_u is entered per load combination below." is now "… on the Loads tab." The combinations are on another input tab.
+- **Check case:** default project, f′c = 0. Before: results shown with D/C = ∞, "9 NG". After: status "INPUT INVALID", output "Output withheld — Materials — Concrete strength f′c must be greater than 0.", panel "Input error: no results. …", f′c box outlined with "f′c must be greater than 0." under it, red dot on Materials & Cover. f_y, f_yt, λ = 0: the same, each with its own message. b_w = 0: the box is now marked "Web width b_w must be greater than 0." and the slender warning is gone. Valid inputs: no change.
+
+### ASIE. ASD Beam Calcs frame: allowables required; §6 link back to Beam Capacity   [behaviour change: when results are shown]
+- **Problem:** a blank allowable stress (f_c,inv, f_s,inv, f_c,op, f_s,op) was stored as 0. That gave M = 0 and a negative rating factor with no error. The "From Beam Capacity" table (d, A_s) did not link to the place where those values are worked (audit item 9).
+- **Where (ASD srcdoc page):**
+  - `asdInputErrors()` is renamed `asdInheritErrors()`, with the body unchanged (the inherited f′c, f_y, d and b checks).
+  - New `asdAllowErrs()` checks the levels shown (`S.mode.inv`, `S.mode.op`): each allowable must be > 0.
+  - New `asdInputMarks(b)`.
+  - The new `asdInputErrors()` is `asdInheritErrors().concat(asdAllowErrs().map(x=>x[1]))`, so `compute()` returns `{errors}` for both kinds.
+  - The "From Beam Capacity" card's error box now uses `asdInheritErrors()`. The Allowable Stresses card calls `asdInputMarks(b)` after the Recompute button: red outline plus `.asdInErrMsg`.
+  - `asdInputTabMarks()` also marks `.asdInErrMsg`.
+  - Messages:
+    - output error box: "Correct the value in the Beam Capacity tab." or, for an allowable, "Correct the marked input on the Allowables tab.";
+    - status chip tooltip: "No results: an input is blank or zero.";
+    - check summary panel: "Input error: no results. <messages> …".
+  - §6 link: in the suite (`window.parent!==window`), under the table there is a line "Worked in: d, A_s → Beam Capacity · Flexure · Section Flexural Capacity — Positive & Negative (f′c, f_y, b, h: Beam Capacity inputs)". A click posts `{type:'cbcGoto',tab:'tabFlex',card:'flexBoth'}` to the shell.
+- **Shell:** the message filter `if(d.type==='cbcGoto' && e.source!==src('suite-frame-dev')) return;` also accepts the ASD frame: `… && e.source!==src('suite-frame-asd')) return;`. The shell then shows the Beam Capacity tab and relays the message as for the Development & Splice links (CBAR-1). The card `flexBoth` tabulates d and A_s for both senses.
+- **Check case:** default project with f_s,op typed as 0. Before: RF_op from M_op = 0 (negative), no error. After: "Input error — no results. Operating steel allowable f_s,op must be greater than 0." in the output and the panel, the box marked, a red dot on Allowables, and the Report "Input error, no results: …". A click on the link opens Beam Capacity · Flexure with that card (checked headless: active suite tab "capacity", `S.ui.tab` "tabFlex").
+
+### CBIE §6 links on the Visuals tab   [display only]
+`cbcWorkedIn` lines added under the captions:
+- Cross-section schematic: "d, A_s → Flexure · Combination k".
+- Strain diagram: "c, ε_t, f_s → Flexure · Combination k". k is the combination chosen in the Visuals selector (`S.ui.detailCombo`).
+- Stirrup elevation: "s_max → Detailing · Maximum stirrup spacing", or "… · Maximum closed-stirrup spacing for torsion" when `govSmaxInfo()` names torsion.
+- D/C chart: "D/C → Summary · All Combinations × Limit States".
+
+### Input placement review (all three frames)   [Decision (pending engineer review)]
+- Reviewed each input tab at 1600 and 390 px. Units stay on their line in every frame. In Development & Splice the two wide optional boxes (bar c-c spacing, bend radius R) are 150 px on screens up to 600 px wide (RBIE CSS), so their label and unit no longer clip.
+- Decision (pending engineer review): no input was moved between tabs.
+  - Beam Capacity: Section / Materials & Cover / Reinforcement / Checks (torsion with A_ℓ, crack control) / Loads / Assumptions.
+  - ASD: Mode & Section / Allowables / Loads.
+  - Development & Splice: the development options sit together. Tension holds the factors, confinement and excess reinforcement; Hook & Comp. holds the hook and compression factors; Splices holds the splices.
+  - Only two cross-references were corrected: the torsion note now points to the Loads tab, and the Splices hint now names "Excess Reinforcement panel (D2, Tension tab)".
+- Decision (pending engineer review): the Beam Capacity Design Code stays in the header project grid, as in the ASD frame, rather than moving to an input tab. It governs every tab.
+- Decision (pending engineer review): λ is blocked only at ≤ 0. A value above 1.0 or below 0.75 is still accepted as before. Should the code range (ACI Table 19.2.4.2, AASHTO 5.4.2.8) be a blocker?
+
+### Saved data, verification
+- **Saved data:** no key or format changed. The hidden inputs keep their values and are saved as before.
+- **How verified:**
+  - Headless Chromium, origin/main (after #793) vs branch, 5 cases (default, AASHTO f_yt 100, ACI with torsion, excess reinforcement ACI and AASHTO), for the suite and the standalone ACI Rebar tool:
+    - `computeAll()`, `allChecks()`, `cbcRptModel()`, `asdRptModel()`, the Dev calculations and `rbrModel()` are identical;
+    - the tab text differs only by the new "Worked in" lines;
+    - 0 console errors.
+  - The invalid cases above were probed headless. A suite Report with blocked inputs shows "No results" and no NaN.
+  - `node tests/check-syntax.mjs`, `node tests/smoke/phone-layout.mjs --tool cbc,aci` and `node tests/smoke/project-library.mjs` pass.
+  - Screenshots looked at: Dev Tension and Hook & Comp. tabs in ACI and AASHTO at 1600 and 390 px; the error states in all three frames; the Visuals captions; the ASD link.
 
 ## 2026-11-05 — PR: claude/cbc-report-overview (CBOV: "Overview of the beam" at the start of the suite Report — cross-section, stirrup elevation, 3-D snapshot; Include box "Overview figures"; display only, no result change)
 
@@ -3549,87 +3710,4 @@ function cbc3DScene(neg,opacity,mats){
 }
 ```
 ```js
-/* =====================================================================
-   CBOV (2026-11-05): the figures of the overview at the start of the suite's Report (the shell's cbovSection): the
-   cross-section of the Input Echo / Visuals tabs (svgSection, the governing sense of bending) and the stirrup elevation
-   (svgElevation), each with a scale bar added below it (one scale across and up: CBOV.sec / CBOV.elev, recorded by those
-   functions), and a snapshot of the Visuals tab's 3-D view (cbc3DScene, the same scene) rendered once more off screen at
-   the view's start camera with every layer on. Display only; nothing is saved (the snapshot is cached in memory until
-   the inputs change). The Include box is S.ui.rptOpts.ov (cbcRxSel / cbcRxSet; absent = on).
-   ===================================================================== */
-/* a scale bar under an svg string drawn at sc px per in, viewBox 0 0 W H: the box grows by 34 px */
-function cbcOvBar(svg,d){
-  if(!svg||!d||!(d.sc>0)) return svg;
-  const want=d.W*0.22/d.sc, L=[1,2,3,4,6,12,18,24,36,48,60,96,120].filter(x=>x<=want).pop()||1, w=L*d.sc, x0=12, y=d.H+14;
-  const lab=L%12===0?(L/12)+' ft ('+L+' in)':L+' in';
-  let b='<g font-family="Arial,Helvetica,sans-serif" font-size="9" fill="#0F172A">';
-  b+='<rect x="'+x0+'" y="'+y+'" width="'+(w/2)+'" height="5" fill="#0F172A"/><rect x="'+(x0+w/2)+'" y="'+y+'" width="'+(w/2)+'" height="5" fill="#fff" stroke="#0F172A" stroke-width="0.8"/>';
-  b+='<rect x="'+x0+'" y="'+y+'" width="'+w+'" height="5" fill="none" stroke="#0F172A" stroke-width="0.8"/>';
-  b+='<text x="'+x0+'" y="'+(y+15)+'">0</text><text x="'+(x0+w)+'" y="'+(y+15)+'" text-anchor="middle">'+lab+'</text>';
-  b+='<text x="'+(x0+w+28)+'" y="'+(y+6)+'">scale bar: the drawing is to scale, the same scale across and up</text></g>';
-  return svg.replace('viewBox="0 0 '+d.W+' '+d.H+'"','viewBox="0 0 '+d.W+' '+(d.H+34)+'"').replace(/<\/svg>\s*$/,b+'</svg>');
-}
-function cbcOvSnap3D(neg){
-  if(!window.THREE) return {note:'three.js could not be loaded from its CDN, so the 3-D view is not included.'};
-  const key=JSON.stringify([S.sec,S.layers,S.stir,S.cover,S.layerClear,neg]);
-  if(CBOV.snapKey===key&&CBOV.snap) return CBOV.snap;
-  let out, R=null;
-  try{
-    const cv=document.createElement('canvas'), W=1000, H=600;
-    R=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});
-    R.setSize(W,H,false); R.setClearColor(0xffffff);
-    const {scene,Lb}=cbc3DScene(neg,0.45,{}), h=S.sec.h;
-    const cam=new THREE.PerspectiveCamera(40,W/H,1,4000), r=Math.max(Lb,h)*1.15, t=0.7, p=0.35;   /* the 3-D view's start angles (VIS3D defaults), closer than its start distance (1.7) so the beam fills the image */
-    cam.position.set(r*Math.cos(p)*Math.sin(t), r*Math.sin(p), r*Math.cos(p)*Math.cos(t)); cam.lookAt(0,0,0);
-    R.render(scene,cam);
-    const url=cv.toDataURL('image/png');
-    out=(url.length>6000)?{url,W,H,Lb}:{note:'the 3-D view rendered blank (WebGL not available in this browser), so it is not included.'};
-  }catch(e){ out={note:'WebGL is not available in this browser, so the 3-D view is not included.'}; }
-  finally{ try{ if(R){ R.dispose(); if(R.forceContextLoss) R.forceContextLoss(); } }catch(e){} }
-  CBOV.snap=out; CBOV.snapKey=key; return out;
-}
-function cbcOvFigs(){
-  if(!CC||!CC.combos||!CC.combos.length) return null;
-  if(VALIDATION&&VALIDATION.blockers&&VALIDATION.blockers.length) return {blocked:true};   /* as the check summary panel: no drawing from invalid input */
-  const neg=CC.govRow?CC.govRow.neg:false, P=S.sec;
-  CBOV.sec=null; CBOV.elev=null;
-  const sec=cbcOvBar(svgSection(neg),CBOV.sec), e=svgElevation(), elev=e?cbcOvBar(e,CBOV.elev):null;
-  return {neg,tee:P.type==='tee',bw:P.bw,h:P.h,bf:P.bf,hf:P.hf,sec,elev,stir:!!S.stir.present,s:S.stir.s,snap:cbcOvSnap3D(neg),
-    gov:CC.govRow?'Combination '+(CC.govRow.ci+1)+' ('+CC.govRow.name+')':''};
-}
-```
-#### Code added — shell
-```js
-  /* ---------- CBOV (2026-11-05): "Overview of the beam", the Report's section 2, after the Summary of results (as Spread
-     Footing SFOV #780): the cross-section with its reinforcement and dimensions, the stirrup elevation (each to scale, with a
-     scale bar) and a snapshot of the Visuals tab's 3-D view, from the Beam Capacity tab (cbcOvFigs). Include box "Overview
-     figures" on the report bar (the tab's S.ui.rptOpts.ov, default on); off, the section stays as one line, so the numbers
-     after it do not move. Display only. ---------- */
-  var CBOV_N=0;
-  function cbovUniq(svg){   /* the copies get their own ids (marker / gradient references resolve inside the copy, also in print) */
-    var n=++CBOV_N, ids=[]; String(svg).replace(/\sid="([^"]+)"/g,function(m,id){ ids.push(id); return m; });
-    ids.forEach(function(id){ var e=id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
-      svg=svg.replace(new RegExp('id="'+e+'"','g'),'id="'+id+'-ov'+n+'"').replace(new RegExp('url\\(#'+e+'\\)','g'),'url(#'+id+'-ov'+n+')').replace(new RegExp('href="#'+e+'"','g'),'href="#'+id+'-ov'+n+'"'); });
-    return svg;
-  }
-  function cbovSection(){
-    var S0={title:'Overview of the beam',key:'cbov',_ch:'ov',subs:[]}, c=RXCH[0], sl=rxFn(c,'Sel'), on=true, w=win('capacity'), F=null;
-    try{ on=!sl||sl().ov!==false; }catch(e){}
-    if(!on){ S0.note='Not included in this report: the Include box “Overview figures” on the report bar is off.'; return S0; }
-    try{ F=w&&typeof w.cbcOvFigs==='function'?w.cbcOvFigs():null; }catch(e){ F=null; }
-    if(!F){ S0.note='No overview: the Beam Capacity tab has no results (it has not finished loading, or its inputs need correcting).'; return S0; }
-    if(F.blocked){ S0.note='No overview: input invalid on the Beam Capacity tab (see its output panel), so the beam is not drawn.'; return S0; }
-    var f2=function(x){ return (Math.round(x*100)/100).toFixed(2); };
-    var dims='$b_{w}$ × h = '+f2(F.bw)+' × '+f2(F.h)+' in'+(F.tee?', $b_{f}$ × $h_{f}$ = '+f2(F.bf)+' × '+f2(F.hf)+' in (T-beam)':'');
-    var sense=F.neg?'negative moment, top face in tension':'positive moment, bottom face in tension';
-    S0.note='The beam as entered on the Beam Capacity tab, for orientation; the checks are worked in the chapters below.';
-    S0.subs.push({title:'Cross-section',items:[{type:'figure',svg:cbovUniq(F.sec).replace('<svg ','<svg style="max-width:420px" '),caption:'Cross-section, '+dims+': reinforcement as entered, to scale (scale bar), for the governing sense of bending ('+sense+(F.gov?'; '+F.gov:'')+'). Dimensions in inches; d of each layer from the extreme compression fibre. Inputs: [[cbro:cap:tabInputEcho]]. [[tab:cap/tabInputEcho|On screen: Input Echo tab]]'}]});
-    S0.subs.push({title:'Elevation',items:F.elev?[{type:'figure',svg:cbovUniq(F.elev),caption:'Elevation of a short run of the beam: closed stirrups at s = '+f2(F.s)+' in, to scale (scale bar); the green band is the permitted spacing range (s_max; Detailing: [[cbro:cap:tabDetail]]). [[tab:cap/tabInputEcho|On screen: Input Echo tab]]'}]
-      :[{type:'note',text:'No elevation: '+(F.stir?'no results.':'the section has no stirrups (transverse reinforcement), so there is no stirrup layout to draw.')}]});
-    var P=F.snap||{};
-    S0.subs.push({title:'3-D view',items:P.url?[{type:'figure',svg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+P.W+' '+P.H+'"><image href="'+P.url+'" x="0" y="0" width="'+P.W+'" height="'+P.H+'"/></svg>',
-        caption:'3-D view of the Visuals tab at its start angles (closer in): every layer on (concrete 45 % opaque, tension bars red, compression bars blue, stirrups grey). The length shown ('+Math.round(P.Lb)+' in) is illustrative: the tool checks a cross-section, not a span. [[tab:cap/tabVisuals|On screen: Visuals tab]]'}]
-      :[{type:'note',text:'3-D view not included: '+(P.note||'it could not be rendered.')+' The cross-section above shows the same reinforcement to scale.'}]});
-    return S0;
-  }
-```
+/* ==============================================================
