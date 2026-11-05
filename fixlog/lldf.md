@@ -1975,3 +1975,23 @@ index 219cc2c..a3e337e 100644
   errors). `node tests/smoke/lldf-layout.mjs --no-index`: PASS (309 checks), as origin/main (the run with the index.html frame timed out in this container on the branch; not re-run on main). `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Entered demands:** not applicable (the tool computes distribution factors; it does not design for demands).
+
+## 2026-11-05 — PR: claude/header-lldf (PR #816: https://github.com/mlococo88/All-Structural/pull/816) (LDHD: compact header; project bar retired; title block, project file and hand-off buttons in a new Project input tab; display only, no result change)
+- **Engineer:** clean up the top of the page: the title-block inputs and the project / hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id, handler and saved field is the same):
+  - `header.apphead .actions`: before Design beam chip, Live recalc, ↩ MCT, Send DFs (+ padlock), Export DF hand-off, Send DL (+ padlock), PS ↗, Recalculate, Print / PDF. After: `#hdrProj` "Project: <project> · <structure no.>" (link), Design beam chip, Live recalc, ↩ MCT, `#saveStatus`, Recalculate, Undo, Redo, Print / PDF.
+  - `.projbar` (second header row: MCT project label, Use / Share project info, Pull geometry, Import hand-off, Undo, Redo, Export / Import JSON, save status) removed; its nodes are in `<div class="noprint" id="lxProjHold">` at the top of `#lxHome` (hidden there by `.lx-home #lxProjHold{display:none}`), as `#lxProjFile` (`#projLabel` line, Export / Import JSON) and `#lxProjXfer` (groups: Project info; Girder layout; Distribution factors: Send DFs, Export DF hand-off, PS ↗; Dead load: Send DL), each with a one-line hint. `#saveStatus` moved into `.actions`.
+  - LXL script: `IN_TABS` gets `["project","Project"]` first; the title block card (`.titleblock .tb-meta`) is now "Title block" on the Project tab (was "Project" on the Bridge tab; `projCard` unchanged, so the geometry-source line follows it), then "Project file" (`move($("lxProjFile"),c)`) and "Shared project info and hand-offs" (`move($("lxProjXfer"),c)`). A first open is still on Bridge (`showIn(lsGet(K_IN)||"bridge")`; `lldf_lxInTab_v1` unchanged). The padlocks are inserted next to their send buttons, so they move with them.
+  - `lldfPlibInit()`: `const ref=$("projExport")` → `const ref=$("printBtn")` (Undo / Redo before Print / PDF).
+  - LXL: new `hdrProj()` (anchor `function hdrProj(){`), called at the start of `after()` (every run) and on `input` in `#mProject` / `#mStruct`; `#hdrProj` click: `showIn("project",true)`, reveal the card, focus `#mProject`.
+  - CSS (anchor `/* LDHD (2026-11-05)`): `#hdrProj`, the hidden holder, light buttons in the Project tab (`.btn:not(.xlink)`; the send buttons keep their xlink colours).
+- **Report:** the Report's input echo follows the input tabs, so it gains "1.2 Inputs — Project tab" (TITLE BLOCK, the same six values that were under "1.2 Inputs — Bridge tab", PROJECT); the following input-echo sections renumber 1.3–1.7. Every other line of the Report is identical.
+- **Decisions (pending engineer review):** ↩ MCT (navigation), the Design beam chip, Live recalc and Recalculate stay in the header; Send DFs / Send DL with their padlocks, Export DF hand-off and PS ↗ go to the Project tab. First open stays on Bridge.
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, title typed "Route 6 Bridge", "P-1234", "MJL", "ABC", "2026-11-05", "2 of 9"):
+  - `window.lldfLast` identical; every localStorage key identical apart from time stamps and the page folder (`savedAt`, `producedAt`, `setAt`, `appPaths.dir`); Report text identical apart from the input-echo headings above; every typed value in the Report;
+  - Share project info: `bridgeSuite.v1.projectMeta` identical; Use shared project info fills the fields; reload identical;
+  - header shows "Project: Route 6 Bridge · P-1234"; the link opens the Project tab with Project focused;
+  - `lldf-layout` (319 checks, incl. 390 px and inside index.html's frame), `project-library --tool lldf`, `check-syntax`: pass; 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change.
