@@ -5461,3 +5461,27 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   explicit cloud delete; token checks; 390 px). `node tests/smoke/project-library.mjs --tool spreadfooting` (origin/main vs branch,
   sync off): results and saved data identical. Screenshots looked at (dialog at 1400 and 390 px, settings dialog).
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-05 — PR: claude/header-sf (PR #810: https://github.com/mlococo88/All-Structural/pull/810) (SFHD: compact page header; title block and hand-off buttons moved to the Project input tab; display only, no result change)
+- **Engineer:** clean up the top of the page: the title-block inputs and the hand-off / project buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (markup moved, not copied: every id, `data-path`, `onclick` and handler is the same):
+  - Header (anchor `<div id="sfdHdr">`; before: `<div style="display:flex;justify-content:space-between;align-items:flex-start">`):
+    - Before: title + by-line on the left; Auto-calculate, Re-analyze, Print-to-PDF Report on the right; then the `#titleblock` grid (6 inputs) and a button row (Use shared project info, Share project info, Pull from Steel Beam, Import hand-off (JSON), Pull from Abutment / SubLoads, Import hand-off (JSON)).
+    - After: title + by-line on the left; on the right `#sfdHdrA`: "Project: <name> · <number>" (`#sfdHdrProj`, a link to the Project tab), Undo, Redo, Saved projects…, Auto-calculate, Re-analyze, Print-to-PDF Report. One row on a wide screen; under the title, wrapping, below 900 px.
+  - Project tab, in order:
+    - new `<details class="sec" id="sec-title">` "Title block": the `#titleblock` div moved here unchanged (same six inputs `meta.project`, `meta.number`, `meta.calcBy`, `meta.calcDate`, `meta.chkBy`, `meta.chkDate`); CSS `.titleblock` grid 6 columns → 2 columns, no border (it sits in a card);
+    - `#sec-proj` Project Manager: unchanged except `#btnUndo` / `#btnRedo` moved to the header;
+    - new `<details class="sec noprint" id="sec-xfer">` "Shared project info and hand-offs": the six buttons, their file inputs and the `#bxMrSrc` / `#bxFlSrc` source lines, in three groups with a one-line hint each (Project info; Support reactions (Steel Beam Design); Foundation loads (Abutment / Substructure Loading)). Button texts unchanged.
+  - `SFD_IN_SEC`: `'sec-title':'project'` and `'sec-xfer':'project'` added (they were already placed on the Project tab, as nodes before the first mapped section).
+  - Saved projects… button (PLIB wiring): `const ref=$('#btnDelProj')` → `const ref=$('#btnRedo')` (inserted after Redo in the header).
+  - New `sfdHdrProjShow()` (anchor `function sfdHdrProjShow(){`): writes `state.meta.project · state.meta.number` (or "(untitled: enter it in the Project tab)") into `#sfdHdrProjTxt`; called at the end of `bindStaticInputs()` (load, import, undo, saved project, hand-off) and on `input` in `#titleblock`. A click on `#sfdHdrProj` opens the Project tab (`sfdSetInTab('project',true)`), opens the Title block card and focuses Project Name (below 900 px it scrolls to the card first). Nothing is stored.
+- **Decision (pending engineer review):** Undo / Redo and Saved projects… are global actions, so they moved to the header with Auto-calculate, Re-analyze and Print; Save / Overwrite / Load / Delete / Export / Import / Reset stay in the Project Manager card.
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, title fields typed: "Route 6 Bridge", "P-1234", "MJL", "2026-11-05", "ABC", "2026-11-06"):
+  - `R` (all results), every localStorage key, the Report model `sfrModel()` (title block included) and the DXF text `sfdwBuild().D.toDXF()` (title block included): identical; every typed value is in the Report model and the DXF;
+  - Share project info: `bridgeSuite.v1.projectMeta` identical (time stamp normalized); Use shared project info on a blank page fills the five shared fields;
+  - reload on the saved autosave: the six fields and `R` identical;
+  - header shows "Project: Route 6 Bridge · P-1234"; the link opens the Project tab with Project Name focused, page not scrolled at 1920 px;
+  - `phone-layout --tool sf` (390, 768), `project-library --tool spreadfooting`, `spread-footing-scroll` (3 window sizes): pass; `check-syntax`: pass; 0 console errors;
+  - screenshots before / after at 1920 and 390 px looked at.
+- **Saved data:** no change (no key, field or format touched).
