@@ -5428,3 +5428,20 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - Printed PDF looked at, default and Seymour: §3.2 General inputs, §3.5, and the appendix echo.
   - `check-syntax` and `spread-footing-scroll` pass.
 - **Saved data:** no change.
+
+## 2026-11-05 — PR: claude/sf-plan-marker, PR #809: https://github.com/mlococo88/All-Structural/pull/809 (SFPA: the plan schematic's B dimension gets its arrowheads; the marker it referenced was never defined; display only, no result change)
+
+### SFPA. B dimension arrowheads in the plan schematic   [display only] [no result change]
+- **Problem:** `planSVG` (Schematic tab card 1.1, and its copies in the Report: overview and §1) draws the B dimension with `marker-start="url(#a1)" marker-end="url(#a1)"`, but no marker `a1` is defined anywhere in the page. The dimension had no arrowheads, on screen or in print. This was found by the print-reference check of the Concrete Beam Capacity PR #807: every `url(#…)` in the printed Report must resolve inside its own figure, and only these two references failed in Spread Footing.
+- **Fix (`planSVG`, the axis-triad block; anchor `<marker id="axg"`):**
+  - Before: `s+='<marker id="axg" …><path d="M0,0 L7,3.5 L0,7 z" fill="#228822"/></marker></defs>';`
+  - After: the same `axg` line without `</defs>`, then
+    `s+='<marker id="a1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,1 L7,4 L0,7 z" fill="#333"/></marker></defs>';`
+  - `auto-start-reverse` points the start head outward as well.
+  - The Report copies get their own id through the existing per-copy handling (SFCB `sfxUniq` / `sfxUniqDom`); nothing else changed.
+- **How verified (headless Chromium, origin/main 22e987d vs branch, default project):**
+  - `R` and the Report text: identical. 0 console errors.
+  - Print-state reference check: 0 unresolved of 124 (main: the 4 `a1` references).
+  - Screen screenshot of card 1.1, and the printed Report (p. 5, the plan) looked at: both arrowheads of B = 10.00 ft.
+  - `check-syntax` and `spread-footing-scroll` pass.
+- **Saved data:** none. **Governing provision:** none. **Other copies:** none.
