@@ -5121,3 +5121,55 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - **Option on (revEx, defEx, seyEx):** `rEx`, `LdEx`, `LdUse` and `dc` move as listed. No status changes.
   - 0 console / KaTeX errors. `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Card 5.4 (revEx) checked by eye.
 - **Saved data:** no change (same `mat.ldExcess`, default off). **Other copies:** none.
+
+## 2026-11-05 — PR: claude/sf-bearing-lesser — Concrete bearing at the pedestal–footing interface: φB_n = the lesser of the footing and the pedestal, ACI 318-19 16.3.3.4 / Table 22.8.3.2 (SFBL; calculation change)
+
+### SFBL. Interface bearing strength = lesser of footing and pedestal   [CLAUDE.md §4]
+- **Engineer (2026-11-05):** approved the open item of #773.
+- **Provisions (read in the PDF, printed pages):**
+  - 16.3.3.4 (p. 223): at the contact surface, B_n is calculated per 22.8, and it is the lesser of the concrete bearing strengths of the supported member and the foundation surface.
+  - 22.8.3.2 and Table 22.8.3.2 (p. 429): B_n is
+    - (a) √(A_2/A_1)(0.85f′c A_1), or (b) 2(0.85f′c A_1), the lesser of the two, where the supporting surface is wider on all sides than the loaded area;
+    - (c) 0.85f′c A_1 in other cases.
+  - φ = 0.65 (as before).
+- **Where:** `computePhase2`, concrete bearing (anchor `const phiPnFtg=`).
+  - Before: `const phiPn=0.65*0.85*fc*A1*conf/1000;`
+  - After:
+    ```
+    const phiPnFtg=0.65*0.85*fc*A1*conf/1000;
+    const phiBsup=0.65*0.85*fc*A1/1000;
+    const phiPn=isPatch?phiPnFtg:Math.min(phiPnFtg,phiBsup);
+    const brgGov=isPatch?'footing':(phiBsup<phiPnFtg-1e-9?'pedestal':(phiPnFtg<phiBsup-1e-9?'footing':'both'));
+    ```
+    - New fields: `phiPnFtg`, `brgGov`. `dcr = PuMax/phiPn` follows.
+    - The SFBC gate `phiBgate = min(phiPnFtg, phiBsup)` is the same value as `phiPn`, so the two stay consistent.
+  - Display (governing side named):
+    - card 5.6: φP_nb column "(pedestal)" / "(footing)" / "(equal)"; the formula line is min(footing, pedestal) with the refs 16.3.3.4, Table 22.8.3.2; the √(A_2/A_1) note;
+    - Report: steps `cb<i>.phiF` (footing), `cb<i>.phiP` (pedestal), `cb<i>.phiPn` (lesser, with the governing side). The `cb<i>.ldcq` step uses φB_n directly;
+    - dashboard chip "Concrete bearing": "DCR = x (Ped n, pedestal side governs)", with the reference;
+    - User Manual checks table and 4C.4.
+- **Decision (pending engineer review):** a bearing patch (h = 0) has no supported concrete member, so it keeps the footing value.
+- **Effect:** with one f′c, the pedestal governs whenever √(A_2/A_1) > 1. Bearing capacity is lower and the result is more conservative; DCR rises by up to 2×.
+- **Check case, default project** (18 × 18 in pedestals, A_1 = 324.0 in², f′c = 4000 psi, √(A_2/A_1) = 2.00 at the code ceiling):
+
+  | | Before | After |
+  |---|---|---|
+  | Footing φB_n | 0.65·0.85·4000·324.0·2.000/1000 = **1432.08 k** | same |
+  | Pedestal φB_n | — | 0.65·0.85·4000·324.0/1000 = **716.04 k** |
+  | Ped 2 (P_u 318.81 k) DCR | 318.81/1432.08 = **0.22** | 318.81/716.04 = **0.45** |
+  | Ped 1 (P_u 240.81 k) DCR | 0.17 | 0.34 |
+
+  The chip reads "DCR = 0.45 (Ped 2, pedestal side governs)", PASS.
+- **Check case, Seymour (f′c 3000 psi):**
+  - Ped 2: A_1 = 1215.90 in², √(A_2/A_1) = 1.004 (footing edge). Footing 2024.26 → pedestal 0.65·0.85·3000·1215.90/1000 = **2015.35 k**. DCR 54.05/2024.26 = 0.0267 → 54.05/2015.35 = **0.0268**.
+  - Ped 1: 6270.79 → 6266.33 k; DCR 0.02375 → 0.02377.
+- **Other cases:**
+  - review: Ped 1 6576.96 → 5940.48 k (DCR 0.0144 → 0.0160); Ped 2 3111.68 → 2263.04 k (0.0164 → 0.0225).
+  - sfe: Ped 1 3818.88 → 2864.16 k (0.111 → 0.147).
+  - pb: Ped 1 1432.08 → 716.04 k, DCR 2.44 → 4.89 (already NG).
+- **How verified:**
+  - Headless Chromium, origin/main b4beecb vs the branch. Deep diff of `R` and `P2` on 17 cases.
+  - The only values that move are `P2.bearing[].phiPn` and `.dcr`, wherever √(A_2/A_1) > 1. Unchanged elements: edgeHook Ped 2 (√ = 1, at the edge) and the pb patch (Ped 2).
+  - New fields: `phiPnFtg`, `brgGov`. `phiBgate`, `ldcReq` and every pass/fail status are unchanged on all cases.
+  - 0 console / KaTeX errors. `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Card 5.6 (default) checked by eye.
+- **Saved data:** no change. **Other copies:** none.
