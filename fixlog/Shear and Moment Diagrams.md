@@ -1518,7 +1518,7 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-05 — PR: claude/header-smd (SMHD: compact header; project name, saved-analysis / template / file buttons and shared-info buttons moved to a Project card in the sidebar; display only, no result change)
+## 2026-11-05 — PR: claude/header-smd (PR #828: https://github.com/mlococo88/All-Structural/pull/828) (SMHD: compact header; project name, saved-analysis / template / file buttons and shared-info buttons moved to a Project card in the sidebar; display only, no result change)
 - **Engineer:** clean up the top of the page: the project inputs and the project / hand-off buttons go into the Project input area; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (nodes moved, not copied: every id, `onclick`, listener and saved field is the same; the file keeps CRLF):
   - `<header>`: before brand + All tools; `#projNm` and `.pshare` (Use / Share project info); then `#upd`, `#bUndo`, `#bRedo`, `#saveSel`, `#bSv`, `#bDl2`, Saved projects… (PLIB, after `#bDl2`), `#tplSel`, `#bPr`, `#bEx`, `#bIm`, `#fIm`. After: brand + All tools; `<a id="hdrProj">` "Project: <name>"; `#upd`, `#bUndo`, `#bRedo`, Saved projects…, `#bPr`.
