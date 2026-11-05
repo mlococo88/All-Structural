@@ -1551,7 +1551,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 ### Open items
 - None.
 
-## 2026-11-05 — PR: claude/ghsync-bgeo (GHS2: saved bridges copied to a private GitHub repository; storage only, no result change)
+## 2026-11-05 — PR: claude/ghsync-bgeo (PR #819: https://github.com/mlococo88/All-Structural/pull/819) (GHS2: saved bridges copied to a private GitHub repository; storage only, no result change)
 - **Engineer:** extend GitHub sync (`shared/github-sync.js`; setup `docs/github-sync-setup.md`; own-dialog hooks from PR #815) to the tools with their own project lists.
 - **Where:**
   - After `<script src="shared/projects-ui.js"></script>`: new `<script src="shared/github-sync.js"></script>` (anchor `GHS2 (2026-11-05): copy of the saved bridges`).
