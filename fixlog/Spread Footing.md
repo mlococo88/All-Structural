@@ -4806,7 +4806,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Saved data:** new field `freinf.botOuter`. Absent = 'y' = today's behaviour. No key or format change.
 - **Other copies:** none.
 - **Decision (pending engineer review):** the 3D view drew the x-bars outermost before, which disagreed with the design and the drawings. It now follows the design (display only; no computed value changes).
-## 2026-11-05 — PR: claude/sf-dxf-loads — Drawings: pedestal load schedule, pedestal tags and section load arrows (SFDL; display only, no result change)
+## 2026-11-05 — PR: claude/sf-dxf-loads (PR #767: https://github.com/mlococo88/All-Structural/pull/767) — Drawings: pedestal load schedule, pedestal tags and section load arrows (SFDL; display only, no result change)
 
 ### SFDL. Drawings tab (DXF / preview / print): the pedestal loads on the FOOTING PLAN and SECTION A-A / B-B sheets   [display only]
 - **Request (engineer):** pedestal tags; a PEDESTAL LOAD SCHEDULE (unfactored, at the top of the pedestal; one row per pedestal x load case, P, Vx, Vy, Mx, My, load point offset; in direct mode the factored envelope, labelled so) with the sign convention and a small axis / arrow legend, on its own layer, inside the border without overlapping the title block or the views, on an extra sheet if it does not fit; on the sections, arrows with values for the governing service combination, labelled with its name.
