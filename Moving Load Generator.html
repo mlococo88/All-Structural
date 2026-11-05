@@ -1774,6 +1774,25 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
 })();
 </script>
 <script>
+/* MLHD (2026-11-05): header clean-up (display only). Save JSON, Open JSON, New and the two benchmark loaders (✔ FHWA, ✔ Closed-form)
+   are MOVED (same nodes, ids and onclick handlers; class hb → btn for the light panel) from the header into a "Project" section at
+   the end of the input panel, which the input tabs below put in its own Project tab. Only buttons move: the hidden #mlgFile input
+   stays in the header, so the saved fields (aside input[id] / select[id]) are unchanged. The header keeps the title, All tools,
+   Print Report, Undo / Redo, Save, Saved projects…, Run and Export CSV. */
+(function(){
+  var A=document.querySelector('aside'); if(!A) return;
+  var d=document.createElement('details'); d.open=true; d.id='mlgPrjSec';
+  var G=function(t,h,ids){ return '<div class="f" style="margin-bottom:8px"><label>'+t+'</label><p class="hint" style="margin:0 0 4px">'+h+'</p><div style="display:flex;gap:6px;flex-wrap:wrap" data-ids="'+ids+'"></div></div>'; };
+  d.innerHTML='<summary>Project</summary><div class="pb">'
+    +G('Project file (JSON)','Every input as a .json file and back; New clears the autosave and starts from the defaults.','mlgSave mlgOpen mlgNew')
+    +G('Benchmarks','Load a published example (replaces the current inputs) and compare the results with it.','bmBtn cfBtn')
+    +'</div>';
+  Array.prototype.forEach.call(d.querySelectorAll('[data-ids]'),function(r){ r.getAttribute('data-ids').split(' ').forEach(function(id){ var b=document.getElementById(id); if(b){ b.className='btn'; r.appendChild(b); } }); });
+  A.appendChild(d);
+  document.head.insertAdjacentHTML('beforeend','<style>@media print{#mlgPrjSec,#mlgInPane_proj{display:none!important}}</style>');
+})();
+</script>
+<script>
 /* ═══════════ INPUT PANEL TABS (UI only — no calculation change) ═══════════
    Every <details> section of the input panel (<aside>) is built exactly as before by the
    scripts above; this block then MOVES the finished section nodes into one tab pane per
@@ -1785,8 +1804,8 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
    (same prefix as the autosave key 'movingLoadGen.autosave.v1'); it is NOT part of the
    autosave, the Save JSON file or any hand-off. */
 (function(){
-  var TABS=[['spans','Spans'],['girder','Girder'],['vehicle','Vehicle'],['rules','Rules'],['impact','Impact'],['factors','Factors']];
-  var SEC={'Spans':'spans','Girder Section':'girder','Vehicle':'vehicle','Load Model Rules':'rules','Impact':'impact','Factors & Analysis':'factors'};
+  var TABS=[['spans','Spans'],['girder','Girder'],['vehicle','Vehicle'],['rules','Rules'],['impact','Impact'],['factors','Factors'],['proj','Project']];   // MLHD: + Project
+  var SEC={'Spans':'spans','Girder Section':'girder','Vehicle':'vehicle','Load Model Rules':'rules','Impact':'impact','Factors & Analysis':'factors','Project':'proj'};
   /* the tool's own warnings / analysis errors, mapped to the tab holding the input they name */
   var MSG=[
     [/^E steel|^Every span length/,'spans'],
