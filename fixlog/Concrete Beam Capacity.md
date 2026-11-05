@@ -3753,3 +3753,41 @@ See `fixlog/ACI Rebar Development Length.md`. The same edits are in `<iframe id=
 - The Development & Splice λ hint cites "ACI Table 19.2.4.2" (should be 19.2.4.1(a)/(b)). It also says "AASHTO 5.4.2.8 … 0.75 ≤ λ ≤ 1.0", which is Eq. 5.4.2.8-2 only.
 - ACI 318-19 19.2.4.1 says "except as required in Table 25.4.2.5", and that table's λ for development may be narrower than 0.75–1.0. Not checked here.
 - Both are code-reference questions for the engineer (§4).
+
+## 2026-11-05 — PR: claude/cbc-lambda-cite, PR #797: https://github.com/mlococo88/All-Structural/pull/797 (RBLC: λ citation corrected to ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b), and AASHTO 5.4.2.8 Eqs. -1 / -2 stated separately; Table 25.4.2.5 checked; text only, no result change)   [code reference (§4); no result change]
+
+Applies to `ACI Rebar Development Length.html` and the Development & Splice frame (`suite-frame-dev`) of `Concrete Beam Capacity.html`, with the same five edits in each. No other "19.2.4.2" appears in `Concrete Beam Capacity.html`: the Beam Capacity and ASD frames and the shell have none.
+
+### RBLC. λ citation   [text only]
+- **Provision, checked in the PDF:** ACI 318-19 has no Table 19.2.4.2. Section 19.2.4.1 (printed p. 357) gives λ by Table 19.2.4.1(a) (from w_c) or Table 19.2.4.1(b) (from the aggregates), both 0.75 to 1.0. AASHTO LRFD 10th Ed. 5.4.2.8 (p. 5-23):
+  - Eq. 5.4.2.8-1, λ = 4.7f_ct/√f′c ≤ 1.0 where f_ct is specified (no lower bound);
+  - Eq. 5.4.2.8-2, 0.75 ≤ λ = 7.5w_c ≤ 1.0.
+- **Before → after (anchor text):**
+  1. `readInputs()` comment: `(ACI Table 19.2.4.2 / AASHTO 5.4.2.8); 0.75-1.0` → `(ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b) / AASHTO 5.4.2.8); 0.75-1.0`.
+  2. `computeFactors()` comment: `limited to 0.75-1.0 (ACI 318-19 Table 19.2.4.2 / 19.2.4.1;` → `limited to 0.75-1.0 (ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b);`.
+  3. λ input hint.
+     - Before: `ACI Table 19.2.4.2: all-lightweight 0.75, sand-lightweight 0.85 (or 19.2.4.1 from w<sub>c</sub>). AASHTO 5.4.2.8: 4.7f<sub>ct</sub>/&radic;f'<sub>c</sub> or 7.5w<sub>c</sub>, 0.75 &le; &lambda; &le; 1.0.`
+     - After: `ACI 318-19 19.2.4.1: Table 19.2.4.1(a) from the equilibrium density w<sub>c</sub>, or Table 19.2.4.1(b) from the aggregates (all-lightweight 0.75, sand-lightweight 0.85); 0.75 &le; &lambda; &le; 1.0. AASHTO 5.4.2.8: Eq. 5.4.2.8-1 &lambda; = 4.7f<sub>ct</sub>/&radic;f'<sub>c</sub> &le; 1.0 where f<sub>ct</sub> is specified, else Eq. 5.4.2.8-2 0.75 &le; &lambda; = 7.5w<sub>c</sub> &le; 1.0. This tool accepts 0.75 to 1.0.`
+  4. `rebarRefs()` ACI row: `(inp.lightweight?"Table 19.2.4.2 (λ); ":"")` → `(inp.lightweight?"19.2.4.1, Tables 19.2.4.1(a)/(b) (λ); ":"")`.
+  5. Report step `lam`: `ref:inp.lightweight?'ACI 318-19 Table 19.2.4.2':''` → `ref:inp.lightweight?'ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b)':''`.
+- **Check case:** ACI, #8, lightweight, λ = 0.85:
+  - l_d = 55.80 in before and after;
+  - the Report reference changes from "ACI 318-19 Table 19.2.4.2" to "ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b)".
+- **How verified:**
+  - Headless Chromium, origin/main (after #796) vs branch: default and AASHTO excess cases IDENTICAL in the suite and the standalone tool.
+  - The lightweight case above gives the same l_d, with only the reference text and the hint changed.
+  - `check-syntax`, `phone-layout --tool cbc,aci` and `project-library` pass.
+
+### Table 25.4.2.5 checked (open item for the engineer; calculation NOT changed)
+- **ACI 318-19 tables (checked in the PDF):** each gives λ = 0.75 for lightweight concrete and 1.0 for normalweight concrete, with no intermediate value.
+  - Table 25.4.2.5, straight bars in tension (printed p. 474, PDF p. 476);
+  - Table 25.4.3.2, hooked bars (printed p. 475);
+  - Table 25.4.9.3, compression (printed p. 487).
+- **How this relates to 19.2.4:** 19.2.4.1 opens with "Except as required in Table 25.4.2.5". R25.4.2.5 says the development λ is the same for all types of lightweight concrete.
+- **This differs from what the tool does.** In ACI mode the Development frame applies the entered λ from 0.75 to 1.0 to l_d, l_dh and l_dc (`computeFactors`: `lambda = inp.lightweight ? clamp(lwLambda, 0.75, 1.0) : 1.0`). Any λ above 0.75 for lightweight concrete gives a shorter, unconservative length.
+- **Example:** #8, f′c 4000 psi, f_y 60 ksi, c_b 1.5 in, ψ = 1.0, λ = 0.85.
+  - Tool: l_d = 47.43/0.85 = 55.80 in.
+  - Table 25.4.2.5: l_d = 47.43/0.75 = 63.24 in.
+  - The tool's length is about 12 % short.
+- **AASHTO mode:** 5.10.8.2.1a uses λ of 5.4.2.8, so it is not affected by this ACI table.
+- **Not changed (calculation, §4):** the engineer is to decide whether the ACI branch should force λ = 0.75 for lightweight concrete in development lengths.
