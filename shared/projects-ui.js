@@ -13,7 +13,9 @@
              changed() (optional: after any change to the list, e.g. the tool's own drop-down is redrawn),
              save() (optional: a "Save the open project…" button at the top of the dialog, for a tool with no Save of its own;
                it asks for the name itself and returns the mapStore result, or nothing when cancelled), saveLabel (its text),
-             note (optional HTML under the table) }
+             note (optional HTML under the table),
+             cloud (optional, 2026-11-05: { tool, label, toFile, fromFile, space }: GitHub sync of this list through
+               shared/github-sync.js when the page loads it; without that file, or without ctx.cloud, nothing changes) }
    undoRedo(h, { undo, redo, keys }) wires a SharedProjects.history to two buttons and (keys !== false) to Ctrl+Z / Ctrl+Y /
      Ctrl+Shift+Z. While text is being typed in a field (not yet committed), the browser's own undo of that field is left alone.
    button(text, title, o) -> a <button type="button" data-sp> with the tool's class o.cls. */
@@ -57,6 +59,8 @@
     document.body.appendChild(dlg);
     const body = dlg.querySelector('.spBody');
     let msg = '';
+    const cloud = ctx.cloud && window.SharedGitHubSync ? window.SharedGitHubSync.attach(ctx) : null;   // GHS (2026-11-05)
+    const cui = { redraw: () => draw(), close: () => dlg.close() };
     dlg.addEventListener('click', e => {
       if (e.target === dlg) { dlg.close(); return; }
       const b = e.target.closest('[data-spa]'); if (!b) return;
@@ -80,7 +84,8 @@
             + `<td class="spAct"><button type="button" data-spa="open" data-n="${enc(i.name)}">Open</button><button type="button" data-spa="rename" data-n="${enc(i.name)}">Rename</button>`
             + `<button type="button" data-spa="dup" data-n="${enc(i.name)}">Duplicate</button><button type="button" class="spDel" data-spa="del" data-n="${enc(i.name)}">Delete</button></td></tr>`).join('')}</tbody></table></div>`
           : '<p class="spNote">No saved projects yet. Use Save to keep the open project in this browser.</p>')
-        + usageHtml() + (ctx.note || '<p class="spNote">Saved projects stay in this browser only. Export JSON makes a file you can back up or move to another computer.</p>');
+        + usageHtml() + (ctx.note || (cloud && cloud.note()) || '<p class="spNote">Saved projects stay in this browser only. Export JSON makes a file you can back up or move to another computer.</p>');
+      if (cloud) cloud.decorate(body, cui);
     }
     function done(r) { msg = r && !r.ok ? (r.message || r.error) : ''; if (ctx.changed) ctx.changed(); draw(); return r && r.ok; }
     function act(a, name) {
@@ -90,7 +95,7 @@
         const n = prompt(`Rename the saved project "${name}" to:`, name); if (n == null) return;
         let r = ctx.store.rename(name, n);
         if (!r.ok && r.error === 'exists') { if (!confirm(`A saved project named "${n.trim()}" already exists. Replace it with "${name}"?`)) return; r = ctx.store.rename(name, n, { replace: true }); }
-        if (done(r) && ctx.renamed) ctx.renamed(name, r.name); draw(); return;
+        if (done(r)) { if (ctx.renamed) ctx.renamed(name, r.name); if (cloud) cloud.renamed(name, r.name); } draw(); return;
       }
       if (a === 'dup') {
         const n = prompt('Name for the copy:', ctx.store.copyName(name)); if (n == null) return;
@@ -101,12 +106,12 @@
       if (a === 'del') {
         const isCur = ctx.current && ctx.current() === name;
         if (!confirm(`Delete the saved project "${name}"? This cannot be undone${isCur ? ' (the project open now stays open, but it will no longer be in this list)' : ''}.`)) return;
-        if (done(ctx.store.remove(name)) && ctx.deleted) ctx.deleted(name); draw();
+        if (done(ctx.store.remove(name))) { if (ctx.deleted) ctx.deleted(name); if (cloud) cloud.deleted(name); } draw();
       }
     }
-    function show() { msg = ''; draw(); if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); } }
+    function show() { msg = ''; draw(); if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); } if (cloud) cloud.shown(cui).catch(() => {}); }
     function refresh() { if (dlg.open) draw(); }
-    return { show, refresh, el: dlg };
+    return { show, refresh, el: dlg, cloud };
   }
 
   let typingWired = false;

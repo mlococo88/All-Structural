@@ -18,6 +18,7 @@
 <!-- PLIB (2026-11-02): saved-project list dialog (Open / Rename / Duplicate / Delete), shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <style>
 *{box-sizing:border-box}
 body{font-family:"Times New Roman",Times,serif;font-size:12px;color:#111;background:#fafafa;margin:0}
@@ -5091,7 +5092,10 @@ $('#btnDelProj').addEventListener('click',()=>{
   open:n=>{const o=store.get(n);if(!o)return false;state=Object.assign(defaultState(),JSON.parse(JSON.stringify(o)));migrateState();
    SEL.asd=null;SEL.lrfd=null;SEL.asdLr=null;$('#projName').value=n;bindStaticInputs();buildPedCards();saveAuto();recalc();refreshProjList();$('#projList').value=n;return true;},
   renamed:(a,b)=>{if($('#projName').value.trim()===a)$('#projName').value=b;},
-  changed:()=>{const v=$('#projList').value;refreshProjList();if(v&&store.has(v))$('#projList').value=v;}});
+  changed:()=>{const v=$('#projList').value;refreshProjList();if(v&&store.has(v))$('#projList').value=v;},
+  /* GHS (2026-11-05): GitHub sync of this list (shared/github-sync.js). Files are the Export JSON format (the stored item is the state). */
+  cloud:{tool:'spread-footing',label:'Spread Footing',
+   fromFile:j=>{if(!(j&&typeof j==='object'&&!Array.isArray(j)&&j.geom&&typeof j.geom==='object'&&j.soil&&typeof j.soil==='object'&&Array.isArray(j.peds)))throw new Error('not a Spread Footing input file: missing geometry, soil or pedestal data');return j;}}});
  const b=SharedProjectsUI.button('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete');
  b.addEventListener('click',()=>dlg.show());
  const ref=$('#btnDelProj');if(ref)ref.parentNode.insertBefore(b,ref.nextSibling);
