@@ -5358,7 +5358,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - `check-syntax`, `run.mjs report` and `spread-footing-scroll` pass.
 - **Saved data:** no change.
 
-## 2026-11-05 — PR: claude/sf-report-overview (SFOV: "Overview of the footing" at the start of the Report — 3D snapshot, plan, elevation, cross sections; Include box "Overview figures"; display only, no result change)
+## 2026-11-05 — PR: claude/sf-report-overview (PR #780: https://github.com/mlococo88/All-Structural/pull/780) (SFOV: "Overview of the footing" at the start of the Report — 3D snapshot, plan, elevation, cross sections; Include box "Overview figures"; display only, no result change)
 - **Engineer:** right after the Summary of results, an overview of the footing. Contents: a 3D rendering at a fixed isometric camera and the default selection, a plan, an elevation and a cross section. Each has a caption, a scale or scale bar, and its dimensions. Include box "Overview figures", default on.
 - **Where:**
   - New `SFOV`, `sfovBarFt`, `sfovSheetView`, `sfovSchem`, `sfovSnap3D` and `sfovReport`, inserted before `/* the report bar's Include box: the manual`.
