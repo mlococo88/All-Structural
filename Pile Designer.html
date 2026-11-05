@@ -292,6 +292,20 @@
   .pd-projShare { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
   .pd-projShare button { font-family: var(--f-ui); font-size: 11.5px; padding: 2px 8px; border: 1px solid #ffffff44; border-radius: 3px; background: #ffffff14; color: #fff; }
   .pd-projShare button:hover { background: #ffffff2a; }
+  /* PDHD (2026-11-05): the title block and Use / Share are in the Project rail tab (#pdPrjBlock); the header keeps a read-only
+     project line (#hdrProj, a link to it), Undo / Redo and Methodology */
+  .pd-hdrProj { font-family: var(--f-ui); font-size: 12px; color: #C7D4E4; text-decoration: none; align-self: center; max-width: 28em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: 4px; }
+  .pd-hdrProj:hover { color: #fff; text-decoration: underline; }
+  .pd-hdrProj .hdrNone { font-style: italic; opacity: .8; }
+  #pdPrjBlock .pd-projGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 0; }
+  #pdPrjBlock .pd-fld-wide { grid-column: 1 / -1; }
+  #pdPrjBlock .pd-fld > span { color: #64748b; }
+  .app-shell #pdPrjBlock .pd-fld input[type=text] { background: #fff; color: inherit; border-color: #C6CFDA; }
+  .app-shell #pdPrjBlock .pd-fld input[type=text]::placeholder { color: #94A3B8; }
+  .app-shell #pdPrjBlock .pd-fld input[type=text]:focus { outline: 2px solid #BFD3F2; background: #fff; }
+  #pdPrjBlock .pd-projShare button { border-color: var(--blue-600, #2563eb); background: #fff; color: var(--blueprint, #14304a); }
+  #pdPrjBlock .pd-projShare button:hover { background: #EFF4FA; }
+  #pdPrjBlock .pd-prjHint { font-family: var(--f-ui); font-size: 10px; color: #94a3b8; margin: 3px 0 0; line-height: 1.35; }
 
   /* OK / NG badges (light, as the recent tools) */
   .app-shell .pd-pill { background: #E8F7F0 !important; color: #065F46 !important; border: 1px solid #7FD1B0; border-radius: 4px; letter-spacing: .4px; font-family: var(--f-ui); }
@@ -6201,6 +6215,18 @@ function TextField({
 }
 /* UI: one title-block field in the header band (GirderDetail look). Same
    onChange contract as TextField; the value is the same input key. */
+/* PDHD (2026-11-05): the header's "Project:" link opens the Project rail tab and focuses Project in the Title block. */
+function pdGoTitleBlock(setRailTab) {
+  setRailTab("project");
+  setTimeout(() => {
+    const blk = document.getElementById("pdPrjBlock"), i = blk && blk.querySelector(".pd-projGrid input");
+    if (!i) return;
+    const rail = blk.closest("aside.input-rail");
+    if (rail && getComputedStyle(rail).position === "sticky") rail.scrollTop = 0;
+    else window.scrollTo(0, blk.getBoundingClientRect().top + window.scrollY - 70);
+    i.focus({ preventScroll: true });
+  }, 60);
+}
 function HdrField({
   label,
   value,
@@ -17943,7 +17969,12 @@ function App() {
     className: "pd-hdrRight"
   }, /*#__PURE__*/React.createElement("div", {
     className: "pd-hdrBtns no-print"
-  }, /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement("a", {   // PDHD (2026-11-05): read-only project line; opens the Project tab (display only)
+    href: "#", id: "hdrProj", className: "pd-hdrProj",
+    title: "Project and job no.: edit them in the Project input tab",
+    onClick: e => { e.preventDefault(); pdGoTitleBlock(setRailTab); }
+  }, "Project: ", /*#__PURE__*/React.createElement("span", { id: "hdrProjTxt" }, (() => { const pv = pileProjShareValues(I), t = [pv.projName, pv.projNum].map(x => String(x == null ? "" : x).trim()).filter(Boolean).join(" \u00b7 ");
+    return t || /*#__PURE__*/React.createElement("span", { className: "hdrNone" }, "(untitled: enter it in the Project tab)"); })())), /*#__PURE__*/React.createElement("button", {
     type: "button", ref: pdUndoRef, "data-sp": "1", disabled: true,
     title: "Undo the last input change (Ctrl+Z)"
   }, "Undo"), /*#__PURE__*/React.createElement("button", {
@@ -17976,7 +18007,32 @@ function App() {
   }, "Overall"), /*#__PURE__*/React.createElement(StatusPill, {
     pass: r.allPass,
     label: r.allPass ? "ALL CHECKS OK" : "CHECK REQUIRED"
-  }))))), /*#__PURE__*/React.createElement("div", {
+  }))))))), /*#__PURE__*/React.createElement(CheckIndex, {
+    pileLabel: I.pileType === "iab" ? "Integral abutment pile" : I.pileType === "hpile" ? "Driven H-pile" : "Drilled micropile",
+    allPass: r.allPass,
+    onSave: exportProject,
+    onPreview: () => { if (window.__pdSetOutTab) window.__pdSetOutTab("report"); },
+    onPrint: printReport,
+    caseLabel: (cases && cases[activeIdx]) ? (cases[activeIdx].name || ("Case " + (activeIdx + 1))) : null
+  }), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length) || loadNotes.length || r.blankInputs) ? /*#__PURE__*/React.createElement("div", {
+    className: "max-w-[1920px] mx-auto px-6 pt-3 no-print"
+  }, r.blankInputs && /*#__PURE__*/React.createElement("div", { className: "pd-blank-banner text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Enter a value: "), blankInputsMsg(r.blankInputs)),
+    (r.inputErrors || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "e" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Input error: "), m)),
+    (r.inputNotes || []).concat(loadNotes).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "n" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(201,98,46,0.10)", color: "#7a4d15", border: "1px solid rgba(201,98,46,0.30)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Note: "), m)),
+    loadNotes.length > 0 && /*#__PURE__*/React.createElement("button", { onClick: () => setLoadNotes([]), className: "text-[10px] text-slate-500 underline" }, "dismiss load notes")) : null, /*#__PURE__*/React.createElement("div", {
+    className: "max-w-[1920px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6"
+  }, /*#__PURE__*/React.createElement("aside", {
+    className: "input-rail space-y-4 lg:sticky lg:self-start no-print",
+    style: {
+      top: "calc(var(--ci-h, 56px) + 8px)",
+      maxHeight: "calc(100vh - var(--ci-h, 56px) - 1rem)",
+      overflowY: "auto"
+    }
+  }, /*#__PURE__*/React.createElement(RailTabs, { tab: railTab, setTab: setRailTab, pileType: I.pileType }), /*#__PURE__*/React.createElement("div", { "data-rtab-fixed": "project", id: "pdPrjBlock" }, /*#__PURE__*/React.createElement(Panel, {   // PDHD (2026-11-05): the title block and Use / Share, moved here from the header
+    title: "Title block",
+    sub: "Printed on the report \u00b7 shared with the other tools",
+    collapsible: false
+  }, /*#__PURE__*/React.createElement("div", {
     className: "pd-projGrid"
   }, /*#__PURE__*/React.createElement(HdrField, {
     label: "Project",
@@ -18008,7 +18064,7 @@ function App() {
     value: I.projDate || "",
     placeholder: "Date (blank = today)",
     onChange: v => setStr('projDate', v)
-  })), /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("p", { className: "pd-prjHint" }, "Printed on the report cover, running header and footer."), /*#__PURE__*/React.createElement("div", {
     className: "pd-projShare no-print"
   }, /*#__PURE__*/React.createElement("button", {
     type: "button",
@@ -18024,28 +18080,7 @@ function App() {
     type: "button",
     onClick: () => ProjMetaUI.share(PILE_PROJ_MAP, pileProjShareValues(I), "Pile Designer", "Pile Designer.html"),
     title: "Make this project info available to the other tools"
-  }, "Share project info")))), /*#__PURE__*/React.createElement(CheckIndex, {
-    pileLabel: I.pileType === "iab" ? "Integral abutment pile" : I.pileType === "hpile" ? "Driven H-pile" : "Drilled micropile",
-    allPass: r.allPass,
-    onSave: exportProject,
-    onPreview: () => { if (window.__pdSetOutTab) window.__pdSetOutTab("report"); },
-    onPrint: printReport,
-    caseLabel: (cases && cases[activeIdx]) ? (cases[activeIdx].name || ("Case " + (activeIdx + 1))) : null
-  }), ((r.inputErrors && r.inputErrors.length) || (r.inputNotes && r.inputNotes.length) || loadNotes.length || r.blankInputs) ? /*#__PURE__*/React.createElement("div", {
-    className: "max-w-[1920px] mx-auto px-6 pt-3 no-print"
-  }, r.blankInputs && /*#__PURE__*/React.createElement("div", { className: "pd-blank-banner text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Enter a value: "), blankInputsMsg(r.blankInputs)),
-    (r.inputErrors || []).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "e" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(178,59,59,0.10)", color: "#8a2a2a", border: "1px solid rgba(178,59,59,0.35)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Input error: "), m)),
-    (r.inputNotes || []).concat(loadNotes).map((m, i) => /*#__PURE__*/React.createElement("div", { key: "n" + i, className: "text-[11px] px-2 py-1 mb-1 rounded-sm", style: { background: "rgba(201,98,46,0.10)", color: "#7a4d15", border: "1px solid rgba(201,98,46,0.30)" } }, /*#__PURE__*/React.createElement("b", null, "\u26a0 Note: "), m)),
-    loadNotes.length > 0 && /*#__PURE__*/React.createElement("button", { onClick: () => setLoadNotes([]), className: "text-[10px] text-slate-500 underline" }, "dismiss load notes")) : null, /*#__PURE__*/React.createElement("div", {
-    className: "max-w-[1920px] mx-auto px-6 py-6 grid grid-cols-1 lg:grid-cols-[1fr_2fr] gap-6"
-  }, /*#__PURE__*/React.createElement("aside", {
-    className: "input-rail space-y-4 lg:sticky lg:self-start no-print",
-    style: {
-      top: "calc(var(--ci-h, 56px) + 8px)",
-      maxHeight: "calc(100vh - var(--ci-h, 56px) - 1rem)",
-      overflowY: "auto"
-    }
-  }, /*#__PURE__*/React.createElement(RailTabs, { tab: railTab, setTab: setRailTab, pileType: I.pileType }), /*#__PURE__*/React.createElement(Panel, {
+  }, "Share project info")), /*#__PURE__*/React.createElement("p", { className: "pd-prjHint" }, "Copy the title block from or to the other tools."))), /*#__PURE__*/React.createElement(Panel, {
     title: "Project file",
     sub: "Save / load .json \u00b7 auto-saves to this browser",
     collapsible: true,
@@ -18143,7 +18178,7 @@ function App() {
     className: "text-[9px] text-slate-400 leading-snug"
   }, "Save many named projects in this browser. Recall, overwrite, or delete any. For cross-device or archival storage, use the .json export above."))), /*#__PURE__*/React.createElement(Panel, {
     title: "Project Info",
-    sub: "Project, job no., subject, by / chk: in the header title block"
+    sub: "Project, job no., subject, by / chk: in the Title block above"
   }, /*#__PURE__*/React.createElement("div", {
     className: "text-[10px] text-slate-500 leading-snug"
   }, I.pileType === "iab"

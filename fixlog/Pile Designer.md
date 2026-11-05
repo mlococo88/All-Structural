@@ -19812,3 +19812,21 @@ index 06a42e4..b58d4e3 100644
   - `node tests/smoke/pile-library.mjs`: library, Undo / Redo, quota and console checks pass; its two "page text identical to origin/main" checks (on load, after an input change) report the intended difference, the two relabelled buttons ("Report", "◰ Open the calculation report (Report tab)").
   - Print routing, headless, from each of the 12 output tabs, by `beforeprint` and by "Print report": `#rp-print` holds the Report (with the 3 chart images on the button path), `body.rp-printing` and the running header are set, the output tab of before comes back after `afterprint`.
 - **Other copies:** none.
+
+## 2026-11-05 — PR: claude/header-pile (PR #830: https://github.com/mlococo88/All-Structural/pull/830) (PDHD: compact header; title block and Use / Share project info moved to the Project rail tab; display only, no result change)
+- **Engineer:** clean up the top of the page: the title-block inputs and the shared-info buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (React elements moved, not copied: the same `HdrField` components with the same `value` / `onChange` → `setStr('projName' …)` etc., the same Use / Share `onClick`s; nothing saved changes; the file keeps CRLF):
+  - Header (anchor `className: "pd-hdrBtns no-print"`): before title column; right column Undo, Redo, Methodology & code path, stats, Overall; then `pd-projGrid` (7 fields: Project, Subject, Job no., Prepared by, Checked by, Client, Date) and `pd-projShare` (Use / Share project info). After: the same without `pd-projGrid` / `pd-projShare`, and `<a id="hdrProj" class="pd-hdrProj">` "Project: <project> · <job no.>" first in `pd-hdrBtns` (values through `pileProjShareValues(I)`, so the old placeholder defaults show as untitled).
+  - Input rail (anchor `id: "pdPrjBlock"`): right after `RailTabs`, a new `<div data-rtab-fixed="project" id="pdPrjBlock">` holding `Panel` "Title block" (not collapsible): `pd-projGrid`, a hint, `pd-projShare`, a hint. `data-rtab-fixed` puts it on the Project rail tab (first card there; Project file, Project library, Project Info follow).
+  - "Project Info" panel sub-title: "… in the header title block" → "… in the Title block above".
+  - New `pdGoTitleBlock(setRailTab)` (anchor `function pdGoTitleBlock(`): Project rail tab, rail scrolled to the top (or the page to the card when the rail is not sticky, narrow screens), focus Project.
+  - CSS (anchor `/* PDHD (2026-11-05)`): `.pd-hdrProj`, `#pdPrjBlock` overrides of the dark header field / button styles.
+- **Decisions (pending engineer review):** the project line shows Project · Job no. The sticky check strip (Expand all, Collapse all, Save .json, Report, Print report) is not part of the header block and is left as it is; Undo / Redo and Methodology stay in the header. The page still opens on the Pile rail tab (unchanged default).
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium with a local Tailwind 3.4.3 play-CDN copy served for cdn.tailwindcss.com so the layout renders; origin/main vs branch; title typed "Route 6 Bridge", "Abutment A piles", "J-4471", "MJL", "ABC", "MassDOT", "2026-11-05" through the native value setter):
+  - output column text (`.main-col`, all modules), every localStorage key and the Report tab text: identical; every typed value in the Report.
+  - Share project info: `bridgeSuite.v1.projectMeta` identical; Use shared project info fills the shared fields; reload of the autosave identical;
+  - header shows "Project: Route 6 Bridge · J-4471"; the link opens the Project tab with Project focused (1920 and 390 px);
+  - `pile-library`: every library / Undo / Redo check passes; its two "page text identical" checks differ only by the moved header text (`micropile_lrfd_inputs_v1` identical on load and after a change; diff looked at); `check-syntax`: pass; 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change.
