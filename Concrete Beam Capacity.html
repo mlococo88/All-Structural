@@ -3515,9 +3515,11 @@ function svgSection(neg){
     ext(X(-(tee?bf:bw)/2)-2,yA,xo-3,yA); ext(X(-bw/2)-2,yB,xo-3,yB);
     dim(xo,yA,xo,yB,`d(${L.side}${L.i+1})=${fmt(L.d)}&quot;`,xo-9,(yA+yB)/2,-90);
   });
-  /* compression-fibre tag */
-  s+=`<text x=&quot;${X(0)}&quot; y=&quot;${compAtTop?Y(0)-6:Y(h)+30}&quot; font-size=&quot;8.5&quot; fill=&quot;#B45309&quot;
-      text-anchor=&quot;middle&quot; font-family=&quot;Arial,Helvetica,sans-serif&quot;>extreme compression fibre ${compAtTop?&quot;(top)&quot;:&quot;(bottom)&quot;} — \u03b5 = 0.003</text>`;
+  /* compression-fibre tag. CBPI (2026-11-05): starts at the section's left face (was centred on it), so it never reaches the layer-depth
+     labels left of the section (a short d(C) label of a deep section ran into it); at the bottom it sits below the b_w label (was +30:
+     on it) */
+  s+=`<text x=&quot;${X(-(tee?bf:bw)/2)}&quot; y=&quot;${compAtTop?Y(0)-6:Y(h)+38}&quot; font-size=&quot;8.5&quot; fill=&quot;#B45309&quot;
+      text-anchor=&quot;start&quot; font-family=&quot;Arial,Helvetica,sans-serif&quot;>extreme compression fibre ${compAtTop?&quot;(top)&quot;:&quot;(bottom)&quot;} — \u03b5 = 0.003</text>`;
   s+=`</svg>`;
   CBOV.sec={W,H,sc};   /* CBOV: the drawing scale (px per in), for the Report overview's scale bar */
   return s;
@@ -10301,6 +10303,26 @@ window.addEventListener('DOMContentLoaded',()=>{
     var box=document.getElementById('rp-print'); if(!box){ box=document.createElement('div'); box.id='rp-print'; document.body.appendChild(box); }
     box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(R.doc,{lazy:false})+'</article></div>';
     document.body.classList.add('rp-printing');
+  });
+  /* CBPI (2026-11-05): the print box is a second rendering of the Report, while the Report tab's own copy stays in the page (hidden
+     while printing). A figure's url(#id) / href="#id" (markers, patterns, clip paths) then resolved to the hidden copy's element (the
+     first with that id), which does not paint: arrowheads of the section / elevation dimensions and the ASD hatching did not print.
+     At beforeprint, after the box is filled (here, or by SharedReport.print for Print / PDF), each top-level SVG of the box gets its own
+     ids: every id defined in it gets a suffix, and its references in that SVG follow. Display only. */
+  var PI_N=0;
+  function uniqSvgIds(root){
+    var A=['fill','stroke','clip-path','mask','filter','marker-start','marker-mid','marker-end','style','href','xlink:href'];
+    Array.prototype.forEach.call(root.querySelectorAll('svg'),function(svg){ if(svg.parentNode&&svg.parentNode.closest&&svg.parentNode.closest('svg')) return;
+      var defs=svg.querySelectorAll('[id]'); if(!defs.length) return; var sfx='-pr'+(++PI_N), map={};
+      Array.prototype.forEach.call(defs,function(e){ map[e.id]=e.id+sfx; e.id=map[e.id]; });
+      Array.prototype.forEach.call(svg.querySelectorAll('*'),function(e){ A.forEach(function(a){ var v=e.getAttribute(a); if(!v||v.indexOf('#')<0) return;
+        var w=v.replace(/url\((["']?)#([^"')\s]+)\1\)/g,function(m,q,id){ return map[id]?'url('+q+'#'+map[id]+q+')':m; });
+        if((a==='href'||a==='xlink:href')&&w.charAt(0)==='#'&&map[w.slice(1)]) w='#'+map[w.slice(1)];
+        if(w!==v) e.setAttribute(a,w); }); }); });
+  }
+  window.addEventListener('beforeprint',function(){
+    var box=document.getElementById('rp-print'); if(!box||!document.body.classList.contains('rp-printing')||box.getAttribute('data-cbpi')===box.innerHTML.length+'') return;
+    try{ uniqSvgIds(box); box.setAttribute('data-cbpi',box.innerHTML.length+''); }catch(e){}
   });
 })();
 </script>
