@@ -4016,3 +4016,34 @@ Not affected:
       subs:[{title:'Input errors',items:E.map(function(t){ return {type:'note',warn:true,text:t}; })}]};
   }
 ```
+
+## 2026-11-05 — PR: claude/cbc-asd-stale (CBST: the ASD Beam Calcs tab says on screen when its "From Beam Capacity" values are stale because Beam Capacity has an input error; REVIEW line in its check panel; display only, no result change)
+
+### CBST. Stale inherited values on the ASD tab   [display only] [no result change]
+- **Problem (coordinator, after CBIR #800):** while Beam Capacity has an input error, its `derive()` returns null and nothing is sent. The ASD tab then keeps the last inherited values and shows its results with no warning on screen. The Report already said so (CBIR).
+- **Fix:**
+  - On the ASD tab's "From Beam Capacity" card: a warning box reading "Values inherited from Beam Capacity are the last ones sent before its input error; correct Beam Capacity first. (Beam Capacity: <errors>)", with a link "→ Beam Capacity tab".
+  - In the ASD check summary panel: a REVIEW line "Inherited from Beam Capacity — Beam Capacity input error"; a click opens the Beam Capacity tab.
+  - ASD's own results are not blanked or changed.
+  - The Report's Summary of results gets the same REVIEW line, because it reads `asdDashItems`.
+- **Where:**
+  - **ASD frame** (`#suite-frame-asd` srcdoc, decoded and re-encoded with CRLF kept):
+    - New block before `function asdDashGo(it){`: `var ASDCE=[]`, `asdSetCapErrors(E)` (sets the list; calls `refresh()` only when it changed), `asdCapGo()` (posts `{type:'cbcGoto',tab:'',card:''}` to the shell).
+    - `asdDashGo`: `if(it.cap){ asdCapGo(); return; }`.
+    - `asdDashItems`: after the `where` loop, `if((ASDCE||[]).length) out.push({name:'Inherited from Beam Capacity',st:'warn',short:'Beam Capacity input error',cap:true,…})`.
+    - `mkSection("inInherit"…)`: the warning box before `const IE=asdInheritErrors();`. `ASDCE` is not in `S`, so nothing is saved.
+  - **Shell:**
+    - `capStatus()` (Beam Capacity `cbcRxErrors()` → ASD `asdSetCapErrors()`; same origin) is called in `show('asd')` and at the start of the Report's `model()`.
+    - It is exposed as `window.CBST_capStatus`.
+- **Check case:** default project, b_w blank on Beam Capacity, then the ASD tab.
+  - The panel reads "2 NG, 1 REVIEW" and shows the warning box with "Beam width and depth must be positive."; the link opens Beam Capacity.
+  - ASD `CC` is identical to main.
+  - After b_w = 12 is restored and ASD is shown again, the notice is gone and the panel reads "2 NG".
+- **How verified (headless Chromium, origin/main afe45fa vs branch):**
+  - Valid inputs:
+    - the ASD tab's text and check panel are identical to main;
+    - the Report text and ASD `CC` are identical to main;
+    - localStorage is identical to main.
+  - The error case and recovery above, with 0 console errors and a screenshot looked at.
+  - `check-syntax`, `run.mjs report steps steps-groups report-wiring` (14 passed) and `phone-layout --tool cbc` pass.
+- **Saved data:** none. **Governing provision:** none. **Other copies:** none (the standalone "Concrete Beam ASD.html" is a redirect; the frame alone gets no message and shows no notice).
