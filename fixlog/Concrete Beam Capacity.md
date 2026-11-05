@@ -3264,3 +3264,163 @@ function rbrDashColl(v,save){
   rbrDashPlace();
 })();
 ```
+
+
+## 2026-11-05 — PR: claude/cbc-report-order (CBRO: the suite Report in the design order, a suite-wide "Summary of results" first, section numbers independent of the Include boxes; display only, no result change)
+
+### CBRO. Report order and Summary of results   [display only] [no result change]
+- **Engineer request (2026-11-05, Phase 4 of the concrete beam suite update):** the Spread Footing Report structure (SFRO #778, SFRF #779) in the suite Report: a suite-wide "Summary of results" first, covering the checks of all three chapters with links; each chapter in design order; numbering that does not move with the Include boxes.
+- **Where:** the suite shell only (no srcdoc frame changed). New block before `  function model(){` (anchor `/* ---------- CBRO (2026-11-05`): `CBRO_ORD`, `CBRO_TTL`, `cbroOrder(M)`, `CBRO_ST`, `cbroSum()`, `cbroKeys(M)`. In `model()`:
+  - Before: `    rxRest(M);   /* CBRX: what the retired print reports printed and the chapters lack */` / `    return M;`
+  - After: the same, with `    cbroOrder(M);   /* CBRO: design order, the suite's Summary of results first, numbering independent of the Include boxes */` between them.
+  `cbroOrder` runs after `rxRest`, so the "As printed" copies are made exactly as before; it only moves sections and adds the Summary and the one-line sections. `shared/report.js` renumbers every section and regenerates every "see §x.y" from the keys.
+- **Summary of results (§1):** one subsection per chapter, one line per line of that tab's check summary panel, with the panel's name, short value (D/C, RF, length, or the condition not met), status and reference:
+  - Beam Capacity: `cbcDashItems()` (CBDC #788), zipped with `allChecks()` for the combination; the Detail column is the panel's expanded text (provided vs limit, governing combination, the D/C where the status comes from a condition). With an input blocker the panel's message ("Input invalid: output withheld …") replaces the table.
+  - ASD Beam Calcs: `asdDashItems()` (ASDC #789): the rating levels and the REVIEW notices.
+  - Development & Splice: the lines of `#rbrDash` as shown (RBDC #791; read from the panel because its checks are local to `buildDashboard`; the standalone ACI Rebar tool is untouched), `rbrDashMeta()` for the card.
+  - The last column links to the step where the check is worked: Beam Capacity `fx<i>/DCR`, `sh<i>/DCRs` or `sh<i>/DCR`, `tq<i>/size|combVT|DCR`, `sv/minr`, `dt/<id>.cmp` (the keys the chapter's own Summary of checks uses); ASD `an/inv.RF` / `an/op.RF`; Development & Splice the length step (`td/ld`, `hk/ldh`, `cd/ldc`, `ts/lst`, `cs/lsc`, `ts/clsA`, `td/ktrHS`) or the limit's step (`td/cbKtr`, `td/psiTE`, `td/rlcf`). `cbroKeys` takes the first key found in the report; else an omitted combination's note (`omit-<scope>`); else the tab's section (key `cbro:<chapter>:<tab>`).
+  - A count line per chapter ("n NG", "REVIEW") and one for the suite, as the panels' header counts.
+- **New order (default project):**
+
+  | Main | Branch |
+  |---|---|
+  | A. 1 Inputs · 2 Summary of checks · 3 Flexure · 4 Shear · 5 Torsion · 6 Serviceability · 7 Detailing · 8 Validation notices | 1 Summary of results · A. 2 Inputs · 3 Validation notices · 4 Flexure · 5 Shear · 6 Torsion · 7 Serviceability · 8 Detailing · 9 Summary of checks |
+  | B. 9 Inputs · 10 Summary & Rating · 11 Analysis and rating | B. 10 Inputs · 11 Analysis and rating · 12 Summary & Rating |
+  | C. 12 Project and inputs (12.3 Summary of results) · 13–17 the five lengths · 18 Bar development schedule | C. 13 Project and inputs · 14–18 the five lengths · 19 Bar development schedule · 20 Summary of results (20.1 "Development and splice lengths and code checks", the former 12.3) |
+  | D. 19 References | D. 21 References |
+
+- **Numbering independent of the Include boxes:** a Beam Capacity or ASD tab whose Include box is off keeps its section, with one line: "Not included in this report: the Include box “…” on the report bar is off. On screen: … tab" (link). A tab that is on but adds nothing (no validation notices; an ASD Summary & Rating with nothing new) keeps a one-line section too. Before, those sections were left out and every later number moved. Torsion is a section only when the project has torsion (ACI), as before (an input, not an Include box).
+- **Decisions (pending engineer review):**
+  - The chapters' own summaries (Beam Capacity "Summary of checks", ASD "Summary & Rating", Development & Splice "Summary of results") are kept, at the end of their chapter, after the checks they summarize. They hold the per-combination tables and the 3-decimal D/C; the suite Summary at the front follows the panels. Moving them to the front of each chapter, or dropping them, is a one-line change in `CBRO_ORD`.
+  - "Validation notices" (method choices, mandatory limits, disclosed conservatism) moved next to the inputs as the basis of the calculation, as Spread Footing's "Assumptions and warnings".
+  - The Summary has no chapter letter: it is front matter for the three chapters.
+  - Condition texts are the panels' own ("s > s_max (torsion)", "A_ℓ < A_ℓ,req"), not re-typeset.
+- **Renamed:** Development & Splice "Summary of results" subsection → section "Summary of results" with the subsection "Development and splice lengths and code checks". Nothing removed.
+- **Table-copy corruption (rowspan / colspan, as SFIE #781):** none of the shell or the three frames uses `rowspan` / `colspan` (searched), so the copier `rxWalk` cannot drop a merged cell. Nothing to fix.
+- **How verified (headless Chromium, origin/main 8c77f48 vs the branch; KaTeX 0.16.9, Plotly 2.27, three r128 from tests/libs):**
+  - 5 cases: default; c2 (title block with quotes, A_ℓ 1.2 in², three combinations, Validation and Combination 2 deselected; ASD negative moment; Development & Splice AASHTO #11, f′c 12 ksi, hook, excess reinforcement); c3 (AASHTO tee, f_y 80 ksi; ASD inventory and operating); off (Input Echo, Validation, Flexure, Summary & Dashboard and Combination 1 off; ASD Summary & Rating and Analysis off); bad (b_w blank, input blocker).
+  - Beam Capacity `CC`, ASD `CC` and the Development & Splice results (JSON): identical. localStorage identical before the Report, and unchanged by showing and printing it.
+  - Report text (screen `SharedReport.text` and the print box): every line of main is present in the branch apart from § / section numbers and the renamed subsection title. Added: the Summary of results and the one-line sections.
+  - 0 unresolved references, 0 duplicate keys, 0 console errors in every case.
+  - Printed PDF of the default project (42 Letter pages, main 41) looked at: contents, the Summary on page 3 with "see §x.y" in the last column.
+  - `node tests/check-syntax.mjs "Concrete Beam Capacity.html"`, `node tests/engine/run.mjs report steps steps-groups report-wiring` (14 passed), `node tests/smoke/phone-layout.mjs --tool cbc` (all passed).
+- **Saved data:** none read or written by the new code; no key or format change.
+- **Governing provision:** none changed (no formula, factor, unit or code reference).
+- **Other copies:** none (shell code). The Development & Splice frame and "ACI Rebar Development Length.html" are unchanged.
+- **Open item (seen, not changed):** with an input blocker (b_w blank) the Beam Capacity panel says "Input invalid: output withheld" while the Beam Capacity chapter still prints the last results (as on main). The Summary follows the panel.
+
+#### Code added (re-apply by hand)
+```js
+  /* ---------- CBRO (2026-11-05, Phase 4 of the concrete beam suite update): the Report in the design order, with a suite-wide
+     "Summary of results" first (the Spread Footing Report's order, SFRO #778 / SFRF #779). Display only: sections are moved and
+     the check lines are read from the tabs' own check summary panels; nothing is computed here.
+     Order: 1 Summary of results · A. Beam Capacity: Inputs, Validation notices (the basis), Flexure, Shear, Torsion,
+     Serviceability, Detailing, Summary of checks · B. ASD Beam Calcs: Inputs, Analysis and rating, Summary & Rating ·
+     C. Development & Splice: Project and inputs, the five lengths, Bar development schedule, Summary of results · D. References.
+     A section whose Include box is off (or that has nothing to show for this project) stays as a one-line section, so the
+     section numbers do not move with the Include boxes. Every section of a tab gets the key cbro:<chapter>:<tab>. ---------- */
+  var CBRO_ORD={cap:['tabInputEcho','tabValid','tabFlex','tabShear','tabTor','tabServ','tabDetail','tabSummary'],asd:['tabInputEcho','tabAnalysis','tabSummary']};
+  var CBRO_TTL={cap:{tabInputEcho:'Inputs',tabValid:'Validation notices',tabFlex:'Flexure',tabShear:'Shear',tabTor:'Torsion',tabServ:'Serviceability',tabDetail:'Detailing',tabSummary:'Summary of checks'},
+    asd:{tabInputEcho:'Inputs',tabAnalysis:'Analysis and rating',tabSummary:'Summary & Rating'}};
+  function cbroOrder(M){
+    var G={cap:[],asd:[],dev:[],ref:[]}, part={};
+    M.sections.forEach(function(s){ var g=G[s._ch]?s._ch:'ref'; if(s.part&&!part[g]) part[g]=s.part; G[g].push(s); });
+    ['cap','asd'].forEach(function(id){
+      var g=G[id]; if(!g.some(function(s){ return s._tab; })) return;   /* a chapter that could not be built: as it is */
+      var c=RXCH.filter(function(q){ return q.id===id; })[0], b=rxFn(c,'Boxes'), sl=rxFn(c,'Sel'), B=null, Sl=null;
+      try{ B=b?b():null; Sl=sl?sl():null; }catch(e){}
+      var lab={}; ((B&&B.tabs)||[]).forEach(function(t){ lab[t[0]]=t[1]; });
+      var res=[];
+      CBRO_ORD[id].forEach(function(t){
+        var hit=g.filter(function(s){ return s._tab===t; });
+        if(hit.length){ res=res.concat(hit); return; }
+        if(!lab[t]) return;   /* not a tab of this project (e.g. Torsion when torsion is off) */
+        var off=!!(Sl&&Sl.tabs&&Sl.tabs[t]===false), link='[[tab:'+id+'/'+t+'|On screen: '+lab[t]+' tab]]';
+        res.push({title:CBRO_TTL[id][t],_ch:id,_tab:t,_stub:true,subs:[],
+          note:off?'Not included in this report: the Include box “'+lab[t]+'” on the report bar is off. '+link
+            :(t==='tabValid'?'No validation notices for this project. ':'The '+lab[t]+' tab adds nothing to the other sections of this chapter for this project. ')+link});
+      });
+      g.forEach(function(s){ if(res.indexOf(s)<0) res.push(s); });
+      G[id]=res;
+    });
+    /* Development & Splice: its Summary of results (a subsection of "Project and inputs") becomes the last section of the chapter */
+    var pi=G.dev.filter(function(s){ return s.title==='Project and inputs'; })[0], k=-1;
+    if(pi) pi.subs.forEach(function(q,i){ if(k<0&&q.title==='Summary of results') k=i; });
+    if(k>=0){ var q=pi.subs.splice(k,1)[0]; q.title='Development and splice lengths and code checks'; G.dev.push({title:'Summary of results',_ch:'dev',_tab:'sum',subs:[q]}); }
+    var DT={'Project and inputs':'inputs','Tension development':'tension','Standard hook':'hook','Compression development':'compression','Tension lap splice':'tsplice','Compression lap splice':'csplice','Bar development schedule':'batch'};
+    G.dev.forEach(function(s){ if(!s._tab&&DT[s.title]) s._tab=DT[s.title]; });
+    ['cap','asd','dev','ref'].forEach(function(g){ G[g].forEach(function(s,i){ s.part=i===0?part[g]:undefined; if(s._tab&&g!=='ref') s.key='cbro:'+g+':'+s._tab; }); });
+    M.sections=[cbroSum()].concat(G.cap,G.asd,G.dev,G.ref);
+    cbroKeys(M);
+  }
+  /* the suite-wide Summary of results: one line per check of each tab's check summary panel (Beam Capacity CBDC #788
+     cbcDashItems, ASD Beam Calcs ASDC #789 asdDashItems, Development & Splice RBDC #791 #rbrDash lines), the same name, short
+     value (the D/C, the RF, the length, or the condition not met), status and reference; the last column links to the step
+     where the check is worked (resolved in cbroKeys, else the tab's section). */
+  var CBRO_ST={pass:['PASS','ok'],fail:['FAIL','ng'],na:['N/A','na'],warn:['REVIEW','hi'],info:['INFO','na']};
+  function cbroSum(){
+    var subs=[], tot=[];
+    var head=['Check','Result','Status','Detail','Reference (worked in)'];
+    var row=function(name,short,st,detail,ref,keys){ var x=CBRO_ST[st]||CBRO_ST.na;
+      return [name,{t:short||'—',n:/^[−\-\d.,\s]*$|^(D\/C|RF) /.test(short||'')||undefined},{t:x[0],cls:x[1]},detail||'',{t:ref||'—',_k:keys}]; };
+    var count=function(rows){ var f=0,w=0; rows.forEach(function(r){ if(r[2].t==='FAIL') f++; if(r[2].t==='REVIEW') w++; });
+      return (f?f+' NG':'no NG')+(w?', '+w+' REVIEW':''); };
+    var add=function(title,rows,msg,note){
+      if(msg){ subs.push({title:title,items:[{type:'note',warn:true,text:msg}]}); tot.push(title+': '+msg.replace(/\.$/,'')); return; }
+      var cn=count(rows); tot.push(title+': '+(rows.length?cn:'no checks'));
+      subs.push({title:title,items:[{type:'note',text:rows.length?'Check summary: '+cn+' ('+rows.length+' lines).':'No checks.'}].concat(rows.length?[{type:'table',head:head,rows:rows}]:[]).concat(note?[{type:'note',text:note}]:[])});
+    };
+    /* A. Beam Capacity */
+    (function(){ var w=win('capacity'), its=null, K=null, msg=null, rows=[];
+      try{ var m=w.document.querySelector('#cbcDash .cbdMsg'); if(m) msg=m.textContent; else { its=w.cbcDashItems(); K=w.allChecks(); } }catch(e){ msg=null; its=null; }
+      if(!msg&&!its) msg='No results: the Beam Capacity tab has not finished loading, or its inputs need correcting.';
+      if(!msg) its.forEach(function(it,i){ var c=K[i]||{}, ks=[];
+        if(!c.na&&c.ci!=null){ var ci=c.ci;
+          if(c.tab==='tabFlex') ks=['fx'+ci+'/DCR'];
+          else if(c.tab==='tabShear') ks=['sh'+ci+'/DCRs','sh'+ci+'/DCR'];
+          else if(c.tab==='tabTor') ks=[/cross/i.test(c.label)?'tq'+ci+'/size':(/Combined/.test(c.label)?'tq'+ci+'/combVT':'tq'+ci+'/DCR')];
+          else if(c.tab==='tabServ') ks=['sv/minr'];
+          else if(c.tab==='tabDetail') ks=['dt/'+c.id+'.cmp']; }
+        ks=ks.map(function(k){ return 'cap:'+k; });
+        ks=ks.concat(ks.length?['cap:omit-'+ks[0].slice(4).split('/')[0]]:[],c.tab?['cbro:cap:'+c.tab]:[]);
+        var det=it.text+(it.cond&&it.dc?'; '+it.dc+(it.within?' (the ratio is within its limit; the status comes from the condition)':''):'');
+        rows.push(row(it.name,it.cond||it.dc,it.st,det,it.ref,ks)); });
+      add('Beam Capacity',rows,msg?msg.replace('the output panel','the Beam Capacity tab’s output panel'):null,msg?null:'Result: the D/C, or, where a limit or condition is not met, that condition (its D/C is under Detail). Every load combination is enveloped; the tables by combination are in the Beam Capacity chapter ([[cbro:cap:tabSummary]]).');
+    })();
+    /* B. ASD Beam Calcs */
+    (function(){ var w=win('asd'), its=null, rows=[], msg=null;
+      try{ its=w.asdDashItems(); }catch(e){ its=null; }
+      if(!its) msg='No results: the ASD Beam Calcs tab has not finished loading, or its inputs need correcting.';
+      else its.forEach(function(it){ var ks=[];
+        if(it.card==='anRF') ks=[/^Inventory/.test(it.name)?'asd:an/inv.RF':'asd:an/op.RF'];
+        ks.push('cbro:asd:'+(it.tab||'tabAnalysis'));
+        rows.push(row(it.name,it.short,it.st,it.text,it.ref,ks)); });
+      add('ASD Beam Calcs',rows,msg,msg?null:'Result: the rating factor RF (PASS when RF ≥ 1.00), or the condition of a REVIEW notice.');
+    })();
+    /* C. Development & Splice: the lines of its check summary panel as shown (the dashboard's checks; RBDC) */
+    (function(){ var w=win('dev'), rows=[], msg=null, f=null, CK={tLd:'td/ld',hLdh:'hk/ldh',cLdc:'cd/ldc',tsLen:'ts/lst',tsClassA:'ts/clsA',tConf:'td/ktrHS',csLen:'cs/lsc'};
+      var CT={tLd:'tension',tConf:'tension',tConfA:'tension',hLdh:'hook',cLdc:'compression',tsLen:'tsplice',tsClassA:'tsplice',csLen:'csplice'};   /* card -> tab (REBAR_CARDS) */
+      var NK=[['(c_b+K_tr)/d_b',['td/cbKtr']],['ψ_t·ψ_e',['td/psiTE']],['λ_rl·λ_cf',['td/rlcf']],['λ_rc',['td/lrc','td/ldcalc']],['K_tr ≥ 0.5d_b',['td/ktrHS','td/Ktr']]];   /* the step that works a limit line */
+      try{ f=w.computeFactors(w.readInputs());
+        [].slice.call(w.document.querySelectorAll('#rbrDash .rbrdCh')).forEach(function(c){
+          var q=function(s){ var e=c.querySelector(s); return e?e.textContent:''; };
+          var name=q('.rbrdN'), short=q('.rbrdR'), S=q('.rbrdS'), V=q('.rbrdV'), val=V.indexOf(name+': ')===0?V.slice(name.length+2).replace(/ \(information\)$/,''):V;
+          var st={PASS:'pass',FAIL:'fail',REVIEW:'warn',INFO:'info'}[S]||'na', m=w.rbrDashMeta(name,f,val)||{}, ks=[];
+          NK.forEach(function(x){ if(name.indexOf(x[0])===0) ks=ks.concat(x[1]); });
+          if(m.card&&CK[m.card]) ks.push(CK[m.card]);
+          ks=ks.map(function(k){ return 'dev:'+k; }).concat(['cbro:dev:'+(CT[m.card]||m.tab||'sum')]);
+          rows.push(row(name,short,st,short!==val?val:'',m.ref,ks)); });
+      }catch(e){ rows=[]; }
+      if(!rows.length) msg='No results: the Development & Splice tab has not finished loading.';
+      add('Development & Splice',rows,msg,msg?null:'INFO: a required length, or a code limit applied in the calculation (not a check). Lengths are required lengths: compare them with the lengths detailed.');
+    })();
+    return {title:'Summary of results',key:'cbro:sum',note:tot.join(' · ')+'.',subs:subs,_ch:'sum'};
+  }
+  /* each summary line links to the first of its keys found in the report (the step, else an omitted combination's note,
+     else the tab's section); a line with none keeps its reference as plain text */
+  function cbroKeys(M){
+    var D=null; try{ D=SharedReport.build(M); }catch(e){ return; }
+    M.sections[0].subs.forEach(function(q){ (q.items||[]).forEach(function(it){ if(it.type!=='table') return;
+      it.rows.forEach(function(r){ var c=r[4]; if(!c||!c._k) return; var h=c._k.filter(function(k){ return D.index.has(k); })[0]; delete c._k; if(h) c.key=h; }); }); });
+  }
+```
