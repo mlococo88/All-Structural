@@ -2297,7 +2297,7 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
 - **Other copies:** none (the CSS of the two frames is kept in step by this entry).
 - **Open items:** at 390 px the ASD Summary table and the Beam Capacity Summary table are wider than the frame (their Worked in / Status columns scroll inside the table box) — as before, not changed.
 
-## 2026-11-05 — PR: claude/cbc-dev-look (CBTH-2: Development & Splice re-themed to the suite look (Light Pole / apps/steel-bridge / the Beam Capacity tab): navy header, slate tabs with a blue stripe, card heads, one-row inputs; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-dev-look, PR #785: https://github.com/mlococo88/All-Structural/pull/785 (CBTH-2: Development & Splice re-themed to the suite look (Light Pole / apps/steel-bridge / the Beam Capacity tab): navy header, slate tabs with a blue stripe, card heads, one-row inputs; display only, no result change)
 
 ### CBTH-2. Beige / maroon serif theme replaced by the suite theme   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 1 of the concrete beam suite update, appearance):** make the concrete beam suite look like the Light Pole and Steel Bridge apps, no orange. Audit item 14 (this tab was still the legacy beige `--panel #f7f6f2`, maroon `--accent #8a1f1f`, Times everywhere, upper-case letter-spaced tabs).

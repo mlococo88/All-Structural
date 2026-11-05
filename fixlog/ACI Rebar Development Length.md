@@ -1395,7 +1395,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** `ACI Rebar Development Length.html` and the Development & Splice frame of `Concrete Beam Capacity.html` (both changed here). Spread Footing already excludes hooks (SFDH/SFEX).
 - **Open items:** none from this change. (Audit C4, the 12 in floor in the tension splice base, is conservative and was not changed.)
 
-## 2026-11-05 — PR: claude/cbc-dev-look (CBTH-2: Development & Splice re-themed to the suite look (Light Pole / apps/steel-bridge / the Beam Capacity tab): navy header, slate tabs with a blue stripe, card heads, one-row inputs; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-dev-look, PR #785: https://github.com/mlococo88/All-Structural/pull/785 (CBTH-2: Development & Splice re-themed to the suite look (Light Pole / apps/steel-bridge / the Beam Capacity tab): navy header, slate tabs with a blue stripe, card heads, one-row inputs; display only, no result change)
 
 ### CBTH-2. Beige / maroon serif theme replaced by the suite theme   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 1 of the concrete beam suite update, appearance):** make the concrete beam suite look like the Light Pole and Steel Bridge apps, no orange. Audit item 14 (this tab was still the legacy beige `--panel #f7f6f2`, maroon `--accent #8a1f1f`, Times everywhere, upper-case letter-spaced tabs).
