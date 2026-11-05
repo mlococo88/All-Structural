@@ -2869,3 +2869,208 @@ function asdDashColl(v,save){
   asdDashPlace();
 })();
 ```
+
+## 2026-11-05 — PR: claude/cbc-asreq-from-beam, PR #790: https://github.com/mlococo88/All-Structural/pull/790 (CBAR-1: "From Beam Capacity" button for A_s,req / A_s,prov in the Development & Splice excess-reinforcement inputs; display / workflow only, no result change)
+
+### CBAR-1. Development & Splice: A_s,req and A_s,prov filled from Beam Capacity   [workflow] [no result change]
+- **Engineer request (2026-11-05, approved):** a "From Beam Capacity" button in the Development & Splice frame's excess-reinforcement inputs (panel D2) that fills A_s,req = max(flexural A_s required, A_s,min of ACI 318-19 9.6.1 or the AASHTO equivalent), A_s,prov = the provided tension steel and the bar size, from the Beam Capacity frame's current results; the values stay editable; a note says where they came from (values, flexure or minimum governing) and links to the worked steps (CLAUDE.md §6). The PR #786 note stays.
+- **Mechanism (reused, no new storage key):** the suite's existing Beam Capacity → shell → ASD message (`type:'sharedInputs'`, `source:'beamCapacity'`, emitted after every Beam Capacity `refresh()` and on `requestShared`) carries a new field `data.asReq`; the shell now also forwards it to the Development & Splice frame and accepts `requestShared` from that frame. The ASD tab copies only the fields it knows (`map` in its listener), so it ignores `asReq`. A new message `type:'cbcGoto'` (Development & Splice → shell → Beam Capacity) opens a Beam Capacity card for the note's "Worked in" links. Both stay inside this file, so HANDOFF.md (cross-tool data) is not changed.
+- **Values (no new provision; computed from results Beam Capacity already has, `asReqOut` in its suite-bridge script):** the flexure-governing combination (`govFlexIndex`) and its sense of bending; A_s,prov = `F.As` (its tension steel); A_s,flex = A_s,prov · |M_u| / φM_n (= A_s,prov × the flexure DCR shown on the Flexure tab: steel in proportion to the moment; φM_n grows less than in proportion to A_s at constant d, so for a section whose φ does not drop as A_s falls this is slightly more than the exact A_s needed, i.e. a larger ratio and less reduction); A_s,min = ACI: the 9.6.1.2 value of the Detailing check `dAsMin` of that combination; AASHTO: A_s,prov · min(M_cr, 1.33 M_u) / φM_n with M_cr = γ_3(γ_1 f_r)S_c, γ_1 = 1.6, as the Serviceability tab's 5.6.3.3 check (AASHTO LRFD 10th Ed.); A_s,req = max(A_s,flex, A_s,min). Filled values: A_s,req rounded up and A_s,prov rounded down to 0.01 in²; the bar size when all tension bars of that sense are one size. "Apply excess-reinforcement reduction" is not ticked by the button. With blockers, no combinations, no tension steel or φM_n = 0 nothing is changed and the note says why.
+- **Shell, `Concrete Beam Capacity.html` (outside the srcdoc pages), message listener, before:**
+```js
+    if(d.type==='requestShared' && e.source!==src('suite-frame-asd')) return;
+    if(d.type==='sharedInputs'){
+      lastShared=d;
+      var w=cw(asdF); if(w) w.postMessage(d,'*');
+    } else if(d.type==='requestShared'){
+      if(lastShared){ var w=cw(asdF); if(w) w.postMessage(lastShared,'*'); }
+      var c=cw(capF); if(c) c.postMessage({type:'requestShared'},'*');
+    }
+```
+  **after:**
+```js
+    if(d.type==='requestShared' && e.source!==src('suite-frame-asd') && e.source!==src('suite-frame-dev')) return;
+    if(d.type==='cbcGoto' && e.source!==src('suite-frame-dev')) return;
+    if(d.type==='sharedInputs'){
+      lastShared=d;
+      var w=cw(asdF); if(w) w.postMessage(d,'*');
+      var v=cw(devF); if(v) v.postMessage(d,'*');
+    } else if(d.type==='requestShared'){
+      if(lastShared && e.source){ try{ e.source.postMessage(lastShared,'*'); }catch(err){} }
+      var c=cw(capF); if(c) c.postMessage({type:'requestShared'},'*');
+    } else if(d.type==='cbcGoto'){
+      show('capacity');
+      var c2=cw(capF); if(c2) c2.postMessage({type:'cbcGoto',tab:String(d.tab||''),card:String(d.card||'')},'*');
+    }
+```
+  (a `requestShared` from the ASD frame is answered to the ASD frame as before.)
+- **Beam Capacity frame (`suite-frame-capacity` srcdoc), "Suite bridge" script:** in `derive()` after `shape:   typ,` added `asReq:   asReqOut(cc),`; before `function emit(){` added:
+```js
+  /* CBAR-1 (2026-11-05): A_s,req and A_s,prov for the excess-reinforcement inputs of the Development & Splice tab, from the
+     current results (no new provision, nothing here changes a Beam Capacity result). Flexure-governing combination
+     (govFlexIndex) and its sense of bending:
+       A_s,prov = F.As (tension steel of that sense);
+       A_s,flex = A_s,prov x |M_u| / phi M_n (= A_s,prov x the flexure DCR; proportional to the moment, an upper bound for a
+                  section whose phi does not drop as A_s falls, since phi M_n grows less than in proportion to A_s);
+       A_s,min  = ACI: the 9.6.1.2 value of the Detailing check dAsMin of that combination;
+                  AASHTO: A_s,prov x min(M_cr, 1.33 M_u) / phi M_n (5.6.3.3, M_cr with gamma_1 = 1.6 and gamma_3, as the
+                  Serviceability tab), i.e. the steel giving M_r = min(M_cr, 1.33 M_u) on the same proportional basis;
+       A_s,req  = max(A_s,flex, A_s,min). */
+  function asReqOut(cc){
+    try{
+      var B=(typeof VALIDATION!=='undefined'&&VALIDATION&&VALIDATION.blockers)||[];
+      if(B.length) return {ok:false, why:'Beam Capacity has '+B.length+' blocker'+(B.length>1?'s':'')+' ('+B.map(function(x){return x.code;}).join(', ')+') and no results.'};
+      if(!cc||!cc.combos||!cc.combos.length) return {ok:false, why:'Beam Capacity has no load combinations.'};
+      var r=cc.combos[cc.govFlexIndex]; if(!r) return {ok:false, why:'Beam Capacity has no flexure results.'};
+      var F=r.F;
+      if(!(F.As>0)||!(r.phiMn>0)||!isFinite(r.phiMn)) return {ok:false, why:'Beam Capacity has no tension steel or no flexural capacity (\u03c6M_n) in the governing sense.'};
+      var Mu=Math.abs(r.Mu), asFlex=F.As*Mu/r.phiMn, mn;
+      if(S.code==='ACI'){
+        var e=(r.det||[]).find(function(x){return x.id==='dAsMin';});
+        mn={code:'ACI', ref:'ACI 318-19 9.6.1.2', as:e?e.need:0};
+      } else {
+        var g3=S.mat.gamma3||0.67, McrF=g3*1.6*r.svc.Mcr, need=Math.min(McrF, Mu>0?1.33*Mu:Infinity);
+        mn={code:'AASHTO', ref:'AASHTO LRFD 10th Ed. 5.6.3.3', McrF:McrF, Mu133:1.33*Mu, need:need, as:F.As*need/r.phiMn};
+      }
+      var asReq=Math.max(asFlex, mn.as), T=(F.T||[]);
+      var sizes=T.map(function(L){return String(L.size);}).filter(function(v,i,a){return a.indexOf(v)===i;});
+      var fc=(typeof cbcComboCard==='function')?cbcComboCard('flexC',r.ci):null;
+      return {ok:true, code:S.code, ci:r.ci, combo:r.name, sense:r.neg?'neg':'pos', Mu:Mu, phiMn:r.phiMn, dcM:r.dcM,
+              asProv:F.As, asFlex:asFlex, asMin:mn.as, min:mn, asReq:asReq, gov:(asFlex>=mn.as?'flexure':'minimum'),
+              bars:T.map(function(L){return L.n+' #'+L.size;}).join(' + '), bar:sizes.length===1?sizes[0]:null,
+              fc:S.mat.fc, fy:S.mat.fy,
+              links:{flex:fc?{tab:'tabFlex', card:fc.card, name:fc.name}:null,
+                     min:S.code==='ACI'?{tab:'tabDetail', card:'detdAsMin', name:'Minimum flexural reinforcement'}
+                                       :{tab:'tabServ', card:'svcMain', name:'Cracking Moment and Minimum Reinforcement'}}};
+    }catch(err){ return {ok:false, why:'Beam Capacity results are not available.'}; }
+  }
+```
+  and in its message listener, after `if(e.data && e.data.type==='requestShared') emit();`:
+```js
+    if(e.data && e.data.type==='cbcGoto' && typeof cbcGoto==='function') cbcGoto(String(e.data.tab||''), String(e.data.card||''));
+```
+### Development & Splice frame / standalone (identical in both copies)
+- **Where:** panel D2 "Excess Reinforcement" (`buildInputPanel`, anchor `<input id="asProv"`), the new block before `function init(){` (anchor `CBAR-1 (2026-11-05): "From Beam Capacity"`), `init()` (anchor `rbPlibInit();`), and `rbrModel()`'s excess-reinforcement steps (anchor `id:'asReq',label:'Area of steel required by analysis (input)'`) with the helper after `const rbS=o=>SharedSteps.step(o);`.
+- **Before (D2, after the A_s provided field):**
+```html
+      <div class="field"><label>A<sub>s</sub> provided <span class="unit">(in²)</span></label><input id="asProv" type="number" value="1.00" step="0.01" min="0"></div>
+    </div>
+```
+- **After:** the same, followed by
+```html
+    <div class="btnrow" id="asFromCapRow" style="display:none;margin-top:6px;"><button type="button" class="btn small" id="asFromCap" title="Fill A_s,req, A_s,prov and the bar size from the Beam Capacity tab's current results (you can still edit them)">From Beam Capacity</button></div>
+    <div class="hint" id="asFromCapNote" style="display:none;margin-top:6px"></div>
+```
+  The two existing hints (the 25.4.10.2 list and the PR #786 "A_s,req for a beam" note) follow unchanged.
+- **New block (before `function init(){`):**
+```js
+/* ---- CBAR-1 (2026-11-05): "From Beam Capacity" for the excess-reinforcement inputs (display / workflow only; no result change).
+   In the Concrete Beam suite the shell relays Beam Capacity's shared inputs (type 'sharedInputs', source 'beamCapacity', the
+   same message the ASD tab uses) to this frame; data.asReq holds A_s,req = max(A_s,flex, A_s,min), A_s,prov and the governing
+   one, worked there. The button appears only after such a message arrives from the parent page, so it never shows in the
+   standalone ACI Rebar Development Length.html (no Beam Capacity there). Clicking fills A_s,req (rounded up to 0.01 in²),
+   A_s,prov (rounded down to 0.01 in²) and the bar size (when all tension bars are one size); the values stay editable. The
+   note under the button says where they came from and links to the Beam Capacity cards where they are worked. Nothing is
+   stored: the note is for this session, and the filled values are saved as ordinary inputs. ---- */
+const RBCAP={last:null, fill:null, msg:''};
+function rbCapUp2(x){ return Math.ceil(x*100-1e-6)/100; }
+function rbCapDn2(x){ return Math.floor(x*100+1e-6)/100; }
+function rbCapLink(l,txt){
+  if(!l) return '';
+  const tn={tabFlex:'Flexure',tabDetail:'Detailing',tabServ:'Serviceability'}[l.tab]||l.tab;
+  return `<a class="wkA rbCapA" href="#" data-cbtab="${escHTML(l.tab)}" data-cbcard="${escHTML(l.card)}" title="Opens the Beam Capacity tab at this card">${escHTML(txt)} → Beam Capacity · ${escHTML(tn)} · ${escHTML(l.name)}</a>`;
+}
+function rbCapNote(){
+  const n=document.getElementById('asFromCapNote'); if(!n) return;
+  const F=RBCAP.fill;
+  if(!F){ n.style.display=RBCAP.msg?'':'none'; n.innerHTML=RBCAP.msg; return; }
+  const d=F.d, aci=d.code==='ACI', sub=s=>s.replace(/A_s,(\w+)/g,'A<sub>s,$1</sub>').replace(/M_(u|n|cr)\b/g,'M<sub>$1</sub>');
+  const sense=d.sense==='neg'?'negative moment, top bars':'positive moment, bottom bars';
+  const minTxt=aci
+    ? `A_s,min = ${fmt(d.asMin,3)} in² (${d.min.ref})`
+    : `A_s,min = A_s,prov·min(M_cr, 1.33M_u)/φM_n = ${fmt(d.asProv,2)} × min(${fmt(d.min.McrF,1)}, ${d.Mu>0?fmt(d.min.Mu133,1):'n/a'})/${fmt(d.phiMn,1)} = ${fmt(d.asMin,3)} in² (${d.min.ref})`;
+  const g=document.getElementById('asReq'), p=document.getElementById('asProv');
+  const edited=!g||!p||Math.abs(parseFloat(g.value)-F.asReq)>1e-9||Math.abs(parseFloat(p.value)-F.asProv)>1e-9;
+  const L=RBCAP.last, stale=L&&L.ok&&(rbCapUp2(L.asReq)!==F.asReq||rbCapDn2(L.asProv)!==F.asProv);
+  n.style.display='';
+  n.innerHTML=sub(`<b>From Beam Capacity</b> (${escHTML(d.code==='ACI'?'ACI 318-19':'AASHTO LRFD')}, flexure-governing combination ${d.ci+1} "${escHTML(d.combo)}", ${sense}${d.bars?' '+escHTML(d.bars):''}): `
+    +`A_s,req = max(A_s,flex, A_s,min) = max(${fmt(d.asFlex,3)}, ${fmt(d.asMin,3)}) = ${fmt(d.asReq,3)} in², <b>${d.gov==='flexure'?'flexure governs':'the minimum governs'}</b>; `
+    +`A_s,flex = A_s,prov·|M_u|/φM_n = ${fmt(d.asProv,2)} × ${fmt(d.Mu,1)}/${fmt(d.phiMn,1)} = ${fmt(d.asFlex,3)} in² (in proportion to the moment; slightly more than the exact value); ${minTxt}; `
+    +`A_s,prov = ${fmt(d.asProv,2)} in². Filled: A_s,req = ${fmt(F.asReq,2)} (rounded up), A_s,prov = ${fmt(F.asProv,2)} in² (rounded down), ratio ${fmt(F.asReq/F.asProv,3)}`
+    +(F.barTxt?`; ${escHTML(F.barTxt)}`:'')+'.'
+    +(F.matTxt?` <b>Check:</b> ${escHTML(F.matTxt)}`:'')
+    +(document.getElementById('useExcess')&&!document.getElementById('useExcess').checked?' The reduction applies only when "Apply excess-reinforcement reduction" is ticked.':'')
+    +(edited?' <b>Edited since:</b> the A_s values above are now your own.':'')
+    +(stale?' <b>Beam Capacity has changed since:</b> click the button again to refresh.':'')
+    +`<div class="wkLink">Worked in: ${rbCapLink(d.links&&d.links.flex,'φM_n, |M_u|')}; ${rbCapLink(d.links&&d.links.min,'A_s,min')}</div>`);
+}
+function rbCapFill(){
+  RBCAP.msg='';
+  const d=RBCAP.last;
+  try{ if(window.parent!==window) window.parent.postMessage({type:'requestShared'},'*'); }catch(e){}
+  if(!d){ RBCAP.fill=null; RBCAP.msg='Beam Capacity has not sent its results yet. Open the Beam Capacity tab once, then try again. Nothing was changed.'; rbCapNote(); return; }
+  if(!d.ok){ RBCAP.fill=null; RBCAP.msg='Nothing was changed: '+escHTML(d.why||'Beam Capacity has no results.'); rbCapNote(); return; }
+  const g=document.getElementById('asReq'), p=document.getElementById('asProv'), bs=document.getElementById('barSize');
+  const F={d, asReq:rbCapUp2(d.asReq), asProv:rbCapDn2(d.asProv), barTxt:'', matTxt:''};
+  g.value=F.asReq.toFixed(2); p.value=F.asProv.toFixed(2);
+  if(d.bar && bs && [...bs.options].some(o=>o.value===d.bar)){
+    if(bs.value!==d.bar){ F.barTxt='bar size set to #'+d.bar+' (was #'+bs.value+')'; bs.value=d.bar; } else F.barTxt='bar size #'+d.bar+' (unchanged)';
+  } else if(!d.bar) F.barTxt='bar size not changed (the tension bars are of more than one size)';
+  const inp=readInputs(), mm=[];
+  if(isFinite(d.fc)&&Math.abs(inp.fc-d.fc*1000)>0.5) mm.push("f′c "+fmt(inp.fc,0)+" psi here, "+fmt(d.fc*1000,0)+" psi in Beam Capacity");
+  if(isFinite(d.fy)&&Math.abs(inp.fy-d.fy*1000)>0.5) mm.push("f_y "+fmt(inp.fy,0)+" psi here, "+fmt(d.fy*1000,0)+" psi in Beam Capacity");
+  if(mm.length) F.matTxt=mm.join('; ')+' (not changed).';
+  RBCAP.fill=F;
+  g.dispatchEvent(new Event('change',{bubbles:true}));   // one recalculation, autosave and undo step, as typing
+  rbCapNote();
+}
+function rbCapInit(){
+  const b=document.getElementById('asFromCap'); if(b) b.addEventListener('click',rbCapFill);
+  const ip=document.getElementById('inputPanel');
+  if(ip){ ip.addEventListener('input',rbCapNote); ip.addEventListener('change',rbCapNote); }
+  document.addEventListener('click',e=>{
+    const a=e.target&&e.target.closest?e.target.closest('a.rbCapA'):null; if(!a) return;
+    e.preventDefault();
+    try{ window.parent.postMessage({type:'cbcGoto',tab:a.getAttribute('data-cbtab'),card:a.getAttribute('data-cbcard')},'*'); }catch(err){}
+  });
+  window.addEventListener('message',e=>{
+    if(!e||window.parent===window||e.source!==window.parent) return;   // only the suite shell
+    const m=e.data; if(!m||m.type!=='sharedInputs'||m.source!=='beamCapacity'||!m.data) return;
+    RBCAP.last=(m.data.asReq&&typeof m.data.asReq==='object')?m.data.asReq:{ok:false,why:'Beam Capacity did not send A_s values.'};
+    const r=document.getElementById('asFromCapRow'); if(r) r.style.display='';
+    rbCapNote();
+  });
+  try{ if(window.parent!==window) window.parent.postMessage({type:'requestShared'},'*'); }catch(e){}
+}
+```
+- **`init()`:** after `rbPlibInit();   // PLIB: …` added `rbCapInit();    // CBAR-1: "From Beam Capacity" (suite only)`.
+- **Report (`rbrModel`), before:**
+```js
+    rbS({id:'asReq',label:'Area of steel required by analysis (input)',sym:'A_{s,req}',value:inp.asReq,unit:'in^{2}'}),
+    rbS({id:'asProv',label:'Area of steel provided (input)',sym:'A_{s,prov}',value:inp.asProv,unit:'in^{2}'}),
+```
+  **after:**
+```js
+    rbS(Object.assign({id:'asReq',label:'Area of steel required by analysis (input)',sym:'A_{s,req}',value:inp.asReq,unit:'in^{2}'},rbCapRpt(inp,'req'))),
+    rbS(Object.assign({id:'asProv',label:'Area of steel provided (input)',sym:'A_{s,prov}',value:inp.asProv,unit:'in^{2}'},rbCapRpt(inp,'prov'))),
+```
+  with, after `const rbS=o=>SharedSteps.step(o);`:
+```js
+/* CBAR-1: Report note on A_s,req / A_s,prov while they still hold the values filled "From Beam Capacity" ({} otherwise) */
+function rbCapRpt(inp,k){
+  const F=(typeof RBCAP!=='undefined')?RBCAP.fill:null;
+  if(!F||Math.abs(inp.asReq-F.asReq)>1e-9||Math.abs(inp.asProv-F.asProv)>1e-9) return {};
+  const d=F.d, cb='Beam Capacity chapter, '+(d.links&&d.links.flex?'Flexure, '+d.links.flex.name:'Flexure');
+  if(k==='prov') return {note:'from Beam Capacity: tension steel '+(d.bars||'')+' of combination '+(d.ci+1)+' = '+fmt(d.asProv,3)+' in² rounded down; see '+cb};
+  return {note:'from Beam Capacity: max(A_s,flex '+fmt(d.asFlex,3)+', A_s,min '+fmt(d.asMin,3)+') = '+fmt(d.asReq,3)+' in² rounded up, '
+    +(d.gov==='flexure'?'flexure governs':'minimum governs')+' (A_s,flex = A_s,prov·|M_u|/φM_n; A_s,min per '+d.min.ref+'); see '+cb
+    +(d.gov==='flexure'?'':(d.code==='ACI'?' and Detailing, Minimum flexural reinforcement':' and Serviceability, Minimum flexural reinforcement'))};
+}
+```
+- **Problem:** A_s,req / A_s,prov had to be copied by hand from the Beam Capacity tab (A_s,min from the Detailing card, A_s from the layers).
+- **Governing provision:** none changed. ACI 318-19 25.4.10 / AASHTO LRFD 10th Ed. 5.10.8.2.1c (the excess factor, unchanged), ACI 318-19 9.6.1.2 and AASHTO LRFD 10th Ed. 5.6.3.3 (A_s,min, values as Beam Capacity already computes them).
+- **Check case (default projects, ACI 318-19):** Beam Capacity default: b_w = 12 in, h = 18 in, cover 2.0 in, #4 stirrups, 3 #5 bottom, f′c = 4000 psi, f_y = 60 ksi, all M_u = 0 (φM_n = 62.6 k-ft). d = 18 − 2.0 − 0.5 − 0.625/2 = 15.1875 in; A_s,min = max(3√4000/60000 × 12 × 15.1875, 200/60000 × 12 × 15.1875) = max(0.576, 0.608) = 0.608 in²; A_s,flex = 0.93 × 0/62.6 = 0; A_s,req = 0.608 → **0.61 in²** (minimum governs); A_s,prov = 3 × 0.31 = **0.93 in²**; ratio 0.61/0.93 = **0.656**; bar #8 → #5. With "Apply excess-reinforcement reduction" ticked the tool's factor is 0.6559 (= 0.61/0.93), computed as before. AASHTO, M_u = 40 k-ft on combination 1: φM_n = 62.59 k-ft, M_cr = 0.67 × 1.6 × 25.92 = 27.79 k-ft, 1.33 M_u = 53.2 k-ft; A_s,flex = 0.93 × 40/62.59 = 0.594, A_s,min = 0.93 × 27.79/62.59 = 0.413 → A_s,req = 0.594 → 0.60 in² (flexure governs), ratio 0.645. Beam Capacity with no combinations (blocker "Loads"): nothing changed, note "Nothing was changed: Beam Capacity has 1 blocker (Loads) and no results."
+- **How verified:** headless dump of the visible text and every input value of every input and output tab of the suite's three frames, the suite Report and the standalone ACI Rebar tool, origin/main vs branch (55 views): identical except the "From Beam Capacity" button on the Development & Splice Tension input tab; 0 console errors. Headless click test: the values above, the note, "Edited since" after typing, "Beam Capacity has changed since" after a Beam Capacity change, the AASHTO case, the no-result case, a "Worked in" link opening Beam Capacity · Detailing, and the Report step notes. `node tests/check-syntax.mjs`: all pass. `node tests/smoke/phone-layout.mjs --tool cbc,aci`: all passed. `node tests/smoke/project-library.mjs`: ALL PASS. Screenshots at 1600 and 390 px.
+- **Saved data:** no key or format changed. The filled values are saved as ordinary inputs; the source note is not stored (session only).
+- **Other copies:** `ACI Rebar Development Length.html` (the same Development & Splice code; the button never shows there: it appears only after a `sharedInputs` message from a parent page, and the standalone has none; listed in its fixlog as an intentional difference). CLAUDE.md §3.
+- **Open items:** (1) A_s,flex is taken in proportion to the moment (A_s,prov · M_u/φM_n), slightly more than the exact steel needed; an exact inverse solve of φM_n(A_s) = M_u was not added (it would be a new calculation): engineer to say if wanted. (2) The Report notes name the Beam Capacity chapter, tab and card, not a § number.
