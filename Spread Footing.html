@@ -2353,6 +2353,63 @@ function comboTable(list,full){
 <script>
 /* ---------- Tab 3: bearing ---------- */
 /* ---- original SVG: bearing pressure block, elevation profiles in x and y (to scale) ---- */
+/* SFQC (2026-11-05): the pressure at the four footing corners of the plotted combination, display only. The values are the
+   solver's own bp.corners (solveBearing; order (+B/2,+L/2), (−B/2,+L/2), (−B/2,−L/2), (+B/2,−L/2)), i.e. the same plane
+   q = q0 + gx·x + gy·y (zero where it would be negative) that the heat map draws; nothing is recomputed. Under partial contact
+   a corner with q = 0 is out of contact. Used by the heat-map labels (renderPlots), the 3.2 table (sfqcCard) and the Report. */
+const SFQC_PTS=[[1,1],[-1,1],[-1,-1],[1,-1]], SFQC_SUB=['₁','₂','₃','₄'];
+function sfqcRows(bp){
+ if(!bp||!bp.plane||!bp.corners||bp.corners.length!==4)return null;
+ const pl=bp.plane;
+ return bp.corners.map((q,i)=>{const s=SFQC_PTS[i],x=s[0]*R.B/2,y=s[1]*R.L/2;
+  return {i,sx:s[0],sy:s[1],x,y,t0:pl.q0,tx:pl.gx*x,ty:pl.gy*y,q,off:bp.mode==='partial'&&!(q>0)};});
+}
+const sfqcName=c=>'('+(c.sx>0?'+':'−')+'B/2, '+(c.sy>0?'+':'−')+'L/2)';
+const sfqcTxt=c=>c.off?'0 (no contact)':f2(c.q>0?c.q:0)+' ksf';
+/* the corner labels of the heat map: just inside each corner; where the footing is too narrow or short on the plot for two labels
+   side by side, just outside its left and right edges (when the plot has the room), else inside on two lines. Display only. */
+function sfqcFit(id,B,L){
+ const gd=document.getElementById(id),fl=gd&&gd._fullLayout;
+ if(!fl||!fl.xaxis||!fl.yaxis||!fl.xaxis._length||!fl.annotations||fl.annotations.length!==4||typeof Plotly==='undefined')return;
+ const xa=fl.xaxis,ya=fl.yaxis,fw=B*xa._length/Math.abs(xa.range[1]-xa.range[0]),fh=L*ya._length/Math.abs(ya.range[1]-ya.range[0]);
+ const lw=Math.max(...fl.annotations.map(a=>String(a.text).replace(/<br>/g,'').length))*5.6+12,lh=20;
+ const mode=(fw>=2*lw+12&&fh>=2*lh+12)?'in':((xa._length-fw)/2>=lw+8&&fh>=2*lh+8)?'side':'two';
+ const upd={};
+ fl.annotations.forEach((a,k)=>{const sx=SFQC_PTS[k][0],sy=SFQC_PTS[k][1],t=String(a.text).replace(/<br>/g,' ');
+  const o=mode==='side'?{xanchor:sx>0?'left':'right',xshift:4*sx,text:t,'font.size':11}:mode==='two'?{xanchor:sx>0?'right':'left',xshift:-4*sx,text:t.replace(' = ',' =<br>'),'font.size':10}:{xanchor:sx>0?'right':'left',xshift:-4*sx,text:t,'font.size':11};
+  Object.keys(o).forEach(q=>{if(q==='font.size'?(a.font&&a.font.size)!==o[q]:a[q]!==o[q])upd['annotations['+k+'].'+q]=o[q];});});
+ if(Object.keys(upd).length)Plotly.relayout(gd,upd);
+}
+function sfqcCard(bp,r){
+ const C=sfqcRows(bp);if(!C)return null;
+ const box=el('div','');box.id='o-br-corners';
+ const full=bp.mode==='full', pl=bp.plane, f3=v=>(Math.abs(v)<5e-4?0:v).toFixed(3), f4=v=>(Math.abs(v)<5e-5?0:v).toFixed(4);
+ if(full){
+  const A=R.B*R.L, Iy=R.L*Math.pow(R.B,3)/12, Ix=R.B*Math.pow(R.L,3)/12;
+  const My=r.P*r.ex, Mx=r.P*r.ey, c1=C[0];
+  box.appendChild(eqBlock('Footing-corner pressures: area and moments of inertia of the base','rectangle B × L',
+   'A = BL,\\;\\; I_y = \\frac{L B^3}{12},\\;\\; I_x = \\frac{B L^3}{12}',
+   'A = '+f2(R.B)+'\\cdot'+f2(R.L)+',\\;\\; I_y = \\frac{'+f2(R.L)+'\\cdot'+f2(R.B)+'^3}{12},\\;\\; I_x = \\frac{'+f2(R.B)+'\\cdot'+f2(R.L)+'^3}{12}',
+   'A = '+f2(A)+'\\;\\mathrm{ft^2},\\;\\; I_y = '+f2(Iy)+'\\;\\mathrm{ft^4},\\;\\; I_x = '+f2(Ix)+'\\;\\mathrm{ft^4}'));
+  box.appendChild(eqBlock('Footing-corner pressures (the labels on the heat map below)','q = P/A ± M_y x/I_y ± M_x y/I_x, full contact',
+   'q = \\frac{\\Sigma P}{A} + \\frac{M_y\\,x}{I_y} + \\frac{M_x\\,y}{I_x},\\;\\; M_y = \\Sigma P\\,e_x,\\;\\; M_x = \\Sigma P\\,e_y,\\;\\; x = \\pm\\tfrac{B}{2},\\; y = \\pm\\tfrac{L}{2}',
+   'M_y = '+f2(r.P)+'\\cdot'+f3(r.ex)+' = '+f2(My)+',\\;\\; M_x = '+f2(r.P)+'\\cdot'+f3(r.ey)+' = '+f2(Mx)+'\\;\\mathrm{kip\\text{-}ft};\\quad q_1 = \\frac{'+f2(r.P)+'}{'+f2(A)+'} + \\frac{'+f2(My)+'\\cdot'+f2(c1.x)+'}{'+f2(Iy)+'} + \\frac{'+f2(Mx)+'\\cdot'+f2(c1.y)+'}{'+f2(Ix)+'}\\;\\;(\\text{all four in the table})',
+   C.map(c=>'q_'+(c.i+1)+' = '+f2(c.q>0?c.q:0)).join(',\\;\\;')+'\\;\\mathrm{ksf}\\quad(q_{max} = '+f2(bp.qmax)+',\\; q_{min} = '+f2(bp.qmin)+')'));
+ }else{
+  box.appendChild(eqBlock('Footing-corner pressures (the labels on the heat map below)','no-tension plane, solution above',
+   'q = \\max\\left(0,\\; q_0 + g_x x + g_y y\\right),\\quad x = \\pm\\tfrac{B}{2},\\; y = \\pm\\tfrac{L}{2}',
+   'q_0 = '+f3(pl.q0)+'\\;\\mathrm{ksf},\\;\\; g_x = '+f4(pl.gx)+',\\;\\; g_y = '+f4(pl.gy)+'\\;\\mathrm{ksf/ft},\\;\\; B/2 = '+f2(R.B/2)+',\\;\\; L/2 = '+f2(R.L/2)+'\\;\\mathrm{ft}',
+   C.map(c=>'q_'+(c.i+1)+' = '+(c.off?'0':f2(c.q))).join(',\\;\\;')+'\\;\\mathrm{ksf}\\quad(q_{max} = '+f2(bp.qmax)+')'));
+ }
+ const t=document.createElement('table');t.className='tbl';
+ t.innerHTML='<tr><th>Corner</th><th>x (ft)</th><th>y (ft)</th>'+(full?'<th>ΣP/A (ksf)</th><th>M<sub>y</sub>x/I<sub>y</sub> (ksf)</th><th>M<sub>x</sub>y/I<sub>x</sub> (ksf)</th><th>q (ksf)</th>'
+  :'<th>q<sub>0</sub> (ksf)</th><th>g<sub>x</sub>x (ksf)</th><th>g<sub>y</sub>y (ksf)</th><th>q<sub>0</sub> + g<sub>x</sub>x + g<sub>y</sub>y (ksf)</th><th>q (ksf)</th>')+'</tr>';
+ C.forEach(c=>{const tr=document.createElement('tr');
+  const cells=['q'+SFQC_SUB[c.i]+' '+sfqcName(c),f2(c.x),f2(c.y),f2(c.t0),f2(c.tx),f2(c.ty)].concat(full?[f2(c.q>0?c.q:0)]:[f2(c.t0+c.tx+c.ty),c.off?'0 (no contact)':f2(c.q)]);
+  cells.forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});t.appendChild(tr);});
+ box.appendChild(t);
+ return box;
+}
 function pressureBlockSVG(bp,r){
  // global pressure range over the whole footing (same basis as the plan heatmap legend)
  const plane0=bp.plane;
@@ -2686,7 +2743,9 @@ function renderBearing(){
  }else{
   b1.appendChild(el('div','errbox','Resultant falls outside the footing footprint \u2014 no equilibrium pressure distribution exists (unstable).'));
  }
+ const qc=(bp.mode==='full'||bp.mode==='partial')?sfqcCard(bp,r):null;if(qc)b1.appendChild(qc);   /* SFQC: the four corner pressures, worked */
  const hm=el('div','plot');hm.id='plot-heat';b1.appendChild(hm);
+ if(qc)b1.appendChild(sfdWorkedIn([['o-br-corners','corner labels q₁…q₄',['tab-bearing','3.2 Footing-corner pressures']]]));   /* SFQC: §6 link */
  if(bp.mode!=='unstable'&&bp.plane)b1.appendChild(pressureBlockSVG(bp,r));
  // interactive biaxial contact-zone map
  if(bp.mode!=='unstable'&&!lvT){
@@ -3121,8 +3180,12 @@ function renderPlots(){
   for(let i=0;i<=N;i++)xs.push(-B/2+B*i/N);
   for(let j=0;j<=N;j++)ys.push(-L/2+L*j/N);
   for(let j=0;j<=N;j++){const row=[];for(let i=0;i<=N;i++){row.push(Math.max(0,bp.q0+bp.gx*xs[i]+bp.gy*ys[j]));}z.push(row);}
+  /* SFQC: the solver's corner pressures, labelled just inside each corner (inside the plot area, clear of the colour scale) */
+  const qcAnn=(sfqcRows(hv?hv.bear:hs.bear)||[]).map(c=>({x:c.x,y:c.y,xref:'x',yref:'y',text:'q'+SFQC_SUB[c.i]+' = '+sfqcTxt(c),showarrow:false,
+   xanchor:c.sx>0?'right':'left',yanchor:c.sy>0?'top':'bottom',xshift:-4*c.sx,yshift:-4*c.sy,bgcolor:'rgba(255,255,255,0.85)',bordercolor:'#444',borderwidth:1,borderpad:2,font:{size:11,color:'#111'}}));
   sfpPlot('plot-heat',[{x:xs,y:ys,z:z,type:'heatmap',colorscale:[[0,'#1a9850'],[0.5,'#fee08b'],[1,'#d73027']],reversescale:false,colorbar:{title:'q (ksf)'},hovertemplate:'x=%{x:.2f} ft<br>y=%{y:.2f} ft<br>q=%{z:.2f} ksf<extra></extra>'}],
-  {font,title:{text:hv?'Base pressure \u2014 LRFD (factored), reference only: '+hv.cb.name+'  (green = min, red = max)':hs===R.govBear?'Base pressure \u2014 governing combination: '+R.govBear.cb.name+'  (green = min, red = max)':'Base pressure \u2014 selected service combination: '+hs.cb.name+' (governing: '+R.govBear.cb.name+')  (green = min, red = max)',font:{size:12}},margin:{t:30},xaxis:{title:'x (ft)',scaleanchor:'y'},yaxis:{title:'y (ft)'}},{responsive:true,displaylogo:false});
+  {font,title:{text:hv?'Base pressure \u2014 LRFD (factored), reference only: '+hv.cb.name+'  (green = min, red = max)':hs===R.govBear?'Base pressure \u2014 governing combination: '+R.govBear.cb.name+'  (green = min, red = max)':'Base pressure \u2014 selected service combination: '+hs.cb.name+' (governing: '+R.govBear.cb.name+')  (green = min, red = max)',font:{size:12}},margin:{t:30},xaxis:{title:'x (ft)',scaleanchor:'y'},yaxis:{title:'y (ft)'},annotations:qcAnn},{responsive:true,displaylogo:false});
+  sfqcFit('plot-heat',B,L);   /* SFQC */
  }
  /* FS chart */
  if(sfpOn('plot-fs')){
@@ -3490,7 +3553,7 @@ function sfrModel(){
    w.add({id:'Ac',label:'Contact area / footing area',sym:'A_{c}/A',eq:'',sub:'',value:100*(bp.contactFrac||0),unit:'%',d:1});
   }
   const bearItem={type:'steps',scope:'brg',see:'res',steps:w.steps,title:'Base pressure, '+G.cb.name};
-  subs.push({title:'Base pressure (governing combination)',key:'S-bp',items:[bearItem,{type:'note',text:'Resultant and eccentricities: [[res/P]], [[res/ex]]. q_max is reported for information and for the structural design; '+(state.soil.mode==='vesic'&&!R.directMode?'the bearing check uses the effective-area method ([[S-qa]]).':'the bearing check is in [[S-qa]].')}]});
+  subs.push({title:'Base pressure (governing combination)',key:'S-bp',items:[bearItem,...sfqcReport(bp,r),{type:'note',text:'Resultant and eccentricities: [[res/P]], [[res/ex]]. q_max is reported for information and for the structural design; '+(state.soil.mode==='vesic'&&!R.directMode?'the bearing check uses the effective-area method ([[S-qa]]).':'the bearing check is in [[S-qa]].')}]});   /* SFQC: + the four corner pressures */
   /* allowable bearing and the check */
   const c=G.cap, T=[];
   if(c&&c.direct){
@@ -4001,6 +4064,28 @@ function sfxApply(model){
   ref.subs.push({title:'About this report',items:[{type:'note',text:'ACI 318-19 · ASCE 7-16 · IBC 2021 · Spread Footing Design Tool, by Mario Lococo.'},{type:'note',text:'Verdict: '+verdict+'.'},
    {type:'note',text:'Each result section ends with the result lines of its checks (one per dashboard chip; status = the chip’s own PASS / FAIL / REVIEW / N/A). For a factor-of-safety check, D/C = FS_target/FS. Where a value is used away from where it is worked, a § link gives the section where it is worked. Units: kips, ft, ksf unless noted.'}]});}
  return model;
+}
+/* SFQC (2026-11-05): the four footing-corner pressures in the Report (governing combination, [[S-bp]]): the same values and table
+   as the Bearing tab's 3.2 (sfqcRows: the solver's bp.corners); the heat-map figure carries them as labels q1..q4. Display only. */
+function sfqcReport(bp,r){
+ const C=sfqcRows(bp);if(!C||!(bp.mode==='full'||bp.mode==='partial'))return [];
+ const full=bp.mode==='full', c=sfrCell, S=o=>SharedSteps.step(o), pl=bp.plane;
+ const lab=x=>'q'+SFQC_SUB[x.i]+' '+sfqcName(x);
+ const items=[];
+ if(full){const A=R.B*R.L, Iy=R.L*Math.pow(R.B,3)/12, Ix=R.B*Math.pow(R.L,3)/12;
+  items.push({type:'steps',scope:'brq',title:'Footing-corner pressures, full contact: q = ΣP/A + M_y x/I_y + M_x y/I_x at x = ±B/2, y = ±L/2',steps:[
+   S({id:'A',label:'Footing area',sym:'A',eq:'B L',sub:sfrN(R.B)+'\\cdot'+sfrN(R.L),value:A,unit:'ft^{2}'}),
+   S({id:'Iy',label:'Moment of inertia about the y-axis',sym:'I_{y}',eq:'\\frac{L B^{3}}{12}',sub:'\\frac{'+sfrN(R.L)+'\\cdot'+sfrN(R.B)+'^{3}}{12}',value:Iy,unit:'ft^{4}'}),
+   S({id:'Ix',label:'Moment of inertia about the x-axis',sym:'I_{x}',eq:'\\frac{B L^{3}}{12}',sub:'\\frac{'+sfrN(R.B)+'\\cdot'+sfrN(R.L)+'^{3}}{12}',value:Ix,unit:'ft^{4}'}),
+   S({id:'My',label:'Moment about the y-axis',sym:'M_{y}',eq:'\\sum P\\,e_{x}',sub:sfrN(r.P)+'\\cdot'+sfrN(r.ex,3),value:r.P*r.ex,unit:'kip-ft'}),
+   S({id:'Mx',label:'Moment about the x-axis',sym:'M_{x}',eq:'\\sum P\\,e_{y}',sub:sfrN(r.P)+'\\cdot'+sfrN(r.ey,3),value:r.P*r.ey,unit:'kip-ft'})]});
+  items.push({type:'table',wide:true,head:['Corner','x (ft)','y (ft)','ΣP/A (ksf)','M_y·x/I_y (ksf)','M_x·y/I_x (ksf)','q (ksf)'],
+   rows:C.map(x=>[lab(x),c(x.x),c(x.y),c(x.t0),c(x.tx),c(x.ty),c(x.q>0?x.q:0)])});
+ }else{
+  items.push({type:'table',wide:true,head:['Corner','x (ft)','y (ft)','q_0 (ksf)','g_x·x (ksf)','g_y·y (ksf)','q_0 + g_x·x + g_y·y (ksf)','q = max(0, ·) (ksf)'],
+   rows:C.map(x=>[lab(x),c(x.x),c(x.y),c(x.t0),c(x.tx),c(x.ty),c(x.t0+x.tx+x.ty),x.off?'0 (no contact)':c(x.q)])});}
+ items.push({type:'note',text:'Footing-corner pressures of '+(full?'the full-contact pressure plane':'the no-tension pressure plane q = max(0, q_0 + g_x x + g_y y), q_0 = '+sfrN(pl.q0,3)+' ksf, g_x = '+sfrN(pl.gx,4)+', g_y = '+sfrN(pl.gy,4)+' ksf/ft ([[brg/qmax]])')+'; the same values label the corners of the Bearing tab’s base-pressure heat map (§3.2 figure). q_max = '+sfrN(bp.qmax)+' ksf'+(full?', q_min = '+sfrN(bp.qmin)+' ksf':'')+'.'});
+ return items;
 }
 /* SFLR (2026-11-04): the LRFD reference tables in the Report, at the end of the Bearing and Stability sections under "Reference: LRFD
    combinations" (Include box, saved field state.lrRefRpt, default on). Added after sfxApply, so the rest of the Report is unchanged. Same

@@ -5173,3 +5173,33 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - New fields: `phiPnFtg`, `brgGov`. `phiBgate`, `ldcReq` and every pass/fail status are unchanged on all cases.
   - 0 console / KaTeX errors. `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Card 5.6 (default) checked by eye.
 - **Saved data:** no change. **Other copies:** none.
+
+## 2026-11-05 — PR: claude/sf-corner-pressures (PR pending) — Bearing-pressure heat map labels the four footing-corner pressures; corner-pressure worked lines and table in 3.2 and in the Report (SFQC; display only)
+
+- **What:** the base-pressure heat map (Bearing tab, card 3.2, Plotly `plot-heat`) labels each footing corner with its pressure, e.g. "q₁ = 7.03 ksf", or "q₃ = 0 (no contact)" where the corner is off the soil under partial contact. Card 3.2 gets a worked block and a table of the four corner pressures, with a "Worked in" link under the heat map. The Report (section Bearing, "Base pressure (governing combination)", key S-bp) gets the same table. The heat-map figure printed in the Report carries the labels.
+- **Values:** no new calculation. Every number is the solver's own `bp.corners` (`solveBearing`), the plane the heat map draws:
+  - full contact: `q0l + gxl*x + gyl*y`, where q0 = ΣP/A, g_x = 12ΣP e_x/(L B³) = M_y/I_y, g_y = 12ΣP e_y/(B L³) = M_x/I_x. The table splits it into ΣP/A, M_y·x/I_y = g_x·x and M_x·y/I_x = g_y·y.
+  - partial contact: `Math.max(0, q0 + gx*x + gy*y)` with the Newton-solved no-tension plane (q0, g_x, g_y). The table shows q0, g_x·x, g_y·y, the unclamped sum and q.
+  - Corner order (as in `solveBearing`): q₁ (+B/2, +L/2), q₂ (−B/2, +L/2), q₃ (−B/2, −L/2), q₄ (+B/2, −L/2).
+- **Where (anchors):**
+  - New, before `function pressureBlockSVG(bp,r){`: `SFQC_PTS`, `SFQC_SUB`, `sfqcRows(bp)` (rows from `bp.corners` and `bp.plane`), `sfqcName`, `sfqcTxt`, `sfqcFit(id,B,L)` (label placement), `sfqcCard(bp,r)` (card 3.2 block, id `o-br-corners`).
+  - `renderBearing`, before `const hm=el('div','plot');hm.id='plot-heat';`: `const qc=(bp.mode==='full'||bp.mode==='partial')?sfqcCard(bp,r):null;if(qc)b1.appendChild(qc);`; after it: `if(qc)b1.appendChild(sfdWorkedIn([['o-br-corners','corner labels q₁…q₄',['tab-bearing','3.2 Footing-corner pressures']]]));`
+  - `renderPlots`, heat map: `const qcAnn=(sfqcRows(hv?hv.bear:hs.bear)||[]).map(...)` added; layout `yaxis:{title:'y (ft)'}}` → `yaxis:{title:'y (ft)'},annotations:qcAnn}`; after the `sfpPlot('plot-heat',…)` call: `sfqcFit('plot-heat',B,L);`.
+  - `sfrModel`, Bearing: `items:[bearItem,{type:'note',…` → `items:[bearItem,...sfqcReport(bp,r),{type:'note',…`. New `sfqcReport(bp,r)` before the `/* SFLR (2026-11-04)` comment.
+- **Decision (pending engineer review):**
+  - Labels sit just inside each corner. Where the footing is too narrow on the plot for two labels side by side (e.g. Seymour, 5 × 13 ft), they sit just outside its left and right edges, if the plot has room there. Otherwise they go inside, on two lines. All placements stay inside the plot area and clear of the colour scale. The placement is chosen when the plot is drawn. A later window resize keeps the labels anchored to the corners but does not choose a new placement.
+  - "No contact" is shown only under partial contact, for a corner where the solved plane is ≤ 0. A full-contact corner at exactly q = 0 (kern index 1.00) reads "0.00 ksf".
+  - The SVG elevation sections under the heat map are cuts through the centroid (movable by slider), not edges, so their end values are not corner pressures. They are not labelled.
+  - In the near-uniaxial partial-contact case, card 3.2 also shows the closed-form triangle q_max. The corner table shows the solver's plane values (the same values as q_max used by the checks and by the heat map). In the cases run, the two agree to 0.01 ksf (sfe9: 8.02 both).
+  - The Report table is for the governing service combination (the S-bp section). The tab and the heat map follow the selected combination (ASD or LRFD reference), as before.
+- **Governing provision:** none changed. This is the rigid-footing linear pressure distribution q = P/A ± M_y x/I_y ± M_x y/I_x, which the tool already uses.
+- **Check case, default project, governing D + 0.75L + 0.45(+Wx) + 0.75S:** ΣP = 434.94 k, B × L = 10 × 8 ft, e_x = 0.488 ft, e_y = 0.
+  - A = 80.00 ft², I_y = 8·10³/12 = 666.67 ft⁴, M_y = 434.94·0.4883 = 212.40 kip-ft.
+  - ΣP/A = 5.437 ksf; M_y·x/I_y = 212.40·5/666.67 = 1.593 ksf.
+  - q₁ = q₄ = 5.437 + 1.593 = **7.03 ksf** (= q_max); q₂ = q₃ = 5.437 − 1.593 = **3.84 ksf** (= q_min).
+- **How verified:**
+  - Headless Chromium, origin/main 36712c9 vs the branch, 11 cases (the 10 of the Spread Footing case set plus the Seymour project file). Deep diff of `R` and `P2`: 0 differences. The dashboard text is identical. 0 console / KaTeX errors.
+  - Report text: only added lines (the new table, steps and note, plus the tab's worked lines that the "As printed" part copies). No line removed.
+  - On all 199 combinations with a pressure solution (ASD and LRFD, all cases): max of the four corners === `bp.qmax`, min === `bp.qmin` (full contact) or q_min = 0 (partial contact), and each corner value equals the heat-map value at that grid corner (exact equality).
+  - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Screenshots checked: default, Seymour (ASD governing, LRFD), the Seymour-based review case partial-contact rows (ASD 0.6D + 0.6(±Wx), LRFD), sfe9 (one-way uplift, two corners off), and a 620 px wide window.
+- **Saved data:** no change. **Other copies:** none.
