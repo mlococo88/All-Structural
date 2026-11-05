@@ -3397,6 +3397,7 @@ function buildInputEchoTab(pg){
    explanatory note if its library is unavailable (offline).
    ===================================================================== */
 let VIS3D={theta:0.7,phi:0.35,r:null,opacity:0.45,show:{conc:true,ten:true,comp:true,stir:true},raf:0};
+var CBOV={sec:null,elev:null,snap:null,snapKey:null};   /* CBOV (2026-11-05): the Report overview (scales of the drawings, 3-D snapshot cache); see cbcOvFigs */
 
 function barXs(n,db){                       /* x-centres across the web, in */
   const cc=S.cover.cc, ds=stirDia(), bw=S.sec.bw;
@@ -3508,6 +3509,7 @@ function svgSection(neg){
   s+=`<text x=&quot;${X(0)}&quot; y=&quot;${compAtTop?Y(0)-6:Y(h)+30}&quot; font-size=&quot;8.5&quot; fill=&quot;#B45309&quot;
       text-anchor=&quot;middle&quot; font-family=&quot;Arial,Helvetica,sans-serif&quot;>extreme compression fibre ${compAtTop?&quot;(top)&quot;:&quot;(bottom)&quot;} — \u03b5 = 0.003</text>`;
   s+=`</svg>`;
+  CBOV.sec={W,H,sc};   /* CBOV: the drawing scale (px per in), for the Report overview's scale bar */
   return s;
 }
 
@@ -3580,28 +3582,18 @@ function plotDCR(divId){
 }
 
 /* ---------- three.js 3-D ---------- */
-function build3D(container){
-  if(!window.THREE){
-    container.innerHTML='<div class=&quot;warnBox&quot;>three.js could not be loaded from its CDN, so the 3-D view is unavailable. The cross-section schematic above shows the same reinforcement to scale.</div>';
-    return;
-  }
+/* CBOV (2026-11-05): the 3-D scene of the Visuals tab (concrete, longitudinal bars at their positions, closed stirrups at s),
+   moved out of build3D unchanged so the Report's overview can render the same scene once more off screen (cbcOvSnap3D).
+   mats: an object that receives each layer's material by layer index (build3D: VIS3D.layerMats, for the linked highlight). */
+function cbc3DScene(neg,opacity,mats){
   const {bw,h,bf,hf,type}=S.sec, tee=type==='tee';
   const Lb=Math.max(4*h,48);                           /* illustrative length */
-  const neg=CC.govRow?CC.govRow.neg:false;
-  const wrap=el(&quot;div&quot;); wrap.style.position=&quot;relative&quot;; container.appendChild(wrap);
-  const cv=el(&quot;canvas&quot;); cv.style.width=&quot;100%&quot;; cv.style.borderRadius=&quot;4px&quot;; wrap.appendChild(cv);
-  const Wpx=wrap.clientWidth||760, Hpx=380;
-  const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
-  renderer.setSize(Wpx,Hpx,false); renderer.setClearColor(0xf4f3ef);
   const scene=new THREE.Scene();
   scene.add(new THREE.AmbientLight(0xffffff,0.75));
   const dl=new THREE.DirectionalLight(0xffffff,0.7); dl.position.set(60,120,90); scene.add(dl);
-  const cam=new THREE.PerspectiveCamera(40,Wpx/Hpx,1,4000);
-  if(VIS3D.r==null) VIS3D.r=Math.max(Lb,h)*1.7;
   /* groups */
   const gConc=new THREE.Group(),gTen=new THREE.Group(),gComp=new THREE.Group(),gStir=new THREE.Group();
-  const mConc=new THREE.MeshLambertMaterial({color:0xcfcabb,transparent:true,opacity:VIS3D.opacity});
-  VIS3D.layerMats={};
+  const mConc=new THREE.MeshLambertMaterial({color:0xcfcabb,transparent:true,opacity:opacity});
   const mStir=new THREE.MeshLambertMaterial({color:0x64748b});
   /* concrete: y measured up; section top at +h/2 */
   if(tee){
@@ -3615,7 +3607,7 @@ function build3D(container){
   G.forEach(L=>{
     const geo=new THREE.CylinderGeometry(L.db/2,L.db/2,Lb,12);
     const mat=new THREE.MeshLambertMaterial({color:L.side==='T'?0xb91c1c:0x1d4ed8});
-    VIS3D.layerMats[String(L.i)]=mat;
+    mats[String(L.i)]=mat;
     barXs(L.n,L.db).forEach(x=>{
       const m=new THREE.Mesh(geo,mat);
       m.rotation.x=Math.PI/2;
@@ -3640,6 +3632,25 @@ function build3D(container){
     }
   }
   scene.add(gConc,gTen,gComp,gStir);
+  return {scene,gConc,gTen,gComp,gStir,mConc,Lb};
+}
+function build3D(container){
+  if(!window.THREE){
+    container.innerHTML='<div class=&quot;warnBox&quot;>three.js could not be loaded from its CDN, so the 3-D view is unavailable. The cross-section schematic above shows the same reinforcement to scale.</div>';
+    return;
+  }
+  const {bw,h,bf,hf,type}=S.sec, tee=type==='tee';
+  const Lb=Math.max(4*h,48);                           /* illustrative length */
+  const neg=CC.govRow?CC.govRow.neg:false;
+  const wrap=el(&quot;div&quot;); wrap.style.position=&quot;relative&quot;; container.appendChild(wrap);
+  const cv=el(&quot;canvas&quot;); cv.style.width=&quot;100%&quot;; cv.style.borderRadius=&quot;4px&quot;; wrap.appendChild(cv);
+  const Wpx=wrap.clientWidth||760, Hpx=380;
+  const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+  renderer.setSize(Wpx,Hpx,false); renderer.setClearColor(0xf4f3ef);
+  const cam=new THREE.PerspectiveCamera(40,Wpx/Hpx,1,4000);
+  if(VIS3D.r==null) VIS3D.r=Math.max(Lb,h)*1.7;
+  VIS3D.layerMats={};
+  const {scene,gConc,gTen,gComp,gStir,mConc}=cbc3DScene(neg,VIS3D.opacity,VIS3D.layerMats);
   /* controls: manual orbit + wheel zoom */
   let drag=false,lx=0,ly=0;
   cv.addEventListener(&quot;mousedown&quot;,e=>{drag=true;lx=e.clientX;ly=e.clientY;});
@@ -3788,6 +3799,7 @@ function svgElevation(){
         font-family=&quot;Arial,Helvetica,sans-serif&quot;>acceptable band: s_max = ${fmt(info.smax)}&quot;  [${info.src}]</text>`;
   }
   s+=`</svg>`;
+  CBOV.elev={W,H,sc};   /* CBOV: the drawing scale (px per in), for the Report overview's scale bar */
   return s;
 }
 
@@ -4266,6 +4278,7 @@ function cbcRxSel(){
   const o=S.ui&amp;&amp;S.ui.rptOpts, ok=!!(o&amp;&amp;o.tabs), r={tabs:{},combos:{}};   /* as normRptOpts: a missing entry is true; an old boolean map reads as all true */
   reportTabList().forEach(([id])=>r.tabs[id]=!(ok&amp;&amp;o.tabs[id]===false));
   S.combos.forEach((c,i)=>r.combos[i]=!(ok&amp;&amp;o.combos&amp;&amp;o.combos[i]===false));
+  r.ov=!(o&amp;&amp;o.ov===false);   /* CBOV: the Report's &quot;Overview figures&quot; box; absent (older saves) = on */
   return r;
 }
 /* an Include box (kind 'tab' | 'combo') or the dialog's &quot;Select all&quot; / &quot;Governing combinations only&quot; ('all' | 'gov') */
@@ -4274,7 +4287,8 @@ function cbcRxSet(kind,key,val){
   const o=normRptOpts();
   if(kind===&quot;tab&quot;) o.tabs[key]=!!val;
   else if(kind===&quot;combo&quot;) o.combos[key]=!!val;
-  else if(kind===&quot;all&quot;){ Object.keys(o.tabs).forEach(k=>o.tabs[k]=true); Object.keys(o.combos).forEach(k=>o.combos[k]=true); }
+  else if(kind===&quot;ov&quot;) o.ov=!!val;   /* CBOV: &quot;Overview figures&quot; (S.ui.rptOpts.ov) */
+  else if(kind===&quot;all&quot;){ Object.keys(o.tabs).forEach(k=>o.tabs[k]=true); Object.keys(o.combos).forEach(k=>o.combos[k]=true); o.ov=true; }
   else if(kind===&quot;gov&quot;){   /* union of the overall governor and the per-limit-state governors (the dialog's rule) */
     const keep=new Set([CC?CC.govIndex:0]);
     if(CC){ [CC.govFlexIndex,CC.govShearIndex].forEach(i=>{ if(i!=null) keep.add(i); });
@@ -4284,6 +4298,54 @@ function cbcRxSet(kind,key,val){
 }
 /* the Include boxes: [id, label] of the tabs, and the combinations (label as the dialog) */
 function cbcRxBoxes(){ return {tabs:reportTabList(),combos:S.combos.map((c,i)=>&quot;Combination &quot;+(i+1)+&quot; — &quot;+c.name+(CC&amp;&amp;i===CC.govIndex?&quot; (governing)&quot;:&quot;&quot;))}; }
+/* =====================================================================
+   CBOV (2026-11-05): the figures of the overview at the start of the suite's Report (the shell's cbovSection): the
+   cross-section of the Input Echo / Visuals tabs (svgSection, the governing sense of bending) and the stirrup elevation
+   (svgElevation), each with a scale bar added below it (one scale across and up: CBOV.sec / CBOV.elev, recorded by those
+   functions), and a snapshot of the Visuals tab's 3-D view (cbc3DScene, the same scene) rendered once more off screen at
+   the view's start camera with every layer on. Display only; nothing is saved (the snapshot is cached in memory until
+   the inputs change). The Include box is S.ui.rptOpts.ov (cbcRxSel / cbcRxSet; absent = on).
+   ===================================================================== */
+/* a scale bar under an svg string drawn at sc px per in, viewBox 0 0 W H: the box grows by 34 px */
+function cbcOvBar(svg,d){
+  if(!svg||!d||!(d.sc>0)) return svg;
+  const want=d.W*0.22/d.sc, L=[1,2,3,4,6,12,18,24,36,48,60,96,120].filter(x=>x<=want).pop()||1, w=L*d.sc, x0=12, y=d.H+14;
+  const lab=L%12===0?(L/12)+' ft ('+L+' in)':L+' in';
+  let b='<g font-family=&quot;Arial,Helvetica,sans-serif&quot; font-size=&quot;9&quot; fill=&quot;#0F172A&quot;>';
+  b+='<rect x=&quot;'+x0+'&quot; y=&quot;'+y+'&quot; width=&quot;'+(w/2)+'&quot; height=&quot;5&quot; fill=&quot;#0F172A&quot;/><rect x=&quot;'+(x0+w/2)+'&quot; y=&quot;'+y+'&quot; width=&quot;'+(w/2)+'&quot; height=&quot;5&quot; fill=&quot;#fff&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;0.8&quot;/>';
+  b+='<rect x=&quot;'+x0+'&quot; y=&quot;'+y+'&quot; width=&quot;'+w+'&quot; height=&quot;5&quot; fill=&quot;none&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;0.8&quot;/>';
+  b+='<text x=&quot;'+x0+'&quot; y=&quot;'+(y+15)+'&quot;>0</text><text x=&quot;'+(x0+w)+'&quot; y=&quot;'+(y+15)+'&quot; text-anchor=&quot;middle&quot;>'+lab+'</text>';
+  b+='<text x=&quot;'+(x0+w+28)+'&quot; y=&quot;'+(y+6)+'&quot;>scale bar: the drawing is to scale, the same scale across and up</text></g>';
+  return svg.replace('viewBox=&quot;0 0 '+d.W+' '+d.H+'&quot;','viewBox=&quot;0 0 '+d.W+' '+(d.H+34)+'&quot;').replace(/<\/svg>\s*$/,b+'</svg>');
+}
+function cbcOvSnap3D(neg){
+  if(!window.THREE) return {note:'three.js could not be loaded from its CDN, so the 3-D view is not included.'};
+  const key=JSON.stringify([S.sec,S.layers,S.stir,S.cover,S.layerClear,neg]);
+  if(CBOV.snapKey===key&amp;&amp;CBOV.snap) return CBOV.snap;
+  let out, R=null;
+  try{
+    const cv=document.createElement('canvas'), W=1000, H=600;
+    R=new THREE.WebGLRenderer({canvas:cv,antialias:true,preserveDrawingBuffer:true});
+    R.setSize(W,H,false); R.setClearColor(0xffffff);
+    const {scene,Lb}=cbc3DScene(neg,0.45,{}), h=S.sec.h;
+    const cam=new THREE.PerspectiveCamera(40,W/H,1,4000), r=Math.max(Lb,h)*1.15, t=0.7, p=0.35;   /* the 3-D view's start angles (VIS3D defaults), closer than its start distance (1.7) so the beam fills the image */
+    cam.position.set(r*Math.cos(p)*Math.sin(t), r*Math.sin(p), r*Math.cos(p)*Math.cos(t)); cam.lookAt(0,0,0);
+    R.render(scene,cam);
+    const url=cv.toDataURL('image/png');
+    out=(url.length>6000)?{url,W,H,Lb}:{note:'the 3-D view rendered blank (WebGL not available in this browser), so it is not included.'};
+  }catch(e){ out={note:'WebGL is not available in this browser, so the 3-D view is not included.'}; }
+  finally{ try{ if(R){ R.dispose(); if(R.forceContextLoss) R.forceContextLoss(); } }catch(e){} }
+  CBOV.snap=out; CBOV.snapKey=key; return out;
+}
+function cbcOvFigs(){
+  if(!CC||!CC.combos||!CC.combos.length) return null;
+  if(VALIDATION&amp;&amp;VALIDATION.blockers&amp;&amp;VALIDATION.blockers.length) return {blocked:true};   /* as the check summary panel: no drawing from invalid input */
+  const neg=CC.govRow?CC.govRow.neg:false, P=S.sec;
+  CBOV.sec=null; CBOV.elev=null;
+  const sec=cbcOvBar(svgSection(neg),CBOV.sec), e=svgElevation(), elev=e?cbcOvBar(e,CBOV.elev):null;
+  return {neg,tee:P.type==='tee',bw:P.bw,h:P.h,bf:P.bf,hf:P.hf,sec,elev,stir:!!S.stir.present,s:S.stir.s,snap:cbcOvSnap3D(neg),
+    gov:CC.govRow?'Combination '+(CC.govRow.ci+1)+' ('+CC.govRow.name+')':''};
+}
 function cbcRxHarvest(){
   const sel=cbcRxSel(), saveTab=S.ui.tab, out=[];
   try{
@@ -9316,6 +9378,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   /* the Include boxes: the tabs of each chapter and the Beam Capacity combinations (the dialogs' choices) */
   function rxControls(){
     var h='<span class="cbrx-inc" style="display:inline-flex;flex-wrap:wrap;gap:2px 10px;font-size:9pt;align-items:center">';
+    (function(){ var s=rxFn(RXCH[0],'Sel'), on=true; if(!s) return; try{ on=s().ov!==false; }catch(e){ return; }   /* CBOV: the overview's Include box (Beam Capacity tab, S.ui.rptOpts.ov) */
+      h+='<b>Report:</b><label><input type="checkbox" data-cbrx="cap|ov|"'+(on?' checked':'')+'> Overview figures</label><span style="width:8px"></span>'; })();
     RXCH.forEach(function(c){ var b=rxFn(c,'Boxes'), s=rxFn(c,'Sel'); if(!b||!s) return; var B, Sl; try{ B=b(); Sl=s(); }catch(e){ return; }
       h+='<b>'+esc(c.name)+':</b>'+B.tabs.map(function(t){ return '<label><input type="checkbox" data-cbrx="'+c.id+'|tab|'+esc(t[0])+'"'+(Sl.tabs[t[0]]?' checked':'')+'> '+esc(t[1])+'</label>'; }).join('');
       if(B.combos.length) h+='<b>worked detail:</b>'+B.combos.map(function(t,i){ return '<label><input type="checkbox" data-cbrx="'+c.id+'|combo|'+i+'"'+(Sl.combos[i]?' checked':'')+'> '+esc(t)+'</label>'; }).join('')+
@@ -9368,8 +9432,40 @@ window.addEventListener('DOMContentLoaded',()=>{
     var DT={'Project and inputs':'inputs','Tension development':'tension','Standard hook':'hook','Compression development':'compression','Tension lap splice':'tsplice','Compression lap splice':'csplice','Bar development schedule':'batch'};
     G.dev.forEach(function(s){ if(!s._tab&&DT[s.title]) s._tab=DT[s.title]; });
     ['cap','asd','dev','ref'].forEach(function(g){ G[g].forEach(function(s,i){ s.part=i===0?part[g]:undefined; if(s._tab&&g!=='ref') s.key='cbro:'+g+':'+s._tab; }); });
-    M.sections=[cbroSum()].concat(G.cap,G.asd,G.dev,G.ref);
+    M.sections=[cbroSum(),cbovSection()].concat(G.cap,G.asd,G.dev,G.ref);   /* CBOV: the overview second */
     cbroKeys(M);
+  }
+  /* ---------- CBOV (2026-11-05): "Overview of the beam", the Report's section 2, after the Summary of results (as Spread
+     Footing SFOV #780): the cross-section with its reinforcement and dimensions, the stirrup elevation (each to scale, with a
+     scale bar) and a snapshot of the Visuals tab's 3-D view, from the Beam Capacity tab (cbcOvFigs). Include box "Overview
+     figures" on the report bar (the tab's S.ui.rptOpts.ov, default on); off, the section stays as one line, so the numbers
+     after it do not move. Display only. ---------- */
+  var CBOV_N=0;
+  function cbovUniq(svg){   /* the copies get their own ids (marker / gradient references resolve inside the copy, also in print) */
+    var n=++CBOV_N, ids=[]; String(svg).replace(/\sid="([^"]+)"/g,function(m,id){ ids.push(id); return m; });
+    ids.forEach(function(id){ var e=id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      svg=svg.replace(new RegExp('id="'+e+'"','g'),'id="'+id+'-ov'+n+'"').replace(new RegExp('url\\(#'+e+'\\)','g'),'url(#'+id+'-ov'+n+')').replace(new RegExp('href="#'+e+'"','g'),'href="#'+id+'-ov'+n+'"'); });
+    return svg;
+  }
+  function cbovSection(){
+    var S0={title:'Overview of the beam',key:'cbov',_ch:'ov',subs:[]}, c=RXCH[0], sl=rxFn(c,'Sel'), on=true, w=win('capacity'), F=null;
+    try{ on=!sl||sl().ov!==false; }catch(e){}
+    if(!on){ S0.note='Not included in this report: the Include box “Overview figures” on the report bar is off.'; return S0; }
+    try{ F=w&&typeof w.cbcOvFigs==='function'?w.cbcOvFigs():null; }catch(e){ F=null; }
+    if(!F){ S0.note='No overview: the Beam Capacity tab has no results (it has not finished loading, or its inputs need correcting).'; return S0; }
+    if(F.blocked){ S0.note='No overview: input invalid on the Beam Capacity tab (see its output panel), so the beam is not drawn.'; return S0; }
+    var f2=function(x){ return (Math.round(x*100)/100).toFixed(2); };
+    var dims='$b_{w}$ × h = '+f2(F.bw)+' × '+f2(F.h)+' in'+(F.tee?', $b_{f}$ × $h_{f}$ = '+f2(F.bf)+' × '+f2(F.hf)+' in (T-beam)':'');
+    var sense=F.neg?'negative moment, top face in tension':'positive moment, bottom face in tension';
+    S0.note='The beam as entered on the Beam Capacity tab, for orientation; the checks are worked in the chapters below.';
+    S0.subs.push({title:'Cross-section',items:[{type:'figure',svg:cbovUniq(F.sec).replace('<svg ','<svg style="max-width:420px" '),caption:'Cross-section, '+dims+': reinforcement as entered, to scale (scale bar), for the governing sense of bending ('+sense+(F.gov?'; '+F.gov:'')+'). Dimensions in inches; d of each layer from the extreme compression fibre. Inputs: [[cbro:cap:tabInputEcho]]. [[tab:cap/tabInputEcho|On screen: Input Echo tab]]'}]});
+    S0.subs.push({title:'Elevation',items:F.elev?[{type:'figure',svg:cbovUniq(F.elev),caption:'Elevation of a short run of the beam: closed stirrups at s = '+f2(F.s)+' in, to scale (scale bar); the green band is the permitted spacing range (s_max; Detailing: [[cbro:cap:tabDetail]]). [[tab:cap/tabInputEcho|On screen: Input Echo tab]]'}]
+      :[{type:'note',text:'No elevation: '+(F.stir?'no results.':'the section has no stirrups (transverse reinforcement), so there is no stirrup layout to draw.')}]});
+    var P=F.snap||{};
+    S0.subs.push({title:'3-D view',items:P.url?[{type:'figure',svg:'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+P.W+' '+P.H+'"><image href="'+P.url+'" x="0" y="0" width="'+P.W+'" height="'+P.H+'"/></svg>',
+        caption:'3-D view of the Visuals tab at its start angles (closer in): every layer on (concrete 45 % opaque, tension bars red, compression bars blue, stirrups grey). The length shown ('+Math.round(P.Lb)+' in) is illustrative: the tool checks a cross-section, not a span. [[tab:cap/tabVisuals|On screen: Visuals tab]]'}]
+      :[{type:'note',text:'3-D view not included: '+(P.note||'it could not be rendered.')+' The cross-section above shows the same reinforcement to scale.'}]});
+    return S0;
   }
   /* the suite-wide Summary of results: one line per check of each tab's check summary panel (Beam Capacity CBDC #788
      cbcDashItems, ASD Beam Calcs ASDC #789 asdDashItems, Development & Splice RBDC #791 #rbrDash lines), the same name, short
