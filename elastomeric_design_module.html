@@ -13,6 +13,7 @@
 <!-- PLIB (2026-11-02): saved-project rename / duplicate and Undo / Redo, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS2 (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <style>
 :root{--navy:#1f3a5f;--navy-lt:#33517a;--panel:#f4f5f0;--panel-h:#e7e9e0;--line:#c9ccc0;--ok:#1a7f37;--bad:#c62828;--amber:#b8860b;}
 *{box-sizing:border-box;}
@@ -988,12 +989,13 @@ function scheduleSave(){ if(window.EDPL) EDPL.soon();   /* PLIB: one undo step p
 function getProjects(){ try{return JSON.parse(localStorage.getItem(PROJKEY))||{};}catch(e){return {};} }
 function setProjects(o){ try{ localStorage.setItem(PROJKEY,JSON.stringify(o)); return true; }catch(e){ alert("Could not save to this browser's local storage ("+e.message+"). Use Export JSON for a backup."); return false; } }
 document.getElementById("btnSaveProj").addEventListener("click",()=>{ const n=prompt("Project name:",S.proj.name||"Bearing"); if(!n)return; const all=getProjects(); all[n]={state:clone(S),ts:Date.now()}; if(setProjects(all)) document.getElementById("saveStatus").textContent=`saved "${n}"`; });
-document.getElementById("btnManageProj").addEventListener("click",()=>{ renderProjList(); document.getElementById("dlgProj").showModal(); });
+document.getElementById("btnManageProj").addEventListener("click",()=>{ renderProjList(); document.getElementById("dlgProj").showModal(); if(EDM_GH) EDM_GH.shown(EDM_GH_UI).catch(()=>{}); /* GHS2 */ });
 document.getElementById("dlgProjClose").addEventListener("click",()=>document.getElementById("dlgProj").close());
 function renderProjList(){ const all=getProjects(),el=document.getElementById("projList"); const names=Object.keys(all).sort((a,b)=>all[b].ts-all[a].ts);
-  el.innerHTML=names.length?names.map(n=>`<div class="prow"><span class="pname">${esc(n)}</span><span class="pdate">${new Date(all[n].ts).toLocaleString()}</span><button class="mini-btn" data-a="load" data-n="${esc(n)}">Load</button><button class="mini-btn" data-a="ren" data-n="${esc(n)}" data-sp="1">Rename</button><button class="mini-btn" data-a="dup" data-n="${esc(n)}" data-sp="1">Duplicate</button><button class="mini-btn" data-a="del" data-n="${esc(n)}">Delete</button></div>`).join(""):"<i>No saved projects.</i>";
-  el.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ const n=b.dataset.n,all=getProjects(); if(b.dataset.a==="load"){S=all[n].state;migrate();buildInputs();recalc();document.getElementById("dlgProj").close();} if(b.dataset.a==="del"){delete all[n];setProjects(all);renderProjList();}
-    if(b.dataset.a==="ren"||b.dataset.a==="dup") edmPlibAct(b.dataset.a,n); })); }
+  el.innerHTML=names.length?names.map(n=>`<div class="prow"><span class="pname">${esc(n)}${EDM_GH?" "+EDM_GH.statusCell(n):""}</span><span class="pdate">${new Date(all[n].ts).toLocaleString()}</span><button class="mini-btn" data-a="load" data-n="${esc(n)}">Load</button><button class="mini-btn" data-a="ren" data-n="${esc(n)}" data-sp="1">Rename</button><button class="mini-btn" data-a="dup" data-n="${esc(n)}" data-sp="1">Duplicate</button><button class="mini-btn" data-a="del" data-n="${esc(n)}">Delete</button></div>`).join(""):"<i>No saved projects.</i>";
+  el.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{ const n=b.dataset.n,all=getProjects(); if(b.dataset.a==="load"){S=all[n].state;migrate();buildInputs();recalc();document.getElementById("dlgProj").close();} if(b.dataset.a==="del"){delete all[n];setProjects(all);renderProjList();if(EDM_GH) EDM_GH.deleted(n); /* GHS2: asks before deleting the GitHub copy */}
+    if(b.dataset.a==="ren"||b.dataset.a==="dup") edmPlibAct(b.dataset.a,n); }));
+  if(EDM_GH){ EDM_GH.bind(el); EDM_GH.decorate(edmGhHost(),EDM_GH_UI,{rows:false}); } }   // GHS2: sync bar, first-sync offer, "On GitHub only" rows above the list
 /* PLIB (2026-11-02): Rename / Duplicate in the Projects dialog, over the tool's own key edm_v1_projects ({ name: { state, ts } }) with
    shared/projects.js: the stored item moves / is copied unchanged; a name already in use asks first; a refused write shows the message. */
 function edmPlibAct(a,n){
@@ -1004,7 +1006,20 @@ function edmPlibAct(a,n){
   if(!r.ok&&r.error==="exists"){ if(!confirm(`A saved project named "${to.trim()}" already exists. Replace it?`)) return; r=a==="ren"?L.rename(n,to,{replace:true}):L.duplicate(n,to,{replace:true}); }
   if(!r.ok) alert(r.message||r.error);
   renderProjList();
+  if(r.ok&&a==="ren"&&EDM_GH) EDM_GH.renamed(n,r.name);   // GHS2: asks before deleting the old name on GitHub
 }
+/* GHS2 (2026-11-05): GitHub sync of the saved projects (shared/github-sync.js; docs/github-sync-setup.md). Off until set up: with no
+   settings it writes nothing and makes no request. The list stays edm_v1_projects ({ name: { state, ts } }, unchanged); each project
+   is the file projects/elastomeric-bearing/<name>.json on GitHub, in the Export JSON format (the state S, indent 2). A file from GitHub
+   is read as Import JSON reads it (Object.assign(defaultState(), file)) and stored as { state, ts }; Open = Load. */
+const EDM_GH=(()=>{ if(!window.SharedGitHubSync||!window.SharedProjects) return null; let ST=null; try{ ST=window.localStorage; }catch(e){ return null; }
+  return SharedGitHubSync.attach({ store:SharedProjects.mapStore(ST,PROJKEY), storage:ST,
+    open:n=>{ const all=getProjects(); if(!all[n]) return false; S=all[n].state; migrate(); buildInputs(); recalc(); return true; },
+    changed:()=>{ if(document.getElementById("dlgProj").open) renderProjList(); },
+    cloud:{ tool:"elastomeric-bearing", label:"Elastomeric Bearing Design", space:2, toFile:i=>i.state,
+      fromFile:o=>{ if(o._schema||o.schema||o.app||!o.proj||!o.geom) throw new Error("not an elastomeric bearing project file"); return { state:Object.assign(defaultState(),o), ts:Date.now() }; } } }); })();
+function edmGhHost(){ let h=document.getElementById("projGh"); if(!h){ h=document.createElement("div"); h.id="projGh"; h.setAttribute("data-sp","gh-host"); document.getElementById("projList").before(h); } h.innerHTML=""; return h; }
+const EDM_GH_UI={ redraw:()=>{ if(document.getElementById("dlgProj").open) renderProjList(); }, close:()=>document.getElementById("dlgProj").close() };
 document.getElementById("btnExport").addEventListener("click",()=>{ const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=(S.proj.name||"bearing").replace(/[^\w]+/g,"_")+"_edm.json"; a.click(); URL.revokeObjectURL(a.href); });
 document.getElementById("btnImport").addEventListener("click",()=>document.getElementById("importFile").click());
 document.getElementById("importFile").addEventListener("change",ev=>{ const f=ev.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ S=Object.assign(defaultState(),JSON.parse(rd.result)); migrate(); buildInputs(); recalc(); }catch(e){alert("Import failed: "+e.message);} ev.target.value=""; }; rd.readAsText(f); });
