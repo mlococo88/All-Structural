@@ -9,6 +9,8 @@
 //      a refused write (setItem patched to throw QuotaExceededError) shows the message and leaves storage byte-identical;
 //   4. console errors: none in B beyond those A also has.
 //   node tests/smoke/project-library.mjs --tool asce7 [--a origin/main] [--shots <dir>]
+// A tool entry may name hash (opened as file#hash) and frame (a same-origin iframe that holds the app): the page object the tool
+// functions get is then that frame, with the page's own keyboard, screenshot, viewport and dialog handling (added 2026-11-05, RBRT).
 // Results are read with the tool's `results` function (computed objects and/or the result panel text with every [data-sp] element removed).
 import fs from 'fs';
 import os from 'os';
@@ -133,7 +135,9 @@ export const TOOLS = {
     no390: 'the page has no phone layout: at 390 px it is 1086 px wide on origin/main, and the library panel already scrolls sideways there (395 / 310 px)'
   },
   rebar: {
-    file: 'ACI Rebar Development Length.html', list: 'rebar_aci_projects_v1', auto: 'rebar_aci_autosave_v1',
+    // the rebar calculator. Its standalone file was retired 2026-11-05 (RBRT; now a redirect page): the same app (same list key) is
+    // tested in the Development & Splice tab of Concrete Beam Capacity, opened as #dev; every call below runs inside that frame.
+    file: 'Concrete Beam Capacity.html', hash: '#dev', frame: '#suite-frame-dev', list: 'rebar_aci_projects_v1', auto: 'rcsuite.rebar_autosave_v1',
     ready: p => p.waitForFunction(() => typeof computeFactors === 'function' && document.getElementById('projSelect') && document.getElementById('dashboard').textContent.length > 20),
     results: p => p.evaluate(() => { const inp = readInputs(); const seen = new WeakSet(); const f = JSON.parse(JSON.stringify({ inp, f: computeFactors(inp) }, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v)));
       const d = document.getElementById('dashboard').cloneNode(true); d.querySelectorAll('[data-sp]').forEach(x => x.remove()); return { ...f, dash: d.textContent.replace(/\s+/g, ' ') }; }),
@@ -224,9 +228,14 @@ const ctxOf = ([k, a, b]) => { if (typeof a !== 'string' || typeof b !== 'string
   return `${k} @${i}: A «${a.slice(Math.max(0, i - 80), i + 120)}» B «${b.slice(Math.max(0, i - 80), i + 120)}»`; };
 const same = (a, b, m) => { const d = diff(a, b); ok(!d.length, m + (d.length ? ` (${d.length} differences, first: ${d.slice(0, 2).map(ctxOf).join(' ; ')})` : '')); };
 async function run(file, o) {
-  const s = await openPage(file, { vw: 1280, vh: 900, ...o });
+  const s = await openPage(file, { vw: 1280, vh: 900, hash: T.hash || '', ...o });
   s.dl = []; s.reply = []; s.p.removeAllListeners('dialog');
   s.p.on('dialog', async d => { s.dl.push(d.type() + ': ' + d.message().slice(0, 200)); const r = s.reply.shift(); if (r === false) await d.dismiss(); else await d.accept(typeof r === 'string' ? r : d.defaultValue()); });
+  if (T.frame) {   // the app lives in a frame: frame methods first, the page's for the rest (keyboard, screenshot, setViewportSize)
+    const page = s.p; await page.waitForSelector(T.frame, { state: 'attached' }); const fr = await (await page.$(T.frame)).contentFrame();
+    const via = (o, k) => typeof o[k] === 'function' ? o[k].bind(o) : o[k];
+    s.page = page; s.p = new Proxy(fr, { get: (t, k) => k in t ? via(t, k) : via(page, k) });
+  }
   await T.ready(s.p); await s.p.waitForTimeout(900); return s;
 }
 const lsAll = p => p.evaluate(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } return o; });

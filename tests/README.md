@@ -71,6 +71,12 @@ node tests/smoke/lightpole-projection.mjs
 # Saved-project list and Undo / Redo (shared/projects.js, PLIB): main vs the working tree (results on load, after an input change, B on
 # main's autosave and project list), Undo / Redo / Ctrl+Z / Ctrl+Y, the dialog (rename, duplicate, delete, open), quota refusal, 390 px
 node tests/smoke/project-library.mjs --tool asce7 [--a origin/main] [--shots <dir>]
+# --tool rebar (and phone-layout --tool aci): since 2026-11-05 the rebar calculator is tested in the Development & Splice tab of
+# Concrete Beam Capacity (opened as #dev, run inside its frame); its standalone file is a redirect page (RBRT)
+
+# Retired rebar calculator (RBRT): the redirect page (?query, #dev, in a frame, one-time .json offer), the suite on its Development &
+# Splice tab, the takeover of the old page's storage, and an Export JSON from the OLD standalone (git ref --old) importing identically. ~1 min
+node tests/smoke/rebar-redirect.mjs [--old f9ec0f9]
 
 # Pile Designer's saved-project library is in IndexedDB (not covered above): page text and autosave main vs the working tree, Undo / Redo,
 # Save as new / rename / duplicate / refused write / load / delete (React 18.3.1 served from the kit's 18.2.0, test-only). ~1 min
