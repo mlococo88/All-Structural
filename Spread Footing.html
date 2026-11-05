@@ -400,6 +400,7 @@ a.wkA:hover{text-decoration:underline}
  <tr><td>Top x</td><td><select data-path="freinf.topX.size" class="barsel" style="width:60px"></select></td><td><select data-path="freinf.topX.mode" class="sfdRbMode" style="width:74px"><option value="spacing">Spacing</option><option value="qty">Total qty</option></select></td><td><input type="number" step="0.5" data-path="freinf.topX.spc" data-num style="width:46px" class="sfdRbSpc" data-mat="topX" title="center-to-center spacing, in"><input type="number" step="1" min="0" data-path="freinf.topX.n" data-num style="width:46px" class="sfdRbN" data-mat="topX" title="total number of bars across the footing width"><div class="sfdRbD" data-mat="topX" style="font-size:10px"></div></td><td class="sfdRbAb" data-mat="topX"></td><td class="sfdRbAs" data-mat="topX"></td><td class="sfdRbS" data-mat="topX"></td></tr>
  <tr><td>Top y</td><td><select data-path="freinf.topY.size" class="barsel" style="width:60px"></select></td><td><select data-path="freinf.topY.mode" class="sfdRbMode" style="width:74px"><option value="spacing">Spacing</option><option value="qty">Total qty</option></select></td><td><input type="number" step="0.5" data-path="freinf.topY.spc" data-num style="width:46px" class="sfdRbSpc" data-mat="topY" title="center-to-center spacing, in"><input type="number" step="1" min="0" data-path="freinf.topY.n" data-num style="width:46px" class="sfdRbN" data-mat="topY" title="total number of bars across the footing width"><div class="sfdRbD" data-mat="topY" style="font-size:10px"></div></td><td class="sfdRbAb" data-mat="topY"></td><td class="sfdRbAs" data-mat="topY"></td><td class="sfdRbS" data-mat="topY"></td></tr>
  </table>
+ <div class="row"><label>Outer bottom layer (nearest the soil)</label><select data-path="freinf.botOuter"><option value="y">y-bars (default)</option><option value="x">x-bars</option></select><span class="hint">sets d<sub>x</sub>, d<sub>y</sub> of the bottom mat; top mat: x-bars outer</span></div>   <!-- SFBO -->
  <div class="note" id="sfdRbNote"></div>
 </div>
 </details>
@@ -719,7 +720,7 @@ function defaultState(){
  mat:{gc:150,fc:4000,fy:60000,lambda:1,coverBot:3,coverTop:2,ks:150,swMode:'auto',swUser:0,vcMode:'c',coating:'none',dagg:0.75,sideExp:'earth',ldExcess:'off',lamsFtg:'off'},
  soil:{mode:'vesic',qa:4,qaBasis:'gross',c:0,phi:32,gs:120,FSb:3,dw:'',qaOverride:'off',qaOverVal:4,sfdDepthF:'off'},
  ev:{cover:1.5,gev:120,qDsur:0,qLsur:0},
- freinf:{botX:{size:8,spc:9,mode:'spacing'},botY:{size:8,spc:9,mode:'spacing'},topX:{size:0,spc:12,mode:'spacing'},topY:{size:0,spc:12,mode:'spacing'}},
+ freinf:{botX:{size:8,spc:9,mode:'spacing'},botY:{size:8,spc:9,mode:'spacing'},topX:{size:0,spc:12,mode:'spacing'},topY:{size:0,spc:12,mode:'spacing'},botOuter:'y'},
  stab:{muMode:'phi',mu:0.45,pf:0,FSot:2,FSsl:1.5,FSfl:1.25,shearCouple:'on',otGate:'off',eccMode:'kern',eccCustom:0.25},
  manPrint:false,manPart:'p0',lrRefRpt:true,
  assump:'',peds:[p1,p2]};}
@@ -735,6 +736,7 @@ function migrateState(){
  if(!state.manPart)state.manPart='p0';
  if(!state.freinf)state.freinf=defaultState().freinf;
  ['botX','botY','topX','topY'].forEach(k=>{const m=state.freinf[k];if(m&&!m.mode)m.mode='spacing';});   /* SFRQ: older saves entered a spacing */
+ if(state.freinf.botOuter!=='x')state.freinf.botOuter='y';   /* SFBO: outer bottom layer; saves without the field: y-bars outermost (as before) */
  const dm=defaultState().mat;['fy','lambda','coverBot','coverTop','vcMode','coating','dagg','sideExp'].forEach(k=>{if(state.mat[k]===undefined)state.mat[k]=dm[k];});   /* SFAG: dagg, older saves 3/4 in; SFCV: sideExp, older saves cast against earth */
  if(state.mat.ldExcess!=='on')state.mat.ldExcess='off';   /* SFDV: excess-reinforcement reduction of l_d (ACI 318-19 25.4.10.1); saves without the field: off (not taken, as before) */
  if(state.mat.vcMode!=='a'&&state.mat.vcMode!=='c')state.mat.vcMode='c';
@@ -3357,7 +3359,7 @@ function sfrModel(){
    {type:'table',head:['Mat','Bar','Entered as','Entered → derived','A_b (in²)'],rows:[['botX','Bottom, x-bars'],['botY','Bottom, y-bars'],['topX','Top, x-bars'],['topY','Top, y-bars']].map(([k,lab])=>{const e=sfdMat(k);
     return [lab,e.size?'#'+e.size:'none',e.size?(e.mode==='qty'?'total quantity':'spacing'):'—',e.size?sfdMatTxt(k):'—',e.size?sfrCell(e.Ab):'—'];})},
    {type:'steps',scope:'rb',steps:w.steps,title:'Steel area per foot of width (the value used in [[S-fd]])'},
-   {type:'note',text:'Set on the Reinforcement input tab[[tab:in-rebar| ↗]]. Bars in the x-direction resist bending about the y-axis.'}]});
+   {type:'note',text:'Set on the Reinforcement input tab[[tab:in-rebar| ↗]]. Bars in the x-direction resist bending about the y-axis. Layer order: bottom mat, '+(state.freinf.botOuter==='x'?'x-bars outer (nearest the soil; input "Outer bottom layer: x-bars")':'y-bars outer (nearest the soil)')+'; top mat, x-bars outer. The effective depths are worked in [[S-fd]].'}]});   /* SFBO */
   const pr=R.peds.map((p,i)=>{const rf=(state.peds[i]||{}).reinf||{};return [p.label,sfrCell(p.x),sfrCell(p.y),sfrN(p.bx)+' × '+sfrN(p.by)+' × '+sfrN(p.h),sfrN(p.lex,3)+', '+sfrN(p.ley,3),
    p.h>1e-9?(sfdPedBarTxt(i)+'; ties #'+rf.tieSize+' at '+sfrN(num(rf.tieSpc))+' in; cover '+sfrN(num(rf.cover))+' in (clear to the vertical bars; exposure: '+(SFTC_EXP[rf.exposure]||SFTC_EXP.weather)[1]+')'+'; dowels '+(()=>{const DB=sfdDowelBars(i);return DB.n+' #'+DB.size+(DB.fromLong?' (the longitudinal bars, continuous)':'')+(rf.dowelHook==='hook90'?', hooked in the footing':', straight in the footing');})()):'bearing patch (h = 0)'];});
   const lr=[];
@@ -3522,8 +3524,11 @@ function sfrModel(){
   const subs=[], S=sfrS, tin=R.t*12, cvB=num(state.mat.coverBot), cvT=num(state.mat.coverTop);
   const dbx=BAR_DIA[state.freinf.botX.size||8], dby=BAR_DIA[state.freinf.botY.size||8];
   subs.push({title:'Design basis and effective depths',items:[{type:'steps',scope:'fd',steps:[
+   ...(P2.botXOut?[   /* SFBO: x-bars the outer bottom layer (input "Outer bottom layer") */
+   S({id:'dx',label:'Effective depth, bottom x-bars (outer layer, nearest the soil; input "Outer bottom layer: x-bars")',sym:'d_{x}',eq:'12 t \\minus c_{bot} \\minus \\frac{d_{b,x}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dbx/2,3),value:P2.dBotX,unit:'in',d:3}),
+   S({id:'dy',label:'Effective depth, bottom y-bars (inner layer, on top of the x-bars)',sym:'d_{y}',eq:'12 t \\minus c_{bot} \\minus d_{b,x} \\minus \\frac{d_{b,y}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dbx,3)+' \\minus '+sfrN(dby/2,3),value:P2.dBotY,unit:'in',d:3})]:[
    S({id:'dx',label:'Effective depth, bottom x-bars (on top of the y-bars)',sym:'d_{x}',eq:'12 t \\minus c_{bot} \\minus \\frac{d_{b,x}}{2} \\minus d_{b,y}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dbx/2,3)+' \\minus '+sfrN(dby,3),value:P2.dBotX,unit:'in',d:3}),
-   S({id:'dy',label:'Effective depth, bottom y-bars',sym:'d_{y}',eq:'12 t \\minus c_{bot} \\minus \\frac{d_{b,y}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dby/2,3),value:P2.dBotY,unit:'in',d:3}),
+   S({id:'dy',label:'Effective depth, bottom y-bars',sym:'d_{y}',eq:'12 t \\minus c_{bot} \\minus \\frac{d_{b,y}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvB)+' \\minus '+sfrN(dby/2,3),value:P2.dBotY,unit:'in',d:3})]),
    S({id:'davg',label:'Average depth (two-way shear)',sym:'d_{avg}',eq:'\\frac{d_{x} + d_{y}}{2}',sub:'\\frac{'+sfrN(P2.dBotX,3)+' + '+sfrN(P2.dBotY,3)+'}{2}',value:P2.dAvg,unit:'in',d:3}),
    ...(state.freinf.topX.size?[S({id:'dtx',label:'Effective depth, top x-bars (outer layer)',sym:'d_{top,x}',eq:'12 t \\minus c_{top} \\minus \\frac{d_{b,top,x}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvT)+' \\minus '+sfrN(BAR_DIA[state.freinf.topX.size]/2,3),value:P2.dTopX,unit:'in',d:3})]:[]),   /* SFTD */
    ...(state.freinf.topY.size?[S({id:'dty',label:'Effective depth, top y-bars (inner layer, under the top x-bars)',sym:'d_{top,y}',eq:'12 t \\minus c_{top} \\minus d_{b,top,x} \\minus \\frac{d_{b,top,y}}{2}',sub:sfrN(tin)+' \\minus '+sfrN(cvT)+' \\minus '+sfrN(BAR_DIA[state.freinf.topX.size||0]||0,3)+' \\minus '+sfrN(BAR_DIA[state.freinf.topY.size]/2,3),value:P2.dTopY,unit:'in',d:3})]:[])]},
@@ -4014,9 +4019,11 @@ function sfdwMats(){
  return out;
 }
 /* bar heights in the section (in above the bottom of the footing): x-bars on top of y-bars in the bottom mat (as d_x of the
-   design), top x-bars outermost in the top mat (as the 3D view) */
+   design), top x-bars outermost in the top mat (as the 3D view). SFBO: with "Outer bottom layer: x-bars" the bottom x-bars
+   are the lower layer and the y-bars sit on them. */
 function sfdwLevels(M){
  const t=R.t*12, cvB=num(state.mat.coverBot), cvT=num(state.mat.coverTop), d=k=>M[k]?M[k].db:0;
+ if(state.freinf.botOuter==='x')return {botX:cvB+d('botX')/2, botY:cvB+d('botX')+d('botY')/2, topX:t-cvT-d('topX')/2, topY:t-cvT-d('topX')-d('topY')/2, topOfBot:cvB+d('botY')+d('botX')};
  return {botY:cvB+d('botY')/2, botX:cvB+d('botY')+d('botX')/2, topX:t-cvT-d('topX')/2, topY:t-cvT-d('topX')-d('topY')/2, topOfBot:cvB+d('botY')+d('botX')};
 }
 /* the pedestal bar layout of the drawings: centres at b/2 − cover − d_b/2 (cover to the bar face, the bar-fit basis of sfdPedBars) */
@@ -4811,8 +4818,10 @@ function computePhase2(R){
  const sq=Math.sqrt(fc);
  const sqV=Math.min(sq,100); // ACI 318-19 22.5.3.1 / 22.6.3.1: sqrt(f'c) <= 100 psi (no shear reinforcement)
  /* effective depths: bottom mat two layers -> avg; approximate d_bot = t - coverBot - 1.0 db (use #8=1") */
- const dBotX=tin-cvB-BAR_DIA[state.freinf.botX.size||8]/2-BAR_DIA[state.freinf.botY.size||8];
- const dBotY=tin-cvB-BAR_DIA[state.freinf.botY.size||8]/2;
+ /* SFBO (2026-11-05, engineer): the outer bottom layer is an input (freinf.botOuter, 'y' default = as before) */
+ const botXOut=(state.freinf.botOuter==='x');
+ const dBotX=botXOut?tin-cvB-BAR_DIA[state.freinf.botX.size||8]/2:tin-cvB-BAR_DIA[state.freinf.botX.size||8]/2-BAR_DIA[state.freinf.botY.size||8];
+ const dBotY=botXOut?tin-cvB-BAR_DIA[state.freinf.botX.size||8]-BAR_DIA[state.freinf.botY.size||8]/2:tin-cvB-BAR_DIA[state.freinf.botY.size||8]/2;
  const dTopX=tin-cvT-BAR_DIA[state.freinf.topX.size||8]/2;
  /* SFTD (2026-11-02): the top y-bars are the inner layer, under the top x-bars (as the drawings and 3D view place them),
     so d_top,y = t - c_top - d_b,top,x - d_b,top,y/2. Before, both top layers used the outer-layer depth. */
@@ -5610,7 +5619,7 @@ function computePhase2(R){
  const shearFr=peds.map((p,i)=>sfdShearFriction(i,p,R.Wpeds[i],pedDes[i],dowels[i],combos,fc,fy,lam));   /* SFSF */
  const pedShear=peds.map((p,i)=>sfdPedShear(i,p,pedDes[i],combos,fc,fy,lam));   /* SFVP */
  const xties=pedDes.map(pd=>sfdCrossties(pd));   /* SFXT */
- return{bandChk,offFooting,dBotX,dBotY,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,punchGroup,bearing,pedDes,dowels,shearFr,pedShear,xties,covChk,pressMomentAbout,pressShearBeyond,pressResultant,
+ return{bandChk,offFooting,dBotX,dBotY,botXOut,dTopX,dTopY,dAvg,fc,fy,lam,combos,desX,desY,punch,punchWarn,punchGroup,bearing,pedDes,dowels,shearFr,pedShear,xties,covChk,pressMomentAbout,pressShearBeyond,pressResultant,
   beamDiagram,pressurePlane,netResultant};
 }
 /* ---- pedestal longitudinal bar coordinates (perimeter arrangement), centered at section center ---- */
@@ -5903,7 +5912,7 @@ function renderFootingDesign(){
  intro.appendChild(el('p','note','Structural design uses strength (LRFD) combinations (ASCE 7-16 \u00a72.3.1 / ACI 318-19 \u00a75.3). The net soil pressure driving footing shear and moment is computed from the pedestal-delivered factored loads (axial, applied moment, and V\u00b7h shear couples'+(R.peds.some(p=>p.lex||p.ley)?', and P\u00b7e from the load offsets on the pedestals':'')+') plus pedestal self-weight; footing self-weight, EV, and buoyancy are uniform reactions carried directly to the soil and are excluded from the structural pressure per standard practice. The footing is analyzed as a rigid body on a compression-only (no-tension) soil; the factored base-pressure plane is solved for each combination and the moment and shear at each critical section are obtained by <b>direct integration of that pressure solid</b> over the region outboard of the section, with the uplifted (zero-pressure) area excluded. Moments are reported by the direction of the resisting bars: the x-direction moment is taken at the pedestal face normal to x. <b>Reinforcement convention:</b> flexural and shear capacities are computed on a <b>per-foot</b> basis, A<sub>s</sub> = A<sub>b</sub>&times;12/s, and are therefore independent of any assumed discrete bar count; the 3D view draws a floor-based count starting at cover + d<sub>b</sub>/2, which can show one fewer bar than a schedule would list. Reconcile the schedule against the spacing, not against the drawn count. Programs that label a moment by the axis it bends about (e.g. RISAFoundation M<sub>xx</sub>) will show these two values transposed.'));
  intro.appendChild(varTable([
   ["f'_c",'Concrete strength',P2.fc,'psi'],['f_y','Steel yield',P2.fy,'psi'],['\\lambda','Lightweight factor',P2.lam,'\u2013'],
-  ['d_{bot,x}','Eff. depth, bottom x-bars',P2.dBotX,'in'],['d_{bot,y}','Eff. depth, bottom y-bars',P2.dBotY,'in'],
+  ['d_{bot,x}','Eff. depth, bottom x-bars'+(P2.botXOut?' (outer layer)':''),P2.dBotX,'in'],['d_{bot,y}','Eff. depth, bottom y-bars'+(P2.botXOut?' (inner layer)':''),P2.dBotY,'in'],   /* SFBO */
   ...(state.freinf.topX.size?[['d_{top,x}','Eff. depth, top x-bars (outer layer)',P2.dTopX,'in']]:[]),...(state.freinf.topY.size?[['d_{top,y}','Eff. depth, top y-bars (inner layer)',P2.dTopY,'in']]:[]),   /* SFTD */
   ['d_{avg}','Average d (two-way shear)',P2.dAvg,'in']]));
  if(P2.covChk){const cc=P2.covChk.rows.filter(z=>z.applies);   /* SFCV */
@@ -6681,7 +6690,10 @@ function buildRebar(){
  const fr=state.freinf;
  function mat2(dir,size,spc,z){if(!size||!spc)return;const n=Math.floor(((dir==='x'?L:B)-2*0.5)/(spc/12))+1;const span=(dir==='x'?L:B);const start=-span/2+0.5;
   for(let k=0;k<n;k++){const pos=start+k*(spc/12);if(Math.abs(pos)>span/2-0.15)continue;if(dir==='x')barX(pos,z,size);else barY(pos,z,size);}}
- const zBotX=-t+cvB+BAR_DIA[fr.botX.size||0]/24, zBotY=-t+cvB+BAR_DIA[fr.botX.size||0]/12+BAR_DIA[fr.botY.size||0]/24;
+ /* SFBO: the outer bottom layer per the input (as d_x, d_y of the design); before, the x-bars were always drawn outermost here */
+ const xOut=(fr.botOuter==='x');
+ const zBotX=xOut?-t+cvB+BAR_DIA[fr.botX.size||0]/24:-t+cvB+BAR_DIA[fr.botY.size||0]/12+BAR_DIA[fr.botX.size||0]/24,
+       zBotY=xOut?-t+cvB+BAR_DIA[fr.botX.size||0]/12+BAR_DIA[fr.botY.size||0]/24:-t+cvB+BAR_DIA[fr.botY.size||0]/24;
  /* SFRQ: a mat entered as a quantity is drawn as its n bars from the side cover; a spacing mat as before */
  function matQ(k,dir,z){const e=sfdMat(k);if(!e.size||!(e.n>0))return;const span=(dir==='x'?L:B),st=-span/2+(e.c+e.db/2)/12;
   for(let j=0;j<e.n;j++){const pos=e.n>1?st+j*e.spc/12:0;if(dir==='x')barX(pos,z,e.size);else barY(pos,z,e.size);}}
@@ -7136,7 +7148,7 @@ manPart("p0","0. Read This First",[
 {p:"Flexure is taken at each pedestal face and one-way shear at distance d from each face, per ACI 318-19 &sect;13.2.7. Two implementation choices matter when comparing to other software:"},
 {ul:[
  "Demands come from <b>exact integration of the no-tension pressure solid</b> over the region outboard of the section \u2014 not from a one-dimensional \u201crigid strip\u201d average. When the resultant is eccentric, the pressure varies across the footing width; strip averaging under-predicts the governing moment by 10\u201317% on the Part 5 benchmark. Part 4C derives the method; Part 7 compares it to the hand strip method.",
- "The effective depth d is computed <b>per bar layer</b>: the outer bottom layer has d = t \u2212 cover \u2212 d<sub>b</sub>/2 and the inner layer d = t \u2212 cover \u2212 d<sub>b,outer</sub> \u2212 d<sub>b</sub>/2. Programs using a single average d will differ by a few percent on shear (the critical section moves with d). The per-layer treatment is the more correct one and is retained."
+ "The effective depth d is computed <b>per bar layer</b>: the outer bottom layer has d = t \u2212 cover \u2212 d<sub>b</sub>/2 and the inner layer d = t \u2212 cover \u2212 d<sub>b,outer</sub> \u2212 d<sub>b</sub>/2. The outer bottom layer is the y-bars unless the Reinforcement input \u201cOuter bottom layer\u201d is set to x-bars; in the top mat the x-bars are outer. Programs using a single average d will differ by a few percent on shear (the critical section moves with d). The per-layer treatment is the more correct one and is retained."
 ]},
 
 {h3:"0.3.5 Structural pressure excludes self-weight and overburden"},
