@@ -3790,7 +3790,7 @@ See `fixlog/ACI Rebar Development Length.md`. The same edits are in `<iframe id=
   - The elevation keeps the tab's card name ("Section Schematic (to scale) (2)") with its caption line "Stirrup elevation; …".
 - **Renamed:** the 11 "As printed: tables, equations, notes and figures" subsections (gone; their content is in the sections and the appendix). The moved headings and captions gain " (<tab> tab)", and their card number is dropped. Nothing removed.
 - **Numbering:** the appendix comes last, so the section numbers before it do not depend on what a copy holds. The Include boxes keep the CBRO one-line sections.
-- **How verified (headless Chromium, origin/main f648111 vs branch):**
+- **How verified (headless Chromium, origin/main 2137868 vs branch):**
   - 6 cases: default, c2, c3, Include boxes off, input blocker, no stirrups.
   - Results (`CC` ×2, Development & Splice) and localStorage identical.
   - Report text (screen and print): every line of main is present apart from section / topic numbers, the removed "As printed" subsection titles and the renamed headings / captions (listed above).
