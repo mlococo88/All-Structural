@@ -5291,3 +5291,69 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - Outline extracted from the on-screen model and from the Chromium PDF (contents page and body headings agree).
 - `node tests/check-syntax.mjs`, `node tests/engine/run.mjs report`, `tests/smoke/spread-footing-scroll.mjs` pass.
 - **Saved data:** no change (Include boxes keep `manPrint`, `lrRefRpt`, `pedCbRpt`). **Other copies:** none.
+
+## 2026-11-05 — PR: claude/sf-report-figs (SFRF: tab figures and unique tables back in their sections; Summary of results first; display only, no result change)
+- **Engineer (on SFRO decisions):**
+  - put the tab figures, and any table found nowhere else in the Report, back next to the worked check they illustrate. The appendix keeps only text and tables that duplicate worked sections;
+  - put the Summary of results back in front.
+- **Where:**
+  - `sfxWalk`: each copied item records its tab card (`it._card={no,title}`). The card number is read from the card summary ("3.2a …"); unnumbered sub-cards ("Edge +x", "Resultant breakdown", the 5.6 headings) inherit it.
+    - Before: `const push=it=>{if(topic){it.topic={title:topic,no:++ntp};topic=null;}out.push(it);};`
+    - After: the same, plus `it._card={no:cno,title:card};`
+  - New `SFRF_TAB`, `sfrfTarget(ti,card)` (card → subsection key / title prefix / pedestal label), and `sfrfMove(ap,secs)`, inserted before `function sfroOrder`.
+  - `sfroOrder`:
+    - calls `sfrfMove` after `sfroCards`;
+    - updates the appendix note and the section notes ("the tab's other notes, equation lines and tables, as printed, in §x");
+    - puts `sum` first: `M.sections=[sum,inp,asm,…,ref]`.
+- **Rule:**
+  - Every copied figure moves. A copied table moves when it has a number (or, roundings as `sfxApply`) or a cell text longer than 15 normalized characters that the Report's own text (all sections except the appendix copy) lacks.
+  - A moved item goes to the end of its subsection, under a topic heading "<card title> [<tab> tab, card x.y]". It is numbered on from that subsection's own topics.
+  - A figure keeps its caption, with "(<tab> tab, card x.y)" added.
+  - What stays in the appendix: the notes and equation lines of the copies, and tables whose values the Report already shows. Topic headings are renumbered there.
+- **Placement:**
+
+  | Card | Goes to |
+  |---|---|
+  | 1.1 / 1.2 | Plan and elevation |
+  | 1.3 | Pedestals and applied loads |
+  | 1.4 | Geometry and materials |
+  | 1.5 | Assumptions |
+  | 2.1 / 2.2 | self-weights |
+  | 2.3 | S-asd ("Resultant breakdown" → S-res) |
+  | 2.4 | Bearing, every combination |
+  | 2.5 | S-lrfd |
+  | 2.6 | S-pcb |
+  | 3.1 / 3.2 / 3.2a | S-bp ("Bearing Check …" → S-qa) |
+  | 3.3 | S-qa |
+  | 4.3a | S-ecc |
+  | other 4.x | S-st |
+  | 5.1 | design basis |
+  | 5.2 | S-fdx |
+  | 5.3 / 5.4 | S-fdy |
+  | 5.5 | S-pun |
+  | 5.6 | S-cbr / S-dow / S-sf (by heading) |
+  | 5.7 | band |
+  | 6.1 | first pedestal |
+  | 6.k | the pedestal of that label |
+  | dashboard | "Checks (as on the dashboard)" |
+
+  An item with no target stays in the appendix.
+- **Dropped:** none. No tab copy became empty, so nothing was dropped as a true duplicate.
+- **Tables kept in the appendix as duplicates of worked sections** (every value already in the Report):
+
+  | Project | Tables |
+  |---|---|
+  | default | 4.3 edge summary; 5.5 punching summary; 5.6 bearing summary; 5.6 shear-friction summary |
+  | Seymour | 4.3 edge summary; 5.5 punching summary; two 5.6 shear-friction tables |
+
+- **Decision (pending engineer review):**
+  - the copies' notes and equation lines are text the Report does not otherwise show, so they stay in the appendix rather than being dropped;
+  - the Summary is §1, before the project inputs.
+- **How verified:**
+  - Headless Chromium, origin/main vs branch:
+    - deep diff of `R` and `P2` on the 10 session cases: 0 differences;
+    - Report text on 6 cases (default, Seymour f′c 3000 + Ped 1 Wall, direct, all Include on, Seymour + all Include, all Include off): every line of the pre-#778 Report is present, apart from §/topic numbers, the renamed subsection titles and the card refs on moved headings and captions;
+    - 0 unresolved references, 0 duplicate keys, 0 console errors.
+  - Printed PDF (default and Seymour) looked at. The heat map with a filled colour bar is in 5.1, the overturning free body in 6.2 and the Summary on page 3.
+  - `check-syntax`, `run.mjs report` and `spread-footing-scroll` pass.
+- **Saved data:** no change.

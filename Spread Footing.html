@@ -4021,7 +4021,7 @@ function sfxPlotSvg(d){
 }
 /* one rendered tab (a clone) → report items, in document order; a card title (summary) or a heading is the topic of its first item */
 function sfxWalk(root,scope,T){
- const out=[];let topic=null,card='',nfig=0,k=0,ntp=0;
+ const out=[];let topic=null,card='',cno='',nfig=0,k=0,ntp=0;   /* cno: the tab card number (SFRF) */
  /* a "Worked in" line: as on screen ("<value> → <tab> · <card>"; the Report links the values itself), an input echo link as printed */
  root.querySelectorAll('.wkLink').forEach(w=>{const c=w.cloneNode(true);c.querySelectorAll('a.wkA:not(.sfdInA) .wkPrt,a.sfdInA .wkScr').forEach(x=>x.remove());
   const d=document.createElement('div');d.textContent=c.textContent.replace(/\s+/g,' ').trim();w.replaceWith(d);});
@@ -4034,7 +4034,7 @@ function sfxWalk(root,scope,T){
   c.querySelectorAll('sub').forEach(x=>x.replaceWith(document.createTextNode('$_{'+x.textContent+'}$')));c.querySelectorAll('sup').forEach(x=>x.replaceWith(document.createTextNode('$^{'+x.textContent+'}$')));
   return c.textContent.replace(/\s+/g,' ').trim();};
  const texOf=e=>{const s=e.querySelector('.sfx-tex');return s&&e.textContent.trim()===s.textContent.trim()?s.dataset.tex:e.textContent.replace(/\$/g,'').replace(/\s+/g,' ').trim();};
- const push=it=>{if(topic){it.topic={title:topic,no:++ntp};topic=null;}out.push(it);};
+ const push=it=>{if(topic){it.topic={title:topic,no:++ntp};topic=null;}it._card={no:cno,title:card};out.push(it);};
  const cellOf=v=>{if(/^(PASS|OK)\b/.test(v))return {t:v,cls:'ok'};if(/^(FAIL|NG)\b/.test(v))return {t:v,cls:'ng'};if(/^(REVIEW|N\/A)\b/.test(v))return {t:v,cls:'na'};
   return /^[-−\d.,e+\s%/×()—°|=≤≥∞–]+$/.test(v)&&/\d/.test(v)?{t:v,n:true}:v;};
  const table=t=>{
@@ -4060,7 +4060,7 @@ function sfxWalk(root,scope,T){
   if(rows.length&&(T.newNum(all)||rows.some(r=>T.fresh(r[2]))))push({type:'table',head:['Check','Result','Detail','Status'],rows,wide:true});T.seen(all);};
  const visit=e=>{
   if(e.nodeType!==1)return;
-  if(e.matches('summary')){topic=txt(e).replace(/^\d+(\.\d+)*[a-z]?\s+/,'');card=topic;nfig=0;return;}
+  if(e.matches('summary')){const t0=txt(e),m0=t0.match(/^(\d+(?:\.\d+)*[a-z]?)\s+/);if(m0)cno=m0[1];topic=t0.replace(/^\d+(\.\d+)*[a-z]?\s+/,'');card=topic;nfig=0;return;}
   if(e.matches('h1,h2,h3,h4,.manH,.manH3')){topic=txt(e);card=topic;nfig=0;return;}
   if(e.matches('.sfp-na')){nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)){T.figs.add(key);push({type:'note',text:cap+': '+SFP_NA+'.'});}return;}   /* SFPN */
   if(e.matches('.js-plotly-plot')){const s=sfxPlotSvg(e);nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(s&&!T.figs.has(key)){T.figs.add(key);push({type:'figure',svg:s,caption:cap});}return;}
@@ -4229,6 +4229,59 @@ function sfroCards(items,have){
    it.head=(it.head||[]).map(c);it.rows=(it.rows||[]).map(r=>Array.isArray(r)?r.map(c):Object.assign(r,{cells:r.cells.map(c)}));}
   else if(it.type==='steps')(it.steps||[]).forEach(st=>{if(typeof st.note==='string')st.note=f(st.note);if(typeof st.label==='string')st.label=f(st.label);});});
 }
+/* SFRF (2026-11-05, engineer): the tab figures, and every copied table with a number or a line of text this report has nowhere
+   else, go back from the appendix copy into the section that works the check they illustrate (end of that subsection, after its
+   worked steps), under a heading with the card's title and "<tab> tab, card x.y". Figures keep their caption, which gains the
+   "(<tab> tab, card x.y)". What stays in the appendix: the notes and equation lines of the copies, and tables whose numbers and text
+   the report already has. A copy left with nothing is dropped (listed in the fixlog as a true duplicate). Display only. */
+const SFRF_TAB=['Dashboard','Schematic & Input Echo','Load Combinations','Bearing','Stability','Footing Design','Pedestal Design'];
+/* the subsection a copied card belongs to: [key] or [section, title prefix] */
+function sfrfTarget(ti,c){
+ const n=c.no||'',t=c.title||'';
+ if(ti===0)return [null,'Checks (as on the dashboard)'];
+ if(ti===1)return n==='1.1'||n==='1.2'?[null,'Plan and elevation']:n==='1.3'?[null,'Pedestals and applied loads']:n==='1.4'?[null,'Geometry and materials']:n==='1.5'?[null,'Assumptions']:null;
+ if(ti===2){if(/^Resultant breakdown/.test(t))return ['S-res'];
+  return {'2.1':[null,'Self-weights'],'2.2':[null,'Self-weights'],'2.3':['S-asd'],'2.4':[null,'Bearing, every combination'],'2.5':['S-lrfd'],'2.6':['S-pcb','S-res']}[n]||null;}
+ if(ti===3){if(/^Bearing Check/.test(t))return ['S-qa'];return {'3.1':['S-bp'],'3.2':['S-bp'],'3.2a':['S-bp'],'3.3':['S-qa']}[n]||null;}
+ if(ti===4)return n==='4.3a'?['S-ecc']:/^4\./.test(n)?['S-st']:null;
+ if(ti===5){if(n==='5.6')return /^Dowels/.test(t)?['S-dow','S-cbr']:/^Shear friction/.test(t)?['S-sf','S-cbr']:['S-cbr'];
+  return {'5.1':[null,'Design basis'],'5.2':['S-fdx'],'5.3':['S-fdy'],'5.4':['S-fdy'],'5.5':['S-pun'],'5.7':[null,'Short-direction band','S-fdy']}[n]||null;}
+ if(ti===6){const m=t.match(/^(.*?) — Detailed Checks/);return m?[null,'#ped:'+m[1],'S-pd0']:['S-pd0'];}
+ return null;
+}
+function sfrfMove(ap,secs){
+ if(!ap.subs.length)return [];
+ /* the report's own text (everything but the copies): numbers (with the roundings sfxApply accepts) and normalised text */
+ let txt='';try{txt=SharedReport.text(SharedReport.build({sections:secs}));}catch(e){return [];}
+ const have=new Set(),all=sfxNrm(txt);
+ sfxNums(txt).forEach(x=>{have.add(x);const v=parseFloat(x),d=(x.split('.')[1]||'').length;for(let i=0;i<d;i++)have.add(String(parseFloat(v.toFixed(i))));});
+ const cellT=c=>(c&&typeof c==='object')?String(c.t==null?'':c.t):String(c==null?'':c);
+ const uniqTable=it=>{const cs=[...(it.head||[]),...[].concat(...(it.rows||[]).map(r=>Array.isArray(r)?r:r.cells))].map(cellT);
+  return sfxNums(cs.join(' ')).some(x=>!have.has(x))||cs.some(c=>{const k=sfxNrm(c);return k.length>15&&!all.includes(k);});};
+ const subs=[].concat(...secs.map(x=>x.subs||[]));
+ const find=tg=>{if(!tg)return null;for(const k of tg){if(!k)continue;let q=null;   /* in the order given: a key, a pedestal label, a title prefix */
+   if(k.indexOf('#ped:')===0){const l=k.slice(5);q=subs.find(z=>z.key&&/^S-pd\d/.test(z.key)&&z.title.indexOf(l+' (')===0);}
+   else if(/^S-/.test(k))q=subs.find(z=>z.key===k);else q=subs.find(z=>z.title.indexOf(k)===0);
+   if(q)return q;}return null;};
+ const dropped=[];
+ ap.subs.forEach(q=>{const ti=+String(q.key).replace('S-axP','');const keep=[],grp=new Map();let lastTopic=null;
+  q.items.forEach(it=>{
+   if(it.topic)lastTopic=it.topic;
+   const c=it._card||{},mv=it.type==='figure'||(it.type==='table'&&uniqTable(it));
+   const tq=mv?find(sfrfTarget(ti,c)):null;
+   if(!tq){if(!it.topic&&lastTopic&&lastTopic._moved&&(!keep.length||(keep[keep.length-1]._card||{}).title!==c.title)){it.topic={title:lastTopic.title};}keep.push(it);return;}
+   const ref=SFRF_TAB[ti]+' tab'+(c.no?', card '+c.no:'');
+   if(it.topic)it.topic._moved=true;
+   const gk=tq.title+'|'+c.title;
+   const mvd=Object.assign({},it);delete mvd.topic;
+   if(!grp.has(gk)){grp.set(gk,1);const nt=(tq.items||[]).reduce((a,x)=>a+(x.topics?x.topics.length:0)+(x.topic?1:0),0);mvd.topic={title:c.title||'From the '+SFRF_TAB[ti]+' tab',ref,no:nt+1};}   /* numbered on from the subsection's own topics */
+   if(mvd.type==='figure')mvd.caption=(mvd.caption||c.title||'Figure')+' ('+ref+')';
+   (tq.items||(tq.items=[])).push(mvd);});
+  let n=0;keep.forEach(it=>{if(it.topic){delete it.topic._moved;it.topic=Object.assign({},it.topic,{no:++n});}});
+  q.items=keep;});
+ ap.subs=ap.subs.filter(q=>{if(q.items.length)return true;dropped.push(q.title);return false;});
+ return dropped;
+}
 function sfroOrder(M){
  if(!M||!M.sections)return M;
  const S=M.sections, take=t=>{const i=S.findIndex(x=>x.title===t);return i<0?null:S.splice(i,1)[0];};
@@ -4253,12 +4306,16 @@ function sfroOrder(M){
     fd.subs.splice(ri,1,...(a.length?[mk(a,q.title)]:[]));
     if(b.length)ifc.subs.push(mk(b,'Results — Pedestal–footing interface'));}}}
  if(!ifc.subs.length)ifc.subs.push({title:'Not computed',items:[{type:'note',warn:true,text:'No pedestal–footing interface checks in this run (no valid strength combination produced downward load for the structural design).'}]});
- const have=new Set();[...S,inp,asm,lds,brg,stb,fd,ifc,pd,...rest,sum,ref,ap,lr,man].forEach(x=>{if(!x)return;if(x.key)have.add(x.key);(x.subs||[]).forEach(q=>{if(q.key)have.add(q.key);});});
+ const have=new Set(),keys=()=>{have.clear();[...S,inp,asm,lds,brg,stb,fd,ifc,pd,...rest,sum,ref,ap,lr,man].forEach(x=>{if(!x)return;if(x.key)have.add(x.key);(x.subs||[]).forEach(q=>{if(q.key)have.add(q.key);});});};keys();
  ap.subs.forEach(q=>sfroCards(q.items,have));
+ sfrfMove(ap,[...S,sum,inp,asm,lds,brg,stb,fd,ifc,pd,...rest,ref,lr].filter(Boolean));   /* SFRF: figures and unique tables back into their sections */
+ Object.keys(ptr).forEach(i=>{if(!ap.subs.some(q=>q.key===ptr[i]))delete ptr[i];});
+ if(ap.subs.length)ap.note='The notes and equation lines of the dashboard and each result tab as rendered, and the tables whose values this report already shows, under the tab’s card titles. The figures and the other tables are in the sections that work them. Card numbers (for example 3.2a, 4.3a) are the tabs’ screen numbering, not this report’s §; where a card is worked in this report it is linked.';
+ keys();   /* SFRF: a copy left empty is gone */
  /* a one-line note at the head of each section whose tab copy or LRFD tables moved to the appendix */
- const say=(sec,keys)=>{const k=keys.filter(x=>x&&have.has(x));if(sec&&k.length)sec.note=(sec.note?sec.note+' ':'')+'Moved to the appendices: '+k.map(x=>x.indexOf('S-axP')===0?'the tab’s further tables, figures and notes, as printed, in [['+x+']]':'the LRFD reference tables (reference only), in [['+x+']]').join('; ')+'.';};
+ const say=(sec,keys)=>{const k=keys.filter(x=>x&&have.has(x));if(sec&&k.length)sec.note=(sec.note?sec.note+' ':'')+'Moved to the appendices: '+k.map(x=>x.indexOf('S-axP')===0?'the tab’s other notes, equation lines and tables, as printed, in [['+x+']]':'the LRFD reference tables (reference only), in [['+x+']]').join('; ')+'.';};
  say(sum,[ptr[0]]);say(inp,[ptr[1]]);say(lds,[ptr[2]]);say(brg,[ptr[3],'S-brLR']);say(stb,[ptr[4],'S-stLR']);say(fd,[ptr[5]]);say(ifc,[ptr[5]]);say(pd,[ptr[6]]);
- M.sections=[inp,asm,lds,brg,stb,fd,ifc,pd,...rest,sum,ref].filter(Boolean);
+ M.sections=[sum,inp,asm,lds,brg,stb,fd,ifc,pd,...rest,ref].filter(Boolean);   /* SFRF (engineer): the summary first */
  const apx=[ap,lr].filter(x=>x.subs.length);if(man)apx.push(man);
  if(apx.length){apx[0].part='Appendices';apx.slice(1).forEach(x=>{delete x.part;});}
  M.sections.push(...apx);
