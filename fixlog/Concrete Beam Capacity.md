@@ -2339,7 +2339,7 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
 - **Other copies:** `fytDesign()` exists only in the Beam Capacity frame (the ASD frame has no transverse steel). The C3 edits in the Development & Splice frame are mirrored in `ACI Rebar Development Length.html` (CLAUDE.md §3).
 - **Open items:** none.
 
-## 2026-11-05 — PR: claude/cbc-asreq-note (CBAR: A_s,req note in the Development & Splice frame; C5: the Report's Summary of checks prints "≫1" like the Summary tab instead of "∞"; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-asreq-note, PR #786: https://github.com/mlococo88/All-Structural/pull/786 (CBAR: A_s,req note in the Development & Splice frame; C5: the Report's Summary of checks prints "≫1" like the Summary tab instead of "∞"; display only, no result change)
 
 - **Development & Splice frame (`#suite-frame-dev` srcdoc):** the same A_s,req hint as `ACI Rebar Development Length.html`. See the CBAR entry in `fixlog/ACI Rebar Development Length.md` (anchor `Also drives Class A splice eligibility.</div>`; ACI 318-19 9.6.1.1, R9.6.1.1 p. 135, R25.4.10.2 p. 488).
 - **C5, Beam Capacity frame (`#suite-frame-capacity` srcdoc), `cbcRptModel()`, "Summary of checks":**
