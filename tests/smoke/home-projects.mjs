@@ -22,7 +22,7 @@ export const FOLDER = { mlg: 'moving-load-generator', bsl: 'bridge-substructure-
   spc: 'section-property-calculator', rebar: 'aci-rebar-development', abutment: 'abutment-calculator', edm: 'elastomeric-bearing' };
 const list = arg('tool', Object.keys(FOLDER).join(',')).split(',');
 let failed = 0; const ok = (c, m) => { console.log((c ? '  ok   ' : '  FAIL ') + m); if (!c) failed++; return c; };
-const NAMES = ['HSP A', 'HSP <b>bold</b> & "q" ü'];
+export const NAMES = ['HSP A', 'HSP <b>bold</b> & "q" ü'];
 
 // toolPage(ctx, key): the tool opened in a new tab of the same profile; frame tools get the frame (page methods passed through)
 export async function toolPage(ctx, key, errs) {
@@ -54,6 +54,9 @@ const homeRows = p => p.evaluate(() => Object.fromEntries([...document.querySele
   [...g.querySelectorAll('li')].map(li => ({ name: li.querySelector('a').textContent, saved: (li.querySelector('.spD') || { textContent: '' }).textContent.replace(/^saved /, '') }))])));
 const snap = p => p.evaluate(() => JSON.stringify(Object.keys(localStorage).sort().map(k => [k, localStorage.getItem(k)])));
 
+// Imported for FOLDER / toolPage / dialogRows (tests/smoke/home-sync.mjs): the run below happens only when this file is the script run.
+if (/home-projects\.mjs$/.test(process.argv[1] || '')) await main();
+async function main() {
 const { b, ctx, p: home, errs } = await openPage(path.join(REPO, 'tools.html'), { vw: 1280, vh: 900 });
 const reqs = []; home.on('request', r => { if (!/^(file|data|about|blob):/.test(r.url())) reqs.push(r.url().slice(0, 120)); });
 const expect = {};
@@ -102,3 +105,4 @@ ok(!reqs.length, 'no network request from the home page (' + reqs.join(', ') + '
 ok(!errs.length, 'no console errors on the home page' + (errs.length ? ': ' + errs.join(' | ') : ''));
 await b.close();
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS'); process.exit(failed ? 1 : 0);
+}

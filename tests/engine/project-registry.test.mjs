@@ -25,6 +25,9 @@ test('project-registry: one entry per tool; its page passes the same key, tool a
     assert.ok(src.includes(`'${e.key}'`) || src.includes(`"${e.key}"`), `${e.tool}: key ${e.key} in ${e.href}`);
     assert.ok(new RegExp(`cloud:\\s*\\{\\s*tool:\\s*(['"])${e.tool}\\1,\\s*label:\\s*(['"])${e.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\2`).test(src), `${e.tool}: ctx.cloud tool / label in ${e.href}`);
     assert.equal(R.get(e.tool).key, e.key);
+    const blk = src.slice(src.search(new RegExp(`cloud:\\s*\\{\\s*tool:\\s*['"]${e.tool}['"]`))).slice(0, 220), sp = /space:\s*(\d)/.exec(blk.split('fromFile')[0]);
+    assert.equal(sp ? Number(sp[1]) : undefined, e.space, `${e.tool}: ctx.cloud space`);
+    assert.equal(/toFile:/.test(blk.split('fromFile')[0]), !!e.toFile, `${e.tool}: ctx.cloud has a toFile exactly when the entry has one`);
   }
   assert.equal(R.get('nope'), null);
 });
@@ -40,4 +43,40 @@ test('project-registry: list() reads only; an unreadable list is reported and ke
   s.setItem('sfd_projects', '{"B":{"x":1},"A":{"y":2}}');
   assert.equal(JSON.stringify([...s.m]), before);
   assert.equal(R.list(sf, null).items.length, 0);
+});
+
+// HSP PR 2: fileText = what the tool's own engine makes; the home page's engine and a tool's engine share the bookkeeping, so after the
+// home page's Upload all a tool finds every project synced and uploads nothing.
+import { makeGitHubMock } from './gh-mock.mjs';
+const G2 = loadShared('projects.js', 'github-sync.js', 'project-registry.js'), R2 = G2.SharedProjectRegistry, GS = G2.SharedGitHubSync, SP2 = G2.SharedProjects;
+const TOKEN = 'github_pat_TESTTOKEN0123456789abcd';
+
+test('project-registry: fileText equals the engine file text; home Upload all then the tool engine: synced, no upload', async () => {
+  const items = {
+    'spread-footing': { geom: { B: 6 }, soil: {}, peds: [] }, 'gusset-plate-rating': { members: [{ pattern: 'custom' }], meta: {} },
+    'light-pole-sign-post': { V: 115 }, 'retaining-wall-designer': { fields: { H: 12 }, ts: 1 }, 'base-plate-anchor': { plate: {}, anchor: {}, conc: {} },
+    'abutment-calculator': { state: { geom: {}, proj: {} }, ts: 2 }, 'timber-beam-check': { t: 3, d: { b: 1 } }
+  };
+  for (const e of R2.all()) {
+    const s = mem(); assert.equal(GS.saveSettings(s, { owner: 'mlococo88', repo: 'structural-projects', branch: 'main', token: TOKEN }).ok, true);
+    const item = items[e.tool] || (e.toFile && /\.d\b/.test(String(e.toFile)) ? { t: 1, d: { x: 1 } } : e.toFile && /\.state\b/.test(String(e.toFile)) ? { state: { x: 1 }, ts: 1 } : { x: 1, 'ü': '✓' });
+    s.setItem(e.key, JSON.stringify({ 'P 1/ü': item }));
+    const gh = makeGitHubMock({ token: TOKEN });
+    const home = R2.engine(e, s, gh.fetch);
+    assert.equal(R2.fileText(e, item, 'P 1/ü'), home.fileText('P 1/ü'), e.tool);
+    const r = await home.uploadAll(); assert.equal(r.ok, true); assert.equal(r.done, 1, e.tool);
+    assert.equal(gh.files.get(`projects/${e.tool}/P 1%2F%C3%BC.json`), R2.fileText(e, item, 'P 1/ü'));
+    // the tool's own engine (its ctx.cloud = the registry's toFile / space): nothing to upload, status synced
+    const tool = GS.engine({ tool: e.tool, label: e.label, store: SP2.mapStore(s, e.key), storage: s, fetch: gh.fetch, toFile: e.toFile, space: e.space });
+    const n0 = gh.log.length; tool.scan(); await tool.flush(true); await tool.refreshCloud();
+    assert.equal(gh.log.slice(n0).filter(l => l.method !== 'GET').length, 0, e.tool);
+    assert.equal(tool.statusOf('P 1/ü'), 'synced', e.tool);
+    assert.equal(s.getItem(e.key), JSON.stringify({ 'P 1/ü': item }), 'the tool list unchanged');
+  }
+});
+
+test('project-registry: the home engine never downloads into a tool list', async () => {
+  const e = R2.get('spread-footing'), s = mem(); GS.saveSettings(s, { owner: 'mlococo88', repo: 'structural-projects', branch: 'main', token: TOKEN });
+  const gh = makeGitHubMock({ token: TOKEN }); gh.setRemote('projects/spread-footing/X.json', '{"geom":{},"soil":{},"peds":[]}');
+  const r = await R2.engine(e, s, gh.fetch).download('X'); assert.equal(r.ok, false); assert.equal(s.getItem('sfd_projects'), null);
 });
