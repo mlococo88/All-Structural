@@ -3754,7 +3754,7 @@ See `fixlog/ACI Rebar Development Length.md`. The same edits are in `<iframe id=
 - ACI 318-19 19.2.4.1 says "except as required in Table 25.4.2.5", and that table's λ for development may be narrower than 0.75–1.0. Not checked here.
 - Both are code-reference questions for the engineer (§4).
 
-## 2026-11-05 — PR: claude/cbc-report-figs (CBRF: figures and tables found only on a tab moved into the section that works the check; the rest of the "As printed" tab copies moved to an appendix; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-report-figs, PR #798: https://github.com/mlococo88/All-Structural/pull/798 (CBRF: figures and tables found only on a tab moved into the section that works the check; the rest of the "As printed" tab copies moved to an appendix; display only, no result change)
 
 ### CBRF. Figures back in their sections, tab copies in an appendix   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 4 part 3; as Spread Footing SFRF #779):** inside each chapter, each figure and each table that appears nowhere else goes in the section that works its check. The "x.4 As printed" copies go to an appendix. Reference-only material goes to the appendix.
