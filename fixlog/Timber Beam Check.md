@@ -1866,7 +1866,7 @@ index 2f29ed5..c3246e1 100644
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-05 — PR: claude/header-timber (TBHD: compact header; title block and shared-info buttons moved to the Project input tab, header Open / Save file into the Project file card; display only, no result change)
+## 2026-11-05 — PR: claude/header-timber (PR #827: https://github.com/mlococo88/All-Structural/pull/827) (TBHD: compact header; title block and shared-info buttons moved to the Project input tab, header Open / Save file into the Project file card; display only, no result change)
 - **Engineer:** clean up the top of the page: the title-block inputs and the file / hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (nodes moved, not copied: every id, `data-fkey`, listener and saved field is the same):
   - `#hdr`: before title row (title, by-line, All tools; `.hdrBtns` Open file…, Save file, Undo / Redo (inserted by the PLIB block before Print report), Print report), `#projGrid` (7 fields), `#projShare` (Use / Share project info). After: title row with `.hdrBtns#hdrActs` (`#hdrProj` "Project: <project> · <job #>" link, Undo / Redo, Print report).
