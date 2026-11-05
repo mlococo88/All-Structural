@@ -4618,3 +4618,33 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 
 ### Open items
 - Stability 4.3, overturning edge tables, still show one row "Applied M + V·h couple" per edge (not part of this request). It can be itemised the same way if wanted.
+
+## 2026-11-05 — PR: claude/sf-ot-itemise (PR #761: https://github.com/mlococo88/All-Structural/pull/761) — overturning edge tables itemise the applied moments and shear couples V·(t + h) (SFOR; display only, no result change)
+
+### SFOR. Stability 4.3 per-edge overturning tables: the "Applied M + V·h couple" row itemised per pedestal and load type   [display only]
+- **Request (engineer, approved after SFMR's open item):** in each edge table of 4.3, replace the single lumped row with one row per pedestal and load type (applied moment; shear "Ped n T shear V_x · (t + h)" with factor × V, lever "t + h = a + b = c" and the moment), signed and bucketed for that edge as the lumped term is, with a subtotal equal to the old row, so M_r, M_o and FS are unchanged.
+- **Where:**
+  - New `sfdOTMaRows(r,e)` after `sfdLevTxt` (anchor `/* SFOR (2026-11-05): the sfdMaRows terms that act about one overturning edge`). It filters `sfdMaRows(r)` (SFMR, from `r.maT`) to the terms acting about edge `e` (an x-edge: applied M_y and V_x couples; a y-edge: applied M_x and V_y couples) and signs each one as `edgeCalc` (in `sfdOTEdges`) signs the lumped term: `Ma = +MaY` on +x, `−MaY` on −x, `+MaX` on +y, `−MaX` on −y. The edge's axis and sign are read from `e.name` ("+x …", "−x …", "+y …", "−y …"); nothing is added to the results object.
+  - `renderStability`, 4.3 per-edge loop (anchor `// SFOR: applied moments and shear couples, itemised per pedestal`). Before:
+    ```js
+      // applied moment / shear-couple row
+      if(e.appRow){const tr=document.createElement('tr');
+       const lbl='Applied M + V·h couple';
+       const cells=[lbl,'–','–',f2(e.Ma),e.appRow.bucket==='r'?f2(Math.abs(e.appRow.m)):'–',e.appRow.bucket==='o'?f2(Math.abs(e.appRow.m)):'–'];
+       cells.forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;td.style.fontStyle='italic';if(k>=4)td.style.color=(k===4?'#1b5e20':'#b71c1c');tr.appendChild(td);});
+       t.appendChild(tr);}
+    ```
+    After: one italic row per `sfdOTMaRows(go.r,e)` term — applied: `[src+' applied Mᵧ' (or Mₓ), f × M, '–', m, bucket cells]`; shear: `[src+' shear Vₓ · (t + h)' (or Vᵧ), 'f × V = H', sfdLevTxt(w,f2), m, bucket cells]` — then `['Subtotal: applied M + shear couples (M_app,net)','','',f2(e.Ma), <the old row's bucket cells>]`. Bucket cells of an item row: in the column of the net (`e.appRow.bucket`), `m` when the net overturns, `−m` when it resists, so a row acting against the net shows negative; the other column "–" (both "–" when `e.appRow` is null, i.e. |M_app,net| ≤ 1e-9). The note above the edge tables gains one sentence explaining this.
+  - Same code serves the 4.3 view of a selected LRFD combination (SFLS) and the Report's copy of 4.3 (the Report reproduces the tab's tables). Card 4.6 and the Report's worked M_r / M_o steps quote M_app,net as one term and are unchanged (no edge table there).
+- **Bucketing (unchanged):** `edgeCalc` nets all applied moments and couples into one `Ma` and puts it in M_o if ≥ 0, in M_r (as |Ma|) if < 0. The rows reproduce that net; they are not bucketed one by one (that would change M_r, M_o and FS where the terms have mixed signs, e.g. "rev", edge −y, 0.6D + 0.6(−Wx): the D terms −21.60 oppose the Wx terms +153.66). Raised as a question, not changed.
+- **Governing provision:** none changed (statics of overturning about an edge, as before). No formula, factor, lever or bucket changed.
+- **Check cases:**
+  - Default project, 0.6D + 0.6(+Wx), edge +x (governing): Ped 1 Wx shear V_x: 0.60 × 8.00 = 4.80 k, lever t + h = 2.50 + 2.00 = 4.50 ft, m = +21.60 k-ft; Ped 2 Wx the same, +21.60. Subtotal 43.20 = old row (43.20, → M_o). M_r = 890.82, M_o = 43.20, FS = 20.62, before and after. Edge −x: the same rows −21.60 each, subtotal −43.20 → M_r, as before.
+  - "rev" case, 0.6D + 0.6(−Wx), edge −y (governing), s = −1 on MaX: Ped 2 D applied M_x 0.60 × 31.50 = 18.90 → −18.90; Ped 2 D shear V_y 0.60 × 0.50 = 0.30 k × (2.00 + 7.00) = 2.70 → −2.70; Ped 2 Wx applied M_x −0.60 × 120.20 = −72.12 → +72.12; Ped 2 Wx shear V_y −0.60 × 15.10 = −9.06 k × 9.00 = −81.54 → +81.54. Sum = 132.06 = old row (→ M_o). M_r = 392.49, M_o = 12.21 + 132.06 = 144.27, FS = 2.72, before and after. Edge −x: V_x rows +38.40, −0.54, −1.62, +0.60, +1.62 = 38.46 = old row.
+  - Shear couple excluded ("rev", Stability "Pedestal shear couple" off): shear rows show H, lever "0 (shear couple off)" and 0.00; the subtotal is the applied-moment sum, as the old row.
+- **How verified:** origin/main vs branch on the 10 harness cases (def, rev, sfe, sfe5, dir, sfe9, revEx, thin, revHook, edgeHook): `R` and `P2` identical, 0 console and KaTeX errors, self-consistency "all 11 passed" on every case. In the page, for every case × shear couple on/off × every service and LRFD combination × all four edges, the `sfdOTMaRows` moments sum to `e.Ma` (relative 1e-9; 0 mismatches over 1,688 edge tables). `node tests/check-syntax.mjs`; `tests/smoke/spread-footing-scroll.mjs`. Screenshots of the edge tables on screen (default, rev, rev with the couple off, rev with an LRFD combination selected) and of the printed Report checked by eye.
+- **Saved data:** none. **Other copies:** none.
+
+### Open items
+- Question for the engineer: should the applied moments and couples about an edge be bucketed term by term (each opposing term into M_r) instead of netted first? That changes M_r, M_o and FS wherever terms have mixed signs (e.g. "rev", edge −y above: M_r 392.49 → 414.09, M_o 144.27 → 165.87, FS 2.72 → 2.50). Not changed here.
+- Pre-existing: the +x and −x edge panels share the id `o-st-ot-xxB2` (and +y / −y `o-st-ot-yyL2`), because the id strips the sign, so their open/closed state is shared. Not changed.
