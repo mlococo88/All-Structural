@@ -1338,3 +1338,23 @@ index 13f0165..656e0f1 100644
 - **How verified:** `node tests/check-syntax.mjs elastomeric_design_module.html`: pass. `node tests/smoke/project-library.mjs --tool edm` (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs --tool edm`: ALL PASS (Save → file; update with sha; "synced" in the row; GitHub-only copy opened → results identical to the saved project; settings button; first-sync offer; Delete asks; sync off: no request, no key; no console errors). origin/main vs branch (sync off): Export JSON text and file name identical; `edm_v1_projects` and `edm_v1_autosave` identical (save times normalised); 0 requests.
 - **Formulas, factors, units, code references:** none.
 - **Other copies:** none.
+
+## 2026-11-05 — PR: claude/header-edm (EDHD: compact toolbar; project-file, Reset, Self-Test and Send Pad buttons moved to the Project input tab; display only, no result change)
+- **Engineer:** clean up the top of the page (the title block is already in the Project tab here; the toolbar had 10 buttons); the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id, listener and saved field is the same):
+  - `.toolbar`: before Save Project, Projects…, Undo / Redo (PLIB, inserted before Export JSON), Export JSON, Import JSON (`#importFile`), Reset, Self-Test, ↩ Send Pad to Abutment, spacer, `#linkStatus`, `#saveStatus`, Print / PDF Report. After: `<a id="hdrProj">` "Project: <name> · <no.>", Projects…, Undo / Redo, spacer, `#linkStatus`, `#saveStatus`, Print / PDF Report.
+  - New `<div id="edmPrjHold" hidden>` after the toolbar holding `<div class="panel" id="edmPrjPane" data-cid="edm-prj">` "Project file, checks and hand-off": Project file (`#btnSaveProj`, `#btnExport`, `#btnImport`, `#importFile`, `#btnReset`); Self-test (`#btnSelfTest`); Pad to the Abutment app (`#btnSendBack`); one-line hints. The button rows carry class `toolbar` (inline padding/border/background reset) so the buttons keep their toolbar style.
+  - `buildInputs()` (anchor `/* EDHD: keep it out of the rebuild */`): parks `#edmPrjPane` in `#edmPrjHold` before `innerHTML=h`; `edmHdrProj()` after `edmInputTabs()`. `edmInputTabs()` (anchor `/* EDHD: after the title block */`): inserts it after the `in-proj` card; `EDM_IN_SEC` gets `"edm-prj":"project"`.
+  - PLIB block: `const ref=document.getElementById("btnExport")` (insert before) → `document.getElementById("btnManageProj")` (`ref.after(bu,br)`).
+  - New `edmHdrProj()` (anchor `function edmHdrProj(){`): `S.proj.name · S.proj.num` or "(untitled: enter it in the Project tab)"; called after every `buildInputs()` and on `input` in `proj.name` / `proj.num`. `#hdrProj` click: `edmSetInTab("project",true)`, scroll up to the input tabs if below them, focus Project name.
+  - CSS (anchor `/* EDHD (2026-11-05)`): `#hdrProj`, `#edmPrjPane` rules.
+- **Decisions (pending engineer review):** the project line shows Project name · Project no.; Save Project, Export / Import JSON and Reset go with the project file; Self-Test and Send Pad to Abutment get their own groups in the same card; Projects…, Undo / Redo and Print stay in the toolbar. The tool still opens on the Project tab when nothing is remembered (unchanged: it is the first tab).
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, title typed "Route 6 Bridge", "P-1234", "MJL", "2026-11-05", "ABC", "2026-11-06"):
+  - `LAST`, every localStorage key (autosave `ts` normalised) and the Report tab text: identical; every typed value in the Report.
+  - Share project info: `bridgeSuite.v1.projectMeta` identical; Use shared project info fills the shared fields; reload of the autosave identical;
+  - header shows "Project: Route 6 Bridge · P-1234"; the link opens the Project tab with Project name focused (1920 and 390 px);
+  - pad type changed (input panel rebuilt): the card stays after the title block, one `#btnSaveProj` on the page; Export JSON downloads once;
+  - `project-library --tool edm`, `github-sync-tools --tool edm` (the Projects dialog's GitHub sync), `check-syntax`: pass; no sideways scroll on any input tab at 390 / 768 px; 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change.
