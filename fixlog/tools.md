@@ -24,7 +24,7 @@
 - **Other copies:** none.
 - **Open items:** none.
 
-## 2026-11-05 — PR: claude/home-saved-projects (HSP PR 1: "Saved projects" panel, the projects saved in this browser across the apps; home page only, no result change)
+## 2026-11-05 — PR: claude/home-saved-projects, PR #818: https://github.com/mlococo88/All-Structural/pull/818 (HSP PR 1: "Saved projects" panel, the projects saved in this browser across the apps; home page only, no result change)
 
 - **Where:** `tools.html`. New `<details class="projects" id="projects">` just before `<details class="checks" open>`; new CSS rules after `details.checks li{…}` (classes `projects`, `spTools`, `spBar`, `spMsg`, `spG`, `spL`, `spD`, `spSt`, `spNote`); `<script src="shared/projects.js">` and `<script src="shared/project-registry.js">` before `</head>`; a new script before `</body>` (anchor `HSP (2026-11-05): "Saved projects" panel`).
 - **Before:** the home page listed tools only.

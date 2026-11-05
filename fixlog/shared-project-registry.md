@@ -3,7 +3,7 @@
 Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node tests/engine/run.mjs project-registry` (Node) and
 `node tests/smoke/home-projects.mjs` (browser: each tool's own Save, then the home page).
 
-## 2026-11-05 — PR: claude/home-saved-projects (HSP PR 1) — created (new file): where each tool keeps its saved-project list   [read only; no result change]
+## 2026-11-05 — PR: claude/home-saved-projects (PR #818: https://github.com/mlococo88/All-Structural/pull/818) (HSP PR 1) — created (new file): where each tool keeps its saved-project list   [read only; no result change]
 - **Why:** engineer request 2026-11-05: a "Saved projects" view on the home page (`tools.html`) across the apps. The home page cannot run a
   tool's code, so it needs to know, per tool, the list key and how the tool reads the saved time.
 - **What:** one entry per tool with a saved-project list and GitHub sync (15 at 2026-11-05: the 14 of #811 and the Abutment Calculator, #815, whose own Projects dialog is newest first by `ts`): `tool` / `label` (the tool's `ctx.cloud`),
