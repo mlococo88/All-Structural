@@ -1176,7 +1176,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-05 — PR: claude/header-asce7 (A7HD: compact header; title block and hand-off buttons moved to the Project input tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-asce7 (PR #822: https://github.com/mlococo88/All-Structural/pull/822) (A7HD: compact header; title block and hand-off buttons moved to the Project input tab; display only, no result change)
 - **Engineer:** clean up the top of the page: the title-block inputs and the hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (nodes moved, not copied: every id, `data-tb`, `onclick` and saved field is the same):
   - `#titlewrap`: before `#appid`, `#tbfields` (8 inputs `tb_project` … `tb_chkdate`), `#tbactions` (Print / PDF, Excel calculation, Send to other tools, Export hand-off (JSON); Undo / Redo / Saved projects… appended by the PLIB block), `#tbshare` (Use / Share project info). After: `#appid`, `<a id="hdrProj">` "Project: <project> · <job no.>", `#tbactions` (Print / PDF, Excel calculation, Undo / Redo / Saved projects…) in one row on the right.
