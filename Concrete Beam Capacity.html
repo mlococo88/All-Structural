@@ -432,6 +432,55 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
   #projGrid input[type=date],#projGrid input[readonly]{width:auto}
   #statusChip{margin-right:0}
 }
+/* CBDC (2026-11-05): check summary panel, as Spread Footing / Light Pole (SFDC #737, SFDF #740, LPDC #747). One line per check,
+   collapsible; on screens >= 1500 px a 280 px left column that scrolls on its own; below that a compact grid above the output
+   tabs. Screen only; the Summary tab, the Report and printing are unchanged. */
+#cbcDashCol{display:none}
+@media print{#cbcDashCol,#cbcDashBox{display:none!important}}
+@media screen{
+  #cbcDashBox{flex:0 0 auto;font-family:var(--font-ui);padding:5px 14px 0;background:var(--slate-50);border-bottom:1px solid var(--color-border);
+    max-height:42vh;overflow-y:auto}
+  #cbcDashHead{display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap}
+  #cbcDashTtl{margin:2px 0;font-size:9pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--navy-800)}
+  #cbcDashTgl{margin:0;padding:1px 7px;font:8.5pt var(--font-ui);border:1px solid #CBD5E1;background:var(--slate-100);border-radius:4px;cursor:pointer;color:#334155}
+  #cbcDashCnt{display:inline-flex;gap:4px;flex-wrap:wrap}
+  #cbcDashCnt span{font-size:8pt;font-weight:700;padding:1px 5px;border:1px solid;border-radius:3px;white-space:nowrap}
+  #cbcDashCnt .cbdCf{color:#991B1B;background:#FEF2F2;border-color:var(--fail)}
+  #cbcDashCnt .cbdCp{color:#065F46;background:#ECFDF5;border-color:var(--pass)}
+  #cbcDashCnt .cbdCn{color:#475569;background:var(--slate-100);border-color:#CBD5E1}
+  body.cbcDashColl #cbcDash{display:none}
+  #cbcDash{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(250px,100%),1fr));gap:3px 6px;margin:4px 0 7px;align-items:start}
+  .cbdCh{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:5px;padding:2px 5px 2px 2px;min-width:0;
+    border:1px solid var(--color-border);border-left:4px solid var(--slate-400);border-radius:3px;background:#fff;font-size:8.5pt;line-height:1.35;cursor:pointer}
+  .cbdCh:hover{background:var(--slate-50)} .cbdCh:focus-visible{outline:2px solid var(--blue-600);outline-offset:-1px}
+  .cbdCh.pass{border-left-color:var(--pass)} .cbdCh.fail{border-left-color:var(--fail);background:#FEF2F2}
+  .cbdCh .cbdX{grid-row:1;grid-column:1;margin:0;padding:0 3px;border:none;background:transparent;font-size:9px;color:#334155;line-height:1.2;cursor:pointer}
+  .cbdCh .cbdN{grid-row:1;grid-column:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cbdCh .cbdR{grid-row:1;grid-column:3;white-space:nowrap;color:#334155;font-variant-numeric:tabular-nums}
+  .cbdCh .cbdS{grid-row:1;grid-column:4;font-size:7.5pt;font-weight:700;white-space:nowrap}
+  .cbdCh.pass .cbdS{color:var(--pass)} .cbdCh.fail .cbdS{color:var(--fail)} .cbdCh.na .cbdS{color:#64748b}
+  .cbdCh .cbdV,.cbdCh .cbdDC,.cbdCh .cbdRef{grid-column:1/-1;display:none;padding-left:16px;overflow-wrap:anywhere}
+  .cbdCh .cbdDC,.cbdCh .cbdRef{color:#475569;font-size:8pt} .cbdCh .cbdRef{font-style:italic}
+  .cbdCh.cbdOpen .cbdV,.cbdCh.cbdOpen .cbdDC,.cbdCh.cbdOpen .cbdRef{display:block}
+  .cbdCh.cbdOpen .cbdN{white-space:normal}
+  .cbdMsg{grid-column:1/-1;font-size:8.5pt;padding:5px 8px;border:1px solid var(--color-border);border-left:4px solid var(--fail);background:#FEF2F2;color:#7F1D1D;border-radius:3px}
+}
+@media screen and (min-width:1500px){
+  body.cbcDashWide #cbcDashCol{display:block;flex:0 0 292px;width:292px;overflow-y:auto;overflow-x:hidden;position:relative;
+    padding:0 6px 24px;border-right:1px solid var(--color-border);background:var(--slate-50);overscroll-behavior:contain;font-family:var(--font-ui)}
+  body.cbcDashWide #cbcDashBox{padding:0;border-bottom:0;max-height:none;overflow:visible;background:transparent}
+  body.cbcDashWide #inputPanel{flex-basis:calc((100% - 292px)*.33);max-width:calc((100% - 292px)*.33)}
+  body.cbcDashWide #cbcDash{grid-template-columns:minmax(0,1fr)}
+  body.cbcDashWide #cbcDashHead{position:sticky;top:0;z-index:3;background:var(--slate-50);padding:5px 0 4px}
+  body.cbcDashWide.cbcDashColl #cbcDashCol{flex-basis:42px;width:42px;padding:0}
+  body.cbcDashWide.cbcDashColl #inputPanel{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
+  body.cbcDashWide.cbcDashColl #cbcDashHead{flex-direction:column;align-items:center}
+  body.cbcDashWide.cbcDashColl #cbcDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);margin:4px 0;white-space:nowrap}
+  body.cbcDashWide.cbcDashColl #cbcDashCnt{flex-direction:column;align-items:center}
+  body.cbcDashWide.cbcDashColl #cbcDashCnt span{font-size:7.5pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
+  body.cbcDashWide #cbcDashCol::-webkit-scrollbar{width:7px}
+  body.cbcDashWide #cbcDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+}
 </style>
 </head>
 <body>
@@ -456,8 +505,13 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
     <div id=&quot;projGrid&quot;></div>
   </div>
   <div id=&quot;main&quot;>
+    <aside id=&quot;cbcDashCol&quot; aria-label=&quot;Check summary&quot;></aside><!-- CBDC (2026-11-05): the check summary panel on screens 1500 px and wider -->
     <div id=&quot;inputPanel&quot;></div>
     <div id=&quot;outputWrap&quot;>
+      <div id=&quot;cbcDashBox&quot;><!-- CBDC: check summary (moved into #cbcDashCol on screens 1500 px and wider) -->
+        <div id=&quot;cbcDashHead&quot;><button type=&quot;button&quot; id=&quot;cbcDashTgl&quot; aria-controls=&quot;cbcDash&quot;></button><h2 id=&quot;cbcDashTtl&quot;>Check summary</h2><span id=&quot;cbcDashCnt&quot;></span></div>
+        <div id=&quot;cbcDash&quot;></div>
+      </div>
       <div id=&quot;tabBar&quot;></div>
       <div id=&quot;outputPanel&quot;><div id=&quot;tabPages&quot;></div></div>
     </div>
@@ -4491,6 +4545,107 @@ function cbcRptModel(){
   return {title:'Beam Capacity',code:codeName,proj:P,refs:cbcRefs(document.getElementById('pageBody')||document.body),sections:keep};
 }
 
+/* CBDC (2026-11-05, engineer): check summary panel, as Spread Footing / Light Pole (SFDC #737, SFDF #740, LPDC #747). One line
+   per check of the Summary tab (allChecks(), the same rows, D/C, status and count): expand button, name, a short value, status.
+   The short value is the Summary's D/C; for a check whose status is a condition (detailing limits, the torsion cross-section
+   limit) that is not satisfied, the condition instead, and the D/C moves to the expanded text. NG lines start expanded. A line
+   click opens the card where the check is worked (cbcGoto, the D11 links). No new calculation.
+   On screens >= 1500 px the box is moved into the left column #cbcDashCol; below that it sits above the output tabs.
+   Collapse state: per-browser UI key cbc_dashCollapsed_v1 ('1' = collapsed, '0' or absent = open); not in S, the autosave,
+   the saved projects or the JSON export. */
+const CBDC={key:'cbc_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,open:new Map(),coll:false};
+CBDC.coll=lsGet(CBDC.key)==='1';
+const CBDC_ST={pass:'PASS',fail:'FAIL',na:'N/A'};
+/* the condition a detailing check (or the torsion cross-section limit) states when it is not satisfied */
+const CBDC_COND={dCover:'c_c < c_c,req',dSpace:'s_clear < s_min',dLayer:'layer gap < 1 in',dAsMin:'A_s < A_s,min',
+  dEpsMin:'ε_t < ε_ty + 0.003',dStirS:'s > s_max',dAvMin:'A_v/s < (A_v/s)_min',dTorS:'s > s_max (torsion)',
+  dTorAl:'A_ℓ < A_ℓ,min',dTorAlReq:'A_ℓ < A_ℓ,req',dTorAts:'A_t/s < 25b_w/f_yt',dTorAlDist:'spacing > 12 in',dCrack:'s > s_max (crack)'};
+function cbcDashDC(c){   /* the D/C as the Summary tab prints it (heatTD, CBAZ) */
+  if(c.na||c.dcr==null) return '';
+  const z=cbcDcZero(c); if(z) return 'D/C '+z;
+  return 'D/C '+(isFinite(c.dcr)?fmt(c.dcr):'≫1');
+}
+function cbcDashItems(){
+  if(!CC) return null;
+  const env=detEnvelope(), byId={}; env.forEach(E=>{ byId[E.id]=E; });
+  return allChecks().map(c=>{
+    /* status exactly as the Summary tab's Status column */
+    const st=c.na?'na':((c.forceOK!==undefined&amp;&amp;c.forceOK!==null)?(c.forceOK?'pass':'fail'):((!isFinite(c.dcr)||c.dcr>1.0001)?'fail':'pass'));
+    const E=c.id?byId[c.id]:null, en=E&amp;&amp;E.entry;
+    let cond='';
+    if(st==='fail'){
+      if(c.id&amp;&amp;CBDC_COND[c.id]) cond=(c.id==='dAvMin'&amp;&amp;c.have0)?'no stirrups':CBDC_COND[c.id];
+      else if(c.label==='Torsion cross-sectional limit') cond='section too small';
+    }
+    let text='';
+    if(c.na) text=E?('N/A: '+(E.naWhy||'')):'N/A: no load combination has this action.';
+    else if(en&amp;&amp;!en.na&amp;&amp;en.cmp){
+      const dec=en.unit==='in²/in'?4:(en.unit===''?5:2), u=en.unit?' '+en.unit:'';
+      text=fmt(en.have,dec)+u+(en.cmp==='\\le'?' provided, limit ≤ ':' provided, required ≥ ')+fmt(en.need,dec)+u+'; governing combination: '+c.combo;
+    } else text=(cbcDashDC(c)||'D/C —')+'; governing combination: '+c.combo;
+    const card=cbcCheckCard(c), tn=cbcTabName(c.tab);
+    return {name:c.label,st,dc:cbcDashDC(c),cond,within:c.dcr!=null&amp;&amp;isFinite(c.dcr)&amp;&amp;c.dcr<=1.0001,text,ref:c.ref,tab:c.tab,card:card?card.card:null,
+      where:tn?('→ '+tn+(card?' · '+card.name:'')):''};
+  });
+}
+function cbcDashGo(it){
+  cbcGoto(it.tab,it.card);
+  /* phone / tablet: the output panel does not scroll on its own there, so bring the card into view */
+  setTimeout(()=>{ const op=document.getElementById('outputPanel'), e=it.card&amp;&amp;document.querySelector('#tabPages #'+it.card);
+    if(e&amp;&amp;op&amp;&amp;op.scrollHeight<=op.clientHeight+1) e.scrollIntoView({behavior:'smooth',block:'start'}); },90);
+}
+function cbcDashRender(){
+  const box=document.getElementById('cbcDash'), cnt=document.getElementById('cbcDashCnt'); if(!box) return;
+  box.innerHTML='';
+  const blocked=!!(VALIDATION&amp;&amp;VALIDATION.blockers&amp;&amp;VALIDATION.blockers.length);
+  let items=null; if(!blocked){ try{ items=cbcDashItems(); }catch(e){ items=null; } }
+  if(blocked||!items){
+    box.innerHTML='<div class=&quot;cbdMsg&quot;>'+(blocked?'Input invalid: output withheld. See the message in the output panel.':'No results yet.')+'</div>';
+    if(cnt) cnt.innerHTML=blocked?'<span class=&quot;cbdCf&quot;>input invalid</span>':'';
+    return;
+  }
+  let nF=0;
+  items.forEach(it=>{
+    if(it.st==='fail') nF++;
+    const short=it.cond||it.dc, dcLine=it.cond&amp;&amp;it.dc?it.dc:'';
+    const c=el('div','cbdCh '+it.st); c.tabIndex=0; c.setAttribute('role','button');
+    const x=el('button','cbdX'); x.type='button'; x.title='Show the result and the reference'; c.appendChild(x);
+    c.appendChild(el('span','cbdN',it.name)); c.appendChild(el('span','cbdR',short)); c.appendChild(el('span','cbdS',CBDC_ST[it.st]));
+    c.appendChild(el('div','cbdV',it.text));
+    if(dcLine) c.appendChild(el('div','cbdDC',dcLine+(it.within?' (the ratio is within its limit; the status comes from the condition)':'')));
+    c.appendChild(el('div','cbdRef',(it.ref||'')+(it.ref&amp;&amp;it.where?' · ':'')+it.where));
+    c.title=it.name+': '+it.text+(dcLine?'\n'+dcLine:'')+(it.ref?'\nReference: '+it.ref:'')+(it.where?'\nClick: '+it.where:'');
+    const setOpen=o=>{ c.classList.toggle('cbdOpen',o); x.setAttribute('aria-expanded',o?'true':'false'); x.textContent=o?'▾':'▸'; };
+    setOpen(CBDC.open.has(it.name)?CBDC.open.get(it.name):it.st==='fail');
+    x.addEventListener('click',ev=>{ ev.preventDefault(); ev.stopPropagation(); const o=!c.classList.contains('cbdOpen'); CBDC.open.set(it.name,o); setOpen(o); });
+    c.addEventListener('click',()=>cbcDashGo(it));
+    c.addEventListener('keydown',ev=>{ if((ev.key==='Enter'||ev.key===' ')&amp;&amp;ev.target===c){ ev.preventDefault(); cbcDashGo(it); } });
+    box.appendChild(c);
+  });
+  if(cnt) cnt.innerHTML=nF?'<span class=&quot;cbdCf&quot;>'+nF+' NG</span>':(items.length?'<span class=&quot;cbdCp&quot;>no NG</span>':'<span class=&quot;cbdCn&quot;>no checks</span>');
+}
+function cbcDashPlace(){
+  const box=document.getElementById('cbcDashBox'), col=document.getElementById('cbcDashCol'), ow=document.getElementById('outputWrap'), bar=document.getElementById('tabBar');
+  if(!box||!col||!ow) return;
+  const wide=!!(CBDC.mq&amp;&amp;CBDC.mq.matches);
+  document.body.classList.toggle('cbcDashWide',wide);
+  if(wide){ if(box.parentNode!==col) col.appendChild(box); }
+  else if(box.parentNode!==ow) ow.insertBefore(box,bar||ow.firstChild);
+  cbcDashColl(CBDC.coll,false);
+}
+function cbcDashColl(v,save){
+  CBDC.coll=!!v; document.body.classList.toggle('cbcDashColl',CBDC.coll);
+  const t=document.getElementById('cbcDashTgl'), wide=document.body.classList.contains('cbcDashWide');
+  if(t){ t.setAttribute('aria-expanded',CBDC.coll?'false':'true');
+    t.innerHTML=wide?(CBDC.coll?'&amp;raquo;':'&amp;laquo;'):(CBDC.coll?'&amp;#9656; Show checks':'&amp;#9662; Hide checks');
+    t.title=(CBDC.coll?'Show':'Hide')+' the check list (remembered in this browser)'; }
+  if(save) lsSet(CBDC.key,CBDC.coll?'1':'0');
+}
+(function(){
+  const t=document.getElementById('cbcDashTgl'); if(t) t.addEventListener('click',()=>cbcDashColl(!CBDC.coll,true));
+  if(CBDC.mq){ if(CBDC.mq.addEventListener) CBDC.mq.addEventListener('change',cbcDashPlace); else if(CBDC.mq.addListener) CBDC.mq.addListener(cbcDashPlace); }
+  cbcDashPlace();
+})();
 function refresh(){
   const st=captureUI();
   VALIDATION=validate();
@@ -4498,6 +4653,7 @@ function refresh(){
   buildProjGrid();
   buildInput();
   buildTabs();
+  cbcDashRender();   /* CBDC: the check summary panel, from the checks just shown */
   autosave();
   restoreUI(st);
 }
