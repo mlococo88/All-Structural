@@ -95,6 +95,18 @@ const TOOLS = {
     known: p => p.evaluate(() => { const s = SPDW.B.S.find(q => q.id === SPDW.cur); return { what: `top flange PL 16 x 1 in on ${s.title} at ${s.scale} (1:${s.k})`, w: 16 / s.k, h: 1 / s.k }; }),
     report: /Section Propert/i,
   },
+  cbc: {   // CBDW (2026-11-05): the Drawings tab of the Beam Capacity frame (srcdoc #suite-frame-capacity of the suite). The buttons and the
+           // sheets are in the frame (fr); the sheets print through the shell's SharedDxf.printSheets, so the print box is in the top page.
+           // The known rectangle is the concrete b_w x h of the default section on the BEAM CROSS SECTION sheet.
+    file: 'Concrete Beam Capacity.html', label: 'Concrete Beam Capacity (Beam Capacity tab, Drawings)', fr: '#suite-frame-capacity',
+    open: async (p, f) => { await p.waitForTimeout(4000); await p.click('#suite-tab-capacity'); await f.waitForFunction(() => typeof refresh === 'function' && typeof CBDW !== 'undefined');
+      await f.evaluate(() => { S.ui.tab = 'tabDrawings'; refresh(); }); await f.waitForSelector('#cbdwPrint1'); },
+    one: '#cbdwPrint1', all: '#cbdwPrintAll',
+    n: f => f.evaluate(() => CBDW.B.S.length),
+    known: f => f.evaluate(() => { const s = CBDW.B.S.find(q => q.id === CBDW.cur); return { what: `concrete b_w x h = ${S.sec.bw} x ${S.sec.h} in on ${s.title} at ${s.scale} (1:${s.k})`, w: S.sec.bw / s.k, h: S.sec.h / s.k }; }),
+    reportOpen: async p => { await p.click('#suite-tab-report'); await p.waitForTimeout(4000); },
+    report: /Concrete Beam|Beam Capacity/i,
+  },
 };
 
 let fails = 0; const check = (ok, m) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${m}`); if (!ok) fails++; };
@@ -113,11 +125,12 @@ for (const key of want) {
   console.log(`${T.label} (${T.file})`);
   const o = await openPage(path.join(REPO, T.file), { vw: 1400, vh: 1000, timeout: 60000 });
   try {
-    await T.open(o.p);
+    const X = T.fr ? await (await o.p.$(T.fr)).contentFrame() : o.p;   // the frame that holds the Drawings tab (CBDW), else the page
+    await T.open(o.p, X);
     await o.p.evaluate(() => { window.__prints = 0; window.print = () => { window.__prints++; }; });
     // 1. the sheet shown
-    const K = await T.known(o.p), N = await T.n(o.p);
-    await o.p.click(T.one);
+    const K = await T.known(X), N = await T.n(X);
+    await X.click(T.one);
     const st1 = await o.p.evaluate(() => ({ box: document.querySelectorAll('#sdx-print .sdx-sheet').length, prints: window.__prints }));
     check(st1.box === 1 && st1.prints === 1, `Print sheet: print box with 1 sheet, window.print called (${JSON.stringify(st1)})`);
     const f1 = path.join(OUT, `${key}-sheet.pdf`);
@@ -135,7 +148,7 @@ for (const key of want) {
     const gone1 = await o.p.evaluate(() => !document.getElementById('sdx-print') && !document.getElementById('sdx-print-css') && !document.body.classList.contains('sdx-printing'));
     check(gone1, 'after printing: the print box, its style and the body class are removed');
     // 2. every sheet
-    await o.p.click(T.all);
+    await X.click(T.all);
     const f2 = path.join(OUT, `${key}-all.pdf`);
     await o.p.pdf({ path: f2, preferCSSPageSize: true, printBackground: true });
     const P2 = pages(f2);
