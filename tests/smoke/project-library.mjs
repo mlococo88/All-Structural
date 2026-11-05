@@ -173,6 +173,17 @@ export const TOOLS = {
     ui: { open: async p => { await p.evaluate(() => { const d = document.getElementById('libDlg'); if (d.open) d.close(); document.getElementById('bLib').click(); }); await p.waitForSelector('#libDlg[open]'); },
       rows: '#libBody tbody tr' }
   },
+  gd: {
+    // Steel Bridge Design.html (GirderDetail): used by tests/smoke/github-sync-tools.mjs and home-projects.mjs (GHS2, 2026-11-05; its
+    // shared Saved projects dialog); not run by this file (results: tests/compare.mjs --tool gd). Results after gdIdle: the modules'
+    // project P (without ui, ts zeroed) and the open module's checks; save = Save as (asks the name; a name in use asks to overwrite).
+    file: 'Steel Bridge Design.html', list: 'girderdetail_projects_v1', auto: 'girderdetail_autosave_v1', noRun: true,
+    ready: async p => { await p.waitForFunction(() => typeof window.gdIdle === 'function' && document.getElementById('pb_saveas'), null, { timeout: 120000 }); await p.evaluate(() => window.gdIdle({ quiet: 3000 })); },
+    results: async p => { await p.evaluate(() => window.gdIdle({ quiet: 3000 })); return p.evaluate(() => { const q = JSON.parse(JSON.stringify(P)); delete q.ui;
+      return JSON.parse(JSON.stringify({ P: q, CK: typeof CK !== 'undefined' && CK ? CK.map(c => [c.id, c.status, c.items.map(i => [i.loc, i.st, i.r != null && isFinite(i.r) ? +i.r : null])]) : null }).replace(/"ts":\d+/g, '"ts":0')); }); },
+    change: p => bump(p, 'input[type=number][data-k]', 1),
+    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('pb_saveas').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(400); }
+  },
   spreadfooting: {
     file: 'Spread Footing.html', list: 'sfd_projects', auto: 'sfd_auto', ownUndo: true,   // the tool's own Undo / Redo (U-2) is unchanged and not re-tested here
     ready: p => p.waitForFunction(() => typeof R !== 'undefined' && R),
