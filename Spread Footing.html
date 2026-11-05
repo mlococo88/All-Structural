@@ -3969,9 +3969,10 @@ function sfrPrinting(){return document.body.classList.contains('rp-printing');}
 function sfrWillPrint(){const T=document.getElementById('tab-report');return sfrPrinting()||!!(SFRP.doc&&T&&T.classList.contains('active'));}
 window.addEventListener('beforeprint',()=>{
  const T=document.getElementById('tab-report');
- if(!SFRP.doc||!T||!T.classList.contains('active')||sfrPrinting())return;
+ if(sfrPrinting()){const b=document.getElementById('rp-print');if(b)sfxUniqDom(b);return;}   /* SFCB: SharedReport.print filled the box */
+ if(!SFRP.doc||!T||!T.classList.contains('active'))return;
  let box=document.getElementById('rp-print');if(!box){box=document.createElement('div');box.id='rp-print';document.body.appendChild(box);}
- box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(SFRP.doc,{lazy:false})+'</article></div>';
+ box.innerHTML='<div class="rp"><article class="rp-doc">'+sfxUniq(SharedReport.html(SFRP.doc,{lazy:false}))+'</article></div>';   /* SFCB */
  document.body.classList.add('rp-printing');
 });
 /* ================= SFRX (2026-11-03): the D11 print report retired =================
@@ -3994,10 +3995,29 @@ const sfxLite=t=>String(t==null?'':t).replace(/\\[dt]frac/g,'\\frac').replace(/\
  .replace(/\\q?quad/g,' ').replace(/\\[;:!,]/g,' ').replace(/\\(displaystyle|scriptstyle|textstyle|limits)/g,'').replace(/\\Rightarrow/g,'⇒').replace(/\\rightarrow|\\to\b/g,'→')
  .replace(/\\approx/g,'≈').replace(/\\big[lr]?|\\Big[lr]?/g,'').replace(/\\ /g,' ').replace(/\$/g,'');
 /* a Plotly chart as one SVG (its layers stacked), so it prints in the Report as on the page */
+/* SFCB (2026-11-05): the copy of an SVG in the Report gets its own element ids. The tab's original stays in the page (hidden while
+   the Report is shown), so a copied gradient / clip path / marker id existed twice and url(#id) resolved to the hidden original,
+   which does not paint: the Plotly colour bar of the 3.2 heat map printed unfilled (main before #777 too). The print box gets fresh ids
+   again (beforeprint), as the Report tab's own copy is hidden while printing. Display only. */
+let SFX_UID=0;
+function sfxUniq(h){   /* only ids referenced by url(#id): gradients, clip paths, markers, filters (never the report's § anchors) */
+ h=String(h);const ids=[...new Set([...h.matchAll(/url\((?:&quot;|["'])?#([^"'&)\s]+)/g)].map(m=>m[1]))];if(!ids.length)return h;
+ const sfx='-rp'+(++SFX_UID),esc=x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+ ids.forEach(id=>{h=h.replace(new RegExp('(\\sid=")'+esc(id)+'(")','g'),'$1'+id+sfx+'$2').replace(new RegExp('#'+esc(id)+'(?=["\')&;])','g'),'#'+id+sfx);});
+ return h;
+}
+/* the same in place (the print box SharedReport.print filled and measured): each url(#id)-referenced element in root gets a new id */
+function sfxUniqDom(root){
+ const sfx='-rp'+(++SFX_UID),A=['style','fill','stroke','clip-path','mask','filter','marker-start','marker-mid','marker-end'];
+ const refs=[...root.querySelectorAll('*')].filter(e=>A.some(a=>/url\(/.test(e.getAttribute(a)||'')));
+ const ids=new Set();refs.forEach(e=>A.forEach(a=>{const v=e.getAttribute(a);if(v)for(const m of v.matchAll(/url\(["']?#([^"')\s]+)/g))ids.add(m[1]);}));
+ ids.forEach(id=>{const t=root.querySelector('[id="'+id.replace(/"/g,'')+'"]');if(!t)return;t.id=id+sfx;
+  refs.forEach(e=>A.forEach(a=>{const v=e.getAttribute(a);if(v&&v.indexOf('#'+id)>=0)e.setAttribute(a,v.split('#'+id+')').join('#'+id+sfx+')').split('#'+id+'"').join('#'+id+sfx+'"').split("#"+id+"'").join("#"+id+sfx+"'"));}));});
+}
 function sfxPlotSvg(d){
  const L=[...d.querySelectorAll('svg.main-svg')];if(!L.length)return '';
  const w=parseFloat(L[0].getAttribute('width'))||700,h=parseFloat(L[0].getAttribute('height'))||340;
- return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;max-width:'+w+'px">'+L.map(s=>{const c=s.cloneNode(true);c.removeAttribute('style');c.setAttribute('x','0');c.setAttribute('y','0');return c.outerHTML;}).join('')+'</svg>';
+ return sfxUniq('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;max-width:'+w+'px">'+L.map(s=>{const c=s.cloneNode(true);c.removeAttribute('style');c.setAttribute('x','0');c.setAttribute('y','0');return c.outerHTML;}).join('')+'</svg>');   /* SFCB */
 }
 /* one rendered tab (a clone) → report items, in document order; a card title (summary) or a heading is the topic of its first item */
 function sfxWalk(root,scope,T){
@@ -4044,7 +4064,7 @@ function sfxWalk(root,scope,T){
   if(e.matches('h1,h2,h3,h4,.manH,.manH3')){topic=txt(e);card=topic;nfig=0;return;}
   if(e.matches('.sfp-na')){nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)){T.figs.add(key);push({type:'note',text:cap+': '+SFP_NA+'.'});}return;}   /* SFPN */
   if(e.matches('.js-plotly-plot')){const s=sfxPlotSvg(e);nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(s&&!T.figs.has(key)){T.figs.add(key);push({type:'figure',svg:s,caption:cap});}return;}
-  if(e.matches('svg')){nfig++;const cap=(card||'Figure')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)&&!T.figs.has(e.outerHTML)){T.figs.add(key);const c=e.cloneNode(true);if(!c.getAttribute('viewBox')&&c.getAttribute('width'))c.setAttribute('viewBox','0 0 '+parseFloat(c.getAttribute('width'))+' '+parseFloat(c.getAttribute('height')));c.style.maxWidth='100%';c.style.height='auto';push({type:'figure',svg:c.outerHTML,caption:cap});}return;}
+  if(e.matches('svg')){nfig++;const cap=(card||'Figure')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)&&!T.figs.has(e.outerHTML)){T.figs.add(key);const c=e.cloneNode(true);if(!c.getAttribute('viewBox')&&c.getAttribute('width'))c.setAttribute('viewBox','0 0 '+parseFloat(c.getAttribute('width'))+' '+parseFloat(c.getAttribute('height')));c.style.maxWidth='100%';c.style.height='auto';push({type:'figure',svg:sfxUniq(c.outerHTML),caption:cap});}return;}
   if(e.matches('table')){table(e);return;}
   if(e.matches('.eq')){eq(e);return;}
   if(e.matches('.manEq')){const s=step(texOf(e),card||'Equation','');if(s)push({type:'steps',scope,steps:[s]});return;}
