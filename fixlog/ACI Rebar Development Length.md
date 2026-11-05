@@ -2158,3 +2158,31 @@ function schematicSVG(inp,f){
   </svg>`;
 }
 ```
+
+
+## 2026-11-05 — PR: claude/retire-aci-rebar, PR #804: https://github.com/mlococo88/All-Structural/pull/804 — tool retired: the file is now a redirect page to the Development & Splice tab of Concrete Beam Capacity (RBRT)
+
+- **Engineer decision (2026-11-05):** retire "ACI Rebar Development Length.html" in favour of the Development & Splice tab of "Concrete Beam Capacity.html" (the same app, embedded since the suite was built), the same pattern as `Concrete Beam ASD.html` (CBAR, PR #562).
+- **New file content (whole file replaced; the old tool is in git history at the commit before this PR, f9ec0f9):**
+  - The page forwards to `Concrete%20Beam%20Capacity.html` + `?query` + `#dev`. The suite already opens the tab named by `#dev` (CBAR, 2026-11-01). The old page read no `#hash` or `?query`, so there is nothing else to carry over.
+  - In a frame, from the website (http/https), with no old data, once the offer below was shown, or when the suite's own key `rcsuite.rebar_autosave_v1` is in the same storage: it forwards at once.
+  - Otherwise (opened from file:// with old data in this file's storage and no sign of the suite: the Firefox / Safari case, where each file has its own storage), it stops ONCE and lists "Last session" (`rebar_aci_autosave_v1`) and each saved project (`rebar_aci_projects_v1`), each with "Download .json": the state as the old Export JSON wrote it (`JSON.stringify(state, null, 2)`, file named as Export JSON named it), which the tab's Import JSON reads. Same idea as `psbeam.html` (PBD-1).
+  - Reads `rebar_aci_projects_v1`, `rebar_aci_autosave_v1`, `rcsuite.rebar_autosave_v1`; writes only `rebar_aci_redirect_offered_v1` (offer shown once); deletes nothing; loads no library.
+- **Saved data (§5), key by key (old page vs the suite's Development & Splice frame):**
+
+  | Key | Old page | Suite tab | Result |
+  |---|---|---|---|
+  | `rebar_aci_projects_v1` (saved projects, `{name: state}`) | read/write | read/write, same code | shared: listed in the tab as before |
+  | `rebar_aci_autosave_v1` (last session) | read/write | read only (F21 one-time copy) | **old-only user data:** taken over once by the tab (see `fixlog/Concrete Beam Capacity.md`, RBRT); key kept |
+  | `rcsuite.rebar_autosave_v1` | — | the tab's own autosave (F21) | unchanged |
+  | `rebar_aci_inputTab_v1` (input tab shown) | read/write | read/write, same code | shared (UI only) |
+  | `rebar_dashCollapsed_v1` (check summary collapsed) | read/write | read/write, same code | shared (UI only) |
+  | `bridgeSuite.v1.projectMeta` (+ `.updatedAt`) | "Use / Share shared project info" | the suite shell's own buttons, same key and schema | shared |
+  | `__bx_t` | storage probe, removed at once | same in the shell | none |
+  | Undo / Redo history (`shared/projects.js`) | in memory only | in memory only | none |
+
+  The rest of the old page's code is the tab's code: the line diff of the old file against the decoded `#suite-frame-dev` srcdoc is only the known embedded differences (frame CSS, no All-tools link, no Report tab button, print through the suite, no share buttons / BridgeXfer, `LS_KEY`/`LS_KEY_OLD`, `REBAR_RPT_TOOL`). So `collectState()` / `applyState()` / `exportJSON()` / `importJSON()` are byte-identical, and every old .json file imports.
+- **Other copies:** none left. The Development & Splice tab of Concrete Beam Capacity is now the only copy (CLAUDE.md §3 updated).
+- **Tests moved, not dropped:** `tests/smoke/phone-layout.mjs --tool aci` and `tests/smoke/project-library.mjs --tool rebar` now run the same checks inside the suite's `#suite-frame-dev` (opened as `#dev`). New `tests/smoke/rebar-redirect.mjs`.
+- **How verified (headless Chromium, file://):** `node tests/smoke/rebar-redirect.mjs` ALL PASS (redirect with `?job=12` → `Concrete%20Beam%20Capacity.html?job=12#dev`; in a frame → forwards; suite on the Development & Splice tab, frame visible, no console errors; offer at 390 px without sideways scroll, its downloads equal to the old autosave / saved project; offer once). Old Export JSON (AASHTO, #7, f'c 6,000, top bar, epoxy) imported in the tab: inputs, `computeFactors()` and the check summary identical to the old page (0 differences).
+- **Open items:** comments in `abutment_calculator.html` and `Retaining Wall Designer.html` say "same form as ACI Rebar Development Length.html"; left as they are (other tools; the app is unchanged in the suite). `tests/libs/MANIFEST.json` `used_by` still names the old file, like other old names there.

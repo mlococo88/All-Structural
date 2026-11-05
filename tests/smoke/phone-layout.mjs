@@ -7,6 +7,8 @@
 // is about the page width, which a missing library does not widen).
 //   node tests/smoke/phone-layout.mjs [--tool <key>[,<key>…]] [--file <file>] [--w 390,768]
 //   keys: see TOOLS below (default: all). --file: another copy of the tool's file (one tool only).
+//   A tool entry may name hash (opened as file#hash) and frame (a same-origin iframe of the page: its tab buttons are the ones found,
+//   clicked and checked against that frame's width; added 2026-11-05 for the retired rebar calculator, RBRT).
 import { openPage, resolveFile } from '../lib.mjs';
 
 const args = {}; const av = process.argv.slice(2);
@@ -24,7 +26,9 @@ const TOOLS = {
   bsl: { file: 'Bridge Substructure Loading.html', tabs: '.itab[data-pane], #tab-bar .tab-btn', wait: 4000, tabWait: 1000 },
   sbeam: { file: 'Steel Beam Design - AISC 15th.html', tabs: '#sbdInTabs .sbdInTab, #tabBar button', wait: 4000, tabWait: 1000 },
   cbc: { file: 'Concrete Beam Capacity.html', tabs: '.suite-tab', wait: 6000, tabWait: 1500 },
-  aci: { file: 'ACI Rebar Development Length.html', tabs: '[role=tab], .tab-btn, .itab, .tab, [data-tab]', wait: 3000, tabWait: 600 },
+  // aci: the rebar calculator. Its standalone file was retired 2026-11-05 (RBRT; now a redirect page): the same app is checked in the
+  // Development & Splice tab of Concrete Beam Capacity (#dev), its tab buttons found and clicked inside that frame (frame).
+  aci: { file: 'Concrete Beam Capacity.html', hash: '#dev', frame: '#suite-frame-dev', tabs: '[role=tab], .tab-btn, .itab, .tab, [data-tab]', wait: 6000, tabWait: 600 },
   bpad: { file: 'BasePlateAnchorDesigner.html', tabs: '[role=tab], .tab-btn, .itab, .tab, [data-tab], .otab', wait: 5000, tabWait: 800 },
   sf: { file: 'Spread Footing.html', tabs: '#sfdInTabs .sfdInTab, #tabbar button, #sfdDashTgl', wait: 3000, tabWait: 800 },   // SFDC (2026-11-03): the dashboard's Hide / Show checks button too
   lp: { file: 'Light Pole and Sign Post.html', tabs: '#lppInTabs .lppInTab, #tabBar button, #lppDashTgl', wait: 3000, tabWait: 800 },   // LPDC (2026-11-03): with the check summary's Hide / Show checks button
@@ -34,27 +38,28 @@ const TOOLS = {
 const keys = args.tool ? String(args.tool).split(',') : Object.keys(TOOLS);
 const widths = String(args.w || '390,768').split(',').map(Number);
 let failures = 0;
-const width = (p, sel) => p.evaluate(sel => { const se = document.scrollingElement, vw = document.documentElement.clientWidth;
-  const scrolls = e => { for (let a = e.parentElement; a; a = a.parentElement) if (/(auto|scroll)/.test(getComputedStyle(a).overflowX)) return true; return false; };
-  const cut = [...document.querySelectorAll(sel)].filter(t => { const r = t.getBoundingClientRect(); return r.width > 0 && r.right > vw + 1 && !scrolls(t); })
+const width = (p, sel, fr) => p.evaluate(([sel, fr]) => { const se = document.scrollingElement, D = fr ? document.querySelector(fr).contentDocument : document, vw = D.documentElement.clientWidth;
+  const scrolls = e => { for (let a = e.parentElement; a; a = a.parentElement) if (/(auto|scroll)/.test(D.defaultView.getComputedStyle(a).overflowX)) return true; return false; };
+  const cut = [...D.querySelectorAll(sel)].filter(t => { const r = t.getBoundingClientRect(); return r.width > 0 && r.right > vw + 1 && !scrolls(t); })
     .map(t => (t.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 20));
   let over = se.scrollWidth - se.clientWidth;   // a visible same-origin frame (srcdoc tabs, e.g. Concrete Beam Capacity) counts as a page too
   for (const f of document.querySelectorAll('iframe')) { if (!f.offsetWidth) continue; try { const fe = f.contentDocument.scrollingElement; over = Math.max(over, fe.scrollWidth - fe.clientWidth); } catch (e) {} }
-  return { over, x: se.scrollLeft, cut }; }, sel);
+  return { over, x: se.scrollLeft, cut }; }, [sel, fr || null]);
 for (const key of keys) {
   const T = TOOLS[key]; if (!T) { console.log(`unknown tool ${key}`); failures++; continue; }
   const src = resolveFile(args.file && keys.length === 1 ? args.file : T.file, T.file);
   for (const vw of widths) {
-    const { b, p, errs } = await openPage(src.file, { vw, vh: vw < 500 ? 844 : 1024 });
+    const { b, p, errs } = await openPage(src.file, { vw, vh: vw < 500 ? 844 : 1024, hash: T.hash || '' });
     try {
       await p.waitForTimeout(T.wait || 2500);
       if (T.init) await T.init(p);
-      const n = await p.$$eval(T.tabs, e => e.length);
-      const res = [['(load)', await width(p, T.tabs)]];
+      const F = T.frame ? await (await p.$(T.frame)).contentFrame() : p;   // where the tab buttons are
+      const n = await F.$$eval(T.tabs, e => e.length);
+      const res = [['(load)', await width(p, T.tabs, T.frame)]];
       for (let i = 0; i < n; i++) {
-        const name = await p.$$eval(T.tabs, (e, i) => { const t = e[i]; if (t.offsetParent !== null) t.click(); return (t.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 30); }, i);
+        const name = await F.$$eval(T.tabs, (e, i) => { const t = e[i]; if (t.offsetParent !== null) t.click(); return (t.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 30); }, i);
         await p.waitForTimeout(T.tabWait || 600);
-        res.push([name, await width(p, T.tabs)]);
+        res.push([name, await width(p, T.tabs, T.frame)]);
       }
       const bad = res.filter(([, r]) => r.over > 1 || r.cut.length);
       failures += bad.length;

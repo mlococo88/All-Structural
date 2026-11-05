@@ -4089,3 +4089,73 @@ Not affected:
   - Screenshots looked at: the Input Echo section and elevation, the Visuals section, elevation and 3-D, the ASD section, both Dev drawings, for default and deep.
   - `check-syntax` (all), `phone-layout --tool cbc,aci`, `project-library --tool rebar` and `run.mjs report steps steps-groups report-wiring` (14 passed) pass.
 - **Saved data:** none. **Governing provision:** none changed (drawings only). **Other copies:** `ACI Rebar Development Length.html` (Dev drawings, same edit).
+
+
+## 2026-11-05 — PR: claude/retire-aci-rebar, PR #804: https://github.com/mlococo88/All-Structural/pull/804 (RBRT: the standalone "ACI Rebar Development Length.html" is retired and opens this suite's Development & Splice tab; the tab takes over the old page's last session once; storage only, no result change)
+
+- **Engineer decision (2026-11-05):** retire the standalone rebar calculator; its file is now a redirect page to `Concrete%20Beam%20Capacity.html#dev` (see `fixlog/ACI Rebar Development Length.md`, RBRT). The `#dev` deep link already existed (CBAR, 2026-11-01); unchanged.
+- **Where:** Development & Splice tab srcdoc (`suite-frame-dev`), main script: new functions before `function init(){` (anchor, unescaped: `/* RBRT (2026-11-05): the standalone "ACI Rebar Development Length.html" is retired`; in the file the quotes are `&quot;` and every `&` is `&amp;`), and `init()` (anchor `// one-time migration: if this tab has no autosave of its own yet`).
+- **Before** (`init()`, unescaped):
+```js
+  // one-time migration: if this tab has no autosave of its own yet, start from the old shared one (left in place)
+  try{ if(localStorage.getItem(LS_KEY)===null){ const old=localStorage.getItem(LS_KEY_OLD); if(old!==null) localStorage.setItem(LS_KEY,old); } }catch(e){}
+```
+- **After** (`init()`, unescaped):
+```js
+  // one-time migration: if this tab has no autosave of its own yet, start from the old shared one (left in place)
+  // RBRT (2026-11-05): with the standalone tool retired, also its later work, once, and a notice (rbOldAutosave, above)
+  rbOldAutosave();
+```
+  and, inserted before `function init(){` (unescaped; encode `&` → `&amp;` and `"` → `&quot;`, CRLF, when pasting into the srcdoc):
+```js
+/* RBRT (2026-11-05): the standalone "ACI Rebar Development Length.html" is retired (it now opens this tab). Its last session
+   (LS_KEY_OLD, never written or deleted here) is taken over ONCE (marker LS_KEY_MIG): as this tab's autosave when the tab has none
+   yet (as before, F21), or else, when its inputs differ from this tab's and from every saved project, as a new saved project
+   (the inputs shown are not changed). A notice above the inputs says what was done, until OK. Storage only; no result change. */
+const LS_KEY_MIG = "rcsuite.rebar_oldAutosaveMigrated_v1";   // {at, did:'autosave'|'project'|'none', name, seen}
+function rbInpIn(a,b){ return !!(a&&b&&typeof a==='object'&&typeof b==='object')&&Object.keys(a).every(k=>String(a[k])===String(b[k])); }
+function rbOldAutosave(){
+  let old=null, cur=null, mig=null;
+  try{ old=localStorage.getItem(LS_KEY_OLD); cur=localStorage.getItem(LS_KEY); mig=localStorage.getItem(LS_KEY_MIG); }catch(e){ return; }
+  if(old===null) return;
+  if(mig!==null){ if(cur===null){ try{ localStorage.setItem(LS_KEY,old); }catch(e){} } rbOldAutosaveNote(mig); return; }   // as before (F21)
+  const at=new Date().toISOString(); let m={at, did:'none', seen:true}, o=null;
+  try{ o=JSON.parse(old); }catch(e){}
+  if(cur===null){ try{ localStorage.setItem(LS_KEY,old); }catch(e){ return; } m={at, did:'autosave', seen:false}; }
+  else if(o&&o.inp&&typeof o.inp==='object'){
+    let c=null; try{ c=JSON.parse(cur); }catch(e){}
+    const p=getProjects();
+    if(!rbInpIn(o.inp,c&&c.inp)&&!Object.keys(p).some(k=>rbInpIn(o.inp,p[k]&&p[k].inp))){
+      const base='Recovered from the standalone tool ('+at.slice(0,10)+')'; let nm=base, i=2; while(p[nm]) nm=base+' '+(i++);
+      p[nm]=o; try{ localStorage.setItem(LS_PROJECTS,JSON.stringify(p)); }catch(e){ return; }
+      m={at, did:'project', name:nm, seen:false};
+    }
+  }
+  try{ localStorage.setItem(LS_KEY_MIG,JSON.stringify(m)); }catch(e){}
+  rbOldAutosaveNote(JSON.stringify(m));
+}
+function rbOldAutosaveNote(s){
+  let m=null; try{ m=JSON.parse(s); }catch(e){}
+  if(!m||m.seen||(m.did!=='autosave'&&m.did!=='project')) return;
+  const P=document.getElementById('inputPanel'); if(!P||document.getElementById('rbOldNote')) return;
+  const d=document.createElement('div'); d.className='warnbox'; d.id='rbOldNote'; d.setAttribute('role','status'); d.style.margin='0 0 8px';
+  d.innerHTML='<b>Standalone calculator retired.</b> "ACI Rebar Development Length.html" now opens this tab. '+
+    (m.did==='autosave'?'The inputs last used there were opened here.'
+      :'The inputs last used there differ from this tab\'s, so they were kept as the saved project <b>'+escHTML(m.name)+'</b> (input tab "Assumptions &amp; Save", Saved Project); the inputs shown were not changed.')+
+    ' Projects saved there are listed here as before. <button type="button" class="btn small" style="margin-left:6px">OK</button>';
+  d.querySelector('button').addEventListener('click',()=>{ m.seen=true; try{ localStorage.setItem(LS_KEY_MIG,JSON.stringify(m)); }catch(e){} d.remove(); });
+  P.insertBefore(d,P.firstChild);
+}
+```
+- **Problem:** since F21 (2026-10-04) the tab has its own autosave and copied the old page's autosave only when it had none. A user who opened the suite once and then kept working in the standalone page would, after the retirement, no longer see that later work (it stays in `rebar_aci_autosave_v1`, which only the retired page wrote). Saved projects were never affected (`rebar_aci_projects_v1` is shared).
+- **Behaviour now (once per browser storage, marker `rcsuite.rebar_oldAutosaveMigrated_v1` = `{at, did, name, seen}`):**
+  - no old autosave: nothing (no marker written);
+  - the tab has no autosave: the old one is copied (as F21 did) and opened; notice "The inputs last used there were opened here.";
+  - the tab has an autosave and the old session's inputs (every old field, compared as text) match it or a saved project: nothing added, no notice;
+  - otherwise: the old session is added to the project list as "Recovered from the standalone tool (YYYY-MM-DD)" (a number is added if the name exists); the inputs shown and the tab's autosave are not changed; notice names the project.
+  - The notice (a warning box above the input tabs) stays until OK; `rebar_aci_autosave_v1` is never written or deleted; nothing else is changed. If storage refuses the write, nothing is marked and the next load tries again.
+- **Governing provision:** none. No formula, factor, unit, code reference or result changed (storage at start-up only).
+- **Check case:** old page (f9ec0f9): AASHTO, #9, f'c 5,000, c_b 2.5, top bar, epoxy saved as "Pier 3 laps"; then f'c 6,000, #7 (last session). (A) suite never opened: the tab opens on the last session, results identical to the old page, notice; "Pier 3 laps" listed and identical. (B) suite autosave = defaults: "Recovered from the standalone tool (2026-11-05)" added, equal byte for byte to `rebar_aci_autosave_v1`, opens with the old page's results; inputs shown unchanged; reopened: no second copy, notice gone after OK. (C) suite autosave = the old session: nothing added, no notice.
+- **How verified:** `node tests/check-syntax.mjs` (all files) pass. `node tests/smoke/rebar-redirect.mjs` ALL PASS. `node tests/smoke/project-library.mjs --tool rebar` (now run inside this tab, main vs branch) ALL PASS: results identical on load, after an input change, on main's autosave and on main's saved project. `node tests/smoke/phone-layout.mjs --tool aci,cbc` pass (aci = this tab's 12 tab buttons at 390 / 768 px). `node tests/compare.mjs --tool page --file "Concrete Beam Capacity.html"`: page text and storage identical.
+- **Other copies:** none (the standalone page was the other copy; it is retired in this PR).
+- **Open items:** none.

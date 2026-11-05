@@ -46,9 +46,10 @@ See `AUDIT.md` for the current inventory, known issues, and the work plan, and
   copies in step and list in the PR which tools contain it.
 - Known duplicated snippets not yet moved: the `bridgeSuite.v1.*` bootstrap/handoff code at the
   top of `index.html`, `lldf.html` and `Prestressed Bridge Design.html`
-  (`psbeam.html` until 2026-10-22), and the
-  ACI rebar development-length app that is also embedded in
-  `Concrete Beam Capacity.html`. See `AUDIT.md`.
+  (`psbeam.html` until 2026-10-22). (The ACI rebar development-length app
+  now exists only as the Development & Splice tab of
+  `Concrete Beam Capacity.html`: its standalone file was retired 2026-11-05.)
+  See `AUDIT.md`.
 - ST-Girder lives only inside `Steel Bridge Design.html` (GirderDetail, renamed
   from `Steel Bridge Beam Modules.html`) as the `st-src` block; `stgirder.html`
   was deleted at the cut-over (2026-10-22, #422). Edit ST-Girder in `st-src`

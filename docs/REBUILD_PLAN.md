@@ -60,7 +60,7 @@ Old file names (`Steel Bridge Design.html`, `lldf.html`, `index.html`, …) stay
 | Steel Bridge Design | 2.9 MB | Full rebuild (§5) | Three apps in one file; slow changes and tests |
 | Moving Load Generator | 0.2 MB | Pilot: becomes the user of `shared/moving-load.js` and `vehicles.js` | One analysis engine for every tool |
 | lldf | 1.0 MB | Engine moves to `shared/lldf.js`; the page stays | Steel Bridge, index and Prestressed duplicate it today |
-| Concrete Beam Capacity + ACI Rebar | 1.2 + 0.75 MB | `shared/rebar.js` | The rebar app is embedded twice today |
+| Concrete Beam Capacity + ACI Rebar | 1.2 + 0.75 MB | `shared/rebar.js` | The rebar app is embedded twice today (since 2026-11-05 once: the standalone file was retired, the suite's Development & Splice tab is the app) |
 | index, Stone Arch, Substructure Loading | 1.4 / 0.8 / 0.5 MB | Switch to `shared/vehicles.js` | The audit found wrong legal-truck data in index and the arch tool |
 | All 17 tools getting a Report tab | — | `shared/report.js`, one viewer | Not 17 copies of the Gusset pattern |
 | Pile Designer, Base Plate, abutment, Prestressed | 0.8–1.8 MB | Split into `apps/<tool>/` when each is next worked on | Large, actively edited |
