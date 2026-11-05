@@ -1403,6 +1403,16 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Governing provision:** AASHTO LRFD 10th Ed. (2024) 5.10.8.4.5a (0.5·m·f_y·d_b; m(0.9f_y − 24)d_b; m = 1.33 for f′c < 3 ksi; ≥ 12 in, as implemented) and 5.10.2.1 Standard Hooks (p. 5-176). Both were confirmed in the 2026-11-05 audit. No formula, factor or value changed.
 - **How verified:** headless, origin/main vs branch, default project: `rbrModel()` and the calc results are identical except that one reference-row string. `node tests/check-syntax.mjs` and `node tests/smoke/project-library.mjs --tool rebar`: pass.
 - **Other copies:** the Development & Splice frame of `Concrete Beam Capacity.html`, same edit, same PR.
+
+## 2026-11-05 — PR: claude/cbc-asreq-note, PR #786: https://github.com/mlococo88/All-Structural/pull/786 (CBAR: a note on A_s,req for the excess-reinforcement option, about beams and the A_s,min case; display only, no result change)
+
+- **Problem (audit C6):** A_s,req is typed by the user, and nothing said what it should be for a beam, in particular where the 9.6.1 minimum governs. R25.4.10.2 (ACI 318-19, printed p. 488) excludes the development of shrinkage and temperature reinforcement (24.4.3.4) from the factor. 9.6.1.1 (p. 135) defines A_s,min as minimum *flexural* reinforcement, and R9.6.1.1 gives its flexural purpose. So for a beam, A_s,req = A_s,min may be used where that minimum governs (engineer's SF decision #774 applied to beams).
+- **Where:** panel D2 "Excess Reinforcement", anchor `Also drives Class A splice eligibility.</div>`. A second `<div class="hint" style="margin-top:6px">` follows it. It says: A_s,req for a beam is the flexural requirement from analysis. Where the 9.6.1 minimum governs, A_s,req = A_s,min may be used, because 9.6.1.1 defines A_s,min as minimum flexural reinforcement (R9.6.1.1), not the 24.4 shrinkage and temperature steel that R25.4.10.2 excludes. Before: no such text.
+- **Governing provision (cited only, all read in the printed code):** ACI 318-19 9.6.1.1, R9.6.1.1 (p. 135), R25.4.10.2 (p. 488). No formula, factor or value changed.
+- **How verified:** headless, origin/main vs branch: default project and #8 with the option on at 0.5 (ACI) give identical `rbrModel()`, calc results and output text in this file and in the Concrete Beam Capacity Dev frame. Screenshot of panel D2 looked at. `node tests/check-syntax.mjs`: pass. `node tests/smoke/phone-layout.mjs --tool cbc,aci`: pass. `node tests/smoke/project-library.mjs --tool rebar`: ALL PASS.
+- **Saved data:** none.
+- **Other copies:** the Development & Splice frame of `Concrete Beam Capacity.html`, same edit in the same PR (CLAUDE.md §3).
+- **Open item (from the audit, not done):** passing A_s,req = max(flexure, A_s,min) and A_s,prov from the Beam Capacity frame to this tab would be a new hand-off. Ask the engineer first.
 ## 2026-11-05 — PR: claude/cbc-dev-look, PR #785: https://github.com/mlococo88/All-Structural/pull/785 (CBTH-2: Development & Splice re-themed to the suite look (Light Pole / apps/steel-bridge / the Beam Capacity tab): navy header, slate tabs with a blue stripe, card heads, one-row inputs; display only, no result change)
 
 ### CBTH-2. Beige / maroon serif theme replaced by the suite theme   [display only] [no result change]
