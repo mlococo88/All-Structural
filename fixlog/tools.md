@@ -37,7 +37,7 @@
 - **Other copies:** none.
 - **Open items:** GitHub status and "Sync all" follow in HSP PR 2.
 
-## 2026-11-05 — PR: claude/home-sync-all (HSP PR 2: GitHub status and "Sync all to GitHub" in the Saved projects panel; home page only, storage only, no result change)
+## 2026-11-05 — PR: claude/home-sync-all, PR #821: https://github.com/mlococo88/All-Structural/pull/821 (HSP PR 2: GitHub status and "Sync all to GitHub" in the Saved projects panel; home page only, storage only, no result change)
 
 - **Where:** `tools.html`. The panel script (anchor `HSP (2026-11-05): "Saved projects" panel`) is replaced by a version with sync (new header lines `HSP PR 2:`); `<script src="shared/github-sync.js">` added before `shared/project-registry.js` in `<head>`. CSS unchanged (the `spSt` status classes were added in PR 1).
 - **Before:** the panel listed this browser's projects only.

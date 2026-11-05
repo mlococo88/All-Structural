@@ -20,7 +20,7 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
   the text is left as it is; the storage is byte-identical after every call.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 
-## 2026-11-05 — PR: claude/home-sync-all (HSP PR 2) — file text and sync engine per tool, for the home page's GitHub status and Sync all   [storage only; no result change]
+## 2026-11-05 — PR: claude/home-sync-all (PR #821: https://github.com/mlococo88/All-Structural/pull/821) (HSP PR 2) — file text and sync engine per tool, for the home page's GitHub status and Sync all   [storage only; no result change]
 - **What:** each entry gets `space` and `toFile`, copied from the tool's `ctx.cloud` (one-line wrappers of the stored item, no calculation). The 17 entries (Bridge Geometry, #819, added in this PR) are:
   - `i => i.d` (Section Property, Shear & Moment, Steel Beam, Timber);
   - `i => i.state` (Abutment, Elastomeric); Bridge Geometry (#819) `(i, n) => { const o = Object.assign({}, i, { name: n }); delete o.savedAt; return o; }` (list: by name, time `savedAt`);
