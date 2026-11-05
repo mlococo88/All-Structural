@@ -1049,6 +1049,16 @@ function servicecalc(F,neg){
    DETAILING — cover, spacing, min/max steel, stirrup limits
    Every check carries its full derivation for the report.
    ===================================================================== */
+/* CBRL (2026-11-05, engineer): the relation the provided and required values actually satisfy, for the Detailing tab's
+   &quot;Comparison&quot; line and the Report's &quot;Provided vs required&quot; step. A passing check prints the required relation (d.cmp, as
+   before); a failing one prints its negation (\gt for a \le limit, \lt for a \ge minimum) when the numbers violate it.
+   Display only: d.ok decides the status as before. */
+function cbcDetRel(d){
+  if(d.ok) return d.cmp;
+  if(d.cmp===&quot;\\le&quot;&amp;&amp;d.have>d.need) return &quot;\\gt&quot;;
+  if(d.cmp===&quot;\\ge&quot;&amp;&amp;d.have<d.need) return &quot;\\lt&quot;;
+  return d.cmp;
+}
 function detailing(F,sh,neg,govMu,Vu,tor){
   const {bw,h}=S.sec, fc=S.mat.fc, fy=S.mat.fy, fyt=fytDesign(), dagg=S.mat.dagg;
   const cc=S.cover.cc, ds=stirDia(), rt=sqrtfc_psi(fc), code=S.code;
@@ -3181,7 +3191,7 @@ function buildDetailTab(pg){
       b.appendChild(eqBlock({
         title:&quot;Comparison&quot;,ref:d.ref,
         lines:[`${d.cmp===&quot;\\ge&quot;?&quot;\\text{provided} \\ge \\text{required}&quot;:&quot;\\text{provided} \\le \\text{required}&quot;}`,
-          `${fmt(d.have,d.unit===&quot;in\u00b2/in&quot;?4:(d.unit===&quot;&quot;?5:3))} ${d.cmp} ${fmt(d.need,d.unit===&quot;in\u00b2/in&quot;?4:(d.unit===&quot;&quot;?5:3))}\\;\\text{${d.unit}}`]
+          `${fmt(d.have,d.unit===&quot;in\u00b2/in&quot;?4:(d.unit===&quot;&quot;?5:3))} ${cbcDetRel(d)} ${fmt(d.need,d.unit===&quot;in\u00b2/in&quot;?4:(d.unit===&quot;&quot;?5:3))}\\;\\text{${d.unit}}`]
       }));
       const v=el(&quot;div&quot;,d.ok?&quot;okBox&quot;:&quot;errBox&quot;);
       v.innerHTML=&quot;<b>&quot;+(d.ok?&quot;PASS&quot;:&quot;FAIL&quot;)+&quot;</b> — &quot;+d.name+&quot; (&quot;+d.ref+&quot;).&quot;;
@@ -4532,7 +4542,7 @@ function cbcRptModel(){
       return [d.name,cRef(d.ref),E.na?'—':E.combo,{t:E.na?'—':fmt(d.have,dp),n:true,key:E.na?undefined:'dt/'+d.id+'.cmp'},{t:E.na?'—':(d.cmp==='\\ge'?'≥ ':'≤ ')+fmt(d.need,dp),n:true},d.unit,E.na?{t:'N/A',cls:'na'}:{t:E.allOk?'PASS':'FAIL',cls:E.allOk?'ok':'ng'}]; })}]});
     const L=ENV.filter(E=>!E.na).map(E=>{ const d=E.entry, dp=d.unit==='in²/in'?4:(d.unit===''?5:3);
       return {title:d.name+' ('+E.combo+')',ref:cRef(d.ref),steps:d.deriv.map((q,k)=>cS({id:d.id+'.'+k,label:q[2]||d.name,sym:'',eq:q[0],sub:q[1]||'',value:null})).concat([
-        cS({id:d.id+'.cmp',label:'Provided '+(d.cmp==='\\ge'?'≥':'≤')+' required',sym:'\\text{provided}',eq:d.cmp+'\\;\\text{required}',sub:fmt(d.have,dp)+' '+d.cmp+' '+fmt(d.need,dp),value:d.have,unit:cU(d.unit),d:dp,ok:!!d.ok,note:E.allOk?'':'fails for at least one combination'})])}; });
+        cS({id:d.id+'.cmp',label:'Provided '+(d.cmp==='\\ge'?'≥':'≤')+' required',sym:'\\text{provided}',eq:d.cmp+'\\;\\text{required}',sub:fmt(d.have,dp)+' '+cbcDetRel(d)+' '+fmt(d.need,dp),value:d.have,unit:cU(d.unit),d:dp,ok:!!d.ok,note:E.allOk?'':'fails for at least one combination'})])}; });
     if(L.length) subs.push({title:'Worked detailing checks',items:[{type:'topics',scope:'dt',title:'Worked steps',list:L},{type:'note',text:'[[tab:tabDetail|On screen: Detailing tab]]'}]});
     const na=ENV.filter(E=>E.na); if(na.length) subs.push({title:'Not applicable',items:na.map(E=>({type:'note',text:E.entry.name+': '+E.naWhy}))});
     secs.push({title:'Detailing',subs});
@@ -8125,6 +8135,8 @@ function rbrDashGo(it){
 function rbrDashRender(checks,f){
   const box=document.getElementById('rbrDash'), cnt=document.getElementById('rbrDashCnt'); if(!box) return;
   box.innerHTML='';
+  /* RBDT (2026-11-05): the panel title names the code of the calculation, as the old dashboard heading did */
+  const tt=document.getElementById('rbrDashTtl'); if(tt) tt.textContent='Checks \u2014 '+(f&amp;&amp;f.AASHTO?'AASHTO LRFD 10th Ed. \u00a75.10.8':'ACI 318-19');
   const n={fail:0,warn:0};
   const tmp=document.createElement('div');
   const txt=h=>{ tmp.innerHTML=String(h); return tmp.textContent; };

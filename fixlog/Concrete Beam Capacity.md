@@ -3265,6 +3265,37 @@ function rbrDashColl(v,save){
 })();
 ```
 
+## 2026-11-05 — PR: claude/cbc-p2-display, PR #792: https://github.com/mlococo88/All-Structural/pull/792 (CBRL: a failing Detailing "Comparison" line prints the relation the values satisfy; RBDT: the Development & Splice check summary title names the code; display only, no result change)
+
+### CBRL. Detailing "Comparison" line and Report step: the actual relation   [display only] [no result change]
+- **Engineer request (2026-11-05, Phase 2 follow-up; seen in CBDC #788):** on a failing Detailing card the "Comparison" line printed the required relation with the numbers, e.g. "provided ≤ required / 6.000 ≤ 5.250 in" for the default project's torsion stirrup spacing. It should print the relation the numbers satisfy ("6.000 > 5.250 in"), the same way on every Detailing card and in the Report.
+- **Where (Beam Capacity srcdoc page, `<iframe id="suite-frame-capacity" srcdoc=…>`):**
+  - New helper `cbcDetRel(d)` just before `function detailing(F,sh,neg,govMu,Vu,tor){` (anchor `/* CBRL (2026-11-05, engineer)`):
+    ```js
+    function cbcDetRel(d){
+      if(d.ok) return d.cmp;
+      if(d.cmp==="\\le"&&d.have>d.need) return "\\gt";
+      if(d.cmp==="\\ge"&&d.have<d.need) return "\\lt";
+      return d.cmp;
+    }
+    ```
+  - `buildDetailTab`, the "Comparison" `eqBlock`, second line. Before: ``…(d.unit===""?5:3))} ${d.cmp} ${fmt(d.need…``. After: ``…(d.unit===""?5:3))} ${cbcDetRel(d)} ${fmt(d.need…``. The first line ("provided ≤ required" / "provided ≥ required") still states the requirement.
+  - `cbcRptModel`, section 7 Detailing, the worked step `d.id+'.cmp'`. Before: `sub:fmt(d.have,dp)+' '+d.cmp+' '+fmt(d.need,dp),`. After: `sub:fmt(d.have,dp)+' '+cbcDetRel(d)+' '+fmt(d.need,dp),`.
+- **Logic:** a passing check prints the required relation as before (unchanged text). A failing check prints `\gt` (for a ≤ limit) or `\lt` (for a ≥ minimum) when the numbers violate it. If a check fails while its two numbers satisfy the relation (none known today), the required relation is kept. `\gt` / `\lt` are in the `shared/steps.js` TeX subset and in KaTeX. Status, D/C and every result are untouched (`d.ok` still decides).
+- **Check case:** default project (ACI): card 7 "Maximum closed-stirrup spacing for torsion": before "6.000 ≤ 5.250 in", after "6.000 > 5.250 in" (s = 6 in, s_max = min(p_h/8, 12) = min(42/8, 12) = 5.25 in, FAIL). Card 9 "Longitudinal torsion steel to develop T_u": before "0.000 ≥ 0.878 in²", after "0.000 < 0.878 in²". Passing cards (e.g. card 8 "0.000 ≥ 0.000 in²") unchanged. AASHTO, f_yt 100, M_u 120 / V_u 60 / T_u 5: "Clear cover" before "2.000 ≥ 2.500", after "2.000 < 2.500 in".
+- **How verified:** headless Chromium, origin/main vs branch, 5 cases (default, AASHTO f_yt 100, ACI with torsion, excess reinforcement ACI / AASHTO): `computeAll()`, `allChecks()` identical; `cbcRptModel()` differs only in the `.cmp` steps' `sub` of failing checks; tab text differs only on the Detailing tab lines above. Screenshot of card 7 looked at.
+
+### RBDT. Development & Splice check summary title names the code   [display only]
+- **Engineer request:** the panel title (RBDC #791, "Check summary") names the code, following the code mode, as the old dashboard heading did (RBDC open item).
+- **Where (Development & Splice srcdoc page and `ACI Rebar Development Length.html`, the same text):** `rbrDashRender(checks,f)`, after `box.innerHTML='';`, added:
+  ```js
+  /* RBDT (2026-11-05): the panel title names the code of the calculation, as the old dashboard heading did */
+  const tt=document.getElementById('rbrDashTtl'); if(tt) tt.textContent='Checks — '+(f&&f.AASHTO?'AASHTO LRFD 10th Ed. §5.10.8':'ACI 318-19');
+  ```
+- **Check case:** default (ACI) "CHECKS — ACI 318-19" (upper case by the existing CSS); Code = AASHTO: "CHECKS — AASHTO LRFD 10TH ED. §5.10.8". The markup's initial text "Check summary" is replaced at the first render.
+- **How verified:** as CBRL; the only text differences in both copies are the title. Screenshots at 1600 px (column) and 1100 px (above the tabs) looked at.
+- **Other copies:** `ACI Rebar Development Length.html` (same edit, logged there).
+- **Tests:** `node tests/check-syntax.mjs`, `node tests/smoke/phone-layout.mjs --tool cbc,aci`, `node tests/smoke/project-library.mjs` pass.
 
 ## 2026-11-05 — PR: claude/cbc-report-order (CBRO: the suite Report in the design order, a suite-wide "Summary of results" first, section numbers independent of the Include boxes; display only, no result change)
 
