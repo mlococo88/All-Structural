@@ -105,6 +105,10 @@
   }
   TOOLS.unshift({ tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)', name: 'Steel Bridge Design (new app)', href: 'apps/steel-bridge/index.html',
     key: 'sbd2.lib.index', toFile: t => t, view: sbd2View });   // card order: before Moving Load Generator; its own list (items by id): the file is the stored item text (= Export JSON)
+  // card order: first (GirderDetail's card comes before the new app's). toFile = the tool's own (v = its SBD_V, 1; tests/smoke/home-sync.mjs
+  // fails if they differ): the Export JSON format of a saved project (its modules' part; no pl / st parts)
+  TOOLS.unshift({ tool: 'steel-bridge-design', label: 'Steel Bridge Design', name: 'Steel Bridge Design (GirderDetail)', href: 'Steel%20Bridge%20Design.html',
+    key: 'girderdetail_projects_v1', space: 2, toFile: (i, n) => ({ app: 'SteelBridgeDesign', v: 1, name: n, data: i }) });
   const all = () => TOOLS.slice();
   const get = tool => TOOLS.find(e => e.tool === tool) || null;
   function store(e, storage) {
