@@ -26,13 +26,40 @@ details.checks{background:var(--card);border:1px solid #d9a441;border-left:5px s
 details.checks summary{cursor:pointer;font-weight:600}
 details.checks h3{font-size:13px;margin:12px 0 4px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 details.checks ul{margin:0;padding-left:20px}details.checks li{margin:3px 0}details.checks b{color:var(--accent)}
+details.projects{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--accent);border-radius:10px;padding:10px 16px;margin:0 0 8px}
+details.projects summary{cursor:pointer;font-weight:600}
+.spTools{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 6px}
+.spTools input,.spTools select{padding:7px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);font:inherit;font-size:14px;min-width:0}
+.spTools input{flex:1 1 220px;max-width:420px}.spTools select{flex:0 1 auto;max-width:100%}
+.spBar{display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;font-size:13px;color:var(--muted);margin:4px 0 8px}
+.spBar button{font:inherit;font-size:13px;padding:4px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink);cursor:pointer}
+.spBar button:hover{border-color:var(--accent)}.spBar button:disabled{opacity:.5;cursor:default}
+.spMsg{font-size:13px;margin:4px 0;white-space:pre-wrap}.spMsg.err{color:#b91c1c}
+.spG{margin:10px 0 4px}.spG h3{font-size:14px;margin:0 0 4px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline}
+.spG h3 a{color:var(--accent);text-decoration:none}.spG h3 a:hover{text-decoration:underline}.spG h3 .spC{color:var(--muted);font-weight:400;font-size:12px}
+ul.spL{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+ul.spL li{display:flex;flex-wrap:wrap;gap:2px 10px;align-items:baseline;padding:5px 2px;border-bottom:1px solid var(--line)}
+ul.spL a{color:var(--ink);text-decoration:none;font-weight:500;overflow-wrap:anywhere;flex:1 1 200px;min-width:0}ul.spL a:hover{color:var(--accent);text-decoration:underline}
+ul.spL .spD{color:var(--muted);font-size:12px;white-space:nowrap}
+.spSt{display:inline-block;font-size:12px;padding:0 7px;border-radius:9px;border:1px solid var(--line);white-space:nowrap;color:var(--muted)}
+.spSt.synced{background:#dcfce7;border-color:#86efac;color:#166534}.spSt.cloud-newer,.spSt.cloud{background:#e0f2fe;border-color:#7dd3fc;color:#075985}.spSt.conflict{background:#fef3c7;border-color:#fcd34d;color:#92400e}
+.spNote{color:var(--muted);font-size:13px;margin:8px 0 2px}
 </style>
+<script src="shared/projects.js"></script>
+<script src="shared/project-registry.js"></script>
 </head>
 <body>
 <div class="wrap">
 <h1>Structural &amp; Bridge Engineering Tools</h1>
 <p class="sub">All tools in one place, grouped by discipline. Each opens in a new tab. Most tools show their calculation report on a Report tab.</p>
 <input id="q" type="search" placeholder="Filter tools (e.g. pile, AASHTO, anchor)" aria-label="Filter tools">
+<details class="projects" id="projects">
+<summary>Saved projects <span id="spSum"></span></summary>
+<div class="spTools"><input id="spq" type="search" placeholder="Find a saved project" aria-label="Find a saved project"><select id="spApp" aria-label="Show the projects of one app"></select></div>
+<div class="spBar" id="spBar"></div>
+<div id="spOut"></div>
+<p class="spNote">Click a project (or an app's name) to open its app in a new tab, then open the project there with <b>Saved projects…</b>. Projects saved in a browser are kept in that browser only; Export JSON in each app makes a file you can keep.</p>
+</details>
 <details class="checks" open>
 <summary>Open engineer checks and decisions — check these before relying on the affected results</summary>
 <h3>Checks (your own action)</h3><ul>
@@ -128,6 +155,48 @@ details.checks ul{margin:0;padding-left:20px}details.checks li{margin:3px 0}deta
       sec.classList.toggle('hidden',shown===0);
     });
   });
+})();
+</script>
+<script>
+/* HSP (2026-11-05): "Saved projects" panel: the projects saved in this browser by every app listed in shared/project-registry.js,
+   grouped by app, with a search and an app filter. Read only: it writes nothing and makes no network request. */
+(function(){
+  var R=window.SharedProjectRegistry,P=window.SharedProjects,det=document.getElementById('projects');
+  if(!R||!P||!det)return;
+  var ST=null;try{ST=window.localStorage;}catch(e){}
+  var q=document.getElementById('spq'),app=document.getElementById('spApp'),out=document.getElementById('spOut'),bar=document.getElementById('spBar'),sum=document.getElementById('spSum');
+  function esc(x){return String(x==null?'':x).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  function load(){return R.all().map(function(e){var r=R.list(e,ST);return{e:e,ok:r.ok,error:r.error,items:r.items};});}
+  var data=[];
+  function summary(){
+    var n=0,a=0;data.forEach(function(d){if(d.items.length){n+=d.items.length;a++;}});
+    sum.textContent=n?'('+n+' in this browser, '+a+' app'+(a>1?'s':'')+')':'(none in this browser)';
+  }
+  function fillApps(){
+    var v=app.value,h='<option value="">All apps</option>';
+    data.forEach(function(d){if(d.items.length||!d.ok)h+='<option value="'+esc(d.e.tool)+'">'+esc(d.e.name)+' ('+d.items.length+')</option>';});
+    app.innerHTML=h;if(v&&app.querySelector('option[value="'+v.replace(/"/g,'')+'"]'))app.value=v;
+  }
+  function render(){
+    var t=q.value.trim().toLowerCase(),only=app.value,h='',shown=0;
+    data.forEach(function(d){
+      if(only&&d.e.tool!==only)return;
+      if(!d.ok){h+='<div class="spG"><h3><a href="'+d.e.href+'" target="_blank">'+esc(d.e.name)+'</a></h3><p class="spMsg err">The saved-project list of this app could not be read in this browser ('+esc(d.error)+'). It was not changed; open the app.</p></div>';return;}
+      var it=d.items.filter(function(i){return !t||i.name.toLowerCase().indexOf(t)>=0;});
+      if(!it.length)return; shown+=it.length;
+      h+='<div class="spG" data-tool="'+esc(d.e.tool)+'"><h3><a href="'+d.e.href+'" target="_blank">'+esc(d.e.name)+'</a><span class="spC">'+it.length+(it.length<d.items.length?' of '+d.items.length:'')+' project'+(d.items.length>1?'s':'')+'</span></h3><ul class="spL">'
+        +it.map(function(i){var dt=P.etTime(i.saved);return'<li data-name="'+esc(i.name)+'"><a href="'+d.e.href+'" target="_blank" title="Open '+esc(d.e.name)+'">'+esc(i.name)+'</a>'+(dt?'<span class="spD">saved '+esc(dt)+'</span>':'')+'</li>';}).join('')+'</ul></div>';
+    });
+    out.innerHTML=h||'<p class="spNote">'+(t||only?'No saved project matches.':'No projects are saved in this browser yet. Each app saves its projects with its own Save button or Saved projects… dialog.')+'</p>';
+    bar.innerHTML='<span>Projects saved in <b>this browser</b>'+(shown?': '+shown+' shown':'')+'.</span><button type="button" id="spReload">Refresh</button>';
+  }
+  function refresh(){data=load();summary();fillApps();render();}
+  bar.addEventListener('click',function(e){if(e.target.id==='spReload')refresh();});
+  q.addEventListener('input',render);app.addEventListener('change',render);
+  det.addEventListener('toggle',function(){if(det.open)refresh();});
+  window.addEventListener('focus',function(){if(det.open)refresh();else{data=load();summary();}});
+  if(location.hash==='#projects')det.open=true;
+  refresh();
 })();
 </script>
 </body>
