@@ -3328,7 +3328,7 @@ function rbrDashColl(v,save){
   - Condition texts are the panels' own ("s > s_max (torsion)", "A_ℓ < A_ℓ,req"), not re-typeset.
 - **Renamed:** Development & Splice "Summary of results" subsection → section "Summary of results" with the subsection "Development and splice lengths and code checks". Nothing removed.
 - **Table-copy corruption (rowspan / colspan, as SFIE #781):** none of the shell or the three frames uses `rowspan` / `colspan` (searched), so the copier `rxWalk` cannot drop a merged cell. Nothing to fix.
-- **How verified (headless Chromium, origin/main 8c77f48 vs the branch; KaTeX 0.16.9, Plotly 2.27, three r128 from tests/libs):**
+- **How verified (headless Chromium, origin/main 3a00e90 vs the branch; KaTeX 0.16.9, Plotly 2.27, three r128 from tests/libs):**
   - 5 cases: default; c2 (title block with quotes, A_ℓ 1.2 in², three combinations, Validation and Combination 2 deselected; ASD negative moment; Development & Splice AASHTO #11, f′c 12 ksi, hook, excess reinforcement); c3 (AASHTO tee, f_y 80 ksi; ASD inventory and operating); off (Input Echo, Validation, Flexure, Summary & Dashboard and Combination 1 off; ASD Summary & Rating and Analysis off); bad (b_w blank, input blocker).
   - Beam Capacity `CC`, ASD `CC` and the Development & Splice results (JSON): identical. localStorage identical before the Report, and unchanged by showing and printing it.
   - Report text (screen `SharedReport.text` and the print box): every line of main is present in the branch apart from § / section numbers and the renamed subsection title. Added: the Summary of results and the one-line sections.
