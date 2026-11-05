@@ -5357,3 +5357,39 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - Printed PDF (default and Seymour) looked at. The heat map with a filled colour bar is in 5.1, the overturning free body in 6.2 and the Summary on page 3.
   - `check-syntax`, `run.mjs report` and `spread-footing-scroll` pass.
 - **Saved data:** no change.
+
+## 2026-11-05 — PR: claude/sf-report-overview (PR #780: https://github.com/mlococo88/All-Structural/pull/780) (SFOV: "Overview of the footing" at the start of the Report — 3D snapshot, plan, elevation, cross sections; Include box "Overview figures"; display only, no result change)
+- **Engineer:** right after the Summary of results, an overview of the footing. Contents: a 3D rendering at a fixed isometric camera and the default selection, a plan, an elevation and a cross section. Each has a caption, a scale or scale bar, and its dimensions. Include box "Overview figures", default on.
+- **Where:**
+  - New `SFOV`, `sfovBarFt`, `sfovSheetView`, `sfovSchem`, `sfovSnap3D` and `sfovReport`, inserted before `/* the report bar's Include box: the manual`.
+  - `renderReport`:
+    - Before: `M=sfroOrder(sfdPcReport(…))`
+    - After: `M=sfovReport(sfroOrder(sfdPcReport(…)))`
+  - The section §2 "Overview of the footing" (key `S-ov`) is inserted after "Summary of results".
+- **Views used (choice):**
+  - **3D:** the 3D View's own scene. It is rendered once more, off screen, by a second WebGLRenderer (1000 × 600, `preserveDrawingBuffer`) to a PNG.
+    - Default selection: the governing service combination (direct mode: the envelope), every layer on, no cut, opacity 0.92, plain colour. If the live view differs, it is set to the default for the snapshot and then restored.
+    - Camera: the Reset-view camera (az 0.9, el 0.5, r = 2.1 · max(B, L, D_f + 4)).
+    - The load-label sprites are laid out for that camera (`v3dLayoutLabels` with the snapshot's camera and size), then for the live view again.
+    - The image is cached until the inputs change (`JSON.stringify(state)`).
+    - If three.js is not loaded, WebGL is not available, the render fails or the image is blank, a note replaces the figure ("3D view not included: <reason>").
+    - The 3D View tab is initialised (hidden) if it has not been opened yet.
+  - **Plan:** the Schematic tab's 1.1 plan (`planSVG`), to scale. A scale bar is added; its scale is read from the footing rectangle (width = B·sc).
+  - **Elevation:** the Schematic tab's 1.2 elevation (`sectSVG`), to scale with one scale across and up, with a scale bar the same way. No plain elevation exists in the other direction; the B-B section covers it.
+  - **Cross sections:** the Drawings tab's SECTION A-A and SECTION B-B views. These are the sheet views only: entities `i0 … iv`, without the post-placed load schedules, border or title block.
+    - `sfdwBuild` / `sheet()` now records `iv` (anchor `const iv=D.mark();`). The sheets themselves are unchanged.
+    - The views are dimensioned and carry their sheet scale text. Each gets a scale bar in model inches, and the caption says the view is reduced from its sheet scale.
+  - The sheet plan was tried and dropped: its text is too small at report size.
+- **Include box:** "Overview figures" (`data-sfx="ov"`), saved field `state.ovRpt`.
+  - `defaultState` sets `ovRpt:true`, and `migrateState` sets `if(state.ovRpt===undefined)state.ovRpt=true;`.
+  - A save without the field gets the overview (default on), like the other report boxes. Existing fields are unchanged.
+- **Print:** the overview fills about 2 pages (3D + plan on the first; elevation and both sections on the second) for the default project and Seymour. The marker ids of the elevation copy are made unique (`sfxUniq`).
+- **How verified:**
+  - Headless Chromium, origin/main vs branch:
+    - deep diff of `R` and `P2` on the 10 session cases: 0 differences;
+    - Report text: every line of main present on 6 cases (only the overview lines are added, plus § renumbering);
+    - 0 unresolved references, 0 console errors.
+  - Printed PDF looked at, default and Seymour: 3D with labels, plan, elevation and A-A / B-B with their scale bars; the 5 ft bar matches the 5'-0" dimension of A-A.
+  - three.js removed: a note replaces the 3D figure and the other figures remain.
+  - `check-syntax` and `spread-footing-scroll` pass.
+- **Saved data:** new field `state.ovRpt` (default true), migrated as above.
