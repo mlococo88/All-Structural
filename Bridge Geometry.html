@@ -12,6 +12,7 @@
 <script src="shared/list-input.js"></script>
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS2 (2026-11-05): copy of the saved bridges to a private GitHub repository; off until set up -->
 <script src="shared/dxf.js"></script><!-- BGDW: DXF writer, sheet preview and printing (Drawings tab) -->
 <style>
   :root {
@@ -4543,23 +4544,25 @@ function doSaveAs(){
 function renderLibrary(){
   const host=document.getElementById('lib_list'); if(!host) return;
   const lib=libRead(); const names=Object.keys(lib).sort((a,b)=>a.localeCompare(b));
-  if(names.length===0){ host.innerHTML='<p class="note" style="margin:6px 0;">No saved bridges yet. Use <strong>Save As</strong> to add one.</p>'; return; }
-  let h='<table class="subtbl"><thead><tr><th class="lbl">Bridge</th><th>Saved</th><th></th></tr></thead><tbody>';
+  if(names.length===0){ host.innerHTML='<p class="note" style="margin:6px 0;">No saved bridges yet. Use <strong>Save As</strong> to add one.</p>'; bgGhDraw(host); return; }
+  const gh=!!(BG_GH&&BG_GH.engine.configured());   // GHS2: a GitHub column while sync is set up
+  let h='<table class="subtbl"><thead><tr><th class="lbl">Bridge</th><th>Saved</th>'+(gh?'<th>GitHub</th>':'')+'<th></th></tr></thead><tbody>';
   names.forEach(n=>{ const p=lib[n]; const when=p.savedAt?new Date(p.savedAt).toLocaleString():'';
     const isCur = n===CURRENT_NAME;
     h+=`<tr${isCur?' style="background:rgba(27,110,120,.08)"':''}>
       <td class="lbl">${isCur?'\u25b8 ':''}${n}</td>
-      <td class="lbl" style="font-size:10px;color:var(--ink-soft);">${when}</td>
+      <td class="lbl" style="font-size:10px;color:var(--ink-soft);">${when}</td>${gh?`
+      <td>${BG_GH.statusCell(n)}</td>`:''}
       <td style="white-space:nowrap;">
         <button class="sm" data-lib-load="${encodeURIComponent(n)}">Load</button>
         <button class="sm ghost" data-lib-ren="${encodeURIComponent(n)}">Rename</button>
         <button class="sm ghost" data-lib-dup="${encodeURIComponent(n)}">Duplicate</button>
         <button class="sm ghost" data-lib-del="${encodeURIComponent(n)}">Delete</button>
       </td></tr>`; });
-  h+='</tbody></table>'; host.innerHTML=h;
+  h+='</tbody></table>'; host.innerHTML=h; bgGhDraw(host);   // GHS2
   host.querySelectorAll('[data-lib-load]').forEach(b=>b.addEventListener('click',()=>libLoad(decodeURIComponent(b.dataset.libLoad))));
-  host.querySelectorAll('[data-lib-del]').forEach(b=>b.addEventListener('click',()=>{ const n=decodeURIComponent(b.dataset.libDel); if(confirm('Delete \u201c'+n+'\u201d? This cannot be undone.')) libDelete(n); }));
-  host.querySelectorAll('[data-lib-ren]').forEach(b=>b.addEventListener('click',()=>{ const n=decodeURIComponent(b.dataset.libRen); const nn=prompt('Rename bridge:',n); if(nn&&nn.trim()) libRename(n,nn.trim()); }));
+  host.querySelectorAll('[data-lib-del]').forEach(b=>b.addEventListener('click',()=>{ const n=decodeURIComponent(b.dataset.libDel); if(confirm('Delete \u201c'+n+'\u201d? This cannot be undone.')){ libDelete(n); if(BG_GH&&!(n in libRead())) BG_GH.deleted(n); /* GHS2: asks before deleting the GitHub copy */ } }));
+  host.querySelectorAll('[data-lib-ren]').forEach(b=>b.addEventListener('click',()=>{ const n=decodeURIComponent(b.dataset.libRen); const nn=prompt('Rename bridge:',n); if(nn&&nn.trim()){ libRename(n,nn.trim()); const L=libRead(); if(BG_GH&&!(n in L)&&(nn.trim() in L)) BG_GH.renamed(n,nn.trim()); /* GHS2 */ } }));
   host.querySelectorAll('[data-lib-dup]').forEach(b=>b.addEventListener('click',()=>bgPlibDup(decodeURIComponent(b.dataset.libDup))));   /* PLIB */
 }
 /* PLIB (2026-11-02): Duplicate in the saved-bridge library, and Undo / Redo (shared/projects.js, shared/projects-ui.js).
@@ -4571,6 +4574,25 @@ function renderLibrary(){
      (plan images on the Site Map: large, and not part of the geometry); session only, nothing stored. set = applyProject() (the Load /
      Import path) of the step with the current name, station and overlays kept, then the autosave. Loading a bridge from the library or
      a file starts a new history (an undo never brings another bridge's data under the loaded name); New is a step (it can be undone). */
+/* GHS2 (2026-11-05): GitHub sync of the saved bridges (shared/github-sync.js; docs/github-sync-setup.md). Off until set up: with no
+   settings it writes nothing and makes no request. The library stays LIBRARY_KEY ({ name: project }, unchanged); each bridge is the
+   file projects/bridge-geometry/<name>.json on GitHub, in the Export JSON format (serializeProject(), indent 2) without the export
+   time savedAt, with name = the library name (as Export JSON writes it after Load). A file from GitHub must be a version-1 project
+   (applyProject's own check); it is stored with name and a new savedAt. Open = Load. The sync bar and the "On GitHub only" rows go in
+   a new div#lib_gh above the list; the GitHub column is drawn only while sync is set up. */
+const BG_GH=(()=>{ if(!window.SharedGitHubSync||!window.SharedProjects) return null; let ST=null; try{ ST=window.localStorage; }catch(e){ return null; }
+  return SharedGitHubSync.attach({ store:SharedProjects.mapStore(ST,LIBRARY_KEY), storage:ST,
+    open:n=>{ if(!(n in libRead())) return false; libLoad(n); return true; },
+    changed:()=>{ if(document.getElementById('lib_panel').style.display!=='none') renderLibrary(); },
+    cloud:{ tool:'bridge-geometry', label:'Bridge Geometry', space:2,
+      toFile:(i,n)=>{ const o=Object.assign({},i,{name:n}); delete o.savedAt; return o; },
+      fromFile:(j,n)=>{ if(j.version!==1||!Array.isArray(j.ELEMS)) throw new Error('not a Bridge Geometry project file'); return Object.assign({},j,{name:n,savedAt:new Date().toISOString()}); } } }); })();
+const BG_GH_UI={ redraw:()=>{ if(document.getElementById('lib_panel').style.display!=='none') renderLibrary(); }, close:()=>{} };
+function bgGhDraw(host){
+  if(!BG_GH) return; let g=document.getElementById('lib_gh');
+  if(!g){ g=document.createElement('div'); g.id='lib_gh'; g.setAttribute('data-sp','gh-host'); host.before(g); }
+  g.innerHTML=''; BG_GH.bind(host); BG_GH.decorate(g,BG_GH_UI,{rows:false});
+}
 function bgPlibDup(n){
   if(!window.SharedProjects) return;
   let ST=null; try{ ST=window.localStorage; }catch(e){}
@@ -4634,12 +4656,12 @@ document.getElementById('proj_new').addEventListener('click', ()=>{ if(confirm('
 document.getElementById('proj_savelib').addEventListener('click', doSave);
 document.getElementById('proj_saveas').addEventListener('click', doSaveAs);
 document.getElementById('lib_saveas').addEventListener('click', doSaveAs);
-document.getElementById('lib_refresh').addEventListener('click', renderLibrary);
+document.getElementById('lib_refresh').addEventListener('click', ()=>{ renderLibrary(); if(BG_GH) BG_GH.shown(BG_GH_UI).catch(()=>{}); /* GHS2 */ });
 document.getElementById('lib_toggle').addEventListener('click', ()=>{
   const p=document.getElementById('lib_panel'); const open=p.style.display!=='none';
   p.style.display=open?'none':'block';
   document.getElementById('lib_toggle').textContent=(open?'\u25b8':'\u25be')+' Library';
-  if(!open) renderLibrary();
+  if(!open){ renderLibrary(); if(BG_GH) BG_GH.shown(BG_GH_UI).catch(()=>{}); /* GHS2 */ }
 });
 
 /* ===== EXAMPLE BRIDGES (seeded into the library on first boot) ===== */
