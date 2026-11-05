@@ -3640,7 +3640,7 @@ Engineer request (2026-11-05, Phase 3 of the concrete beam suite update, display
 - **Scale bars:** 1, 2, 3, 4, 6, 12 … in, about 22 % of the drawing width. Both drawings use one scale across and up (`svgSection`: `sc=min(…)` for both axes; `svgElevation` likewise). Default: section 6 in, elevation 1 ft. Checked on the PDF: the 6 in bar is half of the b_w = 12 in face.
 - **Saved data:** new optional field `S.ui.rptOpts.ov` (boolean) of the Beam Capacity tab. It is written only by the Include box (and "Select all"), through `normRptOpts()` / `autosave()` like the other boxes, so it is kept in `rcbeam_v2_auto`, the saved projects and the JSON export. A save without the field reads as on (`o.ov===false` is the only "off"), so no migration is needed. No key or existing field changed.
 - **Numbering:** with the box off, §2 stays as one line ("Not included in this report: …"), so §3 onward do not move.
-- **How verified (headless Chromium, origin/main b3e1766 vs branch):**
+- **How verified (headless Chromium, origin/main 77eb777 vs branch):**
   - Cases default, c2, c3, Include boxes off (with Overview off), input blocker, no stirrups / no torsion. In every case:
     - Beam Capacity `CC`, ASD `CC` and Development & Splice results identical;
     - localStorage identical and unchanged by the Report;
