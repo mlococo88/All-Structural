@@ -2687,3 +2687,185 @@ function cbcDashColl(v,save){
   cbcDashPlace();
 })();
 ```
+
+## 2026-11-05 — PR: claude/cbc-dash-asd, PR #789: https://github.com/mlococo88/All-Structural/pull/789 (ASDC: check summary panel in the ASD Beam Calcs tab, as the Beam Capacity tab (CBDC #788); display only, no result change)
+
+### ASDC. Check summary panel in the ASD frame   [display only] [no result change]
+- **Engineer request (2026-11-05, Phase 2, PR 2 of 3):** the check summary panel of CBDC (#788) in the ASD Beam Calcs frame (`<iframe id="suite-frame-asd" srcdoc=…>`). The Summary tab, the Report and printing are unchanged.
+- **Where (inside the ASD srcdoc page):**
+  - Markup: as CBDC with the prefix `asd`: `<aside id="asdDashCol" aria-label="Check summary"></aside>` before `<div id="inputPanel"></div>`; `<div id="asdDashBox">` (header `#asdDashHead`: `#asdDashTgl`, `<h2 id="asdDashTtl">Check summary</h2>`, `#asdDashCnt`; list `#asdDash`) before `<div id="tabBar"></div>`.
+  - `refresh()`: after `buildTabs();` added `asdDashRender();   /* ASDC: … */`.
+  - CSS: at the end of the first `<style>` block, after the CBTH phone rule (anchor `/* ASDC (2026-11-05): check summary panel`). It is the CBDC CSS with `cbcDash` → `asdDash` and `cbd` → `asdd`, plus REVIEW styles (`.asddCh.warn`, `.asddCh.warn .asddS`, `#asdDashCnt .asddCw`).
+  - JS: new block just before `function refresh(){` (anchor `const ASDC={key:'asd_dashCollapsed_v1'`), code below.
+- **What the lines are (no new calculation):**
+  - One line per rating level that the Summary tab shows (Inventory / Operating, `S.mode`). The short value is "RF x.xx" (`CC.rf_inv`, `CC.rf_op`). Status PASS when RF ≥ 1.00, FAIL below, N/A when RF is not a number (ratePill).
+  - The expanded text gives M_all, the control, RF and the reference "AASHTO MBE 6B (ASD); Std. Spec. 8.15". A click opens Analysis · Load Rating (`asdGoto`).
+  - One REVIEW line per Summary-tab notice, using the same test:
+    - b_eff over the Std. Spec. 8.10.1.1 limit (`CC.beffEntered!==null`; short "b_eff > b_w + 12h_f");
+    - a steel allowable with no grade rule (`autoAllow(...)[k]===null`, not overridden; "no rule for f_y");
+    - operating f_c > 0.60f′c ("f_c,op > 0.60f′c", MBE 6B.6.2.3).
+    A click opens the Summary tab, where the notice is.
+  - FAIL and REVIEW lines start expanded. The header shows "n NG", "n REVIEW" or "no NG". With `CC.errors` the panel reads "Input error: no results …" and the count "input error".
+- **Layout, collapse:** as CBDC. The left column is used at ≥ 1500 px; below that the box sits above the output tabs. The collapse state is kept in the new per-browser key **`asd_dashCollapsed_v1`** ('1' = collapsed). It is not in `S`, the autosave, the projects or the export. No existing key or format changed.
+- **Check case:** default suite project, so the ASD tab inherits from Beam Capacity: Positive, M_DL / M_LL+I as default. The Summary reads "2 levels below 1.0" and the panel "2 NG": "Inventory rating RF −0.56 FAIL" (M_all = 25.92 k-ft, steel controlled) and "Operating rating RF −0.53 FAIL" (38.88 k-ft). With operating f_c = 2,600 psi and f_y = 55,000 psi the panel reads "2 NG 3 REVIEW": f_s,inv no rule, f_s,op no rule, f_c,op 2,600 > 0.60f′c = 2400.0. These match the Summary tab's three notices.
+- **How verified:**
+  - Headless comparison, origin/main vs branch, with the panels hidden while the tab text is read. Compared: computed results, `asdRptModel()`, the text of every tab of the three frames, the standalone ACI Rebar tool and the Report tab. Result: identical in 5 cases, with 0 console errors.
+  - `node tests/check-syntax.mjs`, `tests/smoke/phone-layout.mjs --tool cbc,aci` and `tests/smoke/project-library.mjs` pass.
+  - Screenshots before and after at 1920 and 390 px, plus 1366 px with the REVIEW lines, looked at. There is no sideways scroll.
+- **Other copies:** none.
+- **Open items:** none.
+
+#### Code added (re-apply by hand)
+CSS:
+```css
+/* ASDC (2026-11-05): check summary panel, as the Beam Capacity tab (CBDC #788) and Spread Footing / Light Pole. One line per check,
+   collapsible; on screens >= 1500 px a 280 px left column that scrolls on its own; below that a compact grid above the output
+   tabs. Screen only; the Summary tab, the Report and printing are unchanged. */
+#asdDashCol{display:none}
+@media print{#asdDashCol,#asdDashBox{display:none!important}}
+@media screen{
+  #asdDashBox{flex:0 0 auto;font-family:var(--font-ui);padding:5px 14px 0;background:var(--slate-50);border-bottom:1px solid var(--color-border);
+    max-height:42vh;overflow-y:auto}
+  #asdDashHead{display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap}
+  #asdDashTtl{margin:2px 0;font-size:9pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--navy-800)}
+  #asdDashTgl{margin:0;padding:1px 7px;font:8.5pt var(--font-ui);border:1px solid #CBD5E1;background:var(--slate-100);border-radius:4px;cursor:pointer;color:#334155}
+  #asdDashCnt{display:inline-flex;gap:4px;flex-wrap:wrap}
+  #asdDashCnt span{font-size:8pt;font-weight:700;padding:1px 5px;border:1px solid;border-radius:3px;white-space:nowrap}
+  #asdDashCnt .asddCf{color:#991B1B;background:#FEF2F2;border-color:var(--fail)}
+  #asdDashCnt .asddCw{color:#92400E;background:#FFFBEB;border-color:var(--warn)}
+  #asdDashCnt .asddCp{color:#065F46;background:#ECFDF5;border-color:var(--pass)}
+  #asdDashCnt .asddCn{color:#475569;background:var(--slate-100);border-color:#CBD5E1}
+  body.asdDashColl #asdDash{display:none}
+  #asdDash{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(250px,100%),1fr));gap:3px 6px;margin:4px 0 7px;align-items:start}
+  .asddCh{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:5px;padding:2px 5px 2px 2px;min-width:0;
+    border:1px solid var(--color-border);border-left:4px solid var(--slate-400);border-radius:3px;background:#fff;font-size:8.5pt;line-height:1.35;cursor:pointer}
+  .asddCh:hover{background:var(--slate-50)} .asddCh:focus-visible{outline:2px solid var(--blue-600);outline-offset:-1px}
+  .asddCh.pass{border-left-color:var(--pass)} .asddCh.fail{border-left-color:var(--fail);background:#FEF2F2} .asddCh.warn{border-left-color:var(--warn);background:#FFFBEB}
+  .asddCh .asddX{grid-row:1;grid-column:1;margin:0;padding:0 3px;border:none;background:transparent;font-size:9px;color:#334155;line-height:1.2;cursor:pointer}
+  .asddCh .asddN{grid-row:1;grid-column:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .asddCh .asddR{grid-row:1;grid-column:3;white-space:nowrap;color:#334155;font-variant-numeric:tabular-nums}
+  .asddCh .asddS{grid-row:1;grid-column:4;font-size:7.5pt;font-weight:700;white-space:nowrap}
+  .asddCh.pass .asddS{color:var(--pass)} .asddCh.fail .asddS{color:var(--fail)} .asddCh.warn .asddS{color:var(--warn)} .asddCh.na .asddS{color:#64748b}
+  .asddCh .asddV,.asddCh .asddDC,.asddCh .asddRef{grid-column:1/-1;display:none;padding-left:16px;overflow-wrap:anywhere}
+  .asddCh .asddDC,.asddCh .asddRef{color:#475569;font-size:8pt} .asddCh .asddRef{font-style:italic}
+  .asddCh.asddOpen .asddV,.asddCh.asddOpen .asddDC,.asddCh.asddOpen .asddRef{display:block}
+  .asddCh.asddOpen .asddN{white-space:normal}
+  .asddMsg{grid-column:1/-1;font-size:8.5pt;padding:5px 8px;border:1px solid var(--color-border);border-left:4px solid var(--fail);background:#FEF2F2;color:#7F1D1D;border-radius:3px}
+}
+@media screen and (min-width:1500px){
+  body.asdDashWide #asdDashCol{display:block;flex:0 0 292px;width:292px;overflow-y:auto;overflow-x:hidden;position:relative;
+    padding:0 6px 24px;border-right:1px solid var(--color-border);background:var(--slate-50);overscroll-behavior:contain;font-family:var(--font-ui)}
+  body.asdDashWide #asdDashBox{padding:0;border-bottom:0;max-height:none;overflow:visible;background:transparent}
+  body.asdDashWide #inputPanel{flex-basis:calc((100% - 292px)*.33);max-width:calc((100% - 292px)*.33)}
+  body.asdDashWide #asdDash{grid-template-columns:minmax(0,1fr)}
+  body.asdDashWide #asdDashHead{position:sticky;top:0;z-index:3;background:var(--slate-50);padding:5px 0 4px}
+  body.asdDashWide.asdDashColl #asdDashCol{flex-basis:42px;width:42px;padding:0}
+  body.asdDashWide.asdDashColl #inputPanel{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
+  body.asdDashWide.asdDashColl #asdDashHead{flex-direction:column;align-items:center}
+  body.asdDashWide.asdDashColl #asdDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);margin:4px 0;white-space:nowrap}
+  body.asdDashWide.asdDashColl #asdDashCnt{flex-direction:column;align-items:center}
+  body.asdDashWide.asdDashColl #asdDashCnt span{font-size:7.5pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
+  body.asdDashWide #asdDashCol::-webkit-scrollbar{width:7px}
+  body.asdDashWide #asdDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+}
+```
+JS, before `function refresh(){`:
+```js
+/* ASDC (2026-11-05, engineer): check summary panel, as the Beam Capacity tab (CBDC #788) and Spread Footing / Light Pole
+   (SFDC #737, SFDF #740, LPDC #747). One line per rating level of the Summary tab's "Load Rating Summary" (RF, PASS when
+   RF >= 1.00 as ratePill; N/A when RF is not a number) and one REVIEW line per Summary notice (b_eff over the 8.10.1.1 limit;
+   a steel allowable with no grade rule; operating f_c above 0.60f'c), from the same tests the Summary tab makes: no new
+   calculation. The short value is the RF, or the condition for a REVIEW line. A line click opens the card where it is worked
+   (asdGoto, the D11 links) or the Summary tab for a notice.
+   On screens >= 1500 px the box is moved into the left column #asdDashCol; below that it sits above the output tabs.
+   Collapse state: per-browser UI key asd_dashCollapsed_v1 ('1' = collapsed, '0' or absent = open); not in S, the autosave,
+   the saved projects or the JSON export. */
+const ASDC={key:'asd_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,open:new Map(),coll:false};
+ASDC.coll=lsGet(ASDC.key)==='1';
+const ASDC_ST={pass:'PASS',fail:'FAIL',warn:'REVIEW',na:'N/A'};
+function asdDashItems(){
+  const R=CC; if(!R||R.errors) return null;
+  const out=[];
+  const lvl=(name,M,ctrl,rf,mp,ma)=>{
+    const na=(rf==null||!isFinite(rf));
+    out.push({name:name+' rating',st:na?'na':(rf>=1.0?'pass':'fail'),short:na?'':'RF '+fmt(rf),
+      text:'M_all = '+fmt(M)+' k-ft ('+String(ctrl).toLowerCase()+' controlled); RF = (M_all − M_DL)/M_LL+I = '+(na?'n/a (M_LL+I = 0)':fmt(rf)),
+      ref:'AASHTO MBE 6B (ASD); Std. Spec. 8.15',tab:'tabAnalysis',card:'anRF'});
+  };
+  if(S.mode.inv) lvl('Inventory',R.M_inv,R.ctrl_inv,R.rf_inv);
+  if(S.mode.op) lvl('Operating',R.M_op,R.ctrl_op,R.rf_op);
+  /* the Summary tab's notices (buildSummaryTab), same tests */
+  if(R.beffEntered!==null) out.push({name:'Effective flange width',st:'warn',short:'b_eff > b_w + 12h_f',
+    text:'Entered b_eff = '+fmt(R.beffEntered)+' in > b_w + 12h_f = '+fmt(R.beffLim)+' in; '+(R.beffCapped?'b_eff = '+fmt(R.beffLim)+' in is used.':'the limit is switched off: the entered width is used.'),
+    ref:'AASHTO Std. Spec. 8.10.1.1',tab:'tabSummary',card:null});
+  const aa=autoAllow(+S.inherit.fc||0,+S.inherit.fy||0);
+  [['fs_inv','f_s,inv'],['fs_op','f_s,op']].forEach(([k,lb])=>{
+    if(!(S.allow.ovr&&S.allow.ovr[k])&&aa[k]===null) out.push({name:'Allowable '+lb,st:'warn',short:'no rule for f_y',
+      text:'f_y = '+grp(R.fy)+' psi has no automatic rule for '+lb+': the value used ('+grp(R.A[k])+' psi) is the field’s current entry; check it against Table 6B.6.2.3-1.',
+      ref:'AASHTO MBE Table 6B.6.2.3-1',tab:'tabSummary',card:null});
+  });
+  if(R.A.fc_op>0.60*R.fc+1e-9) out.push({name:'Operating f_c',st:'warn',short:'f_c,op > 0.60f′c',
+    text:'Operating f_c = '+grp(R.A.fc_op)+' psi > 0.60f′c = '+fmt(0.60*R.fc,1)+' psi; confirm the owner’s basis for this value.',
+    ref:'AASHTO MBE 6B.6.2.3',tab:'tabSummary',card:null});
+  out.forEach(it=>{ const tn=asdTabName(it.tab); it.where=tn?'→ '+tn+(it.card?' · '+ASD_CARDS[it.card]:''):''; });
+  return out;
+}
+function asdDashGo(it){
+  asdGoto(it.tab,it.card);
+  /* phone / tablet: the output panel does not scroll on its own there, so bring the card into view */
+  setTimeout(()=>{ const op=document.getElementById('outputPanel'), e=it.card?document.querySelector('#tabPages #'+it.card):document.getElementById('tabBar');
+    if(e&&op&&op.scrollHeight<=op.clientHeight+1) e.scrollIntoView({behavior:'smooth',block:'start'}); },90);
+}
+function asdDashRender(){
+  const box=document.getElementById('asdDash'), cnt=document.getElementById('asdDashCnt'); if(!box) return;
+  box.innerHTML='';
+  let items=null; try{ items=asdDashItems(); }catch(e){ items=null; }
+  if(!items){
+    const er=!!(CC&&CC.errors);
+    box.innerHTML='<div class="asddMsg">'+(er?'Input error: no results. Correct the value in the Beam Capacity tab.':'No results yet.')+'</div>';
+    if(cnt) cnt.innerHTML=er?'<span class="asddCf">input error</span>':'';
+    return;
+  }
+  const n={fail:0,warn:0};
+  items.forEach(it=>{
+    if(n[it.st]!=null) n[it.st]++;
+    const c=el('div','asddCh '+it.st); c.tabIndex=0; c.setAttribute('role','button');
+    const x=el('button','asddX'); x.type='button'; x.title='Show the result and the reference'; c.appendChild(x);
+    c.appendChild(el('span','asddN',it.name)); c.appendChild(el('span','asddR',it.short)); c.appendChild(el('span','asddS',ASDC_ST[it.st]));
+    c.appendChild(el('div','asddV',it.text));
+    c.appendChild(el('div','asddRef',(it.ref||'')+(it.ref&&it.where?' · ':'')+it.where));
+    c.title=it.name+': '+it.text+(it.ref?'\nReference: '+it.ref:'')+(it.where?'\nClick: '+it.where:'');
+    const setOpen=o=>{ c.classList.toggle('asddOpen',o); x.setAttribute('aria-expanded',o?'true':'false'); x.textContent=o?'▾':'▸'; };
+    setOpen(ASDC.open.has(it.name)?ASDC.open.get(it.name):(it.st==='fail'||it.st==='warn'));
+    x.addEventListener('click',ev=>{ ev.preventDefault(); ev.stopPropagation(); const o=!c.classList.contains('asddOpen'); ASDC.open.set(it.name,o); setOpen(o); });
+    c.addEventListener('click',()=>asdDashGo(it));
+    c.addEventListener('keydown',ev=>{ if((ev.key==='Enter'||ev.key===' ')&&ev.target===c){ ev.preventDefault(); asdDashGo(it); } });
+    box.appendChild(c);
+  });
+  if(!items.length) box.innerHTML='<div class="asddMsg">No rating level selected.</div>';
+  if(cnt) cnt.innerHTML=(n.fail?'<span class="asddCf">'+n.fail+' NG</span>':'')+(n.warn?'<span class="asddCw">'+n.warn+' REVIEW</span>':'')
+    +(items.length&&!n.fail&&!n.warn?'<span class="asddCp">no NG</span>':'');
+}
+function asdDashPlace(){
+  const box=document.getElementById('asdDashBox'), col=document.getElementById('asdDashCol'), ow=document.getElementById('outputWrap'), bar=document.getElementById('tabBar');
+  if(!box||!col||!ow) return;
+  const wide=!!(ASDC.mq&&ASDC.mq.matches);
+  document.body.classList.toggle('asdDashWide',wide);
+  if(wide){ if(box.parentNode!==col) col.appendChild(box); }
+  else if(box.parentNode!==ow) ow.insertBefore(box,bar||ow.firstChild);
+  asdDashColl(ASDC.coll,false);
+}
+function asdDashColl(v,save){
+  ASDC.coll=!!v; document.body.classList.toggle('asdDashColl',ASDC.coll);
+  const t=document.getElementById('asdDashTgl'), wide=document.body.classList.contains('asdDashWide');
+  if(t){ t.setAttribute('aria-expanded',ASDC.coll?'false':'true');
+    t.innerHTML=wide?(ASDC.coll?'&raquo;':'&laquo;'):(ASDC.coll?'&#9656; Show checks':'&#9662; Hide checks');
+    t.title=(ASDC.coll?'Show':'Hide')+' the check list (remembered in this browser)'; }
+  if(save) lsSet(ASDC.key,ASDC.coll?'1':'0');
+}
+(function(){
+  const t=document.getElementById('asdDashTgl'); if(t) t.addEventListener('click',()=>asdDashColl(!ASDC.coll,true));
+  if(ASDC.mq){ if(ASDC.mq.addEventListener) ASDC.mq.addEventListener('change',asdDashPlace); else if(ASDC.mq.addListener) ASDC.mq.addListener(asdDashPlace); }
+  asdDashPlace();
+})();
+```
