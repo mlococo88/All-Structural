@@ -21,17 +21,6 @@ const FOLDER = { asce7: 'asce7-load-generator', baseplate: 'base-plate-anchor', 
   rebar: 'aci-rebar-development', spreadfooting: 'spread-footing',
   // GHS2 (2026-11-05): tools with their own project dialog or panel (statusCell + decorate(body, ui, { rows: false }))
   abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app' };
-// Tools not in project-library.mjs TOOLS (same fields; names(p): the project names in the tool's own list, for a list not keyed by name)
-const pjs = p => p.evaluate(() => { const q = JSON.parse(localStorage.getItem('sbd2.project.current') || 'null'); if (q && q.project) delete q.project.name; return q; });
-TOOLS.sbapp = {
-  file: 'apps/steel-bridge/index.html',
-  ready: p => p.waitForFunction(() => document.getElementById('bSave') && document.getElementById('out') && document.getElementById('out').innerText.length > 50),
-  // the project (as autosaved, without its name: a GitHub copy carries its own) and the output tab's text
-  results: async p => { await p.waitForTimeout(800); return { P: await pjs(p), out: await p.evaluate(() => document.getElementById('out').innerText.replace(/GHS (A|remote)/g, 'NAME')) }; },
-  change: async p => { await p.evaluate(() => { const i = document.querySelector('#inPanes input[type=number]'); i.value = String((+i.value || 0) + 1); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); }); await p.waitForTimeout(900); },
-  save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('bSave').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(400); },
-  names: p => p.evaluate(() => (JSON.parse(localStorage.getItem('sbd2.lib.index') || '{"items":[]}').items || []).map(i => i.name))
-};
 // Tools with their own project dialog: how to show it (with sync on, the GitHub rows are drawn into it), and whether it is open.
 // Default: the shared Saved projects dialog (dialog.spLib).
 const OWN = {
