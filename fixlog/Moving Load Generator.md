@@ -1497,7 +1497,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-05 — PR: claude/header-mlg (MLHD: compact header; JSON file and benchmark buttons moved to a new Project input tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-mlg (PR #834: https://github.com/mlococo88/All-Structural/pull/834) (MLHD: compact header; JSON file and benchmark buttons moved to a new Project input tab; display only, no result change)
 - **Engineer:** clean up the top of the page (button-only header here: 13 buttons, wrapping to four rows on a phone); the header keeps the title and the global actions.
 - **Where / before → after** (nodes moved, not copied: every id and `onclick` is the same):
   - Header: before Solved in…, All tools, ✔ FHWA, ✔ Closed-form, Print Report, Undo, Redo, Save, Saved projects…, Save JSON, Open JSON, New (`#mlgFile`), Run, Export CSV. After: Solved in…, All tools, Print Report, Undo, Redo, Save, Saved projects…, Run, Export CSV (the hidden `#mlgFile` input stays in the header).
