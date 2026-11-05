@@ -5394,7 +5394,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - `check-syntax` and `spread-footing-scroll` pass.
 - **Saved data:** new field `state.ovRpt` (default true), migrated as above.
 
-## 2026-11-05 — PR: claude/sf-report-input-echo (SFIE: the Report's copy of the 1.4 Input Echo printed garbled; display only, no result change)
+## 2026-11-05 — PR: claude/sf-report-input-echo (PR #781: https://github.com/mlococo88/All-Structural/pull/781) (SFIE: the Report's copy of the 1.4 Input Echo printed garbled; display only, no result change)
 - **Engineer:** the printed Report for the Seymour project showed the input echo in §3.2 garbled:
   - the pedestal table's cells shifted (load-case rows: P under x, Vx under y, …; the D row's loads outside the table);
   - General Inputs had an empty fourth column and an unlabelled unit column.
