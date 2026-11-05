@@ -5429,6 +5429,39 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - `check-syntax` and `spread-footing-scroll` pass.
 - **Saved data:** no change.
 
+## 2026-11-05 — PR: claude/sf-plan-marker, PR #809: https://github.com/mlococo88/All-Structural/pull/809 (SFPA: the plan schematic's B dimension gets its arrowheads; the marker it referenced was never defined; display only, no result change)
+
+### SFPA. B dimension arrowheads in the plan schematic   [display only] [no result change]
+- **Problem:** `planSVG` (Schematic tab card 1.1, and its copies in the Report: overview and §1) draws the B dimension with `marker-start="url(#a1)" marker-end="url(#a1)"`, but no marker `a1` is defined anywhere in the page. The dimension had no arrowheads, on screen or in print. This was found by the print-reference check of the Concrete Beam Capacity PR #807: every `url(#…)` in the printed Report must resolve inside its own figure, and only these two references failed in Spread Footing.
+- **Fix (`planSVG`, the axis-triad block; anchor `<marker id="axg"`):**
+  - Before: `s+='<marker id="axg" …><path d="M0,0 L7,3.5 L0,7 z" fill="#228822"/></marker></defs>';`
+  - After: the same `axg` line without `</defs>`, then
+    `s+='<marker id="a1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,1 L7,4 L0,7 z" fill="#333"/></marker></defs>';`
+  - `auto-start-reverse` points the start head outward as well.
+  - The Report copies get their own id through the existing per-copy handling (SFCB `sfxUniq` / `sfxUniqDom`); nothing else changed.
+- **How verified (headless Chromium, origin/main 22e987d vs branch, default project):**
+  - `R` and the Report text: identical. 0 console errors.
+  - Print-state reference check: 0 unresolved of 124 (main: the 4 `a1` references).
+  - Screen screenshot of card 1.1, and the printed Report (p. 5, the plan) looked at: both arrowheads of B = 10.00 ft.
+  - `check-syntax` and `spread-footing-scroll` pass.
+- **Saved data:** none. **Governing provision:** none. **Other copies:** none.
+
+## 2026-11-05 — PR: claude/github-sync (PR #808: https://github.com/mlococo88/All-Structural/pull/808) (GHS: saved projects copied to a private GitHub repository, pilot tool; storage only, no result change)
+- **Engineer:** see the same saved projects on every device (GitHub; `docs/github-sync-setup.md`). Spread Footing is the pilot.
+- **Where / before → after:**
+  - After `<script src="shared/projects-ui.js"></script>`: new `<script src="shared/github-sync.js"></script>`.
+  - PLIB block, `SharedProjectsUI.libraryDialog({…})`: after the `changed:` line, new `cloud:{tool:'spread-footing',label:'Spread Footing',fromFile:j=>{…}}`.
+    Files on GitHub are `projects/spread-footing/<name>.json` = the tool's Export JSON (`JSON.stringify(state,null,1)`; the stored item is the
+    state). `fromFile` refuses a file without `geom`, `soil` and `peds` (the test the tool's Import JSON uses) and otherwise stores it as it is;
+    Open goes through the dialog's existing `open` (Object.assign(defaultState(), …), migrateState()).
+- **Saved data:** `sfd_projects` and `sfd_auto` unchanged (key and format). With sync off nothing is written and no request is made.
+  New keys only with sync on: `bridgeSuite.v1.githubSync`, `bridgeSuite.v1.githubSync.tool.spread-footing`.
+- **How verified:** `node tests/smoke/github-sync.mjs` (13 checks, ALL PASS: sync off; Test connection; Upload all; the GitHub file
+  byte-identical to a real Export JSON download; background save and Overwrite with sha; conflict copy; GitHub-only Open; offline queue;
+  explicit cloud delete; token checks; 390 px). `node tests/smoke/project-library.mjs --tool spreadfooting` (origin/main vs branch,
+  sync off): results and saved data identical. Screenshots looked at (dialog at 1400 and 390 px, settings dialog).
+- **Formulas, factors, units, code references:** none.
+
 ## 2026-11-05 — PR: claude/header-sf (SFHD: compact page header; title block and hand-off buttons moved to the Project input tab; display only, no result change)
 - **Engineer:** clean up the top of the page: the title-block inputs and the hand-off / project buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (markup moved, not copied: every id, `data-path`, `onclick` and handler is the same):

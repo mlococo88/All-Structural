@@ -18,6 +18,7 @@
 <!-- PLIB (2026-11-02): saved-project list dialog (Open / Rename / Duplicate / Delete), shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <style>
 *{box-sizing:border-box}
 body{font-family:"Times New Roman",Times,serif;font-size:12px;color:#111;background:#fafafa;margin:0}
@@ -2081,7 +2082,11 @@ function planSVG(){
  // labeled axis triad (bottom-left corner) matching 3D-view colors: +x red, +y green
  {const ax=28, ox=pad-6, oy=h-14;
   s+='<defs><marker id="axr" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#cc2222"/></marker>';
-  s+='<marker id="axg" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#228822"/></marker></defs>';
+  s+='<marker id="axg" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#228822"/></marker>';
+  /* SFPA (2026-11-05): the arrowhead of the B dimension below (url(#a1)), which was referenced but never defined, so the dimension had
+     no arrowheads on screen or in print; auto-start-reverse points the start head outward too. The Report copies get their own id
+     (sfxUniq / sfxUniqDom, SFCB). Display only. */
+  s+='<marker id="a1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,1 L7,4 L0,7 z" fill="#333"/></marker></defs>';
   s+='<line x1="'+ox+'" y1="'+oy+'" x2="'+(ox+ax)+'" y2="'+oy+'" stroke="#cc2222" stroke-width="1.5" marker-end="url(#axr)"/>';
   s+='<text x="'+(ox+ax+3)+'" y="'+(oy+3)+'" fill="#cc2222" font-weight="bold" font-size="10">+x</text>';
   s+='<line x1="'+ox+'" y1="'+oy+'" x2="'+ox+'" y2="'+(oy-ax)+'" stroke="#228822" stroke-width="1.5" marker-end="url(#axg)"/>';
@@ -5139,7 +5144,10 @@ $('#btnDelProj').addEventListener('click',()=>{
   open:n=>{const o=store.get(n);if(!o)return false;state=Object.assign(defaultState(),JSON.parse(JSON.stringify(o)));migrateState();
    SEL.asd=null;SEL.lrfd=null;SEL.asdLr=null;$('#projName').value=n;bindStaticInputs();buildPedCards();saveAuto();recalc();refreshProjList();$('#projList').value=n;return true;},
   renamed:(a,b)=>{if($('#projName').value.trim()===a)$('#projName').value=b;},
-  changed:()=>{const v=$('#projList').value;refreshProjList();if(v&&store.has(v))$('#projList').value=v;}});
+  changed:()=>{const v=$('#projList').value;refreshProjList();if(v&&store.has(v))$('#projList').value=v;},
+  /* GHS (2026-11-05): GitHub sync of this list (shared/github-sync.js). Files are the Export JSON format (the stored item is the state). */
+  cloud:{tool:'spread-footing',label:'Spread Footing',
+   fromFile:j=>{if(!(j&&typeof j==='object'&&!Array.isArray(j)&&j.geom&&typeof j.geom==='object'&&j.soil&&typeof j.soil==='object'&&Array.isArray(j.peds)))throw new Error('not a Spread Footing input file: missing geometry, soil or pedestal data');return j;}}});
  const b=SharedProjectsUI.button('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete');
  b.addEventListener('click',()=>dlg.show());
  const ref=$('#btnRedo');if(ref)ref.parentNode.insertBefore(b,ref.nextSibling);   /* SFHD: in the header, after Undo / Redo */
