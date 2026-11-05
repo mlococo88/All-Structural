@@ -17,6 +17,7 @@ import path from 'path';
 import assert from 'assert/strict';
 import { openPage, REPO } from '../lib.mjs';
 import { makeGitHubMock, gitBlobSha } from '../engine/gh-mock.mjs';
+import { stdSave } from './project-library.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const SHOTS = arg('shots', process.env.SHOTS);
@@ -29,10 +30,11 @@ const TOOLS = {
   spreadfooting: {
     file: 'Spread Footing.html', list: 'sfd_projects', folder: 'spread-footing',
     ready: p => p.waitForFunction(() => typeof R !== 'undefined' && R),
-    save: async (p, n) => { await p.evaluate(n => { document.getElementById('projName').value = n; document.getElementById('btnSaveProj').click(); }, n); await p.waitForTimeout(200); },
-    overwrite: async (p, n) => { await p.evaluate(n => { refreshProjList(); document.getElementById('projList').value = n; document.getElementById('btnOverwriteProj').click(); }, n); await p.waitForTimeout(200); },
+    // STDS (2026-11-05): Save as through the standard save controls; overwrite = Save as an existing name + "Replace it"
+    save: async (p, n) => { await stdSave(p, n); },
+    overwrite: async (p, n) => { await stdSave(p, n); },
     change: async p => { await p.evaluate(() => { const i = document.querySelector('#inputPanel input[type=number][data-path]'); i.value = String((Number(i.value) || 0) + 0.5); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); }); await p.waitForTimeout(600); },
-    opened: p => p.evaluate(() => document.getElementById('projName').value),
+    opened: p => p.evaluate(() => window.SFPL.pb.current() || ''),
     openBtn: p => p.evaluate(() => window.SFPL.dlg.show()),
     exportText: async p => { const [d] = await Promise.all([p.waitForEvent('download'), p.click('#btnExport')]); return fs.readFileSync(await d.path(), 'utf8'); },
     result: p => p.evaluate(() => JSON.stringify(R, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v)))
@@ -126,7 +128,7 @@ const remote = JSON.parse(gh.files.get(pathOf('Footing C'))); remote.meta = Obje
 gh.setRemote(pathOf('Remote job'), JSON.stringify(remote, null, 1));
 await p.click('#spLibDlg [data-ghx=refresh]');
 await until(() => p.evaluate(() => !!document.querySelector('#spLibDlg [data-ghx=open][data-n="Remote%20job"]')), 8000, 'cloud-only row');
-assert.match(await dlgText(), /On GitHub only/);
+assert.match(await dlgText(), /on GitHub only/i);   // STDS: a row of the one table (status "on GitHub only")
 await p.click('#spLibDlg [data-ghx=open][data-n="Remote%20job"]'); await p.waitForTimeout(1200);
 assert.equal(await T.opened(p), 'Remote job'); assert.deepEqual(JSON.parse(await ls(T.list))['Remote job'], remote);
 assert.equal(await p.evaluate(() => state.meta.project), 'Remote job');
