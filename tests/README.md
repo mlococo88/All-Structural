@@ -87,6 +87,10 @@ node tests/smoke/github-sync-tools.mjs [--tool asce7,baseplate,...]
 # its own Save, then tools.html#projects lists the same names, order and saved times as each tool's own dialog; the home page writes
 # nothing and makes no request; HTML in a name is text; unreadable list reported; search, app filter, 390 px. ~2 min
 node tests/smoke/home-projects.mjs [--tool asce7,spreadfooting,...] [--shots <dir>]
+# Home page GitHub status and "Sync all" (HSP PR 2), api.github.com routed to tests/engine/gh-mock.mjs: tools save with sync off (no
+# request); the panel checks GitHub with one request and writes nothing; Sync all uploads every project, keeps a conflict as a copy, deletes
+# nothing; then each tool's own dialog shows "synced" and the tool uploads nothing (its file = the home page's file); GitHub newer; token. ~4 min
+node tests/smoke/home-sync.mjs [--tool asce7,spreadfooting,...] [--shots <dir>]
 
 # Retired rebar calculator (RBRT): the redirect page (?query, #dev, in a frame, one-time .json offer), the suite on its Development &
 # Splice tab, the takeover of the old page's storage, and an Export JSON from the OLD standalone (git ref --old) importing identically. ~1 min
