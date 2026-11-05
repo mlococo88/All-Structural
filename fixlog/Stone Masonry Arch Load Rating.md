@@ -1214,7 +1214,7 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
   - `node tests/smoke/project-library.mjs --tool stonearch`: ALL PASS.
 - **Other copies:** none.
 
-## 2026-11-05 — PR: claude/github-sync-rollout (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
+## 2026-11-05 — PR: claude/github-sync-rollout (PR #811: https://github.com/mlococo88/All-Structural/pull/811) (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
 - **Engineer:** the same saved projects on every device (`docs/github-sync-setup.md`; shared code `shared/github-sync.js`, fix log `shared-github-sync.md`; pilot Spread Footing, PR #808).
 - **Where:** after `<script src="shared/projects-ui.js"></script>`, new `<script src="shared/github-sync.js"></script>`; in the PLIB block, `SharedProjectsUI.libraryDialog({` gets a first property `cloud:{tool:'stone-arch-rating', …}` (anchor `GHS (2026-11-05): GitHub sync of this list`).
 - **File on GitHub:** `projects/stone-arch-rating/<name>.json`: the stored item is the export (`snapshot()`), indent 2. **Download (fromFile):** an object with `fields`; Open then goes through the dialog's existing `open`.

@@ -59,7 +59,7 @@ Engineer's setup steps: `docs/github-sync-setup.md`.
   waits for the reset; delete only explicit; the token only in the header; Test connection reads only and warns on a public repository.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 
-## 2026-11-05 — PR: claude/github-sync-rollout — roll-out to every tool with the shared Saved projects dialog; two fixes in the shared file   [storage only; no result change]
+## 2026-11-05 — PR: claude/github-sync-rollout (PR #811: https://github.com/mlococo88/All-Structural/pull/811) — roll-out to every tool with the shared Saved projects dialog; two fixes in the shared file   [storage only; no result change]
 - **Loaded by (new):** ASCE7-16 Load Generator, BasePlateAnchorDesigner, Bridge Substructure Loading, Concrete Beam Capacity (Development & Splice
   frame), Gusset Plate Rating, Light Pole and Sign Post, Moving Load Generator, Retaining Wall Designer, Section Property Calculator, Shear and
   Moment Diagrams, Steel Beam Design - AISC 15th, Stone Masonry Arch Load Rating, Timber Beam Check (each tool's `toFile` / `fromFile` in its fix log).

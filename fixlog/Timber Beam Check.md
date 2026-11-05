@@ -1858,7 +1858,7 @@ index 2f29ed5..c3246e1 100644
   - Print routing, headless, from each of the 12 tabs, by `beforeprint` and by the Print report button: `#rp-print` holds the Report, the running header is set, and the tab of before comes back after `afterprint`.
 - **Other copies:** none.
 
-## 2026-11-05 — PR: claude/github-sync-rollout (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
+## 2026-11-05 — PR: claude/github-sync-rollout (PR #811: https://github.com/mlococo88/All-Structural/pull/811) (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
 - **Engineer:** the same saved projects on every device (`docs/github-sync-setup.md`; shared code `shared/github-sync.js`, fix log `shared-github-sync.md`; pilot Spread Footing, PR #808).
 - **Where:** after `<script src="shared/projects-ui.js"></script>`, new `<script src="shared/github-sync.js"></script>`; in the PLIB block, `SharedProjectsUI.libraryDialog({` gets a first property `cloud:{tool:'timber-beam-check', …}` (anchor `GHS (2026-11-05): GitHub sync of this list`).
 - **File on GitHub:** `projects/timber-beam-check/<name>.json`: `toFile` = `item.d` (`stampVersion()`, the export), indent 2. **Download (fromFile):** any JSON object; stored as `{t: Date.now(), d: file}`; Open then goes through the dialog's existing `open`.

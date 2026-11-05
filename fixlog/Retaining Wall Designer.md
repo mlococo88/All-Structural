@@ -1837,7 +1837,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   - Tab text differs only in the lines above. The stem, heel and toe d_b rows now equal the bars in the equations: #4 / #5 / #3 etc.
 - **Other copies:** none. The Report tab already used the actual values.
 
-## 2026-11-05 — PR: claude/github-sync-rollout (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
+## 2026-11-05 — PR: claude/github-sync-rollout (PR #811: https://github.com/mlococo88/All-Structural/pull/811) (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
 - **Engineer:** the same saved projects on every device (`docs/github-sync-setup.md`; shared code `shared/github-sync.js`, fix log `shared-github-sync.md`; pilot Spread Footing, PR #808).
 - **Where:** after `<script src="shared/projects-ui.js"></script>`, new `<script src="shared/github-sync.js"></script>`; in the PLIB block, `SharedProjectsUI.libraryDialog({` gets a first property `cloud:{tool:'retaining-wall-designer', …}` (anchor `GHS (2026-11-05): GitHub sync of this list`).
 - **File on GitHub:** `projects/retaining-wall-designer/<name>.json`: `toFile` = `{format:'RetainCalcPro.project', version:1, name, fields:item.fields}` (the single-project export without `exported`), indent 2. **Download (fromFile):** format `RetainCalcPro.project` with `fields`; stored as `{fields, ts: Date.now()}` (the tool's item); Open then goes through the dialog's existing `open`.

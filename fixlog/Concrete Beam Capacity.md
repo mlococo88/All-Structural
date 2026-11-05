@@ -4768,7 +4768,7 @@ function buildDrawingsTab(pg){
     - p. 29: ASD section hatched.
   - `check-syntax`, `phone-layout --tool cbc`, `dxf-print-sheets --tool cbc` and `run.mjs report steps steps-groups report-wiring` pass.
 
-## 2026-11-05 — PR: claude/github-sync-rollout (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
+## 2026-11-05 — PR: claude/github-sync-rollout (PR #811: https://github.com/mlococo88/All-Structural/pull/811) (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
 - **Engineer:** the same saved projects on every device (`docs/github-sync-setup.md`; shared code `shared/github-sync.js`, fix log `shared-github-sync.md`; pilot Spread Footing, PR #808).
 - **Where:** the Development & Splice frame (the escaped srcdoc page that holds the rebar calculator): after its `<script src=&quot;shared/projects-ui.js&quot;></script>`, new `<script src=&quot;shared/github-sync.js&quot;></script>`; in `rbPlibInit`, `SharedProjectsUI.libraryDialog({` gets a first property `cloud:{tool:'aci-rebar-development', …}` (anchor `GHS (2026-11-05): GitHub sync of this list`).
 - **File on GitHub:** `projects/aci-rebar-development/<name>.json`: the stored item is the export (`collectState()`), indent 2. **Download (fromFile):** an object with `inp`; Open then goes through the dialog's existing `open`.
