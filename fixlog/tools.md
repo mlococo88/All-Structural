@@ -23,3 +23,16 @@
 - **How verified:** diff (1 card line changed, 1 line added); `node tests/smoke/rebar-redirect.mjs` (the suite opens on the tab for `#dev`).
 - **Other copies:** none.
 - **Open items:** none.
+
+## 2026-11-05 — PR: claude/home-saved-projects, PR #818: https://github.com/mlococo88/All-Structural/pull/818 (HSP PR 1: "Saved projects" panel, the projects saved in this browser across the apps; home page only, no result change)
+
+- **Where:** `tools.html`. New `<details class="projects" id="projects">` just before `<details class="checks" open>`; new CSS rules after `details.checks li{…}` (classes `projects`, `spTools`, `spBar`, `spMsg`, `spG`, `spL`, `spD`, `spSt`, `spNote`); `<script src="shared/projects.js">` and `<script src="shared/project-registry.js">` before `</head>`; a new script before `</body>` (anchor `HSP (2026-11-05): "Saved projects" panel`).
+- **Before:** the home page listed tools only.
+- **After:** a closed panel **Saved projects (N in this browser, M apps)** above the open engineer checks. Opened (or with `tools.html#projects`), it lists every project saved in this browser by each app of `shared/project-registry.js`, grouped by app in the card order, with the saved time where the app records one (US Eastern, as in the app's own dialog), a search box and an app filter. Clicking a project or an app's name opens the app in a new tab (no project is loaded automatically: engineer answer 3, 2026-11-05). An app's list that cannot be read is reported and left as it is. The existing cards, filter and layout are unchanged (the panel is not a `<section>`, so the tool filter does not touch it).
+- **Problem:** engineer request (2026-11-05): see the saved projects of all apps from the home page.
+- **Saved data (CLAUDE.md §5):** read only. The panel reads each app's own list key through `SharedProjectRegistry.list` (`SharedProjects.mapStore.read/list`); it writes nothing (no key of its own: the panel's open state is not remembered) and makes no network request.
+- **Governing provision:** none (navigation and display only; no calculation, no tool file changed).
+- **Check case:** each of the 16 apps saves "HSP A" and `HSP <b>bold</b> & "q" ü` with its own Save button → the home page lists both under that app, in the order and with the saved times of the app's own Saved projects dialog; the second name shows as text (no bold); search "hsp a" leaves one per app; at 390 px the page does not scroll sideways.
+- **How verified:** `node tests/smoke/home-projects.mjs` (ALL PASS: names / order / times equal to each tool's dialog for all 16 apps (the Abutment Calculator and Elastomeric Bearing, own Projects dialogs: names and order, and a time shown), storage byte-identical before / after the home page's load, search, filter and refresh, no request, no console errors, 390 px); `node tests/engine/run.mjs project-registry`; `node tests/check-syntax.mjs tools.html`; screenshots at 1280 and 390 px looked at.
+- **Other copies:** none.
+- **Open items:** GitHub status and "Sync all" follow in HSP PR 2.
