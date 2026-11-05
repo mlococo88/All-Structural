@@ -3297,7 +3297,7 @@ function rbrDashColl(v,save){
 - **Other copies:** `ACI Rebar Development Length.html` (same edit, logged there).
 - **Tests:** `node tests/check-syntax.mjs`, `node tests/smoke/phone-layout.mjs --tool cbc,aci`, `node tests/smoke/project-library.mjs` pass.
 
-## 2026-11-05 — PR: claude/cbc-report-order (CBRO: the suite Report in the design order, a suite-wide "Summary of results" first, section numbers independent of the Include boxes; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-report-order, PR #793: https://github.com/mlococo88/All-Structural/pull/793 (CBRO: the suite Report in the design order, a suite-wide "Summary of results" first, section numbers independent of the Include boxes; display only, no result change)
 
 ### CBRO. Report order and Summary of results   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 4 of the concrete beam suite update):** the Spread Footing Report structure (SFRO #778, SFRF #779) in the suite Report: a suite-wide "Summary of results" first, covering the checks of all three chapters with links; each chapter in design order; numbering that does not move with the Include boxes.
