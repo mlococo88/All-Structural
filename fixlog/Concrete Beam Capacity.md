@@ -4391,3 +4391,325 @@ function asdStressSVG(R){
   return s+'</svg>';
 }
 ```
+
+## 2026-11-05 — PR: claude/cbc-drawings, PR #806: https://github.com/mlococo88/All-Structural/pull/806 (CBDW: Drawings tab in the Beam Capacity tab — DXF and 11 × 17 drawing sheets: cross section, typical elevation, notes and schedule; display and export only, no result change)
+
+### CBDW. Drawing sheets   [display and export only] [no result change]
+- **Engineer request (2026-11-05, Phase 5 graphics, PR C):** a Drawings tab as Spread Footing / Light Pole, using `shared/dxf.js` (viewer, sheetSVG, printSheets, PRINT_NOTE, sheetBorder 0.25 in inset), with sheets on 11 × 17 at a standard scale:
+  1. the beam cross section at 1"=1'-0" or 1-1/2"=1'-0", with dimensions, cover, a bar callout per layer, the stirrup size and spacing, and a section-properties note;
+  2. the beam elevation with the stirrup layout, or a typical elevation with spacing zones;
+  3. a notes / schedule sheet: materials, code, cover, and the Development & Splice lengths.
+  - Hooks drawn correctly; title block from the project fields; Download DXF, Print sheet and Print all sheets.
+  - `SharedDxf.validate` passes, and `dxf-print-sheets` checks the sheets.
+- **Where the tab lives — decision (pending engineer review):** in the **Beam Capacity** tab (frame `#suite-frame-capacity`), after Visuals.
+  - That frame holds everything a sheet draws: section, layers (`layerGeom`, `barXs`), cover, stirrups (`stirDia`), materials, code, project fields and results (`CC`).
+  - It reads the Development & Splice lengths from the sibling frame's own functions (`readInputs`, `computeFactors`, `calcTension`, `calcHook`, `calcComp`, `calcTensSplice`, `calcCompSplice`, `rbInputErrors`), so no value is computed twice.
+  - The ASD tab has no bar layout (A_s only), and Development & Splice has no section.
+- **Changes in the Beam Capacity frame** (srcdoc; decoded and re-encoded with CRLF kept):
+  - `<script src="shared/dxf.js"></script>` after `shared/projects-ui.js`.
+  - `TABS()`: `["tabVisuals","Visuals"],["tabDrawings","Drawings"],["tabValid","Validation"]` (was `["tabVisuals","Visuals"],["tabValid","Validation"]`).
+  - `buildOutput`: `case "tabDrawings": buildDrawingsTab(pg); break;`.
+  - New block CBDW before `PERSISTENCE (§10)`: `CBDW_SC`, `CBDW`, `cbdwScName`, `cbdwIn`, `cbdwReq`, `cbdwStirHook`, `cbdwDev`, `cbdwBuild`, `cbdwEsc`, `buildDrawingsTab`. The code is below.
+- **Shell:** `<script src="shared/dxf.js"></script>` after `shared/report.js`.
+  - The frame prints through the shell's copy (`parent.SharedDxf.printSheets`), so the sheets print as the page, one 17 × 11 page each, and not inside the iframe.
+  - Ctrl+P / Print still print the Report (checked).
+- **Sheets** (model space, full size in inches, side by side; title block from `S.proj`: Project, Project No., Calculated By, Date, Checked By, Checked Date, Scale, Sheet title, Subject, "Concrete Beam Design Suite", n OF N):
+  1. **BEAM CROSS SECTION**, 1 1/2" = 1'-0" if it fits, else 1", 3/4", 1/2" = 1'-0".
+     - Shows the concrete (rectangle or T), the bars at true diameter and their `layerGeom` positions (positive-moment orientation, as entered), and the closed stirrup drawn as a bar of true diameter.
+     - The stirrup's corners are bent to the minimum inside diameter (4 d_b #3–#5, 6 d_b #6–#8). It has two 135° hooks at the top-left corner with a 6 d_b extension, not less than 3 in in ACI mode (ACI 318-19 25.3.2 / Table 25.3.2; AASHTO 10th 5.10.2.1(c), Table 5.10.2.3-1).
+     - Interior legs (3 or 4 legs) are drawn straight and noted "interior legs: detailer".
+     - Dimensions: b_w, h (b_f, h_f), clear cover in both directions.
+     - A callout per layer ("3-#5 BOTTOM", "… TOP", "… LAYER 2") and the stirrup callout (size, spacing, legs, hook, bend).
+     - Section-properties table: b_w × h, A_g, I_g (`servicecalc`), A_s bottom / top, bar centre depths, cover provided / required, and φM_n positive / negative (`CC.both`).
+  2. **TYPICAL BEAM ELEVATION**, 1" = 1'-0" if it fits, else 3/4", 1/2", 1/4" = 1'-0".
+     - The tool has no span, so it shows a typical length max(4h, 10s) with break lines at both ends, the bars continuous and the stirrups at s.
+     - Chain dimension n@s and h. One spacing zone, labelled with s_max and its source (`govSmaxInfo`), with "s > s_max: see Detailing tab" when it fails.
+     - A note that no span, supports or cutoffs are modelled.
+  3. **NOTES AND SCHEDULE**, 3" = 1'-0" if it fits, else 1 1/2", 1", 3/4" = 1'-0" (the scale of the hook detail).
+     - General notes: code, f′c, λ, aggregate, f_y, f_yt (and the design f_yt), cover, hooks, and that lengths and cutoffs are not determined.
+     - Bar schedule: one row per layer, plus the stirrup with its hook and A_v.
+     - Development & splice lengths from the Development & Splice tab: bar, code, f′c / f_y, ℓ_d, ℓ_dh, ℓ_dc, tension lap splice (class) or "not permitted", and compression lap splice, with references. Each length is **rounded up to 1/8 in, with the tab's value beside it**. A flag shows when that bar size is not a size of this section.
+     - The 90° standard hook of that bar drawn to scale: ℓ_dh to the outside face of the bend, a bend of 6 / 8 / 10 d_b (or the entered R in AASHTO mode) and the 12 d_b tail (ACI Table 25.3.1 / AASHTO 5.10.2.1, Table 5.10.2.3-1). This is the same geometry as the Dev tab's hook drawing (CBSB #802).
+     - Without the suite (frame opened alone) or with a Dev input error, the sheet says so instead.
+- **Text:** the DXF is R12 (ASCII). ≥, ≤, φ, ², ⁴, ℓ, λ and ′ are written out (>=, PHI, ^2, L, LAMBDA, '). ° and Ø stay, because `SharedDxf.str` makes them %%d / %%c.
+- **Saved data:** the chosen sheet is stored per browser in the new key `rcbeam_dwgSheet_v1` (tool prefix). It is not in the project, the autosave or the export. `S.ui.tab` may now be "tabDrawings"; older saves are unaffected. No key or format changed.
+- **Decisions (pending engineer review):**
+  - The tab lives in the Beam Capacity frame (above).
+  - The elevation is typical, not a span (the tool has no span, supports or cutoffs). It has one spacing zone, the entered s.
+  - Development / splice lengths are rounded up, never down, on the sheet.
+  - Hook positions: both 135° stirrup hooks at the top-left corner. Interior legs are left to the detailer.
+  - The section is drawn in the positive-moment orientation (bottom face = the "tension" layers).
+- **Tests:** `tests/smoke/dxf-print-sheets.mjs` gains a `cbc` entry and a frame option (`fr`). The buttons, `known` and `n` are evaluated in the frame, while the print box and the PDFs are in the top page. The other tools are unchanged (sf, spc re-run).
+- **How verified (headless Chromium):**
+  - `dxf-print-sheets --tool cbc`:
+    - Print sheet gives 1 page, 1224 × 792 pt, with the outer border at 18 pt.
+    - b_w × h = 12 × 18 in at 1 1/2" = 1'-0" measured 108.00 × 162.00 pt (expected 108 × 162).
+    - Print all gives 3 pages of 17 × 11. The box and style are removed. Ctrl+P prints the Report (49 letter pages, no sheet). 0 console errors.
+  - `SharedDxf.validate`: ok (POLYLINE, CIRCLE, LINE, ARC, TEXT, DIMENSION; 11 layers) for default, a 48 × 30 T-beam, a 10 × 48 deep beam (3 layers) and a 24 × 36 beam with 4-leg #5 stirrups. Scales: 1 1/2", 1 1/2", 1" and 1 1/2" for the section, and 3" for notes.
+  - Sheets and printed PDFs looked at.
+  - Results: origin/main vs the branch, cases default, aa100, aci100 and excess. `computeAll`, `allChecks`, ASD and Dev are identical. The text differences are only the new Drawings tab and the tab bar.
+  - `check-syntax` (all), `phone-layout --tool cbc` and `run.mjs report steps steps-groups report-wiring` pass.
+- **Governing provision:** none changed (drawing geometry only, cited above). **Other copies:** none.
+
+#### Code added — Beam Capacity frame (re-apply by hand)
+```js
+/* =====================================================================
+   DRAWINGS tab (CBDW, 2026-11-05, Phase 5 graphics): drawing sheets, 11 x 17 (B-size) at a standard plot scale
+   As Spread Footing (SFDW), Light Pole (LPDW) and Section Property Calculator (SPDW): one DXF R12 file (shared/dxf.js:
+   SharedDxf.drawing -> toDXF), each sheet a 17 x 11 in sheet at its plot scale inside its border (SharedDxf.sheetBorder, 0.25 in
+   inside the paper edge) and title block, side by side in model space, full size in inches; previewed from the same entities
+   (SharedDxf.sheetSVG, SharedDxf.viewer) and printed one 11 x 17 landscape page per sheet at its plot scale
+   (SharedDxf.printSheets; in the suite through the shell's copy, so the page prints as the shell, not inside this frame).
+     1. BEAM CROSS SECTION: the section as entered, 1 1/2" = 1'-0" or 1" = 1'-0" (the larger that fits; then 3/4", 1/2"),
+        dimensions, clear cover, a callout per layer (n-#size), the closed stirrup with its 135-degree hooks, a section-properties note.
+     2. TYPICAL BEAM ELEVATION: the tool checks a section, not a span, so a typical length with the entered stirrup spacing
+        (one spacing zone), break lines at both ends.
+     3. NOTES AND SCHEDULE: materials, code, cover, bar schedule, and the development / splice lengths of the Development &
+        Splice tab (read from that tab's own functions in the suite), with its 90-degree standard hook drawn to scale.
+   Display and export only: geometry from layerGeom / barXs / stirDia (as svgSection), values from CC and the Development &
+   Splice tab's results; nothing is computed for design. Hook and bend geometry (drawing only): stirrup 135-degree hooks with a
+   6 d_b extension (ACI: not less than 3 in) and the minimum inside bend diameter 4 d_b (#3-#5) / 6 d_b (#6-#8) (ACI 318-19
+   25.3.2, Table 25.3.2; AASHTO 10th 5.10.2.1(c), Table 5.10.2.3-1); 90-degree hooks of longitudinal bars 12 d_b with 6 / 8 / 10 d_b
+   (ACI Table 25.3.1; AASHTO 5.10.2.1, Table 5.10.2.3-1).
+   Saved: the chosen sheet, per browser, key rcbeam_dwgSheet_v1 (not in the project, the autosave or the export).
+   ===================================================================== */
+const CBDW_SC=[[8,'1 1/2" = 1\'-0"'],[12,'1" = 1\'-0"'],[16,'3/4" = 1\'-0"'],[24,'1/2" = 1\'-0"'],[4,'3" = 1\'-0"'],[48,'1/4" = 1\'-0"']];
+const CBDW={W:17,H:11,m:0.375,tbH:1.0,key:'rcbeam_dwgSheet_v1',cur:null,B:null};
+const cbdwScName=k=>(CBDW_SC.find(q=>q[0]===k)||[0,'1:'+k])[1];
+const cbdwIn=v=>SharedDxf.fmtIn(v);
+/* a required length on the sheet: rounded UP to 1/8 in (never shorter than the tab's value), with the tab's value beside it */
+const cbdwReq=v=>isFinite(v)?SharedDxf.fmtIn(Math.ceil(v*8-1e-9)/8)+' ('+fmt(v,2)+')':'-';
+/* the stirrup / tie hook and bend (drawing only; see the header) */
+function cbdwStirHook(sz){ const ds=REBAR[sz].d, n=parseInt(sz,10), Di=(n<=5?4:6)*ds, ext=S.code==='ACI'?Math.max(6*ds,3):6*ds;
+  return {ds,Di,ext,rc:Di/2+ds/2,ref:S.code==='ACI'?'ACI 318-19 25.3.2, TABLE 25.3.2':'AASHTO LRFD 10TH ED. 5.10.2.1(c), TABLE 5.10.2.3-1'}; }
+/* the Development & Splice tab's results (suite: the sibling frame; null when not there or it has an input error) */
+function cbdwDev(){
+  try{ const P=window.parent; if(!P||P===window) return null;
+    const fr=P.document.getElementById('suite-frame-dev'), W=fr&&fr.contentWindow; if(!W||!W.readInputs||!W.computeFactors) return null;
+    const inp=W.readInputs(), f=W.computeFactors(inp);
+    if(W.rbInputErrors&&W.rbInputErrors(inp,f).length) return {err:true};
+    const t=W.calcTension(inp,f);
+    return {inp,f,t,h:W.calcHook(inp,f),c:W.calcComp(inp,f),ts:W.calcTensSplice(inp,f,t),cs:W.calcCompSplice(inp,f),
+      lapNo:W.lapProhibited?W.lapProhibited(inp,f):false};
+  }catch(e){ return null; }
+}
+function cbdwBuild(){
+  if(!window.SharedDxf) throw new Error('shared/dxf.js is not loaded');
+  if(!CC||VALIDATION.blockers.length) throw new Error('no results (input error)');
+  const D=SharedDxf.drawing({prefix:'CB-',fmt:cbdwIn}), SH=[], p=S.proj||{};
+  /* DXF R12 text is ASCII (SharedDxf.str writes other characters as \U+XXXX, which the preview shows as typed): the symbols used
+     here are written out (degree and diameter stay: SharedDxf.str makes them %%d / %%c) */
+  const AS=s=>String(s==null?'':s).replace(/≥/g,'>=').replace(/≤/g,'<=').replace(/φ/g,'PHI ').replace(/²/g,'^2').replace(/⁴/g,'^4').replace(/ℓ/g,'L').replace(/λ/g,'LAMBDA').replace(/′/g,"'").replace(/[–—]/g,'-').replace(/·/g,'x').replace(/&amp;/g,'&');
+  const T0=D.text, D0=D.dim; D.text=(l,x,y,hh,s,j,rot)=>T0(l,x,y,hh,AS(s),j,rot); D.dim=(l,p1,p2,b,ang,txt)=>D0(l,p1,p2,b,ang,txt==null?txt:AS(txt));
+  const L={conc:D.layer('CONC',7),bar:D.layer('REBAR',1),stir:D.layer('STIRRUP',30),dim:D.layer('DIMS',3),txt:D.layer('TEXT',7),
+    ldr:D.layer('LEADER',3),tbl:D.layer('TABLE',7),tb:D.layer('TBLK',7),br:D.layer('BRDR',7),brk:D.layer('BREAK',8),hid:D.layer('HIDDEN',8,'HIDDEN')};
+  const AW=CBDW.W-2*CBDW.m-0.5, AH=CBDW.H-2*CBDW.m-CBDW.tbH-0.6;
+  let ox=0;
+  function sheet(id,title,content,ks,src){
+    const i0=D.mark(); let k=null, over=false, ret=null;
+    for(const kk of ks){ D.E.length=i0; D.k=kk; D.h=0.1*kk; ret=content(kk)||null; const b=D.bbox(i0);
+      if(!isFinite(b[0])||((b[2]-b[0])/kk<=AW&&(b[3]-b[1])/kk<=AH)){ k=kk; break; } }
+    if(k===null){ k=ks[ks.length-1]; over=true; }
+    const P=k, b=D.bbox(i0), W=CBDW.W*P, H=CBDW.H*P, m=CBDW.m*P, tb=CBDW.tbH*P;
+    const cx=ox+W/2, cy=m+tb+0.3*P+(AH*P)/2;
+    if(isFinite(b[0])) D.move(i0,cx-(b[0]+b[2])/2,cy-(b[1]+b[3])/2);
+    D.k=P; D.h=0.1*P;
+    SharedDxf.sheetBorder(D,L.br,ox,W,H,P); D.rect(L.br,ox+m,m,ox+W-m,H-m);
+    const x0=ox+m, y0=m, w=(CBDW.W-2*CBDW.m)*P, r=tb/2, sc=(ret&&ret.scale)||cbdwScName(k);
+    D.rect(L.tb,x0,y0,x0+w,y0+tb); D.line(L.tb,x0,y0+r,x0+w,y0+r);
+    const row1=[['PROJECT',p.name,4.25],['PROJECT NO.',p.num,2],['CALCULATED BY',p.by,2],['DATE',p.date,1.75],['CHECKED BY',p.chk,2],['CHECKED DATE',p.chkDate,1.75],['SCALE',sc,2.5]];
+    const row2=[['SHEET TITLE',title,6.25],['SUBJECT',p.subj,3],['DRAWN BY','CONCRETE BEAM DESIGN SUITE',4],['SHEET','?',3]];
+    let sheetEnt=null;
+    [[row1,y0+r],[row2,y0]].forEach(([row,yb])=>{ let x=x0; row.forEach(([lab,val,cw],ci)=>{
+      D.text(L.tb,x+0.05*P,yb+r-0.11*P,0.065*P,lab,0);
+      const mx=Math.floor((cw-0.12)/(0.13*0.9)); D.text(L.tb,x+0.05*P,yb+0.1*P,0.13*P,String(val==null||val===''?'—':val).toUpperCase().slice(0,mx),0);
+      if(lab==='SHEET') sheetEnt=D.E[D.E.length-1];
+      x+=cw*P; if(ci<row.length-1) D.line(L.tb,x,yb,x,yb+r); }); });
+    const sh={id,title,k,i0,i1:D.mark(),ox,W,H,over,sheetEnt,src,scale:sc,known:ret&&ret.known}; SH.push(sh); ox+=W+1*P; return sh;
+  }
+  function table(x0,y0,head,rows,hh,right){
+    const rh=hh*2, cw=head.map((hd,c)=>Math.max(String(hd).length,...rows.map(r=>String(r[c]==null?'':r[c]).length))*hh*0.82+1.9*hh);
+    const tot=cw.reduce((a,b)=>a+b,0); let y=y0;
+    const line=yy=>D.line(L.tbl,x0,yy,x0+tot,yy);
+    line(y); [head,...rows].forEach((r,ri)=>{ let x=x0; r.forEach((v,c)=>{ const rt=right&&right.includes(c)&&ri>0; D.text(L.tbl,rt?x+cw[c]-0.8*hh:x+0.8*hh,y-rh+0.6*hh,hh,String(v==null?'':v),rt?2:0); x+=cw[c]; });
+      y-=rh; line(y); if(ri===0) line(y+0.12*hh); });
+    let x=x0; [0,...cw].forEach(w=>{ x+=w; D.line(L.tbl,x,y0,x,y); });
+    return {w:tot,h:y0-y};
+  }
+  /* a bar of diameter t drawn to scale along a centre-line path of lines and arcs: both faces (offset +-t/2) */
+  function barPath(l,segs,t){ segs.forEach(sg=>{
+    if(sg.a){ [sg.r-t/2,sg.r+t/2].forEach(rr=>{ if(rr>1e-6) D.arc(l,sg.c[0],sg.c[1],rr,sg.a0,sg.a1); }); return; }
+    const dx=sg.x2-sg.x1, dy=sg.y2-sg.y1, Ls=Math.hypot(dx,dy)||1, nx=-dy/Ls*t/2, ny=dx/Ls*t/2;
+    D.line(l,sg.x1+nx,sg.y1+ny,sg.x2+nx,sg.y2+ny); D.line(l,sg.x1-nx,sg.y1-ny,sg.x2-nx,sg.y2-ny); }); }
+  const pt=(c,r,a)=>[c[0]+r*Math.cos(a*Math.PI/180),c[1]+r*Math.sin(a*Math.PI/180)];
+  const {bw,h,bf,hf,type}=S.sec, tee=type==='tee', cc=S.cover.cc, G=layerGeom(false);
+  const hk=S.stir.present?cbdwStirHook(S.stir.size):null;
+  const faceOf=Lr=>Lr.face==='compression'?'TOP':'BOTTOM';
+  const layerName=(Lr,j)=>{ const same=G.filter(q=>q.face===Lr.face), k=same.indexOf(Lr); return faceOf(Lr)+(same.length>1?' LAYER '+(k+1):''); };
+  const svc=servicecalc(CC.govRow.F,false), B2=CC.both||bothSenses();
+  const AsF=f=>G.filter(q=>q.face===f).reduce((s,q)=>s+q.As,0);
+
+  /* ---------- 1. BEAM CROSS SECTION ---------- */
+  sheet('sec','BEAM CROSS SECTION',P=>{
+    const th=0.09*P, i0=D.mark();
+    /* concrete: y up from the bottom; x from the centre line */
+    if(tee) D.pline(L.conc,[[-bw/2,0],[bw/2,0],[bw/2,h-hf],[bf/2,h-hf],[bf/2,h],[-bf/2,h],[-bf/2,h-hf],[-bw/2,h-hf]],true);
+    else D.rect(L.conc,-bw/2,0,bw/2,h);
+    /* longitudinal bars, true size, at their positions (layerGeom, positive-moment convention: physical) */
+    G.forEach(Lr=>{ barXs(Lr.n,Lr.db).forEach(x=>D.circle(L.bar,x,h-Lr.yTop,Lr.db/2)); });
+    /* closed stirrup: centre line at the cover, corners bent to the minimum inside diameter, 135-degree hooks at the top-left corner */
+    if(hk){ const xL=-bw/2+cc+hk.ds/2, xR=bw/2-cc-hk.ds/2, yB=cc+hk.ds/2, yT=h-cc-hk.ds/2, rc=hk.rc;
+      const cTL=[xL+rc,yT-rc], cTR=[xR-rc,yT-rc], cBR=[xR-rc,yB+rc], cBL=[xL+rc,yB+rc];
+      const a45=pt(cTL,rc,45), a225=pt(cTL,rc,225), u=Math.SQRT1_2;
+      const segs=[
+        {x1:a45[0]+hk.ext*u,y1:a45[1]-hk.ext*u,x2:a45[0],y2:a45[1]},            /* hook 1 extension (end of the left leg's hook) */
+        {a:1,c:cTL,r:rc,a0:45,a1:180},                                            /* hook 1 bend 135 degrees (90 + 45) */
+        {x1:xL,y1:yT-rc,x2:xL,y2:yB+rc},{a:1,c:cBL,r:rc,a0:180,a1:270},
+        {x1:xL+rc,y1:yB,x2:xR-rc,y2:yB},{a:1,c:cBR,r:rc,a0:270,a1:360},
+        {x1:xR,y1:yB+rc,x2:xR,y2:yT-rc},{a:1,c:cTR,r:rc,a0:0,a1:90},
+        {x1:xR-rc,y1:yT,x2:xL+rc,y2:yT},
+        {a:1,c:cTL,r:rc,a0:90,a1:225},                                            /* hook 2 bend 135 degrees */
+        {x1:a225[0],y1:a225[1],x2:a225[0]+hk.ext*u,y2:a225[1]-hk.ext*u}];        /* hook 2 extension */
+      barPath(L.stir,segs,hk.ds);
+      /* interior legs (3 or 4 legs): straight legs between the faces; their hooks are by the detailer (noted) */
+      for(let j=1;j<=S.stir.legs-2;j++){ const x=xL+(xR-xL)*j/(S.stir.legs-1); barPath(L.stir,[{x1:x,y1:yB,x2:x,y2:yT}],hk.ds); }
+      /* stirrup callout, leader to the right leg */
+      const tx=(tee?bf:bw)/2+1.6*P, ty=h*0.62;
+      D.line(L.ldr,xR+hk.ds/2,ty-0.03*P,tx-0.05*P,ty+0.05*P);
+      ['#'+S.stir.size+' CLOSED STIRRUP @ '+cbdwIn(S.stir.s)+' O.C., '+S.stir.legs+' LEGS'+(S.stir.legs>2?' (INTERIOR LEGS: DETAILER)':''),
+       '135° HOOKS, '+cbdwIn(hk.ext)+' EXT. ('+(S.code==='ACI'?'6d_b, ≥ 3"':'6d_b')+'), BEND Ø '+cbdwIn(hk.Di)+' ('+(parseInt(S.stir.size,10)<=5?4:6)+'d_b)',
+       hk.ref].forEach((s,j)=>D.text(L.txt,tx,ty-j*0.16*P,th,s,0));
+    }
+    /* bar callouts per layer: left of the section, leader to the first bar */
+    const xl=-(tee?bf:bw)/2-1.2*P;
+    G.slice().sort((a,b)=>a.yTop-b.yTop).forEach((Lr,j,A)=>{ const y=h-Lr.yTop, xs=barXs(Lr.n,Lr.db), yy=y+(j-(A.length-1)/2)*0.0;
+      D.text(L.txt,xl,yy-0.04*P,th,Lr.n+'-#'+Lr.size+' '+layerName(Lr),2); D.line(L.ldr,xl+0.05*P,yy,xs[0]-Lr.db/2,y); D.circle(L.ldr,xs[0],y,0.02*P); });
+    /* dimensions: b_w, h, b_f / h_f, clear cover to the stirrup (or to the bars without stirrups), d per layer from the top */
+    D.dimH(L.dim,-bw/2,bw/2,-0.5*P,0);
+    D.dimV(L.dim,0,h,(tee?bf:bw)/2+0.5*P,(tee?bf:bw)/2);
+    if(tee){ D.dimH(L.dim,-bf/2,bf/2,h+0.45*P,h); D.dimV(L.dim,h-hf,h,-bf/2-0.45*P,-bf/2); }
+    D.dimH(L.dim,-bw/2,-bw/2+cc,-0.95*P,0,'<> CLR');
+    D.dimV(L.dim,0,cc,bw/2+(tee?(bf-bw)/2:0)+1.0*P,bw/2,'<> CLR');
+    const sb=D.bbox(i0);
+    D.text(L.txt,(sb[0]+sb[2])/2,sb[1]-0.4*P,0.16*P,'SECTION A-A',1);
+    D.text(L.txt,(sb[0]+sb[2])/2,sb[1]-0.62*P,0.09*P,'SCALE '+cbdwScName(P)+';  POSITIVE-MOMENT ORIENTATION (TENSION FACE BOTTOM), AS ENTERED',1);
+    /* section properties note, to the right */
+    const nx=sb[0]; let ny=sb[1]-1.0*P;
+    D.text(L.txt,nx,ny,0.13*P,'SECTION PROPERTIES',0); ny-=0.28*P;
+    const rows=[['b_w × h',cbdwIn(bw)+' × '+cbdwIn(h)],...(tee?[['b_f × h_f',cbdwIn(bf)+' × '+cbdwIn(hf)]]:[]),
+      ['A_g',fmt(tee?bf*hf+bw*(h-hf):bw*h,1)+' in²'],['I_g (gross, bars neglected)',fmt(svc.Ig,0)+' in⁴'],
+      ['A_s bottom / top',fmt(AsF('tension'),2)+' / '+fmt(AsF('compression'),2)+' in²'],
+      ...G.map(Lr=>['TOP OF SECTION TO '+Lr.n+'-#'+Lr.size+' '+layerName(Lr)+' (BAR CENTRE)',cbdwIn(Lr.yTop)]),
+      ['CLEAR COVER (PROVIDED / REQUIRED)',cbdwIn(cc)+' / '+cbdwIn(S.cover.req)],
+      ['φM_n POSITIVE / NEGATIVE',fmt(B2.pos.phiMn,1)+' / '+fmt(B2.neg.phiMn,1)+' kip-ft']];
+    const t=table(nx,ny,['ITEM','VALUE'],rows,0.085*P);
+    D.text(L.txt,nx,ny-t.h-0.2*P,0.07*P,'VALUES FROM THE BEAM CAPACITY TAB (INPUT ECHO, SERVICEABILITY, SUMMARY "SECTION CAPACITIES").',0);
+    return {known:{w:bw/P,h:h/P,what:'concrete b_w × h = '+bw+' × '+h+' in'}};
+  },[8,12,16,24],['tabInputEcho','Input Echo']);
+
+  /* ---------- 2. TYPICAL BEAM ELEVATION ---------- */
+  sheet('elev','TYPICAL BEAM ELEVATION',P=>{
+    const th=0.09*P, sSp=S.stir.present?S.stir.s:null, info=govSmaxInfo();
+    const Lel=Math.max(4*h,sSp?10*sSp:4*h), nS=sSp?Math.floor((Lel-sSp)/sSp)+1:0, x0s=sSp?(Lel-(nS-1)*sSp)/2:0;
+    /* concrete with break lines at both ends (the length is not a span) */
+    const zig=x=>[[x,0],[x,h*0.42],[x-0.12*P,h*0.47],[x+0.12*P,h*0.53],[x,h*0.58],[x,h]];
+    D.line(L.conc,0,0,Lel,0); D.line(L.conc,0,h,Lel,h); if(tee) D.line(L.hid,0,h-hf,Lel,h-hf,D.ltype('HIDDEN'));
+    D.pline(L.brk,zig(0),false); D.pline(L.brk,zig(Lel),false);
+    G.forEach(Lr=>{ const y=h-Lr.yTop; D.line(L.bar,0.2*P,y-Lr.db/2,Lel-0.2*P,y-Lr.db/2); D.line(L.bar,0.2*P,y+Lr.db/2,Lel-0.2*P,y+Lr.db/2); });
+    if(sSp){ const ds=hk.ds, xs=[];
+      for(let i=0;i<nS;i++){ const x=x0s+i*sSp; xs.push(x); D.line(L.stir,x-ds/2,cc,x-ds/2,h-cc); D.line(L.stir,x+ds/2,cc,x+ds/2,h-cc); }
+      D.chainH(L.dim,xs,h+0.45*P,h);
+      D.dimH(L.dim,0,Lel,-0.95*P,0,'<> SHOWN (TYPICAL LENGTH, NOT A SPAN)');
+      const zt='ZONE 1 (THE ONLY ZONE): #'+S.stir.size+' CLOSED STIRRUPS @ '+cbdwIn(sSp)+' O.C.'+(info?';  s_max = '+cbdwIn(info.smax)+' ('+String(info.src).toUpperCase()+')'+(sSp>info.smax+1e-9?' — s > s_max: SEE DETAILING TAB':''):'');
+      D.text(L.txt,0,h+1.0*P,th,zt,0);
+    } else D.text(L.txt,0,h+0.6*P,th,'NO STIRRUPS SPECIFIED',0);
+    D.dimV(L.dim,0,h,-0.5*P,0);
+    G.forEach((Lr,j)=>{ const y=h-Lr.yTop; D.text(L.txt,Lel+0.35*P,y-0.04*P,th,Lr.n+'-#'+Lr.size+' '+layerName(Lr)+' (CONT.)',0); D.line(L.ldr,Lel+0.3*P,y,Lel-0.2*P,y); });
+    const sb=D.bbox();
+    D.text(L.txt,Lel/2,-1.5*P,0.16*P,'TYPICAL BEAM ELEVATION',1);
+    D.text(L.txt,Lel/2,-1.72*P,0.09*P,'SCALE '+cbdwScName(P)+';  THE TOOL CHECKS ONE CROSS SECTION: NO SPAN, SUPPORTS OR BAR CUTOFFS ARE MODELLED (SECTION A-A, SHEET 1)',1);
+    return {known:{w:Lel/P,what:'length shown '+cbdwIn(Lel)}};
+  },[12,16,24,48],['tabDetail','Detailing']);
+
+  /* ---------- 3. NOTES AND SCHEDULE ---------- */
+  const DV=cbdwDev();
+  sheet('notes','NOTES AND SCHEDULE',P=>{
+    const th=0.09*P, ACI=S.code==='ACI', notes=[
+      'DESIGN CODE: '+(ACI?'ACI 318-19':'AASHTO LRFD BRIDGE DESIGN SPECIFICATIONS, 10TH ED. (2024)')+' (STRENGTH DESIGN, ONE CROSS SECTION).',
+      "CONCRETE: f'c = "+fmt(S.mat.fc,2)+' KSI ('+Math.round(S.mat.fc*1000)+' PSI), λ = '+fmt(S.mat.lambda,2)+', MAX. AGGREGATE '+cbdwIn(S.mat.dagg)+'.',
+      'LONGITUDINAL REINFORCEMENT: f_y = '+fmt(S.mat.fy,0)+' KSI.',
+      'TRANSVERSE REINFORCEMENT: f_yt = '+fmt(S.mat.fyt,0)+' KSI (DESIGN VALUE USED: '+fmt(fytDesign(),0)+' KSI).',
+      'CLEAR COVER: '+cbdwIn(cc)+' TO THE STIRRUPS (REQUIRED '+cbdwIn(S.cover.req)+', '+String(S.cover.exposure||'').toUpperCase()+').',
+      'STANDARD HOOKS AND BENDS: '+(ACI?'ACI 318-19 25.3':'AASHTO 5.10.2')+'. STIRRUP HOOKS 135°, 6d_b'+(ACI?' (≥ 3")':'')+' EXTENSION.',
+      'BAR LENGTHS, CUTOFFS AND SPLICE LOCATIONS ARE NOT DETERMINED BY THIS TOOL (ONE CROSS SECTION).'];
+    D.text(L.txt,0,0.35*P,0.15*P,'GENERAL NOTES',0);
+    notes.forEach((s,j)=>D.text(L.txt,0,-(0.05+0.2*j)*P,th,(j+1)+'. '+s,0));
+    let y=-(0.3+0.2*notes.length)*P;
+    D.text(L.txt,0,y,0.15*P,'BAR SCHEDULE (ONE CROSS SECTION)',0); y-=0.15*P;
+    const rows=G.map((Lr,j)=>['L'+(j+1),'#'+Lr.size,String(Lr.n),layerName(Lr),'STRAIGHT (LENGTH BY SPAN)',fmt(Lr.As,2)]);
+    if(hk) rows.push(['S1','#'+S.stir.size,S.stir.legs+' LEGS','CLOSED STIRRUP @ '+cbdwIn(S.stir.s),'135° HOOKS '+cbdwIn(hk.ext)+', BEND Ø '+cbdwIn(hk.Di),fmt(S.stir.legs*REBAR[S.stir.size].a,2)+' (A_v)']);
+    const t1=table(0,y,['MARK','SIZE','NO.','LOCATION','SHAPE','A_s (IN²)'],rows,th,[5]); y-=t1.h+0.45*P;
+    D.text(L.txt,0,y,0.15*P,'DEVELOPMENT AND SPLICE LENGTHS (DEVELOPMENT & SPLICE TAB)',0); y-=0.15*P;
+    let hook=null;
+    if(!DV) D.text(L.txt,0,y-0.15*P,th,'NOT AVAILABLE HERE: OPEN THE SUITE (CONCRETE BEAM CAPACITY.HTML) AND THE DEVELOPMENT & SPLICE TAB.',0);
+    else if(DV.err) D.text(L.txt,0,y-0.15*P,th,'NOT SHOWN: THE DEVELOPMENT & SPLICE TAB HAS AN INPUT ERROR.',0);
+    else { const i=DV.inp, f=DV.f, A=f.AASHTO, sz=String(i.barSize), inLay=G.some(q=>String(q.size)===sz);
+      const r2=[['BAR','#'+sz+(inLay?'':' (NOT A SIZE OF THIS SECTION)'),'—'],['CODE',A?'AASHTO LRFD 10TH ED. 5.10.8':'ACI 318-19 25.4, 25.5','—'],
+        ["f'c / f_y",fmt(i.fc,0)+' / '+fmt(i.fy,0)+' PSI','—'],
+        ['TENSION DEVELOPMENT ℓ_d',cbdwReq(DV.t.ld),A?'5.10.8.2.1a':'25.4.2'],
+        ['STANDARD HOOK ℓ_dh (90°)',cbdwReq(DV.h.ldh),A?'5.10.8.2.4a':'25.4.3'],
+        ['COMPRESSION DEVELOPMENT ℓ_dc',cbdwReq(DV.c.ldc),A?'5.10.8.2.2a':'25.4.9'],
+        ['TENSION LAP SPLICE, CLASS '+String(i.tensClass||'B'),DV.lapNo?'NOT PERMITTED':cbdwReq(DV.ts.lst),A?'5.10.8.4.3a':'25.5.2'],
+        ['COMPRESSION LAP SPLICE',cbdwReq(DV.cs.lsc),A?'5.10.8.4.5a':'25.5.5']];
+      const t2=table(0,y,['ITEM','VALUE','REFERENCE'],r2,th,[1]); y-=t2.h;
+      D.text(L.txt,0,y-0.2*P,0.07*P,'LENGTHS ROUNDED UP TO 1/8" (THE TAB\'S VALUE IN BRACKETS), FOR THAT TAB\'S BAR AND INPUTS (c_b, K_tr, FACTORS): CHECK THEY MATCH THIS SECTION.',0);
+      /* the 90-degree standard hook of that bar, to scale, right of the tables */
+      const db=f.db, nb=parseInt(sz,10), Dm=(nb<=8?6:(nb<=11?8:10))*db, Rc=(A&&DV.h.R>0)?DV.h.R:Dm/2+db/2, ldh=DV.h.ldh, tail=12*db;
+      const hx=Math.max(t1.w,t2.w)+2.2*P, hy=-0.3*P, yo=hy-ldh, yc=yo+db/2;
+      barPath(L.bar,[{x1:hx,y1:hy,x2:hx,y2:yc+Rc},{a:1,c:[hx+Rc,yc+Rc],r:Rc,a0:180,a1:270},{x1:hx+Rc,y1:yc,x2:hx+Rc+tail,y2:yc}],db);
+      D.line(L.dim,hx-0.6*P,hy,hx+0.6*P,hy,D.ltype('DASHED')); D.text(L.txt,hx+0.65*P,hy-0.04*P,th,'CRITICAL SECTION',0);
+      D.dimV(L.dim,yo,hy,hx-0.7*P,hx-db/2,'ℓ_dh = '+cbdwReq(ldh));
+      D.dimH(L.dim,hx+Rc,hx+Rc+tail,yo-0.45*P,yo,'12d_b = <>');
+      D.text(L.txt,hx+Rc+tail+0.15*P,yc-0.04*P,th,'BEND Ø '+cbdwIn(A&&DV.h.Rentered?2*Rc-db:Dm)+(A&&DV.h.Rentered?' (ENTERED R)':' ('+(nb<=8?6:(nb<=11?8:10))+'d_b)'),0);
+      D.text(L.txt,hx,yo-1.1*P,0.12*P,'STANDARD 90° HOOK, #'+sz,0);
+      D.text(L.txt,hx,yo-1.3*P,0.075*P,'SCALE '+cbdwScName(P)+';  ℓ_dh TO THE OUTSIDE FACE OF THE BEND; '+(A?'AASHTO 5.10.2.1, TABLE 5.10.2.3-1':'ACI 318-19 TABLE 25.3.1'),0);
+      hook={w:tail/P};
+    }
+    return {known:hook?{w:hook.w,what:'hook tail 12 d_b'}:null};
+  },[4,8,12,16],['tabDetail','Detailing']);
+  SH.forEach((s,j)=>{ s.sheetEnt.s=SharedDxf.str((j+1)+' OF '+SH.length); });
+  return {D,S:SH,dev:DV};
+}
+function cbdwEsc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function buildDrawingsTab(pg){
+  const T=el('div'); pg.appendChild(T);
+  if(!window.SharedDxf){ T.appendChild(el('div','errBox','shared/dxf.js is not loaded: keep the shared folder next to this file.')); return; }
+  let B; try{ B=cbdwBuild(); }catch(e){ T.appendChild(el('div','errBox','The drawings could not be drawn: '+(e&&e.message))); return; }
+  CBDW.B=B;
+  let want=CBDW.cur; if(!want){ try{ want=localStorage.getItem(CBDW.key)||''; }catch(e){ want=''; } }
+  const cur=B.S.find(s=>s.id===want)||B.S[0]; CBDW.cur=cur.id;
+  const PD=(()=>{ try{ const P=window.parent; return P&&P!==window&&P.SharedDxf&&P.SharedDxf.printSheets?P.SharedDxf:SharedDxf; }catch(e){ return SharedDxf; } })();
+  T.innerHTML='<div class="btnRow"><label style="font-size:9pt">Sheet <select id="cbdwSheet">'+B.S.map((s,j)=>'<option value="'+s.id+'"'+(s===cur?' selected':'')+'>'+(j+1)+'. '+cbdwEsc(s.title)+'</option>').join('')+'</select></label> '+
+    '<button type="button" class="b" id="cbdwDxf">Download DXF ('+B.S.length+' sheets)</button> '+
+    '<button type="button" class="b" id="cbdwPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button> '+
+    '<button type="button" class="b" id="cbdwPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets ('+B.S.length+')</button></div>'+
+    '<div class="note">'+cbdwEsc(SharedDxf.PRINT_NOTE)+'</div>'+
+    '<div class="note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers CB-CONC, CB-REBAR, CB-STIRRUP, CB-DIMS, CB-TEXT, CB-LEADER, CB-TABLE, CB-TBLK, CB-BRDR, CB-BREAK, CB-HIDDEN. Title block: the project fields in the header (Project, Project No., Subject, Calculated By, Date, Checked By, Checked Date).'+
+    (B.dev?'':' The development and splice lengths come from the Development &amp; Splice tab of the suite: not available when this tab is opened on its own.')+'</div>'+
+    '<div class="note"><b>'+(B.S.indexOf(cur)+1)+'. '+cbdwEsc(cur.title)+'</b> · scale '+cbdwEsc(cur.scale)+(cur.over?' · <span style="color:var(--red-600)">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
+    '<div class="cbdwBox"></div><div class="note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>'+
+    '<table class="rt"><tr><th>No.</th><th>Sheet</th><th>Scale</th><th>Worked in</th></tr>'+B.S.map((s,j)=>'<tr data-cbdw="'+s.id+'" style="cursor:pointer'+(s===cur?';background:#eff6ff':'')+'"><td>'+(j+1)+'</td><td>'+cbdwEsc(s.title)+'</td><td>'+cbdwEsc(s.scale)+'</td><td><a href="#" data-cbdwgo="'+s.src[0]+'">'+cbdwEsc(s.src[1])+' tab</a></td></tr>').join('')+'</table>';
+  cbcWorkedIn(T,[{tab:"tabInputEcho",c:{card:"ieSchematic",name:"Section Schematic (to scale)"},txt:"section, bars, cover"},{tab:"tabDetail",c:{card:"detdStirS",name:"Maximum stirrup spacing"},txt:"s, s_max"}]);
+  SharedDxf.viewer(T.querySelector('.cbdwBox'),SharedDxf.sheetSVG(B.D,cur),{height:'62vh'});
+  const pick=id=>{ CBDW.cur=id; try{ localStorage.setItem(CBDW.key,id); }catch(e){} refresh(); };
+  T.querySelector('#cbdwSheet').addEventListener('change',e=>pick(e.target.value));
+  T.querySelectorAll('tr[data-cbdw]').forEach(tr=>tr.addEventListener('click',e=>{ if(e.target.closest('a')) return; pick(tr.dataset.cbdw); }));
+  T.querySelectorAll('a[data-cbdwgo]').forEach(a=>a.addEventListener('click',e=>{ e.preventDefault(); S.ui.tab=a.dataset.cbdwgo; autosave(); refresh(); }));
+  T.querySelector('#cbdwDxf').addEventListener('click',()=>{ const txt=B.D.toDXF({ltscale:1}), chk=SharedDxf.validate(txt);
+    if(!chk.ok){ alert('The DXF file failed its structure check:\n'+chk.errors.slice(0,8).join('\n')); return; }
+    SharedDxf.download(txt,String(S.proj.num||S.proj.name||'concrete_beam').replace(/[^\w.-]+/g,'_')+'_drawings.dxf'); });
+  const prt=list=>PD.printSheets(list.map(s=>({svg:SharedDxf.sheetSVG(B.D,s),title:s.title})),{paper:[CBDW.W,CBDW.H]});
+  T.querySelector('#cbdwPrint1').addEventListener('click',()=>prt([cur]));
+  T.querySelector('#cbdwPrintAll').addEventListener('click',()=>prt(B.S));
+}
+```
