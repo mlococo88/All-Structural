@@ -5462,7 +5462,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   sync off): results and saved data identical. Screenshots looked at (dialog at 1400 and 390 px, settings dialog).
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-05 — PR: claude/header-sf (SFHD: compact page header; title block and hand-off buttons moved to the Project input tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-sf (PR #810: https://github.com/mlococo88/All-Structural/pull/810) (SFHD: compact page header; title block and hand-off buttons moved to the Project input tab; display only, no result change)
 - **Engineer:** clean up the top of the page: the title-block inputs and the hand-off / project buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (markup moved, not copied: every id, `data-path`, `onclick` and handler is the same):
   - Header (anchor `<div id="sfdHdr">`; before: `<div style="display:flex;justify-content:space-between;align-items:flex-start">`):
