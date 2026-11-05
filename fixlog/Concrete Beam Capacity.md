@@ -3982,7 +3982,7 @@ Not affected:
 - **Check case:** default project, b_w blank.
   - Before: Report §3–§10, Beam Capacity results such as "Torsional capacity ≫1 FAIL", and the Results — Flexure lines.
   - After: §3 "Input error: no results" with "Beam width and depth must be positive."; the printed Report is 21 pages. The Summary says the same and links to §3.
-- **How verified (headless Chromium, origin/main b3505c0 vs branch):**
+- **How verified (headless Chromium, origin/main f913680 vs branch):**
   - Valid inputs: the Report text (screen and print box) is byte-identical to main in 5 cases (default, c2, c3, Include boxes off, no stirrups). Results and localStorage are identical.
   - Input errors in 4 cases (Beam Capacity b_w blank; ASD f_c,inv −5; Development & Splice f′c blank; Beam Capacity and Development & Splice together):
     - results identical to main;
