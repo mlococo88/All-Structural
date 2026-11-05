@@ -1293,19 +1293,25 @@ function solveBearing(P,ex,ey,B,L){
 }
 /* SFLR (2026-11-04): overturning about the 4 edges of a resultant r (r.verts, r.MaX, r.MaY), moved unchanged out of computeAll's
    ASD loop so the LRFD reference tables (Bearing / Stability, reference only) use the same code. */
+/* SFTB (2026-11-05, engineer): the applied pedestal moments and the shear couples V·(t + h) are bucketed TERM BY TERM about each edge
+   (r.maT: each f·M and each f·V·lev, signed for the edge, + = tips the footing over it): an overturning term adds to M_o, a resisting
+   one (|m|) to M_r. Before, they were netted into Ma (= ±MaY / ±MaX) and only the net was bucketed. e.app lists the terms; e.appR / e.appO
+   are their resisting / overturning sums; e.Ma (the net) is kept for display. */
 function sfdOTEdges(r,B,L){
- const edges=[];
- function edgeCalc(name,arm,Ma,armLabel){
+ const edges=[], T=r.maT||[];
+ function edgeCalc(name,arm,Ma,armLabel,ax,s){
   let Mr=0,Mo=0;const rows=[];
   r.verts.forEach(v=>{const a=arm(v);const mm=v.w*a;if(mm>=0)Mr+=mm;else Mo+=-mm;
    rows.push({src:v.src,w:v.w,arm:a,m:mm,bucket:mm>=0?'r':'o'});});
-  let appRow=null;
-  if(Math.abs(Ma)>1e-9){if(Ma>=0){Mo+=Ma;appRow={m:Ma,bucket:'o'};}else{Mr+=-Ma;appRow={m:-Ma,bucket:'r'};}}
-  edges.push({name,Mr,Mo,FS:Mo>1e-9?Mr/Mo:Infinity,rows,appRow,armLabel,Ma});}
- edgeCalc('+x (x=+B/2)',v=>B/2-v.x,r.MaY,'B/2 \u2212 x');
- edgeCalc('\u2212x (x=\u2212B/2)',v=>v.x+B/2,-r.MaY,'x + B/2');
- edgeCalc('+y (y=+L/2)',v=>L/2-v.y,r.MaX,'L/2 \u2212 y');
- edgeCalc('\u2212y (y=\u2212L/2)',v=>v.y+L/2,-r.MaX,'y + L/2');
+  const app=[];let appR=0,appO=0;
+  T.forEach(z=>{const mA=s*z.f*(ax==='x'?z.my:z.mx), mV=s*z.f*(ax==='x'?z.vx:z.vy)*z.lev;
+   [['M',mA],['V',mV]].forEach(([k,m])=>{if(Math.abs(m)>1e-12){app.push({src:z.src,k,m,bucket:m>=0?'o':'r'});if(m>=0)appO+=m;else appR+=-m;}});});
+  Mr+=appR;Mo+=appO;
+  edges.push({name,Mr,Mo,FS:Mo>1e-9?Mr/Mo:Infinity,rows,app,appR,appO,armLabel,Ma});}
+ edgeCalc('+x (x=+B/2)',v=>B/2-v.x,r.MaY,'B/2 \u2212 x','x',1);
+ edgeCalc('\u2212x (x=\u2212B/2)',v=>v.x+B/2,-r.MaY,'x + B/2','x',-1);
+ edgeCalc('+y (y=+L/2)',v=>L/2-v.y,r.MaX,'L/2 \u2212 y','y',1);
+ edgeCalc('\u2212y (y=\u2212L/2)',v=>v.y+L/2,-r.MaX,'y + L/2','y',-1);
  return edges;
 }
 /* ================= Vesic bearing capacity ================= */
@@ -2217,8 +2223,8 @@ function sfdMaRows(r){
 /* lever text of a shear-couple row: t + h = a + b = c (coupleLever = t + h when included), or 0 when excluded */
 function sfdLevTxt(w,fmt){return w.off?'0 (shear couple off)':'t + h = '+fmt(R.t)+' + '+fmt(w.lev-R.t)+' = '+fmt(w.lev);}
 /* SFOR (2026-11-05): the sfdMaRows terms that act about one overturning edge e of sfdOTEdges (an x-edge takes M_y and the V_x couples,
-   a y-edge M_x and the V_y couples), each signed as edgeCalc signs the lumped term: m = +MaY-term on +x, -MaY-term on -x, +MaX-term on +y,
-   -MaX-term on -y, so the rows sum to e.Ma (+ = tips the footing over that edge). Display only: e.Mr, e.Mo and e.FS are not recomputed. */
+   a y-edge M_x and the V_y couples), each signed as edgeCalc signs it (SFTB: term by term): m = +MaY-term on +x, -MaY-term on -x, +MaX-term on +y,
+   -MaX-term on -y, so the rows sum to e.Ma (+ = tips the footing over that edge); + rows are e.appO, - rows e.appR. Display only. */
 function sfdOTMaRows(r,e){
  const xe=/x/.test(e.name.split(' ')[0]), s=e.name.charAt(0)==='+'?1:-1, nz=v=>Math.abs(v)>1e-12;
  return sfdMaRows(r).filter(w=>w.k==='M'?nz(xe?w.my:w.mx):w.d===(xe?'x':'y')).map(w=>Object.assign({},w,{xe,m:s*(w.k==='M'?(xe?w.my:w.mx):w.M)}));
@@ -2829,7 +2835,7 @@ function renderStability(){
  b2.appendChild(sfdWorkedIn([['o-cb-weights','self-weights, EV, U (unfactored)'],lv?['o-cb-lrfd','\u03a3P, \u03a3H, \u03a3M (this combination\u2019s row)',sfdLrLab()]:['o-cb-asd','\u03a3P, \u03a3H, \u03a3M (this combination\u2019s row)']].concat(lv?[['o-st-lrfd','M<sub>o</sub>, M<sub>r</sub>, M<sub>r</sub>/M<sub>o</sub> (this combination\u2019s row)',['tab-stab','4.6 LRFD (factored) combinations']]]:[])));   /* D11 links */
  b2.appendChild(overturningSVG(go,oe,!!lv));
  b2.appendChild(eqBlock((lv?'Overturning ratio (factored) about edge ':'Overturning check about edge ')+oe.name,fsT,
-  (lv?'':fsS+' = ')+'\\frac{M_r}{M_o} = \\frac{\\sum W_i\\,a_i^{+} + |M_{app}^{-}|}{\\sum |W_i\\,a_i^{-}| + M_{app}^{+}}',
+  (lv?'':fsS+' = ')+'\\frac{M_r}{M_o} = \\frac{\\sum W_i\\,a_i^{+} + \\sum |M_{app}^{-}|}{\\sum |W_i\\,a_i^{-}| + \\sum M_{app}^{+}}',
   fsS+' = \\frac{'+f2(oe.Mr)+'}{'+f2(oe.Mo)+'}',
   fsS+' = \\mathbf{'+f2(oe.FS)+'}'+okM(oe.FS)));
  const et=document.createElement('table');et.className='tbl';
@@ -2839,7 +2845,7 @@ function renderStability(){
   if(e===oe)tr.style.fontWeight='bold';et.appendChild(tr);});
  b2.appendChild(et);
  // per-edge worked breakdown (hand-checkable): each weight's arm, moment, and bucket
- b2.appendChild(el('p','note','Detailed breakdown per edge \u2014 each permanent/applied action, its moment arm to that edge, the resulting moment (W\u00d7arm), and whether it resists (M\u1D63) or overturns (M\u2092). Moments about each edge are taken with arm measured from the tipping edge. Sign convention: an action whose moment stabilizes about the edge is resisting; one that tips the footing over the edge is overturning. The applied pedestal moments and the shear couples V\u00b7(t + h) are listed per pedestal and load type (factor \u00d7 magnitude), their moment signed + where it tips the footing over that edge; they enter once, as their net value (subtotal M_app,net), in M\u2092 when positive and in M\u1D63 when negative, so a row acting against the net shows negative in that column.'));
+ b2.appendChild(el('p','note','Detailed breakdown per edge \u2014 each permanent/applied action, its moment arm to that edge, the resulting moment (W\u00d7arm), and whether it resists (M\u1D63) or overturns (M\u2092). Moments about each edge are taken with arm measured from the tipping edge. Sign convention: an action whose moment stabilizes about the edge is resisting; one that tips the footing over the edge is overturning. The applied pedestal moments and the shear couples V\u00b7(t + h) are listed per pedestal and load type (factor \u00d7 magnitude), their moment signed + where it tips the footing over that edge. Each one is bucketed on its own: a term that tips the footing over the edge adds to M\u2092, one that resists adds its magnitude to M\u1D63 (term by term, not netted first). The subtotal row gives their net M_app,net and the sum in each column.'));
  go.edges.forEach(e=>{
   const isGov=(e===oe);
   /* SFID (2026-11-05): one id per edge (o-st-ot-px, -mx, -py, -my). The old id stripped the sign, so +x / -x shared o-st-ot-xxB2
@@ -2855,16 +2861,16 @@ function renderStability(){
    cells.forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;if(k>=4)td.style.color=(k===4?'#1b5e20':'#b71c1c');tr.appendChild(td);});
    t.appendChild(tr);});
   // SFOR: applied moments and shear couples, itemised per pedestal and load type (sfdOTMaRows, from r.maT; they were one row
-  // "Applied M + V·h couple"). The rows are netted to e.Ma and bucketed once, as edgeCalc does: in the bucket column a row
-  // acting against the net shows negative. The subtotal row is the old lumped row.
-  const MA=sfdOTMaRows(go.r,e), bk=e.appRow?e.appRow.bucket:null, D='\u2013';
+  // "Applied M + V·h couple"). SFTB: each row in its own bucket, as edgeCalc now buckets them (term by term): + -> M_o, - -> |m| to M_r.
+  // The subtotal row gives the net (e.Ma) and the two bucket sums e.appR / e.appO.
+  const MA=sfdOTMaRows(go.r,e), D='\u2013';
   const maRow=(cells,st)=>{const tr=document.createElement('tr');if(st)Object.assign(tr.style,st);
    cells.forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;td.style.fontStyle='italic';if(k===2)td.style.whiteSpace='nowrap';if(k>=4)td.style.color=(k===4?'#1b5e20':'#b71c1c');tr.appendChild(td);});
    t.appendChild(tr);};
-  MA.forEach(w=>{const z=w.z, bv=bk==='o'?w.m:-w.m, bc=[bk==='r'?f2(bv):D,bk==='o'?f2(bv):D];
+  MA.forEach(w=>{const z=w.z, nzm=Math.abs(w.m)>1e-12, bc=[nzm&&w.m<0?f2(-w.m):D,nzm&&w.m>0?f2(w.m):D];
    if(w.k==='M')maRow([z.src+' applied M'+(w.xe?'\u1D67':'\u2093'),f2(z.f)+' \u00d7 '+f2(w.xe?z.my:z.mx),D,f2(w.m)].concat(bc));
    else maRow([z.src+' shear V'+(w.d==='x'?'\u2093':'\u1D67')+' \u00b7 (t + h)',f2(z.f)+' \u00d7 '+f2(w.v)+' = '+f2(w.H),sfdLevTxt(w,f2),f2(w.m)].concat(bc));});
-  if(MA.length||e.appRow)maRow(['Subtotal: applied M + shear couples (M_app,net)','','',f2(e.Ma),bk==='r'?f2(Math.abs(e.appRow.m)):D,bk==='o'?f2(Math.abs(e.appRow.m)):D],MA.length?{borderTop:'1px solid #333'}:null);
+  if(MA.length)maRow(['Subtotal: applied M + shear couples (net M_app,net; per bucket)','','',f2(e.Ma),e.appR>0?f2(e.appR):D,e.appO>0?f2(e.appO):D],{borderTop:'1px solid #333'});
   // totals row
   const trT=document.createElement('tr');trT.style.fontWeight='bold';trT.style.borderTop='2px solid #333';
   ['Totals','','','',f2(e.Mr),f2(e.Mo)].forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;if(k>=4)td.style.color=(k===4?'#1b5e20':'#b71c1c');trT.appendChild(td);});
@@ -3004,9 +3010,9 @@ function sfdLrStabCard(T){
  b.appendChild(sfdWorkedIn([['o-cb-lrfd','P<sub>u</sub>, H, M (each combination\u2019s row)',sfdLrLab()],['o-st-ot','overturning sums (same procedure)'],['o-st-slide','sliding (same procedure)']]));
  const g=X.gO;
  if(g){const oe=g.ot;
-  const sum=bk=>{const t=oe.rows.filter(z=>z.bucket===bk&&Math.abs(z.m)>1e-12).map(z=>f2(Math.abs(z.w))+'\\cdot'+f3(Math.abs(z.arm)));if(oe.appRow&&oe.appRow.bucket===bk)t.push(f2(oe.appRow.m));return t.length?t.join(' + '):'0';};
+  const sum=bk=>{const t=oe.rows.filter(z=>z.bucket===bk&&Math.abs(z.m)>1e-12).map(z=>f2(Math.abs(z.w))+'\\cdot'+f3(Math.abs(z.arm)));(oe.app||[]).filter(z=>z.bucket===bk).forEach(z=>t.push(f2(Math.abs(z.m))));return t.length?t.join(' + '):'0';};
   b.appendChild(eqBlock('Overturning ratio (factored) \u2014 '+g.a.cb.name+', edge '+oe.name,'arm = '+oe.armLabel+'; ratio only, reference',
-   '\\frac{M_r}{M_o},\\quad M_r = \\sum_{W_i a_i \\ge 0} W_i a_i'+(oe.appRow&&oe.appRow.bucket==='r'?' + |M_{app}|':'')+',\\quad M_o = \\sum_{W_i a_i < 0} |W_i a_i|'+(oe.appRow&&oe.appRow.bucket==='o'?' + M_{app}':''),
+   '\\frac{M_r}{M_o},\\quad M_r = \\sum_{W_i a_i \\ge 0} W_i a_i'+(oe.appR>0?' + \\sum |M_{app}^{-}|':'')+',\\quad M_o = \\sum_{W_i a_i < 0} |W_i a_i|'+(oe.appO>0?' + \\sum M_{app}^{+}':''),
    'M_r = '+sum('r')+' = '+f2(oe.Mr)+',\\quad M_o = '+sum('o')+' = '+f2(oe.Mo),
    '\\frac{M_r}{M_o} = \\frac{'+f2(oe.Mr)+'}{'+f2(oe.Mo)+'} = '+f2(oe.FS)+'\\quad(6|e_x|/B + 6|e_y|/L = '+f3(g.ik)+')'));
  }else b.appendChild(el('p','note','No combination has an overturning moment about any edge.'));
@@ -3485,9 +3491,9 @@ function sfrModel(){
   if(isFinite(R.govSlx.FSslx))st.push(...sl(R.govSlx,'x',R.govSlx.FSslx,R.govSlx.r.Hx,R.PpX));
   if(isFinite(R.govSly.FSsly))st.push(...sl(R.govSly,'y',R.govSly.FSsly,R.govSly.r.Hy,R.PpY));
   if(isFinite(R.govSlr.FSslr))st.push(...sl(R.govSlr,'r',R.govSlr.FSslr,R.govSlr.Hres,R.govSlr.PpR));
-  const ot=R.govOT.otMin, otT=(b)=>{const t=(ot.rows||[]).filter(z=>z.bucket===b&&Math.abs(z.m)>1e-12).map(z=>sfrN(Math.abs(z.w))+'\\cdot'+sfrN(Math.abs(z.arm),3));if(ot.appRow&&ot.appRow.bucket===b)t.push(sfrN(ot.appRow.m));return t.length?t.join(' + '):'0';};   /* SFPR (review E2) */
-  const otS=[S({id:'Mr',label:'Resisting moment about edge '+ot.name+', '+R.govOT.cb.name+' (W_i: the vertical actions of the combination, as in the resultant table; arm a_i = '+ot.armLabel+'; the applied moments and shear couples enter once, as their net value M_app,net = '+sfrN(Math.abs(ot.Ma||0))+' kip-ft, on the side they act)',sym:'M_{r}',eq:'\\sum_{W_{i} a_{i} \\ge 0} W_{i} a_{i}'+(ot.appRow&&ot.appRow.bucket==='r'?' + |M_{app,net}|':''),sub:otT('r'),value:ot.Mr,unit:'kip-ft'}),
-   S({id:'Mo',label:'Overturning moment',sym:'M_{o}',eq:'\\sum_{W_{i} a_{i} < 0} |W_{i} a_{i}|'+(ot.appRow&&ot.appRow.bucket==='o'?' + M_{app,net}':''),sub:otT('o'),value:ot.Mo,unit:'kip-ft'}),
+  const ot=R.govOT.otMin, otT=(b)=>{const t=(ot.rows||[]).filter(z=>z.bucket===b&&Math.abs(z.m)>1e-12).map(z=>sfrN(Math.abs(z.w))+'\\cdot'+sfrN(Math.abs(z.arm),3));(ot.app||[]).filter(z=>z.bucket===b).forEach(z=>t.push(sfrN(Math.abs(z.m))));return t.length?t.join(' + '):'0';};   /* SFPR (review E2) */
+  const otS=[S({id:'Mr',label:'Resisting moment about edge '+ot.name+', '+R.govOT.cb.name+' (W_i: the vertical actions of the combination, as in the resultant table; arm a_i = '+ot.armLabel+'; each applied moment and shear couple is bucketed on its own, signed for this edge: resisting terms in M_r, overturning terms in M_o; their net is '+sfrN(ot.Ma||0)+' kip-ft, + overturning)',sym:'M_{r}',eq:'\\sum_{W_{i} a_{i} \\ge 0} W_{i} a_{i}'+(ot.appR>0?' + \\sum |M_{app}^{-}|':''),sub:otT('r'),value:ot.Mr,unit:'kip-ft'}),
+   S({id:'Mo',label:'Overturning moment',sym:'M_{o}',eq:'\\sum_{W_{i} a_{i} < 0} |W_{i} a_{i}|'+(ot.appO>0?' + \\sum M_{app}^{+}':''),sub:otT('o'),value:ot.Mo,unit:'kip-ft'}),
    S({id:'FS',label:'Overturning factor of safety',sym:'FS_{OT}',eq:'\\frac{M_{r}}{M_{o}}',sub:'\\frac{'+sfrN(ot.Mr)+'}{'+sfrN(ot.Mo)+'}',value:ot.FS,unit:'',d:2,note:R.otGate?'':'reported only (the overturning FS does not gate the result; input)'})];
   if(R.otGate&&isFinite(ot.FS))otS.push(S({id:'DC',label:'Demand / capacity (target FS '+sfrN(FSot)+')',sym:'D/C',eq:'\\frac{FS_{target}}{FS_{OT}}',sub:'\\frac{'+sfrN(FSot)+'}{'+sfrN(ot.FS)+'}',value:FSot/ot.FS,unit:'',d:3,ok:ot.FS>=FSot-1e-9}));
   const T=[{title:'Sliding resistance parameters',ref:'',steps:fr},{title:'Sliding',ref:'FS target '+sfrN(FSsl),steps:st},{title:'Overturning (governing edge)',ref:'arm = '+ot.armLabel,steps:otS}];
@@ -3946,9 +3952,9 @@ function sfdLrReport(M){
    {type:'table',wide:true,head:['Combination','H_x (kip)','H_y (kip)','H (kip)','N = max(P_u, 0) (kip)','μN (kip)','P_p,R (kip)','(μN + P_p,R)/H (ratio)'],
     rows:X.rows.map(z=>({cells:[z.a.cb.name,c(z.r.Hx),c(z.r.Hy),c(z.H),c(z.N),c(z.muN),c(z.PpR),z.H>1e-9?c(z.sl):'– (H = 0)'],cls:gv(z,X.gS)}))}];
   const st=[],g=X.gO,s=X.gS;
-  if(g){const oe=g.ot,sum=bk=>{const t=oe.rows.filter(z=>z.bucket===bk&&Math.abs(z.m)>1e-12).map(z=>sfrN(Math.abs(z.w))+'\\cdot'+sfrN(Math.abs(z.arm),3));if(oe.appRow&&oe.appRow.bucket===bk)t.push(sfrN(oe.appRow.m));return t.length?t.join(' + '):'0';};
-   st.push(S({id:'Mr',label:'Resisting moment about edge '+oe.name+', '+g.a.cb.name+' (smallest M_r/M_o; arm a_i = '+oe.armLabel+')',sym:'M_{r}',eq:'\\sum_{W_{i} a_{i} \\ge 0} W_{i} a_{i}'+(oe.appRow&&oe.appRow.bucket==='r'?' + |M_{app,net}|':''),sub:sum('r'),value:oe.Mr,unit:'kip-ft'}),
-    S({id:'Mo',label:'Overturning moment',sym:'M_{o}',eq:'\\sum_{W_{i} a_{i} < 0} |W_{i} a_{i}|'+(oe.appRow&&oe.appRow.bucket==='o'?' + M_{app,net}':''),sub:sum('o'),value:oe.Mo,unit:'kip-ft'}),
+  if(g){const oe=g.ot,sum=bk=>{const t=oe.rows.filter(z=>z.bucket===bk&&Math.abs(z.m)>1e-12).map(z=>sfrN(Math.abs(z.w))+'\\cdot'+sfrN(Math.abs(z.arm),3));(oe.app||[]).filter(z=>z.bucket===bk).forEach(z=>t.push(sfrN(Math.abs(z.m))));return t.length?t.join(' + '):'0';};
+   st.push(S({id:'Mr',label:'Resisting moment about edge '+oe.name+', '+g.a.cb.name+' (smallest M_r/M_o; arm a_i = '+oe.armLabel+')',sym:'M_{r}',eq:'\\sum_{W_{i} a_{i} \\ge 0} W_{i} a_{i}'+(oe.appR>0?' + \\sum |M_{app}^{-}|':''),sub:sum('r'),value:oe.Mr,unit:'kip-ft'}),
+    S({id:'Mo',label:'Overturning moment',sym:'M_{o}',eq:'\\sum_{W_{i} a_{i} < 0} |W_{i} a_{i}|'+(oe.appO>0?' + \\sum M_{app}^{+}':''),sub:sum('o'),value:oe.Mo,unit:'kip-ft'}),
     S({id:'rat',label:'Ratio (reference, not an FS check)',sym:'M_{r}/M_{o}',eq:'',sub:'\\frac{'+sfrN(oe.Mr)+'}{'+sfrN(oe.Mo)+'}',value:oe.FS,unit:'',d:2,note:'6|e_x|/B + 6|e_y|/L = '+sfrN(g.ik,3)}));}
   if(s)st.push(S({id:'sl',label:'Sliding ratio, '+s.a.cb.name+' (smallest; reference, no resistance factor)',sym:'(\\mu N + P_{p,R})/H',eq:'\\frac{\\mu \\max(P_{u},0) + P_{p,R}}{\\sqrt{H_{x}^{2} + H_{y}^{2}}}',sub:'\\frac{'+sfrN(R.mu,3)+'\\cdot'+sfrN(s.N)+' + '+sfrN(s.PpR)+'}{'+sfrN(s.H)+'}',value:s.sl,unit:'',d:2}));
   if(st.length)items.push({type:'steps',scope:'lrs',steps:st,title:'Worked (reference only)'});
@@ -7234,7 +7240,7 @@ manPart("p4b","4B. Bearing & Stability",[
 {eq:"q_{ult}=cN_c s_c d_c i_c+qN_q s_q d_q i_q+\\tfrac12\\gamma_{ef}B_{ef}N_\\gamma s_\\gamma d_\\gamma i_\\gamma"},
 {p:"N-factors per Vesi&cacute;/Reissner/Prandtl; shape and depth factors per Vesi&cacute; (k = D<sub>f</sub>/B&prime; capped, arctan beyond; depth factors only when the Depth factors option is On, else 1.0); inclination factors with m on B&prime;/L&prime;, interpolated by load direction; groundwater case 3 corrections on q and &gamma;<sub>ef</sub>. Every factor is substituted numerically in report &sect;3.3 with its reference. q<sub>max</sub> from the linear distribution is still reported \u2014 it feeds the structural design \u2014 but the geotechnical adequacy statement uses the effective-area value, per the method\u2019s derivation."},
 {h:"4B.3 Overturning"},
-{p:"Evaluated about <b>all four edges</b> for <b>every</b> service combination. For each edge, each vertical action contributes W&middot;(arm to that edge) to M<sub>r</sub>; applied moments and V&middot;(t+h) couples contribute to M<sub>r</sub> or M<sub>o</sub> according to their sign about that edge; buoyancy is destabilising. FS = M<sub>r</sub>/M<sub>o</sub>; the dashboard reports the minimum over edges and combinations. The report prints the complete per-action table for each edge \u2014 the same table you would build by hand."},
+{p:"Evaluated about <b>all four edges</b> for <b>every</b> service combination. For each edge, each vertical action contributes W&middot;(arm to that edge) to M<sub>r</sub>; each applied moment and each V&middot;(t+h) couple contributes, on its own (term by term, not netted first), to M<sub>r</sub> or M<sub>o</sub> according to its sign about that edge; buoyancy is destabilising. FS = M<sub>r</sub>/M<sub>o</sub>; the dashboard reports the minimum over edges and combinations. The report prints the complete per-action table for each edge \u2014 the same table you would build by hand."},
 {key:"Bracketing matters more than the edge arithmetic: the governing overturning case is almost always a min-dead combination (0.6D+0.6W service). If your comparison software checks only nominal dead, expect it to report higher FS."},
 {h:"4B.4 Sliding"},
 {eq:"FS_{sl}=\\frac{\\mu\\,\\Sigma P+P_p}{|\\Sigma H|}\\quad\\text{per direction},\\qquad P_p=f_p\\cdot\\tfrac12 K_p\\gamma D_f^2\\,w_{face},\\;K_p=\\tan^2(45+\\tfrac{\\varphi}{2})"},
