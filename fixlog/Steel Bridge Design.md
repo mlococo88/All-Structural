@@ -22601,7 +22601,7 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 - **Open items:** the bearing stiffener (`bsRenderSummary`) and field splice (`renderSummary`) summaries sort without an isFinite filter; no NaN
   path was found in their checks, and the ckNew guard now marks any NaN item there as an error. Not changed.
 
-## 2026-11-05 — PR: claude/ghsync-sbd (GHS2: Saved projects dialog with GitHub sync of the saved projects; storage only, no result change)
+## 2026-11-05 — PR: claude/ghsync-sbd (PR #826: https://github.com/mlococo88/All-Structural/pull/826) (GHS2: Saved projects dialog with GitHub sync of the saved projects; storage only, no result change)
 - **Engineer:** extend GitHub sync (`shared/github-sync.js`; setup `docs/github-sync-setup.md`) to Steel Bridge Design (the earlier "do not modify" rule was withdrawn by the engineer for this task, 2026-11-05).
 - **Where (GirderDetail main page only; the `pl-src` and `st-src` blocks are not touched):**
   - After `<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>`: new `shared/projects.js`, `shared/projects-ui.js`, `shared/github-sync.js` (anchor `GHS2 (2026-11-05): "Saved projects…" dialog`).
