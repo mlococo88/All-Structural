@@ -1870,7 +1870,7 @@ function rbrDashColl(v,save){
 - **How verified:** headless Chromium, origin/main vs branch, 5 cases: calculations, `rbrModel()` identical; the only text difference is the title. `check-syntax`, `phone-layout --tool cbc,aci`, `project-library` pass.
 - **Other copies:** `Concrete Beam Capacity.html` (suite-frame-dev), same edit; see its fixlog (CBRL / RBDT).
 
-## 2026-11-05 — PR: claude/cbc-p3-inputs (RBCM: inputs used by one code only are hidden in the other code mode; RBIE: required inputs marked, "Input error: no results" instead of NaN; kept in step with the Development & Splice tab of Concrete Beam Capacity.html)   [behaviour change: when results are shown; no formula change]
+## 2026-11-05 — PR: claude/cbc-p3-inputs, PR #794: https://github.com/mlococo88/All-Structural/pull/794 (RBCM: inputs used by one code only are hidden in the other code mode; RBIE: required inputs marked, "Input error: no results" instead of NaN; kept in step with the Development & Splice tab of Concrete Beam Capacity.html)   [behaviour change: when results are shown; no formula change]
 
 ### RBCM. Inputs by code mode   [display only]
 - **Problem (audit item 13):** in ACI mode the AASHTO-only inputs β_t (`betaT`, 5.10.8.2.1c) and the bend radius R (`hookR`, 5.10.8.2.4a) were shown. In AASHTO mode the ACI-only inputs were shown: hook location ψ_o (`hookLoc`, Table 25.4.3.2), compression ψ_r (`psiRc`, Table 25.4.9.3) and the developed-bar c-c spacing (`barSpc`, 25.4.2.2). Each is read by its own code branch only (`computeFactors`, `calcHook`, `calcComp`, `ktrHSCheck`).

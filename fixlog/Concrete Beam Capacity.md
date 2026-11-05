@@ -3456,7 +3456,7 @@ function rbrDashColl(v,save){
   }
 ```
 
-## 2026-11-05 — PR: claude/cbc-p3-inputs (Phase 3 input layout: CBIE / ASIE required inputs marked, "Input error: no results" instead of NaN; RBCM inputs by code mode in Development & Splice; RBIE required inputs in Development & Splice; §6 links on the Visuals captions and the ASD "From Beam Capacity" table)   [behaviour change: when results are shown; no formula change]
+## 2026-11-05 — PR: claude/cbc-p3-inputs, PR #794: https://github.com/mlococo88/All-Structural/pull/794 (Phase 3 input layout: CBIE / ASIE required inputs marked, "Input error: no results" instead of NaN; RBCM inputs by code mode in Development & Splice; RBIE required inputs in Development & Splice; §6 links on the Visuals captions and the ASD "From Beam Capacity" table)   [behaviour change: when results are shown; no formula change]
 
 Engineer request (2026-11-05, Phase 3 of the concrete beam suite update, display / workflow only). The edits to the Development & Splice frame are the same as in `ACI Rebar Development Length.html` (CLAUDE.md §3) and are logged in full in `fixlog/ACI Rebar Development Length.md` (RBCM, RBIE). Results are unchanged whenever the inputs are valid.
 
