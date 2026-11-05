@@ -2869,6 +2869,7 @@ function asdDashColl(v,save){
   asdDashPlace();
 })();
 ```
+
 ## 2026-11-05 — PR: claude/cbc-asreq-from-beam (CBAR-1: "From Beam Capacity" button for A_s,req / A_s,prov in the Development & Splice excess-reinforcement inputs; display / workflow only, no result change)
 
 ### CBAR-1. Development & Splice: A_s,req and A_s,prov filled from Beam Capacity   [workflow] [no result change]
