@@ -5173,3 +5173,52 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - New fields: `phiPnFtg`, `brgGov`. `phiBgate`, `ldcReq` and every pass/fail status are unchanged on all cases.
   - 0 console / KaTeX errors. `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Card 5.6 (default) checked by eye.
 - **Saved data:** no change. **Other copies:** none.
+
+## 2026-11-05 — PR: claude/sf-toscale — Every geometric drawing on the result tabs to scale: one scale across and up for the footing, t and the pedestals (SFTS; display only, no result change)
+
+### SFTS. Drawings to scale (engineer, 2026-11-05: "review all graphics in the output tabs and make sure each is drawn to scale"; extended to the input side, the Report copies and the User Manual)
+- **Audit (headless Chromium, rendered px per ft measured from the drawn rectangles, across vs up; ratio 1.00 = to scale).** Projects: default (10 × 8 × 2.5 ft), Seymour (5 × 13 × 2 ft, pedestals 7.25 ft), cases.json `rev` (5 × 13), and a wide check case (16 × 5 × 1.5 ft, pedestals 5 ft).
+
+  | Graphic | Before (default / Seymour / wide) | After |
+  |---|---|---|
+  | 1.1 Plan schematic (SVG) | 1.00 / 1.00 / 1.00, pedestals true | 1.00 (unchanged; a plan with L > 1.5 B may now be 560 px tall, was 420) |
+  | 1.2 Section schematic (SVG) | 1.00 (B, t, D_f, pedestal b × h) | unchanged |
+  | 3.2 Base pressure sections x / y (SVG) | t: 0.83, 0.67 / 0.52, 1.00 / 1.00, 0.69 (t capped at 70 px); pedestals a fixed 12 px stub: h at 0.03–0.18 | 1.00 (t and full pedestal h); pressure ordinates to their own scale with a ksf scale bar |
+  | 3.2 Heat map (Plotly, x vs y in ft) | 1.00 (`scaleanchor`) | unchanged |
+  | 3.2a Contact-zone map (canvas) | 0.95 / 0.94 / 0.98 (plot height 0.72·L/B·440 px) | 1.00 (pixel scan ±1 px) |
+  | 4.3 Overturning free-body (SVG, title said "to scale") | t: 0.87 / 1.00 / 1.00 (capped at 90 px); pedestals a fixed 14 px stub: 0.06–0.17 | 1.00; weight-arrow lengths stay indicative (labelled) |
+  | 5.2 / 5.3 Flexure plan (SVG) | 1.00 | unchanged (may grow to 380 px tall when the plan is long across the bending direction; span dimension clear of the title) |
+  | 5.2 / 5.3 One-way shear elevation (SVG, title said "to scale") | t 1.00 (cap 120 px not reached); pedestals a fixed 18 px stub: 0.05–0.25 | 1.00 |
+  | 5.5 Punching plan (SVG) | 1.00 | unchanged |
+  | 5.5 Punching elevation (SVG) | depth at 0.50 of the width scale; "45°" lines at 1.15–1.29 run/rise; d drawn over the full slab | 1.00; 45° lines over d; slab = t; pedestal a stub cut by a break line (true width) |
+  | Plotly DCR, FS, V/M, P–M charts | not lengths on both axes (P–M already equal-aspect in k-ft) | unchanged |
+  | Report copies | clones of the tab drawings with a viewBox (aspect kept, 1.00) | follow the tabs |
+  | 3D view; Drawings | camera aspect follows the canvas; DXF full size, viewBox `meet` | confirmed, unchanged |
+  | Input panel, User Manual | no geometric figures | — |
+
+- **Where** (all in `Spread Footing.html`):
+  - New helpers before `function planSVG(){`: `SFTS_GH` (300 px, the most an elevation's footing + pedestal geometry may take), `sftsPedH()` (tallest pedestal), `sftsNice()`, `sftsScaleNote(W,y,sc,qsc,txt)` (a ft scale bar, and a ksf bar for pressure ordinates).
+  - `pressureBlockSVG` → `profile()` (anchor `const tPx=R.t*sc;                         // thickness at the same scale`).
+    - Before: `const sc=(W-padL-padR)/B; … const tPx=Math.min(R.t*sc, 70); const slabTop=padT+16, …`; pedestal `height="12"`.
+    - After: `const hp=sftsPedH(), sc=Math.min((W-padL-padR)/B, SFTS_GH/(R.t+hp));` the footing centred (`X0`), `tPx=R.t*sc`, `slabTop=padT+16+hp*sc`, pedestal height `p.h*sc`; the end q values beside the ordinates; `sftsScaleNote(W,H-22,sc,qsc)`; `H=slabBot+134` (was +120).
+  - `overturningSVG` (anchor `const nArm=go.r.verts`): same scale rule; `slabTop=Math.max(150,weightTop+24+hp*sc)`; pedestal height `p.h*sc` (was 14); `H=Math.max(slabBot+124,slabBot+16+nArm*12+50)` so every stacked arm row and the legend fit (was `slabBot+110`); scale line "arrow lengths indicative".
+  - `onewaySVG` (anchor `SFTS (2026-11-05): one scale for span, t and pedestal h (geometry at most SFTS_GH px tall; was: t capped at 120 px`): same scale rule; `slabTop=Math.max(96,40+hp*sc)`; pedestal height `p.h*sc` (was 18); t dimension at the footing edge (`X0-10`); "shear area" label inside the slab.
+  - `punchingSVG` elevation (anchor `SFTS (2026-11-05): elevation at one scale`):
+    - Before: `const esc=(W-2*pad)/(c1*1.5); … ebot=etop+Math.max(34,tin*esc*0.5);` lines from the pedestal faces to ±c₁/2 at the slab bottom.
+    - After: `const esc=Math.min((W-2*pad)/((c1+d)*1.1), 150/tin); … ebot=etop+tin*esc, edd=etop+d*esc, EH=ebot+64;` 45° lines from the faces to depth d, critical section at ±c₁/2 over d, d and t labelled inside the drawing (the d label used to be cut off at the left edge), pedestal label beside the stub (it was under the P_u arrow).
+  - `contactZoneMap` (anchor `const cvW=440, scU=`):
+    - Before: `const cvW=440,cvH=Math.round(440*L/B*0.72)+64; … const scX=plotW/B, scY=plotH/L;`
+    - After: `scU=Math.min((cvW-padL-padR)/B, 640/L)`, `cvH=Math.round(L*scU)+padT+padB`, `scX=scY=scU`.
+  - `planSVG`: `(420-2*pad)/L` → `((L>1.5*B?560:420)-2*pad)/L`. `flexureSVG`: `padT` 52 → 62, `scY=(other>1.5*B?380:182)/other`, `H=Math.max(300,padT+padB+other*sc)` (was 290 fixed).
+- **Decisions (pending engineer review):**
+  - Elevations show the pedestals at full height. When the footing + tallest pedestal would exceed 300 px at the width scale, the whole elevation is drawn at the smaller scale (narrower), not distorted. Seymour x-section: 32.4 px/ft (was 67.2 across, 35 up).
+  - The punching elevation is a local detail in inches: the pedestal is shown cut by a break line (true width, height not drawn), and the slab is a strip with the footing's ends not shown.
+  - Load arrows (section 1.2, overturning weights) and pressure ordinates are quantities, not geometry: they keep their own lengths, labelled ("arrow lengths indicative"; ksf scale bar).
+  - The 3.2 heat map is already equal-aspect and is not changed (another PR is adding corner labels to it).
+  - The contact-zone canvas is screen only (not in the Report), as before.
+- **Check case (default, 3.2 x-section):** B = 10 ft, t = 2.5 ft, pedestals 1.5 × 2 ft. Width scale (440 − 104)/10 = 33.6 px/ft; height limit 300/(2.5 + 2) = 66.7 px/ft; sc = 33.6 px/ft. Slab 336 × 84 px (before 336 × 70); pedestals 50.4 × 67.2 px (before 50.4 × 12).
+- **How verified:**
+  - Results: headless Chromium, origin/main vs the branch, deep diff of `R` and `P2` plus the dashboard and Report text on 12 cases (cases.json + Seymour + wide): 0 differences, 0 console / KaTeX errors.
+  - Scale: rendered px per ft measured across and up for every drawing on 4 projects (table above); Report figures: rendered box vs viewBox 1.00.
+  - `node tests/check-syntax.mjs`, `tests/smoke/spread-footing-scroll.mjs`, `tests/smoke/phone-layout.mjs --tool sf` pass. Before/after screenshots of each changed drawing looked at (default, Seymour).
+- **Saved data:** none. **Other copies:** none.
