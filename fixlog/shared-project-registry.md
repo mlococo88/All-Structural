@@ -6,7 +6,7 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
 ## 2026-11-05 — PR: claude/home-saved-projects (PR #818: https://github.com/mlococo88/All-Structural/pull/818) (HSP PR 1) — created (new file): where each tool keeps its saved-project list   [read only; no result change]
 - **Why:** engineer request 2026-11-05: a "Saved projects" view on the home page (`tools.html`) across the apps. The home page cannot run a
   tool's code, so it needs to know, per tool, the list key and how the tool reads the saved time.
-- **What:** one entry per tool with a saved-project list and GitHub sync (15 at 2026-11-05: the 14 of #811 and the Abutment Calculator, #815, whose own Projects dialog is newest first by `ts`): `tool` / `label` (the tool's `ctx.cloud`),
+- **What:** one entry per tool with a saved-project list and GitHub sync (16 at 2026-11-05: the 14 of #811, the Abutment Calculator (#815) and Elastomeric Bearing Design (#817), whose own Projects dialogs are newest first by `ts`): `tool` / `label` (the tool's `ctx.cloud`),
   `name` (shown), `href` (page to open; the rebar calculator opens `Concrete%20Beam%20Capacity.html#dev`), `key` (the tool's own list key),
   `time` / `sort` (the tool's own `mapStore` options). `all()`, `get(tool)`, `store(entry, storage)` (a `SharedProjects.mapStore` with
   those options), `list(entry, storage)` (`{ ok, error, items }`; an unreadable list is reported, never changed).

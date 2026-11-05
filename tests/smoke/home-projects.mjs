@@ -19,7 +19,7 @@ const SHOTS = arg('shots', process.env.SHOTS);
 export const FOLDER = { mlg: 'moving-load-generator', bsl: 'bridge-substructure-loading', asce7: 'asce7-load-generator', smd: 'shear-moment-diagrams',
   stonearch: 'stone-arch-rating', gusset: 'gusset-plate-rating', retwall: 'retaining-wall-designer', spreadfooting: 'spread-footing',
   lightpole: 'light-pole-sign-post', baseplate: 'base-plate-anchor', steelbeam: 'steel-beam-aisc', timber: 'timber-beam-check',
-  spc: 'section-property-calculator', rebar: 'aci-rebar-development', abutment: 'abutment-calculator' };
+  spc: 'section-property-calculator', rebar: 'aci-rebar-development', abutment: 'abutment-calculator', edm: 'elastomeric-bearing' };
 const list = arg('tool', Object.keys(FOLDER).join(',')).split(',');
 let failed = 0; const ok = (c, m) => { console.log((c ? '  ok   ' : '  FAIL ') + m); if (!c) failed++; return c; };
 const NAMES = ['HSP A', 'HSP <b>bold</b> & "q" ü'];

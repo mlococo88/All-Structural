@@ -39,6 +39,8 @@
       key: 'gussetRating.projects.v1' },
     { tool: 'abutment-calculator', label: 'Abutment Calculator', name: 'Abutment Calculator', href: 'abutment_calculator.html',
       key: 'abutcalc_v1_projects', time: i => i && i.ts || null, sort: 'saved' },   // its own Projects dialog: newest first by ts
+    { tool: 'elastomeric-bearing', label: 'Elastomeric Bearing Design', name: 'Elastomeric Bearing Design', href: 'elastomeric_design_module.html',
+      key: 'edm_v1_projects', time: i => i && i.ts || null, sort: 'saved' },   // its own Projects dialog: newest first by ts
     { tool: 'retaining-wall-designer', label: 'Retaining Wall Designer', name: 'Retaining Wall Designer', href: 'Retaining%20Wall%20Designer.html',
       key: 'retaincalcpro.projects.v1', time: i => i && i.ts || null },
     { tool: 'spread-footing', label: 'Spread Footing', name: 'Spread Footing', href: 'Spread%20Footing.html',
