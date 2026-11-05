@@ -5393,3 +5393,38 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - three.js removed: a note replaces the 3D figure and the other figures remain.
   - `check-syntax` and `spread-footing-scroll` pass.
 - **Saved data:** new field `state.ovRpt` (default true), migrated as above.
+
+## 2026-11-05 — PR: claude/sf-report-input-echo (SFIE: the Report's copy of the 1.4 Input Echo printed garbled; display only, no result change)
+- **Engineer:** the printed Report for the Seymour project showed the input echo in §3.2 garbled:
+  - the pedestal table's cells shifted (load-case rows: P under x, Vx under y, …; the D row's loads outside the table);
+  - General Inputs had an empty fourth column and an unlabelled unit column.
+- **Root cause:** the Report's tab copier `sfxWalk` (the tool's "As printed" walker, function `table`) read each `<tr>` as a flat list of its own cells and took only the first row as the header. It ignored `rowspan` and `colspan`:
+  - the pedestal table's two-row header (`rowspan="2"` / `colspan="5"`) became one header row plus one body row;
+  - the `rowspan` cells (pedestal, x, y, b×b×h, offset) exist only in each pedestal's first row, so every other load-case row was short by five cells and slid left;
+  - General Inputs' title row (`<th colspan="4">`) became the header, so the columns had no names.
+  - The tab's HTML is valid; the on-screen tab is not garbled (screenshot looked at) and is unchanged. `shared/report.js` is not involved (it renders the flat rows it is given) and is unchanged.
+- **Other tables:** a search of the tool for `rowspan` / `colspan` / `rowSpan` / `colSpan` finds them only in `buildInputEcho`. No other table the Report copies (dashboard, result tabs, user manual) uses spans. The report-text comparison below confirms no other table changed.
+- **Where / before → after:**
+  - `sfxWalk`, inner `const table=t=>{`:
+    - Before: header = `trs[0]` if every cell is `TH`; body = `cs.map(c=>cellOf(txt(c)))` per `<tr>`.
+    - After: the table is read as its grid. A rowspan cell is repeated in each row it spans. A header of several rows becomes one row ("group: column"). A first row that is one heading over the whole table becomes the caption. A column empty in every row is left out. A table without spans reads as before.
+  - `buildInputEcho`:
+    - its General Inputs rows moved unchanged into a new `sfEchoGen()` (anchor `function sfEchoGen(){`), used by the tab and the Report;
+    - the card's div gets `data-sfx-rpt="echo"`.
+  - New `sfxEcho()` (anchor `function sfxEcho(){`). `sfxWalk` sends that card there (`if(e.matches('[data-sfx-rpt="echo"]'))`), with the tab's own values and formats, as three tables:
+    - General inputs: Quantity | Value | Unit. The tab's note joins the quantity in brackets, and an empty unit prints "–".
+    - Pedestal geometry: Pedestal | x | y | b_x × b_y × h | load offset e_x, e_y | element type (the `elemType` input).
+    - Applied loads at top of pedestal: one row per pedestal and load type with a non-zero component, as the tab (a pedestal with none shows its D row). Direct mode: one "factored envelope (LRFD)" row per pedestal, labelled in the caption.
+    - Each table is kept only if it adds to the Report, as for any copied table.
+  - `sfrModel`, §"Pedestals and applied loads" pedestal table: new column "Element type" (pedestal / wall, the input), after "load offset".
+- **Where the tables land (default and Seymour):**
+  - General inputs: §3.2 (it has values the Report shows nowhere else, e.g. K_p, the self-weight).
+  - Pedestal geometry and loads: the appendix §12.2. They repeat §3.5.
+- **How verified:**
+  - Headless Chromium, origin/main vs branch, 13 cases: the 10 session cases, the Seymour file, Seymour with every Include box on, and default with every Include box on.
+    - deep diff of `R` and `P2`: 0 differences;
+    - Report text: every number in the main Report is in the branch Report. The only changed lines are the echo copy and the §3.5 pedestal rows (new column).
+    - 0 console errors.
+  - Printed PDF looked at, default and Seymour: §3.2 General inputs, §3.5, and the appendix echo.
+  - `check-syntax` and `spread-footing-scroll` pass.
+- **Saved data:** no change.
