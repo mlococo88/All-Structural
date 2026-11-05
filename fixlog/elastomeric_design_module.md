@@ -1324,3 +1324,17 @@ index 13f0165..656e0f1 100644
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Entered demands:** the service loads, rotations and movements are entered directly (or filled by the Abutment hand-off and still
   editable). Nothing added.
+
+## 2026-11-05 — PR: claude/ghsync-edm (GHS2: saved projects copied to a private GitHub repository; storage only, no result change)
+- **Engineer:** extend GitHub sync (`shared/github-sync.js`; setup `docs/github-sync-setup.md`; shared hooks for own dialogs in PR #815) to the tools with their own project dialogs.
+- **Where:**
+  - After `<script src="shared/projects-ui.js"></script>`: new `<script src="shared/github-sync.js"></script>` (anchor `GHS2 (2026-11-05): copy of the saved projects`).
+  - `btnManageProj` click: after `showModal()`, new `if(EDM_GH) EDM_GH.shown(EDM_GH_UI).catch(()=>{});`.
+  - `renderProjList()`: `<span class="pname">${esc(n)}</span>` → `<span class="pname">${esc(n)}${EDM_GH?" "+EDM_GH.statusCell(n):""}</span>`; at its end, new `if(EDM_GH){ EDM_GH.bind(el); EDM_GH.decorate(edmGhHost(),EDM_GH_UI,{rows:false}); }` (sync bar, first-sync offer, "On GitHub only" rows in a new `div#projGh[data-sp=gh-host]` above the list).
+  - Delete in the dialog: after `renderProjList();`, new `if(EDM_GH) EDM_GH.deleted(n);` (asks "Also delete … from GitHub?"). `edmPlibAct` Rename: new `if(r.ok&&a==="ren"&&EDM_GH) EDM_GH.renamed(n,r.name);`.
+  - New after `edmPlibAct`: `const EDM_GH = SharedGitHubSync.attach({ store: SharedProjects.mapStore(localStorage, PROJKEY), … cloud: { tool: "elastomeric-bearing", … } })`, `edmGhHost()`, `EDM_GH_UI` (anchor `GHS2 (2026-11-05): GitHub sync of the saved projects`).
+- **File on GitHub:** `projects/elastomeric-bearing/<name>.json` = `toFile: i => i.state`, indent 2: the same text as Export JSON (`JSON.stringify(S,null,2)`, no time stamp). **Download (fromFile):** refused unless it has `proj` and `geom` and no `_schema` / `schema` / `app` tag; then read as Import JSON reads it (`Object.assign(defaultState(), file)`), stored as `{ state, ts: Date.now() }`. **Open** from GitHub: the dialog's Load statements (`S = state; migrate(); buildInputs(); recalc();`).
+- **Saved data:** `edm_v1_projects` and `edm_v1_autosave` unchanged. New keys only while sync is set up: `bridgeSuite.v1.githubSync`, `bridgeSuite.v1.githubSync.tool.elastomeric-bearing`. With sync off nothing is written and no request is made.
+- **How verified:** `node tests/check-syntax.mjs elastomeric_design_module.html`: pass. `node tests/smoke/project-library.mjs --tool edm` (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs --tool edm`: ALL PASS (Save → file; update with sha; "synced" in the row; GitHub-only copy opened → results identical to the saved project; settings button; first-sync offer; Delete asks; sync off: no request, no key; no console errors). origin/main vs branch (sync off): Export JSON text and file name identical; `edm_v1_projects` and `edm_v1_autosave` identical (save times normalised); 0 requests.
+- **Formulas, factors, units, code references:** none.
+- **Other copies:** none.
