@@ -5122,7 +5122,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - 0 console / KaTeX errors. `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Card 5.4 (revEx) checked by eye.
 - **Saved data:** no change (same `mat.ldExcess`, default off). **Other copies:** none.
 
-## 2026-11-05 — PR: claude/sf-bearing-lesser — Concrete bearing at the pedestal–footing interface: φB_n = the lesser of the footing and the pedestal, ACI 318-19 16.3.3.4 / Table 22.8.3.2 (SFBL; calculation change)
+## 2026-11-05 — PR: claude/sf-bearing-lesser (PR #775: https://github.com/mlococo88/All-Structural/pull/775) — Concrete bearing at the pedestal–footing interface: φB_n = the lesser of the footing and the pedestal, ACI 318-19 16.3.3.4 / Table 22.8.3.2 (SFBL; calculation change)
 
 ### SFBL. Interface bearing strength = lesser of footing and pedestal   [CLAUDE.md §4]
 - **Engineer (2026-11-05):** approved the open item of #773.
