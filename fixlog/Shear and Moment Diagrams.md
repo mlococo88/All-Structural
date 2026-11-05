@@ -1517,3 +1517,21 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
 - **Saved data:** `smd_saves_v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-05 — PR: claude/header-smd (PR #828: https://github.com/mlococo88/All-Structural/pull/828) (SMHD: compact header; project name, saved-analysis / template / file buttons and shared-info buttons moved to a Project card in the sidebar; display only, no result change)
+- **Engineer:** clean up the top of the page: the project inputs and the project / hand-off buttons go into the Project input area; the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id, `onclick`, listener and saved field is the same; the file keeps CRLF):
+  - `<header>`: before brand + All tools; `#projNm` and `.pshare` (Use / Share project info); then `#upd`, `#bUndo`, `#bRedo`, `#saveSel`, `#bSv`, `#bDl2`, Saved projects… (PLIB, after `#bDl2`), `#tplSel`, `#bPr`, `#bEx`, `#bIm`, `#fIm`. After: brand + All tools; `<a id="hdrProj">` "Project: <name>"; `#upd`, `#bUndo`, `#bRedo`, Saved projects…, `#bPr`.
+  - The tool has no input tabs (one sidebar `.sb`), so a new card `<div id="smdPrj">` "Project" is the last sidebar section (after Section Properties, before the spacer; the sidebar still starts with Spans & Supports): Project name (`#projNm`, full width, hint), Saved analyses (`#saveSel`, `#bSv`, `#bDl2`), Templates (`#tplSel`), Project file (JSON) (`#bEx`, `#bIm`, `#fIm`), Shared project info (`.pshare`, hint).
+  - `smdPlibInit()`: `g('bDl2').insertAdjacentElement('afterend',b)` → `g('bRedo').insertAdjacentElement('afterend',b)` (Saved projects… stays in the header).
+  - New `smdHdrProj()` (anchor `function smdHdrProj(){`): `#projNm` or "(untitled: enter it in the Project card)"; called on `input` in `#projNm`, in `applyProject()` after the name is set, at the start of `readIn()` (Save's name prompt, rename) and once at start-up. `#hdrProj` click: scrolls the sidebar to the card (below 860 px, the page) and focuses Project name.
+  - CSS (anchor `/* SMHD (2026-11-05)`): `#hdrProj`, `#smdPrj` rules. (Below 860 px `#projNm` was hidden; in the card it is shown.)
+- **Decisions (pending engineer review):** the Project card is placed at the end of the sidebar, not as a first section, so the page still opens on Spans & Supports; 💾 Save (Ctrl+S still works anywhere), the 📁 Saved… list, 🗑, Templates and Export / Import move with the project name, while Undo / Redo, Saved projects… and Print stay in the header.
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, template "3-span w/ point load", Project name "Route 6 Floor Beam"):
+  - `{nodeR, shD, moD, deD, env, tabR, crits}`, every localStorage key (save time stamps normalised) and the Report view text: identical; the name is in the Report.
+  - Share project info: `bridgeSuite.v1.projectMeta` identical; Use shared project info fills Project name; reload of the autosave identical;
+  - header shows "Project: Route 6 Floor Beam"; the link scrolls to the Project card and focuses the name (1920: the sidebar scrolls, the page does not; 390 px: the page scrolls);
+  - `phone-layout --tool smd`, `project-library --tool smd`, `github-sync-tools --tool smd`, `check-syntax`: pass; `list-input --part smd`: results and saved data identical, the only difference is the page text (the moved header); no sideways scroll at 390 / 768 px; 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change.
