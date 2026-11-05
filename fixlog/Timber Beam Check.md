@@ -1865,3 +1865,23 @@ index 2f29ed5..c3246e1 100644
 - **Saved data:** `tbc_projects_v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-05 — PR: claude/header-timber (PR #827: https://github.com/mlococo88/All-Structural/pull/827) (TBHD: compact header; title block and shared-info buttons moved to the Project input tab, header Open / Save file into the Project file card; display only, no result change)
+- **Engineer:** clean up the top of the page: the title-block inputs and the file / hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id, `data-fkey`, listener and saved field is the same):
+  - `#hdr`: before title row (title, by-line, All tools; `.hdrBtns` Open file…, Save file, Undo / Redo (inserted by the PLIB block before Print report), Print report), `#projGrid` (7 fields), `#projShare` (Use / Share project info). After: title row with `.hdrBtns#hdrActs` (`#hdrProj` "Project: <project> · <job #>" link, Undo / Redo, Print report).
+  - `#inputPanel` starts with `<div id="prjPane">`: "Title block" (`#projGrid`, 2 columns, hint) and "Shared project info" (`#projShare`: `#btnUseShared`, `#btnShare`, hint). Moved buttons get `class="btn sm"`.
+  - `#btnOpenHdr` / `#btnSaveHdr` (still wired once by `wireFile()`) move to a hidden `#tbcFileHold` after the header, labelled "⬆ Open file…" / "⬇ Save file" with `class="btn sm"`. `buildProjectPane()`'s "Project file" card (anchor `/* TBHD: the header's Open file / Save file`) uses those two nodes instead of creating a second pair (it still creates its own if they are missing); New project is unchanged.
+  - `rebuildInputs()`: `const PJ=$('prjPane')` and the two file buttons parked in `#tbcFileHold` before `P.innerHTML=''`; `panes.project.appendChild(PJ)` before `buildProjectPane(panes.project)`.
+  - New `tbHdrProj()` (anchor `function tbHdrProj() {`): `M.project.name · M.project.job` or "(untitled: enter it in the Project tab)"; called at the end of `buildProjHeader()` and on any `input` in `#inputPanel`. `#hdrProj` click: `inTabSelect('project', true)`, focus Project (at 820 px and below the input tabs are scrolled into view first).
+  - CSS (anchor `/* TBHD (2026-11-05)`): the dark `#projShare` header button rules replaced by `#hdrActs`, `#hdrProj`, `#prjPane` and `#inputPanel #projGrid` rules.
+- **Decisions (pending engineer review):** the project line shows Project · Job #. The header's Open file / Save file duplicated the Project file card's own pair, so the header nodes now are that card's buttons (one pair on the page). Undo / Redo stay in the header.
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, title typed "Route 6 Barn", "Header H-2", "Town of Acton", "J-4471", "MJL", "ABC", "2026-11-05"):
+  - `TBC.res`, every localStorage key and the Report tab text: identical; every typed value except Client is in the Report (Client is not printed on main either).
+  - Share project info: `bridgeSuite.v1.projectMeta` identical; Use shared project info fills the shared fields; reload of the autosave identical;
+  - header shows "Project: Route 6 Barn · J-4471"; the link opens the Project tab with Project focused (1920 and 390 px);
+  - after `fullRebuild()` the Project file card holds `#btnOpenHdr` / `#btnSaveHdr` (one of each on the page); Save file downloads once and Open file opens one file chooser;
+  - `project-library --tool timber`, `github-sync-tools --tool timber`, `check-syntax`: pass; no sideways scroll on any input tab at 390 / 768 px; 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change.
