@@ -4047,3 +4047,45 @@ Not affected:
   - The error case and recovery above, with 0 console errors and a screenshot looked at.
   - `check-syntax`, `run.mjs report steps steps-groups report-wiring` (14 passed) and `phone-layout --tool cbc` pass.
 - **Saved data:** none. **Governing provision:** none. **Other copies:** none (the standalone "Concrete Beam ASD.html" is a redirect; the frame alone gets no message and shows no notice).
+## 2026-11-05 — PR: claude/cbc-scale-bars, PR #802: https://github.com/mlococo88/All-Structural/pull/802 (CBSB: every geometric drawing of the suite to scale with a scale bar, measured; display only, no result change)
+
+### CBSB. Scale bars and to-scale drawings   [display only] [no result change]
+- **Engineer request (2026-11-05, Phase 5 graphics, PR A):** every geometric drawing in the three frames gets a scale bar or a "to scale" note; re-measure in headless Chromium (as Spread Footing SFTS #776) and fix any drawing that is not to scale.
+- **Measured (headless Chromium, 1600 px window; rendered px per in across ÷ up, 1.00 = to scale).** Default project and a deep / narrow case (Beam Capacity b_w 10 × h 48 in, stirrups at 12 in; ASD b 10, h 48, d 45 in; Development & Splice #11, c_b 3 in).
+
+  | Drawing | main (default / deep) | branch (default / deep) | scale bar ÷ drawing |
+  |---|---|---|---|
+  | Beam Capacity, Input Echo "Section Schematic": cross-section (`svgSection`) | 18.68 px/in, 1.00 / 7.00 px/in, 1.00 | unchanged | 1.00 / 1.00 (6 in / 1 ft) |
+  | Beam Capacity, Input Echo: stirrup elevation (`svgElevation`; stirrup pitch ÷ s vs h) | 8.63, 1.00 / 3.91, 1.00 | unchanged | 1.00 / 1.00 (1 ft) |
+  | Beam Capacity, Visuals: cross-section and elevation | as Input Echo | unchanged | 1.00 / 1.00 |
+  | Beam Capacity, Visuals: 3-D view | perspective (no scale); length illustrative | note says the section is modelled to scale, the view is a perspective without a scale bar | — |
+  | Beam Capacity, Visuals: strain diagram, D/C chart, capacity curves (Plotly) | charts, not geometry | unchanged | — |
+  | ASD, Section tab (`drawSection`; kd and d also measured on the drawing) | 25.49, 1.00 / 16.05, 1.00; kd 3.764 = 3.764, d 15.19 = 15.19 in | unchanged | 1.00 / 1.00 (6 in) |
+  | Development & Splice, "Bar in section" (`schematicSVG`; c_b to bar centre vs d_b) | 1.05 / 0.95 (bar at db·14 px, cover at c_b·20 px, c_b dimensioned to the bar's edge) | 1.00 / 1.00 | 1.00 / 1.00 (3 in) |
+  | Development & Splice, hook (`hookSchematic`; l_dh vs the 12 d_b tail) | 2.39 / 3.55 (lead max(8 d_b, 90 px), bend 3 d_b) | 1.00 / 1.00 | 1.00 / 1.00 (18 in / 2 ft) |
+  | Report: every figure with a scale bar (overview, Input Echo copies, ASD, both Dev figures), rendered box ÷ viewBox | — | 7 figures, 1.00 each | — |
+
+- **What changed:**
+  - Beam Capacity frame (`#suite-frame-capacity` srcdoc, CRLF kept):
+    - Input Echo `ieSchematic` and Visuals `visSec` / `visElev`: the drawings go through the existing CBOV scale-bar helper `cbcOvBar` (#795), which the Report overview already used. The drawing functions are unchanged.
+      - Before: `f.innerHTML=svgSection(CC.govRow?CC.govRow.neg:false);` / `f2.innerHTML=e;` / `f.innerHTML=svgSection(rSel.neg);` / `f.innerHTML=e;`
+      - After: `f.innerHTML=cbcOvBar(svgSection(CC.govRow?CC.govRow.neg:false),CBOV.sec);` / `f2.innerHTML=cbcOvBar(e,CBOV.elev);` / `f.innerHTML=cbcOvBar(svgSection(rSel.neg),CBOV.sec);` / `f.innerHTML=cbcOvBar(e,CBOV.elev);` (each with `/* CBSB: scale bar */`).
+    - `cbcOvBar`: its `<g>` gets `class="cbc-sbar" data-in="<bar length, in>"` (used by the to-scale check). Before: `let b='<g font-family="Arial,Helvetica,sans-serif" font-size="9" fill="#0F172A">';`
+    - `build3D` note. Before: `"Drag to rotate, scroll to zoom. The length shown ("+fmt(Lb,0)+" in) is illustrative; the tool checks a cross-section, not a span."` After: `"Drag to rotate, scroll to zoom. The cross-section (concrete, bars, cover, stirrups at s) is modelled to scale; the view is a perspective, so it has no scale bar (the dimensioned, to-scale section and elevation are above). The length shown ("+fmt(Lb,0)+" in) is illustrative; the tool checks a cross-section, not a span."`
+  - ASD frame (`#suite-frame-asd`), `drawSection`:
+    - Before: `const hTot=Math.max(R.h,R.d+2);` After: `const hTot=(R.h>R.d)?R.h:R.d+2;` The section is drawn to its real h. Before, a section whose steel centroid is within 2 in of the face (h < d + 2) was drawn d + 2 tall. The d + 2 fallback is kept for h not given (h ≤ d), with the note "h not given: drawn to d + 2 in". The default project (h 18, d 15.19) draws the same.
+    - viewBox height `H+90` → `H+110`; the scale bar `asdScaleBar(scale,pad,pad+H+22,w_eff+140,…)` before `</svg>`. New `asdScaleBar(sc,x0,y,W,extra)` after `drawSection` (bar of 1, 2, 3, 4, 6, 12 … in, at most 40 % of the drawing width; the line "to scale, the same scale across and up").
+  - Development & Splice frame and `ACI Rebar Development Length.html` (the same edits in both, CLAUDE.md §3): see the entry of the same date in `fixlog/ACI Rebar Development Length.md` (CBSB): `schematicSVG` and `hookSchematic` rewritten to scale, new `rbrScaleBar`, Report captions "to scale".
+- **Decisions (pending engineer review):**
+  - The 3-D view gets a note, not a scale bar: it is a perspective, so no single scale applies.
+  - The Development & Splice drawings were schematics. They are now drawn to scale, because the hook in particular (l_dh, bend, 12 d_b tail) reads differently at true proportions. The bar-in-section drawing now dimensions c_b to the bar centre, as c_b is defined (ACI 318-19 25.4.2.4; AASHTO 5.10.8.2.1c). Before, it dimensioned c_b to the bar's edge.
+  - The hook drawing uses the minimum bend diameter of ACI 318-19 Table 25.3.1 / AASHTO Table 5.10.2.3-1 (6, 8, 10 d_b), or the entered R in AASHTO mode. The drawing is a picture of the calculated l_dh: no length is computed from it.
+  - The ASD drawing shows A_s as a line at d, as before: the ASD tab has no bar sizes, only A_s.
+  - Pre-existing, not changed: in the deep case the "d(C2)" label of `svgSection` overlaps the "extreme compression fibre" tag (labels only).
+- **How verified (headless Chromium):**
+  - Results and tab text: origin/main afe45fa vs the branch, cases default, aa100, aci100, excess (Concrete Beam Capacity) and the standalone ACI Rebar tool. `CC` ×2 and the Development & Splice results are identical. Text differences are only the scale-bar labels, the 3-D note, the two Dev drawing titles and the Dev "tail ≈ 12d_b" label ("tail 12d_b"). In the Report models, only the figure SVG strings changed.
+  - Scale: the table above. The script is `ph5/measure.mjs` in the session scratchpad: rendered bounding boxes of the outline, stirrups, dimension lines and the scale bar.
+  - Report printed (Letter): 48 pages (main 47). Looked at the overview, the Input Echo copies (p. 9–10), the ASD section (p. 28) and the hook (p. 35).
+  - Screenshots looked at: the Input Echo section and elevation, the Visuals section, elevation and 3-D, the ASD section, both Dev drawings, for default and deep.
+  - `check-syntax` (all), `phone-layout --tool cbc,aci`, `project-library --tool rebar` and `run.mjs report steps steps-groups report-wiring` (14 passed) pass.
+- **Saved data:** none. **Governing provision:** none changed (drawings only). **Other copies:** `ACI Rebar Development Length.html` (Dev drawings, same edit).

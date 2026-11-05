@@ -3344,12 +3344,12 @@ function buildInputEchoTab(pg){
     b.appendChild(t);
   },pg);
   mkSection(&quot;ieSchematic&quot;,&quot;Section Schematic (to scale)&quot;,b=>{
-    const f=el(&quot;div&quot;,&quot;figWrap&quot;); f.innerHTML=svgSection(CC.govRow?CC.govRow.neg:false);
+    const f=el(&quot;div&quot;,&quot;figWrap&quot;); f.innerHTML=cbcOvBar(svgSection(CC.govRow?CC.govRow.neg:false),CBOV.sec);   /* CBSB: scale bar */
     wireSvgHL(f);
     b.appendChild(f);
     b.appendChild(el(&quot;div&quot;,&quot;figCap&quot;,&quot;Reinforcement as entered, drawn to scale for the governing sense of bending.&quot;));
     const e=svgElevation();
-    if(e){ const f2=el(&quot;div&quot;,&quot;figWrap&quot;); f2.innerHTML=e; b.appendChild(f2);
+    if(e){ const f2=el(&quot;div&quot;,&quot;figWrap&quot;); f2.innerHTML=cbcOvBar(e,CBOV.elev); b.appendChild(f2);   /* CBSB: scale bar */
       b.appendChild(el(&quot;div&quot;,&quot;figCap&quot;,&quot;Stirrup elevation; the green band is the permitted spacing range.&quot;)); }
   },pg);
   mkSection(&quot;ieRebar&quot;,&quot;Reinforcement&quot;,b=>{
@@ -3683,7 +3683,7 @@ function build3D(container){
   const pv=el(&quot;span&quot;,&quot;mono&quot;,Math.round(VIS3D.opacity*100)+&quot;%&quot;);
   sl.addEventListener(&quot;input&quot;,()=>pv.textContent=sl.value+&quot;%&quot;);
   sr.appendChild(pv); container.appendChild(sr);
-  container.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Drag to rotate, scroll to zoom. The length shown (&quot;+fmt(Lb,0)+&quot; in) is illustrative; the tool checks a cross-section, not a span.&quot;));
+  container.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Drag to rotate, scroll to zoom. The cross-section (concrete, bars, cover, stirrups at s) is modelled to scale; the view is a perspective, so it has no scale bar (the dimensioned, to-scale section and elevation are above). The length shown (&quot;+fmt(Lb,0)+&quot; in) is illustrative; the tool checks a cross-section, not a span.&quot;));
   /* render loop */
   cancelAnimationFrame(VIS3D.raf);
   (function loop(){
@@ -3922,7 +3922,7 @@ function buildVisualsTab(pg){
   const rSel=CC.combos[S.ui.detailCombo];
 
   mkSection(&quot;visSec&quot;,&quot;Cross-Section Schematic (to scale)&quot;,b=>{
-    const f=el(&quot;div&quot;,&quot;figWrap&quot;); f.innerHTML=svgSection(rSel.neg);
+    const f=el(&quot;div&quot;,&quot;figWrap&quot;); f.innerHTML=cbcOvBar(svgSection(rSel.neg),CBOV.sec);   /* CBSB: scale bar */
     wireSvgHL(f);
     b.appendChild(f);
     if(S.tor.present&amp;&amp;S.code==='ACI'&amp;&amp;S.tor.Al>0&amp;&amp;S.stir.present){
@@ -3964,7 +3964,7 @@ function buildVisualsTab(pg){
   mkSection(&quot;visElev&quot;,&quot;Stirrup Elevation \u2014 spacing vs the code limit&quot;,b=>{
     const e=svgElevation();
     if(!e){ b.appendChild(el(&quot;div&quot;,&quot;infoBox&quot;,&quot;No stirrups are specified, so there is no elevation to draw.&quot;)); return; }
-    const f=el(&quot;div&quot;,&quot;figWrap&quot;); f.innerHTML=e; b.appendChild(f);
+    const f=el(&quot;div&quot;,&quot;figWrap&quot;); f.innerHTML=cbcOvBar(e,CBOV.elev); b.appendChild(f);   /* CBSB: scale bar */
     const info=govSmaxInfo();
     b.appendChild(el(&quot;div&quot;,&quot;figCap&quot;,&quot;Side elevation with the stirrup layout at s = &quot;+fmt(S.stir.s)+
       &quot; in. The green band under the spacing dimension is the acceptable range&quot;+
@@ -4321,7 +4321,7 @@ function cbcOvBar(svg,d){
   if(!svg||!d||!(d.sc>0)) return svg;
   const want=d.W*0.22/d.sc, L=[1,2,3,4,6,12,18,24,36,48,60,96,120].filter(x=>x<=want).pop()||1, w=L*d.sc, x0=12, y=d.H+14;
   const lab=L%12===0?(L/12)+' ft ('+L+' in)':L+' in';
-  let b='<g font-family=&quot;Arial,Helvetica,sans-serif&quot; font-size=&quot;9&quot; fill=&quot;#0F172A&quot;>';
+  let b='<g class=&quot;cbc-sbar&quot; data-in=&quot;'+L+'&quot; font-family=&quot;Arial,Helvetica,sans-serif&quot; font-size=&quot;9&quot; fill=&quot;#0F172A&quot;>';   /* CBSB: class / data-in mark the bar for the to-scale check */
   b+='<rect x=&quot;'+x0+'&quot; y=&quot;'+y+'&quot; width=&quot;'+(w/2)+'&quot; height=&quot;5&quot; fill=&quot;#0F172A&quot;/><rect x=&quot;'+(x0+w/2)+'&quot; y=&quot;'+y+'&quot; width=&quot;'+(w/2)+'&quot; height=&quot;5&quot; fill=&quot;#fff&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;0.8&quot;/>';
   b+='<rect x=&quot;'+x0+'&quot; y=&quot;'+y+'&quot; width=&quot;'+w+'&quot; height=&quot;5&quot; fill=&quot;none&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;0.8&quot;/>';
   b+='<text x=&quot;'+x0+'&quot; y=&quot;'+(y+15)+'&quot;>0</text><text x=&quot;'+(x0+w)+'&quot; y=&quot;'+(y+15)+'&quot; text-anchor=&quot;middle&quot;>'+lab+'</text>';
@@ -6132,8 +6132,11 @@ function buildFigureTab(pg){
   },pg);
 }
 function drawSection(R){
+  /* CBSB (2026-11-05): the section is drawn to its real height h (was max(h, d + 2), which drew it taller than h when the
+     steel centroid is within 2 in of the face); d + 2 in only when h is not given (h <= d). One scale across and up, with a
+     scale bar under the drawing. */
   const pad=46, H=300;
-  const hTot=Math.max(R.h,R.d+2);
+  const hTot=(R.h>R.d)?R.h:R.d+2;
   const scale=H/hTot;
   const w_web=R.b_w*scale, hf=R.h_f*scale, d=R.d*scale, kd_s=R.kd*scale;
   const w_eff=(R.shape==='rect')?w_web:(R.b_eff*scale);
@@ -6142,7 +6145,7 @@ function drawSection(R){
   else{ const oh=(w_eff-w_web)/2;
     path=&quot;M &quot;+pad+&quot; &quot;+pad+&quot; h &quot;+w_eff+&quot; v &quot;+hf+&quot; h -&quot;+oh+&quot; v &quot;+(H-hf)+&quot; h -&quot;+w_web+&quot; v -&quot;+(H-hf)+&quot; h -&quot;+oh+&quot; Z&quot;; }
   const naY=pad+kd_s, steelY=pad+d;
-  return '<svg class=&quot;dwg&quot; viewBox=&quot;0 0 '+(w_eff+140)+' '+(H+90)+'&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>'+
+  return '<svg class=&quot;dwg&quot; viewBox=&quot;0 0 '+(w_eff+140)+' '+(H+110)+'&quot; xmlns=&quot;http://www.w3.org/2000/svg&quot;>'+
     '<defs><pattern id=&quot;cp&quot; width=&quot;9&quot; height=&quot;9&quot; patternUnits=&quot;userSpaceOnUse&quot; patternTransform=&quot;rotate(45)&quot;>'+
     '<line x1=&quot;0&quot; y1=&quot;0&quot; x2=&quot;0&quot; y2=&quot;9&quot; stroke=&quot;#cbd5e1&quot; stroke-width=&quot;1&quot;/></pattern>'+
     '<clipPath id=&quot;cc&quot;><path d=&quot;'+path+'&quot;/></clipPath></defs>'+
@@ -6154,7 +6157,19 @@ function drawSection(R){
     '<text x=&quot;'+(pad+w_eff+28)+'&quot; y=&quot;'+(steelY+4)+'&quot; font-size=&quot;12&quot; fill=&quot;#DC2626&quot; font-family=&quot;sans-serif&quot;>A_s</text>'+
     '<text x=&quot;'+(pad+w_eff/2)+'&quot; y=&quot;'+(pad-16)+'&quot; text-anchor=&quot;middle&quot; font-size=&quot;12&quot; fill=&quot;#475569&quot;>b = '+fmt(R.shape==='rect'?R.b_w:R.b_eff)+'&quot;</text>'+
     '<text x=&quot;'+(pad-14)+'&quot; y=&quot;'+(pad+kd_s/2)+'&quot; text-anchor=&quot;middle&quot; font-size=&quot;11&quot; fill=&quot;#1e40af&quot; transform=&quot;rotate(-90 '+(pad-14)+' '+(pad+kd_s/2)+')&quot;>kd='+fmt(R.kd)+'&quot;</text>'+
+    asdScaleBar(scale,pad,pad+H+22,w_eff+140,(R.h>R.d)?'':'h not given: drawn to d + 2 in')+
     '</svg>';
+}
+/* CBSB (2026-11-05): scale bar for drawSection (sc px per in), at x0, y; W = the drawing's viewBox width. Bar length: the largest
+   of 1, 2, 3, 4, 6, 12 … in that is no longer than 40 % of the drawing width. */
+function asdScaleBar(sc,x0,y,W,extra){
+  const want=0.4*(W-x0)/sc, L=[1,2,3,4,6,12,18,24,36,48].filter(x=>x<=want).pop()||1, w=L*sc;
+  const lab=L%12===0?(L/12)+' ft':L+' in';
+  return '<g class=&quot;cbc-sbar&quot; data-in=&quot;'+L+'&quot; font-family=&quot;Arial,Helvetica,sans-serif&quot; font-size=&quot;9&quot; fill=&quot;#0F172A&quot;>'+
+    '<rect x=&quot;'+x0+'&quot; y=&quot;'+y+'&quot; width=&quot;'+(w/2)+'&quot; height=&quot;5&quot; fill=&quot;#0F172A&quot;/><rect x=&quot;'+(x0+w/2)+'&quot; y=&quot;'+y+'&quot; width=&quot;'+(w/2)+'&quot; height=&quot;5&quot; fill=&quot;#fff&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;0.8&quot;/>'+
+    '<rect x=&quot;'+x0+'&quot; y=&quot;'+y+'&quot; width=&quot;'+w+'&quot; height=&quot;5&quot; fill=&quot;none&quot; stroke=&quot;#0F172A&quot; stroke-width=&quot;0.8&quot;/>'+
+    '<text x=&quot;'+x0+'&quot; y=&quot;'+(y+15)+'&quot;>0</text><text x=&quot;'+(x0+w)+'&quot; y=&quot;'+(y+15)+'&quot; text-anchor=&quot;middle&quot;>'+lab+'</text>'+
+    '<text x=&quot;8&quot; y=&quot;'+(y+27)+'&quot;>to scale, the same scale across and up</text>'+(extra?'<text x=&quot;8&quot; y=&quot;'+(y+39)+'&quot;>'+extra+'</text>':'')+'</g>';
 }
 
 /* =====================================================================
@@ -7945,36 +7960,57 @@ function tabHookAASHTO(inp,f,h){
 }
 
 /* ---- Hook side-view schematic (SVG) ---- */
+/* CBSB (2026-11-05; the same block in ACI Rebar Development Length.html and the Development &amp; Splice tab of Concrete Beam
+   Capacity.html): drawn to scale, one scale across and up, with a scale bar. The lead runs from the critical section to the
+   bend; l_dh is measured to the outside face of the bar at the bend; the bend radius to the bar centreline is D/2 + d_b/2
+   with the minimum inside diameter D (6 d_b #3–#8, 8 d_b #9–#11, 10 d_b #14–#18; ACI 318-19 Table 25.3.1, AASHTO
+   Table 5.10.2.3-1), or the entered R in AASHTO mode; the tail is the 12 d_b extension of a 90° hook. Before: lead
+   max(8 d_b, 90 px), bend 3 d_b and tail 12 d_b at a scale fitted to 8 d_b (a schematic). Display only. */
+function rbrScaleBar(sc,x0,y,W,note){
+  const want=0.3*(W-x0)/sc, L=[1,2,3,4,6,12,18,24,36,48].filter(x=>x<=want).pop()||1, w=L*sc;
+  const lab=L%12===0?(L/12)+' ft':L+' in';
+  return `<g class=&quot;rbr-sbar&quot; data-in=&quot;${L}&quot; font-size=&quot;9&quot; fill=&quot;#333&quot;>
+      <rect x=&quot;${x0}&quot; y=&quot;${y}&quot; width=&quot;${w/2}&quot; height=&quot;5&quot; fill=&quot;#333&quot;/><rect x=&quot;${x0+w/2}&quot; y=&quot;${y}&quot; width=&quot;${w/2}&quot; height=&quot;5&quot; fill=&quot;#fff&quot; stroke=&quot;#333&quot; stroke-width=&quot;0.8&quot;/>
+      <rect x=&quot;${x0}&quot; y=&quot;${y}&quot; width=&quot;${w}&quot; height=&quot;5&quot; fill=&quot;none&quot; stroke=&quot;#333&quot; stroke-width=&quot;0.8&quot;/>
+      <text x=&quot;${x0}&quot; y=&quot;${y+15}&quot;>0</text><text x=&quot;${x0+w}&quot; y=&quot;${y+15}&quot; text-anchor=&quot;middle&quot;>${lab}</text>
+      <text x=&quot;${x0+w+22}&quot; y=&quot;${y+6}&quot;>${note||'to scale, the same scale across and up'}</text></g>`;
+}
 function hookSchematic(inp,f,h){
-  const db=f.db;
-  const scale = Math.min(9, 150/(8*db));      // fit
-  const px = v => v*scale*db;                  // v in bar-diameters -> px
-  const W=460,H=210, ox=80, oy=40;
-  const straightLen = Math.max(px(8), 90);
-  const bendR = px(3);                          // ~6db inside dia -> 3db radius, schematic
-  const tail = px(12);                          // 12db tail for 90°
-  const bw = Math.max(4, db*scale*1.1);
+  const db=f.db, nb=parseInt(inp.barSize);
+  const Dmin=(nb<=8?6:(nb<=11?8:10))*db;                          // minimum inside bend diameter
+  const Rc=(f.AASHTO&amp;&amp;h&amp;&amp;h.R>0)?h.R:Dmin/2+db/2;                   // bend radius to the bar centreline
+  const ldh=(h&amp;&amp;h.ldh>0&amp;&amp;isFinite(h.ldh))?h.ldh:Math.max(8*db,6);
+  const tailL=12*db;
+  const W=460, ox=110, oy=40;
+  const sc=Math.min(170/ldh, (W-ox-130)/(Rc+tailL+db/2));         // px per in
+  const x0=ox, y0=oy, yo=y0+ldh*sc;                                // yo: outside face of the bar at the bend
+  const yc=yo-db/2*sc, bendR=Rc*sc, tail=tailL*sc;                 // tail centreline, bend radius, tail (px)
+  const yb=Math.max(y0,yc-bendR);                                  // bend start
+  const H=Math.round(yo+92);
+  const bw=Math.max(1.5,db*sc);
   // 90-degree hook: vertical lead-in down, bend, horizontal tail
-  const x0=ox, y0=oy;
-  const yb=y0+straightLen;                      // bend start
-  const path = `M ${x0} ${y0} L ${x0} ${yb-bendR} Q ${x0} ${yb} ${x0+bendR} ${yb} L ${x0+bendR+tail} ${yb}`;
-  return `<div class=&quot;subsec&quot;><div class=&quot;sh&quot;><span>Hook Geometry (90° standard hook, schematic) <a href=&quot;javascript:void(0)&quot; onclick=&quot;showRefImage('bend')&quot; style=&quot;font-weight:normal;font-size:11px;color:var(--accent2);text-decoration:underline;&quot;>view bend dimensions ↗</a></span><span class=&quot;ref&quot;>ACI 25.3.1 / AASHTO 5.10.2.1</span></div>
+  const path = `M ${x0} ${y0} L ${x0} ${yb} A ${bendR} ${bendR} 0 0 0 ${x0+bendR} ${yc} L ${x0+bendR+tail} ${yc}`;
+  return `<div class=&quot;subsec&quot;><div class=&quot;sh&quot;><span>Hook Geometry (90° standard hook, to scale) <a href=&quot;javascript:void(0)&quot; onclick=&quot;showRefImage('bend')&quot; style=&quot;font-weight:normal;font-size:11px;color:var(--accent2);text-decoration:underline;&quot;>view bend dimensions ↗</a></span><span class=&quot;ref&quot;>ACI 25.3.1 / AASHTO 5.10.2.1</span></div>
     <svg viewBox=&quot;0 0 ${W} ${H}&quot; class=&quot;schematic&quot; preserveAspectRatio=&quot;xMidYMid meet&quot;>
-      <path d=&quot;${path}&quot; fill=&quot;none&quot; stroke=&quot;#8a1f1f&quot; stroke-width=&quot;${bw}&quot; stroke-linecap=&quot;round&quot;/>
+      <path d=&quot;${path}&quot; fill=&quot;none&quot; stroke=&quot;#8a1f1f&quot; stroke-width=&quot;${bw}&quot; stroke-linecap=&quot;butt&quot;/>
       <!-- critical section marker -->
       <line x1=&quot;${x0-25}&quot; y1=&quot;${y0}&quot; x2=&quot;${x0+25}&quot; y2=&quot;${y0}&quot; stroke=&quot;#0d47a1&quot; stroke-width=&quot;1&quot; stroke-dasharray=&quot;4 3&quot;/>
       <text x=&quot;${x0-28}&quot; y=&quot;${y0-6}&quot; font-size=&quot;10&quot; fill=&quot;#0d47a1&quot; text-anchor=&quot;start&quot;>critical section</text>
-      <!-- l_dh vertical dim -->
-      <line x1=&quot;${x0-45}&quot; y1=&quot;${y0}&quot; x2=&quot;${x0-45}&quot; y2=&quot;${yb}&quot; stroke=&quot;#333&quot;/>
+      <!-- l_dh vertical dim: critical section to the outside face of the bend -->
+      <line x1=&quot;${x0-45}&quot; y1=&quot;${y0}&quot; x2=&quot;${x0-45}&quot; y2=&quot;${yo}&quot; stroke=&quot;#333&quot;/>
       <line x1=&quot;${x0-49}&quot; y1=&quot;${y0}&quot; x2=&quot;${x0-41}&quot; y2=&quot;${y0}&quot; stroke=&quot;#333&quot;/>
-      <line x1=&quot;${x0-49}&quot; y1=&quot;${yb}&quot; x2=&quot;${x0-41}&quot; y2=&quot;${yb}&quot; stroke=&quot;#333&quot;/>
-      <text x=&quot;${x0-52}&quot; y=&quot;${(y0+yb)/2}&quot; font-size=&quot;11&quot; fill=&quot;#333&quot; text-anchor=&quot;end&quot; transform=&quot;rotate(-90 ${x0-52} ${(y0+yb)/2})&quot;>l_dh = ${fmt(h.ldh,2)}&quot;</text>
-      <!-- tail dim -->
-      <line x1=&quot;${x0+bendR}&quot; y1=&quot;${yb+30}&quot; x2=&quot;${x0+bendR+tail}&quot; y2=&quot;${yb+30}&quot; stroke=&quot;#333&quot;/>
-      <text x=&quot;${x0+bendR+tail/2}&quot; y=&quot;${yb+44}&quot; font-size=&quot;10&quot; fill=&quot;#333&quot; text-anchor=&quot;middle&quot;>tail ≈ 12d_b = ${fmt(12*db,2)}&quot;</text>
+      <line x1=&quot;${x0-49}&quot; y1=&quot;${yo}&quot; x2=&quot;${x0-41}&quot; y2=&quot;${yo}&quot; stroke=&quot;#333&quot;/>
+      <line x1=&quot;${x0-41}&quot; y1=&quot;${yo}&quot; x2=&quot;${x0+bendR}&quot; y2=&quot;${yo}&quot; stroke=&quot;#94a3b8&quot; stroke-width=&quot;0.7&quot;/>
+      <text x=&quot;${x0-52}&quot; y=&quot;${(y0+yo)/2}&quot; font-size=&quot;11&quot; fill=&quot;#333&quot; text-anchor=&quot;middle&quot; transform=&quot;rotate(-90 ${x0-52} ${(y0+yo)/2})&quot;>l_dh = ${fmt(ldh,2)}&quot;</text>
+      <!-- tail dim: 12 d_b from the end of the bend -->
+      <line x1=&quot;${x0+bendR}&quot; y1=&quot;${yo+12}&quot; x2=&quot;${x0+bendR}&quot; y2=&quot;${yo+34}&quot; stroke=&quot;#94a3b8&quot; stroke-width=&quot;0.7&quot;/>
+      <line x1=&quot;${x0+bendR+tail}&quot; y1=&quot;${yc+bw/2+2}&quot; x2=&quot;${x0+bendR+tail}&quot; y2=&quot;${yo+34}&quot; stroke=&quot;#94a3b8&quot; stroke-width=&quot;0.7&quot;/>
+      <line x1=&quot;${x0+bendR}&quot; y1=&quot;${yo+30}&quot; x2=&quot;${x0+bendR+tail}&quot; y2=&quot;${yo+30}&quot; stroke=&quot;#333&quot;/>
+      <text x=&quot;${x0+bendR+tail/2}&quot; y=&quot;${yo+44}&quot; font-size=&quot;10&quot; fill=&quot;#333&quot; text-anchor=&quot;middle&quot;>tail 12d_b = ${fmt(tailL,2)}&quot;</text>
       <!-- bend radius note -->
-      <text x=&quot;${x0+bendR+tail+8}&quot; y=&quot;${yb+4}&quot; font-size=&quot;10&quot; fill=&quot;#555&quot;>bend Ø ≥ ${parseInt(inp.barSize)<=8?&quot;6&quot;:(parseInt(inp.barSize)<=11?&quot;8&quot;:&quot;10&quot;)}d_b</text>
-      <text x=&quot;${ox+120}&quot; y=&quot;${oy}&quot; font-size=&quot;10&quot; fill=&quot;#555&quot;>#${inp.barSize} bar · d_b=${fmt(db,3)}&quot;</text>
+      <text x=&quot;${x0+bendR+tail+8}&quot; y=&quot;${yc+4}&quot; font-size=&quot;10&quot; fill=&quot;#555&quot;>bend Ø ≥ ${nb<=8?&quot;6&quot;:(nb<=11?&quot;8&quot;:&quot;10&quot;)}d_b${(f.AASHTO&amp;&amp;h&amp;&amp;h.Rentered)?` · R = ${fmt(Rc,2)}&quot;`:&quot;&quot;}</text>
+      <text x=&quot;${ox+60}&quot; y=&quot;${oy}&quot; font-size=&quot;10&quot; fill=&quot;#555&quot;>#${inp.barSize} bar · d_b=${fmt(db,3)}&quot;</text>
+      ${rbrScaleBar(sc,12,yo+60,W)}
     </svg></div>`;
 }
 
@@ -8270,24 +8306,32 @@ function buildDashboard(inp,f){
    DYNAMIC SCHEMATIC (SVG) — cross-section w/ cover &amp; bar
    ===================================================================== */
 function schematicSVG(inp,f){
-  const W=440,H=200, m=30;
-  const barR = Math.max(6, Math.min(26, f.db*14));
-  const cbPx = Math.max(10, Math.min(70, inp.cb*20));
-  const cx=m+cbPx+barR, cy=H/2;
+  /* CBSB (2026-11-05; both copies): drawn to scale with a scale bar. c_b is dimensioned from the concrete face to the bar
+     centre, as defined (ACI 318-19 25.4.2.4; AASHTO 5.10.8.2.1c); the schematic drew the bar's edge at c_b, bar and cover
+     at different scales. A strip of concrete at the face is shown. Display only. */
+  const W=440,H=220, m=30, Hc=140;
+  const db=f.db>0?f.db:0.5, cb=inp.cb>0?inp.cb:0;
+  const sc=Math.min(40, (W-2*m-90)/Math.max(cb+db/2,0.25), 90/db);   // px per in
+  const barR=db/2*sc;
+  const cx=m+cb*sc, cy=m+Hc/2, yd=cy-barR-12;
   return `<svg viewBox=&quot;0 0 ${W} ${H}&quot; class=&quot;schematic&quot; preserveAspectRatio=&quot;xMidYMid meet&quot;>
-    <rect x=&quot;${m}&quot; y=&quot;${m}&quot; width=&quot;${W-2*m}&quot; height=&quot;${H-2*m}&quot; fill=&quot;#f2f0ea&quot; stroke=&quot;#333&quot; stroke-width=&quot;1.5&quot;/>
-    <text x=&quot;${m}&quot; y=&quot;${m-8}&quot; font-size=&quot;11&quot; fill=&quot;#555&quot;>Concrete section (schematic — c_b controls)</text>
+    <rect x=&quot;${m}&quot; y=&quot;${m}&quot; width=&quot;${W-2*m}&quot; height=&quot;${Hc}&quot; fill=&quot;#f2f0ea&quot; stroke=&quot;#333&quot; stroke-width=&quot;1.5&quot;/>
+    <text x=&quot;${m}&quot; y=&quot;${m-8}&quot; font-size=&quot;11&quot; fill=&quot;#555&quot;>Concrete at the bar (to scale; c_b controls, measured to the bar centre)</text>
     <!-- bar -->
-    <circle cx=&quot;${cx}&quot; cy=&quot;${cy}&quot; r=&quot;${barR}&quot; fill=&quot;#8a1f1f&quot; stroke=&quot;#4d1010&quot; stroke-width=&quot;1.5&quot;/>
-    <text x=&quot;${cx}&quot; y=&quot;${cy+3}&quot; font-size=&quot;10&quot; fill=&quot;#fff&quot; text-anchor=&quot;middle&quot;>#${inp.barSize}</text>
-    <!-- cover dim -->
-    <line x1=&quot;${m}&quot; y1=&quot;${cy}&quot; x2=&quot;${cx-barR}&quot; y2=&quot;${cy}&quot; stroke=&quot;#0d47a1&quot; stroke-width=&quot;1&quot;/>
-    <line x1=&quot;${m}&quot; y1=&quot;${cy-6}&quot; x2=&quot;${m}&quot; y2=&quot;${cy+6}&quot; stroke=&quot;#0d47a1&quot;/>
-    <line x1=&quot;${cx-barR}&quot; y1=&quot;${cy-6}&quot; x2=&quot;${cx-barR}&quot; y2=&quot;${cy+6}&quot; stroke=&quot;#0d47a1&quot;/>
-    <text x=&quot;${(m+cx-barR)/2}&quot; y=&quot;${cy-10}&quot; font-size=&quot;10&quot; fill=&quot;#0d47a1&quot; text-anchor=&quot;middle&quot;>c_b=${fmt(inp.cb,2)}&quot;</text>
+    <circle cx=&quot;${cx}&quot; cy=&quot;${cy}&quot; r=&quot;${barR}&quot; fill=&quot;#8a1f1f&quot; stroke=&quot;#4d1010&quot; stroke-width=&quot;1&quot;/>
+    <text x=&quot;${barR>=9?cx:cx+barR+4}&quot; y=&quot;${cy+3}&quot; font-size=&quot;10&quot; fill=&quot;${barR>=9?&quot;#fff&quot;:&quot;#333&quot;}&quot; text-anchor=&quot;${barR>=9?&quot;middle&quot;:&quot;start&quot;}&quot;>#${inp.barSize}</text>
+    <!-- cover dim: face to bar centre -->
+    <line x1=&quot;${cx}&quot; y1=&quot;${cy-barR-2}&quot; x2=&quot;${cx}&quot; y2=&quot;${yd-4}&quot; stroke=&quot;#94a3b8&quot; stroke-width=&quot;0.7&quot;/>
+    <line x1=&quot;${m}&quot; y1=&quot;${yd}&quot; x2=&quot;${cx}&quot; y2=&quot;${yd}&quot; stroke=&quot;#0d47a1&quot; stroke-width=&quot;1&quot;/>
+    <line x1=&quot;${m}&quot; y1=&quot;${yd-6}&quot; x2=&quot;${m}&quot; y2=&quot;${yd+6}&quot; stroke=&quot;#0d47a1&quot;/>
+    <line x1=&quot;${cx}&quot; y1=&quot;${yd-6}&quot; x2=&quot;${cx}&quot; y2=&quot;${yd+6}&quot; stroke=&quot;#0d47a1&quot;/>
+    <text x=&quot;${cx+6}&quot; y=&quot;${yd-4}&quot; font-size=&quot;10&quot; fill=&quot;#0d47a1&quot;>c_b=${fmt(inp.cb,2)}&quot;</text>
     <!-- db dim -->
     <line x1=&quot;${cx-barR}&quot; y1=&quot;${cy+barR+14}&quot; x2=&quot;${cx+barR}&quot; y2=&quot;${cy+barR+14}&quot; stroke=&quot;#333&quot;/>
-    <text x=&quot;${cx}&quot; y=&quot;${cy+barR+28}&quot; font-size=&quot;10&quot; fill=&quot;#333&quot; text-anchor=&quot;middle&quot;>d_b=${fmt(f.db,3)}&quot;</text>
+    <line x1=&quot;${cx-barR}&quot; y1=&quot;${cy+barR+10}&quot; x2=&quot;${cx-barR}&quot; y2=&quot;${cy+barR+18}&quot; stroke=&quot;#333&quot;/>
+    <line x1=&quot;${cx+barR}&quot; y1=&quot;${cy+barR+10}&quot; x2=&quot;${cx+barR}&quot; y2=&quot;${cy+barR+18}&quot; stroke=&quot;#333&quot;/>
+    <text x=&quot;${cx+barR+6}&quot; y=&quot;${cy+barR+18}&quot; font-size=&quot;10&quot; fill=&quot;#333&quot;>d_b=${fmt(f.db,3)}&quot;</text>
+    ${rbrScaleBar(sc,m,m+Hc+12,W)}
   </svg>`;
 }
 
@@ -9029,10 +9073,10 @@ function rbrModel(){
   const sch='<svg'+(schematicSVG(inp,f).split('<svg')[1]||'');
   const hk=hookSchematic(inp,f,calcHook(inp,f)), hsvg=(hk.match(/<svg[\s\S]*<\/svg>/)||[''])[0];
   secs.push({title:'Tension development',subs:[{title:'Tension development length $l_{d}$',items:[
-    {type:'figure',svg:sch,caption:'Input schematic: bar in section (c_b controls)'},
+    {type:'figure',svg:sch,caption:'Input schematic: bar in section, to scale (c_b controls, measured to the bar centre)'},
     rbTopics('td',rbrTension(inp,f),{title:'Worked steps'}),{type:'note',text:tabLink('tension','On screen: Tension l_d tab (with the sensitivity charts)')}]}].concat(rbCommSub(tabTension(inp,f,true)))});
   secs.push({title:'Standard hook',subs:[{title:'Standard hook development length $l_{dh}$',items:[
-    {type:'figure',svg:hsvg,caption:'Hook geometry (90° standard hook, schematic; '+(A?'AASHTO 5.10.2.1':'ACI 318-19 25.3.1')+')'},
+    {type:'figure',svg:hsvg,caption:'Hook geometry (90° standard hook, to scale; '+(A?'AASHTO 5.10.2.1':'ACI 318-19 25.3.1')+')'},
     rbTopics('hk',rbrHook(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('hook','On screen: Hook l_dh tab')}]}].concat(rbCommSub(tabHook(inp,f)))});
   secs.push({title:'Compression development',subs:[{title:'Compression development length $l_{dc}$',items:[
     rbTopics('cd',rbrComp(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('compression','On screen: Compression l_dc tab')}]}].concat(rbCommSub(tabComp(inp,f)))});
