@@ -374,6 +374,15 @@ table.vars th{background:#EEF2F6; font-family:var(--font-ui); font-size:8pt; let
   body.rbrDashWide #rbrDashCol::-webkit-scrollbar{width:7px}
   body.rbrDashWide #rbrDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
 }
+/* RBCM (2026-11-05): inputs that only one code uses are hidden in the other code mode (body class rbAASHTO, set in
+   updateCodeHint). CSS only: the inputs stay in the page, keep their values and are saved as before. */
+body.rbAASHTO .rbAciOnly{display:none!important}
+body:not(.rbAASHTO) .rbAashOnly{display:none!important}
+/* RBIE (2026-11-05): a required input that is blank or invalid is outlined red, with the message under it */
+.field input.rbInErr{border-color:var(--fail)!important; background:#FEF2F2!important;}
+.rbInErrMsg{grid-column:1/-1; font-size:8.5pt; color:#991B1B; margin:2px 0 0; padding:2px 6px; border-left:3px solid var(--fail); background:#FEF2F2; font-family:var(--font-ui);}
+/* RBIE: on a phone the two wide optional boxes (c-c spacing, bend radius R) leave room for their label and unit */
+@media screen and (max-width:600px){ .field input[type=number][placeholder]{width:150px;} }
 </style>
 </head>
 <body>
@@ -779,10 +788,10 @@ function buildInputPanel(){
       <div class="field"><label>n bars</label><input id="nBars" type="number" value="1" step="1" min="1"></div>
     </div>
     <div class="hint">Leave A<sub>tr</sub>=0 for no transverse steel (conservative). ACI: K<sub>tr</sub>=40A<sub>tr</sub>/(s·n). AASHTO: k<sub>tr</sub>=A<sub>tr</sub>/(s·n).</div>
-    <div class="field" style="margin-top:8px"><label>&beta;<sub>t</sub> &mdash; transverse compression / f<sub>r</sub> <span class="unit">(AASHTO only, &minus;1 to 0)</span></label>
+    <div class="field rbAashOnly" style="margin-top:8px"><label>&beta;<sub>t</sub> &mdash; transverse compression / f<sub>r</sub> <span class="unit">(AASHTO only, &minus;1 to 0)</span></label>
       <input id="betaT" type="number" value="0" step="0.05" min="-1" max="0">
       <div class="hint">AASHTO 5.10.8.2.1c: ratio of the unfactored permanent-load compressive stress across the splitting plane to f<sub>r</sub> (5.4.2.6), entered as a negative number. Default 0 = no credit (conservative).</div></div>
-    <div class="field" style="margin-top:8px"><label>Developed bars c-c spacing <span class="unit">(in, optional)</span></label>
+    <div class="field rbAciOnly" style="margin-top:8px"><label>Developed bars c-c spacing <span class="unit">(in, optional)</span></label>
       <input id="barSpc" type="number" step="0.5" min="0" placeholder="for ACI 25.4.2.2 check (fy ≥ 80 ksi)"></div>`)}
 
   ${panel("D2","Excess Reinforcement",true,`
@@ -799,19 +808,19 @@ function buildInputPanel(){
   ${panel("E","Standard Hook Factors",true,`
     <div class="field"><label>Epoxy Coating (&psi;<sub>e</sub>)</label>
       <select id="hookEpoxy"><option value="1.0" selected>Uncoated (1.0)</option><option value="1.2">Epoxy/zinc-epoxy (1.2)</option></select></div>
-    <div class="field"><label>Location (&psi;<sub>o</sub>)</label>
+    <div class="field rbAciOnly"><label>Location (&psi;<sub>o</sub>)</label>
       <select id="hookLoc">
         <option value="1.0" selected>Inside column/wall core w/ side cover ≥2.5&quot;, or side cover ≥6db (1.0)</option>
         <option value="1.25">Other, e.g. side cover &lt;2.5&quot; (1.25)</option>
       </select></div>
     <div class="chk"><input id="hookConfined" type="checkbox"><label for="hookConfined">Confining reinf. present &rarr; &psi;<sub>r</sub>=1.0 (else 1.6)</label></div>
     <div class="hint">AASHTO: ticked = hook ties per 5.10.8.2.4b (#11 and smaller) &rarr; k<sub>tr</sub> = 0 and l<sub>dh</sub> &times; 0.8. Do not tick at a discontinuous end with side and top/bottom cover both under 2.5 in. (ties required there, no reduction).</div>
-    <div class="field" style="margin-top:8px"><label>Bend radius R to bar centroid <span class="unit">(in, AASHTO only)</span></label>
+    <div class="field rbAashOnly" style="margin-top:8px"><label>Bend radius R to bar centroid <span class="unit">(in, AASHTO only)</span></label>
       <input id="hookR" type="number" step="0.125" min="0" placeholder="blank = minimum standard bend">
       <div class="hint">AASHTO 5.10.8.2.4a. Blank = minimum finished bend of Table 5.10.2.3-1: R = D/2 + d<sub>b</sub>/2 with D = 6d<sub>b</sub> (#3&ndash;#8), 8d<sub>b</sub> (#9&ndash;#11), 10d<sub>b</sub> (#14, #18). The smallest R gives the longest l<sub>dh</sub> (conservative); galvanized bars have larger bends (Table 5.10.2.3-2).</div></div>`)}
 
   ${panel("E2","Compression Development (&psi;<sub>r</sub>)",true,`
-    <div class="field"><label>Confining Reinforcement (&psi;<sub>r</sub>, ACI Table 25.4.9.3)</label>
+    <div class="field rbAciOnly"><label>Confining Reinforcement (&psi;<sub>r</sub>, ACI Table 25.4.9.3)</label>
       <select id="psiRc">
         <option value="1.0" selected>Other (1.0)</option>
         <option value="0.75">Enclosed in spiral, circular tie (db≥1/4&quot;, pitch≤4&quot;), #4 ties or hoops @ ≤4&quot; c-c (0.75)</option>
@@ -826,7 +835,7 @@ function buildInputPanel(){
       </select></div>
     <div class="field"><label>% of A<sub>s</sub> spliced within lap length</label>
       <input id="pctSpliced" type="number" value="100" step="5" min="0" max="100"></div>
-    <div class="hint">The tool checks Class A eligibility using A<sub>s</sub> from the Excess Reinforcement panel: needs A<sub>s,prov</sub> ≥ 2·A<sub>s,req</sub> and ≤50% spliced.</div>`)}
+    <div class="hint">The tool checks Class A eligibility using A<sub>s</sub> from the Excess Reinforcement panel (D2, Tension tab): needs A<sub>s,prov</sub> ≥ 2·A<sub>s,req</sub> and ≤50% spliced.</div>`)}
 
   ${panel("G","Engineering Assumptions",true,`
     <div class="field"><textarea id="assumptions" rows="4" placeholder="Enter any project-specific assumptions…"></textarea></div>`)}
@@ -960,7 +969,9 @@ function rebarInputTabMarks(w){
   const bad={};
   const mark=n=>{ const pn=(n && n.closest) ? n.closest('.rebarInPane') : null; if(pn) bad[pn.id.replace('rebarInPane_','')]=1; };
   const panel=id=>document.querySelector('#inputPanel .panel[data-panel=\''+id+'\']');
-  document.querySelectorAll('#inputPanel .rebarInPane input').forEach(i=>{ if(i.validity && i.validity.badInput) mark(i); });
+  const codeHidden=n=>!!(n.closest && n.closest(document.body.classList.contains('rbAASHTO')?'.rbAciOnly':'.rbAashOnly'));   // RBCM
+  document.querySelectorAll('#inputPanel .rebarInPane input').forEach(i=>{ if(i.validity && i.validity.badInput && !codeHidden(i)) mark(i); });
+  document.querySelectorAll('#inputPanel .rebarInPane .rbInErr').forEach(mark);   // RBIE
   document.querySelectorAll('#inputPanel .rebarInPane .inwarn').forEach(mark);
   const fh=document.getElementById('fcHint'); if(fh && fh.textContent.trim()) mark(fh);
   (w||[]).forEach(s=>{ const m=REBAR_IN_WARN.find(r=>r[0].test(s)); if(m) mark(panel(m[1])); });
@@ -1019,6 +1030,7 @@ function validate(inp,f){
   return w;
 }
 function updateCodeHint(inp){
+  document.body.classList.toggle('rbAASHTO',inp.code==="AASHTO");   // RBCM: hide the inputs of the other code (CSS only)
   const el=document.getElementById('codeHint'); if(!el) return;
   el.textContent = inp.code==="AASHTO"
     ? "Bridge code (ksi units internally). Structure mirrors ACI with λ factors."
@@ -1634,6 +1646,8 @@ document.addEventListener('click',e=>{
    DASHBOARD — all code checks
    ===================================================================== */
 function buildDashboard(inp,f){
+  { const ie=rbInputErrors(inp,f);   // RBIE: no dashboard values while a required input is blank or invalid
+    if(ie.length){ document.getElementById('dashboard').innerHTML='<div class="warnbox">Input error: no results.</div>'; rbrDashRender(null,f,ie); return; } }
   const t=calcTension(inp,f), h=calcHook(inp,f), c=calcComp(inp,f),
         ts=calcTensSplice(inp,f,t), cs=calcCompSplice(inp,f);
   const e=classAEligible(inp,f);
@@ -1749,11 +1763,17 @@ function rbrDashGo(it){
   if(it.card) rebarGoto(it.card);
   else if(it.tab){ switchTab(it.tab); const tc=document.getElementById('tabcontent'); if(tc) tc.scrollTop=0; }
 }
-function rbrDashRender(checks,f){
+function rbrDashRender(checks,f,ie){
   const box=document.getElementById('rbrDash'), cnt=document.getElementById('rbrDashCnt'); if(!box) return;
   box.innerHTML='';
   /* RBDT (2026-11-05): the panel title names the code of the calculation, as the old dashboard heading did */
   const tt=document.getElementById('rbrDashTtl'); if(tt) tt.textContent='Checks \u2014 '+(f&&f.AASHTO?'AASHTO LRFD 10th Ed. \u00a75.10.8':'ACI 318-19');
+  if(ie&&ie.length){   // RBIE: the input error instead of the lines
+    const m=document.createElement('div'); m.className='rbrdMsg';
+    m.textContent='Input error: no results. '+ie.map(e=>e[1]).join(' ')+' Correct the marked inputs.'; box.appendChild(m);
+    if(cnt) cnt.innerHTML='<span class="rbrdCf">input error</span>';
+    return;
+  }
   const n={fail:0,warn:0};
   const tmp=document.createElement('div');
   const txt=h=>{ tmp.innerHTML=String(h); return tmp.textContent; };
@@ -1804,13 +1824,55 @@ function rbrDashColl(v,save){
   rbrDashPlace();
 })();
 
+/* RBIE (2026-11-05, engineer): required inputs. A blank number box gave NaN (f′c, A_tr, A_s,req), an infinite ACI l_d (c_b + K_tr = 0)
+   or silently no credit / no reduction (s and n with A_tr > 0, A_s,prov). While any of these stands, no result is shown: the
+   output tab, the check summary panel and the Report say "Input error: no results" and the inputs are outlined with the reason.
+   Optional boxes (bar c-c spacing, β_t, bend radius R, λ) keep their documented blank behaviour. Valid inputs: no change. */
+function rbInputErrors(inp,f){
+  const E=[], num=v=>typeof v==='number'&&isFinite(v);
+  if(!num(inp.fc)||inp.fc<=0) E.push(['fc',"f′c must be greater than 0."]);
+  const atrOk=num(inp.Atr)&&inp.Atr>=0;
+  if(!num(inp.cb)||inp.cb<0) E.push(['cb',"c_b must be entered (0 or greater)."]);
+  else if(!f.AASHTO&&atrOk&&!(f.cbKtr_raw>0)) E.push(['cb',"c_b must be greater than 0 when K_tr = 0 (ACI Eq. 25.4.2.4a divides by (c_b + K_tr)/d_b)."]);
+  if(!atrOk) E.push(['Atr',"A_tr must be entered, 0 or greater (0 for no transverse steel)."]);
+  else if(inp.Atr>0){
+    if(!num(inp.sTr)) E.push(['sTr',"Spacing s of the transverse steel must be entered when A_tr > 0."]);
+    if(!num(inp.nBars)) E.push(['nBars',"Number of bars n must be entered when A_tr > 0."]);
+  }
+  if(inp.useExcess){
+    if(!num(inp.asReq)||inp.asReq<0) E.push(['asReq',"A_s required must be entered (excess-reinforcement reduction ticked)."]);
+    if(!num(inp.asProv)) E.push(['asProv',"A_s provided must be entered (excess-reinforcement reduction ticked)."]);
+  }
+  if(inp.tensClass==="A"&&(!num(inp.pctSpliced)||inp.pctSpliced<0||inp.pctSpliced>100)) E.push(['pctSpliced',"% of A_s spliced must be between 0 and 100 (Class A eligibility)."]);
+  return E;
+}
+function rbInputMarks(E){
+  document.querySelectorAll('#inputPanel .rbInErrMsg').forEach(n=>n.remove());
+  document.querySelectorAll('#inputPanel .rbInErr').forEach(n=>{ n.classList.remove('rbInErr'); n.removeAttribute('aria-invalid'); });
+  E.forEach(([id,msg])=>{
+    const i=document.getElementById(id); if(!i) return;
+    i.classList.add('rbInErr'); i.setAttribute('aria-invalid','true');
+    const m=document.createElement('div'); m.className='rbInErrMsg'; m.textContent=msg;
+    const fld=i.closest('.field');
+    if(fld&&i.parentNode===fld) fld.appendChild(m); else if(fld) fld.insertAdjacentElement('afterend',m); else i.insertAdjacentElement('afterend',m);
+  });
+}
+function rbInputErrHTML(E){
+  return `<div class="warnbox" style="border-left-color:var(--fail)"><b>Input error: no results.</b><ul>${E.map(e=>'<li>'+escHTML(e[1])+'</li>').join('')}</ul>Correct the marked inputs.</div>`;
+}
 function render(){
   const inp = readInputs();
   const f = computeFactors(inp);
   buildDashboard(inp,f);
   const w = validate(inp,f);
+  const ie = rbInputErrors(inp,f);   // RBIE
+  rbInputMarks(ie);
   if(RBRP.on){ rbrRender(); fcHintUpdate(inp); updateCodeHint(inp); rebarInputTabMarks(w); autosave(); return; }   // RBRP: the Report tab (shared viewer)
 
+  if(ie.length){   // RBIE: no results while a required input is blank or invalid
+    document.getElementById('tabcontent').innerHTML = rbInputErrHTML(ie);
+    fcHintUpdate(inp); updateCodeHint(inp); rebarInputTabMarks(w); autosave(); return;
+  }
   let body = "";
   if(currentTab==="tension") body = tabTension(inp,f,false);
   else if(currentTab==="hook") body = tabHook(inp,f);
@@ -2347,6 +2409,9 @@ function rbComm(html){
 function rbCommSub(html){ const L=rbComm(html); return L.length?[{title:'Notes and commentary',items:L}]:[]; }
 function rbrModel(){
   const inp=readInputs(), f=computeFactors(inp), w=validate(inp,f), A=f.AASHTO, secs=[];
+  { const ie=rbInputErrors(inp,f);   // RBIE: the Report says so instead of printing NaN
+    if(ie.length) return {title:'Rebar Development & Splice Calculation',subtitle:(inp.projName||'Untitled'),code:A?'AASHTO LRFD 10th Ed. (2024) §5.10.8':'ACI 318-19',
+      sections:[{title:'Development and splice lengths',subs:[{title:'No results',items:[{type:'note',warn:true,text:'Input error, no results: '+ie.map(e=>e[1]).join(' ')}]}]}]}; }
   const codeName=A?'AASHTO LRFD 10th Ed. (2024) §5.10.8':'ACI 318-19';
   const CARD_KEY={tLd:'td/ld',hLdh:'hk/ldh',cLdc:'cd/ldc',tsLen:'ts/lst',tsClassA:'ts/clsA',tConf:'td/ktrHS',csLen:'cs/lsc'};
   const tabLink=(tab,txt)=>'[[tab:'+tab+'|'+txt+']]';
