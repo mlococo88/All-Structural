@@ -1984,3 +1984,63 @@ Applies to `ACI Rebar Development Length.html` and the Development & Splice fram
   - The tool's length is about 12 % short.
 - **AASHTO mode:** 5.10.8.2.1a uses λ of 5.4.2.8, so it is not affected by this ACI table.
 - **Not changed (calculation, §4):** the engineer is to decide whether the ACI branch should force λ = 0.75 for lightweight concrete in development lengths.
+
+## 2026-11-05 — PR: claude/cbc-aci-lambda-dev (CBLA: ACI development lengths use λ = 0.75 for lightweight concrete per Tables 25.4.2.5 / 25.4.3.2 / 25.4.9.3; CALCULATION CHANGE, ACI mode, lightweight only; less conservative before)
+
+Engineer approval: 2026-11-05, after the Table 25.4.2.5 check (RBLC, #797). This applies to `ACI Rebar Development Length.html` and to the Development & Splice frame (`suite-frame-dev`) of `Concrete Beam Capacity.html`, with the same edits in each.
+
+Not affected:
+- the Beam Capacity frame's λ (shear, torsion, 19.2.4);
+- AASHTO mode (entered λ, 5.4.2.8);
+- normalweight concrete (λ = 1.0).
+
+### CBLA. λ in ACI development lengths   [CALCULATION CHANGE]
+- **Governing provision (checked in the PDF):** ACI 318-19 sets λ = 0.75 for lightweight concrete and 1.0 for normalweight, with no intermediate value, in three tables:
+  - Table 25.4.2.5, straight bars in tension (printed p. 474);
+  - Table 25.4.3.2, hooked bars (printed p. 475);
+  - Table 25.4.9.3, compression (printed p. 487).
+- **Why 19.2.4.1 does not apply here:** 19.2.4.1 (p. 357) opens with "Except as required in Table 25.4.2.5", and R25.4.2.5 says the development λ is the same for all lightweight concrete.
+- **Where:** `computeFactors()`, anchor `const lambda = inp.lightweight ?`.
+  - Before:
+    ```js
+    const lambda = inp.lightweight ? (isFinite(lamIn) ? Math.min(1.0, Math.max(0.75, lamIn)) : 0.75) : 1.0;
+    const lambdaAdj = inp.lightweight && !(isFinite(lamIn) && lamIn>=0.75 && lamIn<=1.0);
+    ```
+  - After (with a CBLA comment):
+    ```js
+    const lamA = inp.code==="AASHTO";
+    const lambda = inp.lightweight ? (lamA ? (isFinite(lamIn) ? Math.min(1.0, Math.max(0.75, lamIn)) : 0.75) : 0.75) : 1.0;
+    const lambdaAdj = lamA && inp.lightweight && !(isFinite(lamIn) && lamIn>=0.75 && lamIn<=1.0);
+    ```
+  - `f.lambda` feeds the ACI l_d (Eq. 25.4.2.4a), l_dh (25.4.3.1(a)) and l_dc (25.4.9.2(a)). Through them it also feeds the tension lap splice (1.0 or 1.3 × l_d), the bar schedule and the chart. The compression splice has no λ.
+  - The λ input error RBLM, and the validate() warning on λ outside 0.75–1.0, now apply in AASHTO mode only, because ACI no longer reads the box.
+- **Input box (decision, recorded as Decision (pending engineer review)):** the λ box stays and keeps its saved value. In ACI mode it is disabled (greyed).
+  - Under it, an ACI-only hint (`rbAciOnly`) says: "ACI mode: development lengths use λ = 0.75 for lightweight concrete (ACI 318-19 Tables 25.4.2.5, 25.4.3.2 and 25.4.9.3), whatever is entered here; this box is used in AASHTO mode."
+  - Code: `updateCodeHint()` sets `lw.disabled=(inp.code!=="AASHTO")`, and the CSS adds `.field input:disabled{…}`.
+  - Reason: in this frame the entered λ is used only for development, so in ACI mode it has no effect.
+- **Steps say so:**
+  - ACI tension, hook and compression variable tables: λ row "Lightweight concrete: 0.75 per ACI Table 25.4.2.5 / 25.4.3.2 / 25.4.9.3 (entered λ not used)", or "Normalweight concrete (Table …)".
+  - Tension commentary: added "ACI 318-19 Table 25.4.2.5 gives 0.75 for every lightweight concrete, so the λ entered in Code & Material is not used here (it is used in AASHTO mode)."
+  - Report step `lam`: label "Lightweight concrete factor (0.75 for lightweight concrete in every ACI development length, whatever λ is entered)" or "(normalweight)". Its reference is "ACI 318-19 Tables 25.4.2.5, 25.4.3.2, 25.4.9.3".
+  - Report references, ACI row: "Tables 25.4.2.5, 25.4.3.2 and 25.4.9.3 (λ for development)", in place of "19.2.4.1, Tables 19.2.4.1(a)/(b) (λ)".
+- **Check case:** ACI, #8 bar, f′c 4000 psi, f_y 60 ksi, c_b 1.5 in, K_tr 0, all ψ = 1.0, lightweight with λ entered 0.85.
+
+  | Quantity | Before (λ = 0.85) | After (λ = 0.75) | Hand check |
+  |---|---|---|---|
+  | l_d | 55.80 in | 63.25 in | 3/40 · 60000/(0.75·63.25) · 1/1.5 · 1.0 = 63.25 (normalweight 47.43; 47.43/0.75 = 63.24 with rounded inputs) |
+  | l_dh | 28.14 in | 31.89 in | 60000·1.0·1.6·1.0·0.8667/(55·0.75·63.25) = 31.89 |
+  | l_dc | 22.32 in | 25.30 in | max(0.02·60000/(0.75·63.25), 0.0003·60000) = max(25.30, 18.0) = 25.30 |
+  | l_st (Class B) | 72.55 in | 82.22 in | 1.3 × 63.25 = 82.22 |
+  | l_sc | 30.0 in | 30.0 in | no λ |
+
+  With λ entered as 0.75 the results were the same before and after. AASHTO with λ 0.85: l_d 72.75, l_dh 51.50, l_dc 18.90 in before and after (unchanged).
+- **Conservatism:** for any lightweight λ above 0.75 the tool was less conservative before. Lengths now grow by up to λ_entered/0.75, which is +13.3 % at 0.85.
+- **How verified:**
+  - Headless Chromium, origin/main (after #797) vs branch, in the suite and the standalone tool.
+  - Default (normalweight) and ACI torsion cases: every numeric result identical. The only differences are the step labels, the Report λ reference, and one commentary sentence.
+  - AASHTO excess case: identical.
+  - The lightweight table above was computed in the page.
+  - `check-syntax`, `phone-layout --tool cbc,aci` and `project-library` pass.
+  - Screenshot of Code & Material looked at: λ box disabled, with the ACI hint.
+- **Saved data:** no key or format change; the entered λ is still saved.
+- **Other copies:** standalone tool and suite Dev frame (same edits).
