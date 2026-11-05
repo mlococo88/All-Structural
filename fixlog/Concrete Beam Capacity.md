@@ -4047,7 +4047,7 @@ Not affected:
   - The error case and recovery above, with 0 console errors and a screenshot looked at.
   - `check-syntax`, `run.mjs report steps steps-groups report-wiring` (14 passed) and `phone-layout --tool cbc` pass.
 - **Saved data:** none. **Governing provision:** none. **Other copies:** none (the standalone "Concrete Beam ASD.html" is a redirect; the frame alone gets no message and shows no notice).
-## 2026-11-05 — PR: claude/cbc-scale-bars (CBSB: every geometric drawing of the suite to scale with a scale bar, measured; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-scale-bars, PR #802: https://github.com/mlococo88/All-Structural/pull/802 (CBSB: every geometric drawing of the suite to scale with a scale bar, measured; display only, no result change)
 
 ### CBSB. Scale bars and to-scale drawings   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 5 graphics, PR A):** every geometric drawing in the three frames gets a scale bar or a "to scale" note; re-measure in headless Chromium (as Spread Footing SFTS #776) and fix any drawing that is not to scale.

@@ -2045,7 +2045,7 @@ Not affected:
 - **Saved data:** no key or format change; the entered λ is still saved.
 - **Other copies:** standalone tool and suite Dev frame (same edits).
 
-## 2026-11-05 — PR: claude/cbc-scale-bars (CBSB: the bar-in-section and hook drawings to scale with a scale bar; this file and the Development & Splice tab of Concrete Beam Capacity.html; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-scale-bars, PR #802: https://github.com/mlococo88/All-Structural/pull/802 (CBSB: the bar-in-section and hook drawings to scale with a scale bar; this file and the Development & Splice tab of Concrete Beam Capacity.html; display only, no result change)
 
 ### CBSB. Development drawings to scale   [display only] [no result change]
 - **Engineer request (2026-11-05, Concrete Beam Capacity Phase 5, PR A):** every geometric drawing gets a scale bar or a "to scale" note, measured in headless Chromium. Fix any that is not to scale. The Development & Splice frame is kept in step with this file.
