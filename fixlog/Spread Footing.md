@@ -4957,6 +4957,50 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 1. The dashboard chip and Report summary row are still named "Dowel steel (min 0.005A_g)" when a wall is present (the chip's value text and reference name the wall rule). The name is the lookup key of several maps (`sfdResultRows`, the Report summary "Worked in" map), so it was not renamed here.
 2. The card 5.6 formula line shows ℓ_dc ≥ 0.0003f_y d_b but not the 8 in floor of 25.4.9.1(b); the computation and the Report step `p<i>.ldc` include it.
 3. Dowel compression development, excess reinforcement (25.4.10.1): investigated, not implemented. See the PR description (code not clear enough for this case: 25.4.10.2(b), (c), (d) and R16.3.4).
+## 2026-11-05 — PR: claude/sf-3d-dowel-hooks (PR #771: https://github.com/mlococo88/All-Structural/pull/771) (SFHK: dowel hooks and embedment in the 3D view and the section sheets; display only, no result change)
+
+- **Problem:** the 3D view (tab 7) drew the pedestal vertical bars from the footing top up only, and drew "dowels" as a fixed placeholder: min(0.6 t, 1.2 ft) into the footing and min(h/2, 1.5 ft) up, straight, whatever the inputs. The selected hook, the embedment of card 5.6 and the lap of separate dowels were not shown. The section sheets (A-A, B-B) and the pedestal elevation drew the vertical bars straight down to the top of the bottom mat: no hook, and no separate dowels.
+- **Where:**
+  - New helpers before `sfdwDowelNote` (anchor `/* SFHK (2026-11-05): the dowel ends in the footing`): `sfdHookGeo(size)`, `sfdHookDir(x,y,ax,ay)`, `sfdHookPath(x,y,dir,zTop,zOut,size,hooked)`.
+  - `sfdwBuild`: new inner `sfhkEnds(c,a,i,zTof,zTob)` just before `function section(dir){`. It is called in `section()` after the tie lines (anchor `sfhkEnds(c,a,i,t12,LV.topOfBot);`) and in the pedestal elevation before the `'ELEVATION'` title (anchor `sfhkEnds(ex,Lp.ax,i,0,-(t12-LV.topOfBot));`). It only adds S-REBAR LINE / ARC entities.
+  - `buildRebar` (3D), pedestal loop.
+    - Before: `uniq.forEach(([xx,yy])=>{const geo=new THREE.CylinderGeometry(db/2,db/2,p.h*0.98,8);…});`. After: when the bars act as the dowels (`P2.dowels[i].cont`), each bar is drawn as one path from 0.99 h down to the footing end via `sfdHookPath`. Otherwise it is drawn as before.
+    - Before: `if(dwd>0&&dn>0){const per=uniq.slice(0,…);const embFt=Math.min(t*0.6,1.2);const embPed=Math.min(p.h*0.5,1.5);…}`. After: separate dowels (`!cont`, nD > 0) are drawn from the footing end up to the projection `Lprov`. The old placeholder is kept only where there is no dowel result (bearing patch, h = 0): `else if(!hk&&dwd>0&&dn>0){…}`.
+- **Geometry (display only):**
+  - 90° standard hook: straight extension 12 d_b beyond the bend (ACI 318-19 Table 25.3.1). Inside bend diameter per Table 25.3.2: 6 d_b for No. 3–8, 8 d_b for No. 9–11, 10 d_b for No. 14 and 18. Centre-line bend radius r = D/2 + d_b/2.
+  - The outside of the hook rests at the available depth of card 5.6, `z.availEmb` = t − c_bot − d_b,x − d_b,y below the footing top (the top of the bottom mat). The tail centre line is d_b/2 above it. A straight dowel ends at the same depth.
+  - The drawings use `LV.topOfBot`, which is the same level: cvB + d_b,y + d_b,x.
+- **Decisions (pending engineer review):**
+  1. **Tail direction: toward the pedestal centre.** Bars on a face point normal to that face, and corner bars point diagonally. This follows ACI 318-19 18.13.2.3 for column bars hooked in a foundation. The tool and drawings had no convention before. In a small pedestal, tails from opposite faces pass the centre and overlap. They are drawn as such.
+  2. **2D sections:** each hook is drawn in its true shape in the plane of the section, including corner bars, whose real tails are diagonal.
+     - The existing vertical-bar lines are unchanged: new entities only. They still run straight to the top of the bottom mat, so for a hooked bar a short straight stub (r + d_b/2) shows below the start of the bend.
+     - With separate dowels, the existing vertical-bar line still runs into the footing as on main. The new dowel line is drawn beside it.
+     - Both points are left for the engineer to decide (changing the existing lines changes existing DXF entities).
+  3. **Separate dowels:** drawn in contact with the vertical bars on the inside, offset (d_b,long + d_b,dowel)/2 toward the centre, from the footing end up to the projection `Lprov` (the lap; for full-height dowels h − cover).
+     - In 3D, where the dowel count differs from the vertical-bar count, the dowels are spread evenly round the perimeter just inside the bars, starting from a corner. The calculation smears their area over the bar positions (SFDA); this is not changed.
+     - The 3D vertical bars of a pedestal with separate dowels still start at the footing top (as before).
+- **Check case:**
+  - Default project, #8 continuous, hooked: d_b = 1.000 in, D = 6.000 in, r = 3.500 in, tail 12.000 in. availEmb = 25.00 in.
+    - Tail centre line 24.50 in below the footing top.
+    - Bend starts 21.00 in below the top.
+    - Tail end 3.50 + 12.00 = 15.50 in from the bar axis toward the pedestal centre.
+  - Seymour Ped 1, #6: d_b = 0.750 in, D = 4.500 in, r = 2.625 in, tail 9.000 in. availEmb = 19.25 in.
+    - Tail centre line 18.875 in below the top.
+    - Bend starts 16.25 in below.
+    - Tail end 11.625 in from the bar axis.
+- **How verified (headless Chromium, origin/main b833fec vs the branch):**
+  - Deep diff of `R` and `P2` on all 10 cases of the Spread Footing harness: 0 differences. Report text and dashboard identical. 0 console errors, 0 KaTeX errors.
+  - DXF on 7 harness cases plus Seymour:
+    - every existing entity is identical and in the same order;
+    - sheet ids, scales and offsets are unchanged;
+    - only S-REBAR LINE / ARC entities were added (e.g. revHook: 6 on A-A, 12 on B-B, 6 per pedestal elevation);
+    - `SharedDxf.validate` passes on all.
+  - Tests: `node tests/check-syntax.mjs` (all files), `tests/smoke/spread-footing-scroll.mjs` and `tests/smoke/dxf-print-sheets.mjs` pass.
+  - 3D screenshots were checked by eye: default, Seymour, revHook (separate hooked dowels) and rev (separate straight dowels).
+- **Saved data:** none.
+- **Other copies:** none.
+- **Open items:** the existing vertical-bar lines in the 2D sections and the elevation (decision 2) are left as they were.
+
 
 ## 2026-11-05 — PR: claude/sf-ldc-bearing — Dowel compression development ℓ_dc required only for compression beyond the concrete bearing strength, ACI 318-19 16.3.1.2(a) (SFBC; pass / fail logic change)
 
