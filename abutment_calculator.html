@@ -29,6 +29,7 @@
 <!-- PLIB (2026-11-02): saved-project rename / duplicate, Redo and Ctrl+Z / Ctrl+Y, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS2 (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <style>
 /* ================= GLOBAL / THEME ================= */
 :root{
@@ -10041,13 +10042,13 @@ document.getElementById("btnUndo").addEventListener("click",doUndo);
 document.getElementById("btnRedo").addEventListener("click",doRedo);   // PLIB
 /* PLIB: Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z through shared/projects-ui.js (left to the browser while text is being typed in a field) */
 if(window.SharedProjectsUI) SharedProjectsUI.undoRedo({ undo:doUndo, redo:doRedo, canUndo:()=>UNDO.length>0, canRedo:()=>REDO.length>0, onChange:()=>{} },{});
-document.getElementById("btnManageProj").addEventListener("click",()=>{ renderProjList(); document.getElementById("dlgProj").showModal(); });
+document.getElementById("btnManageProj").addEventListener("click",()=>{ renderProjList(); document.getElementById("dlgProj").showModal(); if(AB_GH) AB_GH.shown(AB_GH_UI).catch(()=>{}); /* GHS2 */ });
 document.getElementById("dlgProjClose").addEventListener("click",()=>document.getElementById("dlgProj").close());
 function renderProjList(){
   const all=getProjects(), el=document.getElementById("projList");
   const names=Object.keys(all).sort((a,b)=>all[b].ts-all[a].ts);
   el.innerHTML=names.length?names.map(n=>`
-    <div class="prow"><span class="pname">${esc(n)}</span><span class="pdate">${new Date(all[n].ts).toLocaleString()}</span>
+    <div class="prow"><span class="pname">${esc(n)}${AB_GH?" "+AB_GH.statusCell(n):""}</span><span class="pdate">${new Date(all[n].ts).toLocaleString()}</span>
     <button class="mini-btn" data-act="load" data-n="${esc(n)}">Load</button>
     <button class="mini-btn" data-act="ow" data-n="${esc(n)}">Overwrite</button>
     <button class="mini-btn" data-act="ren" data-n="${esc(n)}" data-sp="1">Rename</button>
@@ -10058,9 +10059,10 @@ function renderProjList(){
     const n=b.dataset.n, all=getProjects();
     if(b.dataset.act==="load"){ S=all[n].state; migrate(); buildTabs(); buildInputs(); recalcAll(); scheduleSave(); document.getElementById("dlgProj").close(); refreshProjHeader(); markSavedFp(); }
     if(b.dataset.act==="ow"){ if(confirm(`Overwrite "${n}" with current inputs?`)){ if(!S.meta)S.meta={revs:[]}; S.meta.revs.push({n, ts:Date.now(), fp:(window.LAST_R&&window.LAST_R.fingerprint)||""}); S.meta.revs=S.meta.revs.slice(-10); all[n]={state:clone(S),ts:Date.now()}; setProjects(all); renderProjList(); } }
-    if(b.dataset.act==="del"){ if(confirm(`Delete "${n}"?`)){ delete all[n]; setProjects(all); renderProjList(); } }
+    if(b.dataset.act==="del"){ if(confirm(`Delete "${n}"?`)){ delete all[n]; setProjects(all); renderProjList(); if(AB_GH) AB_GH.deleted(n); /* GHS2: asks before deleting the GitHub copy */ } }
     if(b.dataset.act==="ren"||b.dataset.act==="dup") abPlibAct(b.dataset.act,n);   // PLIB
   }));
+  if(AB_GH){ AB_GH.bind(el); AB_GH.decorate(abGhHost(),AB_GH_UI,{rows:false}); }   // GHS2: sync bar, first-sync offer, "On GitHub only" rows above the list
 }
 /* PLIB (2026-11-02): Rename / Duplicate in the Projects dialog, over the tool's own key abutcalc_v1_projects ({ name: { state, ts } }) with
    shared/projects.js: the stored item moves / is copied unchanged; a name in use asks first; a refused write shows the message. */
@@ -10072,7 +10074,20 @@ function abPlibAct(a,n){
   if(!r.ok&&r.error==="exists"){ if(!confirm(`A saved project named "${to.trim()}" already exists. Replace it?`)) return; r=a==="ren"?L.rename(n,to,{replace:true}):L.duplicate(n,to,{replace:true}); }
   if(!r.ok) alert(r.message||r.error);
   renderProjList();
+  if(r.ok&&a==="ren"&&AB_GH) AB_GH.renamed(n,r.name);   // GHS2: asks before deleting the old name on GitHub
 }
+/* GHS2 (2026-11-05): GitHub sync of the saved projects (shared/github-sync.js; docs/github-sync-setup.md). Off until set up: with no
+   settings it writes nothing and makes no request. The list stays abutcalc_v1_projects ({ name: { state, ts } }, unchanged); each
+   project is the file projects/abutment-calculator/<name>.json on GitHub, in the Export JSON format (the state S, indent 2).
+   A file from GitHub goes through the Import JSON checks and merge (abutMergeState) and is stored as { state, ts }; Open = Load. */
+const AB_GH=(()=>{ if(!window.SharedGitHubSync||!window.SharedProjects) return null; let ST=null; try{ ST=window.localStorage; }catch(e){ return null; }
+  return SharedGitHubSync.attach({ store:SharedProjects.mapStore(ST,PROJ_KEY), storage:ST,
+    open:n=>{ const all=getProjects(); if(!all[n]) return false; S=all[n].state; migrate(); buildTabs(); buildInputs(); recalcAll(); scheduleSave(); refreshProjHeader(); markSavedFp(); return true; },
+    changed:()=>{ if(document.getElementById("dlgProj").open) renderProjList(); },
+    cloud:{ tool:"abutment-calculator", label:"Abutment Calculator", space:2, toFile:i=>i.state,
+      fromFile:o=>{ const tag=o._schema||o.schema; if(tag||!o.geom||!o.proj) throw new Error("not an abutment-calculator project file"); return { state:abutMergeState(o), ts:Date.now() }; } } }); })();
+function abGhHost(){ let h=document.getElementById("projGh"); if(!h){ h=document.createElement("div"); h.id="projGh"; h.setAttribute("data-sp","gh-host"); document.getElementById("projList").before(h); } h.innerHTML=""; return h; }
+const AB_GH_UI={ redraw:()=>{ if(document.getElementById("dlgProj").open) renderProjList(); }, close:()=>document.getElementById("dlgProj").close() };
 function refreshProjHeader(){
   document.querySelectorAll("#projBlock input").forEach(el=>{ el.value=getPath(S,el.dataset.path)??""; });
 }

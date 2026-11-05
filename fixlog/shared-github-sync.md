@@ -73,3 +73,14 @@ Engineer's setup steps: `docs/github-sync-setup.md`.
 - **Not covered (own project dialogs, not `libraryDialog`):** abutment_calculator, elastomeric_design_module, Bridge Geometry, Pile Designer
   (IndexedDB), index.html, lldf.html, Prestressed Bridge Design, Steel Bridge Design, apps/steel-bridge. Each needs its own small adapter;
   not done (question for the engineer).
+
+## 2026-11-05 — PR: claude/ghsync-ext (GHS2) — hooks for tools with their own project dialog; first tool: abutment_calculator   [storage only; no result change]
+- **Why:** engineer request: sync in the tools that keep projects in their own dialog or panel (not `libraryDialog`).
+- **What (`attach`, additive; the Saved projects dialog of the 14 tools behaves as before):**
+  - New `statusCell(name)`: the GitHub status badge and its buttons for one project (`<span data-sp="gh-cell">…</span>`; `''` while sync is off), for the tool to place in its own row.
+  - New `bind(el)` (= the existing `bindBody`): one click listener for those buttons on the tool's rows element.
+  - `decorate(body, u)` → `decorate(body, u, o)`: `o.rows === false` skips the GitHub column of `body`'s table (the tool placed `statusCell` itself). Before: `const table = body.querySelector('table');` After: `const table = o && o.rows === false ? null : body.querySelector('table');`
+  - In `decorate`, `own = !(dlg && dlg.querySelector('.spHead span'))` (not a Saved projects dialog): the "Cloud sync (GitHub)…" settings button goes in the sync bar (`data-ghx="setup"`, already handled) instead of the dialog head. Before: `if (dlg && !dlg.querySelector('[data-gh=setup]')) {` After: `if (dlg && !own && !dlg.querySelector('[data-gh=setup]')) {`.
+- **Loaded by:** the 14 tools in `shared/README.md` (unchanged path: `libraryDialog` passes no third argument and has a `.spHead`), and new: `abutment_calculator.html`.
+- **Check case / how verified:** `node tests/engine/run.mjs github-sync`: 13 / 13. `node tests/smoke/github-sync.mjs` (whole flow, Spread Footing): ALL PASS. `node tests/smoke/github-sync-tools.mjs` (all 15 tools): ALL PASS. `node tests/smoke/project-library.mjs --tool <each of the 15>` (origin/main vs branch, sync off): ALL PASS. `tests/smoke/github-sync-tools.mjs` extended: `OWN` (show the tool's own dialog), "synced" shown in the row, and for own-dialog tools the settings button in the bar, the first-sync offer, a delete that asks about the GitHub copy, and a sync-off run (no request, no sync key).
+- **Formulas, factors, units, code references:** none (§4 does not apply).
