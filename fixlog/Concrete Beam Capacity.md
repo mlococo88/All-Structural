@@ -4767,3 +4767,31 @@ function buildDrawingsTab(pg){
     - p. 6: overview section and elevation with arrowheads;
     - p. 29: ASD section hatched.
   - `check-syntax`, `phone-layout --tool cbc`, `dxf-print-sheets --tool cbc` and `run.mjs report steps steps-groups report-wiring` pass.
+
+## 2026-11-05 — PR: claude/header-cbc (CBHD: compact headers; title blocks, project file and shared-project-info buttons moved to each tab's Project input tab; display only, no result change)
+- **Engineer:** clean up the top of the page: the title-block inputs and the project / hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (the frames are `srcdoc`; edited decoded and re-encoded with CRLF kept; nodes moved, not copied; every id, `data-fkey`, handler and saved field is the same):
+  - **Suite page** `#suite-xfer`: the two buttons `onclick="bxUseProjectInfo()"` / `onclick="bxShareProjectInfo()"` removed (anchor `HDR (2026-11-05): "Use shared project info"`); the functions are unchanged and are now called from each tab's Project tab. The bar keeps "← All tools".
+  - **Beam Capacity** and **ASD Beam Calcs** frames (same change in both):
+    - `#hdrBtns`: before New, Save Project, Open, (Undo, Redo), Export JSON, Import JSON, Print / PDF, `#fileIn`; then `<div id="projGrid">` under the title row. After: `#hdrProj` "Project: <name> · <number>" (link), Undo, Redo, Print / PDF.
+    - `#inputPanel` now starts with `<div id="prjPane">` (three cards: "Title block" with `#projGrid` (8 fields + Design Code (Capacity) / Design Method (ASD)); "Project file" with `#btnNew`, `#btnSave`, `#btnLoad`, `#btnExport`, `#btnImport`, `#fileIn`; "Shared project info" with `#btnUseProjInfo` / `#btnShareProjInfo` → `parent.bxUseProjectInfo()` / `parent.bxShareProjectInfo()`; the card is hidden when the frame has no suite parent).
+    - `buildInput()`: `const PJ=document.getElementById("prjPane")` taken before `P.innerHTML=""` and re-appended first (so it survives every rebuild; `buildProjGrid()` still refills `#projGrid` first).
+    - `RCB_IN_TABS` / `ASD_IN_TABS`: `['project','Project']` added first; `RCB_IN_SEC` / `ASD_IN_SEC`: `prjPane:'project'`. A browser with no remembered tab still opens on Section / Mode & Section (`rcbeam_v2_inputTab_v1`, `asd_v1_inputTab_v1` unchanged).
+    - `plibUndoInit()`: `const ref=document.getElementById('btnLoad'); … insertAdjacentElement('afterend',…)` → `const ref=document.getElementById('btnPrint'); … insertAdjacentElement('beforebegin',bu) / ('beforebegin',br)` (Undo / Redo in the header, before Print).
+    - New `hdrProjShow()` (anchor `function hdrProjShow(){`): `S.proj.name · S.proj.num` or "(untitled: enter it in the Project tab)"; called from `buildInput()` and on `input` in `#projGrid`. `#hdrProj` click: Project tab, focus Project (below 900 px it first scrolls the card to just under the sticky input tab bar).
+    - CSS (anchor `/* HDR (2026-11-05)`): `#hdrProj`; `#inputPanel #projGrid` two columns with the label above, dark labels and borders; `#prjPane` buttons and non-clickable card heads.
+  - **Development & Splice** frame (already had a Project tab, "A Title Block"):
+    - `.titlebar`: new `#hdrProj` link after the by-line (pushes Undo / Redo right; CSS `.titlebar #hdrProj~button{margin-left:8px!important}`).
+    - Panel A: new `#prjShareRow` (Use shared project info / Share project info → the suite page's functions) and a one-line hint.
+    - `autosave()` also calls `hdrProjShow()` (`#projName` · `#projNo`), which also runs on `input` in those two fields; one delegated click handler for the link and the two buttons.
+- **Decisions (pending engineer review):**
+  - Design Code (Beam Capacity, `pg_code`) moved with the title block to the Project tab (it was in the header grid). It still sets `S.code`; Section stays the tab shown on first open.
+  - Development & Splice keeps its "H Project Management" panel (Save / Load / Export / Import / Print) on "Assumptions & Save": moving it would also need the wording of the retired standalone page's redirect notice (another file) changed.
+  - Undo / Redo stay global actions in each header; the suite bar keeps only the tabs and "← All tools".
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch; typed into Beam Capacity: Project "Route 6 Bridge", Project No. "P-1234", Subject, Calculated By, Date, Sheet, Checked By, Checked Date; ASD: the same with Project "ASD Project"; Development & Splice: "Dev Project", "D-77", by / checked / dates):
+  - Beam Capacity `CC`, ASD `CC`, Development & Splice factors / lengths, the suite Report text (`SharedReport.text(CBRP.doc)`, all three title blocks), every localStorage key, the Beam Capacity DXF (`cbdwBuild().D.toDXF()`, title block) and `bridgeSuite.v1.projectMeta` after Share: identical; after reload on that storage: identical;
+  - each header shows its project line; each link focuses the tab's Project field; Use shared project info (from the Beam Capacity Project tab) fills all three tabs;
+  - `phone-layout --tool cbc,aci`, `project-library --tool rebar`, `rebar-redirect`, `check-syntax`: pass; 0 console errors;
+  - before / after screenshots at 1920 and 390 px of each tab and of each Project tab looked at.
+- **Saved data:** no change (no key, field or format touched).
