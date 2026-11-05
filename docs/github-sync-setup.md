@@ -4,7 +4,7 @@ This copies the projects you save in the tools to a **private** GitHub repositor
 
 You do this once per GitHub account (steps 1 and 2) and once per device and browser (step 3).
 
-Tools with sync (2026-11-05): ASCE7-16 Load Generator, Base Plate & Anchor Designer, Bridge Substructure Loading, Concrete Beam Capacity (Development & Splice tab, the rebar calculator), Gusset Plate Rating, Light Pole and Sign Post, Moving Load Generator, Retaining Wall Designer, Section Property Calculator, Shear and Moment Diagrams, Spread Footing, Steel Beam Design, Stone Masonry Arch Load Rating, Timber Beam Check. Not yet: tools with their own project dialogs (abutment calculator, elastomeric bearing, Bridge Geometry, Pile Designer, MIDAS MCT generator (index.html), LL & DL Distribution, Prestressed Bridge Design, Steel Bridge Design, the Steel Bridge app). The list is kept in `shared/README.md` (row `github-sync.js`).
+Tools with sync (2026-11-05): Abutment Calculator (Projects… dialog), ASCE7-16 Load Generator, Base Plate & Anchor Designer, Bridge Substructure Loading, Concrete Beam Capacity (Development & Splice tab, the rebar calculator), Gusset Plate Rating, Light Pole and Sign Post, Moving Load Generator, Retaining Wall Designer, Section Property Calculator, Shear and Moment Diagrams, Spread Footing, Steel Beam Design, Stone Masonry Arch Load Rating, Timber Beam Check. Not yet: tools with their own project dialogs (elastomeric bearing, Bridge Geometry, Pile Designer, MIDAS MCT generator (index.html), LL & DL Distribution, Prestressed Bridge Design, Steel Bridge Design, the Steel Bridge app). The list is kept in `shared/README.md` (row `github-sync.js`).
 
 ## What is synced, and what is not
 
