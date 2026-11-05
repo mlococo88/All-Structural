@@ -2204,25 +2204,41 @@ function renderCombos(){
  const b3=secPanel(T,'o-cb-lrfd',R.directMode?'2.5  Factored Envelope \u2014 Dead-Load Brackets (for design & uplift)':'2.5  Strength (LRFD) Combinations \u2014 Resultants (for Phase 2 structural design)');
  b3.appendChild(comboTable(R.lrfd,false));
 }
+/* SFMR (2026-11-05): the terms of ΣM_a (r.MaY / r.MaX) itemised for display, one row per pedestal and load type:
+   applied pedestal moments (factor × M) and the shear couples V·(t + h), V_x to ΣM_y and V_y to ΣM_x. Display only:
+   the values are the r.maT terms the engine summed into MaX / MaY (resultant), nothing is recomputed for the results. */
+function sfdMaRows(r){
+ const T=r.maT||[], off=state.stab.shearCouple==='off', out=[], nz=v=>Math.abs(v)>1e-12;
+ T.forEach(z=>{
+  if(nz(z.mx)||nz(z.my))out.push({k:'M',z,my:z.f*z.my,mx:z.f*z.mx});
+  [['x','vx'],['y','vy']].forEach(([d,vk])=>{if(nz(z[vk])){const H=z.f*z[vk];out.push({k:'V'+d,z,d,v:z[vk],H,lev:z.lev,off,M:H*z.lev});}});});
+ return out;
+}
+/* lever text of a shear-couple row: t + h = a + b = c (coupleLever = t + h when included), or 0 when excluded */
+function sfdLevTxt(w,fmt){return w.off?'0 (shear couple off)':'t + h = '+fmt(R.t)+' + '+fmt(w.lev-R.t)+' = '+fmt(w.lev);}
 /* substituted, term-by-term resultant for one combination — full hand-checkable arithmetic */
 function resultantBreakdown(a){
  const r=a.r, wrap=el('div');
  const det=secPanel(wrap,'o-cb-resbrk','Resultant breakdown \u2014 '+a.cb.name+' (fully substituted)');
- det.appendChild(el('p','note','Every action contributing to the resultant of this combination, with its factored vertical load and its moment contributions about the footing centroid. \u03a3M includes P\u00b7(lever arm), any applied pedestal moment, and the V\u00b7h shear couple. e = \u03a3M/\u03a3P. This is the same arithmetic the summary table (above) reports as a single row, expanded so each term can be checked by hand.'));
+ det.appendChild(el('p','note','Every action contributing to the resultant of this combination, with its factored vertical load, its factored horizontal shear and its moment contributions about the footing centroid (at the bottom of the footing). \u03a3M includes P\u00b7(lever arm), each applied pedestal moment, and each shear couple V\u00b7(t + h): V\u2093 adds to \u03a3M\u1D67 and V\u1D67 to \u03a3M\u2093. e = \u03a3M/\u03a3P. This is the same arithmetic the summary table (above) reports as a single row, expanded so each term can be checked by hand.'));
  // vertical load table
  const tp=document.createElement('table');tp.className='tbl';
- tp.innerHTML='<tr><th>Action</th><th>factor \u00d7 magnitude</th><th>\u03a3P term (k)</th><th>x (ft)</th><th>y (ft)</th><th>contrib to \u03a3M\u1D67 = P\u00b7x (k-ft)</th><th>contrib to \u03a3M\u2093 = P\u00b7y (k-ft)</th></tr>';
- r.verts.forEach(v=>{const tr=document.createElement('tr');
-  const cells=[v.src,(v.f===undefined?'\u2013':f2(v.f)+' \u00d7 '+f2(v.mag)),f2(v.w),f2(v.x),f2(v.y),f2(v.w*v.x),f2(v.w*v.y)];
-  cells.forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});
-  tp.appendChild(tr);});
- // applied moment + shear-couple row (MaX, MaY captured separately from P-lever terms)
- if(Math.abs(r.MaX)>1e-9||Math.abs(r.MaY)>1e-9){const tr=document.createElement('tr');tr.style.fontStyle='italic';
-  ['Applied M + V\u00b7h couples','\u2013','\u2013','\u2013','\u2013',f2(r.MaY),f2(r.MaX)].forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});
-  tp.appendChild(tr);}
+ tp.innerHTML='<tr><th>Action</th><th>factor \u00d7 magnitude</th><th>\u03a3P term (k)</th><th>x (ft)</th><th>y (ft)</th><th>\u03a3H\u2093 term (k)</th><th>\u03a3H\u1D67 term (k)</th><th>shear lever (ft)</th><th>contrib to \u03a3M\u1D67 (k-ft)</th><th>contrib to \u03a3M\u2093 (k-ft)</th></tr>';
+ const addRow=(cells,st)=>{const tr=document.createElement('tr');if(st)Object.assign(tr.style,st);cells.forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;if(k===7)td.style.whiteSpace='nowrap';tr.appendChild(td);});tp.appendChild(tr);return tr;};
+ const D='\u2013', nzs=v=>Math.abs(v)>1e-12;
+ r.verts.forEach(v=>addRow([v.src,(v.f===undefined?D:f2(v.f)+' \u00d7 '+f2(v.mag)),f2(v.w),f2(v.x),f2(v.y),D,D,D,f2(v.w*v.x),f2(v.w*v.y)]));
+ // SFMR: applied moments and shear couples, itemised from r.maT (they were one lumped row, r.MaY / r.MaX)
+ const MR=sfdMaRows(r);
+ if(MR.length){
+  addRow(['Subtotal: vertical loads (\u03a3P\u00b7x, \u03a3P\u00b7y)','','','','','','','',f2(r.verts.reduce((q,v)=>q+v.w*v.x,0)),f2(r.verts.reduce((q,v)=>q+v.w*v.y,0))],{fontStyle:'italic'});
+  MR.forEach(w=>{const z=w.z;
+   if(w.k==='M')addRow([z.src+' applied M',[nzs(z.my)?'M\u1D67: '+f2(z.f)+' \u00d7 '+f2(z.my):'',nzs(z.mx)?'M\u2093: '+f2(z.f)+' \u00d7 '+f2(z.mx):''].filter(Boolean).join('; '),D,D,D,D,D,D,f2(w.my),f2(w.mx)]);
+   else addRow([z.src+' shear V'+(w.d==='x'?'\u2093':'\u1D67')+' \u00b7 (t + h)',f2(z.f)+' \u00d7 '+f2(w.v),D,D,D,w.d==='x'?f2(w.H):D,w.d==='y'?f2(w.H):D,sfdLevTxt(w,f2),w.d==='x'?f2(w.M):D,w.d==='y'?f2(w.M):D]);});
+  addRow(['Subtotal: applied M + shear couples (\u03a3M\u2090)','','','','','','','',f2(r.MaY),f2(r.MaX)],{fontStyle:'italic',borderTop:'1px solid #333'});
+ }
  // totals
  const trT=document.createElement('tr');trT.style.fontWeight='bold';trT.style.borderTop='2px solid #333';
- ['Totals (\u03a3)','',f2(r.P),'','',f2(r.My),f2(r.Mx)].forEach(x=>{const td=document.createElement('td');td.textContent=x;trT.appendChild(td);});
+ ['Totals (\u03a3)','',f2(r.P),'','',f2(r.Hx),f2(r.Hy),'',f2(r.My),f2(r.Mx)].forEach(x=>{const td=document.createElement('td');td.textContent=x;trT.appendChild(td);});
  tp.appendChild(trT);
  det.appendChild(tp);
  // E-1: expose the V·h shear-couple lever arm and datum so the couple term is hand-checkable
@@ -2231,7 +2247,7 @@ function resultantBreakdown(a){
  }
  if(R.peds.some(p=>p.lex||p.ley))det.appendChild(el('p','note','<b>Load offsets on the pedestals:</b> pedestal loads act at the load point (x + e<sub>x</sub>, y + e<sub>y</sub>), so their x, y above include the offset: '+R.peds.filter(p=>p.lex||p.ley).map(p=>sfEsc(p.label)+': '+f2(p.x)+' + '+f3(p.lex)+' = '+f3(p.x+p.lex)+', '+f2(p.y)+' + '+f3(p.ley)+' = '+f3(p.y+p.ley)+' ft').join('; ')+'. Pedestal self-weight stays at the pedestal centroid.'));   /* SFLO */
  // horizontal resultants
- det.appendChild(el('p','note','Horizontal resultants: \u03a3H\u2093 = '+f2(r.Hx)+' k, \u03a3H\u1D67 = '+f2(r.Hy)+' k (sum of factored pedestal shears; these also generate the V\u00b7h base moments included above).'));
+ det.appendChild(el('p','note','Horizontal resultants: \u03a3H\u2093 = '+f2(r.Hx)+' k, \u03a3H\u1D67 = '+f2(r.Hy)+' k (sum of the factored pedestal shears tabulated above, each with its V\u00b7(t + h) couple).'));
  // eccentricity worked
  det.appendChild(eqBlock('Eccentricities from this resultant','e = ΣM/ΣP',
   'e_x = \\frac{\\Sigma M_y}{\\Sigma P},\\qquad e_y = \\frac{\\Sigma M_x}{\\Sigma P}',
@@ -3360,7 +3376,16 @@ function sfrModel(){
   w2.add({id:'ex',label:'Eccentricity in x',sym:'e_{x}',eq:'\\frac{\\sum M_{y}}{\\sum P}',sub:'\\frac{'+sfrP(r.My)+'}{'+sfrN(r.P)+'}',value:r.ex,unit:'ft',d:3});
   w2.add({id:'ey',label:'Eccentricity in y',sym:'e_{y}',eq:'\\frac{\\sum M_{x}}{\\sum P}',sub:'\\frac{'+sfrP(r.Mx)+'}{'+sfrN(r.P)+'}',value:r.ey,unit:'ft',d:3});
   subs.push({title:'Resultant of the governing bearing combination ('+G.cb.name+')',key:'S-res',items:[
-   {type:'table',head:['Action','factor × magnitude','w_i (kip)','x_i (ft)','y_i (ft)'],rows:vt.map(v=>[v.src,v.f===undefined?'–':sfrN(v.f)+' × '+sfrN(v.mag),sfrCell(v.w),sfrCell(v.x,3),sfrCell(v.y,3)])},
+   {type:'table',wide:true,head:['Action','factor × magnitude','w_i (kip)','x_i (ft)','y_i (ft)','H_x (kip)','H_y (kip)','shear lever (ft)','to ΣM_y (kip-ft)','to ΣM_x (kip-ft)'],rows:(()=>{   /* SFMR: the shears and the M_a terms tabulated */
+    const D={t:'–',n:true}, MR=sfdMaRows(r), nz=v=>Math.abs(v)>1e-12, rows=vt.map(v=>[v.src,v.f===undefined?'–':sfrN(v.f)+' × '+sfrN(v.mag),sfrCell(v.w),sfrCell(v.x,3),sfrCell(v.y,3),D,D,D,sfrCell(v.w*v.x),sfrCell(v.w*v.y)]);
+    if(MR.length){
+     rows.push({cls:'gov',cells:['Subtotal: vertical loads (Σ w_i·x_i, Σ w_i·y_i)','','','','','','','',sfrCell(vt.reduce((q,v)=>q+v.w*v.x,0)),sfrCell(vt.reduce((q,v)=>q+v.w*v.y,0))]});
+     MR.forEach(w=>{const z=w.z;
+      rows.push(w.k==='M'?[z.src+' applied M',[nz(z.my)?'M_y: '+sfrN(z.f)+' × '+sfrN(z.my):'',nz(z.mx)?'M_x: '+sfrN(z.f)+' × '+sfrN(z.mx):''].filter(Boolean).join('; '),D,D,D,D,D,D,sfrCell(w.my),sfrCell(w.mx)]
+       :[z.src+' shear V_'+w.d+' · (t + h)',sfrN(z.f)+' × '+sfrN(w.v),D,D,D,w.d==='x'?sfrCell(w.H):D,w.d==='y'?sfrCell(w.H):D,sfdLevTxt(w,sfrN),w.d==='x'?sfrCell(w.M):D,w.d==='y'?sfrCell(w.M):D]);});
+     rows.push({cls:'gov',cells:['Subtotal: applied M + shear couples (ΣM_a)','','','','','','','',sfrCell(r.MaY),sfrCell(r.MaX)]});}
+    rows.push({cls:'gov',cells:['Totals (Σ)','',sfrCell(r.P),'','',sfrCell(r.Hx),sfrCell(r.Hy),'',sfrCell(r.My),sfrCell(r.Mx)]});
+    return rows;})()},
    {type:'steps',scope:'res',steps:w2.steps},
    {type:'note',text:'M_a: applied pedestal moments and the shear couples V·(t + h) about the base of the footing'+(state.stab.shearCouple==='off'?' (couples excluded by input)':'')+'. Pedestal loads act at their load points (x + e_x, y + e_y); self-weights at their centroids.'}]});
   secs.push({title:'Loads and combinations',subs});
