@@ -2464,3 +2464,22 @@ function runBenchmarks(){
 - **Saved data:** `sbd_projects_v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-05 — PR: claude/header-sbeam (PR #820: https://github.com/mlococo88/All-Structural/pull/820) (SBHD: compact header; title block and hand-off buttons moved to the Project input tab; display only, no result change)
+- **Engineer:** clean up the top of the page: the title-block inputs and the hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id, `data-fkey`, `onclick` and saved field is the same):
+  - `#hdr`: before title row (title, by-line, All tools; stage tag), then `#projGrid` (7 fields), then `#projShare` (Use / Share project info, Pull from ASCE 7-16, Import hand-off, Send to other tools, Export hand-off, `#bxBldSrc`), then Print report and Export Excel appended by `setupPrintUI()` / `setupExcelUI()`. After: title row with `<div id="hdrActs">` (`#hdrProj` "Project: <project> · <task>" link, Print report, Export Excel) and the stage tag.
+  - `#inputPanel` starts with `<div id="prjPane" data-secid="prjPane">`: "Title block" (`#projGrid`, 2 columns) and "Shared project info and hand-offs" (`#projShare`, grouped: Project info; Loads from ASCE 7-16 Load Generator; Support reactions to other tools; one-line hints). The Project tab's other cards (Mode, Engineering Assumptions, Project Save / Load) follow as before.
+  - `rebuildInputs()`: `const PJ=$('prjPane')` before `P.innerHTML=''`, re-appended first. `SBD_IN_SEC`: `prjPane:'project'`.
+  - `setupPrintUI()` / `setupExcelUI()`: `const hdr=$('hdr')` → `const hdr=$('hdrActs')||$('hdr')`.
+  - New `sbHdrProj()` (anchor `function sbHdrProj(){`): `S.proj.name · S.proj.task` or "(untitled: enter it in the Project tab)"; called at the end of `buildProjHeader()`, from `rebuildInputs()` and on `input` in `#projGrid`. `#hdrProj` click: `sbdSetInTab('project',true)`, focus Project (below 900 px the card is scrolled into view first).
+  - CSS (anchor `/* SBHD (2026-11-05)`): the dark `#projShare` header button rules replaced by light ones; `#hdrActs`, `#hdrProj`, `#inputPanel #projGrid` rules.
+- **Decisions (pending engineer review):** the project line shows Project · Task (the tool has no project-number field; Task is the job / task id on the sheet). Export Excel stays beside Print report as a deliverable.
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, title typed "Route 6 Bridge", "Floor beam", "T-12", "MJL", "2026-11-05", "ABC", "2026-11-06"):
+  - `{AN, DZ}`, every localStorage key and the Report tab text (`textContent`; title block): identical; every typed value in the Report. (The Report's `innerText` differed because the shorter header leaves a different part of the Report on screen, so a different set of its lazily laid-out sections is rendered; the content is identical.)
+  - Share project info: `bridgeSuite.v1.projectMeta` identical; Use shared project info fills the shared fields; reload identical;
+  - header shows "Project: Route 6 Bridge · T-12"; the link opens the Project tab with Project focused;
+  - `phone-layout --tool sbeam`, `project-library --tool steelbeam`, `check-syntax`: pass. `list-input --part sbeam`: the only new difference is the input panel's text (the moved title block); its Report-tab difference against its old reference (9a645e3~1) is the same on main; 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change.

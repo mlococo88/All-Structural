@@ -52,9 +52,23 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #projGrid input::placeholder{color:#8FA3BC}
 #hdr .alltools{display:inline-block;margin-top:2px;font-family:var(--font-ui);font-size:8.5pt;color:#C7D4E4;text-decoration:none}
 #hdr .alltools:hover{color:#fff;text-decoration:underline}
-#projShare{display:flex;gap:6px;margin-top:5px}
-#projShare button{font-family:var(--font-ui);font-size:8pt;padding:2px 8px;border:1px solid #ffffff44;border-radius:3px;background:#ffffff14;color:#fff;cursor:pointer}
-#projShare button:hover{background:#ffffff2a}
+/* SBHD (2026-11-05): the title block and hand-off buttons are in the Project input tab (#prjPane); the header keeps the title, a
+   read-only project line (a link to that tab), Print report and Export Excel (#hdrActs) */
+#hdrActs{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-left:auto;align-self:center}
+#hdrActs .btn{margin-left:0!important}
+#hdrProj{font-family:var(--font-ui);font-size:9pt;color:#C7D4E4;text-decoration:none;max-width:26em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:4px}
+#hdrProj:hover{color:#fff;text-decoration:underline}
+#hdrProj .hdrNone{font-style:italic;opacity:.8}
+#prjPane .secHead{cursor:default}
+#prjPane .prjGrp{margin:2px 0 10px}
+#prjPane .prjGrp>b{display:block;font-family:var(--font-ui);font-size:9pt}
+#projShare button{font-family:var(--font-ui);font-size:9pt;padding:3px 9px;border:1px solid var(--accent);border-radius:4px;background:#fff;color:var(--accent);cursor:pointer}
+#projShare button:hover{background:#EFF4FA}
+#inputPanel #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0}
+#inputPanel #projGrid label{color:#475569}
+#inputPanel #projGrid input{background:#fff;color:inherit;border-color:var(--line)}
+#inputPanel #projGrid input::placeholder{color:#94A3B8}
+@media screen and (max-width:899.98px){#hdrActs{margin-left:0}#hdrProj{flex:1 1 100%;max-width:none}}
 @media print{.alltools,#projShare{display:none!important}}
 #main{flex:1 1 auto;display:flex;min-height:0;overflow:hidden}
 #inputPanel{flex:0 0 33%;max-width:460px;min-width:340px;overflow-y:auto;border-right:2px solid var(--line);background:var(--panel);padding:9px 10px 40px}
@@ -204,21 +218,29 @@ textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:1
         <div class="byline">by Mario Lococo</div>
         <a class="alltools" href="tools.html" target="_top">&larr; All tools</a>
       </div>
+      <div id="hdrActs"><a id="hdrProj" href="#" title="Project and task: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a></div><!-- SBHD (2026-11-05): Print report and Export Excel are added here -->
       <div class="stageTag" id="stageTag">Stage 1 &middot; Analysis Engine, Loads &amp; Sections &middot; strength checks arrive in Stage 2</div>
-    </div>
-    <div id="projGrid"></div>
-    <div id="projShare">
-      <button type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
-      <button type="button" onclick="bxShareProjectInfo()">Share project info</button>
-      <button type="button" onclick="bxPullBuildingLoads()" title="Import nominal area loads (psf) from the ASCE 7-16 Load Generator as line loads (HANDOFF.md, channel buildingLoads)">Pull from ASCE 7-16<span id="bxBldNew" style="display:none;color:#FDE68A;font-weight:700"> &#9679; new data available</span></button>
-      <button type="button" onclick="document.getElementById('bxBldFile').click()">Import hand-off (JSON)</button><input type="file" id="bxBldFile" accept=".json,application/json" style="display:none" onchange="bxImportBuildingLoads(event)">
-      <button type="button" onclick="bxSendMemberReactions('send')" title="Publish the unfactored support reactions by load type for the base plate and spread footing tools (HANDOFF.md, channel memberReactions)">Send to other tools</button>
-      <button type="button" onclick="bxSendMemberReactions('export')" title="Save the same support-reaction hand-off as a JSON file">Export hand-off (JSON)</button>
-      <span id="bxBldSrc" style="font-family:var(--font-ui);font-size:8pt;color:#C7D4E4;align-self:center"></span>
     </div>
   </div>
   <div id="main">
-    <div id="inputPanel"></div>
+    <div id="inputPanel"><div id="prjPane" data-secid="prjPane"><!-- SBHD (2026-11-05): moved here from the header; kept across rebuilds by rebuildInputs() -->
+      <div class="sec"><div class="secHead"><span class="secTitle">Title block</span></div><div class="secBody">
+        <div id="projGrid"></div>
+        <div class="hint">Printed on the Report and the Excel calculation sheet.</div>
+      </div></div>
+      <div class="sec"><div class="secHead"><span class="secTitle">Shared project info and hand-offs</span></div><div class="secBody" id="projShare">
+        <div class="prjGrp"><b>Project info</b><div class="hint">Copy the title block from or to the other tools.</div><div class="btnRow">
+        <button type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
+        <button type="button" onclick="bxShareProjectInfo()">Share project info</button></div></div>
+        <div class="prjGrp"><b>Loads from ASCE 7-16 Load Generator</b><div class="hint">Nominal area loads (psf) as line loads, or its hand-off file.</div><div class="btnRow">
+        <button type="button" onclick="bxPullBuildingLoads()" title="Import nominal area loads (psf) from the ASCE 7-16 Load Generator as line loads (HANDOFF.md, channel buildingLoads)">Pull from ASCE 7-16<span id="bxBldNew" style="display:none;color:#FDE68A;font-weight:700"> &#9679; new data available</span></button>
+        <button type="button" onclick="document.getElementById('bxBldFile').click()">Import hand-off (JSON)</button><input type="file" id="bxBldFile" accept=".json,application/json" style="display:none" onchange="bxImportBuildingLoads(event)">
+        <span id="bxBldSrc" style="font-family:var(--font-ui);font-size:8pt;color:#C7D4E4;align-self:center"></span></div></div>
+        <div class="prjGrp"><b>Support reactions to other tools</b><div class="hint">Unfactored reactions by load type for Base Plate and Spread Footing, or as a file.</div><div class="btnRow">
+        <button type="button" onclick="bxSendMemberReactions('send')" title="Publish the unfactored support reactions by load type for the base plate and spread footing tools (HANDOFF.md, channel memberReactions)">Send to other tools</button>
+        <button type="button" onclick="bxSendMemberReactions('export')" title="Save the same support-reaction hand-off as a JSON file">Export hand-off (JSON)</button></div></div>
+      </div></div>
+    </div></div>
     <div id="outputPanel">
       <div id="tabBar"></div>
       <div id="tabPages"></div>
@@ -2236,6 +2258,21 @@ function buildDesignChecks(D,A){
    Rebuilt only on structural changes (with focus capture); value edits
    mutate S directly and reschedule output only.
    ===================================================================== */
+/* SBHD (2026-11-05): the header's read-only "Project: <project> · <task>" (S.proj.name / S.proj.task, typed in the Project tab).
+   A click opens the Project tab and focuses Project. Display only: nothing is stored. */
+function sbHdrProj(){
+  const t=$('hdrProjTxt');if(!t)return;
+  const pj=(S&&S.proj)||{},v=[pj.name,pj.task].map(x=>String(x==null?'':x).trim()).filter(Boolean);
+  t.textContent='';
+  if(v.length)t.textContent=v.join(' \u00b7 ');else t.appendChild(el('span','hdrNone','(untitled: enter it in the Project tab)'));
+}
+document.addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#projGrid'))sbHdrProj();});
+$('hdrProj').addEventListener('click',e=>{
+  e.preventDefault();sbdSetInTab('project',true);
+  const i=document.querySelector('#projGrid input');if(!i)return;
+  if(window.matchMedia&&window.matchMedia('(max-width:899.98px)').matches){const pn=$('prjPane'),tb=$('sbdInTabs');window.scrollTo(0,pn.getBoundingClientRect().top+window.scrollY-(tb&&getComputedStyle(tb).position==='sticky'?tb.offsetHeight:0)-6);}
+  i.focus({preventScroll:true});
+});
 function buildProjHeader(){
   const g=$('projGrid');g.innerHTML='';
   [['Project','name'],['Subject','subject'],['Task','task'],['Computed by','by'],
@@ -2244,6 +2281,7 @@ function buildProjHeader(){
     const i=txtInput(()=>S.proj[key],v=>{S.proj[key]=v;},'proj_'+key);
     i.placeholder=lab;d.appendChild(i);g.appendChild(d);
   });
+  sbHdrProj();   /* SBHD */
 }
 /* ---------- input panel tabs (UI only) ----------
    rebuildInputs() still builds every section into #inputPanel exactly as
@@ -2255,7 +2293,7 @@ function buildProjHeader(){
 const SBD_IN_TABS=[
   ['project','Project'],['batch','Batch'],['geom','Geometry'],
   ['section','Section'],['loads','Loads'],['checks','Checks']];
-const SBD_IN_SEC={
+const SBD_IN_SEC={prjPane:'project',
   inAssume:'project',inProj:'project',
   inBatch:'batch',
   inGeom:'geom',inBrace:'geom',inBrace2:'geom',inComp:'geom',
@@ -2345,7 +2383,9 @@ function sbdInputTabMarks(){
 }
 function rebuildInputs(){
   const st=captureUI();
+  const PJ=$('prjPane');   /* SBHD: the Project tab's title block and hand-off buttons survive the rebuild */
   const P=$('inputPanel');P.innerHTML='';
+  if(PJ){P.appendChild(PJ);sbHdrProj();}
   resetSecNum();const numHold=__secNum;__secNum=0;
   if(typeof modeSection==='function')modeSection(P);
   /* ---------- Geometry ---------- */
@@ -4439,7 +4479,7 @@ function ensurePrintState(){
 }
 function setupPrintUI(){
   const st=document.createElement('style');st.textContent=PRINT_CSS;document.head.appendChild(st);
-  const hdr=$('hdr');if(!hdr)return;
+  const hdr=$('hdrActs')||$('hdr');if(!hdr)return;   /* SBHD: in the header's action row */
   const b=el('button','btn primary','\uD83D\uDDB6 Print report');
   b.style.cssText='margin-left:auto;align-self:center';
   b.title='Print / PDF the calculation report (the Report tab), from any tab; in batch mode, the batch report';
@@ -4664,7 +4704,7 @@ function xlKF(X,label,ref,formula,result,unit,dp,note){
     {col:7,v:unit||'',kind:'lbl'},{col:8,v:note||'',kind:'note'}]);
 }
 function setupExcelUI(){
-  const hdr=$('hdr');if(!hdr)return;
+  const hdr=$('hdrActs')||$('hdr');if(!hdr)return;   /* SBHD: in the header's action row */
   const b=el('button','btn','\uD83D\uDCD7 Export Excel');
   b.style.cssText='align-self:center;margin-left:6px';
   b.addEventListener('click',()=>{exportExcel().catch(e=>toast('Export failed: '+e.message));});

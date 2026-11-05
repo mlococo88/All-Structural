@@ -46,6 +46,7 @@ ul.spL .spD{color:var(--muted);font-size:12px;white-space:nowrap}
 .spNote{color:var(--muted);font-size:13px;margin:8px 0 2px}
 </style>
 <script src="shared/projects.js"></script>
+<script src="shared/github-sync.js"></script>
 <script src="shared/project-registry.js"></script>
 </head>
 <body>
@@ -159,42 +160,124 @@ ul.spL .spD{color:var(--muted);font-size:12px;white-space:nowrap}
 </script>
 <script>
 /* HSP (2026-11-05): "Saved projects" panel: the projects saved in this browser by every app listed in shared/project-registry.js,
-   grouped by app, with a search and an app filter. Read only: it writes nothing and makes no network request. */
+   grouped by app, with a search and an app filter. With sync off: read only, no write, no network request.
+   HSP PR 2: with Cloud sync (GitHub) set up (shared/github-sync.js, the same setting every app uses), opening the panel or "Check
+   GitHub" reads the repository's file list (GET only; one request per check) and shows each project's GitHub status, and the
+   projects that are on GitHub only. "Sync all to GitHub" (asks first) runs each app's own sync engine over its own list and
+   bookkeeping (SharedProjectRegistry.engine: the same file text, conflict copies, lock and queue as the app): it uploads what is not
+   on GitHub yet or changed here, never overwrites a GitHub file changed elsewhere (both are kept) and never deletes. Getting a GitHub
+   version, choosing after a conflict, and deleting stay in each app's Saved projects (clicking a project opens its app). */
 (function(){
-  var R=window.SharedProjectRegistry,P=window.SharedProjects,det=document.getElementById('projects');
+  var R=window.SharedProjectRegistry,P=window.SharedProjects,G=window.SharedGitHubSync,det=document.getElementById('projects');
   if(!R||!P||!det)return;
   var ST=null;try{ST=window.localStorage;}catch(e){}
   var q=document.getElementById('spq'),app=document.getElementById('spApp'),out=document.getElementById('spOut'),bar=document.getElementById('spBar'),sum=document.getElementById('spSum');
+  var LABEL={synced:'synced',pending:'waiting to upload',local:'this browser only',removed:'not on GitHub (deleted there)',unknown:'not checked yet',cloud:'on GitHub only','cloud-newer':'GitHub newer',conflict:'conflict'};
+  var HINT={pending:'Sync all (or the app) uploads it.',local:'Never uploaded: Sync all uploads it.',removed:'Deleted on GitHub: open the app to upload it again.',cloud:'Not in this browser: open the app, then Saved projects… (On GitHub only) to open or download it.','cloud-newer':'Changed on another device: open the app to get the GitHub version.',conflict:'Changed here and on another device; your version is kept as a conflict copy. Open the app to choose.'};
   function esc(x){return String(x==null?'':x).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
-  function load(){return R.all().map(function(e){var r=R.list(e,ST);return{e:e,ok:r.ok,error:r.error,items:r.items};});}
+  function on(){return !!(G&&ST&&G.configured(G.settings(ST)));}
+  /* fetch for the engines: during a status check, the one repository file list (git trees) is read once and shared by every app */
+  var memo=null;
+  function ghFetch(u,i){
+    if(memo&&(!i||!i.method||i.method==='GET')&&/\/git\/trees\//.test(u)){if(!memo[u])memo[u]=window.fetch(u,i);return memo[u].then(function(r){return r.clone();});}
+    return window.fetch(u,i);
+  }
+  var notes=[],msg='',busy=false,checked=false,engs={};
+  function eng(e){
+    if(!on()||e.sync===false)return null;
+    if(!engs[e.tool])engs[e.tool]=R.engine(e,ST,ghFetch,{onNotice:function(n){if(n.kind==='conflict'||n.kind==='error')notes.push(n.text);}});
+    return engs[e.tool];
+  }
+  function load(){return R.all().map(function(e){var r=R.list(e,ST);return{e:e,ok:r.ok,error:r.error,items:r.items,g:r.ok?eng(e):null};});}
   var data=[];
   function summary(){
     var n=0,a=0;data.forEach(function(d){if(d.items.length){n+=d.items.length;a++;}});
     sum.textContent=n?'('+n+' in this browser, '+a+' app'+(a>1?'s':'')+')':'(none in this browser)';
   }
+  /* rows(d): the app's projects: this browser's list, plus (after a check) the ones on GitHub only; status when sync is on */
+  function rows(d){
+    var by={};d.items.forEach(function(i){by[i.name]=i;});
+    if(!d.g)return d.items.map(function(i){return{name:i.name,saved:i.saved,st:null};});
+    var st={};try{d.g.rows().forEach(function(r){st[r.name]=r;});}catch(x){}
+    var out=d.items.map(function(i){return{name:i.name,saved:i.saved,st:st[i.name]?st[i.name].status:null,cf:st[i.name]&&st[i.name].conflict};});
+    Object.keys(st).forEach(function(n){if(!by[n]&&st[n].status==='cloud')out.push({name:n,saved:null,st:'cloud'});});
+    return out;
+  }
   function fillApps(){
     var v=app.value,h='<option value="">All apps</option>';
-    data.forEach(function(d){if(d.items.length||!d.ok)h+='<option value="'+esc(d.e.tool)+'">'+esc(d.e.name)+' ('+d.items.length+')</option>';});
+    data.forEach(function(d){var n=rows(d).length;if(n||!d.ok)h+='<option value="'+esc(d.e.tool)+'">'+esc(d.e.name)+' ('+n+')</option>';});
     app.innerHTML=h;if(v&&app.querySelector('option[value="'+v.replace(/"/g,'')+'"]'))app.value=v;
   }
+  function chip(r){
+    if(!r.st)return'';
+    var t=HINT[r.st]||'';if(r.st==='conflict'&&r.cf&&r.cf.copy)t+=' (copy: '+r.cf.copy+')';
+    return'<span class="spSt '+esc(r.st)+'" data-gh-status="'+esc(r.st)+'"'+(t?' title="'+esc(t)+'"':'')+'>'+esc(LABEL[r.st]||r.st)+'</span>';
+  }
   function render(){
-    var t=q.value.trim().toLowerCase(),only=app.value,h='',shown=0;
+    var t=q.value.trim().toLowerCase(),only=app.value,h='',shown=0,sync=on();
     data.forEach(function(d){
       if(only&&d.e.tool!==only)return;
       if(!d.ok){h+='<div class="spG"><h3><a href="'+d.e.href+'" target="_blank">'+esc(d.e.name)+'</a></h3><p class="spMsg err">The saved-project list of this app could not be read in this browser ('+esc(d.error)+'). It was not changed; open the app.</p></div>';return;}
-      var it=d.items.filter(function(i){return !t||i.name.toLowerCase().indexOf(t)>=0;});
+      var all=rows(d),it=all.filter(function(i){return !t||i.name.toLowerCase().indexOf(t)>=0;});
       if(!it.length)return; shown+=it.length;
-      h+='<div class="spG" data-tool="'+esc(d.e.tool)+'"><h3><a href="'+d.e.href+'" target="_blank">'+esc(d.e.name)+'</a><span class="spC">'+it.length+(it.length<d.items.length?' of '+d.items.length:'')+' project'+(d.items.length>1?'s':'')+'</span></h3><ul class="spL">'
-        +it.map(function(i){var dt=P.etTime(i.saved);return'<li data-name="'+esc(i.name)+'"><a href="'+d.e.href+'" target="_blank" title="Open '+esc(d.e.name)+'">'+esc(i.name)+'</a>'+(dt?'<span class="spD">saved '+esc(dt)+'</span>':'')+'</li>';}).join('')+'</ul></div>';
+      h+='<div class="spG" data-tool="'+esc(d.e.tool)+'"><h3><a href="'+d.e.href+'" target="_blank">'+esc(d.e.name)+'</a><span class="spC">'+it.length+(it.length<all.length?' of '+all.length:'')+' project'+(all.length>1?'s':'')+'</span>'
+        +(sync&&d.e.sync===false?'<span class="spC">GitHub: open the app to sync</span>':'')+'</h3><ul class="spL">'
+        +it.map(function(i){var dt=P.etTime(i.saved);return'<li data-name="'+esc(i.name)+'"><a href="'+d.e.href+'" target="_blank" title="Open '+esc(d.e.name)+'">'+esc(i.name)+'</a>'+chip(i)+(dt?'<span class="spD">saved '+esc(dt)+'</span>':'')+'</li>';}).join('')+'</ul></div>';
     });
     out.innerHTML=h||'<p class="spNote">'+(t||only?'No saved project matches.':'No projects are saved in this browser yet. Each app saves its projects with its own Save button or Saved projects… dialog.')+'</p>';
-    bar.innerHTML='<span>Projects saved in <b>this browser</b>'+(shown?': '+shown+' shown':'')+'.</span><button type="button" id="spReload">Refresh</button>';
+    if(!sync){
+      bar.innerHTML='<span>Projects saved in <b>this browser</b>'+(shown?': '+shown+' shown':'')+'. Cloud sync (GitHub): <b>off</b>. To set it up, open any app with Saved projects…, then Cloud sync (GitHub)… (docs/github-sync-setup.md).</span><button type="button" id="spReload">Refresh</button>';
+    }else{
+      var s=G.settings(ST),err=null,pend=0;
+      data.forEach(function(d){if(!d.g)return;var e=d.g.cloudError()||d.g.lastError();if(e&&!err)err=e;pend+=d.g.pending();});
+      bar.innerHTML='<span>Projects saved in <b>this browser</b>'+(shown?': '+shown+' shown':'')+'. Cloud sync: <b>'+esc(s.owner)+'/'+esc(s.repo)+'</b> ('+esc(s.branch)+')'+(busy?' · working…':checked?'':' · not checked yet')+(pend?' · '+pend+' waiting to upload':'')+'</span>'
+        +'<button type="button" id="spReload">Refresh</button><button type="button" id="spCheck"'+(busy?' disabled':'')+'>Check GitHub</button><button type="button" id="spSyncAll"'+(busy?' disabled':'')+'>Sync all to GitHub…</button>'
+        +(err?'<span class="spMsg err" style="flex-basis:100%">'+esc(err.message)+'</span>':'')
+        +(msg?'<span class="spMsg" style="flex-basis:100%">'+esc(msg)+'</span>':'')
+        +(notes.length?'<span class="spMsg err" style="flex-basis:100%">'+notes.map(esc).join('\n')+'</span>':'');
+    }
   }
   function refresh(){data=load();summary();fillApps();render();}
-  bar.addEventListener('click',function(e){if(e.target.id==='spReload')refresh();});
+  /* check(): every app's files on GitHub (one tree request shared by all), then the statuses. Reads only. */
+  function check(keep){
+    if(!on()||busy)return Promise.resolve();
+    busy=true;if(!keep){msg='';notes=[];}data=load();render();memo={};
+    var ps=data.filter(function(d){return d.g;}).map(function(d){return d.g.refreshCloud().catch(function(){});});
+    return Promise.all(ps).then(function(){memo=null;busy=false;checked=true;refresh();});
+  }
+  /* syncAll(): each app's own "Upload all" (uploadAll: the app's queue, file text, sha, conflict copies and lock), app by app */
+  function syncAll(){
+    if(!on()||busy)return Promise.resolve();
+    data=load();
+    var todo=data.filter(function(d){return d.g&&d.items.length;});
+    if(!todo.length){msg='No project in this browser to upload.';render();return Promise.resolve();}
+    var n=todo.reduce(function(a,d){return a+d.items.length;},0);
+    if(!confirm('Upload to GitHub every project saved in this browser that is not on GitHub yet or was changed here ('+n+' project'+(n>1?'s':'')+' in '+todo.length+' app'+(todo.length>1?'s':'')+' are checked)?\n\nNothing in this browser is changed or deleted, and nothing is deleted on GitHub. A project that was also changed on another device is not overwritten: your version is kept as a conflict copy, here and on GitHub.'))return Promise.resolve();
+    busy=true;notes=[];msg='';render();
+    var up=0,errs=[],locked=[],i=0;
+    function next(){
+      if(i>=todo.length){
+        busy=false;
+        msg='Sync all: '+up+' file'+(up===1?'':'s')+' uploaded'+(locked.length?'; busy in another tab (try again in a minute): '+locked.join(', '):'')+(errs.length?'; not finished: '+errs.join('; '):'')+'.';
+        return check(true);
+      }
+      var d=todo[i++];
+      return d.g.uploadAll().then(function(r){
+        if(r&&r.ok===false)errs.push(d.e.name+': '+(r.message||r.kind||'failed'));
+        else if(r&&r.locked)locked.push(d.e.name);
+        else if(r&&r.done)up+=r.done;
+      },function(x){errs.push(d.e.name+': '+(x&&x.message||x));}).then(next);
+    }
+    return next();
+  }
+  bar.addEventListener('click',function(e){
+    if(e.target.id==='spReload')refresh();
+    if(e.target.id==='spCheck')check(false);
+    if(e.target.id==='spSyncAll')syncAll();
+  });
   q.addEventListener('input',render);app.addEventListener('change',render);
-  det.addEventListener('toggle',function(){if(det.open)refresh();});
-  window.addEventListener('focus',function(){if(det.open)refresh();else{data=load();summary();}});
+  det.addEventListener('toggle',function(){if(det.open){refresh();if(on()&&!checked)check(false);}});
+  window.addEventListener('focus',function(){if(busy)return;if(det.open)refresh();else{data=load();summary();}});
   if(location.hash==='#projects')det.open=true;
   refresh();
 })();

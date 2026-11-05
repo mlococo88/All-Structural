@@ -36,3 +36,22 @@
 - **How verified:** `node tests/smoke/home-projects.mjs` (ALL PASS: names / order / times equal to each tool's dialog for all 16 apps (the Abutment Calculator and Elastomeric Bearing, own Projects dialogs: names and order, and a time shown), storage byte-identical before / after the home page's load, search, filter and refresh, no request, no console errors, 390 px); `node tests/engine/run.mjs project-registry`; `node tests/check-syntax.mjs tools.html`; screenshots at 1280 and 390 px looked at.
 - **Other copies:** none.
 - **Open items:** GitHub status and "Sync all" follow in HSP PR 2.
+
+## 2026-11-05 — PR: claude/home-sync-all, PR #821: https://github.com/mlococo88/All-Structural/pull/821 (HSP PR 2: GitHub status and "Sync all to GitHub" in the Saved projects panel; home page only, storage only, no result change)
+
+- **Where:** `tools.html`. The panel script (anchor `HSP (2026-11-05): "Saved projects" panel`) is replaced by a version with sync (new header lines `HSP PR 2:`); `<script src="shared/github-sync.js">` added before `shared/project-registry.js` in `<head>`. CSS unchanged (the `spSt` status classes were added in PR 1).
+- **Before:** the panel listed this browser's projects only.
+- **After (sync off):** as before, plus a line in the bar: "Cloud sync (GitHub): off. To set it up, open any app with Saved projects…, then Cloud sync (GitHub)…". No request, nothing written.
+- **After (sync on, the shared setting `bridgeSuite.v1.githubSync`):** opening the panel (once per page load) or **Check GitHub** reads the repository's file list. It is ONE `GET …/git/trees/<branch>?recursive=1`, shared by every app's engine within one check (`ghFetch` memo). Each project then shows its status, with the apps' own labels: synced / waiting to upload / this browser only / not on GitHub (deleted there) / GitHub newer / conflict / on GitHub only. Each status has a hint (title) saying what to do in the app. GitHub-only projects are listed under their app. **Sync all to GitHub…** asks first, then runs `uploadAll()` of each app's engine (`SharedProjectRegistry.engine`) one app at a time and reports the files uploaded, the conflicts kept (the engine's notices) and any app busy in another tab or not finished; it then checks GitHub again. Getting a GitHub version, choosing after a conflict, opening / downloading a GitHub-only project and deleting stay in the app (clicking opens the app).
+- **Problem:** engineer answers 1 and 2 (2026-11-05): GitHub status on the home page, and one action that syncs every app.
+- **Saved data (CLAUDE.md §5):** no new key. While only looking, nothing is written. Sync all writes what the app's own "Upload all" writes: the app's bookkeeping key `bridgeSuite.v1.githubSync.tool.<tool>` (same format: `asked`, `seen`, `base`, `queue`, `conflicts`, `lock`), and on a conflict the copy `<name> (conflict <device> <date>)` in the app's own list (`mapStore.duplicate`, item unchanged), exactly as the app does. Apps with no saved project are skipped (no bookkeeping key made for them). Nothing is deleted. The home page never downloads into an app's list.
+- **Governing provision:** none (storage and display only; no calculation, no tool file changed).
+- **Check case:** 17 apps (with Bridge Geometry, whose sync merged in #819 during this PR; its 5 example bridges are uploaded too), each saving "HSP A" and `HSP <b>bold</b> & "q" ü` with sync off (0 requests). GitHub already holds a different Spread Footing "HSP A" and a "HSP remote". The panel then shows "this browser only" for every project, Spread Footing "HSP A" as conflict and "HSP remote" as on GitHub only; this takes 1 request and storage is unchanged. Sync all uploads every project (33 test files plus Bridge Geometry's examples) and the conflict copy "HSP A (conflict Home <date>)"; GitHub's "HSP A" is unchanged; no DELETE. Each app opened afterwards shows "synced" in its own dialog, no first-sync offer, and makes 0 writes after its 3 s check. A file then changed on GitHub shows "GitHub newer"; Sync all again makes 0 writes.
+- **How verified:**
+  - `node tests/smoke/home-sync.mjs` (ALL PASS, 17 apps);
+  - `node tests/smoke/home-projects.mjs` (ALL PASS);
+  - `node tests/engine/run.mjs project-registry github-sync projects`;
+  - `node tests/check-syntax.mjs`;
+  - screenshots at 1280 and 390 px looked at.
+- **Other copies:** none (the status labels repeat `LABEL` of `shared/github-sync.js`, which does not export it).
+- **Open items:** none.

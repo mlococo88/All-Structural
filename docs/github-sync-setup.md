@@ -70,6 +70,14 @@ A fine-grained personal access token lets the tools write to that one repository
 - On a phone or another computer: set up step 3 there, open the tool, click **Saved projects…**. Projects from other devices are under "On GitHub only". Click **Open**.
 - Problems are shown in the bar at the top of Saved projects (offline, token refused, rate limit). Saves wait and are retried. Nothing is lost locally.
 
+## From the home page (tools.html)
+
+- **Saved projects** (the panel above the engineer checks, or `tools.html#projects`) lists the projects saved in this browser by every app, grouped by app, with a search box and an app filter. With sync set up, opening it reads the list of files on GitHub (one request) and shows the same statuses as the apps' dialogs (table above), plus the projects that are on GitHub only. Nothing is written while you only look.
+- **Sync all to GitHub…** (it asks first) does each app's **Upload all** in one go: every project that is not on GitHub yet, or changed in this browser, is uploaded, with the same file as the app makes (its Export JSON). A project also changed on another device is not overwritten: both are kept, as in the apps. Nothing is deleted, here or on GitHub. Afterwards each app shows its projects as **synced** and does not upload them again.
+- Getting a GitHub version, choosing after a conflict, opening a GitHub-only project and deleting are done in the app: click the project (or the app's name) to open the app, then **Saved projects…**. Clicking does not load the project.
+- With sync off, the panel only reads this browser's lists: no request to GitHub and nothing written.
+- Apps on the home page list: those in `shared/project-registry.js`. An app whose sync is added later appears there once it has an entry. An entry marked list-only shows the projects and their status but leaves uploading to the app ("open the app to sync").
+
 ## Removing the token
 
 - **From one device:** Saved projects… → Cloud sync (GitHub)… → **Forget token on this device**. Sync stops on that device; the projects stay in the browser and on GitHub.
