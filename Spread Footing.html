@@ -2034,7 +2034,11 @@ function planSVG(){
  // labeled axis triad (bottom-left corner) matching 3D-view colors: +x red, +y green
  {const ax=28, ox=pad-6, oy=h-14;
   s+='<defs><marker id="axr" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#cc2222"/></marker>';
-  s+='<marker id="axg" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#228822"/></marker></defs>';
+  s+='<marker id="axg" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto"><path d="M0,0 L7,3.5 L0,7 z" fill="#228822"/></marker>';
+  /* SFPA (2026-11-05): the arrowhead of the B dimension below (url(#a1)), which was referenced but never defined, so the dimension had
+     no arrowheads on screen or in print; auto-start-reverse points the start head outward too. The Report copies get their own id
+     (sfxUniq / sfxUniqDom, SFCB). Display only. */
+  s+='<marker id="a1" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto-start-reverse"><path d="M0,1 L7,4 L0,7 z" fill="#333"/></marker></defs>';
   s+='<line x1="'+ox+'" y1="'+oy+'" x2="'+(ox+ax)+'" y2="'+oy+'" stroke="#cc2222" stroke-width="1.5" marker-end="url(#axr)"/>';
   s+='<text x="'+(ox+ax+3)+'" y="'+(oy+3)+'" fill="#cc2222" font-weight="bold" font-size="10">+x</text>';
   s+='<line x1="'+ox+'" y1="'+oy+'" x2="'+ox+'" y2="'+(oy-ax)+'" stroke="#228822" stroke-width="1.5" marker-end="url(#axg)"/>';
