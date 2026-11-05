@@ -15,8 +15,9 @@
      with dead scroll space under it. The px floor keeps it usable if the
      container refuses to give it a height at all. */
   body{height:100vh;min-height:680px;display:flex;flex-direction:column;}
-  #suite-nav{flex:0 0 46px;height:46px;background:var(--navy-900);color:#fff;display:flex;align-items:stretch;
-    padding:0 12px;gap:2px;box-shadow:0 2px 6px rgba(0,0,0,.25);position:relative;z-index:10;}
+  #suite-nav{flex:0 0 46px;height:46px;background:var(--navy-800);color:#fff;display:flex;align-items:stretch;
+    padding:0 12px;gap:2px;position:relative;z-index:10;
+    border-bottom:1px solid rgba(255,255,255,.12);}  /* CBTH (2026-11-05): same navy as the tab headers below it, no shadow: one header (was navy-900 with a drop shadow) */
   #suite-brand{display:flex;align-items:center;gap:9px;padding-right:16px;margin-right:6px;
     border-right:1px solid rgba(255,255,255,.14);}
   #suite-brand .logo{width:22px;height:22px;border-radius:5px;background:linear-gradient(135deg,#3b82f6,#1e3a5f);
@@ -372,6 +373,43 @@ a.wkA:hover{text-decoration:underline}
   .eqBlock{break-inside:avoid}
 }
 input.autoD{background:#F1F5F9;color:#0F172A;border-style:dashed;font-variant-numeric:tabular-nums;cursor:default;}
+/* CBTH (2026-11-05): suite look as Light Pole / apps/steel-bridge (display only). One header under the suite bar: title,
+   byline and status chip on one line with the buttons; the title block as a compact project bar (label beside its box);
+   card titles 8.5 pt upper-case; selected tabs with a 3 px blue top stripe; input boxes a fixed width with the unit on
+   the same line; header buttons translucent on navy (no white primary); table heads slate #EEF2F6. */
+#hdr{padding:6px 14px 7px}
+#hdr .titleRow{align-items:center;gap:6px 12px}
+#hdr .titleRow>div:first-child{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 12px;min-width:0}
+#hdr h1{font-size:14pt;line-height:1.25}
+#hdr .byline{margin-top:0}
+#statusChip{font-size:9pt;padding:2px 11px;border-radius:12px;margin-right:auto}
+#hdrBtns button{font-size:9.5pt;padding:4px 11px;border-color:rgba(255,255,255,.35);background:rgba(255,255,255,.08)}
+#hdrBtns button:hover{background:rgba(255,255,255,.18)}
+#hdrBtns button.pri{background:rgba(255,255,255,.08);color:#fff;font-weight:600}
+#hdrBtns button.pri:hover{background:rgba(255,255,255,.18)}
+#projGrid{display:flex;flex-wrap:wrap;align-items:center;gap:5px 12px;margin-top:6px}
+#projGrid label{flex-direction:row;align-items:center;gap:6px;font-size:9.5pt}
+#projGrid label span{font-weight:600;font-size:8pt;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+#projGrid input,#projGrid select{width:104px;padding:2px 6px;border-color:rgba(255,255,255,.35)}
+#projGrid input[data-fkey='pg_Project'],#projGrid input[data-fkey='pg_Subject']{width:160px}
+#projGrid input[data-fkey='pg_Sheet']{width:64px}
+#projGrid input[type=date]{width:124px}
+#projGrid select{width:180px}
+#projGrid input[readonly]{width:140px}
+#tabBar button.active{color:var(--navy-800);box-shadow:inset 0 3px 0 var(--blue-600)}
+#rcbInTabs .rcbInTab[aria-selected='true']{color:var(--navy-800);box-shadow:inset 0 3px 0 var(--blue-600)}
+h2.secTitle{font-size:inherit;font-weight:inherit;letter-spacing:inherit;line-height:1.4}
+.fRow{flex-wrap:nowrap;gap:8px;margin:0;padding:3px 0;border-bottom:1px solid #EEF0F3}
+.fRow:last-child{border-bottom:0}
+.fRow label{flex:1 1 auto;min-width:0}
+.fRow input,.fRow select,.fRow textarea{flex:0 1 auto;min-width:0}
+.fRow input[type=number]{width:92px;text-align:right;font-variant-numeric:tabular-nums}
+.fRow select{width:auto;max-width:60%}
+.fRow .unit{min-width:34px}
+.fRow>input:last-child,.fRow>select:last-child{margin-right:42px}
+.fRow.chk{border-bottom:0}
+.fRow.chk input{margin-right:0}
+table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F6}
 /* PHN (2026-11-02): phone / tablet (below 900 px): one column, this frame's page scrolls (the panels do not scroll on their own);
    the title fields wrap; 900 px and up unchanged */
 @media screen and (max-width:899px){
@@ -381,6 +419,14 @@ input.autoD{background:#F1F5F9;color:#0F172A;border-style:dashed;font-variant-nu
   #main{display:block}
   #inputPanel{max-width:none;overflow:visible;border-right:none;border-bottom:1px solid var(--color-border);padding-bottom:16px}
   #outputPanel{overflow:visible;padding:0 10px 40px}
+}
+/* CBTH (2026-11-05): phone / tablet: the title block keeps two columns with the label above its box */
+@media screen and (max-width:899px){
+  #projGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  #projGrid label{flex-direction:column;align-items:stretch;gap:1px}
+  #projGrid input,#projGrid select,#projGrid input[data-fkey]{width:auto;max-width:none}
+  #projGrid input[type=date],#projGrid input[readonly]{width:auto}
+  #statusChip{margin-right:0}
 }
 </style>
 </head>
@@ -4841,6 +4887,43 @@ a.wkA:hover{text-decoration:underline}
   .eqBlock{break-inside:avoid}
 }
 input.autoD{background:#F1F5F9;color:#0F172A;border-style:dashed;font-variant-numeric:tabular-nums;cursor:default;}
+/* CBTH (2026-11-05): suite look as Light Pole / apps/steel-bridge (display only). One header under the suite bar: title,
+   byline and status chip on one line with the buttons; the title block as a compact project bar (label beside its box);
+   card titles 8.5 pt upper-case; selected tabs with a 3 px blue top stripe; input boxes a fixed width with the unit on
+   the same line; header buttons translucent on navy (no white primary); table heads slate #EEF2F6. */
+#hdr{padding:6px 14px 7px}
+#hdr .titleRow{align-items:center;gap:6px 12px}
+#hdr .titleRow>div:first-child{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 12px;min-width:0}
+#hdr h1{font-size:14pt;line-height:1.25}
+#hdr .byline{margin-top:0}
+#statusChip{font-size:9pt;padding:2px 11px;border-radius:12px;margin-right:auto}
+#hdrBtns button{font-size:9.5pt;padding:4px 11px;border-color:rgba(255,255,255,.35);background:rgba(255,255,255,.08)}
+#hdrBtns button:hover{background:rgba(255,255,255,.18)}
+#hdrBtns button.pri{background:rgba(255,255,255,.08);color:#fff;font-weight:600}
+#hdrBtns button.pri:hover{background:rgba(255,255,255,.18)}
+#projGrid{display:flex;flex-wrap:wrap;align-items:center;gap:5px 12px;margin-top:6px}
+#projGrid label{flex-direction:row;align-items:center;gap:6px;font-size:9.5pt}
+#projGrid label span{font-weight:600;font-size:8pt;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+#projGrid input,#projGrid select{width:104px;padding:2px 6px;border-color:rgba(255,255,255,.35)}
+#projGrid input[data-fkey='pg_Project'],#projGrid input[data-fkey='pg_Subject']{width:160px}
+#projGrid input[data-fkey='pg_Sheet']{width:64px}
+#projGrid input[type=date]{width:124px}
+#projGrid select{width:180px}
+#projGrid input[readonly]{width:140px}
+#tabBar button.active{color:var(--navy-800);box-shadow:inset 0 3px 0 var(--blue-600)}
+#asdInTabs .asdInTab[aria-selected='true']{color:var(--navy-800);box-shadow:inset 0 3px 0 var(--blue-600)}
+h2.secTitle{font-size:inherit;font-weight:inherit;letter-spacing:inherit;line-height:1.4}
+.fRow{flex-wrap:nowrap;gap:8px;margin:0;padding:3px 0;border-bottom:1px solid #EEF0F3}
+.fRow:last-child{border-bottom:0}
+.fRow label{flex:1 1 auto;min-width:0}
+.fRow input,.fRow select,.fRow textarea{flex:0 1 auto;min-width:0}
+.fRow input[type=number]{width:92px;text-align:right;font-variant-numeric:tabular-nums}
+.fRow select{width:auto;max-width:60%}
+.fRow .unit{min-width:34px}
+.fRow>input:last-child,.fRow>select:last-child{margin-right:42px}
+.fRow.chk{border-bottom:0}
+.fRow.chk input{margin-right:0}
+table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F6}
 /* PHN (2026-11-02): phone / tablet (below 900 px): one column, this frame's page scrolls (the panels do not scroll on their own);
    the title fields wrap; 900 px and up unchanged */
 @media screen and (max-width:899px){
@@ -4850,6 +4933,14 @@ input.autoD{background:#F1F5F9;color:#0F172A;border-style:dashed;font-variant-nu
   #main{display:block}
   #inputPanel{max-width:none;overflow:visible;border-right:none;border-bottom:1px solid var(--color-border);padding-bottom:16px}
   #outputPanel{overflow:visible;padding:0 10px 40px}
+}
+/* CBTH (2026-11-05): phone / tablet: the title block keeps two columns with the label above its box */
+@media screen and (max-width:899px){
+  #projGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  #projGrid label{flex-direction:column;align-items:stretch;gap:1px}
+  #projGrid input,#projGrid select,#projGrid input[data-fkey]{width:auto;max-width:none}
+  #projGrid input[type=date],#projGrid input[readonly]{width:auto}
+  #statusChip{margin-right:0}
 }
 </style>
 <style>
