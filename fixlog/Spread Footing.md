@@ -5001,7 +5001,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Other copies:** none.
 - **Open items:** the existing vertical-bar lines in the 2D sections and the elevation (decision 2) are left as they were.
 
-## 2026-11-05 — PR: claude/sf-2d-hook-stubs (SFHS: vertical-bar lines in the sections and pedestal elevation end at the hook / the footing top; display only, no result change)
+## 2026-11-05 — PR: claude/sf-2d-hook-stubs (PR #772: https://github.com/mlococo88/All-Structural/pull/772) (SFHS: vertical-bar lines in the sections and pedestal elevation end at the hook / the footing top; display only, no result change)
 
 - **Problem:** after SFHK (#771), the existing vertical-bar lines in the sections A-A / B-B and the pedestal elevation still ran straight to the top of the bottom mat. This left two errors:
   - for hooked bars that act as the dowels, a stub (r + d_b/2) below the start of the bend;
