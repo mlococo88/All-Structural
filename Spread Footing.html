@@ -4116,6 +4116,23 @@ function sfdwPedLayout(i){
  const nt=(tie>0&&ts>0&&h>0)?Math.floor(h/ts+1e-9)+1:0;   // ties at 0, s, 2s, … ≤ h (the 3D view's rule)
  return {PB,db,cov,ax,ay,xs,ys,pts,tie,ts,nt,h,rf,tx:ax+db/2+tie/2,ty:ay+db/2+tie/2};
 }
+/* SFHK (2026-11-05): the dowel ends in the footing, for the drawings and the 3D view (display only; no result uses these).
+   90-degree standard hook: straight extension 12 d_b beyond the bend (ACI 318-19 Table 25.3.1), inside bend diameter per
+   Table 25.3.2 (No. 3-8: 6 d_b; No. 9-11: 8 d_b; No. 14, 18: 10 d_b). The outside of the hook (or the end of a straight bar)
+   is at the available depth of card 5.6, t - c_bot - d_b,x - d_b,y below the footing top (the top of the bottom mat).
+   Decision (pending engineer review): tails point toward the pedestal centre, face bars normal to their face and corner
+   bars diagonally (as ACI 318-19 18.13.2.3 asks of column bars hooked in a foundation); the sections show each hook in
+   its true shape in the plane of the section. Separate dowels are drawn in contact with the vertical bars, on the
+   inside, over the projection (the lap). */
+function sfdHookGeo(size){const db=BAR_DIA[size]||0, D=(size<=8?6:size<=11?8:10)*db;return {db,D,rc:D/2+db/2,tail:12*db};}
+function sfdHookDir(x,y,ax,ay){const onX=Math.abs(Math.abs(x)-ax)<1e-6, onY=Math.abs(Math.abs(y)-ay)<1e-6, l=Math.hypot(x,y)||1;
+ if(onX&&!onY)return [-Math.sign(x),0];if(onY&&!onX)return [0,-Math.sign(y)];return [-x/l,-y/l];}
+/* bar centre line (in, relative to the pedestal centre, z up from the footing top) from zTop down to the end at zOut */
+function sfdHookPath(x,y,dir,zTop,zOut,size,hooked){
+ if(!hooked)return [[x,y,zTop],[x,y,zOut]];
+ const G=sfdHookGeo(size), zt=zOut+G.db/2, zb=zt+G.rc, cx=x+dir[0]*G.rc, cy=y+dir[1]*G.rc, pts=[[x,y,zTop]];
+ for(let j=0;j<=8;j++){const a=j/8*Math.PI/2;pts.push([cx-dir[0]*G.rc*Math.cos(a),cy-dir[1]*G.rc*Math.cos(a),zb-G.rc*Math.sin(a)]);}
+ pts.push([cx+dir[0]*G.tail,cy+dir[1]*G.tail,zt]);return pts;}
 /* SFDO: dowel schedule note: embedment and the computed projection */
 function sfdwDowelNote(i,bz){const z=P2&&P2.dowels&&P2.dowels[i];
  if(!z||z.isPatch)return 'EMBED >= L_DC '+sfdwIn(bz.Ldc)+' (AVAIL. '+sfdwIn(bz.availEmb)+')';
@@ -4261,6 +4278,13 @@ function sfdwBuild(){
   if(s2){T(L.lt,s2[0],s2[1]+0.07*k,0.1*k,'PEDESTAL LOAD SCHEDULE: SEE SHEET ?',0);SFDL.ref=D.E[D.E.length-1];}
  });
  /* ---------- 2./3. Sections ---------- */
+ /* SFHK: dowel hooks, and separate dowels over their lap, in a section / the pedestal elevation (new entities only).
+    c: pedestal centre on the sheet; a: bar centre half-spacing in the plane; zTof / zTob: footing top / top of the bottom mat */
+ function sfhkEnds(c,a,i,zTof,zTob){const z=P2&&P2.dowels&&P2.dowels[i];if(!z||z.isPatch||!(z.db>0))return;
+  const G=sfdHookGeo(z.ds), hk=z.hook==='hook90', zt=zTob+G.db/2, zb=zt+G.rc;let aa=a;
+  if(!z.cont){if(!(z.nD>0))return;aa=a-(sfdwPedLayout(i).db+G.db)/2;[c-aa,c+aa].forEach(xb=>D.line(L.bar,xb,hk?zb:zTob,xb,zTof+z.Lprov));}
+  if(hk)[[c-aa,1],[c+aa,-1]].forEach(([xb,s])=>{if(s>0)D.arc(L.bar,xb+G.rc,zb,G.rc,180,270);else D.arc(L.bar,xb-G.rc,zb,G.rc,270,360);
+   D.line(L.bar,xb+s*G.rc,zt,xb+s*(G.rc+G.tail),zt);});}
  function section(dir){
   const along=dir==='A'?'X':'Y', across=dir==='A'?'Y':'X', W=dir==='A'?B12:L12, cutAt=dir==='A'?yA:xB;
   return k=>{
@@ -4277,6 +4301,7 @@ function sfdwBuild(){
     const Lp=sfdwPedLayout(i), a=dir==='A'?Lp.ax:Lp.ay;
     [c-a,c+a].forEach(xb=>D.line(L.bar,xb,LV.topOfBot,xb,t12+hh-Lp.cov));
     for(let j=0;j<Lp.nt;j++){const z=t12+Math.min(j*Lp.ts,hh-Lp.cov);D.line(L.bar,c-a-Lp.db/2-Lp.tie/2,z,c+a+Lp.db/2+Lp.tie/2,z);}
+    sfhkEnds(c,a,i,t12,LV.topOfBot);   /* SFHK */
     const lx=c+(dir==='A'?p.lex:p.ley)*12;D.line(L.ld,lx,t12+hh+0.55*k,lx,t12+hh+0.05*k);D.line(L.ld,lx,t12+hh+0.05*k,lx-0.04*k,t12+hh+0.14*k);D.line(L.ld,lx,t12+hh+0.05*k,lx+0.04*k,t12+hh+0.14*k);
     T(L.ld,lx,t12+hh+0.62*k,0.08*k,'P'+((dir==='A'?p.lex:p.ley)?' (e = '+sfdwFI((dir==='A'?p.lex:p.ley)*12)+')':''),1);
     D.dimV(L.dim,t12,t12+hh,c+b/2+0.45*k,c+b/2);
@@ -4347,6 +4372,7 @@ function sfdwBuild(){
    const bz=(P2&&P2.bearing&&P2.bearing[i])||null;
    const dwo=(P2&&P2.dowels&&P2.dowels[i])||null;   /* SFDO: computed projection and embedment */
    if(bz&&!bz.isPatch)T(L.txt,ex-bx/2,-(t12-LV.topOfBot)-0.3*k,0.09*k,('DOWEL EMBED. AVAILABLE '+sfdwIn(bz.availEmb)+' >= L_DC = '+sfdwIn(bz.Ldc)+(bz.ldcOK?'':' (NG)')+(dwo&&dwo.devTen?', '+(dwo.hook==='hook90'?'L_DH':'L_D')+' = '+sfdwIn(dwo.LftgReq)+(dwo.ftgOK?'':(dwo.tension?' (NG)':' (REVIEW)')):'')+(dwo?';  PROJ. '+(dwo.cont?'CONTINUOUS':dwo.full?'FULL HEIGHT':sfdwIn(dwo.Lprov)):'')).toUpperCase(),0);
+   sfhkEnds(ex,Lp.ax,i,0,-(t12-LV.topOfBot));   /* SFHK */
    T(L.txt,ex,-(t12-LV.topOfBot)-0.7*k,0.14*k,'ELEVATION',1);
    T(L.txt,(ex)/2,-(t12-LV.topOfBot)-1.1*k,0.16*k,'PEDESTAL '+String(p.label).toUpperCase()+';  '+sfdwFI(bx)+' x '+sfdwFI(by)+' x '+sfdwFI(hh),1);
   });});
@@ -6969,7 +6995,14 @@ function buildRebar(){
   xs.forEach(xx=>{pts.push([xx,y0]);pts.push([xx,y1]);});
   ys.forEach(yy=>{pts.push([x0,yy]);pts.push([x1,yy]);});
   const uniq=[];pts.forEach(pt=>{if(!uniq.some(u=>Math.abs(u[0]-pt[0])<1e-6&&Math.abs(u[1]-pt[1])<1e-6))uniq.push(pt);});
-  uniq.forEach(([xx,yy])=>{const geo=new THREE.CylinderGeometry(db/2,db/2,p.h*0.98,8);const m=new THREE.Mesh(geo,steel);m.position.copy(e2v(xx,yy,p.h/2));g.add(m);});
+  /* SFHK: dowel ends per sfdHookPath (embedment of card 5.6, the selected hook); without dowel results (bearing patch) as before */
+  const dz=P2.dowels&&P2.dowels[i], hk=!!(dz&&!dz.isPatch&&dz.db>0&&isFinite(dz.availEmb)), hooked=hk&&dz.hook==='hook90';
+  const axI=(x1-x0)*6, ayI=(y1-y0)*6;
+  const path3=(pts,d,mtl)=>{for(let j=0;j<pts.length-1;j++){const a=e2v(p.x+pts[j][0]/12,p.y+pts[j][1]/12,pts[j][2]/12),b=e2v(p.x+pts[j+1][0]/12,p.y+pts[j+1][1]/12,pts[j+1][2]/12),len=a.distanceTo(b);if(len<1e-6)continue;
+   const m=new THREE.Mesh(new THREE.CylinderGeometry(d/2,d/2,len,8),mtl);m.position.copy(a.clone().add(b).multiplyScalar(0.5));m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),b.clone().sub(a).normalize());g.add(m);}};
+  uniq.forEach(([xx,yy])=>{
+   if(hk&&dz.cont){const X=(xx-p.x)*12,Y=(yy-p.y)*12;path3(sfdHookPath(X,Y,sfdHookDir(X,Y,axI,ayI),p.h*0.99*12,-dz.availEmb,dz.ds,hooked),db,steel);return;}   /* SFHK: continuous into the footing */
+   const geo=new THREE.CylinderGeometry(db/2,db/2,p.h*0.98,8);const m=new THREE.Mesh(geo,steel);m.position.copy(e2v(xx,yy,p.h/2));g.add(m);});
   // ties (rectangular loops) at tie spacing
   const tie=BAR_DIA[rf.tieSize||0]/12;const spc=(rf.tieSpc||12)/12;
   if(tie>0){const nt=Math.max(1,Math.floor(p.h/spc));
@@ -6977,7 +7010,14 @@ function buildRebar(){
    for(let k=0;k<=nt;k++){const zt=zc0+k*spc;if(zt>zc1)break;g.add(tieLoop(x0-to,x1+to,y0-to,y1+to,zt,tie,steel));}}
   // dowels: extend from within footing up into pedestal base, count dowelN around perimeter
   const DBi=sfdDowelBars(i),dwd=BAR_DIA[DBi.size||0]/12,dn=DBi.n||0;   /* SFDB */
-  if(dwd>0&&dn>0){const per=uniq.slice(0,Math.min(dn,uniq.length));const embFt=Math.min(t*0.6,1.2);const embPed=Math.min(p.h*0.5,1.5);const hL=embFt+embPed;
+  if(hk&&!dz.cont&&dz.nD>0){   /* SFHK: separate dowels, in contact with the vertical bars on the inside, from the footing end up over the projection (the lap) */
+   const dwM=new THREE.MeshLambertMaterial({color:0x18507a}), off=(db*12+dz.db)/2, pos=[];
+   if(dz.nD===uniq.length)uniq.forEach(([xx,yy])=>{const X=(xx-p.x)*12,Y=(yy-p.y)*12,dr=sfdHookDir(X,Y,axI,ayI);pos.push([X+dr[0]*off,Y+dr[1]*off]);});
+   else{const ax=axI-off, ay=ayI-off, per=4*(ax+ay);   // a different count: evenly round the perimeter, from a corner
+    for(let j=0;j<dz.nD;j++){let s=j*per/dz.nD;const P=s<2*ax?[-ax+s,-ay]:(s-=2*ax)<2*ay?[ax,-ay+s]:(s-=2*ay)<2*ax?[ax-s,ay]:[-ax,ay-(s-2*ax)];pos.push(P);}}
+   const axD=Math.max(...pos.map(q=>Math.abs(q[0]))), ayD=Math.max(...pos.map(q=>Math.abs(q[1])));
+   pos.forEach(([X,Y])=>path3(sfdHookPath(X,Y,sfdHookDir(X,Y,axD,ayD),dz.Lprov,-dz.availEmb,dz.ds,hooked),dz.db/12,dwM));}
+  else if(!hk&&dwd>0&&dn>0){const per=uniq.slice(0,Math.min(dn,uniq.length));const embFt=Math.min(t*0.6,1.2);const embPed=Math.min(p.h*0.5,1.5);const hL=embFt+embPed;
    per.forEach(([xx,yy])=>{const geo=new THREE.CylinderGeometry(dwd/2,dwd/2,hL,8);const m=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({color:0x18507a}));m.position.copy(e2v(xx,yy,(embPed-embFt)/2));g.add(m);});}
  });
 }
