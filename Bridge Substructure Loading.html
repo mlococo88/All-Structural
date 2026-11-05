@@ -176,6 +176,16 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 .bx-all-tools { font-size: .82rem; color: var(--muted); text-decoration: none; white-space: nowrap; }
 .bx-all-tools:hover { color: var(--blue); text-decoration: underline; }
 @media print { .bx-all-tools { display: none !important; } }
+/* SLHD (2026-11-05): Open / Save, the abutment and foundation hand-offs and Export DXF are in the Project input tab (#slPrjPane);
+   the header keeps the title, a read-only project line (a link to that tab), Undo / Redo, Projects… and Print */
+#hdrProj { font-size: .85rem; color: var(--muted); text-decoration: none; max-width: 30em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; align-self: center; margin-right: 4px; }
+#hdrProj:hover { color: var(--blue); text-decoration: underline; }
+#hdrProj .hdrNone { font-style: italic; }
+#slPrjPane .slGrp { grid-column: 1 / -1; }
+#slPrjPane .slGrp > b { display: block; font-size: .85rem; }
+#slPrjPane .slGrp .note { padding: 0 0 4px; }
+#slPrjPane .slRow { display: flex; gap: 6px; flex-wrap: wrap; }
+@media (max-width: 900px) { #hdrProj { flex: 1 1 100%; max-width: none; order: -1; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -4187,6 +4197,47 @@ window.addEventListener('beforeprint', () => {
   const strip = document.querySelector('section.strip'); if (strip) { if (getComputedStyle(strip).position === 'static') strip.style.position = 'relative'; strip.appendChild(box); }
   SharedProjectsUI.undoRedo(h, { undo: bu, redo: br });
   h.reset(); window.SLPL = { h, store, dlg, save };
+})();
+</script>
+<script>
+/* SLHD (2026-11-05): header clean-up (display only). The header keeps the title, All tools, a read-only "Project: <name> · <no.>"
+   (P.meta.name / P.meta.num, a link to the Project tab), Undo / Redo / Projects… (moved up from the bridge strip) and Print.
+   Open, Save, Export abutments, Send to Abutment Calculator, Export hand-off (JSON), Send foundation loads and Export DXF are MOVED
+   (same nodes, ids and document-level click handlers) into a "Project files and hand-offs" card in the Project tab, after the
+   Project card. The card is parked in a hidden holder while the sidebar is rebuilt (buildSide) and put back afterwards. */
+(function slHdr() {
+  const grp = document.querySelector('.hdr-group'); if (!grp) return;
+  const $id = id => document.getElementById(id);
+  const a = document.createElement('a'); a.id = 'hdrProj'; a.href = '#'; a.title = 'Project name and number: edit them in the Project tab';
+  a.append('Project: '); const t = document.createElement('span'); t.id = 'hdrProjTxt'; a.appendChild(t); grp.insertBefore(a, grp.firstChild);
+  const box = document.querySelector('section.strip [data-sp="row"]');
+  if (box) { box.style.cssText = 'display:flex;gap:6px'; grp.insertBefore(box, $id('btn-print')); }
+  const hold = document.createElement('div'); hold.id = 'slPrjHold'; hold.hidden = true; document.body.appendChild(hold);
+  const pane = document.createElement('div'); pane.id = 'slPrjPane';
+  const G = (title, hint, ids) => `<div class="slGrp"><b>${title}</b><p class="note">${hint}</p><div class="slRow" data-ids="${ids}"></div></div>`;
+  pane.innerHTML = sec('Project files and hand-offs',
+    G('Project file', 'The whole project as JSON (Save) and back (Open); the last session is also kept in this browser.', 'btn-open btn-save')
+    + G('To the abutment calculator', 'Unfactored abutment reactions per girder and geometry: a JSON file, or sent to "Pull from SubLoads".', 'btn-abx btn-abx-send btn-abx-hf')
+    + G('To Pile Designer and Spread Footing', 'Factored and service loads at the bottom of a unit, per limit state.', 'btn-fdx')
+    + G('Drawings', 'The bridge and its units as a DXF file.', 'btn-dxf'));
+  pane.querySelectorAll('[data-ids]').forEach(r => r.dataset.ids.split(' ').forEach(id => { const b = $id(id); if (b) r.appendChild(b); }));
+  hold.appendChild(pane);
+  const show = () => {
+    const sb = $id('sidebar'), u = sb && sb.querySelector('#bx-pm-use'), body = u && u.closest('.sec-body');
+    if (P.ui.itab === 'project' && body) body.after(pane); else hold.appendChild(pane);
+    const v = [P.meta && P.meta.name, P.meta && P.meta.num].map(x => String(x == null ? '' : x).trim()).filter(Boolean);
+    t.textContent = ''; if (v.length) t.textContent = v.join(' \u00b7 '); else { const s = document.createElement('span'); s.className = 'hdrNone'; s.textContent = '(untitled: enter it in the Project tab)'; t.appendChild(s); }
+  };
+  const bs = buildSide; buildSide = function () { hold.appendChild(pane); const r = bs.apply(this, arguments); show(); return r; };
+  document.addEventListener('input', e => { const k = e.target && e.target.dataset && e.target.dataset.k; if (k === 'meta.name' || k === 'meta.num') setTimeout(show, 0); });
+  a.addEventListener('click', e => {
+    e.preventDefault(); P.ui.itab = 'project'; buildSide(); autosave();
+    const i = document.querySelector('#sidebar [data-k="meta.name"]'); if (!i) return;
+    const sb = $id('sidebar'); if (sb && getComputedStyle(sb).overflowY !== 'visible') sb.scrollTop = 0;
+    if (window.matchMedia && window.matchMedia('(max-width: 900px)').matches) { const it = $id('itabs'); if (it) window.scrollTo(0, it.getBoundingClientRect().top + window.scrollY - 4); }
+    i.focus({ preventScroll: true });
+  });
+  show();
 })();
 </script>
 </body>

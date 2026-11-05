@@ -2260,3 +2260,20 @@ function listTables() {
 - **Saved data:** `subloads_projects_v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-05 — PR: claude/header-subloads (PR #832: https://github.com/mlococo88/All-Structural/pull/832) (SLHD: compact header; Open / Save, hand-off and DXF buttons moved to the Project tab, Undo / Redo / Projects… up into the header; display only, no result change)
+- **Engineer:** clean up the top of the page (button-only header here: 8 buttons, with Undo / Redo / Projects… on the bridge strip below it); the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id and the document-level click handlers are the same):
+  - `.hdr-group`: before Open, Save, Export abutments, Send to Abutment Calculator, Export hand-off (JSON), Send foundation loads, Export DXF (the middle five added by the patchExport / patchAbxHandoff / foundation-loads blocks), Print; Undo / Redo / Projects… in a box at the right of the bridge strip (PLIB block). After: `<a id="hdrProj">` "Project: <name> · <no.>", the Undo / Redo / Projects… box, Print.
+  - New last `<script>` block (anchor `(function slHdr() {`): builds `<div id="slPrjPane">` (a `sec('Project files and hand-offs', …)` card with groups Project file (`#btn-open`, `#btn-save`), To the abutment calculator (`#btn-abx`, `#btn-abx-send`, `#btn-abx-hf`), To Pile Designer and Spread Footing (`#btn-fdx`), Drawings (`#btn-dxf`); one-line hints) and moves the buttons into it; it sits after the Project card of the Project tab (after the `#bx-pm-use` section) and is parked in a hidden `#slPrjHold` while `buildSide()` rebuilds the sidebar (`buildSide` wrapped once more, as the earlier blocks do). The header line shows `P.meta.name · P.meta.num`, refreshed after every `buildSide()` and on `input` in those two fields; a click opens the Project tab (`P.ui.itab='project'`, as clicking the tab) and focuses Project name.
+  - CSS (anchor `/* SLHD (2026-11-05)`): `#hdrProj`, `#slPrjPane` rules; below 900 px the project line takes the first row of the wrapped header.
+- **Decisions (pending engineer review):** Undo / Redo / Projects… move from the bridge strip into the header (the strip box was only there because the header was full); Export DXF goes with the hand-offs (export, not a global action); Print stays in the header.
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, Project tab, title typed "Route 6 Bridge", "P-1234", "2026-11-05", "MJL", "ABC"):
+  - `MODEL`, every localStorage key (time stamps normalised) and the Report tab text: identical; every typed value in the Report.
+  - Share project info: `bridgeSuite.v1.projectMeta` identical; Use shared project info fills the shared fields; reload of the autosave identical;
+  - header shows "Project: Route 6 Bridge · P-1234"; the link opens the Project tab with Project name focused (1920 and 390 px);
+  - after switching tabs (sidebar rebuilt) the card is back in the Project tab with one of each button; Save and Export abutments download once each; Send foundation loads opens its dialog;
+  - `phone-layout --tool bsl`, `project-library --tool bsl`, `github-sync-tools --tool bsl`, `check-syntax`: pass; no sideways scroll on any input tab at 390 / 768 px; 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change.
