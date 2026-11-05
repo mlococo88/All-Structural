@@ -5174,7 +5174,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - 0 console / KaTeX errors. `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Card 5.6 (default) checked by eye.
 - **Saved data:** no change. **Other copies:** none.
 
-## 2026-11-05 — PR: claude/sf-corner-pressures (PR pending) — Bearing-pressure heat map labels the four footing-corner pressures; corner-pressure worked lines and table in 3.2 and in the Report (SFQC; display only)
+## 2026-11-05 — PR: claude/sf-corner-pressures (PR #777: https://github.com/mlococo88/All-Structural/pull/777) — Bearing-pressure heat map labels the four footing-corner pressures; corner-pressure worked lines and table in 3.2 and in the Report (SFQC; display only)
 
 - **What:** the base-pressure heat map (Bearing tab, card 3.2, Plotly `plot-heat`) labels each footing corner with its pressure, e.g. "q₁ = 7.03 ksf", or "q₃ = 0 (no contact)" where the corner is off the soil under partial contact. Card 3.2 gets a worked block and a table of the four corner pressures, with a "Worked in" link under the heat map. The Report (section Bearing, "Base pressure (governing combination)", key S-bp) gets the same table. The heat-map figure printed in the Report carries the labels.
 - **Values:** no new calculation. Every number is the solver's own `bp.corners` (`solveBearing`), the plane the heat map draws:
