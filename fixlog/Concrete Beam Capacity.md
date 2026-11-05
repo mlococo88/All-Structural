@@ -4089,3 +4089,236 @@ Not affected:
   - Screenshots looked at: the Input Echo section and elevation, the Visuals section, elevation and 3-D, the ASD section, both Dev drawings, for default and deep.
   - `check-syntax` (all), `phone-layout --tool cbc,aci`, `project-library --tool rebar` and `run.mjs report steps steps-groups report-wiring` (14 passed) pass.
 - **Saved data:** none. **Governing provision:** none changed (drawings only). **Other copies:** `ACI Rebar Development Length.html` (Dev drawings, same edit).
+
+## 2026-11-05 — PR: claude/cbc-value-labels (CBVL: strain, stress and force diagram with value labels beside the Beam Capacity section; elastic stress diagram on the ASD Section tab; both in the Report; display only, no result change)
+
+### CBVL. Value labels on the graphics   [display only] [no result change]
+- **Engineer request (2026-11-05, Phase 5 graphics, PR B):**
+  - Beside the Beam Capacity section, for the selected or governing combination, a strain and stress (force) diagram. It shows c, ε_cu = 0.003, ε_t, the strain at each layer, f_s per layer (yield noted), the C_c / C_s / T resultants and their lever arm, M_n and φ, all from the tool's own flexure results.
+  - On the ASD frame, the elastic stress diagram (kd, f_c, f_s).
+  - Labels legible, signs clear, links to the worked steps (§6), and the Report copies them.
+- **Beam Capacity frame (`#suite-frame-capacity` srcdoc, CRLF kept):**
+  - New `cbcForceRes(r)`, `cbcLn`, `cbcForceRows(r)`, `cbcArrowHead`, `cbcArrow` and `cbcForceSVG(r)`, before `/* ---------- Plotly strain diagram ---------- */`. The code is below.
+  - Visuals tab, `buildVisualsTab`: a new card `visForce`, "Strain, Stress and Forces at Nominal Strength", between the cross-section (`visSec`) and the Plotly strain diagram. It is for the combination of the tab's existing selector (`S.ui.detailCombo`; the governing combination by default). It holds the diagram (bars hover-linked as the section), a caption, the table "Quantity / Expression / Values / Result" (`cbcForceRows`), and "Worked in: … → Flexure · Combination k".
+  - `cbcRptFlex(r)`: for the combination that governs flexure (`CC.govFlexIndex`, else `CC.govIndex`), the Report's flexure subsection adds the figure, the table "Values on the diagram, worked" and a note. The note links c, a, C_c, ε_t, φ, M_n and φM_n to their steps (`[[fx<ci>/c]]` …).
+    - Before: `return [tbl,{type:'topics',title:'Worked steps',list:T}];`
+    - After: `… .concat(sfd);`
+  - **Values (no new calculation):**
+    - c, a, ȳ, β₁, α₁, C_c, ε_t, d_t, and per layer d, ε_s, f_s, F, arm and M come from `flexure()` (`r.F`). φ and the class come from `r.pf`, and φM_n from `r.phiMn`.
+    - The resultants are sums of the layer values:
+      - T = ΣF over the layers with F > 0;
+      - C_s = ΣF over the layers with F < 0;
+      - lever arms about the concrete resultant: z_T = ΣM·12 / T and z_Cs = ΣM·12 / C_s, each over the same layers.
+    - So (T z_T + C_s z_Cs)/12 = ΣM = M_n exactly, and T + C_s = C_c (the solver's equilibrium).
+  - **Signs:** as the Flexure tab, + tension and − compression. C_c is labelled "−C_c". Arrows point right (→) for tension and left (←) for compression.
+  - **Drawing:**
+    - The section is to scale and drawn in its physical orientation (−M: compression at the bottom). The stress block is shaded to depth a, in flange and web pieces.
+    - The strain profile runs from ε_cu at the compression fibre, through the N.A. (shared dashed line), with a marker and label at each layer. The extreme tension layer is marked "= ε_t".
+    - The stress block α₁f′c is drawn over a. The force arrows are to a force scale. The lever-arm dimension z_T runs from C_c. z_Cs is shown when it is longer than 6 px.
+    - A results line: T, C_s, C_c, M_n, ε_t → class, φ, φM_n.
+    - Overlapping labels are moved apart (15–17 px).
+    - Arrowheads are polygons, not `<marker>` ids. The Report's print copy duplicates the page, so an id reference resolves to the hidden screen copy and the heads did not print (found in the first PDF).
+- **ASD frame (`#suite-frame-asd`):**
+  - New `asdStressState(R)`, `cbcArrowHeadA` and `asdStressSVG(R)` after `drawSection`'s scale-bar helper. The code is below.
+  - Section tab, `buildFigureTab`: a new card `figStress`, "Elastic Stress Diagram at the Allowable Moment". It holds the diagram, a caption, an eqBlock (f_c, f_s, C, T worked with values) and "Worked in" links to cards 2 (kd), 3 (z) and 4 (M_conc, M_steel, M_all).
+  - `asdRptModel`: a topic "Elastic stresses at the allowable moment (inventory)" with steps `sd.fc`, `sd.fs`, `sd.C` and `sd.T`. It comes after the rating-factor topics, so their numbers do not move. The figure follows "Transformed section and stress block", and its caption links `[[an/sd.fc]]`.
+  - **Values:**
+    - The diagram is at the allowable moment M_all of the inventory level (operating when inventory is off). There, the controlling material is at its allowable stress.
+    - The other stress comes from the same capacity equations. They are linear in the stress (M_conc = C_ff f_c z/12000, M_steel = A_s f_s z/12000), so f_c = f_c,all·M_all/M_conc and f_s = f_s,all·M_all/M_steel.
+    - kd, z, C_ff, A_s, n and the moments are `compute()`'s.
+    - The steel stress is drawn as f_s/n on the tension side, so both stresses lie on one straight line through the N.A. (a visual check of the transformed-section kd).
+- **Decisions (pending engineer review):**
+  - The force diagram is on the Visuals tab, in the card after the cross-section. That tab already has the combination selector. The other Beam Capacity tabs are unchanged. In the Report it appears once, for the combination that governs flexure, rather than for every combination.
+  - The ASD stress diagram is drawn at M_all, the rating capacity. The tool computes no stress under the applied M_DL + M_LL+I (it rates by allowable moments), so no service-stress diagram is drawn.
+  - z_T and z_Cs are force-weighted lever arms of the layer arms the solver uses (about the compression-block centroid ȳ, as M_n = ΣF(d − ȳ)/12).
+  - Pre-existing, not changed: the ASD `drawSection` hatching uses `<pattern>` / `<clipPath>` ids and does not print in the Report (same cause as above). This is noted for a later fix.
+- **Check case (default project, Combination 1 "1.2D + 1.6L", governing):**
+  - c = 2.23 in, a = 0.850 × 2.23 = 1.89 in, ȳ = 0.95 in.
+  - T1: d 15.19, ε_s = 0.003(15.19 − 2.23)/2.23 = 0.01748, f_s = 60.0 ksi (yield), F = 0.93 × 60.0 = 55.80 kip.
+  - C2: d 2.81, ε_s = 0.00079 (tension: the N.A. is above it), f_s = 23.0 ksi, F = 21.36 kip.
+  - T = 55.80 + 21.36 = 77.16 kip = C_c = 0.85 × 4 × 12 × 1.89 = 77.16 kip.
+  - z_T = (55.80 × 14.24 + 21.36 × 1.87)/77.16 = 10.82 in.
+  - M_n = 77.16 × 10.82/12 = 69.55 kip-ft (Flexure tab 66.22 + 3.32 = 69.55). φ = 0.900, φM_n = 62.59 kip-ft.
+  - ASD default (inventory): kd 3.76, z 13.94 in, M_conc 41.96, M_steel 25.92 → M_all 25.92 kip-ft (steel controls). f_s = 24,000 psi (= allowable), f_c = 1,600 × 25.92/41.96 = 988 psi. C = 22.58 × 988/1000 = 22.32 kip = T = 0.93 × 24,000/1000 = 22.32 kip. f_s/n = 3,000 psi; 988/3.76 = 263 ≈ 3,000/11.43 = 262 psi/in (straight line).
+- **How verified (headless Chromium, origin/main f9ec0f9 vs the branch):**
+  - Cases default, aa100, aci100 and excess (suite) and the standalone ACI Rebar tool (identical).
+  - `computeAll`, `allChecks` (Beam Capacity), `compute` (ASD) and the Development & Splice results are identical.
+  - Text differences are additions only: the Visuals card, the ASD Section card and the Report additions. No line of main's Report text is missing.
+  - The Report models differ only by the added items.
+  - Screenshots looked at: the Visuals card for default, a two-combination case with −M selected, a T-beam (48 × 30 in) and a deep beam with three layers (one in compression); the ASD card.
+  - The Report printed (49 pages) and looked at: p. 12 (Beam Capacity diagram and table, arrowheads printed) and p. 30 (ASD).
+  - `check-syntax` (all), `phone-layout --tool cbc,aci` and `run.mjs report steps steps-groups report-wiring` pass.
+- **Saved data:** none (the card uses the existing `S.ui.detailCombo` and collapse state). **Governing provision:** none changed. **Other copies:** none.
+
+#### Code added (re-apply by hand) — Beam Capacity frame
+```js
+/* ---------- CBVL (2026-11-05, Phase 5 graphics): strain, stress and force diagram beside the cross-section ----------
+   For one load combination r (CC.combos[i]): the section, the strain profile and the stresses / forces at nominal strength,
+   with value labels. Every value is the flexure solver's own (r.F = flexure(): c, a, ȳ, C_c, per layer ε_s, f_s, F, arm, M;
+   r.pf: φ and the class; r.phiMn). The resultants are sums of those layer values: T = ΣF of the layers in tension, C_s = ΣF
+   of the layers in compression (F < 0), and their lever arms about the compression-block centroid z = ΣM·12/ΣF, so
+   (T·z_T + C_s·z_Cs)/12 = ΣM = M_n exactly. Signs as the Flexure tab: + tension, − compression. Display only. */
+function cbcForceRes(r){
+  const F=r.F, ten=F.detail.filter(L=>L.F>0), cmp=F.detail.filter(L=>L.F<0);
+  const sum=(A,k)=>A.reduce((s,L)=>s+L[k],0);
+  const T=sum(ten,'F'), Cs=sum(cmp,'F'), MT=sum(ten,'M'), MCs=sum(cmp,'M');
+  return {ten,cmp,T,Cs,MT,MCs,zT:T>0?MT*12/T:null,zCs:Cs<0?MCs*12/Cs:null};
+}
+const cbcLn=L=>L.side+(L.i+1);
+/* rows: [quantity, expression, values substituted, result] — the worked lines of the diagram's labels */
+function cbcForceRows(r){
+  const F=r.F, R=cbcForceRes(r), rows=[];
+  rows.push(['Neutral-axis depth c','axial equilibrium (Flexure, Step 4)','',fmt(F.c)+' in']);
+  rows.push(['Stress-block depth a','β₁c',fmt(F.B1,3)+' × '+fmt(F.c),fmt(F.a)+' in']);
+  rows.push(['Concrete strain ε_cu','extreme compression fibre','','0.003']);
+  F.detail.forEach(L=>{
+    rows.push(['Layer '+cbcLn(L)+' (d = '+fmt(L.d)+' in): ε_s','0.003(d − c)/c','0.003('+fmt(L.d)+' − '+fmt(F.c)+')/'+fmt(F.c),fmt(L.eps,5)]);
+    rows.push(['Layer '+cbcLn(L)+': f_s','ε_s E_s, limited to ±f_y','min(|'+fmt(L.eps,5)+'| × 29000, '+fmt(S.mat.fy)+')',fmt(L.fs,1)+' ksi'+(L.yielded?' (yielded)':'')]);
+    rows.push(['Layer '+cbcLn(L)+': F','A_s f_s'+(L.disp>0?' + A_sα₁f′c':''),fmt(L.As)+' × '+fmt(L.fs,1)+(L.disp>0?' + '+fmt(L.disp,2):''),fmt(L.F)+' kip']);
+  });
+  rows.push(['ε_t (extreme tension layer, d_t = '+fmt(F.dt)+' in)','0.003(d_t − c)/c','0.003('+fmt(F.dt)+' − '+fmt(F.c)+')/'+fmt(F.c),fmt(F.eps_t,5)]);
+  rows.push(['Concrete compression C_c','α₁f′c × compression area (depth a)',fmt(F.A1,2)+' × '+fmt(S.mat.fc)+' × A(a = '+fmt(F.a)+')',fmt(F.Cc)+' kip (compression), at ȳ = '+fmt(F.ybar)+' in']);
+  rows.push(['Steel tension T','ΣF, layers in tension',R.ten.length?R.ten.map(L=>fmt(L.F)).join(' + '):'none',fmt(R.T)+' kip']);
+  if(R.cmp.length) rows.push(['Steel compression C_s','ΣF, layers in compression',R.cmp.map(L=>'('+fmt(L.F)+')').join(' + '),fmt(R.Cs)+' kip']);
+  rows.push(['Equilibrium','C_c = T + C_s',fmt(R.T)+(R.cmp.length?' + ('+fmt(R.Cs)+')':''),fmt(R.T+R.Cs)+' kip (C_c = '+fmt(F.Cc)+')']);
+  if(R.zT!=null) rows.push(['Lever arm of T about C_c','z_T = ΣF(d − ȳ)/T',R.ten.map(L=>fmt(L.F)+'('+fmt(L.arm)+')').join(' + ')+' / '+fmt(R.T),fmt(R.zT)+' in']);
+  if(R.zCs!=null) rows.push(['Lever arm of C_s about C_c','z_Cs = ΣF(d − ȳ)/C_s',R.cmp.map(L=>'('+fmt(L.F)+')('+fmt(L.arm)+')').join(' + ')+' / ('+fmt(R.Cs)+')',fmt(R.zCs)+' in']);
+  rows.push(['Nominal moment M_n','(T z_T'+(R.cmp.length?' + C_s z_Cs':'')+')/12','('+fmt(R.T)+' × '+fmt(R.zT)+(R.cmp.length?' + ('+fmt(R.Cs)+') × '+fmt(R.zCs):'')+')/12',fmt(F.Mn)+' kip-ft']);
+  rows.push(['Strength reduction factor φ','by ε_t ('+r.pf.cls.toLowerCase()+')','ε_t = '+fmt(F.eps_t,5),fmt(r.pf.phi,3)]);
+  rows.push(['Design strength φM_n','φM_n',fmt(r.pf.phi,3)+' × '+fmt(F.Mn),fmt(r.phiMn)+' kip-ft']);
+  return rows;
+}
+/* arrowheads drawn as polygons, not <marker> ids: the Report's print copy duplicates the page, and an id reference would resolve
+   to the hidden screen copy (the heads would not print) */
+function cbcArrowHead(x1,y1,x2,y2,col,sz){ const a=Math.atan2(y2-y1,x2-x1), L=sz||8, w=L*0.45;
+  const p=(d,o)=>[x2-L*Math.cos(a)+o*Math.sin(a), y2-L*Math.sin(a)-o*Math.cos(a)];
+  const A=p(L,w), B=p(L,-w); return `<polygon points="${x2},${y2} ${A[0]},${A[1]} ${B[0]},${B[1]}" fill="${col}"/>`; }
+function cbcArrow(x1,y1,x2,y2,col,sw,both){ return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="${col}" stroke-width="${sw}"/>`+cbcArrowHead(x1,y1,x2,y2,col,6+2*sw)+(both?cbcArrowHead(x2,y2,x1,y1,col,6+2*sw):''); }
+function cbcForceSVG(r){
+  const F=r.F, neg=r.neg, R=cbcForceRes(r), {bw,h,bf,hf,type}=S.sec, tee=type==='tee', secW=tee?bf:bw;
+  const MT=58, sc=Math.min(250/h,200/secW), H=Math.round(MT+h*sc+(neg?84:70)), xA=28;
+  const xB=Math.max(320,xA+secW*sc+190), xC=xB+270, W=xC+340;   /* panels: section | strain (zero line xB) | stress and force (face line xC) */
+  const Yp=y=>MT+y*sc, Y=t=>Yp(neg?h-t:t);                 /* Yp: physical depth from the top; Y: depth t from the compression fibre */
+  const X=x=>xA+(secW/2+x)*sc;
+  const T=(x,y,s,o)=>`<text x="${x}" y="${y}"${o||''}>${s}</text>`;
+  let s=`<svg class="dwg cbvl" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="max-width:${W}px" font-family="Arial,Helvetica,sans-serif" font-size="13.5" fill="#0F172A">`;
+  /* --- A: section (physical orientation, to scale) with the stress block and the bars --- */
+  const out=tee?`M${X(-bf/2)},${Yp(0)} L${X(bf/2)},${Yp(0)} L${X(bf/2)},${Yp(hf)} L${X(bw/2)},${Yp(hf)} L${X(bw/2)},${Yp(h)} L${X(-bw/2)},${Yp(h)} L${X(-bw/2)},${Yp(hf)} L${X(-bf/2)},${Yp(hf)} Z`
+    :`M${X(-bw/2)},${Yp(0)} L${X(bw/2)},${Yp(0)} L${X(bw/2)},${Yp(h)} L${X(-bw/2)},${Yp(h)} Z`;
+  s+=`<path d="${out}" fill="#eceae4" stroke="#0F172A" stroke-width="1.3"/>`;
+  const ya=Math.min(Y(0),Y(Math.min(F.a,h))), yb=Math.max(Y(0),Y(Math.min(F.a,h)));
+  /* stress block: the part of the section between the compression face and depth a (flange and web pieces; no clip-path id) */
+  const yb1=Math.min(neg?h-F.a:0,h), yb2=neg?h:Math.min(F.a,h);
+  [[0,tee?hf:h,secW],[tee?hf:h,h,bw]].forEach(q=>{ const y1=Math.max(yb1,q[0]), y2=Math.min(yb2,q[1]); if(y2>y1+1e-9) s+=`<rect x="${X(-q[2]/2)}" y="${Yp(y1)}" width="${q[2]*sc}" height="${(y2-y1)*sc}" fill="#93c5fd" opacity="0.6"/>`; });
+  F.detail.forEach(L=>{ const rr=Math.max(2.4,L.db/2*sc);
+    barXs(L.n,L.db).forEach(x=>{ s+=`<circle data-layer="${L.i}" cx="${X(x)}" cy="${Yp(L.yTop)}" r="${rr}" fill="${L.F>0?'#DC2626':'#fff'}" stroke="${L.F>0?'#991B1B':'#2563EB'}" stroke-width="1.4"/>`; }); });
+  s+=T(xA,MT-30,'Section, '+(neg?'\u2212M':'+M'),' font-weight="bold"');
+  s+=T(xA,MT-16,'shaded: stress block, depth a',' font-size="12" fill="#334155"');
+  /* neutral axis across the panels */
+  if(F.c<=h) s+=`<line x1="${xA}" y1="${Y(F.c)}" x2="${xC+34}" y2="${Y(F.c)}" stroke="#B45309" stroke-width="1" stroke-dasharray="6,4"/>`+T(xA-3,Y(F.c)+4,'N.A.',' text-anchor="end" font-size="10" fill="#B45309"');
+  /* --- B: strain --- */
+  const epsF=EPS_CU*(h-F.c)/F.c, eMax=Math.max(EPS_CU,Math.abs(epsF),...F.detail.map(L=>Math.abs(L.eps))), es=80/eMax;
+  const xs=e=>xB+e*es;   /* tension (+) to the right, compression (−) to the left */
+  s+=T(xB-70,MT-30,'Strain (+ tension, − compression)',' font-weight="bold"');
+  s+=`<line x1="${xB}" y1="${Y(0)}" x2="${xB}" y2="${Y(h)}" stroke="#94A3B8" stroke-width="1"/>`;
+  const yc=F.c<=h?Y(F.c):Y(h);
+  s+=`<polygon points="${xB},${Y(0)} ${xs(-EPS_CU)},${Y(0)} ${xB},${yc}" fill="#bfdbfe" stroke="none"/>`;
+  if(F.c<h) s+=`<polygon points="${xB},${yc} ${xs(epsF)},${Y(h)} ${xB},${Y(h)}" fill="#fecaca" stroke="none"/>`;
+  s+=`<line x1="${xs(-EPS_CU)}" y1="${Y(0)}" x2="${xs(epsF)}" y2="${Y(h)}" stroke="#1E3A5F" stroke-width="2"/>`;
+  s+=T(xs(-EPS_CU)-4,Y(0)+(neg?14:-5),'ε_cu = 0.003',' text-anchor="end"');
+  /* c dimension, compression fibre to N.A. */
+  const xc=xB-125;
+  if(F.c<=h){ s+=cbcArrow(xc,Y(0),xc,Y(F.c),'#334155',1,true);
+    s+=`<line x1="${xc-4}" y1="${Y(0)}" x2="${xB}" y2="${Y(0)}" stroke="#94A3B8" stroke-width="0.6"/>`;
+    s+=T(xc-5,(Y(0)+Y(F.c))/2+3,'c = '+fmt(F.c)+'"',' text-anchor="end" font-weight="bold"'); }
+  /* layer labels, moved apart where they would overlap */
+  const spread=(A,g)=>{ const o=A.slice().sort((p,q)=>p.y-q.y); for(let k=1;k<o.length;k++) if(o[k].y<o[k-1].y+g) o[k].y=o[k-1].y+g; return o; };
+  spread(F.detail.map(L=>({L,y:Y(L.d)+3,y0:Y(L.d)})),17).forEach(o=>{ const L=o.L;
+    s+=`<circle cx="${xs(L.eps)}" cy="${o.y0}" r="3.2" fill="${L.eps>0?'#DC2626':'#2563EB'}" stroke="#0F172A" stroke-width="0.6"/>`;
+    const isT=L.d===F.dt&&L.side==='T';
+    s+=T(xB+96,o.y,cbcLn(L)+': ε_s = '+(L.eps>0?'+':'')+fmt(L.eps,5)+(isT?' = ε_t':''),isT?' font-weight="bold"':''); });
+  /* --- C: stresses and forces --- */
+  const xF=xC+42, fMax=Math.max(F.Cc,...F.detail.map(L=>Math.abs(L.F)),1e-9), fl=v=>Math.max(8,70*Math.abs(v)/fMax);
+  s+=T(xC-6,MT-30,'Stress f_s (ksi) and force F (kip)',' font-weight="bold"');
+  s+=`<line x1="${xC}" y1="${Y(0)}" x2="${xC}" y2="${Y(h)}" stroke="#94A3B8" stroke-width="1"/>`;
+  s+=`<rect x="${xC}" y="${ya}" width="30" height="${yb-ya}" fill="#93c5fd" stroke="#2563EB" stroke-width="0.8"/>`;
+  s+=T(xC,MT-16,'α₁f′c = '+fmt(F.A1*S.mat.fc,2)+' ksi over a = '+fmt(F.a)+'"',' font-size="12"');
+  const arrow=(y,v,col)=>{ const L=fl(v); return v>0?cbcArrow(xF,y,xF+L,y,col,2):cbcArrow(xF+L,y,xF,y,col,2); };
+  const items=[{y0:Y(F.ybar),v:-F.Cc,col:'#1d4ed8',lab:'C_c = \u2212'+fmt(F.Cc)+' k at ȳ = '+fmt(F.ybar)+'"'}]
+    .concat(F.detail.map(L=>({y0:Y(L.d),v:L.F,col:L.F>0?'#DC2626':'#2563EB',
+      lab:cbcLn(L)+': '+(L.fs>0?'+':'')+fmt(L.fs,1)+' ksi'+(L.yielded?' (yield)':'')+', '+(L.F>0?'+':'')+fmt(L.F)+' k'})));
+  items.forEach(o=>{ s+=arrow(o.y0,o.v,o.col); });
+  spread(items.map(o=>Object.assign({},o,{y:o.y0+4})),17).forEach(o=>{ s+=T(xF+78,o.y,o.lab,' font-size="13"'); });
+  /* lever arms of T and C_s about C_c */
+  const arm=(x,z,lab)=>{ if(z==null) return ''; const y1=Y(F.ybar), y2=Y(F.ybar+z);
+    return cbcArrow(x,y1,x,y2,'#7C3AED',1,true)
+      +`<line x1="${x-3}" y1="${y2}" x2="${xC}" y2="${y2}" stroke="#C4B5FD" stroke-width="0.6"/>`+T(x-4,(y1+y2)/2+3,lab,' text-anchor="end" fill="#7C3AED" font-size="13"'); };
+  s+=arm(xC-12,R.zT,'z_T = '+fmt(R.zT)+'"');
+  if(R.zCs!=null&&Math.abs(R.zCs)*sc>6) s+=arm(xC-62,R.zCs,'z_Cs = '+fmt(R.zCs)+'"');
+  /* results line */
+  const yR=MT+h*sc+(neg?44:30);
+  s+=T(xA,yR,'T = '+fmt(R.T)+' kip'+(R.cmp.length?',  C_s = '+fmt(R.Cs)+' kip':'')+',  C_c = '+fmt(F.Cc)+' kip;  M_n = (T z_T'+(R.cmp.length?' + C_s z_Cs':'')+')/12 = '+fmt(F.Mn)+' kip-ft',' font-size="14" font-weight="bold"');
+  s+=T(xA,yR+20,'ε_t = '+fmt(F.eps_t,5)+' → '+r.pf.cls.toLowerCase()+', φ = '+fmt(r.pf.phi,3)+';  φM_n = '+fmt(r.phiMn)+' kip-ft  ('+r.name+')',' font-size="14" font-weight="bold"');
+  s+='</svg>';
+  return s;
+}
+```
+
+#### Code added — ASD frame
+```js
+/* CBVL (2026-11-05, Phase 5 graphics): the elastic (working-stress) stress diagram, from compute()'s own results. It is drawn at
+   the allowable moment M_all of the inventory level (operating when inventory is off), where the controlling material is at its
+   allowable stress. The other material's stress at M_all follows from the same capacity equations, which are linear in the
+   stress (M_conc = C f_c z/12000, M_steel = A_s f_s z/12000): f_c = f_c,all·M_all/M_conc, f_s = f_s,all·M_all/M_steel. kd, z,
+   C (= C_ff) and A_s are compute()'s. Display only: no rating value changes. */
+function asdStressState(R){
+  const inv=S.mode.inv!==false||!S.mode.op, lv=inv?'Inventory':'Operating', id=inv?'inv':'op';
+  const fcA=inv?R.A.fc_inv:R.A.fc_op, fsA=inv?R.A.fs_inv:R.A.fs_op, Mc=inv?R.M_conc_inv:R.M_conc_op, Ms=inv?R.M_steel_inv:R.M_steel_op;
+  const Mg=inv?R.M_inv:R.M_op, ctrl=inv?R.ctrl_inv:R.ctrl_op;
+  const fc=Mc>0?fcA*Mg/Mc:NaN, fs=Ms>0?fsA*Mg/Ms:NaN;
+  return {lv,id,fcA,fsA,Mc,Ms,Mg,ctrl,fc,fs,C:R.Cff*fc,T:R.As*fs};
+}
+/* arrowhead as a polygon (no <marker> id: the Report's print copy would resolve it to the hidden screen copy) */
+function cbcArrowHeadA(x1,y1,x2,y2,col,L){ const a=Math.atan2(y2-y1,x2-x1), w=L*0.45, px=x2-L*Math.cos(a), py=y2-L*Math.sin(a);
+  return '<polygon points="'+x2+','+y2+' '+(px+w*Math.sin(a))+','+(py-w*Math.cos(a))+' '+(px-w*Math.sin(a))+','+(py+w*Math.cos(a))+'" fill="'+col+'"/>'; }
+function asdStressSVG(R){
+  const P=asdStressState(R), hD=(R.h>R.d)?R.h:R.d+2, bD=R.shape==='rect'?R.b_w:R.b_eff;
+  if(!(isFinite(P.fc)&&isFinite(P.fs)&&P.fc>0&&P.fs>0&&R.kd>0)) return '';
+  const W=640, MT=50, sc=Math.min(240/hD,120/bD), H=Math.round(MT+hD*sc+68), x0=30;
+  const Y=y=>MT+y*sc, oh=(bD-R.b_w)/2;
+  const tx=(x,y,s,o)=>'<text x="'+x+'" y="'+y+'"'+(o||'')+'>'+s+'</text>';
+  let s='<svg class="dwg asdsd" viewBox="0 0 '+W+' '+H+'" xmlns="http://www.w3.org/2000/svg" style="max-width:'+W+'px" font-family="Arial,Helvetica,sans-serif" font-size="10" fill="#0F172A">';
+  /* section, to scale */
+  const path=R.shape==='rect'?'M'+x0+','+Y(0)+' h'+(bD*sc)+' v'+(hD*sc)+' h'+(-bD*sc)+' Z'
+    :'M'+x0+','+Y(0)+' h'+(bD*sc)+' v'+(R.h_f*sc)+' h'+(-oh*sc)+' v'+((hD-R.h_f)*sc)+' h'+(-R.b_w*sc)+' v'+(-(hD-R.h_f)*sc)+' h'+(-oh*sc)+' Z';
+  s+='<path d="'+path+'" fill="#eceae4" stroke="#16304F" stroke-width="1.4"/>';
+  /* compression zone: flange and web pieces down to kd (no clip-path id, so it prints from the Report's copy) */
+  const hfl=R.shape==='rect'?hD:Math.min(R.h_f,hD);
+  s+='<rect x="'+x0+'" y="'+Y(0)+'" width="'+(bD*sc)+'" height="'+(Math.min(R.kd,hfl)*sc)+'" fill="#93c5fd" opacity="0.55"/>';
+  if(R.kd>hfl) s+='<rect x="'+(x0+oh*sc)+'" y="'+Y(hfl)+'" width="'+(R.b_w*sc)+'" height="'+((R.kd-hfl)*sc)+'" fill="#93c5fd" opacity="0.55"/>';
+  s+='<line x1="'+(x0+(R.shape==='rect'?0:oh*sc))+'" y1="'+Y(R.d)+'" x2="'+(x0+(R.shape==='rect'?bD:oh+R.b_w)*sc)+'" y2="'+Y(R.d)+'" stroke="#DC2626" stroke-width="4" stroke-dasharray="1,5" stroke-linecap="round"/>';
+  s+=tx(x0,MT-28,'Section (to scale)',' font-weight="bold"');
+  /* neutral axis */
+  s+='<line x1="'+(x0-6)+'" y1="'+Y(R.kd)+'" x2="'+(W-120)+'" y2="'+Y(R.kd)+'" stroke="#2563EB" stroke-dasharray="6,4" stroke-width="1"/>'+tx(W-116,Y(R.kd)+3,'N.A.',' fill="#2563EB"');
+  /* stress diagram: compression (concrete) to the right, tension (steel, drawn as f_s/n) to the left, one straight line through N.A. */
+  const xS=330, fMax=Math.max(P.fc,P.fs/R.n,1e-9), k=90/fMax, xT=xS-P.fs/R.n*k;
+  s+=tx(xS-90,MT-28,'Elastic stresses at M_all ('+P.lv.toLowerCase()+'): \u2190 tension | compression \u2192',' font-weight="bold"');
+  s+='<line x1="'+xS+'" y1="'+Y(0)+'" x2="'+xS+'" y2="'+Y(hD)+'" stroke="#94A3B8"/>';
+  s+='<polygon points="'+xS+','+Y(0)+' '+(xS+P.fc*k)+','+Y(0)+' '+xS+','+Y(R.kd)+'" fill="#bfdbfe" stroke="#2563EB" stroke-width="1"/>';
+  s+='<line x1="'+xS+'" y1="'+Y(R.d)+'" x2="'+xT+'" y2="'+Y(R.d)+'" stroke="#DC2626" stroke-width="2.5"/>'+cbcArrowHeadA(xS,Y(R.d),xT,Y(R.d),'#DC2626',11);
+  s+='<line x1="'+(xS+P.fc*k)+'" y1="'+Y(0)+'" x2="'+xT+'" y2="'+Y(R.d)+'" stroke="#64748B" stroke-width="0.8" stroke-dasharray="3,3"/>';
+  s+=tx(xS+P.fc*k+6,Y(0)+4,'f_c = '+grp(P.fc)+' psi'+(P.ctrl==='Concrete'?' (= allowable)':''),' font-weight="bold"');
+  s+=tx(xT,Y(R.d)+18,'f_s = '+grp(P.fs)+' psi'+(P.ctrl==='Steel'?' (= allowable)':'')+'; drawn as f_s/n = '+grp(P.fs/R.n)+' psi (n = '+R.n+')',' font-weight="bold"');
+  /* kd and z, right of the diagram */
+  const xk=xS+230;
+  s+='<line x1="'+(xS+P.fc*k+4)+'" y1="'+Y(0)+'" x2="'+(xk+4)+'" y2="'+Y(0)+'" stroke="#C4B5FD" stroke-width="0.6"/>';
+  s+='<line x1="'+xk+'" y1="'+Y(0)+'" x2="'+xk+'" y2="'+Y(R.kd)+'" stroke="#334155"/>'+cbcArrowHeadA(xk,Y(R.kd),xk,Y(0),'#334155',8)+cbcArrowHeadA(xk,Y(0),xk,Y(R.kd),'#334155',8)+tx(xk+5,(Y(0)+Y(R.kd))/2+4,'kd = '+fmt(R.kd)+'"');
+  const yC=Y(R.d-R.z), xz=xS+160;
+  s+='<line x1="'+xz+'" y1="'+yC+'" x2="'+xz+'" y2="'+Y(R.d)+'" stroke="#7C3AED"/>'+cbcArrowHeadA(xz,Y(R.d),xz,yC,'#7C3AED',8)+cbcArrowHeadA(xz,yC,xz,Y(R.d),'#7C3AED',8)+tx(xz+5,(yC+Y(R.d))/2+4,'z = '+fmt(R.z)+'" (C to T)',' fill="#7C3AED"');
+  s+='<line x1="'+xS+'" y1="'+yC+'" x2="'+(xz+4)+'" y2="'+yC+'" stroke="#C4B5FD" stroke-width="0.6"/><line x1="'+xS+'" y1="'+Y(R.d)+'" x2="'+(xz+4)+'" y2="'+Y(R.d)+'" stroke="#C4B5FD" stroke-width="0.6"/>';
+  const yR=Y(hD)+34;
+  s+=tx(x0,yR,'C = C_ff f_c = '+fmt(P.C/1000)+' kip,  T = A_s f_s = '+fmt(P.T/1000)+' kip;  M_all = '+fmt(P.Mg)+' kip-ft ('+P.ctrl.toLowerCase()+' controls)',' font-size="10.5" font-weight="bold"');
+  s+=tx(x0,yR+15,'Section to scale; stresses to their own scale. The steel stress is drawn as f_s/n, so both stresses lie on one straight line through N.A.',' font-size="9" fill="#334155"');
+  return s+'</svg>';
+}
+```
