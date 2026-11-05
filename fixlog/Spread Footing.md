@@ -4921,6 +4921,42 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   3. **Where 11.6.1's condition is not met, 0.005A_g is kept.** Table 11.6.1 is used only where in-plane V_u ≤ 0.5φα_cλ√f′c A_cv in every LRFD combination. Otherwise the column rule stays (REVIEW), because 11.6.2 is not computed (it needs ρ_t, and its printed condition could not be confirmed).
   4. **Wall geometry and inputs.** Wall only where ℓ_w/t > 3 (2.3); otherwise the pedestal treatment stays, with a REVIEW note. ℓ_w = the longer plan side. h_w = the pedestal height h. N_u = P_u at the interface. √f′c is capped at 100 psi in the 11.6.1 limit (conservative). ρ_l is taken with the dowel bar size.
 
+## 2026-11-05 — PR: claude/sf-dowel-legend (PR #770: https://github.com/mlococo88/All-Structural/pull/770) — Card 5.6: status legend and dowel-minimum formula follow each element's basis (pedestal 0.005A_g / wall ρ_l A_g); hook-in-compression citation 25.4.9.1 → 25.4.1.2; "ℓ_d reduction for excess A_s" input moved to the Reinforcement tab (SFML; display only, no result change)
+
+### SFML-1. Card 5.6 legend: only the statuses that occur, the dowel minimum per element   [display only]
+- **Where:** `renderFootDes` card 5.6 (anchor `const bb=secPanel(T,'o-fd-bear'`). New helpers before `/* SFSF: shear friction at the pedestal / footing interface (worked) */`: `sfdDowMinBasis(z)`, `sfdDowMinKinds()`, `sfdDowMinTex()`, `sfdDowMinRef()`, `sfdBearLegend(seen)`.
+  - Before: `bb.appendChild(el('div','note','Status legend: <b>OK</b> = bearing stress, dowel area and dowel development all satisfy code; <b style="color:#b71c1c">BEARING NG</b> = … <b style="color:#b71c1c">DOWELS &lt; MIN</b> = provided dowel area is below the 0.005A<sub>g</sub> minimum of ACI 318-19 16.3.4.1; … <b>PATCH</b> = …'));` (static, every status listed).
+  - After: the row loop records `seen.push([status,bz]);` and the note is `sfdBearLegend(seen)`: a general line (one status per element, the first check not met in the order bearing, L_dc, dowel area), the dowel minimum of the elements in the table (0.005A_g column / pedestal, 16.3.4.1; ρ_l A_g wall, 16.3.4.2 → 11.6.1, Table 11.6.1; both, with element names, when both occur; "kept for a wall where 11.6.1 does not apply" for a Wall where SFWL keeps the column rule), then only the statuses present in the table.
+  - Basis test: `z.wall&&z.wall.applied&&z.wall.t1161` → wall rule, the same condition SFWL uses to set `AsDowMin` (and `sfdDowelCheck` `rhoMin`).
+- **Problem:** the legend quoted 0.005A_g (16.3.4.1) for every element, also for a Wall whose minimum is ρ_l A_g (SFWL), and listed statuses (BEARING NG, PATCH) that no row had.
+
+### SFML-2. Card 5.6 formula line and reference   [display only]
+- **Where:** card 5.6 eqBlock `'Bearing on concrete & dowels'`.
+  - Before: ref `'ACI 318-19 22.8.3.2 / 16.3.4.1'`; line 2 `'A_{s,dowel,min} = 0.005 A_g,\\quad L_{dc} = …'`.
+  - After: ref `'ACI 318-19 22.8.3.2 / '+sfdDowMinRef()` (16.3.4.1 and/or 16.3.4.2, 11.6.1, Table 11.6.1). Without a wall the line is unchanged. With a wall the minimum is on its own line (`A_{s,dowel,min} = \rho_{\ell} A_g` (wall), or both forms labelled column / pedestal and wall), and the ℓ_dc expression on the next line.
+- **Report:** the Report's "As printed" copy of the Footing Design tab (`sfxWalk`) carries the new legend and formula lines; the worked Report steps (`cb<i>.dow`, `p<i>.AsMin`) already followed the basis (SFWL).
+
+### SFML-3. Citation: hooks are not effective in compression → ACI 318-19 25.4.1.2   [code reference; CLAUDE.md §4]
+- **Before / after:** "ACI 318-19 25.4.9.1" → "ACI 318-19 25.4.1.2" in: the card 5.6 warnbox "Dowel compression development not satisfied" (anchor `does not permit a hook to develop a bar in compression`); the dowel note `The 90° hook does not develop compression (ACI 318-19 …)`; the Reinforcement-tab dowel table header title (anchor `but not compression (25.4.`); the comment in `computePhase2` bearing.
+- **Provision (read in the PDF):** 25.4.1.2 (printed p. 471): hooks and heads are not to be used to develop bars in compression. 25.4.9.1 (p. 487) only gives ℓ_dc = max(25.4.9.2, 8 in).
+- **Check case:** none (text only); no value changes.
+
+### SFML-4. "ℓ_d reduction for excess A_s" input moved to the Reinforcement tab   [layout; engineer request]
+- **Where:** the row `<select data-path="mat.ldExcess">` moved from `#sec-mat` (Materials, after "Footing sides (cover)") to `#sec-rebar` (Footing Reinforcement), after "Outer bottom layer". Same `data-path`, options, hint and saved field (`state.mat.ldExcess`), same default and migration. The λ_s footing-shear checkbox (`mat.lamsFtg`) is a separate row and stays in Materials.
+- User Manual 2.6 "Footing reinforcement": one sentence saying the option is on this tab.
+
+### How verified
+- Headless Chromium, origin/main b833fec vs the branch, pinned KaTeX 0.16.11 / Plotly 2.35.2 / three 0.160.0. Deep diff of `R` and `P2` and the dashboard text on 15 cases: the 10 harness cases (def, rev, sfe, sfe5, dir, sfe9, revEx, thin, revHook, edgeHook), Seymour at f′c = 3000 psi (sey3), Seymour with Ped 1 Wall (seyW), with both Walls (seyWW), the default with a 1.5 × 6 ft wall Ped 1 (defW), and the default with Ped 2 h = 0 and Ped 1 P_D = 2500 k (pb: BEARING NG and PATCH). **0 differences** in `R`, `P2` and the dashboard on every case. Report text: only the legend, the formula / reference lines and the citation change. 0 console errors, 0 KaTeX errors.
+- `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs` passes.
+- The moved select: changing it on the Reinforcement tab sets `state.mat.ldExcess`, `P2.dev.exOn` and the autosave.
+- Screenshots of card 5.6 (seyW, defW, rev, pb) and of the Reinforcement input checked by eye.
+- **Saved data:** no key or format change.
+- **Other copies:** none.
+
+### Open items
+1. The dashboard chip and Report summary row are still named "Dowel steel (min 0.005A_g)" when a wall is present (the chip's value text and reference name the wall rule). The name is the lookup key of several maps (`sfdResultRows`, the Report summary "Worked in" map), so it was not renamed here.
+2. The card 5.6 formula line shows ℓ_dc ≥ 0.0003f_y d_b but not the 8 in floor of 25.4.9.1(b); the computation and the Report step `p<i>.ldc` include it.
+3. Dowel compression development, excess reinforcement (25.4.10.1): investigated, not implemented. See the PR description (code not clear enough for this case: 25.4.10.2(b), (c), (d) and R16.3.4).
 ## 2026-11-05 — PR: claude/sf-3d-dowel-hooks (SFHK: dowel hooks and embedment in the 3D view and the section sheets; display only, no result change)
 
 - **Problem:** the 3D view (tab 7) drew the pedestal vertical bars from the footing top up only, and drew "dowels" as a fixed placeholder: min(0.6 t, 1.2 ft) into the footing and min(h/2, 1.5 ft) up, straight, whatever the inputs. The selected hook, the embedment of card 5.6 and the lap of separate dowels were not shown. The section sheets (A-A, B-B) and the pedestal elevation drew the vertical bars straight down to the top of the bottom mat: no hook, and no separate dowels.

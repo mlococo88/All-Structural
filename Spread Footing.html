@@ -353,7 +353,6 @@ a.wkA:hover{text-decoration:underline}
  <div class="row"><label>Max. aggregate size d<sub>agg</sub></label><input type="number" step="0.125" min="0" data-path="mat.dagg" data-num><span class="unit">in</span><span class="hint">ACI 25.2.1 / 25.2.3: clear spacing &ge; 4/3 d<sub>agg</sub></span></div>   <!-- SFAG -->
  <div class="row"><label>Cover, top (formed)</label><input type="number" step="0.25" data-path="mat.coverTop" data-num><span class="unit">in</span></div>
  <div class="row"><label>Footing sides (cover)</label><select data-path="mat.sideExp"><option value="earth">Cast against earth (3 in)</option><option value="weather">Formed: exposed / in contact with ground</option></select><span class="hint">ACI Table 20.5.1.3.1</span></div>   <!-- SFCV -->
- <div class="row"><label>&ell;<sub>d</sub> reduction for excess A<sub>s</sub></label><select data-path="mat.ldExcess"><option value="off">Off (not taken)</option><option value="on">On: &ell;<sub>d</sub>&middot;A<sub>s,req</sub>/A<sub>s,prov</sub></option></select><span class="hint">ACI 25.4.10.1; footing mats, straight bars, where flexure (not the 0.0018 minimum) governs A<sub>s,req</sub></span></div>   <!-- SFDV -->
  <div class="row"><label>Side/end cover, bottom bars</label><input type="text" data-path="mat.sfdCoverSide" placeholder="blank = bottom"><span class="unit">in</span><span class="hint">c<sub>b</sub> for &ell;<sub>d</sub></span></div>
  <div class="row"><label>Subgrade modulus k<sub>s</sub></label><input type="number" step="10" data-path="mat.ks" data-num><span class="unit">pci</span><span class="hint">(rigidity check)</span></div>
  <div class="row"><label>Footing self-weight</label><select data-path="mat.swMode" id="swMode"><option value="auto">Auto-compute</option><option value="user">User override</option></select></div>
@@ -401,6 +400,7 @@ a.wkA:hover{text-decoration:underline}
  <tr><td>Top y</td><td><select data-path="freinf.topY.size" class="barsel" style="width:60px"></select></td><td><select data-path="freinf.topY.mode" class="sfdRbMode" style="width:74px"><option value="spacing">Spacing</option><option value="qty">Total qty</option></select></td><td><input type="number" step="0.5" data-path="freinf.topY.spc" data-num style="width:46px" class="sfdRbSpc" data-mat="topY" title="center-to-center spacing, in"><input type="number" step="1" min="0" data-path="freinf.topY.n" data-num style="width:46px" class="sfdRbN" data-mat="topY" title="total number of bars across the footing width"><div class="sfdRbD" data-mat="topY" style="font-size:10px"></div></td><td class="sfdRbAb" data-mat="topY"></td><td class="sfdRbAs" data-mat="topY"></td><td class="sfdRbS" data-mat="topY"></td></tr>
  </table>
  <div class="row"><label>Outer bottom layer (nearest the soil)</label><select data-path="freinf.botOuter"><option value="y">y-bars (default)</option><option value="x">x-bars</option></select><span class="hint">sets d<sub>x</sub>, d<sub>y</sub> of the bottom mat; top mat: x-bars outer</span></div>   <!-- SFBO -->
+ <div class="row"><label>&ell;<sub>d</sub> reduction for excess A<sub>s</sub></label><select data-path="mat.ldExcess"><option value="off">Off (not taken)</option><option value="on">On: &ell;<sub>d</sub>&middot;A<sub>s,req</sub>/A<sub>s,prov</sub></option></select><span class="hint">ACI 25.4.10.1; footing mats, straight bars, where flexure (not the 0.0018 minimum) governs A<sub>s,req</sub></span></div>   <!-- SFDV; SFML: moved from Materials -->
  <div class="note" id="sfdRbNote"></div>
 </div>
 </details>
@@ -910,7 +910,7 @@ function buildPedCards(){
   const dt=document.createElement('table');dt.className='tbl';dt.style.fontSize='11px';
   const dlw=el('div','',' <label title="SFDB: the dowel size, count and layout are those of the pedestal longitudinal bars, which run continuously into the footing (no lap at the joint)"><input type="checkbox" data-path="peds.'+i+'.reinf.dowelLong"> Pedestal longitudinal bars act as the dowels</label>');dlw.style.fontSize='11px';rb.appendChild(dlw);
   dlw.querySelector('input').checked=state.peds[i].reinf.dowelLong===true;
-  dt.innerHTML='<tr><th>Dowel bar</th><th>Dowel count</th><th title="Standard 90\u00b0 hook at the footing end of the dowels (SFDO): develops tension (ACI 318-19 25.4.3) but not compression (25.4.9.1)">Hooked end in footing</th><th title="Dowel projection above the footing top (in); blank = the required projection computed by the tool">Projection (in)</th><th title="Footing top under the pedestal (construction joint), for shear friction mu, ACI 318-19 Table 22.9.4.2 (SFSF)">Joint surface</th></tr>';
+  dt.innerHTML='<tr><th>Dowel bar</th><th>Dowel count</th><th title="Standard 90\u00b0 hook at the footing end of the dowels (SFDO): develops tension (ACI 318-19 25.4.3) but not compression (25.4.1.2)">Hooked end in footing</th><th title="Dowel projection above the footing top (in); blank = the required projection computed by the tool">Projection (in)</th><th title="Footing top under the pedestal (construction joint), for shear friction mu, ACI 318-19 Table 22.9.4.2 (SFSF)">Joint surface</th></tr>';
   const dr=document.createElement('tr');
   const selD=cell('<select data-path="peds.'+i+'.reinf.dowelSize" class="barsel">'+barOptions()+'</select>');selD.querySelector('select').dataset.filled='1';
   dr.appendChild(selD);
@@ -5757,7 +5757,7 @@ function computePhase2(R){
   const Ldc=Math.max(0.02*BAR_DIA[dSize]*fy/(lam*Math.min(sq,100)),0.0003*BAR_DIA[dSize]*fy,8); // ACI 318-19 25.4.9.2, sqrt(f'c) <= 100 psi (25.4.1.4)
   /* Compression development of the dowel INTO the footing.  Depth available is the footing
      thickness less the bottom cover and the two bottom mat layers the dowel must clear.
-     ACI 318-19 25.4.9.1 does not permit a hook to develop a bar in compression, so a
+     ACI 318-19 25.4.1.2 does not permit a hook to develop a bar in compression, so a
      shortfall cannot be detailed away - it needs a thicker footing, smaller or more dowels,
      or a mechanical device.  Previously availEmb was computed here and never compared. */
   const availEmb=Math.max(tin-cvB-BAR_DIA[state.freinf.botX.size||0]-BAR_DIA[state.freinf.botY.size||0],0);
@@ -6249,6 +6249,7 @@ function renderFootingDesign(){
  renderPunching(T);
  const bb=secPanel(T,'o-fd-bear','5.6  Concrete Bearing & Dowels at Pedestal Interface');
  const bt=document.createElement('table');bt.className='tbl';
+ const seen=[];   /* SFML: the statuses that occur, with their elements */
  bt.innerHTML='<tr><th>Element</th><th>A\u2081 (in\u00b2)</th><th>\u221a(A\u2082/A\u2081)</th><th>governed by</th><th>\u03c6P<sub>nb</sub> (k)</th><th>P<sub>u</sub> (k)</th><th>DCR</th><th>A<sub>s,dow</sub> min</th><th>prov</th><th>L<sub>dc</sub> (in)</th><th>avail (in)</th><th>Status</th></tr>';
  P2.bearing.forEach(bz=>{const tr=document.createElement('tr');
   const bearOK=bz.dcr<=1, dowOK=bz.dowelOK, ldOK=bz.ldcOK;
@@ -6258,6 +6259,7 @@ function renderFootingDesign(){
   else if(!ldOK){status='L_dc NG';statColor='#b71c1c';}
   else if(!dowOK){status='DOWELS < MIN';statColor='#b71c1c';}
   else{status='OK';statColor='#1b5e20';}
+  seen.push([status,bz]);   /* SFML */
   [bz.label,f2(bz.A1),f2(bz.conf),bz.confGov,f2(bz.phiPn),f2(bz.PuMax),f2(bz.dcr),
    bz.isPatch?'\u2013':f2(bz.AsDowMin),bz.isPatch?'\u2013':f2(bz.AsDowProv),
    bz.isPatch?'\u2013':f2(bz.Ldc),bz.isPatch?'\u2013':f2(bz.availEmb),status]
@@ -6268,10 +6270,10 @@ function renderFootingDesign(){
   if(!bz.isPatch&&(!bearOK||!ldOK||!dowOK))tr.style.background='#fdecea';
   bt.appendChild(tr);});
  bb.appendChild(bt);
- bb.appendChild(el('div','note','Status legend: <b>OK</b> = bearing stress, dowel area and dowel development all satisfy code; <b style="color:#b71c1c">BEARING NG</b> = bearing stress exceeds \u03c6P<sub>nb</sub>; <b style="color:#b71c1c">DOWELS &lt; MIN</b> = provided dowel area is below the 0.005A<sub>g</sub> minimum of ACI 318-19 16.3.4.1; <b style="color:#b71c1c">L<sub>dc</sub> NG</b> = the dowel cannot develop in compression within the depth available; <b>PATCH</b> = a zero-height bearing element, which has no dowel requirement.'));
+ bb.appendChild(el('div','note',sfdBearLegend(seen)));   /* SFML: only the statuses in the table, each element's dowel-minimum basis */
  P2.bearing.filter(z=>z.wall&&z.wall.sel).forEach(z=>bb.appendChild(el('div',z.wall.applied&&z.wall.t1161?'note':'warnbox','<b>'+sfEsc(z.label)+':</b> '+sfdWallTxt(z.wall,true)+(z.wall.applied?' Dowel minimum: '+(z.wall.t1161?'\u03c1<sub>\u2113</sub> A<sub>g</sub> = '+z.wall.rhoL+' \u00b7 '+f2(z.wall.Ag)+' = '+f2(z.wall.AsMinWall):'0.005A<sub>g</sub> = '+f2(z.wall.AsMinCol))+' in\u00b2 (the A<sub>s,dow</sub> min column above).':''))));   /* SFWL */
  { const bad=P2.bearing.filter(z=>!z.isPatch&&!z.ldcOK);
-   if(bad.length)bb.appendChild(el('div','warnbox','<b>Dowel compression development not satisfied:</b> '+bad.map(z=>z.label+' (#'+z.dSize+', L<sub>dc</sub> = '+f2(z.Ldc)+' in vs '+f2(z.availEmb)+' in available)').join('; ')+'. Available depth = t \u2212 bottom cover \u2212 both bottom mat layers. <b>ACI 318-19 25.4.9.1 does not permit a hook to develop a bar in compression</b>, so this cannot be detailed away with a bend \u2014 thicken the footing, use smaller or more dowels, or use a mechanical device.'));
+   if(bad.length)bb.appendChild(el('div','warnbox','<b>Dowel compression development not satisfied:</b> '+bad.map(z=>z.label+' (#'+z.dSize+', L<sub>dc</sub> = '+f2(z.Ldc)+' in vs '+f2(z.availEmb)+' in available)').join('; ')+'. Available depth = t \u2212 bottom cover \u2212 both bottom mat layers. <b>ACI 318-19 25.4.1.2 does not permit a hook to develop a bar in compression</b>, so this cannot be detailed away with a bend \u2014 thicken the footing, use smaller or more dowels, or use a mechanical device.'));
    const patches=P2.bearing.filter(z=>z.isPatch);
    if(patches.length)bb.appendChild(el('div','note','<b>'+patches.map(z=>z.label).join(', ')+'</b> '+(patches.length>1?'are':'is')+' modelled with h = 0 and treated as a <b>bearing patch</b> (a load applied over a finite contact area) rather than a member: the dowel minimum, tie, longitudinal-steel and slenderness provisions of Chapter 10 do not apply. Load, self-weight, critical-section faces and the bearing check are all still included.'));
  }
@@ -6299,12 +6301,34 @@ function renderFootingDesign(){
     else nb.appendChild(el('div','note','The uniform layout already places at least \u03b3\u209b A\u209b inside the band width, so 13.3.3.3 is satisfied without banding on this geometry.'));
    }
  }
- bb.appendChild(eqBlock('Bearing on concrete & dowels','ACI 318-19 22.8.3.2 / 16.3.4.1',
+ bb.appendChild(eqBlock('Bearing on concrete & dowels','ACI 318-19 22.8.3.2 / '+sfdDowMinRef(),   /* SFML */
   '\\phi P_{nb} = \\phi\\,0.85 f\'_c A_1\\sqrt{A_2/A_1}\\;(\\le 2\\times),\\;\\phi=0.65',
-  'A_{s,dowel,min} = 0.005 A_g,\\quad L_{dc} = (0.02 f_y/\\lambda\\sqrt{f\'_c})d_b \\ge 0.0003 f_y d_b,\\;\\sqrt{f\'_c}\\le100\\;\\mathrm{psi}',
-  null));
+  ...(ldcT=>sfdDowMinKinds().has('wall')?[sfdDowMinTex(),ldcT]:[sfdDowMinTex()+',\\quad '+ldcT,null])('L_{dc} = (0.02 f_y/\\lambda\\sqrt{f\'_c})d_b \\ge 0.0003 f_y d_b,\\;\\sqrt{f\'_c}\\le100\\;\\mathrm{psi}')));   /* SFML: with a wall, the minimum on its own line */
  sfdoRender(bb);   /* SFDO */
  sfsfRender(bb);   /* SFSF */
+}
+/* SFML (2026-11-05, engineer): card 5.6 legend and formula line follow each element's dowel-minimum basis (display only).
+   'col' = column / pedestal rule 0.005A_g (16.3.4.1), also a Wall where 11.6.1 does not apply or l_w/t <= 3;
+   'wall' = wall rule rho_l A_g (16.3.4.2 -> 11.6.1, Table 11.6.1) where sfdWallInfo applied it (same test as AsDowMin). */
+function sfdDowMinBasis(z){return (z&&z.wall&&z.wall.applied&&z.wall.t1161)?'wall':'col';}
+function sfdDowMinKinds(){const real=((P2&&P2.bearing)||[]).filter(z=>!z.isPatch);const k=new Set(real.map(sfdDowMinBasis));if(!k.size)k.add('col');return k;}
+function sfdDowMinTex(){const k=sfdDowMinKinds(),both=k.has('col')&&k.has('wall');
+ const c='A_{s,dowel,min} = 0.005 A_g'+(both?'\;(\\text{column / pedestal, 16.3.4.1})':''),w=(both?'A_{s,dowel,min} = ':'A_{s,dowel,min} = ')+'\\rho_{\\ell} A_g\;(\\text{wall, 16.3.4.2}\\to\\text{11.6.1})';
+ return both?c+',\\quad '+w:(k.has('wall')?w:c);}
+function sfdDowMinRef(){const k=sfdDowMinKinds();return [k.has('col')?'16.3.4.1':'',k.has('wall')?'16.3.4.2, 11.6.1, Table 11.6.1':''].filter(Boolean).join(' / ');}
+function sfdBearLegend(seen){
+ const R='#b71c1c',has=s=>seen.some(q=>q[0]===s);
+ const real=seen.map(q=>q[1]).filter(z=>!z.isPatch),c=real.filter(z=>sfdDowMinBasis(z)==='col'),w=real.filter(z=>sfdDowMinBasis(z)==='wall'),both=c.length&&w.length;
+ const nm=a=>a.map(z=>sfEsc(z.label)).join(', ');
+ const mins=[c.length?'0.005A<sub>g</sub>, column / pedestal (ACI 318-19 16.3.4.1'+(c.some(z=>z.wall&&z.wall.applied)?'; kept for a wall where 11.6.1 does not apply':'')+')'+(both?': '+nm(c):''):'',
+  w.length?'ρ<sub>ℓ</sub>A<sub>g</sub>, wall (ACI 318-19 16.3.4.2 → 11.6.1, Table 11.6.1)'+(both?': '+nm(w):''):''].filter(Boolean);
+ const L=[];
+ if(has('OK'))L.push('<b style="color:#1b5e20">OK</b> = bearing stress, dowel area and dowel compression development all satisfied');
+ if(has('BEARING NG'))L.push('<b style="color:'+R+'">BEARING NG</b> = P<sub>u</sub> exceeds φP<sub>nb</sub>');
+ if(has('L_dc NG'))L.push('<b style="color:'+R+'">L<sub>dc</sub> NG</b> = the dowel cannot develop in compression within the depth available');
+ if(has('DOWELS < MIN'))L.push('<b style="color:'+R+'">DOWELS &lt; MIN</b> = provided dowel area is below the dowel minimum');
+ if(has('PATCH — no dowels'))L.push('<b>PATCH</b> = a zero-height bearing element, which has no dowel requirement');
+ return 'Status: one per element, the first check not met in the order bearing, L<sub>dc</sub>, dowel area (each check has its own columns).'+(mins.length?' Dowel minimum: '+mins.join('; ')+'.':'')+' In this table: '+L.join('; ')+'.';
 }
 /* SFSF: shear friction at the pedestal / footing interface (worked) */
 function sfsfRender(bb){
@@ -6348,7 +6372,7 @@ function sfdoRender(bb){
    '\\ell_{dc} = \\max\\left(\\frac{0.02\\,d_b f_y}{\\lambda\\sqrt{f\'_c}},\\;0.0003\\,d_b f_y,\\;8\\;\\mathrm{in}\\right) \\le t - c_{bot} - d_{b,x} - d_{b,y}',
    '\\ell_{dc} = \\max\\left(\\frac{0.02\\cdot'+f3(z.db)+'\\cdot'+Math.round(P2.fy)+'}{'+lamS+'\\cdot'+f2(z.sq)+'},\\;0.0003\\cdot'+f3(z.db)+'\\cdot'+Math.round(P2.fy)+',\\;8\\right) = \\max('+f2(z.ldcT[0])+',\\,'+f2(z.ldcT[1])+',\\,'+f2(z.ldcT[2])+')',
    '\\ell_{dc} = '+f2(z.Ldc)+'\\;\\mathrm{in}\\;('+T[z.ldcGov]+'\\text{ governs})\\;'+(bz.ldcOK?'\\le':'>')+'\\;'+f2(z.availEmb)+'\\;\\mathrm{in\\;available}'+(bz.ldcOK?'\\;\\checkmark':'\\;\\text{NG}')));
-  if(z.hook==='hook90')bb.appendChild(el('div','note','The 90\u00b0 hook does not develop compression (ACI 318-19 25.4.9.1): \u2113<sub>dc</sub> must fit in the straight length above the bend.'));
+  if(z.hook==='hook90')bb.appendChild(el('div','note','The 90\u00b0 hook does not develop compression (ACI 318-19 25.4.1.2): \u2113<sub>dc</sub> must fit in the straight length above the bend.'));
   /* (2) */
   if(!z.tenKern)bb.appendChild(el('div','note','(2) Tension at the interface: <b>none</b>. In every LRFD combination P<sub>u</sub> &gt; 0 and the resultant is within the kern of the pedestal section (P<sub>u</sub>/A \u2212 |M<sub>ux</sub>|/S<sub>x</sub> \u2212 |M<sub>uy</sub>|/S<sub>y</sub> \u2265 0), so the interface transfers compression by bearing (5.6 above; ACI 318-19 16.3.3, 22.8) and the dowels need no tension development for it.'));
   else{const g=z.tenGov, tn=x=>String(x).replace(/[\\{}$&#%_^~]/g,'');
@@ -7514,7 +7538,7 @@ manPart("p2","2. Input Reference",[
  ["Pedestal shear couple V\u00b7h","include/exclude","See \u00a70.3.2. Include for design; exclude only for software comparison."]
 ]}},
 {h:"2.6 Footing reinforcement"},
-{p:"Bottom and top mats, each direction: bar size and spacing. \u201c\u2014 none\u201d suppresses a mat. Layer stacking order fixes the per-layer d (\u00a70.3.4). Steel is checked against demand and against the 0.0018A<sub>g</sub> shrinkage/temperature minimum \u2014 which, per ACI 318-19 &sect;7.6.1.1, <i>is</i> the minimum-flexural-reinforcement requirement for one-way footing slabs (the 3&radic;f\u2032c/f<sub>y</sub> beam minimum of &sect;9.6.1.2 does not apply)."},
+{p:"Bottom and top mats, each direction: bar size and spacing. \u201c\u2014 none\u201d suppresses a mat. Layer stacking order fixes the per-layer d (\u00a70.3.4). Steel is checked against demand and against the 0.0018A<sub>g</sub> shrinkage/temperature minimum \u2014 which, per ACI 318-19 &sect;7.6.1.1, <i>is</i> the minimum-flexural-reinforcement requirement for one-way footing slabs (the 3&radic;f\u2032c/f<sub>y</sub> beam minimum of &sect;9.6.1.2 does not apply). The \u201c&ell;<sub>d</sub> reduction for excess A<sub>s</sub>\u201d option (ACI 318-19 &sect;25.4.10.1; off by default) is on this tab, below the mats."},
 {h:"2.7 Pedestals"},
 {p:"Each pedestal card: label; plan position (x, y) of its centroid <i>relative to the footing centroid</i>; plan dimensions b<sub>x</sub> &times; b<sub>y</sub>; height h above the footing top; and the load table (per mode). Its reinforcement (long. bar size, bars per face n<sub>x</sub>/n<sub>y</sub>, tie size and spacing, cover, exposure, dowels, joint surface) is entered on the Reinforcement tab, under Pedestal Reinforcement &amp; Dowels. <b>Pedestal longitudinal bars act as the dowels</b> (ticked for new pedestals): the dowel size, count and layout are those of the longitudinal bars, which run continuously into the footing, and the separate dowel inputs are greyed out. <b>Hooked end in footing</b> (ticked for new pedestals): a standard 90\u00b0 hook at the footing end, developed by \u2113<sub>dh</sub>; unticked, a straight bar developed by \u2113<sub>d</sub>. Projects saved before these options open with both unticked. The pedestal <b>cover</b> is the clear cover to the longitudinal bars: the bar-fit check, the bar layout, the P\u2013M interaction and the drawings all place the bar centres at cover + d<sub>b</sub>/2 from each face, with the ties outside the bars (clear cover to the ties = cover \u2212 d<sub>tie</sub>)."},
 {key:"n<sub>x</sub> and n<sub>y</sub> are the bar counts along each face, counted as a perimeter arrangement (total = 2(n<sub>x</sub>+n<sub>y</sub>)\u22124). A physical <b>bar-fit check</b> (clear spacing \u2265 max(1.5d<sub>b</sub>, 1.5 in), ACI 25.2.3) guards against a mistyped count that would still pass the 1\u20138% \u03c1 limit \u2014 a real incident from this program\u2019s own validation history."},
