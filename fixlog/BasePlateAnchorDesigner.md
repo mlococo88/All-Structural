@@ -5069,7 +5069,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   - before / after screenshots at 1920 and 390 px looked at.
 - **Saved data:** no change.
 
-## 2026-11-05 — PR: claude/standard-save-bpad (STDS) — the standard save: header chip + Save + Saved projects…, "Save and open" card first in the Project tab, Save as, Ctrl+S   [display / save controls only; no result change]
+## 2026-11-05 — PR: claude/standard-save-bpad (PR #839: https://github.com/mlococo88/All-Structural/pull/839) (STDS) — the standard save: header chip + Save + Saved projects…, "Save and open" card first in the Project tab, Save as, Ctrl+S   [display / save controls only; no result change]
 - **Why:** engineer decision 2026-11-05 (standard save roll-out after the Spread Footing pilot #837). Uses `SharedProjectsUI.projectBar`.
 - **Header (`#hdrBtns`):** before: `Project: <name · number>` link · Undo · Redo · Saved projects… · Print / PDF Report. After: chip · Undo · Redo · **Save (Ctrl+S)** · Saved projects… · Print / PDF Report; `#hdrProj` kept with `hidden`.
 - **Project tab:** "Saved projects and files" (after the title block) → **"Save and open"** (`#bpSaveCard`), first: status line; Save · Save as… · Saved projects… · New; Export JSON · Import JSON (same buttons / handlers); Backup All · Restore All · Compare (same buttons / handlers, extras row); one note line; `#restoreStatus` kept. Removed: the drop-down `#projSelect`, Load, Save, Save As…, Delete and their handlers in `wireHeader` (anchor `/* STDS (2026-11-05): Save / Save As… / Load / Delete`). `refreshProjSelect` returns when the drop-down is absent.
