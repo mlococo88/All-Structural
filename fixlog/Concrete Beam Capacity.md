@@ -3791,3 +3791,105 @@ Applies to `ACI Rebar Development Length.html` and the Development & Splice fram
   - The tool's length is about 12 % short.
 - **AASHTO mode:** 5.10.8.2.1a uses λ of 5.4.2.8, so it is not affected by this ACI table.
 - **Not changed (calculation, §4):** the engineer is to decide whether the ACI branch should force λ = 0.75 for lightweight concrete in development lengths.
+## 2026-11-05 — PR: claude/cbc-report-figs, PR #798: https://github.com/mlococo88/All-Structural/pull/798 (CBRF: figures and tables found only on a tab moved into the section that works the check; the rest of the "As printed" tab copies moved to an appendix; display only, no result change)
+
+### CBRF. Figures back in their sections, tab copies in an appendix   [display only] [no result change]
+- **Engineer request (2026-11-05, Phase 4 part 3; as Spread Footing SFRF #779):** inside each chapter, each figure and each table that appears nowhere else goes in the section that works its check. The "x.4 As printed" copies go to an appendix. Reference-only material goes to the appendix.
+- **Where (suite shell only):**
+  - `rxRest`: the copy's subsection is tagged.
+    - Before: `if(items.length) sec.subs.push({title:'As printed: tables, equations, notes and figures',items:items});`
+    - After: the same object with `_rx:{ch:c.id,tab:h.id,label:h.label}`.
+  - `rxWalk` `push`: each item records its tab card (`it._card=card`).
+  - `model()`: `cbrfMove(M);` after `cbroOrder(M);`.
+  - New `CBRF_SUB` and `cbrfMove` (anchor `/* ---------- CBRF (2026-11-05`; code below).
+- **Rule:**
+  - Every figure of a copy moves, with the note that follows it on the same card (its caption line on the tab).
+  - A copied table moves when one of its cells (or the caption) has a number, or a text of more than 15 normalized characters, that the Report outside the tab copies lacks. The comparison uses the same number roundings as `rxRest`. Tables are taken in report order, and a moved table's text counts as shown, so a second copy of the same table stays in the appendix.
+  - **Targets:**
+    - a "Combination k — …" card → that combination's subsection;
+    - Input Echo "Section Schematic" (both figures) and "Reinforcement" → Inputs · Reinforcement; "Load Combinations" → Inputs · Load combinations;
+    - Detailing "Detailing Checks" → Detailing checks (envelope);
+    - otherwise → a new subsection "Figures and tables from the <tab> tab", before "Results — <tab>".
+  - A moved item gets the heading "<card or figure caption> (<tab> tab)", and a figure caption gets " (<tab> tab)".
+  - What is left of each copy (notes, equation lines, tables whose values the Report already shows) goes to "Appendix: the tabs as printed": part "Appendices", after the References, one subsection per tab (key `cbrf:ap:<chapter>:<tab>`). Card headings there are renumbered.
+  - The section gets a pointer note ("The <tab> tab's other notes, equation lines and tables, as printed: see §x.y"), and each appendix subsection points back to its section.
+- **Default project, what moved:**
+  - Inputs · Reinforcement: the two Input Echo figures (section schematic, stirrup elevation) with their caption lines.
+  - Flexure: "Section Flexural Capacity — Positive & Negative".
+  - Shear: Combination 1's card table into 6.1, and "Shear Results — All Combinations".
+  - Torsion: "Torsional Results — All Combinations".
+  - Summary of checks: the Design Check Summary table (with its "Worked in" column) and "Section Capacities".
+  - Kept in the appendix as duplicates of worked sections: Input Echo Reinforcement and Load Combinations; the Flexure layer tables per combination; Flexural Results — All Combinations; the Detailing Checks table; All Combinations × Limit States; the second "Section Flexural Capacity" copy; ASD inputs; Load Rating Summary; Key Parameters. Plus every note and equation line of the copies.
+- **Reference-only material:** the copies' notes and equation lines (appendix). The chapters' "About the … chapter" notes were already in References.
+- **Decisions (pending engineer review):**
+  - The copies' notes and equation lines stay in the appendix rather than being dropped, as Spread Footing.
+  - The Development & Splice chapter has no tab copy, so it is unchanged.
+  - The elevation keeps the tab's card name ("Section Schematic (to scale) (2)") with its caption line "Stirrup elevation; …".
+- **Renamed:** the 11 "As printed: tables, equations, notes and figures" subsections (gone; their content is in the sections and the appendix). The moved headings and captions gain " (<tab> tab)", and their card number is dropped. Nothing removed.
+- **Numbering:** the appendix comes last, so the section numbers before it do not depend on what a copy holds. The Include boxes keep the CBRO one-line sections.
+- **How verified (headless Chromium, origin/main 2137868 vs branch):**
+  - 6 cases: default, c2, c3, Include boxes off, input blocker, no stirrups.
+  - Results (`CC` ×2, Development & Splice) and localStorage identical.
+  - Report text (screen and print): every line of main is present apart from section / topic numbers, the removed "As printed" subsection titles and the renamed headings / captions (listed above).
+  - 0 unresolved references, 0 duplicate keys, 0 console errors.
+  - Printed PDF of the default project looked at (47 pages, main 44): the figures on pp. 9–10 in 3.2, the appendix from p. 41.
+  - `check-syntax`, `run.mjs report steps steps-groups report-wiring` (14 passed), `phone-layout --tool cbc` pass.
+- **Saved data:** none. **Governing provision:** none. **Other copies:** none.
+
+#### Code added (re-apply by hand)
+```js
+  /* ---------- CBRF (2026-11-05, Phase 4 part 3; as Spread Footing SFRF #779): each tab copy ("As printed: tables, equations,
+     notes and figures", rxRest) is split. Its figures, and its tables that hold a value or a text found nowhere else in the
+     Report, go into the section that works the check (a combination's card into that combination's subsection; the Input
+     Echo's into Reinforcement / Load combinations; the Detailing table into the envelope; the rest into "Figures and tables
+     from the <tab> tab" before the Results lines). What is left of the copy (its notes, equation lines and the tables whose
+     values the Report already shows) goes to "Appendix: the tabs as printed" after the References, one subsection per tab,
+     and the section gets a pointer to it. Display only: items are moved, never changed or dropped. ---------- */
+  var CBRF_SUB={cap:{tabInputEcho:[[/^Section Schematic/,'Reinforcement'],[/^Reinforcement/,'Reinforcement'],[/^Load Combinations/,'Load combinations']],tabDetail:[[/^Detailing Checks/,'Detailing checks (envelope)']]}};
+  function cbrfMove(M){
+    var rx=[]; M.sections.forEach(function(s){ (s.subs||[]).forEach(function(q){ if(q._rx) rx.push({s:s,q:q}); }); });
+    if(!rx.length) return;
+    var txt=''; try{ txt=SharedReport.text(SharedReport.build({title:M.title,sections:M.sections.map(function(s){ return {title:s.title,note:s.note,subs:(s.subs||[]).filter(function(q){ return !q._rx; })}; })})); }catch(e){ return; }
+    var have=new Set(), all=rxNrm(txt);
+    var addNum=function(x){ have.add(x); var v=parseFloat(x), d=(x.split('.')[1]||'').length; for(var k=0;k<d;k++) have.add(String(parseFloat(v.toFixed(k)))); };
+    rxNums(txt).forEach(addNum);
+    var ct=function(c){ return c&&typeof c==='object'?String(c.t==null?'':c.t):String(c==null?'':c); };
+    var cells=function(it){ var o=[]; (it.head||[]).forEach(function(c){ o.push(ct(c)); }); (it.rows||[]).forEach(function(r){ (Array.isArray(r)?r:r.cells).forEach(function(c){ o.push(ct(c)); }); }); if(it.caption) o.push(ct(it.caption)); return o; };
+    var unique=function(it){ return cells(it).some(function(t){ if(rxNums(t).some(function(n){ return !have.has(n); })) return true; var x=rxNrm(t); return x.length>15&&all.indexOf(x)<0; }); };
+    var seen=function(it){ cells(it).forEach(function(t){ rxNums(t).forEach(addNum); all+=rxNrm(t); }); };
+    var ap=[];
+    rx.forEach(function(R){
+      var s=R.s, q=R.q, X=q._rx, lab=X.label, keep=[], tabT=' ('+lab+' tab)', extra=null;
+      var target=function(card){
+        var m=/^Combination (\d+)\b/.exec(card||''); if(m){ var t=s.subs.filter(function(u){ return u.title.indexOf('Combination '+m[1]+' (')===0; })[0]; if(t) return t; }
+        var L=(CBRF_SUB[X.ch]||{})[X.tab]||[]; for(var i=0;i<L.length;i++){ if(L[i][0].test(card||'')){ var nm=L[i][1], u=s.subs.filter(function(v){ return v.title===nm; })[0]; if(u) return u; } }
+        if(!extra){ extra={title:'Figures and tables from the '+lab+' tab',items:[]}; var k=-1; s.subs.forEach(function(u,i){ if(k<0&&/^Results — /.test(u.title)) k=i; }); s.subs.splice(k<0?s.subs.length:k,0,extra); }
+        return extra;
+      };
+      var prevFig=null;
+      q.items.forEach(function(it){
+        if(it.type==='note'&&prevFig&&(it._card||'')===(prevFig._card||'')&&!it.topic){   /* the figure's own caption line on the tab moves with it */
+          var cn={}; for(var kk in it) cn[kk]=it[kk]; delete cn._card; prevFig.into.items.push(cn); prevFig=null; return; }
+        prevFig=null;
+        var mv=it.type==='figure'||(it.type==='table'&&unique(it));
+        if(!mv){ keep.push(it); return; }
+        if(it.type==='table') seen(it);
+        var o={}; for(var k in it) o[k]=it[k]; delete o._card;
+        var card=it._card||'';
+        if(it.type==='figure') o.caption=(o.caption||card||'Figure')+tabT;
+        o.topic={title:(it.type==='figure'?(it.caption||card||'Figure'):(card||'Table'))+tabT};
+        var into=target(card); into.items.push(o);
+        if(it.type==='figure') prevFig={_card:it._card,into:into};
+      });
+      s.subs.splice(s.subs.indexOf(q),1);
+      if(!keep.length) return;
+      /* the copy's topic headings again: the first item left of each card carries it, numbered in the appendix's order */
+      var n=0, last=null; keep.forEach(function(it){ var c=it._card||''; delete it.topic; if(c!==last){ last=c; if(c) it.topic={title:c,no:++n}; } delete it._card; });
+      var key='cbrf:ap:'+X.ch+':'+X.tab;
+      ap.push({title:lab+' tab ('+({cap:'Beam Capacity',asd:'ASD Beam Calcs'}[X.ch]||X.ch)+')',key:key,items:[{type:'note',text:'As printed on the tab: its notes, equation lines and the tables whose values are worked in [['+(s.key||key)+']]. The figures and tables found only on the tab are in that section.'}].concat(keep)});
+      s.note=(s.note?s.note+' ':'')+'The '+lab+' tab’s other notes, equation lines and tables, as printed: [['+key+']].';
+    });
+    rx.forEach(function(R){ if(R.q.items) R.q.items.forEach(function(it){ delete it._card; }); });
+    if(ap.length) M.sections.push({part:'Appendices',title:'Appendix: the tabs as printed',key:'cbrf:ap',note:'Text and tables of the Beam Capacity and ASD Beam Calcs tabs as they print, kept for completeness. Every value here is worked, or shown, in the chapter section named at the start of each subsection; figures and tables found only on a tab are in that section.',subs:ap});
+  }
+```
