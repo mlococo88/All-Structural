@@ -1,0 +1,33 @@
+<!doctype html>
+<!-- Test page for tests/smoke/standard-save.mjs (STDS, 2026-11-05): a minimal "tool" with the standard save controls of
+     shared/projects-ui.js projectBar over a mapStore list. Test tooling only: no tool links to it. -->
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Standard save fixture</title>
+<style>body{font:14px system-ui,sans-serif;margin:0}header{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px 12px;border-bottom:2px solid #1e3a8a}
+header h1{font-size:18px;margin:0;flex:1 1 auto}.card{border:1px solid #e2e8f0;border-radius:6px;margin:10px;max-width:520px}.card h3{margin:0;padding:6px 10px;background:#f1f5f9;font-size:14px}.card .b{padding:8px 10px}</style>
+<script src="../../shared/projects.js"></script><script src="../../shared/projects-ui.js"></script><script src="../../shared/github-sync.js"></script>
+</head><body>
+<header id="hdr"><h1>Fixture tool</h1><button id="undo">Undo</button><button id="redo">Redo</button><button id="print">Print</button></header>
+<div class="card"><h3>Save and open</h3><div class="b" id="cardBody"><button id="btnExport">Export JSON</button><button id="btnImport">Import JSON</button><button id="btnExtra">Compare…</button></div></div>
+<div class="card"><h3>Inputs</h3><div class="b"><label>Span <input id="span" type="number" value="40"></label> <label>Title <input id="title" value="Bridge 1"></label> <output id="res"></output></div></div>
+<script>
+let state = JSON.parse(localStorage.getItem('fixt_auto') || 'null') || { span: 40, title: 'Bridge 1' };
+const $ = id => document.getElementById(id);
+function show() { $('span').value = state.span; $('title').value = state.title; $('res').textContent = 'M = ' + (state.span * state.span / 8).toFixed(1); }
+function auto() { localStorage.setItem('fixt_auto', JSON.stringify(state)); }
+document.addEventListener('change', e => { if (e.target.id === 'span') state.span = Number(e.target.value); if (e.target.id === 'title') state.title = e.target.value; auto(); show(); });
+show();
+const store = SharedProjects.mapStore(localStorage, 'fixt_projects');
+window.exported = [];
+const PB = SharedProjectsUI.projectBar({ store, storage: localStorage, label: 'Fixture tool', id: 'fixtLib',
+  snapshot: () => JSON.stringify(state), getState: () => JSON.parse(JSON.stringify(state)),
+  open: n => { state = JSON.parse(JSON.stringify(store.get(n))); auto(); show(); return true; },
+  newProject: () => { state = { span: 40, title: 'Bridge 1' }; auto(); show(); },
+  displayName: () => state.title,
+  exportFile: n => { window.exported.push(n || ''); SharedProjectsUI.download((n || 'fixture') + '.json', JSON.stringify(state, null, 1)); },
+  importFile: () => { window.imported = (window.imported || 0) + 1; },
+  fileButtons: [$('btnExport'), $('btnImport')], extras: [$('btnExtra')],
+  header: $("hdr"), chipBefore: $("undo"), headerBefore: $("print"), card: $('cardBody'),
+  cloud: { tool: 'fixture-tool', label: 'Fixture tool' } });
+$('btnExport').onclick = () => window.exported.push('button');
+window.PB = PB;
+</script></body></html>

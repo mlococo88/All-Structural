@@ -33,6 +33,12 @@ const bump = async (p, sel, d) => { const r = await p.evaluate(([sel, d]) => { c
 const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel, on]) => [...document.querySelectorAll(sel)].findIndex(b => b.matches(on)), [sel, onSel]);
   await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, n]); await p.waitForTimeout(600);
   return async () => { await p.evaluate(([sel, n]) => document.querySelectorAll(sel)[n].click(), [sel, Math.max(0, was)]); await p.waitForTimeout(600); }; };
+// stdSave(p, name): Save as through the standard save controls (STDS, shared/projects-ui.js projectBar) when the page has them:
+// the Save as dialog, the name, Save (and "Replace it" when the name exists). false when the page has no projectBar (main before
+// the tool opted in): the tool entry then uses its old Save path.
+export const stdSave = async (p, name) => { const r = await p.evaluate(n => { const pb = window.SharedProjectsUI && SharedProjectsUI.bars && SharedProjectsUI.bars[0]; if (!pb) return false;
+  pb.saveAs(); const d = document.querySelector('dialog.spSave[open]'); d.querySelector('.spName').value = n; d.querySelector('[data-sa=ok]').click(); if (d.open) d.querySelector('[data-sa=ok]').click(); return true; }, name);
+  if (r) await p.waitForTimeout(300); return r; };
 export const TOOLS = {
   lldf: {
     file: 'lldf.html', list: null, auto: 'lldf_autosave_v1', noList: true,

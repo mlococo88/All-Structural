@@ -32,8 +32,6 @@
   const clean = n => String(n == null ? '' : n).trim();
 
   function mapStore(storage, key, o) {
-    o = o || {};
-    const pack = o.pack || (s => s), unpack = o.unpack || (i => i), time = o.time || (() => null);
     function read() {
       let raw = null;
       try { raw = storage ? storage.getItem(key) : null; } catch (e) { return { map: {}, ok: false, error: 'storage' }; }
@@ -41,8 +39,27 @@
       try { const m = JSON.parse(raw); if (m && typeof m === 'object' && !Array.isArray(m)) return { map: m, ok: true }; } catch (e) { /* below */ }
       return { map: {}, ok: false, error: 'unreadable' };
     }
+    const stamp = () => { try { return storage ? storage.getItem(key) : null; } catch (e) { return null; } };
+    return core(key, read, map => { storage.setItem(key, JSON.stringify(map)); }, stamp, o);
+  }
+
+  /* listStore(o) (STDS, 2026-11-05): the same list interface as mapStore over a list the tool keeps some other way (an id-keyed list
+     shown by name, an IndexedDB store with an in-memory copy, two keys under one name...). o = { key (a name for the list: used for
+     the storage meter and the GitHub-sync change check; may be a real storage key), readMap() -> { map: { name: item }, ok, error? }
+     (synchronous), writeMap(map) (stores the whole by-name map; throws on a refused write, as setItem does), stamp() (optional: a
+     text that changes whenever the list changes; default the map's JSON), pack, unpack, time, sort } (as mapStore).
+     Every store (mapStore or listStore) has: key, read, list, has, get, item, save, rename, duplicate, remove, copyName, stamp. */
+  function listStore(o) {
+    const read = () => { try { const r = o.readMap(); return r && r.map ? { map: r.map, ok: r.ok !== false, error: r.error } : { map: {}, ok: false, error: 'unreadable' }; } catch (e) { return { map: {}, ok: false, error: 'storage' }; } };
+    const stamp = o.stamp || (() => { try { return JSON.stringify(read().map); } catch (e) { return null; } });
+    return core(o.key, read, map => o.writeMap(map), stamp, o);
+  }
+
+  function core(key, read, writeRaw, stamp, o) {
+    o = o || {};
+    const pack = o.pack || (s => s), unpack = o.unpack || (i => i), time = o.time || (() => null);
     function write(map, what) {
-      try { storage.setItem(key, JSON.stringify(map)); return { ok: true }; } catch (e) { return fail(e, what); }
+      try { writeRaw(map); return { ok: true }; } catch (e) { return fail(e, what); }
     }
     function sizeOf(v) { try { return JSON.stringify(v).length; } catch (e) { return 0; } }
     /* list(): [{ name, saved (ms or ISO, or null), size (characters) }], sorted by name (o.sort === 'saved': newest first) */
@@ -90,7 +107,7 @@
       delete m[name]; return write(m, 'The project was not deleted.');
     }
     function copyName(from, m) { m = m || read().map; let n = `${from} (copy)`, i = 2; while (Object.prototype.hasOwnProperty.call(m, n)) n = `${from} (copy ${i++})`; return n; }
-    return { key, read, list, has, get, item, save, rename, duplicate, remove, copyName: f => copyName(f) };
+    return { key, read, list, has, get, item, save, rename, duplicate, remove, copyName: f => copyName(f), stamp };
   }
 
   /* usage(storage, keys): characters held by every key of this origin, and by the given keys (the tool's list); bytes = 2 x chars. */
@@ -138,5 +155,15 @@
     return api;
   }
 
-  window.SharedProjects = { QUOTA_CHARS, isQuota, fail, mapStore, usage, etTime, history };
+  /* canon(v, omit): JSON text with object keys sorted (and the top-level keys in omit left out), so two states that differ only in
+     key order compare equal (STDS: the "unsaved changes" check of projectBar). */
+  function canon(v, omit) {
+    const skip = new Set(omit || []);
+    return JSON.stringify(v, function (k, x) {
+      if (x && typeof x === 'object' && !Array.isArray(x)) { const top = this === undefined || (this && this[''] === x); const o = {}; Object.keys(x).sort().forEach(kk => { if (!(top && skip.has(kk))) o[kk] = x[kk]; }); return o; }
+      return x;
+    });
+  }
+
+  window.SharedProjects = { QUOTA_CHARS, isQuota, fail, mapStore, listStore, usage, etTime, history, canon };
 })();
