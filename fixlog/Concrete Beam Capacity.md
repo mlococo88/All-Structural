@@ -4776,7 +4776,7 @@ function buildDrawingsTab(pg){
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-05 — PR: claude/header-cbc (CBHD: compact headers; title blocks, project file and shared-project-info buttons moved to each tab's Project input tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-cbc (PR #812: https://github.com/mlococo88/All-Structural/pull/812) (CBHD: compact headers; title blocks, project file and shared-project-info buttons moved to each tab's Project input tab; display only, no result change)
 - **Engineer:** clean up the top of the page: the title-block inputs and the project / hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (the frames are `srcdoc`; edited decoded and re-encoded with CRLF kept; nodes moved, not copied; every id, `data-fkey`, handler and saved field is the same):
   - **Suite page** `#suite-xfer`: the two buttons `onclick="bxUseProjectInfo()"` / `onclick="bxShareProjectInfo()"` removed (anchor `HDR (2026-11-05): "Use shared project info"`); the functions are unchanged and are now called from each tab's Project tab. The bar keeps "← All tools".
