@@ -18,7 +18,18 @@ const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ?
 const FOLDER = { asce7: 'asce7-load-generator', baseplate: 'base-plate-anchor', bsl: 'bridge-substructure-loading', gusset: 'gusset-plate-rating',
   lightpole: 'light-pole-sign-post', mlg: 'moving-load-generator', retwall: 'retaining-wall-designer', spc: 'section-property-calculator',
   smd: 'shear-moment-diagrams', steelbeam: 'steel-beam-aisc', stonearch: 'stone-arch-rating', timber: 'timber-beam-check',
-  rebar: 'aci-rebar-development', spreadfooting: 'spread-footing' };
+  rebar: 'aci-rebar-development', spreadfooting: 'spread-footing',
+  // GHS2 (2026-11-05): tools with their own project dialog or panel (statusCell + decorate(body, ui, { rows: false }))
+  abutment: 'abutment-calculator' };
+// Tools with their own project dialog: how to show it (with sync on, the GitHub rows are drawn into it), and whether it is open.
+// Default: the shared Saved projects dialog (dialog.spLib).
+const OWN = {
+  abutment: { show: p => p.evaluate(() => { const d = document.getElementById('dlgProj'); if (d.open) d.close(); document.getElementById('btnManageProj').click(); }),
+    open: p => p.evaluate(() => document.getElementById('dlgProj').open),
+    del: (p, n) => p.evaluate(n => document.querySelector(`#projList [data-act=del][data-n="${CSS.escape(n)}"]`).click(), n) }
+};
+const showList = (key, p) => OWN[key] ? OWN[key].show(p) : p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)).click(); });
+const listOpen = (key, p) => OWN[key] ? OWN[key].open(p) : p.evaluate(() => !!document.querySelector('dialog.spLib[open]'));
 const list = arg('tool', Object.keys(FOLDER).join(',')).split(',');
 const TOKEN = 'github_pat_SMOKE0000000000000000wxyz';
 const SET = JSON.stringify({ owner: 'mlococo88', repo: 'structural-projects', branch: 'main', token: TOKEN, device: 'Smoke' });
@@ -47,22 +58,53 @@ for (const key of list) {
     ok(JSON.parse(put.body).sha === sha0, 'change + Save -> update sent with the file\'s sha');
     const r1 = await T.results(p);
     gh.setRemote(P('GHS remote'), gh.files.get(P('GHS A')));
-    await p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)).click(); });
-    await until(() => p.evaluate(() => !!document.querySelector('dialog.spLib [data-ghx=open][data-n="GHS%20remote"]')), 15000, 'cloud-only row');
-    await p.evaluate(() => document.querySelector('dialog.spLib [data-ghx=open][data-n="GHS%20remote"]').click());
-    await until(() => p.evaluate(() => !document.querySelector('dialog.spLib[open]')), 15000, 'Open closes the dialog');
+    await showList(key, p);
+    await until(() => p.evaluate(() => !!document.querySelector('dialog[open] [data-ghx=open][data-n="GHS%20remote"]')), 15000, 'cloud-only row');
+    ok(await p.evaluate(() => !!document.querySelector('dialog[open] [data-gh-status=synced]')), 'the saved project shows "synced" in the list');
+    await p.evaluate(() => document.querySelector('dialog[open] [data-ghx=open][data-n="GHS%20remote"]').click());
+    await until(async () => !(await listOpen(key, p)), 15000, 'Open closes the dialog');
     await p.waitForTimeout(1500);
-    const r2 = await T.results(p); const d = diff(r1, r2);
-    ok(!d.length, 'GitHub-only copy opened: results identical to the saved project' + (d.length ? ` (${d.length} differences: ${JSON.stringify(d.slice(0, 3)).slice(0, 400)})` : ''));
+    // openIgnore (project-library.mjs): fields the tool's own Save changes without a recompute (abutment: the revision added to S.meta
+    // changes the input fingerprint), so they are compared there the same way
+    const drop = o => { if (!T.openIgnore || !o || typeof o !== 'object') return o; const c = { ...o }; T.openIgnore.forEach(k => delete c[k]); return c; };
+    const r2 = await T.results(p); const d = diff(drop(r1), drop(r2));
+    ok(!d.length, 'GitHub-only copy opened: results identical to the saved project' + (T.openIgnore ? ' (except ' + T.openIgnore.join(', ') + ')' : '') + (d.length ? ` (${d.length} differences: ${JSON.stringify(d.slice(0, 3)).slice(0, 400)})` : ''));
     const lst = JSON.parse(await p.evaluate(k => localStorage.getItem(k), T.list) || '{}');
     ok('GHS remote' in lst && 'GHS A' in lst, 'the tool\'s own list holds both projects');
     const sk = (await p.evaluate(() => Object.keys(localStorage))).filter(k => /^bridgeSuite\.v1\.githubSync/.test(k)).sort();
     ok(JSON.stringify(sk) === JSON.stringify(['bridgeSuite.v1.githubSync', `bridgeSuite.v1.githubSync.tool.${folder}`]), 'sync keys: bridgeSuite.v1.githubSync and .tool.' + folder + ' only (' + sk.join(', ') + ')');
+    if (OWN[key]) {   // own dialog: the settings button in the bar, the first-sync offer, and a delete that asks about the GitHub copy
+      await showList(key, p); await p.waitForTimeout(800);
+      ok(await p.evaluate(() => !!document.querySelector('dialog[open] .spGhBar [data-ghx=setup]')), 'own dialog: "Cloud sync (GitHub)…" button in the sync bar');
+      await p.evaluate(k => localStorage.removeItem(k), `bridgeSuite.v1.githubSync.tool.${folder}`);
+      const n0 = gh.files.size; gh.files.delete(P('GHS A'));
+      await showList(key, p);
+      await until(() => p.evaluate(() => !!document.querySelector('dialog[open] [data-ghx=upall]')), 15000, 'first-sync offer');
+      await p.evaluate(() => document.querySelector('dialog[open] [data-ghx=upall]').click());
+      await until(() => gh.files.has(P('GHS A')) && gh.files.has(P('GHS remote')), 15000, 'Upload all');
+      ok(gh.files.size >= n0, 'first sync on a device: offer shown, Upload all sends the projects already in the list');
+      s.dialogs.length = 0;
+      await OWN[key].del(p, 'GHS A');
+      await until(() => !gh.files.has(P('GHS A')), 15000, 'delete on GitHub after the confirm');
+      ok(s.dialogs.some(m => /Also delete "GHS A" from GitHub/.test(m)), 'delete in the tool\'s dialog asks before deleting the GitHub copy (accepted here: file deleted)');
+    }
     const errs = s.errs;
     ok(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ').slice(0, 400) : ''));
     ok(gh.log.every(l => l.auth === `Bearer ${TOKEN}` && !l.url.includes(TOKEN)), 'token only in the Authorization header');
   } catch (e) { ok(false, String(e.message || e).slice(0, 300)); }
-  console.log(`${key} (${T.file})\n${out.join('\n')}`);
   await s.b.close();
+  if (OWN[key]) {   // sync off (no settings): the tool's own Save and its dialog make no request and write no sync key
+    const o = await openPage(path.join(REPO, T.file), { vw: 1280, vh: 900, hash: T.hash || '' }); const reqs = [];
+    await o.p.route('https://api.github.com/**', r => { reqs.push(r.request().url()); return r.abort(); });
+    try {
+      await T.ready(o.p); await o.p.waitForTimeout(900); await T.save(o.p, 'GHS off'); await OWN[key].show(o.p); await o.p.waitForTimeout(4000);
+      const sk = (await o.p.evaluate(() => Object.keys(localStorage))).filter(k => /^bridgeSuite\.v1\.githubSync/.test(k));
+      const bar = await o.p.evaluate(() => { const b = document.querySelector('dialog[open] .spGhBar'); return b ? b.textContent : ''; });
+      ok(!reqs.length && !sk.length && /Cloud sync \(GitHub\): off/.test(bar), `sync off: Save + dialog -> no request (${reqs.length}), no sync key (${sk.join(', ') || 'none'}), bar says off`);
+      ok(!o.errs.length, 'sync off: no console errors' + (o.errs.length ? ': ' + o.errs.join(' | ').slice(0, 400) : ''));
+    } catch (e) { ok(false, 'sync off: ' + String(e.message || e).slice(0, 300)); }
+    await o.b.close();
+  }
+  console.log(`${key} (${T.file})\n${out.join('\n')}`);
 }
 console.log(failed ? `\n${failed} FAILED` : '\nALL PASS'); process.exit(failed ? 1 : 0);

@@ -508,7 +508,12 @@
 
   /* attach(ctx): ctx is the libraryDialog ctx (store, storage, open, changed, cloud = { tool, label, toFile, fromFile, space }).
      Returns the hooks libraryDialog calls: decorate(body, ui), shown(ui), renamed(a, b), deleted(name), note(). Starts a 3 s check
-     of the tool's list (scan + flush) that does nothing while sync is off. */
+     of the tool's list (scan + flush) that does nothing while sync is off.
+     A tool with its OWN project dialog or panel (GHS2, 2026-11-05) calls attach itself (ctx = { store, storage, open, changed, cloud })
+     and, each time it draws its list: statusCell(name) -> the HTML of the GitHub status of one project (badge and its buttons; '' while
+     sync is off) placed in that project's row, bind(rows element) once (one click listener for those buttons), and decorate(body, ui,
+     { rows: false }) with body = an empty element above the rows: the bar, the first-sync offer and the "On GitHub only" rows go there.
+     Outside a Saved projects dialog the bar carries the "Cloud sync (GitHub)…" settings button itself. */
   function attach(ctx) {
     css();
     const cfg = ctx.cloud || {};
@@ -538,10 +543,10 @@
       if (after) after(r);
       if (ctx.changed) ctx.changed(); redraw(); return r;
     }
-    function decorate(body, u) {
+    function decorate(body, u, o) {
       ui = u;
-      const dlg = body.closest('dialog');
-      if (dlg && !dlg.querySelector('[data-gh=setup]')) {
+      const dlg = body.closest('dialog'), own = !(dlg && dlg.querySelector('.spHead span'));   // own: a tool's own dialog / panel (GHS2)
+      if (dlg && !own && !dlg.querySelector('[data-gh=setup]')) {
         const head = dlg.querySelector('.spHead span'); const b = document.createElement('button'); b.type = 'button'; b.setAttribute('data-gh', 'setup'); b.textContent = 'Cloud sync (GitHub)…';
         b.onclick = () => settingsDialog(ctx.storage, () => { shown(ui); });
         if (head) head.insertBefore(b, head.firstChild);
@@ -554,7 +559,7 @@
       }
       const v = eng.state(), pend = v ? v.queue.length : 0, ce = eng.cloudError(), le = eng.lastError();
       bar.innerHTML = `<span>Cloud sync: <b>${esc(s.owner)}/${esc(s.repo)}</b> (${esc(s.branch)})${checking ? ' · checking GitHub…' : ''}${pend ? ` · ${pend} waiting to upload` : ''}</span>`
-        + `<button type="button" data-ghx="refresh">Sync now</button>`
+        + `<button type="button" data-ghx="refresh">Sync now</button>` + (own ? `<button type="button" data-ghx="setup">Cloud sync (GitHub)…</button>` : '')
         + (ce ? `<span class="spErr" style="margin:0">${esc(ce.message)}</span>` : le ? `<span class="spErr" style="margin:0">${esc(le.message)}</span>` : '')
         + (msg ? `<span class="spErr" style="margin:0">${esc(msg)}</span>` : '')
         + `<span class="spNote" style="margin:0;flex-basis:100%">Autosave is not synced, only named projects. Files: ${esc(eng.folder)}/ in the repository.</span>`;
@@ -566,7 +571,7 @@
           bar.after(a); }
       }
       const rows = eng.rows(), byName = new Map(rows.map(r => [r.name, r]));
-      const table = body.querySelector('table');
+      const table = o && o.rows === false ? null : body.querySelector('table');   // rows: false: the tool placed statusCell() in its rows
       if (table) {
         const hr = table.querySelector('thead tr'); if (hr && hr.lastElementChild) { const th = document.createElement('th'); th.textContent = 'GitHub'; hr.insertBefore(th, hr.lastElementChild); }
         table.querySelectorAll('tbody tr').forEach(tr => {
@@ -594,6 +599,12 @@
       return h;
     }
     const store = () => ctx.store;
+    /* statusCell(name): the GitHub status cell of one project for a tool's own list (GHS2); '' while sync is off */
+    function statusCell(name) {
+      if (!eng.configured()) return '';
+      const v = eng.state() || undefined, s = eng.statusOf(name, v);
+      return `<span data-sp="gh-cell">${cell(name, s, v && v.conflicts[name])}</span>`;
+    }
     function bindBody(body) {
       if (body.__gh) return; body.__gh = true;
       body.addEventListener('click', e => {
@@ -626,7 +637,7 @@
       else redraw();
     }
     const note = () => configured(eng.settings()) ? '<p class="spNote">Saved projects are kept in this browser and copied to GitHub (see the bar above). Export JSON still makes a file you can back up.</p>' : null;
-    return { engine: eng, decorate, shown, renamed, deleted, note, tick, stop: () => clearInterval(timer) };
+    return { engine: eng, decorate, shown, renamed, deleted, note, tick, statusCell, bind: bindBody, stop: () => clearInterval(timer) };
   }
 
   window.SharedGitHubSync = { API, KEY, settings, saveSettings, forgetToken, configured, mask, safeName, nameOf, gitSha, b64, unb64, client, engine,
