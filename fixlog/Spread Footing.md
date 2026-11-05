@@ -4670,7 +4670,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **How verified:** the check case above in headless Chromium; origin/main vs branch on the 10 harness cases: `R`, `P2` identical and the Report text identical, 0 console / KaTeX errors; `node tests/check-syntax.mjs`; `tests/smoke/spread-footing-scroll.mjs`.
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-05 — PR: claude/sf-ot-term-bucket — overturning: applied moments and shear couples bucketed term by term (SFTB; CALCULATION CHANGE)
+## 2026-11-05 — PR: claude/sf-ot-term-bucket (PR #763: https://github.com/mlococo88/All-Structural/pull/763) — overturning: applied moments and shear couples bucketed term by term (SFTB; CALCULATION CHANGE)
 
 ### SFTB. M_r / M_o about each edge take each applied moment and each V·(t + h) couple on its own side, not their net   [result change]
 - **Request (engineer, answer to the SFOR question):** bucket term by term. Each applied pedestal moment and each shear couple, signed for the edge, goes to M_r when it resists and to M_o when it tips the footing over that edge, instead of netting them first.
