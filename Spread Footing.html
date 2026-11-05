@@ -118,6 +118,7 @@ body.sfdStale .tabbar button:not([data-tab="tab-manual"])::after{content:" \26A0
 .svgbox{border:1px solid #ccc;background:#fff;margin:6px 0}
 .plot{width:100%;height:380px;margin:6px 0}
 /* 3D view */
+#v3dTitle{font-size:12px;margin:0 0 4px;padding:4px 8px;background:#f6f8fa;border:1px solid #ccd;line-height:1.45}   /* SF3L */
 #v3dwrap{position:relative;width:100%;height:620px;border:1px solid #ccc;background:#eef1f4;overflow:hidden}
 #v3dcanvas{width:100%;height:100%;display:block;cursor:grab}
 #v3dcanvas:active{cursor:grabbing}
@@ -1643,11 +1644,18 @@ function selLRFDindex(){
  return null; // null => Phase 2 uses its own envelope/governing logic
 }
 /* keep the 3D view combo in sync with the output-tab ASD selection */
+/* SF3L (2026-11-05): one-way sync, the latest pick wins. A pick in the Bearing / Stability selector (or the Phase 2 LRFD selector)
+   sets the 3D selection, also before the 3D tab was first opened; a pick in the 3D selector stays local (it never changes SEL). */
 function syncSelTo3D(basis){
- if(!V3D||!V3D.inited)return;
- if(basis==='asd'&&sfdLrSel()){V3D.combo='LRFD:'+SEL.asdLr;const s=$('#v3dCombo');if(s){s.value=V3D.combo;rebuildScene();}return;}   /* SFLS */
- if(basis==='asd'&&SEL.asd!=null){V3D.combo='ASD:'+SEL.asd;const s=$('#v3dCombo');if(s){s.value=V3D.combo;rebuildScene();}}
- if(basis==='lrfd'&&SEL.lrfd!=null){V3D.combo='LRFD:'+SEL.lrfd;const s=$('#v3dCombo');if(s){s.value=V3D.combo;rebuildScene();}}
+ if(!V3D||!R||R.fatal)return;
+ let k=null;
+ if(basis==='asd'&&sfdLrSel())k='LRFD:'+SEL.asdLr;   /* SFLS */
+ else if(basis==='asd')k=(SEL.asd!=null&&R.asd[SEL.asd]&&R.asd[SEL.asd]!==R.govBear)?'ASD:'+SEL.asd:'GOV';
+ else if(basis==='lrfd'&&SEL.lrfd!=null)k='LRFD:'+SEL.lrfd;
+ if(!k)return;
+ if(R.directMode){const gi=R.asd.indexOf(R.govBear);k=(k==='GOV')?'ASD:'+(gi>=0?gi:0):k.replace('LRFD:','ASD:');}   /* direct: the envelope list only */
+ V3D.combo=k;
+ if(V3D.inited){const s=$('#v3dCombo');if(s){s.value=k;if(s.value===k)rebuildScene();else renderView3D();}}
 }
 /* build a selector bar; basis 'asd' or 'lrfd'; govIdx = index of governing combo to badge */
 function comboSelectorBar(basis,govIdx,onChange){
@@ -6397,10 +6405,19 @@ const V3D={inited:false,scene:null,cam:null,renderer:null,raf:null,layers:{},
  orbit:{az:0.9,el:0.5,r:null,tx:0,ty:0,tz:0},needsRender:true,
  opacity:0.92,colorMode:'plain'};
 function e2v(x,y,z){return new THREE.Vector3(x,z,-y);} // eng -> three
+/* SF3L (2026-11-05): selector = Governing (service) [default] + unfactored load cases + service (ASD) + LRFD (reference only);
+   direct (factored envelope) mode: the envelope only. 'grp' = optgroup. Display only. */
+const SF3L_CASE={D:'Dead',L:'Live',Lr:'Roof live',S:'Snow',Wx:'Wind x',Wy:'Wind y'};
 function v3dActiveList(){ // combos available for the selector
- const list=[];
- R.asd.forEach((a,i)=>list.push({key:'ASD:'+i,label:'[ASD] '+a.cb.name,basis:'ASD',a}));
- R.lrfd.forEach((l,i)=>list.push({key:'LRFD:'+i,label:'[LRFD] '+l.cb.name,basis:'LRFD',l}));
+ const list=[];const gi=R.asd.indexOf(R.govBear);
+ if(R.directMode){
+  R.asd.forEach((a,i)=>list.push({key:'ASD:'+i,label:(i+1)+'. '+a.cb.name+(i===gi?'  \u2605 governing':''),basis:'ASD',a,grp:'Direct factored envelope',env:true}));
+  return list;
+ }
+ if(gi>=0)list.push({key:'GOV',label:'Governing (service): '+R.govBear.cb.name,basis:'ASD',a:R.govBear,grp:'',gov:true,idx:gi});
+ TYPES.forEach(tp=>{if(R.present&&R.present[tp])list.push({key:'CASE:'+tp,label:tp+' \u2014 '+SF3L_CASE[tp]+' (unfactored)',basis:'CASE',tp,f:{[tp]:1},grp:'Unfactored load cases'});});
+ R.asd.forEach((a,i)=>list.push({key:'ASD:'+i,label:'[ASD] '+(i+1)+'. '+a.cb.name+(i===gi?'  \u2605':''),basis:'ASD',a,grp:'Service (ASD) combinations',idx:i}));
+ R.lrfd.forEach((l,i)=>list.push({key:'LRFD:'+i,label:'[LRFD] '+(i+1)+'. '+l.cb.name+' (reference)',basis:'LRFD',l,grp:'Strength (LRFD) combinations \u2014 reference only',idx:i}));
  return list;
 }
 function renderView3D(){
@@ -6413,6 +6430,7 @@ function renderView3D(){
   const wrap=el('div');wrap.id='v3dwrap';
   wrap.innerHTML=
    '<canvas id="v3dcanvas"></canvas>'+
+   '<svg id="v3dLeaders" aria-hidden="true" style="position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none"></svg>'+   /* SF3L: label leaders */
    '<div class="v3d-panel v3d-controls">'+
     '<b>Load case / combination</b>'+
     '<select id="v3dCombo"></select>'+
@@ -6441,6 +6459,7 @@ function renderView3D(){
    '<div class="v3d-panel v3d-legend" id="v3dLegend"></div>'+
    '<div class="v3d-hint">drag = orbit &middot; right-drag = pan &middot; wheel = zoom &middot; click footing or pedestal = inspect</div>'+
    '<div class="v3d-panel" id="v3dTip" style="display:none;bottom:34px;left:8px;font-size:10px;pointer-events:none"></div>';
+  const ttl=el('div');ttl.id='v3dTitle';ttl.setAttribute('role','status');T.appendChild(ttl);   /* SF3L: what is shown + sign convention */
   T.appendChild(wrap);
   initThree();
   wireV3DControls();
@@ -6448,10 +6467,10 @@ function renderView3D(){
  // populate combo selector
  const sel=$('#v3dCombo');const list=v3dActiveList();
  const prev=V3D.combo;
- sel.innerHTML=list.map(o=>'<option value="'+o.key+'">'+o.label+'</option>').join('');
- // default: governing bearing combo
+ {let h='',g=null;list.forEach(o=>{if(o.grp!==g){if(g)h+='</optgroup>';g=o.grp;if(g)h+='<optgroup label="'+sfEsc(g)+'">';}h+='<option value="'+o.key+'">'+sfEsc(o.label)+'</option>';});if(g)h+='</optgroup>';sel.innerHTML=h;}   /* SF3L */
+ // default: governing bearing combo (SF3L: 'GOV', which follows the governing combination after a re-analysis)
  if(!prev||!list.some(o=>o.key===prev)){
-  const gi=R.asd.indexOf(R.govBear);V3D.combo=(gi>=0)?'ASD:'+gi:list[0].key;
+  const gi=R.asd.indexOf(R.govBear);V3D.combo=list.some(o=>o.key==='GOV')?'GOV':(gi>=0)?'ASD:'+gi:list[0].key;
  }
  sel.value=V3D.combo;
  rebuildScene();
@@ -6475,7 +6494,7 @@ function initThree(){
  V3D.raycaster=new THREE.Raycaster();
  attachOrbit(canvas);
  const loop=()=>{V3D.raf=requestAnimationFrame(loop);
-  if(V3D.needsRender){updateCamera();renderer.render(scene,cam);V3D.needsRender=false;}};
+  if(V3D.needsRender){updateCamera();v3dLayoutLabels();renderer.render(scene,cam);V3D.needsRender=false;}};   /* SF3L: place the load labels */
  loop();
  new ResizeObserver(()=>{const w=wrap.clientWidth,h=wrap.clientHeight;if(w&&h){cam.aspect=w/h;cam.updateProjectionMatrix();renderer.setSize(w,h,false);V3D.needsRender=true;}}).observe(wrap);
 }
@@ -6543,7 +6562,7 @@ function applyClips(){
  cutReadout();
  V3D.needsRender=true;
 }
-function clearGroup(g){if(!g)return;g.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material){(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());}});while(g.children.length)g.remove(g.children[0]);}
+function clearGroup(g){if(!g)return;g.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material){(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{if(m.map)m.map.dispose();m.dispose();});}});while(g.children.length)g.remove(g.children[0]);}
 function rebuildScene(){
  if(!V3D.inited)return;
  const list=v3dActiveList();const item=list.find(o=>o.key===V3D.combo)||list[0];
@@ -6554,6 +6573,7 @@ function rebuildScene(){
   else clearGroup(V3D.groups[k]);
  });
  if(V3D.orbit.r===null)resetView();
+ V3D.labels=[];   /* SF3L */
  buildFooting();buildGradeSoil();buildEV();buildRebar();
  buildPressure(item);buildLoads(item);buildAxisTriad();
  buildBasisNote(item);buildLegend();
@@ -6704,6 +6724,7 @@ function tieLoop(x0,x1,y0,y1,z,d,material){
  return grp;
 }
 function comboBearing(item){ // return {plane,contactFrac,qmax,verts,P,Hx,Hy} for pressure+arrows
+ if(item.basis==='CASE')return {plane:null,qmax:0,mode:'case'};   /* SF3L: a single unfactored load case is not a bearing combination: no pressure plane */
  if(item.basis==='ASD'){const a=item.a;return {plane:a.bear.plane,contactFrac:a.bear.contactFrac,qmax:a.bear.qmax,mode:a.bear.mode,r:a.r};}
  // LRFD: compute a display pressure plane from factored resultant (structural pressure basis)
  const r=item.l.r;const b=solveBearing(r.P,r.ex,r.ey,R.B,R.L);
@@ -6754,8 +6775,8 @@ function contactOutline(pl,B,L,zb){
 }
 function buildLoads(item){
  const g=V3D.groups.loads;
- const direct=(item.basis==='ASD')?(item.a.cb.f&&item.a.cb.f.direct):(item.l.cb.f&&item.l.cb.f.direct);
- const f=item.basis==='ASD'?item.a.cb.f:item.l.cb.f;
+ const f=item.f||(item.basis==='ASD'?item.a.cb.f:item.l.cb.f);   /* SF3L: a single load case carries its own f ({tp:1}) */
+ const direct=!!(f&&f.direct);
  // compute per-pedestal applied P/Vx/Vy/Mx/My for the selected case
  function pedLoads(p){
   let P=0,Vx=0,Vy=0,Mx=0,My=0;
@@ -6771,18 +6792,64 @@ function buildLoads(item){
   const {P,Vx,Vy,Mx,My}=pedLoads(p);
   const top=e2v(p.x,p.y,p.h);
   const lp=e2v(p.x+(p.lex||0),p.y+(p.ley||0),p.h);   // SFLO: P drawn at the load point on the pedestal top
+  /* SF3L (2026-11-05): each non-zero component is labelled with its signed value (as in the load tables); the arrow points the way it acts */
   if(Math.abs(P)>1e-6){const len=floor+(lenFull-floor)*Math.min(1,Math.abs(P)/maxMag);
-   addArrow(g,lp,new THREE.Vector3(0,P>0?-1:1,0),len,0xc0392b,f2(Math.abs(P))+' k'); }
+   addArrow(g,lp,new THREE.Vector3(0,P>0?-1:1,0),len,0xc0392b,f2(Math.abs(P))+' k');
+   v3dLoadLabel(g,'P = '+f2(P)+' k',lp.clone().add(new THREE.Vector3(0,len*0.5,0)),'#c0392b');   /* at mid-shaft */ }
   if(Math.abs(Vx)>1e-6){const len=floor+(lenFull-floor)*Math.min(1,Math.abs(Vx)/maxMag);
-   addArrow(g,top,new THREE.Vector3(Math.sign(Vx),0,0),len,0x2e7d32,'Vx '+f2(Math.abs(Vx))+' k');}
+   addArrow(g,top,new THREE.Vector3(Math.sign(Vx),0,0),len,0x2e7d32,'Vx '+f2(Math.abs(Vx))+' k');
+   v3dLoadLabel(g,'Vx = '+f2(Vx)+' k',top.clone().add(new THREE.Vector3(Math.sign(Vx)*len,0,0)),'#2e7d32');}
   if(Math.abs(Vy)>1e-6){const len=floor+(lenFull-floor)*Math.min(1,Math.abs(Vy)/maxMag);
-   addArrow(g,top,new THREE.Vector3(0,0,-Math.sign(Vy)),len,0x1565c0,'Vy '+f2(Math.abs(Vy))+' k');}
+   addArrow(g,top,new THREE.Vector3(0,0,-Math.sign(Vy)),len,0x1565c0,'Vy '+f2(Math.abs(Vy))+' k');
+   v3dLoadLabel(g,'Vy = '+f2(Vy)+' k',top.clone().add(new THREE.Vector3(0,0,-Math.sign(Vy)*len)),'#1565c0');}
   // applied moments as curved arcs about the moment axis (right-hand rule)
   const rad=0.35+0.35*Math.min(1,Math.max(Math.abs(Mx),Math.abs(My))/maxM);
   // sign flipped so +Mx/+My draw the rotation that pushes pressure toward +y / +x (matches soil pressure)
   if(Math.abs(Mx)>1e-6)addMomentArc(g,top,'x',-Math.sign(Mx),rad,0xd48806); // Mx about x-axis
   if(Math.abs(My)>1e-6)addMomentArc(g,top,'y',-Math.sign(My),rad,0x9c27b0); // My about y-axis
+  if(Math.abs(Mx)>1e-6)v3dLoadLabel(g,'Mx = '+f2(Mx)+' k-ft',top.clone().add(new THREE.Vector3(0,0,-rad)),'#a86a00');   /* SF3L: at the start of the arc */
+  if(Math.abs(My)>1e-6)v3dLoadLabel(g,'My = '+f2(My)+' k-ft',top.clone().add(new THREE.Vector3(rad,0,0)),'#9c27b0');
  });
+}
+/* SF3L (2026-11-05, engineer): load labels = canvas-texture sprites (three.js core; no new library). sizeAttenuation off, so they keep
+   a constant screen size at any zoom and always face the camera; v3dLayoutLabels() (each render) sizes them in screen pixels and pushes
+   apart any that would overlap. Display only. */
+function v3dLoadLabel(g,txt,anchor,color){
+ try{
+  const k=2,fpx=12,pad=4;const cv=document.createElement('canvas');let cx=cv.getContext('2d');if(!cx)return;
+  const font='bold '+(fpx*k)+'px Arial, Helvetica, sans-serif';cx.font=font;
+  const w=Math.ceil(cx.measureText(txt).width/k)+2*pad,h=fpx+2*pad;
+  cv.width=w*k;cv.height=h*k;cx=cv.getContext('2d');
+  cx.fillStyle='rgba(255,255,255,0.92)';cx.fillRect(0,0,cv.width,cv.height);
+  cx.strokeStyle=color;cx.lineWidth=k;cx.strokeRect(k/2,k/2,cv.width-k,cv.height-k);
+  cx.font=font;cx.fillStyle=color;cx.textBaseline='middle';cx.fillText(txt,pad*k,cv.height/2+k/2);
+  const tex=new THREE.CanvasTexture(cv);tex.colorSpace=THREE.SRGBColorSpace;tex.minFilter=THREE.LinearFilter;tex.generateMipmaps=false;
+  const m=new THREE.SpriteMaterial({map:tex,depthTest:false,depthWrite:false,sizeAttenuation:false,transparent:true});m.userData={noclip:true};
+  const spr=new THREE.Sprite(m);spr.position.copy(anchor);spr.renderOrder=999;spr.frustumCulled=false;   /* the anchor may be off screen while the label is kept inside the view */
+  spr.userData={noclip:true,lbl:{w,h,txt,col:color}};
+  g.add(spr);(V3D.labels||(V3D.labels=[])).push(spr);
+ }catch(e){}
+}
+function v3dLayoutLabels(){
+ const ld=document.getElementById('v3dLeaders');if(ld)ld.innerHTML='';
+ const L=(V3D.labels||[]).filter(s=>s.parent&&s.parent.visible);if(!L.length)return;
+ const cv=V3D.renderer.domElement,W=cv.clientWidth||1,H=cv.clientHeight||1,k=2/(H*V3D.cam.projectionMatrix.elements[5]);
+ V3D.cam.updateMatrixWorld();
+ const it=L.map(s=>{const v=s.position.clone().project(V3D.cam);const ax=(v.x+1)/2*W,ay=(1-v.y)/2*H;const {w,h}=s.userData.lbl;
+  s.visible=v.z<1;s.scale.set(w*k,h*k,1);
+  return {s,ax,ay,w,h,x:Math.max(2,Math.min(W-w-2,ax+6)),y:Math.max(2,Math.min(H-h-2,ay-h/2))};});   /* preferred: just right of the anchor, kept inside the view */
+ it.sort((a,b)=>a.y-b.y||a.x-b.x);
+ const placed=[],cr=cv.getBoundingClientRect();
+ const obs=[...document.querySelectorAll('#v3dwrap .v3d-panel')].filter(e=>e.offsetParent&&getComputedStyle(e).display!=='none').map(e=>{const r=e.getBoundingClientRect();return {x:r.left-cr.left,y:r.top-cr.top,w:r.width,h:r.height};});   /* keep labels off the control panels */
+ const ov=(o,q)=>o.x<q.x+q.w+2&&q.x<o.x+o.w+2&&o.y<q.y+q.h+2&&q.y<o.y+o.h+2;
+ it.forEach(o=>{if(!o.s.visible)return;
+  for(let n=0;n<60;n++){const b=obs.find(q=>ov(o,q));if(b){o.x=(b.x+b.w/2<W/2)?b.x+b.w+3:b.x-o.w-3;continue;}
+   const hit=placed.find(q=>ov(o,q));if(!hit)break;o.y=hit.y+hit.h+2;}
+  placed.push(o);
+  o.s.center.set(-(o.x-o.ax)/o.w,1+(o.y-o.ay)/o.h);});   /* center (0,1) = anchor at the label's top-left corner */
+ if(ld){let h='';placed.forEach(o=>{const ex=Math.max(o.x,Math.min(o.x+o.w,o.ax)),ey=Math.max(o.y,Math.min(o.y+o.h,o.ay));   /* leader when a label was moved off its arrow */
+  if(Math.hypot(ex-o.ax,ey-o.ay)>10&&o.ax>=0&&o.ax<=W&&o.ay>=0&&o.ay<=H)h+='<line x1="'+o.ax.toFixed(1)+'" y1="'+o.ay.toFixed(1)+'" x2="'+ex.toFixed(1)+'" y2="'+ey.toFixed(1)+'" stroke="'+o.s.userData.lbl.col+'" stroke-width="1" stroke-dasharray="3 2"/>';});
+  ld.innerHTML=h;}
 }
 function addMomentArc(g,center,axis,sign,rad,color){
  // center is a three.js Vector3 at the pedestal top. Draw a 270-degree arc in the plane
@@ -6820,9 +6887,24 @@ function addArrow(g,origin,dir,len,color,label){
  g.add(ah);
 }
 function buildBasisNote(item){
+ v3dTitle(item);   /* SF3L */
  const note=$('#v3dBasisNote');if(!note)return;
- if(item.basis==='ASD')note.innerHTML='Service (ASD) basis \u2014 bearing pressure &amp; uplift shown at service loads.';
+ if(item.basis==='CASE')note.innerHTML='Unfactored load case \u2014 arrows only; bearing pressure is shown for combinations only.';
+ else if(item.basis==='ASD')note.innerHTML='Service (ASD) basis \u2014 bearing pressure &amp; uplift shown at service loads.';
  else note.innerHTML='Strength (LRFD) basis \u2014 factored arrows &amp; structural pressure; uplift polygon is a service check (see Bearing tab).';
+}
+/* SF3L: title above the view: what the arrows show, and the sign convention */
+function v3dTitle(item){
+ const d=$('#v3dTitle');if(!d)return;
+ const cb=item.basis==='ASD'?item.a.cb:item.basis==='LRFD'?item.l.cb:null;
+ const what=item.basis==='CASE'?'Load case <b>'+item.tp+'</b> ('+SF3L_CASE[item.tp].toLowerCase()+'), unfactored'
+  :item.env?'Direct factored envelope: <b>'+sfEsc(cb.name)+'</b> (pedestal loads as entered, factored)'
+  :item.basis==='LRFD'?'<b style="color:#8a4b00">LRFD (factored) combination '+(item.idx+1)+': '+sfEsc(cb.name)+'</b> \u2014 reference only; the checks use the service combinations'+(cb.ref?' ('+sfEsc(cb.ref)+')':'')
+  :(item.gov?'Governing service (bearing) combination ':'Service (ASD) combination ')+(item.idx+1)+': <b>'+sfEsc(cb.name)+'</b>'+(cb.ref?' ('+sfEsc(cb.ref)+')':'');
+ d.innerHTML='<b>3D view \u2014 showing:</b> '+what+'. Arrows and labels are the loads at the top of each pedestal'+(item.basis==='CASE'?'':' at this combination\u2019s factors')+' (self-weight, EV and surcharge not included; see '+
+  '<a href="#" class="v3d-jump" data-jump="tab-combos">2. Load Combinations</a>).<br><span style="font-size:11px;color:#445"><b>Sign convention:</b> +P downward (compression); +V<sub>x</sub>, +V<sub>y</sub> act toward +x, +y; '+
+  '+M<sub>x</sub> shifts the resultant toward +y, +M<sub>y</sub> toward +x (arcs drawn in that sense). Labels give the signed value; the arrow points the way the load acts; a zero component is not drawn.</span>';
+ const a=d.querySelector('[data-jump]');if(a)a.addEventListener('click',e=>{e.preventDefault();const b=[...$$('#tabbar button')].find(x=>x.dataset.tab==='tab-combos');if(b)b.click();});
 }
 function buildLegend(){
  const lg=$('#v3dLegend');if(!lg)return;
