@@ -2483,7 +2483,7 @@ table.vars th{background:#EEF2F6; font-family:var(--font-ui); font-size:8pt; let
 - **Other copies:** `ACI Rebar Development Length.html` (same block and the same two colour edits, in this PR; CLAUDE.md §3).
 - **Open items:** the `.check` value text in the summary dashboard stays upper case (`47.4 IN`), as before.
 
-## 2026-11-05 — PR: claude/cbc-shell-look (CBTH-3: suite shell aligned: Report background and buttons, one tab colour, slimmer phone bar; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-shell-look, PR #787: https://github.com/mlococo88/All-Structural/pull/787 (CBTH-3: suite shell aligned: Report background and buttons, one tab colour, slimmer phone bar; display only, no result change)
 
 ### CBTH-3. Suite shell (outer page) aligned with the suite look   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 1 of the concrete beam suite update, appearance):** align the outer suite bar / frame switcher with the Light Pole / Steel Bridge look, as CBTH-1 and CBTH-2 did for the three tabs. CBTH-1 already made the suite bar navy-800 without its shadow.
