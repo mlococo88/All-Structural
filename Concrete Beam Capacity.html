@@ -79,8 +79,7 @@
     <button class="suite-tab" id="suite-tab-report" data-target="report"><span class="dot"></span>Report</button>
     <div id="suite-xfer">
       <a class="alltools" href="tools.html" target="_top">&larr; All tools</a>
-      <button type="button" onclick="bxUseProjectInfo()" title="Fill the title blocks of all three tabs from the shared project info">Use shared project info</button>
-      <button type="button" onclick="bxShareProjectInfo()" title="Share the title block of the active tab with the other tools">Share project info</button>
+      <!-- HDR (2026-11-05): "Use shared project info" / "Share project info" moved to each tab's Project input tab (they call bxUseProjectInfo / bxShareProjectInfo below) -->
     </div>
   </nav>
   <div id="suite-stage">
@@ -416,6 +415,22 @@ h2.secTitle{font-size:inherit;font-weight:inherit;letter-spacing:inherit;line-he
 .fRow.chk{border-bottom:0}
 .fRow.chk input{margin-right:0}
 table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F6}
+/* HDR (2026-11-05): the title block, project file and shared project info buttons are in the Project input tab (#prjPane);
+   the header keeps the title, the status chip, a read-only project line (a link to that tab), Undo / Redo and Print */
+#hdrProj{font-family:var(--font-ui);font-size:9pt;color:#C7D4E4;text-decoration:none;max-width:26em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:4px}
+#hdrProj:hover{color:#fff;text-decoration:underline}
+#hdrProj .hdrNone{font-style:italic;opacity:.8}
+#prjPane .sec>.secHead{cursor:default}
+#prjPane .sec>.secHead:hover{background:inherit}
+#inputPanel #projGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;margin:0}
+#inputPanel #projGrid label{flex-direction:column;align-items:stretch;gap:1px;font-size:9.5pt}
+#inputPanel #projGrid label span{color:#475569}
+#inputPanel #projGrid input,#inputPanel #projGrid select,#inputPanel #projGrid input[data-fkey]{width:auto;max-width:none;min-width:0;border-color:var(--color-border)}
+#inputPanel #projGrid input[type=date],#inputPanel #projGrid input[readonly]{width:auto}
+#prjPane .prjBtns{display:flex;flex-wrap:wrap;gap:6px}
+#prjPane .prjBtns button{font-family:var(--font-ui);font-size:9pt;padding:4px 10px;border-radius:4px;border:1px solid var(--color-border);background:#fff;color:var(--navy-800);cursor:pointer}
+#prjPane .prjBtns button:hover{background:#E8ECF1}
+@media screen and (max-width:899px){#hdrProj{flex:1 1 100%;max-width:none}}
 /* PHN (2026-11-02): phone / tablet (below 900 px): one column, this frame's page scrolls (the panels do not scroll on their own);
    the title fields wrap; 900 px and up unchanged */
 @media screen and (max-width:899px){
@@ -498,21 +513,38 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
         <div class=&quot;byline&quot;>by Mario Lococo</div>
       </div>
       <div id=&quot;statusChip&quot; title=&quot;Overall worst demand/capacity — click for the Summary dashboard&quot;>—</div>
-      <div id=&quot;hdrBtns&quot;>
+      <div id=&quot;hdrBtns&quot;><!-- HDR (2026-11-05): the project line and the global actions; Undo / Redo are inserted before Print (plibUndoInit) -->
+        <a id=&quot;hdrProj&quot; href=&quot;#&quot; title=&quot;Project name and number: edit them in the Project input tab&quot;>Project: <span id=&quot;hdrProjTxt&quot;></span></a>
+        <button class=&quot;pri&quot; id=&quot;btnPrint&quot; title=&quot;Print / PDF the suite's calculation report (the Report tab), from any tab&quot;>Print / PDF</button>
+      </div>
+    </div>
+  </div>
+  <div id=&quot;main&quot;>
+    <aside id=&quot;cbcDashCol&quot; aria-label=&quot;Check summary&quot;></aside><!-- CBDC (2026-11-05): the check summary panel on screens 1500 px and wider -->
+    <div id=&quot;inputPanel&quot;><div id=&quot;prjPane&quot;><!-- HDR (2026-11-05): the Project input tab; moved here from the header, kept across rebuilds by buildInput() -->
+      <div class=&quot;sec&quot; id=&quot;prjTitleSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Title block</h2></div><div class=&quot;secBody&quot;>
+        <div id=&quot;projGrid&quot;></div>
+        <div class=&quot;note&quot;>Printed on the Report and the drawing sheets (DXF title block).</div>
+      </div></div>
+      <div class=&quot;sec&quot; id=&quot;prjFileSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Project file</h2></div><div class=&quot;secBody&quot;>
+        <div class=&quot;prjBtns&quot;>
         <button class=&quot;b&quot; id=&quot;btnNew&quot;>New</button>
         <button class=&quot;b&quot; id=&quot;btnSave&quot;>Save Project</button>
         <button class=&quot;b&quot; id=&quot;btnLoad&quot;>Open</button>
         <button class=&quot;b&quot; id=&quot;btnExport&quot;>Export JSON</button>
         <button class=&quot;b&quot; id=&quot;btnImport&quot;>Import JSON</button>
-        <button class=&quot;pri&quot; id=&quot;btnPrint&quot; title=&quot;Print / PDF the suite's calculation report (the Report tab), from any tab&quot;>Print / PDF</button>
         <input type=&quot;file&quot; id=&quot;fileIn&quot; accept=&quot;.json,application/json&quot; style=&quot;display:none&quot;>
-      </div>
-    </div>
-    <div id=&quot;projGrid&quot;></div>
-  </div>
-  <div id=&quot;main&quot;>
-    <aside id=&quot;cbcDashCol&quot; aria-label=&quot;Check summary&quot;></aside><!-- CBDC (2026-11-05): the check summary panel on screens 1500 px and wider -->
-    <div id=&quot;inputPanel&quot;></div>
+        </div>
+        <div class=&quot;note&quot;>Save Project / Open: the projects saved in this browser. Export / Import JSON: a file to back up or move to another computer.</div>
+      </div></div>
+      <div class=&quot;sec&quot; id=&quot;prjShareSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Shared project info</h2></div><div class=&quot;secBody&quot;>
+        <div class=&quot;prjBtns&quot;>
+        <button type=&quot;button&quot; class=&quot;b&quot; id=&quot;btnUseProjInfo&quot; title=&quot;Fill the title blocks of all three tabs from the shared project info&quot;>Use shared project info</button>
+        <button type=&quot;button&quot; class=&quot;b&quot; id=&quot;btnShareProjInfo&quot; title=&quot;Share this tab's title block with the other tools&quot;>Share project info</button>
+        </div>
+        <div class=&quot;note&quot;>Copy the title block from or to the other tools (all three tabs of this suite are filled).</div>
+      </div></div>
+    </div></div>
     <div id=&quot;outputWrap&quot;>
       <div id=&quot;cbcDashBox&quot;><!-- CBDC: check summary (moved into #cbcDashCol on screens 1500 px and wider) -->
         <div id=&quot;cbcDashHead&quot;><button type=&quot;button&quot; id=&quot;cbcDashTgl&quot; aria-controls=&quot;cbcDash&quot;></button><h2 id=&quot;cbcDashTtl&quot;>Check summary</h2><span id=&quot;cbcDashCnt&quot;></span></div>
@@ -1706,10 +1738,10 @@ document.addEventListener(&quot;click&quot;,e=>{ const a=e.target.closest&amp;&a
    remembered per browser in localStorage key rcbeam_v2_inputTab_v1 (never
    in S, so the autosave, saved projects and the JSON export are unchanged).
    ===================================================================== */
-const RCB_IN_TABS=[
+const RCB_IN_TABS=[['project','Project'],
   ['section','Section'],['materials','Materials &amp; Cover'],['reinf','Reinforcement'],
   ['checks','Checks'],['loads','Loads'],['assume','Assumptions']];
-const RCB_IN_SEC={inSection:'section',inMat:'materials',inCover:'materials',
+const RCB_IN_SEC={prjPane:'project',inSection:'section',inMat:'materials',inCover:'materials',
   inRebar:'reinf',inStir:'reinf',inTor:'checks',inCrack:'checks',
   inLoads:'loads',inAssume:'assume'};
 /* validate() blockers that come from an input, mapped to the section holding it */
@@ -1828,7 +1860,9 @@ function syncCoverPreset(){
    INPUT PANEL
    ===================================================================== */
 function buildInput(){
+  const PJ=document.getElementById(&quot;prjPane&quot;);   /* HDR: the Project tab's nodes (title block, file and share buttons) survive the rebuild */
   const P=document.getElementById(&quot;inputPanel&quot;); P.innerHTML=&quot;&quot;;
+  if(PJ){ P.appendChild(PJ); hdrProjShow(); }
   let __n=0; const NT=t=>(++__n)+&quot;. &quot;+t;   /* §3: visible sections renumber with no gaps */
 
   mkSection(&quot;inSection&quot;,NT(&quot;Section Geometry&quot;),b=>{
@@ -5170,6 +5204,28 @@ function cbcDashColl(v,save){
   if(CBDC.mq){ if(CBDC.mq.addEventListener) CBDC.mq.addEventListener('change',cbcDashPlace); else if(CBDC.mq.addListener) CBDC.mq.addListener(cbcDashPlace); }
   cbcDashPlace();
 })();
+/* HDR (2026-11-05): the header's read-only &quot;Project: <name> · <number>&quot; (S.proj.name / S.proj.num, typed in the Project tab).
+   A click opens the Project tab and focuses the Project field. The share buttons call the suite page's functions (unchanged).
+   Display only: nothing is stored. */
+function hdrProjShow(){
+  const t=document.getElementById('hdrProjTxt'); if(!t) return;
+  const pj=(S&amp;&amp;S.proj)||{}, v=[pj.name,pj.num].map(x=>String(x==null?'':x).trim()).filter(Boolean);
+  t.textContent='';
+  if(v.length) t.textContent=v.join(' \u00b7 '); else t.appendChild(el('span','hdrNone','(untitled: enter it in the Project tab)'));
+}
+document.addEventListener('input',e=>{ if(e.target.closest&amp;&amp;e.target.closest('#projGrid')) hdrProjShow(); });
+document.getElementById('hdrProj').addEventListener('click',e=>{
+  e.preventDefault(); rcbSetInTab('project',true);
+  const i=document.querySelector('#projGrid input'); if(!i) return;
+  if(window.matchMedia&amp;&amp;window.matchMedia('(max-width:899px)').matches) { const pn=document.getElementById('prjPane'), tb=document.getElementById('rcbInTabs'); window.scrollTo(0,pn.getBoundingClientRect().top+window.scrollY-(tb?tb.offsetHeight:0)-6); }   /* below the sticky input tab bar */
+  i.focus({preventScroll:true});
+});
+(function(){
+  const P=window.parent; let ok=false; try{ ok=P&amp;&amp;P!==window&amp;&amp;typeof P.bxUseProjectInfo==='function'; }catch(e){}
+  const sec=document.getElementById('prjShareSec'); if(!ok){ if(sec) sec.hidden=true; return; }
+  document.getElementById('btnUseProjInfo').addEventListener('click',()=>P.bxUseProjectInfo());
+  document.getElementById('btnShareProjInfo').addEventListener('click',()=>P.bxShareProjectInfo());
+})();
 function refresh(){
   const st=captureUI();
   VALIDATION=validate();
@@ -5193,7 +5249,7 @@ function plibUndoInit(){
   const h=SharedProjects.history({ get:snap, set:t=>{ const o=JSON.parse(t); KEEP.forEach(k=>{ if(k in S) o[k]=S[k]; }); mergeState(o); refresh(); } });
   const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'b'});
   const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
-  const ref=document.getElementById('btnLoad'); if(ref){ ref.insertAdjacentElement('afterend',br); ref.insertAdjacentElement('afterend',bu); }
+  const ref=document.getElementById('btnPrint'); if(ref){ ref.insertAdjacentElement('beforebegin',bu); ref.insertAdjacentElement('beforebegin',br); }   /* HDR: in the header, before Print (was after Open) */
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   let tm=null; h.reset();
   PLU={ h, soon:()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); }, full:()=>{ const o=Object.assign({},S); delete o.ui; return JSON.stringify(o); } };
@@ -5649,6 +5705,22 @@ h2.secTitle{font-size:inherit;font-weight:inherit;letter-spacing:inherit;line-he
 .fRow.chk{border-bottom:0}
 .fRow.chk input{margin-right:0}
 table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F6}
+/* HDR (2026-11-05): the title block, project file and shared project info buttons are in the Project input tab (#prjPane);
+   the header keeps the title, the status chip, a read-only project line (a link to that tab), Undo / Redo and Print */
+#hdrProj{font-family:var(--font-ui);font-size:9pt;color:#C7D4E4;text-decoration:none;max-width:26em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:4px}
+#hdrProj:hover{color:#fff;text-decoration:underline}
+#hdrProj .hdrNone{font-style:italic;opacity:.8}
+#prjPane .sec>.secHead{cursor:default}
+#prjPane .sec>.secHead:hover{background:inherit}
+#inputPanel #projGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 10px;margin:0}
+#inputPanel #projGrid label{flex-direction:column;align-items:stretch;gap:1px;font-size:9.5pt}
+#inputPanel #projGrid label span{color:#475569}
+#inputPanel #projGrid input,#inputPanel #projGrid select,#inputPanel #projGrid input[data-fkey]{width:auto;max-width:none;min-width:0;border-color:var(--color-border)}
+#inputPanel #projGrid input[type=date],#inputPanel #projGrid input[readonly]{width:auto}
+#prjPane .prjBtns{display:flex;flex-wrap:wrap;gap:6px}
+#prjPane .prjBtns button{font-family:var(--font-ui);font-size:9pt;padding:4px 10px;border-radius:4px;border:1px solid var(--color-border);background:#fff;color:var(--navy-800);cursor:pointer}
+#prjPane .prjBtns button:hover{background:#E8ECF1}
+@media screen and (max-width:899px){#hdrProj{flex:1 1 100%;max-width:none}}
 /* PHN (2026-11-02): phone / tablet (below 900 px): one column, this frame's page scrolls (the panels do not scroll on their own);
    the title fields wrap; 900 px and up unchanged */
 @media screen and (max-width:899px){
@@ -5736,21 +5808,38 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
         <div class=&quot;byline&quot;>Allowable Stress Design · AASHTO Std. Specs 8.15 · by M. Lococo</div>
       </div>
       <div id=&quot;statusChip&quot; title=&quot;Governing rating factor — click for the Summary dashboard&quot;>—</div>
-      <div id=&quot;hdrBtns&quot;>
+      <div id=&quot;hdrBtns&quot;><!-- HDR (2026-11-05): the project line and the global actions; Undo / Redo are inserted before Print (plibUndoInit) -->
+        <a id=&quot;hdrProj&quot; href=&quot;#&quot; title=&quot;Project name and number: edit them in the Project input tab&quot;>Project: <span id=&quot;hdrProjTxt&quot;></span></a>
+        <button class=&quot;pri&quot; id=&quot;btnPrint&quot; title=&quot;Print / PDF the suite's calculation report (the Report tab), from any tab&quot;>Print / PDF</button>
+      </div>
+    </div>
+  </div>
+  <div id=&quot;main&quot;>
+    <aside id=&quot;asdDashCol&quot; aria-label=&quot;Check summary&quot;></aside><!-- ASDC (2026-11-05): the check summary panel on screens 1500 px and wider -->
+    <div id=&quot;inputPanel&quot;><div id=&quot;prjPane&quot;><!-- HDR (2026-11-05): the Project input tab; moved here from the header, kept across rebuilds by buildInput() -->
+      <div class=&quot;sec&quot; id=&quot;prjTitleSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Title block</h2></div><div class=&quot;secBody&quot;>
+        <div id=&quot;projGrid&quot;></div>
+        <div class=&quot;note&quot;>Printed on the Report.</div>
+      </div></div>
+      <div class=&quot;sec&quot; id=&quot;prjFileSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Project file</h2></div><div class=&quot;secBody&quot;>
+        <div class=&quot;prjBtns&quot;>
         <button class=&quot;b&quot; id=&quot;btnNew&quot;>New</button>
         <button class=&quot;b&quot; id=&quot;btnSave&quot;>Save Project</button>
         <button class=&quot;b&quot; id=&quot;btnLoad&quot;>Open</button>
         <button class=&quot;b&quot; id=&quot;btnExport&quot;>Export JSON</button>
         <button class=&quot;b&quot; id=&quot;btnImport&quot;>Import JSON</button>
-        <button class=&quot;pri&quot; id=&quot;btnPrint&quot; title=&quot;Print / PDF the suite's calculation report (the Report tab), from any tab&quot;>Print / PDF</button>
         <input type=&quot;file&quot; id=&quot;fileIn&quot; accept=&quot;.json,application/json&quot; style=&quot;display:none&quot;>
-      </div>
-    </div>
-    <div id=&quot;projGrid&quot;></div>
-  </div>
-  <div id=&quot;main&quot;>
-    <aside id=&quot;asdDashCol&quot; aria-label=&quot;Check summary&quot;></aside><!-- ASDC (2026-11-05): the check summary panel on screens 1500 px and wider -->
-    <div id=&quot;inputPanel&quot;></div>
+        </div>
+        <div class=&quot;note&quot;>Save Project / Open: the projects saved in this browser. Export / Import JSON: a file to back up or move to another computer.</div>
+      </div></div>
+      <div class=&quot;sec&quot; id=&quot;prjShareSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Shared project info</h2></div><div class=&quot;secBody&quot;>
+        <div class=&quot;prjBtns&quot;>
+        <button type=&quot;button&quot; class=&quot;b&quot; id=&quot;btnUseProjInfo&quot; title=&quot;Fill the title blocks of all three tabs from the shared project info&quot;>Use shared project info</button>
+        <button type=&quot;button&quot; class=&quot;b&quot; id=&quot;btnShareProjInfo&quot; title=&quot;Share this tab's title block with the other tools&quot;>Share project info</button>
+        </div>
+        <div class=&quot;note&quot;>Copy the title block from or to the other tools (all three tabs of this suite are filled).</div>
+      </div></div>
+    </div></div>
     <div id=&quot;outputWrap&quot;>
       <div id=&quot;asdDashBox&quot;><!-- ASDC: check summary (moved into #asdDashCol on screens 1500 px and wider) -->
         <div id=&quot;asdDashHead&quot;><button type=&quot;button&quot; id=&quot;asdDashTgl&quot; aria-controls=&quot;asdDash&quot;></button><h2 id=&quot;asdDashTtl&quot;>Check summary</h2><span id=&quot;asdDashCnt&quot;></span></div>
@@ -5988,8 +6077,8 @@ document.addEventListener(&quot;click&quot;,e=>{ const a=e.target.closest&amp;&a
    remembered per browser in localStorage key asd_v1_inputTab_v1 (never
    in S, so the autosave, saved projects and the JSON export are unchanged).
    ===================================================================== */
-const ASD_IN_TABS=[['section','Mode &amp; Section'],['allow','Allowables'],['loads','Loads']];
-const ASD_IN_SEC={inMode:'section',inInherit:'section',inAllow:'allow',inLoads:'loads'};
+const ASD_IN_TABS=[['project','Project'],['section','Mode &amp; Section'],['allow','Allowables'],['loads','Loads']];
+const ASD_IN_SEC={prjPane:'project',inMode:'section',inInherit:'section',inAllow:'allow',inLoads:'loads'};
 const ASD_IN_KEY='asd_v1_inputTab_v1';
 let asdInTabCur=null;   /* in-memory copy, so the tab survives rebuilds even without storage */
 function asdInTabGet(){ if(asdInTabCur) return asdInTabCur; try{ return localStorage.getItem(ASD_IN_KEY)||''; }catch(e){ return ''; } }
@@ -6064,7 +6153,9 @@ function asdInputTabMarks(){
    INPUT PANEL
    ===================================================================== */
 function buildInput(){
+  const PJ=document.getElementById(&quot;prjPane&quot;);   /* HDR: the Project tab's nodes (title block, file and share buttons) survive the rebuild */
   const P=document.getElementById(&quot;inputPanel&quot;); P.innerHTML=&quot;&quot;;
+  if(PJ){ P.appendChild(PJ); hdrProjShow(); }
   let __n=0; const NT=t=>(++__n)+&quot;. &quot;+t;
 
   /* 1. Analysis mode */
@@ -6971,6 +7062,28 @@ function asdDashColl(v,save){
   if(ASDC.mq){ if(ASDC.mq.addEventListener) ASDC.mq.addEventListener('change',asdDashPlace); else if(ASDC.mq.addListener) ASDC.mq.addListener(asdDashPlace); }
   asdDashPlace();
 })();
+/* HDR (2026-11-05): the header's read-only &quot;Project: <name> · <number>&quot; (S.proj.name / S.proj.num, typed in the Project tab).
+   A click opens the Project tab and focuses the Project field. The share buttons call the suite page's functions (unchanged).
+   Display only: nothing is stored. */
+function hdrProjShow(){
+  const t=document.getElementById('hdrProjTxt'); if(!t) return;
+  const pj=(S&amp;&amp;S.proj)||{}, v=[pj.name,pj.num].map(x=>String(x==null?'':x).trim()).filter(Boolean);
+  t.textContent='';
+  if(v.length) t.textContent=v.join(' \u00b7 '); else t.appendChild(el('span','hdrNone','(untitled: enter it in the Project tab)'));
+}
+document.addEventListener('input',e=>{ if(e.target.closest&amp;&amp;e.target.closest('#projGrid')) hdrProjShow(); });
+document.getElementById('hdrProj').addEventListener('click',e=>{
+  e.preventDefault(); asdSetInTab('project',true);
+  const i=document.querySelector('#projGrid input'); if(!i) return;
+  if(window.matchMedia&amp;&amp;window.matchMedia('(max-width:899px)').matches) { const pn=document.getElementById('prjPane'), tb=document.getElementById('asdInTabs'); window.scrollTo(0,pn.getBoundingClientRect().top+window.scrollY-(tb?tb.offsetHeight:0)-6); }   /* below the sticky input tab bar */
+  i.focus({preventScroll:true});
+});
+(function(){
+  const P=window.parent; let ok=false; try{ ok=P&amp;&amp;P!==window&amp;&amp;typeof P.bxUseProjectInfo==='function'; }catch(e){}
+  const sec=document.getElementById('prjShareSec'); if(!ok){ if(sec) sec.hidden=true; return; }
+  document.getElementById('btnUseProjInfo').addEventListener('click',()=>P.bxUseProjectInfo());
+  document.getElementById('btnShareProjInfo').addEventListener('click',()=>P.bxShareProjectInfo());
+})();
 function refresh(){
   applyAutoAllow();
   const st=captureUI();
@@ -6995,7 +7108,7 @@ function plibUndoInit(){
   const h=SharedProjects.history({ get:snap, set:t=>{ const o=JSON.parse(t); KEEP.forEach(k=>{ if(k in S) o[k]=S[k]; }); mergeState(o); refresh(); } });
   const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'b'});
   const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
-  const ref=document.getElementById('btnLoad'); if(ref){ ref.insertAdjacentElement('afterend',br); ref.insertAdjacentElement('afterend',bu); }
+  const ref=document.getElementById('btnPrint'); if(ref){ ref.insertAdjacentElement('beforebegin',bu); ref.insertAdjacentElement('beforebegin',br); }   /* HDR: in the header, before Print (was after Open) */
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   let tm=null; h.reset();
   PLU={ h, soon:()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); }, full:()=>{ const o=Object.assign({},S); delete o.ui; return JSON.stringify(o); } };
@@ -7289,6 +7402,11 @@ input,select,textarea,button{font-family:var(--font-ui);}
 @media print{.titlebar{box-shadow:none; clip-path:none;}}
 .titlebar .apptitle{font-size:14pt; font-weight:600; letter-spacing:.4px; color:#fff;}
 .titlebar .byline{font-size:9pt; color:#C7D4E4; margin:0;}
+/* HDR (2026-11-05): the project line (a link to the Project tab), right of the title, before Undo / Redo */
+.titlebar #hdrProj{margin-left:auto; font-size:9pt; color:#C7D4E4; text-decoration:none; max-width:26em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; align-self:center;}
+.titlebar #hdrProj:hover{color:#fff; text-decoration:underline;}
+.titlebar #hdrProj .hdrNone{font-style:italic; opacity:.8;}
+.titlebar #hdrProj~button{margin-left:8px!important;}
 .titlebar .alltools{order:-1; flex:0 0 100%; margin:0; font-size:11px; color:#C7D4E4;}
 .titlebar .alltools:hover{color:#fff;}
 .titlebar button:first-of-type{margin-left:auto!important;}
@@ -7449,6 +7567,7 @@ body.rbNoExcess .rbExcessOnly{display:none!important}
   <div class=&quot;titlebar no-print&quot;>
     <div class=&quot;apptitle&quot;>Rebar Development &amp;amp; Splice Calculator</div>
     <div class=&quot;byline&quot;>by Mario Lococo</div>
+    <a id=&quot;hdrProj&quot; href=&quot;#&quot; title=&quot;Project name and number: edit them in the Project input tab&quot;>Project: <span id=&quot;hdrProjTxt&quot;></span></a><!-- HDR (2026-11-05) -->
   </div>
 
   <div class=&quot;layout no-print&quot;>
@@ -7798,7 +7917,12 @@ function buildInputPanel(){
       <div class=&quot;field&quot;><label>Checked By</label><input id=&quot;chkBy&quot; type=&quot;text&quot; placeholder=&quot;—&quot;></div>
       <div class=&quot;field&quot;><label>Calc Date</label><input id=&quot;calcDate2&quot; type=&quot;date&quot; value=&quot;${today}&quot; style=&quot;display:none&quot;></div>
       <div class=&quot;field&quot;><label>Checked Date</label><input id=&quot;chkDate&quot; type=&quot;date&quot;></div>
-    </div>`)}
+    </div>
+    <div class=&quot;btnrow&quot; id=&quot;prjShareRow&quot; style=&quot;margin-top:8px;&quot;><!-- HDR (2026-11-05): moved here from the suite's top bar -->
+      <button type=&quot;button&quot; class=&quot;btn small&quot; id=&quot;btnUseProjInfo&quot; title=&quot;Fill the title blocks of all three tabs from the shared project info&quot;>Use shared project info</button>
+      <button type=&quot;button&quot; class=&quot;btn small&quot; id=&quot;btnShareProjInfo&quot; title=&quot;Share this tab's title block with the other tools&quot;>Share project info</button>
+    </div>
+    <div class=&quot;hint&quot; id=&quot;prjShareHint&quot;>Copy the title block from or to the other tools (all three tabs of this suite are filled).</div>`)}
 
   ${panel(&quot;B&quot;,&quot;Design Code &amp;amp; Material&quot;,true,`
     <div class=&quot;field&quot;><label>Design Code</label>
@@ -9091,7 +9215,27 @@ function applyState(st){
   }
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===currentTab));
 }
-function autosave(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(collectState())); }catch(e){} if(RBPL) RBPL.soon(); /* PLIB: one undo step per change (debounced) */ }
+function autosave(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(collectState())); }catch(e){} if(RBPL) RBPL.soon(); /* PLIB: one undo step per change (debounced) */ hdrProjShow(); }
+/* HDR (2026-11-05): the header's read-only &quot;Project: <name> · <number>&quot; (#projName / #projNo, Project tab); a click opens the
+   Project tab and focuses Project Name. The share buttons call the suite page's functions (unchanged). Display only. */
+function hdrProjShow(){
+  const t=document.getElementById('hdrProjTxt'); if(!t) return;
+  const v=['projName','projNo'].map(id=>{ const e=document.getElementById(id); return e?String(e.value||'').trim():''; }).filter(Boolean);
+  t.textContent='';
+  if(v.length) t.textContent=v.join(' \u00b7 ');
+  else { const i=document.createElement('span'); i.className='hdrNone'; i.textContent='(untitled: enter it in the Project tab)'; t.appendChild(i); }
+}
+document.addEventListener('input',e=>{ if(e.target&amp;&amp;(e.target.id==='projName'||e.target.id==='projNo')) hdrProjShow(); });
+document.addEventListener('click',e=>{
+  const a=e.target.closest&amp;&amp;e.target.closest('#hdrProj');
+  if(a){ e.preventDefault(); if(typeof rebarSetInTab==='function') rebarSetInTab('project',true);
+    const i=document.getElementById('projName'); if(!i) return;
+    if(window.matchMedia&amp;&amp;window.matchMedia('(max-width:899px)').matches) { const pn=i.closest('.panel'), tb=document.getElementById('rebarInTabs'); window.scrollTo(0,pn.getBoundingClientRect().top+window.scrollY-(tb?tb.offsetHeight:0)-6); }   /* below the sticky input tab bar */
+    i.focus({preventScroll:true}); return; }
+  const P=window.parent; let ok=false; try{ ok=P&amp;&amp;P!==window&amp;&amp;typeof P.bxUseProjectInfo==='function'; }catch(x){}
+  if(ok&amp;&amp;e.target.id==='btnUseProjInfo') P.bxUseProjectInfo();
+  if(ok&amp;&amp;e.target.id==='btnShareProjInfo') P.bxShareProjectInfo();
+});
 
 function getProjects(){ try{return JSON.parse(localStorage.getItem(LS_PROJECTS))||{};}catch(e){return {};} }
 function refreshProjectList(){
