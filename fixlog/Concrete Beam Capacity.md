@@ -4017,7 +4017,7 @@ Not affected:
   }
 ```
 
-## 2026-11-05 — PR: claude/cbc-asd-stale (CBST: the ASD Beam Calcs tab says on screen when its "From Beam Capacity" values are stale because Beam Capacity has an input error; REVIEW line in its check panel; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-asd-stale, PR #801: https://github.com/mlococo88/All-Structural/pull/801 (CBST: the ASD Beam Calcs tab says on screen when its "From Beam Capacity" values are stale because Beam Capacity has an input error; REVIEW line in its check panel; display only, no result change)
 
 ### CBST. Stale inherited values on the ASD tab   [display only] [no result change]
 - **Problem (coordinator, after CBIR #800):** while Beam Capacity has an input error, its `derive()` returns null and nothing is sent. The ASD tab then keeps the last inherited values and shows its results with no warning on screen. The Report already said so (CBIR).
