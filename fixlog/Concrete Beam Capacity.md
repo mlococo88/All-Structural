@@ -3894,7 +3894,7 @@ Applies to `ACI Rebar Development Length.html` and the Development & Splice fram
   }
 ```
 
-## 2026-11-05 — PR: claude/cbc-aci-lambda-dev (CBLA: ACI development lengths use λ = 0.75 for lightweight concrete per Tables 25.4.2.5 / 25.4.3.2 / 25.4.9.3; CALCULATION CHANGE, ACI mode, lightweight only; less conservative before)
+## 2026-11-05 — PR: claude/cbc-aci-lambda-dev, PR #799: https://github.com/mlococo88/All-Structural/pull/799 (CBLA: ACI development lengths use λ = 0.75 for lightweight concrete per Tables 25.4.2.5 / 25.4.3.2 / 25.4.9.3; CALCULATION CHANGE, ACI mode, lightweight only; less conservative before)
 
 Engineer approval: 2026-11-05, after the Table 25.4.2.5 check (RBLC, #797). This applies to `ACI Rebar Development Length.html` and to the Development & Splice frame (`suite-frame-dev`) of `Concrete Beam Capacity.html`, with the same edits in each.
 
