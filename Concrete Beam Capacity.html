@@ -9346,7 +9346,7 @@ window.addEventListener('DOMContentLoaded',()=>{
         }
         last=si;
         var sec=M.sections[si], items=rxWalk(h.el,c.id+':rx-'+h.id,{newNum:newNum,fresh:fresh,seen:seen,figs:figs});
-        if(items.length) sec.subs.push({title:'As printed: tables, equations, notes and figures',items:items});
+        if(items.length) sec.subs.push({title:'As printed: tables, equations, notes and figures',items:items,_rx:{ch:c.id,tab:h.id,label:h.label}});   /* CBRF: _rx marks the copy (cbrfMove) */
         var r=null; try{ r=rs?rs(h.id):null; }catch(e){}
         if(r){ sec.subs.push({title:'Results — '+h.label,items:[r,{type:'note',text:'PASS: D/C ≤ 1.00 (detailing: the limit is met for every combination it applies to; rating: RF ≥ 1.00). Each check is worked in the subsections above.'}]}); seen(JSON.stringify(r.rows)); }
       });
@@ -9363,7 +9363,7 @@ window.addEventListener('DOMContentLoaded',()=>{
       c.querySelectorAll('.wkLink,.caret,button,select,input').forEach(function(x){ x.remove(); });
       return c.textContent.replace(/\s+/g,' ').trim().replace(/\$/g,''); };
     var tex=function(l){ var a=l.querySelector('annotation'); return (a?a.textContent:l.textContent).trim(); };
-    var push=function(it){ if(topic){ it.topic={title:topic,no:++ntp}; topic=null; } out.push(it); };   /* numbered in the subsection's order */
+    var push=function(it){ if(topic){ it.topic={title:topic,no:++ntp}; topic=null; } it._card=card; out.push(it); };   /* numbered in the subsection's order; CBRF: _card = the tab card it comes from */
     var cellOf=function(v){ if(/^(PASS|OK)\b/.test(v)) return {t:v,cls:'ok'}; if(/^(FAIL|NG)\b/.test(v)) return {t:v,cls:'ng'}; if(/^N\/A\b/.test(v)) return {t:v,cls:'na'};
       return /^[-−\d.,e+\s%/×()≫∞—]+$/.test(v)&&/\d/.test(v)?{t:v,n:true}:v; };
     var table=function(t){
@@ -9460,6 +9460,60 @@ window.addEventListener('DOMContentLoaded',()=>{
     ['cap','asd','dev','ref'].forEach(function(g){ G[g].forEach(function(s,i){ s.part=i===0?part[g]:undefined; if(s._tab&&g!=='ref') s.key='cbro:'+g+':'+s._tab; }); });
     M.sections=[cbroSum(),cbovSection()].concat(G.cap,G.asd,G.dev,G.ref);   /* CBOV: the overview second */
     cbroKeys(M);
+  }
+  /* ---------- CBRF (2026-11-05, Phase 4 part 3; as Spread Footing SFRF #779): each tab copy ("As printed: tables, equations,
+     notes and figures", rxRest) is split. Its figures, and its tables that hold a value or a text found nowhere else in the
+     Report, go into the section that works the check (a combination's card into that combination's subsection; the Input
+     Echo's into Reinforcement / Load combinations; the Detailing table into the envelope; the rest into "Figures and tables
+     from the <tab> tab" before the Results lines). What is left of the copy (its notes, equation lines and the tables whose
+     values the Report already shows) goes to "Appendix: the tabs as printed" after the References, one subsection per tab,
+     and the section gets a pointer to it. Display only: items are moved, never changed or dropped. ---------- */
+  var CBRF_SUB={cap:{tabInputEcho:[[/^Section Schematic/,'Reinforcement'],[/^Reinforcement/,'Reinforcement'],[/^Load Combinations/,'Load combinations']],tabDetail:[[/^Detailing Checks/,'Detailing checks (envelope)']]}};
+  function cbrfMove(M){
+    var rx=[]; M.sections.forEach(function(s){ (s.subs||[]).forEach(function(q){ if(q._rx) rx.push({s:s,q:q}); }); });
+    if(!rx.length) return;
+    var txt=''; try{ txt=SharedReport.text(SharedReport.build({title:M.title,sections:M.sections.map(function(s){ return {title:s.title,note:s.note,subs:(s.subs||[]).filter(function(q){ return !q._rx; })}; })})); }catch(e){ return; }
+    var have=new Set(), all=rxNrm(txt);
+    var addNum=function(x){ have.add(x); var v=parseFloat(x), d=(x.split('.')[1]||'').length; for(var k=0;k<d;k++) have.add(String(parseFloat(v.toFixed(k)))); };
+    rxNums(txt).forEach(addNum);
+    var ct=function(c){ return c&&typeof c==='object'?String(c.t==null?'':c.t):String(c==null?'':c); };
+    var cells=function(it){ var o=[]; (it.head||[]).forEach(function(c){ o.push(ct(c)); }); (it.rows||[]).forEach(function(r){ (Array.isArray(r)?r:r.cells).forEach(function(c){ o.push(ct(c)); }); }); if(it.caption) o.push(ct(it.caption)); return o; };
+    var unique=function(it){ return cells(it).some(function(t){ if(rxNums(t).some(function(n){ return !have.has(n); })) return true; var x=rxNrm(t); return x.length>15&&all.indexOf(x)<0; }); };
+    var seen=function(it){ cells(it).forEach(function(t){ rxNums(t).forEach(addNum); all+=rxNrm(t); }); };
+    var ap=[];
+    rx.forEach(function(R){
+      var s=R.s, q=R.q, X=q._rx, lab=X.label, keep=[], tabT=' ('+lab+' tab)', extra=null;
+      var target=function(card){
+        var m=/^Combination (\d+)\b/.exec(card||''); if(m){ var t=s.subs.filter(function(u){ return u.title.indexOf('Combination '+m[1]+' (')===0; })[0]; if(t) return t; }
+        var L=(CBRF_SUB[X.ch]||{})[X.tab]||[]; for(var i=0;i<L.length;i++){ if(L[i][0].test(card||'')){ var nm=L[i][1], u=s.subs.filter(function(v){ return v.title===nm; })[0]; if(u) return u; } }
+        if(!extra){ extra={title:'Figures and tables from the '+lab+' tab',items:[]}; var k=-1; s.subs.forEach(function(u,i){ if(k<0&&/^Results — /.test(u.title)) k=i; }); s.subs.splice(k<0?s.subs.length:k,0,extra); }
+        return extra;
+      };
+      var prevFig=null;
+      q.items.forEach(function(it){
+        if(it.type==='note'&&prevFig&&(it._card||'')===(prevFig._card||'')&&!it.topic){   /* the figure's own caption line on the tab moves with it */
+          var cn={}; for(var kk in it) cn[kk]=it[kk]; delete cn._card; prevFig.into.items.push(cn); prevFig=null; return; }
+        prevFig=null;
+        var mv=it.type==='figure'||(it.type==='table'&&unique(it));
+        if(!mv){ keep.push(it); return; }
+        if(it.type==='table') seen(it);
+        var o={}; for(var k in it) o[k]=it[k]; delete o._card;
+        var card=it._card||'';
+        if(it.type==='figure') o.caption=(o.caption||card||'Figure')+tabT;
+        o.topic={title:(it.type==='figure'?(it.caption||card||'Figure'):(card||'Table'))+tabT};
+        var into=target(card); into.items.push(o);
+        if(it.type==='figure') prevFig={_card:it._card,into:into};
+      });
+      s.subs.splice(s.subs.indexOf(q),1);
+      if(!keep.length) return;
+      /* the copy's topic headings again: the first item left of each card carries it, numbered in the appendix's order */
+      var n=0, last=null; keep.forEach(function(it){ var c=it._card||''; delete it.topic; if(c!==last){ last=c; if(c) it.topic={title:c,no:++n}; } delete it._card; });
+      var key='cbrf:ap:'+X.ch+':'+X.tab;
+      ap.push({title:lab+' tab ('+({cap:'Beam Capacity',asd:'ASD Beam Calcs'}[X.ch]||X.ch)+')',key:key,items:[{type:'note',text:'As printed on the tab: its notes, equation lines and the tables whose values are worked in [['+(s.key||key)+']]. The figures and tables found only on the tab are in that section.'}].concat(keep)});
+      s.note=(s.note?s.note+' ':'')+'The '+lab+' tab’s other notes, equation lines and tables, as printed: [['+key+']].';
+    });
+    rx.forEach(function(R){ if(R.q.items) R.q.items.forEach(function(it){ delete it._card; }); });
+    if(ap.length) M.sections.push({part:'Appendices',title:'Appendix: the tabs as printed',key:'cbrf:ap',note:'Text and tables of the Beam Capacity and ASD Beam Calcs tabs as they print, kept for completeness. Every value here is worked, or shown, in the chapter section named at the start of each subsection; figures and tables found only on a tab are in that section.',subs:ap});
   }
   /* ---------- CBOV (2026-11-05): "Overview of the beam", the Report's section 2, after the Summary of results (as Spread
      Footing SFOV #780): the cross-section with its reinforcement and dimensions, the stirrup elevation (each to scale, with a
@@ -9586,6 +9640,7 @@ window.addEventListener('DOMContentLoaded',()=>{
       sections:secs};
     rxRest(M);   /* CBRX: what the retired print reports printed and the chapters lack */
     cbroOrder(M);   /* CBRO: design order, the suite's Summary of results first, numbering independent of the Include boxes */
+    cbrfMove(M);   /* CBRF: figures and unique tables in their sections, the rest of the tab copies in an appendix */
     return M;
   }
   /* [[tab:<chapter>/<tab>|…]]: the suite tab, then that tab's own result tab */
