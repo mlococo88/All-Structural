@@ -1325,7 +1325,7 @@ index 13f0165..656e0f1 100644
 - **Entered demands:** the service loads, rotations and movements are entered directly (or filled by the Abutment hand-off and still
   editable). Nothing added.
 
-## 2026-11-05 — PR: claude/ghsync-edm (GHS2: saved projects copied to a private GitHub repository; storage only, no result change)
+## 2026-11-05 — PR: claude/ghsync-edm (PR #817: https://github.com/mlococo88/All-Structural/pull/817) (GHS2: saved projects copied to a private GitHub repository; storage only, no result change)
 - **Engineer:** extend GitHub sync (`shared/github-sync.js`; setup `docs/github-sync-setup.md`; shared hooks for own dialogs in PR #815) to the tools with their own project dialogs.
 - **Where:**
   - After `<script src="shared/projects-ui.js"></script>`: new `<script src="shared/github-sync.js"></script>` (anchor `GHS2 (2026-11-05): copy of the saved projects`).
