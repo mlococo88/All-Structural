@@ -3954,7 +3954,7 @@ Not affected:
 - **Saved data:** no key or format change; the entered λ is still saved.
 - **Other copies:** standalone tool and suite Dev frame (same edits).
 
-## 2026-11-05 — PR: claude/cbc-report-inputerr (CBIR: a chapter whose tab has an input error prints "Input error: no results" with the errors instead of its last results; Summary and Overview consistent; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-report-inputerr, PR #800: https://github.com/mlococo88/All-Structural/pull/800 (CBIR: a chapter whose tab has an input error prints "Input error: no results" with the errors instead of its last results; Summary and Overview consistent; display only, no result change)
 
 ### CBIR. Input error in the suite Report   [display only] [no result change]
 - **Problem (open item of CBRO #793, raised by the coordinator):** with an input blocker on the Beam Capacity tab (e.g. b_w blank), the tab, its check panel and the Summary of results said "Input error: no results", but the Beam Capacity chapter printed the last results computed before the error, together with the "As printed" tab copies and the Results lines. This is a correctness risk in a printed calculation. The ASD and Development & Splice chapters already printed a one-line "Input error, no results" section (#794), but in their own wording, and the Summary of results said "has not finished loading" for Development & Splice.
