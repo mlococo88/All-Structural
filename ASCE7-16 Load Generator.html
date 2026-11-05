@@ -221,7 +221,7 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
       <div class="code">Snow &middot; Wind &middot; Seismic &nbsp;|&nbsp; <span id="appver"></span></div>
       <a class="alltools" href="tools.html" target="_top">&larr; All tools</a>
     </div>
-    <a id="hdrProj" href="#" title="Project and job number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
+    <a id="hdrProj" hidden href="#" title="Project and job number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
     <div id="tbactions">
       <button class="btn pri" onclick="a7PrintAny()" title="Print / PDF the calculation report (the Report tab), from any tab">Print / PDF</button>
       <button class="btn" id="xlbtn" onclick="doExcel()">Excel calculation</button>
@@ -1673,6 +1673,8 @@ function buildInputs(){
   host.innerHTML=""; let n=0;
   const T=S.itab;
   host.appendChild(el("div",null,'<div id="intabhelp">'+ITAB_HELP[T]+'</div>'));
+  if(T==="proj"){   /* STDS (2026-11-05): the standard "Save and open" card first (shared/projects-ui.js projectBar; was "Project Files") */
+    const sb=panel(host,"i-save","","Save and open",""); if(window.A7PL&&A7PL.pb) A7PL.pb.mount(sb); else sb.id="a7SaveCard"; }
   if(T==="proj"&&PJ){ host.appendChild(PJ); PJ.hidden=false; }
 
   /* ================= SITE ================= */
@@ -1902,19 +1904,6 @@ function buildInputs(){
   let b=panel(host,"i-ass",++n+".","Engineering Assumptions","");
   const ta=el("textarea");ta.value=S.assump;ta.oninput=()=>{S.assump=ta.value;recalc();};b.appendChild(ta);
   b.appendChild(el("div","hint","Reproduced verbatim on the Design Basis tab, in the printed report and in the Excel export."));
-
-  b=panel(host,"i-proj",++n+".","Project Files","");
-  const nw=el("div","row full");nw.innerHTML='<label>Save as</label>';
-  const ni=el("input");ni.type="text";ni.id="savename";ni.placeholder="project name";nw.appendChild(ni);b.appendChild(nw);
-  const br=el("div","btnrow");
-  br.innerHTML='<button class="btn pri" onclick="doSave()">Save</button>'+
-   '<button class="btn" onclick="doExportJSON()">Export JSON</button>'+
-   '<button class="btn" onclick="document.getElementById(\'impf\').click()">Import JSON</button>'+
-   '<button class="btn" onclick="doReset()">Reset</button>';
-  b.appendChild(br);
-  const f=el("input");f.type="file";f.id="impf";f.accept=".json";f.style.display="none";f.onchange=doImportJSON;b.appendChild(f);
-  const list=el("div");list.id="projlist";list.style.marginTop="6px";b.appendChild(list);
-  refreshProjects();
 
   b=panel(host,"i-out",++n+".","Deliverables","");
   const br2=el("div","btnrow");
@@ -4929,20 +4918,31 @@ window.addEventListener("DOMContentLoaded",()=>{
   const h=SharedProjects.history({ get:inputsText, set:t=>{ const o=JSON.parse(t); VIEW.forEach(k=>{ o[k]=S[k]; }); restore(o); } });
   let LS=null; try{ LS=window.localStorage; }catch(e){}
   const store=SharedProjects.mapStore(LS,LSK);
-  const cur=()=>{ const e=document.getElementById("savename"); const n=e?e.value.trim():""; return n&&store.has(n)?n:null; };
-  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'asce7-load-generator',label:'ASCE7-16 Load Generator',space:2,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return j;}},
-    store, storage:LS, title:"Saved projects (this browser)", current:cur,
-    open:n=>{ doLoad(n); return true; },
-    renamed:(a,b)=>{ const e=document.getElementById("savename"); if(e&&e.value.trim()===a) e.value=b; },
-    changed:()=>refreshProjects() });
-  const row=document.createElement("div"); row.setAttribute("data-sp","row"); row.style.cssText="display:flex;gap:4px;flex-wrap:wrap";
+  const row=document.createElement("div"); row.setAttribute("data-sp","row"); row.style.cssText="display:flex;gap:4px;flex-wrap:wrap;align-items:center";
   const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:"btn",style:"font-size:9pt;padding:2px 8px"});
-  const bu=B("Undo","Undo the last input change (Ctrl+Z)"), br=B("Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)"), bl=B("Saved projects\u2026","The projects saved in this browser: open, rename, duplicate, delete");
-  bl.onclick=()=>dlg.show(); row.append(bu,br,bl);
-  const host=document.getElementById("tbactions"); if(host) host.appendChild(row);
+  const bu=B("Undo","Undo the last input change (Ctrl+Z)"), br=B("Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)");
+  row.append(bu,br);
+  const host=document.getElementById("tbactions"); if(host) host.insertBefore(row,host.firstChild);   /* STDS: chip · Undo · Redo · Save · Saved projects… · Print / PDF · Excel */
+  /* STDS (2026-11-05): the standard save (shared/projects-ui.js projectBar) over asce7bldg.projects ({ name: snapshot() }, unchanged).
+     Replaces the "Project Files" panel (name box, Save, the list with Load / Delete) and the PLIB Saved projects… button. Save writes
+     the same item doSave wrote (store.save(name, snapshot())); Open is doLoad. View fields (tab, itab, open, manPart) are not
+     "unsaved changes". */
+  const imp=document.createElement("input"); imp.type="file"; imp.id="impf"; imp.accept=".json"; imp.style.display="none"; imp.setAttribute("data-sp","file");
+  imp.onchange=ev=>{ doImportJSON(ev); pb.setCurrent(null); }; document.body.appendChild(imp);   /* an imported file is not a saved project */
+  const reset=SharedProjectsUI.button("Reset","Reset every input to the defaults (saved projects are kept)",{cls:"btn"}); reset.onclick=()=>doReset();
+  const pb=SharedProjectsUI.projectBar({ store, storage:LS, label:"ASCE7-16 Load Generator", omit:VIEW,
+    getState:()=>snapshot(),
+    open:n=>{ if(!store.has(n)) return false; doLoad(n); return true; },
+    newProject:()=>restore(JSON.parse(JSON.stringify(DEF))),
+    displayName:()=>{ const i=document.getElementById("tb_project"); return i?i.value:""; },
+    exportFile:n=>{ if(!n){ doExportJSON(); return; } SharedProjectsUI.download(String(n).replace(/[^\w\-]+/g,"_")+".json",JSON.stringify(snapshot(),null,2)); },
+    importFile:()=>imp.click(),
+    extras:[reset], header:row, chipBefore:bu, card:true,
+    /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'asce7-load-generator',label:'ASCE7-16 Load Generator',space:2,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return j;}} });
+  const sc=document.getElementById("a7SaveCard"); if(sc){ sc.removeAttribute("id"); pb.mount(sc); }
   SharedProjectsUI.undoRedo(h,{ undo:bu, redo:br });
   h.reset();
-  window.A7PL={ h, store, dlg };
+  window.A7PL={ h, store, dlg:pb.dialog, pb };
 });
 </script>
 <script>

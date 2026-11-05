@@ -238,7 +238,7 @@ export const TOOLS = {
       await p.waitForTimeout(150); const inp = await p.$('#inpanel input[type=number]:not([disabled])'); const v = Number(await inp.inputValue()) || 0; await inp.fill(String(v + 7)); await inp.dispatchEvent('input'); await inp.dispatchEvent('change'); await p.waitForTimeout(800); },
     view: async p => { const back = await p.evaluate(() => S.tab); await p.evaluate(() => { const b = [...document.querySelectorAll('#tabs > *')]; b[2].click(); }); await p.waitForTimeout(600);
       return async () => { await p.evaluate(t => { S.tab = t; render(); }, back); await p.waitForTimeout(400); }; },
-    save: async (p, name) => { await p.evaluate(n => { const b = [...document.querySelectorAll('#intabs .itab')]; b[b.length - 1].click(); }, name); await p.waitForTimeout(150);
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const b = [...document.querySelectorAll('#intabs .itab')]; b[b.length - 1].click(); }, name); await p.waitForTimeout(150);
       await p.evaluate(n => { const i = document.getElementById('savename'); i.value = n; doSave(); }, name); }
   }
 };
