@@ -3950,7 +3950,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 ### Open items
 - None.
 
-## 2026-11-05 — PR: claude/ghsync-sbapp (GHS2: saved projects copied to a private GitHub repository; storage only, no result change)
+## 2026-11-05 — PR: claude/ghsync-sbapp (PR #823: https://github.com/mlococo88/All-Structural/pull/823) (GHS2: saved projects copied to a private GitHub repository; storage only, no result change)
 - **Engineer:** extend GitHub sync (`shared/github-sync.js`; setup `docs/github-sync-setup.md`; own-dialog hooks from PR #815) to the tools with their own project lists.
 - **Where:**
   - `index.html`: after `<script src="ui/library.js"></script>`, new `../../shared/projects.js`, `../../shared/projects-ui.js` (only for the settings dialog's style, `SharedProjectsUI.css()`, and the time format) and `../../shared/github-sync.js`. Before `window.SBDLibraryUI.init({`: new `ghIds`, `ghStore`, `GH = SharedGitHubSync.attach({ store: ghStore, storage: LS, open, changed, cloud: { tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)', toFile: t => t, fromFile } })`, `GH_UI`, `ghCloud`; the init call gets `cloud: ghCloud || null` (anchor `GHS2 (2026-11-05): GitHub sync of the saved-project list`). `GH` is null when browser storage is not available (`store` null).
