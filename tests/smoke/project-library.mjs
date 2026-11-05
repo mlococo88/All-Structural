@@ -159,6 +159,20 @@ export const TOOLS = {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, String((+i.value || 0) + 1)); i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); }); await p.waitForTimeout(1500); },
     save: async () => {}
   },
+  sbapp: {
+    // Steel Bridge app (apps/steel-bridge): used by tests/smoke/github-sync-tools.mjs and home-projects.mjs (GHS2, 2026-11-05). Not run by this
+    // file (its list is engine/library.js, items by id: tests/smoke/steel-bridge-library.mjs tests it). Results: the project as autosaved
+    // (without its name: a GitHub copy carries its own) and the output tab's text; save = the tool's Save as (asks the name; a name in use is replaced).
+    file: 'apps/steel-bridge/index.html', list: null, auto: 'sbd2.project.current', noRun: true,
+    ready: p => p.waitForFunction(() => document.getElementById('bSave') && document.getElementById('out') && document.getElementById('out').innerText.length > 50),
+    results: async p => { await p.waitForTimeout(800); return p.evaluate(() => { const q = JSON.parse(localStorage.getItem('sbd2.project.current') || 'null'); const n = q && q.project ? q.project.name : '';
+      if (q && q.project) delete q.project.name; return { P: q, out: document.getElementById('out').innerText.split(n || '\u0000').join('NAME') }; }); },
+    change: async p => { await p.evaluate(() => { const i = document.querySelector('#inPanes input[type=number]'); i.value = String((+i.value || 0) + 1); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); }); await p.waitForTimeout(900); },
+    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('bSaveAs').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(400); },
+    names: p => p.evaluate(() => (JSON.parse(localStorage.getItem('sbd2.lib.index') || '{"items":[]}').items || []).map(i => i.name)),
+    ui: { open: async p => { await p.evaluate(() => { const d = document.getElementById('libDlg'); if (d.open) d.close(); document.getElementById('bLib').click(); }); await p.waitForSelector('#libDlg[open]'); },
+      rows: '#libBody tbody tr' }
+  },
   spreadfooting: {
     file: 'Spread Footing.html', list: 'sfd_projects', auto: 'sfd_auto', ownUndo: true,   // the tool's own Undo / Redo (U-2) is unchanged and not re-tested here
     ready: p => p.waitForFunction(() => typeof R !== 'undefined' && R),
@@ -215,7 +229,7 @@ export const TOOLS = {
 // Imported for TOOLS (tests/smoke/github-sync.mjs, 2026-11-05): the run below happens only when this file is the script run.
 if (/project-library\.mjs$/.test(process.argv[1] || '')) await main();
 async function main() {
-const T = TOOLS[arg('tool', 'asce7')]; if (!T) { console.error('unknown --tool; one of ' + Object.keys(TOOLS).join(', ')); process.exit(2); }
+const T = TOOLS[arg('tool', 'asce7')]; if (T && T.noRun) { console.error('this tool is not run by project-library.mjs (see its entry)'); process.exit(2); } if (!T) { console.error('unknown --tool; one of ' + Object.keys(TOOLS).join(', ')); process.exit(2); }
 // A: the whole tree at REF (the tool loads shared/ by relative path)
 const sha = execFileSync('git', ['-C', REPO, 'rev-parse', '--short', REF], { encoding: 'utf8' }).trim();
 const ADIR = path.join(os.tmpdir(), 'allstruct-tests', 'tree-' + sha);

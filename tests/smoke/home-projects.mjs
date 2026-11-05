@@ -19,9 +19,11 @@ const SHOTS = arg('shots', process.env.SHOTS);
 export const FOLDER = { mlg: 'moving-load-generator', bsl: 'bridge-substructure-loading', asce7: 'asce7-load-generator', smd: 'shear-moment-diagrams',
   stonearch: 'stone-arch-rating', gusset: 'gusset-plate-rating', retwall: 'retaining-wall-designer', spreadfooting: 'spread-footing',
   lightpole: 'light-pole-sign-post', baseplate: 'base-plate-anchor', steelbeam: 'steel-beam-aisc', timber: 'timber-beam-check',
-  spc: 'section-property-calculator', rebar: 'aci-rebar-development', abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry' };
+  spc: 'section-property-calculator', rebar: 'aci-rebar-development', abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app' };
 // own list panels: every row of the list (project-library's ui.rows may pick one row) and the name cell
-export const OWN_ROWS = { bgeo: '#lib_list tbody tr' };
+export const OWN_ROWS = { bgeo: '#lib_list tbody tr', sbapp: '#libBody tbody tr' };
+// own list panels whose saved time is not in the second cell: the cell index (Steel Bridge app: Name, Project no., Last saved)
+export const OWN_DATE = { sbapp: 2 };
 const list = arg('tool', Object.keys(FOLDER).join(',')).split(',');
 let failed = 0; const ok = (c, m) => { console.log((c ? '  ok   ' : '  FAIL ') + m); if (!c) failed++; return c; };
 export const NAMES = ['HSP A', 'HSP <b>bold</b> & "q" ü'];
@@ -43,8 +45,8 @@ export async function toolPage(ctx, key, errs) {
 // own Projects dialog (T.ui, project-library.mjs): names in its order; saved = null (its own date format is not compared).
 export async function dialogRows(p, T) {
   if (T && T.ui) { await T.ui.open(p); await p.waitForTimeout(300);
-    return p.evaluate(sel => { const r = [...document.querySelectorAll(sel)].map(row => { const c = (row.querySelector('.pname') || row.querySelector('td')).cloneNode(true); c.querySelectorAll('span,[data-sp]').forEach(s => s.remove()); const dt = row.querySelector('.pdate') || row.querySelectorAll('td')[1]; const ld = row.querySelector('[data-lib-load]'); return { name: ld ? decodeURIComponent(ld.dataset.libLoad) : c.textContent.trim(), saved: null, own: dt && dt.textContent.trim() ? 'time' : '' }; });
-      document.querySelectorAll('dialog[open]').forEach(d => d.close()); return r; }, OWN_ROWS[T.key] || T.ui.rows); }
+    return p.evaluate(([sel, di]) => { const r = [...document.querySelectorAll(sel)].map(row => { const c = (row.querySelector('.pname') || row.querySelector('td')).cloneNode(true); c.querySelectorAll('span,[data-sp]').forEach(s => s.remove()); const dt = row.querySelector('.pdate') || row.querySelectorAll('td')[di == null ? 1 : di]; const ld = row.querySelector('[data-lib-load]'); return { name: ld ? decodeURIComponent(ld.dataset.libLoad) : c.textContent.trim(), saved: null, own: dt && dt.textContent.trim() ? 'time' : '' }; });
+      document.querySelectorAll('dialog[open]').forEach(d => d.close()); return r; }, [OWN_ROWS[T.key] || T.ui.rows, OWN_DATE[T.key]]); }
   await p.evaluate(() => { [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)).click(); });
   await p.waitForTimeout(400);
   return p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); const hasT = [...d.querySelectorAll('thead th')].some(t => /Last saved/.test(t.textContent));

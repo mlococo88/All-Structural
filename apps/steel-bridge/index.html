@@ -17,6 +17,11 @@
 <script src="engine/demandfile.js"></script>
 <script src="engine/library.js"></script>
 <script src="ui/library.js"></script>
+<!-- GHS2 (2026-11-05): copy of the saved projects to a private GitHub repository (shared/github-sync.js; off until set up). projects.js /
+     projects-ui.js only for the settings dialog's style (SharedProjectsUI.css) and the time format; nothing else of them is used here. -->
+<script src="../../shared/projects.js"></script>
+<script src="../../shared/projects-ui.js"></script>
+<script src="../../shared/github-sync.js"></script>
 <script src="engine/legacy.js"></script>
 <script src="ui/legacy.js"></script>
 <script src="engine/sections.js"></script>
@@ -371,7 +376,31 @@
     const r = LIB.open(LS, id); if (!r.ok) { alert(r.error); return false; }
     loadAs(r.project, id, norm); loadNotes(r.notes); return true;
   }
-  window.SBDLibraryUI.init({ store: LS, curId: () => cur.id, open: openSaved,
+  /* GHS2 (2026-11-05): GitHub sync of the saved-project list (shared/github-sync.js; docs/github-sync-setup.md). Off until set up: with no
+     settings it writes nothing and makes no request. engine/library.js keeps items by id (sbd2.lib.index + sbd2.lib.p.<id>, unchanged);
+     the sync works by name, so ghStore is a by-name view of that list: each name is its newest item (an older item with the same name is
+     not synced and says so in the list). File on GitHub: projects/steel-bridge-app/<name>.json = the stored item text, which is the
+     Export JSON text (M.exportJSON). A file from GitHub is read by M.importJSON (the Import JSON path) and saved by LIB.save under the
+     name (a new item, or the newest item of that name). Open = the list's Open (asks first when the open project has unsaved changes). */
+  const ghIds = () => { const m = new Map(); LIB.list(LS).forEach(i => { if (!m.has(i.name)) m.set(i.name, i.id); }); return m; };   // newest first
+  const ghStore = { key: M.KEYS.libIndex, read: () => ({ ok: true, map: {} }), list: () => [...ghIds().keys()].map(name => ({ name })),
+    has: n => ghIds().has(n), item: n => { const id = ghIds().get(n); if (id == null) return undefined; const t = LIB.text(LS, id); return t == null ? undefined : t; },
+    save: (n, q) => { q.project.name = n; const r = LIB.save(LS, q, ghIds().get(n) || null); return r.ok ? { ok: true, name: n } : r; },
+    duplicate: (n, to) => { const id = ghIds().get(n); if (id == null) return { ok: false, error: 'missing', message: 'That saved project is not in this browser any more.' };
+      const r = LIB.duplicate(LS, id, to); return r.ok ? { ok: true, name: to } : r; } };
+  const GH = store && window.SharedGitHubSync ? window.SharedGitHubSync.attach({ store: ghStore, storage: LS,
+    open: n => { const id = ghIds().get(n); return id ? openSaved(id) : false; }, changed: () => window.SBDLibraryUI.refresh(),
+    cloud: { tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)', toFile: t => t,
+      fromFile: (j, n) => { const r = M.importJSON(JSON.stringify(j)); if (!r.ok) throw new Error(r.error); r.project.project.name = n; return r.project; } } }) : null;
+  const GH_UI = { redraw: () => window.SBDLibraryUI.refresh(), close: () => window.SBDLibraryUI.close() };
+  if (GH && window.SharedProjectsUI) window.SharedProjectsUI.css();
+  const ghCloud = GH && { on: () => GH.engine.configured(),
+    cell: i => ghIds().get(i.name) === i.id ? GH.statusCell(i.name) : '<span class="note" data-sp="gh-cell">not synced: a newer saved project has the same name</span>',
+    after: body => { let h = document.getElementById('libGh'); if (!h) { h = document.createElement('div'); h.id = 'libGh'; h.setAttribute('data-sp', 'gh-host'); body.before(h); }   // above the list (not inside it: one click listener each)
+      h.innerHTML = ''; GH.bind(body); GH.decorate(h, GH_UI, { rows: false }); },
+    shown: () => { GH.shown(GH_UI).catch(() => {}); },
+    deleted: n => { if (!ghIds().has(n)) GH.deleted(n); }, renamed: (a, b) => { if (a !== b && !ghIds().has(a)) GH.renamed(a, b); } };
+  window.SBDLibraryUI.init({ store: LS, curId: () => cur.id, open: openSaved, cloud: ghCloud || null,
     renamed: (id, name, text) => { P.project.name = name; const q = M.importJSON(text); cur.text = q.ok ? norm(q.project) : cur.text; changed(true); },
     unlinked: () => { cur = { id: null, text: null }; syncBar(); } });
   $('bSave').addEventListener('click', () => { if (doSave(false)) { const n = P.project.name; $('saveState').textContent = 'Saved "' + n + '"'; setTimeout(syncBar, 2500); } });

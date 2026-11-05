@@ -20,7 +20,7 @@ const FOLDER = { asce7: 'asce7-load-generator', baseplate: 'base-plate-anchor', 
   smd: 'shear-moment-diagrams', steelbeam: 'steel-beam-aisc', stonearch: 'stone-arch-rating', timber: 'timber-beam-check',
   rebar: 'aci-rebar-development', spreadfooting: 'spread-footing',
   // GHS2 (2026-11-05): tools with their own project dialog or panel (statusCell + decorate(body, ui, { rows: false }))
-  abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry' };
+  abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app' };
 // Tools with their own project dialog: how to show it (with sync on, the GitHub rows are drawn into it), and whether it is open.
 // Default: the shared Saved projects dialog (dialog.spLib).
 const OWN = {
@@ -33,7 +33,10 @@ const OWN = {
   // Bridge Geometry: a library panel, not a dialog (it stays open after Open: open() is false)
   bgeo: { box: '#lib_panel', show: p => p.evaluate(() => { if (document.getElementById('lib_panel').style.display === 'none') document.getElementById('lib_toggle').click(); else document.getElementById('lib_refresh').click(); }),
     open: () => false,
-    del: (p, n) => p.evaluate(n => document.querySelector(`#lib_list [data-lib-del="${encodeURIComponent(n)}"]`).click(), n) }
+    del: (p, n) => p.evaluate(n => document.querySelector(`#lib_list [data-lib-del="${encodeURIComponent(n)}"]`).click(), n) },
+  sbapp: { show: p => p.evaluate(() => { const d = document.getElementById('libDlg'); if (d.open) d.close(); document.getElementById('bLib').click(); }),
+    open: p => p.evaluate(() => document.getElementById('libDlg').open),
+    del: (p, n) => p.evaluate(n => { const tr = [...document.querySelectorAll('#libBody tbody tr')].find(r => r.querySelector('td').textContent.trim().replace(/ \(open now\)$/, '') === n); tr.querySelector('[data-lib=del]').click(); }, n) }
 };
 const BOX = key => (OWN[key] && OWN[key].box) || 'dialog[open]';
 const showList = (key, p) => OWN[key] ? OWN[key].show(p) : p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)).click(); });
@@ -77,8 +80,8 @@ for (const key of list) {
     const drop = o => { if (!T.openIgnore || !o || typeof o !== 'object') return o; const c = { ...o }; T.openIgnore.forEach(k => delete c[k]); return c; };
     const r2 = await T.results(p); const d = diff(drop(r1), drop(r2));
     ok(!d.length, 'GitHub-only copy opened: results identical to the saved project' + (T.openIgnore ? ' (except ' + T.openIgnore.join(', ') + ')' : '') + (d.length ? ` (${d.length} differences: ${JSON.stringify(d.slice(0, 3)).slice(0, 400)})` : ''));
-    const lst = JSON.parse(await p.evaluate(k => localStorage.getItem(k), T.list) || '{}');
-    ok('GHS remote' in lst && 'GHS A' in lst, 'the tool\'s own list holds both projects');
+    const nms = T.names ? await T.names(p) : Object.keys(JSON.parse(await p.evaluate(k => localStorage.getItem(k), T.list) || '{}'));
+    ok(nms.includes('GHS remote') && nms.includes('GHS A'), 'the tool\'s own list holds both projects');
     const sk = (await p.evaluate(() => Object.keys(localStorage))).filter(k => /^bridgeSuite\.v1\.githubSync/.test(k)).sort();
     ok(JSON.stringify(sk) === JSON.stringify(['bridgeSuite.v1.githubSync', `bridgeSuite.v1.githubSync.tool.${folder}`]), 'sync keys: bridgeSuite.v1.githubSync and .tool.' + folder + ' only (' + sk.join(', ') + ')');
     if (OWN[key]) {   // own dialog: the settings button in the bar, the first-sync offer, and a delete that asks about the GitHub copy
