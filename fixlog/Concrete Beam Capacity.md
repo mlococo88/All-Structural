@@ -4714,7 +4714,7 @@ function buildDrawingsTab(pg){
 }
 ```
 
-## 2026-11-05 — PR: claude/cbc-print-ids (CBPI: Report figures print their markers, hatching and clip paths; the compression-fibre tag of the cross-section no longer overlaps a d label or b_w; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-print-ids, PR #807: https://github.com/mlococo88/All-Structural/pull/807 (CBPI: Report figures print their markers, hatching and clip paths; the compression-fibre tag of the cross-section no longer overlaps a d label or b_w; display only, no result change)
 
 ### CBPI-1. SVG ids in the printed Report   [display only]
 - **Problem:** at print, the Report is rendered a second time into the print box `#rp-print`, while the Report tab's own copy stays in the page, hidden.
