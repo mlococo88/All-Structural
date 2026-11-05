@@ -74,7 +74,7 @@ Engineer's setup steps: `docs/github-sync-setup.md`.
   (IndexedDB), index.html, lldf.html, Prestressed Bridge Design, Steel Bridge Design, apps/steel-bridge. Each needs its own small adapter;
   not done (question for the engineer).
 
-## 2026-11-05 — PR: claude/ghsync-ext (GHS2) — hooks for tools with their own project dialog; first tool: abutment_calculator   [storage only; no result change]
+## 2026-11-05 — PR: claude/ghsync-ext (PR #815: https://github.com/mlococo88/All-Structural/pull/815) (GHS2) — hooks for tools with their own project dialog; first tool: abutment_calculator   [storage only; no result change]
 - **Why:** engineer request: sync in the tools that keep projects in their own dialog or panel (not `libraryDialog`).
 - **What (`attach`, additive; the Saved projects dialog of the 14 tools behaves as before):**
   - New `statusCell(name)`: the GitHub status badge and its buttons for one project (`<span data-sp="gh-cell">…</span>`; `''` while sync is off), for the tool to place in its own row.

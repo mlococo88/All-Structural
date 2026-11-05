@@ -15304,7 +15304,7 @@ index cedb10f..5b89752 100644
   - before / after screenshots at 1920 and 390 px looked at.
 - **Saved data:** no change.
 
-## 2026-11-05 — PR: claude/ghsync-ext (GHS2: saved projects copied to a private GitHub repository; storage only, no result change)
+## 2026-11-05 — PR: claude/ghsync-ext (PR #815: https://github.com/mlococo88/All-Structural/pull/815) (GHS2: saved projects copied to a private GitHub repository; storage only, no result change)
 - **Engineer:** extend GitHub sync (`shared/github-sync.js`, PRs #808 / #811; setup `docs/github-sync-setup.md`) to the tools with their own project dialogs.
 - **Where:**
   - After `<script src="shared/projects-ui.js"></script>`: new `<script src="shared/github-sync.js"></script>` (anchor `GHS2 (2026-11-05): copy of the saved projects`).
