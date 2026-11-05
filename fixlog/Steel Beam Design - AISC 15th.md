@@ -2465,7 +2465,7 @@ function runBenchmarks(){
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-05 — PR: claude/header-sbeam (SBHD: compact header; title block and hand-off buttons moved to the Project input tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-sbeam (PR #820: https://github.com/mlococo88/All-Structural/pull/820) (SBHD: compact header; title block and hand-off buttons moved to the Project input tab; display only, no result change)
 - **Engineer:** clean up the top of the page: the title-block inputs and the hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (nodes moved, not copied: every id, `data-fkey`, `onclick` and saved field is the same):
   - `#hdr`: before title row (title, by-line, All tools; stage tag), then `#projGrid` (7 fields), then `#projShare` (Use / Share project info, Pull from ASCE 7-16, Import hand-off, Send to other tools, Export hand-off, `#bxBldSrc`), then Print report and Export Excel appended by `setupPrintUI()` / `setupExcelUI()`. After: title row with `<div id="hdrActs">` (`#hdrProj` "Project: <project> · <task>" link, Print report, Export Excel) and the stage tag.
