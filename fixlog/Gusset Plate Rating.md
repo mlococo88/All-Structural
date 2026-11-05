@@ -2993,3 +2993,11 @@ function gageTables() {
   - "Open in the report" from the Checks tab: opens the Report, and the check's subsection is found and scrolled to.
   - A save with `ui.otab = 'report'`: opens on the Report tab.
 - **Other copies:** none.
+
+## 2026-11-05 — PR: claude/github-sync-rollout (PR #811: https://github.com/mlococo88/All-Structural/pull/811) (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
+- **Engineer:** the same saved projects on every device (`docs/github-sync-setup.md`; shared code `shared/github-sync.js`, fix log `shared-github-sync.md`; pilot Spread Footing, PR #808).
+- **Where:** after `<script src="shared/projects-ui.js"></script>`, new `<script src="shared/github-sync.js"></script>`; in the PLIB block, `SharedProjectsUI.libraryDialog({` gets a first property `cloud:{tool:'gusset-plate-rating', …}` (anchor `GHS (2026-11-05): GitHub sync of this list`).
+- **File on GitHub:** `projects/gusset-plate-rating/<name>.json`: `toFile` = `GPR.exportProject(item)` without `savedAt` (a time would make every read a change; the file still imports), indent 2. **Download (fromFile):** `GPR.importProject` (schema, version, members; normalized), its `data` stored; Open then goes through the dialog's existing `open`.
+- **Saved data:** `gussetRating.projects.v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
+- **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
+- **Formulas, factors, units, code references:** none.

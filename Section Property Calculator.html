@@ -15,6 +15,7 @@
 <!-- PLIB (2026-11-02): saved-project list dialog (Open / Rename / Duplicate / Delete), shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script src="shared/list-input.js"></script>
 <script src="shared/dxf.js"></script><!-- SPDW: DXF writer, sheet preview and printing (Drawings tab) -->
 <style>
@@ -4387,7 +4388,8 @@ function spcPlibButton() {
   if (!SPCPL) {
     let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
     const store = SharedProjects.mapStore(ST, LS_PROJ, { unpack: i => i && i.d, time: i => i && i.t || null, sort: 'saved' });
-    const dlg = SharedProjectsUI.libraryDialog({ store, storage: ST, title: 'Saved projects (this browser)',
+    const dlg = SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'section-property-calculator',label:'Section Property Calculator',space:2,toFile:i=>i.d,fromFile:j=>{if(!j||j._schema!==SCHEMA)throw new Error('not a Section Property Calculator file');return {t:Date.now(),d:j};}},
+    store, storage: ST, title: 'Saved projects (this browser)',
       current: () => { const n = (M.project.name || '').trim(); return n && store.has(n) ? n : null; },
       open: n => { const d = store.get(n); return d ? loadModel(d, `Opened "${n}"`) !== false : false; },
       renamed: (a, b) => { if ((M.project.name || '').trim() === a) { M.project.name = b; buildProjHeader(); autosave(); } },

@@ -269,6 +269,7 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
 <!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script>
 const APP_VERSION="v1.0";
 /* ==================================================================
@@ -4882,7 +4883,8 @@ window.addEventListener("DOMContentLoaded",()=>{
   let LS=null; try{ LS=window.localStorage; }catch(e){}
   const store=SharedProjects.mapStore(LS,LSK);
   const cur=()=>{ const e=document.getElementById("savename"); const n=e?e.value.trim():""; return n&&store.has(n)?n:null; };
-  const dlg=SharedProjectsUI.libraryDialog({ store, storage:LS, title:"Saved projects (this browser)", current:cur,
+  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'asce7-load-generator',label:'ASCE7-16 Load Generator',space:2,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return j;}},
+    store, storage:LS, title:"Saved projects (this browser)", current:cur,
     open:n=>{ doLoad(n); return true; },
     renamed:(a,b)=>{ const e=document.getElementById("savename"); if(e&&e.value.trim()===a) e.value=b; },
     changed:()=>refreshProjects() });

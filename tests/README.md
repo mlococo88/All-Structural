@@ -79,6 +79,9 @@ node tests/smoke/project-library.mjs --tool asce7 [--a origin/main] [--shots <di
 # Upload all; the file equals the tool's Export JSON; background save / update with sha; conflict kept as a copy; GitHub-only Open;
 # offline queue; cloud delete only on request; the token only in the Authorization header; 390 px. ~1 min
 node tests/smoke/github-sync.mjs [--tool spreadfooting] [--shots <dir>]
+# The same in every tool with sync, shorter: the tool's own Save -> file on GitHub, update with sha, a GitHub-only copy opened gives the
+# same results as the saved project, 0 console errors (tool keys as in project-library.mjs, whose TOOLS it imports). ~4 min
+node tests/smoke/github-sync-tools.mjs [--tool asce7,baseplate,...]
 
 # Retired rebar calculator (RBRT): the redirect page (?query, #dev, in a frame, one-time .json offer), the suite on its Development &
 # Splice tab, the takeover of the old page's storage, and an Export JSON from the OLD standalone (git ref --old) importing identically. ~1 min

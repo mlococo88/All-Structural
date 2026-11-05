@@ -1167,3 +1167,11 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   - `node tests/smoke/project-library.mjs --tool asce7`: ALL PASS. `node tests/smoke/phone-layout.mjs --tool asce7`: pass (1 console error, as on origin/main).
 - **Other copies:** none.
 - **Open item (not changed):** a drift location with an unknown `kind` prints "undefined" in the drift table's Provision column (seen with a hand-made test project; also on origin/main and on the Snow tab). The input list offers only valid kinds.
+
+## 2026-11-05 — PR: claude/github-sync-rollout (PR #811: https://github.com/mlococo88/All-Structural/pull/811) (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
+- **Engineer:** the same saved projects on every device (`docs/github-sync-setup.md`; shared code `shared/github-sync.js`, fix log `shared-github-sync.md`; pilot Spread Footing, PR #808).
+- **Where:** after `<script src="shared/projects-ui.js"></script>`, new `<script src="shared/github-sync.js"></script>`; in the PLIB block, `SharedProjectsUI.libraryDialog({` gets a first property `cloud:{tool:'asce7-load-generator', …}` (anchor `GHS (2026-11-05): GitHub sync of this list`).
+- **File on GitHub:** `projects/asce7-load-generator/<name>.json`: the stored item is the export (`snapshot()`), indent 2. **Download (fromFile):** any JSON object (as Import JSON); Open then goes through the dialog's existing `open`.
+- **Saved data:** `asce7bldg.projects` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
+- **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
+- **Formulas, factors, units, code references:** none.

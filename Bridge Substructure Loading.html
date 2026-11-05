@@ -191,6 +191,7 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
 <!-- PLIB (2026-11-02): saved-project list (Save / Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
 (function(){
@@ -4168,7 +4169,8 @@ window.addEventListener('beforeprint', () => {
   let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
   const store = SharedProjects.mapStore(ST, LIB);
   let cur = null;
-  const dlg = SharedProjectsUI.libraryDialog({ store, storage: ST, title: 'Saved projects (this browser)',
+  const dlg = SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'bridge-substructure-loading',label:'Bridge Substructure Loading',space:1,fromFile:j=>{if(!j||j.app!==APP)throw new Error('not a SubLoads project file');return j;}},
+    store, storage: ST, title: 'Saved projects (this browser)',
     current: () => cur && store.has(cur) ? cur : null,
     open: n => { const j = store.get(n); if (!j) return false; openProject(JSON.parse(JSON.stringify(j)), n); cur = n; return true; },
     renamed: (a, b) => { if (cur === a) cur = b; }, deleted: n => { if (cur === n) cur = null; },

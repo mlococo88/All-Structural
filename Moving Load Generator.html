@@ -280,6 +280,7 @@ tr.pier td{background:#f8fafc;font-weight:600}
 <!-- PLIB (2026-11-02): saved-project list (Save / Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script>
 const $=id=>document.getElementById(id);
 const num=(id,d)=>{const e=$(id);const v=e?parseFloat(e.value):NaN;return isNaN(v)?d:v;};
@@ -1330,7 +1331,8 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
   let ST=null;try{ST=window.localStorage;}catch(e){}
   const store=SharedProjects.mapStore(ST,MLG_LIB,{time:d=>d&&d.savedAt||null,sort:'saved'});
   let cur=null;
-  const dlg=SharedProjectsUI.libraryDialog({store,storage:ST,title:'Saved projects (this browser)',
+  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'moving-load-generator',label:'Moving Load Generator',space:1,fromFile:j=>{if(!j||j.schema!==MLG_SCHEMA||!j.fields)throw new Error('not a Moving Load Generator save file');return j;}},
+   store,storage:ST,title:'Saved projects (this browser)',
     current:()=>cur&&store.has(cur)?cur:null,
     open:n=>{const d=store.get(n);if(!d)return false;try{mlgApply(d);run();cur=n;return true;}catch(err){alert('Could not open the project: '+err.message);return false;}},
     renamed:(a,b)=>{if(cur===a)cur=b;}, deleted:n=>{if(cur===n)cur=null;}});

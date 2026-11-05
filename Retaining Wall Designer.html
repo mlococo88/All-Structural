@@ -650,6 +650,7 @@ window.MathJax = {
 <!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
 (function(){
@@ -8307,7 +8308,8 @@ onInputChange();
   let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
   const store = SharedProjects.mapStore(ST, PROJ_KEY, { time: i => i && i.ts || null });
   const last = () => { try { return LS_OK ? localStorage.getItem(LAST_KEY) : null; } catch (e) { return null; } };
-  const dlg = SharedProjectsUI.libraryDialog({ store, storage: ST, title: 'Saved projects (this browser)',
+  const dlg = SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'retaining-wall-designer',label:'Retaining Wall Designer',space:2,toFile:(i,n)=>({format:'RetainCalcPro.project',version:1,name:n,fields:i.fields}),fromFile:j=>{if(!j||j.format!=='RetainCalcPro.project'||!j.fields)throw new Error('not a RetainCalcPro project file');return {fields:j.fields,ts:Date.now()};}},
+    store, storage: ST, title: 'Saved projects (this browser)',
     current: () => { const n = last(); return n && store.has(n) ? n : null; },
     open: n => { loadProject(n); return true; },
     renamed: (a, b) => { if (last() === a) { try { localStorage.setItem(LAST_KEY, b); } catch (e) { /* pointer not moved */ } }
