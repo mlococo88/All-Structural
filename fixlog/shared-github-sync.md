@@ -4,7 +4,7 @@ Loaded by: see `shared/README.md` (row `github-sync.js`). Tests: `node tests/eng
 `tests/engine/gh-mock.mjs`) and `node tests/smoke/github-sync.mjs` (browser; api.github.com routed to the same mock).
 Engineer's setup steps: `docs/github-sync-setup.md`.
 
-## 2026-11-05 — PR: claude/github-sync — created (new file): saved projects copied to a private GitHub repository (GHS)   [storage only; no result change]
+## 2026-11-05 — PR: claude/github-sync (PR #808: https://github.com/mlococo88/All-Structural/pull/808) — created (new file): saved projects copied to a private GitHub repository (GHS)   [storage only; no result change]
 - **Why:** engineer request 2026-11-05: see the same saved projects on every device; GitHub chosen over Firebase. A private repository
   (default `mlococo88/structural-projects`) and a fine-grained token (Contents read / write on that repository only), pasted once per device.
 - **What:** `shared/github-sync.js` (classic script, no library, GitHub REST API with `fetch`):

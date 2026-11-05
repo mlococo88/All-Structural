@@ -44,7 +44,7 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
 - **Tools that load the file, re-tested:** `tests/smoke/project-library.mjs` with `--tool` asce7, stonearch, gusset, retwall, baseplate,
   spreadfooting, steelbeam, edm, abutment, lightpole, timber, mlg, spc, bsl: ALL PASS each.
 
-## 2026-11-05 — PR: claude/github-sync — projects-ui.js: optional GitHub sync of the list (`ctx.cloud`, GHS)   [display and storage hooks only]
+## 2026-11-05 — PR: claude/github-sync (PR #808: https://github.com/mlococo88/All-Structural/pull/808) — projects-ui.js: optional GitHub sync of the list (`ctx.cloud`, GHS)   [display and storage hooks only]
 - **Why:** engineer request: saved projects copied to a private GitHub repository (`shared/github-sync.js`, `fixlog/shared-github-sync.md`).
 - **Where:** `libraryDialog(ctx)`:
   - after `let msg = '';`: `const cloud = ctx.cloud && window.SharedGitHubSync ? window.SharedGitHubSync.attach(ctx) : null;` and `cui`;

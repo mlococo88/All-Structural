@@ -5429,7 +5429,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - `check-syntax` and `spread-footing-scroll` pass.
 - **Saved data:** no change.
 
-## 2026-11-05 — PR: claude/github-sync (GHS: saved projects copied to a private GitHub repository, pilot tool; storage only, no result change)
+## 2026-11-05 — PR: claude/github-sync (PR #808: https://github.com/mlococo88/All-Structural/pull/808) (GHS: saved projects copied to a private GitHub repository, pilot tool; storage only, no result change)
 - **Engineer:** see the same saved projects on every device (GitHub; `docs/github-sync-setup.md`). Spread Footing is the pilot.
 - **Where / before → after:**
   - After `<script src="shared/projects-ui.js"></script>`: new `<script src="shared/github-sync.js"></script>`.
