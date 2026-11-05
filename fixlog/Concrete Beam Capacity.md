@@ -2338,3 +2338,21 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
 - **Saved data:** keys unchanged (`rcbeam_v2_auto`, `rcbeam_v2_projects`). The state gains the optional field `mat.fyt100` (default false, filled by `mergeState`). No migration that keeps the old 100 ksi was added on purpose. A saved AASHTO project with f_yt > 75 ksi now opens at 75 ksi and shows the 5.7.2.7 warning. The old value was the unconservative result this change corrects, and the user can tick the box where the element qualifies. Older copies of the tool ignore the field.
 - **Other copies:** `fytDesign()` exists only in the Beam Capacity frame (the ASD frame has no transverse steel). The C3 edits in the Development & Splice frame are mirrored in `ACI Rebar Development Length.html` (CLAUDE.md §3).
 - **Open items:** none.
+
+## 2026-11-05 — PR: claude/cbc-asreq-note (CBAR: A_s,req note in the Development & Splice frame; C5: the Report's Summary of checks prints "≫1" like the Summary tab instead of "∞"; display only, no result change)
+
+- **Development & Splice frame (`#suite-frame-dev` srcdoc):** the same A_s,req hint as `ACI Rebar Development Length.html`. See the CBAR entry in `fixlog/ACI Rebar Development Length.md` (anchor `Also drives Class A splice eligibility.</div>`; ACI 318-19 9.6.1.1, R9.6.1.1 p. 135, R25.4.10.2 p. 488).
+- **C5, Beam Capacity frame (`#suite-frame-capacity` srcdoc), `cbcRptModel()`, "Summary of checks":**
+  - Before: `(cbcDcZero(c)||(isFinite(c.dcr)?fmt(c.dcr,3):'∞'))`.
+  - After: `(cbcDcZero(c)||(isFinite(c.dcr)?fmt(c.dcr,3):'≫1'))`.
+  - The Summary tab's `heatTD()` already shows an unbounded D/C (zero capacity) as "≫1", so the two now read the same.
+  - Check case: default project, "Torsional capacity", A_ℓ = 0 gives T_n = 0. Report before: "∞ §5.1 … FAIL". After: "≫1 §5.1 … FAIL". Summary tab "≫1" before and after.
+- **Governing provision:** none changed. ACI 318-19 22.7.6.1 as before. No D/C value or PASS / FAIL changed (`dcr` is untouched, only its text).
+- **How verified:**
+  - Headless (Playwright Chromium, `file://`, tests/libs), origin/main vs branch. Compared: every frame's results (`computeAll()`, `allChecks()`, `cbcRptModel()`, `compute()`, `asdRptModel()`, `rbrModel()`, calc results), every tab's text, and the suite Report text.
+  - Default project: only the one Report D/C cell differs ("∞" → "≫1").
+  - ACI excess case and AASHTO f_yt 100 case: the same one cell, or identical.
+  - Tests: `node tests/check-syntax.mjs` pass; `node tests/smoke/phone-layout.mjs --tool cbc,aci` pass. CRLF kept.
+- **Saved data:** none.
+- **Other copies:** the A_s,req hint is also in `ACI Rebar Development Length.html` (same PR). The C5 text exists only here.
+- **Open items:** none.
