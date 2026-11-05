@@ -4759,7 +4759,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - The tool tabulates combination resultants (tab 2) and the unfactored pedestal loads (input / §1 echo), but not the per-pedestal loads of each combination; the 3D labels are the only place those appear. If the engineer wants them worked in a table (CLAUDE.md §6), that is a separate request.
 
 
-## 2026-11-05 — PR: claude/sf-bot-layer — Input: which bottom layer is outermost (y-bars default, or x-bars); d_x, d_y follow; 3D view follows the design order (SFBO; calculation option, default = no change)
+## 2026-11-05 — PR: claude/sf-bot-layer (PR #766: https://github.com/mlococo88/All-Structural/pull/766) — Input: which bottom layer is outermost (y-bars default, or x-bars); d_x, d_y follow; 3D view follows the design order (SFBO; calculation option, default = no change)
 
 ### SFBO. "Outer bottom layer (nearest the soil): y-bars (default) / x-bars"   [calculation option; CLAUDE.md §4]
 - **Request (engineer, RISAFoundation reconciliation of the Seymour project):** until now the bottom y-bars were always the outer layer. This adds a choice. The top mat order is unchanged: top x-bars outer, top y-bars inner (SFTD, confirmed in SFCJ).
