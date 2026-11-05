@@ -1540,7 +1540,7 @@ table.vars th{background:#EEF2F6; font-family:var(--font-ui); font-size:8pt; let
 - **Other copies:** the `suite-frame-dev` srcdoc page of `Concrete Beam Capacity.html` (decoded / re-encoded with an exact round trip) (same block and the same two colour edits, in this PR; CLAUDE.md §3).
 - **Open items:** the `.check` value text in the summary dashboard stays upper case (`47.4 IN`), as before.
 
-## 2026-11-05 — PR: claude/cbc-asreq-from-beam (CBAR-1: the suite's "From Beam Capacity" button for A_s,req / A_s,prov, kept in step; hidden here, no result change)
+## 2026-11-05 — PR: claude/cbc-asreq-from-beam, PR #790: https://github.com/mlococo88/All-Structural/pull/790 (CBAR-1: the suite's "From Beam Capacity" button for A_s,req / A_s,prov, kept in step; hidden here, no result change)
 
 ### CBAR-1. "From Beam Capacity" code kept in step with the suite's Development & Splice tab   [no change in this tool]
 - **Engineer request (2026-11-05):** in `Concrete Beam Capacity.html` the Development & Splice tab gets a "From Beam Capacity" button that fills A_s,req / A_s,prov / bar size from the Beam Capacity tab. Full description, the values, the check case and the suite side: `fixlog/Concrete Beam Capacity.md`, CBAR-1.

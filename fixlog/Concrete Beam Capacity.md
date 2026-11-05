@@ -2870,7 +2870,7 @@ function asdDashColl(v,save){
 })();
 ```
 
-## 2026-11-05 — PR: claude/cbc-asreq-from-beam (CBAR-1: "From Beam Capacity" button for A_s,req / A_s,prov in the Development & Splice excess-reinforcement inputs; display / workflow only, no result change)
+## 2026-11-05 — PR: claude/cbc-asreq-from-beam, PR #790: https://github.com/mlococo88/All-Structural/pull/790 (CBAR-1: "From Beam Capacity" button for A_s,req / A_s,prov in the Development & Splice excess-reinforcement inputs; display / workflow only, no result change)
 
 ### CBAR-1. Development & Splice: A_s,req and A_s,prov filled from Beam Capacity   [workflow] [no result change]
 - **Engineer request (2026-11-05, approved):** a "From Beam Capacity" button in the Development & Splice frame's excess-reinforcement inputs (panel D2) that fills A_s,req = max(flexural A_s required, A_s,min of ACI 318-19 9.6.1 or the AASHTO equivalent), A_s,prov = the provided tension steel and the bar size, from the Beam Capacity frame's current results; the values stay editable; a note says where they came from (values, flexure or minimum governing) and links to the worked steps (CLAUDE.md §6). The PR #786 note stays.
