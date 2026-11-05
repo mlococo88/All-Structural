@@ -464,7 +464,7 @@ function readInputs(){
     fy:num('fy'),
     fc:num('fc'),
     lightweight:g('lightweight').checked,
-    lwLambda:num('lwLambda'),         // λ used when lightweight is ticked (ACI Table 19.2.4.2 / AASHTO 5.4.2.8); 0.75-1.0
+    lwLambda:num('lwLambda'),         // λ used when lightweight is ticked (ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b) / AASHTO 5.4.2.8); 0.75-1.0
     epoxy:g('epoxy').value,           // ψe selector for tension/dev
     topBar:g('topBar').checked,       // ψt casting position
     // confinement geometry (tension general eq)
@@ -496,7 +496,7 @@ function computeFactors(inp){
   const bar = BAR[inp.barSize];
   const db = bar.d, Ab = bar.a;
   const barNum = parseInt(inp.barSize);
-  // λ for lightweight concrete: the entered value, limited to 0.75-1.0 (ACI 318-19 Table 19.2.4.2 / 19.2.4.1;
+  // λ for lightweight concrete: the entered value, limited to 0.75-1.0 (ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b);
   // AASHTO LRFD 10th Ed. 5.4.2.8). Blank or absent (older saved states) = 0.75, the former fixed value.
   const lamIn = parseFloat(inp.lwLambda);
   const lambda = inp.lightweight ? (isFinite(lamIn) ? Math.min(1.0, Math.max(0.75, lamIn)) : 0.75) : 1.0;
@@ -770,7 +770,7 @@ function buildInputPanel(){
     <div class="chk"><input id="lightweight" type="checkbox"><label for="lightweight">Lightweight concrete (&lambda; below)</label></div>
     <div class="field" style="margin-top:6px"><label>&lambda; for lightweight concrete <span class="unit">(0.75–1.0)</span></label>
       <input id="lwLambda" type="number" value="0.75" step="0.05" min="0.75" max="1">
-      <div class="hint">Used only when Lightweight is ticked. ACI Table 19.2.4.2: all-lightweight 0.75, sand-lightweight 0.85 (or 19.2.4.1 from w<sub>c</sub>). AASHTO 5.4.2.8: 4.7f<sub>ct</sub>/&radic;f'<sub>c</sub> or 7.5w<sub>c</sub>, 0.75 &le; &lambda; &le; 1.0.</div></div>`)}
+      <div class="hint">Used only when Lightweight is ticked. ACI 318-19 19.2.4.1: Table 19.2.4.1(a) from the equilibrium density w<sub>c</sub>, or Table 19.2.4.1(b) from the aggregates (all-lightweight 0.75, sand-lightweight 0.85); 0.75 &le; &lambda; &le; 1.0. AASHTO 5.4.2.8: Eq. 5.4.2.8-1 &lambda; = 4.7f<sub>ct</sub>/&radic;f'<sub>c</sub> &le; 1.0 where f<sub>ct</sub> is specified, else Eq. 5.4.2.8-2 0.75 &le; &lambda; = 7.5w<sub>c</sub> &le; 1.0. This tool accepts 0.75 to 1.0.</div></div>`)}
 
   ${panel("C","Tension: Modification Factors",true,`
     <div class="field"><label>Casting Position</label>
@@ -2113,7 +2113,7 @@ function rebarRefs(inp,f){
     ["AASHTO LRFD","Bridge Design Specifications, 10th Ed. (2024): 3.5.1 and Table 3.5.1-1 (w<sub>c</sub>); 5.4.2.4 and Eq. 5.4.2.4-1 (E<sub>c</sub>); 5.4.2.8 (λ); 5.4.3.2 (E<sub>s</sub>); Table 5.8.2.5.3a-1 (v, CTT node); 5.10.2.1 (standard hooks); 5.10.2.3 and Table 5.10.2.3-1 (minimum bend diameter); 5.10.8.1.1; 5.10.8.2.1 (scope, f′<sub>c</sub> ≤ 15 ksi); 5.10.8.2.1a, Eqs. 5.10.8.2.1a-1 and 5.10.8.2.1a-2 (tension); 5.10.8.2.1b (λ<sub>rl</sub>·λ<sub>cf</sub>); 5.10.8.2.1c, Eqs. 5.10.8.2.1c-1 to -3 (λ<sub>rc</sub>)"+(inp.useExcess?" and Eq. 5.10.8.2.1c-4 (λ<sub>er</sub>)":"")+"; 5.10.8.2.2a, Eqs. 5.10.8.2.2a-1 to -3, 5.10.8.2.2b (compression); 5.10.8.2.4, 5.10.8.2.4a, Eqs. 5.10.8.2.4a-1 and -2, 5.10.8.2.4b (standard hooks); 5.10.8.4 (f<sub>y</sub> &gt; 75 ksi); 5.10.8.4.2a (no tension lap splices for bars larger than No. 11); 5.10.8.4.3 and 5.10.8.4.3a (tension lap splices, Class A / B); 5.10.8.4.5a (compression lap splices, m = 1.0)."],
     ["ACI 318-19","25.3.1 (hook geometry, cited with AASHTO 5.10.2.1)."]];
   return [
-    ["ACI 318-19","Building Code Requirements for Structural Concrete (ACI 318-19): "+(inp.lightweight?"Table 19.2.4.2 (λ); ":"")+"25.3.1 (hook geometry); 25.4.1.4 (√f′<sub>c</sub> ≤ 100 psi); 25.4.2.1 (12 in. minimum); "+(inp.fy>=80000?"25.4.2.2 (K<sub>tr</sub> ≥ 0.5d<sub>b</sub>, f<sub>y</sub> ≥ 80,000 psi); ":"")+"25.4.2.4, Eqs. 25.4.2.4a and 25.4.2.4b, Table 25.4.2.5 (tension); 25.4.3.1 and Table 25.4.3.2 (standard hooks); 25.4.9.1, 25.4.9.2, Table 25.4.9.3 (compression); "+(inp.useExcess?"25.4.10.1, 25.4.10.2(d) (excess reinforcement; not for hooks); ":"")+"25.5.1.1 (no lap splices of No. 14 and No. 18 bars); 25.5.2, 25.5.2.1 (tension lap splices, Class A / B); 25.5.5.1, 25.5.5.3 (compression lap splices)."],
+    ["ACI 318-19","Building Code Requirements for Structural Concrete (ACI 318-19): "+(inp.lightweight?"19.2.4.1, Tables 19.2.4.1(a)/(b) (λ); ":"")+"25.3.1 (hook geometry); 25.4.1.4 (√f′<sub>c</sub> ≤ 100 psi); 25.4.2.1 (12 in. minimum); "+(inp.fy>=80000?"25.4.2.2 (K<sub>tr</sub> ≥ 0.5d<sub>b</sub>, f<sub>y</sub> ≥ 80,000 psi); ":"")+"25.4.2.4, Eqs. 25.4.2.4a and 25.4.2.4b, Table 25.4.2.5 (tension); 25.4.3.1 and Table 25.4.3.2 (standard hooks); 25.4.9.1, 25.4.9.2, Table 25.4.9.3 (compression); "+(inp.useExcess?"25.4.10.1, 25.4.10.2(d) (excess reinforcement; not for hooks); ":"")+"25.5.1.1 (no lap splices of No. 14 and No. 18 bars); 25.5.2, 25.5.2.1 (tension lap splices, Class A / B); 25.5.5.1, 25.5.5.3 (compression lap splices)."],
     ["AASHTO LRFD","5.10.2.1 (hook geometry; cited with ACI 25.3.1 on the hook schematic)."]];
 }
 /* one result line per length and per check, from the tool's own values (the dashboard's checks) */
@@ -2214,7 +2214,7 @@ function rbrTension(inp,f){
       rbS({id:'psiE',label:'Epoxy coating factor (as selected)',sym:'\\psi_{e}',value:f.psiE,unit:'',d:1}),
       rbS({id:'psiS',label:'Bar size factor (#6 and smaller 0.8, else 1.0; #'+inp.barSize+')',sym:'\\psi_{s}',value:f.psiS,unit:'',d:1}),
       rbS({id:'psiG',label:'Reinforcement grade factor (f_y = '+rbG(inp.fy,0).replace('{,}',',')+' psi: Grade 40/60 1.0, 80 1.15, 100 1.30)',sym:'\\psi_{g}',value:f.psiG,unit:'',d:2}),
-      rbS({id:'lam',label:inp.lightweight?'Lightweight concrete factor (entered, limited to 0.75–1.0)':'Lightweight concrete factor (normal weight)',sym:'\\lambda',value:f.lambda,unit:'',d:2,ref:inp.lightweight?'ACI 318-19 Table 19.2.4.2':''}),
+      rbS({id:'lam',label:inp.lightweight?'Lightweight concrete factor (entered, limited to 0.75–1.0)':'Lightweight concrete factor (normal weight)',sym:'\\lambda',value:f.lambda,unit:'',d:2,ref:inp.lightweight?'ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b)':''}),
       rbS({id:'psiTE',label:'Product limit on ψ_t·ψ_e',sym:'\\psi_{t}\\psi_{e}',eq:'\\min(\\psi_{t}\\psi_{e},\\, 1.7)',sub:'\\min('+rbN(f.psiT,1)+'\\times '+rbN(f.psiE,1)+',\\, 1.7) = \\min('+rbN(f.psiT*f.psiE)+',\\, 1.7)',value:f.psiTEcap,unit:'',d:2,ref:'ACI 318-19 25.4.2.4'})]});
     const kH=ktrHSCheck(inp,f), cs=[
       rbS({id:'cb',label:'Lesser of cover and half the center-to-center spacing (input)',sym:'c_{b}',value:inp.cb,unit:'in'}),
