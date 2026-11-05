@@ -83,6 +83,11 @@ node tests/smoke/github-sync.mjs [--tool spreadfooting] [--shots <dir>]
 # same results as the saved project, 0 console errors (tool keys as in project-library.mjs, whose TOOLS it imports). ~4 min
 node tests/smoke/github-sync-tools.mjs [--tool asce7,baseplate,...]
 
+# Home page "Saved projects" panel (tools.html, HSP; registry shared/project-registry.js): each registry tool saves two projects through
+# its own Save, then tools.html#projects lists the same names, order and saved times as each tool's own dialog; the home page writes
+# nothing and makes no request; HTML in a name is text; unreadable list reported; search, app filter, 390 px. ~2 min
+node tests/smoke/home-projects.mjs [--tool asce7,spreadfooting,...] [--shots <dir>]
+
 # Retired rebar calculator (RBRT): the redirect page (?query, #dev, in a frame, one-time .json offer), the suite on its Development &
 # Splice tab, the takeover of the old page's storage, and an Export JSON from the OLD standalone (git ref --old) importing identically. ~1 min
 node tests/smoke/rebar-redirect.mjs [--old f9ec0f9]
