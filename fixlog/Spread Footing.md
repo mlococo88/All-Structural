@@ -4601,7 +4601,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Note:** the Report reads the tabs as rendered, so with a non-governing ASD combination selected, its "As printed" Bearing figure now shows that combination's heat map, the same as the rest of that tab already does (unchanged behaviour of the ASD selection). With the default selection the Report is unchanged.
 - **Saved data:** none. **Other copies:** none.
 
-## 2026-11-05 — PR: claude/sf-shear-couple-rows — resultant breakdown itemises the applied moments and the pedestal shear couples V·(t + h) (SFMR; display only, no result change)
+## 2026-11-05 — PR: claude/sf-shear-couple-rows (PR #760: https://github.com/mlococo88/All-Structural/pull/760) — resultant breakdown itemises the applied moments and the pedestal shear couples V·(t + h) (SFMR; display only, no result change)
 
 ### SFMR. Shears and their moments tabulated in the resultant breakdown (screen 2.3 and Report "Resultant of the governing bearing combination")   [display only]
 - **Request (engineer):** does the resultant account for the moment of the pedestal shears acting at an elevated lever arm, and tabulate the shears and their moments. Answer: yes, `resultant(f)` adds `vx·coupleLever(p)` to M_y and `vy·coupleLever(p)` to M_x, `coupleLever(p) = (t + p.h)·hFac` (top of pedestal to bottom of footing; 0 when Stability "Pedestal shear couple" is Exclude), and this flows into e, bearing and overturning. The breakdown only showed it as one lumped row.
