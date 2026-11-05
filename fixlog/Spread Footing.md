@@ -4726,7 +4726,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Saved data:** new field `mat.lamsFtg` ('off' | 'on'); absent = 'off' = today's behaviour. No key or format change.
 - **Other copies:** none.
 - **Decision (pending engineer review):** the option covers the footing's one-way and punching checks only; the grouped-pedestal statement (SFPG) computes no stress and is unaffected. The one-way override row (a) (`vcMode 'a'`) also uses λ_s in this tool; with the option on it uses 1.0 as well, since 13.2.6.2 covers 22.5 as a whole.
-## 2026-11-05 — PR: claude/sf-3d-load-labels — 3D view: load labels, case/combination selector, title with sign convention (SF3L; display only, no result change)
+## 2026-11-05 — PR: claude/sf-3d-load-labels (PR #765: https://github.com/mlococo88/All-Structural/pull/765) — 3D view: load labels, case/combination selector, title with sign convention (SF3L; display only, no result change)
 
 ### SF3L. Tab 7 (3D View): every pedestal load arrow carries its value; the selector lists the governing service combination, the unfactored load cases, the service and the LRFD combinations   [display only]
 - **Request (engineer):** label each load arrow with its value and units, legible at any zoom and facing the camera, no overlap, hidden for a zero component; a selector for Governing (service) [default], each unfactored load case, each service (ASD) combination and each LRFD combination (reference); in direct mode the envelope only; kept in step with the Bearing / Stability selector; a title with the selection and the sign convention.
