@@ -4726,3 +4726,51 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Saved data:** new field `mat.lamsFtg` ('off' | 'on'); absent = 'off' = today's behaviour. No key or format change.
 - **Other copies:** none.
 - **Decision (pending engineer review):** the option covers the footing's one-way and punching checks only; the grouped-pedestal statement (SFPG) computes no stress and is unaffected. The one-way override row (a) (`vcMode 'a'`) also uses λ_s in this tool; with the option on it uses 1.0 as well, since 13.2.6.2 covers 22.5 as a whole.
+
+## 2026-11-05 — PR: claude/sf-bot-layer — Input: which bottom layer is outermost (y-bars default, or x-bars); d_x, d_y follow; 3D view follows the design order (SFBO; calculation option, default = no change)
+
+### SFBO. "Outer bottom layer (nearest the soil): y-bars (default) / x-bars"   [calculation option; CLAUDE.md §4]
+- **Request (engineer, RISAFoundation reconciliation of the Seymour project):** until now the bottom y-bars were always the outer layer. This adds a choice. The top mat order is unchanged: top x-bars outer, top y-bars inner (SFTD, confirmed in SFCJ).
+- **Where:**
+  - Input: Reinforcement tab, under the mat table (anchor `<!-- SFBO -->`), `data-path="freinf.botOuter"`, `'y'` (default) / `'x'`. `defaultState().freinf.botOuter='y'`; `migrateState`: `if(state.freinf.botOuter!=='x')state.freinf.botOuter='y';`.
+  - `computePhase2` (anchor `/* SFBO (2026-11-05, engineer)`). Before:
+    ```js
+    const dBotX=tin-cvB-BAR_DIA[state.freinf.botX.size||8]/2-BAR_DIA[state.freinf.botY.size||8];
+    const dBotY=tin-cvB-BAR_DIA[state.freinf.botY.size||8]/2;
+    ```
+    After:
+    ```js
+    const botXOut=(state.freinf.botOuter==='x');
+    const dBotX=botXOut?tin-cvB-BAR_DIA[state.freinf.botX.size||8]/2:tin-cvB-BAR_DIA[state.freinf.botX.size||8]/2-BAR_DIA[state.freinf.botY.size||8];
+    const dBotY=botXOut?tin-cvB-BAR_DIA[state.freinf.botX.size||8]-BAR_DIA[state.freinf.botY.size||8]/2:tin-cvB-BAR_DIA[state.freinf.botY.size||8]/2;
+    ```
+    `botXOut` is returned in `P2`. Everything that uses `dBotX` / `dBotY` follows: flexure (φM_n, A_s,req, DCR), one-way shear (ρ_w, λ_s, V_c), the 13.3.3.3 band check, punching d_avg (unchanged when both layers are the same size), and development (A_s,req in the 25.4.10.1 option). The cover used for c_b and the hook factors is the same for both layers (as before).
+  - Drawings and DXF: `sfdwLevels` places the bottom x-bars at c + d_b,x/2 and the y-bars at c + d_b,x + d_b,y/2 when x is outer. Unchanged for y outer.
+  - 3D view, `buildRebar`: the bottom layers now follow the input. **Display fix:** before, the 3D view always drew the bottom x-bars outermost, opposite to the design's d_x and to the drawings. Now, with the default (y outer), it draws the y-bars outermost.
+  - Report 6.1: with x outer, the d_x / d_y steps read "outer layer, nearest the soil" / "inner layer, on top of the x-bars", with their own expressions. With y outer the steps are unchanged. Report 2.4 note states the layer order (every report). Footing Design 5.1 table: "(outer layer)" / "(inner layer)" when x is outer. Manual 0.3.4: one sentence.
+- **Governing provision:** effective depth d is the distance from the extreme compression fibre to the centroid of the tension reinforcement (ACI 318-19 §2.2, "d"); used in §22.2 (flexure) and §22.5 (one-way shear). No formula changes; only which layer is nearer the soil.
+- **Check case (Seymour, f′c = 3000 psi, t = 24 in, bottom cover 3 in, #7 at 8 in both ways, d_b = 0.875 in):**
+  - Default (y outer): d_x = 24 − 3 − 0.4375 − 0.875 = **19.6875 in**; d_y = 24 − 3 − 0.4375 = **20.5625 in**.
+  - x outer: d_x = 24 − 3 − 0.4375 = **20.5625 in**; d_y = 24 − 3 − 0.875 − 0.4375 = **19.6875 in**.
+  - x flexure (transverse, toe), per ft: a = 0.900·60/(0.85·3·12) = 1.765 in.
+    - Before: φM_n = 0.9·0.900·60·(19.6875 − 0.882)/12 = **76.16 kip-ft/ft** (11 881 kip-in over 13 ft).
+    - After: φM_n = 0.9·0.900·60·(20.5625 − 0.882)/12 = **79.70 kip-ft/ft** (12 434 kip-in).
+    - DCR 0.0252 → 0.0241. RISA: 79.87 with A_s 0.902.
+  - y flexure (longitudinal, M_u = 276.76 kip-ft over B = 5 ft):
+    - φM_n 4782.3 → **4569.7 kip-in**;
+    - DCR **0.694 → 0.727** (governing flexure; still PASS);
+    - A_s,req (flexure) 0.616 → 0.646 in²/ft.
+  - One-way φV_c: x 129.38 → 131.27 kip (ρ_w and λ_s change with d); y 50.49 → 49.76 kip (both N/A in this project).
+  - Punching: d_avg = 20.125 in, unchanged (both layers #7).
+- **How verified:** headless Chromium, origin/main d21a727 vs the branch, pinned libraries.
+  - Deep diff of `R` and `P2` on the 10 harness cases plus Seymour at 3 ksi: only the new field `P2.botXOut: false`. Report text identical except the Report 2.4 layer-order note. Dashboard identical. 0 console errors, 0 KaTeX errors.
+  - Option on (Seymour): only the values listed above move (`dBotX/Y`, `desX/Y` capacities, shear, `gfChk` band A_s,req, `dev` A_s,req / `rEx` / `LdEx`).
+  - `sfdwLevels`, Seymour: default botY 3.4375 / botX 4.3125 in; x outer botX 3.4375 / botY 4.3125 in.
+  - 3D bar centre heights (ft from the top of the footing):
+    - main: x −1.7135, y −1.6406 (x drawn outer);
+    - branch default: y −1.7135, x −1.6406;
+    - branch with x outer: x −1.7135, y −1.6406.
+  - `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs` passes. Screenshots of the input, Report 6.1, Footing Design 5.1 and Drawings section A-A checked by eye.
+- **Saved data:** new field `freinf.botOuter`. Absent = 'y' = today's behaviour. No key or format change.
+- **Other copies:** none.
+- **Decision (pending engineer review):** the 3D view drew the x-bars outermost before, which disagreed with the design and the drawings. It now follows the design (display only; no computed value changes).
