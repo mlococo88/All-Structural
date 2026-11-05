@@ -15285,7 +15285,7 @@ index cedb10f..5b89752 100644
 - **Other copies:** none.
 - **Open items:** the Report is rebuilt (with every tab rendered, about 0.8 s) on each input change while it is shown, as before only the Report itself.
 
-## 2026-11-05 — PR: claude/header-abut (ABHD: compact header; title block, project file and hand-off buttons moved to a new Project input tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-abut (PR #814: https://github.com/mlococo88/All-Structural/pull/814) (ABHD: compact header; title block, project file and hand-off buttons moved to a new Project input tab; display only, no result change)
 - **Engineer:** clean up the top of the page: the title-block inputs and the project / hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (nodes moved, not copied: every id, `data-path`, handler and saved field is the same):
   - `<header class="app-head">`: before title + `#projBlock` (6 title inputs + `.bx-pm-row` Use / Share project info); then a `.toolbar` row of 18 buttons (Save Project, Projects…, Export / Import JSON, Undo, Redo, Reset Defaults, Compare…, Self-Test, Open EDM, Pull from SubLoads, Import hand-off, Send foundation loads, Pull pile results, Import pile results, Input ID badge, save status, Print / PDF Report). After: title + `<div class="toolbar" id="hdrActs">` with `#hdrProj` "Project: <name> · <number>" (link), Undo, Redo, Projects…, Input ID badge (`#fpBadge`), `#saveStatus`, Print / PDF Report.
