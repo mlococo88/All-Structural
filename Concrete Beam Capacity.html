@@ -9180,6 +9180,118 @@ window.addEventListener('DOMContentLoaded',()=>{
       try{ f(p[1],p[1]==='combo'?parseInt(p[2],10):p[2],x.checked); }catch(e){}
       render(); }); });
   }
+  /* ---------- CBRO (2026-11-05, Phase 4 of the concrete beam suite update): the Report in the design order, with a suite-wide
+     "Summary of results" first (the Spread Footing Report's order, SFRO #778 / SFRF #779). Display only: sections are moved and
+     the check lines are read from the tabs' own check summary panels; nothing is computed here.
+     Order: 1 Summary of results · A. Beam Capacity: Inputs, Validation notices (the basis), Flexure, Shear, Torsion,
+     Serviceability, Detailing, Summary of checks · B. ASD Beam Calcs: Inputs, Analysis and rating, Summary & Rating ·
+     C. Development & Splice: Project and inputs, the five lengths, Bar development schedule, Summary of results · D. References.
+     A section whose Include box is off (or that has nothing to show for this project) stays as a one-line section, so the
+     section numbers do not move with the Include boxes. Every section of a tab gets the key cbro:<chapter>:<tab>. ---------- */
+  var CBRO_ORD={cap:['tabInputEcho','tabValid','tabFlex','tabShear','tabTor','tabServ','tabDetail','tabSummary'],asd:['tabInputEcho','tabAnalysis','tabSummary']};
+  var CBRO_TTL={cap:{tabInputEcho:'Inputs',tabValid:'Validation notices',tabFlex:'Flexure',tabShear:'Shear',tabTor:'Torsion',tabServ:'Serviceability',tabDetail:'Detailing',tabSummary:'Summary of checks'},
+    asd:{tabInputEcho:'Inputs',tabAnalysis:'Analysis and rating',tabSummary:'Summary & Rating'}};
+  function cbroOrder(M){
+    var G={cap:[],asd:[],dev:[],ref:[]}, part={};
+    M.sections.forEach(function(s){ var g=G[s._ch]?s._ch:'ref'; if(s.part&&!part[g]) part[g]=s.part; G[g].push(s); });
+    ['cap','asd'].forEach(function(id){
+      var g=G[id]; if(!g.some(function(s){ return s._tab; })) return;   /* a chapter that could not be built: as it is */
+      var c=RXCH.filter(function(q){ return q.id===id; })[0], b=rxFn(c,'Boxes'), sl=rxFn(c,'Sel'), B=null, Sl=null;
+      try{ B=b?b():null; Sl=sl?sl():null; }catch(e){}
+      var lab={}; ((B&&B.tabs)||[]).forEach(function(t){ lab[t[0]]=t[1]; });
+      var res=[];
+      CBRO_ORD[id].forEach(function(t){
+        var hit=g.filter(function(s){ return s._tab===t; });
+        if(hit.length){ res=res.concat(hit); return; }
+        if(!lab[t]) return;   /* not a tab of this project (e.g. Torsion when torsion is off) */
+        var off=!!(Sl&&Sl.tabs&&Sl.tabs[t]===false), link='[[tab:'+id+'/'+t+'|On screen: '+lab[t]+' tab]]';
+        res.push({title:CBRO_TTL[id][t],_ch:id,_tab:t,_stub:true,subs:[],
+          note:off?'Not included in this report: the Include box “'+lab[t]+'” on the report bar is off. '+link
+            :(t==='tabValid'?'No validation notices for this project. ':'The '+lab[t]+' tab adds nothing to the other sections of this chapter for this project. ')+link});
+      });
+      g.forEach(function(s){ if(res.indexOf(s)<0) res.push(s); });
+      G[id]=res;
+    });
+    /* Development & Splice: its Summary of results (a subsection of "Project and inputs") becomes the last section of the chapter */
+    var pi=G.dev.filter(function(s){ return s.title==='Project and inputs'; })[0], k=-1;
+    if(pi) pi.subs.forEach(function(q,i){ if(k<0&&q.title==='Summary of results') k=i; });
+    if(k>=0){ var q=pi.subs.splice(k,1)[0]; q.title='Development and splice lengths and code checks'; G.dev.push({title:'Summary of results',_ch:'dev',_tab:'sum',subs:[q]}); }
+    var DT={'Project and inputs':'inputs','Tension development':'tension','Standard hook':'hook','Compression development':'compression','Tension lap splice':'tsplice','Compression lap splice':'csplice','Bar development schedule':'batch'};
+    G.dev.forEach(function(s){ if(!s._tab&&DT[s.title]) s._tab=DT[s.title]; });
+    ['cap','asd','dev','ref'].forEach(function(g){ G[g].forEach(function(s,i){ s.part=i===0?part[g]:undefined; if(s._tab&&g!=='ref') s.key='cbro:'+g+':'+s._tab; }); });
+    M.sections=[cbroSum()].concat(G.cap,G.asd,G.dev,G.ref);
+    cbroKeys(M);
+  }
+  /* the suite-wide Summary of results: one line per check of each tab's check summary panel (Beam Capacity CBDC #788
+     cbcDashItems, ASD Beam Calcs ASDC #789 asdDashItems, Development & Splice RBDC #791 #rbrDash lines), the same name, short
+     value (the D/C, the RF, the length, or the condition not met), status and reference; the last column links to the step
+     where the check is worked (resolved in cbroKeys, else the tab's section). */
+  var CBRO_ST={pass:['PASS','ok'],fail:['FAIL','ng'],na:['N/A','na'],warn:['REVIEW','hi'],info:['INFO','na']};
+  function cbroSum(){
+    var subs=[], tot=[];
+    var head=['Check','Result','Status','Detail','Reference (worked in)'];
+    var row=function(name,short,st,detail,ref,keys){ var x=CBRO_ST[st]||CBRO_ST.na;
+      return [name,{t:short||'—',n:/^[−\-\d.,\s]*$|^(D\/C|RF) /.test(short||'')||undefined},{t:x[0],cls:x[1]},detail||'',{t:ref||'—',_k:keys}]; };
+    var count=function(rows){ var f=0,w=0; rows.forEach(function(r){ if(r[2].t==='FAIL') f++; if(r[2].t==='REVIEW') w++; });
+      return (f?f+' NG':'no NG')+(w?', '+w+' REVIEW':''); };
+    var add=function(title,rows,msg,note){
+      if(msg){ subs.push({title:title,items:[{type:'note',warn:true,text:msg}]}); tot.push(title+': '+msg.replace(/\.$/,'')); return; }
+      var cn=count(rows); tot.push(title+': '+(rows.length?cn:'no checks'));
+      subs.push({title:title,items:[{type:'note',text:rows.length?'Check summary: '+cn+' ('+rows.length+' lines).':'No checks.'}].concat(rows.length?[{type:'table',head:head,rows:rows}]:[]).concat(note?[{type:'note',text:note}]:[])});
+    };
+    /* A. Beam Capacity */
+    (function(){ var w=win('capacity'), its=null, K=null, msg=null, rows=[];
+      try{ var m=w.document.querySelector('#cbcDash .cbdMsg'); if(m) msg=m.textContent; else { its=w.cbcDashItems(); K=w.allChecks(); } }catch(e){ msg=null; its=null; }
+      if(!msg&&!its) msg='No results: the Beam Capacity tab has not finished loading, or its inputs need correcting.';
+      if(!msg) its.forEach(function(it,i){ var c=K[i]||{}, ks=[];
+        if(!c.na&&c.ci!=null){ var ci=c.ci;
+          if(c.tab==='tabFlex') ks=['fx'+ci+'/DCR'];
+          else if(c.tab==='tabShear') ks=['sh'+ci+'/DCRs','sh'+ci+'/DCR'];
+          else if(c.tab==='tabTor') ks=[/cross/i.test(c.label)?'tq'+ci+'/size':(/Combined/.test(c.label)?'tq'+ci+'/combVT':'tq'+ci+'/DCR')];
+          else if(c.tab==='tabServ') ks=['sv/minr'];
+          else if(c.tab==='tabDetail') ks=['dt/'+c.id+'.cmp']; }
+        ks=ks.map(function(k){ return 'cap:'+k; });
+        ks=ks.concat(ks.length?['cap:omit-'+ks[0].slice(4).split('/')[0]]:[],c.tab?['cbro:cap:'+c.tab]:[]);
+        var det=it.text+(it.cond&&it.dc?'; '+it.dc+(it.within?' (the ratio is within its limit; the status comes from the condition)':''):'');
+        rows.push(row(it.name,it.cond||it.dc,it.st,det,it.ref,ks)); });
+      add('Beam Capacity',rows,msg?msg.replace('the output panel','the Beam Capacity tab’s output panel'):null,msg?null:'Result: the D/C, or, where a limit or condition is not met, that condition (its D/C is under Detail). Every load combination is enveloped; the tables by combination are in the Beam Capacity chapter ([[cbro:cap:tabSummary]]).');
+    })();
+    /* B. ASD Beam Calcs */
+    (function(){ var w=win('asd'), its=null, rows=[], msg=null;
+      try{ its=w.asdDashItems(); }catch(e){ its=null; }
+      if(!its) msg='No results: the ASD Beam Calcs tab has not finished loading, or its inputs need correcting.';
+      else its.forEach(function(it){ var ks=[];
+        if(it.card==='anRF') ks=[/^Inventory/.test(it.name)?'asd:an/inv.RF':'asd:an/op.RF'];
+        ks.push('cbro:asd:'+(it.tab||'tabAnalysis'));
+        rows.push(row(it.name,it.short,it.st,it.text,it.ref,ks)); });
+      add('ASD Beam Calcs',rows,msg,msg?null:'Result: the rating factor RF (PASS when RF ≥ 1.00), or the condition of a REVIEW notice.');
+    })();
+    /* C. Development & Splice: the lines of its check summary panel as shown (the dashboard's checks; RBDC) */
+    (function(){ var w=win('dev'), rows=[], msg=null, f=null, CK={tLd:'td/ld',hLdh:'hk/ldh',cLdc:'cd/ldc',tsLen:'ts/lst',tsClassA:'ts/clsA',tConf:'td/ktrHS',csLen:'cs/lsc'};
+      var CT={tLd:'tension',tConf:'tension',tConfA:'tension',hLdh:'hook',cLdc:'compression',tsLen:'tsplice',tsClassA:'tsplice',csLen:'csplice'};   /* card -> tab (REBAR_CARDS) */
+      var NK=[['(c_b+K_tr)/d_b',['td/cbKtr']],['ψ_t·ψ_e',['td/psiTE']],['λ_rl·λ_cf',['td/rlcf']],['λ_rc',['td/lrc','td/ldcalc']],['K_tr ≥ 0.5d_b',['td/ktrHS','td/Ktr']]];   /* the step that works a limit line */
+      try{ f=w.computeFactors(w.readInputs());
+        [].slice.call(w.document.querySelectorAll('#rbrDash .rbrdCh')).forEach(function(c){
+          var q=function(s){ var e=c.querySelector(s); return e?e.textContent:''; };
+          var name=q('.rbrdN'), short=q('.rbrdR'), S=q('.rbrdS'), V=q('.rbrdV'), val=V.indexOf(name+': ')===0?V.slice(name.length+2).replace(/ \(information\)$/,''):V;
+          var st={PASS:'pass',FAIL:'fail',REVIEW:'warn',INFO:'info'}[S]||'na', m=w.rbrDashMeta(name,f,val)||{}, ks=[];
+          NK.forEach(function(x){ if(name.indexOf(x[0])===0) ks=ks.concat(x[1]); });
+          if(m.card&&CK[m.card]) ks.push(CK[m.card]);
+          ks=ks.map(function(k){ return 'dev:'+k; }).concat(['cbro:dev:'+(CT[m.card]||m.tab||'sum')]);
+          rows.push(row(name,short,st,short!==val?val:'',m.ref,ks)); });
+      }catch(e){ rows=[]; }
+      if(!rows.length) msg='No results: the Development & Splice tab has not finished loading.';
+      add('Development & Splice',rows,msg,msg?null:'INFO: a required length, or a code limit applied in the calculation (not a check). Lengths are required lengths: compare them with the lengths detailed.');
+    })();
+    return {title:'Summary of results',key:'cbro:sum',note:tot.join(' · ')+'.',subs:subs,_ch:'sum'};
+  }
+  /* each summary line links to the first of its keys found in the report (the step, else an omitted combination's note,
+     else the tab's section); a line with none keeps its reference as plain text */
+  function cbroKeys(M){
+    var D=null; try{ D=SharedReport.build(M); }catch(e){ return; }
+    M.sections[0].subs.forEach(function(q){ (q.items||[]).forEach(function(it){ if(it.type!=='table') return;
+      it.rows.forEach(function(r){ var c=r[4]; if(!c||!c._k) return; var h=c._k.filter(function(k){ return D.index.has(k); })[0]; delete c._k; if(h) c.key=h; }); }); });
+  }
   function model(){
     var secs=[], codes=[], letters='ABC', P={}, refRows=[];
     CH.forEach(function(c,ci){
@@ -9202,6 +9314,7 @@ window.addEventListener('DOMContentLoaded',()=>{
       head:{left:'Project No. '+(P.num||'—')+' — '+String(proj).slice(0,40),right:'Computed: '+(P.by||'—')+' '+(P.date||'')+' · Checked: '+(P.chk||'—')+' '+(P.chkDate||''),foot:proj+' (Concrete Beam Design Suite)'},
       sections:secs};
     rxRest(M);   /* CBRX: what the retired print reports printed and the chapters lack */
+    cbroOrder(M);   /* CBRO: design order, the suite's Summary of results first, numbering independent of the Include boxes */
     return M;
   }
   /* [[tab:<chapter>/<tab>|…]]: the suite tab, then that tab's own result tab */
