@@ -150,3 +150,8 @@ Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcl
 - Engineer checks: real-browser print of a sheet in each tool; Pile library row at phone width; index AREMA real-project print; AREMA girder spacing table.
 - Stale remote branch claude/sbd-print-sheets (deletion blocked; engineer may delete).
 - PENDING: LP handhole input, leveling-nut standoff; LTS summary lacks shaft reinforcement/torsion threshold; BG dual-bearing label overlap on profile; RW/Abutment entered demands; SF hook-direction input.
+
+## 2026-11-05 overnight (ET)
+- Merged: #757/#758/#759 SF LRFD reference tables + dropdown + heat map; #760/#761 itemized V·h couples; #762 panel ids; #763 term-by-term OT (calc); #764 λs option; #766 bottom layer order; #769 wall option; #765 3D load labels + selector; #767 loads on DXF sheets; #768 card 2.6 pedestal loads by combination.
+- RISA reconciliation: notes/risa-reconcile-2026-11-05.md. Engineer: footing 5 ft, 3 ksi in app; RISA model has 5'-8" (fix in RISA). Water height / surcharge in RISA: ignore.
+- Pending engineer review: decisions listed in PRs #764–#769 (wall punching kept, pedestal checks kept for walls, §11.6.2 not implemented).
