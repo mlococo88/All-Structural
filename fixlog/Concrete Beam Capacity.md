@@ -4091,7 +4091,7 @@ Not affected:
 - **Saved data:** none. **Governing provision:** none changed (drawings only). **Other copies:** `ACI Rebar Development Length.html` (Dev drawings, same edit).
 
 
-## 2026-11-05 — PR: claude/retire-aci-rebar (RBRT: the standalone "ACI Rebar Development Length.html" is retired and opens this suite's Development & Splice tab; the tab takes over the old page's last session once; storage only, no result change)
+## 2026-11-05 — PR: claude/retire-aci-rebar, PR #804: https://github.com/mlococo88/All-Structural/pull/804 (RBRT: the standalone "ACI Rebar Development Length.html" is retired and opens this suite's Development & Splice tab; the tab takes over the old page's last session once; storage only, no result change)
 
 - **Engineer decision (2026-11-05):** retire the standalone rebar calculator; its file is now a redirect page to `Concrete%20Beam%20Capacity.html#dev` (see `fixlog/ACI Rebar Development Length.md`, RBRT). The `#dev` deep link already existed (CBAR, 2026-11-01); unchanged.
 - **Where:** Development & Splice tab srcdoc (`suite-frame-dev`), main script: new functions before `function init(){` (anchor, unescaped: `/* RBRT (2026-11-05): the standalone "ACI Rebar Development Length.html" is retired`; in the file the quotes are `&quot;` and every `&` is `&amp;`), and `init()` (anchor `// one-time migration: if this tab has no autosave of its own yet`).

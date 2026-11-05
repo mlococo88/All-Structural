@@ -12,7 +12,7 @@
 - **Other copies:** none.
 - **Open items:** none.
 
-## 2026-11-05 — PR: claude/retire-aci-rebar (RBRT; home page only)
+## 2026-11-05 — PR: claude/retire-aci-rebar, PR #804: https://github.com/mlococo88/All-Structural/pull/804 (RBRT; home page only)
 
 - **Where:** `tools.html`. Anchors: the card `<div class="name">Rebar Development &amp; Splices</div>` in "Members & detailing", and `<li><b>Concrete Beam ASD:</b> retired (2026-11-01)` in "Open engineer checks" → "Checks (your own action)".
 - **Before:** `<a class="card" href="ACI%20Rebar%20Development%20Length.html" target="_blank"><div class="name">Rebar Development &amp; Splices</div><div class="desc">Development, hooks, compression and lap splices.</div>…`

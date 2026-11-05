@@ -2160,7 +2160,7 @@ function schematicSVG(inp,f){
 ```
 
 
-## 2026-11-05 — PR: claude/retire-aci-rebar — tool retired: the file is now a redirect page to the Development & Splice tab of Concrete Beam Capacity (RBRT)
+## 2026-11-05 — PR: claude/retire-aci-rebar, PR #804: https://github.com/mlococo88/All-Structural/pull/804 — tool retired: the file is now a redirect page to the Development & Splice tab of Concrete Beam Capacity (RBRT)
 
 - **Engineer decision (2026-11-05):** retire "ACI Rebar Development Length.html" in favour of the Development & Splice tab of "Concrete Beam Capacity.html" (the same app, embedded since the suite was built), the same pattern as `Concrete Beam ASD.html` (CBAR, PR #562).
 - **New file content (whole file replaced; the old tool is in git history at the commit before this PR, f9ec0f9):**
