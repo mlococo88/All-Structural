@@ -4159,7 +4159,7 @@ function rbOldAutosaveNote(s){
 - **How verified:** `node tests/check-syntax.mjs` (all files) pass. `node tests/smoke/rebar-redirect.mjs` ALL PASS. `node tests/smoke/project-library.mjs --tool rebar` (now run inside this tab, main vs branch) ALL PASS: results identical on load, after an input change, on main's autosave and on main's saved project. `node tests/smoke/phone-layout.mjs --tool aci,cbc` pass (aci = this tab's 12 tab buttons at 390 / 768 px). `node tests/compare.mjs --tool page --file "Concrete Beam Capacity.html"`: page text and storage identical.
 - **Other copies:** none (the standalone page was the other copy; it is retired in this PR).
 - **Open items:** none.
-## 2026-11-05 — PR: claude/cbc-value-labels (CBVL: strain, stress and force diagram with value labels beside the Beam Capacity section; elastic stress diagram on the ASD Section tab; both in the Report; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-value-labels, PR #805: https://github.com/mlococo88/All-Structural/pull/805 (CBVL: strain, stress and force diagram with value labels beside the Beam Capacity section; elastic stress diagram on the ASD Section tab; both in the Report; display only, no result change)
 
 ### CBVL. Value labels on the graphics   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 5 graphics, PR B):**
