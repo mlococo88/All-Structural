@@ -2044,3 +2044,117 @@ Not affected:
   - Screenshot of Code & Material looked at: λ box disabled, with the ACI hint.
 - **Saved data:** no key or format change; the entered λ is still saved.
 - **Other copies:** standalone tool and suite Dev frame (same edits).
+
+## 2026-11-05 — PR: claude/cbc-scale-bars (CBSB: the bar-in-section and hook drawings to scale with a scale bar; this file and the Development & Splice tab of Concrete Beam Capacity.html; display only, no result change)
+
+### CBSB. Development drawings to scale   [display only] [no result change]
+- **Engineer request (2026-11-05, Concrete Beam Capacity Phase 5, PR A):** every geometric drawing gets a scale bar or a "to scale" note, measured in headless Chromium. Fix any that is not to scale. The Development & Splice frame is kept in step with this file.
+- **Measured (rendered px per in, across ÷ up):**
+  - Bar in section: before 1.05 (default #8, c_b 1.5) and 0.95 (#11, c_b 3). The bar was drawn at d_b·14 px and the cover at c_b·20 px, and c_b was dimensioned to the bar's edge. After: 1.00 / 1.00.
+  - Hook: before 2.39 / 3.55 (l_dh vs the 12 d_b tail). The lead was max(8 d_b, 90 px) and the bend 3 d_b, at a scale fitted to 8 d_b. After: 1.00 / 1.00.
+  - Scale bar ÷ drawing: 1.00.
+- **Where:**
+  - `hookSchematic(inp,f,h)` (anchor `/* ---- Hook side-view schematic (SVG) ---- */`): rewritten. New `rbrScaleBar(sc,x0,y,W,note)` before it.
+    - Before: `const scale = Math.min(9, 150/(8*db)); const px = v => v*scale*db; … const straightLen = Math.max(px(8), 90); const bendR = px(3); const tail = px(12); … const path = \`M ${x0} ${y0} L ${x0} ${yb-bendR} Q ${x0} ${yb} ${x0+bendR} ${yb} L ${x0+bendR+tail} ${yb}\`;` with the title "Hook Geometry (90° standard hook, schematic)" and the label "tail ≈ 12d_b".
+    - After (code below): one scale `sc=min(170/l_dh, 220/(R_c+12d_b+d_b/2))` px/in.
+      - The lead runs from the critical section. The bend is a circular arc of centreline radius R_c = D/2 + d_b/2, with D = 6, 8 or 10 d_b (#3–#8, #9–#11, #14–#18; ACI 318-19 Table 25.3.1, AASHTO Table 5.10.2.3-1). In AASHTO mode an entered R is used instead.
+      - The tail is 12 d_b. l_dh is dimensioned from the critical section to the outside face of the bar at the bend.
+      - The stroke width is d_b. Below the drawing: a scale bar.
+      - Title "(90° standard hook, to scale)", label "tail 12d_b = …".
+  - `schematicSVG(inp,f)`: rewritten (code below). `sc=min(40, 290/(c_b+d_b/2), 90/d_b)` px/in. The bar radius is d_b/2. The bar centre is at c_b from the face, and c_b is dimensioned to the centre (its definition, ACI 318-19 25.4.2.4 / AASHTO 5.10.8.2.1c). d_b is dimensioned with ticks. A scale bar is added. Title "Concrete at the bar (to scale; c_b controls, measured to the bar centre)" (was "Concrete section (schematic — c_b controls)"). viewBox 440 × 220 (was 200).
+  - `rbrModel` captions:
+    - `'Input schematic: bar in section (c_b controls)'` → `'Input schematic: bar in section, to scale (c_b controls, measured to the bar centre)'`;
+    - `'Hook geometry (90° standard hook, schematic; '` → `'Hook geometry (90° standard hook, to scale; '`.
+- **Decisions (pending engineer review):** the drawings were schematics and are now to scale (see the CBSB entry in `fixlog/Concrete Beam Capacity.md`). They draw the computed l_dh; nothing is computed from them.
+- **How verified:**
+  - Headless Chromium, origin/main afe45fa vs the branch (standalone and suite). The results (`readInputs`, `computeFactors`, `calcTension` / `calcHook` / `calcComp` / splices, `rbrModel` apart from the two figure SVGs) are identical. Text differences are only the drawing titles, labels and scale bars.
+  - Screenshots looked at: #8 / c_b 1.5 and #11 / c_b 3. The Report page with the hook was looked at.
+  - `check-syntax`, `phone-layout --tool aci` and `project-library --tool rebar` pass.
+- **Saved data:** none. **Other copies:** the Development & Splice frame of `Concrete Beam Capacity.html` (same edit).
+
+#### Code (re-apply by hand; both copies)
+```js
+/* ---- Hook side-view schematic (SVG) ---- */
+/* CBSB (2026-11-05; the same block in ACI Rebar Development Length.html and the Development & Splice tab of Concrete Beam
+   Capacity.html): drawn to scale, one scale across and up, with a scale bar. The lead runs from the critical section to the
+   bend; l_dh is measured to the outside face of the bar at the bend; the bend radius to the bar centreline is D/2 + d_b/2
+   with the minimum inside diameter D (6 d_b #3–#8, 8 d_b #9–#11, 10 d_b #14–#18; ACI 318-19 Table 25.3.1, AASHTO
+   Table 5.10.2.3-1), or the entered R in AASHTO mode; the tail is the 12 d_b extension of a 90° hook. Before: lead
+   max(8 d_b, 90 px), bend 3 d_b and tail 12 d_b at a scale fitted to 8 d_b (a schematic). Display only. */
+function rbrScaleBar(sc,x0,y,W,note){
+  const want=0.3*(W-x0)/sc, L=[1,2,3,4,6,12,18,24,36,48].filter(x=>x<=want).pop()||1, w=L*sc;
+  const lab=L%12===0?(L/12)+' ft':L+' in';
+  return `<g class="rbr-sbar" data-in="${L}" font-size="9" fill="#333">
+      <rect x="${x0}" y="${y}" width="${w/2}" height="5" fill="#333"/><rect x="${x0+w/2}" y="${y}" width="${w/2}" height="5" fill="#fff" stroke="#333" stroke-width="0.8"/>
+      <rect x="${x0}" y="${y}" width="${w}" height="5" fill="none" stroke="#333" stroke-width="0.8"/>
+      <text x="${x0}" y="${y+15}">0</text><text x="${x0+w}" y="${y+15}" text-anchor="middle">${lab}</text>
+      <text x="${x0+w+22}" y="${y+6}">${note||'to scale, the same scale across and up'}</text></g>`;
+}
+function hookSchematic(inp,f,h){
+  const db=f.db, nb=parseInt(inp.barSize);
+  const Dmin=(nb<=8?6:(nb<=11?8:10))*db;                          // minimum inside bend diameter
+  const Rc=(f.AASHTO&&h&&h.R>0)?h.R:Dmin/2+db/2;                   // bend radius to the bar centreline
+  const ldh=(h&&h.ldh>0&&isFinite(h.ldh))?h.ldh:Math.max(8*db,6);
+  const tailL=12*db;
+  const W=460, ox=110, oy=40;
+  const sc=Math.min(170/ldh, (W-ox-130)/(Rc+tailL+db/2));         // px per in
+  const x0=ox, y0=oy, yo=y0+ldh*sc;                                // yo: outside face of the bar at the bend
+  const yc=yo-db/2*sc, bendR=Rc*sc, tail=tailL*sc;                 // tail centreline, bend radius, tail (px)
+  const yb=Math.max(y0,yc-bendR);                                  // bend start
+  const H=Math.round(yo+92);
+  const bw=Math.max(1.5,db*sc);
+  // 90-degree hook: vertical lead-in down, bend, horizontal tail
+  const path = `M ${x0} ${y0} L ${x0} ${yb} A ${bendR} ${bendR} 0 0 0 ${x0+bendR} ${yc} L ${x0+bendR+tail} ${yc}`;
+  return `<div class="subsec"><div class="sh"><span>Hook Geometry (90° standard hook, to scale) <a href="javascript:void(0)" onclick="showRefImage('bend')" style="font-weight:normal;font-size:11px;color:var(--accent2);text-decoration:underline;">view bend dimensions ↗</a></span><span class="ref">ACI 25.3.1 / AASHTO 5.10.2.1</span></div>
+    <svg viewBox="0 0 ${W} ${H}" class="schematic" preserveAspectRatio="xMidYMid meet">
+      <path d="${path}" fill="none" stroke="#8a1f1f" stroke-width="${bw}" stroke-linecap="butt"/>
+      <!-- critical section marker -->
+      <line x1="${x0-25}" y1="${y0}" x2="${x0+25}" y2="${y0}" stroke="#0d47a1" stroke-width="1" stroke-dasharray="4 3"/>
+      <text x="${x0-28}" y="${y0-6}" font-size="10" fill="#0d47a1" text-anchor="start">critical section</text>
+      <!-- l_dh vertical dim: critical section to the outside face of the bend -->
+      <line x1="${x0-45}" y1="${y0}" x2="${x0-45}" y2="${yo}" stroke="#333"/>
+      <line x1="${x0-49}" y1="${y0}" x2="${x0-41}" y2="${y0}" stroke="#333"/>
+      <line x1="${x0-49}" y1="${yo}" x2="${x0-41}" y2="${yo}" stroke="#333"/>
+      <line x1="${x0-41}" y1="${yo}" x2="${x0+bendR}" y2="${yo}" stroke="#94a3b8" stroke-width="0.7"/>
+      <text x="${x0-52}" y="${(y0+yo)/2}" font-size="11" fill="#333" text-anchor="middle" transform="rotate(-90 ${x0-52} ${(y0+yo)/2})">l_dh = ${fmt(ldh,2)}"</text>
+      <!-- tail dim: 12 d_b from the end of the bend -->
+      <line x1="${x0+bendR}" y1="${yo+12}" x2="${x0+bendR}" y2="${yo+34}" stroke="#94a3b8" stroke-width="0.7"/>
+      <line x1="${x0+bendR+tail}" y1="${yc+bw/2+2}" x2="${x0+bendR+tail}" y2="${yo+34}" stroke="#94a3b8" stroke-width="0.7"/>
+      <line x1="${x0+bendR}" y1="${yo+30}" x2="${x0+bendR+tail}" y2="${yo+30}" stroke="#333"/>
+      <text x="${x0+bendR+tail/2}" y="${yo+44}" font-size="10" fill="#333" text-anchor="middle">tail 12d_b = ${fmt(tailL,2)}"</text>
+      <!-- bend radius note -->
+      <text x="${x0+bendR+tail+8}" y="${yc+4}" font-size="10" fill="#555">bend Ø ≥ ${nb<=8?"6":(nb<=11?"8":"10")}d_b${(f.AASHTO&&h&&h.Rentered)?` · R = ${fmt(Rc,2)}"`:""}</text>
+      <text x="${ox+60}" y="${oy}" font-size="10" fill="#555">#${inp.barSize} bar · d_b=${fmt(db,3)}"</text>
+      ${rbrScaleBar(sc,12,yo+60,W)}
+    </svg></div>`;
+}
+function schematicSVG(inp,f){
+  /* CBSB (2026-11-05; both copies): drawn to scale with a scale bar. c_b is dimensioned from the concrete face to the bar
+     centre, as defined (ACI 318-19 25.4.2.4; AASHTO 5.10.8.2.1c); the schematic drew the bar's edge at c_b, bar and cover
+     at different scales. A strip of concrete at the face is shown. Display only. */
+  const W=440,H=220, m=30, Hc=140;
+  const db=f.db>0?f.db:0.5, cb=inp.cb>0?inp.cb:0;
+  const sc=Math.min(40, (W-2*m-90)/Math.max(cb+db/2,0.25), 90/db);   // px per in
+  const barR=db/2*sc;
+  const cx=m+cb*sc, cy=m+Hc/2, yd=cy-barR-12;
+  return `<svg viewBox="0 0 ${W} ${H}" class="schematic" preserveAspectRatio="xMidYMid meet">
+    <rect x="${m}" y="${m}" width="${W-2*m}" height="${Hc}" fill="#f2f0ea" stroke="#333" stroke-width="1.5"/>
+    <text x="${m}" y="${m-8}" font-size="11" fill="#555">Concrete at the bar (to scale; c_b controls, measured to the bar centre)</text>
+    <!-- bar -->
+    <circle cx="${cx}" cy="${cy}" r="${barR}" fill="#8a1f1f" stroke="#4d1010" stroke-width="1"/>
+    <text x="${barR>=9?cx:cx+barR+4}" y="${cy+3}" font-size="10" fill="${barR>=9?"#fff":"#333"}" text-anchor="${barR>=9?"middle":"start"}">#${inp.barSize}</text>
+    <!-- cover dim: face to bar centre -->
+    <line x1="${cx}" y1="${cy-barR-2}" x2="${cx}" y2="${yd-4}" stroke="#94a3b8" stroke-width="0.7"/>
+    <line x1="${m}" y1="${yd}" x2="${cx}" y2="${yd}" stroke="#0d47a1" stroke-width="1"/>
+    <line x1="${m}" y1="${yd-6}" x2="${m}" y2="${yd+6}" stroke="#0d47a1"/>
+    <line x1="${cx}" y1="${yd-6}" x2="${cx}" y2="${yd+6}" stroke="#0d47a1"/>
+    <text x="${cx+6}" y="${yd-4}" font-size="10" fill="#0d47a1">c_b=${fmt(inp.cb,2)}"</text>
+    <!-- db dim -->
+    <line x1="${cx-barR}" y1="${cy+barR+14}" x2="${cx+barR}" y2="${cy+barR+14}" stroke="#333"/>
+    <line x1="${cx-barR}" y1="${cy+barR+10}" x2="${cx-barR}" y2="${cy+barR+18}" stroke="#333"/>
+    <line x1="${cx+barR}" y1="${cy+barR+10}" x2="${cx+barR}" y2="${cy+barR+18}" stroke="#333"/>
+    <text x="${cx+barR+6}" y="${cy+barR+18}" font-size="10" fill="#333">d_b=${fmt(f.db,3)}"</text>
+    ${rbrScaleBar(sc,m,m+Hc+12,W)}
+  </svg>`;
+}
+```
