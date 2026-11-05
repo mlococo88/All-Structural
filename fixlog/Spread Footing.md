@@ -4705,3 +4705,24 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 
 ### Open items
 - none.
+
+## 2026-11-05 — PR: claude/sf-lams (PR #764: https://github.com/mlococo88/All-Structural/pull/764) — Option: neglect the size-effect factor λ_s in footing one-way and two-way shear, ACI 318-19 §13.2.6.2 (SFLN; calculation option, default off = no change)
+
+### SFLN. "Neglect size effect λ_s for footing shear (ACI 318-19 §13.2.6.2)"   [calculation option; CLAUDE.md §4]
+- **Request (engineer, RISAFoundation reconciliation of the Seymour project):** an option to take λ_s = 1.0 in the footing's shear, as ACI 318-19 permits for shallow foundations. Default off.
+- **Provision read (ACI 318-19, printed p. 194, §13.2.6.2):** for one-way shallow foundations, two-way isolated footings, two-way combined footings and mat foundations, the size effect factor of 22.5 (one-way shear) and 22.6 (two-way shear) may be neglected. Paraphrased; not quoted.
+- **Where:**
+  - Input: Materials, checkbox after "One-way V_c basis" (anchor `<!-- SFLN -->`), `data-path="mat.lamsFtg"`, values `'off'` (default) / `'on'`. `defaultState().mat.lamsFtg='off'`; `migrateState`: `if(state.mat.lamsFtg!=='on')state.mat.lamsFtg='off';` (saves without the field: off, λ_s applied as before).
+  - `computePhase2` / `directionDesign` (footing one-way shear). Before: `const dV=dBot;const lam_s=Math.min(Math.sqrt(2/(1+dV/10)),1);` After: `const dV=dBot;const lamsNeg=(state.mat.lamsFtg==='on'); const lam_s=lamsNeg?1:Math.min(Math.sqrt(2/(1+dV/10)),1);` (`lamsNeg` added to the returned object).
+  - `computePhase2` punching (per pedestal). Before: `const lam_s=Math.min(Math.sqrt(2/(1+d/10)),1);` After: `const lamsNeg=(state.mat.lamsFtg==='on'); const lam_s=lamsNeg?1:Math.min(Math.sqrt(2/(1+d/10)),1);` (`lamsNeg` returned).
+  - Not changed: pedestal shear (`sfdPedShear`, `lams` in `sec`), which is not a footing and keeps λ_s.
+  - Display (option on only): Report footing x / y "One-way shear" topic reference and the λ_s step ("neglected for a shallow foundation (option on)", ACI 318-19 13.2.6.2); punching v_c step note; Footing Design one-way and punching equation blocks; dashboard rows "One-way shear" and "Punching shear"; Report "Geometry and materials" table gets a row "Size effect λ_s, footing one-way and two-way shear" (applied / neglected; shown in every report). User manual 0.3.3: one sentence on the option.
+- **Check case (Seymour Platform Foundation, f′c = 3000 psi, as saved otherwise):**
+  - One-way, x (b = 13 ft = 156 in, #7 at 8 in, d_x = 19.6875 in): ρ_w = 0.900/(12·19.6875) = 0.003810; 8ρ_w^1/3 = 1.2494. Off: λ_s = √(2/(1 + 1.96875)) = **0.8208**; φV_c = 0.75·1.2494·0.8208·1.0·54.772·156·19.6875/1000 = **129.38 kip** (9.95 kip/ft). On: λ_s = 1.0, φV_c = **157.63 kip** (12.13 kip/ft). The check itself is N/A in this project (the critical section at d from the face is outside the footing), so no status changes.
+  - One-way, y (b = 60 in, d_y = 20.5625 in): λ_s 0.8089 → 1.0; φV_c 50.49 → 62.41 kip (also N/A).
+  - Punching, Ped 2 (d = 20.125 in, b_0 = 148.41 in, β = 1.19): λ_s = √(2/(1 + 2.0125)) = 0.8148. Off: v_c = 4·0.8148·54.772 = 178.51 psi, φv_c = 133.89 psi, v_u = 60.12 psi, DCR **0.449**. On: v_c = 4·54.772 = 219.09 psi, φv_c = 164.32 psi, DCR **0.366**. Ped 1: DCR 0.077 → 0.063.
+  - RISAFoundation's one-way φV_n for the same footing, 12.49 kip/ft, is the λ_s = 1 value at its d = 20.56 in (bar layer order differs; see the next option).
+- **How verified:** headless Chromium, origin/main 805f83c vs the branch, pinned KaTeX / Plotly / three. Deep diff of `R` and `P2` on the 10 harness cases plus Seymour at 3000 psi: only the new field `lamsNeg` (false) on `desX`, `desY`, `punch[]`; Report text identical except the new materials-table row. Option on (Seymour, rev, default): only λ_s, V_c, φV_c, v_c1–3, v_c, φv_c and the DCRs move, as above. 0 console errors, 0 KaTeX errors. `node tests/check-syntax.mjs` passes; `tests/smoke/spread-footing-scroll.mjs` passes. Screenshots of the input, the Footing Design blocks and the Report steps checked by eye.
+- **Saved data:** new field `mat.lamsFtg` ('off' | 'on'); absent = 'off' = today's behaviour. No key or format change.
+- **Other copies:** none.
+- **Decision (pending engineer review):** the option covers the footing's one-way and punching checks only; the grouped-pedestal statement (SFPG) computes no stress and is unaffected. The one-way override row (a) (`vcMode 'a'`) also uses λ_s in this tool; with the option on it uses 1.0 as well, since 13.2.6.2 covers 22.5 as a whole.

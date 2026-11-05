@@ -346,6 +346,7 @@ a.wkA:hover{text-decoration:underline}
  <div class="row"><label>Steel yield f<sub>y</sub></label><input type="number" step="1000" data-path="mat.fy" data-num><span class="unit">psi</span></div>
  <div class="row"><label>Lightweight factor &lambda;</label><input type="number" step="0.05" data-path="mat.lambda" data-num><span class="unit">&ndash;</span><span class="hint">1.0 normalweight</span></div>
  <div class="row"><label>One-way V<sub>c</sub> basis</label><select data-path="mat.vcMode"><option value="c">ACI 22.5.5.1(c) &mdash; A<sub>v</sub> &lt; A<sub>v,min</sub></option><option value="a">Override: 2&lambda;&radic;f'<sub>c</sub></option></select><span class="hint">(c) is the only row valid without shear reinf.</span></div>
+ <div class="row"><label title="ACI 318-19 13.2.6.2: for shallow foundations (one-way; two-way isolated or combined footings; mats) the size effect factor of 22.5 (one-way) and 22.6 (two-way) may be neglected. Pedestal shear keeps it."><input type="checkbox" data-path="mat.lamsFtg" data-on="on" data-off="off"> Neglect size effect &lambda;<sub>s</sub> for footing shear (ACI 318-19 &sect;13.2.6.2)</label><span class="hint">off = &lambda;<sub>s</sub> per 22.5.5.1.3 / 22.6.5.2; footing one-way and two-way shear only</span></div>   <!-- SFLN -->
  <div class="row"><label>Bar coating (&psi;<sub>e</sub>)</label><select data-path="mat.coating"><option value="none">Uncoated / galvanized</option><option value="epoxy">Epoxy-coated</option></select><span class="hint">ACI Table 25.4.2.5</span></div>
  <div class="row"><label>Cover, bottom (cast on soil)</label><input type="number" step="0.25" data-path="mat.coverBot" data-num><span class="unit">in</span></div>
  <div class="row"><label>Max. aggregate size d<sub>agg</sub></label><input type="number" step="0.125" min="0" data-path="mat.dagg" data-num><span class="unit">in</span><span class="hint">ACI 25.2.1 / 25.2.3: clear spacing &ge; 4/3 d<sub>agg</sub></span></div>   <!-- SFAG -->
@@ -714,7 +715,7 @@ function defaultState(){
  return {meta:{project:'',number:'',calcBy:'',calcDate:'',chkBy:'',chkDate:''},
  loadMode:'type',
  geom:{B:10,L:8,t:2.5,Df:4},
- mat:{gc:150,fc:4000,fy:60000,lambda:1,coverBot:3,coverTop:2,ks:150,swMode:'auto',swUser:0,vcMode:'c',coating:'none',dagg:0.75,sideExp:'earth',ldExcess:'off'},
+ mat:{gc:150,fc:4000,fy:60000,lambda:1,coverBot:3,coverTop:2,ks:150,swMode:'auto',swUser:0,vcMode:'c',coating:'none',dagg:0.75,sideExp:'earth',ldExcess:'off',lamsFtg:'off'},
  soil:{mode:'vesic',qa:4,qaBasis:'gross',c:0,phi:32,gs:120,FSb:3,dw:'',qaOverride:'off',qaOverVal:4,sfdDepthF:'off'},
  ev:{cover:1.5,gev:120,qDsur:0,qLsur:0},
  freinf:{botX:{size:8,spc:9,mode:'spacing'},botY:{size:8,spc:9,mode:'spacing'},topX:{size:0,spc:12,mode:'spacing'},topY:{size:0,spc:12,mode:'spacing'}},
@@ -736,6 +737,7 @@ function migrateState(){
  const dm=defaultState().mat;['fy','lambda','coverBot','coverTop','vcMode','coating','dagg','sideExp'].forEach(k=>{if(state.mat[k]===undefined)state.mat[k]=dm[k];});   /* SFAG: dagg, older saves 3/4 in; SFCV: sideExp, older saves cast against earth */
  if(state.mat.ldExcess!=='on')state.mat.ldExcess='off';   /* SFDV: excess-reinforcement reduction of l_d (ACI 318-19 25.4.10.1); saves without the field: off (not taken, as before) */
  if(state.mat.vcMode!=='a'&&state.mat.vcMode!=='c')state.mat.vcMode='c';
+ if(state.mat.lamsFtg!=='on')state.mat.lamsFtg='off';   /* SFLN: neglect lambda_s in footing shear (ACI 318-19 13.2.6.2); saves without the field: off (lambda_s applied, as before) */
  // Backfill any stab / soil / ev keys absent from older exports (e.g. shearCouple, qaOverride).
  // Object.assign(defaultState(), imported) is shallow, so an imported stab/soil object
  // replaces the default wholesale and silently drops keys added since the export.
@@ -3214,9 +3216,9 @@ function sfdResultRows(){
   'Input validation':()=>['input checks',null,[]],
   'Flexure (footing)':()=>['ACI 318-19 §22.3; A<sub>s,min</sub> §7.6.1.1 / §24.4.3.2; s<sub>max</sub> §8.7.2.2',
    Math.max(P2.desX.dcrBot,P2.desY.dcrBot,...[P2.desX.dcrTop,P2.desY.dcrTop].filter(v=>v!=null)),['o-fd-x','o-fd-y']],
-  'One-way shear':()=>[state.mat.vcMode==='a'?'override 2λ√f′<sub>c</sub> (not ACI 318-19 Table 22.5.5.1(c))':'ACI 318-19 Table 22.5.5.1(c), size effect §22.5.5.1.3',
+  'One-way shear':()=>[(state.mat.vcMode==='a'?'override 2λ√f′<sub>c</sub> (not ACI 318-19 Table 22.5.5.1(c))':'ACI 318-19 Table 22.5.5.1(c), size effect §22.5.5.1.3')+(state.mat.lamsFtg==='on'?'; λ<sub>s</sub> neglected, §13.2.6.2':''),
    (P2.desX.oneWayOutside&&P2.desY.oneWayOutside)?null:Math.max(P2.desX.dcrV,P2.desY.dcrV),['o-fd-x','o-fd-y']],
-  'Punching shear':()=>['ACI 318-19 §22.6.5.2, §8.4.4.2',mx(P2.punch.filter(z=>!z.perimOutside).map(z=>z.dcr)),['o-fd-punch']],
+  'Punching shear':()=>['ACI 318-19 §22.6.5.2, §8.4.4.2'+(state.mat.lamsFtg==='on'?'; λ<sub>s</sub> neglected, §13.2.6.2':''),mx(P2.punch.filter(z=>!z.perimOutside).map(z=>z.dcr)),['o-fd-punch']],
   'Concrete bearing':()=>['ACI 318-19 §22.8.3.2',mx(P2.bearing.map(z=>z.dcr)),['o-fd-bear']],
   'Dowel steel (min 0.005A_g)':()=>['ACI 318-19 §16.3.4.1; D/C = A<sub>s,min</sub>/A<sub>s,prov</sub>',mx(real.map(z=>z.AsDowProv>0?z.AsDowMin/z.AsDowProv:Infinity)),['o-fd-bear']],
   'Dowel development (ℓdc)':()=>['ACI 318-19 §25.4.9.2; D/C = ℓ<sub>dc</sub>/available',mx(real.map(z=>z.availEmb>0?z.Ldc/z.availEmb:Infinity)),['o-fd-bear']],
@@ -3317,7 +3319,7 @@ function sfrModel(){
   subs.push({title:'Geometry and materials',items:[{type:'table',head:['Quantity','Value','Unit'],rows:[
    ['Footing width B (x)',sfrCell(R.B),'ft'],['Footing length L (y)',sfrCell(R.L),'ft'],['Footing thickness t',sfrCell(R.t),'ft'],['Embedment D_f (grade to bearing)',sfrCell(R.Df),'ft'],
    ['Concrete unit weight γ_c',sfrCell(R.gc*1000,0),'pcf'],["Concrete f′c",sfrCell(fc,0),'psi'],['Steel f_y',sfrCell(fy,0),'psi'],['Lightweight factor λ',sfrCell(num(state.mat.lambda)),'–'],
-   ['Bar coating',state.mat.coating==='epoxy'?'epoxy-coated':'uncoated / galvanized','–'],['One-way V_c basis',state.mat.vcMode==='a'?'override 2λ√f′c':'ACI 318-19 Table 22.5.5.1(c)','–'],
+   ['Bar coating',state.mat.coating==='epoxy'?'epoxy-coated':'uncoated / galvanized','–'],['One-way V_c basis',state.mat.vcMode==='a'?'override 2λ√f′c':'ACI 318-19 Table 22.5.5.1(c)','–'],['Size effect λ_s, footing one-way and two-way shear',state.mat.lamsFtg==='on'?'neglected (λ_s = 1.0), ACI 318-19 §13.2.6.2':'applied, ACI 318-19 §22.5.5.1.3 / §22.6.5.2','–'],
    ['Cover, bottom / top',sfrN(num(state.mat.coverBot))+' / '+sfrN(num(state.mat.coverTop)),'in'],['Side / end cover, bottom bars',sfdSideCoverIn()===null?'= bottom cover':sfrN(sfdSideCoverIn()),'in'],
    ['Subgrade modulus k_s',sfrCell(R.ks,0),'pci'],['Footing self-weight',state.mat.swMode==='user'?'user override':'computed','–']]}]});
   const soilRows=state.soil.mode==='vesic'
@@ -3545,9 +3547,10 @@ function sfrModel(){
     S({id:'s',label:'Bottom bars: #'+(mt.size||0)+' at s',sym:'s',eq:'\\le s_{max}',sub:sfrN(des.spcBot)+(des.spcBotOK?' \\le ':' \\gt ')+sfrN(des.sMax),value:des.spcBot,unit:'in',ok:!!des.spcBotOK}),
     ...(des.asMinTopReq&&des.AsTop>0?[S({id:'sT',label:'Top bars at s',sym:'s_{top}',eq:'\\le s_{max}',sub:sfrN(des.spcTop)+(des.spcTopOK?' \\le ':' \\gt ')+sfrN(des.sMax),value:des.spcTop,unit:'in',ok:!!des.spcTopOK})]:[])]});
    if(des.oneWayOutside)T.push({title:'One-way shear',ref:'ACI 318-19 8.5.3, 22.5',steps:[S({id:'vna',label:'Critical section at d from every face falls outside the footing',sym:'V_{u}',eq:'',sub:'',value:'not applicable'})]});
-   else T.push({title:'One-way shear',ref:des.vcOverride?'override 2λ√f′c (not ACI Table 22.5.5.1(c))':'ACI 318-19 Table 22.5.5.1(c), 22.5.5.1.3',steps:[
+   else T.push({title:'One-way shear',ref:(des.vcOverride?'override 2λ√f′c (not ACI Table 22.5.5.1(c))':'ACI 318-19 Table 22.5.5.1(c), 22.5.5.1.3')+(des.lamsNeg?'; λ_s neglected, 13.2.6.2':''),steps:[
     S({id:'rho',label:'Flexural steel ratio',sym:'\\rho_{w}',eq:'\\frac{A_{s}}{b d}',sub:'\\frac{'+sfrN(des.AsBot,3)+'}{12\\cdot'+sfrN(des.dBot,3)+'}',value:des.rhoW,unit:'',d:5}),
-    S({id:'lams',label:'Size effect factor',sym:'\\lambda_{s}',eq:'\\min\\left(\\sqrt{\\frac{2}{1 + d/10}},\\,1\\right)',sub:'d = '+sfrN(des.dBot,3),value:des.lam_s,unit:'',d:3}),
+    des.lamsNeg?S({id:'lams',label:'Size effect factor: neglected for a shallow foundation (option on)',sym:'\\lambda_{s}',eq:'',sub:'',value:des.lam_s,unit:'',d:3,ref:'ACI 318-19 13.2.6.2'})   /* SFLN */
+    :S({id:'lams',label:'Size effect factor',sym:'\\lambda_{s}',eq:'\\min\\left(\\sqrt{\\frac{2}{1 + d/10}},\\,1\\right)',sub:'d = '+sfrN(des.dBot,3),value:des.lam_s,unit:'',d:3}),
     S({id:'phiVc',label:'Design shear strength',sym:'\\phi V_{c}',eq:des.vcOverride?'0.75\\cdot 2\\lambda_{s}\\lambda\\sqrt{'+SFR_FC+'}\\,b d':'0.75\\cdot 8\\lambda_{s}\\lambda\\rho_{w}^{1/3}\\sqrt{'+SFR_FC+'}\\,b d',
      sub:'0.75\\cdot'+sfrN(des.vcCoef,3)+'\\cdot'+sfrN(des.lam_s,3)+'\\cdot'+sfrN(P2.lam)+'\\cdot\\sqrt{'+sfrN(Math.min(P2.fc,10000),0)+'}\\cdot'+sfrN(des.wperp*12,1)+'\\cdot'+sfrN(des.dBot,3)+'/1000',value:des.phiV,unit:'kip',note:des.vcCapped?'capped at 5λ√f′c b d':''}),
     S({id:'Vu',label:'Factored shear at d from the face (envelope)',sym:'V_{u}',eq:'',sub:'',value:des.maxV,unit:'kip',note:des.govV?'governing combination: '+des.govV.cb.name+' at '+dir+' = '+sfrN(des.govVloc,3)+' ft':''}),
@@ -3579,7 +3582,7 @@ function sfrModel(){
    const sc='pu'+i, d=pu.detail;
    if(pu.perimOutside||!d){PT.push({title:pu.label,ref:'ACI 318-19 22.6.4',steps:[S({id:sc+'.na',label:'Two-way shear: the d/2 perimeter is outside the footing on both axes',sym:'v_{u}',eq:'',sub:'',value:'not applicable'})]});return;}
    const st=[S({id:sc+'.bo',label:'Critical perimeter at d/2 ('+pu.pos+')',sym:'b_{0}',eq:'',sub:'c_{1} = '+sfrN(pu.c1,2)+',\\; c_{2} = '+sfrN(pu.c2,2)+',\\; d = '+sfrN(pu.d,3),value:pu.bo,unit:'in'}),
-    S({id:sc+'.vc',label:'Concrete two-way shear stress (least of three)',sym:'v_{c}',eq:'\\min(4,\\; 2 + 4/\\beta,\\; 2 + \\alpha_{s} d/b_{0})\\,\\lambda\\lambda_{s}\\sqrt{'+SFR_FC+'}',sub:'\\min('+sfrN(pu.vc1)+',\\,'+sfrN(pu.vc2)+',\\,'+sfrN(pu.vc3)+')',value:pu.vc,unit:'psi',ref:'ACI 318-19 22.6.5.2',note:'β = '+sfrN(pu.beta)+', α_s = '+pu.alphas+', λ_s = '+sfrN(pu.lam_s,3)}),
+    S({id:sc+'.vc',label:'Concrete two-way shear stress (least of three)',sym:'v_{c}',eq:'\\min(4,\\; 2 + 4/\\beta,\\; 2 + \\alpha_{s} d/b_{0})\\,\\lambda\\lambda_{s}\\sqrt{'+SFR_FC+'}',sub:'\\min('+sfrN(pu.vc1)+',\\,'+sfrN(pu.vc2)+',\\,'+sfrN(pu.vc3)+')',value:pu.vc,unit:'psi',ref:'ACI 318-19 22.6.5.2',note:'β = '+sfrN(pu.beta)+', α_s = '+pu.alphas+', λ_s = '+sfrN(pu.lam_s,3)+(pu.lamsNeg?' (size effect neglected for a shallow foundation, ACI 318-19 13.2.6.2; option on)':'')}),
     S({id:sc+'.phivc',label:'Design stress',sym:'\\phi v_{c}',eq:'0.75 v_{c}',sub:'0.75\\cdot'+sfrN(pu.vc),value:pu.phiVc,unit:'psi'}),
     S({id:sc+'.Vu',label:'Shear on the perimeter, '+(pu.govC?pu.govC.cb.name:''),sym:'V_{u}',eq:'P_{u} \\minus \\int q\\,dA_{crit} + W_{body,crit}',sub:sfrN(d.Pu)+' \\minus '+sfrN(d.relief)+' + '+sfrN(d.bodyIn),value:d.Vu,unit:'kip'}),   /* SFPR (review E2): P_u in the substitution */
     S({id:sc+'.Mped',label:'Moments at the pedestal base, about the pedestal centre'+((d.lex||d.ley)?' (include P·e: '+sfrN(d.PeMx)+' and '+sfrN(d.PeMy)+' kip-ft)':''),sym:'M_{x,ped}',eq:'',sub:'',value:d.MxPed,unit:'kip-ft',note:'M_y,ped = '+sfrN(d.MyPed)+' kip-ft'}),   /* SFPC */
@@ -5232,7 +5235,8 @@ function computePhase2(R){
      as an explicit user override, and is reported as such.
      Note that Vc is now a function of the PROVIDED flexural steel: changing As changes the
      shear capacity, so the two checks are coupled. */
-  const dV=dBot;const lam_s=Math.min(Math.sqrt(2/(1+dV/10)),1);
+  const dV=dBot;const lamsNeg=(state.mat.lamsFtg==='on');   /* SFLN: ACI 318-19 13.2.6.2 option: lambda_s = 1.0 in footing shear */
+  const lam_s=lamsNeg?1:Math.min(Math.sqrt(2/(1+dV/10)),1);
   const rhoW=(dV>0)?AsBot/(12*dV):0;            // As per ft over a 12 in x d strip
   const vcOverride=(state.mat.vcMode==='a');
   const vcCoef=vcOverride?2:8*Math.cbrt(Math.max(rhoW,0));
@@ -5260,7 +5264,7 @@ function computePhase2(R){
    AsMinPerFt,reqBotFlex,reqBot,reqTop,topNeeded,topProvided,asMinBotOK,asMinTopReq,asMinTopOK,sMax,spcBot,spcTop,spcBotOK,spcTopOK,clrMinB,clrB,clrBotOK,clrMinT,clrT,clrTopOK,dagg:dag,dbB:mB.db,dbT:mT.db,
    dcrBot:capBot.phiMn>0?(MuPos*12)/capBot.phiMn:(MuPos>0?Infinity:0),
    dcrTop:topProvided?(capTop.phiMn>0?(MuNeg*12)/capTop.phiMn:Infinity):null,
-   maxV,govV,govVloc,govMloc,govNegLoc,lam_s,Vc,phiV,rhoW,vcCoef,vcOverride,vcCapped,VcCap,oneWayOutside:!anyOneWaySection,
+   maxV,govV,govVloc,govMloc,govNegLoc,lam_s,lamsNeg,Vc,phiV,rhoW,vcCoef,vcOverride,vcCapped,VcCap,oneWayOutside:!anyOneWaySection,
    dcrV:(!anyOneWaySection)?0:(phiV>0?maxV/phiV:Infinity)};
  }
  const desX=directionDesign('x'), desY=directionDesign('y');
@@ -5319,7 +5323,8 @@ function computePhase2(R){
   // sum the critical faces that actually close (a fully-open side contributes no face there)
   const bo = (openYpos?0:faceY) + (openYneg?0:faceY) + (openXpos?0:faceX) + (openXneg?0:faceX);
   const beta=Math.max(bx,by)/Math.min(bx,by);
-  const lam_s=Math.min(Math.sqrt(2/(1+d/10)),1);
+  const lamsNeg=(state.mat.lamsFtg==='on');   /* SFLN: ACI 318-19 13.2.6.2 option: lambda_s = 1.0 in footing two-way shear */
+  const lam_s=lamsNeg?1:Math.min(Math.sqrt(2/(1+d/10)),1);
   const vc1=4*lam*lam_s*sqV;
   const vc2=(2+4/beta)*lam*lam_s*sqV;
   const vc3=(2+alphas*d/bo)*lam*lam_s*sqV;
@@ -5436,7 +5441,7 @@ function computePhase2(R){
    gfChk={gfX,gfY,bandX,bandY,AsBandX,AsBandY,MfX,MfY,reqX,reqY,
           okX:AsBandX>=reqX-1e-9, okY:AsBandY>=reqY-1e-9};
   }
-  return{idx:i,label:p.label,bx,by,d,c1,c2,bo,beta,pos,alphas,lam_s,vc1,vc2,vc3,vc,phiVc:0.75*vc,gfChk,closedX,closedY,nClosedFaces,twoOpposing,faceX,faceY,
+  return{idx:i,label:p.label,bx,by,d,c1,c2,bo,beta,pos,alphas,lam_s,lamsNeg,vc1,vc2,vc3,vc,phiVc:0.75*vc,gfChk,closedX,closedY,nClosedFaces,twoOpposing,faceX,faceY,
    vuMax,govC,detail,perimOutside,projPastEdge,dcr:perimOutside?0:(vc>0?vuMax/(0.75*vc):Infinity),
    edges:{edgeXpos,edgeXneg,edgeYpos,edgeYneg},nearX,nearY};
  });
@@ -5946,10 +5951,10 @@ function renderFootingDesign(){
   }else{
    const vcCode=0.75*8*Math.cbrt(Math.max(des.rhoW,0))*P2.lam*des.lam_s*Math.min(Math.sqrt(P2.fc),100)*des.wperp*12*des.dBot/1000;
    b.appendChild(eqBlock('One-way (beam) shear at d from pedestal face',
-    des.vcOverride?'OVERRIDE \u2014 not the Table 22.5.5.1 row for A_v < A_v,min':'ACI 318-19 Table 22.5.5.1(c) + size effect 22.5.5.1.3',
+    (des.vcOverride?'OVERRIDE \u2014 not the Table 22.5.5.1 row for A_v < A_v,min':'ACI 318-19 Table 22.5.5.1(c) + size effect 22.5.5.1.3')+(des.lamsNeg?'; \u03bb_s neglected per 13.2.6.2 (option)':''),
     des.vcOverride
-     ?'\\lambda_s = \\sqrt{2/(1+d/10)} = '+f2(des.lam_s)+',\\quad \\phi V_c = \\phi\\,2\\lambda\\lambda_s\\sqrt{f\'_c}\\,b_w d'
-     :'\\rho_w = \\frac{A_s}{b_w d} = '+des.rhoW.toFixed(5)+',\\quad \\lambda_s = '+f2(des.lam_s)+',\\quad \\phi V_c = \\phi\\,8\\lambda_s\\lambda(\\rho_w)^{1/3}\\sqrt{f\'_c}\\,b_w d',
+     ?(des.lamsNeg?'\\lambda_s = 1.0\\;(13.2.6.2)':'\\lambda_s = \\sqrt{2/(1+d/10)} = '+f2(des.lam_s))+',\\quad \\phi V_c = \\phi\\,2\\lambda\\lambda_s\\sqrt{f\'_c}\\,b_w d'
+     :'\\rho_w = \\frac{A_s}{b_w d} = '+des.rhoW.toFixed(5)+',\\quad \\lambda_s = '+(des.lamsNeg?'1.0\\;(13.2.6.2)':f2(des.lam_s))+',\\quad \\phi V_c = \\phi\\,8\\lambda_s\\lambda(\\rho_w)^{1/3}\\sqrt{f\'_c}\\,b_w d',
     '\\phi V_c = 0.75\\cdot'+des.vcCoef.toFixed(3)+'\\cdot'+f2(P2.lam)+'\\cdot'+f2(des.lam_s)+'\\cdot'+(P2.fc>10000?'100\\,(\\sqrt{f\'_c}\\le 100)':'\\sqrt{'+f2(P2.fc)+'}')+'\\cdot'+f2(des.wperp*12)+'\\cdot'+f2(des.dBot)+'/1000'+(des.vcCapped?'\\;\\Rightarrow\\;\\text{capped at }5\\lambda\\sqrt{f\'_c}b_w d':''),
     'V_u = '+f2(des.maxV)+'\\;\\mathrm{k},\\;\\phi V_c = '+f2(des.phiV)+'\\;\\mathrm{k},\\;\\mathrm{DCR}=\\mathbf{'+f2(des.dcrV)+'}'+(des.dcrV<=1?'\\;\\checkmark':'\\;\\text{NG \u2014 increase thickness}')));
    if(des.vcOverride)b.appendChild(el('div','warnbox','<b>V<sub>c</sub> override in use.</b> 2\u03bb\u221af\u2032<sub>c</sub> is expression (a) of ACI 318-19 Table 22.5.5.1, available only where A<sub>v</sub> \u2265 A<sub>v,min</sub>. A footing carries no shear reinforcement, so the governing row is (c) and the code value is \u03c6V<sub>c</sub> = '+f2(vcCode)+' k (reported here: '+f2(des.phiV)+' k). The two forms coincide at \u03c1<sub>w</sub> = 1.56%; below that the override is unconservative.'));
@@ -6255,7 +6260,7 @@ function renderPunching(parent){
   b.appendChild(el('p','','Governing pedestal: <b>'+gov.label+'</b> ('+gov.pos+')'+(gov.govC?', governing combination: <b>'+gov.govC.cb.name+'</b>':'')+'.'));
   const gped=R.peds[P2.punch.indexOf(gov)];
   if(gped)b.appendChild(punchingSVG(gov,gped));
-  b.appendChild(eqBlock('Concrete two-way shear stress','ACI 318-19 22.6.5.2 (min of three) + size effect',
+  b.appendChild(eqBlock('Concrete two-way shear stress','ACI 318-19 22.6.5.2 (min of three) + size effect'+(gov.lamsNeg?'; \u03bb_s = 1.0, neglected per 13.2.6.2 (option)':''),
    'v_c = \\min\\{4\\lambda\\lambda_s\\sqrt{f\'_c},\\,(2+4/\\beta)\\lambda\\lambda_s\\sqrt{f\'_c},\\,(2+\\alpha_s d/b_0)\\lambda\\lambda_s\\sqrt{f\'_c}\\}',
    'v_{c1}='+f2(gov.vc1)+',\\;v_{c2}='+f2(gov.vc2)+',\\;v_{c3}='+f2(gov.vc3)+'\\;\\mathrm{psi}',
    'v_c = '+f2(gov.vc)+'\\;\\mathrm{psi},\\;\\phi v_c = '+f2(gov.phiVc)+'\\;\\mathrm{psi}'+(P2.fc>10000?'\\quad(\\sqrt{f\'_c}\\le 100\\;\\mathrm{psi},\\;22.6.3.1)':'')));
@@ -7043,7 +7048,7 @@ manPart("p0","0. Read This First",[
 {p:"The V&middot;h couple can be excluded entirely (Stability inputs \u2192 \u201cPedestal shear couple\u201d) for comparison with software that reports shear applied at the base. Excluding it is unconservative whenever lateral load is present and should not be a design setting."},
 
 {h3:"0.3.3 Code editions and the punching size-effect factor"},
-{p:"Structural checks follow <b>ACI 318-19</b>, which introduced the size-effect factor &lambda;<sub>s</sub> = &radic;(2/(1+d/10)) &le; 1 on one-way and two-way concrete shear strength. Software or references based on ACI 318-05/08/11/14 (including RISAFoundation\u2019s spread-footing verification problems) will report punching capacities up to ~38% higher for thick footings (at d = 28 in, &lambda;<sub>s</sub> = 0.726). This is a real code change, not a modelling disagreement; Part 5 quantifies it against RISAFoundation exactly."},
+{p:"Structural checks follow <b>ACI 318-19</b>, which introduced the size-effect factor &lambda;<sub>s</sub> = &radic;(2/(1+d/10)) &le; 1 on one-way and two-way concrete shear strength. Software or references based on ACI 318-05/08/11/14 (including RISAFoundation\u2019s spread-footing verification problems) will report punching capacities up to ~38% higher for thick footings (at d = 28 in, &lambda;<sub>s</sub> = 0.726). This is a real code change, not a modelling disagreement; Part 5 quantifies it against RISAFoundation exactly. ACI 318-19 &sect;13.2.6.2 permits the size-effect factor to be neglected in the one-way and two-way shear strength of shallow foundations; the Materials box &ldquo;Neglect size effect &lambda;<sub>s</sub> for footing shear&rdquo; (default off) does that for the footing one-way and punching checks only (pedestal shear keeps &lambda;<sub>s</sub>)."},
 
 {h3:"0.3.4 One-way shear and flexure demands \u2014 direct integration, per-layer d"},
 {p:"Flexure is taken at each pedestal face and one-way shear at distance d from each face, per ACI 318-19 &sect;13.2.7. Two implementation choices matter when comparing to other software:"},
