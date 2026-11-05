@@ -4619,7 +4619,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 - Stability 4.3, overturning edge tables, still show one row "Applied M + V·h couple" per edge (not part of this request). It can be itemised the same way if wanted.
 
-## 2026-11-05 — PR: claude/sf-ot-itemise — overturning edge tables itemise the applied moments and shear couples V·(t + h) (SFOR; display only, no result change)
+## 2026-11-05 — PR: claude/sf-ot-itemise (PR #761: https://github.com/mlococo88/All-Structural/pull/761) — overturning edge tables itemise the applied moments and shear couples V·(t + h) (SFOR; display only, no result change)
 
 ### SFOR. Stability 4.3 per-edge overturning tables: the "Applied M + V·h couple" row itemised per pedestal and load type   [display only]
 - **Request (engineer, approved after SFMR's open item):** in each edge table of 4.3, replace the single lumped row with one row per pedestal and load type (applied moment; shear "Ped n T shear V_x · (t + h)" with factor × V, lever "t + h = a + b = c" and the moment), signed and bucketed for that edge as the lumped term is, with a subtotal equal to the old row, so M_r, M_o and FS are unchanged.
