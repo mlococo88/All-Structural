@@ -5292,7 +5292,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - `node tests/check-syntax.mjs`, `node tests/engine/run.mjs report`, `tests/smoke/spread-footing-scroll.mjs` pass.
 - **Saved data:** no change (Include boxes keep `manPrint`, `lrRefRpt`, `pedCbRpt`). **Other copies:** none.
 
-## 2026-11-05 — PR: claude/sf-report-figs (SFRF: tab figures and unique tables back in their sections; Summary of results first; display only, no result change)
+## 2026-11-05 — PR: claude/sf-report-figs (PR #779: https://github.com/mlococo88/All-Structural/pull/779) (SFRF: tab figures and unique tables back in their sections; Summary of results first; display only, no result change)
 - **Engineer (on SFRO decisions):**
   - put the tab figures, and any table found nowhere else in the Report, back next to the worked check they illustrate. The appendix keeps only text and tables that duplicate worked sections;
   - put the Summary of results back in front.
