@@ -1914,7 +1914,7 @@ function rbrDashColl(v,save){
 - **How verified:** see the CBIE entry in `fixlog/Concrete Beam Capacity.md`. Here, standalone: calculations and `rbrModel()` are identical to origin/main in 5 cases. The Report tab with f′c blank shows the input error, and after a valid value it shows results again with no marks left.
 - **Other copies:** `Concrete Beam Capacity.html` (suite-frame-dev), with the same edits.
 
-## 2026-11-05 — PR: claude/cbc-lambda-excess (RBLM: λ outside 0.75–1.0 is an input error; RBXS: A_s,req, A_s,prov and "From Beam Capacity" hidden while the excess box is unticked; kept in step with the Development & Splice tab of Concrete Beam Capacity.html)   [behaviour change: when results are shown; no formula change]
+## 2026-11-05 — PR: claude/cbc-lambda-excess, PR #796: https://github.com/mlococo88/All-Structural/pull/796 (RBLM: λ outside 0.75–1.0 is an input error; RBXS: A_s,req, A_s,prov and "From Beam Capacity" hidden while the excess box is unticked; kept in step with the Development & Splice tab of Concrete Beam Capacity.html)   [behaviour change: when results are shown; no formula change]
 
 ### RBLM. λ of lightweight concrete   [behaviour change: when results are shown]   Decision (pending engineer review)
 - **Before:** with "Lightweight" ticked, a λ outside 0.75–1.0, or a blank one, was clamped to 0.75–1.0 (`computeFactors`: `lambdaAdj`) with a warning, and results were shown.

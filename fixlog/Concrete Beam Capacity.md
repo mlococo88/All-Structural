@@ -3711,7 +3711,7 @@ function cbc3DScene(neg,opacity,mats){
 ```
 ```js
 /* ==============================================================
-## 2026-11-05 — PR: claude/cbc-lambda-excess (CBLM / RBLM: λ outside the code range is an input error; RBXS: A_s,req, A_s,prov and "From Beam Capacity" hidden while the excess box is unticked)   [behaviour change: when results are shown; no formula change]
+## 2026-11-05 — PR: claude/cbc-lambda-excess, PR #796: https://github.com/mlococo88/All-Structural/pull/796 (CBLM / RBLM: λ outside the code range is an input error; RBXS: A_s,req, A_s,prov and "From Beam Capacity" hidden while the excess box is unticked)   [behaviour change: when results are shown; no formula change]
 
 Engineer request (2026-11-05, follow-up to the open questions of #794). The Development & Splice edits are the same as in `ACI Rebar Development Length.html` and are logged there in full (RBLM, RBXS).
 
