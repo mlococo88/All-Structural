@@ -5044,7 +5044,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-05 — PR: claude/header-bpad (BPHD: compact header; title block, project files, hand-offs and PROFIS / DXF buttons moved to a new Project input tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-bpad (PR #813: https://github.com/mlococo88/All-Structural/pull/813) (BPHD: compact header; title block, project files, hand-offs and PROFIS / DXF buttons moved to a new Project input tab; display only, no result change)
 - **Engineer:** clean up the top of the page: the title-block inputs and the project / hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (nodes moved, not copied: every id, `onclick`, handler and saved field is the same):
   - `#hdrBtns`: before projSelect, Load, Save, Save As…, Delete, (Undo, Redo, Saved projects…), Export JSON, Import JSON, Compare, Backup All, Restore All, Import PROFIS PDF, Export to Hilti PROFIS (.pe), Export DXF, Print / PDF Report; then `#projGrid` (6 fields), `#projMetaBtns` (Use / Share project info, Pull from Steel Beam, Pull from Light Pole, Import hand-off (JSON)) and `#restoreStatus`. After: `#hdrProj` "Project: <name> · <number>" (link), Undo, Redo, Saved projects…, Print / PDF Report. `#bpGroupBar` (anchor-group picker) stays in the header.
