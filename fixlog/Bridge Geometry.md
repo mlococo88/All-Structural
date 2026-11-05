@@ -1566,7 +1566,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Formulas, factors, units, code references:** none.
 - **Other copies:** none.
 
-## 2026-11-05 — PR: claude/header-bgeo (BGHD: compact project bar; Save As New, New, JSON / DXF and LL & DL hand-off buttons moved to a new Project tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-bgeo (PR #835: https://github.com/mlococo88/All-Structural/pull/835) (BGHD: compact project bar; Save As New, New, JSON / DXF and LL & DL hand-off buttons moved to a new Project tab; display only, no result change)
 - **Engineer:** clean up the top of the page (button-only header here: the project bar had 11 buttons); the bar keeps the bridge name and the global actions.
 - **Where / before → after** (nodes moved, not copied: every id and handler is the same; the handlers are bound by id at start-up):
   - `.projbar`: before Bridge: `#cur_name`, Save (`#proj_savelib`), Save As New (`#proj_saveas`), Library (`#lib_toggle`), New (`#proj_new`), Undo / Redo (PLIB, after New), Export JSON (`#proj_save`), Import JSON (`#proj_load`, `#proj_file`), Export DXF (`#dxf_export`), Send to LL & DL (`#bgx_send`), Export hand-off (JSON) (`#bgx_export`), save status. After: Bridge: `#cur_name`, Save, Library, Undo / Redo, save status.
