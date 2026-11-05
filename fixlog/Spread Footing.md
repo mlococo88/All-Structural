@@ -4835,7 +4835,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 - A very large schedule (many pedestals × load cases) on the extra sheet is not split; it is flagged by the existing "does not fit the sheet" marker.
 
-## 2026-11-05 — PR: claude/sf-ped-combo-loads — Load Combinations 2.6: pedestal loads by combination, worked (SFPC; display only, no result change)
+## 2026-11-05 — PR: claude/sf-ped-combo-loads (PR #768: https://github.com/mlococo88/All-Structural/pull/768) — Load Combinations 2.6: pedestal loads by combination, worked (SFPC; display only, no result change)
 
 ### SFPC. Card 2.6 "Pedestal Loads by Combination (at Top of Pedestal)", its Report subsection, and links from the 3D view and the drawings   [display only]
 - **Request (engineer, CLAUDE.md §6):** the per-pedestal combined loads quoted in the 3D labels (SF3L) and on the section sheets (SFDL) were not worked anywhere.
