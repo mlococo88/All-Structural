@@ -16,6 +16,7 @@
 <!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script src="shared/list-input.js"></script>
 <style>
 :root{
@@ -12558,7 +12559,8 @@ function plibInit(){
   let tm=null; PLIB.soon=()=>{clearTimeout(tm);tm=setTimeout(()=>h.record(),400);};
   let LS=null; try{LS=window.localStorage;}catch(e){}
   const store=SharedProjects.mapStore(LS,LSK,{time:i=>i&&(i.saved||i.ts)||null});
-  const dlg=SharedProjectsUI.libraryDialog({store,storage:LS,title:"Saved projects (this browser)",
+  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'stone-arch-rating',label:'Stone Masonry Arch Load Rating',space:2,fromFile:j=>{if(!j||!j.fields||typeof j.fields!=='object')throw new Error('not a Stone Arch project file');return j;}},
+   store,storage:LS,title:"Saved projects (this browser)",
     current:()=>curProj&&store.has(curProj)?curProj:null,
     open:n=>{if(!$("projSel")||!$("bLoad"))return false;refreshProjSel(n);$("projSel").value=n;$("bLoad").click();return curProj===n;},
     renamed:(a,b)=>{if(curProj===a){curProj=b;if($("projName"))$("projName").value=b;autosave();showAutoInfo();}},

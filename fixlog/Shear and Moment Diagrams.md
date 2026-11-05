@@ -1509,3 +1509,11 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
   analysis checked headless: Project name, the autosave's `projName` and the drop-down show the new name. Header and 390 px screenshots
   looked at. `node tests/check-syntax.mjs`: pass.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
+
+## 2026-11-05 — PR: claude/github-sync-rollout (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
+- **Engineer:** the same saved projects on every device (`docs/github-sync-setup.md`; shared code `shared/github-sync.js`, fix log `shared-github-sync.md`; pilot Spread Footing, PR #808).
+- **Where:** after `<script src="shared/projects-ui.js"></script>`, new `<script src="shared/github-sync.js"></script>`; in the PLIB block, `SharedProjectsUI.libraryDialog({` gets a first property `cloud:{tool:'shear-moment-diagrams', …}` (anchor `GHS (2026-11-05): GitHub sync of this list`).
+- **File on GitHub:** `projects/shear-moment-diagrams/<name>.json`: `toFile` = `item.d` (`gatherProject()`, the export), indent 1. **Download (fromFile):** any JSON object; stored as `{t: Date.now(), d: file}`; Open then goes through the dialog's existing `open`.
+- **Saved data:** `smd_saves_v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
+- **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
+- **Formulas, factors, units, code references:** none.

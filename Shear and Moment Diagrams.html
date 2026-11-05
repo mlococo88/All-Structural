@@ -13,6 +13,7 @@
 <script src="shared/list-input.js"></script>
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 :root{--bl:#2563eb;--bdk:#1d4ed8;--blt:#eff6ff;--pu:#7c3aed;--gn:#059669;--am:#d97706;--rd:#dc2626;--tl:#0891b2;--bd:#e2e8f0;--bg:#f1f5f9;--sf:#fff;--tx:#0f172a;--mu:#64748b;--fa:#94a3b8}
@@ -1872,7 +1873,8 @@ function smdPlibInit(){
   if(!window.SharedProjects||!window.SharedProjectsUI||SMPL)return;
   let ST=null;try{ST=window.localStorage;}catch(e){}
   const store=SharedProjects.mapStore(ST,LSK,{unpack:i=>i&&i.d,time:i=>i&&i.t||null,sort:'saved'});
-  const dlg=SharedProjectsUI.libraryDialog({store,storage:ST,title:'Saved analyses (this browser)',
+  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'shear-moment-diagrams',label:'Shear and Moment Diagrams',space:1,toFile:i=>i.d,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return {t:Date.now(),d:j};}},
+   store,storage:ST,title:'Saved analyses (this browser)',
     current:()=>{const n=g('projNm').value.trim();return n&&store.has(n)?n:null;},
     open:n=>{const d=store.get(n);if(!d)return false;applyProject(JSON.parse(JSON.stringify(d)));toast(`Loaded "${n}"`);return true;},
     renamed:(a,b)=>{if(g('projNm').value.trim()===a){g('projNm').value=b;readIn();autoSave();}},

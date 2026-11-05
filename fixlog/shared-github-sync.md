@@ -58,3 +58,18 @@ Engineer's setup steps: `docs/github-sync-setup.md`.
   `Pier 3 (conflict Laptop 2026-11-05 1432)` with ours; 409 on the PUT; cloud-only download; offline queue and backoff; rate limit
   waits for the reset; delete only explicit; the token only in the header; Test connection reads only and warns on a public repository.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
+
+## 2026-11-05 — PR: claude/github-sync-rollout — roll-out to every tool with the shared Saved projects dialog; two fixes in the shared file   [storage only; no result change]
+- **Loaded by (new):** ASCE7-16 Load Generator, BasePlateAnchorDesigner, Bridge Substructure Loading, Concrete Beam Capacity (Development & Splice
+  frame), Gusset Plate Rating, Light Pole and Sign Post, Moving Load Generator, Retaining Wall Designer, Section Property Calculator, Shear and
+  Moment Diagrams, Steel Beam Design - AISC 15th, Stone Masonry Arch Load Rating, Timber Beam Check (each tool's `toFile` / `fromFile` in its fix log).
+- **Fix 1, `keepBoth` (conflict copy):** a tool whose file carries the project name (Light Pole, Retaining Wall) uploaded the copy with the
+  original's text and then once more with its own. Before: `const l = gitSha(text); const r = await c.put(pathOf(cn), text, …); … v.seen[cn] = l; … v.base[cn] = { c: r.sha, l };`.
+  After: `const l = gitSha(text), ctext = fileText(cn), lc = gitSha(ctext); const r = await c.put(pathOf(cn), ctext, …); … v.seen[cn] = lc; … v.base[cn] = { c: r.sha, l: lc };`
+  (`conflicts[name].l` stays the original's). Check: new test "a file that carries the project name": the copy's file has `name` = the copy's
+  name, and a second flush sends no PUT.
+- **Fix 2, `attach`:** before the 3 s timer, new `if (eng.configured()) eng.init();`. Before, a project saved within the first 3 s after the
+  page opened on a device with no bookkeeping yet was counted as "already here" (offered by Upload all) instead of uploaded.
+- **Not covered (own project dialogs, not `libraryDialog`):** abutment_calculator, elastomeric_design_module, Bridge Geometry, Pile Designer
+  (IndexedDB), index.html, lldf.html, Prestressed Bridge Design, Steel Bridge Design, apps/steel-bridge. Each needs its own small adapter;
+  not done (question for the engineer).

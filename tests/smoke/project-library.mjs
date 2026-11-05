@@ -212,6 +212,9 @@ export const TOOLS = {
   }
 };
 
+// Imported for TOOLS (tests/smoke/github-sync.mjs, 2026-11-05): the run below happens only when this file is the script run.
+if (/project-library\.mjs$/.test(process.argv[1] || '')) await main();
+async function main() {
 const T = TOOLS[arg('tool', 'asce7')]; if (!T) { console.error('unknown --tool; one of ' + Object.keys(TOOLS).join(', ')); process.exit(2); }
 // A: the whole tree at REF (the tool loads shared/ by relative path)
 const sha = execFileSync('git', ['-C', REPO, 'rev-parse', '--short', REF], { encoding: 'utf8' }).trim();
@@ -316,3 +319,4 @@ else { const sw = await p.evaluate(sel => document.querySelector(sel).scrollWidt
 const extra = B.errs.filter(e => !aErr.includes(e)); ok(!extra.length, 'no console errors beyond main\'s' + (extra.length ? ': ' + extra.join(' | ') : ''));
 await B.b.close();
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS'); process.exit(fails ? 1 : 0);
+}

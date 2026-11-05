@@ -14,6 +14,7 @@
 <!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script src="apps/light-pole/lts-engine.js"></script><!-- LTS-1 (2026-11-02): AASHTO LRFDLTS mode engine (window.LpLts) -->
 <style>
   /* LPTH (2026-11-02): suite theme, as BasePlateAnchorDesigner.html / apps/steel-bridge/index.html (navy header bar with the
@@ -8340,7 +8341,8 @@ $('projSelect').onchange=e=>{
   let tm=null; const soon=()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); };
   let ST=null; try{ ST=window.localStorage; }catch(e){}
   const store=SharedProjects.mapStore(ST,LS_PROJECTS);
-  const dlg=SharedProjectsUI.libraryDialog({ store, storage:ST, title:'Saved projects (this browser)',
+  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'light-pole-sign-post',label:'Light Pole and Sign Post',space:1,toFile:(i,n)=>({tool:'Light Pole and Sign Post',format:'lpp-project',version:1,name:n,state:i}),fromFile:j=>{const s=j&&j.format==='lpp-project'?j.state:j;if(!s||typeof s!=='object'||Array.isArray(s))throw new Error('not a Light Pole and Sign Post project file');return s;}},
+    store, storage:ST, title:'Saved projects (this browser)',
     current:()=>activeProject&&store.has(activeProject)?activeProject:null,
     open:n=>{ const st=store.get(n); if(!st) return false;
       if(dirty&&!confirm('Loading a project will discard your current unsaved changes. Continue?')) return false;

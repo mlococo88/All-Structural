@@ -5035,3 +5035,11 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   `S`, the stored autosave and the text of every output tab identical; 0 console errors; 390 px no sideways scroll; screenshots at
   1400 and 390 px looked at. `node tests/check-syntax.mjs` passes.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
+
+## 2026-11-05 — PR: claude/github-sync-rollout (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
+- **Engineer:** the same saved projects on every device (`docs/github-sync-setup.md`; shared code `shared/github-sync.js`, fix log `shared-github-sync.md`; pilot Spread Footing, PR #808).
+- **Where:** after `<script src="shared/projects-ui.js"></script>`, new `<script src="shared/github-sync.js"></script>`; in the PLIB block, `SharedProjectsUI.libraryDialog({` gets a first property `cloud:{tool:'base-plate-anchor', …}` (anchor `GHS (2026-11-05): GitHub sync of this list`).
+- **File on GitHub:** `projects/base-plate-anchor/<name>.json`: the export tags the state: `toFile` = `Object.assign({_bpad:'project',_bpadVersion:1}, item)`, indent 2. **Download (fromFile):** tag `_bpad:'project'`, or no tag with plate / anchor / conc (the Import JSON test); the tags are removed before storing; Open then goes through the dialog's existing `open`.
+- **Saved data:** `bpad_projects_v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
+- **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
+- **Formulas, factors, units, code references:** none.

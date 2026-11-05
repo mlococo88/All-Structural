@@ -2269,3 +2269,11 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 
 ### Open items
 - None.
+
+## 2026-11-05 — PR: claude/github-sync-rollout (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
+- **Engineer:** the same saved projects on every device (`docs/github-sync-setup.md`; shared code `shared/github-sync.js`, fix log `shared-github-sync.md`; pilot Spread Footing, PR #808).
+- **Where:** after `<script src="shared/projects-ui.js"></script>`, new `<script src="shared/github-sync.js"></script>`; in the PLIB block, `SharedProjectsUI.libraryDialog({` gets a first property `cloud:{tool:'light-pole-sign-post', …}` (anchor `GHS (2026-11-05): GitHub sync of this list`).
+- **File on GitHub:** `projects/light-pole-sign-post/<name>.json`: `toFile` = `{tool, format:'lpp-project', version:1, name, state:item}` (the export without `exported`), indent 1. **Download (fromFile):** an `lpp-project` file's `state`, or a bare state object (as Import JSON); Open then goes through the dialog's existing `open`.
+- **Saved data:** `lpp_projects_v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
+- **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
+- **Formulas, factors, units, code references:** none.

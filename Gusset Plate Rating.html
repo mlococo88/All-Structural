@@ -16,6 +16,7 @@
 <!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script src="shared/list-input.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Semi+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
@@ -3856,7 +3857,8 @@ if (document.readyState === 'loading') document.addEventListener('DOMContentLoad
     let tm = null; const soon = () => { clearTimeout(tm); tm = setTimeout(() => h.record(), 400); };
     let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
     const store = SharedProjects.mapStore(ST, KEY_PR);
-    const dlg = SharedProjectsUI.libraryDialog({ store, storage: ST, title: 'Saved projects (this browser)',
+    const dlg = SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'gusset-plate-rating',label:'Gusset Plate Rating',space:2,toFile:i=>{const e=GPR.exportProject(i);delete e.savedAt;return e;},fromFile:j=>{const r=GPR.importProject(j);if(r.error)throw new Error(r.error);return r.data;}},
+    store, storage: ST, title: 'Saved projects (this browser)',
       current: () => CUR && store.has(CUR) ? CUR : null,
       open: n => { const d = store.get(n); if (!d) return false; loadData(d, n); refreshList(); flash(`Opened "${n}".`); return true; },
       renamed: (a, b) => { if (CUR === a) { CUR = b; autosave(); } },

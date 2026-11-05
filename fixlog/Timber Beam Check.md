@@ -1857,3 +1857,11 @@ index 2f29ed5..c3246e1 100644
   - Report: 0 unresolved references, no NaN / undefined. All three appendices build (report text 21 k → 54 k characters). The three diagram images are present.
   - Print routing, headless, from each of the 12 tabs, by `beforeprint` and by the Print report button: `#rp-print` holds the Report, the running header is set, and the tab of before comes back after `afterprint`.
 - **Other copies:** none.
+
+## 2026-11-05 — PR: claude/github-sync-rollout (GHS: saved projects copied to a private GitHub repository; storage only, no result change)
+- **Engineer:** the same saved projects on every device (`docs/github-sync-setup.md`; shared code `shared/github-sync.js`, fix log `shared-github-sync.md`; pilot Spread Footing, PR #808).
+- **Where:** after `<script src="shared/projects-ui.js"></script>`, new `<script src="shared/github-sync.js"></script>`; in the PLIB block, `SharedProjectsUI.libraryDialog({` gets a first property `cloud:{tool:'timber-beam-check', …}` (anchor `GHS (2026-11-05): GitHub sync of this list`).
+- **File on GitHub:** `projects/timber-beam-check/<name>.json`: `toFile` = `item.d` (`stampVersion()`, the export), indent 2. **Download (fromFile):** any JSON object; stored as `{t: Date.now(), d: file}`; Open then goes through the dialog's existing `open`.
+- **Saved data:** `tbc_projects_v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
+- **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
+- **Formulas, factors, units, code references:** none.

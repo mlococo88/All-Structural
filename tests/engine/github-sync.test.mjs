@@ -194,3 +194,16 @@ test('github-sync: toFile / fromFile hooks (a tool whose item wraps the export, 
   gh.setRemote('projects/steel-beam/R.json', JSON.stringify({ span: 44 }, null, 2)); await e.refreshCloud(); await e.download('R');
   assert.deepEqual(JSON.parse(s.getItem('tool_v1')).R, { t: 1762370000000, d: { span: 44 } }); assert.equal(e.statusOf('R'), 'synced');
 });
+
+test('github-sync: a file that carries the project name (toFile(item, name)): the conflict copy is uploaded under its own name, once', async () => {
+  const s = mem(); G.saveSettings(s, SETUP); const gh = makeGitHubMock();
+  const store = SP.mapStore(s, 'lp_v1'); let t = Date.parse('2026-11-05T19:32:00Z');
+  const e = G.engine({ tool: 'light-pole', label: 'Light Pole', store, storage: s, fetch: gh.fetch, now: () => t, toFile: (i, n) => ({ format: 'x', name: n, state: i }) });
+  e.scan(); store.save('P', { a: 1 }); e.scan(); await e.flush();
+  gh.setRemote('projects/light-pole/P.json', JSON.stringify({ format: 'x', name: 'P', state: { a: 'remote' } }, null, 1));
+  store.save('P', { a: 2 }); e.scan(); await e.flush();
+  const cn = Object.keys(JSON.parse(s.getItem('lp_v1'))).find(n => n.startsWith('P (conflict'));
+  assert.equal(JSON.parse(gh.files.get(`projects/light-pole/${G.safeName(cn)}.json`)).name, cn);
+  const puts = gh.log.filter(l => l.method === 'PUT').length; e.scan(); await e.flush(true); assert.equal(gh.log.filter(l => l.method === 'PUT').length, puts);
+  await e.refreshCloud(); assert.equal(e.statusOf(cn), 'synced'); assert.equal(e.statusOf('P'), 'conflict');
+});
