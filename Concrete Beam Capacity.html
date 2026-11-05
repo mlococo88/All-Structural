@@ -9454,11 +9454,50 @@ function rbCapInit(){
   });
   try{ if(window.parent!==window) window.parent.postMessage({type:'requestShared'},'*'); }catch(e){}
 }
+/* RBRT (2026-11-05): the standalone &quot;ACI Rebar Development Length.html&quot; is retired (it now opens this tab). Its last session
+   (LS_KEY_OLD, never written or deleted here) is taken over ONCE (marker LS_KEY_MIG): as this tab's autosave when the tab has none
+   yet (as before, F21), or else, when its inputs differ from this tab's and from every saved project, as a new saved project
+   (the inputs shown are not changed). A notice above the inputs says what was done, until OK. Storage only; no result change. */
+const LS_KEY_MIG = &quot;rcsuite.rebar_oldAutosaveMigrated_v1&quot;;   // {at, did:'autosave'|'project'|'none', name, seen}
+function rbInpIn(a,b){ return !!(a&amp;&amp;b&amp;&amp;typeof a==='object'&amp;&amp;typeof b==='object')&amp;&amp;Object.keys(a).every(k=>String(a[k])===String(b[k])); }
+function rbOldAutosave(){
+  let old=null, cur=null, mig=null;
+  try{ old=localStorage.getItem(LS_KEY_OLD); cur=localStorage.getItem(LS_KEY); mig=localStorage.getItem(LS_KEY_MIG); }catch(e){ return; }
+  if(old===null) return;
+  if(mig!==null){ if(cur===null){ try{ localStorage.setItem(LS_KEY,old); }catch(e){} } rbOldAutosaveNote(mig); return; }   // as before (F21)
+  const at=new Date().toISOString(); let m={at, did:'none', seen:true}, o=null;
+  try{ o=JSON.parse(old); }catch(e){}
+  if(cur===null){ try{ localStorage.setItem(LS_KEY,old); }catch(e){ return; } m={at, did:'autosave', seen:false}; }
+  else if(o&amp;&amp;o.inp&amp;&amp;typeof o.inp==='object'){
+    let c=null; try{ c=JSON.parse(cur); }catch(e){}
+    const p=getProjects();
+    if(!rbInpIn(o.inp,c&amp;&amp;c.inp)&amp;&amp;!Object.keys(p).some(k=>rbInpIn(o.inp,p[k]&amp;&amp;p[k].inp))){
+      const base='Recovered from the standalone tool ('+at.slice(0,10)+')'; let nm=base, i=2; while(p[nm]) nm=base+' '+(i++);
+      p[nm]=o; try{ localStorage.setItem(LS_PROJECTS,JSON.stringify(p)); }catch(e){ return; }
+      m={at, did:'project', name:nm, seen:false};
+    }
+  }
+  try{ localStorage.setItem(LS_KEY_MIG,JSON.stringify(m)); }catch(e){}
+  rbOldAutosaveNote(JSON.stringify(m));
+}
+function rbOldAutosaveNote(s){
+  let m=null; try{ m=JSON.parse(s); }catch(e){}
+  if(!m||m.seen||(m.did!=='autosave'&amp;&amp;m.did!=='project')) return;
+  const P=document.getElementById('inputPanel'); if(!P||document.getElementById('rbOldNote')) return;
+  const d=document.createElement('div'); d.className='warnbox'; d.id='rbOldNote'; d.setAttribute('role','status'); d.style.margin='0 0 8px';
+  d.innerHTML='<b>Standalone calculator retired.</b> &quot;ACI Rebar Development Length.html&quot; now opens this tab. '+
+    (m.did==='autosave'?'The inputs last used there were opened here.'
+      :'The inputs last used there differ from this tab\'s, so they were kept as the saved project <b>'+escHTML(m.name)+'</b> (input tab &quot;Assumptions &amp;amp; Save&quot;, Saved Project); the inputs shown were not changed.')+
+    ' Projects saved there are listed here as before. <button type=&quot;button&quot; class=&quot;btn small&quot; style=&quot;margin-left:6px&quot;>OK</button>';
+  d.querySelector('button').addEventListener('click',()=>{ m.seen=true; try{ localStorage.setItem(LS_KEY_MIG,JSON.stringify(m)); }catch(e){} d.remove(); });
+  P.insertBefore(d,P.firstChild);
+}
 function init(){
   buildInputPanel();
   rebarInputTabs();   // move the input panels into the input tabs (before any state is applied)
   // one-time migration: if this tab has no autosave of its own yet, start from the old shared one (left in place)
-  try{ if(localStorage.getItem(LS_KEY)===null){ const old=localStorage.getItem(LS_KEY_OLD); if(old!==null) localStorage.setItem(LS_KEY,old); } }catch(e){}
+  // RBRT (2026-11-05): with the standalone tool retired, also its later work, once, and a notice (rbOldAutosave, above)
+  rbOldAutosave();
   // restore autosave
   let saved=null; try{saved=JSON.parse(localStorage.getItem(LS_KEY));}catch(e){}
   if(saved) applyState(saved);
