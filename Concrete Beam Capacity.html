@@ -481,6 +481,10 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
   body.cbcDashWide #cbcDashCol::-webkit-scrollbar{width:7px}
   body.cbcDashWide #cbcDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
 }
+/* CBIE (2026-11-05): a required input that is blank (stored as 0) or invalid is outlined red, with the message under its row */
+#inputPanel input.cbcInErr{border-color:var(--fail);background:#FEF2F2}
+.cbcInErrMsg{font-size:8.5pt;color:#991B1B;margin:0 0 4px;padding:2px 6px;border-left:3px solid var(--fail);background:#FEF2F2}
+@media print{.cbcInErrMsg{display:none}}
 </style>
 </head>
 <body>
@@ -1496,6 +1500,12 @@ function validate(){
   const B=[],W=[],N=[];
   const {bw,h,bf,hf,type}=S.sec, fc=S.mat.fc, fy=S.mat.fy;
   if(bw<=0||h<=0) B.push({code:&quot;Geometry&quot;,msg:&quot;Beam width and depth must be positive.&quot;});
+  /* CBIE (2026-11-05): required material inputs. A blank box is stored as 0, which gave NaN or an infinite D/C; the results
+     are now withheld until the value is entered (the inputs are marked by cbcInputMarks). */
+  if(!(fc>0)) B.push({code:&quot;Materials&quot;,msg:&quot;Concrete strength f\u2032c must be greater than 0.&quot;});
+  if(!(fy>0)) B.push({code:&quot;Materials&quot;,msg:&quot;Yield strength f_y must be greater than 0.&quot;});
+  if(!(S.mat.fyt>0)) B.push({code:&quot;Materials&quot;,msg:&quot;Transverse yield strength f_yt must be greater than 0.&quot;});
+  if(!(S.mat.lambda>0)) B.push({code:&quot;Materials&quot;,msg:&quot;\u03bb must be greater than 0 (1.0 for normal-weight concrete).&quot;});
   if(type==='tee'){
     if(bf<bw) B.push({code:&quot;Geometry&quot;,msg:&quot;Flange width b_f cannot be less than the web width b_w.&quot;});
     if(hf<=0) B.push({code:&quot;Geometry&quot;,msg:&quot;Flange thickness h_f must be positive for a T-section.&quot;});
@@ -1523,7 +1533,7 @@ function validate(){
   if(S.tor.present &amp;&amp; S.code==='ACI' &amp;&amp; fy>60) W.push({code:&quot;ACI 20.2.2.4&quot;,msg:`f_y = ${fmt(fy)} ksi exceeds 60 ksi. The longitudinal torsion steel (A_\u2113, T_n,\u2113, A_\u2113,min) is computed with f_y = 60 ksi (ACI Table 20.2.2.4(a)); flexure uses ${fmt(fy)} ksi.`});
   if(S.mat.fyt>60 &amp;&amp; S.code==='ACI') W.push({code:&quot;ACI 20.2.2.4&quot;,msg:`f_yt = ${fmt(S.mat.fyt)} ksi exceeds 60 ksi. Shear and torsion are computed with f_yt = 60 ksi (ACI Table 20.2.2.4(a)).`});
   /* proportions */
-  if(h/bw>6) W.push({code:&quot;Proportion&quot;,msg:`Depth-to-width ratio h/b_w = ${fmt(h/bw)} is unusually slender; lateral stability of the compression zone is not evaluated by this tool.`});
+  if(bw>0&amp;&amp;h>0&amp;&amp;h/bw>6) W.push({code:&quot;Proportion&quot;,msg:`Depth-to-width ratio h/b_w = ${fmt(h/bw)} is unusually slender; lateral stability of the compression zone is not evaluated by this tool.`});
   if(S.cover.cc<0.75) W.push({code:&quot;Cover&quot;,msg:`Clear cover of ${fmt(S.cover.cc)} in is below the 0.75 in absolute minimum for cast-in-place construction.`});
   /* stirrups */
   if(S.stir.present &amp;&amp; S.stir.s<=0) B.push({code:&quot;Stirrups&quot;,msg:&quot;Stirrup spacing must be greater than zero.&quot;});
@@ -1701,6 +1711,7 @@ const RCB_IN_SEC={inSection:'section',inMat:'materials',inCover:'materials',
 const RCB_IN_BLOCK=[
   [b=>/^Layer \d+ depth/.test(b.msg),'inRebar'],
   [b=>b.code==='Geometry','inSection'],
+  [b=>b.code==='Materials','inMat'],
   [b=>b.code==='Reinforcement','inRebar'],
   [b=>b.code==='Stirrups','inStir'],
   [b=>b.code==='Loads','inLoads']];
@@ -1915,7 +1926,7 @@ function buildInput(){
         fRow(b,&quot;Longitudinal torsion steel, A_ℓ&quot;,numIn(()=>S.tor.Al,v=>S.tor.Al=v,&quot;0.01&quot;,&quot;tal&quot;),&quot;in²&quot;);
         buildAlGuidance(b);
         fRow(b,&quot;Strut angle, θ&quot;,numIn(()=>S.tor.theta,v=>S.tor.theta=v,&quot;5&quot;,&quot;tth&quot;),&quot;deg&quot;);
-        b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Capacity is computed from the provided closed stirrup (A_t/s) and the longitudinal steel above. T_u is entered per load combination below.&quot;));
+        b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Capacity is computed from the provided closed stirrup (A_t/s) and the longitudinal steel above. T_u is entered per load combination on the Loads tab.&quot;));
       }
     },P);
   }
@@ -1988,7 +1999,36 @@ function buildInput(){
     ta.addEventListener(&quot;input&quot;,()=>{ S.assumptions=ta.value; autosave(); });
     b.appendChild(ta);
   },P);
+  cbcInputMarks(P);   /* CBIE: outline blank or invalid required inputs (display only) */
   rcbInputTabs(P);   /* move the sections just built into the input tabs (UI only) */
+}
+/* CBIE (2026-11-05, engineer): required inputs that are blank (stored as 0) or invalid: the box is outlined red and the reason
+   is written under its row. These are the input blockers of validate(), field by field; validate() still decides that the
+   results are withheld. Display only. */
+function cbcInputErrs(){
+  const E=[], {bw,h,bf,hf,type}=S.sec, M=S.mat;
+  if(!(bw>0)) E.push(['bw','Web width b_w must be greater than 0.']);
+  if(!(h>0)) E.push(['h','Overall depth h must be greater than 0.']);
+  if(type==='tee'){
+    if(bf<bw) E.push(['bf','Flange width b_f cannot be less than the web width b_w.']);
+    if(!(hf>0)) E.push(['hf','Flange thickness h_f must be greater than 0.']);
+    else if(hf>=h) E.push(['hf','Flange thickness h_f must be less than the overall depth h.']);
+  }
+  if(!(M.fc>0)) E.push(['fc','f\u2032c must be greater than 0.']);
+  if(!(M.fy>0)) E.push(['fy','f_y must be greater than 0.']);
+  if(!(M.fyt>0)) E.push(['fyt','f_yt must be greater than 0.']);
+  if(!(M.lambda>0)) E.push(['lam','\u03bb must be greater than 0 (1.0 for normal-weight concrete).']);
+  if(S.stir.present&amp;&amp;!(S.stir.s>0)) E.push(['sp','Stirrup spacing s must be greater than 0.']);
+  if(h>0) layerGeom(false).forEach((L,i)=>{ if(L.d<=0||L.d>=h) E.push(['ld'+i,'Layer '+(i+1)+' depth d = '+fmt(L.d)+' in is outside the section (0 to '+fmt(h)+' in).']); });
+  return E;
+}
+function cbcInputMarks(P){
+  cbcInputErrs().forEach(([k,msg])=>{
+    const i=P.querySelector('[data-fkey=&quot;'+k+'&quot;]'); if(!i) return;
+    i.classList.add('cbcInErr'); i.setAttribute('aria-invalid','true'); i.title=msg;
+    const row=i.closest('.fRow')||i.closest('table'); if(!row) return;
+    row.insertAdjacentElement('afterend',el('div','cbcInErrMsg',msg));
+  });
 }
 
 /* A_l guidance: what the section needs, what the code requires as a minimum,
@@ -3883,6 +3923,7 @@ function buildVisualsTab(pg){
       &quot;. Red = tension-face layers, blue outline = compression-face layers, grey = closed stirrup (&quot;+
       (S.stir.present?(S.stir.legs+&quot;-leg #&quot;+S.stir.size+&quot; at &quot;+fmt(S.stir.s)+&quot; in&quot;):&quot;none&quot;)+
       &quot;). Clear cover c_c = &quot;+fmt(S.cover.cc)+&quot; in. Layer depths d are measured from the extreme compression fibre.&quot;));
+    cbcWorkedIn(b,[{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,S.ui.detailCombo),txt:&quot;d, A_s&quot;}]);   /* CBIE §6 link */
   },pg);
 
   mkSection(&quot;visStrain&quot;,&quot;Strain Diagram&quot;,b=>{
@@ -3890,6 +3931,7 @@ function buildVisualsTab(pg){
     b.appendChild(el(&quot;div&quot;,&quot;figCap&quot;,&quot;Linear strain profile at nominal strength: \u03b5cu = 0.003 at the extreme &quot;+
       &quot;compression fibre, zero at the neutral axis, and the resulting strain at every reinforcement layer. &quot;+
       &quot;Hover a marker for the layer's strain, stress and depth.&quot;));
+    cbcWorkedIn(b,[{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,S.ui.detailCombo),txt:&quot;c, \u03b5_t, f_s&quot;}]);   /* CBIE §6 link */
     setTimeout(()=>{ plotStrain(&quot;strainPlot&quot;,rSel);
       const sp=document.getElementById(&quot;strainPlot&quot;);
       if(sp &amp;&amp; typeof sp.on===&quot;function&quot;){
@@ -3909,6 +3951,7 @@ function buildVisualsTab(pg){
       &quot; in. The green band under the spacing dimension is the acceptable range&quot;+
       (info?(&quot; \u2014 s_max = &quot;+fmt(info.smax)+&quot; in per &quot;+info.src):&quot;&quot;)+
       &quot;; a dimension that runs into the red band exceeds the limit.&quot;));
+    if(info) cbcWorkedIn(b,[{tab:&quot;tabDetail&quot;,c:/torsion/.test(info.src)?{card:&quot;detdTorS&quot;,name:&quot;Maximum closed-stirrup spacing for torsion&quot;}:{card:&quot;detdStirS&quot;,name:&quot;Maximum stirrup spacing&quot;},txt:&quot;s_max&quot;}]);   /* CBIE §6 link */
   },pg);
 
   mkSection(&quot;visAssist&quot;,&quot;Design Assist \u2014 Capacity Curves&quot;,b=>{
@@ -3923,6 +3966,7 @@ function buildVisualsTab(pg){
   mkSection(&quot;visDCR&quot;,&quot;Demand / Capacity Chart&quot;,b=>{
     const d=el(&quot;div&quot;); d.id=&quot;dcrPlot&quot;; b.appendChild(d);
     setTimeout(()=>plotDCR(&quot;dcrPlot&quot;),0);
+    cbcWorkedIn(b,[{tab:&quot;tabSummary&quot;,c:{card:&quot;sumMatrix&quot;,name:&quot;All Combinations \u00d7 Limit States&quot;},txt:&quot;D/C&quot;}]);   /* CBIE §6 link */
   },pg);
 
   mkSection(&quot;vis3D&quot;,&quot;3-D View&quot;,b=>{
@@ -4610,8 +4654,11 @@ function cbcDashRender(){
   const blocked=!!(VALIDATION&amp;&amp;VALIDATION.blockers&amp;&amp;VALIDATION.blockers.length);
   let items=null; if(!blocked){ try{ items=cbcDashItems(); }catch(e){ items=null; } }
   if(blocked||!items){
-    box.innerHTML='<div class=&quot;cbdMsg&quot;>'+(blocked?'Input invalid: output withheld. See the message in the output panel.':'No results yet.')+'</div>';
-    if(cnt) cnt.innerHTML=blocked?'<span class=&quot;cbdCf&quot;>input invalid</span>':'';
+    /* CBIE: the blockers by name, as the ASD tab's &quot;Input error: no results&quot; */
+    const bm=document.createElement('div'); bm.className='cbdMsg';
+    bm.textContent=blocked?'Input error: no results. '+VALIDATION.blockers.map(b=>b.msg).join(' ')+' Correct the marked inputs.':'No results yet.';
+    box.appendChild(bm);
+    if(cnt) cnt.innerHTML=blocked?'<span class=&quot;cbdCf&quot;>input error</span>':'';
     return;
   }
   let nF=0;
@@ -5203,6 +5250,10 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
   body.asdDashWide #asdDashCol::-webkit-scrollbar{width:7px}
   body.asdDashWide #asdDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
 }
+/* ASIE (2026-11-05): a required allowable stress that is blank (stored as 0) is outlined red, with the message under its row */
+#inputPanel input.asdInErr{border-color:var(--fail);background:#FEF2F2}
+.asdInErrMsg{font-size:8.5pt;color:#991B1B;margin:0 0 4px;padding:2px 6px;border-left:3px solid var(--fail);background:#FEF2F2}
+@media print{.asdInErrMsg{display:none}}
 </style>
 <style>
   .grpMini{font-family:var(--font-ui);font-size:7.5pt;font-weight:700;text-transform:uppercase;
@@ -5533,7 +5584,7 @@ function asdInputTabMarks(){
   if(!document.getElementById('asdInTabs')) return;
   const bad={};
   const mark=n=>{ const pn=n&amp;&amp;n.closest('.asdInPane'); if(pn) bad[pn.id.replace('asdInPane_','')]=1; };
-  document.querySelectorAll('#inputPanel .asdInPane .errBox,#inputPanel .asdInPane .warnBox').forEach(mark);
+  document.querySelectorAll('#inputPanel .asdInPane .errBox,#inputPanel .asdInPane .warnBox,#inputPanel .asdInPane .asdInErrMsg').forEach(mark);
   document.querySelectorAll('#inputPanel .asdInPane input').forEach(i=>{ if(i.validity&amp;&amp;i.validity.badInput) mark(i); });
   ASD_IN_TABS.forEach(([k])=>{
     const b=document.getElementById('asdInTab_'+k); if(!b) return;
@@ -5565,7 +5616,7 @@ function buildInput(){
   mkSection(&quot;inInherit&quot;,NT(&quot;From Beam Capacity&quot;),b=>{
     if(!S.inherit.src) b.appendChild(el(&quot;div&quot;,&quot;warnBox&quot;,
       &quot;No live values received yet. Open the Beam Capacity tab, or these defaults are used.&quot;));
-    const IE=asdInputErrors();
+    const IE=asdInheritErrors();   /* ASIE: the inherited values only; the allowables are marked on their own rows */
     if(IE.length) b.appendChild(el(&quot;div&quot;,&quot;errBox&quot;,&quot;Input error \u2014 no results: &quot;+IE.join(&quot; &quot;)));
     const t=el(&quot;table&quot;,&quot;vt&quot;);
     t.innerHTML=&quot;<tr><th>Symbol</th><th>Description</th><th style='text-align:right'>Value</th><th>Units</th></tr>&quot;;
@@ -5589,6 +5640,16 @@ function buildInput(){
     b.appendChild(t);
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Live from the Beam Capacity tab. Edit materials, geometry or &quot;+
       &quot;reinforcement there and they update here automatically.&quot;));
+    /* ASIE §6 link (2026-11-05): d and A_s are worked in Beam Capacity (Flexure tab, both senses); f'c, f_y, b and h are its
+       inputs. In the suite the link opens that card through the shell (cbcGoto, as the Development &amp; Splice links). */
+    if(window.parent!==window){
+      const wl=el(&quot;div&quot;,&quot;wkLink&quot;); wl.appendChild(document.createTextNode(&quot;Worked in: &quot;));
+      const a=el(&quot;a&quot;,&quot;wkA asdCapA&quot;,&quot;d, A_s \u2192 Beam Capacity \u00b7 Flexure \u00b7 Section Flexural Capacity \u2014 Positive &amp; Negative&quot;); a.href=&quot;#&quot;;
+      a.title=&quot;Opens the Beam Capacity tab at this card&quot;;
+      a.addEventListener(&quot;click&quot;,ev=>{ ev.preventDefault(); try{ window.parent.postMessage({type:'cbcGoto',tab:'tabFlex',card:'flexBoth'},'*'); }catch(err){} });
+      wl.appendChild(a); wl.appendChild(document.createTextNode(&quot; (f\u2032c, f_y, b, h: Beam Capacity inputs)&quot;));
+      b.appendChild(wl);
+    }
     if(I.shape==='tee')
       chkRow(b,&quot;Limit b_eff to b_w + 12h_f (Std. Spec. 8.10.1.1)&quot;,()=>S.mode.asd_beffLim!==false,v=>S.mode.asd_beffLim=v,&quot;asdBeffLim&quot;);
   },P,&quot;govSec&quot;);
@@ -5608,6 +5669,7 @@ function buildInput(){
     rb.style.cssText=&quot;font-size:11px;margin-top:6px;cursor:pointer&quot;;
     rb.addEventListener(&quot;click&quot;,()=>{ S.allow.ovr={fc_inv:false,fs_inv:false,fs_op:false}; refresh(); });
     b.appendChild(rb);
+    asdInputMarks(b);   /* ASIE: outline a blank allowable (display only) */
   },P);
 
   /* 4. Applied loads */
@@ -5625,7 +5687,25 @@ function buildInput(){
    ===================================================================== */
 /* Input errors (CBC-O13a): blank or zero inherited values are reported, not replaced
    (previously f'c -> 3,000 psi, f_y -> 40,000 psi, d -> 1 in., b -> 0.01 in. silently). */
-function asdInputErrors(){
+/* ASIE (2026-11-05): the allowable stresses of the rating levels shown must be greater than 0. A blank box is stored as 0,
+   which gave a zero capacity and a negative rating factor; the results are now withheld (&quot;Input error: no results&quot;). */
+function asdAllowErrs(){
+  const A=S.allow, M=S.mode, E=[];
+  if(M.inv){ if(!(A.fc_inv>0)) E.push(['fcInv','Inventory concrete allowable f_c,inv must be greater than 0.']);
+             if(!(A.fs_inv>0)) E.push(['fsInv','Inventory steel allowable f_s,inv must be greater than 0.']); }
+  if(M.op){ if(!(A.fc_op>0)) E.push(['fcOp','Operating concrete allowable f_c,op must be greater than 0.']);
+            if(!(A.fs_op>0)) E.push(['fsOp','Operating steel allowable f_s,op must be greater than 0.']); }
+  return E;
+}
+function asdInputMarks(b){
+  asdAllowErrs().forEach(([k,msg])=>{
+    const i=b.querySelector('[data-fkey=&quot;'+k+'&quot;]'); if(!i) return;
+    i.classList.add('asdInErr'); i.setAttribute('aria-invalid','true'); i.title=msg;
+    const row=i.closest('.fRow'); if(row) row.insertAdjacentElement('afterend',el('div','asdInErrMsg',msg));
+  });
+}
+function asdInputErrors(){ return asdInheritErrors().concat(asdAllowErrs().map(x=>x[1])); }
+function asdInheritErrors(){
   const I=S.inherit, isPos=S.mode.momentType==='pos';
   const dS=isPos?I.d_pos:I.d_neg, aS=isPos?I.as_pos:I.as_neg;
   const bySense=(typeof dS==='number' &amp;&amp; isFinite(dS) &amp;&amp; typeof aS==='number' &amp;&amp; isFinite(aS));
@@ -5724,7 +5804,7 @@ function buildTabs(){
 }
 function updateStatusChip(){
   const chip=document.getElementById(&quot;statusChip&quot;); if(!chip||!CC) return;
-  if(CC.errors){ chip.className=&quot;blk&quot;; chip.textContent=&quot;Input error&quot;; chip.title=&quot;No results: an inherited input is blank or zero.&quot;; return; }
+  if(CC.errors){ chip.className=&quot;blk&quot;; chip.textContent=&quot;Input error&quot;; chip.title=&quot;No results: an input is blank or zero.&quot;; return; }
   const rfs=[]; if(S.mode.inv) rfs.push(CC.rf_inv); if(S.mode.op) rfs.push(CC.rf_op);
   if(!rfs.length){ chip.className=&quot;blk&quot;; chip.textContent=&quot;—&quot;; return; }
   const gov=Math.min.apply(null,rfs);
@@ -5739,7 +5819,7 @@ function buildOutput(pg){
   updateStatusChip();
   if(CC.errors){ const eb=el(&quot;div&quot;,&quot;errBox&quot;);
     eb.innerHTML=&quot;<b>Input error \u2014 no results.</b><ul>&quot;+CC.errors.map(m=>&quot;<li>&quot;+m+&quot;</li>&quot;).join(&quot;&quot;)+&quot;</ul>&quot;+
-      &quot;Correct the value in the Beam Capacity tab.&quot;;
+      (asdInheritErrors().length?&quot;Correct the value in the Beam Capacity tab.&quot;:&quot;Correct the marked input on the Allowables tab.&quot;);   /* ASIE */
     pg.appendChild(eb); return; }
   switch(S.ui.tab){
     case &quot;tabSummary&quot;:  buildSummaryTab(pg); break;
@@ -6259,7 +6339,10 @@ function asdDashRender(){
   let items=null; try{ items=asdDashItems(); }catch(e){ items=null; }
   if(!items){
     const er=!!(CC&amp;&amp;CC.errors);
-    box.innerHTML='<div class=&quot;asddMsg&quot;>'+(er?'Input error: no results. Correct the value in the Beam Capacity tab.':'No results yet.')+'</div>';
+    /* ASIE: name the input(s) in error (inherited from Beam Capacity, or an allowable on this tab) */
+    const bm=document.createElement('div'); bm.className='asddMsg';
+    bm.textContent=er?'Input error: no results. '+CC.errors.join(' ')+(asdInheritErrors().length?' Correct the value in the Beam Capacity tab.':' Correct the marked input.'):'No results yet.';
+    box.appendChild(bm);
     if(cnt) cnt.innerHTML=er?'<span class=&quot;asddCf&quot;>input error</span>':'';
     return;
   }
@@ -6761,6 +6844,15 @@ table.vars th{background:#EEF2F6; font-family:var(--font-ui); font-size:8pt; let
   body.rbrDashWide #rbrDashCol::-webkit-scrollbar{width:7px}
   body.rbrDashWide #rbrDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
 }
+/* RBCM (2026-11-05): inputs that only one code uses are hidden in the other code mode (body class rbAASHTO, set in
+   updateCodeHint). CSS only: the inputs stay in the page, keep their values and are saved as before. */
+body.rbAASHTO .rbAciOnly{display:none!important}
+body:not(.rbAASHTO) .rbAashOnly{display:none!important}
+/* RBIE (2026-11-05): a required input that is blank or invalid is outlined red, with the message under it */
+.field input.rbInErr{border-color:var(--fail)!important; background:#FEF2F2!important;}
+.rbInErrMsg{grid-column:1/-1; font-size:8.5pt; color:#991B1B; margin:2px 0 0; padding:2px 6px; border-left:3px solid var(--fail); background:#FEF2F2; font-family:var(--font-ui);}
+/* RBIE: on a phone the two wide optional boxes (c-c spacing, bend radius R) leave room for their label and unit */
+@media screen and (max-width:600px){ .field input[type=number][placeholder]{width:150px;} }
 </style>
 </head>
 <body>
@@ -7162,10 +7254,10 @@ function buildInputPanel(){
       <div class=&quot;field&quot;><label>n bars</label><input id=&quot;nBars&quot; type=&quot;number&quot; value=&quot;1&quot; step=&quot;1&quot; min=&quot;1&quot;></div>
     </div>
     <div class=&quot;hint&quot;>Leave A<sub>tr</sub>=0 for no transverse steel (conservative). ACI: K<sub>tr</sub>=40A<sub>tr</sub>/(s·n). AASHTO: k<sub>tr</sub>=A<sub>tr</sub>/(s·n).</div>
-    <div class=&quot;field&quot; style=&quot;margin-top:8px&quot;><label>&amp;beta;<sub>t</sub> &amp;mdash; transverse compression / f<sub>r</sub> <span class=&quot;unit&quot;>(AASHTO only, &amp;minus;1 to 0)</span></label>
+    <div class=&quot;field rbAashOnly&quot; style=&quot;margin-top:8px&quot;><label>&amp;beta;<sub>t</sub> &amp;mdash; transverse compression / f<sub>r</sub> <span class=&quot;unit&quot;>(AASHTO only, &amp;minus;1 to 0)</span></label>
       <input id=&quot;betaT&quot; type=&quot;number&quot; value=&quot;0&quot; step=&quot;0.05&quot; min=&quot;-1&quot; max=&quot;0&quot;>
       <div class=&quot;hint&quot;>AASHTO 5.10.8.2.1c: ratio of the unfactored permanent-load compressive stress across the splitting plane to f<sub>r</sub> (5.4.2.6), entered as a negative number. Default 0 = no credit (conservative).</div></div>
-    <div class=&quot;field&quot; style=&quot;margin-top:8px&quot;><label>Developed bars c-c spacing <span class=&quot;unit&quot;>(in, optional)</span></label>
+    <div class=&quot;field rbAciOnly&quot; style=&quot;margin-top:8px&quot;><label>Developed bars c-c spacing <span class=&quot;unit&quot;>(in, optional)</span></label>
       <input id=&quot;barSpc&quot; type=&quot;number&quot; step=&quot;0.5&quot; min=&quot;0&quot; placeholder=&quot;for ACI 25.4.2.2 check (fy ≥ 80 ksi)&quot;></div>`)}
 
   ${panel(&quot;D2&quot;,&quot;Excess Reinforcement&quot;,true,`
@@ -7182,19 +7274,19 @@ function buildInputPanel(){
   ${panel(&quot;E&quot;,&quot;Standard Hook Factors&quot;,true,`
     <div class=&quot;field&quot;><label>Epoxy Coating (&amp;psi;<sub>e</sub>)</label>
       <select id=&quot;hookEpoxy&quot;><option value=&quot;1.0&quot; selected>Uncoated (1.0)</option><option value=&quot;1.2&quot;>Epoxy/zinc-epoxy (1.2)</option></select></div>
-    <div class=&quot;field&quot;><label>Location (&amp;psi;<sub>o</sub>)</label>
+    <div class=&quot;field rbAciOnly&quot;><label>Location (&amp;psi;<sub>o</sub>)</label>
       <select id=&quot;hookLoc&quot;>
         <option value=&quot;1.0&quot; selected>Inside column/wall core w/ side cover ≥2.5&amp;quot;, or side cover ≥6db (1.0)</option>
         <option value=&quot;1.25&quot;>Other, e.g. side cover &amp;lt;2.5&amp;quot; (1.25)</option>
       </select></div>
     <div class=&quot;chk&quot;><input id=&quot;hookConfined&quot; type=&quot;checkbox&quot;><label for=&quot;hookConfined&quot;>Confining reinf. present &amp;rarr; &amp;psi;<sub>r</sub>=1.0 (else 1.6)</label></div>
     <div class=&quot;hint&quot;>AASHTO: ticked = hook ties per 5.10.8.2.4b (#11 and smaller) &amp;rarr; k<sub>tr</sub> = 0 and l<sub>dh</sub> &amp;times; 0.8. Do not tick at a discontinuous end with side and top/bottom cover both under 2.5 in. (ties required there, no reduction).</div>
-    <div class=&quot;field&quot; style=&quot;margin-top:8px&quot;><label>Bend radius R to bar centroid <span class=&quot;unit&quot;>(in, AASHTO only)</span></label>
+    <div class=&quot;field rbAashOnly&quot; style=&quot;margin-top:8px&quot;><label>Bend radius R to bar centroid <span class=&quot;unit&quot;>(in, AASHTO only)</span></label>
       <input id=&quot;hookR&quot; type=&quot;number&quot; step=&quot;0.125&quot; min=&quot;0&quot; placeholder=&quot;blank = minimum standard bend&quot;>
       <div class=&quot;hint&quot;>AASHTO 5.10.8.2.4a. Blank = minimum finished bend of Table 5.10.2.3-1: R = D/2 + d<sub>b</sub>/2 with D = 6d<sub>b</sub> (#3&amp;ndash;#8), 8d<sub>b</sub> (#9&amp;ndash;#11), 10d<sub>b</sub> (#14, #18). The smallest R gives the longest l<sub>dh</sub> (conservative); galvanized bars have larger bends (Table 5.10.2.3-2).</div></div>`)}
 
   ${panel(&quot;E2&quot;,&quot;Compression Development (&amp;psi;<sub>r</sub>)&quot;,true,`
-    <div class=&quot;field&quot;><label>Confining Reinforcement (&amp;psi;<sub>r</sub>, ACI Table 25.4.9.3)</label>
+    <div class=&quot;field rbAciOnly&quot;><label>Confining Reinforcement (&amp;psi;<sub>r</sub>, ACI Table 25.4.9.3)</label>
       <select id=&quot;psiRc&quot;>
         <option value=&quot;1.0&quot; selected>Other (1.0)</option>
         <option value=&quot;0.75&quot;>Enclosed in spiral, circular tie (db≥1/4&amp;quot;, pitch≤4&amp;quot;), #4 ties or hoops @ ≤4&amp;quot; c-c (0.75)</option>
@@ -7209,7 +7301,7 @@ function buildInputPanel(){
       </select></div>
     <div class=&quot;field&quot;><label>% of A<sub>s</sub> spliced within lap length</label>
       <input id=&quot;pctSpliced&quot; type=&quot;number&quot; value=&quot;100&quot; step=&quot;5&quot; min=&quot;0&quot; max=&quot;100&quot;></div>
-    <div class=&quot;hint&quot;>The tool checks Class A eligibility using A<sub>s</sub> from the Excess Reinforcement panel: needs A<sub>s,prov</sub> ≥ 2·A<sub>s,req</sub> and ≤50% spliced.</div>`)}
+    <div class=&quot;hint&quot;>The tool checks Class A eligibility using A<sub>s</sub> from the Excess Reinforcement panel (D2, Tension tab): needs A<sub>s,prov</sub> ≥ 2·A<sub>s,req</sub> and ≤50% spliced.</div>`)}
 
   ${panel(&quot;G&quot;,&quot;Engineering Assumptions&quot;,true,`
     <div class=&quot;field&quot;><textarea id=&quot;assumptions&quot; rows=&quot;4&quot; placeholder=&quot;Enter any project-specific assumptions…&quot;></textarea></div>`)}
@@ -7343,7 +7435,9 @@ function rebarInputTabMarks(w){
   const bad={};
   const mark=n=>{ const pn=(n &amp;&amp; n.closest) ? n.closest('.rebarInPane') : null; if(pn) bad[pn.id.replace('rebarInPane_','')]=1; };
   const panel=id=>document.querySelector('#inputPanel .panel[data-panel=\''+id+'\']');
-  document.querySelectorAll('#inputPanel .rebarInPane input').forEach(i=>{ if(i.validity &amp;&amp; i.validity.badInput) mark(i); });
+  const codeHidden=n=>!!(n.closest &amp;&amp; n.closest(document.body.classList.contains('rbAASHTO')?'.rbAciOnly':'.rbAashOnly'));   // RBCM
+  document.querySelectorAll('#inputPanel .rebarInPane input').forEach(i=>{ if(i.validity &amp;&amp; i.validity.badInput &amp;&amp; !codeHidden(i)) mark(i); });
+  document.querySelectorAll('#inputPanel .rebarInPane .rbInErr').forEach(mark);   // RBIE
   document.querySelectorAll('#inputPanel .rebarInPane .inwarn').forEach(mark);
   const fh=document.getElementById('fcHint'); if(fh &amp;&amp; fh.textContent.trim()) mark(fh);
   (w||[]).forEach(s=>{ const m=REBAR_IN_WARN.find(r=>r[0].test(s)); if(m) mark(panel(m[1])); });
@@ -7402,6 +7496,7 @@ function validate(inp,f){
   return w;
 }
 function updateCodeHint(inp){
+  document.body.classList.toggle('rbAASHTO',inp.code===&quot;AASHTO&quot;);   // RBCM: hide the inputs of the other code (CSS only)
   const el=document.getElementById('codeHint'); if(!el) return;
   el.textContent = inp.code===&quot;AASHTO&quot;
     ? &quot;Bridge code (ksi units internally). Structure mirrors ACI with λ factors.&quot;
@@ -8017,6 +8112,8 @@ document.addEventListener('click',e=>{
    DASHBOARD — all code checks
    ===================================================================== */
 function buildDashboard(inp,f){
+  { const ie=rbInputErrors(inp,f);   // RBIE: no dashboard values while a required input is blank or invalid
+    if(ie.length){ document.getElementById('dashboard').innerHTML='<div class=&quot;warnbox&quot;>Input error: no results.</div>'; rbrDashRender(null,f,ie); return; } }
   const t=calcTension(inp,f), h=calcHook(inp,f), c=calcComp(inp,f),
         ts=calcTensSplice(inp,f,t), cs=calcCompSplice(inp,f);
   const e=classAEligible(inp,f);
@@ -8132,11 +8229,17 @@ function rbrDashGo(it){
   if(it.card) rebarGoto(it.card);
   else if(it.tab){ switchTab(it.tab); const tc=document.getElementById('tabcontent'); if(tc) tc.scrollTop=0; }
 }
-function rbrDashRender(checks,f){
+function rbrDashRender(checks,f,ie){
   const box=document.getElementById('rbrDash'), cnt=document.getElementById('rbrDashCnt'); if(!box) return;
   box.innerHTML='';
   /* RBDT (2026-11-05): the panel title names the code of the calculation, as the old dashboard heading did */
   const tt=document.getElementById('rbrDashTtl'); if(tt) tt.textContent='Checks \u2014 '+(f&amp;&amp;f.AASHTO?'AASHTO LRFD 10th Ed. \u00a75.10.8':'ACI 318-19');
+  if(ie&amp;&amp;ie.length){   // RBIE: the input error instead of the lines
+    const m=document.createElement('div'); m.className='rbrdMsg';
+    m.textContent='Input error: no results. '+ie.map(e=>e[1]).join(' ')+' Correct the marked inputs.'; box.appendChild(m);
+    if(cnt) cnt.innerHTML='<span class=&quot;rbrdCf&quot;>input error</span>';
+    return;
+  }
   const n={fail:0,warn:0};
   const tmp=document.createElement('div');
   const txt=h=>{ tmp.innerHTML=String(h); return tmp.textContent; };
@@ -8187,13 +8290,55 @@ function rbrDashColl(v,save){
   rbrDashPlace();
 })();
 
+/* RBIE (2026-11-05, engineer): required inputs. A blank number box gave NaN (f′c, A_tr, A_s,req), an infinite ACI l_d (c_b + K_tr = 0)
+   or silently no credit / no reduction (s and n with A_tr > 0, A_s,prov). While any of these stands, no result is shown: the
+   output tab, the check summary panel and the Report say &quot;Input error: no results&quot; and the inputs are outlined with the reason.
+   Optional boxes (bar c-c spacing, β_t, bend radius R, λ) keep their documented blank behaviour. Valid inputs: no change. */
+function rbInputErrors(inp,f){
+  const E=[], num=v=>typeof v==='number'&amp;&amp;isFinite(v);
+  if(!num(inp.fc)||inp.fc<=0) E.push(['fc',&quot;f′c must be greater than 0.&quot;]);
+  const atrOk=num(inp.Atr)&amp;&amp;inp.Atr>=0;
+  if(!num(inp.cb)||inp.cb<0) E.push(['cb',&quot;c_b must be entered (0 or greater).&quot;]);
+  else if(!f.AASHTO&amp;&amp;atrOk&amp;&amp;!(f.cbKtr_raw>0)) E.push(['cb',&quot;c_b must be greater than 0 when K_tr = 0 (ACI Eq. 25.4.2.4a divides by (c_b + K_tr)/d_b).&quot;]);
+  if(!atrOk) E.push(['Atr',&quot;A_tr must be entered, 0 or greater (0 for no transverse steel).&quot;]);
+  else if(inp.Atr>0){
+    if(!num(inp.sTr)) E.push(['sTr',&quot;Spacing s of the transverse steel must be entered when A_tr > 0.&quot;]);
+    if(!num(inp.nBars)) E.push(['nBars',&quot;Number of bars n must be entered when A_tr > 0.&quot;]);
+  }
+  if(inp.useExcess){
+    if(!num(inp.asReq)||inp.asReq<0) E.push(['asReq',&quot;A_s required must be entered (excess-reinforcement reduction ticked).&quot;]);
+    if(!num(inp.asProv)) E.push(['asProv',&quot;A_s provided must be entered (excess-reinforcement reduction ticked).&quot;]);
+  }
+  if(inp.tensClass===&quot;A&quot;&amp;&amp;(!num(inp.pctSpliced)||inp.pctSpliced<0||inp.pctSpliced>100)) E.push(['pctSpliced',&quot;% of A_s spliced must be between 0 and 100 (Class A eligibility).&quot;]);
+  return E;
+}
+function rbInputMarks(E){
+  document.querySelectorAll('#inputPanel .rbInErrMsg').forEach(n=>n.remove());
+  document.querySelectorAll('#inputPanel .rbInErr').forEach(n=>{ n.classList.remove('rbInErr'); n.removeAttribute('aria-invalid'); });
+  E.forEach(([id,msg])=>{
+    const i=document.getElementById(id); if(!i) return;
+    i.classList.add('rbInErr'); i.setAttribute('aria-invalid','true');
+    const m=document.createElement('div'); m.className='rbInErrMsg'; m.textContent=msg;
+    const fld=i.closest('.field');
+    if(fld&amp;&amp;i.parentNode===fld) fld.appendChild(m); else if(fld) fld.insertAdjacentElement('afterend',m); else i.insertAdjacentElement('afterend',m);
+  });
+}
+function rbInputErrHTML(E){
+  return `<div class=&quot;warnbox&quot; style=&quot;border-left-color:var(--fail)&quot;><b>Input error: no results.</b><ul>${E.map(e=>'<li>'+escHTML(e[1])+'</li>').join('')}</ul>Correct the marked inputs.</div>`;
+}
 function render(){
   const inp = readInputs();
   const f = computeFactors(inp);
   buildDashboard(inp,f);
   const w = validate(inp,f);
+  const ie = rbInputErrors(inp,f);   // RBIE
+  rbInputMarks(ie);
   if(RBRP.on){ rbrRender(); fcHintUpdate(inp); updateCodeHint(inp); rebarInputTabMarks(w); autosave(); return; }   // RBRP: the Report tab (shared viewer)
 
+  if(ie.length){   // RBIE: no results while a required input is blank or invalid
+    document.getElementById('tabcontent').innerHTML = rbInputErrHTML(ie);
+    fcHintUpdate(inp); updateCodeHint(inp); rebarInputTabMarks(w); autosave(); return;
+  }
   let body = &quot;&quot;;
   if(currentTab===&quot;tension&quot;) body = tabTension(inp,f,false);
   else if(currentTab===&quot;hook&quot;) body = tabHook(inp,f);
@@ -8732,6 +8877,9 @@ function rbComm(html){
 function rbCommSub(html){ const L=rbComm(html); return L.length?[{title:'Notes and commentary',items:L}]:[]; }
 function rbrModel(){
   const inp=readInputs(), f=computeFactors(inp), w=validate(inp,f), A=f.AASHTO, secs=[];
+  { const ie=rbInputErrors(inp,f);   // RBIE: the Report says so instead of printing NaN
+    if(ie.length) return {title:'Rebar Development &amp; Splice Calculation',subtitle:(inp.projName||'Untitled'),code:A?'AASHTO LRFD 10th Ed. (2024) §5.10.8':'ACI 318-19',
+      sections:[{title:'Development and splice lengths',subs:[{title:'No results',items:[{type:'note',warn:true,text:'Input error, no results: '+ie.map(e=>e[1]).join(' ')}]}]}]}; }
   const codeName=A?'AASHTO LRFD 10th Ed. (2024) §5.10.8':'ACI 318-19';
   const CARD_KEY={tLd:'td/ld',hLdh:'hk/ldh',cLdc:'cd/ldc',tsLen:'ts/lst',tsClassA:'ts/clsA',tConf:'td/ktrHS',csLen:'cs/lsc'};
   const tabLink=(tab,txt)=>'[[tab:'+tab+'|'+txt+']]';
@@ -8982,7 +9130,8 @@ window.addEventListener('DOMContentLoaded',()=>{
     /* CBAR-1 (2026-11-05): the Development & Splice frame also receives Beam Capacity's shared inputs (its "From Beam Capacity"
        button for A_s,req / A_s,prov) and may request them; its "Worked in" links open a Beam Capacity card (cbcGoto) */
     if(d.type==='requestShared' && e.source!==src('suite-frame-asd') && e.source!==src('suite-frame-dev')) return;
-    if(d.type==='cbcGoto' && e.source!==src('suite-frame-dev')) return;
+    /* ASIE (2026-11-05): the ASD tab's "From Beam Capacity" link opens a Beam Capacity card the same way (§6) */
+    if(d.type==='cbcGoto' && e.source!==src('suite-frame-dev') && e.source!==src('suite-frame-asd')) return;
     if(d.type==='sharedInputs'){
       lastShared=d;
       var w=cw(asdF); if(w) w.postMessage(d,'*');

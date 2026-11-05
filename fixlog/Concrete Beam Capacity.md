@@ -3455,3 +3455,81 @@ function rbrDashColl(v,save){
       it.rows.forEach(function(r){ var c=r[4]; if(!c||!c._k) return; var h=c._k.filter(function(k){ return D.index.has(k); })[0]; delete c._k; if(h) c.key=h; }); }); });
   }
 ```
+
+## 2026-11-05 — PR: claude/cbc-p3-inputs, PR #794: https://github.com/mlococo88/All-Structural/pull/794 (Phase 3 input layout: CBIE / ASIE required inputs marked, "Input error: no results" instead of NaN; RBCM inputs by code mode in Development & Splice; RBIE required inputs in Development & Splice; §6 links on the Visuals captions and the ASD "From Beam Capacity" table)   [behaviour change: when results are shown; no formula change]
+
+Engineer request (2026-11-05, Phase 3 of the concrete beam suite update, display / workflow only). The edits to the Development & Splice frame are the same as in `ACI Rebar Development Length.html` (CLAUDE.md §3) and are logged in full in `fixlog/ACI Rebar Development Length.md` (RBCM, RBIE). Results are unchanged whenever the inputs are valid.
+
+### CBIE. Beam Capacity frame: required inputs   [behaviour change: when results are shown]
+- **Problem:** a blank number box is stored as 0 (`numIn`: `set(isNaN(v)?0:v)`). For f′c, f_y, f_yt and λ this was not a blocker. The tab showed results built on 0. Default section, M_u 60 / V_u 20:
+  - f′c = 0: D/C = ∞ for shear and torsion, "9 NG";
+  - f_y = 0: φM_n = 0;
+  - f_yt = 0: combined V+T D/C = ∞;
+  - λ = 0: V_c = 0.
+  
+  The browser console also reported NaN SVG coordinates. A blank b_w was a blocker, but the box was not marked, and the warning "h/b_w = — is unusually slender" was shown beside the blocker.
+- **Where (Beam Capacity srcdoc page):**
+  - `validate()`, after `if(bw<=0||h<=0) B.push({code:"Geometry",msg:"Beam width and depth must be positive."});`, four new blockers with code "Materials":
+    ```js
+    if(!(fc>0)) B.push({code:"Materials",msg:"Concrete strength f′c must be greater than 0."});
+    if(!(fy>0)) B.push({code:"Materials",msg:"Yield strength f_y must be greater than 0."});
+    if(!(S.mat.fyt>0)) B.push({code:"Materials",msg:"Transverse yield strength f_yt must be greater than 0."});
+    if(!(S.mat.lambda>0)) B.push({code:"Materials",msg:"λ must be greater than 0 (1.0 for normal-weight concrete)."});
+    ```
+  - `validate()`: changed `if(h/bw>6) W.push({code:"Proportion",` to `if(bw>0&&h>0&&h/bw>6) W.push({code:"Proportion",`. This changes only the warning list while a geometry blocker stands.
+  - `RCB_IN_BLOCK`: added `[b=>b.code==='Materials','inMat']`, so the Materials & Cover input tab gets the red dot.
+  - `buildInput()`: before `rcbInputTabs(P);`, added `cbcInputMarks(P);`. New functions `cbcInputErrs()` and `cbcInputMarks(P)` follow `buildInput()` (anchor `/* CBIE (2026-11-05, engineer)`).
+    - They check, field by field, the input blockers of `validate()`: b_w, h, b_f and h_f (T-beam), f′c, f_y, f_yt, λ, stirrup spacing s (stirrups present) and each layer depth d.
+    - A failing box gets class `cbcInErr` and `aria-invalid`. Its reason goes in a `div.cbcInErrMsg` under the row (under the layer table for a layer depth).
+    - `validate()` still decides whether results are withheld.
+  - CSS, end of the first `<style>`: `#inputPanel input.cbcInErr{…}`, `.cbcInErrMsg{…}`, and `@media print{.cbcInErrMsg{display:none}}`.
+  - `cbcDashRender()` (CBDC check summary panel), while blocked:
+    - before: "Input invalid: output withheld. See the message in the output panel." with the count "input invalid";
+    - after: "Input error: no results. <the blocker messages> Correct the marked inputs." with the count "input error".
+  - Torsion input card note: "T_u is entered per load combination below." is now "… on the Loads tab." The combinations are on another input tab.
+- **Check case:** default project, f′c = 0. Before: results shown with D/C = ∞, "9 NG". After: status "INPUT INVALID", output "Output withheld — Materials — Concrete strength f′c must be greater than 0.", panel "Input error: no results. …", f′c box outlined with "f′c must be greater than 0." under it, red dot on Materials & Cover. f_y, f_yt, λ = 0: the same, each with its own message. b_w = 0: the box is now marked "Web width b_w must be greater than 0." and the slender warning is gone. Valid inputs: no change.
+
+### ASIE. ASD Beam Calcs frame: allowables required; §6 link back to Beam Capacity   [behaviour change: when results are shown]
+- **Problem:** a blank allowable stress (f_c,inv, f_s,inv, f_c,op, f_s,op) was stored as 0. That gave M = 0 and a negative rating factor with no error. The "From Beam Capacity" table (d, A_s) did not link to the place where those values are worked (audit item 9).
+- **Where (ASD srcdoc page):**
+  - `asdInputErrors()` is renamed `asdInheritErrors()`, with the body unchanged (the inherited f′c, f_y, d and b checks).
+  - New `asdAllowErrs()` checks the levels shown (`S.mode.inv`, `S.mode.op`): each allowable must be > 0.
+  - New `asdInputMarks(b)`.
+  - The new `asdInputErrors()` is `asdInheritErrors().concat(asdAllowErrs().map(x=>x[1]))`, so `compute()` returns `{errors}` for both kinds.
+  - The "From Beam Capacity" card's error box now uses `asdInheritErrors()`. The Allowable Stresses card calls `asdInputMarks(b)` after the Recompute button: red outline plus `.asdInErrMsg`.
+  - `asdInputTabMarks()` also marks `.asdInErrMsg`.
+  - Messages:
+    - output error box: "Correct the value in the Beam Capacity tab." or, for an allowable, "Correct the marked input on the Allowables tab.";
+    - status chip tooltip: "No results: an input is blank or zero.";
+    - check summary panel: "Input error: no results. <messages> …".
+  - §6 link: in the suite (`window.parent!==window`), under the table there is a line "Worked in: d, A_s → Beam Capacity · Flexure · Section Flexural Capacity — Positive & Negative (f′c, f_y, b, h: Beam Capacity inputs)". A click posts `{type:'cbcGoto',tab:'tabFlex',card:'flexBoth'}` to the shell.
+- **Shell:** the message filter `if(d.type==='cbcGoto' && e.source!==src('suite-frame-dev')) return;` also accepts the ASD frame: `… && e.source!==src('suite-frame-asd')) return;`. The shell then shows the Beam Capacity tab and relays the message as for the Development & Splice links (CBAR-1). The card `flexBoth` tabulates d and A_s for both senses.
+- **Check case:** default project with f_s,op typed as 0. Before: RF_op from M_op = 0 (negative), no error. After: "Input error — no results. Operating steel allowable f_s,op must be greater than 0." in the output and the panel, the box marked, a red dot on Allowables, and the Report "Input error, no results: …". A click on the link opens Beam Capacity · Flexure with that card (checked headless: active suite tab "capacity", `S.ui.tab` "tabFlex").
+
+### CBIE §6 links on the Visuals tab   [display only]
+`cbcWorkedIn` lines added under the captions:
+- Cross-section schematic: "d, A_s → Flexure · Combination k".
+- Strain diagram: "c, ε_t, f_s → Flexure · Combination k". k is the combination chosen in the Visuals selector (`S.ui.detailCombo`).
+- Stirrup elevation: "s_max → Detailing · Maximum stirrup spacing", or "… · Maximum closed-stirrup spacing for torsion" when `govSmaxInfo()` names torsion.
+- D/C chart: "D/C → Summary · All Combinations × Limit States".
+
+### Input placement review (all three frames)   [Decision (pending engineer review)]
+- Reviewed each input tab at 1600 and 390 px. Units stay on their line in every frame. In Development & Splice the two wide optional boxes (bar c-c spacing, bend radius R) are 150 px on screens up to 600 px wide (RBIE CSS), so their label and unit no longer clip.
+- Decision (pending engineer review): no input was moved between tabs.
+  - Beam Capacity: Section / Materials & Cover / Reinforcement / Checks (torsion with A_ℓ, crack control) / Loads / Assumptions.
+  - ASD: Mode & Section / Allowables / Loads.
+  - Development & Splice: the development options sit together. Tension holds the factors, confinement and excess reinforcement; Hook & Comp. holds the hook and compression factors; Splices holds the splices.
+  - Only two cross-references were corrected: the torsion note now points to the Loads tab, and the Splices hint now names "Excess Reinforcement panel (D2, Tension tab)".
+- Decision (pending engineer review): the Beam Capacity Design Code stays in the header project grid, as in the ASD frame, rather than moving to an input tab. It governs every tab.
+- Decision (pending engineer review): λ is blocked only at ≤ 0. A value above 1.0 or below 0.75 is still accepted as before. Should the code range (ACI Table 19.2.4.2, AASHTO 5.4.2.8) be a blocker?
+
+### Saved data, verification
+- **Saved data:** no key or format changed. The hidden inputs keep their values and are saved as before.
+- **How verified:**
+  - Headless Chromium, origin/main (after #793) vs branch, 5 cases (default, AASHTO f_yt 100, ACI with torsion, excess reinforcement ACI and AASHTO), for the suite and the standalone ACI Rebar tool:
+    - `computeAll()`, `allChecks()`, `cbcRptModel()`, `asdRptModel()`, the Dev calculations and `rbrModel()` are identical;
+    - the tab text differs only by the new "Worked in" lines;
+    - 0 console errors.
+  - The invalid cases above were probed headless. A suite Report with blocked inputs shows "No results" and no NaN.
+  - `node tests/check-syntax.mjs`, `node tests/smoke/phone-layout.mjs --tool cbc,aci` and `node tests/smoke/project-library.mjs` pass.
+  - Screenshots looked at: Dev Tension and Hook & Comp. tabs in ACI and AASHTO at 1600 and 390 px; the error states in all three frames; the Visuals captions; the ASD link.
