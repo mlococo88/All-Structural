@@ -26,6 +26,16 @@ header{background:var(--sf);border-bottom:1px solid var(--bd);height:50px;displa
 .pshare{display:flex;flex-direction:column;gap:2px}
 .pshare .btn{font-size:10px;padding:1px 7px}
 @media print{.alltools,.pshare{display:none!important}}
+/* SMHD (2026-11-05): the project name, the saved-analysis / template / file buttons and the shared-info buttons are in the
+   sidebar's Project card (#smdPrj); the header keeps the title, a read-only project line (a link to that card), Undo / Redo,
+   Saved projects… and Print */
+#hdrProj{font-size:12px;color:var(--mu);text-decoration:none;max-width:32em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:4px}
+#hdrProj:hover{color:var(--bl);text-decoration:underline}
+#hdrProj .hdrNone{font-style:italic;color:var(--fa)}
+#smdPrj #projNm{width:100%;display:block}
+#smdPrj .prow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+#smdPrj .pshare{flex-direction:row;flex-wrap:wrap;gap:6px}
+#smdPrj .pshare .btn{font-size:11px;padding:4px 8px}
 .upd{display:none;align-items:center;gap:5px;font-size:10px;color:var(--mu);padding:3px 8px;background:#f1f5f9;border-radius:5px}
 .upd.show{display:flex}
 .spin{width:10px;height:10px;border:2px solid #e2e8f0;border-top-color:var(--bl);border-radius:50%;animation:sp .6s linear infinite}
@@ -225,34 +235,12 @@ a.wkA:hover{text-decoration:underline}
 <body>
 <header>
   <div class="brand"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M3 12h18M3 18h18"/></svg>Beam Pro<a class="alltools" href="tools.html" target="_top">&larr; All tools</a></div>
-  <div style="display:flex;align-items:center;gap:6px">
-  <input id="projNm" type="text" placeholder="Project name…" value="">
-  <div class="pshare">
-    <button class="btn btn-s" type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
-    <button class="btn btn-s" type="button" onclick="bxShareProjectInfo()">Share project info</button>
-  </div>
-  </div>
+  <a id="hdrProj" href="#" title="Project name: edit it in the Project card (sidebar)">Project: <span id="hdrProjTxt"></span></a>
   <div style="display:flex;align-items:center;gap:6px">
     <div class="upd" id="upd"><div class="spin"></div>Updating…</div>
     <button class="btn btn-s" id="bUndo" style="font-size:12px;padding:4px 9px" title="Undo (Ctrl+Z)" disabled>↩</button>
     <button class="btn btn-s" id="bRedo" style="font-size:12px;padding:4px 9px" title="Redo (Ctrl+Shift+Z)" disabled>↪</button>
-    <select id="saveSel" style="font-size:11px;padding:4px 8px" title="Saved analyses (stored in this browser)">
-      <option value="">📁 Saved…</option>
-    </select>
-    <button class="btn btn-p" id="bSv" style="font-size:11px;padding:4px 10px" title="Ctrl+S — save/update under the project name">💾 Save</button>
-    <button class="btn btn-s" id="bDl2" style="font-size:11px;padding:4px 8px" title="Delete the saved analysis matching the project name">🗑</button>
-    <select id="tplSel" style="font-size:11px;padding:4px 8px">
-      <option value="">⚡ Templates…</option>
-      <option value="ss">Simply supported + UDL</option>
-      <option value="2s">2-span continuous</option>
-      <option value="3s">3-span w/ point load</option>
-      <option value="cant">Cantilever overhang</option>
-      <option value="ff">Fixed-fixed beam</option>
-    </select>
     <button class="btn btn-s" id="bPr" style="font-size:11px;padding:4px 10px" title="Print / PDF the calculation report (Ctrl+P), from either view">🖨 Print</button>
-    <button class="btn btn-s" id="bEx" style="font-size:11px;padding:4px 10px" title="Ctrl+E">⬇ Export</button>
-    <button class="btn btn-s" id="bIm" style="font-size:11px;padding:4px 10px">⬆ Import</button>
-    <input type="file" id="fIm" accept=".json" style="display:none">
   </div>
 </header>
 
@@ -310,6 +298,47 @@ a.wkA:hover{text-decoration:underline}
         <div class="fg"><label class="lbl">Defl. limit (L/x, 0=off)</label><input id="iDL" type="number" value="360" min="0" step="10"></div>
         <div class="fg"><label class="lbl">Allow. σ (<span class="uS">kip/ft²</span>, 0=off)</label><input id="iFb" type="number" value="0" min="0" step="any"></div>
       </div>
+    </div>
+  </div>
+
+  <!-- SMHD (2026-11-05): moved here from the header -->
+  <div id="smdPrj">
+    <div class="slbl">Project</div>
+    <div class="card" style="display:flex;flex-direction:column;gap:9px">
+      <div class="fg"><label class="lbl" for="projNm">Project name</label>
+      <input id="projNm" type="text" placeholder="Project name…" value="">
+      <p class="hint">Printed on the Report and the diagrams; 💾 Save stores the analysis under this name (Ctrl+S).</p></div>
+      <div class="fg"><label class="lbl">Saved analyses (this browser)</label>
+      <div class="prow">
+        <select id="saveSel" style="font-size:11px;padding:4px 8px" title="Saved analyses (stored in this browser)">
+          <option value="">📁 Saved…</option>
+        </select>
+        <button class="btn btn-p" id="bSv" style="font-size:11px;padding:4px 10px" title="Ctrl+S — save/update under the project name">💾 Save</button>
+        <button class="btn btn-s" id="bDl2" style="font-size:11px;padding:4px 8px" title="Delete the saved analysis matching the project name">🗑</button>
+      </div></div>
+      <div class="fg"><label class="lbl">Templates</label>
+      <div class="prow">
+        <select id="tplSel" style="font-size:11px;padding:4px 8px">
+          <option value="">⚡ Templates…</option>
+          <option value="ss">Simply supported + UDL</option>
+          <option value="2s">2-span continuous</option>
+          <option value="3s">3-span w/ point load</option>
+          <option value="cant">Cantilever overhang</option>
+          <option value="ff">Fixed-fixed beam</option>
+        </select>
+      </div></div>
+      <div class="fg"><label class="lbl">Project file (JSON)</label>
+      <div class="prow">
+        <button class="btn btn-s" id="bEx" style="font-size:11px;padding:4px 10px" title="Ctrl+E">⬇ Export</button>
+        <button class="btn btn-s" id="bIm" style="font-size:11px;padding:4px 10px">⬆ Import</button>
+        <input type="file" id="fIm" accept=".json" style="display:none">
+      </div></div>
+      <div class="fg"><label class="lbl">Shared project info</label>
+      <div class="pshare">
+        <button class="btn btn-s" type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
+        <button class="btn btn-s" type="button" onclick="bxShareProjectInfo()">Share project info</button>
+      </div>
+      <p class="hint">Copy the project name from or to the other tools.</p></div>
     </div>
   </div>
 
@@ -680,6 +709,7 @@ function schedule(){g('upd').classList.add('show');clearTimeout(cT);clearTimeout
     kT=setTimeout(()=>{renderKaTeX();g('upd').classList.remove('show');},600);},160);}
 
 function readIn(){
+  smdHdrProj();   /* SMHD: the header's project line follows #projNm (Save's name prompt, rename) */
   fu=g('iFU').value;lu=g('iLU').value;cid=g('iLC').value;
   if(!COMBOS[cid])cid=combosArr[0].id;
   Ev=parseFloat(g('iE').value);Iv=parseFloat(g('iI').value);if(!(Ev>0))Ev=0;if(!(Iv>0))Iv=0; // blank/zero/negative → flagged (was silently 1)
@@ -1545,7 +1575,7 @@ function applyProject(d){
   if(!COMBOS[cid])cid=combosArr[0].id;
   caseView=(d.caseView&&CASES.some(c2=>c2.id===d.caseView))?d.caseView:null;
   Ev=d.Ev!=null?d.Ev:Ev;Iv=d.Iv!=null?d.Iv:Iv;cv=d.cv||cv;Av=d.Av||Av;defLim=d.defLim??360;Fbv=d.Fbv??0;
-  g('projNm').value=d.projName||'';g('iFU').value=fu;g('iLU').value=lu;refreshLC();
+  g('projNm').value=d.projName||'';smdHdrProj();/* SMHD */g('iFU').value=fu;g('iLU').value=lu;refreshLC();
   g('envT').checked=envOn;g('secT').checked=secOn;g('secB').classList.toggle('hidden',!secOn);
   g('iE').value=Ev;g('iI').value=Iv;g('iC').value=cv;g('iA').value=Av;g('iDL').value=defLim;g('iFb').value=Fbv;
   if(d.userXs!=null)g('iUX').value=d.userXs;
@@ -1578,6 +1608,22 @@ g('iLC').addEventListener('change',()=>{caseView=null;cid=g('iLC').value;renderC
 ['iI','iC','iA'].forEach(id=>g(id).addEventListener('input',()=>{if(shpW){shpW=null;g('iShape').value='';}})); // edited by hand → custom section
 g('iUX').addEventListener('input',schedule);
 g('projNm').addEventListener('input',()=>{readIn();updateDirty();autoSave();});
+/* SMHD (2026-11-05): the header's read-only "Project: <name>" (#projNm, typed in the sidebar's Project card). A click scrolls
+   the sidebar (or the page, below 860 px) to the card and focuses the name. Display only: nothing is stored. */
+function smdHdrProj(){
+  const t=g('hdrProjTxt');if(!t)return;
+  const v=String(g('projNm').value||'').trim();
+  t.textContent='';
+  if(v)t.textContent=v;else{const s=document.createElement('span');s.className='hdrNone';s.textContent='(untitled: enter it in the Project card)';t.appendChild(s);}
+}
+g('projNm').addEventListener('input',smdHdrProj);smdHdrProj();
+g('hdrProj').addEventListener('click',e=>{
+  e.preventDefault();const c=g('smdPrj'),i=g('projNm');
+  const sb=c.closest('.sb');
+  if(window.matchMedia&&window.matchMedia('(max-width:860px)').matches)window.scrollTo(0,c.getBoundingClientRect().top+window.scrollY-6);
+  else if(sb)sb.scrollTop+=c.getBoundingClientRect().top-sb.getBoundingClientRect().top-6;
+  i.focus({preventScroll:true});
+});
 g('envT').addEventListener('change',e=>{envOn=e.target.checked;caseView=null;refreshDG();schedule();});
 g('secT').addEventListener('change',e=>{secOn=e.target.checked;g('secB').classList.toggle('hidden',!secOn);schedule();});
 g('iShape').addEventListener('change',e=>{
@@ -1881,7 +1927,7 @@ function smdPlibInit(){
     changed:()=>{refreshSaveList();updateDirty();}});
   const b=SharedProjectsUI.button('Saved projects…','The analyses saved in this browser: open, rename, duplicate, delete',{cls:'btn btn-s',style:'font-size:11px;padding:4px 8px;white-space:nowrap'});
   b.addEventListener('click',()=>dlg.show());
-  g('bDl2').insertAdjacentElement('afterend',b);
+  g('bRedo').insertAdjacentElement('afterend',b);   /* SMHD: in the header, after Redo */
   SMPL={store,dlg,b};
 }
 smdPlibInit();
