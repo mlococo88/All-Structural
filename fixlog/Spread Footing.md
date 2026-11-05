@@ -4669,3 +4669,39 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Check case:** saved `collapseState {'o-st-ot-xxB2':false,'o-st-ot-yyL2':true}` → +x, −x closed, +y, −y open (as before). Opening −x leaves +x closed; closing +y leaves −y open; both survive a reload (saved `o-st-ot-mx:true`, `o-st-ot-px:false`, `o-st-ot-py:false`, `o-st-ot-my:true`). No duplicate `o-st-ot-*` ids in the page.
 - **How verified:** the check case above in headless Chromium; origin/main vs branch on the 10 harness cases: `R`, `P2` identical and the Report text identical, 0 console / KaTeX errors; `node tests/check-syntax.mjs`; `tests/smoke/spread-footing-scroll.mjs`.
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-05 — PR: claude/sf-ot-term-bucket — overturning: applied moments and shear couples bucketed term by term (SFTB; CALCULATION CHANGE)
+
+### SFTB. M_r / M_o about each edge take each applied moment and each V·(t + h) couple on its own side, not their net   [result change]
+- **Request (engineer, answer to the SFOR question):** bucket term by term. Each applied pedestal moment and each shear couple, signed for the edge, goes to M_r when it resists and to M_o when it tips the footing over that edge, instead of netting them first.
+- **Where:**
+  - `sfdOTEdges(r,B,L)` / `edgeCalc` (anchor `/* SFTB (2026-11-05, engineer): the applied pedestal moments and the shear couples`). Before:
+    ```js
+    function edgeCalc(name,arm,Ma,armLabel){
+     ...
+     let appRow=null;
+     if(Math.abs(Ma)>1e-9){if(Ma>=0){Mo+=Ma;appRow={m:Ma,bucket:'o'};}else{Mr+=-Ma;appRow={m:-Ma,bucket:'r'};}}
+     edges.push({name,Mr,Mo,FS:Mo>1e-9?Mr/Mo:Infinity,rows,appRow,armLabel,Ma});}
+    edgeCalc('+x (x=+B/2)',v=>B/2-v.x,r.MaY,'B/2 − x');   // likewise −x (−MaY), +y (MaX), −y (−MaX)
+    ```
+    After:
+    ```js
+    function edgeCalc(name,arm,Ma,armLabel,ax,s){
+     ...
+     const app=[];let appR=0,appO=0;
+     T.forEach(z=>{const mA=s*z.f*(ax==='x'?z.my:z.mx), mV=s*z.f*(ax==='x'?z.vx:z.vy)*z.lev;
+      [['M',mA],['V',mV]].forEach(([k,m])=>{if(Math.abs(m)>1e-12){app.push({src:z.src,k,m,bucket:m>=0?'o':'r'});if(m>=0)appO+=m;else appR+=-m;}});});
+     Mr+=appR;Mo+=appO;
+     edges.push({name,Mr,Mo,FS:Mo>1e-9?Mr/Mo:Infinity,rows,app,appR,appO,armLabel,Ma});}
+    edgeCalc('+x (x=+B/2)',v=>B/2-v.x,r.MaY,'B/2 − x','x',1);   // −x: 'x',−1; +y: 'y',1; −y: 'y',−1
+    ```
+    `T = r.maT` (the terms `resultant()` sums into MaX / MaY: f·M and f·V·lev per pedestal and load type). The sign per edge is the one the net used (+MaY on +x, −MaY on −x, +MaX on +y, −MaX on −y). `appRow` is replaced by `app`, `appR`, `appO`; `Ma` (the net) is kept for display.
+  - Consumers of `appRow` changed to the term list: Stability 4.3 edge tables (`// SFOR: applied moments and shear couples`: each row in its own column, positive; subtotal row = net M_app,net and the two column sums `appR`, `appO`; the note above the tables reworded), the 4.3 FS equation (`\sum |M_{app}^{-}|`, `\sum M_{app}^{+}`), card 4.6 worked ratio (`sum(bk)` lists each term), Report "Overturning (governing edge)" (`otT`, label now says each term is bucketed on its own) and Report "Reference: LRFD combinations" (`sum`). Manual 4B.3 sentence: "each applied moment and each V·(t+h) couple contributes, on its own (term by term, not netted first), …".
+- **Governing provision / basis:** the tool's overturning check is FS_OT = ΣM_r / ΣM_o about each footing edge for the ASCE 7-16 §2.4.1 service combinations (min-dead 0.6D + 0.6W bracket), compared with an input target (default 2.0; reported, not gated, by default — IBC / ASCE 7 set no numeric FS for a building spread footing; IBC 1807.2.3 sets 1.5 for retaining walls). Unchanged. What changes is the classification: every action is now classified individually as resisting or overturning (as the vertical loads already were), instead of netting the applied moments and couples first. Netting understated both M_r and M_o where terms had mixed signs, so FS was higher (unconservative) for FS > 1. The LRFD reference ratios (4.6, 4.3 with an LRFD combination) use the same edge sums and change the same way.
+- **Check case ("rev", governing 0.6D + 0.6(−Wx), edge −y, s = −1 on MaX):** vertical terms unchanged, ΣW·a⁺ = 11.70·6.500 + 4.24·6.712 + 10.08·7.833 + 4.48·1.833 + 21.86·8.433 + 9.00·1.833 = 392.49, ΣW·a⁻ = 6.66·1.833 = 12.21. Terms: Ped 2 D M_x 0.60·31.50 = 18.90 → −18.90 (resists); Ped 2 D V_y 0.60·0.50·(2.00 + 7.00) = 2.70 → −2.70 (resists); Ped 2 Wx M_x −0.60·120.20 = −72.12 → +72.12 (overturns); Ped 2 Wx V_y −0.60·15.10·9.00 = −81.54 → +81.54 (overturns). Before (net 132.06 → M_o): M_r = 392.49, M_o = 12.21 + 132.06 = 144.27, FS = 2.72. After: M_r = 392.49 + 18.90 + 2.70 = 414.09, M_o = 12.21 + 72.12 + 81.54 = 165.87, FS = 414.09 / 165.87 = 2.50. Governing combination and edge unchanged; FS target 2.00 still met (not gated in this case). LRFD reference, 0.9D + 1.0(−Wx), edge −y: M_r 588.73 → 621.13, M_o 244.05 → 276.45, ratio 2.41 → 2.25.
+- **What moves (deep diff, origin/main vs branch, 10 harness cases):** def, sfe, sfe5, dir, sfe9, thin, edgeHook: nothing (every applied term about an edge has the same sign, so term-by-term = net). rev, revEx, revHook (identical lists, 93 values each): M_r, M_o, FS of the edges of the six combinations with D moments opposing a negative wind (D + 0.6(−Wx), D + 0.6(−Wy), D + 0.75L + 0.45(−Wx) + 0.75S, D + 0.75L + 0.45(−Wy) + 0.75S, 0.6D + 0.6(−Wx), 0.6D + 0.6(−Wy)); their otMin edge changes for D + 0.6(−Wx) (−x 4.76 → −y 4.16), D + 0.75L + 0.45(−Wx) + 0.75S (−x 8.73 → −y 7.05) and 0.6D + 0.6(−Wy) (+x 71.01 → +y 19.52); R.govOT (and the same object under govSlx/govSly/govSlr.otMin) 2.72 → 2.50. LRFD reference: six strength combinations change the same way; smallest ratio 0.9D + 1.0(−Wx) −y 2.41 → 2.25. P2 (footing / pedestal design) unchanged in every case. Besides these, only the field names change (`appRow` → `app`, `appR`, `appO`).
+- **How verified:** the deep diff above; self-consistency "all 11 passed" on every case; in the page, for every case × shear couple on/off × every service and LRFD combination × edge, the + rows sum to `appO`, the − rows to `appR` and all rows to the net `Ma` (0 mismatches); `node tests/check-syntax.mjs`; `tests/smoke/spread-footing-scroll.mjs`; screenshots of the 4.3 edge tables (service and LRFD) and the Report pages checked by eye.
+- **Saved data:** none (no input or key changed). **Other copies:** none.
+
+### Open items
+- none.
