@@ -4649,7 +4649,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - Question for the engineer: should the applied moments and couples about an edge be bucketed term by term (each opposing term into M_r) instead of netted first? That changes M_r, M_o and FS wherever terms have mixed signs (e.g. "rev", edge −y above: M_r 392.49 → 414.09, M_o 144.27 → 165.87, FS 2.72 → 2.50). Not changed here.
 - Pre-existing: the +x and −x edge panels share the id `o-st-ot-xxB2` (and +y / −y `o-st-ot-yyL2`), because the id strips the sign, so their open/closed state is shared. Not changed.
 
-## 2026-11-05 — PR: claude/sf-ot-panel-ids — one panel id per overturning edge (SFID; display only, no result change)
+## 2026-11-05 — PR: claude/sf-ot-panel-ids (PR #762: https://github.com/mlococo88/All-Structural/pull/762) — one panel id per overturning edge (SFID; display only, no result change)
 
 ### SFID. Stability 4.3: the four per-edge panels get unique ids, each opens and closes on its own   [display only]
 - **Problem (raised in SFOR, engineer approved the fix):** the per-edge panel id was `'o-st-ot-'+e.name.replace(/[^a-z0-9]/gi,'')`, which strips the sign, so +x and −x were both `o-st-ot-xxB2` and +y and −y both `o-st-ot-yyL2`: duplicate DOM ids, and one saved open/closed state (`collapseState`, saved in `sfd_auto`) per pair.
