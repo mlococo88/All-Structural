@@ -37,6 +37,18 @@ input:focus,select:focus,textarea:focus{outline:2px solid #9db8dc;outline-offset
 #tbactions{flex:0 0 auto;display:flex;flex-direction:column;gap:4px}
 #tbshare{flex:0 0 auto;display:flex;flex-direction:column;gap:4px}
 #tbshare .btn{font-size:9pt;padding:2px 8px}
+/* A7HD (2026-11-05): the title block and the hand-off buttons are in the Project input tab (#a7prjPane); the header keeps the
+   title, a read-only project line (a link to that tab) and the global actions (Print / PDF, Excel, Undo / Redo, Saved projects) */
+#hdrProj{flex:1 1 auto;min-width:0;align-self:center;font-size:10pt;color:var(--navy);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#hdrProj:hover{text-decoration:underline}
+#hdrProj .hdrNone{font-style:italic;color:#777}
+#titlewrap #tbactions{flex-direction:row;flex-wrap:wrap;align-items:center;justify-content:flex-end;align-self:center;margin-left:auto}
+#a7prjPane .pnl>.hd{cursor:default}
+#a7prjPane #tbfields{grid-template-columns:repeat(2,minmax(0,1fr))}
+#a7prjPane #tbshare{flex-direction:column;gap:0}
+#a7prjPane .prjGrp{margin:0 0 8px}
+#a7prjPane .prjGrp>b{display:block;font-size:10pt;color:var(--navy)}
+#a7prjPane .prjGrp .hint{margin:1px 0 3px}
 #appid .alltools{display:inline-block;margin-top:3px;font-size:9pt;color:var(--navy);text-decoration:none}
 #appid .alltools:hover{text-decoration:underline}
 @media print{.alltools,#tbshare{display:none!important}}
@@ -189,13 +201,15 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
   #appid{flex:1 1 100%;border-right:none;padding-right:0}
   #tbfields{flex:1 1 100%;grid-template-columns:repeat(2,minmax(0,1fr))}
   #tbactions,#tbshare{flex:1 1 100%;flex-direction:row;flex-wrap:wrap}
+  #hdrProj{flex:1 1 100%}
+  #titlewrap #tbactions{justify-content:flex-start;margin-left:0}
   #main,#mainwrap,#inpanel,#outpanel{display:block}
   #inpanel{max-width:none;min-width:0;border-right:none;border-bottom:2px solid var(--navy)}
   #inbody{overflow:visible;padding-bottom:16px}
   #outbody{overflow:visible;padding:10px 10px 40px}
   .pnl>.bd{overflow-x:auto}   /* a wide table scrolls inside its panel */
 }
-@media screen and (max-width:520px){#tbfields{grid-template-columns:minmax(0,1fr)}}
+@media screen and (max-width:520px){#tbfields,#a7prjPane #tbfields{grid-template-columns:minmax(0,1fr)}}
 </style>
 </head>
 <body>
@@ -207,25 +221,10 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
       <div class="code">Snow &middot; Wind &middot; Seismic &nbsp;|&nbsp; <span id="appver"></span></div>
       <a class="alltools" href="tools.html" target="_top">&larr; All tools</a>
     </div>
-    <div id="tbfields">
-      <div class="tbf"><label>Project</label><input id="tb_project" data-tb></div>
-      <div class="tbf"><label>Computed by</label><input id="tb_by" data-tb></div>
-      <div class="tbf"><label>Subject</label><input id="tb_subject" data-tb></div>
-      <div class="tbf"><label>Date</label><input id="tb_date" data-tb></div>
-      <div class="tbf"><label>Task</label><input id="tb_task" data-tb></div>
-      <div class="tbf"><label>Checked by</label><input id="tb_chk" data-tb></div>
-      <div class="tbf"><label>Job No.</label><input id="tb_job" data-tb></div>
-      <div class="tbf"><label>Chk. Date</label><input id="tb_chkdate" data-tb></div>
-    </div>
+    <a id="hdrProj" href="#" title="Project and job number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
     <div id="tbactions">
       <button class="btn pri" onclick="a7PrintAny()" title="Print / PDF the calculation report (the Report tab), from any tab">Print / PDF</button>
       <button class="btn" id="xlbtn" onclick="doExcel()">Excel calculation</button>
-      <button class="btn" type="button" onclick="bxSendBuildingLoads()" title="Publish the nominal area loads (psf) and seismic parameters for Steel Beam Design (HANDOFF.md, channel buildingLoads)">Send to other tools</button>
-      <button class="btn" type="button" onclick="bxExportBuildingLoads()" title="Save the same hand-off as a JSON file">Export hand-off (JSON)</button>
-    </div>
-    <div id="tbshare">
-      <button class="btn" type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
-      <button class="btn" type="button" onclick="bxShareProjectInfo()">Share project info</button>
     </div>
   </div>
 </div>
@@ -233,7 +232,32 @@ svg.sch .ld{stroke:var(--bad);fill:var(--bad)}
 <div id="main"><div id="mainwrap">
   <div id="inpanel">
     <div id="intabs"></div>
-    <div id="inbody"><div id="inputs"></div></div>
+    <div id="inbody"><div id="inputs"></div>
+      <div id="a7prjPane" hidden><!-- A7HD (2026-11-05): moved here from the header; shown first on the Project tab by buildInputs() -->
+      <div class="pnl"><div class="hd"><span class="ttl">Title block</span></div><div class="bd">
+        <div id="tbfields">
+          <div class="tbf"><label>Project</label><input id="tb_project" data-tb></div>
+          <div class="tbf"><label>Computed by</label><input id="tb_by" data-tb></div>
+          <div class="tbf"><label>Subject</label><input id="tb_subject" data-tb></div>
+          <div class="tbf"><label>Date</label><input id="tb_date" data-tb></div>
+          <div class="tbf"><label>Task</label><input id="tb_task" data-tb></div>
+          <div class="tbf"><label>Checked by</label><input id="tb_chk" data-tb></div>
+          <div class="tbf"><label>Job No.</label><input id="tb_job" data-tb></div>
+          <div class="tbf"><label>Chk. Date</label><input id="tb_chkdate" data-tb></div>
+        </div>
+        <div class="hint">Printed on the report and the Excel calculation sheet.</div>
+      </div></div>
+      <div class="pnl"><div class="hd"><span class="ttl">Shared project info and hand-offs</span></div><div class="bd" id="tbshare">
+        <div class="prjGrp"><b>Project info</b><div class="hint">Copy the title block from or to the other tools.</div><div class="btnrow">
+        <button class="btn" type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
+        <button class="btn" type="button" onclick="bxShareProjectInfo()">Share project info</button></div></div>
+        <div class="prjGrp"><b>Building loads to other tools</b><div class="hint">Nominal area loads (psf) and seismic parameters for Steel Beam Design, or as a file.</div><div class="btnrow">
+        <button class="btn" type="button" onclick="bxSendBuildingLoads()" title="Publish the nominal area loads (psf) and seismic parameters for Steel Beam Design (HANDOFF.md, channel buildingLoads)">Send to other tools</button>
+        <button class="btn" type="button" onclick="bxExportBuildingLoads()" title="Save the same hand-off as a JSON file">Export hand-off (JSON)</button>
+        </div></div>
+      </div></div>
+      </div>
+    </div>
   </div>
   <div id="outpanel">
     <div id="tabs"></div>
@@ -1436,7 +1460,7 @@ const ITAB_HELP={
   snow:"Roof exposure and thermal condition, and the Fig. 7.4-1 surface qualifier.",
   wind:"How the code tables are treated, the gust factor, and any Chapter 29 appurtenances.",
   seis:"Site class, structural system, height, weight and the level schedule for the Sec. 12.8.3 vertical distribution.",
-  proj:"Engineering assumptions, and saving, loading and exporting the project."
+  proj:"Title block, shared project info and hand-offs, engineering assumptions, and saving, loading and exporting the project."
 };
 function itabState(key){
   const anchors=(ITABS.find(t=>t[0]===key)||[])[2]||[];
@@ -1643,9 +1667,13 @@ function stSummary(){
 
 function buildInputs(){
   buildInputTabs();
-  const host=document.getElementById("inputs"); host.innerHTML=""; let n=0;
+  const PJ=document.getElementById("a7prjPane");   /* A7HD: the title block and hand-off buttons survive the rebuild (kept hidden, */
+  const host=document.getElementById("inputs");     /*  outside #inputs, when another tab is open) */
+  if(PJ){ PJ.hidden=true; host.parentNode.appendChild(PJ); }
+  host.innerHTML=""; let n=0;
   const T=S.itab;
   host.appendChild(el("div",null,'<div id="intabhelp">'+ITAB_HELP[T]+'</div>'));
+  if(T==="proj"&&PJ){ host.appendChild(PJ); PJ.hidden=false; }
 
   /* ================= SITE ================= */
   if(T==="site"){
@@ -3878,7 +3906,7 @@ Each tab also echoes its own principal results at the bottom, so the geometry, t
 shear can be confirmed without leaving the input panel.</p>
 <h3>2.2 Workflow</h3>
 <ol>
-<li>Fill the title block. These fields populate the header and the printed report and match the firm's Excel calculation template.</li>
+<li>Fill the title block on the <b>Project</b> input tab. These fields populate the printed report and match the firm's Excel calculation template.</li>
 <li><b>Site and Jurisdiction.</b> Massachusetts community, or manual entry with a source. Enter the site elevation; it drives K<sub>e</sub> and, where a mean elevation is tabulated, the note 3 snow adjustment.</li>
 <li><b>Building Geometry.</b> Plan dimensions, eave height, roof type, slope, and which axis the ridge runs parallel to. The plan and elevation redraw to scale as you type.</li>
 <li><b>Wall Openings and Enclosure.</b> The total opening area in each of the four walls and in the roof. This drives the classification and therefore GC<sub>pi</sub>, which shifts every wall and roof pressure.</li>
@@ -4333,6 +4361,7 @@ function restore(o){
   if(S.sfrs && SFRS_OLD[S.sfrs]) S.sfrs=SFRS_OLD[S.sfrs];   /* labels renamed; same R, Omega_0, C_d */
   S.open=o.open||{};
   Object.keys(S.tb||{}).forEach(k=>{ const i=document.getElementById("tb_"+k); if(i) i.value=S.tb[k]; });
+  a7HdrProj();   /* A7HD */
   buildInputs(); recalc();
 }
 let saveTimer=null;
@@ -4861,13 +4890,31 @@ window.addEventListener("beforeprint",()=>{
 /* ==================================================================
    Section K : INIT
    ================================================================== */
+/* A7HD (2026-11-05): the header's read-only "Project: <project> · <job no.>" (tb_project / tb_job, typed in the Project tab).
+   A click opens the Project tab and focuses Project. Display only: nothing is stored. */
+function a7HdrProj(){
+  const t=document.getElementById("hdrProjTxt"); if(!t) return;
+  const v=["tb_project","tb_job"].map(id=>{ const i=document.getElementById(id); return i?String(i.value||"").trim():""; }).filter(Boolean);
+  t.textContent="";
+  if(v.length) t.textContent=v.join(" \u00b7 "); else t.appendChild(el("span","hdrNone","(untitled: enter it in the Project tab)"));
+}
+window.addEventListener("DOMContentLoaded",()=>{
+  const a=document.getElementById("hdrProj"); if(!a) return;
+  a.addEventListener("click",e=>{
+    e.preventDefault(); S.itab="proj"; autosave(); buildInputs();
+    const i=document.getElementById("tb_project"); if(!i) return;
+    if(window.matchMedia&&window.matchMedia("(max-width:899px)").matches){ const p=document.getElementById("intabs"); window.scrollTo(0,p.getBoundingClientRect().top+window.scrollY-4); }
+    else { const b=document.getElementById("inbody"); if(b) b.scrollTop=0; }
+    i.focus({preventScroll:true});
+  });
+});
 window.addEventListener("DOMContentLoaded",()=>{
   const av=document.getElementById("appver"); if(av) av.textContent=APP_VERSION;
   Object.keys(DEF.tb).forEach(k=>{ const i=document.getElementById("tb_"+k); if(i){ i.value=DEF.tb[k];
-    i.oninput=()=>{ S.tb[k]=i.value; autosave(); }; } });
+    i.oninput=()=>{ S.tb[k]=i.value; autosave(); a7HdrProj(); }; } });
   let boot=null;
   try{ const a=localStorage.getItem(LSA); if(a) boot=JSON.parse(a); }catch(e){}
-  if(boot){ restore(boot); } else { buildInputs(); recalc(); }
+  if(boot){ restore(boot); } else { a7HdrProj(); buildInputs(); recalc(); }
 });
 </script>
 <script>
