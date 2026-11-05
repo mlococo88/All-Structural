@@ -5174,7 +5174,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - 0 console / KaTeX errors. `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Card 5.6 (default) checked by eye.
 - **Saved data:** no change. **Other copies:** none.
 
-## 2026-11-05 — PR: claude/sf-toscale — Every geometric drawing on the result tabs to scale: one scale across and up for the footing, t and the pedestals (SFTS; display only, no result change)
+## 2026-11-05 — PR: claude/sf-toscale (PR #776: https://github.com/mlococo88/All-Structural/pull/776) — Every geometric drawing on the result tabs to scale: one scale across and up for the footing, t and the pedestals (SFTS; display only, no result change)
 
 ### SFTS. Drawings to scale (engineer, 2026-11-05: "review all graphics in the output tabs and make sure each is drawn to scale"; extended to the input side, the Report copies and the User Manual)
 - **Audit (headless Chromium, rendered px per ft measured from the drawn rectangles, across vs up; ratio 1.00 = to scale).** Projects: default (10 × 8 × 2.5 ft), Seymour (5 × 13 × 2 ft, pedestals 7.25 ft), cases.json `rev` (5 × 13), and a wide check case (16 × 5 × 1.5 ft, pedestals 5 ft).
