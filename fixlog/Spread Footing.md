@@ -4957,7 +4957,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 1. The dashboard chip and Report summary row are still named "Dowel steel (min 0.005A_g)" when a wall is present (the chip's value text and reference name the wall rule). The name is the lookup key of several maps (`sfdResultRows`, the Report summary "Worked in" map), so it was not renamed here.
 2. The card 5.6 formula line shows ℓ_dc ≥ 0.0003f_y d_b but not the 8 in floor of 25.4.9.1(b); the computation and the Report step `p<i>.ldc` include it.
 3. Dowel compression development, excess reinforcement (25.4.10.1): investigated, not implemented. See the PR description (code not clear enough for this case: 25.4.10.2(b), (c), (d) and R16.3.4).
-## 2026-11-05 — PR: claude/sf-3d-dowel-hooks (SFHK: dowel hooks and embedment in the 3D view and the section sheets; display only, no result change)
+## 2026-11-05 — PR: claude/sf-3d-dowel-hooks (PR #771: https://github.com/mlococo88/All-Structural/pull/771) (SFHK: dowel hooks and embedment in the 3D view and the section sheets; display only, no result change)
 
 - **Problem:** the 3D view (tab 7) drew the pedestal vertical bars from the footing top up only, and drew "dowels" as a fixed placeholder: min(0.6 t, 1.2 ft) into the footing and min(h/2, 1.5 ft) up, straight, whatever the inputs. The selected hook, the embedment of card 5.6 and the lap of separate dowels were not shown. The section sheets (A-A, B-B) and the pedestal elevation drew the vertical bars straight down to the top of the bottom mat: no hook, and no separate dowels.
 - **Where:**
