@@ -6926,6 +6926,8 @@ body:not(.rbAASHTO) .rbAashOnly{display:none!important}
 /* RBXS (2026-11-05): A_s,req, A_s,prov and &quot;From Beam Capacity&quot; only while the excess-reinforcement box is ticked (CSS only;
    the values are kept and saved) */
 body.rbNoExcess .rbExcessOnly{display:none!important}
+/* CBLA (2026-11-05): the λ box is disabled in ACI mode (development uses 0.75 per Tables 25.4.2.5 / 25.4.3.2 / 25.4.9.3) */
+.field input:disabled{background:#F1F5F9; color:#64748B; cursor:not-allowed;}
 /* RBIE (2026-11-05): a required input that is blank or invalid is outlined red, with the message under it */
 .field input.rbInErr{border-color:var(--fail)!important; background:#FEF2F2!important;}
 .rbInErrMsg{grid-column:1/-1; font-size:8.5pt; color:#991B1B; margin:2px 0 0; padding:2px 6px; border-left:3px solid var(--fail); background:#FEF2F2; font-family:var(--font-ui);}
@@ -7044,8 +7046,12 @@ function computeFactors(inp){
   // λ for lightweight concrete: the entered value, limited to 0.75-1.0 (ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b);
   // AASHTO LRFD 10th Ed. 5.4.2.8). Blank or absent (older saved states) = 0.75, the former fixed value.
   const lamIn = parseFloat(inp.lwLambda);
-  const lambda = inp.lightweight ? (isFinite(lamIn) ? Math.min(1.0, Math.max(0.75, lamIn)) : 0.75) : 1.0;
-  const lambdaAdj = inp.lightweight &amp;&amp; !(isFinite(lamIn) &amp;&amp; lamIn>=0.75 &amp;&amp; lamIn<=1.0);
+  // CBLA (2026-11-05, engineer): ACI mode: λ = 0.75 for lightweight concrete and 1.0 for normalweight in every development
+  // length, whatever λ is entered: ACI 318-19 Tables 25.4.2.5 (l_d), 25.4.3.2 (l_dh) and 25.4.9.3 (l_dc); 19.2.4.1 applies
+  // &quot;except as required in Table 25.4.2.5&quot;. Before, the entered λ (0.75-1.0) was used. AASHTO mode unchanged (entered λ).
+  const lamA = inp.code===&quot;AASHTO&quot;;
+  const lambda = inp.lightweight ? (lamA ? (isFinite(lamIn) ? Math.min(1.0, Math.max(0.75, lamIn)) : 0.75) : 0.75) : 1.0;
+  const lambdaAdj = lamA &amp;&amp; inp.lightweight &amp;&amp; !(isFinite(lamIn) &amp;&amp; lamIn>=0.75 &amp;&amp; lamIn<=1.0);
   const AASHTO = inp.code===&quot;AASHTO&quot;;
 
   // Excess reinforcement factor (ACI 25.4.10.1 / AASHTO λer). Not <1 unless enabled.
@@ -7311,6 +7317,7 @@ function buildInputPanel(){
     <div class=&quot;chk&quot;><input id=&quot;lightweight&quot; type=&quot;checkbox&quot;><label for=&quot;lightweight&quot;>Lightweight concrete (&amp;lambda; below)</label></div>
     <div class=&quot;field&quot; style=&quot;margin-top:6px&quot;><label>&amp;lambda; for lightweight concrete <span class=&quot;unit&quot;>(0.75–1.0)</span></label>
       <input id=&quot;lwLambda&quot; type=&quot;number&quot; value=&quot;0.75&quot; step=&quot;0.05&quot; min=&quot;0.75&quot; max=&quot;1&quot;>
+      <div class=&quot;hint rbAciOnly&quot;><b>ACI mode:</b> development lengths use &amp;lambda; = 0.75 for lightweight concrete (ACI 318-19 Tables 25.4.2.5, 25.4.3.2 and 25.4.9.3), whatever is entered here; this box is used in AASHTO mode.</div>
       <div class=&quot;hint&quot;>Used only when Lightweight is ticked. ACI 318-19 19.2.4.1: Table 19.2.4.1(a) from the equilibrium density w<sub>c</sub>, or Table 19.2.4.1(b) from the aggregates (all-lightweight 0.75, sand-lightweight 0.85); 0.75 &amp;le; &amp;lambda; &amp;le; 1.0. AASHTO 5.4.2.8: Eq. 5.4.2.8-1 &amp;lambda; = 4.7f<sub>ct</sub>/&amp;radic;f'<sub>c</sub> &amp;le; 1.0 where f<sub>ct</sub> is specified, else Eq. 5.4.2.8-2 0.75 &amp;le; &amp;lambda; = 7.5w<sub>c</sub> &amp;le; 1.0. This tool accepts 0.75 to 1.0.</div></div>`)}
 
   ${panel(&quot;C&quot;,&quot;Tension: Modification Factors&quot;,true,`
@@ -7577,6 +7584,7 @@ function validate(inp,f){
 function updateCodeHint(inp){
   document.body.classList.toggle('rbAASHTO',inp.code===&quot;AASHTO&quot;);   // RBCM: hide the inputs of the other code (CSS only)
   document.body.classList.toggle('rbNoExcess',!inp.useExcess);       // RBXS: hide A_s,req / A_s,prov while the box is unticked
+  { const lw=document.getElementById('lwLambda'); if(lw) lw.disabled=(inp.code!==&quot;AASHTO&quot;); }   // CBLA: the entered λ is not used in ACI mode
   const el=document.getElementById('codeHint'); if(!el) return;
   el.textContent = inp.code===&quot;AASHTO&quot;
     ? &quot;Bridge code (ksi units internally). Structure mirrors ACI with λ factors.&quot;
@@ -7673,7 +7681,7 @@ function tabTension(inp,f,forPrint){
       [&quot;\\psi_e&quot;,&quot;Epoxy coating&quot;,fmt(f.psiE,1),&quot;—&quot;],
       [&quot;\\psi_s&quot;,&quot;Bar size (#6 and smaller = 0.8)&quot;,fmt(f.psiS,1),&quot;—&quot;],
       [&quot;\\psi_g&quot;,&quot;Grade of reinforcement&quot;,fmt(f.psiG,2),&quot;—&quot;],
-      [&quot;\\lambda&quot;,&quot;Lightweight concrete&quot;,fmt(f.lambda,2),&quot;—&quot;],
+      [&quot;\\lambda&quot;,inp.lightweight?&quot;Lightweight concrete: 0.75 per ACI Table 25.4.2.5 (entered λ not used)&quot;:&quot;Normalweight concrete (Table 25.4.2.5)&quot;,fmt(f.lambda,2),&quot;—&quot;],
     ])
     + note(`
       <p>Each ψ factor is a multiplier that lengthens (>1) or shortens (<1) the bar length needed to reach yield. They all enter the numerator, so the required length scales directly with their product.</p>
@@ -7681,7 +7689,7 @@ function tabTension(inp,f,forPrint){
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_e = ${fmt(f.psiE,1)}</span> — Epoxy coating. Epoxy is slick and reduces the friction and adhesion component of bond, so a coated bar needs to be longer. 1.5 applies where cover or spacing is tight (cover < 3d_b or clear spacing < 6d_b); 1.2 otherwise; 1.0 for uncoated black bar.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_s = ${fmt(f.psiS,1)}</span> — Bar size. Smaller bars (#6 and under) develop more efficiently per unit length because their surface-area-to-cross-section ratio is higher, so they earn a 0.8 credit. #7 and larger use 1.0.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>ψ_g = ${fmt(f.psiG,2)}</span> — Grade. Higher-grade steel carries more force at yield, requiring more bond length to anchor it. Gr 40/60 = 1.0, Gr 80 = 1.15, Gr 100 = 1.30.</div>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>λ = ${fmt(f.lambda,2)}</span> — Lightweight concrete. Lightweight aggregate has lower tensile strength at a given f'c, so it splits earlier along the bar's ribs; the 0.75 value effectively lengthens development. Normalweight = 1.0.</div>
+      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>λ = ${fmt(f.lambda,2)}</span> — Lightweight concrete. Lightweight aggregate has lower tensile strength at a given f'c, so it splits earlier along the bar's ribs; the 0.75 value effectively lengthens development. Normalweight = 1.0. ACI 318-19 Table 25.4.2.5 gives 0.75 for every lightweight concrete, so the λ entered in Code &amp;amp; Material is not used here (it is used in AASHTO mode).</div>
       <p><b>The 1.7 cap:</b> ψ_t and ψ_e both reduce bond in overlapping ways (a coated top bar). Testing showed multiplying them in full double-counts the penalty, so the code limits their product to 1.7.</p>`)
     + eqBlock(&quot;Product limit on ψ_t·ψ_e&quot;,&quot;§25.4.2.4&quot;,
         &quot;\\psi_t \\cdot \\psi_e \\le 1.7&quot;,
@@ -7822,7 +7830,7 @@ function tabHook(inp,f){
       [&quot;\\psi_r&quot;,&quot;Confining reinforcement (1.0 if confined, else 1.6)&quot;+(f.psiRForced?&quot;; #14/#18: 1.6&quot;:&quot;&quot;),fmt(f.psiR,1),&quot;—&quot;],
       [&quot;\\psi_o&quot;,&quot;Location factor&quot;+(f.psiOForced?&quot;; #14/#18: 1.25&quot;:&quot;&quot;),fmt(f.psiO,2),&quot;—&quot;],
       [&quot;\\psi_c&quot;,&quot;Concrete strength = min(f'c/15000 + 0.6, 1.0)&quot;,fmt(f.psiC_h,3),&quot;—&quot;],
-      [&quot;\\lambda&quot;,&quot;Lightweight concrete&quot;,fmt(f.lambda,2),&quot;—&quot;],
+      [&quot;\\lambda&quot;,inp.lightweight?&quot;Lightweight concrete: 0.75 per ACI Table 25.4.3.2 (entered λ not used)&quot;:&quot;Normalweight concrete (Table 25.4.3.2)&quot;,fmt(f.lambda,2),&quot;—&quot;],
     ])
     + note(`
       <p>A hook works differently from a straight bar: instead of relying only on bond along its length, the bend bears mechanically against the concrete inside it, like an anchor. These factors adjust for how well that concrete core is protected.</p>
@@ -7962,7 +7970,7 @@ function tabComp(inp,f){
   + subsec(&quot;1. Governing Expressions&quot;,&quot;§25.4.9.2&quot;, varTable([
       [&quot;f_y&quot;,&quot;Yield strength&quot;,fmt(inp.fy,0),&quot;psi&quot;],
       [&quot;\\psi_r&quot;,&quot;Confining reinforcement (Table 25.4.9.3)&quot;,fmt(f.psiR_c,2),&quot;—&quot;],
-      [&quot;\\lambda&quot;,&quot;Lightweight concrete&quot;,fmt(f.lambda,2),&quot;—&quot;],
+      [&quot;\\lambda&quot;,inp.lightweight?&quot;Lightweight concrete: 0.75 per ACI Table 25.4.9.3 (entered λ not used)&quot;:&quot;Normalweight concrete (Table 25.4.9.3)&quot;,fmt(f.lambda,2),&quot;—&quot;],
       [&quot;\\sqrt{f'_c}&quot;,&quot;Capped at 100&quot;,fmt(f.sqrtFc,1),&quot;psi^{0.5}&quot;],
       [&quot;d_b&quot;,&quot;Bar diameter&quot;,fmt(f.db,3),&quot;in&quot;],
     ])
@@ -8654,7 +8662,7 @@ function rebarRefs(inp,f){
     [&quot;AASHTO LRFD&quot;,&quot;Bridge Design Specifications, 10th Ed. (2024): 3.5.1 and Table 3.5.1-1 (w<sub>c</sub>); 5.4.2.4 and Eq. 5.4.2.4-1 (E<sub>c</sub>); 5.4.2.8 (λ); 5.4.3.2 (E<sub>s</sub>); Table 5.8.2.5.3a-1 (v, CTT node); 5.10.2.1 (standard hooks); 5.10.2.3 and Table 5.10.2.3-1 (minimum bend diameter); 5.10.8.1.1; 5.10.8.2.1 (scope, f′<sub>c</sub> ≤ 15 ksi); 5.10.8.2.1a, Eqs. 5.10.8.2.1a-1 and 5.10.8.2.1a-2 (tension); 5.10.8.2.1b (λ<sub>rl</sub>·λ<sub>cf</sub>); 5.10.8.2.1c, Eqs. 5.10.8.2.1c-1 to -3 (λ<sub>rc</sub>)&quot;+(inp.useExcess?&quot; and Eq. 5.10.8.2.1c-4 (λ<sub>er</sub>)&quot;:&quot;&quot;)+&quot;; 5.10.8.2.2a, Eqs. 5.10.8.2.2a-1 to -3, 5.10.8.2.2b (compression); 5.10.8.2.4, 5.10.8.2.4a, Eqs. 5.10.8.2.4a-1 and -2, 5.10.8.2.4b (standard hooks); 5.10.8.4 (f<sub>y</sub> &amp;gt; 75 ksi); 5.10.8.4.2a (no tension lap splices for bars larger than No. 11); 5.10.8.4.3 and 5.10.8.4.3a (tension lap splices, Class A / B); 5.10.8.4.5a (compression lap splices, m = 1.0).&quot;],
     [&quot;ACI 318-19&quot;,&quot;25.3.1 (hook geometry, cited with AASHTO 5.10.2.1).&quot;]];
   return [
-    [&quot;ACI 318-19&quot;,&quot;Building Code Requirements for Structural Concrete (ACI 318-19): &quot;+(inp.lightweight?&quot;19.2.4.1, Tables 19.2.4.1(a)/(b) (λ); &quot;:&quot;&quot;)+&quot;25.3.1 (hook geometry); 25.4.1.4 (√f′<sub>c</sub> ≤ 100 psi); 25.4.2.1 (12 in. minimum); &quot;+(inp.fy>=80000?&quot;25.4.2.2 (K<sub>tr</sub> ≥ 0.5d<sub>b</sub>, f<sub>y</sub> ≥ 80,000 psi); &quot;:&quot;&quot;)+&quot;25.4.2.4, Eqs. 25.4.2.4a and 25.4.2.4b, Table 25.4.2.5 (tension); 25.4.3.1 and Table 25.4.3.2 (standard hooks); 25.4.9.1, 25.4.9.2, Table 25.4.9.3 (compression); &quot;+(inp.useExcess?&quot;25.4.10.1, 25.4.10.2(d) (excess reinforcement; not for hooks); &quot;:&quot;&quot;)+&quot;25.5.1.1 (no lap splices of No. 14 and No. 18 bars); 25.5.2, 25.5.2.1 (tension lap splices, Class A / B); 25.5.5.1, 25.5.5.3 (compression lap splices).&quot;],
+    [&quot;ACI 318-19&quot;,&quot;Building Code Requirements for Structural Concrete (ACI 318-19): &quot;+(inp.lightweight?&quot;Tables 25.4.2.5, 25.4.3.2 and 25.4.9.3 (λ for development); &quot;:&quot;&quot;)+&quot;25.3.1 (hook geometry); 25.4.1.4 (√f′<sub>c</sub> ≤ 100 psi); 25.4.2.1 (12 in. minimum); &quot;+(inp.fy>=80000?&quot;25.4.2.2 (K<sub>tr</sub> ≥ 0.5d<sub>b</sub>, f<sub>y</sub> ≥ 80,000 psi); &quot;:&quot;&quot;)+&quot;25.4.2.4, Eqs. 25.4.2.4a and 25.4.2.4b, Table 25.4.2.5 (tension); 25.4.3.1 and Table 25.4.3.2 (standard hooks); 25.4.9.1, 25.4.9.2, Table 25.4.9.3 (compression); &quot;+(inp.useExcess?&quot;25.4.10.1, 25.4.10.2(d) (excess reinforcement; not for hooks); &quot;:&quot;&quot;)+&quot;25.5.1.1 (no lap splices of No. 14 and No. 18 bars); 25.5.2, 25.5.2.1 (tension lap splices, Class A / B); 25.5.5.1, 25.5.5.3 (compression lap splices).&quot;],
     [&quot;AASHTO LRFD&quot;,&quot;5.10.2.1 (hook geometry; cited with ACI 25.3.1 on the hook schematic).&quot;]];
 }
 /* one result line per length and per check, from the tool's own values (the dashboard's checks) */
@@ -8757,7 +8765,7 @@ function rbrTension(inp,f){
       rbS({id:'psiE',label:'Epoxy coating factor (as selected)',sym:'\\psi_{e}',value:f.psiE,unit:'',d:1}),
       rbS({id:'psiS',label:'Bar size factor (#6 and smaller 0.8, else 1.0; #'+inp.barSize+')',sym:'\\psi_{s}',value:f.psiS,unit:'',d:1}),
       rbS({id:'psiG',label:'Reinforcement grade factor (f_y = '+rbG(inp.fy,0).replace('{,}',',')+' psi: Grade 40/60 1.0, 80 1.15, 100 1.30)',sym:'\\psi_{g}',value:f.psiG,unit:'',d:2}),
-      rbS({id:'lam',label:inp.lightweight?'Lightweight concrete factor (entered, limited to 0.75–1.0)':'Lightweight concrete factor (normal weight)',sym:'\\lambda',value:f.lambda,unit:'',d:2,ref:inp.lightweight?'ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b)':''}),
+      rbS({id:'lam',label:inp.lightweight?'Lightweight concrete factor (0.75 for lightweight concrete in every ACI development length, whatever λ is entered)':'Lightweight concrete factor (normalweight)',sym:'\\lambda',value:f.lambda,unit:'',d:2,ref:'ACI 318-19 Tables 25.4.2.5, 25.4.3.2, 25.4.9.3'}),
       rbS({id:'psiTE',label:'Product limit on ψ_t·ψ_e',sym:'\\psi_{t}\\psi_{e}',eq:'\\min(\\psi_{t}\\psi_{e},\\, 1.7)',sub:'\\min('+rbN(f.psiT,1)+'\\times '+rbN(f.psiE,1)+',\\, 1.7) = \\min('+rbN(f.psiT*f.psiE)+',\\, 1.7)',value:f.psiTEcap,unit:'',d:2,ref:'ACI 318-19 25.4.2.4'})]});
     const kH=ktrHSCheck(inp,f), cs=[
       rbS({id:'cb',label:'Lesser of cover and half the center-to-center spacing (input)',sym:'c_{b}',value:inp.cb,unit:'in'}),
