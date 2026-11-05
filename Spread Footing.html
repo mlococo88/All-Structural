@@ -3945,7 +3945,7 @@ function renderReport(){
  let M;
  try{
  sfpDrawHidden();   /* SFAC: the plots of hidden tabs, which sfxApply reads */
- try{M=sfdPcReport(sfdLrReport(sfxApply(sfrModel())));}catch(e){T.innerHTML='<div class="errbox">Report error: '+sfEsc(e&&e.message)+'</div>';SFRP.api=null;SFRP.doc=null;return;}
+ try{M=sfroOrder(sfdPcReport(sfdLrReport(sfxApply(sfrModel()))));}catch(e){T.innerHTML='<div class="errbox">Report error: '+sfEsc(e&&e.message)+'</div>';SFRP.api=null;SFRP.doc=null;return;}   /* SFRO: the design order (display only) */
  }finally{if(lrKeep!=null){SEL.asdLr=lrKeep;renderBearing();renderStability();SFPLT.skip=true;}}
  SFRP.api=SharedReport.mount(T,M,{closed:SFRP.closed,onGoto:sfrGoto,controls:sfxControls()});   /* SFRX: the Include box */
  SFRP.doc=SFRP.api.doc;sfxWire(T);
@@ -3969,9 +3969,10 @@ function sfrPrinting(){return document.body.classList.contains('rp-printing');}
 function sfrWillPrint(){const T=document.getElementById('tab-report');return sfrPrinting()||!!(SFRP.doc&&T&&T.classList.contains('active'));}
 window.addEventListener('beforeprint',()=>{
  const T=document.getElementById('tab-report');
- if(!SFRP.doc||!T||!T.classList.contains('active')||sfrPrinting())return;
+ if(sfrPrinting()){const b=document.getElementById('rp-print');if(b)sfxUniqDom(b);return;}   /* SFCB: SharedReport.print filled the box */
+ if(!SFRP.doc||!T||!T.classList.contains('active'))return;
  let box=document.getElementById('rp-print');if(!box){box=document.createElement('div');box.id='rp-print';document.body.appendChild(box);}
- box.innerHTML='<div class="rp"><article class="rp-doc">'+SharedReport.html(SFRP.doc,{lazy:false})+'</article></div>';
+ box.innerHTML='<div class="rp"><article class="rp-doc">'+sfxUniq(SharedReport.html(SFRP.doc,{lazy:false}))+'</article></div>';   /* SFCB */
  document.body.classList.add('rp-printing');
 });
 /* ================= SFRX (2026-11-03): the D11 print report retired =================
@@ -3994,10 +3995,29 @@ const sfxLite=t=>String(t==null?'':t).replace(/\\[dt]frac/g,'\\frac').replace(/\
  .replace(/\\q?quad/g,' ').replace(/\\[;:!,]/g,' ').replace(/\\(displaystyle|scriptstyle|textstyle|limits)/g,'').replace(/\\Rightarrow/g,'⇒').replace(/\\rightarrow|\\to\b/g,'→')
  .replace(/\\approx/g,'≈').replace(/\\big[lr]?|\\Big[lr]?/g,'').replace(/\\ /g,' ').replace(/\$/g,'');
 /* a Plotly chart as one SVG (its layers stacked), so it prints in the Report as on the page */
+/* SFCB (2026-11-05): the copy of an SVG in the Report gets its own element ids. The tab's original stays in the page (hidden while
+   the Report is shown), so a copied gradient / clip path / marker id existed twice and url(#id) resolved to the hidden original,
+   which does not paint: the Plotly colour bar of the 3.2 heat map printed unfilled (main before #777 too). The print box gets fresh ids
+   again (beforeprint), as the Report tab's own copy is hidden while printing. Display only. */
+let SFX_UID=0;
+function sfxUniq(h){   /* only ids referenced by url(#id): gradients, clip paths, markers, filters (never the report's § anchors) */
+ h=String(h);const ids=[...new Set([...h.matchAll(/url\((?:&quot;|["'])?#([^"'&)\s]+)/g)].map(m=>m[1]))];if(!ids.length)return h;
+ const sfx='-rp'+(++SFX_UID),esc=x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+ ids.forEach(id=>{h=h.replace(new RegExp('(\\sid=")'+esc(id)+'(")','g'),'$1'+id+sfx+'$2').replace(new RegExp('#'+esc(id)+'(?=["\')&;])','g'),'#'+id+sfx);});
+ return h;
+}
+/* the same in place (the print box SharedReport.print filled and measured): each url(#id)-referenced element in root gets a new id */
+function sfxUniqDom(root){
+ const sfx='-rp'+(++SFX_UID),A=['style','fill','stroke','clip-path','mask','filter','marker-start','marker-mid','marker-end'];
+ const refs=[...root.querySelectorAll('*')].filter(e=>A.some(a=>/url\(/.test(e.getAttribute(a)||'')));
+ const ids=new Set();refs.forEach(e=>A.forEach(a=>{const v=e.getAttribute(a);if(v)for(const m of v.matchAll(/url\(["']?#([^"')\s]+)/g))ids.add(m[1]);}));
+ ids.forEach(id=>{const t=root.querySelector('[id="'+id.replace(/"/g,'')+'"]');if(!t)return;t.id=id+sfx;
+  refs.forEach(e=>A.forEach(a=>{const v=e.getAttribute(a);if(v&&v.indexOf('#'+id)>=0)e.setAttribute(a,v.split('#'+id+')').join('#'+id+sfx+')').split('#'+id+'"').join('#'+id+sfx+'"').split("#"+id+"'").join("#"+id+sfx+"'"));}));});
+}
 function sfxPlotSvg(d){
  const L=[...d.querySelectorAll('svg.main-svg')];if(!L.length)return '';
  const w=parseFloat(L[0].getAttribute('width'))||700,h=parseFloat(L[0].getAttribute('height'))||340;
- return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;max-width:'+w+'px">'+L.map(s=>{const c=s.cloneNode(true);c.removeAttribute('style');c.setAttribute('x','0');c.setAttribute('y','0');return c.outerHTML;}).join('')+'</svg>';
+ return sfxUniq('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+w+' '+h+'" style="width:100%;height:auto;max-width:'+w+'px">'+L.map(s=>{const c=s.cloneNode(true);c.removeAttribute('style');c.setAttribute('x','0');c.setAttribute('y','0');return c.outerHTML;}).join('')+'</svg>');   /* SFCB */
 }
 /* one rendered tab (a clone) → report items, in document order; a card title (summary) or a heading is the topic of its first item */
 function sfxWalk(root,scope,T){
@@ -4044,7 +4064,7 @@ function sfxWalk(root,scope,T){
   if(e.matches('h1,h2,h3,h4,.manH,.manH3')){topic=txt(e);card=topic;nfig=0;return;}
   if(e.matches('.sfp-na')){nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)){T.figs.add(key);push({type:'note',text:cap+': '+SFP_NA+'.'});}return;}   /* SFPN */
   if(e.matches('.js-plotly-plot')){const s=sfxPlotSvg(e);nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(s&&!T.figs.has(key)){T.figs.add(key);push({type:'figure',svg:s,caption:cap});}return;}
-  if(e.matches('svg')){nfig++;const cap=(card||'Figure')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)&&!T.figs.has(e.outerHTML)){T.figs.add(key);const c=e.cloneNode(true);if(!c.getAttribute('viewBox')&&c.getAttribute('width'))c.setAttribute('viewBox','0 0 '+parseFloat(c.getAttribute('width'))+' '+parseFloat(c.getAttribute('height')));c.style.maxWidth='100%';c.style.height='auto';push({type:'figure',svg:c.outerHTML,caption:cap});}return;}
+  if(e.matches('svg')){nfig++;const cap=(card||'Figure')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)&&!T.figs.has(e.outerHTML)){T.figs.add(key);const c=e.cloneNode(true);if(!c.getAttribute('viewBox')&&c.getAttribute('width'))c.setAttribute('viewBox','0 0 '+parseFloat(c.getAttribute('width'))+' '+parseFloat(c.getAttribute('height')));c.style.maxWidth='100%';c.style.height='auto';push({type:'figure',svg:sfxUniq(c.outerHTML),caption:cap});}return;}
   if(e.matches('table')){table(e);return;}
   if(e.matches('.eq')){eq(e);return;}
   if(e.matches('.manEq')){const s=step(texOf(e),card||'Equation','');if(s)push({type:'steps',scope,steps:[s]});return;}
@@ -4175,6 +4195,73 @@ function sfdPcReport(M){
   {type:'steps',scope:'pcb',steps:w.steps,title:(R.directMode?'Direct factored envelope':'Governing service combination: '+G.cb.name)},
   {type:'table',wide:true,head:['Basis','Combination','Pedestal','P (kip)','V_x (kip)','V_y (kip)','M_x (kip-ft)','M_y (kip-ft)'],rows},
   {type:'note',text:'Bold: the governing bearing combination, worked above. The 3D view labels and the drawings\u2019 section sheets quote these values.'}]});
+ return M;
+}
+/* SFRO (2026-11-05, engineer: "sections out of order" in the printed Report): the Report's sections in the order of the design
+   (display only; nothing is computed, removed or reworded except as listed). Applied last, after sfxApply / sfdLrReport / sfdPcReport,
+   which find their sections by title, so the model they build is unchanged; only the order (and so the § numbers, which
+   shared/report.js regenerates, with every [[key]] link) changes:
+     1 Project and inputs · 2 Assumptions and warnings · 3 Loads and combinations (pedestal loads by combination last) · 4 Bearing ·
+     5 Stability · 6 Footing design (flexure, shear, development, punching, band, cover) · 7 Pedestal–footing interface (concrete
+     bearing, shear friction, dowels: moved out of Footing design, with their result lines) · 8 Pedestal design · 9 Summary of results ·
+     10 References · Appendices: the result tabs as printed (the "As printed" subsections, one per tab), the LRFD reference tables
+     (Include box), the User manual (Include box).
+   The calculation sections and References keep their numbers whatever the Include boxes; the optional parts come last. Each section
+   whose "As printed" / LRFD reference part moved gets a one-line section note linking to it. Inside the appendix, a bare tab-card
+   number ("§4.3a", "Section 2.3": the tab's screen numbering, which reads as this report's §) becomes "card 4.3a", linked to the
+   section that works it where that is unambiguous. Decision (pending engineer review): the order above; see fixlog SFRO. */
+const SFRO_IFC=new Set(['Concrete bearing','Dowel steel (min 0.005A_g)','Dowel development (ℓdc)','Interface shear friction','Dowels (tension, laps)']);
+const SFRO_CARD={'2.3':'S-asd','4.1':'S-st','4.2':'S-st','4.3':'S-st','4.3a':'S-ecc','4.4':'S-st','4.5':'S-st','5.2':'S-fdx','5.3':'S-fdy','5.5':'S-pun','5.6':'S-cbr'};
+const SFRO_AP='As printed: tables, equations, notes and figures';
+/* a bare tab-card number in a string of the appendix → "card n.m" (+ a link where SFRO_CARD maps it); code citations are left alone */
+function sfroCard(s,have){
+ return String(s).replace(/(§\s?|\bSection\s)([1-6]\.[1-9][a-z]?)(?!\.?\d)/g,(m,p,n,o,str)=>{
+  if(/(ACI|ASCE|IBC|AASHTO|318-19|7-16|Table|Art\.|Eq\.)[^;:()]{0,6}$/.test(str.slice(Math.max(0,o-16),o)))return m;
+  const k=SFRO_CARD[n];return 'card '+n+(k&&have.has(k)?' ([['+k+']])':'');});
+}
+function sfroCards(items,have){
+ const f=s=>typeof s==='string'?sfroCard(s,have):s;
+ (items||[]).forEach(it=>{
+  if(it.topic&&it.topic.title)it.topic.title=f(it.topic.title);
+  if(it.type==='note')it.text=f(it.text);
+  else if(it.type==='figure')it.caption=f(it.caption);
+  else if(it.type==='table'){const c=x=>(x&&typeof x==='object')?Object.assign(x,{t:f(x.t)}):f(x);
+   it.head=(it.head||[]).map(c);it.rows=(it.rows||[]).map(r=>Array.isArray(r)?r.map(c):Object.assign(r,{cells:r.cells.map(c)}));}
+  else if(it.type==='steps')(it.steps||[]).forEach(st=>{if(typeof st.note==='string')st.note=f(st.note);if(typeof st.label==='string')st.label=f(st.label);});});
+}
+function sfroOrder(M){
+ if(!M||!M.sections)return M;
+ const S=M.sections, take=t=>{const i=S.findIndex(x=>x.title===t);return i<0?null:S.splice(i,1)[0];};
+ const sum=take('Summary of results'),inp=take('Project and inputs'),asm=take('Assumptions and warnings'),lds=take('Loads and combinations'),
+  brg=take('Bearing'),stb=take('Stability'),fd=take('Footing design'),pd=take('Pedestal design'),man=take('User manual'),ref=take('References');
+ const rest=S.splice(0);   /* none today: a section added later keeps its place before the summary */
+ const pull=(sec,pred)=>{if(!sec)return [];const out=sec.subs.filter(pred);sec.subs=sec.subs.filter(q=>!pred(q));return out;};
+ const tabs=[[sum,'Summary of results (dashboard)'],[inp,'Project and inputs (Schematic & Input Echo tab)'],[lds,'Loads and combinations (Load Combinations tab)'],[brg,'Bearing (Bearing tab)'],
+  [stb,'Stability (Stability tab)'],[fd,'Footing design and pedestal–footing interface (Footing Design tab)'],[pd,'Pedestal design (Pedestal Design tab)']];
+ const ap={title:'Appendix: the result tabs as printed',key:'S-axP',part:'Appendices',note:'The dashboard and each result tab as rendered: the tables, equations, notes and figures this report does not already show, under the tab’s card titles. Card numbers (for example 3.2a, 4.3a) are the tabs’ screen numbering, not this report’s §; where a card is worked in this report it is linked.',subs:[]};
+ const ptr={};
+ tabs.forEach(([sec,lab],i)=>{pull(sec,q=>q.title===SFRO_AP).forEach(q=>{q.title=lab;q.key='S-axP'+i;ap.subs.push(q);ptr[i]=q.key;});});
+ const lr={title:'Appendix: LRFD reference tables (reference only)',key:'S-axL',subs:[]};
+ pull(brg,q=>q.key==='S-brLR').forEach(q=>{q.title='Bearing — '+q.title;lr.subs.push(q);});
+ pull(stb,q=>q.key==='S-stLR').forEach(q=>{q.title='Stability — '+q.title;lr.subs.push(q);});
+ /* the pedestal–footing interface, out of Footing design, with its result lines */
+ const ifc={title:'Pedestal–footing interface: bearing, shear friction and dowels',key:'S-ifc',subs:pull(fd,q=>q.key==='S-cbr'||q.key==='S-sf'||q.key==='S-dow')};
+ if(fd){const ri=fd.subs.findIndex(q=>/^Results — /.test(q.title));
+  if(ri>=0){const q=fd.subs[ri],tb=q.items[0],nm=r=>String((Array.isArray(r)?r:r.cells)[0]||'').replace(/:$/,'');
+   if(tb&&tb.type==='table'){const a=tb.rows.filter(r=>!SFRO_IFC.has(nm(r))),b=tb.rows.filter(r=>SFRO_IFC.has(nm(r))),rest2=q.items.slice(1);
+    const mk=(rows,t)=>({title:t,items:[Object.assign({},tb,{rows}),...rest2.map(x=>Object.assign({},x))]});
+    fd.subs.splice(ri,1,...(a.length?[mk(a,q.title)]:[]));
+    if(b.length)ifc.subs.push(mk(b,'Results — Pedestal–footing interface'));}}}
+ if(!ifc.subs.length)ifc.subs.push({title:'Not computed',items:[{type:'note',warn:true,text:'No pedestal–footing interface checks in this run (no valid strength combination produced downward load for the structural design).'}]});
+ const have=new Set();[...S,inp,asm,lds,brg,stb,fd,ifc,pd,...rest,sum,ref,ap,lr,man].forEach(x=>{if(!x)return;if(x.key)have.add(x.key);(x.subs||[]).forEach(q=>{if(q.key)have.add(q.key);});});
+ ap.subs.forEach(q=>sfroCards(q.items,have));
+ /* a one-line note at the head of each section whose tab copy or LRFD tables moved to the appendix */
+ const say=(sec,keys)=>{const k=keys.filter(x=>x&&have.has(x));if(sec&&k.length)sec.note=(sec.note?sec.note+' ':'')+'Moved to the appendices: '+k.map(x=>x.indexOf('S-axP')===0?'the tab’s further tables, figures and notes, as printed, in [['+x+']]':'the LRFD reference tables (reference only), in [['+x+']]').join('; ')+'.';};
+ say(sum,[ptr[0]]);say(inp,[ptr[1]]);say(lds,[ptr[2]]);say(brg,[ptr[3],'S-brLR']);say(stb,[ptr[4],'S-stLR']);say(fd,[ptr[5]]);say(ifc,[ptr[5]]);say(pd,[ptr[6]]);
+ M.sections=[inp,asm,lds,brg,stb,fd,ifc,pd,...rest,sum,ref].filter(Boolean);
+ const apx=[ap,lr].filter(x=>x.subs.length);if(man)apx.push(man);
+ if(apx.length){apx[0].part='Appendices';apx.slice(1).forEach(x=>{delete x.part;});}
+ M.sections.push(...apx);
  return M;
 }
 /* the report bar's Include box: the manual (state.manPrint, the same field as the Manual tab's "Include this manual" box) */

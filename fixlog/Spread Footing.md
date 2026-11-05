@@ -5252,3 +5252,42 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - On all 199 combinations with a pressure solution (ASD and LRFD, all cases): max of the four corners === `bp.qmax`, min === `bp.qmin` (full contact) or q_min = 0 (partial contact), and each corner value equals the heat-map value at that grid corner (exact equality).
   - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Screenshots checked: default, Seymour (ASD governing, LRFD), the Seymour-based review case partial-contact rows (ASD 0.6D + 0.6(±Wx), LRFD), sfe9 (one-way uplift, two corners off), and a 620 px wide window.
 - **Saved data:** no change. **Other copies:** none.
+
+## 2026-11-05 — PR: claude/sf-report-order (PR #778: https://github.com/mlococo88/All-Structural/pull/778) (SFRO: Report sections in the design order, "As printed" copies and LRFD reference tables in appendices; SFCB: Report copy of the 3.2 heat-map colour bar filled; display only, no result change)
+
+### SFRO — Report order
+- **Problem (engineer):** in the printed Report, sections out of order / placed after unrelated material. Found on origin/main (Seymour, f′c 3000 psi, Ped 1 Wall; default; direct; all Include boxes on):
+  - "Pedestal loads by combination" (#768) printed as §3.6, after the Load Combinations tab copy §3.5 "As printed";
+  - "Reference: LRFD combinations" (#757) printed after the Results lines (§4.6 after §4.5 Results — Bearing; §5.5 after §5.4 Results — Stability), i.e. reference-only tables after the checks' result lines;
+  - each "As printed" copy (#732) between the worked checks and the result lines (§1.3, §2.7, §3.5, §4.4, §5.3, §6.10, §7.3);
+  - concrete bearing / shear friction / dowels at the interface (#773/#775) inside "Footing design" (§6.5–§6.7), between punching and the band / cover checks;
+  - the Summary first and "Assumptions and warnings" after the pedestal design; the User manual (Include box) inserted before References, so References moved §9 → §10 with the box;
+  - inside the As printed copies, bare tab-card numbers read as this report's §: "§4.3a" and "§4.3" (Stability copy; Report §4.3 = "Bearing, every combination"), "Section 2.3" (Bearing copy), "Section 3.2" (Bearing copy, Vesić), "§5.6" (Footing and Pedestal copies). No [[key]] link was unresolved (0 on every case) and no duplicate key.
+- **Where:** new `sfroOrder(M)`, `sfroCard`, `sfroCards`, constants `SFRO_IFC`, `SFRO_CARD`, `SFRO_AP`, inserted before the anchor `/* the report bar's Include box: the manual`. Called last in `renderReport()`:
+  - Before: `try{M=sfdPcReport(sfdLrReport(sfxApply(sfrModel())));}`
+  - After: `try{M=sfroOrder(sfdPcReport(sfdLrReport(sfxApply(sfrModel()))));}`
+  The functions before it find their sections by title, so their output is unchanged; `sfroOrder` only moves sections / subsections. shared/report.js regenerates every § number and [[key]] link.
+- **New order:** 1 Project and inputs · 2 Assumptions and warnings · 3 Loads and combinations (pedestal loads by combination last) · 4 Bearing · 5 Stability · 6 Footing design · 7 Pedestal–footing interface: bearing, shear friction and dowels (`S-ifc`; the `S-cbr`, `S-sf`, `S-dow` subsections and their result lines, split from "Results — Footing design" by check name) · 8 Pedestal design · 9 Summary of results · 10 References · part "Appendices": Appendix: the result tabs as printed (`S-axP`, one subsection per tab, `S-axP0`…`S-axP6`) · Appendix: LRFD reference tables (`S-axL`, Include box) · User manual (Include box). §1–§10 no longer move with the Include boxes.
+- **Pointers:** each section whose copy / LRFD tables moved gets a one-line section note "Moved to the appendices: … in §x.y" (a link). In the appendix, a bare tab-card number becomes "card n.m", linked where `SFRO_CARD` maps it (2.3 → S-asd, 4.1–4.5 → S-st, 4.3a → S-ecc, 5.2/5.3 → S-fdx/S-fdy, 5.5 → S-pun, 5.6 → S-cbr). Code citations (ACI / ASCE / IBC / AASHTO / Table / Art.) are left alone.
+- **Decisions (pending engineer review):**
+  - The As printed copies move whole to the appendix. They hold the tab figures (pressure surface, contact-zone map, diagrams) and some tables shown nowhere else; they are linked from each section. Alternative: keep the figures in the sections.
+  - The Summary of results moves to §9 ("drawings and summary" in the requested flow). Moving it back to the front is a one-line change in `sfroOrder`. The drawing sheets are not part of the Report (Drawings tab); the plan / elevation stays in §1.
+  - Assumptions and warnings stays a section of its own, right after the inputs (basis).
+  - Within a subsection the item order is unchanged (lead notes / warnings stay first).
+  - Interface order kept: concrete bearing, shear friction, dowels (the Report's order; on screen card 5.6 shows dowels before shear friction). Tab cards are not reordered.
+  - "Worked in: … → Load Combinations · 2.3 …" lines in the copies name the tab, so they are left as printed.
+- **Removed:** nothing. No true duplicate: `sfxWalk` already drops a table / step / note whose numbers and sentences the Report has. Renamed: the 9 subsection titles "As printed: tables, equations, notes and figures" → "<section> (<tab> tab)", "Reference: LRFD combinations" → "Bearing — …" / "Stability — …".
+
+### SFCB — colour bar of the 3.2 heat map unfilled in the Report
+- **Problem:** the Report copy of a Plotly chart (`sfxPlotSvg`) and of a tab SVG kept the element ids. Plotly fills the colour bar with `url("#<gradient id>")`, and the original (in the hidden Bearing tab) came first in the document. The copy painted no gradient. Same on main before #777 (572f79f), so this is not a #777 regression. In print the Report tab's own copy is hidden, so the print box needs fresh ids again.
+- **Fix:** `sfxUniq(html)` and `sfxUniqDom(root)` (anchor `let SFX_UID=0;`) give every id referenced by `url(#id)` a new suffix. They are used in `sfxPlotSvg` (`return sfxUniq('<svg …'+…+'</svg>')`), on the `svg` figure clone in `sfxWalk` (`svg:sfxUniq(c.outerHTML)`), on the beforeprint print box (`sfxUniq(SharedReport.html(...))`), and in place on the box `SharedReport.print` filled (beforeprint, `if(sfrPrinting()){…sfxUniqDom(b);return;}`). § anchors are not touched (they are not `url()` targets).
+- **Check:** default project: screen copy gradient id is unique in the document (1, was 2). The print box gradient is unique and inside the box. The colour bar prints filled (screenshot).
+
+### How verified
+- Headless Chromium, origin/main vs the branch:
+  - Deep diff of `R` and `P2` on the 10 cases of the session case set: 0 differences.
+  - Report text: every line of main's text is present in the branch's, apart from § / heading numbers and the 9 renamed subsection titles, on 6 cases (default, Seymour wall, direct, all Include on, Seymour + all Include, all Include off). Added lines: the section notes, the appendix headings and note, the interface Results heading.
+  - 0 unresolved references, 0 duplicate keys, 0 console / KaTeX errors.
+- Outline extracted from the on-screen model and from the Chromium PDF (contents page and body headings agree).
+- `node tests/check-syntax.mjs`, `node tests/engine/run.mjs report`, `tests/smoke/spread-footing-scroll.mjs` pass.
+- **Saved data:** no change (Include boxes keep `manPrint`, `lrRefRpt`, `pedCbRpt`). **Other copies:** none.
