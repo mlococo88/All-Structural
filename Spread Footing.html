@@ -27,12 +27,25 @@ h1{font-size:22px;margin:0}
 .byline{font-size:10px;color:#555;margin:0 0 6px 0}
 h2{font-size:16px;margin:6px 0}
 h3{font-size:13px;margin:8px 0 4px 0}
-.titleblock{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;border:1px solid #999;background:#fff;padding:8px;margin:8px 0}
+.titleblock{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;padding:2px 0;margin:0}   /* SFHD: in the Project tab */
 .titleblock label{display:block;font-size:10px;color:#444}
 .titleblock input{width:100%;font-family:inherit;font-size:11px;padding:2px 4px;border:1px solid #bbb}
 .allToolsLink{font-size:10px;color:#1c4e80;text-decoration:none}
 .allToolsLink:hover{text-decoration:underline}
 @media print{.allToolsLink{display:none !important}}
+/* SFHD (2026-11-05): compact header: title on the left; project name / number (a link to the Project tab) and the global
+   actions on one row on the right, wrapping under the title on a phone. The title block and the hand-off buttons are in the
+   Project input tab (#sec-title, #sec-xfer). */
+#sfdHdr{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:4px 16px;margin-bottom:6px}
+#sfdHdrA{display:flex;align-items:center;flex-wrap:wrap;gap:2px 4px;justify-content:flex-end}
+#sfdHdrA button{margin:0}
+#sfdHdrProj{font-size:11px;color:#1c4e80;text-decoration:none;margin-right:6px;max-width:28em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#sfdHdrProj:hover{text-decoration:underline}
+#sfdHdrProj .sfdHdrNone{color:#777;font-style:italic}
+.sfdXg{margin:2px 0 8px 0}
+.sfdXg>b{display:block;font-size:11px;margin-bottom:1px}
+.sfdXg .note{margin:1px 0 2px 0}
+@media screen and (max-width:899.98px){#sfdHdrA{justify-content:flex-start}#sfdHdrProj{flex:1 1 100%;max-width:none}}
 /* SFPR (2026-11-03; review E6): printed Report: the last step of a topic does not go to a page alone (the table scroll-box rule
    moved to shared/report.js, RPTW) */
 td.rp-sfnw{white-space:nowrap}   /* SFDF-N: the condition in a Report D/C cell (sfdRowCond) on one line, screen and print */
@@ -266,19 +279,31 @@ a.wkA:hover{text-decoration:underline}
 </head>
 <body>
 <div class="wrap">
-<div style="display:flex;justify-content:space-between;align-items:flex-start">
+<div id="sfdHdr">
  <div>
   <a class="allToolsLink noprint" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
   <h1>Spread Footing Design Tool</h1>
   <p class="byline">by Mario Lococo &nbsp;|&nbsp; Loads &amp; Combinations &middot; Bearing &amp; Stability &middot; Footing &amp; Pedestal Design &middot; 3D View &nbsp;|&nbsp; ACI 318-19 / ASCE 7-16 / IBC 2021</p>
  </div>
- <div class="noprint">
+ <div class="noprint" id="sfdHdrA">
+  <a id="sfdHdrProj" href="#sec-title" title="Project name and number: edit them in the Project tab (title block)">Project: <span id="sfdHdrProjTxt"></span></a>
+  <button id="btnUndo" title="Undo (Ctrl+Z)" disabled>&#8630; Undo</button>
+  <button id="btnRedo" title="Redo (Ctrl+Y)" disabled>&#8631; Redo</button>
   <label id="sfdAcLbl" title="When off, input changes are saved but the analysis waits for Re-analyze (Ctrl+Enter). Remembered in this browser."><input type="checkbox" id="sfdAcChk" checked> Auto-calculate on change</label>
   <button id="sfdAcBtn" type="button" title="Run the analysis now (Ctrl+Enter)" disabled>Re-analyze</button>
   <button id="btnPrint" title="Print / save as PDF: the Report tab, from any tab (Include boxes on the Report tab)">Print-to-PDF Report</button>
  </div>
 </div>
 
+<a id="sfdJumpOut" href="#outputPanel" class="noprint">Jump to the results (dashboard and output tabs) &darr;</a>   <!-- SFPH: narrow screens only -->
+<div class="main">
+<aside id="sfdDashCol" class="noprint" aria-label="Summary dashboard"></aside>   <!-- SFDC: wide screens: the dashboard is moved here (sfdDashPlace) -->
+<!-- ============ INPUT PANEL ============ -->
+<div class="inp" id="inputPanel">
+
+<details class="sec" id="sec-title" open>   <!-- SFHD (2026-11-05): moved here from the page header; same fields and data paths -->
+<summary>Title block</summary>
+<div class="secbody">
 <div class="titleblock" id="titleblock">
  <div><label>Project Name</label><input data-path="meta.project"></div>
  <div><label>Project Number</label><input data-path="meta.number"></div>
@@ -287,22 +312,9 @@ a.wkA:hover{text-decoration:underline}
  <div><label>Checked By</label><input data-path="meta.chkBy"></div>
  <div><label>Checked Date</label><input data-path="meta.chkDate"></div>
 </div>
-<div class="noprint" style="margin:-4px 0 8px 0">
- <button id="btnUseProjMeta" title="Fill the title block from project info shared by another tool">Use shared project info</button>
- <button id="btnShareProjMeta" title="Make this title block available to the other tools">Share project info</button>
- <button id="btnPullMemberReactions" type="button" onclick="bxPullMemberReactions()" title="Import unfactored support reactions from Steel Beam Design into one pedestal's loads by type (HANDOFF.md, channel memberReactions)">Pull from Steel Beam<span id="bxMrNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
- <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportMemberReactions(event)">
- <span id="bxMrSrc" style="font-size:11px;font-style:italic"></span>
- <br><button id="btnPullFoundationLoads" type="button" onclick="bxPullFoundationLoads()" title="Import one factored foundation-load case (Strength / Extreme Event, top of footing) from the abutment calculator or Bridge Substructure Loading into one pedestal's Direct factored loads (HANDOFF.md, channel foundationLoads)">Pull from Abutment / SubLoads<span id="bxFlNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
- <button id="btnImportFoundationLoads" type="button" onclick="document.getElementById('bxFlFile').click()" title="Import a foundationLoads hand-off JSON file">Import hand-off (JSON)</button><input type="file" id="bxFlFile" accept=".json,application/json" style="display:none" onchange="bxImportFoundationLoads(event)">
- <span id="bxFlSrc" style="font-size:11px;font-style:italic"></span>
+ <div class="note">Printed on the Report and the drawing sheets (DXF title block).</div>
 </div>
-
-<a id="sfdJumpOut" href="#outputPanel" class="noprint">Jump to the results (dashboard and output tabs) &darr;</a>   <!-- SFPH: narrow screens only -->
-<div class="main">
-<aside id="sfdDashCol" class="noprint" aria-label="Summary dashboard"></aside>   <!-- SFDC: wide screens: the dashboard is moved here (sfdDashPlace) -->
-<!-- ============ INPUT PANEL ============ -->
-<div class="inp" id="inputPanel">
+</details>
 
 <details class="sec" id="sec-proj" open>
 <summary>Project Manager</summary>
@@ -319,13 +331,31 @@ a.wkA:hover{text-decoration:underline}
  </div>
  <div class="projrow">
   <button id="btnExport">Export JSON</button>
-  <button id="btnUndo" title="Undo (Ctrl+Z)" disabled>&#8630; Undo</button>
-  <button id="btnRedo" title="Redo (Ctrl+Y)" disabled>&#8631; Redo</button>
   <button id="btnImport">Import JSON</button>
   <input type="file" id="fileImport" accept=".json" style="display:none">
   <button id="btnReset" class="danger">Reset Inputs</button>
  </div>
  <div class="note">Autosave is on. Projects and autosave are stored in this browser's local storage; use Export JSON for backup or transfer.</div>
+</div>
+</details>
+
+<details class="sec noprint" id="sec-xfer" open>   <!-- SFHD (2026-11-05): moved here from the page header; same buttons, ids and handlers -->
+<summary>Shared project info and hand-offs</summary>
+<div class="secbody">
+ <div class="sfdXg"><b>Project info</b><div class="note">Copy the title block from or to the other tools.</div>
+ <button id="btnUseProjMeta" title="Fill the title block from project info shared by another tool">Use shared project info</button>
+ <button id="btnShareProjMeta" title="Make this title block available to the other tools">Share project info</button>
+ </div>
+ <div class="sfdXg"><b>Support reactions (Steel Beam Design)</b><div class="note">Unfactored reactions into one pedestal's loads by type.</div>
+ <button id="btnPullMemberReactions" type="button" onclick="bxPullMemberReactions()" title="Import unfactored support reactions from Steel Beam Design into one pedestal's loads by type (HANDOFF.md, channel memberReactions)">Pull from Steel Beam<span id="bxMrNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
+ <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportMemberReactions(event)">
+ <span id="bxMrSrc" style="font-size:11px;font-style:italic"></span>
+ </div>
+ <div class="sfdXg"><b>Foundation loads (Abutment / Substructure Loading)</b><div class="note">One factored case into one pedestal's direct factored loads.</div>
+ <button id="btnPullFoundationLoads" type="button" onclick="bxPullFoundationLoads()" title="Import one factored foundation-load case (Strength / Extreme Event, top of footing) from the abutment calculator or Bridge Substructure Loading into one pedestal's Direct factored loads (HANDOFF.md, channel foundationLoads)">Pull from Abutment / SubLoads<span id="bxFlNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
+ <button id="btnImportFoundationLoads" type="button" onclick="document.getElementById('bxFlFile').click()" title="Import a foundationLoads hand-off JSON file">Import hand-off (JSON)</button><input type="file" id="bxFlFile" accept=".json,application/json" style="display:none" onchange="bxImportFoundationLoads(event)">
+ <span id="bxFlSrc" style="font-size:11px;font-style:italic"></span>
+ </div>
 </div>
 </details>
 
@@ -819,6 +849,7 @@ function bindStaticInputs(){
   else inp.value=(v===undefined)?'':v;
  });
  refreshVis();
+ sfdHdrProjShow();   /* SFHD */
 }
 function refreshVis(){
  const sm=state.soil.mode;
@@ -962,6 +993,23 @@ function handleFieldChange(inp){
 }
 document.addEventListener('input',e=>{if(e.target.type!=='checkbox')handleFieldChange(e.target);});
 document.addEventListener('change',e=>{if(e.target.tagName==='SELECT'||e.target.type==='checkbox')handleFieldChange(e.target);});
+/* SFHD (2026-11-05): the header's read-only "Project: <name> · <number>" (state.meta.project / meta.number, typed in the
+   title block on the Project tab). A click opens the Project tab at the title block. Display only: nothing is stored. */
+function sfdHdrProjShow(){
+ const t=document.getElementById('sfdHdrProjTxt');if(!t)return;
+ const m=(typeof state!=='undefined'&&state&&state.meta)||{},v=[m.project,m.number].map(x=>String(x==null?'':x).trim()).filter(Boolean);
+ t.textContent='';
+ if(v.length)t.textContent=v.join(' \u00b7 ');else{const i=document.createElement('span');i.className='sfdHdrNone';i.textContent='(untitled: enter it in the Project tab)';t.appendChild(i);}
+ const a=document.getElementById('sfdHdrProj');if(a)a.title=(v.length?v.join(' \u00b7 ')+'. ':'')+'Edit the project name and number in the Project tab (title block)';
+}
+document.addEventListener('input',e=>{if(e.target.closest&&e.target.closest('#titleblock'))sfdHdrProjShow();});
+document.getElementById('sfdHdrProj').addEventListener('click',e=>{
+ e.preventDefault();
+ if(typeof sfdSetInTab==='function')sfdSetInTab('project',true);
+ const sec=document.getElementById('sec-title');if(!sec)return;sec.open=true;
+ if(window.matchMedia&&window.matchMedia('(max-width:899.98px)').matches)sec.scrollIntoView({block:'start'});
+ const i=sec.querySelector('input');if(i)i.focus({preventScroll:true});
+});
 /* ---------- input panel tabs (UI only) ----------
    The input sections are still written in the page exactly as before;
    sfdInputTabs() MOVES those <details class="sec"> nodes into one pane per
@@ -975,7 +1023,7 @@ const SFD_IN_TABS=[
  ['project','Project'],['geom','Geometry'],['mat','Materials'],['rebar','Reinforcement'],['soil','Soil'],
  ['stab','Stability'],['peds','Pedestals &amp; Loads'],['assump','Assumptions']];
 const SFD_IN_SEC={
- 'sec-proj':'project','sec-geom':'geom','sec-mat':'mat','sec-rebar':'rebar','sec-pedrebar':'rebar',
+ 'sec-title':'project','sec-proj':'project','sec-xfer':'project','sec-geom':'geom','sec-mat':'mat','sec-rebar':'rebar','sec-pedrebar':'rebar',
  'sec-soil':'soil','sec-ev':'soil','sec-stab':'stab','sec-peds':'peds','sec-assump':'assump'};
 /* input errors from computeAll() (red ERROR boxes), mapped to the tab holding the input */
 const SFD_IN_ERR=[
@@ -5102,7 +5150,7 @@ $('#btnDelProj').addEventListener('click',()=>{
    fromFile:j=>{if(!(j&&typeof j==='object'&&!Array.isArray(j)&&j.geom&&typeof j.geom==='object'&&j.soil&&typeof j.soil==='object'&&Array.isArray(j.peds)))throw new Error('not a Spread Footing input file: missing geometry, soil or pedestal data');return j;}}});
  const b=SharedProjectsUI.button('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete');
  b.addEventListener('click',()=>dlg.show());
- const ref=$('#btnDelProj');if(ref)ref.parentNode.insertBefore(b,ref.nextSibling);
+ const ref=$('#btnRedo');if(ref)ref.parentNode.insertBefore(b,ref.nextSibling);   /* SFHD: in the header, after Undo / Redo */
  window.SFPL={store,dlg};
 })();
 $('#btnExport').addEventListener('click',()=>{
