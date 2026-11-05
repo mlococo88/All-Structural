@@ -1505,7 +1505,10 @@ function validate(){
   if(!(fc>0)) B.push({code:&quot;Materials&quot;,msg:&quot;Concrete strength f\u2032c must be greater than 0.&quot;});
   if(!(fy>0)) B.push({code:&quot;Materials&quot;,msg:&quot;Yield strength f_y must be greater than 0.&quot;});
   if(!(S.mat.fyt>0)) B.push({code:&quot;Materials&quot;,msg:&quot;Transverse yield strength f_yt must be greater than 0.&quot;});
-  if(!(S.mat.lambda>0)) B.push({code:&quot;Materials&quot;,msg:&quot;\u03bb must be greater than 0 (1.0 for normal-weight concrete).&quot;});
+  /* CBLM (2026-11-05, engineer): \u03bb within the code range, else no results. ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b):
+     0.75 to 1.0 (19.2.4.3: 1.0 for normalweight). AASHTO LRFD 10th Ed. 5.4.2.8: \u03bb \u2264 1.0 (Eq. 5.4.2.8-1, from f_ct, has no lower
+     bound; Eq. 5.4.2.8-2 is 0.75 to 1.0), so only > 0 and \u2264 1.0 are required in AASHTO mode. */
+  if(!cbcLamOk()) B.push({code:&quot;Materials&quot;,msg:cbcLamMsg()});
   if(type==='tee'){
     if(bf<bw) B.push({code:&quot;Geometry&quot;,msg:&quot;Flange width b_f cannot be less than the web width b_w.&quot;});
     if(hf<=0) B.push({code:&quot;Geometry&quot;,msg:&quot;Flange thickness h_f must be positive for a T-section.&quot;});
@@ -2017,11 +2020,15 @@ function cbcInputErrs(){
   if(!(M.fc>0)) E.push(['fc','f\u2032c must be greater than 0.']);
   if(!(M.fy>0)) E.push(['fy','f_y must be greater than 0.']);
   if(!(M.fyt>0)) E.push(['fyt','f_yt must be greater than 0.']);
-  if(!(M.lambda>0)) E.push(['lam','\u03bb must be greater than 0 (1.0 for normal-weight concrete).']);
+  if(!cbcLamOk()) E.push(['lam',cbcLamMsg()]);
   if(S.stir.present&amp;&amp;!(S.stir.s>0)) E.push(['sp','Stirrup spacing s must be greater than 0.']);
   if(h>0) layerGeom(false).forEach((L,i)=>{ if(L.d<=0||L.d>=h) E.push(['ld'+i,'Layer '+(i+1)+' depth d = '+fmt(L.d)+' in is outside the section (0 to '+fmt(h)+' in).']); });
   return E;
 }
+function cbcLamOk(){ const l=S.mat.lambda; return S.code==='ACI'?(l>=0.75&amp;&amp;l<=1.0):(l>0&amp;&amp;l<=1.0); }
+function cbcLamMsg(){ return S.code==='ACI'
+  ?'\u03bb must be between 0.75 and 1.0 (ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b); 1.0 for normalweight concrete, 19.2.4.3).'
+  :'\u03bb must be greater than 0 and not more than 1.0 (AASHTO LRFD 10th Ed. 5.4.2.8; 1.0 for normal weight concrete).'; }
 function cbcInputMarks(P){
   cbcInputErrs().forEach(([k,msg])=>{
     const i=P.querySelector('[data-fkey=&quot;'+k+'&quot;]'); if(!i) return;
@@ -6910,6 +6917,9 @@ table.vars th{background:#EEF2F6; font-family:var(--font-ui); font-size:8pt; let
    updateCodeHint). CSS only: the inputs stay in the page, keep their values and are saved as before. */
 body.rbAASHTO .rbAciOnly{display:none!important}
 body:not(.rbAASHTO) .rbAashOnly{display:none!important}
+/* RBXS (2026-11-05): A_s,req, A_s,prov and &quot;From Beam Capacity&quot; only while the excess-reinforcement box is ticked (CSS only;
+   the values are kept and saved) */
+body.rbNoExcess .rbExcessOnly{display:none!important}
 /* RBIE (2026-11-05): a required input that is blank or invalid is outlined red, with the message under it */
 .field input.rbInErr{border-color:var(--fail)!important; background:#FEF2F2!important;}
 .rbInErrMsg{grid-column:1/-1; font-size:8.5pt; color:#991B1B; margin:2px 0 0; padding:2px 6px; border-left:3px solid var(--fail); background:#FEF2F2; font-family:var(--font-ui);}
@@ -7324,12 +7334,12 @@ function buildInputPanel(){
 
   ${panel(&quot;D2&quot;,&quot;Excess Reinforcement&quot;,true,`
     <div class=&quot;chk&quot;><input id=&quot;useExcess&quot; type=&quot;checkbox&quot;><label for=&quot;useExcess&quot;>Apply excess-reinforcement reduction (ACI 25.4.10 / AASHTO &amp;lambda;<sub>er</sub>)</label></div>
-    <div class=&quot;row2&quot; style=&quot;margin-top:8px;&quot;>
+    <div class=&quot;row2 rbExcessOnly&quot; style=&quot;margin-top:8px;&quot;>
       <div class=&quot;field&quot;><label>A<sub>s</sub> required <span class=&quot;unit&quot;>(in²)</span></label><input id=&quot;asReq&quot; type=&quot;number&quot; value=&quot;1.00&quot; step=&quot;0.01&quot; min=&quot;0&quot;></div>
       <div class=&quot;field&quot;><label>A<sub>s</sub> provided <span class=&quot;unit&quot;>(in²)</span></label><input id=&quot;asProv&quot; type=&quot;number&quot; value=&quot;1.00&quot; step=&quot;0.01&quot; min=&quot;0&quot;></div>
     </div>
-    <div class=&quot;btnrow&quot; id=&quot;asFromCapRow&quot; style=&quot;display:none;margin-top:6px;&quot;><button type=&quot;button&quot; class=&quot;btn small&quot; id=&quot;asFromCap&quot; title=&quot;Fill A_s,req, A_s,prov and the bar size from the Beam Capacity tab's current results (you can still edit them)&quot;>From Beam Capacity</button></div>
-    <div class=&quot;hint&quot; id=&quot;asFromCapNote&quot; style=&quot;display:none;margin-top:6px&quot;></div>
+    <div class=&quot;btnrow rbExcessOnly&quot; id=&quot;asFromCapRow&quot; style=&quot;display:none;margin-top:6px;&quot;><button type=&quot;button&quot; class=&quot;btn small&quot; id=&quot;asFromCap&quot; title=&quot;Fill A_s,req, A_s,prov and the bar size from the Beam Capacity tab's current results (you can still edit them)&quot;>From Beam Capacity</button></div>
+    <div class=&quot;hint rbExcessOnly&quot; id=&quot;asFromCapNote&quot; style=&quot;display:none;margin-top:6px&quot;></div>
     <div class=&quot;hint&quot;>Reduces l_d by A<sub>s,req</sub>/A<sub>s,prov</sub> (ACI: straight bars in tension and bars in compression; the ACI hook length l<sub>dh</sub> is never reduced). The tool does not check where the bar is, so <b>do not tick this</b> if any of these apply &amp;mdash; ACI 318-19 25.4.10.2: (a) at noncontinuous supports, (b) where anchorage or development for f<sub>y</sub> is required, (c) where bars are required to be continuous, (d) hooked, headed or mechanically anchored bars, (e) seismic-force-resisting systems in SDC C, D, E or F, (f) anchorage of concrete piles and concrete-filled pipe piles to pile caps in SDC C, D, E or F. AASHTO &amp;lambda;<sub>er</sub> (5.10.8.2.1c): not where development for f<sub>y</sub> is specifically required or for seismic (5.11) detailing. Never applied to splices. Also drives Class A splice eligibility.</div>
     <div class=&quot;hint&quot; style=&quot;margin-top:6px&quot;><b>A<sub>s,req</sub> for a beam:</b> the flexural requirement from analysis. Where the minimum of ACI 318-19 9.6.1 governs, A<sub>s,req</sub> = A<sub>s,min</sub> may be used: 9.6.1.1 defines A<sub>s,min</sub> as minimum <em>flexural</em> reinforcement (R9.6.1.1), not the shrinkage and temperature reinforcement of 24.4, for which R25.4.10.2 says the factor does not apply.</div>`)}
 
@@ -7497,7 +7507,8 @@ function rebarInputTabMarks(w){
   const bad={};
   const mark=n=>{ const pn=(n &amp;&amp; n.closest) ? n.closest('.rebarInPane') : null; if(pn) bad[pn.id.replace('rebarInPane_','')]=1; };
   const panel=id=>document.querySelector('#inputPanel .panel[data-panel=\''+id+'\']');
-  const codeHidden=n=>!!(n.closest &amp;&amp; n.closest(document.body.classList.contains('rbAASHTO')?'.rbAciOnly':'.rbAashOnly'));   // RBCM
+  const codeHidden=n=>!!(n.closest &amp;&amp; (n.closest(document.body.classList.contains('rbAASHTO')?'.rbAciOnly':'.rbAashOnly')
+    || (document.body.classList.contains('rbNoExcess') &amp;&amp; n.closest('.rbExcessOnly'))));   // RBCM, RBXS
   document.querySelectorAll('#inputPanel .rebarInPane input').forEach(i=>{ if(i.validity &amp;&amp; i.validity.badInput &amp;&amp; !codeHidden(i)) mark(i); });
   document.querySelectorAll('#inputPanel .rebarInPane .rbInErr').forEach(mark);   // RBIE
   document.querySelectorAll('#inputPanel .rebarInPane .inwarn').forEach(mark);
@@ -7559,6 +7570,7 @@ function validate(inp,f){
 }
 function updateCodeHint(inp){
   document.body.classList.toggle('rbAASHTO',inp.code===&quot;AASHTO&quot;);   // RBCM: hide the inputs of the other code (CSS only)
+  document.body.classList.toggle('rbNoExcess',!inp.useExcess);       // RBXS: hide A_s,req / A_s,prov while the box is unticked
   const el=document.getElementById('codeHint'); if(!el) return;
   el.textContent = inp.code===&quot;AASHTO&quot;
     ? &quot;Bridge code (ksi units internally). Structure mirrors ACI with λ factors.&quot;
@@ -8371,6 +8383,12 @@ function rbInputErrors(inp,f){
     if(!num(inp.asReq)||inp.asReq<0) E.push(['asReq',&quot;A_s required must be entered (excess-reinforcement reduction ticked).&quot;]);
     if(!num(inp.asProv)) E.push(['asProv',&quot;A_s provided must be entered (excess-reinforcement reduction ticked).&quot;]);
   }
+  /* RBLM (2026-11-05, engineer): λ of lightweight concrete within 0.75 to 1.0, else no results (it was clamped, with a warning).
+     ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b): 0.75 to 1.0. AASHTO LRFD 10th Ed. 5.4.2.8: ≤ 1.0 (Eq. 5.4.2.8-1 from f_ct has no
+     lower bound), but this tool applies λ only within 0.75 to 1.0 (computeFactors), so a lower value is an error, not raised. */
+  if(inp.lightweight&amp;&amp;f.lambdaAdj) E.push(['lwLambda',f.AASHTO
+    ?&quot;λ must be between 0.75 and 1.0 (AASHTO 5.4.2.8 limits λ to 1.0; this tool does not apply λ below 0.75).&quot;
+    :&quot;λ must be between 0.75 and 1.0 (ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b)).&quot;]);
   if(inp.tensClass===&quot;A&quot;&amp;&amp;(!num(inp.pctSpliced)||inp.pctSpliced<0||inp.pctSpliced>100)) E.push(['pctSpliced',&quot;% of A_s spliced must be between 0 and 100 (Class A eligibility).&quot;]);
   return E;
 }

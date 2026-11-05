@@ -1913,3 +1913,36 @@ function rbrDashColl(v,save){
   - Default and valid inputs: identical.
 - **How verified:** see the CBIE entry in `fixlog/Concrete Beam Capacity.md`. Here, standalone: calculations and `rbrModel()` are identical to origin/main in 5 cases. The Report tab with f′c blank shows the input error, and after a valid value it shows results again with no marks left.
 - **Other copies:** `Concrete Beam Capacity.html` (suite-frame-dev), with the same edits.
+
+## 2026-11-05 — PR: claude/cbc-lambda-excess, PR #796: https://github.com/mlococo88/All-Structural/pull/796 (RBLM: λ outside 0.75–1.0 is an input error; RBXS: A_s,req, A_s,prov and "From Beam Capacity" hidden while the excess box is unticked; kept in step with the Development & Splice tab of Concrete Beam Capacity.html)   [behaviour change: when results are shown; no formula change]
+
+### RBLM. λ of lightweight concrete   [behaviour change: when results are shown]   Decision (pending engineer review)
+- **Before:** with "Lightweight" ticked, a λ outside 0.75–1.0, or a blank one, was clamped to 0.75–1.0 (`computeFactors`: `lambdaAdj`) with a warning, and results were shown.
+- **After:** it is an input error ("Input error: no results", box marked) via `rbInputErrors()`. Added before the `% spliced` check (anchor `/* RBLM (2026-11-05, engineer)`):
+  ```js
+  if(inp.lightweight&&f.lambdaAdj) E.push(['lwLambda',f.AASHTO
+    ?"λ must be between 0.75 and 1.0 (AASHTO 5.4.2.8 limits λ to 1.0; this tool does not apply λ below 0.75)."
+    :"λ must be between 0.75 and 1.0 (ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b))."]);
+  ```
+- **Provisions (checked in the PDFs):** ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b): 0.75 to 1.0. AASHTO LRFD 10th Ed. 5.4.2.8: ≤ 1.0 (Eq. 5.4.2.8-1 has no lower bound; Eq. 5.4.2.8-2 is 0.75 to 1.0).
+- **Decision (pending engineer review):** in AASHTO mode λ < 0.75 is also an error here. The tool's clamp would use 0.75, which gives a shorter l_d than the entered λ (unconservative). The engineer should decide whether this tool should apply λ < 0.75 under Eq. 5.4.2.8-1; that would be a calculation change.
+- **Check case:**
+  - ACI, lightweight, λ = 0.70: before l_d with λ = 0.75 plus a warning; after, input error.
+  - λ = 0.85: results, unchanged (l_d = 55.8 in for #8).
+  - λ blank: before 0.75 used; after, input error.
+  - Not lightweight: λ is ignored, as before.
+  - AASHTO 1.2 or 0.6: input error.
+
+### RBXS. Excess-reinforcement inputs shown only when used   [display only]   Decision (pending engineer review)
+- **Where:** in `buildInputPanel()`, panel D2:
+  - `<div class="row2" style="margin-top:8px;">` (A_s,req / A_s,prov) becomes `<div class="row2 rbExcessOnly" …>`;
+  - `<div class="btnrow" id="asFromCapRow" …>` becomes `<div class="btnrow rbExcessOnly" id="asFromCapRow" …>`;
+  - `<div class="hint" id="asFromCapNote" …>` becomes `<div class="hint rbExcessOnly" id="asFromCapNote" …>`.
+- `updateCodeHint(inp)`: added `document.body.classList.toggle('rbNoExcess',!inp.useExcess);`.
+- CSS: added `body.rbNoExcess .rbExcessOnly{display:none!important}`.
+- `rebarInputTabMarks()`: a hidden excess box no longer marks its tab.
+- CSS only. The values are kept, read and saved as before; A_s,req and A_s,prov are only used when the box is ticked (`computeFactors`, `classAEligible`).
+- **Check:** box off: the row and button have display none; box on: both show and the values (1.00 / 1.00) are kept.
+
+**How verified:** see the CBLM entry in `fixlog/Concrete Beam Capacity.md`. Calculations are identical to origin/main for valid inputs in 5 cases.
+**Other copies:** `Concrete Beam Capacity.html` (suite-frame-dev).
