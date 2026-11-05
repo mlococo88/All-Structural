@@ -45,6 +45,17 @@
   .projbar select{min-width:150px} .projbar input[type=text]{width:150px}
   .projbar select:focus,.projbar input[type=text]:focus{outline:none;border-color:var(--accent)}
   .pb-status{color:#8fce9a;font-size:11px;min-width:80px;font-style:italic}
+  /* LDHD (2026-11-05): header project line; the Project input tab's file and hand-off groups (light buttons on the card) */
+  #hdrProj{color:#c9c7c2;font-size:12px;text-decoration:none;max-width:24em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #hdrProj:hover{color:#fff;text-decoration:underline}
+  #hdrProj .hdrNone{font-style:italic;opacity:.8}
+  .lx-home #lxProjHold{display:none}
+  #inputPanel .lx-btns{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 2px}
+  #inputPanel .lx-grp{margin:2px 0 10px}
+  #inputPanel .lx-grp>b{display:block;font:700 11.5px var(--body);color:#34404d}
+  #inputPanel .lx-btns .btn:not(.xlink){background:#fff;color:#1f2a37;border-color:#c6c4bd;font-weight:600}
+  #inputPanel .lx-btns .btn:not(.xlink):hover{background:#eef2f7}
+  #inputPanel #projLabel{color:#1f2a37!important}
 
   .sheet{background:var(--paper);max-width:940px;margin:26px auto;padding:40px 52px 56px;
     box-shadow:0 1px 2px rgba(0,0,0,.16),0 10px 30px rgba(0,0,0,.14);border:1px solid #bdbbb5}
@@ -415,32 +426,12 @@ var st=document.createElement('style'); st.textContent=css;
     <div class="toolbar">
       <div class="tt"><a class="bx-alltools" href="tools.html" target="_top" title="Open the list of all tools" style="color:#9fb4c9;font-family:var(--body);font-weight:400;font-size:11.5px;text-decoration:none;margin-right:12px">&larr; All tools</a>LL &amp; DL Distribution <span>AASHTO LRFD 4.6.2.2 · MassDOT §3.5.3</span></div>
       <div class="actions">
+        <a id="hdrProj" href="#" title="Project and structure number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a><!-- LDHD (2026-11-05) -->
         <label><input type="checkbox" id="liveUpdate" checked /> Live recalc</label>
         <button class="btn" id="mctBackBtn" title="Back to the MCT analysis app">↩ MCT</button>
-        <button class="btn" id="sendDFBtn" title="Publish the computed distribution factors to shared storage so the MCT Generator and PS-Beam can pull them">⇄ Send DFs to Design Apps</button>
-        <button class="btn" id="exportDFBtn" title="Download the DF hand-off (the same data as Send DFs) as a JSON file, for 'Import hand-off (JSON)' in another tool or a calc package">⇩ Export DF hand-off (JSON)</button>
-        <button class="btn" id="sendDLBtn" title="Publish the selected design beam's distributed dead load (DC1 / DC2 / DW, and pedestrian LL if any) so the MCT Generator's Loads tab can import it as beam UDLs">⇄ Send DL to MCT Loads</button>
-        <button class="btn" id="openPSBtn" title="Open the prestressed concrete design app (pull the DFs there with 'Pull from LL &amp; DL Distribution')">PS ↗</button>
+        <span class="pb-status" id="saveStatus"></span><!-- LDHD (2026-11-05): from the retired project bar; its buttons are in the Project input tab (#lxProjHold) -->
         <button class="btn" id="calcBtn">Recalculate</button>
         <button class="btn primary" id="printBtn">Print / PDF</button>
-      </div>
-    </div>
-    <div class="projbar">
-      <div class="pb-group">
-        <span class="pb-lbl">Project</span>
-        <span id="projLabel" style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink)">— none —</span>
-        <span style="font-size:10.5px;color:var(--muted)">managed in the MCT app · this calculator autosaves into it</span>
-      </div>
-      <div class="pb-group">
-        <button class="btn sm" id="bxProjUse" title="Fill Project, Structure No., Calc. by, Checked and Date from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
-        <button class="btn sm" id="bxProjShare" title="Share this calculation's project info with the other tools">Share project info</button>
-        <button class="btn sm" id="bxGeomPull" title="Review the girder layout another tool has sent (spans, spacing, skew, overhangs) and choose whether to apply it">Pull geometry</button>
-        <button class="btn sm" id="bxGeomImport" title="Load a geometry hand-off file (bridge-lldf-geometry JSON) exported by Bridge Geometry or a design app">Import hand-off (JSON)</button>
-        <input type="file" id="bxGeomFile" accept="application/json,.json" style="display:none" />
-        <button class="btn sm" id="projExport" title="Download this calculation as a JSON file">Export JSON</button>
-        <button class="btn sm" id="projImport" title="Load a calculation from a JSON file">Import JSON</button>
-        <input type="file" id="projFile" accept="application/json,.json" style="display:none" />
-        <span class="pb-status" id="saveStatus"></span>
       </div>
     </div>
   </header>
@@ -456,6 +447,30 @@ var st=document.createElement('style'); st.textContent=css;
       <div class="lldf-rptview" id="lldfRptView"></div>
     </main>
   <div class="sheet lx-home" id="lxHome">
+    <div class="noprint" id="lxProjHold"><!-- LDHD (2026-11-05): moved here from the page header; the LXL script below moves each group into a card of the Project input tab -->
+      <div id="lxProjFile">
+        <div class="lx-note">MCT project: <span id="projLabel" style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink)">— none —</span> &mdash; managed in the MCT app; this calculator autosaves into it.</div>
+        <div class="lx-btns"><button class="btn sm" id="projExport" title="Download this calculation as a JSON file">Export JSON</button>
+        <button class="btn sm" id="projImport" title="Load a calculation from a JSON file">Import JSON</button>
+        <input type="file" id="projFile" accept="application/json,.json" style="display:none" /></div>
+        <div class="lx-note">Export / Import JSON: this calculation as a file.</div>
+      </div>
+      <div id="lxProjXfer">
+        <div class="lx-grp"><b>Project info</b><div class="lx-note">Copy the title block from or to the other tools.</div><div class="lx-btns">
+        <button class="btn sm" id="bxProjUse" title="Fill Project, Structure No., Calc. by, Checked and Date from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
+        <button class="btn sm" id="bxProjShare" title="Share this calculation's project info with the other tools">Share project info</button></div></div>
+        <div class="lx-grp"><b>Girder layout</b><div class="lx-note">Spans, spacing, skew and overhangs sent by Bridge Geometry or a design app, or its hand-off file.</div><div class="lx-btns">
+        <button class="btn sm" id="bxGeomPull" title="Review the girder layout another tool has sent (spans, spacing, skew, overhangs) and choose whether to apply it">Pull geometry</button>
+        <button class="btn sm" id="bxGeomImport" title="Load a geometry hand-off file (bridge-lldf-geometry JSON) exported by Bridge Geometry or a design app">Import hand-off (JSON)</button>
+        <input type="file" id="bxGeomFile" accept="application/json,.json" style="display:none" /></div></div>
+        <div class="lx-grp"><b>Distribution factors</b><div class="lx-note">To the MCT Generator and the prestressed app (or as a file); the padlock sends on every recalculation.</div><div class="lx-btns">
+        <button class="btn" id="sendDFBtn" title="Publish the computed distribution factors to shared storage so the MCT Generator and PS-Beam can pull them">⇄ Send DFs to Design Apps</button>
+        <button class="btn" id="exportDFBtn" title="Download the DF hand-off (the same data as Send DFs) as a JSON file, for 'Import hand-off (JSON)' in another tool or a calc package">⇩ Export DF hand-off (JSON)</button>
+        <button class="btn" id="openPSBtn" title="Open the prestressed concrete design app (pull the DFs there with 'Pull from LL &amp; DL Distribution')">PS ↗</button></div></div>
+        <div class="lx-grp"><b>Dead load</b><div class="lx-note">The design beam's distributed dead load to the MCT Loads tab.</div><div class="lx-btns">
+        <button class="btn" id="sendDLBtn" title="Publish the selected design beam's distributed dead load (DC1 / DC2 / DW, and pedestrian LL if any) so the MCT Generator's Loads tab can import it as beam UDLs">⇄ Send DL to MCT Loads</button></div></div>
+      </div>
+    </div>
     <div class="titleblock">
       <div class="tb-id">
         <h1>Live Load &amp; Dead Load Distribution</h1>
@@ -2915,7 +2930,7 @@ function lldfPlibInit(){
   const h=SharedProjects.history({ get:()=>{ const o=serialize(false); delete o.savedAt; return JSON.stringify(o); }, set:t=>{ applyState(JSON.parse(t)); autosave(); } });
   const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'btn sm'});
   const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
-  const ref=$("projExport"); if(ref){ ref.parentNode.insertBefore(bu,ref); ref.parentNode.insertBefore(br,ref); }
+  const ref=$("printBtn"); if(ref){ ref.parentNode.insertBefore(bu,ref); ref.parentNode.insertBefore(br,ref); }   /* LDHD: in the header, before Print / PDF (was before Export JSON) */
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   h.reset(); window.LLPL={h};
 }
@@ -4978,7 +4993,7 @@ function apply(){
 }
 
 /* ---------- tabs ---------- */
-var IN_TABS=[["bridge","Bridge"],["girders","Girders"],["roadway","Roadway & lanes"],["loads","Dead loads"],["options","Options & images"]];
+var IN_TABS=[["project","Project"],["bridge","Bridge"],["girders","Girders"],["roadway","Roadway & lanes"],["loads","Dead loads"],["options","Options & images"]];
 var OUT_TABS=[["summary","Summary"],["steps","LL worked steps"],["lever","Lever rule"],["dl","Dead load"],
   ["appl","Applicability & notes"],["report","Report"]];
 /* LXM (2026-11-02): tabs merged or retired; a remembered tab of before opens its successor */
@@ -5063,8 +5078,11 @@ buildTabs("out",OUT_TABS,$("lxOutTabs"),OUT);
 var given=$("bridgeType").closest(".given");
 /* inputs */
 var P=PANE.in, c;
-c=card(P.bridge,"Project"); move(HOME.querySelector(".titleblock .tb-meta"),c);
+c=card(P.project,"Title block"); move(HOME.querySelector(".titleblock .tb-meta"),c);   /* LDHD: the Project tab (was the Bridge tab's "Project" card) */
+c.appendChild(mk("p","lx-note","Printed on the Report and the calculation sheet."));
 var projCard=c;
+c=card(P.project,"Project file"); move($("lxProjFile"),c);
+c=card(P.project,"Shared project info and hand-offs"); move($("lxProjXfer"),c);
 c=card(P.bridge,"Cross-section type"); move($("bridgeType").closest(".typerow"),c); move(given.querySelector(":scope > .tblctl"),c);
 c=card(P.bridge,"Spans & skew"); [row("nSpans"),$("spanRows"),$("regionRow"),row("skew"),row("skewV")].forEach(function(n){ move(n,c); });
 c=card(P.bridge,"Deck & overhangs"); move(row("ts"),c); move(grpWrap("OL"),c);
@@ -5114,7 +5132,18 @@ function tabVis(){
   BTN.out.lever.hidden=off;
   if(off&&curOut==="lever") showOut("summary",false);
 }
+/* LDHD (2026-11-05): the header's read-only "Project: <project> · <structure no.>" (#mProject / #mStruct, Project tab). A click
+   opens the Project tab and focuses Project. Display only: nothing is stored. */
+function hdrProj(){
+  var t=$("hdrProjTxt"); if(!t) return;
+  var v=["mProject","mStruct"].map(function(id){ var e=$(id); return e?String(e.value||"").trim():""; }).filter(Boolean);
+  t.textContent="";
+  if(v.length) t.textContent=v.join(" \u00b7 "); else t.appendChild(mk("span","hdrNone","(untitled: enter it in the Project tab)"));
+}
+document.addEventListener("input",function(e){ if(e.target&&(e.target.id==="mProject"||e.target.id==="mStruct")) hdrProj(); });
+$("hdrProj").addEventListener("click",function(e){ e.preventDefault(); showIn("project",true); var i=$("mProject"); if(i){ reveal(i.closest(".lx-card")||i,!panelLayout()); i.focus({preventScroll:true}); } });
 function after(){
+  hdrProj();
   if(restored) return;
   placeLazy(); syncPickers(); tabVis();
   if(window.lldfReportRefresh) window.lldfReportRefresh();   /* LXM: the Report tab, after every card of this run is drawn */
