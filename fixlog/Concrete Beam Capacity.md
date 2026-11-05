@@ -2211,7 +2211,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open items:** none.
 
-## 2026-11-05 — PR: claude/cbc-hook-excess (CBH1: ACI standard hook ℓ_dh no longer reduced by A_s,req/A_s,prov; panel hint quotes the ACI 318-19 25.4.10.2 list; CALCULATION CHANGE, less conservative before)
+## 2026-11-05 — PR: claude/cbc-hook-excess, PR #782: https://github.com/mlococo88/All-Structural/pull/782 (CBH1: ACI standard hook ℓ_dh no longer reduced by A_s,req/A_s,prov; panel hint quotes the ACI 318-19 25.4.10.2 list; CALCULATION CHANGE, less conservative before)
 
 - **Problem (audit C1):** in ACI mode `calcHook()` multiplied the standard hook length by the excess-reinforcement factor when "Apply excess-reinforcement reduction" was ticked. ACI 318-19 25.4.10.1 permits the A_s,req/A_s,prov reduction only for the lengths of 25.4.2.1(a), 25.4.6.1(a), 25.4.7.1(a) and 25.4.9.1(a); 25.4.3.1 (standard hooks) is not listed, and 25.4.10.2(d) does not permit the reduction for hooked, headed or mechanically anchored bars (printed pp. 487–488; R25.4.10.2 gives the reason: hook and head anchorage is a breakout mechanism). The tool's ℓ_dh was unconservative by the factor (2× at 0.5). The panel hint quoted the 318-14 list: (d) omitted "hooked", (e) read SDC D, E or F (318-19: C, D, E or F), (f) piles to pile caps was missing.
 - **Copies changed (CLAUDE.md §3):** the Development & Splice frame of `Concrete Beam Capacity.html` (`#suite-frame-dev` srcdoc; decoded with `srcdoc.py`, edited, re-encoded, exact round trip checked, CRLF kept) and `ACI Rebar Development Length.html`, with the same script (exact-string edits, each found once).
