@@ -1752,6 +1752,8 @@ function rbrDashGo(it){
 function rbrDashRender(checks,f){
   const box=document.getElementById('rbrDash'), cnt=document.getElementById('rbrDashCnt'); if(!box) return;
   box.innerHTML='';
+  /* RBDT (2026-11-05): the panel title names the code of the calculation, as the old dashboard heading did */
+  const tt=document.getElementById('rbrDashTtl'); if(tt) tt.textContent='Checks \u2014 '+(f&&f.AASHTO?'AASHTO LRFD 10th Ed. \u00a75.10.8':'ACI 318-19');
   const n={fail:0,warn:0};
   const tmp=document.createElement('div');
   const txt=h=>{ tmp.innerHTML=String(h); return tmp.textContent; };

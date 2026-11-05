@@ -1856,3 +1856,16 @@ function rbrDashColl(v,save){
   rbrDashPlace();
 })();
 ```
+
+## 2026-11-05 — PR: claude/cbc-p2-display, PR #792: https://github.com/mlococo88/All-Structural/pull/792 (RBDT: the check summary title names the code; kept in step with the Development & Splice tab of Concrete Beam Capacity.html; display only, no result change)
+
+### RBDT. Check summary title names the code   [display only]
+- **Engineer request (2026-11-05):** the panel title (RBDC #791, "Check summary") names the code, following the code mode.
+- **Where:** `rbrDashRender(checks,f)`, after `box.innerHTML='';`, added:
+  ```js
+  /* RBDT (2026-11-05): the panel title names the code of the calculation, as the old dashboard heading did */
+  const tt=document.getElementById('rbrDashTtl'); if(tt) tt.textContent='Checks — '+(f&&f.AASHTO?'AASHTO LRFD 10th Ed. §5.10.8':'ACI 318-19');
+  ```
+- **Check case:** default "CHECKS — ACI 318-19" (upper case by the CSS); AASHTO "CHECKS — AASHTO LRFD 10TH ED. §5.10.8".
+- **How verified:** headless Chromium, origin/main vs branch, 5 cases: calculations, `rbrModel()` identical; the only text difference is the title. `check-syntax`, `phone-layout --tool cbc,aci`, `project-library` pass.
+- **Other copies:** `Concrete Beam Capacity.html` (suite-frame-dev), same edit; see its fixlog (CBRL / RBDT).
