@@ -4863,3 +4863,60 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 
 ### Open items
 - none.
+
+
+## 2026-11-05 — PR: claude/sf-wall (PR #769: https://github.com/mlococo88/All-Structural/pull/769) — Element type per pedestal: Pedestal (default) / Wall; wall-foundation dowel minimum per ACI 318-19 16.3.4.2 → 11.6.1 (SFWL; calculation option, default = no change)
+
+### SFWL. "Element type: Pedestal (default) / Wall"   [calculation option; CLAUDE.md §4]
+- **Request (engineer, RISAFoundation reconciliation of the Seymour project):** a Wall type per pedestal. The dowel minimum follows the wall rule. Two-way shear and the pedestal-only checks are stated for a wall. No full wall design.
+- **Provisions read in the ACI 318-19 PDF (paraphrased):**
+  - **2.3, "wall":** a vertical element with a horizontal length-to-thickness ratio greater than 3.
+  - **16.3.4.1:** column or pedestal to foundation: A_s across the interface ≥ 0.005A_g.
+  - **16.3.4.2:** wall to foundation: the vertical reinforcement crossing the interface satisfies 11.6.1.
+  - **11.6.1:** applies where in-plane V_u ≤ 0.5φα_cλ√f′c A_cv. Minimum ρ_l and ρ_t then per Table 11.6.1. The limits need not be met where adequate strength and stability are shown by analysis (not used).
+  - **Table 11.6.1, cast-in-place, deformed bars, minimum ρ_l:**
+    - No. 5 and smaller, f_y ≥ 60 000 psi: 0.0012;
+    - No. 5 and smaller, f_y < 60 000 psi: 0.0015;
+    - larger than No. 5: 0.0015.
+  - **11.5.4.3:** α_c = 3 for h_w/ℓ_w ≤ 1.5, 2 for ≥ 2.0, linear between.
+  - **11.5.4.4:** net axial tension: α_c = 2(1 + N_u/(500A_g)) ≥ 0.
+  - **2.2 notation:** A_cv = the gross area bounded by the web thickness and the length of section in the direction of the shear (walls). ρ_l = distributed longitudinal reinforcement / the gross area perpendicular to it.
+  - **11.6.2** (where 11.6.1's condition is not met): ρ_l ≥ max(Eq. 11.6.2, 0.0025). The printed condition of 11.6.2 in this copy reads "≤", the same as 11.6.1, so its condition could not be confirmed from the PDF. Not implemented; see the decisions below.
+  - **Also read:** 22.6.4.1 (two-way critical sections at edges or corners of columns, concentrated loads or reaction areas: no exemption for walls); 13.2.7.1 / Table 13.2.7.1 (critical section at the face of a concrete wall); 11.5.3 / Table 11.5.3.2 (k = 2.0 for a wall not braced against lateral translation); 11.5.5.1 (out-of-plane shear per 22.5); 11.7.2.1, 11.7.2.3, 11.7.3.1, 11.7.4.1 (detailing).
+- **Where:**
+  - Input: Pedestals & Loads card, "Element type" (`peds[i].elemType`, `'pedestal'` default / `'wall'`). `newPed` sets `'pedestal'`. `migrateState`: `if(p.elemType!=='wall')p.elemType='pedestal';`.
+  - New `sfdWallInfo(i,p,combos,fc,fy,lam)` (anchor `/* ---- SFWL (2026-11-05, engineer)`):
+    - applied only where elemType is 'wall', h > 0 and ℓ_w/t > 3 (ℓ_w = the longer plan side, t = the shorter);
+    - per LRFD combination: in-plane V_u (the applied shear along ℓ_w), N_u = P_u at the interface, α_c, and the limit 0.5·0.75·α_c·λ·min(√f′c, 100)·A_cv;
+    - ρ_l from Table 11.6.1 with the dowel bar size;
+    - AsMin = ρ_l·A_g where the condition holds in every combination, else 0.005A_g (today's value).
+    - New `sfdWallTxt(w,html)` holds the statements.
+  - `computePhase2` bearing (anchor `const AsDowMin=`). Before: `const AsDowMin=0.005*Ag;`. After: `const wall=sfdWallInfo(i,p,combos,fc,fy,lam); const AsDowMin=wall.applied?wall.AsMin:0.005*Ag;` (`wall` returned).
+  - `sfdDowelCheck` (anchor `o.Ag=A;o.AsMin=`). Before: `o.AsMin=0.005*A;`. After: `o.AsMin=(bz.wall&&bz.wall.applied)?bz.AsDowMin:0.005*A;o.wall=…;o.rhoMin=…;`.
+  - Display (wall only, except where noted):
+    - Report: concrete-bearing topic steps ℓ_w/t, α_c, the 11.6.1 condition, and the dowel minimum ρ_l·A_g. The dowel A_s,min step and the Footing Design (2e) block use ρ_l.
+    - Report pedestal subsection: "(wall, …)" title and the statement note. Punching: a note.
+    - Footing Design 5.5 / 5.6 notes. Pedestal Design: a note per wall; 6.1 Class "Wall"; the 1 % note quotes the dowel minimum in effect (same number for a pedestal).
+    - 3D info box: Class "Wall".
+    - Dashboard: "Dowel steel" text names the wall rule. New REVIEW chip "Wall checks (ACI 318-19 Ch. 11)" whenever a pedestal is set to Wall. The Report result-row references follow.
+- **Check case (Seymour Platform Foundation, f′c = 3000 psi, Ped 1 set to Wall):** Ped 1 is 2.67 × 9.833 × 7.25 ft, 32 #6 continuous into the footing, f_y 60 000 psi.
+  - ℓ_w = 118.00 in (along y), t = 32.04 in, ℓ_w/t = **3.68 > 3**: a wall.
+  - h_w/ℓ_w = 87.0/118.0 = 0.737, so α_c = 3.0.
+  - A_cv = A_g = 32.04·118.00 = 3780.6 in². Limit = 0.5·0.75·3.0·1.0·54.77·3780.6/1000 = **232.96 kip**. In-plane V_u = 0 (Ped 1 carries no shear along y). 11.6.1 applies.
+  - Dowels #6 (larger than No. 5): ρ_l = 0.0015.
+    - Before: A_s,min = 0.005·3780.6 = **18.90 in²**. Provided 32·0.44 = 14.08 in², D/C 1.343, "Dowel steel" **FAIL**, "Dowels (tension, laps)" Ped 1 **NG** (A_s,gov 18.90 > 14.08).
+    - After: A_s,min = 0.0015·3780.6 = **5.67 in²**, D/C 0.403, **PASS**. Ped 1 dowels OK. Ped 2's ℓ_dh failure is unchanged.
+  - Dashboard: 4 NG → 3 NG. New REVIEW "Wall checks".
+  - Ped 2 set to Wall as well: ℓ_w/t = 37.99/32.00 = 1.19 ≤ 3, not a wall. Pedestal treatment kept, with a REVIEW note.
+  - Path where 11.6.1 is not met (default project, Ped 1 made 1.5 × 6 ft, direct V_y = 120 kip): limit = 0.5·0.75·3·63.25·(18·72)/1000 = 92.21 kip < 120. The column rule 0.005·1296 = 6.48 in² is kept (REVIEW: 11.6.2 not computed).
+- **How verified:** headless Chromium, origin/main 8d103e0 vs the branch, pinned libraries.
+  - Deep diff of `R` and `P2` on the 10 harness cases plus Seymour at 3 ksi: only the new fields (`bearing[].wall` {sel: false}, `dowels[].wall` false, `dowels[].rhoMin` 0.005). Report text and dashboard identical.
+  - Wall cases (Seymour Ped 1; Seymour Ped 1 + Ped 2; default with a 1.5 × 6 ft wall; the direct-load case above): values as listed. 0 console errors, 0 KaTeX errors.
+  - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Screenshots of the input, Pedestal Design note, Footing Design 5.6 and the Report steps checked by eye.
+- **Saved data:** new field `peds[i].elemType`. Absent = 'pedestal' = today's behaviour. No key or format change.
+- **Other copies:** none.
+- **Decisions (pending engineer review):**
+  1. **Two-way shear is kept for a wall (conservative).** The brief asked to state it as not applicable along a wall's length and use one-way shear. ACI 318-19 22.6.4.1 has no wall exemption that could be confirmed, so punching is still computed and gates. A note states that the footing one-way check at d from the wall faces (Table 13.2.7.1) is the wall's governing footing shear.
+  2. **The pedestal checks are kept as a conservative stand-in, not marked N/A.** They are the P–M of the section, ties 25.7.2, crossties 25.7.2.3, one-way shear by 22.5 and the k = 2 slenderness screen. The wall statements cite the corresponding Chapter 11 provisions. A REVIEW chip lists the wall checks the tool does not compute: in-plane shear 11.5.4, the wall's own ρ_l / ρ_t (11.6), spacing 11.7.2.1 / 11.7.3.1, and two layers above 10 in (11.7.2.3).
+  3. **Where 11.6.1's condition is not met, 0.005A_g is kept.** Table 11.6.1 is used only where in-plane V_u ≤ 0.5φα_cλ√f′c A_cv in every LRFD combination. Otherwise the column rule stays (REVIEW), because 11.6.2 is not computed (it needs ρ_t, and its printed condition could not be confirmed).
+  4. **Wall geometry and inputs.** Wall only where ℓ_w/t > 3 (2.3); otherwise the pedestal treatment stays, with a REVIEW note. ℓ_w = the longer plan side. h_w = the pedestal height h. N_u = P_u at the interface. √f′c is capped at 100 psi in the 11.6.1 limit (conservative). ρ_l is taken with the dowel bar size.
