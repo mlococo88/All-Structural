@@ -4713,3 +4713,57 @@ function buildDrawingsTab(pg){
   T.querySelector('#cbdwPrintAll').addEventListener('click',()=>prt(B.S));
 }
 ```
+
+## 2026-11-05 — PR: claude/cbc-print-ids, PR #807: https://github.com/mlococo88/All-Structural/pull/807 (CBPI: Report figures print their markers, hatching and clip paths; the compression-fibre tag of the cross-section no longer overlaps a d label or b_w; display only, no result change)
+
+### CBPI-1. SVG ids in the printed Report   [display only]
+- **Problem:** at print, the Report is rendered a second time into the print box `#rp-print`, while the Report tab's own copy stays in the page, hidden.
+  - A figure's `url(#id)` (marker, pattern, clip path) resolves to the first element with that id in the document. That is the hidden copy's element, which does not paint.
+  - In the printed PDF this lost the dimension arrowheads of the overview cross-section and elevation (§2.1 / §2.2) and of the Input Echo copies, and the hatching (pattern `cp`, clip `cc`) of the ASD "Transformed section and stress block".
+  - Found by a headless check: in the print state, every `url(#…)` / `href="#…"` inside an SVG of `#rp-print` must resolve to an element of the same figure inside `#rp-print`. Main had 10 failing references in 5 figures; the branch has 0 of 26.
+- **Fix (suite shell, after the `beforeprint` listener that fills `#rp-print`; anchor `/* CBPI (2026-11-05): the print box is a second rendering`):**
+  - A new `beforeprint` listener, `uniqSvgIds(box)`.
+  - Each top-level SVG of the print box gets its own ids: every id defined in it gets the suffix `-pr<n>`, and the references in that SVG (`fill`, `stroke`, `clip-path`, `mask`, `filter`, `marker-*`, `style`, `href`) follow.
+  - It runs after the box is filled, whether by this shell (Ctrl+P on the Report tab) or by `SharedReport.print` (Print / PDF). The Report tab's own copy and the frames are not touched.
+  - Code:
+```js
+  var PI_N=0;
+  function uniqSvgIds(root){
+    var A=['fill','stroke','clip-path','mask','filter','marker-start','marker-mid','marker-end','style','href','xlink:href'];
+    Array.prototype.forEach.call(root.querySelectorAll('svg'),function(svg){ if(svg.parentNode&&svg.parentNode.closest&&svg.parentNode.closest('svg')) return;
+      var defs=svg.querySelectorAll('[id]'); if(!defs.length) return; var sfx='-pr'+(++PI_N), map={};
+      Array.prototype.forEach.call(defs,function(e){ map[e.id]=e.id+sfx; e.id=map[e.id]; });
+      Array.prototype.forEach.call(svg.querySelectorAll('*'),function(e){ A.forEach(function(a){ var v=e.getAttribute(a); if(!v||v.indexOf('#')<0) return;
+        var w=v.replace(/url\((["']?)#([^"')\s]+)\1\)/g,function(m,q,id){ return map[id]?'url('+q+'#'+map[id]+q+')':m; });
+        if((a==='href'||a==='xlink:href')&&w.charAt(0)==='#'&&map[w.slice(1)]) w='#'+map[w.slice(1)];
+        if(w!==v) e.setAttribute(a,w); }); }); });
+  }
+  window.addEventListener('beforeprint',function(){
+    var box=document.getElementById('rp-print'); if(!box||!document.body.classList.contains('rp-printing')||box.getAttribute('data-cbpi')===box.innerHTML.length+'') return;
+    try{ uniqSvgIds(box); box.setAttribute('data-cbpi',box.innerHTML.length+''); }catch(e){}
+  });
+```
+- **Other tools checked with the same probe (findings only; not changed here):**
+  - Spread Footing: its own per-copy ids (SFCB `sfxUniq` / `sfxUniqDom`) work; markers, gradients and clip paths resolve inside each printed figure.
+    - One different finding: the Report tab plan ("Plan: footing, pedestals, load points …", `planSVG`) uses `marker-start/-end="url(#a1)"` on the B dimension, but no marker `a1` is defined anywhere. The B dimension has no arrowheads on screen or in print.
+    - This is a missing definition, not the print-copy pattern, so it is left for a Spread Footing PR.
+  - Light Pole and Sign Post: its printed Report figures use no `url(#…)` references (0 found); nothing to fix.
+
+### CBPI-2. Compression-fibre tag of the cross-section   [display only]
+- **Problem:** in `svgSection` (Input Echo, Visuals and the Report copies), the tag "extreme compression fibre … ε = 0.003" was centred on the section.
+  - On a deep or narrow section, the rotated layer-depth label of a short dimension (e.g. "d(C2)=2.81"") reaches above the top face and ran into it.
+  - In negative bending, the tag (at Y(h) + 30) also sat on the "b_w = …" label (at Y(h) + 27).
+- **Fix (`svgSection`, anchor `/* compression-fibre tag`):**
+  - Before: `` s+=`<text x="${X(0)}" y="${compAtTop?Y(0)-6:Y(h)+30}" … text-anchor="middle" …` ``.
+  - After: `` s+=`<text x="${X(-(tee?bf:bw)/2)}" y="${compAtTop?Y(0)-6:Y(h)+38}" … text-anchor="start" …` ``.
+  - The tag starts at the section's left face: the layer-depth labels are all left of that face. At the bottom it sits 8 px lower, below the b_w label.
+- **Checked:** bounding boxes of the tag against every other text of the drawing, for 7 cases (default, −M, 10 × 48, 10 × 48 with −M, 8 × 60 with 4 layers, a 48 × 30 T-beam, and the T-beam with −M).
+  - Main: overlaps in 5 cases (d(C2); d(C3) and d(C4); b_w in the three −M cases).
+  - Branch: 0 overlaps. The tag is inside the drawing in every case.
+- **Saved data:** none. **Governing provision:** none. **Other copies:** none.
+- **How verified:**
+  - Results vs origin/main (cases default, aa100, aci100 and excess): `CC` ×2 and the Dev results are identical. The tab text is unchanged.
+  - Report printed (49 pages) and looked at:
+    - p. 6: overview section and elevation with arrowheads;
+    - p. 29: ASD section hatched.
+  - `check-syntax`, `phone-layout --tool cbc`, `dxf-print-sheets --tool cbc` and `run.mjs report steps steps-groups report-wiring` pass.
