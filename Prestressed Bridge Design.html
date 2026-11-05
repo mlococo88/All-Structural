@@ -57,6 +57,20 @@ html,body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-
 .tb-cell:first-child{border-left:none}
 .tb-cell .lab{font-size:9px;letter-spacing:1.2px;color:var(--ink2);text-transform:uppercase}
 .tb-cell input{border:none;outline:none;font-family:var(--mono);font-size:12.5px;font-weight:500;width:100%;background:transparent;color:var(--ink)}
+/* PSHD (2026-11-05): the title block, the project-file / JSON buttons and the hand-off buttons are in the Inputs page's Project
+   sub-tab (#psbInPane-proj); the header keeps the title, a read-only project line (a link to that sub-tab), Checks, and the
+   global actions (Design beam, Undo / Redo, the open project, Open…, MCT Analysis) */
+.tb-grid.psb-hdrGrid{grid-template-columns:minmax(200px,1fr) auto}
+.psb-hdrProj{font-family:var(--mono);font-size:12.5px;font-weight:500;color:var(--ink);text-decoration:none;display:block;max-width:34em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.psb-hdrProj:hover{color:var(--blue);text-decoration:underline}
+.psb-hdrProj .hdrNone{font-style:italic;color:var(--ink2);font-weight:400}
+#psbInPane-proj .tb-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+#psbInPane-proj .tb-cell{border-top:1px solid var(--ink)}
+#psbInPane-proj .tb-cell:nth-child(-n+2){border-top:none}
+#psbInPane-proj .tb-cell:nth-child(odd){border-left:none}
+.psb-prjGrp{margin:0 0 12px}
+.psb-prjGrp>b{display:block;font-size:12px;letter-spacing:.4px;text-transform:uppercase;margin-bottom:2px}
+@media screen and (max-width:700px){.tblock{grid-template-columns:minmax(0,1fr)}.tblock>div{min-width:0}.tb-grid.psb-hdrGrid{grid-template-columns:minmax(0,1fr) auto}}
 
 /* ---- status band ---- */
 .statusband{display:flex;flex-wrap:wrap;gap:6px;padding:10px 0 4px;align-items:center}
@@ -5571,7 +5585,7 @@ function LockAutoSync({inp,set}){
    per browser in localStorage key psbeam.inputTab.v1 (never in inp, so the
    autosave, the project library and the JSON export are unchanged). */
 const PSB_IN_TABS=[['geom','Geometry'],['mat','Materials'],['strands','Strands'],['loads','Loads'],
-  ['hd','Handling & Deck'],['opts','Analysis Options'],['reinf','Reinforcement']];
+  ['hd','Handling & Deck'],['opts','Analysis Options'],['reinf','Reinforcement'],['proj','Project']];   // PSHD: + Project (title block, files, hand-offs)
 const PSB_IN_KEY='psbeam.inputTab.v1';
 let psbInTabMem=null;   // in-memory fallback when storage is blocked
 function psbInTabLoad(){ let v=psbInTabMem; try{ const s=localStorage.getItem(PSB_IN_KEY); if(s) v=s; }catch(e){}
@@ -5608,12 +5622,13 @@ function PsbInTabs({tab,setTab,marks}){
         onClick={()=>setTab(k)}>{l}<span className="psbInDot" aria-hidden="true"></span></button>; })}
   </div>;
 }
-function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clearLog,strandPick}){
+function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clearLog,strandPick,projPane}){
   const [showHelp,setShowHelp]=useState(false);
   // Inputs page sub-tabs (UI only; see PsbInTabs)
   const [inTab,setInTabS]=useState(psbInTabLoad);
   const setInTab=k=>{ setInTabS(k); psbInTabSave(k); };
   const inPane=k=>({className:'psbInPane',role:'tabpanel',id:'psbInPane-'+k,'aria-labelledby':'psbInTab-'+k,hidden:inTab!==k});
+  useEffect(()=>{ const h=()=>setInTab('proj'); window.addEventListener('psb-in-proj',h); return ()=>window.removeEventListener('psb-in-proj',h); },[]);   // PSHD: the header's Project link
   const [inMarks,setInMarks]=useState({});   // {sub-tab key: 'bad'|'blank1'|'both'}
   useEffect(()=>{ const m={}; PSB_IN_TABS.forEach(t=>{ const st=psbInPaneState(document.getElementById('psbInPane-'+t[0])); if(st) m[t[0]]=st; });
     if(JSON.stringify(m)!==JSON.stringify(inMarks)) setInMarks(m); });
@@ -6457,6 +6472,7 @@ function InputsTab({inp,set,R,selRow,setSelRow,editedRows,flashRow,editLog,clear
         </div>}
     </Card>
     </div>
+    <div {...inPane('proj')}>{projPane}</div>
   </div>);
 }
 
@@ -9539,6 +9555,45 @@ function App(){
   /* superReactions hand-off (HANDOFF.md §4.4): send / export the unfactored end reactions of this girder line. */
   const bxSendRx=()=>{ if(window.BXSuperRx) window.BXSuperRx.send(()=>bxSuperRxPayload(inp,R),'PS-Beam','Prestressed Bridge Design.html','psbeam'); else alert('The hand-off helper is not available in this browser.'); };
   const bxExportRx=()=>{ if(window.BXSuperRx) window.BXSuperRx.exportJSON(()=>bxSuperRxPayload(inp,R),'PS-Beam','Prestressed Bridge Design.html'); else alert('The hand-off helper is not available in this browser.'); };
+  /* PSHD (2026-11-05): the title block, project-file / JSON buttons and hand-off buttons, moved here from the header; shown in the
+     Inputs page's Project sub-tab. Same inputs (uP), handlers and file input as before. Display only. */
+  const psbGoProj=e=>{ if(e) e.preventDefault(); psbInTabSave('proj'); setTab('inputs'); window.dispatchEvent(new Event('psb-in-proj'));
+    setTimeout(()=>{ const pane=document.getElementById('psbInPane-proj'), i=pane&&pane.querySelector('.tb-cell input'); if(!i) return;
+      const t=pane.getBoundingClientRect().top; if(t<0||t>window.innerHeight-80) window.scrollTo(0,t+window.scrollY-60); i.focus({preventScroll:true}); },80); };
+  const projPane=<React.Fragment>
+    <Card title="Title block" refTag="printed on the report">
+      <div className="tb-grid">
+        {[['name','Project'],['girderId','Girder'],['by','By'],['date','Date'],['job','Job No.']].map(([k,l])=>
+          <div className="tb-cell" key={k}><div className="lab">{l}</div>
+          <input value={inp.proj[k]} onChange={e=>uP(k,e.target.value)}/></div>)}
+      </div>
+    </Card>
+    <Card title="Project files and hand-offs">
+      <div className="psb-prjGrp"><b>Project info</b><div className="hint">Copy the title block from or to the other tools.</div>
+        <div className="btnrow noprint">
+          <button className="btn sm ghost" onClick={bxUseProject} title="Fill Project, By, Date and Job No. from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
+          <button className="btn sm ghost" onClick={bxShareProject} title="Share this title block with the other tools">Share project info</button>
+        </div></div>
+      {canSave&&PBD_MODS&&<div className="psb-prjGrp"><b>Saved projects (Bridge Suite list)</b><div className="hint">The whole bridge as one project of the shared list; Open… (header) lists them.</div>
+        <div className="btnrow noprint">
+          <button className="btn sm ghost" onClick={projSave} title={curProjId?'Save this design and the bridge model into the open project now (they are also saved on every change)':'Save this design and the bridge model as a new project'}>Save</button>
+          <button className="btn sm ghost" onClick={projSaveAs} title="Save this design and the bridge model as a new project with a name">Save as…</button>
+          <button className="btn sm ghost" onClick={projNew} title="Start a new bridge with the default design (the open project stays saved as it is)">New</button>
+        </div></div>}
+      <div className="psb-prjGrp"><b>Reactions to Bridge Substructure Loading</b><div className="hint">The unfactored DC1, DC2 and DW end reactions of this girder line, or as a file.</div>
+        <div className="btnrow noprint">
+          <button className="btn sm ghost" onClick={bxSendRx} title="Send the unfactored DC1, DC2 and DW end reactions of this girder line (kip) to Bridge Substructure Loading">Send reactions to Substructure Loading</button>
+          <button className="btn sm ghost" onClick={bxExportRx} title="Save the same reactions hand-off as a JSON file (for Import hand-off in Substructure Loading, or a calc package)">Export hand-off (JSON)</button>
+        </div></div>
+      <div className="psb-prjGrp"><b>Project file (JSON)</b><div className="hint">This design's inputs as a .json file; Reset returns every input to the defaults.</div>
+        <div className="btnrow noprint">
+          <button className="btn sm" onClick={exportJSON}>Export JSON</button>
+          <button className="btn sm" onClick={()=>fileRef.current.click()}>Import</button>
+          <button className="btn sm ghost" onClick={resetAll}>Reset</button>
+          <input ref={fileRef} type="file" accept=".json" style={{display:'none'}} onChange={importJSON}/>
+        </div></div>
+    </Card>
+  </React.Fragment>;
   return(<div className="sheet"><div className="sheet-inner">
     {handoff&&(handoff.version>HANDOFF_SUPPORTED_VERSION
       ? <div className="callout warn" style={{marginTop:14,marginBottom:0}}>
@@ -9613,10 +9668,10 @@ function App(){
       <div><h1>Prestressed Bridge Design <span>/ AASHTO LRFD</span></h1>
         <div className="sub">PRESTRESSED CONCRETE GIRDER DESIGN · SERVICE · STRENGTH · LOSSES · CAMBER</div></div>
       <div>
-        <div className="tb-grid">
-          {[['name','Project'],['girderId','Girder'],['by','By'],['date','Date'],['job','Job No.']].map(([k,l])=>
-            <div className="tb-cell" key={k}><div className="lab">{l}</div>
-            <input value={inp.proj[k]} onChange={e=>uP(k,e.target.value)}/></div>)}
+        <div className="tb-grid psb-hdrGrid">
+          <div className="tb-cell"><div className="lab">Project</div>
+            <a href="#" id="hdrProj" className="psb-hdrProj" onClick={psbGoProj} title="Project and job no.: edit them in Inputs › Project">{(()=>{ const t=[inp.proj.name,inp.proj.job].map(x=>String(x==null?'':x).trim()).filter(Boolean).join(' \u00b7 ');
+              return t||<span className="hdrNone">(untitled: enter it in Inputs › Project)</span>; })()}</a></div>
           <div className="tb-cell"><div className="lab">Checks</div>
             <div style={{fontFamily:'var(--mono)',fontSize:12.5,fontWeight:600,
               color:R.error?'var(--fail)':(nPass===R.checks.length?'var(--pass)':'var(--fail)')}}>
@@ -9625,9 +9680,6 @@ function App(){
         <div className="btnrow noprint" style={{marginTop:6,justifyContent:'flex-end',alignItems:'center'}}>
           <a className="bx-alltools" href="tools.html" target="_top" title="Open the list of all tools"
             style={{fontSize:10.5,fontFamily:'var(--mono)',color:'var(--ink2)',textDecoration:'none',marginRight:'auto'}}>← All tools</a>
-          <button className="btn sm ghost" onClick={bxUseProject} title="Fill Project, By, Date and Job No. from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
-          <button className="btn sm ghost" onClick={bxShareProject} title="Share this title block with the other tools">Share project info</button>
-          <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
           <BeamChip nb={Math.max(2,Math.round(+inp.nGirders||0))||null} setBy="PS-Beam"/>
           <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
           {canSave
@@ -9647,21 +9699,10 @@ function App(){
             </span>
             {PBD_MODS&&<React.Fragment>
               <button className="btn sm ghost" onClick={()=>setPbdOpen(true)} title="Open a saved project (this design, the bridge model and the designs of its girders and spans)">Open…</button>
-              <button className="btn sm ghost" onClick={projSave} title={curProjId?'Save this design and the bridge model into the open project now (they are also saved on every change)':'Save this design and the bridge model as a new project'}>Save</button>
-              <button className="btn sm ghost" onClick={projSaveAs} title="Save this design and the bridge model as a new project with a name">Save as…</button>
-              <button className="btn sm ghost" onClick={projNew} title="Start a new bridge with the default design (the open project stays saved as it is)">New</button>
             </React.Fragment>}
             <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
           </React.Fragment>}
           <button className="btn sm ghost" onClick={()=>bridgeNav(null)} title="Back to the MIDAS/MCT analysis app">↩ MCT Analysis</button>
-          <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
-          <button className="btn sm ghost" onClick={bxSendRx} title="Send the unfactored DC1, DC2 and DW end reactions of this girder line (kip) to Bridge Substructure Loading">Send reactions to Substructure Loading</button>
-          <button className="btn sm ghost" onClick={bxExportRx} title="Save the same reactions hand-off as a JSON file (for Import hand-off in Substructure Loading, or a calc package)">Export hand-off (JSON)</button>
-          <span style={{width:1,height:20,background:'var(--line)',margin:'0 3px'}}></span>
-          <button className="btn sm" onClick={exportJSON}>Export JSON</button>
-          <button className="btn sm" onClick={()=>fileRef.current.click()}>Import</button>
-          <button className="btn sm ghost" onClick={resetAll}>Reset</button>
-          <input ref={fileRef} type="file" accept=".json" style={{display:'none'}} onChange={importJSON}/>
         </div>
       </div>
     </div>
@@ -9680,7 +9721,7 @@ function App(){
         <button className={'tab'+(tab===k?' on':'')} onClick={()=>setTab(k)}>{l}</button></React.Fragment>)}</div>
       {tab==='inputs'?
         <div className="cols">
-          <div><InputsTab inp={inp} set={setInp} R={R} selRow={selRow} setSelRow={setSelRow} editedRows={editedRows} flashRow={flashRow} editLog={editLog} clearLog={clearLog} strandPick={strandPick}/></div>
+          <div><InputsTab projPane={projPane} inp={inp} set={setInp} R={R} selRow={selRow} setSelRow={setSelRow} editedRows={editedRows} flashRow={flashRow} editLog={editLog} clearLog={clearLog} strandPick={strandPick}/></div>
           <div className="gfx"><Card title="Live Geometry" refTag="auto-updates">
             <CrossSection inp={inp} R={R} set={setInp} selRow={selRow} setSelRow={setSelRow} flashRow={flashRow} logEdit={logEdit}
               onPickStrand={ri=>setStrandPick({ri})}
