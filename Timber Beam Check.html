@@ -48,9 +48,18 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #projGrid label{display:block;font-family:var(--font-ui);font-size:7.5pt;text-transform:uppercase;letter-spacing:.5px;color:#B9C8DB;margin-bottom:1px}
 #projGrid input{width:100%;font-family:var(--font-ui);font-size:9pt;padding:3px 5px;border:1px solid #ffffff33;border-radius:3px;background:#ffffff14;color:#fff}
 #projGrid input::placeholder{color:#8FA3BC}
-#projShare{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
-#projShare button{font-family:var(--font-ui);font-size:8pt;padding:2px 8px;border:1px solid #ffffff44;border-radius:3px;background:#ffffff14;color:#fff;cursor:pointer}
-#projShare button:hover{background:#ffffff2a}
+/* TBHD (2026-11-05): the title block and the shared-info buttons are in the Project input tab (#prjPane), and the header's Open
+   file / Save file are the Project file card's buttons; the header keeps the title, a read-only project line (a link to that tab),
+   Undo / Redo and Print report (#hdrActs) */
+#hdrActs{margin-left:auto}
+#hdrProj{font-family:var(--font-ui);font-size:9pt;color:#C7D4E4;text-decoration:none;max-width:30em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:4px}
+#hdrProj:hover{color:#fff;text-decoration:underline}
+#hdrProj .hdrNone{font-style:italic;opacity:.8}
+#prjPane .secHead{cursor:default}
+#inputPanel #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0}
+#inputPanel #projGrid label{color:#475569}
+#inputPanel #projGrid input{background:#fff;color:inherit;border-color:var(--line)}
+#inputPanel #projGrid input::placeholder{color:#94A3B8}
 #main{flex:1 1 auto;display:flex;min-height:0;overflow:hidden}
 #inputPanel{flex:0 0 33%;max-width:450px;min-width:330px;overflow-y:auto;border-right:2px solid var(--line);background:var(--panel);padding:9px 10px 40px}
 #tbcInTabs{position:sticky;top:-9px;z-index:12;display:flex;flex-wrap:wrap;gap:2px;margin:-9px -10px 8px;padding:7px 10px 0;background:var(--panel);border-bottom:2px solid var(--accent)}
@@ -195,6 +204,7 @@ a.wkA:hover{text-decoration:underline}
   #tbcInTabs{position:static;margin-top:-9px}
   #outputPanel{overflow:visible;padding:0 8px 40px}
   #projGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #hdrActs{margin-left:0}#hdrProj{flex:1 1 100%;max-width:none}
   #tabBar{position:static}
   .fRow{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 34px}
   .eqbW td.wsrc{display:block;width:auto;padding-left:0}
@@ -216,21 +226,31 @@ a.wkA:hover{text-decoration:underline}
         <div class="byline">Sawn lumber, glulam and SCL beams: simple span, continuous spans and cantilevers &middot; bending, shear, bearing, deflection</div>
         <a class="alltools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
       </div>
-      <div class="hdrBtns">
-        <button type="button" id="btnOpenHdr" title="Open a project file (.json), including files saved by earlier versions of this tool">Open file&hellip;</button>
-        <button type="button" id="btnSaveHdr" title="Save the project to a file (.json)">Save file</button>
+      <div class="hdrBtns" id="hdrActs">
+        <a id="hdrProj" href="#" title="Project and job number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
         <button type="button" id="btnPrint" class="primary" title="Build a printable calculation report">Print report</button>
       </div>
     </div>
-    <div id="projGrid"></div>
-    <div id="projShare">
-      <button type="button" id="btnUseShared" title="Fill the project fields from project info shared by another tool">Use shared project info</button>
-      <button type="button" id="btnShare" title="Make these project fields available to the other tools">Share project info</button>
-    </div>
+  </div>
+  <!-- TBHD (2026-11-05): the header's Open file / Save file, moved; buildProjectPane() puts them in the Project file card -->
+  <div id="tbcFileHold" hidden>
+    <button type="button" class="btn sm" id="btnOpenHdr" title="Open a project file (.json), including files saved by earlier versions of this tool">&#11014; Open file&hellip;</button>
+    <button type="button" class="btn sm" id="btnSaveHdr" title="Save the project to a file (.json)">&#11015; Save file</button>
   </div>
   <div id="govStrip" class="govStrip"></div>
   <div id="main">
-    <div id="inputPanel"></div>
+    <div id="inputPanel"><div id="prjPane"><!-- TBHD (2026-11-05): moved here from the header; kept across rebuilds by rebuildInputs() (first in the Project tab) -->
+      <div class="sec"><div class="secHead"><span class="secTitle">Title block</span></div><div class="secBody">
+        <div id="projGrid"></div>
+        <div class="hint">Printed on the Report.</div>
+      </div></div>
+      <div class="sec"><div class="secHead"><span class="secTitle">Shared project info</span></div><div class="secBody" id="projShare">
+        <div class="btnRow">
+        <button type="button" class="btn sm" id="btnUseShared" title="Fill the project fields from project info shared by another tool">Use shared project info</button>
+        <button type="button" class="btn sm" id="btnShare" title="Make these project fields available to the other tools">Share project info</button></div>
+        <div class="hint">Copy the title block from or to the other tools.</div>
+      </div></div>
+    </div></div>
     <div id="outputPanel">
       <div id="tabBar" role="tablist" aria-label="Results"></div>
       <div id="tabPages"></div>
@@ -1590,7 +1610,24 @@ function buildProjHeader() {
     const i = txtIn(() => M.project[key], v => { M.project[key] = v; }, 'proj_' + key, lab);
     i.id = 'proj_' + key; l.htmlFor = i.id; d.appendChild(i); g.appendChild(d);
   });
+  tbHdrProj();   /* TBHD */
 }
+/* TBHD (2026-11-05): the header's read-only "Project: <project> · <job #>" (M.project.name / M.project.job, typed in the Project
+   tab). A click opens the Project tab and focuses Project. Display only: nothing is stored. */
+function tbHdrProj() {
+  const t = $('hdrProjTxt'); if (!t) return;
+  const pj = (typeof M !== 'undefined' && M && M.project) || {}, v = [pj.name, pj.job].map(x => String(x == null ? '' : x).trim()).filter(Boolean);
+  t.textContent = '';
+  if (v.length) t.textContent = v.join(' \u00b7 '); else t.appendChild(el('span', 'hdrNone', '(untitled: enter it in the Project tab)'));
+}
+document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#inputPanel')) tbHdrProj(); });
+document.addEventListener('click', e => {
+  const a = e.target.closest ? e.target.closest('#hdrProj') : null; if (!a) return;
+  e.preventDefault(); inTabSelect('project', true);
+  const i = $('proj_name'); if (!i) return;
+  if (window.innerWidth <= 820) { const tb = $('tbcInTabs'); if (tb) window.scrollTo(0, tb.getBoundingClientRect().top + window.scrollY - 4); }
+  i.focus({ preventScroll: true });
+});
 
 /* =====================================================================
    INPUT PANEL (tabs)
@@ -1647,6 +1684,8 @@ function setGeom(spans, types) {
 }
 function rebuildInputs() {
   const st = captureUI();
+  const PJ = $('prjPane');   /* TBHD: the Project tab's title block and shared-info buttons survive the rebuild; so do Open / Save file */
+  { const fh = $('tbcFileHold'); ['btnOpenHdr', 'btnSaveHdr'].forEach(id => { const b = $(id); if (b && fh) fh.appendChild(b); }); }
   const P = $('inputPanel'); const keep = P.scrollTop; P.innerHTML = '';
   const bar = el('div'); bar.id = 'tbcInTabs'; bar.setAttribute('role', 'tablist'); bar.setAttribute('aria-label', 'Input groups');
   P.appendChild(bar);
@@ -1660,7 +1699,7 @@ function rebuildInputs() {
     panes[k] = pn; P.appendChild(pn);
   });
   __secNum = 0;
-  buildProjectPane(panes.project); buildGeomPane(panes.geom); buildLoadsPane(panes.loads); buildMaterialPane(panes.material); buildFactorsPane(panes.factors);
+  if (PJ) panes.project.appendChild(PJ); buildProjectPane(panes.project); buildGeomPane(panes.geom); buildLoadsPane(panes.loads); buildMaterialPane(panes.material); buildFactorsPane(panes.factors);
   let t = tbcInTabGet(); if (!TBC_IN_TABS.some(([k]) => k === t)) t = 'project';
   inTabSelect(t, false);
   P.scrollTop = keep;
@@ -1723,8 +1762,10 @@ function buildProjectPane(P) {
   }, { noNum: true });
   mkSec(P, 'inFile', 'Project file', body => {
     const row = el('div', 'btnRow');
-    const op = el('button', 'btn sm', '⬆ Open file…'); op.type = 'button'; op.addEventListener('click', () => $('tbcFile').click());
-    const sv = el('button', 'btn sm', '⬇ Save file'); sv.type = 'button'; sv.addEventListener('click', saveFile);
+    /* TBHD: the header's Open file / Save file (wired once by wireFile()) are moved here instead of making a second pair */
+    let op = $('btnOpenHdr'), sv = $('btnSaveHdr');
+    if (!op) { op = el('button', 'btn sm', '⬆ Open file…'); op.type = 'button'; op.addEventListener('click', () => $('tbcFile').click()); }
+    if (!sv) { sv = el('button', 'btn sm', '⬇ Save file'); sv.type = 'button'; sv.addEventListener('click', saveFile); }
     const nw = el('button', 'btn sm danger', 'New project'); nw.type = 'button';
     nw.addEventListener('click', () => { if (!confirm('Start a new project? Unsaved changes to the current project are lost (the autosave is replaced).')) return; M = tbcDefaultModel(); fullRebuild(); toast('New project'); });
     row.appendChild(op); row.appendChild(sv); row.appendChild(nw); body.appendChild(row);
