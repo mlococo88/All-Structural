@@ -1394,3 +1394,130 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data:** none changed (no key or format; `useExcess`, `asReq`, `asProv` are read as before).
 - **Other copies:** `ACI Rebar Development Length.html` and the Development & Splice frame of `Concrete Beam Capacity.html` (both changed here). Spread Footing already excludes hooks (SFDH/SFEX).
 - **Open items:** none from this change. (Audit C4, the 12 in floor in the tension splice base, is conservative and was not changed.)
+
+## 2026-11-05 — PR: claude/cbc-dev-look (CBTH-2: Development & Splice re-themed to the suite look (Light Pole / apps/steel-bridge / the Beam Capacity tab): navy header, slate tabs with a blue stripe, card heads, one-row inputs; display only, no result change)
+
+### CBTH-2. Beige / maroon serif theme replaced by the suite theme   [display only] [no result change]
+- **Engineer request (2026-11-05, Phase 1 of the concrete beam suite update, appearance):** make the concrete beam suite look like the Light Pole and Steel Bridge apps, no orange. Audit item 14 (this tab was still the legacy beige `--panel #f7f6f2`, maroon `--accent #8a1f1f`, Times everywhere, upper-case letter-spaced tabs).
+- **Where:** `ACI Rebar Development Length.html`. A CBTH-2 block appended at the end of the first `<style>` block (just before its `</style>`). The same block, byte for byte, is in the `suite-frame-dev` srcdoc page of `Concrete Beam Capacity.html` (decoded / re-encoded with an exact round trip). Plus two highlight colours in JS strings (display only):
+  - `renderBatch` bar-schedule row of the current bar, anchor `return `<tr style="${cur?'background:#f0e6e6;font-weight:bold;':''}">``: `#f0e6e6` → `#EEF4FB`;
+  - the active bar-schedule row, anchor `if(active){active.style.background="#f0e6e6";}`: `#f0e6e6` → `#EEF4FB` (the suite's governing-row wash, as Light Pole `--accent-wash`).
+- **Inserted CSS:**
+  ```css
+/* CBTH-2 (2026-11-05): suite look as Light Pole / apps/steel-bridge and the suite's Beam Capacity tab (display only; the same
+   block in ACI Rebar Development Length.html and the Development & Splice tab of Concrete Beam Capacity.html). Navy / slate / blue
+   tokens instead of beige and maroon; system sans for controls, tabs, card heads and labels, Times kept for the calculation text;
+   a navy header; tabs with a white selected tab and a 3 px blue top stripe; panels as cards with 8.5 pt upper-case heads;
+   each input on one row (label left, box right, the unit in the label); buttons as the suite's. */
+:root{
+  --navy-900:#16304F; --navy-800:#1E3A5F; --blue-600:#2563EB;
+  --slate-50:#F8FAFC; --slate-100:#F1F3F5; --slate-200:#E4E7EB; --slate-300:#CBD5E1; --slate-400:#94A3B8; --slate-900:#0F172A;
+  --font-ui:-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --font-doc:"Times New Roman",Times,serif;
+  --ink:var(--slate-900); --sub:#475569; --line:var(--slate-200); --line2:#EEF0F3;
+  --paper:#ffffff; --panel:var(--slate-100); --accent:var(--navy-800); --accent2:var(--blue-600);
+  --pass:#047857; --passbg:#ECFDF5; --fail:#B91C1C; --failbg:#FEF2F2; --warn:#B45309; --warnbg:#FFFBEB;
+}
+body{background:var(--slate-100);}
+input,select,textarea,button{font-family:var(--font-ui);}
+/* header */
+.titlebar{display:flex; flex-wrap:wrap; align-items:baseline; gap:2px 12px; margin:-16px -16px 12px; padding:7px 16px 8px;
+  background:var(--navy-800); color:#fff; border-bottom:3px solid var(--navy-900); font-family:var(--font-ui);}
+/* the navy band runs the full window width also where the page is narrower than the window (standalone, max-width 1500 px) */
+.titlebar{box-shadow:0 0 0 100vmax var(--navy-800); clip-path:inset(0 -100vmax);}
+@media print{.titlebar{box-shadow:none; clip-path:none;}}
+.titlebar .apptitle{font-size:14pt; font-weight:600; letter-spacing:.4px; color:#fff;}
+.titlebar .byline{font-size:9pt; color:#C7D4E4; margin:0;}
+.titlebar .alltools{order:-1; flex:0 0 100%; margin:0; font-size:11px; color:#C7D4E4;}
+.titlebar .alltools:hover{color:#fff;}
+.titlebar button:first-of-type{margin-left:auto!important;}
+.titlebar .btn,.titlebar .btn.small{align-self:center; font-size:9.5pt; padding:4px 11px; border:1px solid rgba(255,255,255,.35);
+  background:rgba(255,255,255,.08); color:#fff; font-weight:400;}
+.titlebar .btn:hover{background:rgba(255,255,255,.18); color:#fff;}
+/* panels and cards */
+.card{border-color:var(--line); border-radius:6px;}
+.inputpanel{background:var(--slate-50); font-family:var(--font-ui); font-size:9.5pt;}
+.panel{margin:10px; border:1px solid var(--line); border-radius:6px; background:#fff; overflow:hidden;}
+.panel:last-child{border-bottom:1px solid var(--line);}
+.panel-head{padding:6px 10px; background:var(--slate-100); border-bottom:1px solid var(--line); font-family:var(--font-ui);
+  font-size:8.5pt; font-weight:600; letter-spacing:.05em; color:#334155;}
+.panel.collapsed .panel-head{border-bottom:0;}
+.panel-head:hover{background:#E8ECF1;}
+.panel-head .tw{font-size:9px; color:#64748B;}
+.panel-head .pnum{color:var(--navy-800); font-weight:700;}
+.panel-body{padding:8px 10px;}
+/* input tabs and output tabs */
+#rebarInTabs,.tabs{gap:3px; padding:7px 12px 0; background:var(--slate-100); border-bottom:1px solid var(--line);}
+#rebarInTabs .rebarInTab,.tab{font-family:var(--font-ui); font-size:9pt; font-weight:400; text-transform:none; letter-spacing:0;
+  padding:5px 11px; color:#334155; background:var(--slate-200); border:1px solid var(--line); border-bottom:none;
+  border-radius:5px 5px 0 0; margin-bottom:-1px;}
+#rebarInTabs .rebarInTab:hover,.tab:hover{background:#DDE2E8; color:var(--ink);}
+#rebarInTabs .rebarInTab[aria-selected='true'],.tab.active{background:#fff; color:var(--navy-800); font-weight:600;
+  border-color:var(--line); border-bottom:1px solid #fff; box-shadow:inset 0 3px 0 var(--blue-600);}
+#rebarInTabs .rebarInTab[aria-selected='true']{background:var(--slate-50); border-bottom-color:var(--slate-50);}
+#rebarInTabs .rebarInTab:focus-visible,.tab:focus-visible{outline:2px solid var(--blue-600); outline-offset:-2px;}
+/* input rows: label left, box right */
+.titleblock,.row2,.row3{display:block;}
+.field{display:grid; grid-template-columns:minmax(38%,1fr) minmax(0,auto); align-items:center; gap:2px 10px; margin:0; padding:4px 0;
+  border-bottom:1px solid var(--line2);}
+.field>label{grid-column:1;}
+.field label{margin:0; font-size:9.5pt; font-weight:400; text-transform:none; letter-spacing:0; color:var(--ink);}
+.field .unit{color:#64748B;}
+.field>input,.field>select,.field>.chk{grid-column:2; justify-self:end; margin:0;}
+.field>.hint,.field>textarea{grid-column:1/-1;}
+.field input,.field select,.field textarea{width:auto; padding:3px 6px; border:1px solid var(--slate-300); border-radius:4px;
+  font-size:9.5pt; background:#fff; color:var(--ink);}
+.field input[type=number]{width:92px; text-align:right; font-variant-numeric:tabular-nums;}
+.field input[type=text],.field input[type=date]{width:150px;}
+.field input[type=number][placeholder]{width:230px; text-align:left;}
+.field select{max-width:100%; min-width:0;}
+.field textarea{width:100%;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:none; border-color:var(--blue-600);
+  box-shadow:0 0 0 2px rgba(37,99,235,.25);}
+.chk label{font-size:9.5pt;}
+.hint{font-size:8.5pt; color:#64748B; line-height:1.45;}
+.inwarn{border-color:var(--fail)!important; background:#FEF2F2!important;}
+.btnrow{margin:6px 0;}
+/* buttons */
+.btn{font-family:var(--font-ui); font-size:9pt; font-weight:400; text-transform:none; letter-spacing:0; padding:4px 10px;
+  border:1px solid var(--slate-300); border-radius:4px; background:#fff; color:var(--ink);}
+.btn:hover{background:var(--slate-100); color:var(--ink);}
+.btn.small{font-size:9pt; padding:3px 9px;}
+.btn.primary{background:var(--navy-800); border-color:var(--navy-800); color:#fff; font-weight:600;}
+.btn.primary:hover{background:var(--navy-900); color:#fff;}
+/* summary dashboard */
+.dash{background:var(--slate-50); border-bottom:1px solid var(--line); padding:10px 14px;}
+.dash h3{font-family:var(--font-ui); font-size:8.5pt; font-weight:600; letter-spacing:.05em; color:#334155;}
+.check{font-family:var(--font-ui); font-size:9pt; border-radius:4px;}
+.check.pass{border-color:#A7F3D0;}
+.check.fail{border-color:#FCA5A5;}
+.check.info{border-color:var(--line);}
+.check .st{font-size:8pt; letter-spacing:.06em;}
+/* output text */
+.result-hero{border-bottom:2px solid var(--line);}
+.result-hero .rt{font-family:var(--font-ui); font-size:11pt; font-weight:600; letter-spacing:.05em; color:#334155;}
+.result-hero .rs{font-family:var(--font-ui); font-size:8.5pt; color:#64748B;}
+.result-hero .rv{color:var(--navy-800);}
+.result-hero .rvl{font-family:var(--font-ui); font-size:8pt; color:#64748B;}
+.narr{background:var(--slate-50); border-color:var(--line); border-radius:4px; color:#334155;}
+.note{border-color:var(--line); border-left-color:var(--blue-600); border-radius:4px; background:#F8FAFC;}
+.note > summary{font-family:var(--font-ui); font-size:8.5pt; font-weight:600; letter-spacing:.05em;}
+.note > summary:hover{background:#EFF6FF;}
+.subsec > .sh{font-family:var(--font-ui); font-size:8.5pt; font-weight:600; letter-spacing:.05em; color:#334155;
+  border-bottom-color:var(--line);}
+.subsec > .sh .ref{font-size:8pt; color:#64748B;}
+table.vars th,table.vars td{border-color:var(--line);}
+table.vars th{background:#EEF2F6; font-family:var(--font-ui); font-size:8pt; letter-spacing:.04em; color:#475569;}
+.eq{background:var(--slate-50); border-color:var(--line); border-radius:4px;}
+.eq .eqt{font-family:var(--font-ui); font-size:8.5pt; font-weight:600; letter-spacing:.05em; color:#334155;}
+.eq .eqt .ref{color:var(--blue-600);}
+.chartctl{font-family:var(--font-ui);}
+.schematic{border-color:var(--line);}
+.wkLink{font-family:var(--font-ui); font-size:8.5pt; color:#64748B;}
+.warnbox{border-radius:0 4px 4px 0; color:#78350F;}
+  ```
+- **What it does:** the old tokens (`--ink`, `--sub`, `--line`, `--line2`, `--panel`, `--accent`, `--accent2`, `--pass` …) are redefined to the navy / slate / blue palette, so the inline `var(--accent)` etc. in the generated HTML follow (the governing value, symbols in the commentary). The title bar is a navy header ("← All tools" above the title in the standalone, title + byline, Undo / Redo right). Input and output tabs: slate, selected white with the 3 px blue top stripe, sentence case (the label text is unchanged; the upper case was CSS). Panels A–H are cards with 8.5 pt upper-case heads, letter in navy. Each input is one row: label left (with its unit, as before), box right (number 92 px, right-aligned), hint under the row; the title-block, f_y / bar-size, A_tr / s / n and A_s rows are no longer two or three to a line. Buttons as the suite's (white with a slate border; Print / PDF Report navy; header buttons translucent on navy). Summary dashboard, equation boxes, variable tables, notes and section heads in the slate palette with sans-serif heads; the calculation text stays Times.
+- **Not changed:** every input, id, label text, default, handler, computed result, saved key / format (`rebar_aci_autosave_v1`, `rebar_aci_projects_v1`, `rcsuite.rebar_autosave_v1`, `rebar_aci_inputTab_v1`), the Report (shared/report.js) and print, the drawings and charts (bar colours, schematic).
+- **How verified:** headless dump (scratchpad `look/dump.mjs`) of the visible text (CSS upper case ignored) and every input value of every input and output tab of the standalone tool (incl. its Report tab), the suite's three tabs and the suite Report, origin/main vs the branch: ALL IDENTICAL (55 views), 0 console errors. `node tests/check-syntax.mjs`: all pass. `node tests/smoke/phone-layout.mjs --tool cbc,aci`: all passed (no sideways scroll at 390 / 768). `node tests/smoke/project-library.mjs --tool rebar`: ALL PASS. Screenshots at 1920 and 390 px before / after (every input tab at 1600) beside Light Pole.
+- **Other copies:** the `suite-frame-dev` srcdoc page of `Concrete Beam Capacity.html` (decoded / re-encoded with an exact round trip) (same block and the same two colour edits, in this PR; CLAUDE.md §3).
+- **Open items:** the `.check` value text in the summary dashboard stays upper case (`47.4 IN`), as before.
