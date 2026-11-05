@@ -4392,7 +4392,7 @@ function asdStressSVG(R){
 }
 ```
 
-## 2026-11-05 — PR: claude/cbc-drawings (CBDW: Drawings tab in the Beam Capacity tab — DXF and 11 × 17 drawing sheets: cross section, typical elevation, notes and schedule; display and export only, no result change)
+## 2026-11-05 — PR: claude/cbc-drawings, PR #806: https://github.com/mlococo88/All-Structural/pull/806 (CBDW: Drawings tab in the Beam Capacity tab — DXF and 11 × 17 drawing sheets: cross section, typical elevation, notes and schedule; display and export only, no result change)
 
 ### CBDW. Drawing sheets   [display and export only] [no result change]
 - **Engineer request (2026-11-05, Phase 5 graphics, PR C):** a Drawings tab as Spread Footing / Light Pole, using `shared/dxf.js` (viewer, sheetSVG, printSheets, PRINT_NOTE, sheetBorder 0.25 in inset), with sheets on 11 × 17 at a standard scale:
