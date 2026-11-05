@@ -286,7 +286,7 @@ a.wkA:hover{text-decoration:underline}
   <p class="byline">by Mario Lococo &nbsp;|&nbsp; Loads &amp; Combinations &middot; Bearing &amp; Stability &middot; Footing &amp; Pedestal Design &middot; 3D View &nbsp;|&nbsp; ACI 318-19 / ASCE 7-16 / IBC 2021</p>
  </div>
  <div class="noprint" id="sfdHdrA">
-  <a id="sfdHdrProj" href="#sec-title" title="Project name and number: edit them in the Project tab (title block)">Project: <span id="sfdHdrProjTxt"></span></a>
+  <a id="sfdHdrProj" hidden href="#sec-title" title="Project name and number: edit them in the Project tab (title block)">Project: <span id="sfdHdrProjTxt"></span></a>
   <button id="btnUndo" title="Undo (Ctrl+Z)" disabled>&#8630; Undo</button>
   <button id="btnRedo" title="Redo (Ctrl+Y)" disabled>&#8631; Redo</button>
   <label id="sfdAcLbl" title="When off, input changes are saved but the analysis waits for Re-analyze (Ctrl+Enter). Remembered in this browser."><input type="checkbox" id="sfdAcChk" checked> Auto-calculate on change</label>
@@ -301,6 +301,18 @@ a.wkA:hover{text-decoration:underline}
 <!-- ============ INPUT PANEL ============ -->
 <div class="inp" id="inputPanel">
 
+<details class="sec" id="sec-proj" open>   <!-- STDS (2026-11-05): the standard "Save and open" card (shared/projects-ui.js projectBar), first in the Project tab; was "Project Manager" after the title block -->
+<summary>Save and open</summary>
+<div class="secbody" id="sfdSaveCard">
+ <div class="projrow">
+  <button id="btnExport">Export JSON</button>
+  <button id="btnImport">Import JSON</button>
+  <input type="file" id="fileImport" accept=".json" style="display:none">
+  <button id="btnReset" class="danger">Reset Inputs</button>
+ </div>
+</div>
+</details>
+
 <details class="sec" id="sec-title" open>   <!-- SFHD (2026-11-05): moved here from the page header; same fields and data paths -->
 <summary>Title block</summary>
 <div class="secbody">
@@ -313,29 +325,6 @@ a.wkA:hover{text-decoration:underline}
  <div><label>Checked Date</label><input data-path="meta.chkDate"></div>
 </div>
  <div class="note">Printed on the Report and the drawing sheets (DXF title block).</div>
-</div>
-</details>
-
-<details class="sec" id="sec-proj" open>
-<summary>Project Manager</summary>
-<div class="secbody">
- <div class="projrow">
-  <input id="projName" placeholder="project name" style="width:150px">
-  <button id="btnSaveProj">Save</button>
-  <button id="btnOverwriteProj">Overwrite</button>
- </div>
- <div class="projrow">
-  <select id="projList" style="width:150px"></select>
-  <button id="btnLoadProj">Load</button>
-  <button id="btnDelProj" class="danger">Delete</button>
- </div>
- <div class="projrow">
-  <button id="btnExport">Export JSON</button>
-  <button id="btnImport">Import JSON</button>
-  <input type="file" id="fileImport" accept=".json" style="display:none">
-  <button id="btnReset" class="danger">Reset Inputs</button>
- </div>
- <div class="note">Autosave is on. Projects and autosave are stored in this browser's local storage; use Export JSON for backup or transfer.</div>
 </div>
 </details>
 
@@ -837,7 +826,8 @@ function saveAuto(){try{localStorage.setItem('sfd_auto',JSON.stringify({state,co
 function loadAuto(){try{const j=JSON.parse(localStorage.getItem('sfd_auto'));if(j&&j.state){state=Object.assign(defaultState(),j.state);migrateState();collapseState=j.collapseState||{};return true;}}catch(e){}return false;}
 function projStore(){try{return JSON.parse(localStorage.getItem('sfd_projects'))||{};}catch(e){return{};}}
 function projSave(name){try{const p=projStore();p[name]=JSON.parse(JSON.stringify(state));localStorage.setItem('sfd_projects',JSON.stringify(p));refreshProjList();return true;}catch(e){alert('Could not save project \u2014 browser storage is unavailable or full. If this is a restricted work computer, localStorage may be blocked; use "Export JSON" to save the inputs to a file instead.');return false;}}
-function refreshProjList(){const sel=$('#projList');const p=projStore();sel.innerHTML='';Object.keys(p).sort().forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);});}
+function refreshProjList(){const sel=$('#projList');if(!sel)return;   /* STDS: no drop-down any more (Saved projects… lists them) */
+ const p=projStore();sel.innerHTML='';Object.keys(p).sort().forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);});}
 /* ================= input binding & pedestal UI ================= */
 function barOptions(){return BAR_SIZES.map(s=>'<option value="'+s+'">'+(s===0?'\u2014 none':'#'+s)+'</option>').join('');}
 function bindStaticInputs(){
@@ -5112,53 +5102,40 @@ $('#tabbar').addEventListener('click',e=>{
  if(b.dataset.tab==='tab-drawings')renderDrawings();   /* SFDW */
  renderPlots();
 });
-/* project manager */
-$('#btnSaveProj').addEventListener('click',()=>{
- const n=$('#projName').value.trim();if(!n){alert('Enter a project name.');return;}
- const p=projStore();if(p[n]&&!confirm('Project "'+n+'" exists. Overwrite?'))return;
- if(projSave(n))alert('Saved "'+n+'".');});
-$('#btnOverwriteProj').addEventListener('click',()=>{
- const n=$('#projList').value;if(!n){alert('No project selected.');return;}
- if(confirm('Overwrite "'+n+'" with current inputs?')){if(projSave(n))alert('Overwrote "'+n+'".');}});
-$('#btnLoadProj').addEventListener('click',()=>{
- const n=$('#projList').value;if(!n){alert('No saved project selected. Save one first, or use Import JSON.');return;}
- const p=projStore();if(!p[n]){alert('Project "'+n+'" not found in browser storage.');return;}
- state=Object.assign(defaultState(),JSON.parse(JSON.stringify(p[n])));migrateState();
- SEL.asd=null;SEL.lrfd=null;SEL.asdLr=null;
- $('#projName').value=n; // auto-populate save-name so Save/Overwrite targets the loaded project
- bindStaticInputs();buildPedCards();saveAuto();recalc();
- alert('Loaded "'+n+'".');});
-$('#btnDelProj').addEventListener('click',()=>{
- const n=$('#projList').value;if(!n)return;
- if(!confirm('Delete project "'+n+'"?'))return;
- const p=projStore();delete p[n];localStorage.setItem('sfd_projects',JSON.stringify(p));refreshProjList();});
-/* PLIB (2026-11-02): "Saved projects…" dialog over the tool's own key sfd_projects ({ name: state }), shared/projects.js and
-   shared/projects-ui.js. Display and storage only: Rename / Duplicate move / copy the stored item unchanged; Open is the Load
-   path without its alert. The tool's own Undo / Redo (U-2) is unchanged. */
+/* STDS (2026-11-05): the standard save (shared/projects-ui.js projectBar) over the tool's own list sfd_projects ({ name: state },
+   key and format unchanged). Replaces the Project Manager's name box, Save / Overwrite and the drop-down with Load / Delete (PLIB
+   dialog kept as the standard Saved projects dialog; every Delete goes through it). Save = projSave(name) as before (no alert);
+   Open = the old Load path without its alert. The tool's own Undo / Redo (U-2) and Print are unchanged. */
 (function(){
- if(!window.SharedProjects||!window.SharedProjectsUI)return;
+ if(!window.SharedProjects||!window.SharedProjectsUI||!SharedProjectsUI.projectBar)return;
  let ST=null;try{ST=window.localStorage;}catch(e){}
  const store=SharedProjects.mapStore(ST,'sfd_projects');
- const dlg=SharedProjectsUI.libraryDialog({store,storage:ST,title:'Saved projects (this browser)',
-  current:()=>{const n=$('#projName').value.trim();return n&&store.has(n)?n:null;},
+ /* text of a state as Open would leave it (defaults + migrateState), keys sorted: "unsaved changes" compares like with like */
+ const canon=v=>JSON.stringify(v,(k,x)=>x&&typeof x==='object'&&!Array.isArray(x)?Object.keys(x).sort().reduce((o,kk)=>(o[kk]=x[kk],o),{}):x);
+ const opened=o=>{const keep=state;try{state=Object.assign(defaultState(),JSON.parse(JSON.stringify(o)));migrateState();return canon(state);}finally{state=keep;}};
+ const exportName=n=>(n||state.meta.number||state.meta.project||'spread_footing')+(n?'':'_inputs')+'.json';
+ const pb=SharedProjectsUI.projectBar({store,storage:ST,label:'Spread Footing',id:'spLibDlg',
+  snapshot:()=>canon(state),snapOf:n=>{const o=store.get(n);return o?opened(o):null;},
+  save:n=>projSave(n)?{ok:true}:{ok:false,message:'The project was not saved.'},
   open:n=>{const o=store.get(n);if(!o)return false;state=Object.assign(defaultState(),JSON.parse(JSON.stringify(o)));migrateState();
-   SEL.asd=null;SEL.lrfd=null;SEL.asdLr=null;$('#projName').value=n;bindStaticInputs();buildPedCards();saveAuto();recalc();refreshProjList();$('#projList').value=n;return true;},
-  renamed:(a,b)=>{if($('#projName').value.trim()===a)$('#projName').value=b;},
-  changed:()=>{const v=$('#projList').value;refreshProjList();if(v&&store.has(v))$('#projList').value=v;},
+   SEL.asd=null;SEL.lrfd=null;SEL.asdLr=null;bindStaticInputs();buildPedCards();saveAuto();recalc();return true;},
+  newProject:()=>{state=defaultState();bindStaticInputs();buildPedCards();saveAuto();recalc();},
+  displayName:()=>state.meta&&state.meta.project||'',
+  exportFile:n=>SharedProjectsUI.download(exportName(n),JSON.stringify(state,null,1)),
+  importFile:()=>$('#fileImport').click(),
+  fileButtons:[$('#btnExport'),$('#btnImport')],extras:[$('#btnReset')],
+  header:$('#sfdHdrA'),chipBefore:$('#btnUndo'),headerBefore:$('#sfdAcLbl'),card:$('#sfdSaveCard'),
   /* GHS (2026-11-05): GitHub sync of this list (shared/github-sync.js). Files are the Export JSON format (the stored item is the state). */
   cloud:{tool:'spread-footing',label:'Spread Footing',
    fromFile:j=>{if(!(j&&typeof j==='object'&&!Array.isArray(j)&&j.geom&&typeof j.geom==='object'&&j.soil&&typeof j.soil==='object'&&Array.isArray(j.peds)))throw new Error('not a Spread Footing input file: missing geometry, soil or pedestal data');return j;}}});
- const b=SharedProjectsUI.button('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete');
- b.addEventListener('click',()=>dlg.show());
- const ref=$('#btnRedo');if(ref)ref.parentNode.insertBefore(b,ref.nextSibling);   /* SFHD: in the header, after Undo / Redo */
- window.SFPL={store,dlg};
+ window.SFPL={store,dlg:pb.dialog,pb};
 })();
 $('#btnExport').addEventListener('click',()=>{
  const blob=new Blob([JSON.stringify(state,null,1)],{type:'application/json'});
  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
  a.download=(state.meta.number||state.meta.project||'spread_footing')+'_inputs.json';a.click();
  const href=a.href;setTimeout(()=>URL.revokeObjectURL(href),60000);}); // revoke later: an immediate revoke can cancel the download (Firefox)
-$('#btnImport').addEventListener('click',()=>$('#fileImport').click());
+$('#btnImport').addEventListener('click',()=>{if(window.SFPL&&SFPL.pb)SFPL.pb.importJSON();else $('#fileImport').click();});   /* STDS: asks first when there are unsaved changes */
 $('#fileImport').addEventListener('change',e=>{
  const f=e.target.files[0];if(!f)return;
  const rd=new FileReader();
@@ -5167,7 +5144,7 @@ $('#fileImport').addEventListener('change',e=>{
   const looksSF=j&&typeof j==='object'&&!Array.isArray(j)&&j.geom&&typeof j.geom==='object'&&j.soil&&typeof j.soil==='object'&&Array.isArray(j.peds);
   if(!looksSF&&!confirm('"'+f.name+'" does not look like a Spread Footing input file (missing geometry, soil or pedestal data). Missing values will be filled with defaults.\n\nLoad it anyway?'))return;
   state=Object.assign(defaultState(),j);migrateState();
-  bindStaticInputs();buildPedCards();saveAuto();recalc();}catch(err){alert('Invalid JSON file.');}};
+  bindStaticInputs();buildPedCards();saveAuto();recalc();if(window.SFPL&&SFPL.pb)SFPL.pb.setCurrent(null);}catch(err){alert('Invalid JSON file.');}};   /* STDS: an imported file is not a saved project */
  rd.readAsText(f);e.target.value='';});
 $('#btnReset').addEventListener('click',()=>{
  if(!confirm('Reset all inputs to defaults? (Saved projects are kept.)'))return;
