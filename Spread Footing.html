@@ -2842,7 +2842,12 @@ function renderStability(){
  b2.appendChild(el('p','note','Detailed breakdown per edge \u2014 each permanent/applied action, its moment arm to that edge, the resulting moment (W\u00d7arm), and whether it resists (M\u1D63) or overturns (M\u2092). Moments about each edge are taken with arm measured from the tipping edge. Sign convention: an action whose moment stabilizes about the edge is resisting; one that tips the footing over the edge is overturning. The applied pedestal moments and the shear couples V\u00b7(t + h) are listed per pedestal and load type (factor \u00d7 magnitude), their moment signed + where it tips the footing over that edge; they enter once, as their net value (subtotal M_app,net), in M\u2092 when positive and in M\u1D63 when negative, so a row acting against the net shows negative in that column.'));
  go.edges.forEach(e=>{
   const isGov=(e===oe);
-  const det=secPanel(b2,'o-st-ot-'+e.name.replace(/[^a-z0-9]/gi,''),'Edge '+e.name+(isGov?'  \u2605 governing':'')+'  \u2014  arm = '+e.armLabel);
+  /* SFID (2026-11-05): one id per edge (o-st-ot-px, -mx, -py, -my). The old id stripped the sign, so +x / -x shared o-st-ot-xxB2
+     and +y / -y o-st-ot-yyL2 (one saved open/closed state per pair). Migration: a saved state under the old shared id seeds both
+     new ids once (the old key is kept, unused). */
+  const eid='o-st-ot-'+(e.name.charAt(0)==='+'?'p':'m')+(/x/.test(e.name.split(' ')[0])?'x':'y'), oid='o-st-ot-'+e.name.replace(/[^a-z0-9]/gi,'');
+  if(collapseState[eid]===undefined&&collapseState[oid]!==undefined)collapseState[eid]=collapseState[oid];
+  const det=secPanel(b2,eid,'Edge '+e.name+(isGov?'  \u2605 governing':'')+'  \u2014  arm = '+e.armLabel);
   const t=document.createElement('table');t.className='tbl';
   t.innerHTML='<tr><th>Action</th><th>W (k)</th><th>arm ('+e.armLabel+') (ft)</th><th>moment W\u00d7arm (k-ft)</th><th>\u2192 M\u1D63</th><th>\u2192 M\u2092</th></tr>';
   e.rows.forEach(rw=>{const tr=document.createElement('tr');
