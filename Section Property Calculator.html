@@ -49,9 +49,19 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #projGrid label{display:block;font-family:var(--font-ui);font-size:7.5pt;text-transform:uppercase;letter-spacing:.5px;color:#B9C8DB;margin-bottom:1px}
 #projGrid input{width:100%;font-family:var(--font-ui);font-size:9pt;padding:3px 5px;border:1px solid #ffffff33;border-radius:3px;background:#ffffff14;color:#fff}
 #projGrid input::placeholder{color:#8FA3BC}
-#projShare{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
-#projShare button{font-family:var(--font-ui);font-size:8pt;padding:2px 8px;border:1px solid #ffffff44;border-radius:3px;background:#ffffff14;color:#fff;cursor:pointer}
-#projShare button:hover{background:#ffffff2a}
+/* SPHD (2026-11-05): the title block, the project-file / DXF buttons and the shared-info buttons are in the Project input tab
+   (#prjPane); the header keeps the title, a read-only project line (a link to that tab) and Print report (#hdrActs) */
+#hdrActs{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-left:auto}
+#hdrProj{font-family:var(--font-ui);font-size:9pt;color:#C7D4E4;text-decoration:none;max-width:30em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#hdrProj:hover{color:#fff;text-decoration:underline}
+#hdrProj .hdrNone{font-style:italic;opacity:.8}
+#prjPane .secHead{cursor:default}
+#prjPane .prjGrp{margin:2px 0 8px}
+#prjPane .prjGrp>b{display:block;font-family:var(--font-ui);font-size:9pt}
+#inputPanel #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0}
+#inputPanel #projGrid label{color:#475569}
+#inputPanel #projGrid input{background:#fff;color:inherit;border-color:var(--line)}
+#inputPanel #projGrid input::placeholder{color:#94A3B8}
 #main{flex:1 1 auto;display:flex;min-height:0;overflow:hidden}
 #inputPanel{flex:0 0 33%;max-width:450px;min-width:330px;overflow-y:auto;border-right:2px solid var(--line);background:var(--panel);padding:9px 10px 40px}
 #outputPanel{flex:1 1 auto;min-width:0;overflow-y:auto;overflow-x:hidden;padding:0 14px 60px;background:var(--paper)}
@@ -196,6 +206,7 @@ a.wkA:hover{text-decoration:underline}
   #inputPanel{max-width:none;min-width:0;border-right:none;border-bottom:2px solid var(--line);overflow:visible;padding-bottom:12px}
   #outputPanel{overflow:visible;padding:0 8px 40px}
   #projGrid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  #hdrActs{margin-left:0}#hdrProj{flex:1 1 100%;max-width:none}
   #tabBar{position:static}
   .fRow{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) 34px}
   .eqbW td.wsrc{display:block;width:auto;padding-left:0}
@@ -301,22 +312,30 @@ table.plist button{font-size:8pt;padding:0 5px;border:1px solid #C6CFDA;backgrou
         <div class="byline">Built-up sections: plates, bars, tubes, polygons, holes and AISC shapes &middot; elastic, plastic, thin-wall torsion, Q</div>
         <a class="alltools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
       </div>
-      <div class="hdrBtns">
-        <button type="button" id="btnOpenHdr" title="Open a project file (.json)">Open file&hellip;</button>
-        <button type="button" id="btnSaveHdr" title="Save the project to a file (.json)">Save file</button>
-        <button type="button" id="btnDxf" title="Export the section geometry to DXF, to check the properties with AutoCAD MASSPROP">Export DXF</button>
+      <div class="hdrBtns" id="hdrActs">
+        <a id="hdrProj" href="#" title="Project and job number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
         <button type="button" id="btnPrint" class="primary" title="Print the Report tab (from any tab); choose what it includes with the Include boxes on the Report tab">Print report</button>
       </div>
-    </div>
-    <div id="projGrid"></div>
-    <div id="projShare">
-      <button type="button" id="btnUseShared" title="Fill the project fields from project info shared by another tool">Use shared project info</button>
-      <button type="button" id="btnShare" title="Make these project fields available to the other tools">Share project info</button>
     </div>
   </div>
   <div id="govStrip" class="govStrip"></div>
   <div id="main">
-    <div id="inputPanel"></div>
+    <div id="inputPanel"><div id="prjPane"><!-- SPHD (2026-11-05): moved here from the header; kept across rebuilds by rebuildInputs() (first in the Project tab) -->
+      <div class="sec"><div class="secHead"><span class="secTitle">Title block</span></div><div class="secBody">
+        <div id="projGrid"></div>
+        <div class="hint">Printed on the Report and on the DXF drawing sheets.</div>
+      </div></div>
+      <div class="sec"><div class="secHead"><span class="secTitle">Project file, DXF and shared project info</span></div><div class="secBody" id="projShare">
+        <div class="prjGrp"><b>Project file</b><div class="hint">The whole project as a .json file, to keep or move it.</div><div class="btnRow">
+        <button type="button" class="btn sm" id="btnOpenHdr" title="Open a project file (.json)">Open file&hellip;</button>
+        <button type="button" class="btn sm" id="btnSaveHdr" title="Save the project to a file (.json)">Save file</button></div></div>
+        <div class="prjGrp"><b>DXF</b><div class="hint">The section geometry, to check the properties with AutoCAD MASSPROP.</div><div class="btnRow">
+        <button type="button" class="btn sm" id="btnDxf" title="Export the section geometry to DXF, to check the properties with AutoCAD MASSPROP">Export DXF</button></div></div>
+        <div class="prjGrp"><b>Project info</b><div class="hint">Copy the title block from or to the other tools.</div><div class="btnRow">
+        <button type="button" class="btn sm" id="btnUseShared" title="Fill the project fields from project info shared by another tool">Use shared project info</button>
+        <button type="button" class="btn sm" id="btnShare" title="Make these project fields available to the other tools">Share project info</button></div></div>
+      </div></div>
+    </div></div>
     <div id="outputPanel">
       <div id="tabBar" role="tablist" aria-label="Results"></div>
       <div id="tabPages"></div>
@@ -3954,7 +3973,24 @@ function buildProjHeader() {
     const i = txtIn(() => M.project[key], v => { M.project[key] = v; }, 'proj_' + key, lab);
     i.id = 'proj_' + key; l.htmlFor = i.id; d.appendChild(i); g.appendChild(d);
   });
+  spHdrProj();   /* SPHD */
 }
+/* SPHD (2026-11-05): the header's read-only "Project: <project> · <job #>" (M.project.name / M.project.job, typed in the Project
+   tab). A click opens the Project tab and focuses Project. Display only: nothing is stored. */
+function spHdrProj() {
+  const t = $('hdrProjTxt'); if (!t) return;
+  const pj = (typeof M !== 'undefined' && M && M.project) || {}, v = [pj.name, pj.job].map(x => String(x == null ? '' : x).trim()).filter(Boolean);
+  t.textContent = '';
+  if (v.length) t.textContent = v.join(' \u00b7 '); else t.appendChild(el('span', 'hdrNone', '(untitled: enter it in the Project tab)'));
+}
+document.addEventListener('input', e => { if (e.target.closest && e.target.closest('#inputPanel')) spHdrProj(); });
+document.addEventListener('click', e => {
+  const a = e.target.closest ? e.target.closest('#hdrProj') : null; if (!a) return;
+  e.preventDefault(); inTabSelect('proj', true);
+  const i = $('proj_name'); if (!i) return;
+  if (window.innerWidth <= 820) { const tb = $('spcInTabs'); if (tb) window.scrollTo(0, tb.getBoundingClientRect().top + window.scrollY - 4); }
+  i.focus({ preventScroll: true });
+});
 
 /* =====================================================================
    PART HELPERS
@@ -4042,6 +4078,7 @@ function inputTabMarks() {
 function rebuildInputs() {
   PANE_STALE = false;
   const st = captureUI();
+  const PJ = $('prjPane');   /* SPHD: the Project tab's title block and file / shared-info buttons survive the rebuild */
   const P = $('inputPanel'); const keep = P.scrollTop; P.innerHTML = '';
   const bar = el('div'); bar.id = 'spcInTabs'; bar.setAttribute('role', 'tablist'); bar.setAttribute('aria-label', 'Input groups');
   P.appendChild(bar);
@@ -4055,7 +4092,7 @@ function rebuildInputs() {
     panes[k] = pn; P.appendChild(pn);
   });
   __secNum = 0;
-  buildPartsPane(panes.parts); buildPartPane(panes.part); buildTplPane(panes.tpl); buildSetPane(panes.set); buildProjPane(panes.proj); buildLibPane(panes.tpl);
+  buildPartsPane(panes.parts); buildPartPane(panes.part); buildTplPane(panes.tpl); buildSetPane(panes.set); if (PJ) panes.proj.appendChild(PJ); buildProjPane(panes.proj); buildLibPane(panes.tpl);
   let t = inTabGet(); if (!IN_TABS.some(([k]) => k === t)) t = 'parts';
   inTabSelect(t, false);
   P.scrollTop = keep;
@@ -4420,7 +4457,7 @@ function buildProjPane(P) {
     }
     { const lb = spcPlibButton(); if (lb) row.appendChild(lb); }   /* PLIB */
     body.appendChild(row);
-    body.appendChild(el('div', 'hint', `The current session is autosaved in this browser (<code>${LS_AUTO}</code>); named projects are kept in <code>${LS_PROJ}</code>. Use Save file / Open file (header) to keep or move a project.`));
+    body.appendChild(el('div', 'hint', `The current session is autosaved in this browser (<code>${LS_AUTO}</code>); named projects are kept in <code>${LS_PROJ}</code>. Use Save file / Open file (above) to keep or move a project.`));
     const r2 = el('div', 'btnRow');
     r2.appendChild(btn('New (example section)', 'sm', () => { if (!confirm('Start a new project? Unsaved changes to the current one are lost (the autosave is replaced).')) return; const m = defaultModel(); loadModel(JSON.parse(JSON.stringify(m)), 'New project'); }));
     r2.appendChild(btn('New (empty)', 'sm', () => { if (!confirm('Start a new, empty project? Unsaved changes to the current one are lost (the autosave is replaced).')) return; const m = defaultModel(); m.parts = []; loadModel(JSON.parse(JSON.stringify(m)), 'New empty project'); }));
@@ -4704,8 +4741,8 @@ function buildLibPane(T) {
   }, { noNum: true });
   mkSec(P, 'libProj', 'Project file (JSON)', body => {
     const r = el('div', 'btnRow');
-    r.appendChild(btn('Save file', 'sm', saveFile, 'Save the whole project to a file (.json) — same as Save file in the header'));
-    r.appendChild(btn('Open file…', 'sm', () => $('spcFile').click(), 'Open a project file (.json) — same as Open file in the header'));
+    r.appendChild(btn('Save file', 'sm', saveFile, 'Save the whole project to a file (.json) — same as Save file in the Project tab'));
+    r.appendChild(btn('Open file…', 'sm', () => $('spcFile').click(), 'Open a project file (.json) — same as Open file in the Project tab'));
     body.appendChild(r);
     body.appendChild(el('div', 'hint', 'A project file holds the whole project (all parts, settings, loads and project data); a library file holds library entries only.'));
   }, { noNum: true });
@@ -6684,7 +6721,7 @@ function buildManual(pg) {
   H('Stresses (Phase 2a)');
   UL(['Stresses tab: P (tension +) at the centroid, M<sub>x</sub> (+ compresses the +y side) and M<sub>y</sub> (+ compresses the +x side) about the centroidal axes. σ = P/A − [(M<sub>x</sub>I<sub>y</sub> − M<sub>y</sub>I<sub>xy</sub>)y + (M<sub>y</sub>I<sub>x</sub> − M<sub>x</sub>I<sub>xy</sub>)x]/(I<sub>x</sub>I<sub>y</sub> − I<sub>xy</sub>²), x, y from the centroid. Transformed sections: σ in part i = n<sub>i</sub> × the transformed-section stress. Colour plot, neutral axis, maximum tension and compression (polygon vertices; circles at the tangent points of the stress gradient) and a table per part. No design check.']);
   H('Checking with AutoCAD MASSPROP (Export DXF)');
-  UL(['<b>Export DXF</b> (header) writes an ASCII DXF R12 file with exactly the geometry the properties are computed from: each part\'s polygons as closed polylines (rectangular-tube and HSS corners as the same 24 chords per corner), round bars, tubes and pipes as true circles, at full numeric precision, in the display units (in: $INSUNITS = 1; mm: $INSUNITS = 4).',
+  UL(['<b>Export DXF</b> (Project tab) writes an ASCII DXF R12 file with exactly the geometry the properties are computed from: each part\'s polygons as closed polylines (rectangular-tube and HSS corners as the same 24 chords per corner), round bars, tubes and pipes as true circles, at full numeric precision, in the display units (in: $INSUNITS = 1; mm: $INSUNITS = 4).',
     '<b>Layers:</b> SPC-PARTS (material), SPC-PARTS-N (material of parts with n ≠ 1), SPC-HOLES (hole parts and the voids inside tubes), SPC-CENTROID (cross at the centroid, principal axes 1 and 2), SPC-NOTES (project, units, basis, the tool\'s A, x̄, ȳ, I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>, I<sub>1</sub>, I<sub>2</sub>, θ<sub>p</sub>, the expected MASSPROP readout and the steps), SPC-LABELS (part labels; off).',
     '<b>Coordinate basis</b> (remembered in this browser): section centroid at 0,0 (default) — MASSPROP "Moments of inertia" X, Y and "Product of inertia" XY are then the centroidal I<sub>x</sub>, I<sub>y</sub>, I<sub>xy</sub>; or the tool\'s own origin — MASSPROP "Centroid" = x̄, ȳ and its moments are about 0,0. Axes: +x right, +y up; product of inertia = ∫xy dA, the sign the tool uses and, as understood, the sign MASSPROP uses (check once: a 1 × 1 square with a corner at 0,0 in the first quadrant gives XY = +0.25).',
     '<b>Steps:</b> UCS World → REGION (select the objects on SPC-PARTS, SPC-PARTS-N, SPC-HOLES) → UNION the material regions (touching parts union cleanly; separate pieces become one composite region) → SUBTRACT the hole regions → MASSPROP. Compare Area, Centroid, Moments of inertia, Product of inertia and Principal moments.',
