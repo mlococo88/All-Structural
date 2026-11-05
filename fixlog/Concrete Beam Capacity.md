@@ -3075,7 +3075,7 @@ function rbCapRpt(inp,k){
 - **Other copies:** `ACI Rebar Development Length.html` (the same Development & Splice code; the button never shows there: it appears only after a `sharedInputs` message from a parent page, and the standalone has none; listed in its fixlog as an intentional difference). CLAUDE.md §3.
 - **Open items:** (1) A_s,flex is taken in proportion to the moment (A_s,prov · M_u/φM_n), slightly more than the exact steel needed; an exact inverse solve of φM_n(A_s) = M_u was not added (it would be a new calculation): engineer to say if wanted. (2) The Report notes name the Beam Capacity chapter, tab and card, not a § number.
 
-## 2026-11-05 — PR: claude/cbc-dash-dev (RBDC: check summary panel in the Development & Splice tab and in ACI Rebar Development Length.html, kept in step; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-dash-dev, PR #791: https://github.com/mlococo88/All-Structural/pull/791 (RBDC: check summary panel in the Development & Splice tab and in ACI Rebar Development Length.html, kept in step; display only, no result change)
 
 ### RBDC. Check summary panel replaces the dashboard box on screen   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 2, PR 3 of 3):** the check summary panel of CBDC (#788) and ASDC (#789) in the Development & Splice frame (`<iframe id="suite-frame-dev" srcdoc=…>` of `Concrete Beam Capacity.html`) and in the standalone `ACI Rebar Development Length.html`, kept in step (CLAUDE.md §3).

@@ -1667,7 +1667,7 @@ function rbCapRpt(inp,k){
 - **Other copies:** the `suite-frame-dev` srcdoc page of `Concrete Beam Capacity.html` (where the button shows).
 - **Open items:** none for this tool.
 
-## 2026-11-05 — PR: claude/cbc-dash-dev (RBDC: check summary panel in the Development & Splice tab and in ACI Rebar Development Length.html, kept in step; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-dash-dev, PR #791: https://github.com/mlococo88/All-Structural/pull/791 (RBDC: check summary panel in the Development & Splice tab and in ACI Rebar Development Length.html, kept in step; display only, no result change)
 
 ### RBDC. Check summary panel replaces the dashboard box on screen   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 2, PR 3 of 3):** the check summary panel of CBDC (#788) and ASDC (#789) in the Development & Splice frame (`<iframe id="suite-frame-dev" srcdoc=…>` of `Concrete Beam Capacity.html`) and in the standalone `ACI Rebar Development Length.html`, kept in step (CLAUDE.md §3).
