@@ -107,12 +107,25 @@
   button:focus-visible{outline:none;border-color:var(--color-ring);box-shadow:0 0 0 2px rgba(37,99,235,.3);}
   #hdrBtns button{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.35);color:#fff;}
   #hdrBtns button:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.6);}
-  #projMetaBtns{margin-top:5px;}
-  #projMetaBtns button{font-size:8.5pt;padding:2px 8px;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.35);color:#fff;}
-  #projMetaBtns button:hover{background:rgba(255,255,255,.18);border-color:rgba(255,255,255,.6);}
+  /* BPHD (2026-11-05): title block, project files, hand-offs and PROFIS / DXF in the Project input tab (#prjPane); the header keeps the
+     title, a read-only project line (a link to that tab), Undo, Redo, Saved projects…, Print and the anchor-group picker */
+  #hdrProj{font-family:var(--font-ui);font-size:9pt;color:#C7D4E4;text-decoration:none;max-width:26em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:4px;}
+  #hdrProj:hover{color:#fff;text-decoration:underline;}
+  #hdrProj .hdrNone{font-style:italic;opacity:.8;}
+  #prjPane .sec>.secHead{cursor:default;}
+  #prjPane .sec>.secHead:hover{background:var(--slate-100);}
+  #prjPane .prjRow{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin:4px 0 2px;}
+  #prjPane .prjGrp{margin:2px 0 10px;}
+  #prjPane .prjGrp>b{display:block;font-family:var(--font-ui);font-size:9pt;}
+  #prjPane .prjGrp button{margin:2px 4px 2px 0;}
+  #prjPane .note{margin:2px 0 6px;}
+  #inputPanel #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0;}
+  #inputPanel #projGrid label,#inputPanel #projGrid label span{color:#334155;}
+  #inputPanel #projGrid input{min-width:0;}
+  @media screen and (max-width:899.98px){ #hdrProj{flex:1 1 100%;max-width:none;} }
   #hdr .allToolsLink{font-size:8.5pt;color:#C7D4E4;text-decoration:none;font-family:var(--font-ui);}
   #hdr .allToolsLink:hover{color:#fff;text-decoration:underline;}
-  @media print{ #hdr .allToolsLink,#projMetaBtns{display:none!important;} }
+  @media print{ #hdr .allToolsLink,#projMetaBtns,#hdrProj{display:none!important;} }
   button:hover{background:#e9e6de;}
   button.primary{background:var(--color-secondary);color:#fff;border-color:var(--color-secondary);}
   button.primary:hover{background:#1D4ED8;border-color:#1D4ED8;}
@@ -340,40 +353,65 @@
         <h1>Base Plate &amp; Anchor Bolt Designer</h1>
         <div class="byline">by Mario Lococo</div>
       </div>
-      <div id="hdrBtns">
+      <div id="hdrBtns"><!-- BPHD (2026-11-05): the project line and the global actions (Undo, Redo, Saved projects… are inserted before Print by bpPlibInit) -->
+        <a id="hdrProj" href="#" title="Project name and number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
+        <button id="btnPrint" class="primary">Print / PDF Report</button>
+      </div>
+    </div>
+    <div id="bpGroupBar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px">
+    </div>
+  </div>
+  <div id="main">
+    <div id="inputPanel"><div id="prjPane" data-secid="prjPane"><!-- BPHD (2026-11-05): the Project input tab, moved here from the header; kept across rebuilds by buildInputPanel() -->
+      <div class="sec"><div class="secHead"><h2 class="secTitle">Title block</h2></div><div class="secBody">
+        <div id="projGrid"></div>
+        <div class="note">Printed on the Report (the project name also on the DXF).</div>
+      </div></div>
+      <div class="sec"><div class="secHead"><h2 class="secTitle">Saved projects and files</h2></div><div class="secBody">
+        <div class="prjRow">
         <select id="projSelect" style="font-family:inherit;font-size:10pt;"></select>
         <button id="btnLoad">Load</button>
         <button id="btnSave" class="primary">Save</button>
         <button id="btnSaveAs">Save As…</button>
         <button id="btnDelete" class="danger">Delete</button>
+        </div>
+        <div class="note">Projects saved in this browser (Saved projects… in the header: rename, duplicate, delete).</div>
+        <div class="prjRow">
         <button id="btnExport">Export JSON</button>
         <button id="btnImport">Import JSON</button>
         <input type="file" id="fileImport" accept=".json" style="display:none">
-        <button id="btnCompare" title="Save design snapshots and compare their DCRs side by side">Compare</button>
         <button id="btnBackupAll" title="Save every project + current work to one file, so you can carry it to a new copy of this app">Backup All</button>
         <button id="btnRestoreAll" title="Restore projects from a workspace backup file">Restore All</button>
         <input type="file" id="fileRestoreAll" accept=".json" style="display:none">
+        </div>
+        <div class="note">One project, or every project (Backup All), as a file to keep or carry to another copy of this tool.</div>
+        <div id="restoreStatus" style="font-size:9pt;font-style:italic;margin-top:4px;"></div>
+        <div class="prjRow">
+        <button id="btnCompare" title="Save design snapshots and compare their DCRs side by side">Compare</button>
+        </div>
+        <div class="note">Design snapshots compared side by side.</div>
+      </div></div>
+      <div class="sec" id="projMetaBtns"><div class="secHead"><h2 class="secTitle">Shared project info and hand-offs</h2></div><div class="secBody">
+        <div class="prjGrp"><b>Project info</b><div class="note">Copy the title block from or to the other tools.</div>
+        <button id="btnUseProjMeta" title="Fill the project fields from project info shared by another tool">Use shared project info</button>
+        <button id="btnShareProjMeta" title="Make these project fields available to the other tools">Share project info</button>
+        </div>
+        <div class="prjGrp"><b>Loads and anchor groups from other tools</b><div class="note">Support reactions (Steel Beam Design) or pole / sign anchor groups (Light Pole and Sign Post), or a hand-off file of either.</div>
+        <button id="btnPullMemberReactions" type="button" onclick="bxPullMemberReactions()" title="Import unfactored support reactions from Steel Beam Design into the ASCE 7-22 service loads (HANDOFF.md, channel memberReactions)">Pull from Steel Beam<span id="bxMrNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
+        <button id="btnPullAnchorGroup" type="button" onclick="bxPullAnchorGroup()" title="Import pole / sign anchor groups from the Light Pole and Sign Post tool (HANDOFF.md, channel anchorGroup)">Pull from Light Pole<span id="bxAgNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
+        <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()" title="A hand-off file: support reactions (memberReactions) or anchor groups (anchorGroup)">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportHandoff(event)">
+        <span id="bxMrSrc" style="font-size:9pt;font-style:italic"></span> <span id="bxAgSrc" style="font-size:9pt;font-style:italic"></span>
+        </div>
+      </div></div>
+      <div class="sec"><div class="secHead"><h2 class="secTitle">Hilti PROFIS and DXF</h2></div><div class="secBody">
+        <div class="prjRow">
         <button id="btnImportProfis">Import PROFIS PDF</button>
         <button id="btnExportProfis" title="Write this design as a Hilti PROFIS Engineering file (.pe), with a summary of what to check in PROFIS">Export to Hilti PROFIS (.pe)</button>
         <button id="btnExportDxf" title="Plan and section of the base plate, anchors, pedestal and reinforcement as an ASCII DXF (R12), in inches">Export DXF</button>
-        <button id="btnPrint" class="primary">Print / PDF Report</button>
-      </div>
-    </div>
-    <div id="projGrid"></div>
-    <div id="projMetaBtns">
-      <button id="btnUseProjMeta" title="Fill the project fields from project info shared by another tool">Use shared project info</button>
-      <button id="btnShareProjMeta" title="Make these project fields available to the other tools">Share project info</button>
-      <button id="btnPullMemberReactions" type="button" onclick="bxPullMemberReactions()" title="Import unfactored support reactions from Steel Beam Design into the ASCE 7-22 service loads (HANDOFF.md, channel memberReactions)">Pull from Steel Beam<span id="bxMrNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
-      <button id="btnPullAnchorGroup" type="button" onclick="bxPullAnchorGroup()" title="Import pole / sign anchor groups from the Light Pole and Sign Post tool (HANDOFF.md, channel anchorGroup)">Pull from Light Pole<span id="bxAgNew" style="display:none;color:#b45309;font-weight:bold"> &#9679; new data available</span></button>
-      <button id="btnImportMemberReactions" type="button" onclick="document.getElementById('bxMrFile').click()" title="A hand-off file: support reactions (memberReactions) or anchor groups (anchorGroup)">Import hand-off (JSON)</button><input type="file" id="bxMrFile" accept=".json,application/json" style="display:none" onchange="bxImportHandoff(event)">
-      <span id="bxMrSrc" style="font-size:9pt;font-style:italic"></span> <span id="bxAgSrc" style="font-size:9pt;font-style:italic"></span>
-    </div>
-    <div id="bpGroupBar" style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px">
-    </div>
-    <div id="restoreStatus" style="font-size:9pt;font-style:italic;margin-top:4px;"></div>
-  </div>
-  <div id="main">
-    <div id="inputPanel"></div>
+        </div>
+        <div class="note">Read a PROFIS report into the inputs, write this design as a PROFIS file, or the plan and section as a DXF.</div>
+      </div></div>
+    </div></div>
     <div id="outputPanel">
       <div id="tabBar"></div>
     <div id="valBox"></div>
@@ -5498,7 +5536,9 @@ function bearingCheck(cc){
    INPUT PANEL
    ===================================================================== */
 function buildInputPanel(){
+  const PJ=document.getElementById("prjPane");   /* BPHD: the Project tab's nodes survive the rebuild */
   const P=document.getElementById("inputPanel"); P.innerHTML="";
+  if(PJ){ P.appendChild(PJ); bpHdrProj(); }
   __fieldSeq=0;   /* deterministic data-fkey assignment for focus restoration */
 
   mkSection("inGeom","1. Plate & Column Geometry",body=>{
@@ -6225,10 +6265,10 @@ function buildInputPanel(){
    bound values are untouched. The active tab is remembered per browser in
    localStorage key bpad_inputTab_v1 (never in S, so the autosave, saved
    projects and the project JSON are unchanged). */
-const BPAD_IN_TABS=[
+const BPAD_IN_TABS=[['project','Project'],
   ['plate','Plate & Anchors'],['standoff','Stand-off'],['pedestal','Pedestal'],
   ['dist','Distribution'],['reinf','Reinforcement'],['loads','Loads'],['assume','Assumptions']];
-const BPAD_IN_SEC={
+const BPAD_IN_SEC={prjPane:'project',
   inGeom:'plate',inAnchor:'plate',
   inGrout:'standoff',inLevNut:'standoff',
   inConc:'pedestal',
@@ -6272,7 +6312,7 @@ function bpadInputTabs(P){
     P.addEventListener("input",()=>bpadInputTabMarks());
   }
   let t=bpadInTabGet();
-  if(!panes[t]||!panes[t].childNodes.length) t=BPAD_IN_TABS.map(x=>x[0]).find(k=>panes[k].childNodes.length)||BPAD_IN_TABS[0][0];
+  if(!panes[t]||!panes[t].childNodes.length) t=BPAD_IN_TABS.map(x=>x[0]).find(k=>k!=='project'&&panes[k].childNodes.length)||BPAD_IN_TABS[0][0];   /* BPHD: first open still on Plate & Anchors */
   bpadSetInTab(t,false);
   bpadInputTabMarks();
 }
@@ -13290,6 +13330,22 @@ function refreshProjSelect(keepName){
   Object.keys(p).forEach(name=>{ const o=document.createElement("option"); o.value=name; o.textContent=name; sel.appendChild(o); });
   if(want && p[want]) sel.value=want;
 }
+/* BPHD (2026-11-05): the header's read-only "Project: <name> · <number>" (S.proj.name / S.proj.num, typed in the Project tab).
+   A click opens the Project tab and focuses Project name. Display only: nothing is stored. */
+function bpHdrProj(){
+  const t=document.getElementById("hdrProjTxt"); if(!t) return;
+  const pj=(S&&S.proj)||{}, v=[pj.name,pj.num].map(x=>String(x==null?"":x).trim()).filter(Boolean);
+  t.textContent="";
+  if(v.length) t.textContent=v.join(" \u00b7 "); else t.appendChild(el("span","hdrNone","(untitled: enter it in the Project tab)"));
+}
+document.addEventListener("input",e=>{ if(e.target.closest&&e.target.closest("#projGrid")) bpHdrProj(); });
+document.getElementById("hdrProj").addEventListener("click",e=>{
+  e.preventDefault(); bpadSetInTab("project",true);
+  const i=document.querySelector("#projGrid input"); if(!i) return;
+  if(window.matchMedia&&window.matchMedia("(max-width:899.98px)").matches){ const pn=document.getElementById("prjPane"), tb=document.getElementById("bpadInTabs");
+    window.scrollTo(0,pn.getBoundingClientRect().top+window.scrollY-(tb&&getComputedStyle(tb).position==="sticky"?tb.offsetHeight:0)-6); }
+  i.focus({preventScroll:true});
+});
 function buildProjHeader(){
   const grid=document.getElementById("projGrid"); grid.innerHTML="";
   [["Project name","name"],["Project number","num"],["Calculated by","by"],
@@ -13304,6 +13360,7 @@ function buildProjHeader(){
     });
     lab.appendChild(inp); grid.appendChild(lab);
   });
+  bpHdrProj();   /* BPHD */
 }
 
 /* =====================================================================
@@ -13477,7 +13534,7 @@ function bpPlibInit(){
   const B=(t,ti)=>SharedProjectsUI.button(t,ti);
   const bu=B("Undo","Undo the last input change (Ctrl+Z)"), br=B("Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)"), bl=B("Saved projects\u2026","The projects saved in this browser: open, rename, duplicate, delete");
   bl.addEventListener("click",()=>dlg.show());
-  const host=document.getElementById("hdrBtns"), ref=document.getElementById("btnExport");
+  const host=document.getElementById("hdrBtns"), ref=document.getElementById("btnPrint");   /* BPHD: before Print (was before Export JSON) */
   if(host){ if(ref&&ref.parentNode===host){ host.insertBefore(bl,ref); host.insertBefore(br,bl); host.insertBefore(bu,br); } else host.append(bu,br,bl); }
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   h.reset(); window.BPPL={h,store,dlg,soon};
