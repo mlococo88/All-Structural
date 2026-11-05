@@ -4648,3 +4648,24 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 - Question for the engineer: should the applied moments and couples about an edge be bucketed term by term (each opposing term into M_r) instead of netted first? That changes M_r, M_o and FS wherever terms have mixed signs (e.g. "rev", edge −y above: M_r 392.49 → 414.09, M_o 144.27 → 165.87, FS 2.72 → 2.50). Not changed here.
 - Pre-existing: the +x and −x edge panels share the id `o-st-ot-xxB2` (and +y / −y `o-st-ot-yyL2`), because the id strips the sign, so their open/closed state is shared. Not changed.
+
+## 2026-11-05 — PR: claude/sf-ot-panel-ids — one panel id per overturning edge (SFID; display only, no result change)
+
+### SFID. Stability 4.3: the four per-edge panels get unique ids, each opens and closes on its own   [display only]
+- **Problem (raised in SFOR, engineer approved the fix):** the per-edge panel id was `'o-st-ot-'+e.name.replace(/[^a-z0-9]/gi,'')`, which strips the sign, so +x and −x were both `o-st-ot-xxB2` and +y and −y both `o-st-ot-yyL2`: duplicate DOM ids, and one saved open/closed state (`collapseState`, saved in `sfd_auto`) per pair.
+- **Where:** `renderStability`, 4.3 per-edge loop (anchor `/* SFID (2026-11-05): one id per edge`). Before:
+  ```js
+    const det=secPanel(b2,'o-st-ot-'+e.name.replace(/[^a-z0-9]/gi,''),'Edge '+e.name+ ...
+  ```
+  After:
+  ```js
+    const eid='o-st-ot-'+(e.name.charAt(0)==='+'?'p':'m')+(/x/.test(e.name.split(' ')[0])?'x':'y'), oid='o-st-ot-'+e.name.replace(/[^a-z0-9]/gi,'');
+    if(collapseState[eid]===undefined&&collapseState[oid]!==undefined)collapseState[eid]=collapseState[oid];
+    const det=secPanel(b2,eid,'Edge '+e.name+ ...
+  ```
+  New ids: `o-st-ot-px`, `o-st-ot-mx`, `o-st-ot-py`, `o-st-ot-my`.
+- **Saved data (§5):** the storage key (`sfd_auto`) and format are unchanged; only the `collapseState` entries for these panels are new. Migration: when a new id has no saved state and the old shared id has one, the old value seeds it, so a saved project opens the panels exactly as before; from then on each edge keeps its own state. The old entries are left in place (unused), nothing is discarded. No other code refers to these ids (links go to the card `o-st-ot`).
+- **Governing provision:** none (display).
+- **Check case:** saved `collapseState {'o-st-ot-xxB2':false,'o-st-ot-yyL2':true}` → +x, −x closed, +y, −y open (as before). Opening −x leaves +x closed; closing +y leaves −y open; both survive a reload (saved `o-st-ot-mx:true`, `o-st-ot-px:false`, `o-st-ot-py:false`, `o-st-ot-my:true`). No duplicate `o-st-ot-*` ids in the page.
+- **How verified:** the check case above in headless Chromium; origin/main vs branch on the 10 harness cases: `R`, `P2` identical and the Report text identical, 0 console / KaTeX errors; `node tests/check-syntax.mjs`; `tests/smoke/spread-footing-scroll.mjs`.
+- **Other copies:** none. **Open items:** none.
