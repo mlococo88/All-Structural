@@ -1817,7 +1817,8 @@ function renderDashboard(){
   const dowOK=P2.bearing.every(z=>z.dowelOK);
   const ldcBad=P2.bearing.filter(z=>!z.ldcOK);
   // bearing stress (strength) and dowel detailing are distinct checks — report separately
-  d.appendChild(chip('Concrete bearing','DCR = '+f2(brmax),brmax<=1?'pass':'fail',undefined,{tab:'tab-footdes',sec:'o-fd-bear'}));
+  const brG=P2.bearing.reduce((a,z)=>(!a||z.dcr>a.dcr)?z:a,null);   /* SFBL: governing element and side */
+  d.appendChild(chip('Concrete bearing','DCR = '+f2(brmax)+(brG?' ('+brG.label+', '+(brG.isPatch||brG.brgGov==='footing'?'footing':brG.brgGov==='pedestal'?'pedestal':'pedestal = footing')+' side governs)':''),brmax<=1?'pass':'fail',undefined,{tab:'tab-footdes',sec:'o-fd-bear'}));
   const wSel=P2.bearing.filter(z=>z.wall&&z.wall.sel);   /* SFWL */
   d.appendChild(chip('Dowel steel (min 0.005A_g)',(dowOK?'\u2265 minimum':'below code minimum')+(wSel.some(z=>z.wall.applied)?' (wall: '+wSel.filter(z=>z.wall.applied).map(z=>z.label+(z.wall.t1161?' \u03c1_l '+z.wall.rhoL+' A_g, 16.3.4.2':' 0.005A_g kept, 11.6.1 condition not met')).join('; ')+')':''),dowOK?'pass':'fail',undefined,{tab:'tab-footdes',sec:'o-fd-bear'}));
   if(wSel.length)d.appendChild(chip('Wall checks (ACI 318-19 Ch. 11)',wSel.map(z=>z.label+': '+(z.wall.applied?(z.wall.t1161?'':'11.6.2 dowel minimum not computed; ')+'in-plane shear 11.5.4, wall \u03c1_l / \u03c1_t 11.6, spacing 11.7 not computed':'l_w/t '+f2(z.wall.lt)+' \u2264 3, checked as a pedestal')).join('; '),'warn',undefined,{tab:'tab-peddes',sec:'o-pd-'+wSel[0].idx}));
@@ -3279,7 +3280,7 @@ function sfdResultRows(){
   'One-way shear':()=>[(state.mat.vcMode==='a'?'override 2λ√f′<sub>c</sub> (not ACI 318-19 Table 22.5.5.1(c))':'ACI 318-19 Table 22.5.5.1(c), size effect §22.5.5.1.3')+(state.mat.lamsFtg==='on'?'; λ<sub>s</sub> neglected, §13.2.6.2':''),
    (P2.desX.oneWayOutside&&P2.desY.oneWayOutside)?null:Math.max(P2.desX.dcrV,P2.desY.dcrV),['o-fd-x','o-fd-y']],
   'Punching shear':()=>['ACI 318-19 §22.6.5.2, §8.4.4.2'+(state.mat.lamsFtg==='on'?'; λ<sub>s</sub> neglected, §13.2.6.2':''),mx(P2.punch.filter(z=>!z.perimOutside).map(z=>z.dcr)),['o-fd-punch']],
-  'Concrete bearing':()=>['ACI 318-19 §22.8.3.2',mx(P2.bearing.map(z=>z.dcr)),['o-fd-bear']],
+  'Concrete bearing':()=>['ACI 318-19 §16.3.3.4, §22.8.3.2, Table 22.8.3.2: φB<sub>n</sub> = lesser of the footing (√(A<sub>2</sub>/A<sub>1</sub>) ≤ 2) and the pedestal (0.85f′<sub>c</sub>A<sub>1</sub>)',mx(P2.bearing.map(z=>z.dcr)),['o-fd-bear']],
   'Dowel steel (min 0.005A_g)':()=>['ACI 318-19 §16.3.4.1'+(real.some(z=>z.wall&&z.wall.applied)?'; walls §16.3.4.2 → §11.6.1, Table 11.6.1':'')+'; D/C = A<sub>s,min</sub>/A<sub>s,prov</sub>',mx(real.map(z=>z.AsDowProv>0?z.AsDowMin/z.AsDowProv:Infinity)),['o-fd-bear']],
   'Dowel development (ℓdc)':()=>['ACI 318-19 §25.4.9.2; required only where P<sub>u</sub> exceeds the concrete bearing strength, §16.3.1.2(a); D/C = ℓ<sub>dc</sub>/available',real.some(z=>z.ldcReq)?mx(real.filter(z=>z.ldcReq).map(z=>z.availEmb>0?z.Ldc/z.availEmb:Infinity)):null,['o-fd-bear']],   /* SFBC */
   'Pedestal design':()=>['ACI 318-19 §22.4.2.1 (axial; D/C shown); §10.6.1.1, §10.7.3.1, §25.7.2',
@@ -3667,7 +3668,9 @@ function sfrModel(){
   P2.bearing.forEach((bz,i)=>{const sc='cb'+i, st=[
    S({id:sc+'.A1',label:'Loaded area',sym:'A_{1}',eq:'b_{x} b_{y}',sub:sfrN(R.peds[i].bx*12,1)+'\\cdot'+sfrN(R.peds[i].by*12,1),value:bz.A1,unit:'in^{2}',d:1}),
    S({id:sc+'.conf',label:'Confinement ('+bz.confGov+')',sym:'\\sqrt{A_{2}/A_{1}}',eq:'\\le 2',sub:'',value:bz.conf,unit:'',d:3}),
-   S({id:sc+'.phiPn',label:'Design bearing strength',sym:'\\phi B_{n}',eq:'0.65\\cdot 0.85 '+SFR_FC+' A_{1}\\sqrt{A_{2}/A_{1}}',sub:'0.65\\cdot 0.85\\cdot'+sfrN(P2.fc,0)+'\\cdot'+sfrN(bz.A1,1)+'\\cdot'+sfrN(bz.conf,3)+'/1000',value:bz.phiPn,unit:'kip',ref:'ACI 318-19 22.8.3.2'}),
+   S({id:sc+'.phiF',label:'Bearing strength, supporting footing (Table 22.8.3.2 '+(bz.conf>1+1e-9?(bz.conf>=2-1e-9?'(b)':'(a)'):'(a), √(A_2/A_1) = 1')+')',sym:'\\phi B_{n,ftg}',eq:'0.65\\cdot 0.85 '+SFR_FC+' A_{1}\\sqrt{A_{2}/A_{1}}',sub:'0.65\\cdot 0.85\\cdot'+sfrN(P2.fc,0)+'\\cdot'+sfrN(bz.A1,1)+'\\cdot'+sfrN(bz.conf,3)+'/1000',value:bz.phiPnFtg,unit:'kip',ref:'ACI 318-19 22.8.3.2, Table 22.8.3.2'}),   /* SFBL */
+   ...(bz.isPatch?[]:[S({id:sc+'.phiP',label:'Bearing strength, supported pedestal (its own loaded area, no increase; Table 22.8.3.2 (c))',sym:'\\phi B_{n,ped}',eq:'0.65\\cdot 0.85 '+SFR_FC+' A_{1}',sub:'0.65\\cdot 0.85\\cdot'+sfrN(P2.fc,0)+'\\cdot'+sfrN(bz.A1,1)+'/1000',value:bz.phiBsup,unit:'kip',ref:'ACI 318-19 22.8.3.2, Table 22.8.3.2'})]),
+   S({id:sc+'.phiPn',label:'Design bearing strength at the interface: '+(bz.isPatch?'footing (bearing patch: no supported concrete member)':'the lesser of the footing and the pedestal; '+(bz.brgGov==='pedestal'?'the pedestal governs':bz.brgGov==='footing'?'the footing governs':'equal (√(A_2/A_1) = 1)')),sym:'\\phi B_{n}',eq:bz.isPatch?'\\phi B_{n,ftg}':'\\min(\\phi B_{n,ftg},\\; \\phi B_{n,ped})',sub:bz.isPatch?sfrN(bz.phiPnFtg):'\\min('+sfrN(bz.phiPnFtg)+',\\; '+sfrN(bz.phiBsup)+')',value:bz.phiPn,unit:'kip',ref:'ACI 318-19 16.3.3.4, 22.8.3.2'}),
    S({id:sc+'.DCR',label:'Concrete bearing: demand / capacity',sym:'DCR',eq:'\\frac{P_{u}}{\\phi B_{n}}',sub:'\\frac{'+sfrN(bz.PuMax)+'}{'+sfrN(bz.phiPn)+'}',value:bz.dcr,unit:'',d:3,ok:bz.dcr<=1+1e-9})];
    if(!bz.isPatch)st.push(
     ...(bz.wall&&bz.wall.applied?(w=>[   /* SFWL: wall-foundation interface, 16.3.4.2 -> 11.6.1 */
@@ -3676,7 +3679,7 @@ function sfrModel(){
      S({id:sc+'.wthr',label:'Condition of 11.6.1: in-plane V_u ≤ 0.5φα_cλ√f′c A_cv, A_cv = t ℓ_w (governing: '+(w.gov?w.gov.name:'—')+')',sym:'0.5\\phi\\alpha_{c}\\lambda\\sqrt{'+SFR_FC+'}A_{cv}',eq:'',sub:'0.5\\cdot 0.75\\cdot'+sfrN(w.gov?w.gov.ac:w.ac0,3)+'\\cdot'+sfrN(w.lam)+'\\cdot'+sfrN(w.sq)+'\\cdot'+sfrN(w.Acv,0)+'/1000',value:w.gov?w.gov.thr:0,unit:'kip',ok:w.t1161,note:'V_u,in-plane = '+sfrN(w.gov?w.gov.Vin:0)+' kip'+(w.t1161?' ≤ limit: Table 11.6.1 applies':' > limit: 11.6.2 governs (not computed); the column rule 0.005A_g is kept (REVIEW)'),ref:'ACI 318-19 11.6.1'}),
      S({id:sc+'.dow',chk:'dowel minimum (wall)',label:'Dowels: '+sfdDowelBars(i).n+' #'+bz.dSize+(sfdDowelBars(i).fromLong?' (longitudinal bars)':'')+(w.t1161?' vs ρ_l A_g (Table 11.6.1, cast-in-place, deformed bars '+(w.ds<=5?'No. 5 and smaller, f_y '+(P2.fy>=60000?'≥':'<')+' 60 000 psi':'larger than No. 5')+')':' vs 0.005 A_g (kept: 11.6.1 not applicable)'),sym:'A_{s,dow}',eq:w.t1161?'\\ge \\rho_{\\ell} A_{g}':'\\ge 0.005 A_{g}',sub:(w.t1161?sfrN(w.rhoL,4)+'\\cdot'+sfrN(w.Ag,0)+' = ':'')+sfrN(bz.AsDowMin)+(bz.dowelOK?' \\le ':' \\gt ')+sfrN(bz.AsDowProv),value:bz.AsDowProv,unit:'in^{2}',ok:!!bz.dowelOK,ref:w.t1161?'ACI 318-19 16.3.4.2, 11.6.1, Table 11.6.1':'ACI 318-19 16.3.4.1',note:'with the area required for interface tension: §p'+i+'.AsGov'})])(bz.wall):[
     S({id:sc+'.dow',chk:'dowel minimum 0.005A_g',label:'Dowels: '+sfdDowelBars(i).n+' #'+bz.dSize+(sfdDowelBars(i).fromLong?' (longitudinal bars)':'')+' vs 0.005 A_g',sym:'A_{s,dow}',eq:'\\ge 0.005 A_{g}',sub:sfrN(bz.AsDowProv)+(bz.dowelOK?' \\ge ':' \\lt ')+sfrN(bz.AsDowMin),value:bz.AsDowProv,unit:'in^{2}',ok:!!bz.dowelOK,ref:'ACI 318-19 16.3.4.1',note:'with the area required for interface tension: §p'+i+'.AsGov'})]),   /* SFLK */
-    S({id:sc+'.ldcq',label:'Compression the dowels must transfer: P_u beyond the lesser concrete bearing strength, footing φB_n (above) or pedestal 0.65·0.85 f′c A_1',sym:'P_{u,dow}',eq:'\\max\\left(0,\\; P_{u} \\minus \\min(\\phi B_{n},\\; 0.65\\cdot 0.85 '+SFR_FC+' A_{1})\\right)',sub:'\\max\\left(0,\\; '+sfrN(bz.PuMax)+' \\minus \\min('+sfrN(bz.phiPn)+',\\; '+sfrN(bz.phiBsup)+')\\right)',value:Math.max(0,bz.PuMax-bz.phiBgate),unit:'kip',ref:'ACI 318-19 16.3.1.2(a), 16.3.3.4',note:bz.ldcReq?'> 0: the dowels must develop in compression (next step)':'= 0: concrete bearing carries P_u in every combination; compression development of the dowels is not required'}),   /* SFBC */
+    S({id:sc+'.ldcq',label:'Compression the dowels must transfer: P_u beyond the lesser concrete bearing strength φB_n (above: the lesser of the footing and the pedestal)',sym:'P_{u,dow}',eq:'\\max\\left(0,\\; P_{u} \\minus \\phi B_{n}\\right)',sub:'\\max\\left(0,\\; '+sfrN(bz.PuMax)+' \\minus '+sfrN(bz.phiBgate)+'\\right)',value:Math.max(0,bz.PuMax-bz.phiBgate),unit:'kip',ref:'ACI 318-19 16.3.1.2(a), 16.3.3.4',note:bz.ldcReq?'> 0: the dowels must develop in compression (next step)':'= 0: concrete bearing carries P_u in every combination; compression development of the dowels is not required'}),   /* SFBC */
     bz.ldcReq?S({id:sc+'.ldc',chk:'dowel ℓ_dc',label:'Dowel compression development into the footing',sym:'\\ell_{dc}',eq:'\\le t \\minus c_{bot} \\minus d_{b,x} \\minus d_{b,y}',sub:sfrN(bz.Ldc)+(bz.ldcOK?' \\le ':' \\gt ')+sfrN(bz.availEmb),value:bz.Ldc,unit:'in',ok:!!bz.ldcOK,ref:'ACI 318-19 25.4.9.2',note:'worked term by term: §p'+i+'.ldc'})
      :S({id:sc+'.ldc',label:'Dowel compression development into the footing: not required, concrete bearing carries P_u (ACI 318-19 16.3.1.2(a)); ℓ_dc '+sfrN(bz.Ldc)+(bz.Ldc<=bz.availEmb?' ≤ ':' > ')+sfrN(bz.availEmb)+' in available, for information',sym:'\\ell_{dc}',eq:'',sub:'',value:'not required',ref:'ACI 318-19 16.3.1.2(a)',note:'worked term by term: §p'+i+'.ldc'}));   /* SFLK; SFBC */
    BT.push({title:bz.label+(bz.isPatch?' (bearing patch)':''),ref:'',steps:st});});
@@ -5753,9 +5756,16 @@ function computePhase2(R){
   const conf=Math.max(1,Math.min(kGeom,kFrust,2));   // code ceiling sqrt(A2/A1) <= 2
   const A2=A1*conf*conf;
   const confGov=(conf>=2-1e-9)?'code ceiling 2.0':((kGeom<=kFrust)?'footing edge (similar concentric figure)':'1:2 frustum over t');
-  const phiPn=0.65*0.85*fc*A1*conf/1000; // kips
+  /* SFBL (2026-11-05, engineer): ACI 318-19 16.3.3.4 - B_n at the interface is the lesser of the bearing strengths of the
+     foundation (Table 22.8.3.2 (a)/(b): 0.85 f'c A1 sqrt(A2/A1) <= 2x) and the supported member (the pedestal: its own loaded
+     area, no increase, Table 22.8.3.2 (c): 0.85 f'c A1; same f'c, the tool has one). A bearing patch (h = 0) has no supported
+     concrete member: footing side only. Before: const phiPn=0.65*0.85*fc*A1*conf/1000; */
+  const phiPnFtg=0.65*0.85*fc*A1*conf/1000; // kips, footing side
   let PuMax=0;combos.forEach(c=>{const pl=c.nr.pl.find(z=>z.idx===i);if(pl&&pl.P>PuMax)PuMax=pl.P;});
   const isPatch=(p.h<=1e-9);
+  const phiBsup=0.65*0.85*fc*A1/1000;   // kips, supported pedestal side
+  const phiPn=isPatch?phiPnFtg:Math.min(phiPnFtg,phiBsup);
+  const brgGov=isPatch?'footing':(phiBsup<phiPnFtg-1e-9?'pedestal':(phiPnFtg<phiBsup-1e-9?'footing':'both'));
   const Ag=A1;
   const wall=sfdWallInfo(i,p,combos,fc,fy,lam);   /* SFWL */
   const AsDowMin=wall.applied?wall.AsMin:0.005*Ag;
@@ -5774,10 +5784,10 @@ function computePhase2(R){
      own bearing is 0.65*0.85*f'c*A1 (sqrt(A2/A1) = 1) and the lesser is min(phiPn, phiBsup). Where PuMax (the largest P_u of the
      LRFD combinations) does not exceed it, compression development l_dc is not required; otherwise it is checked as before.
      Tension development, hooks, shear friction and the minimum area are not affected. */
-  const phiBsup=0.65*0.85*fc*A1/1000, phiBgate=Math.min(phiPn,phiBsup);
+  const phiBgate=Math.min(phiPnFtg,phiBsup);   /* SFBL: = phiPn for a pedestal (the same lesser value) */
   const ldcReq=!isPatch&&PuMax>phiBgate+1e-9;
   const ldcOK=isPatch?true:(!ldcReq||Ldc<=availEmb);
-  return{idx:i,label:p.label,A1,A2,conf,confGov,kEdgeX,kEdgeY,kFrust,phiPn,PuMax,dcr:phiPn>0?PuMax/phiPn:Infinity,
+  return{idx:i,label:p.label,A1,A2,conf,confGov,kEdgeX,kEdgeY,kFrust,phiPn,phiPnFtg,brgGov,PuMax,dcr:phiPn>0?PuMax/phiPn:Infinity,
    isPatch,AsDowMin,AsDowProv,dowelOK:isPatch?true:(AsDowProv>=AsDowMin),Ldc,availEmb,ldcOK,ldcReq,phiBsup,phiBgate,dSize,wall};
  });
  /* ----- PEDESTAL P-M (Bresler), ties, classification, slenderness ----- */
@@ -6279,7 +6289,7 @@ function renderFootingDesign(){
   else if(!dowOK){status='DOWELS < MIN';statColor='#b71c1c';}
   else{status='OK';statColor='#1b5e20';}
   seen.push([status,bz]);   /* SFML */
-  [bz.label,f2(bz.A1),f2(bz.conf),bz.confGov,f2(bz.phiPn),f2(bz.PuMax),f2(bz.dcr),
+  [bz.label,f2(bz.A1),f2(bz.conf),bz.confGov,f2(bz.phiPn)+(bz.isPatch?' (footing)':bz.brgGov==='pedestal'?' (pedestal)':bz.brgGov==='footing'?' (footing)':' (equal)'),f2(bz.PuMax),f2(bz.dcr),   /* SFBL: governing side */
    bz.isPatch?'\u2013':f2(bz.AsDowMin),bz.isPatch?'\u2013':f2(bz.AsDowProv),
    bz.isPatch?'\u2013':f2(bz.Ldc)+(bz.ldcReq?'':' (not req.)'),bz.isPatch?'\u2013':f2(bz.availEmb),status]   /* SFBC */
    .forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;
@@ -6298,7 +6308,7 @@ function renderFootingDesign(){
    const patches=P2.bearing.filter(z=>z.isPatch);
    if(patches.length)bb.appendChild(el('div','note','<b>'+patches.map(z=>z.label).join(', ')+'</b> '+(patches.length>1?'are':'is')+' modelled with h = 0 and treated as a <b>bearing patch</b> (a load applied over a finite contact area) rather than a member: the dowel minimum, tie, longitudinal-steel and slenderness provisions of Chapter 10 do not apply. Load, self-weight, critical-section faces and the bearing check are all still included.'));
  }
- bb.appendChild(el('div','note','\u221a(A\u2082/A\u2081) is built as the largest figure <b>geometrically similar to and concentric with</b> A\u2081 that fits inside the footing (ACI 318-19 22.8.3.2), further limited by the 1:2 frustum over the footing depth and by the code ceiling of 2.0. A bearing area that already reaches a footing edge cannot expand at all in that direction, so the whole similar figure is locked at 1.00 regardless of how much plan area is left elsewhere.'));
+ bb.appendChild(el('div','note','\u221a(A\u2082/A\u2081) is built as the largest figure <b>geometrically similar to and concentric with</b> A\u2081 that fits inside the footing (ACI 318-19 22.8.3.2), further limited by the 1:2 frustum over the footing depth and by the code ceiling of 2.0. A bearing area that already reaches a footing edge cannot expand at all in that direction, so the whole similar figure is locked at 1.00 regardless of how much plan area is left elsewhere. The footing value is then compared with the pedestal\u2019s own bearing strength, \u03c60.85f\u2032<sub>c</sub>A\u2081 with no increase, and the lesser is \u03c6P<sub>nb</sub> (ACI 318-19 16.3.3.4, Table 22.8.3.2 (c)): with one f\u2032<sub>c</sub>, the pedestal side governs whenever \u221a(A\u2082/A\u2081) &gt; 1. A bearing patch (h = 0) has no supported concrete member and uses the footing value.'));
  { const bc=P2.bandChk;
    if(bc&&bc.applies){
     const nb=secPanel(T,'o-fd-band','5.7  Short-Direction Band Reinforcement (ACI 318-19 13.3.3.3) \u2014 advisory');
@@ -6322,8 +6332,8 @@ function renderFootingDesign(){
     else nb.appendChild(el('div','note','The uniform layout already places at least \u03b3\u209b A\u209b inside the band width, so 13.3.3.3 is satisfied without banding on this geometry.'));
    }
  }
- bb.appendChild(eqBlock('Bearing on concrete & dowels','ACI 318-19 22.8.3.2 / '+sfdDowMinRef(),   /* SFML */
-  '\\phi P_{nb} = \\phi\\,0.85 f\'_c A_1\\sqrt{A_2/A_1}\\;(\\le 2\\times),\\;\\phi=0.65',
+ bb.appendChild(eqBlock('Bearing on concrete & dowels','ACI 318-19 16.3.3.4, 22.8.3.2, Table 22.8.3.2 / '+sfdDowMinRef(),   /* SFML; SFBL */
+  '\\phi P_{nb} = \\min\\big(\\underbrace{\\phi\\,0.85 f\'_c A_1\\sqrt{A_2/A_1}\\;(\\le 2\\times)}_{\\text{footing}},\\;\\underbrace{\\phi\\,0.85 f\'_c A_1}_{\\text{pedestal}}\\big),\\;\\phi=0.65',
   ...(ldcT=>sfdDowMinKinds().has('wall')?[sfdDowMinTex(),ldcT]:[sfdDowMinTex()+',\\quad '+ldcT,null])('L_{dc} = (0.02 f_y/\\lambda\\sqrt{f\'_c})d_b \\ge 0.0003 f_y d_b,\\;\\sqrt{f\'_c}\\le100\\;\\mathrm{psi}')));   /* SFML: with a wall, the minimum on its own line */
  sfdoRender(bb);   /* SFDO */
  sfsfRender(bb);   /* SFSF */
@@ -7581,7 +7591,7 @@ manPart("p3","3. Output Reference",[
  ["Rigidity","\u03bb\u2113 \u2264 \u03c0/4 both directions \u2014 gate for everything else (\u00a70.3.1)"],
  ["Input validation","no blocking input errors"],
  ["Flexure / One-way shear / Punching","max DCR over LRFD combos \u2264 1"],
- ["Concrete bearing","Pu/\u03c6Pnb \u2264 1 at each pedestal interface"],
+ ["Concrete bearing","Pu/\u03c6Pnb \u2264 1 at each pedestal interface; \u03c6Pnb = the lesser of the footing (\u03c60.85f\u2032cA\u2081\u221a(A\u2082/A\u2081) \u2264 2\u00d7) and the pedestal (\u03c60.85f\u2032cA\u2081) (ACI 318-19 16.3.3.4, Table 22.8.3.2)"],
  ["Dowel steel","provided \u2265 0.005A_g (REVIEW when short)"],
  ["Dowel development (\u2113dc)","\u2113<sub>dc</sub> \u2264 depth available, where P<sub>u</sub> exceeds the lesser concrete bearing strength in some combination; otherwise N/A, not required (ACI 318-19 16.3.1.2(a))"],
  ["Pedestal design","axial DCR, ties, \u03c1 limits, bar fit, min bars \u2014 all pedestals"],
@@ -7690,7 +7700,7 @@ manPart("p4c","4C. Structural Design",[
 {p:"&beta; = long/short pedestal side; &alpha;<sub>s</sub> = 40/30/20 interior/edge/corner. For elongated pedestals (&beta; &gt; 2) the 2+4/&beta; term governs and capacity drops \u2014 the report prints all three candidates. The &lambda;<sub>s</sub> discussion of &sect;0.3.3 applies here with full force: on a 33-in footing it is a 27% capacity reduction relative to pre-2019 code editions, and it is the entire explanation of the punching-DCR difference against RISAFoundation quantified in Part 5."},
 {h:"4C.4 Development, interface bearing, dowels"},
 {eq:"\\ell_d=\\frac{3}{40}\\,\\frac{f_y}{\\lambda\\sqrt{f'_c}}\\,\\frac{\\psi_t\\psi_e\\psi_s\\psi_g}{(c_b+K_{tr})/d_b}\\,d_b\\quad(\\text{ACI }25.4.2.4)"},
-{p:"Available embedment approximated from the pedestal face to the footing edge; c<sub>b</sub> = min(cover + d<sub>b</sub>/2, s/2), K<sub>tr</sub> = 0, (c<sub>b</sub>+K<sub>tr</sub>)/d<sub>b</sub> &le; 2.5, &radic;f&prime;<sub>c</sub> &le; 100 psi; &lambda;, &psi;<sub>g</sub> (from f<sub>y</sub>) and &psi;<sub>e</sub> (bar-coating input) per Table 25.4.2.5 \u2014 verify if closely bundled. Interface bearing: &phi;P<sub>nb</sub> = &phi;0.85f&prime;<sub>c</sub>A\u2081&radic;(A\u2082/A\u2081) &le; 2&times;, &phi; = 0.65 (ACI 22.8.3.2). Dowels: minimum 0.005A<sub>g</sub> across the interface (ACI 16.3.4.1) with compression development L<sub>dc</sub> checked where P<sub>u</sub> exceeds the lesser concrete bearing strength of the pedestal and the footing (ACI 16.3.1.2(a), 16.3.3.4); where concrete bearing carries P<sub>u</sub> in every combination, L<sub>dc</sub> is not required."},
+{p:"Available embedment approximated from the pedestal face to the footing edge; c<sub>b</sub> = min(cover + d<sub>b</sub>/2, s/2), K<sub>tr</sub> = 0, (c<sub>b</sub>+K<sub>tr</sub>)/d<sub>b</sub> &le; 2.5, &radic;f&prime;<sub>c</sub> &le; 100 psi; &lambda;, &psi;<sub>g</sub> (from f<sub>y</sub>) and &psi;<sub>e</sub> (bar-coating input) per Table 25.4.2.5 \u2014 verify if closely bundled. Interface bearing: &phi;P<sub>nb</sub> = the lesser of the footing, &phi;0.85f&prime;<sub>c</sub>A\u2081&radic;(A\u2082/A\u2081) &le; 2&times;, and the pedestal, &phi;0.85f&prime;<sub>c</sub>A\u2081, &phi; = 0.65 (ACI 16.3.3.4, 22.8.3.2, Table 22.8.3.2). Dowels: minimum 0.005A<sub>g</sub> across the interface (ACI 16.3.4.1) with compression development L<sub>dc</sub> checked where P<sub>u</sub> exceeds the lesser concrete bearing strength of the pedestal and the footing (ACI 16.3.1.2(a), 16.3.3.4); where concrete bearing carries P<sub>u</sub> in every combination, L<sub>dc</sub> is not required."},
 {h:"4C.5 Pedestal checks"},
 {ul:[
  "Classification: pedestal if h &le; 3&times; least plan dimension, else column (affects nothing computed here but is reported).",
