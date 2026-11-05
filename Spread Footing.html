@@ -2216,6 +2216,13 @@ function sfdMaRows(r){
 }
 /* lever text of a shear-couple row: t + h = a + b = c (coupleLever = t + h when included), or 0 when excluded */
 function sfdLevTxt(w,fmt){return w.off?'0 (shear couple off)':'t + h = '+fmt(R.t)+' + '+fmt(w.lev-R.t)+' = '+fmt(w.lev);}
+/* SFOR (2026-11-05): the sfdMaRows terms that act about one overturning edge e of sfdOTEdges (an x-edge takes M_y and the V_x couples,
+   a y-edge M_x and the V_y couples), each signed as edgeCalc signs the lumped term: m = +MaY-term on +x, -MaY-term on -x, +MaX-term on +y,
+   -MaX-term on -y, so the rows sum to e.Ma (+ = tips the footing over that edge). Display only: e.Mr, e.Mo and e.FS are not recomputed. */
+function sfdOTMaRows(r,e){
+ const xe=/x/.test(e.name.split(' ')[0]), s=e.name.charAt(0)==='+'?1:-1, nz=v=>Math.abs(v)>1e-12;
+ return sfdMaRows(r).filter(w=>w.k==='M'?nz(xe?w.my:w.mx):w.d===(xe?'x':'y')).map(w=>Object.assign({},w,{xe,m:s*(w.k==='M'?(xe?w.my:w.mx):w.M)}));
+}
 /* substituted, term-by-term resultant for one combination — full hand-checkable arithmetic */
 function resultantBreakdown(a){
  const r=a.r, wrap=el('div');
@@ -2832,7 +2839,7 @@ function renderStability(){
   if(e===oe)tr.style.fontWeight='bold';et.appendChild(tr);});
  b2.appendChild(et);
  // per-edge worked breakdown (hand-checkable): each weight's arm, moment, and bucket
- b2.appendChild(el('p','note','Detailed breakdown per edge \u2014 each permanent/applied action, its moment arm to that edge, the resulting moment (W\u00d7arm), and whether it resists (M\u1D63) or overturns (M\u2092). Moments about each edge are taken with arm measured from the tipping edge. Sign convention: an action whose moment stabilizes about the edge is resisting; one that tips the footing over the edge is overturning.'));
+ b2.appendChild(el('p','note','Detailed breakdown per edge \u2014 each permanent/applied action, its moment arm to that edge, the resulting moment (W\u00d7arm), and whether it resists (M\u1D63) or overturns (M\u2092). Moments about each edge are taken with arm measured from the tipping edge. Sign convention: an action whose moment stabilizes about the edge is resisting; one that tips the footing over the edge is overturning. The applied pedestal moments and the shear couples V\u00b7(t + h) are listed per pedestal and load type (factor \u00d7 magnitude), their moment signed + where it tips the footing over that edge; they enter once, as their net value (subtotal M_app,net), in M\u2092 when positive and in M\u1D63 when negative, so a row acting against the net shows negative in that column.'));
  go.edges.forEach(e=>{
   const isGov=(e===oe);
   const det=secPanel(b2,'o-st-ot-'+e.name.replace(/[^a-z0-9]/gi,''),'Edge '+e.name+(isGov?'  \u2605 governing':'')+'  \u2014  arm = '+e.armLabel);
@@ -2842,12 +2849,17 @@ function renderStability(){
    const cells=[rw.src,f2(rw.w),f2(rw.arm),f2(rw.m),rw.bucket==='r'?f2(Math.abs(rw.m)):'\u2013',rw.bucket==='o'?f2(Math.abs(rw.m)):'\u2013'];
    cells.forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;if(k>=4)td.style.color=(k===4?'#1b5e20':'#b71c1c');tr.appendChild(td);});
    t.appendChild(tr);});
-  // applied moment / shear-couple row
-  if(e.appRow){const tr=document.createElement('tr');
-   const lbl='Applied M + V\u00b7h couple';
-   const cells=[lbl,'\u2013','\u2013',f2(e.Ma),e.appRow.bucket==='r'?f2(Math.abs(e.appRow.m)):'\u2013',e.appRow.bucket==='o'?f2(Math.abs(e.appRow.m)):'\u2013'];
-   cells.forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;td.style.fontStyle='italic';if(k>=4)td.style.color=(k===4?'#1b5e20':'#b71c1c');tr.appendChild(td);});
-   t.appendChild(tr);}
+  // SFOR: applied moments and shear couples, itemised per pedestal and load type (sfdOTMaRows, from r.maT; they were one row
+  // "Applied M + V·h couple"). The rows are netted to e.Ma and bucketed once, as edgeCalc does: in the bucket column a row
+  // acting against the net shows negative. The subtotal row is the old lumped row.
+  const MA=sfdOTMaRows(go.r,e), bk=e.appRow?e.appRow.bucket:null, D='\u2013';
+  const maRow=(cells,st)=>{const tr=document.createElement('tr');if(st)Object.assign(tr.style,st);
+   cells.forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;td.style.fontStyle='italic';if(k===2)td.style.whiteSpace='nowrap';if(k>=4)td.style.color=(k===4?'#1b5e20':'#b71c1c');tr.appendChild(td);});
+   t.appendChild(tr);};
+  MA.forEach(w=>{const z=w.z, bv=bk==='o'?w.m:-w.m, bc=[bk==='r'?f2(bv):D,bk==='o'?f2(bv):D];
+   if(w.k==='M')maRow([z.src+' applied M'+(w.xe?'\u1D67':'\u2093'),f2(z.f)+' \u00d7 '+f2(w.xe?z.my:z.mx),D,f2(w.m)].concat(bc));
+   else maRow([z.src+' shear V'+(w.d==='x'?'\u2093':'\u1D67')+' \u00b7 (t + h)',f2(z.f)+' \u00d7 '+f2(w.v)+' = '+f2(w.H),sfdLevTxt(w,f2),f2(w.m)].concat(bc));});
+  if(MA.length||e.appRow)maRow(['Subtotal: applied M + shear couples (M_app,net)','','',f2(e.Ma),bk==='r'?f2(Math.abs(e.appRow.m)):D,bk==='o'?f2(Math.abs(e.appRow.m)):D],MA.length?{borderTop:'1px solid #333'}:null);
   // totals row
   const trT=document.createElement('tr');trT.style.fontWeight='bold';trT.style.borderTop='2px solid #333';
   ['Totals','','','',f2(e.Mr),f2(e.Mo)].forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;if(k>=4)td.style.color=(k===4?'#1b5e20':'#b71c1c');trT.appendChild(td);});
