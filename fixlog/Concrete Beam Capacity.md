@@ -3618,7 +3618,7 @@ Engineer request (2026-11-05, Phase 3 of the concrete beam suite update, display
   - `node tests/check-syntax.mjs`, `node tests/smoke/phone-layout.mjs --tool cbc,aci` and `node tests/smoke/project-library.mjs` pass.
   - Screenshots looked at: Dev Tension and Hook & Comp. tabs in ACI and AASHTO at 1600 and 390 px; the error states in all three frames; the Visuals captions; the ASD link.
 
-## 2026-11-05 — PR: claude/cbc-report-overview (CBOV: "Overview of the beam" at the start of the suite Report — cross-section, stirrup elevation, 3-D snapshot; Include box "Overview figures"; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-report-overview, PR #795: https://github.com/mlococo88/All-Structural/pull/795 (CBOV: "Overview of the beam" at the start of the suite Report — cross-section, stirrup elevation, 3-D snapshot; Include box "Overview figures"; display only, no result change)
 
 ### CBOV. Overview figures   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 4 part 2):** an overview at the start of the Report, as Spread Footing SFOV #780. It shows the beam cross-section with reinforcement and dimensions, an elevation, and a 3-D snapshot of the existing 3-D view (with a fallback note when WebGL or three.js is not available). Include box "Overview figures", default on, saved like the other report options.
