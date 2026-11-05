@@ -1395,7 +1395,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** `ACI Rebar Development Length.html` and the Development & Splice frame of `Concrete Beam Capacity.html` (both changed here). Spread Footing already excludes hooks (SFDH/SFEX).
 - **Open items:** none from this change. (Audit C4, the 12 in floor in the tension splice base, is conservative and was not changed.)
 
-## 2026-11-05 — PR: claude/cbc-aashto-fyt (CBFY, C3 part: two stale "edition: verify" markers removed; text only, no result change)
+## 2026-11-05 — PR: claude/cbc-aashto-fyt, PR #784: https://github.com/mlococo88/All-Structural/pull/784 (CBFY, C3 part: two stale "edition: verify" markers removed; text only, no result change)
 
 - **Where:**
   - `calcCompSplice()` comment, before: `// AASHTO LRFD 5.10.8.4.5a (edition: verify): l_c = …`. After: `// AASHTO LRFD 10th Ed. 5.10.8.4.5a: l_c = …`.
