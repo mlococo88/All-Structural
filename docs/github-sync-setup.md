@@ -62,13 +62,26 @@ A fine-grained personal access token lets the tools write to that one repository
   |---|---|
   | synced | Same in this browser and on GitHub. |
   | waiting to upload | Saved here and not yet on GitHub (offline, or GitHub was busy). It is sent automatically. **Sync now** tries at once. |
-  | this browser only | Never uploaded (from before sync was on). **Upload** sends it. |
+  | this browser only | Never uploaded (from before sync was on, or saved with "This browser only"). **Upload** sends it. |
   | GitHub newer | Changed on another device. **Get GitHub version** brings it here. |
   | conflict | Changed both here and on another device. Your version is already kept as a conflict copy. Choose **Use GitHub version** or **Keep mine**. |
-  | on GitHub only | Listed under "On GitHub only". **Open** loads it into the tool, **Download to this browser** adds it to the list, **Delete from GitHub** deletes it (asks first). |
+  | on GitHub only | Listed under "On GitHub only" (tools with the standard save: a row of the same table, buttons Open / Download / Delete from GitHub). **Open** loads it into the tool, **Download to this browser** adds it to the list, **Delete from GitHub** deletes it (asks first). |
 
 - On a phone or another computer: set up step 3 there, open the tool, click **Saved projects…**. Projects from other devices are under "On GitHub only". Click **Open**.
 - Problems are shown in the bar at the top of Saved projects (offline, token refused, rate limit). Saves wait and are retried. Nothing is lost locally.
+
+## Save, Save as and where a project goes (tools with the standard save)
+
+Tools that have the standard save controls (a **Save and open** card first in the Project tab, and **Project: … · Save · Saved projects…** in the header) work like this:
+
+- **Save** (Ctrl+S) saves the open project under its name, without asking. With sync on it is copied to GitHub a few seconds later. A project that was never saved opens **Save as** instead.
+- **Save as…** (Ctrl+Shift+S) asks for the name and where to save:
+  - **This browser and GitHub (cloud)**: the default once sync is set up.
+  - **This browser only**: kept in this browser's list and not uploaded. It shows as "this browser only" in Saved projects; **Upload** sends it later.
+  - **File on this computer (.json)**: the same file as Export JSON; the browser list is not changed.
+  A name that is already saved is not overwritten unless you press **Replace it**.
+- **Saved projects…** lists this browser's projects and (sync on) the ones on GitHub only, in one table, with a filter box. **Delete** always asks whether to delete the GitHub copy too.
+- The header chip shows the open project and whether it has unsaved changes (orange dot) or is saved (green dot), with a small GitHub badge while sync is on.
 
 ## From the home page (tools.html)
 

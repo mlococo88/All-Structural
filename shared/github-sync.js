@@ -18,8 +18,11 @@
 
    Storage (CLAUDE.md §5: new keys only; no tool key or format is touched)
      bridgeSuite.v1.githubSync              { owner, repo, branch, token, device }   one setup for every tool of this browser
-     bridgeSuite.v1.githubSync.tool.<tool>  { v:1, base:{name:{c,l}}, seen:{name:l}, queue:[name], asked, conflicts:{name:{...}}, lock }
+     bridgeSuite.v1.githubSync.tool.<tool>  { v:1, base:{name:{c,l}}, seen:{name:l}, queue:[name], asked, conflicts:{name:{...}}, lock,
+                                              hold:{name:true} }
        c = git blob sha of the file on GitHub, l = git blob sha of this browser's file text, at the last sync.
+       hold (STDS, 2026-11-05): projects saved with "This browser only" (Save as): not uploaded until the user presses Upload.
+       Written only while sync is set up (no key appears while sync is off).
 
    Security: the token is sent only in the Authorization header of requests to https://api.github.com (the only host this file
    calls), never in a URL, never logged, never shown (mask()), never part of a project file. It IS stored in this browser's
@@ -225,12 +228,17 @@
      engine(o): o.tool ('spread-footing'), o.label ('Spread Footing'), o.store (SharedProjects.mapStore), o.storage, o.fetch,
        o.toFile(item, name) -> object or text in the tool's export format (default: the stored item), o.fromFile(obj, name) -> the
        state the tool's store.save takes (default: the object; it must be a JSON object), o.space (JSON indent of the file, default 1),
-       o.now(), o.device (name used in conflict copies; default from settings), o.onNotice({ kind, text }).
+       o.now(), o.device (name used in conflict copies; default from settings), o.onNotice({ kind, text }),
+       o.settle (STDS, 2026-11-05: ms a changed project must stay unchanged before the background upload sends it; default 0 = at
+       once; Sync now, Upload and Upload all send at once).
+     The store may be a mapStore or a listStore (shared/projects.js); store.stamp() (when present) tells whether the list changed.
      Methods: configured(), init(), scan(), flush(), refreshCloud(), rows(), uploadAll(), upload(name), download(name),
-       useCloud(name), keepMine(name), deleteCloud(name), state(), cloud(), lastError(), pending(), notices */
+       useCloud(name), keepMine(name), deleteCloud(name), hold(name, on), held(name), state(), cloud(), lastError(), pending(), notices */
   function engine(o) {
     if (!TOOL_RX.test(o.tool || '')) throw new Error('github-sync: bad tool key');
-    const store = o.store, storage = o.storage, now = o.now || (() => Date.now()), space = o.space == null ? 1 : o.space;
+    const store = o.store, storage = o.storage, now = o.now || (() => Date.now()), space = o.space == null ? 1 : o.space, settle = o.settle || 0;
+    const changedAt = {};   // settle: when each queued name last changed (this page only)
+    const rawList = () => { try { return store.stamp ? store.stamp() : storage.getItem(store.key); } catch (e) { return undefined; } };
     const SKEY = `${KEY}.tool.${o.tool}`, folder = `${DIR}/${o.tool}`, label = o.label || o.tool;
     const toFile = o.toFile || (i => i), fromFile = o.fromFile || (x => x);
     const me = Math.random().toString(36).slice(2);
@@ -254,22 +262,24 @@
       if (!configured_() || st()) return false;
       const seen = {}; store.list().forEach(i => { const l = localSha(i.name); if (l) seen[i.name] = l; });
       writeJSON(storage, SKEY, { v: 1, base: {}, seen, queue: [], conflicts: {}, asked: !Object.keys(seen).length });
-      try { lastRaw = storage.getItem(store.key); } catch (e) { lastRaw = undefined; }
+      lastRaw = rawList();
       return true;
     }
     /* scan(): queue every project whose file text changed since it was last seen (new, saved, renamed, duplicated). */
     function scan(force) {
       if (!configured_()) return 0;
       init();
-      let raw; try { raw = storage.getItem(store.key); } catch (e) { return 0; }
+      const raw = rawList(); if (raw === undefined) return 0;
       if (raw === lastRaw && !force) return 0;
       lastRaw = raw;
       if (!store.read().ok) return 0;
       const names = store.list().map(i => i.name), shas = {}; names.forEach(n => { shas[n] = localSha(n); });
       return mut(v => {
         let q = 0;
-        names.forEach(n => { if (v.seen[n] !== shas[n]) { v.seen[n] = shas[n]; if (v.queue.indexOf(n) < 0) { v.queue.push(n); q++; } } });
+        const hold = v.hold || {};
+        names.forEach(n => { if (v.seen[n] !== shas[n]) { v.seen[n] = shas[n]; changedAt[n] = now(); if (!hold[n] && v.queue.indexOf(n) < 0) { v.queue.push(n); q++; } } });
         Object.keys(v.seen).forEach(n => { if (names.indexOf(n) < 0) delete v.seen[n]; });
+        if (v.hold) { Object.keys(v.hold).forEach(n => { if (names.indexOf(n) < 0) delete v.hold[n]; }); if (!Object.keys(v.hold).length) delete v.hold; }
         v.queue = v.queue.filter(n => names.indexOf(n) >= 0);
         return q;
       });
@@ -303,13 +313,13 @@
         if (r.ok) v.base[cn] = { c: r.sha, l: lc };
         v.conflicts[name] = { copy: cn, l, c: cloudSha || null, t: now() };
       });
-      try { lastRaw = storage.getItem(store.key); } catch (e) { /* ignore */ }
+      lastRaw = rawList();
       if (cloud && r.ok) cloud.set(cn, { sha: r.sha, path: pathOf(cn) });
       note('conflict', `"${name}" was changed on GitHub (another device) and in this browser. Both are kept: your version is saved as "${cn}"${r.ok ? ' here and on GitHub' : ' here (its upload is waiting)'}. Open Saved projects to choose which one to keep under "${name}".`);
       return r.ok ? { ok: true, conflict: cn } : r;
     }
     /* flush(): upload the queue, oldest first. Stops at the first connection / token / rate-limit error (kept for later). */
-    async function flush(force) {
+    async function flush(force, all) {   // all (STDS): also the projects still inside the settle time
       if (busy || !configured_()) return { ok: true, skipped: true };
       if (!force && now() < nextTry) return { ok: true, waiting: true };
       const v0 = st(); if (!v0 || !v0.queue.length) return { ok: true, done: 0 };
@@ -323,6 +333,8 @@
           const v = st();
           if (!store.has(name)) { mut(x => { x.queue = x.queue.filter(n => n !== name); }); continue; }
           if (v.conflicts[name]) { mut(x => { x.queue = x.queue.filter(n => n !== name); }); continue; }   // resolved in the dialog
+          if (v.hold && v.hold[name]) { mut(x => { x.queue = x.queue.filter(n => n !== name); }); continue; }   // "This browser only"
+          if (!all && settle && changedAt[name] && now() - changedAt[name] < settle) continue;   // still being edited: later
           const text = fileText(name), l = gitSha(text), b = v.base[name], path = pathOf(name);
           if (safeName(name).length > 200) { err = { kind: 'invalid', message: `"${name}": the name is too long to be a file name on GitHub. Rename it to sync it.` }; mut(x => { x.queue = x.queue.filter(n => n !== name); }); continue; }
           const m = { sha: shas.get(path) || null };
@@ -357,6 +369,7 @@
       if (!isLocal) return cf ? 'cloud' : null;
       const l = localSha(name);
       if (v.conflicts[name]) return 'conflict';
+      if (v.hold && v.hold[name] && !cf && !b) return 'local';   // "This browser only" (STDS)
       if (!cloud) return v.queue.indexOf(name) >= 0 ? 'pending' : b && b.l === l ? 'synced' : 'unknown';
       if (!cf) return v.queue.indexOf(name) >= 0 ? 'pending' : b ? (b.l === l ? 'removed' : 'pending') : 'local';
       if (cf.sha === l || (b && b.c === cf.sha && b.l === l)) return 'synced';
@@ -368,8 +381,16 @@
       const v = st(); const names = new Set(store.list().map(i => i.name)); if (cloud) cloud.forEach((x, n) => names.add(n));
       return [...names].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' })).map(n => ({ name: n, status: statusOf(n, v), conflict: v && v.conflicts[n] || null }));
     }
-    async function upload(name) { scan(true); mut(v => { if (store.has(name) && v.queue.indexOf(name) < 0) v.queue.push(name); }); return flush(true); }
-    async function uploadAll() { scan(true); mut(v => { v.asked = true; store.list().forEach(i => { if (v.queue.indexOf(i.name) < 0 && !(v.base[i.name] && v.base[i.name].l === v.seen[i.name])) v.queue.push(i.name); }); }); return flush(true); }
+    async function upload(name) { scan(true); mut(v => { if (v.hold) { delete v.hold[name]; if (!Object.keys(v.hold).length) delete v.hold; } if (store.has(name) && v.queue.indexOf(name) < 0) v.queue.push(name); }); return flush(true, true); }
+    async function uploadAll() { scan(true); mut(v => { v.asked = true; store.list().forEach(i => { if (v.queue.indexOf(i.name) < 0 && !(v.hold && v.hold[i.name]) && !(v.base[i.name] && v.base[i.name].l === v.seen[i.name])) v.queue.push(i.name); }); }); return flush(true, true); }
+    /* hold(name, on) (STDS): "This browser only": the project is not uploaded until Upload. Only while sync is set up (writes nothing
+       otherwise). Call it before the save, so the background check never queues the new name. */
+    function hold(name, on) {
+      if (!configured_()) return false; init();
+      mut(v => { if (on) { v.hold = v.hold || {}; v.hold[name] = true; v.queue = v.queue.filter(n => n !== name); } else if (v.hold) { delete v.hold[name]; if (!Object.keys(v.hold).length) delete v.hold; } });
+      return true;
+    }
+    const held = name => { const v = st(); return !!(v && v.hold && v.hold[name]); };
     const skipFirst = () => mut(v => { v.asked = true; });
     /* download(name, replace): the GitHub file into this browser's list (store.save of fromFile(file)). replace false refuses an existing name. */
     async function download(name, replace) {
@@ -383,7 +404,7 @@
       const w = store.save(name, state); if (!w.ok) return w;
       const c2 = gitSha(r.text), l = localSha(name);
       mut(v => { v.base[name] = { c: c2, l }; v.seen[name] = l; v.queue = v.queue.filter(n => n !== name); delete v.conflicts[name]; });
-      try { lastRaw = storage.getItem(store.key); } catch (e) { /* ignore */ }
+      lastRaw = rawList();
       if (cloud) cloud.set(name, { sha: c2, path });
       return { ok: true, name };
     }
@@ -419,7 +440,7 @@
       return { ok: true };
     }
     return { tool: o.tool, label, folder, pathOf, configured: configured_, init, scan, flush, refreshCloud, rows, statusOf, upload, uploadAll, skipFirst,
-      download, useCloud, keepMine, deleteCloud, notices, fileText, localSha,
+      download, useCloud, keepMine, deleteCloud, hold, held, notices, fileText, localSha,
       state: st, cloud: () => cloud, cloudError: () => cloudErr, lastError: () => err, nextTry: () => nextTry, busy: () => busy,
       pending: () => { const v = st(); return v ? v.queue.length : 0; }, settings: S };
   }
@@ -517,7 +538,7 @@
   function attach(ctx) {
     css();
     const cfg = ctx.cloud || {};
-    const eng = engine({ tool: cfg.tool, label: cfg.label, toFile: cfg.toFile, fromFile: cfg.fromFile, space: cfg.space, store: ctx.store, storage: ctx.storage,
+    const eng = engine({ tool: cfg.tool, label: cfg.label, toFile: cfg.toFile, fromFile: cfg.fromFile, space: cfg.space, settle: cfg.settle, store: ctx.store, storage: ctx.storage,
       fetch: (u, i) => window.fetch(u, i), onNotice: n => { if (n.kind === 'conflict' || n.kind === 'error') toast(n.text); } });
     let ui = null, checking = false, msg = '';
     const redraw = () => { if (ui && ui.redraw) ui.redraw(); };
@@ -534,7 +555,7 @@
     async function shown(u) {
       ui = u; if (!eng.configured()) return;
       eng.scan(); checking = true; redraw();
-      await eng.flush(true); await eng.refreshCloud(); checking = false; redraw();
+      await eng.flush(true, true); await eng.refreshCloud(); checking = false; redraw();
     }
     async function run(p, after) {
       checking = true; redraw();
@@ -579,7 +600,7 @@
           const td = document.createElement('td'); td.innerHTML = cell(name, r ? r.status : null, r && r.conflict); tr.insertBefore(td, tr.lastElementChild);
         });
       }
-      const only = rows.filter(r => r.status === 'cloud');
+      const only = o && o.only === false ? [] : rows.filter(r => r.status === 'cloud');   // only: false: the dialog lists them in its own table (STDS)
       if (only.length) {
         const w = document.createElement('div'); w.setAttribute('data-sp', 'gh-only'); w.className = 'spScroll';
         w.innerHTML = `<p class="spNote" style="font-weight:600;color:#075985">On GitHub only (not in this browser):</p><table><tbody>${only.map(r => `<tr><td>${esc(r.name)}</td><td>${cell(r.name, 'cloud')}</td><td class="spAct">`
@@ -627,7 +648,7 @@
     }
     /* after a rename / delete in the dialog: the GitHub file of the old name is deleted only when the user says so */
     function renamed(a, b) {
-      if (!eng.configured()) return; eng.scan(); const cl = eng.cloud();
+      if (!eng.configured()) return; if (eng.held(a)) { eng.hold(b, true); eng.hold(a, false); } eng.scan(); const cl = eng.cloud();
       if (cl && cl.has(a) && confirm(`"${a}" is also on GitHub. The new name "${b}" is uploaded. Delete the old name "${a}" from GitHub? (Cancel keeps it there.)`)) run(eng.deleteCloud(a));
       else tick().catch(() => {});
     }
@@ -637,7 +658,7 @@
       else redraw();
     }
     const note = () => configured(eng.settings()) ? '<p class="spNote">Saved projects are kept in this browser and copied to GitHub (see the bar above). Export JSON still makes a file you can back up.</p>' : null;
-    return { engine: eng, decorate, shown, renamed, deleted, note, tick, statusCell, bind: bindBody, stop: () => clearInterval(timer) };
+    return { engine: eng, decorate, shown, renamed, deleted, note, tick, statusCell, cell, bind: bindBody, stop: () => clearInterval(timer) };
   }
 
   window.SharedGitHubSync = { API, KEY, settings, saveSettings, forgetToken, configured, mask, safeName, nameOf, gitSha, b64, unb64, client, engine,

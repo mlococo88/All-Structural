@@ -207,3 +207,39 @@ test('github-sync: a file that carries the project name (toFile(item, name)): th
   const puts = gh.log.filter(l => l.method === 'PUT').length; e.scan(); await e.flush(true); assert.equal(gh.log.filter(l => l.method === 'PUT').length, puts);
   await e.refreshCloud(); assert.equal(e.statusOf(cn), 'synced'); assert.equal(e.statusOf('P'), 'conflict');
 });
+
+// STDS (2026-11-05): "This browser only" (hold), settle time, and a listStore list.
+test('github-sync: hold ("This browser only"): never uploaded until Upload; status local; off -> hold writes nothing', async () => {
+  const { s, gh, store, e } = rig({ [KEY]: '{}' });
+  e.scan(); assert.equal(e.hold('Local job', true), true); store.save('Local job', { x: 1 }); store.save('Cloud job', { x: 2 });
+  e.scan(); await e.flush();
+  assert.ok(!gh.files.has(P('Local job'))); assert.ok(gh.files.has(P('Cloud job')));
+  await e.refreshCloud(); assert.equal(e.statusOf('Local job'), 'local'); assert.equal(e.held('Local job'), true);
+  store.save('Local job', { x: 3 }); e.scan(); await e.flush(true); assert.ok(!gh.files.has(P('Local job')));   // edits stay local
+  await e.uploadAll(); assert.ok(!gh.files.has(P('Local job')));                                                 // Upload all skips it
+  await e.upload('Local job'); assert.equal(gh.files.get(P('Local job')), JSON.stringify({ x: 3 }, null, 1)); assert.equal(e.held('Local job'), false);
+  store.remove('Cloud job'); e.hold('Gone', true); e.scan(true); assert.equal(e.state().hold, undefined);       // held names not in the list are dropped
+  const off = rig({ [KEY]: '{}' }, { on: false }); const k0 = [...off.s.m.keys()];
+  assert.equal(off.e.hold('A', true), false); assert.deepEqual([...off.s.m.keys()], k0); assert.equal(off.gh.log.length, 0);
+});
+
+test('github-sync: settle: a changed project is sent after it stays unchanged for settle ms; Upload sends at once', async () => {
+  const s = mem({ [KEY]: '{}' }); G.saveSettings(s, SETUP); const gh = makeGitHubMock(); const store = SP.mapStore(s, KEY);
+  let t = Date.parse('2026-11-05T19:32:00Z');
+  const e = G.engine({ tool: 'bridge-suite', label: 'Bridge suite', store, storage: s, fetch: gh.fetch, now: () => t, settle: 30000 });
+  e.scan(); store.save('B1', { v: 1 }); e.scan(); await e.flush(true);
+  assert.ok(!gh.files.has('projects/bridge-suite/B1.json')); assert.equal(e.pending(), 1);
+  t += 20000; store.save('B1', { v: 2 }); e.scan(); t += 20000; await e.flush(true); assert.ok(!gh.files.has('projects/bridge-suite/B1.json'));   // edited 20 s ago
+  t += 15000; await e.flush(true); assert.equal(gh.files.get('projects/bridge-suite/B1.json'), JSON.stringify({ v: 2 }, null, 1));
+  store.save('B2', { v: 1 }); e.scan(); await e.upload('B2'); assert.ok(gh.files.has('projects/bridge-suite/B2.json'));
+});
+
+test('github-sync: a listStore list (by-name view) syncs like a mapStore; stamp() drives the change check', async () => {
+  const s = mem(); G.saveSettings(s, SETUP); const gh = makeGitHubMock(); const rows = {};
+  const store = SP.listStore({ key: 'tool.idlist', readMap: () => ({ ok: true, map: JSON.parse(JSON.stringify(rows)) }), writeMap: m => { Object.keys(rows).forEach(k => delete rows[k]); Object.assign(rows, m); } });
+  const e = G.engine({ tool: 'pile-designer', label: 'Pile', store, storage: s, fetch: gh.fetch });
+  e.scan(); store.save('MP-1', { L: 40 }); assert.equal(e.scan(), 1); await e.flush();
+  assert.equal(gh.files.get('projects/pile-designer/MP-1.json'), JSON.stringify({ L: 40 }, null, 1));
+  assert.equal(e.scan(), 0);   // unchanged stamp: nothing new
+  assert.equal(s.getItem('tool.idlist'), null);   // the list name is not a storage key here: nothing written under it
+});

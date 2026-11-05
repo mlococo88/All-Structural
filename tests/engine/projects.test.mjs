@@ -88,3 +88,29 @@ test('history: undo records a pending change first; normalising redraw within se
   state = 'a '; t = 200; assert.equal(h.record(), false); assert.equal(h.canRedo(), true);   // the tool normalised the applied state
   t = 2000; h.redo(); assert.equal(state, 'b');
 });
+
+// STDS (2026-11-05): listStore = the mapStore interface over a list the tool keeps some other way (here: an id-keyed list shown by
+// name, as apps/steel-bridge and Pile Designer keep theirs). mapStore is the same core over one localStorage value (unchanged).
+test('listStore: by-name view over an id-keyed list; rename / duplicate / remove; refused write leaves it as it was', () => {
+  const rows = [{ id: 'a1', name: 'Pier 1', data: { h: 20 } }, { id: 'b2', name: 'Pier 2', data: { h: 25 } }];
+  let refuse = false;
+  const L = SP.listStore({ key: 'tool.lib',
+    readMap: () => ({ ok: true, map: Object.fromEntries(rows.map(r => [r.name, r.data])) }),
+    writeMap: m => { if (refuse) { const e = new Error('quota'); e.name = 'QuotaExceededError'; throw e; }
+      const keep = rows.filter(r => r.name in m); rows.length = 0; keep.forEach(r => { rows.push({ ...r, data: m[r.name] }); });
+      Object.keys(m).forEach(n => { if (!rows.some(r => r.name === n)) rows.push({ id: 'n' + rows.length, name: n, data: m[n] }); }); } });
+  assert.deepEqual(plain(L.list().map(i => i.name)), ['Pier 1', 'Pier 2']);
+  assert.equal(L.save('Pier 3', { h: 30 }).ok, true); assert.deepEqual(plain(L.get('Pier 3')), { h: 30 });
+  assert.equal(L.rename('Pier 1', 'Pier 1A').ok, true); assert.ok(!L.has('Pier 1') && L.has('Pier 1A'));
+  assert.equal(L.rename('Pier 2', 'Pier 3').error, 'exists');
+  assert.equal(L.duplicate('Pier 2').name, 'Pier 2 (copy)');
+  const st0 = L.stamp(); refuse = true; const r = L.save('Pier 9', { h: 1 }); refuse = false;
+  assert.equal(r.ok, false); assert.equal(r.error, 'quota'); assert.equal(L.stamp(), st0);
+  assert.equal(L.remove('Pier 2').ok, true); assert.ok(!L.has('Pier 2'));
+  assert.equal(typeof L.stamp(), 'string'); assert.equal(L.key, 'tool.lib');
+});
+
+test('mapStore: stamp() is the stored text (the GitHub-sync change check)', () => {
+  const s = store({}), L = SP.mapStore(s, KEY); L.save('A', { x: 1 });
+  assert.equal(L.stamp(), s.getItem(KEY));
+});

@@ -14,8 +14,14 @@
              save() (optional: a "Save the open project…" button at the top of the dialog, for a tool with no Save of its own;
                it asks for the name itself and returns the mapStore result, or nothing when cancelled), saveLabel (its text),
              note (optional HTML under the table),
-             cloud (optional, 2026-11-05: { tool, label, toFile, fromFile, space }: GitHub sync of this list through
-               shared/github-sync.js when the page loads it; without that file, or without ctx.cloud, nothing changes) }
+             cloud (optional, 2026-11-05: { tool, label, toFile, fromFile, space, settle }: GitHub sync of this list through
+               shared/github-sync.js when the page loads it; without that file, or without ctx.cloud, nothing changes),
+             standard (optional, STDS 2026-11-05: the standard dialog: title "Saved projects — <label>", a filter box, "Save the
+               open project…" / "Import JSON…" at the top, ONE table with the GitHub-only projects in it, columns Name / Last saved
+               (Eastern) / Size / This browser / GitHub / Open Rename Duplicate Export Delete; without it the dialog is drawn
+               exactly as before), label (the tool's name, for the title), exportOne(name) (the row's Export: a .json download;
+               default the stored item, or ctx.cloud.toFile of it, as JSON), importFile() (the "Import JSON…" button) }
+   projectBar(ctx) (STDS, 2026-11-05) -> the standard save controls (see the comment above that function).
    undoRedo(h, { undo, redo, keys }) wires a SharedProjects.history to two buttons and (keys !== false) to Ctrl+Z / Ctrl+Y /
      Ctrl+Shift+Z. While text is being typed in a field (not yet committed), the browser's own undo of that field is left alone.
    button(text, title, o) -> a <button type="button" data-sp> with the tool's class o.cls. */
@@ -41,6 +47,21 @@
       '.spLib .spScroll{overflow-x:auto;}',
       '@media (max-width:560px){.spLib td.spAct{white-space:normal;text-align:left;} .spLib td.spAct button{margin:2px 4px 2px 0;} .spLib .spUse{flex-wrap:wrap;} .spLib .spBar{flex:1 1 100%;}}',
       'button[data-sp]:disabled{opacity:.45;cursor:default;}',
+      /* STDS (2026-11-05): standard dialog, Save as, header chip and the "Save and open" card */
+      '.spLib.spStd{width:min(960px,96vw);} .spLib .spTools{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 8px;} .spLib .spTools input{flex:1 1 200px;min-width:0;font:inherit;font-size:10pt;padding:3px 8px;border:1px solid #94a3b8;border-radius:4px;}',
+      '.spLib .spTools button{margin-left:0;} .spLib button.spPri,button.spPri[data-sp]{background:#1d4ed8;border-color:#1d4ed8;color:#fff;} .spLib button.spPri:hover,button.spPri[data-sp]:hover{background:#1e40af;}',
+      '.spLib .spYes{display:inline-block;font-size:8.5pt;padding:0 7px;border-radius:9px;border:1px solid #86efac;background:#dcfce7;color:#166534;} .spLib .spNo{display:inline-block;font-size:8.5pt;padding:0 7px;border-radius:9px;border:1px solid #cbd5e1;background:#f1f5f9;color:#334155;}',
+      '.spLib.spSave{width:min(520px,94vw);} .spLib .spOpt{display:flex;gap:8px;align-items:flex-start;border:1px solid #e2e8f0;border-radius:6px;padding:6px 8px;margin:6px 0;cursor:pointer;} .spLib .spOpt.on{border-color:#93c5fd;background:#eff6ff;} .spLib .spOpt.off{opacity:.55;cursor:default;}',
+      '.spLib .spField{display:block;font-weight:600;font-size:9.5pt;margin:6px 0 3px;} .spLib input.spName{width:100%;box-sizing:border-box;font:inherit;font-size:10.5pt;padding:4px 8px;border:1px solid #94a3b8;border-radius:4px;}',
+      '.spLib .spBtns{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:6px;margin-top:10px;} .spLib .spBtns button{margin-left:0;} .spLib .spWarn{background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:6px;padding:6px 8px;font-size:9pt;margin:6px 0;}',
+      'kbd.spKbd{font:8pt ui-monospace,Consolas,monospace;border:1px solid currentColor;border-radius:3px;padding:0 3px;margin-left:5px;opacity:.75;}',
+      'button.spChip[data-sp]{display:inline-flex;align-items:center;gap:6px;border:1px solid #cbd5e1;border-radius:14px;padding:2px 10px;background:#f8fafc;color:#0f172a;font:inherit;font-size:9.5pt;cursor:pointer;max-width:100%;min-width:0;}',
+      'button.spChip[data-sp] b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:22ch;} .spDot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;flex:0 0 8px;} .spDot.dirty{background:#d97706;}',
+      '.spGhMini{font-size:8pt;padding:0 6px;border-radius:9px;border:1px solid #cbd5e1;background:#f1f5f9;color:#334155;white-space:nowrap;} .spGhMini.synced{background:#dcfce7;border-color:#86efac;color:#166534;} .spGhMini.conflict{background:#fef3c7;border-color:#fcd34d;color:#92400e;} .spGhMini.cloud-newer{background:#e0f2fe;border-color:#7dd3fc;color:#075985;}',
+      '.spCard .spStat{font-size:9.5pt;background:#f8fafc;border:1px solid #e2e8f0;border-radius:5px;padding:5px 8px;margin:0 0 6px;} .spCard .spRow{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0;} .spCard .spRow > *{margin:0;}',
+      '.spCard .spLbl{font-size:8.5pt;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-top:8px;} .spCard .spHint{font-size:9pt;color:#475569;margin:4px 0;}',
+      '.spStat .spGhSt,.spCard .spGhSt{display:inline-block;font-size:8.5pt;padding:0 6px;border-radius:9px;border:1px solid #cbd5e1;}',
+      '@media (max-width:560px){.spLib.spStd table,.spLib.spStd tbody,.spLib.spStd tr,.spLib.spStd td{display:block;width:auto;} .spLib.spStd thead{display:none;} .spLib.spStd tr{border-bottom:1px solid #cbd5e1;padding:4px 0;} .spLib.spStd td{border:0;padding:2px 4px;} .spLib.spStd td[data-l]::before{content:attr(data-l) ": ";font-weight:600;color:#475569;} .spLib .spTools button{flex:1 1 auto;}}',
       '@media print{dialog.spLib{display:none!important;}}'
     ].join('\n');
     document.head.appendChild(s);
@@ -54,8 +75,12 @@
 
   function libraryDialog(ctx) {
     css();
-    const dlg = document.createElement('dialog'); dlg.className = 'spLib'; dlg.setAttribute('data-sp', 'dialog'); dlg.id = ctx.id || 'spLibDlg';
-    dlg.innerHTML = `<div class="spHead"><strong>${esc(ctx.title || 'Saved projects')}</strong><span>${ctx.save ? `<button type="button" data-spa="save">${esc(ctx.saveLabel || 'Save the open project…')}</button>` : ''}<button type="button" data-spa="close">Close</button></span></div><div class="spBody"></div>`;
+    const std = !!ctx.standard;
+    const dlg = document.createElement('dialog'); dlg.className = std ? 'spLib spStd' : 'spLib'; dlg.setAttribute('data-sp', 'dialog'); dlg.id = ctx.id || 'spLibDlg';
+    dlg.innerHTML = std
+      ? `<div class="spHead"><strong>${esc(ctx.title || ('Saved projects' + (ctx.label ? ' — ' + ctx.label : '')))}</strong><span><button type="button" data-spa="close">Close</button></span></div>`
+        + `<div class="spTools"><input type="search" class="spFilter" placeholder="Filter by name…" aria-label="Filter saved projects by name">${ctx.save ? `<button type="button" class="spPri" data-spa="save">${esc(ctx.saveLabel || 'Save the open project…')}</button>` : ''}${ctx.importFile ? '<button type="button" data-spa="import">Import JSON…</button>' : ''}</div><div class="spBody"></div>`
+      : `<div class="spHead"><strong>${esc(ctx.title || 'Saved projects')}</strong><span>${ctx.save ? `<button type="button" data-spa="save">${esc(ctx.saveLabel || 'Save the open project…')}</button>` : ''}<button type="button" data-spa="close">Close</button></span></div><div class="spBody"></div>`;
     document.body.appendChild(dlg);
     const body = dlg.querySelector('.spBody');
     let msg = '';
@@ -66,6 +91,7 @@
       const b = e.target.closest('[data-spa]'); if (!b) return;
       if (b.dataset.spa === 'close') { dlg.close(); return; }
       if (b.dataset.spa === 'save') { const r = ctx.save(); if (r && r.ok === false && r.message) msg = r.message; else msg = ''; if (ctx.changed) ctx.changed(); draw(); return; }
+      if (b.dataset.spa === 'import') { dlg.close(); ctx.importFile(); return; }
       act(b.dataset.spa, decodeURIComponent(b.dataset.n || ''));
     });
     function usageHtml() {
@@ -75,7 +101,44 @@
       return `<div class="spUse"><div class="spBar ${cls}"><i style="width:${pct}%"></i></div><span>Browser storage: ${mb(u.chars)} MB of about ${mb(u.quota)} MB used (${pct}%); this tool's saved projects use ${mb(u.of)} MB. Every tool opened from a file in this browser shares this space.</span></div>`
         + (u.frac > 0.9 ? '<p class="spErr">Storage is almost full. Delete saved projects you no longer need, or use Export JSON.</p>' : '');
     }
+    const filt = std ? dlg.querySelector('.spFilter') : null;
+    function applyFilter() {
+      if (!filt) return; const q = filt.value.trim().toLowerCase();
+      body.querySelectorAll('tbody tr[data-name]').forEach(tr => { tr.style.display = !q || decodeURIComponent(tr.dataset.name).toLowerCase().indexOf(q) >= 0 ? '' : 'none'; });
+    }
+    if (filt) filt.addEventListener('input', applyFilter);
+    /* STDS: the standard table: this browser's projects and (sync on) the GitHub-only ones, one row each */
+    function drawStd() {
+      const r = ctx.store.read(), items = ctx.store.list(), cur = ctx.current ? ctx.current() : null, enc = n => encodeURIComponent(n);
+      const on = !!(cloud && cloud.engine.configured()), gh = on ? cloud.engine.rows() : [], ghBy = new Map(gh.map(x => [x.name, x]));
+      const rows = items.map(i => ({ name: i.name, saved: i.saved, size: i.size, local: true }));
+      gh.forEach(x => { if (x.status === 'cloud') rows.push({ name: x.name, local: false }); });
+      rows.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' }));
+      const B = (a, n, t, c) => `<button type="button" data-spa="${a}" data-n="${enc(n)}"${c ? ` class="${c}"` : ''}>${t}</button>`, G = (a, n, t, c) => `<button type="button" data-ghx="${a}" data-n="${enc(n)}"${c ? ` class="${c}"` : ''}>${t}</button>`;
+      body.innerHTML = (msg ? `<p class="spErr">${esc(msg)}</p>` : '')
+        + (!r.ok ? '<p class="spErr">The saved-project list in this browser could not be read. It is left as it is; nothing in it is changed.</p>' : '')
+        + (rows.length ? `<div class="spScroll"><table><thead><tr><th>Name</th><th>Last saved (Eastern)</th><th>Size</th><th>This browser</th>${on ? '<th>GitHub</th>' : ''}<th></th></tr></thead><tbody>${
+          rows.map(i => { const g = ghBy.get(i.name);
+            return `<tr data-name="${enc(i.name)}" class="${i.name === cur && i.local ? 'spCur' : ''}"><td>${i.name === cur && i.local ? `<b>${esc(i.name)}</b> <span class="spNote">(open now)</span>` : esc(i.name)}</td>`
+              + `<td data-l="Last saved">${i.local ? esc(SP().etTime(i.saved) || '—') : '—'}</td><td data-l="Size">${i.local ? Math.max(1, Math.round(i.size / 1024)) + ' KB' : '—'}</td>`
+              + `<td data-l="This browser">${i.local ? '<span class="spYes" title="Saved in this browser">✓</span>' : '<span class="spNo" title="Not in this browser">—</span>'}</td>`
+              + (on ? `<td data-l="GitHub">${cloud.cell(i.name, g ? g.status : null, g && g.conflict)}</td>` : '')
+              + `<td class="spAct">${i.local ? B('open', i.name, 'Open') + B('rename', i.name, 'Rename') + B('dup', i.name, 'Duplicate') + B('export', i.name, 'Export') + B('del', i.name, 'Delete', 'spDel')
+                : G('open', i.name, 'Open') + G('get', i.name, 'Download') + G('delcloud', i.name, 'Delete from GitHub', 'spDel')}</td></tr>`; }).join('')}</tbody></table></div>`
+          : '<p class="spNote">No saved projects yet. Use Save to keep the open project in this browser.</p>')
+        + usageHtml() + (ctx.note || `<p class="spNote">Open asks first when the project on screen has unsaved changes. Delete removes the browser copy${on ? ' and asks whether to delete the GitHub copy too' : ''}. Export makes a .json file of one saved project.</p>`);
+      if (cloud) cloud.decorate(body, cui, { rows: false, only: false });
+      applyFilter();
+    }
+    function exportOne(name) {
+      if (ctx.exportOne) { ctx.exportOne(name); return; }
+      const it = ctx.store.item(name); if (it === undefined) return;
+      const cfg = ctx.cloud || {}; let f = JSON.parse(JSON.stringify(it)); if (cfg.toFile) f = cfg.toFile(f, name);
+      const text = typeof f === 'string' ? f : JSON.stringify(f, null, cfg.space == null ? 1 : cfg.space);
+      download(name.replace(/[\\/:*?"<>|]+/g, '_') + '.json', text);
+    }
     function draw() {
+      if (std) { drawStd(); return; }
       const r = ctx.store.read(), items = ctx.store.list(), cur = ctx.current ? ctx.current() : null, enc = n => encodeURIComponent(n), hasT = items.some(i => i.saved != null);
       body.innerHTML = (msg ? `<p class="spErr">${esc(msg)}</p>` : '')
         + (!r.ok ? '<p class="spErr">The saved-project list in this browser could not be read. It is left as it is; nothing in it is changed.</p>' : '')
@@ -91,6 +154,7 @@
     function act(a, name) {
       if (!ctx.store.has(name)) { msg = 'That saved project is not in this browser any more.'; draw(); return; }
       if (a === 'open') { msg = ''; if (ctx.open(name) !== false) dlg.close(); else draw(); return; }
+      if (a === 'export') { exportOne(name); return; }
       if (a === 'rename') {
         const n = prompt(`Rename the saved project "${name}" to:`, name); if (n == null) return;
         let r = ctx.store.rename(name, n);
@@ -109,9 +173,15 @@
         if (done(ctx.store.remove(name))) { if (ctx.deleted) ctx.deleted(name); if (cloud) cloud.deleted(name); } draw();
       }
     }
-    function show() { msg = ''; draw(); if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); } if (cloud) cloud.shown(cui).catch(() => {}); }
+    function show() { msg = ''; if (filt) filt.value = ''; draw(); if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); } if (cloud) cloud.shown(cui).catch(() => {}); }
     function refresh() { if (dlg.open) draw(); }
     return { show, refresh, el: dlg, cloud };
+  }
+
+  /* download(file name, text): a .json download (Blob + link); the URL is revoked later (an immediate revoke can cancel it). */
+  function download(file, text) {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' })); a.download = file;
+    a.setAttribute('data-sp', 'dl'); document.body.appendChild(a); a.click(); a.remove(); const h = a.href; setTimeout(() => URL.revokeObjectURL(h), 60000);
   }
 
   let typingWired = false;
@@ -141,5 +211,164 @@
     return { sync };
   }
 
-  window.SharedProjectsUI = { libraryDialog, undoRedo, button, css };
+
+  /* projectBar(ctx) (STDS, 2026-11-05; engineer-approved standard save, mock-ups in the save survey of that date)
+     The standard save controls of a tool, over the tool's own list (a mapStore / listStore: key and format unchanged):
+       header: "Project: <name> ● saved / unsaved changes" chip (a small GitHub badge while sync is on; click = Saved projects…),
+               Save (Ctrl+S), Saved projects…  (the tool keeps its own Undo / Redo / Print buttons in the header)
+       card ("Save and open", first card of the Project tab): status line; Save (Ctrl+S) · Save as… (Ctrl+Shift+S) ·
+               Saved projects… · New; "File on this computer": Export JSON · Import JSON; two hint lines; extras (tool-specific).
+     Save saves to the open name and never asks; with no open name it is Save as. Save as asks for the name and where:
+     "This browser and GitHub (cloud)" (default when sync is set up) / "This browser only" (not uploaded until Upload) /
+     "File on this computer (.json)" (the tool's Export JSON; the list is not changed). A name already in the list (or on GitHub
+     only) is not overwritten without "Replace it". Opening another project, New and Import ask first when there are unsaved
+     changes. Nothing is stored by this function: the open project's name lives in the tool (ctx.current / ctx.setCurrent) or in
+     this page only; after a reload it is found again by content (the saved project whose data equals the inputs on screen).
+     ctx = { store, storage, label (tool name), cloud (as libraryDialog), id,
+             snapshot() -> text of the inputs on screen (compared with snapOf(name) for "unsaved changes"),
+             snapOf(name) -> the same text for a saved project (default JSON.stringify(store.get(name))),
+             save(name) -> the tool's own save into the list ({ ok, message } or true / false; default store.save(name, getState())),
+             getState() (for the default save), open(name) -> false when it did not open (the tool's own open / load path),
+             current() / setCurrent(name) (optional: where the tool keeps the open name), displayName() (optional: shown in the chip
+               when the open project is not saved yet, e.g. the title block's project name),
+             newProject() (optional: the tool's own New / Reset path; it asks nothing itself), exportFile(name) (the tool's Export
+               JSON), importFile() (the tool's Import JSON), fileButtons ([elements]: the tool's own Export / Import buttons, moved
+               into the card instead), extras ([elements]: a third row), header (element for the chip / Save / Saved projects…),
+             headerBefore (optional element in it: Save and Saved projects… go before it, e.g. Print), chipBefore (the chip goes
+               before it, e.g. Undo; default headerBefore), card (element the card body goes into), keys (default true),
+             renamed / deleted / changed / note / exportOne (passed to the dialog), afterSave(name), afterOpen(name) }
+     Returns { dialog, save, saveAs, refresh, dirty, current, el: { chip, save, lib, card } } */
+  function projectBar(ctx) {
+    css();
+    const store = ctx.store, clean = n => String(n == null ? '' : n).trim();
+    const snapOf = ctx.snapOf || (n => { try { return JSON.stringify(store.get(n)); } catch (e) { return null; } });
+    const snapshot = () => { try { return ctx.snapshot ? ctx.snapshot() : JSON.stringify(ctx.getState()); } catch (e) { return null; } };
+    let cur = null, touched = false; const savedAt = {};   // touched: inputs changed on this page since the last open / save / New
+    function getCur() { if (ctx.current) { const n = clean(ctx.current()); return n || null; } return cur; }
+    function setCur(n) { cur = n; touched = false; if (ctx.setCurrent) ctx.setCurrent(n || ''); }
+    /* on load: the tool's open name if it is in the list, else the saved project whose data equals what is on screen */
+    (function find() {
+      const n = getCur(); if (n && store.has(n)) { cur = n; return; }
+      const s = snapshot(); if (s == null) return;
+      const hit = store.list().find(i => snapOf(i.name) === s); if (hit) setCur(hit.name);
+    })();
+    const dirty = () => { const n = getCur(); if (!n || !store.has(n)) return true; return snapshot() !== snapOf(n); };
+    const inList = () => { const n = getCur(); return !!(n && store.has(n)); };
+    const guard = what => !dirty() || (!inList() && !touched) ? true
+      : confirm(`The project on screen has unsaved changes${getCur() && store.has(getCur()) ? ` (since "${getCur()}" was last saved)` : ' and is not in the saved list'}. ${what} anyway? (Cancel, then Save, keeps them.)`);
+    const dialog = libraryDialog({ store, storage: ctx.storage, standard: true, label: ctx.label, id: ctx.id, cloud: ctx.cloud, note: ctx.note, exportOne: ctx.exportOne,
+      current: () => { const n = getCur(); return n && store.has(n) ? n : null; },
+      open: n => { if (!guard(`Open "${n}"`)) return false; const r = ctx.open(n); if (r === false) return false; setCur(n); if (ctx.afterOpen) ctx.afterOpen(n); later(); return true; },
+      renamed: (a, b) => { if (getCur() === a) setCur(b); if (savedAt[a]) { savedAt[b] = savedAt[a]; delete savedAt[a]; } if (ctx.renamed) ctx.renamed(a, b); later(); },
+      deleted: n => { if (ctx.deleted) ctx.deleted(n); later(); },
+      changed: () => { if (ctx.changed) ctx.changed(); later(); },
+      save: () => { saveAs(); return null; }, saveLabel: 'Save the open project…',
+      importFile: ctx.importFile ? () => importJSON() : null });
+    const eng = () => dialog.cloud && dialog.cloud.engine && dialog.cloud.engine.configured() ? dialog.cloud.engine : null;
+    const kbd = k => `<kbd class="spKbd">${k}</kbd>`;
+    const mk = (html, title, o) => { const b = button('', title, o); b.innerHTML = html; return b; };
+    /* header */
+    const chip = mk('', 'The project open now: open Saved projects…', { cls: 'spChip', sp: 'chip' });
+    const hSave = mk('Save' + kbd('Ctrl+S'), 'Save the open project in this browser’s list (and to GitHub when Cloud sync is on). Ctrl+S', { cls: 'spPri', sp: 'hsave' });
+    const hLib = button('Saved projects…', 'The projects saved in this browser (and on GitHub): open, rename, duplicate, export, delete', { sp: 'hlib' });
+    chip.addEventListener('click', () => dialog.show()); hSave.addEventListener('click', () => save()); hLib.addEventListener('click', () => dialog.show());
+    if (ctx.header) {   // standard order: chip · (Undo · Redo) · Save · Saved projects… · (Print)
+      const at = x => x && x.parentNode === ctx.header ? x : null;
+      ctx.header.insertBefore(chip, at(ctx.chipBefore) || at(ctx.headerBefore));
+      [hSave, hLib].forEach(b => ctx.header.insertBefore(b, at(ctx.headerBefore)));
+    }
+    /* card */
+    let card = null, stat = null;
+    if (ctx.card) {
+      card = document.createElement('div'); card.className = 'spCard'; card.setAttribute('data-sp', 'card');
+      card.innerHTML = '<div class="spStat" role="status"></div><div class="spRow" data-r="1"></div><div class="spLbl">File on this computer</div><div class="spRow" data-r="2"></div>'
+        + '<p class="spHint">Save keeps the project in this browser’s list and, with Cloud sync on, copies it to GitHub. Export JSON makes a .json file you can keep, e-mail or open on another computer (Import JSON).</p>'
+        + '<p class="spHint">Autosave: the inputs on screen are kept in this browser while you work and come back when you reopen the tool. Autosave is not a saved project and is not synced.</p>';
+      stat = card.querySelector('.spStat');
+      const r1 = card.querySelector('[data-r="1"]'), r2 = card.querySelector('[data-r="2"]');
+      const cSave = mk('Save' + kbd('Ctrl+S'), 'Save the open project (Ctrl+S)', { cls: 'spPri', sp: 'save' }), cAs = mk('Save as…' + kbd('Ctrl+Shift+S'), 'Save under a new name, or to a file (Ctrl+Shift+S)', { sp: 'saveas' });
+      const cLib = button('Saved projects…', 'The projects saved in this browser (and on GitHub)', { sp: 'lib' });
+      cSave.addEventListener('click', () => save()); cAs.addEventListener('click', () => saveAs()); cLib.addEventListener('click', () => dialog.show());
+      r1.append(cSave, cAs, cLib);
+      if (ctx.newProject) { const nb = button('New', 'Start a new project (the default inputs); saved projects are kept', { sp: 'new' }); nb.addEventListener('click', () => newProject()); r1.append(nb); }
+      if (ctx.fileButtons && ctx.fileButtons.length) ctx.fileButtons.forEach(b => r2.append(b));
+      else {
+        if (ctx.exportFile) { const b = button('Export JSON', 'Save the inputs on screen as a .json file', { sp: 'export' }); b.addEventListener('click', () => ctx.exportFile(getCur())); r2.append(b); }
+        if (ctx.importFile) { const b = button('Import JSON', 'Open a .json file of this tool', { sp: 'import' }); b.addEventListener('click', () => importJSON()); r2.append(b); }
+      }
+      if (ctx.extras && ctx.extras.length) { const r3 = document.createElement('div'); r3.className = 'spRow'; r3.setAttribute('data-r', '3'); ctx.extras.forEach(b => r3.append(b)); r2.after(r3); }
+      ctx.card.insertBefore(card, ctx.card.firstChild);
+    }
+    const LBL = { synced: 'synced', pending: '↑ waiting', local: 'this browser only', removed: 'not on GitHub', unknown: 'not checked yet', 'cloud-newer': 'GitHub newer', conflict: 'conflict' };
+    const timeOf = n => { const i = store.list().find(x => x.name === n); const t = i && i.saved != null ? i.saved : savedAt[n]; if (t == null) return ''; const d = new Date(t); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }); };
+    function refresh() {
+      const n = getCur(), inList = !!(n && store.has(n)), d = dirty(), e = eng(), stt = e && inList ? e.statusOf(n) : null, t = inList ? timeOf(n) : '';
+      const shown = inList ? n : (n || (ctx.displayName && clean(ctx.displayName())) || 'not saved yet');
+      chip.innerHTML = `<span class="spDot${d ? ' dirty' : ''}"></span><span>Project:</span> <b>${esc(shown)}</b> <span>· ${!inList ? 'not saved' : d ? 'unsaved changes' : 'saved'}</span>`
+        + (e ? ` <span class="spGhMini ${stt || ''}" title="Cloud sync (GitHub): ${esc(stt ? LBL[stt] || stt : 'not saved')}">GitHub ${stt === 'synced' ? '✓' : stt === 'pending' ? '↑' : stt === 'conflict' ? '!' : '·'}</span>` : '');
+      chip.title = (inList ? `"${n}" ${d ? 'has unsaved changes' : 'is saved'} in this browser` : 'The inputs on screen are not a saved project yet') + '. Click: Saved projects…';
+      if (stat) stat.innerHTML = `<span class="spDot${d ? ' dirty' : ''}"></span> ` + (inList
+        ? `<b>${esc(n)}</b> — ${d ? 'changed since it was saved' : 'saved'}${t ? ` (${esc(t)})` : ''}. In this browser ✓${e ? ` · GitHub (cloud) <span class="spGhSt ${stt || ''}">${esc(LBL[stt] || stt || '')}</span>` : ''}`
+        : `<b>${esc(shown === 'not saved yet' ? 'Not saved yet' : shown)}</b> — not in the saved list. Use Save as… to keep it in this browser${e ? ' and on GitHub' : ''}.`);
+    }
+    let tmr = 0; function later() { clearTimeout(tmr); tmr = setTimeout(refresh, 250); }
+    const edit = ev => { const t = ev.target; if (!(t && t.closest && t.closest('[data-sp]'))) touched = true; later(); };
+    document.addEventListener('input', edit, true); document.addEventListener('change', edit, true); document.addEventListener('click', later, true);
+    setInterval(refresh, 3000);
+    function done(r, name, quiet) {
+      const ok = r !== false && !(r && r.ok === false) && store.has(name);   // the tool's save may return nothing
+      if (!ok) { if (!quiet) alert((r && r.message) || 'The project was not saved.'); later(); return false; }
+      setCur(name); savedAt[name] = Date.now(); if (ctx.changed) ctx.changed(); dialog.refresh();
+      if (dialog.cloud && dialog.cloud.tick) dialog.cloud.tick().catch(() => {});
+      if (ctx.afterSave) ctx.afterSave(name); refresh(); return true;
+    }
+    const doSave = name => done(ctx.save ? ctx.save(name) : store.save(name, ctx.getState()), name);
+    /* Save: to the open name, no question; no open name: Save as */
+    function save() { const n = getCur(); if (n && store.has(n)) return doSave(n); return saveAs(); }
+    /* Save as dialog */
+    let sd = null;
+    function saveAs() {
+      if (!sd) { sd = document.createElement('dialog'); sd.className = 'spLib spSave'; sd.setAttribute('data-sp', 'saveas'); sd.id = (ctx.id || 'spLibDlg') + 'SaveAs'; document.body.appendChild(sd); }
+      const e = eng(), s = e ? e.settings() : null, repo = s ? `${s.owner}/${s.repo}` : '';
+      const opt = (v, t, h, on, off) => `<label class="spOpt${on ? ' on' : ''}${off ? ' off' : ''}"><input type="radio" name="spLoc" value="${v}"${on ? ' checked' : ''}${off ? ' disabled' : ''}><span><b>${t}</b><br><span class="spNote">${h}</span></span></label>`;
+      sd.innerHTML = `<div class="spHead"><strong>Save as</strong><span><button type="button" data-sa="close">Close</button></span></div>`
+        + `<label class="spField" for="${sd.id}N">Project name</label><input id="${sd.id}N" class="spName" autocomplete="off" value="${esc(getCur() || (ctx.displayName && clean(ctx.displayName())) || '')}">`
+        + `<div class="spField" style="margin-top:10px">Save to</div>`
+        + opt('cloud', 'This browser and GitHub (cloud)', e ? `In this browser’s saved projects; copied to ${esc(repo)} within a few seconds. Opens on every device with sync set up.` : 'Cloud sync (GitHub) is not set up in this browser (Saved projects…, Cloud sync (GitHub)…).', !!e, !e)
+        + opt('local', 'This browser only', e ? 'Not uploaded (you can Upload it later from Saved projects).' : 'In this browser’s saved projects.', !e, false)
+        + (ctx.exportFile ? opt('file', 'File on this computer (.json)', 'The same file as Export JSON. Not added to the browser list.', false, false) : '')
+        + `<div class="spMsg"></div><div class="spBtns"><button type="button" data-sa="cancel">Cancel</button><button type="button" class="spPri" data-sa="ok">Save</button></div>`;
+      const inp = sd.querySelector('.spName'), msgEl = sd.querySelector('.spMsg'); let replaceOk = '';
+      const loc = () => { const r = sd.querySelector('input[name=spLoc]:checked'); return r ? r.value : 'local'; };
+      sd.onchange = () => { sd.querySelectorAll('.spOpt').forEach(l => l.classList.toggle('on', l.querySelector('input').checked)); sd.querySelector('[data-sa=ok]').textContent = 'Save'; replaceOk = ''; msgEl.innerHTML = ''; };
+      inp.oninput = () => { replaceOk = ''; msgEl.innerHTML = ''; sd.querySelector('[data-sa=ok]').textContent = 'Save'; };
+      inp.onkeydown = ev => { if (ev.key === 'Enter') { ev.preventDefault(); go(); } };
+      function go() {
+        const n = clean(inp.value), where = loc(); if (!n) { msgEl.innerHTML = '<p class="spErr">Enter a project name.</p>'; inp.focus(); return; }
+        if (where === 'file') { sd.close(); ctx.exportFile(n); return; }
+        const cl = e && e.cloud ? e.cloud() : null, onGh = !!(cl && cl.has(n)) && !store.has(n);
+        if ((store.has(n) || onGh) && replaceOk !== n && n !== getCur()) {
+          msgEl.innerHTML = `<div class="spWarn">${store.has(n) ? `A saved project named “${esc(n)}” already exists in this browser.` : `A project named “${esc(n)}” is on GitHub (saved on another device). Saving under this name keeps both: yours is uploaded as a conflict copy.`} Type another name, or press Replace it.</div>`;
+          sd.querySelector('[data-sa=ok]').textContent = 'Replace it'; replaceOk = n; inp.focus(); return;
+        }
+        const wasHeld = !!(e && e.held(n)); if (e) e.hold(n, where === 'local');
+        sd.close(); if (doSave(n) && e && where === 'cloud' && wasHeld) e.upload(n).catch(() => {});
+      }
+      sd.onclick = ev => { if (ev.target === sd) { sd.close(); return; } const b = ev.target.closest('[data-sa]'); if (!b) return; if (b.dataset.sa === 'ok') go(); else sd.close(); };
+      if (!sd.open) { if (sd.showModal) sd.showModal(); else sd.setAttribute('open', ''); }
+      inp.focus(); inp.select();
+    }
+    function newProject() { if (!guard('Start a new project')) return; ctx.newProject(); setCur(null); refresh(); }
+    function importJSON() { if (!guard('Import a file')) return; ctx.importFile(); }
+    if (ctx.keys !== false) document.addEventListener('keydown', ev => {
+      if (!(ev.ctrlKey || ev.metaKey) || ev.altKey || (ev.key || '').toLowerCase() !== 's') return;
+      ev.preventDefault();   // never the browser's "Save page as"
+      if (document.querySelector('dialog[open]')) return;
+      if (ev.shiftKey) saveAs(); else save();
+    });
+    refresh();
+    return { dialog, save, saveAs, refresh, dirty, current: getCur, setCurrent: n => { setCur(n); refresh(); }, el: { chip, save: hSave, lib: hLib, card } };
+  }
+
+  window.SharedProjectsUI = { libraryDialog, undoRedo, button, css, projectBar, download };
 })();

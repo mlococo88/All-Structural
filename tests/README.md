@@ -82,6 +82,10 @@ node tests/smoke/github-sync.mjs [--tool spreadfooting] [--shots <dir>]
 # The same in every tool with sync, shorter: the tool's own Save -> file on GitHub, update with sha, a GitHub-only copy opened gives the
 # same results as the saved project, 0 console errors (tool keys as in project-library.mjs, whose TOOLS it imports). ~4 min
 node tests/smoke/github-sync-tools.mjs [--tool asce7,baseplate,...]
+# The standard save (projects-ui.js projectBar + standard dialog, STDS) on a fixture page (tests/smoke/standard-save-fixture.html), mock
+# GitHub: header order, Ctrl+S / Ctrl+Shift+S, Save never asks, Save as an existing name blocked ("Replace it"), Save as file, the one-table
+# dialog (filter, Export, Open asks on unsaved changes), "This browser only" not uploaded until Upload, reload finds the open project, 390 px. ~40 s
+node tests/smoke/standard-save.mjs [--shots <dir>]
 
 # Home page "Saved projects" panel (tools.html, HSP; registry shared/project-registry.js): each registry tool saves two projects through
 # its own Save, then tools.html#projects lists the same names, order and saved times as each tool's own dialog; the home page writes
