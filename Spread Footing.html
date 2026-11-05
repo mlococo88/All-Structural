@@ -4044,12 +4044,13 @@ function sfdwDowelNote(i,bz){const z=P2&&P2.dowels&&P2.dowels[i];
 function sfdwBuild(){
  const D=SharedDxf.drawing({prefix:'S-'}), S=[], m=state.meta||{};
  const L={out:D.layer('CONC',7),ped:D.layer('PED',7),bar:D.layer('REBAR',5),dim:D.layer('DIMS',3),txt:D.layer('TEXT',7),cl:D.layer('CNTR',8,'CENTER'),
-  ld:D.layer('LOAD',1),soil:D.layer('SOIL',30),hid:D.layer('HIDDEN',8,'HIDDEN'),tb:D.layer('TBLK',7),br:D.layer('BRDR',7),cut:D.layer('CUT',6)};
+  ld:D.layer('LOAD',1),soil:D.layer('SOIL',30),hid:D.layer('HIDDEN',8,'HIDDEN'),tb:D.layer('TBLK',7),br:D.layer('BRDR',7),cut:D.layer('CUT',6),
+  lt:D.layer('LOAD-TEXT',7),lg:D.layer('LOAD-TABLE',7),la:D.layer('LOAD-ARW',1)};   /* SFDL: the pedestal loads (schedule, tags, section arrows) on their own layers */
  const M=sfdwMats(), LV=sfdwLevels(M), B12=R.B*12, L12=R.L*12, t12=R.t*12, Df12=R.Df*12;
  const AW=SFDW.W-2*SFDW.m-0.5, AH=SFDW.H-2*SFDW.m-SFDW.tbH-0.6;   // drawing area (paper in)
  let ox=0;
  /* one sheet: content(k) draws around (0,0) at scale k; the smallest standard k it fits is used */
- function sheet(id,title,content,fixedK){
+ function sheet(id,title,content,fixedK,post){   /* SFDL: post(k,ctx) adds entities after the view is placed (the view's fit, scale and position unchanged) */
   const i0=D.mark();let k=null,over=false;
   const ks=fixedK?[fixedK]:SFDW_SCALES.map(s=>s[0]).filter(v=>v>=4);
   for(const kk of ks){D.E.length=i0;D.k=kk;D.h=0.1*kk;content(kk);const b=D.bbox(i0);
@@ -4057,8 +4058,10 @@ function sfdwBuild(){
   if(k===null){k=ks[ks.length-1];over=true;}
   const b=D.bbox(i0), W=SFDW.W*k, H=SFDW.H*k, mm=SFDW.m*k, tb=SFDW.tbH*k;
   const cx=ox+W/2, cy=mm+tb+0.3*k+(AH*k)/2;
-  if(isFinite(b[0]))D.move(i0,cx-(b[0]+b[2])/2,cy-(b[1]+b[3])/2);
+  const dx=isFinite(b[0])?cx-(b[0]+b[2])/2:0, dy=isFinite(b[0])?cy-(b[1]+b[3])/2:0;
+  if(isFinite(b[0]))D.move(i0,dx,dy);
   D.k=k;D.h=0.1*k;
+  if(post){const g=0.15*k;post(k,{i0,dx,dy,ox,W,H,area:[ox+mm+g,mm+tb+g,ox+W-mm-g,H-mm-g]});D.k=k;D.h=0.1*k;}
   SharedDxf.sheetBorder(D,L.br,ox,W,H,k);D.rect(L.br,ox+mm,mm,ox+W-mm,H-mm);   /* SFPS-2: outer border 0.25 in inside the paper edge */
   /* title block (no owner cell): two rows along the bottom of the sheet */
   const x0=ox+mm, y0=mm, w=(SFDW.W-2*SFDW.m)*k, r=tb/2, sc=k===1?'NTS':(SFDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1];
@@ -4077,6 +4080,65 @@ function sfdwBuild(){
  }
  const T=(l,x,y,hh,s,j,rot)=>D.text(l,x,y,hh,s,j,rot);
  const ped=R.peds;
+ /* ---------- SFDL (2026-11-05, engineer): pedestal loads on the drawings (display only) ----------
+    Plan: a tag at each pedestal (P1, P2, ...) and the PEDESTAL LOAD SCHEDULE (unfactored, by load case, at the top of the pedestal;
+    direct mode: the factored envelope as entered) with the sign convention and an axis / load-point legend, placed in a free area of the
+    plan sheet, or on an extra LOADS sheet at the end of the set when it does not fit. Sections A-A / B-B: at each pedestal cut, the
+    governing service combination (direct mode: the envelope) P, V (arrow) and M values. All added after the views are placed (sheet post),
+    on layers S-LOAD-TEXT / S-LOAD-TABLE / S-LOAD-ARW; the existing views keep their geometry, scale and position. */
+ const sfdlSpot=(i0,area,w,h,g)=>{   /* first free w x h box (model units) in area clear (by g) of every entity from i0: corners first, then a grid from the top right */
+  const bx=[];for(let i=i0;i<D.E.length;i++){const b=D.bbox(i,i+1);if(isFinite(b[0]))bx.push(b);}
+  const ok=(x,y)=>x>=area[0]-1e-9&&y>=area[1]-1e-9&&x+w<=area[2]+1e-9&&y+h<=area[3]+1e-9&&!bx.some(b=>x<b[2]+g&&b[0]<x+w+g&&y<b[3]+g&&b[1]<y+h+g);
+  const c=[[area[2]-w,area[3]-h],[area[0],area[3]-h],[area[2]-w,area[1]],[area[0],area[1]]];
+  const sx=(area[2]-area[0])/60, sy=(area[3]-area[1])/40;
+  for(let y=area[3]-h;y>=area[1]-1e-9;y-=sy)for(let x=area[2]-w;x>=area[0]-1e-9;x-=sx)c.push([x,y]);
+  return c.find(([x,y])=>ok(x,y))||null;};
+ const sfdlV=(p,f)=>{let P=0,Vx=0,Vy=0,Mx=0,My=0;   /* pedestal-top loads for factors f (as the 3D view's buildLoads) */
+  if(f&&f.direct){const d=p.direct||{};P=num(d.P);Vx=num(d.Vx);Vy=num(d.Vy);Mx=num(d.Mx);My=num(d.My);}
+  else TYPES.forEach(tp=>{const ft=(f&&f[tp])||0,ld=p.loads[tp];if(!ft||!ld)return;P+=ft*num(ld.P);Vx+=ft*num(ld.Vx);Vy+=ft*num(ld.Vy);Mx+=ft*num(ld.Mx);My+=ft*num(ld.My);});
+  return {P,Vx,Vy,Mx,My};};
+ const sfdlN=v=>Math.abs(v)<5e-7?'0':f2(v);
+ /* the schedule in two layouts (paper in): wide (one row per pedestal x case, with the pedestal name and load point) and compact (narrow,
+    for the side of the plan; load points listed under the table) */
+ const sfdlWrap=(t,n)=>{const out=[];let line='';String(t).split(/\s+/).forEach(w=>{if(line&&(line+' '+w).length>n){out.push(line);line=w;}else line=line?line+' '+w:w;});if(line)out.push(line);return out;};
+ const sfdlLay=compact=>{
+  const cols=compact?[['TAG',0.38],['CASE',0.62],['P (K)',0.62],['Vx (K)',0.56],['Vy (K)',0.56],['Mx (K-FT)',0.8],['My (K-FT)',0.8]]
+   :[['TAG',0.45],['PEDESTAL',1.25],['CASE',1.05],['P (K)',0.8],['Vx (K)',0.75],['Vy (K)',0.75],['Mx (K-FT)',0.9],['My (K-FT)',0.9],['LOAD PT e_x, e_y',1.6]];
+  const rows=[],lps=[];
+  ped.forEach((p,i)=>{const lp=sfdwFI(p.lex*12)+', '+sfdwFI(p.ley*12);lps.push('P'+(i+1)+' ('+String(p.label).toUpperCase()+'): '+lp);
+   const row=(first,cs,v)=>compact?[first?'P'+(i+1):'',cs,sfdlN(v.P),sfdlN(v.Vx),sfdlN(v.Vy),sfdlN(v.Mx),sfdlN(v.My)]
+    :[first?'P'+(i+1):'',first?String(p.label).toUpperCase():'',cs,sfdlN(v.P),sfdlN(v.Vx),sfdlN(v.Vy),sfdlN(v.Mx),sfdlN(v.My),first?lp:''];
+   if(R.directMode){rows.push(row(true,compact?'ENV.':'FACTORED',sfdlV(p,{direct:true})));return;}   /* ENV. = the factored envelope (subtitle) */
+   let first=true;TYPES.forEach(tp=>{if(!R.present[tp])return;rows.push(row(first,tp,sfdlV(p,{[tp]:1})));first=false;});});
+  const w=cols.reduce((q,c)=>q+c[1],0), nc=Math.floor(w/(0.075*0.9));
+  const sub=R.directMode?'FACTORED ENVELOPE AS ENTERED (DIRECT MODE); AT TOP OF PEDESTAL':'UNFACTORED, BY LOAD CASE; AT TOP OF PEDESTAL';
+  const notes=[...(compact?sfdlWrap('LOAD POINT OFFSETS e_x, e_y FROM THE PEDESTAL CENTROID: '+lps.join(';  '),nc):[]),
+   ...sfdlWrap('SIGN CONVENTION: ORIGIN AT THE FOOTING CENTROID; +x TOWARD THE B/2 EDGE, +y TOWARD THE L/2 EDGE. +P DOWNWARD (COMPRESSION) AT THE LOAD POINT (PEDESTAL CENTROID + e_x, e_y). +Vx, +Vy ACT IN +x, +y AT THE TOP OF THE PEDESTAL. +Mx SHIFTS THE RESULTANT TOWARD +y; +My TOWARD +x. PEDESTAL SELF-WEIGHT, SOIL COVER (EV) AND SURCHARGE ARE NOT INCLUDED.'+(R.directMode?'':' LOAD CASES: '+TYPES.filter(tp=>R.present[tp]).join(', ')+'.'),nc)];
+  return {compact,cols,rows,w,rh:0.21,th:0.085,sub:sfdlWrap(sub,Math.floor(w/(0.085*0.9))),notes,
+   h:0.2+0.06+sfdlWrap(sub,Math.floor(w/(0.085*0.9))).length*0.14+(rows.length+1)*0.21+0.1+notes.length*0.14+0.75};};
+ /* the schedule Lo with its top-left corner at (x, y); paper sizes times k */
+ function sfdlTable(Lo,x,y,k){
+  const rh=Lo.rh*k, th=Lo.th*k, W=Lo.w*k, all=[Lo.cols.map(c=>c[0]),...Lo.rows], num0=Lo.compact?2:3;
+  T(L.lt,x,y-0.16*k,0.13*k,'PEDESTAL LOAD SCHEDULE',0);
+  Lo.sub.forEach((q,j)=>T(L.lt,x,y-(0.36+0.14*j)*k,0.085*k,q,0));
+  const yt=y-(0.26+Lo.sub.length*0.14)*k;
+  all.forEach((r,j)=>{let xx=x;const yy=yt-j*rh;
+   r.forEach((c,ci)=>{const w=Lo.cols[ci][1],mx=Math.floor((w-0.1)/(Lo.th*0.9)),rj=ci>=num0&&ci<num0+5&&j>0;
+    if(c!=='')T(L.lt,rj?xx+w*k-0.05*k:xx+0.05*k,yy-rh+0.065*k,th,String(c).slice(0,mx),rj?2:0);xx+=w*k;});
+   if(j>1&&all[j][0]!=='')D.line(L.lg,x,yy,x+W,yy);});
+  const yb=yt-all.length*rh;
+  D.rect(L.lg,x,yb,x+W,yt);D.line(L.lg,x,yt-rh,x+W,yt-rh);let xx=x;Lo.cols.forEach((c,ci)=>{xx+=c[1]*k;if(ci<Lo.cols.length-1)D.line(L.lg,xx,yt,xx,yb);});
+  Lo.notes.forEach((q,j)=>T(L.lt,x,yb-(0.2+0.14*j)*k,0.075*k,q,0));
+  /* legend: +x / +y arrows and the load-point symbol */
+  const ly=yb-(0.2+0.14*Lo.notes.length+0.42)*k, ax=x+0.1*k, a=0.4*k, hd=0.07*k;
+  D.line(L.la,ax,ly,ax+a,ly);D.pline(L.la,[[ax+a-hd,ly+hd/2],[ax+a,ly],[ax+a-hd,ly-hd/2]]);T(L.lt,ax+a+0.05*k,ly-0.035*k,0.075*k,'+x',0);
+  D.line(L.la,ax,ly,ax,ly+a*0.6);D.pline(L.la,[[ax-hd/2,ly+a*0.6-hd],[ax,ly+a*0.6],[ax+hd/2,ly+a*0.6-hd]]);T(L.lt,ax,ly+a*0.6+0.04*k,0.075*k,'+y',1);
+  const sx=ax+0.95*k, r=0.05*k;D.circle(L.la,sx,ly,r);D.line(L.la,sx-1.8*r,ly,sx+1.8*r,ly);D.line(L.la,sx,ly-1.8*r,sx,ly+1.8*r);
+  T(L.lt,sx+0.15*k,ly-0.035*k,0.075*k,'LOAD POINT, +P DOWN',0);
+  const gx=sx+1.75*k;D.circle(L.lt,gx,ly,0.13*k);T(L.lt,gx,ly-0.045*k,0.09*k,'P1',1);T(L.lt,gx+0.2*k,ly-0.035*k,0.075*k,'PEDESTAL TAG',0);
+ }
+ const SFDL={wide:sfdlLay(false),comp:sfdlLay(true)};
+ SFDL.ref=null;   /* the "see sheet" note on the plan when the schedule goes to the LOADS sheet */
  /* ---------- 1. Footing plan ---------- */
  const yA=ped.length?ped[0].y*12:0, xB=ped.length?ped[0].x*12:0;
  sheet('plan','FOOTING PLAN',k=>{
@@ -4108,6 +4170,19 @@ function sfdwBuild(){
   const tx=x0-1.2*k, ty=y0-1.45*k;D.line(L.ld,tx,ty,tx+0.4*k,ty);D.line(L.dim,tx,ty,tx,ty+0.4*k);
   T(L.ld,tx+0.45*k,ty-0.04*k,0.08*k,'+x',0);T(L.dim,tx,ty+0.46*k,0.08*k,'+y',1);
   T(L.txt,0,y0-2.3*k,0.16*k,'FOOTING PLAN',1);T(L.txt,0,y0-2.52*k,0.09*k,'SCALE '+(SFDW_SCALES.find(s=>s[0]===k)||[0,'1:'+k])[1]+';  LOAD POINTS (RED) AT x + e_x, y + e_y',1);
+ },null,(k,c)=>{   /* SFDL: pedestal tags, then the load schedule where it fits */
+  ped.forEach((p,i)=>{const px=p.x*12+c.dx,py=p.y*12+c.dy,bx=p.bx*12,by=p.by*12,r=0.13*k,o=1.6*r;
+   /* the first spot clear of the plan's text and symbols: inside a corner of the pedestal, else just outside it */
+   const ob=[];for(let j=c.i0;j<D.E.length;j++){const e=D.E[j];if(e.t==='TEXT'||e.t==='CIRCLE'){const q=D.bbox(j,j+1);if(isFinite(q[0]))ob.push(q);}}
+   const free=(x,y)=>!ob.some(q=>x-r<q[2]+0.03*k&&q[0]<x+r+0.03*k&&y-r<q[3]+0.03*k&&q[1]<y+r+0.03*k);
+   const cand=(bx>=6*r&&by>=6*r?[[px-bx/2+o,py+by/2-o],[px+bx/2-o,py+by/2-o],[px-bx/2+o,py-by/2+o],[px+bx/2-o,py-by/2+o]]:[])
+    .concat([[px-bx/2-o,py+by/2-r],[px+bx/2+o,py+by/2-r],[px-bx/2-o,py-by/2+r],[px+bx/2+o,py-by/2+r]]);
+   const [tx,ty]=cand.find(([x,y])=>free(x,y))||cand[0];
+   D.circle(L.lt,tx,ty,r);T(L.lt,tx,ty-0.045*k,0.09*k,'P'+(i+1),1);});
+  for(const Lo of [SFDL.wide,SFDL.comp]){const sp=sfdlSpot(c.i0,c.area,Lo.w*k,Lo.h*k,0.12*k);
+   if(sp){sfdlTable(Lo,sp[0],sp[1]+Lo.h*k,k);SFDL.onPlan=true;return;}}
+  const w=7.2*k,h=0.25*k,s2=sfdlSpot(c.i0,c.area,w,h,0.1*k);
+  if(s2){T(L.lt,s2[0],s2[1]+0.07*k,0.1*k,'PEDESTAL LOAD SCHEDULE: SEE SHEET ?',0);SFDL.ref=D.E[D.E.length-1];}
  });
  /* ---------- 2./3. Sections ---------- */
  function section(dir){
@@ -4148,8 +4223,27 @@ function sfdwBuild(){
    T(L.txt,0,-1.35*k,0.16*k,'SECTION '+dir+'-'+dir,1);T(L.txt,0,-1.57*k,0.09*k,'SCALE '+(SFDW_SCALES.find(s=>s[0]===k)||[0,'1:'+k])[1]+';  CUT ALONG '+(dir==='A'?'x AT y = ':'y AT x = ')+sfdwFI(cutAt),1);
   };
  }
- sheet('secA','SECTION A-A (ALONG x)',section('A'));
- sheet('secB','SECTION B-B (ALONG y)',section('B'));
+ /* SFDL: section loads: governing service combination (direct mode: the factored envelope) at each pedestal cut */
+ function sfdlSec(dir){return (k,c)=>{
+  const G=R.govBear, f=R.directMode?{direct:true}:(G&&G.cb.f), cutAt=dir==='A'?yA:xB;if(!f)return;
+  const h=0.08*k;
+  ped.forEach((p,i)=>{if(!(dir==='A'?Math.abs(p.y*12-cutAt)<p.by*6-1e-6:Math.abs(p.x*12-cutAt)<p.bx*6-1e-6))return;
+   const hh=p.h*12;if(hh<=0)return;
+   const v=sfdlV(p,f), cc=(dir==='A'?p.x:p.y)*12+c.dx, b=(dir==='A'?p.bx:p.by)*12, top=t12+hh+c.dy, lx=cc+(dir==='A'?p.lex:p.ley)*12;
+   const V=dir==='A'?v.Vx:v.Vy, M=dir==='A'?v.My:v.Mx;
+   T(L.lt,lx+0.08*k,top+0.38*k,h,'P = '+sfdlN(v.P)+' K'+(v.P<0?' (UPLIFT)':''),0);
+   if(Math.abs(M)>1e-6)T(L.lt,lx+0.08*k,top+0.24*k,h,(dir==='A'?'My':'Mx')+' = '+sfdlN(M)+' K-FT',0);
+   if(Math.abs(V)>1e-6){const sg=Math.sign(V),xe=cc-sg*b/2,xs=xe-sg*0.55*k,y=top+0.07*k,hd=0.07*k;   /* arrow ends at the pedestal side, pointing the way V acts */
+    D.line(L.la,xs,y,xe,y);D.pline(L.la,[[xe-sg*hd,y+hd/2],[xe,y],[xe-sg*hd,y-hd/2]]);
+    T(L.lt,xs-sg*0.05*k,y-h/2,h,(dir==='A'?'Vx':'Vy')+' = '+sfdlN(V)+' K',sg>0?2:0);}});
+  const nm=R.directMode?'DIRECT FACTORED ENVELOPE (AS ENTERED)':'GOVERNING SERVICE COMBINATION '+(R.asd.indexOf(G)+1)+': '+G.cb.name;
+  const s='LOADS AT PEDESTAL TOP: '+nm+(R.directMode?'':' (SERVICE LEVEL)')+';  +P DOWN, +V'+(dir==='A'?'x':'y')+' IN +'+(dir==='A'?'x':'y')+'; SELF-WEIGHT NOT INCLUDED';
+  const w=s.length*0.085*k*0.9, yy=-1.8*k+c.dy;
+  if(yy>=c.area[1]&&Math.abs(c.dx)<1e30&&w<=c.area[2]-c.area[0])T(L.lt,c.dx,yy,0.085*k,s,1);
+  else{const sp=sfdlSpot(c.i0,c.area,w,0.12*k,0.08*k);if(sp)T(L.lt,sp[0],sp[1],0.085*k,s,0);}
+ };}
+ sheet('secA','SECTION A-A (ALONG x)',section('A'),null,sfdlSec('A'));
+ sheet('secB','SECTION B-B (ALONG y)',section('B'),null,sfdlSec('B'));
  /* ---------- 4. Pedestal details ---------- */
  ped.forEach((p,i)=>{if(p.h<=0)return;
   sheet('ped'+i,'PEDESTAL DETAIL, '+String(p.label).toUpperCase(),k=>{
@@ -4229,6 +4323,9 @@ function sfdwBuild(){
    words.forEach(w=>{if((line+w).length>mx){out.push(line);line='    '+w+' ';}else line+=w+' ';});out.push(line);
    out.forEach(l=>{T(L.txt,0,y,h,l.trimEnd(),0);y-=0.2;});y-=0.08;});
  },1);
+ /* ---------- 7. SFDL: pedestal loads, when the schedule did not fit on the plan sheet (k = 1, at the end so no other sheet moves) ---------- */
+ if(!SFDL.onPlan){sheet('loads','PEDESTAL LOADS',k=>{sfdlTable(SFDL.wide,0,0,k);},1);
+  if(SFDL.ref)SFDL.ref.s=SharedDxf.str('PEDESTAL LOAD SCHEDULE: SEE SHEET '+S.length+' OF '+S.length+' (PEDESTAL LOADS)');}
  S.forEach((s,j)=>{s.sheetEnt.s=SharedDxf.str((j+1)+' OF '+S.length);});
  return {D,S};
 }
