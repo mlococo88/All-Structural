@@ -15284,3 +15284,22 @@ index cedb10f..5b89752 100644
   - `node tests/smoke/project-library.mjs`: ALL PASS.
 - **Other copies:** none.
 - **Open items:** the Report is rebuilt (with every tab rendered, about 0.8 s) on each input change while it is shown, as before only the Report itself.
+
+## 2026-11-05 — PR: claude/header-abut (ABHD: compact header; title block, project file and hand-off buttons moved to a new Project input tab; display only, no result change)
+- **Engineer:** clean up the top of the page: the title-block inputs and the project / hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id, `data-path`, handler and saved field is the same):
+  - `<header class="app-head">`: before title + `#projBlock` (6 title inputs + `.bx-pm-row` Use / Share project info); then a `.toolbar` row of 18 buttons (Save Project, Projects…, Export / Import JSON, Undo, Redo, Reset Defaults, Compare…, Self-Test, Open EDM, Pull from SubLoads, Import hand-off, Send foundation loads, Pull pile results, Import pile results, Input ID badge, save status, Print / PDF Report). After: title + `<div class="toolbar" id="hdrActs">` with `#hdrProj` "Project: <name> · <number>" (link), Undo, Redo, Projects…, Input ID badge (`#fpBadge`), `#saveStatus`, Print / PDF Report.
+  - `#inputCol` starts with `<div id="prjPane" data-cid="prjPane">`, three panels: "Title block" (`#projBlock`, 2 columns); "Project file" (Save Project, Export / Import JSON, Reset Defaults; Compare…, Self-Test); "Shared project info and hand-offs" (Use / Share in `.bx-pm-row`; Abutment loads: Pull from SubLoads, Import hand-off, `#axh-src`; Bearings: Open EDM; Foundation: Send foundation loads, Pull pile results, Import pile results), each group with a one-line hint. The panel heads fold the card but store nothing (no `data-cid` on them).
+  - `buildInputs()`: `const PJ=document.getElementById("prjPane")` before `#inputCol.innerHTML=html`, re-inserted first before `abutInputTabs()`.
+  - `ABUT_IN_TABS`: `['proj','Project']` first; `ABUT_IN_SEC`: `'prjPane':'proj'`; fallback tab `ABUT_IN_TABS[0][0]` → `'geom'` (a first open is still on Geometry; `abutcalc_inputTab_v1` unchanged).
+  - `refreshProjHeader()` also calls the new `abHdrProj()` (anchor `function abHdrProj(){`): `S.proj.name · S.proj.num` or "(untitled: enter it in the Project tab)"; also on `input` in `#projBlock`. `#hdrProj` click: `abutSetInTab("proj",true)`, focus `#pj_name` (below 1100 px the card is scrolled into view first).
+  - CSS (anchor `/* ABHD (2026-11-05)`): `#hdrActs`, `#hdrProj`, `#prjPane` rules (the `.proj-block` header rules are unchanged and overridden inside the pane).
+- **Decisions (pending engineer review):** Compare… and Self-Test went to the Project tab's Project file card, and the Input ID badge stays in the header next to Print (it identifies the printed inputs). First open stays on Geometry.
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, title typed "Route 6 Bridge", "P-1234", "MJL", "2026-11-05", "ABC", "2026-11-06"):
+  - `LAST_R`, every localStorage key and the Report tab text (title block): identical; every typed value is in the Report; the tool has no DXF;
+  - Share project info: `bridgeSuite.v1.projectMeta` identical; Use shared project info fills the fields; reload on the autosave identical;
+  - header shows "Project: Route 6 Bridge · P-1234"; the link opens the Project tab with Project Name focused;
+  - `project-library --tool abutment`, `check-syntax`: pass; no sideways scroll at 390 / 768 px on any input tab (A and B); 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change.
