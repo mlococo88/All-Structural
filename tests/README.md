@@ -74,6 +74,12 @@ node tests/smoke/project-library.mjs --tool asce7 [--a origin/main] [--shots <di
 # --tool rebar (and phone-layout --tool aci): since 2026-11-05 the rebar calculator is tested in the Development & Splice tab of
 # Concrete Beam Capacity (opened as #dev, run inside its frame); its standalone file is a redirect page (RBRT)
 
+# GitHub sync of the saved projects (shared/github-sync.js, GHS): the whole flow in the page (Spread Footing, the pilot) with
+# api.github.com routed to the in-memory GitHub of tests/engine/gh-mock.mjs: sync off makes no request and no key; Test connection;
+# Upload all; the file equals the tool's Export JSON; background save / update with sha; conflict kept as a copy; GitHub-only Open;
+# offline queue; cloud delete only on request; the token only in the Authorization header; 390 px. ~1 min
+node tests/smoke/github-sync.mjs [--tool spreadfooting] [--shots <dir>]
+
 # Retired rebar calculator (RBRT): the redirect page (?query, #dev, in a frame, one-time .json offer), the suite on its Development &
 # Splice tab, the takeover of the old page's storage, and an Export JSON from the OLD standalone (git ref --old) importing identically. ~1 min
 node tests/smoke/rebar-redirect.mjs [--old f9ec0f9]

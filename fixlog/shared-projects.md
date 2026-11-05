@@ -43,3 +43,15 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
   `ctx.changed()` and redraws. Tools that do not pass `ctx.save` are unchanged.
 - **Tools that load the file, re-tested:** `tests/smoke/project-library.mjs` with `--tool` asce7, stonearch, gusset, retwall, baseplate,
   spreadfooting, steelbeam, edm, abutment, lightpole, timber, mlg, spc, bsl: ALL PASS each.
+
+## 2026-11-05 — PR: claude/github-sync (PR #808: https://github.com/mlococo88/All-Structural/pull/808) — projects-ui.js: optional GitHub sync of the list (`ctx.cloud`, GHS)   [display and storage hooks only]
+- **Why:** engineer request: saved projects copied to a private GitHub repository (`shared/github-sync.js`, `fixlog/shared-github-sync.md`).
+- **Where:** `libraryDialog(ctx)`:
+  - after `let msg = '';`: `const cloud = ctx.cloud && window.SharedGitHubSync ? window.SharedGitHubSync.attach(ctx) : null;` and `cui`;
+  - `draw()`: the default note becomes `(ctx.note || (cloud && cloud.note()) || '<p class="spNote">Saved projects stay in this browser only…')`,
+    then `if (cloud) cloud.decorate(body, cui);`;
+  - rename: `if (done(r)) { if (ctx.renamed) ctx.renamed(name, r.name); if (cloud) cloud.renamed(name, r.name); }` (before: `if (done(r) && ctx.renamed) ctx.renamed(name, r.name);`);
+  - delete: `if (done(ctx.store.remove(name))) { if (ctx.deleted) ctx.deleted(name); if (cloud) cloud.deleted(name); }` (before: `if (done(ctx.store.remove(name)) && ctx.deleted) ctx.deleted(name);`);
+  - `show()`: `if (cloud) cloud.shown(cui).catch(() => {});`; the returned handle has `cloud`.
+- A tool that passes no `ctx.cloud`, or a page without `shared/github-sync.js`, behaves exactly as before (`cloud` is null).
+- **Tools that load projects-ui.js, re-tested (`tests/smoke/project-library.mjs --tool …`, origin/main vs branch):** see the PR.

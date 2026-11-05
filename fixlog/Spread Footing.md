@@ -5445,3 +5445,19 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - Screen screenshot of card 1.1, and the printed Report (p. 5, the plan) looked at: both arrowheads of B = 10.00 ft.
   - `check-syntax` and `spread-footing-scroll` pass.
 - **Saved data:** none. **Governing provision:** none. **Other copies:** none.
+
+## 2026-11-05 — PR: claude/github-sync (PR #808: https://github.com/mlococo88/All-Structural/pull/808) (GHS: saved projects copied to a private GitHub repository, pilot tool; storage only, no result change)
+- **Engineer:** see the same saved projects on every device (GitHub; `docs/github-sync-setup.md`). Spread Footing is the pilot.
+- **Where / before → after:**
+  - After `<script src="shared/projects-ui.js"></script>`: new `<script src="shared/github-sync.js"></script>`.
+  - PLIB block, `SharedProjectsUI.libraryDialog({…})`: after the `changed:` line, new `cloud:{tool:'spread-footing',label:'Spread Footing',fromFile:j=>{…}}`.
+    Files on GitHub are `projects/spread-footing/<name>.json` = the tool's Export JSON (`JSON.stringify(state,null,1)`; the stored item is the
+    state). `fromFile` refuses a file without `geom`, `soil` and `peds` (the test the tool's Import JSON uses) and otherwise stores it as it is;
+    Open goes through the dialog's existing `open` (Object.assign(defaultState(), …), migrateState()).
+- **Saved data:** `sfd_projects` and `sfd_auto` unchanged (key and format). With sync off nothing is written and no request is made.
+  New keys only with sync on: `bridgeSuite.v1.githubSync`, `bridgeSuite.v1.githubSync.tool.spread-footing`.
+- **How verified:** `node tests/smoke/github-sync.mjs` (13 checks, ALL PASS: sync off; Test connection; Upload all; the GitHub file
+  byte-identical to a real Export JSON download; background save and Overwrite with sha; conflict copy; GitHub-only Open; offline queue;
+  explicit cloud delete; token checks; 390 px). `node tests/smoke/project-library.mjs --tool spreadfooting` (origin/main vs branch,
+  sync off): results and saved data identical. Screenshots looked at (dialog at 1400 and 390 px, settings dialog).
+- **Formulas, factors, units, code references:** none.
