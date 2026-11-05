@@ -2482,3 +2482,18 @@ table.vars th{background:#EEF2F6; font-family:var(--font-ui); font-size:8pt; let
 - **How verified:** headless dump (scratchpad `look/dump.mjs`) of the visible text (CSS upper case ignored) and every input value of every input and output tab of the standalone tool (incl. its Report tab), the suite's three tabs and the suite Report, origin/main vs the branch: ALL IDENTICAL (55 views), 0 console errors. `node tests/check-syntax.mjs`: all pass. `node tests/smoke/phone-layout.mjs --tool cbc,aci`: all passed (no sideways scroll at 390 / 768). `node tests/smoke/project-library.mjs --tool rebar`: ALL PASS. Screenshots at 1920 and 390 px before / after (every input tab at 1600) beside Light Pole.
 - **Other copies:** `ACI Rebar Development Length.html` (same block and the same two colour edits, in this PR; CLAUDE.md §3).
 - **Open items:** the `.check` value text in the summary dashboard stays upper case (`47.4 IN`), as before.
+
+## 2026-11-05 — PR: claude/cbc-shell-look (CBTH-3: suite shell aligned: Report background and buttons, one tab colour, slimmer phone bar; display only, no result change)
+
+### CBTH-3. Suite shell (outer page) aligned with the suite look   [display only] [no result change]
+- **Engineer request (2026-11-05, Phase 1 of the concrete beam suite update, appearance):** align the outer suite bar / frame switcher with the Light Pole / Steel Bridge look, as CBTH-1 and CBTH-2 did for the three tabs. CBTH-1 already made the suite bar navy-800 without its shadow.
+- **Where:** the shell's `<style>` block (outside the srcdoc pages), `Concrete Beam Capacity.html`. CSS only.
+- **Before / after:**
+  - `#suite-tab-asd.active .dot{background:#34d399;…}`, `#suite-tab-dev.active .dot{background:#fbbf24;…}`, `#suite-tab-report.active .dot{background:#f472b6;…}` → `background:#60a5fa` for all three, as `#suite-tab-capacity` (the amber and pink dots read as orange / off-palette next to the navy; one blue accent for the selected tab, as its underline).
+  - `#suite-report{…background:#efede8;…}` → `background:#F1F3F5` (slate-100; the beige was the old theme).
+  - `#suite-report .rp-bar button{font-size:9pt;padding:3px 10px;}` → the same plus `font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; border:1px solid #CBD5E1; border-radius:4px; background:#fff; color:#0F172A; cursor:pointer;` and `#suite-report .rp-bar button:hover{background:#F1F3F5;}` (the suite's ordinary button, as the Development & Splice tab after CBTH-2).
+  - New, after the PHN phone rule: `@media screen and (max-width:899px){.suite-tab{padding:8px 9px;font-size:12px;gap:6px;} #suite-brand{padding-right:6px;margin-right:0;gap:7px;} #suite-xfer{padding:2px 0 6px;}}`: at 390 px the suite bar takes three rows instead of four (brand + Beam Capacity, the other three tabs, All tools + share buttons).
+- **Not changed:** the tab labels, ids, handlers, hand-off buttons, Report content and print (print hides the bar as before), saved data.
+- **How verified:** headless dump (visible text and input values of every tab of the three suite tabs, the Report tab and the standalone ACI Rebar tool), origin/main vs branch: ALL IDENTICAL (55 views), 0 console errors. `node tests/check-syntax.mjs`: all pass. `node tests/smoke/phone-layout.mjs --tool cbc`: all passed (390 / 768). Screenshots of the Report tab at 1920 and 390 px before / after.
+- **Other copies:** none.
+- **Open items:** none.
