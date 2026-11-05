@@ -1857,7 +1857,7 @@ function rbrDashColl(v,save){
 })();
 ```
 
-## 2026-11-05 — PR: claude/cbc-p2-display (RBDT: the check summary title names the code; kept in step with the Development & Splice tab of Concrete Beam Capacity.html; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-p2-display, PR #792: https://github.com/mlococo88/All-Structural/pull/792 (RBDT: the check summary title names the code; kept in step with the Development & Splice tab of Concrete Beam Capacity.html; display only, no result change)
 
 ### RBDT. Check summary title names the code   [display only]
 - **Engineer request (2026-11-05):** the panel title (RBDC #791, "Check summary") names the code, following the code mode.

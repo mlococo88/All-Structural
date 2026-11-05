@@ -3265,7 +3265,7 @@ function rbrDashColl(v,save){
 })();
 ```
 
-## 2026-11-05 — PR: claude/cbc-p2-display (CBRL: a failing Detailing "Comparison" line prints the relation the values satisfy; RBDT: the Development & Splice check summary title names the code; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-p2-display, PR #792: https://github.com/mlococo88/All-Structural/pull/792 (CBRL: a failing Detailing "Comparison" line prints the relation the values satisfy; RBDT: the Development & Splice check summary title names the code; display only, no result change)
 
 ### CBRL. Detailing "Comparison" line and Report step: the actual relation   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 2 follow-up; seen in CBDC #788):** on a failing Detailing card the "Comparison" line printed the required relation with the numbers, e.g. "provided ≤ required / 6.000 ≤ 5.250 in" for the default project's torsion stirrup spacing. It should print the relation the numbers satisfy ("6.000 > 5.250 in"), the same way on every Detailing card and in the Report.
