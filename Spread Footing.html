@@ -4284,6 +4284,10 @@ function sfdwBuild(){
  /* ---------- 2./3. Sections ---------- */
  /* SFHK: dowel hooks, and separate dowels over their lap, in a section / the pedestal elevation (new entities only).
     c: pedestal centre on the sheet; a: bar centre half-spacing in the plane; zTof / zTob: footing top / top of the bottom mat */
+ /* SFHS: the lower end of the vertical-bar line: where the hook bend starts (bars act as the dowels, hooked), the footing top
+    (separate dowels: the vertical bars start there and lap with the dowels), else the top of the bottom mat as before */
+ function sfhkBarBot(i,zTof,zTob){const z=P2&&P2.dowels&&P2.dowels[i];if(!z||z.isPatch||!(z.db>0))return zTob;
+  if(!z.cont)return z.nD>0?zTof:zTob;if(z.hook!=='hook90')return zTob;const G=sfdHookGeo(z.ds);return zTob+G.db/2+G.rc;}
  function sfhkEnds(c,a,i,zTof,zTob){const z=P2&&P2.dowels&&P2.dowels[i];if(!z||z.isPatch||!(z.db>0))return;
   const G=sfdHookGeo(z.ds), hk=z.hook==='hook90', zt=zTob+G.db/2, zb=zt+G.rc;let aa=a;
   if(!z.cont){if(!(z.nD>0))return;aa=a-(sfdwPedLayout(i).db+G.db)/2;[c-aa,c+aa].forEach(xb=>D.line(L.bar,xb,hk?zb:zTob,xb,zTof+z.Lprov));}
@@ -4303,7 +4307,7 @@ function sfdwBuild(){
    cut.forEach(({p,i})=>{const c=(dir==='A'?p.x:p.y)*12,b=(dir==='A'?p.bx:p.by)*12,hh=p.h*12;if(hh<=0)return;
     D.rect(L.ped,c-b/2,t12,c+b/2,t12+hh);
     const Lp=sfdwPedLayout(i), a=dir==='A'?Lp.ax:Lp.ay;
-    [c-a,c+a].forEach(xb=>D.line(L.bar,xb,LV.topOfBot,xb,t12+hh-Lp.cov));
+    [c-a,c+a].forEach(xb=>D.line(L.bar,xb,sfhkBarBot(i,t12,LV.topOfBot),xb,t12+hh-Lp.cov));   /* SFHS */
     for(let j=0;j<Lp.nt;j++){const z=t12+Math.min(j*Lp.ts,hh-Lp.cov);D.line(L.bar,c-a-Lp.db/2-Lp.tie/2,z,c+a+Lp.db/2+Lp.tie/2,z);}
     sfhkEnds(c,a,i,t12,LV.topOfBot);   /* SFHK */
     const lx=c+(dir==='A'?p.lex:p.ley)*12;D.line(L.ld,lx,t12+hh+0.55*k,lx,t12+hh+0.05*k);D.line(L.ld,lx,t12+hh+0.05*k,lx-0.04*k,t12+hh+0.14*k);D.line(L.ld,lx,t12+hh+0.05*k,lx+0.04*k,t12+hh+0.14*k);
@@ -4367,7 +4371,7 @@ function sfdwBuild(){
    /* elevation, to the right of the plan section and of its notes */
    const wN=Math.max(...nts.map(q=>q.length))*h*0.9, hh=p.h*12, ex=Math.max(bx/2+2.6*k,-bx/2+wN+1.2*k)+bx/2;
    D.rect(L.ped,ex-bx/2,0,ex+bx/2,hh);D.line(L.out,ex-bx/2-0.6*k,0,ex+bx/2+0.6*k,0);T(L.txt,ex+bx/2+0.6*k,0.05*k,0.08*k,'TOP OF FTG',2);
-   [ex-Lp.ax,ex+Lp.ax].forEach(xb=>D.line(L.bar,xb,-(t12-LV.topOfBot),xb,hh-Lp.cov));
+   [ex-Lp.ax,ex+Lp.ax].forEach(xb=>D.line(L.bar,xb,sfhkBarBot(i,0,-(t12-LV.topOfBot)),xb,hh-Lp.cov));   /* SFHS */
    D.line(L.out,ex-bx/2-0.6*k,-(t12-LV.topOfBot),ex+bx/2+0.6*k,-(t12-LV.topOfBot),D.ltype('HIDDEN'));
    T(L.txt,ex+bx/2+0.6*k,-(t12-LV.topOfBot)+0.05*k,0.08*k,'TOP OF BOT MAT',2);
    const zs=[];for(let j=0;j<Lp.nt;j++){const z=Math.min(j*Lp.ts,hh-Lp.cov);zs.push(z);D.line(L.bar,ex-Lp.tx,z,ex+Lp.tx,z);}
