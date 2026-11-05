@@ -2232,3 +2232,67 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data:** none changed (no key or format; `useExcess`, `asReq`, `asProv` are read as before).
 - **Other copies:** `ACI Rebar Development Length.html` and the Development & Splice frame of `Concrete Beam Capacity.html` (both changed here). Spread Footing already excludes hooks (SFDH/SFEX).
 - **Open items:** none from this change. (Audit C4, the 12 in floor in the tension splice base, is conservative and was not changed.)
+## 2026-11-05 — PR: claude/cbc-look, PR #783: https://github.com/mlococo88/All-Structural/pull/783 (CBTH-1: suite look for the Beam Capacity and ASD Beam Calcs tabs and the suite bar, as Light Pole / apps/steel-bridge; display only, no result change)
+
+### CBTH-1. One header, compact project bar, tab stripe, small card titles, fixed-width inputs   [display only] [no result change]
+- **Engineer request (2026-11-05, Phase 1 of the concrete beam suite update, appearance):** make the suite look like the Light Pole and Steel Bridge apps (not Spread Footing; no orange). Audit item 14.
+- **Where:** the `suite-frame-capacity` and `suite-frame-asd` srcdoc pages (decoded with `srcdoc.py get`, edited, re-encoded with `put`; exact round trip), first `<style>` block: a new CBTH block inserted just before the anchor `/* PHN (2026-11-02): phone / tablet`, and a CBTH phone block after the PHN media block (anchor `#outputPanel{overflow:visible;padding:0 10px 40px}` + `}`). The ASD copy is identical except `#asdInTabs .asdInTab` for `#rcbInTabs .rcbInTab`. No JS, no markup, no id or text changed.
+- **Inserted (Beam Capacity copy):**
+  ```css
+/* CBTH (2026-11-05): suite look as Light Pole / apps/steel-bridge (display only). One header under the suite bar: title,
+   byline and status chip on one line with the buttons; the title block as a compact project bar (label beside its box);
+   card titles 8.5 pt upper-case; selected tabs with a 3 px blue top stripe; input boxes a fixed width with the unit on
+   the same line; header buttons translucent on navy (no white primary); table heads slate #EEF2F6. */
+#hdr{padding:6px 14px 7px}
+#hdr .titleRow{align-items:center;gap:6px 12px}
+#hdr .titleRow>div:first-child{display:flex;align-items:baseline;flex-wrap:wrap;gap:0 12px;min-width:0}
+#hdr h1{font-size:14pt;line-height:1.25}
+#hdr .byline{margin-top:0}
+#statusChip{font-size:9pt;padding:2px 11px;border-radius:12px;margin-right:auto}
+#hdrBtns button{font-size:9.5pt;padding:4px 11px;border-color:rgba(255,255,255,.35);background:rgba(255,255,255,.08)}
+#hdrBtns button:hover{background:rgba(255,255,255,.18)}
+#hdrBtns button.pri{background:rgba(255,255,255,.08);color:#fff;font-weight:600}
+#hdrBtns button.pri:hover{background:rgba(255,255,255,.18)}
+#projGrid{display:flex;flex-wrap:wrap;align-items:center;gap:5px 12px;margin-top:6px}
+#projGrid label{flex-direction:row;align-items:center;gap:6px;font-size:9.5pt}
+#projGrid label span{font-weight:600;font-size:8pt;letter-spacing:.05em;text-transform:uppercase;white-space:nowrap}
+#projGrid input,#projGrid select{width:104px;padding:2px 6px;border-color:rgba(255,255,255,.35)}
+#projGrid input[data-fkey='pg_Project'],#projGrid input[data-fkey='pg_Subject']{width:160px}
+#projGrid input[data-fkey='pg_Sheet']{width:64px}
+#projGrid input[type=date]{width:124px}
+#projGrid select{width:180px}
+#projGrid input[readonly]{width:140px}
+#tabBar button.active{color:var(--navy-800);box-shadow:inset 0 3px 0 var(--blue-600)}
+#@@InTabs .@@InTab[aria-selected='true']{color:var(--navy-800);box-shadow:inset 0 3px 0 var(--blue-600)}
+h2.secTitle{font-size:inherit;font-weight:inherit;letter-spacing:inherit;line-height:1.4}
+.fRow{flex-wrap:nowrap;gap:8px;margin:0;padding:3px 0;border-bottom:1px solid #EEF0F3}
+.fRow:last-child{border-bottom:0}
+.fRow label{flex:1 1 auto;min-width:0}
+.fRow input,.fRow select,.fRow textarea{flex:0 1 auto;min-width:0}
+.fRow input[type=number]{width:92px;text-align:right;font-variant-numeric:tabular-nums}
+.fRow select{width:auto;max-width:60%}
+.fRow .unit{min-width:34px}
+.fRow>input:last-child,.fRow>select:last-child{margin-right:42px}
+.fRow.chk{border-bottom:0}
+.fRow.chk input{margin-right:0}
+table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F6}
+  ```
+- **Inserted after the PHN media block (both copies):**
+  ```css
+/* CBTH (2026-11-05): phone / tablet: the title block keeps two columns with the label above its box */
+@media screen and (max-width:899px){
+  #projGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+  #projGrid label{flex-direction:column;align-items:stretch;gap:1px}
+  #projGrid input,#projGrid select,#projGrid input[data-fkey]{width:auto;max-width:none}
+  #projGrid input[type=date],#projGrid input[readonly]{width:auto}
+  #statusChip{margin-right:0}
+}
+  ```
+- **Suite shell** (`#suite-nav`, the outer bar), so the suite bar and the tab's header read as one navy header:
+  - Before: `background:var(--navy-900);... padding:0 12px;gap:2px;box-shadow:0 2px 6px rgba(0,0,0,.25);position:relative;z-index:10;}`
+  - After: `background:var(--navy-800);... padding:0 12px;gap:2px;position:relative;z-index:10; border-bottom:1px solid rgba(255,255,255,.12);}`
+- **Effect:** header ≈ 70 px instead of ≈ 140 px at 1920 (title, byline, status chip and buttons on one line; the nine title-block fields on one line at 1920, two at 1280); selected input and output tabs carry the 3 px blue top stripe; card titles 8.5 pt upper-case (were 12 pt bold) in the input and output panels; number boxes 92 px right-aligned with the unit beside them (the unit no longer wraps under the box at 390 px); "Print / PDF" is a header button like the others (was white). Phone (below 900 px): title block two columns, label above the box, as before.
+- **Not changed:** every input, id, label text, default, handler, computed result, saved key / format (`rcbeam_v2_auto`, `rcbeam_v2_projects`, the ASD keys), the Report tab and print. The Development & Splice tab is re-themed in a later PR (CBTH-2).
+- **How verified:** headless dump (scratchpad `look/dump.mjs`) of the visible text and every input value of every input and output tab of the three suite tabs, the Report tab and the standalone ACI Rebar tool, origin/main vs the branch: ALL IDENTICAL (55 views; main against itself also identical); 0 console errors. `node tests/check-syntax.mjs`: all pass. `node tests/smoke/phone-layout.mjs --tool cbc,aci`: all passed (no sideways scroll at 390 / 768). `node tests/smoke/project-library.mjs --tool rebar`: ALL PASS. Screenshots at 1920, 1280 and 390 px before / after beside Light Pole.
+- **Other copies:** none (the CSS of the two frames is kept in step by this entry).
+- **Open items:** at 390 px the ASD Summary table and the Beam Capacity Summary table are wider than the frame (their Worked in / Status columns scroll inside the table box) — as before, not changed.
