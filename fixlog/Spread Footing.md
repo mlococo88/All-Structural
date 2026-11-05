@@ -4834,3 +4834,32 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 
 ### Open items
 - A very large schedule (many pedestals × load cases) on the extra sheet is not split; it is flagged by the existing "does not fit the sheet" marker.
+
+## 2026-11-05 — PR: claude/sf-ped-combo-loads (PR #768: https://github.com/mlococo88/All-Structural/pull/768) — Load Combinations 2.6: pedestal loads by combination, worked (SFPC; display only, no result change)
+
+### SFPC. Card 2.6 "Pedestal Loads by Combination (at Top of Pedestal)", its Report subsection, and links from the 3D view and the drawings   [display only]
+- **Request (engineer, CLAUDE.md §6):** the per-pedestal combined loads quoted in the 3D labels (SF3L) and on the section sheets (SFDL) were not worked anywhere.
+- **Where:**
+  - New `sfdPedCb(p,f)` (after `renderCombos`, anchor `/* SFPC (2026-11-05, engineer; CLAUDE.md §6)`): P, V_x, V_y, M_x, M_y of a pedestal = Σ γ_i·Q_i over `TYPES` (γ_i = `f[type]`, Q_i = the entered `p.loads[type]`), with its terms; direct mode the envelope as entered. New `sfdPcSel`, `sfdPcSub`, `renderPedCb(b)`, `SFPC_SYM`.
+  - `renderCombos`: after 2.5, `renderPedCb(secPanel(T,'o-cb-ped','2.6  Pedestal Loads by Combination (at Top of Pedestal)'));`. The card has:
+    - the Bearing / Stability selector (`comboSelectorBar('asd',…)`, the same `SEL`; the default is the governing service combination, and an LRFD pick there shows that LRFD combination, reference only);
+    - for the combination shown, one row per pedestal × component: the symbolic terms γ_type·Q_type, the substitution, the value;
+    - an open "All … combinations × pedestals" table (service, then LRFD reference; governing in bold, the one shown shaded). Direct mode: the envelope only.
+  - `sfdLrPick`: after `syncSelTo3D('asd');` the card is re-rendered, so a pick in Bearing, Stability or the card moves all of them, and the 3D view.
+  - `SFD_LINKS`: `'o-cb-ped':['tab-combos','2.6 Pedestal loads by combination']`. `v3dTitle`: "see 2. Load Combinations" (tab link) → "worked in " + `sfdLink('o-cb-ped','')` (opens the card); the old click handler is removed.
+  - Drawings `sfdwBuild`: `sfdlV` now calls `sfdPedCb` (same sums: verified, every DXF entity unchanged). Section sheets: a second line under the loads note, `PER-PEDESTAL VALUES WORKED IN: LOAD COMBINATIONS TAB 2.6 / CALC REPORT "PEDESTAL LOADS BY COMBINATION"`.
+  - Report: new `sfdPcReport(M)` after `sfdLrReport` in `renderReport`. It adds the subsection "Pedestal loads by combination (at top of pedestal)" (key `S-pcb`) at the end of "Loads and combinations": the governing service combination worked per pedestal and component (Σ γ_i Q_i, substituted; zero components not listed), and the table of every combination × pedestal. Include box "Pedestal loads by combination" in the Report bar (`sfxControls` / `sfxWire`, `data-sfx="pcb"`). The card is marked `sfPcRef` and skipped by `sfxWalk` (as `sfLrRef`), so the Report has one copy.
+  - State: new field `pedCbRpt` (default `true` in `defaultState`; `migrateState` backfills `true` for saves without it, as `lrRefRpt`). Additive; no existing key or field changed.
+- **Governing provision:** none (display). The factors are the existing ASCE 7-16 §2.4.1 / §2.3.1 combination factors (`genCombos`); nothing new is computed for the checks.
+- **Decisions (pending engineer review):** the card shares the Bearing / Stability selection (`SEL`) rather than having its own, so all of them stay in step; the 3D selector stays local (SF3L). The Report works the governing service combination, as the rest of the Report. The Include box is saved with the project like the LRFD reference box (default on).
+- **Check case (Seymour, governing D + 0.75L + 0.45(+Wx) + 0.75S, Ped 2):** P = 1.00·15.90 + 0.75·11.50 + 0.45·11.10 = 29.52 kip; V_y = 1.00·0.50 + 0.75·0.50 + 0.45·15.10 = 7.67 kip; M_x = 1.00·31.50 + 0.75·35.20 + 0.45·120.20 = 111.99 kip-ft (the card, the Report and the earlier 3D / drawing checks agree). Default, governing, Ped 1: P = 1.00·120 + 0.75·60 = 165.00, V_x = 0.45·8.00 = 3.60.
+- **How verified:**
+  - Deep diff, origin/main vs branch, all 10 harness cases: `R`, `P2` and the dashboard identical; 0 console / KaTeX errors.
+  - Report text: with the Include box off, identical to main. With it on (default), only added lines (the new subsection, appended at the end of its section; 0 lines removed or changed).
+  - DXF of default / Seymour / dir: only the new note line per section sheet added; `SharedDxf.validate` ok.
+  - Sync script: card pick → `SEL`, Bearing selector and 3D follow; Bearing LRFD pick → card shows it; the 3D title link opens tab 2 card 2.6.
+  - `node tests/check-syntax.mjs`; `tests/smoke/spread-footing-scroll.mjs`.
+- **Saved data:** one new additive field `pedCbRpt` (backfilled); nothing else. **Other copies:** the same Σ γ·Q sum remains inline in the 3D view's `buildLoads` (`pedLoads`), unchanged.
+
+### Open items
+- none.
