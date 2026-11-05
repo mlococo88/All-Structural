@@ -5079,3 +5079,45 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - Report: 0 KaTeX errors, 0 console errors. `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Card 5.6 and the dashboard were checked by eye (Seymour).
 - **Saved data:** no change. **Other copies:** none.
 - **Open item (raised, not changed):** the concrete bearing check itself (card 5.6, `dcr = PuMax/phiPn`) uses the footing's φ0.85f′c A_1√(A_2/A_1) only. 16.3.3.4 takes B_n as the lesser of the supported member and the foundation, and with one f′c the pedestal's 0.85f′c A_1 governs whenever √(A_2/A_1) > 1. Default project: DCR 318.81/1432.08 = 0.22 vs 318.81/716.04 = 0.45. Needs the engineer's decision (pedestal f′c may differ in practice; the tool has one f′c).
+
+## 2026-11-05 — PR: claude/sf-ex-asmin — Excess-reinforcement option (25.4.10.1) for footing bars: A_s,req = A_s,min where the 0.0018A_g minimum governs, instead of no reduction (SFEM; calculation option, default off = no change)
+
+### SFEM. ℓ_d reduction with A_s,req = A_s,min where the minimum governs   [CLAUDE.md §4; supersedes the SFEX block (#727)]
+- **Engineer (2026-11-05):** approved. Where the 0.0018 minimum governs A_s,req, use A_s,req = A_s,min in the ratio instead of blocking the reduction. Straight bars only; the hook exclusion (25.4.10.2(d)) stays. The option stays off by default.
+- **Provisions (read in the PDF, printed pages):**
+  - 25.4.10.1 (p. 487).
+  - 25.4.10.2 (pp. 487–488).
+  - R25.4.10.2 (p. 488): no factor where full-f_y anchorage is required. Its examples are shrinkage and temperature reinforcement per 24.4.3.4 and the integrity provisions.
+  - 24.4.1 (p. 461): S&T reinforcement is the steel perpendicular to the flexural reinforcement.
+  - 8.6.1.1 / R8.6.1.1 (p. 110): the 0.0018A_g is the *minimum flexural* reinforcement. It has the same area as 24.4.3.2 but is flexural steel near the tension face. 7.6.1.1 is the same for one-way.
+  - 13.3.3.1 (p. 197): two-way isolated footings → Ch. 7 and 8.
+  - So R25.4.10.2's S&T example does not cover the footing's flexural minimum. The #727 block was more conservative than the code requires.
+- **Where:** `sfdDevAll` (anchor `const AsFlex=top?des.reqTop:des.reqBotFlex`).
+  - Before: `const AsReq=top?Math.max(des.reqTop,des.AsMinPerFt):des.reqBot, AsProv=m.As, rEx=(flexGov&&AsProv>0)?Math.min(1,AsReq/AsProv):1;`
+  - After: `const AsReq=flexGov?(top?Math.max(des.reqTop,des.AsMinPerFt):des.reqBot):des.AsMinPerFt, AsProv=m.As, rEx=(AsProv>0)?Math.min(1,AsReq/AsProv):1;`
+  - ℓ_d,red = max(ℓ_d·A_s,req/A_s,prov, 12 in) as before (25.4.2.1(b)). Hooks unchanged: no reduction of ℓ_dh.
+  - Display:
+    - Report step `<q>ldx`: worked with A_s,min, citing R8.6.1.1 and R25.4.10.2.
+    - Footing Design 5.4: equation line and note.
+    - Input hint; dashboard / Report reference; the `sfdDevAll` header comment.
+- **Check case revEx (option on; #7 epoxy @ 8 in bottom, #6 @ 8 in top, t = 24 in, A_s,min = 0.0018·12·24 = 0.518 in²/ft):**
+  - **Bottom x (#7):** flexure 0.037 < 0.518, so A_s,min governs.
+    - Before: no reduction, ℓ_d 29.88 in.
+    - After: ℓ_d,red = max(29.88·0.518/0.900, 12) = **17.21 in** > 15.00 available. Still NG; hooked ℓ_dh 18.35 > 15.00 → **FAIL unchanged**.
+  - **Bottom y (#7):** flexure 0.599 governs, 19.87 in. Unchanged, PASS.
+  - **Top x (#6):** flexure 0.0007, so A_s,min governs.
+    - ℓ_d,red = max(29.03·0.518/0.660, 12) = **22.80 in** (before 29.03) > 15.00. Still REVIEW (hook: ℓ_dh 14.56 ≤ 15.00).
+  - **Top y (#6):** flexure 0.399 < 0.518.
+    - ℓ_d,red = **22.80 in** (before 29.03) ≤ 35.00. PASS, D/C 0.829 → **0.651**.
+  - These equal the values before #727 (SFEX), since A_s,req = max(flexure, A_s,min) again.
+- **Other cases with the option on:**
+  - Default project ("defEx", #8 @ 9 in, A_s,min 0.648, A_s,prov 1.053): ℓ_d,red 28.46 → 17.51 in. Bottom x still FAIL (ℓ_dh 18.69 > 12.00). Bottom y D/C 0.791 → 0.486.
+  - Seymour 3 ksi with the option on ("seyEx"):
+    - bottom x 34.51 → 19.88 in, still FAIL (> 11.00, ℓ_dh 19.56);
+    - top y 33.52 → 26.33 in, D/C 0.959 → 0.753.
+- **How verified:**
+  - Headless Chromium, origin/main fe9b9f4 vs the branch, deep diff of `R` and `P2` on 17 cases (15 as in SFBC plus defEx and seyEx).
+  - **Option off (default and every case without it):** only the stored informational `P2.dev.rows[].rEx` and `LdEx` move, where A_s,min governs (e.g. default rEx 1 → 0.615, LdEx 28.46 → 17.51). `LdUse`, `dc` and every status are unchanged. Dashboard and Report text are identical.
+  - **Option on (revEx, defEx, seyEx):** `rEx`, `LdEx`, `LdUse` and `dc` move as listed. No status changes.
+  - 0 console / KaTeX errors. `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Card 5.4 (revEx) checked by eye.
+- **Saved data:** no change (same `mat.ldExcess`, default off). **Other copies:** none.
