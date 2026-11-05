@@ -722,7 +722,7 @@ function defaultState(){
  ev:{cover:1.5,gev:120,qDsur:0,qLsur:0},
  freinf:{botX:{size:8,spc:9,mode:'spacing'},botY:{size:8,spc:9,mode:'spacing'},topX:{size:0,spc:12,mode:'spacing'},topY:{size:0,spc:12,mode:'spacing'},botOuter:'y'},
  stab:{muMode:'phi',mu:0.45,pf:0,FSot:2,FSsl:1.5,FSfl:1.25,shearCouple:'on',otGate:'off',eccMode:'kern',eccCustom:0.25},
- manPrint:false,manPart:'p0',lrRefRpt:true,pedCbRpt:true,
+ manPrint:false,manPart:'p0',lrRefRpt:true,pedCbRpt:true,ovRpt:true,
  assump:'',peds:[p1,p2]};}
 let state=defaultState(), collapseState={};
 function getPath(o,p){return p.split('.').reduce((a,k)=>a&&a[k],o);}
@@ -734,6 +734,7 @@ function migrateState(){
  if(state.manPrint===undefined)state.manPrint=false;
  if(state.lrRefRpt===undefined)state.lrRefRpt=true;   /* SFLR: Report Include box, LRFD reference tables (default on) */
  if(state.pedCbRpt===undefined)state.pedCbRpt=true;   /* SFPC: Report Include box, pedestal loads by combination (default on) */
+ if(state.ovRpt===undefined)state.ovRpt=true;   /* SFOV: Report Include box, overview figures (default on) */
  if(!state.manPart)state.manPart='p0';
  if(!state.freinf)state.freinf=defaultState().freinf;
  ['botX','botY','topX','topY'].forEach(k=>{const m=state.freinf[k];if(m&&!m.mode)m.mode='spacing';});   /* SFRQ: older saves entered a spacing */
@@ -3945,7 +3946,7 @@ function renderReport(){
  let M;
  try{
  sfpDrawHidden();   /* SFAC: the plots of hidden tabs, which sfxApply reads */
- try{M=sfroOrder(sfdPcReport(sfdLrReport(sfxApply(sfrModel()))));}catch(e){T.innerHTML='<div class="errbox">Report error: '+sfEsc(e&&e.message)+'</div>';SFRP.api=null;SFRP.doc=null;return;}   /* SFRO: the design order (display only) */
+ try{M=sfovReport(sfroOrder(sfdPcReport(sfdLrReport(sfxApply(sfrModel())))));}catch(e){T.innerHTML='<div class="errbox">Report error: '+sfEsc(e&&e.message)+'</div>';SFRP.api=null;SFRP.doc=null;return;}   /* SFRO: the design order (display only) */
  }finally{if(lrKeep!=null){SEL.asdLr=lrKeep;renderBearing();renderStability();SFPLT.skip=true;}}
  SFRP.api=SharedReport.mount(T,M,{closed:SFRP.closed,onGoto:sfrGoto,controls:sfxControls()});   /* SFRX: the Include box */
  SFRP.doc=SFRP.api.doc;sfxWire(T);
@@ -4321,9 +4322,101 @@ function sfroOrder(M){
  M.sections.push(...apx);
  return M;
 }
+/* SFOV (2026-11-05, engineer): "Overview of the footing" right after the Summary of results (Include box "Overview figures", saved
+   field state.ovRpt, default on): a 3D snapshot (the 3D View at its default selection and reset camera), the plan and the two cross
+   sections of the drawing sheets (Drawings tab: to scale, dimensioned; the view only, without border, title block or schedules),
+   and the 1.2 elevation (Schematic tab, to scale). Every view gets a scale bar. Nothing is computed: the drawings are the Drawings
+   and Schematic tabs' own, the 3D image is the 3D View's own scene. Display only. */
+const SFOV={key:null,img:null,why:''};
+/* a nice bar length (ft) for a view about w ft wide */
+const sfovBarFt=w=>{const t=w/4;return [1,2,5,10,20,25,50,100].reduce((a,b)=>Math.abs(b-t)<Math.abs(a-t)?b:a,1);};
+/* one drawing-sheet view (model inches, full size) as SVG with a scale bar under it */
+function sfovSheetView(Bd,sh){
+ const D=Bd.D,i0=sh.i0,i1=sh.iv||sh.i1,b=D.bbox(i0,i1);if(!isFinite(b[0]))return '';
+ const k=sh.k||12,pad=0.15*k,ft=sfovBarFt((b[2]-b[0])/12),bl=ft*12,th=0.12*k,room=0.55*k;
+ const F=[b[0]-pad,b[1]-pad-room,b[2]+pad,b[3]+pad];
+ let s=SharedDxf.toSVG(D,{i0,i1,bg:'#fff',frame:F});
+ const X=x=>+(x-F[0]).toFixed(3),Y=y=>+(F[3]-y).toFixed(3),y0=b[1]-pad-0.3*k,x0=b[0],sw=+(Math.max(F[2]-F[0],F[3]-F[1])/900).toFixed(3);
+ let g='<g stroke="#000" stroke-width="'+sw+'" fill="none"><rect x="'+X(x0)+'" y="'+Y(y0+0.06*k)+'" width="'+bl+'" height="'+(0.06*k)+'" fill="#000"/>'+
+  '<rect x="'+X(x0+bl)+'" y="'+Y(y0+0.06*k)+'" width="'+bl+'" height="'+(0.06*k)+'" fill="#fff"/></g>'+
+  '<g font-family="Arial, Helvetica, sans-serif" font-size="'+th+'" fill="#000"><text x="'+X(x0)+'" y="'+Y(y0-0.17*k)+'" text-anchor="middle">0</text>'+
+  '<text x="'+X(x0+bl)+'" y="'+Y(y0-0.17*k)+'" text-anchor="middle">'+ft+'</text><text x="'+X(x0+2*bl)+'" y="'+Y(y0-0.17*k)+'" text-anchor="middle">'+(2*ft)+' ft</text></g>';
+ s=s.replace(/<\/svg>\s*$/,g+'</svg>');
+ return s.replace(/^<svg /,'<svg style="width:100%;height:auto;max-height:2.6in;display:block;margin:0 auto" ');
+}
+/* a Schematic-tab drawing (1.1 plan / 1.2 elevation: to scale, one scale across and up) with a scale bar under it; its scale is read
+   from the footing's own rectangle (fill fl), whose width is B·sc */
+function sfovSchem(el,fl,maxH){
+ let s=(el&&el.querySelector&&el.querySelector('svg')||{}).outerHTML||'';if(!s)return '';
+ const m=s.match(new RegExp('<rect x="([\\d.]+)" y="[\\d.]+" width="([\\d.]+)" height="[\\d.]+" fill="'+fl+'"'));
+ const W=+((s.match(/^<svg[^>]*\swidth="([\d.]+)"/)||[])[1]),H=+((s.match(/^<svg[^>]*\sheight="([\d.]+)"/)||[])[1]);
+ if(!m||!(W>0)||!(H>0))return sfxUniq(s);
+ const sc=(+m[2])/R.B,ft=sfovBarFt(R.B),bl=ft*sc,x0=+m[1],y=H+10;
+ const bar='<g font-size="10" fill="#000"><rect x="'+x0+'" y="'+y+'" width="'+bl+'" height="5" fill="#000" stroke="#000" stroke-width="0.8"/><rect x="'+(x0+bl)+'" y="'+y+'" width="'+bl+'" height="5" fill="#fff" stroke="#000" stroke-width="0.8"/>'+
+  '<text x="'+x0+'" y="'+(y+17)+'" text-anchor="middle">0</text><text x="'+(x0+bl)+'" y="'+(y+17)+'" text-anchor="middle">'+ft+'</text><text x="'+(x0+2*bl)+'" y="'+(y+17)+'" text-anchor="middle">'+(2*ft)+' ft</text></g>';
+ s=s.replace(/^<svg([^>]*?)\swidth="[\d.]+"([^>]*?)\sheight="[\d.]+"/,'<svg$1$2 viewBox="0 0 '+W+' '+(H+26)+'" style="width:100%;height:auto;max-height:'+maxH+';display:block;margin:0 auto"');
+ return sfxUniq(s.replace(/<\/svg>\s*$/,bar+'</svg>'));   /* SFCB: its own marker ids */
+}
+/* the 3D View at its default selection, rendered once more to an image off screen (WebGL); '' with SFOV.why when it cannot be */
+function sfovSnap3D(){
+ const key=JSON.stringify(state);if(SFOV.key===key)return SFOV.img;
+ SFOV.key=key;SFOV.img='';SFOV.why='';
+ if(!window.THREE){SFOV.why='three.js is not loaded (offline)';return '';}
+ let rr=null;
+ try{
+  const cv=document.createElement('canvas');
+  if(!(cv.getContext('webgl2')||cv.getContext('webgl'))){SFOV.why='WebGL is not available in this browser';return '';}
+  if(!V3D.inited)renderView3D();
+  if(!V3D.inited||!V3D.scene){SFOV.why='the 3D view could not be built';return '';}
+  const list=v3dActiveList(),gi=R.asd.indexOf(R.govBear),def=list.some(o=>o.key==='GOV')?'GOV':(gi>=0?'ASD:'+gi:list[0].key);
+  const lyr=$$('#v3dwrap [data-lyr]'),cx=$('#v3dClipX'),cy=$('#v3dClipY'),col=$$('#v3dwrap input[name="v3dcolor"]');
+  const keep={combo:V3D.combo,lyr:lyr.map(c=>c.checked),cx:cx&&cx.value,cy:cy&&cy.value,op:V3D.opacity,cm:V3D.colorMode,col:col.map(r=>r.checked)};
+  const off=keep.combo!==def||keep.lyr.some(v=>!v)||(cx&&cx.value!=='100')||(cy&&cy.value!=='100')||Math.abs(V3D.opacity-0.92)>1e-9||V3D.colorMode!=='plain';
+  const setDef=()=>{V3D.combo=def;lyr.forEach(c=>c.checked=true);if(cx)cx.value='100';if(cy)cy.value='100';V3D.opacity=0.92;V3D.colorMode='plain';col.forEach(r=>r.checked=r.value==='plain');rebuildScene();};
+  const restore=()=>{V3D.combo=keep.combo;lyr.forEach((c,i)=>c.checked=keep.lyr[i]);if(cx)cx.value=keep.cx;if(cy)cy.value=keep.cy;V3D.opacity=keep.op;V3D.colorMode=keep.cm;col.forEach((r,i)=>r.checked=keep.col[i]);rebuildScene();};
+  if(off)setDef();
+  try{
+   const W=1000,H=600,c2=document.createElement('canvas');
+   rr=new THREE.WebGLRenderer({canvas:c2,antialias:true,preserveDrawingBuffer:true});rr.setSize(W,H,false);rr.setPixelRatio(1);rr.localClippingEnabled=true;
+   const cam=new THREE.PerspectiveCamera(45,W/H,0.1,2000),span=Math.max(R.B,R.L,R.Df+4),r=span*2.1,az=0.9,el=0.5,ty=-R.t/2;   /* the Reset view camera */
+   cam.position.set(r*Math.cos(el)*Math.cos(az),ty+r*Math.sin(el),r*Math.cos(el)*Math.sin(az));cam.up.set(0,1,0);cam.lookAt(0,ty,0);
+   /* the load labels are sprites sized and placed for a camera and a canvas (v3dLayoutLabels): placed for this one, then for the live view again */
+   const kc=V3D.cam,kr=V3D.renderer;V3D.cam=cam;V3D.renderer={domElement:{clientWidth:W,clientHeight:H,getBoundingClientRect:()=>({left:0,top:0,width:W,height:H})}};
+   try{v3dLayoutLabels();}finally{V3D.cam=kc;V3D.renderer=kr;}
+   rr.render(V3D.scene,cam);
+   SFOV.img=c2.toDataURL('image/png');
+  }finally{if(off)restore();}
+  V3D.needsRender=true;
+ }catch(e){SFOV.img='';SFOV.why='the 3D view could not be rendered ('+String(e&&e.message||e).slice(0,80)+')';}
+ finally{if(rr){try{rr.dispose();rr.forceContextLoss();}catch(e){}}}
+ if(SFOV.img&&SFOV.img.length<5000){SFOV.img='';SFOV.why='the 3D image came out blank';}
+ return SFOV.img;
+}
+function sfovReport(M){
+ if(state.ovRpt===false||!M||!M.sections||!R||R.fatal)return M;
+ const items=[],fi=(svg,caption)=>items.push({type:'figure',svg,caption});
+ const nm=R.directMode?'the direct factored envelope':'the governing service combination ('+(R.govBear?R.govBear.cb.name:'—')+')';
+ const img=sfovSnap3D();
+ if(img)fi('<img src="'+img+'" alt="3D view" style="width:100%;max-width:6.2in;max-height:2.9in;object-fit:contain;display:block;margin:0 auto">',
+  '3D View tab[[tab:3d| ↗]] at its default selection ('+nm+'; every layer on, no cut) and the Reset-view camera (isometric, from the +x, −y side). Perspective: not to scale; footing B × L × t = '+sfrN(R.B)+' × '+sfrN(R.L)+' × '+sfrN(R.t)+' ft. Load labels as in the 3D View (values of that combination).');
+ else items.push({type:'note',text:'3D view not included: '+SFOV.why+'. The 3D View tab[[tab:3d| ↗]] shows it on screen.'});
+ let Bd=null;try{Bd=sfdwBuild();}catch(e){Bd=null;}
+ const sh=id=>Bd&&Bd.S.find(s=>s.id===id),scN=k=>(SFDW_SCALES.find(q=>q[0]===k)||[0,'1:'+k])[1],no=s=>Bd.S.indexOf(s)+1;
+ const cap=(s,t)=>t+' — Drawings tab[[tab:drawings| ↗]], sheet '+no(s)+' ('+s.title.toLowerCase()+'), drawn at '+scN(s.k)+' on the 11 × 17 sheet and reduced here: use the scale bar or the dimensions.';
+ fi(sfovSchem(planSVG(),'#e8dcc8','3.4in'),'Plan: footing, pedestals, load points (red), kern (green), resultant of the governing bearing combination (red ⊗) — Schematic tab[[tab:schem| ↗]] card 1.1, to scale, with a scale bar; B = '+sfrN(R.B)+' ft (x), L = '+sfrN(R.L)+' ft (y).');
+ fi(sfovSchem(sectSVG(),'#d9d9d9','2.4in'),'Elevation looking along −y: grade, embedment D_f, footing t, pedestals, soil cover, water table and the P / V_x arrows — Schematic tab[[tab:schem| ↗]] card 1.2, to scale (one scale across and up), with a scale bar.');
+ const sa=sh('secA'),sb=sh('secB');
+ [sa,sb].forEach((q,j)=>{if(q)fi(sfovSheetView(Bd,q),cap(q,'Cross section '+(j?'B-B (along y)':'A-A (along x)')+': footing, pedestals, bars and dowels, dimensioned'));});
+ if(!Bd)items.push({type:'note',text:'Plan and cross sections not included: the drawing sheets could not be built.'});
+ const sec={title:'Overview of the footing',key:'S-ov',subs:[{title:'3D view, plan, elevation and cross sections',items}]};
+ const i=M.sections.findIndex(x=>x.title==='Summary of results');
+ M.sections.splice(i>=0?i+1:0,0,sec);
+ return M;
+}
 /* the report bar's Include box: the manual (state.manPrint, the same field as the Manual tab's "Include this manual" box) */
-function sfxControls(){return '<span class="sfx-inc" style="display:inline-flex;gap:2px 10px;font-size:9pt;align-items:center"><b>Include:</b> <label style="white-space:nowrap"><input type="checkbox" data-sfx="man"'+(state.manPrint?' checked':'')+'> User manual</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="lr"'+(state.lrRefRpt!==false?' checked':'')+'> LRFD reference tables (bearing, stability)</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="pcb"'+(state.pedCbRpt!==false?' checked':'')+'> Pedestal loads by combination</label></span>';}   /* SFPC */
-function sfxWire(T){T.querySelectorAll('input[data-sfx="pcb"]').forEach(x=>x.addEventListener('change',()=>{state.pedCbRpt=x.checked;saveAuto();renderReport();}));   /* SFPC */
+function sfxControls(){return '<span class="sfx-inc" style="display:inline-flex;gap:2px 10px;font-size:9pt;align-items:center"><b>Include:</b> <label style="white-space:nowrap"><input type="checkbox" data-sfx="man"'+(state.manPrint?' checked':'')+'> User manual</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="lr"'+(state.lrRefRpt!==false?' checked':'')+'> LRFD reference tables (bearing, stability)</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="pcb"'+(state.pedCbRpt!==false?' checked':'')+'> Pedestal loads by combination</label> <label style="white-space:nowrap"><input type="checkbox" data-sfx="ov"'+(state.ovRpt!==false?' checked':'')+'> Overview figures</label></span>';}   /* SFPC */
+function sfxWire(T){T.querySelectorAll('input[data-sfx="ov"]').forEach(x=>x.addEventListener('change',()=>{state.ovRpt=x.checked;saveAuto();renderReport();}));   /* SFOV */
+ T.querySelectorAll('input[data-sfx="pcb"]').forEach(x=>x.addEventListener('change',()=>{state.pedCbRpt=x.checked;saveAuto();renderReport();}));   /* SFPC */
  T.querySelectorAll('input[data-sfx="lr"]').forEach(x=>x.addEventListener('change',()=>{state.lrRefRpt=x.checked;saveAuto();renderReport();}));   /* SFLR */
  T.querySelectorAll('input[data-sfx="man"]').forEach(x=>x.addEventListener('change',()=>{state.manPrint=x.checked;document.body.classList.toggle('printManual',state.manPrint);const c=$('#manPrintChk');if(c)c.checked=state.manPrint;saveAuto();renderReport();}));}
 /* Print: from any tab the Report is shown (not saved: the tab is not part of the project), printed, and the tab of before comes back */
@@ -4422,6 +4515,7 @@ function sfdwBuild(){
   const dx=isFinite(b[0])?cx-(b[0]+b[2])/2:0, dy=isFinite(b[0])?cy-(b[1]+b[3])/2:0;
   if(isFinite(b[0]))D.move(i0,dx,dy);
   D.k=k;D.h=0.1*k;
+  const iv=D.mark();   /* SFOV: end of the view (before the post-placed schedules, the border and the title block) */
   if(post){const g=0.15*k;post(k,{i0,dx,dy,ox,W,H,area:[ox+mm+g,mm+tb+g,ox+W-mm-g,H-mm-g]});D.k=k;D.h=0.1*k;}
   SharedDxf.sheetBorder(D,L.br,ox,W,H,k);D.rect(L.br,ox+mm,mm,ox+W-mm,H-mm);   /* SFPS-2: outer border 0.25 in inside the paper edge */
   /* title block (no owner cell): two rows along the bottom of the sheet */
@@ -4435,7 +4529,7 @@ function sfdwBuild(){
    const mx=Math.floor((cw-0.12)/(0.13*0.9));D.text(L.tb,x+0.05*k,yb+0.1*k,0.13*k,String(val==null||val===''?'—':val).toUpperCase().slice(0,mx),0);
    if(lab==='SHEET')sheetEnt=D.E[D.E.length-1];
    x+=cw*k;if(ci<row.length-1)D.line(L.tb,x,yb,x,yb+r);});});
-  const sh={id,title,k,i0,i1:D.mark(),ox,W,H,over,sheetEnt};S.push(sh);
+  const sh={id,title,k,i0,iv,i1:D.mark(),ox,W,H,over,sheetEnt};S.push(sh);
   ox+=W+1*k;
   return sh;
  }
