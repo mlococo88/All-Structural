@@ -4921,7 +4921,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   3. **Where 11.6.1's condition is not met, 0.005A_g is kept.** Table 11.6.1 is used only where in-plane V_u ≤ 0.5φα_cλ√f′c A_cv in every LRFD combination. Otherwise the column rule stays (REVIEW), because 11.6.2 is not computed (it needs ρ_t, and its printed condition could not be confirmed).
   4. **Wall geometry and inputs.** Wall only where ℓ_w/t > 3 (2.3); otherwise the pedestal treatment stays, with a REVIEW note. ℓ_w = the longer plan side. h_w = the pedestal height h. N_u = P_u at the interface. √f′c is capped at 100 psi in the 11.6.1 limit (conservative). ρ_l is taken with the dowel bar size.
 
-## 2026-11-05 — PR: claude/sf-dowel-legend — Card 5.6: status legend and dowel-minimum formula follow each element's basis (pedestal 0.005A_g / wall ρ_l A_g); hook-in-compression citation 25.4.9.1 → 25.4.1.2; "ℓ_d reduction for excess A_s" input moved to the Reinforcement tab (SFML; display only, no result change)
+## 2026-11-05 — PR: claude/sf-dowel-legend (PR #770: https://github.com/mlococo88/All-Structural/pull/770) — Card 5.6: status legend and dowel-minimum formula follow each element's basis (pedestal 0.005A_g / wall ρ_l A_g); hook-in-compression citation 25.4.9.1 → 25.4.1.2; "ℓ_d reduction for excess A_s" input moved to the Reinforcement tab (SFML; display only, no result change)
 
 ### SFML-1. Card 5.6 legend: only the statuses that occur, the dowel minimum per element   [display only]
 - **Where:** `renderFootDes` card 5.6 (anchor `const bb=secPanel(T,'o-fd-bear'`). New helpers before `/* SFSF: shear friction at the pedestal / footing interface (worked) */`: `sfdDowMinBasis(z)`, `sfdDowMinKinds()`, `sfdDowMinTex()`, `sfdDowMinRef()`, `sfdBearLegend(seen)`.
