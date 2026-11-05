@@ -1221,3 +1221,24 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
 - **Saved data:** `stoneArchLR.projects` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-05 — PR: claude/header-stonearch (PR #824: https://github.com/mlococo88/All-Structural/pull/824) (SAHD: compact header; title block and shared-info buttons moved to the Project input tab; display only, no result change)
+- **Engineer:** clean up the top of the page: the title-block inputs and the shared-info buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id, handler and saved field is the same):
+  - `#hdrIn`: before `#appTitle` (All tools, title, by-line, governing documents, `.bx-pm` Use / Share project info, then Undo / Redo / Saved projects… appended by `plibInit()`) and `#tblk` (7 inputs `tbProject` … `tbChkDate` and `#printBtn`). After: `#appTitle` (All tools, title, by-line, governing documents) and `<div id="hdrActs">` (`#hdrProj` "Project: <project> · <task>" link, `#printBtn`, Undo / Redo / Saved projects…).
+  - New `<div id="saPrjHold" hidden><div id="saPrjPane">` after the header: "Title block" card (`#tblk`, 2 columns, hint) and "Shared project info" card (`.bx-pm` with `#bx-pm-use` / `#bx-pm-share`, hint).
+  - `archInputTabs()` (anchor `/* SAHD: first card of the Project tab */`): `#saPrjPane` is inserted before `#ip_assume`; `IN_SEC` gets `saPrjPane:"proj"`. `inputPanel()` (anchor `/* SAHD: keep the title block out of the rebuild */`) first parks `#saPrjPane` back in `#saPrjHold`, so the four `$("inPanel").innerHTML=inputPanel()` rebuilds (restore, loading mode, Start a new calculation, init) never destroy the title inputs or their values.
+  - `bind()`: inputs inside `#saPrjPane` are skipped by the generic input-panel listener (they keep only their `TB.forEach(... autosave)` listener, as when they were in the header, so typing a title does not re-render).
+  - `plibInit()`: `const host=$("appTitle")` → `$("hdrActs")||$("appTitle")`.
+  - New `saHdrProj()` (anchor `function saHdrProj(){`): `tbProject · tbTask` or "(untitled: enter it in the Project tab)"; called on `input` in `#tblk`, after `restore()` fills the title, after Start a new calculation and in `init()`. `#hdrProj` click: `setInTab("proj",true)`, focus Project (at 1050 px and below the input tabs are scrolled into view first).
+  - CSS (anchor `/* SAHD (2026-11-05)`): `#hdrActs`, `#hdrProj`, `#saPrjPane` rules.
+- **Decisions (pending engineer review):** the project line shows Project · Task (the tool has no project-number field).
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, title typed "Route 6 Arch", "Load rating", "T-12", "MJL", "2026-11-05", "ABC", "2026-11-06"):
+  - `results` and `M.p` (`__archRptForTest()`), every localStorage key (autosave `ts` normalised) and the Report document (`__archRptForTest().doc`): identical; every typed value in the Report.
+  - Share project info: `bridgeSuite.v1.projectMeta` identical; Use shared project info fills the shared fields; reload of the autosave identical;
+  - header shows "Project: Route 6 Arch · T-12"; the link opens the Project tab with Project focused (1920 and 390 px);
+  - changing the loading mode to Railroad (input panel rebuilt) keeps the title block in the Project tab with its values; Start a new calculation clears it as before;
+  - `phone-layout --tool arch`, `project-library --tool stonearch`, `github-sync-tools --tool stonearch`, `check-syntax`: pass; no sideways scroll on any input tab at 390 / 768 px; 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change.

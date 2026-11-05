@@ -330,6 +330,21 @@ a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue
 #appTitle .bx-pm{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;}
 #appTitle .bx-pm button{font-size:.85rem;padding:1px 8px;}
 @media print{.bx-all-tools,#appTitle .bx-pm{display:none !important;}}
+/* SAHD (2026-11-05): the title block and the shared-info buttons are in the Project input tab (#saPrjPane); the header keeps
+   the title, a read-only project line (a link to that tab), Print / PDF Report, Undo / Redo and Saved projects (#hdrActs) */
+#hdrActs{display:flex;align-items:center;gap:8px 12px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto;align-self:center}
+#hdrActs .bx-pm{display:flex;gap:6px;flex-wrap:wrap;}
+#hdrActs .bx-pm button{font-size:.85rem;padding:1px 8px;}
+#hdrProj{color:var(--ink);text-decoration:none;font-size:.96rem;max-width:30em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#hdrProj:hover{text-decoration:underline}
+#hdrProj .hdrNone{font-style:italic;color:var(--soft)}
+#saPrjPane .pnl>.hd{cursor:default}
+#saPrjPane #tblk{grid-template-columns:repeat(2,minmax(0,1fr));min-width:0}
+#saPrjPane .bx-pm{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+#saPrjPane .saHint{font-size:.93rem;color:var(--soft);font-style:italic;margin-top:4px}
+@media print{#hdrActs .bx-pm{display:none !important;}}
+@media(max-width:700px){#hdrActs{margin-left:0;justify-content:flex-start;flex:1 1 100%}#hdrProj{flex:1 1 100%;max-width:none}}
+@media(max-width:420px){#saPrjPane #tblk{grid-template-columns:minmax(0,1fr)}}
 </style>
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
@@ -448,8 +463,14 @@ a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue
     <h1>Stone Masonry Arch Load Rating</h1>
     <div class="by">by Mario Lococo</div>
     <div class="gov">MassDOT BM Pt. I §7.2.7 &middot; AASHTO MBE 6A.9.1</div>
-    <div class="bx-pm"><button type="button" id="bx-pm-use" title="Fill the title block from the project info shared by another tool">Use shared project info</button><button type="button" id="bx-pm-share" title="Share the title block with the other tools">Share project info</button></div>
   </div>
+  <div id="hdrActs"><a id="hdrProj" href="#" title="Project and task: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
+    <button id="printBtn" title="Print / PDF the calculation report (the Report tab), from any tab">Print / PDF Report</button></div><!-- SAHD (2026-11-05): Undo / Redo / Saved projects are added here -->
+</div></div>
+<!-- SAHD (2026-11-05): the title block and shared-info buttons, moved here from the header. archInputTabs() moves #saPrjPane into the
+     Project input tab (before Engineering Assumptions); inputPanel() parks it here again before the input panel is rebuilt. -->
+<div id="saPrjHold" hidden><div id="saPrjPane">
+  <div class="pnl"><div class="hd"><span>Title block</span></div><div class="bd">
   <div id="tblk">
     <div><label>Project</label><input id="tbProject" type="text"></div>
     <div><label>Subject</label><input id="tbSubject" type="text"></div>
@@ -458,8 +479,11 @@ a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue
     <div><label>Date</label><input id="tbDate" type="text"></div>
     <div><label>Checked by</label><input id="tbChk" type="text"></div>
     <div><label>Checked date</label><input id="tbChkDate" type="text"></div>
-    <div><label>&nbsp;</label><button id="printBtn" style="width:100%" title="Print / PDF the calculation report (the Report tab), from any tab">Print / PDF Report</button></div>
   </div>
+  <div class="saHint">Printed on the report cover, running header and footer.</div></div></div>
+  <div class="pnl"><div class="hd"><span>Shared project info</span></div><div class="bd">
+  <div class="bx-pm"><button type="button" id="bx-pm-use" title="Fill the title block from the project info shared by another tool">Use shared project info</button><button type="button" id="bx-pm-share" title="Share the title block with the other tools">Share project info</button></div>
+  <div class="saHint">Copy the title block from or to the other tools.</div></div></div>
 </div></div>
 
 <div id="wrap">
@@ -9682,6 +9706,7 @@ const F={
 const TB=["tbProject","tbSubject","tbTask","tbBy","tbDate","tbChk","tbChkDate"];
 
 function inputPanel(){
+  { const pj=$("saPrjPane"),hd=$("saPrjHold"); if(pj&&hd&&pj.parentNode!==hd)hd.appendChild(pj); }   /* SAHD: keep the title block out of the rebuild */
   const c=UI.counter();
   let h="";
   const row=(lab,hint,ctrl)=>`<div class="row"><label>${lab}${hint?`<span class="h">${hint}</span>`:""}</label>${ctrl}</div>`;
@@ -12444,6 +12469,7 @@ function restore(o){
     if(boxes.length&&!boxes.some(c=>c.checked))boxes.forEach(c=>{c.checked=true;});
   }
   if(o.title)TB.forEach(t=>{if($(t)&&o.title[t]!=null)$(t).value=o.title[t];});
+  saHdrProj();   /* SAHD */
   /* Re-run the Midas comparison on restore. Previously the pasted text was
      restored but the comparison was not, so a session reopened with results in
      the box reported "no Midas results imported". */
@@ -12570,7 +12596,7 @@ function plibInit(){
   const B=(t,ti)=>SharedProjectsUI.button(t,ti);
   const bu=B("Undo","Undo the last input change (Ctrl+Z)"),br=B("Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)"),bl=B("Saved projects\u2026","The projects saved in this browser: open, rename, duplicate, delete");
   bl.onclick=()=>dlg.show();row.append(bu,br,bl);
-  const host=$("appTitle");if(host)host.appendChild(row);
+  const host=$("hdrActs")||$("appTitle");if(host)host.appendChild(row);   /* SAHD: in the header's action row */
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   h.reset(); PLIB.h=h; PLIB.store=store; PLIB.dlg=dlg; window.SAPL=PLIB;
 }
@@ -12613,6 +12639,7 @@ function wireProject(){
     $("inPanel").innerHTML=inputPanel(); UI.wire($("inPanel")); archInputTabs($("inPanel")); listTables();
     TB.forEach(t=>{if($(t)&&t!=="tbDate")$(t).value="";});
     if($("tbDate"))$("tbDate").value=new Date().toISOString().slice(0,10);
+    saHdrProj();   /* SAHD */
     bind(); wireProject(); refreshProjSel(); showAutoInfo(); syncCond(); render(); autosave();
     projMsg("New calculation started.");
   };
@@ -13255,13 +13282,14 @@ function syncCond(){
    projects and the JSON export are unchanged. */
 const IN_TABS=[["geo","Geometry"],["fill","Fill &amp; Dead Load"],["mat","Materials &amp; Loads"],
   ["veh","Vehicles"],["proj","Project"]];
-const IN_SEC={ip_geo:"geo",ip_ring:"geo",ip_grade:"fill",ip_sdl:"fill",ip_mat:"mat",
+const IN_SEC={saPrjPane:"proj",ip_geo:"geo",ip_ring:"geo",ip_grade:"fill",ip_sdl:"fill",ip_mat:"mat",
   ip_veh:"veh",ip_track:"veh",ip_assume:"proj",ip_proj:"proj"};
 const IN_TAB_KEY="stoneArchLR.inputTab_v1";
 let inTabCur=null, inErrLast="";
 function inTabGet(){if(inTabCur)return inTabCur;try{return localStorage.getItem(IN_TAB_KEY)||"";}catch(e){return "";}}
 function inTabSet(t){inTabCur=t;try{localStorage.setItem(IN_TAB_KEY,t);}catch(e){}}
 function archInputTabs(P){
+  { const pj=$("saPrjPane"),a=$("ip_assume"); if(pj)P.insertBefore(pj,a&&a.parentNode===P?a:null); }   /* SAHD: first card of the Project tab */
   const bar=document.createElement("div");
   bar.id="inTabs";bar.setAttribute("role","tablist");bar.setAttribute("aria-label","Input groups");
   const panes={};
@@ -13348,6 +13376,24 @@ function archInTabMarks(err){
   });
 }
 
+/* SAHD (2026-11-05): the header's read-only "Project: <project> · <task>" (tbProject / tbTask, typed in the Project tab).
+   A click opens the Project tab and focuses Project. Display only: nothing is stored. */
+function saHdrProj(){
+  const t=$("hdrProjTxt"); if(!t)return;
+  const v=["tbProject","tbTask"].map(id=>$(id)?String($(id).value||"").trim():"").filter(Boolean);
+  t.textContent="";
+  if(v.length)t.textContent=v.join(" \u00b7 ");
+  else{const s=document.createElement("span");s.className="hdrNone";s.textContent="(untitled: enter it in the Project tab)";t.appendChild(s);}
+}
+document.addEventListener("input",e=>{if(e.target&&e.target.closest&&e.target.closest("#tblk"))saHdrProj();});
+document.addEventListener("click",e=>{
+  const a=e.target&&e.target.closest?e.target.closest("#hdrProj"):null; if(!a)return;
+  e.preventDefault(); setInTab("proj",true);
+  const i=$("tbProject"); if(!i)return;
+  if(window.matchMedia&&window.matchMedia("(max-width:1050px)").matches){const b=$("inTabs");if(b)window.scrollTo(0,b.getBoundingClientRect().top+window.scrollY-4);}
+  i.focus({preventScroll:true});
+});
+
 /* ---------------- init ---------------- */
 let bind=null;
 function init(){
@@ -13356,11 +13402,13 @@ function init(){
   archInputTabs($("inPanel")); listTables();
   const today=new Date().toISOString().slice(0,10);
   if($("tbDate")&&!$("tbDate").value)$("tbDate").value=today;
+  saHdrProj();   /* SAHD */
 
   // wire inputs → live recompute (§7: no recalculate button)
   bind=()=>{
     $("inPanel").querySelectorAll("input,select,textarea").forEach(e2=>{
       if(e2.type==="file")return;
+      if(e2.closest("#saPrjPane"))return;   /* SAHD: the title block (moved from the header) is bound below, as before */
       const ev=(e2.tagName==="TEXTAREA"||e2.type==="text")?"input":"change";
       e2.addEventListener(ev,()=>{
         if(e2.id==="loadMode"){

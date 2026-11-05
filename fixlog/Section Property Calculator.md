@@ -3121,3 +3121,23 @@ index 56a8a3f..13f8372 100644
 - **Saved data:** `spc_projects_v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-05 — PR: claude/header-secprop (PR #825: https://github.com/mlococo88/All-Structural/pull/825) (SPHD: compact header; title block, project-file / DXF and shared-info buttons moved to the Project input tab; display only, no result change)
+- **Engineer:** clean up the top of the page: the title-block inputs and the file / hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id, `data-fkey`, listener and saved field is the same):
+  - `#hdr`: before title row (title, by-line, All tools; `.hdrBtns` Open file…, Save file, Export DXF, Print report), `#projGrid` (7 fields), `#projShare` (Use / Share project info). After: title row with `.hdrBtns#hdrActs` (`#hdrProj` "Project: <project> · <job #>" link, Print report).
+  - `#inputPanel` starts with `<div id="prjPane">`: "Title block" (`#projGrid`, 2 columns, hint) and "Project file, DXF and shared project info" (`#projShare`: Project file: `#btnOpenHdr`, `#btnSaveHdr`; DXF: `#btnDxf`; Project info: `#btnUseShared`, `#btnShare`; one-line hints). The moved buttons get `class="btn sm"` (the light in-panel style).
+  - `rebuildInputs()`: `const PJ=$('prjPane')` before `P.innerHTML=''`; `panes.proj.appendChild(PJ)` before `buildProjPane(panes.proj)`, so it is the first card of the Project tab.
+  - New `spHdrProj()` (anchor `function spHdrProj() {`): `M.project.name · M.project.job` or "(untitled: enter it in the Project tab)"; called at the end of `buildProjHeader()` and on any `input` in `#inputPanel` (so the Project tab's Save-as name, which also writes `M.project.name`, updates it). `#hdrProj` click: `inTabSelect('proj', true)`, focus Project (at 820 px and below the input tabs are scrolled into view first).
+  - CSS (anchor `/* SPHD (2026-11-05)`): the dark `#projShare` header button rules replaced by `#hdrActs`, `#hdrProj`, `#prjPane` and `#inputPanel #projGrid` rules.
+  - Wording: Project tab hint "Use Save file / Open file (header)" → "(above)"; Templates tab "Project file (JSON)" button titles "same as … in the header" → "in the Project tab"; Method §11 "Export DXF (header)" → "Export DXF (Project tab)".
+- **Decisions (pending engineer review):** the project line shows Project · Job #. Open file / Save file and Export DXF move to the Project tab with the title block (they are project-file and export actions, not global ones); Print report stays in the header.
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, title typed "Route 6 Bridge", "Floor beam FB-2", "MassDOT", "J-4471", "MJL", "ABC", "2026-11-05"):
+  - `SPCUI.res`, every localStorage key (autosave timestamps normalised) and the Report tab text: identical once the part ids (time-based, new on every load) are normalised; the only Report difference is the Method §11 wording above. Every typed value in the Report.
+  - Drawings tab DXF (`SPDW.B.D.toDXF`, title block): identical.
+  - Share project info: `bridgeSuite.v1.projectMeta` identical; Use shared project info fills the shared fields; reload of the autosave identical;
+  - header shows "Project: Route 6 Bridge · J-4471"; the link opens the Project tab with Project focused (1920 and 390 px);
+  - `project-library --tool spc`, `github-sync-tools --tool spc`, `dxf-print-sheets --tool spc`, `check-syntax`: pass. `list-input --part secprop`: the only new difference is the input panel's text (the moved title block); its output-text difference against its old reference (ee4f542, before the Drawings tab) is the same on main; no sideways scroll on any input tab at 390 / 768 px; 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change.
