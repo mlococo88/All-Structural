@@ -123,6 +123,17 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
 .bx-all-tools{font-size:12px;color:#555;text-decoration:none;}
 .bx-all-tools:hover{color:var(--navy);text-decoration:underline;}
 @media print{.bx-all-tools,.bx-pm-row{display:none !important;}}
+/* EDHD (2026-11-05): the project-file, Reset, Self-Test and Send Pad buttons are in the Project input tab (#edmPrjPane); the
+   toolbar keeps a read-only project line (a link to that tab), Projects…, Undo / Redo, the status and Print / PDF Report */
+#hdrProj{font-size:13px;color:var(--navy);text-decoration:none;max-width:32em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:6px}
+#hdrProj:hover{text-decoration:underline}
+#hdrProj .hdrNone{font-style:italic;color:#777}
+#edmPrjPane .p-head{cursor:default}
+#edmPrjPane .prjGrp{margin:2px 0 8px}
+#edmPrjPane .prjGrp>b{display:block;font-size:13px}
+#edmPrjPane .prjHint{font-size:12px;color:#555;font-style:italic;margin:1px 0 3px}
+#edmPrjPane .prjRow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+@media(max-width:900px){#hdrProj{flex:1 1 100%;max-width:none}}
 </style>
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
@@ -242,19 +253,27 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
   <div class="codeline">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) &middot; MassDOT LRFD Bridge Manual, Part I §3.5.7 (written to the AASHTO LRFD 9th Ed.) &middot; v1.0</div>
 </header>
 <div class="toolbar">
-  <button id="btnSaveProj" title="Save current inputs as a named project">Save Project</button>
-  <button id="btnManageProj" title="Load / delete saved projects">Projects…</button>
-  <button id="btnExport" title="Download inputs as JSON backup">Export JSON</button>
-  <button id="btnImport" title="Load inputs from JSON">Import JSON</button>
-  <input type="file" id="importFile" accept="application/json" style="display:none">
-  <button id="btnReset" title="Reset all inputs to defaults">Reset</button>
-  <button id="btnSelfTest" title="Run the built-in MassDOT benchmark self-test">Self-Test</button>
-  <button id="btnSendBack" title="Send the designed pad back to the Abutment app (if opened from it)">↩ Send Pad to Abutment</button>
+  <a id="hdrProj" href="#" title="Project name and number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
+  <button id="btnManageProj" title="Load / delete saved projects">Projects…</button><!-- EDHD (2026-11-05): Undo / Redo are added after it -->
   <span class="spacer"></span>
   <span id="linkStatus">Standalone</span>
   <span id="saveStatus"></span>
   <button class="primary" id="btnPrint" title="Generate the full engineering calculation report">Print / PDF Report</button>
 </div>
+<!-- EDHD (2026-11-05): moved here from the toolbar. edmInputTabs() moves #edmPrjPane into the Project input tab (after the title
+     block); buildInputs() parks it here again before the input panel is rebuilt. -->
+<div id="edmPrjHold" hidden><div class="panel" id="edmPrjPane" data-cid="edm-prj"><div class="p-head">Project file, checks and hand-off</div><div class="p-body">
+  <div class="prjGrp"><b>Project file</b><div class="prjHint">Save to this browser's project list (Projects… opens it), or keep a JSON backup.</div><div class="prjRow toolbar" style="padding:0;border:0;background:none">
+  <button id="btnSaveProj" title="Save current inputs as a named project">Save Project</button>
+  <button id="btnExport" title="Download inputs as JSON backup">Export JSON</button>
+  <button id="btnImport" title="Load inputs from JSON">Import JSON</button>
+  <input type="file" id="importFile" accept="application/json" style="display:none">
+  <button id="btnReset" title="Reset all inputs to defaults">Reset</button></div></div>
+  <div class="prjGrp"><b>Self-test</b><div class="prjHint">The built-in MassDOT benchmark check of the calculation engine.</div><div class="prjRow toolbar" style="padding:0;border:0;background:none">
+  <button id="btnSelfTest" title="Run the built-in MassDOT benchmark self-test">Self-Test</button></div></div>
+  <div class="prjGrp"><b>Pad to the Abutment app</b><div class="prjHint">Sends the designed pad back to the Abutment app that opened this one (a JSON file when opened on its own).</div><div class="prjRow toolbar" style="padding:0;border:0;background:none">
+  <button id="btnSendBack" title="Send the designed pad back to the Abutment app (if opened from it)">↩ Send Pad to Abutment</button></div></div>
+</div></div></div>
 <div class="layout">
   <div id="inputPanel"></div>
   <div id="outputPanel">
@@ -445,8 +464,10 @@ function buildInputs(){
   // assumptions
   h+=panel("in-assum","I-7","Engineering Assumptions",`
     <textarea data-path="assumptions">${esc(S.assumptions)}</textarea>`);
+  { const pj=document.getElementById("edmPrjPane"),hd=document.getElementById("edmPrjHold"); if(pj&&hd&&pj.parentNode!==hd)hd.appendChild(pj); }   /* EDHD: keep it out of the rebuild */
   document.getElementById("inputPanel").innerHTML=h;
   edmInputTabs();   // move the cards just built into the input tabs
+  edmHdrProj();   /* EDHD */
   // derived readouts
   const R=LAST;
   if(R){
@@ -464,7 +485,7 @@ function buildInputs(){
    localStorage key edm_v1_inputTab (never in S, so the autosave, saved
    projects, JSON export and the Abutment hand-off are unchanged). */
 const EDM_IN_TABS=[["project","Project"],["pad","Pad"],["mat","Materials"],["loads","Loads"],["code","Code"],["assum","Assumptions"]];
-const EDM_IN_SEC={"in-proj":"project","in-type":"pad","in-geom":"pad","in-mat":"mat","in-loads":"loads","in-tog":"code","in-coef":"code","in-assum":"assum"};
+const EDM_IN_SEC={"edm-prj":"project","in-proj":"project","in-type":"pad","in-geom":"pad","in-mat":"mat","in-loads":"loads","in-tog":"code","in-coef":"code","in-assum":"assum"};
 const EDM_IN_KEY="edm_v1_inputTab";
 let edmInTabCur=null;   // in-memory copy, so the tab survives rebuilds even without storage
 function edmInTabGet(){ if(edmInTabCur)return edmInTabCur; try{ return localStorage.getItem(EDM_IN_KEY)||""; }catch(e){ return ""; } }
@@ -485,6 +506,7 @@ function edmInputTabs(){
     pn.setAttribute("aria-labelledby","edmInTab_"+k);
     panes[k]=pn;
   });
+  { const pj=document.getElementById("edmPrjPane"),tb=P.querySelector('[data-cid="in-proj"]'); if(pj)P.insertBefore(pj,tb?tb.nextSibling:P.firstChild); }   /* EDHD: after the title block */
   // move the built nodes; a node not in the map stays with the card before it
   let cur="project";
   Array.from(P.childNodes).forEach(n=>{
@@ -499,6 +521,23 @@ function edmInputTabs(){
   edmSetInTab(t,false);
   edmInputTabMarks();
 }
+/* EDHD (2026-11-05): the toolbar's read-only "Project: <name> · <no.>" (S.proj.name / S.proj.num, typed in the Project tab).
+   A click opens the Project tab and focuses Project name. Display only: nothing is stored. */
+function edmHdrProj(){
+  const t=document.getElementById("hdrProjTxt"); if(!t)return;
+  const pj=(S&&S.proj)||{}, v=[pj.name,pj.num].map(x=>String(x==null?"":x).trim()).filter(Boolean);
+  t.textContent="";
+  if(v.length)t.textContent=v.join(" \u00b7 ");
+  else{ const s=document.createElement("span"); s.className="hdrNone"; s.textContent="(untitled: enter it in the Project tab)"; t.appendChild(s); }
+}
+document.addEventListener("input",e=>{ const p=e.target&&e.target.getAttribute&&e.target.getAttribute("data-path"); if(p==="proj.name"||p==="proj.num")setTimeout(edmHdrProj,0); });
+document.addEventListener("click",e=>{
+  const a=e.target&&e.target.closest?e.target.closest("#hdrProj"):null; if(!a)return;
+  e.preventDefault(); edmSetInTab("project",true);
+  const i=document.querySelector('#edmInPane_project [data-path="proj.name"]'); if(!i)return;
+  const tb=document.getElementById("edmInTabs"); if(tb)window.scrollTo(0,Math.min(window.scrollY,tb.getBoundingClientRect().top+window.scrollY-4));
+  i.focus({preventScroll:true});
+});
 function edmSetInTab(t,remember){
   EDM_IN_TABS.forEach(([k])=>{
     const b=document.getElementById("edmInTab_"+k),pn=document.getElementById("edmInPane_"+k); if(!b||!pn)return;
@@ -1385,7 +1424,7 @@ document.addEventListener("DOMContentLoaded",()=>{
   let tm=null; const soon=()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); };
   const B=(t,ti)=>SharedProjectsUI.button(t,ti);
   const bu=B("\u21b6 Undo","Undo the last input change (Ctrl+Z)"), br=B("\u21b7 Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)");
-  const ref=document.getElementById("btnExport"); if(ref){ ref.parentNode.insertBefore(bu,ref); ref.parentNode.insertBefore(br,ref); }
+  const ref=document.getElementById("btnManageProj"); if(ref){ ref.after(bu,br); }   /* EDHD: after Projects… in the toolbar */
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   h.reset(); window.EDPL={h,soon};
 });
