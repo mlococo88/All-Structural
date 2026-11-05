@@ -3893,3 +3893,67 @@ Applies to `ACI Rebar Development Length.html` and the Development & Splice fram
     if(ap.length) M.sections.push({part:'Appendices',title:'Appendix: the tabs as printed',key:'cbrf:ap',note:'Text and tables of the Beam Capacity and ASD Beam Calcs tabs as they print, kept for completeness. Every value here is worked, or shown, in the chapter section named at the start of each subsection; figures and tables found only on a tab are in that section.',subs:ap});
   }
 ```
+
+
+## 2026-11-05 — PR: claude/cbc-report-inputerr (CBIR: a chapter whose tab has an input error prints "Input error: no results" with the errors instead of its last results; Summary and Overview consistent; display only, no result change)
+
+### CBIR. Input error in the suite Report   [display only] [no result change]
+- **Problem (open item of CBRO #793, raised by the coordinator):** with an input blocker on the Beam Capacity tab (e.g. b_w blank), the tab, its check panel and the Summary of results said "Input error: no results", but the Beam Capacity chapter printed the last results computed before the error, together with the "As printed" tab copies and the Results lines. This is a correctness risk in a printed calculation. The ASD and Development & Splice chapters already printed a one-line "Input error, no results" section (#794), but in their own wording, and the Summary of results said "has not finished loading" for Development & Splice.
+- **Fix:** for each of the three frames, when its input errors are not empty, the shell replaces that chapter's sections with one section, "Input error: no results". It has a note (the chapter has no results; nothing of the tab is printed until the inputs are corrected; a link to the tab) and the subsection "Input errors", one line per error. The key is `cbir:<chapter>`.
+  - Errors come from the same tests the tabs use:
+    - Beam Capacity: `VALIDATION.blockers`, through the new frame function `cbcRxErrors()`;
+    - ASD: `CC.errors`, through the new `asdRxErrors()`;
+    - Development & Splice: `rbInputErrors(readInputs(), computeFactors(…))`. That frame is unchanged, and so is the ACI Rebar copy.
+  - `rxRest` copies no tab and adds no Results lines for that chapter.
+  - The Summary of results says, for that chapter, "Input error: no results. <errors> Correct the marked inputs on the <tab> tab (see §x)".
+  - The Overview says "No overview: input error on the Beam Capacity tab, no results, so the beam is not drawn (the errors: see §x)".
+  - With a Beam Capacity error and a valid ASD tab, the ASD chapter's first section gets a note: its inherited values are the last ones Beam Capacity sent before the error. `derive()` sends nothing while blocked, so the ASD tab keeps its last values, on screen as well.
+- **Where:**
+  - Shell, new block `/* ---------- CBIR (2026-11-05` before the CBRF block: `cbirErrors`, `CBIR_TAB`, `cbirMsg`, `cbirSection` (code below).
+  - `model()`:
+    - `ERR={}`;
+    - after the chapter is built, `var ie=cbirErrors(c.id); if(ie.length){ ERR[c.id]=ie; m={code:m.code,proj:m.proj,refs:m.refs,sections:[cbirSection(c,ie)]}; }`;
+    - the section push carries `key:s._cbir`;
+    - `M._err=ERR` before `rxRest`, plus the ASD note line.
+  - `rxRest`: `if(M._err&&M._err[c.id]) return;` after the `Harvest` lookup.
+  - `cbroSum(ERR)`: each chapter's message comes from `ERR` first.
+  - `cbovSection`: the blocked note.
+  - Beam Capacity frame: `function cbcRxErrors(){ return ((VALIDATION&&VALIDATION.blockers)||[]).map(b=>String(b.msg).replace(/<[^>]+>/g,'')); }`, before `function cbcRxBoxes(){`.
+  - ASD frame: `function asdRxErrors(){ return (CC&&CC.errors?CC.errors:[]).map(e=>String(e).replace(/<[^>]+>/g,'')); }`, before `function asdRxBoxes(){`.
+- **Check case:** default project, b_w blank.
+  - Before: Report §3–§10, Beam Capacity results such as "Torsional capacity ≫1 FAIL", and the Results — Flexure lines.
+  - After: §3 "Input error: no results" with "Beam width and depth must be positive."; the printed Report is 21 pages. The Summary says the same and links to §3.
+- **How verified (headless Chromium, origin/main b3505c0 vs branch):**
+  - Valid inputs: the Report text (screen and print box) is byte-identical to main in 5 cases (default, c2, c3, Include boxes off, no stirrups). Results and localStorage are identical.
+  - Input errors in 4 cases (Beam Capacity b_w blank; ASD f_c,inv −5; Development & Splice f′c blank; Beam Capacity and Development & Splice together):
+    - results identical to main;
+    - the erroring chapter prints only its "Input error: no results" section;
+    - no "Results — Flexure" lines from a blocked Beam Capacity chapter;
+    - 0 unresolved references, 0 console errors.
+  - Printed PDF of the b_w-blank case looked at.
+  - `check-syntax`, `run.mjs report steps steps-groups report-wiring`, `phone-layout --tool cbc` pass.
+- **Decisions (pending engineer review):** the ASD inheritance note above. The References table still lists the erroring chapter's references.
+- **Saved data:** none. **Governing provision:** none. **Other copies:** none (the Development & Splice frame and the ACI Rebar tool are untouched).
+
+#### Code added (re-apply by hand)
+```js
+  /* ---------- CBIR (2026-11-05, Phase 4 follow-up): a chapter whose tab has an input error (the tab's check summary panel and
+     output say "Input error: no results": Beam Capacity VALIDATION.blockers, ASD CC.errors, Development & Splice rbInputErrors)
+     prints "Input error: no results" with the list of errors in place of its worked sections, so the Report never prints the
+     last results computed before the error. The Summary of results and the Overview say the same. Valid inputs: unchanged. ---------- */
+  function cbirErrors(id){
+    try{
+      if(id==='cap'){ var f=rxFn(RXCH[0],'Errors'); return f?f():[]; }
+      if(id==='asd'){ var g=rxFn(RXCH[1],'Errors'); return g?g():[]; }
+      if(id==='dev'){ var w=win('dev'); if(!w||typeof w.rbInputErrors!=='function') return []; var inp=w.readInputs(); return w.rbInputErrors(inp,w.computeFactors(inp)).map(function(e){ return String(e[1]); }); }
+    }catch(e){}
+    return [];
+  }
+  var CBIR_TAB={cap:'Beam Capacity',asd:'ASD Beam Calcs',dev:'Development & Splice'};
+  function cbirMsg(E,id){ return 'Input error: no results. '+E.join(' ')+' Correct the marked inputs on the '+CBIR_TAB[id]+' tab ([[cbir:'+id+']]).'; }
+  function cbirSection(c,E){   /* the chapter's one section; text in the chapter's own form (model() prefixes keys and tab links) */
+    return {title:'Input error: no results',_cbir:'cbir:'+c.id,
+      note:'The '+c.name+' tab has an input error, so this chapter has no results: no value of this tab is printed until the inputs are corrected. [[tab:|On screen: '+c.name+' tab]]',
+      subs:[{title:'Input errors',items:E.map(function(t){ return {type:'note',warn:true,text:t}; })}]};
+  }
+```

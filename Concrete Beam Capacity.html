@@ -4304,6 +4304,9 @@ function cbcRxSet(kind,key,val){
   autosave();
 }
 /* the Include boxes: [id, label] of the tabs, and the combinations (label as the dialog) */
+/* CBIR (2026-11-05): the input errors that withhold this tab's results (VALIDATION.blockers, as the check summary panel's
+   &quot;Input error: no results&quot;), for the suite Report: with any, the shell prints the chapter as &quot;Input error: no results&quot;. */
+function cbcRxErrors(){ return ((VALIDATION&amp;&amp;VALIDATION.blockers)||[]).map(b=>String(b.msg).replace(/<[^>]+>/g,'')); }
 function cbcRxBoxes(){ return {tabs:reportTabList(),combos:S.combos.map((c,i)=>&quot;Combination &quot;+(i+1)+&quot; — &quot;+c.name+(CC&amp;&amp;i===CC.govIndex?&quot; (governing)&quot;:&quot;&quot;))}; }
 /* =====================================================================
    CBOV (2026-11-05): the figures of the overview at the start of the suite's Report (the shell's cbovSection): the
@@ -6177,6 +6180,9 @@ const ASD_REFS=[
    ===================================================================== */
 function asdRxSel(){ const o=S.ui&amp;&amp;S.ui.rptOpts, ok=!!(o&amp;&amp;o.tabs), r={tabs:{}}; reportTabList().forEach(([id])=>r.tabs[id]=!(ok&amp;&amp;o.tabs[id]===false)); return r; }
 function asdRxSet(kind,key,val){ const o=normRptOpts(); if(kind===&quot;tab&quot;) o.tabs[key]=!!val; else if(kind===&quot;all&quot;) reportTabList().forEach(([id])=>o.tabs[id]=true); autosave(); }
+/* CBIR (2026-11-05): the input errors that withhold this tab's results (CC.errors, as the check summary panel's &quot;Input error:
+   no results&quot;), for the suite Report: with any, the shell prints the chapter as &quot;Input error: no results&quot;. */
+function asdRxErrors(){ return (CC&amp;&amp;CC.errors?CC.errors:[]).map(e=>String(e).replace(/<[^>]+>/g,'')); }
 function asdRxBoxes(){ return {tabs:reportTabList(),combos:[]}; }
 function asdRxHarvest(){
   const sel=asdRxSel(), saveTab=S.ui.tab, out=[];
@@ -9325,6 +9331,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     var figs=new Set(); M.sections.forEach(function(s){ (s.subs||[]).forEach(function(q){ (q.items||[]).forEach(function(it){ if(it.type==='figure') figs.add(rxNrm(it.caption)); }); }); });
     RXCH.forEach(function(c){
       var hv=rxFn(c,'Harvest'), rs=rxFn(c,'Results'); if(!hv) return;
+      if(M._err&&M._err[c.id]) return;   /* CBIR: no tab copies, no result lines for a chapter with an input error */
       var H; try{ H=hv(); }catch(e){ return; }
       var last=-1;   /* the index of the last section of this chapter that a harvested tab went into */
       H.forEach(function(h){
@@ -9450,8 +9457,27 @@ window.addEventListener('DOMContentLoaded',()=>{
     var DT={'Project and inputs':'inputs','Tension development':'tension','Standard hook':'hook','Compression development':'compression','Tension lap splice':'tsplice','Compression lap splice':'csplice','Bar development schedule':'batch'};
     G.dev.forEach(function(s){ if(!s._tab&&DT[s.title]) s._tab=DT[s.title]; });
     ['cap','asd','dev','ref'].forEach(function(g){ G[g].forEach(function(s,i){ s.part=i===0?part[g]:undefined; if(s._tab&&g!=='ref') s.key='cbro:'+g+':'+s._tab; }); });
-    M.sections=[cbroSum(),cbovSection()].concat(G.cap,G.asd,G.dev,G.ref);   /* CBOV: the overview second */
+    M.sections=[cbroSum(M._err||{}),cbovSection()].concat(G.cap,G.asd,G.dev,G.ref);   /* CBOV: the overview second */
     cbroKeys(M);
+  }
+  /* ---------- CBIR (2026-11-05, Phase 4 follow-up): a chapter whose tab has an input error (the tab's check summary panel and
+     output say "Input error: no results": Beam Capacity VALIDATION.blockers, ASD CC.errors, Development & Splice rbInputErrors)
+     prints "Input error: no results" with the list of errors in place of its worked sections, so the Report never prints the
+     last results computed before the error. The Summary of results and the Overview say the same. Valid inputs: unchanged. ---------- */
+  function cbirErrors(id){
+    try{
+      if(id==='cap'){ var f=rxFn(RXCH[0],'Errors'); return f?f():[]; }
+      if(id==='asd'){ var g=rxFn(RXCH[1],'Errors'); return g?g():[]; }
+      if(id==='dev'){ var w=win('dev'); if(!w||typeof w.rbInputErrors!=='function') return []; var inp=w.readInputs(); return w.rbInputErrors(inp,w.computeFactors(inp)).map(function(e){ return String(e[1]); }); }
+    }catch(e){}
+    return [];
+  }
+  var CBIR_TAB={cap:'Beam Capacity',asd:'ASD Beam Calcs',dev:'Development & Splice'};
+  function cbirMsg(E,id){ return 'Input error: no results. '+E.join(' ')+' Correct the marked inputs on the '+CBIR_TAB[id]+' tab ([[cbir:'+id+']]).'; }
+  function cbirSection(c,E){   /* the chapter's one section; text in the chapter's own form (model() prefixes keys and tab links) */
+    return {title:'Input error: no results',_cbir:'cbir:'+c.id,
+      note:'The '+c.name+' tab has an input error, so this chapter has no results: no value of this tab is printed until the inputs are corrected. [[tab:|On screen: '+c.name+' tab]]',
+      subs:[{title:'Input errors',items:E.map(function(t){ return {type:'note',warn:true,text:t}; })}]};
   }
   /* ---------- CBRF (2026-11-05, Phase 4 part 3; as Spread Footing SFRF #779): each tab copy ("As printed: tables, equations,
      notes and figures", rxRest) is split. Its figures, and its tables that hold a value or a text found nowhere else in the
@@ -9525,7 +9551,7 @@ window.addEventListener('DOMContentLoaded',()=>{
     if(!on){ S0.note='Not included in this report: the Include box “Overview figures” on the report bar is off.'; return S0; }
     try{ F=w&&typeof w.cbcOvFigs==='function'?w.cbcOvFigs():null; }catch(e){ F=null; }
     if(!F){ S0.note='No overview: the Beam Capacity tab has no results (it has not finished loading, or its inputs need correcting).'; return S0; }
-    if(F.blocked){ S0.note='No overview: input invalid on the Beam Capacity tab (see its output panel), so the beam is not drawn.'; return S0; }
+    if(F.blocked){ S0.note='No overview: input error on the Beam Capacity tab, no results, so the beam is not drawn (the errors: [[cbir:cap]]).'; return S0; }
     var f2=function(x){ return (Math.round(x*100)/100).toFixed(2); };
     var dims='$b_{w}$ × h = '+f2(F.bw)+' × '+f2(F.h)+' in'+(F.tee?', $b_{f}$ × $h_{f}$ = '+f2(F.bf)+' × '+f2(F.hf)+' in (T-beam)':'');
     var sense=F.neg?'negative moment, top face in tension':'positive moment, bottom face in tension';
@@ -9544,7 +9570,7 @@ window.addEventListener('DOMContentLoaded',()=>{
      value (the D/C, the RF, the length, or the condition not met), status and reference; the last column links to the step
      where the check is worked (resolved in cbroKeys, else the tab's section). */
   var CBRO_ST={pass:['PASS','ok'],fail:['FAIL','ng'],na:['N/A','na'],warn:['REVIEW','hi'],info:['INFO','na']};
-  function cbroSum(){
+  function cbroSum(ERR){
     var subs=[], tot=[];
     var head=['Check','Result','Status','Detail','Reference (worked in)'];
     var row=function(name,short,st,detail,ref,keys){ var x=CBRO_ST[st]||CBRO_ST.na;
@@ -9558,7 +9584,8 @@ window.addEventListener('DOMContentLoaded',()=>{
     };
     /* A. Beam Capacity */
     (function(){ var w=win('capacity'), its=null, K=null, msg=null, rows=[];
-      try{ var m=w.document.querySelector('#cbcDash .cbdMsg'); if(m) msg=m.textContent; else { its=w.cbcDashItems(); K=w.allChecks(); } }catch(e){ msg=null; its=null; }
+      if(ERR.cap) msg=cbirMsg(ERR.cap,'cap');   /* CBIR: as the chapter */
+      else try{ var m=w.document.querySelector('#cbcDash .cbdMsg'); if(m) msg=m.textContent; else { its=w.cbcDashItems(); K=w.allChecks(); } }catch(e){ msg=null; its=null; }
       if(!msg&&!its) msg='No results: the Beam Capacity tab has not finished loading, or its inputs need correcting.';
       if(!msg) its.forEach(function(it,i){ var c=K[i]||{}, ks=[];
         if(!c.na&&c.ci!=null){ var ci=c.ci;
@@ -9575,8 +9602,9 @@ window.addEventListener('DOMContentLoaded',()=>{
     })();
     /* B. ASD Beam Calcs */
     (function(){ var w=win('asd'), its=null, rows=[], msg=null;
-      try{ its=w.asdDashItems(); }catch(e){ its=null; }
-      if(!its) msg='No results: the ASD Beam Calcs tab has not finished loading, or its inputs need correcting.';
+      try{ its=ERR.asd?null:w.asdDashItems(); }catch(e){ its=null; }
+      if(ERR.asd) msg=cbirMsg(ERR.asd,'asd');   /* CBIR: as the chapter */
+      else if(!its) msg='No results: the ASD Beam Calcs tab has not finished loading, or its inputs need correcting.';
       else its.forEach(function(it){ var ks=[];
         if(it.card==='anRF') ks=[/^Inventory/.test(it.name)?'asd:an/inv.RF':'asd:an/op.RF'];
         ks.push('cbro:asd:'+(it.tab||'tabAnalysis'));
@@ -9597,7 +9625,8 @@ window.addEventListener('DOMContentLoaded',()=>{
           ks=ks.map(function(k){ return 'dev:'+k; }).concat(['cbro:dev:'+(CT[m.card]||m.tab||'sum')]);
           rows.push(row(name,short,st,short!==val?val:'',m.ref,ks)); });
       }catch(e){ rows=[]; }
-      if(!rows.length) msg='No results: the Development & Splice tab has not finished loading.';
+      if(ERR.dev) msg=cbirMsg(ERR.dev,'dev');   /* CBIR: as the chapter */
+      else if(!rows.length) msg='No results: the Development & Splice tab has not finished loading.';
       add('Development & Splice',rows,msg,msg?null:'INFO: a required length, or a code limit applied in the calculation (not a check). Lengths are required lengths: compare them with the lengths detailed.');
     })();
     return {title:'Summary of results',key:'cbro:sum',note:tot.join(' · ')+'.',subs:subs,_ch:'sum'};
@@ -9610,16 +9639,17 @@ window.addEventListener('DOMContentLoaded',()=>{
       it.rows.forEach(function(r){ var c=r[4]; if(!c||!c._k) return; var h=c._k.filter(function(k){ return D.index.has(k); })[0]; delete c._k; if(h) c.key=h; }); }); });
   }
   function model(){
-    var secs=[], codes=[], letters='ABC', P={}, refRows=[];
+    var secs=[], codes=[], letters='ABC', P={}, refRows=[], ERR={};
     CH.forEach(function(c,ci){
       var w=win(c.app), m=null, part=letters[ci]+'. '+c.name;
       try{ m=w&&typeof w[c.fn]==='function'?w[c.fn]():null; }catch(e){ m={sections:[{title:c.name,subs:[{title:'Chapter error',items:[{type:'note',warn:true,text:'This chapter could not be built: '+(e&&e.message)}]}]}]}; }
       if(!m) m={sections:[{title:c.name,subs:[{title:'Not available',items:[{type:'note',warn:true,text:'The '+c.name+' tab has not finished loading. Open it once, then show the Report tab again.'}]}]}]};
+      var ie=cbirErrors(c.id); if(ie.length){ ERR[c.id]=ie; m={code:m.code,proj:m.proj,refs:m.refs,sections:[cbirSection(c,ie)]}; }   /* CBIR: an input error replaces the chapter's worked sections */
       if(m.code) codes.push(m.code);
       if(c.id==='cap'&&m.proj) P=m.proj;
       (m.refs||[]).forEach(function(x){ refRows.push([c.name,String(x[0]).replace(/<[^>]+>/g,''),String(x[1]).replace(/<sub>(.*?)<\/sub>/g,'$$_{$1}$$').replace(/<[^>]+>/g,'')]); });
       var S=(m.sections||[]).filter(function(s){ return !(c.id==='dev'&&/^References$/.test(s.title)); });   /* the references of every chapter are joined at the end */
-      S.forEach(function(s,k){ secs.push({part:k===0?part:undefined,title:s.title,note:tx(s.note,c.id),_ch:c.id,_tab:s.tab,
+      S.forEach(function(s,k){ secs.push({part:k===0?part:undefined,title:s.title,note:tx(s.note,c.id),_ch:c.id,_tab:s.tab,key:s._cbir,
         subs:(s.subs||[]).map(function(q){ return {title:tx(q.title,c.id),key:q.key?c.id+':'+q.key:undefined,items:(q.items||[]).map(function(it){ return item(it,c.id); })}; })}); });
     });
     /* references: every chapter's own list (cap, asd: m.refs; dev: its References section, rebarRefs) */
@@ -9630,6 +9660,8 @@ window.addEventListener('DOMContentLoaded',()=>{
       info:[['Project',P.name],['Project No.',P.num],['Subject',P.subj],['Calculated by',P.by],['Date',P.date],['Sheet',P.sheet],['Checked by',P.chk],['Checked date',P.chkDate]],   /* CBRX: Subject and Sheet, as the print report's title block */
       head:{left:'Project No. '+(P.num||'—')+' — '+String(proj).slice(0,40),right:'Computed: '+(P.by||'—')+' '+(P.date||'')+' · Checked: '+(P.chk||'—')+' '+(P.chkDate||''),foot:proj+' (Concrete Beam Design Suite)'},
       sections:secs};
+    M._err=ERR;   /* CBIR: the chapters with an input error (rxRest copies none of their tabs; the Summary says so) */
+    if(ERR.cap&&!ERR.asd) secs.forEach(function(s){ if(s._ch==='asd'&&s.part) s.note=(s.note?s.note+' ':'')+'Note: the Beam Capacity tab has an input error ([[cbir:cap]]). The values this chapter inherits from it are the last ones it sent before the error; check them against the corrected Beam Capacity inputs.'; });   /* CBIR */
     rxRest(M);   /* CBRX: what the retired print reports printed and the chapters lack */
     cbroOrder(M);   /* CBRO: design order, the suite's Summary of results first, numbering independent of the Include boxes */
     cbrfMove(M);   /* CBRF: figures and unique tables in their sections, the rest of the tab copies in an appendix */
