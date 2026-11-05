@@ -1565,3 +1565,20 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **How verified:** `node tests/check-syntax.mjs "Bridge Geometry.html"`: pass. `node tests/smoke/project-library.mjs --tool bgeo` (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs --tool bgeo`: ALL PASS (Save As → file; Save → update with sha; "synced" in the row; GitHub-only copy opened → results (ENG and the output panes) identical to the saved bridge; settings button; first-sync offer; Delete asks; sync off: no request, no key; no console errors). origin/main vs branch (sync off), after Save As and Export JSON: export text and file name identical; `bridgeGeomEngine.library.v1`, `.project.v1`, `.examplesSeeded.v1` identical (`savedAt` normalised); 0 requests. Screenshot of the panel with sync on checked.
 - **Formulas, factors, units, code references:** none.
 - **Other copies:** none.
+
+## 2026-11-05 — PR: claude/header-bgeo (BGHD: compact project bar; Save As New, New, JSON / DXF and LL & DL hand-off buttons moved to a new Project tab; display only, no result change)
+- **Engineer:** clean up the top of the page (button-only header here: the project bar had 11 buttons); the bar keeps the bridge name and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id and handler is the same; the handlers are bound by id at start-up):
+  - `.projbar`: before Bridge: `#cur_name`, Save (`#proj_savelib`), Save As New (`#proj_saveas`), Library (`#lib_toggle`), New (`#proj_new`), Undo / Redo (PLIB, after New), Export JSON (`#proj_save`), Import JSON (`#proj_load`, `#proj_file`), Export DXF (`#dxf_export`), Send to LL & DL (`#bgx_send`), Export hand-off (JSON) (`#bgx_export`), save status. After: Bridge: `#cur_name`, Save, Library, Undo / Redo, save status.
+  - New page tab `<button class="tabbtn" data-tab="project">Project</button>` (last; the page still opens on Alignment) and `<section class="tabpane" id="pane-project">` with three fieldsets: saved bridges (this browser) (Save As New, New), project file (JSON) and drawing (Export JSON, Import JSON + file input, Export DXF), hand-off to LL & DL Distribution (Send to LL & DL, Export hand-off (JSON)); one-line notes.
+  - PLIB block: Undo / Redo inserted after `#lib_toggle` instead of `#proj_new`.
+  - `#cur_name` (the bar's bridge name) becomes a link to the Project tab (anchor `/* BGHD (2026-11-05): the bar's bridge name opens the Project tab`; Enter / Space too) and focuses Save As New.
+  - CSS (anchor `/* BGHD (2026-11-05)`): `#cur_name.bgLink`, `#pane-project .prjRow`. The print rule already hides buttons and fieldsets.
+- **Decisions (pending engineer review):** the bridge name pill is the project line (the tool has no title block); Save (updates the loaded bridge) and Library stay in the bar with Undo / Redo; the page tabs did not fit a phone before this change either (the page already scrolls sideways at 390 / 768 px: max overflow 696 / 318 px on main and on the branch), so the Project tab is at the right end of that row on a phone.
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, default bridge):
+  - `ENG`, the Top of Deck and Beam Seat output text, every localStorage key (time stamps normalised) and the reload of the autosave: identical;
+  - the bridge name opens the Project tab with Save As New focused; Export JSON downloads once; Send to LL & DL opens its dialog; the bar holds Save, Library, Undo, Redo;
+  - `project-library --tool bgeo`, `github-sync-tools --tool bgeo`, `dxf-print-sheets --tool bg`, `check-syntax`: pass; 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change.

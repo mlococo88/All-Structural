@@ -41,6 +41,11 @@
   .tabbtn:focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; }
   main { padding: 22px 24px 60px; max-width: 1320px; }
   .tabpane { display: none; } .tabpane.active { display: block; }
+  /* BGHD (2026-11-05): Save As New, New, Export / Import JSON, Export DXF and the LL & DL hand-off are in the Project tab
+     (#pane-project); the bar keeps the bridge name (a link to that tab), Save, Library, Undo / Redo and the save status */
+  #cur_name.bgLink { cursor: pointer; }
+  #cur_name.bgLink:hover { text-decoration: underline; }
+  #pane-project .prjRow { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 2px; }
   .cols { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 26px; align-items: start; }
   .cols > div { min-width: 0; }
   @media (max-width: 1020px){ .cols { grid-template-columns: 1fr; } }
@@ -160,17 +165,7 @@
     <span class="note" style="text-transform:none;">Bridge:</span>
     <span class="pill" id="cur_name">(unsaved)</span>
     <button class="sm" id="proj_savelib" title="Save the current bridge to the library (updates the loaded entry, or prompts for a name).">Save</button>
-    <button class="sm ghost" id="proj_saveas" title="Save the current bridge as a new named entry in the library.">Save As New</button>
     <button class="sm ghost" id="lib_toggle" type="button" title="Open the saved-bridge library.">&#9656; Library</button>
-    <button class="sm ghost" id="proj_new" title="Clear to a fresh demo bridge.">New</button>
-    <span class="sep" style="display:inline-block;width:1px;height:18px;background:var(--graphite);margin:0 2px;"></span>
-    <button class="sm ghost" id="proj_save" title="Export the current bridge as a JSON file.">Export JSON</button>
-    <button class="sm ghost" id="proj_load" title="Import a bridge from a JSON file.">Import JSON</button>
-    <input type="file" id="proj_file" accept="application/json,.json" style="display:none">
-    <button class="sm ghost" id="dxf_export" type="button" title="Download the plan (alignment, supports, girders, deck edges, elevations) and optionally the profile as a DXF drawing, in State Plane or local coordinates.">Export DXF</button>
-    <span class="sep" style="display:inline-block;width:1px;height:18px;background:var(--graphite);margin:0 2px;"></span>
-    <button class="sm ghost" id="bgx_send" type="button" title="Send spans, girder spacing, skew and overhangs to the LL &amp; DL Distribution tool (lldf.html). You review the values and choices first; LL &amp; DL asks again before applying anything.">Send to LL &amp; DL</button>
-    <button class="sm ghost" id="bgx_export" type="button" title="Download the same LL &amp; DL geometry hand-off as a JSON file (for another browser or device, or the calc package).">Export hand-off (JSON)</button>
     <span class="note" id="save_status" style="margin-left:auto;">—</span>
   </div>
   <div id="lib_panel" style="display:none; margin:0 16px 10px;">
@@ -191,6 +186,7 @@
     <button class="tabbtn" role="tab" aria-selected="false" data-tab="seat">Beam Seat Output</button>
     <button class="tabbtn" role="tab" aria-selected="false" data-tab="map">Site Map</button>
     <button class="tabbtn" role="tab" aria-selected="false" data-tab="drawings">Drawings</button>
+    <button class="tabbtn" role="tab" aria-selected="false" data-tab="project">Project</button>
   </div>
 </header>
 
@@ -550,6 +546,36 @@
   <section class="tabpane" id="pane-drawings" role="tabpanel">
     <p class="note" style="font-size:12px; margin-bottom:10px;">Drawing sheets of the computed geometry: plan, profile, typical section(s), a framing plan per span and the data and elevation tables, each on a B-size sheet (11 &times; 17 in) at a standard scale chosen to fit, with border and title block. The same entities are the preview, the DXF and the printed pages. Display only: nothing here changes a result.</p>
     <div id="bgdwHost"></div>
+  </section>
+
+  <!-- TAB: PROJECT (BGHD, 2026-11-05): moved here from the header's project bar (same ids and handlers) -->
+  <section class="tabpane" id="pane-project" role="tabpanel">
+    <fieldset>
+      <legend>saved bridges (this browser)</legend>
+      <p class="note" style="margin-top:0;">Save (in the bar above) updates the loaded bridge; Save As New adds the current bridge to the library under a new name; New starts again from the demo bridge.</p>
+      <div class="prjRow">
+        <button class="sm ghost" id="proj_saveas" title="Save the current bridge as a new named entry in the library.">Save As New</button>
+        <button class="sm ghost" id="proj_new" title="Clear to a fresh demo bridge.">New</button>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>project file (JSON) and drawing</legend>
+      <p class="note" style="margin-top:0;">A portable copy of the bridge, or one to move to another machine; the plan (and optionally the profile) as a DXF drawing.</p>
+      <div class="prjRow">
+        <button class="sm ghost" id="proj_save" title="Export the current bridge as a JSON file.">Export JSON</button>
+        <button class="sm ghost" id="proj_load" title="Import a bridge from a JSON file.">Import JSON</button>
+        <input type="file" id="proj_file" accept="application/json,.json" style="display:none">
+        <button class="sm ghost" id="dxf_export" type="button" title="Download the plan (alignment, supports, girders, deck edges, elevations) and optionally the profile as a DXF drawing, in State Plane or local coordinates.">Export DXF</button>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>hand-off to LL &amp; DL Distribution</legend>
+      <p class="note" style="margin-top:0;">Spans, girder spacing, skew and overhangs for the LL &amp; DL Distribution tool, or the same hand-off as a file.</p>
+      <div class="prjRow">
+        <button class="sm ghost" id="bgx_send" type="button" title="Send spans, girder spacing, skew and overhangs to the LL &amp; DL Distribution tool (lldf.html). You review the values and choices first; LL &amp; DL asks again before applying anything.">Send to LL &amp; DL</button>
+        <button class="sm ghost" id="bgx_export" type="button" title="Download the same LL &amp; DL geometry hand-off as a JSON file (for another browser or device, or the calc package).">Export hand-off (JSON)</button>
+      </div>
+    </fieldset>
   </section>
 
   <section class="tabpane" id="pane-map" role="tabpanel">
@@ -4610,7 +4636,7 @@ function bgPlibInit(){
     applyProject(p); autosave(); } });
   const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'sm ghost'});
   const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
-  const ref=document.getElementById('proj_new'); if(ref){ ref.insertAdjacentElement('afterend',br); ref.insertAdjacentElement('afterend',bu); }
+  const ref=document.getElementById('lib_toggle'); if(ref){ ref.insertAdjacentElement('afterend',br); ref.insertAdjacentElement('afterend',bu); }   /* BGHD: after Library in the bar */
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   let t=null; h.reset();
   window.BGPL={ h, soon:()=>{ clearTimeout(t); t=setTimeout(()=>h.record(),600); } };
@@ -4650,6 +4676,11 @@ document.getElementById('vdatum_sys').addEventListener('change',()=>{ renderVDat
 document.getElementById('vdatum_txt').addEventListener('input',()=>{ renderVDatum(); markDirty(); });
 renderVDatum();
 document.getElementById('proj_save').addEventListener('click', downloadProject);
+/* BGHD (2026-11-05): the bar's bridge name opens the Project tab (display only) */
+(function(){ const p=document.getElementById('cur_name'), t=document.querySelector('.tabbtn[data-tab="project"]'); if(!p||!t) return;
+  p.classList.add('bgLink'); p.setAttribute('role','link'); p.tabIndex=0; p.title='Saved bridge: Save As New, New, files and hand-offs are in the Project tab';
+  const go=()=>{ t.click(); const b=document.getElementById('proj_saveas'); if(b) b.focus({preventScroll:true}); window.scrollTo(0,0); };
+  p.addEventListener('click',go); p.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); go(); } }); })();
 document.getElementById('proj_load').addEventListener('click', ()=>document.getElementById('proj_file').click());
 document.getElementById('proj_file').addEventListener('change', e=>{ if(e.target.files[0]) loadProjectFromFile(e.target.files[0]); });
 document.getElementById('proj_new').addEventListener('click', ()=>{ if(confirm('Reset to the demo bridge? Unsaved changes will be lost.')){ freshDefaults(); CURRENT_NAME=null; updateNameDisplay(); autosave(); } });
