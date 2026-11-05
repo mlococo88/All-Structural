@@ -2232,7 +2232,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data:** none changed (no key or format; `useExcess`, `asReq`, `asProv` are read as before).
 - **Other copies:** `ACI Rebar Development Length.html` and the Development & Splice frame of `Concrete Beam Capacity.html` (both changed here). Spread Footing already excludes hooks (SFDH/SFEX).
 - **Open items:** none from this change. (Audit C4, the 12 in floor in the tension splice base, is conservative and was not changed.)
-## 2026-11-05 — PR: claude/cbc-look (CBTH-1: suite look for the Beam Capacity and ASD Beam Calcs tabs and the suite bar, as Light Pole / apps/steel-bridge; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-look, PR #783: https://github.com/mlococo88/All-Structural/pull/783 (CBTH-1: suite look for the Beam Capacity and ASD Beam Calcs tabs and the suite bar, as Light Pole / apps/steel-bridge; display only, no result change)
 
 ### CBTH-1. One header, compact project bar, tab stripe, small card titles, fixed-width inputs   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 1 of the concrete beam suite update, appearance):** make the suite look like the Light Pole and Steel Bridge apps (not Spread Footing; no orange). Audit item 14.
