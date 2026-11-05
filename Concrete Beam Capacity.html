@@ -6472,7 +6472,7 @@ function calcHook(inp,f){
     return {Dmin,Rmin,Rentered,R,v_raw,v,Fh,cf,rlcf,ties,conf,lam_rc_h,lam_rc_h_raw,num,den,ldb,ld,ldh_eq,
             ldh_calc,min1,min2,ldh,gov: ldh===ldh_calc?&quot;calc&quot;:(ldh===min1?&quot;8db&quot;:&quot;6in&quot;)};
   } else {
-    const ldh_calc = (inp.fy*f.psiE_h*f.psiR*f.psiO*f.psiC_h*f.excess)/(55*f.lambda*f.sqrtFc)*Math.pow(f.db,1.5);
+    const ldh_calc = (inp.fy*f.psiE_h*f.psiR*f.psiO*f.psiC_h)/(55*f.lambda*f.sqrtFc)*Math.pow(f.db,1.5);   // no A_s,req/A_s,prov: ACI 318-19 25.4.10.1 does not list 25.4.3.1 and 25.4.10.2(d) bars it for hooked bars
     const min1 = 8*f.db, min2 = 6;
     const ldh = Math.max(ldh_calc, min1, min2);
     return {ldh_calc, min1, min2, ldh, gov: ldh===ldh_calc?&quot;calc&quot;:(ldh===min1?&quot;8db&quot;:&quot;6in&quot;)};
@@ -6634,7 +6634,7 @@ function buildInputPanel(){
       <div class=&quot;field&quot;><label>A<sub>s</sub> required <span class=&quot;unit&quot;>(in²)</span></label><input id=&quot;asReq&quot; type=&quot;number&quot; value=&quot;1.00&quot; step=&quot;0.01&quot; min=&quot;0&quot;></div>
       <div class=&quot;field&quot;><label>A<sub>s</sub> provided <span class=&quot;unit&quot;>(in²)</span></label><input id=&quot;asProv&quot; type=&quot;number&quot; value=&quot;1.00&quot; step=&quot;0.01&quot; min=&quot;0&quot;></div>
     </div>
-    <div class=&quot;hint&quot;>Reduces l_d by A<sub>s,req</sub>/A<sub>s,prov</sub>. The tool does not check where the bar is, so <b>do not tick this</b> if any of these apply &amp;mdash; ACI 25.4.10.2: (a) at noncontinuous supports, (b) where anchorage or development for f<sub>y</sub> is required, (c) where bars are required to be continuous, (d) headed or mechanically anchored bars, (e) seismic-force-resisting systems in SDC D, E or F. AASHTO &amp;lambda;<sub>er</sub> (5.10.8.2.1c): not where development for f<sub>y</sub> is specifically required or for seismic (5.11) detailing. Never applied to splices. Also drives Class A splice eligibility.</div>`)}
+    <div class=&quot;hint&quot;>Reduces l_d by A<sub>s,req</sub>/A<sub>s,prov</sub> (ACI: straight bars in tension and bars in compression; the ACI hook length l<sub>dh</sub> is never reduced). The tool does not check where the bar is, so <b>do not tick this</b> if any of these apply &amp;mdash; ACI 318-19 25.4.10.2: (a) at noncontinuous supports, (b) where anchorage or development for f<sub>y</sub> is required, (c) where bars are required to be continuous, (d) hooked, headed or mechanically anchored bars, (e) seismic-force-resisting systems in SDC C, D, E or F, (f) anchorage of concrete piles and concrete-filled pipe piles to pile caps in SDC C, D, E or F. AASHTO &amp;lambda;<sub>er</sub> (5.10.8.2.1c): not where development for f<sub>y</sub> is specifically required or for seismic (5.11) detailing. Never applied to splices. Also drives Class A splice eligibility.</div>`)}
 
   ${panel(&quot;E&quot;,&quot;Standard Hook Factors&quot;,true,`
     <div class=&quot;field&quot;><label>Epoxy Coating (&amp;psi;<sub>e</sub>)</label>
@@ -7118,12 +7118,12 @@ function tabHook(inp,f){
         &quot;\\psi_c = \\min\\!\\left(\\dfrac{f'_c}{15000}+0.6,\\ 1.0\\right)&quot;,
         `\\min\\!\\left(\\dfrac{${fmt(inp.fc,0)}}{15000}+0.6,\\ 1.0\\right)`,
         `\\psi_c = ${fmt(f.psiC_h,3)}`))
-  + excessBlock(inp,f)
+  + (inp.useExcess?subsec(&quot;Excess Reinforcement Factor&quot;,&quot;§25.4.10.2(d)&quot;,note(`<p><b>Not applied to the hook.</b> ACI 318-19 25.4.10.1 permits the A<sub>s,req</sub>/A<sub>s,prov</sub> reduction only for the lengths of 25.4.2.1(a), 25.4.6.1(a), 25.4.7.1(a) and 25.4.9.1(a) (not 25.4.3.1), and 25.4.10.2(d) does not permit it for hooked, headed or mechanically anchored bars. l<sub>dh</sub> below develops full f<sub>y</sub>.</p>`)):&quot;&quot;)
   + subsec(&quot;2. Hook Development Length&quot;,&quot;Eq. 25.4.3.1&quot;,
       note(`<p>The straight development length rarely fits where a beam frames into a column or a bar reaches a wall end — that's where hooks are used. The result below is measured from the critical section (where the bar must be fully stressed) to the outside face of the hook. The two floors (8d_b and 6 in) guarantee a minimum embedment even when the formula returns a very small number for small bars in strong concrete.</p>`)
     + eqBlock(&quot;Standard hook length&quot;,&quot;Eq. 25.4.3.1&quot;,
-        &quot;l_{dh} = \\dfrac{f_y\\,\\psi_e\\psi_r\\psi_o\\psi_c}{55\\,\\lambda\\sqrt{f'_c}}\\,d_b^{1.5}&quot;+(inp.useExcess?&quot;\\cdot\\tfrac{A_{s,req}}{A_{s,prov}}&quot;:&quot;&quot;),
-        `\\dfrac{${fmt(inp.fy,0)}\\times ${fmt(f.psiE_h,1)}\\times ${fmt(f.psiR,1)}\\times ${fmt(f.psiO,2)}\\times ${fmt(f.psiC_h,3)}}{55\\times ${fmt(f.lambda,2)}\\times ${fmt(f.sqrtFc,1)}}\\times ${fmt(f.db,3)}^{1.5}${inp.useExcess?`\\times ${fmt(f.excess,3)}`:&quot;&quot;}`,
+        &quot;l_{dh} = \\dfrac{f_y\\,\\psi_e\\psi_r\\psi_o\\psi_c}{55\\,\\lambda\\sqrt{f'_c}}\\,d_b^{1.5}&quot;,
+        `\\dfrac{${fmt(inp.fy,0)}\\times ${fmt(f.psiE_h,1)}\\times ${fmt(f.psiR,1)}\\times ${fmt(f.psiO,2)}\\times ${fmt(f.psiC_h,3)}}{55\\times ${fmt(f.lambda,2)}\\times ${fmt(f.sqrtFc,1)}}\\times ${fmt(f.db,3)}^{1.5}`,
         `l_{dh,calc} = ${fmt(h.ldh_calc,2)}\\ \\text{in}`)
     + eqBlock(&quot;Minimum length governs&quot;,&quot;§25.4.3.1&quot;,
         &quot;l_{dh} = \\max\\!\\left(l_{dh,calc},\\ 8d_b,\\ 6\\ \\text{in}\\right)&quot;,
@@ -7426,7 +7426,7 @@ function tabBatch(inp,f){
         </tr></thead>
         <tbody>${rows}</tbody>
       </table>
-      <div class=&quot;hint&quot; style=&quot;margin-top:8px&quot;>All lengths in inches. Tension splice uses Class ${inp.tensClass}. ${inp.useExcess?`Excess-reinforcement reduction (×${fmt(f.excess,3)}) applied to development lengths but not splices, per code.`:&quot;No excess-reinforcement reduction applied.&quot;}${f.AASHTO?&quot; *N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).&quot;:&quot; *N/P = lap splice not permitted for #14/#18 bars (ACI 25.5.1.1); in compression they may be lapped only to #11 and smaller bars (25.5.5.3).&quot;}</div>`)
+      <div class=&quot;hint&quot; style=&quot;margin-top:8px&quot;>All lengths in inches. Tension splice uses Class ${inp.tensClass}. ${inp.useExcess?`Excess-reinforcement reduction (×${fmt(f.excess,3)}) applied to development lengths but not splices${f.AASHTO?&quot;&quot;:&quot; or hooks (ACI 25.4.10.2(d))&quot;}, per code.`:&quot;No excess-reinforcement reduction applied.&quot;}${f.AASHTO?&quot; *N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).&quot;:&quot; *N/P = lap splice not permitted for #14/#18 bars (ACI 25.5.1.1); in compression they may be lapped only to #11 and smaller bars (25.5.5.3).&quot;}</div>`)
   + rebarWorkedIn(rebarLenCards(),&quot;&quot;,&quot;Selected bar (#&quot;+inp.barSize+&quot;) worked in: &quot;)
   + note(`<p>This schedule is the single most-used output for detailing: it lets you look up any bar's development and splice length at a glance for the current concrete/steel combination, rather than re-running each bar individually. Because every value obeys the same modification factors you set, it stays consistent with the detailed tabs.</p>`);
 }
@@ -7784,7 +7784,7 @@ function rebarRefs(inp,f){
     [&quot;AASHTO LRFD&quot;,&quot;Bridge Design Specifications, 10th Ed. (2024): 3.5.1 and Table 3.5.1-1 (w<sub>c</sub>); 5.4.2.4 and Eq. 5.4.2.4-1 (E<sub>c</sub>); 5.4.2.8 (λ); 5.4.3.2 (E<sub>s</sub>); Table 5.8.2.5.3a-1 (v, CTT node); 5.10.2.1 (standard hooks); 5.10.2.3 and Table 5.10.2.3-1 (minimum bend diameter); 5.10.8.1.1; 5.10.8.2.1 (scope, f′<sub>c</sub> ≤ 15 ksi); 5.10.8.2.1a, Eqs. 5.10.8.2.1a-1 and 5.10.8.2.1a-2 (tension); 5.10.8.2.1b (λ<sub>rl</sub>·λ<sub>cf</sub>); 5.10.8.2.1c, Eqs. 5.10.8.2.1c-1 to -3 (λ<sub>rc</sub>)&quot;+(inp.useExcess?&quot; and Eq. 5.10.8.2.1c-4 (λ<sub>er</sub>)&quot;:&quot;&quot;)+&quot;; 5.10.8.2.2a, Eqs. 5.10.8.2.2a-1 to -3, 5.10.8.2.2b (compression); 5.10.8.2.4, 5.10.8.2.4a, Eqs. 5.10.8.2.4a-1 and -2, 5.10.8.2.4b (standard hooks); 5.10.8.4 (f<sub>y</sub> &amp;gt; 75 ksi); 5.10.8.4.2a (no tension lap splices for bars larger than No. 11); 5.10.8.4.3 and 5.10.8.4.3a (tension lap splices, Class A / B); 5.10.8.4.5a (compression lap splices, m = 1.0).&quot;],
     [&quot;ACI 318-19&quot;,&quot;25.3.1 (hook geometry, cited with AASHTO 5.10.2.1).&quot;]];
   return [
-    [&quot;ACI 318-19&quot;,&quot;Building Code Requirements for Structural Concrete (ACI 318-19): &quot;+(inp.lightweight?&quot;Table 19.2.4.2 (λ); &quot;:&quot;&quot;)+&quot;25.3.1 (hook geometry); 25.4.1.4 (√f′<sub>c</sub> ≤ 100 psi); 25.4.2.1 (12 in. minimum); &quot;+(inp.fy>=80000?&quot;25.4.2.2 (K<sub>tr</sub> ≥ 0.5d<sub>b</sub>, f<sub>y</sub> ≥ 80,000 psi); &quot;:&quot;&quot;)+&quot;25.4.2.4, Eqs. 25.4.2.4a and 25.4.2.4b, Table 25.4.2.5 (tension); 25.4.3.1 and Table 25.4.3.2 (standard hooks); 25.4.9.1, 25.4.9.2, Table 25.4.9.3 (compression); &quot;+(inp.useExcess?&quot;25.4.10.1 (excess reinforcement); &quot;:&quot;&quot;)+&quot;25.5.1.1 (no lap splices of No. 14 and No. 18 bars); 25.5.2, 25.5.2.1 (tension lap splices, Class A / B); 25.5.5.1, 25.5.5.3 (compression lap splices).&quot;],
+    [&quot;ACI 318-19&quot;,&quot;Building Code Requirements for Structural Concrete (ACI 318-19): &quot;+(inp.lightweight?&quot;Table 19.2.4.2 (λ); &quot;:&quot;&quot;)+&quot;25.3.1 (hook geometry); 25.4.1.4 (√f′<sub>c</sub> ≤ 100 psi); 25.4.2.1 (12 in. minimum); &quot;+(inp.fy>=80000?&quot;25.4.2.2 (K<sub>tr</sub> ≥ 0.5d<sub>b</sub>, f<sub>y</sub> ≥ 80,000 psi); &quot;:&quot;&quot;)+&quot;25.4.2.4, Eqs. 25.4.2.4a and 25.4.2.4b, Table 25.4.2.5 (tension); 25.4.3.1 and Table 25.4.3.2 (standard hooks); 25.4.9.1, 25.4.9.2, Table 25.4.9.3 (compression); &quot;+(inp.useExcess?&quot;25.4.10.1, 25.4.10.2(d) (excess reinforcement; not for hooks); &quot;:&quot;&quot;)+&quot;25.5.1.1 (no lap splices of No. 14 and No. 18 bars); 25.5.2, 25.5.2.1 (tension lap splices, Class A / B); 25.5.5.1, 25.5.5.3 (compression lap splices).&quot;],
     [&quot;AASHTO LRFD&quot;,&quot;5.10.2.1 (hook geometry; cited with ACI 25.3.1 on the hook schematic; edition: verify).&quot;]];
 }
 /* one result line per length and per check, from the tool's own values (the dashboard's checks) */
@@ -7952,10 +7952,10 @@ function rbrHook(inp,f){
       rbS({id:'psiR',label:'Confining reinforcement factor ('+(inp.hookConfined?'confined':'not confined')+(f.psiRForced?'; #14/#18 take 1.6':'')+')',sym:'\\psi_{r}',value:f.psiR,unit:'',d:1}),
       rbS({id:'psiO',label:'Location factor (as selected'+(f.psiOForced?'; #14/#18 take 1.25':'')+')',sym:'\\psi_{o}',value:f.psiO,unit:'',d:2}),
       rbS({id:'psiC',label:'Concrete strength factor',sym:'\\psi_{c}',eq:'\\min(\\frac{'+RB_FC+'}{15{,}000} + 0.6,\\, 1.0)',sub:'\\min(\\frac{'+rbG(inp.fc,0)+'}{15{,}000} + 0.6,\\, 1.0)',value:f.psiC_h,unit:'',d:3}),
-      rbS({id:'lam',label:'Lightweight concrete factor',sym:'\\lambda',value:f.lambda,unit:'',d:2,note:'see §lam'})].concat(exS)});
+      rbS({id:'lam',label:'Lightweight concrete factor',sym:'\\lambda',value:f.lambda,unit:'',d:2,note:'see §lam'})].concat(inp.useExcess?[{type:'note',text:'Excess reinforcement factor not applied to the hook: ACI 318-19 25.4.10.1 does not list 25.4.3.1, and 25.4.10.2(d) does not permit the reduction for hooked bars.'}]:[])});
     T.push({title:'Hook development length',ref:'ACI 318-19 Eq. 25.4.3.1',steps:[
-      rbS({id:'ldhcalc',label:'Standard hook development length',sym:'l_{dh,calc}',eq:'\\frac{f_{y} \\psi_{e}\\psi_{r}\\psi_{o}\\psi_{c}}{55 \\lambda \\sqrt{'+RB_FC+'}}\\, d_{b}^{1.5}'+(inp.useExcess?'\\cdot \\frac{A_{s,req}}{A_{s,prov}}':''),
-        sub:'\\frac{'+rbG(inp.fy,0)+'\\times '+rbN(f.psiE_h,1)+'\\times '+rbN(f.psiR,1)+'\\times '+rbN(f.psiO)+'\\times '+rbN(f.psiC_h,3)+'}{55\\times '+rbN(f.lambda)+'\\times '+rbN(f.sqrtFc)+'}\\times '+rbN(f.db,3)+'^{1.5}'+(inp.useExcess?'\\times '+rbN(f.excess,3):''),
+      rbS({id:'ldhcalc',label:'Standard hook development length',sym:'l_{dh,calc}',eq:'\\frac{f_{y} \\psi_{e}\\psi_{r}\\psi_{o}\\psi_{c}}{55 \\lambda \\sqrt{'+RB_FC+'}}\\, d_{b}^{1.5}',
+        sub:'\\frac{'+rbG(inp.fy,0)+'\\times '+rbN(f.psiE_h,1)+'\\times '+rbN(f.psiR,1)+'\\times '+rbN(f.psiO)+'\\times '+rbN(f.psiC_h,3)+'}{55\\times '+rbN(f.lambda)+'\\times '+rbN(f.sqrtFc)+'}\\times '+rbN(f.db,3)+'^{1.5}',
         value:h.ldh_calc,unit:'in',note:'√f′c (limited to 100 psi): see §sqrtFc'}),
       rbS({id:'min1',label:'Minimum 8 d_b',sym:'8 d_{b}',eq:'',sub:'8\\times '+rbN(f.db,3),value:h.min1,unit:'in'}),
       rbS({id:'ldh',label:'Standard hook development length (minimum 8 d_b and 6 in.)',sym:'l_{dh}',eq:'\\max(l_{dh,calc},\\, 8 d_{b},\\, 6\\, \\text{in.})',sub:'\\max('+rbN(h.ldh_calc)+',\\, '+rbN(h.min1)+',\\, 6)',value:h.ldh,unit:'in',ref:'ACI 318-19 25.4.3.1',note:gov})]});
@@ -8139,7 +8139,7 @@ function rbrModel(){
     });
     secs.push({title:'Bar development schedule',subs:[{title:'Development and splice lengths, all bar sizes',items:[
       {type:'table',head:['Bar','$d_{b}$ (in.)','Tension $l_{d}$','Hook $l_{dh}$','Comp. $l_{dc}$','Tens. splice ('+inp.tensClass+')','Comp. splice'],rows,wide:true},
-      {type:'note',text:'All lengths in inches, rounded to 0.1 in., computed with the inputs above for each bar size (bold: the selected #'+inp.barSize+'; its lengths are worked in [[td/ld]], [[hk/ldh]], [[cd/ldc]], [[ts/lst]], [[cs/lsc]]). '+(inp.useExcess?'Excess reinforcement reduction (×'+rbN(f.excess,3)+') applied to development lengths, not to splices. ':'No excess reinforcement reduction applied. ')+(A?'*N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).':'*N/P = lap splice not permitted for #14/#18 bars (ACI 318-19 25.5.1.1); in compression they may be lapped only to #11 and smaller bars (25.5.5.3).')+' '+tabLink('batch','On screen: Bar Schedule tab')}]}].concat(rbCommSub(tabBatch(inp,f)))});
+      {type:'note',text:'All lengths in inches, rounded to 0.1 in., computed with the inputs above for each bar size (bold: the selected #'+inp.barSize+'; its lengths are worked in [[td/ld]], [[hk/ldh]], [[cd/ldc]], [[ts/lst]], [[cs/lsc]]). '+(inp.useExcess?'Excess reinforcement reduction (×'+rbN(f.excess,3)+') applied to development lengths, not to splices'+(A?'':' or hooks (ACI 318-19 25.4.10.2(d))')+'. ':'No excess reinforcement reduction applied. ')+(A?'*N/P = lap splices not used for bars larger than No. 11 (AASHTO 5.10.8.4.2a).':'*N/P = lap splice not permitted for #14/#18 bars (ACI 318-19 25.5.1.1); in compression they may be lapped only to #11 and smaller bars (25.5.5.3).')+' '+tabLink('batch','On screen: Bar Schedule tab')}]}].concat(rbCommSub(tabBatch(inp,f)))});
   }
   /* 8. references */
   secs.push({title:'References',subs:[{title:'Codes and articles cited',items:[{type:'table',head:['Reference','Provisions used'],rows:rebarRefs(inp,f).map(r=>[rbPlain(r[0]),rbPlain(r[1])])}]}]});
