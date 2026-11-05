@@ -1976,7 +1976,7 @@ index 219cc2c..a3e337e 100644
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Entered demands:** not applicable (the tool computes distribution factors; it does not design for demands).
 
-## 2026-11-05 — PR: claude/header-lldf (LDHD: compact header; project bar retired; title block, project file and hand-off buttons in a new Project input tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-lldf (PR #816: https://github.com/mlococo88/All-Structural/pull/816) (LDHD: compact header; project bar retired; title block, project file and hand-off buttons in a new Project input tab; display only, no result change)
 - **Engineer:** clean up the top of the page: the title-block inputs and the project / hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (nodes moved, not copied: every id, handler and saved field is the same):
   - `header.apphead .actions`: before Design beam chip, Live recalc, ↩ MCT, Send DFs (+ padlock), Export DF hand-off, Send DL (+ padlock), PS ↗, Recalculate, Print / PDF. After: `#hdrProj` "Project: <project> · <structure no.>" (link), Design beam chip, Live recalc, ↩ MCT, `#saveStatus`, Recalculate, Undo, Redo, Print / PDF.
