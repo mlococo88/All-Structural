@@ -5000,3 +5000,34 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Saved data:** none.
 - **Other copies:** none.
 - **Open items:** the existing vertical-bar lines in the 2D sections and the elevation (decision 2) are left as they were.
+
+## 2026-11-05 — PR: claude/sf-2d-hook-stubs (SFHS: vertical-bar lines in the sections and pedestal elevation end at the hook / the footing top; display only, no result change)
+
+- **Problem:** after SFHK (#771), the existing vertical-bar lines in the sections A-A / B-B and the pedestal elevation still ran straight to the top of the bottom mat. This left two errors:
+  - for hooked bars that act as the dowels, a stub (r + d_b/2) below the start of the bend;
+  - with separate dowels, the vertical bars drawn into the footing beside the dowels.
+- **Engineer's direction (2026-11-05):** fix both. The "existing entities unchanged" rule protected the views, not wrong lines.
+- **Where:** `sfdwBuild`.
+  - New inner `sfhkBarBot(i,zTof,zTob)`, just before `function sfhkEnds`. It returns the lower end of the vertical-bar line:
+    - bars act as the dowels, hooked: zTob + d_b/2 + r (where the hook arc starts, `sfdHookGeo`);
+    - separate dowels (nD > 0): zTof, the footing top, where the vertical bars start and the lap with the dowels begins (the 3D view already starts them there);
+    - otherwise (straight continuous bars, no dowels, bearing patch, no dowel result): zTob, as before.
+  - Section, before: `[c-a,c+a].forEach(xb=>D.line(L.bar,xb,LV.topOfBot,xb,t12+hh-Lp.cov));` After: `…D.line(L.bar,xb,sfhkBarBot(i,t12,LV.topOfBot),xb,t12+hh-Lp.cov)…`.
+  - Elevation, before: `[ex-Lp.ax,ex+Lp.ax].forEach(xb=>D.line(L.bar,xb,-(t12-LV.topOfBot),xb,hh-Lp.cov));` After: `…D.line(L.bar,xb,sfhkBarBot(i,0,-(t12-LV.topOfBot)),xb,hh-Lp.cov)…`.
+- **Entities changed:** only the start (lower) point y of these S-REBAR vertical-bar LINEs. Their x, their upper point, the entity count, order and layers, and every other entity are unchanged. Per case (DXF dump, main 535c69a vs branch):
+  - **default:** 10 lines: A-A #5, #6, #21, #22; B-B #5, #6; each pedestal elevation #21, #22. Each moves up by 4.000 in (#8: d_b/2 + r = 0.5 + 3.5).
+  - **Seymour:**
+    - A-A #5, #6 and B-B #5, #6: +3.000 in (#6: 0.375 + 2.625);
+    - B-B #26, #27: +4.000 in (#8);
+    - Ped 1 elevation #45, #46: +3.000 in;
+    - Ped 2 elevation #29, #30: +4.000 in.
+  - **revHook / rev (separate dowels):** 10 lines move up by 19.250 in (= availEmb, top of the bottom mat → footing top): A-A #5, #6; B-B #5, #6 and #27/#28 (#23/#24 in rev); elevations #43, #44 and #29, #30.
+  - **sfe:** separate dowels at Ped 1 (+25.000 in); hooked continuous #8 at Ped 2 (+4.000 in).
+  - **edgeHook, thin, dir:** as default (+4.000 in).
+- **How verified:**
+  - Entity-by-entity DXF comparison on 7 harness cases plus Seymour: only the listed LINE start points differ. `SharedDxf.validate` passes on all.
+  - Results deep diff of `R` and `P2` on all 10 cases: 0 differences. Report and dashboard identical, 0 console errors.
+  - `node tests/check-syntax.mjs` and `tests/smoke/dxf-print-sheets.mjs` pass.
+  - Printed PDFs (Print all sheets) for default, Seymour and revHook checked by eye: no stub below the hooks; with separate dowels only the dowels enter the footing.
+- **Saved data:** none.
+- **Other copies:** none.
