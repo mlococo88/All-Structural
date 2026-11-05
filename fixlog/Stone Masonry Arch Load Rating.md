@@ -1222,7 +1222,7 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-05 — PR: claude/header-stonearch (SAHD: compact header; title block and shared-info buttons moved to the Project input tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-stonearch (PR #824: https://github.com/mlococo88/All-Structural/pull/824) (SAHD: compact header; title block and shared-info buttons moved to the Project input tab; display only, no result change)
 - **Engineer:** clean up the top of the page: the title-block inputs and the shared-info buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (nodes moved, not copied: every id, handler and saved field is the same):
   - `#hdrIn`: before `#appTitle` (All tools, title, by-line, governing documents, `.bx-pm` Use / Share project info, then Undo / Redo / Saved projects… appended by `plibInit()`) and `#tblk` (7 inputs `tbProject` … `tbChkDate` and `#printBtn`). After: `#appTitle` (All tools, title, by-line, governing documents) and `<div id="hdrActs">` (`#hdrProj` "Project: <project> · <task>" link, `#printBtn`, Undo / Redo / Saved projects…).
