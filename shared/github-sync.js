@@ -296,11 +296,11 @@
       const cn = uniqueName(`${name} (conflict ${dev} ${stamp(now())})`);
       const d = store.duplicate(name, cn);
       if (!d.ok) { note('error', `"${name}" changed on GitHub and here, and the copy could not be kept in this browser (${d.message || d.error}). Nothing was uploaded.`); return d; }
-      const l = gitSha(text);
-      const r = await c.put(pathOf(cn), text, null, `${label}: conflict copy "${cn}" (from ${dev})`);
+      const l = gitSha(text), ctext = fileText(cn), lc = gitSha(ctext);   // the copy's own file text (a tool's file may carry the name)
+      const r = await c.put(pathOf(cn), ctext, null, `${label}: conflict copy "${cn}" (from ${dev})`);
       mut(v => {
-        v.seen[cn] = l; v.queue = v.queue.filter(x => x !== name && (r.ok ? x !== cn : true)); if (!r.ok && v.queue.indexOf(cn) < 0) v.queue.push(cn);
-        if (r.ok) v.base[cn] = { c: r.sha, l };
+        v.seen[cn] = lc; v.queue = v.queue.filter(x => x !== name && (r.ok ? x !== cn : true)); if (!r.ok && v.queue.indexOf(cn) < 0) v.queue.push(cn);
+        if (r.ok) v.base[cn] = { c: r.sha, l: lc };
         v.conflicts[name] = { copy: cn, l, c: cloudSha || null, t: now() };
       });
       try { lastRaw = storage.getItem(store.key); } catch (e) { /* ignore */ }
@@ -523,6 +523,7 @@
       const r = await eng.flush(q > 0 && !(before && before.kind === 'rate'));
       if (r && (r.done || r.ok === false || before !== eng.lastError())) { if (r.done && ctx.changed) ctx.changed(); redraw(); }
     }
+    try { if (eng.configured()) eng.init(); } catch (e) { /* storage blocked: nothing to sync */ }   // projects in the list now = 'already here' (first-connect offer); later saves upload
     const timer = setInterval(() => { tick().catch(() => {}); }, 3000);
     if (typeof window !== 'undefined' && window.addEventListener) window.addEventListener('online', () => { tick().catch(() => {}); });
     async function shown(u) {

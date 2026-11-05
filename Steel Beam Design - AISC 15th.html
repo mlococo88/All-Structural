@@ -16,6 +16,7 @@
 <!-- PLIB (2026-11-02): saved-project list dialog (Open / Rename / Duplicate / Delete), shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script src="shared/list-input.js"></script>
 <style>
 :root{
@@ -585,7 +586,8 @@ function sbPlibButton(){
   if(!SBPL){
     let ST=null;try{ST=window.localStorage;}catch(e){}
     const store=SharedProjects.mapStore(ST,LS_PROJ,{unpack:i=>i&&i.d,time:i=>i&&i.t||null,sort:'saved'});
-    const dlg=SharedProjectsUI.libraryDialog({store,storage:ST,title:'Saved projects (this browser)',
+    const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'steel-beam-aisc',label:'Steel Beam Design',space:1,toFile:i=>i.d,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return {t:Date.now(),d:j};}},
+   store,storage:ST,title:'Saved projects (this browser)',
       current:()=>{const n=S.proj&&S.proj.name;return n&&store.has(n)?n:null;},
       open:n=>{const d=store.get(n);if(!d)return false;S=mergeState(defaultState(),d);fullRebuild();toast('Loaded \u201C'+n+'\u201D');return true;},
       renamed:(a,b)=>{if(S.proj&&S.proj.name===a){S.proj.name=b;schedule();}},

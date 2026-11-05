@@ -7183,6 +7183,7 @@ if(document.readyState===&quot;loading&quot;) document.addEventListener(&quot;DO
 <script src=&quot;shared/report.js&quot;></script>
 <script src=&quot;shared/projects.js&quot;></script>
 <script src=&quot;shared/projects-ui.js&quot;></script>
+<script src=&quot;shared/github-sync.js&quot;></script>
 
 <style>
 :root{
@@ -9768,7 +9769,8 @@ function rbPlibInit(){
   const store=SharedProjects.mapStore(ST,LS_PROJECTS);
   const sel=()=>document.getElementById('projSelect');
   const relist=keep=>{ refreshProjectList(); if(keep&amp;&amp;store.has(keep)) sel().value=keep; };
-  const dlg=SharedProjectsUI.libraryDialog({store,storage:ST,title:'Saved projects (this browser)',
+  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'aci-rebar-development',label:'ACI Rebar Development Length',space:2,fromFile:j=>{if(!j||typeof j!=='object'||!j.inp)throw new Error('not a rebar development project file');return j;}},
+    store,storage:ST,title:'Saved projects (this browser)',
     current:()=>{ const n=sel()&amp;&amp;sel().value; return n&amp;&amp;store.has(n)?n:null; },
     open:n=>{ const d=store.get(n); if(!d) return false; applyState(d); render(); relist(n); if(RBPL) RBPL.h.reset(); return true; },
     renamed:(a,b)=>{ if(sel()&amp;&amp;sel().value===a) relist(b); const sn=document.getElementById('saveName'); if(sn&amp;&amp;sn.value.trim()===a) sn.value=b; },
