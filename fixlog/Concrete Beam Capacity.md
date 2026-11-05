@@ -2297,6 +2297,47 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
 - **Other copies:** none (the CSS of the two frames is kept in step by this entry).
 - **Open items:** at 390 px the ASD Summary table and the Beam Capacity Summary table are wider than the frame (their Worked in / Status columns scroll inside the table box) — as before, not changed.
 
+## 2026-11-05 — PR: claude/cbc-aashto-fyt, PR #784: https://github.com/mlococo88/All-Structural/pull/784 (CBFY: AASHTO design yield of transverse reinforcement per 5.7.2.7, 100 ksi only for a 5.4.3.3 element under flexural shear without torsion, else 60 / 75 ksi; three stale "(verify)" markers removed; CALCULATION CHANGE in AASHTO mode, less conservative before)
+
+- **Problem (audit C2):** in AASHTO mode `fytDesign()` returned min(f_yt, 100 ksi) for every shear calculation, citing "5.4.3.1 / 5.7.2.8 (verify)". AASHTO LRFD 10th Ed. (2024) 5.7.2.7 (p. 5-67) allows the specified yield strength up to 100 ksi only for elements and connections of 5.4.3.3 under flexural shear without torsion. For all other elements the design yield is f_yt where f_yt ≤ 60 ksi. Above 60 ksi it is the stress at a strain of 0.0035, but not more than 75 ksi. With f_yt = 100 ksi the tool used 100 ksi where the code allows at most 75 ksi, so V_s was 33 % high. ACI mode is unchanged: min(f_yt, 60), Table 20.2.2.4(a).
+- **Where (Beam Capacity frame, `#suite-frame-capacity` srcdoc; decoded with `srcdoc.py`, exact-string edits, re-encoded, round trip checked, CRLF kept; inside the srcdoc `"` is `&quot;` and `&&` is `&amp;&amp;`):**
+  - `fytDesign()`, anchor `function fytDesign(){`.
+    - Before: `function fytDesign(){ return S.code==='ACI' ? Math.min(S.mat.fyt,60) : Math.min(S.mat.fyt,100); }`. The comment above it cited `5.4.3.1 / 5.7.2.8 (verify)`.
+    - After: `function fytLimAASHTO(){ return S.mat.fyt100 ? 100 : (S.mat.fyt<=60 ? 60 : Math.min(29000*0.0035,75)); }` and `function fytDesign(){ return S.code==='ACI' ? Math.min(S.mat.fyt,60) : Math.min(S.mat.fyt,fytLimAASHTO()); }`. The comment now paraphrases 5.7.2.7. E_s × 0.0035 = 101.5 ksi, so above 60 ksi the limit is 75 ksi for the elastic-plastic bar the tool assumes.
+  - `defaultState()`: `mat:{…,gamma3:0.67}` becomes `mat:{…,gamma3:0.67,fyt100:false}`.
+  - Materials input (AASHTO only), after the f_yt row: a checkbox `fyt100`, "Element of 5.4.3.3, flexural shear without torsion: f_yt up to 100 ksi (5.7.2.7; otherwise 60 ksi, or 75 ksi above 60)". AASHTO mode does not evaluate torsion (the torsion module is ACI only), so the user states both conditions with this one box.
+  - `validate()`: the warning `if(S.mat.fyt>100 && S.code==='AASHTO') … "AASHTO 5.7.2.8" … (AASHTO 5.4.3.1 / 5.7.2.8)` becomes `if(S.code==='AASHTO' && S.mat.fyt>fytDesign()) W.push({code:"AASHTO 5.7.2.7", …})`. It names the value used, and says when the box is not ticked.
+  - Shear tab, AASHTO V_s block (`workShear`): a first line works f_y = min(f_yt, limit) (5.7.2.7). Report `cbcRptShear` AASHTO: a new step `fytd` (same working, ref AASHTO LRFD 10th Ed. 5.7.2.7) before `Vs`.
+  - Input Echo and Report "Section and materials" tables (AASHTO only): a row "f_yt up to 100 ksi (5.4.3.3, no torsion; 5.7.2.7)" with yes / no.
+  - C3, text only: `phiFlex()` comment "AASHTO LRFD 10th Ed. 5.6.2.1 (verify)" becomes "… 5.6.2.1". Development & Splice frame: the comment "AASHTO LRFD 5.10.8.4.5a (edition: verify)" becomes "AASHTO LRFD 10th Ed. 5.10.8.4.5a", and the Report reference row "5.10.2.1 (hook geometry; …; edition: verify)." loses "; edition: verify". All three were confirmed in the audit against the 10th Ed. text: 5.6.2.1 ε_tl 0.005 / 0.008; 5.10.2.1 Standard Hooks p. 5-176; 5.10.8.4.5a as implemented.
+- **Effects of f_yt,design:** V_s (Eq. 5.7.3.3-4), A_v,min (Eq. 5.7.2.5-1, which has f_y in the denominator, so it rises), the A_v ≥ A_v,min test that chooses Eq. 5.7.3.4.2-1 or -2 for β, and the shear-torsion sharing line, as before through `fytDesign()`.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 5.7.2.7 (p. 5-67) and 5.4.3.3 (p. 5-24). Before, the tool cited 5.4.3.1 / 5.7.2.8, which do not set this limit.
+- **Check case (AASHTO; default section 12 × 18 in, 3 #5 / 3 #5, #4 two-leg stirrups at 6 in, f′c 4 ksi, f_y 60 ksi, f_yt 100 ksi; one combination M_u 120 k-ft, V_u 60 kip, T_u 5 k-ft (torsion present, box not ticked)):**
+  - d_v = 14.24 in, θ = 49.9°, β = 0.876, V_c = 9.46 kip (unchanged).
+  - Before: f_y = min(100, 100) = 100 ksi; V_s = 0.40 × 100 × 14.24 × cot 49.9° / 6 = 79.93 kip; V_n = 89.39; φV_n = 0.90 × 89.39 = 80.45 kip; D/C 60/80.45 = 0.746; A_v,min = 0.0316 × 1.0 × √4 × 12 × 1 / 100 = 0.0076 in²/in (D/C 0.114).
+  - After: f_y = min(100, 75) = 75 ksi; V_s = 0.40 × 75 × 14.24 × 0.842 / 6 = 59.95 kip; V_n = 69.41; φV_n = 62.47 kip; D/C 0.961 (still PASS); A_v,min = 0.0101 in²/in (D/C 0.152).
+  - With the box ticked (T_u 0): 100 ksi, results as before.
+  - f_yt 70 ksi: min(70, 75) = 70, no change. f_yt 60: no change.
+- **How verified:** headless (Playwright Chromium, `file://`, tests/libs), origin/main (after #783) vs branch.
+  - What was read:
+    - Beam Capacity frame: `computeAll()`, `allChecks()`, `cbcRptModel()`, every tab's text;
+    - ASD frame: `compute()`, `asdRptModel()`, tab text;
+    - Dev frame: `rbrModel()` and calc results, tab text;
+    - suite Report text;
+    - also `ACI Rebar Development Length.html`.
+  - Default project (ACI): only the Dev Report reference row loses "; edition: verify" (both files); every computed value identical.
+  - AASHTO f_yt 100 with torsion: the values above; nothing else moved.
+  - AASHTO f_yt 100 ticked, f_yt 70, f_yt 60, and ACI f_yt 100: `computeAll()` and `allChecks()` identical; only the new f_y working line, step and echo row added.
+  - Checkbox toggled in the page: φV_n 62.47 → 80.45 kip.
+  - Tests:
+    - `node tests/check-syntax.mjs` (all): pass.
+    - `node tests/smoke/phone-layout.mjs --tool cbc,aci`: pass.
+    - `node tests/smoke/project-library.mjs --tool rebar`: ALL PASS.
+    - 0 console errors.
+  - Screenshot of the Materials card looked at.
+- **Saved data:** keys unchanged (`rcbeam_v2_auto`, `rcbeam_v2_projects`). The state gains the optional field `mat.fyt100` (default false, filled by `mergeState`). No migration that keeps the old 100 ksi was added on purpose. A saved AASHTO project with f_yt > 75 ksi now opens at 75 ksi and shows the 5.7.2.7 warning. The old value was the unconservative result this change corrects, and the user can tick the box where the element qualifies. Older copies of the tool ignore the field.
+- **Other copies:** `fytDesign()` exists only in the Beam Capacity frame (the ASD frame has no transverse steel). The C3 edits in the Development & Splice frame are mirrored in `ACI Rebar Development Length.html` (CLAUDE.md §3).
+- **Open items:** none.
 ## 2026-11-05 — PR: claude/cbc-dev-look, PR #785: https://github.com/mlococo88/All-Structural/pull/785 (CBTH-2: Development & Splice re-themed to the suite look (Light Pole / apps/steel-bridge / the Beam Capacity tab): navy header, slate tabs with a blue stripe, card heads, one-row inputs; display only, no result change)
 
 ### CBTH-2. Beige / maroon serif theme replaced by the suite theme   [display only] [no result change]

@@ -634,7 +634,7 @@ function calcTensSplice(inp,f,tens){
 function calcCompSplice(inp,f){
   let lsc_calc;
   if(f.AASHTO){
-    // AASHTO LRFD 5.10.8.4.5a (edition: verify): l_c = 0.5·m·fy·db (fy <= 60 ksi), m·(0.9fy - 24)·db (fy > 60 ksi), fy in ksi;
+    // AASHTO LRFD 10th Ed. 5.10.8.4.5a: l_c = 0.5·m·fy·db (fy <= 60 ksi), m·(0.9fy - 24)·db (fy > 60 ksi), fy in ksi;
     // x4/3 where f'c < 3.0 ksi; >= 12 in. m = 1.0 (no reduction for ties or spirals; engineer decision 2026-10-19).
     // Written in psi with m = 1.0 these are the same expressions as the ACI branch: 0.5·fy_ksi = 0.0005·fy_psi, 0.9·fy_ksi = 0.0009·fy_psi.
     if(inp.fy<=60000) lsc_calc = 0.0005*inp.fy*f.db;   // = 0.5·m·fy·db, fy in ksi, m = 1.0
@@ -1884,7 +1884,7 @@ function rebarRefs(inp,f){
     ["ACI 318-19","25.3.1 (hook geometry, cited with AASHTO 5.10.2.1)."]];
   return [
     ["ACI 318-19","Building Code Requirements for Structural Concrete (ACI 318-19): "+(inp.lightweight?"Table 19.2.4.2 (λ); ":"")+"25.3.1 (hook geometry); 25.4.1.4 (√f′<sub>c</sub> ≤ 100 psi); 25.4.2.1 (12 in. minimum); "+(inp.fy>=80000?"25.4.2.2 (K<sub>tr</sub> ≥ 0.5d<sub>b</sub>, f<sub>y</sub> ≥ 80,000 psi); ":"")+"25.4.2.4, Eqs. 25.4.2.4a and 25.4.2.4b, Table 25.4.2.5 (tension); 25.4.3.1 and Table 25.4.3.2 (standard hooks); 25.4.9.1, 25.4.9.2, Table 25.4.9.3 (compression); "+(inp.useExcess?"25.4.10.1, 25.4.10.2(d) (excess reinforcement; not for hooks); ":"")+"25.5.1.1 (no lap splices of No. 14 and No. 18 bars); 25.5.2, 25.5.2.1 (tension lap splices, Class A / B); 25.5.5.1, 25.5.5.3 (compression lap splices)."],
-    ["AASHTO LRFD","5.10.2.1 (hook geometry; cited with ACI 25.3.1 on the hook schematic; edition: verify)."]];
+    ["AASHTO LRFD","5.10.2.1 (hook geometry; cited with ACI 25.3.1 on the hook schematic)."]];
 }
 /* one result line per length and per check, from the tool's own values (the dashboard's checks) */
 function rebarResultRows(inp,f,tab){
