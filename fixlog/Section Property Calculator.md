@@ -3122,7 +3122,7 @@ index 56a8a3f..13f8372 100644
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-05 — PR: claude/header-secprop (SPHD: compact header; title block, project-file / DXF and shared-info buttons moved to the Project input tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-secprop (PR #825: https://github.com/mlococo88/All-Structural/pull/825) (SPHD: compact header; title block, project-file / DXF and shared-info buttons moved to the Project input tab; display only, no result change)
 - **Engineer:** clean up the top of the page: the title-block inputs and the file / hand-off buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (nodes moved, not copied: every id, `data-fkey`, listener and saved field is the same):
   - `#hdr`: before title row (title, by-line, All tools; `.hdrBtns` Open file…, Save file, Export DXF, Print report), `#projGrid` (7 fields), `#projShare` (Use / Share project info). After: title row with `.hdrBtns#hdrActs` (`#hdrProj` "Project: <project> · <job #>" link, Print report).
