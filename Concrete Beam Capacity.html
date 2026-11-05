@@ -463,8 +463,11 @@ function beta1(fc){ return fc<=4?0.85:Math.max(0.65,0.85-0.05*(fc-4)); }
 function alpha1(fc){ return (S.code==='AASHTO' &amp;&amp; fc>10) ? Math.max(0.75,0.85-0.02*(fc-10)) : 0.85; }
 function sqrtfc_psi(fc){ return Math.sqrt(fc*1000); }
 /* ACI 318-19 Table 20.2.2.4(a): fyt used for shear and torsion design <= 60 ksi (deformed bars).
-   AASHTO LRFD 10th Ed. 5.4.3.1 / 5.7.2.8 (verify): design yield of transverse reinforcement <= 100 ksi. */
-function fytDesign(){ return S.code==='ACI' ? Math.min(S.mat.fyt,60) : Math.min(S.mat.fyt,100); }
+   AASHTO LRFD 10th Ed. 5.7.2.7: design yield of nonprestressed transverse reinforcement = f_yt up to 100 ksi only for
+   elements and connections of 5.4.3.3 under flexural shear without torsion (the user ticks S.mat.fyt100); otherwise
+   f_yt where f_yt <= 60 ksi, and above 60 ksi the stress at a strain of 0.0035 (E_s x 0.0035 = 101.5 ksi) but not over 75 ksi. */
+function fytLimAASHTO(){ return S.mat.fyt100 ? 100 : (S.mat.fyt<=60 ? 60 : Math.min(29000*0.0035,75)); }
+function fytDesign(){ return S.code==='ACI' ? Math.min(S.mat.fyt,60) : Math.min(S.mat.fyt,fytLimAASHTO()); }
 
 /* =====================================================================
    §0 EQUATION BLOCK — symbolic, substituted, result, variables, code ref
@@ -501,7 +504,7 @@ function defaultState(){
           chk:&quot;&quot;,chkDate:&quot;&quot;,sheet:&quot;S-1&quot;},
     code:&quot;ACI&quot;,
     sec:{type:&quot;rect&quot;,bw:12,h:18,bf:36,hf:6},
-    mat:{fc:4,fy:60,fyt:60,dagg:1.0,lambda:1.0,gamma3:0.67},
+    mat:{fc:4,fy:60,fyt:60,dagg:1.0,lambda:1.0,gamma3:0.67,fyt100:false},
     cover:{cc:2.0,exposure:&quot;exposed&quot;,req:2.0,userEdited:false},
     layers:[{n:3,size:'5',face:'tension',dMan:null},
             {n:3,size:'5',face:'compression',dMan:null}],
@@ -646,7 +649,7 @@ function aashtoEtl(fy){ return fy<=75 ? 0.005 : Math.min(0.008,0.005+0.003*(fy-7
 function phiFlex(et,fy,code){
   const ety=fy/ES;
   if(code==='AASHTO'){
-    /* AASHTO LRFD 10th Ed. 5.6.2.1 (verify): tension-controlled limit 0.005 for fy <= 75 ksi, 0.008 at fy = 100 ksi,
+    /* AASHTO LRFD 10th Ed. 5.6.2.1: tension-controlled limit 0.005 for fy <= 75 ksi, 0.008 at fy = 100 ksi,
        linear between (was 0.005 for every grade). Compression-controlled limit fy/Es (unchanged). */
     const etlA=aashtoEtl(fy);
     if(et>=etlA) return {phi:0.90,cls:&quot;Tension Controlled&quot;};
@@ -1402,7 +1405,7 @@ function validate(){
   if(fc>15) W.push({code:&quot;Materials&quot;,msg:`f′c = ${fmt(fc)} ksi is outside the normal-strength range of this tool.`});
   if(fy>80 &amp;&amp; S.code==='ACI') W.push({code:&quot;ACI 20.2.2.4&quot;,msg:`f_y = ${fmt(fy)} ksi exceeds 80 ksi; ACI limits f_y for most flexural applications. Confirm the grade is permitted.`});
   if(fy>75 &amp;&amp; S.code==='AASHTO') W.push({code:&quot;AASHTO 5.4.3.1&quot;,msg:`f_y = ${fmt(fy)} ksi exceeds the 75 ksi AASHTO limit for most applications. \u03c6 uses the tension-controlled strain limit \u03b5_tl = ${fmt(aashtoEtl(fy),4)} interpolated per 5.6.2.1 (0.005 at 75 ksi, 0.008 at 100 ksi).`});
-  if(S.mat.fyt>100 &amp;&amp; S.code==='AASHTO') W.push({code:&quot;AASHTO 5.7.2.8&quot;,msg:`f_yt = ${fmt(S.mat.fyt)} ksi exceeds 100 ksi. Shear is computed with f_yt = 100 ksi (AASHTO 5.4.3.1 / 5.7.2.8).`});
+  if(S.code==='AASHTO' &amp;&amp; S.mat.fyt>fytDesign()) W.push({code:&quot;AASHTO 5.7.2.7&quot;,msg:`f_yt = ${fmt(S.mat.fyt)} ksi exceeds ${fmt(fytDesign())} ksi. Shear is computed with f_yt = ${fmt(fytDesign())} ksi (AASHTO LRFD 10th Ed. 5.7.2.7: up to 100 ksi only for elements of 5.4.3.3 under flexural shear without torsion${S.mat.fyt100?&quot;&quot;:&quot;, which is not ticked under Materials; otherwise 75 ksi&quot;}).`});
   if(S.tor.present &amp;&amp; S.code==='ACI' &amp;&amp; fy>60) W.push({code:&quot;ACI 20.2.2.4&quot;,msg:`f_y = ${fmt(fy)} ksi exceeds 60 ksi. The longitudinal torsion steel (A_\u2113, T_n,\u2113, A_\u2113,min) is computed with f_y = 60 ksi (ACI Table 20.2.2.4(a)); flexure uses ${fmt(fy)} ksi.`});
   if(S.mat.fyt>60 &amp;&amp; S.code==='ACI') W.push({code:&quot;ACI 20.2.2.4&quot;,msg:`f_yt = ${fmt(S.mat.fyt)} ksi exceeds 60 ksi. Shear and torsion are computed with f_yt = 60 ksi (ACI Table 20.2.2.4(a)).`});
   /* proportions */
@@ -1714,6 +1717,8 @@ function buildInput(){
     fRow(b,&quot;f′_c&quot;,numIn(()=>S.mat.fc,v=>S.mat.fc=v,&quot;0.5&quot;,&quot;fc&quot;),&quot;ksi&quot;);
     fRow(b,&quot;f_y (longitudinal)&quot;,numIn(()=>S.mat.fy,v=>S.mat.fy=v,&quot;5&quot;,&quot;fy&quot;),&quot;ksi&quot;);
     fRow(b,&quot;f_yt (transverse)&quot;,numIn(()=>S.mat.fyt,v=>S.mat.fyt=v,&quot;5&quot;,&quot;fyt&quot;),&quot;ksi&quot;);
+    if(S.code==='AASHTO'){ const r=el(&quot;div&quot;,&quot;fRow chk&quot;); r.appendChild(chkIn(()=>!!S.mat.fyt100,v=>S.mat.fyt100=v,&quot;fyt100&quot;));
+      r.appendChild(el(&quot;label&quot;,null,&quot;Element of 5.4.3.3, flexural shear without torsion: f_yt up to 100 ksi (5.7.2.7; otherwise 60 ksi, or 75 ksi above 60)&quot;)); b.appendChild(r); }
     fRow(b,&quot;Aggregate size&quot;,numIn(()=>S.mat.dagg,v=>S.mat.dagg=v,&quot;0.25&quot;,&quot;dagg&quot;),&quot;in&quot;);
     fRow(b,&quot;λ (lightweight)&quot;,numIn(()=>S.mat.lambda,v=>S.mat.lambda=v,&quot;0.05&quot;,&quot;lam&quot;),&quot;&quot;);
     if(S.code==='AASHTO') fRow(b,&quot;γ₃ (bar spec., 5.6.3.3)&quot;,selIn([&quot;0.67&quot;,&quot;0.75&quot;,&quot;0.76&quot;],()=>String(S.mat.gamma3),v=>S.mat.gamma3=+v,
@@ -2582,7 +2587,8 @@ function workShear(b,r){
     }));
     if(S.stir.present) b.appendChild(eqBlock({
       title:&quot;Shear resisted by the transverse reinforcement&quot;,ref:&quot;AASHTO Eq. 5.7.3.3-4&quot;,
-      lines:[`V_s = \\dfrac{A_v f_y d_v \\cot\\theta}{s}`,
+      lines:[`f_y = \\min(f_{yt},\\;${fmt(fytLimAASHTO())}\\text{ ksi}) = \\min(${fmt(S.mat.fyt)},\\;${fmt(fytLimAASHTO())}) = ${fmt(fyt)}\\text{ ksi}\\quad\\text{(5.7.2.7)}`,
+        `V_s = \\dfrac{A_v f_y d_v \\cot\\theta}{s}`,
         `V_s = \\dfrac{(${fmt(sh.Av)}\\text{ in}^2)(${fmt(fyt)}\\text{ ksi})(${fmt(sh.dv)}\\text{ in})\\cot ${fmt(sh.theta,1)}^\\circ}{${fmt(sh.s)}\\text{ in}} = ${fmt(sh.Vs)}\\text{ kip}`],
       vars:[[&quot;A_v&quot;,&quot;Area of transverse steel crossing the crack&quot;,fmt(sh.Av),&quot;in\u00b2&quot;],
             [&quot;s&quot;,&quot;Stirrup spacing&quot;,fmt(sh.s),&quot;in&quot;]]
@@ -3169,6 +3175,7 @@ function buildInputEchoTab(pg){
     row(&quot;f\u2032_c&quot;,fmt(S.mat.fc),&quot;ksi&quot;);
     row(&quot;f_y&quot;,fmt(S.mat.fy),&quot;ksi&quot;);
     row(&quot;f_yt&quot;,fmt(S.mat.fyt),&quot;ksi&quot;);
+    if(S.code==='AASHTO') row(&quot;f_yt up to 100 ksi (5.4.3.3, no torsion; 5.7.2.7)&quot;,S.mat.fyt100?&quot;yes&quot;:&quot;no&quot;,&quot;&quot;);
     row(&quot;\u03bb&quot;,fmt(S.mat.lambda,2),&quot;&quot;);
     row(&quot;Aggregate size&quot;,fmt(S.mat.dagg),&quot;in&quot;);
     row(&quot;Clear cover provided&quot;,fmt(S.cover.cc),&quot;in&quot;);
@@ -4265,7 +4272,8 @@ function cbcRptShear(r){
       T.push({title:'Longitudinal strain, β and θ',ref:'AASHTO LRFD 10th Ed. 5.7.3.4.2',steps:st});
     } else T.push({title:'Simplified method',ref:'AASHTO LRFD 10th Ed. 5.7.3.4.1',steps:[cS({id:'beta',label:'Simplified value',sym:'\\beta',value:2.0,d:1}),cS({id:'theta',label:'Simplified value',sym:'\\theta',value:45,unit:'deg',d:0})]});
     const cs=[cS({id:'Vc',label:'Shear resisted by the concrete',sym:'V_{c}',eq:&quot;0.0316\\,\\beta\\lambda\\sqrt{f'_c}\\,b_v d_v&quot;,sub:'0.0316('+fmt(sh.beta,3)+')('+fmt(S.mat.lambda,2)+')\\sqrt{'+fmt(fc)+'}('+fmt(bw)+')('+fmt(sh.dv)+')',value:sh.Vc,unit:'kip',ref:'AASHTO LRFD 10th Ed. Eq. 5.7.3.3-3'})];
-    if(S.stir.present) cs.push(cS({id:'Vs',label:'Shear resisted by the transverse reinforcement',sym:'V_{s}',eq:'\\dfrac{A_v f_y d_v \\cot\\theta}{s}',sub:'\\dfrac{('+fmt(sh.Av)+')('+fmt(fyt)+')('+fmt(sh.dv)+')\\cot '+fmt(sh.theta,1)+'^\\circ}{'+fmt(sh.s)+'}',value:sh.Vs,unit:'kip',ref:'AASHTO LRFD 10th Ed. Eq. 5.7.3.3-4'}));
+    if(S.stir.present) cs.push(cS({id:'fytd',label:'Design yield strength of the transverse reinforcement'+(S.mat.fyt100?' (element of 5.4.3.3, flexural shear without torsion)':''),sym:'f_{y}',eq:'\\min(f_{yt},\\;'+fmt(fytLimAASHTO())+')',sub:'\\min('+fmt(S.mat.fyt)+',\\;'+fmt(fytLimAASHTO())+')',value:fyt,unit:'ksi',ref:'AASHTO LRFD 10th Ed. 5.7.2.7'}),
+      cS({id:'Vs',label:'Shear resisted by the transverse reinforcement',sym:'V_{s}',eq:'\\dfrac{A_v f_y d_v \\cot\\theta}{s}',sub:'\\dfrac{('+fmt(sh.Av)+')('+fmt(fyt)+')('+fmt(sh.dv)+')\\cot '+fmt(sh.theta,1)+'^\\circ}{'+fmt(sh.s)+'}',value:sh.Vs,unit:'kip',ref:'AASHTO LRFD 10th Ed. Eq. 5.7.3.3-4'}));
     cs.push(cS({id:'Vlim',label:'Upper limit on nominal shear',sym:'V_{n,max}',eq:&quot;0.25 f'_c b_v d_v&quot;,sub:'0.25('+fmt(fc)+')('+fmt(bw)+')('+fmt(sh.dv)+')',value:sh.Vlim,unit:'kip',ref:'AASHTO LRFD 10th Ed. Eq. 5.7.3.3-2'}));
     T.push({title:'Concrete and steel contributions',ref:'AASHTO LRFD 10th Ed. 5.7.3.3',steps:cs});
   } else {
@@ -4358,7 +4366,7 @@ function cbcRptModel(){
     subs.push({title:'Section and materials',items:[{type:'table',head:['Item','Value','Unit'],rows:[
       ['Design code',codeName,''],['Section type',S.sec.type==='tee'?'T-beam':'Rectangular',''],['Web width $b_{w}$',{t:fmt(S.sec.bw),n:true},'in'],['Overall depth h',{t:fmt(S.sec.h),n:true},'in'],
       ...(S.sec.type==='tee'?[['Flange width $b_{f}$',{t:fmt(S.sec.bf),n:true},'in'],['Flange thickness $h_{f}$',{t:fmt(S.sec.hf),n:true},'in']]:[]),
-      [&quot;$f^{\\prime}_{c}$&quot;,{t:fmt(S.mat.fc),n:true},'ksi'],['$f_{y}$',{t:fmt(S.mat.fy),n:true},'ksi'],['$f_{yt}$',{t:fmt(S.mat.fyt),n:true},'ksi'],['$\\lambda$',{t:fmt(S.mat.lambda,2),n:true},''],
+      [&quot;$f^{\\prime}_{c}$&quot;,{t:fmt(S.mat.fc),n:true},'ksi'],['$f_{y}$',{t:fmt(S.mat.fy),n:true},'ksi'],['$f_{yt}$',{t:fmt(S.mat.fyt),n:true},'ksi'],...(S.code==='AASHTO'?[['$f_{yt}$ up to 100 ksi (5.4.3.3, no torsion; 5.7.2.7)',S.mat.fyt100?'yes':'no','']]:[]),['$\\lambda$',{t:fmt(S.mat.lambda,2),n:true},''],
       ['Aggregate size',{t:fmt(S.mat.dagg),n:true},'in'],['Clear cover provided / required',fmt(S.cover.cc)+' / '+fmt(S.cover.req),'in']]}]});
     subs.push({title:'Reinforcement',items:[{type:'table',head:['Layer','Bars','Size','$A_{s}$ (in²)','Face','d (in)','Source'],rows:G.map((L,i)=>[L.side+(i+1),String(L.n),'#'+L.size,{t:fmt(L.As),n:true},L.face==='tension'?'Tension':'Compression',{t:fmt(L.d),n:true},L.manual?'manual override':'auto-stacked'])},
       {type:'note',text:(S.stir.present?'Transverse: '+S.stir.legs+'-leg #'+S.stir.size+' closed stirrup at '+fmt(S.stir.s)+' in. ($A_{v}$ = '+fmt(S.stir.legs*REBAR[S.stir.size].a)+' in²).':'No transverse reinforcement specified.')+(S.tor.present&amp;&amp;ACI?' Torsion: '+(S.tor.kind==='compatibility'?'compatibility':'equilibrium')+' torsion, θ = '+fmt(S.tor.theta,0)+'°, $A_{\\ell}$ = '+fmt(S.tor.Al)+' in².':'')+' Clear spacing between layers: '+fmt(S.layerClear)+' in.'}]});
@@ -6448,7 +6456,7 @@ function calcTensSplice(inp,f,tens){
 function calcCompSplice(inp,f){
   let lsc_calc;
   if(f.AASHTO){
-    // AASHTO LRFD 5.10.8.4.5a (edition: verify): l_c = 0.5·m·fy·db (fy <= 60 ksi), m·(0.9fy - 24)·db (fy > 60 ksi), fy in ksi;
+    // AASHTO LRFD 10th Ed. 5.10.8.4.5a: l_c = 0.5·m·fy·db (fy <= 60 ksi), m·(0.9fy - 24)·db (fy > 60 ksi), fy in ksi;
     // x4/3 where f'c < 3.0 ksi; >= 12 in. m = 1.0 (no reduction for ties or spirals; engineer decision 2026-10-19).
     // Written in psi with m = 1.0 these are the same expressions as the ACI branch: 0.5·fy_ksi = 0.0005·fy_psi, 0.9·fy_ksi = 0.0009·fy_psi.
     if(inp.fy<=60000) lsc_calc = 0.0005*inp.fy*f.db;   // = 0.5·m·fy·db, fy in ksi, m = 1.0
@@ -7694,7 +7702,7 @@ function rebarRefs(inp,f){
     [&quot;ACI 318-19&quot;,&quot;25.3.1 (hook geometry, cited with AASHTO 5.10.2.1).&quot;]];
   return [
     [&quot;ACI 318-19&quot;,&quot;Building Code Requirements for Structural Concrete (ACI 318-19): &quot;+(inp.lightweight?&quot;Table 19.2.4.2 (λ); &quot;:&quot;&quot;)+&quot;25.3.1 (hook geometry); 25.4.1.4 (√f′<sub>c</sub> ≤ 100 psi); 25.4.2.1 (12 in. minimum); &quot;+(inp.fy>=80000?&quot;25.4.2.2 (K<sub>tr</sub> ≥ 0.5d<sub>b</sub>, f<sub>y</sub> ≥ 80,000 psi); &quot;:&quot;&quot;)+&quot;25.4.2.4, Eqs. 25.4.2.4a and 25.4.2.4b, Table 25.4.2.5 (tension); 25.4.3.1 and Table 25.4.3.2 (standard hooks); 25.4.9.1, 25.4.9.2, Table 25.4.9.3 (compression); &quot;+(inp.useExcess?&quot;25.4.10.1, 25.4.10.2(d) (excess reinforcement; not for hooks); &quot;:&quot;&quot;)+&quot;25.5.1.1 (no lap splices of No. 14 and No. 18 bars); 25.5.2, 25.5.2.1 (tension lap splices, Class A / B); 25.5.5.1, 25.5.5.3 (compression lap splices).&quot;],
-    [&quot;AASHTO LRFD&quot;,&quot;5.10.2.1 (hook geometry; cited with ACI 25.3.1 on the hook schematic; edition: verify).&quot;]];
+    [&quot;AASHTO LRFD&quot;,&quot;5.10.2.1 (hook geometry; cited with ACI 25.3.1 on the hook schematic).&quot;]];
 }
 /* one result line per length and per check, from the tool's own values (the dashboard's checks) */
 function rebarResultRows(inp,f,tab){
