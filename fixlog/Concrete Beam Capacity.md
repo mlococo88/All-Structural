@@ -3754,7 +3754,7 @@ See `fixlog/ACI Rebar Development Length.md`. The same edits are in `<iframe id=
 - ACI 318-19 19.2.4.1 says "except as required in Table 25.4.2.5", and that table's λ for development may be narrower than 0.75–1.0. Not checked here.
 - Both are code-reference questions for the engineer (§4).
 
-## 2026-11-05 — PR: claude/cbc-lambda-cite (RBLC: λ citation corrected to ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b), and AASHTO 5.4.2.8 Eqs. -1 / -2 stated separately; Table 25.4.2.5 checked; text only, no result change)   [code reference (§4); no result change]
+## 2026-11-05 — PR: claude/cbc-lambda-cite, PR #797: https://github.com/mlococo88/All-Structural/pull/797 (RBLC: λ citation corrected to ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b), and AASHTO 5.4.2.8 Eqs. -1 / -2 stated separately; Table 25.4.2.5 checked; text only, no result change)   [code reference (§4); no result change]
 
 Applies to `ACI Rebar Development Length.html` and the Development & Splice frame (`suite-frame-dev`) of `Concrete Beam Capacity.html`, with the same five edits in each. No other "19.2.4.2" appears in `Concrete Beam Capacity.html`: the Beam Capacity and ASD frames and the shell have none.
 
