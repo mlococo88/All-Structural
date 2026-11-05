@@ -5002,7 +5002,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Open items:** the existing vertical-bar lines in the 2D sections and the elevation (decision 2) are left as they were.
 
 
-## 2026-11-05 — PR: claude/sf-ldc-bearing — Dowel compression development ℓ_dc required only for compression beyond the concrete bearing strength, ACI 318-19 16.3.1.2(a) (SFBC; pass / fail logic change)
+## 2026-11-05 — PR: claude/sf-ldc-bearing (PR #773: https://github.com/mlococo88/All-Structural/pull/773) — Dowel compression development ℓ_dc required only for compression beyond the concrete bearing strength, ACI 318-19 16.3.1.2(a) (SFBC; pass / fail logic change)
 
 ### SFBC. ℓ_dc check only where P_u exceeds the concrete bearing strength   [pass / fail logic; CLAUDE.md §4]
 - **Engineer (2026-11-05):** approved. Per 16.3.1.2(a), the dowels must transfer only the compression that exceeds the concrete bearing strength. Where concrete bearing carries P_u in every combination, ℓ_dc is shown as "not required" (OK / N/A), not NG. Unchanged: tension development, hooked ℓ_dh, shear friction (22.9.5.1) and the minimum area (16.3.4.1 / 16.3.4.2).
