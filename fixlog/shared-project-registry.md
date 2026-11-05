@@ -21,9 +21,9 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 
 ## 2026-11-05 — PR: claude/home-sync-all (HSP PR 2) — file text and sync engine per tool, for the home page's GitHub status and Sync all   [storage only; no result change]
-- **What:** each entry gets `space` and `toFile`, copied from the tool's `ctx.cloud` (one-line wrappers of the stored item, no calculation). The 16 entries are:
+- **What:** each entry gets `space` and `toFile`, copied from the tool's `ctx.cloud` (one-line wrappers of the stored item, no calculation). The 17 entries (Bridge Geometry, #819, added in this PR) are:
   - `i => i.d` (Section Property, Shear & Moment, Steel Beam, Timber);
-  - `i => i.state` (Abutment, Elastomeric);
+  - `i => i.state` (Abutment, Elastomeric); Bridge Geometry (#819) `(i, n) => { const o = Object.assign({}, i, { name: n }); delete o.savedAt; return o; }` (list: by name, time `savedAt`);
   - Light Pole `{ tool, format:'lpp-project', version:1, name, state }`;
   - Retaining Wall `{ format:'RetainCalcPro.project', version:1, name, fields }`;
   - Base Plate `Object.assign({ _bpad:'project', _bpadVersion:1 }, i)`;
@@ -31,7 +31,7 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
   - none (the stored item itself) for the rest.
 
   `sync: false` (list only) is available for a tool whose file needs the tool's own code; no tool uses it yet. New `fileText(entry, item, name)` makes the same text as the engine's `fileText`. New `engine(entry, storage, fetch, o)` returns `SharedGitHubSync.engine` with the tool's tool / label / key / toFile / space, so it shares the tool's bookkeeping key, queue, lock and conflict rules. Its `fromFile` refuses ("open <app> …"), so the home page never writes a GitHub file into a tool's list.
-- **Byte-identical files:** `tests/smoke/home-sync.mjs` uploads from the home page, then opens each of the 16 tools with sync on. Each tool's own engine computes its own file text and compares its git blob sha with GitHub's. It reports "synced" and uploads nothing (0 writes after its background check), and the bookkeeping `l` of every project equals the git sha of the file on GitHub. Each tool's sync file is its Export JSON (tested for Spread Footing in `tests/smoke/github-sync.mjs`, and per tool in #811 / #815 / #817).
+- **Byte-identical files:** `tests/smoke/home-sync.mjs` uploads from the home page, then opens each of the 17 tools with sync on. Each tool's own engine computes its own file text and compares its git blob sha with GitHub's. It reports "synced" and uploads nothing (0 writes after its background check), and the bookkeeping `l` of every project equals the git sha of the file on GitHub. Each tool's sync file is its Export JSON (tested for Spread Footing in `tests/smoke/github-sync.mjs`, and per tool in #811 / #815 / #817).
 - **Drift guard (Node):** each tool page's `cloud:{…}` has the same `space`, and has a `toFile` exactly when the entry has one; `fileText` = engine `fileText`; home Upload all followed by a tool engine shows synced with no write, for every entry (`tests/engine/run.mjs project-registry`).
 - **Shared files (§3):** `shared/github-sync.js` and `shared/projects.js` are unchanged (only loaded by `tools.html` too). No tool loads `project-registry.js`.
 - **Formulas, factors, units, code references:** none (§4 does not apply).

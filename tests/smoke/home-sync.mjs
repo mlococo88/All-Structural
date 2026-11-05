@@ -76,9 +76,9 @@ for (const key of list) {
     const { page, p, T } = await toolPage(ctx, key, terrs);
     if (T.ui) await T.ui.open(p); else await p.evaluate(() => { [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)).click(); });
     await p.waitForTimeout(4500);   // the dialog's check (flush + list) and one 3 s background check of the tool
-    const r = await p.evaluate(() => ({ st: [...document.querySelectorAll('dialog[open] [data-gh-status]')].map(e => e.dataset.ghStatus).sort(), ask: !!document.querySelector('dialog[open] [data-sp=gh-ask]') }));
+    const r = await p.evaluate(() => ({ st: [...document.querySelectorAll('dialog[open] [data-gh-status], #lib_panel [data-gh-status]')].map(e => e.dataset.ghStatus).sort(), ask: !!document.querySelector('dialog[open] [data-sp=gh-ask]') }));
     const puts = gh.log.slice(L0).filter(l => l.method !== 'GET');
-    const exp = f === SF ? ['cloud', 'conflict', 'synced', 'synced'] : ['synced', 'synced'];
+    const exp = f === SF ? ['cloud', 'conflict', 'synced', 'synced'] : r.st.length >= 2 ? r.st.map(() => 'synced') : ['synced', 'synced'];   // Bridge Geometry: its 5 example bridges too
     ok(JSON.stringify(r.st) === JSON.stringify(exp) && !r.ask && !puts.length, `${key}: the tool's own dialog shows ${r.st.join(', ')}; no first-sync offer; no upload by the tool (${puts.length} writes): its file = the home page's file`);
     await page.close();
   } catch (e) { ok(false, `${key}: ${String(e.message || e).slice(0, 300)}`); }

@@ -73,7 +73,10 @@
     { tool: 'section-property-calculator', label: 'Section Property Calculator', name: 'Section Property Calculator', href: 'Section%20Property%20Calculator.html',
       key: 'spc_projects_v1', time: t_, sort: 'saved', space: 2, toFile: i => i.d },
     { tool: 'aci-rebar-development', label: 'ACI Rebar Development Length', name: 'Rebar Development & Splices (Concrete Beam Design Suite)', href: 'Concrete%20Beam%20Capacity.html#dev',
-      key: 'rebar_aci_projects_v1', space: 2 }
+      key: 'rebar_aci_projects_v1', space: 2 },
+    { tool: 'bridge-geometry', label: 'Bridge Geometry', name: 'Bridge Geometry', href: 'Bridge%20Geometry.html',
+      key: 'bridgeGeomEngine.library.v1', time: i => i && i.savedAt || null, space: 2,   // its own library panel: by name, "Saved" = savedAt
+      toFile: (i, n) => { const o = Object.assign({}, i, { name: n }); delete o.savedAt; return o; } }
   ];
   const all = () => TOOLS.slice();
   const get = tool => TOOLS.find(e => e.tool === tool) || null;
