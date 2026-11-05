@@ -5253,7 +5253,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Screenshots checked: default, Seymour (ASD governing, LRFD), the Seymour-based review case partial-contact rows (ASD 0.6D + 0.6(±Wx), LRFD), sfe9 (one-way uplift, two corners off), and a 620 px wide window.
 - **Saved data:** no change. **Other copies:** none.
 
-## 2026-11-05 — PR: claude/sf-report-order (SFRO: Report sections in the design order, "As printed" copies and LRFD reference tables in appendices; SFCB: Report copy of the 3.2 heat-map colour bar filled; display only, no result change)
+## 2026-11-05 — PR: claude/sf-report-order (PR #778: https://github.com/mlococo88/All-Structural/pull/778) (SFRO: Report sections in the design order, "As printed" copies and LRFD reference tables in appendices; SFCB: Report copy of the 3.2 heat-map colour bar filled; display only, no result change)
 
 ### SFRO — Report order
 - **Problem (engineer):** in the printed Report, sections out of order / placed after unrelated material. Found on origin/main (Seymour, f′c 3000 psi, Ped 1 Wall; default; direct; all Include boxes on):
