@@ -4706,7 +4706,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 ### Open items
 - none.
 
-## 2026-11-05 — PR: claude/sf-lams — Option: neglect the size-effect factor λ_s in footing one-way and two-way shear, ACI 318-19 §13.2.6.2 (SFLN; calculation option, default off = no change)
+## 2026-11-05 — PR: claude/sf-lams (PR #764: https://github.com/mlococo88/All-Structural/pull/764) — Option: neglect the size-effect factor λ_s in footing one-way and two-way shear, ACI 318-19 §13.2.6.2 (SFLN; calculation option, default off = no change)
 
 ### SFLN. "Neglect size effect λ_s for footing shear (ACI 318-19 §13.2.6.2)"   [calculation option; CLAUDE.md §4]
 - **Request (engineer, RISAFoundation reconciliation of the Seymour project):** an option to take λ_s = 1.0 in the footing's shear, as ACI 318-19 permits for shallow foundations. Default off.
