@@ -19813,7 +19813,7 @@ index 06a42e4..b58d4e3 100644
   - Print routing, headless, from each of the 12 output tabs, by `beforeprint` and by "Print report": `#rp-print` holds the Report (with the 3 chart images on the button path), `body.rp-printing` and the running header are set, the output tab of before comes back after `afterprint`.
 - **Other copies:** none.
 
-## 2026-11-05 — PR: claude/header-pile (PDHD: compact header; title block and Use / Share project info moved to the Project rail tab; display only, no result change)
+## 2026-11-05 — PR: claude/header-pile (PR #830: https://github.com/mlococo88/All-Structural/pull/830) (PDHD: compact header; title block and Use / Share project info moved to the Project rail tab; display only, no result change)
 - **Engineer:** clean up the top of the page: the title-block inputs and the shared-info buttons go into the Project input tab; the header keeps the title, a read-only project line and the global actions.
 - **Where / before → after** (React elements moved, not copied: the same `HdrField` components with the same `value` / `onChange` → `setStr('projName' …)` etc., the same Use / Share `onClick`s; nothing saved changes; the file keeps CRLF):
   - Header (anchor `className: "pd-hdrBtns no-print"`): before title column; right column Undo, Redo, Methodology & code path, stats, Overall; then `pd-projGrid` (7 fields: Project, Subject, Job no., Prepared by, Checked by, Client, Date) and `pd-projShare` (Use / Share project info). After: the same without `pd-projGrid` / `pd-projShare`, and `<a id="hdrProj" class="pd-hdrProj">` "Project: <project> · <job no.>" first in `pd-hdrBtns` (values through `pileProjShareValues(I)`, so the old placeholder defaults show as untitled).
