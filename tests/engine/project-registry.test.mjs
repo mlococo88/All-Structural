@@ -22,7 +22,9 @@ test('project-registry: one entry per tool; its page passes the same key, tool a
     const file = path.join(ROOT, decodeURIComponent(e.href.split('#')[0]));
     assert.ok(fs.existsSync(file), e.href);
     const src = fs.readFileSync(file, 'utf8').replace(/&quot;/g, '"');
-    assert.ok(src.includes(`'${e.key}'`) || src.includes(`"${e.key}"`), `${e.tool}: key ${e.key} in ${e.href}`);
+    // a folder app with a view (Steel Bridge app): its key is defined in one of the app's own .js files (engine/model.js KEYS)
+    const keySrc = e.view ? src + fs.readdirSync(path.dirname(file), { recursive: true }).filter(f => /\.js$/.test(f)).map(f => fs.readFileSync(path.join(path.dirname(file), f), 'utf8')).join('\n') : src;
+    assert.ok(keySrc.includes(`'${e.key}'`) || keySrc.includes(`"${e.key}"`), `${e.tool}: key ${e.key} in ${e.href}`);
     assert.ok(new RegExp(`cloud:\\s*\\{\\s*tool:\\s*(['"])${e.tool}\\1,\\s*label:\\s*(['"])${e.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\2`).test(src), `${e.tool}: ctx.cloud tool / label in ${e.href}`);
     assert.equal(R.get(e.tool).key, e.key);
     const blk = src.slice(src.search(new RegExp(`cloud:\\s*\\{\\s*tool:\\s*['"]${e.tool}['"]`))).slice(0, 220), sp = /space:\s*(\d)/.exec(blk.split('fromFile')[0]);
@@ -57,7 +59,7 @@ test('project-registry: fileText equals the engine file text; home Upload all th
     'light-pole-sign-post': { V: 115 }, 'retaining-wall-designer': { fields: { H: 12 }, ts: 1 }, 'base-plate-anchor': { plate: {}, anchor: {}, conc: {} },
     'abutment-calculator': { state: { geom: {}, proj: {} }, ts: 2 }, 'timber-beam-check': { t: 3, d: { b: 1 } }
   };
-  for (const e of R2.all()) {
+  for (const e of R2.all().filter(x => !x.view)) {   // the view entry (Steel Bridge app): its own test below
     const s = mem(); assert.equal(GS.saveSettings(s, { owner: 'mlococo88', repo: 'structural-projects', branch: 'main', token: TOKEN }).ok, true);
     const item = items[e.tool] || (e.toFile && /\.d\b/.test(String(e.toFile)) ? { t: 1, d: { x: 1 } } : e.toFile && /\.state\b/.test(String(e.toFile)) ? { state: { x: 1 }, ts: 1 } : { x: 1, 'ü': '✓' });
     s.setItem(e.key, JSON.stringify({ 'P 1/ü': item }));
@@ -79,4 +81,31 @@ test('project-registry: the home engine never downloads into a tool list', async
   const e = R2.get('spread-footing'), s = mem(); GS.saveSettings(s, { owner: 'mlococo88', repo: 'structural-projects', branch: 'main', token: TOKEN });
   const gh = makeGitHubMock({ token: TOKEN }); gh.setRemote('projects/spread-footing/X.json', '{"geom":{},"soil":{},"peds":[]}');
   const r = await R2.engine(e, s, gh.fetch).download('X'); assert.equal(r.ok, false); assert.equal(s.getItem('sfd_projects'), null);
+});
+
+// GHS2 (2026-11-05): the Steel Bridge app's list is not a mapStore (engine/library.js: items by id); the registry reads it through a
+// by-name view. Its file is the stored item text; the home Upload all then the app's own engine view (same rule: newest item per name)
+// finds it synced; a second item with the same name (older) is not listed; nothing is written to the app's keys.
+test('project-registry: Steel Bridge app view (items by id): list, file text, home upload then synced; reads only', async () => {
+  const e = R2.get('steel-bridge-app'), s = mem(); GS.saveSettings(s, { owner: 'mlococo88', repo: 'structural-projects', branch: 'main', token: TOKEN });
+  const t1 = '{\n  "schema": "sbd2",\n  "project": {\n    "name": "Mill River"\n  }\n}', t0 = '{"schema":"sbd2","project":{"name":"Mill River","old":1}}', t2 = '{"schema":"sbd2","project":{"name":"Alt ü"}}';
+  s.setItem('sbd2.lib.index', JSON.stringify({ schema: 'sbd2.library', version: 1, items: [{ id: 'pa', name: 'Mill River', saved: '2026-11-01T00:00:00Z', size: t0.length },
+    { id: 'pb', name: 'Mill River', saved: '2026-11-05T00:00:00Z', size: t1.length }, { id: 'pc', name: 'Alt ü', saved: '2026-11-03T00:00:00Z', size: t2.length }] }));
+  s.setItem('sbd2.lib.p.pa', t0); s.setItem('sbd2.lib.p.pb', t1); s.setItem('sbd2.lib.p.pc', t2);
+  const before = JSON.stringify([...s.m].filter(([k]) => k.startsWith('sbd2.')));
+  const l = R2.list(e, s); assert.equal(l.ok, true); assert.equal(l.items.map(i => i.name).join('|'), 'Mill River|Alt ü'); assert.equal(l.items[0].saved, '2026-11-05T00:00:00Z');
+  assert.equal(R2.fileText(e, R2.store(e, s).item('Mill River'), 'Mill River'), t1, 'the newest item of the name, its text as stored');
+  const gh = makeGitHubMock({ token: TOKEN }), home = R2.engine(e, s, gh.fetch);
+  const r = await home.uploadAll(); assert.equal(r.ok, true); assert.equal(r.done, 2);
+  assert.equal(gh.files.get('projects/steel-bridge-app/Mill River.json'), t1); assert.equal(gh.files.get('projects/steel-bridge-app/Alt %C3%BC.json'), t2);
+  const tool = GS.engine({ tool: e.tool, label: e.label, store: R2.store(e, s), storage: s, fetch: gh.fetch, toFile: t => t });
+  const n0 = gh.log.length; tool.scan(); await tool.flush(true); await tool.refreshCloud();
+  assert.equal(gh.log.slice(n0).filter(x => x.method !== 'GET').length, 0); assert.equal(tool.statusOf('Mill River'), 'synced');
+  // a conflict found from the home page: nothing kept, nothing uploaded (the view refuses duplicate)
+  gh.setRemote('projects/steel-bridge-app/Alt %C3%BC.json', '{"other":1}'); s.setItem('sbd2.lib.p.pc', t2.replace('Alt', 'Alt '));
+  const n1 = gh.log.length; home.scan(true); const f = await home.flush(true); assert.equal(f.ok, false);
+  assert.equal(gh.log.slice(n1).filter(x => x.method !== 'GET').length, 0); assert.equal(gh.files.get('projects/steel-bridge-app/Alt %C3%BC.json'), '{"other":1}');
+  s.setItem('sbd2.lib.p.pc', t2);
+  assert.equal(JSON.stringify([...s.m].filter(([k]) => k.startsWith('sbd2.'))), before, 'the app keys unchanged');
+  s.setItem('sbd2.lib.index', '{bad'); const u = R2.list(e, s); assert.equal(u.ok, false); assert.equal(u.error, 'unreadable'); assert.equal(s.getItem('sbd2.lib.index'), '{bad');
 });

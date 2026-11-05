@@ -19,6 +19,9 @@
             sort    the tool's mapStore `sort` option ('saved' = newest first; default by name),
             space   its ctx.cloud.space (JSON indent of the GitHub file; default 1, as shared/github-sync.js),
             toFile  its ctx.cloud.toFile(item, name) (the GitHub file = the tool's Export JSON; default: the stored item itself),
+            view    (optional, GHS2 2026-11-05) storage -> a read-only by-name store for a list that is not a mapStore (the
+                    Steel Bridge app: items by id); the same interface as mapStore (key, read, list, has, item), and save /
+                    duplicate refuse ("open the app"): a conflict found from the home page keeps nothing and uploads nothing,
             sync    false: list only on the home page (the tool's file cannot be made safely outside the tool; "open the app to
                     sync"); default true: the home page may upload this tool's projects with the same file text as the tool }
    toFile is a copy of the tool's own one-line wrapper (no calculation). tests/smoke/home-sync.mjs proves, for every entry with sync,
@@ -78,9 +81,34 @@
       key: 'bridgeGeomEngine.library.v1', time: i => i && i.savedAt || null, space: 2,   // its own library panel: by name, "Saved" = savedAt
       toFile: (i, n) => { const o = Object.assign({}, i, { name: n }); delete o.savedAt; return o; } }
   ];
+  /* sbd2View(storage): apps/steel-bridge's list (engine/library.js: sbd2.lib.index { schema: 'sbd2.library', items: [{ id, name, saved,
+     size }] } + one key sbd2.lib.p.<id> per item, holding the Export JSON text) by name, as the app's own sync (index.html ghStore) sees
+     it: each name is its newest item (by saved, the app's list order). Reads only. */
+  function sbd2View(storage) {
+    const IDX = 'sbd2.lib.index', PRE = 'sbd2.lib.p.';
+    function idx() {
+      let raw = null; try { raw = storage ? storage.getItem(IDX) : null; } catch (e) { return { ok: false, error: 'storage', items: [] }; }
+      if (raw == null || raw === '') return { ok: true, items: [] };
+      try { const o = JSON.parse(raw); if (o && o.schema === 'sbd2.library' && Array.isArray(o.items)) return { ok: true, items: o.items.filter(i => i && typeof i.id === 'string') }; } catch (e) { /* below */ }
+      return { ok: false, error: 'unreadable', items: [] };
+    }
+    function byName() { const r = idx(), m = new Map();
+      r.items.slice().sort((a, b) => a.saved < b.saved ? 1 : a.saved > b.saved ? -1 : 0).forEach(i => { if (!m.has(i.name)) m.set(i.name, i); });
+      return { r, m }; }
+    const no = () => ({ ok: false, error: 'readonly', message: 'Open Steel Bridge Design (new app) to change its saved projects.' });
+    return { key: IDX,
+      read: () => { const r = idx(); return r.ok ? { ok: true, map: {} } : { ok: false, error: r.error, map: {} }; },
+      list: () => [...byName().m.values()].map(i => ({ name: i.name, saved: i.saved && i.saved > '1971' ? i.saved : null, size: i.size || 0 })),
+      has: n => byName().m.has(n),
+      item: n => { const i = byName().m.get(n); if (!i) return undefined; let t = null; try { t = storage.getItem(PRE + i.id); } catch (e) { t = null; } return t == null ? undefined : t; },
+      get: () => null, save: no, duplicate: no, rename: no, remove: no };
+  }
+  TOOLS.unshift({ tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)', name: 'Steel Bridge Design (new app)', href: 'apps/steel-bridge/index.html',
+    key: 'sbd2.lib.index', toFile: t => t, view: sbd2View });   // card order: before Moving Load Generator; its own list (items by id): the file is the stored item text (= Export JSON)
   const all = () => TOOLS.slice();
   const get = tool => TOOLS.find(e => e.tool === tool) || null;
   function store(e, storage) {
+    if (e.view) return e.view(storage);
     const P = window.SharedProjects; if (!P || !P.mapStore) throw new Error('project-registry: load shared/projects.js first');
     const o = {}; if (e.time) o.time = e.time; if (e.sort) o.sort = e.sort;
     return P.mapStore(storage, e.key, o);
