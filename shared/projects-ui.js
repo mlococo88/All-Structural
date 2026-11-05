@@ -238,6 +238,7 @@
                before it, e.g. Undo; default headerBefore), card (element the card body goes into), keys (default true),
              renamed / deleted / changed / note / exportOne (passed to the dialog), afterSave(name), afterOpen(name) }
      Returns { dialog, save, saveAs, refresh, dirty, current, el: { chip, save, lib, card } } */
+  const bars = [];   // every projectBar of the page (tests drive Save as through it)
   function projectBar(ctx) {
     css();
     const store = ctx.store, clean = n => String(n == null ? '' : n).trim();
@@ -367,8 +368,9 @@
       if (ev.shiftKey) saveAs(); else save();
     });
     refresh();
-    return { dialog, save, saveAs, refresh, dirty, current: getCur, setCurrent: n => { setCur(n); refresh(); }, el: { chip, save: hSave, lib: hLib, card } };
+    const api = { dialog, save, saveAs, refresh, dirty, current: getCur, setCurrent: n => { setCur(n); refresh(); }, el: { chip, save: hSave, lib: hLib, card } };
+    bars.push(api); return api;
   }
 
-  window.SharedProjectsUI = { libraryDialog, undoRedo, button, css, projectBar, download };
+  window.SharedProjectsUI = { libraryDialog, undoRedo, button, css, projectBar, download, bars };
 })();
