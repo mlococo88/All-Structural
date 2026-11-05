@@ -1496,3 +1496,18 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data:** `movingLoadGen.projects.v1` and the autosave unchanged (key and format). With sync off nothing is written and no request is made.
 - **How verified:** `node tests/smoke/project-library.mjs` for this tool (origin/main vs branch, sync off): ALL PASS. `node tests/smoke/github-sync-tools.mjs`: Save → file on GitHub; update with sha; a GitHub-only copy opened gives the same results as the saved project; 0 console errors.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-05 — PR: claude/header-mlg (PR #834: https://github.com/mlococo88/All-Structural/pull/834) (MLHD: compact header; JSON file and benchmark buttons moved to a new Project input tab; display only, no result change)
+- **Engineer:** clean up the top of the page (button-only header here: 13 buttons, wrapping to four rows on a phone); the header keeps the title and the global actions.
+- **Where / before → after** (nodes moved, not copied: every id and `onclick` is the same):
+  - Header: before Solved in…, All tools, ✔ FHWA, ✔ Closed-form, Print Report, Undo, Redo, Save, Saved projects…, Save JSON, Open JSON, New (`#mlgFile`), Run, Export CSV. After: Solved in…, All tools, Print Report, Undo, Redo, Save, Saved projects…, Run, Export CSV (the hidden `#mlgFile` input stays in the header).
+  - New script block just before the input-panel tabs block (anchor `/* MLHD (2026-11-05)`): appends `<details open id="mlgPrjSec"><summary>Project</summary>` to `<aside>` with groups Project file (JSON) (`#mlgSave`, `#mlgOpen`, `#mlgNew`) and Benchmarks (`#bmBtn`, `#cfBtn`), one-line hints; the moved buttons' class `hb` → `btn` (the light panel style); the section is not printed. Only buttons move, so `mlgFields()` (`aside input[id], aside select[id]`) and the autosave / JSON format are unchanged.
+  - Input tabs block: `TABS` gets `['proj','Project']` (last; the page still opens on Spans) and `SEC` gets `'Project':'proj'`.
+- **Decisions (pending engineer review):** no "Project: <name>" line here: the tool has no title block in its inputs (the report's Project / Computed by fields are in the Print Report dialog); Save / Saved projects…, Run, Print Report and Export CSV stay in the header as global actions; the FHWA and Closed-form benchmark loaders (they replace the inputs) go to the Project tab with the JSON file buttons.
+- **Governing provision:** none (layout only).
+- **Check case / how verified** (headless Chromium, origin/main vs branch, E steel typed 29500, Run):
+  - `mlgSnapshot()` (less `savedAt`), the output text, every localStorage key (`savedAt` normalised) and the reload of the autosave: identical;
+  - the Project tab holds the five buttons; Save JSON downloads once; header button list as above (1920 and 390 px);
+  - `phone-layout --tool mlg`, `project-library --tool mlg`, `github-sync-tools --tool mlg`, `check-syntax`: pass; no sideways scroll on any input tab at 390 / 768 px; 0 console errors;
+  - before / after screenshots at 1920 and 390 px looked at.
+- **Saved data:** no change (`movingLoadGen.inputTab.v1` may now also hold `proj`, a view setting).
