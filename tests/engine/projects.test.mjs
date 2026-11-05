@@ -114,3 +114,9 @@ test('mapStore: stamp() is the stored text (the GitHub-sync change check)', () =
   const s = store({}), L = SP.mapStore(s, KEY); L.save('A', { x: 1 });
   assert.equal(L.stamp(), s.getItem(KEY));
 });
+
+test('canon: keys sorted at every level; omit drops top-level view fields only', () => {
+  assert.equal(SP.canon({ b: 1, a: { d: 1, c: 2 }, tab: 'x' }, ['tab']), '{"a":{"c":2,"d":1},"b":1}');
+  assert.equal(SP.canon({ a: { tab: 1 } }, ['tab']), '{"a":{"tab":1}}');
+  assert.equal(SP.canon([{ y: 1, x: 2 }]), '[{"x":2,"y":1}]');
+});

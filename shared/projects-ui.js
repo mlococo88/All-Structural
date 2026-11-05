@@ -225,8 +225,9 @@
      changes. Nothing is stored by this function: the open project's name lives in the tool (ctx.current / ctx.setCurrent) or in
      this page only; after a reload it is found again by content (the saved project whose data equals the inputs on screen).
      ctx = { store, storage, label (tool name), cloud (as libraryDialog), id,
-             snapshot() -> text of the inputs on screen (compared with snapOf(name) for "unsaved changes"),
-             snapOf(name) -> the same text for a saved project (default JSON.stringify(store.get(name))),
+             snapshot() -> text of the inputs on screen (compared with snapOf(name) for "unsaved changes"; default
+               SharedProjects.canon(getState(), omit)), snapOf(name) -> the same text for a saved project (default canon(store.get(name),
+               omit)), omit ([top-level fields that are view only, e.g. the open tab: left out of the comparison]),
              save(name) -> the tool's own save into the list ({ ok, message } or true / false; default store.save(name, getState())),
              getState() (for the default save), open(name) -> false when it did not open (the tool's own open / load path),
              current() / setCurrent(name) (optional: where the tool keeps the open name), displayName() (optional: shown in the chip
@@ -234,6 +235,7 @@
              newProject() (optional: the tool's own New / Reset path; it asks nothing itself), exportFile(name) (the tool's Export
                JSON), importFile() (the tool's Import JSON), fileButtons ([elements]: the tool's own Export / Import buttons, moved
                into the card instead), extras ([elements]: a third row), header (element for the chip / Save / Saved projects…),
+             card (element, or true + mount(el) later),
              headerBefore (optional element in it: Save and Saved projects… go before it, e.g. Print), chipBefore (the chip goes
                before it, e.g. Undo; default headerBefore), card (element the card body goes into), keys (default true),
              renamed / deleted / changed / note / exportOne (passed to the dialog), afterSave(name), afterOpen(name) }
@@ -243,8 +245,9 @@
   function projectBar(ctx) {
     css();
     const store = ctx.store, clean = n => String(n == null ? '' : n).trim();
-    const snapOf = ctx.snapOf || (n => { try { return JSON.stringify(store.get(n)); } catch (e) { return null; } });
-    const snapshot = () => { try { return ctx.snapshot ? ctx.snapshot() : JSON.stringify(ctx.getState()); } catch (e) { return null; } };
+    const C = v => SP().canon ? SP().canon(v, ctx.omit) : JSON.stringify(v);   // keys sorted; ctx.omit: view-only top-level fields
+    const snapOf = ctx.snapOf || (n => { try { return C(store.get(n)); } catch (e) { return null; } });
+    const snapshot = () => { try { return ctx.snapshot ? ctx.snapshot() : C(ctx.getState()); } catch (e) { return null; } };
     let cur = null, touched = false; const savedAt = {};   // touched: inputs changed on this page since the last open / save / New
     function getCur() { if (ctx.current) { const n = clean(ctx.current()); return n || null; } return cur; }
     function setCur(n) { cur = n; touched = false; if (ctx.setCurrent) ctx.setCurrent(n || ''); }
@@ -281,7 +284,7 @@
     }
     /* card */
     let card = null, stat = null;
-    if (ctx.card) {
+    if (ctx.card) {   // an element (the card goes first in it), or true: built now, placed later with mount(el) (a tab drawn again)
       card = document.createElement('div'); card.className = 'spCard'; card.setAttribute('data-sp', 'card');
       card.innerHTML = '<div class="spStat" role="status"></div><div class="spRow" data-r="1"></div><div class="spLbl">File on this computer</div><div class="spRow" data-r="2"></div>'
         + '<p class="spHint">Save keeps the project in this browser’s list and, with Cloud sync on, copies it to GitHub. Export JSON makes a .json file you can keep, e-mail or open on another computer (Import JSON).</p>'
@@ -299,8 +302,9 @@
         if (ctx.importFile) { const b = button('Import JSON', 'Open a .json file of this tool', { sp: 'import' }); b.addEventListener('click', () => importJSON()); r2.append(b); }
       }
       if (ctx.extras && ctx.extras.length) { const r3 = document.createElement('div'); r3.className = 'spRow'; r3.setAttribute('data-r', '3'); ctx.extras.forEach(b => r3.append(b)); r2.after(r3); }
-      ctx.card.insertBefore(card, ctx.card.firstChild);
+      if (ctx.card !== true) ctx.card.insertBefore(card, ctx.card.firstChild);
     }
+    function mount(el) { if (card && el && card.parentNode !== el) el.insertBefore(card, el.firstChild); refresh(); }
     const LBL = { synced: 'synced', pending: '↑ waiting', local: 'this browser only', removed: 'not on GitHub', unknown: 'not checked yet', 'cloud-newer': 'GitHub newer', conflict: 'conflict' };
     const timeOf = n => { const i = store.list().find(x => x.name === n); const t = i && i.saved != null ? i.saved : savedAt[n]; if (t == null) return ''; const d = new Date(t); return isNaN(d) ? '' : d.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour: 'numeric', minute: '2-digit' }); };
     function refresh() {
@@ -369,7 +373,7 @@
       if (ev.shiftKey) saveAs(); else save();
     });
     refresh();
-    const api = { dialog, save, saveAs, newProject, importJSON, refresh, dirty, current: getCur, setCurrent: n => { setCur(n); refresh(); }, el: { chip, save: hSave, lib: hLib, card } };
+    const api = { dialog, save, saveAs, newProject, importJSON, mount, refresh, dirty, current: getCur, setCurrent: n => { setCur(n); refresh(); }, el: { chip, save: hSave, lib: hLib, card } };
     bars.push(api); return api;
   }
 

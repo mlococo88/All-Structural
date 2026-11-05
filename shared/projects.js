@@ -155,5 +155,15 @@
     return api;
   }
 
-  window.SharedProjects = { QUOTA_CHARS, isQuota, fail, mapStore, listStore, usage, etTime, history };
+  /* canon(v, omit): JSON text with object keys sorted (and the top-level keys in omit left out), so two states that differ only in
+     key order compare equal (STDS: the "unsaved changes" check of projectBar). */
+  function canon(v, omit) {
+    const skip = new Set(omit || []);
+    return JSON.stringify(v, function (k, x) {
+      if (x && typeof x === 'object' && !Array.isArray(x)) { const top = this === undefined || (this && this[''] === x); const o = {}; Object.keys(x).sort().forEach(kk => { if (!(top && skip.has(kk))) o[kk] = x[kk]; }); return o; }
+      return x;
+    });
+  }
+
+  window.SharedProjects = { QUOTA_CHARS, isQuota, fail, mapStore, listStore, usage, etTime, history, canon };
 })();
