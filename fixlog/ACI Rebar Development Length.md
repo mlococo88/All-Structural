@@ -1394,3 +1394,12 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data:** none changed (no key or format; `useExcess`, `asReq`, `asProv` are read as before).
 - **Other copies:** `ACI Rebar Development Length.html` and the Development & Splice frame of `Concrete Beam Capacity.html` (both changed here). Spread Footing already excludes hooks (SFDH/SFEX).
 - **Open items:** none from this change. (Audit C4, the 12 in floor in the tension splice base, is conservative and was not changed.)
+
+## 2026-11-05 — PR: claude/cbc-aashto-fyt (CBFY, C3 part: two stale "edition: verify" markers removed; text only, no result change)
+
+- **Where:**
+  - `calcCompSplice()` comment, before: `// AASHTO LRFD 5.10.8.4.5a (edition: verify): l_c = …`. After: `// AASHTO LRFD 10th Ed. 5.10.8.4.5a: l_c = …`.
+  - Report reference rows (`rbrModel`, AASHTO LRFD row), before: `"5.10.2.1 (hook geometry; cited with ACI 25.3.1 on the hook schematic; edition: verify)."`. After: `"5.10.2.1 (hook geometry; cited with ACI 25.3.1 on the hook schematic)."`.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 5.10.8.4.5a (0.5·m·f_y·d_b; m(0.9f_y − 24)d_b; m = 1.33 for f′c < 3 ksi; ≥ 12 in, as implemented) and 5.10.2.1 Standard Hooks (p. 5-176). Both were confirmed in the 2026-11-05 audit. No formula, factor or value changed.
+- **How verified:** headless, origin/main vs branch, default project: `rbrModel()` and the calc results are identical except that one reference-row string. `node tests/check-syntax.mjs` and `node tests/smoke/project-library.mjs --tool rebar`: pass.
+- **Other copies:** the Development & Splice frame of `Concrete Beam Capacity.html`, same edit, same PR.
