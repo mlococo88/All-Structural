@@ -5031,3 +5031,51 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
   - Printed PDFs (Print all sheets) for default, Seymour and revHook checked by eye: no stub below the hooks; with separate dowels only the dowels enter the footing.
 - **Saved data:** none.
 - **Other copies:** none.
+
+
+## 2026-11-05 — PR: claude/sf-ldc-bearing (PR #773: https://github.com/mlococo88/All-Structural/pull/773) — Dowel compression development ℓ_dc required only for compression beyond the concrete bearing strength, ACI 318-19 16.3.1.2(a) (SFBC; pass / fail logic change)
+
+### SFBC. ℓ_dc check only where P_u exceeds the concrete bearing strength   [pass / fail logic; CLAUDE.md §4]
+- **Engineer (2026-11-05):** approved. Per 16.3.1.2(a), the dowels must transfer only the compression that exceeds the concrete bearing strength. Where concrete bearing carries P_u in every combination, ℓ_dc is shown as "not required" (OK / N/A), not NG. Unchanged: tension development, hooked ℓ_dh, shear friction (22.9.5.1) and the minimum area (16.3.4.1 / 16.3.4.2).
+- **Provisions (read in the PDF):**
+  - 16.3.1.2 (printed pp. 222–223): reinforcement, dowels or connectors transfer (a) compression exceeding the lesser of the concrete bearing strengths of the supported member and the foundation (22.8), and (b) any calculated tension.
+  - 16.3.3.4 (p. 223): B_n is the lesser of the bearing strengths of the supported member and the foundation surface.
+  - 25.4.1.1 (p. 471) and 13.2.8.2 (p. 196): the calculated force is developed.
+- **Where:**
+  - `computePhase2`, concrete bearing (anchor `const ldcOK=isPatch?true:(Ldc<=availEmb);`).
+    - Before: `const ldcOK=isPatch?true:(Ldc<=availEmb);`
+    - After:
+      ```
+      const phiBsup=0.65*0.85*fc*A1/1000, phiBgate=Math.min(phiPn,phiBsup);
+      const ldcReq=!isPatch&&PuMax>phiBgate+1e-9;
+      const ldcOK=isPatch?true:(!ldcReq||Ldc<=availEmb);
+      ```
+      New fields `ldcReq`, `phiBsup`, `phiBgate`.
+  - Display:
+    - Card 5.6: the L_dc cell reads "(not req.)"; the legend explains it; a note lists any element where ℓ_dc would not fit but is not required.
+    - Card 5.6 dowel table and its step (1): "not required: P_u ≤ …, concrete bearing carries P_u (16.3.1.2(a))".
+    - Dashboard chip "Dowel development (ℓdc)": N/A "not required: concrete bearing carries P_u (16.3.1.2(a))" where no element needs it. A mixed case lists both. The Report row D/C uses only the elements that need it (n/a where none do).
+    - Report: new step `cb<i>.ldcq`, P_u,dow = max(0, P_u − min(φB_n, 0.65·0.85f′c A_1)). Steps `cb<i>.ldc` and `p<i>.ldc` carry no pass/fail flag where ℓ_dc is not required.
+    - User Manual: checks table row "Dowel development (ℓdc)" and the 4C.4 text. The old text said a shortfall was "flagged REVIEW"; it has been NG since #716.
+  - The drawings' "(NG)" on the embedment note follows `ldcOK` (no drawing code touched).
+- **Decision (pending engineer review): the gate uses the lesser bearing strength, the conservative choice.** 16.3.1.2(a) uses the lesser of the supported member's and the foundation's bearing strengths. The tool has one f′c, so the pedestal's own bearing is φ0.85f′c A_1 with √(A_2/A_1) = 1. The gate is therefore min(φP_nb (footing, card 5.6), 0.65·0.85·f′c·A_1), not the footing value alone.
+- **Check case (Seymour, f′c = 3000 psi, Ped 1 Wall), Ped 2:**
+  - Inputs: 32.00 × 37.99 in, A_1 = 1215.90 in²; 16 #8 continuous, hooked; t − c − d_b,x − d_b,y = 19.25 in.
+  - Pedestal bearing: 0.65·0.85·3000·1215.90/1000 = **2015.35 k**. Footing φP_nb = 2024.26 k. Lesser = 2015.35 k.
+  - P_u,max = 54.05 k, so P_u,dow = max(0, 54.05 − 2015.35) = **0**.
+  - ℓ_dc = 0.02·1.000·60000/(1.0·√3000 = 54.77) = 21.91 in > 19.25 in.
+  - Before: **L_dc NG**; dashboard "Dowel development (ℓdc)" **FAIL** (D/C 1.14).
+  - After: **not required**; card 5.6 status OK; chip **N/A**. Verdict: 3 → 2 FAIL.
+  - **Still governing for Ped 2:** "Dowels (tension, laps)" FAIL. There is interface tension in 8 of 9 combinations (A_s,req = 2.93 in²), and the hooked ℓ_dh = 23.90 in > 19.25 in.
+  - Ped 1 (wall): 148.92 ≤ min(6270.79, 6266.33) → not required (16.43 ≤ 19.25, was OK).
+- **Default project:**
+  - Ped 1: P_u 240.81 ≤ min(1432.08, 716.04). Ped 2: 318.81 ≤ 716.04.
+  - Not required (ℓ_dc 18.97 ≤ 25.00 in before, PASS). The chip goes PASS (D/C 0.76) → N/A.
+- **"thin" (t = 8 in):** ℓ_dc 18.97 > 3.00 in available for both pedestals. Before NG (FAIL), after not required (N/A).
+- **"pb" (Ped 1 P_D = 2500 k):** P_u 3500.95 > min(1432.08, 716.04), so P_u,dow = 2784.91 k and ℓ_dc is checked as before (18.97 ≤ 25.00 OK).
+- **How verified:**
+  - Headless Chromium, origin/main c3db2bc vs the branch, pinned libraries. Deep diff of `R` and `P2` on 15 cases (the 10 harness cases, sey3, seyW, seyWW, defW, pb).
+  - The only changed value is `P2.bearing[].ldcOK`, false → true: sey3 / seyW / seyWW Ped 2 and thin Ped 1 and Ped 2. The new fields are `ldcReq`, `phiBsup`, `phiBgate`.
+  - Report: 0 KaTeX errors, 0 console errors. `node tests/check-syntax.mjs` and `tests/smoke/spread-footing-scroll.mjs` pass. Card 5.6 and the dashboard were checked by eye (Seymour).
+- **Saved data:** no change. **Other copies:** none.
+- **Open item (raised, not changed):** the concrete bearing check itself (card 5.6, `dcr = PuMax/phiPn`) uses the footing's φ0.85f′c A_1√(A_2/A_1) only. 16.3.3.4 takes B_n as the lesser of the supported member and the foundation, and with one f′c the pedestal's 0.85f′c A_1 governs whenever √(A_2/A_1) > 1. Default project: DCR 318.81/1432.08 = 0.22 vs 318.81/716.04 = 0.45. Needs the engineer's decision (pedestal f′c may differ in practice; the tool has one f′c).
