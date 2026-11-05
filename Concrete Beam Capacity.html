@@ -5688,6 +5688,11 @@ function buildInput(){
   mkSection(&quot;inInherit&quot;,NT(&quot;From Beam Capacity&quot;),b=>{
     if(!S.inherit.src) b.appendChild(el(&quot;div&quot;,&quot;warnBox&quot;,
       &quot;No live values received yet. Open the Beam Capacity tab, or these defaults are used.&quot;));
+    if((ASDCE||[]).length){   /* CBST: Beam Capacity has an input error and sends nothing, so these values are the last it sent */
+      const w=el(&quot;div&quot;,&quot;warnBox&quot;); w.appendChild(document.createTextNode(&quot;Values inherited from Beam Capacity are the last ones sent before its input error; correct Beam Capacity first. (Beam Capacity: &quot;+ASDCE.join(&quot; &quot;)+&quot;) &quot;));
+      const a=el(&quot;a&quot;,&quot;wkA asdCapA&quot;,&quot;\u2192 Beam Capacity tab&quot;); a.href=&quot;#&quot;; a.title=&quot;Opens the Beam Capacity tab&quot;;
+      a.addEventListener(&quot;click&quot;,ev=>{ ev.preventDefault(); asdCapGo(); }); w.appendChild(a); b.appendChild(w);
+    }
     const IE=asdInheritErrors();   /* ASIE: the inherited values only; the allowables are marked on their own rows */
     if(IE.length) b.appendChild(el(&quot;div&quot;,&quot;errBox&quot;,&quot;Input error \u2014 no results: &quot;+IE.join(&quot; &quot;)));
     const t=el(&quot;table&quot;,&quot;vt&quot;);
@@ -6415,9 +6420,24 @@ function asdDashItems(){
     text:'Operating f_c = '+grp(R.A.fc_op)+' psi > 0.60f′c = '+fmt(0.60*R.fc,1)+' psi; confirm the owner’s basis for this value.',
     ref:'AASHTO MBE 6B.6.2.3',tab:'tabSummary',card:null});
   out.forEach(it=>{ const tn=asdTabName(it.tab); it.where=tn?'→ '+tn+(it.card?' · '+ASD_CARDS[it.card]:''):''; });
+  if((ASDCE||[]).length) out.push({name:'Inherited from Beam Capacity',st:'warn',short:'Beam Capacity input error',cap:true,   /* CBST */
+    text:'Values inherited from Beam Capacity are the last ones sent before its input error; correct Beam Capacity first. (Beam Capacity: '+ASDCE.join(' ')+')',
+    ref:'',tab:'tabInputEcho',card:null,where:'→ Beam Capacity tab'});
   return out;
 }
+/* CBST (2026-11-05, engineer): the Beam Capacity tab's input errors, set by the suite shell (asdSetCapErrors, same origin) when
+   this tab or the Report is shown. While Beam Capacity has an input error it sends no values (derive() returns null), so the
+   &quot;From Beam Capacity&quot; values are the last ones it sent: the inputs card says so with a link, and the check summary panel
+   has a REVIEW line. Display only: this tab's own results are unchanged; nothing is saved (not in S). Empty = no notice. */
+var ASDCE=[];
+function asdSetCapErrors(E){
+  const ne=Array.isArray(E)?E.map(String):[];
+  if(JSON.stringify(ne)===JSON.stringify(ASDCE)) return false;
+  ASDCE=ne; refresh(); return true;
+}
+function asdCapGo(){ try{ window.parent.postMessage({type:'cbcGoto',tab:'',card:''},'*'); }catch(err){} }
 function asdDashGo(it){
+  if(it.cap){ asdCapGo(); return; }   /* CBST: the REVIEW line of a Beam Capacity input error opens that tab */
   asdGoto(it.tab,it.card);
   /* phone / tablet: the output panel does not scroll on its own there, so bring the card into view */
   setTimeout(()=>{ const op=document.getElementById('outputPanel'), e=it.card?document.querySelector('#tabPages #'+it.card):document.getElementById('tabBar');
@@ -9282,6 +9302,10 @@ window.addEventListener('DOMContentLoaded',()=>{
       var c2=cw(capF); if(c2) c2.postMessage({type:'cbcGoto',tab:String(d.tab||''),card:String(d.card||'')},'*');
     }
   });
+  /* CBST (2026-11-05): Beam Capacity's input errors (cbcRxErrors) handed to the ASD tab (asdSetCapErrors; same origin), which
+     then marks its "From Beam Capacity" values as the last ones sent and adds a REVIEW line to its check panel. Display only. */
+  function capStatus(){ try{ var c=cw(capF), a=cw(asdF); if(c&&a&&typeof a.asdSetCapErrors==='function'&&typeof c.cbcRxErrors==='function') a.asdSetCapErrors(c.cbcRxErrors()); }catch(e){} }
+  window.CBST_capStatus=capStatus;
   function show(target){
     document.querySelectorAll('.suite-tab').forEach(function(b){
       b.classList.toggle('active', b.getAttribute('data-target')===target);
@@ -9290,6 +9314,7 @@ window.addEventListener('DOMContentLoaded',()=>{
       w.classList.toggle('active', w.getAttribute('data-app')===target);
     });
     if(target==='asd'){
+      capStatus();   /* CBST: the ASD tab learns whether Beam Capacity has an input error */
       var c=cw(capF); if(c) c.postMessage({type:'requestShared'},'*');
       if(lastShared){ var w=cw(asdF); if(w) w.postMessage(lastShared,'*'); }
     }
@@ -9692,6 +9717,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   }
   function model(){
     var secs=[], codes=[], letters='ABC', P={}, refRows=[], ERR={};
+    try{ if(window.CBST_capStatus) window.CBST_capStatus(); }catch(e){}   /* CBST: the ASD tab's notice of a Beam Capacity input error, before its chapter is read */
     CH.forEach(function(c,ci){
       var w=win(c.app), m=null, part=letters[ci]+'. '+c.name;
       try{ m=w&&typeof w[c.fn]==='function'?w[c.fn]():null; }catch(e){ m={sections:[{title:c.name,subs:[{title:'Chapter error',items:[{type:'note',warn:true,text:'This chapter could not be built: '+(e&&e.message)}]}]}]}; }
