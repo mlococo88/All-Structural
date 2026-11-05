@@ -4151,7 +4151,7 @@ function sfroOrder(M){
  const have=new Set();[...S,inp,asm,lds,brg,stb,fd,ifc,pd,...rest,sum,ref,ap,lr,man].forEach(x=>{if(!x)return;if(x.key)have.add(x.key);(x.subs||[]).forEach(q=>{if(q.key)have.add(q.key);});});
  ap.subs.forEach(q=>sfroCards(q.items,have));
  /* a one-line note at the head of each section whose tab copy or LRFD tables moved to the appendix */
- const say=(sec,keys)=>{const k=keys.filter(x=>x&&have.has(x));if(sec&&k.length)sec.note=(sec.note?sec.note+' ':'')+'Moved to the appendices: '+k.map(x=>x.indexOf('S-axP')===0?'the tab’s further tables, figures and notes as printed [['+x+']]':'the LRFD reference tables (reference only) [['+x+']]').join('; ')+'.';};
+ const say=(sec,keys)=>{const k=keys.filter(x=>x&&have.has(x));if(sec&&k.length)sec.note=(sec.note?sec.note+' ':'')+'Moved to the appendices: '+k.map(x=>x.indexOf('S-axP')===0?'the tab’s further tables, figures and notes, as printed, in [['+x+']]':'the LRFD reference tables (reference only), in [['+x+']]').join('; ')+'.';};
  say(sum,[ptr[0]]);say(inp,[ptr[1]]);say(lds,[ptr[2]]);say(brg,[ptr[3],'S-brLR']);say(stb,[ptr[4],'S-stLR']);say(fd,[ptr[5]]);say(ifc,[ptr[5]]);say(pd,[ptr[6]]);
  M.sections=[inp,asm,lds,brg,stb,fd,ifc,pd,...rest,sum,ref].filter(Boolean);
  const apx=[ap,lr].filter(x=>x.subs.length);if(man)apx.push(man);
