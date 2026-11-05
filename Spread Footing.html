@@ -2131,11 +2131,9 @@ function sectSVG(){
  s+='</g></svg>';
  const d=el('div');d.innerHTML=s;return d;
 }
-function buildInputEcho(){
- const d=el('div');
- const t1=document.createElement('table');t1.className='tbl';
- t1.innerHTML='<tr><th colspan="4">General Inputs</th></tr>';
- const rows=[
+/* SFIE: the 1.4 General Inputs rows [quantity, value, unit, note], shared by the tab (buildInputEcho) and the Report's copy (sfxEcho) */
+function sfEchoGen(){
+ return [
   ['Footing B \u00d7 L \u00d7 t',f2(R.B)+' \u00d7 '+f2(R.L)+' \u00d7 '+f2(R.t),'ft',''],
   ['Embedment Df',f2(R.Df),'ft',''],
   ['\u03b3 concrete / soil / EV',f2(R.gc*1000)+' / '+f2(R.gs*1000)+' / '+f2(R.gev*1000),'pcf',''],
@@ -2148,6 +2146,12 @@ function buildInputEcho(){
   ['FS targets: OT / sliding / flotation',f2(num(state.stab.FSot))+' / '+f2(num(state.stab.FSsl))+' / '+f2(num(state.stab.FSfl)),'\u2013',''],
   ['Pedestal shear couple V\u00b7h',state.stab.shearCouple==='off'?'excluded (shear at base)':'included','\u2013',''],
   ['Footing self-weight',f2(R.Wf)+(state.mat.swMode==='user'?' (user override; auto = '+f2(R.WfAuto)+')':' (auto)'),'kips','']];
+}
+function buildInputEcho(){
+ const d=el('div');d.dataset.sfxRpt='echo';   /* SFIE: the Report copies this card from sfxEcho, not from the DOM */
+ const t1=document.createElement('table');t1.className='tbl';
+ t1.innerHTML='<tr><th colspan="4">General Inputs</th></tr>';
+ const rows=sfEchoGen();
  rows.forEach(r=>{const tr=document.createElement('tr');r.forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});t1.appendChild(tr);});
  d.appendChild(t1);
  const t2=document.createElement('table');t2.className='tbl';
@@ -3505,14 +3509,14 @@ function sfrModel(){
     return [lab,e.size?'#'+e.size:'none',e.size?(e.mode==='qty'?'total quantity':'spacing'):'—',e.size?sfdMatTxt(k):'—',e.size?sfrCell(e.Ab):'—'];})},
    {type:'steps',scope:'rb',steps:w.steps,title:'Steel area per foot of width (the value used in [[S-fd]])'},
    {type:'note',text:'Set on the Reinforcement input tab[[tab:in-rebar| ↗]]. Bars in the x-direction resist bending about the y-axis. Layer order: bottom mat, '+(state.freinf.botOuter==='x'?'x-bars outer (nearest the soil; input "Outer bottom layer: x-bars")':'y-bars outer (nearest the soil)')+'; top mat, x-bars outer. The effective depths are worked in [[S-fd]].'}]});   /* SFBO */
-  const pr=R.peds.map((p,i)=>{const rf=(state.peds[i]||{}).reinf||{};return [p.label,sfrCell(p.x),sfrCell(p.y),sfrN(p.bx)+' × '+sfrN(p.by)+' × '+sfrN(p.h),sfrN(p.lex,3)+', '+sfrN(p.ley,3),
+  const pr=R.peds.map((p,i)=>{const rf=(state.peds[i]||{}).reinf||{};return [p.label,sfrCell(p.x),sfrCell(p.y),sfrN(p.bx)+' × '+sfrN(p.by)+' × '+sfrN(p.h),sfrN(p.lex,3)+', '+sfrN(p.ley,3),(state.peds[i]||{}).elemType==='wall'?'wall':'pedestal',   /* SFIE: the element type input */
    p.h>1e-9?(sfdPedBarTxt(i)+'; ties #'+rf.tieSize+' at '+sfrN(num(rf.tieSpc))+' in; cover '+sfrN(num(rf.cover))+' in (clear to the vertical bars; exposure: '+(SFTC_EXP[rf.exposure]||SFTC_EXP.weather)[1]+')'+'; dowels '+(()=>{const DB=sfdDowelBars(i);return DB.n+' #'+DB.size+(DB.fromLong?' (the longitudinal bars, continuous)':'')+(rf.dowelHook==='hook90'?', hooked in the footing':', straight in the footing');})()):'bearing patch (h = 0)'];});
   const lr=[];
   R.peds.forEach(p=>{
    if(R.directMode){const d=p.direct||{};lr.push([p.label,'factored',...['P','Vx','Vy','Mx','My'].map(k=>sfrCell(num(d[k])))]);}
    else TYPES.forEach(tp=>{const ld=p.loads[tp]||{};if(!COMP.some(c=>num(ld[c])!==0))return;lr.push([p.label,tp,...COMP.map(c=>sfrCell(num(ld[c])))]);});});
   subs.push({title:'Pedestals and applied loads',items:[
-   {type:'table',head:['Pedestal','x (ft)','y (ft)','b_x × b_y × h (ft)','load offset e_x, e_y (ft)','Reinforcement'],rows:pr},
+   {type:'table',head:['Pedestal','x (ft)','y (ft)','b_x × b_y × h (ft)','load offset e_x, e_y (ft)','Element type','Reinforcement'],rows:pr},
    {type:'table',caption:'Loads at the top of each pedestal'+(R.directMode?' (direct factored)':' (unfactored, by type)')+'; P down +, M_x shifts the soil resultant toward +y, M_y toward +x',head:['Pedestal','Load','P (kip)','V_x (kip)','V_y (kip)','M_x (kip-ft)','M_y (kip-ft)'],rows:lr},
    {type:'note',text:'Axes: origin at the footing centroid, +x toward B/2, +y toward L/2, +z up. A load offset e_x, e_y places P at (x + e_x, y + e_y) on the pedestal top: +P·e_x adds to M_y and +P·e_y to M_x ([[S-res]], [[S-pd]]).'}]});
   const pl=planSVG(), se=sectSVG();
@@ -4038,15 +4042,36 @@ function sfxWalk(root,scope,T){
  const push=it=>{if(topic){it.topic={title:topic,no:++ntp};topic=null;}it._card={no:cno,title:card};out.push(it);};
  const cellOf=v=>{if(/^(PASS|OK)\b/.test(v))return {t:v,cls:'ok'};if(/^(FAIL|NG)\b/.test(v))return {t:v,cls:'ng'};if(/^(REVIEW|N\/A)\b/.test(v))return {t:v,cls:'na'};
   return /^[-−\d.,e+\s%/×()—°|=≤≥∞–]+$/.test(v)&&/\d/.test(v)?{t:v,n:true}:v;};
+ /* SFIE (2026-11-05): a table is read as its grid, so a rowspan / colspan cell stays over the columns it spans. A rowspan cell is
+    repeated in each row it spans (each row reads on its own); a header of several rows (the first row's rowspan) becomes one row,
+    "group: column"; a first row that is one heading over the whole table becomes the caption; a column empty in every row is left
+    out. A table without spans reads as before. */
  const table=t=>{
   const trs=[...t.rows];if(!trs.length)return;
-  const rowTxt=trs.map(r=>[...r.cells].map(txt).join(' '));
+  const G=trs.map(()=>[]);
+  trs.forEach((r,ri)=>{let c=0;[...r.cells].forEach(e=>{while(G[ri][c])c++;const rs=Math.max(1,e.rowSpan||1),cs=Math.max(1,e.colSpan||1);
+   for(let a=0;a<rs&&ri+a<trs.length;a++)for(let b=0;b<cs;b++)G[ri+a][c+b]={e,c0:c,cs};c+=cs;});});
+  const n=Math.max(...G.map(r=>r.length));
+  let r0=0,cap;
+  if(trs.length>1&&trs[0].cells.length===1&&trs[0].cells[0].tagName==='TH'&&trs[0].cells[0].colSpan>1&&trs[0].cells[0].colSpan>=n){cap=txt(trs[0].cells[0]);r0=1;}
+  const hr=trs[r0]&&[...trs[r0].cells].every(c=>c.tagName==='TH')?Math.max(1,...[...trs[r0].cells].map(c=>c.rowSpan||1)):0;
+  const used=c=>G.slice(r0).some(r=>r[c]&&txt(r[c].e)!=='');
+  const cols=[...Array(n).keys()].filter(used);
+  const rowOf=ri=>{const out=[];cols.forEach(c=>{const g=G[ri][c];if(!g){out.push('');return;}if(g.c0!==c&&cols.includes(g.c0))return;
+   const sp=cols.filter(k=>k>=g.c0&&k<g.c0+g.cs).length,v=txt(g.e);out.push(sp>1?{t:v,span:sp}:cellOf(v));});return out;};
+  const ct=x=>typeof x==='object'?x.t:x;
+  const hd=hr?cols.map(c=>{const L=[];for(let ri=r0;ri<r0+hr;ri++){const g=G[ri][c];if(g&&!L.some(z=>z.e===g.e))L.push(g);}return L.map(z=>txt(z.e)).filter(Boolean).join(': ');}):null;
+  const body=[];for(let ri=r0+hr;ri<trs.length;ri++){const cs=[...trs[ri].cells];
+   if(cs.length===1&&cs[0].colSpan>1&&G[ri].every(g=>g&&g.e===cs[0])){body.push({cls:'gov',cells:[{t:txt(cs[0]),span:cols.length}]});continue;}
+   body.push(rowOf(ri));}
+  const rowTxt=[...(cap?[cap]:[]),...(hd?[hd.join(' ')]:[]),...body.map(r=>(Array.isArray(r)?r:r.cells).map(ct).join(' '))];
   if(!(T.newNum(rowTxt.join(' '))||rowTxt.some(T.fresh)))return;
-  const hd=[...trs[0].cells].every(c=>c.tagName==='TH')?[...trs[0].cells].map(txt):null;
-  const body=trs.slice(hd?1:0).map(r=>{const cs=[...r.cells];if(cs.length===1&&cs[0].colSpan>1)return {cls:'gov',cells:[{t:txt(cs[0]),span:cs[0].colSpan}]};return cs.map(c=>cellOf(txt(c)));});
-  const n=Math.max(...trs.map(r=>r.cells.length));
-  push({type:'table',head:hd||[],rows:body,wide:n>6||undefined,lazy:trs.length>31||undefined,title:trs.length>31?(topic||card||'Table'):undefined});
+  const nr=trs.length-r0;
+  push({type:'table',caption:cap,head:hd||[],rows:body,wide:cols.length>6||undefined,lazy:nr>31||undefined,title:nr>31?(topic||card||'Table'):undefined});
   rowTxt.forEach(T.seen);};
+ /* SFIE: the 1.4 Input Echo card as clean tables (sfxEcho: the tab's own values); each kept only if it adds to the Report, as any copy */
+ const items=list=>list.forEach(it=>{const ct=x=>(x&&typeof x==='object')?x.t:x,rowTxt=[it.caption||'',(it.head||[]).join(' '),...it.rows.map(r=>r.map(ct).join(' '))].filter(Boolean);
+  if(!(T.newNum(rowTxt.join(' '))||rowTxt.some(T.fresh)))return;push(it);rowTxt.forEach(T.seen);});
  /* a line the Report already works is not repeated; a line this walk added under another title (e.g. the same check for the y-bars) is */
  const step=(s,label,ref)=>{const key=sfxNrm(label)+'|'+sfxNrm(s);if(!s||T.hasLine(s)||T.lines.has(key))return null;T.lines.add(key);T.seen(s);return window.katex?{id:'l'+(++k),label,ref,eq:s}:{id:'l'+(++k),label,ref,note:s};};   /* without KaTeX: the TeX source */
  const eq=b=>{
@@ -4066,6 +4091,7 @@ function sfxWalk(root,scope,T){
   if(e.matches('.sfp-na')){nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)){T.figs.add(key);push({type:'note',text:cap+': '+SFP_NA+'.'});}return;}   /* SFPN */
   if(e.matches('.js-plotly-plot')){const s=sfxPlotSvg(e);nfig++;const cap=(card||'Chart')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(s&&!T.figs.has(key)){T.figs.add(key);push({type:'figure',svg:s,caption:cap});}return;}
   if(e.matches('svg')){nfig++;const cap=(card||'Figure')+(nfig>1?' ('+nfig+')':''),key=sfxNrm(cap);if(!T.figs.has(key)&&!T.figs.has(e.outerHTML)){T.figs.add(key);const c=e.cloneNode(true);if(!c.getAttribute('viewBox')&&c.getAttribute('width'))c.setAttribute('viewBox','0 0 '+parseFloat(c.getAttribute('width'))+' '+parseFloat(c.getAttribute('height')));c.style.maxWidth='100%';c.style.height='auto';push({type:'figure',svg:sfxUniq(c.outerHTML),caption:cap});}return;}
+  if(e.matches('[data-sfx-rpt="echo"]')){items(sfxEcho());return;}   /* SFIE */
   if(e.matches('table')){table(e);return;}
   if(e.matches('.eq')){eq(e);return;}
   if(e.matches('.manEq')){const s=step(texOf(e),card||'Equation','');if(s)push({type:'steps',scope,steps:[s]});return;}
@@ -4075,6 +4101,24 @@ function sfxWalk(root,scope,T){
   kids.forEach(visit);};
  [...root.children].forEach(visit);
  return out;
+}
+/* SFIE (2026-11-05, engineer: the printed input echo was garbled): the Schematic tab's 1.4 Input Echo as the Report prints it.
+   The same values and number formats as the tab (sfEchoGen, f2 / f3), in three plain tables: General inputs (Quantity | Value |
+   Unit; the tab's note column joins the quantity), pedestal geometry (one row per pedestal, with the element type input) and the
+   applied loads at the top of each pedestal (one row per pedestal and load type with a non-zero component, as the tab; in direct
+   mode the factored envelope as entered). Display only. */
+function sfxEcho(){
+ const gen=sfEchoGen().map(([q,v,u,nt])=>[q+(nt?' ('+nt+')':''),{t:v,n:/^[-−\d.,\s/×()]+$/.test(v)&&/\d/.test(v)||undefined},u||'–']);
+ const geo=R.peds.map((p,i)=>[p.label,{t:f2(p.x),n:true},{t:f2(p.y),n:true},{t:f2(p.bx)+' × '+f2(p.by)+' × '+f2(p.h),n:true},{t:f3(p.lex)+', '+f3(p.ley),n:true},((state.peds[i]||{}).elemType==='wall'?'Wall':'Pedestal')]);
+ const ld=[];
+ R.peds.forEach(p=>{
+  if(R.directMode){const d=p.direct||{};ld.push([p.label,'factored envelope (LRFD)',...COMP.map(c=>({t:f2(num(d[c])),n:true}))]);return;}
+  const tps=TYPES.filter(tp=>COMP.some(cm=>num(p.loads[tp][cm])!==0));
+  (tps.length?tps:['D']).forEach(tp=>{const q=p.loads[tp];ld.push([p.label,tp,...COMP.map(c=>({t:f2(num(q[c])),n:true}))]);});});
+ return [{type:'table',caption:'General inputs',head:['Quantity','Value','Unit'],rows:gen},
+  {type:'table',caption:'Pedestal geometry',head:['Pedestal','x (ft)','y (ft)','b_x × b_y × h (ft)','Load offset e_x, e_y (ft)','Element type'],rows:geo},
+  {type:'table',caption:'Applied loads at top of pedestal'+(R.directMode?' (direct mode: the factored LRFD envelope as entered)':' (unfactored, by load type; load types with a non-zero component)'),
+   head:['Pedestal',R.directMode?'Basis':'Case','P (k)','Vx (k)','Vy (k)','Mx (k-ft)','My (k-ft)'],rows:ld,wide:true}];
 }
 /* the result lines the print report printed after each tab (one per dashboard chip) */
 function sfxResults(tab){
