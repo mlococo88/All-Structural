@@ -2498,7 +2498,7 @@ table.vars th{background:#EEF2F6; font-family:var(--font-ui); font-size:8pt; let
 - **Other copies:** none.
 - **Open items:** none.
 
-## 2026-11-05 — PR: claude/cbc-dash (CBDC: check summary panel in the Beam Capacity tab, as Spread Footing / Light Pole; display only, no result change)
+## 2026-11-05 — PR: claude/cbc-dash, PR #788: https://github.com/mlococo88/All-Structural/pull/788 (CBDC: check summary panel in the Beam Capacity tab, as Spread Footing / Light Pole; display only, no result change)
 
 ### CBDC. Check summary panel: one line per check; a left column on screens 1500 px and wider   [display only] [no result change]
 - **Engineer request (2026-11-05, Phase 2 of the concrete beam suite update):** the left-column check summary panel of Spread Footing (SFDC #737, SFDF #740) and Light Pole (LPDC #747), in the Beam Capacity frame (`<iframe id="suite-frame-capacity" srcdoc=…>`). The Summary tab, the Report and printing are kept as they are.
