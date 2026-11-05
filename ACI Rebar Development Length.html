@@ -321,6 +321,59 @@ table.vars th{background:#EEF2F6; font-family:var(--font-ui); font-size:8pt; let
 .schematic{border-color:var(--line);}
 .wkLink{font-family:var(--font-ui); font-size:8.5pt; color:#64748B;}
 .warnbox{border-radius:0 4px 4px 0; color:#78350F;}
+/* RBDC (2026-11-05): check summary panel, as the Beam Capacity and ASD tabs of Concrete Beam Capacity.html (CBDC #788, ASDC #789)
+   and Spread Footing / Light Pole. One line per check of the summary dashboard, collapsible; on screens >= 1500 px a 280 px left
+   column that scrolls on its own; below that a compact grid above the output tabs. It replaces the dashboard box on screen
+   (#dashboard is still written by buildDashboard, hidden). Screen only; the Report and printing are unchanged. */
+#rbrDashCol{display:none}
+@media print{#rbrDashCol,#rbrDashBox{display:none!important}}
+@media screen{
+  #dashboard{display:none!important}
+  #rbrDashBox{flex:0 0 auto;font-family:var(--font-ui);padding:5px 14px 0;background:var(--slate-50);border-bottom:1px solid var(--line);
+    max-height:42vh;overflow-y:auto}
+  #rbrDashHead{display:flex;align-items:center;gap:4px 8px;flex-wrap:wrap}
+  #rbrDashTtl{margin:2px 0;font-family:var(--font-ui);font-size:9pt;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--navy-800)}
+  #rbrDashTgl{margin:0;padding:1px 7px;font:8.5pt var(--font-ui);border:1px solid #CBD5E1;background:var(--slate-100);border-radius:4px;cursor:pointer;color:#334155}
+  #rbrDashCnt{display:inline-flex;gap:4px;flex-wrap:wrap}
+  #rbrDashCnt span{font-size:8pt;font-weight:700;padding:1px 5px;border:1px solid;border-radius:3px;white-space:nowrap}
+  #rbrDashCnt .rbrdCf{color:#991B1B;background:#FEF2F2;border-color:var(--fail)}
+  #rbrDashCnt .rbrdCw{color:#92400E;background:#FFFBEB;border-color:var(--warn)}
+  #rbrDashCnt .rbrdCp{color:#065F46;background:#ECFDF5;border-color:var(--pass)}
+  #rbrDashCnt .rbrdCn{color:#475569;background:var(--slate-100);border-color:#CBD5E1}
+  body.rbrDashColl #rbrDash{display:none}
+  #rbrDash{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(250px,100%),1fr));gap:3px 6px;margin:4px 0 7px;align-items:start}
+  #rbrDash .rbrdCh{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;column-gap:5px;padding:2px 5px 2px 2px;min-width:0;
+    border:1px solid var(--line);border-left:4px solid var(--slate-400);border-radius:3px;background:#fff;font-size:8.5pt;line-height:1.35;cursor:pointer}
+  #rbrDash .rbrdCh:hover{background:var(--slate-50)} #rbrDash .rbrdCh:focus-visible{outline:2px solid var(--blue-600);outline-offset:-1px}
+  #rbrDash .rbrdCh.pass{border-left-color:var(--pass)} #rbrDash .rbrdCh.fail{border-left-color:var(--fail);background:#FEF2F2} #rbrDash .rbrdCh.warn{border-left-color:var(--warn);background:#FFFBEB}
+  #rbrDash .rbrdCh .rbrdX{grid-row:1;grid-column:1;margin:0;padding:0 3px;border:none;background:transparent;font-size:9px;color:#334155;line-height:1.2;cursor:pointer}
+  #rbrDash .rbrdCh .rbrdN{grid-row:1;grid-column:2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #rbrDash .rbrdCh .rbrdR{grid-row:1;grid-column:3;white-space:nowrap;color:#334155;font-variant-numeric:tabular-nums}
+  #rbrDash .rbrdCh .rbrdS{grid-row:1;grid-column:4;font-size:7.5pt;font-weight:700;white-space:nowrap}
+  #rbrDash .rbrdCh.pass .rbrdS{color:var(--pass)} #rbrDash .rbrdCh.fail .rbrdS{color:var(--fail)} #rbrDash .rbrdCh.warn .rbrdS{color:var(--warn)} #rbrDash .rbrdCh.na .rbrdS{color:#64748b}
+  #rbrDash .rbrdCh .rbrdV,#rbrDash .rbrdCh .rbrdDC,#rbrDash .rbrdCh .rbrdRef{grid-column:1/-1;display:none;padding-left:16px;overflow-wrap:anywhere}
+  #rbrDash .rbrdCh .rbrdDC,#rbrDash .rbrdCh .rbrdRef{color:#475569;font-size:8pt} #rbrDash .rbrdCh .rbrdRef{font-style:italic}
+  #rbrDash .rbrdCh.rbrdOpen .rbrdV,#rbrDash .rbrdCh.rbrdOpen .rbrdDC,#rbrDash .rbrdCh.rbrdOpen .rbrdRef{display:block}
+  #rbrDash .rbrdCh.rbrdOpen .rbrdN{white-space:normal}
+  .rbrdMsg{grid-column:1/-1;font-size:8.5pt;padding:5px 8px;border:1px solid var(--line);border-left:4px solid var(--fail);background:#FEF2F2;color:#7F1D1D;border-radius:3px}
+}
+@media screen and (min-width:1500px){
+  .appwrap{max-width:1792px}   /* 1500 + 292 (the column): at 1792 px and wider the input and output panels keep their old widths */
+  body.rbrDashWide .layout{grid-template-columns:292px minmax(340px,1fr) 2fr}
+  body.rbrDashWide #rbrDashCol{display:block;height:100%;overflow-y:auto;overflow-x:hidden;position:relative;
+    padding:0 6px 24px;border:1px solid var(--line);border-radius:3px;background:var(--slate-50);overscroll-behavior:contain;font-family:var(--font-ui)}
+  body.rbrDashWide #rbrDashBox{padding:0;border-bottom:0;max-height:none;overflow:visible;background:transparent}
+  body.rbrDashWide #rbrDash{grid-template-columns:minmax(0,1fr)}
+  body.rbrDashWide #rbrDashHead{position:sticky;top:0;z-index:3;background:var(--slate-50);padding:5px 0 4px}
+  body.rbrDashWide.rbrDashColl .layout{grid-template-columns:42px minmax(340px,1fr) 2fr}
+  body.rbrDashWide.rbrDashColl #rbrDashCol{padding:0}
+  body.rbrDashWide.rbrDashColl #rbrDashHead{flex-direction:column;align-items:center}
+  body.rbrDashWide.rbrDashColl #rbrDashTtl{writing-mode:vertical-rl;transform:rotate(180deg);margin:4px 0;white-space:nowrap}
+  body.rbrDashWide.rbrDashColl #rbrDashCnt{flex-direction:column;align-items:center}
+  body.rbrDashWide.rbrDashColl #rbrDashCnt span{font-size:7.5pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
+  body.rbrDashWide #rbrDashCol::-webkit-scrollbar{width:7px}
+  body.rbrDashWide #rbrDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+}
 </style>
 </head>
 <body>
@@ -332,11 +385,16 @@ table.vars th{background:#EEF2F6; font-family:var(--font-ui); font-size:8pt; let
   </div>
 
   <div class="layout no-print">
+    <aside id="rbrDashCol" aria-label="Check summary"></aside><!-- RBDC (2026-11-05): the check summary panel on screens 1500 px and wider -->
     <!-- ================= INPUT PANEL ================= -->
     <div class="card inputpanel" id="inputPanel"></div>
 
     <!-- ================= OUTPUT PANEL ================= -->
     <div class="card outputpanel">
+      <div id="rbrDashBox"><!-- RBDC: check summary (moved into #rbrDashCol on screens 1500 px and wider) -->
+        <div id="rbrDashHead"><button type="button" id="rbrDashTgl" aria-controls="rbrDash"></button><h2 id="rbrDashTtl">Check summary</h2><span id="rbrDashCnt"></span></div>
+        <div id="rbrDash"></div>
+      </div>
       <div class="tabs" id="tabs">
         <button class="tab active" data-tab="tension">Tension l_d</button>
         <button class="tab" data-tab="hook">Hook l_dh</button>
@@ -1615,6 +1673,7 @@ function buildDashboard(inp,f){
       </div>`).join("")}</div>`
     + rebarWorkedIn(rebarLenCards().concat(inp.tensClass==="A"?[["tsClassA","Class A"]]:[]).concat(kHS.relevant?[["tConf","K_tr"]]:[]));
   document.getElementById('dashboard').innerHTML = html;
+  rbrDashRender(checks,f);   // RBDC: the check summary panel, from the same checks
 }
 
 /* =====================================================================
@@ -1647,6 +1706,99 @@ function schematicSVG(inp,f){
    ===================================================================== */
 let currentTab = "tension";
 let chartMode = "fc";
+
+/* RBDC (2026-11-05, engineer): check summary panel, as the Beam Capacity and ASD tabs of Concrete Beam Capacity.html (CBDC #788,
+   ASDC #789) and Spread Footing / Light Pole. One line per check of the summary dashboard (buildDashboard's `checks`, the same
+   values and states): expand button, name, a short value, status. Status: INFO for a length or a limit applied in the
+   calculation; PASS / FAIL for a code check; REVIEW where the dashboard says "verify", "unknown" or "spacing?" (the Report's CHK).
+   The short value is the dashboard's value; for a FAIL / REVIEW line, the condition. FAIL and REVIEW lines start expanded. A line
+   click opens the card where it is worked (rebarGoto, the D11 links). No new calculation. The panel replaces the dashboard box
+   on screen (#dashboard is still written, hidden).
+   On screens >= 1500 px the box is moved into the left column #rbrDashCol; below that it sits above the output tabs.
+   Collapse state: per-browser UI key rebar_dashCollapsed_v1 ('1' = collapsed, '0' or absent = open), shared by the standalone
+   tool and the Development & Splice tab of Concrete Beam Capacity.html; not in the autosave, the saved projects or the export.
+   The standalone tool and the Development & Splice tab carry this same block (CLAUDE.md §3). */
+const RBDC={key:'rebar_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,open:new Map(),coll:false};
+try{ RBDC.coll=localStorage.getItem(RBDC.key)==='1'; }catch(e){}
+const RBDC_ST={pass:'PASS',fail:'FAIL',warn:'REVIEW',na:'INFO'};
+/* name, card (REBAR_CARDS), reference and failing condition of each dashboard check, by the start of its label */
+function rbrDashMeta(lbl,f,val){
+  const A=f.AASHTO;
+  const M=[
+    ['Tension l_d',{card:'tLd',ref:A?'AASHTO 5.10.8.2.1a, Eq. 5.10.8.2.1a-1':'ACI 318-19 Eq. 25.4.2.4a, 25.4.2.1'}],
+    ['Hook l_dh',{card:'hLdh',ref:A?'AASHTO 5.10.8.2.4a, Eq. 5.10.8.2.4a-1':'ACI 318-19 Eq. 25.4.3.1'}],
+    ['Comp. l_dc',{card:'cLdc',ref:A?'AASHTO 5.10.8.2.2a':'ACI 318-19 25.4.9.2'}],
+    ['Tension splice',{card:'tsLen',ref:A?'AASHTO 5.10.8.4.3a':'ACI 318-19 25.5.2'}],
+    ['Comp. splice',{card:'csLen',ref:A?'AASHTO 5.10.8.4.5a':'ACI 318-19 25.5.5.1'}],
+    ['λ_rc',{card:'tConfA',ref:'AASHTO 5.10.8.2.1c'}],
+    ['(c_b+K_tr)/d_b',{card:'tConf',ref:'ACI 318-19 25.4.2.4'}],
+    ["f'c within code range",{card:null,tab:'tension',ref:A?'AASHTO 5.10.8.2.1, C5.10.8.2.4':'ACI 318-19 25.4.1.4',cond:'out of range'}],
+    ['λ_rl·λ_cf',{card:'tLd',ref:'AASHTO 5.10.8.2.1b'}],
+    ['ψ_t·ψ_e',{card:'tLd',ref:'ACI 318-19 25.4.2.4'}],
+    ['Class A splice eligible',{card:'tsClassA',ref:A?'AASHTO 5.10.8.4.3a':'ACI 318-19 25.5.2.1',cond:val==='unknown'?'A_s,req not entered':'not eligible'}],
+    ['K_tr ≥ 0.5d_b',{card:'tConf',ref:'ACI 318-19 25.4.2.2',cond:val==='spacing?'?'spacing not entered':'K_tr < 0.5d_b'}],
+    ['Lap splice permitted',{card:'tsLen',ref:lapRef(f),cond:'not permitted'}],
+    ['#3 transverse',{card:'tLd',ref:'AASHTO 5.10.8.2.1, 5.10.8.4.3, 5.10.8.2.4b',cond:'verify'}],
+    ['Transverse reinf.',{card:'tLd',ref:'AASHTO 5.10.8.2.1, 5.10.8.4, 5.10.8.2.4',cond:'verify'}]];
+  const m=M.find(x=>lbl.indexOf(x[0])===0);
+  return m?m[1]:{card:null,tab:'tension',ref:''};
+}
+function rbrDashGo(it){
+  if(it.card) rebarGoto(it.card);
+  else if(it.tab){ switchTab(it.tab); const tc=document.getElementById('tabcontent'); if(tc) tc.scrollTop=0; }
+}
+function rbrDashRender(checks,f){
+  const box=document.getElementById('rbrDash'), cnt=document.getElementById('rbrDashCnt'); if(!box) return;
+  box.innerHTML='';
+  const n={fail:0,warn:0};
+  const tmp=document.createElement('div');
+  const txt=h=>{ tmp.innerHTML=String(h); return tmp.textContent; };
+  (checks||[]).forEach(k=>{
+    const val=txt(k.val), name=txt(k.lbl), m=rbrDashMeta(k.lbl,f,val);
+    const st=k.info?'na':(k.ok?'pass':((val==='verify'||val==='unknown'||val==='spacing?')?'warn':'fail'));
+    if(n[st]!=null) n[st]++;
+    const short=(st==='fail'||st==='warn')&&m.cond?m.cond:val;
+    const wh=m.card&&REBAR_CARDS[m.card]?'→ '+rebarCardTxt(m.card):(m.tab?'→ '+rebarTabName(m.tab):'');
+    const c=document.createElement('div'); c.className='rbrdCh '+st; c.tabIndex=0; c.setAttribute('role','button');
+    const add=(tag,cls,t)=>{ const e=document.createElement(tag); e.className=cls; e.textContent=t; c.appendChild(e); return e; };
+    const x=add('button','rbrdX',''); x.type='button'; x.title='Show the value and the reference';
+    add('span','rbrdN',name); add('span','rbrdR',short); add('span','rbrdS',RBDC_ST[st]);
+    add('div','rbrdV',name+': '+val+(k.info?' (information)':''));
+    add('div','rbrdRef',(m.ref||'')+(m.ref&&wh?' · ':'')+wh);
+    c.title=name+': '+val+(m.ref?'\nReference: '+m.ref:'')+(wh?'\nClick: '+wh:'');
+    const setOpen=o=>{ c.classList.toggle('rbrdOpen',o); x.setAttribute('aria-expanded',o?'true':'false'); x.textContent=o?'▾':'▸'; };
+    setOpen(RBDC.open.has(name)?RBDC.open.get(name):(st==='fail'||st==='warn'));
+    x.addEventListener('click',ev=>{ ev.preventDefault(); ev.stopPropagation(); const o=!c.classList.contains('rbrdOpen'); RBDC.open.set(name,o); setOpen(o); });
+    const go=()=>rbrDashGo({card:m.card,tab:m.tab});
+    c.addEventListener('click',go);
+    c.addEventListener('keydown',ev=>{ if((ev.key==='Enter'||ev.key===' ')&&ev.target===c){ ev.preventDefault(); go(); } });
+    box.appendChild(c);
+  });
+  if(cnt) cnt.innerHTML=(n.fail?'<span class="rbrdCf">'+n.fail+' NG</span>':'')+(n.warn?'<span class="rbrdCw">'+n.warn+' REVIEW</span>':'')
+    +(!n.fail&&!n.warn?'<span class="rbrdCp">no NG</span>':'');
+}
+function rbrDashPlace(){
+  const box=document.getElementById('rbrDashBox'), col=document.getElementById('rbrDashCol'), op=document.querySelector('.outputpanel'), tabs=document.getElementById('tabs');
+  if(!box||!col||!op) return;
+  const wide=!!(RBDC.mq&&RBDC.mq.matches);
+  document.body.classList.toggle('rbrDashWide',wide);
+  if(wide){ if(box.parentNode!==col) col.appendChild(box); }
+  else if(box.parentNode!==op) op.insertBefore(box,tabs||op.firstChild);
+  rbrDashColl(RBDC.coll,false);
+}
+function rbrDashColl(v,save){
+  RBDC.coll=!!v; document.body.classList.toggle('rbrDashColl',RBDC.coll);
+  const t=document.getElementById('rbrDashTgl'), wide=document.body.classList.contains('rbrDashWide');
+  if(t){ t.setAttribute('aria-expanded',RBDC.coll?'false':'true');
+    t.innerHTML=wide?(RBDC.coll?'&raquo;':'&laquo;'):(RBDC.coll?'&#9656; Show checks':'&#9662; Hide checks');
+    t.title=(RBDC.coll?'Show':'Hide')+' the check list (remembered in this browser)'; }
+  if(save){ try{ localStorage.setItem(RBDC.key,RBDC.coll?'1':'0'); }catch(e){} }
+}
+(function(){
+  const t=document.getElementById('rbrDashTgl'); if(t) t.addEventListener('click',()=>rbrDashColl(!RBDC.coll,true));
+  if(RBDC.mq){ if(RBDC.mq.addEventListener) RBDC.mq.addEventListener('change',rbrDashPlace); else if(RBDC.mq.addListener) RBDC.mq.addListener(rbrDashPlace); }
+  rbrDashPlace();
+})();
 
 function render(){
   const inp = readInputs();
