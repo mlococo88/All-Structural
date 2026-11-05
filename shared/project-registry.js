@@ -12,7 +12,8 @@
             name    the name shown on the home page,
             href    the page to open (relative to the repository root, URL-encoded),
             key     the tool's own saved-project list key (a mapStore: one JSON object { "<project name>": item }),
-            time    item -> saved time (ms or ISO) or null: the tool's own mapStore `time` option (none: no date),
+            time    item -> saved time (ms or ISO) or null: the tool's own mapStore `time` option (none: no date); for a tool with
+                    its own Projects dialog, the time and order that dialog shows,
             sort    the tool's mapStore `sort` option ('saved' = newest first; default by name) }
    Order: the order of the cards on the home page.
 
@@ -36,6 +37,8 @@
       key: 'stoneArchLR.projects', time: i => i && (i.saved || i.ts) || null },
     { tool: 'gusset-plate-rating', label: 'Gusset Plate Rating', name: 'Gusset Plate Rating', href: 'Gusset%20Plate%20Rating.html',
       key: 'gussetRating.projects.v1' },
+    { tool: 'abutment-calculator', label: 'Abutment Calculator', name: 'Abutment Calculator', href: 'abutment_calculator.html',
+      key: 'abutcalc_v1_projects', time: i => i && i.ts || null, sort: 'saved' },   // its own Projects dialog: newest first by ts
     { tool: 'retaining-wall-designer', label: 'Retaining Wall Designer', name: 'Retaining Wall Designer', href: 'Retaining%20Wall%20Designer.html',
       key: 'retaincalcpro.projects.v1', time: i => i && i.ts || null },
     { tool: 'spread-footing', label: 'Spread Footing', name: 'Spread Footing', href: 'Spread%20Footing.html',

@@ -19,7 +19,7 @@ const SHOTS = arg('shots', process.env.SHOTS);
 export const FOLDER = { mlg: 'moving-load-generator', bsl: 'bridge-substructure-loading', asce7: 'asce7-load-generator', smd: 'shear-moment-diagrams',
   stonearch: 'stone-arch-rating', gusset: 'gusset-plate-rating', retwall: 'retaining-wall-designer', spreadfooting: 'spread-footing',
   lightpole: 'light-pole-sign-post', baseplate: 'base-plate-anchor', steelbeam: 'steel-beam-aisc', timber: 'timber-beam-check',
-  spc: 'section-property-calculator', rebar: 'aci-rebar-development' };
+  spc: 'section-property-calculator', rebar: 'aci-rebar-development', abutment: 'abutment-calculator' };
 const list = arg('tool', Object.keys(FOLDER).join(',')).split(',');
 let failed = 0; const ok = (c, m) => { console.log((c ? '  ok   ' : '  FAIL ') + m); if (!c) failed++; return c; };
 const NAMES = ['HSP A', 'HSP <b>bold</b> & "q" ü'];
@@ -37,8 +37,12 @@ export async function toolPage(ctx, key, errs) {
   await T.ready(p); await p.waitForTimeout(700);
   return { page, p, T };
 }
-// dialogRows(p): the tool's own Saved projects dialog: [{ name, saved }] (saved: the "Last saved" cell, '' when none)
-export async function dialogRows(p) {
+// dialogRows(p, T): the tool's Saved projects dialog: [{ name, saved }] (saved: the "Last saved" cell, '' when none). A tool with its
+// own Projects dialog (T.ui, project-library.mjs): names in its order; saved = null (its own date format is not compared).
+export async function dialogRows(p, T) {
+  if (T && T.ui) { await T.ui.open(p); await p.waitForTimeout(300);
+    return p.evaluate(sel => { const r = [...document.querySelectorAll(sel)].map(row => { const c = row.querySelector('.pname').cloneNode(true); c.querySelectorAll('span,[data-sp]').forEach(s => s.remove()); return { name: c.textContent.trim(), saved: null }; });
+      document.querySelectorAll('dialog[open]').forEach(d => d.close()); return r; }, T.ui.rows); }
   await p.evaluate(() => { [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)).click(); });
   await p.waitForTimeout(400);
   return p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); const hasT = [...d.querySelectorAll('thead th')].some(t => /Last saved/.test(t.textContent));
@@ -58,7 +62,7 @@ for (const key of list) {
   try {
     const { page, p, T } = await toolPage(ctx, key, terrs);
     for (const n of NAMES) await T.save(p, n);
-    expect[FOLDER[key]] = await dialogRows(p);
+    expect[FOLDER[key]] = await dialogRows(p, T);
     await page.close();
   } catch (e) { ok(false, `${key}: ${String(e.message || e).slice(0, 300)}`); }
   ok(expect[FOLDER[key]] && expect[FOLDER[key]].length >= 2, `${key}: two projects saved through the tool's own Save (its dialog lists ${expect[FOLDER[key]] ? expect[FOLDER[key]].map(r => r.name).join(' | ') : '-'})`);
@@ -69,7 +73,8 @@ const before = await snap(home);
 ok(await home.evaluate(() => document.getElementById('projects').open), '#projects opens the panel');
 const got = await homeRows(home);
 for (const key of list) {
-  const t = FOLDER[key], e = expect[t] || [], g = got[t] || [];
+  const t = FOLDER[key], e = expect[t] || [], g0 = got[t] || [];
+  const g = e.length && e[0].saved === null ? g0.map(r => ({ name: r.name, saved: r.saved ? null : 'missing' })) : g0;   // own dialog: names, order, a time shown
   ok(JSON.stringify(e) === JSON.stringify(g), `${key}: home page lists the same names, order and saved times as the tool's dialog` + (JSON.stringify(e) === JSON.stringify(g) ? '' : `\n         tool: ${JSON.stringify(e)}\n         home: ${JSON.stringify(g)}`));
 }
 ok(await home.evaluate(() => !document.querySelector('#spOut b') && [...document.querySelectorAll('#spOut li a')].some(a => a.textContent.includes('<b>bold</b>'))), 'a name holding HTML is shown as text');

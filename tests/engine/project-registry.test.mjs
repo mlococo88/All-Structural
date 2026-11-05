@@ -23,7 +23,7 @@ test('project-registry: one entry per tool; its page passes the same key, tool a
     assert.ok(fs.existsSync(file), e.href);
     const src = fs.readFileSync(file, 'utf8').replace(/&quot;/g, '"');
     assert.ok(src.includes(`'${e.key}'`) || src.includes(`"${e.key}"`), `${e.tool}: key ${e.key} in ${e.href}`);
-    assert.ok(new RegExp(`cloud:\\s*\\{\\s*tool:\\s*'${e.tool}',\\s*label:\\s*'${e.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'`).test(src), `${e.tool}: ctx.cloud tool / label in ${e.href}`);
+    assert.ok(new RegExp(`cloud:\\s*\\{\\s*tool:\\s*(['"])${e.tool}\\1,\\s*label:\\s*(['"])${e.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\2`).test(src), `${e.tool}: ctx.cloud tool / label in ${e.href}`);
     assert.equal(R.get(e.tool).key, e.key);
   }
   assert.equal(R.get('nope'), null);
