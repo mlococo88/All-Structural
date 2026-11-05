@@ -3533,3 +3533,46 @@ Engineer request (2026-11-05, Phase 3 of the concrete beam suite update, display
   - The invalid cases above were probed headless. A suite Report with blocked inputs shows "No results" and no NaN.
   - `node tests/check-syntax.mjs`, `node tests/smoke/phone-layout.mjs --tool cbc,aci` and `node tests/smoke/project-library.mjs` pass.
   - Screenshots looked at: Dev Tension and Hook & Comp. tabs in ACI and AASHTO at 1600 and 390 px; the error states in all three frames; the Visuals captions; the ASD link.
+
+## 2026-11-05 — PR: claude/cbc-lambda-excess (CBLM / RBLM: λ outside the code range is an input error; RBXS: A_s,req, A_s,prov and "From Beam Capacity" hidden while the excess box is unticked)   [behaviour change: when results are shown; no formula change]
+
+Engineer request (2026-11-05, follow-up to the open questions of #794). The Development & Splice edits are the same as in `ACI Rebar Development Length.html` and are logged there in full (RBLM, RBXS).
+
+### CBLM. Beam Capacity: λ within the code range   [behaviour change: when results are shown]   Decision (pending engineer review)
+- **Ranges checked in the PDFs:**
+  - ACI 318-19 19.2.4.1 (printed p. 357), Tables 19.2.4.1(a)/(b): λ from 0.75 to 1.0; 19.2.4.3: 1.0 for normalweight concrete.
+  - AASHTO LRFD 10th Ed. 5.4.2.8 (p. 5-23): Eq. 5.4.2.8-1 (from f_ct) gives λ ≤ 1.0 with no lower bound; Eq. 5.4.2.8-2 (from w_c) gives 0.75 ≤ λ ≤ 1.0; λ = 1.0 for normal weight concrete.
+  - Note: the coordinator's brief cited "Table 19.2.4.2"; 318-19 has Tables 19.2.4.1(a) and (b).
+- **Where (Beam Capacity srcdoc page):**
+  - `validate()`. Before: `if(!(S.mat.lambda>0)) B.push({code:"Materials",msg:"λ must be greater than 0 (1.0 for normal-weight concrete)."});` After: `if(!cbcLamOk()) B.push({code:"Materials",msg:cbcLamMsg()});`, with a CBLM comment.
+  - `cbcInputErrs()`. Before: `if(!(M.lambda>0)) E.push(['lam','…']);` After: `if(!cbcLamOk()) E.push(['lam',cbcLamMsg()]);`.
+  - New, before `function cbcInputMarks(P){`:
+    ```js
+    function cbcLamOk(){ const l=S.mat.lambda; return S.code==='ACI'?(l>=0.75&&l<=1.0):(l>0&&l<=1.0); }
+    function cbcLamMsg(){ … }   // ACI: "between 0.75 and 1.0 (ACI 318-19 19.2.4.1, Tables 19.2.4.1(a)/(b); …)"; AASHTO: "greater than 0 and not more than 1.0 (AASHTO LRFD 10th Ed. 5.4.2.8; …)"
+    ```
+- **Check case:**
+
+  | Code | λ | Before | After |
+  |---|---|---|---|
+  | ACI | 0.70 | results with λ = 0.70 | input error |
+  | ACI | 1.10 | results with λ = 1.10 (unconservative) | input error |
+  | ACI | 0.75, 0.85, 1.0 | results | unchanged |
+  | AASHTO | 1.05 | results | input error |
+  | AASHTO | 0 | input error | input error |
+  | AASHTO | 0.6 (Eq. 5.4.2.8-1) | results | unchanged |
+- **Decision (pending engineer review):** in AASHTO mode λ below 0.75 is accepted in Beam Capacity, where λ enters directly, because Eq. 5.4.2.8-1 permits it. Development & Splice still errors below 0.75 (see RBLM).
+
+### RBLM / RBXS (Development & Splice frame)   Decision (pending engineer review)
+See `fixlog/ACI Rebar Development Length.md`. The same edits are in `<iframe id="suite-frame-dev">`.
+
+### Verification
+- Headless Chromium, origin/main (after #794) vs branch, 5 cases (default, AASHTO f_yt 100, ACI with torsion, excess reinforcement ACI and AASHTO), suite and standalone: IDENTICAL (calculations, Report models, all tab text), 0 console errors.
+- The cases above were probed headless.
+- `check-syntax`, `phone-layout --tool cbc,aci` and `project-library` pass.
+- Screenshots looked at: Tension input tab with the excess box on and off; the λ error state.
+
+### Open item (raised, not changed)
+- The Development & Splice λ hint cites "ACI Table 19.2.4.2" (should be 19.2.4.1(a)/(b)). It also says "AASHTO 5.4.2.8 … 0.75 ≤ λ ≤ 1.0", which is Eq. 5.4.2.8-2 only.
+- ACI 318-19 19.2.4.1 says "except as required in Table 25.4.2.5", and that table's λ for development may be narrower than 0.75–1.0. Not checked here.
+- Both are code-reference questions for the engineer (§4).
