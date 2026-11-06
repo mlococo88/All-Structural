@@ -5918,7 +5918,7 @@ function sfqcFit(id,B,L,T){
 - **How verified:** the SF harness (10 cases, their own eccentricity modes: kern by default, rev cases kern explicitly) on origin/main and the branch: `R` / `P2` 0 differences, dashboard and Report text identical, 0 console / KaTeX errors. `'off'` saves (def, sfe9, dir) as above. Screenshots of the dashboard and Stability tab checked. Tests: check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser.
 - **Other copies:** none.
 
-## 2026-11-06 — PR: claude/sf-nobear-guard (SFNB-1: no service combination with a bearing solution: crash guards, Bearing FAIL with the reason of each combination, renderer safety net, contact-area chip text; display only, no result change where the tool worked before)
+## 2026-11-06 — PR: claude/sf-nobear-guard (PR #920: https://github.com/mlococo88/All-Structural/pull/920) (SFNB-1: no service combination with a bearing solution: crash guards, Bearing FAIL with the reason of each combination, renderer safety net, contact-area chip text; display only, no result change where the tool worked before)
 
 - **Why (engineer decisions 1, 3, 4, 2026-11-06):** a read-only investigation found that the page threw when `R.govBear` was null (no service combination with a finite bearing D/C):
   - `renderPedCb` (card 2.6, SFPC #768): `const s=sfdPcSel(), cb=s.a.cb;` with `s.a` null. Triggers on the default project: direct mode with V_y ≥ 583.9 k (resultant off the footing in both brackets, e_y = 2700/656.9 = 4.11 ft > L/2 = 4.00 ft with lever t + h = 4.5 ft), V_x ≥ 648.9 k (i_q = 0, D/C ∞), M_x = 3000 k-ft, net uplift; case mode D.M_x = 5000, D.V_y = 1000, D.P = −2000, pedestal at x = 20 ft, direct soil q_a = 0.
