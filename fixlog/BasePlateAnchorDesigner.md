@@ -5230,7 +5230,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open items:** as BPDW (the hardware rules to spot-check against the printed ASME / AISC tables).
 
-## 2026-11-06 — BPHT: anchor HOLE TYPE selector (oversized DG1 / standard J3.3 / custom); the top washer follows it (PR: claude/bp-holetype)
+## 2026-11-06 — BPHT: anchor HOLE TYPE selector (oversized DG1 / standard J3.3 / custom); the top washer follows it (PR: claude/bp-holetype, PR #919: https://github.com/mlococo88/All-Structural/pull/919)
 
 ### BPHT. Hole type of the base-plate anchor holes   [result change only when "Standard" (or a custom diameter) is picked; saved projects unchanged] [saved data: one optional field `plate.holeType`]
 - **Request (engineer, 2026-11-06):** a hole-type selector for the base plate anchor holes: oversized anchor-rod hole (AISC DG1 Table 2.3 / Manual Table 14-2, default), standard hole (AISC 360-16 Table J3.3), custom diameter (the existing input). The hole used by the tearout / bearing check and the drawn top washer follow it.
