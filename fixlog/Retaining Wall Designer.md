@@ -2109,3 +2109,64 @@ function renderStatus(r) {
 - **How verified:** origin/main (after #930) vs branch, ten cases (the eight of RWTS-2 + MassDOT full-section CT + 45° spread CT with h_CT above the barrier): `_R`, Export JSON, every localStorage key, Report text and tab text with SVG removed, every Report / Overview SVG, DXF of the four sheets **identical**; the elevation is not in the Report. Screenshots at 1400 and 390 looked at, before and after. Tests: see the PR.
 - **Other copies:** none.
 - **Decision (pending engineer review):** the elevation is drawn at one scale; a very long joint spacing gives a long, low strip with its text still at full size. The plan strip's width is schematic, and the note says so.
+
+## 2026-11-06 — PR: claude/rw-bearing-combo (PR #932: https://github.com/mlococo88/All-Structural/pull/932) (RWBP) — Stability tab: bearing pressure per combination (selector, to-scale diagram, resultant, e, contact length)   [display only; no result change]
+- **Why:** engineer-approved 2026-11-06 (Phase 3 task D, review PR 3c). Before, the Stability tab showed only the Plotly chart (service q(x), factored q_u(x), q_a). There was no per-combination bearing diagram, resultant location, eccentricity or contact length. The Report's bearing figure (`buildBearingDiagram`) was not to scale and had no scale bar.
+- **What:**
+  - A **Combination** selector with a to-scale diagram above the existing chart:
+    - ACI mode: in Step 6 — Bearing Pressure Check.
+    - AASHTO mode: in the "Bearing Pressure Distribution" card.
+  - The chart itself is unchanged.
+- **Options** (what the analysis computes; ★ = default, the governing one):
+  - **ACI:** ★ Service (unfactored), the bearing check vs q_a; U = 1.2D + 1.6H; U = 0.9D + 1.6H (footing design).
+  - **AASHTO:**
+    - ★ Strength I (maximum vertical) or Strength Ia (minimum vertical), whichever governs (`bearing_Ia_governs`);
+    - the other of the two;
+    - Extreme Event II (when the collision check is on);
+    - Strength I / Ia total vertical with uplift (footing design);
+    - Service (unfactored loads), labelled "reference only, not a check in AASHTO mode".
+- **Diagram** (`rwbpSVG`):
+  - footing B × t_f and the stem base (cut by a break line), to scale with a scale bar;
+  - the middle-third ticks and B/2;
+  - the pressure block of the selected combination, ordinates to their own scale and labelled. Linear trapezoid / triangle; uniform over B′ (soil, Meyerhof) placed centred on the resultant; on rock, linear per AASHTO 10.6.5 / Eqs. 11.6.3.2-2/-3;
+  - the limit line (q_a, or q_R) where the combination is a check;
+  - the resultant R = ΣV with e at x̄, and dimensions x̄ (from the toe) and contact length.
+- **Worked lines** under the diagram (§6), for the selected combination:
+  - ΣV and x̄, then e = B/2 − x̄ = …, with B/6;
+  - then the contact length and the pressures: full contact, q = ΣV/B·(1 ± 6e/B); triangular, 3x̄ and 2ΣV/(3x̄); uniform, B′ = B − 2|e| and q = ΣV/B′; rock;
+  - with the limit;
+  - and a "Worked in" link to the card where the combination is worked: Stability Step 6, Step 7 (factored, ACI), Step 7b (EE II), or Footing "Factored Loads on Footing" (new `RW_CARDS.ftgLoads`).
+  - A resultant outside the base (|e| > B/2, where the analysis gives q = 0) is stated, with no contact length.
+- **Values:** every number is the analysis' own (`r`, `r.aashtoR`, `r.aashtoR.ct.ee2`). The only derived values are:
+  - the contact length (B, 3x̄, 3(B − x̄), B′ or 3(B/2 − |e|), by the same formulas the analysis uses);
+  - on rock with |e| ≤ B/6, the minimum-edge pressure ΣV/B·(1 − 6|e|/B) (shown with its formula).
+- **Where** (new block before `// SHARED HELPER — renders a standard flexure+shear result card`):
+  - `rwbpCombos(r)`, `rwbpPick(r)`, `rwbpZone(r, c)`, `rwbpWork(r, c, z)`, `rwbpSVG(r, c)`, `rwbpBlock(r)`, `rwbpSet(k)`;
+  - inserted into `renderStability` (`h += rwbpBlock(r);` before `<div id="plt-bearing" style="margin-top:12px;">`) and into the AASHTO card (`<div class="card-body">${rwbpBlock(r)}<div id="plt-bearing"></div></div>`);
+  - CSS `.rwbp …` after `.wkLink`.
+- **Report:** ACI Step 6 figure "Service bearing pressure, toe to heel": `buildBearingDiagram(r)` → `rwbpSVG(r, <service>)`. The caption is the same; the figure is to scale. `buildBearingDiagram` is now unused (kept). The AASHTO Report is unchanged.
+- **Selection / sync:**
+  - `window.RWBP_SEL`: `'GOV'` (the default) or a combination key; session only, with **no storage key**. 'GOV' follows the governing combination after an input change.
+  - `rwbpSet` calls an optional `window.rwbpOnPick(sel)`, a one-way sync hook for the 3D view (task C, as Spread Footing SF3L); nothing uses it yet.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Saved data (§5):** none.
+- **Check case** (default ACI wall, service):
+  - ΣV = 16583 lb/ft, x̄ = 6.469 ft, e = 6.250 − 6.469 = −0.219 ft (toward the heel), |e| ≤ B/6 = 2.083 ft;
+  - full contact 12.50 ft;
+  - q_toe, q_heel = 1187, 1466 psf ≤ q_a = 3000 psf (as Step 6).
+- **Check case** (H_s 18, L_t 1, L_h 6, service):
+  - x̄ = 1.945 ft, e = 2.305 > B/6 = 1.417 ft;
+  - contact 3·1.945 = 5.834 ft;
+  - q_max = 2·18248/(3·1.945) = 6255 psf (as Step 6).
+- **How verified:**
+  - origin/main vs branch, nine cases (ACI default; project fields; AASHTO full; tall wall + key + water + passive + k_h; f′c blank; column + q_s + β; AASHTO CT; triangular ACI; AASHTO rock with CT): `_R`, Export JSON, every localStorage key, the Report text and the tab text (SVG and the new block removed), and the DXF are **identical**. The Report's only change is the ACI bearing figure.
+  - Every option of every case rendered with 0 console errors.
+  - Measured at 1400: footing across = up = stem width = scale bar 46.88 px/ft, smallest text 11 px. At 390 (620 px, scrolls): 38.24 px/ft, 9 px. Report figure about 670 px wide.
+  - Screenshots looked at: default; AASHTO Strength I / Ia; triangular; resultant outside the base; Report.
+  - Tests: see the PR.
+- **Other copies:** none.
+- **Decisions (pending engineer review):**
+  - The selector shows one combination at a time, with the governing one as default.
+  - AASHTO soil bearing is drawn as the uniform Meyerhof block over B′ centred on the resultant (what the check uses). The footing-design trapezoids are separate options.
+  - The service distribution in AASHTO mode is listed as reference only.
+  - The Plotly chart is kept as is below the new diagram.
