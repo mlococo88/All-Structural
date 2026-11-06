@@ -10,6 +10,7 @@
 //   4. card 2.6 renders (the loads, or the "no governing combination" message);
 //   5. the Report renders (no "Report error") and states the bearing result and a reason; the other checks are in it;
 //   6. the Stability tab still shows overturning and sliding.
+// SFNB-2 (same day): a combination with D/C = ∞ (zero capacity) governs bearing as FAIL, with the reason on the chip.
 // Also: the default project has no banner and Bearing PASS; a renderer made to throw marks its tab "Out of date" (and only that
 // tab), logs to the console, and the banner goes at the next good render.
 //   node tests/smoke/spread-footing-nobear.mjs [--file <file or git ref>] [--shots <dir>]
@@ -39,6 +40,8 @@ const CASES = [
   ['case direct soil q_a = 0', "state.soil.mode='direct';state.soil.qa=0;"],
   ['case D.M_x = 5000, service combination 1 picked', 'state.peds[0].loads.D.Mx=5000;', 'SEL.asd=0;'],
   ['case D.M_x = 5000, LRFD combination 1 picked', 'state.peds[0].loads.D.Mx=5000;', 'SEL.asdLr=0;'],
+  // SFNB-2: a combination with D/C = ∞ governs (H > V with c = 0: i_q = 0); before, it was left out and Bearing read PASS 0.91
+  ['case B = L = 18, shear couple off, Wx.V_x = 250 k per pedestal (0.6D + 0.6Wx: H 300 > V 270.2)', "state.stab.shearCouple='off';state.geom.B=18;state.geom.L=18;state.peds.forEach(p=>{p.loads.Wx.Vx=250;});", '', 'Infinity'],
 ];
 
 const o = await openPage(SRC.file, {});
@@ -73,7 +76,7 @@ await apply('');
   check(!rp.err && rp.doc && rp.katex === 0, 'default: Report did not render cleanly');
   check(o.errs.length === 0, 'default: console errors ' + JSON.stringify(o.errs)); }
 
-for (const [name, src, sel] of CASES) {
+for (const [name, src, sel, dcr] of CASES) {
   o.errs.length = 0;
   await apply(src, sel);
   const s = await read(), b = s.chips.find(c => c.n === 'Bearing (service)'), rp = await report();
@@ -81,6 +84,7 @@ for (const [name, src, sel] of CASES) {
   check(o.errs.length === 0, name + ': console errors ' + JSON.stringify(o.errs));
   check(s.ood === 0 && s.red === 0, name + ': an Out of date banner is shown');
   check(b && /fail/.test(b.s), name + ': Bearing chip not FAIL');
+  if (dcr) check(s.govDCR === dcr && /∞/.test(b.v) && WHY.test(b.v), name + ': governing D/C ' + s.govDCR + ', chip "' + (b && b.v) + '" (expected ' + dcr + ' with the reason)');
   check(/FAIL/.test(s.bearing) && WHY.test(s.bearing), name + ': Bearing tab gives no FAIL with a reason');
   check(s.ped.length > 40 && !/Cannot read/.test(s.ped), name + ': card 2.6 empty');
   check(/Overturning/.test(s.stab) && /Sliding/.test(s.stab), name + ': Stability tab missing overturning / sliding');

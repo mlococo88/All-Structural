@@ -6133,3 +6133,46 @@ index 50f3837..c2d5000 100644
 - **Saved data:** none (no key, field or format change).
 - **Other copies:** none.
 - **Open item (engineer):** when SOME combinations are off the footing and others have a finite D/C, the governing bearing check uses the latter (PASS possible); the off-footing combinations are errors in the warnings and fail the Overturning and Contact chips. Not changed; confirm this is intended.
+
+## 2026-11-06 — PR: claude/sf-inf-dcr (SFNB-2: a service combination with bearing D/C = ∞ (zero or failed bearing capacity) is included and governs bearing as FAIL; CALCULATION CHANGE, pass / fail logic; unchanged when every D/C is finite)
+
+- **Why (engineer decision 2, 2026-11-06):** `computeAll` kept only finite D/Cs for the governing bearing combination (`asd.filter(a=>a.DCR!==null&&isFinite(a.DCR))`). A combination with D/C = ∞ was silently left out. That happens with Vesić i_q = 0 when H ≥ V + A′c/tanφ (with c = 0, H ≥ V), with a failed capacity calculation, or with q_a ≤ 0 (direct). Example: case mode, shear couple off, B = L = 18 ft, Wx.V_x = 250 k per pedestal. Here 0.6D ± 0.6Wx has H = 300 > V = 270.2 and shows D/C ∞ in table 2.3, yet the dashboard read Bearing (service) PASS 0.91 with no bearing warning. Unconservative.
+- **Where / exact code (`Spread Footing.html`):**
+  - `computeAll`, anchor `/* SFNB-2 (2026-11-06, engineer; CALCULATION CHANGE)`:
+    - before: `const valid=asd.filter(a=>a.DCR!==null&&isFinite(a.DCR));`
+    - after: `const valid=asd.filter(a=>a.DCR!==null&&!isNaN(a.DCR));`
+    
+    `govBear` is still the largest D/C (`reduce`, the first ∞ when several), so an ∞ row governs. Rows with no D/C (resultant off the footing, net load not downward: `DCR` null) are still not candidates (SFNB-1 handles "none").
+  - `computeAll`, after the unstable-combination errors:
+    ```js
+    asd.filter(a=>a.DCR===Infinity).forEach(a=>W.push({lvl:'err',design:true,msg:'Bearing FAIL, combination "'+a.cb.name+'": '+sfdBearWhy(a)+' — bearing D/C = ∞.'}));
+    ```
+    It adds one error per ∞ combination, naming it with its reason (`sfdBearWhy`, SFNB-1). `design:true` keeps it out of the input-validation count.
+  - Display:
+    - Dashboard chip: `+(R.govBear.DCR===Infinity?': '+sfEsc(sfdBearWhy(R.govBear)):'')`, e.g. "DCR = ∞ — 0.6D + 0.6(+Wx): zero bearing capacity: H = 300.00 kip ≥ V = 270.22 kip, inclination factor i_q = 0 (Vesić)".
+    - Bearing tab: card 3.1 gets an errbox "Bearing: FAIL, D/C = ∞. <reason>. Worked in 3.3". Card 3.3 (Vesić and direct) gets an errbox "D/C = ∞ (FAIL): <reason>", and the Vesić "capacity cannot be computed" box adds "D/C = ∞ (FAIL)".
+    - Plot 2.4: an ∞ D/C is drawn as a red bar at max(1.5, 1.1 × the largest finite D/C), labelled ∞. It was a zero-height bar.
+    - Report: in the DCR step `value:G.DCR===Infinity?'∞':G.DCR` (SharedSteps printed a non-finite number as "—"). S-qa gets a warn note "Bearing: FAIL, D/C = ∞ (<combination>): <reason>.", and stands as that note alone when the Vesić capacity failed. "Bearing, every combination" gets one note per ∞ row.
+    - Table 2.3 already showed ∞; the governing row is now that one (bold).
+- **Governing provision:** Vesić general bearing-capacity equation with load inclination factors, as AASHTO LRFD 10th Ed. (2024) Art. 10.6.3.1.2a (i_q = (1 − H/(V + A′c cotφ))^m; at H ≥ V + A′c cotφ the base is 0, so i_q = i_γ = 0). Service check per ASCE 7-16 §2.4.1. Direct: q ≤ q_a. No formula or factor changed: only which combinations take part in the governing (pass / fail) selection.
+- **Check case 1 (B = L = 18 ft, shear couple off, case mode, Vesić default soil φ = 32°, c = 0, FS = 3, Wx.V_x = 250 k on each of the two pedestals):**
+  - **Before:** governing "D + 0.6(+Wx)", PASS, DCR 0.911.
+    - H = 0.6·(250 + 250) = 300 k; V = 450.36 k; e_x = 0.200 ft.
+    - B′ = 18 − 2·0.200 = 17.600, L′ = 18, A′ = 316.81 ft²; m = 1.506.
+    - i_q = (1 − 300/450.36)^1.506 = 0.3339^1.506 = 0.192; q_ult = 0 + 3.436 + 1.244 = 4.680 ksf; q_allow = 4.680/3 = 1.560 ksf.
+    - q_eff = 450.36/316.81 = 1.422 ksf; DCR = 1.422/1.560 = 0.911.
+    - 0.6D ± 0.6Wx (D/C ∞) left out; no bearing warning.
+  - **After:** governing "0.6D + 0.6(+Wx)", FAIL, DCR ∞.
+    - H = 300 k; V = 0.6·450.36 = 270.22 k; c = 0, so 1 − H/V = 1 − 300/270.22 = −0.110 → 0; i_q = i_γ = 0.
+    - q_ult = 0 + 0 + 0 = 0; q_allow = 0.
+    - q_eff = 270.22/316.81 = 0.853 ksf; DCR = 0.853/0 = ∞.
+    - Two errors (0.6D ± 0.6Wx), and the i_q < 0.30 warning now applies to the governing combination.
+- **Check case 2 (direct factored mode, default project, Ped 1 V_x = 648.9 k; Ped 2 V_x = 8 k):** H = 656.9 k.
+  - Dead ×1.2: V = 655.93 k, e_x = 4.845 ft, B′ = 0.310, L′ = 8, A′ = 2.478 ft², q_eff = 264.69 ksf; i_q = 0 (H > V), q_allow = 0.
+  - Dead ×0.9: V = 642.45 k; i_q = 0.
+  - **Before (SFNB-1):** no governing combination; Bearing FAIL "no bearing solution…: zero bearing capacity: H = 656.90 kip ≥ V = 655.93 kip, i_q = 0" (before SFNB-1 the page threw).
+  - **After:** governing "Direct LRFD (dead ×1.2)", DCR ∞, FAIL, with the same reason; two errors.
+- **Cases that move:** only those with an ∞ D/C. The SF harness (10 cases: def, rev, sfe, sfe5, dir, sfe9, revEx, thin, revHook, edgeHook) has none. origin/main vs branch: `R`, `P2` 0 differences, dashboard and Report text identical, 0 console / KaTeX errors. The smoke cases that move: direct V_x = 660 (now governs ∞), case direct soil q_a = 0 (now governs ∞, "D", with 10 errors), B = L = 18 above.
+- **How verified:** the SF harness as above; `tests/smoke/spread-footing-nobear.mjs` (case B = L = 18 added: governing D/C ∞ with the reason on the chip); check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser. Screenshots of the dashboard / Bearing tab, table 2.3 and the Report S-qa checked.
+- **Saved data:** none.
+- **Other copies:** none.
