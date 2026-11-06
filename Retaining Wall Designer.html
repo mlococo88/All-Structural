@@ -773,7 +773,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--blue-600); box-s
 #rwDashCol { display: none; }
 @media print { #rwDashCol, #rwDashBox { display: none !important; } }
 /* RWTS (2026-11-06): drawings to scale keep a minimum on-screen width so their labels stay readable (≥ 9 px); narrower windows scroll the drawing sideways */
-.rw-dwg-wrap { overflow-x: auto; }
+.rw-dwg-wrap { overflow-x: auto; max-width: 100%; }
+.tab-panel [style*="grid-template-columns:1fr 330px"] > * { min-width: 0; }   /* lets the drawing's card scroll instead of widening the page */
 .rw-dwg-wrap > svg.rw-dwg { min-width: 620px; }
 @media print { .rw-dwg-wrap > svg.rw-dwg { min-width: 0; } }
 .status-bar { display: block; min-height: 0; padding: 4px 16px 0; }
