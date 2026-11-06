@@ -2171,7 +2171,7 @@ function renderStatus(r) {
   - The service distribution in AASHTO mode is listed as reference only.
   - The Plotly chart is kept as is below the new diagram.
 
-## 2026-11-06 — PR: claude/rw-3d-labels (RW3L) — 3D view: load arrows with value labels, a load case / combination selector, a title with the sign convention   [display only; no result change]
+## 2026-11-06 — PR: claude/rw-3d-labels (PR #933: https://github.com/mlococo88/All-Structural/pull/933) (RW3L) — 3D view: load arrows with value labels, a load case / combination selector, a title with the sign convention   [display only; no result change]
 - **Why:** engineer-approved 2026-11-06 (Phase 3 task C, review PR 3b; as Spread Footing SF3L #765). Before, the 3D view showed pressure prisms only: no load resultants, no values, no selector. Its bearing block was the service trapezoid over the full B, also when the resultant was outside the middle third.
 - **What:**
   - **Selector "Show"** above the view (`#c3d-sel`, optgroups):
