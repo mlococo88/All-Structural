@@ -1922,3 +1922,55 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **How verified:** origin/main (after #924) vs branch, five cases (ACI default; project fields; AASHTO variable height + barrier + collision + interface shear; tall wall + key + water + passive + k_h; f′c blank): `window._R`, Export JSON, every localStorage key, Report text, the result tabs' text and the four sheets' DXF all identical; 0 console errors. A click on AASHTO in the card sets `#design_basis`; Print prints the Report once. Tests: check-syntax, phone-layout rwall 390 / 768, project-library retwall, standard-save, github-sync-tools retwall, home-projects retwall, dxf-print-sheets rw: all pass. Screenshots 1400 / 390 px looked at.
 - **Other copies:** none.
+
+## 2026-11-06 — PR: claude/rw-check-summary (RWDC) — check summary panel replaces the sideways-scrolling check-chip strip   [display only; no result change]
+- **Why:** engineer-approved 2026-11-06 (review `rwreview`, Phase 1 item 3): RW's strip of check chips scrolled sideways and was cut off at 1400 px ("Stem Hoo…") with no D/C. Replaced by the check summary panel of Spread Footing (SFDC #737 / SFDF #740), Light Pole (LPDC #747) and Concrete Beam Capacity (#788).
+- **Where:**
+  - HTML: `<div class="app" id="app">` gains a first child `<aside id="rwDashCol" aria-label="Check summary"></aside>` (the left column at 1500 px and wider); `<div class="status-bar" id="status-bar">` now holds `<div id="rwDashBox">` (head: `#rwDashTgl` Hide / Show checks, `#rwDashTtl` "Check summary", `#rwDashCnt` counts; list `#rwDash`) instead of the "Calculating…" status item;
+  - CSS: block `/* RWDC (2026-11-06): check summary panel … */` after the RWHP block (`.rwdCh` rows, `.rwdMsg`, the ≥ 1500 px column, collapsed strip); not printed;
+  - JS: `renderStatus(r)` (anchor `function renderStatus(r) {`) — before:
+```js
+function renderStatus(r) {
+  const sb = document.getElementById('status-bar');
+  if (window.syncHeaderControls) syncHeaderControls();
+  if (window.refreshInputTabs) refreshInputTabs();
+  if (r.fatal) {
+    sb.innerHTML = `<div class="verdict fail"><span class="vd-ico" aria-hidden="true">!</span>Inputs need attention</div>
+      <div class="chips">${r.errors.map(e => `<span class="chip fail"><b aria-hidden="true">✕</b>${e}</span>`).join('')}</div>`;
+    return;
+  }
+  const cs = Object.values(r.checks);
+  const nFail = cs.filter(c => !c.ok).length;
+  sb.innerHTML = `
+    <div class="verdict ${nFail ? 'fail' : 'pass'}">
+      <span class="vd-ico" aria-hidden="true">${nFail ? '✕' : '✓'}</span>
+      ${nFail ? `${nFail} of ${cs.length} checks fail` : `All ${cs.length} checks pass`}
+    </div>
+    <div class="chips">${cs.map(c => `
+      <span class="chip ${c.ok ? 'pass' : 'fail'}"${c.val ? ` title="${c.label}: ${c.val}"` : ''}>
+        <b aria-hidden="true">${c.ok ? '✓' : '✕'}</b>${c.label}${c.val ? `<em>${c.val}</em>` : ''}
+      </span>`).join('')}
+    </div>`;
+}
+```
+    after:
+```js
+function renderStatus(r) {
+  if (window.syncHeaderControls) syncHeaderControls();
+  if (window.refreshInputTabs) refreshInputTabs();
+  /* RWDC (2026-11-06): the sideways-scrolling strip of check chips is replaced by the check summary panel (rwDashRender, built
+     from r.checks and rwResultRows(r); no new calculation) */
+  if (typeof rwDashRender === 'function') rwDashRender(r);
+}
+```
+  - JS: new script block `/* CHECK SUMMARY PANEL (RWDC, 2026-11-06 …` before the UI-shell script: `RWDC` (key, media query, open state), `RWDC_RPT`, `rwDashDC`, `rwDashGo`, `rwDashWhere`, `rwDashItems(r)`, `rwDashRender(r)`, `rwDashPlace()`, `rwDashColl(v, save)`.
+- **Rows:** one per entry of `r.checks`, in the same order as the Report's summary table (§1.1): name (`label`), short value (`D/C x.xx` from `rwResultRows(r)[i].dc`, formatted `f(dc, 2)`, ∞ when infinite; where a check fails with its ratio within 1.0 or with no ratio, the failing condition instead: the row's note, e.g. "section over-stressed", or the check's value), status PASS / FAIL (`checks[k].ok`). ▸ opens a row: the value (`val`), the D/C and note, the reference (`rwResultRows` basis, tags removed) and "→ tab · card". FAIL rows start open. A click (or Enter / Space) opens the card where the check is worked (`rwGoto(card)`, the D11 "Worked in" links, `RW_CHECK_CARD`); ACI crack control (worked only in the Report) opens the Report tab at its step (`RWRP.api.jump('crk/stem.dc' | 'crk/heel.dc' | 'crk/toe.dc')`, again after the Report's chart images are in). Input errors (`r.fatal`): "Input error: no results. Correct the inputs:" with the error list and an "input error" count.
+- **Layout:** below 1500 px the panel sits above the output tabs (rows in a grid, 250 px minimum); at 1500 px and wider it is a 292 px left column that scrolls on its own («/» shrinks it to a 42 px strip). Hide checks / Show checks collapses it.
+- **Saved data (§5):** new per-browser UI key `retaincalcpro.dashCollapsed.v1` ('1' collapsed, '0' open; written only when the toggle is clicked; not in the project, the autosave or Export JSON). No existing key or format changed.
+- **Kept:** the Overview "Wall section works / governing D/C" card (unchanged); the Report; the D11 links. Removed: only the strip's verdict + chips markup (the CSS rules `.verdict`, `.chips`, `.chip` remain, unused).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). Every value shown is read from `r.checks` / `rwResultRows(r)`.
+- **How verified:**
+  - origin/main (after #925) vs branch, five cases (ACI default; project fields; AASHTO variable height + barrier + collision + interface shear; tall wall + key + water + passive + k_h; f′c blank): `window._R`, Export JSON, every localStorage key on load and after the edit, Report text, the result tabs' text and the four sheets' DXF **identical**; 0 console errors;
+  - the panel against the Report's summary table, five cases (ACI, AASHTO full, water/key, tall ACI wall with 7 FAIL, tall AASHTO wall with 8 FAIL): every row's name, D/C and PASS / FAIL equal;
+  - every row's click lands on its card (ACI and AASHTO); the crack-control rows open the Report at the step; the toggle writes `retaincalcpro.dashCollapsed.v1`; screenshots at 1400, 1700 and 390 px (expanded, collapsed, FAIL rows, input error) looked at.
+- **Other copies:** none.
