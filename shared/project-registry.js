@@ -109,10 +109,37 @@
   }
   TOOLS.unshift({ tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)', name: 'Steel Bridge Design (new app)', href: 'apps/steel-bridge/index.html',
     key: 'sbd2.lib.index', toFile: t => t, view: sbd2View });   // card order: before Moving Load Generator; its own list (items by id): the file is the stored item text (= Export JSON)
-  // card order: first (GirderDetail's card comes before the new app's). toFile = the tool's own (v = its SBD_V, 1; tests/smoke/home-sync.mjs
-  // fails if they differ): the Export JSON format of a saved project (its modules' part; no pl / st parts)
+  /* sbdPairView(storage) (STDS-G, 2026-11-06): Steel Bridge Design's saved projects. One project = the modules' part in
+     girderdetail_projects_v1 and Preliminary sizing's part in plateline_projects_v1, under the same name (both keys and formats as
+     before). By name, as the tool's own store (Steel Bridge Design.html sbdPairStore) sees them: item = { gd?: <first list's item>,
+     pl?: <second list's item> } (only the parts that exist). Reads only. */
+  function sbdPairView(storage) {
+    const G = 'girderdetail_projects_v1', L = 'plateline_projects_v1', own = Object.prototype.hasOwnProperty;
+    const raw = k => { try { return storage ? storage.getItem(k) : null; } catch (e) { return null; } };
+    function one(k) {
+      let t = null; try { t = storage ? storage.getItem(k) : null; } catch (e) { return { ok: false, error: 'storage', map: {} }; }
+      if (t == null || t === '') return { ok: true, map: {} };
+      try { const m = JSON.parse(t); if (m && typeof m === 'object' && !Array.isArray(m)) return { ok: true, map: m }; } catch (e) { /* below */ }
+      return { ok: false, error: 'unreadable', map: {} };
+    }
+    function read() { const a = one(G), b = one(L); if (!a.ok || !b.ok) return { ok: false, error: !a.ok ? a.error : b.error, map: {} };
+      const map = {}; Object.keys(a.map).forEach(n => { map[n] = { gd: a.map[n] }; }); Object.keys(b.map).forEach(n => { if (!own.call(map, n)) map[n] = {}; map[n].pl = b.map[n]; });
+      return { ok: true, map }; }
+    const item = n => { const m = read().map; return own.call(m, n) ? m[n] : undefined; };
+    const len = v => { if (v === undefined) return 0; try { return JSON.stringify(v).length; } catch (e) { return 0; } };
+    const no = () => ({ ok: false, error: 'readonly', message: 'Open Steel Bridge Design to change its saved projects.' });
+    return { key: G, keys: () => [G, L], read,
+      list: () => { const m = read().map; return Object.keys(m).map(name => ({ name, saved: null, size: len(m[name].gd) + len(m[name].pl) }))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })); },
+      has: n => own.call(read().map, n), item, get: n => { const i = item(n); return i === undefined ? null : i; },
+      save: no, duplicate: no, rename: no, remove: no, stamp: () => raw(G) + '\u0000' + raw(L) };
+  }
+  // card order: first (GirderDetail's card comes before the new app's). toFile = the tool's own sbdPairFile (v = its SBD_V, 1;
+  // tests/smoke/home-sync.mjs fails if they differ): { app, v, name, data (the modules' part, when saved), pl (Preliminary sizing's
+  // part as its own file { app: 'PlateLine', v: 1, name, data }, when saved) }; a project with the modules' part only gives the GHS2 file
   TOOLS.unshift({ tool: 'steel-bridge-design', label: 'Steel Bridge Design', name: 'Steel Bridge Design (GirderDetail)', href: 'Steel%20Bridge%20Design.html',
-    key: 'girderdetail_projects_v1', space: 2, toFile: (i, n) => ({ app: 'SteelBridgeDesign', v: 1, name: n, data: i }) });
+    key: 'girderdetail_projects_v1', space: 2, view: sbdPairView,
+    toFile: (i, n) => { const f = { app: 'SteelBridgeDesign', v: 1, name: n }; if (i.gd !== undefined) f.data = i.gd; if (i.pl !== undefined) f.pl = { app: 'PlateLine', v: 1, name: n, data: i.pl }; return f; } });
   /* pileView(storage) (STDS-P, 2026-11-06): Pile Designer's list. Its projects are in IndexedDB (micropile_lrfd_db, which another page
      must not open: opening it before the tool has created it would make it empty); the tool writes a list of names and times to
      micropile_lrfd_index_v1 ({ v: 1, items: [{ id, name, updatedAt, size }] }) after each change, and this view reads that. By name, as
