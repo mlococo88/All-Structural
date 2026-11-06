@@ -2308,3 +2308,41 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **How verified:** main vs branch after the same input change: results (`LPP_LAST`, including every cable reaction and the resultant) identical, localStorage keys identical (`lpp_session_v1` byte-identical), Export JSON text identical apart from its `exported` time stamp (2,687 chars), Report text identical apart from its print time (77,966 chars), no console errors beyond main. Probe: save → saved; change → unsaved; Ctrl+S saves without a dialog; every output and input tab leaves "saved"; Open, reload: saved; New → defaults, not saved. `project-library --tool lightpole` ALL PASS; `lightpole-anchor-handoff`, `lightpole-projection`: ALL PASS; `lightpole-signviews`: the same 4 failures as on main (ltsNoBroms case, not touched here); engine `lightpole*`, `project-registry`, `github-sync`, `projects`: 74 / 74; `github-sync-tools --tool lightpole`, `standard-save` (8 / 8), `github-sync` (13 / 13), `home-projects`, `home-sync`: pass; `phone-layout --tool lp` (390, 768) pass; `check-syntax` pass. 390 px: page 390 / 390, dialog 355 / 355; screenshots looked at.
 - **Open item:** `lightpole-signviews.mjs` ltsNoBroms (no Broms model → the views say so; 3D draws the panel) fails on main as well; not investigated here.
+
+## 2026-11-06 — PR: claude/lightpole-signviews-test (PR #847: https://github.com/mlococo88/All-Structural/pull/847) (LPSV-T: the sign-views smoke test's `ltsNoBroms` case brought up to date with LTS-L2 #744; test only, no tool change)
+- **Problem:** `node tests/smoke/lightpole-signviews.mjs` failed 4 checks on main (case `ltsNoBroms`: default project, LRFDLTS mode, two-post sign, Broms soil model "Not evaluated"; 2 checks × 1280 / 390 px). Open item of #843.
+  - "no Broms model → the views say so": expected the views' error to mention Broms; got "no LRFDLTS results yet (correct any input errors first)."
+  - "3D still draws the panel and posts": expected > 50 sampled non-white px; got undefined (no canvas: the 3D card shows a "No 3D view" message).
+- **Cause:** the test was written with LPSV (#663), when a missing Broms model still let the LTS run show its member checks, and the views drew the panel and posts with "select the Broms soil model". LTS-L2 (#744, commit df05fdd, 2026-11-03) made a missing Broms model an LTS input error: the LTS run is blocked (`ltsCalc()` gets `inp = null`, `lppLtsLast` stays null), the output tabs are hidden behind the input error box, and the 3D and Drawings say there are no results. That change was intended and recorded (#744 check case: "the input error box shows the Broms message and no LTS results are shown"); the test was not updated. Bisected: the case passes at df05fdd^ and fails at df05fdd.
+- **Where (test only):** `tests/smoke/lightpole-signviews.mjs`, anchor `else if (name === 'ltsNoBroms')`:
+  - Before: `check(/Broms/.test(r.err || ''), …the views say so…); check(r.px > 50, …3D still draws the panel and posts…);`
+  - After: the input error box (`#lppInErr`) names "Broms soil model" and the output column has `.lpp-blocked`; `lpsvData()` returns "no LRFDLTS results…", `#lp3dHost` starts "No 3D view" and has no canvas; and (after the existing Drawings-tab step) `#lpdHost` starts "No drawings" with no sheet SVG.
+- **Governing provision:** none changed. (LTS-L2: LRFDLTS 1st Ed. (2015) Art. 13.6.1.1, Broms is the LTS embedment method.)
+- **Check case:** default project, LRFDLTS, sign, two-post, Broms "Not evaluated": the page shows "Input error — results are not shown until this is fixed: Broms soil model (Shaft & soil): choose Cohesive or Cohesionless…"; 3D card "No 3D view: no LRFDLTS results yet (correct any input errors first)."; Drawings "No drawings: correct the input errors."
+- **How verified:** `node tests/smoke/lightpole-signviews.mjs`: ALL PASS (1280 and 390 px). The tool file is not changed, so no result, cable value or saved data can change.
+- **Open item (not changed):** the `lpsvData()` branch "select the Broms soil model (Shaft & soil inputs)…" can no longer be reached by a missing model (LTS-L2) or missing parameters (LTS-L3); it remains as a guard if `bromsEmbedment()` returns no result.
+
+## 2026-11-06 — PR: claude/lightpole-print (PR #849: https://github.com/mlococo88/All-Structural/pull/849) (LPHP: Print in the header, the standard header; display only, no result change)
+- **Engineer:** the standard header after #837–#843: chip · Undo · Redo · Save (Ctrl+S) · Saved projects… · **Print**. The Light Pole header had no Print (#843: "Print stays on the Report tab").
+- **Where:** PLIB / STDS block, after `[pb.el.chip,pb.el.save,pb.el.lib].forEach(b=>b.classList.add('pbtn'));` (anchor `/* LPHP (2026-11-06): Print, last in the header`). Before: nothing. After:
+  ```js
+  const bp=B('Print','Print / PDF the calculation report (the Report tab), from any tab'); bp.id='lppHdrPrint';
+  bp.onclick=()=>{
+    const on=document.querySelector('#tabBar button.on'), back=on?on.dataset.tab:null;
+    if(back!=='report') switchTab('report',true);
+    const rb=Array.from(document.querySelectorAll('#page-report [data-rpact="print"]')).find(x=>x.offsetParent!==null);
+    if(rb){ if(back&&back!=='report') lppPrintBack=back; rb.click(); return; }
+    if(back&&back!=='report') switchTab(back,true);
+    window.print();
+  };
+  if(ref) ref.append(bp);
+  ```
+- **What it does:** exactly the Report tab's own Print, the `data-rpact="print"` toolbar button of the report shown in the active code mode (IBC `#lprHost` or LRFDLTS `#ltsRptHost`), which calls `SharedReport.print(doc)` (shared/report.js). The report is built only when its tab is shown (`switchTab('report')` → `lprRender()` / `ltsReportRender()`), so from another tab the button opens the Report tab first, without remembering it (`noSave`). After printing, the existing `afterprint` handler (LPRX) brings back the tab shown before (`lppPrintBack`), as Ctrl+P does. With input errors there is no report: the page prints as shown, as Ctrl+P and "Export PDF / Print" do. This is the same approach as Gusset Plate Rating (`gprPrintAny`) and Spread Footing (`#btnPrint`): the Report prints from any tab.
+- **Governing provision:** none (display only).
+- **Check case / how verified** (headless Chromium, `window.print` stubbed, 1280 and 390 px):
+  - Cases: IBC pole; IBC two-post sign; LRFDLTS monopost sign (cohesive); LRFDLTS pole; LRFDLTS sign without a Broms model (input error).
+  - Header Print from the Geometry tab: `window.print` called once, with `rp-printing` on. The `#rp-print` content is identical to that of the Report tab's own Print button, apart from the time stamp. The Report tab is shown during the print and Geometry comes back after `afterprint`. With the input error, the page prints as shown and the tab does not change.
+  - Header order: chip · Undo · Redo · Save Ctrl+S · Saved projects… · Print. At 390 px: no sideways scroll (390 / 390).
+  - `node tests/lightpole-compare.mjs --a origin/main --jobs 2`: ALL CASES IDENTICAL (results, cable values, text, drawings; 0 console errors).
+  - Passed: `lightpole-signviews`, `lightpole-projection`, `lightpole-anchor-handoff`, `project-library --tool lightpole`, `phone-layout --tool lp`, `dxf-print-sheets --tool lp`, `standard-save`, `node tests/engine/run.mjs lightpole` and `check-syntax`.
+- **Saved data:** no change (no new key; the Report tab opened by Print is not stored as the remembered tab).

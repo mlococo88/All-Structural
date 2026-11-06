@@ -235,7 +235,7 @@ a.wkA:hover{text-decoration:underline}
 <body>
 <header>
   <div class="brand"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 6h18M3 12h18M3 18h18"/></svg>Beam Pro<a class="alltools" href="tools.html" target="_top">&larr; All tools</a></div>
-  <a id="hdrProj" href="#" title="Project name: edit it in the Project card (sidebar)">Project: <span id="hdrProjTxt"></span></a>
+  <a id="hdrProj" hidden href="#" title="Project name: edit it in the Project card (sidebar)">Project: <span id="hdrProjTxt"></span></a>
   <div style="display:flex;align-items:center;gap:6px">
     <div class="upd" id="upd"><div class="spin"></div>Updating…</div>
     <button class="btn btn-s" id="bUndo" style="font-size:12px;padding:4px 9px" title="Undo (Ctrl+Z)" disabled>↩</button>
@@ -303,19 +303,21 @@ a.wkA:hover{text-decoration:underline}
 
   <!-- SMHD (2026-11-05): moved here from the header -->
   <div id="smdPrj">
+    <div class="slbl">Save and open</div><!-- STDS (2026-11-06): the standard "Save and open" card (shared/projects-ui.js projectBar, SMPL.pb); it replaces "Saved analyses (this browser)" and takes the Project file buttons -->
+    <div class="card" id="smdSaveCard" style="margin-bottom:10px"></div>
     <div class="slbl">Project</div>
     <div class="card" style="display:flex;flex-direction:column;gap:9px">
       <div class="fg"><label class="lbl" for="projNm">Project name</label>
       <input id="projNm" type="text" placeholder="Project name…" value="">
-      <p class="hint">Printed on the Report and the diagrams; 💾 Save stores the analysis under this name (Ctrl+S).</p></div>
-      <div class="fg"><label class="lbl">Saved analyses (this browser)</label>
+      <p class="hint">Printed on the Report and the diagrams.</p></div>
+      <div hidden><!-- STDS: the old saved-analysis controls, kept hidden (their handlers are unchanged; no button shows them) --><div class="fg"><label class="lbl">Saved analyses (this browser)</label>
       <div class="prow">
         <select id="saveSel" style="font-size:11px;padding:4px 8px" title="Saved analyses (stored in this browser)">
           <option value="">📁 Saved…</option>
         </select>
         <button class="btn btn-p" id="bSv" style="font-size:11px;padding:4px 10px" title="Ctrl+S — save/update under the project name">💾 Save</button>
         <button class="btn btn-s" id="bDl2" style="font-size:11px;padding:4px 8px" title="Delete the saved analysis matching the project name">🗑</button>
-      </div></div>
+      </div></div></div>
       <div class="fg"><label class="lbl">Templates</label>
       <div class="prow">
         <select id="tplSel" style="font-size:11px;padding:4px 8px">
@@ -327,12 +329,10 @@ a.wkA:hover{text-decoration:underline}
           <option value="ff">Fixed-fixed beam</option>
         </select>
       </div></div>
-      <div class="fg"><label class="lbl">Project file (JSON)</label>
-      <div class="prow">
-        <button class="btn btn-s" id="bEx" style="font-size:11px;padding:4px 10px" title="Ctrl+E">⬇ Export</button>
-        <button class="btn btn-s" id="bIm" style="font-size:11px;padding:4px 10px">⬆ Import</button>
-        <input type="file" id="fIm" accept=".json" style="display:none">
-      </div></div>
+      <!-- STDS: "Project file (JSON)" (⬇ Export / ⬆ Import) moved into "Save and open" as Export JSON / Import JSON (same ids and handlers) -->
+      <button class="btn btn-s" id="bEx" style="font-size:11px;padding:4px 10px" title="Save the project as a .json file (Ctrl+E)">Export JSON</button>
+      <button class="btn btn-s" id="bIm" style="font-size:11px;padding:4px 10px" title="Open a .json project file of this tool">Import JSON</button>
+      <input type="file" id="fIm" accept=".json" style="display:none">
       <div class="fg"><label class="lbl">Shared project info</label>
       <div class="pshare">
         <button class="btn btn-s" type="button" onclick="bxUseProjectInfo()">Use shared project info</button>
@@ -1590,11 +1590,11 @@ g('bEx').onclick=()=>{
   const a=document.createElement('a');
   a.href='data:application/json;charset=utf-8,'+encodeURIComponent(JSON.stringify(data,null,1));
   a.download=(g('projNm').value||'beam-project')+'.json';a.click();};
-g('bIm').onclick=()=>g('fIm').click();
+g('bIm').onclick=()=>{if(SMPL&&SMPL.pb)SMPL.pb.importJSON();else g('fIm').click();};   /* STDS: asks first on unsaved changes */
 g('fIm').addEventListener('change',e=>{
   const f=e.target.files[0];if(!f)return;
   const rd=new FileReader();
-  rd.onload=()=>{try{applyProject(JSON.parse(rd.result));}catch(err){alert('Invalid project file');}};
+  rd.onload=()=>{try{applyProject(JSON.parse(rd.result));if(SMPL&&SMPL.pb)SMPL.pb.setCurrent(null);/* STDS: an imported file is not the open saved project */}catch(err){alert('Invalid project file');}};
   rd.readAsText(f);e.target.value='';});
 g('bPr').onclick=()=>{readIn();smrPrint();};   /* SMRX: prints the Report from either view */
 
@@ -1689,7 +1689,7 @@ const _ex=g('bEx').onclick;g('bEx').onclick=()=>{_ex();toast('Project exported')
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){e.preventDefault();undo();return;}
   if((e.ctrlKey||e.metaKey)&&(e.key.toLowerCase()==='y'||(e.shiftKey&&e.key.toLowerCase()==='z'))){e.preventDefault();redo();return;}
-  if((e.ctrlKey||e.metaKey)&&e.key==='s'){e.preventDefault();doSave();return;}
+  if((e.ctrlKey||e.metaKey)&&e.key==='s'){if(SMPL&&SMPL.pb)return;/* STDS: Ctrl+S is the standard Save (projectBar) */e.preventDefault();doSave();return;}
   if((e.ctrlKey||e.metaKey)&&e.key==='p'){e.preventDefault();g('bPr').click();return;}
   if((e.ctrlKey||e.metaKey)&&e.key==='e'){e.preventDefault();g('bEx').click();return;}
   const ae=document.activeElement;
@@ -1919,16 +1919,30 @@ function smdPlibInit(){
   if(!window.SharedProjects||!window.SharedProjectsUI||SMPL)return;
   let ST=null;try{ST=window.localStorage;}catch(e){}
   const store=SharedProjects.mapStore(ST,LSK,{unpack:i=>i&&i.d,time:i=>i&&i.t||null,sort:'saved'});
-  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'shear-moment-diagrams',label:'Shear and Moment Diagrams',space:1,toFile:i=>i.d,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return {t:Date.now(),d:j};}},
-   store,storage:ST,title:'Saved analyses (this browser)',
-    current:()=>{const n=g('projNm').value.trim();return n&&store.has(n)?n:null;},
+  /* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over smd_saves_v1 ({ name: { t, d: gatherProject() } },
+     unchanged). Replaces "Saved analyses (this browser)" (📁 Saved… drop-down, 💾 Save under the Project name, 🗑) and the PLIB Saved
+     projects… button. Save(name) = the old Save's write (saves[name] = { t, d: gatherProject() }); Open = applyProject (as before); New =
+     the page's default inputs (the autosave smd_auto_v1 cleared and the page reloaded; the tool had no New, only Templates). The open
+     name is kept in this page (Save no longer saves under the Project name field) and found again by content after a reload; a rename
+     of the open analysis still renames the Project name field when it equals the old name (as before). "Unsaved changes" compares
+     gatherProject() (as the old 💾 dirty mark did). Export JSON / Import JSON: #bEx / #bIm (were ⬇ Export / ⬆ Import). */
+  const $s=id=>g(id);
+  const pb=SharedProjectsUI.projectBar({store,storage:ST,label:'Shear and Moment Diagrams',id:'smdLibDlg',
+    getState:()=>gatherProject(),
+    save:n=>{const saves=getSaves();saves[n]={t:Date.now(),d:gatherProject()};if(!putSaves(saves))return{ok:false,message:'Browser storage is unavailable or full: use Export JSON to keep your work.'};refreshSaveList();updateDirty();toast(`Saved "${n}"`);return{ok:true};},
     open:n=>{const d=store.get(n);if(!d)return false;applyProject(JSON.parse(JSON.stringify(d)));toast(`Loaded "${n}"`);return true;},
-    renamed:(a,b)=>{if(g('projNm').value.trim()===a){g('projNm').value=b;readIn();autoSave();}},
-    changed:()=>{refreshSaveList();updateDirty();}});
-  const b=SharedProjectsUI.button('Saved projects…','The analyses saved in this browser: open, rename, duplicate, delete',{cls:'btn btn-s',style:'font-size:11px;padding:4px 8px;white-space:nowrap'});
-  b.addEventListener('click',()=>dlg.show());
-  g('bRedo').insertAdjacentElement('afterend',b);   /* SMHD: in the header, after Redo */
-  SMPL={store,dlg,b};
+    newProject:()=>{try{localStorage.removeItem(LSA);}catch(e){}location.reload();},
+    displayName:()=>$s('projNm').value.trim(),
+    exportFile:n=>{const nm=$s('projNm'),was=nm.value;if(n)nm.value=n;try{$s('bEx').click();}finally{nm.value=was;}},
+    importFile:()=>$s('fIm').click(),
+    fileButtons:[$s('bEx'),$s('bIm')],
+    header:$s('bUndo').parentNode,chipBefore:$s('bUndo'),headerBefore:$s('bPr'),card:$s('smdSaveCard'),
+    renamed:(a,b)=>{if($s('projNm').value.trim()===a){$s('projNm').value=b;readIn();autoSave();}},
+    changed:()=>{refreshSaveList();updateDirty();},
+    /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'shear-moment-diagrams',label:'Shear and Moment Diagrams',space:1,toFile:i=>i.d,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return {t:Date.now(),d:j};}}});
+  pb.el.card.querySelectorAll('button[data-sp]').forEach(x=>{x.classList.add('btn','btn-s');x.style.fontSize='11px';x.style.padding='4px 10px';});
+  [pb.el.chip,pb.el.save,pb.el.lib].forEach(x=>{x.classList.add('btn','btn-s');x.style.fontSize='11px';x.style.padding='4px 9px';});
+  SMPL={store,dlg:pb.dialog,b:pb.el.lib,pb};
 }
 smdPlibInit();
 

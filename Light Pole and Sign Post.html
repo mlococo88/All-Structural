@@ -8353,6 +8353,20 @@ function commitSave(name){
     header:ref, chipBefore:bu, card:$('lppSaveCard'),
     /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'light-pole-sign-post',label:'Light Pole and Sign Post',space:1,toFile:(i,n)=>({tool:'Light Pole and Sign Post',format:'lpp-project',version:1,name:n,state:i}),fromFile:j=>{const s=j&&j.format==='lpp-project'?j.state:j;if(!s||typeof s!=='object'||Array.isArray(s))throw new Error('not a Light Pole and Sign Post project file');return s;}} });
   [pb.el.chip,pb.el.save,pb.el.lib].forEach(b=>b.classList.add('pbtn'));
+  /* LPHP (2026-11-06): Print, last in the header (the standard header: chip · Undo · Redo · Save · Saved projects… · Print). It runs the
+     Report tab's own Print (shared/report.js print(doc), the toolbar button of the report shown in the active code mode). The report is
+     built when its tab is shown, so from another tab the Report tab opens first and the tab shown before comes back after printing
+     (lppPrintBack, as Ctrl+P, LPRX). With input errors there is no report: the page prints as shown, as Ctrl+P and Export PDF / Print. */
+  const bp=B('Print','Print / PDF the calculation report (the Report tab), from any tab'); bp.id='lppHdrPrint';
+  bp.onclick=()=>{
+    const on=document.querySelector('#tabBar button.on'), back=on?on.dataset.tab:null;
+    if(back!=='report') switchTab('report',true);
+    const rb=Array.from(document.querySelectorAll('#page-report [data-rpact="print"]')).find(x=>x.offsetParent!==null);
+    if(rb){ if(back&&back!=='report') lppPrintBack=back; rb.click(); return; }
+    if(back&&back!=='report') switchTab(back,true);
+    window.print();
+  };
+  if(ref) ref.append(bp);
   const dlg=pb.dialog;
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   window.LPPL={h,store,dlg,soon,pb};

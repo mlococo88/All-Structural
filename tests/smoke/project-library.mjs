@@ -68,7 +68,7 @@ export const TOOLS = {
     results: async p => { await p.waitForFunction(() => RES && RES.abs, null, { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(300); return p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(RES, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }); },
     change: p => bump(p, 'aside input[type=number]', 5),
     // main has no list: A's "save" writes nothing; B saves through the new list
-    save: async (p, name) => { await p.evaluate(n => { if (window.MLPL) window.MLPL.save(n); }, name); await p.waitForTimeout(300); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { if (window.MLPL) window.MLPL.save(n); }, name); await p.waitForTimeout(300); }   // STDS: the standard Save as (branch), the old Save (main)
   },
   timber: {
     file: 'Timber Beam Check.html', list: 'tbc_projects_v1', auto: 'tbc_autosave_v1',
@@ -121,7 +121,7 @@ export const TOOLS = {
       if (!(await p.evaluate(() => loads.length))) { await p.selectOption('#tplSel', '3s'); await p.waitForTimeout(1500); } },
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify({ tabR, nodeR, shD, moD, deD, env, crits, totL }, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '#spanTbl input[data-si]', 2),
-    save: async (p, name) => { await p.evaluate(n => { const i = document.getElementById('projNm'); i.value = n; i.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('bSv').click(); }, name); await p.waitForTimeout(400); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const i = document.getElementById('projNm'); i.value = n; i.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('bSv').click(); }, name); await p.waitForTimeout(400); }
   },
   bgeo: {
     // Bridge Geometry: its own library panel (Load / Rename / Duplicate / Delete); Duplicate is new (mapStore). The tool seeds five example
@@ -211,7 +211,7 @@ export const TOOLS = {
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(window._R, (k, v) => typeof v === 'function' ? undefined : (v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '#H, .sidebar input[type=number]', 1),
     view: p => tabView(p, '.tab-btn', 2, '.active'),
-    save: async (p, name) => { await p.evaluate(n => { const pn = document.getElementById('proj_name'); pn.value = n; document.getElementById('proj_save_btn').click(); }, name); await p.waitForTimeout(300); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const pn = document.getElementById('proj_name'); pn.value = n; document.getElementById('proj_save_btn').click(); }, name); await p.waitForTimeout(300); }   // STDS: the standard Save as (branch), the old Save (main)
   },
   gusset: {
     file: 'Gusset Plate Rating.html', list: 'gussetRating.projects.v1', auto: 'gussetRating.autosave.v1',
@@ -325,7 +325,7 @@ let L1 = await lsAll(p), M1 = JSON.parse(L1[T.list]);
 // T.renameSets: fields the tool's OWN rename writes into the item (Bridge Geometry: its existing Rename sets the item's "name"); left out of the rename checks
 const rn = o => { if (typeof o === 'string') o = JSON.parse(o); if (!T.renameSets || o == null) return JSON.stringify(o); const c = JSON.parse(typeof o === 'string' ? o : JSON.stringify(o)); T.renameSets.forEach(k => delete c[k]); return JSON.stringify(c); };
 ok(!('Job 1' in M1) && rn(M1['Job 1 renamed']) === rn(item('Job 1')), 'Rename: item moved unchanged' + (T.renameSets ? ' (except ' + T.renameSets.join(', ') + ', set by the tool\'s own Rename)' : ''));
-for (const k of Object.keys(L0)) if (k !== T.list && k !== T.auto) ok(L1[k] === L0[k], 'Rename left ' + k + ' unchanged');
+for (const k of Object.keys(L0)) if (k !== T.list && k !== T.auto && !/^bridgeSuite\.v1\.projectsUI\./.test(k)) ok(L1[k] === L0[k], 'Rename left ' + k + ' unchanged');   // START (2026-11-06): the start chooser's own recent list follows a rename
 await act('dup', 'Job 2', ['Job 2 copy']); M1 = JSON.parse((await lsAll(p))[T.list]);
 ok(JSON.stringify(M1['Job 2 copy']) === item('Job 2') && JSON.stringify(M1['Job 2']) === item('Job 2'), 'Duplicate: copy identical, original kept');
 await act('rename', 'Job 2 copy', ['Job 2', true]); M1 = JSON.parse((await lsAll(p))[T.list]);
