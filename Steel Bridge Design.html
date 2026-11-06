@@ -92,6 +92,7 @@ header { flex-wrap: wrap; height: auto; min-height: var(--header-h); row-gap: 6p
 /* GDHD (2026-11-06): one header row as in the other tools (chip · Save · Saved projects… · Print); the bridge-wide actions (Design all,
    Girder report, 3D view, Export DXF) after Suggest in the top bar, the owner next to the project title block */
 @media (min-width: 901px) { header { flex-wrap: nowrap; } header .brand { flex: 0 1 auto; } header .bx-all-tools, header .hdr-group { flex-shrink: 0; } }   /* the subtitle is cut (…) before the header wraps */
+.gd-hdr-proj .btn:disabled { opacity: .45; cursor: default; }   /* GDUR: Undo / Redo with nothing to undo / redo */
 .gd-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .gd-top .own-pill { margin-left: auto; }
 .gd-top .own-pill + .tb-sum { margin-left: 0; }
@@ -1261,7 +1262,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
   </div>
   <a class="bx-all-tools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
   <div class="hdr-spacer"></div>
-  <div class="hdr-group gd-hdr-proj" id="gd-hdr-proj"><button type="button" class="btn" id="btn-print" title="Print report: choose the sections, then print or save as PDF"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6V2.5h8V6M4 11.5H2.5v-5h11v5H12M4.5 9.5h7v4h-7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Print</span></button></div>
+  <div class="hdr-group gd-hdr-proj" id="gd-hdr-proj"><button type="button" class="btn" id="gd-undo" title="Undo the last change to the project (Ctrl+Z): the modules' inputs and Preliminary sizing" disabled>Undo</button><button type="button" class="btn" id="gd-redo" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" disabled>Redo</button><button type="button" class="btn" id="btn-print" title="Print report: choose the sections, then print or save as PDF"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6V2.5h8V6M4 11.5H2.5v-5h11v5H12M4.5 9.5h7v4h-7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Print</span></button></div>
 </header>
 <div class="gd-top" id="gd-top">
   <div class="gd-mode" role="radiogroup" aria-label="Working mode">
@@ -7845,7 +7846,7 @@ function undoGet() { try { return JSON.parse(localStorage.getItem(KEY_UNDO) || '
 function undoSet(u) { try { if (u) localStorage.setItem(KEY_UNDO, JSON.stringify(u)); else localStorage.removeItem(KEY_UNDO); } catch (e) {} renderUndo(); }
 function snapshotBefore(what) { undoSet({ data: clone(P), name: CUR_NAME, what, ts: Date.now(), state: 'applied' }); }
 function renderUndo() {
-  const bar = document.getElementById('undo-bar'); if (!bar) return; const u = undoGet(); if (!u) { bar.hidden = true; bar.innerHTML = ''; return; }
+  const bar = document.getElementById('undo-bar'); if (!bar) return; const u = undoGet(); if (!u || EMBED) { bar.hidden = true; bar.innerHTML = ''; return; }   // GDUR: embedded, the page's Undo / Redo (header, Ctrl+Z) covers Suggest and Alternatives (plateline_undo_v1 still written, unchanged)
   const t = new Date(u.ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
   bar.hidden = false;
   bar.innerHTML = u.state === 'applied'
@@ -21254,7 +21255,7 @@ const store = () => { try { return JSON.parse(localStorage.getItem(KEY_PR) || '{
 const putStore = s => { try { localStorage.setItem(KEY_PR, JSON.stringify(s)); return true; } catch (e) { return false; } };
 function flash(m, c = 'pass') { const el = $('#proj_msg'); if (!el) return; el.textContent = m; el.style.color = c === 'fail' ? 'var(--fail)' : 'var(--pass)'; clearTimeout(flash.t); flash.t = setTimeout(() => el.textContent = '', 3500); }
 function refreshList() { if (!$('#proj_list')) return;   /* STDS-G: no drop-down any more (the standard Saved projects dialog) */ const n = Object.keys(store()).sort(); $('#proj_list').innerHTML = n.length ? n.map(x => `<option ${x === CUR ? 'selected' : ''}>${esc(x)}</option>`).join('') : '<option value="">No saved projects</option>'; }
-function loadData(d, name) { P = deepMerge(GD_FULL(), d); gdXfMark(P, d); gdMigrateK(P); gdModeInit(P); GD_PLD = null; GD_SYNC.n = 0; GD_SYNC.held = false; bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); CUR = name || ''; fillInputs(); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); applyGdMode(); gdTbMigrate(); tbRender(); recompute(); autosave(); }   // GDM, GDT
+function loadData(d, name) { P = deepMerge(GD_FULL(), d); gdXfMark(P, d); gdMigrateK(P); gdModeInit(P); GD_PLD = null; GD_SYNC.n = 0; GD_SYNC.held = false; bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); CUR = name || ''; fillInputs(); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); applyGdMode(); gdTbMigrate(); tbRender(); recompute(); autosave(); gdUndoReset(); }   // GDM, GDT; GDUR: a project opened, imported or new starts the Undo history again
 function initProjects() {
   refreshList();
   /* STDS-G (2026-11-06): Open / Save / Save as… / Delete of this pane are the standard save controls (gdStdInit below) */
@@ -21263,6 +21264,7 @@ function initProjects() {
   $('#pb_file').onchange = ev => { const f = ev.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const j = JSON.parse(r.result); if (j.app === 'PlateLine-splices') { writeInbox(j); renderInbox(); flash('PlateLine data received; see Import from PlateLine.'); } else if (sbdProjectImport(j, f.name)) { /* SBD4: one project file, or a file of one part */ } else if (j.data && (j.data.sec || j.data.bs)) { loadData(j.data, ''); flash(`Imported ${f.name}.`); } else throw 0; } catch (e) { flash('That file is not a Steel Bridge Design, GirderDetail, Preliminary sizing (PlateLine) or ST-Girder project, or a PlateLine splice export.', 'fail'); } }; r.readAsText(f); ev.target.value = ''; };
   $('#pb_new').onclick = () => { if (confirm('Replace the current inputs with the built-in example?')) loadData(GD_FULL(), ''); };
   gdStdInit();   // STDS-G (was gdLibInit, GHS2)
+  gdUndoInit();   // GDUR
 }
 /* STDS-G (2026-11-06; the engineer-approved standard save, decisions of 2026-11-06): the standard save controls of shared/projects-ui.js
    (projectBar) for the whole page: header chip · Save (Ctrl+S) · Saved projects… (Print report stays where it is), the "Save and open"
@@ -21355,9 +21357,10 @@ function gdStdInit() {
       if (it.pl === undefined || miss) gdPlName(n, miss ? msg : '');   // its open name (sbdPlLoad sets it when it has a part) and the message
       flash(msg); return true; },
     deleted: n => { if (CUR === n) { named(''); gdPlName(''); } },
+    afterOpen: () => gdUndoReset(),   // GDUR: the history starts again at the opened project
     exportFile: n => SharedProjectsUI.download(String(n || P.meta.subject || 'steel_bridge_design').replace(/[^\w\-]+/g, '_') + '.json', JSON.stringify({ ...sbdProjectFile(), name: n || CUR || '' }, null, 2)),
     importFile: () => $('#pb_file').click(), fileButtons: [$('#pb_export'), $('#pb_import')],
-    header: $('#gd-hdr-proj'), headerBefore: $('#btn-print'), card: $('#gd-savecard'),   // GDHD: Print last
+    header: $('#gd-hdr-proj'), chipBefore: $('#gd-undo'), headerBefore: $('#btn-print'), card: $('#gd-savecard'),   // GDHD: Print last; GDUR: the chip before Undo
     note: '<p class="spNote">Each saved project holds the design modules and Preliminary sizing under one name; Open, Rename, Duplicate and Delete act on both (a project saved before 2026-11-06 may hold only one of them: opening it keeps the other part\u2019s inputs on screen). Open asks first when the project on screen has unsaved changes. Delete removes the browser copy (with Cloud sync on, it asks whether to delete the GitHub copy too). Export makes a .json file of one saved project.</p>',
     cloud: { tool: 'steel-bridge-design', label: 'Steel Bridge Design', space: 2, toFile: sbdPairFile,
       fromFile: j => { if (j.app === 'SteelBridgeDesign') { const m = sbdMigrate(j); if (!m) throw new Error('a newer Steel Bridge Design file than this copy reads'); const it = {};
@@ -21371,6 +21374,66 @@ function gdStdInit() {
   if (E.card) E.card.querySelectorAll('.spRow button').forEach(b => { b.classList.add('proj-btn'); if (b.classList.contains('spPri')) { b.classList.remove('spPri'); b.classList.add('proj-btn-primary'); } });
   if (fRow && fRow.classList.contains('proj-row') && !fRow.children.length) fRow.remove();   // the Export / Import JSON row, now in the card
 }
+/* GDUR (2026-11-06, engineer's request): page-wide Undo / Redo in the header (Undo · Redo after the chip, Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z, as in
+   the other tools; buttons and keys through shared/projects-ui.js undoRedo). One history for the modules' inputs (GirderDetail's P) and
+   Preliminary sizing (its frame's P): a step is the text of both, without view state (P.ui, the open module P.mod; Preliminary sizing's
+   P.ui), so opening a module, a tab or a section is never a step. In memory only (nothing stored: no key, no format change); at most
+   GD_UNDO_MAX steps. Design & Rating (ST-Girder) keeps its own Undo (its frame).
+   A step starts at a user action (input, change or a click that is not a view control, in this page or in Preliminary sizing's frame):
+   the state just before it is taken (changes made by the page itself since the last step, e.g. the automatic refresh of the demands,
+   are folded in without a step). It ends 0.7 s after the last input, once the page is idle (gdBusy() false and the data unchanged for
+   1.5 s; at most 120 s), so the step holds the action and what the page computes from it (demands, cross-frame second pass); a new
+   action while it settles ends it at once. Undo / Redo put back both parts as they were (each through its own load path, only when it
+   differs: Preliminary sizing's loadData in its frame, the modules' loadData), keeping the view state, the open project name and the
+   Preliminary sizing open name. Embedded, Preliminary sizing's own one-step "Revert to the previous design" bar is not shown: its
+   Suggest / Alternatives apply is a step of this history (it still writes plateline_undo_v1 as before; standalone it is unchanged). */
+const GD_UNDO_MAX = 30;
+const GD_UNDO = (function () {
+  let U = [], R = [], cur = null, pend = 0, tT = null, busy = false, quiet = 0, lastS = null, since = 0, t0 = 0; const subs = [];
+  const N = t => t == null ? null : t.replace(/"ts":\d+/g, '"ts":0');
+  const plWin = () => { try { return PL_FRAME && PL_FRAME.dataset.up ? PL_FRAME.contentWindow : null; } catch (e) { return null; } };
+  const cut = (v, k) => { if (v == null) return null; const o = Object.assign({}, v); k.forEach(x => delete o[x]); return o; };
+  function cap() { try { const w = plWin(); if (!w || !P) return null; return JSON.stringify({ gd: cut(P, ['ui', 'mod']), pl: cut(w.eval('P'), ['ui']) }); } catch (e) { return null; } }
+  const emit = () => subs.forEach(f => { try { f(api); } catch (e) { } });
+  function commit() { clearTimeout(tT); tT = null; pend = 0; const t = cap(); if (t == null) { emit(); return; }
+    if (cur != null && N(t) !== N(cur)) { U.push(cur); if (U.length > GD_UNDO_MAX) U.shift(); R = []; } cur = t; emit(); }
+  function settle() { pend = 2; const s = (typeof gdBusy === 'function' && gdBusy() ? 'busy:' : '') + N(cap()), now = Date.now();
+    if (s !== lastS || s.startsWith('busy:')) { lastS = s; since = now; }
+    if ((now - since >= 1500 && !s.startsWith('busy:')) || now - t0 > 120000) commit(); else tT = setTimeout(settle, 500); }
+  function pre() { if (busy || Date.now() < quiet) return;
+    if (pend === 2) commit();
+    if (pend === 0) { const t = cap(); if (t != null) cur = t; pend = 1; t0 = Date.now(); emit(); }
+    clearTimeout(tT); tT = setTimeout(() => { lastS = null; settle(); }, 700); }
+  function apply(t) { const o = JSON.parse(t); busy = true;
+    try { const w = plWin();
+      if (o.pl && w) { const L = w.eval('P'); if (JSON.stringify(cut(L, ['ui'])) !== JSON.stringify(o.pl)) { o.pl.ui = L.ui; w.loadData(o.pl, w.eval('CUR_NAME')); } }
+      if (o.gd && JSON.stringify(cut(P, ['ui', 'mod'])) !== JSON.stringify(o.gd)) { o.gd.ui = P.ui; o.gd.mod = P.mod; loadData(o.gd, CUR); }
+    } finally { busy = false; }
+    cur = cap() || t; quiet = Date.now() + 600; emit(); }
+  function reset() { if (busy) return; clearTimeout(tT); tT = null; pend = 0; U = []; R = []; cur = cap(); emit(); }
+  function step(from, to) { if (busy) return false; if (pend) commit(); if (!from.length) return false; to.push(cap() || cur); apply(from.pop()); return true; }
+  const api = { pre, commit, reset, undo: () => step(U, R), redo: () => step(R, U), canUndo: () => U.length > 0 || pend > 0, canRedo: () => R.length > 0 && !pend,
+    sizes: () => ({ undo: U.length, redo: R.length, pend }), onChange: f => { subs.push(f); } };
+  return api;
+})();
+/* the actions that start a step: input and change anywhere, a click unless it is a view control or Undo / Redo themselves */
+const GD_UNDO_VIEW = '#gd-undo, #gd-redo, .tab-btn, .itab, [role="tab"], .modbar button, .modbar a, .sec-hd, a[href], summary, [data-sp="chip"], [data-sp="hlib"], [data-sp="lib"]';
+function gdUndoPre(e) { const t = e.target; if (e.type === 'click' && t && t.closest && t.closest(GD_UNDO_VIEW)) return; GD_UNDO.pre(); }
+function gdUndoReset() { try { GD_UNDO.reset(); } catch (e) { /* before this script has run */ } }
+function gdUndoInit() {
+  ['input', 'change', 'click'].forEach(k => document.addEventListener(k, gdUndoPre, true));
+  if (window.SharedProjectsUI && SharedProjectsUI.undoRedo) SharedProjectsUI.undoRedo(GD_UNDO, { undo: $('#gd-undo'), redo: $('#gd-redo') });
+}
+/* Preliminary sizing's frame (each time it is built): its actions start a step; Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z there are the page's Undo / Redo
+   (while text is being typed in one of its fields, the browser's own undo of that field is left alone, as in shared/projects-ui.js) */
+function gdUndoHook(f) { let w = null; try { w = f.contentWindow; if (!w || w.__gdUndo) return; w.__gdUndo = 1; } catch (e) { return; }
+  ['input', 'change', 'click'].forEach(k => w.addEventListener(k, gdUndoPre, true));
+  w.addEventListener('input', e => { const t = e.target; if (t && t.dataset && /^(INPUT|TEXTAREA)$/.test(t.tagName)) t.dataset.spTyping = '1'; }, true);
+  ['change', 'blur'].forEach(k => w.addEventListener(k, e => { const t = e.target; if (t && t.dataset) delete t.dataset.spTyping; }, true));
+  w.addEventListener('keydown', e => { if (!(e.ctrlKey || e.metaKey) || e.altKey) return; const k = (e.key || '').toLowerCase(); if (k !== 'z' && k !== 'y') return;
+    const t = e.target; if (t && t.dataset && t.dataset.spTyping) return; if (t && t.isContentEditable) return;
+    if (document.querySelector('dialog[open]') || w.document.querySelector('.modal:not([hidden])')) return;
+    e.preventDefault(); if (k === 'z' && !e.shiftKey) GD_UNDO.undo(); else GD_UNDO.redo(); }, true); }
 /* Preliminary sizing's Save / Save as… / Saved projects… buttons (and its Ctrl+S) are this page's (message pl-proj from its frame) */
 window.addEventListener('message', e => { if (!gdFromPL(e) || !e.data || e.data.type !== 'pl-proj' || !GD_PB || document.querySelector('dialog[open]')) return;
   const a = e.data.act; if (a === 'save') GD_PB.save(); else if (a === 'saveas') GD_PB.saveAs(); else if (a === 'lib') GD_PB.dialog.show(); });
@@ -21961,7 +22024,7 @@ function plShow(bg) {
   const w = $('#pl-wrap'); w.style.top = Math.ceil($('#modbar').getBoundingClientRect().bottom) + 'px';
   if (PL_FRAME) return;
   const src = sbdShared(plSrc()); if (src == null) { console.error('Preliminary sizing: the shared code block (SBD-SHARED) could not be placed'); return; }   // SBD4
-  PL_FRAME = document.createElement('iframe'); PL_FRAME.id = 'pl-frame'; PL_FRAME.title = 'Preliminary sizing (PlateLine)'; PL_FRAME.addEventListener('load', () => setTimeout(() => { PL_FRAME.dataset.ready = '1'; gdPlFlush(); }, 2500));
+  PL_FRAME = document.createElement('iframe'); PL_FRAME.id = 'pl-frame'; PL_FRAME.title = 'Preliminary sizing (PlateLine)'; PL_FRAME.addEventListener('load', () => setTimeout(() => { PL_FRAME.dataset.ready = '1'; gdPlFlush(); }, 2500)); PL_FRAME.addEventListener('load', ev => gdUndoHook(ev.target));   // GDUR
   const own = `<script>window.GD_OWN_RULES = ${JSON.stringify(OWN_RULES).replace(/</g, '\\u003c')};<\/script>`;   // OWN1: the owner rules table, before Preliminary sizing's scripts
   PL_FRAME.srcdoc = src.replace(/<head>/i, h => h + own); w.appendChild(PL_FRAME);
 }
