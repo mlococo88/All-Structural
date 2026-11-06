@@ -111,6 +111,25 @@ test('project-registry: Steel Bridge app view (items by id): list, file text, ho
   s.setItem('sbd2.lib.index', '{bad'); const u = R2.list(e, s); assert.equal(u.ok, false); assert.equal(u.error, 'unreadable'); assert.equal(s.getItem('sbd2.lib.index'), '{bad');
 });
 
+test('project-registry: Steel Bridge Design two-list view (STDS-G): names of both lists, file with pl only when saved; gd only = the GHS2 file; reads only', async () => {
+  const e = R2.get('steel-bridge-design'), s = mem();
+  const g = { 'Both': { mod: 'girder', x: 1 }, 'Modules only': { mod: 'splice', y: 2 } }, p = { 'PL only': { girder: { a: 1 } }, 'Both': { girder: { b: 2 } } };
+  s.setItem('girderdetail_projects_v1', JSON.stringify(g)); s.setItem('plateline_projects_v1', JSON.stringify(p));
+  const before = JSON.stringify([...s.m]);
+  const l = R2.list(e, s); assert.equal(l.ok, true); assert.equal(l.items.map(i => i.name).join('|'), 'Both|Modules only|PL only');
+  assert.equal(l.items[0].size, JSON.stringify(g.Both).length + JSON.stringify(p.Both).length);
+  const st = R2.store(e, s);
+  assert.equal(R2.fileText(e, st.item('Modules only'), 'Modules only'), JSON.stringify({ app: 'SteelBridgeDesign', v: 1, name: 'Modules only', data: g['Modules only'] }, null, 2), 'the modules\' part only: the GHS2 file, byte for byte');
+  assert.equal(R2.fileText(e, st.item('Both'), 'Both'), JSON.stringify({ app: 'SteelBridgeDesign', v: 1, name: 'Both', data: g.Both, pl: { app: 'PlateLine', v: 1, name: 'Both', data: p.Both } }, null, 2));
+  assert.equal(R2.fileText(e, st.item('PL only'), 'PL only'), JSON.stringify({ app: 'SteelBridgeDesign', v: 1, name: 'PL only', pl: { app: 'PlateLine', v: 1, name: 'PL only', data: p['PL only'] } }, null, 2));
+  assert.equal(st.save('X', {}).ok, false); assert.equal(st.rename('Both', 'Z').ok, false); assert.equal(st.remove('Both').ok, false);
+  const gh = makeGitHubMock({ token: TOKEN }); GS.saveSettings(s, { owner: 'mlococo88', repo: 'structural-projects', branch: 'main', token: TOKEN });
+  const r = await R2.engine(e, s, gh.fetch).uploadAll(); assert.equal(r.ok, true); assert.equal(r.done, 3);
+  assert.equal(gh.files.get('projects/steel-bridge-design/Both.json'), R2.fileText(e, st.item('Both'), 'Both'));
+  assert.equal(JSON.stringify([...s.m].filter(([k]) => !k.startsWith('bridgeSuite.'))), before, 'both lists unchanged');
+  s.setItem('plateline_projects_v1', '{bad'); const u = R2.list(e, s); assert.equal(u.ok, false); assert.equal(u.error, 'unreadable'); assert.equal(s.getItem('plateline_projects_v1'), '{bad');
+});
+
 // BSS (2026-11-06): the Bridge Suite's shared list (bridgeSuite.v1.projects, entries by id, duplicate names): the home page's view and
 // file text equal the suite's own (shared/bridge-suite-projects.js ghStore + toFile); home Upload all, then the suite's engine: synced.
 test('project-registry: Bridge Suite view (entries by id): newest of a name, file text = the suite\'s own, home upload then synced; reads only', async () => {

@@ -118,6 +118,12 @@ node tests/smoke/rebar-redirect.mjs [--old f9ec0f9]
 # Save as new / rename / duplicate / refused write / load / delete (React 18.3.1 served from the kit's 18.2.0, test-only). ~1 min
 node tests/smoke/pile-library.mjs [--a origin/main]
 
+# Steel Bridge Design (STDS-G): the standard save over two lists (girderdetail_projects_v1 + plateline_projects_v1, one name). main vs the
+# working tree: every localStorage key, Export JSON text, the open module's report and the page text, on load and after an input change;
+# then Save / Save as / Replace it, Preliminary sizing's Save and Ctrl+S, older one-list saves, Rename / Duplicate / Delete on both lists,
+# a refused write, 390 px, console errors. ~6 min
+node tests/smoke/sbd-standard-save.mjs [--a origin/main] [--shots <dir>]
+
 # Steel Beam Design - AISC 15th (SBSF): a built-up section stays built-up after the Validation, User Manual and Report tabs, an edit,
 # Undo / Redo, Save as, Export JSON and a reload (phiVn 283.5 kip, not the rolled 315); a save that lost builtUp opens as before with a
 # notice; 0 console errors. Fails on main before SBSF (at "after Validation"). ~1 min
