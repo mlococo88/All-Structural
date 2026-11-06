@@ -2277,7 +2277,7 @@ const PbdListTable = window.SharedListInput ? SharedListInput.react(React) : nul
 - **Check case:** the card shows "Reset inputs" with the tooltip above; clicking it does what the old button did.
 - **How verified:** `node tests/check-syntax.mjs "Prestressed Bridge Design.html"`: pass. `node tests/smoke/bridge-suite-save.mjs`: all passed. Browser check: the button reads "Reset inputs" with the new title; 0 console errors beyond main's (the Babel size note). No test or manual text named the old label.
 - **Other copies:** none.
-## 2026-11-06 — PR: claude/hdrs-suite (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens Inputs › Project   [display only; no result change]
+## 2026-11-06 — PR: claude/hdrs-suite (PR #916: https://github.com/mlococo88/All-Structural/pull/916) (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens Inputs › Project   [display only; no result change]
 - **Why:** engineer 2026-11-06: every app's header as in Spread Footing (#884): no Save (Ctrl+S) and Saved projects… buttons in the header; they stay in the "Save and open" card. The header keeps the project chip (click = Inputs › Project), Undo, Redo, the app's other global actions and Print. Ctrl+S and Ctrl+Shift+S work from anywhere. No "Recent projects" start strip (Spread Footing only).
 - **Where:** the `SharedBridgeSuite.projectBar({...})` call (anchor `app:'psbeam'`), its last line `fileButtons:[bEx,bIm], extras:[bRs], header:psHdrRef.current, chipBefore:psUndoRef.current });`: before it ended the call; after it, a comment `/* HDRS … */` and this line (the call's `});` moved to it).
   Before: (the call ended on the line above). After:

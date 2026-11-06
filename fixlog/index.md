@@ -4462,7 +4462,7 @@ function NumberListInput({value, onChange, placeholder, label, col = 'Value', un
 - **Check case:** the card shows "Reset inputs" with the tooltip above; clicking it does what the old button did.
 - **How verified:** `node tests/check-syntax.mjs "index.html"`: pass. `node tests/smoke/project-library.mjs --tool index`: ALL PASS. Browser check: the button reads "Reset inputs" with the new title; 0 console errors beyond main's (the Babel size note). No test or manual text named the old label.
 - **Other copies:** none.
-## 2026-11-06 — PR: claude/hdrs-suite (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens the Project step   [display only; no result change]
+## 2026-11-06 — PR: claude/hdrs-suite (PR #916: https://github.com/mlococo88/All-Structural/pull/916) (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens the Project step   [display only; no result change]
 - **Why:** engineer 2026-11-06: every app's header as in Spread Footing (#884): no Save (Ctrl+S) and Saved projects… buttons in the header; they stay in the "Save and open" card. The header keeps the project chip (click = the Project step), Undo, Redo, the app's other global actions and Print. Ctrl+S and Ctrl+Shift+S work from anywhere. No "Recent projects" start strip (Spread Footing only).
 - **Where:** the `SharedBridgeSuite.projectBar({...})` call in App (anchor `const pb=SharedBridgeSuite.projectBar({ app:'mct'`), its last line `fileButtons:[bEx,bIm], extras:[bRs], header:ixHdrRef.current, chipBefore:plibUndoRef.current });`: before it ended the call; after it, a comment `/* HDRS … */` and this line (the call's `});` moved to it).
   Before: (the call ended on the line above). After:

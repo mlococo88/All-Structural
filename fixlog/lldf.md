@@ -2016,7 +2016,7 @@ index 219cc2c..a3e337e 100644
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **Check case:** `tests/smoke/bridge-suite-compare.mjs --app lldf`: open project "Alpha" (an MCT part and demands); on load, after skew 0 → 12° (autosaved into Alpha), after a reload: `lldfLast` (every DF), every localStorage key (times and folder normalised), the Report text and the Export JSON file identical, origin/main vs branch.
 - **How verified:** see the PR.
-## 2026-11-06 — PR: claude/hdrs-suite (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens the Project tab   [display only; no result change]
+## 2026-11-06 — PR: claude/hdrs-suite (PR #916: https://github.com/mlococo88/All-Structural/pull/916) (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens the Project tab   [display only; no result change]
 - **Why:** engineer 2026-11-06: every app's header as in Spread Footing (#884): no Save (Ctrl+S) and Saved projects… buttons in the header; they stay in the "Save and open" card. The header keeps the project chip (click = the Project tab), Undo, Redo, the app's other global actions and Print. Ctrl+S and Ctrl+Shift+S work from anywhere. No "Recent projects" start strip (Spread Footing only).
 - **Where:** `lldfStdInit()`, the `SharedBridgeSuite.projectBar({...})` call, its last line `header:document.querySelector("header.apphead .actions"), chipBefore:undoBtn, headerBefore:$("printBtn") });`: before it ended the call; after it, a comment `/* HDRS … */` and this line (the call's `});` moved to it).
   Before: (the call ended on the line above). After:
