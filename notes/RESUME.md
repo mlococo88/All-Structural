@@ -155,3 +155,11 @@ Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcl
 - Merged: #757/#758/#759 SF LRFD reference tables + dropdown + heat map; #760/#761 itemized V·h couples; #762 panel ids; #763 term-by-term OT (calc); #764 λs option; #766 bottom layer order; #769 wall option; #765 3D load labels + selector; #767 loads on DXF sheets; #768 card 2.6 pedestal loads by combination.
 - RISA reconciliation: notes/risa-reconcile-2026-11-05.md. Engineer: footing 5 ft, 3 ksi in app; RISA model has 5'-8" (fix in RISA). Water height / surcharge in RISA: ignore.
 - Pending engineer review: decisions listed in PRs #764–#769 (wall punching kept, pedestal checks kept for walls, §11.6.2 not implemented).
+
+## 2026-11-06 status (standard save + GitHub sync)
+- GitHub project sync: #808 #811 #815 #817 #819 #823 #826; home Saved projects panel #818 #821.
+- Header cleanup: #810 #812-#814 #816 #820 #822 #824 #825 #827-#835.
+- Standard save in every tool: #836 shared, #837 SF, #838-#844, #846, #848, #850-#860, #862 SBD (both lists, one GitHub file), #863-#865 bridge suite (projects/bridge-suite/, 30 s settle, "Hand-off locks").
+- SF "Recent projects" start strip TRIAL (#845, ctx.start; SF only) awaiting engineer verdict.
+- Steel Beam built-up revert bug fixed #861 (notice for old saves, no migration). LP Print #849, LP test fix #847.
+- Open questions for engineer: SB built-up notice vs migration; delete apps/steel-bridge/ui/library.js; re-baseline list-input; CBC filter search beyond name; New vs Reset (Abutment/EDM); SBD no header Undo + header wraps 2 rows + PL own Export JSON; suite Import JSON accept *.bridge-suite.json; Light Pole/BG phone tab overflow; Prestressed 437 px at 390; stale branch claude/bridge-suite-save to delete.
