@@ -5206,7 +5206,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none (the sheet frame and title block follow SPDW / CBDW; each tool keeps its own builder).
 - **Open items:** (1) the hardware dimension rules were entered without a licensed ASME B18.2.1 / B18.2.2 or AISC Manual Table 14-2 copy in `/home/user/structural_references` (the DG1 Table 2.3 washer sizes entered from the published table values, not read from a copy here): engineer to spot-check one size against the printed tables. (2) A DXF round trip in AutoCAD (engineer check, as the other tools' sheets).
 
-## 2026-11-06 — BPAL: realistic anchor rods in the on-screen drawings and the 3-D view (PR: claude/bp-anchor-look)
+## 2026-11-06 — BPAL: realistic anchor rods in the on-screen drawings and the 3-D view (PR: claude/bp-anchor-look, PR #918: https://github.com/mlococo88/All-Structural/pull/918)
 
 ### BPAL. Anchor rods drawn to scale with their hardware   [display only] [saved data: none]
 - **Request (engineer, 2026-11-06):** "The existing graphics show the anchor bolts but they look a little goofy. Can we make them a little more realistic looking." The on-screen 2-D plan and elevation views and the 3-D view get the look the Drawings sheets already use (BPDW, #917).
