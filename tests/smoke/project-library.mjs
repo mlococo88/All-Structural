@@ -121,7 +121,7 @@ export const TOOLS = {
       if (!(await p.evaluate(() => loads.length))) { await p.selectOption('#tplSel', '3s'); await p.waitForTimeout(1500); } },
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify({ tabR, nodeR, shD, moD, deD, env, crits, totL }, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '#spanTbl input[data-si]', 2),
-    save: async (p, name) => { await p.evaluate(n => { const i = document.getElementById('projNm'); i.value = n; i.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('bSv').click(); }, name); await p.waitForTimeout(400); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const i = document.getElementById('projNm'); i.value = n; i.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('bSv').click(); }, name); await p.waitForTimeout(400); }
   },
   bgeo: {
     // Bridge Geometry: its own library panel (Load / Rename / Duplicate / Delete); Duplicate is new (mapStore). The tool seeds five example
