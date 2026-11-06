@@ -83,7 +83,7 @@ export const TOOLS = {
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(LPP_LAST, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '#V', 10),
     view: p => tabView(p, '#tabBar button', 2, '.active, [aria-selected=true]'),
-    save: async (p, name) => { await p.evaluate(n => commitSave(n), name); await p.waitForTimeout(300); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => commitSave(n), name); await p.waitForTimeout(300); }   // STDS: the standard Save as (branch), the old Save (main)
   },
   abutment: {
     file: 'abutment_calculator.html', list: 'abutcalc_v1_projects', auto: 'abutcalc_v1_autosave', openIgnore: ['fingerprint'], undoSel: '#btnUndo', redoSel: '#btnRedo',
@@ -219,7 +219,7 @@ export const TOOLS = {
     results: p => p.evaluate(() => { const t = window.__gprForTest(); const seen = new WeakSet(); return JSON.parse(JSON.stringify({ R: t.R, minRF: t.minRF }, (k, v) => typeof v === 'function' || k === 'ui' ? undefined : (v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '#sidebar input[type=number][data-k^="plates"], #sidebar input[type=number]', 0.125),
     view: p => tabView(p, 'header ~ * .tab-btn, .tab-btn', 3, '.active'),
-    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; CUR = ''; try { document.getElementById('pb_saveas').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; CUR = ''; try { document.getElementById('pb_saveas').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); }
   },
   stonearch: {
     file: 'Stone Masonry Arch Load Rating.html', list: 'stoneArchLR.projects', auto: 'stoneArchLR.autosave',
