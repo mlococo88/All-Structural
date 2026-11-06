@@ -5150,3 +5150,32 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** `node tests/bpad-circle.mjs` PASS: identity origin/main (BC-7) vs this branch on 40 projects (rectangular, cage cases, round-pier saves stored true / false / without the field, rectangular save without the field) — identical results and report text (decision sentence and the new internal `hefEff.mode` normalised); H8 for BC-8 (default "lesser"; audit case 25.304 with 38.487 shown; older save 38.487; stored kept; hand-off new / migrated rect. / rect. storing false → "lesser", round pier true / false kept; rect.→circle → "lesser"); new H9: in all 1,234 sweep cases φN_cbg(lesser) = min(reduced, full) (reduced governs 155, full 1079) and the pryout equals that of the same branch in 1,234/1,234; cases 2 and 3 hand values; TeX typesets. `anchor-parity.mjs` PASS (38), `bpad-profis.mjs` PASS, `project-library --tool baseplate` ALL PASS, `standard-save` ALL PASS, `lightpole-anchor-handoff` ALL PASS, engine `anchor-geom` / `handoffs` / `lightpole` PASS, `check-syntax` passes, console errors 0.
 - **Other copies:** none.
 - **Open items:** pryout follows the tension-breakout pick of the same combination (as decided), so with "lesser" it is not itself the lesser of the two pryout values (in the uplift audit case pryout uses the full h_ef).
+
+## 2026-11-06 — BC-9: circular pier, "Lesser": pryout takes its own minimum of reduced / not reduced (engineer decision 2026-11-06, after BC-8) (PR: claude/round-hef-pryout)
+
+### BC-9. Pryout with `conc.circHefReduce === "lesser"`   [§4: calculation choice] [saved data: none]
+- **Decision (engineer, 2026-11-06):** with "Lesser", pryout also takes its own minimum: V_cpg with N_cpg from the reduced and from the not-reduced breakout, the smaller φV_cpg used, independently of the h_ef that governs the tension breakout. "Reduced" / "Not reduced" unchanged.
+- **Governing provision:** ACI 318-19 §17.7.3 (Eq. 17.7.3.1b, V_cpg = k_cp·N_cpg), §17.6.2 (N_cpg from the group breakout), §17.6.2.1.2 / R17.6.2.1.2 by analogy for a circle. No equation changed.
+- **Where:** `comboCapacities()`, anchor `const pry = pryout(nV, tb);`. Before:
+  ```js
+  const pry = pryout(nV, tb);
+  ```
+  After:
+  ```js
+  let pry = pryout(nV, tb);
+  if(tb.alt && tb.hefEff && tb.hefEff.mode==="lesser"){
+    let tbO=null; __bpHefForce=!tb.hefEff.applies;
+    try{ tbO=tensionBreakoutGroup(nT, ca_minT, combo.eccN_x, combo.eccN_y, tensPts, condAT); } finally{ __bpHefForce=null; }
+    const pryO=pryout(nV, tbO), useO=(pryO.phiVcpg < pry.phiVcpg);
+    ... rd.lesser={reducedPhi, fullPhi, reducedHef, fullHef, governsReduced, tensionReduced, otherPhi};
+    rd.steps = rd.steps.concat([ step "Pryout — lesser of the two h_ef" ]);  pry=rd;
+  }
+  ```
+  A tie keeps the tension breakout's h_ef. The new last pryout step shows φV_cpg = min(φV_cpg(h′_ef), φV_cpg(h_ef)), which governs, and whether the tension breakout picked the same or the other h_ef. The tension step's "governs" note and the pryout "alternative" note now say pryout takes its own minimum. Option help text and manual §4B.4 updated; ENGINEER_CHECKS.md line updated.
+- **Check cases (before = BC-8: pryout followed the tension pick; after = own minimum).** k_cp = 2, φ = 0.70, all anchors' cone (ψ_ec = 1).
+  1. Audit case C, uplift 20 kip (4 × 1 in Gr 55, BC 13, Ø36, h_ef 18, f'c 4): full h_ef: A_Nc,all 1017.88 / 2916 = 0.3491, ψ_ed 0.8278, N_b 125.10 → N_cpg 36.15, φV_cpg = 0.70·2·36.15 = 50.61 kip; reduced h′ 8.936: 1.4164·0.9574·40.546 = 54.98 → 76.97 kip. Tension picks full; pryout min = 50.61 (full). **No change** (pryout demand 0).
+  2. Same, moment (P 5 compression, M_y 480, V_x 3): tension picks reduced (23.38 kip). Before pryout 76.97 kip (reduced) → after **50.61 kip (full h_ef governs; tension and pryout pick different h_ef)**; pryout D/C 3/76.97 = 0.039 → 3/50.61 = **0.059**.
+  3. Default project switched to a round pier (D 36, 2 × 2 at ±6, h_ef 12), pryout governing combination 1.2D+1.0W (demand 16.155 kip): full h_ef 12: A_Nc,all 1017.88/1296 = 0.7854, ψ_ed 0.7 + 0.3·9.515/18 = 0.8586, N_b 63.648 → N_cpg 42.92 → φV_cpg 60.09; reduced h′ 8: 1017.88/576 = 1.7671, ψ_ed 0.9379, N_b 34.346 → 56.92 → 79.69. Tension picks reduced. Before 79.69 (D/C 0.2027) → after **60.09, full governs (D/C 0.2689)**.
+  4. Largest pryout D/C change in the sweep: D 24, 4 bolts, BC 14.4, h_ef 24, moment (P 5 compression, M_y 600, V 2): tension picks reduced (h′ 4.8); pryout 42.66 kip (reduced) → 18.27 kip (full), D/C 0.047 → 0.109. Pryout differs from BC-8 in 153 of 1,234 sweep cases (all more conservative: the minimum can only lower it).
+- **How verified:** `node tests/bpad-circle.mjs` PASS: identity origin/main (BC-8) vs this branch on 40 projects (rectangular, cage cases, round-pier saves stored true / false / absent): identical; H9: φN_cbg(lesser) = min in 1,234/1,234 and **pryout φV_cpg(lesser) = min(reduced, full) in 1,234/1,234** (differs from the tension pick's branch in 153); cases 1–3 pryout values above; TeX typesets. `anchor-parity.mjs` PASS (38), `bpad-profis.mjs` PASS, `project-library --tool baseplate` ALL PASS, `standard-save` ALL PASS, `lightpole-anchor-handoff` ALL PASS, engine `anchor-geom` / `handoffs` / `lightpole` PASS, `check-syntax` passes, console errors 0.
+- **Other copies:** none.
