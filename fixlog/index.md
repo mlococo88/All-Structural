@@ -4451,3 +4451,14 @@ function NumberListInput({value, onChange, placeholder, label, col = 'Value', un
 - **Check case:** origin/main vs branch, `tests/smoke/index-report.mjs --mode state` and `--mode rep`, cases base / lfr / arema: the model, IndexedDB rows, every localStorage key (only the page's folder in `bridgeSuite.v1.appPaths` differs), the Report's sections and the printed Report text identical (times normalised; arema `rep` once differed by one "not computed" note on the branch, a timing race of the notes: a second run of both is identical); step texts differ only by the header chip / buttons, the removed sidebar buttons and the new card.
 - **How verified:** see the PR (`bridge-suite-save.mjs --app mct`, `project-library --tool index`, `home-projects`, `home-sync`, `check-syntax`, screenshots at 1400 and 390 px).
 - **Other copies:** the `'Hand-off locks'` rename is in `lldf.html` and `Prestressed Bridge Design.html` too (same PR).
+
+## 2026-11-06 — PR: claude/reset-inputs-label-mct (RSTI) — "Save and open" card: "Reset to defaults" renamed "Reset inputs", with a tooltip of what it keeps (display only, no result change)
+- **Engineer (2026-11-06):** keep this Reset (it differs from New) but rename it "Reset inputs" and say what it keeps.
+- **Where:** BSS projectBar block, anchor `bRs=B(`: `B('Reset to defaults','All inputs back to their defaults (asks first)')` → `B('Reset inputs','Every input of this app back to its default (asks first). Keeps the shared bridge project open; New also closes it in every Bridge Suite app')` + a trailing `/* RSTI */` comment; the BSS comment lists the new name.
+- **Difference from New (unchanged behaviour, now in the tooltip):** Reset (`loadDefault`: confirm, `pushHistory('before reset')`, `setCfg(DEFAULT_CFG)`) keeps the Bridge Suite project open (`bridgeSuite.v1.currentProjectId`); New (`newDefault`, via the shared Bridge Suite bar) also sets the suite's open project to none, in LL & DL and Prestressed too.
+- **Behaviour:** unchanged (same handler, same confirm text).
+- **Saved data (§5):** no key or format changed.
+- **Formulas, factors, units, code references:** none.
+- **Check case:** the card shows "Reset inputs" with the tooltip above; clicking it does what the old button did.
+- **How verified:** `node tests/check-syntax.mjs "index.html"`: pass. `node tests/smoke/project-library.mjs --tool index`: ALL PASS. Browser check: the button reads "Reset inputs" with the new title; 0 console errors beyond main's (the Babel size note). No test or manual text named the old label.
+- **Other copies:** none.

@@ -21956,7 +21956,7 @@ function App() {
     h.reset(); plibRef.current={h};
   },[]);
   /* BSS (2026-11-06): the standard save (engineer-approved, 2026-11-05/06): header chip · Undo · Redo · Save (Ctrl+S) · Saved projects…; the
-     Project step's first card "Save and open" (Save · Save as… · Saved projects… · New; Export JSON · Import JSON; Reset to defaults); the
+     Project step's first card "Save and open" (Save · Save as… · Saved projects… · New; Export JSON · Import JSON; Reset inputs, "Reset to defaults" until RSTI 2026-11-06); the
      standard Saved projects dialog over the shared Bridge Suite list (bridgeSuite.v1.projects, unchanged); GitHub sync (off until set up).
      The open project is the suite's (bridgeSuite.v1.currentProjectId), as the old "Bridge Project" select. ixHooks: this render's functions. */
   const ixHooks=useRef({}), ixHdrRef=useRef(null);
@@ -21964,7 +21964,7 @@ function App() {
     if(window.IXPB||!window.SharedBridgeSuite||!window.BridgeProjects||!window.SharedProjectsUI||!ixHdrRef.current) return;
     const H=()=>ixHooks.current, SPUI=window.SharedProjectsUI, LS=(()=>{ try{ return window.localStorage; }catch(e){ return null; } })();
     const B=(t,ti)=>SPUI.button(t,ti,{sp:'ixfile'});
-    const bEx=B('Export JSON','Save all config + results to a JSON file'), bIm=B('Import JSON','Load a previously exported JSON file — restores config and results'), bRs=B('Reset to defaults','All inputs back to their defaults (asks first)');
+    const bEx=B('Export JSON','Save all config + results to a JSON file'), bIm=B('Import JSON','Load a previously exported JSON file — restores config and results'), bRs=B('Reset inputs','Every input of this app back to its default (asks first). Keeps the shared bridge project open; New also closes it in every Bridge Suite app');   /* RSTI (2026-11-06): was "Reset to defaults" */
     const fIn=document.createElement('input'); fIn.type='file'; fIn.accept='.json'; fIn.hidden=true; fIn.setAttribute('data-sp','ixfile'); document.body.appendChild(fIn);
     fIn.addEventListener('change',e=>H().importJSON(e)); bEx.addEventListener('click',()=>H().exportJSON()); bRs.addEventListener('click',()=>H().loadDefault());
     const C=v=>SharedProjects.canon(v), merged=c=>c==null?null:{...DEFAULT_CFG,...c,rating:{...(DEFAULT_CFG.rating||{}),...(c.rating||{})}};   // as loadCfg
