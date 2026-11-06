@@ -325,7 +325,7 @@ let L1 = await lsAll(p), M1 = JSON.parse(L1[T.list]);
 // T.renameSets: fields the tool's OWN rename writes into the item (Bridge Geometry: its existing Rename sets the item's "name"); left out of the rename checks
 const rn = o => { if (typeof o === 'string') o = JSON.parse(o); if (!T.renameSets || o == null) return JSON.stringify(o); const c = JSON.parse(typeof o === 'string' ? o : JSON.stringify(o)); T.renameSets.forEach(k => delete c[k]); return JSON.stringify(c); };
 ok(!('Job 1' in M1) && rn(M1['Job 1 renamed']) === rn(item('Job 1')), 'Rename: item moved unchanged' + (T.renameSets ? ' (except ' + T.renameSets.join(', ') + ', set by the tool\'s own Rename)' : ''));
-for (const k of Object.keys(L0)) if (k !== T.list && k !== T.auto) ok(L1[k] === L0[k], 'Rename left ' + k + ' unchanged');
+for (const k of Object.keys(L0)) if (k !== T.list && k !== T.auto && !/^bridgeSuite\.v1\.projectsUI\./.test(k)) ok(L1[k] === L0[k], 'Rename left ' + k + ' unchanged');   // START (2026-11-06): the start chooser's own recent list follows a rename
 await act('dup', 'Job 2', ['Job 2 copy']); M1 = JSON.parse((await lsAll(p))[T.list]);
 ok(JSON.stringify(M1['Job 2 copy']) === item('Job 2') && JSON.stringify(M1['Job 2']) === item('Job 2'), 'Duplicate: copy identical, original kept');
 await act('rename', 'Job 2 copy', ['Job 2', true]); M1 = JSON.parse((await lsAll(p))[T.list]);
