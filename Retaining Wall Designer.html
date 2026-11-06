@@ -934,7 +934,7 @@ window.MathJax = {
    Uses BridgeXfer v1 above. Writes only the fields this tool has, through the tool's normal input path. */
 (function(){
   var TOOL='Retaining Wall Designer', FILE='Retaining Wall Designer.html';
-  var MAP={ projectName:'#proj_name', bridgeId:'', jobNo:'#proj_num', client:'', location:'', preparedBy:'#proj_eng', checkedBy:'#proj_chk', date:'' }; // shared field -> this tool's input ('' = this tool has no such field)
+  var MAP={ projectName:'#proj_name', bridgeId:'', jobNo:'#proj_num', client:'', location:'', preparedBy:'#proj_eng', checkedBy:'#proj_chk', date:'#proj_date' }; // shared field -> this tool's input ('' = this tool has no such field); RWPD (2026-11-06): date -> the Project tab Date (RWTB, a text field: any date text is taken)
   var LBL={ projectName:'Project name', bridgeId:'Bridge ID', jobNo:'Job / project no.', client:'Client', location:'Location', preparedBy:'Prepared by', checkedBy:'Checked by', date:'Date' };
   function el(k){ return MAP[k] ? document.querySelector(MAP[k]) : null; }
   function share(){
