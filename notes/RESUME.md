@@ -163,3 +163,9 @@ Remaining blockers after that: GS1-GS4, external demand imports (+selfWeightExcl
 - SF "Recent projects" start strip TRIAL (#845, ctx.start; SF only) awaiting engineer verdict.
 - Steel Beam built-up revert bug fixed #861 (notice for old saves, no migration). LP Print #849, LP test fix #847.
 - Open questions for engineer: SB built-up notice vs migration; delete apps/steel-bridge/ui/library.js; re-baseline list-input; CBC filter search beyond name; New vs Reset (Abutment/EDM); SBD no header Undo + header wraps 2 rows + PL own Export JSON; suite Import JSON accept *.bridge-suite.json; Light Pole/BG phone tab overflow; Prestressed 437 px at 390; stale branch claude/bridge-suite-save to delete.
+
+## 2026-11-06 later (engineer decisions)
+- Done today: SF wall checks #870 #874 #875 #881 (min steel = larger of Table 11.6.1 and 11.6.2 always, with note) #883 (horizontal bars blank → input needed); SBD header/undo/IO #871 #879 #880 #882 (Owner only in Project tab); Reset cleanup #866-#869 #876-#878; #872 lib.js deleted; #873 list-input rebaseline; SF header Save only in Project tab #884 (trial).
+- Running: SF "Always require ℓ_dc" option (default off); header Save→Project tab in ALL other apps (match SF; no Recent strip elsewhere); SF heat-map corner labels + BG dual-bearing label overlap + SF IBC "no eccentricity limit" option; BP circular-pier h_ef reduction default ON (engineer).
+- Engineer: NOT doing LP handhole/leveling-nut/LTS summary items; NOT doing RW/Abutment entered demands.
+- Still pending (engineer said keep pending): SF direct-mode crash (wall 1.5×6, V_y 600 k, "reading 'cb'"); SF hook-direction input; LP LRFDLTS code questions (sign-panel ice, C_f rect, q_z height, V_c ρw/Acv, 17.5.2.1 numbering, Fig 29.3-1 s/h=0.7, EPA drag, N2–N5, N8); real-browser checks (GitHub sync from file:// on work laptop, print sheets, MCT AREMA, Pile phone row); Steel Bridge new-app items; PS rebuild; ACI 2022 errata upload (11.6.2 sign).
