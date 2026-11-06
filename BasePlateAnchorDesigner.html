@@ -8845,10 +8845,10 @@ function drawPlan(body){
   colPlanDraw(s,XP,YP,sc);   /* G1: I-shape for W columns */
   /* BC-1: bolt circle (dashed) through the anchor centres, with its diameter and the rotation of bolt 1 */
   if(bpCircPattern()){ const rb=(+A.BC||0)/2*sc; const bc=circ(s,XP(0),YP(0),rb,"none","#7a4b00",1); bc.setAttribute("stroke-dasharray","5 4");
-    g.pts.forEach((p,i)=>txt(s,XP(p.x*1.0)+(p.x>=0?1:-1)*(Math.max(4,A.dia/2*sc)+3),YP(p.y)-Math.max(4,A.dia/2*sc)-2,String(i+1),"lblTxt",p.x>=0?"start":"end",8,"#7a4b00")); }
+    g.pts.forEach((p,i)=>txt(s,XP(p.x*1.0)+(p.x>=0?1:-1)*(Math.max(4,bpHw().top.W/2*sc)+3),YP(p.y)-Math.max(4,bpHw().top.W/2*sc)-2,String(i+1),"lblTxt",p.x>=0?"start":"end",8,"#7a4b00")); }
   /* anchors (plate coords) */
   const ar=Math.max(4,A.dia/2*sc);
-  g.pts.forEach(p=>{ circ(s,XP(p.x),YP(p.y),ar,"#fff","#000"); });
+  g.pts.forEach(p=>bpAnchorPlanSvg(s,XP(p.x),YP(p.y),sc));   /* BPAL (2026-11-06): washer, hex nut, rod (was a circle of radius ar) */
   /* pedestal centerlines */
   line(s,X(0),Y(C.By/2)-6,X(0),Y(-C.By/2)+6,"#bbb",0.8,"3 3");
   line(s,X(-C.Bx/2)+6,Y(0),X(C.Bx/2)-6,Y(0),"#bbb",0.8,"3 3");
@@ -9156,15 +9156,8 @@ function drawElevation(body,view){
   const embedTopY = plateTopY;                          /* rods start at plate top (through plate) */
   const headY = baseY - (C.H - A.hef)*sc;               /* head sits at depth hef from concrete top */
   const coords = (view==="x")? [...new Set(g.pts.map(p=>p.y))] : [...new Set(g.pts.map(p=>p.x))];
-  coords.sort((a,b)=>a-b).forEach(cval=>{
-    const pxs=XP(cval);
-    line(s,pxs,embedTopY,pxs,headY,"#2b2b2b",Math.max(2.2,A.dia*sc*0.5));   /* shank */
-    line(s,pxs-7,headY,pxs+7,headY,"#2b2b2b",3.4);                          /* head */
-    line(s,pxs-5,embedTopY+2,pxs+5,embedTopY+2,"#2b2b2b",2.4);              /* nut atop plate */
-    if(openGap>0){                                                          /* G1: leveling nut under the plate */
-      const yUnder=plateTopY+P.t*sc; rect(s,pxs-6,yUnder,12,3.5,"#2b2b2b","#2b2b2b",1);
-      if(soE.type==="clamp") rect(s,pxs-6,yUnder-P.t*sc-7,12,3.5,"#2b2b2b","#2b2b2b",1); }
-  });
+  /* BPAL (2026-11-06): the rods to scale with their nuts, washers, leveling nut and head (was a line, a bar head and a fixed-size nut) */
+  coords.sort((a,b)=>a-b).forEach(cval=>bpAnchorElevSvg(s,XP(cval),z=>baseY-z*sc,sc));
 
   /* ---- loads (governing combo), arrows scaled by magnitude with a fixed minimum ---- */
   const gi=(function(){ if(!CC){try{CC=computeAll();}catch(e){}} try{return governingComboIndex();}catch(e){return 0;} })();
@@ -9858,7 +9851,8 @@ function drawSheetPlan(body){
   rect(s,XP(-P.B/2),YP(P.N/2),P.B*sc,P.N*sc,"#f6f4ee","#333",1.6);
   colPlanDraw(s,XP,YP,sc,{fill:"rgba(58,110,165,.10)",stroke:"#9db4cc",sw:1,label:false});
   const ar=Math.max(5,Math.min(11,A.dia*sc*0.6));
-  g.pts.forEach((p,i)=>{ circ(s,XP(p.x),YP(p.y),ar,"#fff","#000",1.4); txt(s,XP(p.x),YP(p.y)+3.4,String(i+1),null,"middle",9,"#111"); });
+  const aw=Math.max(5,bpHw().top.W/2*sc);   /* BPAL: the anchor with its washer and nut; its number beside the washer */
+  g.pts.forEach((p,i)=>{ bpAnchorPlanSvg(s,XP(p.x),YP(p.y),sc); txt(s,XP(p.x)+aw+2,YP(p.y)-aw-1,String(i+1),null,"start",9,"#111"); });
   const ov=C.ca_override? " (override)" : "";
   bpPlanDims(s,{X,Y,xs:g.pts.map(p=>p.x+px),ys:g.pts.map(p=>p.y+py),fx0:-C.Bx/2,fx1:C.Bx/2,fy0:-C.By/2,fy1:C.By/2,
     px0:px-P.B/2,px1:px+P.B/2,py0:py-P.N/2,py1:py+P.N/2,
@@ -9890,8 +9884,7 @@ function drawSheetElev(body,view){
   rect(s,X(off+ecc-cw/2),Z(zP+P.t+stub),cw*sc,stub*sc,"rgba(58,110,165,.25)","#3a6ea5",1);
   const hs=[...new Set(g.pts.map(p=>+((alongX? p.x : p.y)+off).toFixed(3)))];
   const zHead=C.H-A.hef;
-  hs.forEach(h=>{ line(s,X(h),Z(zP+P.t+Math.max(1,1.5*A.dia)),X(h),Z(zHead),"#2b2b2b",Math.max(2,A.dia*sc*0.5));
-    line(s,X(h)-6,Z(zHead),X(h)+6,Z(zHead),"#2b2b2b",3.5); });
+  hs.forEach(h=>bpAnchorElevSvg(s,X(h),Z,sc));   /* BPAL (2026-11-06): rods to scale with nuts, washers and head */
   const xr=X(span/2);
   dimV(s,Z(C.H),Z(0),xr+12,"H = "+fmt(C.H,2)+"″",xr+18);
   dimV(s,Z(C.H),Z(zHead),xr+34,"h_ef = "+fmt(A.hef,2)+"″",xr+40);
@@ -10098,6 +10091,61 @@ function bpHwStack(){
 }
 /* inches as drawn: an exact 1/16 as a fraction (3 1/2"), otherwise two decimals (4.24") */
 function bpdwIn(v){ const r=Math.round(v*16)/16; return (Math.abs(v-r)<1e-3? SharedDxf.frac(r,16) : fmt(v,2))+'"'; }
+
+/* =====================================================================
+   BPAL (2026-11-06, engineer: "the anchor bolts look a little goofy ... make them a little more realistic looking"; display only):
+   the anchor rods of the on-screen drawings to scale from the model, with the hardware of bpHw / bpHwStack (the sizes and their
+   sources are listed at BPHW above): a threaded rod (thread lines over the threaded lengths, at the true pitch where it is at least
+   2.5 px, otherwise every 2.5 px), heavy hex nuts seen across the corners, plate or round washers, the leveling nut with a stand-off,
+   the projection above the top nut and the embedded head of the model's head type; in plan the washer, the hex nut, the rod and its
+   thread root (the usual 3/4 circle) over the plate hole (dashed). No check reads any of this.
+   ===================================================================== */
+const BPAL={rod:"#5b6168",rodSt:"#1f2328",hi:"#a9b0b8",thr:"#d5d9de",nut:"#9ba3ac",nutSt:"#1f2328",nutFace:"#5d646c",wash:"#cfcabd",washSt:"#4a4a4a",hole:"#6b6b6b"};
+/* draw into a <g> of s (so a caller can fade or tip the whole anchor); returns the <g> */
+function bpGrp(s,fn){ const host=svgHost(s), g=document.createElementNS(SVGNS,"g"); host.appendChild(g); const keep=s.__content; s.__content=g;
+  try{ fn(); } finally{ if(keep===undefined) delete s.__content; else s.__content=keep; } return g; }
+function bpPoly(s,pts,fill,st,sw){ const p=document.createElementNS(SVGNS,"polygon"); p.setAttribute("points",pts.map(q=>q[0].toFixed(2)+","+q[1].toFixed(2)).join(" "));
+  p.setAttribute("fill",fill); p.setAttribute("stroke",st); p.setAttribute("stroke-width",sw||1); svgHost(s).appendChild(p); regStroke(s,p,sw||1); return p; }
+/* one anchor in plan at (cx, cy) px, sc px per inch */
+function bpAnchorPlanSvg(s,cx,cy,sc,o){
+  o=o||{}; const hw=bpHw();
+  return bpGrp(s,()=>{
+    if(o.hole!==false) circ(s,cx,cy,hw.dh/2*sc,"none",BPAL.hole,0.8).setAttribute("stroke-dasharray","3 2");
+    const W=hw.top.W*sc;
+    if(hw.top.kind==="plate") rect(s,cx-W/2,cy-W/2,W,W,BPAL.wash,BPAL.washSt,0.9); else circ(s,cx,cy,W/2,BPAL.wash,BPAL.washSt,0.9);
+    const R=hw.nutF/Math.sqrt(3)*sc, q=[]; for(let i=0;i<6;i++){ const a=i*Math.PI/3; q.push([cx+R*Math.cos(a),cy+R*Math.sin(a)]); }
+    bpPoly(s,q,BPAL.nut,BPAL.nutSt,1);
+    const rr=Math.max(1.5,hw.d/2*sc), rm=Math.max(1,hw.dMinor/2*sc);
+    circ(s,cx,cy,rr,"#eef0f2",BPAL.nutSt,1.1);
+    const a0=0, a1=1.5*Math.PI, pth=document.createElementNS(SVGNS,"path");   /* thread root: 3/4 circle */
+    pth.setAttribute("d","M"+(cx+rm*Math.cos(a0)).toFixed(2)+" "+(cy-rm*Math.sin(a0)).toFixed(2)+" A"+rm.toFixed(2)+" "+rm.toFixed(2)+" 0 1 0 "+(cx+rm*Math.cos(a1)).toFixed(2)+" "+(cy-rm*Math.sin(a1)).toFixed(2));
+    pth.setAttribute("fill","none"); pth.setAttribute("stroke",BPAL.nutSt); pth.setAttribute("stroke-width",0.7); svgHost(s).appendChild(pth); regStroke(s,pth,0.7);
+  });
+}
+/* one anchor in elevation: xc px on the rod axis, Z(z) px for z in inches up from the pedestal bottom (the concrete top at z = C.H),
+   sc px per inch; o.embedOnly: the rod from o.zTop (default the concrete top) down only, without the nuts and washers above */
+function bpAnchorElevSvg(s,xc,Z,sc,o){
+  o=o||{}; const st=bpHwStack(), hw=st.hw, r=hw.d/2*sc, zt=o.embedOnly? (o.zTop!=null? o.zTop : st.zc) : st.zTop;
+  const hex=(z0,z1,F)=>{ const C=F/Math.cos(Math.PI/6)*sc, y1=Z(z1), h=Math.max(0.8,(z1-z0)*sc);
+    rect(s,xc-C/2,y1,C,h,BPAL.nut,BPAL.nutSt,0.9); line(s,xc-C/4,y1,xc-C/4,y1+h,BPAL.nutFace,0.7); line(s,xc+C/4,y1,xc+C/4,y1+h,BPAL.nutFace,0.7); };
+  return bpGrp(s,()=>{
+    const yT=Z(zt), yB=Z(st.zEnd);
+    rect(s,xc-r,yT,2*r,Math.max(1,yB-yT),BPAL.rod,BPAL.rodSt,0.8);
+    if(2*r>=4) line(s,xc-r*0.45,yT+1,xc-r*0.45,yB-1,BPAL.hi,Math.max(0.6,r*0.25));
+    const thr=(za,zb)=>{ const z1=Math.min(za,zt), z0=Math.max(zb,st.zEnd); if(!(z1>z0)) return;
+      const sp=Math.max(hw.pitch*sc,2.5); for(let y=Z(z1)+sp/2; y<Z(z0); y+=sp) line(s,xc-r,y+sp*0.25,xc+r,y-sp*0.25,BPAL.thr,0.6); };
+    thr(st.thrTop[0],st.thrTop[1]); if(st.thrBot) thr(st.thrBot[1],st.thrBot[0]);
+    if(!o.embedOnly){
+      const W=hw.top.W*sc; rect(s,xc-W/2,Z(st.zWt),W,Math.max(0.8,hw.top.t*sc),BPAL.wash,BPAL.washSt,0.8);
+      hex(st.zWt,st.zNt,hw.nutF);
+      if(st.lev) hex(st.zLn,st.zPb,hw.nutF);
+    }
+    const H=hw.head;
+    if(H.kind==="hex") hex(st.hBot[0],st.hBot[1],H.F);
+    else if(H.kind==="sq"||H.kind==="stud") rect(s,xc-H.F/2*sc,Z(st.hBot[1]),H.F*sc,Math.max(0.8,H.H*sc),BPAL.nut,BPAL.nutSt,0.9);
+    else if(H.kind==="washer"){ rect(s,xc-H.F/2*sc,Z(st.zB),H.F*sc,Math.max(0.8,H.H*sc),BPAL.wash,BPAL.washSt,0.8); hex(st.nutBot[0],st.nutBot[1],hw.nutF); }
+  });
+}
 
 /* =====================================================================
    DRAWINGS tab (BPDW, 2026-11-06, engineer: "the same DXF output and sheet preview like other recent apps"): drawing sheets,
@@ -10957,8 +11005,9 @@ function drawHairpinPlan(body, cGov, opt){
   }
 
   const ar=Math.max(5,Math.min(11,A.dia*sc*0.6));
-  g.pts.forEach((p,i)=>{ circ(s,XP(p.x),YP(p.y),ar,"#fff","#000",1.5);
-    const t=txt(s,XP(p.x),YP(p.y)+3.4,String(i+1),null,"middle",9,"#111");
+  const aw=Math.max(5,bpHw().top.W/2*sc);   /* BPAL: the anchor with its washer and nut; its number beside the washer */
+  g.pts.forEach((p,i)=>{ bpAnchorPlanSvg(s,XP(p.x),YP(p.y),sc);
+    const t=txt(s,XP(p.x)+aw+2,YP(p.y)-aw-1,String(i+1),null,"start",9,"#111");
     t.style.pointerEvents="none"; });
 
   /* legs, coloured by verdict — drawn as ACI Fig R17.5.2.1b(i) hairpins: the
@@ -11605,9 +11654,8 @@ function drawRebar(body,kind,opt){
      The shear branch keeps the single schematic anchor. */
   function drawAnchorAt(axp,noCone,faint){
     /* rod runs the full ACTUAL embedment to the physical head */
-    const r1=line(s,X(axp),topY,X(axp),Yv(headZ),"#2b2b2b",Math.max(2.5,A.dia*sc*0.5));
-    const r2=line(s,X(axp)-8,Yv(headZ),X(axp)+8,Yv(headZ),"#2b2b2b",4);
-    if(faint){ r1.setAttribute("opacity",DIM); r2.setAttribute("opacity",DIM); }
+    const r1=bpAnchorElevSvg(s,X(axp),z=>Yv(z),sc,{embedOnly:true});   /* BPAL (2026-11-06): the embedded rod and its head to scale */
+    if(faint) r1.setAttribute("opacity",DIM);
     if(noCone) return;   /* shear section: no tension cone (ACI Section A-A) */
     /* cone springs from the anchor head (actual h_ef, TR-H1) */
     line(s,X(axp),Yv(coneZ),X(axp-spread),topY,"#b71c1c",1.4,"5 4");
@@ -12114,12 +12162,10 @@ function drawShearFace(body,opt){
   }
   /* anchors, projected (the reference row in front); GFX-G: in a cut by their state */
   const headZ=C.H-S.anchor.hef;
-  if(fcut===null) [...new Set(ts.map(t=>+t.toFixed(3)))].forEach(t=>{
-    line(s,T(t),topY,T(t),Z(headZ),"#2b2b2b",Math.max(2.5,S.anchor.dia*sc*0.5));
-    line(s,T(t)-8,Z(headZ),T(t)+8,Z(headZ),"#2b2b2b",4); });
+  if(fcut===null) [...new Set(ts.map(t=>+t.toFixed(3)))].forEach(t=>bpAnchorElevSvg(s,T(t),Z,sc,{embedOnly:true}));   /* BPAL (2026-11-06) */
   else g.pts.map(p=>({t:projT(p),st:uSt(projU(p),S.anchor.dia/2+0.05)})).sort((a,b)=>(a.st==="cut")-(b.st==="cut")).forEach(q=>{ if(q.st==="front") return;
-    const l1=line(s,T(q.t),topY,T(q.t),Z(headZ),"#2b2b2b",Math.max(2.5,S.anchor.dia*sc*0.5)), l2=line(s,T(q.t)-8,Z(headZ),T(q.t)+8,Z(headZ),"#2b2b2b",4);
-    if(q.st==="beyond"){ l1.setAttribute("opacity",0.25); l2.setAttribute("opacity",0.25); } });
+    const l1=bpAnchorElevSvg(s,T(q.t),Z,sc,{embedOnly:true});   /* BPAL (2026-11-06) */
+    if(q.st==="beyond") l1.setAttribute("opacity",0.25); });
   const rb=ic.rb, rd=Math.max(3,rb.db*sc*0.6);
   const colOf=L=>L.eff?"#1f7d32":(L.fits!==false?"#b71c1c":"#999");
   if(ic.isTie){
@@ -12231,12 +12277,33 @@ function build3D(container){
       const m=new THREE.Mesh(new THREE.CylinderGeometry(k.b/2,k.b/2,hS,32,1,true),colMat); setPos(m,cxw,cyw,zc); groups.plate.add(m);
     } else box(groups.plate,colMat,k.b,k.d,hS,cxw,cyw,zc); }
   /* anchors (plate coords → shifted by plate offset) */
-  const r=S.anchor.dia/2;
-  g.pts.forEach(p=>{ const len=S.anchor.hef+P.t+(G.present?G.tg:0)+gap3;
-    const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,16),boltMat);
-    setPos(m, p.x+pxo, p.y+pyo, C.H - S.anchor.hef + len/2); groups.anchors.add(m);
-    const head=new THREE.Mesh(new THREE.CylinderGeometry(r*1.7,r*1.7,0.6,6),boltMat);
-    setPos(head, p.x+pxo, p.y+pyo, C.H-S.anchor.hef); groups.anchors.add(head); });
+  /* BPAL (2026-11-06): the anchors to scale (bpHw / bpHwStack): the rod, its threaded lengths banded at the thread pitch (one shared
+     canvas texture), heavy hex nuts and washers as solids, the leveling nut with a stand-off and the embedded head of the model's type
+     (was a plain cylinder from the head to the plate top and a 0.6 in hexagon) */
+  { const st=bpHwStack(), hw=st.hw, r=hw.d/2;
+    const nutMat=new THREE.MeshLambertMaterial({color:0x8f979f}), washMat=new THREE.MeshLambertMaterial({color:0xb8b2a4});
+    const cv=document.createElement("canvas"); cv.width=4; cv.height=16; const cx2=cv.getContext("2d");
+    cx2.fillStyle="#5b6168"; cx2.fillRect(0,0,4,16); cx2.fillStyle="#c9ced4"; cx2.fillRect(0,0,4,5);
+    const thrTex=new THREE.CanvasTexture(cv); thrTex.wrapS=thrTex.wrapT=THREE.RepeatWrapping;
+    const thrMat=len=>{ const t=thrTex.clone(); t.needsUpdate=true; t.repeat.set(1,Math.max(1,len/hw.pitch)); return new THREE.MeshLambertMaterial({map:t}); };
+    const add=(gm,mat,x,y,zc,rotY)=>{ const m=new THREE.Mesh(gm,mat); setPos(m,x,y,zc); if(rotY) m.rotation.y=rotY; groups.anchors.add(m); return m; };
+    const zones=[st.thrTop].concat(st.thrBot? [[st.thrBot[1],st.thrBot[0]]] : []).map(q=>[Math.min(q[0],st.zTop),Math.max(q[1],st.zEnd)]).filter(q=>q[0]>q[1]);
+    const tMats=zones.map(q=>thrMat(q[0]-q[1]));
+    const hexR=F=>F/Math.sqrt(3);
+    g.pts.forEach(p=>{ const x=p.x+pxo, y=p.y+pyo;
+      add(new THREE.CylinderGeometry(r*0.985,r*0.985,st.zTop-st.zEnd,16),boltMat,x,y,(st.zTop+st.zEnd)/2);
+      zones.forEach((q,k)=>add(new THREE.CylinderGeometry(r,r,q[0]-q[1],16,1,true),tMats[k],x,y,(q[0]+q[1])/2));
+      if(hw.top.kind==="plate") add(new THREE.BoxGeometry(hw.top.W,hw.top.t,hw.top.W),washMat,x,y,st.zPt+hw.top.t/2);
+      else add(new THREE.CylinderGeometry(hw.top.W/2,hw.top.W/2,hw.top.t,24),washMat,x,y,st.zPt+hw.top.t/2);
+      add(new THREE.CylinderGeometry(hexR(hw.nutF),hexR(hw.nutF),hw.nutH,6),nutMat,x,y,st.zWt+hw.nutH/2,Math.PI/6);
+      if(st.lev) add(new THREE.CylinderGeometry(hexR(hw.nutF),hexR(hw.nutF),hw.nutH,6),nutMat,x,y,st.zLn+hw.nutH/2,Math.PI/6);
+      const H=hw.head;
+      if(H.kind==="hex") add(new THREE.CylinderGeometry(hexR(H.F),hexR(H.F),H.H,6),nutMat,x,y,st.zB-H.H/2,Math.PI/6);
+      else if(H.kind==="sq") add(new THREE.BoxGeometry(H.F,H.H,H.F),nutMat,x,y,st.zB-H.H/2);
+      else if(H.kind==="stud") add(new THREE.CylinderGeometry(H.F/2,H.F/2,H.H,24),nutMat,x,y,st.zB-H.H/2);
+      else if(H.kind==="washer"){ add(new THREE.BoxGeometry(H.F,H.H,H.F),washMat,x,y,st.zB-H.H/2);
+        add(new THREE.CylinderGeometry(hexR(hw.nutF),hexR(hw.nutF),hw.nutH,6),nutMat,x,y,(st.nutBot[0]+st.nutBot[1])/2,Math.PI/6); }
+    }); }
 
   /* ---- REINFORCEMENT AND BREAKOUT BODIES (GFX-A, 2026-10-23) ---------------
      Every bar is drawn from the SAME results the tabs report, so the 3-D cannot
