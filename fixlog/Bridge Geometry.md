@@ -1597,3 +1597,54 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **How verified:** main vs branch, same input change then each side's own Save of "Cmp A": (a) on a browser that already has the seeded examples (main's storage): results identical after the change and after Save; every key identical (`examplesSeeded`, library 9,227 chars, project; time stamps aside); Export JSON (3,018 chars), Top of Deck and Beam Seat output text identical; (b) fresh browser: the same, except main seeds the 5 examples and the flag and the branch does not (the "Cmp A" item is identical). `tests/smoke/bgeo-examples.mjs` (new): fresh → nothing seeded, Load example… opens Example 2 unsaved, library unchanged; seeded + sync → 5 examples kept and held, Upload all uploads only own bridges, Upload of one example uploads it and it stays released, a renamed untouched example stays held, an example changed and saved uploads, a name with HTML shown as text. Probe: save → saved; change → unsaved; Ctrl+S saves without a dialog; tabs leave "saved"; Open asks; reload finds the bridge; New → not saved. `project-library --tool bgeo` (standard dialog), `github-sync-tools --tool bgeo` (standard dialog), sync off (no request, no sync key), `list-input --part bgeo`, `home-projects`, `home-sync`, `standard-save`, `github-sync`, engine, `check-syntax`: pass. 390 px: page 666 px wide (main 1,086 px; no phone layout), dialog 355 / 355; screenshots looked at.
 - **Decision (pending engineer review):** "untouched" = content equal to the built-in example (savedAt and name aside). Examples saved again by the old "Save (updates …)" without changes are not "untouched" (Save wrote the full project format) and sync as any project.
 - **Decision (pending engineer review):** the hold is decided per browser; an example already uploaded by an older version stays on GitHub (and in other browsers' lists); nothing is deleted there.
+
+## 2026-11-06 — PR: claude/bg-dual-bearing-labels (BGDL: profile bearing-line labels of dual bearings spread apart with leader lines, Drawings tab profile sheet and Export DXF profile; display only, no result change)
+
+- **Why:** engineer 2026-11-06: on the profile, the labels of dual bearings (back and ahead bearing lines of a pier) overlap each other.
+- **Problem (before):** the profile sheet (Drawings tab, sheet "PROFILE ALONG PGL") and the profile of the Export DXF dialog write each bearing line's label rotated 90°, just left of its own line, above the frame. Two lines closer than the label height overlap. Reproduced with the built-in **Example 5 — 5-Span River Crossing** (piers dual, bearing offset 2.5 ft, sheet at 1" = 80'): the two labels of each pier are 0.0625 in apart for 0.07 in text (touching). With the bearing offset set to 1.0 ft (a continuity pier; lines 2 ft apart): 0.025 in apart, the labels print on top of each other. Export DXF profile (text height 0.7h = 2.8 ft, h = 4 ft for Example 5): offset 1.0 ft → labels 2.0 ft apart for 2.8 ft text, overlapping; 0.5 ft → 1.0 ft apart.
+- **Where (anchors):**
+  - New helper `bgLabSpread(xs,p)` just before `/* text along direction dir from P (distance d), centred on the line, reading upright */` (`function bgdwLab(`).
+  - `bgdwBuild`, profile sheet (anchor `sheet('profile','PROFILE ALONG PGL',k=>{`), the bearing-line loop.
+  - Export DXF `build(opt)`, `/* ===== 7. profile along the PGL ===== */`: the `topGap` line and the `brgTxt.forEach` loop.
+- **Before (profile sheet):**
+```js
+    brgLines.forEach(b=>{ const st=b.bl.sta; if(st<sA-1e-6||st>sB+1e-6) return; const fg=E.prof.elevAt(st);
+      D.line(L.brg,PX(st),PY(zlo),PX(st),PY(zhi),D.ltype('DASHED'));
+      D.text(L.txt,PX(st)-0.03*k,PY(zhi)+0.08*k,0.07*k,(b.bl.label+'  STA '+formatStation(st)+'  FG '+fg.toFixed(dec)).toUpperCase(),0,90); });
+```
+- **After (profile sheet):**
+```js
+    /* BGDL: labels of bearing lines closer than the label pitch (0.07 in text + 0.03 in) spread apart, each with a leader line */
+    const bIn=brgLines.filter(b=>!(b.bl.sta<sA-1e-6||b.bl.sta>sB+1e-6)), bSp=bgLabSpread(bIn.map(b=>PX(b.bl.sta)-0.03*k),0.10*k);
+    bIn.forEach((b,i)=>{ const st=b.bl.sta, fg=E.prof.elevAt(st), lx=bSp.x[i], ly=PY(zhi)+(bSp.moved[i]?0.20*k:0.08*k);
+      D.line(L.brg,PX(st),PY(zlo),PX(st),PY(zhi),D.ltype('DASHED'));
+      if(bSp.moved[i]) D.pline(L.txt,[[PX(st),PY(zhi)],[PX(st),PY(zhi)+0.04*k],[lx+0.03*k,PY(zhi)+0.14*k],[lx+0.03*k,PY(zhi)+0.17*k]]);
+      D.text(L.txt,lx,ly,0.07*k,(b.bl.label+'  STA '+formatStation(st)+'  FG '+fg.toFixed(dec)).toUpperCase(),0,90); });
+```
+- **Before (Export DXF profile):**
+```js
+      const topGap=2*h+Math.max(0,...brgTxt.map(b=>0.62*0.7*h*b[2].length));
+...
+      brgTxt.forEach(([bl,fg,t])=>{
+        W.line(LY.pbrg,[PX(bl.sta),PY(zlo)],[PX(bl.sta),PY(zhi)+0.5*h]);
+        W.text(LY.ptext,[PX(bl.sta)-0.15*h,PY(zhi)+0.8*h],0.7*h,t,{rot:90,va:0}); });
+```
+- **After (Export DXF profile):**
+```js
+      /* BGDL: labels of bearing lines closer than the label pitch (0.7h text + 0.3h) spread apart, each with a leader line
+         (positions relative to the frame's left edge: the spacing does not depend on where the frame is placed) */
+      const bSp=bgLabSpread(brgTxt.map(([bl])=>(bl.sta-sA)*k-0.15*h),1.0*h);
+      const topGap=2*h+Math.max(0,...brgTxt.map(b=>0.62*0.7*h*b[2].length))+(bSp.moved.some(Boolean)?1.3*h:0);   // BGDL: + the leader rise
+...
+      brgTxt.forEach(([bl,fg,t],i)=>{
+        W.line(LY.pbrg,[PX(bl.sta),PY(zlo)],[PX(bl.sta),PY(zhi)+0.5*h]);
+        const lx=X0+bSp.x[i];   // BGDL: the label's position (spread when crowded)
+        if(bSp.moved[i]) W.pline(LY.ptext,[[PX(bl.sta),PY(zhi)+0.5*h],[lx+0.15*h,PY(zhi)+1.5*h],[lx+0.15*h,PY(zhi)+1.9*h]]);
+        W.text(LY.ptext,[lx,PY(zhi)+(bSp.moved[i]?2.1*h:0.8*h)],0.7*h,t,{rot:90,va:0}); });
+```
+- **What it does:** the label positions are spread only where two (or more) labels are closer than one pitch (sheet: 0.07 in text + 0.03 in = 0.10 in of paper; DXF: 0.7h + 0.3h = 1.0h). A crowded group is spread to that pitch, centred on its own lines, in station order (back bearing label left of the ahead one). Each spread label starts higher (sheet 0.20 in instead of 0.08 in above the frame; DXF 2.1h instead of 0.8h) and gets a leader line from the top of its bearing line (sheet: text layer; DXF: BG-PROF-TEXT). A label with room is drawn exactly as before. In the Export DXF, the profile frame's default position moves down by 1.3h only when some label was spread (room for the leader rise). Same drawing style: rotated text, thin leader with a short vertical stub at each end.
+- **Governing provision:** none (display only).
+- **Check case:** Example 5, Pier 1 back/ahead bearings at Sta 12+07.50 / 12+12.50 (offset 2.5 ft), sheet 1" = 80': before, label baselines 0.0625 in apart; after, 0.10 in apart, each with a leader. Offset 1.0 ft (Sta 12+09.00 / 12+11.00): before 0.025 in apart (overlapping); after 0.10 in. Export DXF, offset 1.0 ft: before labels 2.0 ft apart with 2.8 ft text; after 4.0 ft apart (= 1.0h, h = 4 ft). Examples 1, 2, 3 (Example 2 at 1" = 40', dual piers 5 ft apart = 0.125 in) and Example 4: sheets and DXF byte-identical to origin/main.
+- **How verified:** headless Chromium, origin/main vs the branch, all five examples plus Example 5 with offset 1.0 ft: the text of every tab (Alignment, Bridge, Output tables, Beam Seat, Drawings, Project), the Export JSON (`serializeProject`) and every localStorage key/value are identical (time stamps masked). DXF (Export DXF local and auto coordinates, and the drawing sheets DXF): identical for Examples 1–4 and 5 as built-in, except Example 5's sheet DXF (spread labels); differences elsewhere only for the offset 1.0 / 0.5 ft variants (spread labels and the frame shift). Tests: check-syntax, `tests/smoke/bgeo-examples.mjs`, `tests/smoke/dxf-print-sheets.mjs --tool bg`, `tests/smoke/project-library.mjs --tool bgeo`. Sheets and zooms of the Pier 1 labels looked at, before and after.
+- **Saved data:** none touched (§5). **Other copies:** none.
+- **Not changed:** the on-screen Plotly profile (it draws support ticks without labels) and the plan view's bearing-line station labels.
