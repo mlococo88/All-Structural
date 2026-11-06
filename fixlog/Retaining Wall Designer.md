@@ -2110,7 +2110,7 @@ function renderStatus(r) {
 - **Other copies:** none.
 - **Decision (pending engineer review):** the elevation is drawn at one scale; a very long joint spacing gives a long, low strip with its text still at full size. The plan strip's width is schematic, and the note says so.
 
-## 2026-11-06 — PR: claude/rw-bearing-combo (RWBP) — Stability tab: bearing pressure per combination (selector, to-scale diagram, resultant, e, contact length)   [display only; no result change]
+## 2026-11-06 — PR: claude/rw-bearing-combo (PR #932: https://github.com/mlococo88/All-Structural/pull/932) (RWBP) — Stability tab: bearing pressure per combination (selector, to-scale diagram, resultant, e, contact length)   [display only; no result change]
 - **Why:** engineer-approved 2026-11-06 (Phase 3 task D, review PR 3c). Before, the Stability tab showed only the Plotly chart (service q(x), factored q_u(x), q_a). There was no per-combination bearing diagram, resultant location, eccentricity or contact length. The Report's bearing figure (`buildBearingDiagram`) was not to scale and had no scale bar.
 - **What:**
   - A **Combination** selector with a to-scale diagram above the existing chart:
