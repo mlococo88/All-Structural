@@ -449,6 +449,7 @@ a.wkA:hover{text-decoration:underline}
   <option value="a_ee0">AASHTO Extreme Event I, &gamma;<sub>EQ</sub>=0: e &le; 0.33B</option>
   <option value="a_ee1">AASHTO Extreme Event I, &gamma;<sub>EQ</sub>=1.0: e &le; 0.40B</option>
   <option value="custom">Custom fraction of B, L</option>
+  <option value="none">No eccentricity limit (IBC 2021 / ACI 318-19) &mdash; e reported for information</option>
   <option value="off">Not checked</option>
  </select><span class="hint">Replaces the ASD overturning FS in LRFD practice.</span></div>
  <div class="row"><label>Custom e/B limit</label><input type="number" step="0.01" data-path="stab.eccCustom" data-num><span class="unit">&ndash;</span><span class="hint">used only when Custom is selected</span></div>
@@ -1653,8 +1654,17 @@ function computeAll(){
             a_ee0:{f:0.33,set:'lrfd',lab:'e \u2264 0.33B (\u03b3EQ = 0)',ref:'AASHTO LRFD 10.6.4.2 / 11.6.5.1, Extreme Event I'},
             a_ee1:{f:0.40,set:'lrfd',lab:'e \u2264 0.40B (\u03b3EQ = 1.0)',ref:'AASHTO LRFD 10.6.4.2 / 11.6.5.1, Extreme Event I'}};
  const eccMode=state.stab.eccMode||'kern';
- let eccChk=null;
- if(eccMode!=='off'){
+ let eccChk=null, eccInfo=null;
+ /* SFNE (2026-11-06, engineer): 'none' = no eccentricity limit. IBC 2021 and ACI 318-19 set no maximum eccentricity for a spread
+    footing (ACI 318-19 13.2.6.1: bearing, overturning and sliding per the general building code); stability is by overturning,
+    bearing with partial contact and sliding. No check and no D/C (eccChk stays null, as 'off'); the service-combination
+    eccentricities are reported for information (eccInfo). Default and old saves keep their own eccMode (kern unless chosen). */
+ if(eccMode==='none'){
+  const rows=asd.map(a=>{const rr=a.r,ratX=(B>0)?Math.abs(rr.ex)/B:0,ratY=(L>0)?Math.abs(rr.ey)/L:0;
+   return{name:a.cb.name,ex:rr.ex,ey:rr.ey,ratX,ratY,kern:6*ratX+6*ratY,contact:(a.bear&&a.bear.contactFrac!==undefined)?a.bear.contactFrac:1};});
+  eccInfo={rows,gov:rows.length?rows.reduce((a,b)=>b.kern>a.kern?b:a):null};
+ }
+ if(eccMode!=='off'&&eccMode!=='none'){
   const cfg=(eccMode==='custom')
    ?{f:Math.max(num(state.stab.eccCustom)||0.25,0),set:'lrfd',lab:'e \u2264 '+f2(num(state.stab.eccCustom))+'B',ref:'user-defined'}
    :ECC[eccMode]||ECC.kern;
@@ -1695,7 +1705,7 @@ function computeAll(){
   W.push({lvl:'warn',msg:'Load inclination is severe (i_q < 0.30) in the governing bearing combination; the Vesi\u0107 inclination correction is being extrapolated near its limit.'});
  return{W,fatal:false,B,L,t,Df,gc,fc,ks,phi,phiDeg,c,gs,gev,gw,dw:dwc===Infinity?Infinity:dwc,
   peds,Wf,WfAuto,Wpeds,Aped,Aev,covEff,covDry,covSub,evPress,EV,xev,yev,surD,surL,qDsur,qLsur,hsub,U,topDepth,
-  present,combosASD,combosLRFD,asd,lrfd,govBear,govOT,govSlx,govSly,govSlr,minContact,flot,eccChk,otGate:(state.stab.otGate==='on'),
+  present,combosASD,combosLRFD,asd,lrfd,govBear,govOT,govSlx,govSly,govSlr,minContact,flot,eccChk,...(eccInfo?{eccInfo}:{}),otGate:(state.stab.otGate==='on'),
   mu,Kp,pf,PpX,PpY,rig,FSb,directMode,aashtoDirect:AD,loadMode:state.loadMode};
 }
 </script>
@@ -1827,6 +1837,8 @@ function renderDashboard(){
  if(R.eccChk&&R.eccChk.gov){const e=R.eccChk;
   d.appendChild(chip('Eccentricity limit',e.lab+' \u2014 '+(e.biax?'6e\u2093/B + 6e\u1D67/L = '+f2(e.gov.dcr):'max e/B = '+f2(Math.max(e.gov.ratX,e.gov.ratY)))+' ('+e.gov.name+')',
    e.ok?'pass':'fail',undefined,{tab:'tab-stab',sec:'o-st-ecc'}));}
+ else if(R.eccInfo&&R.eccInfo.gov){const g=R.eccInfo.gov;   /* SFNE: information only, no pass/fail */
+  d.appendChild(chip('Eccentricity (information)','e\u2093 = '+f2(g.ex)+', e\u1D67 = '+f2(g.ey)+' ft, 6e\u2093/B + 6e\u1D67/L = '+f2(g.kern)+' ('+g.name+'); no limit (IBC 2021 / ACI 318-19)','na',undefined,{tab:'tab-stab',sec:'o-st-ecc'}));}
  d.appendChild(chip('Sliding, x',(R.govSlx.FSslx===Infinity?'N/A \u2014 no net horizontal load in x':'FS = '+f2(R.govSlx.FSslx)+' (min '+f2(FSsl)+')'),R.govSlx.FSslx===Infinity?'na':(R.govSlx.FSslx>=FSsl?'pass':'fail'),R.asd.indexOf(R.govSlx),{tab:'tab-stab',sec:'o-st-slide'}));
  d.appendChild(chip('Sliding, y',(R.govSly.FSsly===Infinity?'N/A \u2014 no net horizontal load in y':'FS = '+f2(R.govSly.FSsly)+' (min '+f2(FSsl)+')'),R.govSly.FSsly===Infinity?'na':(R.govSly.FSsly>=FSsl?'pass':'fail'),R.asd.indexOf(R.govSly),{tab:'tab-stab',sec:'o-st-slide'}));
  d.appendChild(chip('Sliding, resultant \u221a(Hx\u00b2+Hy\u00b2)',(R.govSlr.FSslr===Infinity?'N/A \u2014 no net horizontal load':'FS = '+f2(R.govSlr.FSslr)+' (min '+f2(FSsl)+')'),R.govSlr.FSslr===Infinity?'na':(R.govSlr.FSslr>=FSsl?'pass':'fail'),R.asd.indexOf(R.govSlr),{tab:'tab-stab',sec:'o-st-slide'}));
@@ -3183,6 +3195,22 @@ function renderStability(){
   be.appendChild(el('div','note','Limit selected on the Stability tab. Options carried: middle third 6|e<sub>x</sub>|/B + 6|e<sub>y</sub>|/L &le; 1 (service; the resultant inside the kern diamond, which guarantees full contact under biaxial eccentricity, and the classical ASD overturning surrogate; the AASHTO limits below are per direction); AASHTO strength on soil e &le; B/3, with e &le; B/4 retained for earlier editions and agencies that still specify it; AASHTO strength on rock e &le; 0.45B; and Extreme Event I at 0.33B (&gamma;<sub>EQ</sub> = 0) and 0.40B (&gamma;<sub>EQ</sub> = 1.0). AASHTO C10.6.3.3 states the intent is to reproduce successful past ASD practice based on the B/6 rule. Agency policy varies \u2014 confirm against the governing specification and the geotechnical report.'));
   if(!E.ok)be.appendChild(el('div','failbox','<b>NG \u2014 eccentricity limit exceeded.</b> Combination \u201c'+E.gov.name+'\u201d gives |e<sub>x</sub>|/B = '+f3(E.gov.ratX)+' and |e<sub>y</sub>|/L = '+f3(E.gov.ratY)+(E.biax?', 6|e<sub>x</sub>|/B + 6|e<sub>y</sub>|/L = '+f3(E.gov.dcr)+' &gt; 1 (outside the kern: partial contact)':' against a limit of '+f3(E.f))+'. Enlarge the footing in the governing direction or reduce the eccentricity of the delivered load.'));
  }
+ /* SFNE (2026-11-06): no eccentricity limit selected: the eccentricities for information, no pass / fail, no D/C */
+ if(R.eccInfo&&R.eccInfo.gov){const I=R.eccInfo,g=I.gov;
+  const be=secPanel(T,'o-st-ecc','4.3a  Eccentricity (information only; no limit)');
+  be.appendChild(el('p','note','No eccentricity limit is applied (input, Stability tab). The eccentricity is <b>not limited by IBC 2021 / ACI 318-19</b>: ACI 318-19 13.2.6.1 has the footing proportioned for bearing and for stability against overturning and sliding under the general building code, and neither code sets a maximum eccentricity. Stability is checked by overturning (\u00a74.3), bearing with partial contact (3.2, 3.3) and sliding (\u00a74.2). The values below are reported for information.'));
+  be.appendChild(eqBlock('Eccentricity of the resultant (information)','service combinations',
+   'e_x = \\frac{\\Sigma M_y}{\\Sigma P},\\; e_y = \\frac{\\Sigma M_x}{\\Sigma P},\\quad \\frac{6|e_x|}{B} + \\frac{6|e_y|}{L}\\;(\\le 1:\\ \\text{full contact})',
+   '\\text{largest: '+g.name.replace(/[\u2212]/g,'-')+':}\\; \\frac{6\\cdot'+f3(Math.abs(g.ex))+'}{'+f2(R.B)+'} + \\frac{6\\cdot'+f3(Math.abs(g.ey))+'}{'+f2(R.L)+'}',
+   'e_x = '+f3(g.ex)+',\\; e_y = '+f3(g.ey)+'\\;\\mathrm{ft};\\quad \\frac{6|e_x|}{B} + \\frac{6|e_y|}{L} = '+f3(g.kern)+'\\;(B/6 = '+f2(R.B/6)+',\\; L/6 = '+f2(R.L/6)+'\\;\\mathrm{ft};\\ \\text{contact '+f2(100*g.contact)+'\\%})'));
+  const te=document.createElement('table');te.className='tbl';
+  te.innerHTML='<tr><th>#</th><th>Service combination</th><th>e<sub>x</sub> (ft)</th><th>e<sub>y</sub> (ft)</th><th>|e<sub>x</sub>|/B</th><th>|e<sub>y</sub>|/L</th><th>6|e<sub>x</sub>|/B + 6|e<sub>y</sub>|/L</th><th>Contact (%)</th></tr>';
+  I.rows.forEach((rw,i)=>{const tr=document.createElement('tr');
+   [String(i+1),rw.name,f2(rw.ex),f2(rw.ey),f3(rw.ratX),f3(rw.ratY),f3(rw.kern),f2(100*rw.contact)].forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});
+   if(rw===g)tr.style.background='#eef4fb';te.appendChild(tr);});
+  be.appendChild(te);
+  be.appendChild(sfdWorkedIn([['o-st-ot','overturning'],['o-br-press','bearing pressure and contact'],['o-st-slide','sliding']]));
+ }
  const b3=secPanel(T,'o-st-flot','4.4  Flotation');
  if(R.flot){
   b3.appendChild(eqBlock('Flotation check (permanent resisting weight vs. buoyancy)','FS_target = '+f2(num(state.stab.FSfl)),
@@ -3489,6 +3517,7 @@ function sfdResultRows(){
     :R.otGate?['FS<sub>OT</sub> = M<sub>r</sub>/M<sub>o</sub>; '+FST(FSot),fs(FSot,FS),['o-st-ot']]
     :['FS<sub>OT</sub> = M<sub>r</sub>/M<sub>o</sub>; reported, not gated',null,['o-st-ot']];},
   'Eccentricity limit':()=>[sfdEsc(R.eccChk.ref),R.eccChk.gov.dcr,['o-st-ecc']],
+  'Eccentricity (information)':()=>['not limited by IBC 2021 / ACI 318-19 (ACI 318-19 §13.2.6.1: stability by overturning and sliding per the general building code); information only, no D/C',null,['o-st-ecc']],
   'Sliding, x':()=>['FS<sub>sl</sub> = (μΣP + P<sub>p</sub>)/|ΣH|; '+FST(FSsl),fs(FSsl,R.govSlx.FSslx),['o-st-slide']],
   'Sliding, y':()=>['FS<sub>sl</sub> = (μΣP + P<sub>p</sub>)/|ΣH|; '+FST(FSsl),fs(FSsl,R.govSly.FSsly),['o-st-slide']],
   'Sliding, resultant √(Hx²+Hy²)':()=>['FS<sub>sl</sub> = (μΣP + P<sub>p</sub>)/|ΣH|; '+FST(FSsl),fs(FSsl,R.govSlr.FSslr),['o-st-slide']],
@@ -3582,6 +3611,7 @@ function sfrCombined(){return !!(R&&R.peds&&R.peds.length>1);}
 function sfrRefs(){
  const ves=state.soil.mode==='vesic', em=state.stab.eccMode||'kern', aEcc=/^a_/.test(em), pp=num(state.stab.pf)>0;
  return SFD_REFS.map(([a,b])=>{
+  if(a==='ACI 318-19'&&em==='none')b=b+', §13.2.6.1 (foundation stability: overturning and sliding per the general building code; no eccentricity limit)';   /* SFNE */
   if(a==='ACI 318-19'&&sfrCombined())return [a,b.replace('§7.6.1.1 / §24.4.3.2 (minimum steel), §8.7.2.2 with §13.3.3.1 (bar spacing)','§13.3.4.1 (combined footing, designed under Chapter 8), §8.6.1.1 / §24.4.3.2 (minimum steel), §8.7.2.2 (bar spacing), §13.3.3.3 (band steel, isolated footings; for information)').replace(', §13.3.3.3 (band steel)','')];
   if(a==='AASHTO LRFD'){const it=[ves?'Art. 10.6.3.1.2a (same N, shape and inclination factors as Vesić; use condition for depth factors; its Eq. 10.6.3.1.2a-10 depth factor is not the one used here)':'',aEcc?'10.6.3.3 / 11.6.3.3 and 10.6.4.2 / 11.6.5.1 (eccentricity limit selected)':'',pp?'10.6.3.4 (passive resistance, warning)':''].filter(Boolean);
    return it.length?[a,'Bridge Design Specifications, 10th Ed. (2024) — '+it.join(', ')]:null;}
@@ -3621,7 +3651,7 @@ function sfrModel(){
    ['Dead / live surcharge',sfrN(num(state.ev.qDsur),0)+' / '+sfrN(num(state.ev.qLsur),0),'psf'],
    ['Base friction μ',sfrN(R.mu,3)+(state.stab.muMode==='phi'?' (tan 2/3 φ)':' (input)'),'–'],['Passive fraction mobilized',sfrCell(R.pf),'–'],
    ['FS targets: overturning / sliding / flotation',sfrN(num(state.stab.FSot))+' / '+sfrN(num(state.stab.FSsl))+' / '+sfrN(num(state.stab.FSfl)),'–'],
-   ['Overturning FS gates the result',R.otGate?'yes':'no (reported only)','–'],['Eccentricity limit',R.eccChk?sfrPlain(R.eccChk.lab):'not checked','–'],
+   ['Overturning FS gates the result',R.otGate?'yes':'no (reported only)','–'],['Eccentricity limit',R.eccChk?sfrPlain(R.eccChk.lab):(R.eccInfo?'none (not limited by IBC 2021 / ACI 318-19); e reported for information':'not checked'),'–'],
    ['Pedestal shear couple V·h',state.stab.shearCouple==='off'?'excluded':'included','–']])}]});
   /* reinforcement: A_b, A_s per ft (barAreaPerFt, as the design) */
   const w=sfrW();
@@ -3772,6 +3802,15 @@ function sfrModel(){
     S({id:'lim',label:'Limits: '+sfrPlain(E.lab),sym:'e_{x,lim}',eq:'f\\,B',sub:sfrN(E.f,3)+'\\cdot'+sfrN(R.B),value:E.limX,unit:'ft',d:3,ref:sfrPlain(E.ref),note:'e_y,lim = f L = '+sfrN(E.limY,3)+' ft'}),
     E.biax?S({id:'DCR',label:'Governing: '+E.gov.name+' (biaxial: the resultant must lie inside the kern diamond for full contact)',sym:'DCR',eq:'\\frac{6|e_{x}|}{B} + \\frac{6|e_{y}|}{L}',sub:'\\frac{6\\cdot'+sfrN(Math.abs(E.gov.ex),3)+'}{'+sfrN(R.B)+'} + \\frac{6\\cdot'+sfrN(Math.abs(E.gov.ey),3)+'}{'+sfrN(R.L)+'} = '+sfrN(E.gov.dcrX,3)+' + '+sfrN(E.gov.dcrY,3),value:E.gov.dcr,unit:'',d:3,ok:!!E.ok})   /* SFEB */
     :S({id:'DCR',label:'Governing: '+E.gov.name,sym:'DCR',eq:'\\max\\left(\\frac{|e_{x}|}{f B}, \\frac{|e_{y}|}{f L}\\right)',sub:'\\max\\left(\\frac{'+sfrN(Math.abs(E.gov.ex),3)+'}{'+sfrN(E.limX,3)+'}, \\frac{'+sfrN(Math.abs(E.gov.ey),3)+'}{'+sfrN(E.limY,3)+'}\\right)',value:E.gov.dcr,unit:'',d:3,ok:!!E.ok})]},...(E.biax?[{type:'note',text:'e_x, e_y of every service combination: [[S-asd]]. Middle third under biaxial eccentricity: the resultant must lie inside the kern diamond, 6|e_x|/B + 6|e_y|/L ≤ 1, for full contact.'}]:[])]});
+  }
+  else if(R.eccInfo&&R.eccInfo.gov){const I=R.eccInfo,g=I.gov;   /* SFNE: information only, no pass / fail, no D/C */
+   subs.push({title:'Eccentricity (information; no limit)',key:'S-ecc',items:[
+    {type:'note',text:'No eccentricity limit is applied (input). The eccentricity is not limited by IBC 2021 / ACI 318-19 (ACI 318-19 13.2.6.1: bearing, overturning and sliding per the general building code; neither code sets a maximum eccentricity). Stability is checked by overturning, bearing with partial contact and sliding ([[S-st]], [[S-bp]]). Reported for information.'},
+    {type:'steps',scope:'ecc',steps:[
+     S({id:'ex',label:'Largest eccentricity index: '+g.name,sym:'e_{x}',eq:'\\frac{\\sum M_{y}}{\\sum P}',sub:'',value:g.ex,unit:'ft',d:3,note:'e_y = '+sfrN(g.ey,3)+' ft'}),
+     S({id:'kern',label:'Kern index (≤ 1: full contact; information, no limit)',sym:'\\frac{6|e_{x}|}{B} + \\frac{6|e_{y}|}{L}',eq:'',sub:'\\frac{6\\cdot'+sfrN(Math.abs(g.ex),3)+'}{'+sfrN(R.B)+'} + \\frac{6\\cdot'+sfrN(Math.abs(g.ey),3)+'}{'+sfrN(R.L)+'}',value:g.kern,unit:'',d:3,note:'B/6 = '+sfrN(R.B/6,3)+' ft, L/6 = '+sfrN(R.L/6,3)+' ft; contact '+sfrN(100*g.contact,1)+' %'})]},
+    {type:'table',caption:'Eccentricity of each service combination (information)',head:['Combination','e_x (ft)','e_y (ft)','|e_x|/B','|e_y|/L','6|e_x|/B + 6|e_y|/L','Contact (%)'],
+     rows:I.rows.map(rw=>({cells:[rw.name,sfrCell(rw.ex,3),sfrCell(rw.ey,3),sfrCell(rw.ratX,3),sfrCell(rw.ratY,3),sfrCell(rw.kern,3),sfrCell(100*rw.contact,1)],cls:rw===g?'gov':''}))}]});
   }
   const st=[], fr=[];
   if(state.stab.muMode==='phi')fr.push(S({id:'mu',label:'Base friction coefficient',sym:'\\mu',eq:'\\tan(\\tfrac{2}{3}\\phi)'.replace('\\tfrac','\\frac'),sub:'\\tan(\\frac{2}{3}\\cdot'+sfrN(R.phiDeg,1)+'^{\\circ})',value:R.mu,unit:'',d:3,ref:'δ = 2/3 φ (cast on soil)'}));
@@ -4074,7 +4113,7 @@ function sfrModel(){
  /* SFLK (2026-11-02): summary of results, one row per dashboard check, each linked to the section that works it */
  {const have=new Set();secs.forEach(x=>{if(x.key)have.add(x.key);(x.subs||[]).forEach(q=>{if(q.key)have.add(q.key);});});
   const pd=((P2&&P2.pedDes)||[]).map((z,i)=>'S-pd'+i), xy=['S-fdx','S-fdy'];
-  const W={'Bearing (service)':['S-qa','S-bp'],'Overturning':['S-st'],'Eccentricity limit':['S-ecc'],'Sliding, x':['S-st'],'Sliding, y':['S-st'],'Sliding, resultant \u221a(Hx\u00b2+Hy\u00b2)':['S-st'],
+  const W={'Bearing (service)':['S-qa','S-bp'],'Overturning':['S-st'],'Eccentricity limit':['S-ecc'],'Eccentricity (information)':['S-ecc'],'Sliding, x':['S-st'],'Sliding, y':['S-st'],'Sliding, resultant \u221a(Hx\u00b2+Hy\u00b2)':['S-st'],
    'Flotation':['S-st'],'Contact area':['S-bp'],'Rigidity (rigid method)':['S-st'],'Flexure (footing)':xy,'One-way shear':xy,'Footing bar clear spacing':xy,'Punching shear':['S-pun'],
    'Concrete bearing':['S-cbr'],'Dowel steel (min 0.005A_g)':['S-cbr','S-dow'],'Dowel development (\u2113dc)':['S-cbr','S-dow'],'Interface shear friction':['S-sf'],'Dowels (tension, laps)':['S-dow'],
    'Pedestal design':pd,'Pedestal P\u2013M (biaxial)':pd,'Pedestal tie cover':pd,'Footing bar development':xy,'Pedestal shear':pd,'Pedestal crossties':pd,'Concrete cover':['S-cov',...pd],'Wall checks (ACI 318-19 Ch. 11)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.sel).map(z=>'S-pd'+z.idx),
