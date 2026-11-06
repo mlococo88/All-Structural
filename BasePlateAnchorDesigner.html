@@ -1023,7 +1023,7 @@ function defaultState(){
           owner:"", supports:""},   /* OWN-1 (2026-11-02, display only): owner "" | "ctdot"; supports "" | "sign" (sign, traffic signal or luminaire) | "other"; "" = not stated (every save before OWN-1) */
     /* geometry: plate */
     plate:{ B:18, N:18, t:1.5, exc_x:0, exc_y:0, grade:"a36", holeDia:0,
-            shape:"rect", D:24 },   /* BC-1 (2026-11-01): shape "rect" (B × N, every save before BC-1) | "circle" (diameter D; double-nut pole base) */   /* B along x (width), N along y (length); holeDia 0 = AISC DG1 Table 2.3 oversized hole */
+            shape:"rect", D:24 },   /* BC-1 (2026-11-01): shape "rect" (B × N, every save before BC-1) | "circle" (diameter D; double-nut pole base) */   /* B along x (width), N along y (length); holeDia 0 = AISC DG1 Table 2.3 oversized hole; holeType (BPHT, stored once picked; absent = from holeDia): see bpHoleTypeOf */
     /* column footprint — for schematic + DG1 bearing interface */
     col:{ shapeType:"W", shape:"W12X65", custom:false, d:12.1, b:12.0 },   /* d along y, b along x */
     /* anchors: layout by faces */
@@ -1633,7 +1633,7 @@ function bpExportDxf(){
     txt:W.layer("BP-TEXT",7), cl:W.layer("BP-CENTER",1,"CENTER"),
     sec:W.layer("BP-SECTION",6,"CENTER"), bey:W.layer("BP-SECTION-BEYOND",8)};   /* GFX-G: cut lines; what lies beyond the cut */
   const cutA=bpCutOf("A"), cutB=bpCutOf("B");   /* GFX-G: the current section cuts (rebar-view frame; the plan adds the plate offset) */
-  const hs=anchorHoleDG1(anchorSpec(A.dia).d), dh=(P.holeDia>0)? P.holeDia : hs.dh;
+  const hs=bpHole(P,anchorSpec(A.dia).d), dh=hs.dh;   /* BPHT: the hole of the selected hole type */
   const hx=C.Bx/2, hy=C.By/2, th=Math.max(0.6, Math.min(C.Bx,C.By)/40);
   /* ---------------- PLAN ---------------- */
   if(bpCircPier()) W.circle(LY.ped,[0,0],C.D/2); else   /* BC-2 */
@@ -4013,15 +4013,42 @@ function anchorHoleDG1(d){
     return {dh:d+o0+f*(o1-o0), exact:false}; } }
   return {dh:d+0.0625, exact:false};
 }
+/* BPHT (2026-11-06, engineer): HOLE TYPE of the base-plate anchor holes, S.plate.holeType:
+     "dg1"    oversized anchor-rod hole, AISC DG1 2nd Ed. Table 2.3 / AISC Manual Table 14-2 (anchorHoleDG1; the default);
+     "std"    standard hole, AISC 360-16 Table J3.3 (d + 1/16 in below 1 in, d + 1/8 in from 1 in up);
+     "custom" the entered S.plate.holeDia (0 or blank falls back to the DG1 hole, as holeDia 0 always meant).
+   plate.holeType is stored only once the user picks a type (it is not in defaultState): a plate without it (every save
+   before BPHT, and a new project) is read by bpHoleTypeOf as holeDia 0 -> "dg1", holeDia > 0 -> "custom", which is exactly
+   what holeDia meant before, so a saved project keeps its hole, its results and its saved / exported JSON. Slotted holes are not
+   offered: anchor-rod holes in base plates are round (DG1 Table 2.3), and a slot's direction, which J3.10 needs for a
+   long slot and which sets l_c, is not modelled. */
+const BP_HOLE_TYPES=[["dg1","Oversized anchor-rod hole (AISC DG1 Table 2.3 / Manual Table 14-2)"],
+                     ["std","Standard hole (AISC 360-16 Table J3.3)"],["custom","Custom diameter"]];
+function anchorHoleStdJ33(d){ return d<1-1e-9? d+1/16 : d+1/8; }   /* AISC 360-16 Table J3.3, standard hole */
+/* AISC 360-16 Table J3.3, oversize column (bolts): used only for the drawn washer of a custom hole (bpHw) */
+function anchorHoleOvsJ33(d){ return d<0.5+1e-9? d+1/8 : d<1-1e-9? d+3/16 : d<1+1e-9? d+1/4 : d+5/16; }
+function bpHoleTypeOf(P){ const t=P&&P.holeType; return (t==="dg1"||t==="std"||t==="custom")? t : ((P&&P.holeDia>0)? "custom" : "dg1"); }
+/* the hole of the plate P for rod diameter d: {type (as used: "custom" with holeDia 0 is used as "dg1"), dh, dg, std, exact, src} */
+function bpHole(P,d){
+  P=P||S.plate; if(d===undefined) d=anchorSpec(S.anchor.dia).d;
+  const sel=bpHoleTypeOf(P), dg=anchorHoleDG1(d), std=anchorHoleStdJ33(d);
+  if(sel==="std") return {type:"std",sel,dh:std,dg:dg.dh,std,exact:true,src:"AISC 360-16 Table J3.3 standard hole"};
+  if(sel==="custom" && P.holeDia>0) return {type:"custom",sel,dh:+P.holeDia,dg:dg.dh,std,exact:true,src:"custom (as entered)"};
+  return {type:"dg1",sel,dh:dg.dh,dg:dg.dh,std,exact:dg.exact,src:"AISC DG1 Table 2.3 oversized anchor-rod hole"};
+}
+/* a plate object copied onto the live S.plate by Object.assign (compare snapshots): a snapshot without holeType must not
+   inherit the live hole type; it is read from its own holeDia */
+function bpHoleTypeFix(dst,src){ if(dst && src && typeof src==="object" && src.holeType===undefined) delete dst.holeType; }
 /* bolt-hole tearout / edge in the plate under shear (AISC J3.10) */
 function plateTearout(combo){
   const P=S.plate, pg=pgrade(P.grade), sp=anchorSpec(S.anchor.dia);
   const phi=0.75, Fu=pg.Fu, t=P.t;
   /* Anchor-rod holes in base plates are OVERSIZED: AISC DG1 Table 2.3 (Manual
      Table 14-2). Previously a standard d + 1/16 hole was assumed, which
-     overstated l_c. S.plate.holeDia > 0 overrides (e.g. a drilled hole). */
-  const hs=anchorHoleDG1(sp.d);
-  const dh=(P.holeDia>0)? P.holeDia : hs.dh;
+     overstated l_c. S.plate.holeDia > 0 overrides (e.g. a drilled hole).
+     BPHT (2026-11-06): d_h follows the hole type (bpHole: DG1 oversized (default), AISC 360-16 Table J3.3 standard, custom). */
+  const hs=bpHole(P,sp.d);
+  const dh=hs.dh;
   const lc=((bpCircPattern()||bpCircPlate())? bpPlateEdgeMin() : Math.min(S.anchor.edx,S.anchor.edy))-dh/2;  /* clear distance to edge (BC-1: bolt circle / circular plate → smallest anchor-to-plate-edge distance) */
   const Rn_to=1.2*lc*t*Fu;   /* tearout */
   const Rn_br=2.4*sp.d*t*Fu; /* bearing */
@@ -4036,7 +4063,7 @@ function plateTearout(combo){
         "\\phi R_n="+fmt(phi)+"\\min(1.2\\times"+fmt(lc,2)+"\\times"+fmt(t,2)+"\\times"+fmt(Fu,0)+",\\;2.4\\times"+fmt(sp.d,3)+"\\times"+fmt(t,2)+"\\times"+fmt(Fu,0)+")="+fmt(phi*Rn,2)+"\\ \\text{kip}",
         "\\text{DCR}=V_u/\\phi R_n="+fmt(Vu,2)+"/"+fmt(phi*Rn,2)+"="+fmt(dcr,2)],
        vars:[["l_c",fmt(lc,2)+" in","clear distance, hole edge to plate edge"],
-             ["d_h",fmt(dh,3)+" in",(P.holeDia>0)?"hole diameter (user input)":("hole diameter, AISC DG1 Table 2.3 oversized anchor-rod hole"+(hs.exact?"":" (interpolated/extrapolated — d not tabulated)"))],["F_u",fmt(Fu,0)+" ksi","plate tensile strength"]]}
+             ["d_h",fmt(dh,3)+" in",(hs.type==="custom")?"hole diameter (user input)":(hs.type==="std")?"hole diameter, AISC 360-16 Table J3.3 standard hole":("hole diameter, AISC DG1 Table 2.3 oversized anchor-rod hole"+(hs.exact?"":" (interpolated/extrapolated — d not tabulated)"))],["F_u",fmt(Fu,0)+" ksi","plate tensile strength"]]}
     ]};
 }
 
@@ -5592,8 +5619,18 @@ function buildInputPanel(){
     fRow(body,"Plate length N (y)",numInput(()=>S.plate.N,v=>S.plate.N=v,0.5),"in");
     }
     fRow(body,"Plate thickness t",numInput(()=>S.plate.t,v=>S.plate.t=v,0.125),"in");
-    fRow(body,"Anchor hole dia. d_h",numInput(()=>S.plate.holeDia||0,v=>S.plate.holeDia=v,0.0625),"in",
-      "0 = AISC DG1 Table 2.3 oversized hole ("+fmt(anchorHoleDG1(S.anchor.dia).dh,4)+"″ for this rod). Used in the tearout check.");
+    /* BPHT (2026-11-06): hole type; the diameter input only for "Custom diameter" */
+    { const hh=bpHole(S.plate,anchorSpec(S.anchor.dia).d), sel=bpHoleTypeOf(S.plate);
+      fRow(body,"Anchor hole type",selInput(BP_HOLE_TYPES,()=>sel,
+        v=>{ if(v==="custom" && !(S.plate.holeDia>0)) S.plate.holeDia=hh.dh; S.plate.holeType=v; },o=>o[1],o=>o[0]),"",
+        "d<sub>h</sub> = "+bpdwIn(hh.dh).replace('"',"″")+" ("+fmt(hh.dh,4)+"″) for this rod: "+
+        (hh.type==="std"? "AISC 360-16 Table J3.3 standard hole. Needs the rods set to a tight tolerance; AISC DG1 recommends the oversized holes for base plates (and AISC 360-16 J3.2(a) permits them)."
+         : hh.type==="custom"? "as entered."
+         : "AISC DG1 Table 2.3 oversized anchor-rod hole"+(hh.exact?"":" (interpolated: d not tabulated)")+".")+
+        " Used in the tearout check (Plate tab) and drawn with the "+(bpHw().top.kind==="plate"?"plate washer":"round hardened washer")+" in the drawings.");
+      if(sel==="custom") fRow(body,"Anchor hole dia. d_h",numInput(()=>S.plate.holeDia||0,v=>S.plate.holeDia=v,0.0625),"in",
+        "0 = AISC DG1 Table 2.3 oversized hole ("+fmt(hh.dg,4)+"″ for this rod); AISC 360-16 Table J3.3 standard hole "+fmt(hh.std,4)+"″.");
+    }
     fRow(body,"Plate grade",selInput(LIB.plateGrades,()=>S.plate.grade,v=>S.plate.grade=v,o=>o.name,o=>o.id),"");
     /* column shape picker */
     fRow(body,"Column type",selInput([["W","W-shape"],["HSS","HSS (square/rect/round)"],["custom","Custom d × b"]],
@@ -10042,23 +10079,31 @@ function bpPrintSheet(){
      - heads of headed bolts (ASME B18.2.1 proportions): hex and square heads F = 1.5 d, heavy hex / heavy square F = 1.5 d + 1/8 in,
        head height about 5/8 d (heavy hex) or 2/3 d (hex, square);
      - headed studs (AWS D1.1 Type B typical head diameter and thickness);
-     - plate washers on top of the base plate when the hole is the AISC DG1 oversized hole (plate holeDia 0 or at least the DG1
-       hole): the minimum washer size and thickness of AISC DG1 Table 2.3 (AISC Manual Table 14-2); otherwise a round hardened
-       washer, OD about 2 d, thickness 5/32 in (ASTM F436 nominal);
+     - the top washer follows the plate's hole type (BPHT, 2026-11-06; bpHole):
+         oversized (AISC DG1) hole: a plate washer, the minimum size and thickness of AISC DG1 Table 2.3 (AISC Manual Table 14-2);
+         standard (AISC 360-16 Table J3.3) hole: a round hardened washer, ASTM F436 nominal outside diameter for the rod size
+           (BPHW_F436), drawn 5/32 in thick up to 1 1/2 in and 7/32 in above (inside the F436 thickness ranges);
+         custom hole: the round F436 washer while d_h is not larger than the AISC 360-16 Table J3.3 oversized hole of that
+           diameter (the largest bolt hole that table lists for the size), otherwise the DG1 plate washer;
+       (was, BPHW: the plate washer when holeDia was 0 or at least the DG1 hole, else a round washer 2 d OD x 5/32 in);
      - the embedded plate washer (head "platewasher"): the model's washer_od (square) with the DG1 Table 2.3 thickness, and a heavy hex
        nut under it;
      - thread pitch 1/n (UNC, LIB.anchorDias n); minor diameter about d - 1.299 / n (drawn as the simplified thread lines).
    ===================================================================== */
 const BPHW_WASH=[[0.75,2,0.25],[0.875,2.5,0.3125],[1,3,0.375],[1.25,3,0.5],[1.5,3.5,0.5],[1.75,4,0.625],[2,5,0.75],[2.5,5.5,0.875]];
+/* ASTM F436 round hardened washers, nominal outside diameter by rod size [d, OD] (in); over 2 in: OD = 2 d - 1/2 */
+const BPHW_F436=[[0.5,1.0625],[0.625,1.3125],[0.75,1.46875],[0.875,1.75],[1,2],[1.125,2.25],[1.25,2.5],[1.375,2.75],[1.5,3],[1.75,3.375],[2,3.75]];
 const BPHW_STUD=[[0.5,1,0.3125],[0.625,1.25,0.3125],[0.75,1.25,0.375],[0.875,1.375,0.375],[1,1.625,0.5]];
 function bpHw(){
   const A=S.anchor, P=S.plate, d=+A.dia||1, sp=anchorSpec(d), n=sp.n||8, pitch=1/n;
   const nutF=1.5*d+0.125, nutH=d-(d<=1.125+1e-9? 1/64 : d<=2+1e-9? 1/32 : 3/64);
   const near=(T)=>{ let best=T[0]; T.forEach(r=>{ if(Math.abs(r[0]-d)<Math.abs(best[0]-d)) best=r; }); return best; };
-  const wr=near(BPHW_WASH), dgHole=anchorHoleDG1(d).dh, dh=(P.holeDia>0)? P.holeDia : dgHole;
-  const plateW=dh>=dgHole-1e-6;
+  const ho=bpHole(P,d), wr=near(BPHW_WASH), dgHole=ho.dg, dh=ho.dh;
+  /* BPHT: the washer follows the hole type (see above) */
+  const plateW=(ho.type==="dg1") || (ho.type==="custom" && dh>anchorHoleOvsJ33(d)+1e-6);
+  const f4=BPHW_F436.find(r=>Math.abs(r[0]-d)<1e-6), f4OD=f4? f4[1] : (d>2? 2*d-0.5 : near(BPHW_F436)[1]*d/near(BPHW_F436)[0]);
   const top=plateW? {kind:"plate",W:Math.max(wr[1],nutF*1.155+0.125),t:wr[2],src:"AISC DG1 Table 2.3 (Manual Table 14-2) minimum plate washer"}
-                  : {kind:"round",W:2*d,t:0.15625,src:"round hardened washer (ASTM F436 nominal)"};
+                  : {kind:"round",W:f4OD,t:(d<=1.5+1e-9? 0.15625 : 0.21875),src:"round hardened washer (ASTM F436)"};
   let head;
   switch(A.head){
     case "heavyhex": head={kind:"hex",F:1.5*d,H:2/3*d,lab:"HEX HEAD"}; break;
@@ -10070,7 +10115,7 @@ function bpHw(){
     case "plainrod": head={kind:"none",F:d,H:0,lab:"PLAIN THREADED ROD (NO HEAD)"}; break;
     default: head={kind:"hex",F:1.5*d,H:2/3*d,lab:"HEX HEAD"};
   }
-  return {d,n,pitch,dMinor:d-1.299/n,nutF,nutH,nutC:nutF/Math.cos(Math.PI/6),dh,dgHole,top,head};
+  return {d,n,pitch,dMinor:d-1.299/n,nutF,nutH,nutC:nutF/Math.cos(Math.PI/6),dh,dgHole,hole:ho,top,head};
 }
 /* the stack of one anchor in elevation, z up from the pedestal bottom (z = C.H at the top of concrete). Display only. */
 function bpHwStack(){
@@ -10436,14 +10481,14 @@ function bpdwBuild(){
     tbl('ANCHOR ROD SCHEDULE',['MARK','QTY','DIA.','ASTM GRADE','FY / FU (KSI)','EMBEDDED END','H_EF','L','PROJ.','INSTALL'],
       [['AR1',String(nA),bpdwIn(hw.d)+' ('+hw.n+' UNC)',ag.name.toUpperCase(),ag.Fy+' / '+ag.Fu,hw.head.lab,bpdwIn(A.hef),bpdwIn(Lr),bpdwIn(st.zTop-st.zc),install]],[1]);
     tbl('BASE PLATE SCHEDULE',['MARK','SIZE','GRADE','FY (KSI)','HOLES','BEARING'],
-      [['BP1',(circPlate?'PL '+bpdwIn(Pl.D)+' DIA. x '+bpdwIn(Pl.t):'PL '+bpdwIn(Pl.B)+' x '+bpdwIn(Pl.N)+' x '+bpdwIn(Pl.t)),pgd.name.toUpperCase(),String(pgd.Fy),nA+' x '+bpdwIn(hw.dh)+' DIA.'+(Pl.holeDia>0?'':' (DG1 TABLE 2.3)'),stackTxt.replace(/ \+ PLATE.*/,'')||'FLUSH']]);
+      [['BP1',(circPlate?'PL '+bpdwIn(Pl.D)+' DIA. x '+bpdwIn(Pl.t):'PL '+bpdwIn(Pl.B)+' x '+bpdwIn(Pl.N)+' x '+bpdwIn(Pl.t)),pgd.name.toUpperCase(),String(pgd.Fy),nA+' x '+bpdwIn(hw.dh)+' DIA.'+(hw.hole.type==='std'?' STD. (AISC 360 TABLE J3.3)':hw.hole.type==='custom'?'':' (DG1 TABLE 2.3)'),stackTxt.replace(/ \+ PLATE.*/,'')||'FLUSH']]);
     const rr=bpRebarSchedule();
     if(rr.length) tbl('REINFORCEMENT SCHEDULE',['MARK','SIZE','QTY','SHAPE','LENGTH (IN)','ANCHOR REINF.'],rr.map(r=>[r.mark,r.size,String(r.qty),String(r.shape).toUpperCase(),fmt(r.len,1),String(r.cnt).toUpperCase()]),[2,4]);
     else { D.text(L.txt,tx,y,0.12*P,'REINFORCEMENT SCHEDULE',0); D.text(L.txt,tx,y-0.25*P,th,'NO REINFORCEMENT ENTERED IN THE TOOL.',0); y-=0.7*P; }
     ['PROJ. = ROD ABOVE THE TOP OF CONCRETE. L = ROD LENGTH '+(hw.head.kind==='washer'?'OVERALL':'UNDER THE HEAD')+' =',
      'H_EF + '+stackTxt+' + WASHER + NUT + 3 THREADS (SCHEDULE: ROUNDED UP TO 1/4").',
      'NOMINAL HARDWARE PROPORTIONS: DETAILER TO CONFIRM THE ROD LENGTH.',
-     'PLATE WASHER: AISC DG1 TABLE 2.3 MINIMUM SIZE AND THICKNESS.',
+     (hw.top.kind==='plate'?'PLATE WASHER: AISC DG1 TABLE 2.3 MINIMUM SIZE AND THICKNESS.':'WASHER: ROUND HARDENED, ASTM F436, '+bpdwIn(hw.top.W)+' OD.'),   /* BPHT */
      'REBAR LENGTHS: CENTRELINE OF STRAIGHT SEGMENTS AND BENDS AS DRAWN IN',
      'THE TOOL; HOOKS AND BEND ALLOWANCES NOT ADDED. ANCHOR REINF.: COUNTED =',
      'THE LEG VERDICTS OF ACI 318-19 17.5.2.1 (TENSION / SHEAR REBAR TABS).'].forEach((s2,j)=>D.text(L.txt,tx,y+0.2*P-0.14*j*P,0.065*P,s2,0));
@@ -10462,13 +10507,13 @@ function bpdwBuild(){
       'MATERIALS',
       '4. CONCRETE: F\'C = '+fmt(C.fc,2)+' KSI, NORMAL WEIGHT; '+(C.cracked?'CRACKED':'UNCRACKED')+' CONCRETE ASSUMED AT SERVICE LOADS.',
       '5. ANCHOR RODS: ASTM '+ag.name.toUpperCase()+', FY = '+ag.Fy+' KSI, FU = '+ag.Fu+' KSI; '+bpdwIn(hw.d)+' DIA.; '+hw.head.lab+'; H_EF = '+bpdwIn(A.hef)+'.',
-      '6. NUTS: HEAVY HEX (ASME B18.2.2). WASHERS: '+(hw.top.kind==='plate'?'PLATE WASHERS PER AISC DG1 TABLE 2.3 (OVERSIZED HOLES)':'HARDENED (ASTM F436)')+'.',
+      '6. NUTS: HEAVY HEX (ASME B18.2.2). WASHERS: '+(hw.top.kind==='plate'?'PLATE WASHERS PER AISC DG1 TABLE 2.3 (OVERSIZED HOLES)':'ROUND HARDENED (ASTM F436)')+'.',
       '7. BASE PLATE: ASTM '+pgd.name.toUpperCase()+', FY = '+pgd.Fy+' KSI.',
       (S.grout.present?'8. GROUT: NON-SHRINK, F\'C = '+fmt(S.grout.fc_grout,2)+' KSI, '+bpdwIn(S.grout.tg)+' THICK, '+(S.grout.taper==='1to1'?'1:1 TAPERED EDGE':'VERTICAL EDGE')+'.':'8. GROUT: NONE.'),
       '9. REINFORCEMENT: '+(rg?'ASTM A615 '+rg.name.toUpperCase()+' (FY = '+rg.fy+' KSI)':'NONE ENTERED')+'.',
       'INSTALLATION',
       '10. ANCHORS '+(A.torqued?'TORQUED (ACI 318-19 TABLE 17.9.2a LIMITS CHECKED)':'UNTORQUED')+'. STAND-OFF: '+String(so.label).toUpperCase()+'.',
-      '11. HOLES: '+bpdwIn(hw.dh)+' DIA. '+(Pl.holeDia>0?'(AS ENTERED)':'(AISC DG1 TABLE 2.3)')+'. WELD OF COLUMN TO PLATE: NOT DESIGNED IN THIS TOOL, BY THE ENGINEER OF RECORD.',
+      '11. HOLES: '+bpdwIn(hw.dh)+' DIA. '+(hw.hole.type==='std'?'(STANDARD, AISC 360-16 TABLE J3.3)':hw.hole.type==='custom'?'(AS ENTERED)':'(AISC DG1 TABLE 2.3)')+'. WELD OF COLUMN TO PLATE: NOT DESIGNED IN THIS TOOL, BY THE ENGINEER OF RECORD.',
       '12. HARDWARE (NUTS, WASHERS, HEADS, THREADS) DRAWN TO NOMINAL PROPORTIONS FOR ILLUSTRATION; ROD LENGTH NOMINAL, DETAILER TO CONFIRM.',
       '13. VALUES AS THE TOOL\'S TABS; EACH CHECK IS WORKED ON ITS TAB AND IN THE CALCULATION REPORT.'];
     let y=0; const lh=0.16;
@@ -13244,6 +13289,7 @@ function checksForState(st){
         Object.assign(S[k],JSON.parse(JSON.stringify(st[k])));
       else S[k]=JSON.parse(JSON.stringify(st[k]));
     });
+    bpHoleTypeFix(S.plate,st.plate);   /* BPHT: a snapshot from before the hole type keeps its own hole */
     CC=computeAll();
     out=allChecks();
   }catch(e){ out=[]; }
@@ -13357,6 +13403,7 @@ function openCompare(){
             Object.assign(S[k],JSON.parse(JSON.stringify(sn.state[k])));
           else S[k]=JSON.parse(JSON.stringify(sn.state[k]));
         });
+        bpHoleTypeFix(S.plate,sn.state.plate);   /* BPHT */
         autosave(); overlay.remove(); buildTabs();
       });
       const dl=el("button",null,"×"); dl.title="Delete "+sn.label;
@@ -16910,7 +16957,8 @@ manPart("p4a","4A. Base Plate Mechanics",[
  ["F_u","ksi","tensile strength of the plate material"],
  ["\\phi","—","0.75"]
 ]},
-{p:"The first term is tearout — the bolt ploughing a channel out to the free edge. The second is bearing — the bolt crushing the material ahead of it. Whichever is smaller governs. With the oversized holes typical in base plates this check is almost never critical, but it is cheap to verify and it catches details where an anchor has been placed very close to the plate edge."}
+{p:"The first term is tearout — the bolt ploughing a channel out to the free edge. The second is bearing — the bolt crushing the material ahead of it. Whichever is smaller governs. With the oversized holes typical in base plates this check is almost never critical, but it is cheap to verify and it catches details where an anchor has been placed very close to the plate edge."},
+{p:"The hole diameter d<sub>h</sub> (it sets &#8467;<sub>c</sub>) follows the <b>Anchor hole type</b> on the Input tab: the oversized anchor-rod hole of AISC DG1 Table 2.3 / Manual Table 14-2 (the default), the standard hole of AISC 360-16 Table J3.3, or a custom diameter. The drawings follow it too: a plate washer (DG1 Table 2.3 minimum size) over an oversized hole, a round hardened ASTM F436 washer over a standard hole; a custom hole gets the round washer up to the Table J3.3 oversized size for the rod and the plate washer above that. Slotted holes are not offered."}
 ]);
 
 /* ===== MANUAL PART IV-B — TENSION LIMIT STATES (ACI 318-19 Ch.17) ===== */
