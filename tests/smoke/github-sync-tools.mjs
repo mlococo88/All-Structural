@@ -28,10 +28,10 @@ const OWN = {
   // apps/steel-bridge (STDS-B, 2026-11-06): the standard Saved projects dialog over its by-name view (items by id); kept here for the
   // own-list checks (first-sync offer, a delete that asks about the GitHub copy) because its sync list differs from the dialog's
   // Pile Designer (STDS-P, 2026-11-06): the standard dialog over its IndexedDB copy (sync list = newest of each name)
-  pile: { show: p => p.evaluate(() => { const d = document.getElementById('pdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=hlib]').click(); }),
+  pile: { show: async p => { await p.evaluate(() => { const d = document.getElementById('pdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=chip]').click(); }); await p.waitForTimeout(300); await p.evaluate(() => document.querySelector('[data-sp=card] [data-sp=lib]').click()); },   // HDRS: chip → Project tab → the card's Saved projects…
     open: p => p.evaluate(() => document.getElementById('pdLibDlg').open),
     del: (p, n) => p.evaluate(n => document.querySelector(`#pdLibDlg [data-spa=del][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(), n) },
-  sbapp: { show: p => p.evaluate(() => { const d = document.getElementById('sbdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=hlib]').click(); }),
+  sbapp: { show: p => p.evaluate(() => { const d = document.getElementById('sbdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=chip]').click(); document.querySelector('[data-sp=card] [data-sp=lib]').click(); }),   // HDRS: chip → Project tab → the card's Saved projects…
     open: p => p.evaluate(() => document.getElementById('sbdLibDlg').open),
     del: (p, n) => p.evaluate(n => document.querySelector(`#sbdLibDlg [data-spa=del][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(), n) }
 };

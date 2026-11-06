@@ -46,7 +46,9 @@ async function run(file) {
 // header buttons are left out of the A vs B text: the page's results (the rest of the page) must be identical
 const text = p => p.evaluate(() => { const c = document.body.cloneNode(true); c.querySelectorAll('[data-sp],script,style,#pdPrjBlock,.pd-hdrBtns').forEach(x => x.remove()); return c.innerText.replace(/saved to browser|auto-save on/g, '').replace(/Project fileSave \/ load \.json · auto-saves to this browser.Project libraryStored in this browser \(IndexedDB\)./, '')   /* main's two collapsed panels (STDS-P: replaced by the card) */.replace(/\s+/g, ' '); });
 const state = async p => ({ text: await text(p), inputs: await p.evaluate(() => localStorage.getItem('micropile_lrfd_inputs_v1')) });
-const change = async p => { await p.evaluate(() => { const i = [...document.querySelectorAll('.input-rail input[type=number]')].find(x => x.offsetParent && x.value !== '');
+const change = async p => {   // HDRS: the chip (lib()) leaves the Project rail tab open, which has no number input: the next rail tab (Pile) first
+  if (!(await p.evaluate(() => [...document.querySelectorAll('.input-rail input[type=number]')].some(x => x.offsetParent && x.value !== '')))) { await p.evaluate(() => [...document.querySelectorAll('.rail-tabs button')].find(b => !/^Project/.test(b.textContent)).click()); await p.waitForTimeout(400); }
+  await p.evaluate(() => { const i = [...document.querySelectorAll('.input-rail input[type=number]')].find(x => x.offsetParent && x.value !== '');
   Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, String((+i.value || 0) + 1)); i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); }); await p.waitForTimeout(1500); };
 const same = (a, b, m) => { const eq = JSON.stringify(a) === JSON.stringify(b); ok(eq, m);
   if (!eq && a && b && typeof a.text === 'string') { let i = 0; while (i < a.text.length && a.text[i] === b.text[i]) i++; console.log('       A: …' + a.text.slice(Math.max(0, i - 80), i + 120) + '\n       B: …' + b.text.slice(Math.max(0, i - 80), i + 120) + '\n       inputs same: ' + (a.inputs === b.inputs)); } };
@@ -71,16 +73,17 @@ const idb = () => p.evaluate(async () => (await idbGetAll()).sort((a, b) => a.id
 const strip = (r, ...k) => { const c = { ...r }; k.forEach(x => delete c[x]); return JSON.stringify(c); };
 const saveAs = async (n, replace) => { await p.evaluate(() => SharedProjectsUI.bars[0].saveAs()); await p.fill('dialog.spSave .spName', n); await p.evaluate(() => document.querySelector('dialog.spSave [data-sa=ok]').click());
   if (replace) { ok(/already exists/.test(await p.$eval('dialog.spSave .spMsg', e => e.innerText)), 'Save as a name in use: "Replace it" asked'); await p.evaluate(() => document.querySelector('dialog.spSave [data-sa=ok]').click()); } await p.waitForTimeout(900); };
-const lib = async () => { await p.evaluate(() => { const d = document.getElementById('pdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=hlib]').click(); }); await p.waitForTimeout(400); };
+// HDRS (2026-11-06): no Save / Saved projects… in the header: the card's buttons (the chip opens the Project tab that holds the card)
+const lib = async () => { await p.evaluate(() => { const d = document.getElementById('pdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=chip]').click(); }); await p.waitForTimeout(300); await p.evaluate(() => document.querySelector('[data-sp=card] [data-sp=lib]').click()); await p.waitForTimeout(400); };
 const row = (n, a) => p.evaluate(([n, a]) => document.querySelector(`#pdLibDlg [data-spa=${a}][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(), [n, a]);
 const chip = () => p.evaluate(() => { SharedProjectsUI.bars[0].refresh(); return document.querySelector('[data-sp=chip]').innerText.replace(/\s+/g, ' '); });
-ok(await p.evaluate(() => [...document.querySelectorAll('.pd-hdrBtns button')].map(b => b.textContent.replace(/Ctrl\+S/, '').trim()).join('|').replace(/^Project:.*?\|/, 'chip|')) === 'chip|Undo|Redo|Save|Saved projects…|Methodology & code path', 'header: chip · Undo · Redo · Save · Saved projects… · Methodology');
+ok(await p.evaluate(() => [...document.querySelectorAll('.pd-hdrBtns button')].map(b => b.textContent.replace(/Ctrl\+S/, '').trim()).join('|').replace(/^Project:.*?\|/, 'chip|')) === 'chip|Undo|Redo|Methodology & code path', 'header: chip · Undo · Redo · Methodology (HDRS: Save / Saved projects… in the card only)');
 ok(await p.evaluate(() => document.querySelector('#pdPrjBlock .panel-title, #pdPrjBlock h2, #pdPrjBlock') && /Save and open/.test(document.querySelector('#pdPrjBlock').innerText.slice(0, 40))), 'Project tab: "Save and open" first');
-await p.evaluate(() => document.querySelector('[data-sp=hsave]').click()); await p.waitForSelector('dialog.spSave[open]'); await p.fill('dialog.spSave .spName', 'Job 1'); await p.evaluate(() => document.querySelector('dialog.spSave [data-sa=ok]').click()); await p.waitForTimeout(900);
+await p.keyboard.press('Control+s'); await p.waitForSelector('dialog.spSave[open]'); await p.fill('dialog.spSave .spName', 'Job 1'); await p.evaluate(() => document.querySelector('dialog.spSave [data-sa=ok]').click()); await p.waitForTimeout(900);   // HDRS: Ctrl+S (no header Save)
 let L = await idb(); const j1 = L[0]; ok(L.length === 1 && j1.name === 'Job 1' && j1.inputs && 'updatedAt' in j1 && 'lpile' in j1, 'Save (no name yet: Save as): one record { id, name, inputs, lpile, updatedAt }');
 ok(/Job 1 · saved/.test(await chip()), 'chip: Job 1 saved');
 await change(p); ok(/unsaved changes/.test(await chip()), 'an input change: unsaved changes');
-const n0 = B.dl.length; await p.evaluate(() => document.querySelector('[data-sp=hsave]').click()); await p.waitForTimeout(900); L = await idb();
+const n0 = B.dl.length; await p.evaluate(() => document.querySelector('[data-sp=card] [data-sp=save]').click()); await p.waitForTimeout(900); L = await idb();   // HDRS: the card's Save
 ok(B.dl.length === n0 && L.length === 1 && L[0].id === j1.id && L[0].updatedAt >= j1.updatedAt && /saved/.test(await chip()), 'Save on the open project: same record, no question');
 await saveAs('Job 1', false); ok((await idb()).length === 1, 'Save as with the open name: no new record');
 await saveAs('Job 2'); L = await idb(); ok(L.length === 2, 'Save as a new name: a second record');
