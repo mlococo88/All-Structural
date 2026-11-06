@@ -1937,6 +1937,9 @@ function smdPlibInit(){
     importFile:()=>$s('fIm').click(),
     fileButtons:[$s('bEx'),$s('bIm')],
     header:$s('bUndo').parentNode,chipBefore:$s('bUndo'),headerBefore:$s('bPr'),card:$s('smdSaveCard'),
+    /* HDRS (2026-11-06, engineer: every app's header as in Spread Footing #884): the header has the chip only (no Save / Saved
+       projects… buttons: they are in the "Save and open" card; Ctrl+S / Ctrl+Shift+S work from anywhere). A chip click goes to the sidebar's Project card ("Save and open"), as the header link #hdrProj does (its click handler is reused). */
+    headerSave:false, chipClick:()=>{ const a=document.getElementById("hdrProj"); if(a) a.click(); }, chipHint:"the Project card in the sidebar (Save and open)",
     renamed:(a,b)=>{if($s('projNm').value.trim()===a){$s('projNm').value=b;readIn();autoSave();}},
     changed:()=>{refreshSaveList();updateDirty();},
     /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'shear-moment-diagrams',label:'Shear and Moment Diagrams',space:1,toFile:i=>i.d,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return {t:Date.now(),d:j};}}});
