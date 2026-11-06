@@ -2002,7 +2002,7 @@ index 219cc2c..a3e337e 100644
 - **Other copies:** `index.html`, `lldf.html`, `Prestressed Bridge Design.html` (same PR; the block stays identical in the three).
 - **Formulas, factors, units, code references:** none. **Saved data:** none.
 
-## 2026-11-06 — PR: claude/bss-lldf (BSS) — the standard save: header chip · Undo · Redo · Save · Saved projects… · Print / PDF, "Save and open" card first in the Project tab, standard dialog over the Bridge Suite list (Save as, Rename, Delete), GitHub sync   [display and storage-access only; no key or format change; no computed result change]
+## 2026-11-06 — PR: claude/bss-lldf (PR #864: https://github.com/mlococo88/All-Structural/pull/864) (BSS) — the standard save: header chip · Undo · Redo · Save · Saved projects… · Print / PDF, "Save and open" card first in the Project tab, standard dialog over the Bridge Suite list (Save as, Rename, Delete), GitHub sync   [display and storage-access only; no key or format change; no computed result change]
 - **Why:** engineer-approved standard save (2026-11-05) and the Bridge Suite decisions (2026-11-06).
 - **Where / what:**
   - `<head>` scripts: after `shared/projects-ui.js`, `shared/github-sync.js` and `shared/bridge-suite-projects.js`; CSS "BSS (2026-11-06)" after `#hdrProj .hdrNone{…}` (chip on the dark header, card buttons).
