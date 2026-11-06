@@ -53,7 +53,7 @@ export const TOOLS = {
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(MODEL, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '#f_units_1_hp', 2),
     view: p => tabView(p, '#tab-bar .tab-btn', 2, '.active'),
-    save: async (p, name) => { await p.evaluate(n => { if (window.SLPL) window.SLPL.save(n); }, name); await p.waitForTimeout(300); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { if (window.SLPL) window.SLPL.save(n); }, name); await p.waitForTimeout(300); }
   },
   spc: {
     file: 'Section Property Calculator.html', list: 'spc_projects_v1', auto: 'spc_autosave_v1', ownUndo: true,   // part ids (time-based, new on every load) are not results and are left out

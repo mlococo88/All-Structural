@@ -320,8 +320,8 @@ header { height: 54px; flex: none; display: flex; align-items: center; gap: 10px
   <a class="bx-all-tools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
   <div class="hdr-spacer"></div>
   <div class="hdr-group">
-    <button type="button" class="btn" id="btn-open">Open</button>
-    <button type="button" class="btn" id="btn-save">Save</button>
+    <button type="button" class="btn" id="btn-open" title="Open a .subloads.json file of this tool">Import JSON</button>
+    <button type="button" class="btn" id="btn-save" title="Save the inputs on screen as a .subloads.json file">Export JSON</button>
     <button type="button" class="btn" id="btn-dxf">Export DXF</button>
     <button type="button" class="btn btn-primary" id="btn-print" title="Print / PDF the calculation report (the Report tab), from any tab">Print</button>
   </div>
@@ -1077,7 +1077,7 @@ function manualHtml() {
   <h3>Conventions</h3><ul><li>Stations are along CL bridge from CL bearing at Abut. 1. Transverse offsets are positive to the left looking ahead station.</li><li>Skew is the angle of the bearing line from the normal to CL bridge, positive when the left end of the line is ahead station.</li><li>Every transverse dimension of a unit (cap length, column spacing, footing length) is measured along its bearing line. Widths normal to the line are measured horizontally at right angles to it.</li><li>The deck profile is straight between the support elevations. Cross slope is not modeled: each bearing seat elevation is the deck elevation at that bearing's station minus the superstructure depth and the bearing height.</li><li>The top of cap is set by the highest seat less the pedestal height; the Geometry tab lists the resulting pedestal height at every bearing.</li><li>At an expansion joint over a pier, the unit has back and ahead bearing rows offset from CL pier, each with its own fixity.</li></ul>
   <h3>Fixity checks</h3><p>The superstructure is split into continuous segments at expansion joints. Each segment must be restrained longitudinally and transversely, either by fixed or guided bearings or by elastomeric bearing stiffness; more than one fixed unit is allowed and noted, because temperature forces then develop between them.</p>
   <h3>Drawings and DXF</h3><p>The plan, elevation, and unit drawings are built once as a list of lines, polylines, circles, text, and dimensions, rendered on screen and written to the DXF, so the file matches the screen. The DXF is AutoCAD R12, full size in inches in model space, with layers prefixed S- (deck, girders, fixed and expansion bearings, substructure, hidden lines, footings, ground, centerlines, dimensions, text). Dimensions are drawn as lines and text in this phase. Sheets with borders and title blocks come in Phase 7.</p>
-  <h3>Files</h3><p><b>Save</b> writes the whole project as JSON; <b>Open</b> reads it back. The app also keeps your last session in this browser.</p></div></div>`;
+  <h3>Files</h3><p><b>Save</b> (Ctrl+S) keeps the project in this browser's list of saved projects (and on GitHub when Cloud sync is on); <b>Save as…</b> asks for a name and where; <b>Saved projects…</b> opens, renames, duplicates and deletes them. <b>Export JSON</b> writes the whole project as a .subloads.json file; <b>Import JSON</b> reads it back. The app also keeps your last session in this browser (autosave).</p></div></div>`;
 }
 
 /* ---------- unit strip ---------- */
@@ -1115,7 +1115,7 @@ document.addEventListener('change', e => {
     setK(t.dataset.list, a); syncSupports(); recompute(); buildSide(); autosave(); }
   else if (t.dataset && t.dataset.v3 != null) { P.ui.v3[t.dataset.v3] = t.checked; v3Layers(); autosave(); }
   else if (t.id === 'v3-focus') { P.ui.v3.focus = t.value; v3Focus(t.value === 'all' ? 'all' : +t.value); autosave(); }
-  else if (t.id === 'file-in' && t.files[0]) { const f = t.files[0]; const rd = new FileReader(); rd.onload = () => { try { const j = JSON.parse(rd.result); openProject(j, f.name); } catch (err) { flash(`${f.name} is not a readable JSON file.`, 'fail'); } t.value = ''; }; rd.readAsText(f); }
+  else if (t.id === 'file-in' && t.files[0]) { const f = t.files[0]; const rd = new FileReader(); rd.onload = () => { try { const j = JSON.parse(rd.result); openProject(j, f.name); if (window.SLPL && SLPL.pb && j && j.app === APP) SLPL.pb.setCurrent(null); /* STDS: an imported file is not a saved project */ } catch (err) { flash(`${f.name} is not a readable JSON file.`, 'fail'); } t.value = ''; }; rd.readAsText(f); }
 });
 document.addEventListener('click', e => {
   const t = e.target.closest('button, [data-k]'); const g = e.target.closest('#strip-host .u');
@@ -1125,8 +1125,8 @@ document.addEventListener('click', e => {
   else if (t.classList.contains('tab-btn')) showTab(t.dataset.tab);
   else if (t.dataset.unit != null) selectUnit(+t.dataset.unit);
   else if (t.dataset.seg) { let v = t.dataset.v; setK(t.dataset.seg, v); t.parentNode.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === t)); recompute(); autosave(); }
-  else if (t.id === 'btn-open') $('#file-in').click();
-  else if (t.id === 'btn-save') download(`${fname()}.subloads.json`, JSON.stringify(P, null, 1), 'application/json'), flash('Project saved.');
+  else if (t.id === 'btn-open') { if (window.SLPL && SLPL.pb) SLPL.pb.importJSON(); else $('#file-in').click(); }   /* STDS: asks first when there are unsaved changes */
+  else if (t.id === 'btn-save') download(`${fname()}.subloads.json`, JSON.stringify(P, null, 1), 'application/json'), flash(`Exported ${fname()}.subloads.json.`);   /* STDS: the file is an export, not the saved project */
   else if (t.id === 'btn-dxf') exportDxf();
   else if (t.id === 'btn-print') printReport();
   else if (t.id === 'rx-clear') { if (!confirm('Clear every reaction?')) return; P.rx.data.forEach(row => row.forEach(r => Object.keys(r).forEach(c => r[c] = 0))); buildSide(); recompute(); autosave(); }
@@ -4178,25 +4178,35 @@ window.addEventListener('beforeprint', () => {
       syncSupports(); buildTabs(); buildSide(); showTab(P.ui.tab); recompute(); autosave(); } });
   let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
   const store = SharedProjects.mapStore(ST, LIB);
-  let cur = null;
-  const dlg = SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'bridge-substructure-loading',label:'Bridge Substructure Loading',space:1,fromFile:j=>{if(!j||j.app!==APP)throw new Error('not a SubLoads project file');return j;}},
-    store, storage: ST, title: 'Saved projects (this browser)',
-    current: () => cur && store.has(cur) ? cur : null,
-    open: n => { const j = store.get(n); if (!j) return false; openProject(JSON.parse(JSON.stringify(j)), n); cur = n; return true; },
-    renamed: (a, b) => { if (cur === a) cur = b; }, deleted: n => { if (cur === n) cur = null; },
-    save: () => ask(), saveLabel: 'Save the open project in this browser\u2026' });
-  const save = n => { const r = store.save(n, P); if (r.ok) cur = r.name; return r; };
-  const ask = () => { const n = prompt('Save the project in this browser as:', cur || P.meta.name || 'Untitled'); if (n == null) return; if (!n.trim()) { alert('Enter a project name.'); return; }
-    if (store.has(n.trim()) && n.trim() !== cur && !confirm('A saved project named "' + n.trim() + '" already exists. Replace it?')) return;
-    const r = save(n); if (r.ok) flash('Saved "' + r.name + '" in this browser.'); return r; };
-  // header space is full (8 buttons): the three controls sit at the right end of the bridge strip under the header
-  const box = document.createElement('div'); box.setAttribute('data-sp', 'row'); box.style.cssText = 'position:absolute;right:12px;top:6px;display:flex;gap:6px;z-index:2';
+  /* STDS (2026-11-05): the standard save (shared/projects-ui.js projectBar) over subloads_projects_v1 ({ name: P }, unchanged). Replaces
+     the Projects… dialog and its "Save the open project in this browser…" prompt. Save = store.save(name, P) as before; Open =
+     openProject() (migrations included). P.ui (tabs, selection, 3D view) is not "unsaved changes". The card is placed first in the
+     Project tab by the SLHD script below. Open / Save of files are Import JSON / Export JSON (same buttons, handlers and format).
+     The comparison text leaves out P.ui and empty objects (the Bridge pane adds an empty br.lf.<combo> = {} for every combination when
+     it is drawn: not a change); a saved project is compared as openProject() leaves it (defaults + migrations), with LF_NOTICE kept. */
+  const merged = j => { const keep = LF_NOTICE; try { j = JSON.parse(JSON.stringify(j)); migEHEQ(j); const d = defP(); return { ...d, ...j, meta: { ...d.meta, ...j.meta }, br: { ...d.br, ...j.br }, rx: { ...d.rx, ...j.rx } }; } finally { LF_NOTICE = keep; } };
+  const snap = v => SharedProjects.canon(JSON.parse(JSON.stringify(v), function (k, x) { return k !== '' && !Array.isArray(this) && x && typeof x === 'object' && !Array.isArray(x) && !Object.keys(x).length ? undefined : x; }), ['ui']);
+  const box = document.createElement('div'); box.setAttribute('data-sp', 'row'); box.style.cssText = 'position:absolute;right:12px;top:6px;display:flex;gap:6px;z-index:2;align-items:center;flex-wrap:wrap';
   const B = (t, ti) => SharedProjectsUI.button(t, ti, { cls: 'btn', style: 'font-size:12px;padding:3px 10px' });
-  const bu = B('Undo', 'Undo the last input change (Ctrl+Z)'), br = B('Redo', 'Redo (Ctrl+Y or Ctrl+Shift+Z)'), bl = B('Projects\u2026', 'Save the project in this browser; open, rename, duplicate or delete the projects saved here');
-  bl.addEventListener('click', () => dlg.show()); box.append(bu, br, bl);
+  const bu = B('Undo', 'Undo the last input change (Ctrl+Z)'), br = B('Redo', 'Redo (Ctrl+Y or Ctrl+Shift+Z)');
+  box.append(bu, br);
+  const pb = SharedProjectsUI.projectBar({ store, storage: ST, label: 'Bridge Substructure Loading', omit: ['ui'],
+    getState: () => P, snapshot: () => snap(P), snapOf: n => { const j = store.get(n); return j && j.app === APP ? snap(merged(j)) : null; },
+    open: n => { const j = store.get(n); if (!j) return false; openProject(JSON.parse(JSON.stringify(j)), n); return true; },
+    newProject: () => { const v = P.ui; P = defP(); P.ui.itab = v.itab; P.ui.tab = v.tab; syncSupports(); V3.homed = false; buildTabs(); buildSide(); showTab(P.ui.tab || 'summary'); recompute(); autosave(); },   // the default project; the open tabs are kept
+    displayName: () => P.meta && P.meta.name || '',
+    exportFile: n => download(`${n ? String(n).replace(/[^\w-]+/g, '_') : fname()}.subloads.json`, JSON.stringify(P, null, 1), 'application/json'),
+    importFile: () => $('#file-in').click(),
+    fileButtons: [document.getElementById('btn-open'), document.getElementById('btn-save')],
+    header: box, chipBefore: bu, card: true,
+    /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'bridge-substructure-loading',label:'Bridge Substructure Loading',space:1,fromFile:j=>{if(!j||j.app!==APP)throw new Error('not a SubLoads project file');return j;}} });
+  [pb.el.save, pb.el.lib, ...pb.el.card.querySelectorAll('button[data-sp]')].forEach(b => { b.classList.add('btn'); if (b.parentNode === box) b.style.cssText = 'font-size:12px;padding:3px 10px'; });   // the tool's button style
+  const save = n => { const r = store.save(n, P); if (r.ok) pb.setCurrent(r.name); return r; };
+  const dlg = pb.dialog;
+  // the row sits at the right end of the bridge strip until the SLHD script below moves it into the header
   const strip = document.querySelector('section.strip'); if (strip) { if (getComputedStyle(strip).position === 'static') strip.style.position = 'relative'; strip.appendChild(box); }
   SharedProjectsUI.undoRedo(h, { undo: bu, redo: br });
-  h.reset(); window.SLPL = { h, store, dlg, save };
+  h.reset(); window.SLPL = { h, store, dlg, save, pb };
 })();
 </script>
 <script>
@@ -4209,26 +4219,29 @@ window.addEventListener('beforeprint', () => {
   const grp = document.querySelector('.hdr-group'); if (!grp) return;
   const $id = id => document.getElementById(id);
   const a = document.createElement('a'); a.id = 'hdrProj'; a.href = '#'; a.title = 'Project name and number: edit them in the Project tab';
+  a.hidden = true;   /* STDS: the header chip shows the open project */
   a.append('Project: '); const t = document.createElement('span'); t.id = 'hdrProjTxt'; a.appendChild(t); grp.insertBefore(a, grp.firstChild);
   const box = document.querySelector('section.strip [data-sp="row"]');
-  if (box) { box.style.cssText = 'display:flex;gap:6px'; grp.insertBefore(box, $id('btn-print')); }
+  if (box) { box.style.cssText = 'display:flex;gap:6px;align-items:center;flex-wrap:wrap'; grp.insertBefore(box, $id('btn-print')); }
   const hold = document.createElement('div'); hold.id = 'slPrjHold'; hold.hidden = true; document.body.appendChild(hold);
   const pane = document.createElement('div'); pane.id = 'slPrjPane';
   const G = (title, hint, ids) => `<div class="slGrp"><b>${title}</b><p class="note">${hint}</p><div class="slRow" data-ids="${ids}"></div></div>`;
   pane.innerHTML = sec('Project files and hand-offs',
-    G('Project file', 'The whole project as JSON (Save) and back (Open); the last session is also kept in this browser.', 'btn-open btn-save')
-    + G('To the abutment calculator', 'Unfactored abutment reactions per girder and geometry: a JSON file, or sent to "Pull from SubLoads".', 'btn-abx btn-abx-send btn-abx-hf')
+    G('To the abutment calculator', 'Unfactored abutment reactions per girder and geometry: a JSON file, or sent to "Pull from SubLoads".', 'btn-abx btn-abx-send btn-abx-hf')
     + G('To Pile Designer and Spread Footing', 'Factored and service loads at the bottom of a unit, per limit state.', 'btn-fdx')
     + G('Drawings', 'The bridge and its units as a DXF file.', 'btn-dxf'));
   pane.querySelectorAll('[data-ids]').forEach(r => r.dataset.ids.split(' ').forEach(id => { const b = $id(id); if (b) r.appendChild(b); }));
   hold.appendChild(pane);
+  /* STDS (2026-11-05): the standard "Save and open" card (SLPL.pb), first in the Project tab, parked with the pane during rebuilds */
+  const saveSec = document.createElement('div'); saveSec.id = 'slSaveSec'; saveSec.innerHTML = sec('Save and open', '', { one: true }); hold.appendChild(saveSec);
+  if (window.SLPL && SLPL.pb) SLPL.pb.mount(saveSec.querySelector('.sec-body'));
   const show = () => {
     const sb = $id('sidebar'), u = sb && sb.querySelector('#bx-pm-use'), body = u && u.closest('.sec-body');
-    if (P.ui.itab === 'project' && body) body.after(pane); else hold.appendChild(pane);
+    if (P.ui.itab === 'project' && body) { body.after(pane); const h0 = body.previousElementSibling; if (h0) h0.before(saveSec); else body.before(saveSec); } else { hold.appendChild(pane); hold.appendChild(saveSec); }
     const v = [P.meta && P.meta.name, P.meta && P.meta.num].map(x => String(x == null ? '' : x).trim()).filter(Boolean);
     t.textContent = ''; if (v.length) t.textContent = v.join(' \u00b7 '); else { const s = document.createElement('span'); s.className = 'hdrNone'; s.textContent = '(untitled: enter it in the Project tab)'; t.appendChild(s); }
   };
-  const bs = buildSide; buildSide = function () { hold.appendChild(pane); const r = bs.apply(this, arguments); show(); return r; };
+  const bs = buildSide; buildSide = function () { hold.appendChild(pane); hold.appendChild(saveSec); const r = bs.apply(this, arguments); show(); return r; };
   document.addEventListener('input', e => { const k = e.target && e.target.dataset && e.target.dataset.k; if (k === 'meta.name' || k === 'meta.num') setTimeout(show, 0); });
   a.addEventListener('click', e => {
     e.preventDefault(); P.ui.itab = 'project'; buildSide(); autosave();
