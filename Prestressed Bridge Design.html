@@ -9468,7 +9468,7 @@ function App(){
   },[inp,canSave]);
   /* BSS (2026-11-06): the standard save (engineer-approved, 2026-11-05/06; shared/bridge-suite-projects.js over shared/projects-ui.js
      projectBar): header chip · Undo · Redo · Save (Ctrl+S) · Saved projects…; the Project tab's first card "Save and open" (Save · Save
-     as… · Saved projects… · New; Export JSON · Import JSON; Reset); the standard dialog over the shared Bridge Suite list
+     as… · Saved projects… · New; Export JSON · Import JSON; Reset inputs, "Reset" until RSTI 2026-11-06); the standard dialog over the shared Bridge Suite list
      (bridgeSuite.v1.projects, unchanged; Rename / Duplicate / Delete there). GitHub sync off until set up. Display and storage only. */
   const psHdrRef=useRef(null), psUndoRef=useRef(null), psHooks=useRef({}), bridgeRef=useRef(null); bridgeRef.current=bridge;
   psHooks.current={ projOpen, projNew, exportJSON:()=>exportJSON(), importJSON:e=>importJSON(e), resetAll:()=>resetAll(),
@@ -9477,7 +9477,7 @@ function App(){
   useEffect(()=>{
     if(window.PSPB||!canSave||!window.SharedBridgeSuite||!BP()||!psHdrRef.current) return;
     const H=()=>psHooks.current, SPUI=window.SharedProjectsUI, B=(t,ti)=>SPUI.button(t,ti,{sp:'psfile',cls:'btn sm'});
-    const bEx=B('Export JSON','This design\'s inputs as a .json file'), bIm=B('Import JSON','Open a .json file of this app (or a MIDAS demands file)'), bRs=B('Reset','Every input back to the defaults (asks first)');
+    const bEx=B('Export JSON','This design\'s inputs as a .json file'), bIm=B('Import JSON','Open a .json file of this app (or a MIDAS demands file)'), bRs=B('Reset inputs','Every input back to its default (asks first). Keeps the open bridge project; clears this app\'s autosave and Undo / Redo history');   /* RSTI (2026-11-06): was "Reset" */
     bRs.classList.add('ghost');
     const fIn=document.createElement('input'); fIn.type='file'; fIn.accept='.json'; fIn.hidden=true; fIn.setAttribute('data-sp','psfile'); document.body.appendChild(fIn);
     fIn.addEventListener('change',e=>{ H().importJSON(e); e.target.value=''; });

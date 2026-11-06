@@ -2266,3 +2266,14 @@ const PbdListTable = window.SharedListInput ? SharedListInput.react(React) : nul
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **Check case:** `tests/ps-compare.mjs --a <origin/main worktree file>` (every case): every computed section identical; `ps.tab.Inputs.Project` differs by design (the card); `ps.report` differed in one case (debond_harp) only in its innerText, because the header is 27 px taller (the title wraps once more) and the report's `content-visibility:auto` subsections then fall differently in the viewport: the report's `textContent` is byte-identical (65 568 chars) main vs branch; `tests/smoke/bridge-suite-compare.mjs --app psb`: design status, storage, Report text, Export JSON identical on load, after a title-block edit (autosaved into the open project) and after a reload.
 - **How verified:** see the PR.
+
+## 2026-11-06 — PR: claude/reset-inputs-label-pbd (RSTI) — "Save and open" card: "Reset" renamed "Reset inputs", with a tooltip of what it keeps (display only, no result change)
+- **Engineer (2026-11-06):** keep this Reset (it differs from New) but rename it "Reset inputs" and say what it keeps.
+- **Where:** BSS projectBar block, anchor `bRs=B(`: `B('Reset','Every input back to the defaults (asks first)')` → `B('Reset inputs','Every input back to its default (asks first). Keeps the open bridge project; clears this app\'s autosave and Undo / Redo history')` + a trailing `/* RSTI */` comment; the BSS comment lists the new name.
+- **Difference from New (unchanged behaviour, now in the tooltip):** Reset (`resetAll`: confirm, `clearSaved()`, undo/redo cleared, `setInpRaw(DEFAULTS)`) keeps the open bridge project and the bridge bar, and deletes this app's autosave and Undo / Redo history; New (`projNew`) closes the project, resets the bridge bar, dates the inputs today and keeps the history.
+- **Behaviour:** unchanged (same handler, same confirm text).
+- **Saved data (§5):** no key or format changed.
+- **Formulas, factors, units, code references:** none.
+- **Check case:** the card shows "Reset inputs" with the tooltip above; clicking it does what the old button did.
+- **How verified:** `node tests/check-syntax.mjs "Prestressed Bridge Design.html"`: pass. `node tests/smoke/bridge-suite-save.mjs`: all passed. Browser check: the button reads "Reset inputs" with the new title; 0 console errors beyond main's (the Babel size note). No test or manual text named the old label.
+- **Other copies:** none.
