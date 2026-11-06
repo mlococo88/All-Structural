@@ -7160,7 +7160,7 @@ function plibUndoInit(){
    refresh, new undo history); New = the old New (defaultState, keeps the inputs relayed from Beam Capacity; still an undo step)
    without its own confirm (projectBar asks first on unsaved changes). Rename / Duplicate / Delete: the standard dialog (both copy
    the item unchanged). GitHub sync (off until set up): folder projects/concrete-beam-asd/, the file = the Export JSON text of the
-   saved inputs (item.data, indent 2); a file brought from GitHub is stored as { when: now, data: file }. S.ui (views) is left out
+   saved inputs (item.data, indent 2); a file brought from GitHub is stored (pack) as { when: now, data: file }. S.ui (views) is left out
    of the &quot;unsaved changes&quot; comparison. */
 var ASPB=null;
 function asdStdsInit(){
@@ -7183,7 +7183,7 @@ function asdStdsInit(){
     fileButtons:[document.getElementById('btnExport'),document.getElementById('btnImport')],
     header:hb, chipBefore:bu||pr, headerBefore:pr, card:document.getElementById('asdSaveCard'),
     cloud:{ tool:'concrete-beam-asd', label:'Concrete Beam ASD Rating', space:2, toFile:i=>i.data,
-      fromFile:j=>{ if(!j||typeof j!=='object'||!j.loads||!j.allow) throw new Error('not an ASD Beam Calcs project file'); return {when:new Date().toISOString(),data:j}; } } });
+      fromFile:j=>{ if(!j||typeof j!=='object'||!j.loads||!j.allow) throw new Error('not an ASD Beam Calcs project file'); return j; /* store.save packs it as { when: now, data } */ } } });
 }
 function init(){
   loadAutosave();
