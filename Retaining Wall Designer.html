@@ -601,10 +601,19 @@ a.wkA:hover { text-decoration: underline; }
   .tab-panels { overflow: visible; }
   .tab-panel { display: block !important; max-width: none; }
   #tab-report:not(.active) { display: none !important; }   /* RWRP: the Report tab prints itself; not part of the page printout */
+  #tab-drawings { display: none !important; }   /* RWDW: the sheets print through Print sheet / Print all sheets only */
   .card, .eq-block, .sc { box-shadow: none; break-inside: avoid; }
 }
 
 .proj-box.hidden { display: none; }
+/* RWDW (2026-11-06): the Drawings tab */
+.rwdwBar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0 8px; font-size: 13px; }
+.rwdwBar select { width: auto; max-width: 100%; height: 34px; font-size: 13px; }
+.rwdwNote { margin: 4px 0; }
+.rwdwHead { margin: 10px 0 6px; font-size: 13px; }
+.rwdwBox { border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; }
+.rwdwScroll { overflow-x: auto; max-width: 100%; margin-top: 10px; }
+.rwdwIdx tr[data-rwdw] { cursor: pointer; } .rwdwIdx tr.on td { background: #eef4fb; font-weight: 600; } .rwdwWk { font-size: 12px; }
 .sidebar.filtering .sec-hd[data-target="sec-projmgr"] { display: none; }
 
 /* "All tools" link */
@@ -647,6 +656,7 @@ window.MathJax = {
 <script>window.addEventListener('beforeprint', function () { try { rwrPrintPrep(); } catch (e) { } });</script>
 <script src="shared/steps.js"></script>
 <script src="shared/report.js"></script>
+<script src="shared/dxf.js"></script>   <!-- RWDW (2026-11-06): the Drawings tab (DXF sheets, preview and print), shared DXF R12 writer -->
 <!-- PLIB (2026-11-02): saved-project list (Open / Rename / Duplicate / Delete) and Undo / Redo, shared with the other tools -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
@@ -1319,6 +1329,7 @@ window.MathJax = {
     <button class="tab-btn" data-tab="rebar">Rebar schedule</button>
     <button class="tab-btn" data-tab="diagram">Analysis diagram</button>
     <button class="tab-btn" data-tab="threed">3D model</button>
+    <button class="tab-btn" data-tab="drawings">Drawings</button>
     <button class="tab-btn" data-tab="report">Report</button>
   </nav>
   <div class="tab-panels">
@@ -1329,6 +1340,7 @@ window.MathJax = {
     <div class="tab-panel" id="tab-rebar"><div class="pending">Building rebar schedule…</div></div>
     <div class="tab-panel" id="tab-diagram"><div class="pending">Drawing analysis diagram…</div></div>
     <div class="tab-panel" id="tab-threed"><div class="pending">Building 3D model…</div></div>
+    <div class="tab-panel" id="tab-drawings"><div class="pending">Drawing sheets…</div></div>
     <div class="tab-panel tex2jax_ignore" id="tab-report"></div>
   </div>
 </main>
@@ -5548,6 +5560,7 @@ function onInputChange() {
   flushPlots(activeTab());
   typesetActivePanel();
   if (typeof renderRwReport === 'function' && document.getElementById('tab-report')?.classList.contains('active')) renderRwReport();   // RWRP
+  if (typeof rwdwRender === 'function' && document.getElementById('tab-drawings')?.classList.contains('active')) rwdwRender(r);   // RWDW: the Drawings tab redraws only while shown
   scheduleAutosave();
 }
 
@@ -8914,7 +8927,7 @@ function rwrAddNotes(M, N) {
 let RWRP_BACK = null;
 function rwrShown() { const T = document.getElementById('tab-report'); return !!(T && T.classList.contains('active')); }
 function rwrPrintPrep() {
-  if (document.body.classList.contains('rp-printing') || rwrShown() || !window.SharedReport || !window.SharedSteps || !window._R || window._R.fatal) return;
+  if (document.body.classList.contains('rp-printing') || document.body.classList.contains('sdx-printing') || rwrShown() || !window.SharedReport || !window.SharedSteps || !window._R || window._R.fatal) return;
   const cur = document.querySelector('.tab-btn.active'); RWRP_BACK = cur ? cur.dataset.tab : null;
   const b = document.querySelector('.tab-btn[data-tab="report"]'); if (b) b.click();
 }
@@ -8936,11 +8949,587 @@ document.querySelector('.tab-btn[data-tab="report"]').addEventListener('click', 
    from any other tab the page prints as before (the Report panel is hidden in print, see the RWRP rule in @media print) */
 window.addEventListener('beforeprint', () => {
   const T = document.getElementById('tab-report');
-  if (!RWRP.doc || !T || !T.classList.contains('active') || document.body.classList.contains('rp-printing')) return;
+  if (!RWRP.doc || !T || !T.classList.contains('active') || document.body.classList.contains('rp-printing') || document.body.classList.contains('sdx-printing')) return;   // RWDW: not while sheets print
   let box = document.getElementById('rp-print'); if (!box) { box = document.createElement('div'); box.id = 'rp-print'; document.body.appendChild(box); }
   box.innerHTML = '<div class="rp"><article class="rp-doc">' + SharedReport.html(RWRP.doc, { lazy: false }) + '</article></div>';
   document.body.classList.add('rp-printing');
 });
+</script>
+
+<script>
+/* =====================================================================
+   DRAWINGS tab (RWDW, 2026-11-06, engineer-approved): drawing sheets, 11 x 17 (B-size) at a standard architectural plot scale, as
+   Spread Footing (SFDW), Light Pole (LPDW), Concrete Beam Capacity (CBDW) and Base Plate & Anchor Designer (BPDW): one DXF R12 file
+   (shared/dxf.js SharedDxf.drawing -> toDXF), each sheet a 17 x 11 in sheet at its plot scale inside its border (SharedDxf.sheetBorder,
+   0.25 in inside the paper edge) and title block, side by side in model space, full size in inches (x from the toe, y up from the
+   footing base); previewed from the same entities (SharedDxf.sheetSVG, SharedDxf.viewer) and printed one 11 x 17 landscape page per
+   sheet at its plot scale (SharedDxf.printSheets).
+     1. TYPICAL WALL SECTION: stem (taper as modelled: front face vertical, back face battered), footing (toe, heel), shear key,
+        barrier, backfill grade and slope, toe grade, water table, surcharge, dimensions, bar marks, covers.
+     2. REINFORCEMENT DETAILS AND BAR SCHEDULE: S1 / S1 dowel (hook, lap as drawn by the tool), S3, S2, F1, F2, F3; bar schedule.
+     3. LOADS AND BEARING PRESSURE: lateral pressures and resultants, loads table, governing combination, resultant location,
+        bearing pressure diagrams under the footing.
+     4. ELEVATION AND GENERAL NOTES.
+   Display and export only: geometry and values from the computed results (window._R = calcAll(getInputs())); nothing here is used by
+   a calculation. Lengths the model does not have (bar lengths, key width, wall length) are drawn by a labelled nominal rule
+   ("detailer to confirm").
+   Footing support: every view asks rwdwSupport(r) for the support layer (soil today: subgrade and bearing diagrams; a planned phase
+   adds pile rows in the section, the loads sheet and the schedule through the same hooks, RWDW_SUPPORT.piles).
+   Saved: the chosen sheet, per browser, key retaincalcpro.dwgSheet.v1 (written only when a sheet is picked; not in the project, the
+   autosave or Export JSON).
+   ===================================================================== */
+const RWDW_SC = [[4,'3" = 1\'-0"'],[6,'2" = 1\'-0"'],[8,'1 1/2" = 1\'-0"'],[12,'1" = 1\'-0"'],[16,'3/4" = 1\'-0"'],[24,'1/2" = 1\'-0"'],[32,'3/8" = 1\'-0"'],[48,'1/4" = 1\'-0"'],[64,'3/16" = 1\'-0"'],[96,'1/8" = 1\'-0"'],[192,'1/16" = 1\'-0"']];
+const RWDW = { W:17, H:11, m:0.375, tbH:1.0, key:'retaincalcpro.dwgSheet.v1', cur:null, B:null };
+const rwdwScName = k => (RWDW_SC.find(q => q[0] === k) || [0, '1:' + k])[1];
+const rwdwFI = v => SharedDxf.fmtFtIn(v);
+const rwdwIn = v => SharedDxf.fmtIn(v);
+const rwdwN = (v, d) => (isFinite(v) ? (+v).toFixed(d == null ? 2 : d) : '-');
+const rwdwK = (lb, d) => rwdwN(lb / 1000, d == null ? 2 : d);   // lb -> kip text
+/* the model geometry in inches (x from the toe, y up from the footing base) */
+function rwdwGeo(r) {
+  const inp = r.inp, k12 = 12;
+  const G = { B: r.B * k12, tf: inp.tf, Hs: inp.Hs * k12, H: r.H * k12, Lt: inp.Lt * k12, Lh: inp.Lh * k12, tsb: inp.ts_bot, tst: inp.ts_top,
+    Dfa: inp.Df_add * k12, dk: inp.useShearKey ? inp.dk : 0, beta: inp.beta, dH: (r.dH_slope || 0) * k12 };
+  G.xf = G.Lt; G.xbb = G.Lt + G.tsb; G.xbt = G.Lt + G.tst;
+  G.xb = y => G.xbb + (G.xbt - G.xbb) * Math.max(0, Math.min(1, (y - G.tf) / Math.max(G.Hs, 1e-9)));   // back face at height y
+  // shear key: width not in the model; drawn as the tool's own section drawings (0.36 t_s,base wide, 0.32 t_s,base from the front face)
+  G.kw = 0.36 * G.tsb; G.kx = G.xf + 0.32 * G.tsb;
+  G.tanb = Math.tan(G.beta * Math.PI / 180);
+  G.gradeB = y0 => y0;   // placeholder
+  G.bar = r.hasBarrier ? { h: r.bar_h_ft * k12, w: inp.bar_mode === 'geom' ? inp.bar_t : 0.85 * G.tst, nominalW: inp.bar_mode !== 'geom' } : null;
+  if (G.bar) G.bar.xc = G.Lt + G.tst / 2 + (inp.bar_ecc || 0);
+  G.wt = r.hasWT ? G.H - r.wt_d * k12 : null;   // water level above the base
+  G.Hp = (r.Hp || r.H) * k12;
+  return G;
+}
+const rwdwBarOf = n => BARS.find(b => b.num === n) || { num: n, db: n / 8, Ab: 0 };
+/* the bars as modelled (sizes, spacings, d), with the nominal lengths the model does not give (labelled rules) */
+function rwdwBars(r, G) {
+  const inp = r.inp, cs = inp.cov_stem, cf = inp.cov_ftg;
+  const s1 = r.sel_stem, s3 = r.sel_stemT, s2 = r.sel_temp, f1 = r.sel_heel, f2 = r.sel_toe, f3 = r.sel_ftg_long;
+  const db = s => s.bar.db;
+  const hook = 12 * db(s1);                                         // 90° standard hook tail 12 d_b
+  const yHook = cf + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
+  const lap = 1.3 * r.ld_stem;                                       // as drawn by the tool (Class B 1.3 l_d), not checked
+  const yCut = r.z_cutoff !== null ? G.tf + r.z_cutoff_from_base * 12 : null;
+  const yTop = G.H - cs;
+  const B = {
+    S1: { s: s1, len: yTop - G.tf, from: G.tf, to: yTop },
+    S1D: { s: s1, hook, yHook, lap, len: (G.tf - yHook) + lap + hook },
+    S3: { s: s3, from: G.tf + G.Hs / 2, to: yTop, len: yTop - (G.tf + G.Hs / 2) },
+    S2: { s: s2 }, F3: { s: f3 },
+    F1: { s: f1, x0: Math.max(cf, G.xbb - r.ld_heel), x1: G.B - cf, y: G.tf - cf - db(f1) / 2 },
+    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cf + db(f2) / 2 },
+    yCut, cs, cf,
+  };
+  B.F1.len = B.F1.x1 - B.F1.x0; B.F2.len = B.F2.x1 - B.F2.x0;
+  B.S1cut = yCut !== null ? { len: yCut - G.tf } : null;
+  B.nF3 = Math.floor((G.B - 2 * cf) / f3.spacing + 1e-9) + 1;
+  return B;
+}
+
+/* ---------------- footing support layer (soil today; piles in a planned phase) ---------------- */
+const RWDW_SUPPORT = {
+  soil: {
+    label: 'SPREAD FOOTING ON SOIL',
+    /* the subgrade under the footing (and key) in a section or elevation: a line with earth ticks */
+    section(c) {
+      const { D, L, G, k } = c, x0 = -0.15 * k, x1 = G.B + 0.15 * k, y = 0;
+      D.line(L.soil, x0, y, G.kx, y); D.line(L.soil, G.kx + G.kw, y, x1, y);
+      for (let x = x0; x < x1 - 1e-6; x += 0.18 * k) { if (G.dk > 0 && x > G.kx - 0.1 * k && x < G.kx + G.kw) continue; D.line(L.soil, x, y, x - 0.07 * k, y - 0.07 * k); }
+    },
+    elev(c) { const { D, L, k, x0, x1 } = c; for (let x = x0; x < x1 - 1e-6; x += 0.18 * k) D.line(L.soil, x, 0, x - 0.07 * k, -0.07 * k); },
+    /* the bearing pressure diagrams under the footing (loads sheet); returns the lowest y used */
+    loads(c) { return rwdwBearing(c); },
+    notes(r) {
+      const inp = r.inp, a = r.aashtoR;
+      return r.isAASHTO
+        ? ['FOOTING ON ' + (a.onRock ? 'ROCK' : 'SOIL') + ': FACTORED BEARING RESISTANCE PHI_B Q_N = ' + rwdwK(a.q_R_A) + ' KSF' + (a.useManualQn ? ' (FROM THE GEOTECHNICAL REPORT, AS ENTERED)' : ' (PHI_B = ' + rwdwN(inp.aashto.phi_b, 2) + ' x Q_N = 3 Q_A, THE TOOL\'S ESTIMATE; CONFIRM WITH THE GEOTECHNICAL ENGINEER)') + '.']
+        : ['FOOTING ON SOIL: ALLOWABLE BEARING PRESSURE Q_A = ' + rwdwK(inp.qa) + ' KSF (SERVICE LOADS), PER THE GEOTECHNICAL ENGINEER.'];
+    },
+    schedule() { return []; },
+  },
+  // piles: { section, elev, loads, notes, schedule }   planned (pile rows across the footing: plan / section / schedule)
+};
+const rwdwSupport = r => RWDW_SUPPORT.soil;   // the foundation type of the model; spread footing only today
+
+/* bearing diagrams (soil): ACI service trapezoid + factored trapezoid for the footing design; AASHTO the governing Strength I / Ia
+   bearing over B' (soil) and the Strength I footing-design trapezoid. Values: the computed results. */
+function rwdwBearing(c) {
+  const { D, L, G, k, r, T } = c, inp = r.inp, a = r.aashtoR, B = G.B, h = 0.085 * k;
+  let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
+  const diag = (title, qt, qh, dashed) => {   // trapezoid hanging below y0, scaled so 1 ksf ~ PS
+    const yt = y0 - qt * c.qs, yh = y0 - qh * c.qs, lt = dashed ? D.ltype('DASHED') : undefined;
+    D.line(L.load, 0, y0, B, y0); D.line(L.load, 0, y0, 0, yt, lt); D.line(L.load, B, y0, B, yh, lt); D.line(L.load, 0, yt, B, yh, lt);
+    for (let i = 1; i < 6; i++) { const x = B * i / 6, q = qt + (qh - qt) * i / 6; if (q * c.qs > 0.12 * k) arrowV(D, L.load, x, y0 - q * c.qs, y0, k); }
+    T(L.lt, -0.08 * k, yt + 0.02 * k, h, rwdwK(qt) + ' KSF', 2); T(L.lt, B + 0.08 * k, yh + 0.02 * k, h, rwdwK(qh) + ' KSF', 0);
+    const yl = Math.min(yt, yh) - 0.2 * k; T(L.lt, B / 2, yl, h, title, 1);
+    y0 = yl - 0.25 * k;
+  };
+  c.qs = 0.55 * k / Math.max(1, (r.isAASHTO ? Math.max(a.quA_toe, a.quA_heel, a.q_ult_gov < 9e5 ? a.q_ult_gov : 0) : Math.max(r.q_toe, r.q_heel, r.qu_toe, r.qu_heel)));
+  if (!r.isAASHTO) {
+    diag('BEARING PRESSURE, SERVICE LOADS (STABILITY): Q_MAX = ' + rwdwK(r.q_max) + ' KSF ' + (r.bearing_ok ? '<=' : '>') + ' Q_A = ' + rwdwK(inp.qa) + ' KSF', r.q_toe, r.q_heel);
+    diag('FACTORED BEARING FOR THE FOOTING DESIGN (1.2D + 1.6H): E_U = ' + rwdwN(r.e_u, 2) + ' FT', r.qu_toe, r.qu_heel, true);
+  } else {
+    const Ia = a.bearing_Ia_governs, e = Ia ? a.e_A : a.e_brg, Bp = (Ia ? a.B_eff_Ia : a.B_eff) * 12, q = Ia ? a.q_ult_Ia : a.q_ult_A, xR = B / 2 - e * 12;
+    if (!a.onRock && Bp > 0 && q < 9e5) {
+      const x0 = Math.max(0, xR - Bp / 2), x1 = Math.min(B, xR + Bp / 2), yq = y0 - q * c.qs;
+      D.line(L.load, 0, y0, B, y0); D.rect(L.load, x0, yq, x1, y0);
+      for (let i = 1; i < 6; i++) arrowV(D, L.load, x0 + (x1 - x0) * i / 6, yq, y0, k);
+      T(L.lt, x1 + 0.08 * k, yq + 0.02 * k, h, rwdwK(q) + ' KSF (UNIFORM OVER B\')', 0);
+      D.dimH(L.dim, x0, x1, yq - 0.25 * k, yq, "B' = <>");
+      const yl = yq - 0.5 * k;
+      T(L.lt, B / 2, yl, h, 'BEARING, ' + (Ia ? 'STRENGTH IA (MIN. VERTICAL)' : 'STRENGTH I (MAX. VERTICAL)') + ' GOVERNS: Q_U = ' + rwdwK(a.q_ult_gov) + ' KSF ' + (a.bearing_ok_A ? '<=' : '>') + ' Q_R = ' + rwdwK(a.q_R_A) + ' KSF', 1);
+      y0 = yl - 0.25 * k;
+    } else {
+      T(L.lt, B / 2, y0 - 0.2 * k, h, 'BEARING' + (a.onRock ? ' ON ROCK (LINEAR PRESSURE)' : '') + ': Q_U,GOV = ' + rwdwK(a.q_ult_gov) + ' KSF ' + (a.bearing_ok_A ? '<=' : '>') + ' Q_R = ' + rwdwK(a.q_R_A) + ' KSF', 1);
+      y0 -= 0.6 * k;
+    }
+    diag('STRENGTH I FACTORED BEARING FOR THE FOOTING DESIGN: E = ' + rwdwN(a.e_tot, 2) + ' FT', a.quA_toe, a.quA_heel, true);
+  }
+  return y0;
+}
+function arrowV(D, l, x, y0, y1, k) {   // an arrow from y0 to y1 (head at y1)
+  D.line(l, x, y0, x, y1); const s = 0.06 * k, dn = y1 < y0 ? 1 : -1;
+  D.solid(l, [[x, y1], [x - s * 0.45, y1 + dn * s], [x + s * 0.45, y1 + dn * s]]);
+}
+function arrowH(D, l, x0, x1, y, k) {   // head at x1
+  D.line(l, x0, y, x1, y); const s = 0.06 * k, dr = x1 < x0 ? 1 : -1;
+  D.solid(l, [[x1, y], [x1 + dr * s, y - s * 0.45], [x1 + dr * s, y + s * 0.45]]);
+}
+
+function rwdwBuild(r) {
+  if (!window.SharedDxf) throw new Error('shared/dxf.js is not loaded');
+  if (!r || r.fatal) throw new Error('no results (input error)');
+  const inp = r.inp, a = r.aashtoR, isA = r.isAASHTO;
+  const D = SharedDxf.drawing({ prefix: 'RW-' }), SH = [];
+  const g = id => ((document.getElementById(id) || {}).value || '').trim();
+  const meta = { name: g('proj_name'), num: g('proj_num'), eng: g('proj_eng'), chk: g('proj_chk') };
+  const AS = s => String(s == null ? '' : s).replace(/≥/g, '>=').replace(/≤/g, '<=').replace(/φ/g, 'PHI').replace(/β/g, 'BETA').replace(/γ/g, 'GAMMA').replace(/ℓ/g, 'L')
+    .replace(/⅔/g, '2/3 ').replace(/δ/g, 'DELTA').replace(/Δ/g, 'DELTA ').replace(/η/g, 'ETA').replace(/²/g, '2').replace(/′/g, "'").replace(/″/g, '"').replace(/[–—−]/g, '-').replace(/\s*·\s*/g, '; ').replace(/§/g, '').replace(/&amp;/g, '&');
+  const T0 = D.text, D0 = D.dim; D.text = (l, x, y, hh, s, j, rot) => T0(l, x, y, hh, AS(s), j, rot); D.dim = (l, p1, p2, b, ang, txt) => D0(l, p1, p2, b, ang, txt == null ? txt : AS(txt));
+  const T = (l, x, y, hh, s, j, rot) => D.text(l, x, y, hh, s, j, rot);
+  const L = { conc: D.layer('CONC', 7), cj: D.layer('JOINT', 8, 'HIDDEN'), hid: D.layer('HIDDEN', 8, 'HIDDEN'), bar: D.layer('REBAR', 5), bmk: D.layer('REBAR-TEXT', 5),
+    dim: D.layer('DIMS', 3), txt: D.layer('TEXT', 7), soil: D.layer('SOIL', 30), grade: D.layer('GRADE', 30), wat: D.layer('WATER', 4), load: D.layer('LOAD', 1),
+    lt: D.layer('LOAD-TEXT', 1), sup: D.layer('SURCHARGE', 30), tbl: D.layer('TABLE', 7), ldr: D.layer('LEADER', 5), tb: D.layer('TBLK', 7), br: D.layer('BRDR', 7) };
+  const G = rwdwGeo(r), BR = rwdwBars(r, G), SUP = rwdwSupport(r);
+  const AW = RWDW.W - 2 * RWDW.m - 0.5, AH = RWDW.H - 2 * RWDW.m - RWDW.tbH - 0.6;
+  const basis = isA ? 'AASHTO LRFD 10TH ED. (2024)' : 'ACI 318-19 / IBC 2021';
+  let ox = 0;
+  /* one sheet: content(k) draws at scale k around any origin; the smallest k (largest scale) of ks it fits is used */
+  function sheet(id, title, content, ks, src) {
+    const i0 = D.mark(); let k = null, over = false, ret = null;
+    for (const kk of ks) { D.E.length = i0; D.k = kk; D.h = 0.09 * kk; ret = content(kk) || null; const b = D.bbox(i0);
+      if (!isFinite(b[0]) || ((b[2] - b[0]) / kk <= AW && (b[3] - b[1]) / kk <= AH)) { k = kk; break; } }
+    if (k === null) { k = ks[ks.length - 1]; over = true; }
+    const P = k, b = D.bbox(i0), W = RWDW.W * P, H = RWDW.H * P, m = RWDW.m * P, tb = RWDW.tbH * P;
+    const cx = ox + W / 2, cy = m + tb + 0.3 * P + (AH * P) / 2;
+    if (isFinite(b[0])) D.move(i0, cx - (b[0] + b[2]) / 2, cy - (b[1] + b[3]) / 2);
+    D.k = P; D.h = 0.1 * P;
+    SharedDxf.sheetBorder(D, L.br, ox, W, H, P); D.rect(L.br, ox + m, m, ox + W - m, H - m);
+    const x0 = ox + m, y0 = m, w = (RWDW.W - 2 * RWDW.m) * P, rr = tb / 2, sc = (ret && ret.scale) || rwdwScName(k);
+    D.rect(L.tb, x0, y0, x0 + w, y0 + tb); D.line(L.tb, x0, y0 + rr, x0 + w, y0 + rr);
+    // no owner cell; the Project tab has no Date / Checked date: those cells stay blank (RWDW)
+    const row1 = [['PROJECT', meta.name, 4.25], ['PROJECT NO.', meta.num, 2], ['CALCULATED BY', meta.eng, 2], ['DATE', '', 1.75], ['CHECKED BY', meta.chk, 2], ['CHECKED DATE', '', 1.75], ['SCALE', sc, 2.5]];
+    const row2 = [['SHEET TITLE', title, 5], ['DESIGN BASIS', basis, 4.25], ['DRAWN BY', 'RETAINING WALL DESIGNER', 4], ['SHEET', '?', 3]];
+    let sheetEnt = null;
+    [[row1, y0 + rr], [row2, y0]].forEach(([row, yb]) => { let x = x0; row.forEach(([lab, val, cw], ci) => {
+      D.text(L.tb, x + 0.05 * P, yb + rr - 0.11 * P, 0.065 * P, lab, 0);
+      const mx = Math.floor((cw - 0.12) / (0.13 * 0.9)); D.text(L.tb, x + 0.05 * P, yb + 0.1 * P, 0.13 * P, String(val == null || val === '' ? '—' : val).toUpperCase().slice(0, mx), 0);
+      if (lab === 'SHEET') sheetEnt = D.E[D.E.length - 1];
+      x += cw * P; if (ci < row.length - 1) D.line(L.tb, x, yb, x, yb + rr); }); });
+    const sh = { id, title, k, i0, i1: D.mark(), ox, W, H, over, sheetEnt, src, scale: sc, known: ret && ret.known }; SH.push(sh); ox += W + 1 * P; return sh;
+  }
+  function table(x0, y0, head, rows, hh, right) {
+    const rh = hh * 2, cw = head.map((hd, c) => Math.max(String(hd).length, ...rows.map(rw => String(rw[c] == null ? '' : rw[c]).length)) * hh * 0.82 + 1.9 * hh);
+    const tot = cw.reduce((p, q) => p + q, 0); let y = y0;
+    const line = yy => D.line(L.tbl, x0, yy, x0 + tot, yy);
+    line(y); [head, ...rows].forEach((rw, ri) => { let x = x0; rw.forEach((v, c) => { const rt = right && right.includes(c) && ri > 0; D.text(L.tbl, rt ? x + cw[c] - 0.8 * hh : x + 0.8 * hh, y - rh + 0.6 * hh, hh, String(v == null ? '' : v), rt ? 2 : 0); x += cw[c]; });
+      y -= rh; line(y); if (ri === 0) line(y + 0.12 * hh); });
+    let x = x0; [0, ...cw].forEach(w => { x += w; D.line(L.tbl, x, y0, x, y); });
+    return { w: tot, h: y0 - y };
+  }
+  /* a graphic scale bar (feet) with its label, centred at (xc, y) */
+  function scaleBar(xc, y, P, label) {
+    const ft = P <= 16 ? [0, 1, 2, 4] : P <= 48 ? [0, 2, 4, 8] : [0, 5, 10, 20], w = ft[3] * 12, x0 = xc - w / 2;
+    D.line(L.txt, x0, y, x0 + w, y); D.line(L.txt, x0, y + 0.04 * P, x0 + w, y + 0.04 * P);
+    ft.forEach(f => { D.line(L.txt, x0 + f * 12, y - 0.03 * P, x0 + f * 12, y + 0.07 * P); D.text(L.txt, x0 + f * 12, y - 0.15 * P, 0.07 * P, String(f), 1); });
+    D.text(L.txt, x0 + w + 0.1 * P, y - 0.15 * P, 0.07 * P, 'FT', 0);
+    D.text(L.txt, xc, y - 0.36 * P, 0.09 * P, label, 1);
+  }
+  /* the concrete outline (footing, stem, key) and the barrier; the construction joint */
+  function concrete(P, cj) {
+    const pts = [[0, 0]]; if (G.dk > 0) pts.push([G.kx, 0], [G.kx, -G.dk], [G.kx + G.kw, -G.dk], [G.kx + G.kw, 0]);
+    pts.push([G.B, 0], [G.B, G.tf], [G.xbb, G.tf], [G.xbt, G.H], [G.xf, G.H], [G.xf, G.tf], [0, G.tf]);
+    D.pline(L.conc, pts, true);
+    if (cj) D.line(L.cj, G.xf, G.tf, G.xbb, G.tf);
+    if (G.bar) D.rect(L.conc, G.bar.xc - G.bar.w / 2, G.H, G.bar.xc + G.bar.w / 2, G.H + G.bar.h);
+  }
+  const gradeX1 = () => G.B + Math.max(24, 0.2 * G.Lh);
+  const gradeY = x => G.H + Math.max(0, x - G.xbt) * G.tanb;
+  /* grades: backfill (level or sloped from the back edge of the stem top), toe grade at the soil cover above the footing */
+  function grades(P, ticks) {
+    const xe = gradeX1(), xs = -Math.max(24, 0.6 * P), yt = G.tf + G.Dfa;
+    D.line(L.grade, G.xbt, G.H, xe, gradeY(xe)); D.line(L.grade, xs, yt, G.xf, yt);
+    if (ticks) { const tk = (x0, x1, f) => { for (let x = x0 + 0.1 * P; x < x1 - 0.05 * P; x += 0.2 * P) { const y = f(x); D.line(L.soil, x, y, x - 0.08 * P, y - 0.08 * P); } };
+      tk(G.xbt, xe, gradeY); tk(xs, G.xf, () => yt); }
+    return { xe, xs, yt };
+  }
+  function water(P, xe, lab) {
+    if (G.wt == null) return;
+    const y = G.wt, x0 = G.xb(Math.max(G.tf, Math.min(G.H, y))), s = 0.08 * P, xt = xe - 0.25 * P;
+    D.line(L.wat, x0, y, xe, y);
+    D.pline(L.wat, [[xt - s, y + s * 1.1], [xt + s, y + s * 1.1], [xt, y]], true);
+    D.line(L.wat, xt - s * 0.8, y - 0.04 * P, xt + s * 0.8, y - 0.04 * P); D.line(L.wat, xt - s * 0.45, y - 0.08 * P, xt + s * 0.45, y - 0.08 * P);
+    if (lab) T(L.wat, xt - 0.2 * P, y + 0.07 * P, 0.08 * P, lab, 2);
+  }
+  /* bar marks: a leader from the bar to a text */
+  function callout(x, y, xt, yt, s, j, hh) {
+    D.line(L.ldr, x, y, xt, yt); const dx = j === 2 ? -0.12 : 0.12; D.line(L.ldr, xt, yt, xt + dx * D.k, yt);
+    String(s).split('\n').forEach((q, i) => T(L.bmk, xt + (j === 2 ? -0.16 : 0.16) * D.k, yt - 0.035 * D.k - i * 1.45 * (hh || 0.085 * D.k), (hh || 0.085 * D.k) * (i ? 0.85 : 1), q, j));
+  }
+  /* dimensions whose text does not fit between the extension lines get it beside them (level text) */
+  const dHs = (x1, x2, y, yref, lab, where) => { const t = (lab || '<>').replace('<>', D.fmt(Math.abs(x2 - x1))), w = t.length * D.h * 0.9;
+    if (Math.abs(x2 - x1) >= w + 0.15 * D.k) { D.dimH(L.dim, x1, x2, y, yref, lab); return; }
+    D.dimH(L.dim, x1, x2, y, yref, ' ');
+    if (where === 'below') T(L.dim, (x1 + x2) / 2, y - 0.2 * D.k, D.h, t, 1);
+    else if (where === 'left') T(L.dim, Math.min(x1, x2) - 0.12 * D.k, y + 0.04 * D.k, D.h, t, 2);
+    else T(L.dim, Math.max(x1, x2) + 0.12 * D.k, y + 0.04 * D.k, D.h, t, 0); };
+  const dVs = (y1, y2, x, xref, lab, left) => { const t = (lab || '<>').replace('<>', D.fmt(Math.abs(y2 - y1))), w = t.length * D.h * 0.9;
+    if (Math.abs(y2 - y1) >= w + 0.15 * D.k) { D.dimV(L.dim, y1, y2, x, xref, lab); return; }
+    D.dimV(L.dim, y1, y2, x, xref, ' '); T(L.dim, x + (left ? -0.1 : 0.1) * D.k, (y1 + y2) / 2 - 0.04 * D.k, D.h, t, left ? 2 : 0); };
+  const bl = s => '#' + s.bar.num + ' @ ' + s.spacing + '"';
+  const s1Pt = y => G.xb(y) - BR.cs - BR.S1.s.bar.db / 2;      // S1 centreline at height y (parallel to the back face)
+  const dotR = (db, P) => Math.max(db / 2, 0.018 * P);
+  /* the reinforcement in section; detail = sheet 2 (hooks, lap, cutoff labelled) */
+  function bars(P, detail) {
+    const s1 = BR.S1.s, dbs1 = s1.bar.db;
+    // S1 (vertical, back face) from the joint to the top cover
+    D.line(L.bar, s1Pt(G.tf), G.tf, s1Pt(BR.S1.to), BR.S1.to);
+    // S1 dowel: hooked on the bottom mat, up through the joint by the lap drawn by the tool (1.3 l_d)
+    const xd = s1Pt(G.tf) - dbs1 - 0.03 * P, yl = Math.min(G.tf + BR.S1D.lap, G.H - BR.cs);
+    D.pline(L.bar, [[xd, yl], [xd, BR.S1D.yHook], [xd - BR.S1D.hook, BR.S1D.yHook]], false);
+    // S3 (upper half, back face; drawn inside S1)
+    if (r.sel_stemT) D.line(L.bar, s1Pt(BR.S3.from) - dbs1 - 0.03 * P, BR.S3.from, s1Pt(BR.S3.to) - dbs1 - 0.03 * P, BR.S3.to);
+    // S2 horizontal, both faces (dots at the spacing), inside the verticals
+    const s2 = BR.S2.s, r2 = dotR(s2.bar.db, P);
+    for (let y = G.tf + s2.spacing / 2; y < G.H - BR.cs; y += s2.spacing) {
+      D.circle(L.bar, s1Pt(y) - dbs1 / 2 - r2 - (y >= BR.S3.from ? dbs1 + 0.03 * P : 0), y, r2);
+      D.circle(L.bar, G.xf + BR.cs + r2, y, r2); }
+    // F1 top (heel), F2 bottom (toe), F3 dots on both mats
+    D.line(L.bar, BR.F1.x0, BR.F1.y, BR.F1.x1, BR.F1.y); D.line(L.bar, BR.F2.x0, BR.F2.y, BR.F2.x1, BR.F2.y);
+    const f3 = BR.F3.s, r3 = dotR(f3.bar.db, P), yT3 = BR.F1.y - BR.F1.s.bar.db / 2 - r3, yB3 = BR.F2.y + BR.F2.s.bar.db / 2 + r3;
+    for (let x = BR.cf; x <= G.B - BR.cf + 1e-6; x += f3.spacing) { D.circle(L.bar, x, yT3, r3); D.circle(L.bar, x, yB3, r3); }
+    // cutoff of the alternate S1 bars
+    if (BR.yCut !== null) { const xc = s1Pt(BR.yCut); D.line(L.bar, xc - 0.12 * P, BR.yCut, xc + 0.12 * P, BR.yCut); }
+    return { xd, yl, yT3, yB3 };
+  }
+
+  /* ================= 1. TYPICAL WALL SECTION ================= */
+  sheet('section', 'TYPICAL WALL SECTION', P => {
+    const h = 0.09 * P, hs = 0.075 * P;
+    concrete(P, true); const gr = grades(P, true); SUP.section({ D, L, G, k: P, r });
+    water(P, gr.xe, 'W.T.');
+    bars(P, false);
+    // surcharge arrows over the backfill
+    let yTopAnn = Math.max(G.H + (G.bar ? G.bar.h : 0), gradeY(gr.xe));
+    if (r.q_sur_eff > 0) {
+      const n = Math.max(3, Math.min(8, Math.floor((gr.xe - G.xbt) / (0.45 * P))));
+      for (let i = 0; i < n; i++) { const x = G.xbt + (i + 0.5) * (gr.xe - G.xbt) / n, y = gradeY(x); arrowV(D, L.sup, x, y + 0.45 * P, y, P); }
+      const yl = gradeY(gr.xe) + 0.45 * P; D.line(L.sup, G.xbt + 0.5 * (gr.xe - G.xbt) / n, gradeY(G.xbt + 0.5 * (gr.xe - G.xbt) / n) + 0.45 * P, G.xbt + (n - 0.5) * (gr.xe - G.xbt) / n, yl);
+      const lab = isA && r.q_ll_aashto > 0 ? (inp.q_sur > 0 ? 'SURCHARGE Q_S = ' + rwdwN(inp.q_sur, 0) + ' PSF + LS (H_EQ = ' + rwdwN(r.heq, 2) + ' FT) = ' + rwdwN(r.q_sur_eff, 0) + ' PSF' : 'LIVE-LOAD SURCHARGE LS: H_EQ = ' + rwdwN(r.heq, 2) + ' FT, Q = ' + rwdwN(r.q_ll_aashto, 0) + ' PSF') : 'SURCHARGE Q_S = ' + rwdwN(inp.q_sur, 0) + ' PSF';
+      T(L.sup, (G.xbt + gr.xe) / 2, yl + 0.12 * P, h, lab, 1); yTopAnn = Math.max(yTopAnn, yl + 0.3 * P);
+    }
+    // labels in the soil
+    const yBF = G.wt != null && Math.abs(G.wt - (G.tf + 0.55 * G.Hs)) < 0.6 * P ? (G.wt > G.tf + 0.55 * G.Hs ? G.wt - 0.6 * P : G.wt + 0.75 * P) : G.tf + 0.55 * G.Hs;
+    T(L.txt, (G.xbb + G.B) / 2, yBF, h, 'BACKFILL', 1);
+    T(L.txt, (G.xbb + G.B) / 2, yBF - 0.16 * P, hs, 'GAMMA = ' + rwdwN(inp.gamma_s, 0) + ' PCF, PHI = ' + rwdwN(inp.phi, 0) + '°', 1);
+    if (G.beta > 0) { const xm = G.xbt + 0.55 * (gr.xe - G.xbt); T(L.grade, xm, gradeY(xm) - 0.25 * P, h, 'BACKFILL SLOPE BETA = ' + rwdwN(G.beta, 1) + '°', 1, Math.atan(G.tanb) * 180 / Math.PI); }
+    T(L.grade, gr.xe + 0.05 * P, gradeY(gr.xe) + 0.06 * P, hs, 'FINISHED GRADE', 0);
+    T(L.grade, gr.xs, gr.yt + 0.08 * P, hs, 'FINISHED GRADE (TOE)', 0);
+    if (G.wt != null) T(L.wat, gr.xe - 0.45 * P, G.wt + 0.22 * P, hs, inp.wt_mode === 'elev' ? 'EL. ' + rwdwN(inp.el_gw, 2) : rwdwFI(r.wt_d * 12) + ' BELOW TOP OF WALL', 2);
+    if (G.bar) T(L.txt, G.bar.xc - G.bar.w / 2 - 0.1 * P, G.H + G.bar.h / 2, hs, 'BARRIER' + (G.bar.nominalW ? ' (WIDTH NOMINAL)' : ''), 2);
+    T(L.cj, G.xbb + 0.08 * P, G.tf + 0.06 * P, 0.065 * P, 'CONST. JT.', 0);
+    // bar marks (sheet 2 has the details)
+    const yb1 = -G.dk - 0.55 * P, yb2 = yb1 - 0.65 * P;
+    const s1y = G.tf + 0.7 * G.Hs, xr = G.B + 0.25 * P;
+    callout(s1Pt(s1y), s1y, G.xbb + 0.6 * P, s1y + 0.25 * P, 'S1 ' + bl(r.sel_stem) + ' (BACK FACE)', 0);
+    const s2y = G.tf + 0.35 * G.Hs; callout(G.xf + BR.cs, s2y, G.xf - 0.5 * P, s2y + 0.3 * P, 'S2 ' + bl(r.sel_temp) + ' E.F.', 2);
+    callout((BR.F1.x0 + BR.F1.x1) / 2 + 0.2 * P, BR.F1.y, (BR.F1.x0 + BR.F1.x1) / 2 + 0.6 * P, G.tf + 0.55 * P, 'F1 ' + bl(r.sel_heel) + ' TOP, ' + rwdwIn(BR.cf) + ' CLR.', 0);
+    callout((BR.F2.x0 + BR.F2.x1) / 2, BR.F2.y, -0.35 * P, -G.dk - 0.3 * P, 'F2 ' + bl(r.sel_toe) + ' BOT., ' + rwdwIn(BR.cf) + ' CLR.', 2);
+    T(L.bmk, G.B / 2, yb2 - 0.3 * P, hs, 'F3 ' + bl(r.sel_ftg_long) + ' T&B (LONGIT.)  ·  S3 ' + bl(r.sel_stemT) + ' UPPER HALF  ·  DETAILS: SHEET 2', 1);
+    // covers
+    T(L.txt, s1Pt(G.tf + 0.92 * G.Hs) + 0.1 * P, G.tf + 0.92 * G.Hs, hs, rwdwIn(BR.cs) + ' CLR.', 0);
+    // dimensions
+    D.h = 0.09 * P;
+    if (G.Lt > 0) dHs(0, G.xf, yb1, 0, 'TOE <>', 'below'); dHs(G.xf, G.xbb, yb1, 0, '<>', 'below'); dHs(G.xbb, G.B, yb1, 0, 'HEEL <>', 'below');
+    D.dimH(L.dim, 0, G.B, yb2, 0, 'B = <>');
+    const xr1 = gr.xe + 0.5 * P, xr2 = xr1 + 0.55 * P;
+    dVs(0, G.tf, xr1, G.B, '<>'); D.dimV(L.dim, G.tf, G.H, xr1, G.B, 'H_S = <>'); D.dimV(L.dim, 0, G.H, xr2, G.B, 'H = <>');
+    const yTop = G.H + (G.bar ? G.bar.h : 0) + 0.35 * P; dHs(G.xf, G.xbt, yTop, G.H, 'STEM TOP <>', 'left');
+    if (G.Dfa > 0) dVs(G.tf, G.tf + G.Dfa, gr.xs - 0.35 * P, G.xf, '<>', true);
+    dVs(0, G.tf + G.Dfa, gr.xs - (G.Dfa > 0 ? 1.3 : 0.35) * P, 0, 'D_F = <>', true);
+    if (G.dk > 0) { dVs(-G.dk, 0, G.kx + G.kw + 0.3 * P, G.kx + G.kw, '<>', false); T(L.txt, G.kx + G.kw + 0.75 * P, -G.dk / 2 - 0.03 * P, hs, 'SHEAR KEY (WIDTH NOT IN THE MODEL, DRAWN NOMINAL)', 0); }
+    if (isA && r.coulombThrust && inp.aashto.batter) T(L.txt, G.B / 2, yb2 - 0.48 * P, hs, 'COULOMB BACK-FACE BATTER OMEGA = ' + rwdwN(inp.aashto.batter, 1) + '° IS USED IN K_A; THE SECTION IS DRAWN AS MODELLED (STEM TAPER).', 1);
+    scaleBar(G.B / 2, yb2 - (isA && r.coulombThrust && inp.aashto.batter ? 0.8 : 0.65) * P, P, 'TYPICAL WALL SECTION  ·  SCALE ' + rwdwScName(P));
+    return { known: { what: 'footing width B = ' + rwdwN(G.B, 2) + ' in', w: G.B / P } };
+  }, [8, 12, 16, 24, 32, 48, 64, 96, 192], [['stabKa', 'K_a, K_p'], ['stabBrg', 'bearing'], ['stemFlex', 'S1'], ['heelFlex', 'F1'], ['toeFlex', 'F2']]);
+
+  /* ================= 2. REINFORCEMENT DETAILS AND BAR SCHEDULE ================= */
+  sheet('rebar', 'REINFORCEMENT DETAILS AND BAR SCHEDULE', P => {
+    const h = 0.085 * P, hs = 0.072 * P;
+    concrete(P, true); grades(P, false);
+    const q = bars(P, true), s1 = r.sel_stem;
+    // labels with leaders, on the left (stem front side) and right
+    const xL = -0.5 * P, xR = gradeX1() + 0.3 * P;
+    const lab = [];
+    lab.push([s1Pt(G.tf + 0.8 * G.Hs), G.tf + 0.8 * G.Hs, 'S1 ' + bl(s1) + ' BACK FACE' + (BR.yCut !== null ? '\nALTERNATE BARS END AT THE CUTOFF' : ''), 'R']);
+    if (r.sel_stemT) lab.push([s1Pt(G.tf + 0.62 * G.Hs) - s1.bar.db, G.tf + 0.62 * G.Hs, 'S3 ' + bl(r.sel_stemT) + ' UPPER HALF\nFROM MID-HEIGHT, SPLICE NOT IN THE MODEL', 'R']);
+    if (BR.yCut !== null) lab.push([s1Pt(BR.yCut), BR.yCut, 'CUTOFF OF ALT. S1 BARS\n' + rwdwFI(BR.yCut - G.tf) + ' ABOVE THE JOINT (Z_CUT = ' + rwdwN(r.z_cutoff, 2) + ' FT FROM TOP)', 'R']);
+    lab.push([q.xd, (G.tf + q.yl) / 2, 'S1D DOWEL ' + bl(s1) + ', LAP ' + rwdwIn(Math.round(BR.S1D.lap)) + '\n= 1.3 L_D AS DRAWN BY THE TOOL (NOT CHECKED)', 'R']);
+    lab.push([BR.F1.x1 - 0.3 * P, BR.F1.y, 'F1 ' + bl(r.sel_heel) + ' TOP (HEEL)\nL_D = ' + rwdwN(r.ld_heel, 1) + '" PAST THE STEM BACK FACE', 'R']);
+    lab.push([BR.F3.s ? G.B - BR.cf - 0.0 : 0, q.yT3, 'F3 ' + bl(r.sel_ftg_long) + ' T&B, LONGITUDINAL', 'R']);
+    lab.push([G.xf + BR.cs, G.tf + 0.45 * G.Hs, 'S2 ' + bl(r.sel_temp) + ' HORIZ., BOTH FACES', 'L']);
+    lab.push([q.xd - BR.S1D.hook * 0.6, BR.S1D.yHook, 'STD. 90° HOOK, 12 D_B = ' + rwdwIn(BR.S1D.hook) + '\nL_DH = ' + rwdwN(r.ldh_stem, 1) + '", ' + rwdwN(r.ldh_avail, 1) + '" AVAILABLE', 'L']);
+    lab.push([BR.F2.x0 + 0.3 * P, BR.F2.y, 'F2 ' + bl(r.sel_toe) + ' BOT. (TOE)\nL_D = ' + rwdwN(r.ld_toe, 1) + '" PAST THE STEM FRONT FACE', 'L']);
+    lab.push([G.xf, G.H - 0.15 * G.Hs, 'FRONT-FACE VERTICALS:\nNOT IN THE MODEL (BY THE ENGINEER)', 'L']);
+    // place labels in two stacks without overlap: sorted by height, at least 0.2 in apart
+    ['R', 'L'].forEach(side => {
+      const xs = side === 'R' ? xR : xL, list = lab.filter(q2 => q2[3] === side).sort((p1, p2) => p2[1] - p1[1]);
+      let yPrev = Infinity, nPrev = 1; list.forEach(([x, y, s]) => { const yl = Math.min(Math.max(y, -G.dk - 0.2 * P), yPrev - (0.12 + 0.13 * nPrev) * P); yPrev = yl; nPrev = s.split('\n').length; callout(x, y, xs, yl, s, side === 'R' ? 0 : 2, h); });
+    });
+    T(L.cj, G.xbb + 0.08 * P, G.tf + 0.06 * P, 0.065 * P, 'CONST. JT.', 0);
+    if (G.dk > 0) T(L.txt, G.kx + G.kw / 2, -G.dk - 0.18 * P, hs, 'SHEAR KEY: NO REINFORCEMENT DESIGNED IN THE TOOL', 1);
+    scaleBar(G.B / 2, -G.dk - 0.5 * P, P, 'REINFORCEMENT SECTION  ·  SCALE ' + rwdwScName(P) + '  ·  COVER: STEM ' + rwdwIn(BR.cs) + ', FOOTING ' + rwdwIn(BR.cf) + ' (TOP AND BOTTOM)');
+    // the schedule below the view, at paper size
+    const yT = -G.dk - 1.15 * P, th = 0.068 * P;
+    const len = v => rwdwFI(Math.ceil(v));
+    const rows = [
+      ['S1D', '#' + s1.bar.num, s1.spacing + '"', 'STEM DOWEL, BACK FACE', '90° HOOK', len(BR.S1D.len), rwdwN(s1.As_prov, 3), rwdwN(r.ld_stem, 1) + ' / ' + rwdwN(r.ldh_stem, 1)],
+      ...(BR.S1cut ? [['S1', '#' + s1.bar.num, (2 * s1.spacing) + '"', 'STEM VERT., BACK, FULL HEIGHT', 'STRAIGHT', len(BR.S1.len), rwdwN(s1.As_prov / 2, 3), rwdwN(r.ld_stem, 1)],
+        ['S1', '#' + s1.bar.num, (2 * s1.spacing) + '" ALT.', 'STEM VERT., BACK, CUT OFF', 'STRAIGHT', len(BR.S1cut.len), rwdwN(s1.As_prov / 2, 3), rwdwN(r.ld_stem, 1)]]
+        : [['S1', '#' + s1.bar.num, s1.spacing + '"', 'STEM VERT., BACK, FULL HEIGHT', 'STRAIGHT', len(BR.S1.len), rwdwN(s1.As_prov, 3), rwdwN(r.ld_stem, 1)]]),
+      ['S3', '#' + r.sel_stemT.bar.num, r.sel_stemT.spacing + '"', 'STEM VERT., BACK, UPPER HALF', 'STRAIGHT', len(BR.S3.len), rwdwN(r.sel_stemT.As_prov, 3), '-'],
+      ['S2', '#' + r.sel_temp.bar.num, r.sel_temp.spacing + '"', 'STEM HORIZ. T&S, EACH FACE', 'STRAIGHT', 'CONT.', rwdwN(r.sel_temp.As_prov, 3), '-'],
+      ['F1', '#' + r.sel_heel.bar.num, r.sel_heel.spacing + '"', 'HEEL, TRANSVERSE, TOP', 'STRAIGHT', len(BR.F1.len), rwdwN(r.sel_heel.As_prov, 3), rwdwN(r.ld_heel, 1)],
+      ['F2', '#' + r.sel_toe.bar.num, r.sel_toe.spacing + '"', 'TOE, TRANSVERSE, BOTTOM', 'STRAIGHT', len(BR.F2.len), rwdwN(r.sel_toe.As_prov, 3), rwdwN(r.ld_toe, 1)],
+      ['F3', '#' + r.sel_ftg_long.bar.num, r.sel_ftg_long.spacing + '"', 'FOOTING LONGIT. T&S, T&B (' + BR.nF3 + ' EA. FACE)', 'STRAIGHT', 'CONT.', rwdwN(r.sel_ftg_long.As_prov, 3), '-'],
+      ...((isA && a && a.ish && a.ish.dowel_needed) ? [['D1', '#' + inp.aashto.dowel_bar, inp.aashto.dowel_spc + '"', 'FOOTING TO SUB-FOOTING DOWELS', '-', 'BY DETAILER', rwdwN(a.ish.Avf_dowel, 3), '-']] : []),
+      ...SUP.schedule(r),
+    ];
+    D.text(L.txt, 0, yT, 0.12 * P, 'BAR SCHEDULE (PER FOOT OF WALL)', 0);
+    const t = table(0, yT - 0.12 * P, ['MARK', 'SIZE', 'SPACING', 'LOCATION', 'SHAPE', 'LENGTH', 'AS,PROV (IN2/FT)', 'L_D / L_DH (IN, TOOL)'], rows, th, [6, 7]);
+    const notes = ['LENGTHS (NOMINAL RULES, NOT IN THE MODEL; DETAILER TO CONFIRM): S1D = EMBEDMENT TO THE BOTTOM MAT + LAP 1.3 L_D + 12 D_B HOOK;',
+      'S1 FROM THE JOINT TO ' + rwdwIn(BR.cs) + ' BELOW THE TOP; CUT-OFF BARS TO THE CUTOFF ELEVATION; S3 FROM MID-HEIGHT TO THE TOP (ITS SPLICE WITH S1 IS',
+      'NOT IN THE MODEL); F1 = HEEL - COVER + L_D PAST THE STEM BACK FACE, F2 = TOE - COVER + L_D PAST THE STEM FRONT FACE (BOTH CAPPED AT THE FOOTING);',
+      'BEND ALLOWANCES NOT ADDED; LENGTHS ROUNDED UP TO 1 IN. S2, F3: CONTINUOUS ALONG THE WALL, LAP SPLICES BY THE DETAILER. A_S AND L_D: THE TOOL\'S RESULTS',
+      '(STEM DESIGN AND FOOTING DESIGN TABS). S1D IS THE DOWEL OF THE S1 BARS (SAME SIZE AND SPACING); MARK ADDED ON THE DRAWINGS.'];
+    notes.forEach((s2, j) => D.text(L.txt, 0, yT - 0.3 * P - t.h - 0.115 * j * P, 0.062 * P, s2, 0));
+    return { known: { what: 'footing width B', w: G.B / P } };
+  }, [8, 12, 16, 24, 32, 48, 64, 96, 192], [['stemFlex', 'S1'], ['stemDev', 'L_d, hook'], ['stemMid', 'S3'], ['stemTS', 'S2'], ['heelFlex', 'F1'], ['toeFlex', 'F2'], ['ftgTS', 'F3']]);
+
+  /* ================= 3. LOADS AND BEARING PRESSURE ================= */
+  sheet('loads', 'LOADS AND BEARING PRESSURE DIAGRAM', P => {
+    const iS = D.mark(), h = 0.08 * P, hs = 0.07 * P;
+    concrete(P, false); const gr = grades(P, false); water(P, gr.xe, '');
+    // lateral pressures on the vertical plane through the heel (x = B), height H' (sloped backfill) or H
+    const xp = G.B, Hp = G.Hp, maxW = 1.6 * P;
+    const Ka = r.Ka, gs = inp.gamma_s, gsub = r.gamma_s_sub;
+    const ha = r.h_above * 12, hb = r.h_below * 12;
+    const p1 = Ka * gs * r.h_above, p2 = p1 + Ka * gsub * r.h_below;   // soil ordinates on the plane (psf): the model's distribution
+    const pS = isA ? Ka * inp.q_sur : Ka * inp.q_sur, pLS = isA ? Ka * r.q_ll_aashto : 0, pW = r.p_hyd_base;
+    const pmax = Math.max(1, p2 + pS + pLS + pW), ps = maxW / pmax;
+    D.line(L.load, xp, 0, xp, Hp, D.ltype('DASHED'));
+    // soil (EH)
+    const soil = hb > 0 ? [[xp, Hp], [xp + p1 * ps, Hp - ha], [xp + p2 * ps, 0], [xp, 0]] : [[xp, Hp], [xp + p2 * ps, 0], [xp, 0]];
+    D.pline(L.load, soil, true);
+    T(L.lt, xp + p2 * ps / 2, 0.12 * P, hs, rwdwN(p2, 0) + ' PSF', 1);
+    if (hb > 0) T(L.lt, xp + p1 * ps + 0.06 * P, Hp - ha, hs, rwdwN(p1, 0) + ' PSF AT W.T.', 0);
+    let xo = xp + p2 * ps;
+    // surcharges as uniform bands outside the soil diagram
+    const band = (p, nm) => { if (!(p > 0)) return; D.pline(L.sup, [[xo, 0], [xo + p * ps, 0], [xo + p * ps, Hp], [xo, Hp]], true); T(L.sup, xo + p * ps / 2, Hp + 0.08 * P, hs, nm + ' ' + rwdwN(p, 0), 1); xo += p * ps; };
+    band(pS, isA ? 'ES' : 'Q_S'); band(pLS, 'LS');
+    if (pW > 0) { D.pline(L.wat, [[xo, 0], [xo + pW * ps, 0], [xo, r.hw * 12]], true); T(L.wat, xo + pW * ps / 2, 0.12 * P, hs, 'WA ' + rwdwN(pW, 0), 1); xo += pW * ps; }
+    T(L.lt, xp + 0.05 * P, -0.15 * P, hs, 'PRESSURES (PSF) ON THE PLANE THROUGH THE HEEL', 0);
+    // resultants (arrows toward the wall) with their heights
+    const xA = xp, xA2 = xo + 0.3 * P;
+    const res = isA
+      ? [['P_EH = ' + rwdwK(a.P_EH) + ' K/FT', a.y_EH * 12], ...(a.P_ES > 0 ? [['P_ES = ' + rwdwK(a.P_ES) + ' K/FT', Hp / 2]] : []), ...(a.P_LS > 0 ? [['P_LS = ' + rwdwK(a.P_LS) + ' K/FT', Hp / 2]] : []), ...(a.P_hyd > 0 ? [['P_WA = ' + rwdwK(a.P_hyd) + ' K/FT', r.hw * 12 / 3]] : [])]
+      : [['P_A,H = ' + rwdwK(r.Pa_tri_h) + ' K/FT', r.y_Pa * 12], ...(r.Pa_sur_h > 0 ? [['P_SUR = ' + rwdwK(r.Pa_sur_h) + ' K/FT', Hp / 2]] : []), ...(r.F_hyd > 0 ? [['F_HYD = ' + rwdwK(r.F_hyd) + ' K/FT', r.hw * 12 / 3]] : []),
+        ...(r.hasSeismic ? [['DELTA P_E (SEISMIC) = ' + rwdwK(r.Pe_inc) + ' K/FT', 0.6 * G.H]] : [])];
+    let yPrev = Infinity;
+    res.sort((p1_, p2_) => p2_[1] - p1_[1]).forEach(([s, y]) => { const yl = Math.min(y, yPrev - 0.22 * P); yPrev = yl;
+      arrowH(D, L.load, xA2, xA, y, P); D.line(L.ldr, xA2, y, xA2 + 0.1 * P, yl);
+      T(L.lt, xA2 + 0.15 * P, yl - 0.03 * P, h, s + ' AT ' + rwdwFI(y), 0); });
+    // passive at the toe
+    if (r.Df > 0 && G.Lt > 0) {
+      const Dft = G.tf + G.Dfa, pp = r.Kp * gs * r.Df, pps = Math.min(maxW, 0.9 * P) / Math.max(pp, 1);
+      D.pline(L.load, [[0, Dft], [0, 0], [-pp * pps, 0]], true);
+      T(L.lt, -pp * pps - 0.05 * P, 0.1 * P, hs, 'PASSIVE ' + rwdwN(pp, 0) + ' PSF, ' + (inp.inclPassive ? 'INCLUDED' : 'NEGLECTED'), 2);
+      T(L.lt, -pp * pps - 0.05 * P, -0.05 * P, hs, 'P_P = ' + rwdwK(r.Pp_toe) + (G.dk > 0 ? ' + ' + rwdwK(r.Pp_key) + ' (KEY)' : '') + ' K/FT', 2);
+    }
+    // vertical: the resultant on the base
+    const xR = (isA ? a.x_R_A : r.x_R) * 12, eV = isA ? a.e_A : r.e;
+    arrowV(D, L.load, xR, G.tf * 0.5 + 0.6 * P, 0, P);
+    T(L.lt, xR, G.tf * 0.5 + 0.7 * P, h, 'R', 1);
+    // support layer: bearing diagrams
+    D.dimH(L.dim, 0, xR, -G.dk - 0.3 * P, -G.dk - 0.3 * P, 'X_R = <>');
+    const yLow = SUP.loads({ D, L, G, k: P, r, T, y0: -G.dk - 0.6 * P });
+    T(L.lt, G.B / 2, yLow - 0.0 * P, h, 'RESULTANT ' + (isA ? '(STRENGTH I, MAX. EH, MIN. VERTICAL): E = ' + rwdwN(a.e_A, 3) + ' FT, |E| ' + (a.ecc_ok_A ? '<=' : '>') + ' ' + a.e_limit_label + ' = ' + rwdwN(a.e_limit, 3) + ' FT' : '(SERVICE): E = ' + rwdwN(r.e, 3) + ' FT ' + (r.tension_zone ? '> B/6 (PARTIAL CONTACT)' : '<= B/6 = ' + rwdwN(r.B / 6, 3) + ' FT')), 1);
+    scaleBar(G.B / 2, yLow - 0.4 * P, P, 'LOADS PER FOOT OF WALL  ·  WALL TO SCALE ' + rwdwScName(P) + '; PRESSURE ORDINATES TO THEIR OWN SCALE');
+    // loads table to the left at paper size
+    const vb = D.bbox(iS); const th = 0.065 * P;
+    const F = (v, d) => rwdwN(v, d == null ? 2 : d);
+    let rows, title, foot;
+    if (!isA) {
+      rows = [['W_FTG FOOTING', F(r.Wftg / 1000), F(r.x_ftg), F(r.Ms_ftg / 1000)], ['W_STEM STEM', F(r.Wstem / 1000), F(r.x_stem), F(r.Ms_stem / 1000)], ['W_SOIL SOIL OVER HEEL', F(r.Wsoil / 1000), F(r.x_soil), F(r.Ms_soil / 1000)],
+        ...(r.Wsur > 0 ? [['W_SUR SURCHARGE OVER HEEL', F(r.Wsur / 1000), F(r.Ms_sur / r.Wsur), F(r.Ms_sur / 1000)]] : []), ...(r.Pa_tri_v > 0 ? [['P_A,V', F(r.Pa_tri_v / 1000), F(r.B), F(r.Ms_Pv / 1000)]] : []),
+        ...(r.hasCol ? [['COLUMN (SERVICE)', F(r.P_col_svc / 1000), F(r.x_col), F(r.Ms_col / 1000)]] : []), ...(r.hasBarrier ? [['BARRIER', F(r.W_bar / 1000), F(r.x_bar), F(r.Ms_bar / 1000)]] : []),
+        ...(r.F_uplift > 0 ? [['UPLIFT (' + (inp.uplift_mode === 'triangular' ? 'TRIANG.' : 'UNIFORM') + ')', F(-r.F_uplift / 1000), F(r.x_uplift), F(r.Ms_uplift / 1000)]] : []),
+        ...(r.Ms_Pp ? [['PASSIVE AT TOE', '-', F(r.Df / 3), F(r.Ms_Pp / 1000)]] : []),
+        ['SUM V / SUM M_R', F(r.SumV / 1000), '', F(r.Ms / 1000)],
+        ['P_A,H ACTIVE (OVERTURNING)', F(r.Pa_tri_h / 1000), F(r.y_Pa), F(r.Mo_tri / 1000)], ...(r.Pa_sur_h > 0 ? [['P_SUR', F(r.Pa_sur_h / 1000), F(r.Hp / 2), F(r.Mo_sur / 1000)]] : []),
+        ...(r.F_hyd > 0 ? [['F_HYD', F(r.F_hyd / 1000), F(r.hw / 3), F(r.Mo_hyd / 1000)]] : []), ...(r.hasSeismic ? [['DELTA P_E (SEISMIC)', F(r.Pe_inc / 1000), F(0.6 * r.H), F(r.Mo_seis / 1000)]] : []),
+        ['SUM M_O', '', '', F(r.Mo / 1000)]];
+      title = 'SERVICE LOADS (STABILITY, ASD), ABOUT THE TOE';
+      foot = ['FOS OVERTURNING = ' + F(r.FOS_OT) + ', SLIDING = ' + F(r.FOS_SL) + ' (>= 1.5, IBC 2021 1807.2.3)', 'X_R = (SUM M_R - SUM M_O) / SUM V = ' + F(r.x_R, 3) + ' FT; E = B/2 - X_R = ' + F(r.e, 3) + ' FT',
+        'Q_TOE = ' + rwdwK(r.q_toe) + ', Q_HEEL = ' + rwdwK(r.q_heel) + ' KSF; Q_A = ' + rwdwK(inp.qa) + ' KSF', 'FACTORED (FOOTING DESIGN, 1.2D + 1.6H): Q_U = ' + rwdwK(r.qu_toe) + ' / ' + rwdwK(r.qu_heel) + ' KSF'];
+    } else {
+      rows = [['EH  LATERAL EARTH', F(a.P_EH / 1000), F(a.y_EH), '1.50 / 0.90'.replace('1.50', rwdwN(a.gEH_max, 2))], ...(a.P_ES > 0 ? [['ES  SURCHARGE (DEAD)', F(a.P_ES / 1000), F(r.Hp / 2), '1.50']] : []),
+        ...(a.P_LS > 0 ? [['LS  LIVE-LOAD SURCHARGE', F(a.P_LS / 1000), F(r.Hp / 2), '1.75']] : []), ...(a.P_hyd > 0 ? [['WA  WATER (LATERAL)', F(a.P_hyd / 1000), F(r.hw / 3), '1.00']] : []),
+        ['DC  FOOTING + STEM', F((r.Wftg + r.Wstem) / 1000), '', '1.25 / 0.90'], ['EV  SOIL OVER HEEL', F(r.Wsoil / 1000), F(r.x_soil), '1.35 / 1.00'],
+        ...(r.Pa_tri_v > 0 ? [['EH  VERTICAL COMPONENT', F(r.Pa_tri_v / 1000), F(r.B), rwdwN(a.gEH_max, 2) + ' / ' + rwdwN(a.gEH_min, 2)]] : []), ...(r.hasBarrier ? [['DC  BARRIER', F(r.W_bar / 1000), F(r.x_bar), '1.25 / 0.90']] : []),
+        ...(a.V_up > 0 ? [['WA  UPLIFT', F(-a.V_up / 1000), F(r.x_uplift), '1.00']] : [])];
+      title = 'UNFACTORED LOADS AND LOAD FACTORS (MAX. / MIN.), ETA = ' + rwdwN(a.eta, 2);
+      foot = ['SLIDING, STRENGTH I: H_U = ' + rwdwK(a.H_drive_str) + ' K/FT ' + (a.sliding_ok_A ? '<=' : '>') + ' R_R = ' + rwdwK(a.R_slide) + ' K/FT (D/C ' + F(a.sliding_dcr) + ')',
+        'ECCENTRICITY, STRENGTH I (MIN. VERTICAL V = ' + rwdwK(a.V_str_min) + ' K/FT): X_R = ' + F(a.x_R_A, 3) + ' FT, E = ' + F(a.e_A, 3) + ' FT',
+        'BEARING: Q_U,GOV = ' + rwdwK(a.q_ult_gov) + ' KSF (' + (a.bearing_Ia_governs ? 'STRENGTH IA' : 'STRENGTH I') + ') VS Q_R = ' + rwdwK(a.q_R_A) + ' KSF',
+        'FOOTING DESIGN, STRENGTH I: Q_U = ' + rwdwK(a.quA_toe) + ' / ' + rwdwK(a.quA_heel) + ' KSF (TOE / HEEL)',
+        ...(r.hasSeismic ? ['SEISMIC (EXTREME EVENT I): NOT EVALUATED BY THE TOOL IN THIS MODE'] : []),
+        ...(a.ct ? ['VEHICULAR COLLISION (EXTREME EVENT II): STABILITY TAB, STEP 7B'] : [])];
+    }
+    const tx = vb[0] - 0.35 * P; let y = vb[3];
+    const head = isA ? ['LOAD', 'K/FT', 'ARM (FT)', 'GAMMA'] : ['LOAD', 'K/FT', 'ARM (FT)', 'M (K-FT/FT)'];
+    // measure the table first, then draw it left of the view
+    const i0 = D.mark(); D.text(L.txt, 0, 0, 0.1 * P, title, 0); const tt = table(0, -0.12 * P, head, rows, th, [1, 2, 3]);
+    foot.forEach((s2, j) => D.text(L.txt, 0, -0.32 * P - tt.h - 0.13 * j * P, 0.065 * P, s2, 0));
+    const bt = D.bbox(i0); D.move(i0, tx - bt[2], y - bt[3]);
+    return { known: { what: 'footing width B', w: G.B / P } };
+  }, [12, 16, 24, 32, 48, 64, 96, 192], isA ? [['stabKa', 'pressures'], ['stabSlide', 'sliding'], ['stabEcc', 'e'], ['stabBrg', 'bearing']] : [['stabKa', 'pressures'], ['stabOT', 'overturning'], ['stabSlide', 'sliding'], ['stabBrg', 'bearing'], ['stabFactBrg', 'factored q']]);
+
+  /* ================= 4. ELEVATION AND GENERAL NOTES ================= */
+  sheet('notes', 'WALL ELEVATION AND GENERAL NOTES', P => {
+    const iS = D.mark(), h = 0.085 * P, hs = 0.072 * P;
+    const vh = isA && inp.vh_enable, ct = isA && inp.aashto.ct_enable && inp.aashto.ct_ljoint > 0;
+    const Lknown = ct ? inp.aashto.ct_ljoint * 12 : null;
+    const Lw = Lknown || Math.max(2 * G.H, 240);
+    const hLo = vh ? inp.vh_hlo * 12 : G.Hs, hHi = vh ? inp.vh_hhi * 12 : G.Hs;
+    const top = x => G.tf + hLo + (hHi - hLo) * x / Lw;
+    // footing and key (below grade: hidden), stem: visible above the toe grade
+    const yg = G.tf + G.Dfa;
+    D.rect(L.hid, 0, 0, Lw, G.tf, D.ltype('HIDDEN'));
+    if (G.dk > 0) D.line(L.hid, 0, -G.dk, Lw, -G.dk, D.ltype('HIDDEN'));
+    D.pline(L.conc, [[0, yg], [0, top(0)], [Lw, top(Lw)], [Lw, yg]], false);
+    if (G.Dfa > 0) { D.line(L.hid, 0, G.tf, 0, yg, D.ltype('HIDDEN')); D.line(L.hid, Lw, G.tf, Lw, yg, D.ltype('HIDDEN')); }
+    if (G.bar) { D.line(L.conc, 0, top(0) + G.bar.h, Lw, top(Lw) + G.bar.h); D.line(L.conc, 0, top(0), 0, top(0) + G.bar.h); D.line(L.conc, Lw, top(Lw), Lw, top(Lw) + G.bar.h); T(L.txt, Lw / 2, top(Lw / 2) + G.bar.h + 0.1 * P, hs, 'BARRIER', 1); }
+    D.line(L.grade, -0.4 * P, yg, Lw + 0.4 * P, yg); for (let x = -0.3 * P; x < Lw + 0.3 * P; x += 0.2 * P) D.line(L.soil, x, yg, x - 0.08 * P, yg - 0.08 * P);
+    T(L.grade, 0.1 * P, yg + 0.07 * P, hs, 'FINISHED GRADE (TOE)', 0);
+    SUP.elev({ D, L, G, k: P, r, x0: 0, x1: Lw });
+    if (ct) [0, Lw].forEach(x => T(L.txt, x, top(x) + (G.bar ? G.bar.h : 0) + 0.12 * P, hs, 'EXP. JT.', 1));
+    D.h = 0.085 * P;
+    const yd = -G.dk - 0.5 * P;
+    if (Lknown) D.dimH(L.dim, 0, Lw, yd, 0, 'JOINT SPACING <> (COLLISION INPUT)');
+    else T(L.txt, Lw / 2, yd, hs, 'WALL LENGTH NOT IN THE MODEL: TYPICAL SEGMENT DRAWN AT A NOMINAL LENGTH (NOT DIMENSIONED)', 1);
+    if (vh) {
+      D.dimV(L.dim, G.tf, top(0), -0.45 * P, 0, 'H_LOW = <>'); D.dimV(L.dim, G.tf, top(Lw), Lw + 0.45 * P, Lw, 'H_HIGH = <>');
+      const xd = 0.75 * Lw; D.line(L.dim, xd, G.tf, xd, top(xd), D.ltype('DASHED'));
+      T(L.dim, xd - 0.08 * P, (yg + top(xd)) / 2, hs, 'DESIGN H_S', 1, 90);
+      T(L.dim, Lw / 2, yd - 0.22 * P, hs, 'DESIGN H_S = H_LOW + 0.75(H_HIGH - H_LOW) = ' + rwdwFI(G.Hs) + ' AT 0.75 L FROM THE LOW END (DASHED; MASSDOT 3.3.2.2)', 1);
+    } else {
+      D.dimV(L.dim, G.tf, top(0), -0.45 * P, 0, 'H_S = <>');
+    }
+    dVs(0, G.tf, Lw + (vh ? 1.0 : 0.45) * P, Lw, 'T_F = <>');
+    const vb = D.bbox(iS);
+    scaleBar(Lw / 2, yd - (vh ? 0.65 : 0.45) * P, P, 'WALL ELEVATION (FROM THE FRONT)  ·  SCALE ' + rwdwScName(P) + (vh ? '  ·  VARIABLE HEIGHT' : ''));
+    // general notes in two columns under the view (paper size)
+    const nA = Object.values(r.checks).filter(c2 => !c2.ok).length, nT = Object.keys(r.checks).length;
+    const epm = isA ? ((inp.aashto.ep_method === 'coulomb' ? 'COULOMB' : 'RANKINE') + ', ' + (inp.aashto.ep_cond === 'atrest' ? 'AT-REST' : 'ACTIVE')) : 'RANKINE, ACTIVE';
+    const N = [
+      'CODE BASIS',
+      ...(isA ? ['1. AASHTO LRFD BRIDGE DESIGN SPECIFICATIONS, 10TH ED. (2024): STRENGTH I / IA' + (a.ct ? ', EXTREME EVENT II (COLLISION)' : '') + ' AND SERVICE I (CRACK CONTROL); ETA = ' + rwdwN(a.eta, 2) + '.',
+        '2. LOAD FACTORS: AASHTO TABLES 3.4.1-1 AND 3.4.1-2; RESISTANCE FACTORS AS ENTERED IN THE TOOL (DESIGN TAB).']
+        : ['1. CONCRETE: ACI 318-19 STRENGTH DESIGN, U = 1.2D + 1.6H AND 0.9D + 1.6H. STABILITY: SERVICE LOADS, FOS >= 1.5',
+          '   (OVERTURNING, SLIDING) AND Q_MAX <= Q_A, IBC 2021 1807.2.3.' + (r.hasCol ? ' COLUMN LOADS: ASCE 7-22 2.3.1.' : '')]),
+      '3. EARTH PRESSURE ' + epm + ': K_A = ' + rwdwN(r.Ka, 4) + ', K_P = ' + rwdwN(r.Kp, 4) + '. VALUES PER FOOT OF WALL (12 IN DESIGN STRIP).',
+      'MATERIALS',
+      '4. CONCRETE: F\'C = ' + rwdwN(inp.fc, 0) + ' PSI, UNIT WEIGHT ' + rwdwN(inp.gamma_c, 0) + ' PCF. REINFORCEMENT: F_Y = ' + rwdwN(inp.fy / 1000, 0) + ' KSI.',
+      '5. CLEAR COVER: STEM BACK FACE ' + rwdwIn(inp.cov_stem) + '; FOOTING ' + rwdwIn(inp.cov_ftg) + ' TOP AND BOTTOM (AS MODELLED). FRONT-FACE COVER: NOT IN THE MODEL.',
+      'FOUNDATION AND BACKFILL',
+      ...SUP.notes(r).map((s2, j) => (6 + j) + '. ' + s2),
+      '7. BACKFILL: GAMMA = ' + rwdwN(inp.gamma_s, 0) + ' PCF, PHI = ' + rwdwN(inp.phi, 0) + '°, SLOPE BETA = ' + rwdwN(inp.beta, 1) + '°' + (inp.q_sur > 0 ? '; SURCHARGE Q_S = ' + rwdwN(inp.q_sur, 0) + ' PSF' : '') + (isA && r.q_ll_aashto > 0 ? '; LS H_EQ = ' + rwdwN(r.heq, 2) + ' FT' : '') + '.',
+      '8. WATER: ' + (r.hasWT ? 'WATER TABLE ' + rwdwN(r.wt_d, 2) + ' FT BELOW THE TOP OF WALL, GAMMA_SAT = ' + rwdwN(r.gamma_sat, 0) + ' PCF, ' + (inp.uplift_mode === 'triangular' ? 'TRIANGULAR' : 'UNIFORM') + ' UPLIFT.' : 'NO WATER TABLE IN THE DESIGN (DRAINED BACKFILL ASSUMED).'),
+      '9. SLIDING: ' + (isA ? 'BASE FRICTION ' + AS(a.fric_label).toUpperCase() + ', PHI_TAU = ' + rwdwN(inp.aashto.phi_tau, 2) : 'MU = ' + rwdwN(inp.mu, 3)) + '; PASSIVE AT THE TOE ' + (inp.inclPassive ? 'INCLUDED' : 'NEGLECTED') + (G.dk > 0 ? '; SHEAR KEY ' + rwdwIn(G.dk) + ' DEEP' : '') + '.',
+      '10. SEISMIC: ' + (r.hasSeismic ? (isA ? 'K_H = ' + rwdwN(inp.kh, 3) + ' ENTERED; EXTREME EVENT I IS NOT EVALUATED BY THE TOOL IN THE AASHTO MODE.' : 'MONONOBE-OKABE INCREMENT AT 0.6H (K_H = ' + rwdwN(inp.kh, 3) + ', K_V = ' + rwdwN(inp.kv, 3) + ') IN STABILITY; NOT IN THE STEM DESIGN.') : 'NONE (K_H = 0).'),
+      'ASSUMPTIONS AND SCOPE',
+      '11. NOT IN THE TOOL, BY THE ENGINEER OF RECORD / GEOTECHNICAL ENGINEER: GLOBAL STABILITY, SETTLEMENT, DRAINAGE (WEEP HOLES,',
+      '    DRAINS, FILTER), JOINT LAYOUT AND WALL LENGTH, SHEAR-KEY AND FRONT-FACE REINFORCEMENT, LAP OF THE S1 DOWELS, BAR DEVELOPMENT.',
+      '12. BAR LENGTHS AND THE KEY WIDTH ARE NOMINAL (SHEET 2); HARDWARE OF THE BARRIER NOT SHOWN.',
+      '13. VALUES ARE THE TOOL\'S RESULTS; EACH IS WORKED ON THE TAB NAMED IN THE SHEET INDEX AND IN THE CALCULATION REPORT.',
+      '14. CHECKS: ' + (nA ? nA + ' OF ' + nT + ' CHECKS FAIL (' + Object.values(r.checks).filter(c2 => !c2.ok).map(c2 => AS(c2.label).toUpperCase()).join(', ') + ').' : 'ALL ' + nT + ' CHECKS PASS.'),
+    ];
+    /* one column of notes at paper size, left of the elevation (wrapped, hanging indent) */
+    const wrap = (t, n) => { const m = /^(\s*\d+\.\s|\s+)/.exec(t), ind = m ? ' '.repeat(Math.min(5, m[0].length)) : '', out = []; let line = '';
+      String(t).trim().split(/\s+/).forEach(w => { if (line && (line + ' ' + w).length > n) { out.push(line); line = ind + w; } else line = line ? line + ' ' + w : w; }); if (line) out.push(line); return out; };
+    const N2 = []; let nn = 0; N.forEach(t => { if (/^\s/.test(t) && N2.length) N2[N2.length - 1] += ' ' + t.trim(); else N2.push(/^\d+\.\s/.test(t) ? (++nn) + '. ' + t.replace(/^\d+\.\s/, '') : t); });
+    const L2 = []; N2.forEach(t => { if (/^[A-Z][A-Z ]+$/.test(t)) L2.push([t, 1]); else wrap(t, 112).forEach(q => L2.push([q, 0])); });
+    const i1 = D.mark(); let y = 0;
+    D.text(L.txt, 0, y, 0.14 * P, 'GENERAL NOTES', 0); y -= 0.3 * P;
+    L2.forEach(([t, head], j) => { if (head && j) y -= 0.06 * P; D.text(L.txt, 0, y, head ? 0.1 * P : 0.072 * P, t, 0); y -= head ? 0.19 * P : 0.135 * P; });
+    const nb = D.bbox(i1), vb2 = D.bbox(iS, i1);
+    D.move(i1, vb2[0] - 0.6 * P - nb[2], vb2[3] - nb[3]);
+    return {};
+  }, [12, 16, 24, 32, 48, 64, 96, 192], [['stabKa', 'K_a'], ['stemFlex', 'materials']]);
+
+  SH.forEach((s, j) => { s.sheetEnt.s = SharedDxf.str((j + 1) + ' OF ' + SH.length); });
+  return { D, S: SH };
+}
+
+function rwdwRender(r) {
+  const T = document.getElementById('tab-drawings'); if (!T) return;
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  if (!r) { T.innerHTML = '<div class="pending">Calculating…</div>'; return; }
+  if (r.fatal) { T.innerHTML = r.errors.map(e => `<div class="alert fail">⚠ ${e}</div>`).join('') + '<div class="note">Input error: no drawings.</div>'; return; }
+  if (!window.SharedDxf) { T.innerHTML = '<div class="alert fail">shared/dxf.js is not loaded: keep the shared folder next to this file.</div>'; return; }
+  let B; try { B = rwdwBuild(r); } catch (e) { console.warn(e); T.innerHTML = '<div class="alert fail">The drawings could not be drawn: ' + esc(e && e.message) + '</div>'; return; }
+  RWDW.B = B;
+  let want = RWDW.cur; if (!want) { try { want = localStorage.getItem(RWDW.key) || ''; } catch (e) { want = ''; } }
+  const cur = B.S.find(s => s.id === want) || B.S[0]; RWDW.cur = cur.id;
+  const scTxt = s => s.scale === 'NTS' ? 'NTS' : s.scale;
+  const links = s => (s.src || []).map(([k2, t]) => rwLink(r, k2, t)).filter(Boolean).join('<br>') || '—';
+  T.innerHTML = '<div class="sec-heading">Drawings</div>'
+    + '<div class="rwdwBar"><label>Sheet <select id="rwdwSheet">' + B.S.map((s, j) => '<option value="' + s.id + '"' + (s === cur ? ' selected' : '') + '>' + (j + 1) + '. ' + esc(s.title) + '</option>').join('') + '</select></label> '
+    + '<button type="button" class="btn" id="rwdwDxf">Download DXF (' + B.S.length + ' sheets)</button> '
+    + '<button type="button" class="btn" id="rwdwPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button> '
+    + '<button type="button" class="btn" id="rwdwPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets (' + B.S.length + ')</button></div>'
+    + '<div class="note rwdwNote">' + esc(SharedDxf.PRINT_NOTE) + '</div>'
+    + '<div class="note rwdwNote">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers RW-CONC, RW-JOINT, RW-HIDDEN, RW-REBAR, RW-REBAR-TEXT, RW-LEADER, RW-DIMS, RW-TEXT, RW-SOIL, RW-GRADE, RW-WATER, RW-SURCHARGE, RW-LOAD, RW-LOAD-TEXT, RW-TABLE, RW-TBLK, RW-BRDR. Title block from the Project tab (Project name, Project number, Engineer of record as "Calculated by", Checked by); the tool has no Date / Checked date fields, so those cells are blank. Geometry, bars and loads as computed; lengths the model does not give are nominal and labelled (sheet 2).</div>'
+    + '<div class="rwdwHead"><b>' + (B.S.indexOf(cur) + 1) + '. ' + esc(cur.title) + '</b> · scale ' + esc(scTxt(cur)) + (cur.over ? ' · <span style="color:var(--fail)">does not fit the sheet even at the smallest scale</span>' : '') + '</div>'
+    + '<div class="rwdwBox"></div><div class="note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>'
+    + '<div class="rwdwScroll"><table class="tbl rwdwIdx"><thead><tr><th>No.</th><th>Sheet</th><th>Scale</th><th>Worked in</th></tr></thead><tbody>' + B.S.map((s, j) =>
+      '<tr data-rwdw="' + s.id + '"' + (s === cur ? ' class="on"' : '') + '><td>' + (j + 1) + '</td><td>' + esc(s.title) + '</td><td>' + esc(scTxt(s)) + '</td><td class="rwdwWk">' + links(s) + '</td></tr>').join('') + '</tbody></table></div>';
+  SharedDxf.viewer(T.querySelector('.rwdwBox'), SharedDxf.sheetSVG(B.D, cur), { height: '62vh' });
+  const pick = id => { RWDW.cur = id; try { localStorage.setItem(RWDW.key, id); } catch (e) { /* not kept */ } rwdwRender(window._R); };
+  T.querySelector('#rwdwSheet').addEventListener('change', e => pick(e.target.value));
+  T.querySelectorAll('tr[data-rwdw]').forEach(tr => tr.addEventListener('click', e => { if (e.target.closest('a')) return; pick(tr.dataset.rwdw); }));
+  T.querySelector('#rwdwDxf').addEventListener('click', () => { const txt = B.D.toDXF({ ltscale: 1, insunits: 1 }), chk = SharedDxf.validate(txt);
+    if (!chk.ok) { alert('The DXF file failed its structure check:\n' + chk.errors.slice(0, 8).join('\n')); return; }
+    const nm = ((document.getElementById('proj_name') || {}).value || '').trim() || 'retaining_wall';
+    SharedDxf.download(txt, nm.replace(/[^\w\-]+/g, '_') + '_sheets.dxf'); });
+  const prt = list => SharedDxf.printSheets(list.map(s => ({ svg: SharedDxf.sheetSVG(B.D, s), title: s.title })), { paper: [RWDW.W, RWDW.H] });
+  T.querySelector('#rwdwPrint1').addEventListener('click', () => prt([cur]));
+  T.querySelector('#rwdwPrintAll').addEventListener('click', () => prt(B.S));
+}
+document.querySelector('.tab-btn[data-tab="drawings"]').addEventListener('click', () => rwdwRender(window._R));
 </script>
 
 <script>
