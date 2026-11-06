@@ -37,8 +37,10 @@ async function state(p) {
   const n = await p.evaluate(() => window.__dl.length); await p.evaluate(() => document.getElementById('pb_export').click());
   await p.waitForFunction(n => window.__dl.length > n, n); const exp = await p.evaluate(() => window.__dl.at(-1));
   const rpt = await p.evaluate(() => { const d = document.createElement('div'); d.innerHTML = buildCalcReport({ ...crOpts(), inputs: true, combos: true, cap: true, stress: true, checks: true, summary: true, drawings: true, manual: false, detail: 'full' }); return d.textContent.replace(/\s+/g, ' '); });
-  const text = await p.evaluate(() => { const c = document.body.cloneNode(true); c.querySelectorAll('[data-sp],script,style,#sec-pm,dialog').forEach(x => x.remove()); return c.innerText.replace(/Save and open|Saved projects/g, '<pm>').replace(/\s+/g, ' '); });
-  return { ls: Object.fromEntries(Object.entries(ls).map(([k, v]) => [k, Z(v)])), exp: Z(exp), rpt: Z(rpt), text: Z(text) };
+  const text = await p.evaluate(() => { const c = document.body.cloneNode(true); c.querySelectorAll('[data-sp],script,style,#sec-pm,dialog,header,#gd-top').forEach(x => x.remove()); return c.innerText.replace(/Save and open|Saved projects/g, '<pm>').replace(/\s+/g, ' '); });
+  // GDHD (2026-11-06): the header and the top bar were rearranged (controls moved, not changed): compared as the set of their controls' ids
+  const ctl = await p.evaluate(() => [...document.querySelectorAll('header [id], #gd-top [id]')].filter(e => !e.closest('[data-sp]') && !/^gd-(undo|redo|acts|own-pill)$/.test(e.id)).map(e => e.id).sort().join(' '));
+  return { ls: Object.fromEntries(Object.entries(ls).map(([k, v]) => [k, Z(v)])), exp: Z(exp), rpt: Z(rpt), text: Z(text), ctl };
 }
 const same = (a, b, m) => { const bad = Object.keys(a).filter(k => JSON.stringify(a[k]) !== JSON.stringify(b[k])); ok(!bad.length, m + (bad.length ? ': differ in ' + bad.join(', ') : ''));
   for (const k of bad) { if (k === 'ls') console.log('       keys A: ' + Object.keys(a.ls).join(', ') + '\n       keys B: ' + Object.keys(b.ls).join(', ') + '\n       ' + JSON.stringify(diff(a.ls, b.ls).slice(0, 3)).slice(0, 600));
@@ -68,7 +70,16 @@ const lib = async () => { await p.evaluate(() => { const d = document.getElement
 const row = (n, a) => p.evaluate(([n, a]) => document.querySelector(`#gdLibDlg [data-spa=${a}][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(), [n, a]);
 const live = async () => ({ gd: await p.evaluate(() => JSON.stringify(P)), pl: await (plf()).evaluate(() => JSON.stringify(P)) });
 
-ok(await p.evaluate(() => [...document.getElementById('gd-hdr-proj').children].map(b => b.dataset.sp).join('|')) === 'chip|hsave|hlib', 'header: chip · Save · Saved projects… (before Owner)');
+ok(await p.evaluate(() => [...document.getElementById('gd-hdr-proj').children].map(b => b.dataset.sp || b.id).join('|')) === 'chip|hsave|hlib|btn-print', 'header: chip · Save · Saved projects… · Print');
+// GDHD (2026-11-06): the header on one row at common laptop widths; the moved controls in the top bar
+for (const w of [1280, 1400, 1920]) { await p.setViewportSize({ width: w, height: 900 }); await p.waitForTimeout(400);
+  const h = await p.evaluate(() => { const r = document.querySelector('header').getBoundingClientRect(), t = [...document.querySelectorAll('header .brand, header .hdr-group > *')].filter(e => e.offsetParent).map(e => e.getBoundingClientRect()); return { h: Math.round(r.height), one: t.every(x => x.top < r.top + r.height / 2 && x.bottom > r.top + r.height / 2) }; });
+  ok(h.one && h.h <= 64, `${w} px: header on one row (${h.h} px)`); if (SHOTS) await p.screenshot({ path: path.join(SHOTS, `sbd-hdr-${w}.png`), clip: { x: 0, y: 0, width: w, height: 240 } }); }
+await p.setViewportSize({ width: 1400, height: 900 });
+ok(await p.evaluate(() => ['btn-designall', 'btn-grpt', 'btn-v3dbr', 'btn-dxf'].every(i => document.getElementById(i).closest('#gd-acts')) && !!document.querySelector('#gd-top #gd-owner') && !!document.querySelector('#gd-top #own-info')), 'top bar: Design all · Girder report · 3D view · Export DXF; Owner next to the title block');
+ok(await p.evaluate(async () => { document.getElementById('btn-print').click();   // the open view's report dialog (Preliminary sizing's, in its frame, on load)
+  const d = P.mod === 'pl' ? PL_FRAME.contentDocument : document, a = !d.getElementById('rpt-modal').hidden; d.getElementById('rpt-cancel').click();
+  document.getElementById('own-info').click(); await new Promise(r => setTimeout(r, 100)); const b = !document.getElementById('own-modal').hidden; document.getElementById('own-close').click(); return a && b; }), 'Print opens the report dialog; Owner "rules" opens the owner rules (handlers kept)');
 ok(await p.evaluate(() => document.querySelector('#sec-pm').firstElementChild.id === 'gd-savecard' && !!document.querySelector('#gd-savecard [data-sp=card]')), 'modules\' Project tab: the "Save and open" card first');
 ok(await p.evaluate(() => !document.getElementById('proj_list') && !document.getElementById('pb_delete') && !document.getElementById('pb_open')), 'modules\' pane: no drop-down, Open or Delete left');
 ok(await plf().evaluate(() => !document.getElementById('proj_list') && !document.getElementById('pb_delete') && !!document.getElementById('pb_lib')), 'Preliminary sizing pane: no drop-down or Delete; Save · Save as… · Saved projects…');

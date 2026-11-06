@@ -130,9 +130,11 @@ node tests/smoke/sbd-standard-save.mjs [--a origin/main] [--shots <dir>]
 node tests/smoke/steel-beam-builtup.mjs [--file <tool html>]
 
 # Editable list tables (shared/list-input.js, LIST): the widget on a test page (typing, Enter, ",", paste from Excel, remove, checks,
-# labels, bindInput, the React wrapper) and every tool that loads it: main vs the working tree on the default project and one with
-# custom stations (results, page text, saved text identical; 0 console errors); --shots: the table at 1400 and 390 px
-node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge,secpropren] [--a origin/main] [--shots <dir>]
+# labels, bindInput, the React wrapper) and every tool that loads it: the reference commit (BASE in the script; --a <ref> for another,
+# --orig for each tool's commit before its table landed) vs the working tree on the default project and one with custom stations
+# (results, page text, saved text identical; 0 console errors); --shots: the table at 1400 and 390 px; --out: raw readouts A / B (JSON).
+# Re-baseline: see "Re-baselining list-input.mjs" below.
+node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge,secpropren] [--a <ref> | --orig] [--shots <dir>] [--out <dir>]
 
 # MIDAS MCT generator (index.html) Report step (IXRX): seeded MIDAS results (mct_results_v1 → IndexedDB), capacity zones and rating
 # cases (base, lfr, arema); old = the retired window reports as written (main), rep = the Report as printed, state = results, storage
@@ -228,6 +230,15 @@ Each `same` case opens A (`--a`, default `origin/main`) and B (`--b`, default th
 For each case, one line per section with the hash of A and B and `same` or `DIFFERENT`, then for each different section the values that differ (path, A, B), then console errors, dialogs, blocked requests and how long the idle wait took. The exit code is 0 when every section is identical, 1 on a difference, 2 on an error (including console errors). Not counted as console errors: "Failed to load resource" and Babel's size note "[BABEL] Note: The code generator has deoptimised the styling …" (ST-Girder's JSX script passed 500 KB with SBD stage 2, S2-6; the note concerns only the formatting of Babel's output; `compare.mjs`, `st-span.mjs`, `sbd-verify.mjs`, as `ps-compare.mjs` already did). Raw readouts (JSON) are saved in `--out`.
 
 Volatile values are normalized before comparing: ISO time stamps and dates (`2026-10-22`), local date/time text (`10/22/2026, 10:05:19 AM`), millisecond time stamps under `ts`/`savedAt`/`producedAt`/`updatedAt`/`seenAt`-like keys, the `file://` folder a page was opened from, and GirderDetail's file name (`Steel Bridge Beam Modules.html` and `Steel Bridge Design.html` both read `(GirderDetail file)`, so the rename of the merge compares equal).
+
+## Re-baselining `list-input.mjs`
+
+`tests/smoke/list-input.mjs` compares the page text of each tool too, so a later PR that changes only display text (a new header, a Report tab section, a button label) makes it fail although no result moved. The reference is one commit, `BASE` near the top of the script (until 2026-11-06 each tool's own commit before its table landed, still used with `--orig`). To re-baseline:
+
+1. `git fetch origin main`, check out `origin/main` (a clean worktree), run `node tests/smoke/list-input.mjs --out <dir>`.
+2. For every failing part, compare `<dir>/<part>-<case>-A.json` with `-B.json` field by field. Only text fields (page / tab / input-panel text) may differ, and only in display text. Every result, input and saved-data field (e.g. `tabR`, `AN`, `S`, `P`, `C`, `R`, `M`, `saved`, `stored`, `savedText`) must be identical.
+3. If so, set `BASE` to that `origin/main` commit (and say which differences were accepted in the comment above it and in the PR). Run the script again: it must pass.
+4. A difference in a result, an input or saved data is never re-baselined: raise it.
 
 ## Baselines (`baselines/`)
 
