@@ -111,6 +111,30 @@
   // fails if they differ): the Export JSON format of a saved project (its modules' part; no pl / st parts)
   TOOLS.unshift({ tool: 'steel-bridge-design', label: 'Steel Bridge Design', name: 'Steel Bridge Design (GirderDetail)', href: 'Steel%20Bridge%20Design.html',
     key: 'girderdetail_projects_v1', space: 2, toFile: (i, n) => ({ app: 'SteelBridgeDesign', v: 1, name: n, data: i }) });
+  /* pileView(storage) (STDS-P, 2026-11-06): Pile Designer's list. Its projects are in IndexedDB (micropile_lrfd_db, which another page
+     must not open: opening it before the tool has created it would make it empty); the tool writes a list of names and times to
+     micropile_lrfd_index_v1 ({ v: 1, items: [{ id, name, updatedAt, size }] }) after each change, and this view reads that. By name, as
+     the tool's sync sees it: each name is its newest record. Reads only; no file text (sync: false: "open the app to sync"). */
+  function pileView(storage) {
+    const IDX = 'micropile_lrfd_index_v1';
+    function idx() {
+      let raw = null; try { raw = storage ? storage.getItem(IDX) : null; } catch (e) { return { ok: false, error: 'storage', items: [] }; }
+      if (raw == null || raw === '') return { ok: true, items: [] };
+      try { const o = JSON.parse(raw); if (o && o.v === 1 && Array.isArray(o.items)) return { ok: true, items: o.items.filter(i => i && typeof i.id === 'string' && typeof i.name === 'string') }; } catch (e) { /* below */ }
+      return { ok: false, error: 'unreadable', items: [] };
+    }
+    function byName() { const r = idx(), m = new Map();
+      r.items.slice().sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))).forEach(i => { if (!m.has(i.name)) m.set(i.name, i); });
+      return { r, m }; }
+    const no = () => ({ ok: false, error: 'readonly', message: 'Open Pile Designer to change its saved projects.' });
+    return { key: IDX,
+      read: () => { const r = idx(); return r.ok ? { ok: true, map: {} } : { ok: false, error: r.error, map: {} }; },
+      list: () => [...byName().m.values()].map(i => ({ name: i.name, saved: i.updatedAt || null, size: i.size || 0 })),
+      has: n => byName().m.has(n), item: () => undefined,
+      get: () => null, save: no, duplicate: no, rename: no, remove: no };
+  }
+  TOOLS.push({ tool: 'pile-designer', label: 'Pile Designer', name: 'Pile Designer', href: 'Pile%20Designer.html', key: 'micropile_lrfd_index_v1', view: pileView, sync: false, space: 2,
+    toFile: r => ({ _type: 'micropile_lrfd_project', _version: 1, inputs: r.inputs, lpile: r.lpile && r.lpile.ok ? r.lpile : null }) });   // the tool's own (not used here: sync false)
   const all = () => TOOLS.slice();
   const get = tool => TOOLS.find(e => e.tool === tool) || null;
   function store(e, storage) {

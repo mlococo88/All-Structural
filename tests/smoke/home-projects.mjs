@@ -19,7 +19,7 @@ const SHOTS = arg('shots', process.env.SHOTS);
 export const FOLDER = { mlg: 'moving-load-generator', bsl: 'bridge-substructure-loading', asce7: 'asce7-load-generator', smd: 'shear-moment-diagrams',
   stonearch: 'stone-arch-rating', gusset: 'gusset-plate-rating', retwall: 'retaining-wall-designer', spreadfooting: 'spread-footing',
   lightpole: 'light-pole-sign-post', baseplate: 'base-plate-anchor', steelbeam: 'steel-beam-aisc', timber: 'timber-beam-check',
-  spc: 'section-property-calculator', rebar: 'aci-rebar-development', cbc: 'concrete-beam-capacity', abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app', gd: 'steel-bridge-design' };
+  spc: 'section-property-calculator', rebar: 'aci-rebar-development', cbc: 'concrete-beam-capacity', abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app', gd: 'steel-bridge-design', pile: 'pile-designer' };
 // own list panels: every row of the list (project-library's ui.rows may pick one row) and the name cell
 export const OWN_ROWS = { bgeo: '#lib_list tbody tr' };   // sbapp: the standard dialog since STDS-B (2026-11-06)
 // own list panels whose saved time is not in the second cell: the cell index (Steel Bridge app: Name, Project no., Last saved)
