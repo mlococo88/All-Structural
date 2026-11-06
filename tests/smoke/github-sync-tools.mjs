@@ -25,10 +25,6 @@ const FOLDER = { asce7: 'asce7-load-generator', baseplate: 'base-plate-anchor', 
 // Tools with their own project dialog: how to show it (with sync on, the GitHub rows are drawn into it), and whether it is open.
 // Default: the shared Saved projects dialog (dialog.spLib).
 const OWN = {
-  // Bridge Geometry: a library panel, not a dialog (it stays open after Open: open() is false)
-  bgeo: { box: '#lib_panel', show: p => p.evaluate(() => { if (document.getElementById('lib_panel').style.display === 'none') document.getElementById('lib_toggle').click(); else document.getElementById('lib_refresh').click(); }),
-    open: () => false,
-    del: (p, n) => p.evaluate(n => document.querySelector(`#lib_list [data-lib-del="${encodeURIComponent(n)}"]`).click(), n) },
   // apps/steel-bridge (STDS-B, 2026-11-06): the standard Saved projects dialog over its by-name view (items by id); kept here for the
   // own-list checks (first-sync offer, a delete that asks about the GitHub copy) because its sync list differs from the dialog's
   // Pile Designer (STDS-P, 2026-11-06): the standard dialog over its IndexedDB copy (sync list = newest of each name)
