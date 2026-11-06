@@ -767,6 +767,52 @@ input:focus, select:focus, textarea:focus { border-color: var(--blue-600); box-s
 .rw-code-card .seg button:hover { background: var(--slate-100); color: var(--slate-900); }
 .rw-code-card .seg button[aria-pressed="true"] { background: var(--navy-800); color: #fff; font-weight: 600; box-shadow: none; }
 @media print { .rw-code-card { display: none !important; } }
+/* RWDC (2026-11-06): check summary panel, as Spread Footing (SFDC #737 / SFDF #740), Light Pole (LPDC #747) and Concrete Beam
+   Capacity (#788): one line per check, collapsible; on screens >= 1500 px a 292 px left column that scrolls on its own. Screen
+   only (not printed); the Report and the Overview card are unchanged. */
+#rwDashCol { display: none; }
+@media print { #rwDashCol, #rwDashBox { display: none !important; } }
+.status-bar { display: block; min-height: 0; padding: 4px 16px 0; }
+#rwDashBox { font-family: var(--font-ui); }
+#rwDashHead { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; }
+#rwDashTtl { margin: 2px 0; font-size: 10pt; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--navy-800); }
+#rwDashTgl { margin: 0; padding: 1px 7px; font: 8.5pt var(--font-ui); border: 1px solid var(--slate-400); background: var(--slate-100); border-radius: 4px; cursor: pointer; color: var(--slate-700); }
+#rwDashCnt { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+#rwDashCnt span { font-size: 8pt; font-weight: 700; padding: 1px 5px; border: 1px solid; border-radius: 3px; white-space: nowrap; }
+#rwDashCnt .rwdCf { color: #991B1B; background: #FEF2F2; border-color: var(--fail); }
+#rwDashCnt .rwdCp { color: #065F46; background: #ECFDF5; border-color: var(--pass); }
+#rwDashCnt .rwdCn { color: var(--slate-600); background: #fff; border-color: var(--slate-300); font-weight: 400; }
+body.rwDashColl #rwDash { display: none; }
+#rwDash { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap: 3px 6px; margin: 4px 0 8px; align-items: start; }
+.rwdCh { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; align-items: center; column-gap: 5px; padding: 2px 5px 2px 2px; min-width: 0;
+  border: 1px solid var(--border); border-left: 4px solid var(--slate-400); border-radius: 3px; background: #fff; font-size: 8.5pt; line-height: 1.35; cursor: pointer; }
+.rwdCh:hover { background: var(--slate-50); } .rwdCh:focus-visible { outline: 2px solid var(--blue-600); outline-offset: -1px; }
+.rwdCh.pass { border-left-color: var(--pass); } .rwdCh.fail { border-left-color: var(--fail); background: #FEF2F2; } .rwdCh.warn { border-left-color: var(--warn); background: #FFFBEB; }
+.rwdCh .rwdX { grid-row: 1; grid-column: 1; margin: 0; padding: 0 3px; border: none; background: transparent; font-size: 9px; color: var(--slate-700); line-height: 1.2; cursor: pointer; }
+.rwdCh .rwdN { grid-row: 1; grid-column: 2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rwdCh .rwdR { grid-row: 1; grid-column: 3; white-space: nowrap; color: var(--slate-700); }
+.rwdCh .rwdS { grid-row: 1; grid-column: 4; font-size: 7.5pt; font-weight: 700; white-space: nowrap; }
+.rwdCh.pass .rwdS { color: var(--pass); } .rwdCh.fail .rwdS { color: var(--fail); } .rwdCh.warn .rwdS { color: var(--warn); } .rwdCh.na .rwdS { color: var(--slate-600); }
+.rwdCh .rwdV, .rwdCh .rwdRef { grid-column: 1/-1; display: none; padding-left: 16px; overflow-wrap: anywhere; }
+.rwdCh .rwdRef { color: var(--slate-600); font-size: 8pt; font-style: italic; }
+.rwdCh.rwdOpen .rwdV, .rwdCh.rwdOpen .rwdRef { display: block; }
+.rwdCh.rwdOpen .rwdN { white-space: normal; }
+.rwdMsg { grid-column: 1/-1; font-size: 8.5pt; padding: 5px 8px; border: 1px solid var(--border); border-left: 4px solid var(--fail); background: #FEF2F2; color: #7F1D1D; border-radius: 3px; }
+.rwdMsg ul { margin: 4px 0 0 18px; padding: 0; }
+.rwdMsg.none { border-left-color: var(--slate-400); background: var(--slate-50); color: var(--slate-600); }
+@media screen and (min-width: 1500px) {
+  body.rwDashWide #rwDashCol { display: block; flex: 0 0 292px; width: 292px; min-height: 0; overflow-y: auto; overflow-x: hidden; position: relative;
+    padding: 0 6px 24px; border-right: 1px solid var(--border); background: var(--slate-50); overscroll-behavior: contain; }
+  body.rwDashWide #status-bar { display: none; }
+  body.rwDashWide #rwDash { grid-template-columns: minmax(0,1fr); }
+  body.rwDashWide #rwDashHead { position: sticky; top: 0; z-index: 3; background: var(--slate-50); padding: 6px 0 4px; }
+  body.rwDashWide.rwDashColl #rwDashCol { flex-basis: 42px; width: 42px; padding: 0; }
+  body.rwDashWide.rwDashColl #rwDashHead { flex-direction: column; align-items: center; }
+  body.rwDashWide.rwDashColl #rwDashTtl { writing-mode: vertical-rl; transform: rotate(180deg); margin: 4px 0; white-space: nowrap; }
+  body.rwDashWide.rwDashColl #rwDashCnt { flex-direction: column; align-items: center; }
+  body.rwDashWide.rwDashColl #rwDashCnt span { font-size: 7.5pt; padding: 1px 2px; white-space: normal; text-align: center; width: 36px; }
+}
+@media (max-width: 900px) { .status-bar { padding: 6px 12px 0; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -936,6 +982,7 @@ window.MathJax = {
 </header>
 
 <div class="app" id="app">
+<aside id="rwDashCol" aria-label="Check summary"></aside><!-- RWDC (2026-11-06): the check summary panel on screens 1500 px and wider -->
 
 <div class="side" id="side">
   <div class="rw-code-card" id="rw-code-card"><!-- RWHP (2026-11-06): the ACI / AASHTO switch, moved from the header (as Light Pole's first input card); same ids, same handler (it sets #design_basis) -->
@@ -1459,8 +1506,11 @@ window.MathJax = {
 </div>
 
 <main class="main">
-  <div class="status-bar" id="status-bar">
-    <div class="si"><div class="sd pend"></div><span class="sl pend">Calculating…</span></div>
+  <div class="status-bar" id="status-bar"><!-- RWDC (2026-11-06): holds the check summary panel below 1500 px (moved into #rwDashCol at 1500 px and wider) -->
+    <div id="rwDashBox">
+      <div id="rwDashHead"><button type="button" id="rwDashTgl" aria-controls="rwDash"></button><h2 id="rwDashTtl">Check summary</h2><span id="rwDashCnt"></span></div>
+      <div id="rwDash"><div class="rwdMsg none">Calculating…</div></div>
+    </div>
   </div>
   <nav class="tab-bar" aria-label="Results">
     <button class="tab-btn active" data-tab="overview" aria-current="page">Overview</button>
@@ -3355,26 +3405,11 @@ function calcAll(inp) {
 // STATUS BAR
 // ================================================================
 function renderStatus(r) {
-  const sb = document.getElementById('status-bar');
   if (window.syncHeaderControls) syncHeaderControls();
   if (window.refreshInputTabs) refreshInputTabs();
-  if (r.fatal) {
-    sb.innerHTML = `<div class="verdict fail"><span class="vd-ico" aria-hidden="true">!</span>Inputs need attention</div>
-      <div class="chips">${r.errors.map(e => `<span class="chip fail"><b aria-hidden="true">✕</b>${e}</span>`).join('')}</div>`;
-    return;
-  }
-  const cs = Object.values(r.checks);
-  const nFail = cs.filter(c => !c.ok).length;
-  sb.innerHTML = `
-    <div class="verdict ${nFail ? 'fail' : 'pass'}">
-      <span class="vd-ico" aria-hidden="true">${nFail ? '✕' : '✓'}</span>
-      ${nFail ? `${nFail} of ${cs.length} checks fail` : `All ${cs.length} checks pass`}
-    </div>
-    <div class="chips">${cs.map(c => `
-      <span class="chip ${c.ok ? 'pass' : 'fail'}"${c.val ? ` title="${c.label}: ${c.val}"` : ''}>
-        <b aria-hidden="true">${c.ok ? '✓' : '✕'}</b>${c.label}${c.val ? `<em>${c.val}</em>` : ''}
-      </span>`).join('')}
-    </div>`;
+  /* RWDC (2026-11-06): the sideways-scrolling strip of check chips is replaced by the check summary panel (rwDashRender, built
+     from r.checks and rwResultRows(r); no new calculation) */
+  if (typeof rwDashRender === 'function') rwDashRender(r);
 }
 
 // ================================================================
@@ -9672,6 +9707,112 @@ function rwdwRender(r) {
   T.querySelector('#rwdwPrintAll').addEventListener('click', () => prt(B.S));
 }
 document.querySelector('.tab-btn[data-tab="drawings"]').addEventListener('click', () => rwdwRender(window._R));
+</script>
+
+<script>
+/* ================================================================
+   CHECK SUMMARY PANEL (RWDC, 2026-11-06, engineer-approved; review rwreview Phase 1 item 3), as Spread Footing (SFDC #737,
+   SFDF #740), Light Pole (LPDC #747) and Concrete Beam Capacity (#788). One line per check of r.checks: expand button, name, a
+   short value (the D/C, or the condition where the status does not come from the ratio), status PASS / FAIL. FAIL lines start
+   expanded; ▸ opens any line to show the value, the governing condition and the reference. A line click opens the card where
+   the check is worked (rwGoto, the D11 "Worked in" links; ACI crack control: its Report step, the only place it is worked).
+   Every value is read from the results already computed: r.checks (status, label, value) and rwResultRows(r) (D/C, basis,
+   note), the same rows as the Report's summary table. No new calculation.
+   On screens >= 1500 px the box is moved into the left column #rwDashCol; below that it sits above the output tabs.
+   Collapse state: per-browser UI key retaincalcpro.dashCollapsed.v1 ('1' = collapsed, '0' or absent = open); not in the
+   project, the autosave or Export JSON.
+   ================================================================ */
+const RWDC = { key: 'retaincalcpro.dashCollapsed.v1', mq: window.matchMedia ? window.matchMedia('screen and (min-width:1500px)') : null, open: new Map(), coll: false };
+try { RWDC.coll = localStorage.getItem(RWDC.key) === '1'; } catch (e) { /* not kept */ }
+const RWDC_ST = { pass: 'PASS', fail: 'FAIL', warn: 'REVIEW', na: 'N/A' };
+// ACI crack control is worked only in the Report (Reinforcement schedule › Crack-control bar spacing): its step key there
+const RWDC_RPT = { crackStem: 'crk/stem.dc', crackHeel: 'crk/heel.dc', crackToe: 'crk/toe.dc' };
+const rwdTxt = h => { const d = document.createElement('div'); d.innerHTML = h == null ? '' : String(h); return d.textContent; };
+const rwdEsc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function rwDashDC(dc) { return typeof dc !== 'number' || isNaN(dc) ? '' : 'D/C ' + (isFinite(dc) ? f(dc, 2) : '∞'); }
+function rwDashGo(r, key, card) {
+  if (RWDC_RPT[key] && !r.isAASHTO) {
+    const b = document.querySelector('.tab-btn[data-tab="report"]'); if (b) b.click();
+    // jump now, and again once the Report's chart images are in (they move the steps down)
+    const j = () => { if (RWRP.api) RWRP.api.jump(RWDC_RPT[key]); };
+    setTimeout(j, 60); Promise.resolve(RWRP.imgsP).catch(() => {}).then(() => setTimeout(j, 120));
+    return;
+  }
+  if (card) rwGoto(card);
+}
+function rwDashWhere(r, key, card) {
+  if (RWDC_RPT[key] && !r.isAASHTO) return 'Report · Crack-control bar spacing';
+  const t = card && rwCardTitle(card, r.isAASHTO);
+  return t ? RW_TABNAME[RW_CARDS[card][0]] + ' · ' + t : '';
+}
+function rwDashItems(r) {
+  const ks = Object.keys(r.checks), rows = rwResultRows(r);
+  return ks.map((k, i) => {
+    const c = r.checks[k], x = rows[i] || {}, st = c.ok ? 'pass' : 'fail';
+    const dcS = rwDashDC(x.dc), over = typeof x.dc === 'number' && x.dc > 1 + 1e-9;
+    // the condition that sets FAIL where the ratio is within its limit (or not a number): the note or the value
+    const cond = !c.ok && !over ? (x.note || rwdTxt(c.val) || 'see the worked check') : '';
+    const short = cond ? cond : (dcS || rwdTxt(c.val) || '');
+    const text = [c.val ? rwdTxt(c.val) : '', dcS && cond ? dcS + ' (the ratio is within its limit; the status comes from the condition)' : (dcS && !short.startsWith('D/C') ? dcS : ''), x.note && x.note !== cond ? x.note : '']
+      .filter(Boolean).join(' · ') || (dcS || '—');
+    return { key: k, name: rwdTxt(c.label), st, short, text, ref: rwdTxt(x.ref), card: x.card, where: rwDashWhere(r, k, x.card) };
+  });
+}
+function rwDashRender(r) {
+  const box = document.getElementById('rwDash'), cnt = document.getElementById('rwDashCnt'); if (!box) return;
+  box.innerHTML = '';
+  if (!r || r.fatal) {
+    box.innerHTML = r && r.errors && r.errors.length
+      ? '<div class="rwdMsg"><b>Input error: no results.</b> Correct the inputs:<ul>' + r.errors.map(e => '<li>' + e + '</li>').join('') + '</ul></div>'
+      : '<div class="rwdMsg none">No results yet.</div>';
+    if (cnt) cnt.innerHTML = r && r.fatal ? '<span class="rwdCf">input error</span>' : '';
+    return;
+  }
+  let items = null; try { items = rwDashItems(r); } catch (e) { console.error(e); items = null; }
+  if (!items) { box.innerHTML = '<div class="rwdMsg none">The check summary could not be built; see the result tabs.</div>'; if (cnt) cnt.innerHTML = ''; return; }
+  let nf = 0;
+  items.forEach(it => {
+    if (it.st === 'fail') nf++;
+    const c = document.createElement('div'); c.className = 'rwdCh ' + it.st; c.tabIndex = 0; c.setAttribute('role', 'button'); c.dataset.chk = it.key;
+    c.innerHTML = '<button type="button" class="rwdX" title="Show the result and the reference"></button><span class="rwdN">' + rwdEsc(it.name) + '</span>'
+      + '<span class="rwdR">' + rwdEsc(it.short) + '</span><span class="rwdS">' + RWDC_ST[it.st] + '</span><div class="rwdV">' + rwdEsc(it.text) + '</div>'
+      + '<div class="rwdRef">' + rwdEsc(it.ref) + (it.ref && it.where ? ' · ' : '') + (it.where ? '→ ' + rwdEsc(it.where) : '') + '</div>';
+    c.title = it.name + ': ' + it.text + (it.ref ? '\nReference: ' + it.ref : '') + (it.where ? '\nClick: → ' + it.where : '');
+    const x = c.querySelector('.rwdX');
+    const setOpen = o => { c.classList.toggle('rwdOpen', o); x.setAttribute('aria-expanded', o ? 'true' : 'false'); x.textContent = o ? '▾' : '▸'; };
+    setOpen(RWDC.open.has(it.key) ? RWDC.open.get(it.key) : it.st === 'fail' || it.st === 'warn');
+    x.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); const o = !c.classList.contains('rwdOpen'); RWDC.open.set(it.key, o); setOpen(o); });
+    if (it.where) {
+      const go = () => rwDashGo(window._R || r, it.key, it.card);
+      c.addEventListener('click', go);
+      c.addEventListener('keydown', ev => { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === c) { ev.preventDefault(); go(); } });
+    }
+    box.appendChild(c);
+  });
+  if (cnt) cnt.innerHTML = (nf ? '<span class="rwdCf">' + nf + ' FAIL</span>' : '<span class="rwdCp">all pass</span>') + '<span class="rwdCn">' + items.length + ' checks</span>';
+}
+function rwDashPlace() {
+  const box = document.getElementById('rwDashBox'), col = document.getElementById('rwDashCol'), bar = document.getElementById('status-bar'); if (!box || !col || !bar) return;
+  const wide = !!(RWDC.mq && RWDC.mq.matches);
+  document.body.classList.toggle('rwDashWide', wide);
+  if (wide) { if (box.parentNode !== col) col.appendChild(box); }
+  else if (box.parentNode !== bar) bar.appendChild(box);
+  rwDashColl(RWDC.coll, false);
+}
+function rwDashColl(v, save) {
+  RWDC.coll = !!v; document.body.classList.toggle('rwDashColl', RWDC.coll);
+  const t = document.getElementById('rwDashTgl'), wide = document.body.classList.contains('rwDashWide');
+  if (t) { t.setAttribute('aria-expanded', RWDC.coll ? 'false' : 'true');
+    t.innerHTML = wide ? (RWDC.coll ? '&raquo;' : '&laquo;') : (RWDC.coll ? '&#9656; Show checks' : '&#9662; Hide checks');
+    t.title = (RWDC.coll ? 'Show' : 'Hide') + ' the check list (remembered in this browser)'; }
+  if (save) { try { localStorage.setItem(RWDC.key, RWDC.coll ? '1' : '0'); } catch (e) { /* not kept */ } }
+}
+(function () {
+  const t = document.getElementById('rwDashTgl'); if (t) t.addEventListener('click', () => rwDashColl(!RWDC.coll, true));
+  if (RWDC.mq) { if (RWDC.mq.addEventListener) RWDC.mq.addEventListener('change', rwDashPlace); else if (RWDC.mq.addListener) RWDC.mq.addListener(rwDashPlace); }
+  rwDashPlace();
+  if (window._R) rwDashRender(window._R);
+})();
 </script>
 
 <script>
