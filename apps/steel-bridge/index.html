@@ -17,7 +17,7 @@
 <script src="engine/demandfile.js"></script>
 <script src="engine/library.js"></script>
 <!-- STDS-B (2026-11-06): the standard save (shared/projects-ui.js projectBar: header chip, Save, Saved projects…, the "Save and open" card,
-     the standard Saved projects dialog) over engine/library.js (items by id, unchanged). ui/library.js (the app's own dialog) is no longer loaded.
+     the standard Saved projects dialog) over engine/library.js (items by id, unchanged). ui/library.js (the app's own dialog) is no longer loaded and was deleted (2026-11-06).
      GHS2 (2026-11-05): copy of the saved projects to a private GitHub repository (shared/github-sync.js; off until set up). -->
 <script src="../../shared/projects.js"></script>
 <script src="../../shared/projects-ui.js"></script>
@@ -335,7 +335,7 @@
     closeToast(); changed(true, true);
   }
   const undo = () => restore(undoS, redoS), redo = () => restore(redoS, undoS);
-  /* ---------- saved projects (engine/library.js, ui/library.js) ---------- */
+  /* ---------- saved projects (engine/library.js) ---------- */
   const isDirty = () => cur.text == null || norm(P) !== cur.text;
   function syncBar() {
     $('bUndo').disabled = !undoS.length; $('bRedo').disabled = !redoS.length;
