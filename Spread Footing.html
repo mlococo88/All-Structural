@@ -5206,6 +5206,10 @@ $('#tabbar').addEventListener('click',e=>{
   importFile:()=>$('#fileImport').click(),
   fileButtons:[$('#btnExport'),$('#btnImport')],
   header:$('#sfdHdrA'),chipBefore:$('#btnUndo'),headerBefore:$('#sfdAcLbl'),card:$('#sfdSaveCard'),
+  /* HDRS (2026-11-06; TRIAL here only, other tools keep the header Save until the engineer decides): the header has the chip only (no
+     Save / Saved projects… buttons: they are in the Project tab's "Save and open" card; Ctrl+S / Ctrl+Shift+S work from anywhere).
+     A chip click opens the Project tab at the title block, as the old header link #sfdHdrProj did (its click handler is reused). */
+  headerSave:false,chipClick:()=>{const a=document.getElementById('sfdHdrProj');if(a)a.click();},chipHint:'the Project tab (title block; Save and open)',
   /* START (2026-11-06; TRIAL here only, pending engineer review): the start-of-session chooser of shared/projects-ui.js: a "Recent
      projects" strip under the header (autosave + saved projects), or the Saved projects dialog (no autosave yet). Not shown when a
      hand-off for this tool was sent in the last 30 minutes and is not pulled yet (memberReactions / foundationLoads), with a URL

@@ -259,6 +259,10 @@
                before it, e.g. Undo; default headerBefore), card (element the card body goes into), keys (default true),
              renamed / deleted / changed / note / exportOne (passed to the dialog), afterSave(name), afterOpen(name),
              start (optional, START trial 2026-11-06, off unless given; see startChooser below),
+             HDRS (2026-11-06, TRIAL in Spread Footing only; both off unless given, so every other tool is unchanged):
+             headerSave (default true; false: the header gets the chip only, no Save / Saved projects… buttons: they stay in the card,
+               and Ctrl+S / Ctrl+Shift+S still work from anywhere), chipClick() (optional: what a click on the chip does instead of
+               opening Saved projects…, e.g. open the Project tab), chipHint (the chip tooltip's "Click: …" text with chipClick),
              STDS-B (2026-11-06, for a list that is not a mapStore, e.g. items by id with duplicate names shown under unique names):
              askUnsaved ('always': Open / New / Import ask on unsaved changes even when the inputs on screen are not a saved project
                and were not edited on this page, e.g. unsaved work restored from the autosave), ghNote(name) (passed to the dialog:
@@ -305,11 +309,11 @@
     const chip = mk('', 'The project open now: open Saved projects…', { cls: 'spChip', sp: 'chip' });
     const hSave = mk('Save' + kbd('Ctrl+S'), 'Save the open project in this browser’s list (and to GitHub when Cloud sync is on). Ctrl+S', { cls: 'spPri', sp: 'hsave' });
     const hLib = button('Saved projects…', 'The projects saved in this browser (and on GitHub): open, rename, duplicate, export, delete', { sp: 'hlib' });
-    chip.addEventListener('click', () => dialog.show()); hSave.addEventListener('click', () => save()); hLib.addEventListener('click', () => dialog.show());
+    chip.addEventListener('click', () => { if (ctx.chipClick) ctx.chipClick(); else dialog.show(); }); hSave.addEventListener('click', () => save()); hLib.addEventListener('click', () => dialog.show());   // HDRS: ctx.chipClick
     if (ctx.header) {   // standard order: chip · (Undo · Redo) · Save · Saved projects… · (Print)
       const at = x => x && x.parentNode === ctx.header ? x : null;
       ctx.header.insertBefore(chip, at(ctx.chipBefore) || at(ctx.headerBefore));
-      [hSave, hLib].forEach(b => ctx.header.insertBefore(b, at(ctx.headerBefore)));
+      if (ctx.headerSave !== false) [hSave, hLib].forEach(b => ctx.header.insertBefore(b, at(ctx.headerBefore)));   // HDRS: headerSave false = chip only
     }
     /* card */
     let card = null, stat = null;
@@ -341,7 +345,7 @@
       const shown = inList ? n : (n || (ctx.displayName && clean(ctx.displayName())) || 'not saved yet');
       chip.innerHTML = `<span class="spDot${d ? ' dirty' : ''}"></span><span>Project:</span> <b>${esc(shown)}</b> <span>· ${!inList ? 'not saved' : d ? 'unsaved changes' : 'saved'}</span>`
         + (e ? ` <span class="spGhMini ${stt || ''}" title="Cloud sync (GitHub): ${esc(stt ? LBL[stt] || stt : 'not saved')}">GitHub ${stt === 'synced' ? '✓' : stt === 'pending' ? '↑' : stt === 'conflict' ? '!' : '·'}</span>` : '');
-      chip.title = (inList ? `"${n}" ${d ? 'has unsaved changes' : 'is saved'} in this browser` : 'The inputs on screen are not a saved project yet') + '. Click: Saved projects…';
+      chip.title = (inList ? `"${n}" ${d ? 'has unsaved changes' : 'is saved'} in this browser` : 'The inputs on screen are not a saved project yet') + '. Click: ' + (ctx.chipClick ? ctx.chipHint || 'open the project' : 'Saved projects…');
       if (stat) stat.innerHTML = `<span class="spDot${d ? ' dirty' : ''}"></span> ` + (inList
         ? `<b>${esc(n)}</b> — ${d ? 'changed since it was saved' : 'saved'}${t ? ` (${esc(t)})` : ''}. In this browser ✓${e ? ` · GitHub (cloud) <span class="spGhSt ${stt || ''}">${esc(LBL[stt] || stt || '')}</span>` : ''}`
         : `<b>${esc(shown === 'not saved yet' ? 'Not saved yet' : shown)}</b> — not in the saved list. Use Save as… to keep it in this browser${e ? ' and on GitHub' : ''}.`);
