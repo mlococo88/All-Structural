@@ -1990,7 +1990,7 @@ function renderStatus(r) {
 - **How verified:** tests check-syntax, phone-layout rwall 390 / 768, project-library retwall, standard-save, github-sync-tools retwall, home-projects retwall, dxf-print-sheets rw: all pass. origin/main (after #926) vs branch, five cases with the dates blank (ACI default; project fields; AASHTO full; tall wall + key + water + passive + k_h; f′c blank): `_R`, Export JSON, every localStorage key, Report text, tab text, DXF **identical**. With Date 2026-11-06 and Checked date 2026-11-09: `_R` identical; Export JSON and the autosave differ only by `fields.proj_date` / `fields.proj_chkdate`; the Report text only in the title block (Date, Checked date); the DXF only in the two title-block date texts of each of the four sheets (8 text values). An old saved project (no date fields) opened after dates were typed: both blank and not saved; a project saved with a date keeps it and opens with it. Screenshots (Project tab, the sheet's title block) looked at. Tests: see the PR.
 - **Other copies:** none.
 
-## 2026-11-06 — PR: claude/rw-shared-date (RWPD) — Shared project info carries the Project tab Date   [display / hand-off mapping only; no result change]
+## 2026-11-06 — PR: claude/rw-shared-date (PR #928: https://github.com/mlococo88/All-Structural/pull/928) (RWPD) — Shared project info carries the Project tab Date   [display / hand-off mapping only; no result change]
 - **Why:** engineer-approved 2026-11-06 (Phase 3 task A; follow-up to RWTB #927, whose PR left the hand-off unchanged).
 - **Where:** script block `/* Shared project info (HANDOFF.md §4.1, channel projectMeta) …`, the field map `var MAP={ projectName:'#proj_name', …`:
   - before: `… preparedBy:'#proj_eng', checkedBy:'#proj_chk', date:'' };`
