@@ -57,6 +57,7 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #hdrProj .hdrNone{font-style:italic;opacity:.8}
 #prjPane .secHead{cursor:default}
 #prjPane .prjGrp{margin:2px 0 8px}
+#spcSaveCard .spCard{font-family:var(--font-ui);font-size:9pt}   /* STDS: the Save and open card in the panel's UI font */
 #prjPane .prjGrp>b{display:block;font-family:var(--font-ui);font-size:9pt}
 #inputPanel #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0}
 #inputPanel #projGrid label{color:#475569}
@@ -313,7 +314,7 @@ table.plist button{font-size:8pt;padding:0 5px;border:1px solid #C6CFDA;backgrou
         <a class="alltools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
       </div>
       <div class="hdrBtns" id="hdrActs">
-        <a id="hdrProj" href="#" title="Project and job number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
+        <a id="hdrProj" hidden href="#" title="Project and job number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
         <button type="button" id="btnPrint" class="primary" title="Print the Report tab (from any tab); choose what it includes with the Include boxes on the Report tab">Print report</button>
       </div>
     </div>
@@ -321,14 +322,14 @@ table.plist button{font-size:8pt;padding:0 5px;border:1px solid #C6CFDA;backgrou
   <div id="govStrip" class="govStrip"></div>
   <div id="main">
     <div id="inputPanel"><div id="prjPane"><!-- SPHD (2026-11-05): moved here from the header; kept across rebuilds by rebuildInputs() (first in the Project tab) -->
+      <div class="sec"><div class="secHead"><span class="secTitle">Save and open</span></div><div class="secBody" id="spcSaveCard"></div></div><!-- STDS (2026-11-06): the standard "Save and open" card (shared/projects-ui.js projectBar, SPCPL.pb); it replaces the "Saved projects (this browser)" section and takes the Project file buttons -->
       <div class="sec"><div class="secHead"><span class="secTitle">Title block</span></div><div class="secBody">
         <div id="projGrid"></div>
         <div class="hint">Printed on the Report and on the DXF drawing sheets.</div>
       </div></div>
-      <div class="sec"><div class="secHead"><span class="secTitle">Project file, DXF and shared project info</span></div><div class="secBody" id="projShare">
-        <div class="prjGrp"><b>Project file</b><div class="hint">The whole project as a .json file, to keep or move it.</div><div class="btnRow">
-        <button type="button" class="btn sm" id="btnOpenHdr" title="Open a project file (.json)">Open file&hellip;</button>
-        <button type="button" class="btn sm" id="btnSaveHdr" title="Save the project to a file (.json)">Save file</button></div></div>
+      <div class="sec"><div class="secHead"><span class="secTitle">DXF and shared project info</span></div><div class="secBody" id="projShare"><!-- STDS: the Project file buttons (#btnSaveHdr / #btnOpenHdr, now Export JSON / Import JSON) moved into "Save and open" -->
+        <button type="button" class="btn sm" id="btnOpenHdr" title="Open a project file (.json)">Import JSON</button>
+        <button type="button" class="btn sm" id="btnSaveHdr" title="Save the project to a file (.json)">Export JSON</button>
         <div class="prjGrp"><b>DXF</b><div class="hint">The section geometry, to check the properties with AutoCAD MASSPROP.</div><div class="btnRow">
         <button type="button" class="btn sm" id="btnDxf" title="Export the section geometry to DXF, to check the properties with AutoCAD MASSPROP">Export DXF</button></div></div>
         <div class="prjGrp"><b>Project info</b><div class="hint">Copy the title block from or to the other tools.</div><div class="btnRow">
@@ -3930,7 +3931,7 @@ function loadModel(d, how) {
 }
 function openFileText(text) {
   let d; try { d = JSON.parse(text); } catch (e) { alert('Could not open project file: the file is not valid JSON.'); return; }
-  loadModel(d);
+  if (loadModel(d) !== false && SPCPL) SPCPL.pb.setCurrent(null);   /* STDS: an imported file is not the open saved project */
 }
 function saveFile() {
   const out = Object.assign({}, persistModel(M), { _schema: SCHEMA, version: SCHEMA_VER, app: 'Section Property Calculator', savedAt: new Date().toISOString() });
@@ -3946,7 +3947,7 @@ function wireFile() {
     const file = e.target.files[0]; if (!file) return;
     const rd = new FileReader(); rd.onload = () => openFileText(rd.result); rd.onerror = () => alert('Could not read the file.'); rd.readAsText(file); fi.value = '';
   });
-  $('btnOpenHdr').addEventListener('click', () => fi.click());
+  $('btnOpenHdr').addEventListener('click', () => { if (SPCPL) SPCPL.pb.importJSON(); else fi.click(); });   /* STDS: asks first on unsaved changes */
   $('btnSaveHdr').addEventListener('click', saveFile);
   $('btnDxf').addEventListener('click', openDxfDialog);
   $('btnPrint').addEventListener('click', spxPrintAny);   // SPRX: the Report, from any tab
@@ -4419,50 +4420,43 @@ function buildSetPane(P) {
    and shared/projects-ui.js. Display and storage only: Rename / Duplicate move / copy the stored item unchanged; Open = loadModel(), as the
    Open button. A rename of the open project (Project name = old name) sets Project name to the new name (Save stores under Project name).
    The tool's own Undo / Redo is unchanged. */
-let SPCPL = null;
-function spcPlibButton() {
-  if (!window.SharedProjects || !window.SharedProjectsUI) return null;
-  if (!SPCPL) {
-    let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
-    const store = SharedProjects.mapStore(ST, LS_PROJ, { unpack: i => i && i.d, time: i => i && i.t || null, sort: 'saved' });
-    const dlg = SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'section-property-calculator',label:'Section Property Calculator',space:2,toFile:i=>i.d,fromFile:j=>{if(!j||j._schema!==SCHEMA)throw new Error('not a Section Property Calculator file');return {t:Date.now(),d:j};}},
-    store, storage: ST, title: 'Saved projects (this browser)',
-      current: () => { const n = (M.project.name || '').trim(); return n && store.has(n) ? n : null; },
-      open: n => { const d = store.get(n); return d ? loadModel(d, `Opened "${n}"`) !== false : false; },
-      renamed: (a, b) => { if ((M.project.name || '').trim() === a) { M.project.name = b; buildProjHeader(); autosave(); } },
-      changed: () => rebuildInputs() });
-    SPCPL = { store, dlg };
-  }
-  const b = btn('Saved projects\u2026', 'sm', () => SPCPL.dlg.show(), 'The projects saved in this browser: open, rename, duplicate, delete'); b.setAttribute('data-sp', '1'); return b;
+let SPCPL = null, SPCNEW = 'example';
+/* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over spc_projects_v1 ({ name: { t, d: persistModel(M) } },
+   unchanged). Replaces the "Saved projects (this browser)" section (Name, Save, drop-down, Open, Delete, Saved projects…, New (example
+   section), New (empty)) and the header's read-only project line (hidden: the chip shows the open project). Save(name) = the old Save's
+   write (p[name] = { t, d: persistModel(M) }); Open = loadModel (as before); New = the example section (was "New (example section)");
+   "New (empty)" is kept as an extra button of the card (the same path with no parts). The open name is kept in this page (Save no longer
+   saves under the Project field; a rename of the open project still renames the Project field when it equals the old name, as before)
+   and found again by content after a reload. "Unsaved changes" compares persistModel(M) without ui (the output tab and the Report's
+   Include boxes), a saved project as loadModel leaves it (migrate). Export JSON / Import JSON: the same #btnSaveHdr / #btnOpenHdr
+   (were Save file / Open file…). The tool's own Undo / Redo (canvas toolbar, Ctrl+Z / Ctrl+Y) is unchanged. */
+function spcStdSave() {
+  if (SPCPL || !window.SharedProjects || !window.SharedProjectsUI) return;
+  let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
+  const store = SharedProjects.mapStore(ST, LS_PROJ, { unpack: i => i && i.d, time: i => i && i.t || null, sort: 'saved' });
+  const C = m => SharedProjects.canon(JSON.parse(JSON.stringify(persistModel(m))), ['ui']);
+  const hdr = $('hdrActs'), card = $('spcSaveCard');
+  const ne = btn('New (empty)', 'sm', () => { SPCNEW = 'empty'; try { SPCPL.pb.newProject(); } finally { SPCNEW = 'example'; } }, 'Start a new, empty project (no parts); saved projects are kept');
+  const pb = SharedProjectsUI.projectBar({ store, storage: ST, label: 'Section Property Calculator', id: 'spcLibDlg',
+    snapshot: () => C(M), snapOf: n => { const d = store.get(n); if (!d) return null; try { return C(migrate(JSON.parse(JSON.stringify(d)))); } catch (e) { return null; } },
+    save: n => { const p = getProjects(); p[n] = { t: Date.now(), d: JSON.parse(JSON.stringify(persistModel(M))) };
+      if (!setProjects(p)) return { ok: false, message: 'Could not save: browser storage is not available or full. Use Export JSON instead.' }; toast(`Saved "${n}"`); return { ok: true }; },
+    open: n => { const d = store.get(n); return d ? loadModel(d, `Opened "${n}"`) !== false : false; },
+    newProject: () => { const m = defaultModel(); if (SPCNEW === 'empty') m.parts = []; loadModel(JSON.parse(JSON.stringify(m)), SPCNEW === 'empty' ? 'New empty project' : 'New project'); },
+    displayName: () => (M.project.name || '').trim(),
+    exportFile: n => { const was = M.project.name; if (n) M.project.name = n; try { saveFile(); } finally { M.project.name = was; } },
+    importFile: () => $('spcFile').click(),
+    fileButtons: [$('btnSaveHdr'), $('btnOpenHdr')], extras: [ne],
+    header: hdr, chipBefore: $('btnPrint'), headerBefore: $('btnPrint'), card,
+    renamed: (a, b) => { if ((M.project.name || '').trim() === a) { M.project.name = b; buildProjHeader(); autosave(); } },
+    /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'section-property-calculator',label:'Section Property Calculator',space:2,toFile:i=>i.d,fromFile:j=>{if(!j||j._schema!==SCHEMA)throw new Error('not a Section Property Calculator file');return {t:Date.now(),d:j};}} });
+  pb.el.card.querySelectorAll('button[data-sp]').forEach(b => b.classList.add('btn', 'sm'));
+  [pb.el.chip, pb.el.save, pb.el.lib].forEach(b => b.classList.add('btn'));
+  SPCPL = { store, dlg: pb.dialog, pb };
 }
 /* ---- Project tab ---- */
 function buildProjPane(P) {
-  mkSec(P, 'inProj', 'Saved projects (this browser)', body => {
-    const projs = getProjects(); const names = Object.keys(projs).sort();
-    fRow(body, 'Name', txtIn(() => M.project.name || '', v => { M.project.name = v; const h = $('proj_name'); if (h) h.value = v; }, 'projSaveName', 'Project name'), '');
-    const row = el('div', 'btnRow');
-    row.appendChild(btn('Save', 'primary sm', () => {
-      const n = (M.project.name || '').trim() || 'Untitled';
-      const p = getProjects(); if (p[n] && !confirm(`Replace the saved project "${n}"?`)) return;
-      p[n] = { t: Date.now(), d: JSON.parse(JSON.stringify(persistModel(M))) };
-      if (!setProjects(p)) { alert('Could not save: browser storage is not available or full. Use "Save file" instead.'); return; }
-      toast(`Saved "${n}"`); rebuildInputs();
-    }));
-    if (names.length) {
-      const sel = document.createElement('select'); tagField(sel, 'projSel'); sel.style.width = 'auto'; sel.style.maxWidth = '170px';
-      names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n + ' (' + new Date(projs[n].t || 0).toLocaleDateString() + ')'; sel.appendChild(o); });
-      row.appendChild(sel);
-      row.appendChild(btn('Open', 'sm', () => { const p = getProjects()[sel.value]; if (!p) return; loadModel(p.d, `Opened "${sel.value}"`); }));
-      row.appendChild(btn('Delete', 'sm danger', () => { if (!confirm(`Delete the saved project "${sel.value}"?`)) return; const p = getProjects(); delete p[sel.value]; setProjects(p); rebuildInputs(); }));
-    }
-    { const lb = spcPlibButton(); if (lb) row.appendChild(lb); }   /* PLIB */
-    body.appendChild(row);
-    body.appendChild(el('div', 'hint', `The current session is autosaved in this browser (<code>${LS_AUTO}</code>); named projects are kept in <code>${LS_PROJ}</code>. Use Save file / Open file (above) to keep or move a project.`));
-    const r2 = el('div', 'btnRow');
-    r2.appendChild(btn('New (example section)', 'sm', () => { if (!confirm('Start a new project? Unsaved changes to the current one are lost (the autosave is replaced).')) return; const m = defaultModel(); loadModel(JSON.parse(JSON.stringify(m)), 'New project'); }));
-    r2.appendChild(btn('New (empty)', 'sm', () => { if (!confirm('Start a new, empty project? Unsaved changes to the current one are lost (the autosave is replaced).')) return; const m = defaultModel(); m.parts = []; loadModel(JSON.parse(JSON.stringify(m)), 'New empty project'); }));
-    body.appendChild(r2);
-  });
+  /* STDS (2026-11-06): the 'Saved projects (this browser)' section is replaced by the standard "Save and open" card (#spcSaveCard, spcStdSave) */
   mkSec(P, 'inNotes', 'Notes and assumptions (printed)', body => {
     const ta = document.createElement('textarea'); ta.value = M.project.notes || ''; tagField(ta, 'projNotes');
     ta.addEventListener('input', () => { M.project.notes = ta.value; schedule(false); }); body.appendChild(ta);
@@ -4520,7 +4514,7 @@ function libWrite(entries) {
   try { localStorage.setItem(LS_LIB, s); }
   catch (e) {
     const quota = e && (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED' || e.code === 22 || e.code === 1014 || /quota/i.test(String(e.message)));
-    alert('Could not save the library: ' + (quota ? 'the browser storage is full (quota exceeded). Export the library to a file (Export all), then delete entries you no longer need; or save the section with Save file instead.' : 'browser storage is not available.') + ' Nothing was changed.');
+    alert('Could not save the library: ' + (quota ? 'the browser storage is full (quota exceeded). Export the library to a file (Export all), then delete entries you no longer need; or save the section with Export JSON instead.' : 'browser storage is not available.') + ' Nothing was changed.');
     return false;
   }
   LIBC = { raw: undefined, r: null }; return true;
@@ -4741,8 +4735,8 @@ function buildLibPane(T) {
   }, { noNum: true });
   mkSec(P, 'libProj', 'Project file (JSON)', body => {
     const r = el('div', 'btnRow');
-    r.appendChild(btn('Save file', 'sm', saveFile, 'Save the whole project to a file (.json) — same as Save file in the Project tab'));
-    r.appendChild(btn('Open file…', 'sm', () => $('spcFile').click(), 'Open a project file (.json) — same as Open file in the Project tab'));
+    r.appendChild(btn('Export JSON', 'sm', saveFile, 'Save the whole project to a file (.json) — same as Export JSON in the Project tab'));   /* STDS: was Save file / Open file… */
+    r.appendChild(btn('Import JSON', 'sm', () => { if (SPCPL) SPCPL.pb.importJSON(); else $('spcFile').click(); }, 'Open a project file (.json) — same as Import JSON in the Project tab'));
     body.appendChild(r);
     body.appendChild(el('div', 'hint', 'A project file holds the whole project (all parts, settings, loads and project data); a library file holds library entries only.'));
   }, { noNum: true });
@@ -6727,7 +6721,7 @@ function buildManual(pg) {
     '<b>Steps:</b> UCS World → REGION (select the objects on SPC-PARTS, SPC-PARTS-N, SPC-HOLES) → UNION the material regions (touching parts union cleanly; separate pieces become one composite region) → SUBTRACT the hole regions → MASSPROP. Compare Area, Centroid, Moments of inertia, Product of inertia and Principal moments.',
     '<b>Differences to expect:</b> MASSPROP is unweighted (compare with every n = 1, or use the unweighted values in the notes); rolled shapes are exported as their plate model (the AISC tabulated option is not in the geometry); overlapping parts (possible with "Prevent overlap" off, after a rotate or flip, or in an older file) are merged once by UNION but counted twice by the tool — the export dialog warns. MASSPROP does not report J, C<sub>w</sub>, Z, S, the shear centre or Q.']);
   H('Saved data');
-  UL([`<b>Files:</b> Save file writes JSON with <code>_schema: "${SCHEMA}"</code>, <code>version: ${SCHEMA_VER}</code>; dimensions are always stored in inches. Open file refuses another schema or a newer version. Optional fields (Phase 2a, written only once used): a part's density <code>rho</code> (lb/ft³; absent = steel 490), the stress loads <code>stress: {P, Mx, My}</code> (kip, kip-in; absent = 0), and the overlay switches <code>settings.showKern</code>, <code>settings.showEllipse</code>. Phase 2b: the shear flow inputs <code>sf: {Vx, Vy, basis, conn}</code> (kip; <code>conn</code> = connector inputs per contact, keyed like <code>contacts.off</code>; absent = no loads, no connectors).`,
+  UL([`<b>Files:</b> Export JSON writes JSON with <code>_schema: "${SCHEMA}"</code>, <code>version: ${SCHEMA_VER}</code>; dimensions are always stored in inches. Import JSON refuses another schema or a newer version. Optional fields (Phase 2a, written only once used): a part's density <code>rho</code> (lb/ft³; absent = steel 490), the stress loads <code>stress: {P, Mx, My}</code> (kip, kip-in; absent = 0), and the overlay switches <code>settings.showKern</code>, <code>settings.showEllipse</code>. Phase 2b: the shear flow inputs <code>sf: {Vx, Vy, basis, conn}</code> (kip; <code>conn</code> = connector inputs per contact, keyed like <code>contacts.off</code>; absent = no loads, no connectors).`,
     `<b>This browser:</b> autosave <code>${LS_AUTO}</code>, named projects <code>${LS_PROJ}</code>, selected input tab <code>${LS_INTAB}</code>, DXF export options <code>${LS_DXF}</code>. All keys start with <code>spc_</code>.`,
     '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Project, Job #, Client, Prepared by, Checked by and Date are shared and received. No other hand-offs in Phase 1.']);
   H('Limitations');
@@ -7463,6 +7457,7 @@ function spcInit() {
   const raw = lsGet(LS_AUTO);
   if (raw) { try { M = migrate(JSON.parse(raw)); } catch (e) { M = defaultModel(); } }
   fullRebuild();
+  spcStdSave();   /* STDS */
   window.addEventListener('resize', () => drawCanvas());
   // KaTeX loads with "defer": re-render the current tab once it is there
   if (!window.katex) window.addEventListener('load', () => { if (window.katex) renderTab(); });

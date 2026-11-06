@@ -61,6 +61,7 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #hdrProj .hdrNone{font-style:italic;opacity:.8}
 #prjPane .secHead{cursor:default}
 #prjPane .prjGrp{margin:2px 0 10px}
+#sbSaveCard .spCard,#hdrActs button[data-sp]{font-family:var(--font-ui)}#sbSaveCard .spCard{font-size:9pt}   /* STDS: the Save and open card and the header chip in the UI font */
 #prjPane .prjGrp>b{display:block;font-family:var(--font-ui);font-size:9pt}
 #projShare button{font-family:var(--font-ui);font-size:9pt;padding:3px 9px;border:1px solid var(--accent);border-radius:4px;background:#fff;color:var(--accent);cursor:pointer}
 #projShare button:hover{background:#EFF4FA}
@@ -218,12 +219,13 @@ textarea{min-height:64px;resize:vertical;font-family:var(--font-doc);font-size:1
         <div class="byline">by Mario Lococo</div>
         <a class="alltools" href="tools.html" target="_top">&larr; All tools</a>
       </div>
-      <div id="hdrActs"><a id="hdrProj" href="#" title="Project and task: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a></div><!-- SBHD (2026-11-05): Print report and Export Excel are added here -->
+      <div id="hdrActs"><a id="hdrProj" hidden href="#" title="Project and task: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a></div><!-- SBHD (2026-11-05): Print report and Export Excel are added here -->
       <div class="stageTag" id="stageTag">Stage 1 &middot; Analysis Engine, Loads &amp; Sections &middot; strength checks arrive in Stage 2</div>
     </div>
   </div>
   <div id="main">
     <div id="inputPanel"><div id="prjPane" data-secid="prjPane"><!-- SBHD (2026-11-05): moved here from the header; kept across rebuilds by rebuildInputs() -->
+      <div class="sec"><div class="secHead"><span class="secTitle">Save and open</span></div><div class="secBody" id="sbSaveCard"></div></div><!-- STDS (2026-11-06): the standard "Save and open" card (shared/projects-ui.js projectBar, SBPL.pb); it replaces the "Project Save / Load" section -->
       <div class="sec"><div class="secHead"><span class="secTitle">Title block</span></div><div class="secBody">
         <div id="projGrid"></div>
         <div class="hint">Printed on the Report and the Excel calculation sheet.</div>
@@ -603,22 +605,57 @@ function setProjects(p){lsSet(LS_PROJ,JSON.stringify(p));}
    (mergeState + fullRebuild). The tool's own Undo / Redo is unchanged. A rename of the open project (Project name = the old name)
    sets Project name to the new name, because Save stores under Project name. */
 let SBPL=null;
-function sbPlibButton(){
-  if(!window.SharedProjects||!window.SharedProjectsUI)return null;
-  if(!SBPL){
-    let ST=null;try{ST=window.localStorage;}catch(e){}
-    const store=SharedProjects.mapStore(ST,LS_PROJ,{unpack:i=>i&&i.d,time:i=>i&&i.t||null,sort:'saved'});
-    const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'steel-beam-aisc',label:'Steel Beam Design',space:1,toFile:i=>i.d,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return {t:Date.now(),d:j};}},
-   store,storage:ST,title:'Saved projects (this browser)',
-      current:()=>{const n=S.proj&&S.proj.name;return n&&store.has(n)?n:null;},
-      open:n=>{const d=store.get(n);if(!d)return false;S=mergeState(defaultState(),d);fullRebuild();toast('Loaded \u201C'+n+'\u201D');return true;},
-      renamed:(a,b)=>{if(S.proj&&S.proj.name===a){S.proj.name=b;schedule();}},
-      changed:()=>rebuildInputs()});
-    SBPL={store,dlg};
-  }
-  const b=SharedProjectsUI.button('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete',{cls:'btn sm'});
-  b.addEventListener('click',()=>SBPL.dlg.show());
-  return b;
+/* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over sbd_projects_v1 ({ name: { t, d: S } }, unchanged). Replaces
+   the "Project Save / Load" section (Save under Project name, drop-down, Load, Delete, Saved projects…) and the header's read-only project
+   line (hidden: the chip shows the open project). Save(name) = the old Save's write (p[name] = { t, d: copy of S }); Open = the Load path
+   (mergeState + fullRebuild, as before); New = the default inputs (S = defaultState(), the tool had no New). The open name is kept in this
+   page (Save no longer saves under Project name; a rename of the open project still renames Project name when it equals the old name, as
+   before) and found again by content after a reload. "Unsaved changes" compares S with a saved project as Load leaves it (mergeState).
+   Export JSON / Import JSON: the old buttons' code, unchanged (sbExportJSON / sbImportText). The tool's own Undo / Redo is unchanged. */
+function sbExportJSON(name){
+  const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download=(name||S.proj.name||'beam').replace(/[^\w\-]+/g,'_')+'.json';a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1500);
+}
+function sbImportText(txt){
+  try{
+    const d=JSON.parse(txt);
+    if(d&&d.v===2){S=mergeState(defaultState(),d);fullRebuild();toast('Project imported');}
+    else if(d&&d.spans&&(d.fu||d.lu))importLegacy(d);
+    else{alert('Unrecognized project file.');return;}
+    if(SBPL)SBPL.pb.setCurrent(null);   /* an imported file is not the open saved project */
+  }catch(err){alert('Invalid JSON: '+err.message);}
+}
+function sbStdSave(){
+  if(SBPL||!window.SharedProjects||!window.SharedProjectsUI)return;
+  let ST=null;try{ST=window.localStorage;}catch(e){}
+  const store=SharedProjects.mapStore(ST,LS_PROJ,{unpack:i=>i&&i.d,time:i=>i&&i.t||null,sort:'saved'});
+  /* S.ui (the open tab, collapsed sections, manual part) is view only: not "unsaved changes". section.builtUp is compared as true / false:
+     sectionFor() (Validation / Report / User Manual tabs) leaves it undefined in place of false (open item in the STDS fix-log entry) */
+  const C=o=>{const c=JSON.parse(JSON.stringify(o));if(c&&c.section)c.section.builtUp=!!c.section.builtUp;return SharedProjects.canon(c,['ui']);};
+  const im=document.createElement('input');im.type='file';im.accept='.json';im.style.display='none';im.id='sbImFile';
+  im.addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>sbImportText(rd.result);rd.readAsText(f);im.value='';});
+  document.body.appendChild(im);
+  const fb=(t,ti,fn)=>{const b=el('button','btn sm',t);b.type='button';b.title=ti;b.addEventListener('click',fn);return b;};
+  const ex=fb('Export JSON','Save the inputs on screen as a .json file (backup or transfer)',()=>sbExportJSON());
+  const ib=fb('Import JSON','Open a .json project of this tool, or a legacy Shear & Moment Diagram export (auto-converted to kip / ft)',()=>SBPL.pb.importJSON());
+  const pb=SharedProjectsUI.projectBar({store,storage:ST,label:'Steel Beam Design',id:'sbLibDlg',
+    snapshot:()=>C(S), snapOf:n=>{const d=store.get(n);if(!d)return null;try{return C(mergeState(defaultState(),JSON.parse(JSON.stringify(d))));}catch(e){return null;}},
+    save:n=>{const p2=getProjects();p2[n]={t:Date.now(),d:JSON.parse(JSON.stringify(S))};setProjects(p2);if(!store.has(n))return{ok:false,message:'Could not save: browser storage is not available or full. Use Export JSON.'};toast('Saved \u201C'+n+'\u201D');return{ok:true};},
+    open:n=>{const d=store.get(n);if(!d)return false;S=mergeState(defaultState(),d);fullRebuild();toast('Loaded \u201C'+n+'\u201D');return true;},
+    newProject:()=>{S=defaultState();fullRebuild();toast('New project');},
+    displayName:()=>(S.proj&&S.proj.name||'').trim(),
+    exportFile:n=>sbExportJSON(n),
+    importFile:()=>im.click(),
+    fileButtons:[ex,ib],
+    header:$('hdrActs'),card:$('sbSaveCard'),
+    renamed:(a,b)=>{if(S.proj&&S.proj.name===a){S.proj.name=b;schedule();}},
+    /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'steel-beam-aisc',label:'Steel Beam Design',space:1,toFile:i=>i.d,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return {t:Date.now(),d:j};}}});
+  pb.el.card.querySelectorAll('button[data-sp]').forEach(b=>b.classList.add('btn','sm'));
+  [pb.el.chip,pb.el.save,pb.el.lib].forEach(b=>{b.classList.add('btn');b.style.alignSelf='center';});
+  const h=document.createElement('div');h.className='hint';h.textContent='Import JSON also reads legacy Shear & Moment Diagram exports (auto-converted to kip / ft).';pb.el.card.appendChild(h);
+  SBPL={store,dlg:pb.dialog,pb};
 }
 /* ---- undo / redo ---- */
 let hist=[],hIdx=-1,histT=null;
@@ -2580,62 +2617,8 @@ function rebuildInputs(){
     ta.addEventListener('input',()=>{S.assume=ta.value;schedule();});
     body.appendChild(ta);
   },P,{noNum:true});
-  /* ---------- Project ---------- */
-  mkSection('inProj','Project Save / Load',body=>{
-    const projs=getProjects();
-    const names=Object.keys(projs).sort();
-    const rowA=el('div','btnRow');
-    const save=el('button','btn primary sm','Save');
-    save.addEventListener('click',()=>{
-      const nm=S.proj.name||'Untitled';
-      const p2=getProjects();p2[nm]={t:Date.now(),d:JSON.parse(JSON.stringify(S))};
-      setProjects(p2);toast('Saved \u201C'+nm+'\u201D');rebuildInputs();
-    });
-    rowA.appendChild(save);
-    if(names.length){
-      const sel=document.createElement('select');tagField(sel,'projSel');
-      names.forEach(n=>{const o=document.createElement('option');o.value=n;o.textContent=n;sel.appendChild(o);});
-      rowA.appendChild(sel);
-      const load=el('button','btn sm','Load');
-      load.addEventListener('click',()=>{
-        const p2=getProjects();if(!p2[sel.value])return;
-        S=mergeState(defaultState(),p2[sel.value].d);fullRebuild();toast('Loaded \u201C'+sel.value+'\u201D');
-      });
-      const del=el('button','btn sm danger','Delete');
-      del.addEventListener('click',()=>{
-        if(!confirm('Delete saved project \u201C'+sel.value+'\u201D?'))return;
-        const p2=getProjects();delete p2[sel.value];setProjects(p2);rebuildInputs();
-      });
-      rowA.appendChild(load);rowA.appendChild(del);
-    }
-    if(typeof sbPlibButton==='function'){const lb=sbPlibButton();if(lb)rowA.appendChild(lb);}   /* PLIB */
-    body.appendChild(rowA);
-    const rowB=el('div','btnRow');
-    const ex=el('button','btn sm','\u2b07 Export JSON');
-    ex.addEventListener('click',()=>{
-      const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'});
-      const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-      a.download=(S.proj.name||'beam').replace(/[^\w\-]+/g,'_')+'.json';a.click();
-      setTimeout(()=>URL.revokeObjectURL(a.href),1500);
-    });
-    const imLab=el('label','btn sm','\u2b06 Import JSON');
-    const im=document.createElement('input');im.type='file';im.accept='.json';im.style.display='none';
-    im.addEventListener('change',e=>{
-      const f=e.target.files[0];if(!f)return;
-      const rd=new FileReader();
-      rd.onload=()=>{try{
-        const d=JSON.parse(rd.result);
-        if(d&&d.v===2){S=mergeState(defaultState(),d);fullRebuild();toast('Project imported');}
-        else if(d&&d.spans&&(d.fu||d.lu))importLegacy(d);
-        else alert('Unrecognized project file.');
-      }catch(err){alert('Invalid JSON: '+err.message);}};
-      rd.readAsText(f);im.value='';
-    });
-    imLab.appendChild(im);
-    rowB.appendChild(ex);rowB.appendChild(imLab);
-    body.appendChild(rowB);
-    body.appendChild(el('div','hint','Import accepts both this app\u2019s projects and legacy Shear &amp; Moment Diagram exports (auto-converted to kip / ft). Saved projects live in this browser\u2019s local storage \u2014 export JSON for backup or transfer.'));
-  },P,{noNum:true});
+  /* STDS (2026-11-06): the 'Project Save / Load' section (Save under Project name, drop-down, Load, Delete, Saved projects…, ⬇ Export JSON,
+     ⬆ Import JSON) is replaced by the standard "Save and open" card (#sbSaveCard, sbStdSave); its Export / Import code is sbExportJSON / sbImportText */
   __secNum=numHold;
   sbdInputTabs(P);   /* move the sections just built into the input tabs */
   restoreUI(st);
@@ -4243,6 +4226,7 @@ function init(){
   rebuildInputs();
   buildTabs();
   hist=[JSON.stringify(S)];hIdx=0;
+  sbStdSave();   /* STDS */
   document.addEventListener('keydown',e=>{
     if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){e.preventDefault();undo();}
     if((e.ctrlKey||e.metaKey)&&(e.key.toLowerCase()==='y'||(e.shiftKey&&e.key.toLowerCase()==='z'))){e.preventDefault();redo();}

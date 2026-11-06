@@ -60,7 +60,7 @@ export const TOOLS = {
     ready: p => p.waitForFunction(() => window.SPCUI && window.SPCUI.res),
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(window.SPCUI.res, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v)).replace(/\bp[0-9a-z]{9,}\b/g, 'ID')); }),
     change: async p => { await p.evaluate(() => { const m = window.SPCUI.model; m.parts[0].x += 1; }); await p.evaluate(() => { fullRebuild(); }); await p.waitForTimeout(900); },
-    save: async (p, name) => { await p.evaluate(n => { window.SPCUI.model.project.name = n; rebuildInputs(); const b = [...document.querySelectorAll('button')].find(x => x.textContent === 'Save' && x.classList.contains('primary')); b.click(); }, name); await p.waitForTimeout(400); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { window.SPCUI.model.project.name = n; rebuildInputs(); const b = [...document.querySelectorAll('button')].find(x => x.textContent === 'Save' && x.classList.contains('primary')); b.click(); }, name); await p.waitForTimeout(400); }
   },
   mlg: {
     file: 'Moving Load Generator.html', list: 'movingLoadGen.projects.v1', auto: 'movingLoadGen.autosave.v1', newList: true,
@@ -112,7 +112,7 @@ export const TOOLS = {
     ready: p => p.waitForFunction(() => typeof AN !== 'undefined' && AN),
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify({ AN, DZ }, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '[data-fkey=dsnLcx]', 2),   // not spanL0: see fixlog PLIB open item (span edits ignored after the Validation benchmarks run)
-    save: async (p, name) => { await p.evaluate(n => { S.proj.name = n; const b = [...document.querySelectorAll('#inputPanel button')].find(x => x.textContent === 'Save'); b.click(); }, name); await p.waitForTimeout(400); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { S.proj.name = n; const b = [...document.querySelectorAll('#inputPanel button')].find(x => x.textContent === 'Save'); b.click(); }, name); await p.waitForTimeout(400); }
   },
   smd: {
     file: 'Shear and Moment Diagrams.html', list: 'smd_saves_v1', auto: 'smd_auto_v1', ownUndo: true,   // the tool's own Undo / Redo (↩ ↪) is unchanged and not re-tested here
@@ -121,7 +121,7 @@ export const TOOLS = {
       if (!(await p.evaluate(() => loads.length))) { await p.selectOption('#tplSel', '3s'); await p.waitForTimeout(1500); } },
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify({ tabR, nodeR, shD, moD, deD, env, crits, totL }, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '#spanTbl input[data-si]', 2),
-    save: async (p, name) => { await p.evaluate(n => { const i = document.getElementById('projNm'); i.value = n; i.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('bSv').click(); }, name); await p.waitForTimeout(400); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const i = document.getElementById('projNm'); i.value = n; i.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('bSv').click(); }, name); await p.waitForTimeout(400); }
   },
   bgeo: {
     // Bridge Geometry: its own library panel (Load / Rename / Duplicate / Delete); Duplicate is new (mapStore). The tool seeds five example
