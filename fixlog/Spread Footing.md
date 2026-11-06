@@ -5624,7 +5624,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Other copies:** none.
 - **Open items:** the cap reading of 11.6.2(a) (SFWC-1 decision 3) is still pending engineer review.
 
-## 2026-11-06 — PR: claude/sf-wall-horiz-blank (SFWH: the wall's horizontal bars default to blank, "Input needed" = REVIEW; engineer confirmations of SFWC-1 decisions; wall wording of the 1 % note and the "Dowel steel" chip; calculation status change for Wall elements only)
+## 2026-11-06 — PR: claude/sf-wall-horiz-blank (PR #883: https://github.com/mlococo88/All-Structural/pull/883) (SFWH: the wall's horizontal bars default to blank, "Input needed" = REVIEW; engineer confirmations of SFWC-1 decisions; wall wording of the 1 % note and the "Dowel steel" chip; calculation status change for Wall elements only)
 
 ### SFWH. Wall horizontal bars: blank by default, checks that need ρ_t are REVIEW until entered   [check status change, Wall elements only; CLAUDE.md §4, §5]
 - **Engineer's answers (2026-11-06) on the wall checks:**
