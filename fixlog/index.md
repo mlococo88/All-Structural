@@ -4452,7 +4452,7 @@ function NumberListInput({value, onChange, placeholder, label, col = 'Value', un
 - **How verified:** see the PR (`bridge-suite-save.mjs --app mct`, `project-library --tool index`, `home-projects`, `home-sync`, `check-syntax`, screenshots at 1400 and 390 px).
 - **Other copies:** the `'Hand-off locks'` rename is in `lldf.html` and `Prestressed Bridge Design.html` too (same PR).
 
-## 2026-11-06 — PR: claude/reset-inputs-label-mct (RSTI) — "Save and open" card: "Reset to defaults" renamed "Reset inputs", with a tooltip of what it keeps (display only, no result change)
+## 2026-11-06 — PR: claude/reset-inputs-label-mct (PR #877: https://github.com/mlococo88/All-Structural/pull/877) (RSTI) — "Save and open" card: "Reset to defaults" renamed "Reset inputs", with a tooltip of what it keeps (display only, no result change)
 - **Engineer (2026-11-06):** keep this Reset (it differs from New) but rename it "Reset inputs" and say what it keeps.
 - **Where:** BSS projectBar block, anchor `bRs=B(`: `B('Reset to defaults','All inputs back to their defaults (asks first)')` → `B('Reset inputs','Every input of this app back to its default (asks first). Keeps the shared bridge project open; New also closes it in every Bridge Suite app')` + a trailing `/* RSTI */` comment; the BSS comment lists the new name.
 - **Difference from New (unchanged behaviour, now in the tooltip):** Reset (`loadDefault`: confirm, `pushHistory('before reset')`, `setCfg(DEFAULT_CFG)`) keeps the Bridge Suite project open (`bridgeSuite.v1.currentProjectId`); New (`newDefault`, via the shared Bridge Suite bar) also sets the suite's open project to none, in LL & DL and Prestressed too.
