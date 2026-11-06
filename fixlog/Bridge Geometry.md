@@ -1702,3 +1702,66 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **How verified:** origin/main vs branch, the 5 examples + Example 5 with offset 1 ft: the text of every tab, Export JSON and all localStorage identical. Export DXF (local, auto) and the sheets DXF are byte-identical for all, including offsets 1 ft and 0.5 ft. Tests: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, project-library --tool bgeo. Screenshots before and after (Examples 2, 3, 5, 5 at 1 ft).
 - **Saved data:** none. **Other copies:** none.
 - **Open item:** at piers with two bearing lines the on-screen girder × bearing elevation labels (TD at each girder on each line) also overlap. Not part of this request; ask before changing.
+
+## 2026-11-06 — PR: claude/bg-plan-elev-labels (BGDE: on-screen plan, girder × bearing top-of-deck labels at dual-bearing piers placed clear of each other; display only, no result change)
+
+- **Why:** engineer 2026-11-06 (BGDP open item): give the on-screen plan's girder × bearing top-of-deck elevation labels at piers with two bearing lines the same treatment as the bearing station labels.
+- **Problem (before):** `drawHeatmap`, layer "elevation nodes at girder×support": each label is drawn left-aligned 3 px right of its node. At a dual-bearing pier the back and ahead nodes of a girder are a few pixels apart, so the two values printed on top of each other. Example 5 (offset 2.5 ft) and its 1 ft and 0.5 ft variants: all 8 girders at all 4 piers. Example 2 (skew 25°): both piers. Example 3 (curved): partly.
+- **Where:** `drawHeatmap`: the `// ---- elevation nodes at girder×support ----` block (rewritten), and the BGDP bearing-label block (it now records its label boxes in `bgBrgBox`, declared just before `if(LY('ly_sta')){` of the station callouts).
+- **Exact code (unified diff, `Bridge Geometry.html`):**
+```diff
+@@ -2306,0 +2307 @@ function drawHeatmap(){
++  const bgBrgBox={};   /* BGDE: where each support's bearing-line station labels were drawn (boxes), for the elevation labels */
+@@ -2333,2 +2334,2 @@ function drawHeatmap(){
+-        ctx.fillText(q.t, lx, ly); }
+-      else ctx.fillText(q.t, q.x+5, q.y); });
++        ctx.fillText(q.t, lx, ly); (bgBrgBox[u.name]=bgBrgBox[u.name]||[]).push([lx,ly-5,lx+q.w,ly+5]); }
++      else { ctx.fillText(q.t, q.x+5, q.y); (bgBrgBox[u.name]=bgBrgBox[u.name]||[]).push([q.x+5,q.y-5,q.x+5+q.w,q.y+5]); } });
+@@ -2343,0 +2345,7 @@ function drawHeatmap(){
++  /* BGDE (2026-11-06, engineer): at a pier with two bearing lines the top-of-deck labels of the back and ahead lines were drawn
++     on top of each other (each label just right of its node, the nodes a few pixels apart). Per girder, where the pair's labels
++     overlap, the first clear of: (1) side by side, the node further left on screen labelled to its left, the other to its right;
++     (2) the pair spread one text line apart vertically (bgLabSpread, 11 px) right of the nodes with a leader to each node, centred,
++     then above, then below. Clear = no overlap with each other, with the support's other elevation labels, with its name /
++     station / skew callouts or with its bearing-line station labels (bgBrgBox). None clear: side by side. Labels with room, and every single-line support, are drawn as before.
++     Display only. */
+@@ -2345,5 +2353,22 @@ function drawHeatmap(){
+-    su.forEach(u=>bearingLinesFor(u).forEach(bl=>{ const span=Math.max(1,Math.min(su.length-1,spanOfSta(bl.sta))); const gset=girdersForSpan(span);
+-      gset.forEach(off=>{ const p=ENG.deckAtSupport(bl,off);
+-        const px=TX(p.x),py=TY(p.y);
+-        ctx.fillStyle=INK; ctx.beginPath(); ctx.arc(px,py,1.7,0,Math.PI*2); ctx.fill();
+-        ctx.fillStyle=INK; ctx.textAlign='left'; ctx.fillText((p.z+ZADD).toFixed(2), px+3, py); }); })); }
++    const eBox=q=>q.al==='right'?[q.tx-q.w,q.ty-5,q.tx,q.ty+5]:[q.tx,q.ty-5,q.tx+q.w,q.ty+5];
++    const eHit=(a,b)=>{ const A=eBox(a),B=eBox(b); return Math.min(A[2],B[2])-Math.max(A[0],B[0])>-1&&Math.min(A[3],B[3])-Math.max(A[1],B[1])>-1; };
++    su.forEach(u=>{ const L=bearingLinesFor(u).map(bl=>{ const span=Math.max(1,Math.min(su.length-1,spanOfSta(bl.sta))); const gset=girdersForSpan(span);
++        return gset.map(off=>{ const p=ENG.deckAtSupport(bl,off), px=TX(p.x), py=TY(p.y), t=(p.z+ZADD).toFixed(2);
++          return {px,py,t,w:ctx.measureText(t).width,tx:px+3,ty:py,al:'left',lead:false}; }); });
++      if(L.length===2&&L[0].length===L[1].length){
++        /* obstacles: the support's own callouts (name, Sta, Skew: right-aligned left of the deck's left edge, 10 px font) */
++        const obs=(bgBrgBox[u.name]||[]).slice(); if(LY('ly_sta')){ const sp0=Math.max(1,Math.min(su.length-1,spanOfSta(u.sta))), top=ENG.deckAtSupport({sta:u.sta,skew:u.skew},edgesForSpan(sp0).l), lx=TX(top.x), ly=TY(top.y);
++          ctx.font='10px monospace'; [[u.name,-7],['Sta '+formatStation(u.sta),5]].concat(u.skew?[['Skew '+u.skew.toFixed(1)+'°',17]]:[]).forEach(([t,dy])=>{ const w=ctx.measureText(t).width; obs.push([lx-6-w,ly+dy-6,lx-6,ly+dy+6]); }); ctx.font='8.5px monospace'; }
++        const all=L.flat(), clear=(q,skip)=>{ const A=eBox(q); return !obs.some(B=>Math.min(A[2],B[2])-Math.max(A[0],B[0])>-1&&Math.min(A[3],B[3])-Math.max(A[1],B[1])>-1)&&!all.some(z=>!skip.includes(z)&&eHit(q,z)); };
++        const set=(q,al,tx,ty,lead)=>{ q.al=al; q.tx=tx; q.ty=ty; q.lead=lead; };
++        L[0].forEach((a,g)=>{ const b=L[1][g]; if(!eHit(a,b)) return;
++          const [l,r]=a.px<=b.px?[a,b]:[b,a], x0=Math.max(a.px,b.px)+8, s=bgLabSpread([a.py,b.py],11), lo=Math.min(...s.x), hi=Math.max(...s.x);
++          const C=[()=>{ set(l,'right',l.px-3,l.py,false); set(r,'left',r.px+3,r.py,false); },              // side by side
++            ()=>{ set(a,'left',x0,s.x[0],true); set(b,'left',x0,s.x[1],true); },                                  // stacked, centred
++            ()=>{ set(a,'left',x0,s.x[0]-(hi-Math.max(a.py,b.py))-5,true); set(b,'left',x0,s.x[1]-(hi-Math.max(a.py,b.py))-5,true); },   // stacked, above
++            ()=>{ set(a,'left',x0,s.x[0]+(Math.min(a.py,b.py)-lo)+5,true); set(b,'left',x0,s.x[1]+(Math.min(a.py,b.py)-lo)+5,true); }]; // stacked, below
++          if(!C.some(f=>{ f(); return !eHit(a,b)&&clear(a,[a,b])&&clear(b,[a,b]); })) C[0](); }); }
++      L.flat().forEach(q=>{
++        ctx.fillStyle=INK; ctx.beginPath(); ctx.arc(q.px,q.py,1.7,0,Math.PI*2); ctx.fill();
++        if(q.lead){ ctx.save(); ctx.strokeStyle=INK; ctx.lineWidth=0.6; ctx.beginPath(); ctx.moveTo(q.px+1.5,q.py); ctx.lineTo(q.tx-1.5,q.ty); ctx.stroke(); ctx.restore(); }
++        ctx.fillStyle=INK; ctx.textAlign=q.al; ctx.fillText(q.t, q.tx, q.ty); }); }); }
+```
+- **What it does:** per girder at a support with two bearing lines, only where the pair's labels overlap, the first placement that is clear is used:
+  1. side by side: the node further left on screen labelled to its left (right-aligned), the other to its right;
+  2. the pair one text line apart (11 px, `bgLabSpread`) to the right of the nodes with a leader to each node, centred;
+  3. the same, above the nodes;
+  4. the same, below the nodes.
+
+  "Clear" means no overlap with each other, with the support's other elevation labels, with its name / Sta / Skew callouts, or with its bearing-line station labels. If none is clear, side by side is used. Labels with room, and every support with one bearing line, are drawn exactly as before.
+- **Governing provision:** none (display only).
+- **Check case:** Example 5, Pier 1 (back 12+07.50, ahead 12+12.50), girder G4. Before: "99.41" and "99.44" printed in the same place, unreadable. After: "99.41" left of the back node, "99.44" right of the ahead node. Top girder with offset 0.5 ft: the side-by-side left label hit the "Sta 12+10.00" callout, so the pair is stacked above the deck edge with leaders. Bottom girder: stacking below would hit the bearing station labels, so it stays side by side.
+- **How verified:** origin/main vs branch on the 5 examples plus Example 5 with offsets 1 ft and 0.5 ft: every tab's text, Export JSON and all localStorage identical. Export DXF (local, auto) and the sheets DXF byte-identical (Examples 1, 2, 3, 5 and both variants; 18 files). Plan canvas pixel-identical for Examples 1 and 4 (no dual bearings). Tests: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, project-library --tool bgeo. Screenshots before and after looked at.
+- **Saved data:** none. **Other copies:** none.
