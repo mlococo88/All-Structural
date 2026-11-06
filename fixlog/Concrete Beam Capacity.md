@@ -4831,7 +4831,7 @@ function buildDrawingsTab(pg){
 - **Decision (pending engineer review):** Duplicate copies the saved record unchanged, so the copy keeps the original's "Last saved" time (the old ⧉ gave the copy the time of the copy).
 - **Decision (pending engineer review):** a project saved before newer inputs existed shows "unsaved changes" right after it is opened (Open fills them with their defaults); Save writes them (as in the Development & Splice tab, #841).
 
-## 2026-11-06 — PR: claude/cbc-stds-asd (STDS) — ASD tab: the standard save: header chip + Save + Saved projects…, "Save and open" first in the Project input tab, Save as, Ctrl+S; GitHub sync of its list   [display / save controls only; no result change]
+## 2026-11-06 — PR: claude/cbc-stds-asd (PR #856: https://github.com/mlococo88/All-Structural/pull/856) (STDS) — ASD tab: the standard save: header chip + Save + Saved projects…, "Save and open" first in the Project input tab, Save as, Ctrl+S; GitHub sync of its list   [display / save controls only; no result change]
 - **Why:** engineer decision 2026-11-05 / 2026-11-06 (standard save roll-out; three lists kept; same change as the Beam Capacity tab, PR #854). All tool edits are inside the `srcdoc` of `<iframe id="suite-frame-asd">` (HTML-escaped; file CRLF kept).
 - **Script tags (frame head):** `<script src="shared/github-sync.js"></script>` added after `shared/projects-ui.js` (sync off until set up).
 - **Header (`#hdrBtns`):** chip · Undo · Redo · **Save (Ctrl+S)** · **Saved projects…** · Print / PDF; `#hdrProj` kept with `hidden`. CSS after `#prjPane .prjBtns button:hover{…}`: card buttons as `.prjBtns` buttons, `#hdrBtns button.spChip{flex:0 0 auto;max-width:100%;white-space:nowrap}`, `body dialog.spLib{font-family:var(--font-ui)}`.
