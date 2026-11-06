@@ -2245,3 +2245,14 @@ function renderStatus(r) {
 - **Observations for the engineer (not changed, §4 — questions):**
   - ACI U = 1.2D + 1.6H and 0.9D + 1.6H: the factored resultant omits the water uplift (service includes it).
   - AASHTO Strength I: the vertical dead-load surcharge q_sur·L_h (ES vertical) is not in ΣV (`V_ES_v = 0`), while ES lateral is; Extreme Event II adds γ_LS,CT × q_sur·L_h (the dead surcharge, not the LS q_LL·L_h) and factors the hydrostatic WA with γ_EH,CT (so it drops to 0 with the MassDOT option).
+
+## 2026-11-06 — PR: claude/rw-report-bearing (PR #935: https://github.com/mlococo88/All-Structural/pull/935) (RWRB) — AASHTO Report: to-scale bearing diagram for the governing combination in Step 6   [display only; no result change]
+- **Why:** engineer-approved 2026-11-06 (task 2). The ACI Report has had the Stability tab's to-scale bearing figure in Step 6 since #932; the AASHTO Report's bearing section had none.
+- **What:** AASHTO Report, "Step 6 — Bearing resistance (Strength I)": after the worked steps, a figure = `rwbpSVG(r, <governing combination>)` (the Stability tab's diagram, #932: footing and stem base to scale with a scale bar, pressure block, q_R line, resultant R at x̄ with e, contact length). The governing combination is the Stability tab's ★ (`rwbpCombos(r).gov`: Strength I or Strength Ia, `bearing_Ia_governs`). Soil: uniform over B′ (Meyerhof); rock: linear (Art. 10.6.5).
+- **Caption:** the combination, ΣV, x̄, e, the distribution and B′ or the contact length, q_u vs q_R, and "see §" links to the steps where they are worked: `sa6/e` (Strength I) or `sa6/BeffIa` (Strength Ia), `sa6/qu` or `sa6/quIa`, and the check `sa6/dc`. The existing "On screen: Stability tab" link stays after it.
+- **Where:** new `rwrBrgFigA(r)` before `function rwrItem(scope, list, opt) {`; in the AASHTO Step 6 `subs.push(sub('Step 6 — Bearing resistance (Strength I)', [rwrItem('sa6', …), rwrBrgFigA(r), onTab('stabBrg')]))` (before: `[rwrItem('sa6', …), onTab('stabBrg')]`).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). Values are the analysis' own (`r.aashtoR`).
+- **Check case** (AASHTO with barrier + CT, default wall): Strength I governs; ΣV = 27441 lb/ft, x̄ = 6.02 ft, e = 0.228 ft; B′ = 12.50 − 2(0.228) = 12.04 ft; q_u = 27441 / 12.04 = 2278 psf ≤ q_R = 4950 psf (as Step 6).
+- **How verified:** origin/main vs branch, eight cases (as RW3F): `_R`, Export JSON, every localStorage key, tab text, DXF identical; the Report text differs only by the new caption in the three AASHTO cases (Strength I soil; Strength Ia soil, resultant near the toe; Strength Ia on rock, triangular); ACI Reports identical; links resolve (no `§?`); 0 console errors. Screenshots of the figure looked at.
+- **Other copies:** none.
+- **Decisions (pending engineer review):** only the governing combination is drawn (the tab's selector shows the others); Extreme Event II keeps its worked steps without a figure.
