@@ -228,7 +228,7 @@ export const TOOLS = {
       const sum = document.querySelector('#pane_sum'); return { M, sum: sum ? sum.textContent.replace(/\s+/g, ' ') : '' }; }),
     change: p => bump(p, '#inPanel input[type=number]', 5),
     view: p => tabView(p, '#tabs button', 2, '.on'),
-    save: async (p, name) => { await p.evaluate(n => { document.getElementById('projName').value = n; document.getElementById('bSave').click(); }, name); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { document.getElementById('projName').value = n; document.getElementById('bSave').click(); }, name); }   // STDS: the standard Save as (branch), the old Save (main)
   },
   asce7: {
     file: 'ASCE7-16 Load Generator.html', list: 'asce7bldg.projects', auto: 'asce7bldg.autosave',
