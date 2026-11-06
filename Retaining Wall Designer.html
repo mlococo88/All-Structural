@@ -1025,8 +1025,12 @@ window.MathJax = {
       <input type="text" id="proj_num" placeholder="e.g. 2025-001"></div>
     <div class="ig"><label for="proj_eng">Engineer of Record</label>
       <input type="text" id="proj_eng" placeholder="Name, PE"></div>
+    <div class="ig"><label for="proj_date">Date <span class="lbl-note">optional</span></label><!-- RWTB (2026-11-06): title-block date of the calculation (Report, drawing sheets); saved only when filled -->
+      <input type="text" id="proj_date" placeholder="e.g. 2026-11-06"></div>
     <div class="ig"><label for="proj_chk">Checked By</label>
       <input type="text" id="proj_chk" placeholder="Name, PE"></div>
+    <div class="ig"><label for="proj_chkdate">Checked Date <span class="lbl-note">optional</span></label><!-- RWTB (2026-11-06): title-block checked date -->
+      <input type="text" id="proj_chkdate" placeholder="e.g. 2026-11-06"></div>
     <div class="proj-row" style="grid-template-columns: 1fr 1fr"><button type="button" id="bx-pm-use" class="proj-btn" title="Fill these fields from the project info shared by another tool">Use shared project info</button><button type="button" id="bx-pm-share" class="proj-btn" title="Share these project fields with the other tools">Share project info</button></div>
     <div class="ig"><label for="proj_notes">Notes / Description</label>
       <textarea id="proj_notes" rows="2" placeholder="Optional scope notes…"></textarea></div>
@@ -5437,17 +5441,24 @@ function _lsAvailable() {
 const LS_OK = _lsAvailable();
 
 // Snapshot every form field by id → plain object
+const RWTB_FIELDS = ['proj_date', 'proj_chkdate'];   // RWTB (2026-11-06): the optional title-block dates (Project tab)
 function snapshotFields() {
   const out = {};
   document.querySelectorAll('.sidebar input, .sidebar select, .sidebar textarea').forEach(el => {
     if (!el.id || el.type === 'file' || el.type === 'button') return;
     out[el.id] = (el.type === 'checkbox') ? el.checked : el.value;
   });
+  /* RWTB (2026-11-06): the optional title-block dates are saved only when filled, so a project without them saves, autosaves and
+     exports exactly as before (saved-format addition only) */
+  RWTB_FIELDS.forEach(id => { if (out[id] === '') delete out[id]; });
   return out;
 }
 // Restore fields from a snapshot object, then fire dependent UI toggles
 function restoreFields(fields) {
   if (!fields) return;
+  /* RWTB (2026-11-06): a project or autosave saved before the title-block dates (or with them blank) has no such field: they open
+     blank (not the value of the project open before) */
+  RWTB_FIELDS.forEach(id => { if (!(id in fields)) { const el = document.getElementById(id); if (el) el.value = ''; } });
   Object.entries(fields).forEach(([id, val]) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -8565,7 +8576,7 @@ const rwrCell = (v, d) => ({ t: (typeof v === 'number') ? (isFinite(v) ? rwrN(v,
 function rwrModel(r) {
   const inp = r.inp, A = inp.aashto, a = r.aashtoR, isA = r.isAASHTO;
   const g = id => ((document.getElementById(id) || {}).value || '').trim();
-  const meta = { name: g('proj_name'), num: g('proj_num'), eng: g('proj_eng'), chk: g('proj_chk'), notes: g('proj_notes') };
+  const meta = { name: g('proj_name'), num: g('proj_num'), eng: g('proj_eng'), chk: g('proj_chk'), notes: g('proj_notes'), date: g('proj_date'), chkDate: g('proj_chkdate') };   // RWTB: + the title-block dates
   const AA = s => 'AASHTO LRFD 10th Ed. ' + s;
   const CK = {};   // r.checks key -> report key of the step that works it (for the summary)
   const DC = {}; { const ks = Object.keys(r.checks); rwResultRows(r).forEach((x, i) => { DC[ks[i]] = x; }); }
@@ -9029,8 +9040,8 @@ function rwrModel(r) {
   }
   const codes = isA ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)' : 'ACI 318-19 · IBC 2021 · ASCE 7-22';
   return { title: 'Cantilever Retaining Wall — Calculation Report', subtitle: meta.name || 'Unnamed project', code: codes,
-    info: [['Project', meta.name], ['Project No.', meta.num], ['Calculated by', meta.eng], ['Date', ''], ['Checked by', meta.chk], ['Checked date', '']],
-    head: { left: 'Project No. ' + (meta.num || '—') + ' — ' + String(meta.notes || meta.name || '—').slice(0, 40), right: 'Computed: ' + (meta.eng || '—') + ' · Checked: ' + (meta.chk || '—'), foot: (meta.name || 'Unnamed project') + ' (Retaining Wall Designer)' },
+    info: [['Project', meta.name], ['Project No.', meta.num], ['Calculated by', meta.eng], ['Date', meta.date], ['Checked by', meta.chk], ['Checked date', meta.chkDate]],   // RWTB: Date / Checked date from the Project tab (were blank)
+    head: { left: 'Project No. ' + (meta.num || '—') + ' — ' + String(meta.notes || meta.name || '—').slice(0, 40), right: 'Computed: ' + (meta.eng || '—') + (meta.date ? ' ' + meta.date : '') + ' · Checked: ' + (meta.chk || '—') + (meta.chkDate ? ' ' + meta.chkDate : ''), foot: (meta.name || 'Unnamed project') + ' (Retaining Wall Designer)' },
     sections: secs };
 }
 function renderRwReport() {
@@ -9280,7 +9291,7 @@ function rwdwBuild(r) {
   const inp = r.inp, a = r.aashtoR, isA = r.isAASHTO;
   const D = SharedDxf.drawing({ prefix: 'RW-' }), SH = [];
   const g = id => ((document.getElementById(id) || {}).value || '').trim();
-  const meta = { name: g('proj_name'), num: g('proj_num'), eng: g('proj_eng'), chk: g('proj_chk') };
+  const meta = { name: g('proj_name'), num: g('proj_num'), eng: g('proj_eng'), chk: g('proj_chk'), date: g('proj_date'), chkDate: g('proj_chkdate') };   // RWTB: + the title-block dates
   const AS = s => String(s == null ? '' : s).replace(/≥/g, '>=').replace(/≤/g, '<=').replace(/φ/g, 'PHI').replace(/β/g, 'BETA').replace(/γ/g, 'GAMMA').replace(/ℓ/g, 'L')
     .replace(/⅔/g, '2/3 ').replace(/δ/g, 'DELTA').replace(/Δ/g, 'DELTA ').replace(/η/g, 'ETA').replace(/²/g, '2').replace(/′/g, "'").replace(/″/g, '"').replace(/[–—−]/g, '-').replace(/\s*·\s*/g, '; ').replace(/§/g, '').replace(/&amp;/g, '&');
   const T0 = D.text, D0 = D.dim; D.text = (l, x, y, hh, s, j, rot) => T0(l, x, y, hh, AS(s), j, rot); D.dim = (l, p1, p2, b, ang, txt) => D0(l, p1, p2, b, ang, txt == null ? txt : AS(txt));
@@ -9306,7 +9317,7 @@ function rwdwBuild(r) {
     const x0 = ox + m, y0 = m, w = (RWDW.W - 2 * RWDW.m) * P, rr = tb / 2, sc = (ret && ret.scale) || rwdwScName(k);
     D.rect(L.tb, x0, y0, x0 + w, y0 + tb); D.line(L.tb, x0, y0 + rr, x0 + w, y0 + rr);
     // no owner cell; the Project tab has no Date / Checked date: those cells stay blank (RWDW)
-    const row1 = [['PROJECT', meta.name, 4.25], ['PROJECT NO.', meta.num, 2], ['CALCULATED BY', meta.eng, 2], ['DATE', '', 1.75], ['CHECKED BY', meta.chk, 2], ['CHECKED DATE', '', 1.75], ['SCALE', sc, 2.5]];
+    const row1 = [['PROJECT', meta.name, 4.25], ['PROJECT NO.', meta.num, 2], ['CALCULATED BY', meta.eng, 2], ['DATE', meta.date, 1.75], ['CHECKED BY', meta.chk, 2], ['CHECKED DATE', meta.chkDate, 1.75], ['SCALE', sc, 2.5]];
     const row2 = [['SHEET TITLE', title, 5], ['DESIGN BASIS', basis, 4.25], ['DRAWN BY', 'RETAINING WALL DESIGNER', 4], ['SHEET', '?', 3]];
     let sheetEnt = null;
     [[row1, y0 + rr], [row2, y0]].forEach(([row, yb]) => { let x = x0; row.forEach(([lab, val, cw], ci) => {
@@ -9689,7 +9700,7 @@ function rwdwRender(r) {
     + '<button type="button" class="btn" id="rwdwPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button> '
     + '<button type="button" class="btn" id="rwdwPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets (' + B.S.length + ')</button></div>'
     + '<div class="note rwdwNote">' + esc(SharedDxf.PRINT_NOTE) + '</div>'
-    + '<div class="note rwdwNote">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers RW-CONC, RW-JOINT, RW-HIDDEN, RW-REBAR, RW-REBAR-TEXT, RW-LEADER, RW-DIMS, RW-TEXT, RW-SOIL, RW-GRADE, RW-WATER, RW-SURCHARGE, RW-LOAD, RW-LOAD-TEXT, RW-TABLE, RW-TBLK, RW-BRDR. Title block from the Project tab (Project name, Project number, Engineer of record as "Calculated by", Checked by); the tool has no Date / Checked date fields, so those cells are blank. Geometry, bars and loads as computed; lengths the model does not give are nominal and labelled (sheet 2).</div>'
+    + '<div class="note rwdwNote">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers RW-CONC, RW-JOINT, RW-HIDDEN, RW-REBAR, RW-REBAR-TEXT, RW-LEADER, RW-DIMS, RW-TEXT, RW-SOIL, RW-GRADE, RW-WATER, RW-SURCHARGE, RW-LOAD, RW-LOAD-TEXT, RW-TABLE, RW-TBLK, RW-BRDR. Title block from the Project tab (Project name, Project number, Engineer of record as "Calculated by", Date, Checked by, Checked date; a blank field prints "-"). Geometry, bars and loads as computed; lengths the model does not give are nominal and labelled (sheet 2).</div>'
     + '<div class="rwdwHead"><b>' + (B.S.indexOf(cur) + 1) + '. ' + esc(cur.title) + '</b> · scale ' + esc(scTxt(cur)) + (cur.over ? ' · <span style="color:var(--fail)">does not fit the sheet even at the smallest scale</span>' : '') + '</div>'
     + '<div class="rwdwBox"></div><div class="note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>'
     + '<div class="rwdwScroll"><table class="tbl rwdwIdx"><thead><tr><th>No.</th><th>Sheet</th><th>Scale</th><th>Worked in</th></tr></thead><tbody>' + B.S.map((s, j) =>
