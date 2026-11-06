@@ -3963,7 +3963,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Formulas, factors, units, code references:** none.
 - **Other copies:** none.
 
-## 2026-11-06 — PR: claude/sbapp-stds (STDS-B) — the standard save: header chip + Undo + Redo + Save + Saved projects…, "Save and open" card, standard dialog, Save as, Ctrl+S (storage and display only, no result change)
+## 2026-11-06 — PR: claude/sbapp-stds (PR #855: https://github.com/mlococo88/All-Structural/pull/855) (STDS-B) — the standard save: header chip + Undo + Redo + Save + Saved projects…, "Save and open" card, standard dialog, Save as, Ctrl+S (storage and display only, no result change)
 - **Engineer:** the standard save (approved 2026-11-05; pattern #836 / #837): header chip · Undo · Redo · Save (Ctrl+S) · Saved projects…; the Project tab's first card "Save and open"; Save as offers This browser and GitHub / This browser only / File; plain Save never prompts; deletes only through the standard dialog; Save as blocks a new duplicate name (existing duplicates are kept).
 - **Where (`index.html`):**
   - Script tags: `<script src="ui/library.js"></script>` removed (the app's own dialog is no longer loaded; the file is kept unchanged). The GHS2 comment above `../../shared/projects.js` replaced by the STDS-B comment.

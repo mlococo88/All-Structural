@@ -89,7 +89,7 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
 - **Check case:** Spread Footing, six saved projects "Footing F1…F6", `sfd_auto` = Footing F3: strip "Continue: Footing F3 (autosaved in this browser) · Footing F6 · F5 · F4 · F2 · F1 · All saved projects… · ×"; Open "Footing F5" from the strip gives state, results R, storage and chip identical to Open "Footing F5" in the dialog (B = 13 ft). Same list, no `sfd_auto`: the dialog opens by itself.
 - **How verified:** see the PR (new `tests/smoke/start-chooser.mjs`, the smoke tests of the tools that load the file, main vs branch for Spread Footing).
 
-## 2026-11-06 — PR: claude/sbapp-stds (STDS-B) — projects-ui.js: projectBar / standard dialog hooks for a list that is not a mapStore (id-keyed, duplicate names)   [display only; no key or format change]
+## 2026-11-06 — PR: claude/sbapp-stds (PR #855: https://github.com/mlococo88/All-Structural/pull/855) (STDS-B) — projects-ui.js: projectBar / standard dialog hooks for a list that is not a mapStore (id-keyed, duplicate names)   [display only; no key or format change]
 - **Why:** apps/steel-bridge (and next Pile Designer) keep items by id with duplicate names; the standard dialog lists them through a by-name view whose rows are not all synced.
 - **What (`shared/projects-ui.js`):**
   - `libraryDialog` `usageHtml()`: `SP().usage(ctx.storage, [ctx.store.key])` → `SP().usage(ctx.storage, ctx.store.keys ? ctx.store.keys() : [ctx.store.key])` (a list kept under several keys).
