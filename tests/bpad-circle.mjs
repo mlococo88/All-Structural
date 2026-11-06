@@ -326,7 +326,8 @@ async function circleChecks(src) {
          BC 0.3–0.7D, h_ef 12–36, centred / offset, uplift / moment), and the pryout of the combination is the one of the same branch.
          Also checks case 2 (moment, reduced governs, 23.378 kip) and case 3 (default project switched to a round pier, 23.164 kip). */
       { let n = 0, bad = [], pryBad = [], nRed = 0, nFull = 0, nAlt = 0, minR = 9, maxR = 0;
-        const one = (s, v) => { s.conc.circHefReduce = v; S = mergeState(JSON.parse(JSON.stringify(s))); try { refreshAll(); } catch (e) {} CC = computeAll(); const cap = comboCapacities(CC, CC.combos[0]); return { tb: cap.tb, pry: cap.pry }; };
+        const one = (s, v) => { s.conc.circHefReduce = v; S = mergeState(JSON.parse(JSON.stringify(s))); try { refreshAll(); } catch (e) {} CC = computeAll(); const c0 = CC.combos[0], cap = comboCapacities(CC, c0); return { tb: cap.tb, pry: cap.pry, dem: (cap.pryDem !== undefined ? cap.pryDem : c0.Vres) }; };
+        let pryDiff = 0, pryTop = [];
         for (const D of [24, 30, 36, 42, 48, 60, 72]) for (const nb of [4, 6, 8]) for (const bcf of [0.3, 0.45, 0.6, 0.7]) for (const hef of [12, 18, 24, 36]) for (const load of ['T', 'M']) for (const off of [0, 0.15]) {
           const BC = D * bcf; if (BC < 6) continue;
           const s = defaultState(); s.plate.shape = 'circle'; s.plate.D = BC + 6; s.plate.B = s.plate.D; s.plate.N = s.plate.D; s.plate.t = 2;
@@ -339,7 +340,11 @@ async function circleChecks(src) {
           const want = Math.min(R.tb.phiNcbg, F.tb.phiNcbg);
           if (Math.abs(L.tb.phiNcbg - want) > 1e-9 * Math.max(1, want)) bad.push([D, nb, BC, hef, load, off, L.tb.phiNcbg, R.tb.phiNcbg, F.tb.phiNcbg]);
           const same = L.tb.hefEff.applies ? R : F; if (L.tb.hefEff.applies) nRed++; else nFull++;
-          if (Math.abs(L.pry.phiVcpg - same.pry.phiVcpg) > 1e-9 * Math.max(1, same.pry.phiVcpg)) pryBad.push([D, nb, BC, hef, load, off]);
+          /* BC-9 (2026-11-06): pryout takes its own minimum of the two (before: the branch of the tension pick, "same") */
+          const wantP = Math.min(R.pry.phiVcpg, F.pry.phiVcpg);
+          if (Math.abs(L.pry.phiVcpg - wantP) > 1e-9 * Math.max(1, wantP)) pryBad.push([D, nb, BC, hef, load, off, L.pry.phiVcpg, R.pry.phiVcpg, F.pry.phiVcpg]);
+          if (Math.abs(same.pry.phiVcpg - L.pry.phiVcpg) > 1e-9) { pryDiff++; pryTop.push({ D, nb, BC: +BC.toFixed(3), hef, load, off, tensionRed: L.tb.hefEff.applies, pryRed: !!(L.pry.lesser && L.pry.lesser.governsReduced),
+            before: same.pry.phiVcpg, after: L.pry.phiVcpg, dem: L.dem, dcBefore: L.dem / same.pry.phiVcpg, dcAfter: L.dem / L.pry.phiVcpg, hefR: R.tb.hef }); }
           const r = R.tb.phiNcbg / F.tb.phiNcbg; minR = Math.min(minR, r); maxR = Math.max(maxR, r);
         }
         const mkA = combo => { const s = defaultState(); s.plate.B = 24; s.plate.N = 24; s.plate.t = 1.5; s.plate.shape = 'circle';
@@ -347,14 +352,17 @@ async function circleChecks(src) {
           s.anchor.pattern = 'circle'; s.anchor.nCircle = 4; s.anchor.BC = 13; s.anchor.theta0 = 0;
           s.conc.fc = 4; s.conc.shape = 'circle'; s.conc.D = 36; s.conc.Bx = 36; s.conc.By = 36; s.conc.H = 120; s.conc.cracked = true;
           s.grout.present = false; s.standoff.type = 'clamp'; s.standoff.z = 1; s.forceModel.method = 'elastic'; s.combos = [combo]; return s; };
-        const c2 = one(mkA({ name: 'M', P: -5, Vx: 3, Vy: 0, Mx: 0, My: 480 }), 'lesser').tb;
+        const c2r = one(mkA({ name: 'M', P: -5, Vx: 3, Vy: 0, Mx: 0, My: 480 }), 'lesser'), c2 = c2r.tb;
+        const c1r = one(mkA({ name: 'T', P: 20, Vx: 0, Vy: 0, Mx: 0, My: 0 }), 'lesser');
         let c3 = null; try { S = mergeState(defaultState()); buildInputPanel();
           const sel = [...document.querySelectorAll('select')].find(x => [...x.options].some(o => /Circular \(drilled shaft/.test(o.textContent)));
           sel.selectedIndex = [...sel.options].findIndex(o => /Circular \(drilled shaft/.test(o.textContent)); sel.dispatchEvent(new Event('change', { bubbles: true }));
           CC = computeAll(); const cb = CC.combos.find(c => c.name === '0.9D+1.0W'); const cap = comboCapacities(CC, cb);
           const sel2 = [...document.querySelectorAll('select')].find(x => [...x.options].some(o => /Lesser of reduced/.test(o.textContent)));
-          c3 = { mode: S.conc.circHefReduce, hef: cap.tb.hef, phi: cap.tb.phiNcbg, alt: cap.tb.alt && cap.tb.alt.phiNcbg, pry: cap.pry.phiVcpg, ui: sel2 ? sel2.value : null }; texCheck('H9 case 3'); } catch (e) { c3 = 'ERR ' + e; }
-        out.hand.H9 = { n, nAlt, bad, pryBad, nRed, nFull, minR, maxR, c2: { hef: c2.hef, ANc: c2.ANc, phi: c2.phiNcbg, alt: c2.alt && c2.alt.phiNcbg }, c3 }; }
+          const cb2 = CC.combos.find(c => c.name === '1.2D+1.0W'), cap2 = comboCapacities(CC, cb2);
+          c3 = { mode: S.conc.circHefReduce, hef: cap.tb.hef, phi: cap.tb.phiNcbg, alt: cap.tb.alt && cap.tb.alt.phiNcbg, pry: cap.pry.phiVcpg, pryL: cap.pry.lesser, pryGov: cap2.pry.lesser, pryGovDem: cap2.pryDem !== undefined ? cap2.pryDem : cb2.Vres, ui: sel2 ? sel2.value : null }; texCheck('H9 case 3'); } catch (e) { c3 = 'ERR ' + e; }
+        pryTop.sort((a, b) => (b.dcAfter - b.dcBefore) - (a.dcAfter - a.dcBefore) || (a.after / a.before) - (b.after / b.before));
+        out.hand.H9 = { n, nAlt, bad, pryBad, pryDiff, pryTop: pryTop.slice(0, 4), pryWorstRatio: pryTop.length ? Math.min(...pryTop.map(x => x.after / x.before)) : 1, nRed, nFull, minR, maxR, c2: { hef: c2.hef, ANc: c2.ANc, phi: c2.phiNcbg, alt: c2.alt && c2.alt.phiNcbg, pry: c2r.pry.lesser, pryDem: c2r.dem }, c1: { pry: c1r.pry.lesser, pryDem: c1r.dem }, c3 }; }
       out.texBad = texBad;
       return out;
     }, { CASES, VARIANTS, BUILD });
@@ -474,7 +482,9 @@ if (r.hand.H9) {
   const h = r.hand.H9;
   const ok = h.nAlt === 1234 && !h.bad.length && !h.pryBad.length;
   if (!ok) fail = true;
-  console.log(`  ${ok ? 'ok  ' : 'FAIL'} H9 "lesser" = min(reduced, not reduced) in ${h.nAlt - h.bad.length}/${h.nAlt} round-pier cases (of ${h.n}); reduced governs ${h.nRed}, full governs ${h.nFull}; reduced/full φN_cbg ratio ${h.minR.toFixed(4)}–${h.maxR.toFixed(4)}; pryout from the same branch in ${h.nAlt - h.pryBad.length}/${h.nAlt}`);
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'} H9 "lesser" = min(reduced, not reduced) in ${h.nAlt - h.bad.length}/${h.nAlt} round-pier cases (of ${h.n}); reduced governs ${h.nRed}, full governs ${h.nFull}; reduced/full φN_cbg ratio ${h.minR.toFixed(4)}–${h.maxR.toFixed(4)}; pryout = min(reduced, full) in ${h.nAlt - h.pryBad.length}/${h.nAlt} (differs from the tension pick's branch in ${h.pryDiff}; smallest after/before ${h.pryWorstRatio.toFixed(4)})`);
+  h.pryTop.forEach(x => console.log('    pryout change: ' + JSON.stringify(x)));
+  console.log('    case 1 pryout: ' + JSON.stringify(h.c1) + '\n    case 2 pryout: ' + JSON.stringify({ pry: h.c2.pry, dem: h.c2.pryDem }));
   h.bad.slice(0, 5).forEach(x => console.log('    ' + JSON.stringify(x)));
   chk('H9 case 2 (moment): h\'_ef (reduced governs)', h.c2.hef, 8.93587, 5e-5);
   chk('H9 case 2: A_Nc', h.c2.ANc, 618.28, 5e-3);
