@@ -726,7 +726,7 @@ const SFTC_EXP={
  earth:['Cast against and permanently in contact with ground','cast against and permanently in contact with ground',n=>3],   // all members: 3 in
  interior:['Not exposed to weather or in contact with ground','not exposed to weather or in contact with ground',n=>1.5]};   // beams, columns, pedestals: ties 1-1/2 in
 function sftcMin(exp,tieSize){const e=SFTC_EXP[exp]||SFTC_EXP.weather;return e[2](tieSize||0);}
-function newPed(n){return {label:'Ped '+n,elemType:'pedestal',wallIn:{hw:'',hSize:'tie',hSpc:'',ex2:false},x:0,y:0,bx:1.5,by:1.5,h:2,loadEx:0,loadEy:0,
+function newPed(n){return {label:'Ped '+n,elemType:'pedestal',wallIn:{hw:'',hSize:'',hSpc:'',ex2:false},x:0,y:0,bx:1.5,by:1.5,h:2,loadEx:0,loadEy:0,
  loads:TYPES.reduce((o,t)=>{o[t]={P:0,Vx:0,Vy:0,Mx:0,My:0};return o;},{}),
  direct:{P:0,Vx:0,Vy:0,Mx:0,My:0},
  reinf:{longSize:8,nx:3,ny:3,longMode:'faces',tieSize:3,tieSpc:12,cover:2,dowelSize:8,dowelN:8,exposure:'weather',dowelHook:'hook90',dowelProj:'',sfJoint:'rough',dowelLong:true}};}   /* SFDB: new pedestals: the longitudinal bars act as the dowels, hooked in the footing */
@@ -790,7 +790,11 @@ function migrateState(){
      = the ties (size and spacing). Only Wall elements read them; a stored value is kept. */
   if(!p.wallIn||typeof p.wallIn!=='object')p.wallIn={};
   if(p.wallIn.hw===undefined||p.wallIn.hw===null)p.wallIn.hw='';
-  if(p.wallIn.hSize===undefined||p.wallIn.hSize===null||p.wallIn.hSize==='')p.wallIn.hSize='tie';
+  /* SFWH (2026-11-06, engineer): the horizontal bars default to BLANK (input needed) instead of "same as ties". The #870
+     default was stored as 'tie' (newPed and this migration), the same value as an explicit "same as ties" choice, so the two
+     cannot be told apart: a stored 'tie' (and an absent / blank value) loads as blank. "Same as ties" picked from now on is
+     stored as 'sameTie'. Decision (pending engineer review). */
+  if(p.wallIn.hSize===undefined||p.wallIn.hSize===null||p.wallIn.hSize==='tie')p.wallIn.hSize='';
   if(p.wallIn.hSpc===undefined||p.wallIn.hSpc===null)p.wallIn.hSpc='';
   if(p.wallIn.ex2!==true)p.wallIn.ex2=false;   /* SFWC-3: 11.7.2.3 exemption; absent = not exempt (two layers required above 10 in) */
  });
@@ -941,14 +945,14 @@ function buildPedCards(){
   mt.appendChild(mr);rb.appendChild(mt);
   const pbi=el('div','note sfdPbInfo');pbi.dataset.ped=i;pbi.style.fontSize='10.5px';rb.appendChild(pbi);
   /* SFWC (2026-11-06): wall horizontal (transverse) bars, one bar in each of the two curtains (one near each face) at s;
-     'tie' / blank = the tie size and spacing above (the long legs of the perimeter ties are the horizontal bars) */
+     'sameTie' = the tie size and spacing above (the long legs of the perimeter ties are the horizontal bars); SFWH: blank = input needed */
   {const wt=document.createElement('table');wt.className='tbl sfdWallOnly';wt.dataset.ped=i;wt.style.fontSize='11px';
-   wt.innerHTML='<tr><th title="Wall only (ACI 318-19 11.6, 11.5.4.3): horizontal bar in each of the two curtains (one near each face)">Wall horizontal bar (each face)</th><th title="Wall only: spacing of the horizontal bars; blank = the tie spacing">Horizontal spc (in)</th></tr>';
+   wt.innerHTML='<tr><th title="Wall only (ACI 318-19 11.6, 11.5.4.3): horizontal bar in each of the two curtains (one near each face); blank = input needed">Wall horizontal bar (each face)</th><th title="Wall only: spacing of the horizontal bars; blank = the tie spacing with &quot;same as ties&quot;, otherwise input needed">Horizontal spc (in)</th></tr>';
    const wr=document.createElement('tr');
-   wr.appendChild(cell('<select data-path="peds.'+i+'.wallIn.hSize" style="width:auto"><option value="tie">same as ties</option>'+BAR_SIZES.filter(z=>z>0).map(z=>'<option value="'+z+'">#'+z+'</option>').join('')+'</select>'));
+   wr.appendChild(cell('<select data-path="peds.'+i+'.wallIn.hSize" style="width:auto" title="Blank = input needed: the wall checks that need \u03c1_t show REVIEW until the horizontal bars are entered (SFWH)"><option value="">\u2014 enter \u2014</option><option value="sameTie">same as ties</option>'+BAR_SIZES.filter(z=>z>0).map(z=>'<option value="'+z+'">#'+z+'</option>').join('')+'</select>'));
    wr.appendChild(cell('<input type="number" step="0.5" min="0" data-path="peds.'+i+'.wallIn.hSpc" placeholder="ties" style="width:56px">'));
    wt.appendChild(wr);rb.appendChild(wt);
-   const wi=state.peds[i].wallIn||{};wr.querySelector('select').value=String(wi.hSize||'tie');wr.querySelector('input').value=(wi.hSpc==null?'':wi.hSpc);}
+   const wi=state.peds[i].wallIn||{};wr.querySelector('select').value=String(wi.hSize||'');wr.querySelector('input').value=(wi.hSpc==null?'':wi.hSpc);}
   mr.querySelectorAll('select,input').forEach(x=>{const v=getPath(state,x.dataset.path);x.value=(v===undefined||v===null)?'':v;});
   const dt=document.createElement('table');dt.className='tbl';dt.style.fontSize='11px';
   const dlw=el('div','',' <label title="SFDB: the dowel size, count and layout are those of the pedestal longitudinal bars, which run continuously into the footing (no lap at the joint)"><input type="checkbox" data-path="peds.'+i+'.reinf.dowelLong"> Pedestal longitudinal bars act as the dowels</label>');dlw.style.fontSize='11px';rb.appendChild(dlw);
@@ -1880,14 +1884,17 @@ function renderDashboard(){
   const brG=P2.bearing.reduce((a,z)=>(!a||z.dcr>a.dcr)?z:a,null);   /* SFBL: governing element and side */
   d.appendChild(chip('Concrete bearing','DCR = '+f2(brmax)+(brG?' ('+brG.label+', '+(brG.isPatch||brG.brgGov==='footing'?'footing':brG.brgGov==='pedestal'?'pedestal':'pedestal = footing')+' side governs)':''),brmax<=1?'pass':'fail',undefined,{tab:'tab-footdes',sec:'o-fd-bear'}));
   const wSel=P2.bearing.filter(z=>z.wall&&z.wall.sel);   /* SFWL */
-  d.appendChild(chip('Dowel steel (min 0.005A_g)',(dowOK?'\u2265 minimum':'below code minimum')+(wSel.some(z=>z.wall.applied)?' (wall: '+wSel.filter(z=>z.wall.applied).map(z=>z.label+' \u03c1_l '+sfdRhoTxt(z.wall.rhoDow)+' A_g, 16.3.4.2 \u2192 '+(z.wall.dow1162?'11.6.2':'Table 11.6.1')).join('; ')+')':''),dowOK?'pass':'fail',undefined,{tab:'tab-footdes',sec:'o-fd-bear'}));
+  d.appendChild(chip(sfdDowChipName(),(dowOK?'\u2265 minimum':'below code minimum')+(wSel.some(z=>z.wall.applied)?' (wall: '+wSel.filter(z=>z.wall.applied).map(z=>z.label+' \u03c1_l '+sfdRhoTxt(z.wall.rhoDow)+' A_g, 16.3.4.2 \u2192 '+(z.wall.dow1162?'11.6.2':'Table 11.6.1')).join('; ')+')':''),dowOK?'pass':'fail',undefined,{tab:'tab-footdes',sec:'o-fd-bear'}));
   {const wA=wSel.filter(z=>z.wall.applied);   /* SFWC: the wall's own minimum rho_l / rho_t, ACI 318-19 11.6 */
-   if(wA.length){const bad=wA.filter(z=>!z.wall.rlOK||!z.wall.rtOK);
-    {const vb=wA.filter(z=>!z.wall.vOK);   /* SFWC-2: in-plane shear, ACI 318-19 11.5.4 */
-     d.appendChild(chip('Wall in-plane shear (ACI 318-19 11.5.4)',wA.map(z=>z.label+': V_u '+f2(z.wall.vGov?z.wall.vGov.Vin:0)+' vs \u03c6V_n '+f2(z.wall.vGov?z.wall.vGov.phiVn:0)+' k'+(z.wall.vGov?' ('+z.wall.vGov.name+')':'')).join('; '),vb.length?'fail':'pass',undefined,{tab:'tab-peddes',sec:'o-pd-'+(vb.length?vb:wA)[0].idx}));}
-    d.appendChild(chip('Wall reinforcement (ACI 318-19 11.6)',wA.map(z=>z.label+': \u03c1_l '+sfdRhoTxt(z.wall.v.rho)+(z.wall.rlOK?' \u2265 ':' < ')+sfdRhoTxt(z.wall.rlMin)+', \u03c1_t '+sfdRhoTxt(z.wall.hz.rho)+(z.wall.rtOK?' \u2265 ':' < ')+sfdRhoTxt(z.wall.rtMin)+' (larger of Table 11.6.1 and 11.6.2; '+(z.wall.t1161?'code case 11.6.1':'code case 11.6.2')+')').join('; '),bad.length?'fail':'pass',undefined,{tab:'tab-peddes',sec:'o-pd-'+(bad.length?bad:wA)[0].idx}));}}
-  {const wA=wSel.filter(z=>z.wall.applied);if(wA.length){const bad=wA.filter(z=>!z.wall.detOK);   /* SFWC-3: spacing and layers, ACI 318-19 11.7 */
-   d.appendChild(chip('Wall bar spacing and layers (ACI 318-19 11.7)',wA.map(z=>z.label+': s_v '+f2(z.wall.v.s)+(z.wall.sVOK?' \u2264 ':' > ')+f2(z.wall.sMaxV)+', s_h '+f2(z.wall.hz.s)+(z.wall.sHOK?' \u2264 ':' > ')+f2(z.wall.sMaxH)+' in, '+z.wall.nC+' layers'+(z.wall.layOK?'':' (two required)')).join('; '),bad.length?'fail':'pass',undefined,{tab:'tab-peddes',sec:'o-pd-'+(bad.length?bad:wA)[0].idx}));}}
+   /* SFWH (2026-11-06, engineer): a check that needs rho_t provided is null while the horizontal bars are blank: REVIEW
+      ("Input needed"), not FAIL, not PASS. A part that can be checked and fails still makes the chip FAIL. */
+   const st3=(bad,nd)=>bad.length?'fail':(nd.length?'warn':'pass'), IN=' input needed (horizontal bars)';
+   if(wA.length){const bad=wA.filter(z=>z.wall.rlOK===false||z.wall.rtOK===false), nd=wA.filter(z=>z.wall.rtOK==null);
+    {const vb=wA.filter(z=>z.wall.vOK===false), vn=wA.filter(z=>z.wall.vOK==null);   /* SFWC-2: in-plane shear, ACI 318-19 11.5.4 */
+     d.appendChild(chip('Wall in-plane shear (ACI 318-19 11.5.4)',wA.map(z=>z.label+': V_u '+f2(z.wall.vGov?z.wall.vGov.Vin:0)+' vs \u03c6V_n '+(z.wall.vOK==null?'\u2014'+IN:f2(z.wall.vGov?z.wall.vGov.phiVn:0)+' k')+(z.wall.vGov?' ('+z.wall.vGov.name+')':'')).join('; '),st3(vb,vn),undefined,{tab:'tab-peddes',sec:'o-pd-'+(vb.length?vb:vn.length?vn:wA)[0].idx}));}
+    d.appendChild(chip('Wall reinforcement (ACI 318-19 11.6)',wA.map(z=>z.label+': \u03c1_l '+sfdRhoTxt(z.wall.v.rho)+(z.wall.rlOK?' \u2265 ':' < ')+sfdRhoTxt(z.wall.rlMin)+', \u03c1_t '+(z.wall.rtOK==null?'\u2014'+IN+' \u2265 ':sfdRhoTxt(z.wall.hz.rho)+(z.wall.rtOK?' \u2265 ':' < '))+sfdRhoTxt(z.wall.rtMin)+' (larger of Table 11.6.1 and 11.6.2; '+(z.wall.t1161?'code case 11.6.1':'code case 11.6.2')+')').join('; '),st3(bad,nd),undefined,{tab:'tab-peddes',sec:'o-pd-'+(bad.length?bad:nd.length?nd:wA)[0].idx}));}}
+  {const wA=wSel.filter(z=>z.wall.applied);if(wA.length){const bad=wA.filter(z=>z.wall.detOK===false), nd=wA.filter(z=>z.wall.detOK==null), IN=' input needed (horizontal bars)';   /* SFWC-3: spacing and layers, ACI 318-19 11.7 */
+   d.appendChild(chip('Wall bar spacing and layers (ACI 318-19 11.7)',wA.map(z=>z.label+': s_v '+f2(z.wall.v.s)+(z.wall.sVOK?' \u2264 ':' > ')+f2(z.wall.sMaxV)+', s_h '+(z.wall.sHOK==null?'\u2014'+IN:f2(z.wall.hz.s)+(z.wall.sHOK?' \u2264 ':' > ')+f2(z.wall.sMaxH)+' in')+', '+(z.wall.layOK==null?'layers: horizontal'+IN:z.wall.nC+' layers'+(z.wall.layOK?'':' (two required)'))).join('; '),bad.length?'fail':(nd.length?'warn':'pass'),undefined,{tab:'tab-peddes',sec:'o-pd-'+(bad.length?bad:nd.length?nd:wA)[0].idx}));}}
   if(wSel.length)d.appendChild(chip('Wall checks (ACI 318-19 Ch. 11)',wSel.map(z=>z.label+': '+(z.wall.applied?'out-of-plane design by the pedestal checks (stand-in for 11.5.2 / 11.5.3 / 11.5.5.1, ties 11.7.4.1); strut-and-tie (11.5.4.1) not used':'l_w/t '+f2(z.wall.lt)+' \u2264 3, checked as a pedestal')).join('; '),'warn',undefined,{tab:'tab-peddes',sec:'o-pd-'+wSel[0].idx}));
   { const rl=P2.bearing.filter(z=>!z.isPatch), nr=rl.filter(z=>!z.ldcReq), rq=rl.filter(z=>z.ldcReq);   /* SFBC: 16.3.1.2(a) */
   d.appendChild(chip('Dowel development (\u2113dc)',ldcBad.length?('\u2113dc > available: '+ldcBad.map(z=>z.label).join(', ')):
@@ -1987,11 +1994,21 @@ function sfdDashDecorate(){
 }
 /* SFDF (2026-11-03, engineer): the failing condition of a chip that can be NG / REVIEW for a reason other than its D/C, as a
    short text. The same flags renderDashboard sets the chip's status and text from (no new calculation). */
+/* SFWH (2026-11-06): the "Dowel steel" chip names the wall minimum where walls are present (pedestal wording unchanged). The
+   lookups keyed by the chip name (Report result rows, summary links, interface group) use the pedestal name (sfdChipKey). */
+const SFWH_DOW='Dowel steel (min 0.005A_g)';
+function sfdDowChipName(){const b=((P2&&P2.bearing)||[]).filter(z=>!z.isPatch), w=b.filter(z=>z.wall&&z.wall.applied);
+ return !w.length?SFWH_DOW:(w.length===b.length?'Dowel steel (min \u03c1_l A_g, wall)':'Dowel steel (min 0.005A_g; wall \u03c1_l A_g)');}
+function sfdChipKey(n){return /^Dowel steel \(min /.test(n)?SFWH_DOW:n;}
 function sfdChCond(name){
  const out=[],add=(b,t)=>{if(b&&out.indexOf(t)<0)out.push(t);};
  if(R&&!R.fatal&&name==='Overturning')add(R.asd.some(a=>a.bear.mode==='unstable'||a.r.P<=1e-9),'resultant off footing');
  if(!P2||P2.noCombo)return out;
  const XY=[P2.desX,P2.desY],realPeds=P2.pedDes.filter(z=>!z.isPatch);
+ {const wa=P2.bearing.filter(z=>z.wall&&z.wall.applied);   /* SFWH: input needed (horizontal bars) */
+  if(name==='Wall reinforcement (ACI 318-19 11.6)')wa.forEach(z=>add(z.wall.rtOK==null,'input needed: horizontal bars'));
+  if(name==='Wall in-plane shear (ACI 318-19 11.5.4)')wa.forEach(z=>add(z.wall.vOK==null,'input needed: horizontal bars'));
+  if(name==='Wall bar spacing and layers (ACI 318-19 11.7)')wa.forEach(z=>add(z.wall.detOK==null,'input needed: horizontal bars'));}
  switch(name){
   case 'Flexure (footing)':
    {const asMin=XY.some(z=>!z.asMinBotOK||!z.asMinTopOK);
@@ -2007,7 +2024,7 @@ function sfdChCond(name){
   case 'Footing bar development':add(!!(P2.dev&&P2.dev.rows.some(z=>z.status==='review')),'straight ℓ_d > avail');break;
   case 'Pedestal shear':add((P2.pedShear||[]).some(z=>!z.isPatch&&z.gov&&z.avFail),'A_v < A_v,min');break;
   case 'Footing bar clear spacing':add(XY.some(z=>!z.clrBotOK||!z.clrTopOK),'s_clr < min');break;
-  case 'Wall bar spacing and layers (ACI 318-19 11.7)':P2.bearing.filter(z=>z.wall&&z.wall.applied).forEach(z=>add(!z.wall.layOK,'two layers required'));break;   /* SFWC-3 */
+  case 'Wall bar spacing and layers (ACI 318-19 11.7)':P2.bearing.filter(z=>z.wall&&z.wall.applied).forEach(z=>add(z.wall.layOK===false,'two layers required'));break;   /* SFWC-3; SFWH: null = input needed */
  }
  return out;
 }
@@ -3461,15 +3478,15 @@ function sfdResultRows(){
   'Footing bar development':()=>['ACI 318-19 §25.4.2.4 (straight), §25.4.3.1 / Table 25.4.3.2 (standard hook)'+(state.mat.ldExcess==='on'?', §25.4.10.1 (excess A<sub>s</sub>, straight bars; A<sub>s,req</sub> = max(flexure, A<sub>s,min</sub>), R8.6.1.1)':'')+'; D/C = ℓ<sub>d</sub> (or ℓ<sub>dh</sub> where hooked)/available',mx(((P2&&P2.dev)?P2.dev.rows:[]).map(z=>z.dc)),['o-fd-dev']],
   'Pedestal shear':()=>['ACI 318-19 Table 22.5.5.1, §22.5.1.10–22.5.1.11 (biaxial), §10.6.2; D/C = V<sub>u</sub>/φV<sub>c</sub>',mx((P2.pedShear||[]).filter(z=>!z.isPatch&&z.gov).map(z=>z.gov.ratio)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
   'Pedestal crossties':()=>['ACI 318-19 §25.7.2.3 (every corner and alternate bar supported; none more than 6 in clear from a supported bar)',null,P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)],
-  'Wall reinforcement (ACI 318-19 11.6)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.6.1, Table 11.6.1 and §11.6.2, Eq. 11.6.2, the larger governing (engineer, 2026-11-06); D/C = max(ρ<sub>ℓ,min</sub>/ρ<sub>ℓ</sub>, ρ<sub>t,min</sub>/ρ<sub>t</sub>)',mx(wa.map(z=>Math.max(z.wall.v.rho>0?z.wall.rlMin/z.wall.v.rho:Infinity,z.wall.hz.rho>0?z.wall.rtMin/z.wall.hz.rho:Infinity))),wa.map(z=>'o-pd-'+z.idx)];},   /* SFWC */
-  'Wall in-plane shear (ACI 318-19 11.5.4)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.5.4.2, §11.5.4.3 (Eq. 11.5.4.3), §11.5.4.4; D/C = V<sub>u</sub>/φV<sub>n</sub>',mx(wa.map(z=>z.wall.vGov?z.wall.vGov.vr:0)),wa.map(z=>'o-pd-'+z.idx)];},   /* SFWC-2 */
-  'Wall bar spacing and layers (ACI 318-19 11.7)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.7.2.1, §11.7.3.1, §11.7.2.3; D/C = max(s<sub>v</sub>/s<sub>v,max</sub>, s<sub>h</sub>/s<sub>h,max</sub>)',mx(wa.map(z=>Math.max(z.wall.v.s/z.wall.sMaxV,z.wall.hz.s>0?z.wall.hz.s/z.wall.sMaxH:Infinity))),wa.map(z=>'o-pd-'+z.idx)];},   /* SFWC-3 */
+  'Wall reinforcement (ACI 318-19 11.6)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.6.1, Table 11.6.1 and §11.6.2, Eq. 11.6.2, the larger governing (engineer, 2026-11-06); D/C = max(ρ<sub>ℓ,min</sub>/ρ<sub>ℓ</sub>, ρ<sub>t,min</sub>/ρ<sub>t</sub>)',mx(wa.map(z=>Math.max(z.wall.v.rho>0?z.wall.rlMin/z.wall.v.rho:Infinity,z.wall.hz.need?0:(z.wall.hz.rho>0?z.wall.rtMin/z.wall.hz.rho:Infinity)))),wa.map(z=>'o-pd-'+z.idx)];},   /* SFWC; SFWH: rho_t input needed: its part left out of the D/C */
+  'Wall in-plane shear (ACI 318-19 11.5.4)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.5.4.2, §11.5.4.3 (Eq. 11.5.4.3), §11.5.4.4; D/C = V<sub>u</sub>/φV<sub>n</sub>',(wa.every(z=>z.wall.vOK==null)?null:mx(wa.map(z=>z.wall.vGov&&z.wall.vGov.vr!=null?z.wall.vGov.vr:0))),wa.map(z=>'o-pd-'+z.idx)];},   /* SFWC-2; SFWH: V_n input needed -> D/C n/a */
+  'Wall bar spacing and layers (ACI 318-19 11.7)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.7.2.1, §11.7.3.1, §11.7.2.3; D/C = max(s<sub>v</sub>/s<sub>v,max</sub>, s<sub>h</sub>/s<sub>h,max</sub>)',mx(wa.map(z=>Math.max(z.wall.v.s/z.wall.sMaxV,z.wall.hz.need?0:(z.wall.hz.s>0?z.wall.hz.s/z.wall.sMaxH:Infinity)))),wa.map(z=>'o-pd-'+z.idx)];},   /* SFWC-3; SFWH: s_h input needed: left out of the D/C */
   'Wall checks (ACI 318-19 Ch. 11)':()=>['ACI 318-19 §2.3 (wall); out-of-plane §11.5.2, §11.5.3, §11.5.5.1 and ties §11.7.4.1 by the pedestal checks (stand-in); strut-and-tie §11.5.4.1 not used',null,real.filter(z=>z.wall&&z.wall.sel).map(z=>'o-pd-'+z.idx)],   /* SFWL */
   'Pedestal tie cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/(c \u2212 d<sub>b,tie</sub>)',mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.tieCov>0?z.tieCovMin/z.tieCov:Infinity)),P2.pedDes.map((z,i)=>z.isPatch?null:'o-pd-'+i).filter(Boolean)]};
  return $$('#dashboard .chip').map(c=>{
   const name=c.querySelector('.cn').textContent, val=c.querySelector('.cv').textContent;
   const st=['pass','fail','warn','na'].find(k=>c.classList.contains(k))||'na';
-  let v=['',null,[]];try{if(D[name])v=D[name]();}catch(e){/* value not available: D/C n/a */}
+  let v=['',null,[]];try{const k=sfdChipKey(name);if(D[k])v=D[k]();}catch(e){/* value not available: D/C n/a */}
   const cards=v[2].length?v[2]:(c.dataset.sec?[c.dataset.sec]:[]);
   const home=cards.map(k=>document.getElementById(k)).find(Boolean);
   const tab=(home&&home.closest('.tabpage'))?home.closest('.tabpage').id:(c.dataset.tab||'tab-schem');
@@ -3510,6 +3527,8 @@ function sfrTopics(scope,list,opt){
 }
 function sfrW(){const w=SharedSteps.work('');return w;}
 /* SFNG (2026-11-03): a step with the short name of its check (chk) and a REVIEW flag (rev), for the topic badges (sfrTopics) */
+/* SFWH (2026-11-06): a wall step that needs rho_t provided while the horizontal bars are blank: no test (ok), REVIEW badge, the note */
+function sfrNeed(o){return sfrS(Object.assign({eq:'',sub:'\\text{input needed}',value:'input needed',unit:'',rev:'input needed (horizontal bars)',note:SFWH_IN+' (Reinforcement input: Wall horizontal bar and spacing; or pick \u201csame as ties\u201d).'},o));}
 function sfrS(o){
  /* SFPR (2026-11-03; review E1): a test step written as sym + a relation (eq '\\ge A_{s,min}') printed "A_s,prov = ≥ A_s,min = 0.900 ≥ 0.518 = 0.900":
     the relation now reads "A_s,prov ≥ A_s,min = 0.900 ≥ 0.518 in²/ft" (the value with its unit moves into the substitution; display only). */
@@ -3848,7 +3867,7 @@ function sfrModel(){
      S({id:sc+'.wlt',label:'Wall by definition: horizontal length / thickness (l_w along '+w.dir+')',sym:'\\ell_{w}/t',eq:'\\gt 3',sub:sfrN(w.lw,1)+'/'+sfrN(w.tw,1),value:w.lt,unit:'',d:2,ok:true,ref:'ACI 318-19 2.3'}),
      S({id:sc+'.wac',label:'α_c from h_w/ℓ_w = '+sfrN(w.hw,1)+'/'+sfrN(w.lw,1)+' = '+sfrN(w.hwlw,3)+' (3 at ≤ 1.5, 2 at ≥ 2.0, linear between)'+(w.gov&&w.gov.ten?'; net tension in '+w.gov.name+': α_c = 2(1 + N_u/(500A_g)) ≥ 0 = '+sfrN(w.gov.ac,3):''),sym:'\\alpha_{c}',eq:'',sub:'',value:w.ac0,unit:'',d:3,ref:'ACI 318-19 11.5.4.3, 11.5.4.4'}),
      S({id:sc+'.wthr',label:'Condition of 11.6.1: in-plane V_u ≤ 0.5φα_cλ√f′c A_cv, A_cv = t ℓ_w (governing: '+(w.gov?w.gov.name:'—')+'); which case of 11.6 is the code minimum (the larger of Table 11.6.1 and 11.6.2 governs for every wall, engineer 2026-11-06)',sym:'0.5\\phi\\alpha_{c}\\lambda\\sqrt{'+SFR_FC+'}A_{cv}',eq:'',sub:'0.5\\cdot 0.75\\cdot'+sfrN(w.gov?w.gov.ac:w.ac0,3)+'\\cdot'+sfrN(w.lam)+'\\cdot'+sfrN(w.sq)+'\\cdot'+sfrN(w.Acv,0)+'/1000',value:w.gov?w.gov.thr:0,unit:'kip',note:'V_u,in-plane = '+sfrN(w.gov?w.gov.Vin:0)+' kip'+(w.t1161?' ≤ limit':' > limit')+'. '+sfdWallCaseTxt(w),ref:'ACI 318-19 11.6.1'}),   /* SFWM */
-     S({id:sc+'.dow',chk:'dowel minimum (wall)',label:'Dowels: '+sfdDowelBars(i).n+' #'+bz.dSize+(sfdDowelBars(i).fromLong?' (longitudinal bars)':'')+' vs ρ_l A_g, ρ_l = the larger of Table 11.6.1 (cast-in-place, deformed bars '+(w.ds<=5?'No. 5 and smaller, f_y '+(P2.fy>=60000?'≥':'<')+' 60 000 psi':'larger than No. 5')+': '+sfrN(w.rhoL,4)+') and 11.6.2 ('+sfrN(w.e1162.rl,5)+', worked under the wall\'s Pedestal design, Wall reinforcement): '+(w.dow1162?'11.6.2':'Table 11.6.1')+' governs',sym:'A_{s,dow}',eq:'\\ge \\rho_{\\ell} A_{g}',sub:'\\max('+sfrN(w.rhoL,4)+',\\,'+sfrN(w.e1162.rl,5)+')\\cdot'+sfrN(w.Ag,0)+' = '+sfrN(bz.AsDowMin)+(bz.dowelOK?' \\le ':' \\gt ')+sfrN(bz.AsDowProv),value:bz.AsDowProv,unit:'in^{2}',ok:!!bz.dowelOK,ref:'ACI 318-19 16.3.4.2, 11.6.1, Table 11.6.1, 11.6.2, Eq. 11.6.2',note:'with the area required for interface tension: §p'+i+'.AsGov'})])(bz.wall):[
+     S({id:sc+'.dow',chk:'dowel minimum (wall)',label:'Dowels: '+sfdDowelBars(i).n+' #'+bz.dSize+(sfdDowelBars(i).fromLong?' (longitudinal bars)':'')+' vs ρ_l A_g, ρ_l = the larger of Table 11.6.1 (cast-in-place, deformed bars '+(w.ds<=5?'No. 5 and smaller, f_y '+(P2.fy>=60000?'≥':'<')+' 60 000 psi':'larger than No. 5')+': '+sfrN(w.rhoL,4)+') and 11.6.2 ('+sfrN(w.e1162.rl,5)+', worked under the wall\'s Pedestal design, Wall reinforcement): '+(w.dow1162?'11.6.2':'Table 11.6.1')+' governs',sym:'A_{s,dow}',eq:'\\ge \\rho_{\\ell} A_{g}',sub:'\\max('+sfrN(w.rhoL,4)+',\\,'+sfrN(w.e1162.rl,5)+')\\cdot'+sfrN(w.Ag,0)+' = '+sfrN(bz.AsDowMin)+(bz.dowelOK?' \\le ':' \\gt ')+sfrN(bz.AsDowProv),value:bz.AsDowProv,unit:'in^{2}',ok:!!bz.dowelOK,ref:'ACI 318-19 16.3.4.2, 11.6.1, Table 11.6.1, 11.6.2, Eq. 11.6.2',note:'with the area required for interface tension: §p'+i+'.AsGov'+sfdWallBoundTxt(w)})])(bz.wall):[
     S({id:sc+'.dow',chk:'dowel minimum 0.005A_g',label:'Dowels: '+sfdDowelBars(i).n+' #'+bz.dSize+(sfdDowelBars(i).fromLong?' (longitudinal bars)':'')+' vs 0.005 A_g',sym:'A_{s,dow}',eq:'\\ge 0.005 A_{g}',sub:sfrN(bz.AsDowProv)+(bz.dowelOK?' \\ge ':' \\lt ')+sfrN(bz.AsDowMin),value:bz.AsDowProv,unit:'in^{2}',ok:!!bz.dowelOK,ref:'ACI 318-19 16.3.4.1',note:'with the area required for interface tension: §p'+i+'.AsGov'})]),   /* SFLK */
     S({id:sc+'.ldcq',label:'Compression the dowels must transfer: P_u beyond the lesser concrete bearing strength φB_n (above: the lesser of the footing and the pedestal)',sym:'P_{u,dow}',eq:'\\max\\left(0,\\; P_{u} \\minus \\phi B_{n}\\right)',sub:'\\max\\left(0,\\; '+sfrN(bz.PuMax)+' \\minus '+sfrN(bz.phiBgate)+'\\right)',value:Math.max(0,bz.PuMax-bz.phiBgate),unit:'kip',ref:'ACI 318-19 16.3.1.2(a), 16.3.3.4',note:bz.ldcReq?'> 0: the dowels must develop in compression (next step)':'= 0: concrete bearing carries P_u in every combination; compression development of the dowels is not required'}),   /* SFBC */
     bz.ldcReq?S({id:sc+'.ldc',chk:'dowel ℓ_dc',label:'Dowel compression development into the footing',sym:'\\ell_{dc}',eq:'\\le t \\minus c_{bot} \\minus d_{b,x} \\minus d_{b,y}',sub:sfrN(bz.Ldc)+(bz.ldcOK?' \\le ':' \\gt ')+sfrN(bz.availEmb),value:bz.Ldc,unit:'in',ok:!!bz.ldcOK,ref:'ACI 318-19 25.4.9.2',note:'worked term by term: §p'+i+'.ldc'})
@@ -3964,30 +3983,30 @@ function sfrModel(){
    if(wI&&wI.applied){const w=wI,v=w.v,h=w.hz,st=[];   /* SFWC: the wall's own minimum reinforcement, ACI 318-19 11.6 */
     st.push(S({id:'w.hw',label:'h_w/ℓ_w (h_w '+(w.hwIn?'entered':'= the pedestal height h')+'; ℓ_w along '+w.dir+')',sym:'h_{w}/\\ell_{w}',eq:'',sub:sfrN(w.hw,1)+'/'+sfrN(w.lw,1),value:w.hwlw,unit:'',d:3,ref:'ACI 318-19 11.5.4.3'}),
      S({id:'w.rlp',label:'Vertical bars: '+v.nF+' #'+v.size+' on each long face (curtain) at s_v = '+sfrN(v.s)+' in',sym:'\\rho_{\\ell}',eq:'\\frac{2A_{b,v}}{s_{v}\\,t}',sub:'\\frac{2\\cdot'+sfrN(v.Ab)+'}{'+sfrN(v.s)+'\\cdot'+sfrN(w.tw)+'}',value:v.rho,unit:'',d:5,ref:'ACI 318-19 2.2'}),
-     S({id:'w.rtp',label:'Horizontal bars: #'+h.size+' at s_h = '+sfrN(h.s)+' in in each face'+(h.fromTie||h.sFromTie?' (the ties'+(h.fromTie&&h.sFromTie?'':h.fromTie?': size':': spacing')+')':''),sym:'\\rho_{t}',eq:'\\frac{2A_{b,h}}{s_{h}\\,t}',sub:'\\frac{2\\cdot'+sfrN(h.Ab)+'}{'+sfrN(h.s)+'\\cdot'+sfrN(w.tw)+'}',value:h.rho,unit:'',d:5,ref:'ACI 318-19 2.2'}));
+     h.need?sfrNeed({id:'w.rtp',label:'Horizontal bars: not entered',sym:'\\rho_{t}',ref:'ACI 318-19 2.2'}):S({id:'w.rtp',label:'Horizontal bars: #'+h.size+' at s_h = '+sfrN(h.s)+' in in each face'+(h.fromTie||h.sFromTie?' (the ties'+(h.fromTie&&h.sFromTie?'':h.fromTie?': size':': spacing')+')':''),sym:'\\rho_{t}',eq:'\\frac{2A_{b,h}}{s_{h}\\,t}',sub:'\\frac{2\\cdot'+sfrN(h.Ab)+'}{'+sfrN(h.s)+'\\cdot'+sfrN(w.tw)+'}',value:h.rho,unit:'',d:5,ref:'ACI 318-19 2.2'}));
     {const q=w.e1162,g=w.rtGov;st.push(S({id:'w.rlT',label:'Minimum ρ_l by Table 11.6.1 (cast-in-place, deformed bars #'+v.size+')',sym:'\\rho_{\\ell,min,T}',eq:'',sub:'',value:w.tbl.rl,unit:'',d:5,ref:'ACI 318-19 11.6.1, Table 11.6.1'}),
-     S({id:'w.rtT',label:'Minimum ρ_t by Table 11.6.1 (cast-in-place, deformed bars #'+h.size+')',sym:'\\rho_{t,min,T}',eq:'',sub:'',value:w.tbl.rt,unit:'',d:5,ref:'ACI 318-19 11.6.1, Table 11.6.1'}),
+     w.tbl.rt==null?S({id:'w.rtT',label:'Minimum ρ_t by Table 11.6.1: 0.0020 or 0.0025 by the horizontal bar size (not entered); ≤ 0.0025, so ρ_t,min below is 0.0025 either way',sym:'\\rho_{t,min,T} \\le 0.0025',eq:'',sub:'',value:'',unit:'',ref:'ACI 318-19 11.6.1, Table 11.6.1'}):S({id:'w.rtT',label:'Minimum ρ_t by Table 11.6.1 (cast-in-place, deformed bars #'+h.size+')',sym:'\\rho_{t,min,T}',eq:'',sub:'',value:w.tbl.rt,unit:'',d:5,ref:'ACI 318-19 11.6.1, Table 11.6.1'}),
      S({id:'w.rtq',label:'ρ_t required for in-plane strength ('+(g?g.name:'—')+'; φ = 0.75; f_yt = min(f_y, 60 000 psi), Table 20.2.2.4(a))',sym:'\\rho_{t,req}',eq:'\\max\\left(0,\\; \\frac{V_{u}/(\\phi A_{cv}) \\minus \\alpha_{c}\\lambda\\sqrt{'+SFR_FC+'}}{f_{yt}}\\right)',sub:'\\max\\left(0,\\; \\frac{'+sfrN(g?g.Vin:0)+'\\cdot 1000/(0.75\\cdot'+sfrN(w.Acv,0)+') \\minus '+sfrN(g?g.ac:w.ac0,3)+'\\cdot'+sfrN(w.lam)+'\\cdot'+sfrN(w.sq)+'}{'+sfrN(w.fyt,0)+'}\\right)',value:w.rhoTreq,unit:'',d:5,ref:'ACI 318-19 11.5.4.3'}),
-     S({id:'w.eq',label:'Eq. 11.6.2 with the provided ρ_t (11.6.2 applied to every wall, engineer 2026-11-06)',sym:'\\rho_{\\ell}',eq:'0.0025 + 0.5\\left(2.5 \\minus \\frac{h_{w}}{\\ell_{w}}\\right)(\\rho_{t} \\minus 0.0025)',sub:'0.0025 + 0.5\\,(2.5 \\minus '+sfrN(w.hwlw,3)+')('+sfrN(h.rho,5)+' \\minus 0.0025)',value:q.eq,unit:'',d:5,ref:'ACI 318-19 11.6.2(a), Eq. 11.6.2'}),
-     S({id:'w.rl2',label:'Minimum ρ_l by 11.6.2: the greater of Eq. 11.6.2 and 0.0025, need not exceed ρ_t required by 11.5.4.3 (taken as max(ρ_t,req, 0.0025): pending engineer review)',sym:'\\rho_{\\ell,min,62}',eq:'\\min\\left[\\max(\\text{Eq. 11.6.2},\\,0.0025),\\; \\max(\\rho_{t,req},\\,0.0025)\\right]',sub:'\\min\\left[\\max('+sfrN(q.eq,5)+',\\,0.0025),\\; \\max('+sfrN(w.rhoTreq,5)+',\\,0.0025)\\right]',value:q.rl,unit:'',d:5,ref:'ACI 318-19 11.6.2(a)'}),
+     q.need?sfrNeed({id:'w.eq',label:'Eq. 11.6.2 with the provided ρ_t',sym:'\\rho_{\\ell}',eq:'0.0025 + 0.5\\left(2.5 \\minus \\frac{h_{w}}{\\ell_{w}}\\right)(\\rho_{t} \\minus 0.0025)',ref:'ACI 318-19 11.6.2(a), Eq. 11.6.2'}):S({id:'w.eq',label:'Eq. 11.6.2 with the provided ρ_t (11.6.2 applied to every wall, engineer 2026-11-06)',sym:'\\rho_{\\ell}',eq:'0.0025 + 0.5\\left(2.5 \\minus \\frac{h_{w}}{\\ell_{w}}\\right)(\\rho_{t} \\minus 0.0025)',sub:'0.0025 + 0.5\\,(2.5 \\minus '+sfrN(w.hwlw,3)+')('+sfrN(h.rho,5)+' \\minus 0.0025)',value:q.eq,unit:'',d:5,ref:'ACI 318-19 11.6.2(a), Eq. 11.6.2'}),
+     S({id:'w.rl2',label:'Minimum ρ_l by 11.6.2: the greater of Eq. 11.6.2 and 0.0025, need not exceed ρ_t required by 11.5.4.3 (taken as max(ρ_t,req, 0.0025): pending engineer review)',sym:'\\rho_{\\ell,min,62}',eq:'\\min\\left[\\max(\\text{Eq. 11.6.2},\\,0.0025),\\; \\max(\\rho_{t,req},\\,0.0025)\\right]',sub:'\\min\\left[\\max('+(q.need?'\\text{Eq.}':sfrN(q.eq,5))+',\\,0.0025),\\; \\max('+sfrN(w.rhoTreq,5)+',\\,0.0025)\\right]',value:q.rl,unit:'',d:5,ref:'ACI 318-19 11.6.2(a)',...(q.need?{note:q.bound?'Upper bound used (conservative): Eq. 11.6.2 needs ρ_t, not entered; the cap max(ρ_t,req, 0.0025) = '+sfrN(q.cap,5)+' is the largest value it can take (pending engineer review).':'Whatever ρ_t: max(Eq. 11.6.2, 0.0025) ≥ 0.0025 = the cap max(ρ_t,req, 0.0025), so ρ_l,min,62 = 0.0025 without the horizontal bars.'}:{})}),   /* SFWH */
      S({id:'w.rt2',label:'Minimum ρ_t by 11.6.2',sym:'\\rho_{t,min,62}',eq:'',sub:'',value:q.rt,unit:'',d:5,ref:'ACI 318-19 11.6.2(b)'}),
      S({id:'w.rl',label:'Governing minimum ρ_l: the larger of Table 11.6.1 and 11.6.2 ('+sfdWallGovTxt(w.rlBy)+')',sym:'\\rho_{\\ell,min}',eq:'\\max(\\rho_{\\ell,min,T},\\,\\rho_{\\ell,min,62})',sub:'\\max('+sfrN(w.tbl.rl,5)+',\\,'+sfrN(q.rl,5)+')',value:w.rlMin,unit:'',d:5,ref:'ACI 318-19 11.6.1, 11.6.2 (engineer, 2026-11-06)',note:sfdWallCaseTxt(w)}),
-     S({id:'w.rt',label:'Governing minimum ρ_t: the larger of Table 11.6.1 and 11.6.2 ('+sfdWallGovTxt(w.rtBy)+')',sym:'\\rho_{t,min}',eq:'\\max(\\rho_{t,min,T},\\,\\rho_{t,min,62})',sub:'\\max('+sfrN(w.tbl.rt,5)+',\\,'+sfrN(q.rt,5)+')',value:w.rtMin,unit:'',d:5,ref:'ACI 318-19 11.6.1, 11.6.2 (engineer, 2026-11-06)'}));}
+     S({id:'w.rt',label:'Governing minimum ρ_t: the larger of Table 11.6.1 and 11.6.2 ('+sfdWallGovTxt(w.rtBy)+')',sym:'\\rho_{t,min}',eq:'\\max(\\rho_{t,min,T},\\,\\rho_{t,min,62})',sub:'\\max('+(w.tbl.rt==null?'\\le 0.0025':sfrN(w.tbl.rt,5))+',\\,'+sfrN(q.rt,5)+')',value:w.rtMin,unit:'',d:5,ref:'ACI 318-19 11.6.1, 11.6.2 (engineer, 2026-11-06)'}));}
     st.push(S({id:'w.rlc',chk:'wall ρ_l',label:'Vertical reinforcement ratio vs minimum',sym:'\\rho_{\\ell}',eq:'\\ge \\rho_{\\ell,min}',sub:sfrN(v.rho,5)+(w.rlOK?' \\ge ':' \\lt ')+sfrN(w.rlMin,5),value:v.rho,unit:'',d:5,ok:!!w.rlOK}),
-     S({id:'w.rtc',chk:'wall ρ_t',label:'Horizontal reinforcement ratio vs minimum',sym:'\\rho_{t}',eq:'\\ge \\rho_{t,min}',sub:sfrN(h.rho,5)+(w.rtOK?' \\ge ':' \\lt ')+sfrN(w.rtMin,5),value:h.rho,unit:'',d:5,ok:!!w.rtOK,note:'The dowel minimum (16.3.4.2) uses ρ_l = '+sfdRhoTxt(w.rhoDow)+(w.dow1162?' (11.6.2, above; Table 11.6.1 with the dowel bar size gives '+w.rhoL+')':' (Table 11.6.1 with the dowel bar size)')}));   /* SFWM */
+     (h.need?sfrNeed:S)({id:'w.rtc',chk:'wall ρ_t',label:'Horizontal reinforcement ratio vs minimum',sym:'\\rho_{t}',eq:'\\ge \\rho_{t,min}',...(h.need?{eq:'',sub:'\\text{input needed}\;(\\ge '+sfrN(w.rtMin,5)+')'}:{sub:sfrN(h.rho,5)+(w.rtOK?' \\ge ':' \\lt ')+sfrN(w.rtMin,5),value:h.rho,unit:'',d:5,ok:!!w.rtOK}),note:(h.need?SFWH_IN+'. ':'')+'The dowel minimum (16.3.4.2) uses ρ_l = '+sfdRhoTxt(w.rhoDow)+(w.dow1162?' (11.6.2, above; Table 11.6.1 with the dowel bar size gives '+w.rhoL+')':' (Table 11.6.1 with the dowel bar size)')+sfdWallBoundTxt(w)}));   /* SFWM; SFWH */
     T.push({title:'Wall reinforcement (minimum ρ_l, ρ_t)',ref:'ACI 318-19 11.6',steps:st});
     {const g=w.vGov;if(g)T.push({title:'Wall in-plane shear (governing: '+g.name+')',ref:'ACI 318-19 11.5.4',steps:[   /* SFWC-2 */
      S({id:'w.ac',label:'α_c: h_w/ℓ_w = '+sfrN(w.hwlw,3)+' (3 at ≤ 1.5, 2 at ≥ 2.0, linear between)'+(g.ten?'; net axial tension: α_c = 2(1 + N_u/(500A_g)) ≥ 0, N_u = '+sfrN(g.Nu)+' kip':''),sym:'\\alpha_{c}',eq:'',sub:'',value:g.ac,unit:'',d:3,ref:g.ten?'ACI 318-19 11.5.4.4':'ACI 318-19 11.5.4.3'}),
      S({id:'w.vc',label:'Concrete term (A_cv = t ℓ_w = '+sfrN(w.tw)+'·'+sfrN(w.lw)+' = '+sfrN(w.Acv,0)+' in²; √f′c ≤ 100 psi)',sym:'\\alpha_{c}\\lambda\\sqrt{'+SFR_FC+'}A_{cv}',eq:'',sub:sfrN(g.ac,3)+'\\cdot'+sfrN(w.lam)+'\\cdot'+sfrN(w.sq)+'\\cdot'+sfrN(w.Acv,0)+'/1000',value:g.vc,unit:'kip',ref:'ACI 318-19 11.5.4.3'}),
-     S({id:'w.vs',label:'Horizontal bars term (ρ_t provided, worked under Wall reinforcement; f_yt = min(f_y, 60 000 psi), Table 20.2.2.4(a))',sym:'\\rho_{t} f_{yt} A_{cv}',eq:'',sub:sfrN(w.hz.rho,5)+'\\cdot'+sfrN(w.fyt,0)+'\\cdot'+sfrN(w.Acv,0)+'/1000',value:g.vs,unit:'kip',ref:'ACI 318-19 11.5.4.3'}),
+     w.hz.need?sfrNeed({id:'w.vs',label:'Horizontal bars term (ρ_t provided; f_yt = min(f_y, 60 000 psi), Table 20.2.2.4(a))',sym:'\\rho_{t} f_{yt} A_{cv}',ref:'ACI 318-19 11.5.4.3'}):S({id:'w.vs',label:'Horizontal bars term (ρ_t provided, worked under Wall reinforcement; f_yt = min(f_y, 60 000 psi), Table 20.2.2.4(a))',sym:'\\rho_{t} f_{yt} A_{cv}',eq:'',sub:sfrN(w.hz.rho,5)+'\\cdot'+sfrN(w.fyt,0)+'\\cdot'+sfrN(w.Acv,0)+'/1000',value:g.vs,unit:'kip',ref:'ACI 318-19 11.5.4.3'}),
      S({id:'w.vmax',label:'Upper limit on V_n at any horizontal section',sym:'8\\sqrt{'+SFR_FC+'}A_{cv}',eq:'',sub:'8\\cdot'+sfrN(w.sq)+'\\cdot'+sfrN(w.Acv,0)+'/1000',value:g.vmax,unit:'kip',ref:'ACI 318-19 11.5.4.2'}),
-     S({id:'w.vn',label:'Nominal in-plane shear strength'+(g.capGov?' (the 11.5.4.2 limit governs)':''),sym:'V_{n}',eq:'\\min\\left[(\\alpha_{c}\\lambda\\sqrt{'+SFR_FC+'} + \\rho_{t} f_{yt})A_{cv},\\; 8\\sqrt{'+SFR_FC+'}A_{cv}\\right]',sub:'\\min('+sfrN(g.vc)+' + '+sfrN(g.vs)+',\\; '+sfrN(g.vmax)+')',value:g.vn,unit:'kip',ref:'ACI 318-19 11.5.4.2, Eq. 11.5.4.3'}),
-     S({id:'w.vr',chk:'wall in-plane shear',label:'In-plane shear: V_u along ℓ_w / φV_n (φ = 0.75, 21.2)',sym:'\\frac{V_{u}}{\\phi V_{n}}',eq:'',sub:'\\frac{'+sfrN(g.Vin)+'}{0.75\\cdot'+sfrN(g.vn)+'}',value:g.vr,unit:'',d:3,ok:!!w.vOK,note:'Every LRFD combination is checked; this is the governing one.'+(w.hwlw<2?' The strut-and-tie alternative of 11.5.4.1 (h_w/ℓ_w < 2) is not used.':'')})]});}
+     ...(w.hz.need?[sfrNeed({id:'w.vr',chk:'wall in-plane shear',label:'In-plane shear: V_u along ℓ_w = '+sfrN(g.Vin)+' kip (largest, '+g.name+') / φV_n: V_n needs the ρ_t f_yt term',sym:'\\frac{V_{u}}{\\phi V_{n}}',ref:'ACI 318-19 11.5.4.2, Eq. 11.5.4.3'})]:[S({id:'w.vn',label:'Nominal in-plane shear strength'+(g.capGov?' (the 11.5.4.2 limit governs)':''),sym:'V_{n}',eq:'\\min\\left[(\\alpha_{c}\\lambda\\sqrt{'+SFR_FC+'} + \\rho_{t} f_{yt})A_{cv},\\; 8\\sqrt{'+SFR_FC+'}A_{cv}\\right]',sub:'\\min('+sfrN(g.vc)+' + '+sfrN(g.vs)+',\\; '+sfrN(g.vmax)+')',value:g.vn,unit:'kip',ref:'ACI 318-19 11.5.4.2, Eq. 11.5.4.3'}),
+     S({id:'w.vr',chk:'wall in-plane shear',label:'In-plane shear: V_u along ℓ_w / φV_n (φ = 0.75, 21.2)',sym:'\\frac{V_{u}}{\\phi V_{n}}',eq:'',sub:'\\frac{'+sfrN(g.Vin)+'}{0.75\\cdot'+sfrN(g.vn)+'}',value:g.vr,unit:'',d:3,ok:!!w.vOK,note:'Every LRFD combination is checked; this is the governing one.'+(w.hwlw<2?' The strut-and-tie alternative of 11.5.4.1 (h_w/ℓ_w < 2) is not used.':'')})])]});}
     T.push({title:'Wall bar spacing and layers',ref:'ACI 318-19 11.7',steps:[   /* SFWC-3 */
      S({id:'w.shq',label:'Shear reinforcement required for in-plane strength: '+(w.shReq?'yes (ρ_t,req > 0), so ℓ_w/3 and ℓ_w/5 apply':'no (ρ_t,req = 0), so ℓ_w/3 and ℓ_w/5 do not apply'),sym:'\\rho_{t,req}',eq:'',sub:'',value:w.rhoTreq,unit:'',d:5,ref:'ACI 318-19 11.5.4.3'}),
      S({id:'w.sv',chk:'wall vertical spacing',label:'Vertical bar spacing (long face)',sym:'s_{v}',eq:'\\le \\min(3t,\\; 18'+(w.shReq?',\\; \\ell_{w}/3':'')+')',sub:sfrN(w.v.s)+(w.sVOK?' \\le ':' \\gt ')+'\\min('+sfrN(3*w.tw)+',\\; 18'+(w.shReq?',\\; '+sfrN(w.lw/3):'')+') = '+sfrN(w.sMaxV),value:w.v.s,unit:'in',ok:!!w.sVOK,ref:'ACI 318-19 11.7.2.1'}),
-     S({id:'w.sh',chk:'wall horizontal spacing',label:'Horizontal bar spacing',sym:'s_{h}',eq:'\\le \\min(3t,\\; 18'+(w.shReq?',\\; \\ell_{w}/5':'')+')',sub:sfrN(w.hz.s)+(w.sHOK?' \\le ':' \\gt ')+'\\min('+sfrN(3*w.tw)+',\\; 18'+(w.shReq?',\\; '+sfrN(w.lw/5):'')+') = '+sfrN(w.sMaxH),value:w.hz.s,unit:'in',ok:!!w.sHOK,ref:'ACI 318-19 11.7.3.1'}),
-     S({id:'w.lay',chk:'wall layers',label:'Layers of distributed reinforcement: '+w.nC+' (perimeter cage, one near each face); '+(w.req2?'two required (t = '+sfrN(w.tw)+' in > 10 in)':w.ex2?'exempt by input (single-story basement or cantilever retaining wall)':'t ≤ 10 in: one permitted'),sym:'n_{layers}',eq:'\\ge '+(w.req2?'2':'1'),sub:'',value:w.nC+' layers',unit:'',ok:!!w.layOK,ref:'ACI 318-19 11.7.2.3'})]});
+     w.hz.need?sfrNeed({id:'w.sh',chk:'wall horizontal spacing',label:'Horizontal bar spacing: s_h,max = min(3t, 18'+(w.shReq?', ℓ_w/5':'')+') = '+sfrN(w.sMaxH)+' in',sym:'s_{h}',ref:'ACI 318-19 11.7.3.1'}):S({id:'w.sh',chk:'wall horizontal spacing',label:'Horizontal bar spacing',sym:'s_{h}',eq:'\\le \\min(3t,\\; 18'+(w.shReq?',\\; \\ell_{w}/5':'')+')',sub:sfrN(w.hz.s)+(w.sHOK?' \\le ':' \\gt ')+'\\min('+sfrN(3*w.tw)+',\\; 18'+(w.shReq?',\\; '+sfrN(w.lw/5):'')+') = '+sfrN(w.sMaxH),value:w.hz.s,unit:'in',ok:!!w.sHOK,ref:'ACI 318-19 11.7.3.1'}),
+     (w.hz.need?sfrNeed:S)({id:'w.lay',chk:'wall layers',label:(w.hz.need?'Layers of distributed reinforcement, horizontal direction not known (bars not entered); vertical: ':'Layers of distributed reinforcement: ')+w.nC+' (perimeter cage, one near each face); '+(w.req2?'two required (t = '+sfrN(w.tw)+' in > 10 in)':w.ex2?'exempt by input (single-story basement or cantilever retaining wall)':'t ≤ 10 in: one permitted'),sym:'n_{layers}',eq:'\\ge '+(w.req2?'2':'1'),sub:'',...(w.hz.need?{}:{value:w.nC+' layers',unit:'',ok:!!w.layOK}),ref:'ACI 318-19 11.7.2.3'})]});
     wNote='Wall reinforcement: the 11.6.1 condition (in-plane V_u vs 0.5φα_cλ√f′c A_cv) is worked in [[cbr/cb'+i+'.wthr]]; the dowel minimum ρ_l A_g in [[cbr/cb'+i+'.dow]].';}
    subs.push({key:'S-pd'+i,title:pd.label+' ('+(wI&&wI.applied?'wall':(pd.isPedestal?'pedestal':'column'))+', '+sfrN(pd.bx,1)+' × '+sfrN(pd.by,1)+' × '+sfrN(pd.h,1)+' in)',items:[...(wI&&wI.sel?[{type:'note',warn:true,text:sfdWallTxt(wI,false)+' Dowel minimum worked in [[cbr/cb'+i+'.dow]].'}]:[]),sfrTopics('pd'+i,T),
     ...(pd.pmRat&&pd.pmRat.length?[{type:'table',wide:true,head:['Combination','P_u (kip)','M_ux (kip-ft)','M_uy (kip-ft)','|M_u| (kip-ft)','|φM_n|_θ (kip-ft)','ratio'],   /* SFPM */
@@ -4027,12 +4046,12 @@ function sfrModel(){
    'Wall bar spacing and layers (ACI 318-19 11.7)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-pd'+z.idx)};   /* SFWC-3 */
   const ST={pass:'PASS',fail:'FAIL',warn:'REVIEW',na:'N/A'};
   const RR=(typeof sfdResultRows==='function'?sfdResultRows():[]);
-  const rows=RR.map(x=>{const ks=(W[x.name]||[]).filter(k=>have.has(k));
+  const rows=RR.map(x=>{const ks=(W[sfdChipKey(x.name)]||[]).filter(k=>have.has(k));
    const dc=(x.dc==null||isNaN(x.dc))?'n/a':(isFinite(x.dc)?sfrN(x.dc,2):'\u221e'), cd=sfdRowCond(x);   /* SFDF-R */
    if(cd)return {cells:[x.name,(cd.ratio?cd.ratio+'; ':'')+String(x.val).replace(/\$/g,''),{t:cd.cond,cls:'sfnw'},{t:ST[x.st]||'N/A',cls:x.st==='pass'?'ok':x.st==='fail'?'ng':'na'},ks.length?ks.map(k=>'[['+k+']]').join(', '):'\u2014']};
    return {cells:[x.name,String(x.val).replace(/\$/g,''),{t:dc,n:true},{t:ST[x.st]||'N/A',cls:x.st==='pass'?'ok':x.st==='fail'?'ng':'na'},ks.length?ks.map(k=>'[['+k+']]').join(', '):'\u2014']};});
   /* SFNG (2026-11-03, engineer; review C9): every NG and REVIEW item in one list, each naming what fails, linked to its work */
-  const bad=RR.filter(x=>x.st==='fail'||x.st==='warn').sort((a,b)=>(a.st==='fail'?0:1)-(b.st==='fail'?0:1)).map(x=>{const ks=(W[x.name]||[]).filter(k=>have.has(k));
+  const bad=RR.filter(x=>x.st==='fail'||x.st==='warn').sort((a,b)=>(a.st==='fail'?0:1)-(b.st==='fail'?0:1)).map(x=>{const ks=(W[sfdChipKey(x.name)]||[]).filter(k=>have.has(k));
    return {cells:[{t:x.st==='fail'?'NG':'REVIEW',cls:x.st==='fail'?'ng':'na'},x.name,String(x.val).replace(/\$/g,''),ks.length?ks.map(k=>'[['+k+']]').join(', '):'\u2014']};});
   const ngSub={title:'Items that fail (NG) or need review (REVIEW)',key:'S-ng',items:bad.length?[{type:'table',wide:true,head:['Status','Check','What fails or needs review','Worked in'],rows:bad},
    {type:'note',text:'NG: the check fails. REVIEW: the tool cannot decide alone (a detail it does not model, or a judgment it asks the engineer to make); the reason is stated. Every row is also in the table below.'}]:[{type:'note',text:'No check fails or needs review.'}]};
@@ -4451,7 +4470,7 @@ function sfroOrder(M){
  const ifc={title:'Pedestal–footing interface: bearing, shear friction and dowels',key:'S-ifc',subs:pull(fd,q=>q.key==='S-cbr'||q.key==='S-sf'||q.key==='S-dow')};
  if(fd){const ri=fd.subs.findIndex(q=>/^Results — /.test(q.title));
   if(ri>=0){const q=fd.subs[ri],tb=q.items[0],nm=r=>String((Array.isArray(r)?r:r.cells)[0]||'').replace(/:$/,'');
-   if(tb&&tb.type==='table'){const a=tb.rows.filter(r=>!SFRO_IFC.has(nm(r))),b=tb.rows.filter(r=>SFRO_IFC.has(nm(r))),rest2=q.items.slice(1);
+   if(tb&&tb.type==='table'){const a=tb.rows.filter(r=>!SFRO_IFC.has(sfdChipKey(nm(r)))),b=tb.rows.filter(r=>SFRO_IFC.has(sfdChipKey(nm(r)))),rest2=q.items.slice(1);
     const mk=(rows,t)=>({title:t,items:[Object.assign({},tb,{rows}),...rest2.map(x=>Object.assign({},x))]});
     fd.subs.splice(ri,1,...(a.length?[mk(a,q.title)]:[]));
     if(b.length)ifc.subs.push(mk(b,'Results — Pedestal–footing interface'));}}}
@@ -5530,16 +5549,20 @@ function sfdCrossties(pd){
    (engineer, 2026-11-06): the larger of Table 11.6.1 and 11.6.2 for every wall (see sfdWallInfo). */
 /* SFWM (2026-11-06, engineer): which case of ACI 318-19 11.6 the code makes the minimum (note; the governing minimum is the larger of both) */
 function sfdWallCaseTxt(w){const g=w&&w.gov;
- return w.t1161?'In-plane V_u = '+f2(g?g.Vin:0)+' kip \u2264 0.5\u03c6\u03b1_c\u03bb\u221af\u2032c A_cv = '+f2(g?g.thr:0)+' kip: 11.6.1 / Table 11.6.1 is the code minimum here (\u03c1_l \u2265 '+sfdRhoTxt(w.tbl.rl)+', \u03c1_t \u2265 '+sfdRhoTxt(w.tbl.rt)+'); the 11.6.2 minimum is applied as a conservative minimum by the engineer\u2019s choice (2026-11-06).'
+ return w.t1161?'In-plane V_u = '+f2(g?g.Vin:0)+' kip \u2264 0.5\u03c6\u03b1_c\u03bb\u221af\u2032c A_cv = '+f2(g?g.thr:0)+' kip: 11.6.1 / Table 11.6.1 is the code minimum here (\u03c1_l \u2265 '+sfdRhoTxt(w.tbl.rl)+', \u03c1_t \u2265 '+(w.tbl.rt==null?'0.002 or 0.0025 by the horizontal bar size, input needed':sfdRhoTxt(w.tbl.rt))+'); the 11.6.2 minimum is applied as a conservative minimum by the engineer\u2019s choice (2026-11-06).'
   :'In-plane V_u = '+f2(g?g.Vin:0)+' kip ('+(g?g.name:'\u2014')+') > 0.5\u03c6\u03b1_c\u03bb\u221af\u2032c A_cv = '+f2(g?g.thr:0)+' kip: 11.6.2 applies (in-plane shear above the 11.6.1 limit). The condition of 11.6.2 is printed \u201c\u2264\u201d in the engineer\u2019s copy of ACI 318-19 (the same as 11.6.1); the intended reading \u201cabove the 11.6.1 limit\u201d is used. Table 11.6.1 is also checked (the larger governs, engineer 2026-11-06).';}
 function sfdWallGovTxt(by){return by==='11.6.2'?'11.6.2 governs':by==='tbl'?'Table 11.6.1 governs':'equal';}
+/* SFWH (2026-11-06, engineer): the wall's horizontal bars default to blank; the checks that need rho_t provided say so (REVIEW) */
+const SFWH_IN='Input needed: enter the wall\u2019s horizontal bars';
+function sfdWallNeed(w){return !!(w&&w.applied&&w.hz&&w.hz.need);}
+function sfdWallBoundTxt(w){return (w&&w.e1162&&w.e1162.bound)?' (11.6.2 \u03c1_l taken at its upper bound max(\u03c1_t,req, 0.0025) = '+sfdRhoTxt(w.e1162.cap)+' until the horizontal bars are entered: Eq. 11.6.2 needs \u03c1_t)':'';}
 /* SFWL: the wall statements shown wherever a wall's pedestal checks are listed (display) */
 function sfdWallTxt(w,html){
  const b=html?(t=>'<b>'+t+'</b>'):(t=>t);
  if(!w||!w.sel)return '';
  if(!w.applied)return 'Element type Wall selected, but l_w/thickness = '+f2(w.lt)+' \u2264 3: not a wall by ACI 318-19 2.3 (horizontal length-to-thickness ratio > 3). It is checked as a pedestal (column rule 0.005A_g for the dowels, 16.3.4.1).';
  return b('Wall')+' (l_w = '+f2(w.lw)+' in along '+w.dir+', thickness '+f2(w.tw)+' in, l_w/t = '+f2(w.lt)+' > 3, ACI 318-19 2.3). '+
-  'Dowels: wall-foundation minimum per 16.3.4.2: \u03c1_l = the larger of Table 11.6.1 (dowel bar size) '+w.rhoL+' and 11.6.2 '+sfdRhoTxt(w.e1162.rl)+' = '+sfdRhoTxt(w.rhoDow)+' \u00d7 A_g = '+f2(w.AsMinWall)+' in\u00b2. '+   /* SFWM */
+  'Dowels: wall-foundation minimum per 16.3.4.2: \u03c1_l = the larger of Table 11.6.1 (dowel bar size) '+w.rhoL+' and 11.6.2 '+sfdRhoTxt(w.e1162.rl)+sfdWallBoundTxt(w)+' = '+sfdRhoTxt(w.rhoDow)+' \u00d7 A_g = '+f2(w.AsMinWall)+' in\u00b2. '+   /* SFWM; SFWH bound */
   'The wall\u2019s own minimum \u03c1_l and \u03c1_t (the larger of Table 11.6.1 and 11.6.2, engineer 2026-11-06) are checked under Wall reinforcement, the in-plane shear (11.5.4) under Wall in-plane shear. '+sfdWallCaseTxt(w)+' '+
   'Two-way (punching) shear is still checked around the wall footprint (conservative): ACI 318-19 22.6.4.1 does not exempt walls; the one-way shear at d from the wall faces (13.2.7.1, Table 13.2.7.1: face of a concrete wall) is the footing one-way check. '+
   'The pedestal checks (P\u2013M of the section, ties 25.7.2, crossties 25.7.2.3, one-way shear by 22.5, slenderness screen k = 2.0) are kept as a conservative stand-in; for a wall the corresponding provisions are Chapter 11: 11.5.3 / Table 11.5.3.2 (k = 2.0 for a wall not braced against lateral translation), 11.5.5.1 (out-of-plane shear by 22.5), 11.7.4.1 (ties only where the vertical bars are compression reinforcement and A_st > 0.01A_g). '+
@@ -5552,10 +5575,11 @@ function sfdWallRhoBlocks(b,w){
  const r5=sfdRhoTxt, v=w.v, h=w.hz, ck=(ok)=>ok?'\\;\\checkmark':'\\;\\text{NG}';
  b.appendChild(eqBlock('Wall: distributed reinforcement ratios (two curtains, one near each face)','ACI 318-19 2.2, 11.6',
   '\\rho_{\\ell} = \\frac{2A_{b,v}}{s_{v}\\,t},\\qquad \\rho_{t} = \\frac{2A_{b,h}}{s_{h}\\,t}',
-  '\\rho_{\\ell} = \\frac{2\\cdot '+f2(v.Ab)+'}{'+f2(v.s)+'\\cdot '+f2(w.tw)+'} = '+r5(v.rho)+',\\qquad \\rho_{t} = \\frac{2\\cdot '+f2(h.Ab)+'}{'+f2(h.s)+'\\cdot '+f2(w.tw)+'} = '+r5(h.rho),
-  '\\text{vertical: '+v.nF+' \\#'+v.size+' per long face at '+f2(v.s)+' in; horizontal: \\#'+h.size+' at '+f2(h.s)+' in each face'+(h.fromTie||h.sFromTie?' (the ties'+(h.fromTie&&h.sFromTie?'':h.fromTie?': size':': spacing')+')':'')+'}'));
+  '\\rho_{\\ell} = \\frac{2\\cdot '+f2(v.Ab)+'}{'+f2(v.s)+'\\cdot '+f2(w.tw)+'} = '+r5(v.rho)+',\\qquad \\rho_{t} = '+(h.need?'\\text{input needed}':'\\frac{2\\cdot '+f2(h.Ab)+'}{'+f2(h.s)+'\\cdot '+f2(w.tw)+'} = '+r5(h.rho)),
+  '\\text{vertical: '+v.nF+' \\#'+v.size+' per long face at '+f2(v.s)+' in; horizontal: '+(h.need?'not entered':'\\#'+h.size+' at '+f2(h.s)+' in each face'+(h.fromTie||h.sFromTie?' (the ties'+(h.fromTie&&h.sFromTie?'':h.fromTie?': size':': spacing')+')':''))+'}'));
+ if(h.need)b.appendChild(el('div','warnbox','<b>'+SFWH_IN+'</b> (Reinforcement input, this element\u2019s \u201cWall horizontal bar (each face)\u201d and spacing; pick \u201csame as ties\u201d to use the ties). Until then the checks that need \u03c1<sub>t</sub> (\u03c1<sub>t</sub> \u2265 \u03c1<sub>t,min</sub>, Eq. 11.6.2, the \u03c1<sub>t</sub>f<sub>yt</sub> term of the in-plane shear, horizontal spacing 11.7.3.1, two layers in the horizontal direction 11.7.2.3) are REVIEW.'));   /* SFWH */
  b.appendChild(eqBlock('Wall: minimum reinforcement by Table 11.6.1','ACI 318-19 11.6.1, Table 11.6.1',   /* SFWM: both minimums worked, the larger governs */
-  '\\rho_{\\ell,min,T} = '+r5(w.tbl.rl)+'\\;(\\#'+v.size+(v.size>0&&v.size<=5?(P2.fy>=60000?',\\;f_y \\ge 60\\,000':',\\;f_y \\lt 60\\,000'):'\\gt \\text{No. 5}')+'),\\qquad \\rho_{t,min,T} = '+r5(w.tbl.rt)+'\\;(\\#'+h.size+(h.size>0&&h.size<=5?(P2.fy>=60000?',\\;f_y \\ge 60\\,000':',\\;f_y \\lt 60\\,000'):'\\gt \\text{No. 5}')+')',
+  '\\rho_{\\ell,min,T} = '+r5(w.tbl.rl)+'\\;(\\#'+v.size+(v.size>0&&v.size<=5?(P2.fy>=60000?',\\;f_y \\ge 60\\,000':',\\;f_y \\lt 60\\,000'):'\\gt \\text{No. 5}')+'),\\qquad '+(w.tbl.rt==null?'\\rho_{t,min,T} \\le 0.0025\\;(\\text{horizontal bar size: input needed})':'\\rho_{t,min,T} = '+r5(w.tbl.rt)+'\\;(\\#'+h.size+(h.size>0&&h.size<=5?(P2.fy>=60000?',\\;f_y \\ge 60\\,000':',\\;f_y \\lt 60\\,000'):'\\gt \\text{No. 5}')+')'),
   '',''));
   {const q=w.e1162,g=w.rtGov;   /* SFWM: 11.6.2 for every wall */
   b.appendChild(eqBlock('Wall: \u03c1_t required for in-plane strength ('+(g?g.name:'\u2014')+')','ACI 318-19 11.5.4.3, 21.2; f_yt \u2264 60 000 psi, Table 20.2.2.4(a)',
@@ -5564,23 +5588,26 @@ function sfdWallRhoBlocks(b,w){
    '\\rho_{t,req} = '+r5(w.rhoTreq)));
   b.appendChild(eqBlock('Wall: minimum reinforcement by 11.6.2 (applied to every wall, engineer)','ACI 318-19 11.6.2, Eq. 11.6.2',
    '\\rho_{\\ell,min,62} = \\min\\left[\\max\\left(0.0025 + 0.5\\left(2.5 - \\frac{h_w}{\\ell_w}\\right)(\\rho_t - 0.0025),\\;0.0025\\right),\\;\\max(\\rho_{t,req},\\,0.0025)\\right],\\qquad \\rho_{t,min,62} = 0.0025',
+   q.need?'\\text{Eq. 11.6.2: input needed }(\\rho_t);\\quad \\rho_{\\ell,min,62} = \\min[\\max(\\text{Eq.},\\,0.0025),\\;\\max('+r5(w.rhoTreq)+',\\,0.0025)] '+(q.bound?'\\le '+r5(q.cap)+'\\;(\\text{upper bound used})':'= '+r5(q.rl)+'\\;(\\text{whatever }\\rho_t)'):   /* SFWH */
    '0.0025 + 0.5\\,(2.5 - '+f3(w.hwlw)+')('+r5(h.rho)+' - 0.0025) = '+r5(q.eq)+';\\quad \\rho_{\\ell,min,62} = \\min[\\max('+r5(q.eq)+',\\,0.0025),\\;\\max('+r5(w.rhoTreq)+',\\,0.0025)] = '+r5(q.rl),
    ''));
   b.appendChild(eqBlock('Wall: governing minimum, the larger of Table 11.6.1 and 11.6.2','ACI 318-19 11.6.1, 11.6.2 (engineer, 2026-11-06)',
    '\\rho_{\\ell,min} = \\max(\\rho_{\\ell,min,T},\\,\\rho_{\\ell,min,62}),\\qquad \\rho_{t,min} = \\max(\\rho_{t,min,T},\\,\\rho_{t,min,62})',
-   '\\rho_{\\ell,min} = \\max('+r5(w.tbl.rl)+',\\,'+r5(q.rl)+') = '+r5(w.rlMin)+'\\;(\\text{'+sfdWallGovTxt(w.rlBy)+'}),\\qquad \\rho_{t,min} = \\max('+r5(w.tbl.rt)+',\\,'+r5(q.rt)+') = '+r5(w.rtMin)+'\\;(\\text{'+sfdWallGovTxt(w.rtBy)+'})',
-   '\\rho_{\\ell} = '+r5(v.rho)+(w.rlOK?' \\ge ':' \\lt ')+r5(w.rlMin)+ck(w.rlOK)+',\\qquad \\rho_{t} = '+r5(h.rho)+(w.rtOK?' \\ge ':' \\lt ')+r5(w.rtMin)+ck(w.rtOK)));
+   '\\rho_{\\ell,min} = \\max('+r5(w.tbl.rl)+',\\,'+r5(q.rl)+') = '+r5(w.rlMin)+'\\;(\\text{'+sfdWallGovTxt(w.rlBy)+'}),\\qquad \\rho_{t,min} = \\max('+(w.tbl.rt==null?'\\le 0.0025':r5(w.tbl.rt))+',\\,'+r5(q.rt)+') = '+r5(w.rtMin)+'\\;(\\text{'+sfdWallGovTxt(w.rtBy)+'})',
+   '\\rho_{\\ell} = '+r5(v.rho)+(w.rlOK?' \\ge ':' \\lt ')+r5(w.rlMin)+ck(w.rlOK)+',\\qquad '+(h.need?'\\rho_{t}:\\;\\text{input needed (REVIEW)}':'\\rho_{t} = '+r5(h.rho)+(w.rtOK?' \\ge ':' \\lt ')+r5(w.rtMin)+ck(w.rtOK))));
   b.appendChild(el('div','note','<b>Code case:</b> '+sfEsc(sfdWallCaseTxt(w))+' The 11.6.1 test is worked in '+sfdLink('o-fd-bear','11.6.1 condition',['tab-footdes','5.6 Concrete Bearing & Dowels'])+'. \u03c1<sub>t</sub> in Eq. 11.6.2 is the provided ratio; the cap \u201cneed not exceed \u03c1<sub>t</sub> required by 11.5.4.3\u201d is taken as max(\u03c1<sub>t,req</sub>, 0.0025) (11.6.2(b) floor; pending engineer review).'));}
  {const g=w.vGov;if(g)b.appendChild(eqBlock('Wall: in-plane shear ('+g.name+')','ACI 318-19 11.5.4.2, 11.5.4.3 (Eq. 11.5.4.3), 11.5.4.4; \u03c6 = 0.75 (21.2)',   /* SFWC-2 */
   'V_n = \\min\\left[(\\alpha_c\\lambda\\sqrt{f\'_c} + \\rho_t f_{yt})A_{cv},\\; 8\\sqrt{f\'_c}A_{cv}\\right],\\qquad A_{cv} = t\\,\\ell_w',
+  w.hz.need?'\\alpha_c\\lambda\\sqrt{f\'_c}A_{cv} = '+f3(g.ac)+'\\cdot '+f2(w.lam)+'\\cdot '+f2(w.sq)+'\\cdot '+f2(w.Acv)+'/1000 = '+f2(g.vc)+'\\;\\mathrm{k};\\quad \\rho_t f_{yt}A_{cv}:\\;\\text{input needed};\\quad 8\\sqrt{f\'_c}A_{cv} = '+f2(g.vmax)+'\\;\\mathrm{k}':   /* SFWH */
   'V_n = \\min\\left[('+f3(g.ac)+'\\cdot '+f2(w.lam)+'\\cdot '+f2(w.sq)+' + '+sfdRhoTxt(w.hz.rho)+'\\cdot '+f2(w.fyt)+')\\cdot '+f2(w.Acv)+',\\; 8\\cdot '+f2(w.sq)+'\\cdot '+f2(w.Acv)+'\\right]/1000 = \\min('+f2(g.vc+g.vs)+',\\;'+f2(g.vmax)+') = '+f2(g.vn)+'\\;\\mathrm{k}',
+  w.hz.need?'V_u = '+f2(g.Vin)+'\\;\\mathrm{k};\\quad \\phi V_n:\\;\\text{input needed (REVIEW)}':
   '\\phi V_n = 0.75\\cdot '+f2(g.vn)+' = '+f2(g.phiVn)+'\\;\\mathrm{k};\\quad \\frac{V_u}{\\phi V_n} = \\frac{'+f2(g.Vin)+'}{'+f2(g.phiVn)+'} = \\mathbf{'+f3(g.vr)+'}'+(w.vOK?'\\;\\checkmark':'\\;\\text{NG}')));
-  b.appendChild(el('div','note','In-plane V<sub>u</sub> = the factored shear along \u2113<sub>w</sub> ('+w.dir+'), every LRFD combination; the governing ratio is shown. \u03b1<sub>c</sub> from h<sub>w</sub>/\u2113<sub>w</sub> (11.5.4.3), 2(1 + N<sub>u</sub>/(500A<sub>g</sub>)) \u2265 0 under net axial tension (11.5.4.4); \u03c1<sub>t</sub> = the provided horizontal ratio, f<sub>yt</sub> \u2264 60 000 psi (Table 20.2.2.4(a)); \u221af\u2032<sub>c</sub> \u2264 100 psi (conservative).'+(w.hwlw<2?' The strut-and-tie alternative of 11.5.4.1 (h<sub>w</sub>/\u2113<sub>w</sub> < 2) is not used.':'')));}
+  b.appendChild(el('div','note','In-plane V<sub>u</sub> = the factored shear along \u2113<sub>w</sub> ('+w.dir+'), every LRFD combination; '+(w.hz.need?'the largest V<sub>u</sub> is shown; <b>'+SFWH_IN+'</b> (\u03c1<sub>t</sub>f<sub>yt</sub> term).':'the governing ratio is shown.')+' \u03b1<sub>c</sub> from h<sub>w</sub>/\u2113<sub>w</sub> (11.5.4.3), 2(1 + N<sub>u</sub>/(500A<sub>g</sub>)) \u2265 0 under net axial tension (11.5.4.4); \u03c1<sub>t</sub> = the provided horizontal ratio, f<sub>yt</sub> \u2264 60 000 psi (Table 20.2.2.4(a)); \u221af\u2032<sub>c</sub> \u2264 100 psi (conservative).'+(w.hwlw<2?' The strut-and-tie alternative of 11.5.4.1 (h<sub>w</sub>/\u2113<sub>w</sub> < 2) is not used.':'')));}
  {const sv=t=>t==='v'?'3t, 18'+(w.shReq?', \\ell_w/3':''):'3t, 18'+(w.shReq?', \\ell_w/5':'');   /* SFWC-3 */
   b.appendChild(eqBlock('Wall: bar spacing and layers','ACI 318-19 11.7.2.1, 11.7.3.1, 11.7.2.3',
    's_{v} \\le \\min('+sv('v')+'),\\qquad s_{h} \\le \\min('+sv('h')+'),\\qquad t \\gt 10\\;\\mathrm{in} \\Rightarrow \\text{two layers}',
    's_{v,max} = \\min('+f2(3*w.tw)+',\\;18'+(w.shReq?',\\;'+f2(w.lw/3):'')+') = '+f2(w.sMaxV)+',\\qquad s_{h,max} = \\min('+f2(3*w.tw)+',\\;18'+(w.shReq?',\\;'+f2(w.lw/5):'')+') = '+f2(w.sMaxH)+'\\;\\mathrm{in}',
-   's_{v} = '+f2(w.v.s)+(w.sVOK?' \\le ':' \\gt ')+f2(w.sMaxV)+(w.sVOK?'\\;\\checkmark':'\\;\\text{NG}')+',\\quad s_{h} = '+f2(w.hz.s)+(w.sHOK?' \\le ':' \\gt ')+f2(w.sMaxH)+(w.sHOK?'\\;\\checkmark':'\\;\\text{NG}')+',\\quad \\text{layers: '+w.nC+(w.req2?' (two required, t = '+f2(w.tw)+' in > 10 in)':w.ex2?' (exempt, 11.7.2.3)':' (t \\le 10 in: one permitted)')+'}'+(w.layOK?'\\;\\checkmark':'\\;\\text{NG}')));
+   's_{v} = '+f2(w.v.s)+(w.sVOK?' \\le ':' \\gt ')+f2(w.sMaxV)+(w.sVOK?'\\;\\checkmark':'\\;\\text{NG}')+',\\quad '+(w.hz.need?'s_{h}:\\;\\text{input needed}':'s_{h} = '+f2(w.hz.s)+(w.sHOK?' \\le ':' \\gt ')+f2(w.sMaxH)+(w.sHOK?'\\;\\checkmark':'\\;\\text{NG}'))+',\\quad \\text{layers: '+(w.hz.need?'vertical ':'')+w.nC+(w.hz.need?', horizontal input needed':'')+(w.req2?' (two required, t = '+f2(w.tw)+' in > 10 in)':w.ex2?' (exempt, 11.7.2.3)':' (t \\le 10 in: one permitted)')+'}'+(w.layOK==null?'':w.layOK?'\\;\\checkmark':'\\;\\text{NG}')));
   b.appendChild(el('div','note','Shear reinforcement is '+(w.shReq?'':'not ')+'required for in-plane strength (\u03c1<sub>t,req</sub> = '+sfdRhoTxt(w.rhoTreq)+(w.shReq?' &gt; 0':' = 0')+'), so the \u2113<sub>w</sub>/3 and \u2113<sub>w</sub>/5 limits '+(w.shReq?'apply':'do not apply')+'. Two layers: the vertical bars are a perimeter cage, one curtain near each face'+(w.ex2?'; exempt by input (single-story basement or cantilever retaining wall)':'')+'.'));}
  b.appendChild(el('div','note','h<sub>w</sub>/\u2113<sub>w</sub> = '+f2(w.hw)+'/'+f2(w.lw)+' = '+f3(w.hwlw)+' (h<sub>w</sub> '+(w.hwIn?'entered':'= the pedestal height h; enter the total wall height on the Pedestals card')+'). The dowel minimum (16.3.4.2) is \u03c1<sub>\u2113</sub>A<sub>g</sub> with \u03c1<sub>\u2113</sub> = '+sfdRhoTxt(w.rhoDow)+(w.dow1162?' (11.6.2, above; Table 11.6.1 with the dowel bar size gives '+w.rhoL+')':' (Table 11.6.1 with the dowel bar size)')+': '+sfdLink('o-fd-bear','',['tab-footdes','5.6 Concrete Bearing & Dowels'])+'.'));
 }
@@ -5610,7 +5637,10 @@ function sfdWallInfo(i,p,combos,fc,fy,lam){
  /* ---- SFWC (2026-11-06, engineer): the wall's own reinforcement, ACI 318-19 11.6 ----
    Vertical bars = the pedestal longitudinal bars; on each long face (curtain) n bars at s_v = the corner-bar centre span / (n - 1)
    (sfdPedBars); rho_l = 2 A_b,v/(s_v t) (distributed, 2.2). Horizontal bars = wallIn.hSize at wallIn.hSpc in each of the 2 curtains
-   ('tie' / blank: the tie size and spacing); rho_t = 2 A_b,h/(s_h t).
+   ('sameTie': the tie size, and the tie spacing where hSpc is blank); rho_t = 2 A_b,h/(s_h t).
+   SFWH (2026-11-06, engineer): hSize blank (the default), or a bar size with hSpc blank = INPUT NEEDED (o.hz.need): rho_t provided
+   is unknown, so every check that needs it (rho_t >= rho_t,min, Eq. 11.6.2, the rho_t f_yt term of V_n, s_h 11.7.3.1, two layers
+   in the horizontal direction 11.7.2.3) is null (REVIEW "Input needed"), not true / false. Checks that do not need it are unchanged.
    rho_t required for in-plane strength (11.5.4.3, phi = 0.75 per 21.2): V_u <= phi (alpha_c lambda sqrt(f'c) + rho_t f_yt) A_cv
    -> rho_t,req = max(0, (V_u/(phi A_cv) - alpha_c lambda sqrt(f'c))/f_yt), f_yt <= 60 000 psi (Table 20.2.2.4(a), shear);
    sqrt(f'c) <= 100 psi as the 11.6.1 test (conservative).
@@ -5622,30 +5652,41 @@ function sfdWallInfo(i,p,combos,fc,fy,lam){
    the rho_t required by 11.5.4.3, taken as max(rho_t,req, 0.0025) (11.6.2(b) floor; decision pending engineer review).
    The dowel minimum (16.3.4.2) is rho_l A_g with the governing rho_l: the larger of Table 11.6.1 with the dowel bar size (SFWL) and 11.6.2 (SFWM). */
  const fyt=Math.min(fy,60000), nC=2, PB=sfdPedBars(i), vSz=rf.longSize||0, Abv=BAR_AREA[vSz]||0, sv=dir==='y'?PB.sy:PB.sx;
- const hTie=!wi.hSize||wi.hSize==='tie', hSz=hTie?(rf.tieSize||0):(parseInt(wi.hSize,10)||0), sTie=!(num(wi.hSpc)>0), hS=sTie?num(rf.tieSpc):num(wi.hSpc), Abh=BAR_AREA[hSz]||0;
+ const hTie=wi.hSize==='sameTie', hSz=hTie?(rf.tieSize||0):(parseInt(wi.hSize,10)||0), sTie=hTie&&!(num(wi.hSpc)>0), hS=sTie?num(rf.tieSpc):num(wi.hSpc), Abh=BAR_AREA[hSz]||0;
+ const hNeed=!(hSz>0)||!(hS>0);   /* SFWH: horizontal bars not entered (blank size, or a size without a spacing) */
  o.nC=nC;o.fyt=fyt;
  o.v={size:vSz,Ab:Abv,s:sv,nF:dir==='y'?PB.ny:PB.nx,rho:(sv>0&&tw>0)?nC*Abv/(sv*tw):0};
- o.hz={size:hSz,fromTie:hTie,sFromTie:sTie,Ab:Abh,s:hS,rho:(hS>0&&tw>0)?nC*Abh/(hS*tw):0};
+ o.hz=hNeed?{need:true,size:hSz>0?hSz:0,fromTie:hTie,sFromTie:sTie,Ab:hSz>0?Abh:0,s:hS>0?hS:0,rho:null}
+  :{need:false,size:hSz,fromTie:hTie,sFromTie:sTie,Ab:Abh,s:hS,rho:(hS>0&&tw>0)?nC*Abh/(hS*tw):0};
  o.rows.forEach(z=>{z.rtReq=Math.max(0,(z.Vin*1000/(0.75*Acv)-z.ac*lam*sq)/fyt);});
  o.rtGov=o.rows.reduce((a,z)=>(!a||z.rtReq>a.rtReq)?z:a,null);o.rhoTreq=o.rtGov?o.rtGov.rtReq:0;
  const t1=sz=>sz>0&&sz<=5&&fy>=60000;
- o.tbl={rl:t1(vSz)?0.0012:0.0015,rt:t1(hSz)?0.0020:0.0025};
+ o.tbl={rl:t1(vSz)?0.0012:0.0015,rt:hNeed&&!(hSz>0)?null:(t1(hSz)?0.0020:0.0025)};   /* SFWH: rt null without a horizontal bar size (Table 11.6.1 rho_t <= 0.0025 = the 11.6.2(b) floor, so rho_t,min is 0.0025 either way) */
  /* SFWM (2026-11-06, engineer, final decision): the 11.6.2 minimums are checked for EVERY wall, whatever the in-plane shear;
     the governing minimum is the larger of Table 11.6.1 and 11.6.2. o.t1161 (the 11.6.1 test) now only says which case the code
     makes the minimum (note). Before (SFWC-1, #870): Table 11.6.1 alone where o.t1161, 11.6.2 alone otherwise. */
- {const eq=0.0025+0.5*(2.5-r)*(o.hz.rho-0.0025), a=Math.max(eq,0.0025), cap=Math.max(o.rhoTreq,0.0025);
+ if(!hNeed){const eq=0.0025+0.5*(2.5-r)*(o.hz.rho-0.0025), a=Math.max(eq,0.0025), cap=Math.max(o.rhoTreq,0.0025);
   o.e1162={eq,a,cap,capGov:cap<a-1e-12,rl:Math.min(a,cap),rt:0.0025};}
+ else{const cap=Math.max(o.rhoTreq,0.0025);
+  /* SFWH: Eq. 11.6.2 needs rho_t provided (input needed). Since max(Eq., 0.0025) >= 0.0025, rho_l,min,62 = min(max(Eq., 0.0025), cap)
+     = 0.0025 whatever rho_t where cap = 0.0025 (rho_t,req <= 0.0025). Where cap > 0.0025 it is not known; the cap, its upper bound,
+     is used (conservative) and flagged (bound). Decision (pending engineer review). */
+  o.e1162={eq:null,a:null,cap,capGov:null,rl:cap,rt:0.0025,need:true,bound:cap>0.0025+1e-12};}
  const gv=(t,q)=>q>t+1e-12?'11.6.2':(t>q+1e-12?'tbl':'equal');
- o.rlMin=Math.max(o.tbl.rl,o.e1162.rl);o.rtMin=Math.max(o.tbl.rt,o.e1162.rt);
- o.rlBy=gv(o.tbl.rl,o.e1162.rl);o.rtBy=gv(o.tbl.rt,o.e1162.rt);
- o.rlOK=o.v.rho>=o.rlMin-1e-9;o.rtOK=o.hz.rho>=o.rtMin-1e-9;
+ o.rlMin=Math.max(o.tbl.rl,o.e1162.rl);o.rtMin=o.tbl.rt==null?o.e1162.rt:Math.max(o.tbl.rt,o.e1162.rt);
+ o.rlBy=gv(o.tbl.rl,o.e1162.rl);o.rtBy=o.tbl.rt==null?'11.6.2':gv(o.tbl.rt,o.e1162.rt);
+ o.rlOK=o.v.rho>=o.rlMin-1e-9;o.rtOK=hNeed?null:o.hz.rho>=o.rtMin-1e-9;   /* SFWH: null = input needed */
  /* SFWC-2 (2026-11-06, engineer): in-plane shear, ACI 318-19 11.5.4. V_n = (alpha_c lambda sqrt(f'c) + rho_t f_yt) A_cv (Eq. 11.5.4.3;
     alpha_c per 11.5.4.3 / 11.5.4.4 of each combination, rho_t = the provided horizontal ratio) <= 8 sqrt(f'c) A_cv (11.5.4.2);
     phi = 0.75 (21.2); sqrt(f'c) <= 100 psi as above (conservative). Strut-and-tie (11.5.4.1, h_w/l_w < 2) is not used. */
- o.rows.forEach(z=>{z.vc=z.ac*lam*sq*Acv/1000;z.vs=o.hz.rho*fyt*Acv/1000;z.vmax=8*sq*Acv/1000;z.vn=Math.min(z.vc+z.vs,z.vmax);z.capGov=z.vc+z.vs>z.vmax+1e-9;
+ if(!hNeed){o.rows.forEach(z=>{z.vc=z.ac*lam*sq*Acv/1000;z.vs=o.hz.rho*fyt*Acv/1000;z.vmax=8*sq*Acv/1000;z.vn=Math.min(z.vc+z.vs,z.vmax);z.capGov=z.vc+z.vs>z.vmax+1e-9;
   z.phiVn=0.75*z.vn;z.vr=z.phiVn>0?z.Vin/z.phiVn:(z.Vin>1e-9?Infinity:0);});
  o.vGov=o.rows.reduce((a,z)=>(!a||z.vr>a.vr)?z:a,null);
- o.vOK=!o.vGov||o.vGov.vr<=1+1e-9;
+ o.vOK=!o.vGov||o.vGov.vr<=1+1e-9;}
+ else{   /* SFWH: the rho_t f_yt term needs rho_t provided: V_n not computed (input needed); the concrete term and the limit are shown, governing = largest V_u */
+  o.rows.forEach(z=>{z.vc=z.ac*lam*sq*Acv/1000;z.vs=null;z.vmax=8*sq*Acv/1000;z.vn=null;z.capGov=null;z.phiVn=null;z.vr=null;});
+  o.vGov=o.rows.reduce((a,z)=>(!a||z.Vin>a.Vin)?z:a,null);
+  o.vOK=o.vGov?null:true;}
  /* SFWC-3 (2026-11-06, engineer): detailing, ACI 318-19 11.7. Shear reinforcement is "required for in-plane strength" where
     rho_t,req > 0 (V_u > phi alpha_c lambda sqrt(f'c) A_cv in some combination). 11.7.2.1 vertical: s <= min(3t, 18 in) and
     l_w/3 when required; 11.7.3.1 horizontal: s <= min(3t, 18 in) and l_w/5 when required. 11.7.2.3: t > 10 in -> two layers,
@@ -5653,9 +5694,9 @@ function sfdWallInfo(i,p,combos,fc,fy,lam){
     two curtains (o.nC). */
  o.shReq=o.rhoTreq>1e-12;o.ex2=wi.ex2===true;
  o.sMaxV=Math.min(3*tw,18,o.shReq?lw/3:Infinity);o.sMaxH=Math.min(3*tw,18,o.shReq?lw/5:Infinity);
- o.sVOK=o.v.s<=o.sMaxV+1e-9;o.sHOK=o.hz.s>0&&o.hz.s<=o.sMaxH+1e-9;
- o.req2=tw>10+1e-9&&!o.ex2;o.layOK=o.nC>=(o.req2?2:1);
- o.detOK=o.sVOK&&o.sHOK&&o.layOK;
+ o.sVOK=o.v.s<=o.sMaxV+1e-9;o.sHOK=hNeed?null:(o.hz.s>0&&o.hz.s<=o.sMaxH+1e-9);
+ o.req2=tw>10+1e-9&&!o.ex2;o.layOK=hNeed?null:o.nC>=(o.req2?2:1);   /* SFWH: the horizontal layers are not known without the bars */
+ o.detOK=(o.sVOK===false)?false:(hNeed?null:(o.sVOK&&o.sHOK&&o.layOK));   /* SFWH: a vertical-spacing NG stays NG; otherwise null = input needed */
  o.rhoDow=Math.max(o.rhoL,o.e1162.rl);o.dow1162=o.e1162.rl>o.rhoL+1e-12;   /* SFWM: the governing rho_l (Table 11.6.1 with the dowel bar size, or 11.6.2); SFWC-1: t1161 ? rhoL : rlMin */
  o.AsMinWall=o.rhoDow*Ag;
  o.AsMin=o.AsMinWall;
@@ -7237,7 +7278,7 @@ function renderPedestalDesign(){
    '\\rho_g = \\frac{A_{st}}{A_g},\\qquad '+(pd.isPedestal?'\\rho_g \\le 0.08':'0.01 \\le \\rho_g \\le 0.08'),
    '\\rho_g = \\frac{'+f2(pd.Ast)+'}{'+f2(pd.bx*pd.by)+'} = '+f3(pd.rho)+' = '+f2(pd.rho*100)+'\\%',
    (pd.rhoOK?'\\text{within limits}\\;\\checkmark':'\\text{outside limits \u2014 NG}')));
-  if(pd.isPedestal)b.appendChild(el('div','note','<b>The 1% lower limit is not applied here.</b> ACI 318-19 10.6.1.1 is a <b>column</b> provision (Chapter 10). This element is classified as a <b>pedestal</b> \u2014 height '+f2(pd.h)+' in \u2264 3 \u00d7 least plan dimension '+f2(pd.bmin)+' in \u2014 and ACI permits a pedestal to be plain concrete under Chapter 14, so there is no 1% floor on \u03c1. The minimum that does govern is the 0.005A<sub>g</sub> connection reinforcement of ACI 318-19 16.3.4.1, checked as the dowel minimum in \u00a75.6: '+f2(P2.bearing[pd.idx]?P2.bearing[pd.idx].AsDowMin:0.005*pd.bx*pd.by)+' in\u00b2 required'+(P2.bearing[pd.idx]&&P2.bearing[pd.idx].wall&&P2.bearing[pd.idx].wall.applied?' (element type Wall: 16.3.4.2, see the note above)':'')+'. The 8% upper limit is a placement and consolidation limit and still applies. If you intend this element to be designed as a column, change the geometry or override the classification.'));
+  if(pd.isPedestal)b.appendChild(el('div','note','<b>The 1% lower limit is not applied here.</b> ACI 318-19 10.6.1.1 is a <b>column</b> provision (Chapter 10). This element is classified as a <b>pedestal</b> \u2014 height '+f2(pd.h)+' in \u2264 3 \u00d7 least plan dimension '+f2(pd.bmin)+' in \u2014 and ACI permits a pedestal to be plain concrete under Chapter 14, so there is no 1% floor on \u03c1. The minimum that does govern is '+((P2.bearing[pd.idx]&&P2.bearing[pd.idx].wall&&P2.bearing[pd.idx].wall.applied)?'(element type Wall) the wall-foundation minimum of ACI 318-19 16.3.4.2, \u03c1<sub>\u2113</sub>A<sub>g</sub> with \u03c1<sub>\u2113</sub> = '+sfdRhoTxt(P2.bearing[pd.idx].wall.rhoDow)+' (the larger of Table 11.6.1 and 11.6.2, see the note above)':'the 0.005A<sub>g</sub> connection reinforcement of ACI 318-19 16.3.4.1')+', checked as the dowel minimum in \u00a75.6: '+f2(P2.bearing[pd.idx]?P2.bearing[pd.idx].AsDowMin:0.005*pd.bx*pd.by)+' in\u00b2 required. The 8% upper limit is a placement and consolidation limit and still applies. If you intend this element to be designed as a column, change the geometry or override the classification.'));
   b.appendChild(eqBlock('Bar count and fit','ACI 318-19 10.7.3.1, 25.2.3',
    'n \\ge 4\\;\\text{(tied)},\\qquad s_{clear} = \\frac{b - 2c - d_b}{n_{face} - 1} - d_b \\ge \\max(1.5d_b,\\;1.5\\;\\mathrm{in},\\;\\tfrac{4}{3}d_{agg})',
    'd_b = '+f3(pd.dbL)+'\\;\\mathrm{in}\\;(\\#'+(state.peds[i].reinf.longSize||0)+'\\text{, bar table}),\\qquad s_{clear,x} = \\frac{'+f2(pd.bx)+' - 2\\cdot'+f2(num(state.peds[i].reinf.cover))+' - '+f3(pd.dbL)+'}{'+pd.PB.nx+' - 1} - '+f3(pd.dbL)+',\\qquad \\max(1.5\\cdot'+f3(pd.dbL)+',\\,1.5,\\,\\tfrac{4}{3}\\cdot'+f3(sfdDagg())+') = '+f3(pd.clrMin)+'\\;\\mathrm{in}',
@@ -8202,7 +8243,7 @@ manPart("p3","3. Output Reference",[
  ["Flexure / One-way shear / Punching","max DCR over LRFD combos \u2264 1"],
  ["Concrete bearing","Pu/\u03c6Pnb \u2264 1 at each pedestal interface; \u03c6Pnb = the lesser of the footing (\u03c60.85f\u2032cA\u2081\u221a(A\u2082/A\u2081) \u2264 2\u00d7) and the pedestal (\u03c60.85f\u2032cA\u2081) (ACI 318-19 16.3.3.4, Table 22.8.3.2)"],
  ["Dowel steel","provided \u2265 0.005A_g (REVIEW when short)"],
- ["Wall reinforcement (ACI 318-19 11.6)","Wall elements only: the wall\u2019s vertical and horizontal ratios \u03c1<sub>\u2113</sub>, \u03c1<sub>t</sub> \u2265 the larger of the Table 11.6.1 and 11.6.2 minimums (both worked, the governing one marked), for every wall whatever the in-plane V<sub>u</sub> (engineer, 2026-11-06)"],
+ ["Wall reinforcement (ACI 318-19 11.6)","Wall elements only: the wall\u2019s vertical and horizontal ratios \u03c1<sub>\u2113</sub>, \u03c1<sub>t</sub> \u2265 the larger of the Table 11.6.1 and 11.6.2 minimums (both worked, the governing one marked), for every wall whatever the in-plane V<sub>u</sub> (engineer, 2026-11-06). The wall\u2019s horizontal bars default to blank: until they are entered (or \u201csame as ties\u201d is picked) the \u03c1<sub>t</sub> check, the in-plane shear, the horizontal spacing and layers are REVIEW, \u201cInput needed\u201d (SFWH)"],
  ["Dowel development (\u2113dc)","\u2113<sub>dc</sub> \u2264 depth available, where P<sub>u</sub> exceeds the lesser concrete bearing strength in some combination; otherwise N/A, not required (ACI 318-19 16.3.1.2(a))"],
  ["Pedestal design","axial DCR, ties, \u03c1 limits, bar fit, min bars \u2014 all pedestals"],
  ["Footing bar clear spacing","each footing mat: clear spacing s \u2212 d<sub>b</sub> \u2265 max(1 in, d<sub>b</sub>, 4/3 d<sub>agg</sub>) (ACI 318-19 25.2.1; d<sub>agg</sub> on the Materials tab, default 3/4 in)"],
