@@ -118,19 +118,18 @@ export const TOOLS = {
     save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const i = document.getElementById('projNm'); i.value = n; i.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('bSv').click(); }, name); await p.waitForTimeout(400); }
   },
   bgeo: {
-    // Bridge Geometry: its own library panel (Load / Rename / Duplicate / Delete); Duplicate is new (mapStore). The tool seeds five example
-    // bridges into the library on first open, so the dialog checks look at the row of A's project only.
-    file: 'Bridge Geometry.html', list: 'bridgeGeomEngine.library.v1', auto: 'bridgeGeomEngine.project.v1', renameSets: ['name'],
+    // Bridge Geometry: the standard Saved projects dialog since STDS (2026-11-06; was its own library panel). main seeds five example
+    // bridges into the library on first open (the branch no longer does), so the dialog checks look at the row of A's project only.
+    file: 'Bridge Geometry.html', list: 'bridgeGeomEngine.library.v1', auto: 'bridgeGeomEngine.project.v1',
     ready: p => p.waitForFunction(() => typeof ENG !== 'undefined' && ENG && document.getElementById('pane-output')),
     results: p => p.evaluate(() => { const seen = new WeakSet(); const eng = JSON.parse(JSON.stringify(ENG, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v)));
       const t = id => { const k = document.getElementById(id).cloneNode(true); k.querySelectorAll('[data-sp],script,style,.legendbar').forEach(x => x.remove()); return k.textContent.replace(/\s+/g, ' '); };
       return { eng, output: t('pane-output'), seat: t('pane-seat'), bridge: t('pane-bridge') }; }),
     change: p => bump(p, '#spantbl input[data-f="edgeL"]', 2),
     view: p => tabView(p, '.tabbtn', 2, '.active, .on'),
-    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('proj_saveas').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(400); },
-    ui: { open: async p => { await p.evaluate(() => { if (document.getElementById('lib_panel').style.display === 'none') document.getElementById('lib_toggle').click(); renderLibrary(); }); await p.waitForSelector('#lib_list table'); },
-      rows: '#lib_list tbody tr:has([data-lib-load="From%20main"])', btn: (a, n) => `#lib_list [data-lib-${({ open: 'load', rename: 'ren', dup: 'dup', del: 'del' })[a]}="${encodeURIComponent(n)}"]`,
-      first: '#lib_list [data-lib-load="From%20main"]', err: async (p, s) => s.dl[s.dl.length - 1] || '', box: '#lib_panel', delConfirm: true },
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('proj_saveas').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(400); },   // STDS (2026-11-06): the standard Save as (branch), Save As New (main)
+    // STDS: the standard Saved projects dialog (the library panel is gone); main seeded five example bridges, so B2 (on A's storage) lists them too: only A's row is checked
+    dlg: { rows: 'dialog.spLib tbody tr[data-name="From%20main"]', first: 'dialog.spLib [data-spa=open][data-n="From%20main"]' },
     // the heatmap legend (.legendbar: lowest / highest deck elevation) is filled only once the Output tab has been drawn: a view detail, left out
     no390: 'the page has no phone layout: at 390 px it is 1086 px wide on origin/main, and the library panel already scrolls sideways there (395 / 310 px)'
   },
@@ -285,7 +284,7 @@ const FA = path.join(ADIR, T.file), FB = path.join(REPO, T.file);
 // the list UI: the shared dialog (default) or the tool's own list with the shared rename / duplicate (T.ui)
 const UI = Object.assign({ open: async p => { await p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects)…$/.test(b.textContent)).click(); }); await p.waitForSelector('dialog.spLib[open]'); },
   rows: 'dialog.spLib tbody tr', btn: (a, n) => `dialog.spLib [data-spa=${a}][data-n="${encodeURIComponent(n)}"]`, first: 'dialog.spLib [data-spa=open]',
-  err: async (p, s) => p.$eval('dialog.spLib .spErr', e => e.textContent).catch(() => ''), box: 'dialog.spLib', delConfirm: true }, T.ui || {});
+  err: async (p, s) => p.$eval('dialog.spLib .spErr', e => e.textContent).catch(() => ''), box: 'dialog.spLib', delConfirm: true }, T.ui || T.dlg || {});   // T.dlg: the standard dialog, other row selectors
 const drop = o => { if (!T.openIgnore) return o; const c = { ...o }; T.openIgnore.forEach(k => delete c[k]); return c; };   // fields the tool's own Save changes (abutment: the save adds a revision to S.meta, so the input fingerprint differs from the autosave's)
 let fails = 0; const ok = (c, m) => { console.log((c ? '  ok   ' : '  FAIL ') + m); if (!c) fails++; };
 const ctxOf = ([k, a, b]) => { if (typeof a !== 'string' || typeof b !== 'string') return JSON.stringify([k, a, b]).slice(0, 400); let i = 0; while (i < a.length && a[i] === b[i]) i++;
