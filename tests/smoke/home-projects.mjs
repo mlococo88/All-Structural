@@ -19,11 +19,11 @@ const SHOTS = arg('shots', process.env.SHOTS);
 export const FOLDER = { mlg: 'moving-load-generator', bsl: 'bridge-substructure-loading', asce7: 'asce7-load-generator', smd: 'shear-moment-diagrams',
   stonearch: 'stone-arch-rating', gusset: 'gusset-plate-rating', retwall: 'retaining-wall-designer', spreadfooting: 'spread-footing',
   lightpole: 'light-pole-sign-post', baseplate: 'base-plate-anchor', steelbeam: 'steel-beam-aisc', timber: 'timber-beam-check',
-  spc: 'section-property-calculator', rebar: 'aci-rebar-development', cbc: 'concrete-beam-capacity', abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app', gd: 'steel-bridge-design' };
+  spc: 'section-property-calculator', rebar: 'aci-rebar-development', cbc: 'concrete-beam-capacity', asd: 'concrete-beam-asd', abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app', gd: 'steel-bridge-design' };
 // own list panels: every row of the list (project-library's ui.rows may pick one row) and the name cell
-export const OWN_ROWS = { bgeo: '#lib_list tbody tr', sbapp: '#libBody tbody tr' };
+export const OWN_ROWS = { bgeo: '#lib_list tbody tr' };   // sbapp: the standard dialog since STDS-B (2026-11-06)
 // own list panels whose saved time is not in the second cell: the cell index (Steel Bridge app: Name, Project no., Last saved)
-export const OWN_DATE = { sbapp: 2 };
+export const OWN_DATE = {};
 const list = arg('tool', Object.keys(FOLDER).join(',')).split(',');
 let failed = 0; const ok = (c, m) => { console.log((c ? '  ok   ' : '  FAIL ') + m); if (!c) failed++; return c; };
 export const NAMES = ['HSP A', 'HSP <b>bold</b> & "q" ü'];

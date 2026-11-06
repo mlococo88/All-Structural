@@ -32,7 +32,11 @@
      settings(storage) / saveSettings(storage, s) / forgetToken(storage) / configured(s)
      client(settings, fetch) -> { repo(), branch(), tree(dir), list(dir), meta(path), raw(path), put(path, text, sha, message), del(path, sha, message) }
      engine({ tool, label, store, storage, fetch, toFile, fromFile, space, now, device, onNotice }) -> see below
-     attach(ctx) -> the hooks shared/projects-ui.js libraryDialog calls when ctx.cloud = { tool, label, toFile?, fromFile?, space? } */
+     attach(ctx) -> the hooks shared/projects-ui.js libraryDialog calls when ctx.cloud = { tool, label, toFile?, fromFile?, space?, store? }
+       ctx.cloud.store (STDS-B, 2026-11-06; optional): the list the sync works on instead of ctx.store, for a dialog that shows more rows
+       than the sync has names (an id-keyed list with duplicate names: the dialog lists every item, the sync the newest of each name).
+       After a rename / delete in the dialog the GitHub copy of the old name is offered for deletion only when that list no longer has
+       the name (another item still carries it: nothing to delete). With a mapStore the name is always gone, so nothing changes. */
 (function () {
   'use strict';
   const API = 'https://api.github.com';
@@ -538,7 +542,7 @@
   function attach(ctx) {
     css();
     const cfg = ctx.cloud || {};
-    const eng = engine({ tool: cfg.tool, label: cfg.label, toFile: cfg.toFile, fromFile: cfg.fromFile, space: cfg.space, settle: cfg.settle, store: ctx.store, storage: ctx.storage,
+    const eng = engine({ tool: cfg.tool, label: cfg.label, toFile: cfg.toFile, fromFile: cfg.fromFile, space: cfg.space, settle: cfg.settle, store: cfg.store || ctx.store, storage: ctx.storage,
       fetch: (u, i) => window.fetch(u, i), onNotice: n => { if (n.kind === 'conflict' || n.kind === 'error') toast(n.text); } });
     let ui = null, checking = false, msg = '';
     const redraw = () => { if (ui && ui.redraw) ui.redraw(); };
@@ -619,7 +623,7 @@
       if (stt === 'conflict') h += B('usecloud', 'Use GitHub version') + B('keepmine', 'Keep mine');
       return h;
     }
-    const store = () => ctx.store;
+    const store = () => cfg.store || ctx.store;   // cfg.store (STDS-B, 2026-11-06): the list the sync works on, when it differs from the dialog's (a by-name view: newest of each name)
     /* statusCell(name): the GitHub status cell of one project for a tool's own list (GHS2); '' while sync is off */
     function statusCell(name) {
       if (!eng.configured()) return '';
@@ -649,12 +653,12 @@
     /* after a rename / delete in the dialog: the GitHub file of the old name is deleted only when the user says so */
     function renamed(a, b) {
       if (!eng.configured()) return; if (eng.held(a)) { eng.hold(b, true); eng.hold(a, false); } eng.scan(); const cl = eng.cloud();
-      if (cl && cl.has(a) && confirm(`"${a}" is also on GitHub. The new name "${b}" is uploaded. Delete the old name "${a}" from GitHub? (Cancel keeps it there.)`)) run(eng.deleteCloud(a));
+      if (cl && cl.has(a) && !store().has(a) && confirm(`"${a}" is also on GitHub. The new name "${b}" is uploaded. Delete the old name "${a}" from GitHub? (Cancel keeps it there.)`)) run(eng.deleteCloud(a));
       else tick().catch(() => {});
     }
     function deleted(name) {
       if (!eng.configured()) return; eng.scan(); const cl = eng.cloud();
-      if (cl && cl.has(name) && confirm(`Also delete "${name}" from GitHub? This affects every device. (Cancel keeps the GitHub copy; it is listed as "on GitHub only".)`)) run(eng.deleteCloud(name));
+      if (cl && cl.has(name) && !store().has(name) && confirm(`Also delete "${name}" from GitHub? This affects every device. (Cancel keeps the GitHub copy; it is listed as "on GitHub only".)`)) run(eng.deleteCloud(name));
       else redraw();
     }
     const note = () => configured(eng.settings()) ? '<p class="spNote">Saved projects are kept in this browser and copied to GitHub (see the bar above). Export JSON still makes a file you can back up.</p>' : null;
