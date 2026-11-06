@@ -595,6 +595,16 @@ function mergeState(base,inc){
   });
   return base;
 }
+/* SBSF (2026-11-06): until this date a visit to the Validation or Report tab dropped section.builtUp (sectionFor), so a project saved
+   after it has no builtUp and opens as rolled, as before. Notice only (a stored project is not changed): an I-shape with property
+   overrides and no builtUp may have been a built-up girder. In memory only; cleared by the Built-up checkbox or another project. */
+let SB_BU_NOTE=false;
+function sbBuiltUpNote(d){
+  const s=d&&d.section;
+  const r=s&&typeof s==='object'&&s.family?shapeRow(s.family,s.label):null;
+  SB_BU_NOTE=!!(r&&r._kind==='I'&&!('builtUp' in s)&&s.ovr&&typeof s.ovr==='object'&&Object.keys(s.ovr).some(k=>s.ovr[k]!=null&&s.ovr[k]!==''));
+  if(SB_BU_NOTE)toast('Check Section & Material: \u201CBuilt-up (welded) section\u201D may have been lost in this save');
+}
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
 function lsSet(k,v){try{localStorage.setItem(k,v);return true;}catch(e){return false;}}
 function autosave(){lsSet(LS_AUTO,JSON.stringify(S));}
@@ -621,8 +631,8 @@ function sbExportJSON(name){
 function sbImportText(txt){
   try{
     const d=JSON.parse(txt);
-    if(d&&d.v===2){S=mergeState(defaultState(),d);fullRebuild();toast('Project imported');}
-    else if(d&&d.spans&&(d.fu||d.lu))importLegacy(d);
+    if(d&&d.v===2){S=mergeState(defaultState(),d);SB_BU_NOTE=false;fullRebuild();toast('Project imported');sbBuiltUpNote(d);if(SB_BU_NOTE)rebuildInputs();}
+    else if(d&&d.spans&&(d.fu||d.lu)){SB_BU_NOTE=false;importLegacy(d);}
     else{alert('Unrecognized project file.');return;}
     if(SBPL)SBPL.pb.setCurrent(null);   /* an imported file is not the open saved project */
   }catch(err){alert('Invalid JSON: '+err.message);}
@@ -632,7 +642,7 @@ function sbStdSave(){
   let ST=null;try{ST=window.localStorage;}catch(e){}
   const store=SharedProjects.mapStore(ST,LS_PROJ,{unpack:i=>i&&i.d,time:i=>i&&i.t||null,sort:'saved'});
   /* S.ui (the open tab, collapsed sections, manual part) is view only: not "unsaved changes". section.builtUp is compared as true / false:
-     sectionFor() (Validation / Report / User Manual tabs) leaves it undefined in place of false (open item in the STDS fix-log entry) */
+     sectionFor() (Validation / Report tabs) left it undefined in place of false until SBSF (2026-11-06); saves made then have no builtUp */
   const C=o=>{const c=JSON.parse(JSON.stringify(o));if(c&&c.section)c.section.builtUp=!!c.section.builtUp;return SharedProjects.canon(c,['ui']);};
   const im=document.createElement('input');im.type='file';im.accept='.json';im.style.display='none';im.id='sbImFile';
   im.addEventListener('change',e=>{const f=e.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>sbImportText(rd.result);rd.readAsText(f);im.value='';});
@@ -643,8 +653,8 @@ function sbStdSave(){
   const pb=SharedProjectsUI.projectBar({store,storage:ST,label:'Steel Beam Design',id:'sbLibDlg',
     snapshot:()=>C(S), snapOf:n=>{const d=store.get(n);if(!d)return null;try{return C(mergeState(defaultState(),JSON.parse(JSON.stringify(d))));}catch(e){return null;}},
     save:n=>{const p2=getProjects();p2[n]={t:Date.now(),d:JSON.parse(JSON.stringify(S))};setProjects(p2);if(!store.has(n))return{ok:false,message:'Could not save: browser storage is not available or full. Use Export JSON.'};toast('Saved \u201C'+n+'\u201D');return{ok:true};},
-    open:n=>{const d=store.get(n);if(!d)return false;S=mergeState(defaultState(),d);fullRebuild();toast('Loaded \u201C'+n+'\u201D');return true;},
-    newProject:()=>{S=defaultState();fullRebuild();toast('New project');},
+    open:n=>{const d=store.get(n);if(!d)return false;S=mergeState(defaultState(),d);SB_BU_NOTE=false;fullRebuild();toast('Loaded \u201C'+n+'\u201D');sbBuiltUpNote(d);if(SB_BU_NOTE)rebuildInputs();return true;},
+    newProject:()=>{S=defaultState();SB_BU_NOTE=false;fullRebuild();toast('New project');},
     displayName:()=>(S.proj&&S.proj.name||'').trim(),
     exportFile:n=>sbExportJSON(n),
     importFile:()=>im.click(),
@@ -1575,11 +1585,10 @@ function runBenchmarks(){
    ===================================================================== */
 const SQ=Math.sqrt,PI=Math.PI;
 function sectionFor(fam,label,gradeId){
-  const keep={f:S.section.family,l:S.section.label,g:S.section.grade,o:S.section.ovr};
+  const keep=S.section;   /* SBSF (2026-11-06): the user's own section object, every field (builtUp, filter) */
   S.section={family:fam,label:label,grade:gradeId,ovr:{}};
-  const p=resolveSection();
-  S.section={family:keep.f,label:keep.l,grade:keep.g,ovr:keep.o};
-  return p;
+  try{return resolveSection();}
+  finally{S.section=keep;}   /* SBSF: was rebuilt from family / label / grade / ovr only, which dropped builtUp (built-up -> rolled) */
 }
 /* ---------- Table B4.1b classification (flexure) ---------- */
 function classifyFlex(p){
@@ -2470,8 +2479,9 @@ function rebuildInputs(){
   },P,{noNum:true});
   /* ---------- Section & Material ---------- */
   mkSection('inSect','Section &amp; Material',body=>{
-    fRow(body,'Built-up (welded) section',chkInput(()=>S.section.builtUp,v=>{S.section.builtUp=v;rebuildInputs();},'bltUp'),'',
+    fRow(body,'Built-up (welded) section',chkInput(()=>S.section.builtUp,v=>{S.section.builtUp=v;SB_BU_NOTE=false;rebuildInputs();},'bltUp'),'',
       '\u00A7G2.1(a) \u03C6\u1D65 = 1.00 is limited to ROLLED I-shapes \u2014 tick this when overriding properties to model a plate girder');
+    if(SB_BU_NOTE)body.appendChild(el('div','warnBox','This project was saved without the built-up setting (a Validation / Report tab visit dropped it before 2026-11-06), so it opens as <b>rolled</b>. If this section is a built-up (welded) girder, tick the box above.'));
     fRow(body,'Shape family',selInput(FAMS.map(f=>f.id),()=>S.section.family,v=>{
       S.section.family=v;S.section.grade=famMeta(v).defMat;S.section.ovr={};
       const list=shapesOf(v);if(!list.find(r=>r[0]===S.section.label))S.section.label=list[Math.min(8,list.length-1)][0];
@@ -4220,7 +4230,7 @@ function init(){
   lockLayout();
   window.addEventListener('resize',lockLayout);
   const a=lsGet(LS_AUTO);
-  if(a){try{const d=JSON.parse(a);if(d&&d.v===2){S=mergeState(defaultState(),d);toast('Restored last session');}}catch(e){}}
+  if(a){try{const d=JSON.parse(a);if(d&&d.v===2){S=mergeState(defaultState(),d);toast('Restored last session');sbBuiltUpNote(d);}}catch(e){}}
   computeAll();
   buildProjHeader();
   rebuildInputs();
@@ -7141,7 +7151,7 @@ function batchCheckRow(row){
 }
 function runBatch(){
   if(!S.batch||!S.batch.rows||!S.batch.rows.length)return[];
-  const keep={f:S.section.family,l:S.section.label,g:S.section.grade,o:S.section.ovr,b:S.section.builtUp};
+  const keep=S.section;   /* SBSF (2026-11-06): the same object back (the copy dropped filter) */
   const out=S.batch.rows.map(r=>{
     let R;
     try{R=batchCheckRow(r);}catch(e){R={row:r,blockers:['Engine error: '+e.message]};}
@@ -7149,7 +7159,7 @@ function runBatch(){
       ((R.govDCR!=null&&R.govDCR>1.0001)?'FAIL':'PASS');
     return R;
   });
-  S.section={family:keep.f,label:keep.l,grade:keep.g,ovr:keep.o,builtUp:keep.b};
+  S.section=keep;
   return out;
 }
 /* =====================================================================
