@@ -18,6 +18,7 @@
 <script src="shared/projects-ui.js"></script>
 <script src="shared/github-sync.js"></script>   <!-- GHS (2026-11-05): copy of the saved projects to a private GitHub repository; off until set up -->
 <script src="shared/list-input.js"></script>
+<script src="shared/dxf.js"></script>   <!-- BPDW (2026-11-06): the Drawings tab (DXF sheets, preview and print), shared DXF R12 writer -->
 <style>
   :root{
     /* ---- primitive tokens (ui-ux-pro-max palette: navy professional) ---- */
@@ -304,6 +305,11 @@
   .manKey{border-left:4px solid var(--accent);background:#eef4fb;padding:8px 12px;margin:11px 0;font-size:10pt;}
   /* GFX-D: detail sheet — one letter page (7.3 in of printable width) */
   .bpSheet{max-width:7.3in;margin:6px auto;font-size:9pt;}
+  /* BPDW (2026-11-06): the Drawings tab */
+  .bpdwBar{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:8px 0 4px;font-family:var(--font-ui);}
+  .bpdwHead{margin:6px 0 4px;font-family:var(--font-ui);}
+  .bpdwBox{border:1px solid var(--color-border);border-radius:4px;overflow:hidden;}
+  .bpdwScroll{overflow-x:auto;max-width:100%;} .bpdwIdx tr[data-bpdw]{cursor:pointer;} .bpdwIdx tr.on td{background:#eef4fb;font-weight:600;}
   .bpSheetHd{font-size:9.5pt;border-bottom:1.5px solid var(--ink);padding:2px 0 4px;margin-bottom:4px;}
   .bpSheetGrid{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
   .bpSheetCell{min-width:0;}
@@ -6447,6 +6453,7 @@ function TABS(){
   if(S.tRebar.present) t.push(["tabTRebar","Tension Rebar"]);
   if(S.vRebar.present) t.push(["tabVRebar","Shear Rebar"]);
   t.push(["tabDetail","Detail Sheet"]);   /* GFX-D */
+  t.push(["tabDrawings","Drawings"]);   /* BPDW (2026-11-06): DXF sheets, preview and print (never in the Report) */
   t.push(["tabReport","Report"]);   /* RPT-2: the calculation sheet on screen (same builder as Print / PDF) */
   t.push(["tabVisual","3-D & Visuals"]);
   t.push(["tabValidation","Validation"]);
@@ -6518,6 +6525,7 @@ function buildOutput(){
     case "tabTRebar":  buildTRebarTab(pg); break;
     case "tabVRebar":  buildVRebarTab(pg); break;
     case "tabDetail":  buildDetailTab(pg); break;   /* GFX-D */
+    case "tabDrawings": buildDrawingsTab(pg); break;   /* BPDW */
     case "tabReport":  bprReportTab(pg); break;   /* RPT-4: the shared viewer (was RPT-2/3 buildReportTab) */
     case "tabVisual":  buildVisualTab(pg); break;
     case "tabValidation": buildValidationTab(pg); break;
@@ -6647,7 +6655,7 @@ function bprModel(){
 }
 /* RPT-4: the Report tab (replaces RPT-3's buildReportTab; same tool bar controls, same document) */
 function bprControls(){
-  const chips=TABS().filter(([id])=>!(id==="tabVisual"||id==="tabReport"||id==="tabDetail")).map(([id,label])=>{
+  const chips=TABS().filter(([id])=>!(id==="tabVisual"||id==="tabReport"||id==="tabDetail"||id==="tabDrawings")).map(([id,label])=>{
     const optIn=(id==="tabValidation"||id==="tabManual"), on=optIn? S.print.sections[id]===true : S.print.sections[id]!==false;
     return '<label class="rp-chip"><input type="checkbox" data-bprsec="'+id+'"'+(on?' checked':'')+'>'+sbdEscB(label+(optIn?" (appendix)":""))+'</label>'; }).join("");
   return '<div class="rp-chips" role="group" aria-label="Report chapters">'+chips+'</div>'
@@ -10033,6 +10041,436 @@ function bpPrintSheet(){
   setTimeout(()=>window.print(),120);
 }
 
+/* =====================================================================
+   BPHW (2026-11-06, display only): anchor rod hardware for the drawings, to scale from the rod diameter d and the model's
+   head type. Dimension sources (drawing only, no check uses them):
+     - heavy hex nuts: ASME B18.2.2 heavy hex nut proportions, width across flats F = 1.5 d + 1/8 in, thickness H = d - 1/64 in
+       (d <= 1 1/8 in), d - 1/32 in (1 1/4 to 2 in), d - 3/64 in (over 2 in); across corners C = F / cos 30°;
+     - heads of headed bolts (ASME B18.2.1 proportions): hex and square heads F = 1.5 d, heavy hex / heavy square F = 1.5 d + 1/8 in,
+       head height about 5/8 d (heavy hex) or 2/3 d (hex, square);
+     - headed studs (AWS D1.1 Type B typical head diameter and thickness);
+     - plate washers on top of the base plate when the hole is the AISC DG1 oversized hole (plate holeDia 0 or at least the DG1
+       hole): the minimum washer size and thickness of AISC DG1 Table 2.3 (AISC Manual Table 14-2); otherwise a round hardened
+       washer, OD about 2 d, thickness 5/32 in (ASTM F436 nominal);
+     - the embedded plate washer (head "platewasher"): the model's washer_od (square) with the DG1 Table 2.3 thickness, and a heavy hex
+       nut under it;
+     - thread pitch 1/n (UNC, LIB.anchorDias n); minor diameter about d - 1.299 / n (drawn as the simplified thread lines).
+   ===================================================================== */
+const BPHW_WASH=[[0.75,2,0.25],[0.875,2.5,0.3125],[1,3,0.375],[1.25,3,0.5],[1.5,3.5,0.5],[1.75,4,0.625],[2,5,0.75],[2.5,5.5,0.875]];
+const BPHW_STUD=[[0.5,1,0.3125],[0.625,1.25,0.3125],[0.75,1.25,0.375],[0.875,1.375,0.375],[1,1.625,0.5]];
+function bpHw(){
+  const A=S.anchor, P=S.plate, d=+A.dia||1, sp=anchorSpec(d), n=sp.n||8, pitch=1/n;
+  const nutF=1.5*d+0.125, nutH=d-(d<=1.125+1e-9? 1/64 : d<=2+1e-9? 1/32 : 3/64);
+  const near=(T)=>{ let best=T[0]; T.forEach(r=>{ if(Math.abs(r[0]-d)<Math.abs(best[0]-d)) best=r; }); return best; };
+  const wr=near(BPHW_WASH), dgHole=anchorHoleDG1(d).dh, dh=(P.holeDia>0)? P.holeDia : dgHole;
+  const plateW=dh>=dgHole-1e-6;
+  const top=plateW? {kind:"plate",W:Math.max(wr[1],nutF*1.155+0.125),t:wr[2],src:"AISC DG1 Table 2.3 (Manual Table 14-2) minimum plate washer"}
+                  : {kind:"round",W:2*d,t:0.15625,src:"round hardened washer (ASTM F436 nominal)"};
+  let head;
+  switch(A.head){
+    case "heavyhex": head={kind:"hex",F:1.5*d,H:2/3*d,lab:"HEX HEAD"}; break;
+    case "hvyhexhead": head={kind:"hex",F:1.5*d+0.125,H:0.625*d,lab:"HEAVY HEX HEAD"}; break;
+    case "sqhead": head={kind:"sq",F:1.5*d,H:2/3*d,lab:"SQUARE HEAD"}; break;
+    case "hvysqhead": head={kind:"sq",F:1.5*d+0.125,H:2/3*d,lab:"HEAVY SQUARE HEAD"}; break;
+    case "stud": { const r=near(BPHW_STUD); head={kind:"stud",F:Math.max(r[1],1.6*d),H:r[2],lab:"HEADED STUD (AWS D1.1 TYPE B)"}; break; }
+    case "platewasher": head={kind:"washer",F:Math.max(+A.washer_od||0,d),H:wr[2],lab:"PLATE WASHER "+bpdwIn(Math.max(+A.washer_od||0,d))+" SQ. x "+bpdwIn(wr[2])+" + HEAVY HEX NUT"}; break;
+    case "plainrod": head={kind:"none",F:d,H:0,lab:"PLAIN THREADED ROD (NO HEAD)"}; break;
+    default: head={kind:"hex",F:1.5*d,H:2/3*d,lab:"HEX HEAD"};
+  }
+  return {d,n,pitch,dMinor:d-1.299/n,nutF,nutH,nutC:nutF/Math.cos(Math.PI/6),dh,dgHole,top,head};
+}
+/* the stack of one anchor in elevation, z up from the pedestal bottom (z = C.H at the top of concrete). Display only. */
+function bpHwStack(){
+  const C=S.conc, P=S.plate, A=S.anchor, G=S.grout, hw=bpHw(), so=standoffParams();
+  const openGap=(so.hasStandoff && !so.groutFilled)? standoffClearGap() : 0, tg=G.present? G.tg : 0;
+  const zc=C.H, zPb=zc+tg+openGap, zPt=zPb+P.t;
+  const zWt=zPt+hw.top.t, zNt=zWt+hw.nutH, proj=Math.max(3*hw.pitch,0.25), zTop=zNt+proj;
+  const lev=so.hasStandoff;   /* a leveling nut under the plate with any stand-off (open, clamped or grouted) */
+  const zLn=lev? zPb-hw.nutH : null;
+  const zB=zc-A.hef;          /* bearing face of the head / washer (h_ef from the concrete surface) */
+  let zEnd=zB, hBot=null, nutBot=null;
+  if(hw.head.kind==="washer"){ nutBot=[zB-hw.head.H-hw.nutH, zB-hw.head.H]; zEnd=nutBot[0]-2*hw.pitch; }
+  else if(hw.head.kind!=="none") hBot=[zB-hw.head.H,zB];
+  const thrTop=[zTop, Math.max((lev? zLn : zPb)-hw.d, zEnd)];
+  const thrBot=(hw.head.kind==="washer")? [zEnd, zB+2*hw.d] : null;
+  const length=zTop-(hw.head.kind==="washer"? zEnd : zB);   /* rod length: under the head (headed bolt / stud), or the whole rod */
+  return {hw,zc,tg,openGap,zPb,zPt,zWt,zNt,zTop,proj,lev,zLn,zB,zEnd,hBot,nutBot,thrTop,thrBot,length,so};
+}
+/* inches as drawn: an exact 1/16 as a fraction (3 1/2"), otherwise two decimals (4.24") */
+function bpdwIn(v){ const r=Math.round(v*16)/16; return (Math.abs(v-r)<1e-3? SharedDxf.frac(r,16) : fmt(v,2))+'"'; }
+
+/* =====================================================================
+   DRAWINGS tab (BPDW, 2026-11-06, engineer: "the same DXF output and sheet preview like other recent apps"): drawing sheets,
+   11 x 17 (B-size) at a standard plot scale, as Spread Footing (SFDW), Light Pole (LPDW), Section Property (SPDW), Bridge Geometry
+   (BGDW) and Concrete Beam Capacity (CBDW): one DXF R12 file (shared/dxf.js SharedDxf.drawing -> toDXF), each sheet a 17 x 11 in
+   sheet at its plot scale inside its border (SharedDxf.sheetBorder, 0.25 in inside the paper edge) and title block, side by side in
+   model space, full size in inches; previewed from the same entities (SharedDxf.sheetSVG, SharedDxf.viewer) and printed one
+   11 x 17 landscape page per sheet at its plot scale (SharedDxf.printSheets).
+     1. BASE PLATE PLAN: pedestal / pier, plate, column, anchors (rod, nut, washer, hole), bolt circle, reinforcement in plan,
+        dimensions (plate, anchor spacing and plate edge distances; anchors to the concrete edges c_a; pedestal), section cuts A-A
+        and B-B, x-y axes, anchor coordinate table.
+     2. SECTIONS A-A (along x, looking +y) and B-B (along y, looking -x), every anchor and bar projected: plate, grout / stand-off,
+        nuts and washers, h_ef, head, pedestal and reinforcement, dimensions.
+     3. ANCHOR DETAIL AND SCHEDULES: one anchor at a larger scale; anchor, plate and reinforcement schedules.
+     4. GENERAL NOTES: code basis, materials, concrete condition, installation, design loads and the check summary.
+   Display and export only: geometry from the model (anchorGeom, colShape, pedGeom, bpCageGeom, the rebar intercepts, as the Export
+   DXF), values from S and the computed results CC; nothing is computed for design. Hardware sizes: bpHw (above).
+   Anchor groups (BC-3): the sheets show the active group (the group picker); its name is in the title block.
+   The Export DXF button (Project tab, DX-1 plan and section) is unchanged.
+   Saved: the chosen sheet, per browser, key bpad_dwgSheet_v1 (not in the project, the autosave or the export).
+   ===================================================================== */
+const BPDW_SC=[[1,'FULL SIZE'],[2,'6" = 1\'-0"'],[3,'4" = 1\'-0"'],[4,'3" = 1\'-0"'],[6,'2" = 1\'-0"'],[8,'1 1/2" = 1\'-0"'],[12,'1" = 1\'-0"'],[16,'3/4" = 1\'-0"'],[24,'1/2" = 1\'-0"'],[32,'3/8" = 1\'-0"'],[48,'1/4" = 1\'-0"'],[96,'1/8" = 1\'-0"']];
+const BPDW={W:17,H:11,m:0.375,tbH:1.0,key:'bpad_dwgSheet_v1',cur:null,B:null};
+const bpdwScName=k=>(BPDW_SC.find(q=>q[0]===k)||[0,'1:'+k])[1];
+function bpdwBuild(){
+  if(!window.SharedDxf) throw new Error('shared/dxf.js is not loaded');
+  if(!CC || (VALIDATION&&VALIDATION.blockers&&VALIDATION.blockers.length)) throw new Error('no results (input error)');
+  const D=SharedDxf.drawing({prefix:'BP-',fmt:bpdwIn}), SH=[], p=S.proj||{};
+  const AS=s=>String(s==null?'':s).replace(/≥/g,'>=').replace(/≤/g,'<=').replace(/φ/g,'PHI ').replace(/²/g,'^2').replace(/′/g,"'").replace(/″/g,'"').replace(/[–—−]/g,'-').replace(/·/g,'x').replace(/ψ/g,'PSI').replace(/ₐ/g,'a').replace(/₀/g,'0').replace(/θ/g,'THETA').replace(/§/g,'');
+  const T0=D.text, D0=D.dim; D.text=(l,x,y,hh,s,j,rot)=>T0(l,x,y,hh,AS(s),j,rot); D.dim=(l,p1,p2,b,ang,txt)=>D0(l,p1,p2,b,ang,txt==null?txt:AS(txt));
+  const L={conc:D.layer('CONCRETE',7),grout:D.layer('GROUT',8),plate:D.layer('PLATE',4),col:D.layer('COLUMN',5),anc:D.layer('ANCHOR',1),
+    hw:D.layer('NUT-WASHER',1),thr:D.layer('THREAD',8),hole:D.layer('HOLE',8,'HIDDEN'),bar:D.layer('REBAR',3),rt:D.layer('REBAR-T',2),rv:D.layer('REBAR-V',30),
+    cl:D.layer('CENTER',1,'CENTER'),sec:D.layer('SECTION',6),dim:D.layer('DIMS',3),txt:D.layer('TEXT',7),ldr:D.layer('LEADER',3),tbl:D.layer('TABLE',7),tb:D.layer('TBLK',7),br:D.layer('BRDR',7)};
+  const AW=BPDW.W-2*BPDW.m-0.5, AH=BPDW.H-2*BPDW.m-BPDW.tbH-0.6;
+  const grp=(typeof bpGroupsOn==='function'&&bpGroupsOn())? ((S.groupActive||0)+1)+' OF '+S.groups.length+': '+(bpGroupLabel()||'') : '';
+  let ox=0;
+  function sheet(id,title,content,ks,src){
+    const i0=D.mark(); let k=null, over=false, ret=null;
+    for(const kk of ks){ D.E.length=i0; D.k=kk; D.h=0.09*kk; ret=content(kk)||null; const b=D.bbox(i0);
+      if(!isFinite(b[0])||((b[2]-b[0])/kk<=AW&&(b[3]-b[1])/kk<=AH)){ k=kk; break; } }
+    if(k===null){ k=ks[ks.length-1]; over=true; }
+    const P=k, b=D.bbox(i0), W=BPDW.W*P, H=BPDW.H*P, m=BPDW.m*P, tb=BPDW.tbH*P;
+    const cx=ox+W/2, cy=m+tb+0.3*P+(AH*P)/2;
+    if(isFinite(b[0])) D.move(i0,cx-(b[0]+b[2])/2,cy-(b[1]+b[3])/2);
+    D.k=P; D.h=0.1*P;
+    SharedDxf.sheetBorder(D,L.br,ox,W,H,P); D.rect(L.br,ox+m,m,ox+W-m,H-m);
+    const x0=ox+m, y0=m, w=(BPDW.W-2*BPDW.m)*P, r=tb/2, sc=(ret&&ret.scale)||bpdwScName(k);
+    D.rect(L.tb,x0,y0,x0+w,y0+tb); D.line(L.tb,x0,y0+r,x0+w,y0+r);
+    const row1=[['PROJECT',p.name,4.25],['PROJECT NO.',p.num,2],['CALCULATED BY',p.by,2],['DATE',p.date,1.75],['CHECKED BY',p.chk,2],['CHECKED DATE',p.chkDate,1.75],['SCALE',sc,2.5]];
+    const row2=[['SHEET TITLE',title,6.25],['ANCHOR GROUP',grp,3],['DRAWN BY','BASE PLATE & ANCHOR DESIGNER',4],['SHEET','?',3]];
+    let sheetEnt=null;
+    [[row1,y0+r],[row2,y0]].forEach(([row,yb])=>{ let x=x0; row.forEach(([lab,val,cw],ci)=>{
+      D.text(L.tb,x+0.05*P,yb+r-0.11*P,0.065*P,lab,0);
+      const mx=Math.floor((cw-0.12)/(0.13*0.9)); D.text(L.tb,x+0.05*P,yb+0.1*P,0.13*P,String(val==null||val===''?'—':val).toUpperCase().slice(0,mx),0);
+      if(lab==='SHEET') sheetEnt=D.E[D.E.length-1];
+      x+=cw*P; if(ci<row.length-1) D.line(L.tb,x,yb,x,yb+r); }); });
+    const sh={id,title,k,i0,i1:D.mark(),ox,W,H,over,sheetEnt,src,scale:sc,known:ret&&ret.known}; SH.push(sh); ox+=W+1*P; return sh;
+  }
+  function table(x0,y0,head,rows,hh,right){
+    const rh=hh*2, cw=head.map((hd,c)=>Math.max(String(hd).length,...rows.map(r=>String(r[c]==null?'':r[c]).length))*hh*0.82+1.9*hh);
+    const tot=cw.reduce((a,b)=>a+b,0); let y=y0;
+    const line=yy=>D.line(L.tbl,x0,yy,x0+tot,yy);
+    line(y); [head,...rows].forEach((r,ri)=>{ let x=x0; r.forEach((v,c)=>{ const rt=right&&right.includes(c)&&ri>0; D.text(L.tbl,rt?x+cw[c]-0.8*hh:x+0.8*hh,y-rh+0.6*hh,hh,String(v==null?'':v),rt?2:0); x+=cw[c]; });
+      y-=rh; line(y); if(ri===0) line(y+0.12*hh); });
+    let x=x0; [0,...cw].forEach(w=>{ x+=w; D.line(L.tbl,x,y0,x,y); });
+    return {w:tot,h:y0-y};
+  }
+  const C=S.conc, Pl=S.plate, A=S.anchor, g=anchorGeom(), px=C.plate_off_x||0, py=C.plate_off_y||0;
+  const circPier=bpCircPier(), circPlate=bpCircPlate(), circPat=bpCircPattern();
+  const hx=circPier? C.D/2 : C.Bx/2, hy=circPier? C.D/2 : C.By/2;
+  const hw=bpHw(), st=bpHwStack(), k0=colShape(), pg=pedGeom();
+  const isPedT=(S.tRebar.pieceType==="pedbars");
+  const ic=S.tRebar.present? tensionRebarIntercept(CC) : null;
+  const icV=S.vRebar.present? shearRebarIntercept(CC) : null;
+  const uniq=v=>[...new Set(v.map(q=>+q.toFixed(4)))].sort((a,b)=>a-b);
+  const AX=g.pts.map(p=>p.x+px), AY=g.pts.map(p=>p.y+py);
+  const hexPts=(cx,cy,F)=>{ const R=F/Math.sqrt(3), o=[]; for(let i=0;i<6;i++){ const a=i*Math.PI/3; o.push([cx+R*Math.cos(a),cy+R*Math.sin(a)]); } return o; };
+  /* one anchor in plan: hole (hidden, under the washer), washer, heavy hex nut, rod */
+  function anchorPlan(cx,cy){
+    D.circle(L.hole,cx,cy,hw.dh/2);
+    if(hw.top.kind==="plate") D.rect(L.hw,cx-hw.top.W/2,cy-hw.top.W/2,cx+hw.top.W/2,cy+hw.top.W/2); else D.circle(L.hw,cx,cy,hw.top.W/2);
+    D.pline(L.hw,hexPts(cx,cy,hw.nutF),true);
+    D.circle(L.anc,cx,cy,hw.d/2);
+  }
+  /* a heavy hex nut / hex head in elevation, viewed across the corners (outline C wide, the face edges at ±C/4) */
+  function hexElev(l,h,z0,z1,F){ const Cc=F/Math.cos(Math.PI/6); D.rect(l,h-Cc/2,z0,h+Cc/2,z1); D.line(l,h-Cc/4,z0,h-Cc/4,z1); D.line(l,h+Cc/4,z0,h+Cc/4,z1); }
+  /* one anchor in elevation at horizontal position h (z up from the pedestal bottom); hatch: thread lines at the true pitch */
+  function anchorElev(h,X,hatch){
+    const r=hw.d/2, rm=hw.dMinor/2, xh=X(h);
+    D.line(L.anc,xh-r,st.zTop,xh-r,st.zEnd); D.line(L.anc,xh+r,st.zTop,xh+r,st.zEnd); D.line(L.anc,xh-r,st.zTop,xh+r,st.zTop);
+    if(st.zEnd<st.zB-1e-9 || hw.head.kind==="none") D.line(L.anc,xh-r,st.zEnd,xh+r,st.zEnd);
+    const thr=(z0,z1)=>{ if(!(z0>z1)) return; D.line(L.thr,xh-rm,z0,xh-rm,z1); D.line(L.thr,xh+rm,z0,xh+rm,z1);
+      if(hatch) for(let z=z0-hw.pitch;z>z1+1e-9;z-=hw.pitch) D.line(L.thr,xh-r,z,xh+r,z-hw.pitch/2); };
+    thr(st.thrTop[0],st.thrTop[1]); if(st.thrBot) thr(st.thrBot[1],st.thrBot[0]);
+    /* top: washer and nut; leveling nut under the plate */
+    D.rect(L.hw,xh-hw.top.W/2,st.zPt,xh+hw.top.W/2,st.zWt); hexElev(L.hw,xh,st.zWt,st.zNt,hw.nutF);
+    if(st.lev) hexElev(L.hw,xh,st.zLn,st.zPb,hw.nutF);
+    /* embedded end */
+    const H=hw.head;
+    if(H.kind==="hex") hexElev(L.hw,xh,st.hBot[0],st.hBot[1],H.F);
+    else if(H.kind==="sq"||H.kind==="stud") D.rect(L.hw,xh-H.F/2,st.hBot[0],xh+H.F/2,st.hBot[1]);
+    else if(H.kind==="washer"){ D.rect(L.hw,xh-H.F/2,st.zB-H.H,xh+H.F/2,st.zB); hexElev(L.hw,xh,st.nutBot[0],st.nutBot[1],hw.nutF); }
+  }
+  /* section arrows and letters for the plan */
+  const arrowTri=(l,x,y,dx,dy,s)=>{ const nx=-dy, ny=dx; D.pline(l,[[x+dx*s,y+dy*s],[x+nx*s*0.45,y+ny*s*0.45],[x-nx*s*0.45,y-ny*s*0.45]],true); };
+  /* a vertical dimension; when it is too short for its text, the text is written level beside it (left of the dimension line) */
+  const dimVs=(y1,y2,x,xref,lab,P)=>{ if(Math.abs(y2-y1)/P>=0.7){ D.dimV(L.dim,y1,y2,x,xref,lab+' = <>'); return; }
+    D.dimV(L.dim,y1,y2,x,xref,' '); D.text(L.dim,x-0.12*P,(y1+y2)/2-0.035*P,0.08*P,lab+' = '+bpdwIn(Math.abs(y2-y1)),2); };
+  /* a zigzag break line across x0..x1 at z (horizontal) */
+  const brkH=(l,x0,x1,z,P)=>{ const m=(x0+x1)/2, a=0.06*P; D.pline(l,[[x0,z],[m-a,z],[m-a/2,z+2*a],[m+a/2,z-2*a],[m+a,z],[x1,z]],false); };
+
+  /* ---------------- 1. BASE PLATE PLAN ---------------- */
+  sheet('plan','BASE PLATE PLAN',P=>{
+    const h=0.09*P, i0=D.mark();
+    if(circPier) D.circle(L.conc,0,0,C.D/2); else D.rect(L.conc,-hx,-hy,hx,hy);
+    if(circPlate) D.circle(L.plate,px,py,Pl.D/2); else D.rect(L.plate,px-Pl.B/2,py-Pl.N/2,px+Pl.B/2,py+Pl.N/2);
+    { const ex=px+(Pl.exc_x||0), ey=py+(Pl.exc_y||0);
+      if(k0.kind==="round") D.circle(L.col,ex,ey,k0.b/2);
+      else if(k0.kind==="W"){ const b=k0.b/2,d=k0.d/2,tf=k0.tf,tw=k0.tw/2;
+        D.pline(L.col,[[-b,d],[b,d],[b,d-tf],[tw,d-tf],[tw,-d+tf],[b,-d+tf],[b,-d],[-b,-d],[-b,-d+tf],[-tw,-d+tf],[-tw,d-tf],[-b,d-tf]].map(q=>[ex+q[0],ey+q[1]]),true); }
+      else D.rect(L.col,ex-k0.b/2,ey-k0.d/2,ex+k0.b/2,ey+k0.d/2); }
+    const e=0.25*P; D.line(L.cl,-hx-e,0,hx+e,0,D.ltype('CENTER')); D.line(L.cl,0,-hy-e,0,hy+e,D.ltype('CENTER'));
+    if(Math.abs(px)>1e-6||Math.abs(py)>1e-6){ const ep=0.15*P, wp=(circPlate?Pl.D:Pl.B)/2, np=(circPlate?Pl.D:Pl.N)/2;
+      D.line(L.cl,px-wp-ep,py,px+wp+ep,py,D.ltype('CENTER')); D.line(L.cl,px,py-np-ep,px,py+np+ep,D.ltype('CENTER')); }
+    if(circPat){ const R=(+A.BC||0)/2, q=[]; for(let i=0;i<96;i++){ const a=2*Math.PI*i/96; q.push([px+R*Math.cos(a),py+R*Math.sin(a)]); } D.pline(L.cl,q,true,D.ltype('CENTER')); }   /* bolt circle, centre line
+    /* reinforcement (pedestal frame), as the Export DXF */
+    if(pg.present){ pg.bars.forEach(b=>D.circle(L.bar,b.x,b.y,pg.rbB.db/2)); D.rect(L.bar,-pg.tieHx,-pg.tieHy,pg.tieHx,pg.tieHy); }
+    if(bpCageOn()){ const G=bpCageGeom(); G.bars.forEach(b=>D.circle(L.bar,b.x,b.y,G.rbL.db/2)); D.circle(L.bar,0,0,G.Rt); }
+    if(ic&&ic.bars) ic.bars.forEach(b=>{ if(!b.fits && b.r===null) return; D.circle(L.rt,b.x+(isPedT?0:px),b.y+(isPedT?0:py),(ic.dev&&ic.dev.db||0.625)/2); });
+    if(icV){ const nx=icV.nx, ny=icV.ny, tx=(nx!==0)?0:1, ty=(nx!==0)?1:0, P2=(u,t)=>[nx*u+tx*t, ny*u+ty*t];
+      if(icV.isTie){ if(!pg.present){ const uF=icV.halfSpanN-icV.cover-icV.dev.db/2; D.pline(L.rv,[P2(-uF,-icV.tLeg),P2(uF,-icV.tLeg),P2(uF,icV.tLeg),P2(-uF,icV.tLeg)],true); } }
+      else (icV.legs||[]).forEach(Lg=>{ const a=P2((icV.legStart!==undefined? icV.legStart : icV.lead),Lg.t), b=P2((icV.legEnd!==undefined? icV.legEnd : icV.lead-icV.availBehind),Lg.t);
+        D.line(L.rv,a[0]+px,a[1]+py,b[0]+px,b[1]+py); }); }
+    /* anchors and their numbers */
+    g.pts.forEach((q,i)=>{ const cx=q.x+px, cy=q.y+py; anchorPlan(cx,cy);
+      D.text(L.txt,cx+hw.top.W/2+0.03*P,cy+hw.top.W/2+0.02*P,0.075*P,String(i+1),0); });
+    /* section cuts A-A (y = plate centre, looking +y) and B-B (x = plate centre, looking -x), through the whole plan */
+    { const a=0.12*P, ext=(0.42+0.36)*P+0.3*P, xa0=-hx-ext, xa1=hx+ext, yb0=-hy-ext, yb1=hy+ext;
+      D.line(L.sec,xa0,py,xa0+0.3*P,py); D.line(L.sec,xa1-0.3*P,py,xa1,py);
+      [xa0,xa1].forEach(x=>{ arrowTri(L.sec,x,py+a*0.5,0,1,a); D.text(L.sec,x,py+a*2,0.12*P,'A',1); });
+      D.line(L.sec,px,yb0,px,yb0+0.3*P); D.line(L.sec,px,yb1-0.3*P,px,yb1);
+      [yb0,yb1].forEach(y=>{ arrowTri(L.sec,px-a*0.5,y,-1,0,a); D.text(L.sec,px-a*2.4,y-0.05*P,0.12*P,'B',1); }); }
+    /* dimensions */
+    const lane=k=>(0.42+0.36*k)*P;
+    if(circPier){ D.dimH(L.dim,-hx,hx,hy+lane(1),0,'<> DIA. PIER'); }
+    else { D.dimH(L.dim,-hx,hx,hy+lane(1),hy,'<> PEDESTAL'); D.dimV(L.dim,-hy,hy,hx+lane(1),hx,'<> PEDESTAL'); }
+    /* anchors to the concrete edges (c_a), top and right; the extreme anchors only for a bolt circle */
+    { const xs=circPat? [Math.min(...AX),Math.max(...AX)] : uniq(AX), ys=circPat? [Math.min(...AY),Math.max(...AY)] : uniq(AY);
+      if(!circPier){ const x0=xs[0], x1=xs[xs.length-1], y0=ys[0], y1=ys[ys.length-1];
+        D.dimH(L.dim,-hx,x0,hy+lane(0),hy,'C_A = <>'); if(xs.length>1) D.chainH(L.dim,xs,hy+lane(0),hy); D.dimH(L.dim,x1,hx,hy+lane(0),hy,'C_A = <>');
+        D.dimV(L.dim,-hy,y0,hx+lane(0),hx,'C_A = <>'); if(ys.length>1) D.chainV(L.dim,ys,hx+lane(0),hx); D.dimV(L.dim,y1,hy,hx+lane(0),hx,'C_A = <>'); }
+      /* plate: edge distances and anchor spacing (bottom and left), then the plate overall */
+      if(!circPlate&&!circPat){ D.chainH(L.dim,[px-Pl.B/2,...xs,px+Pl.B/2],-hy-lane(0),py-Pl.N/2); D.chainV(L.dim,[py-Pl.N/2,...ys,py+Pl.N/2],-hx-lane(0),px-Pl.B/2); }
+      if(circPlate) D.dimH(L.dim,px-Pl.D/2,px+Pl.D/2,-hy-lane(1),py,'<> DIA. PLATE');
+      else { D.dimH(L.dim,px-Pl.B/2,px+Pl.B/2,-hy-lane(1),py-Pl.N/2,'B = <>'); D.dimV(L.dim,py-Pl.N/2,py+Pl.N/2,-hx-lane(1),px-Pl.B/2,'N = <>'); } }
+    /* bolt circle: leader and text */
+    if(circPat){ const R=(+A.BC||0)/2, a=Math.PI*0.75, x1=px+R*Math.cos(a), y1=py+R*Math.sin(a), x2=-hx-0.15*P, y2=hy+0.15*P;
+      D.line(L.ldr,x1,y1,x2,y2); D.line(L.ldr,x2,y2,x2-0.9*P,y2);
+      D.text(L.txt,x2-0.9*P,y2+0.04*P,h,bpCircN()+' ANCHORS EQ. SP. ON '+bpdwIn(+A.BC||0)+' DIA. BOLT CIRCLE',0);
+      D.text(L.txt,x2-0.9*P,y2-0.13*P,0.075*P,'ANCHOR 1 AT '+fmt(A.theta0,1)+'° CCW FROM +X',0); }
+    /* circular pier: the radial c_a,min of the critical anchor */
+    if(circPier&&g.circ){ const kk=g.circ.caRad.indexOf(g.circ.caRadMin), q=g.pts[kk], qx=q.x+px, qy=q.y+py, r0=Math.hypot(qx,qy)||1, R=C.D/2;
+      const ex=qx/r0*R, ey=qy/r0*R; D.line(L.ldr,qx,qy,ex,ey); D.line(L.ldr,ex,ey,ex+(ex>=0?1:-1)*0.5*P,ey+(ey>=0?1:-1)*0.4*P);
+      D.text(L.txt,ex+(ex>=0?1:-1)*0.52*P,ey+(ey>=0?1:-1)*0.4*P,h,'C_A,MIN = '+bpdwIn(g.circ.caRadMin)+' (RADIAL, ANCHOR '+(kk+1)+')',ex>=0?0:2); }
+    /* column label with a leader */
+    { const ex=px+(Pl.exc_x||0), ey=py+(Pl.exc_y||0), lx=hx+lane(2)+0.2*P, ly=-hy-0.35*P, qx=ex+(k0.kind==='W'?k0.tw/2:k0.b/2*0.7), qy=ey-(k0.kind==='W'?k0.d/4:k0.d/2*0.7);
+      D.line(L.ldr,qx,qy,lx,ly); D.text(L.txt,lx+0.05*P,ly-0.04*P,h,String(k0.label||'').toUpperCase()+' COLUMN',0);
+      D.text(L.txt,lx+0.05*P,ly-0.2*P,0.075*P,'WELD TO PLATE: NOT DESIGNED IN THIS TOOL (BY EOR)',0); }
+    /* x-y axes */
+    { const x0=-hx-lane(2)-0.4*P, y0=-hy-lane(2), a=0.5*P, s=0.07*P;
+      D.line(L.txt,x0,y0,x0+a,y0); arrowTri(L.txt,x0+a,y0,1,0,s); D.text(L.txt,x0+a+0.08*P,y0-0.04*P,h,'+X',0);
+      D.line(L.txt,x0,y0,x0,y0+a); arrowTri(L.txt,x0,y0+a,0,1,s); D.text(L.txt,x0,y0+a+0.1*P,h,'+Y',1); }
+    if(C.ca_override) D.text(L.txt,-hx,-hy-lane(2)-0.25*P,0.08*P,'NOTE: C_A OVERRIDES ACTIVE IN THE CALCULATION (+X '+bpdwIn(g.ca_x_pos)+', -X '+bpdwIn(g.ca_x_neg)+', +Y '+bpdwIn(g.ca_y_pos)+', -Y '+bpdwIn(g.ca_y_neg)+'); DIMENSIONS ARE THE DRAWN GEOMETRY',0);
+    const sb=D.bbox(i0);
+    D.text(L.txt,(sb[0]+sb[2])/2,sb[1]-0.3*P,0.16*P,'BASE PLATE PLAN',1);
+    D.text(L.txt,(sb[0]+sb[2])/2,sb[1]-0.5*P,0.09*P,'SCALE '+bpdwScName(P)+';  INCHES;  ORIGIN AT THE '+(circPier?'PIER':'PEDESTAL')+' CENTRE, +X RIGHT, +Y UP',1);
+    /* the anchor coordinate table (plate centre and pedestal centre) to the right */
+    const tx=sb[2]+0.5*P, th=0.085*P, off=Math.abs(px)>1e-6||Math.abs(py)>1e-6;
+    D.text(L.txt,tx,sb[3],0.12*P,'ANCHOR COORDINATES',0);
+    const head=['NO.','X (PLATE)','Y (PLATE)'].concat(off?['X (PED.)','Y (PED.)']:[]);
+    const rows=g.pts.map((q,i)=>[String(i+1),fmt(q.x,3),fmt(q.y,3)].concat(off?[fmt(q.x+px,3),fmt(q.y+py,3)]:[]));
+    const t=table(tx,sb[3]-0.15*P,head,rows,th,[1,2,3,4]);
+    const nts=['INCHES. PLATE: FROM THE PLATE CENTRE'+(off?'; PED.: FROM THE PEDESTAL CENTRE (PLATE OFFSET '+fmt(px,3)+', '+fmt(py,3)+')':'')+'.',
+      'ANCHOR: '+bpdwIn(hw.d)+' DIA. ROD, HEAVY HEX NUT ('+bpdwIn(hw.nutF)+' A/F), '+(hw.top.kind==='plate'?'PLATE WASHER '+bpdwIn(hw.top.W)+' SQ. x '+bpdwIn(hw.top.t):'WASHER '+bpdwIn(hw.top.W)+' OD')+',',
+      'IN A '+bpdwIn(hw.dh)+' DIA. HOLE (HIDDEN). SECTIONS A-A AND B-B: SHEET 2.'];
+    if(pg.present||bpCageOn()||ic||icV){ nts.push('REINFORCEMENT (SCHEDULE: SHEET 3):'); if(pg.present||bpCageOn()) nts.push('  PEDESTAL / PIER BARS AND TIES (GREEN)'); if(ic) nts.push('  TENSION ANCHOR REINFORCEMENT (YELLOW)'); if(icV) nts.push('  SHEAR ANCHOR REINFORCEMENT (ORANGE)'); }
+    nts.forEach((s,j)=>D.text(L.txt,tx,sb[3]-0.15*P-t.h-(0.2+0.14*j)*P,0.07*P,s,0));
+    return {known:{w:circPier?C.D/P:C.Bx/P,h:circPier?C.D/P:C.By/P,what:circPier?'pier '+C.D+' in dia.':'pedestal '+C.Bx+' x '+C.By+' in'}};
+  },[2,3,4,6,8,12,16,24,32,48,96],['tabInput','Input & Schematics']);
+
+  /* ---------------- 2. SECTIONS ---------------- */
+  /* one section, every anchor and bar projected: view "A" along x (looking +y), "B" along y (looking -x); +h right in both */
+  function section(view,x0,P){
+    const alongX=(view==="A"), span=alongX? 2*hx : 2*hy, off=alongX? px : py, pw=circPlate? Pl.D : (alongX? Pl.B : Pl.N);
+    const ecc=alongX? (Pl.exc_x||0) : (Pl.exc_y||0), cw=alongX? k0.b : k0.d, X=v=>x0+v, i0=D.mark(), h=0.09*P;
+    const zc=C.H;
+    D.rect(L.conc,X(-span/2),0,X(span/2),zc);
+    if(S.grout.present&&st.tg>0){ const t1=S.grout.taper==="1to1"? st.tg : 0;
+      D.pline(L.grout,[[X(off-pw/2-t1),zc],[X(off+pw/2+t1),zc],[X(off+pw/2),zc+st.tg],[X(off-pw/2),zc+st.tg]],true); }
+    D.rect(L.plate,X(off-pw/2),st.zPb,X(off+pw/2),st.zPt);
+    const stub=Math.max(6,0.25*zc), zs=st.zPt+stub, xc=off+ecc;
+    D.line(L.col,X(xc-cw/2),st.zPt,X(xc-cw/2),zs); D.line(L.col,X(xc+cw/2),st.zPt,X(xc+cw/2),zs); brkH(L.col,X(xc-cw/2),X(xc+cw/2),zs,P);
+    if(k0.kind==="W"){ if(alongX){ D.line(L.col,X(xc-k0.tw/2),st.zPt,X(xc-k0.tw/2),zs,D.ltype('HIDDEN')); D.line(L.col,X(xc+k0.tw/2),st.zPt,X(xc+k0.tw/2),zs,D.ltype('HIDDEN')); }
+      else { D.line(L.col,X(xc-cw/2+k0.tf),st.zPt,X(xc-cw/2+k0.tf),zs); D.line(L.col,X(xc+cw/2-k0.tf),st.zPt,X(xc+cw/2-k0.tf),zs); } }
+    const hs=uniq(g.pts.map(q=>(alongX? q.x : q.y)+off));
+    hs.forEach(v=>anchorElev(v,X,false));
+    /* reinforcement, projected */
+    if(pg.present){ const zb=(S.ped.intoFooting!==false)? -Math.max(+S.ped.footExt||0,0) : 0, zt=zc-Math.max(+S.ped.barTop||0,0);
+      uniq(pg.bars.map(b=>alongX? b.x : b.y)).forEach(v=>{ D.line(L.bar,X(v-pg.rbB.db/2),zb,X(v-pg.rbB.db/2),zt); D.line(L.bar,X(v+pg.rbB.db/2),zb,X(v+pg.rbB.db/2),zt); });
+      const ht=alongX? pg.tieHx : pg.tieHy; pg.ties.forEach(z=>D.line(L.bar,X(-ht),zc-z,X(ht),zc-z)); }
+    if(bpCageOn()){ const G=bpCageGeom(), K=S.conc.cage, zt=zc-Math.max(+K.topCover||0,0);
+      [-G.Rb,G.Rb].forEach(v=>D.line(L.bar,X(v),3.0,X(v),zt)); bpCageTieDepths().forEach(z=>D.line(L.bar,X(-G.Rt),zc-z,X(G.Rt),zc-z)); }
+    if(ic&&ic.bars&&!isPedT){ const db=(ic.dev&&ic.dev.db||0.625);
+      uniq(ic.bars.filter(b=>b.r!==null).map(b=>(alongX? b.x : b.y)+off)).forEach(v=>{ D.line(L.rt,X(v-db/2),ic.barBot,X(v-db/2),ic.barTop); D.line(L.rt,X(v+db/2),ic.barBot,X(v+db/2),ic.barTop); }); }
+    if(icV&&!icV.isTie&&icV.legs){ const nA=alongX? icV.nx : icV.ny, db=icV.dev&&icV.dev.db||0.5;
+      icV.legs.forEach(Lg=>{ const z=zc-(Lg.z!==undefined? Lg.z : (icV.zBelow||S.vRebar.depth||3));
+        if(nA!==0){ const u0=(icV.legStart!==undefined? icV.legStart : icV.lead), u1=(icV.legEnd!==undefined? icV.legEnd : icV.lead-icV.availBehind); D.line(L.rv,X(nA*u0+off),z,X(nA*u1+off),z); }
+        else D.circle(L.rv,X(Lg.t+off),z,db/2); }); }
+    /* dimensions: right H, h_ef; left plate, grout / gap; bottom pedestal, plate; anchor spacing on top */
+    const xr=X(span/2), xl=X(Math.min(-span/2,off-pw/2-(S.grout.taper==="1to1"?st.tg:0)));
+    D.dimV(L.dim,0,zc,xr+0.35*P,xr,'H = <>');
+    D.dimV(L.dim,st.zB,zc,xr+0.7*P,X(Math.max(...hs)),'H_EF = <>');
+    dimVs(st.zPb,st.zPt,xl-0.35*P,X(off-pw/2),'T_P',P);
+    if(st.tg>0) dimVs(zc,zc+st.tg,xl-0.35*P,X(off-pw/2),'T_G',P);
+    if(st.openGap>0) dimVs(st.zPb-st.openGap,st.zPb,xl-0.35*P,X(off-pw/2),'E_B',P);
+    const zLow=pg.present&&S.ped.intoFooting!==false? -Math.max(+S.ped.footExt||0,0) : 0;   /* pedestal bars into the footing */
+    D.dimH(L.dim,X(-span/2),X(span/2),zLow-0.45*P,0,(circPier?'<> DIA.':'<>'));
+    if(zLow<0) D.text(L.txt,X(span/2)+0.1*P,zLow+0.05*P,0.075*P,'BARS INTO FOOTING '+bpdwIn(-zLow),0);
+    if(!circPat&&hs.length>1) D.chainH(L.dim,[X(off-pw/2),...hs.map(X),X(off+pw/2)],zs+0.35*P,st.zPt);
+    else D.dimH(L.dim,X(off-pw/2),X(off+pw/2),zs+0.35*P,st.zPt);
+    /* leaders: nut and washer, head */
+    if(view==="B"){   /* the callouts once, on B-B */
+    const xa=X(Math.max(...hs)), lx=xr+1.0*P;
+    D.line(L.ldr,xa+hw.nutC/2,(st.zWt+st.zNt)/2,lx,st.zNt+0.3*P); D.text(L.txt,lx+0.04*P,st.zNt+0.27*P,0.075*P,'HVY HEX NUT'+(st.lev?' (TOP AND LEVELING)':'')+' + '+(hw.top.kind==='plate'?'PL. WASHER':'WASHER'),0);
+    const zh=hw.head.kind==='none'? st.zB : (st.hBot? st.hBot[0] : st.nutBot[0]);
+    D.line(L.ldr,xa+hw.head.F/2,zh,lx,zh-0.25*P); D.text(L.txt,lx+0.04*P,zh-0.28*P,0.075*P,hw.head.lab,0);
+    }
+    const sb=D.bbox(i0), cxs=(sb[0]+sb[2])/2;
+    D.text(L.txt,cxs,sb[1]-0.3*P,0.16*P,'SECTION '+view+'-'+view,1);
+    D.text(L.txt,cxs,sb[1]-0.5*P,0.08*P,(alongX?'ALONG X, LOOKING +Y':'ALONG Y, LOOKING -X')+';  ALL ANCHORS AND BARS PROJECTED',1);
+    return sb;
+  }
+  sheet('sec','SECTIONS A-A AND B-B',P=>{
+    const sa=section("A",0,P), iB=D.mark(), sb=section("B",0,P);
+    D.move(iB,sa[2]+0.9*P-sb[0],0);
+    return {known:{w:Pl.t/P,what:'plate thickness '+Pl.t+' in'}};
+  },[2,3,4,6,8,12,16,24,32,48,96],['tabInput','Input & Schematics']);
+
+  /* ---------------- 3. ANCHOR DETAIL AND SCHEDULES ---------------- */
+  const nA=g.pts.length, ag=agrade(A.grade), pgd=pgrade(Pl.grade), Lr=Math.ceil(st.length*4-1e-9)/4;
+  const stackTxt=(st.tg>0?'GROUT '+bpdwIn(st.tg)+' + ':'')+(st.openGap>0?'GAP '+bpdwIn(st.openGap)+' + ':'')+'PLATE '+bpdwIn(Pl.t);
+  sheet('detail','ANCHOR DETAIL AND SCHEDULES',P=>{
+    const i0=D.mark(), h=0.085*P, X=v=>v, half=Math.max(hw.top.W,hw.head.F,hw.nutC)/2+2;
+    /* concrete, grout, plate pieces either side of the rod, cut by break lines */
+    const zc=C.H, zBot=st.zEnd-3, brk=(x0,x1,z)=>brkH(L.conc,x0,x1,z,P);
+    D.line(L.conc,-half,zc,half,zc); D.line(L.conc,-half,zc,-half,zBot); D.line(L.conc,half,zc,half,zBot); brk(-half,half,zBot);
+    if(st.tg>0) D.rect(L.grout,-half,zc,half,zc+st.tg);
+    D.rect(L.plate,-half,st.zPb,half,st.zPt);
+    anchorElev(0,X,hw.pitch/P>=0.025);
+    D.line(L.cl,0,st.zTop+0.15*P,0,zBot-0.1*P,D.ltype('CENTER'));
+    /* dimensions on the left: plate / grout / gap, then h_ef and the projection above concrete, then the rod length */
+    const xl=-half-0.4*P;
+    dimVs(st.zPb,st.zPt,xl,-half,'T_P',P);
+    if(st.tg>0) dimVs(zc,zc+st.tg,xl,-half,'T_G',P);
+    if(st.openGap>0) dimVs(st.zPb-st.openGap,st.zPb,xl,-half,'E_B',P);
+    D.dimV(L.dim,st.zB,zc,xl-0.9*P,-hw.d/2,'H_EF = <>');
+    D.dimV(L.dim,zc,st.zTop,xl-0.9*P,-hw.d/2,'PROJ. = <>');
+    D.dimV(L.dim,(hw.head.kind==='washer'?st.zEnd:st.zB),st.zTop,xl-1.3*P,-hw.d/2,'L = <>');
+    /* callouts on the right, spread so that no two labels overlap */
+    const lx=half+0.6*P, cl=[];
+    cl.push([st.zTop-st.proj/2,hw.d/2,bpdwIn(hw.d)+' DIA. ROD, '+hw.n+' UNC, THREADED '+bpdwIn(st.thrTop[0]-st.thrTop[1])+' MIN.']);
+    cl.push([(st.zWt+st.zNt)/2,hw.nutC/2,'HEAVY HEX NUT '+bpdwIn(hw.nutF)+' A/F x '+bpdwIn(hw.nutH)]);
+    cl.push([(st.zPt+st.zWt)/2,hw.top.W/2,(hw.top.kind==='plate'?'PL. WASHER '+bpdwIn(hw.top.W)+' SQ. x '+bpdwIn(hw.top.t):'HARDENED WASHER '+bpdwIn(hw.top.W)+' OD')]);
+    cl.push([(st.zPb+st.zPt)/2,half,'BASE PLATE '+bpdwIn(Pl.t)+', HOLE '+bpdwIn(hw.dh)+' DIA.']);
+    if(st.lev) cl.push([st.zLn+hw.nutH/2,hw.nutC/2,'LEVELING NUT, HEAVY HEX']);
+    if(st.tg>0) cl.push([zc+st.tg/2,half,'NON-SHRINK GROUT']);
+    const zh=hw.head.kind==='none'? st.zB : (st.hBot? (st.hBot[0]+st.hBot[1])/2 : st.zB-hw.head.H/2);
+    cl.push([zh,hw.head.F/2,hw.head.lab]);
+    let yPrev=Infinity; cl.sort((p1,p2)=>p2[0]-p1[0]).forEach(([z,xa,txt])=>{ const yl=Math.min(z+0.15*P,yPrev-0.2*P); yPrev=yl;
+      D.line(L.ldr,xa,z,lx,yl); D.line(L.ldr,lx,yl,lx+0.15*P,yl); D.text(L.txt,lx+0.2*P,yl-0.035*P,h,txt,0); });
+    const sb=D.bbox(i0);
+    D.text(L.txt,(sb[0]+sb[2])/2,sb[1]-0.3*P,0.16*P,'ANCHOR ROD DETAIL',1);
+    D.text(L.txt,(sb[0]+sb[2])/2,sb[1]-0.5*P,0.08*P,'SCALE '+bpdwScName(P)+';  HARDWARE DRAWN NOMINAL (SEE NOTES)',1);
+    /* schedules to the right, at paper size */
+    const tx=sb[2]+0.6*P, th=0.075*P; let y=sb[3]+0.4*P;
+    const tbl=(title,head,rows,right)=>{ D.text(L.txt,tx,y,0.12*P,title,0); const t=table(tx,y-0.12*P,head,rows,th,right); y-=t.h+0.55*P; return t; };
+    const install=(A.torqued?'TORQUED':'UNTORQUED');
+    tbl('ANCHOR ROD SCHEDULE',['MARK','QTY','DIA.','ASTM GRADE','FY / FU (KSI)','EMBEDDED END','H_EF','L','PROJ.','INSTALL'],
+      [['AR1',String(nA),bpdwIn(hw.d)+' ('+hw.n+' UNC)',ag.name.toUpperCase(),ag.Fy+' / '+ag.Fu,hw.head.lab,bpdwIn(A.hef),bpdwIn(Lr),bpdwIn(st.zTop-st.zc),install]],[1]);
+    tbl('BASE PLATE SCHEDULE',['MARK','SIZE','GRADE','FY (KSI)','HOLES','BEARING'],
+      [['BP1',(circPlate?'PL '+bpdwIn(Pl.D)+' DIA. x '+bpdwIn(Pl.t):'PL '+bpdwIn(Pl.B)+' x '+bpdwIn(Pl.N)+' x '+bpdwIn(Pl.t)),pgd.name.toUpperCase(),String(pgd.Fy),nA+' x '+bpdwIn(hw.dh)+' DIA.'+(Pl.holeDia>0?'':' (DG1 TABLE 2.3)'),stackTxt.replace(/ \+ PLATE.*/,'')||'FLUSH']]);
+    const rr=bpRebarSchedule();
+    if(rr.length) tbl('REINFORCEMENT SCHEDULE',['MARK','SIZE','QTY','SHAPE','LENGTH (IN)','ANCHOR REINF.'],rr.map(r=>[r.mark,r.size,String(r.qty),String(r.shape).toUpperCase(),fmt(r.len,1),String(r.cnt).toUpperCase()]),[2,4]);
+    else { D.text(L.txt,tx,y,0.12*P,'REINFORCEMENT SCHEDULE',0); D.text(L.txt,tx,y-0.25*P,th,'NO REINFORCEMENT ENTERED IN THE TOOL.',0); y-=0.7*P; }
+    ['PROJ. = ROD ABOVE THE TOP OF CONCRETE. L = ROD LENGTH '+(hw.head.kind==='washer'?'OVERALL':'UNDER THE HEAD')+' =',
+     'H_EF + '+stackTxt+' + WASHER + NUT + 3 THREADS (SCHEDULE: ROUNDED UP TO 1/4").',
+     'NOMINAL HARDWARE PROPORTIONS: DETAILER TO CONFIRM THE ROD LENGTH.',
+     'PLATE WASHER: AISC DG1 TABLE 2.3 MINIMUM SIZE AND THICKNESS.',
+     'REBAR LENGTHS: CENTRELINE OF STRAIGHT SEGMENTS AND BENDS AS DRAWN IN',
+     'THE TOOL; HOOKS AND BEND ALLOWANCES NOT ADDED. ANCHOR REINF.: COUNTED =',
+     'THE LEG VERDICTS OF ACI 318-19 17.5.2.1 (TENSION / SHEAR REBAR TABS).'].forEach((s2,j)=>D.text(L.txt,tx,y+0.2*P-0.14*j*P,0.065*P,s2,0));
+    return {known:{w:hw.d/P,what:'rod '+hw.d+' in dia.'}};
+  },[2,3,4,6,8,12,16],['tabAnchor','Anchor Bolts']);
+
+  /* ---------------- 4. GENERAL NOTES (NTS, paper inches) ---------------- */
+  sheet('notes','GENERAL NOTES AND DESIGN LOADS',P=>{
+    const so=st.so, cs=allChecks(), gi=governingComboIndex(), Fu=forceUnit().toUpperCase(), Mu=momentUnit().toUpperCase();
+    const rg=S.tRebar.present? rgrade(S.tRebar.grade) : (S.ped&&S.ped.present? rgrade(S.ped.grade) : (bpCageOn()? rgrade(S.conc.cage.grade) : null));
+    const N=[
+      'CODE BASIS',
+      '1. ANCHORING TO CONCRETE: ACI 318-19 CHAPTER 17 (STRENGTH DESIGN); CONCRETE BEARING ACI 318-19 22.8'+(pg.present?'; PEDESTAL TIES AT ANCHORS 10.7.6.1.6':'')+'.',
+      '2. BASE PLATE: '+(circPlate?'CIRCULAR PLATE, AASHTO LRFDLTS BENDING-LINE METHOD (BASE PLATE TAB)':'AISC DESIGN GUIDE 1, 2ND ED.')+'; BOLT BEARING / TEAROUT AISC 360-16 J3.10'+(so.hasStandoff?'; ROD COMPRESSION AISC 360-16 E3':'')+'.',
+      '3. FACTORED LOADS (LRFD) AS ENTERED / GENERATED IN THE TOOL'+(S.serviceLoads&&S.serviceLoads.useSeismic?'; SEISMIC COMBINATIONS INCLUDED':'')+'.',
+      'MATERIALS',
+      '4. CONCRETE: F\'C = '+fmt(C.fc,2)+' KSI, NORMAL WEIGHT; '+(C.cracked?'CRACKED':'UNCRACKED')+' CONCRETE ASSUMED AT SERVICE LOADS.',
+      '5. ANCHOR RODS: ASTM '+ag.name.toUpperCase()+', FY = '+ag.Fy+' KSI, FU = '+ag.Fu+' KSI; '+bpdwIn(hw.d)+' DIA.; '+hw.head.lab+'; H_EF = '+bpdwIn(A.hef)+'.',
+      '6. NUTS: HEAVY HEX (ASME B18.2.2). WASHERS: '+(hw.top.kind==='plate'?'PLATE WASHERS PER AISC DG1 TABLE 2.3 (OVERSIZED HOLES)':'HARDENED (ASTM F436)')+'.',
+      '7. BASE PLATE: ASTM '+pgd.name.toUpperCase()+', FY = '+pgd.Fy+' KSI.',
+      (S.grout.present?'8. GROUT: NON-SHRINK, F\'C = '+fmt(S.grout.fc_grout,2)+' KSI, '+bpdwIn(S.grout.tg)+' THICK, '+(S.grout.taper==='1to1'?'1:1 TAPERED EDGE':'VERTICAL EDGE')+'.':'8. GROUT: NONE.'),
+      '9. REINFORCEMENT: '+(rg?'ASTM A615 '+rg.name.toUpperCase()+' (FY = '+rg.fy+' KSI)':'NONE ENTERED')+'.',
+      'INSTALLATION',
+      '10. ANCHORS '+(A.torqued?'TORQUED (ACI 318-19 TABLE 17.9.2a LIMITS CHECKED)':'UNTORQUED')+'. STAND-OFF: '+String(so.label).toUpperCase()+'.',
+      '11. HOLES: '+bpdwIn(hw.dh)+' DIA. '+(Pl.holeDia>0?'(AS ENTERED)':'(AISC DG1 TABLE 2.3)')+'. WELD OF COLUMN TO PLATE: NOT DESIGNED IN THIS TOOL, BY THE ENGINEER OF RECORD.',
+      '12. HARDWARE (NUTS, WASHERS, HEADS, THREADS) DRAWN TO NOMINAL PROPORTIONS FOR ILLUSTRATION; ROD LENGTH NOMINAL, DETAILER TO CONFIRM.',
+      '13. VALUES AS THE TOOL\'S TABS; EACH CHECK IS WORKED ON ITS TAB AND IN THE CALCULATION REPORT.'];
+    let y=0; const lh=0.16;
+    N.forEach((s2,j)=>{ const hd=!/^\d/.test(s2); if(hd&&j) y-=0.12*P; D.text(L.txt,0,y,(hd?0.12:0.085)*P,s2,0); y-=(hd?0.22:lh)*P; });
+    /* design loads and the check summary, side by side below */
+    const y1=y-0.25*P, cmb=S.combos.slice(0,14);
+    D.text(L.txt,0,y1,0.12*P,'DESIGN LOADS (FACTORED)',0);
+    const t1=table(0,y1-0.12*P,['COMBINATION','P','VX','VY','MX','MY',''],cmb.map((c,i)=>[c.name,fF(c.P),fF(c.Vx),fF(c.Vy),fM(c.Mx),fM(c.My),i===gi?'GOVERNS':'']),0.075*P,[1,2,3,4,5]);
+    D.text(L.txt,0,y1-0.25*P-t1.h,0.065*P,'FORCES '+Fu+', MOMENTS '+Mu+'; P POSITIVE = TENSION (UPLIFT)'+(S.combos.length>cmb.length?'; FIRST '+cmb.length+' OF '+S.combos.length+' COMBINATIONS (ALL IN THE CALCULATION REPORT)':'')+'.',0);
+    const x2=Math.max(t1.w,3)+0.5*P;
+    D.text(L.txt,x2,y1,0.12*P,'CHECK SUMMARY (ENVELOPE OF ALL COMBINATIONS)',0);
+    table(x2,y1-0.12*P,['CHECK','REF.','D/C','','GOVERNING'],cs.map(k=>{ const s2=statusOf(k.dcr,k.na); return [String(k.label).toUpperCase(),String(k.ref).toUpperCase(),k.na?'N/A':(isFinite(k.dcr)?fmt(k.dcr,2):'INF'),s2==='na'?'N/A':s2.toUpperCase(),k.combo||'—']; }),0.075*P,[2]);
+    return {scale:'NTS'};
+  },[1],['tabSummary','Summary']);
+  SH.forEach((s,j)=>{ s.sheetEnt.s=SharedDxf.str((j+1)+' OF '+SH.length); });
+  return {D,S:SH};
+}
+function buildDrawingsTab(pg){
+  const T=el("div"); pg.appendChild(T);
+  if(!window.SharedDxf){ T.appendChild(el("div","errBox","shared/dxf.js is not loaded: keep the shared folder next to this file.")); return; }
+  let B; try{ B=bpdwBuild(); }catch(e){ console.warn(e); T.appendChild(el("div","errBox","The drawings could not be drawn: "+(e&&e.message))); return; }
+  BPDW.B=B;
+  let want=BPDW.cur; if(!want) want=lsGet(BPDW.key)||"";
+  const cur=B.S.find(s=>s.id===want)||B.S[0]; BPDW.cur=cur.id;
+  const esc=s=>String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+  const scTxt=s=>s.scale==="NTS"? "NTS (paper inches)" : s.scale;
+  T.innerHTML='<div class="bpdwBar"><label>Sheet <select id="bpdwSheet">'+B.S.map((s,j)=>'<option value="'+s.id+'"'+(s===cur?' selected':'')+'>'+(j+1)+'. '+esc(s.title)+'</option>').join('')+'</select></label> '+
+    '<button type="button" id="bpdwDxf">Download DXF ('+B.S.length+' sheets)</button> '+
+    '<button type="button" id="bpdwPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button> '+
+    '<button type="button" id="bpdwPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets ('+B.S.length+')</button></div>'+
+    '<div class="note">'+esc(SharedDxf.PRINT_NOTE)+'</div>'+
+    '<div class="note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) at its plot scale inside its border and title block, side by side. Layers BP-CONCRETE, BP-GROUT, BP-PLATE, BP-COLUMN, BP-ANCHOR, BP-NUT-WASHER, BP-THREAD, BP-HOLE, BP-REBAR, BP-REBAR-T, BP-REBAR-V, BP-CENTER, BP-SECTION, BP-DIMS, BP-TEXT, BP-LEADER, BP-TABLE, BP-TBLK, BP-BRDR. The <b>Export DXF</b> button on the Project tab (plan and section for drafting) is unchanged. Title block: the Project fields (Project, Job #, Prepared by, Date, Checked by, Checked date)'+((typeof bpGroupsOn==="function"&&bpGroupsOn())?'; the sheets show the anchor group selected in the group picker':'')+'.</div>'+
+    '<div class="bpdwHead"><b>'+(B.S.indexOf(cur)+1)+'. '+esc(cur.title)+'</b> · scale '+esc(scTxt(cur))+(cur.over?' · <span style="color:var(--fail)">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
+    '<div class="bpdwBox"></div><div class="note">Wheel: zoom about the cursor · drag: pan · pinch · double-click: fit · + / − / Fit buttons.</div>'+
+    '<div class="bpdwScroll"><table class="tbl bpdwIdx"><tr><th>No.</th><th class="lft">Sheet</th><th>Scale</th><th class="lft">Worked in</th></tr>'+B.S.map((s,j)=>
+      '<tr data-bpdw="'+s.id+'"'+(s===cur?' class="on"':'')+'><td>'+(j+1)+'</td><td class="lft">'+esc(s.title)+'</td><td>'+esc(scTxt(s))+'</td><td class="lft">'+(s.src?'<a href="#" data-bpdwgo="'+s.src[0]+'">'+esc(s.src[1])+' tab</a>':'—')+'</td></tr>').join('')+'</table></div>';
+  SharedDxf.viewer(T.querySelector('.bpdwBox'),SharedDxf.sheetSVG(B.D,cur),{height:'62vh'});
+  const pick=id=>{ BPDW.cur=id; lsSet(BPDW.key,id); buildOutput(); };
+  T.querySelector('#bpdwSheet').addEventListener('change',e=>pick(e.target.value));
+  T.querySelectorAll('tr[data-bpdw]').forEach(tr=>tr.addEventListener('click',e=>{ if(e.target.closest('a')) return; pick(tr.dataset.bpdw); }));
+  T.querySelectorAll('a[data-bpdwgo]').forEach(a=>a.addEventListener('click',e=>{ e.preventDefault(); S.ui.tab=a.dataset.bpdwgo; autosave(); buildTabs(); }));
+  T.querySelector('#bpdwDxf').addEventListener('click',()=>{ const txt=B.D.toDXF({ltscale:1,insunits:1}), chk=SharedDxf.validate(txt);
+    if(!chk.ok){ alert('The DXF file failed its structure check:\n'+chk.errors.slice(0,8).join('\n')); return; }
+    SharedDxf.download(txt,((S.proj.name||'baseplate').replace(/[^\w\-]+/g,'_'))+'_sheets.dxf'); });
+  const prt=list=>SharedDxf.printSheets(list.map(s=>({svg:SharedDxf.sheetSVG(B.D,s),title:s.title})),{paper:[BPDW.W,BPDW.H]});
+  T.querySelector('#bpdwPrint1').addEventListener('click',()=>prt([cur]));
+  T.querySelector('#bpdwPrintAll').addEventListener('click',()=>prt(B.S));
+}
+
+
 /* ---- per-anchor force table (PROFIS "Resulting anchor forces" style) ---- */
 function anchorForceTable(body, c){
   if(!c||!c.perAnchor){ body.appendChild(el("div","note","No per-anchor data for this combination.")); return; }
@@ -12989,7 +13427,7 @@ function openPrintSettings(){
   tabs.forEach(([id,label])=>{
     const row=el("div","chkRow"); const cb=document.createElement("input"); cb.type="checkbox";
     const optIn=(id==="tabValidation"||id==="tabManual"||id==="tabDetail");   /* D11: appendices, off unless ticked (GFX-D: the detail sheet too) */
-    if(id==="tabVisual"||id==="tabReport") return;            /* 3-D is never printed; the Report tab is the document itself (RPT-2) */
+    if(id==="tabVisual"||id==="tabReport"||id==="tabDrawings") return;            /* 3-D is never printed (BPDW: nor the Drawings tab); the Report tab is the document itself (RPT-2) */
     cb.checked=optIn? S.print.sections[id]===true : S.print.sections[id]!==false; cb.addEventListener("change",()=>{S.print.sections[id]=cb.checked;autosave();});
     row.appendChild(cb); row.appendChild(document.createTextNode(label+(optIn?" (appendix)":""))); box.appendChild(row);
   });
@@ -13039,7 +13477,7 @@ function openPrintSettings(){
     const nC=(CC&&CC.combos)?CC.combos.length:0;
     const perComboIds=["tabPlate","tabAnchor","tabConc"];
     const nPerCombo=perComboIds.filter(id=>S.print.sections[id]!==false && TABS().some(t=>t[0]===id)).length;
-    const nOther=TABS().filter(([id])=>id!=="tabVisual" && id!=="tabReport" && ((id==="tabValidation"||id==="tabManual"||id==="tabDetail")? S.print.sections[id]===true : S.print.sections[id]!==false) && perComboIds.indexOf(id)<0).length;
+    const nOther=TABS().filter(([id])=>id!=="tabVisual" && id!=="tabReport" && id!=="tabDrawings" && ((id==="tabValidation"||id==="tabManual"||id==="tabDetail")? S.print.sections[id]===true : S.print.sections[id]!==false) && perComboIds.indexOf(id)<0).length;
     let nRendered=(S.print.combos.all!==false)? nC : 1;
     let nCollapsed=0;
     if(S.print.collapseIdentical!==false && CC && CC.combos && (S.print.combos.all!==false)){
@@ -13242,7 +13680,7 @@ function buildPrintReport(target){
     if(id==="tabReport") return;   /* RPT-2: the Report tab IS this document */
     if(S.print.sections[id]===false) return;
     if(BPAD_OPTIN[id] && S.print.sections[id]!==true) return;
-    if(id==="tabVisual") return; /* skip live 3D in print */
+    if(id==="tabVisual"||id==="tabDrawings") return; /* skip live 3D in print (BPDW: and the Drawings tab, printed by its own buttons) */
     const perCombo=(id==="tabPlate"||id==="tabAnchor"||id==="tabConc");
     if(perCombo){
       /* §7.2 — the ONLY permitted compression of a worked combination: when its
@@ -13522,7 +13960,8 @@ function init(){
       el0.style.color="var(--warn)";
     }
   }
-  window.addEventListener("beforeprint",()=>{ if(typeof bprWillPrint==="function"&&bprWillPrint()) return;   /* RPT-4: the Report tab prints itself (shared/report.js) */
+  window.addEventListener("beforeprint",()=>{ if(typeof bprWillPrint==="function"&&bprWillPrint()) return;
+    if(document.body.classList.contains("sdx-printing")) return;   /* BPDW: the Drawings tab prints its sheets (SharedDxf.printSheets), not the Report */   /* RPT-4: the Report tab prints itself (shared/report.js) */
     if(!document.getElementById("printReport").innerHTML) buildPrintReport(); bpadApplyPageCSS(true); });
   window.addEventListener("afterprint",()=>bpadApplyPageCSS(false));   /* D11: header/footer only while printing */
   window.addEventListener("afterprint",()=>{ const h=document.getElementById("printReport"); if(h)h.innerHTML=""; });
