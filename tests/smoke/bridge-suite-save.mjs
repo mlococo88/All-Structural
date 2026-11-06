@@ -30,7 +30,8 @@ const APPS = {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, (i.value || '') + 'x'); i.dispatchEvent(new Event('input', { bubbles: true })); }); await p.waitForTimeout(1500); } },
   lldf: { file: 'lldf.html', label: 'LL & DL Distribution', parts: ['lldf'], autosaves: true,
     ready: p => p.waitForFunction(() => window.lldfLast && window.LLPB && document.querySelector('[data-sp=chip]'), null, { timeout: 60000 }),
-    change: async p => { await p.evaluate(() => { const i = document.getElementById('skew'); i.value = String((+i.value || 0) + 5); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); }); await p.waitForTimeout(1500); } },
+    // HDRS: the chip leaves the Project tab open: the skew is typed on its own tab (Bridge), as a user does
+    change: async p => { await p.evaluate(() => { const t = document.getElementById('lxTab_in_bridge'); if (t) t.click(); const i = document.getElementById('skew'); i.value = String((+i.value || 0) + 5); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); }); await p.waitForTimeout(4500); } },   // its autosave into the open project can take ~3 s after a tab change (seen on main too)
   psb: { file: 'Prestressed Bridge Design.html', label: 'Prestressed Bridge Design', parts: ['psbeam', 'psbeamBridge'], autosaves: true,
     ready: p => p.waitForFunction(() => window.PSPB && document.querySelector('[data-sp=chip]'), null, { timeout: 120000 }),
     // the Project sub-tab's title block "Project" field (a React input: the native setter so React sees it)
@@ -66,11 +67,17 @@ for (const key of list) {
       ok(await cur() === 'bp_test_alpha', 'load: the open project is unchanged');
       const chip = await p.evaluate(() => document.querySelector('[data-sp=chip]').textContent);
       ok(/Alpha/.test(chip), `chip names the open project: "${chip.trim()}"`);
+      // lib(): Saved projects… through the page (HDRS: the chip opens the view with the card, then the card's button)
+      const lib = async () => { await p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); document.querySelector('[data-sp=chip]').click(); }); await p.waitForTimeout(500);
+        await p.evaluate(() => document.querySelector('[data-sp=card] [data-sp=lib]').click()); await p.waitForTimeout(500); };
       const hdr = await p.evaluate(() => { const c = document.querySelector('[data-sp=chip]'), par = c.parentNode; return [...par.children].filter(e => e.offsetParent !== null || e === c).map(e => (e.dataset.sp || '') + ':' + e.textContent.replace(/Ctrl\+S/, '').trim().slice(0, 24)); });
       out.push('       header: ' + hdr.join(' | '));
-      const iC = hdr.findIndex(x => x.startsWith('chip')), iU = hdr.findIndex(x => /Undo$/.test(x)), iR = hdr.findIndex(x => /Redo$/.test(x)), iS = hdr.findIndex(x => x.startsWith('hsave')), iL = hdr.findIndex(x => x.startsWith('hlib'));
-      ok(iC >= 0 && iC < iU && iU < iR && iR < iS && iS < iL, 'header order: chip · Undo · Redo · Save · Saved projects…');
-      await p.evaluate(() => document.querySelector('[data-sp=hlib]').click()); await p.waitForTimeout(500);
+      const iC = hdr.findIndex(x => x.startsWith('chip')), iU = hdr.findIndex(x => /Undo$/.test(x)), iR = hdr.findIndex(x => /Redo$/.test(x));
+      ok(iC >= 0 && iC < iU && iU < iR && !hdr.some(x => /^(hsave|hlib):/.test(x)) && !(await p.evaluate(() => !!document.querySelector('[data-sp=hsave], [data-sp=hlib]'))), 'header order: chip · Undo · Redo (HDRS: no Save / Saved projects… in the header)');
+      // HDRS: the chip opens the view with the "Save and open" card (no dialog)
+      await p.evaluate(() => document.querySelector('[data-sp=chip]').click()); await p.waitForTimeout(700);
+      ok(await p.evaluate(() => { const c = document.querySelector('[data-sp=card]'); return !!(c && c.offsetParent) && !document.querySelector('dialog[open]'); }), 'chip click: the "Save and open" card on screen, no dialog');
+      await lib();
       const rows = await p.evaluate(() => [...document.querySelectorAll('dialog.spLib[open] tbody tr[data-name]')].map(tr => decodeURIComponent(tr.dataset.name)));
       ok(rows.length === 3 && rows[0] === 'Alpha' && rows[1] === 'Dup' && /^Dup \(older, saved .*E[SD]T\)$/.test(rows[2]), 'dialog: ' + JSON.stringify(rows));
       const title = await p.evaluate(() => document.querySelector('dialog.spLib[open] .spHead strong').textContent);
@@ -105,7 +112,7 @@ for (const key of list) {
       ok(/· saved/.test(st2) && Object.values(r).filter(e => e.name === 'Dup').length === 2, 'Ctrl+S: saved into the open entry: ' + st2.trim());
       ok(A.autosaves || JSON.stringify(r.bp_test_dup2.slices[A.parts[0]]) !== before, 'Ctrl+S wrote the changed part');
       // dialog Rename / Duplicate / Delete
-      const act = async (a, n, answer) => { await p.evaluate(() => document.querySelector('[data-sp=hlib]').click()); await p.waitForTimeout(400);
+      const act = async (a, n, answer) => { await lib();
         await p.evaluate(([a, n, ans]) => { const pr = window.prompt, cf = window.confirm; window.prompt = () => ans; window.confirm = () => true;
           try { document.querySelector(`dialog.spLib[open] [data-spa=${a}][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(); } finally { window.prompt = pr; window.confirm = cf; } }, [a, n, answer]);
         await p.waitForTimeout(500); await p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); }); };

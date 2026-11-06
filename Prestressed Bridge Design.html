@@ -9492,7 +9492,10 @@ function App(){
       displayName:()=>String((inpRef.current.proj&&inpRef.current.proj.name)||'').trim(),
       newProject:PB?()=>H().projNew():undefined,
       exportFile:()=>H().exportJSON(), importFile:()=>fIn.click(),
-      fileButtons:[bEx,bIm], extras:[bRs], header:psHdrRef.current, chipBefore:psUndoRef.current });
+      fileButtons:[bEx,bIm], extras:[bRs], header:psHdrRef.current, chipBefore:psUndoRef.current,
+      /* HDRS (2026-11-06, engineer: every app's header as in Spread Footing #884; shared/bridge-suite-projects.js passes headerSave:false):
+         the header has the chip only; Save / Saved projects… are in the "Save and open" card, Ctrl+S / Ctrl+Shift+S work from anywhere. A chip click opens Inputs › Project (the card first), as the hidden header link #hdrProj does (PSHD psbGoProj; its click handler is reused). */
+      chipClick:()=>{ const a=document.getElementById('hdrProj'); if(a) a.click(); }, chipHint:'Inputs › Project (Save and open)' });
     if(!pb) return;
     pb.el.save.classList.add('btn','sm'); pb.el.lib.classList.add('btn','sm','ghost'); pb.el.chip.classList.add('noprint');
     pb.el.card.querySelectorAll('button').forEach(b=>b.classList.add('btn','sm'));
