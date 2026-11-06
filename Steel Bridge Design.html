@@ -91,6 +91,7 @@ header { flex-wrap: wrap; height: auto; min-height: var(--header-h); row-gap: 6p
 #gd-savecard .spRow .proj-btn { width: auto; flex: 1 1 auto; }
 /* GDHD (2026-11-06): one header row as in the other tools (chip · Save · Saved projects… · Print); the bridge-wide actions (Design all,
    Girder report, 3D view, Export DXF) after Suggest in the top bar, the owner next to the project title block */
+@media (min-width: 901px) { header { flex-wrap: nowrap; } header .brand { flex: 0 1 auto; } header .bx-all-tools, header .hdr-group { flex-shrink: 0; } }   /* the subtitle is cut (…) before the header wraps */
 .gd-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .gd-top .own-pill { margin-left: auto; }
 .gd-top .own-pill + .tb-sum { margin-left: 0; }
