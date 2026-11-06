@@ -19831,7 +19831,7 @@ index 06a42e4..b58d4e3 100644
   - before / after screenshots at 1920 and 390 px looked at.
 - **Saved data:** no change.
 
-## 2026-11-06 — PR: claude/pile-stds (STDS-P) — the standard save over the IndexedDB library: header chip + Undo + Redo + Save + Saved projects…, "Save and open" card, standard dialog, Save as, Ctrl+S, GitHub sync, home-page entry (storage and display only, no result change)
+## 2026-11-06 — PR: claude/pile-stds (PR #859: https://github.com/mlococo88/All-Structural/pull/859) (STDS-P) — the standard save over the IndexedDB library: header chip + Undo + Redo + Save + Saved projects…, "Save and open" card, standard dialog, Save as, Ctrl+S, GitHub sync, home-page entry (storage and display only, no result change)
 - **Engineer:** the standard save (approved 2026-11-05). Pile Designer: KEEP IndexedDB; add a by-name adapter (newest of each name, as apps/steel-bridge) for the standard bar / dialog, GitHub sync and a home-page registry entry.
 - **Where:**
   - Head: new `<script src="shared/github-sync.js"></script>` after `shared/projects-ui.js`.
