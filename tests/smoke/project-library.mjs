@@ -213,11 +213,12 @@ export const TOOLS = {
     // shared Saved projects dialog); not run by this file (results: tests/compare.mjs --tool gd). Results after gdIdle: the modules'
     // project P (without ui, ts zeroed) and the open module's checks; save = Save as (asks the name; a name in use asks to overwrite).
     file: 'Steel Bridge Design.html', list: 'girderdetail_projects_v1', auto: 'girderdetail_autosave_v1', noRun: true,
-    ready: async p => { await p.waitForFunction(() => typeof window.gdIdle === 'function' && document.getElementById('pb_saveas'), null, { timeout: 120000 }); await p.evaluate(() => window.gdIdle({ quiet: 3000 })); },
+    // STDS-G (2026-11-06): the standard save (one Save writes both girderdetail_projects_v1 and plateline_projects_v1); main: the old pane
+    ready: async p => { await p.waitForFunction(() => typeof window.gdIdle === 'function' && (document.getElementById('pb_saveas') || (window.SharedProjectsUI && SharedProjectsUI.bars && SharedProjectsUI.bars[0])), null, { timeout: 120000 }); await p.evaluate(() => window.gdIdle({ quiet: 3000 })); },
     results: async p => { await p.evaluate(() => window.gdIdle({ quiet: 3000 })); return p.evaluate(() => { const q = JSON.parse(JSON.stringify(P)); delete q.ui;
       return JSON.parse(JSON.stringify({ P: q, CK: typeof CK !== 'undefined' && CK ? CK.map(c => [c.id, c.status, c.items.map(i => [i.loc, i.st, i.r != null && isFinite(i.r) ? +i.r : null])]) : null }).replace(/"ts":\d+/g, '"ts":0')); }); },
     change: p => bump(p, 'input[type=number][data-k]', 1),
-    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('pb_saveas').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(400); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('pb_saveas').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(400); }   // STDS-G: the standard Save as (branch), the old Save as (main)
   },
   spreadfooting: {
     file: 'Spread Footing.html', list: 'sfd_projects', auto: 'sfd_auto', ownUndo: true,   // the tool's own Undo / Redo (U-2) is unchanged and not re-tested here

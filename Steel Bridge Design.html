@@ -21345,12 +21345,13 @@ function gdStdInit() {
       if (it.gd !== undefined) loadData(it.gd, n); else named(n);
       const miss = it.gd === undefined ? 'the modules' : it.pl === undefined ? 'Preliminary sizing' : '';
       const msg = miss ? `Opened "${n}": it has no saved part for ${miss} (it was saved before one Save kept both), so ${miss} ${miss === 'the modules' ? 'keep' : 'keeps'} the inputs on screen. Save keeps both under "${n}".` : `Opened "${n}".`;
-      if (it.pl === undefined) gdPlName(n, msg);
+      if (it.pl === undefined || miss) gdPlName(n, miss ? msg : '');   // its open name (sbdPlLoad sets it when it has a part) and the message
       flash(msg); return true; },
     deleted: n => { if (CUR === n) { named(''); gdPlName(''); } },
     exportFile: n => SharedProjectsUI.download(String(n || P.meta.subject || 'steel_bridge_design').replace(/[^\w\-]+/g, '_') + '.json', JSON.stringify({ ...sbdProjectFile(), name: n || CUR || '' }, null, 2)),
     importFile: () => $('#pb_file').click(), fileButtons: [$('#pb_export'), $('#pb_import')],
     header: $('#gd-hdr-proj'), card: $('#gd-savecard'),
+    note: '<p class="spNote">Each saved project holds the design modules and Preliminary sizing under one name; Open, Rename, Duplicate and Delete act on both (a project saved before 2026-11-06 may hold only one of them: opening it keeps the other part\u2019s inputs on screen). Open asks first when the project on screen has unsaved changes. Delete removes the browser copy (with Cloud sync on, it asks whether to delete the GitHub copy too). Export makes a .json file of one saved project.</p>',
     cloud: { tool: 'steel-bridge-design', label: 'Steel Bridge Design', space: 2, toFile: sbdPairFile,
       fromFile: j => { if (j.app === 'SteelBridgeDesign') { const m = sbdMigrate(j); if (!m) throw new Error('a newer Steel Bridge Design file than this copy reads'); const it = {};
           if (m.data && typeof m.data === 'object') it.gd = m.data; if (m.pl && m.pl.data && typeof m.pl.data === 'object' && m.pl.data.girder) it.pl = m.pl.data;
