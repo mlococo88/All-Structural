@@ -28,7 +28,7 @@ const settled = () => p.waitForFunction(() => GD_UNDO.sizes().pend === 0, null, 
 const idle = () => p.evaluate(() => window.gdIdle({ quiet: 3000 }));
 const dis = () => p.evaluate(() => [document.getElementById('gd-undo').disabled, document.getElementById('gd-redo').disabled].join(','));
 
-ok(await p.evaluate(() => [...document.getElementById('gd-hdr-proj').children].map(b => b.dataset.sp || b.id).join('|')) === 'chip|gd-undo|gd-redo|hsave|hlib|btn-print', 'header: chip · Undo · Redo · Save · Saved projects… · Print');
+ok(await p.evaluate(() => [...document.getElementById('gd-hdr-proj').children].map(b => b.dataset.sp || b.id).join('|')) === 'chip|gd-undo|gd-redo|btn-print', 'header: chip · Undo · Redo · Print (HDRS #907: Save / Saved projects… in the card only)');
 for (const w of [1280, 1400, 1920]) { await p.setViewportSize({ width: w, height: 900 }); await p.waitForTimeout(300);
   const h = await p.evaluate(() => { const r = document.querySelector('header').getBoundingClientRect(), t = [...document.querySelectorAll('header .brand, header .hdr-group > *')].filter(e => e.offsetParent).map(e => e.getBoundingClientRect()); return { h: Math.round(r.height), one: t.every(x => x.top < r.top + r.height / 2 && x.bottom > r.top + r.height / 2) }; });
   ok(h.one && h.h <= 64, `${w} px: header on one row (${h.h} px)`); if (SHOTS) await p.screenshot({ path: path.join(SHOTS, `sbd-undo-hdr-${w}.png`), clip: { x: 0, y: 0, width: w, height: 240 } }); }
@@ -86,7 +86,7 @@ const bar = await F.evaluate(() => { localStorage.setItem('plateline_undo_v1', J
 ok(bar.hidden && bar.key, 'embedded: Preliminary sizing\'s Revert bar not shown (its key kept as written)');
 // 10. Open of a saved project starts the history again
 await p.evaluate(() => GD_PB.saveAs()); await p.fill('dialog.spSave .spName', 'Undo test'); await p.evaluate(() => document.querySelector('dialog.spSave [data-sa=ok]').click()); await p.waitForTimeout(800);
-await p.evaluate(() => { document.querySelector('[data-sp=hlib]').click(); }); await p.waitForTimeout(400);
+await p.evaluate(() => { document.querySelector('#gd-savecard [data-sp=lib]').click(); }); await p.waitForTimeout(400);   // HDRS (#907): the card's Saved projects…
 await p.evaluate(() => document.querySelector(`#gdLibDlg [data-spa=open][data-n="${CSS.escape(encodeURIComponent('Undo test'))}"]`).click()); await p.waitForTimeout(800);
 await p.evaluate(() => { const d = document.getElementById('gdLibDlg'); if (d && d.open) d.close(); });
 z = await sizes(); ok(z.undo === 0 && z.redo === 0, 'Open of a saved project: the history starts again');

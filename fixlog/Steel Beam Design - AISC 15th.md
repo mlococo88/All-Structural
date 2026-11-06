@@ -2542,3 +2542,7 @@ function sectionFor(fam,label,gradeId){
 - **How verified:** main vs branch on the default project: every localStorage key (0), page text (11193 chars), Export JSON (4428 chars identical) and the printed report text (print media, 64796 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Steel Beam Design - AISC 15th.html"`; `node tests/smoke/project-library.mjs --tool steelbeam`; `node tests/smoke/github-sync-tools.mjs --tool steelbeam`; `node tests/smoke/home-projects.mjs --tool steelbeam`; `node tests/smoke/phone-layout.mjs --tool sbeam`: pass.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+## 2026-11-06 — PR: claude/hdrs-tests-sbeam (PR #912: https://github.com/mlococo88/All-Structural/pull/912) (HDRS-T) — tests only: `tests/smoke/steel-beam-builtup.mjs` after the header change (HDRS, #891)   [no tool change]
+- **Why:** #891 took Save and Saved projects… out of the header; `steel-beam-builtup.mjs` opened saved projects through the header's Saved projects… (`[data-sp=hlib]`).
+- **What:** `openP()` clicks the chip (Project tab) and then the card's Saved projects… (`#sbSaveCard [data-sp=lib]`). Nothing else changed.
+- **How verified:** `node tests/smoke/steel-beam-builtup.mjs`: 11 checks passed. **Saved data / formulas:** none (test file only).
