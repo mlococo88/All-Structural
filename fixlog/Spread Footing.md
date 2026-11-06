@@ -6177,7 +6177,7 @@ index 50f3837..c2d5000 100644
 - **Saved data:** none.
 - **Other copies:** none.
 
-## 2026-11-06 — PR: claude/sf-off-governs (SFNB-3: a service combination with no bearing solution (resultant off the footing, or net load not downward) has bearing D/C = ∞ and governs bearing as FAIL, also when other combinations have finite D/Cs; CALCULATION CHANGE, pass / fail logic; unchanged when every combination has a bearing solution)
+## 2026-11-06 — PR: claude/sf-off-governs (PR #923: https://github.com/mlococo88/All-Structural/pull/923) (SFNB-3: a service combination with no bearing solution (resultant off the footing, or net load not downward) has bearing D/C = ∞ and governs bearing as FAIL, also when other combinations have finite D/Cs; CALCULATION CHANGE, pass / fail logic; unchanged when every combination has a bearing solution)
 
 - **Why (engineer, 2026-11-06, answer to the SFNB-1 open item):** any service combination whose resultant is off the footing must make Bearing FAIL, consistent with the ∞ rule (SFNB-2), even when other combinations have a finite D/C. Net-uplift combinations ("net load not downward") get the same treatment. Overturning and Contact area stay as they are.
 - **Before:** such a combination had `DCR = null` and was left out of the governing selection. Bearing could PASS on the remaining combinations: only the "unstable" error, the Overturning chip and the Contact chip flagged it.
