@@ -2967,8 +2967,10 @@ function renderBearing(){
    '\\text{Converged in }'+bp.iter+'\\text{ iterations}'+(bp.converged?'\\;(\\text{residuals}\\approx0)':'\\;(\\textbf{NOT fully converged \u2014 verify})')));
  }else if(lvT){
   b1.appendChild(el('div','note','Net factored vertical load is not downward (\u03a3P \u2264 0): no pressure distribution for this combination.'));
+ }else if(bp.mode==='tension'){   /* SFNB-3: net uplift (the message above was for a resultant off the footing) */
+  b1.appendChild(el('div','errbox','Net vertical load is not downward (\u03a3P = '+f2(r.P)+' kip \u2264 0) \u2014 no bearing pressure, no contact. Bearing D/C = \u221e (FAIL).'));
  }else{
-  b1.appendChild(el('div','errbox','Resultant falls outside the footing footprint \u2014 no equilibrium pressure distribution exists (unstable).'));
+  b1.appendChild(el('div','errbox','Resultant falls outside the footing footprint \u2014 no equilibrium pressure distribution exists (unstable).'+(lv?'':' Bearing D/C = \u221e (FAIL): '+sfEsc(sfdBearWhy(g))+'.')));
  }
  const qc=(bp.mode==='full'||bp.mode==='partial')?sfqcCard(bp,r):null;if(qc)b1.appendChild(qc);   /* SFQC: the four corner pressures, worked */
  const hm=el('div','plot');hm.id='plot-heat';b1.appendChild(hm);

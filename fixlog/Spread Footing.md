@@ -6190,6 +6190,7 @@ index 50f3837..c2d5000 100644
   - Bearing tab:
     - Card 3.3 has a new branch when the governing (or selected) combination has no capacity (`!g.cap`): "3.3 Bearing Check — No Bearing Solution" with "D/C = ∞ (FAIL): <reason>". Before, `g.cap.fail` threw for a selected off-footing combination.
     - With an LRFD row selected, card 3.1 states the service bearing FAIL.
+    - Card 3.2: a combination with net uplift (`bp.mode==='tension'`) now reads "Net vertical load is not downward (ΣP = … kip ≤ 0) — no bearing pressure, no contact. Bearing D/C = ∞ (FAIL)." Before, it read "Resultant falls outside the footing footprint", which is the off-footing message. The off-footing message adds "Bearing D/C = ∞ (FAIL): <reason>" for a service combination.
   - Report: when `!G.cap`, S-bp "Base pressure (governing combination) — no solution" and S-qa become warn notes with the reason. Its resultant is still worked in S-res. The "every combination" table and its ∞ notes, table 2.3 ("∞") and plot 2.4 (red ∞ bar) follow from the D/C.
 - **Governing provision:** no formula changed. The bearing check (ASCE 7-16 §2.4.1 service; Vesić / AASHTO LRFD 10th Ed. Art. 10.6.3.1.2a, or the direct q_a) is evaluated only where a no-tension pressure solution exists. A combination without one (|e_x| ≥ B/2 or |e_y| ≥ L/2, or ΣP ≤ 0) cannot be supported in bearing, so it fails the check: D/C = ∞.
 - **Check case 1 (direct factored mode, default project, Ped 1 V_y = 578 k, between the bracket thresholds 571.7 and 583.9 k):**
