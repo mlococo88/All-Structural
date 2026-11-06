@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 // shared/list-input.js in the browser (LIST, 2026-11-02), and the tools that load it: results unchanged, saved text unchanged.
-//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge,secpropren] [--a origin/main] [--shots <dir>]
+//   node tests/smoke/list-input.mjs [--part widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge,secpropren] [--a <ref> | --orig] [--shots <dir>] [--out <dir>]
 // widget: a test page with the table (typing, Enter, "," key, paste from Excel, remove, checks and labels), bindInput (hidden
 //         <input> kept as the text, scripted value redraws the table) and the React wrapper (React 18.2.0 from tests/libs).
-// smd (one key per tool in TOOLS): the tool from --a (default: the entry's `a`, the main commit before its table landed, else
-//         origin/main; with its shared/ folder) and from the working tree, each on its default
-//         project and on one project with custom stations (typed into the old box on A, into the table on B): every computed
-//         result and the page text (table elements removed) must be identical, the saved text the same, 0 console errors.
-//         --shots: screenshots of the table at 1400 and 390 px.
+// smd (one key per tool in TOOLS): the tool from A (with its shared/ folder) and from the working tree, each on its default
+//         project and on one project with custom stations: every computed result and the page text (table elements removed)
+//         must be identical, the saved text the same, 0 console errors.
+//         A = --a <ref>, else BASE (the recorded reference commit below), or with --orig the entry's `a` (the main commit before
+//         its table landed, as the LIST PRs were checked). The values are typed into the table on a side that has it, else into the
+//         old box (typeOld).
+//         --shots: screenshots of the table at 1400 and 390 px. --out: the raw readouts of A and B per tool and case (JSON).
+// Re-baseline (tests/README.md): when a later PR changes only display text of a tool (headers, Report tab, button labels), run
+// with --out on main, check that every difference is display text (no result, input or saved-data field), then set BASE to that
+// main commit. Never re-baseline a difference in a result, an input or saved data.
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
@@ -18,6 +23,10 @@ const args = {}; const av = process.argv.slice(2);
 for (let i = 0; i < av.length; i++) { if (!av[i].startsWith('--')) continue; const k = av[i].slice(2); args[k] = av[i + 1] && !av[i + 1].startsWith('--') ? av[++i] : true; }
 const parts = String(args.part || 'widget,smd,sbeam,bsl,bgeo,gusset,secprop,index,stonearch,pbd,bpad,sbridge,secpropren').split(',');
 const shots = args.shots ? path.resolve(String(args.shots)) : null; if (shots) fs.mkdirSync(shots, { recursive: true });
+const outDir = args.out ? path.resolve(String(args.out)) : null; if (outDir) fs.mkdirSync(outDir, { recursive: true });   // raw readouts A / B per tool and case
+// BASE: origin/main at the re-baseline of 2026-11-06 (RLI). Differences from the entries' `a` commits checked as display text only
+// (smd, sbeam, bsl, secprop, index, pbd, sbridge, secpropren: the standard save card, headers, Report tab additions, labels).
+const BASE = '6c3b1bcc62';
 let fails = 0;
 const ok = (c, m) => { if (!c) { fails++; console.log('  FAIL ' + m); } else console.log('  ok   ' + m); };
 
@@ -417,14 +426,15 @@ function showDiff(x, y) {
 }
 async function tool(key) {
   const T = TOOLS[key]; console.log(`${key}: ${T.file}`);
-  const A = refDir(args.a || T.a || 'origin/main', T.file, T.archive), B = path.join(REPO, T.file);
+  const A = refDir(args.a || (args.orig ? T.a : BASE), T.file, T.archive), B = path.join(REPO, T.file);
   const run = async (file, side, kase) => {
     const { b, p, errs, blocked } = await openPage(file, { vw: 1400, vh: 1000, timeout: T.timeout });
     try {
       await T.setup(p);
       if (kase === 'custom') {
         if (T.template) await T.template(p);
-        if (side === 'A') await T.typeOld(p, T.values); else if (T.typeNew) await T.typeNew(p, T.values); else await typeTable(p, T.tableSel, T.values);
+        const table = side === 'B' || !!(await p.$(T.tableSel));   // A older than the tool's table: the old box
+        if (!table) await T.typeOld(p, T.values); else if (T.typeNew) await T.typeNew(p, T.values); else await typeTable(p, T.tableSel, T.values);
         await p.waitForTimeout(1500);
       }
       const r = await T.read(p); r.savedText = await T.saved(p);
@@ -450,6 +460,7 @@ async function tool(key) {
     const sa = JSON.parse(JSON.stringify({ ...ra, errs: 0, over: 0, blocked: 0 })), sb = JSON.parse(JSON.stringify({ ...rb, errs: 0, over: 0, blocked: 0 }));
     if (rb.blocked.length) console.log('       (blocked offline: ' + rb.blocked.join(', ') + ')');
     const d = diff(sa, sb);
+    if (outDir) { fs.writeFileSync(path.join(outDir, `${key}-${kase}-A.json`), JSON.stringify(sa, null, 1)); fs.writeFileSync(path.join(outDir, `${key}-${kase}-B.json`), JSON.stringify(sb, null, 1)); }
     ok(!d.length, `${kase}: results, page text and saved data identical (hash ${hash(sa)} / ${hash(sb)})` + (d.length ? '\n       ' + d.slice(0, 8).map(x => `${x[0]}: ` + showDiff(x[1], x[2])).join('\n       ') : ''));
     const want = T.expect || T.values;
     if (kase === 'custom') ok(ra.savedText === want && rb.savedText === want, `custom: saved text "${rb.savedText}" (A "${ra.savedText}")`);
