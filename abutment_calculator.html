@@ -462,10 +462,9 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
         <button id="btnExport" title="Download all inputs as a JSON backup file">Export JSON</button>
         <button id="btnImport" title="Load inputs from a JSON backup file">Import JSON</button>
         <input type="file" id="importFile" accept=".json,application/json" style="display:none">
-        <button id="btnReset" title="Reset all inputs to built-in defaults">Reset Defaults</button>
         <button id="btnCompare" title="Compare two saved projects (inputs + D/C side by side)">Compare…</button>
         <button id="btnSelfTest" title="Re-run the built-in validation benchmark through the live engine">Self-Test</button>
-        </div><div class="in-note">Reset Defaults: the built-in inputs (saved projects are kept). Compare two saved projects; re-run the built-in validation benchmark.</div>
+        </div><div class="in-note">New: the built-in inputs (saved projects are kept). Compare two saved projects; re-run the built-in validation benchmark.</div>
       </div></div>
       <div class="panel"><div class="p-head"><span class="tri">▼</span><span>Title block</span></div><div class="p-body">
     <div class="proj-block" id="projBlock">
@@ -10114,7 +10113,7 @@ const AB_GH=null;   // STDS (2026-11-06): the sync is the standard dialog's (abS
 /* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over PROJ_KEY (abutcalc_v1_projects: { name: { state, ts } },
    key and item format unchanged). Header: chip · Undo · Redo · Save · Saved projects… · (input ID, autosave status) · Print; the
    Project input tab's first card "Save and open": Save · Save as… · Saved projects… · New; Export JSON · Import JSON; Reset Defaults ·
-   Compare… · Self-Test (the same buttons and handlers). Save = abSaveNamed (the old Save Project: a revision in S.meta, the item
+   Compare… · Self-Test (the same buttons and handlers; Reset Defaults removed by RSTN, 2026-11-06: New does the same). Save = abSaveNamed (the old Save Project: a revision in S.meta, the item
    { state: copy of S, ts }); Open = the old Load (S = state, migrate, rebuild, autosave); New = Reset Defaults without its confirm
    (projectBar asks first on unsaved changes); Overwrite is Save on the open project. Rename / Duplicate / Delete: the standard dialog
    (items move / are copied unchanged). GitHub sync: as GHS2 (#815), same folder projects/abutment-calculator/, toFile = state, fromFile
@@ -10134,7 +10133,7 @@ function abStdsInit(){
     displayName:()=>S.proj&&S.proj.name||"",
     exportFile:n=>{ SharedProjectsUI.download(String(n||S.proj.name||"abutment").replace(/[^\w\- ]/g,"").trim().replace(/\s+/g,"_")+"_abutment_calc.json",JSON.stringify(S,null,2)); markSavedFp(); },
     importFile:()=>$("importFile").click(),
-    fileButtons:[$("btnExport"),$("btnImport")], extras:[$("btnReset"),$("btnCompare"),$("btnSelfTest")],
+    fileButtons:[$("btnExport"),$("btnImport")], extras:[$("btnCompare"),$("btnSelfTest")],
     header:hb, chipBefore:$("btnUndo"), headerBefore:$("fpBadge"), card:$("abSaveCard"),
     cloud:{ tool:"abutment-calculator", label:"Abutment Calculator", space:2, toFile:i=>i.state,
       fromFile:o=>{ const tag=o._schema||o.schema; if(tag||!o.geom||!o.proj) throw new Error("not an abutment-calculator project file"); return abutMergeState(o); /* store.save packs it as { state, ts } */ } } });
@@ -10195,11 +10194,8 @@ document.getElementById("importFile").addEventListener("change",ev=>{
   };
   rd.readAsText(f);
 });
-document.getElementById("btnReset").addEventListener("click",()=>{
-  if(!confirm("Reset ALL inputs to built-in defaults? (Saved projects are kept.)")) return;
-  S=defaultState(); seedExampleReactions(); migrate();
-  buildTabs(); buildInputs(); recalcAll(); scheduleSave(); refreshProjHeader(); markSavedFp();
-});
+/* RSTN (2026-11-06): the "Reset Defaults" button and its handler removed: it did what New does (abStdsInit reset()); New asks only on
+   unsaved changes and leaves no saved project open */
 
 /* ---------- Elastomeric Design Module (EDM) linkage ---------- */
 let EDM_WIN=null;
