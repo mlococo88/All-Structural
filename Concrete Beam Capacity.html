@@ -96,6 +96,7 @@
 <script src=&quot;https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js&quot;></script>
 <script src=&quot;shared/projects.js&quot;></script>
 <script src=&quot;shared/projects-ui.js&quot;></script>
+<script src=&quot;shared/github-sync.js&quot;></script><!-- STDS (2026-11-06): GitHub sync of the saved projects (off until set up) -->
 <script src=&quot;shared/dxf.js&quot;></script><!-- CBDW: DXF writer, sheet preview and printing (Drawings tab) -->
 <style>
 :root{
@@ -430,6 +431,12 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
 #prjPane .prjBtns{display:flex;flex-wrap:wrap;gap:6px}
 #prjPane .prjBtns button{font-family:var(--font-ui);font-size:9pt;padding:4px 10px;border-radius:4px;border:1px solid var(--color-border);background:#fff;color:var(--navy-800);cursor:pointer}
 #prjPane .prjBtns button:hover{background:#E8ECF1}
+/* STDS (2026-11-06): the standard &quot;Save and open&quot; card (shared/projects-ui.js projectBar) in the Project input tab: same buttons as .prjBtns */
+#prjPane .spCard button{font-family:var(--font-ui);font-size:9pt;padding:4px 10px;border-radius:4px;border:1px solid var(--color-border);background:#fff;color:var(--navy-800);cursor:pointer}
+#prjPane .spCard button:hover{background:#E8ECF1}
+#prjPane .spCard button.spPri{background:var(--navy-800);border-color:var(--navy-800);color:#fff}
+#hdrBtns button.spChip{flex:0 0 auto;max-width:100%;white-space:nowrap}
+body dialog.spLib{font-family:var(--font-ui)}
 @media screen and (max-width:899px){#hdrProj{flex:1 1 100%;max-width:none}}
 /* PHN (2026-11-02): phone / tablet (below 900 px): one column, this frame's page scrolls (the panels do not scroll on their own);
    the title fields wrap; 900 px and up unchanged */
@@ -514,7 +521,7 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
       </div>
       <div id=&quot;statusChip&quot; title=&quot;Overall worst demand/capacity — click for the Summary dashboard&quot;>—</div>
       <div id=&quot;hdrBtns&quot;><!-- HDR (2026-11-05): the project line and the global actions; Undo / Redo are inserted before Print (plibUndoInit) -->
-        <a id=&quot;hdrProj&quot; href=&quot;#&quot; title=&quot;Project name and number: edit them in the Project input tab&quot;>Project: <span id=&quot;hdrProjTxt&quot;></span></a>
+        <a id=&quot;hdrProj&quot; hidden href=&quot;#&quot; title=&quot;Project name and number: edit them in the Project input tab&quot;>Project: <span id=&quot;hdrProjTxt&quot;></span></a>
         <button class=&quot;pri&quot; id=&quot;btnPrint&quot; title=&quot;Print / PDF the suite's calculation report (the Report tab), from any tab&quot;>Print / PDF</button>
       </div>
     </div>
@@ -522,20 +529,16 @@ table.vt th,table.rt th,table.dt th,table.lyrT th,table.cbT th{background:#EEF2F
   <div id=&quot;main&quot;>
     <aside id=&quot;cbcDashCol&quot; aria-label=&quot;Check summary&quot;></aside><!-- CBDC (2026-11-05): the check summary panel on screens 1500 px and wider -->
     <div id=&quot;inputPanel&quot;><div id=&quot;prjPane&quot;><!-- HDR (2026-11-05): the Project input tab; moved here from the header, kept across rebuilds by buildInput() -->
-      <div class=&quot;sec&quot; id=&quot;prjTitleSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Title block</h2></div><div class=&quot;secBody&quot;>
-        <div id=&quot;projGrid&quot;></div>
-        <div class=&quot;note&quot;>Printed on the Report and the drawing sheets (DXF title block).</div>
-      </div></div>
-      <div class=&quot;sec&quot; id=&quot;prjFileSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Project file</h2></div><div class=&quot;secBody&quot;>
-        <div class=&quot;prjBtns&quot;>
-        <button class=&quot;b&quot; id=&quot;btnNew&quot;>New</button>
-        <button class=&quot;b&quot; id=&quot;btnSave&quot;>Save Project</button>
-        <button class=&quot;b&quot; id=&quot;btnLoad&quot;>Open</button>
+      <div class=&quot;sec&quot; id=&quot;prjFileSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Save and open</h2></div><div class=&quot;secBody&quot;><!-- STDS (2026-11-06): was &quot;Project file&quot; (New / Save Project / Open / Export / Import); the standard save card (cbcStdsInit) -->
+        <div id=&quot;cbcSaveCard&quot;>
         <button class=&quot;b&quot; id=&quot;btnExport&quot;>Export JSON</button>
         <button class=&quot;b&quot; id=&quot;btnImport&quot;>Import JSON</button>
         <input type=&quot;file&quot; id=&quot;fileIn&quot; accept=&quot;.json,application/json&quot; style=&quot;display:none&quot;>
         </div>
-        <div class=&quot;note&quot;>Save Project / Open: the projects saved in this browser. Export / Import JSON: a file to back up or move to another computer.</div>
+      </div></div>
+      <div class=&quot;sec&quot; id=&quot;prjTitleSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Title block</h2></div><div class=&quot;secBody&quot;>
+        <div id=&quot;projGrid&quot;></div>
+        <div class=&quot;note&quot;>Printed on the Report and the drawing sheets (DXF title block).</div>
       </div></div>
       <div class=&quot;sec&quot; id=&quot;prjShareSec&quot;><div class=&quot;secHead&quot;><h2 class=&quot;secTitle&quot;>Shared project info</h2></div><div class=&quot;secBody&quot;>
         <div class=&quot;prjBtns&quot;>
@@ -4640,7 +4643,7 @@ function doExport(){
 }
 function doImport(f){
   const rd=new FileReader();
-  rd.onload=()=>{ try{ mergeState(JSON.parse(rd.result)); autosave(); refresh(); if(PLU) PLU.h.reset(); /* PLIB */ }
+  rd.onload=()=>{ try{ mergeState(JSON.parse(rd.result)); autosave(); refresh(); if(PLU) PLU.h.reset(); /* PLIB */ if(CBPB) CBPB.setCurrent(null); /* STDS: an imported file is not a saved project */ }
     catch(e){ alert(&quot;Could not read that file: &quot;+e.message); } };
   rd.readAsText(f);
 }
@@ -5254,13 +5257,44 @@ function plibUndoInit(){
   let tm=null; h.reset();
   PLU={ h, soon:()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); }, full:()=>{ const o=Object.assign({},S); delete o.ui; return JSON.stringify(o); } };
 }
+/* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over LS_PROJ (rcbeam_v2_projects: { name: a copy of S with
+   __savedAt (ISO) }, key and item format unchanged). Replaces the tab's own Save Project / Open dialog (#prjBg, openProjDialog: kept,
+   no longer opened) and the New / Save Project / Open buttons. Header: chip · Undo · Redo · Save · Saved projects… · Print / PDF; the
+   Project input tab's first card &quot;Save and open&quot;: Save · Save as… · Saved projects… · New; Export JSON · Import JSON (the same buttons
+   and handlers). Save writes the record saveAs() wrote (a copy of S, __savedAt = now) and, as before, fills an empty title-block
+   project name with the saved name; Open = loadProject (mergeState, autosave, refresh, new undo history); New = the old New
+   (defaultState; it stays an undo step) without its own confirm (projectBar asks first on unsaved changes). Rename / Duplicate /
+   Delete: the standard dialog (Rename and Duplicate copy the record unchanged, __savedAt included). GitHub sync (off until set up):
+   folder projects/concrete-beam-capacity/, the file = the stored record (JSON, indent 2). S.ui (views) and __savedAt are left out of
+   the &quot;unsaved changes&quot; comparison. */
+var CBPB=null;
+function cbcStdsInit(){
+  if(!window.SharedProjects||!window.SharedProjectsUI||!SharedProjectsUI.projectBar||CBPB) return;
+  let ST=null; try{ ST=window.localStorage; }catch(e){}
+  const store=SharedProjects.mapStore(ST,LS_PROJ,{ time:i=>i&amp;&amp;i.__savedAt||null, sort:'saved' });
+  const OMIT=['ui','__savedAt'];
+  const hb=document.getElementById('hdrBtns'), pr=document.getElementById('btnPrint');
+  const bu=PLU?[...hb.querySelectorAll('button[data-sp]')].find(b=>b.textContent==='Undo'):null;
+  CBPB=SharedProjectsUI.projectBar({ store, storage:ST, label:'Beam Capacity', id:'cbcLibDlg', omit:OMIT,
+    getState:()=>S,
+    /* the saved record names an empty title-block project name after the project (filled in on screen right after Save, as before) */
+    snapOf:n=>{ const it=store.get(n); if(!it) return null; const c=JSON.parse(JSON.stringify(it)); if(c.proj&amp;&amp;!c.proj.name&amp;&amp;S.proj&amp;&amp;S.proj.name===n) c.proj.name=n; return SharedProjects.canon(c,OMIT); },
+    save:n=>{ const rec=JSON.parse(JSON.stringify(S)); rec.__savedAt=new Date().toISOString(); const r=store.save(n,rec);
+      if(r.ok&amp;&amp;!S.proj.name){ S.proj.name=n; autosave(); refresh(); } return r; },
+    open:n=>loadProject(n),
+    newProject:()=>{ S=defaultState(); autosave(); refresh(); },
+    displayName:()=>S.proj&amp;&amp;S.proj.name||'',
+    exportFile:n=>SharedProjectsUI.download((n||S.proj.name||&quot;beam&quot;).replace(/[^\w\-]+/g,&quot;_&quot;)+&quot;.json&quot;,JSON.stringify(S,null,2)),
+    importFile:()=>document.getElementById(&quot;fileIn&quot;).click(),
+    fileButtons:[document.getElementById('btnExport'),document.getElementById('btnImport')],
+    header:hb, chipBefore:bu||pr, headerBefore:pr, card:document.getElementById('cbcSaveCard'),
+    cloud:{ tool:'concrete-beam-capacity', label:'Concrete Beam Capacity', space:2,
+      fromFile:j=>{ if(!j||typeof j!=='object'||!j.sec||!j.mat) throw new Error('not a Beam Capacity project file'); return j; } } });
+}
 function init(){
   loadAutosave();
   syncCoverPreset();
-  document.getElementById(&quot;btnNew&quot;).addEventListener(&quot;click&quot;,()=>{
-    if(confirm(&quot;Discard the current calculation and start a new one?&quot;)){ S=defaultState(); autosave(); refresh(); } });
-  document.getElementById(&quot;btnSave&quot;).addEventListener(&quot;click&quot;,doSave);
-  document.getElementById(&quot;btnLoad&quot;).addEventListener(&quot;click&quot;,doLoad);
+  /* STDS (2026-11-06): New / Save Project / Open are the standard save controls now (cbcStdsInit) */
   document.getElementById(&quot;btnExport&quot;).addEventListener(&quot;click&quot;,doExport);
   document.getElementById(&quot;btnImport&quot;).addEventListener(&quot;click&quot;,()=>document.getElementById(&quot;fileIn&quot;).click());
   document.getElementById(&quot;fileIn&quot;).addEventListener(&quot;change&quot;,e=>{
@@ -5280,6 +5314,7 @@ function init(){
   });
   refresh();
   plibUndoInit();   // PLIB: after start-up, so restoring the session is not a step
+  cbcStdsInit();   // STDS
 }
 if(document.readyState===&quot;loading&quot;) document.addEventListener(&quot;DOMContentLoaded&quot;,init);
 else init();
