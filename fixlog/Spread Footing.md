@@ -5677,6 +5677,50 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** engineer to decide whether other apps follow (they keep the header Save until then).
 
+## 2026-11-06 — PR: claude/sf-ldc-always (PR #900: https://github.com/mlococo88/All-Structural/pull/900) — Option "Always require ℓ_dc for dowels (detailing practice)": ℓ_dc checked for every pedestal / wall regardless of the ACI 318-19 16.3.1.2(a) bearing gate (SFLA; calculation option, default off = no change)
+
+### SFLA. Option: always require dowel compression development ℓ_dc   [pass / fail logic option; CLAUDE.md §4]
+- **Engineer (2026-11-06):** add the option, default off. On: the ℓ_dc ≤ available check applies to every pedestal and wall whatever the SFBC (#773) gate gives, as before #773. Off: exactly as now. Where only the option requires it, every display says so.
+- **Provisions (cited, paraphrased):** ACI 318-19 16.3.1.2(a): the dowels need transfer only the compression beyond the lesser concrete bearing strength (16.3.3.4). 25.4.9.2: ℓ_dc = max(0.02d_b f_y/(λ√f′c), 0.0003d_b f_y, 8 in), √f′c ≤ 100 psi (25.4.1.4). The option is a detailing practice stricter than the code; ℓ_dc itself is unchanged.
+- **Where:**
+  - Input: Reinforcement tab, section "Pedestal Reinforcement & Dowels", checkbox after the section note (anchor `<!-- SFLA -->`), `data-path="mat.ldcAlways"`, values `'off'` (default) / `'on'`. `defaultState().mat.ldcAlways='off'`; `migrateState`: `if(state.mat.ldcAlways!=='on')state.mat.ldcAlways='off';` (saves without the field: off, the 16.3.1.2(a) gate as before).
+  - `computePhase2`, concrete bearing (anchor `const ldcGate=`).
+    - Before:
+      ```
+      const ldcReq=!isPatch&&PuMax>phiBgate+1e-9;
+      ```
+    - After:
+      ```
+      const ldcGate=!isPatch&&PuMax>phiBgate+1e-9;
+      const ldcByOpt=!isPatch&&!ldcGate&&state.mat.ldcAlways==='on';
+      const ldcReq=ldcGate||ldcByOpt;
+      ```
+      and in the returned object `...(ldcByOpt?{ldcByOpt:true}:{})` after `ldcReq` (the field exists only when true, so `P2` is unchanged with the option off). `ldcOK` is unchanged: `isPatch?true:(!ldcReq||Ldc<=availEmb)`.
+  - Display where `ldcByOpt` (the text "required by the engineer's option (detailing practice); ACI 318-19 §16.3.1.2(a) would not require it here"):
+    - Card 5.6: L_dc cell "(option)"; a note listing each such element (P_u ≤ φB_n, L_dc vs available, OK/NG); legend item "L_dc (option)" (`sfdBearLegend`).
+    - Card 5.6 dowel table: "(engineer's option)" in the ℓ_dc column; a note under step (1) with P_u ≤ φB_n.
+    - Dashboard chip "Dowel development (ℓdc)": the elements and the text appended; the Report checks-table reference (`sfdResultRows`) names the option when on.
+    - Report: step `cb<i>.ldcq` note ("= 0: … would not require …; required by the engineer's option"); `cb<i>.ldc` and `p<i>.ldc` labels.
+    - Report "Geometry and materials" table: new row "Dowel compression development ℓ_dc (Reinforcement tab)" = "required only where P_u exceeds the concrete bearing strength, ACI 318-19 §16.3.1.2(a)" (off) / "always required (engineer's option, detailing practice)" (on).
+    - Drawings (pedestal detail elevation, `sfdwBuild`): a second note line under "DOWEL EMBED. AVAILABLE …": "L_DC REQUIRED BY THE ENGINEER'S OPTION (DETAILING PRACTICE); ACI 318-19 16.3.1.2(A) WOULD NOT REQUIRE IT HERE".
+    - User manual: checks table row "Dowel development (ℓdc)" and 4C.4 describe the option.
+- **Check case 1, Seymour Platform Foundation, f′c = 3000 psi, option on** (t = 24 in, bottom cover 3 in, #7 both ways: available = 24 − 3 − 0.875 − 0.875 = 19.25 in; √f′c = 54.77 psi):
+  - Ped 1 (32 #6, d_b = 0.750): ℓ_dc = max(0.02·0.750·60000/(1.0·54.77) = 16.43, 0.0003·0.750·60000 = 13.50, 8) = **16.43 in** ≤ 19.25. P_u = 148.92 k ≤ min(6270.79, 6266.33) = 6266.33 k (gate: not required). Before: not required (OK); after: required by the option, **OK**.
+  - Ped 2 (16 #8, d_b = 1.000): ℓ_dc = max(0.02·1.000·60000/54.77 = 21.91, 18.00, 8) = **21.91 in** > 19.25. P_u = 54.05 k ≤ min(2024.26, 2015.35) = 2015.35 k. Before: not required (OK); after: required by the option, **NG**.
+  - Dashboard "Dowel development (ℓdc)": N/A → **FAIL, D/C 21.91/19.25 = 1.14**. Verdict 3 → 4 FAIL (4 → 3 N/A).
+- **Check case 2, default project, option on** (#8 dowels, f′c 4000, √f′c = 63.25; t = 3 ft, available 36 − 3 − 1 − 1 = 25.00 in):
+  - ℓ_dc = max(0.02·1.000·60000/63.25 = 18.97, 18.00, 8) = **18.97 in** ≤ 25.00.
+  - Ped 1 P_u 240.81, Ped 2 P_u 318.81 ≤ min(1432.08, 716.04) = 716.04 k (gate: not required).
+  - Chip N/A → **PASS, D/C 0.76**. Verdict 2 FAIL · 20 PASS · 4 N/A → 2 FAIL · 21 PASS · 3 N/A.
+  - "thin" (t = 8 in, available 3.00 in) with the option: N/A → **FAIL, D/C 6.32** for both pedestals.
+- **How verified:**
+  - Headless Chromium, origin/main e62f9d9 vs the branch, pinned libraries. Deep diff of `R` and `P2`, dashboard text (collapsed and full) and Report text on 18 cases: the 10 harness cases, Seymour 4 ksi and 3 ksi, and option on for def, thin, sfe, rev, dir, sey3.
+  - **Option off (12 cases):** `R`, `P2` and the dashboard identical (0 diffs). Report identical except the new "Geometry and materials" row.
+  - **Option on:** only `P2.bearing[].ldcReq` false → true, the new `ldcByOpt`, and `ldcOK` true → false where ℓ_dc > available (sey3 Ped 2, thin Ped 1 and 2). The dashboard and Report move only in the ℓ_dc rows, steps and the verdict count.
+  - 0 console / KaTeX errors. `node tests/check-syntax.mjs`, `tests/smoke/spread-footing-scroll.mjs`, `tests/smoke/phone-layout.mjs --tool sf`, `tests/smoke/project-library.mjs --tool spreadfooting` and `tests/smoke/start-chooser.mjs` pass. Input row, card 5.6, the dashboard and the pedestal detail note (Seymour 3 ksi, option on) checked by eye.
+- **Saved data:** one new field `mat.ldcAlways` (default and backfill `'off'`); no key or other format change (§5).
+- **Other copies:** none.
+
 ## 2026-11-06 — PR: claude/sf-corner-labels (SFQL: Bearing heat map, corner-pressure labels placed clear of the centroid axes, the plot edge, the colour bar and each other; display only, no result change)
 
 - **Why:** engineer 2026-11-06: the corner-pressure labels of the card 3.2 heat map (SFQC, #777) crowd or overlap the axis lines near the plot; reposition so they never overlap the axes, the colour bar or each other at 1280–1920 px and on a phone (390 px), including the narrow Seymour footing (5 × 13 ft) and the default project.

@@ -10,7 +10,7 @@
 //   node tests/smoke/github-sync-tools.mjs [--tool asce7,baseplate,...]   (keys of tests/smoke/project-library.mjs)
 import path from 'path';
 import { openPage, REPO, diff } from '../lib.mjs';
-import { TOOLS } from './project-library.mjs';
+import { TOOLS, openSavedList } from './project-library.mjs';
 import { makeGitHubMock, gitBlobSha } from '../engine/gh-mock.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
@@ -38,7 +38,7 @@ const OWN = {
 // tools that share one page (the Concrete Beam suite's frames): the other tabs with sync on the same page (their bookkeeping key is written too)
 const SUITE = { rebar: ['cbc', 'asd'], cbc: ['rebar', 'asd'], asd: ['cbc', 'rebar'] };
 const BOX = key => (OWN[key] && OWN[key].box) || 'dialog[open]';
-const showList = (key, p) => OWN[key] ? OWN[key].show(p) : p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)).click(); });
+const showList = (key, p) => OWN[key] ? OWN[key].show(p) : openSavedList(p);   // HDRS: no header Saved projects… (project-library.mjs openSavedList)
 const listOpen = (key, p) => OWN[key] ? OWN[key].open(p) : p.evaluate(() => !!document.querySelector('dialog.spLib[open]'));
 const list = arg('tool', Object.keys(FOLDER).join(',')).split(',');
 const TOKEN = 'github_pat_SMOKE0000000000000000wxyz';

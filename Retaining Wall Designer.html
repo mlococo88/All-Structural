@@ -8322,6 +8322,9 @@ onInputChange();
     importFile: () => $i('proj_import_file').click(),
     fileButtons: [$i('proj_export_btn'), $i('proj_import_btn'), $i('proj_exportall_btn')],
     header: g, chipBefore: bu, card: $i('sec-projmgr'),
+    /* HDRS (2026-11-06, engineer: every app's header as in Spread Footing #884): the header has the chip only (no Save / Saved
+       projects… buttons: they are in the "Save and open" card; Ctrl+S / Ctrl+Shift+S work from anywhere). A chip click opens the Project input tab (its tab button is clicked), opens the "Save and open" section if it is collapsed and brings the card into view. */
+    headerSave: false, chipClick: () => { const t = $i('itab-project'); if (t) t.click(); const h = document.querySelector('.sec-hd[data-target="sec-projmgr"]'); if (h && h.getAttribute('aria-expanded') === 'false') h.click(); const c = $i('sec-projmgr'); if (c) c.scrollIntoView({ block: 'nearest' }); }, chipHint: 'the Project tab (Save and open)',
     renamed: (a, b) => { const pn = $i('proj_name'); if (pn && pn.value.trim() === a) { pn.value = b; onInputChange(); } },
     deleted: n => { if (last() === n) { try { localStorage.removeItem(LAST_KEY); } catch (e) { /* none */ } } },
     changed: () => refreshProjectList(last() || undefined),

@@ -4448,6 +4448,9 @@ function spcStdSave() {
     importFile: () => $('spcFile').click(),
     fileButtons: [$('btnSaveHdr'), $('btnOpenHdr')], extras: [ne],
     header: hdr, chipBefore: $('btnPrint'), headerBefore: $('btnPrint'), card,
+    /* HDRS (2026-11-06, engineer: every app's header as in Spread Footing #884): the header has the chip only (no Save / Saved
+       projects… buttons: they are in the "Save and open" card; Ctrl+S / Ctrl+Shift+S work from anywhere). A chip click opens the Project tab (the card), as the header link #hdrProj does (its click handler is reused). */
+    headerSave:false, chipClick:()=>{ const a=document.getElementById("hdrProj"); if(a) a.click(); }, chipHint:"the Project tab (Save and open)",
     renamed: (a, b) => { if ((M.project.name || '').trim() === a) { M.project.name = b; buildProjHeader(); autosave(); } },
     /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'section-property-calculator',label:'Section Property Calculator',space:2,toFile:i=>i.d,fromFile:j=>{if(!j||j._schema!==SCHEMA)throw new Error('not a Section Property Calculator file');return {t:Date.now(),d:j};}} });
   pb.el.card.querySelectorAll('button[data-sp]').forEach(b => b.classList.add('btn', 'sm'));
