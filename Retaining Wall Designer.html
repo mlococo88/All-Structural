@@ -777,6 +777,8 @@ input:focus, select:focus, textarea:focus { border-color: var(--blue-600); box-s
 .tab-panel [style*="grid-template-columns:1fr 330px"] > * { min-width: 0; }   /* lets the drawing's card scroll instead of widening the page */
 .rw-dwg-wrap > svg.rw-dwg { min-width: 620px; }
 @media print { .rw-dwg-wrap > svg.rw-dwg { min-width: 0; } }
+/* RWTS-2: the Analysis diagram keeps the same 620 px minimum on narrow screens and scrolls natively (touch) inside its viewport */
+@media (max-width: 700px) { #dg-viewport { overflow: auto !important; } #dg-stage { min-width: 620px; } }
 .status-bar { display: block; min-height: 0; padding: 4px 16px 0; }
 #rwDashBox { font-family: var(--font-ui); }
 #rwDashHead { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; }
@@ -6297,7 +6299,7 @@ function renderDiagram(r) {
 }
 
 // ── Diagram interactivity: pan/zoom, layer filters, hover tooltips ──
-const _dgState = { scale: 1, tx: 0, ty: 0, layers: {} };
+const _dgState = { scale: 1, tx: 0, ty: 0, layers: {}, user: false };   // RWTS-2: user = the view was zoomed / panned by hand (else it is fitted)
 function initDiagramInteractivity(r) {
   const vp    = document.getElementById('dg-viewport');
   const stage = document.getElementById('dg-stage');
@@ -6312,7 +6314,23 @@ function initDiagramInteractivity(r) {
     _dgState.scale = scale; _dgState.tx = tx; _dgState.ty = ty;
     if (zlbl) zlbl.textContent = Math.round(scale*100) + '%';
   };
-  const fit = () => { scale = 1; tx = 0; ty = 0; apply(); };
+  // RWTS-2 (2026-11-06): Fit shows the whole drawing (was: zoom 100 % at the top-left, which cut off the footing and the
+  // dimensions in a 640 px viewport). The viewport is as tall as the drawing, up to 85 % of the window (at least 640 px
+  // when the drawing is taller); the tab opens fitted until the view is zoomed or panned by hand.
+  const size = () => {
+    const sh = stage.offsetHeight; if (!vp.clientWidth || !sh) return false;
+    const h = Math.max(Math.min(sh, 640), Math.min(sh, Math.round(window.innerHeight * 0.85))) + 'px';
+    if (vp.style.height !== h) vp.style.height = h;
+    return true;
+  };
+  const fit = () => {
+    _dgState.user = false;
+    if (!size()) return;
+    const sw = stage.offsetWidth, sh = stage.offsetHeight, vw = vp.clientWidth, vh = vp.clientHeight;
+    scale = Math.min(1, vh / sh); tx = Math.max(0, (vw - sw * scale) / 2); ty = Math.max(0, (vh - sh * scale) / 2);
+    apply();
+  };
+  const byHand = () => { _dgState.user = true; };
 
   // Restore layer visibility from previous render
   Object.entries(_dgState.layers).forEach(([k, vis]) => {
@@ -6329,7 +6347,8 @@ function initDiagramInteractivity(r) {
     const rect = vp.getBoundingClientRect();
     const mx = e.clientX - rect.left, my = e.clientY - rect.top;
     const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
-    const ns = Math.min(8, Math.max(0.4, scale * factor));
+    const ns = Math.min(8, Math.max(0.2, scale * factor));   // RWTS-2: 0.2 (was 0.4) so a fitted tall drawing can still zoom out a step
+    byHand();
     // keep the point under the cursor fixed
     tx = mx - (mx - tx) * (ns / scale);
     ty = my - (my - ty) * (ns / scale);
@@ -6340,7 +6359,7 @@ function initDiagramInteractivity(r) {
   // Drag to pan (window listeners attached once; per-render handlers via _dgDrag)
   vp.addEventListener('mousedown', e => {
     if (e.button !== 0) return;
-    dragging = true; sx = e.clientX - tx; sy = e.clientY - ty;
+    dragging = true; sx = e.clientX - tx; sy = e.clientY - ty; byHand();
     vp.style.cursor = 'grabbing'; e.preventDefault();
   });
   window._dgDrag = {
@@ -6353,8 +6372,8 @@ function initDiagramInteractivity(r) {
     window._dgDragBound = true;
   }
 
-  document.getElementById('dg-zin') ?.addEventListener('click', () => { scale = Math.min(8, scale*1.25); apply(); });
-  document.getElementById('dg-zout')?.addEventListener('click', () => { scale = Math.max(0.4, scale/1.25); apply(); });
+  document.getElementById('dg-zin') ?.addEventListener('click', () => { byHand(); scale = Math.min(8, scale*1.25); apply(); });
+  document.getElementById('dg-zout')?.addEventListener('click', () => { byHand(); scale = Math.max(0.2, scale/1.25); apply(); });
   document.getElementById('dg-fit') ?.addEventListener('click', fit);
   document.getElementById('dg-svg') ?.addEventListener('click', () => downloadDiagramSVG(r));
 
@@ -6412,7 +6431,13 @@ function initDiagramInteractivity(r) {
     tip.style.opacity = '0';
   });
 
-  apply();   // restore previous zoom/pan rather than resetting
+  // restore the previous zoom/pan when it was set by hand; otherwise fit (again when the tab is shown or resized)
+  if (_dgState.user) { size(); apply(); } else fit();
+  if (window.ResizeObserver) {
+    if (window._dgRO) window._dgRO.disconnect();
+    window._dgRO = new ResizeObserver(() => { if (!_dgState.user) fit(); else size(); });
+    window._dgRO.observe(stage);
+  }
 }
 
 // Download the current cross-section as a standalone .svg
@@ -6444,14 +6469,17 @@ function buildCrossSection(r) {
   // Passive pressure: to the LEFT of front face (toe zone)
   // Bearing: below footing
 
+  // RWTS-2 (2026-11-06): one scale across and up (SCALE, px per ft) as before, now with a scale bar; text sized for the
+  // view the tab opens with (the whole drawing fitted in the viewport): K grows the text for tall drawings, which are
+  // fitted at a smaller zoom. Margins grow with what they hold.
   const SVG_W   = 820;
-  const ML      = 30;    // left (toe side + passive label)
-  const MR      = 180;   // right (active pressure + labels)
-  const MT      = 50;    // top (dim lines + col arrow)
-  const MB      = 100;   // bottom (bearing + dim lines)
+  const ML      = 60;    // left (toe side + passive label, D_f dimension)   (was 30)
+  const MR      = 190;   // right (dimensions + active pressure labels)     (was 180)
 
   const drawW   = SVG_W - ML - MR;
   const SCALE   = drawW / (r.B + 0.4);
+  const K   = Math.min(2, Math.max(1, (r.H * SCALE + 280) / SVG_W));   // RWTS-2: text scale (1 for a drawing about as tall as wide)
+  const FS  = { s: 12 * K, m: 12.5 * K, d: 13 * K, b: 14 * K };          // RWTS-2: text sizes (small, values, dimensions, bold)
 
   const Hs_px    = inp.Hs      * SCALE;
   const tf_px    = r.tf_ft     * SCALE;
@@ -6465,7 +6493,19 @@ function buildCrossSection(r) {
   const Df_px    = r.Df        * SCALE;
   const Df_add_px = inp.Df_add * SCALE;
 
-  const SVG_H   = H_px + MT + MB + dk_px + Df_add_px + 30;
+  // RWTS-2: room above the stem top (critical-section tags, stem-top dimension, barrier, surcharge, column load, backfill slope)
+  const bar_hpx = r.hasBarrier ? r.bar_h_ft * SCALE : 0;
+  const off_c   = 7 + bar_hpx;                     // critical-section tag baseline above the stem top
+  const off_d   = off_c + FS.s + 8;                // stem-top width dimension line
+  const off_col = off_d + FS.d + 12;               // column-load arrow tail
+  const rise0   = inp.beta > 0 ? Lh_px * 0.6 * Math.tan(toRad(inp.beta)) : 0;
+  const MT = 10 + Math.max(off_d + FS.d + 4, r.q_sur_eff > 0 ? 22 + FS.m : 0,
+    r.hasCol ? off_col + 9 + FS.m + 4 : 0, rise0 > 0 ? rise0 + FS.s + 6 : 0);
+  // RWTS-2: rows below the footing (shear key + its tag, bearing ordinates + their labels, two dimension rows, scale bar)
+  const brg_ord = 50 / Math.max(Math.max(r.q_toe, r.q_heel, inp.qa) * 1.15, 50);   // = BRG_SCALE below
+  const drop0   = Math.max(inp.useShearKey ? dk_px + FS.s + 4 : 0, Math.max(r.q_toe, r.q_heel, 0) * brg_ord + FS.m + 6);
+  const dimOff1 = drop0 + FS.d + 8, dimOff2 = dimOff1 + FS.b + 8, sbOff = dimOff2 + FS.s + 16;
+  const SVG_H   = H_px + MT + sbOff + 5 + 2 * FS.s + 20;   // scale bar labels + the note line under them
 
   const OX = ML;
   const OY = MT + Hs_px;   // y = top of footing
@@ -6488,7 +6528,7 @@ function buildCrossSection(r) {
   // Pressure scales
   // Active: RIGHT of back face, grows right → into MR zone
   const MAX_ACT   = Math.max(r.p_ftg_base + r.p_hyd_base, r.Ka*r.q_sur_eff, 50) * 1.1;
-  const ACT_MAX_W = MR - 20;
+  const ACT_MAX_W = 160;   // RWTS-2: = the former MR − 20 (pressure ordinates keep their size)
   const PSCALE    = ACT_MAX_W / MAX_ACT;
   function xAct(psf) { return x_bbot + psf * PSCALE; }
 
@@ -6500,13 +6540,13 @@ function buildCrossSection(r) {
 
   // Bearing: below footing, grows down
   const MAX_BRG    = Math.max(r.q_toe, r.q_heel, inp.qa) * 1.15;
-  const BRG_SCALE  = (MB * 0.50) / Math.max(MAX_BRG, 50);
+  const BRG_SCALE  = 50 / Math.max(MAX_BRG, 50);   // RWTS-2: = the former (MB × 0.50) with MB = 100
   function yBrg(psf) { return y_fbot + psf * BRG_SCALE; }
 
   const CC = { fill:'rgba(33,85,196,0.14)', stroke:'#2155c4' };
   const SC = '#9a7a3a';
 
-  let s = `<svg viewBox="0 0 ${SVG_W} ${SVG_H}" style="width:100%;display:block;font-family:'Public Sans',Arial,sans-serif;">
+  let s = `<svg class="rw-dwg" viewBox="0 0 ${SVG_W} ${SVG_H}" data-scale="${SCALE}" style="width:100%;display:block;font-family:'Public Sans',Arial,sans-serif;">
   <defs>
     <pattern id="cs-h1" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
       <line x1="0" y1="0" x2="0" y2="7" stroke="${SC}" stroke-width="0.9" stroke-opacity="0.5"/>
@@ -6531,10 +6571,9 @@ function buildCrossSection(r) {
   // ── Ground lines ─────────────────────────────────────────────
   s += `<line x1="${x_bbot-4}" y1="${y_top}" x2="${x_heel+4}" y2="${y_top}"
     stroke="#7a6030" stroke-width="0.9" stroke-dasharray="5,4"/>`;
-  s += `<text x="${x_heel+6}" y="${y_top+4}" font-size="8" fill="#7a6030">GL (back)</text>`;
   s += `<line x1="${x_toe-16}" y1="${y_grdetoe}" x2="${x_ftoe+4}" y2="${y_grdetoe}"
     stroke="#7a6030" stroke-width="0.9" stroke-dasharray="5,4"/>`;
-  s += `<text x="${x_toe-18}" y="${y_grdetoe+4}" font-size="8" fill="#7a6030" text-anchor="end">GL (toe)</text>`;
+  s += `<text x="${x_toe-14}" y="${y_grdetoe-4}" font-size="8" fill="#7a6030">GL (toe)</text>`;   // RWTS-2: above the line (was left of it, past the edge)
 
   // ── Soil — retained (heel side) ──────────────────────────────
   s += `<g data-layer="soil">`;
@@ -6565,10 +6604,12 @@ function buildCrossSection(r) {
     s += `<path d="M ${tx-5} ${ty-1} L ${tx+5} ${ty-1} L ${tx} ${ty+6} Z" fill="#1f7fd6"/>`;
     s += `<line x1="${tx-7} " y1="${ty+3}" x2="${tx+7}" y2="${ty+3}" stroke="#1f7fd6" stroke-width="0.9"/>`;
     s += `<line x1="${tx-4}" y1="${ty+5}" x2="${tx+4}" y2="${ty+5}" stroke="#1f7fd6" stroke-width="0.9"/>`;
-    s += `<text x="${x_bbot+4}" y="${y_wt-4}" font-size="8" fill="#1f7fd6" font-weight="600">W.T. (${inp.wt_mode==='elev'?'El '+f(inp.el_gw,1):'−'+f(r.wt_d,1)+' ft'})</text>`;
-    s += `<text x="${x_bbot+Lh_px/2}" y="${(y_wt+y_fbot)/2}" font-size="7.5" fill="#1f7fd6" text-anchor="middle" opacity="0.85">saturated γ'=${f(r.gamma_s_sub,0)} pcf</text>`;
+    s += `<text x="${x_heel-14}" y="${y_wt+FS.s+3}" font-size="8" fill="#1f7fd6" font-weight="600" text-anchor="end">W.T. (${inp.wt_mode==='elev'?'El '+f(inp.el_gw,1):'−'+f(r.wt_d,1)+' ft'})</text>`;
+    s += `<text x="${x_heel-14}" y="${y_wt+2*FS.s+7}" font-size="7.5" fill="#1f7fd6" text-anchor="end" opacity="0.85">saturated γ'=${f(r.gamma_s_sub,0)} pcf</text>`;
     s += `</g>`;
   }
+  // RWTS-2: ground-line label inside the backfill under the line at the heel end (was beside the heel, on the dimension lines)
+  s += `<text x="${x_heel-4}" y="${y_top+FS.s+3}" font-size="8" fill="#7a6030" text-anchor="end">GL (back)</text>`;
 
   // Toe soil
   if (Df_px > 1) {
@@ -6628,7 +6669,7 @@ function buildCrossSection(r) {
     s += `<rect x="${skx}" y="${y_fbot}" width="${skw}" height="${dk_px}"
       fill="${CC.fill}" stroke="${CC.stroke}" stroke-width="1.2"
       data-tip="<b>Shear key</b><br>Depth d_k = ${f(inp.dk,0)} in<br>Added passive P_p,key = ${f(r.Pp_key,0)} lb/ft"/>`;
-    s += `<text x="${skx+skw/2}" y="${y_fbot+dk_px+9}" font-size="7" fill="#2155c4" text-anchor="middle">key</text>`;
+    s += `<text x="${skx+skw/2}" y="${y_fbot+dk_px+FS.s+1}" font-size="7" fill="#2155c4" text-anchor="middle">key</text>`;
   }
   s += `</g>`;
 
@@ -6636,11 +6677,11 @@ function buildCrossSection(r) {
   if (r.hasCol) {
     const cx = OX + r.x_col*SCALE;
     const cw = Math.max(6, inp.col_Ldist*SCALE);
-    s += `<rect x="${cx-cw/2}" y="${y_top-30}" width="${cw}" height="5"
+    s += `<rect x="${cx-cw/2}" y="${y_top-off_col-5}" width="${cw}" height="5"
       fill="rgba(139,0,0,0.2)" stroke="#8b0000" stroke-width="0.9"/>`;
-    s += `<line x1="${cx}" y1="${y_top-25}" x2="${cx}" y2="${y_top}"
+    s += `<line x1="${cx}" y1="${y_top-off_col}" x2="${cx}" y2="${y_top}"
       stroke="#8b0000" stroke-width="1.8" marker-end="url(#cs-col)"/>`;
-    s += `<text x="${cx}" y="${y_top-32}" font-size="7.5" fill="#8b0000"
+    s += `<text x="${cx}" y="${y_top-off_col-9}" font-size="7.5" fill="#8b0000"
       text-anchor="middle" font-weight="700">P=${f(inp.col_DL+inp.col_LL+inp.col_SL,1)}k</text>`;
   }
 
@@ -6659,13 +6700,20 @@ function buildCrossSection(r) {
 
   // ── S1 DETAILING: standard hook into footing, bar-cutoff elevation, splice zone ──
   // Standard 90° hook at S1 base: extends down into the footing then toward the toe.
+  // RWTS-2 (2026-11-06): drawn to scale (was schematic: elbow at 0.62 t_f, tail max(10 px, 0.9 t_f)): the bar goes down to
+  // the top of the bottom mat (cover + F2 bar), bends at the standard bend (centreline radius = inside diameter/2 + d_b/2;
+  // inside diameter 6 d_b for #3–#8, 8 d_b for #9–#11, 10 d_b for #14–#18: ACI 318-19 Table 25.3.2 / AASHTO LRFD 10th
+  // Ed. Table 5.10.2.3-1) and runs 12 d_b toward the toe (ACI 318-19 Table 25.3.1 / AASHTO 5.10.2.1). Display only.
   {
-    const hook_y  = y_ftop + tf_px*0.62;             // hook elbow inside footing
-    const hook_dx = Math.max(10, tf_px*0.9);         // horizontal hook extension (12db shown schematic)
-    s += `<path d="M ${s1_x} ${y_ftop} L ${s1_x} ${hook_y} Q ${s1_x} ${hook_y+7} ${s1_x-7} ${hook_y+7} L ${s1_x-hook_dx} ${hook_y+7}"
+    const db1 = r.sel_stem.bar.db / 12, n1 = r.sel_stem.bar.num;
+    const dbT = (inp.Lt > 0.4 ? r.sel_toe.bar.db : 0) / 12;
+    const rb  = ((n1 <= 8 ? 6 : n1 <= 11 ? 8 : 10) / 2 + 0.5) * db1 * SCALE;      // bend radius to the bar centreline
+    const hook_y  = y_fbot - cov_f_px - (dbT + db1 / 2) * SCALE;                    // tail centreline, on the bottom mat
+    const tail    = 12 * db1 * SCALE;
+    s += `<path d="M ${s1_x} ${y_ftop} L ${s1_x} ${hook_y-rb} Q ${s1_x} ${hook_y} ${s1_x-rb} ${hook_y} L ${s1_x-rb-tail} ${hook_y}"
       fill="none" stroke="${RC}" stroke-width="1.6"
-      data-tip="<b>S1 standard hook</b><br>90° hook into footing (ACI §25.3)<br>ℓ_dh development into footing<br>Tail extends toward toe"/>`;
-    s += `<text x="${s1_x-hook_dx-3}" y="${hook_y+10}" font-size="6.5" fill="${RC}" text-anchor="end">std 90° hook</text>`;
+      data-tip="<b>S1 standard hook</b><br>90° hook into footing (ACI §25.3)<br>ℓ_dh development into footing<br>Tail extends toward toe<br>Drawn to scale: bend ${n1 <= 8 ? 6 : n1 <= 11 ? 8 : 10}d_b inside diameter, 12d_b tail, on the bottom mat"/>`;
+    s += `<text x="${s1_x+4}" y="${y_ftop+tf_px*0.55}" font-size="6.5" fill="${RC}">std 90° hook</text>`;
   }
   // Bar cutoff: alternate bars terminate at z_cutoff from top (incl. ℓd extension)
   if (r.z_cutoff !== null && r.z_cutoff > 0.5 && r.z_cutoff < inp.Hs - 0.5) {
@@ -6677,7 +6725,7 @@ function buildCrossSection(r) {
   }
   // Lap splice zone just above the footing (construction joint)
   {
-    const y_spl0 = y_ftop - Math.min(Hs_px*0.16, (r.ld_stem*1.3/12)*SCALE);
+    const y_spl0 = y_ftop - Math.min(Hs_px, (r.ld_stem*1.3/12)*SCALE);   // RWTS-2: true length 1.3 ℓ_d (was capped at 0.16 H_s)
     s += `<rect x="${s1_x-3.5}" y="${y_spl0}" width="7" height="${y_ftop-y_spl0}"
       fill="rgba(196,33,33,0.13)" stroke="${RC}" stroke-width="0.6" stroke-dasharray="2,2"
       data-tip="<b>Lap splice zone</b><br>Dowels from footing lap with S1 above the construction joint<br>Class B lap = 1.3·ℓ_d ≈ ${f(1.3*r.ld_stem,0)}″"/>`;
@@ -6710,7 +6758,7 @@ function buildCrossSection(r) {
     const f2tip = `<b>F2 — toe transverse (bottom)</b><br>#${r.sel_toe.bar.num} @ ${r.sel_toe.spacing}″ o.c.${r.sel_toe.overridden?' <i>(override)</i>':''}<br>A_s prov = ${f(r.sel_toe.As_prov,4)} in²/ft ≥ ${f(r.As_toe_des,4)} req<br>d = ${f(r.d_toe,2)}″ · cover = ${f(inp.cov_ftg,2)}″ · ℓ_d = ${f(r.ld_toe,1)}″<br>M_u = ${f(Math.max(0,r.Mu_toe_net)/1000,2)} kip·ft/ft · V_u = ${f(r.Vu_toe/1000,2)} kip/ft`;
     for (let xi = x_toe+sp2/2; xi < x_ftoe-2; xi += sp2)
       s += `<circle cx="${xi}" cy="${f2_y}" r="${bar_r}" fill="${GC}" data-tip="${f2tip}"/>`;
-    s += `<text x="${(x_toe+x_ftoe)/2}" y="${f2_y+12}" font-size="7.5" fill="${GC}"
+    s += `<text x="${(x_toe+x_ftoe)/2}" y="${y_ftop+FS.m+3}" font-size="7.5" fill="${GC}"
       text-anchor="middle">F2 #${r.sel_toe.bar.num}@${r.sel_toe.spacing}'' BOT${r.sel_toe.overridden?' ★':''}</text>`;
   }
 
@@ -6744,10 +6792,10 @@ function buildCrossSection(r) {
     // Pressure value at the break
     s += `<text x="${x_act_wt+4}" y="${y_wt_line-3}" font-size="7" fill="#c42121" font-weight="600">${f(r.p_wt,0)} psf</text>`;
     // γ' annotation for the saturated zone (slope change explanation)
-    const y_below_mid = (y_wt_line + y_fbot)/2;
+    const y_below_mid = Math.min(y_wt_line + 3.4*FS.s, (y_wt_line + y_fbot)/2);   // RWTS-2: just under the water line (was halfway down; the saturated label is now at the right)
     const gamma_prime = r.gamma_s_sub;
     s += `<text x="${x_bbot+4}" y="${y_below_mid}" font-size="6.8" fill="#1f7fd6" opacity="0.95">γ′=γ_sat−γ_w=${f(gamma_prime,0)} pcf</text>`;
-    s += `<text x="${x_bbot+4}" y="${y_below_mid+9}" font-size="6.8" fill="#1f7fd6" opacity="0.95">(slope ∝ Ka·γ′ below WT)</text>`;
+    s += `<text x="${x_bbot+4}" y="${y_below_mid+FS.s+2}" font-size="6.8" fill="#1f7fd6" opacity="0.95">(slope ∝ Ka·γ′ below WT)</text>`;
     // "W.T." tag on the guide line
     s += `<text x="${x_act_base + r.p_hyd_base*PSCALE + 26}" y="${y_wt_line+3}" font-size="7" fill="#1f7fd6" font-weight="700">W.T.</text>`;
   } else {
@@ -6775,7 +6823,7 @@ function buildCrossSection(r) {
   });
   // Labels
   if (r.p_top > 0)
-    s += `<text x="${x_act_top+3}" y="${y_top+9}" font-size="7.5" fill="#c42121">${f(r.p_top,0)} psf</text>`;
+    s += `<text x="${x_act_top+3}" y="${y_top+FS.s+2}" font-size="7.5" fill="#c42121">${f(r.p_top,0)} psf</text>`;
   s += `<text x="${x_act_base+3}" y="${y_fbot-4}" font-size="7.5" fill="#c42121">${f(pb,0)} psf</text>`;
   const mid_ax = (x_bbot+x_act_base)/2, mid_ay = y_top+H_px*0.5;
   s += `<text x="${mid_ax}" y="${mid_ay}" font-size="7.5" fill="#c42121"
@@ -6790,7 +6838,7 @@ function buildCrossSection(r) {
     s += `<g data-layer="surcharge">`;
     s += `<rect x="${x_bbot}" y="${y_top}" width="${xs-x_bbot}" height="${H_px}"
       fill="rgba(185,100,0,0.07)" stroke="#b96400" stroke-width="0.8" stroke-dasharray="3,3" data-tip="${striptip}"/>`;
-    s += `<text x="${xs+2}" y="${y_top+9}" font-size="7" fill="#b96400" font-weight="600">Ka·q=${f(p_sur,0)} psf</text>`;
+    s += `<text x="${xs+2}" y="${y_top+(r.p_top > 0 ? 2*FS.s+6 : FS.s+2)}" font-size="7" fill="#b96400" font-weight="600">Ka·q=${f(p_sur,0)} psf</text>`;   // RWTS-2: a row under the p_top value when there is one
     s += `<text x="${xs+3}" y="${y_top+H_px*0.5}" font-size="7" fill="#b96400"
       transform="rotate(90,${xs+3},${y_top+H_px*0.5})">${r.isAASHTO&&r.q_ll_aashto>0?'LS surcharge':'Surcharge'}</text>`;
     s += `</g>`;
@@ -6812,7 +6860,7 @@ function buildCrossSection(r) {
   // ── PASSIVE PRESSURE (left of front face) ────────────────────
   if (r.Df > 0) {
     const x_tip = xPass(p_pass_base);
-    const ptip = `<b>Passive resistance</b><br>K_p = ${f(r.Kp,4)} · D_f = ${f(r.Df,2)} ft<br>p at base = ${f(p_pass_base,0)} psf<br>P_p = ${f(r.Pp_full,0)} lb/ft (computed)<br>${inp.inclPassive?'<b style="color:#7fd6a8">Included</b> in sliding &amp; O.T.':'<b style="color:#ffb84d">Neglected</b> (toggle off) — conservative'}`;
+    const ptip = `<b>Passive resistance</b><br>K_p = ${f(r.Kp,4)} · D_f = ${f(r.Df,2)} ft<br>p at base = ${f(p_pass_base,0)} psf<br>P_p = ${f(r.Pp_full,0)} lb/ft (computed)<br>${inp.inclPassive?'<b style=&#39;color:#7fd6a8&#39;>Included</b> in sliding &amp; O.T.':'<b style=&#39;color:#ffb84d&#39;>Neglected</b> (toggle off) — conservative'}`;
     s += `<g data-layer="passive">`;
     s += `<polygon points="${x_ftoe},${y_grdetoe} ${x_ftoe},${y_fbot} ${x_tip},${y_fbot}"
       fill="rgba(15,122,90,0.11)" stroke="#0f7a5a" stroke-width="1.2" data-tip="${ptip}"/>`;
@@ -6823,8 +6871,8 @@ function buildCrossSection(r) {
         s += `<line x1="${xx}" y1="${yy}" x2="${x_ftoe}" y2="${yy}"
           stroke="#0f7a5a" stroke-width="0.85" marker-end="url(#cs-ag)"/>`;
     });
-    s += `<text x="${x_tip-2}" y="${y_fbot-3}" font-size="7.5" fill="#0f7a5a" text-anchor="end">${f(p_pass_base,0)} psf</text>`;
-    if (Df_px > 20) {
+    s += `<text x="${x_tip-2}" y="${f2_y-bar_r-3}" font-size="7.5" fill="#0f7a5a" text-anchor="end">${f(p_pass_base,0)} psf</text>`;   // RWTS-2: above the F2 bars (was on them)
+    if (Df_px > 6.5*FS.s) {   // RWTS-2: only where the tag fits beside the F2 label (was Df_px > 20)
       const mx=(x_tip+x_ftoe)/2, my=y_grdetoe+Df_px*0.5;
       s += `<text x="${mx}" y="${my}" font-size="7" fill="#0f7a5a" text-anchor="middle"
         transform="rotate(-90,${mx},${my})">Passive</text>`;
@@ -6834,7 +6882,9 @@ function buildCrossSection(r) {
 
   // ── BEARING PRESSURE ─────────────────────────────────────────
   const yt = yBrg(r.q_toe), yh = yBrg(r.q_heel);
-  const brgtip = `<b>Bearing pressure (service)</b><br>q_toe = ${f(r.q_toe,0)} psf · q_heel = ${f(r.q_heel,0)} psf<br>q_max = ${f(r.q_max,0)} psf vs q_a = ${f(inp.qa,0)} psf<br>e = ${f(r.e,3)} ft · B/6 = ${f(r.B/6,3)} ft<br>${r.tension_zone?'<b style="color:#ff9090">Resultant OUTSIDE kern</b> — triangular':'Resultant within kern — trapezoidal'}<br>${r.bearing_ok?'<b style="color:#7fd6a8">PASS</b>':'<b style="color:#ff9090">FAIL</b>'}`;
+  // RWTS-2: the PASS/FAIL colour styles inside data-tip (here and in the passive tip) quote with &#39; (an apostrophe): their double quotes
+  // ended the attribute, and the rest of the drawing (bearing labels, critical sections, dimensions) fell out of the SVG
+  const brgtip = `<b>Bearing pressure (service)</b><br>q_toe = ${f(r.q_toe,0)} psf · q_heel = ${f(r.q_heel,0)} psf<br>q_max = ${f(r.q_max,0)} psf vs q_a = ${f(inp.qa,0)} psf<br>e = ${f(r.e,3)} ft · B/6 = ${f(r.B/6,3)} ft<br>${r.tension_zone?'<b style=&#39;color:#ff9090&#39;>Resultant OUTSIDE kern</b> — triangular':'Resultant within kern — trapezoidal'}<br>${r.bearing_ok?'<b style=&#39;color:#7fd6a8&#39;>PASS</b>':'<b style=&#39;color:#ff9090&#39;>FAIL</b>'}`;
   s += `<g data-layer="bearing">`;
   s += `<polygon points="${x_toe},${y_fbot} ${x_toe},${yt} ${x_heel},${yh} ${x_heel},${y_fbot}"
     fill="rgba(15,122,90,0.09)" stroke="#0f7a5a" stroke-width="1.2" data-tip="${brgtip}"/>`;
@@ -6842,63 +6892,73 @@ function buildCrossSection(r) {
   s += `<line x1="${x_toe}" y1="${y_qa}" x2="${x_heel}" y2="${y_qa}"
     stroke="#0f7a5a" stroke-width="0.9" stroke-dasharray="5,3"/>`;
   s += `<text x="${x_heel+3}" y="${y_qa+3}" font-size="7" fill="#0f7a5a">qa=${f(inp.qa/1000,1)} ksf</text>`;
-  s += `<text x="${x_toe}" y="${yt+10}" font-size="7.5" fill="#0f7a5a" text-anchor="middle">${f(r.q_toe,0)}</text>`;
-  s += `<text x="${x_heel}" y="${yh+10}" font-size="7.5" fill="#0f7a5a" text-anchor="middle">${f(r.q_heel,0)}</text>`;
-  s += `<text x="${x_toe+B_px/2}" y="${Math.max(yt,yh)+21}" font-size="7.5" fill="#0f7a5a"
+  s += `<text x="${x_toe}" y="${yt+FS.m+2}" font-size="7.5" fill="#0f7a5a">${f(r.q_toe,0)}</text>`;
+  s += `<text x="${x_heel}" y="${yh+FS.m+2}" font-size="7.5" fill="#0f7a5a" text-anchor="end">${f(r.q_heel,0)}</text>`;
+  s += `<text x="${x_toe+B_px*0.62}" y="${Math.max(yt,yh)+FS.m+2}" font-size="7.5" fill="#0f7a5a"
     text-anchor="middle">Bearing (psf) — service</text>`;
   s += `</g>`;
 
   // ── CRITICAL SECTION MARKERS ─────────────────────────────────
+  // RWTS-2: the tags sit left of each line, above the barrier when there is one (were centred on the lines, on the stem-top dimension)
   [x_ftoe, x_bbot].forEach(xcs => {
-    s += `<line x1="${xcs}" y1="${y_top-8}" x2="${xcs}" y2="${y_fbot}"
+    s += `<line x1="${xcs}" y1="${y_top-4-bar_hpx}" x2="${xcs}" y2="${y_fbot}"
       stroke="#b96400" stroke-width="0.9" stroke-dasharray="4,3" opacity="0.8"/>`;
   });
-  s += `<text x="${x_ftoe}" y="${y_top-11}" font-size="7" fill="#b96400" text-anchor="middle">crit.</text>`;
-  s += `<text x="${x_bbot}" y="${y_top-11}" font-size="7" fill="#b96400" text-anchor="middle">crit.</text>`;
+  s += `<text x="${x_ftoe-2}" y="${y_top-off_c}" font-size="7" fill="#b96400" text-anchor="end">crit.</text>`;
+  s += `<text x="${x_bbot-2}" y="${y_top-off_c}" font-size="7" fill="#b96400" text-anchor="end">crit.</text>`;
+
+  // RWTS-2: the fixed text sizes used above (6.3–8 units) scaled to the drawing's text sizes (the dimensions and the scale bar below use FS)
+  s = s.replace(/<text ([^>]*?)font-size="([\d.]+)"/g, (m0, pre, v) => `<text ${pre}font-size="${(Math.max(+v * 1.5, 12) * K).toFixed(1)}"`);
 
   // ── DIMENSION LINES ──────────────────────────────────────────
-  const brg_drop = Math.max(yt-y_fbot, yh-y_fbot, 0);
-  const dk_drop  = inp.useShearKey ? dk_px : 0;
-  const dim_y1   = y_fbot + dk_drop + brg_drop + 14;
-  const dim_y2   = dim_y1 + 14;
+  const dim_y1   = y_fbot + dimOff1;   // RWTS-2: rows placed under the key and the bearing labels
+  const dim_y2   = y_fbot + dimOff2;
 
   s += `<g data-layer="dims">`;
-  s += dL(x_toe,  x_ftoe,  dim_y1, `Lt=${f(inp.Lt,1)}'`);
-  s += dL(x_ftoe, x_bbot,  dim_y1, `ts=${f(inp.ts_bot,0)}"`);
-  s += dL(x_bbot, x_heel,  dim_y1, `Lh=${f(inp.Lh,1)}'`);
-  s += dL(x_toe,  x_heel,  dim_y2, `B = ${f(r.B,2)} ft`, true);
+  s += dL(x_toe,  x_ftoe,  dim_y1, `Lt=${f(inp.Lt,1)}'`, false, FS.d);
+  s += dL(x_ftoe, x_bbot,  dim_y1, `ts=${f(inp.ts_bot,0)}"`, false, FS.d);
+  s += dL(x_bbot, x_heel,  dim_y1, `Lh=${f(inp.Lh,1)}'`, false, FS.d);
+  s += dL(x_toe,  x_heel,  dim_y2, `B = ${f(r.B,2)} ft`, true, FS.b);
 
-  const vx1 = x_heel+14, vx2 = x_heel+30;
-  s += dV(vx1, y_ftop, y_fbot,  `tf=${inp.tf}"`);
-  s += dV(vx1, y_top,  y_ftop,  `Hs=${f(inp.Hs,1)}'`);
-  s += dV(vx2, y_top,  y_fbot,  `H=${f(r.H,2)}'`, true);
-  if (r.Df > 0.05) s += dV(x_toe-14, y_grdetoe, y_fbot, `Df=${f(r.Df,2)}'`);
+  const vx1 = x_heel+6+FS.d, vx2 = vx1+FS.b+10;   // RWTS-2: room for the text along each line (was x_heel+14, +30)
+  s += dV(vx1, y_ftop, y_fbot,  `tf=${inp.tf}"`, false, FS.d);
+  s += dV(vx1, y_top,  y_ftop,  `Hs=${f(inp.Hs,1)}'`, false, FS.d);
+  s += dV(vx2, y_top,  y_fbot,  `H=${f(r.H,2)}'`, true, FS.b);
+  if (r.Df > 0.05) s += dV(x_toe-14, y_grdetoe, y_fbot, `Df=${f(r.Df,2)}'`, false, FS.d);
 
-  s += dL(x_ftoe, x_btop, y_top-13, `${f(inp.ts_top,0)}" top`);
+  s += dL(x_ftoe, x_btop, y_top-off_d, `${f(inp.ts_top,0)}" top`, false, FS.d);
   s += `</g>`;
 
+  // RWTS-2: scale bar and what is not to scale
+  s += rwtsScaleBar(x_toe, y_fbot + sbOff, SCALE, FS.s, 'Pressure ordinates, load arrows and bar symbols are not to scale (values labelled).', true);
+
   s += '</svg>';
+  // RWTS-2: a halo so text reads over hatching and pressure fills
+  s = s.replace(/<text /g, `<text paint-order="stroke" stroke="#fafbfd" stroke-width="${(3 * K).toFixed(1)}" stroke-linejoin="round" `);
   return s;
 }
 
 // ── dim line helpers ────────────────────────────────────────────
-function dL(x1, x2, y, label, bold=false) {
+function dL(x1, x2, y, label, bold=false, fsz=0) {   // RWTS-2: optional text size
   if (Math.abs(x2-x1) < 4) return '';
-  const mid=(x1+x2)/2, tk=5, fs=bold?9:8;
+  const mid=(x1+x2)/2, tk=5, fs=fsz || (bold?9:8);
   const fw=bold?'700':'400', cl=bold?'#2155c4':'#5a6a80';
   return `<line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${cl}" stroke-width="${bold?1.2:0.8}"/>
     <line x1="${x1}" y1="${y-tk}" x2="${x1}" y2="${y+tk}" stroke="${cl}" stroke-width="${bold?1.2:0.8}"/>
     <line x1="${x2}" y1="${y-tk}" x2="${x2}" y2="${y+tk}" stroke="${cl}" stroke-width="${bold?1.2:0.8}"/>
     <text x="${mid}" y="${y-4}" font-size="${fs}" fill="${cl}" text-anchor="middle" font-weight="${fw}">${label}</text>`;
 }
-function dV(x, y1, y2, label, bold=false) {
+function dV(x, y1, y2, label, bold=false, fsz=0) {   // RWTS-2: with a text size, the text runs along the line, left of it
   if (Math.abs(y2-y1) < 4) return '';
-  const mid=(y1+y2)/2, tk=5, fs=bold?9:8;
+  const mid=(y1+y2)/2, tk=5, fs=fsz || (bold?9:8);
   const fw=bold?'700':'400', cl=bold?'#2155c4':'#5a6a80';
+  const txt = fsz
+    ? `<text x="${x-4}" y="${mid}" font-size="${fs}" fill="${cl}" text-anchor="middle" transform="rotate(-90,${x-4},${mid})" font-weight="${fw}">${label}</text>`
+    : `<text x="${x+4}" y="${mid}" font-size="${fs}" fill="${cl}" dominant-baseline="middle" font-weight="${fw}">${label}</text>`;
   return `<line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${cl}" stroke-width="${bold?1.2:0.8}"/>
     <line x1="${x-tk}" y1="${y1}" x2="${x+tk}" y2="${y1}" stroke="${cl}" stroke-width="${bold?1.2:0.8}"/>
     <line x1="${x-tk}" y1="${y2}" x2="${x+tk}" y2="${y2}" stroke="${cl}" stroke-width="${bold?1.2:0.8}"/>
-    <text x="${x+4}" y="${mid}" font-size="${fs}" fill="${cl}" dominant-baseline="middle" font-weight="${fw}">${label}</text>`;
+    ${txt}`;
 }
 
 // ================================================================
@@ -7895,19 +7955,21 @@ function ovDimV(x, y1, y2, label, side='right', color='#5a6a80', bold=false, fs=
 
 // RWTS (2026-11-06): scale bar for a drawing at sc px per ft — a nice length L (≈ 90–180 px), black/white halves,
 // 0 / L/2 / L ft labels, the word "Scale" and an optional note. Returns SVG markup; x, y = left end, top of the bar.
-function rwtsScaleBar(x, y, sc, fs, note) {
+function rwtsScaleBar(x, y, sc, fs, note, noteBelow) {   // RWTS-2: noteBelow = the note on a line under the labels; the bar grows with large text
   const nice = [0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100];
-  let L = nice[0]; for (const v of nice) { if (v * sc <= 180) L = v; }
+  const maxW = Math.max(180, 15 * fs);
+  let L = nice[0]; for (const v of nice) { if (v * sc <= maxW) L = v; }
   const w = L * sc, h = 5;
   let t = `<g class="rw-scalebar" data-ft="${L}" data-px="${w}">`;
   t += `<text x="${x}" y="${y-4}" font-size="${fs}" fill="#1c2a42" font-weight="700">Scale</text>`;
   t += `<rect x="${x}" y="${y}" width="${w/2}" height="${h}" fill="#1c2a42" stroke="#1c2a42" stroke-width="0.8"/>`;
   t += `<rect x="${x+w/2}" y="${y}" width="${w/2}" height="${h}" fill="#fff" stroke="#1c2a42" stroke-width="0.8"/>`;
   const lab = v => (Math.round(v * 100) / 100).toString();
-  t += `<text x="${x}" y="${y+h+12}" font-size="${fs}" fill="#1c2a42" text-anchor="middle">0</text>`;
-  t += `<text x="${x+w/2}" y="${y+h+12}" font-size="${fs}" fill="#1c2a42" text-anchor="middle">${lab(L/2)}</text>`;
-  t += `<text x="${x+w}" y="${y+h+12}" font-size="${fs}" fill="#1c2a42" text-anchor="middle">${lab(L)} ft</text>`;
-  if (note) t += `<text x="${x+w+28}" y="${y+h+1}" font-size="${fs}" fill="#5a6a80">${note}</text>`;
+  t += `<text x="${x}" y="${y+h+fs+1}" font-size="${fs}" fill="#1c2a42" text-anchor="middle">0</text>`;
+  t += `<text x="${x+w/2}" y="${y+h+fs+1}" font-size="${fs}" fill="#1c2a42" text-anchor="middle">${lab(L/2)}</text>`;
+  t += `<text x="${x+w}" y="${y+h+fs+1}" font-size="${fs}" fill="#1c2a42" text-anchor="middle">${lab(L)} ft</text>`;
+  if (note) t += noteBelow ? `<text x="${x}" y="${y+h+2*fs+6}" font-size="${fs}" fill="#5a6a80">${note}</text>`
+                          : `<text x="${x+w+28}" y="${y+h+1}" font-size="${fs}" fill="#5a6a80">${note}</text>`;
   return t + '</g>';
 }
 

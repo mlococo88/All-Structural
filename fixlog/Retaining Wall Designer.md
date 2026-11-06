@@ -2021,3 +2021,54 @@ function renderStatus(r) {
 - **How verified:** origin/main vs branch, seven cases (ACI default; project fields; AASHTO full; tall wall + key + water + passive + k_h; f′c blank; column load + surcharge + β + water + key; AASHTO barrier + LS surcharge + β): `_R`, Export JSON, every localStorage key, Report text and tab text with the SVG figures removed, DXF of the four sheets **identical**; the only SVG that differs is the Overview figure (tab and Report). Measurements above. Tests: see the PR. Screenshots before/after at 1400 and 390 (default, AASHTO barrier + surcharge + β, water + column) looked at.
 - **Other copies:** none.
 - **Decision (pending engineer review):** at phone width the drawing keeps a 620 px minimum width and scrolls sideways inside its card, so its text stays at 9 px or more (shrinking it to 350 px would put the labels at about 5 px). The material/soil leaders became subtitle lines.
+
+## 2026-11-06 — PR: claude/rw-scale-diagram (RWTS-2) — Analysis diagram cross-section: measured to scale, scale bar, readable labels, Fit shows the whole drawing   [display only; no result change]
+- **Why:** engineer-approved 2026-11-06 (Phase 3 task B; second drawing after RWTS-1 #929). The Analysis diagram tab opened at 100 % in a 640 px viewport, which cut off the footing, the bearing diagram and the dimensions (default wall), and "Fit" only reset to that view. There was no scale bar. Its 6.3–9-unit labels overlapped ("crit." on the stem-top dimension, GL (back) and H_s on the dimension lines, W.T. on the p_wt value, F2 on its bars, the passive value on the F2 bars). The S1 hook and lap zone were schematic.
+- **Bug found and fixed (display):** the bearing and passive tooltips (`brgtip`, `ptip`) held `<b style="color:…">` inside a double-quoted `data-tip` attribute. The inner quote ended the attribute, so the browser closed the `<svg>` there. The bearing labels, the q_a line label, the critical-section tags and **every dimension** fell out of the SVG as loose HTML text under the drawing (on main, in every case, out of sight below the 640 px viewport). The inner quotes are now `&#39;` (`<b style=&#39;color:#7fd6a8&#39;>`), so the tooltips show the same coloured PASS / FAIL / Included / Neglected.
+- **Audit (headless Chromium, px per ft from the drawn footing rectangle and stem polygon; the scale bar's px per ft):** the geometry was already one scale across and up (`SCALE = drawW / (B + 0.4)`). After, at the fitted view:
+  - default wall at 1400 px: 45.98 / 45.98 / 45.98 (bar 2.5 ft);
+  - 768 px: 39.98;
+  - 390 px: 33.41 (drawing 620 px, scrolls);
+  - tall wall (H_s 24, L_t 4, L_h 9, key, water, column, q_s, β) at 1400: 24.92 (bar 5 ft).
+  Ratio across / up 1.00 in every case. Smallest text at the fitted view: 13.3 px (1400), 11.6 (768), 9.7 (390), 12.0 (tall, 1400 and 390). Before, the default wall's smallest text was 7.4 px at 100 % (6.3 units × 1.18), with the bottom of the drawing out of view.
+- **Where:**
+  - `buildCrossSection(r)` (anchor `const SVG_W   = 820;`):
+    - margins: `ML 30 → 60`, `MR 180 → 190`;
+    - new `K` (text scale `min(2, max(1, (H·SCALE + 280) / 820))`, so tall drawings, which are fitted at a smaller zoom, get larger text) and `FS = { s: 12K, m: 12.5K, d: 13K, b: 14K }`;
+    - `MT` (was 50 fixed) and the bottom rows (was `MB = 100`) placed from what they hold (`off_c`, `off_d`, `off_col`, `drop0`, `dimOff1`, `dimOff2`, `sbOff`);
+    - `ACT_MAX_W = MR − 20` → `160` and `BRG_SCALE = (MB·0.50)/…` → `50/…`: the same pressure ordinate sizes;
+    - `<svg … class="rw-dwg" data-scale="${SCALE}">`;
+    - before the dimension block, the fixed 6.3–8-unit text sizes are scaled: `font-size = max(1.5·v, 12)·K`; every `<text>` gets a background-coloured halo;
+    - dimensions use `dL(…, fs)` / `dV(…, fs)`; vertical dimension text runs along the line; the right-hand dimensions sit at `x_heel + 6 + FS.d` and `+ FS.b + 10` (were `+14`, `+30`).
+  - Label moves:
+    - GL (back) inside the backfill at the heel end; GL (toe) above its line;
+    - W.T. label and "saturated γ′" at the right end under the water line; the γ′ note just under the water line;
+    - critical-section tags left of their lines, above the barrier;
+    - stem-top dimension in its own row; column load above it;
+    - F2 label at the top of the toe; the passive value above the F2 bars; the "Passive" tag only where it fits (`Df_px > 6.5·FS.s`, was `> 20`);
+    - "std 90° hook" right of the hook; "Ka·q" under the p_top value; the q values anchored inside the ends; "Bearing (psf) — service" at 0.62 B; the key tag under the key.
+  - **S1 hook drawn to scale** (was: elbow at 0.62 t_f, tail max(10 px, 0.9 t_f)):
+    - down to the top of the bottom mat: tail centreline at `y_fbot − cover − (d_b,F2 + d_b,S1/2)`;
+    - bend radius to the centreline (inside diameter/2 + d_b/2): inside diameter 6 d_b for #3–#8, 8 d_b for #9–#11, 10 d_b for #14–#18 (ACI 318-19 Table 25.3.2; AASHTO LRFD 10th Ed. Table 5.10.2.3-1);
+    - 12 d_b tail toward the toe (ACI 318-19 Table 25.3.1; AASHTO 5.10.2.1).
+  - **Lap zone** at its true length 1.3 ℓ_d (was capped at 0.16 H_s).
+  - **Scale bar:** `rwtsScaleBar(…, noteBelow = true)` with "Pressure ordinates, load arrows and bar symbols are not to scale (values labelled)." `rwtsScaleBar` gains `noteBelow`, and its bar may grow to 15 × the text size so its labels do not overlap. For the Overview's 11-unit text the limit is still 180, so the Overview figure is unchanged (checked: identical to main).
+  - `initDiagramInteractivity` (anchor `const fit = () =>`):
+    - new `size()`: the viewport is as tall as the drawing, up to 85 % of the window (at least 640 px when the drawing is taller; was 640 px fixed);
+    - `fit()` fits the whole drawing (zoom = min(1, viewport height / drawing height), centred; was zoom 1 at the top-left);
+    - the tab opens fitted, and refits when shown or resized (`ResizeObserver` on the stage), until the view is zoomed or panned by hand (`_dgState.user`, a new in-memory field; nothing saved). The hand-set view is kept across re-renders as before;
+    - zoom-out limit 0.4 → 0.2.
+  - CSS `@media (max-width: 700px) { #dg-viewport { overflow: auto !important; } #dg-stage { min-width: 620px; } }`: on a phone the drawing keeps its readable size and scrolls by touch inside the viewport.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). The hook and bend sizes are drawn from the standard-hook tables quoted in the code comment. No check reads them.
+- **Saved data (§5):** none (`_dgState.user` is in memory only).
+- **How verified:**
+  - origin/main (after #929) vs branch, eight cases (seven of RWTS-1 + the tall wall): `_R`, Export JSON, every localStorage key, Report text and tab text with the SVG figures removed, DXF of the four sheets **identical**. The Analysis diagram SVG is the only SVG that differs (it is not in the Report).
+  - Measurements above.
+  - Screenshots at 1400 and 390 (default, AASHTO barrier + LS surcharge + β, tall wall with key + water + column + q_s + β) looked at, before and after.
+  - Tests: see the PR.
+- **Other copies:** none.
+- **Decisions (pending engineer review):**
+  - The diagram opens fitted (whole drawing visible), not at 100 % top-left.
+  - Tall walls get proportionally larger text (K up to 2) so labels stay about 12 px at the fitted view.
+  - The S1 hook is drawn resting on the bottom mat with the standard bend and 12 d_b tail. That is how it is usually detailed, but the tool's ℓ_dh check does not depend on it.
+  - The bar dots stay symbols (enlarged where a true-size dot would be under 2.5 units); the note says so.
