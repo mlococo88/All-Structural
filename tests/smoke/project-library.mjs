@@ -112,7 +112,7 @@ export const TOOLS = {
     ready: p => p.waitForFunction(() => typeof AN !== 'undefined' && AN),
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify({ AN, DZ }, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '[data-fkey=dsnLcx]', 2),   // not spanL0: see fixlog PLIB open item (span edits ignored after the Validation benchmarks run)
-    save: async (p, name) => { await p.evaluate(n => { S.proj.name = n; const b = [...document.querySelectorAll('#inputPanel button')].find(x => x.textContent === 'Save'); b.click(); }, name); await p.waitForTimeout(400); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { S.proj.name = n; const b = [...document.querySelectorAll('#inputPanel button')].find(x => x.textContent === 'Save'); b.click(); }, name); await p.waitForTimeout(400); }
   },
   smd: {
     file: 'Shear and Moment Diagrams.html', list: 'smd_saves_v1', auto: 'smd_auto_v1', ownUndo: true,   // the tool's own Undo / Redo (↩ ↪) is unchanged and not re-tested here
