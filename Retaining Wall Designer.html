@@ -807,25 +807,13 @@ window.MathJax = {
 
   <aside class="sidebar" aria-label="Design inputs">
 <div class="ipane" id="ipane-project" role="tabpanel" aria-labelledby="itab-project">
-<button type="button" class="sec-hd" data-target="sec-projmgr" aria-expanded="true"><span class="sec-hd-label">Saved projects</span><svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-  <div class="proj-box" id="sec-projmgr">
-    <label class="vh" for="proj_list">Saved project</label>
-    <select id="proj_list"></select>
-    <div class="proj-row">
-      <button type="button" id="proj_load_btn" class="proj-btn">Open</button>
-      <button type="button" id="proj_save_btn" class="proj-btn proj-btn-primary">Save</button>
-      <button type="button" id="proj_saveas_btn" class="proj-btn">Save as…</button>
-    </div>
-    <div class="proj-row">
-      <button type="button" id="proj_export_btn" class="proj-btn">Export JSON</button>
-      <button type="button" id="proj_import_btn" class="proj-btn">Import JSON</button>
-      <button type="button" id="proj_delete_btn" class="proj-btn proj-btn-danger">Delete</button>
-    </div>
+<button type="button" class="sec-hd" data-target="sec-projmgr" aria-expanded="true"><span class="sec-hd-label">Save and open</span><svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <div class="proj-box" id="sec-projmgr"><!-- STDS (2026-11-06): the standard "Save and open" card goes here (shared/projects-ui.js projectBar, RWPL.pb); was "Saved projects": drop-down, Open / Save / Save as… / Export JSON / Import JSON / Delete, the autosave line and Back up all -->
+    <select id="proj_list" hidden style="display:none" aria-hidden="true" tabindex="-1"></select><!-- STDS: kept (hidden) because snapshotFields() saves its value in every project / autosave / Export JSON (format unchanged, §5); left out of "unsaved changes" -->
+    <button type="button" id="proj_export_btn" class="proj-btn">Export JSON</button>
+    <button type="button" id="proj_import_btn" class="proj-btn">Import JSON</button>
+    <button type="button" id="proj_exportall_btn" class="proj-btn" title="One .json file with every project saved in this browser (Import JSON reads it back)">Back up all</button>
     <input type="file" id="proj_import_file" accept=".json,application/json" hidden>
-    <div class="proj-foot">
-      <span class="as"><span id="proj_autosave_dot"></span>Autosaves and restores your last session</span>
-      <button type="button" id="proj_exportall_btn" class="link-btn">Back up all</button>
-    </div>
     <div id="proj_msg" role="status"></div>
   </div>
 
@@ -5523,6 +5511,7 @@ function importProjectJSON(file) {
       const nm = (data.name || 'Imported Project').trim();
       restoreFields(data.fields);
       const pn = document.getElementById('proj_name'); if (pn) pn.value = nm;
+      if (window.RWPL && RWPL.pb) RWPL.pb.setCurrent(null);   /* STDS: an imported file is not the open saved project (Save then asks for a name) */
       onInputChange();
       projMsg(`Loaded "${nm}" from file. Click Save to store it.`);
       return;
@@ -8267,7 +8256,7 @@ document.querySelectorAll('input, select, textarea').forEach(el => {
   });
   byId('proj_export_btn')?.addEventListener('click', exportProjectJSON);
   byId('proj_exportall_btn')?.addEventListener('click', exportAllProjectsJSON);
-  byId('proj_import_btn')?.addEventListener('click', () => byId('proj_import_file')?.click());
+  byId('proj_import_btn')?.addEventListener('click', () => { if (window.RWPL && RWPL.pb) RWPL.pb.importJSON(); else byId('proj_import_file')?.click(); });   /* STDS: asks first on unsaved changes */
   byId('proj_import_file')?.addEventListener('change', e => {
     const file = e.target.files?.[0];
     if (file) importProjectJSON(file);
@@ -8308,21 +8297,46 @@ onInputChange();
   let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
   const store = SharedProjects.mapStore(ST, PROJ_KEY, { time: i => i && i.ts || null });
   const last = () => { try { return LS_OK ? localStorage.getItem(LAST_KEY) : null; } catch (e) { return null; } };
-  const dlg = SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'retaining-wall-designer',label:'Retaining Wall Designer',space:2,toFile:(i,n)=>({format:'RetainCalcPro.project',version:1,name:n,fields:i.fields}),fromFile:j=>{if(!j||j.format!=='RetainCalcPro.project'||!j.fields)throw new Error('not a RetainCalcPro project file');return {fields:j.fields,ts:Date.now()};}},
-    store, storage: ST, title: 'Saved projects (this browser)',
-    current: () => { const n = last(); return n && store.has(n) ? n : null; },
-    open: n => { loadProject(n); return true; },
-    renamed: (a, b) => { if (last() === a) { try { localStorage.setItem(LAST_KEY, b); } catch (e) { /* pointer not moved */ } }
-      const pn = document.getElementById('proj_name'); if (pn && pn.value.trim() === a) { pn.value = b; onInputChange(); } },
-    deleted: n => { if (last() === n) { try { localStorage.removeItem(LAST_KEY); } catch (e) { /* none */ } } },
-    changed: () => refreshProjectList(last() || undefined) });
+  /* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over retaincalcpro.projects.v1 ({ name: { fields, ts } },
+     unchanged). Replaces the "Saved projects" card (drop-down, Open, Save, Save as… (prompt), Delete) and the PLIB Saved projects…
+     button. Save = saveProject(name, { overwrite: true }) (the old write: fields + ts, the last-project key, the list); Open =
+     loadProject (as before); the open name is the tool's last-project key retaincalcpro.lastproject.v1 (as before; cleared on New and
+     on a single-project Import). New = the page's default inputs (the autosave cleared and the page reloaded; the tool had no New).
+     "Unsaved changes" compares snapshotFields() without the hidden #proj_list (the old drop-down, still saved for the format).
+     Export JSON / Import JSON / Back up all: the same buttons and handlers, moved into the card. */
+  const snap = f => { if (!f) return null; const c = Object.assign({}, f); delete c.proj_list; return SharedProjects.canon(c); };
   const g = document.createElement('div'); g.className = 'hdr-group'; g.setAttribute('data-sp', 'row');
   const B = (t, ti) => SharedProjectsUI.button(t, ti, { cls: 'btn' });
-  const bu = B('Undo', 'Undo the last input change (Ctrl+Z)'), br = B('Redo', 'Redo (Ctrl+Y or Ctrl+Shift+Z)'), bl = B('Saved projects\u2026', 'The projects saved in this browser: open, rename, duplicate, delete');
-  bl.addEventListener('click', () => dlg.show()); g.append(bu, br, bl);
+  const bu = B('Undo', 'Undo the last input change (Ctrl+Z)'), br = B('Redo', 'Redo (Ctrl+Y or Ctrl+Shift+Z)');
+  g.append(bu, br);
   const grp = document.querySelector('header .hdr-group'); if (grp) grp.parentNode.insertBefore(g, grp);
+  const $i = id => document.getElementById(id);
+  const pb = SharedProjectsUI.projectBar({ store, storage: ST, label: 'Retaining Wall Designer', id: 'rwLibDlg',
+    snapshot: () => snap(snapshotFields()), snapOf: n => { const d = store.get(n); return d ? snap(d.fields) : null; },
+    current: () => last() || '', setCurrent: n => { if (!LS_OK) return; try { if (n) localStorage.setItem(LAST_KEY, n); else localStorage.removeItem(LAST_KEY); } catch (e) { /* pointer not moved */ } },
+    save: n => { saveProject(n, { overwrite: true }); return store.has(n) ? { ok: true } : { ok: false, message: 'The project was not saved (browser storage full or blocked). Use Export JSON.' }; },
+    open: n => { if (!store.has(n)) return false; loadProject(n); return true; },
+    newProject: () => { try { localStorage.removeItem(AUTO_KEY); } catch (e) { /* none */ } location.reload(); },
+    displayName: () => ($i('proj_name') && $i('proj_name').value || '').trim(),
+    exportFile: n => { const pn = $i('proj_name'), was = pn ? pn.value : ''; if (pn && n) pn.value = n; try { exportProjectJSON(); } finally { if (pn) pn.value = was; } },
+    importFile: () => $i('proj_import_file').click(),
+    fileButtons: [$i('proj_export_btn'), $i('proj_import_btn'), $i('proj_exportall_btn')],
+    header: g, chipBefore: bu, card: $i('sec-projmgr'),
+    renamed: (a, b) => { const pn = $i('proj_name'); if (pn && pn.value.trim() === a) { pn.value = b; onInputChange(); } },
+    deleted: n => { if (last() === n) { try { localStorage.removeItem(LAST_KEY); } catch (e) { /* none */ } } },
+    changed: () => refreshProjectList(last() || undefined),
+    /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'retaining-wall-designer',label:'Retaining Wall Designer',space:2,toFile:(i,n)=>({format:'RetainCalcPro.project',version:1,name:n,fields:i.fields}),fromFile:j=>{if(!j||j.format!=='RetainCalcPro.project'||!j.fields)throw new Error('not a RetainCalcPro project file');return {fields:j.fields,ts:Date.now()};}} });
+  pb.el.card.querySelectorAll('button[data-sp]').forEach(b => b.classList.add('proj-btn'));
+  [pb.el.chip, pb.el.save, pb.el.lib].forEach(b => b.classList.add('btn'));
+  /* STDS: room for the chip in the header (display only): the tool name stays readable (its subtitle is cut first), and below 1500 px
+     the Ctrl+S hint is in Save's tooltip only and the chip name is cut at 14 characters (from 901 to 1250 px only the dot and the
+     status are shown; the full name is in the chip's tooltip and the card; from 901 to 1150 px the header may take two rows, as it
+     already does at 900 px and below) */
+  document.head.insertAdjacentHTML('beforeend', '<style>header .brand{min-width:150px}header .brand-text{min-width:0;overflow:hidden}header .logo-name{white-space:nowrap}'
+    + '@media(max-width:1500px){header [data-sp] .spKbd{display:none}header button.spChip[data-sp] b{max-width:14ch}}@media(max-width:1300px){header button.spChip[data-sp]>span:nth-child(2){display:none}}@media(min-width:901px) and (max-width:1250px){header button.spChip[data-sp] b{display:none}}@media(min-width:901px) and (max-width:1150px){header{height:auto;min-height:var(--header-h);flex-wrap:wrap;row-gap:8px;padding-top:8px;padding-bottom:8px}}</style>');
+  const dlg = pb.dialog;
   SharedProjectsUI.undoRedo(h, { undo: bu, redo: br });
-  h.reset(); window.RWPL = { h, store, dlg, soon };
+  h.reset(); window.RWPL = { h, store, dlg, soon, pb };
 })();
 </script>
 <script>

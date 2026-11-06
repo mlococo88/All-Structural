@@ -211,7 +211,7 @@ export const TOOLS = {
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(window._R, (k, v) => typeof v === 'function' ? undefined : (v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '#H, .sidebar input[type=number]', 1),
     view: p => tabView(p, '.tab-btn', 2, '.active'),
-    save: async (p, name) => { await p.evaluate(n => { const pn = document.getElementById('proj_name'); pn.value = n; document.getElementById('proj_save_btn').click(); }, name); await p.waitForTimeout(300); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const pn = document.getElementById('proj_name'); pn.value = n; document.getElementById('proj_save_btn').click(); }, name); await p.waitForTimeout(300); }   // STDS: the standard Save as (branch), the old Save (main)
   },
   gusset: {
     file: 'Gusset Plate Rating.html', list: 'gussetRating.projects.v1', auto: 'gussetRating.autosave.v1',
