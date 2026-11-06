@@ -3985,7 +3985,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Formulas, factors, units, code references:** none.
 - **Other copies:** none.
 
-## 2026-11-06 — PR: claude/sb-remove-ui-library (UILIB-DEL) — `ui/library.js` deleted (not loaded since #855; no result change)
+## 2026-11-06 — PR: claude/sb-remove-ui-library (PR #872: https://github.com/mlococo88/All-Structural/pull/872) (UILIB-DEL) — `ui/library.js` deleted (not loaded since #855; no result change)
 - **Engineer:** delete `apps/steel-bridge/ui/library.js` (approved 2026-11-06).
 - **What:** the app's own "Saved projects" dialog (`window.SBDLibraryUI`: `init`, `show`, `refresh`, `close`; 57 lines). STDS-B (#855) took its `<script src="ui/library.js"></script>` tag out of `index.html` and kept the file unchanged; the standard dialog of `shared/projects-ui.js` replaced it. The saved list itself is `engine/library.js` (`SBDLibrary`, unchanged).
 - **Where:** `apps/steel-bridge/ui/library.js` removed (git history has it: last version as of `9ea00c1`). `index.html`, comments only: the STDS-B comment above `../../shared/projects.js` "ui/library.js (the app's own dialog) is no longer loaded." → "… is no longer loaded and was deleted (2026-11-06)."; `/* ---------- saved projects (engine/library.js, ui/library.js) ---------- */` → `/* ---------- saved projects (engine/library.js) ---------- */`.
