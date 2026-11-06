@@ -5151,7 +5151,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open items:** pryout follows the tension-breakout pick of the same combination (as decided), so with "lesser" it is not itself the lesser of the two pryout values (in the uplift audit case pryout uses the full h_ef).
 
-## 2026-11-06 — BC-9: circular pier, "Lesser": pryout takes its own minimum of reduced / not reduced (engineer decision 2026-11-06, after BC-8) (PR: claude/round-hef-pryout)
+## 2026-11-06 — BC-9: circular pier, "Lesser": pryout takes its own minimum of reduced / not reduced (engineer decision 2026-11-06, after BC-8) (PR: claude/round-hef-pryout, PR #909: https://github.com/mlococo88/All-Structural/pull/909)
 
 ### BC-9. Pryout with `conc.circHefReduce === "lesser"`   [§4: calculation choice] [saved data: none]
 - **Decision (engineer, 2026-11-06):** with "Lesser", pryout also takes its own minimum: V_cpg with N_cpg from the reduced and from the not-reduced breakout, the smaller φV_cpg used, independently of the h_ef that governs the tension breakout. "Reduced" / "Not reduced" unchanged.
