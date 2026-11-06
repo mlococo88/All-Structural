@@ -1330,7 +1330,6 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
   const h=SharedProjects.history({get:inputsText,set:t=>{const d=JSON.parse(t);const vm=$('viewMode');if(vm)d.fields.viewMode=vm.value;mlgApply(d);run();}});
   let ST=null;try{ST=window.localStorage;}catch(e){}
   const store=SharedProjects.mapStore(ST,MLG_LIB,{time:d=>d&&d.savedAt||null,sort:'saved'});
-  const CLOUD= /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ {tool:'moving-load-generator',label:'Moving Load Generator',space:1,fromFile:j=>{if(!j||j.schema!==MLG_SCHEMA||!j.fields)throw new Error('not a Moving Load Generator save file');return j;}};
   /* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over movingLoadGen.projects.v1 ({ name: mlgSnapshot() },
      unchanged). Replaces the header Save (prompt) and the PLIB Saved projects… button, and the Project tab's New. Save = store.save(name,
      mlgSnapshot()) (the old Save's write); Open = mlgApply() + run() (as before); New = the old New (#mlgNew: the autosave cleared and
@@ -1355,9 +1354,9 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     importFile:()=>$('mlgFile').click(),
     fileButtons:[eS,eO],
     header:hdr, chipBefore:bu, headerBefore:$('mlgSave'), card:true,
-    cloud:CLOUD});
+    /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'moving-load-generator',label:'Moving Load Generator',space:1,fromFile:j=>{if(!j||j.schema!==MLG_SCHEMA||!j.fields)throw new Error('not a Moving Load Generator save file');return j;}}});
   [pb.el.chip,pb.el.save,pb.el.lib].forEach(b=>b.classList.add('hb'));
-  document.head.insertAdjacentHTML('beforeend','<style>@media(max-width:1500px){.hdr [data-sp] .spKbd{display:none}.hdr .hb{padding:6px 9px;margin-left:4px}.hdr button.spChip[data-sp] b{max-width:14ch}}@media(max-width:1200px){.hdr button.spChip[data-sp]>span:nth-child(2){display:none}}</style>');   /* STDS: the header keeps one row down to about 1100 px with the chip (Ctrl+S stays in Save\'s tooltip; the full name in the chip\'s tooltip and the card) */
+  document.head.insertAdjacentHTML('beforeend','<style>@media(max-width:1500px){.hdr [data-sp] .spKbd{display:none}.hdr .hb{padding:6px 9px;margin-left:4px}.hdr button.spChip[data-sp] b{max-width:14ch}}@media(max-width:1200px){.hdr button.spChip[data-sp]>span:nth-child(2){display:none}}</style>');   /* STDS: the header keeps one row down to about 1200 px with the chip (Ctrl+S stays in Save\'s tooltip; the full name in the chip\'s tooltip and the card) */
   if(rp&&hdr) hdr.insertBefore(rp,$('runBtn'));   /* STDS: Print Report after Saved projects… (standard order: chip · Undo · Redo · Save · Saved projects… · Print) */
   eO.onclick=()=>pb.importJSON();   /* asks first on unsaved changes */
   const dlg=pb.dialog;
