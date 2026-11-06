@@ -5079,7 +5079,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **How verified:** main vs branch after the same input change: results identical, localStorage keys identical (`bpad_autosave_v1` byte-identical), Export JSON text identical (5,643 chars), print report text `buildPrintReport` identical (114,198 chars), output panel text identical, no console errors beyond main. `project-library.mjs --tool baseplate` ALL PASS; `github-sync-tools.mjs --tool baseplate` ALL PASS; 390 px page 390 / 390, dialog 355 / 355; screenshots looked at.
 
-## 2026-11-06 — BC-7: the §17.6.2.1.2 h_ef reduction by analogy for a round pier is APPLIED by default again (engineer decision 2026-11-06); a saved project keeps its stored choice (PR: claude/round-hef-default)
+## 2026-11-06 — BC-7: the §17.6.2.1.2 h_ef reduction by analogy for a round pier is APPLIED by default again (engineer decision 2026-11-06); a saved project keeps its stored choice (PR: claude/round-hef-default, PR #886: https://github.com/mlococo88/All-Structural/pull/886)
 
 ### BC-7. Default of `conc.circHefReduce`   [§4: default that feeds a result] [saved data: no format change]
 - **Decision (engineer, 2026-11-06):** "change the h_ef for circular piers to use the reduced value". The option "Apply §17.6.2.1.2 h_ef reduction to the circle" (BC-2 default on; BC-6 / #673 default off) is ticked by default for new designs.
