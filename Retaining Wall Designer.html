@@ -9059,6 +9059,19 @@ const rwrPlain = s => String(s == null ? '' : s).replace(/<sub>(.*?)<\/sub>/g, '
 const RWR_FC = "f^{\\prime}_{c}";
 const RWR_DEG = '^{\\circ}';
 /* a steps item; with more than one topic the steps are grouped (SharedSteps.group, one topic per list entry, in order) */
+// RWRB (2026-11-06): the AASHTO Report's bearing figure — the Stability tab's to-scale diagram (rwbpSVG, #932) for the
+// governing AASHTO bearing combination, with a caption that links the steps where it is worked. Display only.
+function rwrBrgFigA(r) {
+  try {
+    const a = r.aashtoR, C = rwbpCombos(r), c = C.list.find(x => x.key === C.gov); if (!a || !c) return null;
+    const svg = rwbpSVG(r, c), z = rwbpZone(r, c), Ia = c.key === 's1a', nm = c.name.replace(/ — .*$/, '');
+    const dist = c.kind === 'rock' ? (c.tri ? 'triangular (rock, linear distribution)' : 'trapezoidal (rock, linear distribution)')
+      : `uniform over B′ = B − 2|e| = ${rwrN(c.Bp, 2)} ft (Meyerhof)`;
+    const q = c.kind === 'rock' ? c.qpk : c.q;
+    return { type: 'figure', svg,
+      caption: `Governing AASHTO bearing combination: ${nm}. ΣV = ${rwrN(c.V, 0)} lb/ft at x̄ = ${rwrN(c.xR, 2)} ft from the toe, e = ${rwrN(c.e, 3)} ft; pressure ${dist}${z.none ? '' : `, contact length ${rwrN(z.x1 - z.x0, 2)} ft`}; q_u = ${rwrN(q, 0)} psf ${q <= c.lim ? '≤' : '>'} q_R = ${rwrN(c.lim, 0)} psf. Worked: ${Ia ? (c.kind === 'rock' ? 'e' : 'B′') + ' see [[sa6/BeffIa]]' : 'e see [[sa6/e]]'}, q_u see [[sa6/${Ia ? 'quIa' : 'qu'}]], check see [[sa6/dc]].` };
+  } catch (e) { console.warn('report bearing figure:', e); return null; }
+}
 function rwrItem(scope, list, opt) {
   const L = list.filter(t => t && t.steps && t.steps.length);
   const steps = [].concat(...L.map(t => t.steps));
@@ -9273,7 +9286,7 @@ function rwrModel(r) {
         rwrS({ id: 'okIa', label: 'Bearing check, Strength Ia (minimum vertical): q_u ≤ q_R', sym: '\\frac{q_{u}}{q_{R}}', eq: '', sub: '\\frac{' + rwrN(a.q_ult_Ia / 1000, 2) + '}{' + rwrN(a.q_R_A / 1000, 2) + '}', value: a.q_ult_Ia / a.q_R_A, unit: '', d: 3, ok: !!a.bearing_ok_Ia }),
         rwrS({ id: 'dc', label: 'Bearing: governing of Strength I and Ia (status-bar check)', sym: '\\frac{q_{u,gov}}{q_{R}}', eq: '', sub: '\\frac{' + rwrN(a.q_ult_gov / 1000, 2) + '}{' + rwrN(a.q_R_A / 1000, 2) + '}', value: dcv('bearing'), unit: '', d: 3, ok: ok('bearing') })];
       CK.bearing = 'sa6/dc';
-      subs.push(sub('Step 6 — Bearing resistance (Strength I)', [rwrItem('sa6', [{ title: 'Strength I (maximum vertical)', ref: a.onRock ? AA('Art. 10.6.5, 11.6.3.2') : AA('Art. 10.6.3.1'), steps: s1 }, { title: 'Strength Ia (minimum vertical)', steps: s2 }]), onTab('stabBrg')])); }
+      subs.push(sub('Step 6 — Bearing resistance (Strength I)', [rwrItem('sa6', [{ title: 'Strength I (maximum vertical)', ref: a.onRock ? AA('Art. 10.6.5, 11.6.3.2') : AA('Art. 10.6.3.1'), steps: s1 }, { title: 'Strength Ia (minimum vertical)', steps: s2 }]), rwrBrgFigA(r), onTab('stabBrg')])); }
     if (a.ct) {
       const c = a.ct, TLN = { tl23: 'TL-2 / TL-3', tl4: 'TL-4 (S3-MTL4)', tl5: 'TL-5 (CF-MTL5)', manual: 'manual' };
       subs.push(sub('Step 7 — Vehicular collision load (Extreme Event II)', [rwrItem('sa7', [{ title: 'Collision', steps: [
