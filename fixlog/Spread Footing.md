@@ -6134,7 +6134,7 @@ index 50f3837..c2d5000 100644
 - **Other copies:** none.
 - **Open item (engineer):** when SOME combinations are off the footing and others have a finite D/C, the governing bearing check uses the latter (PASS possible); the off-footing combinations are errors in the warnings and fail the Overturning and Contact chips. Not changed; confirm this is intended.
 
-## 2026-11-06 — PR: claude/sf-inf-dcr (SFNB-2: a service combination with bearing D/C = ∞ (zero or failed bearing capacity) is included and governs bearing as FAIL; CALCULATION CHANGE, pass / fail logic; unchanged when every D/C is finite)
+## 2026-11-06 — PR: claude/sf-inf-dcr (PR #921: https://github.com/mlococo88/All-Structural/pull/921) (SFNB-2: a service combination with bearing D/C = ∞ (zero or failed bearing capacity) is included and governs bearing as FAIL; CALCULATION CHANGE, pass / fail logic; unchanged when every D/C is finite)
 
 - **Why (engineer decision 2, 2026-11-06):** `computeAll` kept only finite D/Cs for the governing bearing combination (`asd.filter(a=>a.DCR!==null&&isFinite(a.DCR))`). A combination with D/C = ∞ was silently left out. That happens with Vesić i_q = 0 when H ≥ V + A′c/tanφ (with c = 0, H ≥ V), with a failed capacity calculation, or with q_a ≤ 0 (direct). Example: case mode, shear couple off, B = L = 18 ft, Wx.V_x = 250 k per pedestal. Here 0.6D ± 0.6Wx has H = 300 > V = 270.2 and shows D/C ∞ in table 2.3, yet the dashboard read Bearing (service) PASS 0.91 with no bearing warning. Unconservative.
 - **Where / exact code (`Spread Footing.html`):**
