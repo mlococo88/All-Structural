@@ -5577,7 +5577,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Decisions (pending engineer review):** strut-and-tie (11.5.4.1) not used (note where h_w/ℓ_w < 2); ρ_t in V_n = the provided horizontal ratio (the ties by default, SFWC-1); the check uses the in-plane shear at the interface (the only section the tool has).
 - **How verified:** see the PR. **Saved data:** none. **Other copies:** none.
 
-## 2026-11-06 — PR: claude/sf-wall-detailing (SFWC-3: Wall bar spacing (11.7.2.1 / 11.7.3.1) and two layers (11.7.2.3), exemption input; the "Wall checks" REVIEW chip shrinks to what is still not computed; new check, existing results unchanged)
+## 2026-11-06 — PR: claude/sf-wall-detailing (PR #875: https://github.com/mlococo88/All-Structural/pull/875) (SFWC-3: Wall bar spacing (11.7.2.1 / 11.7.3.1) and two layers (11.7.2.3), exemption input; the "Wall checks" REVIEW chip shrinks to what is still not computed; new check, existing results unchanged)
 
 ### SFWC-3. Wall detailing, ACI 318-19 11.7   [new check, Wall elements only; CLAUDE.md §4]
 - **Request (engineer, 2026-11-06):** bar spacing limits 11.7.2.1 (vertical) / 11.7.3.1 (horizontal) and two curtains where thicker than 10 in (11.7.2.3), with a per-wall exemption checkbox; review the REVIEW chip.
