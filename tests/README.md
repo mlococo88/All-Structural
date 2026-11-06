@@ -53,6 +53,10 @@ node tests/smoke/dxf-print-sheets.mjs [--tool sf,...] [--out <dir for the PDFs>]
 # Spread Footing: the page itself never scrolls in the two-panel layout (links, scrollIntoView, focus, wheel, touch; 3 window sizes)
 node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex, plotly, three; default tests/libs>]
 
+# Spread Footing: no service combination with a bearing solution (SFNB): no console error, Bearing FAIL with a reason, card 2.6, Report;
+# a renderer that throws marks its tab "Out of date"
+node tests/smoke/spread-footing-nobear.mjs [--file <file or git ref>] [--shots <dir>]
+
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
 
