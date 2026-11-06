@@ -151,6 +151,17 @@ export const TOOLS = {
     view: p => tabView(p, '#tabs .tab', 2, '.active'),
     save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { document.getElementById('saveName').value = n; saveProject(); }, name); await p.waitForTimeout(400); }   // STDS: the standard Save as (branch), the old Save (main)
   },
+  cbc: {
+    // Concrete Beam Capacity, Beam Capacity tab (srcdoc frame #suite-frame-capacity of the suite; STDS 2026-11-06): its list rcbeam_v2_projects
+    // ({ name: a copy of S + __savedAt }); main: its own Save Project / Open dialog (saveAs(name)), branch: the standard save.
+    file: 'Concrete Beam Capacity.html', hash: '#capacity', frame: '#suite-frame-capacity', list: 'rcbeam_v2_projects', auto: 'rcbeam_v2_auto',
+    ready: p => p.waitForFunction(() => typeof allChecks === 'function' && typeof CC !== 'undefined' && CC && document.getElementById('tabBar').children.length > 2),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); const r = JSON.parse(JSON.stringify({ CC, chk: allChecks() }, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v)));
+      const d = document.getElementById('cbcDash').cloneNode(true); d.querySelectorAll('[data-sp]').forEach(x => x.remove()); return { ...r, dash: d.textContent.replace(/\s+/g, ' ') }; }),
+    change: p => bump(p, '[data-fkey=fc]', 1),
+    view: p => tabView(p, '#tabBar button', 2, '.active'),
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { if (saveAs(n)) { S.proj.name = S.proj.name || n; autosave(); refresh(); } }, name); await p.waitForTimeout(400); }   // STDS: the standard Save as (branch), the old Save (main: projDialogGo)
+  },
   index: {
     // index.html (MCT generator, React, compiled by Babel in the browser): Undo / Redo only. Its named projects are the shared Bridge
     // Projects registry (BridgeProjects), unchanged, so there is no list here. Results: the model (cfg, as autosaved) and the page text.
