@@ -5119,7 +5119,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-06 — BC-8: circular pier h_ef — third choice "Lesser of reduced / not reduced", the new default (engineer decision 2026-11-06, after BC-7); saved choices kept (PR: claude/round-hef-lesser)
+## 2026-11-06 — BC-8: circular pier h_ef — third choice "Lesser of reduced / not reduced", the new default (engineer decision 2026-11-06, after BC-7); saved choices kept (PR: claude/round-hef-lesser, PR #906: https://github.com/mlococo88/All-Structural/pull/906)
 
 ### BC-8. `conc.circHefReduce` = "lesser" | true | false   [§4: default that feeds a result] [saved data: same field, one new value]
 - **Decision (engineer, 2026-11-06, after the BC-7 report):** the default for circular piers is "use the lesser capacity": work the tension breakout with and without the §17.6.2.1.2 h_ef reduction (by analogy) and use the smaller φN_cbg, with the pryout that follows from the same choice. Implemented as a third choice of the existing option.
