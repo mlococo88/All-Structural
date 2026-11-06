@@ -83,7 +83,7 @@ export const TOOLS = {
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(LPP_LAST, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '#V', 10),
     view: p => tabView(p, '#tabBar button', 2, '.active, [aria-selected=true]'),
-    save: async (p, name) => { await p.evaluate(n => commitSave(n), name); await p.waitForTimeout(300); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => commitSave(n), name); await p.waitForTimeout(300); }   // STDS: the standard Save as (branch), the old Save (main)
   },
   abutment: {
     file: 'abutment_calculator.html', list: 'abutcalc_v1_projects', auto: 'abutcalc_v1_autosave', openIgnore: ['fingerprint'], undoSel: '#btnUndo', redoSel: '#btnRedo',

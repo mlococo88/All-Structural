@@ -467,9 +467,9 @@
     <div class="codetag"><b>IBC 2021 §1807.3</b>ASCE 7-22 wind + ice<br>ACI 318-19 shaft</div>
   </div>
   <div class="projbar noprint">
-    <span class="pb-label">Project</span>
-    <a id="hdrProj" href="#" title="The open saved project: open, save or rename it in the Project input tab"><span id="hdrProjTxt"></span></a>
-    <span class="pb-status" id="projStatus">—</span>
+    <span class="pb-label" hidden>Project</span>
+    <a id="hdrProj" hidden href="#" title="The open saved project: open, save or rename it in the Project input tab"><span id="hdrProjTxt"></span></a>
+    <span class="pb-status" id="projStatus" hidden>—</span><!-- STDS (2026-11-05): the header chip of the standard save shows the open project and its status -->
     <div class="pb-btns" id="hdrActs"></div><!-- LPHD (2026-11-05): Undo / Redo / Saved projects… are added here -->
   </div>
   <div class="hdrInfo">
@@ -766,20 +766,11 @@
     </section>
     <!-- LPHD (2026-11-05): moved here from the header's project bar (same ids and handlers); its own input tab, Project -->
     <section class="card" id="lppPrjCard">
-      <div class="card-h"><h2>Project file</h2><span class="hint">saved in this browser</span></div>
-      <div class="card-body">
-        <div class="prjGrp"><b>Saved project</b><span class="note">Recall a project saved in this browser (Saved projects… in the header also renames, duplicates and deletes).</span>
-          <select id="projSelect" title="Recall a saved project"></select></div>
-        <div class="prjGrp"><b>Save</b><span class="note">Save updates the open project; Save As makes a new one.</span><div class="pb-btns">
-          <button class="pbtn accent" id="pbSave" title="Save changes to the current project">Save</button>
-          <button class="pbtn" id="pbSaveAs" title="Save as a new project">Save As…</button>
-          <button class="pbtn" id="pbRename" title="Rename current project">Rename</button>
-          <button class="pbtn danger" id="pbDelete" title="Delete current project">Delete</button>
-          <button class="pbtn" id="pbNew" title="Start a fresh blank project">New</button></div></div>
-        <div class="prjGrp"><b>Project file (JSON)</b><span class="note">A backup of the inputs, or a file to send to the checker.</span><div class="pb-btns">
-          <button class="pbtn" id="pbExport" title="Download the current inputs as a JSON file (backup, or to send to the checker)">Export JSON</button>
-          <button class="pbtn" id="pbImport" title="Open a JSON file exported from this tool">Import JSON</button>
-          <input type="file" id="pbImportFile" accept=".json,application/json" style="display:none"></div></div>
+      <div class="card-h"><h2>Save and open</h2></div><!-- STDS (2026-11-05): the standard "Save and open" card (shared/projects-ui.js projectBar); was "Project file": picker, Save, Save As…, Rename, Delete, New -->
+      <div class="card-body" id="lppSaveCard">
+        <button class="pbtn" id="pbExport" title="Download the current inputs as a JSON file (backup, or to send to the checker)">Export JSON</button>
+        <button class="pbtn" id="pbImport" title="Open a JSON file exported from this tool">Import JSON</button>
+        <input type="file" id="pbImportFile" accept=".json,application/json" style="display:none">
       </div>
     </section>
   </div>
@@ -2592,7 +2583,7 @@ manPart("p1","1. Using the Program",[
 {key:"In check mode the worked calculation opens with a compliance table naming each criterion, the provided value, the limit, and the code reference. An NG tells you precisely what to change."},
 
 {h:"1.4 Projects and saving"},
-{p:"The project bar saves the complete input state under a name, in browser local storage. <b>Save</b> updates the current project; <b>Save As</b> creates a new one; <b>Rename</b>, <b>Delete</b> and <b>New</b> do what they say. The dot beside the name indicates unsaved changes."},
+{p:"<b>Save</b> (Ctrl+S, in the header and in the Project tab's <b>Save and open</b> card) saves the complete input state under the open project's name, in browser local storage (and on GitHub when Cloud sync is on); <b>Save as\u2026</b> asks for a name and where; <b>New</b> starts from the defaults; <b>Saved projects\u2026</b> opens, renames, duplicates and deletes them. The dot in the header's project chip indicates unsaved changes."},
 {warn:"Projects live in <b>this browser on this machine</b>. They are not on a server and are not backed up. Clearing site data deletes them. For anything you need to keep, print the Report to PDF and archive that \u2014 the PDF is the record, not the browser state."},
 
 {h:"1.5 Printing"},
@@ -8248,7 +8239,7 @@ function loadSession(){ if(!storageOK) return null; try{return JSON.parse(localS
 // ---- dropdown ----
 function refreshProjectList(sel){
   const p=loadProjects(), names=Object.keys(p).sort((a,b)=>a.localeCompare(b));
-  const dd=$('projSelect');
+  const dd=$('projSelect'); if(!dd) return;   /* STDS: no picker any more (Saved projects… lists them) */
   dd.innerHTML=`<option value="">— unsaved working state —</option>`+
     names.map(n=>`<option value="${n.replace(/"/g,'&quot;')}">${n}</option>`).join('');
   dd.value = (sel!==undefined? sel : (activeProject||''));
@@ -8329,46 +8320,8 @@ function commitSave(name){
   const p=loadProjects(); p[name]=captureState(); saveProjects(p);
   activeProject=name; dirty=false; refreshProjectList(name); updateStatus(); saveSession(); toast('Saved "'+name+'"');
 }
-$('pbSave').onclick=()=>{
-  if(!storageOK){ toast('Storage unavailable'); return; }
-  if(activeProject) commitSave(activeProject);
-  else doSaveAs();
-};
-$('pbSaveAs').onclick=()=>{ if(!storageOK){toast('Storage unavailable');return;} doSaveAs(); };
-$('pbRename').onclick=()=>{
-  if(!activeProject){ toast('No saved project to rename'); return; }
-  askName('Rename project','New name for "'+activeProject+'".', activeProject).then(name=>{
-    if(!name||name===activeProject) return;
-    const p=loadProjects();
-    if(p[name]){ toast('Name already exists'); return; }
-    p[name]=p[activeProject]; delete p[activeProject]; saveProjects(p);
-    activeProject=name; refreshProjectList(name); updateStatus(); saveSession(); toast('Renamed');
-  });
-};
-$('pbDelete').onclick=()=>{
-  if(!activeProject){ toast('No saved project loaded'); return; }
-  confirmModal('Delete project','Permanently delete "'+activeProject+'"? This cannot be undone.','Delete').then(ok=>{
-    if(!ok) return;
-    const p=loadProjects(); delete p[activeProject]; saveProjects(p);
-    toast('Deleted "'+activeProject+'"');
-    activeProject=null; dirty=false; refreshProjectList(''); updateStatus(); saveSession();
-  });
-};
-$('pbNew').onclick=()=>{
-  const go=()=>{ activeProject=null; dirty=false; applyState(DEFAULT_STATE); refreshProjectList(''); updateStatus(); saveSession(); toast('New project'); };
-  if(dirty){ confirmModal('Discard changes?','You have unsaved changes. Start a new blank project anyway?','Discard').then(ok=>{ if(ok) go(); }); }
-  else go();
-};
-$('projSelect').onchange=e=>{
-  const name=e.target.value;
-  const load=()=>{
-    if(!name){ activeProject=null; dirty=false; updateStatus(); saveSession(); return; }
-    const p=loadProjects();
-    if(p[name]){ applyState(p[name]); activeProject=name; dirty=false; updateStatus(); saveSession(); toast('Loaded "'+name+'"'); }
-  };
-  if(dirty){ confirmModal('Discard changes?','Loading a project will discard your current unsaved changes. Continue?','Load').then(ok=>{ if(ok) load(); else refreshProjectList(); }); }
-  else load();
-};
+/* STDS (2026-11-05): the Save / Save As… / Rename / Delete / New buttons and the picker are replaced by the standard save (below);
+   Rename and Delete are in Saved projects…. doSaveAs() / commitSave() are kept (commitSave is the standard Save's write). */
 
 // ---- PLIB (2026-11-02): saved-project list and Undo / Redo (shared/projects.js, shared/projects-ui.js) ----
 // Display and storage only: the list is the tool's own key lpp_projects_v1 in its own format ({ name: captureState() }); the session
@@ -8380,21 +8333,29 @@ $('projSelect').onchange=e=>{
   let tm=null; const soon=()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); };
   let ST=null; try{ ST=window.localStorage; }catch(e){}
   const store=SharedProjects.mapStore(ST,LS_PROJECTS);
-  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'light-pole-sign-post',label:'Light Pole and Sign Post',space:1,toFile:(i,n)=>({tool:'Light Pole and Sign Post',format:'lpp-project',version:1,name:n,state:i}),fromFile:j=>{const s=j&&j.format==='lpp-project'?j.state:j;if(!s||typeof s!=='object'||Array.isArray(s))throw new Error('not a Light Pole and Sign Post project file');return s;}},
-    store, storage:ST, title:'Saved projects (this browser)',
-    current:()=>activeProject&&store.has(activeProject)?activeProject:null,
-    open:n=>{ const st=store.get(n); if(!st) return false;
-      if(dirty&&!confirm('Loading a project will discard your current unsaved changes. Continue?')) return false;
-      applyState(st); activeProject=n; dirty=false; refreshProjectList(n); updateStatus(); saveSession(); toast('Loaded "'+n+'"'); return true; },
-    renamed:(a,b)=>{ if(activeProject===a){ activeProject=b; updateStatus(); saveSession(); } },
-    deleted:n=>{ if(activeProject===n){ activeProject=null; updateStatus(); saveSession(); } },
-    changed:()=>refreshProjectList() });
+  /* STDS (2026-11-05): the standard save (shared/projects-ui.js projectBar) over lpp_projects_v1 ({ name: captureState() }, unchanged).
+     Save = commitSave(name) (as before: activeProject, dirty = false, the session written); Open = the old load path (applyState); New =
+     the factory defaults (DEFAULT_STATE, as before); the open name is the tool's activeProject (kept in lpp_session_v1, as before).
+     Export / Import JSON: the same buttons and handlers (Import asks first on unsaved changes through the projectBar). */
   const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'pbtn'});
-  const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)'), bl=B('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete');
-  bl.addEventListener('click',()=>dlg.show());
-  const ref=$('hdrActs'); if(ref){ ref.append(bu,br,bl); }   /* LPHD: in the header's project bar */
+  const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
+  const ref=$('hdrActs'); if(ref){ ref.append(bu,br); }   /* LPHD: in the header's project bar */
+  const pb=SharedProjectsUI.projectBar({ store, storage:ST, label:'Light Pole and Sign Post', id:'lpLibDlg',
+    getState:captureState,
+    current:()=>activeProject||'', setCurrent:n=>{ if((activeProject||'')!==(n||'')){ activeProject=n||null; updateStatus(); saveSession(); } },
+    save:n=>{ if(!storageOK) return { ok:false, message:'Storage unavailable (open the file directly to enable saving). Use Export JSON.' }; commitSave(n); return { ok:store.has(n) }; },
+    deleted:n=>{ if(activeProject===n){ activeProject=null; updateStatus(); saveSession(); } },
+    open:n=>{ const st=store.get(n); if(!st) return false; applyState(st); activeProject=n; dirty=false; updateStatus(); saveSession(); toast('Loaded "'+n+'"'); return true; },
+    newProject:()=>{ activeProject=null; dirty=false; applyState(DEFAULT_STATE); updateStatus(); saveSession(); toast('New project'); },
+    exportFile:n=>{ const a=activeProject; activeProject=n; try{ lppExportJSON(); } finally{ activeProject=a; } },
+    importFile:()=>$('pbImportFile').click(),
+    fileButtons:[$('pbExport'),$('pbImport')],
+    header:ref, chipBefore:bu, card:$('lppSaveCard'),
+    /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'light-pole-sign-post',label:'Light Pole and Sign Post',space:1,toFile:(i,n)=>({tool:'Light Pole and Sign Post',format:'lpp-project',version:1,name:n,state:i}),fromFile:j=>{const s=j&&j.format==='lpp-project'?j.state:j;if(!s||typeof s!=='object'||Array.isArray(s))throw new Error('not a Light Pole and Sign Post project file');return s;}} });
+  [pb.el.chip,pb.el.save,pb.el.lib].forEach(b=>b.classList.add('pbtn'));
+  const dlg=pb.dialog;
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
-  window.LPPL={h,store,dlg,soon};
+  window.LPPL={h,store,dlg,soon,pb};
   window.addEventListener('load',()=>setTimeout(()=>h.reset(),0));
   h.reset();
 })();
@@ -8420,7 +8381,7 @@ function lppImportState(obj){
   return obj && obj.name ? obj.name : '';
 }
 $('pbExport').onclick=lppExportJSON;
-$('pbImport').onclick=()=>{ const go=()=>$('pbImportFile').click();
+$('pbImport').onclick=()=>{ const go=()=>$('pbImportFile').click(); if(window.LPPL&&LPPL.pb){ LPPL.pb.importJSON(); return; }   /* STDS: the standard question on unsaved changes */
   if(dirty){ confirmModal('Discard changes?','Importing a file replaces the current unsaved inputs. Continue?','Import').then(ok=>{ if(ok) go(); }); } else go(); };
 $('pbImportFile').addEventListener('change',e=>{
   const f=e.target.files&&e.target.files[0]; if(!f) return;
@@ -8547,7 +8508,7 @@ const LPP_IN_TABS=[['wind','Wind & site'],['pole','Pole'],['fix','Fixtures'],['c
   ['ice','Ice'],['shaft','Shaft & soil'],['anchors','Anchors'],['proj','Project']];   // LPHD: + Project (the project file card)
 // card -> tab, keyed by an element id inside the card
 const LPP_IN_CARD=[['V','wind'],['H','pole'],['signB','pole'],['fixTbl','fix'],['cablesOn','cables'],
-  ['tIce','ice'],['ltsIce','ice'],['shaftShape','shaft'],['boltDia','anchors'],['projSelect','proj']];
+  ['tIce','ice'],['ltsIce','ice'],['shaftShape','shaft'],['boltDia','anchors'],['pbExport','proj']];   // STDS: keyed by Export JSON (no picker)
 const LPP_IN_KEY='lpp_inputTab_v1';
 let lppInTabCur=null;   // in-memory copy, so the tab survives without storage
 function lppInTabGet(){ if(lppInTabCur) return lppInTabCur; try{ return localStorage.getItem(LPP_IN_KEY)||''; }catch(e){ return ''; } }
