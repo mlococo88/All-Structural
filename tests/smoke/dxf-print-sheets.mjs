@@ -107,6 +107,17 @@ const TOOLS = {
     reportOpen: async p => { await p.click('#suite-tab-report'); await p.waitForTimeout(4000); },
     report: /Concrete Beam|Beam Capacity/i,
   },
+  bp: {   // BPDW (2026-11-06): the Drawings tab of the Base Plate & Anchor Designer; the known rectangle is the pedestal Bx x By of the default
+          // project on the BASE PLATE PLAN sheet. Ctrl+P prints the Report from the Report tab (RPT-4).
+    file: 'BasePlateAnchorDesigner.html', label: 'Base Plate & Anchor Designer',
+    open: async p => { await p.waitForFunction(() => typeof S !== 'undefined' && typeof buildTabs === 'function' && document.getElementById('tabBar').children.length > 0, null, { timeout: 60000 });
+      await p.evaluate(() => { S.ui.tab = 'tabDrawings'; buildTabs(); }); await p.waitForSelector('#bpdwPrint1'); await p.selectOption('#bpdwSheet', 'plan'); await p.waitForSelector('#bpdwPrint1'); },
+    one: '#bpdwPrint1', all: '#bpdwPrintAll',
+    n: p => p.evaluate(() => BPDW.B.S.length),
+    known: p => p.evaluate(() => { const s = BPDW.B.S.find(q => q.id === BPDW.cur); return { what: `pedestal Bx x By = ${S.conc.Bx} x ${S.conc.By} in on ${s.title} at ${s.scale} (1:${s.k})`, w: S.conc.Bx / s.k, h: S.conc.By / s.k }; }),
+    reportOpen: async p => { await p.evaluate(() => { S.ui.tab = 'tabReport'; buildTabs(); }); await p.waitForTimeout(6000); },
+    report: /Base Plate|Anchor/i,
+  },
 };
 
 let fails = 0; const check = (ok, m) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${m}`); if (!ok) fails++; };

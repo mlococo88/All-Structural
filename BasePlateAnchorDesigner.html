@@ -10283,6 +10283,7 @@ function bpdwBuild(){
     const nts=['INCHES. PLATE: FROM THE PLATE CENTRE'+(off?'; PED.: FROM THE PEDESTAL CENTRE (PLATE OFFSET '+fmt(px,3)+', '+fmt(py,3)+')':'')+'.',
       'ANCHOR: '+bpdwIn(hw.d)+' DIA. ROD, HEAVY HEX NUT ('+bpdwIn(hw.nutF)+' A/F), '+(hw.top.kind==='plate'?'PLATE WASHER '+bpdwIn(hw.top.W)+' SQ. x '+bpdwIn(hw.top.t):'WASHER '+bpdwIn(hw.top.W)+' OD')+',',
       'IN A '+bpdwIn(hw.dh)+' DIA. HOLE (HIDDEN). SECTIONS A-A AND B-B: SHEET 2.'];
+    if(pg.present||bpCageOn()||ic||icV){ nts.push('REINFORCEMENT (SCHEDULE: SHEET 3):'); if(pg.present||bpCageOn()) nts.push('  PEDESTAL / PIER BARS AND TIES (GREEN)'); if(ic) nts.push('  TENSION ANCHOR REINFORCEMENT (YELLOW)'); if(icV) nts.push('  SHEAR ANCHOR REINFORCEMENT (ORANGE)'); }
     nts.forEach((s,j)=>D.text(L.txt,tx,sb[3]-0.15*P-t.h-(0.2+0.14*j)*P,0.07*P,s,0));
     return {known:{w:circPier?C.D/P:C.Bx/P,h:circPier?C.D/P:C.By/P,what:circPier?'pier '+C.D+' in dia.':'pedestal '+C.Bx+' x '+C.By+' in'}};
   },[2,3,4,6,8,12,16,24,32,48,96],['tabInput','Input & Schematics']);
@@ -10322,7 +10323,9 @@ function bpdwBuild(){
     dimVs(st.zPb,st.zPt,xl-0.35*P,X(off-pw/2),'T_P',P);
     if(st.tg>0) dimVs(zc,zc+st.tg,xl-0.35*P,X(off-pw/2),'T_G',P);
     if(st.openGap>0) dimVs(st.zPb-st.openGap,st.zPb,xl-0.35*P,X(off-pw/2),'E_B',P);
-    D.dimH(L.dim,X(-span/2),X(span/2),-0.45*P,0,(circPier?'<> DIA.':'<>'));
+    const zLow=pg.present&&S.ped.intoFooting!==false? -Math.max(+S.ped.footExt||0,0) : 0;   /* pedestal bars into the footing */
+    D.dimH(L.dim,X(-span/2),X(span/2),zLow-0.45*P,0,(circPier?'<> DIA.':'<>'));
+    if(zLow<0) D.text(L.txt,X(span/2)+0.1*P,zLow+0.05*P,0.075*P,'BARS INTO FOOTING '+bpdwIn(-zLow),0);
     if(!circPat&&hs.length>1) D.chainH(L.dim,[X(off-pw/2),...hs.map(X),X(off+pw/2)],zs+0.35*P,st.zPt);
     else D.dimH(L.dim,X(off-pw/2),X(off+pw/2),zs+0.35*P,st.zPt);
     /* leaders: nut and washer, head */
