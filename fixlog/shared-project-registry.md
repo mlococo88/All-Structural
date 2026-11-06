@@ -66,7 +66,7 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
 - **Other entries:** unchanged.
 - **How verified:** `node tests/engine/run.mjs project-registry`; `node tests/smoke/home-projects.mjs --tool pile,sbapp`.
 
-## 2026-11-06 — PR: claude/sbd-standard-save (STDS-G) — Steel Bridge Design entry: a two-list view (`sbdPairView`) and the file with both parts
+## 2026-11-06 — PR: claude/sbd-standard-save (PR #862: https://github.com/mlococo88/All-Structural/pull/862) (STDS-G) — Steel Bridge Design entry: a two-list view (`sbdPairView`) and the file with both parts
 - **What:** new `sbdPairView(storage)` (read-only, by name, over `girderdetail_projects_v1` and `plateline_projects_v1`: item `{ gd?, pl? }`, the parts that exist; `keys()`, `stamp()`; save / rename / duplicate / remove refuse "Open Steel Bridge Design…"). Entry `steel-bridge-design`: `view: sbdPairView`; toFile before `(i, n) => ({ app: 'SteelBridgeDesign', v: 1, name: n, data: i })`, after `(i, n) => { const f = { app: 'SteelBridgeDesign', v: 1, name: n }; if (i.gd !== undefined) f.data = i.gd; if (i.pl !== undefined) f.pl = { app: 'PlateLine', v: 1, name: n, data: i.pl }; return f; }` (= the tool's `sbdPairFile`; a modules-only project gives the same text as before). key, tool, label, space unchanged.
 - **Why:** the tool's one Save now writes both lists under one name and syncs one file with both parts; the home page must list and upload the same file text (tests/smoke/home-sync.mjs).
 - **Other entries:** unchanged. Loaded by `tools.html` only.
