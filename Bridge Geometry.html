@@ -2315,10 +2315,23 @@ function drawHeatmap(){
     if(u.skew) ctx.fillText(`Skew ${u.skew.toFixed(1)}°`, lx-6, ly+17);
     // distinct bearing-line station labels (e.g. dual bearings at a pier), placed at right edge
     ctx.font='8.5px monospace';
-    bearingLinesFor(u).forEach(bl=>{ if(Math.abs(bl.sta-u.sta)<1e-6) return;
-      const bp=ENG.deckAtSupport(bl, ed.r);
+    /* BGDP (2026-11-06): the labels of a dual-bearing pier's two lines were drawn on top of each other where the lines are a few
+       pixels apart. Where two labels' boxes overlap, they are spread apart vertically (one text line, 11 px, by bgLabSpread,
+       in screen order; moved off the deck where its edge faces up or down) with a short leader from each line; labels with room are
+       drawn as before. Display only. */
+    const bLab=bearingLinesFor(u).filter(bl=>Math.abs(bl.sta-u.sta)>=1e-6).map(bl=>{ const bp=ENG.deckAtSupport(bl, ed.r);
+      const t=`${bl.label.replace(u.name+' ','')} Sta ${formatStation(bl.sta)}`; return {t, x:TX(bp.x), y:TY(bp.y), w:ctx.measureText(t).width}; });
+    const bHit=bLab.some((a,i)=>bLab.some((b,j)=>j>i&&Math.abs(a.y-b.y)<11&&Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x)>-4));
+    const bSp=bHit?bgLabSpread(bLab.map(q=>q.y),11):{x:bLab.map(q=>q.y),moved:bLab.map(()=>false)};
+    if(bHit){ /* off the deck: where the deck edge faces up or down on screen, the spread group moves outward, clear of the deck */
+      const cm=ENG.deckAtSupport({sta:u.sta,skew:u.skew},(ed.l+ed.r)/2), oy=bLab[0].y-TY(cm.y), ox=bLab[0].x-TX(cm.x);
+      if(Math.abs(oy)>Math.abs(ox)){ const ys=bLab.map(q=>q.y), d=oy>0?(Math.max(...ys)+8)-Math.min(...bSp.x):(Math.min(...ys)-8)-Math.max(...bSp.x);
+        bSp.x=bSp.x.map(v=>v+d); } }
+    bLab.forEach((q,i)=>{ const ly=bSp.x[i];
       ctx.fillStyle=CYAN; ctx.textAlign='left';
-      ctx.fillText(`${bl.label.replace(u.name+' ','')} Sta ${formatStation(bl.sta)}`, TX(bp.x)+5, TY(bp.y)); });
+      if(bSp.moved[i]){ const lx=Math.max(...bLab.map(z=>z.x))+10; ctx.save(); ctx.strokeStyle=CYAN; ctx.lineWidth=0.75; ctx.beginPath(); ctx.moveTo(q.x+1,q.y); ctx.lineTo(lx-2,ly); ctx.stroke(); ctx.restore();
+        ctx.fillText(q.t, lx, ly); }
+      else ctx.fillText(q.t, q.x+5, q.y); });
     ctx.font='10px monospace'; });
   }
 
