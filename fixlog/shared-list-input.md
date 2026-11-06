@@ -93,3 +93,17 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
 
 ## 2026-11-02 — PR: claude/spc-rename-dialog, PR #709: https://github.com/mlococo88/All-Structural/pull/709 — Section Property Calculator: the library Rename dialog's tags (`mount`; no change to the shared file)
 - `tests/smoke/list-input.mjs` gains the part `secpropren`.
+
+## 2026-11-06 — PR: claude/list-input-rebaseline (PR #873: https://github.com/mlococo88/All-Structural/pull/873) (RLI) — tests/smoke/list-input.mjs re-baselined (test only; `shared/list-input.js` and every tool unchanged)
+- **Problem:** the browser test compared each tool with its main commit from before its table landed (`a` per entry). Later display PRs (the standard save card and header chip, Report tab additions, renamed save buttons, "Suite sync" → "Hand-off locks") changed the page text, so 8 parts failed on main: smd, sbeam, bsl, secprop, index, pbd, sbridge, secpropren (16 failures). bgeo, gusset, stonearch, bpad and the widget passed.
+- **Checked before re-baselining (origin/main 9ea00c1, raw readouts with the new `--out`):** in every failing part, every result, input and saved-data field was identical (smd `tabR, userX, shD, moD, deD, env, nodeR, saved`; sbeam `AN, userX, S`; bsl `P, C, stored`; secprop `M, R, lib`; index `cfg`; pbd `ls`; sbridge `an, sec, loads, stored`; all `savedText`). Only text differed:
+  - smd: header project line and chip, "Save and open" card and Project tab (title block, templates, shared project info moved into it).
+  - sbeam: Project tab (Save and open card, title block, hand-off group; the old "Project Save / Load" card gone); Report tab (Include boxes, §1.1 Governing result, a results table per check section, longer title block). The rest of the input text is identical.
+  - bsl: Report tab holds the whole calculation package (chapter choice, §1.3, the chapters after §9); the manual's printing paragraph reworded.
+  - secprop / secpropren: Project tab (Save and open card with Export JSON / Import JSON instead of Save file / Open file…, title block, DXF and shared project info, "16. Notes and assumptions" heading); a "Drawings" output tab.
+  - index: the old project bar ("Bridge Project … Save to Project, Export JSON, Import JSON, reset to defaults") replaced by the chip / Save / Saved projects…; "Suite sync" → "Hand-off locks"; the dialog title. With those removed, the text of both steps is identical.
+  - pbd: header (project line, chip, Save / Saved projects… instead of Open… / Save / Save as… / New / Export / Import / Reset), "Hand-off locks", the dialog title. From "Design status" to the end every tab's text is identical (every result in the tab text).
+  - sbridge: the "Save and open" card above the Project inputs; the rest identical.
+- **Change (`tests/smoke/list-input.mjs`):** new `const BASE = '6c3b1bcc62'` (origin/main at the re-baseline; the tools above are the same as at 9ea00c1) is the default A; `--orig` uses each entry's old `a` as before; `--a <ref>` as before. A side types into the table when the page has it (`T.tableSel` present), else into the old box (`typeOld`) as before. New `--out <dir>`: raw readouts A / B per tool and case. Header comment: how to re-baseline. `tests/README.md`: the command line and a "Re-baselining list-input.mjs" section.
+- **How verified:** `node tests/smoke/list-input.mjs` on the branch (tools = origin/main): all passed (89 checks). `--part gusset --orig`: all passed (old path still works).
+- **Open items:** none.
