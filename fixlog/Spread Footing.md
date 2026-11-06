@@ -6176,3 +6176,41 @@ index 50f3837..c2d5000 100644
 - **How verified:** the SF harness as above; `tests/smoke/spread-footing-nobear.mjs` (case B = L = 18 added: governing D/C ∞ with the reason on the chip); check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser. Screenshots of the dashboard / Bearing tab, table 2.3 and the Report S-qa checked.
 - **Saved data:** none.
 - **Other copies:** none.
+
+## 2026-11-06 — PR: claude/sf-off-governs (SFNB-3: a service combination with no bearing solution (resultant off the footing, or net load not downward) has bearing D/C = ∞ and governs bearing as FAIL, also when other combinations have finite D/Cs; CALCULATION CHANGE, pass / fail logic; unchanged when every combination has a bearing solution)
+
+- **Why (engineer, 2026-11-06, answer to the SFNB-1 open item):** any service combination whose resultant is off the footing must make Bearing FAIL, consistent with the ∞ rule (SFNB-2), even when other combinations have a finite D/C. Net-uplift combinations ("net load not downward") get the same treatment. Overturning and Contact area stay as they are.
+- **Before:** such a combination had `DCR = null` and was left out of the governing selection. Bearing could PASS on the remaining combinations: only the "unstable" error, the Overturning chip and the Contact chip flagged it.
+- **Where / exact code (`Spread Footing.html`):**
+  - `computeAll`, the ASD map, before `return{cb,r,bear,cap,DCR,…}` (anchor `/* SFNB-3 (2026-11-06, engineer; CALCULATION CHANGE`): `if(DCR===null)DCR=Infinity;`. The SFNB-2 selection (`a.DCR!==null&&!isNaN(a.DCR)`, largest D/C, first ∞ on a tie) then makes it govern. Because every service combination now has a D/C, `R.govBear` is null only with no combinations. The SFNB-1 "no governing combination" displays stay, but no input now reaches them.
+  - Warnings:
+    - A new error after the minimum-contact warning: `Bearing FAIL: n combination(s) with no bearing solution (bearing D/C = ∞): "<name>": <reason>; …`.
+    - The SFNB-2 per-combination ∞ error is limited to combinations that have a bearing solution (`unstable.indexOf(a)<0`), so nothing is repeated.
+    - `sfdBearWhy(a,dB,dL)` takes the footing B, L when called from `computeAll` (R is not set yet).
+  - Bearing tab:
+    - Card 3.3 has a new branch when the governing (or selected) combination has no capacity (`!g.cap`): "3.3 Bearing Check — No Bearing Solution" with "D/C = ∞ (FAIL): <reason>". Before, `g.cap.fail` threw for a selected off-footing combination.
+    - With an LRFD row selected, card 3.1 states the service bearing FAIL.
+  - Report: when `!G.cap`, S-bp "Base pressure (governing combination) — no solution" and S-qa become warn notes with the reason. Its resultant is still worked in S-res. The "every combination" table and its ∞ notes, table 2.3 ("∞") and plot 2.4 (red ∞ bar) follow from the D/C.
+- **Governing provision:** no formula changed. The bearing check (ASCE 7-16 §2.4.1 service; Vesić / AASHTO LRFD 10th Ed. Art. 10.6.3.1.2a, or the direct q_a) is evaluated only where a no-tension pressure solution exists. A combination without one (|e_x| ≥ B/2 or |e_y| ≥ L/2, or ΣP ≤ 0) cannot be supported in bearing, so it fails the check: D/C = ∞.
+- **Check case 1 (direct factored mode, default project, Ped 1 V_y = 578 k, between the bracket thresholds 571.7 and 583.9 k):**
+  - Dead ×1.2: ΣP = 655.93 k, e_y = 3.965 ft < L/2 = 4.00, partial contact 0.99 %, q_eff = 1040.4 ksf, q_allow = 0.0533 ksf, DCR 19,521.4.
+  - Dead ×0.9: ΣP = 642.45 k, e_y = M_x/P = 2601.0/642.45 = 4.049 ft ≥ 4.00, off the footing.
+  - **Before:** governing "Direct LRFD (dead ×1.2)", DCR 19,521.42, FAIL; the ×0.9 bracket left out.
+  - **After:** governing "Direct LRFD (dead ×0.9, min)", D/C ∞, FAIL, "resultant off the footing: |e_y| 4.05 ft ≥ L/2 4.00 ft".
+  - Overturning (FS 0.99, FAIL) and Contact (min 0.99 %, 1 of 2 off, FAIL) are unchanged.
+- **Check case 2 (case mode, direct soil q_a = 15 ksf gross, Wx.P = −300 k on each pedestal):**
+  - D + 0.6(+Wx): ΣP = 314.94 + 0.6·(−300 − 300) = −45.06 k, net load not downward. 0.6D + 0.6(+Wx): −171.04 k.
+  - **Before:** governing "D + 0.75L + 0.45(−Wx) + 0.75S", ΣP = 704.94 k, q_max = 9.919 ksf, DCR = 9.919/15 = 0.661, **PASS**.
+  - **After:** governing "D + 0.6(+Wx)", D/C ∞, **FAIL**, "net load not downward: ΣP = −45.06 kip".
+  - Overturning FS 0.48 FAIL and Contact FAIL are unchanged.
+- **Other examples that move:**
+  - Case wall 1.5 × 6 ft, Wy.V_y = 600 k: was "D + 0.75L + 0.45(+Wy) + 0.75S" DCR 22.95 FAIL; now "D + 0.6(+Wy)" ∞ FAIL (|e_y| 5.13 ≥ 4.00).
+  - Case B = L = 1 ft: now "D + S" ∞.
+  - Every input that had no governing combination (SFNB-1 triggers) now governs with D/C ∞ and the same reason.
+  - Side effect in the self-consistency list: the "No-tension solver residual" row applies only to a governing combination in partial contact, so it drops out of the V_y = 578 case. The other four MISMATCH rows there (Phase 2 diagrams at 0.99 % contact) are present on main too.
+- **Harness:** SF harness (10 cases), origin/main vs branch: `R`, `P2` 0 differences; dashboard and Report text identical; 0 console / KaTeX errors. No harness case has a combination without a bearing solution, so none moved.
+- **How verified:**
+  - `tests/smoke/spread-footing-nobear.mjs`: the two check cases added (governing D/C ∞ with the reason on the chip); every earlier trigger now governs ∞; the LRFD-pick view states the FAIL.
+  - A renderer sweep over 38 inputs (selector picks included): no renderer error, no Out-of-date banner, no Report error.
+  - check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser. Screenshots checked.
+- **Saved data:** none. **Other copies:** none.

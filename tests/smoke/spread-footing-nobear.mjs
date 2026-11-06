@@ -11,6 +11,8 @@
 //   5. the Report renders (no "Report error") and states the bearing result and a reason; the other checks are in it;
 //   6. the Stability tab still shows overturning and sliding.
 // SFNB-2 (same day): a combination with D/C = ∞ (zero capacity) governs bearing as FAIL, with the reason on the chip.
+// SFNB-3 (same day): so does a combination with no bearing solution (resultant off the footing, net load not downward), also
+// when other combinations have a finite D/C; the cases above that had no governing combination now govern with D/C ∞.
 // Also: the default project has no banner and Bearing PASS; a renderer made to throw marks its tab "Out of date" (and only that
 // tab), logs to the console, and the banner goes at the next good render.
 //   node tests/smoke/spread-footing-nobear.mjs [--file <file or git ref>] [--shots <dir>]
@@ -42,6 +44,9 @@ const CASES = [
   ['case D.M_x = 5000, LRFD combination 1 picked', 'state.peds[0].loads.D.Mx=5000;', 'SEL.asdLr=0;'],
   // SFNB-2: a combination with D/C = ∞ governs (H > V with c = 0: i_q = 0); before, it was left out and Bearing read PASS 0.91
   ['case B = L = 18, shear couple off, Wx.V_x = 250 k per pedestal (0.6D + 0.6Wx: H 300 > V 270.2)', "state.stab.shearCouple='off';state.geom.B=18;state.geom.L=18;state.peds.forEach(p=>{p.loads.Wx.Vx=250;});", '', 'Infinity'],
+  // SFNB-3: a combination off the footing or with net uplift governs as FAIL even when the others have finite D/Cs
+  ['direct V_y = 578 k (dead x0.9 bracket off the footing, x1.2 in partial contact)', "state.loadMode='direct';state.peds[0].direct.Vy=578;", '', 'Infinity'],
+  ['case direct soil q_a = 15, Wx.P = -300 k per pedestal (D + 0.6(+Wx): net uplift; the rest PASS)', "state.soil.mode='direct';state.soil.qa=15;state.peds.forEach(p=>{p.loads.Wx.P=-300;});", '', 'Infinity'],
 ];
 
 const o = await openPage(SRC.file, {});
