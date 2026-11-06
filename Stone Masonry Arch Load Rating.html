@@ -464,12 +464,13 @@ a.wkA{color:var(--blue);text-decoration:none;border-bottom:1px dotted var(--blue
     <div class="by">by Mario Lococo</div>
     <div class="gov">MassDOT BM Pt. I §7.2.7 &middot; AASHTO MBE 6A.9.1</div>
   </div>
-  <div id="hdrActs"><a id="hdrProj" href="#" title="Project and task: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
+  <div id="hdrActs"><a id="hdrProj" hidden href="#" title="Project and task: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
     <button id="printBtn" title="Print / PDF the calculation report (the Report tab), from any tab">Print / PDF Report</button></div><!-- SAHD (2026-11-05): Undo / Redo / Saved projects are added here -->
 </div></div>
 <!-- SAHD (2026-11-05): the title block and shared-info buttons, moved here from the header. archInputTabs() moves #saPrjPane into the
      Project input tab (before Engineering Assumptions); inputPanel() parks it here again before the input panel is rebuilt. -->
 <div id="saPrjHold" hidden><div id="saPrjPane">
+  <div class="pnl"><div class="hd"><span>Save and open</span></div><div class="bd" id="saSaveCard"></div></div><!-- STDS (2026-11-06): the standard "Save and open" card (shared/projects-ui.js projectBar, SAPL.pb), first in the Project tab; it replaces the Saved projects list, Name, Save / Load / Delete, Start a new calculation and Export / Import JSON of "Project Files" -->
   <div class="pnl"><div class="hd"><span>Title block</span></div><div class="bd">
   <div id="tblk">
     <div><label>Project</label><input id="tbProject" type="text"></div>
@@ -9838,21 +9839,21 @@ function inputPanel(){
   h+=UI.pnl("ip_assume",c(),"Engineering Assumptions",
     `<textarea id="assume" rows="5" placeholder="Free text. Reported in the on-screen output and the PDF report.">${esc(F.assume)}</textarea>`);
 
-  h+=UI.pnl("ip_proj",c(),"Project Files",
-    `<label style="font-size:.95rem">Saved projects</label>
+  h+=UI.pnl("ip_proj",c(),"Autosave and charts",   /* STDS: was "Project Files"; its save / open controls are in "Save and open" (kept here hidden: wireProject() wires them) */
+    `<div hidden><label style="font-size:.95rem">Saved projects</label>
      <select id="projSel" size="5" style="width:100%;max-width:none;font-size:.95rem;margin:4px 0 8px"></select>
      <label style="font-size:.95rem">Name</label>
      <input type="text" id="projName" style="width:100%;max-width:none" placeholder="project name">
      <div class="btnrow"><button class="pri" id="bSave">Save</button>
-       <button id="bLoad">Load</button><button id="bDel">Delete</button></div>
+       <button id="bLoad">Load</button><button id="bDel">Delete</button></div></div>
      <div class="note" id="projMsg" style="min-height:16px"></div>
      <div class="note" id="autoInfo"></div>
      <div class="row" style="margin-top:6px"><label>Chart engine<span class="h">interactive needs Plotly to render</span></label>
        <select id="chartEng"><option value="auto">Auto (interactive when it works)</option>
          <option value="plotly">Force interactive</option>
          <option value="svg">Force static</option></select></div>
-     <div class="btnrow"><button id="bReset">Start a new calculation</button></div>`+
-    `<div class="btnrow"><button id="bExp">Export JSON</button><button id="bImp">Import JSON</button>
+     <div class="btnrow" hidden style="display:none"><button id="bReset">Start a new calculation</button></div>`+
+    `<div class="btnrow" hidden style="display:none"><button id="bExp">Export JSON</button><button id="bImp">Import JSON</button>
       <input type="file" id="fImp" accept=".json" style="display:none"></div>`+
     `<div class="note" style="margin-top:6px">Saved projects live in this browser's local storage on this machine.
       Export JSON to back up or move a project to another computer.</div>`);
@@ -12557,8 +12558,10 @@ function showAutoInfo(){
     return;
   }
   const when=restoredAt?new Date(restoredAt):null;
-  e.innerHTML=`Work is saved automatically as you go`+
-    (curProj?` under <b>${esc(curProj)}</b>`:` (unnamed — enter a name and press Save to keep a copy)`)+
+  /* STDS (2026-11-06): was "Work is saved automatically as you go under <project>", which read as if the named project were kept up to
+     date; the autosave is only the session in this browser, and a saved project changes only on Save. */
+  e.innerHTML=`The inputs on screen are autosaved in this browser while you work and come back when you reopen the tool. `+
+    `The autosave is not a saved project`+(curProj?`: <b>${esc(curProj)}</b> changes only when you press Save`:`: use Save or Save as\u2026 to keep one`)+
     `. `+(when?`This session was restored from ${esc(when.toLocaleDateString())} `+
       `${esc(when.toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"}))}.`:"");
   e.innerHTML=rMsg+sMsg+uMsg+e.innerHTML;
@@ -12585,18 +12588,34 @@ function plibInit(){
   let tm=null; PLIB.soon=()=>{clearTimeout(tm);tm=setTimeout(()=>h.record(),400);};
   let LS=null; try{LS=window.localStorage;}catch(e){}
   const store=SharedProjects.mapStore(LS,LSK,{time:i=>i&&(i.saved||i.ts)||null});
-  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'stone-arch-rating',label:'Stone Masonry Arch Load Rating',space:2,fromFile:j=>{if(!j||!j.fields||typeof j.fields!=='object')throw new Error('not a Stone Arch project file');return j;}},
-   store,storage:LS,title:"Saved projects (this browser)",
-    current:()=>curProj&&store.has(curProj)?curProj:null,
-    open:n=>{if(!$("projSel")||!$("bLoad"))return false;refreshProjSel(n);$("projSel").value=n;$("bLoad").click();return curProj===n;},
-    renamed:(a,b)=>{if(curProj===a){curProj=b;if($("projName"))$("projName").value=b;autosave();showAutoInfo();}},
-    deleted:n=>{if(curProj===n){curProj="";autosave();showAutoInfo();}if($("projName")&&($("projName").value||"").trim()===n)$("projName").value="";},
-    changed:()=>refreshProjSel(curProj)});
+  /* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over stoneArchLR.projects ({ name: snapshot() }, unchanged).
+     Replaces the "Project Files" list, Name, Save (Update) / Load / Delete, "Start a new calculation" and Export / Import JSON (kept hidden:
+     the projectBar drives them) and the PLIB Saved projects… button. Save(name) = the old Save (curProj = name; list[name] = snapshot()); Open =
+     the old Load (the hidden #projSel + #bLoad); New = saNewCalc() (the old "Start a new calculation", asked first only on unsaved changes);
+     the open name is the tool's curProj (kept in the autosave, as before). "Unsaved changes" compares the inputs only (fields, title block,
+     rate basis, Midas text: as Undo / Redo); tabs, chart focus, panels and the chart engine are view settings. */
+  const pick=o=>{if(!o)return null;const r={};PLIB_KEEP.forEach(k=>{r[k]=o[k];});return SharedProjects.canon(JSON.parse(JSON.stringify(r)));};
   const row=document.createElement("div");row.className="bx-pm";row.setAttribute("data-sp","row");
   const B=(t,ti)=>SharedProjectsUI.button(t,ti);
-  const bu=B("Undo","Undo the last input change (Ctrl+Z)"),br=B("Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)"),bl=B("Saved projects\u2026","The projects saved in this browser: open, rename, duplicate, delete");
-  bl.onclick=()=>dlg.show();row.append(bu,br,bl);
-  const host=$("hdrActs")||$("appTitle");if(host)host.appendChild(row);   /* SAHD: in the header's action row */
+  const bu=B("Undo","Undo the last input change (Ctrl+Z)"),br=B("Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)");
+  row.append(bu,br);
+  const host=$("hdrActs")||$("appTitle");if(host)host.insertBefore(row,$("printBtn")&&$("printBtn").parentNode===host?$("printBtn"):null);   /* SAHD: in the header's action row; STDS: before Print */
+  const pb=SharedProjectsUI.projectBar({store,storage:LS,label:"Stone Masonry Arch Load Rating",id:"saLibDlg",
+    snapshot:()=>pick(snapshot()), snapOf:n=>pick(store.get(n)),
+    current:()=>curProj||"", setCurrent:n=>{if((curProj||"")!==(n||"")){curProj=n||"";if($("projName"))$("projName").value=curProj;autosave();showAutoInfo();}},
+    save:n=>{curProj=n;const ps=projects();ps[n]=snapshot();setProjects(ps);refreshProjSel(n);if($("projName"))$("projName").value=n;autosave();showAutoInfo();
+      if(!store.has(n))return{ok:false,message:"The project was not saved (browser storage unavailable or full). Use Export JSON."};projMsg(`Saved "${n}".`);return{ok:true};},
+    open:n=>{if(!$("projSel")||!$("bLoad"))return false;refreshProjSel(n);$("projSel").value=n;$("bLoad").click();return curProj===n;},
+    newProject:()=>saNewCalc(),
+    displayName:()=>($("tbProject")&&$("tbProject").value||"").trim(),
+    exportFile:n=>{const o=snapshot(),blob=new Blob([JSON.stringify(o,null,2)],{type:"application/json"}),a=document.createElement("a");   /* the #bExp file, named n */
+      a.href=URL.createObjectURL(blob);a.download=((n||$("tbProject").value||"stone-arch-rating").replace(/[^\w.-]+/g,"_"))+".json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),2000);},
+    importFile:()=>$("fImp").click(),
+    header:row,chipBefore:bu,card:$("saSaveCard"),
+    deleted:n=>{if(curProj===n){curProj="";autosave();showAutoInfo();}if($("projName")&&($("projName").value||"").trim()===n)$("projName").value="";},   /* as before */
+    changed:()=>refreshProjSel(curProj),
+    /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'stone-arch-rating',label:'Stone Masonry Arch Load Rating',space:2,fromFile:j=>{if(!j||!j.fields||typeof j.fields!=='object')throw new Error('not a Stone Arch project file');return j;}}});
+  const dlg=pb.dialog; PLIB.pb=pb;
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   h.reset(); PLIB.h=h; PLIB.store=store; PLIB.dlg=dlg; window.SAPL=PLIB;
 }
@@ -12630,6 +12649,13 @@ function wireProject(){
   if($("bReset"))$("bReset").onclick=()=>{
     if(!confirm("Start a new calculation? The current inputs will be cleared. "+
       "Saved projects are not affected."))return;
+    saNewCalc();
+  };
+  wireProjectFiles();   /* STDS: the rest of the old wireProject(), unchanged (split out so saNewCalc() can stand alone) */
+}
+/* STDS (2026-11-06): the body of "Start a new calculation" (unchanged), also the standard New */
+function saNewCalc(){
+  {
     try{localStorage.removeItem(LSA);}catch(e){}
     curProj=""; restoredAt=null;
     F.loadMode="hwy"; F.vehicles=ARCH.VEHICLES.map(v=>v.id).join(",");
@@ -12642,7 +12668,10 @@ function wireProject(){
     saHdrProj();   /* SAHD */
     bind(); wireProject(); refreshProjSel(); showAutoInfo(); syncCond(); render(); autosave();
     projMsg("New calculation started.");
-  };
+  }
+}
+function wireProjectFiles(){
+  if(!$("bSave"))return;
   $("bSave").onclick=()=>{
     const nm=($("projName").value||"").trim();
     if(!nm){projMsg("Enter a project name first.",true);inTabReveal($("projName"));$("projName").focus();return;}
@@ -12687,7 +12716,7 @@ function wireProject(){
   $("fImp").onchange=e=>{
     const f=e.target.files[0]; if(!f)return;
     const fr=new FileReader();
-    fr.onload=()=>{try{restore(JSON.parse(fr.result));render();autosave();}
+    fr.onload=()=>{try{restore(JSON.parse(fr.result));if(PLIB.pb)PLIB.pb.setCurrent(null);/* STDS: an imported file is not the open saved project */render();autosave();}
       catch(err){alert("Could not read that file: "+err.message);}};
     fr.readAsText(f); e.target.value="";
   };
