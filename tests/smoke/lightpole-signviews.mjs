@@ -54,7 +54,15 @@ for (const vw of [1280, 390]) for (const [name, mut] of Object.entries(CASES)) {
       return out;
     });
     if (name === 'pole') { check(!r.card, `${tag}: pole mode has no 3D card`); }
-    else if (name === 'ltsNoBroms') { check(/Broms/.test(r.err || ''), `${tag}: no Broms model → the views say so (${r.err})`); check(r.px > 50, `${tag}: 3D still draws the panel and posts (${r.px} sampled non-white px)`); }
+    else if (name === 'ltsNoBroms') {
+      // LTS-L2 (#744, 2026-11-03): in the LRFDLTS mode a missing Broms soil model is an input error. The LTS run is blocked, so there are
+      // no LTS results: the input error box names the Broms model, the output tabs are hidden, and the 3D card and the Drawings tab say
+      // there are no results (before #744 the views said "select the Broms soil model" and the 3D drew the panel and posts).
+      const nb = await o.p.evaluate(() => ({ box: (document.getElementById('lppInErr') || {}).innerText || '', blocked: !!document.querySelector('.lpp-blocked'),
+        host: (document.getElementById('lp3dHost') || {}).innerText || '', canvas: !!document.getElementById('lp3dCanvas'), dwg: (document.getElementById('lpdHost') || {}).innerText || '' }));
+      check(/Broms soil model/.test(nb.box) && nb.blocked, `${tag}: no Broms model → input error names it and the results are not shown (${nb.box.replace(/\s+/g, ' ').slice(0, 90)}…)`);
+      check(/no LRFDLTS results/.test(r.err || '') && /^No 3D view/.test(nb.host) && !nb.canvas, `${tag}: 3D card shows no view (${nb.host})`);
+    }
     else {
       check(r.card && r.px > 100, `${tag}: 3D canvas rendered (${r.px} sampled non-white px, ${r.layers} layer groups, ${r.cage} cage meshes)`);
       check(r.cw <= r.hostW + 1, `${tag}: 3D canvas fits its card (${r.cw} / ${r.hostW} px)`);
@@ -77,6 +85,7 @@ for (const vw of [1280, 390]) for (const [name, mut] of Object.entries(CASES)) {
     await o.p.evaluate(() => switchTab('drawings')); await o.p.waitForTimeout(400);
     const pg = await o.p.evaluate(() => ({ sw: document.documentElement.scrollWidth, cw: document.documentElement.clientWidth, dwg: !!(document.querySelector('.lpdCard') && document.querySelector('.lpdCard').offsetParent), svg: !!document.querySelector('#lpdHost svg') }));
     if (name !== 'pole' && name !== 'ltsNoBroms') check(pg.dwg && pg.svg, `${tag}: Drawings tab shows the sheet preview`);
+    if (name === 'ltsNoBroms') { const t = await o.p.evaluate(() => (document.getElementById('lpdHost') || {}).innerText || ''); check(/^No drawings/.test(t) && !pg.svg, `${tag}: Drawings tab has no sheets (${t})`); }
     check(pg.sw <= pg.cw + 1, `${tag}: no horizontal page scroll (${pg.sw} / ${pg.cw})`);
     if (shots && name !== 'pole') { fs.mkdirSync(shots, { recursive: true }); await o.p.evaluate(() => switchTab('geometry')); await o.p.waitForTimeout(300);
       const c = await o.p.$('#lp3dCard'); if (c) await c.screenshot({ path: path.join(shots, `${name}-3d-${vw}.png`) }); }
