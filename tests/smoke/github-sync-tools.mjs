@@ -25,9 +25,6 @@ const FOLDER = { asce7: 'asce7-load-generator', baseplate: 'base-plate-anchor', 
 // Tools with their own project dialog: how to show it (with sync on, the GitHub rows are drawn into it), and whether it is open.
 // Default: the shared Saved projects dialog (dialog.spLib).
 const OWN = {
-  edm: { show: p => p.evaluate(() => { const d = document.getElementById('dlgProj'); if (d.open) d.close(); document.getElementById('btnManageProj').click(); }),
-    open: p => p.evaluate(() => document.getElementById('dlgProj').open),
-    del: (p, n) => p.evaluate(n => document.querySelector(`#projList [data-a=del][data-n="${CSS.escape(n)}"]`).click(), n) },
   // apps/steel-bridge (STDS-B, 2026-11-06): the standard Saved projects dialog over its by-name view (items by id); kept here for the
   // own-list checks (first-sync offer, a delete that asks about the GitHub copy) because its sync list differs from the dialog's
   sbapp: { show: p => p.evaluate(() => { const d = document.getElementById('sbdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=hlib]').click(); }),

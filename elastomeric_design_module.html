@@ -134,6 +134,11 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
 #edmPrjPane .prjHint{font-size:12px;color:#555;font-style:italic;margin:1px 0 3px}
 #edmPrjPane .prjRow{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
 @media(max-width:900px){#hdrProj{flex:1 1 100%;max-width:none}}
+/* STDS (2026-11-06): the standard save controls (shared/projects-ui.js projectBar): header chip and the "Save and open" card */
+.toolbar button.spChip{flex:0 0 auto;max-width:100%;white-space:nowrap}
+#edmSavePane .p-head{cursor:default}
+#edmSaveCard .spCard button{font-family:inherit;font-size:13px;padding:5px 10px;border:1px solid var(--line);background:#fff;border-radius:3px;cursor:pointer}
+#edmSaveCard .spCard button.spPri{background:var(--navy);color:#fff;border-color:var(--navy)}
 </style>
 <script>
 /* BridgeXfer v1 — cross-tool hand-off helper. Spec: HANDOFF.md. Duplicated verbatim in each tool that sends or receives (CLAUDE.md §3). */
@@ -253,8 +258,8 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
   <div class="codeline">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) &middot; MassDOT LRFD Bridge Manual, Part I §3.5.7 (written to the AASHTO LRFD 9th Ed.) &middot; v1.0</div>
 </header>
 <div class="toolbar">
-  <a id="hdrProj" href="#" title="Project name and number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
-  <button id="btnManageProj" title="Load / delete saved projects">Projects…</button><!-- EDHD (2026-11-05): Undo / Redo are added after it -->
+  <a id="hdrProj" hidden href="#" title="Project name and number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
+  <!-- STDS (2026-11-06): Projects… removed (Saved projects… of the standard save); Undo / Redo are added after the project line -->
   <span class="spacer"></span>
   <span id="linkStatus">Standalone</span>
   <span id="saveStatus"></span>
@@ -262,13 +267,12 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
 </div>
 <!-- EDHD (2026-11-05): moved here from the toolbar. edmInputTabs() moves #edmPrjPane into the Project input tab (after the title
      block); buildInputs() parks it here again before the input panel is rebuilt. -->
-<div id="edmPrjHold" hidden><div class="panel" id="edmPrjPane" data-cid="edm-prj"><div class="p-head">Project file, checks and hand-off</div><div class="p-body">
-  <div class="prjGrp"><b>Project file</b><div class="prjHint">Save to this browser's project list (Projects… opens it), or keep a JSON backup.</div><div class="prjRow toolbar" style="padding:0;border:0;background:none">
-  <button id="btnSaveProj" title="Save current inputs as a named project">Save Project</button>
+<div id="edmPrjHold" hidden><div class="panel" id="edmSavePane" data-cid="edm-save"><div class="p-head">Save and open</div><div class="p-body"><div id="edmSaveCard"><!-- STDS (2026-11-06): the standard save card (edmStdsInit), first in the Project input tab; was the "Project file" group below -->
   <button id="btnExport" title="Download inputs as JSON backup">Export JSON</button>
   <button id="btnImport" title="Load inputs from JSON">Import JSON</button>
   <input type="file" id="importFile" accept="application/json" style="display:none">
-  <button id="btnReset" title="Reset all inputs to defaults">Reset</button></div></div>
+  <button id="btnReset" title="Reset all inputs to defaults">Reset</button></div></div></div>
+<div class="panel" id="edmPrjPane" data-cid="edm-prj"><div class="p-head">Checks and hand-off</div><div class="p-body">
   <div class="prjGrp"><b>Self-test</b><div class="prjHint">The built-in MassDOT benchmark check of the calculation engine.</div><div class="prjRow toolbar" style="padding:0;border:0;background:none">
   <button id="btnSelfTest" title="Run the built-in MassDOT benchmark self-test">Self-Test</button></div></div>
   <div class="prjGrp"><b>Pad to the Abutment app</b><div class="prjHint">Sends the designed pad back to the Abutment app that opened this one (a JSON file when opened on its own).</div><div class="prjRow toolbar" style="padding:0;border:0;background:none">
@@ -464,7 +468,7 @@ function buildInputs(){
   // assumptions
   h+=panel("in-assum","I-7","Engineering Assumptions",`
     <textarea data-path="assumptions">${esc(S.assumptions)}</textarea>`);
-  { const pj=document.getElementById("edmPrjPane"),hd=document.getElementById("edmPrjHold"); if(pj&&hd&&pj.parentNode!==hd)hd.appendChild(pj); }   /* EDHD: keep it out of the rebuild */
+  { const hd=document.getElementById("edmPrjHold"); ["edmSavePane","edmPrjPane"].forEach(id=>{ const pj=document.getElementById(id); if(pj&&hd&&pj.parentNode!==hd)hd.appendChild(pj); }); }   /* EDHD: keep them out of the rebuild (STDS: and the Save and open card) */
   document.getElementById("inputPanel").innerHTML=h;
   edmInputTabs();   // move the cards just built into the input tabs
   edmHdrProj();   /* EDHD */
@@ -485,7 +489,7 @@ function buildInputs(){
    localStorage key edm_v1_inputTab (never in S, so the autosave, saved
    projects, JSON export and the Abutment hand-off are unchanged). */
 const EDM_IN_TABS=[["project","Project"],["pad","Pad"],["mat","Materials"],["loads","Loads"],["code","Code"],["assum","Assumptions"]];
-const EDM_IN_SEC={"edm-prj":"project","in-proj":"project","in-type":"pad","in-geom":"pad","in-mat":"mat","in-loads":"loads","in-tog":"code","in-coef":"code","in-assum":"assum"};
+const EDM_IN_SEC={"edm-save":"project","edm-prj":"project","in-proj":"project","in-type":"pad","in-geom":"pad","in-mat":"mat","in-loads":"loads","in-tog":"code","in-coef":"code","in-assum":"assum"};
 const EDM_IN_KEY="edm_v1_inputTab";
 let edmInTabCur=null;   // in-memory copy, so the tab survives rebuilds even without storage
 function edmInTabGet(){ if(edmInTabCur)return edmInTabCur; try{ return localStorage.getItem(EDM_IN_KEY)||""; }catch(e){ return ""; } }
@@ -507,6 +511,7 @@ function edmInputTabs(){
     panes[k]=pn;
   });
   { const pj=document.getElementById("edmPrjPane"),tb=P.querySelector('[data-cid="in-proj"]'); if(pj)P.insertBefore(pj,tb?tb.nextSibling:P.firstChild); }   /* EDHD: after the title block */
+  { const sv=document.getElementById("edmSavePane"); if(sv)P.insertBefore(sv,P.firstChild); }   /* STDS (2026-11-06): Save and open, first in the Project tab */
   // move the built nodes; a node not in the map stays with the card before it
   let cur="project";
   Array.from(P.childNodes).forEach(n=>{
@@ -1027,8 +1032,9 @@ function scheduleSave(){ if(window.EDPL) EDPL.soon();   /* PLIB: one undo step p
   clearTimeout(saveT); saveT=setTimeout(()=>{ try{localStorage.setItem(AUTOSAVE,JSON.stringify(S));document.getElementById("saveStatus").textContent="autosaved "+new Date().toLocaleTimeString();}catch(e){} },500); }
 function getProjects(){ try{return JSON.parse(localStorage.getItem(PROJKEY))||{};}catch(e){return {};} }
 function setProjects(o){ try{ localStorage.setItem(PROJKEY,JSON.stringify(o)); return true; }catch(e){ alert("Could not save to this browser's local storage ("+e.message+"). Use Export JSON for a backup."); return false; } }
-document.getElementById("btnSaveProj").addEventListener("click",()=>{ const n=prompt("Project name:",S.proj.name||"Bearing"); if(!n)return; const all=getProjects(); all[n]={state:clone(S),ts:Date.now()}; if(setProjects(all)) document.getElementById("saveStatus").textContent=`saved "${n}"`; });
-document.getElementById("btnManageProj").addEventListener("click",()=>{ renderProjList(); document.getElementById("dlgProj").showModal(); if(EDM_GH) EDM_GH.shown(EDM_GH_UI).catch(()=>{}); /* GHS2 */ });
+/* STDS (2026-11-06): the Save Project button and Projects… are gone (the standard save, edmStdsInit). edmSaveNamed(n) is the old Save
+   Project without its name prompt; the own dialog (#dlgProj, renderProjList, edmPlibAct) is kept, no longer opened. */
+function edmSaveNamed(n){ const all=getProjects(); all[n]={state:clone(S),ts:Date.now()}; if(!setProjects(all)) return false; document.getElementById("saveStatus").textContent=`saved "${n}"`; return true; }
 document.getElementById("dlgProjClose").addEventListener("click",()=>document.getElementById("dlgProj").close());
 function renderProjList(){ const all=getProjects(),el=document.getElementById("projList"); const names=Object.keys(all).sort((a,b)=>all[b].ts-all[a].ts);
   el.innerHTML=names.length?names.map(n=>`<div class="prow"><span class="pname">${esc(n)}${EDM_GH?" "+EDM_GH.statusCell(n):""}</span><span class="pdate">${new Date(all[n].ts).toLocaleString()}</span><button class="mini-btn" data-a="load" data-n="${esc(n)}">Load</button><button class="mini-btn" data-a="ren" data-n="${esc(n)}" data-sp="1">Rename</button><button class="mini-btn" data-a="dup" data-n="${esc(n)}" data-sp="1">Duplicate</button><button class="mini-btn" data-a="del" data-n="${esc(n)}">Delete</button></div>`).join(""):"<i>No saved projects.</i>";
@@ -1051,17 +1057,12 @@ function edmPlibAct(a,n){
    settings it writes nothing and makes no request. The list stays edm_v1_projects ({ name: { state, ts } }, unchanged); each project
    is the file projects/elastomeric-bearing/<name>.json on GitHub, in the Export JSON format (the state S, indent 2). A file from GitHub
    is read as Import JSON reads it (Object.assign(defaultState(), file)) and stored as { state, ts }; Open = Load. */
-const EDM_GH=(()=>{ if(!window.SharedGitHubSync||!window.SharedProjects) return null; let ST=null; try{ ST=window.localStorage; }catch(e){ return null; }
-  return SharedGitHubSync.attach({ store:SharedProjects.mapStore(ST,PROJKEY), storage:ST,
-    open:n=>{ const all=getProjects(); if(!all[n]) return false; S=all[n].state; migrate(); buildInputs(); recalc(); return true; },
-    changed:()=>{ if(document.getElementById("dlgProj").open) renderProjList(); },
-    cloud:{ tool:"elastomeric-bearing", label:"Elastomeric Bearing Design", space:2, toFile:i=>i.state,
-      fromFile:o=>{ if(o._schema||o.schema||o.app||!o.proj||!o.geom) throw new Error("not an elastomeric bearing project file"); return { state:Object.assign(defaultState(),o), ts:Date.now() }; } } }); })();
+const EDM_GH=null;   // STDS (2026-11-06): the sync is the standard dialog's (edmStdsInit: the same tool folder, bookkeeping and file text)
 function edmGhHost(){ let h=document.getElementById("projGh"); if(!h){ h=document.createElement("div"); h.id="projGh"; h.setAttribute("data-sp","gh-host"); document.getElementById("projList").before(h); } h.innerHTML=""; return h; }
 const EDM_GH_UI={ redraw:()=>{ if(document.getElementById("dlgProj").open) renderProjList(); }, close:()=>document.getElementById("dlgProj").close() };
 document.getElementById("btnExport").addEventListener("click",()=>{ const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=(S.proj.name||"bearing").replace(/[^\w]+/g,"_")+"_edm.json"; a.click(); URL.revokeObjectURL(a.href); });
 document.getElementById("btnImport").addEventListener("click",()=>document.getElementById("importFile").click());
-document.getElementById("importFile").addEventListener("change",ev=>{ const f=ev.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ S=Object.assign(defaultState(),JSON.parse(rd.result)); migrate(); buildInputs(); recalc(); }catch(e){alert("Import failed: "+e.message);} ev.target.value=""; }; rd.readAsText(f); });
+document.getElementById("importFile").addEventListener("change",ev=>{ const f=ev.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ S=Object.assign(defaultState(),JSON.parse(rd.result)); migrate(); buildInputs(); recalc(); if(window.EDPB) EDPB.setCurrent(null); /* STDS: an imported file is not a saved project */ }catch(e){alert("Import failed: "+e.message);} ev.target.value=""; }; rd.readAsText(f); });
 document.getElementById("btnReset").addEventListener("click",()=>{ if(!confirm("Reset all inputs to defaults?"))return; S=defaultState(); migrate(); buildInputs(); recalc(); });
 /* ---- events ---- */
 document.addEventListener("input",ev=>{ const el=ev.target,p=el.dataset.path; if(!p)return; if(el.tagName==="SELECT")return;
@@ -1424,10 +1425,37 @@ document.addEventListener("DOMContentLoaded",()=>{
   let tm=null; const soon=()=>{ clearTimeout(tm); tm=setTimeout(()=>h.record(),400); };
   const B=(t,ti)=>SharedProjectsUI.button(t,ti);
   const bu=B("\u21b6 Undo","Undo the last input change (Ctrl+Z)"), br=B("\u21b7 Redo","Redo (Ctrl+Y or Ctrl+Shift+Z)");
-  const ref=document.getElementById("btnManageProj"); if(ref){ ref.after(bu,br); }   /* EDHD: after Projects… in the toolbar */
+  const ref=document.getElementById("hdrProj"); if(ref){ ref.after(bu,br); }   /* EDHD: after Projects… in the toolbar (STDS: after the project line; Projects… is gone) */
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   h.reset(); window.EDPL={h,soon};
+  edmStdsInit(bu);   // STDS
 });
+/* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over PROJKEY (edm_v1_projects: { name: { state, ts } }, key
+   and item format unchanged). Toolbar: chip · ↶ Undo · ↷ Redo · Save · Saved projects… · (link / autosave status) · Print / PDF
+   Report; the Project input tab's first card "Save and open": Save · Save as… · Saved projects… · New; Export JSON · Import JSON;
+   Reset (the same buttons and handlers). Save = edmSaveNamed (the old Save Project: { state: copy of S, ts }); Open = the old Load
+   (S = state, migrate, buildInputs, recalc); New = Reset without its confirm (projectBar asks first on unsaved changes). Rename /
+   Duplicate / Delete: the standard dialog (items move / are copied unchanged). GitHub sync: as GHS2 (#817), same folder
+   projects/elastomeric-bearing/, toFile = state, fromFile = the Import JSON read (Object.assign(defaultState(), file)), stored
+   through pack as { state, ts }. S.ui (views) is left out of "unsaved changes". */
+function edmStdsInit(bu){
+  if(!window.SharedProjects||!window.SharedProjectsUI||!SharedProjectsUI.projectBar||window.EDPB) return;
+  let ST=null; try{ ST=window.localStorage; }catch(e){}
+  const store=SharedProjects.mapStore(ST,PROJKEY,{ pack:s=>({state:clone(s),ts:Date.now()}), unpack:i=>i&&i.state, time:i=>i&&i.ts||null, sort:'saved' });
+  const $=id=>document.getElementById(id), tb=$("hdrProj").parentNode;
+  window.EDPB=SharedProjectsUI.projectBar({ store, storage:ST, label:"Elastomeric Bearing Design", id:"edmLibDlg", omit:["ui"],
+    getState:()=>S,
+    save:n=>edmSaveNamed(n)?{ok:true}:{ok:false,message:"The project was not saved."},
+    open:n=>{ const all=getProjects(); if(!all[n]) return false; S=all[n].state; migrate(); buildInputs(); recalc(); return true; },
+    newProject:()=>{ S=defaultState(); migrate(); buildInputs(); recalc(); },
+    displayName:()=>S.proj&&S.proj.name||"",
+    exportFile:n=>SharedProjectsUI.download(String(n||S.proj.name||"bearing").replace(/[^\w]+/g,"_")+"_edm.json",JSON.stringify(S,null,2)),
+    importFile:()=>$("importFile").click(),
+    fileButtons:[$("btnExport"),$("btnImport")], extras:[$("btnReset")],
+    header:tb, chipBefore:bu, headerBefore:tb.querySelector(".spacer"), card:$("edmSaveCard"),
+    cloud:{ tool:"elastomeric-bearing", label:"Elastomeric Bearing Design", space:2, toFile:i=>i.state,
+      fromFile:o=>{ if(o._schema||o.schema||o.app||!o.proj||!o.geom) throw new Error("not an elastomeric bearing project file"); return Object.assign(defaultState(),o); /* store.save packs it as { state, ts } */ } } });
+}
 </script>
 </body>
 </html>
