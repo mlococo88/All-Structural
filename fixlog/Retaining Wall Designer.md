@@ -1923,7 +1923,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** origin/main (after #924) vs branch, five cases (ACI default; project fields; AASHTO variable height + barrier + collision + interface shear; tall wall + key + water + passive + k_h; f′c blank): `window._R`, Export JSON, every localStorage key, Report text, the result tabs' text and the four sheets' DXF all identical; 0 console errors. A click on AASHTO in the card sets `#design_basis`; Print prints the Report once. Tests: check-syntax, phone-layout rwall 390 / 768, project-library retwall, standard-save, github-sync-tools retwall, home-projects retwall, dxf-print-sheets rw: all pass. Screenshots 1400 / 390 px looked at.
 - **Other copies:** none.
 
-## 2026-11-06 — PR: claude/rw-check-summary (RWDC) — check summary panel replaces the sideways-scrolling check-chip strip   [display only; no result change]
+## 2026-11-06 — PR: claude/rw-check-summary (PR #926: https://github.com/mlococo88/All-Structural/pull/926) (RWDC) — check summary panel replaces the sideways-scrolling check-chip strip   [display only; no result change]
 - **Why:** engineer-approved 2026-11-06 (review `rwreview`, Phase 1 item 3): RW's strip of check chips scrolled sideways and was cut off at 1400 px ("Stem Hoo…") with no D/C. Replaced by the check summary panel of Spread Footing (SFDC #737 / SFDF #740), Light Pole (LPDC #747) and Concrete Beam Capacity (#788).
 - **Where:**
   - HTML: `<div class="app" id="app">` gains a first child `<aside id="rwDashCol" aria-label="Check summary"></aside>` (the left column at 1500 px and wider); `<div class="status-bar" id="status-bar">` now holds `<div id="rwDashBox">` (head: `#rwDashTgl` Hide / Show checks, `#rwDashTtl` "Check summary", `#rwDashCnt` counts; list `#rwDash`) instead of the "Calculating…" status item;
@@ -1974,3 +1974,4 @@ function renderStatus(r) {
   - the panel against the Report's summary table, five cases (ACI, AASHTO full, water/key, tall ACI wall with 7 FAIL, tall AASHTO wall with 8 FAIL): every row's name, D/C and PASS / FAIL equal;
   - every row's click lands on its card (ACI and AASHTO); the crack-control rows open the Report at the step; the toggle writes `retaincalcpro.dashCollapsed.v1`; screenshots at 1400, 1700 and 390 px (expanded, collapsed, FAIL rows, input error) looked at.
 - **Other copies:** none.
+- **Decision (pending engineer review):** RW's checks are pass / fail only, so the panel shows PASS / FAIL (no REVIEW or N/A rows invented); the AASHTO "Extreme Event I not evaluated" warning is not a check and stays where it is.
