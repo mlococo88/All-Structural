@@ -7126,9 +7126,9 @@ function buildSidebar() {
     project: `
       ${secHd('sec-projmgr', EMBED ? 'Save and open' : 'Saved projects')}
       <div class="proj-box" id="sec-projmgr">${EMBED ? /* STDS-G (2026-11-06): in Steel Bridge Design, Save / Save as… / Saved projects… are the page's (one project: this part and the modules') */ `
-        <p class="hint static" id="pl-save-note">Saved with the page: Save keeps Preliminary sizing and the design modules together under one project name (in this browser and, with Cloud sync on, on GitHub). Open, rename, duplicate or delete in Saved projects…. Export JSON and Import JSON here are Preliminary sizing's part only; the modules' Project tab has the whole project's.</p>
+        <p class="hint static" id="pl-save-note">Saved with the page: Save keeps Preliminary sizing and the design modules together under one project name (in this browser and, with Cloud sync on, on GitHub). Open, rename, duplicate or delete in Saved projects…. Export JSON and Import JSON are the whole project's file (Preliminary sizing, the design modules and Design &amp; Rating), the same as in the modules' Project tab: Import takes the parts the file has, and a Preliminary sizing file (this part only) still imports into this part.</p>
         <div class="proj-row"><button type="button" id="pb_save" class="proj-btn proj-btn-primary" title="Save the project (Preliminary sizing and the modules) under its name (Ctrl+S)">Save</button><button type="button" id="pb_saveas" class="proj-btn" title="Save under a new name, or to a file (Ctrl+Shift+S)">Save as…</button><button type="button" id="pb_lib" class="proj-btn" title="The projects saved in this browser (and on GitHub): open, rename, duplicate, export, delete">Saved projects…</button></div>
-        <div class="proj-row"><button type="button" id="pb_export" class="proj-btn">Export JSON</button><button type="button" id="pb_import" class="proj-btn">Import JSON</button></div>` : `
+        <div class="proj-row"><button type="button" id="pb_export" class="proj-btn" title="The whole project as one .json file (Preliminary sizing, the design modules and Design &amp; Rating): the page's Export JSON">Export JSON</button><button type="button" id="pb_import" class="proj-btn" title="Open a project file: the parts it has (a Preliminary sizing file goes into this part)">Import JSON</button></div>` : `
         <label class="vh" for="proj_list">Saved project</label><select id="proj_list"></select>
         <div class="proj-row"><button type="button" id="pb_open" class="proj-btn">Open</button><button type="button" id="pb_save" class="proj-btn proj-btn-primary">Save</button><button type="button" id="pb_saveas" class="proj-btn">Save as…</button></div>
         <div class="proj-row"><button type="button" id="pb_export" class="proj-btn">Export JSON</button><button type="button" id="pb_import" class="proj-btn">Import JSON</button><button type="button" id="pb_delete" class="proj-btn proj-btn-danger">Delete</button></div>`}
@@ -7771,6 +7771,8 @@ function initProjects() {
   $('#pb_export').onclick = () => { const b = new Blob([JSON.stringify({ app: 'PlateLine', v: 1, name: CUR_NAME, data: P }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = (P.meta.name || 'plateline').replace(/[^\w\-]+/g, '_') + '.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
   $('#pb_import').onclick = () => $('#pb_file').click();
   $('#pb_file').onchange = ev => { const f = ev.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const j = JSON.parse(r.result); if (!j.data || !j.data.girder) throw 0; loadData(j.data, j.name || ''); flash(`Imported ${f.name}.`); } catch (e) { flash('That file is not a PlateLine project.', 'fail'); } }; r.readAsText(f); ev.target.value = ''; };
+  if (EMBED) {   // GDIO (2026-11-06): the page's Export JSON / Import JSON (the whole project file, SBD4; a Preliminary sizing file still imports into this part)
+    $('#pb_export').onclick = () => window.parent.postMessage({ type: 'pl-proj', act: 'export' }, '*'); $('#pb_import').onclick = () => window.parent.postMessage({ type: 'pl-proj', act: 'import' }, '*'); }
   $('#pb_new').onclick = () => { if (confirm('Replace the current inputs with the built-in example? Unsaved changes are lost.')) { loadData(clone(DEFAULT), ''); refreshList(); } };
   /* OWN1: saved owner-limit profiles keyed by owner; a profile saved as 'Custom' is read as 'AASHTO' (copied; the stored 'Custom' entry is kept) */
   const pfAll = () => { const all = (LS ? JSON.parse(localStorage.getItem(KEY_PF) || '{}') : {}) || {}; if (all.Custom && typeof all.Custom === 'object' && !all.AASHTO) all.AASHTO = { ...all.Custom, dot: 'AASHTO' }; return all; };
@@ -21435,6 +21437,9 @@ function gdUndoHook(f) { let w = null; try { w = f.contentWindow; if (!w || w.__
     if (document.querySelector('dialog[open]') || w.document.querySelector('.modal:not([hidden])')) return;
     e.preventDefault(); if (k === 'z' && !e.shiftKey) GD_UNDO.undo(); else GD_UNDO.redo(); }, true); }
 /* Preliminary sizing's Save / Save as… / Saved projects… buttons (and its Ctrl+S) are this page's (message pl-proj from its frame) */
+/* GDIO (2026-11-06): Preliminary sizing's Export JSON / Import JSON are this page's (the whole project file, as the modules' Project tab) */
+window.addEventListener('message', e => { if (!gdFromPL(e) || !e.data || e.data.type !== 'pl-proj' || document.querySelector('dialog[open]')) return;
+  if (e.data.act === 'export') $('#pb_export').click(); else if (e.data.act === 'import') { if (GD_PB) GD_PB.importJSON(); else $('#pb_file').click(); } });
 window.addEventListener('message', e => { if (!gdFromPL(e) || !e.data || e.data.type !== 'pl-proj' || !GD_PB || document.querySelector('dialog[open]')) return;
   const a = e.data.act; if (a === 'save') GD_PB.save(); else if (a === 'saveas') GD_PB.saveAs(); else if (a === 'lib') GD_PB.dialog.show(); });
 /* ---------- One project file (SBD4, 2026-10-22; merge of GirderDetail and ST-Girder, PLAN step 4) ----------
@@ -21471,11 +21476,11 @@ function sbdStLoad(inp) { const o = { ...inp }; delete o._schema;
 // true when j is one of the files this function reads (and it has been loaded), false to let the caller try the older ones
 function sbdProjectImport(j, fname) {
   if (j && j.app === 'SteelBridgeDesign') { const m = sbdMigrate(j); if (!m) { flash(`${fname}: a newer Steel Bridge Design file (version ${j.v}) than this copy reads; nothing was changed.`, 'fail'); return true; }
-    const parts = ['the modules', m.pl ? 'Preliminary sizing' : '', m.st ? 'Design & Rating (ST-Girder)' : ''].filter(Boolean);
+    const parts = [m.data ? 'the modules' : '', m.pl && m.pl.data ? 'Preliminary sizing' : '', m.st ? 'Design & Rating (ST-Girder)' : ''].filter(Boolean);   // GDIO: the parts the file has
     if (!confirm(`Open ${fname}? It replaces ${parts.join(', ')} with the file's project.`)) return true;
     if (m.pl && m.pl.data) sbdPlLoad(m.pl); if (m.st) sbdStLoad(m.st); if (m.data) loadData(m.data, m.name || '');
     flash(`Imported ${fname} (${parts.join(', ')}).`); return true; }
-  if (j && j.app === 'PlateLine' && j.data && j.data.girder) { if (!confirm(`Open ${fname} in Preliminary sizing? It replaces its project.`)) return true; sbdPlLoad(j); flash(`Imported ${fname} into Preliminary sizing.`); return true; }
+  if (j && (j.app === 'PlateLine' || (!j.app && !j.data?.sec && !j.data?.bs)) && j.data && j.data.girder) { /* GDIO: also a part file without app (Preliminary sizing's own Import JSON read any file with data.girder) */ if (!confirm(`Open ${fname} in Preliminary sizing? It replaces its project.`)) return true; sbdPlLoad(j); flash(`Imported ${fname} into Preliminary sizing.`); return true; }
   if (j && j._schema === 'stgirder') { if (!confirm(`Open ${fname} in Design & Rating (ST-Girder)? It replaces ST-Girder's inputs.`)) return true; sbdStLoad(j); flash(`Imported ${fname} into Design & Rating (ST-Girder).`); return true; }
   return false; }
 /* ---------- PlateLine inbox ---------- */
