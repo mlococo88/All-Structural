@@ -219,7 +219,7 @@ export const TOOLS = {
     results: p => p.evaluate(() => { const t = window.__gprForTest(); const seen = new WeakSet(); return JSON.parse(JSON.stringify({ R: t.R, minRF: t.minRF }, (k, v) => typeof v === 'function' || k === 'ui' ? undefined : (v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '#sidebar input[type=number][data-k^="plates"], #sidebar input[type=number]', 0.125),
     view: p => tabView(p, 'header ~ * .tab-btn, .tab-btn', 3, '.active'),
-    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; CUR = ''; try { document.getElementById('pb_saveas').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; CUR = ''; try { document.getElementById('pb_saveas').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); }
   },
   stonearch: {
     file: 'Stone Masonry Arch Load Rating.html', list: 'stoneArchLR.projects', auto: 'stoneArchLR.autosave',
