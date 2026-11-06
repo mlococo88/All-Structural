@@ -72,7 +72,7 @@ const lost = { v: 2, section: { family: 'W', label: 'W24X55', grade: 'A572_50', 
 const plain = { v: 2, section: { family: 'W', label: 'W21X44', grade: 'A992', ovr: {} } };
 await p.evaluate(([a, c]) => { const pr = JSON.parse(localStorage.getItem('sbd_projects_v1')); pr['Lost flag'] = { t: 1, d: a }; pr['Plain'] = { t: 2, d: c }; localStorage.setItem('sbd_projects_v1', JSON.stringify(pr)); }, [lost, plain]);
 const before = await p.evaluate(() => localStorage.getItem('sbd_projects_v1'));
-const openP = async nm => { await p.evaluate(() => { const d = document.getElementById('sbLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=hlib]').click(); }); await p.waitForTimeout(300);
+const openP = async nm => { await p.evaluate(() => { const d = document.getElementById('sbLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=chip]').click(); document.querySelector('#sbSaveCard [data-sp=lib]').click(); }); await p.waitForTimeout(300);   // HDRS (#891): chip → Project tab → the card's Saved projects…
   await p.evaluate(nm => document.querySelector(`#sbLibDlg [data-spa=open][data-n="${CSS.escape(encodeURIComponent(nm))}"]`).click(), nm); await p.waitForTimeout(900); };
 const note = () => p.evaluate(() => [...document.querySelectorAll('.warnBox')].some(x => /saved without the built-up setting/.test(x.textContent)));
 await openP('Lost flag');
