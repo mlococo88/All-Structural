@@ -19848,3 +19848,14 @@ index 06a42e4..b58d4e3 100644
 - **Check case:** two records named "Job 2" (Oct 1 and later): dialog rows "Job 2" and "Job 2 (older, saved Oct 1, 2026, 11:00 AM EDT)"; GitHub (sync on): Save "GHS A" → `projects/pile-designer/GHS A.json`; a GitHub-only copy opened → the autosaved inputs equal the saved ones.
 - **How verified:** `node tests/smoke/pile-library.mjs` (main vs branch page text outside the Project block and header, and the autosaved inputs: identical on load and after an input change; library steps rewritten for the standard UI): ALL PASS. `node tests/smoke/github-sync-tools.mjs --tool pile`: ALL PASS. `node tests/smoke/home-projects.mjs --tool pile,sbapp`: ALL PASS. Screenshots 1400 / 390 px (with Tailwind served locally) looked at.
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-06 — PR: claude/reset-inputs-label-pile (RSTI) — "Save and open" card: "⟲ Reset to defaults" renamed "Reset inputs", with a tooltip of what it keeps (display only, no result change)
+- **Engineer (2026-11-06):** keep this Reset (it differs from New) but rename it "Reset inputs" and say what it keeps.
+- **Where:** PDLIB `start()`, anchor `bRs = B(`: `B("⟲ Reset to defaults", "All inputs back to their defaults (asks first)")` → `B("Reset inputs", "Every input back to its default (asks first). Keeps the LPILE import and the load notes; New also clears them and starts a new project")` + a trailing `// RSTI` comment. The PLIB comment "Reset to defaults is a step" notes the new name.
+- **Difference from New (unchanged behaviour, now in the tooltip):** Reset (`resetToDefaults`: confirm, then `setI(DEFAULT_INPUTS)`) keeps the LPILE import and the load notes and is an undo step; New (`PDLIB.H.newProject`) also clears the LPILE import and load notes, starts a new undo history and leaves no project open.
+- **Behaviour:** unchanged (same handler, same confirm text).
+- **Saved data (§5):** no key or format changed.
+- **Formulas, factors, units, code references:** none.
+- **Check case:** the card shows "Reset inputs" with the tooltip above; clicking it does what the old button did.
+- **How verified:** `node tests/check-syntax.mjs "Pile Designer.html"`: pass. `node tests/smoke/pile-library.mjs`: ALL PASS. Browser check: the button reads "Reset inputs" with the new title; 0 console errors beyond main's (the Babel size note). No test or manual text named the old label.
+- **Other copies:** none.

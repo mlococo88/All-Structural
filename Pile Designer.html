@@ -9179,7 +9179,7 @@ async function idbDelete(id) {
 /* PLIB (2026-11-02): Undo / Redo (shared/projects.js history, shared/projects-ui.js buttons and Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z).
    Display only: snapshots of the inputs I (the LPILE import, the output tab and the open modules are not steps), session only,
    nothing stored. set = setI() of the step. One step per change: recorded by the input autosave (debounced 500 ms). Opening a
-   project from the library or a file starts a new history; Reset to defaults is a step (it can be undone). PDPL_I mirrors the
+   project from the library or a file starts a new history; Reset to defaults ("Reset inputs" since RSTI, 2026-11-06) is a step (it can be undone). PDPL_I mirrors the
    rendered I so the history reads the inputs outside React. */
 var PDPL = null, PDPL_I = null, PDPL_SET = null, PDPL_NEW = false;
 function pdPlibInit(setI, bu, br) {
@@ -9305,7 +9305,7 @@ var PDLIB = (function () {
     mirror();
     if (!window.SharedProjectsUI || !SharedProjectsUI.projectBar) return;
     const B = (t, ti) => { const b = SharedProjectsUI.button(t, ti, { sp: "pdfile" }); return b; };
-    const bEx = B("Export JSON", "Save the inputs (and the LPILE import) as a .json file"), bIm = B("Import JSON", "Open a Pile Designer .json file"), bRs = B("⟲ Reset to defaults", "All inputs back to their defaults (asks first)");
+    const bEx = B("Export JSON", "Save the inputs (and the LPILE import) as a .json file"), bIm = B("Import JSON", "Open a Pile Designer .json file"), bRs = B("Reset inputs", "Every input back to its default (asks first). Keeps the LPILE import and the load notes; New also clears them and starts a new project");   // RSTI (2026-11-06): was "⟲ Reset to defaults"
     const fIn = document.createElement("input"); fIn.type = "file"; fIn.accept = "application/json,.json"; fIn.hidden = true; fIn.setAttribute("data-sp", "pdfile");
     fIn.addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) { H.importProject(f); cur = null; curSnap = null; redraw(); } });
     bEx.addEventListener("click", () => H.exportProject()); bRs.addEventListener("click", () => H.reset());
