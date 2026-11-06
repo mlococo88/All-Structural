@@ -2278,7 +2278,7 @@ function listTables() {
   - before / after screenshots at 1920 and 390 px looked at.
 - **Saved data:** no change.
 
-## 2026-11-06 — PR: claude/standard-save-bsl (STDS) — the standard save: header chip + Save + Saved projects…, "Save and open" card first in the Project tab, Save as, Ctrl+S   [display / save controls only; no result change]
+## 2026-11-06 — PR: claude/standard-save-bsl (PR #840: https://github.com/mlococo88/All-Structural/pull/840) (STDS) — the standard save: header chip + Save + Saved projects…, "Save and open" card first in the Project tab, Save as, Ctrl+S   [display / save controls only; no result change]
 - **Why:** engineer decision 2026-11-05 (standard save roll-out after the Spread Footing pilot #837). Uses `SharedProjectsUI.projectBar` (shared/projects-ui.js).
 - **Header (`.hdr-group`):** before: `Project: <name · no.>` link · Undo · Redo · Projects… · Print. After: chip `Project: <open saved project> ● saved / unsaved changes / not saved` (+ GitHub badge with sync on) · Undo · Redo · **Save (Ctrl+S)** · Saved projects… · Print. The link `#hdrProj` stays in the page with `hidden = true` (SLHD script; its updater unchanged).
 - **Project tab:** new **"Save and open"** card (`#slSaveSec`), first in the tab (before the Project card): status line; Save · Save as… · Saved projects… · New; "File on this computer": **Import JSON** · **Export JSON** (the same buttons `#btn-open` / `#btn-save`, renamed from "Open" / "Save"; same handlers and file format; moved here from the "Project file" group of the SLHD "Project files and hand-offs" card, which is removed); the two hint lines. Parked in the SLHD hidden holder while the sidebar is rebuilt (as the hand-offs card).
