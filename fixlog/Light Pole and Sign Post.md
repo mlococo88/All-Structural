@@ -2321,3 +2321,28 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Check case:** default project, LRFDLTS, sign, two-post, Broms "Not evaluated": the page shows "Input error — results are not shown until this is fixed: Broms soil model (Shaft & soil): choose Cohesive or Cohesionless…"; 3D card "No 3D view: no LRFDLTS results yet (correct any input errors first)."; Drawings "No drawings: correct the input errors."
 - **How verified:** `node tests/smoke/lightpole-signviews.mjs`: ALL PASS (1280 and 390 px). The tool file is not changed, so no result, cable value or saved data can change.
 - **Open item (not changed):** the `lpsvData()` branch "select the Broms soil model (Shaft & soil inputs)…" can no longer be reached by a missing model (LTS-L2) or missing parameters (LTS-L3); it remains as a guard if `bromsEmbedment()` returns no result.
+
+## 2026-11-06 — PR: claude/lightpole-print (PR #849: https://github.com/mlococo88/All-Structural/pull/849) (LPHP: Print in the header, the standard header; display only, no result change)
+- **Engineer:** the standard header after #837–#843: chip · Undo · Redo · Save (Ctrl+S) · Saved projects… · **Print**. The Light Pole header had no Print (#843: "Print stays on the Report tab").
+- **Where:** PLIB / STDS block, after `[pb.el.chip,pb.el.save,pb.el.lib].forEach(b=>b.classList.add('pbtn'));` (anchor `/* LPHP (2026-11-06): Print, last in the header`). Before: nothing. After:
+  ```js
+  const bp=B('Print','Print / PDF the calculation report (the Report tab), from any tab'); bp.id='lppHdrPrint';
+  bp.onclick=()=>{
+    const on=document.querySelector('#tabBar button.on'), back=on?on.dataset.tab:null;
+    if(back!=='report') switchTab('report',true);
+    const rb=Array.from(document.querySelectorAll('#page-report [data-rpact="print"]')).find(x=>x.offsetParent!==null);
+    if(rb){ if(back&&back!=='report') lppPrintBack=back; rb.click(); return; }
+    if(back&&back!=='report') switchTab(back,true);
+    window.print();
+  };
+  if(ref) ref.append(bp);
+  ```
+- **What it does:** exactly the Report tab's own Print, the `data-rpact="print"` toolbar button of the report shown in the active code mode (IBC `#lprHost` or LRFDLTS `#ltsRptHost`), which calls `SharedReport.print(doc)` (shared/report.js). The report is built only when its tab is shown (`switchTab('report')` → `lprRender()` / `ltsReportRender()`), so from another tab the button opens the Report tab first, without remembering it (`noSave`). After printing, the existing `afterprint` handler (LPRX) brings back the tab shown before (`lppPrintBack`), as Ctrl+P does. With input errors there is no report: the page prints as shown, as Ctrl+P and "Export PDF / Print" do. This is the same approach as Gusset Plate Rating (`gprPrintAny`) and Spread Footing (`#btnPrint`): the Report prints from any tab.
+- **Governing provision:** none (display only).
+- **Check case / how verified** (headless Chromium, `window.print` stubbed, 1280 and 390 px):
+  - Cases: IBC pole; IBC two-post sign; LRFDLTS monopost sign (cohesive); LRFDLTS pole; LRFDLTS sign without a Broms model (input error).
+  - Header Print from the Geometry tab: `window.print` called once, with `rp-printing` on. The `#rp-print` content is identical to that of the Report tab's own Print button, apart from the time stamp. The Report tab is shown during the print and Geometry comes back after `afterprint`. With the input error, the page prints as shown and the tab does not change.
+  - Header order: chip · Undo · Redo · Save Ctrl+S · Saved projects… · Print. At 390 px: no sideways scroll (390 / 390).
+  - `node tests/lightpole-compare.mjs --a origin/main --jobs 2`: ALL CASES IDENTICAL (results, cable values, text, drawings; 0 console errors).
+  - Passed: `lightpole-signviews`, `lightpole-projection`, `lightpole-anchor-handoff`, `project-library --tool lightpole`, `phone-layout --tool lp`, `dxf-print-sheets --tool lp`, `standard-save`, `node tests/engine/run.mjs lightpole` and `check-syntax`.
+- **Saved data:** no change (no new key; the Report tab opened by Print is not stored as the remembered tab).
