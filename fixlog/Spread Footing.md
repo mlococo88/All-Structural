@@ -5886,7 +5886,7 @@ function sfqcFit(id,B,L,T){
 - **Other copies:** none.
 - **Open item (engineer):** "Not checked" (`off`) and the new choice now overlap: both apply no limit, but only the new one shows the eccentricities and the statement. Should `off` be removed (with a migration to `none`), or kept?
 
-## 2026-11-06 — PR: claude/sf-ecc-off-remove (SFNO: Eccentricity limit choice "Not checked" removed; saves holding it open as "No eccentricity limit"; §5 migration, pass / fail unchanged)
+## 2026-11-06 — PR: claude/sf-ecc-off-remove (PR #913: https://github.com/mlococo88/All-Structural/pull/913) (SFNO: Eccentricity limit choice "Not checked" removed; saves holding it open as "No eccentricity limit"; §5 migration, pass / fail unchanged)
 
 - **Why:** engineer 2026-11-06, answering the SFNE (#908) open item: remove "Not checked" (`stab.eccMode = 'off'`); `migrateState` maps `'off'` → `'none'`, so saved projects keep the same pass/fail and now show e for information.
 - **Where / exact code (unified diff, `Spread Footing.html`):**
