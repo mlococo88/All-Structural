@@ -77,6 +77,8 @@
       key: 'spc_projects_v1', time: t_, sort: 'saved', space: 2, toFile: i => i.d },
     { tool: 'concrete-beam-capacity', label: 'Concrete Beam Capacity', name: 'Beam Capacity (Concrete Beam Design Suite)', href: 'Concrete%20Beam%20Capacity.html#capacity',
       key: 'rcbeam_v2_projects', time: i => i && i.__savedAt || null, sort: 'saved', space: 2 },   // STDS (2026-11-06): the Beam Capacity tab (the file = the stored record)
+    { tool: 'concrete-beam-asd', label: 'Concrete Beam ASD Rating', name: 'ASD Beam Rating (Concrete Beam Design Suite)', href: 'Concrete%20Beam%20Capacity.html#asd',
+      key: 'asd_v1_projects', time: i => i && i.when || null, space: 2, toFile: i => i.data },   // STDS (2026-11-06): the ASD tab ({ when, data }; the file = data, its Export JSON)
     { tool: 'aci-rebar-development', label: 'ACI Rebar Development Length', name: 'Rebar Development & Splices (Concrete Beam Design Suite)', href: 'Concrete%20Beam%20Capacity.html#dev',
       key: 'rebar_aci_projects_v1', space: 2 },
     { tool: 'bridge-geometry', label: 'Bridge Geometry', name: 'Bridge Geometry', href: 'Bridge%20Geometry.html',

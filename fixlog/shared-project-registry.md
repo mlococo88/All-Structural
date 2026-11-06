@@ -55,6 +55,11 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
 - Loaded by: `tools.html` (home page) only.
 - **How verified:** `node tests/engine/run.mjs project-registry github-sync projects`; `node tests/smoke/home-projects.mjs`; `node tests/smoke/home-sync.mjs` (all tools): pass.
 
+## 2026-11-06 — PR: claude/cbc-stds-asd (PR #856: https://github.com/mlococo88/All-Structural/pull/856) (STDS) — entry for Concrete Beam Capacity, ASD tab   [storage only; no result change]
+- New entry before `aci-rebar-development`: `{ tool: 'concrete-beam-asd', label: 'Concrete Beam ASD Rating', name: 'ASD Beam Rating (Concrete Beam Design Suite)', href: 'Concrete%20Beam%20Capacity.html#asd', key: 'asd_v1_projects', time: i => i && i.when || null, space: 2, toFile: i => i.data }` (the tool's own mapStore options and ctx.cloud).
+- Tests: `tests/engine/project-registry.test.mjs`: a `{ when, data }` item for `concrete-beam-asd`; `home-projects.mjs` / `github-sync-tools.mjs` `FOLDER`: `asd`; `github-sync-tools` `SUITE` lists the three synced tabs of the suite page; `project-library.mjs`: new `asd` entry (frame `#suite-frame-asd`). Loaded by `tools.html` only.
+- **How verified:** engine `project-registry github-sync projects`; `home-projects`; `home-sync` (all tools): pass.
+
 ## 2026-11-06 — PR: claude/pile-stds (STDS-P) — Pile Designer entry (`pile-designer`, read-only view over the tool's name mirror, sync: false)
 - **What:** new `pileView(storage)` and `TOOLS.push({ tool: 'pile-designer', label: 'Pile Designer', name: 'Pile Designer', href: 'Pile%20Designer.html', key: 'micropile_lrfd_index_v1', view: pileView, sync: false, space: 2, toFile })` before `const all = () => TOOLS.slice();`.
 - **Why a mirror, not async lists:** the projects are in IndexedDB `micropile_lrfd_db`. The home page must not open that database: opening it before the tool has created it would create it empty (version 1, no store), and the tool's upgrade would then never run. Pile Designer writes the names and times to the new key `micropile_lrfd_index_v1` after each change; the view reads it (newest record of each name, as the tool's sync). No async support was needed in github-sync.js or project-registry.js. `sync: false`: the home page lists Pile projects; "open the app to sync" (the file text needs the records).

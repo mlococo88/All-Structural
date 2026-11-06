@@ -103,6 +103,10 @@ header.app-head{
 #hdrProj{color:var(--navy);text-decoration:none;font-size:0.85rem;max-width:26em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-right:4px;}
 #hdrProj:hover{text-decoration:underline;}
 #hdrProj .hdrNone{color:#777;font-style:italic;}
+/* STDS (2026-11-06): the standard save controls (shared/projects-ui.js projectBar): header chip and the "Save and open" card */
+#hdrActs button.spChip{flex:0 0 auto;max-width:100%;white-space:nowrap;}
+#prjPane .spCard button{background:var(--paper);border:1px solid var(--line);border-radius:3px;padding:3px 10px;}
+#prjPane .spCard button.spPri{background:var(--navy);color:#fff;border-color:var(--navy);}
 #prjPane .proj-block{margin-left:0;grid-template-columns:repeat(2,minmax(0,1fr));border:none;padding:0;background:transparent;}
 #prjPane .proj-block input{min-width:0;width:100%;box-sizing:border-box;}
 #prjPane .prjBtns{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 2px;}
@@ -442,10 +446,9 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
       <div class="codeline">AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) &middot; MassDOT LRFD Bridge Manual &middot; v2.1</div>
     </div>
     <div class="toolbar" id="hdrActs"><!-- ABHD (2026-11-05): the project line and the global actions; the title block, project files and hand-offs are in the Project input tab -->
-      <a id="hdrProj" href="#" title="Project name and number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
+      <a id="hdrProj" hidden href="#" title="Project name and number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
       <button id="btnUndo" title="Undo the last input change" disabled>↶ Undo</button>
       <button id="btnRedo" title="Redo the last undone change (Ctrl+Y or Ctrl+Shift+Z)" disabled data-sp="1">↷ Redo</button>
-      <button id="btnManageProj" title="Load, overwrite or delete saved projects">Projects…</button>
       <span id="fpBadge" title="Fingerprint of the current input set — printed on the report so a reviewer can confirm the PDF matches these exact inputs" style="font-size:0.8rem;color:#555;border:1px dashed #bbb;border-radius:3px;padding:1px 7px;"></span>
       <span id="saveStatus"></span>
       <button class="primary" id="btnPrint" title="Print / PDF the calculation report (the Report tab), from any tab">Print / PDF Report</button>
@@ -455,6 +458,15 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
   <!-- ======= MAIN 2-PANEL LAYOUT ======= -->
   <div class="main" id="appmain">
     <div class="col-in" id="inputCol"><div id="prjPane" data-cid="prjPane"><!-- ABHD (2026-11-05): the Project input tab, moved here from the header; kept across rebuilds by buildInputs() -->
+      <div class="panel"><div class="p-head"><span class="tri">▼</span><span>Save and open</span></div><div class="p-body"><div id="abSaveCard"><!-- STDS (2026-11-06): was "Project file" (Save Project, Export / Import JSON, Reset Defaults; Compare…, Self-Test), after the title block; the standard save card (abStdsInit) -->
+        <button id="btnExport" title="Download all inputs as a JSON backup file">Export JSON</button>
+        <button id="btnImport" title="Load inputs from a JSON backup file">Import JSON</button>
+        <input type="file" id="importFile" accept=".json,application/json" style="display:none">
+        <button id="btnReset" title="Reset all inputs to built-in defaults">Reset Defaults</button>
+        <button id="btnCompare" title="Compare two saved projects (inputs + D/C side by side)">Compare…</button>
+        <button id="btnSelfTest" title="Re-run the built-in validation benchmark through the live engine">Self-Test</button>
+        </div><div class="in-note">Reset Defaults: the built-in inputs (saved projects are kept). Compare two saved projects; re-run the built-in validation benchmark.</div>
+      </div></div>
       <div class="panel"><div class="p-head"><span class="tri">▼</span><span>Title block</span></div><div class="p-body">
     <div class="proj-block" id="projBlock">
       <label>Project Name <input type="text" data-path="proj.name" id="pj_name"></label>
@@ -465,18 +477,6 @@ svg circle.fi[data-pile].fhl,svg circle.fi[data-pile]:hover,svg circle.fi[data-p
       <label>Checked Date <input type="date" data-path="proj.chkDate"></label>
     </div>
         <div class="in-note">Printed on the Report.</div>
-      </div></div>
-      <div class="panel"><div class="p-head"><span class="tri">▼</span><span>Project file</span></div><div class="p-body"><div class="prjBtns">
-        <button id="btnSaveProj" title="Save the current inputs as a named project (browser local storage)">Save Project</button>
-        <button id="btnExport" title="Download all inputs as a JSON backup file">Export JSON</button>
-        <button id="btnImport" title="Load inputs from a JSON backup file">Import JSON</button>
-        <input type="file" id="importFile" accept=".json,application/json" style="display:none">
-        <button id="btnReset" title="Reset all inputs to built-in defaults">Reset Defaults</button>
-        </div><div class="in-note">Save Project: a named project in this browser (Projects… in the header lists them). Export / Import JSON: a backup file.</div>
-        <div class="prjBtns">
-        <button id="btnCompare" title="Compare two saved projects (inputs + D/C side by side)">Compare…</button>
-        <button id="btnSelfTest" title="Re-run the built-in validation benchmark through the live engine">Self-Test</button>
-        </div><div class="in-note">Compare two saved projects; re-run the built-in validation benchmark.</div>
       </div></div>
       <div class="panel"><div class="p-head"><span class="tri">▼</span><span>Shared project info and hand-offs</span></div><div class="p-body">
         <div class="prjGrp"><b>Project info</b><div class="in-note">Copy the title block from or to the other tools.</div><div class="prjBtns bx-pm-row"><button type="button" id="bx-pm-use" title="Fill this title block from the project info shared by another tool">Use shared project info</button><button type="button" id="bx-pm-share" title="Share this title block with the other tools">Share project info</button></div></div>
@@ -10056,24 +10056,23 @@ document.getElementById("btnRunCmp").addEventListener("click",()=>{
 /* ---------- project manager ---------- */
 function getProjects(){ try{return JSON.parse(localStorage.getItem(PROJ_KEY))||{};}catch(e){return {};} }
 function setProjects(o){ try{ localStorage.setItem(PROJ_KEY,JSON.stringify(o)); return true; }catch(e){ alert("Could not save to this browser's local storage ("+e.message+"). Use Export JSON for a backup."); return false; } }
-document.getElementById("btnSaveProj").addEventListener("click",()=>{
-  const name=prompt("Project name to save as:",S.proj.name||"Untitled");
-  if(!name) return;
+/* STDS (2026-11-06): the Save Project button is gone; abSaveNamed(name) is its save (a revision in S.meta, then { state, ts }), called by
+   the standard Save / Save as (abStdsInit), which choose the name (no prompt; Save as asks before replacing a name in the list). */
+function abSaveNamed(name){
   const all=getProjects();
-  if(all[name] && !confirm(`"${name}" exists — overwrite?`)) return;
   if(!S.meta)S.meta={revs:[]};
   S.meta.revs.push({n:name, ts:Date.now(), fp:(window.LAST_R&&window.LAST_R.fingerprint)||""});
   S.meta.revs=S.meta.revs.slice(-10);
   all[name]={state:clone(S), ts:Date.now()};
-  if(!setProjects(all)) return;
+  if(!setProjects(all)) return false;
   document.getElementById("saveStatus").textContent=`project "${name}" saved`;
-  markSavedFp();
-});
+  markSavedFp(); return true;
+}
 document.getElementById("btnUndo").addEventListener("click",doUndo);
 document.getElementById("btnRedo").addEventListener("click",doRedo);   // PLIB
 /* PLIB: Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z through shared/projects-ui.js (left to the browser while text is being typed in a field) */
 if(window.SharedProjectsUI) SharedProjectsUI.undoRedo({ undo:doUndo, redo:doRedo, canUndo:()=>UNDO.length>0, canRedo:()=>REDO.length>0, onChange:()=>{} },{});
-document.getElementById("btnManageProj").addEventListener("click",()=>{ renderProjList(); document.getElementById("dlgProj").showModal(); if(AB_GH) AB_GH.shown(AB_GH_UI).catch(()=>{}); /* GHS2 */ });
+/* STDS (2026-11-06): the own "Saved Projects" dialog (#dlgProj, renderProjList, abPlibAct) is no longer opened: Saved projects… is the standard dialog */
 document.getElementById("dlgProjClose").addEventListener("click",()=>document.getElementById("dlgProj").close());
 function renderProjList(){
   const all=getProjects(), el=document.getElementById("projList");
@@ -10111,12 +10110,35 @@ function abPlibAct(a,n){
    settings it writes nothing and makes no request. The list stays abutcalc_v1_projects ({ name: { state, ts } }, unchanged); each
    project is the file projects/abutment-calculator/<name>.json on GitHub, in the Export JSON format (the state S, indent 2).
    A file from GitHub goes through the Import JSON checks and merge (abutMergeState) and is stored as { state, ts }; Open = Load. */
-const AB_GH=(()=>{ if(!window.SharedGitHubSync||!window.SharedProjects) return null; let ST=null; try{ ST=window.localStorage; }catch(e){ return null; }
-  return SharedGitHubSync.attach({ store:SharedProjects.mapStore(ST,PROJ_KEY), storage:ST,
+const AB_GH=null;   // STDS (2026-11-06): the sync is the standard dialog's (abStdsInit, the same tool folder, bookkeeping and file text)
+/* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over PROJ_KEY (abutcalc_v1_projects: { name: { state, ts } },
+   key and item format unchanged). Header: chip · Undo · Redo · Save · Saved projects… · (input ID, autosave status) · Print; the
+   Project input tab's first card "Save and open": Save · Save as… · Saved projects… · New; Export JSON · Import JSON; Reset Defaults ·
+   Compare… · Self-Test (the same buttons and handlers). Save = abSaveNamed (the old Save Project: a revision in S.meta, the item
+   { state: copy of S, ts }); Open = the old Load (S = state, migrate, rebuild, autosave); New = Reset Defaults without its confirm
+   (projectBar asks first on unsaved changes); Overwrite is Save on the open project. Rename / Duplicate / Delete: the standard dialog
+   (items move / are copied unchanged). GitHub sync: as GHS2 (#815), same folder projects/abutment-calculator/, toFile = state, fromFile
+   = the Import JSON checks and abutMergeState. S.ui (views) is left out of "unsaved changes". */
+var ABPB=null;
+function abStdsInit(){
+  if(!window.SharedProjects||!window.SharedProjectsUI||!SharedProjectsUI.projectBar||ABPB) return;
+  let ST=null; try{ ST=window.localStorage; }catch(e){}
+  const store=SharedProjects.mapStore(ST,PROJ_KEY,{ pack:s=>({state:clone(s),ts:Date.now()}), unpack:i=>i&&i.state, time:i=>i&&i.ts||null, sort:'saved' });
+  const $=id=>document.getElementById(id), hb=$("hdrActs");
+  const reset=()=>{ S=defaultState(); seedExampleReactions(); migrate(); buildTabs(); buildInputs(); recalcAll(); scheduleSave(); refreshProjHeader(); markSavedFp(); };
+  ABPB=SharedProjectsUI.projectBar({ store, storage:ST, label:"Abutment Calculator", id:"abLibDlg", omit:["ui"],
+    getState:()=>S,
+    save:n=>{ if(!abSaveNamed(n)) return {ok:false,message:"The project was not saved."}; scheduleSave(); return {ok:true}; },   // autosave now (the revision just added), so a reload finds the open project
     open:n=>{ const all=getProjects(); if(!all[n]) return false; S=all[n].state; migrate(); buildTabs(); buildInputs(); recalcAll(); scheduleSave(); refreshProjHeader(); markSavedFp(); return true; },
-    changed:()=>{ if(document.getElementById("dlgProj").open) renderProjList(); },
+    newProject:reset,
+    displayName:()=>S.proj&&S.proj.name||"",
+    exportFile:n=>{ SharedProjectsUI.download(String(n||S.proj.name||"abutment").replace(/[^\w\- ]/g,"").trim().replace(/\s+/g,"_")+"_abutment_calc.json",JSON.stringify(S,null,2)); markSavedFp(); },
+    importFile:()=>$("importFile").click(),
+    fileButtons:[$("btnExport"),$("btnImport")], extras:[$("btnReset"),$("btnCompare"),$("btnSelfTest")],
+    header:hb, chipBefore:$("btnUndo"), headerBefore:$("fpBadge"), card:$("abSaveCard"),
     cloud:{ tool:"abutment-calculator", label:"Abutment Calculator", space:2, toFile:i=>i.state,
-      fromFile:o=>{ const tag=o._schema||o.schema; if(tag||!o.geom||!o.proj) throw new Error("not an abutment-calculator project file"); return { state:abutMergeState(o), ts:Date.now() }; } } }); })();
+      fromFile:o=>{ const tag=o._schema||o.schema; if(tag||!o.geom||!o.proj) throw new Error("not an abutment-calculator project file"); return abutMergeState(o); /* store.save packs it as { state, ts } */ } } });
+}
 function abGhHost(){ let h=document.getElementById("projGh"); if(!h){ h=document.createElement("div"); h.id="projGh"; h.setAttribute("data-sp","gh-host"); document.getElementById("projList").before(h); } h.innerHTML=""; return h; }
 const AB_GH_UI={ redraw:()=>{ if(document.getElementById("dlgProj").open) renderProjList(); }, close:()=>document.getElementById("dlgProj").close() };
 function refreshProjHeader(){
@@ -10166,6 +10188,7 @@ document.getElementById("importFile").addEventListener("change",ev=>{
       if(miss.length && !confirm("This file does not look like a complete abutment-calculator project (missing: "+miss.join(", ")+"). Missing groups take the built-in defaults. Load it anyway?")){ ev.target.value=""; return; }
       S=abutMergeState(o);
       migrate(); buildTabs(); buildInputs(); recalcAll(); scheduleSave(); refreshProjHeader(); markSavedFp();
+      if(ABPB) ABPB.setCurrent(null);   // STDS: an imported file is not a saved project
       document.getElementById("saveStatus").textContent="imported "+f.name;
     }catch(e){ alert("Import failed: "+e.message); }
     ev.target.value="";
@@ -10443,6 +10466,7 @@ function init(){
   },8000);
   window.addEventListener("resize",()=>{ if(window.LAST_R) drawChartsFor(S.ui.tab,window.LAST_R); });
   setTimeout(()=>{ try{ runSelfTest(); recalcAll(); }catch(e){ console.warn("self-test:",e); } },1200);
+  abStdsInit();   // STDS
 }
 document.addEventListener("DOMContentLoaded",init);
 </script>
