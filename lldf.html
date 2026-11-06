@@ -49,6 +49,11 @@
   #hdrProj{color:#c9c7c2;font-size:12px;text-decoration:none;max-width:24em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #hdrProj:hover{color:#fff;text-decoration:underline}
   #hdrProj .hdrNone{font-style:italic;opacity:.8}
+  /* BSS (2026-11-06): the standard save controls (shared/projects-ui.js) in the dark header and the Project tab */
+  .apphead button.spChip[data-sp]{background:#ffffff1c;color:#e8e6e1;border-color:#ffffff55;font-family:var(--body);font-size:11.5px}
+  .apphead .spDot{box-shadow:0 0 0 1px #ffffff40} .apphead kbd.spKbd{display:none}
+  #inputPanel .spCard .btn:not(.spPri){background:#fff;color:#1f2a37;border-color:#c6c4bd;font-weight:600} #inputPanel .spCard .btn:not(.spPri):hover{background:#eef2f7}
+  #inputPanel .spCard .btn.spPri{background:var(--accent);border-color:var(--accent);color:#fff}
   .lx-home #lxProjHold{display:none}
   #inputPanel .lx-btns{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0 2px}
   #inputPanel .lx-grp{margin:2px 0 10px}
@@ -426,7 +431,7 @@ var st=document.createElement('style'); st.textContent=css;
     <div class="toolbar">
       <div class="tt"><a class="bx-alltools" href="tools.html" target="_top" title="Open the list of all tools" style="color:#9fb4c9;font-family:var(--body);font-weight:400;font-size:11.5px;text-decoration:none;margin-right:12px">&larr; All tools</a>LL &amp; DL Distribution <span>AASHTO LRFD 4.6.2.2 · MassDOT §3.5.3</span></div>
       <div class="actions">
-        <a id="hdrProj" href="#" title="Project and structure number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a><!-- LDHD (2026-11-05) -->
+        <a id="hdrProj" href="#" hidden title="Project and structure number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a><!-- LDHD (2026-11-05); BSS (2026-11-06): hidden, the project chip names the open project (the title block is in the Project tab) -->
         <label><input type="checkbox" id="liveUpdate" checked /> Live recalc</label>
         <button class="btn" id="mctBackBtn" title="Back to the MCT analysis app">↩ MCT</button>
         <span class="pb-status" id="saveStatus"></span><!-- LDHD (2026-11-05): from the retired project bar; its buttons are in the Project input tab (#lxProjHold) -->
@@ -448,12 +453,11 @@ var st=document.createElement('style'); st.textContent=css;
     </main>
   <div class="sheet lx-home" id="lxHome">
     <div class="noprint" id="lxProjHold"><!-- LDHD (2026-11-05): moved here from the page header; the LXL script below moves each group into a card of the Project input tab -->
-      <div id="lxProjFile">
-        <div class="lx-note">MCT project: <span id="projLabel" style="font-family:var(--mono);font-size:12px;font-weight:600;color:var(--ink)">— none —</span> &mdash; managed in the MCT app; this calculator autosaves into it.</div>
+      <div id="lxProjFile"><!-- BSS (2026-11-06): the "Save and open" card (shared/projects-ui.js projectBar) is mounted here; Export JSON / Import JSON move into it.
+        Was: "MCT project: <name> — managed in the MCT app; this calculator autosaves into it." -->
         <div class="lx-btns"><button class="btn sm" id="projExport" title="Download this calculation as a JSON file">Export JSON</button>
         <button class="btn sm" id="projImport" title="Load a calculation from a JSON file">Import JSON</button>
         <input type="file" id="projFile" accept="application/json,.json" style="display:none" /></div>
-        <div class="lx-note">Export / Import JSON: this calculation as a file.</div>
       </div>
       <div id="lxProjXfer">
         <div class="lx-grp"><b>Project info</b><div class="lx-note">Copy the title block from or to the other tools.</div><div class="lx-btns">
@@ -1752,6 +1756,9 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
 <!-- PLIB (2026-11-02): Undo / Redo (shared with the other tools) -->
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<!-- BSS (2026-11-06): the standard save over the shared Bridge Suite project list and its GitHub sync (off until set up) -->
+<script src="shared/github-sync.js"></script>
+<script src="shared/bridge-suite-projects.js"></script>
 <script>
 "use strict";
 /* =========================================================================
@@ -2859,8 +2866,8 @@ function migrateLLDFonce(){ try{ if(!BP()) return;
   BP().migrate('lldf', conv, le=>le&&le.inp);
 }catch(e){} }
 function escHtml(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));}
-// Named projects are created/renamed/deleted only in the MCT app. Here we just show which
-// project is active and autosave this calculator's slice into it (see autosave()).
+// This calculator autosaves its slice into the active project (see autosave()). BSS (2026-11-06): it can also Save / Save as (a new
+// project holding its slice), and Rename / Duplicate / Delete through the standard Saved projects dialog (lldfStdInit below).
 function activeProjectName(){ try{ if(BP()){ var id=BP().current(); var e=id&&BP().get(id); return e?e.name:''; } }catch(e){} return ''; }
 function updateProjectLabel(){ var el=$("projLabel"); if(!el) return;
   var nm=activeProjectName(); el.textContent=nm||'— none —';
@@ -2933,6 +2940,30 @@ function lldfPlibInit(){
   const ref=$("printBtn"); if(ref){ ref.parentNode.insertBefore(bu,ref); ref.parentNode.insertBefore(br,ref); }   /* LDHD: in the header, before Print / PDF (was before Export JSON) */
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   h.reset(); window.LLPL={h};
+  lldfStdInit(bu);
+}
+/* BSS (2026-11-06): the standard save (engineer-approved, 2026-11-05/06; shared/bridge-suite-projects.js over shared/projects-ui.js
+   projectBar): header chip · Undo · Redo · Save (Ctrl+S) · Saved projects… · Print / PDF; the Project tab's first card "Save and open"
+   (Save · Save as… · Saved projects…; Export JSON · Import JSON); the standard dialog over the shared Bridge Suite list (bridgeSuite.v1.projects,
+   unchanged). Save writes this calculator's slice ("lldf", serialize(false), as the autosave) into the open project; Save as starts a new
+   project holding it (or, "Replace it", puts it into the project of that name). GitHub sync off until set up. */
+function lldfStdInit(undoBtn){
+  if(!window.SharedBridgeSuite||!BP()||!LS.ok) return;
+  const noT=o=>{ if(o&&typeof o==="object"){ o=JSON.parse(JSON.stringify(o)); delete o.savedAt; } return SharedProjects.canon(o==null?null:o); };
+  const pb=SharedBridgeSuite.projectBar({ app:"lldf", label:"LL & DL Distribution", id:"lldfLibDlg", storage:(()=>{ try{ return window.localStorage; }catch(e){ return null; } })(),
+    parts:()=>({lldf:serialize(false)}),
+    cmp:()=>noT(serialize(false)), cmpOf:e=>noT(e&&e.slices?e.slices.lldf:null),
+    open:id=>{ BP().setCurrent(id); syncActiveProject(true); return true; },
+    changed:()=>{ _lastProjId=BP().current(); updateProjectLabel(); },
+    displayName:()=>($("mProject")?$("mProject").value.trim():""),
+    exportFile:()=>projExport(), importFile:()=>$("projFile").click(),
+    fileButtons:[$("projExport"),$("projImport")],
+    header:document.querySelector("header.apphead .actions"), chipBefore:undoBtn, headerBefore:$("printBtn") });
+  if(!pb) return;
+  pb.el.save.classList.add("btn"); pb.el.lib.classList.add("btn");
+  pb.el.card.querySelectorAll("button").forEach(b=>{ b.classList.add("btn","sm"); });
+  pb.mount($("lxProjFile"));
+  window.LLPB=pb;
 }
 /* -------------------- wiring -------------------- */
 function toggleSectional(){ const t=$("bridgeType").value;
@@ -2999,7 +3030,7 @@ renderRefImgs();
 $("calcBtn").addEventListener("click",run);
 $("printBtn").addEventListener("click",()=>window.print());
 $("projExport").addEventListener("click",projExport);
-$("projImport").addEventListener("click",()=>$("projFile").click());
+$("projImport").addEventListener("click",()=>{ if(window.LLPB) window.LLPB.importJSON(); else $("projFile").click(); });   // BSS: the standard Import (asks first on unsaved changes)
 $("projFile").addEventListener("change",projImportFile);
 let rz; window.addEventListener("resize",()=>{clearTimeout(rz);rz=setTimeout(run,120);});
 
@@ -5078,10 +5109,10 @@ buildTabs("out",OUT_TABS,$("lxOutTabs"),OUT);
 var given=$("bridgeType").closest(".given");
 /* inputs */
 var P=PANE.in, c;
+c=card(P.project,"Save and open"); move($("lxProjFile"),c);   /* BSS (2026-11-06): the standard card, first in the Project tab (was "Project file", after the title block) */
 c=card(P.project,"Title block"); move(HOME.querySelector(".titleblock .tb-meta"),c);   /* LDHD: the Project tab (was the Bridge tab's "Project" card) */
 c.appendChild(mk("p","lx-note","Printed on the Report and the calculation sheet."));
 var projCard=c;
-c=card(P.project,"Project file"); move($("lxProjFile"),c);
 c=card(P.project,"Shared project info and hand-offs"); move($("lxProjXfer"),c);
 c=card(P.bridge,"Cross-section type"); move($("bridgeType").closest(".typerow"),c); move(given.querySelector(":scope > .tblctl"),c);
 c=card(P.bridge,"Spans & skew"); [row("nSpans"),$("spanRows"),$("regionRow"),row("skew"),row("skewV")].forEach(function(n){ move(n,c); });

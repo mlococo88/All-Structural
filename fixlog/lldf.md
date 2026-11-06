@@ -2001,3 +2001,18 @@ index 219cc2c..a3e337e 100644
 - **Why:** engineer decision (2026-11-06): the hand-off lock panel must not read as cloud sync next to "Cloud sync (GitHub)".
 - **Other copies:** `index.html`, `lldf.html`, `Prestressed Bridge Design.html` (same PR; the block stays identical in the three).
 - **Formulas, factors, units, code references:** none. **Saved data:** none.
+
+## 2026-11-06 — PR: claude/bss-lldf (PR #864: https://github.com/mlococo88/All-Structural/pull/864) (BSS) — the standard save: header chip · Undo · Redo · Save · Saved projects… · Print / PDF, "Save and open" card first in the Project tab, standard dialog over the Bridge Suite list (Save as, Rename, Delete), GitHub sync   [display and storage-access only; no key or format change; no computed result change]
+- **Why:** engineer-approved standard save (2026-11-05) and the Bridge Suite decisions (2026-11-06).
+- **Where / what:**
+  - `<head>` scripts: after `shared/projects-ui.js`, `shared/github-sync.js` and `shared/bridge-suite-projects.js`; CSS "BSS (2026-11-06)" after `#hdrProj .hdrNone{…}` (chip on the dark header, card buttons).
+  - Header: `#hdrProj` ("Project: <title-block name>", LDHD) gets `hidden` (the chip names the open project; the title block is in the Project tab), as Pile Designer #859.
+  - `#lxProjFile`: the note "MCT project: <name> — managed in the MCT app; this calculator autosaves into it." and "Export / Import JSON: this calculation as a file." removed; Export JSON / Import JSON stay (moved into the card by projectBar).
+  - LXL tab script: `c=card(P.project,"Save and open"); move($("lxProjFile"),c);` now comes first, before "Title block" (was `card(P.project,"Project file")` after it).
+  - `lldfPlibInit()`: ends with `lldfStdInit(bu)`; new `function lldfStdInit(undoBtn)`: `SharedBridgeSuite.projectBar({ app: 'lldf', parts: () => ({ lldf: serialize(false) }) (what the autosave writes), cmp / cmpOf (canon without savedAt), open: id => { BP().setCurrent(id); syncActiveProject(true); }, changed: () => { _lastProjId = BP().current(); updateProjectLabel(); }, fileButtons: [#projExport, #projImport], header: .apphead .actions, chipBefore: Undo, headerBefore: #printBtn })`.
+  - `#projImport` click: `LLPB.importJSON()` (asks first on unsaved changes, then the file chooser) instead of the file chooser at once.
+- **Decision (pending engineer review):** LL & DL Distribution can now create suite projects: Save as with a new name makes a new project holding only its own part (`{ name, savedAt, slices: { lldf } }`, the shape the MCT app and Prestressed already make), and Rename / Duplicate / Delete act on the whole project through the standard dialog. Before, only the MCT app (and Prestressed's Save as) created projects. The autosave into the open project is unchanged.
+- **Saved data (§5):** `bridgeSuite.v1.projects`, `bridgeSuite.v1.currentProjectId`, `lldf_autosave_v1`, the Export JSON format unchanged.
+- **Formulas, factors, units, code references:** none (§4 does not apply).
+- **Check case:** `tests/smoke/bridge-suite-compare.mjs --app lldf`: open project "Alpha" (an MCT part and demands); on load, after skew 0 → 12° (autosaved into Alpha), after a reload: `lldfLast` (every DF), every localStorage key (times and folder normalised), the Report text and the Export JSON file identical, origin/main vs branch.
+- **How verified:** see the PR.
