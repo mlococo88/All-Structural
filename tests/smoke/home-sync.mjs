@@ -17,6 +17,7 @@ import path from 'path';
 import { openPage, REPO } from '../lib.mjs';
 import { makeGitHubMock, gitBlobSha } from '../engine/gh-mock.mjs';
 import { FOLDER, NAMES, toolPage } from './home-projects.mjs';
+import { openSavedList } from './project-library.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const SHOTS = arg('shots', process.env.SHOTS);
@@ -76,7 +77,7 @@ for (const key of list) {
   const L0 = gh.log.length, f = FOLDER[key];
   try {
     const { page, p, T } = await toolPage(ctx, key, terrs);
-    if (T.ui) await T.ui.open(p); else await p.evaluate(() => { [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)).click(); });
+    if (T.ui) await T.ui.open(p); else await openSavedList(p);   // HDRS: no header Saved projects… (project-library.mjs openSavedList)
     await p.waitForTimeout(4500);   // the dialog's check (flush + list) and one 3 s background check of the tool
     const r = await p.evaluate(() => ({ st: [...document.querySelectorAll('dialog[open] [data-gh-status], #lib_panel [data-gh-status]')].map(e => e.dataset.ghStatus).sort(), ask: !!document.querySelector('dialog[open] [data-sp=gh-ask]') }));
     const puts = gh.log.slice(L0).filter(l => l.method !== 'GET');
