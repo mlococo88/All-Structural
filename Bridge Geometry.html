@@ -2304,6 +2304,7 @@ function drawHeatmap(){
     ctx.stroke(); ctx.restore(); }
 
   // ---- station callouts for each substructure unit + each distinct bearing line ----
+  const bgBrgBox={};   /* BGDE: where each support's bearing-line station labels were drawn (boxes), for the elevation labels */
   if(LY('ly_sta')){
   ctx.font='10px monospace'; ctx.textBaseline='middle';
   su.forEach(u=>{ const span=Math.max(1,Math.min(su.length-1,spanOfSta(u.sta))); const ed=edgesForSpan(span);
@@ -2330,8 +2331,8 @@ function drawHeatmap(){
     bLab.forEach((q,i)=>{ const ly=bSp.x[i];
       ctx.fillStyle=CYAN; ctx.textAlign='left';
       if(bSp.moved[i]){ const lx=Math.max(...bLab.map(z=>z.x))+10; ctx.save(); ctx.strokeStyle=CYAN; ctx.lineWidth=0.75; ctx.beginPath(); ctx.moveTo(q.x+1,q.y); ctx.lineTo(lx-2,ly); ctx.stroke(); ctx.restore();
-        ctx.fillText(q.t, lx, ly); }
-      else ctx.fillText(q.t, q.x+5, q.y); });
+        ctx.fillText(q.t, lx, ly); (bgBrgBox[u.name]=bgBrgBox[u.name]||[]).push([lx,ly-5,lx+q.w,ly+5]); }
+      else { ctx.fillText(q.t, q.x+5, q.y); (bgBrgBox[u.name]=bgBrgBox[u.name]||[]).push([q.x+5,q.y-5,q.x+5+q.w,q.y+5]); } });
     ctx.font='10px monospace'; });
   }
 
@@ -2341,12 +2342,36 @@ function drawHeatmap(){
       ctx.fillText(`Span ${i+1}: ${(su[i+1].sta-su[i].sta).toFixed(2)} ft`, TX(p.x), TY(p.y)-2); } }
 
   // ---- elevation nodes at girder×support ----
+  /* BGDE (2026-11-06, engineer): at a pier with two bearing lines the top-of-deck labels of the back and ahead lines were drawn
+     on top of each other (each label just right of its node, the nodes a few pixels apart). Per girder, where the pair's labels
+     overlap, the first clear of: (1) side by side, the node further left on screen labelled to its left, the other to its right;
+     (2) the pair spread one text line apart vertically (bgLabSpread, 11 px) right of the nodes with a leader to each node, centred,
+     then above, then below. Clear = no overlap with each other, with the support's other elevation labels, with its name /
+     station / skew callouts or with its bearing-line station labels (bgBrgBox). None clear: side by side. Labels with room, and every single-line support, are drawn as before.
+     Display only. */
   if(LY('ly_elev')){ ctx.font='8.5px monospace';
-    su.forEach(u=>bearingLinesFor(u).forEach(bl=>{ const span=Math.max(1,Math.min(su.length-1,spanOfSta(bl.sta))); const gset=girdersForSpan(span);
-      gset.forEach(off=>{ const p=ENG.deckAtSupport(bl,off);
-        const px=TX(p.x),py=TY(p.y);
-        ctx.fillStyle=INK; ctx.beginPath(); ctx.arc(px,py,1.7,0,Math.PI*2); ctx.fill();
-        ctx.fillStyle=INK; ctx.textAlign='left'; ctx.fillText((p.z+ZADD).toFixed(2), px+3, py); }); })); }
+    const eBox=q=>q.al==='right'?[q.tx-q.w,q.ty-5,q.tx,q.ty+5]:[q.tx,q.ty-5,q.tx+q.w,q.ty+5];
+    const eHit=(a,b)=>{ const A=eBox(a),B=eBox(b); return Math.min(A[2],B[2])-Math.max(A[0],B[0])>-1&&Math.min(A[3],B[3])-Math.max(A[1],B[1])>-1; };
+    su.forEach(u=>{ const L=bearingLinesFor(u).map(bl=>{ const span=Math.max(1,Math.min(su.length-1,spanOfSta(bl.sta))); const gset=girdersForSpan(span);
+        return gset.map(off=>{ const p=ENG.deckAtSupport(bl,off), px=TX(p.x), py=TY(p.y), t=(p.z+ZADD).toFixed(2);
+          return {px,py,t,w:ctx.measureText(t).width,tx:px+3,ty:py,al:'left',lead:false}; }); });
+      if(L.length===2&&L[0].length===L[1].length){
+        /* obstacles: the support's own callouts (name, Sta, Skew: right-aligned left of the deck's left edge, 10 px font) */
+        const obs=(bgBrgBox[u.name]||[]).slice(); if(LY('ly_sta')){ const sp0=Math.max(1,Math.min(su.length-1,spanOfSta(u.sta))), top=ENG.deckAtSupport({sta:u.sta,skew:u.skew},edgesForSpan(sp0).l), lx=TX(top.x), ly=TY(top.y);
+          ctx.font='10px monospace'; [[u.name,-7],['Sta '+formatStation(u.sta),5]].concat(u.skew?[['Skew '+u.skew.toFixed(1)+'°',17]]:[]).forEach(([t,dy])=>{ const w=ctx.measureText(t).width; obs.push([lx-6-w,ly+dy-6,lx-6,ly+dy+6]); }); ctx.font='8.5px monospace'; }
+        const all=L.flat(), clear=(q,skip)=>{ const A=eBox(q); return !obs.some(B=>Math.min(A[2],B[2])-Math.max(A[0],B[0])>-1&&Math.min(A[3],B[3])-Math.max(A[1],B[1])>-1)&&!all.some(z=>!skip.includes(z)&&eHit(q,z)); };
+        const set=(q,al,tx,ty,lead)=>{ q.al=al; q.tx=tx; q.ty=ty; q.lead=lead; };
+        L[0].forEach((a,g)=>{ const b=L[1][g]; if(!eHit(a,b)) return;
+          const [l,r]=a.px<=b.px?[a,b]:[b,a], x0=Math.max(a.px,b.px)+8, s=bgLabSpread([a.py,b.py],11), lo=Math.min(...s.x), hi=Math.max(...s.x);
+          const C=[()=>{ set(l,'right',l.px-3,l.py,false); set(r,'left',r.px+3,r.py,false); },              // side by side
+            ()=>{ set(a,'left',x0,s.x[0],true); set(b,'left',x0,s.x[1],true); },                                  // stacked, centred
+            ()=>{ set(a,'left',x0,s.x[0]-(hi-Math.max(a.py,b.py))-5,true); set(b,'left',x0,s.x[1]-(hi-Math.max(a.py,b.py))-5,true); },   // stacked, above
+            ()=>{ set(a,'left',x0,s.x[0]+(Math.min(a.py,b.py)-lo)+5,true); set(b,'left',x0,s.x[1]+(Math.min(a.py,b.py)-lo)+5,true); }]; // stacked, below
+          if(!C.some(f=>{ f(); return !eHit(a,b)&&clear(a,[a,b])&&clear(b,[a,b]); })) C[0](); }); }
+      L.flat().forEach(q=>{
+        ctx.fillStyle=INK; ctx.beginPath(); ctx.arc(q.px,q.py,1.7,0,Math.PI*2); ctx.fill();
+        if(q.lead){ ctx.save(); ctx.strokeStyle=INK; ctx.lineWidth=0.6; ctx.beginPath(); ctx.moveTo(q.px+1.5,q.py); ctx.lineTo(q.tx-1.5,q.ty); ctx.stroke(); ctx.restore(); }
+        ctx.fillStyle=INK; ctx.textAlign=q.al; ctx.fillText(q.t, q.tx, q.ty); }); }); }
 
   // ---- girder station/offset callouts at supports (off by default; dense) ----
   if(LY('ly_gpt')){ ctx.font='7.5px monospace';
