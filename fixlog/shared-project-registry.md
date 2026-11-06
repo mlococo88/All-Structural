@@ -54,3 +54,9 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
 - Tests: `tests/smoke/home-projects.mjs` `FOLDER` and `tests/smoke/github-sync-tools.mjs` `FOLDER`: `cbc`; `github-sync-tools` allows the suite's other tab's bookkeeping key (`SUITE`: rebar ↔ cbc share one page); `tests/smoke/project-library.mjs`: new `cbc` entry (frame `#suite-frame-capacity`).
 - Loaded by: `tools.html` (home page) only.
 - **How verified:** `node tests/engine/run.mjs project-registry github-sync projects`; `node tests/smoke/home-projects.mjs`; `node tests/smoke/home-sync.mjs` (all tools): pass.
+
+## 2026-11-06 — PR: claude/pile-stds (STDS-P) — Pile Designer entry (`pile-designer`, read-only view over the tool's name mirror, sync: false)
+- **What:** new `pileView(storage)` and `TOOLS.push({ tool: 'pile-designer', label: 'Pile Designer', name: 'Pile Designer', href: 'Pile%20Designer.html', key: 'micropile_lrfd_index_v1', view: pileView, sync: false, space: 2, toFile })` before `const all = () => TOOLS.slice();`.
+- **Why a mirror, not async lists:** the projects are in IndexedDB `micropile_lrfd_db`. The home page must not open that database: opening it before the tool has created it would create it empty (version 1, no store), and the tool's upgrade would then never run. Pile Designer writes the names and times to the new key `micropile_lrfd_index_v1` after each change; the view reads it (newest record of each name, as the tool's sync). No async support was needed in github-sync.js or project-registry.js. `sync: false`: the home page lists Pile projects; "open the app to sync" (the file text needs the records).
+- **Other entries:** unchanged.
+- **How verified:** `node tests/engine/run.mjs project-registry`; `node tests/smoke/home-projects.mjs --tool pile,sbapp`.
