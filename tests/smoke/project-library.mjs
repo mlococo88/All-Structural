@@ -144,12 +144,12 @@ export const TOOLS = {
     // the rebar calculator. Its standalone file was retired 2026-11-05 (RBRT; now a redirect page): the same app (same list key) is
     // tested in the Development & Splice tab of Concrete Beam Capacity, opened as #dev; every call below runs inside that frame.
     file: 'Concrete Beam Capacity.html', hash: '#dev', frame: '#suite-frame-dev', list: 'rebar_aci_projects_v1', auto: 'rcsuite.rebar_autosave_v1',
-    ready: p => p.waitForFunction(() => typeof computeFactors === 'function' && document.getElementById('projSelect') && document.getElementById('dashboard').textContent.length > 20),
+    ready: p => p.waitForFunction(() => typeof computeFactors === 'function' && (document.getElementById('projSelect') || window.RBPL) && document.getElementById('dashboard').textContent.length > 20),   // STDS: no drop-down on the branch
     results: p => p.evaluate(() => { const inp = readInputs(); const seen = new WeakSet(); const f = JSON.parse(JSON.stringify({ inp, f: computeFactors(inp) }, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v)));
       const d = document.getElementById('dashboard').cloneNode(true); d.querySelectorAll('[data-sp]').forEach(x => x.remove()); return { ...f, dash: d.textContent.replace(/\s+/g, ' ') }; }),
     change: p => bump(p, '#fc', 500),
     view: p => tabView(p, '#tabs .tab', 2, '.active'),
-    save: async (p, name) => { await p.evaluate(n => { document.getElementById('saveName').value = n; saveProject(); }, name); await p.waitForTimeout(400); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { document.getElementById('saveName').value = n; saveProject(); }, name); await p.waitForTimeout(400); }   // STDS: the standard Save as (branch), the old Save (main)
   },
   index: {
     // index.html (MCT generator, React, compiled by Babel in the browser): Undo / Redo only. Its named projects are the shared Bridge

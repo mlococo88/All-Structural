@@ -7567,7 +7567,7 @@ body.rbNoExcess .rbExcessOnly{display:none!important}
   <div class=&quot;titlebar no-print&quot;>
     <div class=&quot;apptitle&quot;>Rebar Development &amp;amp; Splice Calculator</div>
     <div class=&quot;byline&quot;>by Mario Lococo</div>
-    <a id=&quot;hdrProj&quot; href=&quot;#&quot; title=&quot;Project name and number: edit them in the Project input tab&quot;>Project: <span id=&quot;hdrProjTxt&quot;></span></a><!-- HDR (2026-11-05) -->
+    <a id=&quot;hdrProj&quot; hidden href=&quot;#&quot; title=&quot;Project name and number: edit them in the Project input tab&quot;>Project: <span id=&quot;hdrProjTxt&quot;></span></a><!-- HDR (2026-11-05) -->
   </div>
 
   <div class=&quot;layout no-print&quot;>
@@ -8024,23 +8024,13 @@ function buildInputPanel(){
   ${panel(&quot;G&quot;,&quot;Engineering Assumptions&quot;,true,`
     <div class=&quot;field&quot;><textarea id=&quot;assumptions&quot; rows=&quot;4&quot; placeholder=&quot;Enter any project-specific assumptions…&quot;></textarea></div>`)}
 
-  ${panel(&quot;H&quot;,&quot;Project Management&quot;,true,`
-    <div class=&quot;field&quot;><label>Saved Project</label>
-      <select id=&quot;projSelect&quot;><option value=&quot;&quot;>— select —</option></select></div>
-    <div class=&quot;field&quot;><label>Save As (name)</label><input id=&quot;saveName&quot; type=&quot;text&quot; placeholder=&quot;project name&quot;></div>
-    <div class=&quot;btnrow&quot;>
-      <button class=&quot;btn small&quot; onclick=&quot;saveProject()&quot;>Save</button>
-      <button class=&quot;btn small&quot; onclick=&quot;loadProject()&quot;>Load</button>
-      <button class=&quot;btn small&quot; onclick=&quot;deleteProject()&quot;>Delete</button>
-    </div>
-    <div class=&quot;btnrow&quot; style=&quot;margin-top:8px;&quot;>
-      <button class=&quot;btn small&quot; onclick=&quot;exportJSON()&quot;>Export JSON</button>
-      <button class=&quot;btn small&quot; onclick=&quot;document.getElementById('importFile').click()&quot;>Import JSON</button>
+  ${panel(&quot;H&quot;,&quot;Save and open&quot;,true,`
+    <div id=&quot;rbSaveCard&quot;>
+      <button class=&quot;btn small&quot; id=&quot;rbExportBtn&quot; onclick=&quot;exportJSON()&quot;>Export JSON</button>
+      <button class=&quot;btn small&quot; id=&quot;rbImportBtn&quot; onclick=&quot;if(RBPL&amp;&amp;RBPL.pb)RBPL.pb.importJSON();else document.getElementById('importFile').click()&quot;>Import JSON</button>
       <input id=&quot;importFile&quot; type=&quot;file&quot; accept=&quot;application/json&quot; style=&quot;display:none&quot; onchange=&quot;importJSON(event)&quot;>
     </div>
-    <div class=&quot;btnrow&quot; style=&quot;margin-top:10px;&quot;>
-      <button class=&quot;btn primary&quot; style=&quot;width:100%&quot; onclick=&quot;printReport()&quot;>Print / PDF Report</button>
-    </div>`)}
+    <button class=&quot;btn primary&quot; id=&quot;rbPrintBtn&quot; onclick=&quot;printReport()&quot;>Print / PDF Report</button>`)}
   `;
 }
 
@@ -8071,9 +8061,9 @@ function togglePanel(head){
    ===================================================================== */
 const REBAR_IN_TABS=[
   ['project','Project'],['material','Code &amp;amp; Material'],['tension','Tension'],
-  ['hookcomp','Hook &amp;amp; Comp.'],['splices','Splices'],['notes','Assumptions &amp;amp; Save']];
+  ['hookcomp','Hook &amp;amp; Comp.'],['splices','Splices'],['notes','Assumptions']];   // STDS (2026-11-05): was &quot;Assumptions &amp;amp; Save&quot;; panel H (Save and open) is first in the Project tab
 const REBAR_IN_PANEL={A:'project',B:'material',C:'tension',D:'tension',D2:'tension',
-  E:'hookcomp',E2:'hookcomp',F:'splices',G:'notes',H:'notes'};
+  E:'hookcomp',E2:'hookcomp',F:'splices',G:'notes',H:'project'};
 /* validate() messages that point at an input, mapped to the panel holding it */
 const REBAR_IN_WARN=[
   [/^f'c must be a positive/,'B'],
@@ -9185,6 +9175,7 @@ function collectState(){
   const inp=readInputs();
   const panels={};
   document.querySelectorAll('.panel').forEach(p=>panels[p.dataset.panel]=!p.classList.contains('collapsed'));
+  if('H' in panels){ const h=panels.H; delete panels.H; panels.H=h; }   // STDS: panel H is first in the Project tab now; its key stays last, as saved before
   return {inp, currentTab, chartMode, panels};
 }
 function applyState(st){
@@ -9278,7 +9269,7 @@ function exportJSON(){
 function importJSON(ev){
   const file=ev.target.files[0]; if(!file) return;
   const r=new FileReader();
-  r.onload=e=>{ try{ applyState(JSON.parse(e.target.result)); render(); refreshProjectList(); if(RBPL) RBPL.h.reset(); /* PLIB */ }
+  r.onload=e=>{ try{ applyState(JSON.parse(e.target.result)); render(); refreshProjectList(); if(RBPL) RBPL.h.reset(); /* PLIB */ if(RBPL&amp;&amp;RBPL.pb) RBPL.pb.setCurrent(null); /* STDS: an imported file is not a saved project */ }
     catch(err){ alert(&quot;Could not read JSON file.&quot;); } ev.target.value=&quot;&quot;;};
   r.readAsText(file);
 }
@@ -9763,29 +9754,41 @@ function switchTab(name){
      starts a new history.
    The standalone tool and the Development &amp; Splice tab of Concrete Beam Capacity.html carry this same block (CLAUDE.md §3). */
 var RBPL=null;   // var: autosave() may run before this line is reached
+var RB_DEF=null;  // STDS: the default inputs (set in init), for New
+/* STDS (2026-11-05): the standard save (shared/projects-ui.js projectBar) over LS_PROJECTS ({ name: collectState() }, unchanged).
+   Replaces Project Management (the Saved Project drop-down, the Save As name box, Save / Load / Delete; was in the input tab
+   &quot;Assumptions &amp; Save&quot;) and the PLIB Saved projects… button: panel H is now &quot;Save and open&quot;, first in the Project tab, and every
+   Delete goes through Saved projects…. Save writes the item saveProject wrote (collectState()); Open is the Load path (applyState +
+   render, new undo history). The output tab, chart mode and open panels are views, not &quot;unsaved changes&quot;. Header: chip · Undo ·
+   Redo · Save · Saved projects… · Print / PDF Report (the button moved up from panel H; same handler). Export / Import JSON: same
+   buttons and handlers; Import asks first on unsaved changes. Ctrl+S / Ctrl+Shift+S work while this tab has the focus. */
 function rbPlibInit(){
-  if(!window.SharedProjects||!window.SharedProjectsUI||RBPL) return;
+  if(!window.SharedProjects||!window.SharedProjectsUI||!SharedProjectsUI.projectBar||RBPL) return;
   let ST=null; try{ ST=window.localStorage; }catch(e){}
   const store=SharedProjects.mapStore(ST,LS_PROJECTS);
-  const sel=()=>document.getElementById('projSelect');
-  const relist=keep=>{ refreshProjectList(); if(keep&amp;&amp;store.has(keep)) sel().value=keep; };
-  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'aci-rebar-development',label:'ACI Rebar Development Length',space:2,fromFile:j=>{if(!j||typeof j!=='object'||!j.inp)throw new Error('not a rebar development project file');return j;}},
-    store,storage:ST,title:'Saved projects (this browser)',
-    current:()=>{ const n=sel()&amp;&amp;sel().value; return n&amp;&amp;store.has(n)?n:null; },
-    open:n=>{ const d=store.get(n); if(!d) return false; applyState(d); render(); relist(n); if(RBPL) RBPL.h.reset(); return true; },
-    renamed:(a,b)=>{ if(sel()&amp;&amp;sel().value===a) relist(b); const sn=document.getElementById('saveName'); if(sn&amp;&amp;sn.value.trim()===a) sn.value=b; },
-    changed:()=>relist(sel()&amp;&amp;sel().value)});
-  const lb=SharedProjectsUI.button('Saved projects…','The projects saved in this browser: open, rename, duplicate, delete',{cls:'btn small'});
-  lb.addEventListener('click',()=>dlg.show());
-  const del=document.querySelector('#inputPanel button[onclick=&quot;deleteProject()&quot;]'); if(del) del.insertAdjacentElement('afterend',lb);
+  const hp=document.querySelector('.panel[data-panel=&quot;H&quot;]'); if(hp&amp;&amp;hp.parentNode) hp.parentNode.insertBefore(hp,hp.parentNode.querySelector('.panel'));   // Save and open: first in the Project tab
   const h=SharedProjects.history({ get:()=>JSON.stringify(collectState().inp), set:t=>{ applyState({inp:JSON.parse(t)}); render(); } });
   const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'btn small',style:'margin-left:8px'});
   const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
   const tb=document.querySelector('.titlebar'); const at=tb&amp;&amp;tb.querySelector('.alltools');
   if(tb){ if(at){ at.insertAdjacentElement('afterend',br); at.insertAdjacentElement('afterend',bu); } else { tb.appendChild(bu); tb.appendChild(br); } }
+  const pr=document.getElementById('rbPrintBtn'); if(tb&amp;&amp;pr){ pr.className='btn small'; pr.style.marginLeft='8px'; pr.textContent='Print'; pr.title='Print / PDF the calculation report'; tb.appendChild(pr); }
+  const nm=n=>(n||readInputs().projName||&quot;rebar_calc&quot;).replace(/[^a-z0-9]+/gi,&quot;_&quot;);
+  const pb=SharedProjectsUI.projectBar({ store, storage:ST, label:'Development &amp; Splice', id:'rbLibDlg', omit:['currentTab','chartMode','panels'],
+    getState:collectState, save:n=>store.save(n,collectState()),
+    open:n=>{ const d=store.get(n); if(!d) return false; applyState(d); render(); refreshProjectList(); h.reset(); return true; },
+    newProject:()=>{ if(RB_DEF) applyState({inp:RB_DEF}); render(); h.reset(); },
+    displayName:()=>{ const e=document.getElementById('projName'); return e?e.value:''; },
+    exportFile:n=>SharedProjectsUI.download(nm(n)+'.json',JSON.stringify(collectState(),null,2)),
+    importFile:()=>document.getElementById('importFile').click(),
+    fileButtons:[document.getElementById('rbExportBtn'),document.getElementById('rbImportBtn')],
+    header:tb, chipBefore:bu, headerBefore:pr, card:document.getElementById('rbSaveCard'),
+    /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'aci-rebar-development',label:'ACI Rebar Development Length',space:2,fromFile:j=>{if(!j||typeof j!=='object'||!j.inp)throw new Error('not a rebar development project file');return j;}} });
+  [pb.el.chip,pb.el.save,pb.el.lib].forEach(b=>{ b.classList.add('btn','small'); b.style.marginLeft='8px'; });
+  pb.el.card.querySelectorAll('button[data-sp]').forEach(b=>b.classList.add('btn','small'));
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   let t=null; h.reset();
-  RBPL={ h, dlg, soon:()=>{ clearTimeout(t); t=setTimeout(()=>h.record(),400); } };
+  RBPL={ h, dlg:pb.dialog, pb, soon:()=>{ clearTimeout(t); t=setTimeout(()=>h.record(),400); } };
 }
 /* ---- CBAR-1 (2026-11-05): &quot;From Beam Capacity&quot; for the excess-reinforcement inputs (display / workflow only; no result change).
    In the Concrete Beam suite the shell relays Beam Capacity's shared inputs (type 'sharedInputs', source 'beamCapacity', the
@@ -9898,7 +9901,7 @@ function rbOldAutosaveNote(s){
   const d=document.createElement('div'); d.className='warnbox'; d.id='rbOldNote'; d.setAttribute('role','status'); d.style.margin='0 0 8px';
   d.innerHTML='<b>Standalone calculator retired.</b> &quot;ACI Rebar Development Length.html&quot; now opens this tab. '+
     (m.did==='autosave'?'The inputs last used there were opened here.'
-      :'The inputs last used there differ from this tab\'s, so they were kept as the saved project <b>'+escHTML(m.name)+'</b> (input tab &quot;Assumptions &amp;amp; Save&quot;, Saved Project); the inputs shown were not changed.')+
+      :'The inputs last used there differ from this tab\'s, so they were kept as the saved project <b>'+escHTML(m.name)+'</b> (Project tab, Saved projects…); the inputs shown were not changed.')+
     ' Projects saved there are listed here as before. <button type=&quot;button&quot; class=&quot;btn small&quot; style=&quot;margin-left:6px&quot;>OK</button>';
   d.querySelector('button').addEventListener('click',()=>{ m.seen=true; try{ localStorage.setItem(LS_KEY_MIG,JSON.stringify(m)); }catch(e){} d.remove(); });
   P.insertBefore(d,P.firstChild);
@@ -9909,6 +9912,7 @@ function init(){
   // one-time migration: if this tab has no autosave of its own yet, start from the old shared one (left in place)
   // RBRT (2026-11-05): with the standalone tool retired, also its later work, once, and a notice (rbOldAutosave, above)
   rbOldAutosave();
+  RB_DEF=collectState().inp;   // STDS: the default inputs (before the autosave is applied), for New
   // restore autosave
   let saved=null; try{saved=JSON.parse(localStorage.getItem(LS_KEY));}catch(e){}
   if(saved) applyState(saved);
