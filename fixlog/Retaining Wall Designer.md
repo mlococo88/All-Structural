@@ -1897,7 +1897,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   - Every sheet looked at for the five projects (deviceScaleFactor 2): no overlaps; scales chosen 3/8" (default section) … 1/16" (tall wall elevation).
 - **Other copies:** none. **Open items (engineer):** S3 vs S1 in the upper half (both back-face verticals; drawn and scheduled as the model gives them); the S1 dowel lap and F1 / F2 development are drawn, not checked (calculation audit, Phase 7); Date / Checked date fields (Phase 1c).
 
-## 2026-11-06 — PR: claude/rw-suite-theme (RWTH) — suite look: navy masthead, suite fonts, box tabs, card heads; visible title "Retaining Wall Designer"   [display only; no result change]
+## 2026-11-06 — PR: claude/rw-suite-theme (PR #924: https://github.com/mlococo88/All-Structural/pull/924) (RWTH) — suite look: navy masthead, suite fonts, box tabs, card heads; visible title "Retaining Wall Designer"   [display only; no result change]
 - **Why:** engineer-approved 2026-11-06 (review `rwreview`, Phase 1 item 1): RW matches Light Pole and Sign Post (LPTH #662) and Concrete Beam Capacity (CBTH #783/#785/#787).
 - **Where:**
   - head: `<title>RetainCalc Pro — Cantilever Retaining Wall Design</title>` → `<title>Retaining Wall Designer — Cantilever Retaining Wall Design</title>`;
