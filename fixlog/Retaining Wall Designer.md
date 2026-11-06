@@ -2073,7 +2073,7 @@ function renderStatus(r) {
   - The S1 hook is drawn resting on the bottom mat with the standard bend and 12 d_b tail. That is how it is usually detailed, but the tool's ℓ_dh check does not depend on it.
   - The bar dots stay symbols (enlarged where a true-size dot would be under 2.5 units); the note says so.
 
-## 2026-11-06 — PR: claude/rw-scale-elev (RWTS-3) — Collision elevation (Analysis diagram, AASHTO CT) drawn to scale with a scale bar; readable labels   [display only; no result change]
+## 2026-11-06 — PR: claude/rw-scale-elev (PR #931: https://github.com/mlococo88/All-Structural/pull/931) (RWTS-3) — Collision elevation (Analysis diagram, AASHTO CT) drawn to scale with a scale bar; readable labels   [display only; no result change]
 - **Why:** engineer-approved 2026-11-06 (Phase 3 task B; third drawing after RWTS-1 #929 and RWTS-2 #930).
   - The "Elevation — Vehicular Collision Distribution" card drew the wall with a vertical scale exaggerated to a 240–330 px height and said so ("NTS — vertical scale ×1.39 horizontal"). The 45° spread lines were therefore not at 45°, and the note "(true; NTS)" admitted it.
   - Its 6–9.5-unit labels were cut off at the left (y_CT, H_s) and overlapped: h_b on h_CT; ROADWAY on the data table; EE-II OK on the M_CT box; "vertical cantilever" on the centred MassDOT note.
@@ -2103,7 +2103,7 @@ function renderStatus(r) {
   - L_joint 41 ft, MassDOT full section, 1400 px: 16.17 / 16.17, bar 10 ft → 16.17; smallest text 13.1 px.
   - Same at 390 px (drawing 760 px, scrolls): 12.03 / 12.03; 9.7 px.
   - L_joint 90 ft, 45° spread, h_CT 42 in (above the 36 in barrier): 7.37 / 7.37, bar 25 ft.
-  - Before, the default case had a vertical scale ×1.39 the horizontal, and its smallest text was 8.3 px at 1400 (some labels cut off at the left edge) and 3.0 px at 390.
+  - Before, the default case had a vertical scale ×1.39 the horizontal (17.16 px/ft along, 23.77 up at 1400), and its smallest text was 8.3 px at 1400 (some labels cut off at the left edge) and 3.0 px at 390.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Saved data (§5):** none.
 - **How verified:** origin/main (after #930) vs branch, ten cases (the eight of RWTS-2 + MassDOT full-section CT + 45° spread CT with h_CT above the barrier): `_R`, Export JSON, every localStorage key, Report text and tab text with SVG removed, every Report / Overview SVG, DXF of the four sheets **identical**; the elevation is not in the Report. Screenshots at 1400 and 390 looked at, before and after. Tests: see the PR.
