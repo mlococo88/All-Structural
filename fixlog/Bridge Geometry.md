@@ -1703,7 +1703,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Saved data:** none. **Other copies:** none.
 - **Open item:** at piers with two bearing lines the on-screen girder × bearing elevation labels (TD at each girder on each line) also overlap. Not part of this request; ask before changing.
 
-## 2026-11-06 — PR: claude/bg-plan-elev-labels (BGDE: on-screen plan, girder × bearing top-of-deck labels at dual-bearing piers placed clear of each other; display only, no result change)
+## 2026-11-06 — PR: claude/bg-plan-elev-labels (PR #914: https://github.com/mlococo88/All-Structural/pull/914) (BGDE: on-screen plan, girder × bearing top-of-deck labels at dual-bearing piers placed clear of each other; display only, no result change)
 
 - **Why:** engineer 2026-11-06 (BGDP open item): give the on-screen plan's girder × bearing top-of-deck elevation labels at piers with two bearing lines the same treatment as the bearing station labels.
 - **Problem (before):** `drawHeatmap`, layer "elevation nodes at girder×support": each label is drawn left-aligned 3 px right of its node. At a dual-bearing pier the back and ahead nodes of a girder are a few pixels apart, so the two values printed on top of each other. Example 5 (offset 2.5 ft) and its 1 ft and 0.5 ft variants: all 8 girders at all 4 piers. Example 2 (skew 25°): both piers. Example 3 (curved): partly.
