@@ -20,7 +20,9 @@
                open project…" / "Import JSON…" at the top, ONE table with the GitHub-only projects in it, columns Name / Last saved
                (Eastern) / Size / This browser / GitHub / Open Rename Duplicate Export Delete; without it the dialog is drawn
                exactly as before), label (the tool's name, for the title), exportOne(name) (the row's Export: a .json download;
-               default the stored item, or ctx.cloud.toFile of it, as JSON), importFile() (the "Import JSON…" button) }
+               default the stored item, or ctx.cloud.toFile of it, as JSON), importFile() (the "Import JSON…" button),
+             startPref (optional, START 2026-11-06: { get() -> bool, set(bool) }: a "Show this when the app opens" box under the
+               standard table; projectBar passes it when ctx.start is on) }
    projectBar(ctx) (STDS, 2026-11-05) -> the standard save controls (see the comment above that function).
    undoRedo(h, { undo, redo, keys }) wires a SharedProjects.history to two buttons and (keys !== false) to Ctrl+Z / Ctrl+Y /
      Ctrl+Shift+Z. While text is being typed in a field (not yet committed), the browser's own undo of that field is left alone.
@@ -62,7 +64,14 @@
       '.spCard .spLbl{font-size:8.5pt;font-weight:600;color:#475569;text-transform:uppercase;letter-spacing:.04em;margin-top:8px;} .spCard .spHint{font-size:9pt;color:#475569;margin:4px 0;}',
       '.spStat .spGhSt,.spCard .spGhSt{display:inline-block;font-size:8.5pt;padding:0 6px;border-radius:9px;border:1px solid #cbd5e1;}',
       '@media (max-width:560px){.spLib.spStd table,.spLib.spStd tbody,.spLib.spStd tr,.spLib.spStd td{display:block;width:auto;} .spLib.spStd thead{display:none;} .spLib.spStd tr{border-bottom:1px solid #cbd5e1;padding:4px 0;} .spLib.spStd td{border:0;padding:2px 4px;} .spLib.spStd td[data-l]::before{content:attr(data-l) ": ";font-weight:600;color:#475569;} .spLib .spTools button{flex:1 1 auto;}}',
-      '@media print{dialog.spLib{display:none!important;}}'
+      /* START (trial, 2026-11-06): the "Recent projects" strip under the header, and the dialog's start setting */
+      '.spStart[data-sp]{display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px;box-sizing:border-box;max-width:100%;margin:0 0 6px;padding:4px 8px;border:1px solid #bfdbfe;border-radius:6px;background:#eff6ff;color:#0f172a;font-size:9.5pt;}',
+      '.spStart button{font:inherit;font-size:9pt;padding:2px 8px;margin:0;border:1px solid #94a3b8;border-radius:4px;background:#fff;color:#0f172a;cursor:pointer;max-width:100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+      '.spStart button:hover{background:#f1f5f9;} .spStart button.spPri{background:#1d4ed8;border-color:#1d4ed8;color:#fff;} .spStart button.spPri:hover{background:#1e40af;} .spStart .spStLbl{font-weight:600;color:#1e3a8a;} .spStart .spStNote{color:#475569;font-size:8.5pt;} .spStart .spStList{display:contents;}',
+      '.spStart button.spStX{margin-left:auto;border-color:transparent;background:transparent;font-size:11pt;line-height:1;padding:0 6px;} .spStart button.spStX:hover{background:#dbeafe;}',
+      '.spStart button .spGhMini{margin-left:4px;} .spLib .spStartPref{display:flex;gap:6px;align-items:center;font-size:9pt;color:#334155;margin:8px 0 2px;}',
+      '@media (max-width:560px){.spStart button{max-width:calc(100vw - 60px);}}',
+      '@media print{dialog.spLib{display:none!important;} .spStart[data-sp]{display:none!important;}}'
     ].join('\n');
     document.head.appendChild(s);
   }
@@ -81,6 +90,13 @@
       ? `<div class="spHead"><strong>${esc(ctx.title || ('Saved projects' + (ctx.label ? ' — ' + ctx.label : '')))}</strong><span><button type="button" data-spa="close">Close</button></span></div>`
         + `<div class="spTools"><input type="search" class="spFilter" placeholder="Filter by name…" aria-label="Filter saved projects by name">${ctx.save ? `<button type="button" class="spPri" data-spa="save">${esc(ctx.saveLabel || 'Save the open project…')}</button>` : ''}${ctx.importFile ? '<button type="button" data-spa="import">Import JSON…</button>' : ''}</div><div class="spBody"></div>`
       : `<div class="spHead"><strong>${esc(ctx.title || 'Saved projects')}</strong><span>${ctx.save ? `<button type="button" data-spa="save">${esc(ctx.saveLabel || 'Save the open project…')}</button>` : ''}<button type="button" data-spa="close">Close</button></span></div><div class="spBody"></div>`;
+    if (std && ctx.startPref) {   // START (trial): "Show this when the app opens" (projectBar ctx.start only)
+      const l = document.createElement('label'); l.className = 'spStartPref';
+      l.innerHTML = '<input type="checkbox" class="spStartChk"> Show this when the app opens';
+      l.title = 'On: this list opens every time the app starts (instead of the Recent projects strip). Remembered in this browser.';
+      dlg.appendChild(l);
+      const c = l.querySelector('input'); c.addEventListener('change', () => ctx.startPref.set(c.checked));
+    }
     document.body.appendChild(dlg);
     const body = dlg.querySelector('.spBody');
     let msg = '';
@@ -173,7 +189,7 @@
         if (done(ctx.store.remove(name))) { if (ctx.deleted) ctx.deleted(name); if (cloud) cloud.deleted(name); } draw();
       }
     }
-    function show() { msg = ''; if (filt) filt.value = ''; draw(); if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); } if (cloud) cloud.shown(cui).catch(() => {}); }
+    function show() { msg = ''; if (filt) filt.value = ''; draw(); if (std && ctx.startPref) { const c = dlg.querySelector('.spStartChk'); if (c) c.checked = !!ctx.startPref.get(); } if (!dlg.open) { if (dlg.showModal) dlg.showModal(); else dlg.setAttribute('open', ''); } if (cloud) cloud.shown(cui).catch(() => {}); }
     function refresh() { if (dlg.open) draw(); }
     return { show, refresh, el: dlg, cloud };
   }
@@ -238,7 +254,8 @@
              card (element, or true + mount(el) later),
              headerBefore (optional element in it: Save and Saved projects… go before it, e.g. Print), chipBefore (the chip goes
                before it, e.g. Undo; default headerBefore), card (element the card body goes into), keys (default true),
-             renamed / deleted / changed / note / exportOne (passed to the dialog), afterSave(name), afterOpen(name) }
+             renamed / deleted / changed / note / exportOne (passed to the dialog), afterSave(name), afterOpen(name),
+             start (optional, START trial 2026-11-06, off unless given; see startChooser below) }
      Returns { dialog, save, saveAs, newProject, importJSON (both ask first on unsaved changes), refresh, dirty, current, setCurrent,
        el: { chip, save, lib, card } } */
   const bars = [];   // every projectBar of the page (tests drive Save as through it)
@@ -261,11 +278,15 @@
     const inList = () => { const n = getCur(); return !!(n && store.has(n)); };
     const guard = what => !dirty() || (!inList() && !touched) ? true
       : confirm(`The project on screen has unsaved changes${getCur() && store.has(getCur()) ? ` (since "${getCur()}" was last saved)` : ' and is not in the saved list'}. ${what} anyway? (Cancel, then Save, keeps them.)`);
+    let st = null;   // START: the start-of-session chooser (ctx.start), else null
+    /* the dialog's Open (and the strip's): asks first on unsaved changes, then the tool's own open path */
+    const openNamed = n => { if (!guard(`Open "${n}"`)) return false; const r = ctx.open(n); if (r === false) return false; setCur(n); if (ctx.afterOpen) ctx.afterOpen(n); if (st) st.opened(n); later(); return true; };
     const dialog = libraryDialog({ store, storage: ctx.storage, standard: true, label: ctx.label, id: ctx.id, cloud: ctx.cloud, note: ctx.note, exportOne: ctx.exportOne,
       current: () => { const n = getCur(); return n && store.has(n) ? n : null; },
-      open: n => { if (!guard(`Open "${n}"`)) return false; const r = ctx.open(n); if (r === false) return false; setCur(n); if (ctx.afterOpen) ctx.afterOpen(n); later(); return true; },
-      renamed: (a, b) => { if (getCur() === a) setCur(b); if (savedAt[a]) { savedAt[b] = savedAt[a]; delete savedAt[a]; } if (ctx.renamed) ctx.renamed(a, b); later(); },
-      deleted: n => { if (ctx.deleted) ctx.deleted(n); later(); },
+      open: openNamed,
+      renamed: (a, b) => { if (getCur() === a) setCur(b); if (savedAt[a]) { savedAt[b] = savedAt[a]; delete savedAt[a]; } if (st) st.renamed(a, b); if (ctx.renamed) ctx.renamed(a, b); later(); },
+      deleted: n => { if (st) st.deleted(n); if (ctx.deleted) ctx.deleted(n); later(); },
+      startPref: ctx.start ? { get: () => !!(st && st.pref()), set: v => { if (st) st.setPref(v); } } : null,
       changed: () => { if (ctx.changed) ctx.changed(); later(); },
       save: () => { saveAs(); return null; }, saveLabel: 'Save the open project…',
       importFile: ctx.importFile ? () => importJSON() : null });
@@ -324,7 +345,7 @@
     function done(r, name, quiet) {
       const ok = r !== false && !(r && r.ok === false) && store.has(name);   // the tool's save may return nothing
       if (!ok) { if (!quiet) alert((r && r.message) || 'The project was not saved.'); later(); return false; }
-      setCur(name); savedAt[name] = Date.now(); if (ctx.changed) ctx.changed(); dialog.refresh();
+      setCur(name); savedAt[name] = Date.now(); if (st) st.opened(name); if (ctx.changed) ctx.changed(); dialog.refresh();
       if (dialog.cloud && dialog.cloud.tick) dialog.cloud.tick().catch(() => {});
       if (ctx.afterSave) ctx.afterSave(name); refresh(); return true;
     }
@@ -372,9 +393,124 @@
       if (document.querySelector('dialog[open]')) return;
       if (ev.shiftKey) saveAs(); else save();
     });
+    st = ctx.start ? startChooser(ctx, { store, dialog, eng, openNamed, getCur, setCur, snapshot, snapOf, refresh, clean, dirty }) : null;
     refresh();
-    const api = { dialog, save, saveAs, newProject, importJSON, mount, refresh, dirty, current: getCur, setCurrent: n => { setCur(n); refresh(); }, el: { chip, save: hSave, lib: hLib, card } };
+    const api = { dialog, save, saveAs, newProject, importJSON, mount, refresh, dirty, current: getCur, setCurrent: n => { setCur(n); refresh(); }, el: { chip, save: hSave, lib: hLib, card }, start: st };
     bars.push(api); return api;
+  }
+
+  /* startChooser(ctx, bar) (START, 2026-11-06: TRIAL in Spread Footing only, pending engineer review). Called by projectBar when
+     ctx.start is given (true or an object); without ctx.start nothing below runs, so every other tool is unchanged.
+     When the app opens (DOMContentLoaded, after the tool's own start-up scripts):
+       - autosave in this browser and at least one saved project: a "Recent projects" strip right after ctx.start.after (normal page
+         flow, never over the page): "Continue: <name> (autosaved <time, US Eastern>)", up to 5 saved projects as Open buttons (most
+         recently saved / opened first; with GitHub sync on, the GitHub-only ones once the background listing is back, marked
+         "GitHub only"), "All saved projects…" (the standard dialog) and ×. It closes on the first input edit, on Open and on ×.
+         Open = the dialog's Open (openNamed: asks first on unsaved changes, then the tool's own open).
+       - no autosave (first use on this device) and at least one saved project (here or on GitHub): the standard dialog opens instead.
+       - no project at all: nothing.
+       - "Show this when the app opens" (in the dialog; off by default): the dialog opens at every start instead of the strip.
+       - never when the page came with incoming data (ctx.start.incoming() true, a URL #hash or ?query unless start.url === false),
+         inside a frame, or while printing.
+     ctx.start = { tool (default ctx.cloud.tool), autosaveKey (the tool's autosave key, read only), hasAutosave() (optional, instead of
+       autosaveKey), incoming() (optional), after / before (where the strip goes; default first in <body>), url (default true) }
+     Storage (CLAUDE.md §5: new keys only, per tool; no existing key or format is touched; nothing is written while ctx.start is off):
+       bridgeSuite.v1.projectsUI.<tool>.startDialog  '1' = "Show this when the app opens" (absent = off)
+       bridgeSuite.v1.projectsUI.<tool>.start        { v:1, auto:{ at (ISO), h (hash of the autosave text it belongs to) },
+                                                       recent:[{ n (name), t (ms) }] (Save / Open order, newest first, at most 30) } */
+  function startChooser(ctx, b) {
+    if (typeof document === 'undefined' || typeof window === 'undefined') return null;
+    const so = ctx.start === true ? {} : (ctx.start || {});
+    const tool = String(so.tool || (ctx.cloud && ctx.cloud.tool) || '');
+    if (!/^[a-z0-9][a-z0-9-]{0,60}$/.test(tool)) return null;
+    const S = ctx.storage, K = 'bridgeSuite.v1.projectsUI.' + tool, KD = K + '.startDialog', KS = K + '.start';
+    const get = k => { try { return S ? S.getItem(k) : null; } catch (e) { return null; } };
+    const put = (k, v) => { try { if (S) { if (v == null) S.removeItem(k); else S.setItem(k, v); } return true; } catch (e) { return false; } };
+    const readS = () => { try { const v = JSON.parse(get(KS) || 'null'); return v && typeof v === 'object' && !Array.isArray(v) ? v : {}; } catch (e) { return {}; } };
+    const writeS = f => { const v = readS(); f(v); v.v = 1; put(KS, JSON.stringify(v)); };
+    const hash = t => { let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return ('0000000' + h.toString(16)).slice(-8) + ':' + t.length; };
+    const autoRaw = () => so.autosaveKey ? get(so.autosaveKey) : null;
+    const raw0 = autoRaw(), hadAuto = so.hasAutosave ? !!so.hasAutosave() : !!raw0;
+    const s0 = readS(), autoAt = raw0 && s0.auto && s0.auto.h === hash(raw0) ? s0.auto.at : null;
+    /* the time of the autosave: noted when the tool rewrites its autosave (checked every 3 s and when the page is left) */
+    let lastRaw = raw0;
+    function stamp() { const r = autoRaw(); if (r == null || r === lastRaw) return; lastRaw = r; writeS(v => { v.auto = { at: new Date().toISOString(), h: hash(r) }; }); }
+    if (so.autosaveKey) {
+      setInterval(stamp, 3000); window.addEventListener('pagehide', stamp);
+      document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') stamp(); });
+    }
+    const pref = () => get(KD) === '1';
+    const setPref = v => put(KD, v ? '1' : null);
+    function opened(n) { if (n) writeS(v => { const r = Array.isArray(v.recent) ? v.recent.filter(x => x && x.n !== n) : []; r.unshift({ n, t: Date.now() }); v.recent = r.slice(0, 30); }); close(); }
+    function renamed(a, c) { const v0 = readS(); if (!Array.isArray(v0.recent) || !v0.recent.some(x => x && x.n === a)) return; writeS(v => { v.recent = v.recent.filter(x => x && x.n !== c).map(x => x.n === a ? { n: c, t: x.t } : x); }); if (strip) drawStrip(); }
+    function deleted(n) { const v0 = readS(); if (Array.isArray(v0.recent) && v0.recent.some(x => x && x.n === n)) writeS(v => { v.recent = v.recent.filter(x => x && x.n !== n); }); if (strip) drawStrip(); }
+    const ghOnly = () => { const e = b.eng(), cl = e ? e.cloud() : null; return cl ? [...cl.keys()].filter(n => !b.store.has(n)) : []; };
+    /* up to max projects, most recently saved / opened first (the list's own saved time, else this file's note of Save / Open, else
+       the list's order, last added first); then the GitHub-only ones (no time known) */
+    function recent(max) {
+      const rt = new Map(); (readS().recent || []).forEach(x => { if (x && typeof x.n === 'string' && !rt.has(x.n)) rt.set(x.n, +x.t || 0); });
+      let ord = []; try { ord = Object.keys(b.store.read().map); } catch (e) { /* none */ }
+      const tm = t => t == null ? -Infinity : typeof t === 'number' ? t : (Date.parse(t) || -Infinity);
+      const rows = b.store.list().map(i => ({ name: i.name, local: true, t: Math.max(tm(i.saved), rt.has(i.name) ? rt.get(i.name) : -Infinity), o: ord.indexOf(i.name) }));
+      rows.sort((x, y) => (y.t - x.t) || (y.o - x.o));
+      ghOnly().sort((x, y) => x.localeCompare(y, undefined, { numeric: true, sensitivity: 'base' })).forEach(n => rows.push({ name: n, local: false }));
+      return rows.slice(0, max);
+    }
+    let strip = null, closed = false, edited = false, why = null, auto = false;
+    function close() { closed = true; if (strip) { strip.remove(); strip = null; } }
+    function drawStrip() {
+      if (closed) return;
+      if (!strip) {
+        strip = document.createElement('div'); strip.className = 'spStart'; strip.setAttribute('data-sp', 'start'); strip.setAttribute('role', 'region'); strip.setAttribute('aria-label', 'Recent projects');
+        if (so.after && so.after.parentNode) so.after.after(strip); else if (so.before && so.before.parentNode) so.before.before(strip); else document.body.insertBefore(strip, document.body.firstChild);
+        strip.addEventListener('click', onStrip);
+      }
+      const n = b.getCur(), saved = !!(n && b.store.has(n)), dn = ctx.displayName ? b.clean(ctx.displayName()) : '';
+      const name = saved ? n : dn ? `${dn} (unsaved work)` : 'unsaved work', enc = x => encodeURIComponent(x);
+      const rows = recent(hadAuto && saved && !b.dirty() ? 6 : 5).filter(r => !(hadAuto && saved && !b.dirty() && r.local && r.name === n)).slice(0, 5);   // the project Continue names is not listed again
+      strip.innerHTML = '<span class="spStLbl">Recent projects</span>'
+        + (hadAuto ? `<button type="button" class="spPri" data-st="continue" title="Keep working on the inputs that were on screen last time (this browser’s autosave)">Continue: <b>${esc(name)}</b></button>`
+          + `<span class="spStNote">(${autoAt ? 'autosaved ' + esc(SP().etTime(autoAt)) : 'autosaved in this browser'})</span>` : '')
+        + rows.map(r => `<button type="button" data-st="${r.local ? 'open' : 'ghopen'}" data-n="${enc(r.name)}" title="Open “${esc(r.name)}”${r.local ? '' : ' from GitHub (not in this browser yet)'}">${esc(r.name)}${r.local ? '' : ' <span class="spGhMini">GitHub only</span>'}</button>`).join('')
+        + '<button type="button" data-st="all" title="The standard Saved projects dialog">All saved projects…</button>'
+        + '<button type="button" class="spStX" data-st="close" title="Close" aria-label="Close the Recent projects strip">×</button>';
+    }
+    function onStrip(ev) {
+      const t = ev.target.closest('[data-st]'); if (!t) return; const a = t.dataset.st, nm = decodeURIComponent(t.dataset.n || '');
+      if (a === 'continue' || a === 'close') { close(); return; }
+      if (a === 'all') { b.dialog.show(); return; }
+      if (a === 'open') { if (!b.store.has(nm)) { drawStrip(); return; } b.openNamed(nm); return; }
+      if (a === 'ghopen') {   // as the dialog's GitHub-only Open: download into this browser's list, then the same Open
+        const e = b.eng(); if (!e) return; t.disabled = true;
+        e.download(nm, false).then(r => { if (r && r.ok) { if (ctx.changed) ctx.changed(); b.openNamed(nm); b.dialog.refresh(); } else { t.disabled = false; alert((r && (r.message || r.error)) || 'The project could not be downloaded from GitHub.'); } }, () => { t.disabled = false; });
+      }
+    }
+    const onEdit = ev => { if (!ev.isTrusted) return; const t = ev.target; if (t && t.closest && t.closest('[data-sp]')) return; edited = true; close(); };
+    document.addEventListener('input', onEdit, true); document.addEventListener('change', onEdit, true);
+    function suppressed() {
+      try { if (so.incoming && so.incoming()) return 'incoming'; } catch (e) { return 'incoming'; }
+      try { if (so.url !== false && (location.hash.length > 1 || location.search.length > 1)) return 'url'; } catch (e) { /* none */ }
+      try { if (window.self !== window.top) return 'frame'; } catch (e) { return 'frame'; }
+      try { if (window.matchMedia && window.matchMedia('print').matches) return 'print'; } catch (e) { /* none */ }
+      return '';
+    }
+    function show() {   // the strip (autosave) or the dialog (no autosave); never after an edit
+      if (edited || closed) return;
+      if (hadAuto) { drawStrip(); return; }
+      if (auto || document.querySelector('dialog[open]')) return; auto = true; b.dialog.show();
+    }
+    function decide() {
+      why = suppressed(); if (why) return;
+      /* the open project, found again by its content now that the tool has restored its inputs (the chip and "Continue: <name>") */
+      if (!b.getCur()) { const s = b.snapshot(); if (s != null) { const hit = b.store.list().find(i => b.snapOf(i.name) === s); if (hit) { b.setCur(hit.name); b.refresh(); } } }
+      if (pref()) { auto = true; b.dialog.show(); return; }
+      const e = b.eng(), nLocal = b.store.list().length;
+      if (nLocal) show();
+      if (e && !auto) e.refreshCloud().then(() => { if (strip) drawStrip(); else if (!nLocal && ghOnly().length) show(); }, () => {});   // background; never waited for
+    }
+    const go = () => setTimeout(() => { try { decide(); } catch (e) { /* the page works without the chooser */ } }, 0);
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go();
+    return { pref, setPref, opened, renamed, deleted, close, strip: () => strip, why: () => why, keys: { dialog: KD, state: KS } };
   }
 
   window.SharedProjectsUI = { libraryDialog, undoRedo, button, css, projectBar, download, bars };
