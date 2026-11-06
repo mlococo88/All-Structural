@@ -22702,7 +22702,7 @@ Basis: AASHTO LRFD 10th Ed. (2024). Reference implementation: `lldf.html` `membe
 - **How verified:** see the PR.
 - **Other copies:** none.
 - **Open items:** none.
-## 2026-11-06 — PR: claude/hdrs-gd (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens the modules' Project tab   [display only; no result change]
+## 2026-11-06 — PR: claude/hdrs-gd (PR #907: https://github.com/mlococo88/All-Structural/pull/907) (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens the modules' Project tab   [display only; no result change]
 - **Why:** engineer 2026-11-06: every app's header as in Spread Footing (#884): no Save (Ctrl+S) and Saved projects… buttons in the header; they stay in the "Save and open" card. The header keeps the project chip (click = the modules' Project tab), Undo, Redo, the app's other global actions and Print. Ctrl+S and Ctrl+Shift+S work from anywhere. No "Recent projects" start strip (Spread Footing only).
 - **Where:** the `SharedProjectsUI.projectBar({...})` call, right after the line `header: $('#gd-hdr-proj'), chipBefore: $('#gd-undo'), headerBefore: $('#btn-print'), card: $('#gd-savecard'),` (a comment `/* HDRS (2026-11-06, …) */` and one line).
   Before: nothing. After:
