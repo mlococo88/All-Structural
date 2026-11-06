@@ -109,6 +109,11 @@ node tests/smoke/rebar-redirect.mjs [--old f9ec0f9]
 # Save as new / rename / duplicate / refused write / load / delete (React 18.3.1 served from the kit's 18.2.0, test-only). ~1 min
 node tests/smoke/pile-library.mjs [--a origin/main]
 
+# Steel Beam Design - AISC 15th (SBSF): a built-up section stays built-up after the Validation, User Manual and Report tabs, an edit,
+# Undo / Redo, Save as, Export JSON and a reload (phiVn 283.5 kip, not the rolled 315); a save that lost builtUp opens as before with a
+# notice; 0 console errors. Fails on main before SBSF (at "after Validation"). ~1 min
+node tests/smoke/steel-beam-builtup.mjs [--file <tool html>]
+
 # Editable list tables (shared/list-input.js, LIST): the widget on a test page (typing, Enter, ",", paste from Excel, remove, checks,
 # labels, bindInput, the React wrapper) and every tool that loads it: main vs the working tree on the default project and one with
 # custom stations (results, page text, saved text identical; 0 console errors); --shots: the table at 1400 and 390 px

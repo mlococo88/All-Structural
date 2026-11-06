@@ -20,7 +20,9 @@ import { FOLDER, NAMES, toolPage } from './home-projects.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const SHOTS = arg('shots', process.env.SHOTS);
-const list = [...new Set(['spreadfooting', ...arg('tool', Object.keys(FOLDER).join(',')).split(',')])];
+// entries with sync: false in shared/project-registry.js (listed on the home page, synced only by the tool itself): not part of this test
+const NOSYNC = new Set(['pile']);   // Pile Designer (STDS-P, 2026-11-06): IndexedDB; the home page sees only its name mirror
+const list = [...new Set(['spreadfooting', ...arg('tool', Object.keys(FOLDER).filter(k => !NOSYNC.has(k)).join(',')).split(',')])];
 const TOKEN = 'github_pat_SMOKE0000000000000000wxyz';
 const SET = JSON.stringify({ owner: 'mlococo88', repo: 'structural-projects', branch: 'main', token: TOKEN, device: 'Home' });
 const safe = n => n.replace(/[^A-Za-z0-9 _\-.(),+&'!~=@]/g, c => [...Buffer.from(c, 'utf8')].map(b => '%' + b.toString(16).toUpperCase().padStart(2, '0')).join('')).replace(/^[ .]|[ .]$/g, c => '%' + c.charCodeAt(0).toString(16).toUpperCase());
