@@ -1660,3 +1660,45 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **How verified:** headless Chromium, origin/main vs the branch, all five examples plus Example 5 with offset 1.0 ft: the text of every tab (Alignment, Bridge, Output tables, Beam Seat, Drawings, Project), the Export JSON (`serializeProject`) and every localStorage key/value are identical (time stamps masked). DXF (Export DXF local and auto coordinates, and the drawing sheets DXF): identical for Examples 1–4 and 5 as built-in, except Example 5's sheet DXF (spread labels); differences elsewhere only for the offset 1.0 / 0.5 ft variants (spread labels and the frame shift). Tests: check-syntax, `tests/smoke/bgeo-examples.mjs`, `tests/smoke/dxf-print-sheets.mjs --tool bg`, `tests/smoke/project-library.mjs --tool bgeo`. Sheets and zooms of the Pier 1 labels looked at, before and after.
 - **Saved data:** none touched (§5). **Other copies:** none.
 - **Not changed:** the on-screen Plotly profile (it draws support ticks without labels) and the plan view's bearing-line station labels.
+
+## 2026-11-06 — PR: claude/bg-plan-brg-labels (BGDP: on-screen plan, the station labels of a dual-bearing pier's two bearing lines spread apart with leader lines; display only, no result change)
+
+- **Why:** engineer 2026-11-06, after BGDL (#902): check the PLAN view's bearing station labels at piers with two bearing lines (on-screen plan, Drawings plan sheet, DXF plan) with Example 5 and its 1 ft-offset variant; treat them like the profile labels if they crowd.
+- **Findings:**
+  - **On-screen plan** (Output tab, canvas `#heat`, `drawHeatmap`, layer "station callouts"): the labels "brg-back Sta …" and "brg-ahead Sta …" are drawn left-aligned, 8.5 px, just past the deck's right edge at each line. Two lines 5 ft apart are a few pixels apart on screen, so the two labels printed on top of each other. Seen in Example 5 (offset 2.5 ft) and its 1 ft variant at all four piers. In Example 3 (curved) they were 9 px apart and touched an elevation label. **Changed.**
+  - **Export DXF plan** (BG-BRG-TEXT): each label is placed on the outer side of its own line: back on the back side, ahead on the ahead side (`va` 1 / 3). Example 5 with a 1 ft offset: back label x 156.2–159.0, ahead x 161.0–163.8 (text 2.8 ft); 0.5 ft: 156.7–159.5 vs 160.5–163.3. They do not overlap at any offset. **Not changed.**
+  - **Drawings tab, PLAN sheet:** draws the bearing lines without labels (support CL labels only). Framing-plan sheets: one span each, so a pier's back and ahead labels are on different sheets (Example 5, 1 ft: 2424 drawing units apart). **Not changed.**
+- **Where:** `drawHeatmap`, block `// ---- station callouts for each substructure unit + each distinct bearing line ----`, after `ctx.font='8.5px monospace';`. Uses `bgLabSpread` (BGDL).
+- **Before:**
+```js
+    bearingLinesFor(u).forEach(bl=>{ if(Math.abs(bl.sta-u.sta)<1e-6) return;
+      const bp=ENG.deckAtSupport(bl, ed.r);
+      ctx.fillStyle=CYAN; ctx.textAlign='left';
+      ctx.fillText(`${bl.label.replace(u.name+' ','')} Sta ${formatStation(bl.sta)}`, TX(bp.x)+5, TY(bp.y)); });
+```
+- **After:**
+```js
+    /* BGDP (2026-11-06): the labels of a dual-bearing pier's two lines were drawn on top of each other where the lines are a few
+       pixels apart. Where two labels' boxes overlap, they are spread apart vertically (one text line, 11 px, by bgLabSpread,
+       in screen order; moved off the deck where its edge faces up or down) with a short leader from each line; labels with room are
+       drawn as before. Display only. */
+    const bLab=bearingLinesFor(u).filter(bl=>Math.abs(bl.sta-u.sta)>=1e-6).map(bl=>{ const bp=ENG.deckAtSupport(bl, ed.r);
+      const t=`${bl.label.replace(u.name+' ','')} Sta ${formatStation(bl.sta)}`; return {t, x:TX(bp.x), y:TY(bp.y), w:ctx.measureText(t).width}; });
+    const bHit=bLab.some((a,i)=>bLab.some((b,j)=>j>i&&Math.abs(a.y-b.y)<11&&Math.min(a.x+a.w,b.x+b.w)-Math.max(a.x,b.x)>-4));
+    const bSp=bHit?bgLabSpread(bLab.map(q=>q.y),11):{x:bLab.map(q=>q.y),moved:bLab.map(()=>false)};
+    if(bHit){ /* off the deck: where the deck edge faces up or down on screen, the spread group moves outward, clear of the deck */
+      const cm=ENG.deckAtSupport({sta:u.sta,skew:u.skew},(ed.l+ed.r)/2), oy=bLab[0].y-TY(cm.y), ox=bLab[0].x-TX(cm.x);
+      if(Math.abs(oy)>Math.abs(ox)){ const ys=bLab.map(q=>q.y), d=oy>0?(Math.max(...ys)+8)-Math.min(...bSp.x):(Math.min(...ys)-8)-Math.max(...bSp.x);
+        bSp.x=bSp.x.map(v=>v+d); } }
+    bLab.forEach((q,i)=>{ const ly=bSp.x[i];
+      ctx.fillStyle=CYAN; ctx.textAlign='left';
+      if(bSp.moved[i]){ const lx=Math.max(...bLab.map(z=>z.x))+10; ctx.save(); ctx.strokeStyle=CYAN; ctx.lineWidth=0.75; ctx.beginPath(); ctx.moveTo(q.x+1,q.y); ctx.lineTo(lx-2,ly); ctx.stroke(); ctx.restore();
+        ctx.fillText(q.t, lx, ly); }
+      else ctx.fillText(q.t, q.x+5, q.y); });
+```
+- **What it does:** when two labels of the pier overlap (vertical distance < 11 px and their widths overlapping across), they are spread to an 11 px pitch in screen y. Where the deck edge faces up or down on screen, the group moves outward, clear of the deck (8 px past the outermost line point). The labels start 10 px right of the rightmost line point, each with a thin leader from its line. Otherwise drawn exactly as before.
+- **Check case:** Example 5, Pier 1, Sta 12+07.50 / 12+12.50 at the default view (1270 px canvas). Before: both labels at the same place, unreadable. After: "brg-back Sta 12+07.50" above "brg-ahead Sta 12+12.50", below the deck edge, with leaders. The same with offset 1 ft (12+09.00 / 12+11.00).
+- **Governing provision:** none (display only).
+- **How verified:** origin/main vs branch, the 5 examples + Example 5 with offset 1 ft: the text of every tab, Export JSON and all localStorage identical. Export DXF (local, auto) and the sheets DXF are byte-identical for all, including offsets 1 ft and 0.5 ft. Tests: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, project-library --tool bgeo. Screenshots before and after (Examples 2, 3, 5, 5 at 1 ft).
+- **Saved data:** none. **Other copies:** none.
+- **Open item:** at piers with two bearing lines the on-screen girder × bearing elevation labels (TD at each girder on each line) also overlap. Not part of this request; ask before changing.
