@@ -60,7 +60,7 @@ export const TOOLS = {
     ready: p => p.waitForFunction(() => window.SPCUI && window.SPCUI.res),
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(window.SPCUI.res, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v)).replace(/\bp[0-9a-z]{9,}\b/g, 'ID')); }),
     change: async p => { await p.evaluate(() => { const m = window.SPCUI.model; m.parts[0].x += 1; }); await p.evaluate(() => { fullRebuild(); }); await p.waitForTimeout(900); },
-    save: async (p, name) => { await p.evaluate(n => { window.SPCUI.model.project.name = n; rebuildInputs(); const b = [...document.querySelectorAll('button')].find(x => x.textContent === 'Save' && x.classList.contains('primary')); b.click(); }, name); await p.waitForTimeout(400); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { window.SPCUI.model.project.name = n; rebuildInputs(); const b = [...document.querySelectorAll('button')].find(x => x.textContent === 'Save' && x.classList.contains('primary')); b.click(); }, name); await p.waitForTimeout(400); }
   },
   mlg: {
     file: 'Moving Load Generator.html', list: 'movingLoadGen.projects.v1', auto: 'movingLoadGen.autosave.v1', newList: true,
