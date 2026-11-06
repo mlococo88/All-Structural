@@ -20,6 +20,9 @@ const devF = async p => { await p.waitForSelector('#suite-frame-dev', { state: '
 const res = f => f.evaluate(() => { const inp = readInputs(); const r = JSON.parse(JSON.stringify({ inp, f: computeFactors(inp) }, (k, v) => typeof v === 'number' && !isFinite(v) ? String(v) : v));
   const d = document.getElementById('dashboard').cloneNode(true); d.querySelectorAll('[data-sp]').forEach(x => x.remove()); delete r.inp.calcDate; return { ...r, dash: d.textContent.replace(/\s+/g, ' ') }; });
 const lsAll = p => p.evaluate(() => { const o = {}; for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); o[k] = localStorage.getItem(k); } return o; });
+// STDS (2026-11-05): the suite tab has the standard save (no drop-down): its projects are listed and opened through Saved projects…
+const listed = f => f.evaluate(() => { SharedProjectsUI.bars[0].dialog.show(); const n = [...document.querySelectorAll('dialog[open] [data-spa="open"]')].map(b => decodeURIComponent(b.dataset.n)); document.querySelectorAll('dialog[open]').forEach(x => x.close()); return n; });
+const openIn = async (f, test) => { await f.evaluate(src => { const t = new RegExp(src); SharedProjectsUI.bars[0].dialog.show(); [...document.querySelectorAll('dialog[open] [data-spa="open"]')].find(b => t.test(decodeURIComponent(b.dataset.n))).click(); }, test); };
 const oldReady = async p => { await p.waitForFunction(() => typeof computeFactors === 'function' && document.getElementById('dashboard').textContent.length > 20); await p.waitForTimeout(800); };
 // an old-standalone state: change inputs in the OLD page, save as project "Pier 3 laps", read its storage and Export JSON
 const S = await openPage(OLD, { vw: 1280, vh: 900 }); await oldReady(S.p);
@@ -89,7 +92,7 @@ const cases = [
 for (const [name, seed] of cases) {
   const C = await openPage(CBC, { vw: 1280, vh: 900, ls: seed, hash: '#dev' }); const f = await devF(C.p);
   const L = await lsAll(C.p), mig = JSON.parse(L['rcsuite.rebar_oldAutosaveMigrated_v1'] || 'null'), P = JSON.parse(L['rebar_aci_projects_v1']);
-  const opts = await f.evaluate(() => [...document.getElementById('projSelect').options].map(o => o.value).filter(Boolean));
+  const opts = await listed(f);
   const note = await f.evaluate(() => { const n = document.getElementById('rbOldNote'); return n ? n.innerText.replace(/\s+/g, ' ') : null; });
   const r = await res(f);
   console.log(`-- ${name}: marker ${JSON.stringify(mig)}; list ${JSON.stringify(opts)}; notice ${note ? '"' + note.slice(0, 160) + '…"' : 'none'}`);
@@ -100,7 +103,7 @@ for (const [name, seed] of cases) {
     ok(mig.did === 'project' && k && JSON.stringify(P[k]) === oldLS['rebar_aci_autosave_v1'] && !!note, name + ': old session kept as project "' + k + '", notice shown');
     ok(L['rcsuite.rebar_autosave_v1'] === seed['rcsuite.rebar_autosave_v1'] || JSON.parse(L['rcsuite.rebar_autosave_v1']).inp.fc === JSON.parse(seed['rcsuite.rebar_autosave_v1']).inp.fc, name + ': the suite\'s own inputs not overwritten');
     await C.p.screenshot({ path: path.join(OUT, 'notice-B.png') });
-    await f.evaluate(() => { document.getElementById('projSelect').value = [...document.getElementById('projSelect').options].find(o => /^Recovered/.test(o.value)).value; loadProject(); }); await C.p.waitForTimeout(600);
+    await openIn(f, '^Recovered'); await C.p.waitForTimeout(600);
     ok(!diff(await res(f), oldRes).length, name + ': the recovered project opens with the old page\'s results');
     // reload: once only; OK dismisses
     const L2 = await lsAll(C.p); await f.click('#rbOldNote button'); const L3 = await lsAll(C.p); await C.b.close();
@@ -109,7 +112,7 @@ for (const [name, seed] of cases) {
     await C2.b.close(); continue; }
   if (name[0] === 'C') ok(mig.did === 'none' && !note && Object.keys(P).length === 1, name + ': nothing added, no notice');
   // the old saved project opens with the old page's results
-  await f.evaluate(() => { document.getElementById('projSelect').value = 'Pier 3 laps'; loadProject(); }); await C.p.waitForTimeout(600);
+  await openIn(f, '^Pier 3 laps$'); await C.p.waitForTimeout(600);
   ok(!diff(await res(f), oldProjRes).length, name + ': "Pier 3 laps" opens with the same results as in the old standalone');
   await C.b.close();
 }
