@@ -308,7 +308,6 @@ a.wkA:hover{text-decoration:underline}
   <button id="btnExport">Export JSON</button>
   <button id="btnImport">Import JSON</button>
   <input type="file" id="fileImport" accept=".json" style="display:none">
-  <button id="btnReset" class="danger">Reset Inputs</button>
  </div>
 </div>
 </details>
@@ -5123,7 +5122,7 @@ $('#tabbar').addEventListener('click',e=>{
   displayName:()=>state.meta&&state.meta.project||'',
   exportFile:n=>SharedProjectsUI.download(exportName(n),JSON.stringify(state,null,1)),
   importFile:()=>$('#fileImport').click(),
-  fileButtons:[$('#btnExport'),$('#btnImport')],extras:[$('#btnReset')],
+  fileButtons:[$('#btnExport'),$('#btnImport')],
   header:$('#sfdHdrA'),chipBefore:$('#btnUndo'),headerBefore:$('#sfdAcLbl'),card:$('#sfdSaveCard'),
   /* START (2026-11-06; TRIAL here only, pending engineer review): the start-of-session chooser of shared/projects-ui.js: a "Recent
      projects" strip under the header (autosave + saved projects), or the Saved projects dialog (no autosave yet). Not shown when a
@@ -5153,9 +5152,8 @@ $('#fileImport').addEventListener('change',e=>{
   state=Object.assign(defaultState(),j);migrateState();
   bindStaticInputs();buildPedCards();saveAuto();recalc();if(window.SFPL&&SFPL.pb)SFPL.pb.setCurrent(null);}catch(err){alert('Invalid JSON file.');}};   /* STDS: an imported file is not a saved project */
  rd.readAsText(f);e.target.value='';});
-$('#btnReset').addEventListener('click',()=>{
- if(!confirm('Reset all inputs to defaults? (Saved projects are kept.)'))return;
- state=defaultState();bindStaticInputs();buildPedCards();saveAuto();recalc();});
+/* RSTN (2026-11-06): the card's "Reset Inputs" button and its handler removed: it did what New does (projectBar newProject); New asks
+   only on unsaved changes and leaves no saved project open */
 $('#btnAddPed').addEventListener('click',()=>{
  if(state.peds.length>=10){alert('Maximum of 10 pedestals.');return;}
  state.peds.push(newPed(state.peds.length+1));buildPedCards();saveAuto();sfdAnalyzeReq();});

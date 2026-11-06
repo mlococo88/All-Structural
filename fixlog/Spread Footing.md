@@ -5507,3 +5507,16 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **Check case:** six saved projects "Footing F1…F6" (B = 9…14 ft), autosave = Footing F3: strip "Continue: Footing F3 … Footing F6 · F5 · F4 · F2 · F1"; Open "Footing F5" from the strip = Open from Saved projects… (B = 13 ft; identical state, results and storage).
 - **How verified:** see the PR (`tests/smoke/start-chooser.mjs`; main vs branch: results, state, Export JSON text, Report text and storage identical with four seeds).
+
+## 2026-11-06 — PR: claude/reset-to-new-sf (RSTN) — "Save and open" card: Reset Inputs removed (New does the same; display only, no result change)
+- **Engineer:** remove Reset where New does the same (approved 2026-11-06). Closes the STDS decision above ("Reset Inputs is kept … Remove it later if New is enough").
+- **Comparison (main):** Reset Inputs (`#btnReset` handler): `confirm('Reset all inputs to defaults? (Saved projects are kept.)')`, then `state=defaultState();bindStaticInputs();buildPedCards();saveAuto();recalc();`. New = projectBar `newProject:()=>{state=defaultState();bindStaticInputs();buildPedCards();saveAuto();recalc();}` (the same line, no confirm of its own: projectBar asks only on unsaved changes), then no saved project is open. Same inputs, results and autosave. Only differences: Reset Inputs always asked and left the open project's name in the chip (a following Save would have written the defaults over that saved project).
+- **Where:**
+  - Card `#sfdSaveCard`: `<button id="btnReset" class="danger">Reset Inputs</button>` removed.
+  - projectBar call: `fileButtons:[$('#btnExport'),$('#btnImport')],extras:[$('#btnReset')],` → `fileButtons:[$('#btnExport'),$('#btnImport')],`.
+  - Handler `$('#btnReset').addEventListener('click',()=>{ if(!confirm('Reset all inputs to defaults? (Saved projects are kept.)'))return; state=defaultState();bindStaticInputs();buildPedCards();saveAuto();recalc();});` → the comment `/* RSTN (2026-11-06): the card's "Reset Inputs" button and its handler removed: … */`.
+- **Saved data (§5):** no key or format changed.
+- **Formulas, factors, units, code references:** none.
+- **Check case:** default footing with every geometry value changed (×1.25 + 1) and the project name changed, then main Reset Inputs / main New / branch New: `state` and every localStorage key identical in all three (state hash e09852898b63, storage 41aa740774f7); page text after New main vs branch differs only by the "Reset Inputs" button; 0 console errors.
+- **How verified:** `node tests/check-syntax.mjs "Spread Footing.html"`: pass. `node tests/smoke/project-library.mjs --tool spreadfooting`: ALL PASS. `node tests/smoke/start-chooser.mjs`: all 58 checks pass. Main-vs-branch Reset/New script (above). Screenshot of the card (1400 px) looked at. No test clicked Reset Inputs; the user manual does not name it.
+- **Other copies:** none.
