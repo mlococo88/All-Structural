@@ -508,6 +508,13 @@ select option { background: #fff; color: var(--text); }
 .mono   { font-family: var(--mono); }
 /* D11 links (CLAUDE.md §6): "Worked in: → Tab · Card" */
 .wkLink { font-size: 11.5px; color: var(--muted); margin: 2px 0 8px; }
+/* RWBP (2026-11-06): bearing pressure per combination (Stability tab) */
+.rwbp { margin: 8px 0 12px; }
+.rwbp-l { font-size: 12px; color: var(--muted); margin-right: 6px; font-weight: 600; }
+#rwbp-sel { max-width: 100%; font-size: 13px; padding: 4px 6px; }
+.rwbp-fig { margin-top: 8px; }
+.rwbp-fig > svg.rw-dwg { max-width: 760px; }
+.rwbp-work { font-size: 12.5px; line-height: 1.6; margin-top: 6px; }
 a.wkA { color: var(--blue); text-decoration: none; cursor: pointer; }
 a.wkA:hover { text-decoration: underline; }
 .card.wkFlash { animation: wkflash 1.4s ease-out; }
@@ -1688,6 +1695,7 @@ const RW_CARDS = {
   toeFlex:     ['footing', 'Toe Step 3 — Flexural Steel', 'Toe Step 3 — Flexural Steel'],
   toeShear:    ['footing', 'Toe Step 4 — Shear', 'Toe Step 4 — Shear'],
   ftgTS:       ['footing', 'Temperature & Shrinkage — Parallel to Wall', 'Temperature & Shrinkage — Parallel to Wall'],
+  ftgLoads:    ['footing', 'Factored Loads on Footing', 'Factored Loads on Footing'],   // RWBP (2026-11-06): link target of the bearing selector
 };
 // r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
 const RW_CHECK_CARD = { ot:'stabOT', sliding:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
@@ -4295,7 +4303,7 @@ function renderStabilityAASHTO(r) {
 
   h += `<div class="card" style="margin-bottom:16px;">
     <div class="card-hd"><span class="card-title">Bearing Pressure Distribution</span></div>
-    <div class="card-body"><div id="plt-bearing"></div></div>
+    <div class="card-body">${rwbpBlock(r)}<div id="plt-bearing"></div></div>
   </div>`;
   clearPlots('stability'); registerPlot('stability', () => plotBearing(r));
 
@@ -4569,6 +4577,7 @@ function renderStability(r) {
     `q_{max} = ${F(r.q_max,1)}\\ \\text{psf} \\leq q_a = ${F(inp.qa,0)}\\ \\text{psf}`, r.bearing_ok,'',
     [{sym:'q_{max}', desc:'maximum bearing pressure', val:F(r.q_max,1), unit:'psf'},
      {sym:'q_a', desc:'allowable bearing pressure', val:F(inp.qa,0), unit:'psf'}]);
+  h += rwbpBlock(r);   // RWBP (2026-11-06): bearing pressure per combination, to scale
   h += `<div id="plt-bearing" style="margin-top:12px;"></div>`;
   clearPlots('stability'); registerPlot('stability', () => plotBearing(r));
   h += `</div></div>`;
@@ -4709,6 +4718,140 @@ function buildBearingDiagram(r) {
       ? `<text x="${W/2}" y="14" font-size="10" fill="var(--fail)" font-family="'Public Sans',Arial,sans-serif" text-anchor="middle" font-weight="700">⚠ BEARING CAPACITY EXCEEDED</text>`
       : `<text x="${W/2}" y="14" font-size="10" fill="var(--pass)" font-family="'Public Sans',Arial,sans-serif" text-anchor="middle" font-weight="700">✓ WITHIN ALLOWABLE BEARING</text>`}
   </svg>`;
+}
+
+// ================================================================
+// RWBP (2026-11-06): BEARING PRESSURE PER COMBINATION — Stability tab selector + to-scale diagram.
+// Display only: every number is the analysis' own (r / r.aashtoR); the info box works the pressures
+// and the contact length from them. Selection is session only (window.RWBP_SEL; no storage key).
+// ================================================================
+function rwbpCombos(r) {
+  const B = r.B, L = [];
+  const lin = (key, name, V, xR, e, qt, qh, lim, limName, card, note) =>
+    L.push({ key, name, kind: 'lin', V, xR, e, qt, qh, lim, limName, card, note });
+  if (!r.isAASHTO) {
+    lin('svc', 'Service (unfactored) — bearing check', r.SumV, r.x_R, r.e, r.q_toe, r.q_heel, r.inp.qa, 'q_a', 'stabBrg');
+    lin('u12', 'Factored U = 1.2D + 1.6H — footing design', r.SumVu, r.x_Ru, r.e_u, r.qu_toe, r.qu_heel, null, '', 'stabFactBrg');
+    lin('u09', 'Factored U = 0.9D + 1.6H — footing design', r.SumVu_min, r.x_Ru_min, r.e_u_min, r.qu_toe_min, r.qu_heel_min, null, '', 'stabFactBrg');
+    return { list: L, gov: 'svc' };
+  }
+  const a = r.aashtoR, rock = !!a.onRock;
+  const uni = (key, name, V, xR, e, Bp, q, lim, card) => {
+    if (rock) {   // footing on rock: linear distribution (AASHTO 10.6.5 / Eqs. 11.6.3.2-2, -3), peak = the analysis' q
+      const ae = Math.abs(e), tri = ae > B / 6;
+      L.push({ key, name, kind: 'rock', V, xR, e, qpk: q, tri, lim, limName: 'q_R', card });
+    } else L.push({ key, name, kind: 'uni', V, xR, e, Bp, q, lim, limName: 'q_R', card });
+  };
+  uni('s1', 'Strength I (maximum vertical) — bearing check', a.V_str_max, a.x_R_brg, a.e_brg, a.B_eff, a.q_ult_A, a.q_R_A, 'stabBrg');
+  uni('s1a', 'Strength Ia (minimum vertical) — bearing check', Math.max(a.V_str_min, 0), a.x_R_A, a.e_A, a.B_eff_Ia, a.q_ult_Ia, a.q_R_A, 'stabBrg');
+  const ee = a.ct && a.ct.ee2;
+  if (ee) uni('ee2', 'Extreme Event II (vehicular collision) — bearing check', ee.V_ct_max, ee.x_R_brg_ct, ee.e_brg_ct, ee.B_eff_ct, ee.q_ult_ct, ee.q_R_ct, 'stabCT');
+  lin('s1t', 'Strength I, total vertical (with uplift) — footing design', a.V_str_max_tot, a.x_R_tot, a.e_tot, a.quA_toe, a.quA_heel, null, '', 'ftgLoads');
+  lin('s1at', 'Strength Ia, total vertical (with uplift) — footing design', a.V_str_min_tot, B / 2 - a.e_Ia, a.e_Ia, a.quIa_toe, a.quIa_heel, null, '', 'ftgLoads');
+  lin('svc', 'Service (unfactored loads) — reference only, not a check in AASHTO mode', r.SumV, r.x_R, r.e, r.q_toe, r.q_heel, null, '', null);
+  return { list: L, gov: a.bearing_Ia_governs ? 's1a' : 's1' };
+}
+function rwbpPick(r) {
+  const C = rwbpCombos(r), k = window.RWBP_SEL && window.RWBP_SEL !== 'GOV' ? window.RWBP_SEL : C.gov;
+  return { C, c: C.list.find(x => x.key === k) || C.list.find(x => x.key === C.gov) };
+}
+// contact zone [x0, x1] from the toe and the pressure at each end (linear) — from the analysis' own values
+function rwbpZone(r, c) {
+  const B = r.B;
+  if (c.kind === 'uni') { const x0 = Math.max(0, c.xR - c.Bp / 2); return { x0, x1: Math.min(B, x0 + c.Bp), q0: c.q, q1: c.q }; }
+  if (c.kind === 'rock') {
+    if (!c.tri) { const lo = c.V / B * (1 - 6 * Math.abs(c.e) / B); return c.e >= 0 ? { x0: 0, x1: B, q0: c.qpk, q1: lo } : { x0: 0, x1: B, q0: lo, q1: c.qpk }; }
+    const Lc = 3 * (B / 2 - Math.abs(c.e)); return c.e >= 0 ? { x0: 0, x1: Lc, q0: c.qpk, q1: 0 } : { x0: B - Lc, x1: B, q0: 0, q1: c.qpk };
+  }
+  if (!(c.qt > 0) && !(c.qh > 0)) return { x0: 0, x1: 0, q0: 0, q1: 0, none: true };   // resultant outside the base: the analysis gives q = 0
+  if (c.qh <= 0 && c.qt > 0) return { x0: 0, x1: Math.min(B, 3 * c.xR), q0: c.qt, q1: 0 };
+  if (c.qt <= 0 && c.qh > 0) return { x0: Math.max(0, B - 3 * (B - c.xR)), x1: B, q0: 0, q1: c.qh };
+  return { x0: 0, x1: B, q0: c.qt, q1: c.qh };
+}
+// worked lines for the selected combination (HTML with KaTeX-free plain maths, as the tab's info notes)
+function rwbpWork(r, c, z) {
+  const B = r.B, ae = Math.abs(c.e), side = c.e > 0.0005 ? 'toward the toe' : c.e < -0.0005 ? 'toward the heel' : 'centred';
+  const L = [];
+  L.push(`ΣV = <b>${f(c.V, 0)}</b> lb/ft · x̄ = <b>${f(c.xR, 3)}</b> ft from the toe · e = B/2 − x̄ = ${f(B / 2, 3)} − ${f(c.xR, 3)} = <b>${f(c.e, 3)}</b> ft (${side}); B/6 = ${f(B / 6, 3)} ft`);
+  if (c.kind === 'uni') {
+    L.push(`Contact length B′ = B − 2|e| = ${f(B, 3)} − 2(${f(ae, 3)}) = <b>${f(c.Bp, 3)}</b> ft, centred on the resultant (x = ${f(z.x0, 2)} to ${f(z.x1, 2)} ft)`);
+    L.push(`q = ΣV / B′ = ${f(c.V, 0)} / ${f(c.Bp, 3)} = <b>${f(c.q, 0)}</b> psf (uniform) ${c.lim ? `${c.q <= c.lim ? '≤' : '>'} q_R = ${f(c.lim, 0)} psf` : ''}`);
+  } else if (c.kind === 'rock') {
+    if (!c.tri) L.push(`|e| ≤ B/6: full contact, length <b>${f(B, 2)}</b> ft; q_max = ΣV/B·(1 + 6|e|/B) = <b>${f(c.qpk, 0)}</b> psf, q_min = ${f(Math.min(z.q0, z.q1), 0)} psf (rock, linear) ${c.lim ? `${c.qpk <= c.lim ? '≤' : '>'} q_R = ${f(c.lim, 0)} psf` : ''}`);
+    else L.push(`|e| > B/6: contact length 3(B/2 − |e|) = 3(${f(B / 2, 3)} − ${f(ae, 3)}) = <b>${f(z.x1 - z.x0, 3)}</b> ft; q_max = 2ΣV / [3(B/2 − |e|)] = <b>${f(c.qpk, 0)}</b> psf (rock, triangular) ${c.lim ? `${c.qpk <= c.lim ? '≤' : '>'} q_R = ${f(c.lim, 0)} psf` : ''}`);
+  } else if (z.none) {
+    L.push(`|e| > B/2: the resultant is outside the base; the analysis gives no bearing distribution (q = 0 at both ends). See the overturning / eccentricity check.`);
+  } else {
+    const full = z.x0 <= 1e-9 && z.x1 >= B - 1e-9;
+    if (full) L.push(`|e| ≤ B/6: full contact, length <b>${f(B, 2)}</b> ft; q_toe, q_heel = ΣV/B·(1 ± 6e/B) = <b>${f(c.qt, 0)}</b>, <b>${f(c.qh, 0)}</b> psf${c.lim ? ` · q_max ${Math.max(c.qt, c.qh) <= c.lim ? '≤' : '>'} ${c.limName} = ${f(c.lim, 0)} psf` : ''}`);
+    else { const xb = c.qt > 0 ? c.xR : B - c.xR;
+      L.push(`|e| > B/6: triangular, contact length 3·${c.qt > 0 ? 'x̄' : '(B − x̄)'} = 3(${f(xb, 3)}) = <b>${f(z.x1 - z.x0, 3)}</b> ft; q_max = 2ΣV / (3·${f(xb, 3)}) = <b>${f(Math.max(c.qt, c.qh), 0)}</b> psf${c.lim ? ` ${Math.max(c.qt, c.qh) <= c.lim ? '≤' : '>'} ${c.limName} = ${f(c.lim, 0)} psf` : ''}`); }
+  }
+  if (c.note) L.push(c.note);
+  return L;
+}
+// the diagram: footing (and the stem base) to scale with a scale bar; pressure ordinates to their own scale
+function rwbpSVG(r, c) {
+  const B = r.B, tf = r.tf_ft, ts = r.ts_bot_ft, Lt = r.inp.Lt, z = rwbpZone(r, c);
+  const mk = 'rwbp-up-' + (rwbpSVG.n = (rwbpSVG.n || 0) + 1);   // a marker id of its own (the Report holds a copy; a hidden duplicate id draws no arrowhead)
+  const W = 760, ML = 64, MR = 110, SC = (W - ML - MR) / B, FS = { s: 11, m: 11.5, b: 12.5 };
+  const HALO = 'paint-order="stroke" stroke="#fff" stroke-width="3" stroke-linejoin="round"';
+  const qmax = Math.max(z.q0, z.q1, c.lim || 0, 1), PS = 110 / qmax;
+  const xs = x => ML + x * SC;
+  const yStem = 30, stemH = Math.min(1.6 * tf, 3) * SC, yF = yStem + stemH, yB = yF + tf * SC, yQ = q => yB + q * PS;
+  const yArrow0 = yB + 110 + 46, yDim1 = yArrow0 + 26, yDim2 = yDim1 + 30, ySB = yDim2 + 30, H = ySB + 52;
+  let s = `<svg class="rw-dwg" viewBox="0 0 ${W} ${H}" data-scale="${SC}" style="width:100%;height:auto;display:block;font-family:'Public Sans',Arial,sans-serif;">`;
+  s += `<defs><marker id="${mk}" markerWidth="9" markerHeight="8" refX="9" refY="4" orient="auto" markerUnits="userSpaceOnUse"><polygon points="0 0,9 4,0 8" fill="#b8322a"/></marker></defs>`;
+  // stem base (cut by a break line) and footing, to scale
+  const xsf = xs(Lt), xsb = xs(Lt + ts);
+  s += `<polygon data-geo="stem" points="${xsf},${yStem} ${xsb},${yStem} ${xsb},${yF} ${xsf},${yF}" fill="rgba(33,85,196,0.10)" stroke="#2155c4" stroke-width="1.2"/>`;
+  s += `<path d="M ${xsf-6} ${yStem+4} L ${(xsf+xsb)/2-4} ${yStem+4} L ${(xsf+xsb)/2} ${yStem-3} L ${(xsf+xsb)/2+4} ${yStem+8} L ${xsb+6} ${yStem+4}" fill="none" stroke="#5a6a80" stroke-width="0.9"/>`;
+  s += `<rect data-geo="footing" x="${xs(0)}" y="${yF}" width="${B*SC}" height="${tf*SC}" fill="rgba(33,85,196,0.14)" stroke="#2155c4" stroke-width="1.5"/>`;
+  s += `<text x="${xs(0)}" y="${yF-6}" font-size="${FS.s}" fill="#5a6a80">TOE</text><text x="${xs(B)}" y="${yF-6}" font-size="${FS.s}" fill="#5a6a80" text-anchor="end">HEEL</text>`;
+  // middle third (kern) ticks
+  [B / 3, 2 * B / 3].forEach(x => { s += `<line x1="${xs(x)}" y1="${yB}" x2="${xs(x)}" y2="${yB+8}" stroke="#5a6a80" stroke-width="0.9"/>`; });
+  s += `<text x="${xs(2*B/3)+4}" y="${yB+15}" font-size="${FS.s}" fill="#5a6a80" ${HALO}>middle third</text>`;
+  s += `<line x1="${xs(B/2)}" y1="${yB-8}" x2="${xs(B/2)}" y2="${yB}" stroke="#5a6a80" stroke-width="0.9"/><text x="${xs(B/2)}" y="${yB-11}" font-size="${FS.s}" fill="#5a6a80" text-anchor="middle" ${HALO}>B/2</text>`;
+  // pressure block
+  s += `<polygon points="${xs(z.x0)},${yB} ${xs(z.x0)},${yQ(z.q0)} ${xs(z.x1)},${yQ(z.q1)} ${xs(z.x1)},${yB}" fill="rgba(35,70,194,0.13)" stroke="#2346c2" stroke-width="1.6"/>`;
+  const lab = (x, q, anchor) => `<text x="${xs(x) + (anchor === 'end' ? -4 : anchor === 'start' ? 4 : 0)}" y="${yQ(q)+FS.m+3}" font-size="${FS.m}" fill="#2346c2" text-anchor="${anchor}" font-weight="600" ${HALO}>${f(q,0)} psf</text>`;
+  if (c.kind === 'uni') s += Math.abs(c.xR - z.x1) > 0.25 * (z.x1 - z.x0) ? lab(z.x1, z.q0, 'end') : lab(z.x0, z.q0, 'start');   // clear of the resultant arrow
+  else if (z.q0 > 0) s += lab(z.x0, z.q0, z.x0 < 0.15 * B ? 'start' : 'middle');
+  if (z.q1 > 0 && (c.kind !== 'uni')) s += lab(z.x1, z.q1, z.x1 > 0.85 * B ? 'end' : 'middle');
+  if (c.lim) { s += `<line x1="${xs(0)}" y1="${yQ(c.lim)}" x2="${xs(B)}" y2="${yQ(c.lim)}" stroke="#15724a" stroke-width="1.2" stroke-dasharray="6,4"/>`;
+    s += `<text x="${xs(B)+6}" y="${yQ(c.lim)+4}" font-size="${FS.s}" fill="#15724a">${c.limName} = ${f(c.lim,0)} psf</text>`; }
+  // resultant (soil reaction) at x̄
+  const xr = Math.max(8, Math.min(W - 8, xs(c.xR)));   // kept on the sheet when the resultant is outside the base
+  s += `<line x1="${xr}" y1="${yArrow0}" x2="${xr}" y2="${yB+2}" stroke="#b8322a" stroke-width="2" marker-end="url(#${mk})"/>`;
+  s += `<text x="${xr+6}" y="${yArrow0-4}" font-size="${FS.m}" fill="#b8322a" font-weight="700" ${HALO}>R = ΣV = ${f(c.V,0)} lb/ft · e = ${f(c.e,3)} ft</text>`;
+  // dimensions: x̄ from the toe, contact length, B
+  const dimH = (xa, xb, y, t, cl, bold) => `<line x1="${xs(xa)}" y1="${y}" x2="${xs(xb)}" y2="${y}" stroke="${cl}" stroke-width="${bold?1.2:0.9}"/>`
+    + [xa, xb].map(x => `<line x1="${xs(x)}" y1="${y-5}" x2="${xs(x)}" y2="${y+5}" stroke="${cl}" stroke-width="${bold?1.2:0.9}"/>`).join('')
+    + `<text x="${(xs(xa)+xs(xb))/2}" y="${y-5}" font-size="${bold?FS.b:FS.m}" fill="${cl}" text-anchor="middle" font-weight="${bold?700:600}" ${HALO}>${t}</text>`;
+  s += dimH(0, c.xR, yDim1, `x̄ = ${f(c.xR,2)} ft`, '#b8322a');
+  if (!z.none) s += dimH(z.x0, z.x1, yDim2, `contact ${f(z.x1 - z.x0, 2)} ft`, '#2346c2', true);
+  else s += `<text x="${xs(B/2)}" y="${yDim2}" font-size="${FS.b}" fill="#b8322a" text-anchor="middle" font-weight="700">resultant outside the base — no contact length</text>`;
+  s += `<text x="${xs(B)}" y="${yDim2+18}" font-size="${FS.s}" fill="#5a6a80" text-anchor="end">B = ${f(B,2)} ft</text>`;
+  s += rwtsScaleBar(xs(0), ySB, SC, FS.s, 'Footing and stem base to scale; pressure ordinates to their own scale (values labelled).', true);
+  return s + '</svg>';
+}
+function rwbpBlock(r) {
+  const { C, c } = rwbpPick(r);
+  const opts = C.list.map(x => `<option value="${x.key}"${x.key === c.key ? ' selected' : ''}>${x.key === C.gov ? '★ ' : ''}${x.name}${x.key === C.gov ? ' (governing)' : ''}</option>`).join('');
+  const z = rwbpZone(r, c);
+  return `<div id="rwbp" class="rwbp">
+    <label class="rwbp-l" for="rwbp-sel">Combination</label>
+    <select id="rwbp-sel" onchange="rwbpSet(this.value)">${opts}</select>
+    <div class="rwbp-fig rw-dwg-wrap">${rwbpSVG(r, c)}</div>
+    <div class="rwbp-work">${rwbpWork(r, c, z).map(t => `<div>${t}</div>`).join('')}</div>
+    ${c.card ? rwWorkedIn(r, [[c.card, 'this combination']]) : ''}
+  </div>`;
+}
+function rwbpSet(k) {
+  const r = window._R; if (!r) return;
+  const C = rwbpCombos(r); window.RWBP_SEL = k === C.gov ? 'GOV' : k;
+  const el = document.getElementById('rwbp'); if (el) el.outerHTML = rwbpBlock(r);
+  if (typeof window.rwbpOnPick === 'function') { try { window.rwbpOnPick(window.RWBP_SEL); } catch (e) { console.warn('rwbp sync:', e); } }   // one-way sync hook (3D view)
 }
 
 // ================================================================
@@ -8826,7 +8969,7 @@ function rwrModel(r) {
       else st.push(rwrS({ id: 'qmaxT', label: 'Peak bearing pressure, resultant outside the kern (triangular)', sym: 'q_{max}', eq: '\\frac{2\\sum V}{3\\bar{x}}', sub: '\\frac{2(' + rwrN(r.SumV, 1) + ')}{3(' + rwrN(r.x_R, 4) + ')}', value: r.q_max, unit: 'psf', d: 1 }));
       st.push(rwrS({ id: 'dc', label: 'Bearing check: q_max ≤ q_a (service loads)', sym: '\\frac{q_{max}}{q_{a}}', eq: '', sub: '\\frac{' + rwrN(r.q_max, 1) + '}{' + rwrN(inp.qa, 0) + '}', value: dcv('bearing'), unit: '', d: 3, ok: ok('bearing') }));
       CK.bearing = 'st6/dc';
-      const fig = (() => { try { return buildBearingDiagram(r); } catch (e) { return ''; } })();
+      const fig = (() => { try { const C = rwbpCombos(r); return rwbpSVG(r, C.list.find(x => x.key === 'svc')); } catch (e) { return ''; } })();   // RWBP: to scale (was buildBearingDiagram)
       subs.push(sub('Step 6 — Bearing pressure check (q_a = ' + rwrN(inp.qa, 0) + ' psf)', [rwrItem('st6', [{ title: 'Bearing', steps: st }]), fig ? { type: 'figure', svg: fig, caption: 'Service bearing pressure, toe to heel' } : null, onTab('stabBrg')])); }
     { const st = [rwrS({ id: 'SumVu', label: 'Factored vertical load, U = 1.2D + 1.6H', sym: '\\sum V_{u}', eq: '1.2(W_{ftg} + W_{stem} + W_{soil}' + (r.W_bar > 0 ? ' + W_{bar}' : '') + ') + 1.6(W_{sur} + P_{a,V})' + (r.hasCol ? ' + w_{col,u}' : ''), sub: '', value: r.SumVu, unit: 'lb/ft', d: 1 }),
       rwrS({ id: 'xRu', label: 'Factored resultant location from the toe', sym: '\\bar{x}_{u}', eq: '\\frac{M_{s,u} \\minus M_{o,u}}{\\sum V_{u}}', sub: '\\frac{' + rwrN(r.Msu, 1) + ' \\minus ' + rwrN(r.Mou, 1) + '}{' + rwrN(r.SumVu, 1) + '}', value: r.x_Ru, unit: 'ft', d: 4 }),
