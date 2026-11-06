@@ -5677,7 +5677,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** engineer to decide whether other apps follow (they keep the header Save until then).
 
-## 2026-11-06 — PR: claude/sf-ldc-always — Option "Always require ℓ_dc for dowels (detailing practice)": ℓ_dc checked for every pedestal / wall regardless of the ACI 318-19 16.3.1.2(a) bearing gate (SFLA; calculation option, default off = no change)
+## 2026-11-06 — PR: claude/sf-ldc-always (PR #900: https://github.com/mlococo88/All-Structural/pull/900) — Option "Always require ℓ_dc for dowels (detailing practice)": ℓ_dc checked for every pedestal / wall regardless of the ACI 318-19 16.3.1.2(a) bearing gate (SFLA; calculation option, default off = no change)
 
 ### SFLA. Option: always require dowel compression development ℓ_dc   [pass / fail logic option; CLAUDE.md §4]
 - **Engineer (2026-11-06):** add the option, default off. On: the ℓ_dc ≤ available check applies to every pedestal and wall whatever the SFBC (#773) gate gives, as before #773. Off: exactly as now. Where only the option requires it, every display says so.
