@@ -243,3 +243,18 @@ test('github-sync: a listStore list (by-name view) syncs like a mapStore; stamp(
   assert.equal(e.scan(), 0);   // unchanged stamp: nothing new
   assert.equal(s.getItem('tool.idlist'), null);   // the list name is not a storage key here: nothing written under it
 });
+
+// BSS (2026-11-06): two open pages of one tool (the Bridge Suite's three apps share the tool key 'bridge-suite'): a change the other page
+// already recorded still waits the settle time in this page, and the lock keeps them from uploading at once.
+test('github-sync: settle across two pages of one tool: the second page waits too; one upload', async () => {
+  const s = mem({ [KEY]: '{}' }); G.saveSettings(s, SETUP); const gh = makeGitHubMock(); const store = SP.mapStore(s, KEY);
+  let t = Date.parse('2026-11-06T15:00:00Z');
+  const mk = () => G.engine({ tool: 'bridge-suite', label: 'Bridge suite', store, storage: s, fetch: gh.fetch, now: () => t, settle: 30000 });
+  const a = mk(), b = mk();
+  a.scan(); b.scan(); store.save('S1', { v: 1 });
+  a.scan(); t += 1000; b.scan();                       // A recorded it (seen); B finds it already seen
+  await b.flush(true); assert.ok(!gh.files.has('projects/bridge-suite/S1.json'));   // B waits too (before: sent at once)
+  t += 31000; await Promise.all([a.flush(true), b.flush(true)]);
+  assert.equal(gh.files.get('projects/bridge-suite/S1.json'), JSON.stringify({ v: 1 }, null, 1));
+  assert.equal(gh.log.filter(l => l.method === 'PUT').length, 1);
+});

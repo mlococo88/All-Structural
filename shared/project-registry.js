@@ -22,6 +22,8 @@
             view    (optional, GHS2 2026-11-05) storage -> a read-only by-name store for a list that is not a mapStore (the
                     Steel Bridge app: items by id); the same interface as mapStore (key, read, list, has, item), and save /
                     duplicate refuse ("open the app"): a conflict found from the home page keeps nothing and uploads nothing,
+            def     (optional, BSS 2026-11-06) the file that holds the tool's ctx.cloud and key when it is not the page itself (a list
+                    shared by several pages: the Bridge Suite, shared/bridge-suite-projects.js),
             sync    false: list only on the home page (the tool's file cannot be made safely outside the tool; "open the app to
                     sync"); default true: the home page may upload this tool's projects with the same file text as the tool }
    toFile is a copy of the tool's own one-line wrapper (no calculation). tests/smoke/home-sync.mjs proves, for every entry with sync,
@@ -137,6 +139,33 @@
   }
   TOOLS.push({ tool: 'pile-designer', label: 'Pile Designer', name: 'Pile Designer', href: 'Pile%20Designer.html', key: 'micropile_lrfd_index_v1', view: pileView, sync: false, space: 2,
     toFile: r => ({ _type: 'micropile_lrfd_project', _version: 1, inputs: r.inputs, lpile: r.lpile && r.lpile.ok ? r.lpile : null }) });   // the tool's own (not used here: sync false)
+  /* suiteView(storage) (BSS, 2026-11-06): the Bridge Suite's shared list (index.html, lldf.html, Prestressed Bridge Design.html; the
+     bootstrap's bridgeSuite.v1.projects = { "<id>": { name, savedAt, slices, demands? } }, duplicate names allowed) by name, as the
+     suite's own sync (shared/bridge-suite-projects.js ghStore) sees it: each name is its newest entry (savedAt). Reads only. */
+  function suiteView(storage) {
+    const KP = 'bridgeSuite.v1.projects', clean = n => String(n == null ? '' : n).trim();
+    function raw() {
+      let t = null; try { t = storage ? storage.getItem(KP) : null; } catch (e) { return { ok: false, error: 'storage', map: {} }; }
+      if (t == null || t === '') return { ok: true, map: {} };
+      try { const m = JSON.parse(t); if (m && typeof m === 'object' && !Array.isArray(m)) return { ok: true, map: m }; } catch (e) { /* below */ }
+      return { ok: false, error: 'unreadable', map: {} };
+    }
+    function byName() { const r = raw(), m = new Map();
+      Object.keys(r.map).filter(id => r.map[id] && typeof r.map[id] === 'object').map(id => r.map[id])
+        .sort((a, b) => String(b.savedAt || '').localeCompare(String(a.savedAt || ''))).forEach(e => { const n = clean(e.name) || 'Untitled'; if (!m.has(n)) m.set(n, e); });
+      return { r, m }; }
+    const no = () => ({ ok: false, error: 'readonly', message: 'Open the MCT generator, LL & DL Distribution or Prestressed Bridge Design to change the Bridge Suite projects.' });
+    return { key: KP,
+      read: () => { const r = raw(); return r.ok ? { ok: true, map: {} } : { ok: false, error: r.error, map: {} }; },
+      list: () => [...byName().m].map(([n, e]) => ({ name: n, saved: e.savedAt || null, size: (() => { try { return JSON.stringify(e).length; } catch (x) { return 0; } })() })),
+      has: n => byName().m.has(n),
+      item: n => byName().m.get(n),
+      get: () => null, save: no, duplicate: no, rename: no, remove: no };
+  }
+  // card order: after Steel Bridge Design. toFile = the suite's own (shared/bridge-suite-projects.js toFile; tests/smoke/home-sync.mjs fails if they differ)
+  TOOLS.splice(Math.max(0, TOOLS.findIndex(e => e.tool === 'steel-bridge-app') + 1), 0, { tool: 'bridge-suite', label: 'Bridge Suite (MCT, LL & DL, Prestressed)',
+    name: 'Bridge Suite (MCT generator, LL & DL, Prestressed)', href: 'index.html', def: 'shared/bridge-suite-projects.js', key: 'bridgeSuite.v1.projects', view: suiteView,
+    toFile: (e, n) => ({ app: 'BridgeSuite', v: 1, name: n, savedAt: e && e.savedAt || null, slices: e && e.slices || {} }) });
   const all = () => TOOLS.slice();
   const get = tool => TOOLS.find(e => e.tool === tool) || null;
   function store(e, storage) {

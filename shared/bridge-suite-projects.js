@@ -133,7 +133,8 @@
       return { ok: true, name: vName(id) };
     }
     const curName = () => vName(BP().current()) || '';
-    const cloud = window.SharedGitHubSync ? { tool: TOOL, label: LABEL, toFile, fromFile, store: ghStore, settle: SETTLE } : undefined;
+    const SYNC = { cloud: { tool: 'bridge-suite', label: 'Bridge Suite (MCT, LL & DL, Prestressed)', toFile: toFile, fromFile: fromFile, store: ghStore, settle: SETTLE } };   // = TOOL, LABEL (tests/engine/project-registry.test.mjs checks this line)
+    const cloud = window.SharedGitHubSync ? SYNC.cloud : undefined;
     pb = SPUI.projectBar({ store: vStore, storage: o.storage, label: o.label, id: o.id, askUnsaved: 'always',
       snapshot: () => o.cmp(),
       snapOf: v => { const i = vItem(v); return i ? o.cmpOf(i.e) : null; },
