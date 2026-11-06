@@ -16,9 +16,9 @@
 <script src="engine/model.js"></script>
 <script src="engine/demandfile.js"></script>
 <script src="engine/library.js"></script>
-<script src="ui/library.js"></script>
-<!-- GHS2 (2026-11-05): copy of the saved projects to a private GitHub repository (shared/github-sync.js; off until set up). projects.js /
-     projects-ui.js only for the settings dialog's style (SharedProjectsUI.css) and the time format; nothing else of them is used here. -->
+<!-- STDS-B (2026-11-06): the standard save (shared/projects-ui.js projectBar: header chip, Save, Saved projects…, the "Save and open" card,
+     the standard Saved projects dialog) over engine/library.js (items by id, unchanged). ui/library.js (the app's own dialog) is no longer loaded.
+     GHS2 (2026-11-05): copy of the saved projects to a private GitHub repository (shared/github-sync.js; off until set up). -->
 <script src="../../shared/projects.js"></script>
 <script src="../../shared/projects-ui.js"></script>
 <script src="../../shared/github-sync.js"></script>
@@ -170,6 +170,8 @@
   #libDlg .libAct{white-space:nowrap;text-align:right;} #libDlg .libAct button{margin-left:4px;font-size:9pt;padding:2px 8px;}
   #libDlg .libUse{display:flex;gap:10px;align-items:center;font-size:9pt;color:#475569;margin:8px 0;} .libBar{flex:0 0 140px;height:10px;border-radius:5px;background:var(--slate-200);overflow:hidden;} .libBar i{display:block;height:100%;background:var(--green-600);}
   .libBar.high i{background:var(--amber-700);} .libBar.full i{background:var(--fail);}
+  /* STDS-B (2026-11-06): the standard save controls and dialogs (shared/projects-ui.js) in the app's UI font */
+  body dialog.spLib,#hdrBtns button.spChip[data-sp]{font-family:var(--font-ui);}
   #toast{position:fixed;right:14px;top:84px;max-width:min(520px,calc(100vw - 28px));max-height:60vh;overflow:auto;z-index:50;background:#fff;border:1px solid var(--slate-400);border-left:4px solid var(--navy-800);border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);padding:8px 12px;font-family:var(--font-ui);font-size:9.5pt;}
   #toast[hidden]{display:none;} #toast.err{border-left-color:var(--fail);} #toast ul{margin:4px 0 6px;padding-left:18px;} #toast .tBtns{display:flex;gap:6px;justify-content:flex-end;margin-top:4px;} #toast .tFld{font-weight:600;} #toast .tArr{color:#475569;}
   @media print{ #hdrBtns,#toast,#libDlg,.inTabs,#tabBar,#inputPanel{display:none!important;} html,body{overflow:visible;height:auto;} #app{height:auto;box-shadow:none;} #outputPanel{overflow:visible;}
@@ -183,20 +185,18 @@
     <div class="titleRow">
       <div>
         <h1>Steel Bridge Design <span style="font-weight:400;font-size:11pt">(new, in development)</span></h1>
-        <div class="byline">AASHTO LRFD 10th Ed. (2024) · <span id="projName"></span> · <span id="saveState" aria-live="polite"></span></div>
+        <div class="byline">AASHTO LRFD 10th Ed. (2024) <span id="saveState" aria-live="polite"></span></div>
         <a class="allToolsLink" href="../../tools.html" title="Open the list of all tools">&larr; All tools</a>
       </div>
       <div id="hdrBtns">
-        <button type="button" id="bSave" title="Save the open project in this browser's project list (Ctrl+S)">Save</button>
-        <button type="button" id="bSaveAs" title="Save the open project under a new name">Save as…</button>
-        <button type="button" id="bLib" title="The projects saved in this browser: open, rename, duplicate, delete">Saved projects…</button>
         <button type="button" id="bUndo" title="Undo the last input change (Ctrl+Z)" disabled>Undo</button>
         <button type="button" id="bRedo" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" disabled>Redo</button>
-        <button type="button" id="bNew">New</button>
-        <button type="button" id="bImport" title="A project of this app, or of the old Steel Bridge Design (GirderDetail, Preliminary sizing, ST-Girder)">Import JSON…</button>
-        <button type="button" id="bOld" title="Import the project the old Steel Bridge Design autosaved in this browser (read only: the old app's saved data is not changed)">From old app</button>
-        <button type="button" id="bExport">Export JSON</button>
         <input type="file" id="fImport" accept=".json,application/json" hidden>
+      </div>
+      <div id="pbMove" hidden><!-- STDS-B: moved into the Project tab's "Save and open" card at start-up (they were in the header) -->
+        <button type="button" id="bExport" title="Save the open project as a .json file">Export JSON</button>
+        <button type="button" id="bImport" title="A project of this app, or of the old Steel Bridge Design (GirderDetail, Preliminary sizing, ST-Girder)">Import JSON</button>
+        <button type="button" id="bOld" title="Import the project the old Steel Bridge Design autosaved in this browser (read only: the old app's saved data is not changed)">From old app</button>
       </div>
     </div>
   </header>
@@ -226,6 +226,7 @@
      normalised file text then (null: not saved anywhere in the browser). The open project is "unsaved" when its normalised text differs. */
   const ensureAll = Q => { UL.ensure(Q); window.SBDShearUI.ensure(Q); window.SBDFatigueUI.ensure(Q); window.SBDFramingUI.ensure(Q); window.SBDSplicesUI.ensure(Q); window.SBDRatingUI.ensure(Q); };
   const norm = Q => { const c = JSON.parse(JSON.stringify(Q)); ensureAll(c); return M.exportJSON(c); };
+  let pb = null;   // STDS-B: the standard save controls (shared/projects-ui.js projectBar), made below
   let cur = { id: null, text: null }, autoFailed = false, snap = '', undoS = [], redoS = [], stepNo = 0, toastStep = -1;
   const UNDO_MAX = 100;   // steps kept in this session (the brief asks for at least 50)
   let ui = { itab: 'proj', g: 0, seg: 0, region: 'pos', otab: 'sec', lg: 0, lr: 0 };
@@ -249,7 +250,8 @@
   function panes() {
     const g = P.girders[ui.g] || P.girders[0];
     return {
-      proj: card('Project', ['name', 'number', 'owner', 'designer', 'checker', 'date'].map(k => num('project.' + k, k === 'owner' ? 'Client name (title block, optional)' : k[0].toUpperCase() + k.slice(1), '', { text: true })).join('')
+      proj: card('Save and open', '<div id="pbHost"></div>')   // STDS-B: the standard card (projectBar, mounted after each redraw)
+        + card('Project', ['name', 'number', 'owner', 'designer', 'checker', 'date'].map(k => num('project.' + k, k === 'owner' ? 'Client name (title block, optional)' : k[0].toUpperCase() + k.slice(1), '', { text: true })).join('')
           + '<p class="note">Client name: blank = the selected DOT\'s name (Bridge owner (DOT) rules, below) is used in the title block, the report and the drawings.</p>')
         + UL.ownerCard(P, { num, sel, card, esc })   // moved here from the Cross-section & loads tab (UI only)
         + (window.SBDHandoffUI ? window.SBDHandoffUI.card(P, ui) : ''),   // B2: hand-offs to and from the other tools (ui/handoffs.js)
@@ -278,6 +280,7 @@
     $('inTabs').innerHTML = TABS.map(([k, t]) => `<button type="button" role="tab" data-itab="${k}" aria-selected="${ui.itab === k}">${t}<span class="inDot"></span></button>`).join('');
     const p = panes();
     $('inPanes').innerHTML = TABS.map(([k]) => `<div class="pane" data-pane="${k}"${ui.itab === k ? '' : ' hidden'}>${p[k]}</div>`).join('');
+    if (pb) pb.mount($('pbHost'));   // STDS-B
     markErrors();
   }
   function markErrors() {
@@ -319,7 +322,6 @@
     // keep the segments contiguous: each x0 is the x1 before it
     P.girders.forEach(g => g.segments.forEach((s, i) => { if (i) s.x0 = g.segments[i - 1].x1; }));
     if (autosave) autoFailed = !M.save(LS, P);   // false: storage refused (full); the project stays open and the header says so
-    $('projName').textContent = P.project.name || '';
     if (redraw) drawInputs(); else markErrors();
     markStale();
     if (!restoring) { const t = JSON.stringify(P); if (t !== snap) { undoS.push(snap); if (undoS.length > UNDO_MAX) undoS.shift(); redoS.length = 0; snap = t; stepNo++; if (toastStep !== stepNo) closeToast(); } }   // one undo step per input change; a message with an Undo button closes when a later change is made
@@ -337,10 +339,10 @@
   const isDirty = () => cur.text == null || norm(P) !== cur.text;
   function syncBar() {
     $('bUndo').disabled = !undoS.length; $('bRedo').disabled = !redoS.length;
-    const el = $('saveState'), d = isDirty();
-    el.className = autoFailed ? 'err' : d ? 'dirty' : '';
-    el.textContent = autoFailed ? 'Autosave failed: browser storage is full. Export JSON now.' : cur.id ? (d ? 'Unsaved changes' : 'Saved') : 'Not saved to the project list';
-    if (window.SBDLibraryUI) window.SBDLibraryUI.refresh();
+    const el = $('saveState');   // STDS-B: the saved / unsaved state is the header chip; this line is kept for the autosave failure
+    el.className = autoFailed ? 'err' : '';
+    el.textContent = autoFailed ? '· Autosave failed: browser storage is full. Export JSON now.' : '';
+    if (pb) { pb.refresh(); pb.dialog.refresh(); }
   }
   function toast(html, o) { o = o || {}; const t = $('toast'); t.className = o.err ? 'err' : ''; toastStep = o.undo ? stepNo : -1;
     t.innerHTML = html + '<div class="tBtns">' + (o.undo ? '<button type="button" id="tUndo">Undo</button>' : '') + '<button type="button" id="tClose">Close</button></div>'; t.hidden = false; }
@@ -355,66 +357,105 @@
   const loadNotes = n => { if (n && n.length) toast(n.map(t => esc(t)).join('<br>')); };
   $('toast').addEventListener('click', e => { if (e.target.id === 'tClose') closeToast(); else if (e.target.id === 'tUndo') undo(); });
   const loadAs = (proj, id, textFn) => { P = proj; ui.g = 0; ui.seg = 0; autosave = true; undoS = []; redoS = []; closeToast(); changed(true, true); cur = { id, text: textFn ? textFn(P) : null }; LIB.setCur(LS, id); snap = JSON.stringify(P); syncBar(); };   // a different project: the undo history starts again
-  function doSave(asNew) {
-    let id = asNew ? null : cur.id;
-    if (!id) {
-      const n0 = String(P.project.name || '').trim(); let n = prompt(asNew ? 'Save as (project name):' : 'Save to the project list as:', asNew && cur.id ? n0 + ' (2)' : n0 || 'Untitled'); if (n == null) return false; n = n.trim(); if (!n) { alert('Enter a project name.'); return false; }
-      const same = LIB.list(LS).find(i => i.name === n);
-      if (same) { if (!confirm('A saved project named "' + n + '" already exists. Replace it with the open project?')) return false; id = same.id; }
-      P.project.name = n; $('projName').textContent = n;
-    }
-    const r = LIB.save(LS, P, id);
-    if (!r.ok) { toast('<strong>Not saved.</strong> ' + esc(r.message), { err: true }); syncBar(); return false; }
-    cur = { id: r.id, text: norm(P) }; LIB.setCur(LS, r.id); if (autosave) autoFailed = !M.save(LS, P);
-    const t = JSON.stringify(P); if (t !== snap) { undoS.push(snap); redoS.length = 0; snap = t; }   // the name change, if any
-    drawInputs(); syncBar(); return true;
-  }
-  /* guard(): true when it is fine to replace the open project (nothing unsaved, or the engineer chose to go on) */
-  const guard = what => !isDirty() || confirm('The open project has changes that are not saved to the project list (the autosave keeps them only until another project replaces them).\n\nContinue and ' + what + '? Choose Cancel, then Save (or Export JSON) first.');
-  function openSaved(id) {
-    if (!guard('open the other project')) return false;
-    const r = LIB.open(LS, id); if (!r.ok) { alert(r.error); return false; }
-    loadAs(r.project, id, norm); loadNotes(r.notes); return true;
-  }
-  /* GHS2 (2026-11-05): GitHub sync of the saved-project list (shared/github-sync.js; docs/github-sync-setup.md). Off until set up: with no
-     settings it writes nothing and makes no request. engine/library.js keeps items by id (sbd2.lib.index + sbd2.lib.p.<id>, unchanged);
-     the sync works by name, so ghStore is a by-name view of that list: each name is its newest item (an older item with the same name is
-     not synced and says so in the list). File on GitHub: projects/steel-bridge-app/<name>.json = the stored item text, which is the
-     Export JSON text (M.exportJSON). A file from GitHub is read by M.importJSON (the Import JSON path) and saved by LIB.save under the
-     name (a new item, or the newest item of that name). Open = the list's Open (asks first when the open project has unsaved changes). */
+  /* STDS-B (2026-11-06): the standard save (shared/projects-ui.js projectBar; engineer-approved standard, 2026-11-05): header chip ·
+     Undo · Redo · Save (Ctrl+S) · Saved projects…; the Project tab's first card "Save and open" (Save · Save as… · Saved projects… · New;
+     Export JSON · Import JSON; From old app); the standard Saved projects dialog. Replaces the app's own dialog (ui/library.js) and the
+     nine header buttons. Storage unchanged (engine/library.js: sbd2.lib.index + sbd2.lib.p.<id>, sbd2.lib.current; items by id).
+     By-name view for the dialog (vStore): every item is a row; the newest item of a name is listed under the name itself, an older item
+     with the same name under "<name> (older, saved <time>)" (a name for the list only: nothing is stored or renamed; Rename gives it its
+     own name). Save as does not create a new duplicate name (a name in use asks "Replace it"; the shared Save as).
+     GHS2 (2026-11-05): GitHub sync of the list (shared/github-sync.js; docs/github-sync-setup.md). Off until set up: with no settings it
+     writes nothing and makes no request. The sync works by name over ghStore (cloud.store): each name is its newest item (an older item
+     with the same name is not synced and says so in the list). File on GitHub: projects/steel-bridge-app/<name>.json = the stored item
+     text, which is the Export JSON text (M.exportJSON). A file from GitHub is read by M.importJSON (the Import JSON path) and saved by
+     LIB.save under the name (a new item, or the newest item of that name). */
   const ghIds = () => { const m = new Map(); LIB.list(LS).forEach(i => { if (!m.has(i.name)) m.set(i.name, i.id); }); return m; };   // newest first
   const ghStore = { key: M.KEYS.libIndex, read: () => ({ ok: true, map: {} }), list: () => [...ghIds().keys()].map(name => ({ name })),
     has: n => ghIds().has(n), item: n => { const id = ghIds().get(n); if (id == null) return undefined; const t = LIB.text(LS, id); return t == null ? undefined : t; },
     save: (n, q) => { q.project.name = n; const r = LIB.save(LS, q, ghIds().get(n) || null); return r.ok ? { ok: true, name: n } : r; },
     duplicate: (n, to) => { const id = ghIds().get(n); if (id == null) return { ok: false, error: 'missing', message: 'That saved project is not in this browser any more.' };
       const r = LIB.duplicate(LS, id, to); return r.ok ? { ok: true, name: to } : r; } };
-  const GH = store && window.SharedGitHubSync ? window.SharedGitHubSync.attach({ store: ghStore, storage: LS,
-    open: n => { const id = ghIds().get(n); return id ? openSaved(id) : false; }, changed: () => window.SBDLibraryUI.refresh(),
-    cloud: { tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)', toFile: t => t,
-      fromFile: (j, n) => { const r = M.importJSON(JSON.stringify(j)); if (!r.ok) throw new Error(r.error); r.project.project.name = n; return r.project; } } }) : null;
-  const GH_UI = { redraw: () => window.SBDLibraryUI.refresh(), close: () => window.SBDLibraryUI.close() };
-  if (GH && window.SharedProjectsUI) window.SharedProjectsUI.css();
-  const ghCloud = GH && { on: () => GH.engine.configured(),
-    cell: i => ghIds().get(i.name) === i.id ? GH.statusCell(i.name) : '<span class="note" data-sp="gh-cell">not synced: a newer saved project has the same name</span>',
-    after: body => { let h = document.getElementById('libGh'); if (!h) { h = document.createElement('div'); h.id = 'libGh'; h.setAttribute('data-sp', 'gh-host'); body.before(h); }   // above the list (not inside it: one click listener each)
-      h.innerHTML = ''; GH.bind(body); GH.decorate(h, GH_UI, { rows: false }); },
-    shown: () => { GH.shown(GH_UI).catch(() => {}); },
-    deleted: n => { if (!ghIds().has(n)) GH.deleted(n); }, renamed: (a, b) => { if (a !== b && !ghIds().has(a)) GH.renamed(a, b); } };
-  window.SBDLibraryUI.init({ store: LS, curId: () => cur.id, open: openSaved, cloud: ghCloud || null,
-    renamed: (id, name, text) => { P.project.name = name; const q = M.importJSON(text); cur.text = q.ok ? norm(q.project) : cur.text; changed(true); },
-    unlinked: () => { cur = { id: null, text: null }; syncBar(); } });
-  $('bSave').addEventListener('click', () => { if (doSave(false)) { const n = P.project.name; $('saveState').textContent = 'Saved "' + n + '"'; setTimeout(syncBar, 2500); } });
-  $('bSaveAs').addEventListener('click', () => doSave(true));
-  $('bLib').addEventListener('click', () => window.SBDLibraryUI.show());
+  function view() {   // { byV: list name -> index item, vOf: id -> list name }; LIB.list is newest first
+    const items = LIB.list(LS), used = new Set(items.map(i => i.name)), seen = new Set(), byV = new Map(), vOf = new Map();
+    items.forEach(i => {
+      let v = i.name;
+      if (seen.has(i.name)) { const t = i.saved && i.saved > '1971' ? LIB.etTime(i.saved) : '', base = `${i.name} (older${t ? ', saved ' + t : ' copy'})`; v = base; let k = 2; while (used.has(v) || byV.has(v)) v = `${base} #${k++}`; }
+      seen.add(i.name); byV.set(v, i); vOf.set(i.id, v);
+    });
+    return { byV, vOf };
+  }
+  const vItem = v => view().byV.get(v), vName = id => id ? view().vOf.get(id) || null : null;
+  const MISS = { ok: false, error: 'missing', message: 'That saved project is not in this browser any more.' };
+  const EXISTS = n => ({ ok: false, error: 'exists', message: `A saved project named "${n}" already exists.` });
+  const clean = n => String(n == null ? '' : n).trim();
+  let lastRen = null;   // the item a dialog Rename just renamed (its new file text), for the open project's name
+  const vStore = { key: M.KEYS.libIndex,
+    keys: () => [M.KEYS.libIndex, ...LIB.list(LS).map(i => M.KEYS.libItem + i.id)],
+    read: () => ({ ok: true, map: {} }),
+    list: () => [...view().byV].map(([v, i]) => ({ name: v, saved: i.saved && i.saved > '1971' ? i.saved : null, size: i.size || 0 })),
+    has: v => view().byV.has(v),
+    item: v => { const i = vItem(v); if (!i) return undefined; const t = LIB.text(LS, i.id); return t == null ? undefined : t; },
+    get: v => { const i = vItem(v); if (!i) return null; const r = LIB.open(LS, i.id); return r.ok ? r.project : null; },
+    save: v => pbSave(v),
+    rename: (v, to, o) => { const { byV } = view(), i = byV.get(v); if (!i) return MISS; to = clean(to); if (!to) return { ok: false, error: 'empty', message: 'Enter a name.' };
+      if (to === v) return { ok: true, name: to };
+      const t = byV.get(to); if (t && t.id !== i.id && !(o && o.replace)) return EXISTS(to);
+      const r = LIB.rename(LS, i.id, to); if (!r.ok) return r;
+      if (t && t.id !== i.id) LIB.remove(LS, t.id);   // "Replace it" (confirmed in the dialog): the item listed under that name
+      lastRen = { id: i.id, text: r.text }; return { ok: true, name: vName(i.id) }; },
+    duplicate: (v, to, o) => { const { byV } = view(), i = byV.get(v); if (!i) return MISS; to = clean(to) || vStore.copyName(v);
+      const t = byV.get(to); if (t && !(o && o.replace)) return EXISTS(to);
+      const r = LIB.duplicate(LS, i.id, to); if (!r.ok) return r;
+      if (t) LIB.remove(LS, t.id); return { ok: true, name: vName(r.id) }; },
+    remove: v => { const i = vItem(v); return i ? LIB.remove(LS, i.id) : { ok: true }; },
+    copyName: v => { const m = view().byV, base = (m.get(v) || { name: v }).name; let n = `${base} (copy)`, k = 2; while (m.has(n)) n = `${base} (copy ${k++})`; return n; },
+    stamp: () => { try { return LS.getItem(M.KEYS.libIndex); } catch (e) { return null; } } };
+  /* pbSave(v): Save (v = the open project's list name: saved to that item; the project's own name field is its list name, as before)
+     or Save as (another name: that item when the name is in the list, after "Replace it"; else a new item). */
+  function pbSave(v) {
+    const i = vItem(v), id = i ? i.id : null, plain = !!(id && id === cur.id && v === vName(cur.id));
+    if (!plain) P.project.name = i ? i.name : v;
+    else if (!clean(P.project.name)) P.project.name = i.name;
+    else { const o = vItem(clean(P.project.name)); if (o && o.id !== id && clean(P.project.name) !== i.name) return { ok: false, message: `Not saved: the project name (Project tab) "${clean(P.project.name)}" is the name of another saved project. Change the name, or use Save as… to replace that project.` }; }
+    const r = LIB.save(LS, P, id);
+    if (!r.ok) { syncBar(); return { ok: false, message: r.message }; }
+    cur = { id: r.id, text: norm(P) }; LIB.setCur(LS, r.id); if (autosave) autoFailed = !M.save(LS, P);
+    const t = JSON.stringify(P); if (t !== snap) { undoS.push(snap); redoS.length = 0; snap = t; }   // the name change, if any
+    drawInputs(); syncBar(); return { ok: true, name: vName(r.id) };
+  }
+  const snapC = new Map();   // normalised text of a saved item, by id and saved time ("unsaved changes" and the start-up match)
+  const SPUI = window.SharedProjectsUI, B_EX = $('bExport'), B_IM = $('bImport'), B_OLD = $('bOld');   // moved into the card (detached until the Project tab is drawn)
+  pb = SPUI.projectBar({ store: vStore, storage: LS, label: 'Steel Bridge Design (new app)', id: 'sbdLibDlg', askUnsaved: 'always',
+    snapshot: () => norm(P),
+    snapOf: v => { const i = vItem(v); if (!i) return null; if (i.id === cur.id && cur.text != null) return cur.text;
+      const k = i.id + '|' + i.saved; if (!snapC.has(k)) { const r = LIB.open(LS, i.id); snapC.set(k, r.ok ? norm(r.project) : null); } return snapC.get(k); },
+    current: () => vName(cur.id) || '',
+    setCurrent: v => { const id = v ? (vItem(v) || {}).id : null;
+      if (id && id !== cur.id) { cur = { id, text: norm(P) }; LIB.setCur(LS, id); } else if (!v && cur.id) { cur = { id: null, text: null }; LIB.setCur(LS, null); } },
+    displayName: () => clean(P.project.name),
+    save: pbSave,
+    open: v => { const i = vItem(v); if (!i) return false; const r = LIB.open(LS, i.id); if (!r.ok) { alert(r.error); return false; } loadAs(r.project, i.id, norm); loadNotes(r.notes); return true; },
+    newProject: () => loadAs(M.defaultProject(), null, norm),
+    exportFile: v => { if (!v || v === vName(cur.id) || v === P.project.name) { exportFile(P); return; } const Q = JSON.parse(JSON.stringify(P)); Q.project.name = v; exportFile(Q); },
+    importFile: () => $('fImport').click(),
+    exportOne: v => { const i = vItem(v); if (!i) return; const t = LIB.text(LS, i.id); if (t != null) SPUI.download(String(i.name || 'steel-bridge').replace(/[^\w.-]+/g, '_') + '.sbd2.json', t); },
+    fileButtons: [B_EX, B_IM], extras: [B_OLD],
+    header: $('hdrBtns'), chipBefore: $('bUndo'), card: true,
+    renamed: () => { if (lastRen && lastRen.id === cur.id) { const q = M.importJSON(lastRen.text); if (q.ok) { P.project.name = q.project.project.name; cur.text = norm(q.project); } changed(true); } lastRen = null; },
+    deleted: () => { if (cur.id && !LIB.list(LS).some(i => i.id === cur.id)) cur = { id: null, text: null }; syncBar(); },
+    changed: () => syncBar(),
+    ghNote: v => { const i = vItem(v); return i && v !== i.name ? '<span class="note" data-sp="gh-cell">not synced: a newer saved project has the same name (Rename this one to sync it)</span>' : ''; },
+    ...(store && window.SharedGitHubSync ? { cloud: { tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)', toFile: t => t, store: ghStore,   // no browser storage: no sync (as before)
+      fromFile: (j, n) => { const r = M.importJSON(JSON.stringify(j)); if (!r.ok) throw new Error(r.error); r.project.project.name = n; return r.project; } } } : {}) });
+  $('pbMove').remove();
   $('bUndo').addEventListener('click', undo); $('bRedo').addEventListener('click', redo);
   document.addEventListener('input', e => { if (e.target && e.target.dataset) e.target.dataset.typing = '1'; }, true);
   document.addEventListener('change', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
   document.addEventListener('blur', e => { if (e.target && e.target.dataset) delete e.target.dataset.typing; }, true);
   document.addEventListener('keydown', e => {
     if (!(e.ctrlKey || e.metaKey) || e.altKey) return; const k = e.key.toLowerCase(), t = e.target;
-    if (k === 's') { e.preventDefault(); $('bSave').click(); return; }
     if (t && t.dataset && t.dataset.typing) return;   // text being typed in a field: the browser's own undo for that field
-    if (document.getElementById('libDlg').open) return;
+    if (document.querySelector('dialog[open]')) return;   // a dialog is open (Saved projects, Save as, Cloud sync)
     if (k === 'z' && !e.shiftKey) { e.preventDefault(); undo(); } else if (k === 'y' || (k === 'z' && e.shiftKey)) { e.preventDefault(); redo(); }
   });
 
@@ -484,24 +525,24 @@
   $('tabBar').addEventListener('click', e => { const b = e.target.closest('[data-otab]'); if (!b) return; ui.otab = b.dataset.otab; saveUi(); drawOut(); });
 
   /* ---------- header ---------- */
-  $('bNew').addEventListener('click', () => { if (!confirm('Start a new project? The current one is replaced (export it first to keep it).')) return; loadAs(M.defaultProject(), null, norm); });
-  $('bExport').addEventListener('click', () => {
-    const a = document.createElement('a'), name = (P.project.name || 'steel-bridge').replace(/[^\w.-]+/g, '_');
-    a.href = URL.createObjectURL(new Blob([M.exportJSON(P)], { type: 'application/json' })); a.download = name + '.sbd2.json'; document.body.appendChild(a); a.click();
+  /* exportFile(Q): the .json download of Export JSON (STDS-B: also Save as > File on this computer, with the name typed there) */
+  function exportFile(Q) {
+    const a = document.createElement('a'), name = (Q.project.name || 'steel-bridge').replace(/[^\w.-]+/g, '_');
+    a.href = URL.createObjectURL(new Blob([M.exportJSON(Q)], { type: 'application/json' })); a.download = name + '.sbd2.json'; document.body.appendChild(a); a.click();
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 0);
-  });
-  $('bImport').addEventListener('click', () => $('fImport').click());
+  }
+  B_EX.addEventListener('click', () => exportFile(P));
+  B_IM.addEventListener('click', () => pb.importJSON());   // STDS-B: asks first on unsaved changes, then the file chooser
   $('fImport').addEventListener('change', e => { const f = e.target.files[0]; if (!f) return; const rd = new FileReader();
     rd.onload = () => { const r = M.importJSON(String(rd.result)); e.target.value = '';
-      if (!r.ok) { alert(r.error); return; } if (!guard('import the file')) return; loadAs(r.project, null, null);
+      if (!r.ok) { alert(r.error); return; } loadAs(r.project, null, null);   // STDS-B: asked first (pb.importJSON)
       if (r.summary) window.SBDLegacyUI.show(r.summary); else loadNotes(r.notes); };   // an old project (engine/legacy.js): its import summary
     rd.readAsText(f); });
   // the old app's autosaves (girderdetail_autosave_v1, plateline_autosave_v1, stgirder.session): read only, never written or deleted
-  $('bOld').addEventListener('click', () => { const r = window.SBDLegacy.fromStorage(store || memStore); if (!r.ok) { alert(r.error); return; }
+  B_OLD.addEventListener('click', () => { const r = window.SBDLegacy.fromStorage(store || memStore); if (!r.ok) { alert(r.error); return; }
     if (!confirm('Import the project the old Steel Bridge Design autosaved in this browser? It replaces the current project here (export it first to keep it). The old app\'s data is not changed.')) return;
     loadAs(r.project, null, null); window.SBDLegacyUI.show(r.summary); });
 
-  $('projName').textContent = P.project.name || '';
   drawInputs(); calc();
   { const lc = LIB.getCur(LS);   // which saved project the autosave belongs to (nothing to lose when it is a blank new project)
     if (L.source === 'saved' && lc) { const r = LIB.open(LS, lc); if (r.ok) cur = { id: lc, text: norm(r.project) }; }

@@ -190,16 +190,16 @@ export const TOOLS = {
   sbapp: {
     // Steel Bridge app (apps/steel-bridge): used by tests/smoke/github-sync-tools.mjs and home-projects.mjs (GHS2, 2026-11-05). Not run by this
     // file (its list is engine/library.js, items by id: tests/smoke/steel-bridge-library.mjs tests it). Results: the project as autosaved
-    // (without its name: a GitHub copy carries its own) and the output tab's text; save = the tool's Save as (asks the name; a name in use is replaced).
+    // (without its name: a GitHub copy carries its own) and the output tab's text; save = the standard Save as (STDS-B, 2026-11-06; a name in
+    // use is replaced) on the branch, the old Save as (asks the name) before it.
     file: 'apps/steel-bridge/index.html', list: null, auto: 'sbd2.project.current', noRun: true,
-    ready: p => p.waitForFunction(() => document.getElementById('bSave') && document.getElementById('out') && document.getElementById('out').innerText.length > 50),
+    ready: p => p.waitForFunction(() => (document.getElementById('bSave') || document.querySelector('[data-sp=chip]')) && document.getElementById('out') && document.getElementById('out').innerText.length > 50),
     results: async p => { await p.waitForTimeout(800); return p.evaluate(() => { const q = JSON.parse(localStorage.getItem('sbd2.project.current') || 'null'); const n = q && q.project ? q.project.name : '';
       if (q && q.project) delete q.project.name; return { P: q, out: document.getElementById('out').innerText.split(n || '\u0000').join('NAME') }; }); },
     change: async p => { await p.evaluate(() => { const i = document.querySelector('#inPanes input[type=number]'); i.value = String((+i.value || 0) + 1); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); }); await p.waitForTimeout(900); },
-    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('bSaveAs').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(400); },
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('bSaveAs').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(400); },
     names: p => p.evaluate(() => (JSON.parse(localStorage.getItem('sbd2.lib.index') || '{"items":[]}').items || []).map(i => i.name)),
-    ui: { open: async p => { await p.evaluate(() => { const d = document.getElementById('libDlg'); if (d.open) d.close(); document.getElementById('bLib').click(); }); await p.waitForSelector('#libDlg[open]'); },
-      rows: '#libBody tbody tr' }
+    // STDS-B: the standard Saved projects dialog (no own ui entry since 2026-11-06)
   },
   gd: {
     // Steel Bridge Design.html (GirderDetail): used by tests/smoke/github-sync-tools.mjs and home-projects.mjs (GHS2, 2026-11-05; its
