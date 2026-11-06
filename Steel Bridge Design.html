@@ -92,7 +92,10 @@ header { flex-wrap: wrap; height: auto; min-height: var(--header-h); row-gap: 6p
 /* GDHD (2026-11-06): one header row as in the other tools (chip · Save · Saved projects… · Print); the bridge-wide actions (Design all,
    Girder report, 3D view, Export DXF) after Suggest in the top bar, the owner next to the project title block */
 @media (min-width: 901px) { header { flex-wrap: nowrap; } header .brand { flex: 0 1 auto; } header .bx-all-tools, header .hdr-group { flex-shrink: 0; } }   /* the subtitle is cut (…) before the header wraps */
+<<<<<<< HEAD
 .gd-hdr-proj .btn:disabled { opacity: .45; cursor: default; }   /* GDUR: Undo / Redo with nothing to undo / redo */
+=======
+>>>>>>> origin/main
 .gd-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .gd-top .own-pill { margin-left: auto; }
 .gd-top .own-pill + .tb-sum { margin-left: 0; }
@@ -1262,7 +1265,11 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
   </div>
   <a class="bx-all-tools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
   <div class="hdr-spacer"></div>
+<<<<<<< HEAD
   <div class="hdr-group gd-hdr-proj" id="gd-hdr-proj"><button type="button" class="btn" id="gd-undo" title="Undo the last change to the project (Ctrl+Z): the modules' inputs and Preliminary sizing" disabled>Undo</button><button type="button" class="btn" id="gd-redo" title="Redo (Ctrl+Y or Ctrl+Shift+Z)" disabled>Redo</button><button type="button" class="btn" id="btn-print" title="Print report: choose the sections, then print or save as PDF"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6V2.5h8V6M4 11.5H2.5v-5h11v5H12M4.5 9.5h7v4h-7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Print</span></button></div>
+=======
+  <div class="hdr-group gd-hdr-proj" id="gd-hdr-proj"><button type="button" class="btn" id="btn-print" title="Print report: choose the sections, then print or save as PDF"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6V2.5h8V6M4 11.5H2.5v-5h11v5H12M4.5 9.5h7v4h-7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Print</span></button></div>
+>>>>>>> origin/main
 </header>
 <div class="gd-top" id="gd-top">
   <div class="gd-mode" role="radiogroup" aria-label="Working mode">
@@ -21360,7 +21367,11 @@ function gdStdInit() {
     afterOpen: () => gdUndoReset(),   // GDUR: the history starts again at the opened project
     exportFile: n => SharedProjectsUI.download(String(n || P.meta.subject || 'steel_bridge_design').replace(/[^\w\-]+/g, '_') + '.json', JSON.stringify({ ...sbdProjectFile(), name: n || CUR || '' }, null, 2)),
     importFile: () => $('#pb_file').click(), fileButtons: [$('#pb_export'), $('#pb_import')],
+<<<<<<< HEAD
     header: $('#gd-hdr-proj'), chipBefore: $('#gd-undo'), headerBefore: $('#btn-print'), card: $('#gd-savecard'),   // GDHD: Print last; GDUR: the chip before Undo
+=======
+    header: $('#gd-hdr-proj'), headerBefore: $('#btn-print'), card: $('#gd-savecard'),   // GDHD: Print last
+>>>>>>> origin/main
     note: '<p class="spNote">Each saved project holds the design modules and Preliminary sizing under one name; Open, Rename, Duplicate and Delete act on both (a project saved before 2026-11-06 may hold only one of them: opening it keeps the other part\u2019s inputs on screen). Open asks first when the project on screen has unsaved changes. Delete removes the browser copy (with Cloud sync on, it asks whether to delete the GitHub copy too). Export makes a .json file of one saved project.</p>',
     cloud: { tool: 'steel-bridge-design', label: 'Steel Bridge Design', space: 2, toFile: sbdPairFile,
       fromFile: j => { if (j.app === 'SteelBridgeDesign') { const m = sbdMigrate(j); if (!m) throw new Error('a newer Steel Bridge Design file than this copy reads'); const it = {};

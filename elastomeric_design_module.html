@@ -270,8 +270,7 @@ textarea{width:100%;min-height:90px;font-family:inherit;font-size:13px;border:1p
 <div id="edmPrjHold" hidden><div class="panel" id="edmSavePane" data-cid="edm-save"><div class="p-head">Save and open</div><div class="p-body"><div id="edmSaveCard"><!-- STDS (2026-11-06): the standard save card (edmStdsInit), first in the Project input tab; was the "Project file" group below -->
   <button id="btnExport" title="Download inputs as JSON backup">Export JSON</button>
   <button id="btnImport" title="Load inputs from JSON">Import JSON</button>
-  <input type="file" id="importFile" accept="application/json" style="display:none">
-  <button id="btnReset" title="Reset all inputs to defaults">Reset</button></div></div></div>
+  <input type="file" id="importFile" accept="application/json" style="display:none"></div></div></div>
 <div class="panel" id="edmPrjPane" data-cid="edm-prj"><div class="p-head">Checks and hand-off</div><div class="p-body">
   <div class="prjGrp"><b>Self-test</b><div class="prjHint">The built-in MassDOT benchmark check of the calculation engine.</div><div class="prjRow toolbar" style="padding:0;border:0;background:none">
   <button id="btnSelfTest" title="Run the built-in MassDOT benchmark self-test">Self-Test</button></div></div>
@@ -1063,7 +1062,8 @@ const EDM_GH_UI={ redraw:()=>{ if(document.getElementById("dlgProj").open) rende
 document.getElementById("btnExport").addEventListener("click",()=>{ const blob=new Blob([JSON.stringify(S,null,2)],{type:"application/json"}); const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=(S.proj.name||"bearing").replace(/[^\w]+/g,"_")+"_edm.json"; a.click(); URL.revokeObjectURL(a.href); });
 document.getElementById("btnImport").addEventListener("click",()=>document.getElementById("importFile").click());
 document.getElementById("importFile").addEventListener("change",ev=>{ const f=ev.target.files[0]; if(!f)return; const rd=new FileReader(); rd.onload=()=>{ try{ S=Object.assign(defaultState(),JSON.parse(rd.result)); migrate(); buildInputs(); recalc(); if(window.EDPB) EDPB.setCurrent(null); /* STDS: an imported file is not a saved project */ }catch(e){alert("Import failed: "+e.message);} ev.target.value=""; }; rd.readAsText(f); });
-document.getElementById("btnReset").addEventListener("click",()=>{ if(!confirm("Reset all inputs to defaults?"))return; S=defaultState(); migrate(); buildInputs(); recalc(); });
+/* RSTN (2026-11-06): the card's Reset button and its handler removed: it did what New does (edmStdsInit newProject); New asks only on
+   unsaved changes and leaves no saved project open */
 /* ---- events ---- */
 document.addEventListener("input",ev=>{ const el=ev.target,p=el.dataset.path; if(!p)return; if(el.tagName==="SELECT")return;
   let v; if(el.type==="checkbox")v=el.checked; else if(el.type==="number")v=el.value===""?0:Number(el.value); else v=el.value;
@@ -1417,7 +1417,7 @@ function init(){
 document.addEventListener("DOMContentLoaded",init);
 /* PLIB (2026-11-02): Undo / Redo (shared/projects.js history, shared/projects-ui.js buttons and Ctrl+Z / Ctrl+Y). Snapshots of S
    without S.ui (tabs and collapsed panels are not steps), session only; set = the Import path (Object.assign(defaultState(), step),
-   migrate(), buildInputs(), recalc()) with the current S.ui. Load, Import and Reset are one step each. */
+   migrate(), buildInputs(), recalc()) with the current S.ui. Load, Import and Reset (New since RSTN, 2026-11-06) are one step each. */
 document.addEventListener("DOMContentLoaded",()=>{
   if(!window.SharedProjects||!window.SharedProjectsUI) return;
   const h=SharedProjects.history({ get:()=>JSON.stringify(Object.assign({},S,{ui:undefined})),
@@ -1433,7 +1433,7 @@ document.addEventListener("DOMContentLoaded",()=>{
 /* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over PROJKEY (edm_v1_projects: { name: { state, ts } }, key
    and item format unchanged). Toolbar: chip · ↶ Undo · ↷ Redo · Save · Saved projects… · (link / autosave status) · Print / PDF
    Report; the Project input tab's first card "Save and open": Save · Save as… · Saved projects… · New; Export JSON · Import JSON;
-   Reset (the same buttons and handlers). Save = edmSaveNamed (the old Save Project: { state: copy of S, ts }); Open = the old Load
+   Reset (the same buttons and handlers; Reset removed by RSTN, 2026-11-06: New does the same). Save = edmSaveNamed (the old Save Project: { state: copy of S, ts }); Open = the old Load
    (S = state, migrate, buildInputs, recalc); New = Reset without its confirm (projectBar asks first on unsaved changes). Rename /
    Duplicate / Delete: the standard dialog (items move / are copied unchanged). GitHub sync: as GHS2 (#817), same folder
    projects/elastomeric-bearing/, toFile = state, fromFile = the Import JSON read (Object.assign(defaultState(), file)), stored
@@ -1451,7 +1451,7 @@ function edmStdsInit(bu){
     displayName:()=>S.proj&&S.proj.name||"",
     exportFile:n=>SharedProjectsUI.download(String(n||S.proj.name||"bearing").replace(/[^\w]+/g,"_")+"_edm.json",JSON.stringify(S,null,2)),
     importFile:()=>$("importFile").click(),
-    fileButtons:[$("btnExport"),$("btnImport")], extras:[$("btnReset")],
+    fileButtons:[$("btnExport"),$("btnImport")],
     header:tb, chipBefore:bu, headerBefore:tb.querySelector(".spacer"), card:$("edmSaveCard"),
     cloud:{ tool:"elastomeric-bearing", label:"Elastomeric Bearing Design", space:2, toFile:i=>i.state,
       fromFile:o=>{ if(o._schema||o.schema||o.app||!o.proj||!o.geom) throw new Error("not an elastomeric bearing project file"); return Object.assign(defaultState(),o); /* store.save packs it as { state, ts } */ } } });
