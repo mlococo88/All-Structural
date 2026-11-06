@@ -1243,7 +1243,7 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
   - before / after screenshots at 1920 and 390 px looked at.
 - **Saved data:** no change.
 
-## 2026-11-06 — PR: claude/standard-save-stone-arch (STDS) — the standard save: header chip + Save + Saved projects…, "Save and open" card first in the Project tab, Save as, Ctrl+S; the misleading autosave text fixed   [display / save controls only; no result change]
+## 2026-11-06 — PR: claude/standard-save-stone-arch (PR #852: https://github.com/mlococo88/All-Structural/pull/852) (STDS) — the standard save: header chip + Save + Saved projects…, "Save and open" card first in the Project tab, Save as, Ctrl+S; the misleading autosave text fixed   [display / save controls only; no result change]
 - **Why:** engineer decision 2026-11-05 (standard save roll-out after the Spread Footing pilot #837), including "fix Stone Arch's misleading autosave text". Uses `SharedProjectsUI.projectBar` (shared/projects-ui.js).
 - **Header (`#hdrActs`):** before: `Project: <project> · <task>` (read-only link) · Print / PDF Report · Undo · Redo · Saved projects…. After: chip `Project: <open saved project> ● saved / unsaved changes / not saved` (+ GitHub badge with sync on) · Undo · Redo · **Save (Ctrl+S)** · Saved projects… · Print / PDF Report (the Undo / Redo row now goes before Print, the standard order). `#hdrProj` is hidden (`hidden`; `saHdrProj()` still fills it).
 - **Project tab:** a new first card **"Save and open"** at the top of the persistent `#saPrjPane` (`#saSaveCard`; archInputTabs() already puts `#saPrjPane` first in the Project tab): status line; Save · Save as… · Saved projects… · New; Export JSON · Import JSON (they run the old `#bExp` / `#fImp` paths); the two hint lines.
