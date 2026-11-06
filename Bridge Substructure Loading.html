@@ -4199,6 +4199,9 @@ window.addEventListener('beforeprint', () => {
     importFile: () => $('#file-in').click(),
     fileButtons: [document.getElementById('btn-open'), document.getElementById('btn-save')],
     header: box, chipBefore: bu, card: true,
+    /* HDRS (2026-11-06, engineer: every app's header as in Spread Footing #884): the header has the chip only (no Save / Saved
+       projects… buttons: they are in the "Save and open" card; Ctrl+S / Ctrl+Shift+S work from anywhere). A chip click opens the Project input tab (its tab button is clicked) and brings the card into view. */
+    headerSave: false, chipClick: () => { const t = document.querySelector('.itab[data-pane="project"]'); if (t) t.click(); const c = pb.el.card; if (c && c.isConnected) c.scrollIntoView({ block: 'nearest' }); }, chipHint: 'the Project tab (Save and open)',
     /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'bridge-substructure-loading',label:'Bridge Substructure Loading',space:1,fromFile:j=>{if(!j||j.app!==APP)throw new Error('not a SubLoads project file');return j;}} });
   [pb.el.save, pb.el.lib, ...pb.el.card.querySelectorAll('button[data-sp]')].forEach(b => { b.classList.add('btn'); if (b.parentNode === box) b.style.cssText = 'font-size:12px;padding:3px 10px'; });   // the tool's button style
   const save = n => { const r = store.save(n, P); if (r.ok) pb.setCurrent(r.name); return r; };
