@@ -56,6 +56,7 @@ body{font-family:var(--font-doc);font-size:10pt;color:var(--ink);background:#efe
 #hdrProj:hover{color:#fff;text-decoration:underline}
 #hdrProj .hdrNone{font-style:italic;opacity:.8}
 #prjPane .secHead{cursor:default}
+#tbSaveCard .spCard{font-family:var(--font-ui);font-size:9pt}   /* STDS: the Save and open card in the panel's UI font */
 #inputPanel #projGrid{grid-template-columns:repeat(2,minmax(0,1fr));margin-top:0}
 #inputPanel #projGrid label{color:#475569}
 #inputPanel #projGrid input{background:#fff;color:inherit;border-color:var(--line)}
@@ -227,19 +228,20 @@ a.wkA:hover{text-decoration:underline}
         <a class="alltools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
       </div>
       <div class="hdrBtns" id="hdrActs">
-        <a id="hdrProj" href="#" title="Project and job number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
+        <a id="hdrProj" hidden href="#" title="Project and job number: edit them in the Project input tab">Project: <span id="hdrProjTxt"></span></a>
         <button type="button" id="btnPrint" class="primary" title="Build a printable calculation report">Print report</button>
       </div>
     </div>
   </div>
   <!-- TBHD (2026-11-05): the header's Open file / Save file, moved; buildProjectPane() puts them in the Project file card -->
   <div id="tbcFileHold" hidden>
-    <button type="button" class="btn sm" id="btnOpenHdr" title="Open a project file (.json), including files saved by earlier versions of this tool">&#11014; Open file&hellip;</button>
-    <button type="button" class="btn sm" id="btnSaveHdr" title="Save the project to a file (.json)">&#11015; Save file</button>
+    <button type="button" class="btn sm" id="btnOpenHdr" title="Open a project file (.json), including files saved by earlier versions of this tool">Import JSON</button>
+    <button type="button" class="btn sm" id="btnSaveHdr" title="Save the project to a file (.json)">Export JSON</button><!-- STDS (2026-11-06): were ⬆ Open file… / ⬇ Save file; the standard "Save and open" card takes them -->
   </div>
   <div id="govStrip" class="govStrip"></div>
   <div id="main">
     <div id="inputPanel"><div id="prjPane"><!-- TBHD (2026-11-05): moved here from the header; kept across rebuilds by rebuildInputs() (first in the Project tab) -->
+      <div class="sec"><div class="secHead"><span class="secTitle">Save and open</span></div><div class="secBody" id="tbSaveCard"></div></div><!-- STDS (2026-11-06): the standard "Save and open" card (shared/projects-ui.js projectBar, TBPL.pb); it replaces "Saved projects (this browser)" and "Project file" -->
       <div class="sec"><div class="secHead"><span class="secTitle">Title block</span></div><div class="secBody">
         <div id="projGrid"></div>
         <div class="hint">Printed on the Report.</div>
@@ -1530,22 +1532,35 @@ function tbPlibInit() {
   let tm = null; const soon = () => { clearTimeout(tm); tm = setTimeout(() => h.record(), 400); };
   let ST = null; try { ST = window.localStorage; } catch (e) { /* none */ }
   const store = SharedProjects.mapStore(ST, LS_PROJ, { unpack: i => i && i.d, time: i => i && i.t || null, sort: 'saved' });
-  const dlg = SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'timber-beam-check',label:'Timber Beam Check',space:2,toFile:i=>i.d,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return {t:Date.now(),d:j};}},
-    store, storage: ST, title: 'Saved projects (this browser)',
-    current: () => { const n = (M.project.name || '').trim(); return n && store.has(n) ? n : null; },
-    open: n => { const d = store.get(n); return d ? loadModel(d, `Opened "${n}"`) : false; },
-    renamed: (a, b) => { if ((M.project.name || '').trim() === a) { M.project.name = b; buildProjHeader(); rebuildInputs(); autosave(); } },
-    changed: () => rebuildInputs() });
+  /* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over tbc_projects_v1 ({ name: { t, d: M } }, unchanged). Replaces
+     the sections "Saved projects (this browser)" and "Project file" and the PLIB Saved projects… button. Save(name) = the old Save's write
+     (p[name] = { t, d: stampVersion() copy }); Open = loadModel (as before); New = tbcDefaultModel() (was "New project"). The open name is
+     kept in this page (Save no longer saves under the Project field; a rename of the open project still renames the Project field when it
+     equals the old name, as before) and found again by content after a reload. "Unsaved changes" compares M without ui (as Undo / Redo),
+     a saved project as loadModel leaves it (tbcMigrate). Export JSON / Import JSON: #btnSaveHdr / #btnOpenHdr (were ⬇ Save file / ⬆ Open file…). */
+  const C = m => { const c = JSON.parse(JSON.stringify(m)); c.version = tbcVersionFor(c); return SharedProjects.canon(c, ['ui']); };
   const B = (t, ti) => SharedProjectsUI.button(t, ti);
   const bu = B('Undo', 'Undo the last input change (Ctrl+Z)'), br = B('Redo', 'Redo (Ctrl+Y or Ctrl+Shift+Z)');
   const ref = $('btnPrint'); if (ref) { ref.parentNode.insertBefore(bu, ref); ref.parentNode.insertBefore(br, ref); }
+  const pb = SharedProjectsUI.projectBar({ store, storage: ST, label: 'Timber Beam Check', id: 'tbLibDlg',
+    snapshot: () => C(M), snapOf: n => { const d = store.get(n); if (!d) return null; try { return C(tbcMigrate(JSON.parse(JSON.stringify(d))).model); } catch (e) { return null; } },
+    save: n => { const p = getProjects(); p[n] = { t: Date.now(), d: JSON.parse(JSON.stringify(stampVersion())) };
+      if (!setProjects(p)) return { ok: false, message: 'Could not save: browser storage is not available or full. Use Export JSON instead.' }; toast(`Saved "${n}"`); return { ok: true }; },
+    open: n => { const d = store.get(n); return d ? loadModel(d, `Opened "${n}"`) : false; },
+    newProject: () => { M = tbcDefaultModel(); fullRebuild(); toast('New project'); },
+    displayName: () => (M.project.name || '').trim(),
+    exportFile: n => { const was = M.project.name; if (n) M.project.name = n; try { saveFile(); } finally { M.project.name = was; } },
+    importFile: () => $('tbcFile').click(),
+    fileButtons: [$('btnSaveHdr'), $('btnOpenHdr')],
+    header: ref ? ref.parentNode : null, chipBefore: bu, headerBefore: ref, card: $('tbSaveCard'),
+    renamed: (a, b) => { if ((M.project.name || '').trim() === a) { M.project.name = b; buildProjHeader(); rebuildInputs(); autosave(); } },
+    /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'timber-beam-check',label:'Timber Beam Check',space:2,toFile:i=>i.d,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return {t:Date.now(),d:j};}} });
+  pb.el.card.querySelectorAll('button[data-sp]').forEach(b => b.classList.add('btn', 'sm'));
+  [pb.el.chip, pb.el.save, pb.el.lib].forEach(b => b.classList.add('btn'));
+  { const hn = el('div', 'hint', 'Import JSON opens this tool’s project files, including every format saved by the earlier version of the tool (timber_design.json); those are converted with identical results.'); pb.el.card.appendChild(hn); }
+  const dlg = pb.dialog;
   SharedProjectsUI.undoRedo(h, { undo: bu, redo: br });
-  h.reset(); TBPL = { h, store, dlg, soon };
-}
-function tbPlibButton() {
-  if (!TBPL) return null;
-  const b = SharedProjectsUI.button('Saved projects\u2026', 'The projects saved in this browser: open, rename, duplicate, delete', { cls: 'btn sm' });
-  b.addEventListener('click', () => TBPL.dlg.show()); return b;
+  h.reset(); TBPL = { h, store, dlg, soon, pb };
 }
 function getProjects() { try { const p = JSON.parse(lsGet(LS_PROJ) || '{}'); return (p && typeof p === 'object' && !Array.isArray(p)) ? p : {}; } catch (e) { return {}; } }
 function setProjects(p) { return lsSet(LS_PROJ, JSON.stringify(p)); }
@@ -1574,7 +1589,7 @@ function openFileText(text) {
   let d;
   try { d = JSON.parse(text); if (!d || typeof d !== 'object' || Array.isArray(d)) throw new Error('file does not contain a project object'); }
   catch (e) { alert('Could not open project file: ' + e.message); return; }
-  loadModel(d);
+  if (loadModel(d) !== false && TBPL && TBPL.pb) TBPL.pb.setCurrent(null);   /* STDS: an imported file is not the open saved project */
 }
 function saveFile() {
   const blob = new Blob([JSON.stringify(stampVersion(), null, 2)], { type: 'application/json' });
@@ -1592,7 +1607,7 @@ function wireFile() {
     rd.onerror = () => alert('Could not read the file.');
     rd.readAsText(file); fi.value = '';
   });
-  $('btnOpenHdr').addEventListener('click', () => fi.click());
+  $('btnOpenHdr').addEventListener('click', () => { if (TBPL && TBPL.pb) TBPL.pb.importJSON(); else fi.click(); });   /* STDS: asks first on unsaved changes */
   $('btnSaveHdr').addEventListener('click', saveFile);
   $('btnPrint').addEventListener('click', () => tbrPrintAny());   // TBRX: prints the Report tab from any tab
   $('btnUseShared').addEventListener('click', () => { const patch = ProjMetaUI.use(TBC_PROJ_MAP, M.project, 'timberBeamCheck'); if (patch) { Object.assign(M.project, patch); buildProjHeader(); schedule(false); } });
@@ -1685,7 +1700,7 @@ function setGeom(spans, types) {
 function rebuildInputs() {
   const st = captureUI();
   const PJ = $('prjPane');   /* TBHD: the Project tab's title block and shared-info buttons survive the rebuild; so do Open / Save file */
-  { const fh = $('tbcFileHold'); ['btnOpenHdr', 'btnSaveHdr'].forEach(id => { const b = $(id); if (b && fh) fh.appendChild(b); }); }
+  { const fh = $('tbcFileHold'); ['btnOpenHdr', 'btnSaveHdr'].forEach(id => { const b = $(id); if (b && fh && !(TBPL && TBPL.pb)) fh.appendChild(b); }); }   /* STDS: not once they are in the Save and open card (it is in #prjPane, which survives) */
   const P = $('inputPanel'); const keep = P.scrollTop; P.innerHTML = '';
   const bar = el('div'); bar.id = 'tbcInTabs'; bar.setAttribute('role', 'tablist'); bar.setAttribute('aria-label', 'Input groups');
   P.appendChild(bar);
@@ -1733,44 +1748,8 @@ function refLineHTML() {
 }
 
 function buildProjectPane(P) {
-  mkSec(P, 'inProj', 'Saved projects (this browser)', body => {
-    const projs = getProjects(); const names = Object.keys(projs).sort();
-    const nm = txtIn(() => M.project.name || '', v => { M.project.name = v; const h = $('proj_name'); if (h) h.value = v; }, 'projSaveName', 'Project name');
-    fRow(body, 'Name', nm, '');
-    const row = el('div', 'btnRow');
-    const sv = el('button', 'btn primary sm', 'Save'); sv.type = 'button';
-    sv.addEventListener('click', () => {
-      const n = (M.project.name || '').trim() || 'Untitled';
-      const p = getProjects(); if (p[n] && !confirm(`Replace the saved project "${n}"?`)) return;
-      p[n] = { t: Date.now(), d: JSON.parse(JSON.stringify(stampVersion())) };
-      if (!setProjects(p)) { alert('Could not save: browser storage is not available or full. Use "Save file" instead.'); return; }
-      toast(`Saved "${n}"`); rebuildInputs();
-    });
-    row.appendChild(sv);
-    if (names.length) {
-      const sel = document.createElement('select'); tagField(sel, 'projSel'); sel.style.width = 'auto'; sel.style.maxWidth = '170px';
-      names.forEach(n => { const o = document.createElement('option'); o.value = n; o.textContent = n + ' (' + new Date(projs[n].t || 0).toLocaleDateString() + ')'; sel.appendChild(o); });
-      const ld = el('button', 'btn sm', 'Open'); ld.type = 'button';
-      ld.addEventListener('click', () => { const p = getProjects()[sel.value]; if (!p) return; loadModel(p.d, `Opened "${sel.value}"`); });
-      const del = el('button', 'btn sm danger', 'Delete'); del.type = 'button';
-      del.addEventListener('click', () => { if (!confirm(`Delete the saved project "${sel.value}"?`)) return; const p = getProjects(); delete p[sel.value]; setProjects(p); rebuildInputs(); });
-      row.appendChild(sel); row.appendChild(ld); row.appendChild(del);
-    }
-    { const lb = tbPlibButton(); if (lb) row.appendChild(lb); }   /* PLIB */
-    body.appendChild(row);
-    body.appendChild(el('div', 'hint', `Saved projects and the last session (autosave) are kept in this browser's local storage (keys <code>${LS_PROJ}</code>, <code>${LS_AUTO}</code>). Use <b>Save file</b> for a backup or to move a project to another computer.`));
-  }, { noNum: true });
-  mkSec(P, 'inFile', 'Project file', body => {
-    const row = el('div', 'btnRow');
-    /* TBHD: the header's Open file / Save file (wired once by wireFile()) are moved here instead of making a second pair */
-    let op = $('btnOpenHdr'), sv = $('btnSaveHdr');
-    if (!op) { op = el('button', 'btn sm', '⬆ Open file…'); op.type = 'button'; op.addEventListener('click', () => $('tbcFile').click()); }
-    if (!sv) { sv = el('button', 'btn sm', '⬇ Save file'); sv.type = 'button'; sv.addEventListener('click', saveFile); }
-    const nw = el('button', 'btn sm danger', 'New project'); nw.type = 'button';
-    nw.addEventListener('click', () => { if (!confirm('Start a new project? Unsaved changes to the current project are lost (the autosave is replaced).')) return; M = tbcDefaultModel(); fullRebuild(); toast('New project'); });
-    row.appendChild(op); row.appendChild(sv); row.appendChild(nw); body.appendChild(row);
-    body.appendChild(el('div', 'hint', 'Opens this tool’s project files, including every format saved by the earlier version of the tool (timber_design.json); those are converted with identical results.'));
-  }, { noNum: true });
+  /* STDS (2026-11-06): the sections 'Saved projects (this browser)' (Name, Save, drop-down, Open, Delete, Saved projects…) and 'Project file'
+     (Open file… / Save file / New project) are replaced by the standard "Save and open" card (#tbSaveCard, tbPlibInit) */
   mkSec(P, 'inNotes', 'Notes and assumptions', body => {
     const ta = document.createElement('textarea'); tagField(ta, 'projNotes'); ta.value = M.project.notes || '';
     ta.placeholder = 'Free text; printed in the report.';
@@ -2902,7 +2881,7 @@ function buildManual(pg) {
     '<b>SCL (NDS Ch. 8):</b> manufacturer’s values; C<sub>V</sub> = (d<sub>ref</sub>/d)<sup>n</sup> up to the limit entered; the lesser of C<sub>L</sub> and C<sub>V</sub> applies when C<sub>V</sub> ≤ 1.0, both when C<sub>V</sub> > 1.0 (NDS 8.3.6); repetitive member factor C<sub>r</sub> = 1.04 on F<sub>b</sub> (NDS 8.3.7). Wet service, flat use and notches: not covered.',
     '<b>Timbers (Table 4D):</b> C<sub>F</sub> = (12/d)<sup>1/9</sup> for d > 12 in.; no C<sub>r</sub>; flat use with the Table 4D factors (Beams and Stringers).']);
   H('Saved data');
-  UL(['<b>Files:</b> Save file writes the project as JSON with <code>_schema: "timber-beam-check"</code> and <code>version: 2</code>, or <code>version: 3</code> when the project uses glulam, SCL or LRFD (so that the earlier version of the tool refuses it instead of reading it as sawn lumber / ASD). Open file reads versions 2 and 3 and every format of the earlier version (the original 11-field file, the full flat file of fix log F18, <code>temp: "High"</code>, custom species in the old <code>F_b</code> shape); those convert with identical results, except that the bottom (negative-moment) edge opens as braced at supports only (engineer\'s decision R1-a, fix log R2; that version took it as braced like the top edge, which can still be chosen as "Same as top edge"). Files of any version that use the 6x8 or 8x8 size open with the Table 1B dressed sizes (5.5 × 7.5 and 7.5 × 7.5 in.; fix log R4), so their results change.',
+  UL(['<b>Files:</b> Export JSON writes the project as JSON with <code>_schema: "timber-beam-check"</code> and <code>version: 2</code>, or <code>version: 3</code> when the project uses glulam, SCL or LRFD (so that the earlier version of the tool refuses it instead of reading it as sawn lumber / ASD). Open file reads versions 2 and 3 and every format of the earlier version (the original 11-field file, the full flat file of fix log F18, <code>temp: "High"</code>, custom species in the old <code>F_b</code> shape); those convert with identical results, except that the bottom (negative-moment) edge opens as braced at supports only (engineer\'s decision R1-a, fix log R2; that version took it as braced like the top edge, which can still be chosen as "Same as top edge"). Files of any version that use the 6x8 or 8x8 size open with the Table 1B dressed sizes (5.5 × 7.5 and 7.5 × 7.5 in.; fix log R4), so their results change.',
     `<b>This browser:</b> the last session is autosaved (<code>${LS_AUTO}</code>) and named projects are kept (<code>${LS_PROJ}</code>); the selected input tab is remembered (<code>${TBC_IN_KEY}</code>). All keys start with <code>tbc_</code>.`,
     '<b>Shared project info</b> (bridgeSuite.v1.projectMeta): Project, Client, Job #, Designer, Checked by and Date are shared and received (shared fields <code>projectName</code>, <code>client</code>, <code>jobNo</code>, <code>preparedBy</code>, <code>checkedBy</code>, <code>date</code>; Project, Checked by and Date added in fix log R5). Member / mark and Notes stay in this tool.']);
   H('Limitations and open items');

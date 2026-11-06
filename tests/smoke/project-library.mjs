@@ -75,7 +75,7 @@ export const TOOLS = {
     ready: p => p.waitForFunction(() => window.TBC && window.TBC.res),
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(window.TBC.res, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, '#inputPanel input[type=number], input[type=number]', 2),
-    save: async (p, name) => { await p.evaluate(n => { window.TBC.model.project.name = n; const b = [...document.querySelectorAll('button')].find(x => x.textContent === 'Save' && x.closest('[data-secid=inProj], #inProj, section, div')); b.click(); }, name); await p.waitForTimeout(400); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { window.TBC.model.project.name = n; const b = [...document.querySelectorAll('button')].find(x => x.textContent === 'Save' && x.closest('[data-secid=inProj], #inProj, section, div')); b.click(); }, name); await p.waitForTimeout(400); }
   },
   lightpole: {
     file: 'Light Pole and Sign Post.html', list: 'lpp_projects_v1', auto: 'lpp_session_v1',
