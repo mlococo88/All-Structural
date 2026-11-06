@@ -2248,7 +2248,7 @@ const PbdListTable = window.SharedListInput ? SharedListInput.react(React) : nul
   - before / after screenshots at 1920 and 390 px looked at.
 - **Saved data:** no change (`psbeam.inputTab.v1` may now also hold `proj`, a view setting read through the same list).
 
-## 2026-11-06 — PR: claude/bss-shared-mct (BSS) — the "Suite sync" pill is called "Hand-off locks"   [label only]
+## 2026-11-06 — PR: claude/bss-shared-mct (PR #863: https://github.com/mlococo88/All-Structural/pull/863) (BSS) — the "Suite sync" pill is called "Hand-off locks"   [label only]
 - **Where:** the duplicated Bridge Suite bootstrap (CLAUDE.md §3), `BridgeLocksUI` (`SuitePanel` title default, `mountPanel` title, `drawer` `paintFab` label and `setOpen` title): the four `'Suite sync'` → `'Hand-off locks'`.
 - **Why:** engineer decision (2026-11-06): the hand-off lock panel must not read as cloud sync next to "Cloud sync (GitHub)".
 - **Other copies:** `index.html`, `lldf.html`, `Prestressed Bridge Design.html` (same PR; the block stays identical in the three).

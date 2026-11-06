@@ -4436,7 +4436,7 @@ function NumberListInput({value, onChange, placeholder, label, col = 'Value', un
 - The Report Card's date and the "Report Generated" line are the time the Report is built (as the windows printed the time they were opened).
 - Engineer check: print the Report from the AREMA Rating step of a real AREMA project (GFS member selected) and confirm the AREMA section matches the old "Print AREMA Report" printout.
 
-## 2026-11-06 — PR: claude/bss-shared-mct (BSS) — the standard save: header chip · Undo · Redo · Save · Saved projects…, "Save and open" card, standard dialog over the Bridge Suite list, GitHub sync; "Suite sync" pill renamed "Hand-off locks"   [display and storage-access only; no key or format change; no computed result change]
+## 2026-11-06 — PR: claude/bss-shared-mct (PR #863: https://github.com/mlococo88/All-Structural/pull/863) (BSS) — the standard save: header chip · Undo · Redo · Save · Saved projects…, "Save and open" card, standard dialog over the Bridge Suite list, GitHub sync; "Suite sync" pill renamed "Hand-off locks"   [display and storage-access only; no key or format change; no computed result change]
 - **Why:** engineer-approved standard save (2026-11-05) and the Bridge Suite decisions (2026-11-06).
 - **Where / what:**
   - `<head>`: after `<script src="shared/projects-ui.js">`, new `<script src="shared/github-sync.js">` and `<script src="shared/bridge-suite-projects.js">`; CSS block "BSS (2026-11-06)" after `@media print{.bx-alltools,.bx-projbtns{…}}` (button look; `.ix-hstats` hidden between 900 and 1599 px).

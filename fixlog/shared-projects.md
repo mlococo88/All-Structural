@@ -101,7 +101,7 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
 - **How verified:** see the PR (standard-save, github-sync, github-sync-tools (all tools), home-projects, home-sync, steel-bridge-library, engine tests).
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-06 — PR: claude/bss-shared-mct (BSS) — projects-ui.js: Save sends the project to GitHub at once also with a settle time   [display only]
+## 2026-11-06 — PR: claude/bss-shared-mct (PR #863: https://github.com/mlococo88/All-Structural/pull/863) (BSS) — projects-ui.js: Save sends the project to GitHub at once also with a settle time   [display only]
 - **What (`projectBar` `done()`, anchor `dialog.cloud.tick()`):** `if (dialog.cloud && dialog.cloud.tick) dialog.cloud.tick().catch(() => {});` → `… dialog.cloud.tick(true).catch(() => {});` (see fixlog/shared-github-sync.md, same PR: `tick(all)`).
 - **Unchanged for every other tool:** none has a `settle` time; `all` only skips the settle check.
 - **Loaded by:** the tools listed for `shared/projects-ui.js` in shared/README.md, plus `index.html`; `lldf.html` (already loaded it); `Prestressed Bridge Design.html` (its own PR).
