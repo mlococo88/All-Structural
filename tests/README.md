@@ -49,6 +49,7 @@ node tests/smoke/steel-bridge-report.mjs
 # Drawings "Print sheet" / "Print all sheets" (shared/dxf.js printSheets): headless print-to-PDF, 17 x 11 in pages, a known dimension
 # measured to scale on the PDF (pdfinfo, pdftocairo), the Report still printed by Ctrl+P (one entry per tool in TOOLS)
 node tests/smoke/dxf-print-sheets.mjs [--tool sf,...] [--out <dir for the PDFs>]
+# (tools: sf, lp, sbd, bg, spc, cbc, bp, rw = Retaining Wall Designer: the graphic scale bar of the ELEVATION AND NOTES sheet is the measured rectangle)
 
 # Spread Footing: the page itself never scrolls in the two-panel layout (links, scrollIntoView, focus, wheel, touch; 3 window sizes)
 node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex, plotly, three; default tests/libs>]

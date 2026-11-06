@@ -118,6 +118,17 @@ const TOOLS = {
     reportOpen: async p => { await p.evaluate(() => { S.ui.tab = 'tabReport'; buildTabs(); }); await p.waitForTimeout(6000); },
     report: /Base Plate|Anchor/i,
   },
+  rw: {   // RWDW (2026-11-06): the Drawings tab of the Retaining Wall Designer; the known rectangle is the footing (wall segment length x t_f)
+          // in the WALL ELEVATION AND GENERAL NOTES sheet. Ctrl+P prints the Report from any tab (RWRX).
+    file: 'Retaining Wall Designer.html', label: 'Retaining Wall Designer',
+    open: async p => { await p.waitForFunction(() => window._R && typeof rwdwRender === 'function', null, { timeout: 60000 }); await p.click('.tab-btn[data-tab="drawings"]');
+      await p.waitForSelector('#rwdwPrint1'); await p.selectOption('#rwdwSheet', 'notes'); await p.waitForSelector('#rwdwPrint1'); },
+    one: '#rwdwPrint1', all: '#rwdwPrintAll',
+    n: p => p.evaluate(() => RWDW.B.S.length),
+    known: p => p.evaluate(() => { const s = RWDW.B.S.find(q => q.id === RWDW.cur); return { what: s.known.what + ' on ' + s.title + ' at ' + s.scale + ' (1:' + s.k + ')', w: s.known.w, h: s.known.h }; }),
+    reportOpen: async p => { await p.waitForTimeout(500); },
+    report: /Retaining Wall|Calculation Report/i,
+  },
 };
 
 let fails = 0; const check = (ok, m) => { console.log(`  ${ok ? 'ok  ' : 'FAIL'} ${m}`); if (!ok) fails++; };
