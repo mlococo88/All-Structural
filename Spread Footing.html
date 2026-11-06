@@ -5125,6 +5125,13 @@ $('#tabbar').addEventListener('click',e=>{
   importFile:()=>$('#fileImport').click(),
   fileButtons:[$('#btnExport'),$('#btnImport')],extras:[$('#btnReset')],
   header:$('#sfdHdrA'),chipBefore:$('#btnUndo'),headerBefore:$('#sfdAcLbl'),card:$('#sfdSaveCard'),
+  /* START (2026-11-06; TRIAL here only, pending engineer review): the start-of-session chooser of shared/projects-ui.js: a "Recent
+     projects" strip under the header (autosave + saved projects), or the Saved projects dialog (no autosave yet). Not shown when a
+     hand-off for this tool was sent in the last 30 minutes and is not pulled yet (memberReactions / foundationLoads), with a URL
+     #hash / ?query, in a frame or while printing. sfd_auto is only read. */
+  start:{tool:'spread-footing',autosaveKey:'sfd_auto',after:$('#sfdHdr'),
+   incoming:()=>{const X=window.BridgeXfer;if(!X)return false;
+    return ['memberReactions','foundationLoads'].some(ch=>{if(!X.isNew(ch,'spreadFooting'))return false;let at=NaN;try{at=Date.parse(localStorage.getItem(X.NS+ch+'.updatedAt'));}catch(e){}return !(at<Date.now()-30*60000);});}},
   /* GHS (2026-11-05): GitHub sync of this list (shared/github-sync.js). Files are the Export JSON format (the stored item is the state). */
   cloud:{tool:'spread-footing',label:'Spread Footing',
    fromFile:j=>{if(!(j&&typeof j==='object'&&!Array.isArray(j)&&j.geom&&typeof j.geom==='object'&&j.soil&&typeof j.soil==='object'&&Array.isArray(j.peds)))throw new Error('not a Spread Footing input file: missing geometry, soil or pedestal data');return j;}}});

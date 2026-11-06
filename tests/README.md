@@ -86,6 +86,11 @@ node tests/smoke/github-sync-tools.mjs [--tool asce7,baseplate,...]
 # GitHub: header order, Ctrl+S / Ctrl+Shift+S, Save never asks, Save as an existing name blocked ("Replace it"), Save as file, the one-table
 # dialog (filter, Export, Open asks on unsaved changes), "This browser only" not uploaded until Upload, reload finds the open project, 390 px. ~40 s
 node tests/smoke/standard-save.mjs [--shots <dir>]
+# Start-of-session chooser (projects-ui.js projectBar ctx.start, START; trial in Spread Footing): nothing without projects; the "Recent
+# projects" strip with an autosave (Continue keeps the state; Open = the dialog's Open, same state / results / storage; first edit and × close
+# it; most recently saved / opened first; autosave time in US Eastern); the dialog by itself without an autosave; "Show this when the app
+# opens"; suppressed with a fresh unpulled hand-off, a URL #hash and print; GitHub-only projects (mock GitHub); 390 px; 0 console errors. ~2 min
+node tests/smoke/start-chooser.mjs [--shots <dir>]
 
 # Home page "Saved projects" panel (tools.html, HSP; registry shared/project-registry.js): each registry tool saves two projects through
 # its own Save, then tools.html#projects lists the same names, order and saved times as each tool's own dialog; the home page writes
