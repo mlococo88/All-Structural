@@ -1661,7 +1661,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Saved data:** none touched (§5). **Other copies:** none.
 - **Not changed:** the on-screen Plotly profile (it draws support ticks without labels) and the plan view's bearing-line station labels.
 
-## 2026-11-06 — PR: claude/bg-plan-brg-labels (BGDP: on-screen plan, the station labels of a dual-bearing pier's two bearing lines spread apart with leader lines; display only, no result change)
+## 2026-11-06 — PR: claude/bg-plan-brg-labels (PR #910: https://github.com/mlococo88/All-Structural/pull/910) (BGDP: on-screen plan, the station labels of a dual-bearing pier's two bearing lines spread apart with leader lines; display only, no result change)
 
 - **Why:** engineer 2026-11-06, after BGDL (#902): check the PLAN view's bearing station labels at piers with two bearing lines (on-screen plan, Drawings plan sheet, DXF plan) with Example 5 and its 1 ft-offset variant; treat them like the profile labels if they crowd.
 - **Findings:**
