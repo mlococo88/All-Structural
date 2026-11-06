@@ -776,6 +776,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--blue-600); box-s
 .rw-dwg-wrap { overflow-x: auto; max-width: 100%; }
 .tab-panel [style*="grid-template-columns:1fr 330px"] > * { min-width: 0; }   /* lets the drawing's card scroll instead of widening the page */
 .rw-dwg-wrap > svg.rw-dwg { min-width: 620px; }
+.rw-dwg-wrap > svg.rw-dwg.rw-dwg-wide { min-width: 760px; }   /* RWTS-3: the collision elevation (860-unit drawing) */
 @media print { .rw-dwg-wrap > svg.rw-dwg { min-width: 0; } }
 /* RWTS-2: the Analysis diagram keeps the same 620 px minimum on narrow screens and scrolls natively (touch) inside its viewport */
 @media (max-width: 700px) { #dg-viewport { overflow: auto !important; } #dg-stage { min-width: 620px; } }
@@ -5957,22 +5958,20 @@ function buildElevationSVG(r) {
   const YL  = c.yl;
   const A   = inp.aashto;
 
-  // ── Layout: INDEPENDENT horizontal / vertical scales (NTS) ──
+  // ── Layout: ONE scale along the wall and up (RWTS-3, 2026-11-06; was independent scales, vertical
+  //    exaggerated to 240–330 px and marked NTS). The scale is the joint spacing across the drawing width, or
+  //    smaller so the elevation is at most 420 px tall; text 11–15.5 units (the drawing is shown at least 760 px wide).
   const W    = 860;
-  const ML   = 96, MR = 172;          // left = vert dims, right = callout table
-  const MT   = 54;
-  const drawW = W - ML - MR;
+  const ML   = 96, MR = 206;          // left = vert dims, right = callout table   (RWTS-3: MR 172 → 206 for the larger text)
+  const drawW0 = W - ML - MR;
 
   const Ljoint = A.ct_ljoint;
-  const SCx = drawW / Ljoint;                 // px per ft ALONG the wall
-
-  // Vertical scale exaggerated so the wall is readable. A long, squat wall
-  // (e.g. 41 ft between joints but only 17 ft tall) would otherwise draw as a
-  // thin ribbon. Target a minimum on-screen height, capped so tall walls stay sane.
   const totalFt = r.H + r.bar_h_ft;            // stem+ftg + barrier
-  const ELEV_H  = Math.max(240, Math.min(330, totalFt * SCx * 1.6));
-  const SCy = ELEV_H / Math.max(totalFt, 1);   // px per ft VERTICAL (≠ SCx)
-  const vExag = SCy / SCx;                      // reported on the drawing
+  const SCx = Math.min(drawW0 / Ljoint, 420 / Math.max(totalFt, 1));   // px per ft ALONG the wall
+  const SCy = SCx;                              // px per ft VERTICAL (= SCx: to scale)
+  const drawW = Ljoint * SCx;
+  const YL0 = c.yl;
+  const MT   = 56 + Math.max(30, (YL0 && r.hasBarrier) ? 46 : 0, (A.ct_h_app/12 - r.bar_h_ft) * SCy + 30);   // RWTS-3: room for EXP JT / L_c / F_t above the barrier (was 54)
 
   const bar_px = r.bar_h_ft * SCy;
   const Hs_px  = inp.Hs     * SCy;
@@ -5999,18 +5998,20 @@ function buildElevationSVG(r) {
   const xd1 = isSection ? x1 : Math.min(x1, xc + Ld_px/2);
 
   // Plan strip + dimension band below
-  const y_band  = y_ftgBot + 40;               // CT kip/ft band
-  const y_planT = y_band + 62;                 // plan strip top
+  const y_band  = y_ftgBot + 44;               // CT kip/ft band
+  const y_planT = y_band + 84;                 // plan strip top   (RWTS-3: was +62)
   const PLAN_H  = 40;
   const y_planB = y_planT + PLAN_H;
-  const H_SVG   = y_planB + 96;
+  const warnCT  = r.hasBarrier && (A.ct_h_app/12) > r.bar_h_ft + 0.01;
+  const y_sb    = y_planB + 54;                // RWTS-3: scale bar
+  const H_SVG   = y_sb + 52 + (warnCT ? 34 : 0);
 
   // Pass/fail tint on the load band
   const ee2ok = E ? (E.sliding_ok_ct && E.ecc_ok_ct && E.bearing_ok_ct) : true;
   const bandFill = ee2ok ? 'rgba(15,122,90,0.14)' : 'rgba(196,33,33,0.16)';
   const bandStrk = ee2ok ? '#0f7a5a' : '#c42121';
 
-  let s = `<svg viewBox="0 0 ${W} ${H_SVG}" style="width:100%;display:block;font-family:'Public Sans',Arial,sans-serif;">`;
+  let s = `<svg class="rw-dwg rw-dwg-wide" viewBox="0 0 ${W} ${H_SVG}" data-scale="${SCx}" style="width:100%;display:block;font-family:'Public Sans',Arial,sans-serif;">`;
   s += `<defs>
     <marker id="el-ar" markerWidth="7" markerHeight="6" refX="7" refY="3" orient="auto">
       <polygon points="0 0,7 3,0 6" fill="#c42121"/></marker>
@@ -6028,7 +6029,7 @@ function buildElevationSVG(r) {
   s += `<text x="${W/2}" y="30" font-size="8" fill="#5a6a80" text-anchor="middle">
     ${isSection ? 'MassDOT \u00a73.3.2.4 \u2014 load engages the ENTIRE section between expansion joints'
                 : 'AASHTO 45\u00b0 spread from the contact patch, capped at joint spacing'}
-    \u00b7 NTS \u2014 vertical scale \u00d7${f(vExag,2)} horizontal</text>`;
+    \u00b7 to scale</text>`;
 
   // ═══ FULL-SECTION SHADING (MassDOT) — the whole wall is engaged ═══
   if (isSection) {
@@ -6046,7 +6047,7 @@ function buildElevationSVG(r) {
   if (r.hasBarrier) {
     s += `<rect x="${x0}" y="${y_barTop}" width="${drawW}" height="${bar_px}"
       fill="rgba(90,106,128,0.20)" stroke="#5a6a80" stroke-width="1.4"/>`;
-    s += `<text x="${x0+7}" y="${y_barTop+bar_px/2+3}" font-size="8" fill="#3d4a5c" font-weight="700">BARRIER</text>`;
+    s += `<text x="${x0+7}" y="${y_barTop+bar_px/2+3}" font-size="8" fill="#3d4a5c" font-weight="700">BARRIER h_b=${f(r.bar_h_ft,2)}'</text>`;
   }
 
   // ── 45° spread lines (only in spread mode) ──
@@ -6061,8 +6062,7 @@ function buildElevationSVG(r) {
     // 45° angle marks
     s += `<path d="M ${xp0} ${y_roadway+16} A 16 16 0 0 0 ${xp0-16} ${y_roadway}"
       fill="none" stroke="#b96400" stroke-width="0.9"/>`;
-    s += `<text x="${xp0-24}" y="${y_roadway+15}" font-size="7.5" fill="#b96400" font-weight="700">45\u00b0</text>`;
-    s += `<text x="${xp0-24}" y="${y_roadway+24}" font-size="6" fill="#b96400" opacity="0.75">(true; NTS)</text>`;
+    s += `<text x="${xp0-20}" y="${y_roadway+18}" font-size="7.5" fill="#b96400" font-weight="700" text-anchor="end">45\u00b0</text>`;
   } else {
     s += `<text x="${xc}" y="${y_roadway + Hs_px*0.55}" font-size="9.5" fill="#8a4a00"
       text-anchor="middle" font-weight="700" opacity="0.85">ENTIRE SECTION ENGAGED</text>`;
@@ -6071,7 +6071,7 @@ function buildElevationSVG(r) {
   }
 
   // ── LOAD PATH arrow: impact → down stem → into footing (vertical cantilever) ──
-  const lpx = xc + Lt_px/2 + 34;
+  const lpx = Math.min(x1 - 50, Math.max(xc + Lt_px/2 + 34, xc + 175));   // RWTS-3: clear of the centred notes (was xc + L_t/2 + 34)
   s += `<path d="M ${lpx} ${y_impact+4} C ${lpx+20} ${y_impact+30}, ${lpx+20} ${y_ftgTop-30}, ${lpx} ${y_ftgTop-6}"
     fill="none" stroke="#7a3ab0" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#el-path)"/>`;
   s += `<text x="${lpx+26}" y="${(y_impact+y_ftgTop)/2}" font-size="7.5" fill="#7a3ab0" font-weight="600"
@@ -6087,7 +6087,7 @@ function buildElevationSVG(r) {
   // ── Roadway line ──
   s += `<line x1="${x0-20}" y1="${y_roadway}" x2="${x1+8}" y2="${y_roadway}"
     stroke="#2a7a2a" stroke-width="1.8"/>`;
-  s += `<text x="${x1+11}" y="${y_roadway+3}" font-size="8" fill="#2a7a2a" font-weight="700">ROADWAY</text>`;
+  s += `<text x="${x0+6}" y="${y_roadway+16}" font-size="8" fill="#2a7a2a" font-weight="700">ROADWAY</text>`;   // RWTS-3: under the line at the left (was right of the wall, on the data table)
   // hatch ticks under roadway
   for (let xx = x0; xx < x1; xx += 26)
     s += `<line x1="${xx}" y1="${y_roadway}" x2="${xx-5}" y2="${y_roadway+5}" stroke="#2a7a2a" stroke-width="0.7" opacity="0.6"/>`;
@@ -6106,46 +6106,60 @@ function buildElevationSVG(r) {
   // L_t dimension on the patch
   s += `<line x1="${xp0}" y1="${y_impact+15}" x2="${xp1}" y2="${y_impact+15}" stroke="#c42121" stroke-width="0.9"/>`;
   [xp0,xp1].forEach(xx => s += `<line x1="${xx}" y1="${y_impact+11}" x2="${xx}" y2="${y_impact+19}" stroke="#c42121" stroke-width="0.9"/>`);
-  s += `<text x="${xc}" y="${y_impact+25}" font-size="7.5" fill="#c42121" text-anchor="middle">L_t = ${f(A.ct_wh,1)}'</text>`;
+  s += `<text x="${xc}" y="${y_impact+30}" font-size="7.5" fill="#c42121" text-anchor="middle">L_t = ${f(A.ct_wh,1)}'</text>`;
 
   // ═══ VERTICAL DIMENSION CHAIN (left side) ═══
-  const dx1 = x0 - 30, dx2 = x0 - 62;   // two dim lines
+  // RWTS-3: three lines (h_CT had shared a line with h_b, and the labels ran past the left edge); the text runs along
+  // each line, left of it, where the segment is long enough, else it sits beside the line's lower end.
+  const dx1 = x0 - 16, dx0 = x0 - 44, dx2 = x0 - 72;
   function vdim(x, ya, yb, lbl, color, bold) {
     if (Math.abs(yb-ya) < 3) return '';
     const cl = color || '#2155c4', wt = bold ? 1.3 : 0.9;
     let o = `<line x1="${x}" y1="${ya}" x2="${x}" y2="${yb}" stroke="${cl}" stroke-width="${wt}"/>`;
     [ya,yb].forEach(yy => { o += `<line x1="${x-4}" y1="${yy}" x2="${x+4}" y2="${yy}" stroke="${cl}" stroke-width="${wt}"/>`; });
-    o += `<text x="${x-6}" y="${(ya+yb)/2+3}" font-size="${bold?8.5:8}" fill="${cl}" text-anchor="end"
-      font-weight="${bold?'700':'600'}">${lbl}</text>`;
+    if (!lbl) return o;
+    const fs = bold ? 8.5 : 8, my = (ya+yb)/2, need = t => t.length * 6.6 * (bold ? 1.08 : 1) + 8;
+    if (Math.abs(yb-ya) < need(lbl) && lbl.includes(' (')) lbl = lbl.slice(0, lbl.indexOf(' ('));   // drop the note before falling back
+    if (Math.abs(yb-ya) >= need(lbl))
+      o += `<text x="${x-4}" y="${my}" font-size="${fs}" fill="${cl}" text-anchor="middle" transform="rotate(-90,${x-4},${my})"
+        font-weight="${bold?'700':'600'}">${lbl}</text>`;
+    else
+      o += `<text x="${x+6}" y="${Math.max(ya,yb)+14}" font-size="${fs}" fill="${cl}" font-weight="${bold?'700':'600'}">${lbl}</text>`;
     return o;
   }
-  // Inner chain (dx1): h_CT, barrier, stem, footing
-  s += vdim(dx1, y_impact, y_roadway, `h_CT=${f(A.ct_h_app,0)}"`, '#2a7a2a');
-  if (r.hasBarrier) s += vdim(dx1, y_barTop, y_roadway, `h_b=${f(r.bar_h_ft,2)}'`, '#5a6a80');
+  // Inner chain (dx1): barrier, stem, footing; h_CT on its own line (dx0)
+  // RWTS-3: h_CT is dimensioned beside the contact patch and h_b is named in the barrier (short segments: their text did not fit here)
+  s += vdim(dx0, y_impact, y_roadway, '', '#2a7a2a');
+  if (r.hasBarrier) s += vdim(dx1, y_barTop, y_roadway, '', '#5a6a80');
+  if (Math.abs(y_roadway - y_impact) > 3) {
+    const hx = xp1 + 12;
+    s += `<line x1="${hx}" y1="${y_impact}" x2="${hx}" y2="${y_roadway}" stroke="#2a7a2a" stroke-width="0.9"/>`;
+    [y_impact, y_roadway].forEach(yy => { s += `<line x1="${hx-4}" y1="${yy}" x2="${hx+4}" y2="${yy}" stroke="#2a7a2a" stroke-width="0.9"/>`; });
+    s += `<text x="${hx+6}" y="${(y_impact+y_roadway)/2+4}" font-size="8" fill="#2a7a2a" font-weight="600">h_CT=${f(A.ct_h_app,0)}"</text>`;
+  }
   s += vdim(dx1, y_roadway, y_ftgTop, `H_s=${f(inp.Hs,2)}'`);
   s += vdim(dx1, y_ftgTop,  y_ftgBot, `t_f=${f(inp.tf,0)}"`);
   // Outer chain (dx2): y_CT (the governing lever arm) and overall H
-  s += vdim(dx2, y_impact, y_ftgBot, `y_CT=${f(c.y_CT,2)}'`, '#c42121', true);
-  s += `<text x="${dx2-6}" y="${(y_impact+y_ftgBot)/2+14}" font-size="7" fill="#c42121" text-anchor="end">lever arm</text>`;
+  s += vdim(dx2, y_impact, y_ftgBot, `y_CT=${f(c.y_CT,2)}' (lever arm)`, '#c42121', true);
 
   // ═══ CT LOAD BAND (with pass/fail tint) ═══
-  s += `<rect x="${xd0}" y="${y_band}" width="${xd1-xd0}" height="21"
+  s += `<rect x="${xd0}" y="${y_band}" width="${xd1-xd0}" height="24"
     fill="${bandFill}" stroke="${bandStrk}" stroke-width="1.5"/>`;
-  s += `<text x="${(xd0+xd1)/2}" y="${y_band+14}" font-size="9.5" fill="${bandStrk}"
+  s += `<text x="${(xd0+xd1)/2}" y="${y_band+17}" font-size="9.5" fill="${bandStrk}"
     text-anchor="middle" font-weight="700">CT = F_t / L_dist = ${f(c.CT_h,3)} kip/ft</text>`;
-  if (E) {
-    s += `<text x="${xd1+6}" y="${y_band+14}" font-size="8" fill="${bandStrk}" font-weight="700">
+  if (E) {   // RWTS-3: above the band's right end (was right of it, on the M_CT box)
+    s += `<text x="${xd1}" y="${y_band-5}" font-size="8" fill="${bandStrk}" font-weight="700" text-anchor="end">
       ${ee2ok ? '\u2713 EE-II OK' : '\u2717 EE-II FAIL'}</text>`;
   }
   // L_dist dim
-  s += `<line x1="${xd0}" y1="${y_band+32}" x2="${xd1}" y2="${y_band+32}" stroke="#b96400" stroke-width="1.3"/>`;
-  [xd0,xd1].forEach(xx => s += `<line x1="${xx}" y1="${y_band+27}" x2="${xx}" y2="${y_band+37}" stroke="#b96400" stroke-width="1.3"/>`);
-  s += `<text x="${(xd0+xd1)/2}" y="${y_band+28}" font-size="8.5" fill="#b96400" text-anchor="middle" font-weight="700">
+  s += `<line x1="${xd0}" y1="${y_band+50}" x2="${xd1}" y2="${y_band+50}" stroke="#b96400" stroke-width="1.3"/>`;
+  [xd0,xd1].forEach(xx => s += `<line x1="${xx}" y1="${y_band+45}" x2="${xx}" y2="${y_band+55}" stroke="#b96400" stroke-width="1.3"/>`);
+  s += `<text x="${(xd0+xd1)/2}" y="${y_band+45}" font-size="8.5" fill="#b96400" text-anchor="middle" font-weight="700">
     L_dist = ${f(c.Ldist,1)} ft${isSection?' (= L_joint)':''}</text>`;
 
   // ═══ PLAN STRIP ═══
   s += `<text x="${x0}" y="${y_planT-8}" font-size="8.5" fill="#1c2a42" font-weight="700"
-    font-family="'Public Sans',Arial,sans-serif" letter-spacing=".05em">PLAN \u2014 LOAD SPREAD ALONG WALL</text>`;
+    font-family="'Public Sans',Arial,sans-serif" letter-spacing=".05em">PLAN \u2014 LOAD SPREAD ALONG WALL (strip width schematic)</text>`;
   // wall in plan
   s += `<rect x="${x0}" y="${y_planT}" width="${drawW}" height="${PLAN_H}"
     fill="rgba(33,85,196,0.07)" stroke="#2155c4" stroke-width="1.2"/>`;
@@ -6168,9 +6182,9 @@ function buildElevationSVG(r) {
   [x0,x1].forEach(xx => s += `<line x1="${xx}" y1="${y_planT-4}" x2="${xx}" y2="${y_planB+4}"
     stroke="#c42121" stroke-width="2" stroke-dasharray="6,3"/>`);
   // L_joint dim
-  s += `<line x1="${x0}" y1="${y_planB+22}" x2="${x1}" y2="${y_planB+22}" stroke="#5a6a80" stroke-width="1"/>`;
-  [x0,x1].forEach(xx => s += `<line x1="${xx}" y1="${y_planB+17}" x2="${xx}" y2="${y_planB+27}" stroke="#5a6a80" stroke-width="1"/>`);
-  s += `<text x="${(x0+x1)/2}" y="${y_planB+18}" font-size="8.5" fill="#5a6a80" text-anchor="middle" font-weight="700">
+  s += `<line x1="${x0}" y1="${y_planB+26}" x2="${x1}" y2="${y_planB+26}" stroke="#5a6a80" stroke-width="1"/>`;
+  [x0,x1].forEach(xx => s += `<line x1="${xx}" y1="${y_planB+21}" x2="${xx}" y2="${y_planB+31}" stroke="#5a6a80" stroke-width="1"/>`);
+  s += `<text x="${(x0+x1)/2}" y="${y_planB+21}" font-size="8.5" fill="#5a6a80" text-anchor="middle" font-weight="700">
     L_joint = ${f(Ljoint,1)} ft (between expansion joints)</text>`;
 
   // ═══ YIELD-LINE OVERLAY (on the barrier, if enabled) ═══
@@ -6181,14 +6195,14 @@ function buildElevationSVG(r) {
     s += `<path d="M ${xy0} ${y_roadway} L ${xp0} ${y_barTop} L ${xp1} ${y_barTop} L ${xy1} ${y_roadway}"
       fill="rgba(122,58,176,0.10)" stroke="#7a3ab0" stroke-width="1.2" stroke-dasharray="4,2"/>`;
     // L_c dimension
-    s += `<line x1="${xy0}" y1="${y_barTop-24}" x2="${xy1}" y2="${y_barTop-24}" stroke="#7a3ab0" stroke-width="1.1"/>`;
-    [xy0,xy1].forEach(xx => s += `<line x1="${xx}" y1="${y_barTop-28}" x2="${xx}" y2="${y_barTop-20}" stroke="#7a3ab0" stroke-width="1.1"/>`);
-    s += `<text x="${(xy0+xy1)/2}" y="${y_barTop-27}" font-size="8" fill="#7a3ab0" text-anchor="middle" font-weight="700">
+    s += `<line x1="${xy0}" y1="${y_barTop-34}" x2="${xy1}" y2="${y_barTop-34}" stroke="#7a3ab0" stroke-width="1.1"/>`;
+    [xy0,xy1].forEach(xx => s += `<line x1="${xx}" y1="${y_barTop-38}" x2="${xx}" y2="${y_barTop-30}" stroke="#7a3ab0" stroke-width="1.1"/>`);
+    s += `<text x="${(xy0+xy1)/2}" y="${y_barTop-38}" font-size="8" fill="#7a3ab0" text-anchor="middle" font-weight="700">
       L_c = ${f(YL.Lc,2)} ft \u00b7 R_w = ${f(YL.Rw,1)} kip ${YL.yl_ok?'\u2265':'<'} F_t ${YL.yl_ok?'\u2713':'\u2717'}</text>`;
   }
 
   // ═══ CALLOUT TABLE (right) ═══
-  const tx = x1 + 30, ty = MT + 6;
+  const tx = W - MR + 30, ty = MT + 6;   // RWTS-3: the right column (the wall may be narrower than drawW0 when its height limits the scale)
   const TLNAME = { tl23:'TL-2/3', tl4:'TL-4', tl5:'TL-5', manual:'Manual' };
   const rows = [
     ['Test level', TLNAME[c.tl] || c.tl],
@@ -6200,34 +6214,38 @@ function buildElevationSVG(r) {
     ['y_CT', `${f(c.y_CT,2)} ft`],
     ['M_CT', `${f(c.M_CT/1000,2)} k·ft/ft`],
   ];
-  s += `<rect x="${tx-8}" y="${ty-6}" width="140" height="${rows.length*15+26}"
+  s += `<rect x="${tx-8}" y="${ty-6}" width="176" height="${rows.length*17+30}"
     fill="rgba(255,255,255,0.92)" stroke="#c9d2e0" stroke-width="1" rx="4"/>`;
-  s += `<text x="${tx}" y="${ty+6}" font-size="8" fill="#1c2a42" font-weight="700"
+  s += `<text x="${tx}" y="${ty+8}" font-size="8" fill="#1c2a42" font-weight="700"
     font-family="'Public Sans',Arial,sans-serif" letter-spacing=".05em">COLLISION DATA</text>`;
   rows.forEach(([k,v],i) => {
-    const yy = ty + 20 + i*15;
+    const yy = ty + 26 + i*17;
     const hot = (k==='M_CT'||k==='y_CT');
     s += `<text x="${tx}" y="${yy}" font-size="8" fill="#5a6a80">${k}</text>`;
-    s += `<text x="${tx+124}" y="${yy}" font-size="8" fill="${hot?'#c42121':'#1c2a42'}"
+    s += `<text x="${tx+160}" y="${yy}" font-size="8" fill="${hot?'#c42121':'#1c2a42'}"
       text-anchor="end" font-weight="${hot?'700':'600'}" font-family="var(--mono)">${v}</text>`;
   });
 
   // ═══ M_CT CALC CALLOUT ═══
-  const cy = y_band + 4;
-  s += `<rect x="${tx-8}" y="${cy}" width="140" height="42"
+  const cy = Math.max(y_band + 4, ty + rows.length*17 + 34);   // RWTS-3: below the data table when the elevation is short
+  s += `<rect x="${tx-8}" y="${cy}" width="176" height="54"
     fill="rgba(196,33,33,0.07)" stroke="#c42121" stroke-width="1" rx="4"/>`;
-  s += `<text x="${tx}" y="${cy+14}" font-size="7.5" fill="#8a1a1a" font-weight="700">M_CT = CT \u00d7 y_CT</text>`;
-  s += `<text x="${tx}" y="${cy+26}" font-size="7.5" fill="#5a6a80">= ${f(c.CT_h,3)} \u00d7 ${f(c.y_CT,2)}</text>`;
-  s += `<text x="${tx}" y="${cy+37}" font-size="9" fill="#c42121" font-weight="700">= ${f(c.M_CT/1000,2)} k\u00b7ft/ft</text>`;
+  s += `<text x="${tx}" y="${cy+16}" font-size="7.5" fill="#8a1a1a" font-weight="700">M_CT = CT \u00d7 y_CT</text>`;
+  s += `<text x="${tx}" y="${cy+31}" font-size="7.5" fill="#5a6a80">= ${f(c.CT_h,3)} \u00d7 ${f(c.y_CT,2)}</text>`;
+  s += `<text x="${tx}" y="${cy+47}" font-size="9" fill="#c42121" font-weight="700">= ${f(c.M_CT/1000,2)} k\u00b7ft/ft</text>`;
 
   // ═══ WARNING: impact above barrier top ═══
-  if (r.hasBarrier && (A.ct_h_app/12) > r.bar_h_ft + 0.01) {
-    s += `<rect x="${x0}" y="${H_SVG-32}" width="${drawW}" height="22"
+  if (warnCT) {
+    s += `<rect x="${x0}" y="${H_SVG-34}" width="${W-x0-8}" height="26"
       fill="rgba(196,33,33,0.10)" stroke="#c42121" stroke-width="1" rx="3"/>`;
     s += `<text x="${x0+8}" y="${H_SVG-17}" font-size="8" fill="#c42121" font-weight="700">
       \u26a0 h_CT = ${f(A.ct_h_app,0)}" exceeds barrier height ${f(r.bar_h_ft*12,0)}" \u2014 impact is above the barrier. Check test level / barrier height.</text>`;
   }
 
+  // RWTS-3: text sizes for a drawing shown at least 760 px wide (were 6–11.5 units: 2.6–5 px at 390 px), then the scale bar
+  s = s.replace(/<text ([^>]*?)font-size="([\d.]+)"/g, (m0, pre, v) => `<text ${pre}font-size="${Math.max(+v * 1.35, 11).toFixed(1)}"`)
+       .replace(/<text /g, '<text paint-order="stroke" stroke="#fafbfd" stroke-width="3" stroke-linejoin="round" ');
+  s += rwtsScaleBar(x0, y_sb, SCx, 11, 'Arrow lengths, the load band and the plan strip width are not to scale (values labelled).', true);
   s += `</svg>`;
   return s;
 }
@@ -6290,7 +6308,7 @@ function renderDiagram(r) {
         <span class="card-title">Elevation — Vehicular Collision Distribution</span>
         <span class="card-ref">${r.aashtoR.ct.distMode==='section' ? 'MassDOT §3.3.2.4 · full section' : 'AASHTO 45° spread'}</span>
       </div>
-      <div class="card-body" style="background:#fafbfd;padding:8px 0;overflow-x:auto;">
+      <div class="card-body rw-dwg-wrap" style="background:#fafbfd;padding:8px 0;overflow-x:auto;">
         ${buildElevationSVG(r)}
       </div>
     </div>` : ''}`;
