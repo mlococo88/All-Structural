@@ -85,7 +85,7 @@ Verification method for every item: the page was loaded in jsdom from origin/mai
       $('warns').classList.remove('hidden');$('warns').innerHTML='⚠ Analysis not run: '+esc(err.message)+'<br>⚠ The plots and tables below are from the previous run and are NOT current.';}
   }
   ```
-- **Check case:** E = 0. Before: status "Solved in 200 ms", +M = 0.0. After: status "Error: E steel = 0 ksi…", the headline values show "—", and a warning box says that the plots are not current.
+- **Check case:** E = 0. Before: status "Solved in … ms", +M = 0.0. After: status "Error: E steel = 0 ksi…", the headline values show "—", and a warning box says that the plots are not current.
 - **How verified:** jsdom (old vs new).
 - **Other copies of this code:** none known.
 
@@ -1521,3 +1521,15 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data (§5):** `movingLoadGen.projects.v1` ({ name: mlgSnapshot() }), `movingLoadGen.autosave.v1`, `movingLoadGen.inputTab.v1` unchanged; Export JSON / GitHub file format unchanged; no new key.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **How verified:** main vs branch after the same input change: `RES` identical (0 differences), localStorage keys identical (`movingLoadGen.autosave.v1` identical apart from its time stamp), Export JSON text identical apart from `savedAt` (1,447 chars), Report tab text identical (13,011 chars), no console errors. Probe: save → saved; change → unsaved; Ctrl+S saves with no dialog; every input tab, output tab, section toggle and the view selects (viewMode, influence-line section / type) leave "saved"; Open, reload: saved; New → the defaults, not saved. `project-library --tool mlg` ALL PASS; `github-sync-tools --tool mlg`, `standard-save` (8 / 8), `github-sync` (13 / 13), `home-projects`, `home-sync`: pass; `phone-layout --tool mlg` pass; engine `project-registry`, `github-sync`, `projects`, `moving-load` pass; `check-syntax` pass. 390 px: page 390 / 390, dialog 355 / 355; header one row at 1280 px; screenshots looked at.
+## 2026-11-06 — PR: claude/hdrs-mlg (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens the Project tab   [display only; no result change]
+- **Why:** engineer 2026-11-06: every app's header as in Spread Footing (#884): no Save (Ctrl+S) and Saved projects… buttons in the header; they stay in the "Save and open" card. The header keeps the project chip (click = the Project tab), Undo, Redo, the app's other global actions and Print. Ctrl+S and Ctrl+Shift+S work from anywhere. No "Recent projects" start strip (Spread Footing only).
+- **Where:** the `SharedProjectsUI.projectBar({...})` call, right after the line `header:hdr, chipBefore:bu, headerBefore:$('mlgSave'), card:true,` (a comment `/* HDRS (2026-11-06, …) */` and one line).
+  Before: nothing. After:
+  `headerSave:false, chipClick:()=>{ const t=document.getElementById('mlgInTab_proj'); if(t) t.click(); const c=pb.el.card; if(c&&c.isConnected) c.scrollIntoView({block:'nearest'}); }, chipHint:'the Project tab (Save and open)',`
+  Uses the projectBar options of `shared/projects-ui.js` (HDRS, #884; `fixlog/shared-projects.md`): `headerSave:false` (the chip only in the header), `chipClick`, `chipHint` (the chip tooltip's "Click: …").
+- **Header before:** Solved in … ms · ← All tools · chip · Undo · Redo · Save · Saved projects… · 🖨 Print Report · Run · Export CSV; chip click = Saved projects… dialog. **After:** Solved in … ms · ← All tools · chip · Undo · Redo · 🖨 Print Report · Run · Export CSV; chip click = the Project input tab (its tab button `#mlgInTab_proj` clicked; the "Save and open" card first in it, brought into view). The card's buttons are unchanged.
+- **Problem:** none (layout request). **Governing provision:** none (§4 does not apply).
+- **Check case:** default project, another tab open: click the chip → the Project tab, the "Save and open" card on screen, no dialog; Ctrl+S on another tab (nothing saved yet) → Save as dialog; Ctrl+Shift+S → Save as dialog.
+- **How verified:** main vs branch on the default project: every localStorage key (1), page text (15604 chars), Export JSON (1425 chars identical) and the printed report text (print media, 12854 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Moving Load Generator.html"`; `node tests/smoke/project-library.mjs --tool mlg`; `node tests/smoke/github-sync-tools.mjs --tool mlg`; `node tests/smoke/home-projects.mjs --tool mlg`; `node tests/smoke/phone-layout.mjs --tool mlg`: pass. The "Solved in N ms" timing normalised.
+- **Saved data:** no key or format changed (§5).
+- **Other copies:** none. **Open items:** none.
