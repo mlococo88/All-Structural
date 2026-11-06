@@ -94,7 +94,7 @@ Loaded by: see `shared/README.md`. Tests: `node tests/engine/run.mjs list-input`
 ## 2026-11-02 — PR: claude/spc-rename-dialog, PR #709: https://github.com/mlococo88/All-Structural/pull/709 — Section Property Calculator: the library Rename dialog's tags (`mount`; no change to the shared file)
 - `tests/smoke/list-input.mjs` gains the part `secpropren`.
 
-## 2026-11-06 — PR: claude/list-input-rebaseline (RLI) — tests/smoke/list-input.mjs re-baselined (test only; `shared/list-input.js` and every tool unchanged)
+## 2026-11-06 — PR: claude/list-input-rebaseline (PR #873: https://github.com/mlococo88/All-Structural/pull/873) (RLI) — tests/smoke/list-input.mjs re-baselined (test only; `shared/list-input.js` and every tool unchanged)
 - **Problem:** the browser test compared each tool with its main commit from before its table landed (`a` per entry). Later display PRs (the standard save card and header chip, Report tab additions, renamed save buttons, "Suite sync" → "Hand-off locks") changed the page text, so 8 parts failed on main: smd, sbeam, bsl, secprop, index, pbd, sbridge, secpropren (16 failures). bgeo, gusset, stonearch, bpad and the widget passed.
 - **Checked before re-baselining (origin/main 9ea00c1, raw readouts with the new `--out`):** in every failing part, every result, input and saved-data field was identical (smd `tabR, userX, shD, moD, deD, env, nodeR, saved`; sbeam `AN, userX, S`; bsl `P, C, stored`; secprop `M, R, lib`; index `cfg`; pbd `ls`; sbridge `an, sec, loads, stored`; all `savedText`). Only text differed:
   - smd: header project line and chip, "Save and open" card and Project tab (title block, templates, shared project info moved into it).
