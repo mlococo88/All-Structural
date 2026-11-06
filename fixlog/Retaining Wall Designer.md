@@ -2170,3 +2170,49 @@ function renderStatus(r) {
   - AASHTO soil bearing is drawn as the uniform Meyerhof block over B′ centred on the resultant (what the check uses). The footing-design trapezoids are separate options.
   - The service distribution in AASHTO mode is listed as reference only.
   - The Plotly chart is kept as is below the new diagram.
+
+## 2026-11-06 — PR: claude/rw-3d-labels (PR #933: https://github.com/mlococo88/All-Structural/pull/933) (RW3L) — 3D view: load arrows with value labels, a load case / combination selector, a title with the sign convention   [display only; no result change]
+- **Why:** engineer-approved 2026-11-06 (Phase 3 task C, review PR 3b; as Spread Footing SF3L #765). Before, the 3D view showed pressure prisms only: no load resultants, no values, no selector. Its bearing block was the service trapezoid over the full B, also when the resultant was outside the middle third.
+- **What:**
+  - **Selector "Show"** above the view (`#c3d-sel`, optgroups):
+    - ★ Governing bearing combination (default; the one the Stability tab marks ★);
+    - Load cases (unfactored, per ft of wall): All load cases, then each case present.
+      - AASHTO: EH; LS; ES; WA (with uplift); CT (Extreme Event II).
+      - ACI: H (earth, with P_a,v when β > 0); surcharge; water (with uplift); E (M-O increment, when k_h > 0).
+      - Both modes: surcharge (vertical, q·L_h); D/DC concrete (stem, footing, barrier); soil on the heel (EV); column / beam (service); passive (toe, key) when included.
+    - Combinations (base reaction and bearing pressure): every combination of the Stability tab's bearing selector (RWBP #932).
+  - **Arrows and labels:**
+    - Each load is an arrow, placed at the front of the 12 ft run, with a label giving its value and its height y above the footing base (lateral loads) or its x from the toe (vertical loads). Example: `H (earth) = 3.65 k/ft @ y = 4.50 ft`.
+    - Lateral loads act on the heel plane (x = B) toward the toe; passive acts on the toe toward the heel; CT acts at the stem's back face at y_CT.
+    - For a combination (or Governing): the base reaction `R = ΣV = … k/ft @ x̄ = … ft, e = … ft` points up under the footing, and the bearing layer shows that combination's distribution (`rwbpZone`: trapezoid / triangle, B′ block, rock). The contact length and q_max are given in the title.
+    - "All load cases" shows the service reaction. A single load case shows no bearing pressure.
+  - **Labels:**
+    - Canvas-texture `THREE.Sprite`s (bold 12 px, white box, border in the load colour), `sizeAttenuation:false` and `depthTest:false`: the same pixel size at any zoom, always facing the camera, never hidden by geometry or the section cut.
+    - `rw3LayoutLabels()` runs each frame before the render. It places each label right of its anchor inside the view, keeps it off the control panels (legend, buttons, readout: class `c3d-panel`), and moves it below the panel in the way when neither side has room. It pushes a label down below any label already placed, and draws a dashed leader (SVG `#c3d-leaders`) when a label is more than 10 px from its arrow.
+  - **Title** (`#c3d-title`): what is shown (governing / combination, factored or not; or the load case, unfactored), the units and axes, and the sign convention (directions of every arrow). It links to the bearing card.
+- **Where:**
+  - New block before `function buildGeometry3D(r) {`: `RW3`, `rw3K`, `rw3Cases`, `rw3Options`, `rw3Selected`, `rw3Title`, `rw3Label`, `rw3Arrow`, `rw3Build`, `rw3LayoutLabels`, `rw3Set`, `window.rwbpOnPick`.
+  - `render3D` shell: the `.c3d-bar` with the selector and the title; `<svg id="c3d-leaders">`; class `c3d-panel` on the legend, the right-hand controls and the readout; group `'loads'` added to the scene groups; `rw3LayoutLabels()` in the animation loop.
+  - `buildGeometry3D`: before, `// ── BEARING PRESSURE (trapezoid below footing) ──` built `bShape` from `r.q_toe`/`r.q_heel` over 0…B. After: `rw3Build(r);`.
+  - CSS `.c3d-bar …`.
+- **Sync (one-way, as SF3L):** a pick in the Stability tab's bearing selector (`rwbpSet` → `window.rwbpOnPick`) sets the 3D selection (`'GOV'` or `'C:'+key`), also before the 3D tab is opened. A pick in the 3D selector stays local. The selection is session only (`RW3.sel`): **no storage key**.
+- **Values:** the analysis' own: `r` (ACI / service) and `r.aashtoR` (P_EH, y_EH, P_LS, y_LS, P_ES, P_hyd, ct.CT_h, ct.y_CT). Heights where the analysis keeps only the moment: y = M / P (surcharge Mo_sur/Pa_sur_h, water Mo_hyd/F_hyd, seismic Mo_seis/Pe_inc). Positions: x_stem, x_ftg, x_soil, x_bar, x_col, Ms_sur/Wsur, x_uplift; passive toe at D_f/3 (as `Ms_Pp`). Arrow lengths are indicative.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Check case** (default ACI wall, H = 13.5 ft, K_a = 1/3, γ = 120 pcf):
+  - H (earth) = ½·(1/3)·120·13.5² = 3645 lb/ft → `3.65 k/ft @ y = 4.50 ft` (= H/3);
+  - stem (1 + 1.5)/2·12·150 = 2250 → `2.25 k/ft @ x = 3.63 ft`;
+  - footing 12.5·1.5·150 = 2812.5 → `2.81 k/ft`;
+  - soil 8·12·120 = 11520 → `11.52 k/ft @ x = 8.50 ft`;
+  - R = 16.58 k/ft @ x̄ = 6.47 ft, e = −0.22 ft (as Stability Step 6).
+- **How verified:**
+  - origin/main vs branch, eight cases (ACI default; project fields; AASHTO full; tall wall + key + water + passive + k_h; f′c blank; column + q_s + β + water; AASHTO CT; triangular ACI): `_R`, Export JSON, every localStorage key, Report and tab text, and DXF **identical**.
+  - Every option rendered with 0 console errors.
+  - Sync: a Stability pick of U = 1.2D + 1.6H → 3D shows `C:u12`.
+  - Screenshots at 1400 and 390 (ACI with water + seismic + column + key + passive; AASHTO with barrier + CT; load case CT; synced combination) looked at: no label overlaps another label or a panel.
+  - Tests: see the PR.
+- **Other copies:** none. **Library:** three.js r128 already loaded (Sprite, CanvasTexture, ArrowHelper); nothing new.
+- **Decisions (pending engineer review):**
+  - In a combination view the load arrows are the **unfactored** load cases, while the base reaction and the bearing pressure are the combination's (factored where it is). The title says so. Factored per-load arrows would need the combination factors restated outside the analysis; I did not add them (question).
+  - A single load case shows no bearing pressure.
+  - The 3D selection is session only.
+  - AASHTO mode lists no seismic case (Extreme Event I is not evaluated by the tool).

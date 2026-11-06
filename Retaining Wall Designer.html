@@ -508,6 +508,12 @@ select option { background: #fff; color: var(--text); }
 .mono   { font-family: var(--mono); }
 /* D11 links (CLAUDE.md §6): "Worked in: → Tab · Card" */
 .wkLink { font-size: 11.5px; color: var(--muted); margin: 2px 0 8px; }
+/* RW3L (2026-11-06): 3D view load selector and title */
+.c3d-bar { padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--sidebar); font-size: 12.5px; }
+.c3d-bar label { font-weight: 600; color: var(--muted); margin-right: 4px; }
+#c3d-sel { max-width: 100%; font-size: 13px; padding: 3px 6px; }
+#c3d-title { margin-top: 6px; line-height: 1.5; }
+#c3d-title .c3d-sign { color: var(--muted); font-size: 11.5px; }
 /* RWBP (2026-11-06): bearing pressure per combination (Stability tab) */
 .rwbp { margin: 8px 0 12px; }
 .rwbp-l { font-size: 12px; color: var(--muted); margin-right: 6px; font-weight: 600; }
@@ -8272,9 +8278,11 @@ function render3D(r) {
           <span class="card-ref">drag to rotate · scroll to zoom · right-drag to pan</span>
         </div>
         <div class="card-body" style="padding:0;">
+          <div class="c3d-bar"><label for="c3d-sel">Show</label> <select id="c3d-sel" onchange="rw3Set(this.value)"></select><div id="c3d-title"></div></div>
           <div style="position:relative;width:100%;background:#1a1e2e;border-radius:0 0 8px 8px;overflow:hidden;">
             <canvas id="c3d" style="width:100%;display:block;height:520px;"></canvas>
-            <div id="c3d-legend" style="position:absolute;top:12px;left:12px;display:flex;flex-direction:column;gap:5px;font-family:var(--cond);font-size:11px;">
+            <svg id="c3d-leaders" style="position:absolute;left:0;top:0;width:100%;height:520px;pointer-events:none;"></svg>
+            <div id="c3d-legend" class="c3d-panel" style="position:absolute;top:12px;left:12px;display:flex;flex-direction:column;gap:5px;font-family:var(--cond);font-size:11px;">
               ${[['concrete','Concrete','#8899bb'],['soil','Soil','#c9a96e'],['water','Water','#3fa9f5'],['rebar','Rebar','#e05050'],
                  ['pressure','Active pressure','#3399ff'],['passive','Passive','#30c880'],['bearing','Bearing','#c0a020']]
                 .map(([k,lbl,clr]) => `
@@ -8283,7 +8291,7 @@ function render3D(r) {
                   <span style="color:${clr};font-weight:700;">${lbl}</span>
                 </label>`).join('')}
             </div>
-            <div style="position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:5px;align-items:flex-end;">
+            <div class="c3d-panel" style="position:absolute;top:12px;right:12px;display:flex;flex-direction:column;gap:5px;align-items:flex-end;">
               <button id="c3d-reset" style="background:rgba(33,85,196,0.85);color:#fff;border:none;border-radius:4px;padding:5px 10px;font-family:var(--cond);font-size:10px;font-weight:700;letter-spacing:.05em;cursor:pointer;">⟲ Reset View</button>
               <label style="color:#fff;display:flex;align-items:center;gap:5px;background:rgba(0,0,0,0.3);padding:3px 8px;border-radius:4px;font-family:var(--cond);font-size:10px;cursor:pointer;">
                 <input type="checkbox" id="c3d-cut" style="accent-color:#fff;"> Section cut
@@ -8296,7 +8304,7 @@ function render3D(r) {
                 <input type="range" id="c3d-opacity" min="10" max="100" value="100" step="5" style="width:100%;accent-color:#8899bb;cursor:pointer;">
               </div>
             </div>
-            <div id="c3d-readout" style="position:absolute;bottom:10px;left:12px;color:#aab;font-size:10px;font-family:var(--mono);background:rgba(0,0,0,0.35);padding:4px 9px;border-radius:4px;"></div>
+            <div id="c3d-readout" class="c3d-panel" style="position:absolute;bottom:10px;left:12px;color:#aab;font-size:10px;font-family:var(--mono);background:rgba(0,0,0,0.35);padding:4px 9px;border-radius:4px;"></div>
           </div>
         </div>
       </div>`;
@@ -8330,7 +8338,7 @@ function render3D(r) {
     fill.position.set(-15, 8, -12); scene.add(fill);
 
     const groups = {};
-    ['concrete','soil','water','rebar','pressure','passive','bearing','helpers'].forEach(k => {
+    ['concrete','soil','water','rebar','pressure','passive','bearing','helpers','loads'].forEach(k => {   // RW3L: + 'loads' (arrows and labels)
       groups[k] = new THREE.Group(); scene.add(groups[k]);
     });
 
@@ -8375,6 +8383,7 @@ function render3D(r) {
       _3d._raf = requestAnimationFrame(loop);
       if (_3d.spin) _3d.scene.rotation.y += 0.003;
       _3d.controls.update();
+      rw3LayoutLabels();   // RW3L: labels at a fixed pixel size, not overlapping
       _3d.renderer.render(_3d.scene, _3d.camera);
     })();
   }
@@ -8409,6 +8418,167 @@ function applyConcreteOpacity3D(o) {
     }
   });
 }
+
+// ================================================================
+// RW3L (2026-11-06): 3D load labels and a load-case / combination selector (as Spread Footing SF3L).
+// Display only: every value is the analysis' own (r, r.aashtoR); arrow lengths are indicative.
+// Selection is session only (RW3.sel; no storage key). A pick on the Stability tab's bearing selector
+// (rwbpSet → window.rwbpOnPick) sets it (one-way sync); a pick here stays local.
+// ================================================================
+const RW3 = { sel: 'GOV', labels: [] };
+const rw3K = v => f(v / 1000, 2) + ' k/ft';
+// unfactored load cases, per ft of wall: [{ key, name, items: [{ kind:'h'|'v'|'up', P, x, y, dir, txt, col }] }]
+function rw3Cases(r) {
+  const inp = r.inp, a = r.aashtoR, A = r.isAASHTO && a, B = r.B, H = r.H, L = [];
+  const add = (key, name, items) => { const it = items.filter(o => o && o.P > 0.5); if (it.length) L.push({ key, name, items: it }); };
+  const hz = (P, y, txt, col, x0, dir) => ({ kind: 'h', P, x: x0 == null ? B : x0, y, dir: dir || -1, txt, col });
+  const vt = (P, x, yTop, txt, col) => ({ kind: 'v', P, x, y: yTop, txt, col });
+  const yArm = (M, P) => P > 0 ? M / P : 0;
+  if (A) {
+    add('EH', 'EH — horizontal earth pressure', [hz(a.P_EH, a.y_EH, `EH = ${rw3K(a.P_EH)} @ y = ${f(a.y_EH, 2)} ft`, '#e05050')]);
+    add('LS', 'LS — live-load surcharge (lateral)', [hz(a.P_LS, a.y_LS, `LS = ${rw3K(a.P_LS)} @ y = ${f(a.y_LS, 2)} ft`, '#e0a030')]);
+    add('ES', 'ES — dead-load surcharge (lateral)', [hz(a.P_ES, r.Hp / 2, `ES = ${rw3K(a.P_ES)} @ y = ${f(r.Hp / 2, 2)} ft`, '#d08a20')]);
+    add('WA', 'WA — water (hydrostatic, uplift)', [hz(a.P_hyd, r.hw / 3, `WA = ${rw3K(a.P_hyd)} @ y = ${f(r.hw / 3, 2)} ft`, '#3fa9f5'),
+      { kind: 'up', P: r.F_uplift, x: r.x_uplift, y: 0, txt: `U = ${rw3K(r.F_uplift)} (uplift) @ x = ${f(r.x_uplift, 2)} ft`, col: '#3fa9f5' }]);
+    const ct = a.ct;
+    if (ct) add('CT', 'CT — vehicular collision (Extreme Event II)', [hz(ct.CT_h * 1000, ct.y_CT, `CT = ${f(ct.CT_h, 3)} k/ft @ y = ${f(ct.y_CT, 2)} ft`, '#ff6060', inp.Lt + r.ts_bot_ft)]);
+  } else {
+    add('EH', 'H — earth pressure (lateral)', [hz(r.Pa_tri_h, r.y_Pa, `H (earth) = ${rw3K(r.Pa_tri_h)} @ y = ${f(r.y_Pa, 2)} ft`, '#e05050'),
+      r.Pa_tri_v > 0.5 ? vt(r.Pa_tri_v, B, H, `P_a,v = ${rw3K(r.Pa_tri_v)} @ x = B`, '#e05050') : null]);
+    add('LS', 'Surcharge (lateral)', [hz(r.Pa_sur_h, yArm(r.Mo_sur, r.Pa_sur_h), `Surcharge = ${rw3K(r.Pa_sur_h)} @ y = ${f(yArm(r.Mo_sur, r.Pa_sur_h), 2)} ft`, '#e0a030')]);
+    add('WA', 'Water (hydrostatic, uplift)', [hz(r.F_hyd, yArm(r.Mo_hyd, r.F_hyd), `Water = ${rw3K(r.F_hyd)} @ y = ${f(yArm(r.Mo_hyd, r.F_hyd), 2)} ft`, '#3fa9f5'),
+      { kind: 'up', P: r.F_uplift, x: r.x_uplift, y: 0, txt: `U = ${rw3K(r.F_uplift)} (uplift) @ x = ${f(r.x_uplift, 2)} ft`, col: '#3fa9f5' }]);
+    if (r.Pe_inc > 0) add('EQ', 'E — seismic increment (Mononobe-Okabe)', [hz(r.Pe_inc, yArm(r.Mo_seis, r.Pe_inc), `ΔP_AE = ${rw3K(r.Pe_inc)} @ y = ${f(yArm(r.Mo_seis, r.Pe_inc), 2)} ft`, '#c070ff')]);
+  }
+  add('SV', A ? 'Surcharge (vertical, on the heel)' : 'Surcharge (vertical, on the heel)', [vt(r.Wsur, yArm(r.Ms_sur, r.Wsur), H, `q·L_h = ${rw3K(r.Wsur)} @ x = ${f(yArm(r.Ms_sur, r.Wsur), 2)} ft`, '#e0a030')]);
+  add('DC', A ? 'DC — concrete self-weight' : 'D — concrete self-weight', [
+    vt(r.Wstem, r.x_stem, H, `Stem = ${rw3K(r.Wstem)} @ x = ${f(r.x_stem, 2)} ft`, '#aab8d8'),
+    vt(r.Wftg, r.x_ftg, r.tf_ft, `Footing = ${rw3K(r.Wftg)} @ x = ${f(r.x_ftg, 2)} ft`, '#aab8d8'),
+    r.W_bar > 0.5 ? vt(r.W_bar, r.x_bar, H + r.bar_h_ft, `Barrier = ${rw3K(r.W_bar)} @ x = ${f(r.x_bar, 2)} ft`, '#aab8d8') : null]);
+  add('EV', A ? 'EV — soil weight on the heel' : 'D — soil weight on the heel', [vt(r.Wsoil, r.x_soil, H, `Soil = ${rw3K(r.Wsoil)} @ x = ${f(r.x_soil, 2)} ft`, '#c9a96e')]);
+  if (r.hasCol) add('COL', 'Column / beam load (service)', [vt(r.W_col, r.x_col, H, `Column = ${rw3K(r.W_col)} @ x = ${f(r.x_col, 2)} ft`, '#ff8080')]);
+  if (r.Pp > 0.5) add('PP', 'Passive resistance (toe' + (r.Pp_key > 0.5 ? ' + key' : '') + ')', [
+    hz(r.Pp_toe, r.Df / 3, `P_p,toe = ${rw3K(r.Pp_toe)} @ y = ${f(r.Df / 3, 2)} ft`, '#30c880', 0, 1),
+    r.Pp_key > 0.5 ? hz(r.Pp_key, -r.dk_ft / 2, `P_p,key = ${rw3K(r.Pp_key)}`, '#30c880', inp.Lt + r.ts_bot_ft * 0.3, 1) : null]);
+  return L;
+}
+function rw3Options(r) {
+  const C = (typeof rwbpCombos === 'function') ? rwbpCombos(r) : { list: [], gov: null };
+  const g = C.list.find(x => x.key === C.gov);
+  const o = [['Governing', [['GOV', '★ Governing bearing combination' + (g ? ': ' + g.name.replace(/ — .*$/, '') : '')]]]];
+  const cases = rw3Cases(r);
+  o.push(['Load cases (unfactored, per ft of wall)', [['ALL', 'All load cases'], ...cases.map(c => ['CASE:' + c.key, c.name])]]);
+  o.push(['Combinations (base reaction and bearing pressure)', C.list.map(x => ['C:' + x.key, (x.key === C.gov ? '★ ' : '') + x.name])]);
+  return { o, C, cases };
+}
+// what the current selection shows: { cases: [...], combo: <rwbp combination or null>, title }
+function rw3Selected(r) {
+  const { C, cases } = rw3Options(r);
+  let sel = RW3.sel;
+  if (sel.startsWith('C:') && !C.list.find(x => 'C:' + x.key === sel)) sel = 'GOV';
+  if (sel.startsWith('CASE:') && !cases.find(c => 'CASE:' + c.key === sel)) sel = 'ALL';
+  const svc = C.list.find(x => x.key === 'svc');
+  if (sel === 'ALL') return { sel, cases, combo: svc || null, comboNote: 'service (unfactored)' };
+  if (sel.startsWith('CASE:')) return { sel, cases: cases.filter(c => 'CASE:' + c.key === sel), combo: null };
+  const k = sel === 'GOV' ? C.gov : sel.slice(2);
+  return { sel, cases, combo: C.list.find(x => x.key === k) || null, gov: sel === 'GOV' };
+}
+function rw3Title(r, S) {
+  const unit = 'Forces per ft of wall (k/ft); heights y above the footing base, x from the toe.';
+  const sign = 'Arrows point the way each load acts on the wall: earth, surcharge, water, seismic and collision toward the toe; weights down; uplift and the base reaction up; passive toward the heel.';
+  let what;
+  if (S.sel.startsWith('CASE:')) what = `<b>${S.cases[0] ? S.cases[0].name : ''}</b>: unfactored. No bearing pressure is shown for a single load case.`;
+  else if (S.sel === 'ALL') what = `<b>All load cases</b>, unfactored; base reaction R and bearing pressure for the ${S.comboNote}.`;
+  else what = `${S.gov ? '<b>Governing</b> bearing combination: ' : ''}<b>${S.combo ? S.combo.name : ''}</b>: base reaction R and bearing pressure as the analysis computes them${S.combo && /Service/.test(S.combo.name) ? '' : ' (factored)'}; the load arrows are the unfactored load cases (choose one in the list to see it alone).`;
+  return `<div>${what}</div><div class="c3d-sign">${unit} ${sign} Worked on the Stability tab (<a class="wkA" href="#" data-card="stabBrg">bearing</a>).</div>`;
+}
+// label sprite: fixed pixel size, faces the camera, never hidden by geometry or the section cut
+function rw3Label(g, txt, anchor, color) {
+  try {
+    const k = 2, fpx = 12, pad = 4, cv = document.createElement('canvas'); let cx = cv.getContext('2d'); if (!cx) return;
+    const font = 'bold ' + (fpx * k) + 'px Arial, Helvetica, sans-serif'; cx.font = font;
+    const w = Math.ceil(cx.measureText(txt).width / k) + 2 * pad, h = fpx + 2 * pad;
+    cv.width = w * k; cv.height = h * k; cx = cv.getContext('2d');
+    cx.fillStyle = 'rgba(255,255,255,0.93)'; cx.fillRect(0, 0, cv.width, cv.height);
+    cx.strokeStyle = color; cx.lineWidth = k; cx.strokeRect(k / 2, k / 2, cv.width - k, cv.height - k);
+    cx.font = font; cx.fillStyle = '#1c2a42'; cx.textBaseline = 'middle'; cx.fillText(txt, pad * k, cv.height / 2 + k / 2);
+    const tex = new THREE.CanvasTexture(cv); tex.minFilter = THREE.LinearFilter; tex.generateMipmaps = false;
+    const m = new THREE.SpriteMaterial({ map: tex, depthTest: false, depthWrite: false, sizeAttenuation: false, transparent: true });
+    const spr = new THREE.Sprite(m); spr.position.copy(anchor); spr.renderOrder = 999; spr.frustumCulled = false;
+    spr.userData = { lbl: { w, h, col: color } };
+    g.add(spr); RW3.labels.push(spr);
+  } catch (e) { console.warn('3D label:', e); }
+}
+function rw3Arrow(g, from, to, color) {
+  const d = to.clone().sub(from), len = d.length(); if (!(len > 1e-6)) return;
+  const ah = new THREE.ArrowHelper(d.normalize(), from, len, new THREE.Color(color).getHex(), Math.min(len * 0.3, 0.9), Math.min(len * 0.15, 0.45));
+  ah.renderOrder = 998; [ah.line, ah.cone].forEach(o => { if (o && o.material) { o.material.depthTest = false; o.material.transparent = true; } });
+  g.add(ah);
+}
+// arrows + labels of the selection into the 'loads' group; bearing layer = the combination's distribution
+function rw3Build(r) {
+  if (!_3d || !_3d.groups.loads) return;
+  const G = _3d.groups, g = G.loads, B = r.B, H = r.H, WL = wallLen3D(r), z = WL + 0.05;
+  while (g.children.length) { const c = g.children[0]; g.remove(c); if (c.material && c.material.map) c.material.map.dispose(); }
+  RW3.labels = [];
+  const S = rw3Selected(r), La = Math.max(B, H) * 0.22, V3 = (x, y) => new THREE.Vector3(x, y, z);
+  S.cases.forEach(c => c.items.forEach(o => {
+    if (o.kind === 'h') { const x1 = o.x, x0 = o.x - o.dir * La; rw3Arrow(g, V3(x0, o.y), V3(x1, o.y), o.col); rw3Label(g, o.txt, V3(x0, o.y), o.col); }
+    else if (o.kind === 'v') { rw3Arrow(g, V3(o.x, o.y + La * 0.8), V3(o.x, o.y), o.col); rw3Label(g, o.txt, V3(o.x, o.y + La * 0.8), o.col); }
+    else { rw3Arrow(g, V3(o.x, o.y - La * 0.8), V3(o.x, o.y), o.col); rw3Label(g, o.txt, V3(o.x, o.y - La * 0.8), o.col); }
+  }));
+  // bearing layer: the selected combination's pressure (none for a single load case)
+  while (G.bearing.children.length) G.bearing.remove(G.bearing.children[0]);
+  const c = S.combo;
+  if (c) {
+    const zn = rwbpZone(r, c), qm = Math.max(zn.q0, zn.q1, 1), bS = Math.max(B, H) * 0.16 / qm;
+    if (!zn.none && zn.x1 > zn.x0) {
+      const sh = new THREE.Shape(); sh.moveTo(zn.x0, 0); sh.lineTo(zn.x0, -zn.q0 * bS); sh.lineTo(zn.x1, -zn.q1 * bS); sh.lineTo(zn.x1, 0); sh.closePath();
+      const m = new THREE.Mesh(new THREE.ExtrudeGeometry(sh, { depth: WL, bevelEnabled: false }),
+        new THREE.MeshLambertMaterial({ color: 0xc0a020, transparent: true, opacity: 0.34, side: THREE.DoubleSide }));
+      G.bearing.add(m);
+    }
+    const yb = -Math.max(zn.q0, zn.q1) * bS - 0.3, xr = Math.max(-1, Math.min(B + 1, c.xR));
+    rw3Arrow(g, V3(xr, yb - La * 0.8), V3(xr, yb + 0.25), '#ffd040');
+    rw3Label(g, `R = ΣV = ${rw3K(c.V)} @ x̄ = ${f(c.xR, 2)} ft, e = ${f(c.e, 2)} ft`, V3(xr, yb - La * 0.8), '#c0a020');
+    S.rInfo = zn.none ? 'the resultant is outside the base (no contact)' : `contact length ${f(zn.x1 - zn.x0, 2)} ft, q_max = ${f(Math.max(zn.q0, zn.q1), 0)} psf`;
+  }
+  const t = document.getElementById('c3d-title'); if (t) t.innerHTML = rw3Title(r, S) + (S.rInfo ? `<div class="c3d-sign">Base reaction: ${S.rInfo}.</div>` : '');
+  const sel = document.getElementById('c3d-sel');
+  if (sel) { const { o } = rw3Options(r);
+    sel.innerHTML = o.map(([lab, items]) => `<optgroup label="${lab}">${items.map(([v, n]) => `<option value="${v}"${v === S.sel ? ' selected' : ''}>${n}</option>`).join('')}</optgroup>`).join(''); }
+}
+// each frame: labels at a fixed pixel size, right of their anchors, inside the view, off the control panels, not overlapping
+function rw3LayoutLabels() {
+  const ld = document.getElementById('c3d-leaders'); if (ld) ld.innerHTML = '';
+  if (!_3d) return;
+  const L = RW3.labels.filter(s => s.parent && s.parent.visible); if (!L.length) return;
+  const cv = _3d.renderer.domElement, W = cv.clientWidth || 1, Hh = cv.clientHeight || 1, cam = _3d.camera;
+  cam.updateMatrixWorld(); const k = 2 / (Hh * cam.projectionMatrix.elements[5]);
+  const it = L.map(s => { const v = s.getWorldPosition(new THREE.Vector3()).project(cam); const ax = (v.x + 1) / 2 * W, ay = (1 - v.y) / 2 * Hh; const { w, h } = s.userData.lbl;
+    s.visible = v.z < 1; s.scale.set(w * k, h * k, 1);
+    return { s, ax, ay, w, h, x: Math.max(2, Math.min(W - w - 2, ax + 6)), y: Math.max(2, Math.min(Hh - h - 2, ay - h / 2)) }; });
+  it.sort((a, b) => a.y - b.y || a.x - b.x);
+  const cr = cv.getBoundingClientRect();
+  const obs = [...cv.parentElement.querySelectorAll('.c3d-panel')].filter(e => e.offsetParent).map(e => { const q = e.getBoundingClientRect(); return { x: q.left - cr.left, y: q.top - cr.top, w: q.width, h: q.height }; });
+  const ov = (o, q) => o.x < q.x + q.w + 2 && q.x < o.x + o.w + 2 && o.y < q.y + q.h + 2 && q.y < o.y + o.h + 2;
+  const placed = [];
+  it.forEach(o => { if (!o.s.visible) return;
+    let side = 0;
+    for (let n = 0; n < 60; n++) { const b = obs.find(q => ov(o, q));
+      if (b) { if (side < 2) { o.x = Math.max(2, Math.min(W - o.w - 2, (b.x + b.w / 2 < W / 2) ? b.x + b.w + 3 : b.x - o.w - 3)); side++; }
+               else { o.y = b.y + b.h + 3; side = 0; }   // no room beside the panels: below the one in the way
+               continue; }
+      side = 0;
+      const hit = placed.find(q => ov(o, q)); if (!hit) break; o.y = hit.y + hit.h + 2; }
+    placed.push(o); o.s.center.set(-(o.x - o.ax) / o.w, 1 + (o.y - o.ay) / o.h); });
+  if (ld) { let h = ''; placed.forEach(o => { const ex = Math.max(o.x, Math.min(o.x + o.w, o.ax)), ey = Math.max(o.y, Math.min(o.y + o.h, o.ay));
+    if (Math.hypot(ex - o.ax, ey - o.ay) > 10 && o.ax >= 0 && o.ax <= W && o.ay >= 0 && o.ay <= Hh)
+      h += `<line x1="${o.ax.toFixed(1)}" y1="${o.ay.toFixed(1)}" x2="${ex.toFixed(1)}" y2="${ey.toFixed(1)}" stroke="${o.s.userData.lbl.col}" stroke-width="1" stroke-dasharray="3 2"/>`; });
+    ld.innerHTML = h; }
+}
+function rw3Set(v) { RW3.sel = v; if (_3d && window._R) rw3Build(window._R); }
+window.rwbpOnPick = sel => { RW3.sel = sel === 'GOV' ? 'GOV' : 'C:' + sel; if (_3d && window._R && document.getElementById('c3d')) rw3Build(window._R); };   // one-way: the bearing selector sets the 3D view
 
 function buildGeometry3D(r) {
   if (!_3d) return;
@@ -8612,15 +8782,9 @@ function buildGeometry3D(r) {
     G.passive.add(ppMesh);
   }
 
-  // ── BEARING PRESSURE (trapezoid below footing) ──
-  const bScale = Math.max(B,H)*0.16 / Math.max(r.q_toe, r.q_heel, 1);
-  const bShape = new THREE.Shape();
-  bShape.moveTo(0,0); bShape.lineTo(0, -r.q_toe*bScale);
-  bShape.lineTo(B, -r.q_heel*bScale); bShape.lineTo(B, 0); bShape.closePath();
-  const bGeo = new THREE.ExtrudeGeometry(bShape, { depth: WL, bevelEnabled:false });
-  const bMesh = new THREE.Mesh(bGeo, mat(0xc0a020, 0.34));
-  bMesh.position.set(0, 0, 0);
-  G.bearing.add(bMesh);
+  // ── BEARING PRESSURE ── RW3L (2026-11-06): drawn by rw3Build for the selected combination (was the service
+  //    trapezoid q_toe → q_heel over the full B, also when the service resultant was outside the middle third)
+  rw3Build(r);
 
   // Apply section-cut clipping to concrete + soil + water if enabled
   if (_3d.clip) {
