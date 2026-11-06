@@ -1640,7 +1640,11 @@ function computeAll(){
  });
  const lrfd=combosLRFD.map(cb=>({cb,r:resultant(cb.f)}));
  /* governing */
- const valid=asd.filter(a=>a.DCR!==null&&isFinite(a.DCR));
+ /* SFNB-2 (2026-11-06, engineer; CALCULATION CHANGE): a combination with D/C = \u221e (zero or failed bearing capacity: Vesi\u0107 i_q = 0 when
+    H \u2265 V + A\u2032c/tan\u03c6, capacity not computable, or q_a \u2264 0) is included and governs as FAIL; before, only finite D/Cs were kept and
+    such a combination was silently left out. Unchanged when every D/C is finite. Rows with no D/C (resultant off the footing, net load
+    not downward: DCR null) are still not bearing candidates. */
+ const valid=asd.filter(a=>a.DCR!==null&&!isNaN(a.DCR));
  const unstable=asd.filter(a=>a.bear.mode==='unstable'||a.r.P<=1e-9);
  const govBear=valid.length?valid.reduce((a,b)=>b.DCR>a.DCR?b:a):null;
  const govOT=asd.reduce((a,b)=>(b.otMin.FS<a.otMin.FS)?b:a,asd[0]);
@@ -1706,6 +1710,7 @@ function computeAll(){
  if(!rig.rigid)W.push({lvl:'warn',msg:'Rigidity check: \u03bb\u00b7\u2113 exceeds \u03c0/4 in at least one direction. The rigid-footing (linear pressure) assumption may not apply; pressures and Phase 2 strip design should be reviewed.'});
  if(minContact<1-1e-6)W.push({lvl:'warn',msg:'Partial bearing contact (uplift of the footing edge) occurs in at least one service combination. Minimum contact = '+f2(minContact*100)+'% of the footing area.'});
  unstable.forEach(a=>W.push({lvl:'err',msg:'Combination "'+a.cb.name+'": resultant falls outside the footing or net vertical load is not downward \u2014 footing is unstable under this combination.'}));
+ asd.filter(a=>a.DCR===Infinity).forEach(a=>W.push({lvl:'err',design:true,msg:'Bearing FAIL, combination "'+a.cb.name+'": '+sfdBearWhy(a)+' \u2014 bearing D/C = \u221e.'}));   /* SFNB-2 */
  if(state.soil.mode==='vesic'&&govBear&&govBear.cap&&!govBear.cap.fail&&govBear.cap.iq<0.3)
   W.push({lvl:'warn',msg:'Load inclination is severe (i_q < 0.30) in the governing bearing combination; the Vesi\u0107 inclination correction is being extrapolated near its limit.'});
  return{W,fatal:false,B,L,t,Df,gc,fc,ks,phi,phiDeg,c,gs,gev,gw,dw:dwc===Infinity?Infinity:dwc,
@@ -1853,7 +1858,7 @@ function renderDashboard(){
  const FSot=num(state.stab.FSot),FSsl=num(state.stab.FSsl),FSfl=num(state.stab.FSfl);
  if(R.govBear){
   const ok=R.govBear.DCR<=1+1e-9;
-  d.appendChild(chip('Bearing (service)','DCR = '+f2(R.govBear.DCR)+' \u2014 '+R.govBear.cb.name,ok?'pass':'fail',R.asd.indexOf(R.govBear),{tab:'tab-bearing',sec:'o-br-gov'}));
+  d.appendChild(chip('Bearing (service)','DCR = '+f2(R.govBear.DCR)+' \u2014 '+R.govBear.cb.name+(R.govBear.DCR===Infinity?': '+sfEsc(sfdBearWhy(R.govBear)):''),ok?'pass':'fail',R.asd.indexOf(R.govBear),{tab:'tab-bearing',sec:'o-br-gov'}));
  }else d.appendChild(chip('Bearing (service)',sfEsc(sfdNoBearShort()),'fail',undefined,{tab:'tab-bearing',sec:'o-br-gov'}));   /* SFNB */
  const anyUnstable=R.asd.some(a=>a.bear.mode==='unstable'||a.r.P<=1e-9);
  const ot=R.govOT.otMin;
@@ -2869,6 +2874,7 @@ function renderBearing(){
  }else{
   b0.appendChild(el('p','','Selected combination: <b>'+g.cb.name+'</b> &nbsp;['+g.cb.ref+']. This is <b>not</b> the governing case (governing = '+R.govBear.cb.name+', DCR = '+f2(R.govBear.DCR)+'). Full worked calculation for the selected combination follows.'));
  }
+ if(!lv&&g.DCR===Infinity)b0.appendChild(el('div','errbox','<b>Bearing: FAIL, D/C = \u221e.</b> '+sfEsc(sfdBearWhy(g))+'. Worked in '+sfdLink('o-br-cap','')+'.'));   /* SFNB-2 */
  b0.appendChild(varTable([
   ['\\Sigma P','Net vertical load (incl. self-weights, EV, \u2212U)',r.P,'kips'],
   ['\\Sigma H_x,\\;\\Sigma H_y','Horizontal resultants at base',f2(r.Hx)+', '+f2(r.Hy),'kips'],
@@ -2977,7 +2983,7 @@ function renderBearing(){
  }else if(state.soil.mode==='vesic'){
   const v=g.cap;
   const b2=secPanel(T,'o-br-cap','3.3  Bearing Capacity \u2014 Vesi\u0107 Method (effective area)');
-  if(v.fail){b2.appendChild(el('div','errbox','Effective area is non-positive (eccentricity too large) \u2014 capacity cannot be computed.'));}
+  if(v.fail){b2.appendChild(el('div','errbox','Effective area is non-positive (eccentricity too large) \u2014 capacity cannot be computed.'+(g.DCR===Infinity?' <b>D/C = \u221e (FAIL).</b>':'')));}   /* SFNB-2 */
   else{
   b2.appendChild(el('p','note','General bearing capacity equation (Vesi\u0107) with shape, depth, and load-inclination factors, applied to the Meyerhof effective footing B\u2032 \u00d7 L\u2032. The uniform effective pressure q_eff = \u03a3P/(B\u2032L\u2032) is compared with q_allow = q_ult/FS. Reference: Vesi\u0107 (1973, 1975). AASHTO LRFD 10th Ed. (2024) Art. 10.6.3.1.2a uses the same N, shape and inclination factors, but its depth factor (Eq. 10.6.3.1.2a-10) differs from the Vesi\u0107 depth factors used here (see the Depth factors line).'));
   b2.appendChild(eqBlock('Effective footing dimensions (Meyerhof)','Meyerhof (1953)',
@@ -3021,6 +3027,7 @@ function renderBearing(){
    "q_{eff} = \\frac{\\Sigma P}{B'L'} \\le q_{allow}",
    'q_{eff} = \\frac{'+f2(v.V)+'}{'+f2(v.Bp)+'\\cdot'+f2(v.Lp)+'} = '+f2(v.qeff)+'\\;\\mathrm{ksf}'+(v.override?'\\quad(q_{allow}='+f2(v.qall)+'\\text{ ksf, user override})':''),
    '\\mathrm{DCR} = '+f2(v.qeff)+'/'+f2(v.qall)+' = \\mathbf{'+f2(v.DCR)+'}'+(v.DCR<=1?'\\;\\checkmark':'\\;\\text{NG}')));
+  if(v.DCR===Infinity)b2.appendChild(el('div','errbox','<b>D/C = \u221e (FAIL):</b> '+sfEsc(sfdBearWhy(g))+'.'));   /* SFNB-2 */
   b2.appendChild(el('p','note','q_max from the linear distribution (Section 3.2) is reported for information and for the Phase 2 structural design; the geotechnical adequacy check uses the effective-area method above.'));
   }
  }else{
@@ -3036,6 +3043,7 @@ function renderBearing(){
    'q_{'+(state.soil.qaBasis==='net'?'net':'max')+'} \\le q_a',
    f2(cpd.qcheck)+' \\le '+f2(cpd.qa),
    '\\mathrm{DCR} = '+f2(cpd.qcheck)+'/'+f2(cpd.qa)+' = \\mathbf{'+f2(g.DCR)+'}'+(g.DCR<=1?'\\;\\checkmark':'\\;\\text{NG}')));
+  if(g.DCR===Infinity)b2.appendChild(el('div','errbox','<b>D/C = \u221e (FAIL):</b> '+sfEsc(sfdBearWhy(g))+'.'));   /* SFNB-2 */
  }
  sfdLrBearCard(T);   /* SFLR: reference only */
 }
@@ -3401,9 +3409,11 @@ function renderPlots(){
  const font={family:'Times New Roman',size:12};
  /* DCR bar */
  const names=R.asd.map((a,i)=>(i+1)+'. '+a.cb.name);
- const dcrs=R.asd.map(a=>a.DCR===null?0:(isFinite(a.DCR)?a.DCR:0));
+ /* SFNB-2: a D/C of \u221e is drawn as a red bar above the tallest finite one (at least 1.5), labelled \u221e */
+ const dFin=R.asd.map(a=>a.DCR).filter(v=>v!==null&&isFinite(v)), dTop=Math.max(1.5,1.1*Math.max(0,...dFin));
+ const dcrs=R.asd.map(a=>a.DCR===null?0:(isFinite(a.DCR)?a.DCR:(a.DCR===Infinity?dTop:0)));
  if(sfpOn('plot-dcr'))sfpPlot('plot-dcr',[
-  {x:names,y:dcrs,type:'bar',name:'Bearing DCR',marker:{color:dcrs.map(v=>v>1?'#c62828':'#4a6f9b')}},
+  {x:names,y:dcrs,type:'bar',name:'Bearing DCR',marker:{color:dcrs.map(v=>v>1?'#c62828':'#4a6f9b')},...(R.asd.some(a=>a.DCR===Infinity)?{text:R.asd.map(a=>a.DCR===Infinity?'\u221e':''),textposition:'outside'}:{})},
   {x:names,y:names.map(()=>1),type:'scatter',mode:'lines',name:'DCR = 1.0',line:{color:'#c00',dash:'dash'}}],
   {font,margin:{t:20,b:130},xaxis:{title:'Service combination',tickangle:-40,tickfont:{size:9}},yaxis:{title:'Bearing DCR'},legend:{orientation:'h'}},{responsive:true,displaylogo:false});
  /* heatmap */
@@ -3815,7 +3825,7 @@ function sfrModel(){
    const st=[];
    if(state.soil.qaBasis==='net')st.push(SharedSteps.step({id:'qsur',label:'Overburden at the base (net basis)',sym:'q_{sur}',eq:'\\gamma_{s} D_{f}\\;(\\gamma^{\\prime}\\text{ below the water table})',sub:'',value:c.qsur,unit:'ksf',d:3}));
    st.push(SharedSteps.step({id:'qchk',label:'Pressure checked',sym:'q',eq:state.soil.qaBasis==='net'?'q_{max} \\minus q_{sur}':'q_{max}',sub:state.soil.qaBasis==='net'?sfrN(bp.qmax,3)+' \\minus '+sfrN(c.qsur,3):sfrN(bp.qmax,3),value:c.qcheck,unit:'ksf',d:3}));
-   st.push(SharedSteps.step({id:'DCR',label:'Bearing demand / capacity',sym:'DCR',eq:'\\frac{q}{q_{a}}',sub:'\\frac{'+sfrN(c.qcheck,3)+'}{'+sfrN(c.qa)+'}',value:G.DCR,unit:'',d:3,ok:G.DCR<=1+1e-9,ref:R.directMode?'factored envelope vs allowable (conservative)':'ASCE 7-16 §2.4.1 service loads'}));
+   st.push(SharedSteps.step({id:'DCR',label:'Bearing demand / capacity',sym:'DCR',eq:'\\frac{q}{q_{a}}',sub:'\\frac{'+sfrN(c.qcheck,3)+'}{'+sfrN(c.qa)+'}',value:G.DCR===Infinity?'∞':G.DCR,unit:'',d:3,ok:G.DCR<=1+1e-9,ref:R.directMode?'factored envelope vs allowable (conservative)':'ASCE 7-16 §2.4.1 service loads'}));
    T.push({title:'Bearing check',ref:'',steps:st});
   }else if(c&&!c.fail){
    const S=(o)=>SharedSteps.step(o), ph=sfrN(R.phiDeg,1)+'^{\\circ}';
@@ -3845,13 +3855,16 @@ function sfrModel(){
     S({id:'qall',label:'Allowable bearing'+(c.override?' (user override; computed '+sfrN(c.qallComputed,3)+' ksf)':''),sym:'q_{allow}',eq:c.override?'q_{allow,user}':'\\frac{q_{ult}}{FS}',sub:c.override?'':'\\frac{'+sfrN(c.qult,3)+'}{'+sfrN(R.FSb)+'}',value:c.qall,unit:'ksf',d:3})]});
    T.push({title:'Bearing check (effective-area uniform pressure)',ref:R.directMode?'factored envelope vs allowable (conservative)':'ASCE 7-16 §2.4.1 service loads',steps:[
     S({id:'qeff',label:'Effective-area pressure',sym:'q_{eff}',eq:'\\frac{V}{A^{\\prime}}',sub:'\\frac{'+sfrN(c.V)+'}{'+sfrN(c.Ae)+'}',value:c.qeff,unit:'ksf',d:3}),
-    S({id:'DCR',label:'Bearing demand / capacity',sym:'DCR',eq:'\\frac{q_{eff}}{q_{allow}}',sub:'\\frac{'+sfrN(c.qeff,3)+'}{'+sfrN(c.qall,3)+'}',value:G.DCR,unit:'',d:3,ok:G.DCR<=1+1e-9})]});
+    S({id:'DCR',label:'Bearing demand / capacity',sym:'DCR',eq:'\\frac{q_{eff}}{q_{allow}}',sub:'\\frac{'+sfrN(c.qeff,3)+'}{'+sfrN(c.qall,3)+'}',value:G.DCR===Infinity?'∞':G.DCR,unit:'',d:3,ok:G.DCR<=1+1e-9})]});
   }
-  if(T.length)subs.push({title:'Allowable bearing and bearing check',key:'S-qa',items:[sfrTopics('cap',T,{title:'Governing combination: '+G.cb.name})]});
+  const infN=G.DCR===Infinity?[{type:'note',warn:true,text:'Bearing: FAIL, D/C = ∞ ('+G.cb.name+'): '+sfdBearWhy(G)+'.'}]:[];   /* SFNB-2 */
+  if(T.length)subs.push({title:'Allowable bearing and bearing check',key:'S-qa',items:[sfrTopics('cap',T,{title:'Governing combination: '+G.cb.name}),...infN]});
+  else if(infN.length)subs.push({title:'Allowable bearing and bearing check',key:'S-qa',items:infN});
   }   /* SFNB: end of the governing pressure and check */
   subs.push({title:'Bearing, every combination',items:[{type:'table',wide:true,head:['Combination','ΣP (kip)','e_x (ft)','e_y (ft)','q_max (ksf)','contact (%)','DCR'],
    rows:R.asd.map(a=>({cells:[a.cb.name,sfrCell(a.r.P),sfrCell(a.r.ex,3),sfrCell(a.r.ey,3),sfrCell(a.bear.qmax,3),sfrCell(100*(a.bear.contactFrac!==undefined?a.bear.contactFrac:1),1),sfrDC(a.DCR)],cls:a===G?'gov':''}))},
-   {type:'note',text:'The governing row (bold) is worked in [[S-bp]] and [[S-qa]]; every row follows the same procedure.'}]});
+   {type:'note',text:'The governing row (bold) is worked in [[S-bp]] and [[S-qa]]; every row follows the same procedure.'},
+   ...R.asd.filter(a=>a.DCR===Infinity).map(a=>({type:'note',warn:true,text:'D/C = ∞, '+a.cb.name+': '+sfdBearWhy(a)+'.'}))]});   /* SFNB-2 */
   secs.push({title:'Bearing',subs});
  }
  /* ---------- 4. Stability ---------- */
