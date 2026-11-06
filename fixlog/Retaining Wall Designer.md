@@ -2103,7 +2103,7 @@ function renderStatus(r) {
   - L_joint 41 ft, MassDOT full section, 1400 px: 16.17 / 16.17, bar 10 ft → 16.17; smallest text 13.1 px.
   - Same at 390 px (drawing 760 px, scrolls): 12.03 / 12.03; 9.7 px.
   - L_joint 90 ft, 45° spread, h_CT 42 in (above the 36 in barrier): 7.37 / 7.37, bar 25 ft.
-  - Before, the default case had a vertical scale ×1.39 the horizontal, and its smallest text was 7.1 px at 1400 and 2.5 px at 390.
+  - Before, the default case had a vertical scale ×1.39 the horizontal, and its smallest text was 8.3 px at 1400 (some labels cut off at the left edge) and 3.0 px at 390.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Saved data (§5):** none.
 - **How verified:** origin/main (after #930) vs branch, ten cases (the eight of RWTS-2 + MassDOT full-section CT + 45° spread CT with h_CT above the barrier): `_R`, Export JSON, every localStorage key, Report text and tab text with SVG removed, every Report / Overview SVG, DXF of the four sheets **identical**; the elevation is not in the Report. Screenshots at 1400 and 390 looked at, before and after. Tests: see the PR.
