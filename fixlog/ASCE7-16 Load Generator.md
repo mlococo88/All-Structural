@@ -1204,3 +1204,16 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data (§5):** `asce7bldg.projects` ({ name: snapshot() }) and `asce7bldg.autosave` unchanged; GitHub file unchanged; no new key. The panel's open / closed state is kept in `S.open['i-save']` like every other panel (view field, as before).
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **How verified:** main vs branch after the same input change: results identical, localStorage keys identical (`asce7bldg.autosave` byte-identical), Export JSON text (`JSON.stringify(snapshot(),null,2)`, 2,199 chars), report model `a7Model()` (17,744 chars) and results panel text identical; no console errors beyond main. `node tests/smoke/project-library.mjs --tool asce7` (save through the standard Save as on the branch): ALL PASS. `github-sync-tools.mjs --tool asce7`: ALL PASS. 390 px: page 390 / 390, dialog 355 / 355; screenshots looked at.
+
+## 2026-11-06 — PR: claude/reset-to-new-asce7 (RSTN) — "Save and open" card: Reset removed (New does the same; display only, no result change)
+- **Engineer:** remove Reset where New does the same (approved 2026-11-06).
+- **Comparison (main):** Reset = `doReset()`: `confirm("Reset every input to the defaults? Unsaved work will be lost.")`, then `restore(JSON.parse(JSON.stringify(DEF)))`. New = projectBar `newProject`: asks only when there are unsaved changes (the standard question), then the same `restore(JSON.parse(JSON.stringify(DEF)))`, then no saved project is open (chip "not saved yet"). Same inputs, same autosave (`restore` writes it), same Undo step. Only differences: Reset always asked (its own wording) and left the open project's name in the chip (a following Save would have written the defaults over that saved project).
+- **Where:**
+  - `function doReset(){ if(!confirm("Reset every input to the defaults? Unsaved work will be lost.")) return;` + `  restore(JSON.parse(JSON.stringify(DEF))); }` removed (no other caller).
+  - Anchor `/* STDS (2026-11-05): the standard save (shared/projects-ui.js projectBar)`: `const reset=SharedProjectsUI.button("Reset","Reset every input to the defaults (saved projects are kept)",{cls:"btn"}); reset.onclick=()=>doReset();` → the comment `/* RSTN (2026-11-06): the card's Reset button removed: … */`; in the `projectBar({...})` call `extras:[reset], header:row,` → `header:row,` (the card's third row is gone).
+  - PLIB comment: "Opening a saved project, Import JSON and Reset are one step each" → "… and Reset (New since RSTN, 2026-11-06) are one step each".
+- **Saved data (§5):** no key or format changed.
+- **Formulas, factors, units, code references:** none.
+- **Check case:** default project, one number input changed, then main Reset / main New / branch New: snapshot() and every localStorage key identical in all three (hash 27cd792117b3 / storage 1b4fb71c4455), chip "not saved yet", 0 console errors.
+- **How verified:** `node tests/check-syntax.mjs "ASCE7-16 Load Generator.html"`: pass. `node tests/smoke/project-library.mjs --tool asce7`: ALL PASS. Main-vs-branch Reset/New script (above). No test or manual text named the Reset button.
+- **Other copies:** none.

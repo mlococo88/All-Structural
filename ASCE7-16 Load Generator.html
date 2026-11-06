@@ -4395,8 +4395,6 @@ function doDelete(n){ if(!confirm('Delete "'+n+'" from this machine? This cannot
   const p=projects(); delete p[n];
   try{ localStorage.setItem(LSK, JSON.stringify(p)); }catch(e){ alert("Local storage is unavailable; the project could not be deleted."); return; }
   refreshProjects(); }
-function doReset(){ if(!confirm("Reset every input to the defaults? Unsaved work will be lost.")) return;
-  restore(JSON.parse(JSON.stringify(DEF))); }
 function doExportJSON(){
   const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:"application/json"});
   const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
@@ -4910,7 +4908,7 @@ window.addEventListener("DOMContentLoaded",()=>{
 /* PLIB (2026-11-02): saved-project list and Undo / Redo (shared/projects.js, shared/projects-ui.js). Display and storage only:
    the list is the tool's own key asce7bldg.projects in its own format ({ name: snapshot() }); the autosave key is unchanged.
    Undo / Redo: whole-input snapshots (the view fields tab / itab / open / manPart are left out, so changing tabs is not a step),
-   session only. Opening a saved project, Import JSON and Reset are one step each (Undo returns to the inputs before them). */
+   session only. Opening a saved project, Import JSON and Reset (New since RSTN, 2026-11-06) are one step each (Undo returns to the inputs before them). */
 window.addEventListener("DOMContentLoaded",()=>{
   if(!window.SharedProjects||!window.SharedProjectsUI) return;
   const VIEW=["tab","itab","open","manPart"];
@@ -4929,7 +4927,8 @@ window.addEventListener("DOMContentLoaded",()=>{
      "unsaved changes". */
   const imp=document.createElement("input"); imp.type="file"; imp.id="impf"; imp.accept=".json"; imp.style.display="none"; imp.setAttribute("data-sp","file");
   imp.onchange=ev=>{ doImportJSON(ev); pb.setCurrent(null); }; document.body.appendChild(imp);   /* an imported file is not a saved project */
-  const reset=SharedProjectsUI.button("Reset","Reset every input to the defaults (saved projects are kept)",{cls:"btn"}); reset.onclick=()=>doReset();
+  /* RSTN (2026-11-06): the card's Reset button removed: it did what New does (restore(DEF)); New also asks only on unsaved changes and
+     leaves no saved project open */
   const pb=SharedProjectsUI.projectBar({ store, storage:LS, label:"ASCE7-16 Load Generator", omit:VIEW,
     getState:()=>snapshot(),
     open:n=>{ if(!store.has(n)) return false; doLoad(n); return true; },
@@ -4937,7 +4936,7 @@ window.addEventListener("DOMContentLoaded",()=>{
     displayName:()=>{ const i=document.getElementById("tb_project"); return i?i.value:""; },
     exportFile:n=>{ if(!n){ doExportJSON(); return; } SharedProjectsUI.download(String(n).replace(/[^\w\-]+/g,"_")+".json",JSON.stringify(snapshot(),null,2)); },
     importFile:()=>imp.click(),
-    extras:[reset], header:row, chipBefore:bu, card:true,
+    header:row, chipBefore:bu, card:true,
     /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'asce7-load-generator',label:'ASCE7-16 Load Generator',space:2,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return j;}} });
   const sc=document.getElementById("a7SaveCard"); if(sc){ sc.removeAttribute("id"); pb.mount(sc); }
   SharedProjectsUI.undoRedo(h,{ undo:bu, redo:br });
