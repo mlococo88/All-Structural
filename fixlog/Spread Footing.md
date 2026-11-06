@@ -5519,4 +5519,46 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Formulas, factors, units, code references:** none.
 - **Check case:** default footing with every geometry value changed (×1.25 + 1) and the project name changed, then main Reset Inputs / main New / branch New: `state` and every localStorage key identical in all three (state hash e09852898b63, storage 41aa740774f7); page text after New main vs branch differs only by the "Reset Inputs" button; 0 console errors.
 - **How verified:** `node tests/check-syntax.mjs "Spread Footing.html"`: pass. `node tests/smoke/project-library.mjs --tool spreadfooting`: ALL PASS. `node tests/smoke/start-chooser.mjs`: all 58 checks pass. Main-vs-branch Reset/New script (above). Screenshot of the card (1400 px) looked at. No test clicked Reset Inputs; the user manual does not name it.
+## 2026-11-06 — PR: claude/sf-wall-minimums (PR #870: https://github.com/mlococo88/All-Structural/pull/870) (SFWC-1: wall inputs h_w and horizontal bars; the wall's own minimum ρ_l / ρ_t per ACI 318-19 11.6.1 / 11.6.2; 11.6.2 replaces the 0.005A_g dowel fallback; calculation change for Wall elements only)
+
+### SFWC-1. Wall reinforcement minimums, ACI 318-19 11.6   [calculation change, Wall elements only; CLAUDE.md §4]
+- **Request (engineer, 2026-11-06):** add the wall checks listed only in the REVIEW chip of SFWL (#769). This PR: the inputs, the wall's own minimum ρ_l / ρ_t (11.6), and 11.6.2 where the in-plane V_u exceeds the 11.6.1 limit, replacing the 0.005A_g dowel fallback (SFWL decision 3). Two-way shear for walls and the pedestal checks are unchanged (SFWL decisions 1 and 2 kept).
+- **Provisions read in the ACI 318-19 PDF (printed pp. 169–172; paraphrased):**
+  - 11.6.1: where in-plane V_u ≤ 0.5φα_cλ√f′c A_cv, minimum ρ_l and ρ_t per Table 11.6.1 (cast-in-place, deformed bars: No. 5 and smaller with f_y ≥ 60 000 psi: ρ_l 0.0012, ρ_t 0.0020; otherwise 0.0015 and 0.0025).
+  - 11.6.2: (a) ρ_l ≥ the greater of Eq. 11.6.2 and 0.0025, need not exceed the ρ_t required for strength by 11.5.4.3; (b) ρ_t ≥ 0.0025. Eq. 11.6.2: ρ_l ≥ 0.0025 + 0.5(2.5 − h_w/ℓ_w)(ρ_t − 0.0025). R11.6.2: at h_w/ℓ_w ≤ 0.5 the vertical reinforcement equals the horizontal; above 2.5 only the 0.0025 minimum.
+  - **The condition of 11.6.2 in this copy is printed "If in-plane V_u ≤ 0.5φα_cλ√f′c A_cv"** (read at 600 dpi), the same sign as 11.6.1.
+  - 11.5.4.3, Eq. 11.5.4.3: V_n = (α_cλ√f′c + ρ_t f_yt)A_cv; α_c 3 at h_w/ℓ_w ≤ 1.5, 2 at ≥ 2.0, linear between. 11.5.4.4: net axial tension α_c = 2(1 + N_u/(500A_g)) ≥ 0.
+  - Table 20.2.2.4(a): shear, stirrups / ties / hoops (deformed bars): f_yt ≤ 60 000 psi.
+  - 2.2: ρ_l, ρ_t = area of distributed reinforcement / gross concrete area perpendicular to it.
+- **Inputs (saved fields; §5):**
+  - `peds[i].wallIn.hw` "Total wall height h_w" (ft), Pedestals card, shown for a Wall only. Blank = the pedestal height h (what SFWL used).
+  - `peds[i].wallIn.hSize` / `.hSpc` "Wall horizontal bar (each face)" / "Horizontal spc (in)", Reinforcement tab, shown for a Wall only. `'tie'` / blank = the tie size / tie spacing (the long legs of the perimeter ties are the horizontal bars).
+  - Number of curtains: not an input. The vertical bars are a perimeter cage, so the wall has two curtains (one near each face); vertical bar spacing s_v = the long-face bar spacing of `sfdPedBars` (not an input).
+  - `newPed`: `wallIn:{hw:'',hSize:'tie',hSpc:''}`. `migrateState` (anchor `/* SFWC (2026-11-06): wall inputs`): fills absent keys with the same values; a stored value is kept. Pedestal elements never read the fields.
+- **Where (code):**
+  - `sfdWallInfo` (anchor `/* ---- SFWC (2026-11-06, engineer): the wall's own reinforcement`):
+    - before: `const hw=p.h*12, r=…`; after: `const hw=(hwIn>0?hwIn:p.h)*12, r=…` (hwIn = `wallIn.hw`).
+    - before: `o.AsMinWall=o.rhoL*Ag;o.AsMinCol=0.005*Ag; o.AsMin=o.t1161?o.AsMinWall:o.AsMinCol;`
+    - after: new `o.v` (vertical: size, A_b, s_v, ρ_l = 2A_b,v/(s_v t)), `o.hz` (horizontal: ρ_t = 2A_b,h/(s_h t)), per combination `rtReq` = max(0, (V_u/(0.75A_cv) − α_cλ√f′c)/f_yt) with f_yt = min(f_y, 60 000), `o.rhoTreq` (governing), `o.tbl` (Table 11.6.1 with each bar set's size), `o.rlMin` / `o.rtMin` (11.6.1: Table 11.6.1; 11.6.2: `min(max(Eq,0.0025), max(rhoTreq,0.0025))` and 0.0025, `o.e1162`), `o.rlOK` / `o.rtOK`, `o.rhoDow = t1161 ? rhoL : rlMin`, `o.AsMinWall = rhoDow·A_g`, `o.AsMin = o.AsMinWall`.
+  - `sfdDowelCheck`: before `o.rhoMin=(o.wall&&bz.wall.t1161)?bz.wall.rhoL:0.005;` after `o.rhoMin=o.wall?bz.wall.rhoDow:0.005;if(o.wall&&!bz.wall.t1161)o.w1162=true;`.
+  - `sfdDowMinBasis`: before `…applied&&z.wall.t1161)?'wall':'col'`; after `…applied)?'wall':'col'`. New `sfdRhoTxt(x)`, `sfdWall1162()`.
+  - Display: new `sfdWallRhoBlocks(b,w)` (Pedestal Design card 6.x, after the wall statement): ratios provided, then Table 11.6.1 or the ρ_t,req / Eq. 11.6.2 blocks, checks, and the h_w/ℓ_w line, with links to card 5.6. Report: new topic "Wall reinforcement (minimum ρ_l, ρ_t)" in the wall's Pedestal design subsection (steps `w.hw`, `w.rlp`, `w.rtp`, `w.rtq`, `w.eq`, `w.rl`, `w.rt`, `w.rlc`, `w.rtc`); `cb<i>.wthr` note and `cb<i>.dow`, `p<i>.AsMin` and card 5.6 (2e) / note / legend / formula follow 11.6.2. Dashboard: new chip "Wall reinforcement (ACI 318-19 11.6)" (FAIL where ρ_l or ρ_t is below its minimum; D/C = max(ρ_l,min/ρ_l, ρ_t,min/ρ_t)), Report result row linked to the wall's Pedestal design subsection. "Dowel steel" chip text names 11.6.2. `sfdWallTxt` and the REVIEW chip no longer list 11.6 as not computed.
+- **Check case 1 (Seymour Platform Foundation, f′c 3000 psi, Ped 1 set to Wall):** ℓ_w = 118.00 in, t = 32.04 in, h_w = h = 87.0 in, h_w/ℓ_w = 0.737, α_c = 3. In-plane V_u = 0 ≤ 232.96 kip: 11.6.1.
+  - Vertical: 14 #6 per long face, s_v = (118.00 − 2·2 − 0.75)/13 = 8.711 in; ρ_l = 2·0.44/(8.711·32.04) = **0.00315** ≥ 0.0015 (#6 > No. 5) OK.
+  - Horizontal = the ties #4 at 12 in: ρ_t = 2·0.20/(12·32.04) = **0.00104** < 0.0020 (#4, f_y 60 000) **NG** (new chip "Wall reinforcement" FAIL; enter the actual horizontal bars).
+  - Dowel minimum unchanged: 0.0015·3780.6 = 5.67 in².
+- **Check case 2 (#769 high in-plane shear: default project, direct mode, Ped 1 1.5 × 6 ft Wall, V_y = 120 kip):** t = 18 in, ℓ_w = 72 in, h_w = 24 in, h_w/ℓ_w = 0.333, α_c = 3, √f′c = 63.25 psi, A_cv = 1296 in².
+  - 11.6.1 limit 0.5·0.75·3·1.0·63.25·1296/1000 = 92.21 kip < 120: 11.6.2.
+  - ρ_t,req = max(0, (120 000/(0.75·1296) − 3·63.25)/60 000) = max(0, (123.46 − 189.74)/60 000) = **0**.
+  - ρ_t (ties #3 at 12 in) = 2·0.11/(12·18) = 0.00102. Eq. 11.6.2 = 0.0025 + 0.5(2.5 − 0.333)(0.00102 − 0.0025) = 0.00090. max(0.00090, 0.0025) = 0.0025; cap max(0, 0.0025) = 0.0025; **ρ_l,min = 0.0025**.
+  - Dowel minimum: before 0.005·1296 = **6.48 in²** (D/C 6.48/6.32 = 1.025, "Dowel steel" FAIL, Ped 1 dowels NG); after 0.0025·1296 = **3.24 in²** (D/C 0.513, PASS; Ped 1 dowels OK).
+  - Wall: ρ_l = 2·0.79/(33.5·18) = 0.00262 ≥ 0.0025 OK; ρ_t = 0.00102 < 0.0025 NG.
+- **Decisions (pending engineer review / confirmation):**
+  1. **11.6.2 condition (pending engineer confirmation, 2026-11-06):** the engineer's copy prints "≤"; 11.6.2 is applied where the in-plane V_u exceeds the 11.6.1 limit in some LRFD combination (the reading believed corrected by erratum). Stated in the app, the Report and here.
+  2. **ρ_t in Eq. 11.6.2 = the provided ratio** (engineer, 2026-11-06).
+  3. **The cap "need not exceed ρ_t required by 11.5.4.3" is taken as max(ρ_t,req, 0.0025).** Read literally, with ρ_t,req = 0 (V_u ≤ φα_cλ√f′c A_cv, as in check case 2) ρ_l,min would be 0 and the dowel minimum 0. The 11.6.2(b) floor 0.0025 is kept in the cap (conservative). Question to the engineer.
+  4. **ρ_l is the distributed ratio of the long faces,** 2A_b,v/(s_v t), not A_st/A_g. Table 11.6.1 class from each bar set's own size (vertical / horizontal); the dowel minimum keeps the dowel bar size (SFWL).
+  5. **Horizontal bars default to the ties** (size and spacing); two curtains; f_yt ≤ 60 000 psi (Table 20.2.2.4(a)); √f′c ≤ 100 psi as in the SFWL limit (conservative).
+- **How verified:** see the PR (harness main vs branch on 15 cases; wall and pedestal-only cases; tests).
+- **Saved data:** new field `peds[i].wallIn` (absent = h_w = h, horizontal bars = ties); no key or format change; pedestal elements unaffected.
 - **Other copies:** none.
