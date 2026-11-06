@@ -5721,7 +5721,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Saved data:** one new field `mat.ldcAlways` (default and backfill `'off'`); no key or other format change (§5).
 - **Other copies:** none.
 
-## 2026-11-06 — PR: claude/sf-corner-labels (SFQL: Bearing heat map, corner-pressure labels placed clear of the centroid axes, the plot edge, the colour bar and each other; display only, no result change)
+## 2026-11-06 — PR: claude/sf-corner-labels (PR #901: https://github.com/mlococo88/All-Structural/pull/901) (SFQL: Bearing heat map, corner-pressure labels placed clear of the centroid axes, the plot edge, the colour bar and each other; display only, no result change)
 
 - **Why:** engineer 2026-11-06: the corner-pressure labels of the card 3.2 heat map (SFQC, #777) crowd or overlap the axis lines near the plot; reposition so they never overlap the axes, the colour bar or each other at 1280–1920 px and on a phone (390 px), including the narrow Seymour footing (5 × 13 ft) and the default project.
 - **Problem (before):** `sfqcFit` chose one of three placements from an *estimated* label width (5.6 px per character + 12) and fixed thresholds, and did not look at the two centroid axes (the Plotly zero lines x = 0 and y = 0, drawn across the footing and out to the plot edge). Examples: a short footing on a phone (B × L = 14 × 4.5 ft, 390 px) put the labels inside on two lines, where q₁/q₄ and q₂/q₃ overlapped each other and all four sat on the y = 0 axis line; at the default project on a phone the estimate forced two-line labels although one line fitted; the inside placement was accepted with only 6 px between a label and the axis line.
