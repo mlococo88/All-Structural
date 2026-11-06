@@ -5798,7 +5798,7 @@ function sfqcFit(id,B,L,T){
 - **Saved data:** none touched (§5). **Other copies:** none.
 - **Open item:** at 390 px the plot title is wider than the plot and is cut at both ends (unchanged; not part of this request).
 
-## 2026-11-06 — PR: claude/sf-ecc-nolimit (SFNE: Eccentricity limit option "No eccentricity limit (IBC 2021 / ACI 318-19)", e reported for information; calculation option, default = no change)
+## 2026-11-06 — PR: claude/sf-ecc-nolimit (PR #908: https://github.com/mlococo88/All-Structural/pull/908) (SFNE: Eccentricity limit option "No eccentricity limit (IBC 2021 / ACI 318-19)", e reported for information; calculation option, default = no change)
 
 - **Why:** engineer 2026-11-06. On 2026-11-03 the engineer was told that IBC 2021 and ACI 318-19 set no maximum eccentricity for a spread footing: stability is checked by overturning, by bearing with partial contact, and by sliding. The engineer asked for an option that does not apply the app's eccentricity-limit check.
 - **What the app did before (unchanged for every existing choice):** Stability input "Eccentricity limit" (`stab.eccMode`, default `'kern'`; `migrateState` backfills it when absent):
