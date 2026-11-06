@@ -772,6 +772,11 @@ input:focus, select:focus, textarea:focus { border-color: var(--blue-600); box-s
    only (not printed); the Report and the Overview card are unchanged. */
 #rwDashCol { display: none; }
 @media print { #rwDashCol, #rwDashBox { display: none !important; } }
+/* RWTS (2026-11-06): drawings to scale keep a minimum on-screen width so their labels stay readable (≥ 9 px); narrower windows scroll the drawing sideways */
+.rw-dwg-wrap { overflow-x: auto; max-width: 100%; }
+.tab-panel [style*="grid-template-columns:1fr 330px"] > * { min-width: 0; }   /* lets the drawing's card scroll instead of widening the page */
+.rw-dwg-wrap > svg.rw-dwg { min-width: 620px; }
+@media print { .rw-dwg-wrap > svg.rw-dwg { min-width: 0; } }
 .status-bar { display: block; min-height: 0; padding: 4px 16px 0; }
 #rwDashBox { font-family: var(--font-ui); }
 #rwDashHead { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; }
@@ -7367,7 +7372,7 @@ function renderOverview(r) {
                 transition:all .15s;white-space:nowrap;"
               >${t.label}</button>`).join('')}
           </div>
-          <div class="card-body" style="background:#fafbfd;padding:10px;">
+          <div class="card-body rw-dwg-wrap" style="background:#fafbfd;padding:10px;">
             ${buildOverviewSVG(r)}
           </div>
         </div>
@@ -7476,12 +7481,15 @@ function buildOverviewSVG(r) {
   //     Labels sit to the RIGHT of reference line
   // ─────────────────────────────────────────────────────────────
 
+  // RWTS (2026-11-06): one scale across and up (SCALE, px per ft), a scale bar, and label sizes chosen for the
+  // rendered size: the tab shows the drawing at least 620 px wide (it scrolls sideways in a narrower window), so
+  // 11-unit text renders at 9 px or more; the Report prints it about 670 px wide. Margins grow with what they hold.
   const SVG_W   = 760;
-  const ML      = 60;   // left margin (passive + toe soil)
-  const DIM_GAP = 52;   // gap between heel and vertical dim lines
-  const PRESS_W = 150;  // width reserved for active pressure diagram (right side)
-  const MT      = 54;   // top (title + col arrow)
-  const MB      = 82;   // bottom (bearing + dim lines)
+  const ML      = 70;   // left margin (passive + toe soil, Df dimension)
+  const DIM_GAP = 56;   // gap between heel and vertical dim lines
+  const PRESS_W = 160;  // width reserved for active pressure diagram (right side)
+  const FS = { s: 11, m: 11.5, d: 12.5, b: 13.5 };   // RWTS: text sizes (small, values, dimensions, bold)
+  const HALO = 'paint-order="stroke" stroke="#fafbfd" stroke-width="3" stroke-linejoin="round"';   // RWTS: readable over hatching
 
   const drawW = SVG_W - ML - DIM_GAP - PRESS_W;
   const SCALE = drawW / (r.B + 0.3);
@@ -7498,7 +7506,11 @@ function buildOverviewSVG(r) {
   const Df_px     = r.Df        * SCALE;
   const Df_add_px = inp.Df_add  * SCALE;
 
-  const SVG_H = H_px + MT + MB + dk_px + Df_add_px + 24;
+  // RWTS: room above the stem top for what is drawn there (stem-top dimension, barrier, surcharge, column load, backfill slope)
+  const bar_px  = r.hasBarrier ? r.bar_h_ft * SCALE : 0;
+  const rise_px = inp.beta > 0 ? Lh_px * 0.55 * Math.tan(toRad(inp.beta)) : 0;
+  const needTop = Math.max(24 + bar_px, r.q_sur_eff > 0 ? 36 : 0, r.hasCol ? 62 : 0, rise_px > 0 ? rise_px + 16 : 0);
+  const MT = 58 + needTop;   // title + two subtitle lines, then needTop
 
   const OX = ML;
   const OY = MT + Hs_px;    // y = top of footing
@@ -7538,14 +7550,21 @@ function buildOverviewSVG(r) {
 
   // ── Bearing (below footing, grows down) ───────────────────────
   const MAX_BRG   = Math.max(r.q_toe, r.q_heel, inp.qa) * 1.15;
-  const BRG_SCALE = (MB * 0.48) / Math.max(MAX_BRG, 50);
+  const BRG_SCALE = 40 / Math.max(MAX_BRG, 50);   // RWTS: 40 px for the largest ordinate (was 0.48 × the 82 px bottom margin = 39 px)
   function yBrg(psf) { return y_fbot + psf * BRG_SCALE; }
+
+  // RWTS: bottom rows (below the footing): bearing block, two dimension rows, scale bar + note
+  const brg_drop = tog.bearing ? Math.max(yBrg(r.q_toe)-y_fbot, yBrg(r.q_heel)-y_fbot) + 30 : 0;
+  const dim_y1   = y_fbot + Math.max(inp.useShearKey ? dk_px : 0, brg_drop) + 22;
+  const dim_y2   = dim_y1 + 22;
+  const sb_y     = dim_y2 + 24;
+  const SVG_H    = sb_y + 40;
 
   const C_CONC = { fill: 'rgba(175,195,225,0.45)', stroke: '#3a5a96' };
   const C_SOIL = '#9a7a3a';
 
-  let s = `<svg viewBox="0 0 ${SVG_W} ${SVG_H}"
-    style="width:75%;min-width:300px;font-family:'Public Sans',Arial,sans-serif;display:block;margin:0 auto;">`;
+  let s = `<svg class="rw-dwg" viewBox="0 0 ${SVG_W} ${SVG_H}" data-scale="${SCALE}"
+    style="width:100%;height:auto;font-family:'Public Sans',Arial,sans-serif;display:block;margin:0 auto;">`;
 
   // ── Defs ─────────────────────────────────────────────────────
   s += `<defs>
@@ -7576,19 +7595,21 @@ function buildOverviewSVG(r) {
   </defs>`;
 
   // ── Title ─────────────────────────────────────────────────────
-  s += `<text x="${(x_toe+x_heel)/2}" y="15" font-family="'Public Sans',Arial,sans-serif"
-    font-size="11" font-weight="700" fill="#1c2a42" text-anchor="middle" letter-spacing=".05em">
+  // RWTS: titles centred on the drawing; the material / soil callouts (were leaders beside the toe and the heel) are the second subtitle line
+  s += `<text x="${SVG_W/2}" y="17" font-family="'Public Sans',Arial,sans-serif"
+    font-size="${FS.b}" font-weight="700" fill="#1c2a42" text-anchor="middle" letter-spacing=".04em">
     CANTILEVER RETAINING WALL — GEOMETRY &amp; PRESSURE DIAGRAM</text>`;
-  s += `<text x="${(x_toe+x_heel)/2}" y="27" font-size="7.5" fill="#5a6a80" text-anchor="middle">
-    ${r.isAASHTO ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19 / IBC 2021'}  ·  f'c=${inp.fc} psi · fy=${inp.fy/1000} ksi · γs=${inp.gamma_s} pcf · Ka=${f(r.Ka,4)} · Kp=${f(r.Kp,4)}</text>`;
+  s += `<text x="${SVG_W/2}" y="33" font-size="${FS.s}" fill="#5a6a80" text-anchor="middle">
+    ${r.isAASHTO ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19 / IBC 2021'}  ·  f'c=${inp.fc} psi · fy=${inp.fy/1000} ksi · γc=${inp.gamma_c} pcf · Ka=${f(r.Ka,4)} · Kp=${f(r.Kp,4)}</text>`;
+  s += `<text x="${SVG_W/2}" y="48" font-size="${FS.s}" fill="#7a5a20" text-anchor="middle">
+    Soil: γs=${inp.gamma_s} pcf · φ=${inp.phi}° · qa=${inp.qa} psf</text>`;
 
   // ── Ground lines ──────────────────────────────────────────────
   s += `<line x1="${x_bbot-4}" y1="${y_top}" x2="${x_heel+4}" y2="${y_top}"
     stroke="#7a6030" stroke-width="0.8" stroke-dasharray="5,4"/>`;
-  s += `<text x="${x_heel+6}" y="${y_top+4}" font-size="7.5" fill="#7a6030">GL(back)</text>`;
   s += `<line x1="${x_toe-24}" y1="${y_grade_toe}" x2="${x_ftoe+4}" y2="${y_grade_toe}"
     stroke="#7a6030" stroke-width="0.8" stroke-dasharray="5,4"/>`;
-  s += `<text x="${x_toe-26}" y="${y_grade_toe+4}" font-size="7.5" fill="#7a6030" text-anchor="end">GL(toe)</text>`;
+  s += `<text x="${x_toe-22}" y="${y_grade_toe-4}" font-size="${FS.s}" fill="#7a6030" ${HALO}>GL(toe)</text>`;
 
   // ── Retained soil (heel side) ─────────────────────────────────
   s += `<rect x="${x_bbot}" y="${y_top}" width="${Lh_px}" height="${Hs_px+tf_px}"
@@ -7597,7 +7618,7 @@ function buildOverviewSVG(r) {
     const run=Lh_px*0.55, rise=run*Math.tan(toRad(inp.beta));
     s += `<line x1="${x_bbot}" y1="${y_top}" x2="${x_bbot+run}" y2="${y_top-rise}"
       stroke="${C_SOIL}" stroke-width="1.3"/>`;
-    s += `<text x="${x_bbot+run+3}" y="${y_top-rise+4}" font-size="7.5" fill="${C_SOIL}">β=${inp.beta}°</text>`;
+    s += `<text x="${x_bbot+run+3}" y="${y_top-rise+4}" font-size="${FS.s}" fill="${C_SOIL}" ${HALO}>β=${inp.beta}°</text>`;
   }
 
   // ── Toe soil (passive side) ───────────────────────────────────
@@ -7624,20 +7645,22 @@ function buildOverviewSVG(r) {
       lbl = `q_LS = γ·h_eq = ${f(r.q_ll_aashto,0)} psf (h_eq=${f(r.heq,2)} ft)`;
     else
       lbl = `qs = ${inp.q_sur} psf`;
-    s += `<text x="${x_bbot+Lh_px/2}" y="${y_top-19}" font-size="8" fill="#b96400"
-      text-anchor="middle" font-weight="700">${lbl}</text>`;
+    s += `<text x="${x_bbot+Lh_px/2}" y="${y_top-20}" font-size="${FS.m}" fill="#b96400"
+      text-anchor="middle" font-weight="700" ${HALO}>${lbl}</text>`;
   }
 
   // ── Concrete footing ──────────────────────────────────────────
-  s += `<rect x="${x_toe}" y="${y_ftop}" width="${B_px}" height="${tf_px}"
+  s += `<rect data-geo="footing" x="${x_toe}" y="${y_ftop}" width="${B_px}" height="${tf_px}"
     fill="${C_CONC.fill}" stroke="${C_CONC.stroke}" stroke-width="1.5"/>`;
   s += `<rect x="${x_toe}" y="${y_ftop}" width="${B_px}" height="${tf_px}" fill="url(#oc)"/>`;
 
   // ── Concrete stem ─────────────────────────────────────────────
-  s += `<polygon points="${x_ftoe},${y_top} ${x_btop},${y_top} ${x_bbot},${y_ftop} ${x_ftoe},${y_ftop}"
+  s += `<polygon data-geo="stem" points="${x_ftoe},${y_top} ${x_btop},${y_top} ${x_bbot},${y_ftop} ${x_ftoe},${y_ftop}"
     fill="${C_CONC.fill}" stroke="${C_CONC.stroke}" stroke-width="1.5"/>`;
   s += `<polygon points="${x_ftoe},${y_top} ${x_btop},${y_top} ${x_bbot},${y_ftop} ${x_ftoe},${y_ftop}"
     fill="url(#oc)"/>`;
+  // RWTS: ground-line label inside the backfill, under the line at the heel end (was beside the heel, over the dimension lines)
+  s += `<text x="${x_heel-4}" y="${y_top+13}" font-size="${FS.s}" fill="#7a6030" text-anchor="end" ${HALO}>GL(back)</text>`;
 
   // ── Barrier on top of stem (retains no soil) ──
   if (r.hasBarrier) {
@@ -7646,7 +7669,7 @@ function buildOverviewSVG(r) {
     const bh_px = r.bar_h_ft * SCALE;
     s += `<rect x="${bx}" y="${y_top - bh_px}" width="${bw_px}" height="${bh_px}"
       fill="rgba(90,106,128,0.22)" stroke="#5a6a80" stroke-width="1.2"/>`;
-    s += `<text x="${bx + bw_px + 3}" y="${y_top - bh_px/2 + 3}" font-size="7" fill="#5a6a80">barrier ${f(r.W_bar,0)} plf</text>`;
+    s += `<text x="${bx - 4}" y="${y_top - bh_px/2 + 4}" font-size="${FS.s}" fill="#5a6a80" text-anchor="end" ${HALO}>barrier ${f(r.W_bar,0)} plf</text>`;
   }
 
   // ── Shear key ─────────────────────────────────────────────────
@@ -7662,7 +7685,7 @@ function buildOverviewSVG(r) {
     const y_wt = y_top + r.wt_d * SCALE;
     s += `<line x1="${x_bbot-6}" y1="${y_wt}" x2="${x_heel+4}" y2="${y_wt}"
       stroke="#0055c4" stroke-width="1.0" stroke-dasharray="7,4"/>`;
-    s += `<text x="${x_heel+6}" y="${y_wt+3}" font-size="7" fill="#0055c4">▼ WT (${f(r.wt_d,1)} ft)</text>`;
+    s += `<text x="${x_heel-4}" y="${Math.max(y_wt+13, y_top+28)}" font-size="${FS.s}" fill="#0055c4" text-anchor="end" ${HALO}>▼ WT (${f(r.wt_d,1)} ft)</text>`;
   }
 
   // ════════════════════════════════════════════════════════════
@@ -7691,10 +7714,10 @@ function buildOverviewSVG(r) {
       s += `<line x1="${act_left}" y1="${y_wt_line}" x2="${xb + r.p_hyd_base*PSCALE + 18}" y2="${y_wt_line}"
         stroke="#1f7fd6" stroke-width="0.8" stroke-dasharray="4,3" opacity="0.9"/>`;
       s += `<circle cx="${x_wt}" cy="${y_wt_line}" r="2.2" fill="#c42121"/>`;
-      s += `<text x="${x_wt+4}" y="${y_wt_line-3}" font-size="7" fill="#c42121" font-weight="600">${f(r.p_wt,0)} psf</text>`;
+      s += `<text x="${x_wt+4}" y="${y_wt_line-3}" font-size="${FS.s}" fill="#c42121" font-weight="600" ${HALO}>${f(r.p_wt,0)} psf</text>`;
       const y_bm = (y_wt_line + y_fbot)/2;
-      s += `<text x="${act_left+3}" y="${y_bm}" font-size="6.5" fill="#1f7fd6">γ′=${f(r.gamma_s_sub,0)} pcf</text>`;
-      s += `<text x="${act_left+3}" y="${y_bm+8}" font-size="6.5" fill="#1f7fd6">(Ka·γ′ below WT)</text>`;
+      s += `<text x="${act_left+3}" y="${y_bm}" font-size="${FS.s}" fill="#1f7fd6" ${HALO}>γ′=${f(r.gamma_s_sub,0)} pcf</text>`;
+      s += `<text x="${act_left+3}" y="${y_bm+13}" font-size="${FS.s}" fill="#1f7fd6" ${HALO}>(Ka·γ′ below WT)</text>`;
     } else {
       // Filled triangle/trapezoid: left edge = act_left (zero ref), right = pressure face
       s += `<polygon points="${act_left},${y_top} ${xt},${y_top} ${xb},${y_fbot} ${act_left},${y_fbot}"
@@ -7721,12 +7744,13 @@ function buildOverviewSVG(r) {
     });
 
     // Labels: zero at top-left, max at bottom-right (outside triangle to the right)
+    // RWTS: values inside the pressure zone (the base value was cut off at the right edge)
     if (r.p_top > 0)
-      s += `<text x="${act_left-3}" y="${y_top+9}" font-size="7" fill="#c42121" text-anchor="end">${f(r.p_top,0)} psf</text>`;
-    s += `<text x="${xb+3}" y="${y_fbot-3}" font-size="7" fill="#c42121">${f(pb,0)} psf</text>`;
+      s += `<text x="${xt+3}" y="${y_top+13}" font-size="${FS.s}" fill="#c42121" ${HALO}>${f(r.p_top,0)} psf</text>`;
+    s += `<text x="${SVG_W-4}" y="${y_fbot+14}" font-size="${FS.m}" fill="#c42121" text-anchor="end" font-weight="600">${f(pb,0)} psf at base</text>`;
     // Rotated "Active" label along the hypotenuse
     const mid_x = (act_left + xb)/2, mid_y = y_top + H_px*0.5;
-    s += `<text x="${mid_x}" y="${mid_y}" font-size="7" fill="#c42121"
+    s += `<text x="${mid_x}" y="${mid_y}" font-size="${FS.s}" fill="#c42121" ${HALO}
       text-anchor="middle" transform="rotate(90,${mid_x},${mid_y})">Active (Ka·γ·z)</text>`;
   }
 
@@ -7736,8 +7760,8 @@ function buildOverviewSVG(r) {
     const xs = xAct(p_sur);
     s += `<rect x="${act_left}" y="${y_top}" width="${xs - act_left}" height="${H_px}"
       fill="rgba(185,100,0,0.08)" stroke="#b96400" stroke-width="0.8" stroke-dasharray="3,3"/>`;
-    s += `<text x="${xs+2}" y="${y_top+10}" font-size="7" fill="#b96400" font-weight="600">Ka·q = ${f(p_sur,0)} psf</text>`;
-    s += `<text x="${(act_left+xs)/2}" y="${y_top+H_px*0.35}" font-size="6.5" fill="#b96400"
+    s += `<text x="${act_left}" y="${y_top-5}" font-size="${FS.s}" fill="#b96400" font-weight="600">Ka·q = ${f(p_sur,0)} psf</text>`;
+    s += `<text x="${(act_left+xs)/2}" y="${y_top+H_px*0.35}" font-size="${FS.s}" fill="#b96400" ${HALO}
       text-anchor="middle" transform="rotate(90,${(act_left+xs)/2},${y_top+H_px*0.35})">${r.isAASHTO&&r.q_ll_aashto>0?'LS surcharge':'Surcharge'}</text>`;
   }
 
@@ -7748,7 +7772,7 @@ function buildOverviewSVG(r) {
     const x_hyd_tip  = x_act_base + r.p_hyd_base * PSCALE;
     s += `<polygon points="${x_act_base},${y_wt_line} ${x_hyd_tip},${y_fbot} ${x_act_base},${y_fbot}"
       fill="rgba(0,85,196,0.09)" stroke="#0055c4" stroke-width="0.9"/>`;
-    s += `<text x="${x_hyd_tip+3}" y="${y_fbot-3}" font-size="7" fill="#0055c4">+${f(r.p_hyd_base,0)} psf (hydro.)</text>`;
+    s += `<text x="${SVG_W-4}" y="${y_fbot+28}" font-size="${FS.m}" fill="#0055c4" text-anchor="end">+${f(r.p_hyd_base,0)} psf (hydro.)</text>`;
   }
 
   // ── PASSIVE — LEFT of front face, in toe zone ──────────────────
@@ -7766,10 +7790,10 @@ function buildOverviewSVG(r) {
         s += `<line x1="${xx}" y1="${yy}" x2="${x0-2}" y2="${yy}"
           stroke="#0f7a5a" stroke-width="0.85" marker-end="url(#m-lft-grn)"/>`;
     });
-    s += `<text x="${x_tip-2}" y="${y_fbot-3}" font-size="7" fill="#0f7a5a" text-anchor="end">${f(p_pass_base,0)} psf</text>`;
-    if (Df_px > 22) {
+    s += `<text x="${x_tip-2}" y="${y_fbot-3}" font-size="${FS.s}" fill="#0f7a5a" text-anchor="end" ${HALO}>${f(p_pass_base,0)} psf</text>`;
+    if (Df_px > 40) {
       const px_mid = (x_tip+x0)/2, py_mid = y_grade_toe+Df_px*0.5;
-      s += `<text x="${px_mid}" y="${py_mid}" font-size="7" fill="#0f7a5a"
+      s += `<text x="${px_mid}" y="${py_mid}" font-size="${FS.s}" fill="#0f7a5a" ${HALO}
         text-anchor="middle" transform="rotate(-90,${px_mid},${py_mid})">Passive</text>`;
     }
   }
@@ -7782,51 +7806,35 @@ function buildOverviewSVG(r) {
     const y_qa = yBrg(inp.qa);
     s += `<line x1="${x_toe}" y1="${y_qa}" x2="${x_heel}" y2="${y_qa}"
       stroke="#0f7a5a" stroke-width="0.8" stroke-dasharray="4,3"/>`;
-    s += `<text x="${x_heel+3}" y="${y_qa+3}" font-size="7" fill="#0f7a5a">qa=${f(inp.qa/1000,1)} ksf</text>`;
-    s += `<text x="${x_toe}" y="${yt+10}" font-size="7.5" fill="#2155c4" text-anchor="middle">${f(r.q_toe,0)}</text>`;
-    s += `<text x="${x_heel}" y="${yh+10}" font-size="7.5" fill="#2155c4" text-anchor="middle">${f(r.q_heel,0)}</text>`;
-    s += `<text x="${x_toe+B_px/2}" y="${Math.max(yt,yh)+19}" font-size="7.5" fill="#2155c4" text-anchor="middle">Bearing (psf)</text>`;
+    s += `<text x="${x_heel+4}" y="${y_qa+4}" font-size="${FS.s}" fill="#0f7a5a">qa=${f(inp.qa/1000,1)} ksf</text>`;
+    s += `<text x="${x_toe}" y="${yt+14}" font-size="${FS.m}" fill="#2155c4" text-anchor="middle">${f(r.q_toe,0)}</text>`;
+    s += `<text x="${x_heel}" y="${yh+14}" font-size="${FS.m}" fill="#2155c4" text-anchor="middle">${f(r.q_heel,0)}</text>`;
+    s += `<text x="${x_toe+B_px/2}" y="${Math.max(yt,yh)+16}" font-size="${FS.m}" fill="#2155c4" text-anchor="middle" ${HALO}>Bearing (psf; ordinates not to scale)</text>`;
   }
 
   // ════════════════════════════════════════════════════════════
-  //  DIMENSION LINES
+  //  DIMENSION LINES  (RWTS: rows placed under the bearing block; vertical labels along the lines)
   // ════════════════════════════════════════════════════════════
-  const brg_drop = tog.bearing ? Math.max(yBrg(r.q_toe)-y_fbot, yBrg(r.q_heel)-y_fbot) : 0;
-  const dim_y1   = y_fbot + (inp.useShearKey ? dk_px : 0) + brg_drop + 12;
-  const dim_y2   = dim_y1 + 13;
-
   // Horizontal dims below footing
-  s += ovDimH(x_toe,  x_ftoe,  dim_y1, `Lt=${f(inp.Lt,1)}'`,  '#5a6a80');
-  s += ovDimH(x_ftoe, x_bbot,  dim_y1, `${f(inp.ts_bot,0)}"`, '#5a6a80');
-  s += ovDimH(x_bbot, x_heel,  dim_y1, `Lh=${f(inp.Lh,1)}'`,  '#5a6a80');
-  s += ovDimH(x_toe,  x_heel,  dim_y2, `B = ${f(r.B,2)} ft`,   '#2155c4', true);
+  s += ovDimH(x_toe,  x_ftoe,  dim_y1, `Lt=${f(inp.Lt,1)}'`,  '#5a6a80', false, FS.d);
+  s += ovDimH(x_ftoe, x_bbot,  dim_y1, `${f(inp.ts_bot,0)}"`, '#5a6a80', false, FS.d);
+  s += ovDimH(x_bbot, x_heel,  dim_y1, `Lh=${f(inp.Lh,1)}'`,  '#5a6a80', false, FS.d);
+  s += ovDimH(x_toe,  x_heel,  dim_y2, `B = ${f(r.B,2)} ft`,   '#2155c4', true, FS.b);
 
   // Vertical dims right of heel (before pressure zone)
-  s += ovDimV(vdim_x1, y_ftop, y_fbot,  `tf=${inp.tf}"`,         'right', '#5a6a80');
-  s += ovDimV(vdim_x1, y_top,  y_ftop,  `Hs=${f(inp.Hs,1)}'`,   'right', '#5a6a80');
-  s += ovDimV(vdim_x2, y_top,  y_fbot,  `H=${f(r.H,2)}'`,        'right', '#2155c4', true);
+  s += ovDimV(vdim_x1, y_ftop, y_fbot,  `tf=${inp.tf}"`,         'rot', '#5a6a80', false, FS.d);
+  s += ovDimV(vdim_x1, y_top,  y_ftop,  `Hs=${f(inp.Hs,1)}'`,   'rot', '#5a6a80', false, FS.d);
+  s += ovDimV(vdim_x2, y_top,  y_fbot,  `H=${f(r.H,2)}'`,        'rot', '#2155c4', true, FS.b);
 
   // Toe embedment dim
   if (r.Df > 0.05)
-    s += ovDimV(x_toe-14, y_grade_toe, y_fbot, `Df=${f(r.Df,2)}'`, 'left', '#0f7a5a');
+    s += ovDimV(x_toe-14, y_grade_toe, y_fbot, `Df=${f(r.Df,2)}'`, 'rot', '#0f7a5a', false, FS.d);
 
-  // Stem top width dim
-  s += ovDimH(x_ftoe, x_btop, y_top-11, `${f(inp.ts_top,0)}" top`, '#5a6a80');
+  // Stem top width dim (above the barrier when there is one)
+  s += ovDimH(x_ftoe, x_btop, y_top-11-bar_px, `${f(inp.ts_top,0)}" top`, '#5a6a80', false, FS.d);
 
-  // ════════════════════════════════════════════════════════════
-  //  CALLOUT LEADERS — kept inside wall section, small
-  // ════════════════════════════════════════════════════════════
-  // Concrete: inside stem, leader to left
-  const st_cx = x_ftoe + tsbot_px*0.42, st_cy = y_top + Hs_px*0.44;
-  s += leader(st_cx, st_cy, x_toe - 4, st_cy - 10, '#2155c4');
-  s += `<text x="${x_toe-6}" y="${st_cy-17}" font-size="7.5" fill="#2155c4" text-anchor="end" font-weight="600">f'c=${inp.fc} psi</text>`;
-  s += `<text x="${x_toe-6}" y="${st_cy-8}"  font-size="7"   fill="#2155c4" text-anchor="end">γc=${inp.gamma_c} pcf</text>`;
-
-  // Soil: leader from inside soil zone to label RIGHT of heel (avoids soil hatch)
-  const sc_x = x_bbot + Lh_px*0.5, sc_y = y_top + Hs_px*0.58;
-  s += leader(sc_x, sc_y, x_heel + DIM_GAP*0.3, sc_y - 16, '#7a5a20');
-  s += `<text x="${x_heel+DIM_GAP*0.35}" y="${sc_y-23}" font-size="7.5" fill="#7a5a20" font-weight="600">γs=${inp.gamma_s} pcf</text>`;
-  s += `<text x="${x_heel+DIM_GAP*0.35}" y="${sc_y-13}" font-size="7" fill="#7a5a20">φ=${inp.phi}° · qa=${inp.qa} psf</text>`;
+  // RWTS: scale bar (ft, same scale across and up) and the note on what is not to scale
+  s += rwtsScaleBar(x_toe, sb_y, SCALE, FS.s, 'Pressure ordinates and load arrows are not to scale (values labelled).');
 
   // ── Column load arrow ─────────────────────────────────────────
   if (r.hasCol) {
@@ -7838,7 +7846,7 @@ function buildOverviewSVG(r) {
     s += `<line x1="${cx}" y1="${a_top-5}" x2="${cx}" y2="${y_top}"
       stroke="#8b0000" stroke-width="1.8" marker-end="url(#m-col)"/>`;
     const Pt = inp.col_DL + inp.col_LL + inp.col_SL;
-    s += `<text x="${cx}" y="${a_top-15}" font-size="7.5" fill="#8b0000"
+    s += `<text x="${cx}" y="${a_top-12}" font-size="${FS.m}" fill="#8b0000" ${HALO}
       text-anchor="middle" font-weight="700" font-family="'Public Sans',Arial,sans-serif">
       P=${f(Pt,1)} k / ${f(inp.col_Ldist,1)} ft</text>`;
   }
@@ -7846,7 +7854,7 @@ function buildOverviewSVG(r) {
   s += '</svg>';
   return s;
 }
-function ovDimH(x1, x2, y, label, color, bold=false) {
+function ovDimH(x1, x2, y, label, color, bold=false, fs=0) {   // RWTS: optional text size fs (default as before)
   if (Math.abs(x2 - x1) < 4) return '';
   const mid = (x1 + x2) / 2;
   const tick = 5;
@@ -7854,16 +7862,26 @@ function ovDimH(x1, x2, y, label, color, bold=false) {
     <line x1="${x1}" y1="${y}" x2="${x2}" y2="${y}" stroke="${color}" stroke-width="${bold?1.2:0.8}"/>
     <line x1="${x1}" y1="${y-tick}" x2="${x1}" y2="${y+tick}" stroke="${color}" stroke-width="${bold?1.2:0.8}"/>
     <line x1="${x2}" y1="${y-tick}" x2="${x2}" y2="${y+tick}" stroke="${color}" stroke-width="${bold?1.2:0.8}"/>
-    <text x="${mid}" y="${y - 4}" font-size="${bold?9.5:8.5}" fill="${color}"
+    <text x="${mid}" y="${y - 4}" font-size="${fs || (bold?9.5:8.5)}" fill="${color}"${fs ? ' paint-order="stroke" stroke="#fafbfd" stroke-width="3"' : ''}
       font-family="'Public Sans',Arial,sans-serif" text-anchor="middle"
       font-weight="${bold?'700':'400'}">${label}</text>`;
 }
 
 // ── SVG helper: vertical dimension line ───────────────────────
-function ovDimV(x, y1, y2, label, side='right', color='#5a6a80', bold=false) {
+function ovDimV(x, y1, y2, label, side='right', color='#5a6a80', bold=false, fs=0) {   // RWTS: side 'rot' = label along the line, left of it; optional text size fs
   if (Math.abs(y2 - y1) < 4) return '';
   const mid = (y1 + y2) / 2;
   const tick = 5;
+  if (side === 'rot') {
+    const sw = bold ? 1.2 : 0.8, tx = x - 4;
+    return `
+    <line x1="${x}" y1="${y1}" x2="${x}" y2="${y2}" stroke="${color}" stroke-width="${sw}"/>
+    <line x1="${x-tick}" y1="${y1}" x2="${x+tick}" y2="${y1}" stroke="${color}" stroke-width="${sw}"/>
+    <line x1="${x-tick}" y1="${y2}" x2="${x+tick}" y2="${y2}" stroke="${color}" stroke-width="${sw}"/>
+    <text x="${tx}" y="${mid}" font-size="${fs || (bold?9.5:8.5)}" fill="${color}" transform="rotate(-90,${tx},${mid})"
+      font-family="'Public Sans',Arial,sans-serif" text-anchor="middle" paint-order="stroke" stroke="#fafbfd" stroke-width="3"
+      font-weight="${bold?'700':'400'}">${label}</text>`;
+  }
   const tx = side === 'right' ? x + 4 : x - 4;
   const anchor = side === 'right' ? 'start' : 'end';
   return `
@@ -7873,6 +7891,24 @@ function ovDimV(x, y1, y2, label, side='right', color='#5a6a80', bold=false) {
     <text x="${tx}" y="${mid}" font-size="${bold?9.5:8.5}" fill="${color}"
       font-family="'Public Sans',Arial,sans-serif" text-anchor="${anchor}"
       dominant-baseline="middle" font-weight="${bold?'700':'400'}">${label}</text>`;
+}
+
+// RWTS (2026-11-06): scale bar for a drawing at sc px per ft — a nice length L (≈ 90–180 px), black/white halves,
+// 0 / L/2 / L ft labels, the word "Scale" and an optional note. Returns SVG markup; x, y = left end, top of the bar.
+function rwtsScaleBar(x, y, sc, fs, note) {
+  const nice = [0.5, 1, 2, 2.5, 5, 10, 20, 25, 50, 100];
+  let L = nice[0]; for (const v of nice) { if (v * sc <= 180) L = v; }
+  const w = L * sc, h = 5;
+  let t = `<g class="rw-scalebar" data-ft="${L}" data-px="${w}">`;
+  t += `<text x="${x}" y="${y-4}" font-size="${fs}" fill="#1c2a42" font-weight="700">Scale</text>`;
+  t += `<rect x="${x}" y="${y}" width="${w/2}" height="${h}" fill="#1c2a42" stroke="#1c2a42" stroke-width="0.8"/>`;
+  t += `<rect x="${x+w/2}" y="${y}" width="${w/2}" height="${h}" fill="#fff" stroke="#1c2a42" stroke-width="0.8"/>`;
+  const lab = v => (Math.round(v * 100) / 100).toString();
+  t += `<text x="${x}" y="${y+h+12}" font-size="${fs}" fill="#1c2a42" text-anchor="middle">0</text>`;
+  t += `<text x="${x+w/2}" y="${y+h+12}" font-size="${fs}" fill="#1c2a42" text-anchor="middle">${lab(L/2)}</text>`;
+  t += `<text x="${x+w}" y="${y+h+12}" font-size="${fs}" fill="#1c2a42" text-anchor="middle">${lab(L)} ft</text>`;
+  if (note) t += `<text x="${x+w+28}" y="${y+h+1}" font-size="${fs}" fill="#5a6a80">${note}</text>`;
+  return t + '</g>';
 }
 
 // ── SVG helper: callout leader line ───────────────────────────
