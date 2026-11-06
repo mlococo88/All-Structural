@@ -1247,6 +1247,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
   </div>
   <a class="bx-all-tools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
   <div class="hdr-spacer"></div>
+  <div class="hdr-group gd-hdr-proj" id="gd-hdr-proj"></div>
   <div class="hdr-group"><label class="own-pill" for="gd-owner" title="Owner (DOT) profile of the bridge: owner rules on top of AASHTO LRFD 10th Ed. Set here or on Preliminary sizing's Limits tab.">Owner <select id="gd-owner"><option value="" hidden>(open Preliminary sizing)</option><option value="RIDOT">RIDOT</option><option value="MassDOT">MassDOT</option><option value="CTDOT">CTDOT</option><option value="AASHTO">AASHTO</option></select><button type="button" class="own-i" id="own-info" title="Owner rules">rules</button></label></div>
   <div class="hdr-group"><button type="button" class="btn" id="btn-designall" style="margin-right:8px">Design all</button><button type="button" class="btn" id="btn-grpt" style="margin-right:8px">Girder report</button><button type="button" class="btn" id="btn-v3dbr" style="margin-right:8px">3D view</button><button type="button" class="btn" id="btn-dxf" style="margin-right:8px">Export DXF</button><button type="button" class="btn btn-primary" id="btn-print"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6V2.5h8V6M4 11.5H2.5v-5h11v5H12M4.5 9.5h7v4h-7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Print report</span></button></div>
 </header>
@@ -7108,11 +7109,14 @@ const GRADE_OPTS = [['36', 'A709 Gr. 36'], ['50', 'A709 Gr. 50'], ['50W', 'A709 
 function buildSidebar() {
   const panes = {
     project: `
-      ${secHd('sec-projmgr', 'Saved projects')}
-      <div class="proj-box" id="sec-projmgr">
+      ${secHd('sec-projmgr', EMBED ? 'Save and open' : 'Saved projects')}
+      <div class="proj-box" id="sec-projmgr">${EMBED ? /* STDS-G (2026-11-06): in Steel Bridge Design, Save / Save as… / Saved projects… are the page's (one project: this part and the modules') */ `
+        <p class="hint static" id="pl-save-note">Saved with the page: Save keeps Preliminary sizing and the design modules together under one project name (in this browser and, with Cloud sync on, on GitHub). Open, rename, duplicate or delete in Saved projects…. Export JSON and Import JSON here are Preliminary sizing's part only; the modules' Project tab has the whole project's.</p>
+        <div class="proj-row"><button type="button" id="pb_save" class="proj-btn proj-btn-primary" title="Save the project (Preliminary sizing and the modules) under its name (Ctrl+S)">Save</button><button type="button" id="pb_saveas" class="proj-btn" title="Save under a new name, or to a file (Ctrl+Shift+S)">Save as…</button><button type="button" id="pb_lib" class="proj-btn" title="The projects saved in this browser (and on GitHub): open, rename, duplicate, export, delete">Saved projects…</button></div>
+        <div class="proj-row"><button type="button" id="pb_export" class="proj-btn">Export JSON</button><button type="button" id="pb_import" class="proj-btn">Import JSON</button></div>` : `
         <label class="vh" for="proj_list">Saved project</label><select id="proj_list"></select>
         <div class="proj-row"><button type="button" id="pb_open" class="proj-btn">Open</button><button type="button" id="pb_save" class="proj-btn proj-btn-primary">Save</button><button type="button" id="pb_saveas" class="proj-btn">Save as…</button></div>
-        <div class="proj-row"><button type="button" id="pb_export" class="proj-btn">Export JSON</button><button type="button" id="pb_import" class="proj-btn">Import JSON</button><button type="button" id="pb_delete" class="proj-btn proj-btn-danger">Delete</button></div>
+        <div class="proj-row"><button type="button" id="pb_export" class="proj-btn">Export JSON</button><button type="button" id="pb_import" class="proj-btn">Import JSON</button><button type="button" id="pb_delete" class="proj-btn proj-btn-danger">Delete</button></div>`}
         <input type="file" id="pb_file" accept=".json,application/json" hidden>
         <div class="proj-foot"><span class="as"><span id="proj_autosave_dot"></span>Autosaves and restores your last session</span><button type="button" id="pb_new" class="link-btn">New from example</button></div>
         <div id="proj_msg" role="status"></div>
@@ -7734,14 +7738,21 @@ function autosave() {
 const store = () => { try { return JSON.parse(localStorage.getItem(KEY_PR) || '{}'); } catch (e) { return {}; } };
 const putStore = s => { try { localStorage.setItem(KEY_PR, JSON.stringify(s)); return true; } catch (e) { return false; } };
 function flash(msg, cls = 'pass') { const el = $('#proj_msg'); if (!el) return; el.textContent = msg; el.style.color = cls === 'fail' ? 'var(--fail)' : 'var(--pass)'; clearTimeout(flash.t); flash.t = setTimeout(() => el.textContent = '', 3500); }
-function refreshList() { const s = store(), names = Object.keys(s).sort(); $('#proj_list').innerHTML = names.length ? names.map(n => `<option ${n === CUR_NAME ? 'selected' : ''}>${esc(n)}</option>`).join('') : '<option value="">No saved projects</option>'; }
+function refreshList() { if (!$('#proj_list')) return;   /* STDS-G: none in Steel Bridge Design (the page's Saved projects…) */ const s = store(), names = Object.keys(s).sort(); $('#proj_list').innerHTML = names.length ? names.map(n => `<option ${n === CUR_NAME ? 'selected' : ''}>${esc(n)}</option>`).join('') : '<option value="">No saved projects</option>'; }
 function loadData(d, name) { P = migrateOwner(migrateCosts(deepMerge(clone(DEFAULT), d))); CUR_NAME = name || ''; syncSkews(); fillInputs(); Object.keys(ARR).forEach(renderArr); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); recompute(); autosave(); }
 function initProjects() {
   refreshList();
+  if (EMBED) {   // STDS-G (2026-11-06): the page's Save / Save as… / Saved projects… (message pl-proj; the page saves both parts under one name)
+    const ask = act => window.parent.postMessage({ type: 'pl-proj', act }, '*');
+    $('#pb_save').onclick = () => ask('save'); $('#pb_saveas').onclick = () => ask('saveas'); $('#pb_lib').onclick = () => ask('lib');
+    document.addEventListener('keydown', e => { if (!(e.ctrlKey || e.metaKey) || e.altKey || (e.key || '').toLowerCase() !== 's') return; e.preventDefault(); if (document.querySelector('.modal:not([hidden])')) return; ask(e.shiftKey ? 'saveas' : 'save'); });
+    window.addEventListener('message', e => { if (e.source !== window.parent || !e.data || e.data.type !== 'gd-plname') return; CUR_NAME = String(e.data.name || ''); autosave(); if (e.data.note) flash(e.data.note); });
+  } else {
   $('#pb_save').onclick = () => { let n = CUR_NAME || P.meta.name || ''; if (!n) n = prompt('Save project as:'); if (!n) return; const s = store(); s[n] = clone(P); if (putStore(s)) { CUR_NAME = n; refreshList(); flash(`Saved "${n}".`); autosave(); } else flash('Browser storage is full or unavailable.', 'fail'); };
   $('#pb_saveas').onclick = () => { const n = prompt('Save project as:', P.meta.name || ''); if (!n) return; const s = store(); if (s[n] && !confirm(`"${n}" exists. Overwrite it?`)) return; s[n] = clone(P); putStore(s); CUR_NAME = n; refreshList(); flash(`Saved "${n}".`); autosave(); };
   $('#pb_open').onclick = () => { const n = $('#proj_list').value, s = store(); if (!s[n]) return; loadData(s[n], n); refreshList(); flash(`Opened "${n}".`); };
   $('#pb_delete').onclick = () => { const n = $('#proj_list').value, s = store(); if (!s[n] || !confirm(`Delete saved project "${n}"? This cannot be undone.`)) return; delete s[n]; putStore(s); if (CUR_NAME === n) CUR_NAME = ''; refreshList(); flash(`Deleted "${n}".`); };
+  }
   $('#pb_export').onclick = () => { const b = new Blob([JSON.stringify({ app: 'PlateLine', v: 1, name: CUR_NAME, data: P }, null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = (P.meta.name || 'plateline').replace(/[^\w\-]+/g, '_') + '.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); };
   $('#pb_import').onclick = () => $('#pb_file').click();
   $('#pb_file').onchange = ev => { const f = ev.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const j = JSON.parse(r.result); if (!j.data || !j.data.girder) throw 0; loadData(j.data, j.name || ''); flash(`Imported ${f.name}.`); } catch (e) { flash('That file is not a PlateLine project.', 'fail'); } }; r.readAsText(f); ev.target.value = ''; };
@@ -20842,10 +20853,9 @@ const flangeSplice = k => `
 function buildSidebar() {
   const panes = {
     project: `
-      ${secHd('sec-pm', 'Saved projects')}
-      <div class="proj-box" id="sec-pm"><label class="vh" for="proj_list">Saved project</label><select id="proj_list"></select>
-        <div class="proj-row"><button type="button" id="pb_open" class="proj-btn">Open</button><button type="button" id="pb_save" class="proj-btn proj-btn-primary">Save</button><button type="button" id="pb_saveas" class="proj-btn">Save as…</button></div>
-        <div class="proj-row"><button type="button" id="pb_export" class="proj-btn">Export JSON</button><button type="button" id="pb_import" class="proj-btn">Import JSON</button><button type="button" id="pb_delete" class="proj-btn proj-btn-danger">Delete</button></div>
+      ${secHd('sec-pm', 'Save and open')}
+      <div class="proj-box" id="sec-pm"><div id="gd-savecard"></div>
+        <div class="proj-row"><button type="button" id="pb_export" class="proj-btn">Export JSON</button><button type="button" id="pb_import" class="proj-btn">Import JSON</button></div>
         <input type="file" id="pb_file" accept=".json,application/json" hidden>
         <div class="proj-foot"><span class="as"><span id="proj_autosave_dot"></span>Autosaves and restores your last session</span><button type="button" id="pb_new" class="link-btn">New from example</button></div>
         <div id="proj_msg" role="status"></div></div>
@@ -21229,45 +21239,126 @@ function gdAsState(ok) { if (ok === !gdAsState.bad) return; gdAsState.bad = !ok;
 const store = () => { try { return JSON.parse(localStorage.getItem(KEY_PR) || '{}'); } catch (e) { return {}; } };
 const putStore = s => { try { localStorage.setItem(KEY_PR, JSON.stringify(s)); return true; } catch (e) { return false; } };
 function flash(m, c = 'pass') { const el = $('#proj_msg'); if (!el) return; el.textContent = m; el.style.color = c === 'fail' ? 'var(--fail)' : 'var(--pass)'; clearTimeout(flash.t); flash.t = setTimeout(() => el.textContent = '', 3500); }
-function refreshList() { const n = Object.keys(store()).sort(); $('#proj_list').innerHTML = n.length ? n.map(x => `<option ${x === CUR ? 'selected' : ''}>${esc(x)}</option>`).join('') : '<option value="">No saved projects</option>'; }
+function refreshList() { if (!$('#proj_list')) return;   /* STDS-G: no drop-down any more (the standard Saved projects dialog) */ const n = Object.keys(store()).sort(); $('#proj_list').innerHTML = n.length ? n.map(x => `<option ${x === CUR ? 'selected' : ''}>${esc(x)}</option>`).join('') : '<option value="">No saved projects</option>'; }
 function loadData(d, name) { P = deepMerge(GD_FULL(), d); gdXfMark(P, d); gdMigrateK(P); gdModeInit(P); GD_PLD = null; GD_SYNC.n = 0; GD_SYNC.held = false; bsRebuildRows(); Object.keys(GM).forEach(gmBuildPanes); CUR = name || ''; fillInputs(); setITab(P.ui.itab || 'project'); setOTab(P.ui.otab || 'summary'); applyGdMode(); gdTbMigrate(); tbRender(); recompute(); autosave(); }   // GDM, GDT
 function initProjects() {
   refreshList();
-  $('#pb_save').onclick = () => { let n = CUR || gdMeta().name || prompt('Save project as:'); if (!n) return; const s = store(); s[n] = clone(P); if (putStore(s)) { CUR = n; refreshList(); flash(`Saved "${n}".`); } };
-  $('#pb_saveas').onclick = () => { const n = prompt('Save project as:', P.meta.subject || ''); if (!n) return; const s = store(); if (s[n] && !confirm(`"${n}" exists. Overwrite it?`)) return; s[n] = clone(P); putStore(s); CUR = n; refreshList(); flash(`Saved "${n}".`); };
-  $('#pb_open').onclick = () => { const n = $('#proj_list').value, s = store(); if (s[n]) { loadData(s[n], n); refreshList(); flash(`Opened "${n}".`); } };
-  $('#pb_delete').onclick = () => { const n = $('#proj_list').value, s = store(); if (!s[n] || !confirm(`Delete "${n}"? This cannot be undone.`)) return; delete s[n]; putStore(s); if (CUR === n) CUR = ''; refreshList(); flash(`Deleted "${n}".`); };
+  /* STDS-G (2026-11-06): Open / Save / Save as… / Delete of this pane are the standard save controls (gdStdInit below) */
   $('#pb_export').onclick = () => { const b = new Blob([JSON.stringify(sbdProjectFile(), null, 2)], { type: 'application/json' }); const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = (P.meta.subject || (P.mod === 'bstf' ? 'bearing_stiffeners' : 'splice')).replace(/[^\w\-]+/g, '_') + '.json'; a.click(); };   // SBD4: one project file
-  $('#pb_import').onclick = () => $('#pb_file').click();
+  $('#pb_import').onclick = () => { if (GD_PB) GD_PB.importJSON(); else $('#pb_file').click(); };   // STDS-G: asks first on unsaved changes
   $('#pb_file').onchange = ev => { const f = ev.target.files[0]; if (!f) return; const r = new FileReader(); r.onload = () => { try { const j = JSON.parse(r.result); if (j.app === 'PlateLine-splices') { writeInbox(j); renderInbox(); flash('PlateLine data received; see Import from PlateLine.'); } else if (sbdProjectImport(j, f.name)) { /* SBD4: one project file, or a file of one part */ } else if (j.data && (j.data.sec || j.data.bs)) { loadData(j.data, ''); flash(`Imported ${f.name}.`); } else throw 0; } catch (e) { flash('That file is not a Steel Bridge Design, GirderDetail, Preliminary sizing (PlateLine) or ST-Girder project, or a PlateLine splice export.', 'fail'); } }; r.readAsText(f); ev.target.value = ''; };
   $('#pb_new').onclick = () => { if (confirm('Replace the current inputs with the built-in example?')) loadData(GD_FULL(), ''); };
-  gdLibInit();   // GHS2
+  gdStdInit();   // STDS-G (was gdLibInit, GHS2)
 }
-/* GHS2 (2026-11-05): "Saved projects…" (shared/projects-ui.js libraryDialog: Open / Rename / Duplicate / Delete, as the other tools) over the
-   tool's own list girderdetail_projects_v1 ({ name: P }, unchanged; shared/projects.js mapStore: Rename moves an item unchanged, Duplicate
-   copies it), with GitHub sync (shared/github-sync.js; docs/github-sync-setup.md; off until set up: with no settings it writes nothing
-   and makes no request). File on GitHub: projects/steel-bridge-design/<name>.json = the Export JSON format of the saved project
-   { app: 'SteelBridgeDesign', v: SBD_V, name, data } (indent 2). A saved project holds the modules' part only (P), so the file has no
-   pl / st parts (Export JSON adds the open Preliminary sizing and ST-Girder parts). A file from GitHub: its modules' part (data, after
-   sbdMigrate), or a GirderDetail file's data; Open = the Open button's path (loadData). */
-function gdLibInit() {
-  if (!window.SharedProjects || !window.SharedProjectsUI || !LS) return;
+/* STDS-G (2026-11-06; the engineer-approved standard save, decisions of 2026-11-06): the standard save controls of shared/projects-ui.js
+   (projectBar) for the whole page: header chip · Save (Ctrl+S) · Saved projects… (Print report stays where it is), the "Save and open"
+   card first in the modules' Project tab, Save as (This browser and GitHub / This browser only / File on this computer), the standard
+   Saved projects dialog (replaces GHS2's gdLibInit, #826, and this pane's drop-down with Open / Save / Save as… / Delete).
+   ONE project = the modules' part (GirderDetail's P) and Preliminary sizing's part (the frame's P) under the SAME name, kept in the two
+   lists they were always kept in, each in its own format, unchanged (CLAUDE.md §5):
+     girderdetail_projects_v1  { "<name>": P }   (as this pane's Save wrote: s[name] = clone(P), the whole list JSON.stringify'd)
+     plateline_projects_v1     { "<name>": P }   (as Preliminary sizing's own Save wrote, the same way)
+   - Save: the modules' P into the first list and Preliminary sizing's P as it is now (sbdPlPart(): read from its frame, as Export JSON
+     does; its autosave when the frame is not loaded) into the second, under the open name, without asking (no open name: Save as).
+     When the second write is refused (storage full) the first list is put back as it was: nothing is half-saved.
+   - Open: each part saved under the name (Preliminary sizing: sbdPlLoad, as Import JSON does; the modules: loadData). A name kept in
+     one list only (saves made before this change) opens that part; the other part keeps the inputs on screen and the message says so.
+   - Saved projects… lists the names of both lists; Rename / Duplicate / Delete act on both lists (the only Delete of the page).
+   - GitHub (shared/github-sync.js; off until set up): one file per project, projects/steel-bridge-design/<name>.json =
+       { app: 'SteelBridgeDesign', v: SBD_V, name, data: <the modules' part>, pl: { app: 'PlateLine', v: 1, name, data: <its part> } }
+     (indent 2; the Export JSON format without st): data only when the first list has the name, pl only when the second has it, so a
+     project with the modules' part only has exactly the GHS2 file. A file from GitHub writes the parts it has; a part it lacks is
+     left as it is in this browser (never deleted). shared/project-registry.js (entry steel-bridge-design) reads the same two lists and
+     makes the same file text (tests/smoke/home-sync.mjs). */
+let GD_PB = null;
+const KEY_PLPR = 'plateline_projects_v1';   // Preliminary sizing's saved-project list (its own key; written here as its own Save wrote it)
+/* sbdPairStore(storage): the two lists by name, with the store interface of shared/projects.js (key, keys, read, list, has, get, item, save,
+   rename, duplicate, remove, copyName, stamp). An item is { gd?: <modules' P>, pl?: <Preliminary sizing's P> } (only the parts that exist).
+   Each list is written by its own mapStore (shared/projects.js): Rename moves its item unchanged and in place, Duplicate copies it. */
+function sbdPairStore(ST) {
+  const gs = SharedProjects.mapStore(ST, KEY_PR), ps = SharedProjects.mapStore(ST, KEY_PLPR), own = Object.prototype.hasOwnProperty;
+  const raw = k => { try { return ST.getItem(k); } catch (e) { return null; } };
+  const back = (k, t) => { try { if (t == null) ST.removeItem(k); else ST.setItem(k, t); } catch (e) { } };
+  const clean = n => String(n == null ? '' : n).trim();
+  function read() { const a = gs.read(), b = ps.read(); if (!a.ok || !b.ok) return { ok: false, error: !a.ok ? a.error : b.error, map: {} };
+    const map = {}; Object.keys(a.map).forEach(n => { map[n] = { gd: a.map[n] }; }); Object.keys(b.map).forEach(n => { if (!own.call(map, n)) map[n] = {}; map[n].pl = b.map[n]; });
+    return { ok: true, map }; }
+  const has = n => gs.has(n) || ps.has(n);
+  const item = n => { const m = read().map; return own.call(m, n) ? m[n] : undefined; };
+  const len = v => { if (v === undefined) return 0; try { return JSON.stringify(v).length; } catch (e) { return 0; } };
+  const list = () => { const m = read().map; return Object.keys(m).map(name => ({ name, saved: null, size: len(m[name].gd) + len(m[name].pl) }))
+    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })); };
+  /* both(fn): fn makes the writes; when one is refused, both lists are put back as they were */
+  function both(fn) { const a0 = raw(KEY_PR), b0 = raw(KEY_PLPR), r = fn(); if (!r.ok) { if (raw(KEY_PR) !== a0) back(KEY_PR, a0); if (raw(KEY_PLPR) !== b0) back(KEY_PLPR, b0); } return r; }
+  const each = fn => { for (const s of [gs, ps]) { const w = fn(s); if (w && !w.ok) return w; } return { ok: true }; };
+  const missing = { ok: false, error: 'missing', message: 'That saved project is not in this browser any more.' };
+  const exists = n => ({ ok: false, error: 'exists', message: `A saved project named "${n}" already exists.` });
+  /* save(name, { gd, pl }): writes the parts given; a part not given is left as it is */
+  function save(name, it) {
+    name = clean(name); if (!name) return { ok: false, error: 'empty', message: 'Enter a project name.' };
+    if (!it || (it.gd === undefined && it.pl === undefined)) return { ok: false, error: 'empty', message: 'The project was not saved: nothing to save.' };
+    return both(() => { if (it.gd !== undefined) { const w = gs.save(name, it.gd); if (!w.ok) return w; } if (it.pl !== undefined) { const w = ps.save(name, it.pl); if (!w.ok) return w; } return { ok: true, name }; });
+  }
+  function rename(from, to, ro) {
+    to = clean(to); if (!to) return { ok: false, error: 'empty', message: 'Enter a name.' }; if (!has(from)) return missing;
+    if (to === from) return { ok: true, name: to }; if (has(to) && !(ro && ro.replace)) return exists(to);
+    const w = both(() => each(s => s.has(from) ? s.rename(from, to, { replace: true }) : s.has(to) ? s.remove(to) : null)); return w.ok ? { ok: true, name: to } : w;
+  }
+  function copyName(from) { let n = `${from} (copy)`, i = 2; while (has(n)) n = `${from} (copy ${i++})`; return n; }
+  function duplicate(from, to, ro) {
+    if (!has(from)) return missing; to = clean(to) || copyName(from); if (has(to) && !(ro && ro.replace)) return exists(to);
+    const w = both(() => each(s => s.has(from) ? s.duplicate(from, to, { replace: true }) : s.has(to) ? s.remove(to) : null)); return w.ok ? { ok: true, name: to } : w;
+  }
+  const remove = name => both(() => each(s => s.has(name) ? s.remove(name) : null));
+  return { key: KEY_PR, keys: () => [KEY_PR, KEY_PLPR], read, list, has, item, get: n => { const i = item(n); return i === undefined ? null : i; },
+    save, rename, duplicate, remove, copyName, stamp: () => raw(KEY_PR) + '\u0000' + raw(KEY_PLPR) };
+}
+/* the GitHub file of a saved project (shared/project-registry.js has the same function) */
+function sbdPairFile(i, n) { const f = { app: 'SteelBridgeDesign', v: SBD_V, name: n }; if (i.gd !== undefined) f.data = i.gd; if (i.pl !== undefined) f.pl = { app: 'PlateLine', v: 1, name: n, data: i.pl }; return f; }
+/* text compared for "unsaved changes": both parts without their view state (ui; the modules' open module, mod), time stamps zeroed */
+function gdSnapText(gd, pl) { const cut = (v, k) => { if (v == null) return null; const o = JSON.parse(JSON.stringify(v)); k.forEach(x => delete o[x]); return o; };
+  return SharedProjects.canon({ gd: cut(gd, ['ui', 'mod']), pl: cut(pl, ['ui']) }).replace(/"ts":\d+/g, '"ts":0'); }
+const gdPlName = (n, note) => gdPlPost({ type: 'gd-plname', name: n || '', note: note || '' });   // Preliminary sizing's open name (its autosave keeps it)
+function gdStdInit() {
+  if (!window.SharedProjects || !window.SharedProjectsUI || !SharedProjectsUI.projectBar || !LS) return;
   let ST = null; try { ST = window.localStorage; } catch (e) { return; }
-  const ms = SharedProjects.mapStore(ST, KEY_PR);
-  const dlg = SharedProjectsUI.libraryDialog({ /* GHS2 (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud: { tool: 'steel-bridge-design', label: 'Steel Bridge Design', space: 2, toFile: (i, n) => ({ app: 'SteelBridgeDesign', v: SBD_V, name: n, data: i }),
-      fromFile: j => { if (j.app === 'SteelBridgeDesign') { const m = sbdMigrate(j); if (!m || !m.data || typeof m.data !== 'object') throw new Error('not a Steel Bridge Design project file (or a newer version)'); return m.data; }
-        if (j.app === 'GirderDetail' && j.data && typeof j.data === 'object') return j.data; throw new Error('not a Steel Bridge Design project file'); } },
-    store: ms, storage: ST, title: 'Saved projects (this browser)', id: 'gdLibDlg',
-    current: () => CUR && ms.has(CUR) ? CUR : null,
-    open: n => { const s = store(); if (!s[n]) return false; loadData(s[n], n); refreshList(); flash(`Opened "${n}".`); return true; },
-    renamed: (a, b) => { if (CUR === a) { CUR = b; autosave(); } },
-    deleted: n => { if (CUR === n) CUR = ''; },
-    changed: () => refreshList() });
-  const b = SharedProjectsUI.button('Saved projects…', 'Open, rename, duplicate or delete the projects saved in this browser; cloud sync (GitHub)', { cls: 'proj-btn' });
-  b.onclick = () => dlg.show();
-  const row = document.createElement('div'); row.className = 'proj-row'; row.setAttribute('data-sp', 'row'); row.appendChild(b);
-  const del = $('#pb_delete'); if (del && del.parentNode) del.parentNode.after(row);
+  const pair = sbdPairStore(ST), plLive = () => { const f = sbdPlPart(); return f ? f.data : undefined; };
+  let snapC = { st: null, m: new Map() };   // saved texts, until either list changes
+  const snapOf = n => { const st = pair.stamp(); if (snapC.st !== st) snapC = { st, m: new Map() }; if (!snapC.m.has(n)) { const it = pair.item(n); snapC.m.set(n, it === undefined ? null : gdSnapText(it.gd, it.pl)); } return snapC.m.get(n); };
+  // the parts on screen; a part the open project has no saved copy of is left out of the comparison
+  const snapshot = () => { const it = CUR && pair.has(CUR) ? pair.item(CUR) : null; return gdSnapText(it && it.gd === undefined ? null : P, it && it.pl === undefined ? null : plLive()); };
+  const named = n => { n = n || ''; if (CUR !== n) { CUR = n; autosave(); } };
+  const fRow = $('#pb_export') && $('#pb_export').parentNode;
+  GD_PB = SharedProjectsUI.projectBar({ store: pair, storage: ST, label: 'Steel Bridge Design', id: 'gdLibDlg', snapshot, snapOf,
+    current: () => CUR, setCurrent: n => { const was = CUR; named(n); if (was !== CUR) gdPlName(CUR); },
+    displayName: () => gdMeta().name || '',
+    save: n => { const r = pair.save(n, { gd: clone(P), pl: plLive() }); if (!r.ok) return r; named(r.name); gdPlName(r.name); flash(`Saved "${r.name}".`); return { ok: true, name: r.name }; },
+    open: n => { const it = pair.item(n); if (it === undefined) return false;
+      if (it.pl !== undefined) sbdPlLoad({ data: it.pl, name: n });
+      if (it.gd !== undefined) loadData(it.gd, n); else named(n);
+      const miss = it.gd === undefined ? 'the modules' : it.pl === undefined ? 'Preliminary sizing' : '';
+      const msg = miss ? `Opened "${n}": it has no saved part for ${miss} (it was saved before one Save kept both), so ${miss} ${miss === 'the modules' ? 'keep' : 'keeps'} the inputs on screen. Save keeps both under "${n}".` : `Opened "${n}".`;
+      if (it.pl === undefined) gdPlName(n, msg);
+      flash(msg); return true; },
+    deleted: n => { if (CUR === n) { named(''); gdPlName(''); } },
+    exportFile: n => SharedProjectsUI.download(String(n || P.meta.subject || 'steel_bridge_design').replace(/[^\w\-]+/g, '_') + '.json', JSON.stringify({ ...sbdProjectFile(), name: n || CUR || '' }, null, 2)),
+    importFile: () => $('#pb_file').click(), fileButtons: [$('#pb_export'), $('#pb_import')],
+    header: $('#gd-hdr-proj'), card: $('#gd-savecard'),
+    cloud: { tool: 'steel-bridge-design', label: 'Steel Bridge Design', space: 2, toFile: sbdPairFile,
+      fromFile: j => { if (j.app === 'SteelBridgeDesign') { const m = sbdMigrate(j); if (!m) throw new Error('a newer Steel Bridge Design file than this copy reads'); const it = {};
+          if (m.data && typeof m.data === 'object') it.gd = m.data; if (m.pl && m.pl.data && typeof m.pl.data === 'object' && m.pl.data.girder) it.pl = m.pl.data;
+          if (it.gd === undefined && it.pl === undefined) throw new Error('not a Steel Bridge Design project file'); return it; }
+        if (j.app === 'GirderDetail' && j.data && typeof j.data === 'object') return { gd: j.data };
+        if (j.app === 'PlateLine' && j.data && typeof j.data === 'object' && j.data.girder) return { pl: j.data };
+        throw new Error('not a Steel Bridge Design project file'); } } });
+  // the page's look for the controls (the shared defaults are blue; this page's primary buttons are graphite)
+  const E = GD_PB.el; E.save.classList.remove('spPri'); E.save.classList.add('btn', 'btn-primary'); E.lib.classList.add('btn');
+  if (E.card) E.card.querySelectorAll('.spRow button').forEach(b => { b.classList.add('proj-btn'); if (b.classList.contains('spPri')) { b.classList.remove('spPri'); b.classList.add('proj-btn-primary'); } });
+  if (fRow && fRow.classList.contains('proj-row') && !fRow.children.length) fRow.remove();   // the Export / Import JSON row, now in the card
 }
+/* Preliminary sizing's Save / Save as… / Saved projects… buttons (and its Ctrl+S) are this page's (message pl-proj from its frame) */
+window.addEventListener('message', e => { if (!gdFromPL(e) || !e.data || e.data.type !== 'pl-proj' || !GD_PB || document.querySelector('dialog[open]')) return;
+  const a = e.data.act; if (a === 'save') GD_PB.save(); else if (a === 'saveas') GD_PB.saveAs(); else if (a === 'lib') GD_PB.dialog.show(); });
 /* ---------- One project file (SBD4, 2026-10-22; merge of GirderDetail and ST-Girder, PLAN step 4) ----------
    Export JSON writes every part of the project in one file:
      { app: 'SteelBridgeDesign', v: 1, data: <the modules' project P, as GirderDetail's file>, name, pl: <Preliminary sizing's file
