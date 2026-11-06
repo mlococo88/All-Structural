@@ -10481,7 +10481,7 @@ function bpdwBuild(){
     tbl('ANCHOR ROD SCHEDULE',['MARK','QTY','DIA.','ASTM GRADE','FY / FU (KSI)','EMBEDDED END','H_EF','L','PROJ.','INSTALL'],
       [['AR1',String(nA),bpdwIn(hw.d)+' ('+hw.n+' UNC)',ag.name.toUpperCase(),ag.Fy+' / '+ag.Fu,hw.head.lab,bpdwIn(A.hef),bpdwIn(Lr),bpdwIn(st.zTop-st.zc),install]],[1]);
     tbl('BASE PLATE SCHEDULE',['MARK','SIZE','GRADE','FY (KSI)','HOLES','BEARING'],
-      [['BP1',(circPlate?'PL '+bpdwIn(Pl.D)+' DIA. x '+bpdwIn(Pl.t):'PL '+bpdwIn(Pl.B)+' x '+bpdwIn(Pl.N)+' x '+bpdwIn(Pl.t)),pgd.name.toUpperCase(),String(pgd.Fy),nA+' x '+bpdwIn(hw.dh)+' DIA.'+(hw.hole.type==='std'?' STD. (AISC 360 TABLE J3.3)':hw.hole.type==='custom'?'':' (DG1 TABLE 2.3)'),stackTxt.replace(/ \+ PLATE.*/,'')||'FLUSH']]);
+      [['BP1',(circPlate?'PL '+bpdwIn(Pl.D)+' DIA. x '+bpdwIn(Pl.t):'PL '+bpdwIn(Pl.B)+' x '+bpdwIn(Pl.N)+' x '+bpdwIn(Pl.t)),pgd.name.toUpperCase(),String(pgd.Fy),nA+' x '+bpdwIn(hw.dh)+' DIA.'+(hw.hole.type==='std'?' STD. (AISC 360-16 TABLE J3.3)':hw.hole.type==='custom'?'':' (DG1 TABLE 2.3)'),stackTxt.replace(/ \+ PLATE.*/,'')||'FLUSH']]);
     const rr=bpRebarSchedule();
     if(rr.length) tbl('REINFORCEMENT SCHEDULE',['MARK','SIZE','QTY','SHAPE','LENGTH (IN)','ANCHOR REINF.'],rr.map(r=>[r.mark,r.size,String(r.qty),String(r.shape).toUpperCase(),fmt(r.len,1),String(r.cnt).toUpperCase()]),[2,4]);
     else { D.text(L.txt,tx,y,0.12*P,'REINFORCEMENT SCHEDULE',0); D.text(L.txt,tx,y-0.25*P,th,'NO REINFORCEMENT ENTERED IN THE TOOL.',0); y-=0.7*P; }
