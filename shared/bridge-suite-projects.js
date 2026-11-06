@@ -27,7 +27,9 @@
                 open(id) -> false when not opened (the app's own open path; it sets the current project),
                 afterWrite(id, isNew) (after this app's parts were written: e.g. MCT bundles the demands),
                 changed() (the list or the open project changed: the app redraws its own labels),
-                displayName(), newProject(), exportFile(name), importFile(), fileButtons, extras, header, chipBefore, headerBefore }
+                displayName(), newProject(), exportFile(name), importFile(), fileButtons, extras, header, chipBefore, headerBefore,
+                chipClick() (HDRS: what a chip click does: open the view with the "Save and open" card), chipHint (its tooltip text) }
+          The header gets the chip only (headerSave false, HDRS 2026-11-06): Save and Saved projects… are in the card; Ctrl+S / Ctrl+Shift+S.
         toFile(entry, name), fromFile(obj, name), SETTLE, TOOL, LABEL */
 (function () {
   'use strict';
@@ -147,6 +149,7 @@
       open: v => { const i = vItem(v); if (!i) return false; return o.open(i.id); },
       newProject: o.newProject, exportFile: o.exportFile, importFile: o.importFile, fileButtons: o.fileButtons, extras: o.extras,
       header: o.header, chipBefore: o.chipBefore, headerBefore: o.headerBefore, card: true,
+      headerSave: false, chipClick: o.chipClick, chipHint: o.chipHint,   // HDRS (2026-11-06): the chip only in the header (Save / Saved projects… in the card); the chip opens the app's card
       renamed: () => { if (o.changed) o.changed(); }, deleted: () => { if (o.changed) o.changed(); }, changed: () => { if (o.changed) o.changed(); },
       note: o.note || '<p class="spNote">One project holds every Bridge Suite app’s part (MCT generator, LL &amp; DL Distribution, Prestressed Bridge Design) and the MIDAS demands. Open makes it the open project in all three apps. Rename, Duplicate and Delete act on the whole project (every app’s part). Export makes one .json of the whole project (the GitHub file: every app’s part, without the MIDAS demands).</p>',
       exportOne: v => { const i = vItem(v); if (!i) return; const n = clean(i.e.name) || 'bridge-suite'; SPUI.download(n.replace(/[^\w.-]+/g, '_') + '.bridge-suite.json', JSON.stringify(toFile(i.e, n), null, 1)); },

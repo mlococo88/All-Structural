@@ -21977,7 +21977,10 @@ function App() {
       displayName:()=>String(cfgRef.current.projectName||'').trim(),
       newProject:()=>H().newDefault(),
       exportFile:()=>H().exportJSON(), importFile:()=>fIn.click(),
-      fileButtons:[bEx,bIm], extras:[bRs], header:ixHdrRef.current, chipBefore:plibUndoRef.current });
+      fileButtons:[bEx,bIm], extras:[bRs], header:ixHdrRef.current, chipBefore:plibUndoRef.current,
+      /* HDRS (2026-11-06, engineer: every app's header as in Spread Footing #884; shared/bridge-suite-projects.js passes headerSave:false):
+         the header has the chip only; Save / Saved projects… are in the "Save and open" card, Ctrl+S / Ctrl+Shift+S work from anywhere. A chip click goes to the Project step (it closes the LL & DL overlay, as any step does) and brings the card into view. */
+      chipClick:()=>{ setStep(0); setTimeout(()=>{ const c=document.querySelector('.ix-pbcard'); if(c) c.scrollIntoView({block:'nearest'}); },80); }, chipHint:'the Project step (Save and open)' });
     if(!pb) return;
     bIm.addEventListener('click',()=>pb.importJSON());
     window.IXPB=pb; const host=document.querySelector('.ix-pbhost'); if(host) pb.mount(host);
