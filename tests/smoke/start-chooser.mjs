@@ -18,6 +18,8 @@
 //      downloads it and opens it; with only GitHub projects and no autosave the dialog opens;
 //   9. no existing key changed: sfd_auto / sfd_projects are only read at start (byte-identical after load);
 //  10. 390 px: the strip wraps, the page does not scroll sideways; 0 console errors in every case.
+//  11. HDRS (2026-11-06): header = chip · Undo · Redo · Auto-calc · Re-analyze · Print (no Save / Saved projects…: in the Project tab's
+//      card); a chip click opens the Project tab (title block); Ctrl+Shift+S / Ctrl+S work from another input tab.
 //   node tests/smoke/start-chooser.mjs [--file <file>] [--shots <dir>]
 import fs from 'fs';
 import path from 'path';
@@ -36,6 +38,8 @@ const { chromium } = await loadPlaywright();
 const browser = await chromium.launch({ executablePath: chromiumPath() });
 const TYPES = { '.js': 'application/javascript', '.css': 'text/css', '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf' };
 
+// HDRS (2026-11-06): Saved projects… is in the Project tab's "Save and open" card only (no header button in Spread Footing)
+const libBtn = p => p.evaluate(() => document.querySelector('[data-sp=card] [data-sp=lib]').click());
 async function open({ ls, vw = 1920, vh = 1080, hash = '', gh = null, media = null } = {}) {
   const ctx = await browser.newContext({ viewport: { width: vw, height: vh }, deviceScaleFactor: 2 });
   await ctx.route('**/*', r => {
@@ -104,11 +108,11 @@ const st2 = JSON.parse((await lsDump(o.p))[KS] || '{}');
 ok(st2.v === 1 && st2.auto && /^\d{4}-/.test(st2.auto.at), 'the autosave time is noted in ' + KS);
 const auto2 = (await lsDump(o.p)).sfd_auto;
 // open Footing F4, then Footing F1 from the dialog (recent order), then reload: time shown, F1 = Continue, F4 first in the list
-await o.p.click('[data-sp=hlib]');
+await libBtn(o.p);
 await o.p.click('#spLibDlg button[data-spa=open][data-n="' + encodeURIComponent('Footing F4') + '"]');
 await o.p.waitForTimeout(400);
 ok(o.dialogs.some(d => /unsaved changes/.test(d)), 'dialog Open asked about the unsaved changes (edited Footing F3)');
-await o.p.click('[data-sp=hlib]');
+await libBtn(o.p);
 await o.p.click('#spLibDlg button[data-spa=open][data-n="' + encodeURIComponent('Footing F1') + '"]');
 await o.p.waitForTimeout(400);
 await o.p.reload(); await o.p.waitForFunction(() => typeof R !== 'undefined' && R && window.SFPL); await o.p.waitForTimeout(700);
@@ -140,7 +144,7 @@ const ra = await results(o.p), la = await lsDump(o.p), chipA = await o.p.$eval('
 ok(!(await view(o.p)).strip, 'Open closes the strip');
 await close(o);
 o = await open({ ls: seedOpen });
-await o.p.click('[data-sp=hlib]'); await o.p.click('#spLibDlg button[data-spa=open][data-n="' + encodeURIComponent('Footing F5') + '"]'); await o.p.waitForTimeout(800);
+await libBtn(o.p); await o.p.click('#spLibDlg button[data-spa=open][data-n="' + encodeURIComponent('Footing F5') + '"]'); await o.p.waitForTimeout(800);
 const rb = await results(o.p), lb = await lsDump(o.p), chipB = await o.p.$eval('[data-sp=chip]', e => e.textContent);
 ok(ra === rb && JSON.parse(ra).state.geom.B === 13, 'state and results identical to the dialog\'s Open (Footing F5, B = 13 ft)');
 const strip = x => { const y = { ...x }; delete y[KS]; return y; };
@@ -165,7 +169,7 @@ await close(o);
 /* ---- 6. the setting ---- */
 console.log('6. "Show this when the app opens"');
 o = await open({ ls: { sfd_projects: projects, sfd_auto: autoOf('Footing F3') } });
-await o.p.click('[data-sp=hlib]'); await o.p.check('#spLibDlg .spStartChk');
+await libBtn(o.p); await o.p.check('#spLibDlg .spStartChk');
 ok((await lsDump(o.p))[KD] === '1', `on: ${KD} = '1'`);
 await o.p.reload(); await o.p.waitForFunction(() => window.SFPL); await o.p.waitForTimeout(700);
 v = await view(o.p);
@@ -227,6 +231,31 @@ o = await open({ ls: { sfd_projects: projects }, vw: 390, vh: 844 });
 v = await view(o.p);
 ok(v.dlg && v.sx <= 0, `dialog at 390 px, no sideways scroll (${v.sx})`);
 if (SHOTS) await o.p.screenshot({ path: path.join(SHOTS, 'start-dialog-390.png') });
+await close(o);
+
+/* ---- 11. header (HDRS, 2026-11-06; trial in Spread Footing) ---- */
+console.log('11. header: chip only, Save in the Project tab');
+o = await open({ ls: { sfd_projects: projects, sfd_auto: autoOf('Footing F3') } });
+const hdr = await o.p.evaluate(() => [...document.getElementById('sfdHdrA').children].filter(e => !e.hidden).map(e => e.dataset.sp || e.id));
+ok(JSON.stringify(hdr) === JSON.stringify(['chip', 'btnUndo', 'btnRedo', 'sfdAcLbl', 'sfdAcBtn', 'btnPrint']), 'header: chip · Undo · Redo · Auto-calc · Re-analyze · Print (' + hdr.join(' · ') + ')');
+ok(await o.p.evaluate(() => !document.querySelector('[data-sp=hsave], [data-sp=hlib]') && !!document.querySelector('[data-sp=card] [data-sp=save]') && !!document.querySelector('[data-sp=card] [data-sp=lib]')), 'no header Save / Saved projects…; both in the "Save and open" card');
+await o.p.click('.spStart [data-st=close], .spStart [data-st=x]').catch(() => {});
+await o.p.evaluate(() => sfdSetInTab('soil', true));
+await o.p.click('[data-sp=chip]'); await o.p.waitForTimeout(300);
+ok(await o.p.evaluate(() => !document.getElementById('sfdInPane_project').hidden && document.getElementById('sec-title').open && !document.querySelector('dialog[open]')), 'chip click: the Project tab, title block open, no dialog');
+ok(/Click: the Project tab/.test(await o.p.$eval('[data-sp=chip]', e => e.title)), 'chip tooltip says where a click goes');
+await o.p.evaluate(() => sfdSetInTab('geom', true));
+await o.p.keyboard.press('Control+Shift+s'); await o.p.waitForTimeout(200);
+ok(await o.p.evaluate(() => !!document.querySelector('dialog.spSave[open]')), 'Ctrl+Shift+S from the Geometry tab opens Save as');
+await o.p.fill('dialog.spSave .spName', 'Footing H1'); await o.p.evaluate(() => document.querySelector('dialog.spSave [data-sa=ok]').click()); await o.p.waitForTimeout(300);
+ok(await o.p.evaluate(() => SFPL.store.has('Footing H1') && SFPL.pb.current() === 'Footing H1'), 'saved as "Footing H1"');
+await o.p.evaluate(() => { const i = document.querySelector('#sfdInPane_geom input[type=number][data-path]'); i.value = String((Number(i.value) || 0) + 0.5); i.dispatchEvent(new Event('input', { bubbles: true })); i.dispatchEvent(new Event('change', { bubbles: true })); });
+await o.p.waitForTimeout(500);
+ok(/unsaved changes/.test(await o.p.$eval('[data-sp=chip]', e => e.textContent)), 'an edit: chip "unsaved changes"');
+const nd = o.dialogs.length; await o.p.keyboard.press('Control+s'); await o.p.waitForTimeout(400);
+ok(/· saved/.test(await o.p.$eval('[data-sp=chip]', e => e.textContent)) && o.dialogs.length === nd && !(await o.p.evaluate(() => !!document.querySelector('dialog[open]'))), 'Ctrl+S from the Geometry tab saves to the open name (no question)');
+if (SHOTS) await o.p.screenshot({ path: path.join(SHOTS, 'header-1920.png') });
+ok(o.errs.length === 0, 'no console errors: ' + o.errs.join(' | '));
 await close(o);
 
 await browser.close();

@@ -107,3 +107,17 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
 - **Loaded by:** the tools listed for `shared/projects-ui.js` in shared/README.md, plus `index.html`; `lldf.html` (already loaded it); `Prestressed Bridge Design.html` (its own PR).
 - **How verified:** `tests/smoke/standard-save.mjs`, `github-sync-tools.mjs`, `bridge-suite-save.mjs` (Save uploads at once although the suite's settle time is 30 s).
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-06 — PR: claude/sf-header-save (PR #TBD) (HDRS) — projects-ui.js: projectBar options `headerSave:false`, `chipClick`, `chipHint` (opt-in; trial in Spread Footing)   [display only; no key or format change]
+- **Why:** engineer 2026-11-06: in Spread Footing, take Save and Saved projects… out of the header (they stay in the Project tab's "Save and open" card); the chip opens the Project tab. Trial in Spread Footing; other apps keep the header Save until the engineer decides.
+- **What (`shared/projects-ui.js`, `projectBar`):**
+  - Header comment: three options documented after `start` (anchor `HDRS (2026-11-06, TRIAL in Spread Footing only`).
+  - Chip click, anchor `chip.addEventListener('click',`: before `chip.addEventListener('click', () => dialog.show());` → after `chip.addEventListener('click', () => { if (ctx.chipClick) ctx.chipClick(); else dialog.show(); });`
+  - Header buttons, anchor `[hSave, hLib].forEach(`: before `[hSave, hLib].forEach(b => ctx.header.insertBefore(b, at(ctx.headerBefore)));` → after `if (ctx.headerSave !== false) [hSave, hLib].forEach(…same…);` (the buttons are still built and returned in `el.save` / `el.lib`, just not placed).
+  - Chip tooltip in `refresh()`: before `+ '. Click: Saved projects…';` → after `+ '. Click: ' + (ctx.chipClick ? ctx.chipHint || 'open the project' : 'Saved projects…');`
+  - Ctrl+S / Ctrl+Shift+S (document keydown, `ctx.keys`) unchanged: they work from anywhere with or without the header buttons.
+- **Unchanged for every other tool:** none passes `headerSave`, `chipClick` or `chipHint` (only Spread Footing does), so the header, chip click and tooltip are as before.
+- **Loaded by:** ASCE7-16 Load Generator, BasePlateAnchorDesigner, Bridge Geometry, Bridge Substructure Loading, Concrete Beam Capacity, Gusset Plate Rating, Light Pole and Sign Post, Moving Load Generator, Pile Designer, Prestressed Bridge Design, Retaining Wall Designer, Section Property Calculator, Shear and Moment Diagrams, Spread Footing, Steel Beam Design - AISC 15th, Steel Bridge Design, Stone Masonry Arch Load Rating, Timber Beam Check, abutment_calculator, elastomeric_design_module, index, lldf, apps/steel-bridge.
+- **Check case:** Spread Footing (opts in): header = chip · Undo · Redo · Auto-calculate · Re-analyze · Print; chip click → Project tab, title block open. Standard-save fixture (does not opt in): header chip · Undo · Redo · Save · Saved projects… · Print and chip click = Saved projects…, as before (`tests/smoke/standard-save.mjs` unchanged and passing).
+- **How verified:** see the PR (standard-save, start-chooser, project-library for every tool entry, sbd-standard-save, pile-library, steel-bridge-library, github-sync, github-sync-tools, bridge-suite-save, check-syntax).
+- **Formulas, factors, units, code references:** none (§4 does not apply).
