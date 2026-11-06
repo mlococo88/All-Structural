@@ -5797,3 +5797,91 @@ function sfqcFit(id,B,L,T){
 - **How verified:** SF harness (10 cases) main vs branch: `R` and `P2` deep diff 0 differences, dashboard and Report text identical, 0 console / KaTeX errors. The Report's copy of the heat map carries the four labels with the same values. Tests: check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser.
 - **Saved data:** none touched (§5). **Other copies:** none.
 - **Open item:** at 390 px the plot title is wider than the plot and is cut at both ends (unchanged; not part of this request).
+
+## 2026-11-06 — PR: claude/sf-ecc-nolimit (SFNE: Eccentricity limit option "No eccentricity limit (IBC 2021 / ACI 318-19)", e reported for information; calculation option, default = no change)
+
+- **Why:** engineer 2026-11-06. On 2026-11-03 the engineer was told that IBC 2021 and ACI 318-19 set no maximum eccentricity for a spread footing: stability is checked by overturning, by bearing with partial contact, and by sliding. The engineer asked for an option that does not apply the app's eccentricity-limit check.
+- **What the app did before (unchanged for every existing choice):** Stability input "Eccentricity limit" (`stab.eccMode`, default `'kern'`; `migrateState` backfills it when absent):
+  - `kern`: middle third, biaxial 6|e_x|/B + 6|e_y|/L ≤ 1, on the service (ASD) combinations (SFEB, 2026-11-02);
+  - `a_soil` e ≤ B/3, `a_soil4` B/4, `a_rock` 0.45B, `a_ee0` 0.33B, `a_ee1` 0.40B, `custom` f·B: AASHTO forms, per axis, on the factored (LRFD) combinations;
+  - `off` "Not checked": `R.eccChk = null`, no chip, no 4.3a card, no Report section; the input echo reads "not checked"; the eccentricities are not shown anywhere as a group.
+  - With a limit: `R.eccChk` gives a dashboard chip "Eccentricity limit" (PASS / FAIL; it counts in the verdict), a red design error when exceeded, card 4.3a (worked limit, table, NG box), the Report section "Eccentricity limit" (S-ecc) with DCR, and a result row with D/C = DCR.
+  - "Not checked" does not do what was asked (it shows no eccentricity and no statement), so a separate choice was added and `off` was left as it is (question to the engineer below).
+- **After:** new choice `none`, "No eccentricity limit (IBC 2021 / ACI 318-19) — e reported for information", placed in the same select before "Not checked". With it:
+  - `R.eccChk = null`, as with `off`: no pass/fail, no D/C, no design error, no verdict count except one N/A chip.
+  - New `R.eccInfo = {rows, gov}` (the key is present only with this choice, so `R` is unchanged otherwise): for each service combination e_x, e_y, |e_x|/B, |e_y|/L, the kern index 6|e_x|/B + 6|e_y|/L and the contact fraction. `gov` is the largest kern index.
+  - Dashboard chip "Eccentricity (information)" with status N/A, text "eₓ = …, eᵧ = … ft, 6eₓ/B + 6eᵧ/L = … (combination); no limit (IBC 2021 / ACI 318-19)", linking to 4.3a. Result row: reference "not limited by IBC 2021 / ACI 318-19 (ACI 318-19 §13.2.6.1 …); information only, no D/C", D/C n/a.
+  - Card "4.3a Eccentricity (information only; no limit)": the statement, the worked e and kern index of the largest case (no ✓ / NG), the table of every service combination, and links to overturning, bearing/contact and sliding.
+  - Report: section "Eccentricity (information; no limit)" (key S-ecc) with the statement, two steps without a verdict, and the table. Input echo "none (not limited by IBC 2021 / ACI 318-19); e reported for information". References: ACI 318-19 gets "§13.2.6.1 (foundation stability: overturning and sliding per the general building code; no eccentricity limit)" only with this choice.
+- **Governing provision:** ACI 318-19 13.2.6.1 (printed p. 194; checked in the PDF) has foundations proportioned for bearing effects and for stability against overturning and sliding at the soil–foundation interface under the general building code. It sets no eccentricity limit. IBC: the 2018 IBC text (Ch. 18) was searched and has no maximum-eccentricity requirement for shallow foundations. The IBC 2018→2021 structural-changes document lists none either, so no IBC section is cited for the absence. The §1807.2.3 retaining-wall FS the tool already quotes is unchanged.
+- **Where / exact code (unified diff, `Spread Footing.html`):**
+```diff
+@@ -451,0 +452 @@ a.wkA:hover{text-decoration:underline}
++  <option value="none">No eccentricity limit (IBC 2021 / ACI 318-19) &mdash; e reported for information</option>
+@@ -1656,2 +1657,11 @@ function computeAll(){
+- let eccChk=null;
+- if(eccMode!=='off'){
++ let eccChk=null, eccInfo=null;
++ /* SFNE (2026-11-06, engineer): 'none' = no eccentricity limit. IBC 2021 and ACI 318-19 set no maximum eccentricity for a spread
++    footing (ACI 318-19 13.2.6.1: bearing, overturning and sliding per the general building code); stability is by overturning,
++    bearing with partial contact and sliding. No check and no D/C (eccChk stays null, as 'off'); the service-combination
++    eccentricities are reported for information (eccInfo). Default and old saves keep their own eccMode (kern unless chosen). */
++ if(eccMode==='none'){
++  const rows=asd.map(a=>{const rr=a.r,ratX=(B>0)?Math.abs(rr.ex)/B:0,ratY=(L>0)?Math.abs(rr.ey)/L:0;
++   return{name:a.cb.name,ex:rr.ex,ey:rr.ey,ratX,ratY,kern:6*ratX+6*ratY,contact:(a.bear&&a.bear.contactFrac!==undefined)?a.bear.contactFrac:1};});
++  eccInfo={rows,gov:rows.length?rows.reduce((a,b)=>b.kern>a.kern?b:a):null};
++ }
++ if(eccMode!=='off'&&eccMode!=='none'){
+@@ -1698 +1708 @@ function computeAll(){
+-  present,combosASD,combosLRFD,asd,lrfd,govBear,govOT,govSlx,govSly,govSlr,minContact,flot,eccChk,otGate:(state.stab.otGate==='on'),
++  present,combosASD,combosLRFD,asd,lrfd,govBear,govOT,govSlx,govSly,govSlr,minContact,flot,eccChk,...(eccInfo?{eccInfo}:{}),otGate:(state.stab.otGate==='on'),
+@@ -1829,0 +1840,2 @@ function renderDashboard(){
++ else if(R.eccInfo&&R.eccInfo.gov){const g=R.eccInfo.gov;   /* SFNE: information only, no pass/fail */
++  d.appendChild(chip('Eccentricity (information)','e\u2093 = '+f2(g.ex)+', e\u1D67 = '+f2(g.ey)+' ft, 6e\u2093/B + 6e\u1D67/L = '+f2(g.kern)+' ('+g.name+'); no limit (IBC 2021 / ACI 318-19)','na',undefined,{tab:'tab-stab',sec:'o-st-ecc'}));}
+@@ -3185,0 +3198,16 @@ function renderStability(){
++ /* SFNE (2026-11-06): no eccentricity limit selected: the eccentricities for information, no pass / fail, no D/C */
++ if(R.eccInfo&&R.eccInfo.gov){const I=R.eccInfo,g=I.gov;
++  const be=secPanel(T,'o-st-ecc','4.3a  Eccentricity (information only; no limit)');
++  be.appendChild(el('p','note','No eccentricity limit is applied (input, Stability tab). The eccentricity is <b>not limited by IBC 2021 / ACI 318-19</b>: ACI 318-19 13.2.6.1 has the footing proportioned for bearing and for stability against overturning and sliding under the general building code, and neither code sets a maximum eccentricity. Stability is checked by overturning (\u00a74.3), bearing with partial contact (3.2, 3.3) and sliding (\u00a74.2). The values below are reported for information.'));
++  be.appendChild(eqBlock('Eccentricity of the resultant (information)','service combinations',
++   'e_x = \\frac{\\Sigma M_y}{\\Sigma P},\\; e_y = \\frac{\\Sigma M_x}{\\Sigma P},\\quad \\frac{6|e_x|}{B} + \\frac{6|e_y|}{L}\\;(\\le 1:\\ \\text{full contact})',
++   '\\text{largest: '+g.name.replace(/[\u2212]/g,'-')+':}\\; \\frac{6\\cdot'+f3(Math.abs(g.ex))+'}{'+f2(R.B)+'} + \\frac{6\\cdot'+f3(Math.abs(g.ey))+'}{'+f2(R.L)+'}',
++   'e_x = '+f3(g.ex)+',\\; e_y = '+f3(g.ey)+'\\;\\mathrm{ft};\\quad \\frac{6|e_x|}{B} + \\frac{6|e_y|}{L} = '+f3(g.kern)+'\\;(B/6 = '+f2(R.B/6)+',\\; L/6 = '+f2(R.L/6)+'\\;\\mathrm{ft};\\ \\text{contact '+f2(100*g.contact)+'\\%})'));
++  const te=document.createElement('table');te.className='tbl';
++  te.innerHTML='<tr><th>#</th><th>Service combination</th><th>e<sub>x</sub> (ft)</th><th>e<sub>y</sub> (ft)</th><th>|e<sub>x</sub>|/B</th><th>|e<sub>y</sub>|/L</th><th>6|e<sub>x</sub>|/B + 6|e<sub>y</sub>|/L</th><th>Contact (%)</th></tr>';
++  I.rows.forEach((rw,i)=>{const tr=document.createElement('tr');
++   [String(i+1),rw.name,f2(rw.ex),f2(rw.ey),f3(rw.ratX),f3(rw.ratY),f3(rw.kern),f2(100*rw.contact)].forEach(x=>{const td=document.createElement('td');td.textContent=x;tr.appendChild(td);});
++   if(rw===g)tr.style.background='#eef4fb';te.appendChild(tr);});
++  be.appendChild(te);
++  be.appendChild(sfdWorkedIn([['o-st-ot','overturning'],['o-br-press','bearing pressure and contact'],['o-st-slide','sliding']]));
++ }
+@@ -3491,0 +3520 @@ function sfdResultRows(){
++  'Eccentricity (information)':()=>['not limited by IBC 2021 / ACI 318-19 (ACI 318-19 §13.2.6.1: stability by overturning and sliding per the general building code); information only, no D/C',null,['o-st-ecc']],
+@@ -3584,0 +3614 @@ function sfrRefs(){
++  if(a==='ACI 318-19'&&em==='none')b=b+', §13.2.6.1 (foundation stability: overturning and sliding per the general building code; no eccentricity limit)';   /* SFNE */
+@@ -3624 +3654 @@ function sfrModel(){
+-   ['Overturning FS gates the result',R.otGate?'yes':'no (reported only)','–'],['Eccentricity limit',R.eccChk?sfrPlain(R.eccChk.lab):'not checked','–'],
++   ['Overturning FS gates the result',R.otGate?'yes':'no (reported only)','–'],['Eccentricity limit',R.eccChk?sfrPlain(R.eccChk.lab):(R.eccInfo?'none (not limited by IBC 2021 / ACI 318-19); e reported for information':'not checked'),'–'],
+@@ -3775,0 +3806,9 @@ function sfrModel(){
++  else if(R.eccInfo&&R.eccInfo.gov){const I=R.eccInfo,g=I.gov;   /* SFNE: information only, no pass / fail, no D/C */
++   subs.push({title:'Eccentricity (information; no limit)',key:'S-ecc',items:[
++    {type:'note',text:'No eccentricity limit is applied (input). The eccentricity is not limited by IBC 2021 / ACI 318-19 (ACI 318-19 13.2.6.1: bearing, overturning and sliding per the general building code; neither code sets a maximum eccentricity). Stability is checked by overturning, bearing with partial contact and sliding ([[S-st]], [[S-bp]]). Reported for information.'},
++    {type:'steps',scope:'ecc',steps:[
++     S({id:'ex',label:'Largest eccentricity index: '+g.name,sym:'e_{x}',eq:'\\frac{\\sum M_{y}}{\\sum P}',sub:'',value:g.ex,unit:'ft',d:3,note:'e_y = '+sfrN(g.ey,3)+' ft'}),
++     S({id:'kern',label:'Kern index (≤ 1: full contact; information, no limit)',sym:'\\frac{6|e_{x}|}{B} + \\frac{6|e_{y}|}{L}',eq:'',sub:'\\frac{6\\cdot'+sfrN(Math.abs(g.ex),3)+'}{'+sfrN(R.B)+'} + \\frac{6\\cdot'+sfrN(Math.abs(g.ey),3)+'}{'+sfrN(R.L)+'}',value:g.kern,unit:'',d:3,note:'B/6 = '+sfrN(R.B/6,3)+' ft, L/6 = '+sfrN(R.L/6,3)+' ft; contact '+sfrN(100*g.contact,1)+' %'})]},
++    {type:'table',caption:'Eccentricity of each service combination (information)',head:['Combination','e_x (ft)','e_y (ft)','|e_x|/B','|e_y|/L','6|e_x|/B + 6|e_y|/L','Contact (%)'],
++     rows:I.rows.map(rw=>({cells:[rw.name,sfrCell(rw.ex,3),sfrCell(rw.ey,3),sfrCell(rw.ratX,3),sfrCell(rw.ratY,3),sfrCell(rw.kern,3),sfrCell(100*rw.contact,1)],cls:rw===g?'gov':''}))}]});
++  }
+@@ -4077 +4116 @@ function sfrModel(){
+-  const W={'Bearing (service)':['S-qa','S-bp'],'Overturning':['S-st'],'Eccentricity limit':['S-ecc'],'Sliding, x':['S-st'],'Sliding, y':['S-st'],'Sliding, resultant \u221a(Hx\u00b2+Hy\u00b2)':['S-st'],
++  const W={'Bearing (service)':['S-qa','S-bp'],'Overturning':['S-st'],'Eccentricity limit':['S-ecc'],'Eccentricity (information)':['S-ecc'],'Sliding, x':['S-st'],'Sliding, y':['S-st'],'Sliding, resultant \u221a(Hx\u00b2+Hy\u00b2)':['S-st'],
+```
+- **Check case (§4), harness case sfe9 (B × L = 10 × 8 ft; governing service combination 0.6D + 0.6(−Wx)):**
+  - Inputs: ΣP and ΣM_y of that combination give e_x = ΣM_y/ΣP = −2.091 ft, e_y = 0. B/6 = 10/6 = 1.667 ft, so |e_x| > B/6.
+  - **Before** (default, middle third): 6|e_x|/B + 6|e_y|/L = 6·2.091/10 + 0 = **1.255 > 1 → FAIL**, D/C 1.25. Red error "Eccentricity limit exceeded…". Verdict "7 of 26 checks FAIL · 12 PASS · 3 REVIEW · 4 N/A".
+  - **After** (choice `none`): the same e_x = −2.091 ft and index 1.255 are shown as information (contact 87.25 %). No pass/fail, no D/C, no error. Verdict "6 of 26 checks FAIL · 12 PASS · 3 REVIEW · 5 N/A". The rest of `R` and all of `P2` are identical: the deep diff changes only `eccChk` (→ null), the new `eccInfo` and the removed error message.
+  - Second case, rev (Seymour-based, 5 × 13 ft, biaxial): e_x = −0.703, e_y = −1.962 ft. Before: 6·0.703/5 + 6·1.962/13 = 0.844 + 0.905 = 1.749 FAIL. After: information only. Verdict 4 FAIL / 4 N/A → 3 FAIL / 5 N/A.
+- **Saved data:** no new field and no key change. `stab.eccMode` gets one more allowed value. The default stays `'kern'`, and `migrateState` already backfills an absent `eccMode` with it, so old projects keep their results. A save holding `'none'` opened in an older copy of the tool falls back to the middle third (`ECC[eccMode]||ECC.kern`).
+- **How verified:** the SF harness (10 cases) run on origin/main and on the branch with the default choice: `R` and `P2` 0 differences, dashboard and Report text identical, 0 console / KaTeX errors. The `none` choice on def, sfe9 and rev: 0 console / KaTeX errors, and the input set through the select itself. Screenshots of the 4.3a card and the dashboard checked. Tests: check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser.
+- **Other copies:** none.
+- **Open item (engineer):** "Not checked" (`off`) and the new choice now overlap: both apply no limit, but only the new one shows the eccentricities and the statement. Should `off` be removed (with a migration to `none`), or kept?
