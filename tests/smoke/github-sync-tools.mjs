@@ -31,7 +31,7 @@ const OWN = {
   pile: { show: p => p.evaluate(() => { const d = document.getElementById('pdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=hlib]').click(); }),
     open: p => p.evaluate(() => document.getElementById('pdLibDlg').open),
     del: (p, n) => p.evaluate(n => document.querySelector(`#pdLibDlg [data-spa=del][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(), n) },
-  sbapp: { show: p => p.evaluate(() => { const d = document.getElementById('sbdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=hlib]').click(); }),
+  sbapp: { show: p => p.evaluate(() => { const d = document.getElementById('sbdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=chip]').click(); document.querySelector('[data-sp=card] [data-sp=lib]').click(); }),   // HDRS: chip → Project tab → the card's Saved projects…
     open: p => p.evaluate(() => document.getElementById('sbdLibDlg').open),
     del: (p, n) => p.evaluate(n => document.querySelector(`#sbdLibDlg [data-spa=del][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(), n) }
 };
