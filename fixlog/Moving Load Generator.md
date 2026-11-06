@@ -85,7 +85,7 @@ Verification method for every item: the page was loaded in jsdom from origin/mai
       $('warns').classList.remove('hidden');$('warns').innerHTML='⚠ Analysis not run: '+esc(err.message)+'<br>⚠ The plots and tables below are from the previous run and are NOT current.';}
   }
   ```
-- **Check case:** E = 0. Before: status "Solved in … ms", +M = 0.0. After: status "Error: E steel = 0 ksi…", the headline values show "—", and a warning box says that the plots are not current.
+- **Check case:** E = 0. Before: status "Solved in 200 ms", +M = 0.0. After: status "Error: E steel = 0 ksi…", the headline values show "—", and a warning box says that the plots are not current.
 - **How verified:** jsdom (old vs new).
 - **Other copies of this code:** none known.
 
