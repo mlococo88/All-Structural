@@ -1636,6 +1636,10 @@ function computeAll(){
   const Hres=Math.hypot(r.Hx,r.Hy);
   const PpR=Hres>1e-9?(PpX*Math.abs(r.Hx)+PpY*Math.abs(r.Hy))/Hres:0;
   const FSslr=Hres>1e-9?(mu*Nn+PpR)/Hres:Infinity;
+  /* SFNB-3 (2026-11-06, engineer; CALCULATION CHANGE, pass / fail): a combination with no bearing solution (resultant off the footing, or
+     net load not downward) has bearing D/C = \u221e, so it governs bearing as FAIL like a zero capacity (SFNB-2), even when other
+     combinations have a finite D/C. Before: D/C null and left out of the governing selection. */
+  if(DCR===null)DCR=Infinity;
   return{cb,r,bear,cap,DCR,edges,otMin,FSslx,FSsly,Hres,PpR,FSslr};
  });
  const lrfd=combosLRFD.map(cb=>({cb,r:resultant(cb.f)}));
@@ -1707,10 +1711,11 @@ function computeAll(){
  const lx=maxSeg(B,peds.map(p=>p.x)), ly=maxSeg(L,peds.map(p=>p.y));
  const rig={lam,lx,ly,vx:lam*lx,vy:lam*ly,limit:Math.PI/4,Ec_ksf,ks_kcf,
   rigid:lam*lx<=Math.PI/4&&lam*ly<=Math.PI/4};
+ if(unstable.length)W.push({lvl:'err',design:true,msg:'Bearing FAIL: '+unstable.length+' combination'+(unstable.length===1?'':'s')+' with no bearing solution (bearing D/C = \u221e): '+unstable.map(a=>'"'+a.cb.name+'": '+sfdBearWhy(a,B,L)).join('; ')+'.'});   /* SFNB-3 */
  if(!rig.rigid)W.push({lvl:'warn',msg:'Rigidity check: \u03bb\u00b7\u2113 exceeds \u03c0/4 in at least one direction. The rigid-footing (linear pressure) assumption may not apply; pressures and Phase 2 strip design should be reviewed.'});
  if(minContact<1-1e-6)W.push({lvl:'warn',msg:'Partial bearing contact (uplift of the footing edge) occurs in at least one service combination. Minimum contact = '+f2(minContact*100)+'% of the footing area.'});
  unstable.forEach(a=>W.push({lvl:'err',msg:'Combination "'+a.cb.name+'": resultant falls outside the footing or net vertical load is not downward \u2014 footing is unstable under this combination.'}));
- asd.filter(a=>a.DCR===Infinity).forEach(a=>W.push({lvl:'err',design:true,msg:'Bearing FAIL, combination "'+a.cb.name+'": '+sfdBearWhy(a)+' \u2014 bearing D/C = \u221e.'}));   /* SFNB-2 */
+ asd.filter(a=>a.DCR===Infinity&&unstable.indexOf(a)<0).forEach(a=>W.push({lvl:'err',design:true,msg:'Bearing FAIL, combination "'+a.cb.name+'": '+sfdBearWhy(a,B,L)+' \u2014 bearing D/C = \u221e.'}));   /* SFNB-2 */
  if(state.soil.mode==='vesic'&&govBear&&govBear.cap&&!govBear.cap.fail&&govBear.cap.iq<0.3)
   W.push({lvl:'warn',msg:'Load inclination is severe (i_q < 0.30) in the governing bearing combination; the Vesi\u0107 inclination correction is being extrapolated near its limit.'});
  return{W,fatal:false,B,L,t,Df,gc,fc,ks,phi,phiDeg,c,gs,gev,gw,dw:dwc===Infinity?Infinity:dwc,
@@ -1731,13 +1736,13 @@ function selASD(govObj){
 }
 /* SFNB (2026-11-06, engineer): why a service combination has no finite bearing D/C, for the Bearing tab, card 2.6, the selector badge,
    the dashboard and the Report. Display only: reads R.asd rows (r, bear, cap, DCR), computes nothing for the checks. '' = a finite D/C. */
-function sfdBearWhy(a){
+function sfdBearWhy(a,dB,dL){   /* dB, dL: footing B, L when called from computeAll (R is not set yet; SFNB-3) */
  if(!a||!a.r)return '';
- const r=a.r,bp=a.bear||{},c=a.cap;
+ const r=a.r,bp=a.bear||{},c=a.cap,Bf=dB!=null?dB:R.B,Lf=dL!=null?dL:R.L;
  if(!(r.P>1e-9))return 'net load not downward: \u03a3P = '+f2(r.P)+' kip';
  if(bp.mode==='unstable'){const o=[];
-  if(Math.abs(r.ex)>=R.B/2-1e-9)o.push('|e\u2093| '+f2(Math.abs(r.ex))+' ft \u2265 B/2 '+f2(R.B/2)+' ft');
-  if(Math.abs(r.ey)>=R.L/2-1e-9)o.push('|e\u1D67| '+f2(Math.abs(r.ey))+' ft \u2265 L/2 '+f2(R.L/2)+' ft');
+  if(Math.abs(r.ex)>=Bf/2-1e-9)o.push('|e\u2093| '+f2(Math.abs(r.ex))+' ft \u2265 B/2 '+f2(Bf/2)+' ft');
+  if(Math.abs(r.ey)>=Lf/2-1e-9)o.push('|e\u1D67| '+f2(Math.abs(r.ey))+' ft \u2265 L/2 '+f2(Lf/2)+' ft');
   return 'resultant off the footing: '+(o.join(', ')||'no contact solution');}
  if(a.DCR!==null&&isFinite(a.DCR))return '';
  if(c&&c.direct)return 'zero bearing capacity: allowable q\u2090 = '+f2(c.qa)+' ksf \u2264 0';
@@ -2874,6 +2879,7 @@ function renderBearing(){
  }else{
   b0.appendChild(el('p','','Selected combination: <b>'+g.cb.name+'</b> &nbsp;['+g.cb.ref+']. This is <b>not</b> the governing case (governing = '+R.govBear.cb.name+', DCR = '+f2(R.govBear.DCR)+'). Full worked calculation for the selected combination follows.'));
  }
+ if(lv&&R.govBear&&R.govBear.DCR===Infinity)b0.appendChild(el('div','errbox','<b>Bearing (service): FAIL, D/C = \u221e</b> \u2014 governing service combination '+sfEsc(R.govBear.cb.name)+': '+sfEsc(sfdBearWhy(R.govBear))+'.'));   /* SFNB-3 */
  if(!lv&&g.DCR===Infinity)b0.appendChild(el('div','errbox','<b>Bearing: FAIL, D/C = \u221e.</b> '+sfEsc(sfdBearWhy(g))+'. Worked in '+sfdLink('o-br-cap','')+'.'));   /* SFNB-2 */
  b0.appendChild(varTable([
   ['\\Sigma P','Net vertical load (incl. self-weights, EV, \u2212U)',r.P,'kips'],
@@ -2961,8 +2967,10 @@ function renderBearing(){
    '\\text{Converged in }'+bp.iter+'\\text{ iterations}'+(bp.converged?'\\;(\\text{residuals}\\approx0)':'\\;(\\textbf{NOT fully converged \u2014 verify})')));
  }else if(lvT){
   b1.appendChild(el('div','note','Net factored vertical load is not downward (\u03a3P \u2264 0): no pressure distribution for this combination.'));
+ }else if(bp.mode==='tension'){   /* SFNB-3: net uplift (the message above was for a resultant off the footing) */
+  b1.appendChild(el('div','errbox','Net vertical load is not downward (\u03a3P = '+f2(r.P)+' kip \u2264 0) \u2014 no bearing pressure, no contact. Bearing D/C = \u221e (FAIL).'));
  }else{
-  b1.appendChild(el('div','errbox','Resultant falls outside the footing footprint \u2014 no equilibrium pressure distribution exists (unstable).'));
+  b1.appendChild(el('div','errbox','Resultant falls outside the footing footprint \u2014 no equilibrium pressure distribution exists (unstable).'+(lv?'':' Bearing D/C = \u221e (FAIL): '+sfEsc(sfdBearWhy(g))+'.')));
  }
  const qc=(bp.mode==='full'||bp.mode==='partial')?sfqcCard(bp,r):null;if(qc)b1.appendChild(qc);   /* SFQC: the four corner pressures, worked */
  const hm=el('div','plot');hm.id='plot-heat';b1.appendChild(hm);
@@ -2980,6 +2988,9 @@ function renderBearing(){
   b2.appendChild(el('div','note','The bearing check compares the service pressure with the allowable bearing pressure, a service quantity, so it applies to the service (ASD) combinations only. An LRFD (factored) combination is selected above: its factored pressures (\u00a73.2, \u00a73.4) are reference values and are not checked. The governing service combination is <b>'+sfEsc(R.govBear.cb.name)+'</b>; its check is on the dashboard and in the Report.'));
   const bb=el('button','','Show the governing service combination');bb.type='button';bb.addEventListener('click',()=>{SEL.asd=null;sfdLrPick(null);});
   b2.appendChild(bb);
+ }else if(!g.cap){   /* SFNB-3: no bearing solution (resultant off the footing, or net load not downward): no capacity is computed */
+  const b2=secPanel(T,'o-br-cap','3.3  Bearing Check \u2014 No Bearing Solution');
+  b2.appendChild(el('div','errbox','<b>D/C = \u221e (FAIL):</b> '+sfEsc(sfdBearWhy(g))+'. There is no base-pressure solution for this combination, so no bearing capacity or pressure is compared; it fails the bearing check.'));
  }else if(state.soil.mode==='vesic'){
   const v=g.cap;
   const b2=secPanel(T,'o-br-cap','3.3  Bearing Capacity \u2014 Vesi\u0107 Method (effective area)');
@@ -3806,6 +3817,9 @@ function sfrModel(){
  {
   const subs=[], G=R.govBear, w=sfrW();
   if(!G){subs.push(sfrNoBear('Base pressure (governing combination)','S-bp',true));subs.push(sfrNoBear('Allowable bearing and bearing check','S-qa'));}   /* SFNB */
+  else if(!G.cap){const why='Bearing: FAIL, D/C = ∞ ('+G.cb.name+'): '+sfdBearWhy(G)+'.';   /* SFNB-3: governing combination with no bearing solution */
+   subs.push({title:'Base pressure (governing combination) — no solution',key:'S-bp',items:[{type:'note',warn:true,text:why+' There is no base-pressure solution for this combination, so no pressure is worked; its resultant is in [[S-res]].'}]});
+   subs.push({title:'Allowable bearing and bearing check',key:'S-qa',items:[{type:'note',warn:true,text:why+' No bearing capacity or pressure is compared: the combination fails the bearing check.'}]});}
   else{const r=G.r, bp=G.bear;
   w.add({id:'kern',label:'Kern (middle third) index',sym:'k',eq:'\\frac{6|e_{x}|}{B} + \\frac{6|e_{y}|}{L}',sub:'\\frac{6\\cdot'+sfrN(Math.abs(r.ex),3)+'}{'+sfrN(R.B)+'} + \\frac{6\\cdot'+sfrN(Math.abs(r.ey),3)+'}{'+sfrN(R.L)+'}',value:bp.kern||0,unit:'',d:3,
    note:(bp.kern<=1?'k ≤ 1: full contact':'k > 1: partial contact (no-tension soil)')+'; e: see §ex'});
