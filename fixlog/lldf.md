@@ -1995,3 +1995,9 @@ index 219cc2c..a3e337e 100644
   - `lldf-layout` (319 checks, incl. 390 px and inside index.html's frame), `project-library --tool lldf`, `check-syntax`: pass; 0 console errors;
   - before / after screenshots at 1920 and 390 px looked at.
 - **Saved data:** no change.
+
+## 2026-11-06 — PR: claude/bss-shared-mct (PR #863: https://github.com/mlococo88/All-Structural/pull/863) (BSS) — the "Suite sync" pill is called "Hand-off locks"   [label only]
+- **Where:** the duplicated Bridge Suite bootstrap (CLAUDE.md §3), `BridgeLocksUI` (`SuitePanel` title default, `mountPanel` title, `drawer` `paintFab` label and `setOpen` title): the four `'Suite sync'` → `'Hand-off locks'`.
+- **Why:** engineer decision (2026-11-06): the hand-off lock panel must not read as cloud sync next to "Cloud sync (GitHub)".
+- **Other copies:** `index.html`, `lldf.html`, `Prestressed Bridge Design.html` (same PR; the block stays identical in the three).
+- **Formulas, factors, units, code references:** none. **Saved data:** none.

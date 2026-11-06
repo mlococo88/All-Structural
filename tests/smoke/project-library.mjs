@@ -178,7 +178,7 @@ export const TOOLS = {
     change: async p => { await p.locator('button', { hasText: 'Geometry' }).first().click(); await p.waitForTimeout(800);
       await p.evaluate(() => { const i = [...document.querySelectorAll('input[type=number]')].find(x => x.offsetParent && x.value !== '' && !x.disabled);
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, String((+i.value || 0) + 1)); i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); }); await p.waitForTimeout(1500); },
-    save: async () => {}
+    save: async (p, name) => { await p.waitForFunction(() => window.IXPB, null, { timeout: 60000 }).catch(() => {}); await stdSave(p, name); await p.waitForTimeout(400); }   // BSS (2026-11-06): the standard Save as (branch); nothing on main
   },
   sbapp: {
     // Steel Bridge app (apps/steel-bridge): used by tests/smoke/github-sync-tools.mjs and home-projects.mjs (GHS2, 2026-11-05). Not run by this

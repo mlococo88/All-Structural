@@ -21,7 +21,7 @@ test('project-registry: one entry per tool; its page passes the same key, tool a
     assert.match(e.tool, /^[a-z0-9][a-z0-9-]{0,60}$/);
     const file = path.join(ROOT, decodeURIComponent(e.href.split('#')[0]));
     assert.ok(fs.existsSync(file), e.href);
-    const src = fs.readFileSync(file, 'utf8').replace(/&quot;/g, '"');
+    const src = fs.readFileSync(e.def ? path.join(ROOT, e.def) : file, 'utf8').replace(/&quot;/g, '"');   // def (BSS): a list shared by several pages
     // a folder app with a view (Steel Bridge app): its key is defined in one of the app's own .js files (engine/model.js KEYS)
     const keySrc = e.view ? src + fs.readdirSync(path.dirname(file), { recursive: true }).filter(f => /\.js$/.test(f)).map(f => fs.readFileSync(path.join(path.dirname(file), f), 'utf8')).join('\n') : src;
     assert.ok(keySrc.includes(`'${e.key}'`) || keySrc.includes(`"${e.key}"`), `${e.tool}: key ${e.key} in ${e.href}`);
@@ -128,4 +128,34 @@ test('project-registry: Steel Bridge Design two-list view (STDS-G): names of bot
   assert.equal(gh.files.get('projects/steel-bridge-design/Both.json'), R2.fileText(e, st.item('Both'), 'Both'));
   assert.equal(JSON.stringify([...s.m].filter(([k]) => !k.startsWith('bridgeSuite.'))), before, 'both lists unchanged');
   s.setItem('plateline_projects_v1', '{bad'); const u = R2.list(e, s); assert.equal(u.ok, false); assert.equal(u.error, 'unreadable'); assert.equal(s.getItem('plateline_projects_v1'), '{bad');
+});
+
+// BSS (2026-11-06): the Bridge Suite's shared list (bridgeSuite.v1.projects, entries by id, duplicate names): the home page's view and
+// file text equal the suite's own (shared/bridge-suite-projects.js ghStore + toFile); home Upload all, then the suite's engine: synced.
+test('project-registry: Bridge Suite view (entries by id): newest of a name, file text = the suite\'s own, home upload then synced; reads only', async () => {
+  const W3 = loadShared('projects.js', 'github-sync.js', 'project-registry.js', 'bridge-suite-projects.js'), R3 = W3.SharedProjectRegistry, BS = W3.SharedBridgeSuite, G3 = W3.SharedGitHubSync;
+  const e = R3.get('bridge-suite'), s = mem(); G3.saveSettings(s, { owner: 'mlococo88', repo: 'structural-projects', branch: 'main', token: TOKEN });
+  const reg = { bp_a: { name: 'Mill River', savedAt: '2026-11-01T00:00:00.000Z', slices: { mct: { a: 1 } } },
+    bp_b: { name: 'Mill River', savedAt: '2026-11-05T00:00:00.000Z', slices: { mct: { a: 2 }, lldf: { b: 'ü' } }, demands: { big: [1, 2] } },
+    bp_c: { name: 'Alt', savedAt: '2026-11-03T00:00:00.000Z', slices: { psbeam: { c: 3 } } } };
+  s.setItem('bridgeSuite.v1.projects', JSON.stringify(reg)); const before = s.getItem('bridgeSuite.v1.projects');
+  const l = R3.list(e, s); assert.equal(l.ok, true); assert.equal(l.items.map(i => i.name).sort().join('|'), 'Alt|Mill River');
+  assert.equal(l.items.find(i => i.name === 'Mill River').saved, '2026-11-05T00:00:00.000Z');
+  const own = BS.store({ storage: s }).ghStore;
+  const txt = R3.fileText(e, R3.store(e, s).item('Mill River'), 'Mill River');
+  assert.equal(txt, JSON.stringify(BS.toFile(own.item('Mill River'), 'Mill River'), null, 1), 'the same text as the suite');
+  assert.deepEqual(JSON.parse(txt), { app: 'BridgeSuite', v: 1, name: 'Mill River', savedAt: '2026-11-05T00:00:00.000Z', slices: { mct: { a: 2 }, lldf: { b: 'ü' } } }, 'the newest entry, no demands');
+  const gh = makeGitHubMock({ token: TOKEN }), home = R3.engine(e, s, gh.fetch);
+  const r = await home.uploadAll(); assert.equal(r.ok, true); assert.equal(r.done, 2);
+  const tool = G3.engine({ tool: 'bridge-suite', label: e.label, store: own, storage: s, fetch: gh.fetch, toFile: BS.toFile, fromFile: BS.fromFile, settle: BS.SETTLE });
+  const n0 = gh.log.length; tool.scan(); await tool.flush(true, true); await tool.refreshCloud();
+  assert.equal(gh.log.slice(n0).filter(x => x.method !== 'GET').length, 0); assert.equal(tool.statusOf('Mill River'), 'synced'); assert.equal(tool.statusOf('Alt'), 'synced');
+  assert.equal(s.getItem('bridgeSuite.v1.projects'), before, 'the suite list unchanged');
+  // a file from GitHub into the suite's list: the newest entry of the name, its demands kept
+  gh.setRemote('projects/bridge-suite/Mill River.json', JSON.stringify({ app: 'BridgeSuite', v: 1, name: 'Mill River', savedAt: '2026-11-06T00:00:00.000Z', slices: { mct: { a: 9 } } }, null, 1));
+  await tool.refreshCloud(); const d = await tool.useCloud('Mill River'); assert.equal(d.ok, true);
+  const after = JSON.parse(s.getItem('bridgeSuite.v1.projects'));
+  assert.deepEqual(after.bp_b, { name: 'Mill River', savedAt: '2026-11-06T00:00:00.000Z', slices: { mct: { a: 9 } }, demands: { big: [1, 2] } });
+  assert.deepEqual(after.bp_a, reg.bp_a); assert.deepEqual(after.bp_c, reg.bp_c);
+  assert.throws(() => BS.fromFile({ cfg: {} }, 'x'));
 });
