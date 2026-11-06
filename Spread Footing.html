@@ -450,7 +450,6 @@ a.wkA:hover{text-decoration:underline}
   <option value="a_ee1">AASHTO Extreme Event I, &gamma;<sub>EQ</sub>=1.0: e &le; 0.40B</option>
   <option value="custom">Custom fraction of B, L</option>
   <option value="none">No eccentricity limit (IBC 2021 / ACI 318-19) &mdash; e reported for information</option>
-  <option value="off">Not checked</option>
  </select><span class="hint">Replaces the ASD overturning FS in LRFD practice.</span></div>
  <div class="row"><label>Custom e/B limit</label><input type="number" step="0.01" data-path="stab.eccCustom" data-num><span class="unit">&ndash;</span><span class="hint">used only when Custom is selected</span></div>
  <div class="row"><label>Target FS, sliding</label><input type="number" step="0.1" data-path="stab.FSsl" data-num><span class="unit">&ndash;</span></div>
@@ -775,6 +774,9 @@ function migrateState(){
  if(state.soil.sfdDepthF===undefined)state.soil.sfdDepthF='on';
  ['stab','soil','ev'].forEach(sec=>{if(!state[sec])state[sec]={};
   Object.keys(ds[sec]).forEach(k=>{if(state[sec][k]===undefined)state[sec][k]=ds[sec][k];});});
+ /* SFNO (2026-11-06, engineer): the choice "Not checked" (stab.eccMode 'off') is removed. A save holding it opens as 'none'
+    (No eccentricity limit): no limit is applied either way, so pass / fail is unchanged; e is now reported for information. */
+ if(state.stab.eccMode==='off')state.stab.eccMode='none';
  (state.peds||[]).forEach(p=>{
   if(!p.direct)p.direct={P:0,Vx:0,Vy:0,Mx:0,My:0};
   else ['P','Vx','Vy','Mx','My'].forEach(k=>{if(p.direct[k]===undefined)p.direct[k]=0;});
@@ -1653,7 +1655,7 @@ function computeAll(){
             a_rock:{f:0.45,set:'lrfd',lab:'e \u2264 0.45B (rock)',ref:'AASHTO LRFD 10.6.3.3, strength'},
             a_ee0:{f:0.33,set:'lrfd',lab:'e \u2264 0.33B (\u03b3EQ = 0)',ref:'AASHTO LRFD 10.6.4.2 / 11.6.5.1, Extreme Event I'},
             a_ee1:{f:0.40,set:'lrfd',lab:'e \u2264 0.40B (\u03b3EQ = 1.0)',ref:'AASHTO LRFD 10.6.4.2 / 11.6.5.1, Extreme Event I'}};
- const eccMode=state.stab.eccMode||'kern';
+ const eccMode=(state.stab.eccMode==='off')?'none':(state.stab.eccMode||'kern');   /* SFNO: 'off' (removed choice) = 'none' */
  let eccChk=null, eccInfo=null;
  /* SFNE (2026-11-06, engineer): 'none' = no eccentricity limit. IBC 2021 and ACI 318-19 set no maximum eccentricity for a spread
     footing (ACI 318-19 13.2.6.1: bearing, overturning and sliding per the general building code); stability is by overturning,
@@ -3198,7 +3200,7 @@ function renderStability(){
  /* SFNE (2026-11-06): no eccentricity limit selected: the eccentricities for information, no pass / fail, no D/C */
  if(R.eccInfo&&R.eccInfo.gov){const I=R.eccInfo,g=I.gov;
   const be=secPanel(T,'o-st-ecc','4.3a  Eccentricity (information only; no limit)');
-  be.appendChild(el('p','note','No eccentricity limit is applied (input, Stability tab). The eccentricity is <b>not limited by IBC 2021 / ACI 318-19</b>: ACI 318-19 13.2.6.1 has the footing proportioned for bearing and for stability against overturning and sliding under the general building code, and neither code sets a maximum eccentricity. Stability is checked by overturning (\u00a74.3), bearing with partial contact (3.2, 3.3) and sliding (\u00a74.2). The values below are reported for information.'));
+  be.appendChild(el('p','note','No eccentricity limit is applied (input, Stability tab). The eccentricity is <b>not limited by IBC 2021 / ACI 318-19</b>: ACI 318-19 13.2.6.1 has the footing proportioned for bearing and for stability against overturning and sliding under the general building code, and neither code sets a maximum eccentricity. Stability is checked by overturning (\u00a74.3), bearing with partial contact (3.2, 3.3) and sliding (\u00a74.2). The values below are reported for information. Projects saved with the former choice \u201cNot checked\u201d open with this choice; their results are unchanged.'));
   be.appendChild(eqBlock('Eccentricity of the resultant (information)','service combinations',
    'e_x = \\frac{\\Sigma M_y}{\\Sigma P},\\; e_y = \\frac{\\Sigma M_x}{\\Sigma P},\\quad \\frac{6|e_x|}{B} + \\frac{6|e_y|}{L}\\;(\\le 1:\\ \\text{full contact})',
    '\\text{largest: '+g.name.replace(/[\u2212]/g,'-')+':}\\; \\frac{6\\cdot'+f3(Math.abs(g.ex))+'}{'+f2(R.B)+'} + \\frac{6\\cdot'+f3(Math.abs(g.ey))+'}{'+f2(R.L)+'}',

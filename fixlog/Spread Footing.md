@@ -5885,3 +5885,35 @@ function sfqcFit(id,B,L,T){
 - **How verified:** the SF harness (10 cases) run on origin/main and on the branch with the default choice: `R` and `P2` 0 differences, dashboard and Report text identical, 0 console / KaTeX errors. The `none` choice on def, sfe9 and rev: 0 console / KaTeX errors, and the input set through the select itself. Screenshots of the 4.3a card and the dashboard checked. Tests: check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser.
 - **Other copies:** none.
 - **Open item (engineer):** "Not checked" (`off`) and the new choice now overlap: both apply no limit, but only the new one shows the eccentricities and the statement. Should `off` be removed (with a migration to `none`), or kept?
+
+## 2026-11-06 — PR: claude/sf-ecc-off-remove (PR #913: https://github.com/mlococo88/All-Structural/pull/913) (SFNO: Eccentricity limit choice "Not checked" removed; saves holding it open as "No eccentricity limit"; §5 migration, pass / fail unchanged)
+
+- **Why:** engineer 2026-11-06, answering the SFNE (#908) open item: remove "Not checked" (`stab.eccMode = 'off'`); `migrateState` maps `'off'` → `'none'`, so saved projects keep the same pass/fail and now show e for information.
+- **Where / exact code (unified diff, `Spread Footing.html`):**
+```diff
+@@ -453 +452,0 @@ a.wkA:hover{text-decoration:underline}
+-  <option value="off">Not checked</option>
+@@ -777,0 +777,3 @@ function migrateState(){
++ /* SFNO (2026-11-06, engineer): the choice "Not checked" (stab.eccMode 'off') is removed. A save holding it opens as 'none'
++    (No eccentricity limit): no limit is applied either way, so pass / fail is unchanged; e is now reported for information. */
++ if(state.stab.eccMode==='off')state.stab.eccMode='none';
+@@ -1656 +1658 @@ function computeAll(){
+- const eccMode=state.stab.eccMode||'kern';
++ const eccMode=(state.stab.eccMode==='off')?'none':(state.stab.eccMode||'kern');   /* SFNO: 'off' (removed choice) = 'none' */
+@@ -3201 +3203 @@ function renderStability(){
+-  be.appendChild(el('p','note','No eccentricity limit is applied (input, Stability tab). The eccentricity is <b>not limited by IBC 2021 / ACI 318-19</b>: ACI 318-19 13.2.6.1 has the footing proportioned for bearing and for stability against overturning and sliding under the general building code, and neither code sets a maximum eccentricity. Stability is checked by overturning (\u00a74.3), bearing with partial contact (3.2, 3.3) and sliding (\u00a74.2). The values below are reported for information.'));
++  be.appendChild(el('p','note','No eccentricity limit is applied (input, Stability tab). The eccentricity is <b>not limited by IBC 2021 / ACI 318-19</b>: ACI 318-19 13.2.6.1 has the footing proportioned for bearing and for stability against overturning and sliding under the general building code, and neither code sets a maximum eccentricity. Stability is checked by overturning (\u00a74.3), bearing with partial contact (3.2, 3.3) and sliding (\u00a74.2). The values below are reported for information. Projects saved with the former choice \u201cNot checked\u201d open with this choice; their results are unchanged.'));
+```
+  - Input: the `<option value="off">Not checked</option>` line removed from `select[data-path="stab.eccMode"]`.
+  - `migrateState` (anchor `/* SFNO (2026-11-06, engineer)`, after the stab/soil/ev backfill): `if(state.stab.eccMode==='off')state.stab.eccMode='none';`. Every load path calls it: autosave (`loadAuto`), Saved projects open and its "unsaved changes" compare (`opened`), Import JSON, start-up.
+  - `computeAll`: `const eccMode=state.stab.eccMode||'kern';` → `const eccMode=(state.stab.eccMode==='off')?'none':(state.stab.eccMode||'kern');`, a guard for any state not passed through `migrateState`.
+  - Card 4.3a (`none`) note: added "Projects saved with the former choice "Not checked" open with this choice; their results are unchanged."
+- **§5 migration:** no key or field change. The value `'off'` is mapped to `'none'` in memory on load. The stored project keeps `'off'` until it is saved again, and then holds `'none'`. A copy of the tool from before SFNE (#908) reading `'none'` falls back to the middle third (`ECC[eccMode]||ECC.kern`). No user data is discarded.
+- **§4 / §5 callout: a save with `'off'`** (default project + `stab.eccMode:'off'` in the autosave), origin/main vs the branch:
+  - **Before:** select "Not checked"; `R.eccChk = null`; no eccentricity chip, no 4.3a card, no Report section; input echo "not checked". Verdict "2 of 25 checks FAIL · 19 PASS · 4 N/A".
+  - **After:** select "No eccentricity limit (IBC 2021 / ACI 318-19)"; `R.eccChk = null` (no limit, as before); chip "Eccentricity (information)" N/A; card 4.3a and the Report section with e (largest 6|e_x|/B + 6|e_y|/L = 0.309, 0.6D + 0.6(+Wx)); input echo "none (not limited …)". Verdict "2 of 26 checks FAIL · 19 PASS · 5 N/A".
+  - FAIL, PASS and REVIEW counts are identical. The only change in the counts is the one added N/A (the information chip). The same holds for sfe9 with `'off'` (6 FAIL · 12 PASS · 3 REVIEW, N/A 4 → 5) and dir (3 FAIL · 18 PASS, N/A 4 → 5).
+  - Deep diff of `R` and `P2`, main `'off'` vs branch `'off'`: only the new `eccInfo`. Branch `'off'` vs branch `'none'`: 0 differences.
+- **Governing provision:** as SFNE (ACI 318-19 13.2.6.1). No limit is applied before or after.
+- **How verified:** the SF harness (10 cases, their own eccentricity modes: kern by default, rev cases kern explicitly) on origin/main and the branch: `R` / `P2` 0 differences, dashboard and Report text identical, 0 console / KaTeX errors. `'off'` saves (def, sfe9, dir) as above. Screenshots of the dashboard and Stability tab checked. Tests: check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser.
+- **Other copies:** none.
