@@ -5563,7 +5563,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Saved data:** new field `peds[i].wallIn` (absent = h_w = h, horizontal bars = ties); no key or format change; pedestal elements unaffected.
 - **Other copies:** none.
 
-## 2026-11-06 — PR: claude/sf-wall-inplane-shear (SFWC-2: in-plane shear of a Wall element per ACI 318-19 11.5.4; new check, existing results unchanged)
+## 2026-11-06 — PR: claude/sf-wall-inplane-shear (PR #874: https://github.com/mlococo88/All-Structural/pull/874) (SFWC-2: in-plane shear of a Wall element per ACI 318-19 11.5.4; new check, existing results unchanged)
 
 ### SFWC-2. Wall in-plane shear, ACI 318-19 11.5.4   [new check, Wall elements only; CLAUDE.md §4]
 - **Request (engineer, 2026-11-06):** compute the in-plane shear of a wall (11.5.4, incl. α_c from h_w/ℓ_w and the V_n limit), listed as not computed by SFWL.
