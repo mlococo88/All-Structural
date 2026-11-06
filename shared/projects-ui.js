@@ -355,7 +355,7 @@
       const ok = r !== false && !(r && r.ok === false) && store.has(name);   // the tool's save may return nothing
       if (!ok) { if (!quiet) alert((r && r.message) || 'The project was not saved.'); later(); return false; }
       setCur(name); savedAt[name] = Date.now(); if (st) st.opened(name); if (ctx.changed) ctx.changed(); dialog.refresh();
-      if (dialog.cloud && dialog.cloud.tick) dialog.cloud.tick().catch(() => {});
+      if (dialog.cloud && dialog.cloud.tick) dialog.cloud.tick(true).catch(() => {});   // true (BSS): sent now even with a settle time
       if (ctx.afterSave) ctx.afterSave(name); refresh(); return true;
     }
     const doSave = name => done(ctx.save ? ctx.save(name) : store.save(name, ctx.getState()), name);

@@ -1457,7 +1457,7 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
       return h('div',{className:'bl-panel'},
         h('div',{className:'bl-ph'},
           h('span',{className:'xlk'},'⇄'),
-          h('span',null,p.title||'Suite sync'),
+          h('span',null,p.title||'Hand-off locks'),
           h('span',{style:{flex:'1 1 auto'}}),
           h('span',{style:{fontWeight:500,color:'#c2410c'}},
             order.filter(isLocked).length+' of '+order.length+' locked')),
@@ -1582,7 +1582,7 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
 
       var hd=mk('div','bl-ph');
       hd.appendChild(mk('span','xlk','⇄'));
-      hd.appendChild(mk('span',null,o.title||'Suite sync'));
+      hd.appendChild(mk('span',null,o.title||'Hand-off locks'));
       var sp=mk('span'); sp.style.flex='1 1 auto'; hd.appendChild(sp);
       var cnt=mk('span',null,order.filter(isLocked).length+' of '+order.length+' locked');
       cnt.style.fontWeight='500'; cnt.style.color='#c2410c';
@@ -1678,7 +1678,7 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
       fab.className='bl-fab'+(n?' on':'');
       fab.innerHTML='';
       var i=document.createElement('span'); i.className='xlk'; i.textContent=n?'🔒':'⇄';
-      var t=document.createElement('span'); t.textContent='Suite sync';
+      var t=document.createElement('span'); t.textContent='Hand-off locks';
       var b=document.createElement('span'); b.className='b';
       b.textContent=n?(n+' locked'):'off';
       fab.appendChild(i); fab.appendChild(t); fab.appendChild(b);
@@ -1689,7 +1689,7 @@ try{ window.BridgeApps.boot('lldf'); }catch(e){}
     function setOpen(v){
       open=v;
       wrap.style.display=v?'block':'none';
-      if(v&&!un) un=mountPanel({el:wrap, app:o.app, order:o.order, title:o.title||'Suite sync', limit:o.limit});
+      if(v&&!un) un=mountPanel({el:wrap, app:o.app, order:o.order, title:o.title||'Hand-off locks', limit:o.limit});
     }
     fab.addEventListener('click',function(e){ e.preventDefault(); setOpen(!open); });
     document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&open) setOpen(false); });

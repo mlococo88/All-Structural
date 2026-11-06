@@ -22,6 +22,10 @@
 <script src="shared/list-input.js"></script>
 <script src="shared/projects.js"></script>
 <script src="shared/projects-ui.js"></script>
+<!-- BSS (2026-11-06): the standard save over the shared Bridge Suite project list (shared/bridge-suite-projects.js) and its GitHub sync
+     (shared/github-sync.js; off until set up: no request, no key). -->
+<script src="shared/github-sync.js"></script>
+<script src="shared/bridge-suite-projects.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet"/>
@@ -37,6 +41,13 @@
   input:focus,select:focus{border-color:#1d4ed8 !important;box-shadow:0 0 0 3px rgba(29,78,216,0.1);outline:none;}
   button:active{transform:translateY(1px);}
   @media print{.bx-alltools,.bx-projbtns{display:none!important;}}
+  /* BSS (2026-11-06): the standard save controls (shared/projects-ui.js) in this page (the reset above removes button padding) */
+  .ix-pbhdr button[data-sp]:not(.spChip),.spCard button[data-sp]{background:#fff;border:1px solid #d1d5db;border-radius:6px;color:#374151;padding:6px 10px;cursor:pointer;font:inherit;font-size:11.5px;font-weight:500;white-space:nowrap;}
+  .ix-pbhdr button.spPri[data-sp],.spCard button.spPri[data-sp]{background:#1d4ed8;border-color:#1d4ed8;color:#fff;}
+  .ix-pbhdr button[data-sp]:disabled{opacity:.45;cursor:default;} .ix-pbhdr kbd.spKbd{display:none;}
+  dialog.spLib{font-family:'IBM Plex Sans',system-ui,sans-serif;} dialog.spLib button{padding:2px 8px;} dialog.spLib table td,dialog.spLib table th{padding:4px 6px;}
+  .ix-pbcard .spCard .spRow{gap:6px;} .ix-pbcard .spCard .spHint{margin:4px 0;}
+  @media screen and (min-width:900px) and (max-width:1599px){.ix-hstats{display:none!important;}}
   /* D11 links (CLAUDE.md §6): "Worked in: → …" flash on arrival */
   .idx-wkFlash{animation:idxwkflash 1.5s ease-out;} @keyframes idxwkflash{from{box-shadow:0 0 0 4px #93c5fd;}to{box-shadow:0 0 0 4px rgba(147,197,253,0);}}
   .idx-wkA:hover{text-decoration:underline !important;} @media print{.idx-wk{display:none!important;}}
@@ -1010,7 +1021,7 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
       return h('div',{className:'bl-panel'},
         h('div',{className:'bl-ph'},
           h('span',{className:'xlk'},'⇄'),
-          h('span',null,p.title||'Suite sync'),
+          h('span',null,p.title||'Hand-off locks'),
           h('span',{style:{flex:'1 1 auto'}}),
           h('span',{style:{fontWeight:500,color:'#c2410c'}},
             order.filter(isLocked).length+' of '+order.length+' locked')),
@@ -1135,7 +1146,7 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
 
       var hd=mk('div','bl-ph');
       hd.appendChild(mk('span','xlk','⇄'));
-      hd.appendChild(mk('span',null,o.title||'Suite sync'));
+      hd.appendChild(mk('span',null,o.title||'Hand-off locks'));
       var sp=mk('span'); sp.style.flex='1 1 auto'; hd.appendChild(sp);
       var cnt=mk('span',null,order.filter(isLocked).length+' of '+order.length+' locked');
       cnt.style.fontWeight='500'; cnt.style.color='#c2410c';
@@ -1231,7 +1242,7 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
       fab.className='bl-fab'+(n?' on':'');
       fab.innerHTML='';
       var i=document.createElement('span'); i.className='xlk'; i.textContent=n?'🔒':'⇄';
-      var t=document.createElement('span'); t.textContent='Suite sync';
+      var t=document.createElement('span'); t.textContent='Hand-off locks';
       var b=document.createElement('span'); b.className='b';
       b.textContent=n?(n+' locked'):'off';
       fab.appendChild(i); fab.appendChild(t); fab.appendChild(b);
@@ -1242,7 +1253,7 @@ try{ window.BridgeApps.boot('mct'); }catch(e){}
     function setOpen(v){
       open=v;
       wrap.style.display=v?'block':'none';
-      if(v&&!un) un=mountPanel({el:wrap, app:o.app, order:o.order, title:o.title||'Suite sync', limit:o.limit});
+      if(v&&!un) un=mountPanel({el:wrap, app:o.app, order:o.order, title:o.title||'Hand-off locks', limit:o.limit});
     }
     fab.addEventListener('click',function(e){ e.preventDefault(); setOpen(!open); });
     document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&open) setOpen(false); });
@@ -3695,6 +3706,10 @@ function StepProject({cfg,set}) {
     cursor:'pointer',fontSize:'12px',color:'#374151',whiteSpace:'nowrap'};
 
   return (<div><StepHeader icon="📋" title="Project Information" sub="Project metadata, bridge identification, and MCT file header fields"/>
+    {/* BSS (2026-11-06): the standard "Save and open" card (shared/projects-ui.js projectBar, made in App; mounted here each time this step is shown) */}
+    {window.SharedBridgeSuite&&<div className="ix-pbcard" style={{maxWidth:'860px',border:'1px solid #e5e7eb',borderRadius:'8px',background:'#fff',padding:'10px 14px',marginBottom:'14px'}}>
+      <div style={{fontSize:'13px',fontWeight:600,color:'#111827',marginBottom:'6px'}}>Save and open <span style={{fontSize:'11px',fontWeight:400,color:'#6b7280'}}>— one Bridge Suite project for the MCT generator, LL &amp; DL Distribution and Prestressed Bridge Design</span></div>
+      <div className="ix-pbhost" ref={el=>{ if(el&&window.IXPB) window.IXPB.mount(el); }}/></div>}
     <div className="bx-projbtns" style={{display:'flex',gap:'8px',flexWrap:'wrap',maxWidth:'860px',marginBottom:'6px'}}>
       <button style={BXB} onClick={bxUse} title="Fill these fields from the project info shared by another tool (asks first; never blanks a field)">Use shared project info</button>
       <button style={BXB} onClick={bxShare} title="Share this project's name, bridge ID, client, location, engineer and date with the other tools">Share project info</button>
@@ -21778,23 +21793,9 @@ function App() {
       window.BridgeProjects.migrate('mct',legacy,le=>le&&le.cfg);
     } }catch(e){} bpRefresh(); },[]);
   const bpCurrent = ()=> window.BridgeProjects? window.BridgeProjects.current(): null;
-  const saveToProject=()=>{
-    if(!window.BridgeProjects){ alert('Shared storage unavailable in this environment.'); return; }
-    const curId=window.BridgeProjects.current();
-    const cur=curId?window.BridgeProjects.get(curId):null;
-    const suggested=(cur&&cur.name)||cfg.projectName||cfg.projectUser||('Bridge '+new Date().toLocaleDateString());
-    const name=window.prompt('Save to Bridge Project (shared with PS-Beam / LLDF):', suggested);
-    if(name==null) return;
-    const nm=name.trim()||suggested;
-    const targetId=(cur&&cur.name===nm)?curId:null;   // overwrite current if name unchanged, else new
-    const id=window.BridgeProjects.saveSlice(targetId, nm, 'mct', JSON.parse(JSON.stringify(cfg)));
-    if(!id){ alert('Could not save to shared storage.'); return; }
-    // Bundle the latest published demands so a design app loading this project can pull them in.
-    try{ const latest=window.BridgeHandoff&&window.BridgeHandoff.readOne();
-      if(latest&&latest.payload) window.BridgeProjects.setDemands(id,latest.payload); }catch(e){}
-    window.BridgeProjects.setCurrent(id); bpRefresh();
-    setSavedMsg('Saved to project “'+nm+'”'); setTimeout(()=>setSavedMsg(''),2200);
-  };
+  /* BSS (2026-11-06): "⇄ Save to Project" (a prompt for the name) is replaced by the standard save (shared/bridge-suite-projects.js projectBar,
+     made in the effect below): Save writes this cfg as the project's "mct" part (BridgeProjects.saveSlice, as before) and bundles the
+     latest published demands (setDemands, as before); Save as asks the name (a name in use: "Replace it" = this part into that project). */
   const loadFromProject=(id)=>{
     if(!id){ if(window.BridgeProjects) window.BridgeProjects.setCurrent(null); bpRefresh(); return; }
     if(!window.BridgeProjects) return;
@@ -21954,6 +21955,33 @@ function App() {
     SharedProjectsUI.undoRedo(h,{undo:plibUndoRef.current,redo:plibRedoRef.current});
     h.reset(); plibRef.current={h};
   },[]);
+  /* BSS (2026-11-06): the standard save (engineer-approved, 2026-11-05/06): header chip · Undo · Redo · Save (Ctrl+S) · Saved projects…; the
+     Project step's first card "Save and open" (Save · Save as… · Saved projects… · New; Export JSON · Import JSON; Reset to defaults); the
+     standard Saved projects dialog over the shared Bridge Suite list (bridgeSuite.v1.projects, unchanged); GitHub sync (off until set up).
+     The open project is the suite's (bridgeSuite.v1.currentProjectId), as the old "Bridge Project" select. ixHooks: this render's functions. */
+  const ixHooks=useRef({}), ixHdrRef=useRef(null);
+  useEffect(()=>{
+    if(window.IXPB||!window.SharedBridgeSuite||!window.BridgeProjects||!window.SharedProjectsUI||!ixHdrRef.current) return;
+    const H=()=>ixHooks.current, SPUI=window.SharedProjectsUI, LS=(()=>{ try{ return window.localStorage; }catch(e){ return null; } })();
+    const B=(t,ti)=>SPUI.button(t,ti,{sp:'ixfile'});
+    const bEx=B('Export JSON','Save all config + results to a JSON file'), bIm=B('Import JSON','Load a previously exported JSON file — restores config and results'), bRs=B('Reset to defaults','All inputs back to their defaults (asks first)');
+    const fIn=document.createElement('input'); fIn.type='file'; fIn.accept='.json'; fIn.hidden=true; fIn.setAttribute('data-sp','ixfile'); document.body.appendChild(fIn);
+    fIn.addEventListener('change',e=>H().importJSON(e)); bEx.addEventListener('click',()=>H().exportJSON()); bRs.addEventListener('click',()=>H().loadDefault());
+    const C=v=>SharedProjects.canon(v), merged=c=>c==null?null:{...DEFAULT_CFG,...c,rating:{...(DEFAULT_CFG.rating||{}),...(c.rating||{})}};   // as loadCfg
+    const pb=SharedBridgeSuite.projectBar({ app:'mct', label:'MIDAS MCT Generator', id:'ixLibDlg', storage:LS,
+      parts:()=>({mct:JSON.parse(JSON.stringify(cfgRef.current))}),
+      afterWrite:id=>{ const latest=window.BridgeHandoff&&window.BridgeHandoff.readOne(); if(latest&&latest.payload) window.BridgeProjects.setDemands(id,latest.payload); },
+      cmp:()=>C(cfgRef.current), cmpOf:e=>C(merged(e&&e.slices?e.slices.mct:null)),
+      open:id=>{ H().loadFromProject(id); return true; },
+      changed:()=>H().bpRefresh(),
+      displayName:()=>String(cfgRef.current.projectName||'').trim(),
+      newProject:()=>H().newDefault(),
+      exportFile:()=>H().exportJSON(), importFile:()=>fIn.click(),
+      fileButtons:[bEx,bIm], extras:[bRs], header:ixHdrRef.current, chipBefore:plibUndoRef.current });
+    if(!pb) return;
+    bIm.addEventListener('click',()=>pb.importJSON());
+    window.IXPB=pb; const host=document.querySelector('.ix-pbhost'); if(host) pb.mount(host);
+  },[]);
   // Snapshot config at step-change checkpoints — natural editing boundaries
   const prevStepRef = React.useRef(step);
   useEffect(()=>{
@@ -22021,6 +22049,7 @@ function App() {
   },[resultsCfgSnap]);
 
   const loadDefault=()=>{if(window.confirm('Reset all inputs to defaults?')){pushHistory('before reset');setCfg(DEFAULT_CFG);}};
+  const newDefault=()=>{ pushHistory('before new'); setCfg(DEFAULT_CFG); };   // BSS: New (the standard card): the defaults, no project open (projectBar asks first on unsaved changes)
   const exportJSON=()=>{
     // Bundle ALL state so the file is a complete save
     const bundle={
@@ -22077,6 +22106,7 @@ function App() {
     e.target.value='';
   };
   const mctOutput=useMemo(()=>(cfg.geomMode||'beam')==='gfs'?generateGFS_MCT(cfg):generateMCT(cfg),[cfg]);
+  ixHooks.current={exportJSON,importJSON,loadDefault,newDefault,loadFromProject,bpRefresh};   // BSS: the standard save calls these
   const downloadMCT=()=>{
     const blob=new Blob([mctOutput],{type:'text/plain'});
     const url=URL.createObjectURL(blob);
@@ -22380,11 +22410,17 @@ function App() {
           style={{fontSize:'11.5px',color:'#6b7280',textDecoration:'none',border:'1px solid #e5e7eb',
             borderRadius:'6px',padding:'4px 10px',whiteSpace:'nowrap'}}>← All tools</a>
         <div style={{marginLeft:'auto',display:'flex',alignItems:'center',gap:'12px'}}>
+          {/* BSS (2026-11-06): the standard header: project chip · Undo · Redo · Save · Saved projects… (projectBar adds the chip, Save and
+              Saved projects… around the Undo / Redo buttons, which were in the sidebar under ↺ History) */}
+          <div ref={ixHdrRef} className="ix-pbhdr" style={{display:'flex',alignItems:'center',gap:'6px',flexWrap:'wrap'}}>
+            <button ref={plibUndoRef} data-sp="1" type="button" disabled title="Undo the last input change (Ctrl+Z)">Undo</button>
+            <button ref={plibRedoRef} data-sp="1" type="button" disabled title="Redo (Ctrl+Y or Ctrl+Shift+Z)">Redo</button>
+          </div>
           {/* The beam every app in the suite is designing. In GFS mode the chip also
               flags a girder count that disagrees with the published roster. */}
           <BeamChip nb={(cfg.geomMode||'beam')==='gfs'?(Math.max(2,Math.round(+(cfg.gfs&&cfg.gfs.nGirders)||0))||null):null}
             setBy="MCT Generator"/>
-          <div style={{display:'flex',gap:'12px',fontSize:'11.5px',fontFamily:'monospace',color:'#6b7280',
+          <div className="ix-hstats" style={{display:'flex',gap:'12px',fontSize:'11.5px',fontFamily:'monospace',color:'#6b7280',
             background:'#f9fafb',border:'1px solid #e5e7eb',borderRadius:'6px',padding:'6px 14px'}}>
             {(cfg.geomMode||'beam')==='gfs' ? (<>
               <span>🌉 GFS</span><span style={{color:'#d1d5db'}}>·</span>
@@ -22543,41 +22579,8 @@ function App() {
                   fontSize:'9.5px',padding:'1px 5px',fontWeight:'700'}}>{cfgHistoryRef.current.length}</span>}
               </button>
             </div>
-            {/* PLIB: Undo / Redo (their disabled state is set by SharedProjectsUI.undoRedo), a row of their own under ↺ History */}
-            <div style={{display:'flex',gap:'4px'}}>
-              <button ref={plibUndoRef} data-sp="1" type="button" disabled title="Undo the last input change (Ctrl+Z)"
-                style={{background:'#fff',border:'1px solid #d1d5db',borderRadius:'6px',color:'#374151',padding:'6px 8px',cursor:'pointer',fontSize:'11.5px',flex:1,fontWeight:'500'}}>Undo</button>
-              <button ref={plibRedoRef} data-sp="1" type="button" disabled title="Redo (Ctrl+Y or Ctrl+Shift+Z)"
-                style={{background:'#fff',border:'1px solid #d1d5db',borderRadius:'6px',color:'#374151',padding:'6px 8px',cursor:'pointer',fontSize:'11.5px',flex:1,fontWeight:'500'}}>Redo</button>
-            </div>
-            {window.BridgeProjects&&(()=>{ void bpTick; const cur=bpCurrent(); const items=window.BridgeProjects.list();
-              return (<div style={{border:'1px solid #f0abfc',borderRadius:'6px',padding:'6px 7px',background:'#fdf4ff',display:'flex',flexDirection:'column',gap:'5px'}}>
-                <div style={{fontSize:'9px',fontFamily:'monospace',color:'#a21caf',textTransform:'uppercase',letterSpacing:'0.08em',display:'flex',justifyContent:'space-between'}}>
-                  <span>Bridge Project</span><span title="One project shared across MCT, PS-Beam and LLDF">shared ⇄</span></div>
-                <select value={cur||''} onChange={e=>loadFromProject(e.target.value)}
-                  style={{fontSize:'11px',border:'1px solid #e9d5ff',borderRadius:'5px',padding:'4px 6px',background:'#fff',color:cur?'#a21caf':'#6b7280',fontWeight:cur?'600':'400'}}>
-                  <option value="">— none / unsaved —</option>
-                  {items.map(p=><option key={p.id} value={p.id}>{p.name}{p.apps.indexOf('mct')<0?' · (no MCT cfg)':''}</option>)}
-                </select>
-                <button onClick={saveToProject} style={{background:'#a21caf',border:'none',borderRadius:'5px',
-                  color:'#fff',padding:'5px 8px',cursor:'pointer',fontSize:'11px',fontWeight:'600'}}
-                  title="Save this MCT config into the shared project (bundles the latest published demands for the design apps)">⇄ Save to Project</button>
-              </div>); })()}
-            <div style={{display:'flex',gap:'4px'}}>
-              <button onClick={exportJSON} style={{background:'#dbeafe',border:'1px solid #93c5fd',borderRadius:'5px',
-                color:'#1d4ed8',padding:'5px 0',cursor:'pointer',fontSize:'11px',flex:1,fontWeight:'600'}}
-                title="Save all config + results to a JSON file">⬆ Export JSON</button>
-              <label style={{background:'#dcfce7',border:'1px solid #86efac',borderRadius:'5px',
-                color:'#15803d',padding:'5px 0',cursor:'pointer',fontSize:'11px',flex:1,textAlign:'center',
-                display:'block',fontWeight:'600'}}
-                title="Load a previously exported JSON file — restores config and results">
-                ⬇ Import JSON<input type="file" accept=".json" onChange={importJSON} style={{display:'none'}}/>
-              </label>
-            </div>
-            <button onClick={loadDefault} style={{background:'none',border:'none',color:'#d1d5db',
-              padding:'4px',cursor:'pointer',fontSize:'10.5px',width:'100%',textAlign:'center'}}>
-              reset to defaults
-            </button>
+            {/* BSS (2026-11-06): Undo / Redo moved to the header (standard header); the "Bridge Project" box (select + ⇄ Save to Project),
+                ⬆ Export JSON / ⬇ Import JSON and "reset to defaults" moved into the Project step's "Save and open" card (the standard save) */}
           </div>
         </nav>
 
