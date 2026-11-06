@@ -9152,10 +9152,11 @@ function rwdwBuild(r) {
   /* a graphic scale bar (feet) with its label, centred at (xc, y) */
   function scaleBar(xc, y, P, label) {
     const ft = P <= 16 ? [0, 1, 2, 4] : P <= 48 ? [0, 2, 4, 8] : [0, 5, 10, 20], w = ft[3] * 12, x0 = xc - w / 2;
-    D.line(L.txt, x0, y, x0 + w, y); D.line(L.txt, x0, y + 0.04 * P, x0 + w, y + 0.04 * P);
+    D.rect(L.txt, x0, y, x0 + w, y + 0.04 * P);
     ft.forEach(f => { D.line(L.txt, x0 + f * 12, y - 0.03 * P, x0 + f * 12, y + 0.07 * P); D.text(L.txt, x0 + f * 12, y - 0.15 * P, 0.07 * P, String(f), 1); });
     D.text(L.txt, x0 + w + 0.1 * P, y - 0.15 * P, 0.07 * P, 'FT', 0);
     D.text(L.txt, xc, y - 0.36 * P, 0.09 * P, label, 1);
+    return { what: 'graphic scale bar ' + ft[3] + ' ft', w: w / P, h: 0.04 };
   }
   /* the concrete outline (footing, stem, key) and the barrier; the construction joint */
   function concrete(P, cj) {
@@ -9271,8 +9272,8 @@ function rwdwBuild(r) {
     dVs(0, G.tf + G.Dfa, gr.xs - (G.Dfa > 0 ? 1.3 : 0.35) * P, 0, 'D_F = <>', true);
     if (G.dk > 0) { dVs(-G.dk, 0, G.kx + G.kw + 0.3 * P, G.kx + G.kw, '<>', false); T(L.txt, G.kx + G.kw + 0.75 * P, -G.dk / 2 - 0.03 * P, hs, 'SHEAR KEY (WIDTH NOT IN THE MODEL, DRAWN NOMINAL)', 0); }
     if (isA && r.coulombThrust && inp.aashto.batter) T(L.txt, G.B / 2, yb2 - 0.48 * P, hs, 'COULOMB BACK-FACE BATTER OMEGA = ' + rwdwN(inp.aashto.batter, 1) + '° IS USED IN K_A; THE SECTION IS DRAWN AS MODELLED (STEM TAPER).', 1);
-    scaleBar(G.B / 2, yb2 - (isA && r.coulombThrust && inp.aashto.batter ? 0.8 : 0.65) * P, P, 'TYPICAL WALL SECTION  ·  SCALE ' + rwdwScName(P));
-    return { known: { what: 'footing width B = ' + rwdwN(G.B, 2) + ' in', w: G.B / P } };
+    const sbK = scaleBar(G.B / 2, yb2 - (isA && r.coulombThrust && inp.aashto.batter ? 0.8 : 0.65) * P, P, 'TYPICAL WALL SECTION  ·  SCALE ' + rwdwScName(P));
+    return { known: sbK };
   }, [8, 12, 16, 24, 32, 48, 64, 96, 192], [['stabKa', 'K_a, K_p'], ['stabBrg', 'bearing'], ['stemFlex', 'S1'], ['heelFlex', 'F1'], ['toeFlex', 'F2']]);
 
   /* ================= 2. REINFORCEMENT DETAILS AND BAR SCHEDULE ================= */
@@ -9300,7 +9301,7 @@ function rwdwBuild(r) {
     });
     T(L.cj, G.xbb + 0.08 * P, G.tf + 0.06 * P, 0.065 * P, 'CONST. JT.', 0);
     if (G.dk > 0) T(L.txt, G.kx + G.kw / 2, -G.dk - 0.18 * P, hs, 'SHEAR KEY: NO REINFORCEMENT DESIGNED IN THE TOOL', 1);
-    scaleBar(G.B / 2, -G.dk - 0.5 * P, P, 'REINFORCEMENT SECTION  ·  SCALE ' + rwdwScName(P) + '  ·  COVER: STEM ' + rwdwIn(BR.cs) + ', FOOTING ' + rwdwIn(BR.cf) + ' (TOP AND BOTTOM)');
+    const sbK = scaleBar(G.B / 2, -G.dk - 0.5 * P, P, 'REINFORCEMENT SECTION  ·  SCALE ' + rwdwScName(P) + '  ·  COVER: STEM ' + rwdwIn(BR.cs) + ', FOOTING ' + rwdwIn(BR.cf) + ' (TOP AND BOTTOM)');
     // the schedule below the view, at paper size
     const yT = -G.dk - 1.15 * P, th = 0.068 * P;
     const len = v => rwdwFI(Math.ceil(v));
@@ -9325,7 +9326,7 @@ function rwdwBuild(r) {
       'BEND ALLOWANCES NOT ADDED; LENGTHS ROUNDED UP TO 1 IN. S2, F3: CONTINUOUS ALONG THE WALL, LAP SPLICES BY THE DETAILER. A_S AND L_D: THE TOOL\'S RESULTS',
       '(STEM DESIGN AND FOOTING DESIGN TABS). S1D IS THE DOWEL OF THE S1 BARS (SAME SIZE AND SPACING); MARK ADDED ON THE DRAWINGS.'];
     notes.forEach((s2, j) => D.text(L.txt, 0, yT - 0.3 * P - t.h - 0.115 * j * P, 0.062 * P, s2, 0));
-    return { known: { what: 'footing width B', w: G.B / P } };
+    return { known: sbK };
   }, [8, 12, 16, 24, 32, 48, 64, 96, 192], [['stemFlex', 'S1'], ['stemDev', 'L_d, hook'], ['stemMid', 'S3'], ['stemTS', 'S2'], ['heelFlex', 'F1'], ['toeFlex', 'F2'], ['ftgTS', 'F3']]);
 
   /* ================= 3. LOADS AND BEARING PRESSURE ================= */
@@ -9376,7 +9377,7 @@ function rwdwBuild(r) {
     D.dimH(L.dim, 0, xR, -G.dk - 0.3 * P, -G.dk - 0.3 * P, 'X_R = <>');
     const yLow = SUP.loads({ D, L, G, k: P, r, T, y0: -G.dk - 0.6 * P });
     T(L.lt, G.B / 2, yLow - 0.0 * P, h, 'RESULTANT ' + (isA ? '(STRENGTH I, MAX. EH, MIN. VERTICAL): E = ' + rwdwN(a.e_A, 3) + ' FT, |E| ' + (a.ecc_ok_A ? '<=' : '>') + ' ' + a.e_limit_label + ' = ' + rwdwN(a.e_limit, 3) + ' FT' : '(SERVICE): E = ' + rwdwN(r.e, 3) + ' FT ' + (r.tension_zone ? '> B/6 (PARTIAL CONTACT)' : '<= B/6 = ' + rwdwN(r.B / 6, 3) + ' FT')), 1);
-    scaleBar(G.B / 2, yLow - 0.4 * P, P, 'LOADS PER FOOT OF WALL  ·  WALL TO SCALE ' + rwdwScName(P) + '; PRESSURE ORDINATES TO THEIR OWN SCALE');
+    const sbK = scaleBar(G.B / 2, yLow - 0.4 * P, P, 'LOADS PER FOOT OF WALL  ·  WALL TO SCALE ' + rwdwScName(P) + '; PRESSURE ORDINATES TO THEIR OWN SCALE');
     // loads table to the left at paper size
     const vb = D.bbox(iS); const th = 0.065 * P;
     const F = (v, d) => rwdwN(v, d == null ? 2 : d);
@@ -9414,7 +9415,7 @@ function rwdwBuild(r) {
     const i0 = D.mark(); D.text(L.txt, 0, 0, 0.1 * P, title, 0); const tt = table(0, -0.12 * P, head, rows, th, [1, 2, 3]);
     foot.forEach((s2, j) => D.text(L.txt, 0, -0.32 * P - tt.h - 0.13 * j * P, 0.065 * P, s2, 0));
     const bt = D.bbox(i0); D.move(i0, tx - bt[2], y - bt[3]);
-    return { known: { what: 'footing width B', w: G.B / P } };
+    return { known: sbK };
   }, [12, 16, 24, 32, 48, 64, 96, 192], isA ? [['stabKa', 'pressures'], ['stabSlide', 'sliding'], ['stabEcc', 'e'], ['stabBrg', 'bearing']] : [['stabKa', 'pressures'], ['stabOT', 'overturning'], ['stabSlide', 'sliding'], ['stabBrg', 'bearing'], ['stabFactBrg', 'factored q']]);
 
   /* ================= 4. ELEVATION AND GENERAL NOTES ================= */
@@ -9450,7 +9451,7 @@ function rwdwBuild(r) {
     }
     dVs(0, G.tf, Lw + (vh ? 1.0 : 0.45) * P, Lw, 'T_F = <>');
     const vb = D.bbox(iS);
-    scaleBar(Lw / 2, yd - (vh ? 0.65 : 0.45) * P, P, 'WALL ELEVATION (FROM THE FRONT)  ·  SCALE ' + rwdwScName(P) + (vh ? '  ·  VARIABLE HEIGHT' : ''));
+    const sbK = scaleBar(Lw / 2, yd - (vh ? 0.65 : 0.45) * P, P, 'WALL ELEVATION (FROM THE FRONT)  ·  SCALE ' + rwdwScName(P) + (vh ? '  ·  VARIABLE HEIGHT' : ''));
     // general notes in two columns under the view (paper size)
     const nA = Object.values(r.checks).filter(c2 => !c2.ok).length, nT = Object.keys(r.checks).length;
     const epm = isA ? ((inp.aashto.ep_method === 'coulomb' ? 'COULOMB' : 'RANKINE') + ', ' + (inp.aashto.ep_cond === 'atrest' ? 'AT-REST' : 'ACTIVE')) : 'RANKINE, ACTIVE';
@@ -9487,7 +9488,7 @@ function rwdwBuild(r) {
     L2.forEach(([t, head], j) => { if (head && j) y -= 0.06 * P; D.text(L.txt, 0, y, head ? 0.1 * P : 0.072 * P, t, 0); y -= head ? 0.19 * P : 0.135 * P; });
     const nb = D.bbox(i1), vb2 = D.bbox(iS, i1);
     D.move(i1, vb2[0] - 0.6 * P - nb[2], vb2[3] - nb[3]);
-    return {};
+    return { known: sbK };
   }, [12, 16, 24, 32, 48, 64, 96, 192], [['stabKa', 'K_a'], ['stemFlex', 'materials']]);
 
   SH.forEach((s, j) => { s.sheetEnt.s = SharedDxf.str((j + 1) + ' OF ' + SH.length); });
