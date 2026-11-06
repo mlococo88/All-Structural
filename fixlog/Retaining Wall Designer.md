@@ -2072,3 +2072,40 @@ function renderStatus(r) {
   - Tall walls get proportionally larger text (K up to 2) so labels stay about 12 px at the fitted view.
   - The S1 hook is drawn resting on the bottom mat with the standard bend and 12 d_b tail. That is how it is usually detailed, but the tool's ℓ_dh check does not depend on it.
   - The bar dots stay symbols (enlarged where a true-size dot would be under 2.5 units); the note says so.
+
+## 2026-11-06 — PR: claude/rw-scale-elev (PR #931: https://github.com/mlococo88/All-Structural/pull/931) (RWTS-3) — Collision elevation (Analysis diagram, AASHTO CT) drawn to scale with a scale bar; readable labels   [display only; no result change]
+- **Why:** engineer-approved 2026-11-06 (Phase 3 task B; third drawing after RWTS-1 #929 and RWTS-2 #930).
+  - The "Elevation — Vehicular Collision Distribution" card drew the wall with a vertical scale exaggerated to a 240–330 px height and said so ("NTS — vertical scale ×1.39 horizontal"). The 45° spread lines were therefore not at 45°, and the note "(true; NTS)" admitted it.
+  - Its 6–9.5-unit labels were cut off at the left (y_CT, H_s) and overlapped: h_b on h_CT; ROADWAY on the data table; EE-II OK on the M_CT box; "vertical cantilever" on the centred MassDOT note.
+- **Where:** `buildElevationSVG(r)` (anchor `// ── Layout: ONE scale along the wall and up`):
+  - **Scale.**
+    - Before: `SCx = drawW / Ljoint; ELEV_H = max(240, min(330, totalFt·SCx·1.6)); SCy = ELEV_H / totalFt`.
+    - After: `SCx = min(drawW0 / Ljoint, 420 / totalFt); SCy = SCx; drawW = Ljoint·SCx`: one scale, and the elevation is at most 420 units tall (the wall is then narrower than the column).
+    - `MR 172 → 206`. `MT` (was 54) grows for EXP JT / L_c / an impact above the barrier.
+    - Bottom rows: band +40 → +44, plan +62 → +84, scale bar at plan bottom + 54; H_SVG adds 34 when the impact-above-barrier warning shows (it used to sit on the plan dimension).
+    - Subtitle "NTS — vertical scale ×n horizontal" → "to scale". "(true; NTS)" under 45° removed.
+  - **Dimension chain.**
+    - Three lines (`dx1 = x0−16`, `dx0 = x0−44`, `dx2 = x0−72`; were two at −30 / −62). Text runs along each line where it fits, else it sits beside the line's lower end; "(lever arm)" is dropped from y_CT when it does not fit.
+    - h_CT is now dimensioned beside the contact patch (`xp1 + 12`). h_b is named in the barrier ("BARRIER h_b=3.00'"), as the two short segments' text could not fit on the left.
+  - **Label moves.**
+    - ROADWAY under the line at the left end.
+    - EE-II OK / FAIL above the band's right end.
+    - L_dist dimension at band + 50 (was +32).
+    - L_c dimension at barrier top − 34 (was −24).
+    - Load-path arrow at `min(x1 − 50, max(xc + L_t/2 + 34, xc + 175))`.
+    - Data table 176 wide with 17-unit rows (was 140 / 15); M_CT box below it when the elevation is short.
+    - Plan title "… (strip width schematic)".
+  - **Text and scale bar.**
+    - Text sizes `max(1.35·v, 11)` units, with a halo.
+    - `rwtsScaleBar(x0, y_sb, SCx, 11, 'Arrow lengths, the load band and the plan strip width are not to scale (values labelled).', true)`.
+  - **Display width.** `<svg class="rw-dwg rw-dwg-wide" data-scale=…>`; its card body gets `rw-dwg-wrap`; new CSS `.rw-dwg-wrap > svg.rw-dwg.rw-dwg-wide { min-width: 760px; }`. Below that width the drawing scrolls inside its card; the page does not widen.
+- **Measured (headless Chromium; px per ft along the wall from the stem rectangle's width ÷ L_joint, and up from its height ÷ H_s; scale bar):**
+  - L_joint 41 ft, MassDOT full section, 1400 px: 16.17 / 16.17, bar 10 ft → 16.17; smallest text 13.1 px.
+  - Same at 390 px (drawing 760 px, scrolls): 12.03 / 12.03; 9.7 px.
+  - L_joint 90 ft, 45° spread, h_CT 42 in (above the 36 in barrier): 7.37 / 7.37, bar 25 ft.
+  - Before, the default case had a vertical scale ×1.39 the horizontal (17.16 px/ft along, 23.77 up at 1400), and its smallest text was 8.3 px at 1400 (some labels cut off at the left edge) and 3.0 px at 390.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Saved data (§5):** none.
+- **How verified:** origin/main (after #930) vs branch, ten cases (the eight of RWTS-2 + MassDOT full-section CT + 45° spread CT with h_CT above the barrier): `_R`, Export JSON, every localStorage key, Report text and tab text with SVG removed, every Report / Overview SVG, DXF of the four sheets **identical**; the elevation is not in the Report. Screenshots at 1400 and 390 looked at, before and after. Tests: see the PR.
+- **Other copies:** none.
+- **Decision (pending engineer review):** the elevation is drawn at one scale; a very long joint spacing gives a long, low strip with its text still at full size. The plan strip's width is schematic, and the note says so.
