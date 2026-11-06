@@ -106,7 +106,9 @@ async function identity(src) {
         if (spec.calcOnly) { rep = ''; model = ''; }
         /* BC-7 (2026-11-06): the round-pier worked step's "accepted" sentence names the decision on the default ("2026-11-02: not
            applied by default" → "2026-11-06: applied by default"); that sentence is normalised so the comparison is on the results */
-        const decis = o => JSON.parse(JSON.stringify(o).replace(/engineer decision 2026-11-0\d: (not )?applied by default\./g, 'engineer decision (on the default).'));
+        /* BC-8 (2026-11-06): the sentence reads "the default is the lesser of the two" */
+        const decis = o => JSON.parse(JSON.stringify(o).replace(/engineer decision 2026-11-0\d: ((not )?applied by default|the default is the lesser of the two)\./g, 'engineer decision (on the default).')
+          .replace(/,"mode":"(reduced|full|lesser)"/g, ''));   /* BC-8: hefEff.mode, a new internal field (the choice, already in the inputs) */
         out[spec.id] = decis({ cc: strip(CC), caps, checks: strip(allChecks()), validation: strip(VALIDATION), report: rep.replace(/\d{4}-\d\d-\d\d/g, '(date)'), model: model.replace(/\d{4}-\d\d-\d\d/g, '(date)') });
       }
       return out;
@@ -320,6 +322,39 @@ async function circleChecks(src) {
           sw = { before, after: S.conc.circHefReduce, shape: S.conc.shape }; } catch (e) { sw = 'ERR ' + e; }
         out.hand.H8 = { def, hef: ta.hef, ANc: ta.ANc, ANco: ta.ANco, psi_ed: ta.psi_ed, Nb: ta.Nb, phiNcbg: ta.phiNcbg, altPhi: ta.alt && ta.alt.phiNcbg,
           oldHef: tOld.hef, oldPhi: tOld.phiNcbg, mig, note, kept, hand, sw, errs: a.errs }; }
+      /* H9 (BC-8, 2026-11-06): "lesser" = min(reduced, not reduced) for every round-pier case of the sweep (D 24–72, 4/6/8 bolts,
+         BC 0.3–0.7D, h_ef 12–36, centred / offset, uplift / moment), and the pryout of the combination is the one of the same branch.
+         Also checks case 2 (moment, reduced governs, 23.378 kip) and case 3 (default project switched to a round pier, 23.164 kip). */
+      { let n = 0, bad = [], pryBad = [], nRed = 0, nFull = 0, nAlt = 0, minR = 9, maxR = 0;
+        const one = (s, v) => { s.conc.circHefReduce = v; S = mergeState(JSON.parse(JSON.stringify(s))); try { refreshAll(); } catch (e) {} CC = computeAll(); const cap = comboCapacities(CC, CC.combos[0]); return { tb: cap.tb, pry: cap.pry }; };
+        for (const D of [24, 30, 36, 42, 48, 60, 72]) for (const nb of [4, 6, 8]) for (const bcf of [0.3, 0.45, 0.6, 0.7]) for (const hef of [12, 18, 24, 36]) for (const load of ['T', 'M']) for (const off of [0, 0.15]) {
+          const BC = D * bcf; if (BC < 6) continue;
+          const s = defaultState(); s.plate.shape = 'circle'; s.plate.D = BC + 6; s.plate.B = s.plate.D; s.plate.N = s.plate.D; s.plate.t = 2;
+          s.anchor.dia = 1; s.anchor.grade = 'f1554_55'; s.anchor.hef = hef; s.anchor.head = 'hvyhexhead'; s.anchor.pattern = 'circle'; s.anchor.nCircle = nb; s.anchor.BC = BC; s.anchor.theta0 = 0;
+          s.conc.fc = 4; s.conc.shape = 'circle'; s.conc.D = D; s.conc.Bx = D; s.conc.By = D; s.conc.H = 200; s.conc.plate_off_x = off * D;
+          s.grout.present = false; s.standoff.type = 'clamp'; s.standoff.z = 1; s.forceModel.method = 'elastic';
+          s.combos = [load === 'T' ? { name: 'T', P: 20, Vx: 0, Vy: 0, Mx: 0, My: 0 } : { name: 'M', P: -5, Vx: 2, Vy: 0, Mx: 0, My: 600 }];
+          const L = one(s, 'lesser'), R = one(s, true), F = one(s, false); n++;
+          if (!L.tb.alt) continue; nAlt++;
+          const want = Math.min(R.tb.phiNcbg, F.tb.phiNcbg);
+          if (Math.abs(L.tb.phiNcbg - want) > 1e-9 * Math.max(1, want)) bad.push([D, nb, BC, hef, load, off, L.tb.phiNcbg, R.tb.phiNcbg, F.tb.phiNcbg]);
+          const same = L.tb.hefEff.applies ? R : F; if (L.tb.hefEff.applies) nRed++; else nFull++;
+          if (Math.abs(L.pry.phiVcpg - same.pry.phiVcpg) > 1e-9 * Math.max(1, same.pry.phiVcpg)) pryBad.push([D, nb, BC, hef, load, off]);
+          const r = R.tb.phiNcbg / F.tb.phiNcbg; minR = Math.min(minR, r); maxR = Math.max(maxR, r);
+        }
+        const mkA = combo => { const s = defaultState(); s.plate.B = 24; s.plate.N = 24; s.plate.t = 1.5; s.plate.shape = 'circle';
+          s.anchor.dia = 1; s.anchor.grade = 'f1554_55'; s.anchor.hef = 18; s.anchor.head = 'hvyhexhead'; s.anchor.torqued = true;
+          s.anchor.pattern = 'circle'; s.anchor.nCircle = 4; s.anchor.BC = 13; s.anchor.theta0 = 0;
+          s.conc.fc = 4; s.conc.shape = 'circle'; s.conc.D = 36; s.conc.Bx = 36; s.conc.By = 36; s.conc.H = 120; s.conc.cracked = true;
+          s.grout.present = false; s.standoff.type = 'clamp'; s.standoff.z = 1; s.forceModel.method = 'elastic'; s.combos = [combo]; return s; };
+        const c2 = one(mkA({ name: 'M', P: -5, Vx: 3, Vy: 0, Mx: 0, My: 480 }), 'lesser').tb;
+        let c3 = null; try { S = mergeState(defaultState()); buildInputPanel();
+          const sel = [...document.querySelectorAll('select')].find(x => [...x.options].some(o => /Circular \(drilled shaft/.test(o.textContent)));
+          sel.selectedIndex = [...sel.options].findIndex(o => /Circular \(drilled shaft/.test(o.textContent)); sel.dispatchEvent(new Event('change', { bubbles: true }));
+          CC = computeAll(); const cb = CC.combos.find(c => c.name === '0.9D+1.0W'); const cap = comboCapacities(CC, cb);
+          const sel2 = [...document.querySelectorAll('select')].find(x => [...x.options].some(o => /Lesser of reduced/.test(o.textContent)));
+          c3 = { mode: S.conc.circHefReduce, hef: cap.tb.hef, phi: cap.tb.phiNcbg, alt: cap.tb.alt && cap.tb.alt.phiNcbg, pry: cap.pry.phiVcpg, ui: sel2 ? sel2.value : null }; texCheck('H9 case 3'); } catch (e) { c3 = 'ERR ' + e; }
+        out.hand.H9 = { n, nAlt, bad, pryBad, nRed, nFull, minR, maxR, c2: { hef: c2.hef, ANc: c2.ANc, phi: c2.phiNcbg, alt: c2.alt && c2.alt.phiNcbg }, c3 }; }
       out.texBad = texBad;
       return out;
     }, { CASES, VARIANTS, BUILD });
@@ -418,22 +453,36 @@ if (r.hand.H6) {
 }
 if (r.hand.H8) {
   const h = r.hand.H8;
-  /* BC-7 (2026-11-06): applied by default */
-  chk('H8 new project: default circHefReduce (BC-7: true)', h.def === true ? 0 : 1, 0, 0);
-  chk('H8 round pier default: h\'_ef (reduced)', h.hef, 8.93587, 5e-5);
+  /* BC-8 (2026-11-06): the default is "lesser"; in audit case C (uplift) the full h_ef gives the smaller φN_cbg */
+  chk('H8 new project: default circHefReduce (BC-8: "lesser")', h.def === 'lesser' ? 0 : 1, 0, 0);
+  chk('H8 round pier default (lesser): h_ef (full governs)', h.hef, 18, 1e-9);
   chk('H8 A_Nc (full disc)', h.ANc, Math.PI * 324, 1e-6);
-  chk('H8 A_Nco = 9h\'_ef²', h.ANco, 718.648, 5e-3);
-  chk('H8 ψ_ed,N', h.psi_ed, 0.95739, 5e-5);
-  chk('H8 N_b (24√f\'c h\'_ef^1.5)', h.Nb, 40.546, 5e-4);
-  chk('H8 φN_cbg (default, applied)', h.phiNcbg, 38.487, 5e-4);
-  chk('H8 φN_cbg shown as the alternative (not applied)', h.altPhi, 25.304, 5e-4);
+  chk('H8 A_Nco', h.ANco, 2916, 1e-9);
+  chk('H8 ψ_ed,N', h.psi_ed, 0.82778, 5e-5);
+  chk('H8 N_b (16√f\'c h_ef^5/3)', h.Nb, 125.104, 5e-4);
+  chk('H8 φN_cbg (default, lesser = not reduced)', h.phiNcbg, 25.304, 5e-4);
+  chk('H8 φN_cbg shown as the alternative (reduced)', h.altPhi, 38.487, 5e-4);
   chk('H8 older save (no field): h\'_ef kept', h.oldHef, 8.93587, 5e-5);
   chk('H8 older save: φN_cbg kept', h.oldPhi, 38.487, 5e-4);
   const ok = h.mig.act === true && JSON.stringify(h.mig.g) === '[true,true,false]' && h.note === false && JSON.stringify(h.kept) === '[false,true]'
-    && h.hand.fresh === true && h.hand.legacyRect === true && h.hand.roundOn === true && h.hand.roundOff === false && h.hand.rectOff === true && !h.errs.length
-    && h.sw && h.sw.before === false && h.sw.after === true && h.sw.shape === 'circle';
+    && h.hand.fresh === 'lesser' && h.hand.legacyRect === 'lesser' && h.hand.roundOn === true && h.hand.roundOff === false && h.hand.rectOff === 'lesser' && !h.errs.length
+    && h.sw && h.sw.before === false && h.sw.after === 'lesser' && h.sw.shape === 'circle';
   if (!ok) fail = true;
   console.log(`  ${ok ? 'ok  ' : 'FAIL'} H8 migration: active ${h.mig.act}, groups ${JSON.stringify(h.mig.g)}, input note ${h.note}; stored false/true kept ${JSON.stringify(h.kept)}; hand-off into new ${h.hand.fresh}, migrated rect. save ${h.hand.legacyRect}, round pier applying it ${h.hand.roundOn}, round pier not applying it ${h.hand.roundOff}, rect. save storing false ${h.hand.rectOff}; rect. save storing false switched to a round pier ${JSON.stringify(h.sw)}${h.errs.length ? '; errors ' + h.errs.join(' | ') : ''}`);
+}
+if (r.hand.H9) {
+  const h = r.hand.H9;
+  const ok = h.nAlt === 1234 && !h.bad.length && !h.pryBad.length;
+  if (!ok) fail = true;
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'} H9 "lesser" = min(reduced, not reduced) in ${h.nAlt - h.bad.length}/${h.nAlt} round-pier cases (of ${h.n}); reduced governs ${h.nRed}, full governs ${h.nFull}; reduced/full φN_cbg ratio ${h.minR.toFixed(4)}–${h.maxR.toFixed(4)}; pryout from the same branch in ${h.nAlt - h.pryBad.length}/${h.nAlt}`);
+  h.bad.slice(0, 5).forEach(x => console.log('    ' + JSON.stringify(x)));
+  chk('H9 case 2 (moment): h\'_ef (reduced governs)', h.c2.hef, 8.93587, 5e-5);
+  chk('H9 case 2: A_Nc', h.c2.ANc, 618.28, 5e-3);
+  chk('H9 case 2: φN_cbg (lesser)', h.c2.phi, 23.378, 5e-4);
+  chk('H9 case 2: alternative (not reduced)', h.c2.alt, 25.304, 5e-4);
+  const c3 = h.c3, ok3 = c3 && c3.mode === 'lesser' && c3.ui === 'lesser'; if (!ok3) fail = true;
+  console.log(`  ${ok3 ? 'ok  ' : 'FAIL'} H9 case 3: default project switched to a round pier → ${JSON.stringify(c3)}`);
+  if (c3 && typeof c3 === 'object') { chk('H9 case 3: h\'_ef (reduced governs)', c3.hef, 8, 1e-9); chk('H9 case 3: φN_cbg (lesser)', c3.phi, 23.164, 5e-4); chk('H9 case 3: alternative (not reduced)', c3.alt, 23.354, 5e-4); }
 }
 console.log(`  TeX of the worked steps (KaTeX, throwOnError): ${r.texBad.length ? r.texBad.length + ' line(s) FAIL' : 'all typeset'}`); r.texBad.slice(0, 10).forEach(x => console.log('    ' + x));
 if (r.texBad.length) fail = true;
