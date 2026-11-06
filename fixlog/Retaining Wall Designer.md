@@ -1869,7 +1869,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-06 — PR: claude/rw-drawings (RWDW) — Drawings output tab: four 11 × 17 sheets (typical section; reinforcement and bar schedule; loads and bearing pressure; elevation and general notes), sheet viewer, Print sheet / Print all sheets, Download DXF   [display / export only; no result change]
+## 2026-11-06 — PR: claude/rw-drawings (PR #922: https://github.com/mlococo88/All-Structural/pull/922) (RWDW) — Drawings output tab: four 11 × 17 sheets (typical section; reinforcement and bar schedule; loads and bearing pressure; elevation and general notes), sheet viewer, Print sheet / Print all sheets, Download DXF   [display / export only; no result change]
 - **Why:** engineer-approved 2026-11-06 (review `rwreview` Phase 2): a Drawings tab matching Spread Footing (SFDW #749/#767), Light Pole (#750), Concrete Beam Capacity (#806) and Base Plate & Anchor Designer (BPDW #917).
 - **Where (all new code, anchors):**
   - head: `<script src="shared/dxf.js"></script>   <!-- RWDW (2026-11-06) …` after `shared/report.js` (classic script, relative path; works from `file://`);
