@@ -445,8 +445,8 @@
     deleted: () => { if (cur.id && !LIB.list(LS).some(i => i.id === cur.id)) cur = { id: null, text: null }; syncBar(); },
     changed: () => syncBar(),
     ghNote: v => { const i = vItem(v); return i && v !== i.name ? '<span class="note" data-sp="gh-cell">not synced: a newer saved project has the same name (Rename this one to sync it)</span>' : ''; },
-    cloud: store && window.SharedGitHubSync ? { tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)', toFile: t => t, store: ghStore,
-      fromFile: (j, n) => { const r = M.importJSON(JSON.stringify(j)); if (!r.ok) throw new Error(r.error); r.project.project.name = n; return r.project; } } : null });
+    ...(store && window.SharedGitHubSync ? { cloud: { tool: 'steel-bridge-app', label: 'Steel Bridge Design (new app)', toFile: t => t, store: ghStore,   // no browser storage: no sync (as before)
+      fromFile: (j, n) => { const r = M.importJSON(JSON.stringify(j)); if (!r.ok) throw new Error(r.error); r.project.project.name = n; return r.project; } } } : {}) });
   $('pbMove').remove();
   $('bUndo').addEventListener('click', undo); $('bRedo').addEventListener('click', redo);
   document.addEventListener('input', e => { if (e.target && e.target.dataset) e.target.dataset.typing = '1'; }, true);

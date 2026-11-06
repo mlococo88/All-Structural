@@ -95,3 +95,11 @@ Engineer's setup steps: `docs/github-sync-setup.md`.
 - **Loaded by:** unchanged list in `shared/README.md`; no page passes `settle`, `only: false` or calls `hold` yet.
 - **Check case / how verified:** `node tests/engine/run.mjs github-sync`: 16 / 16 (3 new: hold, settle, listStore). Settle check: save B1 at t, flush at t → not sent; edit at t+20 s, flush at t+40 s → not sent; flush at t+55 s → sent with v = 2. `node tests/smoke/github-sync.mjs`, `github-sync-tools.mjs` (19 tools), `home-sync.mjs`: ALL PASS; `tests/smoke/standard-save.mjs` (hold through Save as, Upload): ALL PASS.
 - **Formulas, factors, units, code references:** none (§4 does not apply).
+
+## 2026-11-06 — PR: claude/sbapp-stds (STDS-B) — attach(): `ctx.cloud.store` (the list the sync works on) and no GitHub-delete question while the name is still in that list   [storage bookkeeping only; no key or format change]
+- **What (`shared/github-sync.js` `attach(ctx)`):** engine `store: ctx.store` → `store: cfg.store || ctx.store`; `const store = () => ctx.store;` → `const store = () => cfg.store || ctx.store;` (first-sync count); `renamed(a, b)`: `if (cl && cl.has(a) && confirm(…` → `if (cl && cl.has(a) && !store().has(a) && confirm(…`; `deleted(name)`: `if (cl && cl.has(name) && confirm(…` → `if (cl && cl.has(name) && !store().has(name) && confirm(…`. Header comment of `attach` documents `ctx.cloud.store`.
+- **Why:** apps/steel-bridge's dialog lists every item (duplicate names included) while the sync works on the newest item of each name (`ghStore`, as in #823). After deleting / renaming the newest item, an older item may still carry the name: its GitHub file must not be offered for deletion (the rule #823 implemented in the app's own dialog).
+- **Unchanged for mapStore tools:** without `cfg.store` the store is `ctx.store`; after a mapStore rename / delete the old name is never in it, so the question is asked exactly as before.
+- **Loaded by:** as `shared/projects-ui.js` (fixlog/shared-projects.md, same date) plus tools.html.
+- **How verified:** `tests/smoke/steel-bridge-library.mjs` step 11 (delete of the newest "Dup" with an older "Dup" left: only the delete question, the GitHub file kept); `tests/smoke/github-sync.mjs`, `github-sync-tools.mjs` (all tools), `home-sync.mjs`.
+- **Formulas, factors, units, code references:** none.

@@ -69,7 +69,9 @@ try {
   // the project's name field renames the item on Save (as before); a name of another saved project is refused
   await setIn('project.name', 'Route 9 alt'); reply = [true]; await p.click('[data-sp=hsave]'); assert.match(dl.at(-1), /alert: Not saved: the project name/);
   assert.equal(JSON.parse(await ls('sbd2.lib.index')).items.filter(i => i.name === 'Route 9 alt').length, 1);
-  await setIn('project.name', 'Route 9 over Mill River');
+  await setIn('project.name', 'Route 9 over Mill River B'); await p.click('[data-sp=hsave]'); assert.equal(await state(), 'saved'); assert.match(await chip(), /Mill River B/);
+  assert.deepEqual(JSON.parse(await ls('sbd2.lib.index')).items.map(i => i.name).sort(), ['Route 9 alt', 'Route 9 over Mill River B'], 'Save with the name field changed: the item takes the new name');
+  await setIn('project.name', 'Route 9 over Mill River'); await p.click('[data-sp=hsave]'); assert.equal(await state(), 'saved');
   // 4. rename, duplicate, delete
   await lib(); reply = ['Mill River (renamed)']; await rowBtn('Mill River', 'rename');
   assert.equal((await proj()).project.name, 'Mill River (renamed)'); assert.equal(await state(), 'saved');
