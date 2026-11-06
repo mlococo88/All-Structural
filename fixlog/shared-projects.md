@@ -108,7 +108,7 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
 - **How verified:** `tests/smoke/standard-save.mjs`, `github-sync-tools.mjs`, `bridge-suite-save.mjs` (Save uploads at once although the suite's settle time is 30 s).
 - **Formulas, factors, units, code references:** none.
 
-## 2026-11-06 — PR: claude/sf-header-save (PR #TBD) (HDRS) — projects-ui.js: projectBar options `headerSave:false`, `chipClick`, `chipHint` (opt-in; trial in Spread Footing)   [display only; no key or format change]
+## 2026-11-06 — PR: claude/sf-header-save (PR #884: https://github.com/mlococo88/All-Structural/pull/884) (HDRS) — projects-ui.js: projectBar options `headerSave:false`, `chipClick`, `chipHint` (opt-in; trial in Spread Footing)   [display only; no key or format change]
 - **Why:** engineer 2026-11-06: in Spread Footing, take Save and Saved projects… out of the header (they stay in the Project tab's "Save and open" card); the chip opens the Project tab. Trial in Spread Footing; other apps keep the header Save until the engineer decides.
 - **What (`shared/projects-ui.js`, `projectBar`):**
   - Header comment: three options documented after `start` (anchor `HDRS (2026-11-06, TRIAL in Spread Footing only`).
