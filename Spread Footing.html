@@ -91,6 +91,9 @@ table.ldtbl input{width:58px;font-family:inherit;font-size:11px;border:1px solid
 .warnbox{background:#fff8e1;border:1px solid #f9a825;padding:5px 8px;margin:4px 0}
 .failbox{background:#fdecea;border:1px solid #b71c1c;padding:5px 8px;margin:4px 0}
 .errbox{background:#fdecea;border:1px solid #c62828;padding:5px 8px;margin:4px 0}
+.sfdOod{border-width:2px;background:#fbd5d2;color:#8b0000;font-size:13px}   /* SFNB: "Out of date" banner */
+.dash>.sfdOod{grid-column:1/-1;flex:1 1 100%}
+#tabbar button.sfdTabErr{color:#c62828;box-shadow:inset 0 -3px 0 #c62828}
 .tabbar{margin:8px 0 0 0;border-bottom:2px solid #7a8aa0}
 .tabbar button{border:1px solid #7a8aa0;border-bottom:none;margin:0 2px -2px 0;background:#e2e8ef;font-size:12px;padding:5px 12px}
 .tabbar button.active{background:#fff;border-bottom:2px solid #fff;font-weight:bold}
@@ -1721,6 +1724,33 @@ function selASD(govObj){
  if(SEL.asd!=null&&R.asd[SEL.asd])return R.asd[SEL.asd];
  return govObj;
 }
+/* SFNB (2026-11-06, engineer): why a service combination has no finite bearing D/C, for the Bearing tab, card 2.6, the selector badge,
+   the dashboard and the Report. Display only: reads R.asd rows (r, bear, cap, DCR), computes nothing for the checks. '' = a finite D/C. */
+function sfdBearWhy(a){
+ if(!a||!a.r)return '';
+ const r=a.r,bp=a.bear||{},c=a.cap;
+ if(!(r.P>1e-9))return 'net load not downward: \u03a3P = '+f2(r.P)+' kip';
+ if(bp.mode==='unstable'){const o=[];
+  if(Math.abs(r.ex)>=R.B/2-1e-9)o.push('|e\u2093| '+f2(Math.abs(r.ex))+' ft \u2265 B/2 '+f2(R.B/2)+' ft');
+  if(Math.abs(r.ey)>=R.L/2-1e-9)o.push('|e\u1D67| '+f2(Math.abs(r.ey))+' ft \u2265 L/2 '+f2(R.L/2)+' ft');
+  return 'resultant off the footing: '+(o.join(', ')||'no contact solution');}
+ if(a.DCR!==null&&isFinite(a.DCR))return '';
+ if(c&&c.direct)return 'zero bearing capacity: allowable q\u2090 = '+f2(c.qa)+' ksf \u2264 0';
+ if(!c||c.fail)return 'bearing capacity could not be computed (effective area B\u2032\u00b7L\u2032 \u2264 0)';
+ if(c.H>1e-9&&c.iq===0)return 'zero bearing capacity: H = '+f2(c.H)+' kip \u2265 '+(c.denom!=null&&Math.abs(c.denom-c.V)>1e-9?'V + A\u2032c/tan\u03c6 = '+f2(c.denom):'V = '+f2(c.V))+' kip, inclination factor i_q = 0 (Vesi\u0107)';
+ return 'zero bearing capacity: q_allow = '+f2(c.qall)+' ksf';
+}
+/* SFNB: every service combination with its reason, when none has a bearing solution (R.govBear null) */
+function sfdNoBearRows(){return R.asd.map((a,i)=>({i,a,why:sfdBearWhy(a)||'no finite D/C'}));}
+function sfdNoBearShort(){
+ const z=sfdNoBearRows(),n=z.length;
+ return 'no bearing solution in any of the '+n+' combination'+(n===1?'':'s')+(z.length?' \u2014 '+z[0].a.cb.name+': '+z[0].why+(n>1?' (and '+(n-1)+' more, see 3. Bearing)':''):'');}
+function sfdNoBearTable(){
+ const t=document.createElement('table');t.className='tbl';
+ t.innerHTML='<tr><th>#</th><th>Combination</th><th>\u03a3P (kip)</th><th>e\u2093 (ft)</th><th>e\u1D67 (ft)</th><th>Why there is no bearing D/C</th></tr>';
+ sfdNoBearRows().forEach(z=>{const tr=document.createElement('tr');
+  [String(z.i+1),sfEsc(z.a.cb.name),f2(z.a.r.P),f2(z.a.r.ex),f2(z.a.r.ey),sfEsc(z.why)].forEach(x=>{const td=document.createElement('td');td.innerHTML=x;tr.appendChild(td);});t.appendChild(tr);});
+ return t;}
 function selLRFDindex(){
  // default: the max-demand LRFD combo (used by Phase 2 as the design driver)
  if(SEL.lrfd!=null&&R.lrfd[SEL.lrfd])return SEL.lrfd;
@@ -1753,13 +1783,16 @@ function comboSelectorBar(basis,govIdx,onChange){
  if(lrG){const g=document.createElement('optgroup');g.label='LRFD (factored), reference only';
   R.lrfd.forEach((c,i)=>{const o=document.createElement('option');o.value='L'+i;o.textContent='[LRFD] '+(i+1)+'. '+c.cb.name;g.appendChild(o);});sel.appendChild(g);}
  const lrOn=lrG&&sfdLrSel();
+ const noGov=!(govIdx>=0&&list[govIdx]);   /* SFNB: no governing combination (no service combination has a bearing solution) */
+ if(noGov&&SEL[basis]==null&&!lrOn){const o=document.createElement('option');o.value='-1';o.disabled=true;o.textContent='\u2014 no governing combination \u2014';sel.insertBefore(o,sel.firstChild);}
  const cur=(SEL[basis]!=null)?SEL[basis]:govIdx;
  sel.value=lrOn?'L'+SEL.asdLr:cur;
  sel.addEventListener('change',()=>{if(sel.value.charAt(0)==='L'){SEL.asdLr=parseInt(sel.value.slice(1),10);}else{if(lrG)SEL.asdLr=null;SEL[basis]=parseInt(sel.value,10);}onChange();});
  const govBtn=el('button','',' \u2605 governing');govBtn.type='button';govBtn.title='Reset to governing combination';
  govBtn.addEventListener('click',()=>{SEL[basis]=null;if(lrG)SEL.asdLr=null;onChange();});
  const badge=el('span','selBadge');
- if(lrOn)badge.innerHTML=' &nbsp;<b style="color:#8a4b00">Showing an LRFD (factored) combination</b> \u2014 the checks use the service combinations; governing is #'+(govIdx+1)+' ('+sfEsc(list[govIdx].cb.name)+')';
+ if(noGov)badge.innerHTML=' &nbsp;<b style="color:#c62828">No governing combination</b> \u2014 no service combination has a bearing solution: Bearing FAIL (reasons in 3. Bearing)'+(lrOn?'; showing an LRFD (factored) combination, reference only':'');
+ else if(lrOn)badge.innerHTML=' &nbsp;<b style="color:#8a4b00">Showing an LRFD (factored) combination</b> \u2014 the checks use the service combinations; governing is #'+(govIdx+1)+' ('+sfEsc(list[govIdx].cb.name)+')';
  else if(SEL[basis]!=null&&SEL[basis]!==govIdx)badge.innerHTML=' &nbsp;<b style="color:#b26a00">Showing non-governing case</b> \u2014 governing is #'+(govIdx+1)+' ('+list[govIdx].cb.name+')';
  else badge.innerHTML=' &nbsp;<span style="color:#1b5e20">Governing case</span>';
  wrap.appendChild(lbl);wrap.appendChild(sel);wrap.appendChild(govBtn);wrap.appendChild(badge);
@@ -1821,7 +1854,7 @@ function renderDashboard(){
  if(R.govBear){
   const ok=R.govBear.DCR<=1+1e-9;
   d.appendChild(chip('Bearing (service)','DCR = '+f2(R.govBear.DCR)+' \u2014 '+R.govBear.cb.name,ok?'pass':'fail',R.asd.indexOf(R.govBear),{tab:'tab-bearing',sec:'o-br-gov'}));
- }else d.appendChild(chip('Bearing (service)','No valid combination','fail',undefined,{tab:'tab-bearing'}));
+ }else d.appendChild(chip('Bearing (service)',sfEsc(sfdNoBearShort()),'fail',undefined,{tab:'tab-bearing',sec:'o-br-gov'}));   /* SFNB */
  const anyUnstable=R.asd.some(a=>a.bear.mode==='unstable'||a.r.P<=1e-9);
  const ot=R.govOT.otMin;
  /* Overturning FS is REPORTED but does not gate by default. Neither IBC nor ASCE 7 sets a
@@ -1848,7 +1881,12 @@ function renderDashboard(){
  else d.appendChild(chip('Flotation','No water table above base','na',undefined,{tab:'tab-stab',sec:'o-st-flot'}));
  /* SF-ST1 (2026-10-19, engineer): full contact PASS; partial contact REVIEW (a warning: bearing and
     overturning govern strength); no contact or resultant off the footing (anyUnstable) FAIL. */
- d.appendChild(chip('Contact area','min '+f2(R.minContact*100)+'% of footing'+(anyUnstable?' \u2014 resultant off the footing in at least one combination':''),(anyUnstable||R.minContact<=0)?'fail':(R.minContact>=1-1e-6?'pass':'warn'),undefined,{tab:'tab-bearing',sec:'o-br-press'}));
+ /* SFNB (2026-11-06, engineer): the text counts the combinations with the resultant off the footing (or a net load not downward) and
+    gives the minimum contact of those in contact; a resultant off the footing counted as 100 % before. Status unchanged. */
+ const ctN=R.asd.length, ctOff=R.asd.filter(a=>a.r.P>1e-9&&a.bear.mode==='unstable').length, ctUp=R.asd.filter(a=>!(a.r.P>1e-9)).length,
+  ctIn=R.asd.filter(a=>a.r.P>1e-9&&a.bear.mode!=='unstable'), ctMin=ctIn.reduce((m,a)=>Math.min(m,a.bear.contactFrac!==undefined?a.bear.contactFrac:1),1),
+  ctNo=[ctOff?'resultant off the footing ('+ctOff+' of '+ctN+' combination'+(ctN===1?'':'s')+')':'',ctUp?'net load not downward ('+ctUp+' of '+ctN+')':''].filter(Boolean).join('; ');
+ d.appendChild(chip('Contact area',!ctIn.length?ctNo:'min '+f2((ctNo?ctMin:R.minContact)*100)+'% of footing'+(ctNo?' (of the '+ctIn.length+' combination'+(ctIn.length===1?'':'s')+' in contact) \u2014 '+ctNo:(anyUnstable?' \u2014 resultant off the footing in at least one combination':'')),(anyUnstable||R.minContact<=0)?'fail':(R.minContact>=1-1e-6?'pass':'warn'),undefined,{tab:'tab-bearing',sec:'o-br-press'}));
  d.appendChild(chip('Rigidity (rigid method)','\u03bb\u2113 = '+f2(Math.max(R.rig.vx,R.rig.vy))+' vs \u03c0/4 = '+f2(R.rig.limit),R.rig.rigid?'pass':'fail',undefined,{tab:'tab-stab',sec:'o-st-rig'}));
  /* Only INPUT errors belong in the input-validation chip. A design failure (eccentricity
     limit, off-footing resultant) is an error, but it has its own chip and should not be
@@ -2372,7 +2410,7 @@ function sfdPedCb(p,f){
 const SFPC_SYM={P:'P',Vx:'V\u2093',Vy:'V\u1D67',Mx:'M\u2093',My:'M\u1D67'};
 /* the combination card 2.6 shows: an LRFD pick of the Bearing / Stability selector (SFLS), else the selected or governing service combination */
 function sfdPcSel(){
- if(R.directMode)return {a:R.govBear,basis:'env',i:R.asd.indexOf(R.govBear)};
+ if(R.directMode){const a=R.govBear||R.asd[0];return {a,basis:'env',i:R.asd.indexOf(a)};}   /* SFNB: no governing bracket, the entered envelope (the same in both) */
  if(sfdLrSel())return {a:R.lrfd[SEL.asdLr],basis:'LRFD',i:SEL.asdLr};
  const a=selASD(R.govBear);return {a,basis:'ASD',i:R.asd.indexOf(a)};}
 function sfdPcSub(t){return t.length?t.map(([g,q])=>f2(g)+'\u00b7'+(q<0?'('+f2(q)+')':f2(q))).join(' + '):'\u2014';}
@@ -2381,7 +2419,11 @@ function renderPedCb(b){
  if(b.parentElement)b.parentElement.classList.add('sfPcRef');   /* the Report has its own copy (sfdPcReport, Include box), not the card as printed */
  const gi=R.asd.indexOf(R.govBear);
  if(!R.directMode)b.appendChild(comboSelectorBar('asd',gi,()=>{sfdLrPick(SEL.asdLr);}));   /* the same selection as Bearing / Stability (SEL) */
- const s=sfdPcSel(), cb=s.a.cb;
+ const s=sfdPcSel();
+ if(!s.a){   /* SFNB (2026-11-06, engineer): no governing combination and none selected */
+  b.appendChild(el('div','errbox','No governing service combination: no service combination has a bearing solution (Bearing FAIL, reasons in '+sfdLink('o-br-gov','',['tab-bearing','3.1 Bearing check'])+'). Pick a combination in the selector above to see its pedestal loads.'));
+  return;}
+ const cb=s.a.cb;
  const what=s.basis==='env'?'the direct factored envelope (pedestal loads as entered, \u03b3 = 1)':s.basis==='LRFD'?'<b>LRFD (factored) combination '+(s.i+1)+': '+sfEsc(cb.name)+'</b> (reference only)':(s.a===R.govBear?'the governing service combination ':'service combination ')+(s.i+1)+': <b>'+sfEsc(cb.name)+'</b>';
  b.appendChild(el('p','note','Loads at the top of each pedestal for '+what+'. Each component is <b>\u03a3 \u03b3<sub>i</sub>\u00b7Q<sub>i</sub></b> over the load types: \u03b3<sub>i</sub> is this combination\u2019s factor ('+sfEsc(cb.ref||'')+'), Q<sub>i</sub> the pedestal load entered for type i (Pedestals tab). Pedestal self-weight, soil cover, surcharge and buoyancy act on the footing, not at the pedestal top (2.2). Sign convention: +P downward; +V<sub>x</sub>, +V<sub>y</sub> in +x, +y; +M<sub>x</sub> shifts the resultant toward +y, +M<sub>y</sub> toward +x. These are the values the 3D view labels and the drawings\u2019 sections show.'));
  const t=document.createElement('table');t.className='tbl';
@@ -2805,7 +2847,12 @@ function contactZoneMap(r,bp){
 function renderBearing(){
  const T=$('#tab-bearing');T.innerHTML='';
  if(R.fatal)return;
- if(!R.govBear){T.appendChild(el('div','errbox','No valid bearing combination (net vertical load not downward, or resultant off the footing in all cases).'));return;}
+ if(!R.govBear){   /* SFNB (2026-11-06, engineer): Bearing FAIL with the reason of each combination */
+  const b0=secPanel(T,'o-br-gov','3.1  Bearing Check \u2014 No Governing Combination');
+  b0.appendChild(el('div','errbox','<b>Bearing: FAIL.</b> No service combination has a bearing solution, so there is no governing combination, no base pressure and no bearing D/C. The reason for each combination is below. The other checks (Stability tab: overturning, sliding, flotation) still run.'));
+  b0.appendChild(sfdNoBearTable());
+  b0.appendChild(el('p','note','Resultants and eccentricities: '+sfdLink('o-cb-asd','')+'. A resultant off the footing (|e| \u2265 B/2 or L/2) or a net load that is not downward means the footing is unstable under that combination; zero bearing capacity means the allowable pressure is zero or could not be computed.'));
+  return;}
  const govIdx=R.asd.indexOf(R.govBear);
  // selector bar (skip in direct mode — single envelope)
  if(!R.directMode)T.appendChild(comboSelectorBar('asd',govIdx,()=>{sfdLrPick(SEL.asdLr);}));   /* SFLS: both tabs and their plots follow the selection */
@@ -3621,6 +3668,12 @@ function sfrRefs(){
   return [a,b];}).filter(Boolean);
 }
 const sfrCell=(v,d,cls)=>({t:(typeof v==='number')?(isFinite(v)?sfrN(v,d):(v>0?'∞':'−∞')):String(v==null?'—':v),n:typeof v==='number',cls});
+/* SFNB (2026-11-06, engineer): a Report subsection in place of a governing-combination subsection when no service combination has a
+   bearing solution (R.govBear null): Bearing FAIL and why; the key is kept so the cross-references resolve. withTable: each combination's reason. */
+function sfrNoBear(title,key,withTable){
+ const it=[{type:'note',text:'Bearing: FAIL. No service combination has a bearing solution, so there is no governing bearing combination'+(key==='S-res'?' and no governing resultant is worked here; every combination\'s resultant is in [[S-asd]]':'')+(key==='S-bp'?', no base pressure and no bearing D/C':'')+(key==='S-qa'?' and the allowable bearing pressure is not compared with a pressure':'')+'. '+(withTable?'The reason for each combination:':'Reasons: [[S-bp]].')}];
+ if(withTable)it.push({type:'table',wide:true,head:['#','Combination','ΣP (kip)','e_x (ft)','e_y (ft)','Why there is no bearing D/C'],rows:sfdNoBearRows().map(z=>[String(z.i+1),z.a.cb.name,sfrCell(z.a.r.P),sfrCell(z.a.r.ex,3),sfrCell(z.a.r.ey,3),z.why])});
+ return {title:title+' \u2014 none',key,items:it};}
 const sfrDC=v=>({t:(typeof v==='number'&&isFinite(v))?sfrN(v,2):(v===Infinity?'∞':'—'),n:true,cls:(typeof v==='number')?(v>1+1e-9?'ng':(v>=0.9?'hi':'ok')):'na'});
 
 function sfrModel(){
@@ -3707,7 +3760,9 @@ function sfrModel(){
   subs.push({title:R.directMode?'Factored envelope (structural design)':'Strength (LRFD) combinations',key:'S-lrfd',items:[{type:'table',wide:true,head:hd,rows:R.lrfd.map(a=>row(a,null))},
    {type:'note',text:'ASCE 7-16 §2.3.1 / ACI 318-19 §5.3: footing and pedestal design ([[S-fd]], [[S-pd]]).'}]});
   /* resultant of the governing bearing combination */
-  const G=R.govBear, r=G.r, w2=sfrW(), vt=r.verts;
+  const G=R.govBear;
+  if(!G)subs.push(sfrNoBear('Resultant of the governing bearing combination','S-res'));   /* SFNB: none governs */
+  else{const r=G.r, w2=sfrW(), vt=r.verts;
   const lst=(f)=>vt.map(f).join(' + ');
   w2.add({id:'P',label:'Vertical resultant, '+G.cb.name,sym:'\\sum P',eq:'\\sum w_{i}',sub:lst(v=>sfrP(v.w)),value:r.P,unit:'kip'});
   {const T=r.maT||[], fm=(f,v)=>(Math.abs(f-1)<1e-12?'':sfrN(f)+'\\cdot')+sfrP(v);   /* SFPR (review E2): ΣM_a itemised */
@@ -3734,11 +3789,14 @@ function sfrModel(){
     return rows;})()},
    {type:'steps',scope:'res',steps:w2.steps},
    {type:'note',text:'M_a: applied pedestal moments and the shear couples V·(t + h) about the base of the footing'+(state.stab.shearCouple==='off'?' (couples excluded by input)':'')+'. Pedestal loads act at their load points (x + e_x, y + e_y); self-weights at their centroids.'}]});
+  }   /* SFNB: end of the governing resultant */
   secs.push({title:'Loads and combinations',subs});
  }
  /* ---------- 3. Bearing ---------- */
  {
-  const subs=[], G=R.govBear, r=G.r, bp=G.bear, w=sfrW();
+  const subs=[], G=R.govBear, w=sfrW();
+  if(!G){subs.push(sfrNoBear('Base pressure (governing combination)','S-bp',true));subs.push(sfrNoBear('Allowable bearing and bearing check','S-qa'));}   /* SFNB */
+  else{const r=G.r, bp=G.bear;
   w.add({id:'kern',label:'Kern (middle third) index',sym:'k',eq:'\\frac{6|e_{x}|}{B} + \\frac{6|e_{y}|}{L}',sub:'\\frac{6\\cdot'+sfrN(Math.abs(r.ex),3)+'}{'+sfrN(R.B)+'} + \\frac{6\\cdot'+sfrN(Math.abs(r.ey),3)+'}{'+sfrN(R.L)+'}',value:bp.kern||0,unit:'',d:3,
    note:(bp.kern<=1?'k ≤ 1: full contact':'k > 1: partial contact (no-tension soil)')+'; e: see §ex'});
   if(bp.mode==='full'){
@@ -3790,6 +3848,7 @@ function sfrModel(){
     S({id:'DCR',label:'Bearing demand / capacity',sym:'DCR',eq:'\\frac{q_{eff}}{q_{allow}}',sub:'\\frac{'+sfrN(c.qeff,3)+'}{'+sfrN(c.qall,3)+'}',value:G.DCR,unit:'',d:3,ok:G.DCR<=1+1e-9})]});
   }
   if(T.length)subs.push({title:'Allowable bearing and bearing check',key:'S-qa',items:[sfrTopics('cap',T,{title:'Governing combination: '+G.cb.name})]});
+  }   /* SFNB: end of the governing pressure and check */
   subs.push({title:'Bearing, every combination',items:[{type:'table',wide:true,head:['Combination','ΣP (kip)','e_x (ft)','e_y (ft)','q_max (ksf)','contact (%)','DCR'],
    rows:R.asd.map(a=>({cells:[a.cb.name,sfrCell(a.r.P),sfrCell(a.r.ex,3),sfrCell(a.r.ey,3),sfrCell(a.bear.qmax,3),sfrCell(100*(a.bear.contactFrac!==undefined?a.bear.contactFrac:1),1),sfrDC(a.DCR)],cls:a===G?'gov':''}))},
    {type:'note',text:'The governing row (bold) is worked in [[S-bp]] and [[S-qa]]; every row follows the same procedure.'}]});
@@ -5193,20 +5252,42 @@ function renderConsistency(){
  body.appendChild(el('p','note','These are internal cross-checks: each quantity is recomputed by an independent path and compared to what the report displays. A mismatch indicates an engine inconsistency and should be investigated before relying on the output.'));
  det.appendChild(body);host.appendChild(det);
 }
+/* SFNB safety net (2026-11-06, engineer): each renderer runs on its own (try / catch). One that throws is logged to the console and the
+   tab (or panel) it draws gets a red "Out of date" banner (and its tab button a red mark), so stale results never look current; the next
+   successful render of that tab removes it. Display only: nothing is computed here, and when nothing throws nothing changes. */
+const SFD_OOD=new Set();   /* 'tab id|renderer name' of the renderers whose last run failed */
+function sfdPlotTabs(){return [...new Set([...document.querySelectorAll('.tabpage [id^="plot-"]')].map(e=>e.closest('.tabpage')).filter(Boolean).map(e=>e.id))];}
+function sfdRun(ids,name,fn){
+ try{fn();return true;}
+ catch(e){console.error('Spread Footing: '+name+' failed; the tab it draws is marked out of date.',e);
+  (typeof ids==='function'?ids():ids||[]).forEach(id=>SFD_OOD.add(id+'|'+name));return false;}}
+function sfdMarkOod(id,bad){
+ const T=document.getElementById(id);if(!T)return;
+ let b=[...T.children].find(c=>c.classList&&c.classList.contains('sfdOod'));
+ if(bad&&!b){b=el('div','errbox sfdOod','<b>Out of date: an error stopped this tab updating.</b> What is shown here is from an earlier analysis and may not match the inputs. The error is in the browser console (F12).');T.insertBefore(b,T.firstChild);}
+ if(!bad&&b)b.remove();
+ const btn=document.querySelector('#tabbar button[data-tab="'+id+'"]');if(btn)btn.classList.toggle('sfdTabErr',!!bad);}
+/* run renderers ([ids, name, fn]); afterwards each tab they draw is marked out of date while any renderer's last run on it failed */
+function sfdRunAll(list){
+ const ran=new Set();list.forEach(([ids,name,fn])=>{(typeof ids==='function'?ids():ids||[]).forEach(id=>{ran.add(id);SFD_OOD.delete(id+'|'+name);});});
+ list.forEach(([ids,name,fn])=>sfdRun(ids,name,fn));
+ ran.forEach(id=>sfdMarkOod(id,[...SFD_OOD].some(k=>k.startsWith(id+'|'))));}
 function recalc(){
  clearTimeout(rcTimer);sfdSetStale(false);   /* SFAC */
- R=computeAll();
- P2=R.fatal?null:computePhase2(R);
- if(P2&&!P2.noCombo)P2.dev=sfdDevAll();   /* SFDV */
- renderDashboard();sfdDashDecorate();renderWarnings();renderConsistency();   /* SFDC */
- if(!R.fatal){renderSchematic();renderCombos();renderBearing();renderStability();renderFootingDesign();renderPedestalDesign();renderPlots();}
- else{['tab-schem','tab-combos','tab-bearing','tab-stab','tab-footdes','tab-peddes'].forEach(id=>{$('#'+id).innerHTML='';});}
- if($('#tab-3d').classList.contains('active')||$('#v3dwrap'))renderView3D();
- if($('#tab-report').classList.contains('active'))renderReport();   /* SFRP */
- if($('#tab-drawings').classList.contains('active'))renderDrawings();   /* SFDW */
- sfdInputTabMarks();
- sfdRebarInfo();   /* Reinforcement input tab: A_b, A_s per ft, s vs s_max (display only) */
- sfdPedBarInfo();   /* SFRQ */
+ const ALL=['dashboard','warnings','tab-schem','tab-combos','tab-bearing','tab-stab','tab-footdes','tab-peddes','tab-3d','tab-report','tab-drawings'];
+ ALL.forEach(id=>SFD_OOD.delete(id+'|computeAll'));
+ if(!sfdRun(ALL,'computeAll',()=>{R=computeAll();P2=R.fatal?null:computePhase2(R);if(P2&&!P2.noCombo)P2.dev=sfdDevAll();})){ALL.forEach(id=>sfdMarkOod(id,true));return;}   /* SFDV */
+ const L=[[['dashboard'],'renderDashboard',()=>{renderDashboard();sfdDashDecorate();}],[['warnings'],'renderWarnings',()=>{renderWarnings();renderConsistency();}]];   /* SFDC */
+ if(!R.fatal){L.push([['tab-schem'],'renderSchematic',renderSchematic],[['tab-combos'],'renderCombos',renderCombos],[['tab-bearing'],'renderBearing',renderBearing],[['tab-stab'],'renderStability',renderStability],
+  [['tab-footdes'],'renderFootingDesign',renderFootingDesign],[['tab-peddes'],'renderPedestalDesign',renderPedestalDesign],[sfdPlotTabs,'renderPlots',renderPlots]);}
+ else{['tab-schem','tab-combos','tab-bearing','tab-stab','tab-footdes','tab-peddes'].forEach(id=>{$('#'+id).innerHTML='';sfdMarkOod(id,false);});}
+ if($('#tab-3d').classList.contains('active')||$('#v3dwrap'))L.push([['tab-3d'],'renderView3D',renderView3D]);
+ if($('#tab-report').classList.contains('active'))L.push([['tab-report'],'renderReport',renderReport]);   /* SFRP */
+ if($('#tab-drawings').classList.contains('active'))L.push([['tab-drawings'],'renderDrawings',renderDrawings]);   /* SFDW */
+ L.push([[],'sfdInputTabMarks',sfdInputTabMarks]);
+ L.push([[],'sfdRebarInfo',sfdRebarInfo]);   /* Reinforcement input tab: A_b, A_s per ft, s vs s_max (display only) */
+ L.push([[],'sfdPedBarInfo',sfdPedBarInfo]);   /* SFRQ */
+ sfdRunAll(L);
  if(typeof buildManualTab==='function'&&$('#manualHost')&&!$('#manualHost').childNodes.length)buildManualTab();
 }
 let rcTimer=null;
@@ -5257,10 +5338,12 @@ $('#tabbar').addEventListener('click',e=>{
  $$('#tabbar button').forEach(x=>x.classList.remove('active'));
  $$('.tabpage').forEach(x=>x.classList.remove('active'));
  b.classList.add('active');$('#'+b.dataset.tab).classList.add('active');
- if(b.dataset.tab==='tab-3d'){renderView3D();V3D.needsRender=true;}
- if(b.dataset.tab==='tab-report')renderReport();   /* SFRP */
- if(b.dataset.tab==='tab-drawings')renderDrawings();   /* SFDW */
- renderPlots();
+ const L=[];   /* SFNB: each renderer on its own, a failure marks its tab out of date */
+ if(b.dataset.tab==='tab-3d')L.push([['tab-3d'],'renderView3D',()=>{renderView3D();V3D.needsRender=true;}]);
+ if(b.dataset.tab==='tab-report')L.push([['tab-report'],'renderReport',renderReport]);   /* SFRP */
+ if(b.dataset.tab==='tab-drawings')L.push([['tab-drawings'],'renderDrawings',renderDrawings]);   /* SFDW */
+ if(R&&!R.fatal)L.push([sfdPlotTabs,'renderPlots',renderPlots]);else renderPlots();
+ sfdRunAll(L);
 });
 /* STDS (2026-11-05): the standard save (shared/projects-ui.js projectBar) over the tool's own list sfd_projects ({ name: state },
    key and format unchanged). Replaces the Project Manager's name box, Save / Overwrite and the drop-down with Load / Delete (PLIB
