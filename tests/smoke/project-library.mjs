@@ -39,6 +39,16 @@ const tabView = async (p, sel, n, onSel) => { const was = await p.evaluate(([sel
 export const stdSave = async (p, name) => { const r = await p.evaluate(n => { const pb = window.SharedProjectsUI && SharedProjectsUI.bars && SharedProjectsUI.bars[0]; if (!pb) return false;
   pb.saveAs(); const d = document.querySelector('dialog.spSave[open]'); d.querySelector('.spName').value = n; d.querySelector('[data-sa=ok]').click(); if (d.open) d.querySelector('[data-sa=ok]').click(); return true; }, name);
   if (r) await p.waitForTimeout(300); return r; };
+// openSavedList(p): the Saved projects dialog through the page's own buttons. HDRS (2026-11-06): the header has no Save / Saved
+// projects… buttons; the chip opens the view that holds the "Save and open" card (whose Saved projects… button is then clicked).
+// A page with neither (a card not drawn yet) opens the dialog through the projectBar.
+export const openSavedList = async p => {
+  const btn = () => p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); const b = [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)); if (b) b.click(); return !!b; });
+  if (await btn()) return;
+  await p.evaluate(() => { const c = document.querySelector('[data-sp=chip]'); if (c) c.click(); }); await p.waitForTimeout(800);
+  if (await btn()) return;
+  await p.evaluate(() => SharedProjectsUI.bars[0].dialog.show());
+};
 export const TOOLS = {
   lldf: {
     file: 'lldf.html', list: null, auto: 'lldf_autosave_v1', noList: true,
@@ -282,7 +292,7 @@ const ADIR = path.join(os.tmpdir(), 'allstruct-tests', 'tree-' + sha);
 if (!fs.existsSync(path.join(ADIR, '.done'))) { fs.mkdirSync(ADIR, { recursive: true }); execFileSync('sh', ['-c', `git -C "${REPO}" archive ${sha} | tar -x -C "${ADIR}"`]); fs.writeFileSync(path.join(ADIR, '.done'), sha); }
 const FA = path.join(ADIR, T.file), FB = path.join(REPO, T.file);
 // the list UI: the shared dialog (default) or the tool's own list with the shared rename / duplicate (T.ui)
-const UI = Object.assign({ open: async p => { await p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects)…$/.test(b.textContent)).click(); }); await p.waitForSelector('dialog.spLib[open]'); },
+const UI = Object.assign({ open: async p => { await openSavedList(p); await p.waitForSelector('dialog.spLib[open]'); },   // HDRS: openSavedList
   rows: 'dialog.spLib tbody tr', btn: (a, n) => `dialog.spLib [data-spa=${a}][data-n="${encodeURIComponent(n)}"]`, first: 'dialog.spLib [data-spa=open]',
   err: async (p, s) => p.$eval('dialog.spLib .spErr', e => e.textContent).catch(() => ''), box: 'dialog.spLib', delConfirm: true }, T.ui || T.dlg || {});   // T.dlg: the standard dialog, other row selectors
 const drop = o => { if (!T.openIgnore) return o; const c = { ...o }; T.openIgnore.forEach(k => delete c[k]); return c; };   // fields the tool's own Save changes (abutment: the save adds a revision to S.meta, so the input fingerprint differs from the autosave's)

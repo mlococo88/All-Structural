@@ -4937,6 +4937,10 @@ window.addEventListener("DOMContentLoaded",()=>{
     exportFile:n=>{ if(!n){ doExportJSON(); return; } SharedProjectsUI.download(String(n).replace(/[^\w\-]+/g,"_")+".json",JSON.stringify(snapshot(),null,2)); },
     importFile:()=>imp.click(),
     header:row, chipBefore:bu, card:true,
+    /* HDRS (2026-11-06, engineer: every app like Spread Footing #884): the header has the chip only (no Save / Saved projects… buttons:
+       they are in the Project tab's "Save and open" card; Ctrl+S / Ctrl+Shift+S work from anywhere). A chip click opens the Project tab
+       at the title block, as the header link #hdrProj (A7HD) does (its click handler is reused). */
+    headerSave:false, chipClick:()=>{ const a=document.getElementById("hdrProj"); if(a) a.click(); }, chipHint:"the Project tab (title block; Save and open)",
     /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'asce7-load-generator',label:'ASCE7-16 Load Generator',space:2,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return j;}} });
   const sc=document.getElementById("a7SaveCard"); if(sc){ sc.removeAttribute("id"); pb.mount(sc); }
   SharedProjectsUI.undoRedo(h,{ undo:bu, redo:br });

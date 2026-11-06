@@ -11,7 +11,7 @@
 //   node tests/smoke/home-projects.mjs [--tool asce7,spreadfooting,...] [--shots <dir>]
 import path from 'path';
 import { openPage, REPO } from '../lib.mjs';
-import { TOOLS } from './project-library.mjs';
+import { TOOLS, openSavedList } from './project-library.mjs';
 
 const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ? process.argv[i + 1] : d; };
 const SHOTS = arg('shots', process.env.SHOTS);
@@ -47,7 +47,7 @@ export async function dialogRows(p, T) {
   if (T && T.ui) { await T.ui.open(p); await p.waitForTimeout(300);
     return p.evaluate(([sel, di]) => { const r = [...document.querySelectorAll(sel)].map(row => { const c = (row.querySelector('.pname') || row.querySelector('td')).cloneNode(true); c.querySelectorAll('span,[data-sp]').forEach(s => s.remove()); const dt = row.querySelector('.pdate') || row.querySelectorAll('td')[di == null ? 1 : di]; const ld = row.querySelector('[data-lib-load]'); return { name: ld ? decodeURIComponent(ld.dataset.libLoad) : c.textContent.trim(), saved: null, own: dt && dt.textContent.trim() ? 'time' : '' }; });
       document.querySelectorAll('dialog[open]').forEach(d => d.close()); return r; }, [OWN_ROWS[T.key] || T.ui.rows, OWN_DATE[T.key]]); }
-  await p.evaluate(() => { [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)).click(); });
+  await openSavedList(p);   // HDRS: no header Saved projects… (project-library.mjs openSavedList)
   await p.waitForTimeout(400);
   return p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); const hasT = [...d.querySelectorAll('thead th')].some(t => /Last saved/.test(t.textContent));
     const rows = [...d.querySelectorAll('.spBody > .spScroll tbody tr')].map(tr => { const td = tr.querySelectorAll('td'); const c = td[0].cloneNode(true); c.querySelectorAll('span').forEach(s => s.remove());
