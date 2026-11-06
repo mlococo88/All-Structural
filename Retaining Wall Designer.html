@@ -3,10 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RetainCalc Pro — Cantilever Retaining Wall Design</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Public+Sans:wght@400;500;600;650;700&display=swap" rel="stylesheet">
+<title>Retaining Wall Designer — Cantilever Retaining Wall Design</title>
+<!-- RWTH (2026-11-06): the Google Fonts link (Public Sans, IBM Plex Mono) removed; the suite fonts (system UI font, Times) as Light Pole / Concrete Beam Capacity -->
 <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -620,6 +618,146 @@ a.wkA:hover { text-decoration: underline; }
 .bx-all-tools { font-size: 12px; color: var(--muted); text-decoration: none; white-space: nowrap; }
 .bx-all-tools:hover { color: var(--blue); text-decoration: underline; }
 @media print { .bx-all-tools { display: none !important; } }
+/* RWTH (2026-11-06, engineer-approved; review rwreview Phase 1): suite look, as Light Pole and Sign Post (LPTH #662) and
+   Concrete Beam Capacity (CBTH #783/#785/#787): navy masthead, the suite UI font for controls and Times for the calculation
+   values, slate input panel with box tabs and cards with an upper-case slate head, a white output panel, box output tabs with a
+   blue top stripe. Overrides only (the rules above are kept); every id, class and behaviour unchanged. Display only. */
+:root {
+  --navy-900: #16304F; --navy-800: #1E3A5F; --blue-600: #2563EB;
+  --slate-50: #F8FAFC; --slate-100: #F1F3F5; --slate-200: #E4E7EB; --slate-300: #CBD5E1; --slate-400: #94A3B8;
+  --slate-600: #475569; --slate-700: #334155; --slate-900: #0F172A;
+  --font-ui: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-doc: "Times New Roman", Times, serif;
+  --bg: #ffffff; --surface: #ffffff; --sidebar: var(--slate-50); --card: #ffffff;
+  --border: var(--slate-200); --border-hi: var(--slate-300);
+  --text: var(--slate-900); --text-dim: var(--slate-600); --muted: #64748B;
+  --blue: #1c4e80; --blue-dim: #EFF6FF; --blue-mid: #BFDBFE;
+  --pass: #047857; --pass-dim: #ECFDF5; --fail: #B91C1C; --fail-dim: #FEF2F2; --warn: #B45309; --warn-dim: #FFFBEB;
+  --info: #1c4e80; --info-dim: #EFF6FF;
+  --sans: var(--font-ui); --cond: var(--font-ui); --mono: var(--font-doc);
+  --header-h: 56px; --r: 4px; --r-lg: 6px;
+  --shadow: 0 1px 2px rgba(15,23,42,.04);
+  --ring: 0 0 0 2px rgba(37,99,235,.25);
+}
+body { font-family: var(--font-ui); font-variant-numeric: tabular-nums; background: #fff; }
+:focus-visible { outline-color: var(--blue-600); }
+/* masthead */
+header { background: var(--navy-800); color: #fff; border-bottom: 3px solid var(--navy-900); font-family: var(--font-ui); gap: 16px; padding: 0 16px; }
+.logo-name { font-size: 15pt; font-weight: 600; letter-spacing: .4px; color: #fff; line-height: 1.2; }
+.brand-sub { font-size: 9pt; color: #C7D4E4; }
+.logo-pill { color: #fff; font-weight: 600; }
+.hdr-lbl { color: #C7D4E4; font-size: 8.5pt; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+.bx-all-tools { color: #C7D4E4; font-size: 11px; }
+.bx-all-tools:hover { color: #fff; }
+header .btn { height: auto; padding: 4px 11px; border-radius: 4px; font-size: 9.5pt; font-weight: 400; color: #fff;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.35); }
+header .btn:hover:not(:disabled) { background: rgba(255,255,255,.18); border-color: rgba(255,255,255,.35); }
+header .btn:disabled { opacity: .45; }
+header .btn-primary { font-weight: 600; }
+header button.spChip[data-sp] { background: #fff; color: var(--slate-900); border-color: rgba(255,255,255,.35); font-size: 9.5pt; height: auto; padding: 3px 11px; }
+header button.spChip[data-sp]:hover { background: var(--slate-100); }
+header .seg { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.35); border-radius: 6px; padding: 2px; }
+header .seg button { color: #DCE4EE; font-size: 9.5pt; padding: 3px 10px; border-radius: 4px; }
+header .seg button:hover { color: #fff; }
+header .seg button[aria-pressed="true"] { background: #fff; color: var(--navy-800); box-shadow: none; }
+/* input panel: box tabs, cards with an upper-case slate head */
+.side { background: var(--slate-50); border-right: 1px solid var(--border); }
+.side-tools { background: var(--slate-50); border-bottom: 0; padding: 10px 12px 6px; }
+.side-search input { font-family: var(--font-ui) !important; }
+.itabs { flex-wrap: wrap; justify-content: flex-start; gap: 2px; padding: 6px 12px 0; background: var(--slate-50); border-bottom: 2px solid var(--slate-900); }
+.itab { flex: 0 0 auto; font-family: var(--font-ui); font-size: 9pt; font-weight: 400; color: var(--slate-600); background: var(--slate-100);
+  border: 1px solid var(--border); border-bottom: 0; border-radius: 6px 6px 0 0; padding: 5px 10px; }
+.itab:hover:not([aria-selected="true"]) { background: var(--slate-200); color: var(--slate-600); }
+.itab::after { display: none; }
+.itab[aria-selected="true"] { background: #fff; color: var(--navy-800); font-weight: 600; box-shadow: inset 0 3px 0 var(--blue-600); }
+.itab-dot { top: 4px; right: 3px; }
+.sidebar { background: var(--slate-50); padding: 2px 12px 28px; }
+.sec-hd { margin-top: 10px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px 6px 0 0; background: var(--slate-100); }
+.sec-hd.closed { border-radius: 6px; }
+.sidebar > .sec-hd:first-child, .ipane > .sec-hd:first-child { border-top: 1px solid var(--border); }
+.sec-hd-label { font-size: 8.5pt; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--slate-700); }
+.sec-hd:hover .sec-hd-label { color: var(--navy-800); }
+.sec-hd-chevron { color: var(--slate-600); }
+.sec-tag { text-transform: none; letter-spacing: 0; color: var(--blue); background: var(--blue-dim); }
+.sec-body, .proj-box { background: #fff; border: 1px solid var(--border); border-top: 0; border-radius: 0 0 6px 6px; padding: 10px 10px 12px; }
+.ig label, .ig > label { font-size: 9.5pt; color: var(--slate-900); font-weight: 400; }
+.lbl-note { color: var(--muted); font-style: italic; }
+input[type=number], input[type=text], select, textarea { font-family: var(--font-ui); font-size: 9.5pt; border-color: var(--slate-300); border-radius: 4px; color: var(--slate-900); }
+input[type=number] { text-align: right; padding-right: 40px; }
+.iw-unit { font-family: var(--font-ui); font-size: 9pt; color: #555; }
+input:focus, select:focus, textarea:focus { border-color: var(--blue-600); box-shadow: var(--ring); }
+.ck-row label { font-size: 9.5pt; }
+.subhd { color: var(--navy-800); font-size: 8.5pt; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; }
+.note, .hint { font-size: 8.5pt; color: var(--muted); }
+.hint:not(.static) { background: var(--blue-dim); color: var(--slate-700); }
+.btn { font-family: var(--font-ui); font-size: 9.5pt; border-radius: 4px; }
+.proj-btn { font-family: var(--font-ui); font-size: 9.5pt; border-radius: 4px; border-color: var(--slate-300); }
+.proj-btn:hover { background: var(--slate-100); border-color: var(--slate-400); color: var(--slate-900); }
+.proj-btn-primary, .btn-primary { background: var(--navy-800); border-color: var(--navy-800); color: #fff; }
+.proj-btn-primary:hover, .btn-primary:hover { background: var(--navy-900); border-color: var(--navy-900); color: #fff; }
+.ipane-foot { padding: 8px 0 4px; }
+/* output panel: white, box tabs with a blue top stripe */
+.main { background: #fff; }
+.status-bar { background: #fff; border-bottom: 1px solid var(--border); font-family: var(--font-ui); }
+.verdict { font-size: 10pt; letter-spacing: .02em; }
+.chip { border-radius: 4px; font-size: 8.5pt; background: #fff; border-color: var(--border); }
+.chip.pass { border-left: 3px solid var(--pass); }
+.chip.fail { background: var(--fail-dim); border-color: #FCA5A5; border-left: 3px solid var(--fail); }
+.chip em { font-family: var(--font-doc); font-size: 9.5pt; }
+.tab-bar { flex-wrap: wrap; overflow: visible; gap: 2px; padding: 8px 16px 0; background: #fff; border-bottom: 2px solid var(--slate-900); }
+.tab-btn { font-family: var(--font-ui); font-size: 9pt; font-weight: 400; color: var(--slate-600); background: var(--slate-100);
+  border: 1px solid var(--border); border-bottom: 0; border-radius: 6px 6px 0 0; padding: 5px 10px; }
+.tab-btn:hover:not(.active) { background: var(--slate-200); color: var(--slate-600); }
+.tab-btn::after { display: none; }
+.tab-btn.active { background: #fff; color: var(--navy-800); font-weight: 600; box-shadow: inset 0 3px 0 var(--blue-600); }
+.tab-panels { background: #fff; }
+.tab-panel { padding: 14px 16px 48px; }
+/* cards and result blocks */
+.sec-heading { font-size: 10pt; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--navy-800); }
+.sec-heading .sec-ref { text-transform: none; letter-spacing: 0; font-size: 8.5pt; }
+.card, .eq-block, .sc { border-radius: 6px; border-color: var(--border); box-shadow: var(--shadow); }
+.card-hd { background: var(--slate-100); padding: 6px 10px; border-radius: 6px 6px 0 0; align-items: baseline; }
+.card-title { font-size: 8.5pt; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--slate-700); }
+.card-ref { font-size: 8pt; color: var(--muted); }
+.card-body { padding: 8px 10px 10px; }
+.tbl { font-family: var(--font-doc); font-size: 13px; }
+.tbl th { font-family: var(--font-ui); font-size: 8.5pt; color: var(--slate-600); background: #EEF2F6; border-bottom: 1px solid var(--slate-400); }
+.tbl .val, .chk-val, .chk-fos, .dc-val, .sc-gov .v, .eq-where td.wval { font-family: var(--font-doc); font-variant-numeric: tabular-nums; }
+.tbl .val { font-size: 13.5px; }
+.chk-label { font-size: 13px; }
+.badge { border-radius: 4px; font-size: 8pt; letter-spacing: .06em; text-transform: uppercase; border: 1px solid; }
+.badge.pass { border-color: #A7F3D0; } .badge.fail { border-color: #FCA5A5; } .badge.warn { border-color: #FCD34D; } .badge.info { border-color: var(--blue-mid); }
+.eq-title { background: var(--slate-100); font-size: 9pt; padding: 6px 10px; }
+.eq-title .eq-num { color: var(--navy-800); font-family: var(--font-ui); }
+.eq-math { background: var(--slate-50); border-left-color: var(--blue); }
+.eq-where-hd { font-size: 8.5pt; letter-spacing: .05em; text-transform: uppercase; }
+.fbox { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--slate-50); border-left-color: var(--blue); }
+.alert { border-radius: 4px; border-left-width: 4px; font-size: 9.5pt; }
+.alert.fail { background: #FEF2F2; border-color: var(--slate-200); border-left-color: var(--fail); color: #7F1D1D; }
+.alert.warn { background: #FFFBEB; border-color: var(--slate-200); border-left-color: var(--warn); color: #78350F; }
+.alert.info { background: var(--blue-dim); border-color: var(--slate-200); border-left-color: var(--blue); color: #1E3A5F; }
+.dg-chip, .dg-btn { font-family: var(--font-ui); border-radius: 4px; }
+.dg-btn:hover { border-color: var(--blue-600); color: var(--navy-800); }
+/* the overview "Wall section works / governing D/C" card */
+.sc-head { padding: 12px 16px; }
+.sc-head.pass { background: #F0FDF4; } .sc-head.fail { background: #FEF2F2; }
+.sc-ico { width: 34px; height: 34px; font-size: 17px; }
+.sc-verdict h2 { font-size: 11pt; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.sc-verdict p { font-size: 9.5pt; }
+.sc-gov .k, .sc-gov .w { font-size: 8.5pt; }
+.sc-gov .v { font-size: 26px; font-weight: 700; letter-spacing: 0; }
+.sc-group { padding: 10px 16px 12px; }
+.sc-group h3 { font-size: 8.5pt; font-weight: 600; letter-spacing: .05em; text-transform: uppercase; color: var(--slate-700); }
+.sc-group h3 span { text-transform: none; letter-spacing: 0; }
+.dc-track { background: var(--slate-200); }
+.dc-val { font-size: 14px; font-weight: 700; }
+@media (max-width: 900px) {
+  header { padding: 8px 12px; }
+  .sidebar { padding: 2px 12px 20px; }
+  .tab-panel { padding: 14px 12px 40px; }
+  input[type=number], input[type=text], select, textarea { font-size: 16px; }
+}
+@media print { .tab-panels, .main, body { background: #fff; } }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -774,18 +912,9 @@ window.MathJax = {
 
 <header>
   <div class="brand">
-    <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
-  <rect width="32" height="32" rx="7" fill="#17212b"/>
-  <path d="M15.5 26V6.5h3.2L19.5 22" fill="none" stroke="none"/>
-  <path d="M19 7 25.5 7" stroke="#8fa3e6" stroke-width="1.2" stroke-linecap="round"/>
-  <g stroke="#5e7bd8" stroke-width="1.1" stroke-linecap="round" opacity=".9">
-    <path d="M20.5 10.5l4-3"/><path d="M20.5 14l5-4"/><path d="M20.5 17.5l5-4"/><path d="M20.5 21l5-4"/>
-  </g>
-  <path d="M14.5 6.5h4.4L20 22H26v3.8H6V22h8.5z" fill="#fff"/>
-</svg>
     <div class="brand-text">
-      <span class="logo-name">RetainCalc Pro</span>
-      <span class="brand-sub">Cantilever retaining wall design, <span class="logo-pill" id="logo-pill">ACI 318-19 / IBC 2021</span></span>
+      <span class="logo-name">Retaining Wall Designer</span>
+      <span class="brand-sub">by Mario Lococo · cantilever retaining wall · <span class="logo-pill" id="logo-pill">ACI 318-19 / IBC 2021</span></span>
     </div>
   </div>
   <a class="bx-all-tools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
@@ -8838,7 +8967,7 @@ function rwrModel(r) {
         'Rankine earth pressure; surcharge over the heel and column live / snow loads are excluded from the resisting forces and included in the bearing check.',
         'b = 12 in design strip; no shear reinforcement (ACI 318-19 Table 22.5.5.1(c)).']).forEach(t => items.push({ type: 'note', text: t }));
     (r.warnings || []).forEach(w => items.push({ type: 'note', warn: true, text: 'Warning: ' + rwrPlain(w) }));
-    items.push({ type: 'note', text: 'Engineering note: generated by RetainCalc Pro as a calculation aid only. All results must be independently reviewed by a licensed Professional Engineer before use in construction. Global slope stability (IBC §1807.2 / ASCE 7 §12.13.5), seismic earth pressure (Mononobe-Okabe), drainage design, and site-specific geotechnical conditions require separate evaluation.' });   // RWRX: the Export report's closing note
+    items.push({ type: 'note', text: 'Engineering note: generated by Retaining Wall Designer as a calculation aid only. All results must be independently reviewed by a licensed Professional Engineer before use in construction. Global slope stability (IBC §1807.2 / ASCE 7 §12.13.5), seismic earth pressure (Mononobe-Okabe), drainage design, and site-specific geotechnical conditions require separate evaluation.' });   // RWRX: the Export report's closing note
     secs.push({ title: 'Assumptions and warnings', subs: [sub('Assumptions and warnings', items)] });
     secs.push({ title: 'References', subs: [sub('Codes and references cited', [{ type: 'table', head: ['Reference', 'Provisions used'], rows: RW_REFS[isA ? 'AASHTO' : 'ACI'].map(([x, y]) => [rwrPlain(x), rwrPlain(y)]) }])] });
   }
@@ -8854,7 +8983,7 @@ function rwrModel(r) {
   const codes = isA ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)' : 'ACI 318-19 · IBC 2021 · ASCE 7-22';
   return { title: 'Cantilever Retaining Wall — Calculation Report', subtitle: meta.name || 'Unnamed project', code: codes,
     info: [['Project', meta.name], ['Project No.', meta.num], ['Calculated by', meta.eng], ['Date', ''], ['Checked by', meta.chk], ['Checked date', '']],
-    head: { left: 'Project No. ' + (meta.num || '—') + ' — ' + String(meta.notes || meta.name || '—').slice(0, 40), right: 'Computed: ' + (meta.eng || '—') + ' · Checked: ' + (meta.chk || '—'), foot: (meta.name || 'Unnamed project') + ' (RetainCalc Pro — Retaining Wall Designer)' },
+    head: { left: 'Project No. ' + (meta.num || '—') + ' — ' + String(meta.notes || meta.name || '—').slice(0, 40), right: 'Computed: ' + (meta.eng || '—') + ' · Checked: ' + (meta.chk || '—'), foot: (meta.name || 'Unnamed project') + ' (Retaining Wall Designer)' },
     sections: secs };
 }
 function renderRwReport() {
