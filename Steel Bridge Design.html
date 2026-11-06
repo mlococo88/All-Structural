@@ -89,6 +89,12 @@ header { flex-wrap: wrap; height: auto; min-height: var(--header-h); row-gap: 6p
 .gd-hdr-proj { gap: 8px; min-width: 0; }
 .gd-hdr-proj button.spChip[data-sp] b { max-width: 18ch; }
 #gd-savecard .spRow .proj-btn { width: auto; flex: 1 1 auto; }
+/* GDHD (2026-11-06): one header row as in the other tools (chip · Save · Saved projects… · Print); the bridge-wide actions (Design all,
+   Girder report, 3D view, Export DXF) after Suggest in the top bar, the owner next to the project title block */
+.gd-acts { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.gd-top .own-pill { margin-left: auto; }
+.gd-top .own-pill + .tb-sum { margin-left: 0; }
+@media (max-width: 1100px) { .gd-top .own-pill { margin-left: 0; } }
 .hdr-lbl { font-size: 12px; color: var(--muted); }
 /* owner (DOT) profile in the top bar (OWN1) */
 .own-pill { display: inline-flex; align-items: center; gap: 4px; height: 34px; padding: 0 2px 0 10px; border: 1px solid var(--border-hi); border-radius: var(--r); background: var(--surface); font-size: 12px; color: var(--muted); white-space: nowrap; }
@@ -1254,9 +1260,7 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
   </div>
   <a class="bx-all-tools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
   <div class="hdr-spacer"></div>
-  <div class="hdr-group gd-hdr-proj" id="gd-hdr-proj"></div>
-  <div class="hdr-group"><label class="own-pill" for="gd-owner" title="Owner (DOT) profile of the bridge: owner rules on top of AASHTO LRFD 10th Ed. Set here or on Preliminary sizing's Limits tab.">Owner <select id="gd-owner"><option value="" hidden>(open Preliminary sizing)</option><option value="RIDOT">RIDOT</option><option value="MassDOT">MassDOT</option><option value="CTDOT">CTDOT</option><option value="AASHTO">AASHTO</option></select><button type="button" class="own-i" id="own-info" title="Owner rules">rules</button></label></div>
-  <div class="hdr-group"><button type="button" class="btn" id="btn-designall" style="margin-right:8px">Design all</button><button type="button" class="btn" id="btn-grpt" style="margin-right:8px">Girder report</button><button type="button" class="btn" id="btn-v3dbr" style="margin-right:8px">3D view</button><button type="button" class="btn" id="btn-dxf" style="margin-right:8px">Export DXF</button><button type="button" class="btn btn-primary" id="btn-print"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6V2.5h8V6M4 11.5H2.5v-5h11v5H12M4.5 9.5h7v4h-7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Print report</span></button></div>
+  <div class="hdr-group gd-hdr-proj" id="gd-hdr-proj"><button type="button" class="btn" id="btn-print" title="Print report: choose the sections, then print or save as PDF"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 6V2.5h8V6M4 11.5H2.5v-5h11v5H12M4.5 9.5h7v4h-7z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span>Print</span></button></div>
 </header>
 <div class="gd-top" id="gd-top">
   <div class="gd-mode" role="radiogroup" aria-label="Working mode">
@@ -1264,7 +1268,9 @@ window.MathJax = { tex: { inlineMath: [['\\(','\\)']], displayMath: [['\\[','\\]
     <button type="button" role="radio" class="gd-mode-b" data-gdmode="mod" aria-checked="false" title="Preliminary sizing becomes the bridge and girder definition only; each module chooses its own demand source (Structural analysis, Preliminary sizing, or entered)"><b>Design modules</b><span>Bridge &amp; girder only; each module picks its demands</span></button>
   </div>
   <button type="button" class="btn btn-primary gd-sgp-b" id="gd-sgp-b" title="Suggest: proposes girder designs (girder count, spacing, web, flanges, splices, framing) within the modes and limits you set, compared side by side with the current design; Apply writes the chosen one into Preliminary sizing">Suggest</button>
+  <div class="gd-acts" id="gd-acts"><button type="button" class="btn" id="btn-designall">Design all</button><button type="button" class="btn" id="btn-grpt">Girder report</button><button type="button" class="btn" id="btn-v3dbr">3D view</button><button type="button" class="btn" id="btn-dxf">Export DXF</button></div>
   <div class="gd-sync" id="gd-sync" role="status"></div>
+  <label class="own-pill" id="gd-own-pill" for="gd-owner" title="Owner (DOT) profile of the bridge: owner rules on top of AASHTO LRFD 10th Ed. Set here or on Preliminary sizing's Limits tab.">Owner <select id="gd-owner"><option value="" hidden>(open Preliminary sizing)</option><option value="RIDOT">RIDOT</option><option value="MassDOT">MassDOT</option><option value="CTDOT">CTDOT</option><option value="AASHTO">AASHTO</option></select><button type="button" class="own-i" id="own-info" title="Owner rules">rules</button></label>
   <button type="button" class="tb-sum" id="tb-sum" title="Project title block: used by every report, drawing and hand-off. Click to edit."></button>
 </div>
 <nav class="modbar" id="modbar" aria-label="Design modules"></nav>
@@ -21350,7 +21356,7 @@ function gdStdInit() {
     deleted: n => { if (CUR === n) { named(''); gdPlName(''); } },
     exportFile: n => SharedProjectsUI.download(String(n || P.meta.subject || 'steel_bridge_design').replace(/[^\w\-]+/g, '_') + '.json', JSON.stringify({ ...sbdProjectFile(), name: n || CUR || '' }, null, 2)),
     importFile: () => $('#pb_file').click(), fileButtons: [$('#pb_export'), $('#pb_import')],
-    header: $('#gd-hdr-proj'), card: $('#gd-savecard'),
+    header: $('#gd-hdr-proj'), headerBefore: $('#btn-print'), card: $('#gd-savecard'),   // GDHD: Print last
     note: '<p class="spNote">Each saved project holds the design modules and Preliminary sizing under one name; Open, Rename, Duplicate and Delete act on both (a project saved before 2026-11-06 may hold only one of them: opening it keeps the other part\u2019s inputs on screen). Open asks first when the project on screen has unsaved changes. Delete removes the browser copy (with Cloud sync on, it asks whether to delete the GitHub copy too). Export makes a .json file of one saved project.</p>',
     cloud: { tool: 'steel-bridge-design', label: 'Steel Bridge Design', space: 2, toFile: sbdPairFile,
       fromFile: j => { if (j.app === 'SteelBridgeDesign') { const m = sbdMigrate(j); if (!m) throw new Error('a newer Steel Bridge Design file than this copy reads'); const it = {};
