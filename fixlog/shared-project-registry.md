@@ -54,3 +54,8 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
 - Tests: `tests/smoke/home-projects.mjs` `FOLDER` and `tests/smoke/github-sync-tools.mjs` `FOLDER`: `cbc`; `github-sync-tools` allows the suite's other tab's bookkeeping key (`SUITE`: rebar ↔ cbc share one page); `tests/smoke/project-library.mjs`: new `cbc` entry (frame `#suite-frame-capacity`).
 - Loaded by: `tools.html` (home page) only.
 - **How verified:** `node tests/engine/run.mjs project-registry github-sync projects`; `node tests/smoke/home-projects.mjs`; `node tests/smoke/home-sync.mjs` (all tools): pass.
+
+## 2026-11-06 — PR: claude/cbc-stds-asd (PR #856: https://github.com/mlococo88/All-Structural/pull/856) (STDS) — entry for Concrete Beam Capacity, ASD tab   [storage only; no result change]
+- New entry before `aci-rebar-development`: `{ tool: 'concrete-beam-asd', label: 'Concrete Beam ASD Rating', name: 'ASD Beam Rating (Concrete Beam Design Suite)', href: 'Concrete%20Beam%20Capacity.html#asd', key: 'asd_v1_projects', time: i => i && i.when || null, space: 2, toFile: i => i.data }` (the tool's own mapStore options and ctx.cloud).
+- Tests: `tests/engine/project-registry.test.mjs`: a `{ when, data }` item for `concrete-beam-asd`; `home-projects.mjs` / `github-sync-tools.mjs` `FOLDER`: `asd`; `github-sync-tools` `SUITE` lists the three synced tabs of the suite page; `project-library.mjs`: new `asd` entry (frame `#suite-frame-asd`). Loaded by `tools.html` only.
+- **How verified:** engine `project-registry github-sync projects`; `home-projects`; `home-sync` (all tools): pass.

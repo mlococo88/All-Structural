@@ -57,7 +57,8 @@ test('project-registry: fileText equals the engine file text; home Upload all th
   const items = {
     'spread-footing': { geom: { B: 6 }, soil: {}, peds: [] }, 'gusset-plate-rating': { members: [{ pattern: 'custom' }], meta: {} },
     'light-pole-sign-post': { V: 115 }, 'retaining-wall-designer': { fields: { H: 12 }, ts: 1 }, 'base-plate-anchor': { plate: {}, anchor: {}, conc: {} },
-    'abutment-calculator': { state: { geom: {}, proj: {} }, ts: 2 }, 'timber-beam-check': { t: 3, d: { b: 1 } }
+    'abutment-calculator': { state: { geom: {}, proj: {} }, ts: 2 }, 'timber-beam-check': { t: 3, d: { b: 1 } },
+    'concrete-beam-asd': { when: '2026-11-06T02:00:00.000Z', data: { loads: {}, allow: {} } }   // STDS: { when, data }, the file = data
   };
   for (const e of R2.all().filter(x => !x.view)) {   // the view entry (Steel Bridge app): its own test below
     const s = mem(); assert.equal(GS.saveSettings(s, { owner: 'mlococo88', repo: 'structural-projects', branch: 'main', token: TOKEN }).ok, true);

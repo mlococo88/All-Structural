@@ -162,6 +162,17 @@ export const TOOLS = {
     view: p => tabView(p, '#tabBar button', 2, '.active'),
     save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { if (saveAs(n)) { S.proj.name = S.proj.name || n; autosave(); refresh(); } }, name); await p.waitForTimeout(400); }   // STDS: the standard Save as (branch), the old Save (main: projDialogGo)
   },
+  asd: {
+    // Concrete Beam Capacity, ASD tab (srcdoc frame #suite-frame-asd of the suite; STDS 2026-11-06): its list asd_v1_projects ({ name: { when,
+    // data: a copy of S } }); main: its own Save Project prompt and Open dialog, branch: the standard save.
+    file: 'Concrete Beam Capacity.html', hash: '#asd', frame: '#suite-frame-asd', list: 'asd_v1_projects', auto: 'asd_v1_auto',
+    ready: p => p.waitForFunction(() => typeof CC !== 'undefined' && CC && document.getElementById('tabBar').children.length > 2),
+    results: p => p.evaluate(() => { const seen = new WeakSet(); const r = JSON.parse(JSON.stringify({ CC }, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v)));
+      const d = document.getElementById('asdDash').cloneNode(true); d.querySelectorAll('[data-sp]').forEach(x => x.remove()); return { ...r, dash: d.textContent.replace(/\s+/g, ' ') }; }),
+    change: p => bump(p, '[data-fkey=mLl]', 10),
+    view: p => tabView(p, '#tabBar button', 2, '.active'),
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const pr = window.prompt, al = window.alert; window.prompt = () => n; window.alert = () => {}; try { doSave(); } finally { window.prompt = pr; window.alert = al; } }, name); await p.waitForTimeout(400); }   // STDS: the standard Save as (branch), the old Save Project prompt (main)
+  },
   index: {
     // index.html (MCT generator, React, compiled by Babel in the browser): Undo / Redo only. Its named projects are the shared Bridge
     // Projects registry (BridgeProjects), unchanged, so there is no list here. Results: the model (cfg, as autosaved) and the page text.
