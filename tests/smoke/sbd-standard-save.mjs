@@ -67,11 +67,11 @@ const names = async () => { const l = await lists(); return Object.keys(l.gd).jo
 const chip = () => p.evaluate(() => { GD_PB.refresh(); return document.querySelector('[data-sp=chip]').innerText.replace(/\s+/g, ' '); });
 const saveAs = async (n, replace) => { await p.evaluate(() => GD_PB.saveAs()); await p.fill('dialog.spSave .spName', n); await p.evaluate(() => document.querySelector('dialog.spSave [data-sa=ok]').click());
   if (replace) { ok(/already exists/.test(await p.$eval('dialog.spSave .spMsg', e => e.innerText)), `Save as "${n}" (in use): "Replace it" asked`); await p.evaluate(() => document.querySelector('dialog.spSave [data-sa=ok]').click()); } await p.waitForTimeout(800); };
-const lib = async () => { await p.evaluate(() => { const d = document.getElementById('gdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=hlib]').click(); }); await p.waitForTimeout(400); };
+const lib = async () => { await p.evaluate(() => { const d = document.getElementById('gdLibDlg'); if (d && d.open) d.close(); document.querySelector('#gd-savecard [data-sp=lib]').click(); }); await p.waitForTimeout(400); };   // HDRS: the card's Saved projects… (no header button)
 const row = (n, a) => p.evaluate(([n, a]) => document.querySelector(`#gdLibDlg [data-spa=${a}][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(), [n, a]);
 const live = async () => ({ gd: await p.evaluate(() => JSON.stringify(P)), pl: await (plf()).evaluate(() => JSON.stringify(P)) });
 
-ok(await p.evaluate(() => [...document.getElementById('gd-hdr-proj').children].map(b => b.dataset.sp || b.id).join('|')) === 'chip|gd-undo|gd-redo|hsave|hlib|btn-print', 'header: chip · Undo · Redo · Save · Saved projects… · Print');
+ok(await p.evaluate(() => [...document.getElementById('gd-hdr-proj').children].map(b => b.dataset.sp || b.id).join('|')) === 'chip|gd-undo|gd-redo|btn-print', 'header: chip · Undo · Redo · Print (HDRS: Save / Saved projects… in the card only)');
 // GDHD (2026-11-06): the header on one row at common laptop widths; the moved controls in the top bar
 for (const w of [1280, 1400, 1920]) { await p.setViewportSize({ width: w, height: 900 }); await p.waitForTimeout(400);
   const h = await p.evaluate(() => { const r = document.querySelector('header').getBoundingClientRect(), t = [...document.querySelectorAll('header .brand, header .hdr-group > *')].filter(e => e.offsetParent).map(e => e.getBoundingClientRect()); return { h: Math.round(r.height), one: t.every(x => x.top < r.top + r.height / 2 && x.bottom > r.top + r.height / 2) }; });
@@ -85,7 +85,7 @@ ok(await p.evaluate(async () => { document.getElementById('btn-print').click(); 
 ok(await p.evaluate(() => document.querySelector('#sec-pm').firstElementChild.id === 'gd-savecard' && !!document.querySelector('#gd-savecard [data-sp=card]')), 'modules\' Project tab: the "Save and open" card first');
 ok(await p.evaluate(() => !document.getElementById('proj_list') && !document.getElementById('pb_delete') && !document.getElementById('pb_open')), 'modules\' pane: no drop-down, Open or Delete left');
 ok(await plf().evaluate(() => !document.getElementById('proj_list') && !document.getElementById('pb_delete') && !!document.getElementById('pb_lib')), 'Preliminary sizing pane: no drop-down or Delete; Save · Save as… · Saved projects…');
-await p.evaluate(() => document.querySelector('[data-sp=hsave]').click()); await p.waitForSelector('dialog.spSave[open]');
+await p.locator('body').click({ position: { x: 5, y: 5 } }).catch(() => {}); await p.keyboard.press('Control+s'); await p.waitForSelector('dialog.spSave[open]');   // HDRS: Ctrl+S (no header Save)
 ok(true, 'Save with no saved name: the Save as dialog'); await p.evaluate(() => document.querySelector('dialog.spSave').close());
 await saveAs('Job 1');
 let L = await lists(), V = await live();
@@ -94,7 +94,7 @@ ok(JSON.stringify(L.gd['Job 1']) === V.gd && JSON.stringify(L.pl['Job 1']) === V
 ok(/Job 1 · saved/.test(await chip()), 'chip: Job 1 · saved');
 ok(await plf().evaluate(() => CUR_NAME) === 'Job 1', 'Preliminary sizing\'s open name follows (its autosave keeps it)');
 await bump(p); await p.evaluate(() => window.gdIdle({ quiet: 3000 })); ok(/unsaved changes/.test(await chip()), 'an input change: unsaved changes');
-const nd = B.dialogs.length; await p.evaluate(() => document.querySelector('[data-sp=hsave]').click()); await p.waitForTimeout(800);
+const nd = B.dialogs.length; await p.evaluate(() => document.querySelector('#gd-savecard [data-sp=save]').click()); await p.waitForTimeout(800);   // HDRS: the card's Save
 L = await lists(); V = await live(); ok(B.dialogs.length === nd && !(await p.evaluate(() => !!document.querySelector('dialog[open]'))) && JSON.stringify(L.gd['Job 1']) === V.gd, 'Save on the open name: no question, the list updated');
 // Preliminary sizing changes: its Save button (in its frame) and Ctrl+S there save both
 await plf().evaluate(() => { P.meta.name = 'PL renamed'; autosave(); });
@@ -134,8 +134,13 @@ ok(JSON.stringify(after) === JSON.stringify(before) && B.dialogs.some(m => /stor
 const keys = await p.evaluate(() => Object.keys(localStorage).sort().join(', '));
 ok(!/projectsUI|githubSync/.test(keys), 'no new storage key with sync off (' + keys + ')');
 if (SHOTS) { fs.mkdirSync(SHOTS, { recursive: true }); await lib(); await p.screenshot({ path: path.join(SHOTS, 'sbd-dialog.png') }); await p.evaluate(() => document.getElementById('gdLibDlg').close()); }
+// HDRS (2026-11-06): the chip opens the modules' Project tab with the card, from Preliminary sizing too (it does not show that tab)
+await p.evaluate(() => gdModGo('pl')); await p.waitForTimeout(800); await p.evaluate(() => document.querySelector('[data-sp=chip]').click()); await p.waitForTimeout(1200);
+ok(await p.evaluate(() => P.mod === 'df' && P.ui.itab === 'project' && !!document.getElementById('gd-savecard').offsetParent && !document.querySelector('dialog[open]')), 'chip from Preliminary sizing: LLDF and DLs, Project tab, the card on screen, no dialog');
+await p.evaluate(() => gdModGo('st')); await p.waitForTimeout(800); await p.evaluate(() => document.querySelector('[data-sp=chip]').click()); await p.waitForTimeout(1200);
+ok(await p.evaluate(() => P.mod === 'df' && !!document.getElementById('gd-savecard').offsetParent), 'chip from Design & Rating (ST-Girder): the modules\' Project tab with the card');
 await p.setViewportSize({ width: 390, height: 800 }); await p.waitForTimeout(600); ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '390 px: no sideways scroll');
 if (SHOTS) await p.screenshot({ path: path.join(SHOTS, 'sbd-390.png') });
-const extra = B.errs.filter(e => !aErr.includes(e)); ok(!extra.length, "no console errors beyond main's" + (extra.length ? ': ' + extra.join(' | ') : ''));
+const extra = B.errs.filter(e => !aErr.includes(e) && !/^\[BABEL\] Note: The code generator has deoptimised/.test(e));   // HDRS: the Design & Rating view (opened above for the chip) compiles ST-Girder in the browser (Babel's size note) ok(!extra.length, "no console errors beyond main's" + (extra.length ? ': ' + extra.join(' | ') : ''));
 await B.b.close();
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS'); process.exit(fails ? 1 : 0);
