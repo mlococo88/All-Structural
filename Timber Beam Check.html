@@ -1553,6 +1553,9 @@ function tbPlibInit() {
     importFile: () => $('tbcFile').click(),
     fileButtons: [$('btnSaveHdr'), $('btnOpenHdr')],
     header: ref ? ref.parentNode : null, chipBefore: bu, headerBefore: ref, card: $('tbSaveCard'),
+    /* HDRS (2026-11-06, engineer: every app's header as in Spread Footing #884): the header has the chip only (no Save / Saved
+       projects… buttons: they are in the "Save and open" card; Ctrl+S / Ctrl+Shift+S work from anywhere). A chip click opens the Project tab (the card), as the header link #hdrProj does (its click handler is reused). */
+    headerSave:false, chipClick:()=>{ const a=document.getElementById("hdrProj"); if(a) a.click(); }, chipHint:"the Project tab (Save and open)",
     renamed: (a, b) => { if ((M.project.name || '').trim() === a) { M.project.name = b; buildProjHeader(); rebuildInputs(); autosave(); } },
     /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'timber-beam-check',label:'Timber Beam Check',space:2,toFile:i=>i.d,fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j))throw new Error('not a project file of this tool');return {t:Date.now(),d:j};}} });
   pb.el.card.querySelectorAll('button[data-sp]').forEach(b => b.classList.add('btn', 'sm'));

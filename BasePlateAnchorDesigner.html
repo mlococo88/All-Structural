@@ -1057,8 +1057,9 @@ function defaultState(){
            /* BC-2 (2026-11-01): pier shape "rect" (Bx × By, every save before BC-2) | "circle" (drilled shaft / round pier,
               diameter D, centred at the pedestal origin; the plate offset places the anchors on it). circHefReduce: apply
               the §17.6.2.1.2 h_ef reduction to a circular pier by analogy (engineer decision 2026-11-01: applied by default;
-              BC-6, engineer decision 2026-11-02: NOT applied by default — a save without the field keeps it applied, mergeState). */
-           shape:"rect", D:36, circHefReduce:false,
+              BC-6, engineer decision 2026-11-02: NOT applied by default — a save without the field keeps it applied, mergeState;
+              BC-7, engineer decision 2026-11-06: applied by default again — a stored choice is kept, a save without the field keeps it applied). */
+           shape:"rect", D:36, circHefReduce:true,
            /* BC-5 (2026-11-01): the pier cage of a circular pier as anchor reinforcement (bpCageTension / bpCageShear) */
            cage:{ present:false, nBars:8, barSize:"#8", grade:"gr60", cover:3.0, angle0:0, topCover:3.0, topHook:false,
                   tieType:"tie", tieSize:"#4", tieGrade:"gr60", tieTop:3.0, pitch:4.0, ackDetail:false } },
@@ -1217,7 +1218,10 @@ function mergeState(st){
   if(oldHead) out.anchor.head=oldHead;
   /* BC-6 migration (2026-11-02): the default of conc.circHefReduce changed from applied (true) to not applied (false).
      A save without the field (every save before BC-6, the active design and each anchor group's data) was designed
-     with the old default: set it to true explicitly, so it keeps its results. A stored choice is kept. */
+     with the old default: set it to true explicitly, so it keeps its results. A stored choice is kept.
+     BC-7 (2026-11-06): the default is applied (true) again; this migration is kept (it writes the same value the
+     default now gives). The input note that named the migrated project is removed (it pointed to "not applied" as
+     the new default); __bpHefMig is still set but no longer read. */
   const hefMig=c=>{ if(c && typeof c==="object" && c.circHefReduce===undefined){ c.circHefReduce=true; return c.shape==="circle"; } return false; };
   let hefMigCirc=false;
   if(st && st.conc && typeof st.conc==="object" && st.conc.circHefReduce===undefined){ out.conc.circHefReduce=true; hefMigCirc=out.conc.shape==="circle"; }
@@ -1875,8 +1879,8 @@ function breakoutRing(H,R,rect,nArc){
    - A_Nc and A_Vc by the exact projected areas clipped by the pier circle (union of the 3h_ef squares of the
      anchors, ∩ the disc: SharedAnchorGeom.unionRectsDiscArea), c_a to the circle (radial for ψ_ed,N and side-face
      blowout), ψ_ed,N with c_a,min to the circle.
-   - §17.6.2.1.2 h_ef reduction: user-selectable (conc.circHefReduce); not applied by default since BC-6 (engineer
-     decision 2026-11-02; applied by default before). The provision is written
+   - §17.6.2.1.2 h_ef reduction: user-selectable (conc.circHefReduce); applied by default (BC-7, engineer decision
+     2026-11-06; not applied by default 2026-11-02 to 2026-11-06, BC-6; applied by default before). The provision is written
      for straight edges; applying it to a circle is an engineering analogy, stated on screen with both values.
    - Shear breakout toward a round edge: tangent-edge model (the edge is the tangent to the circle at the point the
      shear direction reaches from the critical anchor; §17.7.2.1, R17.7.2.1).
@@ -2264,7 +2268,7 @@ function tensionBreakoutGroup(nT, ca_min, eccX, eccY, tensPts, condA){
         "\\text{with the reduction: }\\phi N_{cbg}="+fmt(he.applies? phi*Ncbg : alt.phiNcbg,2)+"\\ \\text{kip};\\quad\\text{without: }\\phi N_{cbg}="+fmt(he.applies? alt.phiNcbg : phi*Ncbg,2)+"\\ \\text{kip}"] : []),
        vars:[["c_{a,max}",fmt(he.caMax,3)+" in","largest distance from the group to a tangent of the circle among the directions within 1.5h_ef"],
              ["s",fmt(he.s,3)+" in",he.sBasis],
-             ["accepted","","The provision is written for members with straight edges (three or more edges within 1.5h_ef). Applying it to a circle treats the pier boundary as those edges: it caps h_ef at max(c_a,max/1.5, s/3), which lowers N_b and A_Nco but enlarges A_Nc/A_Nco. For this geometry the reduction "+(alt? ((he.applies? phi*Ncbg : alt.phiNcbg) >= (he.applies? alt.phiNcbg : phi*Ncbg) ? "RAISES" : "LOWERS")+" φN_cbg ("+fmt(he.applies? phi*Ncbg : alt.phiNcbg,2)+" vs "+fmt(he.applies? alt.phiNcbg : phi*Ncbg,2)+" kip): applying it is the "+(((he.applies? phi*Ncbg : alt.phiNcbg) >= (he.applies? alt.phiNcbg : phi*Ncbg))? "LESS":"MORE")+" conservative choice here" : "changes φN_cbg")+". R17.6.2.1.2 explains the unreduced concrete-capacity-design result is overly conservative in such members. Set on the Pedestal input (circular pier option); engineer decision 2026-11-02: not applied by default."]]}];
+             ["accepted","","The provision is written for members with straight edges (three or more edges within 1.5h_ef). Applying it to a circle treats the pier boundary as those edges: it caps h_ef at max(c_a,max/1.5, s/3), which lowers N_b and A_Nco but enlarges A_Nc/A_Nco. For this geometry the reduction "+(alt? ((he.applies? phi*Ncbg : alt.phiNcbg) >= (he.applies? alt.phiNcbg : phi*Ncbg) ? "RAISES" : "LOWERS")+" φN_cbg ("+fmt(he.applies? phi*Ncbg : alt.phiNcbg,2)+" vs "+fmt(he.applies? alt.phiNcbg : phi*Ncbg,2)+" kip): applying it is the "+(((he.applies? phi*Ncbg : alt.phiNcbg) >= (he.applies? alt.phiNcbg : phi*Ncbg))? "LESS":"MORE")+" conservative choice here" : "changes φN_cbg")+". R17.6.2.1.2 explains the unreduced concrete-capacity-design result is overly conservative in such members. Set on the Pedestal input (circular pier option); engineer decision 2026-11-06: applied by default."]]}];
   return {phi,hef,hefNom,hefEff:he,alt:(alt? {phiNcbg:alt.phiNcbg,Ncbg:alt.Ncbg,hef:alt.hef,ANc:alt.ANc,ANco:alt.ANco,Nb:alt.Nb,psi_ed:alt.psi_ed,ANcAll:alt.ANcAll,ANcRatioAll:alt.ANcRatioAll,psi_edAll:alt.psi_edAll,applies:!he.applies} : undefined),fc,ANco,ANc,ANcRatio,ANcAll,ANcRatioAll,nAll,caAll,psi_edAll,nTensPts:tp.length,Nb1,NbAlt,useAlt,Nb,psi_ed,psi_c,psi_cp,psi_ec,psi_ec1,psi_ec2,eN1,eN2,eN,ca,isCorner,nearEdges,Ncbg,phiNcbg:phi*Ncbg,
     steps:[
       {title:"Basic breakout strength of single anchor (tension)",ref:"ACI 318-19 §17.6.2.2.1, Eq.(17.6.2.2.1)"+(useAlt?" & §17.6.2.2.3":""),
@@ -5691,15 +5695,13 @@ function buildInputPanel(){
     fRow(body,"f'c",numInput(()=>S.conc.fc,v=>S.conc.fc=v,0.5),"ksi");
     /* BC-2 (2026-11-01): rectangular pedestal (default) or circular pier / drilled shaft */
     fRow(body,"Pier shape",selInput([["rect","Rectangular Bx × By"],["circle","Circular (drilled shaft / round pier)"]],
-      ()=>S.conc.shape||"rect",v=>{ if(v==="circle" && S.conc.shape!=="circle") S.conc.circHefReduce=false;   /* BC-6: a design becoming a round pier takes the new default (not applied) */
+      ()=>S.conc.shape||"rect",v=>{ if(v==="circle" && S.conc.shape!=="circle") S.conc.circHefReduce=true;   /* BC-6 / BC-7 (2026-11-06): a design becoming a round pier takes the default (applied) */
         S.conc.shape=v; if(v==="circle"){ if(!(+S.conc.D>0)) S.conc.D=Math.max(S.conc.Bx,S.conc.By); S.conc.Bx=S.conc.D; S.conc.By=S.conc.D;
         S.conc.ca_override=false; S.tRebar.present=false; S.vRebar.present=false; S.ped.present=false; } },o=>o[1],o=>o[0]),"");
     if(bpCircPier()){
       fRow(body,"Pier diameter D",numInput(()=>S.conc.D,v=>{ S.conc.D=v; S.conc.Bx=v; S.conc.By=v; },1),"in");
       fRow(body,"Apply §17.6.2.1.2 h_ef reduction to the circle",chkInput(()=>S.conc.circHefReduce!==false,v=>S.conc.circHefReduce=v),"",
-        "ACI 318-19 §17.6.2.1.2 is written for anchors within 1.5h<sub>ef</sub> of three or more <b>straight</b> edges. Applied here by analogy: the circle counts when it lies within 1.5h<sub>ef</sub> of the anchor group over at least 270° of its circumference; h′<sub>ef</sub> = max(c<sub>a,max</sub>/1.5, s/3). <b>By ticking this you accept that analogy.</b> It lowers N<sub>b</sub> and A<sub>Nco</sub> and raises A<sub>Nc</sub>/A<sub>Nco</sub>; the net effect on φN<sub>cbg</sub> (usually an increase, i.e. the less conservative result — R17.6.2.1.2 calls the unreduced result overly conservative) is shown with both values in the Concrete Embedment tab. Engineer decision 2026-11-02: not applied by default (projects saved before that keep it applied).");
-      if(__bpHefMig && __bpHefMig===((S.proj&&S.proj.name)||"") && S.conc.circHefReduce===true)
-        body.appendChild(el("div","warnBox","This project was saved before 2026-11-02, when the reduction was applied by default. It keeps the reduction applied, as it was designed. Untick the box above to use the new default (not applied)."));
+        "ACI 318-19 §17.6.2.1.2 is written for anchors within 1.5h<sub>ef</sub> of three or more <b>straight</b> edges. Applied here by analogy: the circle counts when it lies within 1.5h<sub>ef</sub> of the anchor group over at least 270° of its circumference; h′<sub>ef</sub> = max(c<sub>a,max</sub>/1.5, s/3). <b>The box is ticked by default: with it ticked you accept that analogy; untick it to use the full h<sub>ef</sub>.</b> It lowers N<sub>b</sub> and A<sub>Nco</sub> and raises A<sub>Nc</sub>/A<sub>Nco</sub>; the net effect on φN<sub>cbg</sub> (usually an increase, i.e. the less conservative result — R17.6.2.1.2 calls the unreduced result overly conservative) is shown with both values in the Concrete Embedment tab. Engineer decision 2026-11-06: applied by default (a saved project keeps the choice it was saved with).");
       body.appendChild(el("div","note","Circular pier: A_Nc / A_Vc are the projected areas clipped by the circle (exact), c_a is measured to the circle (radial for ψ_ed,N and side-face blowout), and shear breakout uses the tangent-edge model (the edge is the tangent to the circle where the shear direction meets it). The rectangular anchor / pedestal reinforcement inputs do not apply; enter the pier cage below to credit it (§17.5.2.1)."));
       /* BC-5 (2026-11-01): the pier cage as anchor reinforcement */
       const K=S.conc.cage;
@@ -13513,6 +13515,9 @@ function bpPlibInit(){
     importFile:()=>$("fileImport").click(),
     fileButtons:[$("btnExport"),$("btnImport")], extras:[$("btnBackupAll"),$("btnRestoreAll"),$("btnCompare")],
     header:host, chipBefore:bu, headerBefore:ref, card:$("bpSaveCard"),
+    /* HDRS (2026-11-06, engineer: every app's header as in Spread Footing #884): the header has the chip only (no Save / Saved
+       projects… buttons: they are in the "Save and open" card; Ctrl+S / Ctrl+Shift+S work from anywhere). A chip click opens the Project tab (the card), as the header link #hdrProj does (its click handler is reused). */
+    headerSave:false, chipClick:()=>{ const a=document.getElementById("hdrProj"); if(a) a.click(); }, chipHint:"the Project tab (Save and open)",
     renamed:(a,b)=>{ if(S.proj&&S.proj.name===a){ S.proj.name=b; buildProjHeader(); autosave(); } },
     deleted:n=>{ if(lsGet(LS_LAST)===n) lsSet(LS_LAST,""); },
     /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'base-plate-anchor',label:'Base Plate & Anchor Designer',space:2,toFile:i=>Object.assign({_bpad:'project',_bpadVersion:1},i),fromFile:j=>{if(!j||typeof j!=='object'||Array.isArray(j)||(j._bpad!=='project'&&!(j._bpad===undefined&&j.plate&&j.anchor&&j.conc)))throw new Error('not a BasePlate project file');const d=Object.assign({},j);delete d._bpad;delete d._bpadVersion;return d;}} });
@@ -16430,6 +16435,7 @@ manPart("p4b","4B. Tension Limit States",[
 {p:"The reason is geometric. In a narrow pedestal, a deeply embedded anchor cannot develop the cone the CCD equations assume — the cone would extend past every face of the member. Using the full <i>h<sub>ef</sub></i> would predict a capacity the member cannot physically deliver. Capping <i>h<sub>ef</sub></i> forces the calculation back to a cone that fits."},
 {warn:"This reduction cascades. Reducing h<sub>ef</sub> reduces N<sub>b</sub> (by the 1.5 power), reduces A<sub>Nc0</sub>, changes A<sub>Nc</sub>, changes ψ<sub>ed,N</sub>, and because pryout is derived from N<sub>cbg</sub>, it reduces the shear pryout capacity too. In the worked example, h<sub>ef</sub> drops from 12.00 in to 4.67 in — a factor of 2.6 — and N<sub>b</sub> falls with it."},
 {note:"The program detects this condition automatically, reports how many edges are within 1.5h<sub>ef</sub>, states which of the two terms governs, and explains the reduction in the output. You can also force it on or off if your judgement differs."},
+{note:"<b>Circular pier (drilled shaft / round pier).</b> The provision is written for straight edges. For a round pier the program applies it by analogy: it counts the circle as \"three or more edges\" when the circle lies within 1.5h<sub>ef</sub> of the anchor group over at least 270° of its circumference, and then uses h′<sub>ef</sub> = max(c<sub>a,max</sub>/1.5, s/3). The option \"Apply §17.6.2.1.2 h_ef reduction to the circle\" on the Pedestal input is <b>ticked by default</b> (engineer decision 2026-11-06); untick it to use the full h<sub>ef</sub>. Either way the Concrete Embedment tab works both values of φN<sub>cbg</sub> (with and without the reduction) and says which is the less conservative. For a pier that is cramped all round the reduction usually <b>raises</b> φN<sub>cbg</sub>: A<sub>Nc</sub> is already limited to the pier disc, so the smaller A<sub>Nco</sub> and the larger ψ<sub>ed,N</sub> outweigh the smaller N<sub>b</sub>. A saved project keeps the choice it was saved with."},
 
 {h:"4B.5 Pullout strength"},
 {p:"Pullout is a local failure at the anchor head: the concrete immediately beneath the bearing surface crushes, and the anchor is drawn through the (otherwise intact) concrete. It depends on the bearing area of the head, not on embedment or edges."},
@@ -17326,8 +17332,8 @@ function bpGroupResultFor(i){
     Object.keys(G.set).forEach(function(k){ d[k]=Object.assign({},d[k]||{},G.set[k]); });
     /* BC-6 (2026-11-02): the §17.6.2.1.2 analogy for a round pier. A receiving design that is already a round pier keeps its
        stored choice; any other design (a rectangular pedestal, where the choice is hidden and has no effect) takes the
-       new default, not applied — also when an older save was migrated to "applied" */
-    if(!wasCirc) d.conc.circHefReduce=false;
+       default. BC-7 (2026-11-06): the default is applied (true); the hand-off carries no such choice. */
+    if(!wasCirc) d.conc.circHefReduce=true;
     d.combos=G.combos.map(function(c){ return Object.assign({},c); });
     d.tRebar=Object.assign({},d.tRebar,{present:false}); d.vRebar=Object.assign({},d.vRebar,{present:false}); d.ped=Object.assign({},d.ped,{present:false});
     d.detailCombo=0;
