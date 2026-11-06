@@ -31,10 +31,6 @@ const OWN = {
   edm: { show: p => p.evaluate(() => { const d = document.getElementById('dlgProj'); if (d.open) d.close(); document.getElementById('btnManageProj').click(); }),
     open: p => p.evaluate(() => document.getElementById('dlgProj').open),
     del: (p, n) => p.evaluate(n => document.querySelector(`#projList [data-a=del][data-n="${CSS.escape(n)}"]`).click(), n) },
-  // Bridge Geometry: a library panel, not a dialog (it stays open after Open: open() is false)
-  bgeo: { box: '#lib_panel', show: p => p.evaluate(() => { if (document.getElementById('lib_panel').style.display === 'none') document.getElementById('lib_toggle').click(); else document.getElementById('lib_refresh').click(); }),
-    open: () => false,
-    del: (p, n) => p.evaluate(n => document.querySelector(`#lib_list [data-lib-del="${encodeURIComponent(n)}"]`).click(), n) },
   // apps/steel-bridge (STDS-B, 2026-11-06): the standard Saved projects dialog over its by-name view (items by id); kept here for the
   // own-list checks (first-sync offer, a delete that asks about the GitHub copy) because its sync list differs from the dialog's
   sbapp: { show: p => p.evaluate(() => { const d = document.getElementById('sbdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=hlib]').click(); }),

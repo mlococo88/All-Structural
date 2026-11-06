@@ -46,6 +46,11 @@
   #cur_name.bgLink { cursor: pointer; }
   #cur_name.bgLink:hover { text-decoration: underline; }
   #pane-project .prjRow { display:flex; gap:8px; flex-wrap:wrap; margin:6px 0 2px; }
+  /* STDS (2026-11-06): the standard save controls (shared/projects-ui.js projectBar): bar chip, the "save and open" card, Load example */
+  .projbar button.spChip { flex:0 0 auto; max-width:100%; white-space:nowrap; }
+  #bgSaveCard .spCard button { font:inherit; font-size:12px; padding:4px 10px; border:1px solid var(--graphite); background:#fff; color:var(--ink); border-radius:3px; cursor:pointer; }
+  #bgSaveCard .spCard button.spPri { background:var(--ink); color:#fff; border-color:var(--ink); }
+  #bg_example { font:inherit; font-size:12px; padding:3px 6px; width:auto; max-width:100%; }
   .cols { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 26px; align-items: start; }
   .cols > div { min-width: 0; }
   @media (max-width: 1020px){ .cols { grid-template-columns: 1fr; } }
@@ -162,23 +167,11 @@
     <a class="bx-alltools noprint" href="tools.html" target="_top" title="Open the list of all tools" style="margin-left:auto;font-size:11px;color:var(--ink-soft);text-decoration:none;">&larr; All tools</a>
   </div>
   <div class="projbar">
-    <span class="note" style="text-transform:none;">Bridge:</span>
-    <span class="pill" id="cur_name">(unsaved)</span>
-    <button class="sm" id="proj_savelib" title="Save the current bridge to the library (updates the loaded entry, or prompts for a name).">Save</button>
-    <button class="sm ghost" id="lib_toggle" type="button" title="Open the saved-bridge library.">&#9656; Library</button>
+    <span class="note" style="text-transform:none; display:none;">Bridge:</span>
+    <span class="pill" id="cur_name" style="display:none;">(unsaved)</span><!-- STDS (2026-11-06): the chip shows the open bridge; Save (updates …) and ▸ Library are the standard Save and Saved projects… -->
     <span class="note" id="save_status" style="margin-left:auto;">—</span>
   </div>
-  <div id="lib_panel" style="display:none; margin:0 16px 10px;">
-    <fieldset>
-      <legend>saved bridges (stored in this browser)</legend>
-      <p class="note" style="margin-top:0;">Save multiple bridges and switch between them. These are stored locally in this browser only &mdash; use <strong>Export JSON</strong> to keep a portable copy or move a bridge to another machine. <strong>Save As</strong> adds a new entry; <strong>Save</strong> updates the one currently loaded.</p>
-      <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
-        <button class="sm" id="lib_saveas">Save current as&hellip;</button>
-        <button class="sm ghost" id="lib_refresh">Refresh list</button>
-      </div>
-      <div id="lib_list" style="overflow-x:auto;"></div>
-    </fieldset>
-  </div>
+  <!-- STDS (2026-11-06): the library panel (#lib_panel: Save current as…, Refresh list, the saved-bridge table) is replaced by the standard Saved projects dialog -->
   <div class="tabs" role="tablist">
     <button class="tabbtn" role="tab" aria-selected="true"  data-tab="align">Alignment</button>
     <button class="tabbtn" role="tab" aria-selected="false" data-tab="bridge">Bridge</button>
@@ -551,20 +544,18 @@
   <!-- TAB: PROJECT (BGHD, 2026-11-05): moved here from the header's project bar (same ids and handlers) -->
   <section class="tabpane" id="pane-project" role="tabpanel">
     <fieldset>
-      <legend>saved bridges (this browser)</legend>
-      <p class="note" style="margin-top:0;">Save (in the bar above) updates the loaded bridge; Save As New adds the current bridge to the library under a new name; New starts again from the demo bridge.</p>
-      <div class="prjRow">
-        <button class="sm ghost" id="proj_saveas" title="Save the current bridge as a new named entry in the library.">Save As New</button>
-        <button class="sm ghost" id="proj_new" title="Clear to a fresh demo bridge.">New</button>
-      </div>
-    </fieldset>
-    <fieldset>
-      <legend>project file (JSON) and drawing</legend>
-      <p class="note" style="margin-top:0;">A portable copy of the bridge, or one to move to another machine; the plan (and optionally the profile) as a DXF drawing.</p>
-      <div class="prjRow">
+      <legend>save and open</legend>
+      <div id="bgSaveCard"><!-- STDS (2026-11-06): the standard save card (bgStdsInit); was "saved bridges (this browser)": Save As New, New -->
         <button class="sm ghost" id="proj_save" title="Export the current bridge as a JSON file.">Export JSON</button>
         <button class="sm ghost" id="proj_load" title="Import a bridge from a JSON file.">Import JSON</button>
         <input type="file" id="proj_file" accept="application/json,.json" style="display:none">
+        <select id="bg_example" title="Open one of the built-in example bridges as a new, unsaved bridge (your saved bridges are not changed)"><option value="">Load example…</option></select>
+      </div>
+    </fieldset>
+    <fieldset>
+      <legend>drawing (DXF)</legend>
+      <p class="note" style="margin-top:0;">The plan (and optionally the profile) as a DXF drawing.</p>
+      <div class="prjRow">
         <button class="sm ghost" id="dxf_export" type="button" title="Download the plan (alignment, supports, girders, deck edges, elevations) and optionally the profile as a DXF drawing, in State Plane or local coordinates.">Export DXF</button>
       </div>
     </fieldset>
@@ -4501,7 +4492,7 @@ function downloadProject(){
 function loadProjectFromFile(file){
   const reader=new FileReader();
   reader.onload=()=>{ try { const p=JSON.parse(reader.result);
-      if(applyProject(p)){ CURRENT_NAME=p.name||null; setStatus('loaded '+file.name); updateNameDisplay(); autosave(); if(window.BGPL) BGPL.h.reset(); /* PLIB */ }
+      if(applyProject(p)){ CURRENT_NAME=window.BGPB?null:(p.name||null); /* STDS: an imported file is not a saved bridge (was: the file's name) */ setStatus('loaded '+file.name); updateNameDisplay(); autosave(); if(window.BGPL) BGPL.h.reset(); /* PLIB */ if(window.BGPB) BGPB.setCurrent(null); }
       else setStatus('not a valid project file'); }
     catch(e){ setStatus('could not read file'); } };
   reader.readAsText(file);
@@ -4576,7 +4567,7 @@ function renderLibrary(){
   names.forEach(n=>{ const p=lib[n]; const when=p.savedAt?new Date(p.savedAt).toLocaleString():'';
     const isCur = n===CURRENT_NAME;
     h+=`<tr${isCur?' style="background:rgba(27,110,120,.08)"':''}>
-      <td class="lbl">${isCur?'\u25b8 ':''}${n}</td>
+      <td class="lbl">${isCur?'\u25b8 ':''}${String(n).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</td>
       <td class="lbl" style="font-size:10px;color:var(--ink-soft);">${when}</td>${gh?`
       <td>${BG_GH.statusCell(n)}</td>`:''}
       <td style="white-space:nowrap;">
@@ -4606,14 +4597,8 @@ function renderLibrary(){
    time savedAt, with name = the library name (as Export JSON writes it after Load). A file from GitHub must be a version-1 project
    (applyProject's own check); it is stored with name and a new savedAt. Open = Load. The sync bar and the "On GitHub only" rows go in
    a new div#lib_gh above the list; the GitHub column is drawn only while sync is set up. */
-const BG_GH=(()=>{ if(!window.SharedGitHubSync||!window.SharedProjects) return null; let ST=null; try{ ST=window.localStorage; }catch(e){ return null; }
-  return SharedGitHubSync.attach({ store:SharedProjects.mapStore(ST,LIBRARY_KEY), storage:ST,
-    open:n=>{ if(!(n in libRead())) return false; libLoad(n); return true; },
-    changed:()=>{ if(document.getElementById('lib_panel').style.display!=='none') renderLibrary(); },
-    cloud:{ tool:'bridge-geometry', label:'Bridge Geometry', space:2,
-      toFile:(i,n)=>{ const o=Object.assign({},i,{name:n}); delete o.savedAt; return o; },
-      fromFile:(j,n)=>{ if(j.version!==1||!Array.isArray(j.ELEMS)) throw new Error('not a Bridge Geometry project file'); return Object.assign({},j,{name:n,savedAt:new Date().toISOString()}); } } }); })();
-const BG_GH_UI={ redraw:()=>{ if(document.getElementById('lib_panel').style.display!=='none') renderLibrary(); }, close:()=>{} };
+const BG_GH=null;   // STDS (2026-11-06): the sync is the standard dialog's (bgStdsInit: the same tool folder, bookkeeping and file text)
+const BG_GH_UI={ redraw:()=>{ const p=document.getElementById('lib_panel'); if(p&&p.style.display!=='none') renderLibrary(); }, close:()=>{} };
 function bgGhDraw(host){
   if(!BG_GH) return; let g=document.getElementById('lib_gh');
   if(!g){ g=document.createElement('div'); g.id='lib_gh'; g.setAttribute('data-sp','gh-host'); host.before(g); }
@@ -4636,10 +4621,79 @@ function bgPlibInit(){
     applyProject(p); autosave(); } });
   const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'sm ghost'});
   const bu=B('Undo','Undo the last input change (Ctrl+Z)'), br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
-  const ref=document.getElementById('lib_toggle'); if(ref){ ref.insertAdjacentElement('afterend',br); ref.insertAdjacentElement('afterend',bu); }   /* BGHD: after Library in the bar */
+  const ref=document.getElementById('cur_name'); if(ref){ ref.insertAdjacentElement('afterend',br); ref.insertAdjacentElement('afterend',bu); }   /* BGHD: after Library in the bar (STDS: after the hidden name; Library is gone) */
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
   let t=null; h.reset();
   window.BGPL={ h, soon:()=>{ clearTimeout(t); t=setTimeout(()=>h.record(),600); } };
+  bgStdsInit(bu);   // STDS
+}
+
+/* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over LIBRARY_KEY (bridgeGeomEngine.library.v1: { name:
+   serializeProject() with name }, key and item format unchanged). Bar: chip · Undo · Redo · Save · Saved projects… · status; the
+   Project tab's first card "save and open": Save · Save as… · Saved projects… · New; Export JSON · Import JSON; Load example….
+   Save = libSave (no "Update …?" question); Open = libLoad; New = the old New (the demo bridge) without its confirm (projectBar asks
+   first on unsaved changes); the open name stays CURRENT_NAME (kept in the autosave as before). Rename / Duplicate / Delete: the
+   standard dialog (Rename and Duplicate move / copy the item unchanged; the old Rename also set the item's inner name, which Open and
+   the GitHub file do not use). GitHub sync: as GHS2 (#819): folder bridge-geometry, toFile = the item with name = list name and no
+   savedAt, fromFile = a version-1 project stored with name and a new savedAt.
+   Example bridges (engineer decision 2026-11-06): not seeded any more; "Load example…" opens one as a new, unsaved bridge. Examples a
+   user already has in the list are never deleted. With sync set up, an example still exactly as it was seeded (same content, any
+   name; savedAt and name aside) is held in this browser ("This browser only": not uploaded, also not by Upload all) unless the
+   user chooses otherwise (Upload in the dialog, or Save as with GitHub); once it is saved with changes, the hold ends and it uploads
+   as any project. Copies already on GitHub are left there. "Unsaved changes" leaves out savedAt, name and activeSta (a view); an item
+   saved by an older version (fewer fields) is compared with what Open showed for it. */
+var BGPB=null;
+function bgStdsInit(bu){
+  if(!window.SharedProjects||!window.SharedProjectsUI||!SharedProjectsUI.projectBar||BGPB) return;
+  let ST=null; try{ ST=window.localStorage; }catch(e){}
+  const store=SharedProjects.mapStore(ST,LIBRARY_KEY,{ time:i=>i&&i.savedAt||null });
+  const OMIT=['savedAt','name','activeSta'], C=o=>SharedProjects.canon(o,OMIT);
+  const shown={};   // name -> { it: stored text when opened, snap: the inputs on screen right after Open }
+  const raw=n=>{ const it=store.item(n); return it===undefined?null:JSON.stringify(it); };
+  const $=id=>document.getElementById(id), bar=document.querySelector('header .projbar');
+  BGPB=SharedProjectsUI.projectBar({ store, storage:ST, label:'Bridge Geometry', id:'bgLibDlg', omit:OMIT,
+    getState:()=>serializeProject(),
+    snapOf:n=>{ const r=raw(n); if(r==null) return null; if(shown[n]&&shown[n].it===r) return shown[n].snap; return C(JSON.parse(r)); },
+    current:()=>CURRENT_NAME, setCurrent:n=>{ CURRENT_NAME=n||null; updateNameDisplay(); },
+    save:n=>libSave(n)?{ok:true}:{ok:false,message:'The bridge was not saved (browser storage full or blocked). Use Export JSON.'},
+    open:n=>{ if(!store.has(n)) return false; libLoad(n); shown[n]={ it:raw(n), snap:C(serializeProject()) }; return true; },
+    afterSave:()=>bgExCheck(), 
+    newProject:()=>{ freshDefaults(); CURRENT_NAME=null; updateNameDisplay(); autosave(); },
+    displayName:()=>'',
+    exportFile:()=>downloadProject(),
+    importFile:()=>$('proj_file').click(),
+    fileButtons:[$('proj_save'),$('proj_load')], extras:[$('bg_example')],
+    header:bar, chipBefore:bu, headerBefore:$('save_status'), card:$('bgSaveCard'),
+    renamed:(a,b)=>{ bgExRen=[a,b]; if(bgExMine[a]){ delete bgExMine[a]; bgExMine[b]=1; } if(bgExFree[a]){ delete bgExFree[a]; bgExFree[b]=1; } },
+    deleted:n=>{ if(CURRENT_NAME===n){ CURRENT_NAME=null; updateNameDisplay(); } },
+    cloud:{ tool:'bridge-geometry', label:'Bridge Geometry', space:2,
+      toFile:(i,n)=>{ const o=Object.assign({},i,{name:n}); delete o.savedAt; return o; },
+      fromFile:(j,n)=>{ if(j.version!==1||!Array.isArray(j.ELEMS)) throw new Error('not a Bridge Geometry project file'); return Object.assign({},j,{name:n,savedAt:new Date().toISOString()}); } } });
+  /* Load example…: one of the built-in examples as a new, unsaved bridge */
+  const sel=$('bg_example');
+  if(sel){ EXAMPLE_BRIDGES.forEach((p,k)=>{ const o=document.createElement('option'); o.value=String(k); o.textContent=p.name; sel.appendChild(o); });
+    sel.addEventListener('change',()=>{ const k=sel.value; sel.value=''; if(k==='') return; const ex=EXAMPLE_BRIDGES[+k]; if(!ex) return;
+      if(BGPB.dirty()&&!confirm('Open the example \u201c'+ex.name+'\u201d as a new, unsaved bridge? The bridge on screen has unsaved changes'+(CURRENT_NAME?' (since \u201c'+CURRENT_NAME+'\u201d was last saved)':'')+'; your saved bridges are not changed. (Cancel, then Save, keeps them.)')) return;
+      const p=JSON.parse(JSON.stringify(ex)); p.name=null;
+      if(applyProject(p)){ CURRENT_NAME=null; updateNameDisplay(); BGPB.setCurrent(null); autosave(); if(window.BGPL) BGPL.h.reset(); setStatus('example loaded: \u201c'+ex.name+'\u201d (not saved)'); } }); }
+  bgExCheck(); setInterval(bgExCheck,3000);
+}
+/* the examples' GitHub hold (see above): bgExMine = holds set here this session; bgExFree = names the user decided on (Upload, Save as) */
+const bgExKey=p=>{ const o=Object.assign({},p); delete o.savedAt; delete o.name; return JSON.stringify(o); };
+let BG_EX_TXT=null;   // the built-in examples' text (filled on first use: EXAMPLE_BRIDGES is defined further down)
+let bgExMine={}, bgExFree={}, bgExRen=null, bgExHook=false;
+function bgExCheck(){
+  const cl=BGPB&&BGPB.dialog&&BGPB.dialog.cloud, e=cl&&cl.engine; if(!e||!e.configured()) return;
+  if(!bgExHook){ bgExHook=true;   // the user's own choices: Save as (hold on / off) and Upload end the automatic hold for that name
+    const h0=e.hold.bind(e), u0=e.upload.bind(e);
+    e.hold=(n,on)=>{ if(!bgExRen||(n!==bgExRen[0]&&n!==bgExRen[1])){ bgExFree[n]=1; delete bgExMine[n]; } return h0(n,on); };
+    e.upload=n=>{ bgExFree[n]=1; delete bgExMine[n]; return u0(n); };
+    e._bgHold=h0; e._bgUpload=u0; }
+  bgExRen=null; if(!BG_EX_TXT) BG_EX_TXT=EXAMPLE_BRIDGES.map(bgExKey);
+  let lib={}; try{ lib=libRead(); }catch(x){ return; }
+  Object.keys(lib).forEach(n=>{ if(bgExFree[n]) return; let ex=false; try{ ex=BG_EX_TXT.indexOf(bgExKey(lib[n]))>=0; }catch(x){}
+    if(ex){ if(!e.held(n)) e._bgHold(n,true); bgExMine[n]=1; }
+    else if(bgExMine[n]){ delete bgExMine[n]; if(e.held(n)) e._bgUpload(n).catch(()=>{}); } });   // saved with changes: uploads as any project
 }
 
 // hook autosave onto every change/click that mutates state
@@ -4683,19 +4737,12 @@ document.getElementById('proj_save').addEventListener('click', downloadProject);
   p.addEventListener('click',go); p.addEventListener('keydown',e=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); go(); } }); })();
 document.getElementById('proj_load').addEventListener('click', ()=>document.getElementById('proj_file').click());
 document.getElementById('proj_file').addEventListener('change', e=>{ if(e.target.files[0]) loadProjectFromFile(e.target.files[0]); });
-document.getElementById('proj_new').addEventListener('click', ()=>{ if(confirm('Reset to the demo bridge? Unsaved changes will be lost.')){ freshDefaults(); CURRENT_NAME=null; updateNameDisplay(); autosave(); } });
-document.getElementById('proj_savelib').addEventListener('click', doSave);
-document.getElementById('proj_saveas').addEventListener('click', doSaveAs);
-document.getElementById('lib_saveas').addEventListener('click', doSaveAs);
-document.getElementById('lib_refresh').addEventListener('click', ()=>{ renderLibrary(); if(BG_GH) BG_GH.shown(BG_GH_UI).catch(()=>{}); /* GHS2 */ });
-document.getElementById('lib_toggle').addEventListener('click', ()=>{
-  const p=document.getElementById('lib_panel'); const open=p.style.display!=='none';
-  p.style.display=open?'none':'block';
-  document.getElementById('lib_toggle').textContent=(open?'\u25b8':'\u25be')+' Library';
-  if(!open){ renderLibrary(); if(BG_GH) BG_GH.shown(BG_GH_UI).catch(()=>{}); /* GHS2 */ }
-});
+/* STDS (2026-11-06): New, Save (updates …), Save As New, Save current as…, Refresh list and ▸ Library are the standard save controls
+   (bgStdsInit); doSave / doSaveAs / libSave / libLoad / libDelete / libRename / renderLibrary are kept (libSave and libLoad are the
+   standard Save and Open). */
 
-/* ===== EXAMPLE BRIDGES (seeded into the library on first boot) ===== */
+/* ===== EXAMPLE BRIDGES (STDS 2026-11-06: no longer seeded into the library; "Load example…" in the Project tab opens one as a new,
+   unsaved bridge. Examples a user already has in the library are kept as they are; see bgStdsInit for the GitHub sync of those.) ===== */
 function _exScalars(ov){
   const base={ h_sta0:'10+00.00', h_x0:'760000', h_y0:'2950000', h_brg0:'N90E', nspans:'1',
     x_mode_global:'crown', x_rate_global:'0.02', x_pivot:'0',
@@ -4754,6 +4801,7 @@ const EXAMPLE_BRIDGES=[
 const EXAMPLES_FLAG='bridgeGeomEngine.examplesSeeded.v1';
 // Seed the example bridges into the library once. Never overwrites an existing entry of the
 // same name; if the user deletes an example it stays deleted (flag prevents re-seeding).
+// STDS (2026-11-06): no longer called (engineer decision: examples are not seeded into the saved list; "Load example…" instead).
 function seedExampleBridges(){
   if(!_storageOK) return;
   try{
@@ -4779,7 +4827,7 @@ if(!_restored){
 // dimension fields that plans give in feet-inches — accept either notation
 ['edge_l','edge_r','curb_l','curb_r','crown_off_a1','crown_off_a2','bcl_off_a1','bcl_off_a2']
   .forEach(enableFeetInches);
-seedExampleBridges();
+/* STDS (2026-11-06): seedExampleBridges() is no longer called here (examples are opened with "Load example…") */
 // keep the crown-offset field labels in sync with the chosen crown reference
 function syncCrownRefLabels(){ const ref=document.getElementById('crown_ref'); if(!ref)return;
   const t = ref.value==='bcl' ? 'from ref line' : 'from PGL';
