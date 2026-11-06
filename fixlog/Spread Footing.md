@@ -5576,3 +5576,24 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Check case 4 (Seymour, f′c 3000, Ped 1 Wall):** V_u,in-plane = 0; vc = 3·54.77·3780.6/1000 = 621.21; vs = 0.00104·60 000·3780.6/1000 = 235.99; V_n = 857.21; φV_n = 642.90; ratio **0.000 PASS**.
 - **Decisions (pending engineer review):** strut-and-tie (11.5.4.1) not used (note where h_w/ℓ_w < 2); ρ_t in V_n = the provided horizontal ratio (the ties by default, SFWC-1); the check uses the in-plane shear at the interface (the only section the tool has).
 - **How verified:** see the PR. **Saved data:** none. **Other copies:** none.
+
+## 2026-11-06 — PR: claude/sf-wall-detailing (SFWC-3: Wall bar spacing (11.7.2.1 / 11.7.3.1) and two layers (11.7.2.3), exemption input; the "Wall checks" REVIEW chip shrinks to what is still not computed; new check, existing results unchanged)
+
+### SFWC-3. Wall detailing, ACI 318-19 11.7   [new check, Wall elements only; CLAUDE.md §4]
+- **Request (engineer, 2026-11-06):** bar spacing limits 11.7.2.1 (vertical) / 11.7.3.1 (horizontal) and two curtains where thicker than 10 in (11.7.2.3), with a per-wall exemption checkbox; review the REVIEW chip.
+- **Provisions read in the ACI 318-19 PDF (printed pp. 171–172; paraphrased):** 11.7.2.1 cast-in-place: vertical s ≤ the lesser of 3h and 18 in; ≤ ℓ_w/3 also where shear reinforcement is required for in-plane strength. 11.7.3.1: horizontal s ≤ the lesser of 3h and 18 in; ≤ ℓ_w/5 also where required for in-plane strength. 11.7.2.3: walls thicker than 10 in, except single-story basement walls and cantilever retaining walls, have the distributed reinforcement in each direction in at least two layers, one near each face. (h = wall thickness.)
+- **Input:** `peds[i].wallIn.ex2` checkbox "Exempt from two layers" (Pedestals card, Wall only). `newPed` and `migrateState`: absent / not `true` = `false` (not exempt).
+- **Where:** `sfdWallInfo` (anchor `/* SFWC-3 (2026-11-06, engineer): detailing`): `o.shReq` = ρ_t,req > 0 (SFWC-1: V_u > φα_cλ√f′c A_cv in some combination); `o.sMaxV` = min(3t, 18, ℓ_w/3 if shReq); `o.sMaxH` = min(3t, 18, ℓ_w/5 if shReq); `o.sVOK` (s_v, SFWC-1), `o.sHOK` (s_h); `o.req2` = t > 10 in and not exempt; `o.layOK` = 2 curtains (perimeter cage) ≥ required; `o.detOK`.
+  - Display: Pedestal Design card 6.x eqBlock "Wall: bar spacing and layers" + note; Report topic "Wall bar spacing and layers" (steps `w.shq`, `w.sv`, `w.sh`, `w.lay`); dashboard chip "Wall bar spacing and layers (ACI 318-19 11.7)" (FAIL where a spacing or the layers fail; D/C = max(s_v/s_v,max, s_h/s_h,max); `sfdChCond` names "two layers required") and its Report result row.
+  - REVIEW chip "Wall checks (ACI 318-19 Ch. 11)": before "spacing 11.7 not computed (…)"; after "out-of-plane design by the pedestal checks (stand-in for 11.5.2 / 11.5.3 / 11.5.5.1, ties 11.7.4.1); strut-and-tie (11.5.4.1) not used". `sfdWallTxt` lists the same as not computed.
+- **Check cases:**
+  - Seymour Ped 1 Wall (t = 32.04 in, ℓ_w = 118.0 in, ρ_t,req = 0): s_v = 8.71 ≤ min(96.12, 18) = 18 OK; s_h = 12 ≤ 18 OK; t > 10: two layers required, 2 provided OK → **PASS**.
+  - #769 case (t = 18, ℓ_w = 72, ρ_t,req = 0): s_v = (72 − 4 − 1)/2 = 33.50 > 18 **NG** (D/C 1.86); s_h = 12 ≤ 18 OK; two layers OK → **FAIL**.
+  - Same, V_y = 500 kip, horizontal #8 @ 4 in (ρ_t,req = 0.00541 > 0): s_v,max = min(54, 18, 24) = 18 → 33.50 NG; s_h,max = min(54, 18, 14.4) = 14.40 → 4.00 OK.
+  - Default, Ped 1 0.75 × 4 ft Wall (t = 9 in ≤ 10): one layer permitted; s_v = 21.50 > 18 NG.
+  - #769 case with the exemption ticked: layers "exempt"; spacing as above.
+- **Decisions (pending engineer review):**
+  1. "Shear reinforcement required for in-plane strength" = ρ_t,req > 0, i.e. V_u > φα_cλ√f′c A_cv in some combination.
+  2. The number of curtains is not an input: the tool's perimeter cage always has a curtain near each face, so 11.7.2.3 passes for every wall; the check is shown for the record.
+  3. The REVIEW chip stays (status REVIEW) and lists only what is still not computed: the Chapter 11 out-of-plane design (the pedestal P–M, shear and slenderness checks stand in) and 11.7.4.1; the strut-and-tie alternative.
+- **How verified:** see the PR. **Saved data:** new field `peds[i].wallIn.ex2` (absent = false). **Other copies:** none.
