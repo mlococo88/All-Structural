@@ -3995,7 +3995,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Check case:** the app opens with 0 console errors; Save as, Saved projects… (Open / Rename / Duplicate / Delete) work as before (steel-bridge-library smoke).
 - **How verified:** `node tests/check-syntax.mjs` (94 files): pass. `node tests/engine/run.mjs` parts library, project-registry, model, report-wiring, legacy, handoffs, paths, demandfile. `node tests/smoke/steel-bridge-library.mjs`, `node tests/smoke/steel-bridge-wiring.mjs` (results in the PR).
 - **Other copies:** none.
-## 2026-11-06 — PR: claude/hdrs-sbapp (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens the Project tab   [display only; no result change]
+## 2026-11-06 — PR: claude/hdrs-sbapp (PR #905: https://github.com/mlococo88/All-Structural/pull/905) (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens the Project tab   [display only; no result change]
 - **Why:** engineer 2026-11-06: every app's header as in Spread Footing (#884): no Save (Ctrl+S) and Saved projects… buttons in the header; they stay in the "Save and open" card. The header keeps the project chip (click = the Project tab), Undo, Redo, the app's other global actions and Print. Ctrl+S and Ctrl+Shift+S work from anywhere. No "Recent projects" start strip (Spread Footing only).
 - **Where:** the `SharedProjectsUI.projectBar({...})` call, right after the line `header: $('hdrBtns'), chipBefore: $('bUndo'), card: true,` (a comment `/* HDRS (2026-11-06, …) */` and one line).
   Before: nothing. After:
