@@ -1299,7 +1299,7 @@ let mlgSaveT=null;
 function mlgAutosave(){clearTimeout(mlgSaveT);mlgSaveT=setTimeout(()=>{try{localStorage.setItem(MLG_KEY,JSON.stringify(mlgSnapshot()));}catch(e){} if(window.MLPL)MLPL.h.record(); /* PLIB: one undo step per change */},400);}
 document.addEventListener('input',mlgAutosave); document.addEventListener('change',mlgAutosave);
 {const _runS=run; run=function(){_runS(); mlgAutosave();};}
-$('runBtn').insertAdjacentHTML('beforebegin','<button class="hb" id="mlgSave" title="Save all inputs to a JSON file">Save JSON</button><button class="hb" id="mlgOpen" title="Load inputs from a JSON file">Open JSON</button><button class="hb" id="mlgNew" title="Clear the autosave and start from the default inputs">New</button><input type="file" id="mlgFile" accept=".json,application/json" style="display:none">');
+$('runBtn').insertAdjacentHTML('beforebegin','<button class="hb" id="mlgSave" title="Save all inputs to a JSON file">Export JSON</button><button class="hb" id="mlgOpen" title="Load inputs from a JSON file">Import JSON</button><button class="hb" id="mlgNew" title="Clear the autosave and start from the default inputs">New</button><input type="file" id="mlgFile" accept=".json,application/json" style="display:none">');
 $('mlgSave').onclick=()=>{
   const d=mlgSnapshot(),blob=new Blob([JSON.stringify(d,null,1)],{type:'application/json'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);
@@ -1330,23 +1330,40 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
   const h=SharedProjects.history({get:inputsText,set:t=>{const d=JSON.parse(t);const vm=$('viewMode');if(vm)d.fields.viewMode=vm.value;mlgApply(d);run();}});
   let ST=null;try{ST=window.localStorage;}catch(e){}
   const store=SharedProjects.mapStore(ST,MLG_LIB,{time:d=>d&&d.savedAt||null,sort:'saved'});
-  let cur=null;
-  const dlg=SharedProjectsUI.libraryDialog({ /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ cloud:{tool:'moving-load-generator',label:'Moving Load Generator',space:1,fromFile:j=>{if(!j||j.schema!==MLG_SCHEMA||!j.fields)throw new Error('not a Moving Load Generator save file');return j;}},
-   store,storage:ST,title:'Saved projects (this browser)',
-    current:()=>cur&&store.has(cur)?cur:null,
-    open:n=>{const d=store.get(n);if(!d)return false;try{mlgApply(d);run();cur=n;return true;}catch(err){alert('Could not open the project: '+err.message);return false;}},
-    renamed:(a,b)=>{if(cur===a)cur=b;}, deleted:n=>{if(cur===n)cur=null;}});
-  const save=()=>{const n0=cur||($('rProj')&&$('rProj').value)||'';const n=prompt('Save the inputs in this browser as:',n0||'Untitled');if(n==null)return;
-    if(!n.trim()){alert('Enter a project name.');return;}
-    if(store.has(n.trim())&&n.trim()!==cur&&!confirm('A saved project named "'+n.trim()+'" already exists. Replace it?'))return;
-    const r=store.save(n,mlgSnapshot());if(!r.ok){alert(r.message);return;}cur=r.name;};
+  const CLOUD= /* GHS (2026-11-05): GitHub sync of this list, files in the Export JSON format */ {tool:'moving-load-generator',label:'Moving Load Generator',space:1,fromFile:j=>{if(!j||j.schema!==MLG_SCHEMA||!j.fields)throw new Error('not a Moving Load Generator save file');return j;}};
+  /* STDS (2026-11-06): the standard save (shared/projects-ui.js projectBar) over movingLoadGen.projects.v1 ({ name: mlgSnapshot() },
+     unchanged). Replaces the header Save (prompt) and the PLIB Saved projects… button, and the Project tab's New. Save = store.save(name,
+     mlgSnapshot()) (the old Save's write); Open = mlgApply() + run() (as before); New = the old New (#mlgNew: the autosave cleared and
+     the page reloaded with the defaults; asked first only on unsaved changes). The open name is kept in this page only (as before) and
+     found again by content after a reload. "Unsaved changes" compares mlgSnapshot() without savedAt and the view toggle viewMode (as
+     Undo / Redo). Export / Import JSON: the same #mlgSave / #mlgOpen buttons and handlers (labels were Save JSON / Open JSON), moved
+     into the card; the card is placed in the Project tab by the MLHD block below. */
+  const strip=d=>{if(!d||!d.fields)return null;const c=JSON.parse(JSON.stringify(d));delete c.savedAt;delete c.fields.viewMode;return SharedProjects.canon(c);};
   const B=(t,ti)=>SharedProjectsUI.button(t,ti,{cls:'hb'});
-  const bs=B('Save','Save the inputs in this browser\'s project list'),bl=B('Saved projects\u2026','The projects saved in this browser: open, rename, duplicate, delete'),
-    bu=B('Undo','Undo the last input change (Ctrl+Z)'),br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
-  bs.addEventListener('click',save);bl.addEventListener('click',()=>dlg.show());
-  const ref=$('mlgSave');if(ref){[bu,br,bs,bl].forEach(b=>ref.parentNode.insertBefore(b,ref));}
+  const bu=B('Undo','Undo the last input change (Ctrl+Z)'),br=B('Redo','Redo (Ctrl+Y or Ctrl+Shift+Z)');
+  const hdr=$('runBtn')&&$('runBtn').parentNode, rp=$('rptBtn'), eS=$('mlgSave'), eO=$('mlgOpen');   /* eS / eO: off the page until the card is mounted (MLHD block) */
+  if(hdr){[bu,br].forEach(b=>hdr.insertBefore(b,$('mlgSave')));}
+  const nb=$('mlgNew'); if(nb) nb.remove();   /* New is in the "Save and open" card (same path, below) */
+  const pb=SharedProjectsUI.projectBar({store,storage:ST,label:'Moving Load Generator',id:'mlgLibDlg',
+    snapshot:()=>strip(mlgSnapshot()), snapOf:n=>strip(store.get(n)),
+    save:n=>store.save(n,mlgSnapshot()),
+    open:n=>{const d=store.get(n);if(!d)return false;try{mlgApply(d);run();return true;}catch(err){alert('Could not open the project: '+err.message);return false;}},
+    newProject:()=>{try{localStorage.removeItem(MLG_KEY);}catch(e){}location.reload();},
+    displayName:()=>$('rProj')&&$('rProj').value||'',
+    exportFile:n=>{const d=mlgSnapshot(),blob=new Blob([JSON.stringify(d,null,1)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+      a.download=`moving_load_${(n||d.fields.rProj||'project').replace(/[^\w.-]+/g,'_')}.json`;a.click();},
+    importFile:()=>$('mlgFile').click(),
+    fileButtons:[eS,eO],
+    header:hdr, chipBefore:bu, headerBefore:$('mlgSave'), card:true,
+    cloud:CLOUD});
+  [pb.el.chip,pb.el.save,pb.el.lib].forEach(b=>b.classList.add('hb'));
+  document.head.insertAdjacentHTML('beforeend','<style>@media(max-width:1500px){.hdr [data-sp] .spKbd{display:none}.hdr .hb{padding:6px 9px;margin-left:4px}.hdr button.spChip[data-sp] b{max-width:14ch}}@media(max-width:1200px){.hdr button.spChip[data-sp]>span:nth-child(2){display:none}}</style>');   /* STDS: the header keeps one row down to about 1100 px with the chip (Ctrl+S stays in Save\'s tooltip; the full name in the chip\'s tooltip and the card) */
+  if(rp&&hdr) hdr.insertBefore(rp,$('runBtn'));   /* STDS: Print Report after Saved projects… (standard order: chip · Undo · Redo · Save · Saved projects… · Print) */
+  eO.onclick=()=>pb.importJSON();   /* asks first on unsaved changes */
+  const dlg=pb.dialog;
+  const save=n=>{const r=store.save(n,mlgSnapshot());if(r.ok)pb.setCurrent(r.name);return r;};
   SharedProjectsUI.undoRedo(h,{undo:bu,redo:br});
-  h.reset();window.MLPL={h,store,dlg,save:n=>{const r=store.save(n,mlgSnapshot());if(r.ok)cur=r.name;return r;}};
+  h.reset();window.MLPL={h,store,dlg,save,pb};
 })();
 </script>
 <script>
@@ -1783,12 +1800,16 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
   var A=document.querySelector('aside'); if(!A) return;
   var d=document.createElement('details'); d.open=true; d.id='mlgPrjSec';
   var G=function(t,h,ids){ return '<div class="f" style="margin-bottom:8px"><label>'+t+'</label><p class="hint" style="margin:0 0 4px">'+h+'</p><div style="display:flex;gap:6px;flex-wrap:wrap" data-ids="'+ids+'"></div></div>'; };
+  /* STDS (2026-11-06): the first group is the standard "Save and open" card (MLPL.pb, built in the PLIB block with Export JSON /
+     Import JSON = #mlgSave / #mlgOpen); was "Project file (JSON)": Save JSON · Open JSON · New */
   d.innerHTML='<summary>Project</summary><div class="pb">'
-    +G('Project file (JSON)','Every input as a .json file and back; New clears the autosave and starts from the defaults.','mlgSave mlgOpen mlgNew')
+    +'<div class="f" style="margin-bottom:8px"><label>Save and open</label><div id="mlgSaveCard"></div></div>'
     +G('Benchmarks','Load a published example (replaces the current inputs) and compare the results with it.','bmBtn cfBtn')
     +'</div>';
   Array.prototype.forEach.call(d.querySelectorAll('[data-ids]'),function(r){ r.getAttribute('data-ids').split(' ').forEach(function(id){ var b=document.getElementById(id); if(b){ b.className='btn'; r.appendChild(b); } }); });
   A.appendChild(d);
+  if(window.MLPL&&MLPL.pb){ MLPL.pb.mount(document.getElementById('mlgSaveCard')); MLPL.pb.el.card.querySelectorAll('button[data-sp]').forEach(function(b){ b.classList.add('btn'); }); }
+  ['mlgSave','mlgOpen'].forEach(function(id){ var b=document.getElementById(id); if(b) b.className='btn'; });
   document.head.insertAdjacentHTML('beforeend','<style>@media print{#mlgPrjSec,#mlgInPane_proj{display:none!important}}</style>');
 })();
 </script>

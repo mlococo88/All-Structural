@@ -68,7 +68,7 @@ export const TOOLS = {
     results: async p => { await p.waitForFunction(() => RES && RES.abs, null, { timeout: 20000 }).catch(() => {}); await p.waitForTimeout(300); return p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(RES, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }); },
     change: p => bump(p, 'aside input[type=number]', 5),
     // main has no list: A's "save" writes nothing; B saves through the new list
-    save: async (p, name) => { await p.evaluate(n => { if (window.MLPL) window.MLPL.save(n); }, name); await p.waitForTimeout(300); }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { if (window.MLPL) window.MLPL.save(n); }, name); await p.waitForTimeout(300); }   // STDS: the standard Save as (branch), the old Save (main)
   },
   timber: {
     file: 'Timber Beam Check.html', list: 'tbc_projects_v1', auto: 'tbc_autosave_v1',
