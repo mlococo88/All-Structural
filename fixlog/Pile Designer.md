@@ -19860,7 +19860,7 @@ index 06a42e4..b58d4e3 100644
 - **How verified:** `node tests/check-syntax.mjs "Pile Designer.html"`: pass. `node tests/smoke/pile-library.mjs`: ALL PASS. Browser check: the button reads "Reset inputs" with the new title; 0 console errors beyond main's (the Babel size note). No test or manual text named the old label.
 - **Other copies:** none.
 
-## 2026-11-06 — PR: claude/hdrs-pile (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens the Project tab   [display only; no result change]
+## 2026-11-06 — PR: claude/hdrs-pile (PR #904: https://github.com/mlococo88/All-Structural/pull/904) (HDRS) — header: Save and Saved projects… removed (in the "Save and open" card only); the chip opens the Project tab   [display only; no result change]
 - **Why:** engineer 2026-11-06: every app's header as in Spread Footing (#884): no Save (Ctrl+S) and Saved projects… buttons in the header; they stay in the "Save and open" card. The header keeps the project chip (click = the Project tab), Undo, Redo, the app's other global actions and Print. Ctrl+S and Ctrl+Shift+S work from anywhere. No "Recent projects" start strip (Spread Footing only).
 - **Where:** the `SharedProjectsUI.projectBar({...})` call, right after the line `header: hdr.box, chipBefore: hdr.undo, headerBefore: hdr.before, card: true,` (a comment `/* HDRS (2026-11-06, …) */` and one line).
   Before: nothing. After:
