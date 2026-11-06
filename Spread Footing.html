@@ -2479,17 +2479,50 @@ const sfqcName=c=>'('+(c.sx>0?'+':'−')+'B/2, '+(c.sy>0?'+':'−')+'L/2)';
 const sfqcTxt=c=>c.off?'0 (no contact)':f2(c.q>0?c.q:0)+' ksf';
 /* the corner labels of the heat map: just inside each corner; where the footing is too narrow or short on the plot for two labels
    side by side, just outside its left and right edges (when the plot has the room), else inside on two lines. Display only. */
-function sfqcFit(id,B,L){
+/* SFQL (2026-11-06): the placement is chosen from the labels' own measured size (Plotly's box of the first draw, the text width
+   from a canvas at the candidate font size) and checked, in plot-area pixels, against the plot area (the colour bar, title and
+   axes are outside it), the two centroid axes (the zero lines x = 0 and y = 0, which run through the footing and out to the plot
+   edge) and each other, with a 3 px gap. Candidates in order: inside each corner; outside the left and right edges; above and
+   below the top and bottom edges; the same three on two lines at 10 pt, then 9 pt; the first that is clear is used. When none is
+   clear, each corner shows its tag q₁…q₄ only (the values are in the corner table directly above the plot and in the hover).
+   Chosen again after a window resize, zoom or pan (plotly_relayout). Display only: no value changes. */
+function sfqcFit(id,B,L,T){
  const gd=document.getElementById(id),fl=gd&&gd._fullLayout;
  if(!fl||!fl.xaxis||!fl.yaxis||!fl.xaxis._length||!fl.annotations||fl.annotations.length!==4||typeof Plotly==='undefined')return;
- const xa=fl.xaxis,ya=fl.yaxis,fw=B*xa._length/Math.abs(xa.range[1]-xa.range[0]),fh=L*ya._length/Math.abs(ya.range[1]-ya.range[0]);
- const lw=Math.max(...fl.annotations.map(a=>String(a.text).replace(/<br>/g,'').length))*5.6+12,lh=20;
- const mode=(fw>=2*lw+12&&fh>=2*lh+12)?'in':((xa._length-fw)/2>=lw+8&&fh>=2*lh+8)?'side':'two';
+ T=T||fl.annotations.map(a=>String(a.text).replace(/<br>/g,' '));   /* SFQL: the full one-line texts, as drawn by renderPlots */
+ const cv=sfqcFit.cv||(sfqcFit.cv=document.createElement('canvas').getContext('2d'));
+ const tw=(t,sz)=>{cv.font=sz+'px "Times New Roman", Times, serif';return cv.measureText(t).width;};
+ /* padding and line height from Plotly's own box of a one-line 11 pt label (border 1 + borderpad 2 each side if not drawn yet) */
+ const one=fl.annotations.find(a=>!/<br>/.test(String(a.text))&&(a.font&&a.font.size)===11&&a._xsize>0);
+ if(one)gd._sfqcCal=[Math.max(one._xsize-tw(String(one.text),11),4),Math.max(one._ysize-6,12)];
+ const padX=gd._sfqcCal?gd._sfqcCal[0]:6, lh11=gd._sfqcCal?gd._sfqcCal[1]:14;
+ const box=(t,sz)=>{const ln=t.split('<br>');return {w:Math.max(...ln.map(x=>tw(x,sz)))+padX+1,h:ln.length*lh11*sz/11+6+1};};
+ const xa=fl.xaxis,ya=fl.yaxis,W=xa._length,H=ya._length,g=3;
+ const px=v=>xa.c2p(v),py=v=>ya.c2p(v),inR=(ax,v)=>(v-ax.range[0])*(v-ax.range[1])<=0;
+ const X0=inR(xa,0)?px(0):null,Y0=inR(ya,0)?py(0):null;
+ const C=[['in',1,11],['side',1,11],['vout',1,11],['in',2,10],['side',2,10],['vout',2,10],['in',2,9],['side',2,9],['vout',2,9],['tag',1,10]];
+ const plan=c=>T.map((t0,k)=>{const sx=SFQC_PTS[k][0],sy=SFQC_PTS[k][1],pl=c[0];
+  const t=pl==='tag'?t0.split(' ')[0]:c[1]===2?t0.replace(' = ',' =<br>'):t0, b=box(t,c[2]);
+  const xo=pl==='side', yo=pl==='vout';
+  const xan=xo?(sx>0?'left':'right'):(sx>0?'right':'left'), xsh=xo?4*sx:(yo?0:-4*sx);
+  const yan=yo?(sy>0?'bottom':'top'):(sy>0?'top':'bottom'), ysh=yo?4*sy:-4*sy;
+  const x0=px(sx*B/2)+xsh-(xan==='right'?b.w:0), y0=py(sy*L/2)-ysh-(yan==='bottom'?b.h:0);
+  return {o:{xanchor:xan,yanchor:yan,xshift:xsh,yshift:ysh,text:t,'font.size':c[2]},x0,x1:x0+b.w,y0,y1:y0+b.h};});
+ const bad=P=>{let n=0;
+  P.forEach((q,i)=>{n+=Math.max(0,-q.x0)+Math.max(0,q.x1-W)+Math.max(0,-q.y0)+Math.max(0,q.y1-H);
+   if(X0!==null&&q.x0-g<X0&&X0<q.x1+g)n+=Math.min(X0-q.x0+g,q.x1+g-X0);
+   if(Y0!==null&&q.y0-g<Y0&&Y0<q.y1+g)n+=Math.min(Y0-q.y0+g,q.y1+g-Y0);
+   for(let j=i+1;j<P.length;j++){const r=P[j],ox=Math.min(q.x1,r.x1)-Math.max(q.x0,r.x0)+g,oy=Math.min(q.y1,r.y1)-Math.max(q.y0,r.y0)+g;if(ox>0&&oy>0)n+=Math.min(ox,oy);}});
+  return n;};
+ let best=null,bs=Infinity;
+ for(const c of C){const P=plan(c),s=bad(P);if(s<bs){best=P;bs=s;}if(s<=0.5)break;}
  const upd={};
- fl.annotations.forEach((a,k)=>{const sx=SFQC_PTS[k][0],sy=SFQC_PTS[k][1],t=String(a.text).replace(/<br>/g,' ');
-  const o=mode==='side'?{xanchor:sx>0?'left':'right',xshift:4*sx,text:t,'font.size':11}:mode==='two'?{xanchor:sx>0?'right':'left',xshift:-4*sx,text:t.replace(' = ',' =<br>'),'font.size':10}:{xanchor:sx>0?'right':'left',xshift:-4*sx,text:t,'font.size':11};
+ fl.annotations.forEach((a,k)=>{const o=best[k].o;
   Object.keys(o).forEach(q=>{if(q==='font.size'?(a.font&&a.font.size)!==o[q]:a[q]!==o[q])upd['annotations['+k+'].'+q]=o[q];});});
- if(Object.keys(upd).length)Plotly.relayout(gd,upd);
+ gd._sfqcFit=bs<=0.5?'clear':'least overlap';
+ if(Object.keys(upd).length&&!gd._sfqcBusy){gd._sfqcBusy=true;try{Plotly.relayout(gd,upd);}finally{gd._sfqcBusy=false;}}
+ if(gd.on){if(gd._sfqcH&&gd.removeListener)gd.removeListener('plotly_relayout',gd._sfqcH);
+  gd._sfqcH=e=>{if(!gd._sfqcBusy&&!(e&&Object.keys(e).some(k=>/^annotations/.test(k))))sfqcFit(id,B,L,T);};gd.on('plotly_relayout',gd._sfqcH);}
 }
 function sfqcCard(bp,r){
  const C=sfqcRows(bp);if(!C)return null;
@@ -3307,7 +3340,7 @@ function renderPlots(){
    xanchor:c.sx>0?'right':'left',yanchor:c.sy>0?'top':'bottom',xshift:-4*c.sx,yshift:-4*c.sy,bgcolor:'rgba(255,255,255,0.85)',bordercolor:'#444',borderwidth:1,borderpad:2,font:{size:11,color:'#111'}}));
   sfpPlot('plot-heat',[{x:xs,y:ys,z:z,type:'heatmap',colorscale:[[0,'#1a9850'],[0.5,'#fee08b'],[1,'#d73027']],reversescale:false,colorbar:{title:'q (ksf)'},hovertemplate:'x=%{x:.2f} ft<br>y=%{y:.2f} ft<br>q=%{z:.2f} ksf<extra></extra>'}],
   {font,title:{text:hv?'Base pressure \u2014 LRFD (factored), reference only: '+hv.cb.name+'  (green = min, red = max)':hs===R.govBear?'Base pressure \u2014 governing combination: '+R.govBear.cb.name+'  (green = min, red = max)':'Base pressure \u2014 selected service combination: '+hs.cb.name+' (governing: '+R.govBear.cb.name+')  (green = min, red = max)',font:{size:12}},margin:{t:30},xaxis:{title:'x (ft)',scaleanchor:'y'},yaxis:{title:'y (ft)'},annotations:qcAnn},{responsive:true,displaylogo:false});
-  sfqcFit('plot-heat',B,L);   /* SFQC */
+  sfqcFit('plot-heat',B,L,qcAnn.map(a=>a.text));   /* SFQC; SFQL: the full texts */
  }
  /* FS chart */
  if(sfpOn('plot-fs')){

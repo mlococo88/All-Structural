@@ -5676,3 +5676,80 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **How verified:** main vs branch on the 10 SF harness cases (R, P2, dashboard text and Report text identical, 0 diffs, 0 console errors); Save as / edit / Ctrl+S / Export JSON at 1400 and 390 px, main vs branch: Export JSON identical, the same localStorage keys with the same values (only time stamps differ); `tests/smoke/start-chooser.mjs` (its Saved projects… clicks now use the card button; new step 11 for the header), standard-save, project-library --tool spreadfooting, github-sync, phone-layout --tool sf, spread-footing-scroll, check-syntax; screenshots at 1400 and 390 px looked at.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** engineer to decide whether other apps follow (they keep the header Save until then).
+
+## 2026-11-06 — PR: claude/sf-corner-labels (SFQL: Bearing heat map, corner-pressure labels placed clear of the centroid axes, the plot edge, the colour bar and each other; display only, no result change)
+
+- **Why:** engineer 2026-11-06: the corner-pressure labels of the card 3.2 heat map (SFQC, #777) crowd or overlap the axis lines near the plot; reposition so they never overlap the axes, the colour bar or each other at 1280–1920 px and on a phone (390 px), including the narrow Seymour footing (5 × 13 ft) and the default project.
+- **Problem (before):** `sfqcFit` chose one of three placements from an *estimated* label width (5.6 px per character + 12) and fixed thresholds, and did not look at the two centroid axes (the Plotly zero lines x = 0 and y = 0, drawn across the footing and out to the plot edge). Examples: a short footing on a phone (B × L = 14 × 4.5 ft, 390 px) put the labels inside on two lines, where q₁/q₄ and q₂/q₃ overlapped each other and all four sat on the y = 0 axis line; at the default project on a phone the estimate forced two-line labels although one line fitted; the inside placement was accepted with only 6 px between a label and the axis line.
+- **Where:** `sfqcFit` (anchor `function sfqcFit(id,B,L`, before `function sfqcCard(bp,r){`), and its call in `renderPlots`, heat map.
+- **Before (`sfqcFit`):**
+```js
+function sfqcFit(id,B,L){
+ const gd=document.getElementById(id),fl=gd&&gd._fullLayout;
+ if(!fl||!fl.xaxis||!fl.yaxis||!fl.xaxis._length||!fl.annotations||fl.annotations.length!==4||typeof Plotly==='undefined')return;
+ const xa=fl.xaxis,ya=fl.yaxis,fw=B*xa._length/Math.abs(xa.range[1]-xa.range[0]),fh=L*ya._length/Math.abs(ya.range[1]-ya.range[0]);
+ const lw=Math.max(...fl.annotations.map(a=>String(a.text).replace(/<br>/g,'').length))*5.6+12,lh=20;
+ const mode=(fw>=2*lw+12&&fh>=2*lh+12)?'in':((xa._length-fw)/2>=lw+8&&fh>=2*lh+8)?'side':'two';
+ const upd={};
+ fl.annotations.forEach((a,k)=>{const sx=SFQC_PTS[k][0],sy=SFQC_PTS[k][1],t=String(a.text).replace(/<br>/g,' ');
+  const o=mode==='side'?{xanchor:sx>0?'left':'right',xshift:4*sx,text:t,'font.size':11}:mode==='two'?{xanchor:sx>0?'right':'left',xshift:-4*sx,text:t.replace(' = ',' =<br>'),'font.size':10}:{xanchor:sx>0?'right':'left',xshift:-4*sx,text:t,'font.size':11};
+  Object.keys(o).forEach(q=>{if(q==='font.size'?(a.font&&a.font.size)!==o[q]:a[q]!==o[q])upd['annotations['+k+'].'+q]=o[q];});});
+ if(Object.keys(upd).length)Plotly.relayout(gd,upd);
+}
+```
+  call: `sfqcFit('plot-heat',B,L);   /* SFQC */`
+- **After:**
+```js
+/* SFQL (2026-11-06): the placement is chosen from the labels' own measured size (Plotly's box of the first draw, the text width
+   from a canvas at the candidate font size) and checked, in plot-area pixels, against the plot area (the colour bar, title and
+   axes are outside it), the two centroid axes (the zero lines x = 0 and y = 0, which run through the footing and out to the plot
+   edge) and each other, with a 3 px gap. Candidates in order: inside each corner; outside the left and right edges; above and
+   below the top and bottom edges; the same three on two lines at 10 pt, then 9 pt; the first that is clear is used. When none is
+   clear, each corner shows its tag q₁…q₄ only (the values are in the corner table directly above the plot and in the hover).
+   Chosen again after a window resize, zoom or pan (plotly_relayout). Display only: no value changes. */
+function sfqcFit(id,B,L,T){
+ const gd=document.getElementById(id),fl=gd&&gd._fullLayout;
+ if(!fl||!fl.xaxis||!fl.yaxis||!fl.xaxis._length||!fl.annotations||fl.annotations.length!==4||typeof Plotly==='undefined')return;
+ T=T||fl.annotations.map(a=>String(a.text).replace(/<br>/g,' '));   /* SFQL: the full one-line texts, as drawn by renderPlots */
+ const cv=sfqcFit.cv||(sfqcFit.cv=document.createElement('canvas').getContext('2d'));
+ const tw=(t,sz)=>{cv.font=sz+'px "Times New Roman", Times, serif';return cv.measureText(t).width;};
+ /* padding and line height from Plotly's own box of a one-line 11 pt label (border 1 + borderpad 2 each side if not drawn yet) */
+ const one=fl.annotations.find(a=>!/<br>/.test(String(a.text))&&(a.font&&a.font.size)===11&&a._xsize>0);
+ if(one)gd._sfqcCal=[Math.max(one._xsize-tw(String(one.text),11),4),Math.max(one._ysize-6,12)];
+ const padX=gd._sfqcCal?gd._sfqcCal[0]:6, lh11=gd._sfqcCal?gd._sfqcCal[1]:14;
+ const box=(t,sz)=>{const ln=t.split('<br>');return {w:Math.max(...ln.map(x=>tw(x,sz)))+padX+1,h:ln.length*lh11*sz/11+6+1};};
+ const xa=fl.xaxis,ya=fl.yaxis,W=xa._length,H=ya._length,g=3;
+ const px=v=>xa.c2p(v),py=v=>ya.c2p(v),inR=(ax,v)=>(v-ax.range[0])*(v-ax.range[1])<=0;
+ const X0=inR(xa,0)?px(0):null,Y0=inR(ya,0)?py(0):null;
+ const C=[['in',1,11],['side',1,11],['vout',1,11],['in',2,10],['side',2,10],['vout',2,10],['in',2,9],['side',2,9],['vout',2,9],['tag',1,10]];
+ const plan=c=>T.map((t0,k)=>{const sx=SFQC_PTS[k][0],sy=SFQC_PTS[k][1],pl=c[0];
+  const t=pl==='tag'?t0.split(' ')[0]:c[1]===2?t0.replace(' = ',' =<br>'):t0, b=box(t,c[2]);
+  const xo=pl==='side', yo=pl==='vout';
+  const xan=xo?(sx>0?'left':'right'):(sx>0?'right':'left'), xsh=xo?4*sx:(yo?0:-4*sx);
+  const yan=yo?(sy>0?'bottom':'top'):(sy>0?'top':'bottom'), ysh=yo?4*sy:-4*sy;
+  const x0=px(sx*B/2)+xsh-(xan==='right'?b.w:0), y0=py(sy*L/2)-ysh-(yan==='bottom'?b.h:0);
+  return {o:{xanchor:xan,yanchor:yan,xshift:xsh,yshift:ysh,text:t,'font.size':c[2]},x0,x1:x0+b.w,y0,y1:y0+b.h};});
+ const bad=P=>{let n=0;
+  P.forEach((q,i)=>{n+=Math.max(0,-q.x0)+Math.max(0,q.x1-W)+Math.max(0,-q.y0)+Math.max(0,q.y1-H);
+   if(X0!==null&&q.x0-g<X0&&X0<q.x1+g)n+=Math.min(X0-q.x0+g,q.x1+g-X0);
+   if(Y0!==null&&q.y0-g<Y0&&Y0<q.y1+g)n+=Math.min(Y0-q.y0+g,q.y1+g-Y0);
+   for(let j=i+1;j<P.length;j++){const r=P[j],ox=Math.min(q.x1,r.x1)-Math.max(q.x0,r.x0)+g,oy=Math.min(q.y1,r.y1)-Math.max(q.y0,r.y0)+g;if(ox>0&&oy>0)n+=Math.min(ox,oy);}});
+  return n;};
+ let best=null,bs=Infinity;
+ for(const c of C){const P=plan(c),s=bad(P);if(s<bs){best=P;bs=s;}if(s<=0.5)break;}
+ const upd={};
+ fl.annotations.forEach((a,k)=>{const o=best[k].o;
+  Object.keys(o).forEach(q=>{if(q==='font.size'?(a.font&&a.font.size)!==o[q]:a[q]!==o[q])upd['annotations['+k+'].'+q]=o[q];});});
+ gd._sfqcFit=bs<=0.5?'clear':'least overlap';
+ if(Object.keys(upd).length&&!gd._sfqcBusy){gd._sfqcBusy=true;try{Plotly.relayout(gd,upd);}finally{gd._sfqcBusy=false;}}
+ if(gd.on){if(gd._sfqcH&&gd.removeListener)gd.removeListener('plotly_relayout',gd._sfqcH);
+  gd._sfqcH=e=>{if(!gd._sfqcBusy&&!(e&&Object.keys(e).some(k=>/^annotations/.test(k))))sfqcFit(id,B,L,T);};gd.on('plotly_relayout',gd._sfqcH);}
+}
+```
+  call: `sfqcFit('plot-heat',B,L,qcAnn.map(a=>a.text));   /* SFQC; SFQL: the full texts */`
+- **What it does:** each candidate placement is laid out in plot-area pixels from the labels' real size (Plotly's own box of the first draw gives the padding and line height; the text width comes from a canvas at the candidate font size) and scored against: the plot area (the colour bar, title and axis ticks are outside it), the two centroid axis lines, and the other labels, with a 3 px gap. Order: inside each corner (11 pt); outside the left/right edges; above/below the top/bottom edges; the same three on two lines at 10 pt, then at 9 pt; the first clear one is used. If none is clear, each corner shows only its tag q₁…q₄ (the values are in the corner table directly above the plot and in the hover); if even that is not clear, the placement with the least overlap. The placement is chosen again on a window resize, zoom or pan (`plotly_relayout`, ignoring the function's own annotation relayout). `gd._sfqcFit` records 'clear' or 'least overlap' (used by the check below).
+- **Governing provision:** none (display only). No value, table, saved field or Report number changes.
+- **Check case (headless Chromium at 390 / 1280 / 1600 / 1920 px):** default 10 × 8 ft; Seymour 5 × 13 ft; sfe9 and sfe (partial contact, two corners off); rev; thin; a short footing 14 × 4.5 ft; a 3 × 3 ft footing with no-contact corners. DOM check of each drawn label box against the plot area, the colour bar, the zero-line paths and the other labels: before, the short footing at 390 px had 6 overlaps (q₁ × q₄, q₂ × q₃, all four × the y = 0 axis); after, 0 overlaps in all 32 views, every view 'clear'. Seymour: 1280–1920 px unchanged (labels outside the left and right edges, one line); 390 px two lines inside, as before. Default at 390 px: one line inside (before: two lines). Short footing at 390 px: above and below the footing. Resize 1600 → 390 → 1600 px: the placement follows (one line outside → two lines inside → one line outside).
+- **How verified:** SF harness (10 cases) main vs branch: `R` and `P2` deep diff 0 differences, dashboard and Report text identical, 0 console / KaTeX errors. The Report's copy of the heat map carries the four labels with the same values. Tests: check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser.
+- **Saved data:** none touched (§5). **Other copies:** none.
+- **Open item:** at 390 px the plot title is wider than the plot and is cut at both ends (unchanged; not part of this request).
