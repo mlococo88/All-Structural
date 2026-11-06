@@ -18,16 +18,13 @@ const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ?
 const FOLDER = { asce7: 'asce7-load-generator', baseplate: 'base-plate-anchor', bsl: 'bridge-substructure-loading', gusset: 'gusset-plate-rating',
   lightpole: 'light-pole-sign-post', mlg: 'moving-load-generator', retwall: 'retaining-wall-designer', spc: 'section-property-calculator',
   smd: 'shear-moment-diagrams', steelbeam: 'steel-beam-aisc', stonearch: 'stone-arch-rating', timber: 'timber-beam-check',
-  rebar: 'aci-rebar-development', spreadfooting: 'spread-footing', cbc: 'concrete-beam-capacity',
+  rebar: 'aci-rebar-development', spreadfooting: 'spread-footing', cbc: 'concrete-beam-capacity', asd: 'concrete-beam-asd',
   // GHS2 (2026-11-05): tools with their own project dialog or panel (statusCell + decorate(body, ui, { rows: false }))
   abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app',
   gd: 'steel-bridge-design' };   // Steel Bridge Design.html: the shared Saved projects dialog (GHS2)
 // Tools with their own project dialog: how to show it (with sync on, the GitHub rows are drawn into it), and whether it is open.
 // Default: the shared Saved projects dialog (dialog.spLib).
 const OWN = {
-  abutment: { show: p => p.evaluate(() => { const d = document.getElementById('dlgProj'); if (d.open) d.close(); document.getElementById('btnManageProj').click(); }),
-    open: p => p.evaluate(() => document.getElementById('dlgProj').open),
-    del: (p, n) => p.evaluate(n => document.querySelector(`#projList [data-act=del][data-n="${CSS.escape(n)}"]`).click(), n) },
   edm: { show: p => p.evaluate(() => { const d = document.getElementById('dlgProj'); if (d.open) d.close(); document.getElementById('btnManageProj').click(); }),
     open: p => p.evaluate(() => document.getElementById('dlgProj').open),
     del: (p, n) => p.evaluate(n => document.querySelector(`#projList [data-a=del][data-n="${CSS.escape(n)}"]`).click(), n) },
@@ -38,7 +35,7 @@ const OWN = {
     del: (p, n) => p.evaluate(n => document.querySelector(`#sbdLibDlg [data-spa=del][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(), n) }
 };
 // tools that share one page (the Concrete Beam suite's frames): the other tabs with sync on the same page (their bookkeeping key is written too)
-const SUITE = { rebar: ['cbc'], cbc: ['rebar'] };
+const SUITE = { rebar: ['cbc', 'asd'], cbc: ['rebar', 'asd'], asd: ['cbc', 'rebar'] };
 const BOX = key => (OWN[key] && OWN[key].box) || 'dialog[open]';
 const showList = (key, p) => OWN[key] ? OWN[key].show(p) : p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)).click(); });
 const listOpen = (key, p) => OWN[key] ? OWN[key].open(p) : p.evaluate(() => !!document.querySelector('dialog.spLib[open]'));
