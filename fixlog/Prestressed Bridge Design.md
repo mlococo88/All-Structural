@@ -2254,7 +2254,7 @@ const PbdListTable = window.SharedListInput ? SharedListInput.react(React) : nul
 - **Other copies:** `index.html`, `lldf.html`, `Prestressed Bridge Design.html` (same PR; the block stays identical in the three).
 - **Formulas, factors, units, code references:** none. **Saved data:** none.
 
-## 2026-11-06 — PR: claude/bss-psb (BSS) — the standard save: header chip · Undo · Redo · Save · Saved projects…, "Save and open" card first in Inputs › Project, standard dialog over the Bridge Suite list   [display and storage-access only; no key or format change; no computed result change]
+## 2026-11-06 — PR: claude/bss-psb (PR #865: https://github.com/mlococo88/All-Structural/pull/865) (BSS) — the standard save: header chip · Undo · Redo · Save · Saved projects…, "Save and open" card first in Inputs › Project, standard dialog over the Bridge Suite list   [display and storage-access only; no key or format change; no computed result change]
 - **Why:** engineer-approved standard save (2026-11-05) and the Bridge Suite decisions (2026-11-06). Prestressed is on hold for its rebuild: display / storage only, kept minimal.
 - **Where / what:**
   - `<head>`: after `shared/list-input.js`, `shared/projects.js`, `shared/projects-ui.js`, `shared/github-sync.js`, `shared/bridge-suite-projects.js`; CSS "BSS (2026-11-06)" after `.btn.ghost{…}`.
