@@ -2217,7 +2217,7 @@ function renderStatus(r) {
   - The 3D selection is session only.
   - AASHTO mode lists no seismic case (Extreme Event I is not evaluated by the tool).
 
-## 2026-11-06 — PR: claude/rw-3d-factored (RW3F) — 3D view: "Load arrows: Unfactored / Factored" for combination views; factors read from the analysis' combination definitions   [display only; calcAll refactor with no result change]
+## 2026-11-06 — PR: claude/rw-3d-factored (PR #934: https://github.com/mlococo88/All-Structural/pull/934) (RW3F) — 3D view: "Load arrows: Unfactored / Factored" for combination views; factors read from the analysis' combination definitions   [display only; calcAll refactor with no result change]
 - **Why:** engineer-approved 2026-11-06 (follow-up to RW3L #933, whose open question was factored per-load arrows).
 - **What:**
   - A toggle **Load arrows: ○ Unfactored ○ Factored** next to the 3D selector (`#c3d-fac`, radios `name="c3d-fac"`). Enabled for a factored combination (ACI U = 1.2D + 1.6H, U = 0.9D + 1.6H; AASHTO Strength I, Strength Ia, Extreme Event II, Strength I / Ia total). Disabled (greyed, with a tooltip) for a single load case, "All load cases" and the service combination: these stay unfactored.
