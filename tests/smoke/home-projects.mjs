@@ -19,7 +19,7 @@ const SHOTS = arg('shots', process.env.SHOTS);
 export const FOLDER = { mlg: 'moving-load-generator', bsl: 'bridge-substructure-loading', asce7: 'asce7-load-generator', smd: 'shear-moment-diagrams',
   stonearch: 'stone-arch-rating', gusset: 'gusset-plate-rating', retwall: 'retaining-wall-designer', spreadfooting: 'spread-footing',
   lightpole: 'light-pole-sign-post', baseplate: 'base-plate-anchor', steelbeam: 'steel-beam-aisc', timber: 'timber-beam-check',
-  spc: 'section-property-calculator', rebar: 'aci-rebar-development', cbc: 'concrete-beam-capacity', asd: 'concrete-beam-asd', abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app', gd: 'steel-bridge-design', pile: 'pile-designer' };
+  spc: 'section-property-calculator', rebar: 'aci-rebar-development', cbc: 'concrete-beam-capacity', asd: 'concrete-beam-asd', abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app', gd: 'steel-bridge-design', pile: 'pile-designer', index: 'bridge-suite' };
 // own list panels: every row of the list (project-library's ui.rows may pick one row) and the name cell
 export const OWN_ROWS = {};   // sbapp: the standard dialog since STDS-B (2026-11-06); bgeo since STDS (2026-11-06)
 // own list panels whose saved time is not in the second cell: the cell index (Steel Bridge app: Name, Project no., Last saved)
@@ -31,7 +31,7 @@ export const NAMES = ['HSP A', 'HSP <b>bold</b> & "q" ü'];
 // toolPage(ctx, key): the tool opened in a new tab of the same profile; frame tools get the frame (page methods passed through)
 export async function toolPage(ctx, key, errs) {
   const T = TOOLS[key], page = await ctx.newPage();
-  page.on('console', m => { if (m.type() === 'error') errs.push(`${key}: ${m.text().slice(0, 300)}`); });
+  page.on('console', m => { if (m.type() === 'error' && !/^\[BABEL\] Note: The code generator has deoptimised/.test(m.text())) errs.push(`${key}: ${m.text().slice(0, 300)}`); });   // the in-browser Babel's size note (index.html, as on main) is not an error
   page.on('pageerror', e => errs.push(`${key}: pageerror ${e.message.slice(0, 300)}`));
   page.on('dialog', d => d.accept());
   await page.goto('file://' + path.join(REPO, T.file) + (T.hash || ''));

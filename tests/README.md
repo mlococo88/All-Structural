@@ -101,6 +101,15 @@ node tests/smoke/home-projects.mjs [--tool asce7,spreadfooting,...] [--shots <di
 # nothing; then each tool's own dialog shows "synced" and the tool uploads nothing (its file = the home page's file); GitHub newer; token. ~4 min
 node tests/smoke/home-sync.mjs [--tool asce7,spreadfooting,...] [--shots <dir>]
 
+# Bridge Suite standard save (BSS, shared/bridge-suite-projects.js) in index.html / lldf.html / Prestressed Bridge Design.html (a page that
+# does not load the adapter yet is skipped): seeded suite list with a duplicate name; chip, header order, the dialog's rows, Save as (new /
+# "Replace it" into the newest entry, other parts and demands kept), Ctrl+S, Rename / Duplicate / Delete, sync off = no request and no key,
+# 390 px; mock GitHub: Save uploads at once, the file = { app, v, name, savedAt, slices } (no demands), a later change waits for the 30 s pause. ~4 min
+node tests/smoke/bridge-suite-save.mjs [--app mct,lldf,psb] [--no-gh] [--shots <dir>]
+# The same pages, origin/main (a worktree) vs the working tree: results, every localStorage key, the Report, Export JSON on load, after an
+# edit (autosaved into the open project) and after a reload (lldf.html, Prestressed). index.html: index-report.mjs --mode state / rep on both.
+node tests/smoke/bridge-suite-compare.mjs --a <folder with origin/main> [--app lldf,psb]
+
 # Retired rebar calculator (RBRT): the redirect page (?query, #dev, in a frame, one-time .json offer), the suite on its Development &
 # Splice tab, the takeover of the old page's storage, and an Export JSON from the OLD standalone (git ref --old) importing identically. ~1 min
 node tests/smoke/rebar-redirect.mjs [--old f9ec0f9]

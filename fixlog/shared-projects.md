@@ -100,3 +100,10 @@ Loaded by: see `shared/README.md` (one row per file). Tests: `node tests/engine/
 - **Loaded by:** ASCE7-16 Load Generator, BasePlateAnchorDesigner, Bridge Geometry, Bridge Substructure Loading, Concrete Beam Capacity, Gusset Plate Rating, Light Pole and Sign Post, Moving Load Generator, Pile Designer, Retaining Wall Designer, Section Property Calculator, Shear and Moment Diagrams, Spread Footing, Steel Beam Design - AISC 15th, Steel Bridge Design, Stone Masonry Arch Load Rating, Timber Beam Check, abutment_calculator, elastomeric_design_module, index.html, lldf.html, tools.html, apps/steel-bridge.
 - **How verified:** see the PR (standard-save, github-sync, github-sync-tools (all tools), home-projects, home-sync, steel-bridge-library, engine tests).
 - **Formulas, factors, units, code references:** none.
+
+## 2026-11-06 — PR: claude/bss-shared-mct (BSS) — projects-ui.js: Save sends the project to GitHub at once also with a settle time   [display only]
+- **What (`projectBar` `done()`, anchor `dialog.cloud.tick()`):** `if (dialog.cloud && dialog.cloud.tick) dialog.cloud.tick().catch(() => {});` → `… dialog.cloud.tick(true).catch(() => {});` (see fixlog/shared-github-sync.md, same PR: `tick(all)`).
+- **Unchanged for every other tool:** none has a `settle` time; `all` only skips the settle check.
+- **Loaded by:** the tools listed for `shared/projects-ui.js` in shared/README.md, plus `index.html`; `lldf.html` (already loaded it); `Prestressed Bridge Design.html` (its own PR).
+- **How verified:** `tests/smoke/standard-save.mjs`, `github-sync-tools.mjs`, `bridge-suite-save.mjs` (Save uploads at once although the suite's settle time is 30 s).
+- **Formulas, factors, units, code references:** none.

@@ -242,6 +242,8 @@
     if (!TOOL_RX.test(o.tool || '')) throw new Error('github-sync: bad tool key');
     const store = o.store, storage = o.storage, now = o.now || (() => Date.now()), space = o.space == null ? 1 : o.space, settle = o.settle || 0;
     const changedAt = {};   // settle: when each queued name last changed (this page only)
+    const known = {};       // settle (BSS, 2026-11-06): the file sha this page last saw for each name, so a change another open tab of the
+                            // same tool already recorded (seen) still starts this page's settle time (else this page would send it at once)
     const rawList = () => { try { return store.stamp ? store.stamp() : storage.getItem(store.key); } catch (e) { return undefined; } };
     const SKEY = `${KEY}.tool.${o.tool}`, folder = `${DIR}/${o.tool}`, label = o.label || o.tool;
     const toFile = o.toFile || (i => i), fromFile = o.fromFile || (x => x);
@@ -281,6 +283,7 @@
       return mut(v => {
         let q = 0;
         const hold = v.hold || {};
+        if (settle) names.forEach(n => { if (known[n] !== shas[n]) { known[n] = shas[n]; changedAt[n] = now(); } });
         names.forEach(n => { if (v.seen[n] !== shas[n]) { v.seen[n] = shas[n]; changedAt[n] = now(); if (!hold[n] && v.queue.indexOf(n) < 0) { v.queue.push(n); q++; } } });
         Object.keys(v.seen).forEach(n => { if (names.indexOf(n) < 0) delete v.seen[n]; });
         if (v.hold) { Object.keys(v.hold).forEach(n => { if (names.indexOf(n) < 0) delete v.hold[n]; }); if (!Object.keys(v.hold).length) delete v.hold; }
@@ -546,11 +549,11 @@
       fetch: (u, i) => window.fetch(u, i), onNotice: n => { if (n.kind === 'conflict' || n.kind === 'error') toast(n.text); } });
     let ui = null, checking = false, msg = '';
     const redraw = () => { if (ui && ui.redraw) ui.redraw(); };
-    async function tick() {
+    async function tick(all) {   // all (BSS, 2026-11-06): also the projects still inside the settle time (after a Save)
       if (!eng.configured()) return;
       const q = eng.scan();
       const before = eng.lastError();
-      const r = await eng.flush(q > 0 && !(before && before.kind === 'rate'));
+      const r = await eng.flush(q > 0 && !(before && before.kind === 'rate'), !!all);
       if (r && (r.done || r.ok === false || before !== eng.lastError())) { if (r.done && ctx.changed) ctx.changed(); redraw(); }
     }
     try { if (eng.configured()) eng.init(); } catch (e) { /* storage blocked: nothing to sync */ }   // projects in the list now = 'already here' (first-connect offer); later saves upload
