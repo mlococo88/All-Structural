@@ -91,10 +91,7 @@ export const TOOLS = {
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(window.LAST_R, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, 'input[type=number][data-path]', 0.5),
     view: p => tabView(p, '.tab', 2, '.active, .on'),
-    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('btnSaveProj').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); },
-    ui: { open: async p => { await p.evaluate(() => { const d = document.getElementById('dlgProj'); if (d.open) d.close(); }); await p.click('#btnManageProj'); await p.waitForSelector('#dlgProj[open]'); },
-      rows: '#projList .prow', btn: (a, n) => `#projList [data-act=${({ open: 'load', rename: 'ren', dup: 'dup', del: 'del' })[a]}][data-n="${n}"]`, first: '#projList [data-act=load]',
-      err: async (p, s) => s.dl[s.dl.length - 1] || '', box: '#dlgProj', delConfirm: true }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('btnSaveProj').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); }   // STDS (2026-11-06): the standard Save as (branch), the old Save Project prompt (main); its own Projects dialog is replaced by the standard one
   },
   edm: {
     file: 'elastomeric_design_module.html', list: 'edm_v1_projects', auto: 'edm_v1_autosave',
@@ -102,10 +99,7 @@ export const TOOLS = {
     results: p => p.evaluate(() => { const seen = new WeakSet(); return JSON.parse(JSON.stringify(LAST, (k, v) => typeof v === 'function' ? undefined : (typeof v === 'number' && !isFinite(v) ? String(v) : v && typeof v === 'object' ? (seen.has(v) ? '[cycle]' : (seen.add(v), v)) : v))); }),
     change: p => bump(p, 'input[type=number][data-path="geom.hri"]', 0.05),
     view: p => tabView(p, '.tab', 2, '.active, .on'),
-    save: async (p, name) => { await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('btnSaveProj').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); },
-    ui: { open: async p => { await p.evaluate(() => { const d = document.getElementById('dlgProj'); if (d.open) d.close(); }); await p.click('#btnManageProj'); await p.waitForSelector('#dlgProj[open]'); },
-      rows: '#projList .prow', btn: (a, n) => `#projList [data-a=${({ open: 'load', rename: 'ren', dup: 'dup', del: 'del' })[a]}][data-n="${n}"]`, first: '#projList [data-a=load]',
-      err: async (p, s) => s.dl[s.dl.length - 1] || '', box: '#dlgProj', delConfirm: false }
+    save: async (p, name) => { if (await stdSave(p, name)) return; await p.evaluate(n => { const pr = window.prompt; window.prompt = () => n; try { document.getElementById('btnSaveProj').click(); } finally { window.prompt = pr; } }, name); await p.waitForTimeout(300); }   // STDS (2026-11-06): the standard Save as (branch), the old Save Project prompt (main); its own Projects dialog is replaced by the standard one
   },
   steelbeam: {
     file: 'Steel Beam Design - AISC 15th.html', list: 'sbd_projects_v1', auto: 'sbd_autosave_v1', ownUndo: true,

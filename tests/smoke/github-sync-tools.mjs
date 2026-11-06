@@ -25,12 +25,6 @@ const FOLDER = { asce7: 'asce7-load-generator', baseplate: 'base-plate-anchor', 
 // Tools with their own project dialog: how to show it (with sync on, the GitHub rows are drawn into it), and whether it is open.
 // Default: the shared Saved projects dialog (dialog.spLib).
 const OWN = {
-  abutment: { show: p => p.evaluate(() => { const d = document.getElementById('dlgProj'); if (d.open) d.close(); document.getElementById('btnManageProj').click(); }),
-    open: p => p.evaluate(() => document.getElementById('dlgProj').open),
-    del: (p, n) => p.evaluate(n => document.querySelector(`#projList [data-act=del][data-n="${CSS.escape(n)}"]`).click(), n) },
-  edm: { show: p => p.evaluate(() => { const d = document.getElementById('dlgProj'); if (d.open) d.close(); document.getElementById('btnManageProj').click(); }),
-    open: p => p.evaluate(() => document.getElementById('dlgProj').open),
-    del: (p, n) => p.evaluate(n => document.querySelector(`#projList [data-a=del][data-n="${CSS.escape(n)}"]`).click(), n) },
   // Bridge Geometry: a library panel, not a dialog (it stays open after Open: open() is false)
   bgeo: { box: '#lib_panel', show: p => p.evaluate(() => { if (document.getElementById('lib_panel').style.display === 'none') document.getElementById('lib_toggle').click(); else document.getElementById('lib_refresh').click(); }),
     open: () => false,
