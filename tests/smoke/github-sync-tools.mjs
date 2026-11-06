@@ -18,7 +18,7 @@ const arg = (k, d) => { const i = process.argv.indexOf('--' + k); return i > 0 ?
 const FOLDER = { asce7: 'asce7-load-generator', baseplate: 'base-plate-anchor', bsl: 'bridge-substructure-loading', gusset: 'gusset-plate-rating',
   lightpole: 'light-pole-sign-post', mlg: 'moving-load-generator', retwall: 'retaining-wall-designer', spc: 'section-property-calculator',
   smd: 'shear-moment-diagrams', steelbeam: 'steel-beam-aisc', stonearch: 'stone-arch-rating', timber: 'timber-beam-check',
-  rebar: 'aci-rebar-development', spreadfooting: 'spread-footing',
+  rebar: 'aci-rebar-development', spreadfooting: 'spread-footing', cbc: 'concrete-beam-capacity',
   // GHS2 (2026-11-05): tools with their own project dialog or panel (statusCell + decorate(body, ui, { rows: false }))
   abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app',
   gd: 'steel-bridge-design' };   // Steel Bridge Design.html: the shared Saved projects dialog (GHS2)
@@ -39,6 +39,8 @@ const OWN = {
     open: p => p.evaluate(() => document.getElementById('libDlg').open),
     del: (p, n) => p.evaluate(n => { const tr = [...document.querySelectorAll('#libBody tbody tr')].find(r => r.querySelector('td').textContent.trim().replace(/ \(open now\)$/, '') === n); tr.querySelector('[data-lib=del]').click(); }, n) }
 };
+// tools that share one page (the Concrete Beam suite's frames): the other tabs with sync on the same page (their bookkeeping key is written too)
+const SUITE = { rebar: ['cbc'], cbc: ['rebar'] };
 const BOX = key => (OWN[key] && OWN[key].box) || 'dialog[open]';
 const showList = (key, p) => OWN[key] ? OWN[key].show(p) : p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)).click(); });
 const listOpen = (key, p) => OWN[key] ? OWN[key].open(p) : p.evaluate(() => !!document.querySelector('dialog.spLib[open]'));
@@ -84,7 +86,9 @@ for (const key of list) {
     const nms = T.names ? await T.names(p) : Object.keys(JSON.parse(await p.evaluate(k => localStorage.getItem(k), T.list) || '{}'));
     ok(nms.includes('GHS remote') && nms.includes('GHS A'), 'the tool\'s own list holds both projects');
     const sk = (await p.evaluate(() => Object.keys(localStorage))).filter(k => /^bridgeSuite\.v1\.githubSync/.test(k)).sort();
-    ok(JSON.stringify(sk) === JSON.stringify(['bridgeSuite.v1.githubSync', `bridgeSuite.v1.githubSync.tool.${folder}`]), 'sync keys: bridgeSuite.v1.githubSync and .tool.' + folder + ' only (' + sk.join(', ') + ')');
+    // STDS (2026-11-06): the Concrete Beam suite page holds three frames with sync (Beam Capacity, Development & Splice): each keeps its own bookkeeping key
+    const sib = (SUITE[key] || []).map(k => `bridgeSuite.v1.githubSync.tool.${FOLDER[k]}`), want = ['bridgeSuite.v1.githubSync', `bridgeSuite.v1.githubSync.tool.${folder}`, ...sib].sort();
+    ok(JSON.stringify(sk) === JSON.stringify(want), 'sync keys: bridgeSuite.v1.githubSync and .tool.' + folder + (sib.length ? ' (+ the suite\'s other tabs: ' + sib.join(', ') + ')' : '') + ' only (' + sk.join(', ') + ')');
     if (OWN[key]) {   // own dialog: the settings button in the bar, the first-sync offer, and a delete that asks about the GitHub copy
       await showList(key, p); await p.waitForTimeout(800);
       ok(await p.evaluate(b => !!document.querySelector(b + ' .spGhBar [data-ghx=setup]'), BOX(key)), 'own dialog: "Cloud sync (GitHub)…" button in the sync bar');

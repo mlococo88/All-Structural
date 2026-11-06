@@ -48,3 +48,9 @@ Loaded by: see `shared/README.md` (row `project-registry.js`). Tests: `node test
 - New first entry `{ tool: 'steel-bridge-design', label: 'Steel Bridge Design', name: 'Steel Bridge Design (GirderDetail)', href: 'Steel%20Bridge%20Design.html', key: 'girderdetail_projects_v1', space: 2, toFile: (i, n) => ({ app: 'SteelBridgeDesign', v: 1, name: n, data: i }) }` (the tool's own toFile with its `SBD_V` = 1; `tests/smoke/home-sync.mjs` fails if they ever differ). Card order: first (its card precedes the new app's).
 - `tests/smoke/home-projects.mjs` `FOLDER`: `gd`; `tests/smoke/project-library.mjs`: `gd` entry (`noRun`).
 - **How verified:** `node tests/engine/run.mjs project-registry github-sync projects`; `node tests/smoke/home-projects.mjs`; `node tests/smoke/home-sync.mjs` (see the PR).
+
+## 2026-11-06 — PR: claude/cbc-stds-capacity (STDS) — entry for Concrete Beam Capacity, Beam Capacity tab   [storage only; no result change]
+- New entry before `aci-rebar-development`: `{ tool: 'concrete-beam-capacity', label: 'Concrete Beam Capacity', name: 'Beam Capacity (Concrete Beam Design Suite)', href: 'Concrete%20Beam%20Capacity.html#capacity', key: 'rcbeam_v2_projects', time: i => i && i.__savedAt || null, sort: 'saved', space: 2 }` (the tool's own mapStore options and ctx.cloud; the file = the stored record).
+- Tests: `tests/smoke/home-projects.mjs` `FOLDER` and `tests/smoke/github-sync-tools.mjs` `FOLDER`: `cbc`; `github-sync-tools` allows the suite's other tab's bookkeeping key (`SUITE`: rebar ↔ cbc share one page); `tests/smoke/project-library.mjs`: new `cbc` entry (frame `#suite-frame-capacity`).
+- Loaded by: `tools.html` (home page) only.
+- **How verified:** `node tests/engine/run.mjs project-registry github-sync projects`; `node tests/smoke/home-projects.mjs`; `node tests/smoke/home-sync.mjs` (all tools): pass.
