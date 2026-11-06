@@ -70,7 +70,7 @@ const lib = async () => { await p.evaluate(() => { const d = document.getElement
 const row = (n, a) => p.evaluate(([n, a]) => document.querySelector(`#gdLibDlg [data-spa=${a}][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(), [n, a]);
 const live = async () => ({ gd: await p.evaluate(() => JSON.stringify(P)), pl: await (plf()).evaluate(() => JSON.stringify(P)) });
 
-ok(await p.evaluate(() => [...document.getElementById('gd-hdr-proj').children].map(b => b.dataset.sp || b.id).join('|')) === 'chip|hsave|hlib|btn-print', 'header: chip · Save · Saved projects… · Print');
+ok(await p.evaluate(() => [...document.getElementById('gd-hdr-proj').children].map(b => b.dataset.sp || b.id).join('|')) === 'chip|gd-undo|gd-redo|hsave|hlib|btn-print', 'header: chip · Undo · Redo · Save · Saved projects… · Print');
 // GDHD (2026-11-06): the header on one row at common laptop widths; the moved controls in the top bar
 for (const w of [1280, 1400, 1920]) { await p.setViewportSize({ width: w, height: 900 }); await p.waitForTimeout(400);
   const h = await p.evaluate(() => { const r = document.querySelector('header').getBoundingClientRect(), t = [...document.querySelectorAll('header .brand, header .hdr-group > *')].filter(e => e.offsetParent).map(e => e.getBoundingClientRect()); return { h: Math.round(r.height), one: t.every(x => x.top < r.top + r.height / 2 && x.bottom > r.top + r.height / 2) }; });
