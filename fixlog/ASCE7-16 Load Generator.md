@@ -1205,7 +1205,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Formulas, factors, units, code references:** none (§4 does not apply).
 - **How verified:** main vs branch after the same input change: results identical, localStorage keys identical (`asce7bldg.autosave` byte-identical), Export JSON text (`JSON.stringify(snapshot(),null,2)`, 2,199 chars), report model `a7Model()` (17,744 chars) and results panel text identical; no console errors beyond main. `node tests/smoke/project-library.mjs --tool asce7` (save through the standard Save as on the branch): ALL PASS. `github-sync-tools.mjs --tool asce7`: ALL PASS. 390 px: page 390 / 390, dialog 355 / 355; screenshots looked at.
 
-## 2026-11-06 — PR: claude/reset-to-new-asce7 (RSTN) — "Save and open" card: Reset removed (New does the same; display only, no result change)
+## 2026-11-06 — PR: claude/reset-to-new-asce7 (PR #866: https://github.com/mlococo88/All-Structural/pull/866) (RSTN) — "Save and open" card: Reset removed (New does the same; display only, no result change)
 - **Engineer:** remove Reset where New does the same (approved 2026-11-06).
 - **Comparison (main):** Reset = `doReset()`: `confirm("Reset every input to the defaults? Unsaved work will be lost.")`, then `restore(JSON.parse(JSON.stringify(DEF)))`. New = projectBar `newProject`: asks only when there are unsaved changes (the standard question), then the same `restore(JSON.parse(JSON.stringify(DEF)))`, then no saved project is open (chip "not saved yet"). Same inputs, same autosave (`restore` writes it), same Undo step. Only differences: Reset always asked (its own wording) and left the open project's name in the chip (a following Save would have written the defaults over that saved project).
 - **Where:**
