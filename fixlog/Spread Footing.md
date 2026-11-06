@@ -5508,7 +5508,7 @@ These are the engineer's decisions on the open items of #723 (questions 1–3) a
 - **Check case:** six saved projects "Footing F1…F6" (B = 9…14 ft), autosave = Footing F3: strip "Continue: Footing F3 … Footing F6 · F5 · F4 · F2 · F1"; Open "Footing F5" from the strip = Open from Saved projects… (B = 13 ft; identical state, results and storage).
 - **How verified:** see the PR (`tests/smoke/start-chooser.mjs`; main vs branch: results, state, Export JSON text, Report text and storage identical with four seeds).
 
-## 2026-11-06 — PR: claude/reset-to-new-sf (RSTN) — "Save and open" card: Reset Inputs removed (New does the same; display only, no result change)
+## 2026-11-06 — PR: claude/reset-to-new-sf (PR #869: https://github.com/mlococo88/All-Structural/pull/869) (RSTN) — "Save and open" card: Reset Inputs removed (New does the same; display only, no result change)
 - **Engineer:** remove Reset where New does the same (approved 2026-11-06). Closes the STDS decision above ("Reset Inputs is kept … Remove it later if New is enough").
 - **Comparison (main):** Reset Inputs (`#btnReset` handler): `confirm('Reset all inputs to defaults? (Saved projects are kept.)')`, then `state=defaultState();bindStaticInputs();buildPedCards();saveAuto();recalc();`. New = projectBar `newProject:()=>{state=defaultState();bindStaticInputs();buildPedCards();saveAuto();recalc();}` (the same line, no confirm of its own: projectBar asks only on unsaved changes), then no saved project is open. Same inputs, results and autosave. Only differences: Reset Inputs always asked and left the open project's name in the chip (a following Save would have written the defaults over that saved project).
 - **Where:**
