@@ -5180,7 +5180,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** `node tests/bpad-circle.mjs` PASS: identity origin/main (BC-8) vs this branch on 40 projects (rectangular, cage cases, round-pier saves stored true / false / absent): identical; H9: φN_cbg(lesser) = min in 1,234/1,234 and **pryout φV_cpg(lesser) = min(reduced, full) in 1,234/1,234** (differs from the tension pick's branch in 153); cases 1–3 pryout values above; TeX typesets. `anchor-parity.mjs` PASS (38), `bpad-profis.mjs` PASS, `project-library --tool baseplate` ALL PASS, `standard-save` ALL PASS, `lightpole-anchor-handoff` ALL PASS, engine `anchor-geom` / `handoffs` / `lightpole` PASS, `check-syntax` passes, console errors 0.
 - **Other copies:** none.
 
-## 2026-11-06 — BPDW: Drawings tab (DXF sheets, preview, print) (PR: claude/bp-drawings)
+## 2026-11-06 — BPDW: Drawings tab (DXF sheets, preview, print) (PR: claude/bp-drawings, PR #917: https://github.com/mlococo88/All-Structural/pull/917)
 
 ### BPDW. A "Drawings" output tab, as Spread Footing / Light Pole / Section Property / Bridge Geometry / Concrete Beam Capacity   [display only] [saved data: one new per-browser key]
 - **Request (engineer, 2026-11-06):** "the baseplate and anchor bolt app could use the same DXF output and sheet preview like other recent apps".
