@@ -195,6 +195,19 @@ export const TOOLS = {
     names: p => p.evaluate(() => (JSON.parse(localStorage.getItem('sbd2.lib.index') || '{"items":[]}').items || []).map(i => i.name)),
     // STDS-B: the standard Saved projects dialog (no own ui entry since 2026-11-06)
   },
+  pile: {
+    // Pile Designer (STDS-P, 2026-11-06): its list is IndexedDB (tests/smoke/pile-library.mjs tests it); used by github-sync-tools.mjs and
+    // home-projects.mjs. Results: the autosaved inputs and LPILE import (the GitHub copy carries no title-block change); save = the
+    // standard Save as; names: the tool's in-memory copy of the IndexedDB records.
+    file: 'Pile Designer.html', list: null, auto: 'micropile_lrfd_inputs_v1', noRun: true,
+    errOk: /^Failed to load resource: net::ERR_FAILED$/,   // cdn.tailwindcss.com is not in the test kit (tests/libs): the same error on main
+    ready: async p => { await p.waitForFunction(() => document.querySelector('.input-rail input[type=number]') && window.SharedProjectsUI && SharedProjectsUI.bars && SharedProjectsUI.bars[0], null, { timeout: 60000 }); await p.waitForTimeout(800); },
+    results: async p => { await p.waitForTimeout(1200); return p.evaluate(() => ({ inputs: JSON.parse(localStorage.getItem('micropile_lrfd_inputs_v1') || 'null'), out: (document.querySelector('main') || document.body).innerText.length > 0 })); },
+    change: async p => { await p.evaluate(() => { const i = [...document.querySelectorAll('.input-rail input[type=number]')].find(x => x.offsetParent && x.value !== '') || document.querySelector('.input-rail input[type=number]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, String((+i.value || 0) + 1)); i.dispatchEvent(new Event('input', { bubbles: true })); i.blur(); }); await p.waitForTimeout(1500); },
+    save: async (p, name) => { await stdSave(p, name); await p.waitForTimeout(500); },
+    names: p => p.evaluate(() => PDLIB.recs().map(r => r.name))
+  },
   gd: {
     // Steel Bridge Design.html (GirderDetail): used by tests/smoke/github-sync-tools.mjs and home-projects.mjs (GHS2, 2026-11-05; its
     // shared Saved projects dialog); not run by this file (results: tests/compare.mjs --tool gd). Results after gdIdle: the modules'

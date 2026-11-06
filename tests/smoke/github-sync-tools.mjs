@@ -21,7 +21,7 @@ const FOLDER = { asce7: 'asce7-load-generator', baseplate: 'base-plate-anchor', 
   rebar: 'aci-rebar-development', spreadfooting: 'spread-footing', cbc: 'concrete-beam-capacity', asd: 'concrete-beam-asd',
   // GHS2 (2026-11-05): tools with their own project dialog or panel (statusCell + decorate(body, ui, { rows: false }))
   abutment: 'abutment-calculator', edm: 'elastomeric-bearing', bgeo: 'bridge-geometry', sbapp: 'steel-bridge-app',
-  gd: 'steel-bridge-design' };   // Steel Bridge Design.html: the shared Saved projects dialog (GHS2)
+  gd: 'steel-bridge-design', pile: 'pile-designer' };   // Steel Bridge Design.html: the shared Saved projects dialog (GHS2)
 // Tools with their own project dialog: how to show it (with sync on, the GitHub rows are drawn into it), and whether it is open.
 // Default: the shared Saved projects dialog (dialog.spLib).
 const OWN = {
@@ -31,6 +31,10 @@ const OWN = {
     del: (p, n) => p.evaluate(n => document.querySelector(`#lib_list [data-lib-del="${encodeURIComponent(n)}"]`).click(), n) },
   // apps/steel-bridge (STDS-B, 2026-11-06): the standard Saved projects dialog over its by-name view (items by id); kept here for the
   // own-list checks (first-sync offer, a delete that asks about the GitHub copy) because its sync list differs from the dialog's
+  // Pile Designer (STDS-P, 2026-11-06): the standard dialog over its IndexedDB copy (sync list = newest of each name)
+  pile: { show: p => p.evaluate(() => { const d = document.getElementById('pdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=hlib]').click(); }),
+    open: p => p.evaluate(() => document.getElementById('pdLibDlg').open),
+    del: (p, n) => p.evaluate(n => document.querySelector(`#pdLibDlg [data-spa=del][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(), n) },
   sbapp: { show: p => p.evaluate(() => { const d = document.getElementById('sbdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=hlib]').click(); }),
     open: p => p.evaluate(() => document.getElementById('sbdLibDlg').open),
     del: (p, n) => p.evaluate(n => document.querySelector(`#sbdLibDlg [data-spa=del][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(), n) }
@@ -100,7 +104,7 @@ for (const key of list) {
       await until(() => !gh.files.has(P('GHS A')), 15000, 'delete on GitHub after the confirm');
       ok(s.dialogs.some(m => /Also delete "GHS A" from GitHub/.test(m)), 'delete in the tool\'s dialog asks before deleting the GitHub copy (accepted here: file deleted)');
     }
-    const errs = s.errs;
+    const errs = s.errs.filter(m => !(T.errOk && T.errOk.test(m)));   // errOk: a test-kit artifact the tool also has on main (project-library.mjs entry)
     ok(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ').slice(0, 400) : ''));
     ok(gh.log.every(l => l.auth === `Bearer ${TOKEN}` && !l.url.includes(TOKEN)), 'token only in the Authorization header');
   } catch (e) { ok(false, String(e.message || e).slice(0, 300)); }
@@ -113,7 +117,8 @@ for (const key of list) {
       const sk = (await o.p.evaluate(() => Object.keys(localStorage))).filter(k => /^bridgeSuite\.v1\.githubSync/.test(k));
       const bar = await o.p.evaluate(x => { const b = document.querySelector(x + ' .spGhBar'); return b ? b.textContent : ''; }, BOX(key));
       ok(!reqs.length && !sk.length && /Cloud sync \(GitHub\): off/.test(bar), `sync off: Save + dialog -> no request (${reqs.length}), no sync key (${sk.join(', ') || 'none'}), bar says off`);
-      ok(!o.errs.length, 'sync off: no console errors' + (o.errs.length ? ': ' + o.errs.join(' | ').slice(0, 400) : ''));
+      const oe = o.errs.filter(m => !(T.errOk && T.errOk.test(m)));
+      ok(!oe.length, 'sync off: no console errors' + (oe.length ? ': ' + oe.join(' | ').slice(0, 400) : ''));
     } catch (e) { ok(false, 'sync off: ' + String(e.message || e).slice(0, 300)); }
     await o.b.close();
   }
