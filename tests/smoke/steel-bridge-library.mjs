@@ -26,27 +26,32 @@ const state = async () => { await p.evaluate(() => SharedProjectsUI.bars[0].refr
 const saveAs = async (n, replace) => { await p.evaluate(() => SharedProjectsUI.bars[0].saveAs()); await p.waitForSelector('dialog.spSave[open]');
   await p.fill('dialog.spSave .spName', n); await p.click('dialog.spSave [data-sa=ok]'); if (replace) { assert.match(await p.$eval('dialog.spSave .spMsg', e => e.innerText), /already exists/); await p.click('dialog.spSave [data-sa=ok]'); }
   await p.waitForTimeout(150); };
-const lib = async () => { await p.evaluate(() => { const d = document.getElementById('sbdLibDlg'); if (d && d.open) d.close(); }); await p.click('[data-sp=hlib]'); await p.waitForSelector('#sbdLibDlg[open] .spBody'); await p.waitForTimeout(100); };
+// HDRS (2026-11-06): no Save / Saved projects… in the header: Save is Ctrl+S (from anywhere), Saved projects… is the card's button
+// (the chip opens the Project tab that holds the card)
+const hsave = () => p.keyboard.press('Control+s');
+const lib = async () => { await p.evaluate(() => { const d = document.getElementById('sbdLibDlg'); if (d && d.open) d.close(); }); await p.click('[data-sp=chip]'); await p.click('[data-sp=card] [data-sp=lib]'); await p.waitForSelector('#sbdLibDlg[open] .spBody'); await p.waitForTimeout(100); };
 const rowBtn = (txt, a) => p.click(`#sbdLibDlg tbody tr:has-text("${txt}") [data-spa=${a}]`);
 try {
   await p.waitForSelector('[data-sp=chip]'); await p.waitForTimeout(500);
   assert.equal(await state(), 'not saved');
-  assert.equal(await p.evaluate(() => [...document.querySelectorAll('#hdrBtns button')].map(b => b.textContent.replace(/Ctrl\+S/, '').trim()).join('|').replace(/^Project:.*?\|/, 'chip|')), 'chip|Undo|Redo|Save|Saved projects…', 'header: chip · Undo · Redo · Save · Saved projects…');
+  assert.equal(await p.evaluate(() => [...document.querySelectorAll('#hdrBtns button')].map(b => b.textContent.replace(/Ctrl\+S/, '').trim()).join('|').replace(/^Project:.*?\|/, 'chip|')), 'chip|Undo|Redo', 'header: chip · Undo · Redo (HDRS: Save / Saved projects… in the card only)');
+  await p.evaluate(() => { const t = document.querySelector('[data-itab="spans"]'); t && t.click(); }); await p.click('[data-sp=chip]');
+  assert.equal(await p.evaluate(() => { const t = document.querySelector('#inTabs [aria-selected=true]'); const c = document.querySelector('[data-sp=card]'); return (t && t.dataset.itab) + '|' + !!(c && c.offsetParent); }), 'proj|true', 'HDRS: the chip opens the Project tab with the card');
   assert.equal(await p.evaluate(() => [...document.querySelectorAll('[data-pane=proj] .sec')][0].querySelector('.secHead').textContent), 'Save and open');
   assert.deepEqual(await p.evaluate(() => [...document.querySelectorAll('[data-sp=card] button')].map(b => b.textContent.replace(/Ctrl\+(Shift\+)?S/, '').trim())), ['Save', 'Save as…', 'Saved projects…', 'New', 'Export JSON', 'Import JSON', 'From old app']);
   // 1. edit, Save (no name yet: Save as), list
   await setIn('project.name', 'Route 9 over Mill River'); await setIn('project.number', 'B-1234');
-  await p.click('[data-sp=hsave]'); await p.waitForSelector('dialog.spSave[open]');
+  await hsave(); await p.waitForSelector('dialog.spSave[open]');
   assert.equal(await p.$eval('dialog.spSave .spName', e => e.value), 'Route 9 over Mill River', 'Save as offers the project name'); await p.click('dialog.spSave [data-sa=ok]'); await p.waitForTimeout(150);
   assert.equal(await state(), 'saved'); assert.match(await chip(), /Route 9 over Mill River/);
   let idx = JSON.parse(await ls('sbd2.lib.index')); assert.equal(idx.items.length, 1); assert.equal(idx.items[0].number, 'B-1234');
   // an edit makes it unsaved; Save (and Ctrl+S) overwrite without asking
   await setIn('project.checker', 'first revision'); assert.equal(await state(), 'unsaved');
-  reply = []; const n0 = dl.length; await p.click('[data-sp=hsave]'); assert.equal(dl.length, n0, 'Save of a linked project asks nothing');
+  reply = []; const n0 = dl.length; await hsave(); assert.equal(dl.length, n0, 'Save of a linked project asks nothing');
   await p.waitForTimeout(100); assert.equal((await proj()).project.checker, 'first revision'); assert.equal(await state(), 'saved');
   await setIn('project.checker', 'first revision b'); await p.evaluate(() => document.activeElement && document.activeElement.blur()); await p.keyboard.press('Control+s'); await p.waitForTimeout(150);
   assert.equal(await state(), 'saved'); assert.equal(dl.length, n0, 'Ctrl+S asks nothing'); assert.equal(JSON.parse(await ls('sbd2.lib.index')).items.length, 1);
-  await setIn('project.checker', 'first revision'); await p.click('[data-sp=hsave]');
+  await setIn('project.checker', 'first revision'); await hsave();
   // 2. Save as: a second project; a name in use is not overwritten without "Replace it"
   await saveAs('Route 9 alt'); idx = JSON.parse(await ls('sbd2.lib.index')); assert.equal(idx.items.length, 2);
   assert.equal((await proj()).project.name, 'Route 9 alt'); assert.equal(await p.$eval('#i_project\\.name', e => e.value), 'Route 9 alt');
@@ -54,7 +59,7 @@ try {
   assert.equal(idx.items.filter(i => i.name === 'Route 9 over Mill River').length, 1);
   await p.evaluate(() => SharedProjectsUI.bars[0].dialog.el.close());
   // put the first one back (open it, change, save), then reopen alt
-  await lib(); await rowBtn('Mill River', 'open'); await setIn('project.checker', 'first revision'); await p.click('[data-sp=hsave]');
+  await lib(); await rowBtn('Mill River', 'open'); await setIn('project.checker', 'first revision'); await hsave();
   await lib(); await rowBtn('Route 9 alt', 'open'); assert.equal((await proj()).project.name, 'Route 9 alt');
   // 3. open the first from the list with an unsaved change: warned
   await setIn('project.checker', 'alt only'); reply = [false];
@@ -67,11 +72,11 @@ try {
   reply = [true]; await rowBtn('Mill River', 'open');
   assert.equal((await proj()).project.name, 'Route 9 over Mill River'); assert.equal((await proj()).project.checker, 'first revision'); assert.equal(await state(), 'saved');
   // the project's name field renames the item on Save (as before); a name of another saved project is refused
-  await setIn('project.name', 'Route 9 alt'); reply = [true]; await p.click('[data-sp=hsave]'); assert.match(dl.at(-1), /alert: Not saved: the project name/);
+  await setIn('project.name', 'Route 9 alt'); reply = [true]; await hsave(); assert.match(dl.at(-1), /alert: Not saved: the project name/);
   assert.equal(JSON.parse(await ls('sbd2.lib.index')).items.filter(i => i.name === 'Route 9 alt').length, 1);
-  await setIn('project.name', 'Route 9 over Mill River B'); await p.click('[data-sp=hsave]'); assert.equal(await state(), 'saved'); assert.match(await chip(), /Mill River B/);
+  await setIn('project.name', 'Route 9 over Mill River B'); await hsave(); assert.equal(await state(), 'saved'); assert.match(await chip(), /Mill River B/);
   assert.deepEqual(JSON.parse(await ls('sbd2.lib.index')).items.map(i => i.name).sort(), ['Route 9 alt', 'Route 9 over Mill River B'], 'Save with the name field changed: the item takes the new name');
-  await setIn('project.name', 'Route 9 over Mill River'); await p.click('[data-sp=hsave]'); assert.equal(await state(), 'saved');
+  await setIn('project.name', 'Route 9 over Mill River'); await hsave(); assert.equal(await state(), 'saved');
   // 4. rename, duplicate, delete
   await lib(); reply = ['Mill River (renamed)']; await rowBtn('Mill River', 'rename');
   assert.equal((await proj()).project.name, 'Mill River (renamed)'); assert.equal(await state(), 'saved');
@@ -92,10 +97,10 @@ try {
   // 5. quota: the write throws; message, nothing lost
   await setIn('project.checker', 'before the quota');
   await p.evaluate(() => { const o = Storage.prototype.setItem; window.__setItem = o; Storage.prototype.setItem = function (k, v) { if (String(k).startsWith('sbd2.lib.')) { const e = new Error('full'); e.name = 'QuotaExceededError'; throw e; } return o.call(this, k, v); }; });
-  const before = await ls('sbd2.lib.index'); reply = [true]; await p.click('[data-sp=hsave]');
+  const before = await ls('sbd2.lib.index'); reply = [true]; await hsave();
   const msg = dl.at(-1); assert.match(msg, /^alert: The project was not saved/); assert.match(msg, /storage is full/);
   assert.equal(await ls('sbd2.lib.index'), before); assert.equal((await proj()).project.checker, 'before the quota'); assert.equal(await state(), 'unsaved');
-  await p.evaluate(() => { Storage.prototype.setItem = window.__setItem; }); await p.click('[data-sp=hsave]'); assert.equal(await state(), 'saved');
+  await p.evaluate(() => { Storage.prototype.setItem = window.__setItem; }); await hsave(); assert.equal(await state(), 'saved');
   // 6. reload: the link survives
   await p.reload(); await p.waitForSelector('[data-sp=chip]'); await p.waitForTimeout(400); assert.equal(await state(), 'saved'); assert.match(await chip(), /Mill River \(renamed\)/);
   // 7. old autosave only (no sbd2.lib.* keys) still opens
@@ -141,7 +146,7 @@ try {
     await q.waitForSelector('[data-sp=chip]');
     await q.evaluate(() => { const L = SBDLibrary, M = SBDModel; const a = M.defaultProject(); a.project.name = 'Dup'; a.project.checker = 'old'; L.save(localStorage, a, null, { now: '2026-10-01T15:00:00Z' });
       const c = M.defaultProject(); c.project.name = 'Dup'; c.project.checker = 'new'; L.save(localStorage, c, null, { now: '2026-10-02T15:00:00Z' }); });
-    await q.click('[data-sp=hlib]'); await q.waitForSelector('#sbdLibDlg[open]');   // saved after sync was set up: uploaded in the background
+    await q.click('[data-sp=chip]'); await q.click('[data-sp=card] [data-sp=lib]'); await q.waitForSelector('#sbdLibDlg[open]');   // HDRS: the card's Saved projects…   // saved after sync was set up: uploaded in the background
     await until(() => gh.files.has(F('Dup')), 15000, 'upload of Dup');
     assert.equal(JSON.parse(gh.files.get(F('Dup'))).project.checker, 'new', 'the newest of the name is the GitHub file'); assert.equal(gh.files.size, 1);
     await q.evaluate(() => SharedProjectsUI.bars[0].dialog.refresh()); await q.waitForTimeout(300);
