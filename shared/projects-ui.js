@@ -21,6 +21,9 @@
                (Eastern) / Size / This browser / GitHub / Open Rename Duplicate Export Delete; without it the dialog is drawn
                exactly as before), label (the tool's name, for the title), exportOne(name) (the row's Export: a .json download;
                default the stored item, or ctx.cloud.toFile of it, as JSON), importFile() (the "Import JSON…" button),
+             ghNote(name) (optional, STDS-B 2026-11-06: HTML for the GitHub cell of a row the sync has no status for, e.g. "not
+               synced: a newer saved project has the same name"); store.keys() (optional: every storage key of the list, for the
+               storage meter; default [store.key]),
              startPref (optional, START 2026-11-06: { get() -> bool, set(bool) }: a "Show this when the app opens" box under the
                standard table; projectBar passes it when ctx.start is on) }
    projectBar(ctx) (STDS, 2026-11-05) -> the standard save controls (see the comment above that function).
@@ -111,7 +114,7 @@
       act(b.dataset.spa, decodeURIComponent(b.dataset.n || ''));
     });
     function usageHtml() {
-      const u = SP().usage(ctx.storage, [ctx.store.key]);
+      const u = SP().usage(ctx.storage, ctx.store.keys ? ctx.store.keys() : [ctx.store.key]);   // store.keys() (STDS-B): a list kept under several keys
       if (!u.counted) return '<p class="spNote">Storage use cannot be read in this browser.</p>';
       const mb = x => (x * 2 / 1048576).toFixed(2), pct = Math.min(100, Math.round(u.frac * 100)), cls = u.frac > 0.9 ? 'full' : u.frac > 0.7 ? 'high' : '';
       return `<div class="spUse"><div class="spBar ${cls}"><i style="width:${pct}%"></i></div><span>Browser storage: ${mb(u.chars)} MB of about ${mb(u.quota)} MB used (${pct}%); this tool's saved projects use ${mb(u.of)} MB. Every tool opened from a file in this browser shares this space.</span></div>`
@@ -138,7 +141,7 @@
             return `<tr data-name="${enc(i.name)}" class="${i.name === cur && i.local ? 'spCur' : ''}"><td>${i.name === cur && i.local ? `<b>${esc(i.name)}</b> <span class="spNote">(open now)</span>` : esc(i.name)}</td>`
               + `<td data-l="Last saved">${i.local ? esc(SP().etTime(i.saved) || '—') : '—'}</td><td data-l="Size">${i.local ? Math.max(1, Math.round(i.size / 1024)) + ' KB' : '—'}</td>`
               + `<td data-l="This browser">${i.local ? '<span class="spYes" title="Saved in this browser">✓</span>' : '<span class="spNo" title="Not in this browser">—</span>'}</td>`
-              + (on ? `<td data-l="GitHub">${cloud.cell(i.name, g ? g.status : null, g && g.conflict)}</td>` : '')
+              + (on ? `<td data-l="GitHub">${cloud.cell(i.name, g ? g.status : null, g && g.conflict) || (ctx.ghNote && ctx.ghNote(i.name)) || ''}</td>` : '')
               + `<td class="spAct">${i.local ? B('open', i.name, 'Open') + B('rename', i.name, 'Rename') + B('dup', i.name, 'Duplicate') + B('export', i.name, 'Export') + B('del', i.name, 'Delete', 'spDel')
                 : G('open', i.name, 'Open') + G('get', i.name, 'Download') + G('delcloud', i.name, 'Delete from GitHub', 'spDel')}</td></tr>`; }).join('')}</tbody></table></div>`
           : '<p class="spNote">No saved projects yet. Use Save to keep the open project in this browser.</p>')
@@ -255,7 +258,12 @@
              headerBefore (optional element in it: Save and Saved projects… go before it, e.g. Print), chipBefore (the chip goes
                before it, e.g. Undo; default headerBefore), card (element the card body goes into), keys (default true),
              renamed / deleted / changed / note / exportOne (passed to the dialog), afterSave(name), afterOpen(name),
-             start (optional, START trial 2026-11-06, off unless given; see startChooser below) }
+             start (optional, START trial 2026-11-06, off unless given; see startChooser below),
+             STDS-B (2026-11-06, for a list that is not a mapStore, e.g. items by id with duplicate names shown under unique names):
+             askUnsaved ('always': Open / New / Import ask on unsaved changes even when the inputs on screen are not a saved project
+               and were not edited on this page, e.g. unsaved work restored from the autosave), ghNote(name) (passed to the dialog:
+               the GitHub cell of a row the sync has no status for), and save(name) may return { ok: true, name } when the list name
+               it stored the project under differs from the name asked (the tool's own name field) }
      Returns { dialog, save, saveAs, newProject, importJSON (both ask first on unsaved changes), refresh, dirty, current, setCurrent,
        el: { chip, save, lib, card } } */
   const bars = [];   // every projectBar of the page (tests drive Save as through it)
@@ -276,12 +284,12 @@
     })();
     const dirty = () => { const n = getCur(); if (!n || !store.has(n)) return true; return snapshot() !== snapOf(n); };
     const inList = () => { const n = getCur(); return !!(n && store.has(n)); };
-    const guard = what => !dirty() || (!inList() && !touched) ? true
+    const guard = what => !dirty() || (!inList() && !touched && ctx.askUnsaved !== 'always') ? true
       : confirm(`The project on screen has unsaved changes${getCur() && store.has(getCur()) ? ` (since "${getCur()}" was last saved)` : ' and is not in the saved list'}. ${what} anyway? (Cancel, then Save, keeps them.)`);
     let st = null;   // START: the start-of-session chooser (ctx.start), else null
     /* the dialog's Open (and the strip's): asks first on unsaved changes, then the tool's own open path */
     const openNamed = n => { if (!guard(`Open "${n}"`)) return false; const r = ctx.open(n); if (r === false) return false; setCur(n); if (ctx.afterOpen) ctx.afterOpen(n); if (st) st.opened(n); later(); return true; };
-    const dialog = libraryDialog({ store, storage: ctx.storage, standard: true, label: ctx.label, id: ctx.id, cloud: ctx.cloud, note: ctx.note, exportOne: ctx.exportOne,
+    const dialog = libraryDialog({ store, storage: ctx.storage, standard: true, label: ctx.label, id: ctx.id, cloud: ctx.cloud, note: ctx.note, exportOne: ctx.exportOne, ghNote: ctx.ghNote,
       current: () => { const n = getCur(); return n && store.has(n) ? n : null; },
       open: openNamed,
       renamed: (a, b) => { if (getCur() === a) setCur(b); if (savedAt[a]) { savedAt[b] = savedAt[a]; delete savedAt[a]; } if (st) st.renamed(a, b); if (ctx.renamed) ctx.renamed(a, b); later(); },
@@ -343,6 +351,7 @@
     document.addEventListener('input', edit, true); document.addEventListener('change', edit, true); document.addEventListener('click', later, true);
     setInterval(refresh, 3000);
     function done(r, name, quiet) {
+      if (r && r.ok && typeof r.name === 'string' && r.name) name = r.name;   // STDS-B: the name the tool's save stored it under (the list name follows the project's own name field)
       const ok = r !== false && !(r && r.ok === false) && store.has(name);   // the tool's save may return nothing
       if (!ok) { if (!quiet) alert((r && r.message) || 'The project was not saved.'); later(); return false; }
       setCur(name); savedAt[name] = Date.now(); if (st) st.opened(name); if (ctx.changed) ctx.changed(); dialog.refresh();

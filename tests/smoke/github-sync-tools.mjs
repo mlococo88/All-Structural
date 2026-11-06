@@ -35,9 +35,11 @@ const OWN = {
   bgeo: { box: '#lib_panel', show: p => p.evaluate(() => { if (document.getElementById('lib_panel').style.display === 'none') document.getElementById('lib_toggle').click(); else document.getElementById('lib_refresh').click(); }),
     open: () => false,
     del: (p, n) => p.evaluate(n => document.querySelector(`#lib_list [data-lib-del="${encodeURIComponent(n)}"]`).click(), n) },
-  sbapp: { show: p => p.evaluate(() => { const d = document.getElementById('libDlg'); if (d.open) d.close(); document.getElementById('bLib').click(); }),
-    open: p => p.evaluate(() => document.getElementById('libDlg').open),
-    del: (p, n) => p.evaluate(n => { const tr = [...document.querySelectorAll('#libBody tbody tr')].find(r => r.querySelector('td').textContent.trim().replace(/ \(open now\)$/, '') === n); tr.querySelector('[data-lib=del]').click(); }, n) }
+  // apps/steel-bridge (STDS-B, 2026-11-06): the standard Saved projects dialog over its by-name view (items by id); kept here for the
+  // own-list checks (first-sync offer, a delete that asks about the GitHub copy) because its sync list differs from the dialog's
+  sbapp: { show: p => p.evaluate(() => { const d = document.getElementById('sbdLibDlg'); if (d && d.open) d.close(); document.querySelector('[data-sp=hlib]').click(); }),
+    open: p => p.evaluate(() => document.getElementById('sbdLibDlg').open),
+    del: (p, n) => p.evaluate(n => document.querySelector(`#sbdLibDlg [data-spa=del][data-n="${CSS.escape(encodeURIComponent(n))}"]`).click(), n) }
 };
 const BOX = key => (OWN[key] && OWN[key].box) || 'dialog[open]';
 const showList = (key, p) => OWN[key] ? OWN[key].show(p) : p.evaluate(() => { const d = document.querySelector('dialog.spLib[open]'); if (d) d.close(); [...document.querySelectorAll('button[data-sp]')].find(b => /^(Saved projects|Projects|Saved analyses)…$/.test(b.textContent)).click(); });
@@ -87,7 +89,7 @@ for (const key of list) {
     ok(JSON.stringify(sk) === JSON.stringify(['bridgeSuite.v1.githubSync', `bridgeSuite.v1.githubSync.tool.${folder}`]), 'sync keys: bridgeSuite.v1.githubSync and .tool.' + folder + ' only (' + sk.join(', ') + ')');
     if (OWN[key]) {   // own dialog: the settings button in the bar, the first-sync offer, and a delete that asks about the GitHub copy
       await showList(key, p); await p.waitForTimeout(800);
-      ok(await p.evaluate(b => !!document.querySelector(b + ' .spGhBar [data-ghx=setup]'), BOX(key)), 'own dialog: "Cloud sync (GitHub)…" button in the sync bar');
+      ok(await p.evaluate(b => !!document.querySelector(b + ' .spGhBar [data-ghx=setup], ' + b + ' [data-gh=setup]'), BOX(key)), 'own dialog: "Cloud sync (GitHub)…" button (sync bar, or the standard dialog\'s head)');
       await p.evaluate(k => localStorage.removeItem(k), `bridgeSuite.v1.githubSync.tool.${folder}`);
       const n0 = gh.files.size; gh.files.delete(P('GHS A'));
       await showList(key, p);
