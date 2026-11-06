@@ -2322,7 +2322,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **How verified:** `node tests/smoke/lightpole-signviews.mjs`: ALL PASS (1280 and 390 px). The tool file is not changed, so no result, cable value or saved data can change.
 - **Open item (not changed):** the `lpsvData()` branch "select the Broms soil model (Shaft & soil inputs)…" can no longer be reached by a missing model (LTS-L2) or missing parameters (LTS-L3); it remains as a guard if `bromsEmbedment()` returns no result.
 
-## 2026-11-06 — PR: claude/lightpole-print (LPHP: Print in the header, the standard header; display only, no result change)
+## 2026-11-06 — PR: claude/lightpole-print (PR #849: https://github.com/mlococo88/All-Structural/pull/849) (LPHP: Print in the header, the standard header; display only, no result change)
 - **Engineer:** the standard header after #837–#843: chip · Undo · Redo · Save (Ctrl+S) · Saved projects… · **Print**. The Light Pole header had no Print (#843: "Print stays on the Report tab").
 - **Where:** PLIB / STDS block, after `[pb.el.chip,pb.el.save,pb.el.lib].forEach(b=>b.classList.add('pbtn'));` (anchor `/* LPHP (2026-11-06): Print, last in the header`). Before: nothing. After:
   ```js
