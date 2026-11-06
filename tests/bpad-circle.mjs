@@ -49,6 +49,7 @@ const BUILD = `(function(spec){
   }
   const set=(o,k,v)=>{ const p=k.split('.'); let t=o; for(let i=0;i<p.length-1;i++){ t=t[p[i]]; } t[p[p.length-1]]=v; };
   Object.entries(spec.patch||{}).forEach(([k,v])=>set(s,k,v));
+  if(spec.delHef) delete s.conc.circHefReduce;   /* a save made before the field existed (BC-6 / BC-7 saved-data proof) */
   return s; })`;
 const VARIANTS = {
   base: {}, dn: { 'standoff.type': 'clamp', 'standoff.z': 1.5 }, na: { 'forceModel.method': 'na', 'grout.present': true },
@@ -73,6 +74,16 @@ IDENT.push(
     'conc.shape': 'circle', 'conc.D': 42, 'conc.Bx': 42, 'conc.By': 42, 'conc.circHefReduce': true, 'conc.cage': { present: true, nBars: 10, barSize: '#9', grade: 'gr60', cover: 3, angle0: 0, topCover: 3, topHook: false, tieType: 'spiral', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 3, ackDetail: false } } },
   { id: 'cage-subst', calcOnly: true, case: CASES[0], patch: { 'anchor.pattern': 'circle', 'anchor.nCircle': 4, 'anchor.BC': 16.970562748477143, 'anchor.theta0': 45, 'anchor.hef': 36,
     'conc.shape': 'circle', 'conc.D': 36, 'conc.Bx': 36, 'conc.By': 36, 'conc.circHefReduce': true, 'conc.cage': { present: true, nBars: 8, barSize: '#8', grade: 'gr60', cover: 3, angle0: 45, topCover: 3, topHook: false, tieType: 'tie', tieSize: '#4', tieGrade: 'gr60', tieTop: 3, pitch: 4, ackDetail: true } } },
+  /* BC-7 (2026-11-06) saved-data proof: round-pier saves with the option stored (false / true) and without the field (made
+     before it existed) give the same results on origin/main and the working tree; compared on the computed results only
+     (the worked step's "accepted" sentence names the decision date). Audit case C geometry, uplift and moment. */
+  ...[['up', [{ name: 'T', P: 20, Vx: 0, Vy: 0, Mx: 0, My: 0 }]], ['mom', [{ name: 'M', P: -5, Vx: 3, Vy: 0, Mx: 0, My: 480 }]]].flatMap(([lk, combos]) =>
+    [['false', false], ['true', true], ['nofield', true]].map(([vk, v]) => ({ id: 'round-' + lk + '-' + vk, calcOnly: true, delHef: vk === 'nofield', patch: {
+      'plate.B': 24, 'plate.N': 24, 'plate.t': 1.5, 'plate.shape': 'circle', 'anchor.dia': 1, 'anchor.grade': 'f1554_55', 'anchor.hef': 18, 'anchor.head': 'hvyhexhead',
+      'anchor.torqued': true, 'anchor.pattern': 'circle', 'anchor.nCircle': 4, 'anchor.BC': 13, 'anchor.theta0': 0, 'conc.fc': 4, 'conc.shape': 'circle', 'conc.D': 36,
+      'conc.Bx': 36, 'conc.By': 36, 'conc.H': 120, 'conc.cracked': true, 'grout.present': false, 'standoff.type': 'clamp', 'standoff.z': 1, 'forceModel.method': 'elastic',
+      'conc.circHefReduce': v, combos } }))),
+  { id: 'rect-nofield', delHef: true },
   { id: 'narrow', patch: { 'conc.Bx': 14, 'conc.By': 40, 'conc.H': 16, 'plate.B': 12, 'anchor.hef': 10, 'anchor.torqued': true } },
 );
 
@@ -93,7 +104,10 @@ async function identity(src) {
         try { buildPrintReport(); const h = document.getElementById('printReport'); rep = h ? h.innerText : ''; if (h) h.innerHTML = ''; } catch (e) { rep = 'ERR ' + e; }
         let model = ''; try { model = JSON.stringify(bprModel()); } catch (e) { model = 'ERR ' + e; }
         if (spec.calcOnly) { rep = ''; model = ''; }
-        out[spec.id] = { cc: strip(CC), caps, checks: strip(allChecks()), validation: strip(VALIDATION), report: rep.replace(/\d{4}-\d\d-\d\d/g, '(date)'), model: model.replace(/\d{4}-\d\d-\d\d/g, '(date)') };
+        /* BC-7 (2026-11-06): the round-pier worked step's "accepted" sentence names the decision on the default ("2026-11-02: not
+           applied by default" → "2026-11-06: applied by default"); that sentence is normalised so the comparison is on the results */
+        const decis = o => JSON.parse(JSON.stringify(o).replace(/engineer decision 2026-11-0\d: (not )?applied by default\./g, 'engineer decision (on the default).'));
+        out[spec.id] = decis({ cc: strip(CC), caps, checks: strip(allChecks()), validation: strip(VALIDATION), report: rep.replace(/\d{4}-\d\d-\d\d/g, '(date)'), model: model.replace(/\d{4}-\d\d-\d\d/g, '(date)') });
       }
       return out;
     }, { IDENT, BUILD });
@@ -264,7 +278,9 @@ async function circleChecks(src) {
           phiTbA: capA.tb.phi, tbInA: capA.tensionModes.some(m => /breakout/.test(m.label)), tbInB: capB.tensionModes.some(m => /Concrete breakout/.test(m.label)),
           cageModeB: capB.tensionModes.some(m => /pier cage/.test(m.label)) && capB.shearModes.some(m => /pier cage/.test(m.label)),
           checksB: b.checks.map(x => x[0]), errs: a.errs.concat(b.errs) }; }
-      /* H8 (BC-6, 2026-11-02): the §17.6.2.1.2 analogy for a round pier is NOT applied by default. Audit case C: 4 × 1 in Gr 55
+      /* H8 (BC-6, 2026-11-02; BC-7, 2026-11-06): the §17.6.2.1.2 analogy for a round pier. BC-6 made it NOT applied by default;
+         BC-7 (engineer, 2026-11-06) makes it APPLIED by default again: a new project gets h'_ef and 38.487 kip, the alternative
+         shown is 25.304 kip. Older text of this comment (BC-6): Audit case C: 4 × 1 in Gr 55
          on BC 13 (θ0 0), Ø36 pier, h_ef 18, f'c 4 ksi cracked, heavy hex. Without: h_ef 18, A_Nc = π·18² = 1017.876, A_Nco = 2916,
          ψ_ed = 0.7 + 0.3·11.5/27 = 0.82778, N_b = 16·√4000·18^(5/3) = 125.104 kip → φN_cbg = 0.70·0.349066·0.82778·125.104 = 25.304 kip.
          With (the old default): h'_ef = (18 − 6.5·cos45°)/1.5 = 8.93587, A_Nco = 718.648, ψ_ed = 0.95739, N_b = 40.546 → 38.487 kip.
@@ -284,7 +300,7 @@ async function circleChecks(src) {
         const m = mergeState(JSON.parse(JSON.stringify(old)));
         const mig = { act: m.conc.circHefReduce, g: m.groups.map(g => g.data.conc.circHefReduce) };
         S = m; refreshAll(); CC = computeAll(); const tOld = comboCapacities(CC, CC.combos[0]).tb;
-        let note = false; try { buildInputPanel(); note = /saved before 2026-11-02/.test(document.body.innerHTML); } catch (e) { note = 'ERR ' + e; }
+        let note = false; try { buildInputPanel(); note = /saved before 2026-11-02/.test(document.body.innerHTML); } catch (e) { note = 'ERR ' + e; }   /* BC-7: the note is gone */
         const kept = [false, true].map(v => { const k = mkC(); k.conc.circHefReduce = v; return mergeState(JSON.parse(JSON.stringify(k))).conc.circHefReduce; });
         const pay = { _schema: 'bridge-anchor-group', schemaVersion: 1, producer: 'Light Pole and Sign Post', producedAt: '2026-11-02T12:00:00Z', project: { name: 'P' },
           units: { length: 'in', force: 'kip', moment: 'kip-in', stress: 'ksi' }, basis: { factored: true, method: 'LRFD' }, signConvention: 'basePlate-v1', notes: [],
@@ -294,9 +310,11 @@ async function circleChecks(src) {
         const imp = base => { S = mergeState(base); refreshAll(); bxAg.apply(pay, bxAg.check(pay), { mode: 'all' }, 'test'); return S.conc.circHefReduce; };
         const legacyRect = defaultState(); delete legacyRect.conc.circHefReduce;
         const roundOn = mkC(); roundOn.conc.circHefReduce = true;
-        const hand = { fresh: imp(defaultState()), legacyRect: imp(legacyRect), roundOn: imp(roundOn) };
+        const roundOff = mkC(); roundOff.conc.circHefReduce = false;
+        const rectOff = defaultState(); rectOff.conc.circHefReduce = false;   /* a rectangular project saved 2026-11-02 … 2026-11-06 */
+        const hand = { fresh: imp(defaultState()), legacyRect: imp(legacyRect), roundOn: imp(roundOn), roundOff: imp(roundOff), rectOff: imp(rectOff) };
         /* the Pier shape input: a migrated rectangular save switched to a round pier takes the new default */
-        let sw = null; try { S = mergeState(JSON.parse(JSON.stringify(legacyRect))); const before = S.conc.circHefReduce; buildInputPanel();
+        let sw = null; try { S = mergeState(JSON.parse(JSON.stringify(rectOff))); const before = S.conc.circHefReduce; buildInputPanel();
           const sel = [...document.querySelectorAll('select')].find(x => [...x.options].some(o => /Circular \(drilled shaft/.test(o.textContent)));
           sel.selectedIndex = [...sel.options].findIndex(o => /Circular \(drilled shaft/.test(o.textContent)); sel.dispatchEvent(new Event('change', { bubbles: true }));
           sw = { before, after: S.conc.circHefReduce, shape: S.conc.shape }; } catch (e) { sw = 'ERR ' + e; }
@@ -312,7 +330,7 @@ async function circleChecks(src) {
 console.log(`A: ${A.label}\nB: ${B.label}\nreadouts in ${OUT}\n`);
 const [ra, rb, cc] = await Promise.all([identity(A), identity(B), circleChecks(B)]);
 fs.writeFileSync(path.join(OUT, 'identity.A.json'), JSON.stringify(ra)); fs.writeFileSync(path.join(OUT, 'identity.B.json'), JSON.stringify(rb));
-console.log(`== 1. identity on ${Object.keys(ra.R).length} rectangular projects, origin/main vs working tree`);
+console.log(`== 1. identity on ${Object.keys(ra.R).length} projects (rectangular, round-pier cage and round-pier saved-data cases), origin/main vs working tree`);
 for (const k of Object.keys(ra.R)) {
   const d = diff(ra.R[k], rb.R[k]);
   console.log(`  ${k.padEnd(18)} ${hash(ra.R[k])} ${hash(rb.R[k])} ${d.length ? 'DIFFERENT' : 'same'}`);
@@ -400,21 +418,22 @@ if (r.hand.H6) {
 }
 if (r.hand.H8) {
   const h = r.hand.H8;
-  chk('H8 new project: default circHefReduce', h.def === false ? 0 : 1, 0, 0);
-  chk('H8 round pier default: h_ef (no reduction)', h.hef, 18, 1e-9);
+  /* BC-7 (2026-11-06): applied by default */
+  chk('H8 new project: default circHefReduce (BC-7: true)', h.def === true ? 0 : 1, 0, 0);
+  chk('H8 round pier default: h\'_ef (reduced)', h.hef, 8.93587, 5e-5);
   chk('H8 A_Nc (full disc)', h.ANc, Math.PI * 324, 1e-6);
-  chk('H8 A_Nco', h.ANco, 2916, 1e-9);
-  chk('H8 ψ_ed,N', h.psi_ed, 0.82778, 5e-5);
-  chk('H8 N_b (16√f\'c h_ef^5/3)', h.Nb, 125.104, 5e-4);
-  chk('H8 φN_cbg (default, not applied)', h.phiNcbg, 25.304, 5e-4);
-  chk('H8 φN_cbg shown as the alternative (applied)', h.altPhi, 38.487, 5e-4);
+  chk('H8 A_Nco = 9h\'_ef²', h.ANco, 718.648, 5e-3);
+  chk('H8 ψ_ed,N', h.psi_ed, 0.95739, 5e-5);
+  chk('H8 N_b (24√f\'c h\'_ef^1.5)', h.Nb, 40.546, 5e-4);
+  chk('H8 φN_cbg (default, applied)', h.phiNcbg, 38.487, 5e-4);
+  chk('H8 φN_cbg shown as the alternative (not applied)', h.altPhi, 25.304, 5e-4);
   chk('H8 older save (no field): h\'_ef kept', h.oldHef, 8.93587, 5e-5);
   chk('H8 older save: φN_cbg kept', h.oldPhi, 38.487, 5e-4);
-  const ok = h.mig.act === true && JSON.stringify(h.mig.g) === '[true,true,false]' && h.note === true && JSON.stringify(h.kept) === '[false,true]'
-    && h.hand.fresh === false && h.hand.legacyRect === false && h.hand.roundOn === true && !h.errs.length
-    && h.sw && h.sw.before === true && h.sw.after === false && h.sw.shape === 'circle';
+  const ok = h.mig.act === true && JSON.stringify(h.mig.g) === '[true,true,false]' && h.note === false && JSON.stringify(h.kept) === '[false,true]'
+    && h.hand.fresh === true && h.hand.legacyRect === true && h.hand.roundOn === true && h.hand.roundOff === false && h.hand.rectOff === true && !h.errs.length
+    && h.sw && h.sw.before === false && h.sw.after === true && h.sw.shape === 'circle';
   if (!ok) fail = true;
-  console.log(`  ${ok ? 'ok  ' : 'FAIL'} H8 migration: active ${h.mig.act}, groups ${JSON.stringify(h.mig.g)}, input note ${h.note}; stored false/true kept ${JSON.stringify(h.kept)}; hand-off into new ${h.hand.fresh}, migrated rect. save ${h.hand.legacyRect}, round pier applying it ${h.hand.roundOn}; migrated rect. save switched to a round pier ${JSON.stringify(h.sw)}${h.errs.length ? '; errors ' + h.errs.join(' | ') : ''}`);
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'} H8 migration: active ${h.mig.act}, groups ${JSON.stringify(h.mig.g)}, input note ${h.note}; stored false/true kept ${JSON.stringify(h.kept)}; hand-off into new ${h.hand.fresh}, migrated rect. save ${h.hand.legacyRect}, round pier applying it ${h.hand.roundOn}, round pier not applying it ${h.hand.roundOff}, rect. save storing false ${h.hand.rectOff}; rect. save storing false switched to a round pier ${JSON.stringify(h.sw)}${h.errs.length ? '; errors ' + h.errs.join(' | ') : ''}`);
 }
 console.log(`  TeX of the worked steps (KaTeX, throwOnError): ${r.texBad.length ? r.texBad.length + ' line(s) FAIL' : 'all typeset'}`); r.texBad.slice(0, 10).forEach(x => console.log('    ' + x));
 if (r.texBad.length) fail = true;
