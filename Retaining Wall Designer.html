@@ -513,6 +513,10 @@ select option { background: #fff; color: var(--text); }
 .c3d-bar label { font-weight: 600; color: var(--muted); margin-right: 4px; }
 #c3d-sel { max-width: 100%; font-size: 13px; padding: 3px 6px; }
 #c3d-title { margin-top: 6px; line-height: 1.5; }
+.c3d-fac { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-left: 10px; white-space: nowrap; }
+.c3d-fac .c3d-fl { font-weight: 600; color: var(--muted); }
+.c3d-fac label { font-weight: 500; color: var(--text); margin: 0; cursor: pointer; }
+.c3d-fac.off label { color: var(--muted); cursor: not-allowed; }
 #c3d-title .c3d-sign { color: var(--muted); font-size: 11.5px; }
 /* RWBP (2026-11-06): bearing pressure per combination (Stability tab) */
 .rwbp { margin: 8px 0 12px; }
@@ -2276,9 +2280,13 @@ function calcAll(inp) {
 
   // ── FACTORED loads  U = 1.2D + 1.6H ─────────────────────────
   // Seismic uses 1.0E, not 1.6, so factor static Mo only and add Mo_seis at 1.0
-  const SumVu = 1.2 * (Wftg + Wstem + Wsoil + W_bar) + 1.6 * (Wsur + Pa_tri_v) + Puf_max;
-  const Mou   = 1.6 * (Mo_tri + Mo_sur + Mo_hyd) + 1.0 * Mo_seis;
-  const Msu   = 1.2 * (Ms_ftg + Ms_stem + Ms_soil + Ms_bar) + 1.6 * (Ms_sur + Ms_Pv) + Puf_max * x_col;
+  // RW3F (2026-11-06): each combination's load factors are one definition (CMB_*), used by the formulas and
+  // returned (r.comb, aashtoR.CMB_S1 / CMB_S1A, ct.ee2.CMB_EE2) so the 3D view reads them. Same numbers, same
+  // arithmetic order as before: no result change.
+  const CMB_U12 = { D: 1.2, H: 1.6, E: 1.0 };   // U = 1.2D + 1.6H (+ 1.0E)
+  const SumVu = CMB_U12.D * (Wftg + Wstem + Wsoil + W_bar) + CMB_U12.H * (Wsur + Pa_tri_v) + Puf_max;
+  const Mou   = CMB_U12.H * (Mo_tri + Mo_sur + Mo_hyd) + CMB_U12.E * Mo_seis;
+  const Msu   = CMB_U12.D * (Ms_ftg + Ms_stem + Ms_soil + Ms_bar) + CMB_U12.H * (Ms_sur + Ms_Pv) + Puf_max * x_col;
   const x_Ru  = SumVu > 0 ? (Msu - Mou) / SumVu : B / 2;
   const e_u   = B / 2 - x_Ru;
 
@@ -2302,8 +2310,9 @@ function calcAll(inp) {
   // ── FACTORED loads  U = 0.9D + 1.6H (minimum vertical; footing design only) ──
   // Dead load (concrete, soil, column DL) at 0.9; the vertical earth-thrust component resists
   // the primary (overturning) effect and is taken at 0.9; surcharge, column L/S/W omitted.
-  const SumVu_min = 0.9 * (Wftg + Wstem + Wsoil + W_bar) + 0.9 * Pa_tri_v + 0.9 * pDL;
-  const Msu_min   = 0.9 * (Ms_ftg + Ms_stem + Ms_soil + Ms_bar) + 0.9 * Ms_Pv + 0.9 * pDL * x_col;
+  const CMB_U09 = { D: 0.9, Hv: 0.9, colD: 0.9 };   // U = 0.9D + 1.6H (lateral as CMB_U12)
+  const SumVu_min = CMB_U09.D * (Wftg + Wstem + Wsoil + W_bar) + CMB_U09.Hv * Pa_tri_v + CMB_U09.colD * pDL;
+  const Msu_min   = CMB_U09.D * (Ms_ftg + Ms_stem + Ms_soil + Ms_bar) + CMB_U09.Hv * Ms_Pv + CMB_U09.colD * pDL * x_col;
   const x_Ru_min  = SumVu_min > 0 ? (Msu_min - Mou) / SumVu_min : B / 2;
   const e_u_min   = B / 2 - x_Ru_min;
   let qu_toe_min, qu_heel_min;
@@ -2371,10 +2380,12 @@ function calcAll(inp) {
     else if (fricMode === 'manual' && A.delta_b > 0) { tanDelta = Math.tan(toRad(A.delta_b)); fric_label = 'tan δ_b (user)'; }
     else                             { tanDelta = Math.tan(toRad((2/3)*inp.phi));  fric_label = 'tan(⅔φ)'; }
     const delta_b = Math.atan(tanDelta) * 180 / Math.PI;     // equivalent interface angle
-    const H_drive_str = eta * (gEH_max*P_EH + 1.75*P_LS + 1.50*P_ES + 1.00*P_hyd);
+    const CMB_S1 = { DC: 1.25, EV: 1.35, EH: gEH_max, LS: 1.75, ES: 1.50, WA: 1.00 };   // Strength I, maximum factors (RW3F)
+    const H_drive_str = eta * (CMB_S1.EH*P_EH + CMB_S1.LS*P_LS + CMB_S1.ES*P_ES + CMB_S1.WA*P_hyd);
     // Vertical component of the earth thrust is EH (Table 3.4.1-2: γEH max/min), not EV.
     const gEH_min = 0.90;
-    const V_resist_min = 0.90*(V_DC + W_bar) + 1.00*Wsoil + gEH_min*Pa_tri_v + 0*V_LS_v - V_up;   // min vertical for sliding (net of uplift)
+    const CMB_S1A = { DC: 0.90, EV: 1.00, EH: gEH_min };   // Strength Ia, minimum vertical factors (RW3F)
+    const V_resist_min = CMB_S1A.DC*(V_DC + W_bar) + CMB_S1A.EV*Wsoil + CMB_S1A.EH*Pa_tri_v + 0*V_LS_v - V_up;   // min vertical for sliding (net of uplift)
     const R_tau = A.phi_tau * V_resist_min * tanDelta;        // friction resistance
     const R_ep  = A.phi_ep * Pp;                               // passive resistance
     const R_slide = R_tau + R_ep;
@@ -2383,9 +2394,9 @@ function calcAll(inp) {
 
     // ── ECCENTRICITY / OVERTURNING (Strength I): e ≤ B/4 ──
     // Max overturning: max EH/LS horizontal, min DC/EV vertical
-    const Mo_str = eta * (gEH_max*P_EH*y_EH + 1.75*P_LS*y_LS + 1.50*P_ES*y_ES + 1.00*P_hyd*y_hyd);
-    const V_str_min = 0.90*(V_DC + W_bar) + 1.00*Wsoil + gEH_min*Pa_tri_v - V_up;  // min stabilizing vertical (net of uplift)
-    const Mr_str_min = 0.90*(Wftg*x_ftg + Wstem*x_stem + W_bar*x_bar) + gEH_min*Pa_tri_v*B + 1.00*Wsoil*x_soil - M_up;
+    const Mo_str = eta * (CMB_S1.EH*P_EH*y_EH + CMB_S1.LS*P_LS*y_LS + CMB_S1.ES*P_ES*y_ES + CMB_S1.WA*P_hyd*y_hyd);
+    const V_str_min = CMB_S1A.DC*(V_DC + W_bar) + CMB_S1A.EV*Wsoil + CMB_S1A.EH*Pa_tri_v - CMB_S1.WA*V_up;  // min stabilizing vertical (net of uplift)
+    const Mr_str_min = CMB_S1A.DC*(Wftg*x_ftg + Wstem*x_stem + W_bar*x_bar) + CMB_S1A.EH*Pa_tri_v*B + CMB_S1A.EV*Wsoil*x_soil - CMB_S1.WA*M_up;
     const x_R_A = V_str_min > 0 ? (Mr_str_min - Mo_str) / V_str_min : B/2;
     const e_A   = B/2 - x_R_A;
     // Eccentricity limit — user-selectable (see UI description for when each applies)
@@ -2402,12 +2413,12 @@ function calcAll(inp) {
 
     // ── BEARING (Strength I): max DC/EV vertical + eccentric ──
     // Total (for footing structural design — soil + water pressure together) …
-    const V_str_max_tot = eta * (1.25*V_DC + 1.35*Wsoil + gEH_max*Pa_tri_v + 1.75*V_LS_v + 1.25*W_bar) + V_col;
-    const Mr_str_max_tot = eta * (1.25*(Wftg*x_ftg + Wstem*x_stem + W_bar*x_bar) + 1.35*Wsoil*x_soil + gEH_max*Pa_tri_v*B
-                     + 1.75*V_LS_v*xLSv) + V_col*x_col;
+    const V_str_max_tot = eta * (CMB_S1.DC*V_DC + CMB_S1.EV*Wsoil + CMB_S1.EH*Pa_tri_v + CMB_S1.LS*V_LS_v + CMB_S1.DC*W_bar) + V_col;
+    const Mr_str_max_tot = eta * (CMB_S1.DC*(Wftg*x_ftg + Wstem*x_stem + W_bar*x_bar) + CMB_S1.EV*Wsoil*x_soil + CMB_S1.EH*Pa_tri_v*B
+                     + CMB_S1.LS*V_LS_v*xLSv) + V_col*x_col;
     // … and effective (for the soil bearing check — uplift carried by the water, γ_WA = 1.0)
-    const V_str_max  = V_str_max_tot - V_up;
-    const Mr_str_max = Mr_str_max_tot - M_up;
+    const V_str_max  = V_str_max_tot - CMB_S1.WA*V_up;
+    const Mr_str_max = Mr_str_max_tot - CMB_S1.WA*M_up;
     const Mo_str_max = Mo_str;                                 // same driving moment
     const x_R_brg = V_str_max > 0 ? (Mr_str_max - Mo_str_max) / V_str_max : B/2;
     const e_brg   = B/2 - x_R_brg;
@@ -2529,16 +2540,17 @@ function calcAll(inp) {
       // ── EXTREME EVENT II LIMIT STATE (full stability suite) ──
       const gEH_ct  = (A.ct_eh === 'full') ? 1.00 : 0.00;   // MassDOT: 0
       const gLS_ct  = 0.50;    // reduced live load in extreme events
+      const CMB_EE2 = { CT: 1.00, DC: 1.00, EV: 1.00, EH: gEH_ct, LS: gLS_ct, WA: 1.00 };   // Extreme Event II factors (RW3F)
       const phi_ct  = A.ct_phi;                              // φ = 1.0 (extreme event)
       const eccDiv  = A.ct_ecc_div;                          // e ≤ B/n (default B/3)
 
       // Driving: collision + (optionally) earth pressure + LS
-      const H_drive_ct = CT_h*1000
+      const H_drive_ct = CMB_EE2.CT*CT_h*1000
                        + gEH_ct * (P_EH + P_hyd)
                        + gLS_ct * P_LS;
       // Resisting vertical: unfactored DC + EV (γ = 1.0 in extreme events).
       // Barrier weight is DC and is included via SumV.
-      const V_ct_min = 1.00*(Wftg + Wstem + W_bar) + 1.00*(Wsoil + Pa_tri_v) - F_uplift;
+      const V_ct_min = CMB_EE2.DC*(Wftg + Wstem + W_bar) + CMB_EE2.EV*(Wsoil + Pa_tri_v) - CMB_EE2.WA*F_uplift;
       const V_ct_max = V_ct_min + gLS_ct * Wsur;
 
       // Sliding
@@ -2549,10 +2561,10 @@ function calcAll(inp) {
       const sliding_dcr_ct = R_ct > 0 ? H_drive_ct / R_ct : 999;
 
       // Overturning / eccentricity
-      const Mo_ct = M_CT
+      const Mo_ct = CMB_EE2.CT*M_CT
                   + gEH_ct * (P_EH*y_EH + P_hyd*(hw/3))
                   + gLS_ct * (P_LS*y_LS);
-      const Mr_ct = 1.00*(Ms_ftg + Ms_stem + Ms_bar) + 1.00*(Ms_soil + Ms_Pv) + Ms_uplift;
+      const Mr_ct = CMB_EE2.DC*(Ms_ftg + Ms_stem + Ms_bar) + CMB_EE2.EV*(Ms_soil + Ms_Pv) + CMB_EE2.WA*Ms_uplift;
       const x_R_ct = V_ct_min > 0 ? (Mr_ct - Mo_ct) / V_ct_min : B/2;
       const e_ct   = B/2 - x_R_ct;
       const e_lim_ct = B / eccDiv;
@@ -2568,7 +2580,7 @@ function calcAll(inp) {
       const bearing_ok_ct = q_ult_ct <= q_R_ct;
 
       ct.ee2 = {
-        gEH_ct, gLS_ct, phi_ct, eccDiv,
+        gEH_ct, gLS_ct, phi_ct, eccDiv, CMB_EE2,
         H_drive_ct, V_ct_min, V_ct_max,
         R_tau_ct, R_ep_ct, R_ct, sliding_ok_ct, sliding_dcr_ct,
         Mo_ct, Mr_ct, x_R_ct, e_ct, e_lim_ct, ecc_ok_ct,
@@ -2617,6 +2629,7 @@ function calcAll(inp) {
       quA_toe, quA_heel, quA_front, quA_back, useManualQn, onRock,
       x_R_tot, e_tot,   // RWETOT (2026-11-01): the Strength I footing-design resultant, returned for the report (exposure only)
       V_str_min_tot, e_Ia, quIa_toe, quIa_heel, quIa_front, quIa_back,
+      CMB_S1, CMB_S1A, V_LS_v, x_LSv: xLSv,   // RW3F (2026-11-06): the combination factors and the LS vertical, returned for the 3D view (exposure only)
     };
   }
 
@@ -3382,6 +3395,7 @@ function calcAll(inp) {
     q_toe, q_heel, q_max, bearing_ok, Fr,
     // Factored bearing
     SumVu, Mou, Msu, x_Ru, e_u: B/2 - x_Ru,
+    comb: { u12: CMB_U12, u09: CMB_U09 },   // RW3F (2026-11-06): ACI combination factors, returned for the 3D view (exposure only)
     qu_toe, qu_heel, quf_front, quf_back,
     SumVu_min, Msu_min, x_Ru_min, e_u_min, qu_toe_min, qu_heel_min, quf_front_min, quf_back_min,
     heel_min_governs, toe_min_governs, gHeel: hcG.g,
@@ -8278,7 +8292,7 @@ function render3D(r) {
           <span class="card-ref">drag to rotate · scroll to zoom · right-drag to pan</span>
         </div>
         <div class="card-body" style="padding:0;">
-          <div class="c3d-bar"><label for="c3d-sel">Show</label> <select id="c3d-sel" onchange="rw3Set(this.value)"></select><div id="c3d-title"></div></div>
+          <div class="c3d-bar"><label for="c3d-sel">Show</label> <select id="c3d-sel" onchange="rw3Set(this.value)"></select> <span id="c3d-fac" class="c3d-fac" role="radiogroup" aria-label="Load arrows"><span class="c3d-fl">Load arrows</span><label><input type="radio" name="c3d-fac" value="0" checked onchange="rw3Fac(false)"> Unfactored</label><label><input type="radio" name="c3d-fac" value="1" onchange="rw3Fac(true)"> Factored</label></span><div id="c3d-title"></div></div>
           <div style="position:relative;width:100%;background:#1a1e2e;border-radius:0 0 8px 8px;overflow:hidden;">
             <canvas id="c3d" style="width:100%;display:block;height:520px;"></canvas>
             <svg id="c3d-leaders" style="position:absolute;left:0;top:0;width:100%;height:520px;pointer-events:none;"></svg>
@@ -8425,42 +8439,85 @@ function applyConcreteOpacity3D(o) {
 // Selection is session only (RW3.sel; no storage key). A pick on the Stability tab's bearing selector
 // (rwbpSet → window.rwbpOnPick) sets it (one-way sync); a pick here stays local.
 // ================================================================
-const RW3 = { sel: 'GOV', labels: [] };
+const RW3 = { sel: 'GOV', labels: [], fac: false };   // fac: load arrows factored (RW3F; session only, no storage key)
 const rw3K = v => f(v / 1000, 2) + ' k/ft';
 // unfactored load cases, per ft of wall: [{ key, name, items: [{ kind:'h'|'v'|'up', P, x, y, dir, txt, col }] }]
 function rw3Cases(r) {
   const inp = r.inp, a = r.aashtoR, A = r.isAASHTO && a, B = r.B, H = r.H, L = [];
   const add = (key, name, items) => { const it = items.filter(o => o && o.P > 0.5); if (it.length) L.push({ key, name, items: it }); };
-  const hz = (P, y, txt, col, x0, dir) => ({ kind: 'h', P, x: x0 == null ? B : x0, y, dir: dir || -1, txt, col });
-  const vt = (P, x, yTop, txt, col) => ({ kind: 'v', P, x, y: yTop, txt, col });
+  const hz = (P, y, txt, col, x0, dir, tag) => ({ kind: 'h', P, x: x0 == null ? B : x0, y, dir: dir || -1, txt, col, tag });
+  const vt = (P, x, yTop, txt, col, tag) => ({ kind: 'v', P, x, y: yTop, txt, col, tag });
   const yArm = (M, P) => P > 0 ? M / P : 0;
   if (A) {
-    add('EH', 'EH — horizontal earth pressure', [hz(a.P_EH, a.y_EH, `EH = ${rw3K(a.P_EH)} @ y = ${f(a.y_EH, 2)} ft`, '#e05050')]);
-    add('LS', 'LS — live-load surcharge (lateral)', [hz(a.P_LS, a.y_LS, `LS = ${rw3K(a.P_LS)} @ y = ${f(a.y_LS, 2)} ft`, '#e0a030')]);
-    add('ES', 'ES — dead-load surcharge (lateral)', [hz(a.P_ES, r.Hp / 2, `ES = ${rw3K(a.P_ES)} @ y = ${f(r.Hp / 2, 2)} ft`, '#d08a20')]);
-    add('WA', 'WA — water (hydrostatic, uplift)', [hz(a.P_hyd, r.hw / 3, `WA = ${rw3K(a.P_hyd)} @ y = ${f(r.hw / 3, 2)} ft`, '#3fa9f5'),
-      { kind: 'up', P: r.F_uplift, x: r.x_uplift, y: 0, txt: `U = ${rw3K(r.F_uplift)} (uplift) @ x = ${f(r.x_uplift, 2)} ft`, col: '#3fa9f5' }]);
+    add('EH', 'EH — horizontal earth pressure', [hz(a.P_EH, a.y_EH, `EH = ${rw3K(a.P_EH)} @ y = ${f(a.y_EH, 2)} ft`, '#e05050', null, null, 'EH'),
+      r.Pa_tri_v > 0.5 ? vt(r.Pa_tri_v, B, H, `EH,v = ${rw3K(r.Pa_tri_v)} @ x = B`, '#e05050', 'EHv') : null]);
+    add('LS', 'LS — live-load surcharge (lateral' + (a.V_LS_v > 0.5 ? ', and vertical on the heel' : '') + ')', [hz(a.P_LS, a.y_LS, `LS = ${rw3K(a.P_LS)} @ y = ${f(a.y_LS, 2)} ft`, '#e0a030', null, null, 'LS'),
+      a.V_LS_v > 0.5 ? vt(a.V_LS_v, a.x_LSv, H, `LS,v = ${rw3K(a.V_LS_v)} @ x = ${f(a.x_LSv, 2)} ft`, '#e0a030', 'LSv') : null]);
+    add('ES', 'ES — dead-load surcharge (lateral)', [hz(a.P_ES, r.Hp / 2, `ES = ${rw3K(a.P_ES)} @ y = ${f(r.Hp / 2, 2)} ft`, '#d08a20', null, null, 'ES')]);
+    add('WA', 'WA — water (hydrostatic, uplift)', [hz(a.P_hyd, r.hw / 3, `WA = ${rw3K(a.P_hyd)} @ y = ${f(r.hw / 3, 2)} ft`, '#3fa9f5', null, null, 'WA'),
+      { kind: 'up', P: r.F_uplift, x: r.x_uplift, y: 0, txt: `U = ${rw3K(r.F_uplift)} (uplift) @ x = ${f(r.x_uplift, 2)} ft`, col: '#3fa9f5', tag: 'UP' }]);
     const ct = a.ct;
-    if (ct) add('CT', 'CT — vehicular collision (Extreme Event II)', [hz(ct.CT_h * 1000, ct.y_CT, `CT = ${f(ct.CT_h, 3)} k/ft @ y = ${f(ct.y_CT, 2)} ft`, '#ff6060', inp.Lt + r.ts_bot_ft)]);
+    if (ct) add('CT', 'CT — vehicular collision (Extreme Event II)', [hz(ct.CT_h * 1000, ct.y_CT, `CT = ${f(ct.CT_h, 3)} k/ft @ y = ${f(ct.y_CT, 2)} ft`, '#ff6060', inp.Lt + r.ts_bot_ft, null, 'CT')]);
   } else {
-    add('EH', 'H — earth pressure (lateral)', [hz(r.Pa_tri_h, r.y_Pa, `H (earth) = ${rw3K(r.Pa_tri_h)} @ y = ${f(r.y_Pa, 2)} ft`, '#e05050'),
-      r.Pa_tri_v > 0.5 ? vt(r.Pa_tri_v, B, H, `P_a,v = ${rw3K(r.Pa_tri_v)} @ x = B`, '#e05050') : null]);
-    add('LS', 'Surcharge (lateral)', [hz(r.Pa_sur_h, yArm(r.Mo_sur, r.Pa_sur_h), `Surcharge = ${rw3K(r.Pa_sur_h)} @ y = ${f(yArm(r.Mo_sur, r.Pa_sur_h), 2)} ft`, '#e0a030')]);
-    add('WA', 'Water (hydrostatic, uplift)', [hz(r.F_hyd, yArm(r.Mo_hyd, r.F_hyd), `Water = ${rw3K(r.F_hyd)} @ y = ${f(yArm(r.Mo_hyd, r.F_hyd), 2)} ft`, '#3fa9f5'),
-      { kind: 'up', P: r.F_uplift, x: r.x_uplift, y: 0, txt: `U = ${rw3K(r.F_uplift)} (uplift) @ x = ${f(r.x_uplift, 2)} ft`, col: '#3fa9f5' }]);
-    if (r.Pe_inc > 0) add('EQ', 'E — seismic increment (Mononobe-Okabe)', [hz(r.Pe_inc, yArm(r.Mo_seis, r.Pe_inc), `ΔP_AE = ${rw3K(r.Pe_inc)} @ y = ${f(yArm(r.Mo_seis, r.Pe_inc), 2)} ft`, '#c070ff')]);
+    add('EH', 'H — earth pressure (lateral)', [hz(r.Pa_tri_h, r.y_Pa, `H (earth) = ${rw3K(r.Pa_tri_h)} @ y = ${f(r.y_Pa, 2)} ft`, '#e05050', null, null, 'EH'),
+      r.Pa_tri_v > 0.5 ? vt(r.Pa_tri_v, B, H, `P_a,v = ${rw3K(r.Pa_tri_v)} @ x = B`, '#e05050', 'EHv') : null]);
+    add('LS', 'Surcharge (lateral)', [hz(r.Pa_sur_h, yArm(r.Mo_sur, r.Pa_sur_h), `Surcharge = ${rw3K(r.Pa_sur_h)} @ y = ${f(yArm(r.Mo_sur, r.Pa_sur_h), 2)} ft`, '#e0a030', null, null, 'ES')]);
+    add('WA', 'Water (hydrostatic, uplift)', [hz(r.F_hyd, yArm(r.Mo_hyd, r.F_hyd), `Water = ${rw3K(r.F_hyd)} @ y = ${f(yArm(r.Mo_hyd, r.F_hyd), 2)} ft`, '#3fa9f5', null, null, 'WA'),
+      { kind: 'up', P: r.F_uplift, x: r.x_uplift, y: 0, txt: `U = ${rw3K(r.F_uplift)} (uplift) @ x = ${f(r.x_uplift, 2)} ft`, col: '#3fa9f5', tag: 'UP' }]);
+    if (r.Pe_inc > 0) add('EQ', 'E — seismic increment (Mononobe-Okabe)', [hz(r.Pe_inc, yArm(r.Mo_seis, r.Pe_inc), `ΔP_AE = ${rw3K(r.Pe_inc)} @ y = ${f(yArm(r.Mo_seis, r.Pe_inc), 2)} ft`, '#c070ff', null, null, 'EQ')]);
   }
-  add('SV', A ? 'Surcharge (vertical, on the heel)' : 'Surcharge (vertical, on the heel)', [vt(r.Wsur, yArm(r.Ms_sur, r.Wsur), H, `q·L_h = ${rw3K(r.Wsur)} @ x = ${f(yArm(r.Ms_sur, r.Wsur), 2)} ft`, '#e0a030')]);
+  add('SV', A ? 'Surcharge (vertical, on the heel)' : 'Surcharge (vertical, on the heel)', [vt(r.Wsur, yArm(r.Ms_sur, r.Wsur), H, `q·L_h = ${rw3K(r.Wsur)} @ x = ${f(yArm(r.Ms_sur, r.Wsur), 2)} ft`, '#e0a030', 'SV')]);
   add('DC', A ? 'DC — concrete self-weight' : 'D — concrete self-weight', [
-    vt(r.Wstem, r.x_stem, H, `Stem = ${rw3K(r.Wstem)} @ x = ${f(r.x_stem, 2)} ft`, '#aab8d8'),
-    vt(r.Wftg, r.x_ftg, r.tf_ft, `Footing = ${rw3K(r.Wftg)} @ x = ${f(r.x_ftg, 2)} ft`, '#aab8d8'),
-    r.W_bar > 0.5 ? vt(r.W_bar, r.x_bar, H + r.bar_h_ft, `Barrier = ${rw3K(r.W_bar)} @ x = ${f(r.x_bar, 2)} ft`, '#aab8d8') : null]);
-  add('EV', A ? 'EV — soil weight on the heel' : 'D — soil weight on the heel', [vt(r.Wsoil, r.x_soil, H, `Soil = ${rw3K(r.Wsoil)} @ x = ${f(r.x_soil, 2)} ft`, '#c9a96e')]);
-  if (r.hasCol) add('COL', 'Column / beam load (service)', [vt(r.W_col, r.x_col, H, `Column = ${rw3K(r.W_col)} @ x = ${f(r.x_col, 2)} ft`, '#ff8080')]);
+    vt(r.Wstem, r.x_stem, H, `Stem = ${rw3K(r.Wstem)} @ x = ${f(r.x_stem, 2)} ft`, '#aab8d8', 'DC'),
+    vt(r.Wftg, r.x_ftg, r.tf_ft, `Footing = ${rw3K(r.Wftg)} @ x = ${f(r.x_ftg, 2)} ft`, '#aab8d8', 'DC'),
+    r.W_bar > 0.5 ? vt(r.W_bar, r.x_bar, H + r.bar_h_ft, `Barrier = ${rw3K(r.W_bar)} @ x = ${f(r.x_bar, 2)} ft`, '#aab8d8', 'DC') : null]);
+  add('EV', A ? 'EV — soil weight on the heel' : 'D — soil weight on the heel', [vt(r.Wsoil, r.x_soil, H, `Soil = ${rw3K(r.Wsoil)} @ x = ${f(r.x_soil, 2)} ft`, '#c9a96e', 'EV')]);
+  if (r.hasCol) add('COL', 'Column / beam load (service)', [vt(r.W_col, r.x_col, H, `Column = ${rw3K(r.W_col)} @ x = ${f(r.x_col, 2)} ft`, '#ff8080', 'COL')]);
   if (r.Pp > 0.5) add('PP', 'Passive resistance (toe' + (r.Pp_key > 0.5 ? ' + key' : '') + ')', [
-    hz(r.Pp_toe, r.Df / 3, `P_p,toe = ${rw3K(r.Pp_toe)} @ y = ${f(r.Df / 3, 2)} ft`, '#30c880', 0, 1),
-    r.Pp_key > 0.5 ? hz(r.Pp_key, -r.dk_ft / 2, `P_p,key = ${rw3K(r.Pp_key)}`, '#30c880', inp.Lt + r.ts_bot_ft * 0.3, 1) : null]);
+    hz(r.Pp_toe, r.Df / 3, `P_p,toe = ${rw3K(r.Pp_toe)} @ y = ${f(r.Df / 3, 2)} ft`, '#30c880', 0, 1, 'PP'),
+    r.Pp_key > 0.5 ? hz(r.Pp_key, -r.dk_ft / 2, `P_p,key = ${rw3K(r.Pp_key)}`, '#30c880', inp.Lt + r.ts_bot_ft * 0.3, 1, 'PP') : null]);
   return L;
+}
+// RW3F (2026-11-06): the load factor of each load-case item in a combination, READ from the analysis'
+// combination definitions (r.comb, aashtoR.CMB_S1 / CMB_S1A, ct.ee2.CMB_EE2; η from aashtoR.eta). The map
+// only says which definition factor multiplies which load, as the analysis' formulas do (calcAll); a factor
+// of 0 means the load is not in that combination's base resultant. The column is factored by its own
+// combinations in the analysis (col: the analysis' factored value). null = no factors (service).
+function rw3Factors(r, key) {
+  const a = r.aashtoR;
+  if (!r.isAASHTO) {
+    const U = r.comb && r.comb.u12, M = r.comb && r.comb.u09; if (!U || !M) return null;
+    if (key === 'u12') return { def: 'U = 1.2D + 1.6H', f: { EH: U.H, EHv: U.H, ES: U.H, WA: U.H, UP: 0, EQ: U.E, SV: U.H, DC: U.D, EV: U.D, PP: 0 },
+      col: r.hasCol ? { v: r.Puf_max, how: 'the analysis\' largest factored column combination' } : null };
+    if (key === 'u09') return { def: 'U = 0.9D + 1.6H', f: { EH: U.H, EHv: M.Hv, ES: U.H, WA: U.H, UP: 0, EQ: U.E, SV: 0, DC: M.D, EV: M.D, PP: 0 },
+      col: r.hasCol ? { v: M.colD * r.pDL, how: `${f(M.colD, 2)} × column dead load` } : null };
+    return null;
+  }
+  if (!a || !a.CMB_S1 || !a.CMB_S1A) return null;
+  const S = a.CMB_S1, I = a.CMB_S1A, et = a.eta;
+  const lat = { EH: et * S.EH, LS: et * S.LS, ES: et * S.ES, WA: et * S.WA, CT: 0, PP: 0 };
+  if (key === 's1' || key === 's1t') return { def: 'Strength I (maximum)', eta: et, f: { ...lat, EHv: et * S.EH, LSv: et * S.LS, SV: 0, DC: et * S.DC, EV: et * S.EV, UP: key === 's1' ? S.WA : 0 },
+    col: r.hasCol ? { v: a.V_col, how: 'the analysis\' Strength I column load' } : null };
+  if (key === 's1a' || key === 's1at') return { def: 'Strength Ia (minimum vertical)', eta: et, f: { ...lat, EHv: I.EH, LSv: 0, SV: 0, DC: I.DC, EV: I.EV, UP: key === 's1a' ? S.WA : 0 },
+    col: r.hasCol ? { v: 0 } : null };
+  const E = a.ct && a.ct.ee2 && a.ct.ee2.CMB_EE2;
+  if (key === 'ee2' && E) return { def: 'Extreme Event II', f: { CT: E.CT, EH: E.EH, WA: E.EH, LS: E.LS, ES: 0, EHv: E.EV, LSv: 0, SV: E.LS, DC: E.DC, EV: E.EV, UP: E.WA, PP: 0 },
+    col: r.hasCol ? { v: 0 } : null };
+  return null;
+}
+// the factored items of a selection, and the check: Σγ·V and Σγ·M about the toe against the combination's own R and x̄
+function rw3Factored(r, S, F) {
+  const out = [], omit = [];
+  S.cases.forEach(c => c.items.forEach(o => {
+    const nm = o.kind === 'up' ? 'Water uplift U' : o.txt.split(' = ')[0];
+    let g = null, P;
+    if (o.tag === 'COL') { if (!F.col || !(F.col.v > 0.5)) { omit.push(nm); return; } P = F.col.v; }
+    else { g = F.f[o.tag]; if (!(g > 0)) { omit.push(nm); return; } P = g * o.P; }
+    out.push({ ...o, P, P0: o.P, g, nm });
+  }));
+  let V = 0, M = 0;   // M about the toe: resisting (+) less overturning (−) = V·x̄
+  out.forEach(o => { if (o.kind === 'v') { V += o.P; M += o.P * o.x; } else if (o.kind === 'up') { V -= o.P; M -= o.P * o.x; } else M += o.dir * o.P * o.y; });
+  return { items: out, omit, V, M };
 }
 function rw3Options(r) {
   const C = (typeof rwbpCombos === 'function') ? rwbpCombos(r) : { list: [], gov: null };
@@ -8481,7 +8538,8 @@ function rw3Selected(r) {
   if (sel === 'ALL') return { sel, cases, combo: svc || null, comboNote: 'service (unfactored)' };
   if (sel.startsWith('CASE:')) return { sel, cases: cases.filter(c => 'CASE:' + c.key === sel), combo: null };
   const k = sel === 'GOV' ? C.gov : sel.slice(2);
-  return { sel, cases, combo: C.list.find(x => x.key === k) || null, gov: sel === 'GOV' };
+  const F = rw3Factors(r, k);
+  return { sel, cases, combo: C.list.find(x => x.key === k) || null, gov: sel === 'GOV', F, fac: !!(F && RW3.fac) };
 }
 function rw3Title(r, S) {
   const unit = 'Forces per ft of wall (k/ft); heights y above the footing base, x from the toe.';
@@ -8489,7 +8547,14 @@ function rw3Title(r, S) {
   let what;
   if (S.sel.startsWith('CASE:')) what = `<b>${S.cases[0] ? S.cases[0].name : ''}</b>: unfactored. No bearing pressure is shown for a single load case.`;
   else if (S.sel === 'ALL') what = `<b>All load cases</b>, unfactored; base reaction R and bearing pressure for the ${S.comboNote}.`;
-  else what = `${S.gov ? '<b>Governing</b> bearing combination: ' : ''}<b>${S.combo ? S.combo.name : ''}</b>: base reaction R and bearing pressure as the analysis computes them${S.combo && /Service/.test(S.combo.name) ? '' : ' (factored)'}; the load arrows are the unfactored load cases (choose one in the list to see it alone).`;
+  else if (S.fac) {
+    const X = S.FX, F = S.F, c = S.combo, tol = v => 1e-6 * Math.max(1, Math.abs(v));
+    const okV = Math.abs(X.V - c.V) <= tol(c.V), okM = Math.abs(X.M - c.V * c.xR) <= tol(c.V * c.xR) * 10;
+    what = `${S.gov ? '<b>Governing</b> bearing combination: ' : ''}<b>${c.name}</b>. <b>Load arrows: factored</b>, each load case × its load factor γ in this combination, read from the analysis' definition of ${F.def}${F.eta != null && F.eta !== 1 ? ` (γ includes η = ${f(F.eta, 3)})` : ''}; base reaction R and bearing pressure as the analysis computes them.`
+      + (X.omit.length ? ` Not in this combination's base resultant: ${X.omit.join(', ')}.` : '')
+      + `<div class="c3d-sign">Check: Σγ·V of the arrows = ${f(X.V, 0)} lb/ft vs R = ${f(c.V, 0)} lb/ft ${okV ? '✓' : '✗'}; Σγ·M about the toe = ${f(X.M, 0)} vs R·x̄ = ${f(c.V * c.xR, 0)} lb·ft/ft ${okM ? '✓' : '✗'}.</div>`;
+  }
+  else what = `${S.gov ? '<b>Governing</b> bearing combination: ' : ''}<b>${S.combo ? S.combo.name : ''}</b>: base reaction R and bearing pressure as the analysis computes them${S.combo && /Service/.test(S.combo.name) ? '' : ' (factored)'}; <b>load arrows: unfactored</b>, the load cases${S.F ? ' (choose Factored to see them × this combination\'s load factors)' : ''} (choose one in the list to see it alone).`;
   return `<div>${what}</div><div class="c3d-sign">${unit} ${sign} Worked on the Stability tab (<a class="wkA" href="#" data-card="stabBrg">bearing</a>).</div>`;
 }
 // label sprite: fixed pixel size, faces the camera, never hidden by geometry or the section cut
@@ -8522,7 +8587,13 @@ function rw3Build(r) {
   while (g.children.length) { const c = g.children[0]; g.remove(c); if (c.material && c.material.map) c.material.map.dispose(); }
   RW3.labels = [];
   const S = rw3Selected(r), La = Math.max(B, H) * 0.22, V3 = (x, y) => new THREE.Vector3(x, y, z);
-  S.cases.forEach(c => c.items.forEach(o => {
+  let shown = S.cases;
+  if (S.fac) {   // RW3F: factored arrows, γ × load case, γ from the analysis' combination definition
+    S.FX = rw3Factored(r, S, S.F);
+    shown = [{ items: S.FX.items.map(o => { const at = o.txt.indexOf(' @ '), pos = at >= 0 ? o.txt.slice(at) : '';
+      return { ...o, txt: o.g == null ? `${o.nm} (factored) = ${rw3K(o.P)}${pos}` : `${o.nm} = ${f(o.g, 2)} × ${rw3K(o.P0).replace(' k/ft', '')} = ${rw3K(o.P)}${pos}` }; }) }];
+  }
+  shown.forEach(c => c.items.forEach(o => {
     if (o.kind === 'h') { const x1 = o.x, x0 = o.x - o.dir * La; rw3Arrow(g, V3(x0, o.y), V3(x1, o.y), o.col); rw3Label(g, o.txt, V3(x0, o.y), o.col); }
     else if (o.kind === 'v') { rw3Arrow(g, V3(o.x, o.y + La * 0.8), V3(o.x, o.y), o.col); rw3Label(g, o.txt, V3(o.x, o.y + La * 0.8), o.col); }
     else { rw3Arrow(g, V3(o.x, o.y - La * 0.8), V3(o.x, o.y), o.col); rw3Label(g, o.txt, V3(o.x, o.y - La * 0.8), o.col); }
@@ -8544,6 +8615,8 @@ function rw3Build(r) {
     S.rInfo = zn.none ? 'the resultant is outside the base (no contact)' : `contact length ${f(zn.x1 - zn.x0, 2)} ft, q_max = ${f(Math.max(zn.q0, zn.q1), 0)} psf`;
   }
   const t = document.getElementById('c3d-title'); if (t) t.innerHTML = rw3Title(r, S) + (S.rInfo ? `<div class="c3d-sign">Base reaction: ${S.rInfo}.</div>` : '');
+  document.querySelectorAll('input[name="c3d-fac"]').forEach(el => { el.disabled = !S.F; el.checked = (el.value === '1') === S.fac; });
+  const fw = document.getElementById('c3d-fac'); if (fw) { fw.classList.toggle('off', !S.F); fw.title = S.F ? '' : 'Factored arrows apply to a factored combination; a single load case, all load cases and the service combination are unfactored.'; }
   const sel = document.getElementById('c3d-sel');
   if (sel) { const { o } = rw3Options(r);
     sel.innerHTML = o.map(([lab, items]) => `<optgroup label="${lab}">${items.map(([v, n]) => `<option value="${v}"${v === S.sel ? ' selected' : ''}>${n}</option>`).join('')}</optgroup>`).join(''); }
@@ -8578,6 +8651,7 @@ function rw3LayoutLabels() {
     ld.innerHTML = h; }
 }
 function rw3Set(v) { RW3.sel = v; if (_3d && window._R) rw3Build(window._R); }
+function rw3Fac(on) { RW3.fac = !!on; if (_3d && window._R) rw3Build(window._R); }   // RW3F: session only, no storage key
 window.rwbpOnPick = sel => { RW3.sel = sel === 'GOV' ? 'GOV' : 'C:' + sel; if (_3d && window._R && document.getElementById('c3d')) rw3Build(window._R); };   // one-way: the bearing selector sets the 3D view
 
 function buildGeometry3D(r) {

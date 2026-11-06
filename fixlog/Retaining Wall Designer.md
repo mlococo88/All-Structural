@@ -2216,3 +2216,32 @@ function renderStatus(r) {
   - A single load case shows no bearing pressure.
   - The 3D selection is session only.
   - AASHTO mode lists no seismic case (Extreme Event I is not evaluated by the tool).
+
+## 2026-11-06 — PR: claude/rw-3d-factored (PR #934: https://github.com/mlococo88/All-Structural/pull/934) (RW3F) — 3D view: "Load arrows: Unfactored / Factored" for combination views; factors read from the analysis' combination definitions   [display only; calcAll refactor with no result change]
+- **Why:** engineer-approved 2026-11-06 (follow-up to RW3L #933, whose open question was factored per-load arrows).
+- **What:**
+  - A toggle **Load arrows: ○ Unfactored ○ Factored** next to the 3D selector (`#c3d-fac`, radios `name="c3d-fac"`). Enabled for a factored combination (ACI U = 1.2D + 1.6H, U = 0.9D + 1.6H; AASHTO Strength I, Strength Ia, Extreme Event II, Strength I / Ia total). Disabled (greyed, with a tooltip) for a single load case, "All load cases" and the service combination: these stay unfactored.
+  - Factored: each load-case arrow is γ × the load case, labelled `name = γ × P = γP k/ft @ position` (e.g. `Soil = 1.20 × 16.16 = 19.39 k/ft @ x = 8.50 ft`). A load whose factor is 0 in that combination is not drawn and is listed in the title ("Not in this combination's base resultant: …"). The column is drawn as the analysis' own factored value (ACI: `Puf_max`, or 0.9·column DL for U = 0.9D + 1.6H; AASHTO Strength I: `V_col`; none in Ia / EE II, as the formulas).
+  - The title states which is shown ("Load arrows: factored …, read from the analysis' definition of <combination>", with η when ≠ 1; or "load arrows: unfactored") and a **check line**: Σγ·V of the arrows vs R = ΣV of the combination, and Σγ·M about the toe vs R·x̄, each ✓/✗ (tolerance 1e-6 relative). This proves the factor map against the analysis for any input.
+  - AASHTO unfactored load cases gain two arrows that the analysis uses and the view lacked: `EH,v` (P_a,v at x = B, in the EH case) and `LS,v` (q_LL·L_h on the heel, in the LS case).
+  - State `RW3.fac` (default Unfactored): **session only, no storage key**.
+- **calcAll refactor (no result change):** the literal factors of the bearing / stability combinations are now one definition each, used by the formulas and returned:
+  - ACI, before `const SumVu = 1.2 * (Wftg + Wstem + Wsoil + W_bar) + 1.6 * (Wsur + Pa_tri_v) + Puf_max;` (and `Mou`, `Msu`, `SumVu_min`, `Msu_min`). After: `const CMB_U12 = { D: 1.2, H: 1.6, E: 1.0 };` `const CMB_U09 = { D: 0.9, Hv: 0.9, colD: 0.9 };` and e.g. `const SumVu = CMB_U12.D * (Wftg + Wstem + Wsoil + W_bar) + CMB_U12.H * (Wsur + Pa_tri_v) + Puf_max;` Returned as `r.comb = { u12, u09 }`.
+  - AASHTO Strength I / Ia, before e.g. `eta * (gEH_max*P_EH + 1.75*P_LS + 1.50*P_ES + 1.00*P_hyd)`, `0.90*(V_DC + W_bar) + 1.00*Wsoil + gEH_min*Pa_tri_v - V_up`, `eta * (1.25*V_DC + 1.35*Wsoil + gEH_max*Pa_tri_v + 1.75*V_LS_v + 1.25*W_bar) + V_col`, `V_str_max_tot - V_up`. After: `const CMB_S1 = { DC: 1.25, EV: 1.35, EH: gEH_max, LS: 1.75, ES: 1.50, WA: 1.00 };` `const CMB_S1A = { DC: 0.90, EV: 1.00, EH: gEH_min };` used in `H_drive_str`, `V_resist_min`, `Mo_str`, `V_str_min`, `Mr_str_min`, `V_str_max_tot`, `Mr_str_max_tot`, `V_str_max`, `Mr_str_max` (uplift as `CMB_S1.WA*V_up`, `CMB_S1.WA*M_up`; ×1.00 is exact). Returned in `aashtoR` with `V_LS_v` and `x_LSv`.
+  - Extreme Event II, before `CT_h*1000 + …`, `1.00*(Wftg + Wstem + W_bar) + 1.00*(Wsoil + Pa_tri_v) - F_uplift`, `M_CT + …`, `1.00*(Ms_ftg + Ms_stem + Ms_bar) + 1.00*(Ms_soil + Ms_Pv) + Ms_uplift`. After: `const CMB_EE2 = { CT: 1.00, DC: 1.00, EV: 1.00, EH: gEH_ct, LS: gLS_ct, WA: 1.00 };` used in `H_drive_ct`, `V_ct_min`, `Mo_ct`, `Mr_ct`; returned in `ct.ee2.CMB_EE2`.
+  - Same numbers and the same arithmetic order (each literal replaced by a constant of the same value, grouping unchanged), so every result is bit-identical (proved below).
+- **Where:** `rw3Factors(r, key)` (which definition factor multiplies which load, as the formulas do), `rw3Factored(r, S, F)` (factored items, omitted loads, Σγ·V, Σγ·M), `rw3Fac(on)`; `rw3Selected` returns `F` and `fac`; `rw3Title` factored branch; `rw3Build` draws `S.FX.items` when factored; item tags (`tag`) on `rw3Cases`; CSS `.c3d-fac`.
+- **Formulas, factors, units, code references:** none changed (§4: refactor only).
+- **Check case** (default ACI wall, U = 1.2D + 1.6H, factored arrows): stem 1.20 × 2.25 = 2.70, footing 1.20 × 2.81 = 3.38, soil 1.20 × 11.52 = 13.82 k/ft; H (earth) 1.60 × 3.65 = 5.83 k/ft @ y = 4.50 ft. Σγ·V = 19899 lb/ft = SumVu ✓; Σγ·M = 122164 lb·ft/ft = SumVu·x_Ru ✓.
+- **How verified:**
+  - origin/main vs branch, eight cases (ACI default; project fields; AASHTO full with CT; tall wall + water + passive + k_h; f′c blank; ACI water + seismic + column + q_s + β + key; AASHTO water + column + η 1.05 + at-rest + passive; AASHTO rock + CT (γ_EH,CT 0) + water + β): `_R` identical except the added `comb`, `aashtoR.CMB_S1`, `CMB_S1A`, `V_LS_v`, `x_LSv`, `ct.ee2.CMB_EE2` (exact comparison); Export JSON, every localStorage key, Report and tab text, DXF identical; 0 console errors.
+  - Every combination of six cases with Factored on: both checks ✓ (Σγ·V = R, Σγ·M = R·x̄) in all 21 factored views; toggle disabled for load cases, All and service.
+  - Screenshots 1400 (ACI U = 1.2D + 1.6H unfactored / factored, load case; AASHTO governing and EE II factored) and 390 looked at.
+- **Other copies:** none.
+- **Decisions (pending engineer review):**
+  - Factored arrows only in combination views; the reaction R and pressure were already the combination's.
+  - η is included in γ for AASHTO Strength (as the analysis multiplies), stated in the title.
+  - The view state is session only (no key).
+- **Observations for the engineer (not changed, §4 — questions):**
+  - ACI U = 1.2D + 1.6H and 0.9D + 1.6H: the factored resultant omits the water uplift (service includes it).
+  - AASHTO Strength I: the vertical dead-load surcharge q_sur·L_h (ES vertical) is not in ΣV (`V_ES_v = 0`), while ES lateral is; Extreme Event II adds γ_LS,CT × q_sur·L_h (the dead surcharge, not the LS q_LL·L_h) and factors the hydrostatic WA with γ_EH,CT (so it drops to 0 with the MassDOT option).
