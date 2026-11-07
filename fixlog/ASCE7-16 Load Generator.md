@@ -1436,7 +1436,7 @@ Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 a
   - All gable, monoslope, flat and seismic cases: `R` identical (the refactor into `normCp` moved no value).
 - **How verified:** headless Chromium main vs branch, 21 cases: leaf diff of `R` and hand-off (only the hip cases moved); rendered text of all tabs and the Report (0 console / KaTeX errors); Excel built; `check-syntax`, `project-library --tool asce7` (ALL PASS), `phone-layout --tool asce7`, `engine handoffs`.
 
-## 2026-11-07 — PR: claude/asce7-m9-ch29 — A7M9: Ch. 29 round sections D√q_z, signs and walls Case B and Case C computed (review M9; §4)
+## 2026-11-07 — PR: claude/asce7-m9-ch29 — A7M9: Ch. 29 round sections D√q_z, signs and walls Case B and Case C computed (review M9; §4; PR #1092: https://github.com/mlococo88/All-Structural/pull/1092)
 
 Basis: ASCE/SEI 7-16 Fig. 29.3-1 (Cases A, B, C; Case C table and the (1.8 − s/h) reduction) and Fig. 29.4-1 (round sections, D√q_z) — **verify (ASCE 7-16 PDF unreadable)**. The Case C values are recalled from the figure (unchanged in substance since ASCE 7-05 Fig. 6-20); they must be checked against the printed 7-16 before relying on Case C.
 
