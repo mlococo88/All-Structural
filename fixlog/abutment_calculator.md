@@ -15358,7 +15358,7 @@ index cedb10f..5b89752 100644
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/abut-shared-pile-group — 8h: pileReaction and the C-8 pile-group properties from shared/pile-group.js (refactor; results bit-identical)
+## 2026-11-07 — PR: claude/abut-shared-pile-group — 8h: pileReaction and the C-8 pile-group properties from shared/pile-group.js (refactor; results bit-identical) (PR #990: https://github.com/mlococo88/All-Structural/pull/990)
 
 Review Phase 8, PR 8h (planned move into `shared/`, CLAUDE.md §3). No computed result changes.
 ### Where / before / after

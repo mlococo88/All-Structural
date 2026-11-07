@@ -35,6 +35,6 @@
 ### Open items
 - None.
 
-## 2026-11-07 — PR: claude/abut-shared-pile-group — 8h: the abutment calculator now loads this file (no change to the file)
+## 2026-11-07 — PR: claude/abut-shared-pile-group — 8h: the abutment calculator now loads this file (no change to the file) (PR #990: https://github.com/mlococo88/All-Structural/pull/990)
 - `abutment_calculator.html` `pileReaction` calls `SharedPileGroup.reaction`, and its C-8 group properties come from `SharedPileGroup.groupProps`. Consumers: Retaining Wall Designer, abutment calculator.
 - Proof: tests/engine/pile-group.test.mjs (the abutment's former code frozen in the test, bit-identical on 2000 random inputs; the file delegates) and tests/smoke/abutment-pile-group-parity.mjs (main vs branch LAST_R identical on 14 cases). See fixlog/abutment_calculator.md.
