@@ -4019,14 +4019,15 @@ function runDesignExamples(){
     add('F.1-3B','W18\u00D750, L\u1D47 = 17.5 ft, C\u1D47 = 1.30 \u2014 M\u2099',c.Mn,3840,'kip\u00B7in',0.01);
     const ltb=c.ls.find(l=>l.name.includes('Lateral'));
     add('F.1-3B','\u2026 elastic F\u1D9C\u02B3',ltb.d.Fcr,43.2,'ksi',0.01);
-    /* F.2-2B — C15×33.9 A36, Lb = 5 ft (validates channel c factor) */
-    p=sectionFor('C','C15X33.9','A36');
+    /* L1 (2026-11-07): values, grades and labels of AISC Design Examples v16.0 (were v14.0) */
+    /* F.2-2B — C15×33.9 F_y = 50 ksi (v16), Lb = 5 ft (validates channel c factor) */
+    p=sectionFor('C','C15X33.9','A572_50');
     c=flexMajorIC(p,5*12,1.0);
-    add('F.2-2B','C15\u00D733.9, L\u1D47 = 5 ft \u2014 M\u2099 (channel c factor)',c.Mn,1740,'kip\u00B7in',0.015);
-    /* F.7B — HSS10×6×3/16 A500B, noncompact flange */
-    p=sectionFor('HSSR','HSS10X6X3/16','A500B_R');
+    add('F.2-2B','C15\u00D733.9 F\u1D67 = 50, L\u1D47 = 5 ft \u2014 M\u2099 (channel c factor)',c.Mn,2300,'kip\u00B7in',0.015);
+    /* F.7B — HSS10×6×3/16 A500 Gr C (v16), noncompact flange */
+    p=sectionFor('HSSR','HSS10X6X3/16','A500C_R');
     c=flexRectHSS(p,'x',0,1);
-    add('F.7B','HSS10\u00D76\u00D7\u2075\u2044\u2081\u2086 \u2014 \u03C6M\u2099 (F7-2 noncompact flange)',c.phiMn/12,57.0,'kip\u00B7ft',0.01);
+    add('F.7B','HSS10\u00D76\u00D7\u00B3\u2044\u2081\u2086 Gr C \u2014 M\u2099 (F7-2 noncompact flange)',c.Mn/12,66.3,'kip\u00B7ft',0.01);
     /* F.9B — Pipe 8 X-Strong A53B */
     p=sectionFor('PIPE','Pipe8XS','A53B');
     c=flexRound(p);
@@ -4035,21 +4036,21 @@ function runDesignExamples(){
     p=sectionFor('W','W24X62','A992');
     let sv=shearMajor(p);
     add('G.1A','W24\u00D762 \u2014 \u03C6V\u2099 (G2.1(a), \u03C6 = 1.00)',sv.phi*sv.Vn,306,'kip',0.01);
-    /* H.5 — HSS6×4×1/4 A500B: shear, flexure, torsion */
-    p=sectionFor('HSSR','HSS6X4X1/4','A500B_R');
+    /* H.5A / H.5C — HSS6×4×1/4 A500 Gr C (v16): torsion, shear, flexure */
+    p=sectionFor('HSSR','HSS6X4X1/4','A500C_R');
     sv=shearMajor(p);
-    add('H.5','HSS6\u00D74\u00D7\u00BC \u2014 \u03C6V\u2099 (G4)',sv.phi*sv.Vn,61.4,'kip',0.01);
+    add('H.5C','HSS6\u00D74\u00D7\u00BC Gr C \u2014 \u03C6V\u2099 (G4)',sv.phi*sv.Vn,66.7,'kip',0.01);
     c=flexRectHSS(p,'x',0,1);
-    add('H.5','HSS6\u00D74\u00D7\u00BC \u2014 \u03C6M\u2099 (F7-1)',c.phiMn,353,'kip\u00B7in',0.01);
+    add('H.5C','HSS6\u00D74\u00D7\u00BC Gr C \u2014 \u03C6M\u2099 (F7-1)',c.phiMn,384,'kip\u00B7in',0.01);
     const tor=torsionHSS(p,0);
-    add('H.5','HSS6\u00D74\u00D7\u00BC \u2014 \u03C6T\u2099 (H3)',tor.phiTn,251,'kip\u00B7in',0.01);
+    add('H.5A','HSS6\u00D74\u00D7\u00BC Gr C \u2014 \u03C6T\u2099 (H3)',tor.phiTn,273,'kip\u00B7in',0.01);
     /* G.8B — kv from stiffener spacing (Eq. G2-5; identical in 360-10 and 360-16) */
     {
       const fake={_kind:'I',hClear:33.0,htw:106,tw:0.3125,d:36,mat:{Fy:36}};
-      let K=stiffKv(fake,{on:true,a:60.0});
-      add('G.8B','Built-up girder, a/h = 1.82 \u2014 k\u1D65 (Eq. G2-5)',K.kv,6.51,'\u2014',0.005);
-      K=stiffKv(fake,{on:true,a:99.0});
-      add('G.8B','\u2026 second panel, a/h = 3.0 \u2014 k\u1D65',K.kv,5.56,'\u2014',0.005);
+      let K=stiffKv(fake,{on:true,a:42.0});
+      add('G.8B','Built-up girder, a = 42 in, a/h = 1.27 \u2014 k\u1D65 (Eq. G2-5)',K.kv,8.09,'\u2014',0.005);
+      K=stiffKv(fake,{on:true,a:90.0});
+      add('G.8B','\u2026 second panel, a = 90 in, a/h = 2.73 \u2014 k\u1D65',K.kv,5.67,'\u2014',0.005);
       K=stiffKv(fake,{on:true,a:150.0});
       add('G2.1(b)','a/h = 4.55 > 3.0 \u2014 k\u1D65 reverts to 5.34 (360-16)',K.kv,5.34,'\u2014',0.002);
       K=stiffKv(fake,null);
@@ -4085,11 +4086,35 @@ function runDesignExamples(){
     const cp=compStrength(p,360,360,360);
     add('E.1C','W14\u00D7132, L\u1D9C = 30 ft \u2014 \u03C6P\u2099',cp.phiPn,892,'kip',0.012);
     add('E.1C','\u2026 governing L\u1D9C/r (y\u2013y)',cp.govFe.s||cp.slMax,95.7,'\u2014',0.01);
+    /* L1: further v16 anchors (built-up girders by the plate-girder input, H3-2) */
+    const bu=(d,bf,tf,tw)=>{const keep=S.section;S.section={family:'W',label:'W18X50',grade:'A572_50',builtUp:true,plates:true,ovr:{d,bf,tf,tw}};
+      try{return resolveSection();}finally{S.section=keep;}};
+    {let q=bu(17,8,1,0.25),cq=compStrength(q,180,180,180);
+      add('E.2','Built-up 2PL1\u00D78 + PL\u00BC\u00D715, L\u1D9C = 15 ft \u2014 \u03C6P\u2099 (slender web, E7)',cq.phiPn,500,'kip',0.01);
+      q=bu(8,10.5,0.375,0.25);cq=compStrength(q,180,180,180);
+      add('E.3','Built-up 2PL\u215C\u00D710\u00BD + PL\u00BC\u00D77\u00BC, L\u1D9C = 15 ft \u2014 \u03C6P\u2099 (slender flanges, k_c)',cq.phiPn,318,'kip',0.01);
+      q=sectionFor('HSSR','HSS12X10X3/8','A500C_R');cq=compStrength(q,192,192,192);
+      add('E.9','HSS12\u00D710\u00D7\u215C Gr C, L\u1D9C = 16 ft \u2014 \u03C6P\u2099',cq.phiPn,556,'kip',0.01);
+      q=sectionFor('HSSR','HSS12X8X3/16','A500C_R');cq=compStrength(q,288,288,288);
+      add('E.10','HSS12\u00D78\u00D7\u00B3\u2044\u2081\u2086 Gr C, L\u1D9C = 24 ft \u2014 \u03C6P\u2099 (slender walls)',cq.phiPn,151,'kip',0.01);
+      q=bu(66,14,2,0.5);let cf=flexMajorIC(q,150,1.25);
+      add('F.14','Plate girder 2PL2\u00D714 + PL\u00BD\u00D762, L\u1D47 = 12.5 ft, C\u1D47 = 1.25 \u2014 \u03C6M\u2099 (F4)',cf.phiMn/12,7880,'kip\u00B7ft',0.005);
+      let sq=shearMajor(q,null,{on:true,a:298});
+      add('F.14','\u2026 \u03C6V\u2099 (a/h = 4.8, k\u1D65 = 5.34)',sq.phi*sq.Vn,440,'kip',0.005);
+      q=bu(36,16,1.5,0.3125);sq=shearMajor(q,null,null);
+      add('G.8A','Built-up 2PL1\u00BD\u00D716 + PL\u2075\u2044\u2081\u2086\u00D733 \u2014 \u03C6V\u2099 unstiffened',sq.phi*sq.Vn,176,'kip',0.005);
+      sq=shearMajor(q,null,{on:true,a:42});
+      add('G.8B','\u2026 end panel, a = 42 in \u2014 \u03C6V\u2099',sq.phi*sq.Vn,217,'kip',0.005);
+      q=sectionFor('W','W24X55','A992');
+      add('J.7','W24\u00D755, l\u1D47 = 7.5 in, interior \u2014 R\u2099 web local yielding (J10-2)',j10WLY(q,7.5,1e6).Rn,248,'kip',0.005);
+      add('J.7','\u2026 R\u2099 web local crippling (J10-4)',j10WLC(q,7.5,1e6).Rn,282,'kip',0.005);
+      const ws=j10WSB(q,240,3800/12,'rot');
+      add('J.7','\u2026 \u03C6R\u2099 web sidesway buckling (J10-6, L\u1D47 = 20 ft)',ws.phi*ws.Rn,142,'kip',0.015);}
   }catch(e){out.push({id:'ERROR',desc:''+(e&&e.message||e),got:0,exp:0,unit:'',ok:false});}
   return out;
 }
 function buildValidTab(pg){
-  pg.appendChild(el('div','note','Two independent test families run <b>live</b> through the production code path every time this tab renders: (1) closed-form mechanics benchmarks through the analysis solver, and (2) AISC Design Examples (v14.0, published results \u2014 the governing equations are unchanged in AISC 360-16 for every case used) through the Stage-2/3 capacity engine.'));
+  pg.appendChild(el('div','note','Two independent test families run <b>live</b> through the production code path every time this tab renders: (1) closed-form mechanics benchmarks through the analysis solver, and (2) AISC Design Examples (v16.0, published results; where v16 uses an AISC 360-22 value that differs from 360-16 the case is left out) through the Stage-2/3 capacity engine.'));
   mkSection('valBench','Analysis Benchmarks (closed form)',body=>{
     let res=[];
     try{res=runBenchmarks();}catch(e){body.appendChild(el('div','errBox','Benchmark run failed: '+e.message));}
@@ -4120,8 +4145,8 @@ function buildValidTab(pg){
     });
     body.appendChild(t);
     body.appendChild(el('div',fails?'errBox':'okBox',fails?fails+' design-example check(s) FAILED \u2014 do not rely on strength results.':
-      'All '+res.length+' design-example checks pass (F2 I & channel, F7, F8, G2, G4, H3, E3). Tolerances 0.5\u20131.5% reflect the rounding used in the published solutions.'));
-    body.appendChild(el('div','hint','Still not independently anchored: \u00A7F4 and \u00A7F5 (noncompact and slender webs \u2014 no rolled shape reaches them), \u00A7E4 torsional buckling, \u00A7E7 where the effective-width reduction actually bites, \u00A7J10, and the \u00A7H1 composition of the individual ratios. These are direct transcriptions of the Specification equations, exercised by construction but not compared against a published answer \u2014 hand-check them before relying on them in production.'));
+      'All '+res.length+' design-example checks pass (F2 I & channel, F3, F4 plate girder, F7, F8, G2, G4, G6, H3, E3, E7 built-up, J10). Tolerances 0.5\u20131.5% reflect the rounding used in the published solutions.'));
+    body.appendChild(el('div','hint','Anchored by the v16.0 examples above: \u00A7F4 (F.14 plate girder), \u00A7E7 effective width (E.2, E.3, E.10), \u00A7J10.2 / J10.3 / J10.4 (J.7). Still not independently anchored: \u00A7F5 (slender webs), \u00A7E4 torsional buckling, \u00A7J10.1, and the \u00A7H1 composition of the individual ratios. These are direct transcriptions of the Specification equations, exercised by construction but not compared against a published answer \u2014 hand-check them before relying on them in production.'));
   },pg);
   mkSection('valEC','Independent Reference Checks (ENERCALC)',body=>{
     body.appendChild(el('div','note','A second commercial AISC 360-16 implementation, used to anchor routes the AISC Design Examples do not reach: elastic lateral-torsional buckling (Eq. F2-4), rectangular HSS flexure and shear at F\u1D67 = 36 ksi, minor-axis flexure (\u00A7F6 and \u00A7F7), compression governed by the y-axis, lightweight-concrete stud strength, and a partial-composite section with the plastic neutral axis in the web.'));
@@ -4737,7 +4762,7 @@ function sbdRefs(){
   if(AN&&AN.comp&&!AN.comp.blocked)r.push(['AISC Design Guide 3','construction-stage and composite deflection limits; edition: verify']);
   if(!mem)r.push(['ASCE/SEI 7-16','\u00A72.3.1 LRFD strength combinations (presets; the user manual says to verify the edition)']);
   if(!mem||(S.member.defl&&S.member.defl.on))r.push(['IBC Table 1604.3','deflection limit convention; edition: verify']);
-  if(sbrSel().tabValid)r.push(['Validation','AISC Design Examples v15.0; ENERCALC; Hibbeler, Structural Analysis (benchmarks of the Validation section only)']);
+  if(sbrSel().tabValid)r.push(['Validation','AISC Design Examples v16.0; ENERCALC; Hibbeler, Structural Analysis (benchmarks of the Validation section only)']);
   return r;
 }
 /* tab where a check is worked (the Summary keeps its own tab ids) */
