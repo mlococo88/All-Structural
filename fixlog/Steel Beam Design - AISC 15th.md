@@ -2639,7 +2639,7 @@ From the code-compliance review of 2026-11-07 (finding H3). The plate-girder inp
 - **Decision (pending engineer review):** no migration that keeps the old (parent-shape) values for saved built-up projects: the old values were the wrong section and unconservative in the check case. The properties listed in the warning (A, I_x, S_x, Z_x, r_x, k, Q, W_no, S_w1, Wt) are not replaced, only flagged, because the user may have entered the welded values on purpose elsewhere; the plate-girder input mode (next PR) computes all of them.
 - **Open items:** singly symmetric built-up girders are not modelled (top and bottom flanges are the same plates here).
 
-## 2026-11-07 — PR: claude/steelbeam-h3-plate-girder — Plate-girder input: every built-up I-shape property computed from the plates (H3 part 2; new option, default off)
+## 2026-11-07 — PR: claude/steelbeam-h3-plate-girder (PR #1017: https://github.com/mlococo88/All-Structural/pull/1017) — Plate-girder input: every built-up I-shape property computed from the plates (H3 part 2; new option, default off)
 
 From the code-compliance review of 2026-11-07 (finding H3, the plate-girder builder). Follows H3 part 1 (#1012).
 
