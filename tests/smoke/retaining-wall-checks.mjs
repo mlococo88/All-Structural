@@ -7,6 +7,7 @@
 //   3. 0 console / page errors.
 // A doubtful value (REVIEW) is marked but does not block the results. A saved autosave holding a blank value opens on the banner
 // (no crash). The default project has no banner and no mark.
+// RWSC (2026-11-07): the self-consistency panel passes on representative walls, reports MISMATCH on a tampered result, hides on error.
 //   node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 import path from 'path';
 import { openPage, resolveFile } from '../lib.mjs';
@@ -87,6 +88,31 @@ for (const [name, set, id, kind] of CASES) await run(name, set, id, kind);
     check(n > 0, `autosave ${k}: H_s and f'c set blank (${n})`);
     await run('saved autosave with H_s blank', {}, 'Hs', 'e', { [k]: JSON.stringify(o) });
   }
+}
+// RWSC: the self-consistency panel (independent recomputations) passes on representative walls, says MISMATCH and opens when a
+// shown value is made inconsistent, and is empty while an input is in error
+const SC = [['ACI default', {}], ['ACI water + seismic + column + surcharge + β + key', { Hs: 16, wt_depth: 6, incl_hydro: true, incl_passive: true, kh: 0.15, col_DL: 20, col_LL: 10, col_Ldist: 1, q_sur: 250, beta: 10, use_shear_key: true }],
+  ['ACI triangular bearing', { Hs: 18, Lt: 1, Lh: 6 }], ['AASHTO barrier + collision + variable height', { design_basis: 'AASHTO', vh_enable: true, bar_enable: true, aashto_ct_enable: true }],
+  ['AASHTO rock + water + η 1.05', { design_basis: 'AASHTO', aashto_ecc_limit: 'rock', wt_depth: 6, incl_hydro: true, aashto_eta: 1.05 }]];
+for (const [name, set] of SC) {
+  const { b, p, errs } = await openPage(SRC.file); await p.waitForTimeout(2500);
+  const o = await p.evaluate(async set => {
+    for (const [k, v] of Object.entries(set)) { const el = document.getElementById(k); if (el.type === 'checkbox') el.checked = !!v; else el.value = v; el.dispatchEvent(new Event('change', { bubbles: true })); el.dispatchEvent(new Event('input', { bubbles: true })); }
+    if (typeof syncConditionalUI === 'function') syncConditionalUI(); onInputChange(); await new Promise(r => setTimeout(r, 500));
+    const sum = () => { const e = document.querySelector('#rwSelf summary'); return e ? e.innerText : ''; };
+    const ok = sum(), n = rwSelfChecks(window._R).length;
+    const R = Object.assign({}, window._R, { SumV: window._R.SumV + 100 }); rwSelfRender(R);
+    const ng = sum(), open = !!document.querySelector('#rwSelf details[open]');
+    rwSelfRender(window._R);
+    document.getElementById('fc').value = ''; onInputChange(); const gone = !document.querySelector('#rwSelf details');
+    return { ok, n, ng, open, gone };
+  }, set);
+  await b.close();
+  console.log('self-consistency: ' + name);
+  check(/all \d+ passed/.test(o.ok) && o.n >= 10, o.ok + ` (${o.n} checks)`);
+  check(/MISMATCH/.test(o.ng) && o.open, 'ΣV made inconsistent: ' + o.ng + (o.open ? ' (opened)' : ''));
+  check(o.gone, 'no panel while an input is in error');
+  check(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
 }
 console.log(failures ? `${failures} FAILED` : 'all ok');
 process.exit(failures ? 1 : 0);

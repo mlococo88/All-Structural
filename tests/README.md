@@ -58,7 +58,7 @@ node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex
 # a renderer that throws marks its tab "Out of date"
 node tests/smoke/spread-footing-nobear.mjs [--file <file or git ref>] [--shots <dir>]
 
-# Retaining Wall Designer: required inputs (RWIE): a blank / invalid input gives the "Input error: no results" banner on the check
+# Retaining Wall Designer: required inputs (RWIE) and the self-consistency panel (RWSC): a blank / invalid input gives the "Input error: no results" banner on the check
 # summary, every output tab, the Drawings and the Report, the field marked with its reason, a working link; REVIEW does not block
 node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 

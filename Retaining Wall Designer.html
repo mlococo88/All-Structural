@@ -808,6 +808,17 @@ input:focus, select:focus, textarea:focus { border-color: var(--blue-600); box-s
 #rwDashBox { font-family: var(--font-ui); }
 #rwDashHead { display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap; }
 #rwDashTtl { margin: 2px 0; font-size: 10pt; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--navy-800); }
+/* RWSC (2026-11-07): self-consistency checks panel */
+#rwSelf { margin-top: 6px; }
+body.rwDashColl #rwSelf { display: none; }
+.rwsc summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--slate-700); padding: 2px 0; }
+.rwsc-ok { color: #1f7a3f; } .rwsc-ng { color: #b42318; font-weight: 700; }
+.rwsc-w { overflow-x: auto; }
+.rwsc-t { border-collapse: collapse; width: 100%; font-size: 11.5px; margin-top: 4px; }
+.rwsc-t th, .rwsc-t td { border: 1px solid var(--border); padding: 3px 6px; text-align: left; vertical-align: top; }
+.rwsc-t td.ok { color: #1f7a3f; font-weight: 700; white-space: nowrap; } .rwsc-t td.ng { color: #b42318; font-weight: 700; white-space: nowrap; }
+.rwsc-t tr.ng { background: #fdecea; }
+.rwsc-n { font-size: 11px; color: var(--muted); margin: 4px 0 0; }
 #rwDashTgl { margin: 0; padding: 1px 7px; font: 8.5pt var(--font-ui); border: 1px solid var(--slate-400); background: var(--slate-100); border-radius: 4px; cursor: pointer; color: var(--slate-700); }
 #rwDashCnt { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 #rwDashCnt span { font-size: 8pt; font-weight: 700; padding: 1px 5px; border: 1px solid; border-radius: 3px; white-space: nowrap; }
@@ -1546,6 +1557,7 @@ window.MathJax = {
     <div id="rwDashBox">
       <div id="rwDashHead"><button type="button" id="rwDashTgl" aria-controls="rwDash"></button><h2 id="rwDashTtl">Check summary</h2><span id="rwDashCnt"></span></div>
       <div id="rwDash"><div class="rwdMsg none">Calculating…</div></div>
+      <div id="rwSelf"></div>
     </div>
   </div>
   <nav class="tab-bar" aria-label="Results">
@@ -3431,7 +3443,7 @@ function calcAll(inp) {
     // Heel
     d_heel, wu_heel, q0h, qLh, Md_heel, Mu_heel_net, Mu_heel_in, Vu_heel,
     Mu_heel_up, Mu_heel_std, Vu_heel_std, Mu_heel_nr, Vu_heel_nr, heelBasis, heel_case, V_wedge_heel,
-    gEV, gDC, gES, gLS,
+    gEV, gDC, gES, gLS, gEH, gWA,   // RWSC (2026-11-07): gEH, gWA returned for the self-consistency panel (exposure only)
     Rn_heel, As_heel_req, As_h_min, As_heel_des,
     Vc_heel, phiVc_heel, heel_shear_ok, heel_overstressed, sel_heel, ld_heel,
     a_heel, phiMn_heel,
@@ -10417,7 +10429,84 @@ function rwDashItems(r) {
     return { key: k, name: rwdTxt(c.label), st, short, text, ref: rwdTxt(x.ref), card: x.card, where: rwDashWhere(r, k, x.card) };
   });
 }
+// ================================================================
+// RWSC (2026-11-07): self-consistency checks (as Spread Footing). Each quantity is recomputed by an independent path from
+// the inputs and the analysis' own load components, and compared with what the tool shows. Display only: nothing here
+// feeds a result. A mismatch means an engine inconsistency to investigate before relying on the output.
+// ================================================================
+function rwSelfChecks(r) {
+  const C = [], inp = r.inp, B = r.B, tb = r.ts_bot_ft, tt = r.ts_top_ft, Hs = inp.Hs;
+  const near = (a, b, rel, abs) => { const d = Math.abs(a - b), m = Math.max(Math.abs(a), Math.abs(b)); return d <= (abs || 1e-6) || (m > 0 && d / m <= (rel || 1e-6)); };
+  const n = (v, d) => f(v, d == null ? 1 : d);
+  const add = (name, ok, detail, card) => C.push({ name, ok: !!ok, detail, card });
+  // 1. footing width and concrete weights from the geometry (stem as a rectangle + a triangle, front face vertical)
+  const B1 = inp.Lt + inp.ts_bot / 12 + inp.Lh;
+  add('Footing width B = L_t + t_s + L_h', near(B1, B), `${n(inp.Lt, 3)} + ${n(inp.ts_bot / 12, 3)} + ${n(inp.Lh, 3)} = ${n(B1, 3)} ft vs B = ${n(B, 3)} ft`);
+  const Wf = inp.gamma_c * B * r.tf_ft, Wr = inp.gamma_c * tt * Hs, Wt = inp.gamma_c * (tb - tt) / 2 * Hs, Ws = Wr + Wt;
+  add('Concrete weights from the geometry', near(Wf, r.Wftg) && near(Ws, r.Wstem),
+    `footing γ_c·B·t_f = ${n(Wf)} vs ${n(r.Wftg)} lb/ft; stem (rectangle ${n(Wr)} + triangle ${n(Wt)}) = ${n(Ws)} vs ${n(r.Wstem)} lb/ft`, 'stabV');
+  // 2. ΣV (service)
+  const V = Wf + Ws + r.Wsoil + r.Wsur + r.Pa_tri_v + r.W_col + (r.W_bar || 0) - r.F_uplift;
+  add('ΣV (service) from its components', near(V, r.SumV, 1e-9, 1e-6), `${n(V)} vs ΣV = ${n(r.SumV)} lb/ft`, 'stabV');
+  // 3. ΣM about the toe and the resultant location (service): stem centroid by decomposition, lateral arms from the forces
+  const xr = inp.Lt + tt / 2, xt = inp.Lt + tt + (tb - tt) / 3;
+  const xs = r.Wsur > 0 ? r.Ms_sur / r.Wsur : 0;
+  const Mr = Wf * B / 2 + Wr * xr + Wt * xt + r.Wsoil * r.x_soil + r.Wsur * xs + r.Pa_tri_v * B + r.W_col * r.x_col
+    + (r.W_bar || 0) * (r.x_bar || 0) - r.F_uplift * (r.x_uplift || 0) * (r.hasWT ? 1 : 0) + (r.Ms_Pp || 0);
+  const Mo = r.Pa_tri_h * r.y_Pa + r.Pa_sur_h * r.Hp / 2 + (r.hasWT ? r.F_hyd * r.hw / 3 : 0) + (r.Mo_seis || 0);
+  const xR = (Mr - Mo) / V;
+  add('ΣM about the toe (service)', near(Mr, r.Ms, 1e-9, 1e-3) && near(Mo, r.Mo, 1e-9, 1e-3),
+    `resisting ${n(Mr, 0)} vs M_s = ${n(r.Ms, 0)}; overturning ${n(Mo, 0)} vs M_o = ${n(r.Mo, 0)} lb·ft/ft (stem centroid by rectangle + triangle)`, 'stabOT');
+  add('Resultant location x̄ = (M_s − M_o) / ΣV', near(xR, r.x_R, 1e-9, 1e-6), `${n(xR, 4)} vs x̄ = ${n(r.x_R, 4)} ft; e = B/2 − x̄ = ${n(B / 2 - xR, 4)} vs ${n(r.e, 4)} ft`, 'stabBrg');
+  // 4. bearing diagrams: the pressure block of every combination integrates to its ΣV, with its centroid at its x̄
+  try {
+    const CB = rwbpCombos(r);
+    CB.list.forEach(c => {
+      const z = rwbpZone(r, c); if (z.none || !(z.x1 > z.x0)) return;
+      const L = z.x1 - z.x0, F = (z.q0 + z.q1) / 2 * L, xc = z.x0 + (z.q0 + 2 * z.q1) / (3 * (z.q0 + z.q1)) * L;
+      const okF = near(F, c.V, 1e-6, 0.5), okX = near(xc, c.xR, 1e-6, 1e-4);
+      add('Bearing diagram: ' + c.name.replace(/ — .*$/, ''), okF && okX,
+        `∫q dx = ${n(F, 0)} vs ΣV = ${n(c.V, 0)} lb/ft; centroid ${n(xc, 3)} vs x̄ = ${n(c.xR, 3)} ft (${c.kind === 'uni' ? 'uniform over B′' : c.kind === 'rock' ? 'rock, linear' : (L < B - 1e-9 ? 'triangular' : 'trapezoidal')})`, c.card);
+    });
+  } catch (e) { add('Bearing diagrams', false, 'could not be evaluated: ' + e.message); }
+  // 5. stem moment at the base: the lateral pressure integrated over the stem height (Simpson, 400 strips) vs the force resultants
+  {
+    const wt = r.hasWT ? r.wt_d : Infinity, N = 400, h = Hs / N;
+    const pS = z => r.Ka * inp.gamma_s * Math.min(z, wt) + r.Ka * r.gamma_s_sub * Math.max(0, z - wt);
+    const pW = z => r.hasWT ? r.gamma_w * Math.max(0, z - wt) : 0;
+    let Ms = 0, Mw = 0;
+    for (let i = 0; i <= N; i++) { const z = i * h, w = (i === 0 || i === N) ? 1 : (i % 2 ? 4 : 2); Ms += w * pS(z) * (Hs - z); Mw += w * pW(z) * (Hs - z); }
+    Ms *= h / 3; Mw *= h / 3;
+    add('Stem base: earth moment ∫p(z)(H_s − z)dz', near(Ms, r.sd_base_Msoil, 1e-4, 0.5) && near(Mw, r.sd_base_Mhyd, 1e-4, 0.5),
+      `earth ${n(Ms, 0)} vs ${n(r.sd_base_Msoil, 0)}; water ${n(Mw, 0)} vs ${n(r.sd_base_Mhyd, 0)} lb·ft/ft (unfactored)`, 'stemFlex');
+    if (r.gEH != null && r.gWA != null) {
+      const qll = r.isAASHTO ? r.q_ll_aashto : 0;
+      const Mu = r.gEH * Ms + r.gWA * Mw + r.gES * r.Ka * inp.q_sur * Hs * Hs / 2 + r.gLS * r.Ka * qll * Hs * Hs / 2;
+      add('Stem base: factored M_u from the integrated pressures', near(Mu, r.Mu_stem_strI, 1e-4, 0.5),
+        `γ_EH·${n(Ms, 0)} + γ_WA·${n(Mw, 0)} + γ_ES·K_a q_s H_s²/2 + γ_LS·K_a q_LL H_s²/2 = ${n(Mu, 0)} vs M_u = ${n(r.Mu_stem_strI, 0)} lb·ft/ft (${r.isAASHTO ? 'Strength I' : 'U = 1.6H'}; factors as the analysis: ${[r.gEH, r.gWA, r.gES, r.gLS].map(g => n(g, 2)).join(', ')})`, 'stemFlex');
+    }
+  }
+  // 6. reinforcement: A_s = A_b(bar table) × 12 / s for every bar mark
+  [['S1', r.sel_stem], ['S3', r.sel_stemT], ['S2', r.sel_temp], ['F1', r.sel_heel], ['F2', r.sel_toe], ['F3', r.sel_ftg_long]].forEach(([mk, s]) => {
+    if (!s || !s.bar) return;
+    const b = BARS.find(x => x.num === s.bar.num), As = b ? b.Ab * 12 / s.spacing : NaN;
+    add(`A_s of ${mk} from bar size and spacing`, b && near(As, s.As_prov, 1e-9, 1e-9), `#${s.bar.num} @ ${n(s.spacing, 2)} in: ${b ? n(b.Ab, 2) : '?'} × 12 / ${n(s.spacing, 2)} = ${n(As, 3)} vs ${n(s.As_prov, 3)} in²/ft`, 'rebar');
+  });
+  return C;
+}
+function rwSelfRender(r) {
+  const host = document.getElementById('rwSelf'); if (!host) return;
+  if (!r || r.fatal) { host.innerHTML = ''; return; }
+  let C; try { C = rwSelfChecks(r); } catch (e) { console.error('self-consistency:', e); host.innerHTML = '<details class="rwsc"><summary>Self-consistency checks — could not be evaluated</summary></details>'; return; }
+  const bad = C.filter(c => !c.ok), was = host.querySelector('details');
+  const open = bad.length > 0 || !!(was && was.open);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  host.innerHTML = `<details class="rwsc"${open ? ' open' : ''}><summary>Self-consistency checks ${bad.length ? `<span class="rwsc-ng">— ${bad.length} MISMATCH</span>` : `<span class="rwsc-ok">— all ${C.length} passed ✓</span>`}</summary>
+    <div class="rwsc-w"><table class="rwsc-t"><thead><tr><th>Internal check</th><th>Result</th><th>Detail</th></tr></thead><tbody>${C.map(c => `<tr class="${c.ok ? '' : 'ng'}"><td>${esc(c.name)}</td><td class="${c.ok ? 'ok' : 'ng'}">${c.ok ? '✓ OK' : '✗ MISMATCH'}</td><td>${esc(c.detail)}</td></tr>`).join('')}</tbody></table></div>
+    <p class="rwsc-n">Internal cross-checks: each quantity is recomputed by an independent path (geometry, decomposition, integration, the bar table) and compared with what the tool shows. A mismatch indicates an engine inconsistency; investigate it before relying on the output. Display only.</p></details>`;
+}
 function rwDashRender(r) {
+  rwSelfRender(r);   // RWSC
   const box = document.getElementById('rwDash'), cnt = document.getElementById('rwDashCnt'); if (!box) return;
   box.innerHTML = '';
   if (!r || r.fatal) {

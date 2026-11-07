@@ -2315,3 +2315,29 @@ function renderStatus(r) {
   - A blank "none-type" input (loads, cohesion, surcharge, seismic, water depth) stays 0 and is not an error. Geometry, materials and q_a must be entered.
   - The REVIEW list is kept short: β < 0 and φ > 1.
 - **Observation (not changed):** `getInputs` applies the variable-height rule (H = H_lo + 0.75(H_hi − H_lo)) whenever its box is ticked, also in ACI mode, where the card is hidden.
+
+## 2026-11-07 — PR: claude/rw-self-checks (PR #937: https://github.com/mlococo88/All-Structural/pull/937) (RWSC) — self-consistency checks panel under the check summary   [display only; no result change]
+- **Why:** engineer-approved 2026-11-06 (task 4, review Phase 4b; as Spread Footing's "Self-consistency checks — all n passed").
+- **What:** a collapsed `<details>` "Self-consistency checks — all n passed ✓" (or "— k MISMATCH", which opens itself) under the check summary (`#rwSelf` in `#rwDashBox`; hidden while the summary is collapsed or while an input is in error). Each row: the internal check, ✓ OK / ✗ MISMATCH, and the detail with both numbers. Each value is recomputed by an independent path:
+  1. B = L_t + t_s + L_h vs B.
+  2. Concrete weights from the geometry: footing γ_c·B·t_f; stem as a rectangle (t_top) plus a triangle (t_base − t_top), vs W_ftg, W_stem.
+  3. ΣV (service) from those weights and the analysis' soil, surcharge, P_a,v, column, barrier and uplift, vs ΣV.
+  4. ΣM about the toe: resisting moment with the stem centroid by the rectangle + triangle decomposition (not the trapezoid-centroid formula); overturning from each lateral force × its arm. Compared with M_s and M_o.
+  5. x̄ = (M_s − M_o) / ΣV and e vs the shown x̄, e.
+  6. Bearing diagrams: for every combination of the Stability tab's bearing selector, the drawn pressure block (`rwbpZone`) integrated (∫q dx, the trapezoid area) and its centroid vs that combination's ΣV and x̄.
+  7. Stem base, unfactored: the lateral pressure p(z) integrated over the stem height by Simpson's rule (400 strips; earth above / below the water table, water) vs the force-resultant moments `sd_base_Msoil`, `sd_base_Mhyd`.
+  8. Stem base, factored: γ_EH·(integrated earth) + γ_WA·(integrated water) + γ_ES·K_a·q_s·H_s²/2 + γ_LS·K_a·q_LL·H_s²/2 vs M_u (Strength I / U = 1.6H), with the analysis' own factors.
+  9. A_s of S1, S3, S2, F1, F2, F3: A_b (bar table by bar number) × 12 / s vs A_s,prov.
+- **Tolerances:** relative 1e-6 (geometry, sums, moments, bearing; bearing with an absolute floor of 0.5 lb/ft and 1e-4 ft), 1e-4 for the numerical integration.
+- **Where:** `rwSelfChecks(r)`, `rwSelfRender(r)` before `function rwDashRender(r) {` (which now calls `rwSelfRender(r)` first); `<div id="rwSelf"></div>` after `#rwDash`; CSS `.rwsc…`. calcAll returns `gEH, gWA` (the stem factors already used for M_u; exposure only).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Check case** (default ACI wall): 16 checks, all pass. B = 3 + 1.5 + 8 = 12.5 ft. Stem 150·1.0·12 = 1800 + 150·0.5/2·12 = 450 → 2250 lb/ft. ΣV = 16582.5 lb/ft. x̄ = 6.4689 ft. Earth moment at the stem base ∫ = 11520 = ⅓·120·12³/6 lb·ft/ft. M_u = 1.6·11520 = 18432 lb·ft/ft. S1 #4 @ 6: 0.20·12/6 = 0.400 in²/ft.
+- **How verified:**
+  - origin/main vs branch, eight cases: `_R` identical except the added `gEH`, `gWA`. Export JSON, every localStorage key, Report and tab text, and the DXF are identical.
+  - All checks pass in 12 cases: ACI; ACI with water + seismic + column + β + key; triangular bearing; AASHTO with barrier + CT + variable height; AASHTO water + column + η + at-rest; AASHTO rock + CT; a high water table; elevation-mode water; an override; a battered stem; a barrier by geometry.
+  - `tests/smoke/retaining-wall-checks.mjs` extended: the panel passes on 5 walls; a ΣV made inconsistent shows MISMATCH and opens; the panel is gone while an input is in error.
+  - Screenshots at 1400, 1700 (left column) and 390 looked at.
+- **Other copies:** none.
+- **Decisions (pending engineer review):**
+  - The panel is collapsed when all checks pass and opens on a mismatch, as in SF.
+  - It is not in the Report.
