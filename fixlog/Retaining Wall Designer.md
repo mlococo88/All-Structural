@@ -6284,6 +6284,7 @@ Engineer request (2026-11-07): "there is no output tab for the piles". Code site
   - The lateral diagrams are drawn separately (earth, surcharge band, water) rather than stacked, so none overlaps another; the earth values exclude the K_a q_s share, which is the band's value.
   - The bearing diagram's zero line is drawn a small gap under the footing (under the key when there is one), tied to the base corners by dashed leaders.
 
+
 ## 2026-11-07 — PR: claude/rw-gfx-rebar (PR #__PR2__: https://github.com/mlococo88/All-Structural/pull/__PR2__) (RWRB) — Analysis diagram: the reinforcement drawn from the Drawings' bar model (bars in the section as lines at their extents, bars along the wall as dots), labels in columns with leaders   [display only; no result change]
 - **Why:** engineer, 2026-11-07: "The analysis diagram tab doesn't show the rebar correctly, please review."
 - **Before (`buildCrossSection`, block `// ── REINFORCING BARS`):**
