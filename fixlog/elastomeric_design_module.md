@@ -1528,3 +1528,20 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.6 (Eqs. 14.7.5.3.6-1 to -3; C14
 - **Decisions (pending engineer review):** layer strain by the linear Eq. C14.7.5.3.6-1 (Figure C14.7.6.3.3-1 may give less at low S — it decides the plain-pad result); cover layers not counted in δ; Method B limits default to 0 (report only) because no owner value was found; a_cr default 0.35.
 - **How verified:** check-syntax pass; headless main-vs-branch probe (19 scenarios): only the new items are added (Method B default: one INFO item; Method A: deflA; plain: deflP FAIL, nFail +1); every other value identical; 0 console errors; worked block screenshot checked.
 - **Saved data:** additive `tog.dLLmax`, `tog.dLTmax`, `coef.acr`. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/edm-m2-hydrostatic (M2, review 2026-11-07) — bonded external plates toggle and hydrostatic tension check   [new check, off by default]
+
+Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.3, Eqs. 14.7.5.3.3-11 to -17 and C14.7.5.3.3 (bearings with external steel plates bonded top and bottom: peak hydrostatic stress ≤ 2.25G; satisfied automatically for α > 1/3). Practice: CTDOT BDM §9.2.1 (top vulcanized to a steel plate on steel beams; bottom plate vulcanized and anchored when H exceeds 20 % of P_min).
+
+- **Before:** no hydrostatic check; the "anchored / doweled" toggle only turned the slip and restraint items into INFO.
+- **After:**
+  - `defaultState().tog.bonded=false` (older saves off through migrate()); I-5 checkbox "External steel plates bonded (vulcanized) to the top and bottom of the pad".
+  - `computeEDM`, after `R.res=…`: when Method B (steel-reinforced) and `tog.bonded`: α = εa·n/(Si·θs); Cα = (4/3)[(α² + 1/3)^1.5 − α(1 − α²)]; σhyd = 3·G·Si³·(θs/n)·Cα; limit 2.25G; `R.hyd={al,auto,Ca,sh,lim,G,dc}` (auto = α > 1/3 → D/C 0). εa and θs are those of the restraint test (static + 1.75 × cyclic; rectangular: the larger of the rotations about L and W). G = G_max: the ratio σhyd/(2.25G) depends on G only through α, and a larger G gives a smaller εa, α and a larger Cα.
+  - Dashboard item `hyd` (pass/fail D/C); worked block `hydEq` after the restraint block; Report tab topic "Hydrostatic tension".
+- **Check cases (bonded ticked):**
+  - Default pad: εa = 0.01551 (G_max 0.184), θs = 0.047, n 6, S 8 → α = 0.01551·6/(8·0.047) = 0.2475; Cα = (4/3)[(0.06126 + 0.3333)^1.5 − 0.2475(0.9387)] = (4/3)(0.2479 − 0.2323) = 0.0207; σhyd = 3·0.184·512·(0.047/6)·0.0207 = 0.0459 ksi ≤ 2.25·0.184 = 0.414 → **D/C 0.111 PASS**. (The review's 0.013 used the specified G and α 0.285, before H1.)
+  - Light load P 20 + 10 kip, same pad: α = 0.0527, Cα = 0.190, σhyd = 0.420 ksi → **D/C 1.015 FAIL**.
+  - Toggle off (default and every older save): no change.
+- **Decisions (pending engineer review):** the restraint test (14.7.5.4, for bearings *without* bonded plates) is left as it is when "bonded" is ticked (conservative; the engineer may tick "anchored / doweled" for the 14.8.3.1 anchorage); the construction case of C14.7.5.3.3 (light load, camber rotation, cyclic 0) is not modelled.
+- **How verified:** check-syntax pass; headless main-vs-branch probe (22 scenarios): only the 3 bonded scenarios gain the `hyd` item, values as above; everything else identical; 0 console errors.
+- **Saved data:** additive `tog.bonded`. **Other copies:** none.
