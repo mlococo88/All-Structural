@@ -1545,3 +1545,44 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.3, Eqs. 14.7.5.3.3-11 to -17 an
 - **Decisions (pending engineer review):** the restraint test (14.7.5.4, for bearings *without* bonded plates) is left as it is when "bonded" is ticked (conservative; the engineer may tick "anchored / doweled" for the 14.8.3.1 anchorage); the construction case of C14.7.5.3.3 (light load, camber rotation, cyclic 0) is not modelled.
 - **How verified:** check-syntax pass; headless main-vs-branch probe (22 scenarios): only the 3 bonded scenarios gain the `hyd` item, values as above; everything else identical; 0 console errors.
 - **Saved data:** additive `tog.bonded`. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/edm-low-calc (PR #1095: https://github.com/mlococo88/All-Structural/pull/1095) (L2, L3, L4, L8, L11, review 2026-11-07) — LOW items with a result or hand-off effect   [calc change]
+
+Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.4.2.1 (L2), C14.8.3.1 (L3), 14.7.5.3.3 / C14.7.5.3.2 (L4), 14.7.5.2 and Table 14.7.5.2-1, C14.6.3.1 (L11); MassDOT §3.5.7.6 (L2).
+
+### L2. Transverse tolerance for any non-MassDOT value   [MORE conservative for non-standard tolerances]
+- Before: `const tolW=(Math.abs(+tg.rotTol-0.005)<1e-9)?0.005:0;` (a tolerance other than exactly 0.005 was dropped from the checks about W).
+- After: `const tolW=(Math.abs(+tg.rotTol-0.03)<1e-9)?0:Math.max(0,+tg.rotTol||0);` (only the MassDOT 0.03, applied once to the resultant, is left out about W).
+- Check: rect 14 × 24, θt 0.004, tolerance 0.010 (an imported value): θt,W 0.004 → 0.014; γr,st,W = 0.5(24/0.5)²(0.014/6) = 2.688 (0.768); transverse combined 1.479 → 3.399, governing D/C 0.521 → **0.716**. Selections 0.005 and 0.03: unchanged.
+
+### L3. P_min in the Girder Run; DC-only note   [MORE conservative]
+- Before: a P_min entered in I-4 was used for every girder of the run.
+- After (`edmGirdRun`): `o.Pmin = Pmin·(P_DL,girder / P_DL)` when P_min > 0 and the girder has its own P_DL. The I-4 tooltip says to enter the DC reaction only (no DW) where they differ.
+- **Decision (pending engineer review):** P_min still defaults to P_DL when blank (the tool has no DC / DW split); the note asks for DC only. Check: P_min 60 with P_DL 80; girder G1 P_DL 60 → P_min 45, slip D/C 3.70/9.0 = 0.411 (was 3.70/12 = 0.308).
+
+### L4. Cyclic shear deformation input   [new input, default 0 = no change]
+- Before: `const gs_st=(+L.deltaS)/hrt, gs_cy=0;`. After: `gs_cy=Math.max(0,+L.deltaScy||0)/hrt;` with the new I-4 input `loads.deltaScy` (0 default; migrate gives older saves 0). Worked lines on the tab and in the Report; warning when γs,cy > 0.10 (C14.7.5.3.2).
+- Check: default pad, Δs,cy = 0.20 in: γs,cy = 0.2/3.5 = 0.0571; combined 3.914 + 1.75·0.0571 = 4.014 → D/C 0.824 → **0.845**.
+
+### L8. No PAD hand-off with input errors
+- Before: `pass:R.nFail===0`, sent regardless of input errors. After: `sendPadBack` refuses (alert, status "pad not sent (input errors)") while `R.nInErr` > 0, and `pass:R.nFail===0&&!R.nInErr`.
+
+### L11. Low-temperature zone and design option   [new inputs, default = no change]
+- New I-5 selects `tog.ltZone` ("" not set | A–E) and `tog.ltOption` (std ×1 | slide ×2 | noslide ×4, 14.7.5.2). `R.lowT={mult,zone,grade}` (minimum grade from Table 14.7.5.2-1: row 1, or row 2 with special force provisions). `R.Hbu` × mult; the H_bu block shows the zone, grade and multiplier.
+- PAD: `G` unchanged (the abutment refuses G > 0.30 ksi), new `Gmult`; `Hbu` includes the multiplier. The abutment does not apply `Gmult` (open item, cross-tool): a warning and an alert on send say to multiply its pad forces. The slip check H is not multiplied (decision pending engineer review).
+- Check: default pad, zone C, no slider: H_bu = 4 × 3.70 = **14.80 kip**, minimum grade 2. Default (not set, ×1): unchanged.
+
+### Verification
+- check-syntax pass; headless main-vs-branch probe (26 scenarios): only the cases above move (rect tolerance 0.010, Δs,cy 0.20, zone C ×4, Girder Run with P_min, input error → no PAD); saved state gains `loads.deltaScy`, `tog.ltZone`, `tog.ltOption`; 0 console errors. Abutment ↔ module round trip unchanged (abutment receives 0.1495 from 0.130).
+- **Saved data:** additive fields with the old behaviour as default. HANDOFF.md §4.13 updated (`Gmult`, L8).
+
+## 2026-11-07 — PR: claude/edm-low-notes (PR #1097: https://github.com/mlococo88/All-Structural/pull/1097) (L1, L5, L6, L7, L9, L10, review 2026-11-07) — notes, labels and warnings   [no computed value changes]
+
+- **L1 (tapered plate):** new warning in `computeEDM` when θ_pg + θ_DL + θ_c > 0.010 rad: a tapered (beveled) sole or internal load plate is required [AASHTO LRFD 10th Ed. 14.8.2; MassDOT §3.5.7.6, §3.5.7.8]. Check: θ_pg 0.008 + θ_DL 0.004 = 0.012 → warning; default pad (0) → none.
+- **L5 (thermal reference calculation):** the note on the Rotation & Movement tab and in the Report says the half span is for a floating bridge with zero movement at midspan (MassDOT §3.1.8.3), that a layout with a fixed bearing needs the distance from the point of zero movement, and that transverse movement (MassDOT Figs 3.5.7-2 to -4) is not included.
+- **L6 (large bearing):** new warning for steel-reinforced pads with total thickness (h_rt + (n + 1)h_s, as H3) over 8 in or plan area over 1000 in²: specify the more rigorous testing [MassDOT §3.5.7.3; C14.7.5.2; AASHTO M 251]. Check: D 40, n 14 → 9.29 in, 1257 in² → warning.
+- **L7:** the σ_DL < 0.20 ksi warning now reads "Practice guidance (not an AASHTO or MassDOT limit) …". Before: "Dead-load stress σ_DL = … < 0.20 ksi — risk of bearing walking/creep; increase DL or reduce pad area."
+- **L9:** "Seat concrete f′c" is labelled "(not used by any check)" in I-3 and in the Report input table (the 5.6.5 bearing check is not part of this module).
+- **L10:** `tog.fixedShear` comment corrected (it affects only the Method B stability equation; the old comment said Method A stress); the label reads "Bridge deck fixed against horizontal translation (Method B stability, Eq. 14.7.5.3.4-5)" with a tooltip paraphrasing C14.7.5.3.4 (a bearing restrained elsewhere on the bridge counts as fixed). Same wording in the Report settings table.
+- **How verified:** check-syntax pass; headless main-vs-branch probe (27 scenarios): every computed value and dashboard item identical; only the warning texts above change; 0 console errors. `tests/smoke/project-library.mjs --tool edm`: ALL PASS. `tests/compare.mjs --tool page`: text only.
+- **Saved data:** none changed. **§4:** no formula, factor or result change (labels and warnings only).

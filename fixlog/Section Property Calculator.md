@@ -3358,3 +3358,59 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - `check-syntax` passes; Validation 136/136.
   - Headless probe, main vs branch: only holeEdge, holeEdgeTiny and holeInTube changed, all to the error. Every other model (holes inside one part, across a joint, round holes, concrete holes) is identical, as are all 1,660 shapes.
   - `project-library --tool spc`: ALL PASS. 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-j-thick — SPM3: J statement corrected; thin-wall J flagged for thick-flanged W, M, HP, WT, MT shapes (review M3; display only, no value change; PR #1094: https://github.com/mlococo88/All-Structural/pull/1094)
+
+- **Problem (review M3):** the C1 entry ("Plate model vs AISC tables") said that the thin-wall J is lower than the AISC J and therefore conservative for torsional stiffness. That is true for light shapes and false for heavy ones. The thin-wall J of **155** W, WT, HP, M and MT shapes is above the table, for example W14X730 +9.1 % and WT7X436.5 +11.1 %. Σbt³/3 overestimates J of stocky flange elements, and for these shapes that outweighs the neglected fillets. All 155 have b_f/2t_f ≤ 5.33.
+- **Correction of the C1 statement (old entry not rewritten):** the thin-wall J is **not** always lower than the AISC J. It is lower for light shapes and for all S, C, MC and ST shapes (−1 to −27 %). It is higher for heavy W, M, HP, WT and MT shapes, by up to +11 %. In that case it is unconservative wherever J resists torsion (torsional stiffness, LTB terms).
+- **Fix (display only):**
+  - In `torsion()` (anchor `const thick = parts.filter(`), a W, M, HP, WT or MT part with b_f/2t_f ≤ 5.5 sets `T.jHigh` and adds a torsion warning. The warning is shown on the Torsion tab and in the Report notes: "Thick flanges (b_f/2t_f ≤ 5.5: W1 W14X730 1.82): the thin-wall J (Σ b t³/3) can be higher than the true J for such stocky flanges (up to +11 % over the AISC tables for the heaviest W and WT shapes), which is unconservative where J resists torsion. Use the AISC tabulated J of the shape, or check J by another method."
+  - Properties tile label: before `'J (thin-wall)'` → after `'J (thin-wall; may be high, see Torsion)'` when flagged.
+  - Single-shape AISC comparison hint and Method list: they now say that the thin-wall J can be above the AISC J for heavy shapes, and that such values are flagged.
+  - The single-shape comparison already shows the AISC J beside the computed J. No change there.
+- **Threshold:** 5.5 is just above the largest b_f/2t_f of the shapes over the table (5.33). It flags all 155 of them (296 shapes flagged in total; the extra 141 have J within the table or below). S and ST shapes are excluded, because their thin-wall J is always 14–27 % below the table.
+- **§4:** no computed value changes. This is a flag and wording only. Governing basis: AISC Design Guide 9 (thin-walled open sections, Σbt³/3) against the AISC Shapes Database v16.0 J.
+- **Check case:** W14X730 (b_f 17.9, t_f 4.91, t_w 3.07, d 22.4).
+  - b_f/2t_f = 17.9/9.82 = 1.82 ≤ 5.5, so J is flagged.
+  - Thin-wall J = [2 × 17.9 × 4.91³ + (22.4 − 4.91) × 3.07³]/3 = (4237.4 + 506.1)/3 = 1581 in⁴. AISC 1450 (+9.1 %).
+  - W21X62 (default project): b_f/2t_f = 6.70, not flagged.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch: the only differences are the new torsion warnings on W14X730 and WT7X436.5. All values are identical, including all 1,660 shapes and the default project. 0 console errors.
+  - Sweep of all shapes: 155 of 155 shapes with thin-wall J above the table are flagged. The other shapes with J slightly above the table are not W/M/HP/WT/MT: L ≤ +0.4 %, HSS ≤ +1.7 % and pipe ≤ +3.2 %, which come from data rounding and t_des and are documented in the SPH1 table.
+
+## 2026-11-07 — PR: claude/spc-j-n — SPM4: J with modulus ratios is reported as the transformed Σ n·J and labelled (review M4; §4 result change; PR #1098: https://github.com/mlococo88/All-Structural/pull/1098)
+
+- **Problem (review M4):** J of a section with modulus ratios n ≠ 1 was geometric. The headline showed it next to the transformed A and I, and only a Torsion-tab note said that n is not applied. Example: the FHWA girder with its slab (n = 1/8) showed J = 16,561 in⁴, of which 16,548 is the 102 × 8 slab. The transformed value is about 2,082.
+- **Fix (engine, `torsion()`):** anchor `SPM4 (2026-11-07)`.
+  - Each piece C (connected parts) gets `C.n` = the smallest n of its parts and `C.nMix` (true when its parts have different n). A piece with mixed n adds a warning: "PL1, PL2 are connected but have different modulus ratios n (1, 0.5): the J of this piece is taken with the smallest n = 0.5 (conservative; a mixed-material thin-wall piece is not modelled)."
+  - Before: `T.J = allOk ? Jsum : null;` with Jsum = Σ J_c.
+  - After: `T.Jgeo = allOk ? Jsum : null; T.Jn = !!R.anyN; T.J = allOk ? (R.anyN ? JnSum : Jsum) : null;` with JnSum = Σ n_c·J_c.
+  - When every n = 1, the result is identical to before.
+  - Torsion note, before: "Torsion properties are geometric: the modulus ratios n are not applied." After: "J is transformed to the reference material: J = Σ n_i·J_i over the pieces (n taken as the shear-modulus ratio G_i/G_ref, equal to E_i/E_ref for the same Poisson ratio). C_w, the shear centre and β_x are geometric (n not applied)."
+- **Labels and show-work (§6):**
+  - Torsion tab: new calc block "Transformed J (modulus ratios n)": J = Σ n_i J_i = n₁ × J₁ + … = value, with the geometric Σ J given in the result line.
+  - J label, when any n ≠ 1:
+    - Properties tile: "J (transformed Σ n·J, thin-wall)".
+    - Properties table row: "J (transformed, Σ n·J)", with the geometric Σ J in the note.
+    - Report step to.J: "St. Venant torsion constant, transformed (Σ n·J …)", with the substitution and the geometric Σ J in its note.
+    - Summary and DXF sheet table: the same label.
+  - Method tab: the item "Not modelled in torsion: … the modulus ratio n" is reworded.
+- **§4 callout:**
+  - J is transformed when n ≠ 1.
+  - Before: J = Σ J_i (geometric). After: J = Σ n_i·J_i (n_c = smallest n of a connected piece).
+  - Governing basis: mechanics of materials. A transformed section scales each material's stiffness by its modulus ratio, and G_iJ_i = (G_i/G_ref)·G_ref·J_i. G_i/G_ref = E_i/E_ref only when ν is the same. For concrete (ν = 0.2) on steel (ν = 0.3), G_c/G_s = 1.083 n, so using n underestimates the slab J by about 8 % (conservative).
+  - C_w, the shear centre and β_x are not changed (geometric).
+- **Check case:** FHWA Steel Design Example, Section 1, with the slab. Steel: PL 16 × 1¼, web 42 × 7/16, PL 14 × ¾ (one piece). Slab: 102 × 8, n = 1/8, a separate piece across the 1.25 in gap.
+  - J_steel = 13.48 in⁴ (thin-wall, unchanged). J_slab = 102 × 8³[1/3 − 0.21(8/102)(1 − (8/102)⁴/12)] = 16,547.9 in⁴ (Roark).
+  - Before: J = 13.48 + 16,547.9 = 16,561.4 in⁴.
+  - After: J = 1 × 13.48 + 0.125 × 16,547.9 = **2,082.1 in⁴**. With 3n = 24: 13.48 + 16,547.9/24 = **703.1 in⁴**.
+  - Concrete 10 × 10 at n = 1/8: 1408.33 → 176.04 in⁴.
+  - Two face-contact PL 10 × 1 with n = 1 and 0.5 (one piece): 26.67 → 13.33 in⁴, with the mixed-n warning.
+- **Decision (pending engineer review):** a connected piece made of parts with different n takes the **smallest** n (conservative) and is flagged. A mixed-material thin-wall model (e.g. Bredt with n·t walls) is not attempted.
+- **Saved data:** no change.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch: only J of the models with n ≠ 1 changed (FHWA_n/3n/mp, the concrete-hole models, holeMulti, mixN). All other values are identical, including every model with all n = 1, all 1,660 shapes and the default project.
+  - Every output tab built with the FHWA model: new labels shown, 0 console errors.
+  - `project-library --tool spc`: the only differences are the 4 new fields `tors.comps[i].n`, `.nMix`, `tors.Jgeo` and `tors.Jn`. They are new keys in the results object; every value that existed before is identical. Save and open are ok.
