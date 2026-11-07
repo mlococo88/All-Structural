@@ -1823,9 +1823,11 @@ const RW_CARDS = {
   toeShear:    ['footing', 'Toe Step 4 — Shear', 'Toe Step 4 — Shear'],
   ftgTS:       ['footing', 'Temperature & Shrinkage — Parallel to Wall', 'Temperature & Shrinkage — Parallel to Wall'],
   ftgLoads:    ['footing', 'Factored Loads on Footing', 'Factored Loads on Footing'],
-  ftgKey:      ['footing', 'Shear Key — Structural Design', 'Shear Key — Structural Design'],
+  ftgHeelUp:   ['footing', 'Heel Step 1 — Factored Loads', 'Heel Step 1 — Factored Loads'],   // RWUP (2026-11-07): water uplift split
+  ftgToeUp:    ['footing', 'Toe Step 1 — Net Upward Load', 'Toe Step 1 — Net Upward Load'],   // RWUP
+  ftgKey:      ['footing', 'Shear Key — Structural Design', 'Shear Key — Structural Design'],   // RWSK   // RWBP (2026-11-06): link target of the bearing selector
+  stabPile:    ['stability', 'Pile Step 2 — Pile Reactions and Checks', 'Pile Step 2 — Pile Reactions and Checks'],   // RWPL
   ftgPunch:    ['footing', 'Pile Cap — Punching around the Piles', 'Pile Cap — Punching around the Piles'],   // RWPL 8d
-  stabPile:    ['stability', 'Pile Step 2 — Pile Reactions and Checks', 'Pile Step 2 — Pile Reactions and Checks'],   // RWPL   // RWSK   // RWBP (2026-11-06): link target of the bearing selector
 };
 // r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
 const RW_CHECK_CARD = { pilePunch:'ftgPunch', pileCapD:'ftgPunch', pileComp:'stabPile', pileUplift:'stabPile', pileLat:'stabPile', pileSpacing:'stabPile', pileEdge:'stabPile', pileEmbed:'stabPile', ot:'stabOT', otE:'stabOT', sliding:'stabSlide', slidingE:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
@@ -2196,6 +2198,8 @@ function calcAll(inp) {
   // ── Seismic: Mononobe-Okabe with Seed & Whitman increment location ──
   //    (ASCE 7-22 §11.8.3 requires the geotech report to give this pressure; method per M-O)
   const hasSeismic = inp.kh > 0;
+  // RWPL (2026-11-07, Phase 8b): pile-supported footing selected: inputs and drawings only in this version
+  if (inp.fnd && inp.fnd.type === 'pile') warnings.push('Pile-supported footing selected: the piles are drawn, but the pile analysis is not in this version yet (Phase 8c). The stability and footing results shown are still those of a spread footing on soil.');
   let Pae = 0, Pe_inc = 0, Mo_seis = 0, Kae = 0;
   if (hasSeismic) {
     const kh = inp.kh, kv = inp.kv;
@@ -3306,25 +3310,86 @@ function calcAll(inp) {
     const cmin = isAASHTO ? mk('str_min', 'Strength I (minimum, Ia)', aashtoR.V_str_min_tot, B / 2 - aashtoR.e_Ia) : mk('u09', 'U = 0.9D + 1.6H', SumVu_min, x_Ru_min);
     return { cmax, cmin };
   })() : null;
-  function heelCase(gEVc, gDCc, gESc, gLSc, q0, qL, pc) {
+  // RWUP (2026-11-07): ACI 318-19 §5.3.8 — the water uplift is split out of the factored base pressure for the heel and toe
+  // design (engineer decision, audit item 1 follow-up; replaces the RWUPN note). H includes water in soil (R5.3.8). For each
+  // combination (U = 1.2D + 1.6H and 0.9D + 1.6H, enveloped as before) the soil reaction is the factored vertical load less
+  // γ_U·U, with the moment about the toe less γ_U·U·x_U, and the water pushes up on the member with γ_U·u(x):
+  //   toe  γ_U = 1.6 — the uplift adds to the toe's upward bending (§5.3.8(a));
+  //   heel γ_U = 0.9 — the uplift is permanent and counteracts the heel's downward load (§5.3.8(b)).
+  // In full contact the split gives the same pressure as the total trapezoid; it differs where the soil reaction alone leaves
+  // the middle third (statically consistent triangular block of length 3x̄_s). Without water, or in AASHTO mode, nothing changes.
+  const upS = (!isAASHTO && F_uplift > 0 && !isPile) ?   // RWPL: on piles the factored vertical load (water included) goes to the pile rows; no split
+    { gToe: 1.6, gHeel: 0.9 } : null;
+  const upWarn = [];
+  function rwUpSplit(V, M, g, lbl) {   // V, M: factored vertical load and net moment about the toe (resisting − overturning), no uplift deducted
+    const Vs = V - g * F_uplift, Mss = M - g * F_uplift * x_uplift;
+    const xs = Vs > 0 ? Mss / Vs : B / 2, es = B / 2 - xs;
+    let kind, qt = 0, qh = 0, Lc = B;
+    if (!(Vs > 0)) kind = 'none';                                     // the factored uplift exceeds the vertical load: no soil reaction
+    else if (xs <= 0) { kind = 'outToe'; Lc = 0; }                    // resultant beyond the toe: no equilibrium with soil in compression
+    else if (xs >= B) { kind = 'outHeel'; Lc = 0; }
+    else if (Math.abs(es) <= B / 6) { kind = 'full'; qt = Vs / B * (1 + 6 * es / B); qh = Vs / B * (1 - 6 * es / B); }
+    else if (es > 0) { kind = 'toe'; Lc = 3 * xs; qt = 2 * Vs / Lc; }
+    else { kind = 'heel'; Lc = 3 * (B - xs); qh = 2 * Vs / Lc; }
+    if (kind === 'none' || kind === 'outToe' || kind === 'outHeel')
+      upWarn.push(`${lbl}, water uplift at γ_U = ${g}: ${kind === 'none' ? 'the factored uplift exceeds the vertical load (no soil reaction)' : 'the soil resultant falls outside the base (no equilibrium with the soil in compression)'}. The footing is designed with the soil reaction ${kind === 'outToe' ? 'concentrated at the toe tip' : 'taken as zero on that member'} (conservative); review the proportions or the water level.`);
+    const uw0 = g * gamma_w * hw * (upliftTri ? 0 : 1), uwB = g * gamma_w * hw;   // water pressure at the toe (x = 0) and the heel end (x = B)
+    return { g, V, M, Vs, Ms: Mss, xs, es, kind, qt, qh, Lc, uw0, uwB, combo: lbl.split(', ')[1] };
+  }
+  function rwUpSoilAt(sp, x) {
+    if (sp.kind === 'full') return sp.qt + (sp.qh - sp.qt) * x / B;
+    if (sp.kind === 'toe')  return x < sp.Lc ? sp.qt * (1 - x / sp.Lc) : 0;
+    if (sp.kind === 'heel') return x > B - sp.Lc ? sp.qh * (1 - (B - x) / sp.Lc) : 0;
+    return 0;
+  }
+  // Member from its face (x = xf) to its tip (x = xt); s = |x − xf|. A linear piece q_a at s1 → q_b at s2 has
+  // F = (q_a + q_b)(s2 − s1)/2 and M about the face = (s2 − s1)[q_a(2s1 + s2) + q_b(s1 + 2s2)]/6.
+  function rwUpMember(sp, xf, xt) {
+    const L = Math.abs(xt - xf), lo = Math.min(xf, xt), hi = Math.max(xf, xt), sOf = x => Math.abs(x - xf);
+    const pc = (s1, s2, qa, qb) => ({ s1, s2, qa, qb, F: (qa + qb) * (s2 - s1) / 2, M: (s2 - s1) * (qa * (2 * s1 + s2) + qb * (s1 + 2 * s2)) / 6 });
+    let soil = null;
+    if (sp.kind === 'outToe') { if (lo <= 1e-9) soil = { s1: L, s2: L, qa: 0, qb: 0, point: true, F: sp.Vs, M: sp.Vs * L }; }   // V_s at the toe tip (x = 0)
+    else if (sp.kind !== 'none' && sp.kind !== 'outHeel') {
+      const a = sp.kind === 'heel' ? B - sp.Lc : 0, b = sp.kind === 'toe' ? sp.Lc : B;
+      const c = Math.max(lo, a), d = Math.min(hi, b);
+      if (d - c > 1e-9) { let s1 = sOf(c), s2 = sOf(d), q1 = rwUpSoilAt(sp, c), q2 = rwUpSoilAt(sp, d);
+        if (s1 > s2) { [s1, s2] = [s2, s1]; [q1, q2] = [q2, q1]; }
+        soil = pc(s1, s2, q1, q2); }
+    }
+    const uw = x => sp.uw0 + (sp.uwB - sp.uw0) * x / B;
+    const water = pc(0, L, uw(xf), uw(xt));
+    const Fs = soil ? soil.F : 0, Msl = soil ? soil.M : 0;
+    return { sp, L, soil, water, Fs, Ms: Msl, Fw: water.F, Mw: water.M, F: Fs + water.F, M: Msl + water.M,
+             q0: rwUpSoilAt(sp, xf) + uw(xf), qL: rwUpSoilAt(sp, xt) + uw(xt), q0s: rwUpSoilAt(sp, xf), qLs: rwUpSoilAt(sp, xt) };
+  }
+  if (upS) {
+    upS.heelMax = rwUpMember(rwUpSplit(SumVu, Msu - Mou, upS.gHeel, 'Heel, U = 1.2D + 1.6H'), x_back, B);
+    upS.heelMin = rwUpMember(rwUpSplit(SumVu_min, Msu_min - Mou, upS.gHeel, 'Heel, U = 0.9D + 1.6H'), x_back, B);
+    upS.toeMax  = rwUpMember(rwUpSplit(SumVu, Msu - Mou, upS.gToe, 'Toe, U = 1.2D + 1.6H'), x_front, 0);
+    upS.toeMin  = rwUpMember(rwUpSplit(SumVu_min, Msu_min - Mou, upS.gToe, 'Toe, U = 0.9D + 1.6H'), x_front, 0);
+    upWarn.forEach(w => warnings.push('Footing (water uplift split, ACI 318-19 §5.3.8): ' + w));
+  }
+  function heelCase(gEVc, gDCc, gESc, gLSc, q0, qL, up, pc) {   // up: RWUP split (soil + water) for this combination, or null; pc: RWPL pile rows
     const wu  = gEVc * w_soil_col + gDCc * (inp.gamma_c * tf_ft) + gESc * inp.q_sur
               + (isAASHTO ? gLSc * q_ll_aashto : 0);
     const Md  = wu * inp.Lh ** 2 / 2 + gEVc * M_wedge_heel;
     if (pc) {   // RWPL: pile rows behind the back face, line loads q_i at a_i = x_i − x_back
       const hr = pc.rows.filter(rw => rw.x > x_back + 1e-9).map(rw => ({ x: rw.x, q: rw.q, a: rw.x - x_back }));
       const Mup = hr.reduce((t, rw) => t + rw.q * rw.a, 0), Vup = hr.reduce((t, rw) => t + rw.q, 0);
-      return { wu, Md, Mup, q0: NaN, qL: NaN, g: [gEVc, gDCc, gESc, gLSc], pile: { key: pc.key, label: pc.label, rows: hr, Vup },
+      return { wu, Md, Mup, q0: NaN, qL: NaN, up: null, g: [gEVc, gDCc, gESc, gLSc], pile: { key: pc.key, label: pc.label, rows: hr, Vup },
                Mstd: Md - Mup, Vstd: Math.abs(wu * inp.Lh + gEVc * V_wedge_heel - Vup), Vnr: wu * inp.Lh + gEVc * V_wedge_heel };
     }
-    const Mup = q0 * inp.Lh ** 2 / 2 + (qL - q0) * inp.Lh ** 2 / 3;
-    return { wu, Md, Mup, q0, qL, g: [gEVc, gDCc, gESc, gLSc],
+    if (up) { q0 = up.q0; qL = up.qL; }
+    const Mup = up ? up.M : q0 * inp.Lh ** 2 / 2 + (qL - q0) * inp.Lh ** 2 / 3;
+    const Fup = up ? up.F : ((q0 + qL) / 2) * inp.Lh;
+    return { wu, Md, Mup, q0, qL, up: up || null, g: [gEVc, gDCc, gESc, gLSc],
              Mstd: Md - Mup,                                        // +ve = downward → top bars
-             Vstd: Math.abs(wu * inp.Lh + gEVc * V_wedge_heel - ((q0 + qL) / 2) * inp.Lh),
+             Vstd: Math.abs(wu * inp.Lh + gEVc * V_wedge_heel - Fup),
              Vnr:  wu * inp.Lh + gEVc * V_wedge_heel };
   }
-  const hcMax = heelCase(gEV, gDC, gES, gLS, bq_back, bq_heel, pileFtg && pileFtg.cmax);
-  const hcMin = isAASHTO ? heelCase(1.00, 0.90, 0.75, 0, bqm_back, bqm_heel, pileFtg && pileFtg.cmin)
-                         : heelCase(0.9, 0.9, 0, 0, bqm_back, bqm_heel, pileFtg && pileFtg.cmin);
+  const hcMax = heelCase(gEV, gDC, gES, gLS, bq_back, bq_heel, upS ? upS.heelMax : null, pileFtg && pileFtg.cmax);   // RWUP, RWPL
+  const hcMin = isAASHTO ? heelCase(1.00, 0.90, 0.75, 0, bqm_back, bqm_heel, null, pileFtg && pileFtg.cmin)
+                         : heelCase(0.9, 0.9, 0, 0, bqm_back, bqm_heel, upS ? upS.heelMin : null, pileFtg && pileFtg.cmin);
   const heel_min_governs = hcMin.Mstd > hcMax.Mstd;
   const hcG = heel_min_governs ? hcMin : hcMax;
   const wu_heel = hcG.wu;
@@ -3423,19 +3488,20 @@ function calcAll(inp) {
   // Self-weight RELIEVES toe demand → minimum factor (AASHTO DC 0.90 / ACI 0.9D)
   const wu_toe_down = 0.90 * inp.gamma_c * tf_ft;   // factored footing self-weight (DC) only
   // Envelope of the max- and min-vertical bearing trapezoids (see heel)
-  function toeCase(q0, qL, pc) {
+  function toeCase(q0, qL, up, pc) {   // up: RWUP split (soil + water) for this combination, or null; pc: RWPL pile rows
     if (pc) {   // RWPL: pile rows in front of the front face, line loads q_i at a_i = x_front − x_i, less the footing weight
       const tr = pc.rows.filter(rw => rw.x < x_front - 1e-9).map(rw => ({ x: rw.x, q: rw.q, a: x_front - rw.x }));
       const Mup = tr.reduce((t, rw) => t + rw.q * rw.a, 0), Vup = tr.reduce((t, rw) => t + rw.q, 0);
       return { q0: NaN, qL: NaN, n0: NaN, nL: NaN, pile: { key: pc.key, label: pc.label, rows: tr, Vup, Mup },
                M: Mup - wu_toe_down * inp.Lt ** 2 / 2, V: Math.max(0, Vup - wu_toe_down * inp.Lt) };
     }
+    if (up) { q0 = up.q0; qL = up.qL; }
     const n0 = q0 - wu_toe_down, nL = qL - wu_toe_down;
-    return { q0, qL, n0, nL,
-             M: n0 * inp.Lt ** 2 / 2 + (nL - n0) * inp.Lt ** 2 / 3,
-             V: Math.max(0, n0 * inp.Lt + (nL - n0) * inp.Lt / 2) };
+    return { q0, qL, n0, nL, up: up || null,
+             M: up ? up.M - wu_toe_down * inp.Lt ** 2 / 2 : n0 * inp.Lt ** 2 / 2 + (nL - n0) * inp.Lt ** 2 / 3,
+             V: Math.max(0, up ? up.F - wu_toe_down * inp.Lt : n0 * inp.Lt + (nL - n0) * inp.Lt / 2) };
   }
-  const tcMax = toeCase(bq_front, bq_toe, pileFtg && pileFtg.cmax), tcMin = toeCase(bqm_front, bqm_toe, pileFtg && pileFtg.cmin);
+  const tcMax = toeCase(bq_front, bq_toe, upS ? upS.toeMax : null, pileFtg && pileFtg.cmax), tcMin = toeCase(bqm_front, bqm_toe, upS ? upS.toeMin : null, pileFtg && pileFtg.cmin);   // RWUP, RWPL
   const toe_min_governs = tcMin.M > tcMax.M;
   const tcG = toe_min_governs ? tcMin : tcMax;
   const q0t = tcG.q0, qLt = tcG.qL;
@@ -3924,7 +3990,7 @@ function calcAll(inp) {
   // ── Return ────────────────────────────────────────────────────
   return {
     inp, errors, warnings, fatal: false,
-    pile, pileFtg, cov_bot, pilePunch, heelPile: hcG.pile || null, toePile: tcG.pile || null,   // RWPL (2026-11-07): pile-supported footing results (null for a spread footing); 8d: factored pile reactions for the footing, bottom cover
+    ...(pile ? { pile, pileFtg, cov_bot, pilePunch, heelPile: hcG.pile || null, toePile: tcG.pile || null } : {}),   // RWPL (2026-11-07): pile-supported footing results, absent for a spread footing (its results are as before); 8d: factored pile reactions for the footing, bottom cover, punching
     basis: inp.basis, isAASHTO, aashtoR, heq, q_ll_aashto, q_sur_eff,
     // Geometry
     B, H, Df, tf_ft, ts_bot_ft, ts_top_ft, dk_ft, x_front, x_back,
@@ -3979,6 +4045,7 @@ function calcAll(inp) {
     d_stemT, As_stemT_des, sel_stemT, stemT_overstressed, stemT_shear_ok,
     phiVc_stemT,
     // Heel
+    upS, hcG_up: hcG.up, tcG_up: tcG.up,   // RWUP (2026-11-07): water uplift split (ACI with water), governing members
     d_heel, wu_heel, q0h, qLh, Md_heel, Mu_heel_net, Mu_heel_in, Vu_heel,
     Mu_heel_up, Mu_heel_std, Vu_heel_std, Mu_heel_nr, Vu_heel_nr, heelBasis, heel_case, V_wedge_heel,
     gEV, gDC, gES, gLS, gEH, gWA,   // RWSC (2026-11-07): gEH, gWA returned for the self-consistency panel (exposure only)
@@ -4448,6 +4515,19 @@ function plotCantSM(elId, title, xTitle, xs, Vs, Ms, phiVc, faceLabel, tipLabel)
   }), PLT_CFG);
 }
 
+// RWUP (2026-11-07): upward force and moment, about the section at s (ft from the stem face), of the soil and water pieces
+// beyond s (water uplift split, ACI). Exact for the linear pieces (same formula as Heel/Toe Step 2).
+function rwUpBeyond(up, s0) {
+  let F = 0, M = 0;
+  for (const p of [up.soil, up.water]) {
+    if (!p) continue;
+    if (p.point) { if (p.s1 >= s0) { F += p.F; M += p.F * (p.s1 - s0); } continue; }
+    const a = Math.max(p.s1, s0), b = p.s2; if (b - a <= 1e-12) continue;
+    const qa = p.qa + (p.qb - p.qa) * (p.s2 > p.s1 ? (a - p.s1) / (p.s2 - p.s1) : 0), qb = p.qb;
+    F += (qa + qb) * (b - a) / 2; M += (b - a) * (qa * (2 * (a - s0) + (b - s0)) + qb * ((a - s0) + 2 * (b - s0))) / 6;
+  }
+  return { F, M };
+}
 function plotHeelSM(r) {
   const { inp } = r;
   const N = 40, xs=[], Vs=[], Ms=[];
@@ -4460,8 +4540,9 @@ function plotHeelSM(r) {
     }
     const q_at = r.q0h + (r.qLh - r.q0h)*t;           // upward bearing at section x
     // Loads on free side (x → tip): uniform wu down, trapezoid q_at→qLh up
-    const V = (r.wu_heel*L - (q_at + r.qLh)/2*L)/1000;
-    const M = (r.wu_heel*L*L/2 - (q_at*L*L/2 + (r.qLh - q_at)*L*L/3))/1000;
+    const ub = r.hcG_up ? rwUpBeyond(r.hcG_up, x) : null;   // RWUP: soil + water pieces (ACI with water)
+    const V = (r.wu_heel*L - (ub ? ub.F : (q_at + r.qLh)/2*L))/1000;
+    const M = (r.wu_heel*L*L/2 - (ub ? ub.M : (q_at*L*L/2 + (r.qLh - q_at)*L*L/3)))/1000;
     Vs.push(Math.abs(V)); Ms.push(Math.abs(M)); xs.push(x);
   }
   plotCantSM('plt-heel-sm', 'Heel — Factored Shear & Moment (from back face)',
@@ -4484,8 +4565,9 @@ function plotToeSM(r) {
     const L = inp.Lt - x;                                     // remaining cantilever
     const q_tip = r.net_qLt;
     // V and M at section x from load beyond x (trapezoid q_at → q_tip over L)
-    const V = ((q_at + q_tip)/2 * L)/1000;
-    const M = ((q_at*L*L/2) + (q_tip-q_at)*L*L/3)/1000;
+    const ub = r.tcG_up ? rwUpBeyond(r.tcG_up, x) : null;   // RWUP: soil + water pieces less the self-weight (ACI with water)
+    const V = (ub ? ub.F - r.wu_toe_down * L : (q_at + q_tip)/2 * L)/1000;
+    const M = (ub ? ub.M - r.wu_toe_down * L * L / 2 : (q_at*L*L/2) + (q_tip-q_at)*L*L/3)/1000;
     Vs.push(Math.max(0,V)); Ms.push(Math.max(0,M)); xs.push(x);
   }
   plotCantSM('plt-toe-sm', 'Toe — Factored Shear & Moment (from front face)',
@@ -5357,6 +5439,7 @@ function renderStabilitySoil(r) {
     [{sym:'\\Sigma V_u', desc:'min factored vertical load (surcharge and column L/S/W omitted)', val:F(r.SumVu_min,1), unit:'lb/ft'},
      {sym:'q_{u,front}', desc:'bearing at front face of stem', val:F(r.quf_front_min,1), unit:'psf'},
      {sym:'q_{u,back}', desc:'bearing at back face of stem', val:F(r.quf_back_min,1), unit:'psf'}]);
+  if (r.upS) h += `<div class="alert info" style="margin-top:8px;">Water uplift: these are the total factored base pressures (soil + water). For the heel and toe design the uplift U = ${F(r.F_uplift,0)} lb/ft is split out of them (ACI 318-19 §5.3.8: γ<sub>U</sub> = 1.6 toe, 0.9 heel); ΣV<sub>u</sub> and the moment above feed the split, worked in <a class="wkA" href="#" data-card="ftgHeelUp" data-intext="1">Heel Step 1</a> and <a class="wkA" href="#" data-card="ftgToeUp" data-intext="1">Toe Step 1</a> of the Footing design tab.</div>`;   // RWUP (2026-11-07)
   h += `</div></div>`;
 
   // ── Column loads (if any) ──
@@ -6060,6 +6143,48 @@ function buildStemPressureDiagram(r) {
 // ================================================================
 // FOOTING DESIGN TAB RENDERER
 // ================================================================
+// RWUP (2026-11-07): worked steps of the water-uplift split (ACI 318-19 §5.3.8) for one footing member, used by the Footing
+// tab and the Report. up = r.hcG_up (heel) or r.tcG_up (toe). Each step: { id, label, sym, eq, sub, value, unit, d, note }.
+// '\\minus' is the Report's minus; the tab replaces it with '-'.
+function rwUpSteps(r, up, mem) {
+  const sp = up.sp, n = (v, d) => (isFinite(v) ? Number(v).toFixed(d) : '—'), isToe = mem === 'toe';
+  const g = n(sp.g, 1), Ls = isToe ? 'L_{t}' : 'L_{h}', U = r.F_uplift, st = [];
+  st.push({ id: 'Vs', label: 'Soil reaction without the water: ' + sp.combo + ' less the uplift at γ_U = ' + g + ' (ACI 318-19 §5.3.8(' + (isToe ? 'a): the uplift adds to the toe’s upward bending' : 'b): the uplift is permanent and counteracts the heel’s downward load') + ')',
+    sym: 'V_{s}', eq: '\\Sigma V_{u} \\minus \\gamma_{U} U', sub: n(sp.V, 0) + ' \\minus ' + g + '(' + n(U, 0) + ')', value: sp.Vs, unit: 'lb/ft', d: 0,
+    note: 'ΣV_u and its moment from the ' + sp.combo + ' trapezoid (Stability tab, factored bearing); U = ' + n(U, 0) + ' lb/ft at x_U = ' + n(r.x_uplift, 3) + ' ft from the toe (' + (r.upliftTri ? 'triangular' : 'uniform') + ' uplift).' });
+  if (sp.Vs > 0) {
+    st.push({ id: 'xs', label: 'Location of the soil reaction from the toe (M_u = resisting less overturning moment about the toe)', sym: '\\bar{x}_{s}', eq: '\\frac{M_{u} \\minus \\gamma_{U} U x_{U}}{V_{s}}', sub: '\\frac{' + n(sp.M, 0) + ' \\minus ' + g + '(' + n(U, 0) + ')(' + n(r.x_uplift, 3) + ')}{' + n(sp.Vs, 0) + '}', value: sp.xs, unit: 'ft', d: 3 });
+    st.push({ id: 'es', label: 'Eccentricity of the soil reaction (B/6 = ' + n(r.B / 6, 3) + ' ft)', sym: 'e_{s}', eq: '\\frac{B}{2} \\minus \\bar{x}_{s}', sub: n(r.B / 2, 3) + ' \\minus ' + n(sp.xs, 3), value: sp.es, unit: 'ft', d: 3 });
+  }
+  if (sp.kind === 'full') {
+    st.push({ id: 'qst', label: 'Soil pressure at the toe (full contact, |e_s| ≤ B/6)', sym: 'q_{s,toe}', eq: '\\frac{V_{s}}{B}\\left(1 + \\frac{6e_{s}}{B}\\right)', sub: '\\frac{' + n(sp.Vs, 0) + '}{' + n(r.B, 2) + '}\\left(1 + \\frac{6(' + n(sp.es, 3) + ')}{' + n(r.B, 2) + '}\\right)', value: sp.qt, unit: 'psf', d: 1 });
+    st.push({ id: 'qsh', label: 'Soil pressure at the heel end', sym: 'q_{s,heel}', eq: '\\frac{V_{s}}{B}\\left(1 \\minus \\frac{6e_{s}}{B}\\right)', sub: '\\frac{' + n(sp.Vs, 0) + '}{' + n(r.B, 2) + '}\\left(1 \\minus \\frac{6(' + n(sp.es, 3) + ')}{' + n(r.B, 2) + '}\\right)', value: sp.qh, unit: 'psf', d: 1 });
+  } else if (sp.kind === 'toe' || sp.kind === 'heel') {
+    const t = sp.kind === 'toe';
+    st.push({ id: 'Lc', label: 'Soil contact length (|e_s| > B/6: triangular block from the ' + (t ? 'toe' : 'heel end') + ')', sym: 'L_{c}', eq: t ? '3\\bar{x}_{s}' : '3(B \\minus \\bar{x}_{s})', sub: t ? '3(' + n(sp.xs, 3) + ')' : '3(' + n(r.B, 2) + ' \\minus ' + n(sp.xs, 3) + ')', value: sp.Lc, unit: 'ft', d: 3 });
+    st.push({ id: 'qs', label: 'Peak soil pressure at the ' + (t ? 'toe' : 'heel end'), sym: t ? 'q_{s,toe}' : 'q_{s,heel}', eq: '\\frac{2V_{s}}{L_{c}}', sub: '\\frac{2(' + n(sp.Vs, 0) + ')}{' + n(sp.Lc, 3) + '}', value: t ? sp.qt : sp.qh, unit: 'psf', d: 1 });
+  } else {
+    st.push({ id: 'qs', label: sp.kind === 'none' ? 'The factored uplift exceeds the vertical load: no soil reaction (see the warning)' : sp.kind === 'outToe' ? 'The soil resultant falls beyond the toe (no equilibrium with the soil in compression): V_s is taken at the toe tip (see the warning)' : 'The soil resultant falls beyond the heel end: no soil reaction is counted on the member (see the warning)', sym: 'V_{s}', eq: '', sub: '', value: sp.Vs, unit: 'lb/ft', d: 0 });
+  }
+  st.push({ id: 'uw', label: 'Water pressure on the underside at γ_U = ' + g + (r.upliftTri ? ' (triangular: 0 at the toe, this value at the heel end)' : ' (uniform)'), sym: '\\gamma_{U}\\gamma_{w}h_{w}', eq: '', sub: g + '(' + n(r.gamma_w, 1) + ')(' + n(r.hw, 2) + ')', value: sp.uwB, unit: 'psf', d: 1 });
+  const ws0 = up.q0 - up.q0s, wsL = up.qL - up.qLs;
+  st.push({ id: 'q0', label: 'Upward pressure at the stem face: soil + water', sym: 'q(0)', eq: 'q_{s}(0) + \\gamma_{U}u(0)', sub: n(up.q0s, 1) + ' + ' + n(ws0, 1), value: up.q0, unit: 'psf', d: 1 });
+  st.push({ id: 'qL', label: 'Upward pressure at the ' + (isToe ? 'toe' : 'heel') + ' tip: soil + water', sym: 'q(' + Ls + ')', eq: 'q_{s}(' + Ls + ') + \\gamma_{U}u(' + Ls + ')', sub: n(up.qLs, 1) + ' + ' + n(wsL, 1), value: up.qL, unit: 'psf', d: 1 });
+  // a linear piece q_a at s1 → q_b at s2 (s from the stem face): M = (s2 − s1)[q_a(2s1 + s2) + q_b(s1 + 2s2)]/6; with s1 = 0, M = s2²(q_a + 2q_b)/6
+  const pf = p => p.s1 < 1e-9 ? '\\frac{s_{2}^{2}}{6}(q_{a} + 2q_{b})' : '\\frac{s_{2} \\minus s_{1}}{6}\\left[q_{a}(2s_{1} + s_{2}) + q_{b}(s_{1} + 2s_{2})\\right]';
+  const psub = p => p.s1 < 1e-9 ? '\\frac{(' + n(p.s2, 3) + ')^{2}}{6}(' + n(p.qa, 1) + ' + 2(' + n(p.qb, 1) + '))'
+    : '\\frac{' + n(p.s2, 3) + ' \\minus ' + n(p.s1, 3) + '}{6}\\left[' + n(p.qa, 1) + '(2(' + n(p.s1, 3) + ') + ' + n(p.s2, 3) + ') + ' + n(p.qb, 1) + '(' + n(p.s1, 3) + ' + 2(' + n(p.s2, 3) + '))\\right]';
+  const so = up.soil;
+  st.push({ id: 'Ms', label: 'Moment of the soil reaction about the stem face' + (so && !so.point ? ' (linear piece q_a = ' + n(so.qa, 1) + ' psf at s₁ = ' + n(so.s1, 3) + ' ft to q_b = ' + n(so.qb, 1) + ' psf at s₂ = ' + n(so.s2, 3) + ' ft from the face' + (so.s2 < up.L - 1e-9 ? '; the soil contact ends inside the member' : '') + ')' : so ? ' (V_s at the toe tip)' : ' (no soil contact on the member)'),
+    sym: 'M_{soil}', eq: so ? (so.point ? 'V_{s}' + Ls : pf(so)) : '', sub: so ? (so.point ? '(' + n(sp.Vs, 0) + ')(' + n(up.L, 2) + ')' : psub(so)) : '', value: up.Ms, unit: 'lb-ft/ft', d: 1, note: 'F_soil = ' + n(up.Fs, 1) + ' lb/ft' });
+  st.push({ id: 'Mw', label: 'Moment of the water pressure about the stem face (q_a = ' + n(up.water.qa, 1) + ' psf at the face, q_b = ' + n(up.water.qb, 1) + ' psf at the tip)', sym: 'M_{water}', eq: pf(up.water), sub: psub(up.water), value: up.Mw, unit: 'lb-ft/ft', d: 1, note: 'F_water = ' + n(up.Fw, 1) + ' lb/ft' });
+  st.push({ id: 'Mup', label: 'Moment of the upward pressure about the stem face', sym: 'M_{up}', eq: 'M_{soil} + M_{water}', sub: n(up.Ms, 1) + ' + ' + n(up.Mw, 1), value: up.M, unit: 'lb-ft/ft', d: 1, note: 'F_up = F_soil + F_water = ' + n(up.F, 1) + ' lb/ft' });
+  return st;
+}
+function rwUpTabEq(st) {   // the tab form of a step list
+  return st.map(o => eq(o.label, (o.sym + (o.eq ? ' = ' + o.eq : '') + (o.sub ? ' = ' + o.sub : '') + ' = \\boxed{' + (isFinite(o.value) ? Number(o.value).toFixed(o.d) : '—') + '\\ \\text{' + o.unit + '}}').replace(/\\minus/g, '-'), '', null)
+    + (o.note ? `<div class="eq-note" style="font-size:11px;color:var(--muted);margin:-6px 0 8px 4px;">${o.note}</div>` : '')).join('');
+}
 function renderFooting(r) {
   const el = document.getElementById('tab-footing');
   if (r.fatal) { el.innerHTML = rwInputErrHTML(r); return; }
@@ -6073,8 +6198,8 @@ function renderFooting(r) {
   // ── Load diagram ──
   h += `<div class="card" style="margin-bottom:16px;">
     <div class="card-hd"><span class="card-title">Factored Loads on Footing</span><span class="card-ref">bearing from ${r.isAASHTO ? 'Step 7 of Stability tab' : '<a class="wkA" href="#" data-card="stabFactBrg" data-intext="1">Step 7 of Stability tab</a>'}</span></div>
-    <div class="card-body"><div id="plt-ftg-loads"></div>${!r.isAASHTO && r.F_uplift > 0 ? `<div class="alert info" style="margin:8px 0 0;">Water uplift: in U = 1.2D + 1.6H and U = 0.9D + 1.6H the factored base pressure q<sub>u</sub> is the total contact pressure on the footing underside (soil + water). The uplift U is part of that reaction, so it is not subtracted from ΣV<sub>u</sub> and is already in the heel and toe design (the same as splitting it out while the base is in full contact; the AASHTO mode also uses the total pressure).</div>` : ''}</div>
-  </div>`;   // RWUPN (2026-11-07): ACI uplift note, display only
+    <div class="card-body"><div id="plt-ftg-loads"></div>${r.upS ? `<div class="alert info" style="margin:8px 0 0;">Water uplift (ACI 318-19 §5.3.8; water in soil is part of H, R5.3.8): for the heel and toe design the uplift is split out of the factored base pressure. In each combination the soil reaction is ΣV<sub>u</sub> less γ<sub>U</sub>·U (moment less γ<sub>U</sub>·U·x<sub>U</sub>), and the water pushes up on the member with γ<sub>U</sub>·u(x): <b>toe γ<sub>U</sub> = 1.6</b> (the uplift adds to the toe’s upward bending, §5.3.8(a)); <b>heel γ<sub>U</sub> = 0.9</b> (permanent, counteracts the heel’s downward load, §5.3.8(b)). The plot shows the total factored base pressure of Stability Step 7; the members’ own pressures are worked in Heel Step 1 and Toe Step 1.</div>` : ''}</div>
+  </div>`;   // RWUPN (2026-11-07): ACI uplift note, display only; RWUP (2026-11-07): rewritten, the uplift is split out
 
   // ════ HEEL ════
   h += `<div class="sec-heading" style="margin-top:6px;">Heel — Cantilever from Back Face (L_h = ${F(inp.Lh,2)} ft)</div>`;
@@ -6090,6 +6215,7 @@ function renderFooting(r) {
      {sym:'H_s', desc:'soil height on heel', val:F(inp.Hs,2), unit:'ft'},
      {sym:'t_f', desc:'footing thickness', val:F(r.tf_ft,3), unit:'ft'},
      {sym:'w_u', desc:'factored downward pressure', val:F(r.wu_heel,1), unit:'psf'}]);
+  const upHs = r.hcG_up ? rwUpSteps(r, r.hcG_up, 'heel') : null;   // RWUP (2026-11-07): water uplift split out (ACI)
   if (r.heelPile) {   // RWPL (2026-11-07, Phase 8d): pile rows behind the back face instead of the bearing trapezoid
     const hp = r.heelPile;
     h += eq('Factored pile reactions under the heel (' + hp.label + '; line loads q_i = P_i/s_i)',
@@ -6097,11 +6223,12 @@ function renderFooting(r) {
       hp.rows.map((rw, j) => ({ sym: 'q_{' + (j + 1) + '}', desc: 'pile row at x = ' + F(rw.x, 2) + ' ft from the toe', val: F(rw.q, 1), unit: 'lb/ft' })));
     h += rwWorkedIn(r, [['stabPile', 'pile reactions']]);
   } else {
-  h += eq('Factored upward bearing (varies linearly along heel)',
+  if (upHs) h += rwUpTabEq(upHs.filter(o => !/^M/.test(o.id)));
+  else h += eq('Factored upward bearing (varies linearly along heel)',
     `q_{u}(0) = q_{u,back} = ${F(r.q0h,1)}\\ \\text{psf at face}, \\quad q_u(L_h) = q_{u,heel} = ${F(r.qLh,1)}\\ \\text{psf at tip}`,'',
     [{sym:'q_u(0)', desc:'upward bearing at stem face', val:F(r.q0h,1), unit:'psf'},
      {sym:'q_u(L_h)', desc:'upward bearing at heel tip', val:F(r.qLh,1), unit:'psf'}]);
-  h += rwWorkedIn(r, [['stabFactBrg','q<sub>u,back</sub>, q<sub>u,heel</sub>']]);
+  h += rwWorkedIn(r, [['stabFactBrg', upHs ? 'ΣV<sub>u</sub>, M<sub>u</sub>' : 'q<sub>u,back</sub>, q<sub>u,heel</sub>']]);
   }
   h += `</div></div>`;
 
@@ -6113,14 +6240,15 @@ function renderFooting(r) {
     [{sym:'w_u', desc:'factored downward pressure', val:F(r.wu_heel,1), unit:'psf'},
      {sym:'L_h', desc:'heel length', val:F(inp.Lh,2), unit:'ft'},
      {sym:'M_{down}', desc:'downward-load moment at face', val:F(r.Md_heel,1), unit:'lb·ft/ft'}]);
-  h += r.heelPile ? eq('Moment from the pile reactions about back face',
+  if (upHs) h += rwUpTabEq(upHs.filter(o => /^M/.test(o.id)));   // RWUP
+  else h += r.heelPile ? eq('Moment from the pile reactions about back face',
     `M_{up} = \\sum q_i a_i = ${r.heelPile.rows.length ? r.heelPile.rows.map(rw => `(${F(rw.q,1)})(${F(rw.a,3)})`).join(' + ') : '0'} = \\boxed{${F(r.Mu_heel_up,1)}\\ \\text{lb·ft/ft}}`,'',
     [{sym:'M_{up}', desc:'pile-reaction moment at face', val:F(r.Mu_heel_up,1), unit:'lb·ft/ft'}]) : eq('Moment from upward bearing about back face (trapezoid: ∫q(x)·x dx)',
     `M_{up} = \\frac{q_0 L_h^2}{2} + \\frac{(q_L - q_0)L_h^2}{3} = \\boxed{${F(r.Mu_heel_up,1)}\\ \\text{lb·ft/ft}}`,'',
     [{sym:'M_{up}', desc:'upward-bearing moment at face', val:F(r.Mu_heel_up,1), unit:'lb·ft/ft'}]);
   const hbLbl = {std:'Standard (relief credited)', norelief:'No upward relief', envelope:'Envelope'}[r.heelBasis] || 'Standard';
   h += eq('Case A — Standard: net moment & shear (upward relief credited)',
-    `M_{u,A} = M_{down} - M_{up} = ${Fk(r.Mu_heel_std)}\\ \\text{kip·ft/ft}, \\quad V_{u,A} = ${r.heelPile ? '\\left| w_u L_h - \\sum q_i \\right|' : '\\left| w_u L_h - \\tfrac{q_0+q_L}{2}L_h \\right|'} = ${Fk(r.Vu_heel_std)}\\ \\text{kip/ft}`,'');
+    `M_{u,A} = M_{down} - M_{up} = ${Fk(r.Mu_heel_std)}\ \text{kip·ft/ft}, \quad V_{u,A} = ${r.heelPile ? '\left| w_u L_h - \sum q_i \right|' : '\left| w_u L_h - ' + (upHs ? 'F_{up}' : '\tfrac{q_0+q_L}{2}L_h') + ' \right|'} = ${Fk(r.Vu_heel_std)}\ \text{kip/ft}`,'');
   h += eq('Case B — No upward relief: full factored downward cantilever (max load factors)',
     `M_{u,B} = M_{down} = ${Fk(r.Mu_heel_nr)}\\ \\text{kip·ft/ft}, \\quad V_{u,B} = w_u L_h = ${Fk(r.Vu_heel_nr)}\\ \\text{kip/ft}`,'');
   h += eq(`Design values — basis: ${hbLbl}${r.heel_md_governs?' (MassDOT §3.3.2.2 governs)':''}`,
@@ -6205,6 +6333,7 @@ function renderFooting(r) {
     [{sym:'\\gamma_c', desc:'concrete unit weight', val:F(inp.gamma_c,0), unit:'pcf'},
      {sym:'t_f', desc:'footing thickness', val:F(r.tf_ft,3), unit:'ft'},
      {sym:'w_{sw}', desc:'factored footing self-weight', val:F(r.wu_toe_down,1), unit:'psf'}]);
+  const upTs = r.tcG_up ? rwUpSteps(r, r.tcG_up, 'toe') : null;   // RWUP (2026-11-07): water uplift split out (ACI)
   if (r.toePile) {   // RWPL 8d: pile rows in front of the front face
     const tp = r.toePile;
     h += eq('Factored pile reactions under the toe (' + tp.label + '; line loads q_i = P_i/s_i)',
@@ -6212,33 +6341,42 @@ function renderFooting(r) {
       tp.rows.map((rw, j) => ({ sym: 'q_{' + (j + 1) + '}', desc: 'pile row at x = ' + F(rw.x, 2) + ' ft from the toe', val: F(rw.q, 1), unit: 'lb/ft' })));
     h += rwWorkedIn(r, [['stabPile', 'pile reactions']]);
   } else {
+  if (upTs) h += rwUpTabEq(upTs.filter(o => !/^M/.test(o.id)));
   h += eq('Net upward pressure at front face and toe tip',
-    `q_{net}(0) = q_{u,front} - w_{sw} = ${F(r.net_q0t,1)}\\ \\text{psf}, \\quad q_{net}(L_t) = q_{u,toe} - w_{sw} = ${F(r.net_qLt,1)}\\ \\text{psf}`,'',
+    `q_{net}(0) = ${upTs ? 'q(0)' : 'q_{u,front}'} - w_{sw} = ${F(r.net_q0t,1)}\\ \\text{psf}, \\quad q_{net}(L_t) = ${upTs ? 'q(L_t)' : 'q_{u,toe}'} - w_{sw} = ${F(r.net_qLt,1)}\\ \\text{psf}`,'',
     [{sym:'q_{net}(0)', desc:'net upward pressure at stem face', val:F(r.net_q0t,1), unit:'psf'},
      {sym:'q_{net}(L_t)', desc:'net upward pressure at toe tip', val:F(r.net_qLt,1), unit:'psf'}]);
-  h += rwWorkedIn(r, [['stabFactBrg','q<sub>u,front</sub>, q<sub>u,toe</sub>']]);
+  h += rwWorkedIn(r, [['stabFactBrg', upTs ? 'ΣV<sub>u</sub>, M<sub>u</sub>' : 'q<sub>u,front</sub>, q<sub>u,toe</sub>']]);
   }
   h += `</div></div>`;
 
   h += `<div class="card" style="margin-bottom:16px;">
     <div class="card-hd"><span class="card-title">Toe Step 2 — Design Moment &amp; Shear at Front Face</span></div>
     <div class="card-body">`;
-  h += eq('Design moment about front face (tension on BOTTOM)',
-    `M_u = ${r.toePile ? '\\sum q_i a_i - \\frac{w_{sw} L_t^2}{2}' : '\\frac{q_0 L_t^2}{2} + \\frac{(q_L-q_0)L_t^2}{3}'} = \\boxed{${F(r.Mu_toe_net,1)}\\ \\text{lb·ft/ft}} = ${Fk(Math.max(0,r.Mu_toe_net))}\\ \\text{kip·ft/ft}`,'',
+  if (upTs) h += rwUpTabEq(upTs.filter(o => /^M/.test(o.id)));   // RWUP
+  h += r.toePile ? eq('Design moment about front face (tension on BOTTOM)',
+    `M_u = \\sum q_i a_i - \\frac{w_{sw} L_t^2}{2} = ${F(r.toePile.Mup,1)} - \\frac{(${F(r.wu_toe_down,1)})(${F(inp.Lt,2)})^2}{2} = \\boxed{${F(r.Mu_toe_net,1)}\\ \\text{lb·ft/ft}}`,'',
+    [{sym:'M_u', desc:'factored design moment at face', val:F(r.Mu_toe_net,1), unit:'lb·ft/ft'}])   // RWPL 8d
+  : upTs ? eq('Design moment about front face (tension on BOTTOM)',
+    `M_u = M_{up} - \\frac{w_{sw} L_t^2}{2} = ${F(r.tcG_up.M,1)} - \\frac{(${F(r.wu_toe_down,1)})(${F(inp.Lt,2)})^2}{2} = \\boxed{${F(r.Mu_toe_net,1)}\\ \\text{lb·ft/ft}} = ${Fk(Math.max(0,r.Mu_toe_net))}\\ \\text{kip·ft/ft}`,'',
+    [{sym:'L_t', desc:'toe length', val:F(inp.Lt,2), unit:'ft'},
+     {sym:'M_u', desc:'factored design moment at face', val:F(r.Mu_toe_net,1), unit:'lb·ft/ft'}])
+  : eq('Design moment about front face (tension on BOTTOM)',
+    `M_u = \\frac{q_0 L_t^2}{2} + \\frac{(q_L-q_0)L_t^2}{3} = \\boxed{${F(r.Mu_toe_net,1)}\\ \\text{lb·ft/ft}} = ${Fk(Math.max(0,r.Mu_toe_net))}\\ \\text{kip·ft/ft}`,'',
     [{sym:'L_t', desc:'toe length', val:F(inp.Lt,2), unit:'ft'},
      {sym:'M_u', desc:'factored design moment at face', val:F(r.Mu_toe_net,1), unit:'lb·ft/ft'}]);
   h += eq('Design shear at front face',
-    `V_u = ${r.toePile ? '\\sum q_i - w_{sw} L_t' : '\\frac{q_0+q_L}{2}\\,L_t'} = \\boxed{${F(r.Vu_toe,1)}\\ \\text{lb/ft}} = ${Fk(r.Vu_toe)}\\ \\text{kip/ft}`,'',
+    `V_u = ${r.toePile ? '\\sum q_i - w_{sw} L_t' : upTs ? (Math.abs(r.tcG_up.F - r.wu_toe_down*inp.Lt - r.Vu_toe) < 0.5 ? `F_{up} - w_{sw} L_t = ${F(r.tcG_up.F,1)} - (${F(r.wu_toe_down,1)})(${F(inp.Lt,2)})` : '\\max \\text{ of the two combinations}') : '\\frac{q_0+q_L}{2}\\,L_t'} = \\boxed{${F(r.Vu_toe,1)}\\ \\text{lb/ft}} = ${Fk(r.Vu_toe)}\\ \\text{kip/ft}`,'',
     [{sym:'V_u', desc:'factored shear at front face', val:F(r.Vu_toe,1), unit:'lb/ft'}]);
   h += `</div></div>`;
 
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Toe Step 3 — Flexural Steel (bottom face)</span><span class="card-ref">d = t_f − cover − d_b/2 · cover = ${F(r.cov_bot,2)} in</span></div>
+    <div class="card-hd"><span class="card-title">Toe Step 3 — Flexural Steel (bottom face)</span><span class="card-ref">d = t_f − cover − d_b/2 · cover = ${F(r.cov_bot ?? inp.cov_ftg,2)} in</span></div>
     <div class="card-body">`;
   h += eq('Effective depth',
-    `d = t_f - c_c - \\frac{d_b}{2} = ${F(inp.tf,1)} - ${F(r.cov_bot,2)} - ${F(r.sel_toe.bar.db/2,4)} = \\boxed{${F(r.d_toe,3)}\\ \\text{in}}`,'',
+    `d = t_f - c_c - \\frac{d_b}{2} = ${F(inp.tf,1)} - ${F(r.cov_bot ?? inp.cov_ftg,2)} - ${F(r.sel_toe.bar.db/2,4)} = \\boxed{${F(r.d_toe,3)}\\ \\text{in}}`,'',
     [{sym:'t_f', desc:'footing thickness', val:F(inp.tf,1), unit:'in'},
-     {sym:'c_c', desc: r.pile ? 'bottom clear cover on piles = max(cover input, embedment + clear over the pile heads)' : 'bottom clear cover', val:F(r.cov_bot,2), unit:'in'},   // RWPL
+     {sym:'c_c', desc: r.pile ? 'bottom clear cover on piles = max(cover input, embedment + clear over the pile heads)' : 'bottom clear cover', val:F(r.cov_bot ?? inp.cov_ftg,2), unit:'in'},   // RWPL
      {sym:'d_b', desc:`diameter of the selected bar (#${r.sel_toe.bar.num})`, val:F(r.sel_toe.bar.db,3), unit:'in'},   // RWDB (2026-11-02): was a fixed '#7, 0.875'
      {sym:'d', desc:'effective depth to bottom steel', val:F(r.d_toe,3), unit:'in'}]);
   h += eq('Flexural resistance factor',
@@ -10331,7 +10469,9 @@ function rwrModel(r) {
         rwrS({ id: 'xRumin', label: 'Factored resultant location from the toe, minimum-vertical case', sym: '\\bar{x}_{u}', eq: '\\frac{M_{s,u} \\minus M_{o,u}}{\\sum V_{u}}', sub: '', value: r.x_Ru_min, unit: 'ft', d: 4 }),
         rwrS({ id: 'eumin', label: 'Factored eccentricity, minimum-vertical case', sym: 'e_{u}', eq: '\\frac{B}{2} \\minus \\bar{x}_{u}', sub: '\\frac{' + rwrN(r.B, 3) + '}{2} \\minus ' + rwrN(r.x_Ru_min, 4), value: r.e_u_min, unit: 'ft', d: 4 }),
         ...rwrTrap('min', r.SumVu_min, r.e_u_min, r.x_Ru_min, r.qu_toe_min, r.qu_heel_min, r.quf_front_min, r.quf_back_min, '\\sum V_{u}', ', minimum-vertical case')];
-      subs.push(sub('Step 7 — Factored bearing for footing design', [rwrItem('st7', [{ title: 'U = 1.2D + 1.6H (+ 1.0E)', ref: 'ACI 318-19 §5.3', steps: st }, { title: 'U = 0.9D + 1.6H (footing design envelope)', ref: 'ACI 318-19 §5.3', steps: sm }]), onTab('stabFactBrg')])); }
+      subs.push(sub('Step 7 — Factored bearing for footing design', [rwrItem('st7', [{ title: 'U = 1.2D + 1.6H (+ 1.0E)', ref: 'ACI 318-19 §5.3', steps: st }, { title: 'U = 0.9D + 1.6H (footing design envelope)', ref: 'ACI 318-19 §5.3', steps: sm }]),
+        r.upS ? { type: 'note', text: 'Water uplift: these are the total factored base pressures (soil + water). For the heel and toe design the uplift U = ' + rwrN(r.F_uplift, 0) + ' lb/ft is split out of them (ACI 318-19 §5.3.8: γ_U = 1.6 toe, 0.9 heel); see Footing, Heel Step 1 and Toe Step 1.' } : null,   // RWUP (2026-11-07)
+        onTab('stabFactBrg')])); }
     secs.push({ title: 'Stability analysis (service, unfactored)', subs, key: 'stab' });
   } else {
     const subs = [], E = a.ct ? a.ct.ee2 : null;
@@ -10582,12 +10722,16 @@ function rwrModel(r) {
   /* ---------- 5. Footing ---------- */
   {
     const subs = [], down = r.Mu_heel_net >= 0, fk = x => rwrN(x / 1000, 3), phiF = isA ? '0.90' : '0.75';
+    const upR = (up, mem) => up ? rwUpSteps(r, up, mem).map(o => rwrS(Object.assign({}, o, { id: 'u' + o.id, ref: o.id === 'Vs' ? 'ACI 318-19 §5.3.8' : '' }))) : null;   // RWUP
+    const upHr = upR(r.hcG_up, 'heel'), upTr = upR(r.tcG_up, 'toe');
     const H1 = [rwrS({ id: 'wu', label: 'Factored downward load, uniform over the heel (' + (r.heel_min_governs ? (isA ? 'Strength Ia' : 'U = 0.9D + 1.6H') : (isA ? 'Strength I' : 'U = 1.2D + 1.6H')) + ' governs case A)', sym: 'w_{u}', eq: isA ? rwrN(r.gHeel[0], 2) + '\\,w_{EV} + ' + rwrN(r.gHeel[1], 2) + '\\gamma_{c} t_{f} + ' + rwrN(r.gHeel[2], 2) + '\\,q_{s} + ' + rwrN(r.gHeel[3], 2) + '\\,q_{LS}' : rwrN(r.gHeel[0], 1) + '(w_{EV} + \\gamma_{c} t_{f}) + ' + rwrN(r.gHeel[2], 1) + '\\,q_{s}', sub: 'w_{EV} = ' + rwrN(r.w_soil_col, 1) + ',\\; \\gamma_{c} t_{f} = ' + rwrN(inp.gamma_c * r.tf_ft, 1), value: r.wu_heel, unit: 'psf', d: 1 }),
+      ...(upHr ? upHr.filter(o => !/^uM/.test(o.id)) : [   // RWUP (2026-11-07): water uplift split out (ACI)
       rwrS({ id: 'q0', label: 'Factored upward bearing at the stem face', sym: 'q_{u}(0)', eq: 'q_{u,back}', sub: '', value: r.q0h, unit: 'psf', d: 1, note: '' }),
-      rwrS({ id: 'qL', label: 'Factored upward bearing at the heel tip', sym: 'q_{u}(L_{h})', eq: 'q_{u,heel}', sub: '', value: r.qLh, unit: 'psf', d: 1 })];
+      rwrS({ id: 'qL', label: 'Factored upward bearing at the heel tip', sym: 'q_{u}(L_{h})', eq: 'q_{u,heel}', sub: '', value: r.qLh, unit: 'psf', d: 1 })])];
     const H2 = [rwrS({ id: 'Md', label: 'Moment of the downward load about the back face', sym: 'M_{down}', eq: '\\frac{w_{u} L_{h}^{2}}{2}', sub: '\\frac{(' + rwrN(r.wu_heel, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{2}', value: r.Md_heel, unit: 'lb-ft/ft', d: 1 }),
-      rwrS({ id: 'Mup', label: 'Moment of the upward bearing about the back face (trapezoid)', sym: 'M_{up}', eq: '\\frac{q_{0} L_{h}^{2}}{2} + \\frac{(q_{L} \\minus q_{0})L_{h}^{2}}{3}', sub: '\\frac{(' + rwrN(r.q0h, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{2} + \\frac{(' + rwrN(r.qLh, 1) + ' \\minus ' + rwrN(r.q0h, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{3}', value: r.Mu_heel_up, unit: 'lb-ft/ft', d: 1 }),
-      rwrS({ id: 'MA', label: 'Case A, standard: net moment (upward relief credited)', sym: 'M_{u,A}', eq: 'M_{down} \\minus M_{up}', sub: rwrN(r.Md_heel, 1) + ' \\minus ' + rwrN(r.Mu_heel_up, 1), value: r.Mu_heel_std / 1000, unit: 'kip-ft/ft', d: 3, note: 'V_u,A = |w_u L_h − (q_0 + q_L)/2 · L_h| = ' + fk(r.Vu_heel_std) + ' kip/ft' }),
+      ...(upHr ? upHr.filter(o => /^uM/.test(o.id)) : []),   // RWUP
+      ...(upHr ? [] : [rwrS({ id: 'Mup', label: 'Moment of the upward bearing about the back face (trapezoid)', sym: 'M_{up}', eq: '\\frac{q_{0} L_{h}^{2}}{2} + \\frac{(q_{L} \\minus q_{0})L_{h}^{2}}{3}', sub: '\\frac{(' + rwrN(r.q0h, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{2} + \\frac{(' + rwrN(r.qLh, 1) + ' \\minus ' + rwrN(r.q0h, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{3}', value: r.Mu_heel_up, unit: 'lb-ft/ft', d: 1 })]),
+      rwrS({ id: 'MA', label: 'Case A, standard: net moment (upward relief credited)', sym: 'M_{u,A}', eq: 'M_{down} \\minus M_{up}', sub: rwrN(r.Md_heel, 1) + ' \\minus ' + rwrN(r.Mu_heel_up, 1), value: r.Mu_heel_std / 1000, unit: 'kip-ft/ft', d: 3, note: 'V_u,A = |w_u L_h − ' + (upHr ? 'F_up' : '(q_0 + q_L)/2 · L_h') + '| = ' + fk(r.Vu_heel_std) + ' kip/ft' + (upHr ? ' (larger of the two combinations)' : '') }),
       rwrS({ id: 'MB', label: 'Case B, no upward relief: full factored downward cantilever', sym: 'M_{u,B}', eq: 'M_{down}', sub: '', value: r.Mu_heel_nr / 1000, unit: 'kip-ft/ft', d: 3, note: 'V_u,B = w_u L_h = ' + fk(r.Vu_heel_nr) + ' kip/ft' })];
     if (r.useMassDOTFtg) H2.push(rwrS({ id: 'MMD', label: 'MassDOT §3.3.2.2 heel top steel: DL only, no upward relief (γ = φ = 1.0)' + (r.heel_md_governs ? ', governs' : ', does not govern'), sym: 'M_{u,MD}', eq: '\\frac{w_{DL} L_{h}^{2}}{2}', sub: '\\frac{(' + rwrN(inp.gamma_s * inp.Hs + inp.gamma_c * r.tf_ft, 1) + ')(' + rwrN(inp.Lh, 2) + ')^{2}}{2}', value: r.Mu_heel_md, unit: 'lb-ft/ft', d: 1, ref: 'MassDOT LRFD Bridge Manual §3.3.2.2' }));
     H2.push(rwrS({ id: 'Mu', label: 'Design moment at the stem face, basis ' + ({ std: 'standard', norelief: 'no upward relief', envelope: 'envelope' }[r.heelBasis] || 'standard') + (r.heel_md_governs ? ' (MassDOT governs)' : '') + ' (' + (down ? 'top' : 'bottom') + ' bars)', sym: 'M_{u}', eq: '', sub: '', value: r.Mu_heel_net, unit: 'lb-ft/ft', d: 1 }),
@@ -10615,12 +10759,15 @@ function rwrModel(r) {
     subs.push(sub('Heel: cantilever from the back face (L_h = ' + rwrN(inp.Lh, 2) + ' ft)', [rwrItem('heel', [
       { title: 'Heel Step 1 — Factored loads', steps: pre('h1', H1) }, { title: 'Heel Step 2 — Design moment and shear at the face of the stem', steps: pre('h2', H2) },
       { title: 'Heel Step 3 — Flexural steel (' + (down ? 'top' : 'bottom') + ' face)', ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5', steps: pre('h3', H3) },
-      { title: 'Heel Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('h4', H4) }], { title: 'Heel' }), { type: 'note', text: 'q_u,back and q_u,heel: ' + (isA ? '[[saf/quback]], [[saf/quheel]] (Strength Ia: [[saf/qubackIa]])' : '[[st7/quback]], [[st7/quheel]] (minimum-vertical case: [[st7/qubackmin]])') + '; ' + (r.heel_min_governs ? 'the minimum-vertical case governs the heel.' : 'the maximum-vertical case governs the heel.') },
+      { title: 'Heel Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('h4', H4) }], { title: 'Heel' }), { type: 'note', text: (upHr ? 'ΣV_u and its moment: [[st7/SumVu]], [[st7/SumVumin]] (the water uplift is split out in Heel Step 1, ACI 318-19 §5.3.8)' : 'q_u,back and q_u,heel: ' + (isA ? '[[saf/quback]], [[saf/quheel]] (Strength Ia: [[saf/qubackIa]])' : '[[st7/quback]], [[st7/quheel]] (minimum-vertical case: [[st7/qubackmin]])')) + '; ' + (r.heel_min_governs ? 'the minimum-vertical case governs the heel.' : 'the maximum-vertical case governs the heel.') },
       { type: 'note', text: 'Serviceability (crack control) uses the unfactored no-relief moment.' }, onTab('heelFlex', 'Footing design tab, Heel (shear and moment diagrams)')]));
     const sT = r.sel_toe, T1 = [rwrS({ id: 'wsw', label: 'Factored self-weight of the footing (downward)' + (r.toe_min_governs ? '; bearing from ' + (isA ? 'Strength Ia' : 'U = 0.9D + 1.6H') + ' governs the toe' : ''), sym: 'w_{sw}', eq: '0.9\\,\\gamma_{c} t_{f}', sub: '0.9(' + rwrN(inp.gamma_c, 0) + ')(' + rwrN(r.tf_ft, 3) + ')', value: r.wu_toe_down, unit: 'psf', d: 1 }),
-      rwrS({ id: 'q0', label: 'Net upward pressure at the front face', sym: 'q_{net}(0)', eq: 'q_{u,front} \\minus w_{sw}', sub: '', value: r.net_q0t, unit: 'psf', d: 1, }),
-      rwrS({ id: 'qL', label: 'Net upward pressure at the toe tip', sym: 'q_{net}(L_{t})', eq: 'q_{u,toe} \\minus w_{sw}', sub: '', value: r.net_qLt, unit: 'psf', d: 1 })];
-    const T2 = [rwrS({ id: 'Mu', label: 'Design moment about the front face (tension on the bottom)', sym: 'M_{u}', eq: '\\frac{q_{0} L_{t}^{2}}{2} + \\frac{(q_{L} \\minus q_{0})L_{t}^{2}}{3}', sub: '\\frac{(' + rwrN(r.net_q0t, 1) + ')(' + rwrN(inp.Lt, 2) + ')^{2}}{2} + \\frac{(' + rwrN(r.net_qLt, 1) + ' \\minus ' + rwrN(r.net_q0t, 1) + ')(' + rwrN(inp.Lt, 2) + ')^{2}}{3}', value: r.Mu_toe_net, unit: 'lb-ft/ft', d: 1 }),
+      ...(upTr ? upTr.filter(o => !/^uM/.test(o.id)) : []),   // RWUP
+      rwrS({ id: 'q0', label: 'Net upward pressure at the front face', sym: 'q_{net}(0)', eq: (upTr ? 'q(0)' : 'q_{u,front}') + ' \\minus w_{sw}', sub: '', value: r.net_q0t, unit: 'psf', d: 1, }),
+      rwrS({ id: 'qL', label: 'Net upward pressure at the toe tip', sym: 'q_{net}(L_{t})', eq: (upTr ? 'q(L_{t})' : 'q_{u,toe}') + ' \\minus w_{sw}', sub: '', value: r.net_qLt, unit: 'psf', d: 1 })];
+    const T2 = upTr ? [...upTr.filter(o => /^uM/.test(o.id)),   // RWUP (2026-11-07): water uplift split out (ACI)
+      rwrS({ id: 'Mu', label: 'Design moment about the front face (tension on the bottom)', sym: 'M_{u}', eq: 'M_{up} \\minus \\frac{w_{sw} L_{t}^{2}}{2}', sub: rwrN(r.tcG_up.M, 1) + ' \\minus \\frac{(' + rwrN(r.wu_toe_down, 1) + ')(' + rwrN(inp.Lt, 2) + ')^{2}}{2}', value: r.Mu_toe_net, unit: 'lb-ft/ft', d: 1 }),
+      rwrS({ id: 'Vu', label: 'Design shear at the front face (larger of the two combinations)', sym: 'V_{u}', eq: 'F_{up} \\minus w_{sw} L_{t}', sub: '', value: r.Vu_toe, unit: 'lb/ft', d: 1 })] : [rwrS({ id: 'Mu', label: 'Design moment about the front face (tension on the bottom)', sym: 'M_{u}', eq: '\\frac{q_{0} L_{t}^{2}}{2} + \\frac{(q_{L} \\minus q_{0})L_{t}^{2}}{3}', sub: '\\frac{(' + rwrN(r.net_q0t, 1) + ')(' + rwrN(inp.Lt, 2) + ')^{2}}{2} + \\frac{(' + rwrN(r.net_qLt, 1) + ' \\minus ' + rwrN(r.net_q0t, 1) + ')(' + rwrN(inp.Lt, 2) + ')^{2}}{3}', value: r.Mu_toe_net, unit: 'lb-ft/ft', d: 1 }),
       rwrS({ id: 'Vu', label: 'Design shear at the front face', sym: 'V_{u}', eq: '\\frac{q_{0} + q_{L}}{2}\\,L_{t}', sub: '\\frac{' + rwrN(r.net_q0t, 1) + ' + ' + rwrN(r.net_qLt, 1) + '}{2}(' + rwrN(inp.Lt, 2) + ')', value: r.Vu_toe, unit: 'lb/ft', d: 1 })];
     if (r.heelPile && r.toePile) {   // RWPL (2026-11-07, Phase 8d): the factored pile-row reactions replace the bearing trapezoid
       const rowsS = (L, sym) => L.length ? L.map(rw => '(' + rwrN(rw.q, 1) + ')(' + rwrN(rw.a, 3) + ')').join(' + ') : '0';
@@ -10632,7 +10779,7 @@ function rwrModel(r) {
       T2.splice(0, 2, rwrS({ id: 'Mu', label: 'Design moment about the front face (tension on the bottom)', sym: 'M_{u}', eq: '\\sum q_{i} a_{i} \\minus \\frac{w_{sw} L_{t}^{2}}{2}', sub: rowsS(tp.rows) + ' \\minus \\frac{(' + rwrN(r.wu_toe_down, 1) + ')(' + rwrN(inp.Lt, 2) + ')^{2}}{2}', value: r.Mu_toe_net, unit: 'lb-ft/ft', d: 1 }),
         rwrS({ id: 'Vu', label: 'Design shear at the front face', sym: 'V_{u}', eq: '\\sum q_{i} \\minus w_{sw} L_{t}', sub: rwrN(tp.Vup, 1) + ' \\minus (' + rwrN(r.wu_toe_down, 1) + ')(' + rwrN(inp.Lt, 2) + ')', value: r.Vu_toe, unit: 'lb/ft', d: 1 }));
     }
-    const T3 = [rwrS({ id: 'd', label: 'Effective depth' + (r.pile ? ' (bottom cover on piles = max(c_c, embedment + clear))' : ''), sym: 'd', eq: 't_{f} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(r.cov_bot, 2) + ' \\minus ' + rwrN(sT.bar.db / 2, 4), value: r.d_toe, unit: 'in', d: 3 })]
+    const T3 = [rwrS({ id: 'd', label: 'Effective depth' + (r.pile ? ' (bottom cover on piles = max(c_c, embedment + clear))' : ''), sym: 'd', eq: 't_{f} \\minus c_{c} \\minus \\frac{d_{b}}{2}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(r.cov_bot ?? inp.cov_ftg, 2) + ' \\minus ' + rwrN(sT.bar.db / 2, 4), value: r.d_toe, unit: 'in', d: 3 })]
       .concat(flexF(r.Mu_toe_in, r.d_toe, r.Rn_toe, r.As_toe_req, r.As_t_min, r.As_toe_des, sT, 'F2', ok('toeFlex'), r.toe_overstressed));
     const T4 = vcF(r.shearToe, r.Vc_toe, r.d_toe).concat([
       rwrS({ id: 'phiVc', label: 'Design shear resistance', sym: '\\phi V_{c}', eq: phiF + '\\,V_{c}', sub: phiF + '(' + rwrN(r.Vc_toe, 0) + ')', value: r.phiVc_toe, unit: 'lb/ft', d: 0 }),
@@ -10645,7 +10792,7 @@ function rwrModel(r) {
     subs.push(sub('Toe: cantilever from the front face (L_t = ' + rwrN(inp.Lt, 2) + ' ft)', [rwrItem('toe', [
       { title: 'Toe Step 1 — Net upward load', steps: pre('t1', T1) }, { title: 'Toe Step 2 — Design moment and shear at the front face', steps: pre('t2', T2) },
       { title: 'Toe Step 3 — Flexural steel (bottom face)', ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5', steps: pre('t3', T3) },
-      { title: 'Toe Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('t4', T4) }], { title: 'Toe' }), { type: 'note', text: 'q_u,front and q_u,toe: ' + (isA ? '[[saf/qufront]], [[saf/qutoe]] (Strength Ia: [[saf/qufrontIa]])' : '[[st7/qufront]], [[st7/qutoe]] (minimum-vertical case: [[st7/qufrontmin]])') + '; ' + (r.toe_min_governs ? 'the minimum-vertical case governs the toe.' : 'the maximum-vertical case governs the toe.') },
+      { title: 'Toe Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('t4', T4) }], { title: 'Toe' }), { type: 'note', text: (upTr ? 'ΣV_u and its moment: [[st7/SumVu]], [[st7/SumVumin]] (the water uplift is split out in Toe Step 1, ACI 318-19 §5.3.8)' : 'q_u,front and q_u,toe: ' + (isA ? '[[saf/qufront]], [[saf/qutoe]] (Strength Ia: [[saf/qufrontIa]])' : '[[st7/qufront]], [[st7/qutoe]] (minimum-vertical case: [[st7/qufrontmin]])')) + '; ' + (r.toe_min_governs ? 'the minimum-vertical case governs the toe.' : 'the maximum-vertical case governs the toe.') },
       onTab('toeFlex', 'Footing design tab, Toe')]));
     const L = [isA ? rwrS({ id: 'As', label: 'Required temperature and shrinkage steel, per face (b = footing width ' + rwrN(r.b_TS_ftg, 0) + ' in)', sym: 'A_{s,TS}', eq: '\\frac{1.30\\,b\\,h}{2(b + h)f_{y}},\\; 0.11 \\le A_{s} \\le 0.60', sub: '\\frac{1.30(' + rwrN(r.b_TS_ftg, 0) + ')(' + rwrN(inp.tf, 1) + ')}{2(' + rwrN(r.b_TS_ftg, 0) + ' + ' + rwrN(inp.tf, 1) + ')(' + rwrN(r.fy_TS, 0) + ')}', value: r.As_ftg_long, unit: 'in^{2}/ft', d: 4, ref: AA('Eq. 5.10.6-1') })
       : rwrS({ id: 'As', label: 'Required temperature and shrinkage steel', sym: 'A_{s,TS}', eq: '0.0018\\,b\\,t_{f}', sub: '0.0018(12)(' + rwrN(inp.tf, 1) + ')', value: r.As_ftg_long, unit: 'in^{2}/ft', d: 4, ref: 'ACI 318-19 §24.4.3.2' }),
@@ -10671,7 +10818,7 @@ function rwrModel(r) {
     }
     if (r.pilePunch) {   // RWPL 8d: punching around the piles
       const pp = r.pilePunch, g = pp.gov;
-      const PS = [rwrS({ id: 'dp', label: 'Depth over the pile heads', sym: 'd_{p}', eq: 't_{f} \\minus c_{bot} \\minus d_{b}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(r.cov_bot, 2) + ' \\minus ' + rwrN(r.sel_toe.bar.db, 3), value: pp.dp, unit: 'in', d: 2 }),
+      const PS = [rwrS({ id: 'dp', label: 'Depth over the pile heads', sym: 'd_{p}', eq: 't_{f} \\minus c_{bot} \\minus d_{b}', sub: rwrN(inp.tf, 1) + ' \\minus ' + rwrN(r.cov_bot ?? inp.cov_ftg, 2) + ' \\minus ' + rwrN(r.sel_toe.bar.db, 3), value: pp.dp, unit: 'in', d: 2 }),
         rwrS({ id: 'a', label: 'Critical section side, pile as the square of equal area at ' + (isA ? 'd_v/2' : 'd/2') + ' from its face', sym: 'a', eq: 'D_{eq} + ' + (isA ? 'd_{v}' : 'd'), sub: rwrN(pp.Deq, 2) + ' + ' + rwrN(pp.dc, 2), value: pp.a, unit: 'in', d: 2 }),
         rwrS({ id: 'bo', label: 'Perimeter, governing row ' + (g.i + 1) + ' (' + g.loc + ')', sym: 'b_{o}', eq: g.strip ? 's' : (g.cut ? 'a + 2(e + a/2)' : '4a'), sub: g.strip ? rwrN(g.S, 1) : (g.cut ? rwrN(g.a, 2) + ' + 2(' + rwrN(g.ex, 2) + ' + ' + rwrN(g.a / 2, 2) + ')' : '4(' + rwrN(g.a, 2) + ')'), value: g.bo, unit: 'in', d: 1 }),
         isA ? rwrS({ id: 'Vc', label: 'Two-way shear resistance (Eq. 5.12.8.6.3-1, β_c = 1)', sym: '\\phi V_{n}', eq: '0.90(0.126)\\sqrt{f\'_{c}}\\,b_{o} d_{v}', sub: '0.90(0.126)\\sqrt{' + rwrN(inp.fc / 1000, 2) + '}(' + rwrN(g.bo, 1) + ')(' + rwrN(pp.dvp, 2) + ')', value: g.phiVc / 1000, unit: 'kip', d: 2 })
