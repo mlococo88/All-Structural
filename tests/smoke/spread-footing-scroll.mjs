@@ -82,7 +82,7 @@ for (const [vw, vh] of [[1280, 800], [1366, 768], [1920, 1080]]) {
   console.log(`${vw}x${vh}  ${SRC.label}`);
   const { b, p, errs } = await open(vw, vh);
   try {
-    const tabs = await p.$$eval('#tabbar button', bs => bs.map(x => x.dataset.tab));
+    const tabs = await p.$$eval('#tabbar button', bs => bs.filter(x => !x.hidden).map(x => x.dataset.tab));   // SFWD: the Wall Design tab is hidden without a wall
     // 1 + 2: every tab, wheel down and back up in the output panel (beside the canvas / drawing), then the input panel
     for (const t of tabs) {
       await p.click(`#tabbar button[data-tab="${t}"]`); await p.waitForTimeout(800);
