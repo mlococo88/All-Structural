@@ -201,3 +201,8 @@ Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clea
 - Running: RW 2nd-review fixes; shared steps fallback renderer (KaTeX blocked) follow-up.
 - Open question to engineer: left summary panel in other apps?
 - Next: RW User Manual (Phase 6) after RW fixes.
+
+## Check-in 2026-11-07 13:14 UTC (8:14 AM ET) — engineer awake, giving RW feedback
+- Merged: RW 2nd-review #1134–#1144; γ_EH display #1146; KaTeX fallback #1145; plain text #1138.
+- Running (all on Retaining Wall Designer.html, merge-main discipline): (1) pile bottom mat at normal cover → pile input error → A3 PR-description corrections → User Manual; (2) stem projection above retained grade; (3) graphics: passive off to side, Analysis-diagram rebar as lines/dots correctly, Overview section clipped, overview check-summary blanks, drawings viewer fit, pile labels; (4) dedicated Piles output tab.
+- Open: tool-specific KaTeX calls outside shared code show raw TeX when CDN blocked (e.g. SF notes). Left summary panel in other apps — asked, unanswered.
