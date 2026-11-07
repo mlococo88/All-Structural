@@ -410,6 +410,7 @@ select option { background: #fff; color: var(--text); }
 .tbl .val { font-family: var(--mono); text-align: right; font-size: 12.5px; }
 .tbl .unit { font-size: 11.5px; color: var(--muted); text-align: left; width: 1%; white-space: nowrap; }
 .tbl .right { text-align: right; }
+.tbl tr.rwpt-ng td { background: var(--fail-dim); }   /* RWPT: a failing pile check */
 
 .chk-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -1701,6 +1702,7 @@ body.rwDashColl #rwDash { display: none; }
     <button class="tab-btn" data-tab="stability">Stability</button>
     <button class="tab-btn" data-tab="stem">Stem design</button>
     <button class="tab-btn" data-tab="footing">Footing design</button>
+    <button class="tab-btn" data-tab="piles" id="tabbtn-piles" style="display:none">Piles</button><!-- RWPT (2026-11-07): pile-supported footing only (rwPileUI) -->
     <button class="tab-btn" data-tab="rebar">Rebar schedule</button>
     <button class="tab-btn" data-tab="diagram">Analysis diagram</button>
     <button class="tab-btn" data-tab="threed">3D model</button>
@@ -1713,6 +1715,7 @@ body.rwDashColl #rwDash { display: none; }
     <div class="tab-panel" id="tab-stability"><div class="pending">Calculating stability…</div></div>
     <div class="tab-panel" id="tab-stem"><div class="pending">Calculating stem design…</div></div>
     <div class="tab-panel" id="tab-footing"><div class="pending">Calculating footing design…</div></div>
+    <div class="tab-panel" id="tab-piles"></div>
     <div class="tab-panel" id="tab-rebar"><div class="pending">Building rebar schedule…</div></div>
     <div class="tab-panel" id="tab-diagram"><div class="pending">Drawing analysis diagram…</div></div>
     <div class="tab-panel" id="tab-threed"><div class="pending">Building 3D model…</div></div>
@@ -1837,7 +1840,7 @@ function fmtEqTitle(title) {
 /* ---- D11 links (CLAUDE.md §6, 2026-10-18): a value quoted away from where it is worked links to that card.
    On screen: "Worked in: <value> → <Tab> · <card>" (opens the tab, scrolls to the card, flashes it).
    In the calculation report (retired 2026-11-02, RWRX) the same link read "<value>: see §n.k"; the Report tab links its own steps. ---- */
-const RW_TABNAME = { stability:'Stability', stem:'Stem design', footing:'Footing design', rebar:'Rebar schedule' };
+const RW_TABNAME = { stability:'Stability', stem:'Stem design', footing:'Footing design', piles:'Piles', rebar:'Rebar schedule' };   // RWPT: + piles
 // card key → [tab, card-title prefix on the ACI basis, on the AASHTO basis]; null = the card does not exist on that basis
 const RW_CARDS = {
   stabKa:      ['stability', 'Step 1 — Earth Pressure Coefficient', 'Step 1 — Earth Pressure Coefficient'],
@@ -1869,7 +1872,13 @@ const RW_CARDS = {
   ftgToeUp:    ['footing', 'Toe Step 1 — Net Upward Load', 'Toe Step 1 — Net Upward Load'],   // RWUP
   ftgEE:       ['footing', null, 'Heel and Toe — Extreme Event I / II Check'],   // RW2M1
   ftgKey:      ['footing', 'Shear Key — Structural Design', 'Shear Key — Structural Design'],   // RWSK   // RWBP (2026-11-06): link target of the bearing selector
-  stabPile:    ['stability', 'Pile Step 2 — Pile Reactions and Checks', 'Pile Step 2 — Pile Reactions and Checks'],   // RWPL
+  // RWPT (2026-11-07): the pile cards moved from the Stability tab to the Piles tab; the key stabPile is kept (every link to it follows)
+  stabPile:    ['piles', 'Pile Step 2 — Pile Reactions and Checks', 'Pile Step 2 — Pile Reactions and Checks'],   // RWPL
+  pileLay:     ['piles', 'Pile Layout', 'Pile Layout'],   // RWPT
+  pileGrp:     ['piles', 'Pile Step 1 — Pile Group', 'Pile Step 1 — Pile Group'],   // RWPT
+  pileCk:      ['piles', 'Pile Step 3 — Pile Checks', 'Pile Step 3 — Pile Checks'],   // RWPT
+  pilePD:      ['piles', 'Pile Designer Hand-off', 'Pile Designer Hand-off'],   // RWPT
+  stabPileSum: ['stability', 'Pile-Supported Footing — Summary', 'Pile-Supported Footing — Summary'],   // RWPT
   ftgPunch:    ['footing', 'Pile Cap — Punching around the Piles', 'Pile Cap — Punching around the Piles'],   // RWPL 8d
 };
 // r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
@@ -4116,7 +4125,7 @@ function calcAll(inp) {
   // soil + footing + q_s + γ_LS·LS down (γ = 1.0), the toe its own weight (γ = 1.0). Spread footings only (pile mode: a note).
   let eeFtg = null;
   if (isAASHTO && aashtoR && (aashtoR.ee1 || (aashtoR.ct && aashtoR.ct.ee2))) {
-    if (pileFtg) warnings.push('Pile-supported footing: the heel and toe are designed for Strength I only; Extreme Event I / II pile reactions (Stability tab, Pile Step 2) are not applied to the heel and toe. Check them by hand (AASHTO Art. 11.6.4).');   // RW2M1
+    if (pileFtg) warnings.push('Pile-supported footing: the heel and toe are designed for Strength I only; Extreme Event I / II pile reactions (Piles tab, Pile Step 2) are not applied to the heel and toe. Check them by hand (AASHTO Art. 11.6.4).');   // RW2M1
     else {
       const Q = aashtoR.ee1, E = aashtoR.ct && aashtoR.ct.ee2, cs = [];
       if (Q) [['c1', 'P_AE + 0.5P_IR'], ['c2', 'max(0.5P_AE, P_A) + P_IR']].forEach(([k, t]) => {
@@ -4344,6 +4353,10 @@ function rwPileUI() {
     const m = /pile-row-(\d)/.exec(e.className), show = pile && !(e.classList.contains('aci-only') && isA) && !(e.classList.contains('aashto-only') && !isA) && !(m && +m[1] > nr);
     e.style.display = show ? '' : 'none';
   });
+  // RWPT (2026-11-07): the Piles output tab is shown for a pile-supported footing only; leaving pile mode while it is open opens Stability
+  const tb = el('tabbtn-piles');
+  if (tb) { tb.style.display = pile ? '' : 'none';
+    if (!pile && tb.classList.contains('active')) { const sb = document.querySelector('.tab-btn[data-tab="stability"]'); if (sb) sb.click(); } }
 }
 function getInputs() {
   const n = id => parseFloat(document.getElementById(id).value) || 0;
@@ -5372,17 +5385,62 @@ function renderStabilityAASHTO(r) {
   el.innerHTML = h;
 }
 
-/* RWPL (2026-11-07, Phase 8c): in pile mode the Stability tab opens with the pile cards (group, reactions per combination, checks);
-   the soil cards below stay for the earth pressures and are marked "not applicable" where they check the soil. */
+/* RWPL (2026-11-07, Phase 8c): in pile mode the Stability tab marks the soil cards "not applicable" where they check the soil.
+   RWPT (2026-11-07): the pile cards (group, reactions per combination, checks) moved to the Piles tab (renderPiles); the Stability tab
+   keeps a summary card with links to them. Display only: every value is read from r.pile and r.checks. */
 function renderStability(r) {
   renderStabilitySoil(r);
   if (!r.fatal && r.pile && !r.pile.err) rwPileStability(r);
 }
 function rwPileStability(r) {
   const el = document.getElementById('tab-stability'); if (!el) return;
-  const P = r.pile, g = P.g, A = r.isAASHTO, F = (v, d = 2) => (isFinite(v) ? (+v).toFixed(d) : '—');
-  const rowsT = P.rows.map((rw, i) => { const n = 1 / rw.s, xp = rw.x - g.xbar; return `<tr><td>${i + 1}</td><td>${F(rw.x)}</td><td>${F(rw.s)}</td><td>${F(n, 4)}</td><td>${F(xp, 3)}</td><td>${F(n * xp * xp, 4)}</td></tr>`; }).join('');
+  const P = r.pile, g = P.g, F = (v, d = 2) => (isFinite(v) ? (+v).toFixed(d) : '—');
+  const K = ['pileComp', 'pileUplift', 'pileCapT', 'pileLat', 'pileSpacing', 'pileEdge', 'pileEmbed', 'pileCapD', 'pilePunch'].filter(k => r.checks[k]);
+  const nF = K.filter(k => !r.checks[k].ok).length;
+  const ln = (k, t) => rwLink(r, k, t);
   let h = `<div class="sec-heading">Pile-Supported Footing — Rigid Cap on Rows of Vertical Piles</div>`;
+  h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile-Supported Footing — Summary</span><span class="card-ref">worked on the Piles tab</span></div><div class="card-body">
+    <div style="overflow-x:auto"><table class="tbl"><tbody>
+      <tr><td class="lbl">Pile group (per ft of wall)</td><td class="right">${P.rows.length} rows · N = ${F(g.N, 4)} /ft · x̄ = ${F(g.xbar, 3)} ft from the toe</td></tr>
+      <tr><td class="lbl">Largest pile load (${P.govC.label})</td><td class="right">P<sub>max</sub> = ${F(P.govC.L.Pmax, 2)} kip · D/C ${F(P.govC.dcC, 3)}</td></tr>
+      <tr><td class="lbl">Smallest pile load</td><td class="right">P<sub>min</sub> = ${F(Math.min(...P.comb.map(c => c.L.Pmin)), 2)} kip${P.govT.L.Pmin < 0 ? ' (uplift; ' + P.govT.label + ')' : ' (no uplift)'}</td></tr>
+      <tr><td class="lbl">Lateral load per pile (${P.govH.label})</td><td class="right">h = H/N = ${F(P.govH.L.rows[0].h, 2)} kip · D/C ${F(P.govH.dcH, 3)}</td></tr>
+      <tr><td class="lbl">Pile checks</td><td class="right">${nF ? `<span class="badge fail">${nF} of ${K.length} FAIL</span>` : `<span class="badge pass">all ${K.length} PASS</span>`}</td></tr>
+    </tbody></table></div>
+    <div class="wkLink">Worked in: ${[ln('pileGrp', 'group'), ln('stabPile', 'reactions per combination'), ln('pileCk', 'all pile checks')].filter(Boolean).join(' · ')}</div></div></div>`;
+  el.insertAdjacentHTML('afterbegin', h);
+  // the soil checks do not apply in pile mode
+  const A = r.isAASHTO, na = A ? ['Step 4 — Sliding', 'Step 5 — Eccentricity', 'Step 6 — Bearing', 'Step 7a — Extreme Event I'] : ['Step 4 — Overturning', 'Step 5 — Sliding', 'Step 6 — Bearing', 'Step 7 — Factored Bearing'];
+  el.querySelectorAll('.card').forEach(c => { const t = c.querySelector('.card-title'); if (!t) return; const tt = t.textContent;
+    if (na.some(x => tt.startsWith(x)) || (A && /Stability under Collision/.test(tt))) {
+      c.style.opacity = '0.55'; c.querySelector('.card-hd').insertAdjacentHTML('afterend', '<div class="note" style="margin:8px 12px;font-weight:600">Not applicable: pile-supported footing. Shown for information only; the piles carry the wall (Piles tab, Pile Step 2).</div>'); } });
+}
+/* RWPT (2026-11-07): the Piles output tab (pile-supported footing only; the tab button is shown by rwPileUI). Display only: every
+   value is read from the results already computed (r.pile of rwPileAnalysis, r.checks, r.pilePunch, r.pxr) and from the Pile
+   Designer hand-off record; nothing is computed here but the presentation. Cards: Pile Layout; Pile Step 1 — Pile Group and Pile
+   Step 2 — Pile Reactions and Checks (moved unchanged from the Stability tab); Pile Step 3 — Pile Checks (every pile check with its
+   D/C and status, and where it is worked); Pile Designer Hand-off (status and the buttons of the Foundation card). */
+const RWPT_SHAPE = { hp: 'Steel H-pile', pipe: 'Steel pipe pile', square: 'Square precast concrete', round: 'Round (timber / cast-in-place)' };
+function renderPiles(r) {
+  const el = document.getElementById('tab-piles'); if (!el) return;
+  if (r.fatal) { el.innerHTML = rwInputErrHTML(r); return; }
+  if (!r.pile) { el.innerHTML = '<div class="note">Spread footing on soil: no piles. Set Foundation type to "Pile-supported footing" (Wall tab, Foundation) for this tab.</div>'; return; }
+  if (r.pile.err) { el.innerHTML = `<div class="alert fail">⚠ ${r.pile.err}</div>`; return; }
+  const P = r.pile, g = P.g, A = r.isAASHTO, inp = r.inp, Fd = inp.fnd, F = (v, d = 2) => (isFinite(v) ? (+v).toFixed(d) : '—');
+  let h = `<div class="sec-heading">Piles — Rigid Cap on Rows of Vertical Piles</div>`;
+  // ── Pile layout ──
+  const lay = P.rows.map((rw, i) => `<tr><td>${i + 1}</td><td class="val">${F(rw.x)}</td><td class="val">${F(r.B - rw.x)}</td><td class="val">${F(rw.s)}</td><td class="val">${F(1 / rw.s, 4)}</td></tr>`).join('');
+  const capRows = A ? [['Nominal compression R<sub>n</sub> · φ<sub>c</sub>', F(Fd.Rn, 1) + ' kip · ' + F(Fd.phic, 2)], ['Nominal uplift R<sub>n,up</sub> · φ<sub>up</sub>', F(Fd.Rnup, 1) + ' kip · ' + F(Fd.phiup, 2)], ['Factored lateral resistance H<sub>r</sub>', F(Fd.Hr, 1) + ' kip']]
+    : [['Allowable compression P<sub>a</sub>', F(Fd.Pa, 1) + ' kip'], ['Allowable uplift T<sub>a</sub>', F(Fd.Ta, 1) + ' kip'], ['Allowable lateral H<sub>a</sub>', F(Fd.Ha, 1) + ' kip']];
+  const dat = [['Pile type', (RWPT_SHAPE[P.shape] || P.shape) + ', vertical'], ['Designation', P.desig || '— (not entered)'], ['Pile width / diameter D', F(P.D, 1) + ' in'],
+    ['Embedment into the footing', F(P.embed, 1) + ' in'], ['Clear, pile top to the bottom bars', F(P.clr, 2) + ' in'],
+    ['Bottom cover of the footing bars', F(r.cov_bot, 2) + ' in = c<sub>c</sub> (the mat between the pile heads)'], ['Cover over the pile heads for punching', F(r.cov_ph, 2) + ' in = max(c<sub>c</sub>, embedment + clear)'], ['Footing (pile cap) B × t<sub>f</sub>', F(r.B, 2) + ' ft × ' + F(inp.tf, 1) + ' in'],
+    ...capRows, ['Passive in front of the toe', P.passive ? 'credited against H: ' + F(P.Hpass, 3) + ' kip/ft' : 'not credited (no passive, no base friction)']];
+  h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Layout</span><span class="card-ref">as entered · Wall tab, Foundation</span></div><div class="card-body">
+    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Row</th><th>x from toe (ft)</th><th>x from heel (ft)</th><th>s along wall (ft)</th><th>piles per ft (1/s)</th></tr></thead><tbody>${lay}</tbody></table></div>
+    <div style="overflow-x:auto;margin-top:10px"><table class="tbl"><tbody>${dat.map(([k, v]) => `<tr><td class="lbl">${k}</td><td class="right">${v}</td></tr>`).join('')}</tbody></table></div>
+    <div class="note">Rows of identical vertical piles, each row with its own spacing along the wall; one pile type per wall; no staggering. The footing acts as a rigid cap. Plan and schedule to scale: Drawings tab, pile layout sheet.</div></div></div>`;
+  const rowsT = P.rows.map((rw, i) => { const n = 1 / rw.s, xp = rw.x - g.xbar; return `<tr><td>${i + 1}</td><td>${F(rw.x)}</td><td>${F(rw.s)}</td><td>${F(n, 4)}</td><td>${F(xp, 3)}</td><td>${F(n * xp * xp, 4)}</td></tr>`; }).join('');
   h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Step 1 — Pile Group (per ft of wall)</span><span class="card-ref">rigid cap · identical vertical piles · shared/pile-group.js</span></div><div class="card-body">
     <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Row</th><th>x from toe (ft)</th><th>s along wall (ft)</th><th>n = 1/s (/ft)</th><th>x' = x − x̄ (ft)</th><th>n·x'² (ft²/ft)</th></tr></thead><tbody>${rowsT}</tbody></table></div>`
     + eq('1.1 Piles per ft and centroid', `N = \\sum \\frac{1}{s_i} = \\boxed{${F(g.N, 4)}\\ \\text{/ft}}, \\quad \\bar{x} = \\frac{\\sum n_i x_i}{N} = \\boxed{${F(g.xbar, 3)}\\ \\text{ft}}`, 'from the toe')
@@ -5398,12 +5456,53 @@ function rwPileStability(r) {
     + (r.checks.pileCapT ? `<div class="alert warn" style="margin:4px 0 8px;">\u26a0 <b>Pile\u2013cap tension (not designed): FAIL.</b> T = ${F(-P.govT.L.Pmin, 2)} kip per pile (${P.govT.label}); embedment ${F(P.det.embed, 1)} in. The uplift needs a designed pile-to-cap tension connection: embedded bars, strands or dowels developed into the cap and the pile's own tension capacity (${r.checks.pileCapT.ref}). Design it outside this tool (Pile Designer) and keep the record with the calculation.</div>` : '')   // RW2M3
     + eqCheck('2.4 Lateral', `h = \\frac{H}{N} = \\frac{${F(P.govH.H, 3)}}{${F(g.N, 4)}} = ${F(P.govH.L.rows[0].h, 2)} \\le ${P.govH.cap.hs} = ${F(P.govH.cap.h, 2)}\\ \\text{kip}`, r.checks.pileLat.ok, r.checks.pileLat.ref)
     + `<div class="note">Detailing: c-c spacing ${F(P.det.cc, 1)} in${P.det.ccMin ? ' (min. ' + F(P.det.ccMin, 1) + ' in)' : ''}; pile side to footing edge ${F(P.det.edge, 1)} in (min. ${F(P.det.edgeMin, 0)} in); embedment ${F(P.det.embed, 1)} in (min. ${F(P.det.embMin, 0)} in) — ${P.det.ref}.</div></div></div>`;
-  el.insertAdjacentHTML('afterbegin', h);
-  // the soil checks do not apply in pile mode
-  const na = A ? ['Step 4 — Sliding', 'Step 5 — Eccentricity', 'Step 6 — Bearing', 'Step 7a — Extreme Event I'] : ['Step 4 — Overturning', 'Step 5 — Sliding', 'Step 6 — Bearing', 'Step 7 — Factored Bearing'];
-  el.querySelectorAll('.card').forEach(c => { const t = c.querySelector('.card-title'); if (!t) return; const tt = t.textContent;
-    if (na.some(x => tt.startsWith(x)) || (A && /Stability under Collision/.test(tt))) {
-      c.style.opacity = '0.55'; c.querySelector('.card-hd').insertAdjacentHTML('afterend', '<div class="note" style="margin:8px 12px;font-weight:600">Not applicable: pile-supported footing. Shown for information only; the piles carry the wall (Pile Step 2).</div>'); } });
+  // ── Pile Step 3: every pile check ──
+  const CK = [['pileComp', 'stabPile'], ['pileUplift', 'stabPile'], ['pileCapT', 'stabPile'], ['pileLat', 'stabPile'], ['pileSpacing', 'stabPile'], ['pileEdge', 'stabPile'], ['pileEmbed', 'stabPile'], ['pileCapD', 'ftgPunch'], ['pilePunch', 'ftgPunch']];
+  const ckr = CK.filter(([k]) => r.checks[k]).map(([k]) => { const c = r.checks[k], ck = RW_CHECK_CARD[k] || 'stabPile';
+    return `<tr${c.ok ? '' : ' class="rwpt-ng"'}><td class="lbl">${c.label}</td><td class="right">${c.val || ''}</td><td class="val">${typeof c.dc === 'number' && isFinite(c.dc) ? F(c.dc, 3) : 'n/a'}</td><td class="right">${pf(c.ok)}</td><td style="font-size:12px">${c.ref || ''}</td><td style="font-size:12px">${rwLink(r, ck) || ''}</td></tr>`; }).join('');
+  h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Step 3 — Pile Checks</span><span class="card-ref">${A ? 'AASHTO LRFD 10th Ed. Sec. 10.7, Art. 5.12.8.6.3' : 'IBC 2018 §1810; ACI 318-19 §13.4.6.1, Table 22.6.5.2'}</span></div><div class="card-body">
+    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Check</th><th>Value</th><th>D/C</th><th>Status</th><th>Basis</th><th>Worked in</th></tr></thead><tbody>${ckr}</tbody></table></div>
+    <div class="note">The pile rows of the check summary (status bar), with the values computed in Pile Step 2 and, for punching and the cap depth, on the Footing design tab (Pile Cap — Punching around the Piles).${A ? '' : ' IBC 2018 has no minimum pile spacing (group effects, §1810.2.5): no spacing row in ACI / IBC mode.'}${r.checks.pileCapT ? ' The pile–cap tension row stays FAIL until the connection is designed (Pile Designer) and recorded with the calculation.' : ''}</div></div></div>`;
+  h += rwptHandoff(r);
+  el.innerHTML = h;
+}
+/* RWPT: the Pile Designer hand-off card: what was sent (channel foundationLoads, copy by.retwall) and whether it matches what the wall
+   sends now (content hash), what was pulled back (the saved record pile_pxr, its stale status r.pxr), the imported values with
+   Pile Designer's group reduction, and the same buttons as the Foundation card (rwpxSendOpen, rwpxPullOpen, rwpxImportFile, rwpxClear). */
+function rwptHandoff(r) {
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const F = (v, d = 2) => (typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—');
+  const when = typeof rwpxWhen === 'function' ? rwpxWhen : (x => String(x || '?'));
+  let cur = null; try { const b = typeof rwpxBuild === 'function' ? rwpxBuild(r, rwpxMeta()) : null; cur = b && b.p ? b.p.contentHash : null; } catch (e) { cur = null; }
+  const sent = typeof rwpxSent === 'function' ? rwpxSent() : null, rec = typeof rwpxRec === 'function' ? rwpxRec() : null, st = r.pxr;
+  const sentTxt = !sent ? 'Not sent from this browser.'
+    : 'Sent ' + esc(when(sent.producedAt)) + (sent.contentHash ? ' (content ' + esc(sent.contentHash) + ')' : '') + ': '
+      + (sent.contentHash && cur ? (sent.contentHash === cur ? '<b style="color:var(--pass)">matches</b> what the wall sends now.' : '<b style="color:var(--fail)">differs</b> from what the wall sends now (content ' + esc(cur) + '): send again.') : 'cannot be compared.');
+  const stc = !st ? '' : st.status === 'stale' ? 'var(--fail)' : st.status === 'current' ? 'var(--pass)' : 'var(--warn)';
+  let recTxt = 'No Pile Designer results pulled.';
+  const rows = [];
+  if (rec) {
+    recTxt = 'Pulled ' + esc(when(rec.producedAt)) + ' from ' + esc(rec.producer || '?') + (rec.via === 'file' ? ' (file)' : '') + ': <b style="color:' + stc + '">' + esc(st ? st.status.toUpperCase() : '—') + '</b>' + (st ? ' (' + esc(st.why) + ')' : '') + '.';
+    const geo = rec.geo || {}, fl = rec.fields || {};
+    const red = (id, raw) => { const v = parseFloat(fl[id]); return isFinite(v) && typeof raw === 'number' && raw > 0 ? v / raw : null; };
+    if ('pile_Rn' in fl) { const q = red('pile_Rn', geo.Rn); rows.push(['R<sub>n</sub> (compression)', F(geo.Rn, 1) + ' kip', esc(fl.pile_Rn) + ' kip', q != null && Math.abs(q - 1) > 1e-6 ? '× ' + F(q, 3) + ' (Pile Designer group reduction)' : 'none']); }
+    if ('pile_phic' in fl) rows.push(['φ<sub>c</sub>', F(geo.phi, 2), esc(fl.pile_phic), '']);
+    if ('pile_Rnup' in fl) { const q = red('pile_Rnup', geo.RnUp); rows.push(['R<sub>n,up</sub> (uplift)', F(geo.RnUp, 1) + ' kip', esc(fl.pile_Rnup) + ' kip', q != null && Math.abs(q - 1) > 1e-6 ? '× ' + F(q, 3) + ' (Pile Designer group uplift reduction)' : 'none']); }
+    if ('pile_phiup' in fl) rows.push(['φ<sub>up</sub>', F(geo.phiUp, 2), esc(fl.pile_phiup), '']);
+  }
+  const imp = rows.length ? `<div style="overflow-x:auto;margin-top:8px"><table class="tbl"><thead><tr><th>Imported input</th><th>Pile Designer (single pile)</th><th>Set in the wall</th><th>Group reduction</th></tr></thead><tbody>${rows.map(q => '<tr>' + q.map((c, i) => `<td${i ? ' class="right"' : ' class="lbl"'}>${c}</td>`).join('') + '</tr>').join('')}</tbody></table></div>`
+    + (st && st.status === 'stale' ? '<div class="note" style="color:var(--fail)">While STALE the calculation uses the values held before the import (the inputs still show the imported values).</div>' : '')
+    : (rec ? '<div class="note">No input imported (reference only' + (r.isAASHTO ? '' : ': ACI / IBC mode keeps the allowable capacities as entered') + ').</div>' : '');
+  const cs = rec && rec.cases && rec.cases.length ? `<div style="overflow-x:auto;margin-top:8px"><table class="tbl"><thead><tr><th>Pile Designer case (pulled)</th><th>P (kip)</th><th>V (kip)</th><th>M<sub>max</sub> p-y (kip-ft)</th><th>Checks</th></tr></thead><tbody>${rec.cases.map(c => `<tr><td class="lbl">${esc(c.name)}</td><td class="val">${F(c.P, 1)}</td><td class="val">${F(c.V, 2)}</td><td class="val">${F(c.M, 1)}</td><td class="right">${c.pass === true ? pf(true) : c.pass === false ? pf(false) : '—'}</td></tr>`).join('')}</tbody></table></div>` : '';
+  return `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Designer Hand-off</span><span class="card-ref">HANDOFF.md §4.6 / §4.10 · channels foundationLoads, pileResults</span></div><div class="card-body">
+    <div style="overflow-x:auto"><table class="tbl"><tbody><tr><td class="lbl">Loads sent</td><td>${sentTxt}</td></tr><tr><td class="lbl">Results received</td><td>${recTxt}</td></tr></tbody></table></div>${imp}${cs}
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+      <button type="button" class="btn" onclick="rwpxSendOpen()" title="Send the pile combinations, a wall segment of the pile rows and the per-pile governing loads to Pile Designer (channel foundationLoads)">Send to Pile Designer</button>
+      <button type="button" class="btn" onclick="rwpxPullOpen()" title="Pull Pile Designer's results (channel pileResults): R_n and φ, and per combination its p-y results; with the stale check">Pull pile results</button>
+      <label class="btn" style="cursor:pointer" title="Import a pile-results hand-off file exported by Pile Designer">Import pile results (JSON)<input type="file" accept=".json,application/json" style="display:none" onchange="rwpxImportFile(this)"></label>
+      ${rec ? '<button type="button" class="btn" onclick="rwpxClear()" title="Clear the Pile Designer results record (the imported input values stay)">Clear results record</button>' : ''}
+    </div>
+    <div class="note">The same buttons as the Foundation card (Wall tab). The pile-to-cap tension connection, the pile length and its structural design are by Pile Designer / the engineer.</div></div></div>`;
 }
 function renderStabilitySoil(r) {
   const el = document.getElementById('tab-stability');
@@ -7393,6 +7492,7 @@ function onInputChange() {
   renderStability(r);
   renderStem(r);
   renderFooting(r);
+  renderPiles(r);   // RWPT
   renderRebar(r);
   renderDiagram(r);
   // 3D view rebuilds only when its tab is visible (perf)
@@ -9722,7 +9822,7 @@ const RW_REFS = {
 };
 // a result tab's HTML, built by its own render function into a stand-in element (the live tab is untouched)
 function rwTabSource(tab, r) {
-  const fn = { stability: renderStability, stem: renderStem, footing: renderFooting, rebar: renderRebar }[tab];
+  const fn = { stability: renderStability, stem: renderStem, footing: renderFooting, piles: renderPiles, rebar: renderRebar }[tab];   // RWPT: + piles
   const live = document.getElementById('tab-' + tab);
   const tmp = document.createElement('div');
   live.id = 'tab-' + tab + '--live';
@@ -10152,7 +10252,7 @@ function rw3TitlePile(r, S, unit) {
       + `<div class="c3d-sign">Check: Σγ·V of the arrows = ${f(X.V, 0)} lb/ft vs V = ${f(c.V, 0)} lb/ft ${okV ? '✓' : '✗'}; Σγ·M about the toe = ${f(X.M, 0)} vs V·x_R = ${f(c.V * c.xR, 0)} lb·ft/ft ${okM ? '✓' : '✗'}.</div>`;
   }
   else what = `${S.gov ? '<b>Governing</b> pile compression combination: ' : ''}${cmb}: pile reactions per row (kip per pile) as the pile analysis computes them${r.isAASHTO ? ' (factored)' : ' (service loads)'}; <b>load arrows: unfactored</b>, the load cases${S.F ? ' (choose Factored to see them × this combination\'s load factors)' : ' (no factor map for this combination: the arrows stay unfactored)'}.`;
-  return `<div>${what}</div><div class="c3d-sign">${unit} ${sign} Worked on the Stability tab (<a class="wkA" href="#" data-card="stabPile">pile reactions</a>).</div>`;
+  return `<div>${what}</div><div class="c3d-sign">${unit} ${sign} Worked on the Piles tab (<a class="wkA" href="#" data-card="stabPile">pile reactions</a>).</div>`;
 }
 // label sprite: fixed pixel size, faces the camera, never hidden by geometry or the section cut
 function rw3Label(g, txt, anchor, color) {
@@ -11325,13 +11425,17 @@ function rwrModel(r) {
         cmb(q.c), cmb(q.t), PS.h ? N(PS.h.h, 2) + ' / ' + N(PS.h.cap, 2) + ' (' + PS.h.n + ')' : '–']);
       const cap = isA ? 'factored resistance' : 'allowable';
       subs.push(sub('Pile schedule', [{ type: 'table', wide: true, caption: 'Pile schedule (per pile row; loads per pile, kip)', head: ['Row', 'x from the toe (ft)', 'Spacing s (ft)', 'Piles per ft', PS.Lseg ? 'Piles in ' + N(PS.Lseg, 1) + ' ft' : 'Piles per segment', 'Pile', 'Embedment (in)', 'Compression P / ' + cap + ' (comb.)', 'Uplift T / ' + cap + ' (comb.)', 'Lateral h / ' + cap + ' (comb.)'], rows: prow },
-        { type: 'note', text: 'Combinations: ' + PS.combs.map(c => '(' + c.n + ') ' + c.label).join('; ') + '. For each row the combination with the largest load-to-capacity ratio is shown; the lateral load h = H/N is the same on every pile. Every value is worked in Pile Step 2 (above; on screen: Stability tab, Pile Step 2).' },
+        { type: 'note', text: 'Combinations: ' + PS.combs.map(c => '(' + c.n + ') ' + c.label).join('; ') + '. For each row the combination with the largest load-to-capacity ratio is shown; the lateral load h = H/N is the same on every pile. Every value is worked in Pile Step 2 (above; on screen: Piles tab, Pile Step 2).' },
         { type: 'note', text: PS.Lseg ? 'Piles per segment: one joint segment of ' + N(PS.Lseg, 1) + ' ft (the collision input), the first pile s/2 from the joint, then every s (as drawn on the Drawings, sheet 5).' : 'The wall length is not in the model: piles per ft only; the Drawings (sheet 5) show a typical segment at a nominal length.' },
         { type: 'note', text: '[[tab:drawings|On screen: Drawings tab, sheet 5 (pile layout plan and pile schedule)]]' }]));
     }
     CK.pileComp = 'pl2/comp'; CK.pileUplift = 'pl2/upl'; CK.pileCapT = 'pl2/capT'; CK.pileLat = 'pl2/latdc';
+    // RWPT (2026-11-07): Pile Step 3 — every pile check, as the Piles tab (values, D/C and status from r.checks; "see §" to where it is worked)
+    { const K = ['pileComp', 'pileUplift', 'pileCapT', 'pileLat', 'pileSpacing', 'pileEdge', 'pileEmbed', 'pileCapD', 'pilePunch'].filter(k => r.checks[k]);
+      const prow = K.map(k => { const c = r.checks[k]; return { cells: [rwrPlain(c.label), c.val != null ? rwrPlain(c.val) : '—', { t: (typeof c.dc === 'number' && isFinite(c.dc)) ? rwrN(c.dc, 3) : 'n/a', n: true }, rwrPlain(c.ref || ''), { t: c.ok ? 'PASS' : 'FAIL', cls: c.ok ? 'ok' : 'ng' }, CK[k] ? { t: '', key: CK[k] } : (/^pile(Spacing|Edge|Embed)$/.test(k) ? 'Pile Step 2 (detailing)' : '—')], cls: c.ok ? '' : 'gov' }; });
+      subs.push(sub('Pile Step 3 — Pile checks', [{ type: 'table', wide: true, head: ['Check', 'Value', 'D/C', 'Basis', 'Status', 'Worked in'], rows: prow }, onTab('pileCk')])); }
     const iS = secs.findIndex(x => x.key === 'stab');
-    secs.splice(iS + 1, 0, { title: 'Pile-supported footing', subs, key: 'pile' });
+    secs.splice(iS + 1, 0, { title: 'Piles (pile-supported footing)', subs, key: 'pile' });   // RWPT: titled as the Piles tab (was 'Pile-supported footing')
     if (iS >= 0) secs[iS].subs.unshift(sub('Pile-supported footing: soil checks not applicable', [{ type: 'note', text: 'The footing is on piles. The overturning, sliding, eccentricity and soil-bearing steps of this section are shown for information only and are not checks; the piles carry the wall (next section). The earth pressures and the factored loads of this section are used.' }]));
   }
   /* ---------- 1. Design summary (in front) ---------- */
@@ -11502,7 +11606,8 @@ function rwrTabNotes(r) {
   const nrm = x => String(x).toLowerCase().replace(/[^a-z0-9]+/g, '');
   const warn = new Set((r.warnings || []).map(w => nrm(rwrPlain(w))));
   const out = {};
-  ['stability', 'stem', 'footing', 'rebar'].forEach(tab => {
+  ['stability', 'stem', 'footing', 'piles', 'rebar'].forEach(tab => {   // RWPT: + piles (the pile cards' notes moved with them)
+    if (tab === 'piles' && !(r.pile && !r.pile.err)) return;
     let h = ''; try { h = rwTabSource(tab, r); } catch (e) { console.warn('report notes:', e); return; }
     const t = document.createElement('template'); t.innerHTML = h;
     const notes = [], cards = {};
@@ -11529,7 +11634,7 @@ function rwrTabNotes(r) {
 }
 function rwrAddNotes(M, N) {
   if (!N) return;
-  [['stability', /^Stability/], ['stem', /^Stem design/], ['footing', /^Footing design/], ['rebar', /^Reinforcement schedule/]].forEach(([tab, re]) => {
+  [['stability', /^Stability/], ['stem', /^Stem design/], ['footing', /^Footing design/], ['piles', /^Piles/], ['rebar', /^Reinforcement schedule/]].forEach(([tab, re]) => {   // RWPT: + piles
     const s = M.sections.find(x => re.test(x.title)), n = N[tab]; if (!s || !n) return;
     n.extra.forEach(q => s.subs.push({ title: q.title, items: q.items.slice() }));
     if (n.notes.length) s.subs.push({ title: 'Notes on the ' + RW_TABNAME[tab] + ' tab', items: n.notes.slice() });
@@ -12312,7 +12417,7 @@ function rwdwBuild(r) {
     }
     if (r.pile && !r.pile.err) {   // RWPL (8e): on piles the soil checks do not apply; the pile results instead
       const pc = r.pile;
-      foot = ['PILE-SUPPORTED FOOTING: SOIL BEARING, SLIDING AND OVERTURNING NOT APPLICABLE (STABILITY TAB, PILE STEP 2)',
+      foot = ['PILE-SUPPORTED FOOTING: SOIL BEARING, SLIDING AND OVERTURNING NOT APPLICABLE (SEE PILES TAB, PILE STEP 2)',
         'PILE GROUP PER FT: N = ' + F(pc.g.N, 4) + ' /FT, X_BAR = ' + F(pc.g.xbar, 3) + ' FT, I = ' + F(pc.g.I, 4) + ' FT2/FT',
         'COMPRESSION: P_MAX = ' + F(pc.govC.L.Pmax, 1) + ' KIP <= ' + F(pc.govC.cap.c, 1) + ' (' + pc.govC.label.toUpperCase() + ')',
         'UPLIFT: ' + (pc.govT.L.Pmin < 0 ? F(-pc.govT.L.Pmin, 1) + ' KIP VS ' + F(pc.govT.cap.t, 1) : 'NONE'),
@@ -12440,7 +12545,7 @@ function rwdwBuild(r) {
     const t = table(0, yT - 0.12 * P, ['ROW', 'X FROM TOE', 'SPACING', 'PILES/FT', PS.Lseg ? 'NO. IN ' + rwdwFI(PS.Lseg * 12) : 'NO./SEGMENT', 'PILE', 'EMBED.', 'P_MAX (KIP)', capS + ' (KIP)', 'COMB.', 'UPLIFT (KIP)', capS + ' (KIP)', 'COMB.', 'H/N (KIP)', capS + ' (KIP)', 'COMB.'], rows, th, [1, 2, 3, 4, 7, 8, 10, 11, 13, 14]);
     const comb = PS.combs.map(c => '(' + c.n + ') ' + c.label.toUpperCase()).join('; ');
     const notes = ['COMBINATIONS: ' + comb + '.',
-      'PER PILE, FROM THE PILE ANALYSIS (STABILITY TAB, PILE STEP 2): P_MAX = THE COMPRESSION OF THE COMBINATION WITH THE LARGEST P / CAPACITY FOR THE ROW; UPLIFT LIKEWISE;',
+      'PER PILE, FROM THE PILE ANALYSIS (SEE PILES TAB, PILE STEP 2): P_MAX = THE COMPRESSION OF THE COMBINATION WITH THE LARGEST P / CAPACITY FOR THE ROW; UPLIFT LIKEWISE;',
       'H/N = THE LATERAL LOAD PER PILE (EQUAL SHARE)' + (F.passive ? ', NET OF THE PASSIVE CREDIT' : '') + '. ' + (isA ? 'RESISTANCES: PHI_C R_N, PHI_UP R_N,UP (STRENGTH), 1.0 R_N, 0.80 R_N,UP (EXTREME EVENT), H_R AS ENTERED.' : 'ALLOWABLE CAPACITIES (SERVICE LOADS) AS ENTERED: P_A, T_A, H_A.'),
       'NO. IN SEGMENT: PILES OF THE ROW IN ONE SEGMENT, FIRST PILE S/2 FROM THE SEGMENT END (AS DRAWN); ' + (PS.Lseg ? 'SEGMENT = THE JOINT SPACING OF THE COLLISION INPUT.' : 'THE WALL LENGTH IS NOT IN THE MODEL: PILES PER FT ONLY.'),
       'PILE LENGTH, TIP ELEVATION AND DRIVING CRITERIA: BY THE GEOTECHNICAL ENGINEER (NOT IN THE TOOL).'];
