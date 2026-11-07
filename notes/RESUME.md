@@ -206,3 +206,8 @@ Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clea
 - Merged: RW 2nd-review #1134–#1144; γ_EH display #1146; KaTeX fallback #1145; plain text #1138.
 - Running (all on Retaining Wall Designer.html, merge-main discipline): (1) pile bottom mat at normal cover → pile input error → A3 PR-description corrections → User Manual; (2) stem projection above retained grade; (3) graphics: passive off to side, Analysis-diagram rebar as lines/dots correctly, Overview section clipped, overview check-summary blanks, drawings viewer fit, pile labels; (4) dedicated Piles output tab.
 - Open: tool-specific KaTeX calls outside shared code show raw TeX when CDN blocked (e.g. SF notes). Left summary panel in other apps — asked, unanswered.
+
+## Check-in 2026-11-07 16:17 UTC (11:17 AM ET)
+- Merged: RW Piles tab #1148/#1153, bottom mat #1149, thin-cap error #1151, γ_EH #1146, graphics #1147/#1152/#1156, manual #1154/#1157, stem projection part 1 #1150.
+- Running: RW stem projection part 2 (graphics + drawings note 11); abutment pile bottom mat at normal cover (engineer: "same deal for abutment").
+- Open: left summary panel in other apps (unanswered); bearing colour green vs blue in RW figures; tool-specific KaTeX calls (SF notes) raw TeX when CDN blocked.
