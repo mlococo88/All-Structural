@@ -8341,9 +8341,10 @@ function buildCrossSection(r) {
   // Shear key
   if (inp.useShearKey && dk_px > 0) {
     const skw = (inp.key_bk || 12) / 12 * SCALE, skx = x_ftoe + tsbot_px / 2 - skw / 2;   // RWSK: width b_k (was 0.36 t_s,base), centred under the stem as before
+    // RWRB: the K1 label's inch mark (") ended the data-tip attribute, and the rest of the drawing (piles, …) fell into the key's rect; written ″
     s += `<rect x="${skx}" y="${y_fbot}" width="${skw}" height="${dk_px}"
       fill="${CC.fill}" stroke="${CC.stroke}" stroke-width="1.2"
-      data-tip="<b>Shear key</b><br>Depth d_k = ${f(inp.dk,0)} in · width b_k = ${f(inp.key_bk||12,0)} in<br>${r.keyR ? (r.keyR.plain ? 'Plain concrete (ACI Ch. 14)' : 'Reinforced: K1 ' + r.keyR.rf.sel.label) + '<br>' : ''}Added passive P_p,key = ${f(r.Pp_key,0)} lb/ft"/>`;
+      data-tip="<b>Shear key</b><br>Depth d_k = ${f(inp.dk,0)} in · width b_k = ${f(inp.key_bk||12,0)} in<br>${r.keyR ? (r.keyR.plain ? 'Plain concrete (ACI Ch. 14)' : 'Reinforced: K1 ' + String(r.keyR.rf.sel.label).replace(/"/g, '″')) + '<br>' : ''}Added passive P_p,key = ${f(r.Pp_key,0)} lb/ft"/>`;
     if (!(r.keyR && r.keyR.rf)) s += `<text x="${skx+skw+3}" y="${y_fbot+dk_px/2+4}" font-size="7" fill="#2155c4">key</text>`;   // RWRB: with K1 bars, the K1 label names the key   // RWPS: beside the key (was under it, on the bearing diagram)
   }
   s += rwPileSVG(r, x_toe, y_fbot, SCALE, '#3d4650');   // RWPL: pile rows (pile-supported footing only)
