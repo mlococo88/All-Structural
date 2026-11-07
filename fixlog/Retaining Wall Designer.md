@@ -6489,3 +6489,44 @@ Every statement was checked against this file's code (anchors: `calcAll`, `rwInp
 - **Decisions (pending engineer review):**
   - On a phone the Overview drawing keeps a 740 px width and scrolls inside its card. Fitting it to 364 px would put its text at about 4 px.
   - Between 700 and 1100 px of tab width the properties go under the drawing.
+
+## 2026-11-07 — PR: claude/rw-user-manual-2 (PR #1157: https://github.com/mlococo88/All-Structural/pull/1157) — User Manual, part 2: loads, stability, seismic, collision, stem, footing, shear key, bar layout, piles and the Pile Designer hand-off, limits, and the appendix of decisions pending engineer review (RWMAN-2; display only, no result change)
+
+Review Phase 6a, part 2 of the User Manual (part 1: #1154). Code sites are tagged `RWMAN` (the `RWMAN_PARTS` block only).
+
+### What was added (`RWMAN_PARTS`; nothing else changed)
+- Inserted after "Inputs, units and defaults":
+  - **Loads**: earth pressure, with H′ on the retained height H_ret (RWHP #1150) and the thrust inclination; surcharges (q_s as H in ACI and ES in AASHTO; LS h_eq tables, the distance and the H_ret/2 rule); water and uplift (the ACI γ_U split, AASHTO WA); column / beam loads (the ASCE 7-22 §2.3.1 combinations, AASHTO η(1.25DL + 1.75(LL + S)), Col. Axial §22.4); barrier.
+  - **Stability**: an ACI table (OT and sliding FS 1.5, bearing q_a, eccentricity choice) and an AASHTO table (sliding, eccentricity of the Ia resultant, bearing on B − 2e with φ_b, rock, no overturning FS); passive and the key credit.
+  - **Seismic**: ACI / IBC 2018 §1807.2.3 (ΔP_E at 0.6H′, FS 1.5 static and 1.1 with 0.7E, bearing and e from the static and 1.0E cases, stem and footing combinations). AASHTO Extreme Event I, Art. 11.6.5.1 (two cases, P_IR, φ 1.0 / 0.8, e from B/3 to 0.4B by γ_EQ).
+  - **Collision**: Extreme Event II (test levels, distribution, the factors, φ and φ_b = min(0.8, φ), B/n, stem); barrier yield line, Art. A13.3.1.
+  - **Stem design**: a table of Steps 1–6 and Mid 1–3 by mode; crack control.
+  - **Footing design**: base reaction, partial contact, water split, heel and toe, shear, ℓ_d, the AASHTO EE footing check, F3.
+  - **Shear key**.
+  - **Bar layout**: S1, S1D, S3, S2, S4, F1, F2, F3, K1.
+  - **Pile-supported footing and the Pile Designer hand-off**: the model, the combinations, a check table by mode, the footing on piles (bottom mat at c_c, RWPB #1149; the RWTE #1151 thickness limit), punching, the schedule, Send / Pull and STALE. Linked to the Piles tab cards (RWPT #1148 / #1153).
+- At the end:
+  - **Limits: what the tool does not check**: global stability, settlement, AASHTO Strength IV, strip / line / point surcharges, compaction and hydrodynamic pressure, battered piles, the pile-to-cap anchorage, EE on the pile footing, crack control of S4 / K1, and the others.
+  - **Appendix: decisions pending engineer review**: the 53 fix-log items, grouped by tag and paraphrased, with those since overtaken marked (RWPL 8d bottom cover → RWPB; ACI Ch. 13 citations → RW2L1; the RWDL breakpoint → RWLB; the RW2M2 pile-toe note → RWPB).
+- Cross-links added to the part 1 text: Scope → piles and shear key parts; the two-mode table → every calculation part and Limits; the Rebar marks → the bar layout part.
+
+### How checked
+- Each statement was checked against the code of this file. Anchors:
+  - loads and stability: `calcAll` (Pa_incl, Hq / H_ret, FOS_OT / FOS_SL, Ms_OT_excl, V_slide_excl, Puf_combos, CMB_U12, gEH, the RWES / RWLS / RWUP / RWPC blocks);
+  - seismic and collision: ee1 (eLim), the ct block (gLS_ct, Ldist, y_CT), Mu_stem_ee2;
+  - the members: heelCase / toeCase, aciCr, the stem and key blocks;
+  - piles: rwPileAnalysis (combination labels), pileChecks (edgeMin / embMin / ccMin), pilePunch.
+- Also checked against the Report's Design summary basis column (dumped for ACI, AASHTO and both pile modes), HANDOFF.md §4.6 / §4.10 and the fix log.
+- Provisions are cited by number and paraphrased; no code text is reproduced.
+- A link checker run in the page: 114 link targets (tabs, RW_CARDS keys, input ids, manual parts), none missing; no "$" in the text (the Report would read it as TeX).
+
+### How verified
+- No computed value changes: headless, origin/main vs branch, `calcAll` on the 32 review walls plus the at-rest walls: identical; 0 console errors.
+- Screenshots looked at: the Stem part at 1400 px and the Piles part at 390 px (no sideways scroll). The Report with "Include the user manual" ticked has the appendix and no unresolved references.
+- Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Observation (not changed; for the engineer)
+- Drawings sheet 4, general note 11 still lists "shear-key and front-face reinforcement, lap of the S1 dowels, bar development" as not in the tool. These have been designed and checked since RWSK, RWFF and RWDS (#947–#951). The note is display text on the drawings; it is left for a separate drawings PR.
+
+### Saved data
+- None (text only).
