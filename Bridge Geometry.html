@@ -341,7 +341,8 @@
       <div>
         <h2 class="sec">Substructure Units</h2>
         <div style="overflow-x:auto;"><table class="subtbl" id="subtbl"></table></div>
-        <p class="note">Skew is measured from the normal to the straight abutment-to-abutment chord (the construction reference line between the two abutments), not from the radial line of the PGL; 0° = support perpendicular to that chord. With <em>Girder layout in plan</em> = per-span chords (Bridge tab): from the normal to the span chord at an abutment, and to the bisector of the two span chords at a pier. On a tangent alignment these are all the same. Dual bearing offset = distance back/ahead of unit station.</p>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:6px 0 0;"><label for="skew_datum" style="margin:0;">Skew measured from</label><select id="skew_datum" style="width:auto;" title="The line each support's skew angle is measured from. Alignment normal: the normal (radial line) to the PGL at the support station, as plans give skew. Chord normal: the normal to the construction reference line (the girders' chord; with per-span chords the bisector of the two span chords at a pier). On a tangent the two are the same. Projects saved before this setting existed open with Chord normal (their results are unchanged)."><option value="align">alignment normal (as on the plans)</option><option value="chord">chord normal (the girders' line)</option></select></div><!-- BGX4 (2026-11-07): skew datum; new projects alignment normal, saved projects without the field chord normal -->
+        <p class="note">Skew is measured from the datum chosen above, 0° = support square to it; the support line passes through the construction reference line point at the support station. <em>Alignment normal</em> is the normal (radial line) to the PGL at the support station, as plans give it. <em>Chord normal</em> is the normal to the straight abutment-to-abutment chord (the construction reference line), or with <em>Girder layout in plan</em> = per-span chords (Bridge tab), the span chord normal at an abutment and the bisector of the two span chords at a pier. On a tangent alignment these are all the same; the Derived table shows each support's skew from both. Dual bearing offset = distance back/ahead of unit station.</p>
 
         <h2 class="sec">Per-span girder &amp; deck-edge overrides</h2>
         <p class="note" style="margin-top:-6px;">Most bridges use the same girders and deck width everywhere &mdash; if so, you can ignore this table entirely; every span uses the global values above. Use it only when a particular span differs (e.g. a span has a different number of girders, a flared deck, or a different edge offset). Each greyed cell shows the global value it would inherit; type a value to override just that span (it turns solid), or clear it to revert.</p>
@@ -1143,6 +1144,7 @@ function buildEngine(){
      support j (= the chord normal at the abutments). With two supports, or all reference points in line, this is exactly the
      single chord. 'single' (saved projects without the setting): the one abutment-to-abutment chord, as before. */
   const FRAME_SET=(document.getElementById('girder_frame')||{}).value==='span'?'span':'single';
+  const SKEW_DATUM=(document.getElementById('skew_datum')||{}).value==='align'?'align':'chord';   // BGX4 (see effSkew)
   const PS=(function(){ const su=sortedUnits(); if(!CH || FRAME_SET!=='span' || su.length<3) return null;
     const P=su.map(u=>pglOffsetPoint(align, u.sta, _lerpAbut(_bclOff.a1, _bclOff.a2, u.sta)));
     const seg=[], T=[0];
@@ -1237,8 +1239,8 @@ function buildEngine(){
   // the end edge is displaced along the chord by w*tan(skew). Positive skew convention matches
   // the substructure skew field. Returns the along-chord t at each end for a given offset w.
   const _su = sortedUnits();
-  const SK1 = (CH && _su.length>=2) ? (_su[0].skew||0)*DEG : 0;               // Abut 1 skew (t=0 end)
-  const SK2 = (CH && _su.length>=2) ? (_su[_su.length-1].skew||0)*DEG : 0;    // Abut 2 skew (t=len end)
+  const SK1 = (CH && _su.length>=2) ? effSkew({skew:_su[0].skew, supSta:_su[0].sta})*DEG : 0;               // Abut 1 skew (t=0 end; BGX4: as a chord skew)
+  const SK2 = (CH && _su.length>=2) ? effSkew({skew:_su[_su.length-1].skew, supSta:_su[_su.length-1].sta})*DEG : 0;    // Abut 2 skew (t=len end)
   function chordExtent(w){
     // t at the two ends for a transverse line at offset w; skew shears the end line along the chord
     if(!CH) return {t0:0, t1:0};
@@ -1276,11 +1278,23 @@ function buildEngine(){
      support's datum normal turned by the skew: at a pier the bisector of the two span chords (the mitre direction), at an
      abutment its span's chord normal. Dual bearing lines are parallel to their pier's line. The girder at offset w meets it
      where the line crosses that girder's mitred polyline; returns the frame t there. */
+  /* BGX4 (review H4, engineer item Q-BG2; Decision pending engineer review): skew datum. 'chord' (saved projects without the
+     setting): skew from the chord normal, as before. 'align' (new projects): skew from the normal to the PGL at the support
+     station, as plans give it; the support line is the same straight line through the reference point, so it equals a chord
+     skew of θ + δ, δ = the angle from the chord normal (per-span: the bisector at a pier) to the PGL normal there, measured
+     toward up-station. effSkew(bl) returns that chord skew (deg), which every chord formula below uses. */
+  function skewDelta(sta){ if(!CH) return 0;
+    let nd; if(PS){ let j=-1; PS.sta.forEach((st,k)=>{ if(Math.abs(st-sta)<1e-6) j=k; });
+      if(j>=0){ const L=Math.hypot(PS.m[j].x,PS.m[j].y); nd={x:PS.m[j].x/L,y:PS.m[j].y/L}; } else { const S=PS.seg[psSeg(psRef(sta).t)]; nd={x:S.nx,y:S.ny}; } }
+    else nd={x:CH.nx,y:CH.ny};
+    const a=align.at(sta), nax=Math.sin(a.brg+Math.PI/2), nay=Math.cos(a.brg+Math.PI/2);   // PGL normal, +right
+    return Math.atan2(nax*(-nd.y)+nay*nd.x, nax*nd.x+nay*nd.y)/DEG; }                          // in (n_d, u_d), u_d = (−n_y, n_x)
+  function effSkew(bl){ const sk=+(bl.skew||0); return SKEW_DATUM==='align' ? sk+skewDelta(bl.supSta!=null?bl.supSta:bl.sta) : sk; }
   function psSupT(bl, w){
     const R=psRef(bl.sta), Rp=psXY(R.t,0); let j=-1, sup=(bl.supSta!=null)?bl.supSta:bl.sta;
     PS.sta.forEach((st,k)=>{ if(Math.abs(st-sup)<1e-6) j=k; });
     let nb; if(j>=0){ const L=Math.hypot(PS.m[j].x,PS.m[j].y); nb={x:PS.m[j].x/L, y:PS.m[j].y/L}; } else { const S=PS.seg[psSeg(R.t)]; nb={x:S.nx,y:S.ny}; }
-    const tn=Math.tan((bl.skew||0)*DEG), dx=nb.x+tn*(-nb.y), dy=nb.y+tn*nb.x;   // n turned toward +u (u = (−n_y, n_x)) by the skew
+    const tn=Math.tan(effSkew(bl)*DEG), dx=nb.x+tn*(-nb.y), dy=nb.y+tn*nb.x;   // BGX4: effSkew (= bl.skew with the chord datum)   // n turned toward +u (u = (−n_y, n_x)) by the skew
     let best=null;
     for(let i=0;i<PS.n;i++){ const A=psXY(PS.T[i],w), B=psXY(PS.T[i+1],w), ex=B.x-A.x, ey=B.y-A.y, den=ex*dy-ey*dx; if(Math.abs(den)<1e-12) continue;
       const qx=Rp.x-A.x, qy=Rp.y-A.y, l=(qx*dy-qy*dx)/den, inside=(l>=-1e-9||i===0)&&(l<=1+1e-9||i===PS.n-1);
@@ -1290,13 +1304,13 @@ function buildEngine(){
   function deckAtSupport(bl, off){
     if(!CH) return getDeckPoint(staOnBearing(bl.sta,bl.skew,off), off);
     if(PS){ const w=off-bridgeCL(); return deckPointCW(psSupT(bl,w),w); }
-    const w=off-bridgeCL(); const t=supportChordT(bl.sta)+w*Math.tan((bl.skew||0)*DEG);
+    const w=off-bridgeCL(); const t=supportChordT(bl.sta)+w*Math.tan(effSkew(bl)*DEG);   // BGX4: effSkew
     return deckPointCW(t,w);
   }
   function beamSeatAtSupport(bl, off, ctx){
     if(!CH) return getBeamSeat(staOnBearing(bl.sta,bl.skew,off), off, ctx);
     if(PS){ const w=off-bridgeCL(); return beamSeatCW(psSupT(bl,w),w,ctx); }
-    const w=off-bridgeCL(); const t=supportChordT(bl.sta)+w*Math.tan((bl.skew||0)*DEG);
+    const w=off-bridgeCL(); const t=supportChordT(bl.sta)+w*Math.tan(effSkew(bl)*DEG);   // BGX4: effSkew
     return beamSeatCW(t,w,ctx);
   }
   // BGX3: the frame stations a line from t0 to t1 passes through (its ends plus the kinks at the interior supports), and
@@ -1311,7 +1325,7 @@ function buildEngine(){
   }
   return { align, prof, xsec, depths, getDeckPoint, getBeamSeat,
     chord:CH, frameInfo:()=>({ frame:(PS?'span':'single'), set:FRAME_SET, poly:PS, len:(PS?PS.T[PS.n]:(CH?CH.len:0)) }), cwTs,   // BGX3 (a function: kept out of the engine's data)
-    cwPath, deckPointCW, deckPointAtXY, beamSeatCW, beamSeatAtXY, chordExtent, supportChordT, deckAtSupport, beamSeatAtSupport, offsetChordLine, crownAtSta, bclOffAtSta, chordOffsetAtXY, crownRef:CROWN_REF, skews:{a1:SK1,a2:SK2},
+    cwPath, effSkew, skewDelta, deckPointCW, deckPointAtXY, beamSeatCW, beamSeatAtXY, chordExtent, supportChordT, deckAtSupport, beamSeatAtSupport, offsetChordLine, crownAtSta, bclOffAtSta, chordOffsetAtXY, crownRef:CROWN_REF, skews:{a1:SK1,a2:SK2},
     globalGirders: GIRDERS.map(g=>g+bridgeCL()) };
 }
 
@@ -2957,6 +2971,7 @@ function drawSeatSection(divId, r){
 function ftin(v){ const sg=v<0?'-':''; v=Math.abs(v); const ft=Math.floor(v+1e-9);
   let inch=(v-ft)*12; if(inch>=11.9995){ return sg+(ft+1)+"'-0\""; }
   return sg+ft+"'-"+inch.toFixed(2).replace(/\.?0+$/,'')+'"'; }
+function skewDatumUI(){ return (document.getElementById('skew_datum')||{}).value==='align'?'align':'chord'; }   // BGX4
 function buildDerived(){
   const box=document.getElementById('derived_wrap'); if(!box||!ENG) return;
   const su=sortedUnits();
@@ -2982,7 +2997,9 @@ function buildDerived(){
   const fmtOff=(v)=>isNaN(v)?'&mdash;':`${v>=0?'+':''}${v.toFixed(3)} <span style="color:var(--ink-soft);font-size:10px">${ftin(v)}</span>`;
   const R=[
     ['Station', V.map(v=>formatStation(v.sta))],
-    ['Skew (from chord normal)', V.map(v=>v.skew.toFixed(2)+'&deg;')],
+    /* BGX4: the skew from both datums (the entered one is the one chosen in "Skew measured from") */
+    ['Skew from the chord normal'+(ENG.effSkew&&skewDatumUI()==='chord'?' (entered)':''), V.map(v=>(ENG.effSkew?ENG.effSkew({skew:v.skew,supSta:v.sta}):v.skew).toFixed(2).replace(/^-(0\.00)$/,'$1')+'&deg;')],
+    ['Skew from the alignment normal'+(skewDatumUI()==='align'?' (entered)':''), V.map(v=>(ENG.effSkew?ENG.effSkew({skew:v.skew,supSta:v.sta})-ENG.skewDelta(v.sta):v.skew).toFixed(2).replace(/^-(0\.00)$/,'$1')+'&deg;')],
     ['PGL bearing', V.map(v=>azimuthToQuadrant(v.brg/DEG))],
     ['Construction ref line &larr; from PGL', V.map(v=>fmtOff(v.bcl))],
     ['Crown &larr; from PGL', V.map(v=>fmtOff(v.crown))],
@@ -4430,7 +4447,7 @@ let _heatResizeT=null;
 window.addEventListener('resize',()=>{ clearTimeout(_heatResizeT); _heatResizeT=setTimeout(()=>{ if(ENG) drawHeatmap(); },120); });
 ['ly_fill','ly_align','ly_crown','ly_bcl','ly_dcl','ly_ov','ly_gird','ly_edge','ly_sub','ly_brg','ly_sta','ly_gpt','ly_elev','ly_cut','ly_cont'].forEach(id=>{
   const el=document.getElementById(id); if(el) el.addEventListener('change',()=>{ if(ENG) drawHeatmap(); }); });
-['x_mode_global','x_rate_global','crown_ref','girder_frame','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma'].forEach(id=>
+['x_mode_global','x_rate_global','crown_ref','girder_frame','skew_datum','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma'].forEach(id=>
   document.getElementById(id).addEventListener('change',()=>{ renderOvrGrid(); renderSpanTable(); if(ENG) compute(); }));
 document.getElementById('ovr_toggle').addEventListener('click',()=>{
   const p=document.getElementById('ovr_panel'); const open=p.style.display!=='none';
@@ -4520,7 +4537,7 @@ const STORAGE_KEY = 'bridgeGeomEngine.project.v1';
 const LIBRARY_KEY = 'bridgeGeomEngine.library.v1';
 let CURRENT_NAME = null; // name of the loaded library entry, if any
 const SCALAR_IDS = ['h_sta0','h_x0','h_y0','h_brg0','nspans','x_mode_global','x_rate_global',
-  'x_pivot','sec_cut','sec_surf','cont_int','heat_surf','crown_ref','girder_frame','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma','divs','rep_mode','rep_div','val_tol','map_datum','map_units','vdatum_sys','vdatum_txt'];
+  'x_pivot','sec_cut','sec_surf','cont_int','heat_surf','crown_ref','girder_frame','skew_datum','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma','divs','rep_mode','rep_div','val_tol','map_datum','map_units','vdatum_sys','vdatum_txt'];
 
 // Vertical datum: a label only (scalars vdatum_sys / vdatum_txt). Elevations are never converted.
 // '' = not specified (the default for new projects and for saves made before the field existed).
@@ -4888,8 +4905,8 @@ function armAutosave(){
 /* BGX (2026-11-07, §5): settings added by the review fixes. A project saved without one opens with the value that reproduces
    its old results (BG_OLD_DEFAULTS, applied by applyProject before the saved scalars); a new project (the page with nothing
    saved, New) uses BG_NEW_DEFAULTS, which are the HTML defaults. Decisions pending engineer review. */
-const BG_OLD_DEFAULTS={ girder_frame:'single' };
-const BG_NEW_DEFAULTS={ girder_frame:'span' };
+const BG_OLD_DEFAULTS={ girder_frame:'single', skew_datum:'chord' };
+const BG_NEW_DEFAULTS={ girder_frame:'span', skew_datum:'align' };
 function bgOldDefaults(){ for(const id in BG_OLD_DEFAULTS){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!BG_OLD_DEFAULTS[id]; else el.value=BG_OLD_DEFAULTS[id]; } } }
 function bgNewDefaults(){ for(const id in BG_NEW_DEFAULTS){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!BG_NEW_DEFAULTS[id]; else el.value=BG_NEW_DEFAULTS[id]; } } }
 function freshDefaults(){
@@ -5143,11 +5160,14 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
     }
 
     // ---- skew: per support, from the normal to the chord; the sign is dropped ----
-    const sk=su.map(u=>Math.abs(+u.skew||0));
+    // BGX4: the skew sent is from the girders' chord normal (AASHTO LRFD 10th Ed. Art. 4.3 notation θ: from a line perpendicular
+    // to the span centerline, 4.6.2.2.1); with skews entered from the alignment normal it is converted (E.effSkew). Chord datum: as entered.
+    const skS=su.map(u=>E.effSkew?E.effSkew({skew:+u.skew||0, supSta:u.sta}):(+u.skew||0));
+    const sk=skS.map(v=>Math.abs(v));
     if(sk.some(v=>!isFinite(v)||v>=90)) return {error:'A support skew is not a number between -90 and 90 degrees.'};
     const skMin=Math.min.apply(null,sk), skMax=Math.max.apply(null,sk);
     // largest change of the (signed) skew between adjacent supports, i.e. the angle between the two support lines
-    let skAdj=0; for(let i=1;i<su.length;i++) skAdj=Math.max(skAdj,Math.abs((+su[i].skew||0)-(+su[i-1].skew||0)));
+    let skAdj=0; for(let i=1;i<su.length;i++) skAdj=Math.max(skAdj,Math.abs(skS[i]-skS[i-1]));
     // moment DFs: smallest |skew|; no reduction (0) when adjacent supports differ by more than 10 deg (Art. 4.6.2.2.2e)
     const skNoRed=skAdj>10+1e-9, skMoment=skNoRed?0:skMin;
     const skewVal=r2(skewRule==='moment'?skMoment:(skewRule==='min'?skMin:(skewRule==='mean'?sk.reduce((s,v)=>s+v,0)/sk.length:skMax)));
@@ -5197,6 +5217,7 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
         +'. On a curved alignment these differ from the PGL station differences in the Bridge Geometry span summary. Rounded to 0.001 ft.',
       (E.frameInfo().poly?'Skew is measured at each support from the normal to the reference line there (at an abutment its span chord; at a pier the bisector of the two span chords; 0 deg = square to it); the sign is dropped. '
              :'Skew is measured at each support from the normal to the construction reference line chord (0 deg = support square to the chord); the sign is dropped. ')
+        +(skewDatumUI()==='align'?'The skews were entered from the alignment normal (as on the plans) and are converted here to the chord normal (the line the girders follow; AASHTO LRFD 10th Ed. Art. 4.3, notation θ for 4.6.2.2.1: measured from a line perpendicular to the span centerline): '+su.map((u,i)=>u.name+' '+(+u.skew||0).toFixed(2)+' -> '+skS[i].toFixed(2)).join(', ')+' deg. ':'')
         +'Per support: '+su.map((u,i)=>u.name+' '+sk[i].toFixed(2)).join(', ')+' deg. Sent: '
         +(skewRule==='moment'?('the skew for moment DFs = '+skewVal.toFixed(2)+' deg ('+(skNoRed?'0: adjacent supports differ by more than 10 deg, so AASHTO LRFD 10th Ed. (2024) Art. 4.6.2.2.2e allows no moment reduction':'the smallest |skew|')+').')
           :('the '+(skewRule==='min'?'smallest':(skewRule==='mean'?'average':'largest'))+' |skew| = '+skewVal.toFixed(2)+' deg.')),
@@ -5233,7 +5254,8 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
     if(Nb) payload.Nb=Nb;
     // BG-OH2: optional, additive (lldf ignores it): the per-support skews (signed, deg, as entered) and the
     // values for moment and shear DFs, so the hand-off records what the single inputs.skew stands for.
-    payload.skewDetail={bySupport:su.map(u=>({name:String(u.name||''), skew:r2(+u.skew||0)})),
+    payload.skewDetail={bySupport:su.map((u,i)=>({name:String(u.name||''), skew:r2(skS[i])})),   // BGX4: from the chord normal (= as entered with the chord datum)
+     
       absMin:r2(skMin), absMax:r2(skMax), maxAdjacentDiff:r2(skAdj), moment:r2(skMoment), shear:r2(skMax), sent:skewVal};
     const summary=[
       ['Spans', spans.map(v=>v.toFixed(3)).join(' / ')+' ft'],

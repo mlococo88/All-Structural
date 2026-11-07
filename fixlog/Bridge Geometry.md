@@ -1933,3 +1933,42 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Saved data (§5):** new scalar `girder_frame` in `scalars` (additive). Migration: `applyProject` calls `bgOldDefaults()` (`BG_OLD_DEFAULTS = {girder_frame:'single'}`) before reading the saved scalars, so a save without the field keeps One chord. `freshDefaults()` calls `bgNewDefaults()` (`BG_NEW_DEFAULTS = {girder_frame:'span'}`), which are also the HTML defaults. No key changed.
 - **Open item (pre-existing, not changed):** the heatmap leaves one column unfilled after each pier (it does not join columns of different spans); the same on main with one chord.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/bg-h4-skew-datum (PR #1119: https://github.com/mlococo88/All-Structural/pull/1119) (BGX4, review H4, engineer item Q-BG2 / O1: skew datum "alignment normal (plans)" or "chord normal"; new projects alignment normal)   [calc change: new option] [hand-off value for new projects] [saved data: additive field with migration]
+
+- **Why:** review 2026-11-07 H4. Skew was always measured from the normal to the chord. Plans give skew from the survey baseline: MassDOT Bridge Manual Part I, survey section, defines skew between the bearing centerlines and the baseline (paraphrased), and AASHTO LRFD 10th Ed. Art. 4.2 defines the skew angle from a line normal to the roadway centerline. A plan skew entered as is was therefore off by the chord-to-alignment angle (review variant: 30° plan skew = 23.43° from the chord, 3.46 ft along the chord at the deck edge).
+- **Decision (pending engineer review):**
+  - New setting **Skew measured from** (Bridge tab, `#skew_datum`, just under the Substructure Units table): "alignment normal (as on the plans)" / "chord normal (the girders' line)".
+  - New projects use the alignment normal. Projects saved without the setting (all existing saves, files and the 5 built-in examples) keep the chord normal and their results.
+  - In both, the support line passes through the construction reference line point at the support station, as before.
+- **Decision (pending engineer review):** the LL & DL hand-off sends the skew from the **chord normal** (the line the girders follow), converted from the entered value when the alignment normal is chosen. Basis: AASHTO LRFD 10th Ed. Art. 4.3 notation θ for Art. 4.6.2.2.1, measured from a line perpendicular to the span centerline (checked in the 10th Ed. PDF). The notes list the conversion per support. `skewDetail.bySupport` carries the same chord skews; with the chord datum they are the entered values, unchanged. The 10° rule of Art. 4.6.2.2.2e uses the converted signed values.
+- **Where:**
+  - `buildEngine()`: `SKEW_DATUM` (next to `FRAME_SET`), new `skewDelta(sta)` and `effSkew(bl)` (anchor `/* BGX4 (review H4`).
+  - `effSkew` used in `SK1` / `SK2`, `deckAtSupport`, `beamSeatAtSupport` and `psSupT`; exported `effSkew`, `skewDelta`.
+  - `buildDerived()`: rows "Skew from the chord normal" / "Skew from the alignment normal", with "(entered)" on the chosen one; `skewDatumUI()`.
+  - `bgxBuildLldfGeom`: `skS`, `sk`, `skAdj`, the notes and `skewDetail.bySupport`.
+  - The note under the Substructure Units table rewritten for both datums.
+- **Before:** `const w=off-bridgeCL(); const t=supportChordT(bl.sta)+w*Math.tan((bl.skew||0)*DEG);` and `const SK1 = … (_su[0].skew||0)*DEG`; hand-off `const sk=su.map(u=>Math.abs(+u.skew||0));`, `skAdj` from `u.skew`, `bySupport … skew:r2(+u.skew||0)`.
+- **After:**
+  - `const t=supportChordT(bl.sta)+w*Math.tan(effSkew(bl)*DEG);` and `SK1 = effSkew({skew:_su[0].skew, supSta:_su[0].sta})*DEG`.
+  - `effSkew(bl) = bl.skew + δ` (alignment datum) or `bl.skew` (chord datum).
+  - δ = atan2(n_a·u_d, n_a·n_d): n_a is the PGL right normal at the support station; n_d / u_d are the chord normal and chord direction (per-span: the bisector at a pier, the span chord at an abutment).
+  - Hand-off: `skS = effSkew(...)`, `sk = |skS|`, `skAdj` from `skS`, `bySupport skew: r2(skS[i])`.
+- **Governing provision:** AASHTO LRFD 10th Ed. Art. 4.2 (skew angle definition), Art. 4.3 notation θ (4.6.2.2.1), Art. 4.6.2.2.2e (10° rule, unchanged); MassDOT Bridge Manual Part I survey requirements (skew between bearing CL and baseline).
+- **Check case (default demo, per-span, alignment normal):**
+  - Abut 1 skew 0°. The line is the PGL normal at 0+00 (x = 0); the span 1 chord bearing is 93.753°, so δ = +3.75° (the Derived table shows chord-normal skew 3.75°, alignment-normal 0.00°).
+  - G4 (w = +18): girder line P0 + 18·n1 + λ·u1 with n1 = (−0.06546, −0.99786), u1 = (0.99786, −0.06546). It meets x = 0 at λ = 1.17830/0.99786 = 1.18082, y = −17.9615 − 0.0773 = −18.039, i.e. Sta 0+00, offset 18.039.
+  - TD = 100 − 0.02 × 18.039 = **99.639**; seat = 99.639 − 4.0417 = **95.60**.
+  - Before (chord normal, per-span): 95.58 (TD 99.617). G1 is symmetric: 95.60 (before 95.62). Abut 2: 98.80 / 99.04 / 99.04 / 98.80.
+  - The BGX1 warning goes away (no deck point is before the POB).
+  - Hand-off: chord skews 3.75 / 15.00 / −3.75. Moment skew 0 (adjacent supports differ by 11.25° > 10°), shear 15.00; the same values were sent before (0 / 15).
+- **Check case (review variant, R 1500, plan skew 30° at every support, one chord):** chord skew at Abut 1 = 30 − 6.575 = **23.43°** (sent to LL & DL as θ; before: 30). Abut 1 seats G1…G4 106.84 / 107.35 / 107.86 / 108.41 → 106.89 / 107.37 / 107.85 / 108.35.
+- **How verified:** headless probe, origin/main vs branch:
+  - Demo set to chord normal: identical to main.
+  - Variant and Examples 1–5 as saved: every table, the hand-off payload and DXF identical; only the Derived table (2 skew rows) and Export JSON (`skew_datum:'chord'`) differ.
+  - 0 console errors.
+  - Tests:
+    - pass: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, home-projects --tool bgeo, tests/engine/run.mjs handoffs lldf list-input.
+    - project-library --tool bgeo: old autosave and old saved project differ only in the Bridge tab text (the Derived table rows and the new setting), so their results are identical. "On load" differs by the new-project default.
+- **Saved data (§5):** additive scalar `skew_datum`. Migration: `BG_OLD_DEFAULTS.skew_datum='chord'` (applied before the saved scalars); `BG_NEW_DEFAULTS.skew_datum='align'`. No key changed. Hand-off payload shape unchanged (HANDOFF §4.2); the receiver is not changed.
+- **Other copies:** none.
