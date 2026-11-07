@@ -2514,6 +2514,55 @@ function rateVehicle(model,vehicle,faPsi,impMode,onlySec){
           sweepStep:step,sweepLo:x0,sweepHi:x1};
 }
 
+/* SLD (review S-2, 2026-11-07): bed-joint sliding by friction, |V| <= mu*N, an ADVISORY check beside the §7.2.7
+   compressive-stress rating (it never changes a rating factor). The vehicle is swept exactly as in rateVehicle (same
+   positions, both directions, same impact basis) with its live load scaled by m (the reported rating factor), and at
+   every node the section shear V and thrust N (both resolved on the section normal, which stands in for the bed joint)
+   give D/C = |V_DL + m(1+I)V_LL| / (mu (N_DL + m(1+I)N_LL)). N <= 0 is reported as D/C = Infinity (no compression,
+   no friction). mSlide is the largest live load multiplier for which friction holds at every node and position:
+   the two linear inequalities  ±(V0 + m VL) <= mu (N0 + m NL)  solved for m (0 when dead load alone slides). */
+function slideScan(model,vehicle,impMode,m,mu){
+  impMode=impMode||"crown";
+  const DL=model.DL, adv=!!(model.p&&model.p.llAdverse);
+  const impCrown=impactAt(model.p,model.g.coverCrown+model.p.tws);
+  const impComb=(impMode==="local")?0:impCrown;
+  const Lveh=vehicle.axles[vehicle.axles.length-1].x;
+  const x0=model.g.xmin-Lveh-2.0, x1=model.g.xmax+2.0;
+  const STEP_TARGET=(model.p&&model.p.__sweepStep)||0.25, MAX_POS=4000;
+  const step=Math.max(STEP_TARGET,(x1-x0)/MAX_POS);
+  const mm=(m>0&&isFinite(m))?m:0;
+  let best={dc:-1,sec:0,pos:x0,dir:1,V:0,N:0,VD:0,ND:0,VL:0,NL:0}, mS=Infinity, mSat=null;
+  for(let pos=x0;pos<=x1;pos+=step){
+    for(const dir of [1,-1]){
+      let q=nodalLL(model,vehicle,pos,dir);
+      if(impMode==="local")q=applyLocalImpact(model,q);
+      const LLx=adv?llEffectsSplit(model,q):llEffects(model,q);
+      const sets=adv?[LLx.pos,LLx.neg]:[LLx];
+      for(const S of sets)for(let i=0;i<model.nN;i++){
+        const VL=(1+impComb)*S[i].V, NL=(1+impComb)*S[i].C, V0=DL[i].V, N0=DL[i].C;
+        const V=V0+mm*VL, N=N0+mm*NL;
+        const dc=(N>0)?Math.abs(V)/(mu*N):Infinity;
+        if(dc>best.dc)best={dc,sec:i,pos,dir,V,N,VD:V0,ND:N0,VL,NL};
+        let lim=Infinity;
+        const r1=mu*N0-V0, c1=VL-mu*NL, r2=mu*N0+V0, c2=-VL-mu*NL;
+        if(r1<0||r2<0)lim=0;
+        else{if(c1>0)lim=Math.min(lim,r1/c1); if(c2>0)lim=Math.min(lim,r2/c2);}
+        if(lim<mS){mS=lim;mSat={sec:i,pos,dir};}
+      }
+    }
+  }
+  return Object.assign(best,{m:mm,mu,imp:impComb,mSlide:mS,mSlideAt:mSat,sweepStep:step});
+}
+/* D/C of friction under dead load alone, every node (the worst one returned with the list). */
+function slideDL(model,mu){
+  const rows=[]; let w=null;
+  for(let i=0;i<model.nN;i++){
+    const V=model.DL[i].V, N=model.DL[i].C, dc=(N>0)?Math.abs(V)/(mu*N):Infinity;
+    const r={sec:i,V,N,dc}; rows.push(r); if(!w||dc>w.dc)w=r;
+  }
+  return {rows,worst:w};
+}
+
 /* Rating factor at EVERY section, each at its own critical vehicle position.
 
    rateVehicle answers "what is the rating of this bridge" — the minimum over
@@ -2715,7 +2764,7 @@ function vehiclesFor(mode){return (mode==="rail")?RAIL_VEHICLES:VEHICLES;}
 return {buildModel,buildGeometry,denseIntrados,fitAll,fitOk,stressPair,
         SHALLOW_FILL,slabWidthE,shallowWidth,shallowRate,rateAt,isLrfdRate,LRFD_MIN_FILL,shallowRuleOn,stripLoadConc,coverAtX,llRegime,deepTire,
         RAIL_VEHICLES,ALL_VEHICLES,vehiclesFor,railSpread,railGroups,railTracks,TIE_LONG,nodalLL,nodalLLByAxle,llEffects,stressMax,
-        impactFor,impactForRail,impactAt,baseDepth,faAt,leadAxleX,shearRF,deterZones,tribSpan,coverFrac,rateTrace,rateAllSections,extremeAt,railRate,llEffectsSplit,llAtSection,axleLs,axleTrib,axleFoot,axleHalves,trackExtents,applyLocalImpact,rateVehicle,thrustOffsets,VEHICLES,
+        impactFor,impactForRail,impactAt,baseDepth,faAt,leadAxleX,shearRF,deterZones,tribSpan,coverFrac,rateTrace,rateAllSections,extremeAt,railRate,llEffectsSplit,llAtSection,axleLs,axleTrib,axleFoot,axleHalves,trackExtents,applyLocalImpact,rateVehicle,slideScan,slideDL,thrustOffsets,VEHICLES,
         TIRE_L,TIRE_W,GAGE,sideBySide,sideBySideAt,lanesOn,TRUCK_CLR};
 })();
 
@@ -7215,7 +7264,12 @@ function validate(p,M,results){
         "surface load by <b>"+nfx(dpc,1)+"%</b>. Ring self weight is unaffected: it is distributed along the "+
         "arc, not on a projection."+
         (dpc>2?" On a deep or near-semicircular ring this is worth several percent of the rating, which is why "+
-          "the two spans are reported separately on the Model tab.":""),
+          "the two spans are reported separately on the Model tab.":"")+
+        " <b>Stated deviation (review L-3):</b> §7.2.7.3B says the vertical dead loads are calculated along the "+
+        "horizontal length of each element; read literally that is the axis projection. The extrados projection used "+
+        "here puts "+nfx(dpc,1)+"% more surface load on this ring. That is usually the conservative reading, but not "+
+        "certainly so, because added dead load also adds thrust. "+
+        "State it in the calculation (it is in the Design Basis on the Summary tab).",
         "§7.2.7.3B");
     })();
     /* Deep springing cover. On a near-semicircular ring the extrados at the
@@ -7577,10 +7631,49 @@ function validate(p,M,results){
     "AASHTO MBE Art. 6A.9.1 evaluates unreinforced masonry arches at the Inventory level only; no Operating "+
     "allowable stress is given for masonry. EV2/EV3 are rated at the Inventory stress level and reported at "+
     "both levels per §7.2.7.11B — that reporting convention is not an Operating capacity check.","MBE 6A.9.1");
-  add("na","Shear / radial joint sliding",
-    "§7.2.7 rates stone masonry arches on combined compressive stress only. Shear is computed and reported "+
-    "for information but is not a rating check in this procedure.","§7.2.7.9B");
+  /* SLD (S-2, 2026-11-07): the friction check replaces the old "not a rating check" N/A row. Advisory: it never
+     changes a rating factor; a D/C over 1 is flagged for the engineer. */
+  {
+    const SL=(M&&M.slide)?M.slide:null;
+    if(!(p.mu>0))
+      add("wn","Bed-joint sliding not checked",
+        "The friction coefficient &mu; is 0 or blank, so |V| &le; &mu;N is not evaluated. §7.2.7 rates on combined "+
+        "compressive stress only; the sliding check is an advisory supplement. Enter &mu; (0.6 is a common judgment "+
+        "value for masonry joints, verify) to run it.","advisory");
+    else if(SL&&SL.worst){
+      const w=SL.worst, dw=SL.dlWorst, bad=!(w.s.dc<=1)||!(dw.d.worst.dc<=1);
+      add(bad?"bad":"ok","Bed-joint sliding |V| ≤ μN (advisory)",
+        `&mu; = ${nfx(SL.mu,2)}. Worst joint at the rated load: <b>D/C = ${nfx(w.s.dc,3)}</b> (${esc(w.name)}, `+
+        `${esc(CALC.secTag(w.Mo,w.s.sec))}, ${w.nEl}-element mesh); dead load alone ${nfx(dw.d.worst.dc,3)}. `+
+        (bad?"<b>Friction is exceeded:</b> the joints would slide before the compressive stress reaches f<sub>a</sub>. "+
+            "The reported rating factors are the §7.2.7 compressive-stress ratings and are NOT reduced by this check; "+
+            "the engineer must decide how to treat it (Decision pending engineer review). "
+            :"Friction holds at every joint and position, so sliding does not govern before the compressive stress. ")+
+        "V and N are resolved on the section normal at each node (the radial joint)."+
+        archWorkedIn([{tab:"rate",card:"rate_slide",txt:"D/C "+nfx(w.s.dc,3),lab:"Rating · Bed-joint sliding"}]),
+        "advisory");
+    }
+  }
   add("na","Thermal effects","Not considered, per explicit direction in §7.2.7.6B.","§7.2.7.6B");
+  /* HSV (L-5, 2026-11-07) */
+  if(M&&M.hsv&&M.hsv.best&&p.loadMode!=="rail"){
+    const H=M.hsv, b=H.best;
+    add("ok","HS20 rear-axle spacing V = 14 to 30 ft",
+      `HS20 rated with V = ${H.runs.map(q=>q.V).join(", ")} ft on the ${H.Mo.nEl}-element mesh; the lowest is `+
+      `<b>RF ${nfx(b.rf,3)} at V = ${b.V} ft</b>`+(b.V===14?" (the listed truck), which is the reported HS20 rating. ":
+        `, which is the reported HS20 rating (V = 14 ft: ${nfx(H.runs[0].rf,3)}). `)+
+      "Std. Spec. Art. 3.7.6: the spacing producing the maximum effect is used (verify, not in references)."+
+      archWorkedIn([{tab:"rate",card:"rate_hsv",txt:"V = "+b.V+" ft",lab:"Rating · HS20 variable axle spacing"}]),
+      "Std. Spec. 3.7.6");
+  }
+  /* S-4 (2026-11-07): what the model does not represent, stated once on the dashboard and in the Design Basis. */
+  add("na","Outside the scope of this model",
+    "Not modelled: spandrel walls (overturning, bulging, separation from the barrel, and any participation, which "+
+    "§7.2.7.4B says to neglect); passive restraint of the fill against sway of the ring (the fill is load only); "+
+    "three-dimensional behaviour (skew, transverse distribution beyond the wheel-load rules, longitudinal cracking of "+
+    "the barrel, edge strips); ring separation of multi-ring barrels (the ring acts as one solid section); abutment and "+
+    "pier capacity, foundation movement and scour; and collapse-mechanism capacity (the rating is an elastic "+
+    "allowable-stress rating). Assess these separately where they matter.","—");
   add("na","Spandrel wall participation",
     "§7.2.7.4B permits a spandrel to act as an independent member but states the ability of a spandrel to "+
     "support itself and a portion of the arch is uncertain and shall be neglected. Spandrel weight must be "+
@@ -9766,7 +9859,7 @@ const F={
   geoMode:"ideal",shape:"circular",span:"40",rise:"10",measPts:"",fitSel:"auto",
   support:"fixed",nelem:"0",dCrown:"24",dSpring:"24",dOver:"",deter:"",deterFace:"intrados",
   gradeMode:"crown",gradePct:"0",cover:"2.0",covL:"12.0",covR:"12.0",tws:"4",
-  gm:"170",gf:"120",gws:"140",kcoef:"0.25",emod:"1500",shearDef:"1",impMode:"crown",llAdverse:"0",shallowE:"tire",shallowRate:"0",deepSpread:"std",lanes:"auto",truckClr:"4",fallow:"250",fv:"0",
+  gm:"170",gf:"120",gws:"140",kcoef:"0.25",emod:"1500",shearDef:"1",impMode:"crown",llAdverse:"0",shallowE:"tire",shallowRate:"0",deepSpread:"std",lanes:"auto",truckClr:"4",fallow:"250",fv:"0",mu:"0.6",
   barrelW:"24",sdlItems:"",loadMode:"hwy",tieLen:"8.5",tieDepth:"0.583",railSpread:"0.5",railCapLong:"0",tracks:"0",
   assume:"",vehicles:ARCH.VEHICLES.map(v=>v.id).join(",")
 };
@@ -9870,7 +9963,11 @@ function inputPanel(){
     row("Allowable compressive stress f<sub>a</sub>","psi — MBE 6B.5.2.6 with field judgment",nb("fallow","10"))+
     row("Allowable shear stress f<sub>v</sub>",
       "psi — 0 disables the check. §7.2.7 does not require a shear rating; entering a value adds one to the "+
-      "governing rating factor",nb("fv","1")),"§7.2.7.5B / 11B");
+      "governing rating factor",nb("fv","1"))+
+    row("Bed-joint friction coefficient &mu;",
+      "sliding check |V| &le; &mu;N at every section, reported beside the rating (advisory; it does not change a "+
+      "rating factor). 0.6 is a common judgment value for masonry joints (verify); 0 switches the check off",
+      nb("mu","0.05",0)),"§7.2.7.5B / 11B");
 
   const vlist=ARCH.vehiclesFor(F.loadMode);
   h+=UI.pnl("ip_veh",c(),"Rating Vehicles",
@@ -10151,7 +10248,7 @@ function readP(){
     K:n("kcoef"),E:n("emod"),shearDef:g("shearDef")==="1",
     llAdverse:g("llAdverse")==="1",
     impMode:g("impMode"),shallowRule:"6.4.1",shallowE:g("shallowE")||"tire",shallowRate:+(g("shallowRate")||0),
-    deepSpread:(g("deepSpread")==="tire")?"tire":"std",fa:n("fallow"),fv:n("fv"),
+    deepSpread:(g("deepSpread")==="tire")?"tire":"std",fa:n("fallow"),fv:n("fv"),mu:n("mu"),
     lanes:g("lanes")||"auto",truckClr:n("truckClr"),
     barrelW:n("barrelW"),sdl:readSdl(g("sdlItems")),
     loadMode:g("loadMode"),tieLen:n("tieLen"),tieDepth:n("tieDepth"),
@@ -10858,7 +10955,31 @@ function buildOutput(p){
       <li>Eccentricity is positive toward the extrados, e<sub>s</sub> = ΣM/ΣP.</li>
     </ul>`+
     `<h4>Units</h4><p>Imperial throughout. Forces on the one-foot strip are k/ft; moments are k·ft/ft;
-      stresses are reported in psi and computed internally in ksf (1 psi = 0.144 ksf).</p>`,"");
+      stresses are reported in psi and computed internally in ksf (1 psi = 0.144 ksf).</p>`+
+    /* L-3 and S-4 (review, 2026-11-07): the dead-load projection stated as an assumption, and the scope limits */
+    (()=>{let te=0,ta=0;for(let i=0;i<M.nN;i++){te+=M.tribH[i];ta+=(M.tribAxis?M.tribAxis[i]:M.tribH[i]);}
+      const dpc=(ta>0)?100*(te-ta)/ta:0;
+      return `<h4>Stated assumptions</h4><ul>
+      <li><b>Dead load on the extrados projection.</b> MassDOT §7.2.7.3B calculates the vertical dead loads along the
+          horizontal length of each element. This program applies the fill, wearing surface and superimposed dead load on
+          the horizontal projection of the <i>extrados</i> of each element (the surface they bear on), not of the arch
+          axis; ring self weight is on the arc. On this ring that is ${nfx(dpc,1)}% more surface load than the axis
+          projection (extrados ${nfx(te,3)} ft against axis ${nfx(ta,3)} ft). It is a deliberate deviation from the
+          literal text, usually conservative, but not certainly so, because more dead load also adds thrust.</li>
+      <li><b>Bed-joint sliding</b> is checked as |V| &le; &mu;N on the section normal at each node, with &mu; =
+          ${(p.mu>0)?nfx(p.mu,2):"(not checked)"}. It is advisory and does not change a rating factor.</li>
+      <li><b>HS20</b> is rated with the rear-axle spacing V varied from 14 to 30 ft; the lowest rating is reported.</li>
+      </ul>
+      <h4>Outside the scope of this model</h4><ul>
+      <li>Spandrel walls: overturning, bulging and separation from the barrel are not checked, and any participation is
+          neglected (§7.2.7.4B).</li>
+      <li>Passive restraint of the fill against sway of the ring is not modelled; the fill is load only.</li>
+      <li>Three-dimensional behaviour: skew, transverse distribution beyond the wheel-load rules, longitudinal cracking of
+          the barrel and edge strips.</li>
+      <li>Ring separation of multi-ring barrels: the ring is one solid section.</li>
+      <li>Abutment and pier capacity, foundation movement and scour.</li>
+      <li>Collapse-mechanism capacity: the rating is an elastic allowable-stress rating (§7.2.7).</li>
+      </ul>`;})(),"");
   panes.sum=s;
 
   const c2=UI.counter();
@@ -11129,6 +11250,56 @@ function buildOutput(p){
     }
     s+=UI.pnl("rate_lane",c5(),"Lane loading — MassDOT §7.2.4.2B (H vehicles at 12 tons or less)",lh,"§7.2.4.2B");
   }
+  if(archHsv&&archHsv.runs){
+    const H=archHsv, b=H.best;
+    let hh=msg("inf","HS20 rear-axle spacing varied from 14 to 30 ft",
+      "AASHTO Std. Spec. 17th Ed. Art. 3.7.6 (verify, not in references): the spacing V between the two 32 kip axles of the "+
+      "HS20 truck is varied from 14 to 30 ft and the spacing that produces the maximum effect is used. Each spacing below "+
+      "is a complete rating (swept in both directions at the same step) on the "+H.Mo.nEl+"-element mesh that the reported "+
+      "HS20 rating comes from. The reported HS20 rating is the lowest of the nine.")+
+      dtab([{k:"V",h:"Rear-axle spacing V (ft)",dp:0},{k:"rf",h:"HS20 RF",dp:3},{k:"t",h:"tons",dp:1}],
+        H.runs.map((q,i)=>({__i:i,V:q.V,rf:q.rf,t:q.rf*36})),{})+
+      `<div class="note">Reported HS20: RF = <b>${nfx(b.rf,3)}</b> at V = ${b.V} ft `+
+      (b.V===14?"(the listed V = 14 ft truck governs, so its panel below is the reported rating).":
+        "(a longer spacing governs; it is worked in full below, and the HS20 panel keeps the V = 14 ft steps).")+
+      ` V = 14 ft is the HS20 result of the mesh convergence table.</div>`;
+    if(b.V!==14&&b.res)hh+=UI.pnl("hsv_worked",null,esc(b.veh.name)+" — worked",
+      CALC.vehicleSection(p,H.Mo,b.veh,b.res,{}),"RF = "+nfx(b.rf,3));
+    s+=UI.pnl("rate_hsv",c5(),"HS20 variable axle spacing — V = 14 to 30 ft",hh,"Std. Spec. 3.7.6");
+  }
+  if(archSlide&&archSlide.worst){
+    const C=archSlide, w=C.worst, ws=w.s, Mw=w.Mo, dw=C.dlWorst;
+    const dcTxt=x=>isFinite(x)?nfx(x,3):"&infin; (no compression)";
+    let sh=msg("inf","Bed-joint sliding: friction against the thrust (advisory)",
+      "§7.2.7 rates the ring on combined compressive stress only. This check adds the friction condition that a "+
+      "masonry joint needs to transmit shear: |V| &le; &mu;N, with V and N resolved on the section normal to the arch "+
+      "axis (the radial bed joint at the node). It is evaluated at every section and every vehicle position, with each "+
+      "vehicle's live load at its reported rating factor (the load the rating says the arch carries), including impact. "+
+      "It is reported beside the rating and does <b>not</b> change any rating factor. &mu; = "+nfx(C.mu,2)+
+      " (input; 0.6 is a common judgment value for stone on stone or mortared joints in masonry arch assessment, "+
+      "not a code value: verify against the joint condition).");
+    sh+=R.step({label:"Friction demand / capacity at the governing joint",ref:"advisory",
+      sym:"\\dfrac{D}{C}=\\dfrac{|V_{DL}+m\\,(1+I)\\,V_{LL}|}{\\mu\\,\\left(N_{DL}+m\\,(1+I)\\,N_{LL}\\right)}",
+      sub:`\\dfrac{|${R.num(ws.VD,3)}+${R.num(ws.m,3)}\\times(${R.num(ws.VL,3)})|}{${R.num(C.mu,2)}\\times(${R.num(ws.ND,3)}+${R.num(ws.m,3)}\\times ${R.num(ws.NL,3)})}`,
+      res:dcTxt(ws.dc),units:"",
+      note:`${esc(w.name)}, ${esc(CALC.secTag(Mw,ws.sec))} of the ${w.nEl}-element mesh (x = ${nfx(Mw.g.nodes[ws.sec].x,2)} ft), `+
+        `lead axle at x = ${nfx(ARCH.leadAxleX(w.veh,ws.pos,ws.dir),2)} ft, ${ws.dir<0?"right to left":"left to right"}; m = reported RF; `+
+        `V_LL and N_LL already include the impact factor (1 + I = ${nfx(1+ws.imp,2)}). V in k/ft, N in k/ft.`});
+    sh+=R.step({label:"Dead load alone, worst joint over the convergence meshes",ref:"advisory",
+      sym:"\\dfrac{D}{C}_{DL}=\\dfrac{|V_{DL}|}{\\mu\\,N_{DL}}",
+      sub:`\\dfrac{|${R.num(dw.d.worst.V,3)}|}{${R.num(C.mu,2)}\\times ${R.num(dw.d.worst.N,3)}}`,
+      res:dcTxt(dw.d.worst.dc),units:"",
+      note:`${esc(CALC.secTag(dw.Mo,dw.d.worst.sec))} of the ${dw.nEl}-element mesh.`});
+    sh+=dtab([{k:"tag",h:"Vehicle",txt:1},{k:"rf",h:"Reported RF (= m)",dp:3},{k:"mesh",h:"mesh",txt:1},
+        {k:"sec",h:"governing joint",txt:1},{k:"dc",h:"D/C sliding",dp:3},{k:"ms",h:"m at sliding",dp:2},{k:"ok",h:"check",txt:1}],
+      C.rows.map((q,i)=>({__i:i,tag:esc(q.name),rf:q.rf,mesh:q.nEl+" el",sec:esc(CALC.secTag(q.Mo,q.s.sec)),
+        dc:q.s.dc,ms:q.s.mSlide,ok:(q.s.dc<=1)?"OK":"SLIDES"})),{})+
+      `<div class="note"><b>m at sliding</b> is the largest live load multiplier for which friction holds at every joint and
+       every position (— : friction is never exceeded however large the live load). Where it exceeds the reported RF,
+       compression governs and the joints do not slide at the rated load. The check uses the section normal at the node as
+       the joint, the same section the stress check uses; real bed joints may be inclined to it.</div>`;
+    s+=UI.pnl("rate_slide",c5(),"Bed-joint sliding — |V| ≤ μN (advisory)",sh,"advisory");
+  }
   const govId=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b).id:null;
   {
     const atSec=(rateBasis==="sec");
@@ -11147,6 +11318,9 @@ function buildOutput(p){
       const off=(atSec&&rr.sec!==r.sec);
       s+=UI.pnl("veh_"+r.id,c5(),
         esc(v.name)+(r.id===govId?" &mdash; GOVERNS":""),
+        (r.vGov?msg("warn","This vehicle's reported rating is from a longer rear-axle spacing",
+          `HS20 with V = ${r.vGov} ft rates ${nfx(r.rf,3)} against ${nfx(r.v14RF,3)} for V = 14 ft (Std. Spec. 3.7.6, verify); `+
+          `the steps below are for V = 14 ft. The governing spacing is worked in the "HS20 variable axle spacing" panel above.`):"")+
         (r.laneGov?msg("warn","This vehicle's reported rating is from the lane loading",
           `The lane loading rates ${nfx(r.rf,3)} against ${nfx(r.truckRF,3)} for the truck (MassDOT §7.2.4.2B); the steps `+
           `below are the truck's. The lane loading is worked in the "Lane loading" panel above.`):"")+
@@ -11715,6 +11889,75 @@ function archLaneRun(p){
   }
   return archLane;
 }
+/* HSV (review L-5, 2026-11-07): HS20 rear-axle spacing V varied from 14 to 30 ft (AASHTO Std. Spec. 17th Ed.
+   Art. 3.7.6: the spacing that produces the maximum effect is used; verify, not in references). The listed HS20 is
+   V = 14 ft; V = 16, 18 … 30 ft are rated on the same mesh as the reported HS20 rating (r.Mo, or the worked mesh), and
+   the reported HS20 rating is the lowest of the nine. A V other than 14 ft that governs keeps the V = 14 ft worked steps
+   in the HS20 panel and is worked in full in the "HS20 variable axle spacing" panel. */
+const HSV_V=[16,18,20,22,24,26,28,30];
+let archHsv=null;
+function archHsvVeh(base,V){
+  return Object.assign({},base,{id:"HS20_V"+V,name:"HS20 (V="+V+"′)",
+    axles:[{x:0,P:8},{x:14,P:32},{x:14+V,P:32}]});
+}
+function archHsvRun(p){
+  archHsv=null;
+  if(p.loadMode==="rail")return null;
+  const r=results.find(q=>q.id==="HS20");
+  if(!r||!isFinite(r.rf))return null;
+  const Mo=r.Mo||M, key=JSON.stringify(p)+"|"+Mo.nEl;
+  if(!(archHsvRun.cache&&archHsvRun.cache.key===key)){
+    const base=ARCH.VEHICLES.find(v=>v.id==="HS20"), t0=Date.now();
+    const runs=[{V:14,rf:r.rf,veh:base,res:null}];
+    for(const V of HSV_V){
+      const v=archHsvVeh(base,V), q=ARCH.rateVehicle(Mo,v,p.fa,p.impMode);
+      q.id=v.id; runs.push({V,rf:q.rf,veh:v,res:q});
+    }
+    archHsvRun.cache={key,Mo,runs,ms:Date.now()-t0};
+  }
+  archHsv=archHsvRun.cache;
+  let best=archHsv.runs[0];
+  /* a longer V governs only when it rates lower by more than 5e-5 (well below the 0.001 shown); on many arches the
+     rear axle is off the ring for every V and the nine ratings agree to rounding */
+  for(const q of archHsv.runs)if(q.rf<best.rf-5e-5)best=q;
+  archHsv.best=best;
+  Object.defineProperty(M,"hsv",{value:archHsv,writable:true,configurable:true,enumerable:false});   /* for CALC.validate */
+  if(best.V!==14){
+    const i=results.indexOf(r), o=Object.assign({},r);
+    o.v14RF=r.rf; o.rf=best.rf; o.tons=o.rf*36; o.vGov=best.V;
+    results[i]=o;
+  }
+  return archHsv;
+}
+/* SLD (review S-2, 2026-11-07): bed-joint sliding, |V| <= mu N, advisory (it does not change a rating factor).
+   Each vehicle is scanned on the mesh its reported rating comes from, with its live load at the reported rating
+   factor (the load the rating says the arch carries); an HS20 governed by a longer V uses that V. Dead load alone is
+   checked on every mesh of the convergence study. mu = 0 or blank: not checked. */
+let archSlide=null;
+function archSlideRun(p){
+  archSlide=null;
+  const mu=+p.mu;
+  if(!(mu>0))return null;
+  const key=JSON.stringify(p)+"|"+results.map(r=>r.id+":"+r.rf+":"+(r.nElR||M.nEl)+":"+(r.vGov||"")).join(",");
+  if(!(archSlideRun.cache&&archSlideRun.cache.key===key)){
+    const t0=Date.now();
+    const rows=results.map(r=>{
+      const Mo=r.Mo||M;
+      const v=r.vGov?archHsvVeh(ARCH.VEHICLES.find(q=>q.id==="HS20"),r.vGov):ARCH.ALL_VEHICLES.find(q=>q.id===r.id);
+      const s=ARCH.slideScan(Mo,v,p.impMode,r.rf,mu);
+      return {id:r.id,name:v.name,veh:v,rf:r.rf,nEl:Mo.nEl,Mo,s};
+    });
+    const meshes=(archConv&&archConv.models)?Object.values(archConv.models):[M];
+    const dl=meshes.map(Mo=>({nEl:Mo.nEl,Mo,d:ARCH.slideDL(Mo,mu)}));
+    archSlideRun.cache={key,mu,rows,dl,ms:Date.now()-t0};
+  }
+  archSlide=archSlideRun.cache;
+  const C=archSlide;
+  C.worst=C.rows.length?C.rows.reduce((a,b)=>b.s.dc>a.s.dc?b:a):null;
+  C.dlWorst=C.dl.reduce((a,b)=>b.d.worst.dc>a.d.worst.dc?b:a);
+  Object.defineProperty(M,"slide",{value:C,writable:true,configurable:true,enumerable:false});
+  return C;
+}
 /* the convergence table (Rating tab, Verification tab and Report) */
 function archConvTable(){
   const C=archConv; if(!C||!C.rows)return "";
@@ -11763,7 +12006,9 @@ function render(){
     r.id=v.id; results.push(r);
   }
   archConvRun(p);   /* MCV (H-1): rate at n1, 2n1, 4n1; lowest RF per vehicle; M may become a finer mesh */
+  archHsvRun(p);    /* HSV (L-5): HS20 rear-axle spacing V = 14 to 30 ft; lowest RF reported */
   archLaneRun(p);   /* HLN (M-1): H vehicles at 12 tons or less also rated with the lane loading */
+  archSlideRun(p);  /* SLD (S-2): bed-joint sliding |V| <= mu N, advisory; does not change a rating */
   window.__impCmp=impCmp;
   /* The editor's "Resolves to" column depends on the model that was just built,
      so it is refreshed here rather than left showing whatever was true when the
@@ -12632,6 +12877,9 @@ function restore(o){
      field and opens on the defaults: lanes from the barrel width, 4 ft gap. */
   F.lanes=(o.fields.lanes!=null)?String(o.fields.lanes):"auto";
   F.truckClr=(o.fields.truckClr!=null)?String(o.fields.truckClr):"4";
+  /* SLD (2026-11-07): a file written before the sliding check has no mu and opens on the default 0.6 (advisory
+     check only; no rating factor depends on it). */
+  F.mu=(o.fields.mu!=null)?String(o.fields.mu):"0.6";
   $("inPanel").innerHTML=inputPanel();
   UI.wire($("inPanel"));
   archInputTabs($("inPanel")); listTables();
@@ -12899,7 +13147,7 @@ function saNewCalc(){
     try{localStorage.removeItem(LSA);}catch(e){}
     curProj=""; restoredAt=null;
     F.loadMode="hwy"; F.vehicles=ARCH.VEHICLES.map(v=>v.id).join(",");
-    F.lanes="auto"; F.truckClr="4"; twsAuto=false;
+    F.lanes="auto"; F.truckClr="4"; F.mu="0.6"; twsAuto=false;
     animVehId=null;ndVeh=null;ndPos=null;ndNode=null;xsNode=null;
     impText="";impParsed=null;impCmp=null;impErr="";activeTab="sum";
     $("inPanel").innerHTML=inputPanel(); UI.wire($("inPanel")); archInputTabs($("inPanel")); listTables();

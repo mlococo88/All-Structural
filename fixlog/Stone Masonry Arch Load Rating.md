@@ -1484,3 +1484,53 @@ function transDisp(w,n,c,cap){
   - The truck governs, so the reported H20 RF of 0.390 is unchanged.
   - HS20 (14.1 t) is not triggered. On the default (H20 14.9 t) nothing changes.
 - **How verified:** `check-syntax`; `phone-layout --tool arch`; `project-library --tool stonearch`: on load identical (not triggered); after the test's input change (H20 1.7 t) the only difference is the new dashboard lane row (truck governs, ratings identical); all 14 tabs on the 20/4 case with 0 console errors; the lane panel appears in the Report.
+
+## 2026-11-07 — PR #1114: https://github.com/mlococo88/All-Structural/pull/1114 — Bed-joint sliding check, HS20 variable axle spacing, stated assumptions and scope (SLD / HSV / ASM; review S-2, L-5, L-3, S-4)
+
+### SLD-1. Bed-joint sliding |V| ≤ μN at every section, reported with D/C   [§4: new advisory check; no rating factor changes]
+- **Problem (review S-2):** the only joint check was the optional f_v·A shear rating (off by default), which takes no account of the thrust that actually resists sliding in a masonry joint. The dashboard carried an N/A row "Shear / radial joint sliding".
+- **Where:**
+  - engine: new `slideScan(model,vehicle,impMode,m,mu)` and `slideDL(model,mu)` just before the comment `/* Rating factor at EVERY section`, exported from `ARCH`;
+  - render: new `archSlideRun(p)` before `/* the convergence table`, called in `render()` (anchor `archSlideRun(p);  /* SLD (S-2)`) after `archLaneRun`;
+  - Rating tab panel `rate_slide` (after `rate_lane`); dashboard row "Bed-joint sliding |V| ≤ μN (advisory)" in `validate()`, replacing the N/A row "Shear / radial joint sliding";
+  - input `mu` (Allowables panel, after f_v; default "0.6"; `readP` `mu:n("mu")`; `restore` and `saNewCalc` set `F.mu`).
+- **Before:** `add("na","Shear / radial joint sliding","§7.2.7 rates stone masonry arches on combined compressive stress only. Shear is computed and reported for information but is not a rating check in this procedure.","§7.2.7.9B");`
+- **After:** for each selected vehicle, on the mesh its reported rating comes from (`r.Mo` or the worked mesh), swept exactly as `rateVehicle` sweeps it (0.25 ft, both directions, same impact basis, adverse-only split when that option is on), with the live load at m = the reported RF:
+  - D/C = |V_DL + m(1+I)V_LL| / (μ (N_DL + m(1+I)N_LL)), maximum over every node and position (N ≤ 0 gives ∞);
+  - m at sliding = the largest multiplier with ±(V0 + m·VL) ≤ μ(N0 + m·NL) at every node and position (0 if dead load alone slides);
+  - dead load alone: max |V_DL|/(μN_DL) over every node of all three convergence meshes.
+  The dashboard row is OK when every D/C ≤ 1 and FAIL ("Friction is exceeded") otherwise. V and N are the section-normal values the stress check already uses (the radial joint at the node).
+- **Basis:** not a MassDOT §7.2.7 requirement (§7.2.7 rates on compressive stress only; the MassDOT manual has no sliding provision for arches, checked). The Coulomb friction condition at a joint is the standard one in masonry-arch assessment (Heyman, *The Masonry Arch*, 1982, assumes sliding does not occur and recommends checking it; arch limit-analysis practice commonly takes μ ≈ 0.6 for stone or mortared joints). **Verify (not in references).** μ = 0.6 is the review's judgment value.
+- **Decisions (pending engineer review):**
+  1. Advisory only: a D/C over 1 is a dashboard FAIL, but the reported §7.2.7 rating is not reduced (the optional f_v rating is still the way to fold a shear limit into the RF).
+  2. Load level = the reported RF of each vehicle (the load the rating says the arch carries). A vehicle whose rating is governed by the lane loading is scanned as the truck at that RF.
+  3. Joint = section normal at the node; real bed joints may be inclined to it.
+  4. Old files have no `mu`; they open on 0.6 (only this advisory check depends on it).
+- **Check case (default, 12 el, governing joint SL-L, SU5 at RF 0.672, 1 + I = 1.10):**
+  - V_DL = 3.455, V_LL(1+I) = 1.081, N_DL = 27.538, N_LL(1+I) = 2.229 (k/ft);
+  - D/C = |3.455 + 0.672 × 1.081| / (0.60 × (27.538 + 0.672 × 2.229)) = 4.181 / 17.42 = **0.240**;
+  - dead load alone: 3.455 / (0.60 × 27.538) = **0.209**;
+  - other cases: 20/4 rise 0.335 (H20, 48 el), 30/6 rise 0.296, semicircle 0.231, 4 ft cover 0.178. No case slides.
+
+### HSV-1. HS20 rear-axle spacing V = 14 to 30 ft   [§4: can only lower the reported HS20 rating]
+- **Problem (review L-5):** HS20 was rated with V = 14 ft only. Std. Spec. Art. 3.7.6 varies V from 14 to 30 ft and uses the spacing that produces the maximum effect.
+- **Where:** new `HSV_V`, `archHsvVeh`, `archHsvRun` before `/* the convergence table`; `render()` anchor `archHsvRun(p);    /* HSV (L-5)` between `archConvRun` and `archLaneRun` (so the 12-ton lane trigger and the MS18 panel see the final HS20 value); Rating tab panel `rate_hsv`; HS20 vehicle panel note when a longer V governs; dashboard row "HS20 rear-axle spacing V = 14 to 30 ft".
+- **Before:** HS20 = `{x:0,P:8},{x:14,P:32},{x:28,P:32}` only.
+- **After:** V = 16, 18 … 30 ft (`{x:0,P:8},{x:14,P:32},{x:14+V,P:32}`) rated with `ARCH.rateVehicle` on the mesh the reported HS20 comes from; reported HS20 RF = the lowest of the nine. A longer V governs only when lower by more than 5e-5. Vehicle ids and saved data unchanged.
+- **Governing provision:** AASHTO Std. Spec. 17th Ed. Art. 3.7.6 (variable spacing 14 to 30 ft). **Verify (not in references).** MassDOT §7.2.4.1B lists HS20 for the rating vehicles (checked).
+- **Decision (pending engineer review):** 2 ft steps; the longer spacings are rated on one mesh (the reported HS20 mesh), not over all three convergence meshes (performance: 0.15 to 0.9 s per input change).
+- **Check case (20/4 rise, ring 20→23.4 in, cover 1.24 ft, 48 el):** V = 14: 0.3905; V = 16 to 30: 0.3900. At V ≥ 16 the rear 32 kip axle is off the 20 ft ring when the drive axle governs; with it on, its thrust helps. Reported HS20 0.391 → **0.390** (14.06 → 14.04 tons). Default: V = 14 governs (0.6765; V = 16: 0.7001, V ≥ 20: 0.7732): unchanged.
+
+### ASM-1. Stated assumption: dead load on the extrados projection (review L-3)   [wording]
+- **Where:** Summary `o_basis` panel, new "Stated assumptions" list; dashboard row "Load width measured on the extrados" (anchor `Stated deviation (review L-3)`).
+- **After:** says that §7.2.7.3B calculates vertical dead loads along the horizontal length of each element, that this program uses the extrados projection, and by how much (default: 3.8% more surface load, extrados 43.197 ft against axis 41.599 ft); usually conservative, but not certainly, because more dead load also adds thrust. No computed value changes.
+
+### ASM-2. Outside the scope of this model (review S-4)   [wording]
+- **Where:** Summary `o_basis` panel "Outside the scope of this model" list and dashboard N/A row "Outside the scope of this model".
+- **After:** spandrel walls (overturning, bulging, separation; participation neglected per §7.2.7.4B), passive restraint of the fill, 3-D effects (skew, transverse distribution, longitudinal cracking, edge strips), ring separation, abutments/piers/foundations/scour, and collapse-mechanism capacity.
+
+### How verified
+- `node tests/check-syntax.mjs` (all pass); `tests/smoke/phone-layout.mjs --tool arch` (pass); `tests/smoke/project-library.mjs --tool stonearch` (the four A-vs-B identity checks differ only by `M.p.mu` and the new Summary text; the other checks pass);
+- headless main vs branch (Playwright, `tests/lib.mjs` `openPage`), reported RFs on seven cases: default, 30/6, semicircle, 4 ft cover, Lanes = 1, 80/16: identical; 20/4: HS20 0.391 → 0.390 only;
+- all 14 tabs with 0 console errors on the default and the 20/4 case; the new panels appear in the Report.
+- **Saved data:** one new field `mu` in the project file (old files open on 0.6); no key changed.
