@@ -3358,3 +3358,23 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - `check-syntax` passes; Validation 136/136.
   - Headless probe, main vs branch: only holeEdge, holeEdgeTiny and holeInTube changed, all to the error. Every other model (holes inside one part, across a joint, round holes, concrete holes) is identical, as are all 1,660 shapes.
   - `project-library --tool spc`: ALL PASS. 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-j-thick — SPM3: J statement corrected; thin-wall J flagged for thick-flanged W, M, HP, WT, MT shapes (review M3; display only, no value change; PR #1094: https://github.com/mlococo88/All-Structural/pull/1094)
+
+- **Problem (review M3):** the C1 entry ("Plate model vs AISC tables") said that the thin-wall J is lower than the AISC J and therefore conservative for torsional stiffness. That is true for light shapes and false for heavy ones. The thin-wall J of **155** W, WT, HP, M and MT shapes is above the table, for example W14X730 +9.1 % and WT7X436.5 +11.1 %. Σbt³/3 overestimates J of stocky flange elements, and for these shapes that outweighs the neglected fillets. All 155 have b_f/2t_f ≤ 5.33.
+- **Correction of the C1 statement (old entry not rewritten):** the thin-wall J is **not** always lower than the AISC J. It is lower for light shapes and for all S, C, MC and ST shapes (−1 to −27 %). It is higher for heavy W, M, HP, WT and MT shapes, by up to +11 %. In that case it is unconservative wherever J resists torsion (torsional stiffness, LTB terms).
+- **Fix (display only):**
+  - In `torsion()` (anchor `const thick = parts.filter(`), a W, M, HP, WT or MT part with b_f/2t_f ≤ 5.5 sets `T.jHigh` and adds a torsion warning. The warning is shown on the Torsion tab and in the Report notes: "Thick flanges (b_f/2t_f ≤ 5.5: W1 W14X730 1.82): the thin-wall J (Σ b t³/3) can be higher than the true J for such stocky flanges (up to +11 % over the AISC tables for the heaviest W and WT shapes), which is unconservative where J resists torsion. Use the AISC tabulated J of the shape, or check J by another method."
+  - Properties tile label: before `'J (thin-wall)'` → after `'J (thin-wall; may be high, see Torsion)'` when flagged.
+  - Single-shape AISC comparison hint and Method list: they now say that the thin-wall J can be above the AISC J for heavy shapes, and that such values are flagged.
+  - The single-shape comparison already shows the AISC J beside the computed J. No change there.
+- **Threshold:** 5.5 is just above the largest b_f/2t_f of the shapes over the table (5.33). It flags all 155 of them (296 shapes flagged in total; the extra 141 have J within the table or below). S and ST shapes are excluded, because their thin-wall J is always 14–27 % below the table.
+- **§4:** no computed value changes. This is a flag and wording only. Governing basis: AISC Design Guide 9 (thin-walled open sections, Σbt³/3) against the AISC Shapes Database v16.0 J.
+- **Check case:** W14X730 (b_f 17.9, t_f 4.91, t_w 3.07, d 22.4).
+  - b_f/2t_f = 17.9/9.82 = 1.82 ≤ 5.5, so J is flagged.
+  - Thin-wall J = [2 × 17.9 × 4.91³ + (22.4 − 4.91) × 3.07³]/3 = (4237.4 + 506.1)/3 = 1581 in⁴. AISC 1450 (+9.1 %).
+  - W21X62 (default project): b_f/2t_f = 6.70, not flagged.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch: the only differences are the new torsion warnings on W14X730 and WT7X436.5. All values are identical, including all 1,660 shapes and the default project. 0 console errors.
+  - Sweep of all shapes: 155 of 155 shapes with thin-wall J above the table are flagged. The other shapes with J slightly above the table are not W/M/HP/WT/MT: L ≤ +0.4 %, HSS ≤ +1.7 % and pipe ≤ +3.2 %, which come from data rounding and t_des and are documented in the SPH1 table.
