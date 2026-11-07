@@ -1497,6 +1497,14 @@ body.rwDashColl #rwDash { display: none; }
       </div>
     </div>
 
+    <div class="ig full bar-ovr aashto-only" style="display:none">   <!-- RWFF (2026-11-07): S4 front-face verticals, AASHTO mode -->
+      <label class="grp-lbl">S4 — Stem vert. front face T&amp;S (AASHTO)</label>
+      <div class="pair">
+        <div class="ig"><label for="ovr_bar_s4">Bar #</label><div class="iw"><input type="number" id="ovr_bar_s4" value="0" min="0" max="10" step="1"></div></div>
+        <div class="ig"><label for="ovr_spc_s4">Spacing</label><div class="iw"><input type="number" id="ovr_spc_s4" value="0" min="0" max="18" step="1"><span class="iw-unit">in</span></div></div>
+      </div>
+    </div>
+
     <div class="ig full bar-ovr">
       <label class="grp-lbl">F1 — Heel top bars</label>
       <div class="pair">
@@ -1741,7 +1749,7 @@ const RW_CARDS = {
 const RW_CHECK_CARD = { ot:'stabOT', sliding:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
   stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid', stemLap:'stemDev', heelDev:'heelShear', toeDev:'toeShear', stemS3Lap:'stemS13', stemMAlong:'stemS13',
   heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', colAxial:'stabCol',
-  ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFtg:'ftgTS', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
+  ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFF:'stemTS', tsFtg:'ftgTS', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
   crackStem:'stabServ', minRfStem:'stabServ', crackHeel:'stabServ', minRfHeel:'stabServ', crackToe:'stabServ', minRfToe:'stabServ' };
 function rwCardTitle(key, isAASHTO) { const c = RW_CARDS[key]; return c ? c[isAASHTO ? 2 : 1] : null; }
 function rwLink(r, key, txt) {
@@ -2888,8 +2896,9 @@ function calcAll(inp) {
   //   Footing: least width = footing width B; h = t_f.
   const b_TS_stem = inp.Hs * 12;
   const b_TS_ftg  = B * 12;
+  const fy_TS = Math.min(inp.fy / 1000, 75);   // RWFF (2026-11-07): AASHTO 10th Eq. 5.10.6-1 takes f_y ≤ 75.0 ksi (S2, S4, F3)
   const As_temp_stem = isAASHTO
-    ? Math.min(0.60, Math.max(0.11, 1.30 * b_TS_stem * inp.ts_bot / (2 * (b_TS_stem + inp.ts_bot) * (inp.fy / 1000))))
+    ? Math.min(0.60, Math.max(0.11, 1.30 * b_TS_stem * inp.ts_bot / (2 * (b_TS_stem + inp.ts_bot) * fy_TS)))
     : 0.0018 * bw * inp.ts_bot;
   let d_stem = inp.ts_bot - inp.cov_stem - 0.375;   // in (pass 1 assumption)
   let Rn_stem = 0, As_stem_req = 0, As_s_min = 0, As_stem_des = 0,
@@ -2921,6 +2930,11 @@ function calcAll(inp) {
   if (!stem_shear_ok) warnings.push('Stem shear: φVc < Vu. Increase ts_bot.');
 
   const sel_temp   = applyOvr('s2', As_temp_stem, selectBar(As_temp_stem, tsMaxS(inp.ts_bot)));
+  // RWFF (2026-11-07): AASHTO 10th Art. 5.10.6 — T&S steel on each face and in each direction: the front face of the stem gets
+  // vertical bars S4 with the same A_s as S2 (same b = stem height, h = base thickness). ACI: not required (cantilever retaining
+  // walls are exempt from two layers, ACI 318-19 §11.7.2.3; the stem is a one-way slab, §13.3.6.1).
+  const As_ff_stem = isAASHTO ? As_temp_stem : 0;
+  const sel_ff     = isAASHTO ? applyOvr('s4', As_ff_stem, selectBar(As_ff_stem, tsMaxS(inp.ts_bot))) : null;
   const ld_stem    = isAASHTO
     ? devLengthAASHTO(sel_stem.bar.db, inp.fy, inp.fc, false, inp.cov_stem + sel_stem.bar.db / 2, sel_stem.spacing)
     : devLength(sel_stem.bar.db, inp.fy, inp.fc, 1.0, 1.0, inp.cov_stem + sel_stem.bar.db / 2, 1.0, sel_stem.spacing);
@@ -3320,7 +3334,7 @@ function calcAll(inp) {
 
   // Longitudinal temp/shrinkage (parallel to wall, both faces)
   const As_ftg_long  = isAASHTO
-    ? Math.min(0.60, Math.max(0.11, 1.30 * b_TS_ftg * inp.tf / (2 * (b_TS_ftg + inp.tf) * (inp.fy / 1000))))
+    ? Math.min(0.60, Math.max(0.11, 1.30 * b_TS_ftg * inp.tf / (2 * (b_TS_ftg + inp.tf) * fy_TS)))   // RWFF: f_y ≤ 75 ksi
     : 0.0018 * bw * inp.tf;
   const sel_ftg_long = applyOvr('f3', As_ftg_long, selectBar(As_ftg_long, tsMaxS(inp.tf)));
 
@@ -3484,6 +3498,7 @@ function calcAll(inp) {
     toeShear:  { ok: toe_shear_ok,                 label: 'Toe Shear' },
     tsStem:    { ok: sel_temp.As_prov >= As_temp_stem - 0.001,     label: 'Stem T&amp;S (S2)' },
     tsFtg:     { ok: sel_ftg_long.As_prov >= As_ftg_long - 0.001,  label: 'Ftg T&amp;S (F3)' },
+    ...(isAASHTO ? { tsFF: { ok: sel_ff.As_prov >= As_ff_stem - 0.001, label: 'Stem Front T&amp;S (S4)' } } : {}),   // RWFF
     ...(hasCol ? { colAxial: { ok: col_axial_ok,   label: 'Col. Axial', val: `P/φPn=${f(col_axial_ratio,3)}` } } : {}),
     ...(isAASHTO && aashtoR && aashtoR.ish ? {
       ishFtg:  { ok: aashtoR.ish.ish_ftg_ok || aashtoR.ish.dowel_ok, label: 'Interface Shear',
@@ -3593,6 +3608,7 @@ function calcAll(inp) {
     a_toe, phiMn_toe,
     // Longitudinal
     As_ftg_long, sel_ftg_long,
+    fy_TS, As_ff_stem, sel_ff,   // RWFF
     // Checks
     checks,
   };
@@ -3659,6 +3675,7 @@ function getInputs() {
     ovr: {
       s1: { bar: Math.round(n('ovr_bar_s1')), spc: n('ovr_spc_s1') },
       s2: { bar: Math.round(n('ovr_bar_s2')), spc: n('ovr_spc_s2') },
+      s4: { bar: Math.round(n('ovr_bar_s4')), spc: n('ovr_spc_s4') },   // RWFF
       s3: { bar: Math.round(n('ovr_bar_s3')), spc: n('ovr_spc_s3') },
       f1: { bar: Math.round(n('ovr_bar_f1')), spc: n('ovr_spc_f1') },
       f2: { bar: Math.round(n('ovr_bar_f2')), spc: n('ovr_spc_f2') },
@@ -5331,13 +5348,14 @@ function renderStem(r) {
 
   // ════ STEP 6 — TEMPERATURE & SHRINKAGE ════
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Step 6 — Horizontal Temperature &amp; Shrinkage Steel</span><span class="card-ref">ACI 318-19 §24.4.3.2 · both faces</span></div>
+    <div class="card-hd"><span class="card-title">Step 6 — Horizontal Temperature &amp; Shrinkage Steel${r.isAASHTO ? ' (S2) and Front-Face Verticals (S4)' : ''}</span><span class="card-ref">${r.isAASHTO ? 'AASHTO §5.10.6 · each face, each direction' : 'ACI 318-19 §24.4.3.2 · both faces'}</span></div>
     <div class="card-body">`;
   h += r.isAASHTO
     ? eq('Required T&S steel (AASHTO 5.10.6-1, per face)',
-    `A_{s,T\\&S} = \\frac{1.30\\,b\\,h}{2(b+h)f_y} = \\frac{1.30(${F(r.b_TS_stem,0)})(${F(inp.ts_bot,1)})}{2(${F(r.b_TS_stem,0)}+${F(inp.ts_bot,1)})(${F(inp.fy/1000,0)})},\\ 0.11 \\le A_s \\le 0.60 \\Rightarrow \\boxed{${F(r.As_temp_stem,4)}\\ \\text{in}^2/\\text{ft}}`,'\u00a75.10.6',
+    `A_{s,T\\&S} = \\frac{1.30\\,b\\,h}{2(b+h)f_y} = \\frac{1.30(${F(r.b_TS_stem,0)})(${F(inp.ts_bot,1)})}{2(${F(r.b_TS_stem,0)}+${F(inp.ts_bot,1)})(${F(r.fy_TS,0)})},\\ 0.11 \\le A_s \\le 0.60 \\Rightarrow \\boxed{${F(r.As_temp_stem,4)}\\ \\text{in}^2/\\text{ft}}`,'\u00a75.10.6',
     [{sym:'b', desc:'least width of component = stem height (not the 12-in strip)', val:F(r.b_TS_stem,0), unit:'in'},
      {sym:'h', desc:'least thickness (base thickness used — conservative for a tapered stem)', val:F(inp.ts_bot,1), unit:'in'},
+     {sym:'f_y', desc:'yield strength used, ≤ 75.0 ksi (Eq. 5.10.6-1)', val:F(r.fy_TS,1), unit:'ksi'},
      {sym:'A_{s,T\\&S}', desc:'required per face, each direction', val:F(r.As_temp_stem,4), unit:'in²/ft'}])
     : eq('Required T&S steel (0.0018 gross area)',
     `A_{s,T\\&S} = 0.0018\\,b\\,t_{s,bot} = 0.0018(12)(${F(inp.ts_bot,1)}) = \\boxed{${F(r.As_temp_stem,4)}\\ \\text{in}^2/\\text{ft}}`,'',
@@ -5347,6 +5365,13 @@ function renderStem(r) {
   h += eqCheck('Bar selection — S2 horizontal' + (r.sel_temp.overridden ? ' (USER OVERRIDE)' : ''),
     `\\text{\\#${r.sel_temp.bar.num} @ ${r.sel_temp.spacing}'' o.c.} \\Rightarrow A_{s,prov} = ${F(r.sel_temp.As_prov,4)}\\ \\text{in}^2/\\text{ft} \\geq ${F(r.As_temp_stem,4)}`,
     r.sel_temp.As_prov >= r.As_temp_stem - 0.001);
+  // RWFF (2026-11-07): front-face verticals
+  if (r.isAASHTO)
+    h += eqCheck('Bar selection — S4 front-face vertical (T&S, same A_s per face: §5.10.6 each face, each direction)' + (r.sel_ff.overridden ? ' (USER OVERRIDE)' : ''),
+      `\\text{\\#${r.sel_ff.bar.num} @ ${r.sel_ff.spacing}'' o.c.} \\Rightarrow A_{s,prov} = ${F(r.sel_ff.As_prov,4)}\\ \\text{in}^2/\\text{ft} \\geq ${F(r.As_ff_stem,4)}`,
+      r.sel_ff.As_prov >= r.As_ff_stem - 0.001, '\u00a75.10.6');
+  else
+    h += `<div class="alert info" style="margin-top:6px;">ℹ Front face: no vertical bars are required. ACI 318-19 §11.7.2.3 exempts cantilever retaining walls from two layers of distributed reinforcement, and the stem is designed as a one-way slab (§13.3.6.1, Ch. 7).</div>`;
   h += `</div></div>`;
 
   // ════ MID-HEIGHT (TOP-HALF) STEM SECTION ════
@@ -5849,7 +5874,7 @@ const LS_OK = _lsAvailable();
 
 // Snapshot every form field by id → plain object
 const RWTB_FIELDS = ['proj_date', 'proj_chkdate'];   // RWTB (2026-11-06): the optional title-block dates (Project tab)
-const RWLS_DEF = { aashto_traffic_dir: 'parallel', toe_hook: false };   // RWLS (2026-11-07) / RWDS (toe_hook): saved only when not the default; absent → the default
+const RWLS_DEF = { aashto_traffic_dir: 'parallel', toe_hook: false, ovr_bar_s4: '0', ovr_spc_s4: '0' };   // RWFF: + the S4 override (saved only when set)   // RWLS (2026-11-07) / RWDS (toe_hook): saved only when not the default; absent → the default
 function snapshotFields() {
   const out = {};
   document.querySelectorAll('.sidebar input, .sidebar select, .sidebar textarea').forEach(el => {
@@ -6195,7 +6220,7 @@ function rwInputErrors() {
   opt('kh', ge0); opt('kv', Object.assign(v => v < 1, { msg: 'must be less than 1 (the analysis divides by 1 − k_v)' }));
   opt('delta_mo', ge0);
   // ── Bar overrides (0 = automatic) ──
-  ['s1', 's2', 's3', 'f1', 'f2', 'f3'].forEach(k => {
+  ['s1', 's2', 's3', ...(isA ? ['s4'] : []), 'f1', 'f2', 'f3'].forEach(k => {   // RWFF: + s4 (AASHTO; hidden in ACI)
     const b = 'ovr_bar_' + k, s = 'ovr_spc_' + k, bv = blank(b) ? 0 : val(b), sv = blank(s) ? 0 : val(s);
     if (bv !== 0 && !(Number.isInteger(bv) && bv >= 3 && bv <= 10)) err(b, `${lab(b)} = ${raw(b)}: the override takes bar sizes #3 to #10 (0 = automatic).`);
     else if (bv !== 0 && !(sv >= 3 && sv <= 18)) err(s, `${lab(s)} = ${raw(s) || 'blank'}: with bar #${bv} the override needs a spacing of 3 to 18 in (0 / blank bar = automatic).`);
@@ -6331,6 +6356,13 @@ function renderRebar(r) {
       ld:null, face:'Both', note:'ACI §24.4.3, max s=18"',
       overridden: r.sel_temp.overridden
     },
+    ...(r.sel_ff ? [{   // RWFF (2026-11-07)
+      mark:'S4', location:'Stem — vertical front face (temp & shrinkage)', zone:'Stem',
+      bar:r.sel_ff.bar.num, spacing:r.sel_ff.spacing,
+      As_req:r.As_ff_stem, As_prov:r.sel_ff.As_prov,
+      ld:null, face:'Front', note:'AASHTO §5.10.6, each face and each direction',
+      overridden: r.sel_ff.overridden
+    }] : []),
     {
       mark:'F1', location:'Heel — transverse top bars', zone:'Heel',
       bar:r.sel_heel.bar.num, spacing:r.sel_heel.spacing,
@@ -7889,6 +7921,7 @@ function buildScorecard(r) {
     { label:'Toe Shear',   val: r.phiVc_toe/1000,   req: r.Vu_toe/1000,  unit:'k/ft', ok: r.toe_shear_ok },
     { label:'Stem T&amp;S (S2)', val: r.sel_temp.As_prov, req: r.As_temp_stem, unit:'in²/ft', ok: r.sel_temp.As_prov >= r.As_temp_stem - 0.001 },
     { label:'Ftg T&amp;S (F3)',  val: r.sel_ftg_long.As_prov, req: r.As_ftg_long, unit:'in²/ft', ok: r.sel_ftg_long.As_prov >= r.As_ftg_long - 0.001 },
+    ...(r.sel_ff ? [{ label:'Stem Front T&amp;S (S4)', val: r.sel_ff.As_prov, req: r.As_ff_stem, unit:'in²/ft', ok: r.sel_ff.As_prov >= r.As_ff_stem - 0.001 }] : []),   // RWFF
     ...(r.isAASHTO && r.aashtoR && r.aashtoR.ish ? [
     { label:'Stem–Ftg Interface', val: r.aashtoR.ish.Vr_stem, req: r.aashtoR.ish.Vu_stem_ish, unit:'k/ft', ok: r.aashtoR.ish.ish_stem_ok }] : []),
   ];
@@ -8631,6 +8664,7 @@ function rwResultRows(r) {
     ishStem:      () => [AA('5.7.4.3') + '; stem–footing, S1 bars as shear friction', s.Vu_stem_ish / s.Vr_stem],
     tsStem:       () => [A ? AA('5.10.6') : 'ACI 318-19 §24.4.3.2', r.As_temp_stem / r.sel_temp.As_prov],
     tsFtg:        () => [A ? AA('5.10.6') : 'ACI 318-19 §24.4.3.2', r.As_ftg_long / r.sel_ftg_long.As_prov],
+    tsFF:         () => [AA('5.10.6') + '; front face, vertical, each face and each direction', r.As_ff_stem / r.sel_ff.As_prov],   // RWFF
     ctSliding:    () => ['MassDOT §3.3.2.4; Extreme Event II', E.sliding_dcr_ct],
     ctEcc:        () => ['Extreme Event II; e ≤ B/' + f(E.eccDiv, 0), Math.abs(E.e_ct) / E.e_lim_ct],
     ctBearing:    () => ['Extreme Event II; q<sub>u</sub> ≤ q<sub>R</sub>', E.q_ult_ct / E.q_R_ct],
@@ -9535,7 +9569,7 @@ function rwrModel(r) {
       ...(a.ls_on ? [['Equivalent height of soil h_eq', rwrCell(a.heq, 2), 'ft']] : []),   // RWPR: the earth-pressure and LS inputs in use
       ['Shear method', A.shear_method || 'auto', '–'], ['Exposure factors γ_e (footing / stem)', rwrN(A.gamma_e1, 2) + ' / ' + rwrN(A.gamma_e2, 2), '–'],
       ['Vehicular collision (Extreme Event II)', A.ct_enable ? 'on' : 'off', '–'], ['Interface shear check', A.ish_enable ? 'on' : 'off', '–']);
-    { const MK = { s1: 'S1', s2: 'S2', s3: 'S3', f1: 'F1', f2: 'F2', f3: 'F3' }, ov = Object.keys(MK).filter(k => inp.ovr[k] && inp.ovr[k].bar >= 3 && inp.ovr[k].bar <= 10 && inp.ovr[k].spc >= 3 && inp.ovr[k].spc <= 18);   // RWPR: the bar-size overrides (Rebar tab)
+    { const MK = { s1: 'S1', s2: 'S2', s3: 'S3', s4: 'S4', f1: 'F1', f2: 'F2', f3: 'F3' }, ov = Object.keys(MK).filter(k => inp.ovr[k] && inp.ovr[k].bar >= 3 && inp.ovr[k].bar <= 10 && inp.ovr[k].spc >= 3 && inp.ovr[k].spc <= 18);   // RWPR: the bar-size overrides (Rebar tab)
       mat.push(['Bar overrides (Rebar tab)', ov.length ? ov.map(k => MK[k] + ' #' + inp.ovr[k].bar + ' @ ' + rwrN(inp.ovr[k].spc, 1) + ' in').join(', ') : 'none (automatic selection)', '–']); }
     subs.push(sub('Materials, cover and design options', [{ type: 'table', head: ['Quantity', 'Value', 'Unit'], rows: mat }]));
     if (!r.hasCol) subs.push(sub('Column / beam loads', [{ type: 'note', text: 'No column or beam loads applied.' }]));   // RWRX: as the Export report §2.3
@@ -9819,9 +9853,11 @@ function rwrModel(r) {
     CK.stemHook = 'stb/s5.hook';
     T5.push(rwrS({ id: 'lap', label: 'Stem dowel lap with S1 at the joint: Class ' + (r.lap_classA ? 'A' : 'B') + ' (A_s,prov/A_s,req = ' + rwrN(r.lap_ratio, 2) + ', ' + r.lap_pct + ' % spliced at one level; Class A needs ≥ 2 and ≤ 50 %); ℓ_d before the 12-in minimum = ' + rwrN(r.lap_ld_a, 2) + ' in; ℓ_st ≤ H_s = ' + rwrN(r.lap_avail, 0) + ' in', sym: '\\ell_{st}', eq: '\\max(' + (r.lap_classA ? '1.0' : '1.3') + '\\,\\ell_{d},\\; 12)', sub: '\\max(' + (r.lap_classA ? '1.0' : '1.3') + '(' + rwrN(r.lap_ld_a, 2) + '),\\; 12)', value: r.lst_stem, unit: 'in', d: 1, ok: ok('stemLap'), ref: isA ? AA('Art. 5.10.8.4.3a') : 'ACI 318-19 Table 25.5.2.1' }));   // RWDS
     CK.stemLap = 'stb/s5.lap';
-    const T6 = [isA ? rwrS({ id: 'As', label: 'Required temperature and shrinkage steel, per face (b = stem height ' + rwrN(r.b_TS_stem, 0) + ' in)', sym: 'A_{s,TS}', eq: '\\frac{1.30\\,b\\,h}{2(b + h)f_{y}},\\; 0.11 \\le A_{s} \\le 0.60', sub: '\\frac{1.30(' + rwrN(r.b_TS_stem, 0) + ')(' + rwrN(inp.ts_bot, 1) + ')}{2(' + rwrN(r.b_TS_stem, 0) + ' + ' + rwrN(inp.ts_bot, 1) + ')(' + rwrN(inp.fy / 1000, 0) + ')}', value: r.As_temp_stem, unit: 'in^{2}/ft', d: 4, ref: AA('Eq. 5.10.6-1') })
+    const T6 = [isA ? rwrS({ id: 'As', label: 'Required temperature and shrinkage steel, per face (b = stem height ' + rwrN(r.b_TS_stem, 0) + ' in)', sym: 'A_{s,TS}', eq: '\\frac{1.30\\,b\\,h}{2(b + h)f_{y}},\\; 0.11 \\le A_{s} \\le 0.60', sub: '\\frac{1.30(' + rwrN(r.b_TS_stem, 0) + ')(' + rwrN(inp.ts_bot, 1) + ')}{2(' + rwrN(r.b_TS_stem, 0) + ' + ' + rwrN(inp.ts_bot, 1) + ')(' + rwrN(r.fy_TS, 0) + ')}', value: r.As_temp_stem, unit: 'in^{2}/ft', d: 4, ref: AA('Eq. 5.10.6-1') })
       : rwrS({ id: 'As', label: 'Required temperature and shrinkage steel (0.0018 gross area)', sym: 'A_{s,TS}', eq: '0.0018\\,b\\,t_{s,bot}', sub: '0.0018(12)(' + rwrN(inp.ts_bot, 1) + ')', value: r.As_temp_stem, unit: 'in^{2}/ft', d: 4, ref: 'ACI 318-19 §24.4.3.2' }),
       rwrS({ id: 'S2', label: 'Bar selection S2 (horizontal): #' + r.sel_temp.bar.num + ' at ' + r.sel_temp.spacing + ' in' + (r.sel_temp.overridden ? ' (user override)' : ''), sym: 'A_{s,prov}', eq: '', sub: rwrN(r.sel_temp.As_prov, 4) + ' \\ge ' + rwrN(r.As_temp_stem, 4), value: r.sel_temp.As_prov, unit: 'in^{2}/ft', d: 4, ok: ok('tsStem') })];
+    if (isA) { T6.push(rwrS({ id: 'S4', label: 'Bar selection S4 (front-face vertical, T&S; Art. 5.10.6 each face and each direction, same A_s as S2): #' + r.sel_ff.bar.num + ' at ' + r.sel_ff.spacing + ' in' + (r.sel_ff.overridden ? ' (user override)' : ''), sym: 'A_{s,prov}', eq: '', sub: rwrN(r.sel_ff.As_prov, 4) + ' \\ge ' + rwrN(r.As_ff_stem, 4), value: r.sel_ff.As_prov, unit: 'in^{2}/ft', d: 4, ok: ok('tsFF'), ref: AA('Art. 5.10.6') })); CK.tsFF = 'stb/s6.S4'; }   // RWFF
+    else T6.push(rwrS({ id: 'S4', label: 'Front face: no vertical bars required (ACI 318-19 §11.7.2.3 exempts cantilever retaining walls from two layers; the stem is a one-way slab, §13.3.6.1)', sym: 'A_{s,front}', eq: '', sub: '', value: 0, unit: 'in^{2}/ft', d: 0 }));   // RWFF
     CK.tsStem = 'stb/s6.S2';
     const pre = (p, L) => L.map(s => Object.assign({}, s, { id: p + '.' + s.id }));
     subs.push(sub('Base section: Steps 1 to 6', [rwrItem('stb', [
@@ -9912,7 +9948,7 @@ function rwrModel(r) {
       { title: 'Toe Step 3 — Flexural steel (bottom face)', ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5', steps: pre('t3', T3) },
       { title: 'Toe Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('t4', T4) }], { title: 'Toe' }), { type: 'note', text: 'q_u,front and q_u,toe: ' + (isA ? '[[saf/qufront]], [[saf/qutoe]] (Strength Ia: [[saf/qufrontIa]])' : '[[st7/qufront]], [[st7/qutoe]] (minimum-vertical case: [[st7/qufrontmin]])') + '; ' + (r.toe_min_governs ? 'the minimum-vertical case governs the toe.' : 'the maximum-vertical case governs the toe.') },
       onTab('toeFlex', 'Footing design tab, Toe')]));
-    const L = [isA ? rwrS({ id: 'As', label: 'Required temperature and shrinkage steel, per face (b = footing width ' + rwrN(r.b_TS_ftg, 0) + ' in)', sym: 'A_{s,TS}', eq: '\\frac{1.30\\,b\\,h}{2(b + h)f_{y}},\\; 0.11 \\le A_{s} \\le 0.60', sub: '\\frac{1.30(' + rwrN(r.b_TS_ftg, 0) + ')(' + rwrN(inp.tf, 1) + ')}{2(' + rwrN(r.b_TS_ftg, 0) + ' + ' + rwrN(inp.tf, 1) + ')(' + rwrN(inp.fy / 1000, 0) + ')}', value: r.As_ftg_long, unit: 'in^{2}/ft', d: 4, ref: AA('Eq. 5.10.6-1') })
+    const L = [isA ? rwrS({ id: 'As', label: 'Required temperature and shrinkage steel, per face (b = footing width ' + rwrN(r.b_TS_ftg, 0) + ' in)', sym: 'A_{s,TS}', eq: '\\frac{1.30\\,b\\,h}{2(b + h)f_{y}},\\; 0.11 \\le A_{s} \\le 0.60', sub: '\\frac{1.30(' + rwrN(r.b_TS_ftg, 0) + ')(' + rwrN(inp.tf, 1) + ')}{2(' + rwrN(r.b_TS_ftg, 0) + ' + ' + rwrN(inp.tf, 1) + ')(' + rwrN(r.fy_TS, 0) + ')}', value: r.As_ftg_long, unit: 'in^{2}/ft', d: 4, ref: AA('Eq. 5.10.6-1') })
       : rwrS({ id: 'As', label: 'Required temperature and shrinkage steel', sym: 'A_{s,TS}', eq: '0.0018\\,b\\,t_{f}', sub: '0.0018(12)(' + rwrN(inp.tf, 1) + ')', value: r.As_ftg_long, unit: 'in^{2}/ft', d: 4, ref: 'ACI 318-19 §24.4.3.2' }),
       rwrS({ id: 'F3', label: 'Bar selection F3 (longitudinal, both faces): #' + r.sel_ftg_long.bar.num + ' at ' + r.sel_ftg_long.spacing + ' in' + (r.sel_ftg_long.overridden ? ' (user override)' : ''), sym: 'A_{s,prov}', eq: '', sub: rwrN(r.sel_ftg_long.As_prov, 4) + ' \\ge ' + rwrN(r.As_ftg_long, 4), value: r.sel_ftg_long.As_prov, unit: 'in^{2}/ft', d: 4, ok: ok('tsFtg') })];
     CK.tsFtg = 'lng/F3';
@@ -9923,7 +9959,7 @@ function rwrModel(r) {
   /* ---------- 6. Reinforcement schedule (+ ACI crack control) ---------- */
   {
     const rows = [['S1', 'Stem — vertical (back face)', r.sel_stem, r.As_stem_des, r.ld_stem, r.stem_overstressed, 'stb/s3.S1'], ['S3', 'Stem — vertical mid-height (top half)', r.sel_stemT, r.As_stemT_des, null, r.stemT_overstressed, 'stm/m2.S3'],
-      ['S2', 'Stem — horizontal T&S (both faces)', r.sel_temp, r.As_temp_stem, null, false, 'stb/s6.S2'], ['F1', 'Heel — transverse ' + (r.Mu_heel_net >= 0 ? 'top' : 'bottom') + ' bars', r.sel_heel, r.As_heel_des, r.ld_heel, r.heel_overstressed, 'heel/h3.F1'],
+      ['S2', 'Stem — horizontal T&S (both faces)', r.sel_temp, r.As_temp_stem, null, false, 'stb/s6.S2'], ...(r.sel_ff ? [['S4', 'Stem — vertical front face (T&S)', r.sel_ff, r.As_ff_stem, null, false, 'stb/s6.S4']] : []), ['F1', 'Heel — transverse ' + (r.Mu_heel_net >= 0 ? 'top' : 'bottom') + ' bars', r.sel_heel, r.As_heel_des, r.ld_heel, r.heel_overstressed, 'heel/h3.F1'],
       ['F2', 'Toe — transverse bottom bars', r.sel_toe, r.As_toe_des, r.ld_toe, r.toe_overstressed, 'toe/t3.F2'], ['F3', 'Footing — longitudinal T&S (both faces)', r.sel_ftg_long, r.As_ftg_long, null, false, 'lng/F3']]
       .map(([m, loc, s, req, ld, os, key]) => { const okk = !os && s.As_prov >= req - 0.001;
         return { cells: [{ t: m + (s.overridden ? ' (override)' : ''), key }, loc, '#' + s.bar.num, rwrCell(s.spacing, 0), rwrCell(req, 4), rwrCell(s.As_prov, 4), rwrCell(s.As_prov / Math.max(req, 0.001), 2), ld == null ? '—' : rwrCell(ld, 1), { t: okk ? 'OK' : 'NG', cls: okk ? 'ok' : 'ng' }] }; });
@@ -10253,6 +10289,7 @@ function rwdwBars(r, G) {
     S1D: { s: s1, hook, yHook, lap, len: (G.tf - yHook) + lap + hook },
     S3: { s: s3, from: G.tf + G.Hs / 2, to: yTop, len: yTop - (G.tf + G.Hs / 2) },
     S2: { s: s2 }, F3: { s: f3 },
+    S4: r.sel_ff ? { s: r.sel_ff, len: G.H - cs - G.tf } : null,   // RWFF
     F1: { s: f1, x0: Math.max(cf, G.xbb - r.ld_heel), x1: G.B - cf, y: G.tf - cf - db(f1) / 2 },
     F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cf + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
     yCut, cs, cf,
@@ -10451,7 +10488,9 @@ function rwdwBuild(r) {
     const s2 = BR.S2.s, r2 = dotR(s2.bar.db, P);
     for (let y = G.tf + s2.spacing / 2; y < G.H - BR.cs; y += s2.spacing) {
       D.circle(L.bar, s1Pt(y) - dbs1 / 2 - r2 - (y >= BR.S3.from ? dbs1 + 0.03 * P : 0), y, r2);
-      D.circle(L.bar, G.xf + BR.cs + r2, y, r2); }
+      D.circle(L.bar, G.xf + BR.cs + (BR.S4 ? BR.S4.s.bar.db : 0) + r2, y, r2); }   // RWFF: inside S4 when present
+    // RWFF (2026-11-07): S4 front-face verticals (AASHTO), from the joint to the top cover
+    if (BR.S4) D.line(L.bar, G.xf + BR.cs + BR.S4.s.bar.db / 2, G.tf, G.xf + BR.cs + BR.S4.s.bar.db / 2, G.H - BR.cs);
     // F1 top (heel), F2 bottom (toe), F3 dots on both mats
     D.line(L.bar, BR.F1.x0, BR.F1.y, BR.F1.x1, BR.F1.y); D.line(L.bar, BR.F2.x0, BR.F2.y, BR.F2.x1, BR.F2.y);
     if (BR.F2.hook) D.line(L.bar, BR.F2.x0, BR.F2.y, BR.F2.x0, BR.F2.y + BR.F2.hook);   // RWDS: hooked F2
@@ -10526,7 +10565,8 @@ function rwdwBuild(r) {
     lab.push([G.xf + BR.cs, G.tf + 0.45 * G.Hs, 'S2 ' + bl(r.sel_temp) + ' HORIZ., BOTH FACES', 'L']);
     lab.push([q.xd - BR.S1D.hook * 0.6, BR.S1D.yHook, 'STD. 90° HOOK, 12 D_B = ' + rwdwIn(BR.S1D.hook) + '\nL_DH = ' + rwdwN(r.ldh_stem, 1) + '", ' + rwdwN(r.ldh_avail, 1) + '" AVAILABLE', 'L']);
     lab.push([BR.F2.x0 + 0.3 * P, BR.F2.y, 'F2 ' + bl(r.sel_toe) + ' BOT. (TOE)' + (r.toe_hook ? ', 90° HOOK AT THE TOE END (L_DH = ' + rwdwN(r.ldh_toe, 1) + '")' : '') + '\nL_D = ' + rwdwN(r.ld_toe, 1) + '" PAST THE STEM FRONT FACE', 'L']);
-    lab.push([G.xf, G.H - 0.15 * G.Hs, 'FRONT-FACE VERTICALS:\nNOT IN THE MODEL (BY THE ENGINEER)', 'L']);
+    lab.push(BR.S4 ? [G.xf + BR.cs, G.H - 0.15 * G.Hs, 'S4 ' + bl(r.sel_ff) + ' FRONT FACE, VERT.\nT&S, AASHTO 5.10.6', 'L']
+      : [G.xf, G.H - 0.15 * G.Hs, 'FRONT-FACE VERTICALS: NOT REQUIRED\n(ACI 318-19 11.7.2.3 / 13.3.6.1)', 'L']);   // RWFF
     // place labels in two stacks without overlap: sorted by height, at least 0.2 in apart
     ['R', 'L'].forEach(side => {
       const xs = side === 'R' ? xR : xL, list = lab.filter(q2 => q2[3] === side).sort((p1, p2) => p2[1] - p1[1]);
@@ -10543,6 +10583,7 @@ function rwdwBuild(r) {
       ['S1', '#' + s1.bar.num, s1.spacing + '"', r.s1_full ? 'STEM VERT., BACK, FULL HEIGHT' : 'STEM VERT., BACK, LOWER (TO MID-HT + LAP)', 'STRAIGHT', len(BR.S1.len), rwdwN(s1.As_prov, 3), rwdwN(r.ld_stem, 1)],   // RWS13
       ['S3', '#' + r.sel_stemT.bar.num, r.sel_stemT.spacing + '"', 'STEM VERT., BACK, UPPER HALF', 'STRAIGHT', len(BR.S3.len), rwdwN(r.sel_stemT.As_prov, 3), rwdwN(r.ld_S3, 1) + ' (LAP ' + rwdwN(r.s13_lst, 1) + ')'],
       ['S2', '#' + r.sel_temp.bar.num, r.sel_temp.spacing + '"', 'STEM HORIZ. T&S, EACH FACE', 'STRAIGHT', 'CONT.', rwdwN(r.sel_temp.As_prov, 3), '-'],
+      ...(BR.S4 ? [['S4', '#' + r.sel_ff.bar.num, r.sel_ff.spacing + '"', 'STEM VERT. T&S, FRONT FACE', 'STRAIGHT', len(BR.S4.len), rwdwN(r.sel_ff.As_prov, 3), '-']] : []),   // RWFF
       ['F1', '#' + r.sel_heel.bar.num, r.sel_heel.spacing + '"', 'HEEL, TRANSVERSE, TOP', 'STRAIGHT', len(BR.F1.len), rwdwN(r.sel_heel.As_prov, 3), rwdwN(r.ld_heel, 1)],
       ['F2', '#' + r.sel_toe.bar.num, r.sel_toe.spacing + '"', 'TOE, TRANSVERSE, BOTTOM', r.toe_hook ? '90° HOOK' : 'STRAIGHT', len(BR.F2.len), rwdwN(r.sel_toe.As_prov, 3), rwdwN(r.ld_toe, 1) + (r.toe_hook ? ' / ' + rwdwN(r.ldh_toe, 1) : '')],   // RWDS
       ['F3', '#' + r.sel_ftg_long.bar.num, r.sel_ftg_long.spacing + '"', 'FOOTING LONGIT. T&S, T&B (' + BR.nF3 + ' EA. FACE)', 'STRAIGHT', 'CONT.', rwdwN(r.sel_ftg_long.As_prov, 3), '-'],

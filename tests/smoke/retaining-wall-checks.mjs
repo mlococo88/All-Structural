@@ -10,7 +10,7 @@
 // RWSC (2026-11-07): the self-consistency panel passes on representative walls, reports MISMATCH on a tampered result, hides on error.
 // RWPR (2026-11-07): the Report prints alone, with every section, the overview figures and the input echo; 0 KaTeX errors.
 // RWKX (2026-11-07): the tabs' equations are all set by KaTeX, none in error; MathJax is not loaded.
-// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, ...).
+// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, RWFF front-face T&S, ...).
 //   node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 import path from 'path';
 import { openPage, resolveFile } from '../lib.mjs';
@@ -193,6 +193,12 @@ const AUD = [
     ['R.checks.ecc.ok && Math.abs(Math.abs(R.e) / R.ecc_lim_aci - 0.841) < 0.001', 'PASS, D/C 0.841']]],
   ['RWEC an autosave saved before the option opens with "No eccentricity limit" (old behaviour)', {}, [
     ['document.getElementById("aci_ecc_limit").value === "none" && !R.checks.ecc && R.ecc_lim_aci === null', 'set to none, no ecc check row'], ['/saved before the option existed/.test(T.stability)', 'the notice on Stability Step 6']], { strip: ['aci_ecc_limit'] }],
+  ['RWFF AASHTO default: S4 front-face verticals 0.1733 in²/ft, #3@7', { design_basis: 'AASHTO' }, [
+    ['Math.abs(R.As_ff_stem - 0.1733) < 0.0001 && R.sel_ff.bar.num === 3 && R.sel_ff.spacing === 7 && R.checks.tsFF.ok', 'S4 #3@7 ≥ 0.1733'],
+    ['/Stem Front T&S \\(S4\\)/.test(T.overview) && /S4 front-face vertical/i.test(T.stem)', 'dashboard row and Stem Step 6'], ['/Bar selection S4/.test(P)', 'Report Step 6']]],
+  ['RWFF AASHTO f_y 80 ksi: Eq. 5.10.6-1 with f_y = 75 ksi (S2, S4, F3 0.1387 / 0.1393)', { design_basis: 'AASHTO', fy: 80000 }, [
+    ['R.fy_TS === 75 && Math.abs(R.As_temp_stem - 0.1387) < 0.0001 && Math.abs(R.As_ff_stem - 0.1387) < 0.0001 && Math.abs(R.As_ftg_long - 0.1393) < 0.0001', 'capped f_y']]],
+  ['RWFF ACI: no S4, note only', {}, [['R.sel_ff === null && !R.checks.tsFF && /no vertical bars are required/i.test(T.stem)', 'note on Stem Step 6']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {

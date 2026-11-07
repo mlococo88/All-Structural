@@ -3239,3 +3239,61 @@ Calculation audit, item 7. Engineer decision (2026-11-07). Code sites are tagged
 - `aci_ecc_limit` is a new field (additive), saved with every project.
 - Old saves without it open with "none" (migration above), so their results and pass/fail are unchanged.
 - **Open item:** this changes pass/fail for new ACI projects (or an old project after the user picks a limit) where e > the chosen limit.
+
+## 2026-11-07 — PR: claude/rw-front-face-ts — AASHTO: stem front-face vertical T&S bars S4 (Art. 5.10.6, each face and each direction); f_y ≤ 75 ksi in Eq. 5.10.6-1 for S2, S4 and F3; ACI: note only (RWFF; calculation change) (PR #950: https://github.com/mlococo88/All-Structural/pull/950)
+
+Calculation audit, item 8. Engineer decision (2026-11-07). Code sites are tagged `RWFF`.
+
+### RWFF-1. `calcAll`   [§4]
+- **Provisions (verified; cited and paraphrased):**
+  - AASHTO LRFD 10th Ed. (2024) Art. 5.10.6: shrinkage and temperature steel near exposed surfaces; Eq. 5.10.6-1 gives the area per foot **on each face and in each direction**, 0.11 ≤ A_s ≤ 0.60, with f_y the specified yield strength **≤ 75.0 ksi**.
+  - ACI 318-19 §11.7.2.3 (PDF p. 174, printed 172): walls thicker than 10 in need two layers of distributed reinforcement, except single-story basement walls and **cantilever retaining walls**.
+  - ACI 318-19 §13.3.6.1: the stem of a cantilever retaining wall is designed as a one-way slab (Ch. 7).
+- **f_y cap** (`fy_TS = min(f_y, 75 ksi)`) in every Eq. 5.10.6-1 use: S2 (stem horizontal), S4 (new) and F3 (footing longitudinal). Results move only for AASHTO walls with f_y > 75 ksi (A_s goes up).
+- **S4 front-face verticals (AASHTO):** A_s = the same Eq. 5.10.6-1 value as S2 (same b = stem height, h = base thickness); bar by `selectBar` with the T&S spacing limit; override `ovr_bar_s4` / `ovr_spc_s4`. New check `tsFF` "Stem Front T&S (S4)". ACI: no S4, a note.
+- **Before / after** (`git diff -U0`, calculation, inputs, saved-field default):
+```diff
+@@ -2890,0 +2899 @@ function calcAll(inp) {
++  const fy_TS = Math.min(inp.fy / 1000, 75);   // RWFF (2026-11-07): AASHTO 10th Eq. 5.10.6-1 takes f_y ≤ 75.0 ksi (S2, S4, F3)
+@@ -2892 +2901 @@ function calcAll(inp) {
+-    ? Math.min(0.60, Math.max(0.11, 1.30 * b_TS_stem * inp.ts_bot / (2 * (b_TS_stem + inp.ts_bot) * (inp.fy / 1000))))
++    ? Math.min(0.60, Math.max(0.11, 1.30 * b_TS_stem * inp.ts_bot / (2 * (b_TS_stem + inp.ts_bot) * fy_TS)))
+@@ -2923,0 +2933,5 @@ function calcAll(inp) {
++  // RWFF (2026-11-07): AASHTO 10th Art. 5.10.6 — T&S steel on each face and in each direction: the front face of the stem gets
++  // vertical bars S4 with the same A_s as S2 (same b = stem height, h = base thickness). ACI: not required (cantilever retaining
++  // walls are exempt from two layers, ACI 318-19 §11.7.2.3; the stem is a one-way slab, §13.3.6.1).
++  const As_ff_stem = isAASHTO ? As_temp_stem : 0;
++  const sel_ff     = isAASHTO ? applyOvr('s4', As_ff_stem, selectBar(As_ff_stem, tsMaxS(inp.ts_bot))) : null;
+@@ -3323 +3337 @@ function calcAll(inp) {
+-    ? Math.min(0.60, Math.max(0.11, 1.30 * b_TS_ftg * inp.tf / (2 * (b_TS_ftg + inp.tf) * (inp.fy / 1000))))
++    ? Math.min(0.60, Math.max(0.11, 1.30 * b_TS_ftg * inp.tf / (2 * (b_TS_ftg + inp.tf) * fy_TS)))   // RWFF: f_y ≤ 75 ksi
+@@ -3486,0 +3501 @@ function calcAll(inp) {
++    ...(isAASHTO ? { tsFF: { ok: sel_ff.As_prov >= As_ff_stem - 0.001, label: 'Stem Front T&amp;S (S4)' } } : {}),   // RWFF
+@@ -3595,0 +3611 @@ function calcAll(inp) {
++    fy_TS, As_ff_stem, sel_ff,   // RWFF
+@@ -3661,0 +3678 @@ function getInputs() {
++      s4: { bar: Math.round(n('ovr_bar_s4')), spc: n('ovr_spc_s4') },   // RWFF
+@@ -5852 +5877 @@ const RWTB_FIELDS = ['proj_date', 'proj_chkdate'];   // RWTB (2026-11-06): the o
+-const RWLS_DEF = { aashto_traffic_dir: 'parallel', toe_hook: false };   // RWLS (2026-11-07) / RWDS (toe_hook): saved only when not the default; absent → the default
++const RWLS_DEF = { aashto_traffic_dir: 'parallel', toe_hook: false, ovr_bar_s4: '0', ovr_spc_s4: '0' };   // RWFF: + the S4 override (saved only when set)   // RWLS (2026-11-07) / RWDS (toe_hook): saved only when not the default; absent → the default
+```
+
+### RWFF-2. Display
+- **Stem design Step 6:** title and reference by mode; f_y used shown in the where-list; S4 bar selection (AASHTO) or the ACI note.
+- **Dashboard row** "Stem Front T&S (S4)" (→ Step 6); Overview bars list; Rebar schedule tab row S4.
+- **Report:** Step 6 `stb/s6.S4` (AASHTO check, ACI note); f_y used in the S2 and F3 substitutions; bar schedule row S4; input echo of the S4 override.
+- **Drawings sheet 2:** S4 drawn on the front face from the joint to the top cover, label "S4 … FRONT FACE, VERT. T&S, AASHTO 5.10.6", bar schedule row S4. In ACI mode the old note "FRONT-FACE VERTICALS: NOT IN THE MODEL (BY THE ENGINEER)" becomes "NOT REQUIRED (ACI 318-19 11.7.2.3 / 13.3.6.1)".
+- **Input:** Rebar tab, "S4 — Stem vert. front face T&S (AASHTO)" (AASHTO only); validated only in AASHTO mode.
+
+### Check cases (`calcAll` in Node and in the browser)
+- **AASHTO default** (H_s 12 ft → b = 144 in, h = 18 in, f_y 60 ksi): A_s = 1.30·144·18 / (2·(144 + 18)·60) = 3369.6 / 19440 = **0.1733 in²/ft per face** → S4 **#3@7** (0.1886 ≥ 0.1733, D/C 0.92, PASS). S2 and F3 unchanged (0.1733, #3@7; 0.1741, #3@7).
+- **AASHTO, f_y = 80 ksi:** f_y used = 75 ksi. S2: 3369.6 / (324·75) = **0.1387** (was 0.1300 with 80 ksi), #3@10 → **#3@9**. F3: 0.1306 → **0.1393**, #3@10 → #3@9. S4: 0.1387, #3@9.
+- **ACI default and ACI f_y 80:** unchanged (0.0018·12·18 = 0.3888, #4@6); no S4; note shown.
+
+### How verified
+- origin/main vs branch, headless Chromium, the twelve audit walls + AASHTO f_y 80 + ACI f_y 80. `_R` differs only by the new fields (`fy_TS`, `As_ff_stem`, `sel_ff`, `inp.ovr.s4`) and `checks.tsFF` (AASHTO), except AASHTO f_y 80, where also `As_temp_stem`, `sel_temp`, `As_ftg_long` and `sel_ftg_long` change as above. Export JSON and localStorage are identical (the S4 override is saved only when set). 0 console errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: the RWFF cases); phone-layout rwall 390/768; project-library retwall (its "results identical" steps list only the new items); dxf-print-sheets rw.
+- Screenshots looked at: AASHTO Stem Step 6, Drawings sheet 2.
+
+### Saved data
+- `ovr_bar_s4` / `ovr_spc_s4` are additive and saved only when not 0 (`RWLS_DEF`). Old saves and default projects are unchanged.
