@@ -6109,7 +6109,7 @@ AASHTO LRFD 10th Ed. (2024) Table 3.4.1-2 (γ_p for EH: active 1.50 / 0.90, at-r
 
 ### Saved data
 - No input or format change.
-## 2026-11-07 — PR: claude/rw-gfx-passive (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (RWPS) — pressure diagrams drawn off the structure: passive (and the shear-key block) in front of the toe face; earth, surcharge and water side by side beyond the heel; bearing under the footing and the key   [display only; no result change]
+## 2026-11-07 — PR: claude/rw-gfx-passive (PR #1147: https://github.com/mlococo88/All-Structural/pull/1147) (RWPS) — pressure diagrams drawn off the structure: passive (and the shear-key block) in front of the toe face; earth, surcharge and water side by side beyond the heel; bearing under the footing and the key   [display only; no result change]
 - **Why:** engineer, 2026-11-07: "the passive pressure triangle is overlapping the structure, it should be drawn off to the side so they don't overlap."
 - **Before (origin/main after #1144):**
   - Overview section and Analysis diagram: the passive triangle grew left from the **stem front face**, from toe grade to the footing base, so it lay over the toe soil hatching **and the toe of the footing**; it was squeezed to 0.65 L_t, and its value label sat on the toe (Analysis: above the F2 bars).
