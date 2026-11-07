@@ -197,7 +197,7 @@ Loaded by: `Moving Load Generator.html` (does not call `staticAnalysis`; its res
 ### Open items
 - SB2-X1 closed (fixlog/steel-bridge.md).
 
-## 2026-11-07 — PR: claude/ml-h1-axle-on-section (H1: each axle placed exactly on each moment section; results can only rise; §4)
+## 2026-11-07 — PR: claude/ml-h1-axle-on-section (PR #1106: https://github.com/mlococo88/All-Structural/pull/1106) (H1: each axle placed exactly on each moment section; results can only rise; §4)
 Loaded by: `Moving Load Generator.html` and `apps/steel-bridge/index.html` (engine `apps/steel-bridge/engine/analysis.js`,
 `autodesign.js` call `SharedMovingLoad.analyze`).
 ### Problem (review 2026-11-07, finding H1; slightly unconservative)

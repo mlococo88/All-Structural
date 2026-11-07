@@ -1534,7 +1534,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/ml-h1-axle-on-section (H1: engine places each axle on each moment section; page text only here)
+## 2026-11-07 — PR: claude/ml-h1-axle-on-section (PR #1106: https://github.com/mlococo88/All-Structural/pull/1106) (H1: engine places each axle on each moment section; page text only here)
 - **Engine change:** `shared/moving-load.js` `analyze` (see `fixlog/shared-moving-load.md`, same date): +M at sections off the 1 ft
   position grid could be up to about 0.8 % low; now each axle is also placed exactly on each moment section. Results can only rise
   (60/90/90/60, span 2 at 0.25L, +M per lane with IM: 878.68 → 884.35). §4 callout in the PR.
