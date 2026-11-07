@@ -2260,7 +2260,7 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
   - The glulam compression-face depth limit (5.4.4.2).
   - Different notches at the two ends (O8).
 
-## 2026-11-07 — PR: claude/timber-low (TBL1: cantilever citation footnote i; snow "S or W" note; negative dead load warning; IBC footnote d quantity as information; AUDIT.md timber section)   [citation / notes / information only; no result change]
+## 2026-11-07 — PR: claude/timber-low (PR #1038: https://github.com/mlococo88/All-Structural/pull/1038) (TBL1: cantilever citation footnote i; snow "S or W" note; negative dead load warning; IBC footnote d quantity as information; AUDIT.md timber section)   [citation / notes / information only; no result change]
 
 Line numbers are approximate; search for the anchor text. Code sites are tagged `TBL1`.
 
