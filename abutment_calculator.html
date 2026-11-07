@@ -677,7 +677,8 @@ function defaultState(){
       soilH:19.00,                  // soil height over heel, from top of footing (ft)
       beta:0.0,                     // backfill slope (deg)
       spanL:80.0, skew:0.0,         // span length & skew (for min support length)
-      hw:0.0                        // water table height above BOTTOM of footing (ft); 0 = none
+      hw:0.0,                       // water table height above BOTTOM of footing (ft); 0 = none
+      hwFr:null                     // ABM6: water level in front of the wall, above the bottom of footing (ft); null = same as h_w (balanced, no WA) [3.11.3]
     },
     mat:{fc:4.0, gc:0.150, fy:60.0, coverF:3.0, coverT:2.0, ag:0.75, // ksi, kcf, ksi, in (footing / wall+top), max aggregate size (in) for the 5.7.3.4.2 s_xe
       coverExp:"deicing", coverCat:"A", coverWcm:1.0,               // ABCHK: cover advisory [T.5.10.1-1]: wall exposure, reinforcing material category, W/CM factor (0.8 / 1.0 / 1.2)
@@ -2033,6 +2034,8 @@ function buildInputs(){
     ${inpRow("Soil height over heel (above top of footing)","geom.soilH","ft")}
     ${inpRow("Backfill slope β","geom.beta","deg")}
     ${inpRow("Water table above bottom of footing h<sub>w</sub>","geom.hw","ft",{title:"0 = water table at or below the bottom of footing (no buoyancy)."})}
+    <div class="in-row"><label title="Water level in front of the wall (toe side), above the bottom of footing. Blank = the same as h_w (balanced groundwater, no net water pressure). Lower than h_w: the net hydrostatic thrust WA acts on the wall and stem [3.11.3] (Tab 1 §1.3a).">Water level in front h<sub>w,f</sub> (blank = h<sub>w</sub>)</label>
+      <input type="number" step="any" data-path="geom.hwFr" data-blank="1" value="${S.geom.hwFr==null||S.geom.hwFr===""?"":S.geom.hwFr}"><span class="unit">ft</span></div>
     <div class="subhead">Bridge (for minimum support length)</div>
     ${inpRow("Span length L","geom.spanL","ft")}
     ${inpRow("Skew angle S","geom.skew","deg")}
@@ -3216,11 +3219,11 @@ function computeAll(){
   if(g.tst>g.tsb) warnFor("conv","Stem top thickness exceeds bottom thickness (negative front batter) — verify intent.");
   if(Math.abs(g.soilH-(g.hstem+g.hbw))>0.01) warnFor("conv",`Soil height over heel (${fmt(g.soilH)} ft) differs from stem + backwall height (${fmt(g.hstem+g.hbw)} ft). The tool uses the entered value; confirm the grading assumption.`);
   if(g.hw>H) warnFor("conv","Water table is above the retained soil surface — outside the tool's applicability (submerged backfill with ponded water is not modeled).","err");
-  else if(g.hw>g.tf) warnFor("conv","Water table is above the top of footing. Buoyant unit weights are used below the water table and a balanced groundwater condition (equal water both sides, no net hydrostatic thrust) is assumed — confirm drainage details support this.");
+  else if(g.hw>g.tf) warnFor("conv","Water table is above the top of footing. Buoyant unit weights are used below the water table and a balanced groundwater condition (equal water both sides, no net hydrostatic thrust) is assumed"+((g.hwFr!==null&&g.hwFr!==undefined&&g.hwFr!=="")?" unless the water level in front (panel I-1) is lower: then the net thrust WA is added (Tab 1 §1.3)":"")+" — confirm drainage details support this.");   // ABM6
 
   /* ===== C-2 Self-weights & centroids (per component, TOTAL kips) ===== */
   const gcSub = m.gc, Lab=g.Lab, Lftg=(+g.Lftg||g.Lab);
-  const hwF = Math.max(0,Math.min(g.hw,g.tf));            // submerged footing depth
+  const hwF = Math.max(0,Math.min(g.hw,g.tf));            // submerged footing depth (ABM6: the uplift stays at the level behind, h_w)
   const hwS = Math.max(0,Math.min(g.hw-g.tf,g.hstem));    // submerged stem height
   const hwSoil = Math.max(0,Math.min(g.hw-g.tf,g.soilH)); // submerged soil height over heel
   const parts=[];
@@ -3457,6 +3460,15 @@ function computeAll(){
     if(A.orient==="inline"){
       groups.WGh={cls:"EH", V:0,Mv:0, Hx:nw*A.FEH, Mh:nw*A.FEH*A.zEH, Hy:0,Mt:0, desc:"In-line wingwalls (pair) — earth pressure"};
       groups.WGls={cls:"LL", V:0,Mv:0, Hx:nw*A.FLS, Mh:nw*A.FLS*A.zLS, Hy:0,Mt:0, desc:"In-line wingwalls (pair) — live-load surcharge"}; } }
+  /* ABM6 (2026-11-07): unbalanced water WA [3.11.3, Table 3.4.1-1 (γ_WA = 1.00)] — water h_w behind (on the virtual back plane, as the buoyant
+     earth pressure), h_w,f in front (toe side). Net hydrostatic thrust ½γ_w(h_w² − h_w,f²)·L_ab at its resultant, toward the toe. The uplift stays
+     as the buoyant weights at h_w (uniform under the base; the relief of a lower front level is neglected — decision). Not in the construction stage. */
+  { const hB=hwE, hFr0=(g.hwFr===null||g.hwFr===undefined||g.hwFr==="")? hB : Math.max(0,+g.hwFr||0), hFr=Math.min(hFr0,hB);
+    if(hB-hFr>1e-9) R.WA={hB, hFr, hFrIn:hFr0, on:true};   // (absent when balanced: the result object of a balanced project is unchanged)
+    if(hFr0>hB+1e-9) warnFor("conv","Water level in front (panel I-1) is above the water level behind the wall: a higher front level would push toward the backfill; it is taken as balanced (no WA).");
+    if(R.WA&&R.WA.on){ const Hw=0.5*GAMMA_W*(hB*hB-hFr*hFr)*Lab, Mw=GAMMA_W*(hB*hB*hB-hFr*hFr*hFr)/6*Lab;
+      Object.assign(R.WA,{H:Hw, M:Mw, z:Hw>0? Mw/Hw : 0});
+      groups.WA={cls:"WA", stage:"full", V:0,Mv:0, Hx:Hw, Mh:Mw, Hy:0,Mt:0, desc:"Unbalanced water WA — net hydrostatic thrust"}; } }
   // permanent earth surcharge ES (uniform behind wall)
   { const es=+S.soil.esQ||0;
     const hES=hCut>0? H-hCut : H;   // IAB2: semi-integral — below the seat only
@@ -3555,6 +3567,7 @@ function computeAll(){
       else if(gr.cls==="EQ"){ gamma = L.EQ||0;   // ABR3: 11.6.5.1 cases (f_P on ΔP_AE, f_I on the wall / soil / wing inertia) and 100/30 [3.10.8]
         if(perm.nc){ if(k==="EQd") gamma*=perm.fP; else if(k==="EQiW"||k==="EQiS"||k==="WGeq"||k==="EQap") gamma*=perm.fI; }   // APS: EQap
         if(perm.dir) gamma*=((k==="EQt")===(perm.dir==="T"))? 1 : 0.3; }
+      else if(gr.cls==="WA") gamma = L.perm? eta : 1.0;   // ABM6: γ_WA = 1.00 (× η at the strength limit states) [T.3.4.1-1]
       else gamma = L[gr.cls]; // TU, CR, WS, WL
       if(gr.cls==="DC" && L.perm && L.dcMax && (perm.DC??1)===1) gamma = L.dcMax;   // Strength IV γDC max
       if(k==="LSv" && exclLSv) gamma=0;
@@ -3571,6 +3584,7 @@ function computeAll(){
     const lbl = (L.perm||L.eq)
       ? `${(L.perm&&perm.DC===1&&L.dcMax?L.dcMax:gq("DC",perm.DC)).toFixed(2)}·DC + ${gq("DW",perm.DW).toFixed(2)}·DW + ${gq("EV",perm.EV).toFixed(2)}·EV + ${((L.eq&&eqEHfixed()!==null)?eqEHfixed():gq("EH",perm.EH)).toFixed(2)}·EH`
         +(esOn?` + ${gq("ES",perm.ES??1).toFixed(2)}·ES`:"")
+        +(groups.WA&&!L.noSuper?` + ${(L.perm?eta:1).toFixed(2)}·WA`:"")   // ABM6
         +(liveOn&&L.LL?(L.mLL&&L.mLL!==1&&!L.noSuper?(liveOn===2?` + ${L.LL.toFixed(2)}·LS + ${(L.LL*L.mLL).toFixed(2)}·BR, LL reaction off`:` + ${(L.LL*L.mLL).toFixed(2)}·(LL,BR) + ${L.LL.toFixed(2)}·LS`):(liveOn===2?` + ${L.LL.toFixed(2)}·(BR,LS), LL reaction off`:` + ${L.LL.toFixed(2)}·(LL,BR,LS)`)):"")
         +(L.WS?` + ${L.WS.toFixed(2)}·WS`:"")+(L.WL?` + ${L.WL.toFixed(2)}·WL`:"")
         +(L.TU&&(groups.TU.Hx||groups.CRSH.Hx)&&!L.noSuper?` + ${L.TU.toFixed(2)}·TU/CR/SH`:"")
@@ -4329,6 +4343,10 @@ function computeAll(){
       if(!r||Mecc>r.Mecc+1e-12) r={Mecc,Pv,gDC,gDW,llOn,...(apSG?{Map,apL}:{})}; }
     return r; }
   R.stemEcc=stemEcc;
+  // ABM6: net hydrostatic pressure on the stem per ft (water h_w − t_f behind, h_w,f − t_f in front, above the stem base)
+  const stWA=(R.WA&&R.WA.on)? (()=>{ const b=Math.max(0,Math.min(R.WA.hB-g.tf,Hs)), f=Math.max(0,Math.min(R.WA.hFr-g.tf,Hs));
+    return b>f+1e-9? {b, f, M:GAMMA_W*(b*b*b-f*f*f)/6, V:GAMMA_W*(b*b-f*f)/2} : null; })() : null;
+  if(stWA) R.stemWA=stWA;
   let stemGov=null; const stemRecs=[];   // ABR1: every limit state's stem-base demand (the shear check takes each one's own V_u, below)
   for(const lsName of STR_LIMITS){
     const L=LIMITS[lsName], ns=L.noSuper?0:1;
@@ -4378,11 +4396,14 @@ function computeAll(){
     }
     let Mu=gEH_ls*MEH_ls+(L.LL?L.LL*MLS_ls:0)+gES_ls*MES_ls+HgirdPerFt*g.hstem + MeccPerFt + Meq;
     let Vu=gEH_ls*VEH_ls+(L.LL?L.LL*VLS_ls:0)+gES_ls*VES_ls+HgirdPerFt + Veq;
+    const gWA=(stWA&&!L.noSuper)? (L.perm? eta : 1.0) : 0;   // ABM6: net water on the stem (not in the construction stage)
+    if(gWA){ Mu+=gWA*stWA.M; Vu+=gWA*stWA.V; }
     if(qCl>0){ Mu+=MCS_ls; Vu+=VCS_ls; }
     const eccMin=(gDCe!==gDCmx||gDWe!==(L.perm?GP.DW[1]:1.0)||llE!==!!L.LL);   // a minimum-factor / no-LL permutation governs M_ecc
-    const rec={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,gDCe,gDWe,llE,eccMin,gEH:gEH_ls,MCS:MCS_ls,...(se.Map!==undefined?{Map:se.Map,apL:se.apL}:{}),   // APS
+    const rec={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,...(gWA?{gWA}:{}),gDCe,gDWe,llE,eccMin,gEH:gEH_ls,MCS:MCS_ls,...(se.Map!==undefined?{Map:se.Map,apL:se.apL}:{}),   // APS
       Veq,eqT,cL,hwL,MEH:MEH_ls,VEH:VEH_ls,MLS:MLS_ls,VLS:VLS_ls,MES:MES_ls,VES:VES_ls,VCS:VCS_ls,gES:gES_ls,gLL:L.LL||0,HsL:Hs_ls,heqL:heq_ls,   // ABSW: worked terms (display only)
       lbl:`${gEH_ls.toFixed(2)}·EH${esQ>0?` + ${gES_ls.toFixed(2)}·ES`:""}${L.LL?(L.mLL&&L.mLL!==1&&!L.noSuper?` + ${L.LL.toFixed(2)}·LS + ${(L.LL*L.mLL).toFixed(2)}·BR`:` + ${L.LL.toFixed(2)}·(LS,BR)`):""}${qCl>0?` + ${L.CL.toFixed(2)}·CS`:""}${L.WS?` + ${L.WS.toFixed(2)}·WS`:""}${L.TU?` + ${L.TU.toFixed(2)}·TU/CR/SH`:""}${L.eq?" + 1.00·EQ"+(eqT&&eqT.nc?` (11.6.5.1 case ${eqT.nc})`:""):""} + P·e_brg`+(eccMin?` [${gDCe.toFixed(2)}·DC, ${gDWe.toFixed(2)}·DW${L.LL?(llE?", LL reaction on":", no LL reaction"):""}]`:"")+(se.Map!==undefined&&L.LL&&!se.apL?" [approach-slab LL off]":"")+` (${lsName})`};
+    if(gWA) rec.lbl+=` + ${gWA.toFixed(2)}·WA`;   // ABM6
     stemRecs.push(rec);
     // ABR3: the other 11.6.5.1 case of Extreme Event I, for the shear check (its M_u is the smaller one)
     if(eqT&&eqT.alt) eqT.alt.forEach(x=>stemRecs.push(Object.assign({},rec,{Mu:Mu-Meq+x.Meq, Vu:Vu-Veq+x.Veq, Meq:x.Meq, Veq:x.Veq,
@@ -4393,7 +4414,7 @@ function computeAll(){
   const HgirdSvc=(groups.BR.Hx*(LIMITS["Service I"].mLL||1)+groups.TU.Hx+groups.CRSH.Hx+wsFsv*groups.WS.Hx+groups.WL.Hx)/Lab;   // OWNB: m on BR (Service I)
   // Service I: LL reaction on or off, whichever gives the larger back-face moment (LS and BR stay on)
   const seSvc=stemEcc(LIMITS["Service I"],1), PvSvc=seSvc.Pv, MeccSvc=seSvc.Mecc, svcNoLL=!seSvc.llOn;
-  const MsStem=Mst_EH+Mst_LS+Mst_ES+HgirdSvc*g.hstem+MeccSvc;   // Service I: EH + LS + ES + girder horizontal + eccentric vertical (as the Service I V&M diagram)
+  const MsStem=Mst_EH+Mst_LS+Mst_ES+HgirdSvc*g.hstem+MeccSvc+(stWA? stWA.M : 0);   // ABM6: + WA   // Service I: EH + LS + ES + girder horizontal + eccentric vertical (as the Service I V&M diagram)
   R.stemDem={Hs,heqS,cS,Mst_EH,Vst_EH,Mst_LS,Vst_LS,Mst_ES,...stemGov,MsStem,HgirdSvc,eBrg:R.geo.eBrg,MselfEccTot,MeccSvc,svcNoLL};
   R.stemRecs=stemRecs;
   if(g.hw>g.tf) warnFor("conv","Water table above the top of footing: the stem earth pressure uses the buoyant unit weight below the water level, as the stability (balanced groundwater, no net hydrostatic thrust); the backwall and wingwalls use the moist unit weight.");
@@ -5051,7 +5072,8 @@ function computeAll(){
   /* ===== C-21 Input fingerprint (identifies this exact input set) ===== */
   {
     const fpS=JSON.parse(JSON.stringify(Object.assign({},S,{ui:undefined, own:abutOwner()==="AASHTO"?undefined:S.own})));   // OWNA: owner AASHTO leaves the Input ID unchanged
-    if(fpS.soil&&fpS.soil.Kmode==="active") delete fpS.soil.Kmode;              // OWNB: new inputs at their default leave it unchanged too
+    if(fpS.soil&&fpS.soil.Kmode==="active") delete fpS.soil.Kmode;
+    if(fpS.geom&&(fpS.geom.hwFr===null||fpS.geom.hwFr===undefined||fpS.geom.hwFr==="")) delete fpS.geom.hwFr;   // ABM6: balanced water leaves the Input ID unchanged              // OWNB: new inputs at their default leave it unchanged too
     if(fpS.factors&&fpS.factors.gpEHmaxR===1.35) delete fpS.factors.gpEHmaxR;
     if(fpS.constr&&fpS.constr.qC===0) delete fpS.constr.qC;
     if(fpS.constr&&fpS.constr.gC===1.5) delete fpS.constr.gC;
@@ -6185,6 +6207,11 @@ function renderTabLoads(R){
       ["H","Retained height (t_f + h_{soil})",geo.H,"ft"]])}
     ${kSelEq}
     ${ehLayers}
+    ${R.WA&&R.WA.on? eqB("Unbalanced water WA — net hydrostatic thrust (water h<sub>w</sub> behind, h<sub>w,f</sub> in front)","AASHTO 3.11.3; Table 3.4.1-1 (γ<sub>WA</sub> = 1.00)",[
+      `WA_h = \\tfrac{1}{2}\\gamma_w\\left(h_w^2 - h_{w,f}^2\\right)L_{ab} = \\tfrac{1}{2}(${fmtT(GAMMA_W,4)})\\left(${fmtT(R.WA.hB)}^2 - ${fmtT(R.WA.hFr)}^2\\right)(${fmtT(g.Lab)}) = ${fmtT(R.WA.H)}\\ \\text{kip}`,
+      `M_{WA} = \\tfrac{1}{6}\\gamma_w\\left(h_w^3 - h_{w,f}^3\\right)L_{ab} = ${fmtT(R.WA.M)}\\ \\text{kip-ft about the base}\\,, \\quad \\bar z = ${fmtT(R.WA.z)}\\ \\text{ft}`]
+      .concat(R.stemWA?[`\\text{Stem (per ft, above the stem base): } m_{WA} = \\tfrac{1}{6}\\gamma_w(h_b^3 - h_f^3) = \\tfrac{1}{6}(${fmtT(GAMMA_W,4)})(${fmtT(R.stemWA.b)}^3 - ${fmtT(R.stemWA.f)}^3) = ${fmtT(R.stemWA.M,3)}\\ \\text{kip-ft/ft}\\,, \\quad v_{WA} = \\tfrac{1}{2}\\gamma_w(h_b^2 - h_f^2) = ${fmtT(R.stemWA.V,3)}\\ \\text{kip/ft}`]:[]),
+      "Water behind on the virtual back plane (the earth pressure above already uses the buoyant unit weight below h<sub>w</sub>); water in front on the toe and stem front. WA is a load group at γ = 1.00 in every limit state except the construction stage (dry). The uplift is kept at the level behind (buoyant weights at h<sub>w</sub>, uniform under the base); the relief from the lower front level is neglected. Seepage and piping are not checked (3.11.3) — by the geotechnical engineer.") : ""}
     ${eqB(`Resolution into components (resultant inclined at ${s.method==="rankine"?"β":"δ"} = ${fmt(R.iota,1)}°) and totals`,"AASHTO 3.11.5.3",[
       `EH_h = P_a\\cos${s.method==="rankine"?"\\beta":"\\delta"}\\,L_{ab} = (${fmtT(E.PaSum)})(${fmtT(E.ci,4)})(${fmtT(g.Lab)}) = ${fmtT(E.EHh)}\\ \\text{kip}`,
       `EH_v = P_a\\sin${s.method==="rankine"?"\\beta":"\\delta"}\\,L_{ab} = (${fmtT(E.PaSum)})(${fmtT(E.si,4)})(${fmtT(g.Lab)}) = ${fmtT(E.EHv)}\\ \\text{kip}`,
@@ -10086,7 +10113,7 @@ document.addEventListener("input",ev=>{
   pushUndo(p);
   let v;
   if(el.type==="checkbox") v=el.checked;
-  else if(el.type==="number") v=el.value===""?0:Number(el.value);
+  else if(el.type==="number") v=el.value===""?(el.dataset.blank?null:0):Number(el.value);   // ABM6: data-blank inputs store null when empty
   else v=el.value;
   const ownPreN=(p==="mat.fc"&&abutOwner()==="CTDOT")? ownDefMap() : null;   // ABR3: the CTDOT γ_c owner default follows f′c (V2 3.5.1)
   setPath(S,p,v);
