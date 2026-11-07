@@ -392,6 +392,7 @@ a.wkA:hover{text-decoration:underline}
  <div class="row sm-vesic"><label>Friction angle &phi;</label><input type="number" step="0.5" data-path="soil.phi" data-num><span class="unit">deg</span></div>
  <div class="row sm-vesic"><label>Bearing capacity FS</label><input type="number" step="0.1" data-path="soil.FSb" data-num><span class="unit">&ndash;</span></div>
  <div class="row sm-vesic"><label>Depth factors d<sub>q</sub>, d<sub>c</sub></label><select data-path="soil.sfdDepthF"><option value="off">Off (d = 1.0)</option><option value="on">On (Vesi&cacute;)</option></select><span class="hint">Vesi&cacute; form (not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10); use condition per AASHTO 10.6.3.1.2a</span></div>
+<div class="row sm-vesic"><label>Shear failure mode</label><select data-path="soil.sfdShearMode"><option value="general">General shear (c, &phi; as entered)</option><option value="local">Local / punching shear (c* = 0.67c, &phi;* = tan<sup>&minus;1</sup>(0.67 tan &phi;))</option></select><span class="hint">AASHTO LRFD 10th Ed. 10.6.3.1.2b: use the reduced parameters where local or punching shear failure is possible (loose or compressible soil, weak soil under slow loading, dense sand under a deep footing with a high load). Bearing capacity only; sliding and passive use &phi;.</span></div>
  <div class="row sm-vesic"><label>Override q<sub>allow</sub></label><select data-path="soil.qaOverride" id="qaOverSel"><option value="off">Off (use computed)</option><option value="on">On (user value)</option></select></div>
  <div class="row sm-vesic qa-over"><label>User q<sub>allow</sub></label><input type="number" step="0.25" data-path="soil.qaOverVal" data-num><span class="unit">ksf</span></div>
  <div class="row"><label>Soil unit weight &gamma;<sub>s</sub></label><input type="number" step="1" data-path="soil.gs" data-num><span class="unit">pcf</span></div>
@@ -741,7 +742,7 @@ function defaultState(){
  loadMode:'type',
  geom:{B:10,L:8,t:2.5,Df:4},
  mat:{gc:150,fc:4000,fy:60000,lambda:1,coverBot:3,coverTop:2,ks:150,swMode:'auto',swUser:0,vcMode:'c',coating:'none',dagg:0.75,sideExp:'earth',ldExcess:'off',lamsFtg:'off',ldcAlways:'off'},
- soil:{mode:'vesic',qa:4,qaBasis:'gross',c:0,phi:32,gs:120,FSb:3,dw:'',qaOverride:'off',qaOverVal:4,sfdDepthF:'off'},
+ soil:{mode:'vesic',qa:4,qaBasis:'gross',c:0,phi:32,gs:120,FSb:3,dw:'',qaOverride:'off',qaOverVal:4,sfdDepthF:'off',sfdShearMode:'general'},
  ev:{cover:1.5,gev:120,qDsur:0,qLsur:0},
  freinf:{botX:{size:8,spc:9,mode:'spacing'},botY:{size:8,spc:9,mode:'spacing'},topX:{size:0,spc:12,mode:'spacing'},topY:{size:0,spc:12,mode:'spacing'},botOuter:'y'},
  stab:{muMode:'phi',mu:0.45,pf:0,FSot:2,FSsl:1.5,FSfl:1.25,shearCouple:'on',otGate:'off',eccMode:'kern',eccCustom:0.25},
@@ -775,6 +776,7 @@ function migrateState(){
  // for those saves so an old project reproduces its results (new projects default to off).
  if(!state.soil||typeof state.soil!=='object')state.soil={};
  if(state.soil.sfdDepthF===undefined)state.soil.sfdDepthF='on';
+ if(state.soil.sfdShearMode!=='local')state.soil.sfdShearMode='general';   /* SFVL: older saves general shear (as before) */
  ['stab','soil','ev'].forEach(sec=>{if(!state[sec])state[sec]={};
   Object.keys(ds[sec]).forEach(k=>{if(state[sec][k]===undefined)state[sec][k]=ds[sec][k];});});
  /* SFNO (2026-11-06, engineer): the choice "Not checked" (stab.eccMode 'off') is removed. A save holding it opens as 'none'
@@ -1475,6 +1477,7 @@ function computeAll(){
  if(num(state.stab.mu)<0)W.push({lvl:'err',msg:'Friction coefficient \u03bc cannot be negative.'});
  if(num(state.stab.pf)<0||num(state.stab.pf)>1)W.push({lvl:'err',msg:'Passive fraction mobilized must be between 0 and 1.'});
  else if(num(state.stab.pf)>0)W.push({lvl:'warn',msg:'Passive resistance is credited over the full embedment Df and the full footing width (P_p = f_p·½K_pγD_f²·w), not only the footing face of depth t. Neglect soil that may be removed by excavation, scour or frost, and soil above the footing top, unless the geotechnical report allows it (AASHTO LRFD 10.6.3.4); set the passive fraction accordingly.'});
+ if(state.soil.mode==='vesic'&&state.soil.sfdShearMode!=='local'&&phiDeg<30)W.push({lvl:'warn',msg:'Vesić bearing with \u03c6 = '+f2(phiDeg)+'\u00b0 < 30\u00b0 and general shear: in loose or compressible soil local or punching shear failure is possible; AASHTO LRFD 10th Ed. 10.6.3.1.2b then reduces c and \u03c6 (Soil: Shear failure mode, Local / punching). Confirm the failure mode with the geotechnical engineer.'});   /* SFVL */
  if(state.soil.mode==='vesic'&&state.soil.sfdDepthF==='on'&&Df>0)W.push({lvl:'warn',msg:'Depth factors d_q, d_c are applied in the Vesić bearing capacity. Use them only where the soil above the base is as competent as the bearing soil and will not be removed (AASHTO LRFD 10.6.3.1.2a); otherwise set "Depth factors" to Off.'});
  ['otGate','eccMode','eccCustom'].forEach(k=>{if(state.stab[k]===undefined)state.stab[k]=defaultState().stab[k];});
  ['FSot','FSsl','FSfl'].forEach(k=>{if(num(state.stab[k])<1)W.push({lvl:'warn',msg:'Target factor of safety '+k+' = '+f2(num(state.stab[k]))+' is less than 1.0.'});});
@@ -1591,7 +1594,12 @@ function computeAll(){
   if(U>0){P-=U;verts.push({w:-U,x:0,y:0,src:'Buoyancy U',f:1,mag:-U});}
   return{P,Hx,Hy,Mx,My,MaX,MaY,verts,maT,ex:Math.abs(P)>1e-9?My/P:0,ey:Math.abs(P)>1e-9?Mx/P:0};
  }
- const ctx={B,L,Df,phi,c,gs,gw,dw:dwc===Infinity?Infinity:dwc,FSb,useD:state.soil.sfdDepthF==='on'};
+ /* SFVL (2026-11-07): AASHTO LRFD 10th Ed. 10.6.3.1.2b (Eqs. 10.6.3.1.2b-1, -2): where local or punching shear failure is
+    possible, the bearing resistance uses c* = 0.67c and phi* = atan(0.67 tan phi). Option soil.sfdShearMode ('general' default:
+    unchanged; 'local'). Bearing capacity only (sliding and passive keep phi). */
+ const lpMode=state.soil.mode==='vesic'&&state.soil.sfdShearMode==='local';
+ const phiB=lpMode?Math.atan(0.67*Math.tan(phi)):phi, cB=lpMode?0.67*c:c, phiBdeg=phiB*180/Math.PI;
+ const ctx={B,L,Df,phi:phiB,c:cB,gs,gw,dw:dwc===Infinity?Infinity:dwc,FSb,useD:state.soil.sfdDepthF==='on'};
  const mu=(state.stab.muMode==='phi')?Math.tan((2/3)*phi):num(state.stab.mu);
  const Kp=Math.pow(Math.tan(Math.PI/4+phi/2),2);
  const pf=Math.min(Math.max(num(state.stab.pf),0),1);
@@ -1727,7 +1735,7 @@ function computeAll(){
  asd.filter(a=>a.DCR===Infinity&&unstable.indexOf(a)<0).forEach(a=>W.push({lvl:'err',design:true,msg:'Bearing FAIL, combination "'+a.cb.name+'": '+sfdBearWhy(a,B,L)+' \u2014 bearing D/C = \u221e.'}));   /* SFNB-2 */
  if(state.soil.mode==='vesic'&&govBear&&govBear.cap&&!govBear.cap.fail&&govBear.cap.iq<0.3)
   W.push({lvl:'warn',msg:'Load inclination is severe (i_q < 0.30) in the governing bearing combination; the Vesi\u0107 inclination correction is being extrapolated near its limit.'});
- return{W,fatal:false,B,L,t,Df,gc,fc,ks,phi,phiDeg,c,gs,gev,gw,dw:dwc===Infinity?Infinity:dwc,
+ return{lpMode,phiB,phiBdeg,cB,W,fatal:false,B,L,t,Df,gc,fc,ks,phi,phiDeg,c,gs,gev,gw,dw:dwc===Infinity?Infinity:dwc,
   peds,Wf,WfAuto,Wpeds,Aped,Aev,covEff,covDry,covSub,evPress,EV,xev,yev,surD,surL,qDsur,qLsur,hsub,U,topDepth,
   present,combosASD,combosLRFD,asd,lrfd,govBear,govOT,govSlx,govSly,govSlr,minContact,flot,eccChk,...(eccInfo?{eccInfo}:{}),otGate:(state.stab.otGate==='on'),
   mu,Kp,pf,PpX,PpY,rig,FSb,directMode,aashtoDirect:AD,loadMode:state.loadMode};
@@ -3015,24 +3023,28 @@ function renderBearing(){
    "B' = B - 2|e_x| ,\\qquad L' = L - 2|e_y|",
    "B' = "+f2(R.B)+' - 2\\cdot'+f2(Math.abs(r.ex))+',\\qquad L\' = '+f2(R.L)+' - 2\\cdot'+f2(Math.abs(r.ey)),
    "B' = "+f2(v.Bp)+'\\;\\mathrm{ft},\\qquad L\' = '+f2(v.Lp)+'\\;\\mathrm{ft}\\quad (B_{eff}='+f2(v.Beff)+',\\;L_{eff}='+f2(v.Leff)+')'));
+  if(R.lpMode)b2.appendChild(eqBlock('Local / punching shear: reduced parameters','AASHTO LRFD 10th Ed. 10.6.3.1.2b',   /* SFVL */
+   'c^* = 0.67c,\\quad \\varphi^* = \\tan^{-1}(0.67\\tan\\varphi)',
+   'c^* = 0.67\\cdot'+f3(R.c)+',\\quad \\varphi^* = \\tan^{-1}(0.67\\tan '+f2(R.phiDeg)+'^\\circ)',
+   'c^* = '+f3(R.cB)+'\\;\\mathrm{ksf},\\quad \\varphi^* = '+f2(R.phiBdeg)+'^\\circ\\;\\text{(used below)}'));
   b2.appendChild(eqBlock('Bearing capacity factors','Vesi\u0107 / Reissner / Prandtl',
    'N_q = e^{\\pi\\tan\\varphi}\\tan^2\\!\\left(45+\\tfrac{\\varphi}{2}\\right),\\quad N_c = (N_q-1)\\cot\\varphi,\\quad N_\\gamma = 2(N_q+1)\\tan\\varphi',
-   'N_q = e^{\\pi\\tan '+f2(R.phiDeg)+'^\\circ}\\tan^2\\!\\left(45+'+f2(R.phiDeg/2)+'^\\circ\\right),\\quad N_c = ('+f2(v.Nq)+'-1)\\cot '+f2(R.phiDeg)+'^\\circ,\\quad N_\\gamma = 2('+f2(v.Nq)+'+1)\\tan '+f2(R.phiDeg)+'^\\circ',
+   'N_q = e^{\\pi\\tan '+f2(R.phiBdeg)+'^\\circ}\\tan^2\\!\\left(45+'+f2(R.phiBdeg/2)+'^\\circ\\right),\\quad N_c = ('+f2(v.Nq)+'-1)\\cot '+f2(R.phiBdeg)+'^\\circ,\\quad N_\\gamma = 2('+f2(v.Nq)+'+1)\\tan '+f2(R.phiBdeg)+'^\\circ',
    'N_q = '+f2(v.Nq)+',\\quad N_c = '+f2(v.Nc)+',\\quad N_\\gamma = '+f2(v.Ng)));
   b2.appendChild(eqBlock('Shape factors','Vesi\u0107',
    's_c = 1+\\frac{B_{eff}}{L_{eff}}\\frac{N_q}{N_c},\\quad s_q = 1+\\frac{B_{eff}}{L_{eff}}\\tan\\varphi,\\quad s_\\gamma = 1-0.4\\frac{B_{eff}}{L_{eff}}',
-   's_c = 1+'+f2(v.Beff/v.Leff)+'\\cdot\\frac{'+f2(v.Nq)+'}{'+f2(v.Nc)+'},\\quad s_q = 1+'+f2(v.Beff/v.Leff)+'\\cdot\\tan '+f2(R.phiDeg)+'^\\circ,\\quad s_\\gamma = 1-0.4\\cdot'+f2(v.Beff/v.Leff),
+   's_c = 1+'+f2(v.Beff/v.Leff)+'\\cdot\\frac{'+f2(v.Nq)+'}{'+f2(v.Nc)+'},\\quad s_q = 1+'+f2(v.Beff/v.Leff)+'\\cdot\\tan '+f2(R.phiBdeg)+'^\\circ,\\quad s_\\gamma = 1-0.4\\cdot'+f2(v.Beff/v.Leff),
    's_c = '+f2(v.sc)+',\\quad s_q = '+f2(v.sq)+',\\quad s_\\gamma = '+f2(v.sg)));
   if(!v.useD)b2.appendChild(eqBlock('Depth factors','Option off \u2014 AASHTO LRFD 10.6.3.1.2a (soil above the base not relied on)',
    'd_q = d_c = d_\\gamma = 1',null,
    'd_q = 1.00,\\quad d_c = 1.00,\\quad d_\\gamma = 1.00'));
   else b2.appendChild(eqBlock('Depth factors','Vesi\u0107 (k = Df/B\u2032 \u2264 1, else arctan); option on \u2014 soil above the base taken as competent and permanent (use condition: AASHTO LRFD 10.6.3.1.2a). Not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10, which takes arctan(Df/B) at every depth, caps dq at 1.4 and has no dc',
    'k = '+ (R.Df/v.Beff<=1?'D_f/B_{eff}':'\\arctan(D_f/B_{eff})')+',\\quad d_q = 1+2\\tan\\varphi(1-\\sin\\varphi)^2 k,\\quad d_c = d_q-\\frac{1-d_q}{N_c\\tan\\varphi},\\quad d_\\gamma = 1',
-   'k = '+(R.Df/v.Beff<=1?f2(R.Df)+'/'+f2(v.Beff):'\\arctan('+f2(R.Df)+'/'+f2(v.Beff)+')')+' = '+f2(v.kk)+',\\quad d_q = 1+2\\tan '+f2(R.phiDeg)+'^\\circ(1-\\sin '+f2(R.phiDeg)+'^\\circ)^2\\cdot'+f2(v.kk)+',\\quad d_c = '+f2(v.dq)+'-\\frac{1-'+f2(v.dq)+'}{'+f2(v.Nc)+'\\cdot'+f2(v.tphi)+'}',
+   'k = '+(R.Df/v.Beff<=1?f2(R.Df)+'/'+f2(v.Beff):'\\arctan('+f2(R.Df)+'/'+f2(v.Beff)+')')+' = '+f2(v.kk)+',\\quad d_q = 1+2\\tan '+f2(R.phiBdeg)+'^\\circ(1-\\sin '+f2(R.phiBdeg)+'^\\circ)^2\\cdot'+f2(v.kk)+',\\quad d_c = '+f2(v.dq)+'-\\frac{1-'+f2(v.dq)+'}{'+f2(v.Nc)+'\\cdot'+f2(v.tphi)+'}',
    'd_q = '+f2(v.dq)+',\\quad d_c = '+f2(v.dc)+',\\quad d_\\gamma = 1.00'));
   b2.appendChild(eqBlock('Load inclination factors','Vesi\u0107 (m interpolated by load direction, on B\u2032/L\u2032 \u2014 AASHTO LRFD 10.6.3.1.2a)',
    "m_x=\\tfrac{2+B'/L'}{1+B'/L'},\\; m_y=\\tfrac{2+L'/B'}{1+L'/B'},"+'\\; m = m_x\\cos^2\\theta + m_y\\sin^2\\theta,\\quad i_q = \\left(1-\\tfrac{H}{V+A_e c\\cot\\varphi}\\right)^m,\\; i_\\gamma = (\\;\\cdot\\;)^{m+1},\\; i_c = i_q-\\tfrac{1-i_q}{N_c\\tan\\varphi}',
-   "B'/L'="+f2(v.Bp)+'/'+f2(v.Lp)+',\\; m_x='+f2(v.mxm)+',\\; m_y='+f2(v.mym)+'\\Rightarrow m='+f2(v.m)+';\\quad i_q = \\left(1-\\frac{'+f2(v.H)+'}{'+f2(v.V)+'+'+f2(v.Ae)+'\\cdot'+f2(R.c)+'\\cot '+f2(R.phiDeg)+'^\\circ}\\right)^{'+f2(v.m)+'}'+(v.denom!==null?'=\\left(1-\\frac{'+f2(v.H)+'}{'+f2(v.denom)+'}\\right)^{'+f2(v.m)+'}':''),
+   "B'/L'="+f2(v.Bp)+'/'+f2(v.Lp)+',\\; m_x='+f2(v.mxm)+',\\; m_y='+f2(v.mym)+'\\Rightarrow m='+f2(v.m)+';\\quad i_q = \\left(1-\\frac{'+f2(v.H)+'}{'+f2(v.V)+'+'+f2(v.Ae)+'\\cdot'+f2(R.c)+'\\cot '+f2(R.phiBdeg)+'^\\circ}\\right)^{'+f2(v.m)+'}'+(v.denom!==null?'=\\left(1-\\frac{'+f2(v.H)+'}{'+f2(v.denom)+'}\\right)^{'+f2(v.m)+'}':''),
    'i_q = '+f2(v.iq)+',\\quad i_\\gamma = '+f2(v.ig)+',\\quad i_c = '+f2(v.ic)));
   const gwtxt=['','\\text{WT at/above base: } q = \\gamma d_w + \\gamma\'(D_f-d_w),\\; \\gamma_{eff} = \\gamma\'','\\text{WT within B below base: } q = \\gamma D_f,\\; \\gamma_{eff} = \\gamma\' + \\gamma_w\\frac{d_w-D_f}{B_{eff}}','\\text{WT deeper than } D_f+B_{eff}: \\text{ no correction}'][v.gwCase];
   const gwsub=[''
@@ -3737,7 +3749,7 @@ function sfrModel(){
    ['Cover, bottom / top',sfrN(num(state.mat.coverBot))+' / '+sfrN(num(state.mat.coverTop)),'in'],['Side / end cover, bottom bars',sfdSideCoverIn()===null?'= bottom cover':sfrN(sfdSideCoverIn()),'in'],
    ['Subgrade modulus k_s',sfrCell(R.ks,0),'pci'],['Footing self-weight',state.mat.swMode==='user'?'user override':'computed','–']]}]});
   const soilRows=state.soil.mode==='vesic'
-   ?[['Bearing basis','Vesić, computed','–'],['Cohesion c',sfrCell(R.c),'ksf'],['Friction angle φ',sfrCell(R.phiDeg,1),'deg'],['Bearing capacity FS',sfrCell(R.FSb),'–'],['Depth factors',state.soil.sfdDepthF==='on'?'on':'off (d = 1.0)','–'],
+   ?[['Bearing basis','Vesić, computed','–'],['Cohesion c',sfrCell(R.c),'ksf'],['Friction angle φ',sfrCell(R.phiDeg,1),'deg'],['Shear failure mode',R.lpMode?'local / punching (c* = '+sfrN(R.cB,3)+' ksf, φ* = '+sfrN(R.phiBdeg,2)+'°; AASHTO 10.6.3.1.2b)':'general','–'],['Bearing capacity FS',sfrCell(R.FSb),'–'],['Depth factors',state.soil.sfdDepthF==='on'?'on':'off (d = 1.0)','–'],
      ['Allowable bearing override',state.soil.qaOverride==='on'?sfrN(num(state.soil.qaOverVal))+' ksf':'off','–']]
    :[['Bearing basis','Direct allowable q_a ('+state.soil.qaBasis+')','–'],['Allowable bearing q_a',sfrCell(num(state.soil.qa)),'ksf'],['Friction angle φ (base friction tan(2/3 φ), passive K_p)',sfrCell(R.phiDeg,1),'deg']];   /* SFPR (review E7) */
   subs.push({title:'Soil, cover and stability parameters',items:[{type:'table',head:['Quantity','Value','Unit'],rows:soilRows.concat([
@@ -3861,14 +3873,17 @@ function sfrModel(){
    st.push(SharedSteps.step({id:'DCR',label:'Bearing demand / capacity',sym:'DCR',eq:'\\frac{q}{q_{a}}',sub:'\\frac{'+sfrN(c.qcheck,3)+'}{'+sfrN(c.qa)+'}',value:G.DCR===Infinity?'∞':G.DCR,unit:'',d:3,ok:G.DCR<=1+1e-9,ref:R.directMode?'factored envelope vs allowable (conservative)':'ASCE 7-16 §2.4.1 service loads'}));
    T.push({title:'Bearing check',ref:'',steps:st});
   }else if(c&&!c.fail){
-   const S=(o)=>SharedSteps.step(o), ph=sfrN(R.phiDeg,1)+'^{\\circ}';
+   const S=(o)=>SharedSteps.step(o), ph=sfrN(R.phiBdeg,1)+'^{\\circ}';
    T.push({title:'Effective footing (Meyerhof)',ref:'Meyerhof (1953)',steps:[
     S({id:'Bp',label:'Effective width',sym:'B^{\\prime}',eq:'B \\minus 2|e_{x}|',sub:sfrN(R.B)+' \\minus 2\\cdot'+sfrN(Math.abs(r.ex),3),value:c.Bp,unit:'ft',d:3}),
     S({id:'Lp',label:'Effective length',sym:'L^{\\prime}',eq:'L \\minus 2|e_{y}|',sub:sfrN(R.L)+' \\minus 2\\cdot'+sfrN(Math.abs(r.ey),3),value:c.Lp,unit:'ft',d:3}),
     S({id:'Ae',label:'Effective area',sym:'A^{\\prime}',eq:'B^{\\prime} L^{\\prime}',sub:sfrN(c.Bp,3)+'\\cdot'+sfrN(c.Lp,3),value:c.Ae,unit:'ft^{2}'})]});
+   if(R.lpMode)T.push({title:'Local / punching shear: reduced strength parameters',ref:'AASHTO LRFD 10th Ed. 10.6.3.1.2b',steps:[   /* SFVL */
+    S({id:'cst',label:'Reduced cohesion',sym:'c^{*}',eq:'0.67 c',sub:'0.67\\cdot'+sfrN(R.c,3),value:R.cB,unit:'ksf',d:3,ref:'Eq. 10.6.3.1.2b-1'}),
+    S({id:'phst',label:'Reduced friction angle (used in the factors below)',sym:'\\phi^{*}',eq:'\\tan^{-1}(0.67 \\tan\\phi)',sub:'\\tan^{-1}(0.67\\cdot\\tan '+sfrN(R.phiDeg,1)+'^{\\circ})',value:R.phiBdeg,unit:'°',d:2,ref:'Eq. 10.6.3.1.2b-2'})]});
    T.push({title:'Bearing capacity factors',ref:'Vesić (1973, 1975)',steps:[
     S({id:'Nq',label:'N_q',sym:'N_{q}',eq:'e^{\\pi \\tan\\phi} \\tan^{2}(45^{\\circ} + \\phi/2)',sub:'\\phi = '+ph,value:c.Nq,unit:'',d:3}),
-    S({id:'Nc',label:'N_c',sym:'N_{c}',eq:R.phiDeg>1e-6?'\\frac{N_{q} \\minus 1}{\\tan\\phi}':'5.14',sub:R.phiDeg>1e-6?'\\frac{'+sfrN(c.Nq,3)+' \\minus 1}{'+sfrN(c.tphi,4)+'}':'',value:c.Nc,unit:'',d:3}),
+    S({id:'Nc',label:'N_c',sym:'N_{c}',eq:R.phiBdeg>1e-6?'\\frac{N_{q} \\minus 1}{\\tan\\phi}':'5.14',sub:R.phiBdeg>1e-6?'\\frac{'+sfrN(c.Nq,3)+' \\minus 1}{'+sfrN(c.tphi,4)+'}':'',value:c.Nc,unit:'',d:3}),
     S({id:'Ng',label:'N_γ',sym:'N_{\\gamma}',eq:'2 (N_{q} + 1) \\tan\\phi',sub:'2\\cdot('+sfrN(c.Nq,3)+' + 1)\\cdot'+sfrN(c.tphi,4),value:c.Ng,unit:'',d:3})]});
    const bl=c.Beff/c.Leff;
    T.push({title:'Shape, depth and inclination factors',ref:'Vesić; AASHTO LRFD 10th Ed. Art. 10.6.3.1.2a (m, use of depth factors)',steps:[
