@@ -16217,3 +16217,168 @@ index 9d50d7b..7c34a8a 100644
 +      : `<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Group efficiency η not entered (panel I-7): the group resistance in compression [10.7.3.9] is not checked (largest ΣV<sub>f</sub> = ${fmt(G.V,1)} kip, ${esc(G.ls)}). η = 1.0 in cohesionless soil or with the cap in firm contact; in clay with soft surface soil and the cap not in contact, 0.65 at 2.5D to 1.0 at 6D; the equivalent-pier check in clay is by the geotechnical engineer.</div>`)
 +      +(U&&U.uplift? `<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Piles in tension (minimum ${fmt(U.P,1)} kip, ${esc(U.ls||"")}): the group uplift resistance φ<sub>ug</sub>R<sub>ug</sub> [10.7.3.11, Eq. 10.7.3.11-1] — the lesser of the sum of the individual uplift resistances and the block — is by the geotechnical engineer (the individual check is §4.3).</div>` : `<div class="note-box">No pile in tension in any combination: group uplift [10.7.3.11] does not apply.</div>`)); }
 ```
+
+## 2026-11-07 — PR: claude/pile-m7-group-handoff (PR #1050: https://github.com/mlococo88/All-Structural/pull/1050) (PDA-M7) — pile results import: Pile Designer's group reduction applied to R_n and R_n,up   [imported value change with a group]
+- **Problem (Pile Designer review M7):** the import set `piles.Rn` / `piles.RnUp` to Pile Designer's single-pile static resistance even when its Module 11 group efficiency or block governs. The abutment then over-credited the piles.
+- **Where:** `AbutPileResults` IIFE, `plan(p,st)`.
+  - Before the `if(geoOn){` block (anchor `// PDA-M7 (2026-11-07): Pile Designer's group result`): `grR` = `p.group.reduce` when < 1 (conventional abutment only), `grU` = `p.group.uplift.reduceUp` when < 1, and two warnings (the group factors; for a field-method R_n, which is imported as sent).
+  - Before: `add(kp+"Rn",g.static.Rn,…)` and `add(kp+"RnUp",g.static.RnUp,…)`. After: `g.static.Rn*grR` and `g.static.RnUp*grU`, with the labels stating the factor.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.7.3.9 / 10.9.3.6 and 10.7.3.11 / 10.9.3.8 (through Pile Designer's Module 11). The abutment's own formulas are unchanged.
+- **Check case:** payload R_n 123.7, φ 0.70, R_n,up 123.7, φ_up 0.60, `group.reduce` 0.9458, `uplift.reduceUp` 0.7735.
+  - Before: piles.Rn 123.7, piles.RnUp 123.7.
+  - After: **116.995** and **95.682**, plus the warning.
+  - Without `group`: unchanged.
+- **How verified:** `AbutPileResults.plan` evaluated in the page, both payloads. `check-syntax`: pass. No console errors.
+- **Other copies:** the Retaining Wall Designer receiver gets the same rule (fixlog/Retaining Wall Designer.md, PDA-M7).
+
+## 2026-11-07 — PR: claude/abut-low (PR #1052: https://github.com/mlococo88/All-Structural/pull/1052) (ABL: review LOW items L1 crack-control γ_e default, L2 pile φ defaults, L3 rock adhesion on the compressed area, L4 construction-stage label, L6 zone vs S_D1, L7 BR/TU in both directions)   [calc changes: new-project defaults (L1, L2), formula (L3), permutations (L7); label (L4); warning (L6)] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, items L1–L4, L6, L7 (L5, the built-in project failing its own checks, is an engineer decision and is not changed).
+
+### ABL1. γ_e default 0.75 (Class 2)
+- **Where:** `defaultState` `reinf.gammaE` (anchor `ABL1 (2026-11-07): new projects 0.75`); REVIEW warning (anchor `REVIEW — Crack control uses Class 1 exposure`).
+- **Before / after:** new-project γ_e = 1.00 → **0.75**; a saved project keeps its stored γ_e (every save stores it). A warning is raised when γ_e = 1.00 with a deicing / coastal / salt-water wall exposure (panel I-2).
+- **Provision:** AASHTO LRFD 10th Ed. (2024) 5.6.7 (Eq. 5.6.7-1, γ_e 1.00 Class 1, 0.75 Class 2) and C5.6.7 (Class 2 for substructures exposed to water). RIDOT and CTDOT owner defaults are already 0.75.
+- **Check case (built-in stem, M_s = 74.79 kip-ft/ft, f_ss = 13.84 ksi, β_s = 1.071, d_c = 2.564 in):** s_max = 700γ_e/(β_s f_ss) − 2d_c = 700(1.00)/(1.071·13.84) − 5.13 = **42.1 in** before, and 700(0.75)/(1.071·13.84) − 5.13 = **30.3 in** after. Stem crack D/C 0.214 → 0.297; backwall 0.225 → 0.310.
+  - The independent wing stem (built-in dimensions, #5 @ 12) goes from crack D/C 0.927 → **1.403 FAIL**.
+  - The integral built-in wing junction goes from 0.802 → **1.245 FAIL**.
+
+### ABL2. Pile φ defaults without a static load test
+- **Where:** `defaultState` piles (anchor `ABL2 (2026-11-07): new-project φ without a static load test`), `iabDefault` (same), the overrides list in C-20.
+- **Before / after:** new projects φ_c 0.70 → **0.65** and φ_up 0.60 → **0.50**, for both conventional piles and integral piles. Saved projects keep their stored φ (always stored).
+- **Provision:** AASHTO LRFD 10th Ed. (2024) Table 10.5.5.2.3-1:
+  - compression: 0.80 / 0.75 apply only with a static load test; 0.65 applies to driving criteria by dynamic testing with QC on at least two piles per site condition and at least 2 %;
+  - uplift: 0.60 = static load test; 0.50 = dynamic test with signal matching; static analysis methods 0.20–0.40.
+  - The old 0.70 is not a table value.
+- **Check case (review §2.2 piles, P_max = 200.97 kip, R_n = 330 kip):** D/C = 200.97/(0.70·330) = **0.870** before, and 200.97/(0.65·330) = **0.937** after. Uplift (EE I variant, P_min = −15.92 kip, R_n,up = 100 kip): 15.92/(0.60·100) = 0.265 before, 15.92/(0.50·100) = **0.318** after.
+
+### ABL3. Rock adhesion on the compressed area
+- **Where:** C-7 sliding (anchor `ABL3 (2026-11-07): rock adhesion on the compressed area only`), Tab 3 §3.1 rock line (shows B_c); wing simplified sliding on rock (anchor `ABL3: adhesion on the compressed width`).
+- **Before:** R_n = μV + c_a·B·L_ftg.
+- **After:** R_n = μV + c_a·B_c·L_ftg, where B_c = B for |e| ≤ B/6, else 3(B/2 − |e|) (linear pressure on rock, as the bearing check). c_a = 0 (the default) is unchanged.
+- **Provision:** AASHTO LRFD 10th Ed. (2024) 10.6.3.4 (resistance along the contact). Interface adhesion acts only where the base is in contact.
+- **Check case (built-in, rock, μ = 0.70, c_a = 2.0 ksf; governing Strength I V = 1712.5 kip, e = 2.782 ft, B = 13 ft, L_ftg = 44 ft):**
+  - Before: R_n = 1198.75 + 2.0·13·44 = 2342.75 kip, D/C 744.20/(0.8·2342.75) = **0.397**.
+  - After: B_c = 3(6.5 − 2.782) = 11.154 ft, so R_n = 1198.75 + 2.0·11.154·44 = 2180.34 kip and D/C = **0.427**.
+
+### ABL4. Construction-stage label
+- **Where:** `comboEffects` label (anchor `${L.noSuper?"":gq("DW",perm.DW)`). The construction stage ("no superstructure") no longer prints a γ·DW term. Display only.
+
+### ABL6. Seismic zone vs S_D1
+- **Where:** new input `seismic.SD1` (panel I-11, 0 = not entered) and a REVIEW warning (anchor `ABL6: zone vs S_D1`).
+- **Provision:** AASHTO LRFD 10th Ed. (2024) Table 3.10.6-1 (Zone 1 ≤ 0.15; 2 ≤ 0.30; 3 ≤ 0.50; 4 above). Warning only; no result changes.
+- **Check case:** S_D1 = 0.35 with Zone 1 selected → warning (Table gives Zone 3).
+
+### ABL7. BR and TU in both directions
+- **Where:** `permutations` (anchor `ABL7 (2026-11-07): BR and TU act in either direction`), `comboEffects` (anchor `if(perm.rev && (k==="BR"||k==="TU")) gamma = -gamma;`), labels "(BR, TU reversed: toward the backfill)".
+- **Before:** BR and TU acted only toward the toe.
+- **After:** every permutation is also run with BR and TU reversed when either is present. The reversed set follows the usual permutations, whose order and numbering are unchanged (the Tab 2 tables are longer). CR/SH stays toward the span (shortening). The reversed magnitude is the same as entered or calculated (conservative for the rise case).
+- **Provision:** AASHTO LRFD 10th Ed. (2024) 3.6.4 (braking in either direction), 3.12.2 (uniform temperature rise and fall).
+- **Check case:** in the 38 scenarios run, no check is governed by the reversed direction (earth pressure dominates a cantilever abutment), so no D/C moves. The permutation count doubles (Strength I: 48 → 96 rows) when BR or TU is present.
+
+### Verification
+- Headless origin/main vs branch:
+  - 38 scenarios: only crack control (L1), the pile compression / uplift / group D/Cs (L2) and the rock-adhesion scenario (L3) move.
+  - With the old γ_e and φ entered explicitly, 7 scenarios are identical to main except rock adhesion (L3).
+- All tabs and the Report render with 0 console errors; the self-test passes (its keys hold no crack or pile values); `check-syntax` passes.
+- `project-library --tool abutment`: the main-vs-branch result comparison differs by design (default γ_e, permutation tables). Against this branch itself (`--a HEAD`): ALL PASS.
+
+### Decisions (pending engineer review)
+- L2: 0.65 / 0.50 assume dynamic testing (QC) as the minimum field verification. Projects relying only on static analysis need the lower static-method values; the tooltip and the overrides list name the method.
+- L7: CR/SH not reversed; reversed TU uses the same magnitude.
+- L5 (built-in project fails its own checks): not changed, engineer decision.
+
+### Saved data
+- New optional field `seismic.SD1` (0). No keys changed.
+- Saved projects keep their stored γ_e and φ. They change only through L3 (rock with c_a > 0) and L7 (where a reversed case governs).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 2547b26..432d945 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -620 +620 @@ function iabDefault(){
+-    Rn:0, phiC:0.70, RnUp:0, phiUp:0.60,                                     // ABR2 (N-4): integral piles, geotechnical nominal compression / uplift resistance (kip, 0 = not checked) and φ [10.5.5.2.3]
++    Rn:0, phiC:0.65, RnUp:0, phiUp:0.50,   // ABL2: as the piles (T.10.5.5.2.3-1, no static load test)                                     // ABR2 (N-4): integral piles, geotechnical nominal compression / uplift resistance (kip, 0 = not checked) and φ [10.5.5.2.3]
+@@ -722 +722 @@ function defaultState(){
+-      Rn:330.0, phiC:0.70, RnUp:100.0, phiUp:0.60, etaG:0,   // ABM7: etaG = group efficiency η for 10.7.3.9 (0 = not entered: REVIEW row)
++      Rn:330.0, phiC:0.65, RnUp:100.0, phiUp:0.50, etaG:0,   // ABL2 (2026-11-07): new-project φ without a static load test [T.10.5.5.2.3-1: dynamic testing QC 0.65; uplift, dynamic test with signal matching 0.50] (was 0.70 / 0.60)   // ABM7: etaG = group efficiency η for 10.7.3.9 (0 = not entered: REVIEW row)
+@@ -744 +744,2 @@ function defaultState(){
+-      khRAuto:true, Wseg:0, EQsupL:0, EQsupT:0,                   // ABM9: superstructure seismic force at this abutment from the seismic analysis, longitudinal / transverse (kip, 0 = not entered; Zones 2–4 multispan) [4.7.4.3, 3.10.9.3, 3.10.9.4]
++      khRAuto:true, Wseg:0, EQsupL:0, EQsupT:0, SD1:0,   // ABL6: SD1 = S_D1 for the zone consistency check (0 = not entered) [T.3.10.6-1]
++                        // ABM9: superstructure seismic force at this abutment from the seismic analysis, longitudinal / transverse (kip, 0 = not entered; Zones 2–4 multispan) [4.7.4.3, 3.10.9.3, 3.10.9.4]
+@@ -769 +770 @@ function defaultState(){
+-      gammaE:1.00, // exposure factor, crack control (1.00 Class 1 / 0.75 Class 2)
++      gammaE:0.75, // exposure factor, crack control (1.00 Class 1 / 0.75 Class 2); ABL1 (2026-11-07): new projects 0.75 (Class 2: substructure exposed to water / deicing salts, C5.6.7; was 1.00); saved projects keep their value
+@@ -1717 +1718 @@ function migrate(){
+-    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt","Wseg","EQsupL","EQsupT"]);   // ABM9: EQsupL, EQsupT 0   // ABM1: Wseg 0   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
++    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt","Wseg","EQsupL","EQsupT","SD1"]);   // ABM9: EQsupL, EQsupT 0   // ABM1: Wseg 0   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
+@@ -2399,0 +2401 @@ function buildInputs(){
++    ${inpRow("S<sub>D1</sub> (0 = not entered; zone check)","seismic.SD1","g",{title:"Design spectral acceleration at 1.0 s; used only to check the zone selected below against Table 3.10.6-1 (Zone 1 ≤ 0.15, 2 ≤ 0.30, 3 ≤ 0.50, 4 above)."})}
+@@ -2914 +2916,2 @@ function computeWing(R,X){
+-        const RR=phiT*(rock? (+fn.muRock*c.V+(+fn.caRock||0)*B) : c.V*Math.tan(deg2rad(+fn.deltaB)));
++        const eW=Math.abs(c.e), BcW=eW<=B/6? B : Math.max(0,3*(B/2-eW));   // ABL3: adhesion on the compressed width
++        const RR=phiT*(rock? (+fn.muRock*c.V+(+fn.caRock||0)*BcW) : c.V*Math.tan(deg2rad(+fn.deltaB)));
+@@ -3600,0 +3604 @@ function computeAll(){
++      if(perm.rev && (k==="BR"||k==="TU")) gamma = -gamma;   // ABL7: reversed (toward the backfill)
+@@ -3613 +3617 @@ function computeAll(){
+-      ? `${(L.perm&&perm.DC===1&&L.dcMax?L.dcMax:gq("DC",perm.DC)).toFixed(2)}·DC + ${gq("DW",perm.DW).toFixed(2)}·DW + ${gq("EV",perm.EV).toFixed(2)}·EV + ${((L.eq&&eqEHfixed()!==null)?eqEHfixed():gq("EH",perm.EH)).toFixed(2)}·EH`
++      ? `${(L.perm&&perm.DC===1&&L.dcMax?L.dcMax:gq("DC",perm.DC)).toFixed(2)}·DC + ${L.noSuper?"":gq("DW",perm.DW).toFixed(2)+"·DW + "}${gq("EV",perm.EV).toFixed(2)}·EV + ${((L.eq&&eqEHfixed()!==null)?eqEHfixed():gq("EH",perm.EH)).toFixed(2)}·EH`
+@@ -3623,2 +3627,2 @@ function computeAll(){
+-        +(L.noSuper?" (no superstructure)":"")
+-      : `1.00·(all)`+(liveOn?" incl. LL":" excl. LL")+(liveOn&&L.mLL&&L.mLL!==1?`, ${L.mLL.toFixed(2)}·(LL,BR)`:"")+(liveOn===3?", approach-slab LL off":"");   // APS
++        +(L.noSuper?" (no superstructure)":"")+(perm.rev?" (BR, TU reversed: toward the backfill)":"")
++      : `1.00·(all)`+(perm.rev?" (BR, TU reversed)":"")+(liveOn?" incl. LL":" excl. LL")+(liveOn&&L.mLL&&L.mLL!==1?`, ${L.mLL.toFixed(2)}·(LL,BR)`:"")+(liveOn===3?", approach-slab LL off":"");   // APS
+@@ -3633,0 +3638,4 @@ function computeAll(){
++    // ABL7 (2026-11-07): BR and TU act in either direction (braking both ways; temperature rise pushes toward the backfill): each permutation is also
++    // run with them reversed when they are present (CR/SH shortening acts toward the span only)
++    const revs=(!L.noSuper&&((groups.BR&&Math.abs(groups.BR.Hx)>1e-9)||(groups.TU&&Math.abs(groups.TU.Hx)>1e-9)))? [false,true] : [false];
++    for(const rv of revs){   // the reversed permutations follow the usual ones (whose order is unchanged)
+@@ -3635 +3643 @@ function computeAll(){
+-      for(const lv of lives) for(const x of xs) yield {perm:Object.assign({DC:0,DW:0,EV:0,EH:0,ES:1},x), liveOn:lv}; return; }
++      for(const lv of lives) for(const x of xs) yield {perm:Object.assign({DC:0,DW:0,EV:0,EH:0,ES:1},x,rv?{rev:true}:{}), liveOn:lv}; continue; }
+@@ -3637 +3645 @@ function computeAll(){
+-      for(const lv of lives) yield {perm:{DC:dc,DW:dw,EV:ev,EH:eh,ES:es}, liveOn:lv};
++      for(const lv of lives) yield {perm:Object.assign({DC:dc,DW:dw,EV:ev,EH:eh,ES:es},rv?{rev:true}:{}), liveOn:lv}; }
+@@ -3686 +3694,3 @@ function computeAll(){
+-        const RnD = fn.matl==="soil" ? c.V*Math.tan(deg2rad(fn.deltaB)) : c.V*fn.muRock + fn.caRock*B*Lftg;
++        // ABL3 (2026-11-07): rock adhesion on the compressed area only, B_c·L_ftg (linear pressure: B_c = B for |e| ≤ B/6, else 3(B/2 − |e|)) [10.6.3.4]; was B·L_ftg
++        const eRk=Math.abs(B/2-(c.Mv-c.Mh)/c.V), Bc=fn.matl==="soil"? B : (eRk<=B/6? B : Math.max(0,3*(B/2-eRk)));
++        const RnD = fn.matl==="soil" ? c.V*Math.tan(deg2rad(fn.deltaB)) : c.V*fn.muRock + fn.caRock*Bc*Lftg;
+@@ -3696 +3706 @@ function computeAll(){
+-        if(dc>slid.dc) slid={dc, D:c.Hx, Rn, ...(und?{RnD, und, undGov:und.Ru<RnD}:{}), RR, V:c.V, phiTau:rf.phiTau, lbl:c.lbl, ls:lsName, c, pUsed, Hy:Hyv, HxN, Hres:Math.hypot(HxN,Hyv), dcX, dcV, vec:dcV>dcX};
++        if(dc>slid.dc) slid={dc, D:c.Hx, Rn, ...(fn.matl==="rock"&&Bc<B-1e-9?{Bc}:{}), ...(und?{RnD, und, undGov:und.Ru<RnD}:{}), RR, V:c.V, phiTau:rf.phiTau, lbl:c.lbl, ls:lsName, c, pUsed, Hy:Hyv, HxN, Hres:Math.hypot(HxN,Hyv), dcX, dcV, vec:dcV>dcX};
+@@ -4078,0 +4089,2 @@ function computeAll(){
++  { const sd=+S.seismic.SD1||0, zs=Math.min(4,Math.max(1,Math.round(+S.seismic.zone||1)));   // ABL6: zone vs S_D1 [T.3.10.6-1]
++    if(sd>0){ const zq=sd<=0.15?1:sd<=0.30?2:sd<=0.50?3:4; if(zq!==zs) warn(`REVIEW — Seismic zone ${zs} (panel I-11) does not match S_D1 = ${fmt(sd,3)} (Table 3.10.6-1 gives Zone ${zq}). Check the zone: it sets the support-length percentage and the connection force.`); } }
+@@ -4658,0 +4671 @@ function computeAll(){
++  if(Math.abs(+S.reinf.gammaE-1)<1e-9&&["deicing","coastal","saltwater"].includes(S.mat.coverExp)) warn("REVIEW — Crack control uses Class 1 exposure (γ_e = 1.00, panel I-9) while the wall exposure is "+({deicing:"deicing salts",coastal:"coastal",saltwater:"salt water"})[S.mat.coverExp]+" (panel I-2): C5.6.7 suggests Class 2 (γ_e = 0.75) for substructures exposed to water.");   // ABL1
+@@ -5089,2 +5102,2 @@ function computeAll(){
+-      ["piles.phiC",0.70,"φc pile compression (tool default; method-dependent)"],
+-      ["piles.phiUp",0.60,"φup pile uplift (tool default; method-dependent)"],
++      ["piles.phiC",0.65,"φc pile compression (tool default: dynamic testing QC, T.10.5.5.2.3-1; method-dependent)"],
++      ["piles.phiUp",0.50,"φup pile uplift (tool default: dynamic test with signal matching, T.10.5.5.2.3-1; method-dependent)"],
+@@ -5120 +5133 @@ function computeAll(){
+-      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg","EQsupL","EQsupT"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
++      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg","EQsupL","EQsupT","SD1"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
+@@ -6661 +6674 @@ function renderTabStab(R){
+-          `R_n = (${fmtT(sl.V)})(${fmtT(fn.muRock)}) + (${fmtT(fn.caRock)})(${fmtT(geo.B)})(${fmtT(g.Lftg)}) = ${fmtT(sl.Rn)}\\ \\text{kip}`,
++          `R_n = (${fmtT(sl.V)})(${fmtT(fn.muRock)}) + (${fmtT(fn.caRock)})(${fmtT(sl.Bc??geo.B)})(${fmtT(g.Lftg)}) = ${fmtT(sl.Rn)}\\ \\text{kip}${sl.Bc!=null?"\\quad(B_c = 3(B/2 - |e|),\\ \\text{compressed width})":""}`,
+@@ -11351,6 +11363,0 @@ document.addEventListener("DOMContentLoaded",init);
+-    // PDA-M7 (2026-11-07): Pile Designer's group result (pileResults.group): the static R_n (R_n,up) is imported times its group
+-    // reduction, so a group whose efficiency or block governs is not credited with the single-pile resistance. Integral: none.
+-    const grR=(conv&&p.group&&num(p.group.reduce)&&p.group.reduce>0&&p.group.reduce<1)? p.group.reduce : 1;
+-    const grU=(conv&&p.group&&p.group.uplift&&num(p.group.uplift.reduceUp)&&p.group.uplift.reduceUp>0&&p.group.uplift.reduceUp<1)? p.group.uplift.reduceUp : 1;
+-    if(geoOn&&(grR<1||grU<1)) warns.push("Pile group (Pile Designer Module 11): "+(grR<1?"R_n × "+f(grR,3)+" (group φR per pile "+f(p.group.phiRnPerPile,1)+" / single "+f(p.group.phiRnSingle,1)+" kip"+(p.group.blockComputed&&p.group.blockGoverns?", block governs":"")+")":"")+(grR<1&&grU<1?"; ":"")+(grU<1?"R_n,up × "+f(grU,3)+" (group uplift)":"")+". The group of this abutment should be the group Pile Designer checked.");
+-    if(geoOn&&st.rn==="field"&&g.field&&grR<1) warns.push("Field method: the required R_n is imported as sent; Pile Designer's group reduction ("+f(grR,3)+") applies to the static resistance — check the group separately.");
+@@ -11362 +11369 @@ document.addEventListener("DOMContentLoaded",init);
+-      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add(kp+"Rn",g.static.Rn*grR,"Nominal compression R_n (static analysis, Pile Designer Module "+(g.pileType==="iab"?"13":"01")+")"+(grR<1?" × "+f(grR,3)+" group reduction (Pile Designer Module 11: "+(p.group.blockComputed&&p.group.blockGoverns?"block":"η = "+f(p.group.eta,3))+") = "+f(g.static.Rn,1)+" × "+f(grR,3):""),"kip"); add(kp+"phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
++      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add(kp+"Rn",g.static.Rn,"Nominal compression R_n (static analysis, Pile Designer Module "+(g.pileType==="iab"?"13":"01")+")","kip"); add(kp+"phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
+@@ -11364 +11371 @@ document.addEventListener("DOMContentLoaded",init);
+-      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add(kp+"RnUp",g.static.RnUp*grU,"Nominal uplift R_n,up (static, side only)"+(grU<1?" × "+f(grU,3)+" group uplift reduction (Pile Designer Module 11, 10.7.3.11)":""),"kip"); add(kp+"phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
++      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add(kp+"RnUp",g.static.RnUp,"Nominal uplift R_n,up (static, side only)","kip"); add(kp+"phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
+```
+
+- **Note added after merging main (PDA-M7, #1050):** `Pull pile results` now imports R_n already times Pile Designer's group reduction. The ABM7 η text says to enter η = 1.0 in that case, so the reduction is not applied twice. Text only (anchor `η = 1.0 when R_n already carries Pile Designer's group reduction`).

@@ -6426,3 +6426,31 @@ index 50f3837..c2d5000 100644
   - q_ult 15.11 → **5.31 ksf**; governing D + 0.75L + 0.45(+Wx) + 0.75S bearing D/C **1.196 → 3.404**.
   - With the option at "general" nothing changes. The default project (φ = 32°) shows no warning.
 - **Saved data:** new field `soil.sfdShearMode`. Older saves read as 'general' (no result change).
+
+## 2026-11-07 — PR: claude/sf-m1-bearing-dowels (PR #1047: https://github.com/mlococo88/All-Structural/pull/1047) (SFBX: concrete bearing, compression beyond φB_n is carried by the dowels, ACI 318-19 16.3.1.2(a); CALCULATION CHANGE, pass / fail logic, less conservative only where the dowels suffice)
+
+- **Problem:** concrete bearing FAILed whenever P_u > φB_n (the lesser of the footing and pedestal bearing strengths, 16.3.3.4). ACI 318-19 16.3.1.2(a) has the reinforcement carry the compression beyond that strength; R16.3.3.4 limits the transfer to concrete alone only where there are no dowels or continuing bars. The tool already required ℓ_dc in that case (SFBC), but never computed the dowel area, so valid interfaces were rejected.
+- **Where / exact code (`Spread Footing.html`, bearing map in `computePhase2`, anchor `/* SFBX (2026-11-07)`):**
+  - New fields:
+    - `excess = !isPatch && P_u > φB_n`.
+    - `AsComp = (P_u − φB_n)/(0.65·f_y)`.
+    - `phiPnDow = φB_n + 0.65·f_y·A_s,dow`.
+    - `dcrEff = P_u/phiPnDow` where `excess`, otherwise `P_u/φB_n`.
+    - `dcr` (concrete alone) is unchanged.
+  - Uses of `dcrEff`:
+    - Dashboard chip "Concrete bearing" (`brmax`, `brG`), with the text "excess to the dowels, A_s,req … vs … provided".
+    - Summary D/C.
+    - Card 5.6 status (`bearOK`) and its D/C cell.
+    - 3D pick table.
+  - Report steps `cb<i>.AsC`, `cb<i>.AsCk` and `cb<i>.DCRe` are added when `excess`. The concrete-alone `DCR` step then carries no status.
+  - ℓ_dc into the footing is required as before (SFBC gate `ldcOK`, the "Dowel development (ℓdc)" check). A bearing patch (h = 0, no dowels) keeps the concrete-alone D/C.
+- **Governing provisions:** ACI 318-19 16.3.1.2(a), 16.3.3.4, R16.3.3.4, Table 21.2.2 (φ = 0.65, compression-controlled), 25.4.9 (ℓ_dc).
+- **Decision (pending engineer review):** φ = 0.65 on the dowels in compression (compression-controlled); f_y of the dowels = f_y of the project.
+- **Check case (direct factored mode, default project, Ped 2 P = 800 k; P_u = 800 + 1.2·0.675 = 800.81 k):**
+  - φB_n = 0.65·0.85·4·324 = 716.04 k (pedestal side governs).
+  - A_s,req = (800.81 − 716.04)/(0.65·60) = **2.17 in²** ≤ 8 #8 = **6.32 in²**.
+  - ℓ_dc = 18.97 in ≤ 25.0 in available.
+  - D/C with dowels = 800.81/(716.04 + 0.65·60·6.32) = 800.81/962.52 = **0.832**.
+  - **Before:** bearing D/C 1.118, **FAIL**. **After:** **PASS**, 0.832.
+- **Cases that move:** only cases with P_u > φB_n. None of the other SF harness cases does. def and sey: no change.
+- **Saved data:** none. **Other copies:** none.
