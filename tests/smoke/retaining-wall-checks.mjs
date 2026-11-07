@@ -234,7 +234,7 @@ const AUD = [
     ['/Resisting moment about the toe/.test(T.stability)', 'Stability Step 7b M_r']]],
   ['RWUP ACI water 2 ft below the top, triangular uplift: uplift split (toe γ_U 1.6, heel 0.9): toe M_u 9250 → 12344, heel 28267 → 27772', { wt_mode: 'depth', wt_depth: 2, uplift_mode: 'triangular' }, [
     ['Math.abs(R.Mu_toe_net - 12344.3) < 1 && R.toe_min_governs && Math.abs(R.Mu_heel_net - 27772.1) < 1 && R.tcG_up && R.tcG_up.sp.kind === "toe"', 'toe 12344 (0.9D + 1.6H), heel 27772'],
-    ['/Soil reaction without the water/.test(T.footing) && /M_soil|Msoil/.test(T.footing) && /split out/.test(T.footing)', 'Footing Heel / Toe Step 1–2 worked'], ['/Soil reaction without the water/.test(P)', 'Report']]],
+    ['/Soil reaction without the water/.test(T.footing) && /Moment of the soil reaction about the stem face/.test(T.footing) && /split out/.test(T.footing)', 'Footing Heel / Toe Step 1–2 worked'], ['/Soil reaction without the water/.test(P)', 'Report']]],
   ['RWUP ACI water 6 ft (uniform): unchanged (toe 7325, heel 19032)', { wt_mode: 'depth', wt_depth: 6 }, [
     ['Math.abs(R.Mu_toe_net - 7325) < 1 && Math.abs(R.Mu_heel_net - 19032) < 1 && R.upS', 'toe 7325, heel 19032']]],
   ['RWUP ACI no water: no split', {}, [['R.upS === null && !/Soil reaction without the water/.test(T.footing)', 'no split']]],
