@@ -19969,3 +19969,28 @@ index 06a42e4..b58d4e3 100644
   - App and Report main vs branch: the new rows, steps and note only. 0 unresolved references, 0 duplicate keys, no NaN.
   - `check-syntax`: pass. `pile-library`: library checks pass; its page-text checks show the new check text and `pdaRev`. 0 console errors.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/pile-m4m5-fixity (PDA-M4 / PDA-M5) — Davisson depth to fixity: E_s = 0.465 S_u in clay; group spacing reduction of the soil modulus   [calculation change]
+- **Problem (review M4):** Davisson fixity in clay (Module 10) used the p-y layer's k_h (presets 30–600, default 150 kip/ft²). Eq. C10.7.3.13.4-1 uses E_s = 0.465 S_u (ksi, S_u in ksf). A high k_h gave a short L_f, which is unconservative.
+- **Problem (review M5):** the single-pile modulus was used for a pile in a group. C10.7.3.13.4 reduces the modulus to 25 % at 3B spacing, with no effect at 8B or more, and interpolation between.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.7.3.13.4 and C10.7.3.13.4 (Eqs. C10.7.3.13.4-1 / -2; E_s for clays from S_u; the spacing effect after Prakash and Sharma). Micropiles reach it through 10.9.3.10.6.
+- **Where:** `computeAll`, Module 10, Davisson soil selection.
+  - M4, anchor `// PDA-M4 (2026-11-07)`: when the top layer is "clay" or "stiffclay" and has an S_u (`su` psf / 1000, or `Su` ksf; the smaller when both are entered), `bklStiff = 0.465 · S_u · 144` (kip/ft²). It replaces the layer's k_h, which is kept as `bklKhLayer` for the note. Sand, weak rock and the uniform-soil option are unchanged.
+  - M5, anchor `// PDA-M5 (2026-11-07)`, before `const T_char`: with `I.groupEnable` (not integral abutments), s/B = `groupCcSpacing(I) / groupB(I)` and f = 0.25 for s/B ≤ 3, 1.0 for s/B ≥ 8, otherwise 0.25 + 0.75 (s/B − 3)/5. Then `bklStiff = bklStiffSingle · f` (n_h or E_s / k_h).
+  - New `R.buckling` fields: `bklSu`, `bklKhLayer`, `bklStiffSingle`, `bklGrpF`, `bklGrpSB`.
+  - Display: Module 10 Davisson tab Calc "Soil modulus for the fixity depth" (E_s = 0.465 S_u (144), then the group factor), the Report step `bk/Es`, and the soil-basis text.
+  - One-time load note (pdaRev < 7) for a project with a clay top layer that has S_u, or with a group; `pdaRev` 6 → 7. No input changed.
+- **Decisions (pending engineer review):**
+  - Below 3B, the 25 % is kept: the commentary gives no value there, and holding the smallest stated value is conservative.
+  - The group reduction is always applied when the group is on; there is no opt-out.
+  - With both S_u entries of a layer, the smaller one is used.
+- **Check cases** (micropile EI 8451 kip·ft²):
+  - M4, clay S_u 1.0 ksf: E_s = 0.465(1.0)(144) = 66.96 kip/ft², so R = (8451/66.96)^0.25 = 3.352 ft and L_f = 1.4R = **4.69 ft**. Before: k_h 150 → R = 2.740 ft, L_f = **3.84 ft**. φ_c P_n (3 ft stickup): 263.7 → 221.3 kip.
+  - M5, sand n_h 60, 3×3 group at 3D: f = 0.25 → n_h = 15, so T = (8451/15)^0.2 = 3.549 ft and L_f = 1.8T = **6.39 ft**. Before: **4.84 ft**. φ_c P_n 214.1 → 150.5 kip.
+  - V3 (clay S_u 2 ksf, 3×3 at 2.5D): E_s = 133.9 kip/ft² × 0.25 = 33.5, so R = 3.986 ft and L_f = **5.58 ft**. Before: **3.84 ft**. φ_c P_n 263.7 → 180.2 kip. App Module 05 D/C 0.978 OK → **1.129 NG**.
+- **How verified:**
+  - `computeAll` on 15 cases main vs branch. Only the clay and group cases (M4, M5, V3) moved, through L_f → Module 10 and Module 05. The other cases gain only the new fields.
+  - App and Report: the new step and Calc; 0 unresolved references, 0 duplicate keys, no NaN. The load note is shown.
+  - `check-syntax`: pass. `tests/engine` handoffs and pile-group: pass. `pile-library`: see the PR. 0 console errors.
+- **Hand-off:** `pileResults.fixity.Lf` (= `R.buckling.Lf_buck`) changes with L_f for these cases. The format is unchanged.
+- **Other copies:** the integral-abutment path already uses 0.465 S_u (PDA-D2) and is unchanged.
