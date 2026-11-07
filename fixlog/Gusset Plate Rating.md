@@ -3101,3 +3101,32 @@ From the code-compliance review of 2026-11-07 (finding H2). Engineer asleep, mer
 - **How verified:** headless Chromium, file://, `GPR.compute` main vs branch on the review cases; every tab rendered (calc sheet included), 0 console errors; `node tests/check-syntax.mjs`, `tests/smoke/project-library.mjs --tool gusset`, `tests/smoke/phone-layout.mjs --tool gusset`: pass.
 - **Other copies:** none.
 - **Open items:** the engineer to confirm the reversal of C4.4 and the K to pair with the average if `lmidAvg` = 1 (FHWA-IF-09-014 / MBE not in references).
+
+## 2026-11-07 — PR: claude/gusset-m1-rp-rupture — Shear rupture on the shear planes includes R<sub>p</sub> (LRFD 10th Ed. Eq. 6.13.5.3-2) (M1; §4, results go down for punched holes)
+
+From the code-compliance review of 2026-11-07 (finding M1). Engineer asleep, merge-as-you-go approved.
+
+### M1. SPn-U: φ<sub>vu</sub> 0.58 R<sub>p</sub> F<sub>u</sub> A<sub>vn</sub>   [§4: formula]
+- **Where:** `capPV(pl, meth, kind)`, the shear-rupture branch after `if (kind === 'pvy') { … }`; `ref.pvu`.
+- **Problem:** LRFD 10th Ed. 6.14.2.8.3 rates shear rupture of a gusset plane by Eq. 6.13.5.3-2, which includes the hole reduction factor R<sub>p</sub> (6.13.4: 1.0 drilled / subpunched and reamed, 0.90 punched full size). The tool left R<sub>p</sub> out (it already used it in block shear, `capBS`). 10 % unconservative for punched holes; drilled holes (the default) unchanged.
+- **Before:**
+```js
+      const phi = lrfr ? p.phiVU : p.phiVUL, An = pl.Ln * sumT, C = phi * 0.58 * Fu * An;
+```
+- **After:**
+```js
+      const hsP = [...pl.cross, ...(pl.stag && pl.stag.used ? (pl.stag.chain || []).map(z => z && z.h).filter(Boolean) : [])], pun = hsP.some(h => P.members[h.m] && P.members[h.m].fast.prep === 'punched'),
+        Rp = hsP.length ? Math.min(...hsP.map(h => P.members[h.m] && P.members[h.m].fast.prep === 'punched' ? p.RpP : p.RpD)) : p.RpD, RpK = pun && p.RpP <= p.RpD ? 'RpP' : 'RpD';
+      const phi = lrfr ? p.phiVU : p.phiVUL, An = pl.Ln * sumT, C = phi * 0.58 * Rp * Fu * An;
+```
+  plus an R<sub>p</sub> row in the calculation, `R_p` in the equation, and the R<sub>p</sub> key (`RpP` / `RpD`) in `keys`.
+- **Decisions (pending engineer review):**
+  1. A plane through holes of members with different hole preparation takes the **lowest** R<sub>p</sub> of the holes on it (the straight-line holes, plus the holes of a staggered chain when that chain governs). A plane with no holes takes R<sub>p</sub> for drilled holes (1.0).
+  2. R<sub>p</sub> is applied to LFR shear rupture too, as the tool already does for LFR block shear (FHWA-IF-09-014 not in references: verify).
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.3 → Eq. 6.13.5.3-2; R<sub>p</sub> per Art. 6.13.4. MBE 3rd Ed. 6A.6.12.6.6: verify (MBE not in references).
+- **Check case** (review §2.3 variant: plate 1 loses 1/16 in, Σt = 0.9375 in; A325 7/8 in bolts, threads included, punched holes; SP1 net length 36.000 in):
+  - **Before:** SP1-U = 0.80 × 0.58 × 58 × 36.000 × 0.9375 = **908.3 kip**; RF LRFR Inventory **1.436**.
+  - **After:** 0.80 × 0.58 × **0.90** × 58 × 36.000 × 0.9375 = **817.5 kip**; RF LRFR Inventory = (0.85 × 817.45 − 287.33)/337.46 = **1.208** (Operating 1.862 → 1.565; Legal 2.167 → 1.822; LFR Inventory 1.925 → 1.642).
+  - Default project with punched holes: SP1-U 968.8 → 871.9 kip, RF LRFR Inv 2.020 → 1.732.
+- **How verified:** main vs branch on 20 review cases: only SPn-U moved, and only in the cases with punched holes (all punched; only L2-L3 punched, whose chord holes lie on SP1; the §2.3 variant; the validation model with punched holes). Drilled cases identical. Validation tab 17 of 17 (drilled holes; unchanged). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks, which differ only in the SPn-U equation text (now shows R<sub>p</sub>) on the default (drilled) project. 0 console errors.
+- **Saved data:** no change. **Other copies:** none.
