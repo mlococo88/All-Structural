@@ -401,6 +401,20 @@ const SFRS=[
  ["Light-frame walls sheathed with wood structural panels",6.5,3.0,4.0,       {B:"NL",C:"NL",D:65,E:65,F:65}],
  ["Cantilevered column system, ordinary steel moment frame",1.25,1.25,1.25,   {B:35,C:35,D:"NP",E:"NP",F:"NP"}],
  ["Steel systems not specifically detailed for seismic resistance",3.0,3.0,3.0,{B:"NL",C:"NL",D:"NP",E:"NP",F:"NP"}]];
+/* A7M2 (2026-11-07): 780 CMR 10th Ed. Ch. 16 amendments to ASCE 7 Table 12.2-1 (limitations), for the rows this tool lists.
+   C.7 ordinary reinforced concrete moment frame: NP in SDC B. H, steel systems not specifically detailed for seismic
+   resistance: limited to 100 ft in SDC B and 65 ft in SDC C, with Note 2 (connections, including to foundations, for two
+   times the seismic forces, within the caps the note gives; columns per AISC 341 D1.4a; no K-bracing; V / inverted-V beam
+   requirements). The other amended rows (A.3, A.4, A.9-A.11, A.13, A.14, A.17, B.6, B.7, B.18-B.20, B.24, E.3, F) are
+   not offered by this tool. Applied only when the jurisdiction is Massachusetts. */
+const SFRS_MA={
+ "Ordinary reinforced concrete moment frame":{id:"C.7",lim:{B:"NP"}},
+ "Steel systems not specifically detailed for seismic resistance":{id:"H",lim:{B:100,C:65},note2:true}};
+function sfrsLimits(S){
+  const sf=SFRS.find(r=>r[0]===S.sfrs); if(!sf||!sf[4]) return null;
+  const ma=(S.jur==="MA")?SFRS_MA[S.sfrs]:null;
+  return {lim:Object.assign({},sf[4],ma?ma.lim:{}), asce:sf[4], ma:ma||null};
+}
 /* Labels used before the building-frame / bearing-wall rows were distinguished. Saved projects store the
    label, so restore() maps these to the row that carries the same R, Omega_0 and C_d as before. */
 const SFRS_OLD={"Special reinforced concrete shear wall":"Special reinforced concrete shear wall, building frame system (B.4)",
@@ -776,17 +790,30 @@ function solve(S){
       const Tn=CP_ROOF_NORM, keys=[0.25,0.5,1.0], grp=["<=0.25","0.5",">=1.0"];
       c.hLBand=hLBand(c.hL);
       c.hLInterp=(c.hL>0.25&&c.hL<1.0&&Math.abs(c.hL-0.5)>1e-9);
-      /* step 1: coefficient at theta within each h/L row group; step 2: across h/L */
-      const across=(pull)=>{
-        const per=grp.map(k=>tblPick(Tn.theta,pull(k),g.theta,S.tblMode).v);
-        const r=tblPick(keys,per,c.hL,S.tblMode);
-        return {v:r.v, per:per, i0:r.i0, i1:r.i1, f:r.f};
+      /* step 1: coefficient at theta within each h/L row group; step 2: across h/L.
+         A7H2 (2026-11-07): Fig. 27.3-1 note: interpolation only between values of the same sign, with 0.0 assumed
+         where no value of that sign is given. When the two bracketing values of a step differ in sign, the value of
+         the other sign is replaced by 0.0 for that step (sign = +1: the positive set; -1: the negative set). */
+      const sameSign=(ks,vs,x,sign)=>{
+        const r=tblPick(ks,vs,x,S.tblMode);
+        if(r.i0===r.i1) return {r:r,sub:[]};
+        const nn=[]; ks.forEach((k,i)=>{ if(vs[i]!==null&&vs[i]!==undefined) nn.push(i); });   /* tblPick indices skip nulls */
+        const a=vs[nn[r.i0]], b=vs[nn[r.i1]];
+        if(!(a*b<0)) return {r:r,sub:[]};
+        const sub=[], v2=vs.map((v,i)=>{ if((i===nn[r.i0]||i===nn[r.i1]) && v*sign<0){ sub.push(i); return 0.0; } return v; });
+        return {r:tblPick(ks,v2,x,S.tblMode),sub:sub};
+      };
+      const across=(pull,sign)=>{
+        const per=grp.map(k=>sameSign(Tn.theta,pull(k),g.theta,sign).r.v);
+        const q=sameSign(keys,per,c.hL,sign), r=q.r;
+        const o={v:r.v, per:per, i0:r.i0, i1:r.i1, f:r.f}; if(q.sub.length) o.sub=q.sub;   /* sub: per[] entries taken as 0.0 */
+        return o;
       };
       /* Fig. 27.3-1: at theta = 60 deg the windward coefficient is 0.01*theta = 0.6 (positive). Interpolation is
          between values of the same sign only, with 0.0 assumed where none is given (note 3), so the 60 deg
          column is 0.6 for the positive row and 0.0 for the negative row when interpolating 45 to 60 deg. */
       const at60=(arr,v)=>arr.map((x,j)=>Tn.theta[j]>=60?v:x);
-      const wn=across(k=>at60(Tn.ww[k].neg,0.0)), wp=across(k=>at60(Tn.ww[k].pos,0.6));
+      const wn=across(k=>at60(Tn.ww[k].neg,0.0),-1), wp=across(k=>at60(Tn.ww[k].pos,0.6),+1);
       const lw=(function(){const per=grp.map(k=>tblPick(Tn.lw.thetas,Tn.lw[k],g.theta,S.tblMode).v);
         const r=tblPick(keys,per,c.hL,S.tblMode); return {v:r.v,per:per,i0:r.i0,i1:r.i1,f:r.f};})();
       c.CpWWroofNeg=wn.v; c.CpWWroofPos=wp.v; c.CpLWroof=lw.v;
@@ -854,6 +881,17 @@ function solve(S){
         for(let j=0;j<=40;j++) zmax=Math.max(zmax,roofZplain(x,S.Ly*j/40)); A+=zmax*dx; } }
     return A;
   };
+  /* A7H1: the silhouette as strips {z: top of the strip, d: strip width}, for the end-wall integration */
+  function silhouetteProfile(axis){
+    const out=[];
+    if(axis==="X"){ const dy=S.Ly/NS;
+      for(let j=0;j<NS;j++){ const y=(j+0.5)*dy; let zmax=0;
+        for(let i=0;i<=40;i++) zmax=Math.max(zmax,roofZplain(S.Lx*i/40,y)); out.push({z:zmax,d:dy}); } }
+    else { const dx=S.Lx/NS;
+      for(let i=0;i<NS;i++){ const x=(i+0.5)*dx; let zmax=0;
+        for(let j=0;j<=40;j++) zmax=Math.max(zmax,roofZplain(x,S.Ly*j/40)); out.push({z:zmax,d:dx}); } }
+    return out;
+  }
   function roofZplain(x,y){
     const he=g.hEave,m=g.slope,Lx=S.Lx,Ly=S.Ly;
     switch(S.roofType){
@@ -890,10 +928,48 @@ function solve(S){
       Fww += 0.5*(zq(zs[i])+zq(zs[i+1]))*(zs[i+1]-zs[i]);
     }
     c.Fww = Fww*Bp;
+    /* A7H1 (2026-11-07): wind parallel to the ridge of a gable or monoslope: the silhouette above the eave is the
+       end wall (gable-end triangle), not roof. It takes the wall coefficients (windward 0.8 with q_z integrated
+       over its height and width, leeward C_p(L/B) at q_h) and counts as wall area at 16 psf in Sec. 27.1.5. */
+    if(!c.normalToRidge && c.Aroof>0 && (S.roofType==="Gable"||S.roofType==="Monoslope")){
+      const zTop=g.hRidge, nq=48, Qc=[0];               /* Qc[i] = integral of 0.8 G q_z dz from h_e to z_i */
+      const zq=z=>qAt(z,w.kdMWFRS).q*w.G*c.CpWW;
+      for(let i=0;i<nq;i++){ const za=he+(zTop-he)*i/nq, zb=he+(zTop-he)*(i+1)/nq; Qc.push(Qc[i]+0.5*(zq(za)+zq(zb))*(zb-za)); }
+      const Qat=z=>{ const u=Math.max(0,Math.min(nq,(z-he)/(zTop-he)*nq)), i=Math.min(nq-1,Math.floor(u)); return Qc[i]+(Qc[i+1]-Qc[i])*(u-i); };
+      const prof=silhouetteProfile(c.axis); let Ft=0;
+      prof.forEach(s=>{ if(s.z>he) Ft+=Qat(s.z)*s.d; });
+      c.Atri=c.Aroof; c.FwwTri=Ft; c.Fww+=Ft; c.Awall+=c.Atri; c.Aroof=0;
+    }
     c.Flw = Math.abs(w.qh.q*w.G*c.CpLW)*c.Awall;
-    const cpr = c.roofRows ? Math.max(...c.roofRows.map(r=>Math.abs(r.Cp))) : 0;
-    c.CpRoofUsed=cpr;
-    c.Froof = c.Aroof>0 ? Math.abs(w.qh.q*w.G*cpr)*c.Aroof : 0;
+    /* A7H1: wind normal to the ridge (theta >= 10 deg, Fig. 27.3-1): the net horizontal force on the projected roof
+       area is q_h G (C_p,windward - C_p,leeward) A_roof; both windward signs are enveloped, and the earlier value, the
+       largest roof |C_p| on the projected area, is kept as a floor (windward-slope suction is not credited as relief;
+       Decision pending engineer review). Other roof cases
+       (parallel to the ridge on a hip, theta < 10 deg) keep the largest roof |C_p| on the projected area. */
+    if(c.Aroof>0 && c.roofMode==="normal" && c.roofRows){
+      const cw=[c.CpWWroofPos,c.CpWWroofNeg], cl=c.CpLWroof;
+      const floor={v:Math.max(...c.roofRows.map(r=>Math.abs(r.Cp))), t:"\\max|C_p|", a:null, b:null, floor:true};
+      if(S.roofType==="Monoslope"){
+        /* a monoslope roof is one plane: wind from the low eave meets it as a windward roof with the high wall strip
+           above the eave leeward (wall C_p(L/B)); wind from the high side meets that strip as a windward wall
+           (0.8, at q_h: Decision pending engineer review) and the roof as a leeward roof */
+        const fromHigh = (S.ridgeDir==="X") ? (c.id==="-Y") : (c.id==="-X");
+        const opts = fromHigh
+          ? [{v:c.CpWW-cl, t:"0.8 - C_{p,lw}", a:c.CpWW, b:cl}, floor]
+          : cw.map((x,i)=>({v:x-c.CpLW, t:(i?"C_{p,ww,neg}":"C_{p,ww,pos}")+" - C_{p,L,wall}", a:x, b:c.CpLW})).concat([{v:Math.abs(c.CpLW), t:"|C_{p,L,wall}|", a:null, b:c.CpLW}, floor]);
+        c.roofNet = opts.reduce((p,q)=>q.v>p.v?q:p);
+        c.roofNet.mono=true; c.roofNet.fromHigh=fromHigh;
+      } else {
+        const opts = cw.map((x,i)=>({v:x-cl, t:(i?"C_{p,ww,neg}":"C_{p,ww,pos}")+" - C_{p,lw}", a:x, b:cl})).concat([floor]);
+        c.roofNet = opts.reduce((p,q)=>q.v>p.v?q:p);
+      }
+      c.CpRoofUsed=c.roofNet.v;
+      c.Froof = w.qh.q*w.G*c.CpRoofUsed*c.Aroof;
+    } else {
+      const cpr = c.roofRows ? Math.max(...c.roofRows.map(r=>Math.abs(r.Cp))) : 0;
+      c.CpRoofUsed=cpr;
+      c.Froof = c.Aroof>0 ? Math.abs(w.qh.q*w.G*cpr)*c.Aroof : 0;
+    }
     c.Ftot = c.Fww + c.Flw + c.Froof;
     c.Fmin = 16*c.Awall + 8*c.Aroof;
     c.minGoverns = c.Ftot < c.Fmin;
@@ -1021,6 +1097,10 @@ function solve(S){
     const ord="ABCDEF";
     sq.SDC=ord[Math.max(ord.indexOf(sq.sdcS),ord.indexOf(sq.sdc1))];
     if(site.S1>=0.75){ sq.SDC=(S.risk==="IV")?"F":"E"; sq.sdcOverride="Sec. 11.6: S\u2081 \u2265 0.75 forces Seismic Design Category "+sq.SDC+" regardless of the tables."; }
+    /* A7M1 (2026-11-07): 780 CMR 1613.1 (10th Ed.): Seismic Design Category A is not used in Massachusetts; a structure
+       that could be assigned A is assigned B. V is unchanged (no SDC-dependent term in this tool's ELF); the label, the
+       hand-off and the Table 12.2-1 screen follow B. */
+    if(S.jur==="MA" && sq.SDC==="A"){ sq.sdcASCE="A"; sq.SDC="B"; sq.sdcMA="780 CMR 1613.1 (Massachusetts amendment): Seismic Design Category A shall not be used in the Commonwealth; a structure that could be assigned A by ASCE 7 is assigned B."; }
     const cx=CT_X.find(r=>r[0]===S.seisSysType)||CT_X[3];
     sq.Ct=cx[1]; sq.x=cx[2]; sq.hn=S.hn;
     sq.Ta=sq.Ct*Math.pow(S.hn,sq.x);
@@ -1306,16 +1386,60 @@ function solve(S){
   }
   /* Table 12.2-1 screening: is the system permitted, and within its height limit */
   if(sq.SDC){
-    const sf=SFRS.find(r=>r[0]===S.sfrs);
-    const lim=sf&&sf[4]?sf[4][sq.SDC]:undefined;
+    const SL=sfrsLimits(S);   /* A7M2: with the 780 CMR amendments under MA */
+    const lim=SL?SL.lim[sq.SDC]:undefined;
+    const maHit=!!(SL&&SL.ma&&(sq.SDC in SL.ma.lim));
+    const src=maHit?"Table 12.2-1 as amended by 780 CMR (Massachusetts, row "+SL.ma.id+")":"Table 12.2-1";
     sq.sysLimit=lim;
     if(lim==="NP")
       xc("err","System not permitted in this category",
-        "Table 12.2-1 does not permit \""+S.sfrs+"\" in Seismic Design Category "+sq.SDC+".","s-seis");
+        src+" does not permit \""+S.sfrs+"\" in Seismic Design Category "+sq.SDC+".","s-seis");
     else if(typeof lim==="number" && S.hn>lim+0.01)
       xc("err","System height limit exceeded",
-        "Table 12.2-1 limits \""+S.sfrs+"\" to "+lim+" ft in Seismic Design Category "+sq.SDC+
+        src+" limits \""+S.sfrs+"\" to "+lim+" ft in Seismic Design Category "+sq.SDC+
         "; h\u2099 = "+R2(S.hn)+" ft.","s-seis");
+    if(SL&&SL.ma&&SL.ma.note2&&(sq.SDC==="B"||sq.SDC==="C"))
+      R.warn.push("780 CMR Table 12.2-1 Note 2 applies (system H). Massachusetts amendment to Table 12.2-1, Note 2: design connections, including those to foundations, for two times the computed seismic forces and moments "+
+        "(in combination with other loads), capped at the brace expected yield strength R\u1d67F\u1d67A\u1d4d or 1.1R\u1d67M\u209a of moment-frame beams; columns of the seismic "+
+        "force-resisting system per AISC 341 Sec. D1.4a; K-braced frames not permitted; V and inverted-V braced frame beams continuous, designed for gravity without the braces, "+
+        "and flanges braced for 2 % of F\u1d67b\u1d63t\u1d63 at the brace intersection. This tool does not apply the factor of 2; carry it into the connection design.");
+  }
+  /* A7M3 + A7M4 (2026-11-07): is the equivalent lateral force procedure permitted?
+     Sec. 11.4.8 Exception 3: Site Class E with S1 >= 0.2 without a site-specific ground motion analysis only where
+     T <= T_s (and the ELF procedure is used). Table 12.6-1: in SDC D, E, F the ELF procedure is permitted for Risk Category
+     I / II buildings of at most two stories above the base, light-frame construction, regular structures up to 160 ft,
+     regular structures above 160 ft with T < 3.5 T_s, and structures up to 160 ft with only horizontal irregularities 2-5
+     or vertical 4, 5a, 5b. T is taken as the larger of T_used and C_u T_a (conservative; Decision pending engineer review). */
+  if(sq.Fa!==null && sq.SDS>0){
+    const Ts=sq.SD1/sq.SDS, Tc=Math.max(sq.Tused, sq.T||0);
+    sq.elf={Ts:Ts, T:Tc, ok:true, rows:[]};
+    if(S.siteClass==="E" && site.S1>=0.2){
+      const ok=Tc<=Ts+1e-9;
+      sq.elf.siteE={ok:ok};
+      if(!ok){ sq.elf.ok=false;
+        xc("err","ELF not permitted: Site Class E with S\u2081 \u2265 0.2 (Sec. 11.4.8)",
+          "Site Class E with S\u2081 = "+RN(site.S1,3)+" \u2265 0.2: without a site-specific ground motion analysis, Sec. 11.4.8 Exception 3 permits the equivalent lateral force procedure only where T \u2264 T\u209b. T = "+
+          RN(Tc,3)+" s > T\u209b = "+RN(Ts,3)+" s. A site-specific ground motion analysis (Sec. 21) is required; the base shear shown is not admissible.","s-seis"); }
+    }
+    if(sq.SDC==="D"||sq.SDC==="E"||sq.SDC==="F"){
+      const nSt=S.levels.filter(l=>l.w>0).length, light=/Light-frame/.test(S.sfrs), irr=S.irreg||"none";
+      const R1=(S.risk==="I"||S.risk==="II") && nSt<=2, R2v=light, R3=irr==="none" && S.hn<=160, R4=irr==="none" && S.hn>160 && Tc<3.5*Ts,
+            R5=irr==="limited" && S.hn<=160;
+      sq.elf.rows=[
+        {t:"Risk Category I or II building not exceeding two stories above the base",ok:R1,v:"Risk "+S.risk+", "+nSt+" level(s)"},
+        {t:"Structure of light-frame construction",ok:R2v,v:light?"yes":"no"},
+        {t:"No structural irregularities, h\u2099 \u2264 160 ft",ok:R3,v:"irregularities: "+irr+", h\u2099 = "+R2(S.hn)+" ft"},
+        {t:"No structural irregularities, h\u2099 > 160 ft and T < 3.5T\u209b",ok:R4,v:"T = "+RN(Tc,3)+" s, 3.5T\u209b = "+RN(3.5*Ts,3)+" s"},
+        {t:"h\u2099 \u2264 160 ft with only horizontal irregularities 2\u20135 or vertical 4, 5a, 5b",ok:R5,v:"irregularities: "+irr}];
+      const ok=R1||R2v||R3||R4||R5;
+      sq.elf.t1261=ok;
+      if(!ok){ sq.elf.ok=false;
+        xc("err","ELF not permitted in SDC "+sq.SDC+" (Table 12.6-1)",
+          "Table 12.6-1: none of the conditions that permit the equivalent lateral force procedure in Seismic Design Category "+sq.SDC+" is met ("+
+          (irr==="other"?"an irregularity outside those listed is present":(S.hn>160?"h\u2099 = "+R2(S.hn)+" ft > 160 ft with T = "+RN(Tc,3)+" s \u2265 3.5T\u209b = "+RN(3.5*Ts,3)+" s":"h\u2099 = "+R2(S.hn)+" ft"))+
+          "). A modal response spectrum or response history analysis is required; the base shear shown is not admissible.","s-seis"); }
+    }
+    if(!sq.elf.siteE && !sq.elf.rows.length) delete sq.elf;   /* nothing to check (SDC B / C, not Site E): R unchanged */
   }
   /* manually entered hazard data */
   if(S.jur!=="MA"){
@@ -1366,6 +1490,7 @@ const DEF={
  Goverride:false, Gval:0.85, windFlow:"Clear", tblMode:"interp",
  siteClass:"D", seisSysType:"All other structural systems", sfrs:"Steel systems not specifically detailed for seismic resistance",
  hn:36, TL:6, seisW:1200, useTa:true, rho:1.0, baseElev:0, siteDefaultD:false, siteBnoVs:false,
+ irreg:"none",   /* A7M4 (2026-11-07): structural irregularities for the Table 12.6-1 ELF check; saves without it read "none" */
  levels:[{name:"Roof",h:36,w:600},{name:"Level 2",h:18,w:600}],
  elems:[],
  drifts:[],
@@ -1880,6 +2005,8 @@ function buildInputs(){
   inRow(b,"Long-period transition period","T<sub>L</sub>","s",num("TL"));
   inRow(b,"Effective seismic weight","W","kip",num("seisW"));
   inRow(b,"Redundancy factor","\u03C1","",num("rho","0.1"));
+  selWide(b,"Structural irregularities (Tables 12.3-1, 12.3-2), for the Table 12.6-1 ELF check","irreg",["none","limited","other"],
+    ["None","Only horizontal types 2, 3, 4, 5 and/or vertical types 4, 5a, 5b","Any other irregularity"]);
   b.appendChild(chk("useTa","Use T = T\u2090 rather than C\u1d64T\u2090"));
   b.appendChild(el("div","hint","T\u2090 is the conservative choice; C\u1d64T\u2090 requires a substantiated analysis of the computed period."));
 
@@ -2591,18 +2718,44 @@ function renderWalls(host){
     R.cases.map(c=>[{v:c.id},{v:R2(c.Awall)},{v:R2(c.Aroof)},{v:R2(c.Fww)},{v:R2(c.Flw)},{v:R2(c.Froof)},
       {v:R2(c.Ftot),cls:c.minGoverns?"":"hl"},{v:R2(c.Fmin),cls:c.minGoverns?"hl":""},
       {v:c.minGoverns?'<span class="badge b-w">minimum</span>':'<span class="badge b-ok">computed</span>'}]),
-    "Projected areas are computed from the building silhouette normal to each wind direction: the wall term is B \u00D7 h\u2091 and the roof term is everything above the eave line.");
+    "Projected areas are computed from the building silhouette normal to each wind direction: the wall term is B \u00D7 h\u2091 (plus, for wind parallel to the ridge of a gable or monoslope, the end wall above the eave) and the roof term is the rest of the silhouette above the eave line.");
   const cg=R.cases.reduce((a,b2)=>(b2.Fmin/Math.max(b2.Ftot,1e-9))>(a.Fmin/Math.max(a.Ftot,1e-9))?b2:a);
-  const sb=panel(b,"o-minw-w",null,"Worked derivation \u2014 direction "+cg.id,"Sec. 27.1.5",true);
+  /* A7H1: the worked derivation is shown for the direction where the minimum comes closest to governing and, when
+     different, for the direction with the largest design force (the W carried into the combinations) */
+  const cW=R.cases.reduce((a,b2)=>b2.Fdes>a.Fdes?b2:a);
+  [cg].concat(cW!==cg?[cW]:[]).forEach((cg,k)=>{
+  const sb=panel(b,k?"o-minw-w2":"o-minw-w",null,"Worked derivation \u2014 direction "+cg.id+(k?" (largest design force)":""),"Sec. 27.1.5",true);
+  if(cg.Atri>0){
+    eq(sb,"Projected wall area, including the end wall above the eave",null,"A_{wall} = B\\,h_e + A_{end}","A_{wall} = "+R2(cg.B)+"\\,("+R2(R.geom.hEave)+") + "+R2(cg.Atri),"A_{wall} = "+R2(cg.Awall)+"\\ \\text{ft}^2");
+    note(sb,"Wind parallel to the ridge: the silhouette above the eave is the "+(S.roofType==="Gable"?"gable-end":"monoslope end")+" wall, A<sub>end</sub> = "+R2(cg.Atri)+" ft\u00B2. It is a wall surface, so it takes the wall coefficients of Fig. 27.3-1 (windward 0.8 with q<sub>z</sub>, leeward C<sub>p</sub>(L/B) at q<sub>h</sub>) and counts as wall area in Sec. 27.1.5.");
+  } else
   eq(sb,"Projected wall area",null,"A_{wall} = B\\,h_e","A_{wall} = "+R2(cg.B)+"\\,("+R2(R.geom.hEave)+")","A_{wall} = "+R2(cg.Awall)+"\\ \\text{ft}^2");
   eq(sb,"Projected roof area",null,"A_{roof} = A_{silhouette} - A_{wall}",
     "A_{roof} = "+R2(cg.Atot)+" - "+R2(cg.Awall),"A_{roof} = "+R2(cg.Aroof)+"\\ \\text{ft}^2");
-  eq(sb,"Windward wall force, external pressure integrated over height",null,
+  if(cg.Atri>0) eq(sb,"Windward wall force, external pressure integrated over height and over the end wall",null,
+    "F_{ww} = B\\int_0^{h_e} q_z\\,G\\,C_p\\,dz + \\int_{A_{end}} q_z\\,G\\,C_p\\,dA","C_p = "+R2(cg.CpWW)+",\\quad B = "+R2(cg.B)+"\\ \\text{ft}:\\quad "+R2(cg.Fww-cg.FwwTri)+" + "+R2(cg.FwwTri),
+    "F_{ww} = "+R2(cg.Fww)+"\\ \\text{lbf}");
+  else eq(sb,"Windward wall force, external pressure integrated over height",null,
     "F_{ww} = B\\int_0^{h_e} q_z\\,G\\,C_p\\,dz","C_p = "+R2(cg.CpWW)+",\\quad B = "+R2(cg.B)+"\\ \\text{ft}",
     "F_{ww} = "+R2(cg.Fww)+"\\ \\text{lbf}");
   eq(sb,"Leeward wall force",null,"F_{lw} = |q_h\\,G\\,C_p|\\,A_{wall}",
     "F_{lw} = |"+R2(R.wind.qh.q)+"("+R2(R.wind.G)+")("+RN(cg.CpLW,3)+")|\\,("+R2(cg.Awall)+")","F_{lw} = "+R2(cg.Flw)+"\\ \\text{lbf}");
-  if(cg.Aroof>0) eq(sb,"Roof contribution on the projected area",null,"F_{roof} = |q_h\\,G\\,C_p|\\,A_{roof}",
+  if(cg.Aroof>0 && cg.roofNet){
+    const rn=cg.roofNet, mx=RN(Math.max(...cg.roofRows.map(r=>Math.abs(r.Cp))),3), cands=cg.roofNet.mono
+      ? (rn.fromHigh ? "0.8 - ("+RN(cg.CpLWroof,3)+"),\\ "+mx : RN(cg.CpWWroofPos,3)+" - ("+RN(cg.CpLW,3)+"),\\ "+RN(cg.CpWWroofNeg,3)+" - ("+RN(cg.CpLW,3)+"),\\ |"+RN(cg.CpLW,3)+"|,\\ "+mx)
+      : RN(cg.CpWWroofPos,3)+" - ("+RN(cg.CpLWroof,3)+"),\\ "+RN(cg.CpWWroofNeg,3)+" - ("+RN(cg.CpLWroof,3)+"),\\ "+mx;
+    eq(sb,"Net roof coefficient, wind normal to the ridge","ASCE 7-16 Fig. 27.3-1",
+      rn.mono&&rn.fromHigh ? "C_{net} = \\max(0.8 - C_{p,lw},\\ \\max|C_p|)"
+        : (rn.mono ? "C_{net} = \\max(C_{p,ww,pos} - C_{p,L,wall},\\ C_{p,ww,neg} - C_{p,L,wall},\\ |C_{p,L,wall}|,\\ \\max|C_p|)"
+                   : "C_{net} = \\max(C_{p,ww,pos} - C_{p,lw},\\ C_{p,ww,neg} - C_{p,lw},\\ \\max|C_p|)"),
+      "C_{net} = \\max("+cands+")","C_{net} = "+RN(cg.CpRoofUsed,3)+"\\quad ("+rn.t+")");
+    note(sb,rn.mono
+      ? (rn.fromHigh ? "Monoslope, wind from the high side: the wall strip above the eave is a windward wall (0.8, taken at q<sub>h</sub>) and the roof is a leeward roof whose suction also pushes downwind."
+                     : "Monoslope, wind from the low eave: the roof is a windward roof and the wall strip above the high eave is a leeward wall (C<sub>p</sub>(L/B)). Windward-roof suction is not credited as relief: |C<sub>p,L,wall</sub>| and the largest roof |C<sub>p</sub>| (the earlier method) are floors.")
+      : "Windward-slope pressure and leeward-slope suction both push downwind, so the net horizontal coefficient on the projected roof area is the windward minus the leeward C<sub>p</sub>, for both windward values of Fig. 27.3-1. Windward-slope suction is not credited as relief: the largest roof |C<sub>p</sub>| (the earlier method) is the floor.");
+    eq(sb,"Roof contribution on the projected area",null,"F_{roof} = q_h\\,G\\,C_{net}\\,A_{roof}",
+      "F_{roof} = "+R2(R.wind.qh.q)+"("+R2(R.wind.G)+")("+RN(cg.CpRoofUsed,3)+")\\,("+R2(cg.Aroof)+")","F_{roof} = "+R2(cg.Froof)+"\\ \\text{lbf}");
+  } else if(cg.Aroof>0) eq(sb,"Roof contribution on the projected area",null,"F_{roof} = |q_h\\,G\\,C_p|\\,A_{roof}",
     "F_{roof} = |"+R2(R.wind.qh.q)+"("+R2(R.wind.G)+")("+RN(cg.CpRoofUsed,3)+")|\\,("+R2(cg.Aroof)+")","F_{roof} = "+R2(cg.Froof)+"\\ \\text{lbf}");
   eq(sb,"Total computed force",null,"F = F_{ww} + F_{lw} + F_{roof}",
     "F = "+R2(cg.Fww)+" + "+R2(cg.Flw)+" + "+R2(cg.Froof),"F = "+R2(cg.Ftot)+"\\ \\text{lbf}");
@@ -2610,12 +2763,14 @@ function renderWalls(host){
     "F_{min} = 16("+R2(cg.Awall)+") + 8("+R2(cg.Aroof)+")","F_{min} = "+R2(cg.Fmin)+"\\ \\text{lbf}");
   eq(sb,"Governing design force",null,"F_{des} = \\max(F,\\ F_{min})",
     "F_{des} = \\max("+R2(cg.Ftot)+",\\ "+R2(cg.Fmin)+")","F_{des} = "+R2(cg.Fdes)+"\\ \\text{lbf}");
+  });
   if(cg.minGoverns) note(b,"The minimum governs in at least one direction. Scale the computed surface pressures for that "+
     "direction by <b>"+RN(cg.scale,3)+"</b>, or apply 16 psf to the wall projection and 8 psf to the roof projection directly. "+
     "Sec. 27.1.5 applies to the MWFRS only; the Chapter 30 minimum of 16 psf on components and cladding is a separate provision.","w");
   else note(b,"The computed forces exceed the minimum in every direction, so Sec. 27.1.5 does not control.","k");
-  note(b,"Interpretation applied: the roof term uses the largest magnitude roof C\u209a for the direction acting on the "+
-    "projected roof area, and internal pressure is excluded because it cancels on the net force. Both choices are stated in the manual.");
+  note(b,"Interpretation applied: wind normal to the ridge (\u03B8 \u2265 10\u00B0), the roof term is q<sub>h</sub>G(C<sub>p,windward</sub> \u2212 C<sub>p,leeward</sub>) on the "+
+    "projected roof area, enveloped over both windward values with the largest roof |C\u209a| as a floor; wind parallel to the ridge of a gable or monoslope, the end wall above the eave is wall; "+
+    "otherwise the largest magnitude roof C\u209a for the direction acts on the projected roof area. Internal pressure is excluded because it cancels on the net force. These choices are stated in the manual.");
 
   b=panel(host,"o-watr",++n+".","Torsional Load Cases","ASCE 7-16 Fig. 27.3-8");
   note(b,"Chapter 27 Part 1 requires four load cases for buildings with a rigid diaphragm: Case 1 full windward and leeward "+
@@ -2683,10 +2838,11 @@ function renderRoof(host){
       if(c.hlTrace && c.hLInterp){
         dtable(cb,"Two-step interpolation on \u03B8 then on h/L",
           ["Coefficient","at h/L = 0.25","at h/L = 0.5","at h/L = 1.0","interpolated at h/L = "+RN(c.hL,3)],[
-          [{v:"Windward, negative C\u209a"}].concat(c.hlTrace.wn.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.CpWWroofNeg,3),cls:"hl"}]),
-          [{v:"Windward, positive C\u209a"}].concat(c.hlTrace.wp.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.CpWWroofPos,3),cls:"hl"}]),
+          [{v:"Windward, negative C\u209a"}].concat(c.hlTrace.wn.per.map((v,j)=>({v:RN(v,3)+((c.hlTrace.wn.sub||[]).indexOf(j)>=0?" \u2192 0.000\u002A":"")}))).concat([{v:RN(c.CpWWroofNeg,3),cls:"hl"}]),
+          [{v:"Windward, positive C\u209a"}].concat(c.hlTrace.wp.per.map((v,j)=>({v:RN(v,3)+((c.hlTrace.wp.sub||[]).indexOf(j)>=0?" \u2192 0.000\u002A":"")}))).concat([{v:RN(c.CpWWroofPos,3),cls:"hl"}]),
           [{v:"Leeward C\u209a"}].concat(c.hlTrace.lw.per.map(v=>({v:RN(v,3)}))).concat([{v:RN(c.CpLWroof,3),cls:"hl"}])],
-          "The middle three columns are the coefficient evaluated at \u03B8 = "+R2(g.theta)+"\u00B0 within each tabulated h/L row group.");
+          "The middle three columns are the coefficient evaluated at \u03B8 = "+R2(g.theta)+"\u00B0 within each tabulated h/L row group."+
+          ((c.hlTrace.wp.sub||c.hlTrace.wn.sub)?" \u002A The two bracketing values differ in sign. Fig. 27.3-1 permits interpolation only between values of the same sign, with 0.0 assumed where no value of that sign is given, so the value of the other sign is taken as 0.0 for the interpolation.":""));
       }
       dtable(cb,"Fig. 27.3-1 \u2014 windward roof C\u209a, wind normal to ridge",
         ["h/L","Sign"].concat(T.theta.map(t=>t>=60?"\u2265 60":t.toString())),
@@ -2883,6 +3039,8 @@ function renderSeis(host){
     [{v:"Table 11.6-2, from S\u2091\u2081 = "+RN(q.SD1,4)},{v:q.sdc1}],
     [{v:"Governing Seismic Design Category"},{v:"<b>"+q.SDC+"</b>",cls:"hl"}]]);
   if(q.sdcOverride) note(b,esc(q.sdcOverride),"w");
+  if(q.sdcMA) note(b,"<b>"+esc(q.sdcMA)+"</b> ASCE 7 gives "+q.sdcASCE+"; the governing category used throughout is <b>"+q.SDC+"</b>. "+
+    "The base shear is unchanged: no term of the equivalent lateral force calculation here depends on the category.","w");
 
   b=panel(host,"o-se3",++n+".","Fundamental Period","ASCE 7-16 Sec. 12.8.2");
   dtable(b,"Table 12.8-2 \u2014 approximate period parameters",["Structure type","C\u209c","x"],
@@ -2906,15 +3064,21 @@ function renderSeis(host){
           ["C\u1d48","Deflection amplification factor",R2(q.Cd),"Table 12.2-1"],
           ["I\u2091","Seismic importance factor",R2(q.Ie),"Table 1.5-2"],
           ["T\u029f","Long-period transition period",R2(q.TL)+" s","Fig. 22-14 through 22-17"]]);
-  const sfE=SFRS.find(r=>r[0]===S.sfrs), limE=sfE&&sfE[4]?sfE[4]:null;
+  const SLE=sfrsLimits(S), limE=SLE?SLE.lim:null;
   if(limE){
+    const fmtL=v=>(v==="NL"?"NL":(v==="NP"?"NP":v+" ft"));
     dtable(b,"Table 12.2-1 \u2014 structural system limitations and height limits, screening summary",
       ["Seismic Design Category","B","C","D","E","F"],
-      [[{v:esc(S.sfrs)}].concat(["B","C","D","E","F"].map(k=>
-        ({v:(limE[k]==="NL"?"NL":(limE[k]==="NP"?"NP":limE[k]+" ft")),cls:k===q.SDC?"hl":""})))],
+      (SLE.ma?[[{v:esc(S.sfrs)+" \u2014 ASCE 7-16"}].concat(["B","C","D","E","F"].map(k=>({v:fmtL(SLE.asce[k])})))]:[]).concat(
+      [[{v:esc(S.sfrs)+(SLE.ma?" \u2014 as amended by 780 CMR (row "+SLE.ma.id+"), used":"")}].concat(["B","C","D","E","F"].map(k=>
+        ({v:fmtL(limE[k]),cls:k===q.SDC?"hl":""})))]),
       "NL = not limited, NP = not permitted. The highlighted column is the governing category. This is a screen against the "+
       "main table only; the footnote exceptions of Table 12.2-1, including those that permit some systems in higher categories "+
-      "under Sec. 12.2.5, are not evaluated.");
+      "under Sec. 12.2.5, are not evaluated."+(S.jur==="MA"?" Massachusetts: the 780 CMR 10th Ed. amendments to Table 12.2-1 are applied to the rows this tool lists (C.7 and H).":""));
+    if(SLE.ma&&SLE.ma.note2&&(q.SDC==="B"||q.SDC==="C")) note(b,"<b>780 CMR amendment to Table 12.2-1, Note 2 (system H).</b> Connections, including those to foundations, are designed for "+
+      "two times the computed seismic forces and moments in combination with other loads, capped at the expected brace yield strength or 1.1 times the expected beam "+
+      "flexural capacity; columns of the seismic force-resisting system meet AISC 341 Sec. D1.4a; K-braced frames are not permitted; V and inverted-V braced frame beams "+
+      "have added requirements. The factor of 2 is not applied by this tool.","w");
     const lim=limE[q.SDC];
     if(lim==="NP") note(b,"<b>Table 12.2-1 does not permit this system in Seismic Design Category "+q.SDC+".</b> Either the "+
       "system or the category has to change; the base shear below is arithmetically correct and structurally inadmissible.","e");
@@ -2922,6 +3086,19 @@ function renderSeis(host){
       note(b,"<b>h\u2099 = "+R2(S.hn)+" ft exceeds the "+lim+" ft limit</b> for this system in Seismic Design Category "+q.SDC+".","e");
     else note(b,"The system is permitted in Seismic Design Category "+q.SDC+
       (typeof lim==="number"?" up to "+lim+" ft; h\u2099 = "+R2(S.hn)+" ft.":" with no height limit."),"k");
+  }
+  if(q.elf && (q.elf.siteE || q.elf.rows.length)){   /* A7M3, A7M4 */
+    const fx=x=>"T = \\max(T_{used},\\ C_uT_a) = "+RN(q.elf.T,3)+"\\ \\text{s},\\quad T_s = S_{D1}/S_{DS} = "+RN(q.elf.Ts,3)+"\\ \\text{s}";
+    eq(b,"Period used for the ELF permission checks","ASCE 7-16 Sec. 11.4.6, 12.6","T_s = S_{D1}/S_{DS}",fx(),"T_s = "+RN(q.elf.Ts,3)+"\\ \\text{s}");
+    if(q.elf.siteE) note(b,"<b>Sec. 11.4.8 Exception 3</b> (Site Class E, S\u2081 \u2265 0.2, no site-specific analysis): the equivalent lateral force procedure is permitted only where T \u2264 T\u209b. "+
+      "T = "+RN(q.elf.T,3)+" s "+(q.elf.siteE.ok?"\u2264":">")+" T\u209b = "+RN(q.elf.Ts,3)+" s: "+(q.elf.siteE.ok?"<b>permitted</b>.":"<b>not permitted</b>; a site-specific ground motion analysis is required."),q.elf.siteE.ok?"k":"e");
+    if(q.elf.rows.length){
+      dtable(b,"Table 12.6-1 \u2014 equivalent lateral force procedure, Seismic Design Category "+q.SDC,["Condition that permits ELF","Project","Met"],
+        q.elf.rows.map(r=>[{v:r.t},{v:r.v},{v:r.ok?"yes":"no",cls:r.ok?"hl":""}]),
+        "ELF is permitted when any one condition is met. Irregularities are as entered on the Seismic input tab (Tables 12.3-1, 12.3-2); this tool does not evaluate them.");
+      note(b,q.elf.t1261?"Table 12.6-1: the equivalent lateral force procedure is <b>permitted</b>.":
+        "<b>Table 12.6-1: the equivalent lateral force procedure is not permitted.</b> A modal response spectrum analysis (Sec. 12.9.1) or a response history analysis is required; the base shear below is arithmetically correct and not admissible.",q.elf.t1261?"k":"e");
+    }
   }
   eq(b,"Base value","ASCE 7-16 Eq. 12.8-2","C_s = \\dfrac{S_{DS}}{R/I_e}",
     "C_s = \\dfrac{"+RN(q.SDS,4)+"}{"+R2(q.R)+"/"+R2(q.Ie)+"}","C_s = "+RN(q.CsBase,4));
@@ -3004,8 +3181,8 @@ function renderSeis(host){
   note(b,"Horizontal distribution and accidental torsion (Sec. 12.8.4), drift and P-delta (Sec. 12.8.6, 12.9), irregularity "+
     "checks (Sec. 12.3.2), nonstructural components (Ch. 13), nonbuilding structures (Ch. 15), and modal response spectrum "+
     "analysis (Sec. 12.9) are <b>not</b> performed. The vertical seismic effect E\u1d65 (Sec. 12.4.2.2) <i>is</i> computed and "+
-    "carried into the combinations with both signs; the redundancy factor \u03C1 is applied as entered but Sec. 12.3.4.2 is not evaluated. Sec. 12.6 must also be checked to confirm that the equivalent lateral force procedure is permitted for "+
-    "this structure in Seismic Design Category "+q.SDC+".","w");
+    "carried into the combinations with both signs; the redundancy factor \u03C1 is applied as entered but Sec. 12.3.4.2 is not evaluated. Sec. 12.6: the equivalent lateral force procedure is "+
+    "permitted in Seismic Design Categories B and C; in D, E and F the Table 12.6-1 check relies on the irregularities entered on the input tab, which this tool does not evaluate.","w");
 }
 
 /* ---------------- Combinations ---------------- */
@@ -3862,8 +4039,16 @@ height input for that reason, and the velocity pressure table reports K<sub>zt</
 <p>The minimum is written as a force on projected areas, not as a pressure floor on individual surfaces. The app computes the
 projected areas from the building silhouette normal to each wind direction, takes the wall term as B &times; h<sub>e</sub> and
 the roof term as everything above the eave line, and compares the total against 16A<sub>wall</sub> + 8A<sub>roof</sub>. The
-computed force excludes internal pressure, because it acts on both faces and cancels on the net. The roof contribution uses the
-largest magnitude roof C<sub>p</sub> for that direction acting on the projected roof area, which is conservative. Where the
+computed force excludes internal pressure, because it acts on both faces and cancels on the net. For wind normal to the ridge
+(&theta; &ge; 10&deg;) the roof contribution is q<sub>h</sub>G(C<sub>p,windward</sub> &minus; C<sub>p,leeward</sub>) on the projected roof
+area, because windward-slope pressure and leeward-slope suction both push downwind; both windward values of Fig. 27.3-1 are tried,
+and the largest roof |C<sub>p</sub>| on the projected area (the method used before) is the floor: windward-slope suction is not
+credited as relief (decision pending engineer review). A monoslope is treated as one plane:
+from the low eave it is a windward roof with the wall strip above the high eave leeward; from the high side that strip is a windward
+wall (0.8 at q<sub>h</sub>) and the roof is leeward. For wind parallel to the ridge of a gable or monoslope, the silhouette above the
+eave is the end wall: it takes the wall coefficients (0.8 q<sub>z</sub> windward, C<sub>p</sub>(L/B) leeward) and counts as wall area
+at 16 psf. In the remaining cases (a hip roof parallel to its ridge, &theta; &lt; 10&deg;) the largest magnitude roof C<sub>p</sub>
+for that direction acts on the projected roof area (A7H1, 2026-11-07). Where the
 minimum governs, the app reports the scale factor rather than silently rewriting the surface pressures, so the reviewer sees
 both numbers.</p>
 <h4>1.3.7 q<sub>i</sub> is always taken as q<sub>h</sub></h4>
@@ -4139,8 +4324,12 @@ within w of the obstruction.</p>
 {t:"8. Methodology: Seismic",h:`
 <h3>8.1 Scope</h3>
 <p>Sec. 12.8, the equivalent lateral force procedure, taken as far as the story shears and overturning moments. Whether the ELF
-procedure is <i>permitted</i> for a given structure and seismic design category is governed by Table 12.6-1, and that check is
-not performed here.</p>
+procedure is <i>permitted</i> for a given structure and seismic design category is governed by Table 12.6-1. The app checks it
+in Seismic Design Categories D, E and F from the risk category, the number of levels, a light-frame system, h<sub>n</sub>,
+T against 3.5T<sub>s</sub> and the irregularities you enter (it does not evaluate irregularities), with T taken as the larger of
+the period used and C<sub>u</sub>T<sub>a</sub>. For Site Class E with S<sub>1</sub> &ge; 0.2 it applies Sec. 11.4.8 Exception 3:
+without a site-specific analysis the ELF procedure is permitted only where T &le; T<sub>s</sub>. Either failure is a blocking
+check (A7M3, A7M4, 2026-11-07).</p>
 <h3>8.2 Site coefficients and the site-specific triggers</h3>
 <p>F<sub>a</sub> and F<sub>v</sub> are interpolated from Tables 11.4-1 and 11.4-2. Three conditions force a site-specific
 ground motion analysis under Sec. 11.4.8 and each raises a Review flag: Site Class F under any condition, Site Class E with
@@ -4815,7 +5004,7 @@ function a7Model(){
     a7S({id:"se.SDS",label:"Design spectral response acceleration, short periods",sym:"S_{DS}",eq:"\\frac{2}{3} S_{MS}",sub:"\\frac{2}{3} \\times "+RN(q.SMS,4),value:q.SDS,unit:"g",d:4,ref:A+"Eq. 11.4-3"}),
     a7S({id:"se.SD1",label:"Design spectral response acceleration, 1 s",sym:"S_{D1}",eq:"\\frac{2}{3} S_{M1}",sub:"\\frac{2}{3} \\times "+RN(q.SM1,4),value:q.SD1,unit:"g",d:4,ref:A+"Eq. 11.4-4"})])});
   if(q.Fa!==null){
-    SE.push({title:"Seismic design category",ref:A+"Sec. 11.6",res:/SDC$/,steps:[a7S({id:"se.SDC",label:"Seismic design category: the more severe of Table 11.6-1 ("+q.sdcS+", from S_DS) and Table 11.6-2 ("+q.sdc1+", from S_D1)",sym:"SDC",value:q.SDC,unit:"",d:0,ref:A+"Tables 11.6-1, 11.6-2",note:q.sdcOverride||""})]});
+    SE.push({title:"Seismic design category",ref:A+"Sec. 11.6",res:/SDC$/,steps:[a7S({id:"se.SDC",label:"Seismic design category: the more severe of Table 11.6-1 ("+q.sdcS+", from S_DS) and Table 11.6-2 ("+q.sdc1+", from S_D1)",sym:"SDC",value:q.SDC,unit:"",d:0,ref:A+"Tables 11.6-1, 11.6-2"+(q.sdcMA?"; 780 CMR 1613.1":""),note:[q.sdcOverride||"",q.sdcMA||""].filter(Boolean).join(" ")})]});
     SE.push({title:"Fundamental period",ref:A+"Sec. 12.8.2",res:/Tused$/,steps:[
       a7S({id:"se.Ta",label:"Approximate fundamental period",sym:"T_{a}",eq:"C_{t}\\,h_{n}^{x}",sub:q.Ct+" \\times "+R2(q.hn)+"^{"+q.x+"}",value:q.Ta,unit:"s",d:4,ref:A+"Eq. 12.8-7"}),
       a7S({id:"se.CuTa",label:"Upper limit on the calculated period",sym:"C_{u} T_{a}",eq:"",sub:RN(q.Cu,3)+" \\times "+RN(q.Ta,4),value:q.T,unit:"s",d:4,ref:A+"Sec. 12.8.2"}),
@@ -5683,6 +5872,14 @@ function buildWorkbook(S,R,ExcelJS,tb){
     /* Sec. 27.1.5 */
     inp("Aw"+t,"Projected wall area normal to the wind","A_{wall}", c.Awall, NF.a,"B \u00D7 h_e");
     inp("Ar"+t,"Projected roof area normal to the wind","A_{roof}", c.Aroof, NF.a,"silhouette above the eave");
+    /* A7H1: the roof term and, parallel to a gable or monoslope ridge, the end wall counted in A_wall */
+    if(c.Atri>0) inp("At"+t,"End wall above the eave, included in A_wall (wall coefficients)","A_{end}", c.Atri, NF.a,"Fig. 27.3-1");
+    if(R.geom.free) inp("Fr"+t,"Roof force, largest free-roof net pressure on A_roof","F_{roof}", c.Froof, NF.lb,"Fig. 27.3-4");
+    else if(c.Aroof>0){
+      inp("Cn"+t,c.roofNet?"Net roof coefficient, max(C_p,ww - C_p,lw over both windward values, largest roof |C_p|)":"Largest roof |C_p| for the direction","C_{roof}", c.CpRoofUsed, NF.n3,"Fig. 27.3-1");
+      out("Fr"+t,"Roof contribution on the projected roof area","F_{roof}",
+        {formula:A("qh")+"*"+A("Gf")+"*"+A("Cn"+t)+"*"+A("Ar"+t),result:c.Froof},NF.lb,"Fig. 27.3-1");
+    }
     inp("Fc"+t,"Computed total wind force","F", c.Ftot, NF.lb,"Sec. 27.3");
     out("Fm"+t,"Minimum design wind load","F_{min}",
       {formula:"16*"+A("Aw"+t)+"+8*"+A("Ar"+t),result:c.Fmin},NF.lb,"Sec. 27.1.5");
@@ -5772,8 +5969,13 @@ function buildWorkbook(S,R,ExcelJS,tb){
       {formula:'IF('+A("SDS")+'<0.167,"A",IF('+A("SDS")+'<0.33,"'+(iv?"C":"B")+'",IF('+A("SDS")+'<0.5,"'+(iv?"D":"C")+'","D")))',result:q.sdcS},null,"Table 11.6-1");
     out("sdc1","SDC from Table 11.6-2, on S_D1","",
       {formula:'IF('+A("SD1")+'<0.067,"A",IF('+A("SD1")+'<0.133,"'+(iv?"C":"B")+'",IF('+A("SD1")+'<0.2,"'+(iv?"D":"C")+'","D")))',result:q.sdc1},null,"Table 11.6-2");
-    out("SDC","Governing seismic design category","SDC",
-      {formula:'IF('+A("S1")+'>=0.75,"'+(iv?"F":"E")+'",IF(CODE('+A("sdcS")+')>=CODE('+A("sdc1")+'),'+A("sdcS")+','+A("sdc1")+'))',result:q.SDC},null,"Sec. 11.6");
+    const sdcF='IF('+A("S1")+'>=0.75,"'+(iv?"F":"E")+'",IF(CODE('+A("sdcS")+')>=CODE('+A("sdc1")+'),'+A("sdcS")+','+A("sdc1")+'))';
+    out("SDC","Governing seismic design category"+(S.jur==="MA"?" (780 CMR 1613.1: A is assigned B)":""),"SDC",
+      {formula:S.jur==="MA"?'IF('+sdcF+'="A","B",'+sdcF+')':sdcF,result:q.SDC},null,S.jur==="MA"?"Sec. 11.6; 780 CMR 1613.1":"Sec. 11.6");
+    if(q.elf && (q.elf.siteE || q.elf.rows.length)){   /* A7M3, A7M4 */
+      if(q.elf.siteE) statusRow("Sec. 11.4.8 Exception 3, Site Class E with S_1 >= 0.2: T = "+RN(q.elf.T,3)+" s vs T_s = "+RN(q.elf.Ts,3)+" s", q.elf.siteE.ok?"ELF PERMITTED":"ELF NOT PERMITTED", q.elf.siteE.ok);
+      if(q.elf.rows.length) statusRow("Table 12.6-1, SDC "+q.SDC+" (irregularities as entered: "+(S.irreg||"none")+")", q.elf.t1261?"ELF PERMITTED":"ELF NOT PERMITTED", q.elf.t1261);
+    }
     noteRow("Both Table 11.6-1 and Table 11.6-2 are evaluated and the more severe category governs, as Sec. 11.6 requires. S_1 \u2265 0.75 forces category E, or F for Risk Category IV, regardless of both tables.");
     inp("Ctp","Period coefficient","C_t", q.Ct, NF.n3,"Table 12.8-2");
     inp("xexp","Period exponent","x", q.x, NF.n2,"Table 12.8-2");

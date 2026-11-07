@@ -1268,3 +1268,99 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
 - **How verified:** main vs branch on the default project: every localStorage key (0), page text (343735 chars), Export JSON (1933 chars identical) and the printed report text (print media, 415510 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Stone Masonry Arch Load Rating.html"`; `node tests/smoke/project-library.mjs --tool stonearch`; `node tests/smoke/github-sync-tools.mjs --tool stonearch`; `node tests/smoke/home-projects.mjs --tool stonearch`; `node tests/smoke/phone-layout.mjs --tool arch`: pass.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR #1064: https://github.com/mlococo88/All-Structural/pull/1064 — Automatic mesh convergence: lowest RF of three meshes reported (MCV; review H-1, L-1)
+
+### MCV-1. Every vehicle rated at n1, about 2·n1 and 4·n1 elements; the lowest RF is reported   [§4 result change]
+- **Problem (review H-1):** the rating was reported from the §7.2.7.2B minimum mesh (10 elements at 40 ft). The straight chords carry the transverse fill load as beams, which a curved ring does not, so the minimum mesh is not reliably close to the converged answer and the error goes either way. Unconservative cases: 20 ft / 4 ft rise (HS20 0.419 at 10 el, 0.391 at 40), 30 ft / 6 ft (0.318 vs 0.278), 40 ft semicircle (0.262 vs 0.000, dead load alone overstresses the springing). The study on the Verification tab ran only on demand, and the dashboard row read "Compliant" / OK.
+- **Where:** new `archConvMeshes`, `archConvRun`, `archConvTable` just after `function readPSafe()`; `render()`, anchor `archConvRun(p);   /* MCV (H-1)` right after the base-mesh `results` loop.
+- **Before (render):**
+```js
+  for(const v of ARCH.vehiclesFor(p.loadMode)){
+    if(!p.vehicles.includes(v.id))continue;
+    const r=ARCH.rateVehicle(M,v,p.fa,p.impMode);
+    r.id=v.id; results.push(r);
+  }
+  window.__impCmp=impCmp;
+```
+- **After (render):** the same loop, then `archConvRun(p);`. `archConvRun`:
+  - meshes = unique of [n1, up4(2·n1), up4(4·n1)], up4(n) = min(120, 4·ceil(n/4)); n1 = the count in use (code minimum or the count entered);
+  - builds `ARCH.buildModel({...p, nEl:n})` and rates every selected vehicle on each mesh (cached on `JSON.stringify(p)`, so tab changes and focus changes do not re-run it);
+  - governing mesh gN = the mesh with the lowest controlling RF (the base mesh on a tie); `M` becomes that mesh's model and `results` its results;
+  - for a vehicle whose lowest RF is on another mesh k, its result object is that mesh's (`r.nElR = k`, `r.Mo`, `r.secOwn`), with `r.sec = round(secOwn·gN/k)` (meshes are equal arc length, `buildGeometry` `s=Ltot*i/nEl`, so the mapping is exact when the counts nest);
+  - spread = (max − min)/max of the controlling vehicle's three RFs; the model carries the study as a non-enumerable `M.conv` for `CALC.validate`.
+- **Dashboard:** `validate()`, anchor `"Element count — convergence"`: REVIEW when the spread is over 3%, OK when within, FAIL only below the code minimum; lists the meshes, the three RFs and which vehicles were reported from a finer mesh, with a Worked-in link to the table. The old "Compliant" row remains only as a fallback when no study is attached.
+- **Display:** Rating tab panel `rate_mcv` "Mesh convergence — every vehicle rated at …" (all vehicles × meshes, reported value and its mesh); it reaches the Report through the tab (§10). A vehicle reported from another mesh gets a note at the top of its panel (its RF and section on that mesh, and its RF on the worked mesh). The Verification tab's "Run the study" button is replaced by the same table; `MESHCONV` is kept (its `fingerprint` keys `secResults`).
+- **Governing provision:** MassDOT Bridge Manual Part I §7.2.7.2B (minimum 10 elements or one per 4 ft of clear span: a minimum; finer meshes are compliant). Checked in the MassDOT PDF.
+- **Decision (pending engineer review):** the lowest RF of the three meshes is reported per vehicle (conservative), not the finest-mesh value. On the default arch this keeps the code-minimum ratings (they are the lowest, about 30% below converged).
+- **Check case (main → branch, headless, reported RFs):**
+
+| Case | main | branch |
+|---|---|---|
+| Default 40/10 circular | HS20 0.626, EV3 0.451 (10 el) | unchanged (all vehicles lowest at 10; spread 25% shown) |
+| 20/4, ring 20→23.4 in, cover 1.24 ft | H20/HS20 0.419, EV2 0.400, EV3 0.449, T3 0.819 | 0.391, 0.373, 0.415, 0.756 (all from 40 el) |
+| 30/6, ring 18 in, cover 1.0 ft | H20/HS20 0.318, EV2 0.304, EV3 0.189 | H20/HS20 0.278 and EV2 0.266 (40 el); EV3 0.189 and the others unchanged (10 el lowest) |
+| 40/20 semicircle | HS20 0.262, EV3 0.172 | all 0.000; dashboard "Dead load alone exceeds allowable", 257 psi at SL-R on 40 el (review's 120-el / independent value 261 psi) > 250 |
+| 40/10, 4 ft cover; 40/10, 1 lane | — | unchanged (10 el lowest) |
+
+  Hand check (20/4 case, HS20): 10 el 0.419, 20 el 0.396, 40 el 0.391 → reported min = 0.391; the review's independent frame (160 el) converges to the same trend (tool 120 el 0.386).
+- **L-1 text:** Manual §1.3.6 ("about 5% below the converged value… slightly unconservative") rewritten with the measured behaviour and the three-mesh rule; the §7 verification note under the 10/20/40/80 table now limits the 5% figure to that load case; the `tribSpan` comment's "about 1.3% from the converged rating" is annotated (live-load station question only); the Model tab step note points to the convergence table.
+- **Performance:** default render on an input change 1.15 s (main 1.04 s); 80 ft span 2.5 s (0.9), 120 ft 2.9 s (1.5). Tab changes use the cache (unchanged). The page stays synchronous so every displayed number belongs to one consistent state.
+- **How verified:** `node tests/check-syntax.mjs` (all pass); `tests/smoke/phone-layout.mjs --tool arch` (pass); `tests/smoke/project-library.mjs --tool stonearch`: the only differences A vs B are the dashboard row text (the model JSON is identical on the default and after the test's input change); all 14 tabs on default / 30 ft / semicircle with 0 console errors; the table appears in the Report.
+- **Saved data:** no key or format change; the study is not saved (recomputed on open).
+
+## 2026-11-07 — PR #1072: https://github.com/mlococo88/All-Structural/pull/1072 — Wheel-load spread capped at the barrel width (BWC; review H-2)
+
+### BWC-1. Merged 6.4.2 distribution width ≤ barrel width   [§4 result change, MORE conservative]
+- **Problem (review H-2; open item of 2026-10-12, "Remaining", Art. 6.4.2 slab-width limit not applied):** under deep fill the merged distribution width exceeded the barrel, so part of each axle was spread onto ground beside the arch. One truck at the springing (H = 13.1 ft): 6 + 23 = 29 ft; two trucks at node 9 of the default (H = 9.43 ft): 16 + 16.5 = 32.5 ft, against a 24 ft barrel.
+- **Where:** `transDisp` (anchor `width=Math.min(xs[j]-xs[i]+w,lim)`) and `sideBySide` (anchor `const cap=(!conc&&p&&+p.barrelW>0)?+p.barrelW:Infinity;`). Every highway 6.4.2 path (`nodalLL`, `nodalLLByAxle`, the credited-spread 6.4.1 path, `sideBySideAt` and the worked steps) goes through `sideBySide`, so the cap is in one place.
+- **Before:**
+```js
+function transDisp(w,n,c){
+  const xs=wheelLinesX(n,c); let best=0,bk=0,bw=0;
+  for(let i=0;i<xs.length;){
+    let j=i; while(j+1<xs.length&&xs[j+1]-xs[j]<=w)j++;
+    const k=j-i+1, width=xs[j]-xs[i]+w, v=k*0.5/width;
+...
+  const one=f(w,1,c);
+...
+    const t=f(w,n,c), m=multiPres(n), v=m*t.v;
+...
+  best.kappa=(best.n===1)?1:best.v/one.v; ... best.one=one; ...
+```
+- **After:**
+```js
+function transDisp(w,n,c,cap){
+  const xs=wheelLinesX(n,c); let best=0,bk=0,bw=0;
+  const lim=(cap>0)?cap:Infinity;
+  for(let i=0;i<xs.length;){
+    let j=i; while(j+1<xs.length&&xs[j+1]-xs[j]<=w)j++;
+    const k=j-i+1, width=Math.min(xs[j]-xs[i]+w,lim), v=k*0.5/width;
+...
+  const cap=(!conc&&p&&+p.barrelW>0)?+p.barrelW:Infinity;
+  const one=f(w,1,c,cap), oneU=conc?one:f(w,1,c,Infinity);
+...
+    const t=f(w,n,c,cap), m=multiPres(n), v=m*t.v;
+...
+  best.kappa=(best.n===1&&best.v===oneU.v)?1:best.v/oneU.v; ... best.one=oneU; ...
+  best.capW=cap; best.capped=(isFinite(cap)&&best.width>=cap-1e-9);
+```
+  κ stays relative to the **uncapped** one-truck value, because the callers multiply their one-truck pressure P/((s_g + w_t)·L_s) by κ; so the pressure is now P·m·k·0.5/(min(W, W_barrel)·L_s). With one truck under the cap, κ = 1 exactly as before. When the cap acts on one truck, κ > 1.
+- **Not capped:** the 6.4.1 concentrated width E (≤ 7 ft), and rail mode (its own dashboard warning is unchanged).
+- **Display:** the "Side-by-side trucks" step (Live Load tab worked example and the per-node worked calculation) is shown whenever the cap acts. Its equation reads min(W_n, W_barrel), and the note says when the barrel width limits the spread.
+- **Governing provision:** AASHTO Std. Spec. 17th Ed. Art. 6.4.2 (total distribution width limited to the width of the supporting slab), applied to the arch barrel. **Verify (not in references).** MassDOT BM Pt. I §7.2.7.8B points to the Std. Spec. for the live-load distribution.
+- **Check case (default model, node 9, H = 9.427 ft, w_t = 16.497 ft, two trucks):**
+  - before: W = 32.497 ft, v = 2·0.5/32.497 = 0.03077, κ = 0.03077/(1/22.497) = 1.3846;
+  - after: W = 24 ft, v = 2·0.5/24 = 0.04167, κ = 1.875.
+- **Reported RFs, main → branch:**
+
+| Case | main | branch |
+|---|---|---|
+| Default (10 el governs) | H20 0.690, HS20 0.626, T3 0.822, 3S2 0.901, 3-3 0.998, SU4 0.705, SU5 0.675, SU6 0.638, SU7 0.656, EV2 0.638, EV3 0.451 | 0.623, **0.554**, 0.732, 0.802, 0.888, 0.635, 0.606, 0.564, 0.574, 0.573, **0.401** (the review's §2.4 capped row, to 3 decimals) |
+| 40/10, 4 ft cover | HS20 0.729, EV3 0.455 | 0.579, 0.366 |
+| 30/6, 18 in ring | T3 0.345, SU7 0.451, EV3 0.189 (H20/HS20 0.278, EV2 0.266 unchanged) | 0.342, 0.442, 0.188 |
+| 20/4 (Kingston variant), 40/20 semicircle, Lanes = 1 | — | unchanged |
+
+- **Saved data:** no key or format change. Old projects open with the cap (more conservative). There is no option to switch it off, and no migration: this is a correction toward the provision, not a choice the user made.
+- **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool arch`; `tests/smoke/project-library.mjs --tool stonearch` (the only failures are the four A-vs-B identity checks, by design: live-load envelopes and ratings move; undo, dialog, quota and console checks pass); all 14 tabs with 0 console errors.
+- **Open item closed:** the 2026-10-12 "Remaining" item (Art. 6.4.2 slab-width limit).

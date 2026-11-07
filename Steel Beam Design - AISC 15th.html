@@ -1367,6 +1367,10 @@ function evalVM(X,R,fac){
   });
   return{V,M};
 }
+/* L6 (2026-11-07): IBC 2018 Table 1604.3 footnote i: for a cantilever member the length l in the deflection limit is
+   twice the cantilever length. A span with a free end node is a cantilever. Before: l = the cantilever length (2x stricter). */
+function cantSpanF(i){const nd=S.geom.nodes,n=S.geom.spans.length;
+  return(i===0&&nd[0]&&nd[0].t==='free')||(i===n-1&&nd[n]&&nd[n].t==='free');}
 /* Station list (Seam B): union of uniform grid, node points, load points ±ε
    (so shear discontinuities are captured exactly, fixing the grid-clipping
    defect of the predecessor app), distributed-load ends, and user stations. */
@@ -1527,9 +1531,9 @@ function computeAll(){
         const xa=res.nX[i],xb=res.nX[i+1];
         let dm=0,dx=xa;
         dc.xs.forEach((x,k)=>{if(x>=xa-1e-9&&x<=xb+1e-9&&Math.abs(dc.d[k])>Math.abs(dm)){dm=dc.d[k];dx=x;}});
-        const lim=c.den>0?sp.L/c.den:null;   /* ft — per-span length (defect fix) */
-        perSpan.push({span:i,dmax:dm,x:dx,lim,ratio:lim?Math.abs(dm)/lim:null,
-          pass:lim?Math.abs(dm)<=lim*1.0001:null});
+        const cant=cantSpanF(i),lim=c.den>0?(cant?2:1)*sp.L/c.den:null;   /* ft — per-span length (defect fix); L6: 2L for a cantilever */
+        perSpan.push(Object.assign({span:i,dmax:dm,x:dx,lim,ratio:lim?Math.abs(dm)/lim:null,
+          pass:lim?Math.abs(dm)<=lim*1.0001:null},cant?{cant:true}:{}));
       });
     }
     res.svc.push({id:c.id,name:comboName(c.f),f:c.f,den:c.den,R:sol.R,defl:dc,perSpan});
@@ -1761,7 +1765,12 @@ function flexMajorIC(p,Lb,Cb){
 }
 /* ---------- F6: I & C minor axis ---------- */
 function flexMinorIC(p){
-  const Fy=p.mat.Fy,E=EKSI,cls=classifyFlex(p);
+  const Fy=p.mat.Fy,E=EKSI,cls=Object.assign({},classifyFlex(p));
+  /* L2 (2026-11-07): minor-axis flexure of every I-shape and channel uses AISC 360-16 Table B4.1b case 13
+     (lambda_p = 0.38 sqrt(E/F_y), lambda_r = 1.0 sqrt(E/F_y)), Sec. F6.2. Before: built-up I-shapes used case 11
+     (lambda_r = 0.95 sqrt(k_c E/F_L), the major-axis case). Rolled shapes unchanged (case 10 has the same limits). */
+  {const rt=SQ(E/Fy),lam=cls.flange.lam,lp=0.38*rt,lr=1.0*rt;
+    cls.flange={lam,lp,lr,case:'13',cls:lam<=lp?'compact':lam<=lr?'noncompact':'slender'};}
   const Mp=Math.min(Fy*p.Zy,1.6*Fy*p.Sy);
   const out={phi:0.9,ls:[],Mp,route:'F6',cls};
   out.ls.push({name:'Yielding',clause:'F6.1 (F6-1)',Mn:Mp,applies:true,
@@ -2029,8 +2038,19 @@ function flexRegions(cb,A){
   }
   if(cur)regs.push(cur);
   if(!regs.length)regs.push({x1:0,x2:L,sign:1});
-  /* extend adjacent regions to meet at the inflection point midway */
-  for(let i=0;i<regs.length-1;i++){const mid=(regs[i].x2+regs[i+1].x1)/2;regs[i].x2=mid;regs[i+1].x1=mid;}
+  /* extend adjacent regions to meet at the inflection point. L5 (2026-11-07): the zero of M, linearly interpolated between
+     the stations either side of the sign change (exact for a linear segment; within one station spacing otherwise).
+     Before: the midpoint of the last station of one region and the first of the next (up to half a station off). */
+  for(let i=0;i<regs.length-1;i++){
+    const ia=xs.indexOf(regs[i].x2),ib=xs.indexOf(regs[i+1].x1);let x0=(regs[i].x2+regs[i+1].x1)/2;
+    if(ia>=0&&ib>ia){
+      let j0=ia;while(j0>0&&Math.abs(M[j0])<=tol)j0--;   /* back over near-zero stations the region absorbed */
+      for(let j=j0;j<ib;j++){const m1=M[j],m2=M[j+1];
+        if(m1===0){x0=xs[j];break;}
+        if(m1*m2<0||m2===0){x0=m2===0?xs[j+1]:xs[j]+m1*(xs[j+1]-xs[j])/(m1-m2);break;}}
+    }
+    regs[i].x2=x0;regs[i+1].x1=x0;
+  }
   regs[0].x1=0;regs[regs.length-1].x2=L;
   return regs.filter(r=>r.x2-r.x1>1e-6);
 }
@@ -2161,6 +2181,7 @@ function designAll(A){
   const anyTu=A.combos.some(cb=>manOf(cb.id).Tu!==0);
   D.flexY=(anyMuy||true)?flexFor(p,'y',0,1):null;
   D.shearX=(p._kind==='P')?null:shearMajor(p,null,S.design.stiff);           /* round is per-combo (Lv) */
+  const tfa0=(p._kind==='I'&&D.shearX)?shearTFA(p,S.design.stiff,D.shearX):null;if(tfa0)D.tfa=tfa0;   /* TFA option (G2.2), default off */
   D.shearY=shearMinor(p);
   const dsn=S.design||{};
   const Ltot=totalL();
@@ -2209,6 +2230,16 @@ function designAll(A){
     }else C.shearX=D.shearX;
     C.Vu=Math.abs(cb.Vabs.v);C.VuX=cb.Vabs.x;
     C.dcrVx=C.Vu/(C.shearX.phi*C.shearX.Vn);
+    /* TFA: end panels (within a of a support or a member end) keep G2.1; interior panels may use max(G2.1, G2.2) */
+    if(D.tfa&&D.tfa.applies){
+      const aFt=D.tfa.a/12,ends=A.nX.filter((x,j)=>S.geom.nodes[j].t!=='free').concat([0,Ltot]);
+      let ve=0,xe=0,vi=0,xi=null;
+      A.stations.forEach((x,i)=>{const v=Math.abs(cb.V[i]);const end=ends.some(e=>Math.abs(x-e)<=aFt+1e-9);
+        if(end){if(v>ve){ve=v;xe=x;}}else if(v>vi){vi=v;xi=x;}});
+      const cE=C.shearX.phi*C.shearX.Vn,cI=D.tfa.phi*D.tfa.Vn,dE=ve/cE,dI=xi!=null?vi/cI:0;
+      C.tfa={VuEnd:ve,xEnd:xe,VuInt:vi,xInt:xi,capEnd:cE,capInt:cI,dcrEnd:dE,dcrInt:dI};
+      C.dcrVx=Math.max(dE,dI);C.tfa.gov=dI>dE?'int':'end';
+    }
     if(man.Vuy&&D.shearY)C.dcrVy=Math.abs(man.Vuy)/(D.shearY.phi*D.shearY.Vn);
     /* minor flexure */
     if(man.Muy&&D.flexY){
@@ -2306,8 +2337,11 @@ function buildDesignChecks(D,A){
     detail:D.member?('L_b = '+fmt(fGov.c.flexGov.LbFt,1)+' ft, C_b = '+fmt(fGov.c.flexGov.Cb,2)):
       ('region '+fmt(fGov.c.flexGov.x1,1)+'\u2013'+fmt(fGov.c.flexGov.x2,1)+' ft, '+fGov.c.flexGov.flange+' flange')});
   const vGov=gv(c=>({d:c.dcrVx,c}));
-  if(vGov)D.checks.push({label:'Shear V\u2093',ref:vGov.c.shearX.route,dcr:vGov.d,combo:vGov.c.name,tab:'tabVx',
-    dem:vGov.c.Vu,cap:vGov.c.shearX.phi*vGov.c.shearX.Vn,unit:'kip',capSym:'\u03C6V\u2099'});
+  if(vGov){const t=vGov.c.tfa,ti=!!(t&&t.gov==='int');   /* TFA: the governing panel's demand and strength */
+    const ck={label:'Shear V\u2093',ref:ti?'G2.2 ('+D.tfa.eq+')':vGov.c.shearX.route,dcr:vGov.d,combo:vGov.c.name,tab:'tabVx',
+      dem:t?(ti?t.VuInt:t.VuEnd):vGov.c.Vu,cap:t?(ti?t.capInt:t.capEnd):vGov.c.shearX.phi*vGov.c.shearX.Vn,unit:'kip',capSym:'\u03C6V\u2099'};
+    if(t)ck.detail=ti?'interior panel, x = '+fmt(t.xInt,2)+' ft (tension field)':'end panel, x = '+fmt(t.xEnd,2)+' ft (G2.1)';
+    D.checks.push(ck);}
   const myGov=gv(c=>c.dcrMy!=null?{d:c.dcrMy,c}:null);
   D.checks.push(myGov?{label:'Flexure M\u1D67',ref:D.flexY?D.flexY.route:'F6',dcr:myGov.d,combo:myGov.c.name,tab:'tabMy',
     dem:Math.abs(myGov.c.man.Muy),cap:myGov.c.phiMny,unit:'kip\u00B7ft',capSym:'\u03C6M\u2099'}:
@@ -2613,7 +2647,9 @@ function rebuildInputs(){
     fRow(body,'Material',selInput(mats.map(m=>m.id),()=>S.section.grade,v=>{S.section.grade=v;},
       id=>{const m=matOf(id);return m.name+' (Fy='+m.Fy+')';},null,'grade'),'');
     const m=matOf(S.section.grade);
-    body.appendChild(el('div','hint','F<sub>y</sub> = '+m.Fy+' ksi, F<sub>u</sub> = '+m.Fu+' ksi, E = 29,000 ksi'+(m.tRule==='nom'?' \u2014 A1085: design wall = nominal wall':'')+'. '+DBVER+'.'));
+    body.appendChild(el('div','hint','F<sub>y</sub> = '+m.Fy+' ksi, F<sub>u</sub> = '+m.Fu+' ksi, E = 29,000 ksi'+(m.tRule==='nom'?' \u2014 A1085: design wall = nominal wall':'')+'. '+DBVER+'.'+
+      /* L3 (2026-11-07): material edition note, no value changed */
+      (m.id==='A500C_P'?' A500 Gr. C round: F<sub>y</sub> = 46 ksi is the ASTM A500-13 value referenced by AISC 360-16 (Table C-A3.1). Later A500 editions, used by the AISC Manual 16th Ed. and the v16.0 Design Examples, give 50 ksi; 46 ksi is kept (conservative).':'')));
     /* overrides */
     const p=resolveSection();
     if(p){
@@ -3997,14 +4033,15 @@ function runDesignExamples(){
     add('F.1-3B','W18\u00D750, L\u1D47 = 17.5 ft, C\u1D47 = 1.30 \u2014 M\u2099',c.Mn,3840,'kip\u00B7in',0.01);
     const ltb=c.ls.find(l=>l.name.includes('Lateral'));
     add('F.1-3B','\u2026 elastic F\u1D9C\u02B3',ltb.d.Fcr,43.2,'ksi',0.01);
-    /* F.2-2B — C15×33.9 A36, Lb = 5 ft (validates channel c factor) */
-    p=sectionFor('C','C15X33.9','A36');
+    /* L1 (2026-11-07): values, grades and labels of AISC Design Examples v16.0 (were v14.0) */
+    /* F.2-2B — C15×33.9 F_y = 50 ksi (v16), Lb = 5 ft (validates channel c factor) */
+    p=sectionFor('C','C15X33.9','A572_50');
     c=flexMajorIC(p,5*12,1.0);
-    add('F.2-2B','C15\u00D733.9, L\u1D47 = 5 ft \u2014 M\u2099 (channel c factor)',c.Mn,1740,'kip\u00B7in',0.015);
-    /* F.7B — HSS10×6×3/16 A500B, noncompact flange */
-    p=sectionFor('HSSR','HSS10X6X3/16','A500B_R');
+    add('F.2-2B','C15\u00D733.9 F\u1D67 = 50, L\u1D47 = 5 ft \u2014 M\u2099 (channel c factor)',c.Mn,2300,'kip\u00B7in',0.015);
+    /* F.7B — HSS10×6×3/16 A500 Gr C (v16), noncompact flange */
+    p=sectionFor('HSSR','HSS10X6X3/16','A500C_R');
     c=flexRectHSS(p,'x',0,1);
-    add('F.7B','HSS10\u00D76\u00D7\u2075\u2044\u2081\u2086 \u2014 \u03C6M\u2099 (F7-2 noncompact flange)',c.phiMn/12,57.0,'kip\u00B7ft',0.01);
+    add('F.7B','HSS10\u00D76\u00D7\u00B3\u2044\u2081\u2086 Gr C \u2014 M\u2099 (F7-2 noncompact flange)',c.Mn/12,66.3,'kip\u00B7ft',0.01);
     /* F.9B — Pipe 8 X-Strong A53B */
     p=sectionFor('PIPE','Pipe8XS','A53B');
     c=flexRound(p);
@@ -4013,21 +4050,21 @@ function runDesignExamples(){
     p=sectionFor('W','W24X62','A992');
     let sv=shearMajor(p);
     add('G.1A','W24\u00D762 \u2014 \u03C6V\u2099 (G2.1(a), \u03C6 = 1.00)',sv.phi*sv.Vn,306,'kip',0.01);
-    /* H.5 — HSS6×4×1/4 A500B: shear, flexure, torsion */
-    p=sectionFor('HSSR','HSS6X4X1/4','A500B_R');
+    /* H.5A / H.5C — HSS6×4×1/4 A500 Gr C (v16): torsion, shear, flexure */
+    p=sectionFor('HSSR','HSS6X4X1/4','A500C_R');
     sv=shearMajor(p);
-    add('H.5','HSS6\u00D74\u00D7\u00BC \u2014 \u03C6V\u2099 (G4)',sv.phi*sv.Vn,61.4,'kip',0.01);
+    add('H.5C','HSS6\u00D74\u00D7\u00BC Gr C \u2014 \u03C6V\u2099 (G4)',sv.phi*sv.Vn,66.7,'kip',0.01);
     c=flexRectHSS(p,'x',0,1);
-    add('H.5','HSS6\u00D74\u00D7\u00BC \u2014 \u03C6M\u2099 (F7-1)',c.phiMn,353,'kip\u00B7in',0.01);
+    add('H.5C','HSS6\u00D74\u00D7\u00BC Gr C \u2014 \u03C6M\u2099 (F7-1)',c.phiMn,384,'kip\u00B7in',0.01);
     const tor=torsionHSS(p,0);
-    add('H.5','HSS6\u00D74\u00D7\u00BC \u2014 \u03C6T\u2099 (H3)',tor.phiTn,251,'kip\u00B7in',0.01);
+    add('H.5A','HSS6\u00D74\u00D7\u00BC Gr C \u2014 \u03C6T\u2099 (H3)',tor.phiTn,273,'kip\u00B7in',0.01);
     /* G.8B — kv from stiffener spacing (Eq. G2-5; identical in 360-10 and 360-16) */
     {
       const fake={_kind:'I',hClear:33.0,htw:106,tw:0.3125,d:36,mat:{Fy:36}};
-      let K=stiffKv(fake,{on:true,a:60.0});
-      add('G.8B','Built-up girder, a/h = 1.82 \u2014 k\u1D65 (Eq. G2-5)',K.kv,6.51,'\u2014',0.005);
-      K=stiffKv(fake,{on:true,a:99.0});
-      add('G.8B','\u2026 second panel, a/h = 3.0 \u2014 k\u1D65',K.kv,5.56,'\u2014',0.005);
+      let K=stiffKv(fake,{on:true,a:42.0});
+      add('G.8B','Built-up girder, a = 42 in, a/h = 1.27 \u2014 k\u1D65 (Eq. G2-5)',K.kv,8.09,'\u2014',0.005);
+      K=stiffKv(fake,{on:true,a:90.0});
+      add('G.8B','\u2026 second panel, a = 90 in, a/h = 2.73 \u2014 k\u1D65',K.kv,5.67,'\u2014',0.005);
       K=stiffKv(fake,{on:true,a:150.0});
       add('G2.1(b)','a/h = 4.55 > 3.0 \u2014 k\u1D65 reverts to 5.34 (360-16)',K.kv,5.34,'\u2014',0.002);
       K=stiffKv(fake,null);
@@ -4063,11 +4100,35 @@ function runDesignExamples(){
     const cp=compStrength(p,360,360,360);
     add('E.1C','W14\u00D7132, L\u1D9C = 30 ft \u2014 \u03C6P\u2099',cp.phiPn,892,'kip',0.012);
     add('E.1C','\u2026 governing L\u1D9C/r (y\u2013y)',cp.govFe.s||cp.slMax,95.7,'\u2014',0.01);
+    /* L1: further v16 anchors (built-up girders by the plate-girder input, H3-2) */
+    const bu=(d,bf,tf,tw)=>{const keep=S.section;S.section={family:'W',label:'W18X50',grade:'A572_50',builtUp:true,plates:true,ovr:{d,bf,tf,tw}};
+      try{return resolveSection();}finally{S.section=keep;}};
+    {let q=bu(17,8,1,0.25),cq=compStrength(q,180,180,180);
+      add('E.2','Built-up 2PL1\u00D78 + PL\u00BC\u00D715, L\u1D9C = 15 ft \u2014 \u03C6P\u2099 (slender web, E7)',cq.phiPn,500,'kip',0.01);
+      q=bu(8,10.5,0.375,0.25);cq=compStrength(q,180,180,180);
+      add('E.3','Built-up 2PL\u215C\u00D710\u00BD + PL\u00BC\u00D77\u00BC, L\u1D9C = 15 ft \u2014 \u03C6P\u2099 (slender flanges, k_c)',cq.phiPn,318,'kip',0.01);
+      q=sectionFor('HSSR','HSS12X10X3/8','A500C_R');cq=compStrength(q,192,192,192);
+      add('E.9','HSS12\u00D710\u00D7\u215C Gr C, L\u1D9C = 16 ft \u2014 \u03C6P\u2099',cq.phiPn,556,'kip',0.01);
+      q=sectionFor('HSSR','HSS12X8X3/16','A500C_R');cq=compStrength(q,288,288,288);
+      add('E.10','HSS12\u00D78\u00D7\u00B3\u2044\u2081\u2086 Gr C, L\u1D9C = 24 ft \u2014 \u03C6P\u2099 (slender walls)',cq.phiPn,151,'kip',0.01);
+      q=bu(66,14,2,0.5);let cf=flexMajorIC(q,150,1.25);
+      add('F.14','Plate girder 2PL2\u00D714 + PL\u00BD\u00D762, L\u1D47 = 12.5 ft, C\u1D47 = 1.25 \u2014 \u03C6M\u2099 (F4)',cf.phiMn/12,7880,'kip\u00B7ft',0.005);
+      let sq=shearMajor(q,null,{on:true,a:298});
+      add('F.14','\u2026 \u03C6V\u2099 (a/h = 4.8, k\u1D65 = 5.34)',sq.phi*sq.Vn,440,'kip',0.005);
+      q=bu(36,16,1.5,0.3125);sq=shearMajor(q,null,null);
+      add('G.8A','Built-up 2PL1\u00BD\u00D716 + PL\u2075\u2044\u2081\u2086\u00D733 \u2014 \u03C6V\u2099 unstiffened',sq.phi*sq.Vn,176,'kip',0.005);
+      sq=shearMajor(q,null,{on:true,a:42});
+      add('G.8B','\u2026 end panel, a = 42 in \u2014 \u03C6V\u2099',sq.phi*sq.Vn,217,'kip',0.005);
+      q=sectionFor('W','W24X55','A992');
+      add('J.7','W24\u00D755, l\u1D47 = 7.5 in, interior \u2014 R\u2099 web local yielding (J10-2)',j10WLY(q,7.5,1e6).Rn,248,'kip',0.005);
+      add('J.7','\u2026 R\u2099 web local crippling (J10-4)',j10WLC(q,7.5,1e6).Rn,282,'kip',0.005);
+      const ws=j10WSB(q,240,3800/12,'rot');
+      add('J.7','\u2026 \u03C6R\u2099 web sidesway buckling (J10-6, L\u1D47 = 20 ft)',ws.phi*ws.Rn,142,'kip',0.015);}
   }catch(e){out.push({id:'ERROR',desc:''+(e&&e.message||e),got:0,exp:0,unit:'',ok:false});}
   return out;
 }
 function buildValidTab(pg){
-  pg.appendChild(el('div','note','Two independent test families run <b>live</b> through the production code path every time this tab renders: (1) closed-form mechanics benchmarks through the analysis solver, and (2) AISC Design Examples (v14.0, published results \u2014 the governing equations are unchanged in AISC 360-16 for every case used) through the Stage-2/3 capacity engine.'));
+  pg.appendChild(el('div','note','Two independent test families run <b>live</b> through the production code path every time this tab renders: (1) closed-form mechanics benchmarks through the analysis solver, and (2) AISC Design Examples (v16.0, published results; where v16 uses an AISC 360-22 value that differs from 360-16 the case is left out) through the Stage-2/3 capacity engine.'));
   mkSection('valBench','Analysis Benchmarks (closed form)',body=>{
     let res=[];
     try{res=runBenchmarks();}catch(e){body.appendChild(el('div','errBox','Benchmark run failed: '+e.message));}
@@ -4098,8 +4159,8 @@ function buildValidTab(pg){
     });
     body.appendChild(t);
     body.appendChild(el('div',fails?'errBox':'okBox',fails?fails+' design-example check(s) FAILED \u2014 do not rely on strength results.':
-      'All '+res.length+' design-example checks pass (F2 I & channel, F7, F8, G2, G4, H3, E3). Tolerances 0.5\u20131.5% reflect the rounding used in the published solutions.'));
-    body.appendChild(el('div','hint','Still not independently anchored: \u00A7F4 and \u00A7F5 (noncompact and slender webs \u2014 no rolled shape reaches them), \u00A7E4 torsional buckling, \u00A7E7 where the effective-width reduction actually bites, \u00A7J10, and the \u00A7H1 composition of the individual ratios. These are direct transcriptions of the Specification equations, exercised by construction but not compared against a published answer \u2014 hand-check them before relying on them in production.'));
+      'All '+res.length+' design-example checks pass (F2 I & channel, F3, F4 plate girder, F7, F8, G2, G4, G6, H3, E3, E7 built-up, J10). Tolerances 0.5\u20131.5% reflect the rounding used in the published solutions.'));
+    body.appendChild(el('div','hint','Anchored by the v16.0 examples above: \u00A7F4 (F.14 plate girder), \u00A7E7 effective width (E.2, E.3, E.10), \u00A7J10.2 / J10.3 / J10.4 (J.7). Still not independently anchored: \u00A7F5 (slender webs), \u00A7E4 torsional buckling, \u00A7J10.1, and the \u00A7H1 composition of the individual ratios. These are direct transcriptions of the Specification equations, exercised by construction but not compared against a published answer \u2014 hand-check them before relying on them in production.'));
   },pg);
   mkSection('valEC','Independent Reference Checks (ENERCALC)',body=>{
     body.appendChild(el('div','note','A second commercial AISC 360-16 implementation, used to anchor routes the AISC Design Examples do not reach: elastic lateral-torsional buckling (Eq. F2-4), rectangular HSS flexure and shear at F\u1D67 = 36 ksi, minor-axis flexure (\u00A7F6 and \u00A7F7), compression governed by the y-axis, lightweight-concrete stud strength, and a partial-composite section with the plastic neutral axis in the web.'));
@@ -4715,7 +4776,7 @@ function sbdRefs(){
   if(AN&&AN.comp&&!AN.comp.blocked)r.push(['AISC Design Guide 3','construction-stage and composite deflection limits; edition: verify']);
   if(!mem)r.push(['ASCE/SEI 7-16','\u00A72.3.1 LRFD strength combinations (presets; the user manual says to verify the edition)']);
   if(!mem||(S.member.defl&&S.member.defl.on))r.push(['IBC Table 1604.3','deflection limit convention; edition: verify']);
-  if(sbrSel().tabValid)r.push(['Validation','AISC Design Examples v15.0; ENERCALC; Hibbeler, Structural Analysis (benchmarks of the Validation section only)']);
+  if(sbrSel().tabValid)r.push(['Validation','AISC Design Examples v16.0; ENERCALC; Hibbeler, Structural Analysis (benchmarks of the Validation section only)']);
   return r;
 }
 /* tab where a check is worked (the Summary keeps its own tab ids) */
@@ -4933,9 +4994,13 @@ function memberDesignAll(A){
   D.j10=null;
   if((p._kind==='I'||p._kind==='C')&&S.member.j10.lb>0){
     const end=S.member.j10.loc==='end';
-    const endDist=end?0:1e6;
-    D.j10={locs:[{kind:'user',label:'concentrated force ('+S.member.j10.loc+')',x:null,lb:S.member.j10.lb,endDist,
-      wly:j10WLY(p,S.member.j10.lb,end?0:1e6),wlc:j10WLC(p,S.member.j10.lb,end?0:1e6)}],
+    /* L7 (2026-11-07): an entered distance from the member end (new field member.j10.dist, in) sets the end criteria of
+       J10.2 (<= d -> Eq. J10-3) and J10.3 (< d/2 -> Eq. J10-5) separately, so a force between d/2 and d uses J10-3 for
+       yielding and J10-4 for crippling. Blank: as before ('end' = 0, 'interior' = far from the end). */
+    const dIn=S.member.j10.dist,hasD=dIn!=null&&dIn!==''&&isFinite(dIn)&&+dIn>=0;
+    const endDist=hasD?+dIn:(end?0:1e6);
+    D.j10={locs:[{kind:'user',label:'concentrated force ('+(hasD?fmt(+dIn,2)+' in from the end':S.member.j10.loc)+')',x:null,lb:S.member.j10.lb,endDist,
+      wly:j10WLY(p,S.member.j10.lb,endDist),wlc:j10WLC(p,S.member.j10.lb,endDist)}],
       lbSup:S.member.j10.lb,lbPt:S.member.j10.lb};
   }
   rows.forEach(r=>{
@@ -5286,6 +5351,7 @@ function buildVxTab(pg){
     else{
       stiffBlock(body,p,D.shearX,D);
       shearBlock(body,p,D.shearX,'Shear per '+D.shearX.route);
+      if(D.tfa)tfaBlock(body,p,D.tfa,D.shearX);   /* TFA option */
     }
   },pg);
   if(D.sw)mkSection('vxSw','Self-Weight Contribution',body=>{
@@ -5294,6 +5360,12 @@ function buildVxTab(pg){
   },pg);
   perComboSections(pg,'vx_',isMember()?'Case ':'Combination ',(body,C)=>{
     if(p._kind==='P'&&!isMember())shearBlock(body,p,C.shearX,'Shear capacity at this combination\u2019s L\u1D65');
+    if(C.tfa){const t=C.tfa;   /* TFA: end panels G2.1, interior panels max(G2.1, G2.2) */
+      body.appendChild(eqBlock({title:'Shear by panel type (tension field action on)',ref:'\u00A7G2.1 / \u00A7G2.2',
+        lines:['\\text{End panels (within }a='+fmt(D.tfa.a,1)+'\\text{ in of a support or end): }\\tfrac{V_u}{\\phi V_n}=\\tfrac{'+fmt(t.VuEnd,1)+'}{'+fmt(t.capEnd,1)+'}='+fmt(t.dcrEnd,3)+'\\ (x='+fmt(t.xEnd,2)+'\\ \\text{ft, G2.1})',
+          t.xInt!=null?'\\text{Interior panels: }\\tfrac{V_u}{\\phi V_n}=\\tfrac{'+fmt(t.VuInt,1)+'}{'+fmt(t.capInt,1)+'}='+fmt(t.dcrInt,3)+'\\ (x='+fmt(t.xInt,2)+'\\ \\text{ft, }'+(D.tfa.usesTFA?'G2.2':'G2.1')+')':'\\text{No interior panel (every station within }a\\text{ of a support or end)}',
+          '\\text{DCR}=\\mathbf{'+fmt(C.dcrVx,3)+'}'+(C.dcrVx>1?'\\ \\color{#B42318}{\\text{FAIL}}':'\\ \\checkmark')]}));
+    }else
     dcrLine(body,'Major-axis shear DCR',C.shearX.route,' V',C.Vu,C.shearX.phi*C.shearX.Vn,C.dcrVx,
       isMember()?null:'V_u\\ \\text{at }x='+fmt(C.VuX,2)+'\\ \\text{ft}');
     if(!isMember())sbdWorkedIn(body,[['tabAnalysis','anC_'+C.id,'Combination '+C.name,'V\u1D64']]);   /* D11 links */
@@ -5684,6 +5756,34 @@ function f13Prop(p){
   const g=L.reduce((m,x)=>x.r>m.r?x:m,L[0]);
   return{L,g,dcr:g.r,lamR,slender,stiffened,ah,h};
 }
+function tfaBlock(body,p,t,sh){
+  if(!t.applies){body.appendChild(el('div','note','Tension field action requested: '+t.note+'; §G2.1 is used in every panel.'));return;}
+  const lines=['\\tfrac{a}{h}='+fmt(t.ah,3)+'\\le 3.0,\\quad 1.10\\sqrt{k_vE/F_y}='+fmt(t.lim,1)+'\\ \\text{vs}\\ h/t_w='+fmt(p.htw,1)];
+  if(t.eq!=='G2-6')lines.push('C_{v2}='+fmt(t.Cv2,4)+'\\ \\text{(Eq. '+t.cv2reg+')},\\quad \\tfrac{2A_w}{A_{fc}+A_{ft}}='+fmt(t.rA,3)+',\\ \\tfrac{h}{b_f}='+fmt(t.rB,2)+'\\ \\Rightarrow\\ \\text{Eq. '+t.eq+'}');
+  lines.push(t.eq==='G2-6'?'V_n=0.6F_yA_w=0.6\\times '+p.mat.Fy+'\\times '+fmt(t.Aw,3)+'='+fmt(t.VnTFA,1)+'\\ \\text{kip}':
+    t.eq==='G2-7'?'V_n=0.6F_yA_w\\left[C_{v2}+\\tfrac{1-C_{v2}}{1.15\\sqrt{1+(a/h)^2}}\\right]=0.6\\times '+p.mat.Fy+'\\times '+fmt(t.Aw,3)+'\\left['+fmt(t.Cv2,4)+'+\\tfrac{1-'+fmt(t.Cv2,4)+'}{1.15\\sqrt{1+'+fmt(t.ah,3)+'^2}}\\right]='+fmt(t.VnTFA,1)+'\\ \\text{kip}':
+    'V_n=0.6F_yA_w\\left[C_{v2}+\\tfrac{1-C_{v2}}{1.15\\left(a/h+\\sqrt{1+(a/h)^2}\\right)}\\right]='+fmt(t.VnTFA,1)+'\\ \\text{kip}');
+  lines.push('\\phi V_n=0.90\\times\\max(V_{n,G2.1}='+fmt(sh.Vn,1)+',\\ V_{n,G2.2}='+fmt(t.VnTFA,1)+')=\\mathbf{'+fmt(0.9*t.Vn,1)+'\\ \\text{kip}}\\quad\\text{(interior panels)}');
+  body.appendChild(eqBlock({title:'Interior panels with tension field action (option on)',ref:'§G2.2, Eq. '+t.eq,lines}));
+  body.appendChild(el('div','hint','Panels within a = '+fmt(t.a,1)+' in of a support or member end are end panels and keep §G2.1. The stiffener requirement above is shown on the §G2.1 basis (Vᶜ₁ of G2.1), which gives the larger ρᵥ.'));
+}
+/* TFA (2026-11-07, option, default off): AISC 360-16 Sec. G2.2, interior web panels with a/h <= 3 of I-shapes:
+   h/t_w <= 1.10 sqrt(k_v E/F_y): V_n = 0.6 F_y A_w (G2-6); otherwise V_n = 0.6 F_y A_w [C_v2 + (1 - C_v2)/(1.15 sqrt(1 + (a/h)^2))]
+   (G2-7) when 2A_w/(A_fc + A_ft) <= 2.5 and h/b_f <= 6.0, else G2-8 [.. /(1.15 (a/h + sqrt(1 + (a/h)^2)))]. A_w = d t_w.
+   V_n is the larger of G2.1 and G2.2 (permitted by Sec. G2.2). End panels are not covered: they keep G2.1. */
+function shearTFA(p,stiff,sh){
+  if(!stiff||!stiff.on||!stiff.tfa||!(stiff.a>0)||p._kind!=='I'||!sh||!(sh.Vn>0))return null;
+  const h=webH(p),ah=stiff.a/h,Fy=p.mat.Fy,E=EKSI;
+  if(!(ah<=3.0))return{applies:false,ah,note:'a/h = '+fmt(ah,2)+' > 3.0: §G2.2 does not apply'};
+  const kv=sh.kv,Aw=p.d*p.tw,lim=1.10*SQ(kv*E/Fy),cv=cv2Of(p.htw,kv,Fy),Af=p.bf*p.tf;
+  const rA=2*Aw/(2*Af),rB=h/p.bf,simple=rA<=2.5&&rB<=6.0;
+  let Vn,eq;
+  if(p.htw<=lim){Vn=0.6*Fy*Aw;eq='G2-6';}
+  else if(simple){Vn=0.6*Fy*Aw*(cv.Cv2+(1-cv.Cv2)/(1.15*SQ(1+ah*ah)));eq='G2-7';}
+  else{Vn=0.6*Fy*Aw*(cv.Cv2+(1-cv.Cv2)/(1.15*(ah+SQ(1+ah*ah))));eq='G2-8';}
+  const VnUse=Math.max(Vn,sh.Vn);
+  return{applies:true,ah,kv,Aw,lim,Cv2:cv.Cv2,cv2reg:cv.reg,rA,rB,simple,VnTFA:Vn,eq,Vn:VnUse,phi:0.90,usesTFA:Vn>sh.Vn,a:stiff.a};
+}
 /* M1 (2026-11-07): AISC 360-16 Sec. G2.3(e), Eq. G2-13: I_st >= I_st2 + (I_st1 - I_st2) rho_w, with
    I_st1 = h^4 rho_st^1.3/40 (F_yw/E)^1.5 (G2-14), I_st2 = [2.5/(a/h)^2 - 2] b_p t_w^3 >= 0.5 b_p t_w^3 (G2-15),
    rho_w = (V_r - V_c2)/(V_c1 - V_c2) >= 0 (V_c1 = phi V_n of Sec. G2.1, V_c2 = phi 0.6 F_y A_w C_v2).
@@ -5875,7 +5975,8 @@ function buildMemDeflSection(pg){
         ['1728','ft\u00B3/in\u00B3','unit conversion (w in kip/ft, L in ft)']]}));
     if(r.lim!=null){
       body.appendChild(eqBlock({title:'Limit and demand/capacity ratio',ref:'IBC Table 1604.3 convention',
-        lines:['\\Delta_{allow}=\\tfrac{L}{'+r.den+'}=\\tfrac{'+fmt(r.L,2)+'\\times 12}{'+r.den+'}='+fmt(r.lim,4)+'\\ \\text{in}',
+        lines:[r.cant?'\\Delta_{allow}=\\tfrac{2L}{'+r.den+'}=\\tfrac{2\\times '+fmt(r.L,2)+'\\times 12}{'+r.den+'}='+fmt(r.lim,4)+'\\ \\text{in}\\quad\\text{(cantilever: IBC 2018 Table 1604.3 footnote i)}':
+          '\\Delta_{allow}=\\tfrac{L}{'+r.den+'}=\\tfrac{'+fmt(r.L,2)+'\\times 12}{'+r.den+'}='+fmt(r.lim,4)+'\\ \\text{in}',
           '\\text{DCR}=\\tfrac{\\Delta}{\\Delta_{allow}}=\\tfrac{'+fmt(r.d,4)+'}{'+fmt(r.lim,4)+'}=\\mathbf{'+fmt(r.dcr,3)+'}'+
             (r.dcr>1?'\\ \\color{#B42318}{\\text{FAIL}}':'\\ \\checkmark')]}));
     }else body.appendChild(el('div','note','No limit denominator set \u2014 the deflection is reported without a check.'));
@@ -6472,6 +6573,9 @@ function secStiffeners(P){
     }
     fRow(body,'Stiffener spacing  a',numInput(()=>S.design.stiff.a,v=>{S.design.stiff.a=v;},1,'stfA'),'in',
       'clear spacing between transverse stiffeners');
+    /* TFA option (new field design.stiff.tfa; absent = off) */
+    if(!isMember())fRow(body,'Tension field action (\u00A7G2.2)',chkInput(()=>!!S.design.stiff.tfa,v=>{S.design.stiff.tfa=v;},'stfTFA'),'',
+      'Interior panels with a/h \u2264 3 of I-shapes may use the larger of \u00A7G2.1 and \u00A7G2.2; panels within a of a support or member end keep \u00A7G2.1. Off by default: the engineer chooses.');
     const pk=AN&&AN.sect?AN.sect:null;
     if(pk&&!(pk._kind==='I'||pk._kind==='C'))
       body.appendChild(el('div','warnBox','Stiffener spacing affects k\u1D65 only for I-shapes and channels (\u00A7G2). It has no effect on the current section type.'));
@@ -6494,6 +6598,9 @@ function secJ10(P){
       fRow(body,'Bearing length  l\u1D47',numInput(()=>S.member.j10.lb,v=>{S.member.j10.lb=v;},0.5,'memJlb'),'in');
       fRow(body,'Location',selInput(['interior','end'],()=>S.member.j10.loc,v=>{S.member.j10.loc=v;},
         o=>o==='interior'?'Interior (away from member end)':'At or near member end',null,'memJloc'),'');
+      /* L7: optional distance from the member end */
+      fRow(body,'Distance from member end',numInput(()=>S.member.j10.dist,v=>{S.member.j10.dist=v;},0.5,'memJdist'),'in',
+        'Optional. Sets the J10.2 (\u2264 d) and J10.3 (< d/2) end criteria separately; blank uses Location');
     }else{
       fRow(body,'Bearing length at supports',numInput(()=>S.design.lbSup,v=>{S.design.lbSup=v;},0.5,'lbSup'),'in');
       fRow(body,'Bearing length at point loads',numInput(()=>S.design.lbPt,v=>{S.design.lbPt=v;},0.5,'lbPt'),'in');
@@ -9612,9 +9719,9 @@ function applyCompositeDeflection(A){
       const xa=A.nX[i],xb=A.nX[i+1];
       let dm=0,dx=xa;
       sp.xs.forEach((x,k)=>{if(x>=xa-1e-9&&x<=xb+1e-9&&Math.abs(sp.d[k])>Math.abs(dm)){dm=sp.d[k];dx=x;}});
-      const lim=c.den>0?s2.L/c.den:null;
-      sc.perSpan.push({span:i,dmax:dm,x:dx,lim,ratio:lim?Math.abs(dm)/lim:null,
-        pass:lim?Math.abs(dm)<=lim*1.0001:null});
+      const cant=cantSpanF(i),lim=c.den>0?(cant?2:1)*s2.L/c.den:null;   /* L6: 2L for a cantilever */
+      sc.perSpan.push(Object.assign({span:i,dmax:dm,x:dx,lim,ratio:lim?Math.abs(dm)/lim:null,
+        pass:lim?Math.abs(dm)<=lim*1.0001:null},cant?{cant:true}:{}));
     });
   });
   A.compDefl=used?{Ibare,Icomp}:null;
@@ -10056,8 +10163,9 @@ function memberDefl(p){
   const d=pt? c*df.w*Math.pow(L*12,3)/(EKSI*I)
             : c*df.w*1728*Math.pow(L,4)/(EKSI*I);
   const den=(df.den==null||df.den==='')?360:df.den;   /* blank defaults; 0 means report only */
-  const lim=den>0?L*12/den:null;
-  return{d,lim,den,c,I,pt,cfgLab:cfg.lab,L,w:df.w,
+  const cant=(df.cfg==='cant'||df.cfg==='cantP');   /* L6: IBC 2018 Table 1604.3 footnote i, l = 2 x cantilever length */
+  const lim=den>0?(cant?2:1)*L*12/den:null;
+  return{d,lim,den,c,I,pt,cant,cfgLab:cfg.lab,L,w:df.w,
     dcr:lim!=null?d/lim:null,pass:lim!=null?d<=lim*1.0001:null};
 }
 function openTorsionFor(A){
@@ -10414,7 +10522,9 @@ function buildMxTab(pg){
       if(g.mode==='calc'&&g.win){
         const q=g.win.q;
         body.appendChild(eqBlock({title:'Worst window ['+fmt(g.win.a,2)+', '+fmt(g.win.b,2)+'] ft \u2014 C\u1D47',ref:'Eq. F1-1',
-          lines:['C_b=\\tfrac{12.5M_{max}}{2.5M_{max}+3M_A+4M_B+3M_C}=\\mathbf{'+fmt(g.Cb,2)+'}']}));
+          /* L4 (2026-11-07): the moments substituted (section 6, show the work) */
+          lines:['C_b=\\tfrac{12.5M_{max}}{2.5M_{max}+3M_A+4M_B+3M_C}=\\tfrac{12.5('+fmt(q.Mmax,1)+')}{2.5('+fmt(q.Mmax,1)+')+3('+fmt(q.MA,1)+')+4('+fmt(q.MB,1)+')+3('+fmt(q.MC,1)+')}=\\mathbf{'+fmt(g.Cb,2)+'}'],
+          vars:[['M_{max}','kip\u00B7ft','largest |M| in the window'],['M_A,M_B,M_C','kip\u00B7ft','|M| at the window quarter points']]}));
       }
       dcrLine(body,'Governing DCR \u2014 '+(g.basis==='composite'?'composite section':(D.member?'bare steel':g.flange+' flange, region '+fmt(g.x1,1)+'\u2013'+fmt(g.x2,1)+' ft')),
         g.cap.gov?g.cap.gov.clause:'',' M',g.Mu,g.phiMn,g.dcr);
@@ -10465,6 +10575,7 @@ function buildServiceTab(pg){
           t.appendChild(tr);
         });
         body.appendChild(t);
+        sc.perSpan.filter(ps=>ps.cant&&ps.lim!=null).forEach(ps=>body.appendChild(el('div','note','Span '+(ps.span+1)+' is a cantilever: \u03B4\u2090\u2097\u2097\u2092\u02B7 = 2L/'+sc.den+' = 2\u00B7'+fmt(S.geom.spans[ps.span].L,2)+'\u00B712/'+sc.den+' = '+fmt(ps.lim*12,3)+' in (IBC 2018 Table 1604.3, footnote i: l = twice the cantilever length).')));
       },pg);
     });
   }

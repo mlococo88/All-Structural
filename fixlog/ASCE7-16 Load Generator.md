@@ -1229,3 +1229,138 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** main vs branch on the default project: every localStorage key, page text, Export JSON (2199 chars) and the printed report text (print media, 88,688 chars) identical; 0 console errors; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/smoke/project-library.mjs --tool asce7`, `github-sync-tools.mjs --tool asce7`, `home-projects.mjs --tool asce7`, `home-sync.mjs --tool asce7`, `phone-layout.mjs --tool asce7`, `check-syntax.mjs`: pass. Tests: `project-library.mjs` gets `openSavedList(p)` (the header button, else the chip then the card's Saved projects…, else the projectBar's dialog), used by its own dialog step and by `github-sync-tools.mjs`, `home-projects.mjs`, `home-sync.mjs`.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/asce7-h1-roof-lateral — A7H1: MWFRS lateral force, roof term normal to the ridge and the end wall parallel to the ridge (review H1; §4; PR #1061: https://github.com/mlococo88/All-Structural/pull/1061)
+
+Basis: ASCE/SEI 7-16 Fig. 27.3-1 and Sec. 27.1.5 (**verify (ASCE 7-16 PDF unreadable)**: the coefficients are the ones already in the tool; the 16 psf wall / 8 psf roof split of 27.1.5 is applied to the projected wall area, which here now includes the end wall above the eave). Code site tag `A7H1`.
+
+### A7H1-1. Roof term, wind normal to the ridge (θ ≥ 10°)   [calc change] [more conservative, or unchanged]
+- **Where:** `solve()`, the Sec. 27.1.5 block, `cases.forEach(c=>{ ... })`, anchor `c.Flw = Math.abs(w.qh.q*w.G*c.CpLW)*c.Awall;`.
+- **Problem:** the roof term was `|q_h G C_p,max| A_roof`, one largest-magnitude roof coefficient on the projected roof area. On a gable or hip, windward-slope pressure and leeward-slope suction both push downwind, so the net horizontal coefficient is C_p,windward − C_p,leeward. Where the windward slope has a positive C_p (steep roofs) the old term dropped it (unconservative).
+- **Before:**
+  ```js
+    c.Flw = Math.abs(w.qh.q*w.G*c.CpLW)*c.Awall;
+    const cpr = c.roofRows ? Math.max(...c.roofRows.map(r=>Math.abs(r.Cp))) : 0;
+    c.CpRoofUsed=cpr;
+    c.Froof = c.Aroof>0 ? Math.abs(w.qh.q*w.G*cpr)*c.Aroof : 0;
+  ```
+- **After (summary; see the file at anchor `A7H1: wind normal to the ridge`):** for `c.roofMode==="normal"` with A_roof > 0,
+  - Gable / Hip: `C_net = max(C_p,ww,pos − C_p,lw, C_p,ww,neg − C_p,lw, max|C_p|)`; `F_roof = q_h G C_net A_roof`.
+  - Monoslope (one plane): wind from the low eave `max(C_p,ww,pos − C_p,L,wall, C_p,ww,neg − C_p,L,wall, |C_p,L,wall|, max|C_p|)` (roof windward, wall strip above the high eave leeward with the wall C_p(L/B)); wind from the high side (−Y for ridge X, −X for ridge Y) `max(0.8 − C_p,lw, max|C_p|)` (strip windward at 0.8, roof leeward).
+  - All other cases (hip parallel to its ridge, θ < 10°) keep the old `max|C_p|` term.
+  - `c.roofNet = {v, t, ...}` records the governing candidate; `c.CpRoofUsed = C_net`.
+- **Decision (pending engineer review):** the old value `max|C_p|` is kept as a floor, so no direction's force goes down. Windward-slope suction (which pulls upwind) is not credited as relief. The monoslope windward strip uses 0.8 at q_h (not q_z integrated); see the review M8 note for hip ends (separate PR).
+
+### A7H1-2. End wall above the eave, wind parallel to the ridge of a gable or monoslope   [calc change] [more conservative]
+- **Where:** same block, anchor `A7H1 (2026-11-07): wind parallel to the ridge`, and the new helper `silhouetteProfile(axis)` (just before `function roofZplain`).
+- **Problem:** the gable-end triangle (monoslope end wall above the eave) was treated as roof at `max|C_p|` (0.9) and counted at 8 psf in 27.1.5. It is a wall: windward 0.8 with q_z, leeward C_p(L/B) at q_h, and 16 psf in 27.1.5.
+- **After:** `c.Atri` = silhouette above the eave; `c.FwwTri` = Σ over silhouette strips of ∫(h_e..z_top) 0.8 G q_z dz × strip width (cumulative trapezoid on 48 height steps); `c.Fww += c.FwwTri; c.Awall += c.Atri; c.Aroof = 0`. The leeward term then uses the larger A_wall, and `F_min = 16 A_wall + 8 A_roof` counts the triangle at 16 psf.
+- **Before:** `c.Awall = B h_e`, `c.Aroof = A_sil − A_wall`, triangle in `F_roof` at `max|C_p|`.
+
+### A7H1-3. Display, Excel, text
+- Walls tab, Minimum Design Wind Load: worked derivation also for the direction with the largest design force (the W in the combinations) when it differs from the one where the minimum comes closest (`o-minw-w2`); new steps "Projected wall area, including the end wall above the eave", end-wall integral, "Net roof coefficient, wind normal to the ridge" (candidates substituted), and notes. Table caption and the "Interpretation applied" note, User Manual 1.3.6 rewritten to match.
+- Excel, MWFRS wall section per direction: new rows `A_end` (when present), `C_roof` (value) and `F_roof = q_h·G·C_roof·A_roof` (live formula); free roof: `F_roof` as a value.
+- Hand-off (`buildingLoads`, HANDOFF.md §4.7): unchanged; it carries pressures, not F (checked: payload identical main vs branch in all 9 cases).
+
+### Check cases (main → branch)
+- **Gable 12:12**, Melrose defaults, 120 × 50 ft, ridge X, h_e = 36, h = 48.5 ft, q_h = 33.49 psf, G = 0.85.
+  - +Y (normal): C_p,ww = 0.306 / 0.000, C_p,lw = −0.600 → C_net = max(0.906, 0.600, 0.600) = 0.906 (was 0.600). F_roof = 33.49·0.85·0.906·3000 = 77,369 lbf (was 51,237). F = 81,890 + 61,485 + 77,369 = **220,743 lbf (was 194,612, +13.4 %)**.
+  - +X (parallel): A_end = 625 ft². F_ww,end = ∫0.68 q_z w(z) dz = 13,946 lbf (hand: centroid z = 36 + 25/3 = 44.33 ft, q = 32.86 psf, 0.68·32.86·625 = 13,966). F_lw = 33.49·0.85·0.28·2425 = 19,328. F = 34,121 + 13,946 + 19,328 = **67,395 lbf (was 64,479)**. F_min = 16·2425 = **38,800 (was 33,800)**.
+- **Hip 6:12**, same plan: +Y C_net = 0.105 + 0.600 = 0.705 (was 0.600); F 161,316 → 164,770 lbf. ±X unchanged (M8).
+- **Monoslope 4:12**: ±X end wall A_end = 416.7 ft²: F 58,673 → 60,635, F_min 32,133 → 35,467; +Y (from the low eave) unchanged 182,775 (floor governs, 0.726); −Y (from the high side) C_net = 0.8 + 0.593 = 1.393: F 182,775 → 220,036 lbf.
+- **Review variant B (Adams, gable 4:12, 100 × 60)**: ±X end wall 300 ft²: F 63,778 → 66,367, F_min 25,440 → 27,840; ±Y unchanged 120,614 (floor 0.569 governs; C_p,ww,pos − C_p,lw = 0.526).
+- **Default (flat), seismic variant C, Chatham, Site E, Adams flat:** `R` identical (the new fields `Atri`, `FwwTri`, `roofNet` are set only where they apply). The display gains a second worked derivation (direction with the largest design force).
+
+### How verified
+- Headless Chromium, `solve()` on main and branch for 9 cases (default, gable 12:12, hip 6:12, monoslope 4:12, variant B, variant C, Chatham Site B, Site E manual, Adams flat): leaf diff of `R` and of the hand-off payload. Moved: only `cases[].{Awall, Aroof, Fww, Flw, Froof, Ftot, Fmin, scale, Fdes, pEquivWall, CpRoofUsed}` and the combination lateral force columns (`items[].F`, `lat`, `latMax`, `gov*.F/lat`) on the sloped cases; hand-off identical.
+- Rendered text of every output tab and the Report for the 9 cases: 0 console errors, 0 KaTeX errors; differences only in the Minimum Design Wind Load panel and the Combinations lateral column.
+- Excel workbook built for all 9 cases (`buildWorkbook` + `writeBuffer`, no error).
+- `node tests/check-syntax.mjs` (95 files pass), `tests/smoke/project-library.mjs --tool asce7` (ALL PASS), `tests/smoke/phone-layout.mjs --tool asce7` (390 / 768 px pass), `tests/engine/run.mjs handoffs` (10 passed).
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/asce7-h2-same-sign — A7H2: roof C_p interpolation only between values of the same sign (review H2; §4; PR #1066: https://github.com/mlococo88/All-Structural/pull/1066)
+
+### A7H2-1. Same-sign interpolation of the windward roof C_p, wind normal to the ridge   [calc change] [more conservative]
+- **Where:** `solve()`, Sec. E.6 roof block, anchor `const across=(pull`, and the call `const wn=across(k=>at60(Tn.ww[k].neg,0.0)`; `renderRoof` two-step interpolation table, anchor `"Windward, positive Cₚ"}].concat(c.hlTrace.wp.per`.
+- **Problem:** the windward coefficient was interpolated on θ inside each h/L row and then linearly across h/L with no sign check. Fig. 27.3-1 (note) allows interpolation only between values of the same sign, with 0.0 assumed where no value of that sign is given. For 15° < θ < 20° with 0.25 < h/L < 0.5, and 20° < θ < 25° with 0.5 < h/L < 1.0, the "positive" windward value came out negative or too small (unconservative for downward wind and, since A7H1, for the lateral roof term).
+- **Governing provision:** ASCE/SEI 7-16 Fig. 27.3-1, roof pressure coefficients, note on interpolation (**verify (ASCE 7-16 PDF unreadable)**; the existing code comment at `at60` already cites the same note for the 45°–60° step).
+- **Before:**
+  ```js
+      const across=(pull)=>{
+        const per=grp.map(k=>tblPick(Tn.theta,pull(k),g.theta,S.tblMode).v);
+        const r=tblPick(keys,per,c.hL,S.tblMode);
+        return {v:r.v, per:per, i0:r.i0, i1:r.i1, f:r.f};
+      };
+      ...
+      const wn=across(k=>at60(Tn.ww[k].neg,0.0)), wp=across(k=>at60(Tn.ww[k].pos,0.6));
+  ```
+- **After:** a helper `sameSign(ks,vs,x,sign)` picks as before (`tblPick`, both the interpolate and the conservative mode). When the two bracketing values differ in sign, the one of the other sign (sign = +1 for the positive set, −1 for the negative set) is replaced by 0.0 and the pick is redone. Both steps (θ within a row, then across h/L) use it: `across(pull,sign)`, `wn=across(...,-1)`, `wp=across(...,+1)`. The trace gains `sub` (the per-row entries taken as 0.0; only when non-empty), and the Roof tab table shows "−0.056 → 0.000*" with a footnote.
+- **Check case (review variant B):** Adams, gable 4:12 (θ = 18.43°), 100 × 60 ft, ridge X, h_e = 24 ft, h = 29 ft, wind ±Y, h/L = 0.483, q_h = 38.40 psf, GC_pi ±0.18.
+  - θ step: h/L ≤ 0.25 row 0.0 → 0.2 gives 0.137; h/L = 0.5 row −0.18 → 0.0 gives −0.056.
+  - Before: 0.137 + (−0.056 − 0.137)(0.932) = **−0.043**; p(−GC_pi) = 38.40·0.85·(−0.043) + 38.40·0.18 = **5.49 psf**.
+  - After: signs differ → −0.056 taken as 0.0: 0.137·(1 − 0.932) = **+0.009**; p(−GC_pi) = **7.21 psf**; p(+GC_pi) −8.33 → −6.61 psf.
+  - Hand-off `roofDown` 5.49 → 7.21 psf. Max net downward LRFD-3W (drift peak, local) 251.45 → 252.31 psf. A7H1 roof term C_net 0.569 (floor) → 0.009 + 0.569 = 0.578: F_roof 18,560 → 18,859 lbf, F(±Y) 120,614 → 120,913 lbf.
+  - Negative windward set unchanged (−0.485).
+- **How verified:** headless Chromium, main vs branch, 9 cases (default, gable 12:12, hip 6:12, monoslope 4:12, variant B, variant C, Chatham, Site E, Adams flat): leaf diff of `R` and the hand-off: only variant B moved (the values above, and the combinations that use them). Rendered text of all tabs and the Report: 0 console errors, 0 KaTeX errors. Excel built for all cases. `check-syntax`, `project-library --tool asce7`, `phone-layout --tool asce7`, `engine handoffs`.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/asce7-m1m2-ma-seismic — A7M1 + A7M2: 780 CMR 1613.1 (no SDC A in Massachusetts) and the 780 CMR amendments to Table 12.2-1 (review M1, M2; §4; PR #1069: https://github.com/mlococo88/All-Structural/pull/1069)
+
+Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 and the "ASCE 7, Table 12.2-1" limitations amendment with its Notes 1 and 2 (checked in the 10th Ed. PDF, pp. 95–97). The Table 12.2-1 row IDs used by the tool's rows (C.7, H) follow ASCE 7-16 numbering (**verify (ASCE 7-16 PDF unreadable)**).
+
+### A7M1. Seismic Design Category A is assigned B in Massachusetts   [calc change: label, screen, hand-off] [more conservative]
+- **Where:** `solve()`, Sec. E seismic block, after the line anchored `if(site.S1>=0.75){ sq.SDC=`; seismic tab panel `o-se2` after `if(q.sdcOverride) note(b,esc(q.sdcOverride),"w");`; report step `id:"se.SDC"`; Excel `out("SDC","Governing seismic design category"`.
+- **Before:** `sq.SDC` = the more severe of Tables 11.6-1 / 11.6-2 (or E/F for S_1 ≥ 0.75), which can be "A".
+- **After:**
+  ```js
+    if(S.jur==="MA" && sq.SDC==="A"){ sq.sdcASCE="A"; sq.SDC="B"; sq.sdcMA="780 CMR 1613.1 (Massachusetts amendment): ..."; }
+  ```
+  The seismic tab shows the note (ASCE gives A, B is used; V unchanged); the report step adds "780 CMR 1613.1"; the Excel SDC cell becomes `IF(<old formula>="A","B",<old formula>)` under MA.
+- **Provision:** 780 CMR 1613.1 (10th Ed.): SDC A shall not be used in the Commonwealth; a structure that could satisfy SDC A is assigned SDC B.
+- **Check case:** Chatham, Site B (S_s = 0.140, S_1 = 0.046, F_a = 0.9, F_v = 0.8 as coded): S_DS = ⅔·0.9·0.140 = 0.084 < 0.167 → A; S_D1 = ⅔·0.8·0.046 = 0.0245 < 0.067 → A. Before: SDC **A** (dashboard, seismic tab, hand-off `seismic.SDC = "A"`). After: SDC **B**, hand-off "B". C_s = 0.0278, V = 33.39 k unchanged (no SDC-dependent term in the ELF here).
+
+### A7M2. 780 CMR amendments to Table 12.2-1 in the system screen   [check logic change] [more conservative]
+- **Where:** new `SFRS_MA` table and `sfrsLimits(S)` after `const SFRS=[...]` (anchor `/* A7M2 (2026-11-07): 780 CMR 10th Ed.`); `solve()` screen anchor `/* Table 12.2-1 screening: is the system permitted`; seismic tab panel `o-se4` screening table (anchor `const SLE=sfrsLimits(S)`).
+- **Before:**
+  ```js
+    const sf=SFRS.find(r=>r[0]===S.sfrs);
+    const lim=sf&&sf[4]?sf[4][sq.SDC]:undefined;
+  ```
+- **After:** `const SL=sfrsLimits(S); const lim=SL?SL.lim[sq.SDC]:undefined;` where under MA the ASCE limits are overlaid with
+  - C.7 Ordinary RC moment frame: B → **NP**;
+  - H Steel systems not specifically detailed: B → **100 ft**, C → **65 ft**, and Note 2.
+  The error messages name "Table 12.2-1 as amended by 780 CMR (Massachusetts, row …)". For H in SDC B or C under MA an advisory notice (`R.warn`) and a seismic-tab note state Note 2 (connections, including to foundations, for 2× the seismic forces with the stated caps; AISC 341 D1.4a columns; no K-bracing; V / inverted-V beam rules); the tool does not apply the factor 2. The screening table shows the ASCE row and the amended row (used).
+- **Not covered (rows not offered by the tool):** A.3, A.4, A.9, A.10, A.11, A.13, A.14, A.17, B.6, B.7, B.18–B.20, B.24, E.3, F; Note 1 (A.17, B.24); the Table 12.14-1 amendments (the tool does not use 12.14). Note p wording change has no effect here.
+- **Check cases:**
+  - Methuen (S_s 0.372, S_1 0.078), Site D, system H, h_n = 70 ft: F_a = 1.502, S_DS = 0.373 → SDC C (S_D1 = 0.125 → B). Before: "permitted, no height limit". After: **error** "limits … to 65 ft in SDC C; h_n = 70.00 ft" (calculation blocked).
+  - Melrose default with Ordinary RC moment frame, SDC B. Before: permitted. After: **error** NP (row C.7).
+  - Default project (system H, SDC B, h_n = 36 ft): permitted up to 100 ft; Note 2 advisory added; every computed number identical.
+  - The same Methuen numbers entered under "Other" jurisdiction: unchanged (NL).
+
+### How verified
+- Headless Chromium, main vs branch, 13 cases (the 9 earlier ones plus Methuen h_n 70, ORC frame, Other-jurisdiction h_n 70): leaf diff of `R` and the hand-off. Moved: `seis.SDC` (Chatham only, A → B; hand-off SDC), `seis.sysLimit`, new `seis.sdcASCE/sdcMA`, `R.warn` (Note 2), the two new errors. No load, pressure, C_s or V moved.
+- Rendered text of every tab and the Report: 0 console errors, 0 KaTeX errors. Excel built for all cases.
+- `check-syntax` (pass); `project-library --tool asce7`: against main its result comparison differs only by the Note 2 advisory (`R.warn`) and `seis.sysLimit` (NL → 100), as intended; with `--a HEAD` (same calculation both sides) ALL PASS, so the save / open / undo paths are unaffected; `phone-layout --tool asce7` pass; `engine handoffs` 10 passed.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/asce7-m3m4-elf-permitted — A7M3 + A7M4: ELF permission checks, Sec. 11.4.8 Exception 3 (Site E, S_1 ≥ 0.2) and Table 12.6-1 (review M3, M4; §4; PR #1074: https://github.com/mlococo88/All-Structural/pull/1074)
+
+### A7M3 / A7M4. ELF procedure permitted?   [check logic change] [more conservative]
+- **Where:** `solve()`, new block just before `/* manually entered hazard data */` (anchor `/* A7M3 + A7M4 (2026-11-07)`); seismic tab panel `o-se4` before `eq(b,"Base value"` (anchor `if(q.elf && (q.elf.siteE`); the "Not Included in the Seismic Module" note; User Manual 8.1; Excel seismic section (two `statusRow`s before the Sec. 11.6 note row); new input `S.irreg` (DEF, anchor `irreg:"none"`) on the Seismic input tab, "Weight and Period" panel.
+- **Before:** no check. The seismic tab said Sec. 12.6 "must also be checked"; Site E with S_1 ≥ 0.2 gave only the Sec. 11.4.8 "Review" flag and a base shear.
+- **After:** with T = max(T_used, C_u·T_a) and T_s = S_D1/S_DS:
+  - **Sec. 11.4.8 Exception 3** (Site Class E, S_1 ≥ 0.2, no site-specific analysis): ELF permitted only if T ≤ T_s; otherwise a blocking check "ELF not permitted …".
+  - **Table 12.6-1** (SDC D, E, F): ELF permitted if any of: Risk I/II and ≤ 2 levels; light-frame system; no irregularity and h_n ≤ 160 ft; no irregularity, h_n > 160 ft and T < 3.5T_s; only horizontal 2–5 / vertical 4, 5a, 5b irregularities and h_n ≤ 160 ft. Otherwise a blocking check. The seismic tab shows the T_s step, the condition table and the verdict; Excel shows the status rows.
+  - Both use the existing cross-tab check mechanism (`xc("err",…)`, shown as "Blocked" on the dashboard and in the checks), like the Table 12.2-1 screen. They do not stop the rest of the calculation (`R.xBlocked` is not consumed anywhere), so wind and snow stay available; the seismic tab states that the base shear shown is not admissible.
+  - `R.seis.elf` is set only when a check applies (SDC D–F or Site E with S_1 ≥ 0.2); otherwise `R` is unchanged.
+- **Decisions (pending engineer review):** T for both checks is the larger of the period used and C_u·T_a (conservative). Irregularities are a user input (`none` / `limited` / `other`, default `none`: saved projects without the field read `none`, i.e. the assumption the tool made before, now stated); the tool does not evaluate Tables 12.3-1/12.3-2. "Two stories" is taken as the number of levels with weight in the story schedule.
+- **Provisions:** ASCE/SEI 7-16 Sec. 11.4.8 Exception 3 and Sec. 11.4.6 (T_s); Table 12.6-1; Sec. 12.6 (**verify (ASCE 7-16 PDF unreadable)**; the three Sec. 11.4.8 exceptions as summarised in the IBC 2018→2021 changes PDF, slide "Site-Specific Hazard Analysis Requirements"). That slide groups Exception 2 under "Site Class D & E"; the tool applies Exception 2 to Site D only (unchanged) — open item for the engineer.
+- **Check cases (main → branch):**
+  - Manual S_s = 0.6, S_1 = 0.3, Site E, h_n = 200 ft, one level, Risk II (review M3 case): F_a = 1.54, F_v = 2.8: S_DS = ⅔·1.54·0.6 = 0.616, S_D1 = ⅔·2.8·0.3 = 0.560; T_s = 0.909 s; T_a = 0.02·200^0.75 = 1.064 s, C_u = 1.4, C_uT_a = 1.489 s. Before: V = 210.59 k, "Review" only. After: **blocking** "ELF not permitted: Site Class E …, T = 1.489 s > T_s = 0.909 s". (Table 12.6-1 is met: Risk II, one level.)
+  - Same, h_n = 30 ft: T = 0.359 s ≤ 0.909 s → permitted; nothing moves except the new display.
+  - Review variant C (S_s 1.2, S_1 0.5, Site D, Risk IV, SCBF, h_n 100 ft, 5 levels, SDC D): T_s = 0.600/0.816 = 0.735 s, T = max(0.632, 1.4·0.632 = 0.885) = 0.885 s; regular, h_n ≤ 160 ft → **permitted**; V = 1020 k unchanged.
+  - Variant C with irregularity "other": **blocking** "ELF not permitted in SDC D (Table 12.6-1)".
+  - Default, B, gable, hip, monoslope, Chatham, Methuen, ORC: `R` identical.
+- **How verified:** headless Chromium main vs branch, 16 cases, leaf diff of `R` + hand-off (moved only as above; the hand-off gains a note line where a check fails); rendered text of every tab and the Report (0 console / KaTeX errors); Excel built in all cases; `check-syntax`, `project-library --tool asce7`, `phone-layout --tool asce7`, `engine handoffs`.
+- **Saved data:** one new optional field `irreg` in the project / autosave JSON (`asce7bldg.*`); older saves open with `none`. No key or existing field changed.
+- **Correction to the A7M1/M2 entry above:** its check case says the Table 12.2-1 error "blocks the calculation". It shows as a blocking check ("Blocked" on the dashboard); like every `xc("err",…)` check it does not stop the other results. Nothing was changed for this.
