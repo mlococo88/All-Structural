@@ -2083,3 +2083,110 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
   - `node tests/check-syntax.mjs`: passes.
 - **Other copies:** none.
 - **Saved data:** no change.
+
+## 2026-11-07 — PR: claude/timber-bearing (PR #1027: https://github.com/mlococo88/All-Structural/pull/1027) (TBB1: bearing on the supporting member and under point loads)   [calc change: new checks] [MORE conservative only where the new inputs are used; old projects unchanged]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBB1`.
+
+### TBB1. Supporting-member F<sub>c⊥</sub> per support, and bearing under point loads (review finding M1)
+
+- **Engineer request (brief 2026-11-07):** check bearing under point loads and on the supporting member. Add a new input for the supporting member's species/grade F<sub>c⊥</sub>, defaulting to the beam's own value, so that old projects do not change.
+- **Where:**
+  - **`tbcRun`:**
+    - `const fcsIn = supIn.map(…)` after `const cbOn =`.
+    - `pls` gains `lb`.
+    - `const plBear = [];` and `const FcpTop =` come before `const legacyBear =`, which now also requires that no new check is present.
+    - In each combination, `const bearX = [];` builds the supporting-member and point-load entries.
+    - `const gx = …`, `r_cB` (the beam at its supports, exactly the old `r_c`) and `const r_c = gx && gx.r > r_cB ? gx.r : r_cB;` are new.
+    - New combination fields: `bearX, gcX, r_cB, gcKind`. `gov.cb = govBy('r_cB')`. New result fields: `fcsIn, plBear, FcpTop`.
+  - **Constant `SUP_FCP_PRESETS`:** No.2 F<sub>c⊥</sub> taken from the built-in Tables 4A / 4B (DF-L 625, HF 405, SPF 425, SP 565 psi).
+  - **`tbcSanitize`:** supports keep a numeric `fcs`, and point loads keep a numeric `lb`. Both are written only when set, so the format of files without them is unchanged.
+  - **Input wiring:** `setGeom` and "+ Add span" carry `fcs`. `refreshInputs` checks `fcs` and `plb`.
+  - **Inputs:**
+    - Support table: new column "Supporting member F<sub>c⊥</sub>". Its options are "Same as beam" (the default: no separate check), the presets, and "Other (psi)".
+    - Point-load table: new column "Bearing l<sub>b</sub>" (blank = not checked).
+  - **Displays:**
+    - New helpers `bearLab`, `bearVals`, `bearXKey`, `bearXName`, `bearXBest`.
+    - The Summary chip and row, and the Report's summary row, name the governing bearing check.
+    - The Design Values bearing card and Report step `dv.Fcp` now use `R.gov.cb`, the beam at its supports.
+    - Bearing tab: the beam card uses `R.gov.cb` and `r_cB`. A new section "Supporting members and point loads" (`buildBearX`) shows the governing item fully worked plus a table of every item.
+    - Report: new sub-section `tbrBearX()` under Bearing.
+  - **Validation:** new group 10 (6 benchmarks; 114 → 120, all match).
+- **Problem:** NDS 3.10 applies to every bearing: the beam on its support, the softer supporting member under the beam (a DF joist on an HF or SPF plate is governed by the plate), and concentrated loads delivered onto the beam. The tool checked only the beam at its supports.
+- **Governing provision:** NDS 2018 3.10.1, 3.10.2 (f<sub>c⊥</sub> = R/(b l<sub>b</sub>) ≤ F′<sub>c⊥</sub>), 3.10.4 (C<sub>b</sub>, Eq. 3.10-2) and Table 4.3.1. Supplement Table 4A footnote: C<sub>M</sub> for F<sub>c⊥</sub> = 0.67. **Verify against NDS 2018 (not in references).**
+- **Rules implemented and decisions (pending engineer review), all conservative:**
+  - **Supporting member:** F′<sub>c⊥,s</sub> = F<sub>c⊥,s</sub> × C<sub>M</sub> × C<sub>t</sub> × [K<sub>F</sub> φ<sub>c</sub>].
+    - The reaction and contact area are the beam's: R / (b × l<sub>b</sub>).
+    - C<sub>M</sub> = 0.67 in wet service, taking the support as sawn lumber. For a glulam support, enter the value with this in mind (glulam C<sub>M</sub> 0.53).
+    - C<sub>t</sub> is the beam's.
+    - C<sub>b</sub> = 1.0 (conservative: the bearing length along the supporting member's grain is the beam width, and the end distance is unknown).
+    - C<sub>i</sub> = 1.0, as for F<sub>c⊥</sub>.
+    - No C<sub>D</sub> or λ.
+  - **Point loads:** checked only where a bearing length is entered. F′<sub>c⊥</sub> = F<sub>c⊥</sub> (glulam: compression-face value, since the load is on the top face) × C<sub>M</sub> × C<sub>t</sub> × C<sub>i</sub> × C<sub>b</sub> × [K<sub>F</sub> φ<sub>c</sub>].
+    - C<sub>b</sub> = (l<sub>b</sub> + 0.375)/l<sub>b</sub> applies when l<sub>b</sub> < 6 in. and the load is at least 3 in. from both member ends; otherwise C<sub>b</sub> = 1.0.
+    - Loads at the same location are added per combination, with the shortest entered l<sub>b</sub>. Upward loads count as 0.
+    - The post or hanger that delivers the load is not checked.
+  - **Governing ratio:** the bearing ratio of a combination is the largest of the beam at its supports, each supporting member, and each point-load bearing.
+- **Before:**
+  ```js
+        const gc = bear.reduce((a, e) => (e.r > a.r ? e : a), bear[0]);
+        …
+        const r_b = …, r_c = legacyBear ? fcp / Fcp_p : gc.r;
+  ```
+- **After:**
+  ```js
+        const bearX = [];
+        supJ.forEach(j => { if (fcsIn[j] === null) return;
+            const Rb = Math.max(bm.R[j], 0), Fcp_pj = fcsIn[j] * (wet ? 0.67 : 1.0) * Ct.Fcp * KF.Fcp * PHI.Fcp, fcpj = Rb / (bw * lbs[j]);
+            bearX.push({ kind: 'sup', j, R: bm.R[j], Rb, lb: lbs[j], Cb: 1.0, Fcs: fcsIn[j], CMs: wet ? 0.67 : 1.0, Fcp_p: Fcp_pj, fcp: fcpj, r: fcpj / Fcp_pj }); });
+        plBear.forEach(g => {
+            const Pc = g.idx.reduce((sum, i) => sum + (c.f[pls[i].type] || 0) * pls[i].mag, 0), Rb = Math.max(Pc, 0);
+            const Fcp_pj = FcpTop * CM.Fcp * Ct.Fcp * Ci.Fcp * g.Cb * KF.Fcp * PHI.Fcp, fcpj = Rb / (bw * g.lb);
+            bearX.push({ kind: 'pl', j: null, loc: g.loc, idx: g.idx, R: Pc, Rb, lb: g.lb, Cb: g.Cb, Fcp_p: Fcp_pj, fcp: fcpj, r: fcpj / Fcp_pj }); });
+        const gx = bearX.length ? bearX.reduce((a, e) => (e.r > a.r ? e : a), bearX[0]) : null;
+        const gc = bear.reduce((a, e) => (e.r > a.r ? e : a), bear[0]);   // the beam at its supports (as before TBB1)
+        …
+        const r_b = …, r_cB = legacyBear ? fcp / Fcp_p : gc.r;
+        const r_c = gx && gx.r > r_cB ? gx.r : r_cB;
+  ```
+  The `plBear` grouping, as entered before `legacyBear`:
+  ```js
+    const plBear = [];
+    pls.forEach((p, i) => { if (!(p.lb > 0) || !isFinite(p.loc)) return; const g = plBear.find(q => Math.abs(q.loc - p.loc) < 1e-9);
+        if (g) { g.idx.push(i); g.lb = Math.min(g.lb, p.lb); } else plBear.push({ loc: p.loc, idx: [i], lb: p.lb }); });
+    plBear.forEach(g => { const endDist = Math.min(g.loc, L - g.loc) * 12; g.cbOK = endDist >= 3; g.Cb = (g.cbOK && g.lb < 6) ? (g.lb + 0.375) / g.lb : 1.0; });
+    const FcpTop = isGL && ref.Fcpc !== undefined ? ref.Fcpc : ref.Fcp;
+  ```
+- **Saved data (§5):** no key was renamed. `supports[j].fcs` and `points[i].lb` are optional. Files without them (every existing file) give identical results and identical displays, and opening then saving them leaves the JSON identical.
+- **Check case 1 (review M1):** default joist (DF-L No.2 2x10 @ 16 in., 16 ft, D 15 / L 40 psf) on Hem-Fir plates at both supports.
+  - R = 612.9 lb; f<sub>c⊥</sub> = 612.9/(1.5 × 3.5) = 116.7 psi.
+  - Beam: 116.7/625 = 0.187 (unchanged). Plate: 116.7/405 = **0.288**.
+  - Bearing ratio: before **0.187**, after **0.288**.
+  - Wet service: 116.7/(405 × 0.67) = 0.430. LRFD: 0.2835.
+- **Check case 2:** default joist with 1500 lb D and 3000 lb L at midspan, l<sub>b</sub> 3.5 in. and 5.5 in. (shortest used: 3.5 in.).
+  - D + L: P = 4500 lb; f<sub>c⊥</sub> = 4500/(1.5 × 3.5) = 857.1 psi.
+  - C<sub>b</sub> = 3.875/3.5 = 1.107; F′<sub>c⊥</sub> = 625 × 1.107 = 692.0 psi.
+  - Ratio **1.239** (before: bearing 0.872 at the supports only).
+- **How verified:**
+  - **Review cases, origin/main vs branch (headless Chromium, `file://`):** 48 cases run.
+    - Only the cases that use the new inputs moved, and only the bearing ratio:
+      - HF plates: 0.1868 → 0.2882
+      - HF plates, wet: 0.2788 → 0.4302
+      - HF plates, LRFD: 0.1837 → 0.2835
+      - 3000 lb on 1.5 in. at midspan: 0.6439 → 1.7067
+      - The same load 1.2 in. from the end: 1.0954 → 2.1333 (C<sub>b</sub> = 1.0)
+      - Overhang on HF plates: 0.1977 → 0.3378
+    - Invalid inputs (l<sub>b</sub> = 0, F<sub>c⊥,s</sub> < 0) give input errors.
+  - **Old projects:** full text of every output tab and of the input panel, origin/main vs branch, for 8 cases without the new inputs (default, notch, glulam, glulam LRFD with notch, point loads, LRFD, overhang, two-span). Identical except the Validation tab, which only gains the new benchmarks.
+  - **Validation:** 120/120 match.
+  - **Other checks:**
+    - Every output tab: no NaN, undefined or KaTeX errors.
+    - Save → open: identical.
+    - No console errors; no horizontal scroll at 400 px.
+    - Input-panel screenshots checked.
+    - `node tests/check-syntax.mjs`: passes.
+- **Other copies:** none.
+- **Open items:**
+  - Glulam supporting members (C<sub>M</sub> 0.53) are not a preset.
+  - The member delivering a point load (post end grain, hanger) is not checked.
+  - Supporting-member C<sub>b</sub> is fixed at 1.0.

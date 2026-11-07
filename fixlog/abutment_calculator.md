@@ -15927,3 +15927,101 @@ index 4cb6603..c8b38ca 100644
 +          `R_R = \\varphi_\\tau R_n${(sl.pUsed??R.passive.on)?" + \\varphi_{ep}P_p":""} = (${fmtT(sl.phiTau??fn.phiTau)})(${fmtT(sl.Rn)})${(sl.pUsed??R.passive.on)?` + (${fmtT(fn.phiEP)})(${fmtT(R.passive.Pp)})`:""} = ${fmtT(sl.RR)}\\ \\text{kip}`],
 +          sl.und?`Footing on clay: S<sub>u</sub> = ${fmt(sl.und.Su,3)} ksf (${sl.und.src==="entered"?"entered, panel I-4":"the cohesion c of the φ<sub>f</sub> = 0 bearing stratum, panel I-4"}). The undrained resistance is the lesser of the cohesion and half the normal stress on the interface (Fig. 10.6.3.4-1), taken on the effective width B′ (uniform pressure); both the drained and the undrained resistance are checked and the lesser governs. 10.6.3.4 assumes at least 6 in of compacted granular material under the footing for the 0.5σ<sub>v</sub> limit; consider the possible shrinkage gap on clay.`:"")
 ```
+
+## 2026-11-07 — PR: claude/abut-m6-wa (PR #1029: https://github.com/mlococo88/All-Structural/pull/1029) (ABM6: unbalanced water WA — a water level in front of the wall; the net hydrostatic thrust acts on the abutment and the stem at γ_WA = 1.00)   [calc change only when the new input is entered] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M6.
+
+### ABM6. Unbalanced water
+- **Where:** `defaultState` geom (anchor `hwFr:null`); panel I-1 input `geom.hwFr` (blank = h_w; the input handler stores null for an empty `data-blank` input); `computeAll` WA group (anchor `ABM6 (2026-11-07): unbalanced water WA`); `comboEffects` (anchor `gr.cls==="WA"`) and the combination label; stem demand (anchors `const stWA=`, `if(gWA){ Mu+=gWA*stWA.M;`, `MsStem=…+(stWA? stWA.M : 0)`); Tab 1 equations after the layered earth pressure (anchor `Unbalanced water WA — net hydrostatic thrust`); water warning text; Input ID (null left out).
+- **Before:** water at h_w on both sides (balanced): buoyant unit weights, no net hydrostatic thrust, and a warning to confirm drainage.
+- **After:** with h_w,f < h_w (water lower in front), a load group WA is added:
+  - abutment: WA_h = ½γ_w(h_w² − h_w,f²)L_ab, with M_WA = γ_w(h_w³ − h_w,f³)L_ab/6 about the base, toward the toe;
+  - stem, per ft above the stem base: m = γ_w(h_b³ − h_f³)/6 and v = γ_w(h_b² − h_f²)/2, where h_b = h_w − t_f and h_f = h_w,f − t_f (both ≥ 0, ≤ H_s).
+
+  Factors: γ_WA = 1.00 (× η at the strength limit states) in every limit state. It is not applied in the construction stage (dry, as before) and is included in Service I.
+  
+  Blank / equal levels: unchanged (no new result fields). A front level above h_w is taken as balanced, with a warning.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 3.11.3 (hydrostatic pressure added where the backfill cannot drain; levels that differ on the two sides), Table 3.4.1-1 (WA at 1.00 in all the limit states used here).
+- **Check case (built-in project, h_w = 10 ft, h_w,f = 3 ft, L_ab = 44 ft, γ_w = 0.0624 kcf, t_f = 3 ft):**
+  - WA_h = ½(0.0624)(100 − 9)(44) = **124.92 kip**; M_WA = (0.0624)(1000 − 27)(44)/6 = 445.24 kip-ft, z̄ = 3.564 ft.
+  - Stem: h_b = 7, h_f = 0. m = 0.0624·343/6 = **3.567 kip-ft/ft** and v = 1.529 kip/ft. Strength I stem M_u goes from 110.42 to **113.98 kip-ft/ft**.
+  - Dashboard: eccentricity 0.781 → 0.852, bearing 0.828 → 0.862, stem shear 0.249 → 0.286; sliding is unchanged (the dry construction stage governs).
+  - Pile variant (h_w,f = 0): pile combined P-M 0.994 → **1.136 FAIL**; pile compression 0.815 → 0.844.
+- **Decisions (pending engineer review):**
+  - The uplift is kept as the buoyant weights at the level behind (uniform under the base). The relief from a lower front level, a linear uplift toward the toe, is neglected. This is conservative for sliding and overturning; for bearing it slightly lowers the vertical load.
+  - Full hydrostatic head with no seepage loss.
+  - The water thrust acts over L_ab, as the earth pressure.
+  - The heel and toe local design keep the buoyant model.
+  - Seepage and piping are left to the geotechnical engineer, as noted in Tab 1.
+- **Saved data:** new optional field `geom.hwFr` (null). Saved projects are balanced, as before.
+- **How verified:**
+  - Headless origin/main vs branch, 30 scenarios: only the two unbalanced-water scenarios move. The balanced h_w = 10 ft scenario is identical.
+  - UI script: typing a value adds WA; clearing it stores null and removes WA.
+  - All tabs and the Report render with 0 console errors; the self-test passes; `check-syntax` passes; `project-library --tool abutment` ALL PASS.
+- **Other copies:** Retaining Wall Designer.html and Spread Footing.html have their own water handling (not changed).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index c8b38ca..86d5f78 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -680 +680,2 @@ function defaultState(){
+-      hw:0.0                        // water table height above BOTTOM of footing (ft); 0 = none
++      hw:0.0,                       // water table height above BOTTOM of footing (ft); 0 = none
++      hwFr:null                     // ABM6: water level in front of the wall, above the bottom of footing (ft); null = same as h_w (balanced, no WA) [3.11.3]
+@@ -2035,0 +2037,2 @@ function buildInputs(){
++    <div class="in-row"><label title="Water level in front of the wall (toe side), above the bottom of footing. Blank = the same as h_w (balanced groundwater, no net water pressure). Lower than h_w: the net hydrostatic thrust WA acts on the wall and stem [3.11.3] (Tab 1 §1.3a).">Water level in front h<sub>w,f</sub> (blank = h<sub>w</sub>)</label>
++      <input type="number" step="any" data-path="geom.hwFr" data-blank="1" value="${S.geom.hwFr==null||S.geom.hwFr===""?"":S.geom.hwFr}"><span class="unit">ft</span></div>
+@@ -3219 +3222 @@ function computeAll(){
+-  else if(g.hw>g.tf) warnFor("conv","Water table is above the top of footing. Buoyant unit weights are used below the water table and a balanced groundwater condition (equal water both sides, no net hydrostatic thrust) is assumed — confirm drainage details support this.");
++  else if(g.hw>g.tf) warnFor("conv","Water table is above the top of footing. Buoyant unit weights are used below the water table and a balanced groundwater condition (equal water both sides, no net hydrostatic thrust) is assumed"+((g.hwFr!==null&&g.hwFr!==undefined&&g.hwFr!=="")?" unless the water level in front (panel I-1) is lower: then the net thrust WA is added (Tab 1 §1.3)":"")+" — confirm drainage details support this.");   // ABM6
+@@ -3223 +3226 @@ function computeAll(){
+-  const hwF = Math.max(0,Math.min(g.hw,g.tf));            // submerged footing depth
++  const hwF = Math.max(0,Math.min(g.hw,g.tf));            // submerged footing depth (ABM6: the uplift stays at the level behind, h_w)
+@@ -3459,0 +3463,9 @@ function computeAll(){
++  /* ABM6 (2026-11-07): unbalanced water WA [3.11.3, Table 3.4.1-1 (γ_WA = 1.00)] — water h_w behind (on the virtual back plane, as the buoyant
++     earth pressure), h_w,f in front (toe side). Net hydrostatic thrust ½γ_w(h_w² − h_w,f²)·L_ab at its resultant, toward the toe. The uplift stays
++     as the buoyant weights at h_w (uniform under the base; the relief of a lower front level is neglected — decision). Not in the construction stage. */
++  { const hB=hwE, hFr0=(g.hwFr===null||g.hwFr===undefined||g.hwFr==="")? hB : Math.max(0,+g.hwFr||0), hFr=Math.min(hFr0,hB);
++    if(hB-hFr>1e-9) R.WA={hB, hFr, hFrIn:hFr0, on:true};   // (absent when balanced: the result object of a balanced project is unchanged)
++    if(hFr0>hB+1e-9) warnFor("conv","Water level in front (panel I-1) is above the water level behind the wall: a higher front level would push toward the backfill; it is taken as balanced (no WA).");
++    if(R.WA&&R.WA.on){ const Hw=0.5*GAMMA_W*(hB*hB-hFr*hFr)*Lab, Mw=GAMMA_W*(hB*hB*hB-hFr*hFr*hFr)/6*Lab;
++      Object.assign(R.WA,{H:Hw, M:Mw, z:Hw>0? Mw/Hw : 0});
++      groups.WA={cls:"WA", stage:"full", V:0,Mv:0, Hx:Hw, Mh:Mw, Hy:0,Mt:0, desc:"Unbalanced water WA — net hydrostatic thrust"}; } }
+@@ -3557,0 +3570 @@ function computeAll(){
++      else if(gr.cls==="WA") gamma = L.perm? eta : 1.0;   // ABM6: γ_WA = 1.00 (× η at the strength limit states) [T.3.4.1-1]
+@@ -3573,0 +3587 @@ function computeAll(){
++        +(groups.WA&&!L.noSuper?` + ${(L.perm?eta:1).toFixed(2)}·WA`:"")   // ABM6
+@@ -4331,0 +4346,4 @@ function computeAll(){
++  // ABM6: net hydrostatic pressure on the stem per ft (water h_w − t_f behind, h_w,f − t_f in front, above the stem base)
++  const stWA=(R.WA&&R.WA.on)? (()=>{ const b=Math.max(0,Math.min(R.WA.hB-g.tf,Hs)), f=Math.max(0,Math.min(R.WA.hFr-g.tf,Hs));
++    return b>f+1e-9? {b, f, M:GAMMA_W*(b*b*b-f*f*f)/6, V:GAMMA_W*(b*b-f*f)/2} : null; })() : null;
++  if(stWA) R.stemWA=stWA;
+@@ -4380,0 +4399,2 @@ function computeAll(){
++    const gWA=(stWA&&!L.noSuper)? (L.perm? eta : 1.0) : 0;   // ABM6: net water on the stem (not in the construction stage)
++    if(gWA){ Mu+=gWA*stWA.M; Vu+=gWA*stWA.V; }
+@@ -4383 +4403 @@ function computeAll(){
+-    const rec={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,gDCe,gDWe,llE,eccMin,gEH:gEH_ls,MCS:MCS_ls,...(se.Map!==undefined?{Map:se.Map,apL:se.apL}:{}),   // APS
++    const rec={Mu,Vu,HgirdPerFt,MeccPerFt,Pv,Meq,ls:lsName,...(gWA?{gWA}:{}),gDCe,gDWe,llE,eccMin,gEH:gEH_ls,MCS:MCS_ls,...(se.Map!==undefined?{Map:se.Map,apL:se.apL}:{}),   // APS
+@@ -4385,0 +4406 @@ function computeAll(){
++    if(gWA) rec.lbl+=` + ${gWA.toFixed(2)}·WA`;   // ABM6
+@@ -4396 +4417 @@ function computeAll(){
+-  const MsStem=Mst_EH+Mst_LS+Mst_ES+HgirdSvc*g.hstem+MeccSvc;   // Service I: EH + LS + ES + girder horizontal + eccentric vertical (as the Service I V&M diagram)
++  const MsStem=Mst_EH+Mst_LS+Mst_ES+HgirdSvc*g.hstem+MeccSvc+(stWA? stWA.M : 0);   // ABM6: + WA   // Service I: EH + LS + ES + girder horizontal + eccentric vertical (as the Service I V&M diagram)
+@@ -5054 +5075,2 @@ function computeAll(){
+-    if(fpS.soil&&fpS.soil.Kmode==="active") delete fpS.soil.Kmode;              // OWNB: new inputs at their default leave it unchanged too
++    if(fpS.soil&&fpS.soil.Kmode==="active") delete fpS.soil.Kmode;
++    if(fpS.geom&&(fpS.geom.hwFr===null||fpS.geom.hwFr===undefined||fpS.geom.hwFr==="")) delete fpS.geom.hwFr;   // ABM6: balanced water leaves the Input ID unchanged              // OWNB: new inputs at their default leave it unchanged too
+@@ -6187,0 +6210,5 @@ function renderTabLoads(R){
++    ${R.WA&&R.WA.on? eqB("Unbalanced water WA — net hydrostatic thrust (water h<sub>w</sub> behind, h<sub>w,f</sub> in front)","AASHTO 3.11.3; Table 3.4.1-1 (γ<sub>WA</sub> = 1.00)",[
++      `WA_h = \\tfrac{1}{2}\\gamma_w\\left(h_w^2 - h_{w,f}^2\\right)L_{ab} = \\tfrac{1}{2}(${fmtT(GAMMA_W,4)})\\left(${fmtT(R.WA.hB)}^2 - ${fmtT(R.WA.hFr)}^2\\right)(${fmtT(g.Lab)}) = ${fmtT(R.WA.H)}\\ \\text{kip}`,
++      `M_{WA} = \\tfrac{1}{6}\\gamma_w\\left(h_w^3 - h_{w,f}^3\\right)L_{ab} = ${fmtT(R.WA.M)}\\ \\text{kip-ft about the base}\\,, \\quad \\bar z = ${fmtT(R.WA.z)}\\ \\text{ft}`]
++      .concat(R.stemWA?[`\\text{Stem (per ft, above the stem base): } m_{WA} = \\tfrac{1}{6}\\gamma_w(h_b^3 - h_f^3) = \\tfrac{1}{6}(${fmtT(GAMMA_W,4)})(${fmtT(R.stemWA.b)}^3 - ${fmtT(R.stemWA.f)}^3) = ${fmtT(R.stemWA.M,3)}\\ \\text{kip-ft/ft}\\,, \\quad v_{WA} = \\tfrac{1}{2}\\gamma_w(h_b^2 - h_f^2) = ${fmtT(R.stemWA.V,3)}\\ \\text{kip/ft}`]:[]),
++      "Water behind on the virtual back plane (the earth pressure above already uses the buoyant unit weight below h<sub>w</sub>); water in front on the toe and stem front. WA is a load group at γ = 1.00 in every limit state except the construction stage (dry). The uplift is kept at the level behind (buoyant weights at h<sub>w</sub>, uniform under the base); the relief from the lower front level is neglected. Seepage and piping are not checked (3.11.3) — by the geotechnical engineer.") : ""}
+@@ -10089 +10116 @@ document.addEventListener("input",ev=>{
+-  else if(el.type==="number") v=el.value===""?0:Number(el.value);
++  else if(el.type==="number") v=el.value===""?(el.dataset.blank?null:0):Number(el.value);   // ABM6: data-blank inputs store null when empty
+```
