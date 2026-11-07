@@ -2820,7 +2820,7 @@ From the code-compliance review of 2026-11-07 (finding M3). Beam mode; member an
 - 0 console errors.
 - **Saved data:** new optional field `design.wsb` (absent = `env`). No key changed. Old projects with point loads now show the J10.4 row (new check).
 
-## 2026-11-07 — PR: claude/steelbeam-low-items — Review LOW items L1–L7: Validation on v16 examples, minor-axis case 13, A500 note, C_b substitution, interpolated region boundaries, cantilever deflection 2ℓ, member-mode J10 distance (calculation changes: L2, L5, L6, L7)
+## 2026-11-07 — PR: claude/steelbeam-low-items (PR #1065: https://github.com/mlococo88/All-Structural/pull/1065) — Review LOW items L1–L7: Validation on v16 examples, minor-axis case 13, A500 note, C_b substitution, interpolated region boundaries, cantilever deflection 2ℓ, member-mode J10 distance (calculation changes: L2, L5, L6, L7)
 
 From the code-compliance review of 2026-11-07 (LOW findings). One commit per item. L8 (the corrupt ASCE 7-16 reference PDF) is outside the repository: no change.
 
