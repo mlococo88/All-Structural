@@ -3565,7 +3565,7 @@ Calculation audit, item 9 (1). Engineer decision (2026-11-07). Code sites are ta
 ### Saved data
 - `aashto_gamma_eq` is additive (saved only when not 0; absent = 0).
 
-## 2026-11-07 — PR: claude/rw-aci-ibc-seismic — ACI/IBC mode with earthquake: static FS 1.5 with E = 0, and 0.7 × ΔP_E with FS 1.1 (IBC 2018 §1807.2.3 and Exception); IBC cited as 2018 (RWIB; calculation change)
+## 2026-11-07 — PR: claude/rw-aci-ibc-seismic — ACI/IBC mode with earthquake: static FS 1.5 with E = 0, and 0.7 × ΔP_E with FS 1.1 (IBC 2018 §1807.2.3 and Exception); IBC cited as 2018 (RWIB; calculation change) (PR #953: https://github.com/mlococo88/All-Structural/pull/953)
 
 Calculation audit, item 9 (2). Engineer decision (2026-11-07). Code sites are tagged `RWIB`. AASHTO checks are unchanged; `FOS_OT` / `FOS_SL` are ACI-mode checks.
 
