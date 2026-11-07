@@ -1249,6 +1249,11 @@ body.rwDashColl #rwDash { display: none; }
         <option value="none">No eccentricity limit (IBC / ACI) — information only</option>
       </select></div>
     <div class="hint aci-only" id="hint_aci_ecc">Neither code sets a maximum eccentricity: ACI 318-19 §13.2.6.1 proportions the footing for bearing and for stability against overturning and sliding under the general building code, and IBC 2018 §1807.2.1 asks for stability against overturning, sliding, excessive foundation pressure and water uplift. The limit is the engineer's choice (the middle third keeps the whole base in contact). A project saved before this option opens with "No eccentricity limit", as it was calculated.</div>
+    <div class="ck-row aci-only">   <!-- RW2L6 (2026-11-07): ACI 318-19 §13.2.6.2 size-effect option, default off (conservative); saved only when on -->
+      <input type="checkbox" id="aci_ftg_nolams" onchange="onInputChange()">
+      <label for="aci_ftg_nolams">Heel / toe one-way shear: neglect the size-effect factor λ<sub>s</sub> (ACI §13.2.6.2)</label>
+    </div>
+    <div class="hint aci-only">ACI 318-19 §13.2.6.2 permits neglecting λ<sub>s</sub> for one-way shear of shallow foundations. Off: λ<sub>s</sub> = √(2/(1 + d/10)) ≤ 1 is applied (conservative). Spread footings only; pile caps keep λ<sub>s</sub>.</div>
     <div class="ig"><label for="beta">Backfill Slope β</label>
       <div class="iw"><input type="number" id="beta" value="0" min="0" max="30" step="1"><span class="iw-unit">°</span></div></div>
     <div class="ig"><label for="q_sur">Surcharge q<sub>s</sub></label>
@@ -1861,9 +1866,9 @@ const RW_CARDS = {
 // r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
 const RW_CHECK_CARD = { pilePunch:'ftgPunch', pileCapD:'ftgPunch', pileComp:'stabPile', pileUplift:'stabPile', pileCapT:'stabPile', pileLat:'stabPile', pileSpacing:'stabPile', pileEdge:'stabPile', pileEmbed:'stabPile', ot:'stabOT', otE:'stabOT', sliding:'stabSlide', slidingE:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
   stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid', stemLap:'stemDev', heelDev:'heelShear', toeDev:'toeShear', stemS3Lap:'stemS13', stemMAlong:'stemS13',
-  heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', colAxial:'stabCol', heelEE:'ftgEE', toeEE:'ftgEE',
+  heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', ftgDepth:'toeFlex', colAxial:'stabCol', heelEE:'ftgEE', toeEE:'ftgEE',
   ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFF:'stemTS', tsFtg:'ftgTS', keyFlex:'ftgKey', keyShear:'ftgKey', keyDev:'ftgKey', eeSliding:'stabEE1', eeEcc:'stabEE1', eeBearing:'stabEE1', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
-  crackStem:'stabServ', minRfStem:'stabServ', crackHeel:'stabServ', minRfHeel:'stabServ', crackToe:'stabServ', minRfToe:'stabServ' };
+  crackStem:'stabServ', crackStemT:'stabServ', ishAci:'stemShear', minRfStem:'stabServ', crackHeel:'stabServ', minRfHeel:'stabServ', crackToe:'stabServ', minRfToe:'stabServ' };
 function rwCardTitle(key, isAASHTO) { const c = RW_CARDS[key]; return c ? c[isAASHTO ? 2 : 1] : null; }
 function rwLink(r, key, txt) {
   const t = rwCardTitle(key, r.isAASHTO); if (!t) return '';
@@ -2183,8 +2188,9 @@ function rwPileAnalysis(ctx) {
     add('str_min', 'Strength I (minimum vertical)', a.V_str_min, a.x_R_A, a.H_drive_str, capS, 'min');
     const HpE = P.passive ? 1.0 * ctx.Pp_toe : 0;
     if (a.ee1) [['c1', 'P_AE + 0.5P_IR'], ['c2', 'max(0.5P_AE, P_A) + P_IR']].forEach(([q, t]) => { const c = a.ee1[q];
-      add('ee1_' + q + '_max', 'Extreme Event I, ' + t + ' (maximum vertical)', a.ee1.V_max, c.xRb, c.H, capE, 'max', HpE);
-      add('ee1_' + q + '_min', 'Extreme Event I, ' + t + ' (minimum vertical)', a.ee1.V_min, c.xR, c.H, capE, 'min', HpE); });
+      const same = Math.abs(a.ee1.V_max - a.ee1.V_min) < 1e-6 && Math.abs(c.xRb - c.xR) < 1e-9;   // RW2L7: γ_EQ = 0 and no column: one row
+      add('ee1_' + q + '_max', 'Extreme Event I, ' + t + (same ? ' (maximum = minimum vertical)' : ' (maximum vertical)'), a.ee1.V_max, c.xRb, c.H, capE, 'max', HpE);
+      if (!same) add('ee1_' + q + '_min', 'Extreme Event I, ' + t + ' (minimum vertical)', a.ee1.V_min, c.xR, c.H, capE, 'min', HpE); });
     if (a.ct && a.ct.ee2) { const E = a.ct.ee2;
       add('ee2_max', 'Extreme Event II, collision (maximum vertical)', E.V_ct_max, E.x_R_brg_ct, E.H_drive_ct, capE, 'max', HpE);
       add('ee2_min', 'Extreme Event II, collision (minimum vertical)', E.V_ct_min, E.x_R_ct, E.H_drive_ct, capE, 'min', HpE); }
@@ -3162,11 +3168,11 @@ function calcAll(inp) {
   //     whose point of zero shear is within 3dv of the wall face; otherwise §5.7.3.4.2:
   //     β = 4.8/(1+750εs) · 51/(39+sxe),  εs = (|Mu|/dv + |Vu|)/(Es·As),  |Mu| ≥ |Vu|·dv,
   //     sxe = sx·1.38/(ag+0.63), 12 ≤ sxe ≤ 80 in, sx = dv (no crack-control layers)
-  function shearVc(d, h, As, Mu_lbft, Vu_lb, Lcant_ft) {
+  function shearVc(d, h, As, Mu_lbft, Vu_lb, Lcant_ft, ftg = false) {   // RW2L5: ftg = a footing (heel / toe) for the 3d_v rule
     const sqfc = Math.min(100, Math.sqrt(inp.fc));
     if (!isAASHTO) {
       const rho = As / (bw * d);
-      const lam_s = Math.min(1, Math.sqrt(2 / (1 + d / 10)));
+      const lam_s = (ftg && inp.aci_ftg_nolams && !(inp.fnd && inp.fnd.type === 'pile')) ? 1.0 : Math.min(1, Math.sqrt(2 / (1 + d / 10)));   // RW2L6: ACI 318-19 §13.2.6.2 option (one-way shallow foundations; default off)
       const Vc_c = 8 * lam_s * Math.cbrt(rho) * sqfc * bw * d;
       const Vc = Math.min(Vc_c, 5 * sqfc * bw * d);
       return { Vc, dv: d, rho, lam_s, method: 'ACI 22.5.5.1(c)',
@@ -3174,7 +3180,7 @@ function calcAll(inp) {
     }
     const dv = Math.max(0.9 * d, 0.72 * h);
     const mode = A.shear_method || 'auto';
-    const simpleAllowed = h < 16 || (Lcant_ft * 12 < 3 * dv);
+    const simpleAllowed = h < 16 || (ftg && Lcant_ft * 12 < 3 * dv);   // RW2L5 (2026-11-07): the 3d_v rule of Art. 5.7.3.4.1 is for footings only (was applied to the stem and key too)
     const useSimple = mode === 'simplified' || (mode === 'auto' && simpleAllowed);
     let beta = 2.0, eps_s = null, sxe = null;
     if (!useSimple) {
@@ -3575,7 +3581,7 @@ function calcAll(inp) {
   const phiMn_heel = sel_heel ? phiF_heel * sel_heel.As_prov * inp.fy * (d_heel - a_heel / 2) : 0; // lb-in/ft
 
   // Heel: critical section at the stem face (support in tension); point of zero shear at heel end
-  const shearHeel  = shearVc(d_heel, inp.tf, sel_heel.As_prov, Mu_heel_net, Vu_heel, inp.Lh);
+  const shearHeel  = shearVc(d_heel, inp.tf, sel_heel.As_prov, Mu_heel_net, Vu_heel, inp.Lh, true);
   const dv_heel    = shearHeel.dv;
   const Vc_heel    = shearHeel.Vc;
   const phiVc_heel = phiV_ftg * Vc_heel;
@@ -3647,7 +3653,7 @@ function calcAll(inp) {
   const a_toe     = sel_toe ? sel_toe.As_prov * inp.fy / (0.85 * inp.fc * bw) : 0;
   const phiMn_toe = sel_toe ? 0.9 * sel_toe.As_prov * inp.fy * (d_toe - a_toe / 2) : 0; // lb-in/ft
 
-  const shearToe  = shearVc(d_toe, inp.tf, sel_toe.As_prov, Mu_toe_net, Vu_toe, inp.Lt);
+  const shearToe  = shearVc(d_toe, inp.tf, sel_toe.As_prov, Mu_toe_net, Vu_toe, inp.Lt, true);
   const dv_toe    = shearToe.dv;
   const Vc_toe    = shearToe.Vc;
   const phiVc_toe = phiV_ftg * Vc_toe;
@@ -3802,8 +3808,17 @@ function calcAll(inp) {
     const smax = Math.min(15 * (40000/fs) - 2.5*cc, 12 * (40000/fs));
     return { fs, cc, smax, spacing, ok: spacing <= smax + 1e-9 };
   };
+  // RW2L8 (2026-11-07): ACI 318-19 §22.9 shear friction at the stem–footing construction joint. V_n = μA_vf f_y (Eq. 22.9.4.2) with
+  // A_vf = the S1D dowels crossing the joint (the flexural tension steel may serve, R22.9.4.6), μ = 0.6λ (concrete against hardened
+  // concrete not intentionally roughened, Table 22.9.4.2(c); conservative), V_n ≤ min(0.2f'c A_c, 800A_c) (Table 22.9.4.4(d),(e)),
+  // φ = 0.75 (Table 21.2.1). Permanent compression across the joint is not added (§22.9.4.5 permits it). AASHTO mode: the optional
+  // interface-shear check (Art. 5.7.4) already covers the joint.
+  const sfJ = isAASHTO ? null : (() => { const Ac = inp.ts_bot * bw, Avf = sel_stem.As_prov, mu = 0.6, phi = 0.75;
+    const Vn = Math.min(mu * Avf * inp.fy, 0.2 * inp.fc * Ac, 800 * Ac);
+    return { Ac, Avf, mu, phi, Vn, phiVn: phi * Vn, Vu: Vu_stem, ok: phi * Vn >= Vu_stem - 1e-6, Avf_req: Vu_stem / (phi * mu * inp.fy) }; })();
   const aciCr = isAASHTO ? null : {
     stem: aciCrack(inp.cov_stem, sel_stem.spacing),
+    stemT: aciCrack(inp.cov_stem, sel_stemT.spacing),   // RW2L4 (2026-11-07): S3 (upper half of the stem)
     heel: aciCrack(inp.cov_ftg,  sel_heel.spacing),
     toe:  aciCrack(cov_bot,  sel_toe.spacing),
   };
@@ -3951,6 +3966,7 @@ function calcAll(inp) {
     // deflecting enough to mobilize full active) — LL surcharge stays on Kₐ.
     const Ko_serv  = 1 - Math.sin(toRad(inp.phi));
     const K_serv   = A.serv_ko ? Ko_serv : Ka;
+    const M_serv_stemT = (Ka > 0 ? sd_mid.M_soil * (K_serv / Ka) : 0) + sd_mid.M_hyd + Ka * inp.q_sur * Hs_mid ** 2 / 2 + Ka * q_ll_stem * Hs_mid ** 2 / 2;   // RW2L4: S3 at mid-height
     const M_serv_stem = (Ka > 0 ? sd_base.M_soil * (K_serv / Ka) : 0)
                       + sd_base.M_hyd
                       + (Ka * inp.q_sur   * inp.Hs ** 2 / 2)
@@ -3993,7 +4009,8 @@ function calcAll(inp) {
 
     aashtoR.serv = {
       n_modular, Ec, fr, beta1, K_serv, Ko_serv, serv_ko: !!A.serv_ko,
-      M_serv_stem, M_serv_heel, M_serv_toe,
+      M_serv_stem, M_serv_heel, M_serv_toe, M_serv_stemT,
+      stemT: { crack: crackSpacing(d_stemT, sel_stemT.bar.db, inp.cov_stem, ts_mid, sel_stemT.As_prov, M_serv_stemT, A.gamma_e2), spacing: sel_stemT.spacing },   // RW2L4
       svc: { V: V_svc, Mr: Mr_svc, Mo: Mo_svc, xR: xR_svc, e: e_svc, qt: qt_svc, qh: qh_svc, w_dn: w_dn_svc, Md_heel: Md_svc_heel, Mup_heel: Mup_svc_heel, Mup_toe: Mup_svc_toe, pile: !!svcPile },   // RW2M2
       stem: {
         minR: minReinf(d_stem, inp.ts_bot, sel_stem.As_prov, Mu_stem_lbft),
@@ -4019,6 +4036,7 @@ function calcAll(inp) {
     if (!aashtoR.serv.heel.crack.fss_ok)
       warnings.push('Heel service steel stress exceeds 0.6f_y (§5.6.7) — increase A_s or section.');
     aashtoR.serv.stem.crack.ok = aashtoR.serv.stem.spacing <= aashtoR.serv.stem.crack.s_max;
+    aashtoR.serv.stemT.crack.ok = aashtoR.serv.stemT.spacing <= aashtoR.serv.stemT.crack.s_max;   // RW2L4
     aashtoR.serv.heel.crack.ok = aashtoR.serv.heel.spacing <= aashtoR.serv.heel.crack.s_max;
     aashtoR.serv.toe.crack.ok  = aashtoR.serv.toe.spacing  <= aashtoR.serv.toe.crack.s_max;
   }
@@ -4052,7 +4070,7 @@ function calcAll(inp) {
         ...(pilePunch ? { pilePunch: { ok: pilePunch.ok, label: 'Pile Punching', val: `${f(pilePunch.gov.Pu/1000,1)}${pilePunch.ok ? '≤' : '>'}${f(pilePunch.gov.phiVc/1000,1)}k`, dc: pilePunch.gov.dc,
                       ref: (isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 5.12.8.6.3, φ 0.90' : 'ACI 318-19 Table 22.6.5.2, φ 0.75') + '; row ' + (pilePunch.gov.i + 1) + ', ' + pilePunch.gov.loc + ', b<sub>o</sub> = ' + f(pilePunch.gov.bo,1) + ' in' } } : {}),
         ...(pilePunch && !isAASHTO ? { pileCapD: { ok: pilePunch.dp >= 12 - 1e-9, label: 'Cap Depth over Bars', val: `${f(pilePunch.dp,2)}${pilePunch.dp >= 12 - 1e-9 ? '≥' : '<'}12"`, dc: 12 / Math.max(pilePunch.dp, 1e-9),
-                      ref: 'ACI 318-19 §13.3.1.2; depth above the bottom bars, footings on piles' } } : {}),
+                      ref: 'ACI 318-19 §13.4.6.1; effective depth of the bottom bars of a pile cap ≥ 12 in' } } : {}),   // RW2L1: was §13.3.1.2 (the 6-in rule for shallow foundations)
         // RW2M3 (2026-11-07): a pile in tension needs a designed pile-to-cap tension connection (AASHTO LRFD 10th Art. 10.7.1.2: the
         // reduced projection only with bars or strands anchored per Art. 5.12.9.1; IBC 2018 §1810.3.11 / §1810.3.3.1.5: the uplift load
         // path designed). Not designed in this tool: FAIL with the tension and the embedment until the engineer designs it (conservative).
@@ -4125,6 +4143,7 @@ function calcAll(inp) {
     toeFlex:   { ok: !toe_overstressed && sel_toe.As_prov >= As_toe_des - 0.001,
                  label: 'Toe Flex' },
     toeShear:  { ok: toe_shear_ok,                 label: 'Toe Shear' },
+    ...(!isAASHTO && !pileFtg ? { ftgDepth: { ok: d_toe >= 6 - 1e-9, label: 'Footing d ≥ 6 in', val: `d=${f(d_toe,2)}${d_toe >= 6 - 1e-9 ? '≥' : '<'}6"`, dc: 6 / Math.max(d_toe, 1e-9), ref: 'ACI 318-19 §13.3.1.2; effective depth of the bottom reinforcement (F2) of a shallow foundation' } } : {}),   // RW2L1
     ...(eeFtg ? {   // RW2M1
       heelEE: { ok: eeFtg.heelOk, label: 'Heel EE I/II', val: `M ${f(Math.max(0, eeFtg.gH.Mh)/1000,1)}≤${f(eeFtg.Mn_heel/1000,1)}k-ft`, dc: eeFtg.heelDC, ref: 'AASHTO LRFD 10th Ed. Art. 11.6.4 / 11.6.5.1; φ = 1.0, F1 as designed for Strength I; ' + eeFtg.gH.label },
       toeEE:  { ok: eeFtg.toeOk,  label: 'Toe EE I/II',  val: `M ${f(Math.max(0, eeFtg.gT.Mt)/1000,1)}≤${f(eeFtg.Mn_toe/1000,1)}k-ft`,  dc: eeFtg.toeDC,  ref: 'AASHTO LRFD 10th Ed. Art. 11.6.4 / 11.6.5.1; φ = 1.0, F2 as designed for Strength I; ' + eeFtg.gT.label } } : {}),
@@ -4163,6 +4182,7 @@ function calcAll(inp) {
       crackStem: { ok: aashtoR.serv.stem.crack.ok, label: 'Stem Crack Ctrl',
                    val: `s≤${f(aashtoR.serv.stem.crack.s_max,1)}"` },
       minRfStem: { ok: aashtoR.serv.stem.minR.ok,  label: 'Stem Min Reinf' },
+      crackStemT: { ok: aashtoR.serv.stemT.crack.ok, label: 'Stem S3 Crack Ctrl', val: `s≤${f(aashtoR.serv.stemT.crack.s_max,1)}"` },   // RW2L4
       crackHeel: { ok: aashtoR.serv.heel.crack.ok, label: 'Heel Crack Ctrl',
                    val: `s≤${f(aashtoR.serv.heel.crack.s_max,1)}"` },
       minRfHeel: { ok: aashtoR.serv.heel.minR.ok,  label: 'Heel Min Reinf' },
@@ -4172,6 +4192,8 @@ function calcAll(inp) {
     } : {}),
     ...(aciCr ? {
       crackStem: { ok: aciCr.stem.ok, label: 'Stem Crack Ctrl', val: `s≤${f(aciCr.stem.smax,1)}"` },
+      crackStemT: { ok: aciCr.stemT.ok, label: 'Stem S3 Crack Ctrl', val: `s≤${f(aciCr.stemT.smax,1)}"` },   // RW2L4
+      ishAci: { ok: sfJ.ok, label: 'Joint Shear Friction', val: `φVn=${f(sfJ.phiVn/1000,2)}≥${f(sfJ.Vu/1000,2)}k`, dc: sfJ.Vu / Math.max(sfJ.phiVn, 1e-9), ref: 'ACI 318-19 §22.9.4.2, μ = 0.6 (Table 22.9.4.2(c)), φ 0.75; A_vf = S1D dowels' },   // RW2L8
       crackHeel: { ok: aciCr.heel.ok, label: 'Heel Crack Ctrl', val: `s≤${f(aciCr.heel.smax,1)}"` },
       crackToe:  { ok: aciCr.toe.ok,  label: 'Toe Crack Ctrl',  val: `s≤${f(aciCr.toe.smax,1)}"` },
     } : {}),
@@ -4237,6 +4259,7 @@ function calcAll(inp) {
     phiVc_stemT,
     // Heel
     upS, hcG_up: hcG.up, tcG_up: tcG.up,   // RWUP (2026-11-07): water uplift split (ACI with water), governing members
+    sfJ,   // RW2L8
     d_heel, wu_heel, q0h, qLh, Md_heel, Mu_heel_net, Mu_heel_in, Vu_heel,
     Mu_heel_up, Mu_heel_std, Vu_heel_std, Mu_heel_nr, Vu_heel_nr, heelBasis, heel_case, V_wedge_heel,
     gEV, gDC, gES, gLS, gEH, gWA,   // RWSC (2026-11-07): gEH, gWA returned for the self-consistency panel (exposure only)
@@ -4319,7 +4342,8 @@ function getInputs() {
     tf: n('tf'), ts_bot: n('ts_bot'), ts_top: n('ts_top'),
     // MassDOT footing rules + variable-height
     massdot_ftg: b('massdot_ftg'),
-    aci_ecc_limit: (document.getElementById('aci_ecc_limit') || {}).value || 'none',   // RWEC (2026-11-07)
+    aci_ecc_limit: (document.getElementById('aci_ecc_limit') || {}).value || 'none',
+    aci_ftg_nolams: !!(document.getElementById('aci_ftg_nolams') || {}).checked,   // RW2L6 (2026-11-07): default off   // RWEC (2026-11-07)
     ...(b('toe_hook') ? { toe_hook: true } : {}),   // RWDS (2026-11-07): F2 hooked at the toe end; absent = straight (as before)
     vh_enable: b('vh_enable'), vh_hlo: n('vh_hlo'), vh_hhi: n('vh_hhi'),
     Lt: n('Lt'), Lh: n('Lh'), Df_add: n('Df_add'),
@@ -5279,6 +5303,11 @@ function renderStabilityAASHTO(r) {
        {sym:'\\beta_s', desc:'strain ratio factor', val:F(sv.stem.crack.beta_s,2), unit:''},
        {sym:'\\gamma_e', desc:'exposure factor (above grade)', val:F(A.gamma_e2,2), unit:''},
        {sym:'s_{max}', desc:'max allowable bar spacing', val:F(sv.stem.crack.s_max,1), unit:'in'}]);
+    h += eqCheck('Stem S3 crack-control spacing (mid-height)',   // RW2L4 (2026-11-07)
+      `s_{max} = ${F(sv.stemT.crack.s_max,1)}\\ \\text{in} \\geq s = ${F(sv.stemT.spacing,1)}\\ \\text{in}`, sv.stemT.crack.ok,'\u00a75.6.7',
+      [{sym:'M_{serv}', desc:'Service I moment at mid-height', val:F(sv.M_serv_stemT/1000,1), unit:'kip·ft/ft'},
+       {sym:'f_{ss}', desc:'service tensile stress in steel', val:F(sv.stemT.crack.fss/1000,1), unit:'ksi'},
+       {sym:'s_{max}', desc:'max allowable bar spacing', val:F(sv.stemT.crack.s_max,1), unit:'in'}]);
     h += eqCheck('Stem minimum reinforcement (M_r \u2265 min[M_cr, 1.33M_u])',
       `M_r = ${F(sv.stem.minR.Mr/1000,1)} \\geq ${F(sv.stem.minR.demand/1000,1)}\\ \\text{kip\u00b7ft/ft}`, sv.stem.minR.ok,'\u00a75.6.3.3',
       [{sym:'M_{cr}', desc:'cracking moment', val:F(sv.stem.minR.Mcr/1000,1), unit:'kip·ft/ft'},
@@ -5333,7 +5362,7 @@ function rwPileStability(r) {
   const rowsT = P.rows.map((rw, i) => { const n = 1 / rw.s, xp = rw.x - g.xbar; return `<tr><td>${i + 1}</td><td>${F(rw.x)}</td><td>${F(rw.s)}</td><td>${F(n, 4)}</td><td>${F(xp, 3)}</td><td>${F(n * xp * xp, 4)}</td></tr>`; }).join('');
   let h = `<div class="sec-heading">Pile-Supported Footing — Rigid Cap on Rows of Vertical Piles</div>`;
   h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Step 1 — Pile Group (per ft of wall)</span><span class="card-ref">rigid cap · identical vertical piles · shared/pile-group.js</span></div><div class="card-body">
-    <table class="tbl"><thead><tr><th>Row</th><th>x from toe (ft)</th><th>s along wall (ft)</th><th>n = 1/s (/ft)</th><th>x' = x − x̄ (ft)</th><th>n·x'² (ft²/ft)</th></tr></thead><tbody>${rowsT}</tbody></table>`
+    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Row</th><th>x from toe (ft)</th><th>s along wall (ft)</th><th>n = 1/s (/ft)</th><th>x' = x − x̄ (ft)</th><th>n·x'² (ft²/ft)</th></tr></thead><tbody>${rowsT}</tbody></table></div>`
     + eq('1.1 Piles per ft and centroid', `N = \\sum \\frac{1}{s_i} = \\boxed{${F(g.N, 4)}\\ \\text{/ft}}, \\quad \\bar{x} = \\frac{\\sum n_i x_i}{N} = \\boxed{${F(g.xbar, 3)}\\ \\text{ft}}`, 'from the toe')
     + eq('1.2 Moment of inertia of the group', `I = \\sum n_i (x_i - \\bar{x})^2 = \\boxed{${F(g.I, 4)}\\ \\text{ft}^2\\text{/ft}}`, '')
     + `<div class="note">${A ? 'AASHTO LRFD 10th Ed.: factored loads per limit state; resistances φ<sub>c</sub>R<sub>n</sub>, φ<sub>up</sub>R<sub>n,up</sub> (Art. 10.5.5.2.3), H<sub>r</sub> as entered; Extreme Event φ = 1.0, uplift 0.80 (Art. 10.5.5.3.3).' : 'ACI 318-19 / IBC 2018: service (ASD) loads, ASCE 7-16 §2.4.1, against the allowable capacities (IBC 2018 §1810.3.3.1, §1810.3.3.2). The soil under the cap carries no vertical load (§1810.3.11).'} Each pile takes H/N of the horizontal load.${P.passive ? ' Passive in front of the toe credited: ' + F(P.Hpass, 3) + ' kip/ft.' : ' No passive or base friction credited.'}</div></div></div>`;
@@ -6161,6 +6190,14 @@ function renderStem(r) {
          {sym:'V_c', desc:'nominal concrete shear', val:F(r.Vc_stem,0), unit:'lb/ft'}]);
   h += eqCheck('Design shear check',
     `\\phi V_c = ${r.isAASHTO?((r.stem_ee2_governs||r.stem_eq_governs)?'1.00':'0.90'):'0.75'}\\,V_c = ${Fk(r.phiVc_stem)}\\ \\text{kip/ft} \\geq V_u = ${Fk(r.Vu_stem)}\\ \\text{kip/ft}`, r.stem_shear_ok);
+  if (r.sfJ) { const J = r.sfJ;   // RW2L8 (2026-11-07): ACI 318-19 §22.9 shear friction at the stem–footing joint
+    h += eqCheck('Shear friction at the stem–footing construction joint (ACI 318-19 §22.9)',
+      `\\phi V_n = \\phi\\min(\\mu A_{vf} f_y,\\ 0.2f'_c A_c,\\ 800A_c) = 0.75\\min(${F(J.mu,1)}(${F(J.Avf,3)})(${F(inp.fy,0)}),\\ ${F(0.2*inp.fc*J.Ac,0)},\\ ${F(800*J.Ac,0)}) = ${Fk(J.phiVn)}\\ \\text{kip/ft} \\geq V_u = ${Fk(J.Vu)}\\ \\text{kip/ft}`, J.ok, 'ACI 22.9.4.2 / Table 22.9.4.4',
+      [{sym:'A_{vf}', desc:'S1D dowels crossing the joint (flexural tension steel may serve, R22.9.4.6)', val:F(J.Avf,3), unit:'in²/ft'},
+       {sym:'\\mu', desc:'0.6\u03bb: concrete placed against hardened concrete not intentionally roughened (Table 22.9.4.2(c); conservative)', val:F(J.mu,2), unit:''},
+       {sym:'A_c', desc:'joint area t_bot \u00d7 12', val:F(J.Ac,0), unit:'in²/ft'},
+       {sym:'A_{vf,req}', desc:'V_u/(\u03c6\u03bcf_y)', val:F(J.Avf_req,3), unit:'in²/ft'}]);
+  }
   h += `</div></div>`;
 
   // ════ STEP 5 — DEVELOPMENT & CUTOFF ════
@@ -6673,7 +6710,7 @@ function renderFooting(r) {
       <div class="card-hd"><span class="card-title">Pile Cap — Punching around the Piles</span><span class="card-ref">${A ? 'AASHTO Art. 5.12.8.6.1 / 5.12.8.6.3 · φ<sub>v</sub> 0.90' : 'ACI 318-19 §22.6.4.1 / Table 22.6.5.2 · φ 0.75'}</span></div><div class="card-body">`;
     h += eq('Depth over the pile heads', `d_p = t_f - c_{bot} - d_b = ${F(inp.tf,1)} - ${F(r.cov_bot,2)} - ${F(r.sel_toe.bar.db,3)} = \\boxed{${F(pp.dp,2)}\\ \\text{in}}` + (A ? `, \\quad d_v = \\max(0.9d_p,\\,0.72t_f) = ${F(pp.dvp,2)}\\ \\text{in}` : ''), 'c_bot = max(cover, embedment + clear)');
     h += eq('Critical section side (pile as the square of equal area, at ' + (A ? 'd_v/2' : 'd/2') + ' from its face)', `a = D_{eq} + ${A ? 'd_v' : 'd'} = ${F(pp.Deq,2)} + ${F(pp.dc,2)} = \\boxed{${F(pp.a,2)}\\ \\text{in}}`, '');
-    h += `<table class="tbl"><thead><tr><th>Row</th><th>x (ft)</th><th>s (in)</th><th>edge e (in)</th><th>section</th><th>b<sub>o</sub> (in)</th><th>P<sub>u</sub> (kip)</th><th>φV<sub>c</sub> (kip)</th><th>D/C</th></tr></thead><tbody>${pp.rows.map(x => `<tr><td>${x.i + 1}</td><td>${F(x.x,2)}</td><td>${F(x.S,1)}</td><td>${F(x.ex,1)}</td><td>${x.loc}</td><td>${F(x.bo,1)}</td><td>${F(x.Pu/1000,2)}</td><td>${F(x.phiVc/1000,2)}</td><td>${F(x.dc,3)}</td></tr>`).join('')}</tbody></table>`;
+    h += `<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Row</th><th>x (ft)</th><th>s (in)</th><th>edge e (in)</th><th>section</th><th>b<sub>o</sub> (in)</th><th>P<sub>u</sub> (kip)</th><th>φV<sub>c</sub> (kip)</th><th>D/C</th></tr></thead><tbody>${pp.rows.map(x => `<tr><td>${x.i + 1}</td><td>${F(x.x,2)}</td><td>${F(x.S,1)}</td><td>${F(x.ex,1)}</td><td>${x.loc}</td><td>${F(x.bo,1)}</td><td>${F(x.Pu/1000,2)}</td><td>${F(x.phiVc/1000,2)}</td><td>${F(x.dc,3)}</td></tr>`).join('')}</tbody></table></div>`;
     h += eq('Perimeter, row ' + (g.i + 1) + ' (' + g.loc + ')', g.strip ? `b_o = ${g.cut ? '1' : '2'}\\,s = ${F(g.bo,1)}\\ \\text{in}\\ (s \\le a)` : (g.cut ? `b_o = a + 2(e + a/2) = ${F(g.a,2)} + 2(${F(g.ex,2)} + ${F(g.a/2,2)}) = \\boxed{${F(g.bo,1)}\\ \\text{in}}` : `b_o = 4a = 4(${F(g.a,2)}) = \\boxed{${F(g.bo,1)}\\ \\text{in}}`), '');
     h += A ? eqCheck('Two-way shear, row ' + (g.i + 1), `\\phi V_n = 0.90\\,(0.126)\\sqrt{${F(inp.fc/1000,2)}}\\,(${F(g.bo,1)})(${F(pp.dvp,2)}) = ${F(g.phiVc/1000,2)} \\ge P_u = ${F(g.Pu/1000,2)}\\ \\text{kip}`, pp.ok, 'β_c = 1: (0.063 + 0.126/β_c) capped at 0.126')
            : eqCheck('Two-way shear, row ' + (g.i + 1), `\\lambda_s = \\sqrt{\\tfrac{2}{1+d/10}} = ${F(g.lam_s,3)};\; v_c = \\min(4,\\,6,\\,2 + \\tfrac{${F(g.alpha,0)}(${F(pp.dp,2)})}{${F(g.bo,1)}})\\lambda_s\\sqrt{${F(inp.fc,0)}} = ${F(g.vc,1)}\\ \\text{psi};\; \\phi V_c = 0.75(${F(g.vc,1)})(${F(g.bo,1)})(${F(pp.dp,2)}) = ${F(g.phiVc/1000,2)} \\ge P_u = ${F(g.Pu/1000,2)}\\ \\text{kip}`, pp.ok, 'α_s = ' + g.alpha + (g.alpha === 40 ? ' (interior)' : ' (edge)'));
@@ -6878,7 +6915,8 @@ function snapshotFields() {
   /* RWTB (2026-11-06): the optional title-block dates are saved only when filled, so a project without them saves, autosaves and
      exports exactly as before (saved-format addition only) */
   RWTB_FIELDS.forEach(id => { if (out[id] === '') delete out[id]; });
-  Object.entries(RWLS_DEF).forEach(([id, d]) => { if (out[id] === d) delete out[id]; });   // RWLS: old saves and default projects unchanged
+  Object.entries(RWLS_DEF).forEach(([id, d]) => { if (out[id] === d) delete out[id]; });
+  if (out.aci_ftg_nolams === false) delete out.aci_ftg_nolams;   // RW2L6: saved only when on (older saves and default projects unchanged)   // RWLS: old saves and default projects unchanged
   return out;
 }
 // Restore fields from a snapshot object, then fire dependent UI toggles
@@ -7361,6 +7399,13 @@ function renderRebar(r) {
       ld:r.ld_stem, face:'Back', note: r.s1_full ? 'Full height; dowel S1D into footing' : `Joint to ${f(r.z_s1_end,2)} ft (mid-height + S3–S1 lap ${f(r.s13_lst,1)}″); dowel S1D into footing`,   // RWS13
       overridden: r.sel_stem.overridden, os: r.stem_overstressed
     },
+    {   // RW2L2 (2026-11-07): the dowel, as on Drawings sheet 2
+      mark:'S1D', location:'Stem dowel — back face, 90° hook into the footing', zone:'Stem',
+      bar:r.sel_stem.bar.num, spacing:r.sel_stem.spacing,
+      As_req:r.As_stem_des, As_prov:r.sel_stem.As_prov,
+      ld:r.ldh_stem, ldh:true, face:'Back', note:`Hooked into the footing (ℓdh = ${f(r.ldh_stem,1)}″ ≤ ${f(r.ldh_avail,1)}″); lap with S1 ℓst = ${f(r.lst_stem,1)}″`,
+      overridden: r.sel_stem.overridden, os: r.stem_overstressed
+    },
     {
       mark:'S3', location:'Stem — vertical mid-height (top half)', zone:'Stem',
       bar:r.sel_stemT.bar.num, spacing:r.sel_stemT.spacing,
@@ -7372,7 +7417,7 @@ function renderRebar(r) {
       mark:'S2', location:'Stem — horiz. temp & shrinkage (both faces)', zone:'Stem',
       bar:r.sel_temp.bar.num, spacing:r.sel_temp.spacing,
       As_req:r.As_temp_stem, As_prov:r.sel_temp.As_prov,
-      ld:null, face:'Both', note:'ACI §24.4.3, max s=18"',
+      ld:null, face:'Both', note: r.isAASHTO ? 'AASHTO §5.10.6, each face, max s = min(3h, 18")' : 'ACI §24.4.3, max s=18"',   // RW2L2
       overridden: r.sel_temp.overridden
     },
     ...(r.sel_ff ? [{   // RWFF (2026-11-07)
@@ -7400,9 +7445,16 @@ function renderRebar(r) {
       mark:'F3', location:'Footing — longitudinal T&S (both faces)', zone:'Footing',
       bar:r.sel_ftg_long.bar.num, spacing:r.sel_ftg_long.spacing,
       As_req:r.As_ftg_long, As_prov:r.sel_ftg_long.As_prov,
-      ld:null, face:'Both', note:'ACI §24.4.3, parallel to wall',
+      ld:null, face:'Both', note: r.isAASHTO ? 'AASHTO §5.10.6, parallel to wall' : 'ACI §24.4.3, parallel to wall',   // RW2L2
       overridden: r.sel_ftg_long.overridden
     },
+    ...(r.keyR && r.keyR.rf ? [{   // RW2L2 (2026-11-07): K1, as on Drawings sheet 2
+      mark:'K1', location:'Shear key — toe face, hooked into the footing', zone:'Key',
+      bar:r.keyR.rf.sel.bar.num, spacing:r.keyR.rf.sel.spacing,
+      As_req:r.keyR.rf.As_des, As_prov:r.keyR.rf.sel.As_prov,
+      ld:r.keyR.rf.ldh, ldh:true, face:'Toe', note:`90° hook into the footing (ℓdh = ${f(r.keyR.rf.ldh,1)}″)${r.keyR.rf.hook_bot ? '; hooked at the key bottom' : ''}`,
+      overridden: false, os: r.keyR.rf.os
+    }] : []),
   ];
 
   const allOk = rows.every(rw => !rw.os && rw.As_prov >= rw.As_req - 0.001);
@@ -7422,7 +7474,7 @@ function renderRebar(r) {
     <div class="card" style="margin-bottom:16px;">
       <div class="card-hd">
         <span class="card-title">Bar Schedule — Per Foot of Wall Length</span>
-        <span class="card-ref">ACI 318-19 · f'c=${f(inp.fc,0)} psi · fy=${f(inp.fy/1000,0)} ksi</span>
+        <span class="card-ref">${r.isAASHTO ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19'} · f'c=${f(inp.fc,0)} psi · fy=${f(inp.fy/1000,0)} ksi</span>
       </div>
       <div class="card-body" style="overflow-x:auto;">
         <table class="tbl" style="min-width:640px;">
@@ -7451,13 +7503,13 @@ function renderRebar(r) {
                 <td class="val">${f(rw.As_req,4)}</td>
                 <td class="val ${ok?'n-pass':'n-fail'}">${f(rw.As_prov,4)}</td>
                 <td class="val ${ratio>=1?'n-pass':'n-fail'}">${f(ratio,2)}</td>
-                <td class="val">${rw.ld ? f(rw.ld,1)+'"' : '—'}</td>
+                <td class="val">${rw.ld ? f(rw.ld,1)+'"' + (rw.ldh ? ' (ℓ<sub>dh</sub>)' : '') : '—'}</td>
                 <td class="right">${pf(ok)}</td>
               </tr>`;
             }).join('')}
           </tbody>
         </table>
-        ${rwWorkedIn(r, [['stemFlex','S1'], ['stemMid','S3'], ['stemTS','S2'], ['heelFlex','F1'], ['toeFlex','F2'], ['ftgTS','F3'],
+        ${rwWorkedIn(r, [['stemFlex','S1'], ['stemDev','S1D'], ['stemMid','S3'], ['stemTS','S2'], ['heelFlex','F1'], ['toeFlex','F2'], ['ftgTS','F3'], ...(r.keyR && r.keyR.rf ? [['ftgKey','K1']] : []),
           ['stemDev','ℓ<sub>d</sub> S1'], ['heelShear','ℓ<sub>d</sub> F1'], ['toeShear','ℓ<sub>d</sub> F2']])}
       </div>
     </div>
@@ -7480,14 +7532,14 @@ function renderRebar(r) {
         </div>
       </div>
       <div class="card">
-        <div class="card-hd"><span class="card-title">General Detailing Requirements</span><span class="card-ref">ACI 318-19</span></div>
+        <div class="card-hd"><span class="card-title">General Detailing Requirements</span><span class="card-ref">${r.isAASHTO ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19'}</span></div>
         <div class="card-body">
           <div class="chk-row"><span class="chk-label">Stem back cover</span><span class="chk-val">${f(inp.cov_stem,2)} in</span></div>
           <div class="chk-row"><span class="chk-label">Footing bottom cover</span><span class="chk-val">${f(inp.cov_ftg,2)} in</span></div>
-          <div class="chk-row"><span class="chk-label">Max bar spacing (stem)</span><span class="chk-val">${f(Math.min(3*inp.ts_bot,18),0)} in</span></div>
-          <div class="chk-row"><span class="chk-label">Max bar spacing (ftg)</span><span class="chk-val">${f(Math.min(3*inp.tf,18),0)} in</span></div>
+          <div class="chk-row"><span class="chk-label">Max bar spacing (stem)</span><span class="chk-val">${f(Math.min((r.isAASHTO ? 1.5 : 3)*inp.ts_bot,18),0)} in</span></div>
+          <div class="chk-row"><span class="chk-label">Max bar spacing (ftg)</span><span class="chk-val">${f(Math.min((r.isAASHTO ? 1.5 : 3)*inp.tf,18),0)} in</span></div>
           <div class="chk-row"><span class="chk-label">Min clear between bars</span><span class="chk-val">1.5 × d<sub>b</sub> ≥ 1.5"</span></div>
-          <div class="chk-row"><span class="chk-label">Stem S1 dev. into ftg</span><span class="chk-val">${f(r.ld_stem,1)}" (${f(r.ld_stem/12,2)} ft)</span></div>
+          <div class="chk-row"><span class="chk-label">Stem S1D dowel hook ℓ<sub>dh</sub> into ftg</span><span class="chk-val">${f(r.ldh_stem,1)}" ≤ ${f(r.ldh_avail,1)}" (straight ℓ<sub>d</sub> ${f(r.ld_stem,1)}")</span></div>
           <div class="chk-row"><span class="chk-label">Heel F1 dev. at stem</span><span class="chk-val">${f(r.ld_heel,1)}" (${f(r.ld_heel/12,2)} ft)</span></div>
           <div class="chk-row"><span class="chk-label">Toe F2 dev. at stem</span><span class="chk-val">${f(r.ld_toe,1)}" (${f(r.ld_toe/12,2)} ft)</span></div>
           <div class="chk-row"><span class="chk-label">S1D dowel lap ℓst (Class ${r.lap_classA?'A':'B'})</span><span class="chk-val">${f(r.lst_stem,1)}" (${f(r.lst_stem/12,2)} ft)</span></div>${r.toe_hook ? `
@@ -9727,6 +9779,7 @@ function rwResultRows(r) {
     ctBearing:    () => ['Extreme Event II; q<sub>u</sub> ≤ q<sub>R</sub>', E.q_ult_ct / E.q_R_ct],
     ctYield:      () => [AA('A13.3.1'), a.ct.yl.Ft / a.ct.yl.Rw],
     crackStem:    () => A ? [AA('5.6.7'), sv.stem.spacing / sv.stem.crack.s_max] : ['ACI 318-19 §24.3.2', r.aciCr.stem.spacing / r.aciCr.stem.smax],
+    crackStemT:   () => A ? [AA('5.6.7') + '; S3 at mid-height', sv.stemT.spacing / sv.stemT.crack.s_max] : ['ACI 318-19 §24.3.2; S3', r.aciCr.stemT.spacing / r.aciCr.stemT.smax],   // RW2L4
     crackHeel:    () => A ? [AA('5.6.7'), sv.heel.spacing / sv.heel.crack.s_max] : ['ACI 318-19 §24.3.2', r.aciCr.heel.spacing / r.aciCr.heel.smax],
     crackToe:     () => A ? [AA('5.6.7'), sv.toe.spacing / sv.toe.crack.s_max]   : ['ACI 318-19 §24.3.2', r.aciCr.toe.spacing / r.aciCr.toe.smax],
     minRfStem:    () => [AA('5.6.3.3'), sv.stem.minR.demand / sv.stem.minR.Mr],
@@ -10907,6 +10960,7 @@ function rwrModel(r) {
         rwrS({ id: k + '.Mcr', label: nm + ': cracking moment', sym: 'M_{cr}', eq: '\\gamma_{3}\\gamma_{1} f_{r} S_{nc}', sub: 'f_{r} = ' + rwrN(sv.fr, 0) + '\\;\\text{psi}', value: m.Mcr / 1000, unit: 'kip-ft/ft', d: 1, ref: AA('Art. 5.6.3.3') }),
         rwrS({ id: k + '.mr', label: nm + ': minimum reinforcement M_r ≥ min(M_cr, 1.33 M_u)', sym: '\\frac{\\min(M_{cr}, 1.33M_{u})}{M_{r}}', eq: '', sub: '\\frac{' + rwrN(m.demand / 1000, 1) + '}{' + rwrN(m.Mr / 1000, 1) + '}', value: dcv('minRf' + k[0].toUpperCase() + k.slice(1)), unit: '', d: 3, ok: ok('minRf' + k[0].toUpperCase() + k.slice(1)) })]; };
       T.push({ title: 'Stem crack control', ref: AA('Art. 5.6.7'), steps: cr('stem', 'Stem', A.gamma_e2, sv.M_serv_stem, 'S1') });
+      T.push({ title: 'Stem S3 crack control (mid-height)', ref: AA('Art. 5.6.7'), steps: cr('stemT', 'Stem S3', A.gamma_e2, sv.M_serv_stemT, 'S3') });   // RW2L4
       if (sv.svc) { const S = sv.svc;   // RW2M2 (2026-11-07): Service I heel and toe moments from the Service I base reaction
         T.push({ title: 'Service I heel and toe moments (all γ = 1.0)', ref: AA('Table 3.4.1-1, Art. 5.6.7'), steps: [
           rwrS({ id: 'svc.xR', label: 'Service I resultant' + (S.pile ? ' (pile-row reactions, rigid cap; the heel with the water uplift split out)' : ' (total vertical; trapezoid, or the block 3x̄ in partial contact)'), sym: '\\bar{x}', eq: '\\frac{M_{r} \\minus M_{o}}{V}', sub: '\\frac{' + rwrN(S.Mr, 0) + ' \\minus ' + rwrN(S.Mo, 0) + '}{' + rwrN(S.V, 0) + '}', value: S.xR, unit: 'ft', d: 3 }),
@@ -10916,6 +10970,7 @@ function rwrModel(r) {
       T.push({ title: 'Toe crack control', ref: AA('Art. 5.6.7'), steps: cr('toe', 'Toe', A.gamma_e1, sv.M_serv_toe, 'F2') });
       T.push({ title: 'Minimum reinforcement', ref: AA('Art. 5.6.3.3'), steps: [].concat(mr('stem', 'Stem'), mr('heel', 'Heel'), mr('toe', 'Toe')) });
       ['Stem', 'Heel', 'Toe'].forEach(x => { CK['crack' + x] = 'sa9/' + x.toLowerCase() + '.ok'; CK['minRf' + x] = 'sa9/' + x.toLowerCase() + '.mr'; });
+      CK.crackStemT = 'sa9/stemT.ok';   // RW2L4
       subs.push(sub('Step 9 — Serviceability: crack control and minimum reinforcement', [rwrItem('sa9', T),
         { type: 'note', text: 'n = ' + rwrN(sv.n_modular, 0) + ' (E_c = ' + rwrN(sv.Ec / 1000, 0) + ' ksi, Eq. 5.4.2.4-1). Service I stem moment: ' + (sv.serv_ko ? 'K_0 = ' + rwrN(sv.K_serv, 3) + ' for the earth term, K_a for the surcharge' : 'K_a') + '; heel: full downward load, no upward relief; toe: |M_u| / 1.5 (approximation of the tool). Heel and toe minimum reinforcement are status-bar checks without a card on the tab.' }, onTab('stabServ')])); }
     { const sI = [rwrS({ id: 'V', label: 'Factored vertical load on the footing underside, Strength I maximum (total: water uplift added back, it acts on the same underside)', sym: 'V_{u}', eq: '\\eta(1.25\\,DC + 1.35\\,EV + \\gamma_{EH}\\,P_{a,V} + 1.75\\,LS_{v}' + (a.V_ES_v > 0 ? ' + 1.50\\,ES_{v}' : '') + (a.eta !== 1 ? ' + V_{col})' : ') + V_{col}'), sub: '', value: a.V_str_max_tot, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-1') })];
@@ -10984,6 +11039,7 @@ function rwrModel(r) {
     const T4 = vc(r.shearStem, r.Vc_stem, r.d_stem, inp.ts_bot).concat([
       rwrS({ id: 'phiVc', label: 'Design shear resistance', sym: '\\phi V_{c}', eq: phiS + '\\,V_{c}', sub: phiS + '(' + rwrN(r.Vc_stem, 0) + ')', value: r.phiVc_stem, unit: 'lb/ft', d: 0 }),
       rwrS({ id: 'dc', label: 'One-way shear check: V_u ≤ φV_c', sym: '\\frac{V_{u}}{\\phi V_{c}}', eq: '', sub: '\\frac{' + rwrN(r.Vu_stem, 0) + '}{' + rwrN(r.phiVc_stem, 0) + '}', value: dcv('stemShear'), unit: '', d: 3, ok: ok('stemShear') })]);
+    if (r.sfJ) { const J = r.sfJ; T4.push(rwrS({ id: 'sf', label: 'Shear friction at the stem–footing construction joint: μ = 0.6 (not intentionally roughened, Table 22.9.4.2(c)), A_vf = S1D dowels, A_c = ' + rwrN(J.Ac, 0) + ' in²/ft; V_n ≤ min(0.2f′c A_c, 800A_c)', sym: '\\frac{V_{u}}{\\phi V_{n}}', eq: '\\frac{V_{u}}{0.75\\min(\\mu A_{vf} f_{y},\\, 0.2f^{\\prime}_{c}A_{c},\\, 800A_{c})}', sub: '\\frac{' + rwrN(J.Vu, 0) + '}{' + rwrN(J.phiVn, 0) + '}', value: J.Vu / J.phiVn, unit: '', d: 3, ok: ok('ishAci'), ref: 'ACI 318-19 §22.9.4.2' })); CK.ishAci = 'stb/s4.sf'; }   // RW2L8
     CK.stemShear = 'stb/s4.dc';
     const T5 = [];
     if (isA) { const L = r.ldA_stem, H = r.ldhA_stem;
@@ -11118,7 +11174,7 @@ function rwrModel(r) {
       ...(r.toe_hook ? [rwrS({ id: 'ldh', label: 'Standard 90° hook at the toe end', sym: '\\ell_{dh}', eq: '', sub: '', value: r.ldh_toe, unit: 'in', d: 1, ref: isA ? AA('Art. 5.10.8.2.4a') : 'ACI 318-19 §25.4.3.1' })] : []),
       rwrS({ id: 'dev', label: 'F2 development past the stem front face, ' + (r.toe_hook ? 'hooked: ℓ_dh' : 'straight: ℓ_d') + ' ≤ L_t − c_c = ' + rwrN(r.f2_av_toe, 1) + ' in (and ℓ_d ≤ t_s + L_h − c_c = ' + rwrN(r.f2_av_heel, 1) + ' in)', sym: '\\frac{' + (r.toe_hook ? '\\ell_{dh}' : '\\ell_{d}') + '}{L_{t} \\minus c_{c}}', eq: '', sub: '\\frac{' + rwrN(r.f2_need, 1) + '}{' + rwrN(r.f2_av_toe, 1) + '}', value: dcv('toeDev'), unit: '', d: 3, ok: ok('toeDev') })]);   // RWDS
     CK.toeDev = 'toe/t4.dev';
-    CK.toeFlex = 'toe/t3.F2'; CK.toeShear = 'toe/t4.dc';
+    CK.toeFlex = 'toe/t3.F2'; CK.toeShear = 'toe/t4.dc'; CK.ftgDepth = 'toe/t3.d';   // RW2L1
     subs.push(sub('Toe: cantilever from the front face (L_t = ' + rwrN(inp.Lt, 2) + ' ft)', [rwrItem('toe', [
       { title: 'Toe Step 1 — Net upward load', steps: pre('t1', T1) }, { title: 'Toe Step 2 — Design moment and shear at the front face', steps: pre('t2', T2) },
       { title: 'Toe Step 3 — Flexural steel (bottom face)', ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5', steps: pre('t3', T3) },
@@ -11179,7 +11235,7 @@ function rwrModel(r) {
       { type: 'note', text: 'Each mark links to its bar selection.' }, { type: 'note', text: '[[tab:rebar|On screen: Rebar schedule tab]]' }];
     const subs = [sub('Bar schedule', items)];
     if (r.aciCr) {
-      const T = [['stem', 'Stem S1 (back face)', 'Stem'], ['heel', 'Heel F1', 'Heel'], ['toe', 'Toe F2', 'Toe']].map(([k, nm, K]) => { const x = r.aciCr[k];
+      const T = [['stem', 'Stem S1 (back face)', 'Stem'], ['stemT', 'Stem S3 (back face, upper half)', 'StemT'], ['heel', 'Heel F1', 'Heel'], ['toe', 'Toe F2', 'Toe']].map(([k, nm, K]) => { const x = r.aciCr[k];
         CK['crack' + K] = 'crk/' + k + '.dc';
         return { title: nm, ref: 'ACI 318-19 §24.3.2', steps: [
           rwrS({ id: k + '.smax', label: nm + ': maximum bar spacing (f_s = ⅔ f_y = ' + rwrN(x.fs, 0) + ' psi, c_c = ' + rwrN(x.cc, 2) + ' in)', sym: 's_{max}', eq: '\\min\\left(15\\,\\frac{40000}{f_{s}} \\minus 2.5\\,c_{c},\\; 12\\,\\frac{40000}{f_{s}}\\right)', sub: '\\min(' + rwrN(15 * 40000 / x.fs - 2.5 * x.cc, 2) + ',\\; ' + rwrN(12 * 40000 / x.fs, 2) + ')', value: x.smax, unit: 'in', d: 2, ref: 'ACI 318-19 §24.3.2' }),
@@ -12196,7 +12252,7 @@ const RWDC = { key: 'retaincalcpro.dashCollapsed.v1', mq: window.matchMedia ? wi
 try { RWDC.coll = localStorage.getItem(RWDC.key) === '1'; } catch (e) { /* not kept */ }
 const RWDC_ST = { pass: 'PASS', fail: 'FAIL', warn: 'REVIEW', na: 'N/A' };
 // ACI crack control is worked only in the Report (Reinforcement schedule › Crack-control bar spacing): its step key there
-const RWDC_RPT = { crackStem: 'crk/stem.dc', crackHeel: 'crk/heel.dc', crackToe: 'crk/toe.dc' };
+const RWDC_RPT = { crackStem: 'crk/stem.dc', crackStemT: 'crk/stemT.dc', crackHeel: 'crk/heel.dc', crackToe: 'crk/toe.dc' };
 const rwdTxt = h => { const d = document.createElement('div'); d.innerHTML = h == null ? '' : String(h); return d.textContent; };
 const rwdEsc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function rwDashDC(dc) { return typeof dc !== 'number' || isNaN(dc) ? '' : 'D/C ' + (isFinite(dc) ? f(dc, 2) : '∞'); }
