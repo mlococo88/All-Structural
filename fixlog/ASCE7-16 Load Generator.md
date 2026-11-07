@@ -1385,3 +1385,39 @@ Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 a
   - Default Melrose (p_f,des = 30.00, not > 30): unchanged; likewise gable/hip/monoslope Melrose, Chatham, Site E cases.
 - **How verified:** headless Chromium, main vs branch, 16 cases: leaf diff of `R` + hand-off (moved: W, V, level forces, story shears and moments, the seismic lateral column of the combinations; hand-off unchanged); rendered text of every tab and the Report (0 console / KaTeX errors); Excel built in all cases; `check-syntax`, `project-library --tool asce7`, `phone-layout --tool asce7`, `engine handoffs`.
 - **Saved data:** new optional field `snowInW` (default false); no key or existing field changed.
+
+## 2026-11-07 — PR: claude/asce7-low-text — A7L1–L6: stale scope text, Fig. 26.8-1 caption, health-care debris basis, Site E message, slippery-surface conditions (review L1–L6; PR #1078: https://github.com/mlococo88/All-Structural/pull/1078)
+
+### A7L1. Stale "drift not generated" statements   [text only]
+- **Where / before → after:**
+  - `renderSnow`, Design Snow Summary note, anchor `note(b,"Sliding snow (Sec. 7.9), "+` — before `"Drift against parapets, adjacent higher roofs and projections (Sec. 7.7, 7.8), sliding snow (Sec. 7.9), "+`; after `"Sliding snow (Sec. 7.9), "+`.
+  - Excel "Assumptions and Limitations": `"Snow drift, sliding snow, partial loading and ponding are not addressed."` → `"Sliding snow, partial loading and ponding are not addressed (drifts at parapets, projections, lower and adjacent roofs are in the Snow section)."`
+  - Report disclaimer (`{title:"Disclaimer"`): `Snow drift and sliding snow, partial loading, …` → `Sliding snow, partial loading, …`.
+- The tool generates Sec. 7.7 / 7.8 drifts (parapet, projection, lower roof, adjacent structure); the old text said it did not.
+
+### A7L2. Topographic multipliers caption   [citation]
+- `renderWindP` panel `o-wp2`: `"Table 26.8-1 — topographic multipliers"` → `"Fig. 26.8-1 — topographic multipliers"`. In ASCE 7-16 the multipliers are part of Fig. 26.8-1 (**verify (ASCE 7-16 PDF unreadable)**). No value changed.
+
+### A7L3. Table 12.2-1 A.2 ordinary RC shear wall (bearing wall), SDC C = NP   [no change]
+- **Decision (pending engineer review):** kept NP in SDC C (conservative screen). The review reads ASCE 7-16 as NL in B and C; it could not be verified (ASCE 7-16 PDF unreadable). If the printed table gives NL for C, change `{B:"NL",C:"NP",…}` to `{B:"NL",C:"NL",…}` on the `SFRS` row `"Ordinary reinforced concrete shear wall, bearing wall system (A.2)"`.
+
+### A7L4. Wind-borne debris: Risk Category III health care facilities   [check logic] [more conservative where ticked]
+- **Where:** `solve()` E.3, anchor `dbr.Vbasis =`; input `chk("healthCare", …)` in the Glazing and Wind-Borne Debris panel (shown for Risk Category III); DEF `healthCare:false`.
+- **Before:** `dbr.Vbasis = (S.risk==="IV") ? "III" : (S.risk==="I" ? "I" : "II");`
+- **After:** `dbr.Vbasis = (S.risk==="IV" || (S.risk==="III" && S.healthCare)) ? "III" : (S.risk==="I" ? "I" : "II");`
+- **Provision:** ASCE/SEI 7-16 Sec. 26.2 definition of wind-borne debris regions (**verify**); 2018 IBC Ch. 2 "Wind-borne debris region" (read: Risk Category III health care facilities and Risk Category IV use the Risk Category III map). The tool's own text already said so; the input was missing.
+- **Check case:** Chatham, Risk Category III, within 1 mile of the coast. Unticked: V_dbr = 132 mph (RC II), coastal trigger yes, 140 mph trigger no. Ticked: V_dbr = 140 mph (RC III), both triggers yes. Region status unchanged here (already in by the coastal trigger).
+- **Saved data:** new optional field `healthCare` (default false = previous behaviour).
+
+### A7L5. Site E with 0.75 < S_s < 1.0   [message only]
+- `solve()`, the `ssReason` "Table 11.4-1 or 11.4-2 marks this combination…" message gains, for Site E with 0.75 < S_s < 1.0: Supplement No. 3 tabulates F_a = 1.2 at S_s ≥ 1.0 for T_s, the SDC, interpolation and the Sec. 11.4.8 exceptions (IBC 2018→2021 changes PDF); the tool does not use it and stays blocked (conservative).
+- Check: manual S_s = 0.85, S_1 = 0.1, Site E: still no coefficient; message extended.
+
+### A7L6. Slippery-surface conditions   [text only]
+- Snow input tab, after `chk("slippery","Unobstructed slippery surface (Fig. 7.4-1)")`: a hint states the Fig. 7.4-1 conditions (unobstructed slippery surface, examples; a membrane with embedded aggregate or mineral granules is not slippery; warm roof C_t ≤ 1.0 also needs R ≥ 30 ft²·h·°F/Btu unventilated or R ≥ 20 ventilated) — **verify (ASCE 7-16 PDF unreadable)**.
+
+### Also
+- Seismic input hint `"This tool does not check that the system is permitted …"` was stale since the Table 12.2-1 screen: now says the system is screened against Table 12.2-1 (with the 780 CMR amendments under MA), footnote exceptions not evaluated.
+
+### How verified
+- Headless Chromium main vs branch, 19 cases: `R` and hand-off identical except Chatham RC III health care (`dbr.Vbasis/Vdbr/trig140`, as above) and the Site E S_s = 0.85 message. Rendered text of every tab and the Report: only the strings above changed; 0 console / KaTeX errors. Excel built. `check-syntax`, `project-library --tool asce7` (ALL PASS), `phone-layout --tool asce7`, `engine handoffs`.
