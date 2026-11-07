@@ -3176,7 +3176,7 @@ From the code-compliance review of 2026-11-07 (finding M4).
 - **How verified:** main vs branch on 20 review cases: every capacity and RF identical; only the warning count moved, in the dead-load case above and in two spliced validation models whose LFR live load columns are zero (CL-WB LFR D 286.0 > 242.4 kip). Validation 17 of 17. `check-syntax`, `project-library --tool gusset`, `phone-layout --tool gusset` pass; 0 console errors.
 - **Saved data:** no change.
 
-## 2026-11-07 — PR: claude/gusset-m5-ridot — Owner selection; RIDOT: LRFD 10th Ed. 6.5.4.2 resistance factors for gusset plates and the condition-factor requirement (M5; §4 for RIDOT only, AASHTO unchanged)
+## 2026-11-07 — PR: claude/gusset-m5-ridot (PR #1049: https://github.com/mlococo88/All-Structural/pull/1049) — Owner selection; RIDOT: LRFD 10th Ed. 6.5.4.2 resistance factors for gusset plates and the condition-factor requirement (M5; §4 for RIDOT only, AASHTO unchanged)
 
 From the code-compliance review of 2026-11-07 (finding M5). Engineer asleep; no question asked; decision pending engineer review.
 
