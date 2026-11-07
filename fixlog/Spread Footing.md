@@ -6806,6 +6806,8 @@ index 50f3837..c2d5000 100644
   - Harness: 17 cases (10 + `w769`, `w769h`, `wTall`, `wTallBr` braced top, `wAll`, `wOOP`, `wSel`) on origin/main vs the branch. 0 console errors, 0 KaTeX errors. Values as above.
   - Section routine checked in Node at N = 0 (both curtains yield: C_c = 39.75 k, M_n = 18.26 k-ft) and at the case-1 point.
   - Tests: see the PR. Screenshots, including 390 px for the wrapped items.
+- **Other copies:** none.
+
 ## 2026-11-07 — PR: claude/sf-notes-split (PR #PRA) (SFNL-1: long notes as a bold lead and a list — input tabs, Schematic, Load Combinations, Bearing, LRFD reference boxes, 3D View, Drawings; display only, no result change)
 
 ### SFNL-1. Long notes split into a lead line and a list   [display only] [no result change]
