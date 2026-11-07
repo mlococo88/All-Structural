@@ -425,7 +425,10 @@
     .lpdMsg{grid-column:1/-1;font-size:8.5pt;padding:5px 8px;border:1px solid var(--line);border-left:4px solid var(--bad);background:#FEF2F2;color:#7F1D1D;border-radius:3px}
     .lpdMsg.none{border-left-color:var(--slate-400);background:var(--slate-50);color:var(--slate-600)}
   }
-  @media screen and (min-width:1500px){
+  /* LPLB (2026-11-07, Decision pending engineer review: "the summary cards should be on the left panel"): the left column starts at
+     1200 px (was 1500 px), as in Retaining Wall Designer and Spread Footing; from 1200 to 1499 px it is 240 px wide (rule after this
+     block), at 1500 px and wider 292 px as before */
+  @media screen and (min-width:1200px){
     .wrap{max-width:1792px}   /* 1500 + 292 (the column): at 1792 px and wider the input and output panels keep their old widths */
     body.lppDashWide #lppDashCol{display:block;flex:0 0 292px;width:292px;height:100%;overflow-y:auto;overflow-x:hidden;position:relative;
       padding:0 6px 24px;border-right:1px solid var(--line);background:var(--slate-50);overscroll-behavior:contain}
@@ -440,6 +443,12 @@
     body.lppDashWide.lppDashColl #lppDashCnt span{font-size:7.5pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
     body.lppDashWide #lppDashCol::-webkit-scrollbar{width:7px}
     body.lppDashWide #lppDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+  }
+  @media screen and (min-width:1200px) and (max-width:1499.98px){   /* LPLB */
+    body.lppDashWide #lppDashCol{flex-basis:240px;width:240px}
+    body.lppDashWide .grid2 .col-in{flex-basis:calc((100% - 240px)*.33);max-width:calc((100% - 240px)*.33)}
+    body.lppDashWide.lppDashColl #lppDashCol{flex-basis:42px;width:42px}
+    body.lppDashWide.lppDashColl .grid2 .col-in{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
   }
 </style>
 </head>
@@ -2784,7 +2793,7 @@ manPart("p2","2. Input Reference",[
 manPart("p3","3. Output Reference",[
 {h:"3.1 Summary tab"},
 {p:"The Summary is the answer sheet. Every number on it is read from the same result objects the discipline tabs consume, so it cannot disagree with them."},
-{p:"<b>Check summary panel</b> (2026-11-03): a short list of every check, one line each \u2014 name, D/C (or the failing condition where the ratio is not what fails) and status, with a count of NG / REVIEW items. NG and REVIEW lines open to show the result and the reference; \u25b8 opens any line, and a click on a line opens the card where that check is worked. On screens 1500 px and wider it is a column on the left (\u00ab shrinks it to a strip); on narrower screens it sits above the output tabs (Hide / Show checks). It lists the same checks as this tab (IBC mode) or the LRFDLTS summary (LRFDLTS mode), shows the input errors instead when there are any, and is not printed."},
+{p:"<b>Check summary panel</b> (2026-11-03): a short list of every check, one line each \u2014 name, D/C (or the failing condition where the ratio is not what fails) and status, with a count of NG / REVIEW items. NG and REVIEW lines open to show the result and the reference; \u25b8 opens any line, and a click on a line opens the card where that check is worked. On screens 1200 px and wider it is a column on the left (\u00ab shrinks it to a strip); on narrower screens it sits above the output tabs (Hide / Show checks). It lists the same checks as this tab (IBC mode) or the LRFDLTS summary (LRFDLTS mode), shows the input errors instead when there are any, and is not printed."},
 
 {h3:"3.1.1 Verdict banner and strip"},
 {p:"The banner states either <b>ALL CHECKS PASS</b>, naming the governing utilisation, or <b>N CHECKS FAIL</b>, naming each failure. Below it, one chip per check gives a green tick or a red cross. In two-post sign mode each chip is labelled P1 or P2, so a failure is attributed to the post that has it."},
@@ -6094,7 +6103,7 @@ document.addEventListener('click',ev=>{ const a=ev.target.closest&&ev.target.clo
    On screens >= 1500 px the box is moved into the left column #lppDashCol; below that it sits on top of the output panel.
    Collapse state: per-browser UI key lpp_dashCollapsed_v1 ('1' = collapsed, '0' or absent = open); not in the project, the
    autosave or the export. The Summary tab, the Report and printing are unchanged. */
-const LPDC={key:'lpp_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,open:new Map(),coll:false};
+const LPDC={key:'lpp_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1200px)')/* LPLB: was 1500px */:null,open:new Map(),coll:false};
 try{LPDC.coll=localStorage.getItem(LPDC.key)==='1';}catch(e){}
 const LPDC_ST={pass:'OK',fail:'NG',warn:'REVIEW',na:'INFO'};
 function lppDashDC(r){ return (r==null||isNaN(r))?'':'D/C '+(isFinite(r)?fmt(r,2):'∞'); }

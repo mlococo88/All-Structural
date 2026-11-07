@@ -5075,3 +5075,29 @@ Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summa
 - **How verified:** headless main vs branch, review probe cases: ACI cases and every Dev case identical; every AASHTO case gains only the threshold row (N/A where T_u = 0), the new note and, for aa100 and aasT, the warning; no other value moved. Screenshot of the Shear tab (aasT) looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** no key or format change (T_u was already saved per combination).
 - **Open items:** full AASHTO torsion design (5.7.3.4.2 V_eff in ε_s, 5.7.3.6.1/-.2 transverse, 5.7.3.6.3 longitudinal, Summary interaction) is not implemented yet; until then a combination above the threshold stays FAIL.
+
+## 2026-11-07 — PR: claude/cbc-aashto-long-reinf, PR #992: https://github.com/mlococo88/All-Structural/pull/992 (CBM2: AASHTO 5.7.3.5 longitudinal reinforcement for moment and shear checked for every combination; CALCULATION CHANGE (new check), Beam Capacity tab, AASHTO mode; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summary. Found in the in-depth review of 2026-11-07 (item M2).
+
+### CBM2. 5.7.3.5 longitudinal reinforcement   [CALCULATION CHANGE: new check]
+- **Governing provision (10th Ed. text checked):** AASHTO LRFD 10th Ed. (2024) 5.7.3.5, Eq. 5.7.3.5-1: the tensile capacity of the longitudinal reinforcement on the flexural tension side is at least |M_u|/(d_v φ_f) + 0.5N_u/φ_c + (|V_u/φ_v − V_p| − 0.5V_s) cot θ, with V_s (Eq. 5.7.3.3-4) not greater than V_u/φ_v; φ from 5.5.4.2; θ from 5.7.3.4. With torsion, 5.7.3.6.3 amends it.
+- **Where / what (all new, anchors `CBM2`):**
+  - `cbcLonA(F,sh,pf,Mu,Vu)` (before `function computeAll(){`): demand = |M_u|·12/(d_v φ_f) + max(0, |V_u|/φ_v − 0.5 min(V_s, |V_u|/φ_v)) cot θ (kip); capacity A_s f_y (A_s = tension steel of the combination's sense, `F.As`; f_y as in flexure); D/C = demand/capacity. No prestress (A_ps, V_p = 0) and N_u = 0 (the tool has no axial input). φ_f = the combination's flexural φ, φ_v, d_v, θ and V_s from `shear()`.
+  - `computeAll()` row: `lonA` (AASHTO only).
+  - `allChecks()`: `env("Longitudinal reinforcement for moment and shear","AASHTO 5.7.3.5", …,"tabShear")`, id `lonA`; N/A where M_u = V_u = 0.
+  - Shear tab: new card "Longitudinal Reinforcement (AASHTO 5.7.3.5)" (`shLonA`) with the worked lines per combination and links to that combination's Shear (d_v, θ, V_s) and Flexure (φ_f) cards; `cbcCheckCard` links the Summary row there.
+  - Report: new section "Longitudinal reinforcement (AASHTO 5.7.3.5)" (scope `lon`, steps Vs/dem/cap/dc per combination); chapter Summary key and suite shell Report summary (anchor `else if(c.id==='lonA') ks=`) → `lon/dc<ci>`; Report filter maps the section to the Shear tab.
+- **Decisions (pending engineer review):**
+  1. All tension steel of the sense is taken as fully developed at the section (the tool has no location or anchorage input; 5.7.3.5 says lack of full development shall be accounted for). Stated in the card and the Report.
+  2. The end-support form (Eq. 5.7.3.5-2) is not separate: with M_u = 0, Eq. 5.7.3.5-1 gives the same shear term.
+  3. Torsion (5.7.3.6.3) is not included; combinations above the 5.7.2.1 threshold already FAIL (CBH1a).
+- **Check case `aasT`:** AASHTO tee 12 × 36 in, f′c 12 ksi, f_y 80 ksi, 6 #10 (7.62 in²), #4 @ 10 in, M_u 900 k-ft, V_u 120 kip.
+  - d_v 31.18 in, θ 36.39°, V_s 101.54 kip, φ_f 0.90, φ_v 0.90.
+  - V_s = min(101.54, 120/0.9 = 133.33) = 101.54 kip.
+  - 10,800/(31.18 · 0.90) + (133.33 − 50.77) cot 36.39° = 384.9 + 112.0 = 496.9 kip.
+  - A_s f_y = 7.62 · 80 = 609.6 kip → **D/C 0.815 PASS (before: no check).**
+  - Other moved cases (new row only): `aasMinNeg` 1.13 FAIL (S2, top 2 #4); `aasMinNeg45` 1.22 FAIL; `aa100` 2.57 FAIL (its flexure D/C is already 1.92); `aasTeeNeg` 0.88 PASS. ACI: unchanged (no new field or row).
+- **How verified:** headless main vs branch, review probe cases: ACI and Dev cases identical; AASHTO cases gain only the new row (values above). Screenshot of the Shear tab card (aasT) looked at; Report section §8 and summary link checked. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change.
+- **Open items:** torsion in the longitudinal demand (5.7.3.6.3) with the full AASHTO torsion design.
