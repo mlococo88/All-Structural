@@ -1386,14 +1386,35 @@ function geometryWarnings(){
   const su=sortedUnits(); if(su.length<2) return w;
   const s0=ENG.align.staStart, s1=ENG.align.staEnd;
   // H2: deck points (girders and deck edges on every bearing line) before the POB / after the POE
-  let before=null, after=null;
+  let before=null, after=null, dMin=null, dMax=null;
   su.forEach(u=>{ const span=Math.max(1,Math.min(su.length-1,spanOfSta(u.sta))), ed=edgesForSpan(span);
     bearingLinesFor(u).forEach(bl=>{ [ed.l, ed.r, ...girdersForSpan(span)].forEach(off=>{ let d; try{ d=ENG.deckAtSupport(bl,off); }catch(e){ return; }
       if(!d||!isFinite(d.sta)) return;
+      if(!dMin||d.sta<dMin.sta) dMin={sta:d.sta, at:bl.label}; if(!dMax||d.sta>dMax.sta) dMax={sta:d.sta, at:bl.label};
       if(d.sta<s0-0.005 && (!before||s0-d.sta>before.by)) before={by:s0-d.sta, at:bl.label};
       if(d.sta>s1+0.005 && (!after||d.sta-s1>after.by)) after={by:d.sta-s1, at:bl.label}; }); }); });
   if(before) w.push(`Deck points lie up to ${before.by.toFixed(2)} ft before the POB (Sta ${formatStation(s0)}), at ${before.at}. Their plan position is projected onto the start tangent extended. Extend the alignment to cover the whole deck.`);
   if(after) w.push(`Deck points lie up to ${after.by.toFixed(2)} ft after the POE (Sta ${formatStation(s1)}), at ${after.at}. Their plan position is projected onto the end tangent extended. Extend the alignment to cover the whole deck.`);
+  // M1: supports outside the alignment; supports out of order (a pier at or beyond an end); two supports at one station
+  su.forEach(u=>{
+    if(u.sta<s0-0.005) w.push(`${u.name} (Sta ${formatStation(u.sta)}) is ${(s0-u.sta).toFixed(2)} ft before the POB (Sta ${formatStation(s0)}): it is placed on the start tangent extended.`);
+    if(u.sta>s1+0.005) w.push(`${u.name} (Sta ${formatStation(u.sta)}) is ${(u.sta-s1).toFixed(2)} ft after the POE (Sta ${formatStation(s1)}): it is placed on the end tangent extended.`); });
+  const uF=su[0], uL=su[su.length-1];
+  [[uF,'first'],[uL,'last']].forEach(([u,k])=>{ if(u.type!=='abut') w.push(`${u.name} (Sta ${formatStation(u.sta)}) is the ${k} support by station, so the bridge ${k==='first'?'starts':'ends'} there (the chord, the deck end and the span numbering use it), not at an abutment. Check the support stations.`); });
+  for(let i=1;i<su.length;i++) if(Math.abs(su[i].sta-su[i-1].sta)<0.005) w.push(`${su[i-1].name} and ${su[i].name} are at the same station (${formatStation(su[i].sta)}): the span between them has zero length.`);
+  // M1: deck points outside the vertical profile (its elevations are the first / last grade extended)
+  const pv=ENG.prof.pvis||[];
+  if(pv.length>=2 && dMin && dMax){ const p0=pv[0], pn=pv[pv.length-1];
+    if(dMin.sta<p0.sta-0.005) w.push(`Deck points lie up to ${(p0.sta-dMin.sta).toFixed(2)} ft before the profile Start point (Sta ${formatStation(p0.sta)}), at ${dMin.at}: their elevations use the first grade (${(100*(p0.gradeOut||0)).toFixed(3)} %) extended. Extend the profile to cover the whole deck.`);
+    if(dMax.sta>pn.sta+0.005) w.push(`Deck points lie up to ${(dMax.sta-pn.sta).toFixed(2)} ft past the profile End point (Sta ${formatStation(pn.sta)}), at ${dMax.at}: their elevations use the last grade (${(100*(pn.gradeIn||0)).toFixed(3)} %) extended. Extend the profile to cover the whole deck.`); }
+  // H1: one straight chord from end support to end support on a curved alignment: interior supports leave the roadway.
+  // The reference line's offset from the PGL at each interior support is compared with the straight-line interpolation of the
+  // two end offsets (what it is on a tangent). Tolerance: the smaller of 0.5 ft and 2 % of the deck width.
+  if(ENG.chord && su.length>2){ const {a1,a2}=abutOffsets(), S1=uF.sta, S2=uL.sta; const out=[];
+    su.slice(1,-1).forEach(u=>{ const sp=Math.max(1,Math.min(su.length-1,spanOfSta(u.sta))), ed=edgesForSpan(sp), tol=Math.min(0.5, 0.02*Math.abs(ed.r-ed.l));
+      const f=(S2>S1)?(u.sta-S1)/(S2-S1):0, want=a1+(a2-a1)*f, got=ENG.bclOffAtSta(u.sta);
+      if(isFinite(got) && Math.abs(got-want)>tol) out.push(`${u.name}: reference line ${got>=0?'+':''}${got.toFixed(2)} ft from the PGL (${(got-want)>=0?'+':''}${(got-want).toFixed(2)} ft off the line between the end offsets; tolerance ${tol.toFixed(2)} ft)`); });
+    if(out.length) w.push(`The alignment curves within the bridge, but the girders, deck edges and supports are laid out on ONE straight chord from ${uF.name} to ${uL.name}, so the deck leaves the roadway at the interior supports: ${out.join('; ')}. The elevations there are the cross slope extended to those offsets. Check against the plans (the girders are not chorded span by span).`); }
   return w;
 }
 function showGeomWarnings(ws){
