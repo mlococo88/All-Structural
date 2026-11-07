@@ -2394,3 +2394,34 @@ function renderStatus(r) {
 - **Decisions (pending engineer review):**
   - The appendix is a list with links, not a second print of every figure. The figures are in their sections, as SF #779 moved them out of its appendix.
   - Drawings sheets 2–3 are listed as on screen only (Print sheet / Print all).
+
+## 2026-11-07 — PR: claude/rw-report-print (PR #940: https://github.com/mlococo88/All-Structural/pull/940) (RWPR) — Report in print checked (PDF); input echo completed (Project dates, barrier, Coulomb / at-rest / h_eq inputs, bar overrides); print smoke test   [display only; no result change]
+- **Why:** engineer-approved 2026-11-06 (task 5, review Phase 5a: verify the input echo prints correctly, as SF #781, and that the page breaks print correctly).
+- **Print check (PDF, Letter):**
+  - ACI (water, column, seismic): 29–30 pages. AASHTO (barrier, CT, variable height, key): 31–32 pages.
+  - Rendered page by page and looked at. The report prints alone, with its running header (project no., computed / checked with dates) and "Page n of N".
+  - Each section starts as the shared viewer sets it; figures are not split across pages; long tables repeat their header row on the next page (§3.3).
+  - 0 KaTeX errors; the page comes back after printing.
+  - Nothing to correct in the page breaks: `shared/report.js` is not changed.
+- **Input echo:**
+  - It printed correctly: no shifted or empty cells. RW builds its echo tables directly and does not copy a tab, so SF's span problem does not arise.
+  - It lacked some inputs, now added:
+    - §3.1 Project: **Date** and **Checked date** (the Project tab fields; they were only in the title block);
+    - §3.2 Wall geometry, with a barrier: how its weight is set (geometry: thickness × height × γ_c, or the entered weight) and its offset from the stem-top centreline;
+    - §3.4 Materials and options, AASHTO: Coulomb wall friction δ and wall batter θ (Coulomb); OCR (at-rest); h_eq (LS on);
+    - §3.4, both modes: **Bar overrides (Rebar tab)**: the marks overridden ("S1 #6 @ 8 in"), or "none (automatic selection)". Only overrides the analysis applies are listed (#3–#10 at 3–18 in, as `applyOvr`).
+- **Where:** `rwrModel`, inputs block:
+  - the Project kv rows;
+  - the `geo` barrier row;
+  - before `subs.push(sub('Materials, cover and design options', …` (the overrides row);
+  - before `['Shear method', A.shear_method || 'auto', '–'],` (the AASHTO rows).
+- **Test:** `tests/smoke/retaining-wall-checks.mjs` gains the print check, for two walls:
+  - Print report with window.print stubbed, print media, page.pdf;
+  - the report alone; every section present; the 3D image and the drawn figures;
+  - the echo with the dates and overrides; 0 KaTeX errors; ≥ 15 pages; the page restored.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **How verified:**
+  - origin/main vs branch, eight cases: `_R`, Export JSON, every localStorage key, tab text and DXF identical. The Report differs only by the added echo rows.
+  - The smoke test passes, as do the standard tests (see the PR).
+- **Other copies:** none.
+- **PDFs** (scratch, not committed): `aci.pdf`, `aashto.pdf` from the session scratchpad `rw4/pdf`.
