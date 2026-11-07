@@ -65,6 +65,9 @@ export const CASES = {
   // IBC rectangular pole, wind on the deep face (added 2026-11-07, LPH2: mast strip width by wind direction)
   rect610: { inputs: { poleShape: 'rect', poleDiaTop: '6', poleDepthTop: '10', poleTwTop: '0.25' }, top: { cablesEnabled: false }, fixtures: [] },
   rect106: { inputs: { poleShape: 'rect', poleDiaTop: '10', poleDepthTop: '6', poleTwTop: '0.25' }, top: { cablesEnabled: false }, fixtures: [] },
+  // LRFDLTS and IBC monopost sign with an undersized manual shaft cage (added 2026-11-07, LPH4 / LPM7: the shaft checks reach the Summary)
+  ltsshaftng: { inputs: { ltsV: '130', signB: '16', signS: '8', b: '2', bromsSoil: 'cohesive', bromsC: '1.0', rebarMode: 'manual', manBarN: '4', manBarSize: '#4' }, top: { codeMode: 'lts', appMode: 'sign', signPosts: 1 } },
+  ibcshaftng: { inputs: { V: '130', signB: '16', signS: '8', b: '2', rebarMode: 'manual', manBarN: '4', manBarSize: '#4' }, top: { appMode: 'sign', signPosts: 1 } },
   deep12: { inputs: { H: '50', poleDiaTop: '6', poleDiaBase: '12', poleTwBase: '0.3125', soilClass: 'clay', S1: '100', b: '2', V: '170' } },
 };
 

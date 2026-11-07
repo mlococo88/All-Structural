@@ -5101,3 +5101,29 @@ Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summa
 - **How verified:** headless main vs branch, review probe cases: ACI and Dev cases identical; AASHTO cases gain only the new row (values above). Screenshot of the Shear tab card (aasT) looked at; Report section §8 and summary link checked. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** no key or format change.
 - **Open items:** torsion in the longitudinal demand (5.7.3.6.3) with the full AASHTO torsion design.
+
+## 2026-11-07 — PR: claude/cbc-skin-reinf, PR #1001: https://github.com/mlococo88/All-Structural/pull/1001 (CBM3: skin reinforcement checked where required — ACI 318-19 9.7.2.3 (h > 36 in) and AASHTO 5.6.7 (d_ℓ > 36 in); new input "Skin bars (each side face)", blank = none entered → FAIL where required; CALCULATION CHANGE (new checks), Beam Capacity tab; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (item M3).
+
+### CBM3. Skin reinforcement   [CALCULATION CHANGE: new checks]
+- **Governing provisions:**
+  - ACI 318-19 9.7.2.3 (rendered PDF, printed p. 139; no 2022 erratum): where h exceeds 36 in, longitudinal skin reinforcement is distributed on both side faces for a distance h/2 from the tension face, with spacing not more than s of 24.3.2, c_c being the clear cover from the skin reinforcement to the side face. Table 24.3.2 / 24.3.2.1: s = min(15(40,000/f_s) − 2.5c_c, 12(40,000/f_s)), f_s may be 2/3 f_y.
+  - AASHTO LRFD 10th Ed. (2024) 5.6.7 (text checked): where d_ℓ of nonprestressed members exceeds 3.0 ft, skin reinforcement on both side faces over d_ℓ/2 nearest the flexural tension reinforcement, A_sk ≥ 0.012(d_ℓ − 30) in²/ft of height on each face (Eq. 5.6.7-3); total per face need not exceed one-fourth of the required flexural tensile reinforcement; spacing not more than d_ℓ/6 or 12.0 in.
+- **New input** (Transverse Reinforcement section): "Skin bars (each side face)": None / bar size, and "Skin bar spacing" (in), saved as `S.skin = {size, s}` (default `{size:"", s:0}`; `mergeState` now merges `skin` like the other groups). Shown in the Input Echo and the Report inputs note.
+- **Where:** `detailing()`, new block before `/* maximum steel via net tensile strain */` (anchor `CBM3`); rows are added only where skin bars are required, so other projects are unchanged.
+  - ACI, h > 36 in: `dSkin` "Skin reinforcement spacing (h > 36 in)": s_skin ≤ s_max with f_s = 2/3 f_y and c_c = cover + stirrup diameter; no bars entered → FAIL (provided "—").
+  - AASHTO, d_ℓ > 36 in (d_ℓ = d of the outermost tension layer of the combination's sense): `dSkinA` A_sk = A_b·12/s ≥ min(0.012(d_ℓ − 30), (A_s/4)/(d_ℓ/24)); `dSkinS` s ≤ min(d_ℓ/6, 12 in); no bars entered → both FAIL.
+  - `CBDC_COND` gets the conditions of the three new ids.
+- **Decisions (pending engineer review):**
+  1. ACI f_s = 2/3 f_y for the skin spacing (24.3.2.1 default), whatever crack-control basis is selected.
+  2. ACI c_c to the side face = clear cover + stirrup diameter (skin bars inside the stirrup).
+  3. AASHTO one-fourth cap computed with A_s provided (A_s required is not known to the tool): a larger cap, so the requirement is not reduced below what the code allows (conservative).
+  4. Blank skin input = "not provided" → FAIL where required (the brief's rule).
+- **Check cases:**
+  - `aciDeep` (ACI 16 × 48 in, 4 #10, cover 2 in, #4 stirrups, f_y 60 ksi): f_s 40,000 psi, c_c 2.5 in, s_max = min(15 − 6.25, 12) = 8.75 in. **Before: no row (all PASS). After: no skin bars → FAIL;** with #4 @ 10 in → 10/8.75 = 1.14 FAIL; #4 @ 8 in → PASS.
+  - `aasDeep` (same section, AASHTO): d_ℓ = 48 − 2 − 0.5 − 0.635 = 44.87 in; A_sk,req = 0.012(14.87) = 0.178 in²/ft (cap (5.08/4)/(44.87/24) = 0.679); s_max = min(7.48, 12) = 7.48 in. No bars → both FAIL; #4 @ 8 in → A_sk 0.30 in²/ft PASS (0.59), spacing 8/7.48 = 1.07 FAIL.
+  - Sections with h ≤ 36 in (ACI) or d_ℓ ≤ 36 in (AASHTO): unchanged (no row).
+- **How verified:** headless main vs branch, review probe cases: only aciDeep (and the new deep cases) moved; all other Beam Capacity and Dev cases identical. Screenshot of the Detailing tab (aasDeep) looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar` (save round trip with the new field), `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** one new additive field `skin` (old saves read with the default "none"; no key change).
+- **Open items:** the skin bars are not drawn in the section figure or the DXF sheets.
