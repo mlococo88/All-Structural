@@ -3079,8 +3079,8 @@ function renderBearing(){
    'd_q = d_c = d_\\gamma = 1',null,
    'd_q = 1.00,\\quad d_c = 1.00,\\quad d_\\gamma = 1.00'));
   else b2.appendChild(eqBlock('Depth factors','Vesi\u0107 (k = Df/B\u2032 \u2264 1, else arctan); option on \u2014 soil above the base taken as competent and permanent (use condition: AASHTO LRFD 10.6.3.1.2a). Not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10, which takes arctan(Df/B) at every depth, caps dq at 1.4 and has no dc',
-   'k = '+ (R.Df/v.Beff<=1?'D_f/B_{eff}':'\\arctan(D_f/B_{eff})')+',\\quad d_q = 1+2\\tan\\varphi(1-\\sin\\varphi)^2 k,\\quad d_c = d_q-\\frac{1-d_q}{N_c\\tan\\varphi},\\quad d_\\gamma = 1',
-   'k = '+(R.Df/v.Beff<=1?f2(R.Df)+'/'+f2(v.Beff):'\\arctan('+f2(R.Df)+'/'+f2(v.Beff)+')')+' = '+f2(v.kk)+',\\quad d_q = 1+2\\tan '+f2(R.phiBdeg)+'^\\circ(1-\\sin '+f2(R.phiBdeg)+'^\\circ)^2\\cdot'+f2(v.kk)+',\\quad d_c = '+f2(v.dq)+'-\\frac{1-'+f2(v.dq)+'}{'+f2(v.Nc)+'\\cdot'+f2(v.tphi)+'}',
+   'k = \\arctan(D_f/B_{eff}),\\quad d_q = 1+2\\tan\\varphi(1-\\sin\\varphi)^2 k \\le 1.4,\\quad d_c = d_q-\\frac{1-d_q}{N_c\\tan\\varphi},\\quad d_\\gamma = 1',
+   'k = \\arctan('+f2(R.Df)+'/'+f2(v.Beff)+') = '+f2(v.kk)+',\\quad d_q = 1+2\\tan '+f2(R.phiBdeg)+'^\\circ(1-\\sin '+f2(R.phiBdeg)+'^\\circ)^2\\cdot'+f2(v.kk)+',\\quad d_c = '+f2(v.dq)+'-\\frac{1-'+f2(v.dq)+'}{'+f2(v.Nc)+'\\cdot'+f2(v.tphi)+'}',
    'd_q = '+f2(v.dq)+',\\quad d_c = '+f2(v.dc)+',\\quad d_\\gamma = 1.00'));
   b2.appendChild(eqBlock('Load inclination factors','Vesi\u0107 (m interpolated by load direction, on B\u2032/L\u2032 \u2014 AASHTO LRFD 10.6.3.1.2a)',
    "m_x=\\tfrac{2+B'/L'}{1+B'/L'},\\; m_y=\\tfrac{2+L'/B'}{1+L'/B'},"+'\\; m = m_x\\cos^2\\theta + m_y\\sin^2\\theta,\\quad i_q = \\left(1-\\tfrac{H}{V+A_e c\\cot\\varphi}\\right)^m,\\; i_\\gamma = (\\;\\cdot\\;)^{m+1},\\; i_c = i_q-\\tfrac{1-i_q}{N_c\\tan\\varphi}',
