@@ -1561,7 +1561,7 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/sm-combo3 (CMB3: ASCE 7-16 Sec. 2.3.1 combination 3 in the default list and the LRFD preset; review H1 + M1)   [CALCULATION CHANGE — default combination list and LRFD preset only, new projects] [MORE conservative]
+## 2026-11-07 — PR: claude/sm-combo3 (PR #1082: https://github.com/mlococo88/All-Structural/pull/1082) (CMB3: ASCE 7-16 Sec. 2.3.1 combination 3 in the default list and the LRFD preset; review H1 + M1)   [CALCULATION CHANGE — default combination list and LRFD preset only, new projects] [MORE conservative]
 - **Why:** code-compliance review 2026-11-07, findings H1 and M1. The default list had no combination 3 at all; the LRFD preset had 1.2D + 1.0L + 1.6S but not 1.2D + 1.6S + 0.5W, and no 1.2D + 1.6L with snow set to zero.
 - **Governing provision:** ASCE 7-16 Sec. 2.3.1, combinations 2 and 3 (= 2018 IBC Sec. 1605.2, Eqs. 16-2 and 16-3); 2018 IBC Sec. 1605.1 (each combination also investigated with one or more variable loads set to zero).
 - **Where (1), `defCombos()`, anchor `{id:'12_16S',f:{DL:1.2,LL:1.6,SL:.5},on:true},`:** two rows added after it.
