@@ -314,7 +314,7 @@
             <div></div>
           </div>
           <p class="note" style="margin-top:0">The vertical profile and PGL are defined at <strong>top of pavement (top of HMA)</strong>. The top-of-deck (structural surface) is the profile elevation minus the HMA thickness. Beam seats hang off top-of-deck, so they drop with it automatically.</p>
-          <p class="note" style="margin-top:0">Beam seat = top-of-deck − deck thickness − (min haunch + camber) − beam depth − bearing assembly. Camber is the positive midspan ordinate; it lowers the seat. <strong>All depths on this panel are in inches.</strong></p>
+          <p class="note" style="margin-top:0">Beam seat = top-of-deck − deck thickness − (min haunch + camber [+ sag ordinate + cross slope × b<sub>f</sub>/2]) − beam depth − bearing assembly. Camber is the positive midspan ordinate of the <em>net</em> camber left when the deck is placed (camber − dead-load deflection of the deck and haunch); it lowers the seat. The bracketed terms apply when <em>Seat terms</em> below is ticked; each seat's working is shown on the Beam Seat Output tab. <strong>All depths on this panel are in inches.</strong></p>
           <div class="row2">
             <div><label>Deck structural thickness <span class="unit">(in)</span></label><input type="number" id="d_slab" value="8" step="0.125" title="Minimum structural thickness of the deck slab, in INCHES, constant across the section. Subtracted from top-of-deck to reach the bottom of the deck."></div>
             <div><label>Minimum haunch <span class="unit">(in)</span></label><input type="number" id="d_haunch" value="1.5" step="0.125" title="Minimum haunch, in INCHES, between bottom of deck and top of beam, occurring at the point of maximum camber. At the bearings the haunch becomes minimum haunch + camber."></div>
@@ -322,7 +322,11 @@
           <div class="row3">
             <div><label>Beam depth (default) <span class="unit">(in)</span></label><input type="number" id="d_beam" value="36" step="0.25" title="Overall beam/girder depth, in INCHES, top of beam to bottom of beam. Default; can be overridden per beam and per span below."></div>
             <div><label>Bearing assy (default) <span class="unit">(in)</span></label><input type="number" id="d_bearing" value="3" step="0.125" title="Bearing assembly thickness, in INCHES, from bottom of beam to top of substructure concrete (the beam seat). Default; can be overridden per beam and per span below."></div>
-            <div><label>Camber (default) <span class="unit">(in)</span></label><input type="number" id="d_camber" value="0" step="0.125" title="Midspan camber ordinate, in INCHES, entered positive (beam bows up at midspan). Lowers the beam seat by this amount at the bearings. Default; can be overridden per beam and per span below."></div>
+            <div><label>Net camber (default) <span class="unit">(in)</span></label><input type="number" id="d_camber" value="0" step="0.125" title="Net midspan camber at deck placement, in INCHES, entered positive (beam bows up at midspan): the camber that remains after the dead-load deflection of the deck and haunch (steel: camber diagram less the slab deflection; prestressed: the at-erection camber less the slab deflection). Lowers the beam seat by this amount at the bearings. Default; can be overridden per beam and per span below."></div>
+          </div>
+          <div class="row2"><!-- BGX5 (2026-11-07): optional seat terms (review H5, engineer item Q-BG3) -->
+            <div><label style="display:flex;gap:6px;align-items:center;"><input type="checkbox" id="seat_terms" checked style="width:auto;" title="Adds two terms to the haunch at each bearing: (1) the sag ordinate of the deck along each girder between its bearings (the deck at midspan below the straight line between the deck at the two bearings; sag adds, crest is not used), so the deck is not thinned at midspan; (2) the cross slope of the deck across the top flange × half the flange width, so the minimum haunch is kept at the low flange edge. Projects saved before this option existed open with it off (their seats are unchanged).">Seat terms: sag ordinate + cross slope &times; b<sub>f</sub>/2</label></div>
+            <div><label>Top flange width b<sub>f</sub> <span class="unit">(in)</span></label><input type="number" id="d_bf" value="0" step="0.25" min="0" title="Top flange width, in INCHES, for the cross slope × b_f/2 seat term and the low-edge haunch check (all girders). 0 = not used."></div>
           </div>
           <div style="margin-top:10px">
             <button class="sm ghost" id="ovr_toggle" type="button">▸ Per-beam / per-span overrides</button>
@@ -517,10 +521,13 @@
   <!-- TAB: BEAM SEAT OUTPUT -->
   <section class="tabpane" id="pane-seat" role="tabpanel">
     <h2 class="sec">Beam Seat Elevations · at bearing lines</h2>
-    <p class="note" style="margin-top:-6px;">Seat = top-of-deck − deck thickness − (min haunch + camber) − beam depth − bearing assembly. One row per bearing line; dual-bearing piers report back &amp; ahead separately, each using its own span's camber/depth/bearing.</p>
+    <p class="note" style="margin-top:-6px;">Seat = top-of-deck − deck thickness − (min haunch + net camber [+ sag ordinate + cross slope × b<sub>f</sub>/2 when Seat terms is ticked]) − beam depth − bearing assembly; hover a seat, or see <a href="#seat_work_h">Seat working</a> below, for its working. One row per bearing line; dual-bearing piers report back &amp; ahead separately, each using its own span's camber/depth/bearing.</p>
     <p class="note vdatum_cap" style="margin:6px 0 0;" title="Label only — no datum conversion is applied.">Elevations in feet · vertical datum: not specified</p>
     <div class="noprint" style="display:flex; gap:8px; margin:6px 0;"><button class="sm ghost" type="button" onclick="exportTableCSV('seat_tbl_wrap','beam-seat')" title="Download the beam-seat table as a CSV file.">Export CSV</button><button class="sm ghost" type="button" onclick="window.print()" title="Print this tab.">Print</button></div>
     <div id="seat_tbl_wrap" style="overflow-x:auto;"></div>
+    <!-- BGX5 (2026-11-07, §6): the working of every seat, and the midspan haunch check -->
+    <h2 class="sec" style="margin-top:24px;" id="seat_work_h">Seat working &middot; midspan haunch check</h2>
+    <div id="seat_work_wrap" style="overflow-x:auto;"></div>
 
     <h2 class="sec" style="margin-top:24px;">Cross-sections at each bearing line</h2>
     <p class="note" style="margin-top:-6px;">Looking up-station. Stepped substructure (top follows each girder seat), beam centerlines, deck edges, curb lines, and the top-of-deck profile, with seat elevation callouts.</p>
@@ -1229,7 +1236,7 @@ function buildEngine(){
     if(ctx && ctx.bi!=null && ctx.span!=null){ camber=resolveDepth('camber',ctx.bi,ctx.span); beamDepth=resolveDepth('beam',ctx.bi,ctx.span); bearing=resolveDepth('bearing',ctx.bi,ctx.span); }
     else { camber=depths.camber; beamDepth=depths.beam; bearing=depths.bearing; }
     const drop=depths.slab+(depths.minHaunch+camber)+beamDepth+bearing;
-    return { ...d, z:d.z-drop };
+    return { ...d, z:d.z-drop, drop };   // BGX5: drop kept for the seat's working
   }
   function beamSeatCW(t,w,ctx){ if(!CH) return getBeamSeat(align.staStart+t,w,ctx);
     if(PS){ const q=psXY(t,w); return beamSeatAtXY(q.x,q.y,ctx); }   // BGX3
@@ -1307,11 +1314,35 @@ function buildEngine(){
     const w=off-bridgeCL(); const t=supportChordT(bl.sta)+w*Math.tan(effSkew(bl)*DEG);   // BGX4: effSkew
     return deckPointCW(t,w);
   }
+  /* BGX5 (review H5, engineer item Q-BG3; Decision pending engineer review): optional seat terms and the seat's working.
+     supT: the frame t of girder w on a bearing line. spanBrgs(k): the bearing lines at the start and end of span k.
+     girderSag(k, bi): the deck's sag ordinate along girder bi of span k, m = (TD_A + TD_B)/2 − TD_mid (ft; > 0 = sag, the deck
+     at midspan below the straight line between the deck at the two bearings; < 0 = crest). crossDrop(t, w): how far the deck
+     falls across the top flange, TD(w) − min(TD(w − b_f/2), TD(w + b_f/2)) (ft, ≥ 0; b_f = 0: 0). */
+  const SEAT_TERMS=!!(document.getElementById('seat_terms')||{}).checked, BF=Math.max(0,+((document.getElementById('d_bf')||{}).value||0))/12;
+  function supT(bl,w){ return PS ? psSupT(bl,w) : supportChordT(bl.sta)+w*Math.tan(effSkew(bl)*DEG); }
+  function spanBrgs(k){ const su=sortedUnits(); if(k<1||k>su.length-1) return null; const A=bearingLinesFor(su[k-1]), B=bearingLinesFor(su[k]); return {A:A[A.length-1], B:B[0]}; }
+  function girderSag(k, bi){ const sb=spanBrgs(k); if(!sb||!CH) return null; const gs=girdersForSpan(k); if(bi==null||gs[bi]==null) return null;
+    const w=gs[bi]-bridgeCL(), tA=supT(sb.A,w), tB=supT(sb.B,w), zA=deckPointCW(tA,w).z, zB=deckPointCW(tB,w).z, zM=deckPointCW((tA+tB)/2,w).z;
+    return { m:(zA+zB)/2-zM, tA, tB, tM:(tA+tB)/2, zA, zB, zM, w, len:Math.abs(tB-tA) }; }
+  function crossDrop(t,w){ if(!(BF>0)) return 0; const z=deckPointCW(t,w).z; return Math.max(0, z-Math.min(deckPointCW(t,w-BF/2).z, deckPointCW(t,w+BF/2).z)); }
+  // the spans a bearing line carries: back / ahead of a pier: one; a single line at a pier: both; an abutment: its span
+  function brgSpans(bl){ const su=sortedUnits(); const j=su.findIndex(u=>Math.abs(u.sta-(bl.supSta!=null?bl.supSta:bl.sta))<1e-6); if(j<0) return [];
+    if(bl.role==='back') return [j]; if(bl.role==='ahead') return [j+1]; return [j,j+1].filter(k=>k>=1&&k<=su.length-1); }
   function beamSeatAtSupport(bl, off, ctx){
     if(!CH) return getBeamSeat(staOnBearing(bl.sta,bl.skew,off), off, ctx);
-    if(PS){ const w=off-bridgeCL(); return beamSeatCW(psSupT(bl,w),w,ctx); }
-    const w=off-bridgeCL(); const t=supportChordT(bl.sta)+w*Math.tan(effSkew(bl)*DEG);   // BGX4: effSkew
-    return beamSeatCW(t,w,ctx);
+    const w=off-bridgeCL(), t=supT(bl,w);
+    const base=beamSeatCW(t,w,ctx);
+    // the working (§6): every term of the stack, ft
+    const bi=ctx&&ctx.bi, span=ctx&&ctx.span, has=(bi!=null&&span!=null);
+    const P={ td:base.z+base.drop, slab:depths.slab, hmin:depths.minHaunch,
+      camber:has?resolveDepth('camber',bi,span):depths.camber, beam:has?resolveDepth('beam',bi,span):depths.beam, bearing:has?resolveDepth('bearing',bi,span):depths.bearing,
+      sag:0, sagSpan:null, sagRaw:null, cross:crossDrop(t,w), on:SEAT_TERMS };
+    if(has){ brgSpans(bl).forEach(k=>{ const gs=girdersForSpan(k); const g=(k===span)?bi:gs.findIndex(o=>Math.abs(o-off)<1e-6); const r=girderSag(k, g>=0?g:bi);
+      if(r && (P.sagRaw==null || r.m>P.sagRaw)){ P.sagRaw=r.m; P.sagSpan=k; } }); }
+    P.sag=Math.max(0, P.sagRaw||0);
+    const extra=SEAT_TERMS ? (P.sag+P.cross) : 0;
+    return { ...base, z:base.z-extra, parts:P };
   }
   // BGX3: the frame stations a line from t0 to t1 passes through (its ends plus the kinks at the interior supports), and
   // the deck points there; one chord: just the two ends (unchanged drawings)
@@ -1325,15 +1356,15 @@ function buildEngine(){
   }
   return { align, prof, xsec, depths, getDeckPoint, getBeamSeat,
     chord:CH, frameInfo:()=>({ frame:(PS?'span':'single'), set:FRAME_SET, poly:PS, len:(PS?PS.T[PS.n]:(CH?CH.len:0)) }), cwTs,   // BGX3 (a function: kept out of the engine's data)
-    cwPath, effSkew, skewDelta, deckPointCW, deckPointAtXY, beamSeatCW, beamSeatAtXY, chordExtent, supportChordT, deckAtSupport, beamSeatAtSupport, offsetChordLine, crownAtSta, bclOffAtSta, chordOffsetAtXY, crownRef:CROWN_REF, skews:{a1:SK1,a2:SK2},
+    cwPath, effSkew, skewDelta, girderSag, crossDrop, spanBrgs, supT, seatTerms:()=>({on:SEAT_TERMS, bf:BF}), deckPointCW, deckPointAtXY, beamSeatCW, beamSeatAtXY, chordExtent, supportChordT, deckAtSupport, beamSeatAtSupport, offsetChordLine, crownAtSta, bclOffAtSta, chordOffsetAtXY, crownRef:CROWN_REF, skews:{a1:SK1,a2:SK2},
     globalGirders: GIRDERS.map(g=>g+bridgeCL()) };
 }
 
 function bearingLinesFor(u){
   if(u.type==='pier' && u.bearMode==='double')
-    return [ {label:`${u.name} brg-back`, sta:u.sta-u.bearOffset, skew:u.skew, supSta:u.sta},
-             {label:`${u.name} brg-ahead`, sta:u.sta+u.bearOffset, skew:u.skew, supSta:u.sta} ];
-  return [ {label:`${u.name} brg`, sta:u.sta, skew:u.skew, supSta:u.sta} ];
+    return [ {label:`${u.name} brg-back`, sta:u.sta-u.bearOffset, skew:u.skew, supSta:u.sta, role:'back'},
+             {label:`${u.name} brg-ahead`, sta:u.sta+u.bearOffset, skew:u.skew, supSta:u.sta, role:'ahead'} ];
+  return [ {label:`${u.name} brg`, sta:u.sta, skew:u.skew, supSta:u.sta, role:'cl'} ];
 }
 /* ===== feet-inches input =====
    Plans dimension in feet and inches; the model works in decimal feet. These fields accept either,
@@ -1514,7 +1545,7 @@ function compute(){
   { const R=sectionStaRange();
     if(ACTIVE_STA===null||ACTIVE_STA<R.s0-1e-6||ACTIVE_STA>R.s1+1e-6) ACTIVE_STA=(R.s0+R.s1)/2; }
   drawPlan('svg_plan_a'); drawProfile('svg_prof_a');
-  buildSpanSummary(); buildDerived(); drawSection(); buildTable(); drawHeatmap(); buildSeatTable(); buildSeatSections(); syncSectionControls(); renderSnapButtons();
+  buildSpanSummary(); buildDerived(); drawSection(); buildTable(); drawHeatmap(); buildSeatTable(); buildSeatWork(); buildSeatSections(); syncSectionControls(); renderSnapButtons();
   render3DAlign(); render3DSub();
   if(typeof bgdwRefresh==='function') bgdwRefresh();   // BGDW: the Drawings tab, when it is open
   document.getElementById('plan_len').textContent='L = '+(ENG.align.staEnd-ENG.align.staStart).toFixed(1)+' ft';
@@ -2819,7 +2850,8 @@ function seatData(){
     const gs=girdersForSpan(span);
     const seats=gs.map((o,bi)=>{ const dp=ENG.deckAtSupport(bl,o);
       const st=(dp.sta!=null)?dp.sta:staOnBearing(bl.sta,bl.skew,o);
-      return { bi, off:o, sta:st, seatZ:ENG.beamSeatAtSupport(bl,o,{bi,span}).z, deckZ:dp.z }; });
+      const sb=ENG.beamSeatAtSupport(bl,o,{bi,span});
+      return { bi, off:o, sta:st, seatZ:sb.z, deckZ:dp.z, parts:sb.parts||null }; });   // BGX5: parts = the seat's working
     out.push({ unit:u, label:bl.label, sta:bl.sta, skew:bl.skew, span, seats });
   }));
   return out;
@@ -2836,11 +2868,48 @@ function buildSeatTable(){
   data.forEach(r=>{
     h+=`<tr><td class="lbl" style="color:var(--cyan)">${r.label}</td><td class="lbl">${formatStation(r.sta)}</td><td>${r.skew.toFixed(1)}</td><td class="lbl">${r.span}</td>`;
     // map each global girder column to this span's seat (by index)
-    gcols.forEach((o,k)=>{ const s=r.seats[k]; h+=`<td>${s?s.seatZ.toFixed(2):'—'}</td>`; });
+    gcols.forEach((o,k)=>{ const s=r.seats[k]; h+=`<td${s&&s.parts?` title="${seatWorkText(s).replace(/"/g,'&quot;')}"`:''}>${s?s.seatZ.toFixed(2):'—'}</td>`; });   // BGX5: hover = the working
     h+='</tr>';
   });
   h+='</tbody></table><p class="note">Beam-seat elevations at each bearing line. Columns G1..Gn use the global girder set; each value resolves camber/beam-depth/bearing for that girder in that bearing\u2019s span.</p>';
   wrap.innerHTML=h;
+}
+/* BGX5 (§6): one seat's working, symbol by symbol (ft):
+   seat = TD − t_s − (h_min + c + m_sag + Δ_cs) − d − t_brg. m_sag, Δ_cs: the optional seat terms (shown, and marked "not
+   applied" when Seat terms is off). */
+function seatWorkText(s){ const P=s.parts; if(!P) return '';
+  const f=v=>v.toFixed(3), on=P.on;
+  const sagTxt=(P.sagRaw==null)?'m_sag 0.000':(P.sagRaw>=0?`m_sag ${f(P.sag)} (span ${P.sagSpan} sag)`:`m_sag 0.000 (span ${P.sagSpan} crest ${f(-P.sagRaw)}: not used)`);
+  const extra=on?(P.sag+P.cross):0;
+  return `seat = TD − t_s − (h_min + c`+(on?' + m_sag + Δ_cs':'')+`) − d − t_brg = ${f(P.td)} − ${f(P.slab)} − (${f(P.hmin)} + ${f(P.camber)}`+(on?` + ${f(P.sag)} + ${f(P.cross)}`:'')+`) − ${f(P.beam)} − ${f(P.bearing)} = ${f(P.td-P.slab-P.hmin-P.camber-extra-P.beam-P.bearing)} ft`+
+    (on?` [${sagTxt}; Δ_cs = cross slope × b_f/2 = ${f(P.cross)}]`:` [Seat terms off: ${sagTxt}, Δ_cs ${f(P.cross)} not applied]`);
+}
+function buildSeatWork(){
+  const box=document.getElementById('seat_work_wrap'); if(!box) return;
+  const su=sortedUnits(); if(su.length<2||!ENG||!ENG.chord||!ENG.girderSag){ box.innerHTML='<p class="note">Define at least two substructure units.</p>'; return; }
+  const ST=ENG.seatTerms(), F=v=>v.toFixed(3), IN=v=>(v*12).toFixed(2);
+  const esc=t=>String(t).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  let h=`<p class="note" style="margin-top:0;">Each seat worked out (ft): <b>seat = TD − t<sub>s</sub> − (h<sub>min</sub> + c`+(ST.on?' + m<sub>sag</sub> + Δ<sub>cs</sub>':'')+`) − d − t<sub>brg</sub></b>. TD = top of deck at the girder on the bearing line (Top of Deck Output); t<sub>s</sub> deck thickness; h<sub>min</sub> minimum haunch; c net camber; d beam depth; t<sub>brg</sub> bearing assembly (Bridge tab, per-beam overrides applied). `+
+    (ST.on?`m<sub>sag</sub> = the deck's sag ordinate along the girder over the span the bearing carries, (TD<sub>A</sub> + TD<sub>B</sub>)/2 − TD<sub>mid</sub> (a crest is not used; a single bearing line at a pier takes the larger of its two spans); Δ<sub>cs</sub> = how far the deck falls across the top flange, b<sub>f</sub> = ${IN(ST.bf)} in`+(ST.bf>0?'':' (0: not used)')+`.`
+      :`<b>Seat terms are off</b> for this project (saved before 2026-11-07, or switched off on the Bridge tab): m<sub>sag</sub> and Δ<sub>cs</sub> are worked below but not applied; the seats are as before. Basis: MassDOT Bridge Manual Part I 3.5.6.3, CTDOT BDM 7.2.11.1 and 8.1.2.4, RIDOT BDM 9.4.6 (see the note under the check).`)+`</p>`;
+  h+='<details><summary class="note" style="cursor:pointer">Working of every seat ('+seatData().reduce((n,r)=>n+r.seats.length,0)+')</summary><table class="wide" style="font-size:11px"><thead><tr><th class="lbl">Bearing line</th><th class="lbl">Girder</th><th class="lbl" style="text-align:left">working</th></tr></thead><tbody>';
+  seatData().forEach(r=>r.seats.forEach((q,k)=>{ if(q.parts) h+=`<tr><td class="lbl">${esc(r.label)}</td><td class="lbl">G${k+1}</td><td class="lbl" style="text-align:left;white-space:normal">${esc(seatWorkText(q))}</td></tr>`; }));
+  h+='</tbody></table></details>';
+  // midspan haunch check: girder straight between its two seats, rising by the net camber at midspan
+  h+='<table class="wide" style="margin-top:10px"><thead><tr><th class="lbl">Span</th><th class="lbl">Girder</th><th title="Distance between the girder\'s two bearing points (along the girder).">L<sub>brg</sub> (ft)</th><th title="Top of deck at the girder at the start / end bearing and at midspan between them.">TD<sub>A</sub> / TD<sub>B</sub> / TD<sub>mid</sub></th><th title="(TD_A + TD_B)/2 − TD_mid. Positive = sag (deck below the chord at midspan); negative = crest.">m (in)</th><th title="Top of girder at midspan = (TOG_A + TOG_B)/2 + net camber, TOG = seat + bearing + beam depth.">TOG<sub>mid</sub></th><th title="Haunch at the girder centerline at midspan = TD_mid − t_s − TOG_mid.">haunch CL (in)</th><th title="Fall of the deck across the top flange at midspan.">Δ<sub>cs</sub> (in)</th><th title="Haunch at the low flange edge = haunch CL − Δ_cs.">haunch edge (in)</th><th>h<sub>min</sub> (in)</th><th class="lbl">check</th></tr></thead><tbody>';
+  let low=0;
+  for(let k=1;k<=su.length-1;k++){ const sb=ENG.spanBrgs(k); girdersForSpan(k).forEach((o,bi)=>{
+    const r=ENG.girderSag(k,bi); if(!r) return;
+    const sA=ENG.beamSeatAtSupport(sb.A,o,{bi,span:k}).z, sB=ENG.beamSeatAtSupport(sb.B,o,{bi,span:k}).z;
+    const tog=v=>v+resolveDepth('bearing',bi,k)+resolveDepth('beam',bi,k), c=resolveDepth('camber',bi,k);
+    const togM=(tog(sA)+tog(sB))/2+c, hCL=r.zM-ENG.depths.slab-togM, dcs=ENG.crossDrop(r.tM,r.w), hE=hCL-dcs, hmin=ENG.depths.minHaunch, ok=hE>=hmin-0.0005;
+    if(!ok) low++;
+    h+=`<tr><td class="lbl">${k}</td><td class="lbl">G${bi+1}</td><td>${r.len.toFixed(2)}</td><td>${F(r.zA)} / ${F(r.zB)} / ${F(r.zM)}</td><td>${IN(r.m)}</td><td>${F(togM)}</td><td>${IN(hCL)}</td><td>${IN(dcs)}</td><td>${IN(hE)}</td><td>${IN(hmin)}</td>`+
+       `<td class="lbl" style="color:${ok?'var(--good)':'var(--oxide)'}">${ok?'OK':'LOW by '+IN(hmin-hE)+' in'}</td></tr>`; }); }
+  h+='</tbody></table>';
+  h+=`<p class="note" style="margin:6px 0 0;${low?'color:var(--oxide)':''}">${low?`<b>${low} girder(s) have less than the minimum haunch at midspan</b> at the low flange edge.${ST.on?'':' Tick Seat terms on the Bridge tab to lower the seats by the sag ordinate and the cross-slope term.'}`:'Every girder keeps at least the minimum haunch at midspan (at the low flange edge when b<sub>f</sub> is given).'} `+
+     `The girder is taken straight between its two seats and rising by the net camber at midspan; the minimum haunch is checked at the low edge of the top flange. Owner practice (paraphrased): MassDOT Bridge Manual Part I 3.5.6.3: prestressed beam camber is considered with the profile's vertical curvature when setting seat elevations, and the deck is not thinned by a negative haunch; CTDOT BDM (02/24) 7.2.11.1 item 5: on a sag vertical curve the ordinate goes in the haunch (on a crest, in the steel camber) and 8.1.2.4: minimum haunch from the top of the top flange, deeper where a wide flange meets the cross slope; RIDOT BDM (2026) 9.4.6: minimum nominal haunch at the girder centerline, deeper for flanges wider than 16 in on a cross slope, and profile, cross slope and camber considered.</p>`;
+  box.innerHTML=h;
 }
 // stacked cross-section per bearing line
 function buildSeatSections(){
@@ -2853,7 +2922,7 @@ function buildSeatSections(){
     html+=`<div class="svgcard" style="margin-bottom:14px;">
       <div class="cap"><span>${r.label}</span><span class="pill">${formatStation(r.sta)}</span>
         <span class="note" style="text-transform:none;letter-spacing:0;">span ${r.span} · skew ${r.skew.toFixed(1)}°</span></div>
-      <div id="seatsec_${idx}" class="plotbox" style="height:320px"></div></div>`;
+      <div id="seatsec_${idx}" class="plotbox" style="height:320px"></div>${r.seats.some(q=>q.parts)?`<div class="note" style="font-size:10.5px;margin:4px 8px 6px;">${r.seats.map((q,k)=>'G'+(k+1)+': '+seatWorkText(q).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))).join('<br>')} &middot; <a href="#seat_work_h">all seats and the midspan haunch check</a></div>`:''}</div>`;   // BGX5 (§6): the working
   });
   host.innerHTML=html;
   data.forEach((r,idx)=>drawSeatSection('seatsec_'+idx, r));
@@ -4447,7 +4516,7 @@ let _heatResizeT=null;
 window.addEventListener('resize',()=>{ clearTimeout(_heatResizeT); _heatResizeT=setTimeout(()=>{ if(ENG) drawHeatmap(); },120); });
 ['ly_fill','ly_align','ly_crown','ly_bcl','ly_dcl','ly_ov','ly_gird','ly_edge','ly_sub','ly_brg','ly_sta','ly_gpt','ly_elev','ly_cut','ly_cont'].forEach(id=>{
   const el=document.getElementById(id); if(el) el.addEventListener('change',()=>{ if(ENG) drawHeatmap(); }); });
-['x_mode_global','x_rate_global','crown_ref','girder_frame','skew_datum','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma'].forEach(id=>
+['x_mode_global','x_rate_global','crown_ref','girder_frame','skew_datum','seat_terms','d_bf','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma'].forEach(id=>
   document.getElementById(id).addEventListener('change',()=>{ renderOvrGrid(); renderSpanTable(); if(ENG) compute(); }));
 document.getElementById('ovr_toggle').addEventListener('click',()=>{
   const p=document.getElementById('ovr_panel'); const open=p.style.display!=='none';
@@ -4537,7 +4606,7 @@ const STORAGE_KEY = 'bridgeGeomEngine.project.v1';
 const LIBRARY_KEY = 'bridgeGeomEngine.library.v1';
 let CURRENT_NAME = null; // name of the loaded library entry, if any
 const SCALAR_IDS = ['h_sta0','h_x0','h_y0','h_brg0','nspans','x_mode_global','x_rate_global',
-  'x_pivot','sec_cut','sec_surf','cont_int','heat_surf','crown_ref','girder_frame','skew_datum','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma','divs','rep_mode','rep_div','val_tol','map_datum','map_units','vdatum_sys','vdatum_txt'];
+  'x_pivot','sec_cut','sec_surf','cont_int','heat_surf','crown_ref','girder_frame','skew_datum','seat_terms','d_bf','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma','divs','rep_mode','rep_div','val_tol','map_datum','map_units','vdatum_sys','vdatum_txt'];
 
 // Vertical datum: a label only (scalars vdatum_sys / vdatum_txt). Elevations are never converted.
 // '' = not specified (the default for new projects and for saves made before the field existed).
@@ -4905,8 +4974,8 @@ function armAutosave(){
 /* BGX (2026-11-07, §5): settings added by the review fixes. A project saved without one opens with the value that reproduces
    its old results (BG_OLD_DEFAULTS, applied by applyProject before the saved scalars); a new project (the page with nothing
    saved, New) uses BG_NEW_DEFAULTS, which are the HTML defaults. Decisions pending engineer review. */
-const BG_OLD_DEFAULTS={ girder_frame:'single', skew_datum:'chord' };
-const BG_NEW_DEFAULTS={ girder_frame:'span', skew_datum:'align' };
+const BG_OLD_DEFAULTS={ girder_frame:'single', skew_datum:'chord', seat_terms:false, d_bf:'0' };
+const BG_NEW_DEFAULTS={ girder_frame:'span', skew_datum:'align', seat_terms:true, d_bf:'0' };
 function bgOldDefaults(){ for(const id in BG_OLD_DEFAULTS){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!BG_OLD_DEFAULTS[id]; else el.value=BG_OLD_DEFAULTS[id]; } } }
 function bgNewDefaults(){ for(const id in BG_NEW_DEFAULTS){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!BG_NEW_DEFAULTS[id]; else el.value=BG_NEW_DEFAULTS[id]; } } }
 function freshDefaults(){
