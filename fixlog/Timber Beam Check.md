@@ -1908,3 +1908,34 @@ index 2f29ed5..c3246e1 100644
 - **How verified:** main vs branch on the default project: every localStorage key (1), page text (7773 chars), Export JSON (2002 chars identical) and the printed report text (print media, 22204 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Timber Beam Check.html"`; `node tests/smoke/project-library.mjs --tool timber`; `node tests/smoke/github-sync-tools.mjs --tool timber`; `node tests/smoke/home-projects.mjs --tool timber`: pass.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/timber-kcr (PR #1008: https://github.com/mlococo88/All-Structural/pull/1008) (TBK1: creep factor K<sub>cr</sub> = 2.0 in wet service)   [calc change] [MORE conservative]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBK1`.
+
+### TBK1. K<sub>cr</sub> follows the service condition (review finding H2)
+
+- **Where:** `tbcRun`, deflection block. Anchor: `const KcrIn = num(dz.creep) > 0 ? dz.creep : 0;` (replaces `const Kcr = num(dz.creep) > 0 ? dz.creep : 1.5;`). Also: the K<sub>cr</sub> input hint (`fRow(body, 'Creep factor K<sub>cr</sub>'`), the Deflection card's "where" row (`'NDS 3.5.2 (1.5 seasoned, dry; 2.0 wet or unseasoned) '`), the "Creep factor" rows of the Design values input table and of the Report's input table (`['Creep factor K<sub>cr</sub>', R.ok && dz.moisture === 'Wet' && R.Kcr !== dz.creep ?` and `['Creep factor K_cr', R.ok && dz.moisture === 'Wet' && …`), and a new Validation group "7. TBK1" (4 benchmarks; 102 → 106, all match).
+- **Problem:** K<sub>cr</sub> was the user value (default 1.5) whatever the service condition. Ticking Wet service reduced E by C<sub>M</sub> but kept K<sub>cr</sub> = 1.5, so the total (long-term) deflection was unconservative by 0.5 Δ<sub>D</sub> in wet service.
+- **Governing provision:** NDS 2018 3.5.2 (Eq. 3.5-1): K<sub>cr</sub> = 1.5 for seasoned lumber, glulam and SCL in dry service, 2.0 for unseasoned lumber and for wet service. **Verify against NDS 2018 (not in references).** IBC 2018 Table 1604.3 footnote d (checked in `2018_IBC.pdf`) agrees in substance: for members not dry at installation or not used in dry conditions, the creep component is estimated as the immediate D deflection (i.e. K<sub>cr</sub> − 1 = 1.0).
+- **Before:**
+  ```js
+    const Kcr = num(dz.creep) > 0 ? dz.creep : 1.5;
+  ```
+- **After:**
+  ```js
+    const KcrIn = num(dz.creep) > 0 ? dz.creep : 0;
+    const Kcr = wet && (KcrIn === 0 || KcrIn === 1.5) ? 2.0 : (KcrIn || 1.5);
+    if (wet && KcrIn === 1.5) adv.push('Wet service: creep factor K_cr = 2.0 used (NDS 3.5.2, verify against NDS 2018 (not in references); IBC 2018 Table 1604.3 footnote d). The K_cr input holds 1.5, the dry-service default used for wet service too before 2026-11-07; enter another value to override.');
+    if (!wet && cat === 'timber' && KcrIn !== 2.0) adv.push('Timbers (5 in. and thicker) are often surfaced green: if this member is unseasoned (not dry at installation), NDS 3.5.2 gives K_cr = 2.0. Enter 2.0 in the creep factor if so.');
+  ```
+  (`wet` is the existing `const wet = dz.moisture === 'Wet';`.) Input hint before: "…(NDS 3.5.2: 1.5 for seasoned lumber in dry service). 0 or blank = 1.5." After: states 1.5 dry / 2.0 wet or unseasoned, "0 or blank = by service condition", and that 1.5 with Wet ticked is read as the old default.
+- **Decision (pending engineer review):** every saved file stores `creep: 1.5` (the old default), so an entered 1.5 cannot be told apart from the default. With Wet service ticked, 1.5 (or blank / 0) is therefore read as the default and 2.0 is used, with the one-line note above (conservative). Any other value is used as entered (override kept). Consequence: a user who really wants 1.5 in wet service cannot enter it (NDS 3.5.2 does not give 1.5 for wet service). No saved key or format changed (§5): `creep` keeps its stored value; nothing is rewritten. Dry service is unchanged. Unseasoned timbers in dry service: advisory only (no seasoned / unseasoned input added), no result change.
+- **Check case 1 (default joist, Wet ticked):** DF-L No.2 2x10 @ 16 in., 16 ft, D 15 / L 40 psf, self-weight 34 pcf. E′ = 1,600,000 × 0.9 = 1,440,000 psi; Δ<sub>D</sub> = 0.2409 in., Δ<sub>L</sub> = 0.5520 in., limit 192/240 = 0.800 in.
+  - Before: Δ<sub>T</sub> = 1.5 × 0.2409 + 0.5520 = 0.9134 in., ratio **1.142**.
+  - After: Δ<sub>T</sub> = 2.0 × 0.2409 + 0.5520 = 1.0338 in., ratio **1.292**.
+- **Check case 2 (glulam, wet):** 24F-1.8E DF, 5-1/8 × 18 in., 24 ft, trib. 8 ft, D 15 / L 40 psf, top edge braced at the supports. E′ = 1,800,000 × 0.833 = 1,499,400 psi; Δ<sub>D</sub> = 0.2847 in., Δ<sub>L</sub> = 0.6396 in., limit 288/240 = 1.200 in.
+  - Before: Δ<sub>T</sub> = 1.0667 in., ratio **0.889** (OK). After: Δ<sub>T</sub> = 1.2090 in., ratio **1.007** (NG).
+- **How verified:** `tbcRun` on 33 review cases, origin/main vs branch, headless Chromium from `file://`: only the wet cases moved (dTL and K<sub>cr</sub> only; bending, shear, bearing and live-load deflection identical). Moved: default wet 1.1418 → 1.2923, wet glulam 0.8889 → 1.0075, wet LRFD joist 1.1418 → 1.2923, wet incised 125–150 °F joist 1.3354 → 1.5115, wet with K<sub>cr</sub> blank 1.1418 → 1.2923. Wet with K<sub>cr</sub> 2.0 or 1.8 entered: unchanged. Validation 106/106 match (the 102 existing unchanged). Every output tab at 1400 px (Summary and Report at 400 px) without NaN / undefined / KaTeX errors; save → open round trip identical; no console errors; no horizontal scroll at 400 px. `node tests/check-syntax.mjs` passes.
+- **Other copies:** none.
+- **Open items:** a seasoned / unseasoned input for sawn lumber (K<sub>cr</sub> 2.0 for unseasoned in dry service) was not added; advisory for timbers only.

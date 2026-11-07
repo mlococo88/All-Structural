@@ -585,13 +585,20 @@ const REBAR={
  '7':{d:0.875,a:0.60},'8':{d:1.000,a:0.79},'9':{d:1.128,a:1.00},'10':{d:1.270,a:1.27},
  '11':{d:1.410,a:1.56},'14':{d:1.693,a:2.25},'18':{d:2.257,a:4.00}};
 const BAR_SIZES=Object.keys(REBAR);
+/* CBL1 (2026-11-07): gamma_3 by bar specification, AASHTO LRFD 10th Ed. 5.6.3.3 (six rows). S.mat.gamma3 keeps the number
+   (saved format unchanged); S.mat.g3spec (additive) remembers which row was picked where two rows share a value. */
+const G3_SPECS=[{k:&quot;a615-60&quot;,g:0.67,lab:&quot;A615 Gr 60&quot;},{k:&quot;a615-75&quot;,g:0.75,lab:&quot;A615 Gr 75&quot;},{k:&quot;a615-80&quot;,g:0.76,lab:&quot;A615 Gr 80&quot;},
+  {k:&quot;a706-60&quot;,g:0.75,lab:&quot;A706 Gr 60&quot;},{k:&quot;a706-80&quot;,g:0.80,lab:&quot;A706 Gr 80&quot;},{k:&quot;a1035-100&quot;,g:0.67,lab:&quot;A1035 Gr 100&quot;}];
+function cbcG3Key(){ const g=+S.mat.gamma3||0.67, k=S.mat.g3spec, o=G3_SPECS.find(x=>x.k===k&amp;&amp;Math.abs(x.g-g)<1e-9);
+  if(o) return o.k; const m=G3_SPECS.find(x=>Math.abs(x.g-g)<1e-9); return m?m.k:&quot;a615-60&quot;; }
 const COVER_PRESETS={
   ACI:[{v:'cast',label:'Cast against earth',c:3.0},
        {v:'exposed',label:'Exposed to earth/weather (#6+)',c:2.0},
        {v:'exposed_s',label:'Exposed to earth/weather (#5-)',c:1.5},
        {v:'interior',label:'Not exposed — beams/columns',c:1.5}],
   AASHTO:[{v:'cast',label:'Cast against earth',c:3.0},
-       {v:'exposed',label:'Exposed to weather / deicing',c:2.5},
+       {v:'exposed',label:'Exposure to deicing salts',c:2.5},   /* CBL6: label (Table 5.10.1-1 row); value unchanged */
+       {v:'exterior',label:'Exterior, other than above',c:2.0},   /* CBL6: added row of Table 5.10.1-1 */
        {v:'interior',label:'Interior, not exposed',c:1.5},
        {v:'deck_top',label:'Deck top, deicing salts',c:2.5}]};
 
@@ -990,10 +997,13 @@ function alAvailable(){
    steel by (n-1) to allow for the concrete it displaces.
    ===================================================================== */
 function concreteE(){
-  const fc=S.mat.fc, wc=0.145;
+  const fc=S.mat.fc;
+  /* CBL7 (2026-11-07): w_c of normal weight concrete per AASHTO Table 3.5.1-1 (5.4.2.4 refers to it): 0.145 kcf for
+     f'c <= 5.0 ksi, 0.140 + 0.001 f'c above (before: 0.145 at every f'c). */
+  const wc=fc<=5?0.145:0.140+0.001*fc;
   if(S.code==='AASHTO')
-    return {Ec:120000*1.0*Math.pow(wc,2.0)*Math.pow(fc,0.33), ref:&quot;AASHTO Eq. 5.4.2.4-1&quot;,   /* K1 = 1.0 */
-            expr:`E_c = 120{,}000\\,K_1 w_c^{2.0}f'^{\\,0.33}_c = 120{,}000(1.0)(${fmt(wc,3)})^{2.0}(${fmt(fc)})^{0.33}`};
+    return {Ec:120000*1.0*Math.pow(wc,2.0)*Math.pow(fc,0.33), ref:&quot;AASHTO Eq. 5.4.2.4-1, Table 3.5.1-1&quot;,   /* K1 = 1.0 */
+            expr:`E_c = 120{,}000\\,K_1 w_c^{2.0}f'^{\\,0.33}_c = 120{,}000(1.0)(${fmt(wc,3)})^{2.0}(${fmt(fc)})^{0.33},\\quad w_c = ${fc<=5?&quot;0.145&quot;:&quot;0.140+0.001f'_c&quot;}\\text{ kcf (Table 3.5.1-1)}`};
   return {Ec:57000*Math.sqrt(fc*1000)/1000, ref:&quot;ACI 19.2.2.1&quot;,
           expr:`E_c = 57{,}000\\sqrt{f'_c} = 57{,}000\\sqrt{${fmt(fc*1000,0)}\\text{ psi}}`};
 }
@@ -1330,14 +1340,15 @@ function detailing(F,sh,neg,govMu,Vu,tor){
         &quot;Not required. &quot;+trigTx+&quot;, so &quot;+trigRef+&quot; does not call for minimum shear reinforcement &quot;+
         &quot;in this member. (Note this is a demand check — it is evaluated for every combination, &quot;+
         &quot;and reads N/A only where no combination triggers it.)&quot;);
-    } else if(smallH){
+    } else if(smallH &amp;&amp; VuA<=sh.phi*sh.Vc+1e-9){   /* CBL4: Table 9.6.3.1 applies only where V_u <= phi V_c */
       add(&quot;dAvMin&quot;,&quot;Minimum shear reinforcement&quot;,trigRef,0,avMin0,&quot;\\ge&quot;,&quot;in²/in&quot;,true,[],true,
         &quot;Exempt. &quot;+trigTx+&quot;, so ACI 9.6.3.1 would otherwise require A_v,min ≥ &quot;+fmt(avMin0,4)+
-        &quot; in²/in and none is provided — but Table 9.6.3.1(d) exempts members with h ≤ 10 in, &quot;+
-        &quot;and h = &quot;+fmt(h)+&quot; in here. One-way slabs, footings and joists are exempt at any depth. &quot;+
+        &quot; in²/in and none is provided — but Table 9.6.3.1 exempts members with h ≤ 10 in where V_u ≤ \u03c6V_c, &quot;+
+        &quot;and h = &quot;+fmt(h)+&quot; in, V_u = &quot;+fmt(VuA)+&quot; kip ≤ \u03c6V_c = &quot;+fmt(sh.phi*sh.Vc)+&quot; kip here. One-way slabs, footings and joists are exempt at any depth. &quot;+
         &quot;Confirm the exemption being relied on is the right one for this member.&quot;);
     } else {
-      add(&quot;dAvMin&quot;,&quot;Minimum shear reinforcement&quot;,trigRef,0,avMin0,&quot;\\ge&quot;,&quot;in²/in&quot;,false,dvA);
+      add(&quot;dAvMin&quot;,&quot;Minimum shear reinforcement&quot;,trigRef,0,avMin0,&quot;\\ge&quot;,&quot;in²/in&quot;,false,
+        smallH?[[&quot;h \\le 10\\text{ in but } V_u > \\phi V_c&quot;,`${fmt(VuA)}\\text{ kip} > ${fmt(sh.phi*sh.Vc)}\\text{ kip}`,&quot;The h \u2264 10 in exemption of Table 9.6.3.1 applies only where V_u \u2264 \u03c6V_c (9.6.3.1), so A_v,min is required.&quot;]].concat(dvA):dvA);   /* CBL4 */
     }
   }
   /* ---- torsion detailing (ACI 9.7.6.3) — mandatory limits, listed as checks ---- */
@@ -1683,7 +1694,7 @@ function validate(){
   if(S.tor.present &amp;&amp; !S.stir.present)
     W.push({code:&quot;ACI 9.7.6.3&quot;,msg:&quot;Torsion requires closed transverse reinforcement. No stirrups are specified, so the transverse torsional capacity is zero.&quot;});
   /* method disclosure (§8 disclose conservatism) */
-  N.push({code:&quot;Method&quot;,msg:&quot;Torsional section properties A_oh and p_h are taken to the centreline of the outermost closed stirrup. This is slightly conservative relative to the common (b−2c)(h−2c) approximation.&quot;});
+  if(S.code==='ACI') N.push({code:&quot;Method&quot;,msg:&quot;Torsional section properties A_oh and p_h are taken to the centreline of the outermost closed stirrup. This is slightly conservative relative to the common (b−2c)(h−2c) approximation.&quot;});
   if(S.sec.type==='tee')
     N.push({code:&quot;ACI 22.7.6.1&quot;,msg:&quot;The flange contribution permitted for A_cp and p_cp is not taken; the web-only value is used. This is conservative.&quot;});
   if(S.crack.check &amp;&amp; S.crack.fsBasis==='calc'){
@@ -1701,10 +1712,10 @@ function validate(){
   if(S.tor.present &amp;&amp; S.code==='ACI' &amp;&amp; S.stir.present)
     N.push({code:&quot;ACI 22.7.6.1&quot;,msg:&quot;Shear and torsion share the same closed stirrup. The Shear tab reserves the transverse steel required for torsion and reports \u03c6V_n on the remainder; the \u03c6V_n that ignores torsion is also shown for reference but is not used in any demand/capacity ratio.&quot;});
   if(S.code==='ACI' &amp;&amp; S.stir.present)
-    N.push({code:&quot;ACI 9.7.6.2.2&quot;,msg:&quot;The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/\u03c6 \u2212 V_c) rather than the V_s the detailed stirrups could provide. The provision exists to control diagonal crack width where stirrups work hard in shear; stirrups placed for torsion or minimum area are not. Both values are shown in the Detailing derivation so the alternative reading can be checked.&quot;});
+    N.push({code:&quot;ACI 9.7.6.2.2&quot;,msg:&quot;The tighter d/4 spacing limit is triggered from V_s REQUIRED (V_u/\u03c6 \u2212 V_c) rather than the V_s the detailed stirrups could provide. The provision exists to control diagonal crack width where stirrups work hard in shear; stirrups placed for torsion or minimum area are not. Both values are shown in the Detailing derivation so the alternative reading can be checked. Decision (pending engineer review, 2026-11-07): this V_s-required reading is kept as common practice (it avoids the circularity of a spacing limit that depends on the spacing chosen); under the literal reading (V_s = the strength provided by the stirrups) the d/4 limit applies wherever V_s,provided > 4\u221af\u2032c b_w d, which can be tighter.&quot;});
   if(S.tor.present &amp;&amp; S.code==='ACI')
     N.push({code:&quot;ACI 9.7.5.1&quot;,msg:&quot;Longitudinal torsion steel is entered as a total area, so the requirement for a bar at every corner of the closed stirrup and a maximum 12 in spacing around p_h cannot be verified automatically. That check is reported N/A and must be confirmed by inspection.&quot;});
-  N.push({code:&quot;ACI 9.6.1.3&quot;,msg:&quot;The exception allowing A_{s,min} to be waived where A_s provided is at least 4/3 of A_s required is NOT applied; the full 9.6.1.2 minimum is always enforced. This is conservative.&quot;});
+  if(S.code==='ACI') N.push({code:&quot;ACI 9.6.1.3&quot;,msg:&quot;The exception allowing A_{s,min} to be waived where A_s provided is at least 4/3 of A_s required is NOT applied; the full 9.6.1.2 minimum is always enforced. This is conservative.&quot;});
   N.push({code:&quot;Scope&quot;,msg:&quot;Deflection, development length, bar cut-offs, fatigue and strut-and-tie are not evaluated. Crack control is checked as a bar-spacing limit; explicit crack-width prediction is not performed.&quot;});
   return {blockers:B,warnings:W,notes:N};
 }
@@ -1979,8 +1990,8 @@ function buildInput(){
       r.appendChild(el(&quot;label&quot;,null,&quot;Element of 5.4.3.3, flexural shear without torsion: f_yt up to 100 ksi (5.7.2.7; otherwise 60 ksi, or 75 ksi above 60)&quot;)); b.appendChild(r); }
     fRow(b,&quot;Aggregate size&quot;,numIn(()=>S.mat.dagg,v=>S.mat.dagg=v,&quot;0.25&quot;,&quot;dagg&quot;),&quot;in&quot;);
     fRow(b,&quot;λ (lightweight)&quot;,numIn(()=>S.mat.lambda,v=>S.mat.lambda=v,&quot;0.05&quot;,&quot;lam&quot;),&quot;&quot;);
-    if(S.code==='AASHTO') fRow(b,&quot;γ₃ (bar spec., 5.6.3.3)&quot;,selIn([&quot;0.67&quot;,&quot;0.75&quot;,&quot;0.76&quot;],()=>String(S.mat.gamma3),v=>S.mat.gamma3=+v,
-      o=>o===&quot;0.67&quot;?&quot;0.67 — A615 Gr 60&quot;:(o===&quot;0.75&quot;?&quot;0.75 — A706 Gr 60&quot;:&quot;0.76 — A615 Gr 75&quot;),o=>o,&quot;gamma3&quot;),&quot;&quot;);
+    if(S.code==='AASHTO') fRow(b,&quot;γ₃ (bar spec., 5.6.3.3)&quot;,selIn(G3_SPECS.map(o=>o.k),()=>cbcG3Key(),v=>{ const o=G3_SPECS.find(x=>x.k===v); if(o){ S.mat.gamma3=o.g; S.mat.g3spec=o.k; } },
+      k=>{ const o=G3_SPECS.find(x=>x.k===k); return o.g.toFixed(2)+&quot; — &quot;+o.lab; },o=>o,&quot;gamma3&quot;),&quot;&quot;);   /* CBL1 */
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;E_s = 29,000 ksi and ε_cu = 0.003 are fixed by code.&quot;));
   },P);
 
@@ -2363,7 +2374,7 @@ function allChecks(){
       if(v.dcr>best.dcr) best={dcr:v.dcr,combo:r.name,na:false,ci:r.ci}; });
     out.push({label,ref,dcr:best.na?null:best.dcr,combo:best.combo,na:best.na,tab,ci:best.ci});   /* ci: D11 link target only */
   };
-  env(&quot;Flexural capacity&quot;,&quot;ACI 9.3.3 / 22.2&quot;,r=>({dcr:r.dcM,na:Math.abs(r.Mu)<1e-9}),&quot;tabFlex&quot;);
+  env(&quot;Flexural capacity&quot;,S.code==='ACI'?&quot;ACI 9.3.3 / 22.2&quot;:&quot;AASHTO 5.6.3.2 / 5.5.4.2&quot;,r=>({dcr:r.dcM,na:Math.abs(r.Mu)<1e-9}),&quot;tabFlex&quot;);
   env(&quot;Shear capacity&quot;+(CC.combos.some(r=>r.share)?&quot; (after torsion demand)&quot;:&quot;&quot;),
     S.code==='ACI'?&quot;ACI 22.5&quot;:&quot;AASHTO 5.7.3&quot;,
     r=>({dcr:r.dcV_eff,na:Math.abs(r.Vu)<1e-9}),&quot;tabShear&quot;);
