@@ -3853,7 +3853,7 @@ function gprItems(root, scope, st) {
       if (cl.contains('eq-block')) {
         flush(); const tt = e.querySelector('.eq-title'), lab = gprClean(tt && tt.firstElementChild ? gprInline(tt.firstElementChild) : ''), ref = gprClean((e.querySelector('.eq-ref') || {}).textContent || '');
         const lines = [...e.querySelectorAll(':scope>.eq-math')].map(m => m.textContent.trim().replace(/^\\\[/, '').replace(/\\\]$/, '').trim());
-        lines.forEach((tx, k) => addStep(SharedSteps.step({ id: sid(lab), label: (lab.replace(/\$[^$]*\$/g, m => SharedSteps.toText(m.slice(1, -1))) || 'Equation') + (lines.length > 1 ? ` (${k + 1} of ${lines.length})` : ''), sym: tx, eq: '', sub: '', value: null, unit: '', ref: k ? '' : ref })));
+        lines.forEach((tx, k) => addStep(SharedSteps.step({ id: sid(lab), label: (lab.replace(/\$[^$]*\$/g, m => SharedSteps.toText(m.slice(1, -1), { legacy: true })) || 'Equation') + (lines.length > 1 ? ` (${k + 1} of ${lines.length})` : ''), sym: tx, eq: '', sub: '', value: null, unit: '', ref: k ? '' : ref })));
         const wt = e.querySelector(':scope>.eq-where table'); if (wt) { const t = gprTable(wt); if (t) { t.caption = 'where'; t.head = ['Symbol', 'Description', 'Value', 'Source']; t.rows = t.rows.map(r => { const c = Array.isArray(r) ? r : r.cells; return [c[0], c[1], c[2], c[3] || '']; }); push(t); } }
         continue; }
       if (cl.contains('cr-res')) { flush();

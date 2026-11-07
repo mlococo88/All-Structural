@@ -6537,3 +6537,20 @@ index 50f3837..c2d5000 100644
   - spread-footing-nobear: pass.
   - start-chooser: 68/68 on re-run; the first run under load had 2 failures in the list order, which looks like load flakiness, with the app unchanged.
   - project-library `--tool spreadfooting`: ALL PASS.
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+### Where
+- `sfxApply` and `sfrfMove` (which tab content is added to / moved in the Report). Anchor text: `legacy` next to the call below.
+- Before: `let txt='';try{txt=SharedReport.text(SharedReport.build(model));}catch(e){return model;}`
+- After: `let txt='';try{txt=SharedReport.text(SharedReport.build(model),{legacy:true});}catch(e){return model;}`
+- Before: `let txt='';try{txt=SharedReport.text(SharedReport.build({sections:secs}));}catch(e){return [];}`
+- After: `let txt='';try{txt=SharedReport.text(SharedReport.build({sections:secs}),{legacy:true});}catch(e){return [];}`
+### Problem
+- shared/steps.js `toText` (and so `SharedReport.text`) now writes TeX outside the notation subset as readable text (TXP, `fixlog/shared-steps.md`).
+  This tool uses that plain text internally (to decide what to copy into its Report, or as a label / note / sheet text); `{ legacy: true }`
+  keeps that text exactly as before, so the Report, the labels and the sheets stay as they were.
+### Governing provision
+- None (display only; no computed value changes).
+### Check case
+- Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
+### How verified
+- `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.

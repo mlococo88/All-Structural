@@ -5487,3 +5487,19 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified (all four):** probe of `interaction()`; `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects), `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
 - **Other copies:** none.
 - **Open items:** L1, L4, L7 of the review are not changed (L1 conservative; L4 reading stated in the step; L7 = open item N1).
+
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+### Where
+- the worked-equation step notes ("where …", `$…$` as text). Anchor text: `legacy` next to the call below.
+- Before: `'+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};`
+- After: `'+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t,{legacy:true}))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};`
+### Problem
+- shared/steps.js `toText` (and so `SharedReport.text`) now writes TeX outside the notation subset as readable text (TXP, `fixlog/shared-steps.md`).
+  This tool uses that plain text internally (to decide what to copy into its Report, or as a label / note / sheet text); `{ legacy: true }`
+  keeps that text exactly as before, so the Report, the labels and the sheets stay as they were.
+### Governing provision
+- None (display only; no computed value changes).
+### Check case
+- Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
+### How verified
+- `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.

@@ -6923,7 +6923,7 @@ function bprStep(eb,id){
   const res=lines.length?bprResult(lines[lines.length-1]):null;
   if(res){value=res.value;unit=res.unit;d=res.d;lines[lines.length-1]=res.line;}
   const eq=lines.length>1?'\\begin{gathered}'+lines.join(' \\\\ ')+'\\end{gathered}':(lines[0]||'');
-  return {id,label:title||'Worked equation',sym:'',eq,sub:'',value,unit:unit.replace(/\u00B2|\^2/g,'^{2}').replace(/\u00B3|\^3/g,'^{3}'),d,ref:r?r.textContent.replace(/^\[|\]$/g,'').trim():'',note:vars.length?('where '+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};
+  return {id,label:title||'Worked equation',sym:'',eq,sub:'',value,unit:unit.replace(/\u00B2|\^2/g,'^{2}').replace(/\u00B3|\^3/g,'^{3}'),d,ref:r?r.textContent.replace(/^\[|\]$/g,'').trim():'',note:vars.length?('where '+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t,{legacy:true}))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};
 }
 /* the RPT-2 document -> the viewer's model (same chapters, cards and numbering) */
 function bprModel(){

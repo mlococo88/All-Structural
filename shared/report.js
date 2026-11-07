@@ -41,7 +41,8 @@
    API:
      build(model)               -> doc: numbering (§n, §n.m), the anchor index, refs, unresolved refs, duplicate keys
      html(doc, { lazy })        -> the document HTML (title block, cover, contents, sections); lazy=false fills every lazy item
-     text(doc)                  -> plain text of the whole report (tests: NaN / undefined scan, "see §" check)
+     text(doc, opt)             -> plain text of the whole report (tests: NaN / undefined scan, "see §" check); equation notation through
+                                   SharedSteps.toText (readable, TXP 2026-11-07); opt.legacy: the notation as before TXP
      mount(host, model, opt)    -> the viewer in host: bar (opt.controls HTML + search, Expand all, Collapse all, Print), nav tree, doc.
                                    opt.onGoto(name) for [[tab:…]] links; opt.stick: the height of the host page's own sticky header
                                    above the viewer (the bar sticks below it); opt.closed (a Set of closed heading ids, kept between mounts).
@@ -122,8 +123,8 @@
     const m = (it.steps || []).find(t => String(t.id).endsWith('.' + id));   // an id relative to the engine's work prefix ('v.Vn' of 'pn.v.Vn')
     return keyOf(it.scope, m ? m.id : id);
   };
-  const noteOf = (doc, it, t, html) => { const ps = String(t).split(SEE);   // a note that already says "See §x" does not get the "see " of .rp-see in front a second time (class rp-seen)
-    return ps.map((p, i) => i % 2 ? (a => html && /\bsee\s*$/i.test(ps[i - 1]) ? a.replace('class="rp-see"', 'class="rp-see rp-seen"') : a)(rich(doc, `[[${seeKey(doc, it, p)}]]`, html)) : html ? esc(p) : p).join(''); };
+  const noteOf = (doc, it, t, html, o) => { const ps = String(t).split(SEE);   // a note that already says "See §x" does not get the "see " of .rp-see in front a second time (class rp-seen)
+    return ps.map((p, i) => i % 2 ? (a => html && /\bsee\s*$/i.test(ps[i - 1]) ? a.replace('class="rp-see"', 'class="rp-see rp-seen"') : a)(rich(doc, `[[${seeKey(doc, it, p)}]]`, html, o)) : html ? esc(p) : p).join(''); };
   const ref = (doc, key) => { const e = doc.index.get(key); return e ? '§' + e.n : null; };
 
   /* ---------- rich text: $tex$, [[key]], [[tab:name|text]] ----------
@@ -133,7 +134,7 @@
   const LITE = new Map();
   const lite = t => { let h = LITE.get(t); if (h != null) return h; const w = typeof window !== 'undefined' ? window : null, K = w && w.katex;
     try { if (K) w.katex = undefined; h = ST().toHTML(t); } finally { if (K) w.katex = K; } if (LITE.size < 20000) LITE.set(t, h); return h; };
-  function rich(doc, s, html) {
+  function rich(doc, s, html, o) {   // o: SharedSteps.toText's options (plain text only; text(doc, o))
     const parts = String(s == null ? '' : s).split(/(\[\[[^\]]+\]\]|\$[^$]+\$)/);
     return parts.map(p => {
       if (!p) return '';
@@ -143,7 +144,7 @@
         const e = doc.index.get(k), t = e ? '§' + e.n : '§?';
         return html ? (e ? `<a href="#${e.anchor}" class="rp-see" data-rpjump="${esc(k)}">${t}</a>` : `<span class="rp-bad" title="${esc(k)}">${t}</span>`) : t;
       }
-      if (p.length > 2 && p[0] === '$' && p[p.length - 1] === '$') return html ? lite(p.slice(1, -1)) : ST().toText(p.slice(1, -1));
+      if (p.length > 2 && p[0] === '$' && p[p.length - 1] === '$') return html ? lite(p.slice(1, -1)) : ST().toText(p.slice(1, -1), o);
       return html ? esc(p) : p;
     }).join('');
   }
@@ -208,8 +209,8 @@
   }
 
   /* ---------- plain text ---------- */
-  function text(doc) {
-    const m = doc.model, L = [], T = s => rich(doc, s, false);
+  function text(doc, o) {   // o.legacy (TXP, 2026-11-07): equation notation as before TXP (SharedSteps.toText), for the tools that compare it with their tabs
+    const m = doc.model, L = [], T = s => rich(doc, s, false, o), SM = t => ST().summary(t, false, o);
     L.push(m.title || '', m.subtitle || '', m.code || '');
     if (m.refs && m.refs.length) { L.push('', 'References'); m.refs.forEach(([a, b]) => L.push(`${a}: ${b}`)); }
     (m.info || []).forEach(([l, v]) => L.push(`${l}: ${v == null || v === '' ? '—' : v}`));
@@ -219,9 +220,9 @@
       (s.subs || []).forEach((q, j) => {
         L.push('', `${i + 1}.${j + 1} ${T(q.title)}${q.ref ? ' [' + q.ref + ']' : ''}`);
         (q.items || []).forEach(it => {
-          if (it.topic) { const t = it.topic; L.push(`  ${t.no != null ? t.no + '. ' : ''}${t.title}${t.ref ? ' [' + t.ref + ']' : ''}${t.chip ? ' (' + t.chip + ')' : ''}${t.res ? ' — ' + ST().summary(t, false) : ''}`); }
-          if (it.type === 'steps') { if (it.title) L.push(T(it.title)); const tp = new Map(); { let j = 0; (it.topics || []).forEach((t, k) => { tp.set(j, `  ${k + 1}. ${t.title}${t.ref ? ' [' + t.ref + ']' : ''}${t.chip ? ' (' + t.chip + ')' : ''}${t.res ? ' — ' + ST().summary(t, false) : ''}`); j += t.n; }); }
-            (it.steps || []).forEach((st, i) => { if (tp.has(i)) L.push(tp.get(i)); L.push(`  ${st.label}${st.ref ? ' [' + st.ref + ']' : ''}: ${ST().line(st, false)}${st.ok === true ? ' OK' : st.ok === false ? ' NG' : ''}${st.note ? ' (' + noteOf(doc, it, st.note, false) + ')' : ''}`); }); }
+          if (it.topic) { const t = it.topic; L.push(`  ${t.no != null ? t.no + '. ' : ''}${t.title}${t.ref ? ' [' + t.ref + ']' : ''}${t.chip ? ' (' + t.chip + ')' : ''}${t.res ? ' — ' + SM(t) : ''}`); }
+          if (it.type === 'steps') { if (it.title) L.push(T(it.title)); const tp = new Map(); { let j = 0; (it.topics || []).forEach((t, k) => { tp.set(j, `  ${k + 1}. ${t.title}${t.ref ? ' [' + t.ref + ']' : ''}${t.chip ? ' (' + t.chip + ')' : ''}${t.res ? ' — ' + SM(t) : ''}`); j += t.n; }); }
+            (it.steps || []).forEach((st, i) => { if (tp.has(i)) L.push(tp.get(i)); L.push(`  ${st.label}${st.ref ? ' [' + st.ref + ']' : ''}: ${ST().line(st, false, o)}${st.ok === true ? ' OK' : st.ok === false ? ' NG' : ''}${st.note ? ' (' + noteOf(doc, it, st.note, false, o) + ')' : ''}`); }); }
           else if (it.type === 'table') { if (it.caption) L.push(T(it.caption)); const c = x => { const o = x && typeof x === 'object' ? x : { t: x }; return T(o.t) + (o.key ? ' ' + T(`[[${o.key}]]`) : ''); };
             L.push((it.head || []).map(c).join(' | ')); (it.rows || []).forEach(r => L.push((Array.isArray(r) ? r : r.cells).map(c).join(' | '))); }
           else if (it.type === 'figure') L.push('[Figure] ' + T(it.caption));

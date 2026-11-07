@@ -4474,3 +4474,19 @@ function NumberListInput({value, onChange, placeholder, label, col = 'Value', un
 - **How verified:** main vs branch: localStorage keys (the folder path in `bridgeSuite.v1.appPaths` normalised), page text, Export JSON and printed text identical on load (index.html, lldf.html, Prestressed Bridge Design.html); `tests/smoke/bridge-suite-compare.mjs --a <main worktree>`: all identical; `tests/smoke/bridge-suite-save.mjs`: all passed (updated, see the PR); `project-library.mjs --tool lldf / index`, `github-sync-tools.mjs --tool index`, `home-projects.mjs --tool index`, `tests/engine/run.mjs`, `check-syntax.mjs`: see the PR. Header at 1280 / 1400 / 1920 / 390 px; screenshots looked at.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** the same change in the other two Bridge Suite pages (index.html, lldf.html, Prestressed Bridge Design.html) and `shared/bridge-suite-projects.js` (one PR). **Open items:** none.
+
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+### Where
+- the Report step harvest (`rep=SharedReport.text(...)`: which tab content is added to the Report). Anchor text: `legacy` next to the call below.
+- Before: `try{ rep=SharedReport.text(SharedReport.build(M)); }catch(e){ return M; }`
+- After: `try{ rep=SharedReport.text(SharedReport.build(M),{legacy:true}); }catch(e){ return M; }`
+### Problem
+- shared/steps.js `toText` (and so `SharedReport.text`) now writes TeX outside the notation subset as readable text (TXP, `fixlog/shared-steps.md`).
+  This tool uses that plain text internally (to decide what to copy into its Report, or as a label / note / sheet text); `{ legacy: true }`
+  keeps that text exactly as before, so the Report, the labels and the sheets stay as they were.
+### Governing provision
+- None (display only; no computed value changes).
+### Check case
+- Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
+### How verified
+- `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.

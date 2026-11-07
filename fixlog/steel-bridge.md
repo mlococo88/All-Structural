@@ -4007,3 +4007,19 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **How verified:** main vs branch on the default project: every localStorage key (0), page text (33433 chars), Export JSON (7958 chars identical) and the printed report text (print media, 13402 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "apps/steel-bridge/index.html"`; `node tests/smoke/steel-bridge-library.mjs`; `node tests/smoke/github-sync-tools.mjs --tool sbapp`; `node tests/smoke/home-projects.mjs --tool sbapp`: pass. Tests: `steel-bridge-library.mjs` (header = chip · Undo · Redo; new check: the chip opens the Project tab with the card; Save by Ctrl+S; Saved projects… through the chip and the card) and `github-sync-tools.mjs` (sbapp: chip, then the card's Saved projects…).
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+### Where
+- `engine/sheets.js` `plain()` (check titles on the drawing sheets). Anchor text: `legacy` next to the call below.
+- Before: `oText ? String(s || '').replace(/\$([^$]*)\$/g, (m, q) => S.toText(q)) : String(s || ''); return t.replace(/\$/g, ''); };`
+- After: `oText ? String(s || '').replace(/\$([^$]*)\$/g, (m, q) => S.toText(q, { legacy: true })) : String(s || ''); return t.replace(/\$/g, ''); };`
+### Problem
+- shared/steps.js `toText` (and so `SharedReport.text`) now writes TeX outside the notation subset as readable text (TXP, `fixlog/shared-steps.md`).
+  This tool uses that plain text internally (to decide what to copy into its Report, or as a label / note / sheet text); `{ legacy: true }`
+  keeps that text exactly as before, so the Report, the labels and the sheets stay as they were.
+### Governing provision
+- None (display only; no computed value changes).
+### Check case
+- Default project, origin/main vs this branch, headless: the Report's rendered text (`.rp-doc` textContent) and the page text are identical.
+### How verified
+- `node tests/check-syntax.mjs`; `node tests/engine/run.mjs`; the headless comparison listed in the PR.

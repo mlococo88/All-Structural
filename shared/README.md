@@ -78,7 +78,10 @@ It renders as `label` over `sym = eq = sub = value unit`, with `ref` beside the 
   options `SharedSteps.katexOpt`) when the page has loaded it (`window.katex`; `apps/steel-bridge/index.html` loads
   KaTeX 0.16.9 from cdnjs), and with the built-in renderer otherwise (offline, CDN blocked), so the steps always show.
   Units go to KaTeX through `SharedSteps.unitTeX()` (words upright: `in^{2}` → `\text{in}^{2}`). `toText()` (the
-  plain-text report) never uses KaTeX. `tests/engine/tex.test.mjs` parses every step string the engine tests make with
+  plain-text report) never uses KaTeX; it also reads the TeX the tools write beyond the subset as text (TXP, 2026-11-07:
+  `\mathrm{…}` / `\mathbf{…}` / `\operatorname{…}` → their content, `\dfrac` / `\tfrac` as `\frac`, `\quad` / `\qquad` / `\!` as
+  spacing, `\varphi` and the other Greek variants, `\checkmark` ✓, `\Rightarrow` ⇒, `\cos` / `\sin` / `\cot`, `\begin{cases}`, …;
+  `tests/engine/steps-totext.test.mjs`); the HTML path is unchanged. `tests/engine/tex.test.mjs` parses every step string the engine tests make with
   KaTeX (the copy in `tests/libs`).
 - **Collecting:** `const w = SharedSteps.work('sec.s'); const A = w.add({ id: 'A', … , value });` stores
   the step (id `sec.s.A`) and returns its value, so the value used downstream is the value shown.
