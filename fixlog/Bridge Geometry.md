@@ -2091,3 +2091,41 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
     - pass: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, project-library --tool bgeo, home-projects --tool bgeo, tests/engine/run.mjs handoffs lldf list-input.
     - list-input --part bgeo: unchanged from main, failing only against its recorded base commit for the earlier BGX1/BGX3 results.
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/bg-m3-bearing-offsets (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX8, review M3: dual bearing offsets measured along the girders; new projects only)   [calc change: new option] [saved data: additive field with migration]
+
+- **Why:** review 2026-11-07, M3. A dual-bearing pier's offset was applied in PGL stationing and then mapped onto the chord. Off the PGL on a curve it scaled by about (R ± offset)/R: in the demo the 2.5 ft offsets became 2.167 ft along the girders (bearing lines 4.33 ft apart instead of 5.0).
+- **Decision (pending engineer review):**
+  - New setting **Dual bearing offset measured**: "along the girders (reference line)" / "along the PGL stationing", next to Skew measured from (Bridge tab, `#brg_off_mode`).
+  - New projects measure along the girders. Saved projects without the setting keep the PGL stationing and their results.
+  - Along the girders, each bearing line is the given distance from the pier line, measured along the construction reference line (per-span chords: along the polyline). It is parallel to the pier line (BGX3 / BGX4 already orient a dual bearing line by its pier).
+  - The distance is along the girders, not normal to the pier line. On a skew, the normal distance is offset × cos θ.
+- **Where:** new `brgOffMode()` and `staAtChordT(tt, guess)` (secant on `ENG.supportChordT`) just before `function bearingLinesFor(u)`, which now solves the PGL station of each bearing line's reference point so that its chord t is t_pier ∓ offset. HTML select after `#skew_datum`; the Substructure note's last sentence was reworded.
+- **Before:**
+```js
+  if(u.type==='pier' && u.bearMode==='double')
+    return [ {label:`${u.name} brg-back`, sta:u.sta-u.bearOffset, …}, {label:`${u.name} brg-ahead`, sta:u.sta+u.bearOffset, …} ];
+```
+- **After:**
+```js
+  if(u.type==='pier' && u.bearMode==='double'){
+    let sb=u.sta-u.bearOffset, sa=u.sta+u.bearOffset;
+    if(brgOffMode()==='chord' && ENG && ENG.chord && u.bearOffset){ const t0=ENG.supportChordT(u.sta); sb=staAtChordT(t0-u.bearOffset, sb); sa=staAtChordT(t0+u.bearOffset, sa); }
+    return [ {label:`${u.name} brg-back`, sta:sb, …}, {label:`${u.name} brg-ahead`, sta:sa, …} ]; }
+```
+- **Governing provision:** none (geometry; dimensioning convention).
+- **Check case (demo, one chord):**
+  - Before: bearing lines at Sta 4+97.50 / 5+02.50, Δt along the chord −2.1668 / +2.1668 ft.
+  - After (along the girders): Sta **4+97.12 / 5+02.88**, Δt **−2.500 / +2.500 ft**.
+  - Seats at 0.01 ft are unchanged here (the grade at the pier is about −0.3 %, so 0.33 ft moves the seat by 0.001 ft). The bearing stations, the DXF and the plan move.
+- **Check case (demo, per-span chords; the new-project default):** Sta 4+97.50 / 5+02.50 (Δt ∓2.5576) → 4+97.56 / 5+02.44 (Δt ∓2.500). Seats unchanged at 0.01 ft.
+- **How verified:**
+  - Headless probe origin/main vs branch:
+    - Variant and Examples 1–5 as saved: every table, the hand-off payload and DXF identical; Export JSON gains `brg_off_mode:'pgl'`.
+    - Demo (new project): the bearing stations above, the Top-of-Deck rows at the bearing lines, and the DXF (178 lines: bearing positions and labels).
+  - 0 console errors.
+  - Tests:
+    - pass: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, home-projects --tool bgeo, tests/engine/run.mjs handoffs lldf list-input.
+    - project-library --tool bgeo: old saves differ only in the Bridge tab text (the new setting), so their results are identical. "On load" differs by the new-project default (the bearing-line rows).
+- **Saved data (§5):** additive scalar `brg_off_mode`. Migration: `BG_OLD_DEFAULTS.brg_off_mode='pgl'`; `BG_NEW_DEFAULTS.brg_off_mode='chord'`. No key changed.
+- **Other copies:** none.
