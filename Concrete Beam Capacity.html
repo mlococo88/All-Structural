@@ -8326,7 +8326,11 @@ function calcCompSplice(inp,f){
       hiFy = {term:lsc_calc, lst:ts.lst, ldBase:ts.ldBase, factor:ts.factor, cls, gov: ts.lst>lsc_calc?&quot;lst&quot;:&quot;term&quot;};
       lsc_calc = Math.max(lsc_calc, ts.lst);
     }
-    if(inp.fc<3000) lsc_calc *= (4/3);
+    // CBH2b (2026-11-07): ACI 318-19 25.5.5.1: l_sc is the longer of the expression (or l_st) and 12 in; for f'c < 3000 psi
+    // that length is then increased by one-third. Before: x4/3 on the expression, then the 12 in floor (less conservative
+    // where the expression is under 12 in, e.g. #3 / #4 bars).
+    const lsc0 = Math.max(lsc_calc, 12);
+    return {lsc_calc, lsc0, lsc: inp.fc<3000 ? lsc0*(4/3) : lsc0, lowFc: inp.fc<3000, hiFy, aciOrder:true};
   }
   const lsc = Math.max(lsc_calc, 12);
   return {lsc_calc, lsc, lowFc: inp.fc<3000, hiFy};
@@ -9157,23 +9161,28 @@ function tabCSplice(inp,f){
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>f_y ≤ 60,000 psi</span> — Uses the linear form 0.0005·f_y·d_b.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>f_y > 60,000 psi</span> — Switches to (0.0009·f_y − 24)·d_b, a steeper relationship for high-strength bars.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>f_y > 80,000 psi</span> — l_sc is the longer of (0.0009·f_y − 24)·d_b and the tension lap splice length l_st of §25.5.2.1 (§25.5.5.1(c)). l_st is taken as Class B unless Class A is selected and shown eligible.${s.hiFy?&quot; <b>This applies to your input.</b>&quot;:&quot;&quot;}</div>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>f'c < 3,000 psi</span> — Weak concrete grips less, so the length is increased by one-third (×4/3).${s.lowFc?&quot; <b>This increase is active for your input.</b>&quot;:&quot;&quot;}</div>
-      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>12 in minimum</span> — Absolute floor.</div>`)
+      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>12 in minimum</span> — The length is not less than 12 in.</div>
+      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>f'c < 3,000 psi</span> — Weak concrete grips less, so the length (after the 12 in minimum) is increased by one-third (×4/3).${s.lowFc?&quot; <b>This increase is active for your input.</b>&quot;:&quot;&quot;}</div>`)
     + eqBlock(fyLE60?&quot;Splice length (f_y ≤ 60,000 psi)&quot;:&quot;Splice length (f_y > 60,000 psi)&quot;,&quot;§25.5.5.1&quot;,
         fyLE60 ? &quot;l_{sc} = 0.0005\\,f_y\\,d_b&quot; : &quot;l_{sc} = (0.0009\\,f_y - 24)\\,d_b&quot;,
         fyLE60 ? `0.0005\\times ${fmt(inp.fy,0)}\\times ${fmt(f.db,3)}`
                : `(0.0009\\times ${fmt(inp.fy,0)} - 24)\\times ${fmt(f.db,3)}`,
         s.hiFy ? `(0.0009\\,f_y - 24)\\,d_b = ${fmt(s.hiFy.term,2)}\\ \\text{in}`
-               : `${s.lowFc?&quot;\\text{(×4/3 for }f'_c<3000)\\ &quot;:&quot;&quot;}l_{sc,calc} = ${fmt(s.lsc_calc,2)}\\ \\text{in}`)
+               : `l_{sc,calc} = ${fmt(s.lsc_calc,2)}\\ \\text{in}`)
     + (s.hiFy ? eqBlock(`f_y > 80,000 psi: longer of the above and l_st (Class ${s.hiFy.cls})`,&quot;§25.5.5.1(c), §25.5.2.1&quot;,
         &quot;l_{sc,calc} = \\max\\!\\left[(0.0009\\,f_y - 24)\\,d_b,\\ l_{st}\\right],\\quad l_{st} = \\max(\\text{factor}\\cdot l_d,\\ 12)&quot;,
         `\\max\\!\\left[${fmt(s.hiFy.term,2)},\\ \\max(${fmt(s.hiFy.factor,1)}\\times ${fmt(s.hiFy.ldBase,2)},\\ 12) = ${fmt(s.hiFy.lst,2)}\\right]`,
-        `${s.lowFc?&quot;\\times\\tfrac{4}{3}\\ (f'_c<3000)\\quad &quot;:&quot;&quot;}l_{sc,calc} = ${fmt(s.lsc_calc,2)}\\ \\text{in}`)
+        `l_{sc,calc} = ${fmt(s.lsc_calc,2)}\\ \\text{in}`)
         + rebarWorkedIn([[&quot;tsLen&quot;,&quot;l_d (splice base, without the excess-reinforcement factor)&quot;]]) : &quot;&quot;)
-    + eqBlock(&quot;Minimum governs&quot;,f.AASHTO?&quot;§5.10.8.4.5&quot;:&quot;§25.5.5.1&quot;,
+    + (s.lowFc   /* CBH2b: 12 in minimum first, then x4/3 for f'c < 3000 psi (25.5.5.1) */
+      ? eqBlock(&quot;12 in minimum, then one-third increase for f'c < 3,000 psi&quot;,&quot;§25.5.5.1&quot;,
+        &quot;l_{sc} = \\tfrac{4}{3}\\max\\!\\left(l_{sc,calc},\\ 12\\ \\text{in}\\right)&quot;,
+        `\\tfrac{4}{3}\\max(${fmt(s.lsc_calc,2)},\\ 12) = \\tfrac{4}{3}(${fmt(s.lsc0,2)})`,
+        `\\boxed{l_{sc} = ${fmt(s.lsc,2)}\\ \\text{in}}`)
+      : eqBlock(&quot;Minimum governs&quot;,f.AASHTO?&quot;§5.10.8.4.5&quot;:&quot;§25.5.5.1&quot;,
         &quot;l_{sc} = \\max\\!\\left(l_{sc,calc},\\ 12\\ \\text{in}\\right)&quot;,
         `\\max(${fmt(s.lsc_calc,2)},\\ 12)`,
-        `\\boxed{l_{sc} = ${fmt(s.lsc,2)}\\ \\text{in}}`));
+        `\\boxed{l_{sc} = ${fmt(s.lsc,2)}\\ \\text{in}}`)));
 }
 
 /* ---- AASHTO compression lap splice branch (5.10.8.4.5a; engineer decision 2026-10-19: AASHTO citation and form,
@@ -10060,9 +10069,9 @@ function rbrTSplice(inp,f){
 /* ---------- compression lap splice (tabCSplice / tabCSpliceAASHTO) ---------- */
 function rbrCSplice(inp,f){
   const s=calcCompSplice(inp,f), A=f.AASHTO, le=inp.fy<=60000, L=[];
-  if(!A) L.push(rbS({id:'lsccalc',label:'Compression lap splice length (f_y '+(le?'≤':'>')+' 60,000 psi'+(s.lowFc?'; ×4/3 for f′c < 3,000 psi':'')+')',sym:'l_{sc,calc}',
-      eq:(le?'0.0005\\, f_{y} d_{b}':'(0.0009\\, f_{y} \\minus 24)\\, d_{b}')+(s.lowFc?'\\cdot \\frac{4}{3}':''),
-      sub:(le?'0.0005\\times '+rbG(inp.fy,0)+'\\times '+rbN(f.db,3):'(0.0009\\times '+rbG(inp.fy,0)+' \\minus 24)\\times '+rbN(f.db,3))+(s.lowFc?'\\times \\frac{4}{3}':''),value:s.lsc_calc,unit:'in',ref:'ACI 318-19 25.5.5.1'}));
+  if(!A) L.push(rbS({id:'lsccalc',label:'Compression lap splice length (f_y '+(le?'≤':'>')+' 60,000 psi)',sym:'l_{sc,calc}',   /* CBH2b: x4/3 after the 12 in minimum */
+      eq:(le?'0.0005\\, f_{y} d_{b}':'(0.0009\\, f_{y} \\minus 24)\\, d_{b}'),
+      sub:(le?'0.0005\\times '+rbG(inp.fy,0)+'\\times '+rbN(f.db,3):'(0.0009\\times '+rbG(inp.fy,0)+' \\minus 24)\\times '+rbN(f.db,3)),value:s.lsc_calc,unit:'in',ref:'ACI 318-19 25.5.5.1'}));
   else L.push(rbS({id:'m',label:'Modification factor (1.0: no reduction for ties or spirals taken)',sym:'m',value:1.0,unit:'',d:1}),
     rbS({id:'lsccalc',label:'Compression lap splice length (f_y '+(le?'≤':'>')+' 60 ksi'+(s.lowFc?'; ×4/3 for f′c < 3.0 ksi':'')+')',sym:'l_{sc,calc}',
       eq:(le?'0.5\\, m\\, f_{y} d_{b}':'m\\, (0.9\\, f_{y} \\minus 24)\\, d_{b}')+(s.lowFc?'\\cdot \\frac{4}{3}':''),
@@ -10073,10 +10082,11 @@ function rbrCSplice(inp,f){
         sub:'(0.0009\\times '+rbG(inp.fy,0)+' \\minus 24)\\times '+rbN(f.db,3),value:s.hiFy.term,unit:'in',ref:'ACI 318-19 25.5.5.1(c)'}),
       rbS({id:'lscst',label:'Tension lap splice length, Class '+s.hiFy.cls+' (Class B unless Class A is selected and shown eligible)',sym:'l_{st}',note:'l_d without the excess-reinforcement factor: see §ldBase',
         eq:'\\max(\\text{factor}\\cdot l_{d},\\, 12\\, \\text{in.})',sub:'\\max('+rbN(s.hiFy.factor,1)+'\\times '+rbN(s.hiFy.ldBase)+',\\, 12)',value:s.hiFy.lst,unit:'in',ref:'ACI 318-19 25.5.2.1'}),
-      rbS({id:'lsccalc',label:'Compression lap splice length (f_y > 80,000 psi: the longer of the two'+(s.lowFc?'; ×4/3 for f′c < 3,000 psi':'')+')',sym:'l_{sc,calc}',
-        eq:'\\max(l_{sc,1},\\, l_{st})'+(s.lowFc?'\\cdot \\frac{4}{3}':''),sub:'\\max('+rbN(s.hiFy.term)+',\\, '+rbN(s.hiFy.lst)+')'+(s.lowFc?'\\times \\frac{4}{3}':''),value:s.lsc_calc,unit:'in',ref:'ACI 318-19 25.5.5.1(c)'}));
+      rbS({id:'lsccalc',label:'Compression lap splice length (f_y > 80,000 psi: the longer of the two)',sym:'l_{sc,calc}',
+        eq:'\\max(l_{sc,1},\\, l_{st})',sub:'\\max('+rbN(s.hiFy.term)+',\\, '+rbN(s.hiFy.lst)+')',value:s.lsc_calc,unit:'in',ref:'ACI 318-19 25.5.5.1(c)'}));
   }
-  L.push(rbS({id:'lsc',label:'Compression lap splice length (12 in. minimum)',sym:'l_{sc}',eq:'\\max(l_{sc,calc},\\, 12\\, \\text{in.})',sub:'\\max('+rbN(s.lsc_calc)+',\\, 12)',value:s.lsc,unit:'in',ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.5a':'ACI 318-19 25.5.5.1'}));
+  if(!A&amp;&amp;s.lowFc) L.push(rbS({id:'lsc',label:'Compression lap splice length (12 in. minimum, then ×4/3 for f′c < 3,000 psi)',sym:'l_{sc}',eq:'\\tfrac{4}{3}\\max(l_{sc,calc},\\, 12\\, \\text{in.})',sub:'\\tfrac{4}{3}\\max('+rbN(s.lsc_calc)+',\\, 12)',value:s.lsc,unit:'in',ref:'ACI 318-19 25.5.5.1'}));   /* CBH2b */
+  else L.push(rbS({id:'lsc',label:'Compression lap splice length (12 in. minimum)',sym:'l_{sc}',eq:'\\max(l_{sc,calc},\\, 12\\, \\text{in.})',sub:'\\max('+rbN(s.lsc_calc)+',\\, 12)',value:s.lsc,unit:'in',ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.5a':'ACI 318-19 25.5.5.1'}));
   if(lapProhibited(inp,f)) L.push(rbS({id:'lapOK',label:'Lap splice of #'+inp.barSize+' to #'+inp.barSize+' permitted',sym:'',value:'no: use a mechanical or welded splice (the length above is for reference only)',unit:'',ok:false,ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.2a':'ACI 318-19 25.5.1.1, 25.5.5.3'}));
   return [{title:'Splice length',ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.5a':'ACI 318-19 25.5.5.1',steps:L}];
 }
