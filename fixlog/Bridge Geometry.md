@@ -2068,7 +2068,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Saved data (§5):** additive top-level `XSLOPES` (array of {staStr, L, R}); absent = empty = old behaviour. No key changed.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/bg-m2-curve-elements (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX7, review M2 / O4 part: curve and spiral element report; report only, no result change)   [display only]
+## 2026-11-07 — PR: claude/bg-m2-curve-elements (PR #1128: https://github.com/mlococo88/All-Structural/pull/1128) (BGX7, review M2 / O4 part: curve and spiral element report; report only, no result change)   [display only]
 
 - **Why:** review 2026-11-07 M2. The plan curve data could be checked only through the end stations and bearings. Curve elements (T, E, M, LC, PI, D) and spiral elements (θs, Xs, Ys, p, k, LT, ST) were not shown.
 - **Where:**
