@@ -1765,3 +1765,72 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Check case:** Example 5, Pier 1 (back 12+07.50, ahead 12+12.50), girder G4. Before: "99.41" (back) and "99.49" (ahead) printed in the same place, unreadable. After: "99.41" left of the back node, "99.49" right of the ahead node. Top girder with offset 0.5 ft: the side-by-side left label hit the "Sta 12+10.00" callout, so the pair is stacked above the deck edge with leaders. Bottom girder: stacking below would hit the bearing station labels, so it stays side by side.
 - **How verified:** origin/main vs branch on the 5 examples plus Example 5 with offsets 1 ft and 0.5 ft: every tab's text, Export JSON and all localStorage identical. Export DXF (local, auto) and the sheets DXF byte-identical (Examples 1, 2, 3, 5 and both variants; 18 files). Plan canvas pixel-identical for Examples 1 and 4 (no dual bearings). Tests: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, project-library --tool bgeo. Screenshots before and after looked at.
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/bg-h2-extend-tangents (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX1, review H2 + L3 part: points before the POB / after the POE on the extended end tangents, with a warning)   [calc change] [results change only for deck points outside the alignment]
+
+- **Why:** in-depth review 2026-11-07, H2. A deck point before the POB or after the POE was evaluated at the POB / POE station (`projectToPGL` found no sign change of the along-tangent residual and kept the nearest end station). The skewed chord puts half the girders of the default demo bridge past both alignment ends, so Abut 1 G4 was 0.10 ft high. Also L3 (part): an alignment that starts or ends with a spiral put every station beyond its end on the end point, and a curve end continued around the circle.
+- **Governing provision:** none (route-surveying geometry). Commercial practice (and the review): a point beyond the alignment ends is referred to the end tangent extended, with a warning.
+- **Where (anchors):**
+  - `buildAlignment`: the element loop (a `TAN` set of the tangent elements) and the returned `at(s)` (anchor `function extTan(e, s0, s)`).
+  - `projectToPGL`: anchor `// BGX (H2): the extended end tangents`.
+  - New `geometryWarnings()` / `showGeomWarnings()` just before `function compute(){`, called right after `ENG=buildEngine();`; new box `<div id="geom_warn">` right after `<div id="geom_err">`.
+- **Before:**
+```js
+  let sta=pob.sta,x=pob.x,y=pob.y,brg=pob.brg*DEG; const elems=[];
+  for(const ln of lines){ const p=ln.split(',').map(s=>s.trim()); const type=p[0].toLowerCase();
+    if(type==='tan') elems.push(makeTangent(sta,x,y,brg,+p[1]));
+  …
+  if(elems.length===0) elems.push(makeTangent(pob.sta, pob.x, pob.y, pob.brg*DEG, 0));
+  return { staStart:pob.sta, staEnd:sta,
+    at(s){ let el=elems.find(e=>s>=e.staStart-1e-9&&s<=e.staEnd+1e-9);
+      if(!el) el=(s<elems[0].staStart)?elems[0]:elems[elems.length-1]; return el.at(s); }, elems };
+```
+```js
+  let sstar;
+  if(brk.length){ let bestD=Infinity;
+    for(const [lo,hi] of brk){ … if(d<bestD){ bestD=d; sstar=r; } }
+  } else { sstar=bestS; } // no sign change (point beyond the ends) -> nearest endpoint station
+  const a=align.at(sstar); const nrm=a.brg+Math.PI/2;
+  const off=(x-a.x)*Math.sin(nrm)+(y-a.y)*Math.cos(nrm); // signed perpendicular offset
+  return { sta:sstar, off };
+```
+- **After:**
+```js
+  let sta=pob.sta,x=pob.x,y=pob.y,brg=pob.brg*DEG; const elems=[], TAN=new Set();   // TAN: the tangent elements (BGX, H2)
+  for(const ln of lines){ const p=ln.split(',').map(s=>s.trim()); const type=p[0].toLowerCase();
+    if(type==='tan'){ elems.push(makeTangent(sta,x,y,brg,+p[1])); TAN.add(elems[elems.length-1]); }
+  …
+  if(elems.length===0){ elems.push(makeTangent(pob.sta, pob.x, pob.y, pob.brg*DEG, 0)); TAN.add(elems[0]); }
+  const eF=elems[0], eL=elems[elems.length-1];
+  function extTan(e, s0, s){ const a=e.at(s0), d=s-s0; return { x:a.x+Math.sin(a.brg)*d, y:a.y+Math.cos(a.brg)*d, brg:a.brg }; }
+  return { staStart:pob.sta, staEnd:sta,
+    at(s){ let el=elems.find(e=>s>=e.staStart-1e-9&&s<=e.staEnd+1e-9);
+      if(!el){ const e=(s<eF.staStart)?eF:eL; if(TAN.has(e)) return e.at(s);
+        return extTan(e, (e===eF&&s<eF.staStart)?e.staStart:e.staEnd, s); }
+      return el.at(s); }, elems };
+```
+```js
+  let sstar, bestD=Infinity, ext=0;
+  if(brk.length){
+    for(const [lo,hi] of brk){ … if(d<bestD){ bestD=d; sstar=r; } }
+  }
+  // BGX (H2): the extended end tangents (align.at continues on them past the POB / POE)
+  if(s1>s0){ const f0=f(s0), f1=f(s1);
+    [[f0<0, s0+f0, -1], [f1>0, s1+f1, 1]].forEach(([on, se, k])=>{ if(!on) return;
+      const q=align.at(se), d=Math.hypot(x-q.x, y-q.y); if(d<bestD-1e-9){ bestD=d; sstar=se; ext=k; } }); }
+  if(sstar===undefined) sstar=bestS;   // zero-length alignment: the POB
+  const a=align.at(sstar); const nrm=a.brg+Math.PI/2;
+  const off=(x-a.x)*Math.sin(nrm)+(y-a.y)*Math.cos(nrm); // signed perpendicular offset
+  return { sta:sstar, off, ext };
+```
+  `geometryWarnings()` evaluates `ENG.deckAtSupport(bl, off)` for every bearing line of every support at both deck edges and every girder, and reports the furthest point before the POB and after the POE: "Deck points lie up to X ft before the POB (Sta …), at <bearing line>. Their plan position is projected onto the start tangent extended. Extend the alignment to cover the whole deck." (same for the POE). The box shows only when there is a warning; results are not changed by it.
+- **Check case (default demo bridge):** tangent 200 ft from POB 0+00 at N90E, then the spiral 0→800; profile +2.0 % from EL 100 at 0+00; crown 2 % at the PGL; no overlay; seat stack 8 + 1.5 + 0 + 36 + 3 = 48.5 in = 4.0417 ft. Abut 1 line is normal to the chord (chord bearing 106.0°, unit normal to the right (−0.2775, −0.9607)).
+  - G4 (w = +18): point (−4.996, −17.293). Before the POB: f(POB) = −4.996 → station −0+04.996 on the start tangent, offset +17.293 ft right.
+  - TD = 100 + 0.02 × (−4.996) − 0.02 × 17.293 = 100 − 0.0999 − 0.3459 = **99.554** (before 99.654, the point taken at 0+00 with offset 17.293). Seat = 99.554 − 4.0417 = **95.51** (before 95.61).
+  - G3 (w = +6): sta −0+01.665, off +5.764: TD = 100 − 0.0333 − 0.1153 = 99.851, seat **95.81** (before 95.84).
+  - Abut 2 (after the POE, end tangent, profile −0.8 % past 9+00): G3 seat 99.04 → **99.03**; G4 seat 98.81 → **98.77** (TD 102.854 → 102.814).
+  - G1, G2 (inside the alignment) unchanged (95.71, 95.88 at Abut 1). Warning: "Deck points lie up to 6.66 ft before the POB … at Abut 1 brg" and "6.66 ft after the POE … at Abut 2 brg" (the deck edges at ±24 ft).
+  - All eight Abut 1 / Abut 2 girder TD and seat values agree with the review's independent engine (scratchpad `bg/indep.mjs` + extended tangents) to 1e-4 ft.
+- **How verified:** headless Chromium, origin/main vs branch (scratchpad probe): demo, the review's spiral-curve-spiral variant and the 5 built-in examples; text of the Top-of-Deck table, Beam Seat table and seat sections, Derived table, span summary, warnings, LL & DL hand-off payload (`producedAt` aside), Export JSON, Export DXF (local). Only the demo moves (the 4 Abut 1 / Abut 2 values above, the same values in the Top-of-Deck table row "Abut 1 CL" / "Abut 2 CL" and the DXF elevation labels, 12 DXF lines); the variant and Examples 1–5 identical (DXF: the time stamp line only). Hand-off payload identical (spans and skews do not depend on it). Spiral-first and curve-first alignments: `align.at(-50)` was the POB (spiral) / a point on the circle (curve); now (−50, 0) on the start tangent. 0 console errors. Tests: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, home-projects --tool bgeo, tests/engine/run.mjs: pass. project-library --tool bgeo and list-input --part bgeo compare the page with origin/main and report exactly the intended differences (the demo's Abut 1 G3/G4 seats 95.84/95.61 → 95.81/95.51, the "Abut 1 CL" Top-of-Deck row, and the plan colour-scale minimum 99.54 → 99.41, the deck corner); nothing else.
+- **Also affected (same rule, intended):** map picks, the plan hover and the N/E → station converter beyond the alignment ends now report the station on the extended tangent (was the POB / POE station).
+- **Saved data:** none touched (§5). **Other copies:** none.

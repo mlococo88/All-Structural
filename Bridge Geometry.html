@@ -185,6 +185,7 @@
 
 <main>
   <div id="geom_err" style="display:none; border:2px solid var(--oxide); background:#fbeee9; color:var(--ink); padding:8px 12px; margin:0 0 14px; font-size:13px;"></div>
+  <div id="geom_warn" style="display:none; border:1px solid var(--oxide); background:#fdf5f0; color:var(--ink); padding:6px 12px; margin:0 0 14px; font-size:12.5px;"></div><!-- BGX (2026-11-07): geometry warnings (results computed, but check them) -->
   <!-- TAB 1: ALIGNMENT -->
   <section class="tabpane active" id="pane-align" role="tabpanel">
     <p class="note" style="font-size:12px; margin-bottom:14px;">Define the roadway geometry the bridge follows: the <strong>horizontal alignment</strong> (the path in plan — tangents, curves, spirals) and the <strong>vertical profile</strong> (elevation along the route — grades and vertical curves). Everything else in the tool is positioned relative to this. Graphics at the bottom show the result.</p>
@@ -764,19 +765,26 @@ function azimuthToQuadrant(az){
 /* ===== ALIGNMENT (verified) ===== */
 function buildAlignment(pob, elemText){
   const lines=elemText.trim().split(/\n+/).map(s=>s.trim()).filter(Boolean);
-  let sta=pob.sta,x=pob.x,y=pob.y,brg=pob.brg*DEG; const elems=[];
+  let sta=pob.sta,x=pob.x,y=pob.y,brg=pob.brg*DEG; const elems=[], TAN=new Set();   // TAN: the tangent elements (BGX, H2)
   for(const ln of lines){ const p=ln.split(',').map(s=>s.trim()); const type=p[0].toLowerCase();
-    if(type==='tan') elems.push(makeTangent(sta,x,y,brg,+p[1]));
+    if(type==='tan'){ elems.push(makeTangent(sta,x,y,brg,+p[1])); TAN.add(elems[elems.length-1]); }
     else if(type==='crv') elems.push(makeCurve(sta,x,y,brg,+p[1],+p[2]));
     else if(type==='spi') elems.push(makeSpiral(sta,x,y,brg,+p[1],+p[2],+p[3]));
     else continue;
     const e=elems[elems.length-1]; const end=e.at(e.staEnd); sta=e.staEnd; x=end.x; y=end.y; brg=end.brg; }
   // No elements (all rows deleted): degrade to a point-alignment on the POB tangent rather than
   // crashing every at() call downstream.
-  if(elems.length===0) elems.push(makeTangent(pob.sta, pob.x, pob.y, pob.brg*DEG, 0));
+  if(elems.length===0){ elems.push(makeTangent(pob.sta, pob.x, pob.y, pob.brg*DEG, 0)); TAN.add(elems[0]); }
+  /* BGX (H2, 2026-11-07): before the POB / after the POE the alignment continues on its END TANGENT (a straight line at the
+     bearing of the first / last element's end). A tangent end element is the same line, so nothing changes for it; a curve end
+     used to continue around the circle and a spiral end stopped at its end point (every station beyond it fell on the POB/POE). */
+  const eF=elems[0], eL=elems[elems.length-1];
+  function extTan(e, s0, s){ const a=e.at(s0), d=s-s0; return { x:a.x+Math.sin(a.brg)*d, y:a.y+Math.cos(a.brg)*d, brg:a.brg }; }
   return { staStart:pob.sta, staEnd:sta,
     at(s){ let el=elems.find(e=>s>=e.staStart-1e-9&&s<=e.staEnd+1e-9);
-      if(!el) el=(s<elems[0].staStart)?elems[0]:elems[elems.length-1]; return el.at(s); }, elems };
+      if(!el){ const e=(s<eF.staStart)?eF:eL; if(TAN.has(e)) return e.at(s);
+        return extTan(e, (e===eF&&s<eF.staStart)?e.staStart:e.staEnd, s); }
+      return el.at(s); }, elems };
 }
 function makeTangent(sta0,x0,y0,brg0,L){ return { staStart:sta0, staEnd:sta0+L,
   at(s){ const d=s-sta0; return { x:x0+Math.sin(brg0)*d, y:y0+Math.cos(brg0)*d, brg:brg0 }; } }; }
@@ -1010,7 +1018,11 @@ function chordGeom(align){
 /* Project a plan point (x,y) back onto the PGL alignment: return the station whose perpendicular
    passes through the point, plus the signed perpendicular offset. Used to fetch elevation from
    the profile for a point that lives on the straight chord (not at a clean PGL offset).
-   Robust coarse-scan + bisection refine on f(s) = dot( point - PGL(s), tangent(s) ). */
+   Robust coarse-scan + bisection refine on f(s) = dot( point - PGL(s), tangent(s) ).
+   BGX (H2, 2026-11-07): a point before the POB (f(POB) < 0) or after the POE (f(POE) > 0) is also projected onto the
+   END TANGENT extended (station POB + f(POB), or POE + f(POE)), and that candidate competes with the roots by distance.
+   It used to be evaluated at the POB / POE station itself (the nearest end), e.g. 0.10 ft high at the demo's Abut 1 G4.
+   ext = -1 / +1 marks a point on the extended start / end tangent (0 inside). */
 function projectToPGL(align, x, y){
   const s0=align.staStart, s1=align.staEnd;
   const f=(s)=>{ const a=align.at(s); return (x-a.x)*Math.sin(a.brg)+(y-a.y)*Math.cos(a.brg); }; // along-tangent component
@@ -1025,17 +1037,22 @@ function projectToPGL(align, x, y){
     else if((prevF<0)!==(fv<0)) brk.push([prevS,s]);
     prevS=s; prevF=fv;
   }
-  let sstar;
-  if(brk.length){ let bestD=Infinity;
+  let sstar, bestD=Infinity, ext=0;
+  if(brk.length){
     for(const [lo,hi] of brk){ let a=lo,b=hi;
       for(let k=0;k<60;k++){ const m=(a+b)/2, fm=f(m); if(Math.abs(fm)<1e-9){a=b=m;break;} const fa=f(a); if((fa<0)!==(fm<0)) b=m; else a=m; }
       const r=(a+b)/2, q=align.at(r), d=Math.hypot(x-q.x, y-q.y);
       if(d<bestD){ bestD=d; sstar=r; }
     }
-  } else { sstar=bestS; } // no sign change (point beyond the ends) -> nearest endpoint station
+  }
+  // BGX (H2): the extended end tangents (align.at continues on them past the POB / POE)
+  if(s1>s0){ const f0=f(s0), f1=f(s1);
+    [[f0<0, s0+f0, -1], [f1>0, s1+f1, 1]].forEach(([on, se, k])=>{ if(!on) return;
+      const q=align.at(se), d=Math.hypot(x-q.x, y-q.y); if(d<bestD-1e-9){ bestD=d; sstar=se; ext=k; } }); }
+  if(sstar===undefined) sstar=bestS;   // zero-length alignment: the POB
   const a=align.at(sstar); const nrm=a.brg+Math.PI/2;
   const off=(x-a.x)*Math.sin(nrm)+(y-a.y)*Math.cos(nrm); // signed perpendicular offset
-  return { sta:sstar, off };
+  return { sta:sstar, off, ext };
 }
 function girdersForSpan(span){
   const ov=SPAN_OV[span]; const b=bridgeCL();
@@ -1363,10 +1380,34 @@ function showGeomErrors(errs){
     errs.map(e=>'<li>'+esc(e)+'</li>').join('')+'</ul>';
   d.style.display='block';
 }
+/* BGX (2026-11-07): warnings about a geometry that computes but needs checking. Results are not changed by these. */
+function geometryWarnings(){
+  const w=[]; if(!ENG) return w;
+  const su=sortedUnits(); if(su.length<2) return w;
+  const s0=ENG.align.staStart, s1=ENG.align.staEnd;
+  // H2: deck points (girders and deck edges on every bearing line) before the POB / after the POE
+  let before=null, after=null;
+  su.forEach(u=>{ const span=Math.max(1,Math.min(su.length-1,spanOfSta(u.sta))), ed=edgesForSpan(span);
+    bearingLinesFor(u).forEach(bl=>{ [ed.l, ed.r, ...girdersForSpan(span)].forEach(off=>{ let d; try{ d=ENG.deckAtSupport(bl,off); }catch(e){ return; }
+      if(!d||!isFinite(d.sta)) return;
+      if(d.sta<s0-0.005 && (!before||s0-d.sta>before.by)) before={by:s0-d.sta, at:bl.label};
+      if(d.sta>s1+0.005 && (!after||d.sta-s1>after.by)) after={by:d.sta-s1, at:bl.label}; }); }); });
+  if(before) w.push(`Deck points lie up to ${before.by.toFixed(2)} ft before the POB (Sta ${formatStation(s0)}), at ${before.at}. Their plan position is projected onto the start tangent extended. Extend the alignment to cover the whole deck.`);
+  if(after) w.push(`Deck points lie up to ${after.by.toFixed(2)} ft after the POE (Sta ${formatStation(s1)}), at ${after.at}. Their plan position is projected onto the end tangent extended. Extend the alignment to cover the whole deck.`);
+  return w;
+}
+function showGeomWarnings(ws){
+  const d=document.getElementById('geom_warn'); if(!d) return;
+  if(!ws.length){ d.style.display='none'; d.innerHTML=''; return; }
+  const esc=s=>String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  d.innerHTML='<b>Geometry warning'+(ws.length>1?'s':'')+'</b> (results computed; check them):<ul style="margin:4px 0 0 18px; padding:0;">'+ws.map(e=>'<li>'+esc(e)+'</li>').join('')+'</ul>';
+  d.style.display='block';
+}
 function compute(){
   const gErr=geometryInputErrors(); showGeomErrors(gErr);
   if(gErr.length){ if(_autosaveArmed) autosave(); return; }
   ENG=buildEngine();
+  showGeomWarnings(geometryWarnings());
   { const R=sectionStaRange();
     if(ACTIVE_STA===null||ACTIVE_STA<R.s0-1e-6||ACTIVE_STA>R.s1+1e-6) ACTIVE_STA=(R.s0+R.s1)/2; }
   drawPlan('svg_plan_a'); drawProfile('svg_prof_a');
