@@ -3405,6 +3405,11 @@ function groupPmTable(I) {
     avg: rows.reduce((a,b)=>a+b.fm,0)/nRows, belowTable: s_dia < 3 - 1e-9, aboveTable: s_dia > 5 + 1e-9 };
 }
 function groupPmModOf(I) { const v = +(I && I.groupPmMod); return (isFinite(v) && v > 0) ? v : 1.0; }
+/* PDA-H2 (2026-11-07): the Module 10 column check runs automatically whenever the pile has an unsupported length
+   (stickup + design scour > 0; AASHTO 10.9.3.10.2, 10.7.3.13.4). The saved toggle bucklingEnable is kept as stored and still
+   turns the check on with no stickup or scour (e.g. a void / soft layer entered as the added length). Not for integral abutments. */
+function bklAutoOn(I) { return !!I && I.pileType !== "iab" && !I.bucklingEnable && (Math.max(I.solverFree || 0, 0) + Math.max(I.scourDepth || 0, 0)) > 0; }
+function bklOn(I) { return !!I && (!!I.bucklingEnable || bklAutoOn(I)); }
 function groupPmAutoOn(I) { return !!(I && I.groupPmAuto && I.groupEnable && I.lateralSource === "py" && I.pileType !== "iab"); }
 // One row's lateral-dependent results (from computeAll R and the row's p-y result pr):
 // D/C as the case envelope reports them (micropile: M_max / phi M_n and the P-M interaction;
@@ -4621,7 +4626,7 @@ function computeAll(I, opts = {}) {
   /* ---------- 10. BUCKLING (unsupported length) ---------- */
   // Triggered when an unsupported span exists: stickup, scour zone, soft/liquefiable layer.
   // Effective length = unsupported length + depth to fixity, per discussion.
-  const enableBuckling = I.bucklingEnable;
+  const enableBuckling = bklOn(I);   // PDA-H2: automatic with stickup + design scour > 0
   // --- Depth to fixity for BUCKLING (Davisson & Robinson 1965) ---
   // For a laterally-supported pile, the equivalent fixed base for buckling sits a
   // short distance below the top of competent soil — NOT at the lateral moment-zero
@@ -4921,6 +4926,7 @@ function computeAll(I, opts = {}) {
   const buck_pass = !enableBuckling || selFinal.pass;
   R.buckling = {
     enable: enableBuckling,
+    auto: bklAutoOn(I),   // PDA-H2: on because of the stickup / design scour (the saved toggle is off)
     Lu_free,
     LuFloored,
     stickPos,
@@ -9458,7 +9464,7 @@ const DEFAULT_INPUTS = {
   hpPhiUp: 0.25,   // uplift: SPT / alpha method
   hpDriveCond: "good", // "good" (phi_c 0.60) | "severe" (phi_c 0.50) | "static_generic" (custom / legacy)
   hpPhiRev: 2,     // migration marker for the H-pile phi defaults (see mergeSavedInputs)
-  pdaRev: 4,           // PDA (2026-10-20): migration marker (mergeSavedInputs); 2 = part B, 3 = part C, 4 = PDA-H1 note (2026-11-07)
+  pdaRev: 5,           // PDA (2026-10-20): migration marker (mergeSavedInputs); 2 = part B, 3 = part C, 4 = PDA-H1 note, 5 = PDA-H2 note (2026-11-07)
   hpSptBasis: "N60",   // PDA-D5 (2026-10-20): SPT values entered as N60 (C_N applied, 10.4.6.2.4) | "N160"; saved projects without it: "N160"
   scourDepth: 0,       // PDA-D12 (2026-10-20): design scour depth below grade (ft); no side / bond / p-y resistance above it (10.7.3.6)
   hpSmallGroup: false, // apply Table 10.5.5.2.3-1 small-group 0.80 reduction on φ_stat
@@ -10040,6 +10046,11 @@ function mergeSavedInputs(parsed) {
     const mp = out.pileType !== "hpile" && out.pileType !== "iab";
     if (mp && ((out.solverFree || 0) > 0 || (out.scourDepth || 0) > 0 || (out.LuFree || 0) > 0)) notes.push("Micropile combined axial + flexure (Module 05, 2026-11-07): with an unsupported length (stickup, design scour or added length), P_r is now the lesser of the casing column at L_c and the Module 10 column over L_u + L_f (10.9.3.10.2, 10.7.3.13.4). Results change: review the combined check.");
     out.pdaRev = 4;
+  }
+  // PDA-H2 (2026-11-07): one-time note for a project saved before it (pdaRev < 5). No input is changed (bucklingEnable kept as saved).
+  if (parsed && typeof parsed === "object" && !(parsed.pdaRev >= 5)) {
+    if (bklAutoOn(out)) notes.push("Buckling (Module 10, 2026-11-07): the column check over the unsupported length now runs automatically when the pile has a stickup or design scour (10.9.3.10.2, 10.7.3.13.4). This project had it switched off: results change" + (out.pileType === "hpile" ? " (H-pile axial P_n and the combined check use the Module 10 column)" : " (the Module 10 buckling check is added)") + ". Review the buckling and axial checks.");
+    out.pdaRev = 5;
   }
   LAST_LOAD_NOTES = notes;
   return out;
@@ -11057,8 +11068,8 @@ function PrintReport({
     ] }),
 
     // ---- BUCKLING ----
-    (I.pileType !== "iab" && I.bucklingEnable) && /*#__PURE__*/React.createElement(RptInputs, { title: "Buckling \u00b7 unsupported length", rows: [
-      ["Buckling check", "ENABLED", "", ""],
+    (I.pileType !== "iab" && r.buckling.enable) && /*#__PURE__*/React.createElement(RptInputs, { title: "Buckling \u00b7 unsupported length", rows: [
+      ["Buckling check", r.buckling.auto ? "ON (automatic: unsupported length)" : "ENABLED", "", ""],
       ["Unsupported length L\u1d64", r.buckling.Lu_free, "ft", "derived: max(entered, stickup)"],
       ["  \u2014 physical stickup", r.buckling.stickPos, "ft", "from pile geometry"],
       ["  \u2014 added scour / void / soft", Math.max((I.LuFree || 0) - r.buckling.stickPos, 0) || null, "ft", "entered"],
@@ -16808,7 +16819,7 @@ function App() {
       // display, but never reached the model the ramp actually solves. A 20 ft scour
       // zone was reporting ~3x the true critical load.)
       // Only applies when buckling is enabled; otherwise the profile is untouched.
-      const Lu_ft = I.bucklingEnable
+      const Lu_ft = bklOn(I)   // PDA-H2: as computeAll (automatic with stickup / scour)
         ? Math.max(I.LuFree || 0, (I.solverFree || 0) > 0 ? (I.solverFree || 0) : 0)
         : 0;
       const stickPos_ft = (I.solverFree || 0) > 0 ? (I.solverFree || 0) : 0;
@@ -18787,10 +18798,10 @@ function App() {
     sub: "unsupported span and column parameters (10)"
   }, /*#__PURE__*/React.createElement(Toggle, {
     label: "Evaluate buckling over an unsupported span",
-    sub: "enable if a stickup, scour zone, void, or soft/liquefiable layer removes continuous soil bracing",
-    on: I.bucklingEnable,
-    onChange: v => set('bucklingEnable', v)
-  }), I.bucklingEnable && /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mt-3" },
+    sub: r.buckling.auto ? "on automatically: the pile has an unsupported length (stickup " + fmt(r.buckling.stickPos, 1) + " ft + design scour " + fmt(r.buckling.scourBkl, 1) + " ft; AASHTO 10.9.3.10.2, 10.7.3.13.4)" : "enable if a void or soft/liquefiable layer removes continuous soil bracing; on automatically with a stickup or design scour",
+    on: r.buckling.enable,
+    onChange: v => { if (!r.buckling.auto) set('bucklingEnable', v); }   // PDA-H2
+  }), r.buckling.enable && /*#__PURE__*/React.createElement("div", { className: "grid grid-cols-2 gap-3 mt-3" },
     /*#__PURE__*/React.createElement(Field, { label: "Effective length factor K", sub: "free \u2248 2.1 \u00b7 fixed \u2248 1.2 (AASHTO C4.6.2.5)", value: I.Kb, step: 0.1, onChange: v => set('Kb', v) }),
     /*#__PURE__*/React.createElement(Field, { label: "Added unsupported length", sub: "scour / void / soft layer below grade", unit: "ft", step: 0.5,
       value: Math.max((I.LuFree || 0) - r.buckling.stickPos, 0),
@@ -18800,7 +18811,7 @@ function App() {
       onChange: v => set('bklCapMult', isFinite(v) && v > 0 ? v : 10) }),
     /*#__PURE__*/React.createElement("div", { className: "text-[10px] text-slate-500 leading-snug self-end pb-1" },
       "L\u1d64 = stickup ", fmt(r.buckling.stickPos, 1), " ft + ", r.buckling.scourBkl > 0 ? "max(added, design scour " + fmt(r.buckling.scourBkl, 1) + " ft)" : "added", " = ", /*#__PURE__*/React.createElement("b", null, fmt(r.buckling.Lu_free, 1), " ft"))),   // PDA-D12
-    I.bucklingEnable && /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" },
+    r.buckling.enable && /*#__PURE__*/React.createElement("p", { className: "text-[10px] text-slate-500 leading-snug mt-2" },
       "The ramp's real endpoint is non-convergence; the cap only bounds runtime. Truncating low is unconservative \u2014 on LPILE Ex. 23 a 2\u00d7 cap returned +25.9% over the true P\u1d04\u1d63, while R\u00b2 improved.")), /*#__PURE__*/(I.pileType === "micropile") && /*#__PURE__*/React.createElement(Panel, {
     title: "Uplift",
     sub: "tension / uplift demand (09)"
@@ -20187,9 +20198,9 @@ function App() {
     /*#__PURE__*/React.createElement(DerivLine, { label: "Factored tensile resistance", tex: `\\phi_t T_n=${fmt(r.axial.phiT_ax, 2)}(${fmt(r.axial.Tn_steel, 1)})=\\mathbf{${fmt(r.axial.phiTn_steel, 1)}\\text{ kip}}` }),
     /*#__PURE__*/React.createElement("p", { className: "text-[8.5px] text-slate-400 mt-1 leading-snug" }, "φt = φTC = φTU, AASHTO LRFD 10th Ed. Table 10.5.5.2.5-2 (see Resistance Factors). Casing tension across threaded joints may be governed by the net section at the joint — confirm the joint capacity for uplift-controlled designs.")),
   /*#__PURE__*/React.createElement("div", { className: "mt-3 p-2.5 rounded-sm border text-[10px] leading-snug",
-    style: (I.solverFree > 0 || I.bucklingEnable) ? { borderColor: "#c9622e", background: "rgba(201,98,46,0.08)", color: "#7a4515" } : { borderColor: "#cbd5e1", background: "rgba(148,163,184,0.06)", color: "#475569" } },
+    style: (I.solverFree > 0 || r.buckling.enable) ? { borderColor: "#c9622e", background: "rgba(201,98,46,0.08)", color: "#7a4515" } : { borderColor: "#cbd5e1", background: "rgba(148,163,184,0.06)", color: "#475569" } },
     /*#__PURE__*/React.createElement("b", null, "Note — compression resistance above excludes buckling. "),
-    (I.solverFree > 0 || I.bucklingEnable)
+    (I.solverFree > 0 || r.buckling.enable)
       ? [/*#__PURE__*/React.createElement("span", { key: "a" }, "This design has "), /*#__PURE__*/React.createElement("b", { key: "b" }, I.solverFree > 0 ? "an unsupported length (stickup " + fmt(I.solverFree, 1) + " ft)" : "the buckling check enabled"), /*#__PURE__*/React.createElement("span", { key: "c" }, " — the axial capacity here (φ", /*#__PURE__*/React.createElement("sub", { key: "s" }, "cc"), "R", /*#__PURE__*/React.createElement("sub", { key: "s2" }, "n"), ") is a pure squash/crushing capacity and does NOT include column buckling. See "), /*#__PURE__*/React.createElement("b", { key: "d" }, "Module 10 (Buckling — Unsupported Length)"), /*#__PURE__*/React.createElement("span", { key: "e" }, " for the governing buckling check, which may control below this value.")]
       : "The section is treated as continuously braced by competent soil, so column buckling does not govern and this squash capacity applies. If a stickup, scour zone, or soft/liquefiable layer is present, enable Module 10 to check buckling over the unsupported length.")), /*#__PURE__*/(I.pileType === "micropile") && React.createElement(Module, {
     idx: "04",
@@ -20588,10 +20599,10 @@ function App() {
     open: open[10],
     onToggle: () => toggle(10)
   }, /*#__PURE__*/React.createElement(InputsUsed, { tab: "checks", setTab: setRailTab, panelTitle: "Buckling",
-    items: [["buckling check", I.bucklingEnable ? "on" : "off", ""],
-      I.bucklingEnable && ["K", fmt(I.Kb, 2), ""],
-      I.bucklingEnable && ["added unsupported length", fmt(Math.max((I.LuFree || 0) - r.buckling.stickPos, 0), 1), "ft"],
-      I.bucklingEnable && ["P-crit ramp cap", fmt(I.bklCapMult != null && isFinite(I.bklCapMult) ? I.bklCapMult : 10, 0) + "\u00d7 F\u1d67A", ""]] }), !r.buckling.enable ? /*#__PURE__*/React.createElement("p", {
+    items: [["buckling check", r.buckling.auto ? "on (automatic: stickup / scour)" : r.buckling.enable ? "on" : "off", ""],
+      r.buckling.enable && ["K", fmt(I.Kb, 2), ""],
+      r.buckling.enable && ["added unsupported length", fmt(Math.max((I.LuFree || 0) - r.buckling.stickPos, 0), 1), "ft"],
+      r.buckling.enable && ["P-crit ramp cap", fmt(I.bklCapMult != null && isFinite(I.bklCapMult) ? I.bklCapMult : 10, 0) + "\u00d7 F\u1d67A", ""]] }), !r.buckling.enable ? /*#__PURE__*/React.createElement("p", {
     className: "text-[12px] text-slate-500 max-w-2xl"
   }, (I.pileType === "hpile" ? "Disabled. The pile is assumed continuously braced by competent soil, so column buckling does not govern and the axial check uses the full squash capacity Pn = Po. Enable this only when part of the pile is genuinely unsupported \u2014 an above-grade stickup, a scour or void zone, or a soft/liquefiable layer too weak to brace the shaft. The effective length then runs from the top of the unsupported span down to the depth of fixity, and that full length is checked for column buckling. The Structural Axial module (03) reads its Pn from whichever method is selected here." : "Disabled. The combined-loading check (Module 05) assumes the casing is continuously braced by competent soil (Lc = 1 ft). Enable this only when part of the pile is genuinely unsupported \u2014 an above-grade stickup, a scour or void zone, or a soft/liquefiable layer too weak to brace the shaft. The effective length then runs from the top of the unsupported span down to the depth of fixity, and that full length is checked for column buckling.")) : /*#__PURE__*/React.createElement("div", { className: "space-y-4" },
     /*#__PURE__*/React.createElement("div", null,
