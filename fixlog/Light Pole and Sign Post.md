@@ -2408,7 +2408,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Saved data:** none.
 - **Open items (not changed):** (1) IBC sign mode, rectangular post: the post drag (`signWind`, exposed clearance height) uses B for every azimuth; at edge-on wind (90°/270°, panel force 0) the depth face is loaded. Decision (pending engineer review): left as is in this PR (small, edge-on post drag only). (2) Mast ice weight on a rectangular pole uses a round of diameter B.
 
-## 2026-11-07 — PR: claude/lp-left-breakpoint — Check summary panel as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (LPLB; display only, no result change)
+## 2026-11-07 — PR: claude/lp-left-breakpoint (PR #991: https://github.com/mlococo88/All-Structural/pull/991) — Check summary panel as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (LPLB; display only, no result change)
 
 ### LPLB. The check summary is on the left at common laptop widths   [display only]
 - **Decision (pending engineer review):** the engineer asked (2026-11-07, for the Retaining Wall Designer) for "the summary cards … on the left panel", most likely at a laptop width below 1500 px, where LPDC (#747) put the panel above the output tabs. The left column now starts at **1200 px** in Light Pole and Sign Post, Retaining Wall Designer (RWLB, #984) and Spread Footing (SFLB, #988) alike. From 1200 to 1499 px it is **240 px** wide and the input panel is 33 % of the rest; at 1500 px and wider 292 px as before (layout and panel widths unchanged there). Below 1200 px nothing changes (panel above the output tabs; phone layout). Same collapse button (« / » → 42 px strip) and key `lpp_dashCollapsed_v1`.
