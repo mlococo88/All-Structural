@@ -129,6 +129,7 @@ tr.pier td{background:#f8fafc;font-weight:600}
       <div class="f"><label>Fixed var. spacing (ft)</label><input id="mFixed" type="number" step="any"></div>
     </div>
     <p class="hint">The multi-vehicle case applies only to negative moment between points of contraflexure (unit load on all spans) and to interior support reactions. Headway is the clear distance from the rear axle of the lead vehicle to the front axle of the following one, swept up to twice the longest span. The lane or uniform load is included and scaled with the vehicles.</p>
+    <p class="hint" id="mlgMultiNote">90 % case (LRFD 10th Ed. Art. 3.6.1.3.1): the 90 % lane load is placed only on the parts of the influence line that add to the effect (C3.6.1.3.1), not on all spans as the 10th Ed. article text reads; this gives the larger (conservative) result. Decision (pending engineer review). The two trucks are not forced into adjacent spans: every headway from the minimum up to twice the longest span is tried, which covers the adjacent-span placements and more (conservative).</p>
   </div></details>
 
   <details open><summary>Impact</summary><div class="pb">
@@ -596,6 +597,10 @@ const _render2=render; render=function(){_render2();drawVehicle();};
 P['Fatigue']=VEH.fatigue;
 $('lls').options[0].text='Strength I / Fatigue I (1.75)';
 $('lls').options[4].insertAdjacentHTML('beforebegin','<option value="0.80">Service III / Fatigue II (0.80)</option>');
+// L2 (2026-11-07): Service III with γ_LL = 1.0 (LRFD 10th Ed. Table 3.4.1-4: prestressed components designed with the refined
+// time-dependent losses of Art. 5.9.3.4 and the elastic gain). Value "1.0" (not "1.00") so a save restores this option and old
+// saves ("1.00" = Service I) are unchanged.
+$('lls').options[5].insertAdjacentHTML('beforebegin','<option value="1.0">Service III, PS refined losses + elastic gain (1.00, Table 3.4.1-4)</option>');
 {const hn=$('impAF').querySelector('.hint');if(hn)hn.textContent='I% = 100/S + [40 − 3L²/1600 for L < 80 ft, else 16 + 600/(L − 30)]. Choose how L is defined below. With "span containing section", pier sections and interior reactions use the mean of the adjacent spans. Confirm the basis against the current AREMA Ch. 15 for your structure.';}
 $('impAF').insertAdjacentHTML('beforeend',`<div class="g2"><div class="f"><label>Impact length L basis</label><select id="aLb"><option value="span">Span containing section</option><option value="max">Longest span</option><option value="total">Total bridge length</option><option value="user">User-defined L</option></select></div><div class="f hidden" id="aLF"><label>User L (ft)</label><input id="aL" type="number" value="100" step="any"></div></div>`);
 $('aLb').addEventListener('input',()=>$('aLF').classList.toggle('hidden',$('aLb').value!=='user'));
@@ -931,7 +936,7 @@ $('hStep').closest('.g2').insertAdjacentHTML('afterend','<label class="chk"><inp
 $('dfNeg').closest('.f').insertAdjacentHTML('afterend',`<div class="lbl" style="margin-top:4px">Rail vehicles (used instead of the highway DFs above)</div>
   <div class="g3"><div class="f"><label>DF moment</label><input id="rDFm" type="number" value="0.50" step="0.01"></div><div class="f"><label>DF shear</label><input id="rDFv" type="number" value="0.50" step="0.01"></div><div class="f"><label>Neg. M DF</label><input id="rDFn" type="number" step="0.01" placeholder="Same"></div></div>
   <label class="chk"><input type="checkbox" id="custRail">Treat custom vehicles as rail</label>`);
-$('dLim').closest('.f').insertAdjacentHTML('afterend','<div class="f" style="width:96px"><label>Rail defl. DF</label><input id="dDFr" type="number" value="0.50" step="0.01"></div><div class="f" style="width:96px"><label>Rail limit L /</label><input id="dLimR" type="number" value="640" step="10"></div><div class="f" style="width:140px"><label>Defl. width / girder (in)</label><input id="dBw" type="number" step="any" placeholder="Same as b_eff"></div>');
+$('dLim').closest('.f').insertAdjacentHTML('afterend','<div class="f" style="width:96px"><label>Rail defl. DF</label><input id="dDFr" type="number" value="0.50" step="0.01"></div><div class="f" style="width:96px"><label>Rail limit L /</label><input id="dLimR" type="number" value="640" step="10"></div><div class="f" style="width:140px"><label>Defl. width / girder (in, approx.)</label><input id="dBw" type="number" step="any" placeholder="Same as b_eff"></div>');
 $('envB').closest('.card').insertAdjacentHTML('afterend',`<div class="card hidden" id="trCard"><div class="ch"><div><h2>Results at Plate Transitions</h2><p>Segment boundaries, checked in addition to tenth points. Click a value to load it into step mode.</p></div></div>
   <div class="tw"><table><thead><tr><th>x (ft)</th><th>Span</th><th>x/L</th><th>+M</th><th>−M</th><th>+V</th><th>−V</th><th>Max |V|</th></tr></thead><tbody id="trB"></tbody></table></div></div>`);
 $('bmBtn').textContent='✔ FHWA';
@@ -977,7 +982,7 @@ const _drawDefl=drawDefl;
 drawDefl=function(){
   const rail=RES&&RES.m.rail,e=$('dLim'),old=e.value; if(rail)e.value=$('dLimR').value;
   try{_drawDefl();}finally{e.value=old;}
-  if(DEF&&RES)$('dNote').textContent+=` · ${rail?'rail':'highway'} DF and limit`+(DEF.k&&DEF.k!==1?` · stiffness factor ${DEF.k.toFixed(3)} (${num('dBw',0)} in width)`:'');
+  if(DEF&&RES)$('dNote').textContent+=` · ${rail?'rail':'highway'} DF and limit`+(DEF.k&&DEF.k!==1?` · stiffness factor ${DEF.k.toFixed(3)} (${num('dBw',0)} in width; approximate: deflections divided by the length-weighted mean of I(width)/I(b_eff) over the segments, not re-solved with each segment's I)`:'');
 };
 ['dDFr','dLimR','dBw'].forEach(id=>$(id).addEventListener('input',()=>{if(RES){try{DEF=deflAnalyze();}catch(e){console.error(e);}drawDefl();}}));
 
@@ -1068,9 +1073,12 @@ benchmarkReport=function(){
     const aM=[F(r.mi,R.res[r.mi].max),F(r.mi,R.res[r.mi].min)],aV=[F(r.vi,R.res[r.vi].max),F(r.vi,R.res[r.vi].min)];
     const fM=[FHWA.pM[i],FHWA.nM[i]],fV=[FHWA.pV[i],FHWA.nV[i]];
     let mTxt='—',mP=null,mRev='—';
-    if(i>0){const g=Math.abs(fM[0])>=Math.abs(fM[1])?0:1;mP=bmPct(aM[g],fM[g]);worst=Math.max(worst,Math.abs(mP));mTxt=`${fM[g]} / ${aM[g].toFixed(1)}`;mRev=`${fM[1-g]} / ${aM[1-g].toFixed(1)}`;}
+    // L6 (2026-11-07): 0.7L (84 ft, the plate transition) +M is shown but not graded: an independent variable-EI force-method
+    // check (review 2026-11-07) reproduces the tool's value, so the difference is in the FHWA table (see the note below).
+    const ng=i===7;
+    if(i>0){const g=Math.abs(fM[0])>=Math.abs(fM[1])?0:1;mP=bmPct(aM[g],fM[g]);if(!ng)worst=Math.max(worst,Math.abs(mP));mTxt=`${fM[g]} / ${aM[g].toFixed(1)}`;mRev=`${fM[1-g]} / ${aM[1-g].toFixed(1)}`;}
     const gv=Math.abs(fV[0])>=Math.abs(fV[1])?0:1,fA=Math.abs(fV[gv]),aA=Math.max(Math.abs(aV[0]),Math.abs(aV[1])),vP=bmPct(aA,fA);worst=Math.max(worst,Math.abs(vP));
-    return `<tr><td>${(i/10).toFixed(1)}L</td><td>${mTxt}</td><td style="font-weight:700;color:${mP==null?'#94a3b8':bmCol(mP)}">${mP==null?'—':bmFp(mP)}</td><td>${fA} / ${aA.toFixed(1)}</td><td style="font-weight:700;color:${bmCol(vP)}">${bmFp(vP)}</td><td style="color:#94a3b8">M ${mRev} · V ${fV[1-gv]} / ${aV[1-gv].toFixed(1)}</td></tr>`;
+    return `<tr><td>${(i/10).toFixed(1)}L</td><td>${mTxt}</td><td style="font-weight:700;color:${mP==null||ng?'#94a3b8':bmCol(mP)}">${mP==null?'—':bmFp(mP)+(ng?' (not graded, see note)':'')}</td><td>${fA} / ${aA.toFixed(1)}</td><td style="font-weight:700;color:${bmCol(vP)}">${bmFp(vP)}</td><td style="color:#94a3b8">M ${mRev} · V ${fV[1-gv]} / ${aV[1-gv].toFixed(1)}</td></tr>`;
   }).join('');
   const mf={...readModel(),axles:[[8,0],[32,14],[32,30]],short:'Fatigue',udl:{mode:'none',w:0,gap:0,trunc:false},vK:0,vMin:0,vMax:0,neglect:true,
     secondary:'',multi:false,imp:{...m.imp,method:'const',val:1.15,onUdl:false},llf:1,dfM:[0.472/1.2,0.472/1.2],dfV:[0.75/1.2,0.75/1.2],dfNeg:0};
@@ -1088,7 +1096,8 @@ benchmarkReport=function(){
     <div style="font-size:12px;color:#475569">FHWA 1.43 in (full-width section, all lanes, IM) · App <b>${Math.abs(dmax).toFixed(2)} in</b> with DF 0.51 and the single-girder section. Enter a deflection width per girder to approximate the full-width section.</div>
     <div style="display:flex;gap:8px;align-items:center"><button class="btn" id="bmSensBtn">Run stiffness sensitivity</button><span class="hint">Tests which section-property assumption best matches FHWA</span></div>
     <div id="bmSens"></div>
-    <p class="hint">Section built from the FHWA plates with the haunch measured from the top of the web (3.5 in), giving composite I = ${Is} in⁴ (FHWA lists 66,340 and 130,196 for the end and pier regions). Reversal values are shown but not graded: by statics, moment over the pier and shear just left of the pier cannot be positive under downward load, and FHWA's −33.8 kip uplift exceeds the 27.4 kip bound implied by its own −2,450 kip-ft pier moment.</p>`;
+    <p class="hint">Section built from the FHWA plates with the haunch measured from the top of the web (3.5 in), giving composite I = ${Is} in⁴ (FHWA lists 66,340 and 130,196 for the end and pier regions). Reversal values are shown but not graded: by statics, moment over the pier and shear just left of the pier cannot be positive under downward load, and FHWA's −33.8 kip uplift exceeds the 27.4 kip bound implied by its own −2,450 kip-ft pier moment.</p>
+    <p class="hint" id="bmNote07">0.7L (84 ft, where the plates change): the +M cell is shown but not graded. An independent check with a separate variable-EI force-method solver (code review, 2026-11-07) gives 1250.6 kip-ft, the same as this tool, against FHWA's 1318; the difference is taken to be in the FHWA table, not in the analysis.</p>`;
   $('bmSensBtn').onclick=runSensitivity;
   $('bmCard').classList.remove('hidden');$('bmCard').scrollIntoView({behavior:'smooth',block:'start'});
 };
@@ -1777,6 +1786,9 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     try{ var t=(m&&m.short==='Fatigue'&&!m.rail)?fatLine():'';
       if(t){ var i=-1; R.warn.forEach(function(w,k){ if(i<0&&/^LRFD fatigue truck/.test(w)) i=k; });
         if(i>=0) R.warn[i]+=' '+t; else R.warn.push(t); } }catch(e){}
+    // L3 (2026-11-07): LRFD 10th Ed. Art. 3.6.2.1 — IM is not applied to the design lane load or pedestrian loads
+    try{ if(m&&!m.rail&&m.imp&&m.imp.onUdl&&m.imp.method!=='std'&&m.udl&&(m.udl.mode==='lane'||m.udl.mode==='full')&&m.udl.w>0&&R&&R.warn)
+      R.warn.push('Impact is applied to the uniform load ("Apply impact to uniform load" is ticked). For the LRFD design lane load, IM is not applied (LRFD 10th Ed. Art. 3.6.2.1); untick it unless the owner requires it.'); }catch(e){}
     try{ if(SRC&&SRC.perFootStrip&&R&&R.warn&&!(m&&m.rail)) R.warn.push('Highway DFs pulled from LL & DL are for a cast-in-place slab, per 1-ft strip of slab width: the factored results are per foot of slab width, not per girder.'); }catch(e){}
     return R;
   };
@@ -1836,7 +1848,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
     [/^Segment lengths reach|^A segment has invalid geometry/,'girder'],
     [/^One or more axles have zero/,'vehicle'],
     [/^Variable spacing|^The multi-vehicle case needs|^A uniform load mode is selected|^Std\. Spec\. lane loading: /,'rules'],
-    [/^The impact multiplier/,'impact'],
+    [/^The impact multiplier|^Impact is applied to the uniform load/,'impact'],
     [/^One or more distribution factors/,'factors']];
   var KEY='movingLoadGen.inputTab.v1', cur=null;
   function tget(){ if(cur) return cur; try{ return localStorage.getItem(KEY)||''; }catch(e){ return ''; } }
@@ -2030,7 +2042,7 @@ initSelects(); renderSpans(); $('preset').value='HL93-Truck'; applyPreset('HL93-
       if(vi)s2el.appendChild(vi); if(info)s2el.appendChild(info);
       var off=0, rows=m.axles.map(function(a,j){off+=j?+a[1]:0;var vs=r.R.varOK&&j+1===m.vK;return '<tr><td>'+(j+1)+'</td><td class="n">'+fx(a[0],2)+'</td><td class="n">'+(j?(vs?m.vMin+'–'+m.vMax+' (varies)':fx(a[1],2)):'—')+'</td><td class="n">'+(vs?'—':fx(off,2))+'</td></tr>';}).join('');
       s2el.appendChild(mk('table','cr-tbl','<thead><tr><th>Axle</th><th>Load (kips)</th><th>Spacing from previous (ft)</th><th>Distance from axle 1 (ft)</th></tr></thead><tbody>'+rows+'</tbody>'));
-      s2el.appendChild(mk('p','cr-note','Axles that do not contribute: '+(m.neglect?'neglected (LRFD 3.6.1.3.1)':'always included')+' · travel: '+(m.dirs&&m.dirs.length>1?'both directions':'one direction')+(m.rail?' · rail vehicle (rail DF set)':' · highway vehicle')+'.'));
+      s2el.appendChild(mk('p','cr-note','Axles that do not contribute: '+(m.neglect?'neglected (LRFD 3.6.1.3.1)':'always included')+' · travel: '+(m.dirs&&m.dirs.length>1?'both directions':'one direction')+(m.rail?' · rail vehicle (rail DF set)':' · highway vehicle')+(m.multi&&m.spans.length>1?' · two-vehicle case ('+m.mScale+' ×): uniform load on the parts of the influence line that add only (C3.6.1.3.1; the 10th Ed. Art. 3.6.1.3.1 text reads all spans), vehicles not limited to adjacent spans; both conservative, Decision (pending engineer review)':'')+'.'));
     });
     body.appendChild(s2el);
 
