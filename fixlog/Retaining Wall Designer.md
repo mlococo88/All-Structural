@@ -3564,3 +3564,71 @@ Calculation audit, item 9 (1). Engineer decision (2026-11-07). Code sites are ta
 
 ### Saved data
 - `aashto_gamma_eq` is additive (saved only when not 0; absent = 0).
+
+## 2026-11-07 — PR: claude/rw-aci-ibc-seismic — ACI/IBC mode with earthquake: static FS 1.5 with E = 0, and 0.7 × ΔP_E with FS 1.1 (IBC 2018 §1807.2.3 and Exception); IBC cited as 2018 (RWIB; calculation change)
+
+Calculation audit, item 9 (2). Engineer decision (2026-11-07). Code sites are tagged `RWIB`. AASHTO checks are unchanged; `FOS_OT` / `FOS_SL` are ACI-mode checks.
+
+### RWIB-1. `calcAll`   [§4]
+- **Provision (verified in the IBC 2018 PDF; cited and paraphrased):**
+  - IBC 2018 §1807.2.3: retaining walls resist sliding and overturning with a safety factor of 1.5. The Section 1605 combinations do not apply; design uses 0.7 × the nominal earthquake load and 1.0 × the other nominal loads, with variable loads also investigated at zero.
+  - **Exception:** where earthquake loads are included, the minimum safety factor for sliding and overturning is 1.1.
+  - The tool cited IBC 2021, which is not in the references. Every "IBC 2021" citation and label in the tool now reads "IBC 2018" (14 places, including the mode label). §1807.2 of the 2021 edition was not checked.
+- **Before:** with k_h > 0, FOS_OT = M_stab,OT / (M_o + 1.0·M_o,E) and FOS_SL = F_r / (F_h + 1.0·ΔP_E), both ≥ 1.5.
+- **After:**
+  - FOS_OT = M_stab,OT / (M_o − M_o,E) and FOS_SL = F_r / F_h, the static case, ≥ 1.5;
+  - with earthquake (k_h > 0): FOS_OT,E = M_stab,OT / (M_o − M_o,E + 0.7·M_o,E) and FOS_SL,E = F_r / (F_h + 0.7·ΔP_E), ≥ 1.1. New checks `otE` and `slidingE`.
+  - M_o (incl. 1.0·M_o,E) still gives x̄, e and the service bearing pressure, unchanged.
+  - ΔP_E stays at 0.6H (Seed–Whitman), as decided.
+- **Results move** only for ACI walls with k_h > 0. Pass/fail can become less conservative (as the engineer decided).
+- **Before / after** (`git diff -U0`, `calcAll`):
+```diff
+@@ -2342 +2342,6 @@ function calcAll(inp) {
+-  const FOS_OT = Mo > 0 ? Ms_OT / Mo : 999;
++  // RWIB (2026-11-07): IBC 2018 §1807.2.3 — FS 1.5 on sliding and overturning with the earthquake load set to zero (static case),
++  // and, where earthquake loads are included, 0.7 × the nominal earthquake load with FS ≥ 1.1 (Exception). Before: one check,
++  // 1.0·ΔP_E included, against 1.5. M_o (incl. 1.0·M_o,E) still drives x̄, e and the service bearing (unchanged).
++  const Mo_st    = Mo - Mo_seis;
++  const FOS_OT   = Mo_st > 0 ? Ms_OT / Mo_st : 999;
++  const FOS_OT_E = hasSeismic ? (Mo_st + 0.7 * Mo_seis > 0 ? Ms_OT / (Mo_st + 0.7 * Mo_seis) : 999) : null;
+@@ -2351 +2356,2 @@ function calcAll(inp) {
+-  const FOS_SL = Fh  > 0 ? Fr / (Fh + (hasSeismic ? Pe_inc : 0)) : 999;
++  const FOS_SL = Fh  > 0 ? Fr / Fh : 999;   // RWIB: static case (E = 0), FS ≥ 1.5
++  const FOS_SL_E = hasSeismic ? (Fh + 0.7 * Pe_inc > 0 ? Fr / (Fh + 0.7 * Pe_inc) : 999) : null;   // RWIB: 0.7E, FS ≥ 1.1
+@@ -3575,0 +3582 @@ function calcAll(inp) {
++    ...(hasSeismic ? { otE: { ok: FOS_OT_E >= 1.1, label: 'O.T. (0.7E)', val: `FOS=${f(FOS_OT_E)}` }, slidingE: { ok: FOS_SL_E >= 1.1, label: 'Sliding (0.7E)', val: `FOS=${f(FOS_SL_E)}` } } : {}),   // RWIB
+@@ -3657 +3664 @@ function calcAll(inp) {
+-    hasSeismic, Pae, Pe_inc, Mo_seis, Kae,
++    hasSeismic, Pae, Pe_inc, Mo_seis, Kae, Mo_st, FOS_OT_E, FOS_SL_E,   // RWIB
+```
+
+### RWIB-2. Display
+- **Stability Steps 4 and 5:** the static check (E = 0), plus the 0.7E check with FOS ≥ 1.1. Card references are IBC 2018.
+- **Dashboard rows** "O.T. (0.7E)" and "Sliding (0.7E)".
+- **Report:** steps `st4/FOSE` and `st5/FOSE`; the static FOS labelled "earthquake set to zero".
+- **Drawings:** sheet note "WITH 0.7E: …"; IBC 2018 in the notes.
+
+### Check cases (`calcAll` in Node and in the browser)
+- **ACI default, k_h = 0.10:** ΔP_E = 691.3 lb/ft at 0.6H = 8.1 ft, so M_o,E = 5600 lb·ft/ft. M_o = 22002 (static 16403). M_stab,OT = 123673.
+  - **Before:** FOS_OT = 123673/22002 = 5.62; FOS_SL = 6035.5/(3645 + 691.3) = **1.392 < 1.5, FAIL**.
+  - **After, static:** FOS_OT = 123673/16403 = **7.54**; FOS_SL = 6035.5/3645 = **1.656 ≥ 1.5**.
+  - **After, 0.7E:** FOS_OT,E = 123673/(16403 + 3920) = **6.09**; FOS_SL,E = 6035.5/(3645 + 483.9) = **1.462 ≥ 1.1, PASS**.
+  - q_max 1402 psf (unchanged).
+- **ACI tall wall + water + k_h 0.15:**
+  - Before: FS_OT 1.948, FS_SL 0.452.
+  - After: static 2.724 / 0.541; 0.7E 2.130 / 0.475 (sliding still FAIL).
+- **k_h = 0 walls:** unchanged.
+
+### Open item (found, not changed)
+- With k_h > 0 the **service bearing check and e use M_o with 1.0·ΔP_E only**; the static case (E = 0) is not checked for bearing. At the ACI default with k_h 0.10, static q_max = 1466 psf > the 1402 psf checked. This is a separate, small §4 change, left for the engineer.
+
+### How verified
+- origin/main vs branch, headless Chromium, the twelve audit walls + ACI k_h 0.10 + AASHTO k_h 0.10.
+  - Only the seismic ACI walls (mix, tall, k_h 0.10) change: `FOS_OT`, `FOS_SL`, `checks.ot` / `sliding` values, plus the new `Mo_st`, `FOS_OT_E`, `FOS_SL_E` and checks.
+  - The AASHTO seismic wall also changes `FOS_OT` / `FOS_SL`, which are not used in AASHTO mode.
+  - Every other value is identical.
+  - Text differs by the IBC 2018 citations.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWIB); phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+
+### Saved data
+- No input or format change. Old ACI projects with k_h > 0 change their stability FOS and pass/fail as above.
