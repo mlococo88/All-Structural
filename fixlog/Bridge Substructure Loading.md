@@ -2431,3 +2431,39 @@ function listTables() {
 - **How verified (all four):** headless main vs branch: default (new) project: changes only in Extreme Event I (γEQ) and in the max of bearings G1, G2, G4, G5 (each unit's Str I / Str V / Svc I / EE I / EE II and the abutment payload's `LL.envelopeMax`); old save (fields removed, opened by `openProject`): identical to main; Zone 4 / Critical variant: flags and the R = 1 card as above. Receivers: abutment calculator, Spread Footing, Pile Designer pulled SubLoads' hand-offs with no page errors (foundationLoads: the EEI cases change; 42 cases instead of 37 as the LL adds concurrent sets). `check-syntax`, `phone-layout --tool bsl` (pass), `engine/run.mjs handoffs` (10 / 10); `project-library --tool bsl`: library / undo checks pass; its "identical to main" checks fail by design (γEQ and skew on the default project; an old autosave differs only in the new Summary flags). 0 console errors on every tab.
 - **Hand-offs changed (§7):** foundationLoads Extreme Event I (γEQ); abutmentLoads per-bearing `LL.envelopeMax` (skew), for new projects.
 - **Saved data (§5):** new fields `br.skCorr`, `br.skKg`, `br.skOld`; old saves migrated as above (γEQ and the skew correction keep their old behaviour). No key renamed.
+
+## 2026-11-07 — PR: claude/subloads-review-low (VW4, L01, WZ, CIT, EC10, CHK) — review LOW items L1–L5, L7 (§4 result changes: E_c (L5) on every project; Z (L3) only where Z > 33 ft; L1 opt-in)
+- **Why:** in-depth code review of 2026-11-07, LOW findings L1–L5 and L7 (L6 was fixed with H1, KZG).
+
+### VW4 (L1). Service IV vertical wind: option 0.010 ksf; default kept 0.020 ksf
+- **Provision:** AASHTO LRFD 10th Ed. Art. 3.8.2 (vertical wind 0.020 ksf with Strength III, 0.010 ksf with Service IV).
+- **Code:** new `vwP(key)` before `const LS =`; both vertical-wind sites (`phase3`, abutment export `wsLc`): Before `Fup: 0.020 * G.Wd`, after `Fup: vwP(key) * G.Wd`. `vwP` = 0.010 only for Service IV with `br.vwSIV === 'code'`, else 0.020. Bridge tab field "Vertical wind, Service IV (3.8.2)": blank = 0.020 ksf (as before), `code` = 0.010 ksf.
+- **Decision (pending engineer review):** the default stays 0.020 ksf (conservative; the code value is less conservative); the option is labelled.
+- **Check case:** default project, Pier 1, Service IV axial at the top of footing, min: 1321.57 kip (default, unchanged) → 1377.20 kip with the option (uplift F = 0.010 × 41.5 ft deck instead of 0.020).
+
+### L01 (L2). 0.30 klf Strength III minimum labelled as earlier edition / agency practice   [wording only]
+- Wind tab note, report note, Manual, Methods, PENDING/decision lists: "a requirement of earlier editions kept as agency practice (not in the 10th Ed.; conservative)". The value and its use are unchanged.
+
+### WZ (L3). Structure height Z per 3.8.1.2.1   [§4; no change while Z ≤ 33 ft]
+- **Provision:** AASHTO LRFD 10th Ed. Art. 3.8.1.2.1: for superstructures, the average height of the top of the superstructure above the surrounding ground or water; for substructures not above the superstructure, the superstructure's height (unless the Owner approves otherwise); Z ≥ 33 ft in K_z.
+- **Code:** new `wsZ(G)` = average over the supports of (deckZ + solid barrier − ground of the unit). `windSuper`: Before `const Z = Math.max(...G.sup.map((S, k) => S.deckZ + bar - D / 2 - nz(P.units[k].ground)));` (largest height of the exposed depth's centroid); after `const Z = wsZ(G);`. `subWindPts`: Before `Kz(z - g, ex)` (each component's own height); after `Kz(Zs, ex)` with `Zs = wsZ(G)`.
+- **Decision (pending engineer review):** the average is taken over the support locations (the commentary also allows the largest value per span for valley crossings).
+- **Check case:** default project: Z 21.81 → 21.17 ft, both < 33 ft → K_z unchanged, no wind result change. Variant with every deck elevation +30 ft: Z 51.81 → 51.18 ft; K_z(C) 1.1073 → 1.1043; Strength III P_Z (super) 0.062277 → 0.062110 ksf; substructure P_Z (C_D 1.6): cap 0.07332, columns 0.06932 → all 0.07644 ksf.
+
+### CIT (L4). Citations   [wording only]
+- "3.8.1.2.4" (sound barriers) → "3.8.1.2.3b" (wind on substructure) in 7 places (code comments, Wind tab, Bridge tab option, decisions list, references list, report topic). Manual, Combinations: "Strength I, III, IV, V" → "Strength I, III, V … (Strength IV does not apply to substructures, C3.4.1)".
+
+### EC10 (L5). E_c by Eq. 5.4.2.4-1   [§4 result change, all projects]
+- **Provision:** AASHTO LRFD 10th Ed. Eq. 5.4.2.4-1, E_c = 120,000 K_1 w_c^2.0 f′c^0.33 (ksi), K_1 = 1.0; w_c of plain normal-weight concrete from Table 3.5.1-1 (0.145 kcf for f′c ≤ 5.0 ksi; 0.140 + 0.001 f′c above).
+- **Code:** new `wcEc(fc)` and `EcKsi(fc)` before `const Kz =`. The five sites `57 * Math.sqrt(nz(u.fc) * 1000) * 144` / `57 * Math.sqrt(nz(u.fc || 4) * 1000) * 144` / `57 * Math.sqrt((nz(P.br.deckFc) || 4) * 1000) * 144` (unit frame model `Ec`, `unitLongK`, `unitTransK`, deck beam in `distrib`, deck in `seismicModel`) → `EcKsi(nz(u.fc) || 4) * 144` / `EcKsi(nz(P.br.deckFc) || 4) * 144`. SKC's K_g estimate (`skewKgEst`) uses the same `EcKsi` (was w_c of the Summary tab, 0.150).
+- **Decision (pending engineer review):** w_c for E_c is the Table 3.5.1-1 plain-concrete value, not the Summary tab's reinforced-concrete weight used for DC.
+- **Display (§6):** Force distribution tab note: E_c = 120,000 K_1 w_c^2.0 f′c^0.33 with w_c and the value per f′c.
+- **Check case:** f′c = 4 ksi: before E = 57,000√4000 psi = 3,605 ksi; after w_c = 0.145, E_c = 120,000 × 0.145² × 4^0.33 = 3,987 ksi (× 1.106). Default project, Pier 1: TU rise forces −36.04, −61.93, +32.91, +65.05 → −35.64, −63.22, +33.41, +65.45 kip; Strength I M_l at the top of footing 2632.6 → 2685.8 kip-ft (+2.0 %; TU and BR shares move with the pier stiffness); Strength III V_t 97.7 → 98.2 kip (transverse distribution). Seismic periods (check variant) T_L 0.642 → 0.616 s. SKC on the default: n 6.80 → 7.27, K_g 1,037,464 → 1,110,247 in⁴, f(15°) 1.0507 → 1.0496.
+
+### CHK (L7). ENGINEER_CHECKS / tools.html
+- ENGINEER_CHECKS B4 updated (EE I γEH = 1.00 per the 10th Ed. Table 3.4.1-1, EEP; was "γp 1.50/0.90"); section C SubLoads line: the γSH 0.5 and Service IV items removed; the 2026-11-07 review decisions listed. tools.html mirror updated the same way.
+- **SUB-O1 closed:** Service IV = 0.75 × the Strength III speed (Table 3.8.1.1.2-1) with γWS = 1.00 (Table 3.4.1-1) confirmed against the printed 10th Ed. (review §2). No code change.
+
+- **How verified:** headless main vs branch on the default, the check variant, the Zone 4 variant, the +30 ft variant and the Service IV option: every change traced to E_c (all projects), Z (only the +30 ft variant), the Service IV option (only with it set); 0 console errors on every tab. Receivers: abutment calculator, Spread Footing, Pile Designer pulled SubLoads' hand-offs with no page errors (foundationLoads values move with E_c). `check-syntax` (tool and tools.html), `phone-layout --tool bsl`, `engine/run.mjs handoffs` (10 / 10) pass; `project-library --tool bsl`: library / undo checks pass, the "identical to main" checks fail by design (E_c).
+- **Hand-offs changed (§7):** foundationLoads and abutmentLoads values (E_c through the stiffness distribution); no format change.
+- **Saved data (§5):** new optional field `br.vwSIV` (blank = previous behaviour). No key changed.
