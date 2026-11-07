@@ -5528,7 +5528,7 @@ Review Phase 8, PR 8f, following the abutment calculator's contract (HANDOFF.md 
   - Without `group`, or with `reduce` 1: 400 / 150 as before.
 - **How verified:** handoffs tests 10 pass; `tests/smoke/retwall-pile-handoff.mjs` all passed; `check-syntax`: pass.
 
-## 2026-11-07 — PR: claude/rw2-h5-collision-phib — AASHTO Extreme Event II (collision): bearing φ_b = 0.8 for semigravity walls per Art. 11.5.8; sliding keeps φ = 1.0 (RW2H5; calculation change)
+## 2026-11-07 — PR: claude/rw2-h5-collision-phib — AASHTO Extreme Event II (collision): bearing φ_b = 0.8 for semigravity walls per Art. 11.5.8; sliding keeps φ = 1.0 (RW2H5; calculation change) (PR #1134: https://github.com/mlococo88/All-Structural/pull/1134)
 
 Second-pass review finding H5 (2026-11-07). Code sites are tagged `RW2H5`.
 
