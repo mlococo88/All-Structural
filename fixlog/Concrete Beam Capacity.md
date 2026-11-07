@@ -4930,3 +4930,32 @@ Frame: Development & Splice (`suite-frame-dev`, srcdoc of `Concrete Beam Capacit
 - **Saved data:** no key or format change.
 - **Other copies:** none (the standalone rebar page is a redirect since RBRT).
 - **Open items:** in cases (a)/(b) with f′c < 3000 psi the tool applies ×4/3 before the 12 in floor (max(4/3·calc, 12)), not after; not changed here (raise with the engineer).
+
+## 2026-11-07 — PR: claude/cbc-aashto-ldc-lambda (CBH3: AASHTO compression development length divided by λ per Eq. 5.10.8.2.2a-1; CALCULATION CHANGE, Development & Splice tab, AASHTO mode, lightweight concrete only; less conservative before)
+
+Frame: Development & Splice (`suite-frame-dev`). Found in the in-depth review of 2026-11-07 (item H3); it was listed in the tool as an open item.
+
+### CBH3. λ in the AASHTO compression development length   [CALCULATION CHANGE]
+- **Governing provision (checked in the rendered PDF, p. 5-192):** AASHTO LRFD 10th Ed. (2024) Eq. 5.10.8.2.2a-1: the modified compression development length is l_db times λ_er times λ_rc, divided by λ (the concrete density modification factor of 5.4.2.8); l_db from Eqs. 5.10.8.2.2a-2/-3; not less than 8.0 in.
+- **Where:** `calcComp()`, anchor `const ldc_calc = base*f.excess`, AASHTO branch.
+  - Before: `const ldc_calc = base*f.excess;   // excess reinf factor applies` (comment: "The tool applies λer only (λrc = 1.0, λ not applied; open item).")
+  - After: `const ldc_calc = base*f.excess/f.lambda;   // excess reinf factor λer applies; divided by λ` (comment updated, CBH3).
+  - `f.lambda` in AASHTO mode is the entered λ (0.75–1.0) for lightweight concrete and 1.0 for normalweight (`computeFactors`, unchanged). λ_rc stays 1.0 (no reduction for spirals or hoops taken, conservative, unchanged).
+  - The ACI branch is unchanged (λ is already inside 25.4.9.2(a)).
+- **Display:**
+  - `tabCompAASHTO`: the narrative now says λ_er and λ are applied; a λ row was added to the variable table; the "Governing length" block reads l_dc = max[max(l_dc,a, l_dc,b) (× A_s,req/A_s,prov) / λ, 8 in] when λ ≠ 1 (unchanged form for λ = 1).
+  - Report (`rbrComp`): AASHTO "Governing expressions" gets a step `lam` (note "see §lam"); the step `ldccalc` shows "/ λ" in AASHTO mode.
+  - Removed the AASHTO validation notice that said λ was not applied to compression development (anchor "divides the compression development length by λ; this tool does not apply"), and the Hook & Comp. hint now says λ divides the compression development length.
+- **Check case:** AASHTO, #8 (d_b 1.000 in), f_y 60 ksi, f′c 4.0 ksi, lightweight, λ = 0.75, no excess factor.
+
+  | Quantity | Before | After | Hand check |
+  |---|---|---|---|
+  | l_dc,a = 0.63 d_b f_y/√f′c | 18.90 in | 18.90 in | 0.63 × 1.000 × 60/2.000 |
+  | l_dc,b = 0.3 d_b f_y | 18.00 in | 18.00 in | |
+  | **l_dc** | **18.90 in** | **25.20 in** | 18.90/0.75 |
+
+  Also: λ 0.85 with A_s,req/A_s,prov = 0.8: 15.12 → 17.79 in (18.90 × 0.8/0.85). Normalweight (λ = 1.0) and all ACI cases unchanged.
+- **Conservatism:** before, lightweight AASHTO compression development lengths were short by the factor λ (up to 25 %).
+- **How verified:** headless main vs branch with the review probe cases (all Beam Capacity cases and every Dev case except the two lightweight AASHTO ones identical); full dumps of the default project (identical) and the AASHTO excess case (values identical, only the new λ step/row and narrative); screenshot of the Compression l_dc tab looked at; `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change.
+- **Open items:** none.
