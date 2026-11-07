@@ -2341,3 +2341,29 @@ function renderStatus(r) {
 - **Decisions (pending engineer review):**
   - The panel is collapsed when all checks pass and opens on a mismatch, as in SF.
   - It is not in the Report.
+
+## 2026-11-07 — PR: claude/rw-report-overview (PR #938: https://github.com/mlococo88/All-Structural/pull/938) (RWOV) — Report: "Overview of the wall" after the Design summary (3D snapshot, typical section, elevation)   [display only; no result change]
+- **Why:** engineer-approved 2026-11-06 (task 5, review Phase 5a; as Spread Footing SFOV #780 and CBC #795).
+- **What:** a new Report section 2, "Overview of the wall", right after the Design summary. Its subsection "3D view, typical section and elevation" holds three figures:
+  1. **3D snapshot.** The 3D model tab's own scene at its default view: the governing bearing combination, unfactored load arrows with value labels, every layer on, no section cut, the Reset-view camera. It is rendered off screen once per result (`rwovSnap3D`, WebGL with `preserveDrawingBuffer`, 1000 × 600, white background). The viewer's 3D state (selection, Factored toggle, layers, cut, opacity, rotation) is put back after the snapshot (tested). When WebGL or three.js is missing, a note says why.
+  2. **Typical wall section.** Drawings sheet 1's view only: no border, title block or schedules. It is to scale and dimensioned, with the sheet's own scale bar.
+  3. **Wall elevation from the front.** Drawings sheet 4's view only, without the general notes. It shows the variable height when that option is on.
+  - Each caption names its source with a link (`[[tab:threed| ↗]]`, `[[tab:drawings| ↗]]`). For the sheet views, the caption gives the sheet number, the sheet scale and "reduced here: use the scale bar or the dimensions".
+- **Where:**
+  - `rwdwBuild` → `sheet()`: `const ic = D.mark();` after the view is placed (the end of the view, before the border). `sh` gains `ic` and `iv` (`ret.iv`).
+  - The notes sheet: `const ivE = D.mark();` after the elevation's scale bar, and `return { known: sbK, iv: ivE };` (before: `return { known: sbK };`).
+  - `D.mark()` only reads the length of the display list, so the sheets and the DXF are unchanged.
+  - New `RWOV`, `rwovSnap3D`, `rwovView`, `rwovAdd` before `/* RWRP2: the result tabs' Plotly charts…`.
+  - `renderRwReport`: `rwovAdd(M, r);` after `rwrAddNotes(M, RWRP.notes);`.
+- **Section numbers:** every later section moves up by one (Input parameters is §3, and so on). The step links are by key and still resolve (0 `§?`).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Saved data (§5):** none. The section is always included. SF has an "Include" box saved in its project; RW has no Include bar and its saved format is unchanged.
+- **How verified:**
+  - origin/main vs branch, eight cases: `_R`, Export JSON, every localStorage key, the tab text and the **DXF identical**. The Report differs by the new section and the renumbering.
+  - 0 console errors; 0 unresolved links.
+  - 3D state restore checked: the selection `C:u12`, Factored on and Soil layer off are the same after the snapshot.
+  - Screenshots (ACI default; AASHTO with barrier, collision, variable height and key) looked at.
+- **Other copies:** none.
+- **Decisions (pending engineer review):**
+  - No Include box. If you want one, a new prefixed key or project field is needed: ask.
+  - The snapshot has a white background (the screen has a dark one) for print.

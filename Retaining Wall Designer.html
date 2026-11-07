@@ -9716,8 +9716,74 @@ function renderRwReport() {
   rwrAddPlots(M, RWRP.imgs || {});
   if (RWRP.notesFor !== r) { RWRP.notesFor = r; RWRP.notes = rwrTabNotes(r); }   // RWRX: once per result
   rwrAddNotes(M, RWRP.notes);
+  rwovAdd(M, r);   // RWOV: the overview figures after the Design summary
   RWRP.api = SharedReport.mount(T, M, { closed: RWRP.closed, onGoto: rwrGoto });
   RWRP.doc = RWRP.api.doc;
+}
+/* RWOV (2026-11-07): "Overview of the wall" right after the Design summary (as Spread Footing SFOV #780, CBC #795): a 3D snapshot
+   (the 3D model tab at its default view: governing bearing combination, unfactored load arrows, every layer, no cut, Reset-view camera),
+   the typical wall section and the wall elevation of the Drawings sheets (to scale, dimensioned, with their scale bars; the views
+   only, without border, title block, schedules or notes). Nothing is computed: the drawings are the Drawings tab's own, the 3D image
+   is the 3D tab's own scene. Display only. */
+const RWOV = { key: null, img: '', why: '' };
+function rwovSnap3D(r) {
+  if (RWOV.key === r) return RWOV.img;
+  RWOV.key = r; RWOV.img = ''; RWOV.why = '';
+  if (typeof THREE === 'undefined') { RWOV.why = 'three.js is not loaded (offline)'; return ''; }
+  let rr = null;
+  try {
+    const t = document.createElement('canvas');
+    if (!(t.getContext('webgl2') || t.getContext('webgl'))) { RWOV.why = 'WebGL is not available in this browser'; return ''; }
+    if (!_3d || !document.getElementById('c3d')) render3D(r);
+    if (!_3d || !_3d.scene) { RWOV.why = 'the 3D view could not be built'; return ''; }
+    const G = _3d.groups, names = Object.keys(G);
+    const keep = { sel: RW3.sel, fac: RW3.fac, vis: names.map(k => G[k].visible), clip: _3d.clip, op: _3d.concreteOpacity, rot: _3d.scene.rotation.y };
+    const setAll = (sel, fac, vis, clip, op, rot) => { RW3.sel = sel; RW3.fac = fac; names.forEach((k, i) => { G[k].visible = vis[i]; }); _3d.clip = clip; _3d.scene.rotation.y = rot;
+      buildGeometry3D(r); if (typeof applyConcreteOpacity3D === 'function') applyConcreteOpacity3D(op == null ? 1 : op); };
+    setAll('GOV', false, names.map(() => true), false, 1, 0);
+    try {
+      const W = 1000, H = 600, c2 = document.createElement('canvas');
+      rr = new THREE.WebGLRenderer({ canvas: c2, antialias: true, preserveDrawingBuffer: true }); rr.setSize(W, H, false); rr.setPixelRatio(1); rr.localClippingEnabled = true; rr.setClearColor(0xffffff, 1);
+      const B = r.B, Hw = r.H, WL = wallLen3D(r), d = Math.max(B, Hw, WL) * 1.6;   // the Reset-view camera (resetCam3D)
+      const cam = new THREE.PerspectiveCamera(45, W / H, 0.1, 1000);
+      cam.position.set(B / 2 + d, Hw * 0.7 + d * 0.5, WL / 2 + d); cam.lookAt(B / 2, Hw * 0.4, WL / 2); cam.updateProjectionMatrix();
+      // the load labels are sprites placed for a camera and a canvas (rw3LayoutLabels): placed for this one, then for the live view again
+      const kc = _3d.camera, kr = _3d.renderer, lead = document.getElementById('c3d-leaders'), lh = lead ? lead.innerHTML : '';
+      _3d.camera = cam; _3d.renderer = { domElement: { clientWidth: W, clientHeight: H, getBoundingClientRect: () => ({ left: 0, top: 0, width: W, height: H }), parentElement: { querySelectorAll: () => [] } } };
+      try { rw3LayoutLabels(); } finally { _3d.camera = kc; _3d.renderer = kr; if (lead) lead.innerHTML = lh; }
+      rr.render(_3d.scene, cam);
+      RWOV.img = c2.toDataURL('image/png');
+    } finally { setAll(keep.sel, keep.fac, keep.vis, keep.clip, keep.op, keep.rot); }
+  } catch (e) { RWOV.img = ''; RWOV.why = 'the 3D view could not be rendered (' + String(e && e.message || e).slice(0, 80) + ')'; }
+  finally { if (rr) { try { rr.dispose(); rr.forceContextLoss(); } catch (e) { /* gone */ } } }
+  if (RWOV.img && RWOV.img.length < 5000) { RWOV.img = ''; RWOV.why = 'the 3D image came out blank'; }
+  return RWOV.img;
+}
+/* one drawing-sheet view (entities i0..i1 of the sheets' display list) as SVG, white, framed on its own extents */
+function rwovView(Bd, i0, i1, maxH) {
+  const D = Bd.D, b = D.bbox(i0, i1); if (!isFinite(b[0])) return '';
+  const pad = 0.04 * Math.max(b[2] - b[0], b[3] - b[1]);
+  const s = SharedDxf.toSVG(D, { i0, i1, bg: '#fff', frame: [b[0] - pad, b[1] - pad, b[2] + pad, b[3] + pad] });
+  return s.replace(/^<svg /, `<svg style="width:100%;height:auto;max-height:${maxH};display:block;margin:0 auto" `);
+}
+function rwovAdd(M, r) {
+  if (!M || !M.sections || !r || r.fatal) return M;
+  const items = [], fi = (svg, caption) => { if (svg) items.push({ type: 'figure', svg, caption }); };
+  let gname = ''; try { const C = rwbpCombos(r), g = C.list.find(x => x.key === C.gov); gname = g ? g.name.replace(/ — .*$/, '') : ''; } catch (e) { /* none */ }
+  const img = rwovSnap3D(r);
+  if (img) fi('<img src="' + img + '" alt="3D model of the wall" style="width:100%;max-width:6.2in;max-height:3.2in;object-fit:contain;display:block;margin:0 auto">',
+    '3D model tab[[tab:threed| ↗]] at its default view: the governing bearing combination' + (gname ? ' (' + gname + ')' : '') + ' with its base reaction R and bearing pressure, the load cases as unfactored arrows with their values, every layer on, no section cut, the Reset-view camera. Perspective: not to scale; B = ' + rwrN(r.B, 2) + ' ft, H = ' + rwrN(r.H, 2) + ' ft, a ' + rwrN(wallLen3D(r), 0) + ' ft run of wall.');
+  else items.push({ type: 'note', text: '3D view not included: ' + RWOV.why + '. The 3D model tab[[tab:threed| ↗]] shows it on screen.' });
+  let Bd = null; try { Bd = rwdwBuild(r); } catch (e) { Bd = null; }
+  const sh = id => Bd && Bd.S ? Bd.S.find(s => s.id === id) : null;
+  const cap = (s, t) => t + ' — Drawings tab[[tab:drawings| ↗]], sheet ' + (Bd.S.indexOf(s) + 1) + ' (' + s.title.toLowerCase() + '), drawn at ' + s.scale + ' on the 11 × 17 sheet and reduced here: use the scale bar or the dimensions.';
+  const sc = sh('section'), el = sh('notes');
+  if (sc && sc.ic) fi(rwovView(Bd, sc.i0, sc.ic, '4.6in'), cap(sc, 'Typical wall section: stem, footing' + (r.inp.useShearKey ? ', shear key' : '') + ', grades, bars and dimensions'));
+  if (el && el.iv) fi(rwovView(Bd, el.i0, el.iv, '2.4in'), cap(el, 'Wall elevation from the front' + (r.isAASHTO && r.inp.vh_enable ? ', variable height (design H_s at 0.75 L)' : '')));
+  if (!Bd) items.push({ type: 'note', text: 'Section and elevation not included: the drawing sheets could not be built.' });
+  const i = M.sections.findIndex(x => x.title === 'Design summary');
+  M.sections.splice(i >= 0 ? i + 1 : 0, 0, { title: 'Overview of the wall', key: 'ov', subs: [{ title: '3D view, typical section and elevation', items }] });
+  return M;
 }
 /* RWRP2: the result tabs' Plotly charts as figures, after the subsection they belong to (images from rwPlotImages, as the Export report) */
 function rwrAddPlots(M, im) {
@@ -9972,6 +10038,7 @@ function rwdwBuild(r) {
     const P = k, b = D.bbox(i0), W = RWDW.W * P, H = RWDW.H * P, m = RWDW.m * P, tb = RWDW.tbH * P;
     const cx = ox + W / 2, cy = m + tb + 0.3 * P + (AH * P) / 2;
     if (isFinite(b[0])) D.move(i0, cx - (b[0] + b[2]) / 2, cy - (b[1] + b[3]) / 2);
+    const ic = D.mark();   // RWOV: the end of the view (before the border and title block), for the Report's overview figures
     D.k = P; D.h = 0.1 * P;
     SharedDxf.sheetBorder(D, L.br, ox, W, H, P); D.rect(L.br, ox + m, m, ox + W - m, H - m);
     const x0 = ox + m, y0 = m, w = (RWDW.W - 2 * RWDW.m) * P, rr = tb / 2, sc = (ret && ret.scale) || rwdwScName(k);
@@ -9985,7 +10052,7 @@ function rwdwBuild(r) {
       const mx = Math.floor((cw - 0.12) / (0.13 * 0.9)); D.text(L.tb, x + 0.05 * P, yb + 0.1 * P, 0.13 * P, String(val == null || val === '' ? '—' : val).toUpperCase().slice(0, mx), 0);
       if (lab === 'SHEET') sheetEnt = D.E[D.E.length - 1];
       x += cw * P; if (ci < row.length - 1) D.line(L.tb, x, yb, x, yb + rr); }); });
-    const sh = { id, title, k, i0, i1: D.mark(), ox, W, H, over, sheetEnt, src, scale: sc, known: ret && ret.known }; SH.push(sh); ox += W + 1 * P; return sh;
+    const sh = { id, title, k, i0, i1: D.mark(), ox, W, H, over, sheetEnt, src, scale: sc, known: ret && ret.known, ic, iv: ret && ret.iv }; SH.push(sh); ox += W + 1 * P; return sh;
   }
   function table(x0, y0, head, rows, hh, right) {
     const rh = hh * 2, cw = head.map((hd, c) => Math.max(String(hd).length, ...rows.map(rw => String(rw[c] == null ? '' : rw[c]).length)) * hh * 0.82 + 1.9 * hh);
@@ -10299,6 +10366,7 @@ function rwdwBuild(r) {
     dVs(0, G.tf, Lw + (vh ? 1.0 : 0.45) * P, Lw, 'T_F = <>');
     const vb = D.bbox(iS);
     const sbK = scaleBar(Lw / 2, yd - (vh ? 0.65 : 0.45) * P, P, 'WALL ELEVATION (FROM THE FRONT)  ·  SCALE ' + rwdwScName(P) + (vh ? '  ·  VARIABLE HEIGHT' : ''));
+    const ivE = D.mark();   // RWOV: the end of the elevation view (the general notes follow)
     // general notes in two columns under the view (paper size)
     const nA = Object.values(r.checks).filter(c2 => !c2.ok).length, nT = Object.keys(r.checks).length;
     const epm = isA ? ((inp.aashto.ep_method === 'coulomb' ? 'COULOMB' : 'RANKINE') + ', ' + (inp.aashto.ep_cond === 'atrest' ? 'AT-REST' : 'ACTIVE')) : 'RANKINE, ACTIVE';
@@ -10335,7 +10403,7 @@ function rwdwBuild(r) {
     L2.forEach(([t, head], j) => { if (head && j) y -= 0.06 * P; D.text(L.txt, 0, y, head ? 0.1 * P : 0.072 * P, t, 0); y -= head ? 0.19 * P : 0.135 * P; });
     const nb = D.bbox(i1), vb2 = D.bbox(iS, i1);
     D.move(i1, vb2[0] - 0.6 * P - nb[2], vb2[3] - nb[3]);
-    return { known: sbK };
+    return { known: sbK, iv: ivE };
   }, [12, 16, 24, 32, 48, 64, 96, 192], [['stabKa', 'K_a'], ['stemFlex', 'materials']]);
 
   SH.forEach((s, j) => { s.sheetEnt.s = SharedDxf.str((j + 1) + ' OF ' + SH.length); });
