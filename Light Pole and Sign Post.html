@@ -8067,7 +8067,8 @@ function ltsCalc(){
       +`<div style="overflow-x:auto"><table class="tbl"><tr><th>z (ft)</th><th>Section (in)</th><th>λ</th><th>Class</th><th>φM<sub>n</sub></th><th>φP<sub>nc</sub></th><th>φV<sub>n</sub></th><th>φT<sub>n</sub></th><th>Governing</th><th>M<sub>u</sub></th><th>Eq.</th><th>Ratio</th></tr>${mrows}</table></div>`);
     // LTS-6: base plate (bending line, engineering method; Q-C3) and the pole-to-plate weld (Q-B5)
     { const bp=LpLts.basePlate(ba,mc.Bs,{n:inp.boltQty,BC:inp.boltBC,theta0:inp.boltTheta,D:inp.poleDiaBase,Fy:inp.bpFy||36,t:inp.bpT});
-      const wt=$('ltsWeldType')?$('ltsWeldType').value:'fillet', wd=LpLts.baseWeld(ba,mc.Bs,{type:wt,size:num('ltsWeldW')||0.3125,Fexx:num('ltsFexx')||70,D:inp.poleDiaBase});
+      const wt=$('ltsWeldType')?$('ltsWeldType').value:'fillet', wd=LpLts.baseWeld(ba,mc.Bs,{type:wt,size:num('ltsWeldW')||0.3125,Fexx:num('ltsFexx')||70,D:inp.poleDiaBase,
+        shape:inp.poleShape, Bx:(inp.poleShape==='rect'?inp.poleDepthBase:inp.poleDiaBase), By:inp.poleDiaBase});   // LPL8: square / rect. tube → rectangular line weld
       lppLtsLast.bp=bp; lppLtsLast.wd=wd;
       const gb=bp.gov, n2=(x,d)=>SharedSteps.n(x,d);
       const bpSteps=[
@@ -8078,7 +8079,11 @@ function ltsCalc(){
       lppLtsLast.bpSteps=bpSteps; let wSteps='';
       if(wd.type==='cjp') wSteps=`<p class="tbl-note">Full-penetration groove weld: the base metal governs (the member check at the base, Post tab); no separate weld check (AWS D1.1).</p>`;
       else { const gw=wd.gov; wSteps=ltsStepsHTML(lppLtsLast.wdSteps=[
-        {id:'wd.q',label:`Weld force per inch around the tube (as a line, D = ${n2(inp.poleDiaBase,3)} in): ${gw.name}, ${gw.lcName}`,sym:'q',eq:'\\sqrt{\\left(\\frac{BM}{S_{w}} + \\frac{P}{\\pi D}\\right)^{2} + \\left(\\frac{2V}{\\pi D} + \\frac{2T}{\\pi D^{2}}\\right)^{2}},\\, S_{w} = \\pi D^{2}/4',
+        wd.shape==='rect'   // LPL8 (2026-11-07): square / rectangular tube, the weld as a rectangular line group
+        ?{id:'wd.q',label:`Weld force per inch at the corner (rectangular line weld, B_x = ${n2(wd.Bx,3)} in along x, B_y = ${n2(wd.By,3)} in along y; S_wx = ${n2(wd.Swx,2)}, S_wy = ${n2(wd.Swy,2)} in², L_w = ${n2(wd.Lw,2)} in): ${gw.name}, ${gw.lcName}`,sym:'q',
+          eq:'\\sqrt{\\left(\\frac{B|M_{x}|}{S_{wx}} + \\frac{B|M_{y}|}{S_{wy}} + \\frac{P}{L_{w}}\\right)^{2} + \\left(\\frac{|V_{x}|}{2B_{x}} + \\frac{|V_{y}|}{2B_{y}} + \\frac{T}{2B_{x}B_{y}}\\right)^{2}},\\, S_{wx} = B_{y}B_{x} + B_{x}^{2}/3,\\, S_{wy} = B_{x}B_{y} + B_{y}^{2}/3',
+          sub:`\\sqrt{\\left(\\frac{${n2(gw.Mxk,2)}}{${n2(wd.Swx,2)}} + \\frac{${n2(gw.Myk,2)}}{${n2(wd.Swy,2)}} + \\frac{${n2(gw.Pk,3)}}{${n2(wd.Lw,2)}}\\right)^{2} + \\left(\\frac{${n2(gw.Vxk,3)}}{${n2(2*wd.Bx,2)}} + \\frac{${n2(gw.Vyk,3)}}{${n2(2*wd.By,2)}} + \\frac{${n2(gw.Tk,2)}}{${n2(2*wd.Bx*wd.By,2)}}\\right)^{2}} = \\sqrt{${n2(gw.qn,3)}^{2} + ${n2(gw.qs,3)}^{2}}`,value:gw.q,unit:'kip/in',d:3,ref:'line-weld section of a rectangle (engineering method; kip, kip-in)'}
+        :{id:'wd.q',label:`Weld force per inch around the tube (as a line, D = ${n2(inp.poleDiaBase,3)} in): ${gw.name}, ${gw.lcName}`,sym:'q',eq:'\\sqrt{\\left(\\frac{BM}{S_{w}} + \\frac{P}{\\pi D}\\right)^{2} + \\left(\\frac{2V}{\\pi D} + \\frac{2T}{\\pi D^{2}}\\right)^{2}},\\, S_{w} = \\pi D^{2}/4',
           sub:`\\sqrt{${n2(gw.qn,3)}^{2} + ${n2(gw.qs,3)}^{2}}`,value:gw.q,unit:'kip/in',d:3,ref:'line-weld section'},
         {id:'wd.cap',label:'Fillet weld strength per inch',sym:'\\phi R_{n}',eq:'0.75\\cdot 0.60F_{EXX}\\cdot 0.707w',sub:`0.75\\cdot 0.60\\cdot${n2(num('ltsFexx')||70,0)}\\cdot 0.707\\cdot${n2(num('ltsWeldW')||0.3125,4)}`,value:wd.phiRn,unit:'kip/in',d:3,ref:'AWS D1.1 / AISC 360-16 §J2.4 (LRFDLTS Art. 5.14, p. 5-35, 2017, refers to AWS D1.1)',ok:wd.ok,
           note:`Ratio ${n2(wd.ratio,3)} → ${wd.ok?'OK':'NOT OK'}. LRFDLTS gives no weld strength method; AWS D1.1 / AISC 360-16 §J2 with φ = 0.75 and no directional increase (accepted by the engineer, 2026-11-02).`}]); }
