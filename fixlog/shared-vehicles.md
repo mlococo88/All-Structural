@@ -58,7 +58,7 @@ Loaded by: `Moving Load Generator.html` (preset list) and `apps/steel-bridge/ind
 ### Check case (`tests/engine/moving-load.test.mjs`, "M1")
 - Type 3S2, simple span 100 ft, midspan +M by hand: axle 3 on the section (lead axle at 35 ft), ordinates 17.5, 23, 25, 14, 12:
   M = 10(17.5) + 15.5(23 + 25 + 14 + 12) = 175 + 1147 = 1322 kip-ft; × 1.33 = 1758.26. Tool: 1758.26. Before: n/a (no preset).
-- CT-TLC, simple span 100 ft, midspan +M: tool 3920.00 = the static maximum of a 0.01 ft brute-force search (3920.01), i.e. no IM.
+- CT-TLC, simple span 100 ft, midspan +M: tool 3920.01 = the static maximum of a 0.01 ft brute-force search (3920.01), i.e. no IM.
 - Every vehicle's gross weight and length equal the documented values (table above).
 ### How verified
 - `node tests/engine/run.mjs moving-load`: all pass; the original presets' keys, order and values are unchanged (test adjusted to
