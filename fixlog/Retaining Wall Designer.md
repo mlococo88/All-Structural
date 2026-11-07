@@ -3784,3 +3784,32 @@ Calculation audit, item 9 (3). Engineer decision (2026-11-07). Code sites are ta
 
 ### Saved data
 - No input or format change. Old projects with k_h > 0 get the stem seismic combination; their stem results can change (ACI).
+
+## 2026-11-07 — PR: claude/rw-left-summary — Check summary in the left panel exactly as Spread Footing's Summary Dashboard: rows styled as SF's chips (RWDL; display only, no result change)
+
+### RWDL. Check summary rows styled as Spread Footing's dashboard chips; position and breakpoints confirmed against SF   [display only]
+- **Request (engineer, 2026-11-07):** "the summary cards should be on the left panel" — RW's check summary panel (RWDC, #926) to sit in the left column exactly like Spread Footing's Summary Dashboard (SFDC #737 / SFDF #740) and Light Pole's panel (LPDC #747): same position, breakpoints, collapse behaviour and card styling.
+- **Study of SF (origin/main, `Spread Footing.html`):** `SFDC.mq = matchMedia('screen and (min-width:1500px)')`; at 1500 px and wider `sfdDashPlace()` moves `#sfdDashBox` into `#sfdDashCol`, the first child of `.main`, i.e. a left column (280 px + 12 px gap) to the LEFT of the input panel, own scroll, sticky head, «/» collapses it to a 42 px strip; below 1500 px the box sits on top of the output panel above the output tabs, chips in a `minmax(min(250px,100%),1fr)` grid, "▾ Hide checks / ▸ Show checks". RW (RWDC) already does the same: same 1500 px query, `#rwDashCol` first child of `#app` (left of the inputs, 292 px incl. padding), own scroll, sticky head, «/» → 42 px strip, below 1500 px above the output tabs with the same grid and the same Hide / Show checks button, same key behaviour (`retaincalcpro.dashCollapsed.v1`, unchanged). Screenshots of both tools at 1280, 1400, 1920 and 390 px confirm the same placement. The one visible difference was the row ("card") styling: SF chips have a 1 px border in the status colour on a tinted background and a bold check name; RW rows had a 4 px coloured left stripe on white with a regular-weight name.
+- **Where:** CSS, block `/* RWDC (2026-11-06): check summary panel …`, after the line anchor `.rwdCh.pass { border-left-color: var(--pass); } .rwdCh.fail { border-left-color: var(--fail); background: #FEF2F2; } .rwdCh.warn { border-left-color: var(--warn); background: #FFFBEB; }`.
+  - Before: (nothing after that line)
+  - After (added):
+```css
+/* RWDL (2026-11-07, engineer: "the summary cards should be on the left panel" as in Spread Footing): each row is styled as
+   Spread Footing's dashboard chip (SFDC): a 1 px border in the status colour on a tinted background, the check name in bold.
+   Display only. */
+.rwdCh { border-left-width: 1px; }
+.rwdCh.pass { border-color: var(--pass); background: #ECFDF5; } .rwdCh.fail { border-color: var(--fail); background: #FEF2F2; }
+.rwdCh.warn { border-color: var(--warn); background: #FFFBEB; } .rwdCh.na { border-color: var(--slate-400); background: var(--slate-50); }
+.rwdCh.pass:hover { background: #D1FAE5; } .rwdCh.fail:hover { background: #FEE2E2; } .rwdCh.warn:hover { background: #FEF3C7; } .rwdCh.na:hover { background: var(--slate-100); }
+.rwdCh .rwdN { font-weight: 700; color: var(--slate-900); }
+```
+- **Decisions (pending engineer review):**
+  1. Breakpoint kept at 1500 px, the same as Spread Footing and Light Pole (as asked: "same breakpoints"). Below 1500 px (e.g. 1280 and 1400 px windows, or a 1920 px screen at 150 % Windows scaling = 1280 CSS px) both tools show the summary above the output tabs, not as a left column. If the engineer's screen is below 1500 px and the left column is wanted there, the breakpoint would need lowering in SF, LP and RW together (a separate change).
+  2. RW's own fonts and colour tokens are kept (sans-serif UI, `--pass` / `--fail` / `--warn`); only the chip shape (border + tint + bold name) follows SF. The RW title "CHECK SUMMARY" and the count badges are unchanged.
+  3. The Overview "Wall section works / governing D/C" card stays at the top of the Overview tab (SF has no equivalent card; its dashboard is the only summary). The self-consistency line stays under the check list (in the left column at ≥ 1500 px), as RWSC placed it.
+  4. Phone (≤ 900 px): RW's "results first / Show inputs" behaviour is kept (SF shows inputs first with a "Jump to the results" link); only the row styling changes there.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply).
+- **Saved data (§5):** no key or format changed; no new key.
+- **Check case:** default ACI wall (H_s 12 ft, q_a 3000 psf): 23 rows, all PASS, green bordered rows (D/C 0.20 … 1.00), "all pass · 23 checks"; H_s 22 ft, q_a 2500 psf: "5 FAIL", red bordered rows open (Sliding D/C 1.62, Bearing 1.66, Stem Shear 1.12, Stem Hook ℓdh 1.91, Toe Shear 2.39).
+- **How verified:** origin/main vs branch, headless Chromium at 1920 px, three walls (ACI default; AASHTO default; ACI H_s 22 / q_a 2500 with 5 FAIL): `window._R`, Export JSON fields (`snapshotFields()`), every localStorage key and value, the Report tab text and the four-sheet DXF **identical**; 0 console errors. No sideways page scroll at 390, 768, 1280, 1400 and 1920 px. Screenshots before / after at 1280, 1400, 1920 and 390 px (deviceScaleFactor 2) next to Spread Footing at the same widths, and the FAIL wall at 1920 and 1400 px, looked at. Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall.
+- **Other copies:** none.
