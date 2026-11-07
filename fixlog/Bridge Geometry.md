@@ -2067,3 +2067,27 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
     - project-library --tool bgeo: the only difference is the Bridge tab text (the new table's note), so the results are identical.
 - **Saved data (§5):** additive top-level `XSLOPES` (array of {staStr, L, R}); absent = empty = old behaviour. No key changed.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/bg-m2-curve-elements (PR #1128: https://github.com/mlococo88/All-Structural/pull/1128) (BGX7, review M2 / O4 part: curve and spiral element report; report only, no result change)   [display only]
+
+- **Why:** review 2026-11-07 M2. The plan curve data could be checked only through the end stations and bearings. Curve elements (T, E, M, LC, PI, D) and spiral elements (θs, Xs, Ys, p, k, LT, ST) were not shown.
+- **Where:**
+  - New collapsible block `<details id="elem_rep_box">` under `#elem_warn` (Alignment tab, Horizontal Alignment Data).
+  - New `buildElemReport()` after `function elemType(i)`, called in `compute()` after `showGeomWarnings(...)`.
+  - Nothing else reads it.
+- **Formulas (shown in the code comment):**
+  - Circular curve: Δ = L/R; T = R tan(Δ/2); E = R(sec(Δ/2) − 1); M = R(1 − cos(Δ/2)); LC = 2R sin(Δ/2); PI = PC + T·(PC tangent); D_arc(100 ft) = 18000/(πR); D_chord(100 ft) = 2 asin(50/R).
+  - Spiral to or from a tangent: θs = Ls/(2Rc). Xs, Ys = the engine's far-end point in the frame of the tangent end. p = Ys − Rc(1 − cos θs); k = Xs − Rc sin θs; LT = Xs − Ys/tan θs; ST = Ys/sin θs.
+  - Symmetric spiral–curve–spiral: total Δ; Ts = (R + p) tan(Δ/2) + k; Es = (R + p) sec(Δ/2) − R.
+  - A compound spiral (both radii non-zero) shows its length, radii and change of bearing only.
+- **Governing provision:** none (route surveying; standard formulas). Station equations (rest of O4) are not added.
+- **Check case (default demo):**
+  - Spiral in: θs = 150/1600 = 0.09375 rad = 5°22'17.33". Xs 149.868 and Ys 4.685 (the review's series values: 149.8682 and 4.6846). p = 4.685 − 800(1 − cos θs) = 1.172; k = 149.868 − 800 sin θs = 74.978; LT 100.046; ST 50.042.
+  - Curve: R 800, L 300, Δ = 0.375 rad = 21°29'09.30"; T 151.783; E 14.271; M 14.021; LC 298.245 (the F1 chord); D_arc 7°09'43.10"; PI (N −18.893, E 500.985).
+  - Group: total Δ = 0.5625 rad = 32°13'43.95"; Ts = 801.172 tan(16.114°) + 74.978 = 306.443; Es 33.938.
+- **How verified:**
+  - Headless probe origin/main vs branch (demo, variant, Examples 1–5): every table, the hand-off payload, Export JSON and DXF identical. 0 console errors.
+  - Tests:
+    - pass: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, project-library --tool bgeo, home-projects --tool bgeo, tests/engine/run.mjs handoffs lldf list-input.
+    - list-input --part bgeo: unchanged from main, failing only against its recorded base commit for the earlier BGX1/BGX3 results.
+- **Saved data:** none. **Other copies:** none.
