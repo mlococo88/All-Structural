@@ -15358,7 +15358,7 @@ index cedb10f..5b89752 100644
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/abut-h1-punch-round (ABH1: punching shear around round / pipe / drilled piles uses the circular critical section π(D + d_v); square and H-piles unchanged)   [calc change] [MORE conservative]
+## 2026-11-07 — PR: claude/abut-h1-punch-round (PR #993: https://github.com/mlococo88/All-Structural/pull/993) (ABH1: punching shear around round / pipe / drilled piles uses the circular critical section π(D + d_v); square and H-piles unchanged)   [calc change] [MORE conservative]
 
 Source: code-compliance review of 2026-11-07, item H1.
 
