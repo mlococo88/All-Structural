@@ -6171,7 +6171,7 @@ After:
 ### Saved data
 - No input or format change. Old pile saves open with the mat at c_c (engineer instruction: no option).
 
-## 2026-11-07 — PR: claude/rw-pile-thin-cap-error — Pile-supported footing: a named input error when t_f ≤ embedment + clear + 2 in (the depth over the pile heads), never a throw; the page catches any calculation error (RWTE; input-validation change, pile mode only; valid inputs: no result change)
+## 2026-11-07 — PR: claude/rw-pile-thin-cap-error (PR #1151: https://github.com/mlococo88/All-Structural/pull/1151) — Pile-supported footing: a named input error when t_f ≤ embedment + clear + 2 in (the depth over the pile heads), never a throw; the page catches any calculation error (RWTE; input-validation change, pile mode only; valid inputs: no result change)
 
 Follow-up A2 of the second-pass fix round. Code sites are tagged `RWTE`.
 
