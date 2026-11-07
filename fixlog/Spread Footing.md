@@ -6310,3 +6310,25 @@ index 50f3837..c2d5000 100644
   - Strips: Ped 1 20.21 kip-ft on b_s = 127.9 in, D/C 0.025; Ped 2 8.67 kip-ft on b_s = 47.9 in, D/C **0.028** (x full width 0.025).
   - The governing flexure (y, 0.687) is unchanged.
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-left-breakpoint (PR #988: https://github.com/mlococo88/All-Structural/pull/988) — Summary dashboard as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (SFLB; display only, no result change)
+
+### SFLB. The summary dashboard is on the left at common laptop widths   [display only]
+- **Decision (pending engineer review):** the engineer asked (2026-11-07, for the Retaining Wall Designer) for "the summary cards … on the left panel", most likely at a laptop width below 1500 px, where SFDC (#737) put the dashboard above the output tabs. The left column now starts at **1200 px** in Spread Footing, Retaining Wall Designer (RWLB, #984) and Light Pole and Sign Post alike. From 1200 to 1499 px it is **240 px** wide; at 1500 px and wider 280 px as before (layout and panel widths unchanged there). Below 1200 px nothing changes (dashboard above the output tabs; phone stacking, SFPH). Same collapse button (« / » → 42 px strip) and key `sfd_dashCollapsed_v1`.
+- **Output panel at 1200–1499 px with the column open:** 508–748 px wide (the input panel keeps its 400 px minimum), as the output panel already is at 950–1190 px without the column. At those widths the Load Combinations, Pedestal Design, Stability, Footing Design and Report pages are wider than the panel and were cut off at its edge (`.out{overflow-x:hidden}`, an existing condition below 1200 px). With the column open from 1200 to 1499 px, each tab page now scrolls sideways inside itself (`overflow-x:auto`, as on tablets and phones, SFPH), so nothing is cut off and the page itself never scrolls sideways. Measured (main → branch): at 1280 px nothing was cut; now Load Combinations scrolls 161 px, Pedestal Design 92 px, Report 189 px inside their tab page. « (collapse) gives the width back.
+- **Where:**
+  - CSS: `@media screen and (min-width:1500px){` (the SFDC block, anchor `.wrap{max-width:1892px}`) → `@media screen and (min-width:1200px){` with a comment `/* SFLB … */` above; after that block, added:
+```css
+@media screen and (min-width:1200px) and (max-width:1499.98px){   /* SFLB */
+ body.sfdDashWide #sfdDashCol{flex-basis:240px;width:240px}
+ body.sfdDashWide .inp{width:calc((100% - 252px)*.33)}
+ body.sfdDashWide.sfdDashColl #sfdDashCol{flex-basis:42px;width:42px}
+ body.sfdDashWide.sfdDashColl .inp{width:calc((100% - 54px)*.33)}
+ /* … a wide table, plot or Report page scrolls sideways inside its tab page … */
+ body.sfdDashWide:not(.sfdDashColl) .tabpage{overflow-x:auto}
+}
+```
+  - JS: `const SFDC={key:'sfd_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,…` → `'screen and (min-width:1200px)'` (comment `/* SFLB: was 1500px */`).
+  - `tests/smoke/spread-footing-scroll.mjs`: the dashboard-column assertion `vw >= 1500` → `vw >= 1200` (its 1280 and 1366 px sizes now expect the column) and its comments.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
+- **How verified:** origin/main vs branch at 1920, 1280 and 1200 px, three projects (default, 2 NG; Direct load mode, 3 NG; B 7 × L 6 ft with water table at 2 ft, 6 NG): `R`, `P2`, `state` (Export JSON), the dashboard text, the Report text (Plotly / SVG figures removed: their tick labels follow the plot width) and every localStorage key and value (the `at` time stamp of `bridgeSuite.v1.projectsUI.spread-footing.start` masked) **identical**; 0 console errors. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px (and no output cut off on any of the ten tabs at 1200, 1280, 1400). Screenshots before / after at 1200, 1280, 1400 and after at 1920, 768, 390 looked at. Tests: check-syntax; spread-footing-scroll; phone-layout sf 390/768; project-library spreadfooting.
