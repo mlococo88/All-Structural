@@ -19913,6 +19913,63 @@ index 06a42e4..b58d4e3 100644
   - `check-syntax`: pass. `pile-library`: every library check passes; its two "page text identical" checks show the intended buckling text and `pdaRev`. 0 console errors.
 - **Other copies:** none.
 
+## 2026-11-07 — PR: claude/pile-m2-summary (PR #1003: https://github.com/mlococo88/All-Structural/pull/1003) (PDA-M2) — Report summary: a row for each Module G code-limit item; never "not satisfied" over an all-PASS table   [display only; no result change]
+- **Problem (review M2):** `R.allPass` includes `R.geoChecks.pass`, which covers the uncased flexure, L_b ≥ L_b,req, L_b ≥ L_b,min, the plunge, the grout cover, the geometry consistency and the casing past the active zone. The Summary-of-results rows listed only the uncased flexure and the casing past the active zone. With a failing plunge (default, input M_max 0.5), the Report said "One or more checks not satisfied" and every row read PASS.
+- **Where:**
+  - New `gcSummaryRows(r, keys)` and `sumFallbackRow(r, rows, keys)` before `function checkNoFor(` (anchor `/* PDA-M2 (2026-11-07)`).
+  - `checkNoFor`: `/^Code limit/` → "G".
+  - `rptResText`: "consistent" / "inconsistent" for the geometry row, and "see the module status" for the fallback row.
+  - Report model: after the `"Uncased flexure (below casing tip)"` row (anchor `"gc/unc"]);`), `rows.push(...gcSummaryRows(r, true))`, with report keys gc/Lb, gc/Lbmin, gc/pl, gc/cov and gc/geo (the steps already in "G Code-limit checks"). Before `const sumRows = rows.map(`: the fallback row.
+  - PrintReport `resultRows`: the same rows (no keys) after the uncased-flexure row, and the fallback after the group rows.
+- **Rows:** [name, provided, unit, required, pass, basis]:
+  - effective bond length ≥ required (10.9.3.5);
+  - effective bond length ≥ practical minimum 10 ft (FHWA);
+  - casing plunge length ≥ min(max(40 d_b, 3 ft), L_bond) (tool rule; relabelled in M3);
+  - grout cover ≥ 0.5 in;
+  - geometry consistency.
+  - D/C = required / provided.
+  - Fallback: when `allPass` is false and no row fails, "Other check not satisfied (see the module status on the Summary tab)", FAIL.
+- **Governing provision:** none changed. No formula, factor or pass/fail logic changed; the rows show existing values and flags.
+- **Check case:** default micropile, input M_max 0.5 kip-ft. The new row "Code limit — casing plunge length | 3.0 ft | 3.34 ft | D/C = 1.11 | FAIL" sits under "One or more checks not satisfied". The other four rows pass (L_b 27.0 vs 26.82 and 10 ft; cover 3.0 vs 0.5 in; geometry consistent).
+- **How verified:**
+  - `computeAll` on 15 cases: identical main vs branch.
+  - App and Report text main vs branch: only the five new summary rows differ, in both the Report and the printed tables.
+  - The fallback function was checked in the page (all-pass rows with allPass false → one FAIL row; otherwise none).
+  - `check-syntax`: pass. `pile-library`: library checks pass; the "page text identical" checks show the new rows (autosaved inputs identical). 0 console errors.
+- **Saved data:** none changed.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/pile-m1-uncased-pm (PR #1010: https://github.com/mlococo88/All-Structural/pull/1010) (PDA-M1) — uncased length: combined axial + flexure check (compression and tension)   [check-logic change]
+- **Problem (review M1):** below the casing tip, the bar + grout section was checked for axial (Module 03), tension (Module 09) and bar-only flexure (Module G), each on its own. There was no interaction. An uplift + lateral case (T_u 50, M 0.5) passed each check, 0.88 and 0.53, while the combined demand is 1.41.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024):
+  - Art. 10.9.3.10.1: micropile structural design per Sec. 5 for the reinforced grout section, cased and uncased lengths.
+  - Art. 5.6.6.1: in tension, the axial force is carried by the steel only.
+  - Art. 5.6.6.2: combined tension and flexure is proportioned per 5.6.2.
+  - Art. 5.6.2 / 5.6.4: compression with flexure uses the P–M interaction.
+- **Decision (pending engineer review):** an interim, conservative linear interaction with the existing bar-only φM_n (0.90 f_yb Z_bar), in both directions:
+  - compression: P_u,unc/φ_CU R_n + M_u,unc/φM_n ≤ 1;
+  - tension: (T_u − P_t)/φ_t f_yb A_b + M_u,unc/φM_n ≤ 1.
+
+  P_u,unc is taken at the casing tip, with the largest moment below the tip (both maxima together, conservative). A strain-compatibility P–M of the grout + bar section (5.6.2) would credit the grout compression block and be less conservative; that is listed as a future feature. Micropile only.
+- **Where:**
+  - `computeAll`, Module G, after `const uncasedFlex_pass = …` (anchor `// PDA-M1 (2026-11-07)`): `uncMr`, `uncPM_c` (null without compression), `uncPM_t` (null without tension demand) and `uncPM_pass`.
+  - `uncPM_pass` is added to `R.geoChecks.pass`, so it counts in Module G and `allPass`. With p-y not converged it is false, like the uncased flexure.
+  - Display:
+    - on-screen Module G: two CheckRows plus a "Worked in" link to Modules 03 and 09;
+    - printed `RptGeomChecks`: two RptChecks and a note;
+    - Report steps `gc/pmc` and `gc/pmt` in "Uncased flexure";
+    - summary rows "Uncased combined compression + flexure (D/C)" and "Uncased combined tension + flexure (D/C)" via `gcSummaryRows`, with `checkNoFor` → G.
+  - One-time load note for a micropile project saved before (pdaRev < 6); `pdaRev` 5 → 6; no input changed.
+- **Check cases:**
+  - V4 (default, STL 0, T_u 50 kip, input M_max 0.5 kip-ft): (50 − 8.2)/47.4 + 0.50/0.946 = 0.881 + 0.529 = **1.410 NG**. Before: no check; uncased flexure 0.53 OK and tension 0.88 OK.
+  - Default (p-y, M_u,unc 1.27): 76.4/119.5 + 1.27/0.946 = 0.639 + 1.338 = **1.977 NG**. Before: no check; uncased flexure alone 1.338 was already NG.
+  - V2 (`computeAll`, M_u,unc 0): compression 0.803 and tension 0.572. These are the axial ratios alone, no change of status.
+- **How verified:**
+  - `computeAll` on 15 cases main vs branch: only the new `geoChecks` fields (`uncMr`, `uncPM_*`). No other value moved. H-pile cases: null (not applied).
+  - App and Report main vs branch: the new rows, steps and note only. 0 unresolved references, 0 duplicate keys, no NaN.
+  - `check-syntax`: pass. `pile-library`: library checks pass; its page-text checks show the new check text and `pdaRev`. 0 console errors.
+- **Other copies:** none.
+
 ## 2026-11-07 — PR: claude/rw-pile-8f — foundationLoads from the Retaining Wall Designer listed (copy by.retwall); pileResults dialog names both receivers (RWPX; no calculation change)
 
 Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4.10). Minimal change.

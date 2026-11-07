@@ -9818,13 +9818,37 @@ function rw3Factored(r, S, F) {
   out.forEach(o => { if (o.kind === 'v') { V += o.P; M += o.P * o.x; } else if (o.kind === 'up') { V -= o.P; M -= o.P * o.x; } else M += o.dir * o.P * o.y; });
   return { items: out, omit, V, M };
 }
+/* RWPL (2026-11-07, Phase 8 3D): on a pile-supported footing the combinations of the 3D view are the pile analysis' own
+   (r.pile.comb, Stability tab, Pile Step 2): V (lb/ft) at x_R, with the pile reactions per row; no soil base reaction. */
+const rw3IsPile = r => !!(r && r.pile && !r.pile.err && r.pile.comb && r.pile.comb.length);
+function rw3PileCombos(r) {
+  const P = r.pile;
+  return { list: P.comb.map(c => ({ key: c.key, name: c.label, kind: 'pile', V: c.V * 1000, xR: c.xR, e: r.B / 2 - c.xR, pile: c })), gov: P.govC ? P.govC.key : P.comb[0].key };
+}
+/* the load factors of a pile combination for the factored arrows (RW3F), or null (arrows unfactored only):
+   AASHTO: Strength I max / min and Extreme Event II max are the bearing sets' own V and x_R (8c), so their definitions apply
+   (rw3Factors 's1', 's1a', 'ee2'); Extreme Event I and Extreme Event II min have no factor map here.
+   ACI / IBC: the service combinations of rwPileAnalysis (ASCE 7-16 §2.4.1): D + H + L (all loads × 1.0), + 0.7E, and
+   0.6D + H (0.6 on the dead loads and on the vertical earth thrust, water uplift 1.0, no surcharge or column L / S), + 0.7E. */
+function rw3PileFactors(r, key) {
+  if (r.isAASHTO) { const m = { str_max: 's1', str_min: 's1a', ee2_max: 'ee2' }[key]; return m ? rw3Factors(r, m) : null; }
+  const E = r.hasSeismic ? 0.7 : 0, all = { EH: 1, EHv: 1, ES: 1, WA: 1, UP: 1, SV: 1, DC: 1, EV: 1, PP: 0 };
+  const min6 = { EH: 1, EHv: 0.6, ES: 1, WA: 1, UP: 1, SV: 0, DC: 0.6, EV: 0.6, PP: 0 };
+  const colMin = r.hasCol ? { v: 0.6 * (r.inp.col_DL + Math.min(0, r.inp.col_WL || 0)) * 1000 / r.inp.col_Ldist, how: '0.6 × (column dead load + any wind uplift)' } : null;
+  if (key === 's1') return { def: 'D + H + L (service)', f: { ...all, EQ: 0 }, col: r.hasCol ? { v: r.W_col, how: 'the service column load' } : null };
+  if (key === 's2') return { def: 'D + H + L + 0.7E', f: { ...all, EQ: E }, col: r.hasCol ? { v: r.W_col, how: 'the service column load' } : null };
+  if (key === 's3') return { def: '0.6D + H', f: { ...min6, EQ: 0 }, col: colMin };
+  if (key === 's4') return { def: '0.6D + 0.7E + H', f: { ...min6, EQ: E }, col: colMin };
+  return null;
+}
 function rw3Options(r) {
-  const C = (typeof rwbpCombos === 'function') ? rwbpCombos(r) : { list: [], gov: null };
+  const pm = rw3IsPile(r);   // RWPL
+  const C = pm ? rw3PileCombos(r) : (typeof rwbpCombos === 'function') ? rwbpCombos(r) : { list: [], gov: null };
   const g = C.list.find(x => x.key === C.gov);
-  const o = [['Governing', [['GOV', '★ Governing bearing combination' + (g ? ': ' + g.name.replace(/ — .*$/, '') : '')]]]];
+  const o = [['Governing', [['GOV', (pm ? '★ Governing pile compression combination' : '★ Governing bearing combination') + (g ? ': ' + g.name.replace(/ — .*$/, '') : '')]]]];
   const cases = rw3Cases(r);
   o.push(['Load cases (unfactored, per ft of wall)', [['ALL', 'All load cases'], ...cases.map(c => ['CASE:' + c.key, c.name])]]);
-  o.push(['Combinations (base reaction and bearing pressure)', C.list.map(x => ['C:' + x.key, (x.key === C.gov ? '★ ' : '') + x.name])]);
+  o.push([pm ? 'Combinations (pile reactions per row)' : 'Combinations (base reaction and bearing pressure)', C.list.map(x => ['C:' + x.key, (x.key === C.gov ? '★ ' : '') + x.name])]);
   return { o, C, cases };
 }
 // what the current selection shows: { cases: [...], combo: <rwbp combination or null>, title }
@@ -9833,16 +9857,17 @@ function rw3Selected(r) {
   let sel = RW3.sel;
   if (sel.startsWith('C:') && !C.list.find(x => 'C:' + x.key === sel)) sel = 'GOV';
   if (sel.startsWith('CASE:') && !cases.find(c => 'CASE:' + c.key === sel)) sel = 'ALL';
-  const svc = C.list.find(x => x.key === 'svc');
-  if (sel === 'ALL') return { sel, cases, combo: svc || null, comboNote: 'service (unfactored)' };
+  const pm = rw3IsPile(r), svc = C.list.find(x => x.key === (pm ? 's1' : 'svc') && (!pm || !r.isAASHTO));   // RWPL: on piles, ACI D + H + L (service); AASHTO none
+  if (sel === 'ALL') return { sel, cases, combo: svc || null, comboNote: pm ? 'service combination D + H + L' : 'service (unfactored)' };
   if (sel.startsWith('CASE:')) return { sel, cases: cases.filter(c => 'CASE:' + c.key === sel), combo: null };
   const k = sel === 'GOV' ? C.gov : sel.slice(2);
-  const F = rw3Factors(r, k);
+  const F = pm ? rw3PileFactors(r, k) : rw3Factors(r, k);   // RWPL
   return { sel, cases, combo: C.list.find(x => x.key === k) || null, gov: sel === 'GOV', F, fac: !!(F && RW3.fac) };
 }
 function rw3Title(r, S) {
   const unit = 'Forces per ft of wall (k/ft); heights y above the footing base, x from the toe.';
   const sign = 'Arrows point the way each load acts on the wall: earth, surcharge, water, seismic and collision toward the toe; weights down; uplift and the base reaction up; passive toward the heel.';
+  if (rw3IsPile(r)) return rw3TitlePile(r, S, unit);   // RWPL: pile-supported footing
   let what;
   if (S.sel.startsWith('CASE:')) what = `<b>${S.cases[0] ? S.cases[0].name : ''}</b>: unfactored. No bearing pressure is shown for a single load case.`;
   else if (S.sel === 'ALL') what = `<b>All load cases</b>, unfactored; base reaction R and bearing pressure for the ${S.comboNote}.`;
@@ -9855,6 +9880,23 @@ function rw3Title(r, S) {
   }
   else what = `${S.gov ? '<b>Governing</b> bearing combination: ' : ''}<b>${S.combo ? S.combo.name : ''}</b>: base reaction R and bearing pressure as the analysis computes them${S.combo && /Service/.test(S.combo.name) ? '' : ' (factored)'}; <b>load arrows: unfactored</b>, the load cases${S.F ? ' (choose Factored to see them × this combination\'s load factors)' : ''} (choose one in the list to see it alone).`;
   return `<div>${what}</div><div class="c3d-sign">${unit} ${sign} Worked on the Stability tab (<a class="wkA" href="#" data-card="stabBrg">bearing</a>).</div>`;
+}
+/* RWPL (2026-11-07): the 3D title on a pile-supported footing (pile combinations, pile reactions per row; no soil base reaction) */
+function rw3TitlePile(r, S, unit) {
+  const sign = 'Arrows point the way each load acts on the wall: earth, surcharge, water, seismic and collision toward the toe; weights down; uplift up; passive toward the heel. Pile reactions act on the footing: up in compression, down in uplift (tension), and toward the heel against the lateral load.';
+  const c = S.combo, cmb = c ? `<b>${c.name}</b>` : '';
+  let what;
+  if (S.sel.startsWith('CASE:')) what = `<b>${S.cases[0] ? S.cases[0].name : ''}</b>: unfactored. No pile reactions are shown for a single load case.`;
+  else if (S.sel === 'ALL') what = `<b>All load cases</b>, unfactored` + (c ? `; pile reactions per row for the ${S.comboNote} (${c.name}).` : '; no pile reactions (every pile combination in AASHTO mode is factored: choose one in the list).');
+  else if (S.fac) {
+    const X = S.FX, F = S.F, tol = v => 1e-6 * Math.max(1, Math.abs(v));
+    const okV = Math.abs(X.V - c.V) <= tol(c.V), okM = Math.abs(X.M - c.V * c.xR) <= tol(c.V * c.xR) * 10;
+    what = `${S.gov ? '<b>Governing</b> pile compression combination: ' : ''}${cmb}. <b>Load arrows: factored</b>, each load case × its load factor γ in this combination, read from the analysis' definition of ${F.def}${F.eta != null && F.eta !== 1 ? ` (γ includes η = ${f(F.eta, 3)})` : ''}; pile reactions per row as the pile analysis computes them.`
+      + (X.omit.length ? ` Not in this combination's vertical resultant: ${X.omit.join(', ')}.` : '')
+      + `<div class="c3d-sign">Check: Σγ·V of the arrows = ${f(X.V, 0)} lb/ft vs V = ${f(c.V, 0)} lb/ft ${okV ? '✓' : '✗'}; Σγ·M about the toe = ${f(X.M, 0)} vs V·x_R = ${f(c.V * c.xR, 0)} lb·ft/ft ${okM ? '✓' : '✗'}.</div>`;
+  }
+  else what = `${S.gov ? '<b>Governing</b> pile compression combination: ' : ''}${cmb}: pile reactions per row (kip per pile) as the pile analysis computes them${r.isAASHTO ? ' (factored)' : ' (service loads)'}; <b>load arrows: unfactored</b>, the load cases${S.F ? ' (choose Factored to see them × this combination\'s load factors)' : ' (no factor map for this combination: the arrows stay unfactored)'}.`;
+  return `<div>${what}</div><div class="c3d-sign">${unit} ${sign} Worked on the Stability tab (<a class="wkA" href="#" data-card="stabPile">pile reactions</a>).</div>`;
 }
 // label sprite: fixed pixel size, faces the camera, never hidden by geometry or the section cut
 function rw3Label(g, txt, anchor, color) {
@@ -9900,7 +9942,16 @@ function rw3Build(r) {
   // bearing layer: the selected combination's pressure (none for a single load case)
   while (G.bearing.children.length) G.bearing.remove(G.bearing.children[0]);
   const c = S.combo;
-  if (c) {
+  if (c && c.kind === 'pile') {   // RWPL (2026-11-07): pile reactions per row (kip per pile) in the 'bearing' layer; no soil base reaction
+    const L = c.pile.L, Pm = Math.max(...L.rows.map(x => Math.abs(x.P)), 1e-9), gb = G.bearing;
+    L.rows.forEach((x, i) => { const len = La * (0.35 + 0.65 * Math.abs(x.P) / Pm), y0 = -0.15;
+      if (x.P >= 0) rw3Arrow(gb, V3(x.x, y0 - len), V3(x.x, y0), '#ffd040');
+      else rw3Arrow(gb, V3(x.x, y0), V3(x.x, y0 - len), '#ffd040');
+      rw3Label(gb, `Row ${i + 1}: P = ${f(x.P, 1)} kip/pile${x.P < 0 ? ' (uplift)' : ''}, q = ${f(x.q, 2)} k/ft`, V3(x.x, y0 - len), '#c0a020'); });
+    const h = L.rows.length ? L.rows[0].h : 0, xh = Math.min(...L.rows.map(x => x.x));
+    if (h > 1e-6) { rw3Arrow(gb, V3(xh - La * 0.6, 0.05), V3(xh, 0.05), '#ffd040'); rw3Label(gb, `h = H/N = ${f(h, 2)} kip/pile (lateral, every pile)`, V3(xh - La * 0.6, 0.05), '#c0a020'); }
+    S.rInfo = `V = ${rw3K(c.V)} at x_R = ${f(c.xR, 2)} ft; P_max = ${f(L.Pmax, 1)} kip, P_min = ${f(L.Pmin, 1)} kip per pile; H = ${f(c.pile.H, 3)} k/ft`;
+  } else if (c) {
     const zn = rwbpZone(r, c), qm = Math.max(zn.q0, zn.q1, 1), bS = Math.max(B, H) * 0.16 / qm;
     if (!zn.none && zn.x1 > zn.x0) {
       const sh = new THREE.Shape(); sh.moveTo(zn.x0, 0); sh.lineTo(zn.x0, -zn.q0 * bS); sh.lineTo(zn.x1, -zn.q1 * bS); sh.lineTo(zn.x1, 0); sh.closePath();
@@ -9913,7 +9964,8 @@ function rw3Build(r) {
     rw3Label(g, `R = ΣV = ${rw3K(c.V)} @ x̄ = ${f(c.xR, 2)} ft, e = ${f(c.e, 2)} ft`, V3(xr, yb - La * 0.8), '#c0a020');
     S.rInfo = zn.none ? 'the resultant is outside the base (no contact)' : `contact length ${f(zn.x1 - zn.x0, 2)} ft, q_max = ${f(Math.max(zn.q0, zn.q1), 0)} psf`;
   }
-  const t = document.getElementById('c3d-title'); if (t) t.innerHTML = rw3Title(r, S) + (S.rInfo ? `<div class="c3d-sign">Base reaction: ${S.rInfo}.</div>` : '');
+  const t = document.getElementById('c3d-title'); if (t) t.innerHTML = rw3Title(r, S) + (S.rInfo ? `<div class="c3d-sign">${c && c.kind === 'pile' ? 'Pile reactions' : 'Base reaction'}: ${S.rInfo}.</div>` : '');
+  const lb = document.querySelector('#t3d-bearing + span'); if (lb) lb.textContent = rw3IsPile(r) ? 'Pile reactions' : 'Bearing';   // RWPL: the layer holds the pile reactions on piles
   document.querySelectorAll('input[name="c3d-fac"]').forEach(el => { el.disabled = !S.F; el.checked = (el.value === '1') === S.fac; });
   const fw = document.getElementById('c3d-fac'); if (fw) { fw.classList.toggle('off', !S.F); fw.title = S.F ? '' : 'Factored arrows apply to a factored combination; a single load case, all load cases and the service combination are unfactored.'; }
   const sel = document.getElementById('c3d-sel');
@@ -11081,10 +11133,10 @@ function rwovView(Bd, i0, i1, maxH) {
 function rwovAdd(M, r) {
   if (!M || !M.sections || !r || r.fatal) return M;
   const items = [], fi = (svg, caption) => { if (svg) items.push({ type: 'figure', svg, caption }); };
-  let gname = ''; try { const C = rwbpCombos(r), g = C.list.find(x => x.key === C.gov); gname = g ? g.name.replace(/ — .*$/, '') : ''; } catch (e) { /* none */ }
+  let gname = ''; try { const C = rw3IsPile(r) ? rw3PileCombos(r) : rwbpCombos(r), g = C.list.find(x => x.key === C.gov); gname = g ? g.name.replace(/ — .*$/, '') : ''; } catch (e) { /* none */ }   // RWPL: on piles, the governing pile combination
   const img = rwovSnap3D(r);
   if (img) fi('<img src="' + img + '" alt="3D model of the wall" style="width:100%;max-width:6.2in;max-height:3.2in;object-fit:contain;display:block;margin:0 auto">',
-    '3D model tab[[tab:threed| ↗]] at its default view: the governing bearing combination' + (gname ? ' (' + gname + ')' : '') + ' with its base reaction R and bearing pressure, the load cases as unfactored arrows with their values, every layer on, no section cut, the Reset-view camera. Perspective: not to scale; B = ' + rwrN(r.B, 2) + ' ft, H = ' + rwrN(r.H, 2) + ' ft, a ' + rwrN(wallLen3D(r), 0) + ' ft run of wall.');
+    '3D model tab[[tab:threed| ↗]] at its default view: the governing ' + (rw3IsPile(r) ? 'pile compression combination' : 'bearing combination') + (gname ? ' (' + gname + ')' : '') + (rw3IsPile(r) ? ' with its pile reactions per row' : ' with its base reaction R and bearing pressure') + ', the load cases as unfactored arrows with their values, every layer on, no section cut, the Reset-view camera. Perspective: not to scale; B = ' + rwrN(r.B, 2) + ' ft, H = ' + rwrN(r.H, 2) + ' ft, a ' + rwrN(wallLen3D(r), 0) + ' ft run of wall.');
   else items.push({ type: 'note', text: '3D view not included: ' + RWOV.why + '. The 3D model tab[[tab:threed| ↗]] shows it on screen.' });
   let Bd = null; try { Bd = rwdwBuild(r); } catch (e) { Bd = null; }
   const sh = id => Bd && Bd.S ? Bd.S.find(s => s.id === id) : null;

@@ -461,22 +461,30 @@ const REF_4D = {
         ALL: { 'SS': [1500, 1000, 165, 375, 950, 1500000, 550000], 'No.1': [1350, 900, 165, 375, 825, 1500000, 550000], 'No.2': [850, 550, 165, 375, 525, 1200000, 440000] },
     },
 };
-// Table 4D footnote: Beams and Stringers loaded on the wide face (flat use), factor on Fb by grade (E, Emin and the
-// other values 1.00). Applied to Southern Pine timbers too (conservative; SP has no BS / PT split). PT: 1.00.
+// Table 4D footnote: Beams and Stringers loaded on the wide face (flat use), factor on Fb by grade (E and Emin: T4D_FLAT_E
+// below, since TBF1; the other values 1.00). Applied to Southern Pine timbers too (conservative; SP has no BS / PT split). PT: 1.00.
 const T4D_FLAT_FB = { 'SS': 0.86, 'No.1': 0.74, 'No.2': 1.00 };
+// Table 4D footnote, flat use of Beams and Stringers: E and Emin factor by grade (fix log TBF1, 2026-11-07; values as best known,
+// verify against NDS 2018 Supplement Table 4D (not in references)). Applied with the Fb factor above (same members).
+const T4D_FLAT_E = { 'SS': 1.00, 'No.1': 0.90, 'No.2': 1.00 };
 // Structural glued laminated softwood timber, bending about x-x (load perpendicular to the wide faces of the laminations).
 // NDS Supplement 2018 Table 5A (stress classes) and Table 5A Expanded (combination symbols) (Phase 2, fix log R3).
 // v = [Fbx+ (tension zone stressed in tension), Fbx- (compression zone stressed in tension), Fc_perp,x (tension face),
-//      Fc_perp,x (compression face), Fvx, Ex, Ex,min] psi. grp: species group fixed by the combination (null = stress class).
+//      Fc_perp,x (compression face), Fvx, Ex, Ex,min, Ey,min] psi. grp: species group fixed by the combination (null = stress class).
+// Ey,min (bending about y-y; used for beam stability F_bE, NDS 3.3.3.8): added 2026-11-07 (fix log TBE1), values as recalled,
+// verify against NDS 2018 Supplement Table 5A / 5A Expanded (not in references).
 const GLULAM_5A = {
-    '20F-1.5E':  { table: '5A', grp: null, v: [2000, 1100, 425, 425, 210, 1500000, 790000] },
-    '24F-1.7E':  { table: '5A', grp: null, v: [2400, 1450, 500, 500, 210, 1700000, 900000] },
-    '24F-1.8E':  { table: '5A', grp: null, v: [2400, 1450, 650, 650, 265, 1800000, 950000] },
-    '24F-V4 DF': { table: '5A Expanded', grp: 'DF', v: [2400, 1850, 650, 650, 265, 1800000, 950000] },
-    '24F-V8 DF': { table: '5A Expanded', grp: 'DF', v: [2400, 2400, 650, 650, 265, 1800000, 950000] },
-    '24F-V3 SP': { table: '5A Expanded', grp: 'SP', v: [2400, 2000, 740, 740, 300, 1800000, 950000] },
-    '24F-V5 SP': { table: '5A Expanded', grp: 'SP', v: [2400, 2400, 740, 740, 300, 1700000, 900000] },
+    '20F-1.5E':  { table: '5A', grp: null, v: [2000, 1100, 425, 425, 210, 1500000, 790000, 630000] },
+    '24F-1.7E':  { table: '5A', grp: null, v: [2400, 1450, 500, 500, 210, 1700000, 900000, 690000] },
+    '24F-1.8E':  { table: '5A', grp: null, v: [2400, 1450, 650, 650, 265, 1800000, 950000, 850000] },
+    '24F-V4 DF': { table: '5A Expanded', grp: 'DF', v: [2400, 1850, 650, 650, 265, 1800000, 950000, 850000] },
+    '24F-V8 DF': { table: '5A Expanded', grp: 'DF', v: [2400, 2400, 650, 650, 265, 1800000, 950000, 850000] },
+    '24F-V3 SP': { table: '5A Expanded', grp: 'SP', v: [2400, 2000, 740, 740, 300, 1800000, 950000, 850000] },
+    '24F-V5 SP': { table: '5A Expanded', grp: 'SP', v: [2400, 2400, 740, 740, 300, 1700000, 900000, 790000] },
 };
+// Custom glulam without an entered Ey,min (every file saved before TBE1): Ey,min = Ex,min x the lowest Ey,min/Ex,min ratio of the
+// table above (conservative assumption, fix log TBE1; a REVIEW note is shown).
+const GL_EYMIN_RATIO = Math.min(...Object.values(GLULAM_5A).map(s => s.v[7] / s.v[6]));
 // Glulam species groups: lamination thickness (in.), volume-factor exponent x (NDS 5.3.6: 20 for Southern Pine, 10 otherwise),
 // standard net widths (in.) and the density used for self-weight (tool value, pcf).
 const GLULAM_GRP = {
@@ -581,7 +589,7 @@ function tbcDefaultModel() {
             manualProps: { Fb: 900, Fv: 180, E: 1600000, Emin: 580000, FcPerp: 625, G: 0.50, dens: 35, cfIncluded: false },
             customMaterials: {}, notch: 0, costPerBF: 1.50,
             glulam: { combo: '24F-1.8E', grp: 'DF', b: 5.125, nLam: 12, customSize: false, customB: 5.125, customD: 18,
-                custom: { Fbp: null, Fbn: null, Fv: null, Fcp: null, E: null, Emin: null, dens: 35 } },
+                custom: { Fbp: null, Fbn: null, Fv: null, Fcp: null, E: null, Emin: null, Eymin: null, dens: 35 } },
             scl: { kind: 'LVL', name: '', b: 1.75, d: 11.875, Fb: null, Fv: null, Fcp: null, E: null, Emin: null, n: null, dref: 12, cvMax: 1.0, dens: null },
         },
         design: {
@@ -723,15 +731,19 @@ function tbcRun(m) {
     if (isGL) {
         if (glC.combo === 'Custom') {
             const cv = (glC.custom && typeof glC.custom === 'object') ? glC.custom : {};
-            ref = { Fb: num(cv.Fbp), Fbn: num(cv.Fbn), Ft: null, Fv: num(cv.Fv), Fcp: num(cv.Fcp), Fc: null, E: num(cv.E), Emin: num(cv.Emin) };
+            ref = { Fb: num(cv.Fbp), Fbn: num(cv.Fbn), Ft: null, Fv: num(cv.Fv), Fcp: num(cv.Fcp), Fc: null, E: num(cv.E), Emin: num(cv.Emin), Eymin: num(cv.Eymin) };
             dens = num(cv.dens);
             src = `Custom glulam${glGrp ? ', ' + glGrp.name : ''} (user-entered reference values)`;
             if (![ref.Fb, ref.Fbn, ref.Fv, ref.Fcp, ref.E, ref.Emin].every(v => v > 0)) errors.push('Enter all glulam reference design values (Fbx+, Fbx−, Fvx, Fc⊥x, Ex, Ex,min) greater than zero.');
+            else if (!(ref.Eymin > 0)) {   // TBE1: never an optimistic default for Ey,min
+                ref.Eymin = ref.Emin * GL_EYMIN_RATIO; ref.EyminAssumed = true;
+                adv.push(`REVIEW: custom glulam has no Ey,min (beam stability uses Ey,min, NDS 3.3.3.8). Assumed Ey,min = Ex,min × ${GL_EYMIN_RATIO.toFixed(4)} (the lowest Ey,min/Ex,min of the built-in Table 5A values) = ${Math.round(ref.Eymin)} psi. Enter Ey,min from NDS Supplement Table 5A or the manufacturer.`);
+            }
             if (ld.selfWeight && !(dens >= 0)) errors.push('Enter the density (pcf) for self-weight, or turn self-weight off.');
         } else if (!glSpec) errors.push(`Unknown glulam combination "${glC.combo}".`);
         else if (glGrp) {
             const v = glSpec.v;
-            ref = { Fb: v[0], Fbn: v[1], Ft: null, Fv: v[4], Fcp: v[2], Fcpc: v[3], Fc: null, E: v[5], Emin: v[6] };
+            ref = { Fb: v[0], Fbn: v[1], Ft: null, Fv: v[4], Fcp: v[2], Fcpc: v[3], Fc: null, E: v[5], Emin: v[6], Eymin: v[7] };
             dens = glGrp.dens;
             src = `NDS Supplement 2018 Table ${glSpec.table}, ${glC.combo}${glSpec.grp ? '' : ' (' + glGrp.name + ')'}`;
             refTable = { table: glSpec.table, key: 'GL|' + glC.combo };
@@ -866,6 +878,7 @@ function tbcRun(m) {
     if (dz.repetitive && cat === 'dim' && spacing > 24) notes.push('Cr requires spacing ≤ 24 in. (NDS 4.3.9); Cr = 1.0 used.');
     if (dz.repetitive && cat === 'scl' && spacing > 24) notes.push('Cr requires spacing ≤ 24 in. (NDS 8.3.7); Cr = 1.0 used.');
     const Cfu = (flat && cat === 'dim') ? T4A_CFU[wg][thick4 ? 1 : 0] : (flat && cat === 'timber' && !userVals && cls4D !== 'PT') ? T4D_FLAT_FB[mt.grade] : 1.0;
+    const CfuE = (flat && cat === 'timber' && !userVals && cls4D !== 'PT') ? (T4D_FLAT_E[mt.grade] || 1.0) : 1.0;   // TBF1: E, Emin (Table 4D footnote)
     // LRFD (NDS 2018 Appendix N): KF and phi multiply the reference values (exactly 1 in ASD)
     const KF = lrfd ? LRFD_KF : { Fb: 1, Fv: 1, Fcp: 1, Emin: 1 };
     const PHI = lrfd ? LRFD_PHI : { Fb: 1, Fv: 1, Fcp: 1, Emin: 1 };
@@ -878,8 +891,10 @@ function tbcRun(m) {
     const lb = lbs[j0], Cb = Cbs[j0];
 
     // --- Beam stability (NDS 3.3.3), per span; top edge for M > 0, bottom edge for M < 0 ---
-    const Emin_p = ref.Emin * CM.E * Ct.E * Ci.E * KF.Emin * PHI.Emin;
-    const E_p = ref.E * CM.E * Ct.E * Ci.E;
+    // TBE1: glulam bent about x-x buckles laterally about y-y, so F_bE uses Ey,min (NDS 3.3.3.8, Supplement Table 5A); E_x stays in deflection
+    const EminStab = isGL ? ref.Eymin : ref.Emin;
+    const Emin_p = EminStab * CM.E * Ct.E * Ci.E * CfuE * KF.Emin * PHI.Emin;
+    const E_p = ref.E * CM.E * Ct.E * Ci.E * CfuE;
     const hasPL = pls.some(p => p.mag !== 0);
     const fn1 = hasPL || !simple;   // Table 3.3.3 footnote 1 general rule (loading not specified / continuous / cantilever)
     const leFor = (lu) => {
@@ -1153,7 +1168,13 @@ function tbcRun(m) {
         if (simple) dType[t] = xs.map(x => defl(wu[t], P, x));
         else { const sol = beamG(wu[t], P); dType[t] = xs.map((x, k) => deflG(wu[t], P, sol, Math.min(spanIdx[k], nS - 1), x)); }
     });
-    const Kcr = num(dz.creep) > 0 ? dz.creep : 1.5;
+    // Creep factor (NDS 3.5.2; IBC 2018 Table 1604.3 footnote d): 1.5 seasoned / dry service, 2.0 wet service (TBK1, 2026-11-07).
+    // Blank / 0 = by service condition. With Wet service, an entered 1.5 (the dry default, stored in every saved file) is read as
+    // that default and 2.0 is used, with a note (decision pending engineer review: conservative). Any other entered value is used as entered.
+    const KcrIn = num(dz.creep) > 0 ? dz.creep : 0;
+    const Kcr = wet && (KcrIn === 0 || KcrIn === 1.5) ? 2.0 : (KcrIn || 1.5);
+    if (wet && KcrIn === 1.5) adv.push('Wet service: creep factor K_cr = 2.0 used (NDS 3.5.2, verify against NDS 2018 (not in references); IBC 2018 Table 1604.3 footnote d). The K_cr input holds 1.5, the dry-service default used for wet service too before 2026-11-07; enter another value to override.');
+    if (!wet && cat === 'timber' && KcrIn !== 2.0) adv.push('Timbers (5 in. and thicker) are often surfaced green: if this member is unseasoned (not dry at installation), NDS 3.5.2 gives K_cr = 2.0. Enter 2.0 in the creep factor if so.');
     const maxAbs = (arr) => arr.reduce((mx, v) => Math.max(mx, Math.abs(v)), 0);
     // per span: limits use the span length; a cantilever uses twice its length (IBC Table 1604.3 footnote h)
     const dSpan = Ls.map((Li, i) => {
@@ -1196,7 +1217,7 @@ function tbcRun(m) {
 
     return {
         ...base, ok: true, bw, dep, A, S, I, thick4, cfIncluded,
-        CF, CFnote, CM, Ct, Ci, Cr, Cfu, Cb, lb, lu, luD, le, leRule, RB, stabilityApplies, Emin_p, E_p, FbE,
+        CF, CFnote, CM, Ct, Ci, Cr, Cfu, CfuE, Cb, lb, lu, luD, le, leRule, RB, stabilityApplies, Emin_p, EminStab, E_p, FbE,
         notch, hasNotch, dn, Cn, trib, w_self, wu, combos, gov,
         defl: defl_,
         diag: { key: dc.key, name: dc.name, shearData, momentData, maxV, maxM },
@@ -1300,7 +1321,7 @@ function tbcSanitize(d) {
     m.material.glulam = {
         combo: st(gl.combo, dgl.combo, [...Object.keys(GLULAM_5A), 'Custom']), grp: st(gl.grp, dgl.grp, Object.keys(GLULAM_GRP)),
         b: nb(gl.b, dgl.b), nLam: nb(gl.nLam, dgl.nLam), customSize: bo(gl.customSize, false), customB: nb(gl.customB, dgl.customB), customD: nb(gl.customD, dgl.customD),
-        custom: { Fbp: nb(glc.Fbp, null), Fbn: nb(glc.Fbn, null), Fv: nb(glc.Fv, null), Fcp: nb(glc.Fcp, null), E: nb(glc.E, null), Emin: nb(glc.Emin, null), dens: nb(glc.dens, dgl.custom.dens) },
+        custom: { Fbp: nb(glc.Fbp, null), Fbn: nb(glc.Fbn, null), Fv: nb(glc.Fv, null), Fcp: nb(glc.Fcp, null), E: nb(glc.E, null), Emin: nb(glc.Emin, null), Eymin: nb(glc.Eymin, null), dens: nb(glc.dens, dgl.custom.dens) },
     };
     m.material.scl = {
         kind: st(sc.kind, dsc.kind, Object.keys(SCL_KINDS)), name: st(sc.name, ''), b: nb(sc.b, dsc.b), d: nb(sc.d, dsc.d),
@@ -1746,7 +1767,7 @@ function refreshInputs() {
 function refLineHTML() {
   if (!R || !R.ref) return '';
   const r = R.ref;
-  if (R.isGL) return `<b>${esc(R.src)}</b>${R.userVals ? '' : ' ' + VFY}<br>Fbx+ ${g4(r.Fb)}, Fbx− ${g4(r.Fbn)}, Fvx ${g4(r.Fv)}, Fc⊥x ${g4(r.Fcp)}${r.Fcpc !== undefined ? ' (tension face; compression face ' + g4(r.Fcpc) + ')' : ''}, Ex ${g4(r.E)}, Ex,min ${g4(r.Emin)} psi`;
+  if (R.isGL) return `<b>${esc(R.src)}</b>${R.userVals ? '' : ' ' + VFY}<br>Fbx+ ${g4(r.Fb)}, Fbx− ${g4(r.Fbn)}, Fvx ${g4(r.Fv)}, Fc⊥x ${g4(r.Fcp)}${r.Fcpc !== undefined ? ' (tension face; compression face ' + g4(r.Fcpc) + ')' : ''}, Ex ${g4(r.E)}, Ex,min ${g4(r.Emin)}, Ey,min ${g4(r.Eymin)}${r.EyminAssumed ? ' (assumed, REVIEW)' : ''} psi`;
   return `<b>${esc(R.src)}</b>${R.userVals ? '' : ' ' + VFY}<br>Fb ${g4(r.Fb)}, Ft ${r.Ft ?? '—'}, Fv ${g4(r.Fv)}, Fc⊥ ${g4(r.Fcp)}, Fc ${r.Fc ?? '—'}, E ${g4(r.E)}, Emin ${g4(r.Emin)} psi`;
 }
 
@@ -1890,8 +1911,8 @@ function buildGlulamInputs(body, mt) {
   if (gl.combo === 'Custom') {
     body.appendChild(el('div', 'hint', '<b>Custom glulam reference values (bending about x–x)</b>'));
     [['Fbp', 'F<sub>bx</sub><sup>+</sup> (tension zone in tension)', 'psi'], ['Fbn', 'F<sub>bx</sub><sup>−</sup> (compression zone in tension)', 'psi'], ['Fv', 'F<sub>vx</sub>', 'psi'], ['Fcp', 'F<sub>c⊥x</sub> (face on the supports)', 'psi'],
-     ['E', 'E<sub>x</sub>', 'psi'], ['Emin', 'E<sub>x,min</sub>', 'psi'], ['dens', 'Density (self-weight)', 'pcf']].forEach(([k, l, u]) =>
-      fRow(body, l, numIn(() => gl.custom[k], v => { gl.custom[k] = v; }, 'glc_' + k), u));
+     ['E', 'E<sub>x</sub>', 'psi'], ['Emin', 'E<sub>x,min</sub>', 'psi'], ['Eymin', 'E<sub>y,min</sub> (beam stability)', 'psi'], ['dens', 'Density (self-weight)', 'pcf']].forEach(([k, l, u]) =>
+      fRow(body, l, numIn(() => gl.custom[k], v => { gl.custom[k] = v; }, 'glc_' + k), u, k === 'Eymin' ? 'Used for F<sub>bE</sub> (NDS 3.3.3.8). Blank: E<sub>x,min</sub> × ' + GL_EYMIN_RATIO.toFixed(4) + ' is assumed (conservative) and a REVIEW note is shown.' : undefined));
   }
   const rl = el('div', 'note small'); rl.id = 'refLine'; body.appendChild(rl);
   body.appendChild(el('div', 'hint', 'Straight, prismatic members, bending about x–x (load perpendicular to the wide faces of the laminations). F<sub>bx</sub><sup>+</sup> applies to positive moment (bottom tension laminations in tension) and F<sub>bx</sub><sup>−</sup> to negative moment (NDS Supplement Table 5A footnotes). Flat use (y–y), curved and tapered members are not covered.'));
@@ -1987,7 +2008,7 @@ function buildFactorsPane(P) {
     body.appendChild(el('div', 'hint', 'Negative moment occurs over interior supports, on cantilevers and under net uplift; its compression edge is the bottom edge. An inflection point is not a brace point. Files from the earlier (pre-2026-10-10) version of this tool open with the bottom edge "At supports only" (engineer\'s decision, fix log R2); "Same as top edge" is how that version worked and can still be chosen.'));
   }, { noNum: true });
   mkSec(P, 'inDefl', 'Deflection', body => {
-    fRow(body, 'Creep factor K<sub>cr</sub>', numIn(() => dz.creep, v => { dz.creep = v; }, 'creep'), '', 'Applied to the dead-load deflection (NDS 3.5.2: 1.5 for seasoned lumber in dry service). 0 or blank = 1.5.');
+    fRow(body, 'Creep factor K<sub>cr</sub>', numIn(() => dz.creep, v => { dz.creep = v; }, 'creep'), '', 'Applied to the dead-load deflection (NDS 3.5.2: 1.5 for seasoned lumber, glulam and SCL in dry service; 2.0 for unseasoned lumber or wet service). 0 or blank = by service condition (1.5 dry, 2.0 wet). With Wet service ticked, 1.5 is read as the old default and 2.0 is used; any other value is used as entered.');
     fRow(body, 'Live/snow limit L /', numIn(() => dz.deflLL, v => { dz.deflLL = v; }, 'deflLL'), '');
     fRow(body, 'Total limit L /', numIn(() => dz.deflTL, v => { dz.deflTL = v; }, 'deflTL'), '', 'IBC Table 1604.3 (user-editable). For a cantilever, L = twice the cantilever length (IBC Table 1604.3, footnote h).');
   }, { noNum: true });
@@ -2119,7 +2140,7 @@ function fbFacs(c, CL, CV) {
 }
 function fvFacs(c) { const f = [tfFac(c), ['C_M', g4(R.CM.Fv)], ['C_t', g4(R.Ct.Fv)]]; if (sawnOnly()) f.push(['C_i', g4(R.Ci.Fv)]); return f.concat(lrfdFac('Fv')); }
 function fcpFacs(j) { const f = [['C_M', g4(R.CM.Fcp)], ['C_t', g4(R.Ct.Fcp)]]; if (sawnOnly()) f.push(['C_i', g4(R.Ci.Fcp)]); f.push(['C_b', f3(R.Cbs[j])]); return f.concat(lrfdFac('Fcp')); }
-function eFacs(min) { const f = [['C_M', g4(R.CM.E)], ['C_t', g4(R.Ct.E)]]; if (sawnOnly()) f.push(['C_i', g4(R.Ci.E)]); return min ? f.concat(lrfdFac('Emin')) : f; }
+function eFacs(min) { const f = [['C_M', g4(R.CM.E)], ['C_t', g4(R.Ct.E)]]; if (sawnOnly()) f.push(['C_i', g4(R.Ci.E)]); if (R.CfuE !== 1) f.push(['C_{fu,E}', g4(R.CfuE)]); return min ? f.concat(lrfdFac('Emin')) : f; }
 // one TeX line: symbols = values = result
 function facEq1(lhs, base, facs, res) { const e = facEq(lhs, base, facs, res); return e[0] + ' = ' + e[1].slice(lhs.length + 3); }
 // two TeX lines: symbols, then values = result
@@ -2264,7 +2285,7 @@ function buildSchem(pg) {
       ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' : 'none'], ['Point loads within d of a support (shear)', dz.shearXd ? 'times x/d (NDS 3.4.3.1(b))' : 'full value'],
       ['Lateral support, top edge', dz.latTop === 'Supports' ? `at supports only, l<sub>u</sub> = ${dz.luTop > 0 ? g4(dz.luTop) + ' ft' : 'span length'}` : 'continuous'],
       ['Lateral support, bottom edge', dz.latBot === 'same' ? 'same as top edge (earlier tool versions)' : dz.latBot === 'Supports' ? `at supports only, l<sub>u</sub> = ${dz.luBot > 0 ? g4(dz.luBot) + ' ft' : 'span length'}` : 'continuous'],
-      ['Creep factor K<sub>cr</sub>', g4(dz.creep)], ['Deflection limits', `L/${g4(dz.deflLL)} live/snow, L/${g4(dz.deflTL)} total`], ['Design method', dz.method === 'LRFD' ? `LRFD (NDS 2018 Appendix N; floor live load from ${dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8'})` : 'ASD (NDS 2018)']);
+      ['Creep factor K<sub>cr</sub>', R.ok && dz.moisture === 'Wet' && R.Kcr !== dz.creep ? g4(R.Kcr) + ' used (' + (dz.creep > 0 ? g4(dz.creep) + ' entered; ' : 'blank; ') + 'wet service, NDS 3.5.2)' : g4(dz.creep)], ['Deflection limits', `L/${g4(dz.deflLL)} live/snow, L/${g4(dz.deflTL)} total`], ['Design method', dz.method === 'LRFD' ? `LRFD (NDS 2018 Appendix N; floor live load from ${dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8'})` : 'ASD (NDS 2018)']);
     body.appendChild(tblEl(['Item', 'Value'], rows.map(r => [r[0], { h: r[1] }]).map(r => [{ h: r[0] }, r[1]]), { left: [0, 1] }));
   });
 }
@@ -2375,7 +2396,7 @@ function factorRows() {
   ];
   if (sawnOnly()) rows.push(
     ['C<sub>F</sub> size', g4(R.CF), '—', '—', '—', esc(R.CFnote), (R.cat === 'dim' ? (R.cfIncluded ? (builtIn ? 'NDS Supplement Table 4B ' + VFY : 'included in the entered F<sub>b</sub>') : 'NDS Supplement Table 4A ' + VFY) : 'NDS 4.3.6.2, Eq. (12/d)^(1/9)')],
-    ['C<sub>fu</sub> flat use', g4(R.Cfu), '—', '—', '—', R.flat ? 'flat use' + (R.cat === 'timber' ? (R.cls4D === 'PT' ? ' (Posts and Timbers: 1.00)' : ' (Table 4D Beams and Stringers factor, by grade)') : '') : 'edgewise', R.flat ? (R.cat === 'timber' ? 'NDS Supplement Table 4D footnote ' : 'NDS Supplement Table 4A/4B ') + VFY : 'NDS 4.3.7'],
+    ['C<sub>fu</sub> flat use', g4(R.Cfu), '—', '—', R.cat === 'timber' && R.flat ? g4(R.CfuE) : '—', R.flat ? 'flat use' + (R.cat === 'timber' ? (R.cls4D === 'PT' ? ' (Posts and Timbers: 1.00)' : ' (Table 4D Beams and Stringers factors by grade, on F<sub>b</sub> and on E, E<sub>min</sub>)') : '') : 'edgewise', R.flat ? (R.cat === 'timber' ? 'NDS Supplement Table 4D footnote ' : 'NDS Supplement Table 4A/4B ') + VFY : 'NDS 4.3.7'],
     ['C<sub>i</sub> incising', g4(R.Ci.Fb), g4(R.Ci.Fv), g4(R.Ci.Fcp), g4(R.Ci.E), M.design.incising ? 'incised' : 'not incised', 'NDS 4.3.8, Table 4.3.8 ' + VFY],
     ['C<sub>r</sub> repetitive member', g4(R.Cr), '—', '—', '—', M.design.repetitive ? (R.Cr > 1 ? 'repetitive, s ≤ 24 in.' : 'not applicable (see notes)') : 'not repetitive', (R.isSCL ? 'NDS 8.3.7 ' : 'NDS 4.3.9 ') + VFY]);
   else rows.push(R.isGL
@@ -2422,8 +2443,8 @@ function buildDV(pg) {
     calc(body, { title: 'Bearing: F′c⊥ at support ' + nodeN(gc.gcJ), ref: tbl + (isLRFD() ? ' (no λ)' : ' (no CD)'),
       lines: [facEq1("F'_{c\\perp}", ['F_{c\\perp}', g4(r.Fcp)], fcpFacs(gc.gcJ), `${f1(gc.Fcp_p)}\\ \\text{psi}`)], result: `F′c⊥ = ${f1(gc.Fcp_p)} psi` });
     calc(body, { title: 'Stiffness: E′ and E′min', ref: tbl,
-      lines: [facEq1("E'", ['E', g4(r.E)], eFacs(false), `${f0(R.E_p)}\\ \\text{psi}`), facEq1("E'_{min}", ['E_{min}', g4(r.Emin)], eFacs(true), `${f0(R.Emin_p)}\\ \\text{psi}`)],
-      result: `E′ = ${f0(R.E_p)} psi, E′min = ${f0(R.Emin_p)} psi` + (isLRFD() ? ' (E′min includes K<sub>F</sub> φ<sub>s</sub>; E′ for deflection at service loads)' : '') });
+      lines: [facEq1("E'", ['E', g4(r.E)], eFacs(false), `${f0(R.E_p)}\\ \\text{psi}`), facEq1("E'_{min}", R.isGL ? ['E_{y,min}', g4(R.EminStab)] : ['E_{min}', g4(r.Emin)], eFacs(true), `${f0(R.Emin_p)}\\ \\text{psi}`)],
+      result: `E′ = ${f0(R.E_p)} psi, E′min = ${f0(R.Emin_p)} psi` + (R.isGL ? ' (glulam: E′min from E<sub>y,min</sub> for beam stability, NDS 3.3.3.8 ' + VFY + '; E′ from E<sub>x</sub> for deflection)' : '') + (isLRFD() ? ' (E′min includes K<sub>F</sub> φ<sub>s</sub>; E′ for deflection at service loads)' : '') });
   });
 }
 
@@ -2460,7 +2481,7 @@ function clBlock(body, c, i, sign) {
       T`C_L = \frac{1 + F_{bE}/F_b^*}{1.9} - \sqrt{\left[\frac{1 + F_{bE}/F_b^*}{1.9}\right]^2 - \frac{F_{bE}/F_b^*}{0.95}} = ${f3(CL)}`],
     where: [['l_u', `unbraced length of the ${st.edge} edge (${(sign > 0 ? M.design.luTop : M.design.luBot) > 0 ? 'entered' : 'span length'})`, f1(s.lu), 'in.', 'input'],
       ['l_e', 'effective length: ' + esc(s.leRule), f1(s.le), 'in.', 'NDS Table 3.3.3' + (R.fn1 ? ' footnote 1' : '')],
-      ['F_{bE}/F_b^*', '', f3(r), '', ''], ['E\'_{min}', 'adjusted E<sub>min</sub>' + (isLRFD() ? ' (incl. K<sub>F</sub> φ<sub>s</sub>, LRFD)' : ''), f0(R.Emin_p), 'psi', tbcLink('dvAdj', 'Design Values tab')],
+      ['F_{bE}/F_b^*', '', f3(r), '', ''], ['E\'_{min}', 'adjusted E<sub>min</sub>' + (R.isGL ? ' (glulam: from E<sub>y,min</sub>, NDS 3.3.3.8)' : '') + (isLRFD() ? ' (incl. K<sub>F</sub> φ<sub>s</sub>, LRFD)' : ''), f0(R.Emin_p), 'psi', tbcLink('dvAdj', 'Design Values tab')],
       ...(sawnOnly() ? [] : [['F_b^*', 'all factors except C_L, C_V' + (R.isGL ? ' (and C_fu)' : ''), f0(Fbs), 'psi', 'NDS 3.3.3.8']])],
     result: `C<sub>L</sub> = ${f3(CL)}` + (s.RB > 50 ? ` \u2014 R<sub>B</sub> = ${f2(s.RB)} > 50: not permitted (NDS 3.3.3.7)` : '') });
 }
@@ -2614,7 +2635,7 @@ function buildDefl(pg) {
       where: [['L', d.perSpan[d.spanLL].cant ? 'twice the cantilever length (IBC Table 1604.3 footnote h)' : 'span length', f1(d.perSpan[d.spanLL].Lref), 'in.', 'IBC Table 1604.3 ' + VFY]], result: `Live/snow deflection ratio ${f3(d.r_dLL)} (L/${f0(d.perSpan[d.spanLL].Lref / d.Dtr)})` });
     calc(body, { title: 'Total deflection with creep' + (R.nS > 1 ? ' (' + spanLab(d.spanTL) + ')' : ''), ref: 'NDS 3.5.2, Eq. 3.5-1; IBC Table 1604.3', status: stCls(d.r_dTL),
       lines: [T`\Delta_T = K_{cr}\,\Delta_D + \Delta_{LL} = ${g4(d.Kcr)}\,\Delta_D + \Delta(${d.totName}) = ${f3(d.Dtot)}\ \text{in.}`, T`\frac{\Delta_T}{L/${g4(d.TLdiv)}} = \frac{${f3(d.Dtot)}}{${f3(d.TLlim)}} = ${f3(d.r_dTL)}`],
-      where: [['K_{cr}', 'creep factor on the dead-load deflection', g4(d.Kcr), '', 'NDS 3.5.2 (1.5 seasoned, dry) ' + VFY], ['\\Delta_D', 'dead-load deflection (largest, whole beam)', f3(d.dD), 'in.', '']],
+      where: [['K_{cr}', 'creep factor on the dead-load deflection', g4(d.Kcr), '', 'NDS 3.5.2 (1.5 seasoned, dry; 2.0 wet or unseasoned) ' + VFY], ['\\Delta_D', 'dead-load deflection (largest, whole beam)', f3(d.dD), 'in.', '']],
       result: `Total deflection ratio ${f3(d.r_dTL)} (L/${f0(d.perSpan[d.spanTL].Lref / d.Dtot)})` });
     body.appendChild(el('div', 'hint', 'The total check uses K<sub>cr</sub>·Δ<sub>D</sub> + Δ<sub>LL</sub> against the total limit (fix log F10, O7: K<sub>cr</sub> applies to dead load only; no sustained live load).'));
   });
@@ -2659,14 +2680,14 @@ function buildRefv(pg) {
       return { cls: key === inUse ? 'inuse' : '', cells: [DEFAULT_SPECIES[sp].name, cn[cl], (GRADES_DB[gr] || {}).name, ...a.map(v => String(v)), 'Table 4D', { h: '<b>' + conf + ': VERIFY</b> ' + VFY + (key === inUse ? ' <span class="badge use">in use</span>' : '') }] };
     })));
     body.appendChild(tblEl(['Species', 'Size class', 'Grade', 'F<sub>b</sub>', 'F<sub>t</sub>', 'F<sub>v</sub>', 'F<sub>c⊥</sub>', 'F<sub>c</sub>', 'E', 'E<sub>min</sub>', 'Table', 'Confidence'], rows, { left: [0, 1, 2, 11] }));
-    body.appendChild(el('div', 'hint', 'psi. Added in Phase 2 (fix log R3, open item O3). Size class from the section: Beams and Stringers when d − b > 2 in., else Posts and Timbers. C<sub>F</sub> = (12/d)<sup>1/9</sup> for d > 12 in. (NDS 4.3.6.2); C<sub>r</sub> does not apply. Flat use (load on the wide face), Table 4D footnote: Beams and Stringers F<sub>b</sub> × ' + T4D_FLAT_FB['SS'] + ' (SS), ' + T4D_FLAT_FB['No.1'] + ' (No.1), ' + T4D_FLAT_FB['No.2'].toFixed(2) + ' (No.2) ' + VFY + '; Posts and Timbers 1.00; Southern Pine timbers take the Beams and Stringers factors (conservative). Wet service: F<sub>c⊥</sub> × 0.67 only. Spruce-Pine-Fir timbers, Dense grades and Stud are not built in (Manual values).'));
+    body.appendChild(el('div', 'hint', 'psi. Added in Phase 2 (fix log R3, open item O3). Size class from the section: Beams and Stringers when d − b > 2 in., else Posts and Timbers. C<sub>F</sub> = (12/d)<sup>1/9</sup> for d > 12 in. (NDS 4.3.6.2); C<sub>r</sub> does not apply. Flat use (load on the wide face), Table 4D footnote: Beams and Stringers F<sub>b</sub> × ' + T4D_FLAT_FB['SS'] + ' (SS), ' + T4D_FLAT_FB['No.1'] + ' (No.1), ' + T4D_FLAT_FB['No.2'].toFixed(2) + ' (No.2), and E, E<sub>min</sub> × ' + T4D_FLAT_E['SS'].toFixed(2) + ' (SS), ' + T4D_FLAT_E['No.1'].toFixed(2) + ' (No.1), ' + T4D_FLAT_E['No.2'].toFixed(2) + ' (No.2; fix log TBF1) ' + VFY + '; Posts and Timbers 1.00; Southern Pine timbers take the Beams and Stringers factors (conservative). Wet service: F<sub>c⊥</sub> × 0.67 only. Spruce-Pine-Fir timbers, Dense grades and Stud are not built in (Manual values).'));
   });
   mkSec(pg, 'rvGL', 'NDS Supplement 2018 Table 5A — structural glued laminated softwood timber (bending about x–x)', body => {
     const rows = Object.keys(GLULAM_5A).map(k => {
       const s = GLULAM_5A[k], v = s.v, key = 'GL|' + k;
       return { cls: key === inUse ? 'inuse' : '', cells: [k, s.grp ? GLULAM_GRP[s.grp].name : 'any (stress class)', ...v.map(x => String(x)), 'Table ' + s.table, { h: '<b>' + (s.grp === 'SP' ? 'Low-medium' : 'Medium') + ': VERIFY</b> ' + VFY + (key === inUse ? ' <span class="badge use">in use</span>' : '') }] };
     });
-    body.appendChild(tblEl(['Combination', 'Species', 'F<sub>bx</sub><sup>+</sup>', 'F<sub>bx</sub><sup>−</sup>', 'F<sub>c⊥x</sub> tension face', 'F<sub>c⊥x</sub> compr. face', 'F<sub>vx</sub>', 'E<sub>x</sub>', 'E<sub>x,min</sub>', 'Table', 'Confidence'], rows, { left: [0, 1, 10] }));
+    body.appendChild(tblEl(['Combination', 'Species', 'F<sub>bx</sub><sup>+</sup>', 'F<sub>bx</sub><sup>−</sup>', 'F<sub>c⊥x</sub> tension face', 'F<sub>c⊥x</sub> compr. face', 'F<sub>vx</sub>', 'E<sub>x</sub>', 'E<sub>x,min</sub>', 'E<sub>y,min</sub> (stability)', 'Table', 'Confidence'], rows, { left: [0, 1, 11] }));
     body.appendChild(tblEl(['Species group', 'Lamination t (in.)', 'x (C<sub>V</sub>)', 'Standard widths (in.)', 'Density (pcf, self-weight)'], Object.keys(GLULAM_GRP).map(k => { const g = GLULAM_GRP[k]; return [g.name, String(g.lam), String(g.x), g.widths.join(', '), String(g.dens) + ' (tool value)']; }), { left: [0] }));
     body.appendChild(el('div', 'hint', 'psi. F<sub>bx</sub><sup>+</sup> for positive moment, F<sub>bx</sub><sup>−</sup> for negative moment (unbalanced layups; balanced layups have F<sub>bx</sub><sup>−</sup> = F<sub>bx</sub><sup>+</sup>, use Custom values). Bearing uses the tension-face F<sub>c⊥x</sub>. Wet service C<sub>M</sub> (Table 5A footnote): F<sub>b</sub> ' + GLULAM_CM.Fb + ', F<sub>v</sub> ' + GLULAM_CM.Fv + ', F<sub>c⊥</sub> ' + GLULAM_CM.Fcp + ', E and E<sub>min</sub> ' + GLULAM_CM.E + ' ' + VFY + '. Volume factor C<sub>V</sub> = (21/L)<sup>1/x</sup>(12/d)<sup>1/x</sup>(5.125/b)<sup>1/x</sup> ≤ 1.0 (NDS 5.3.6) ' + VFY + '; the lesser of C<sub>L</sub> and C<sub>V</sub> applies. Notches: C<sub>vr</sub> = ' + GLULAM_CVR + ' (NDS 5.3.10) and the tension-face end notch ≤ the lesser of d/10 and 3 in. (NDS 5.4.4.1) ' + VFY + '. Added in Phase 2 (fix log R3).'));
   });
@@ -2778,8 +2799,8 @@ function runBenchmarks() {
       add(g, 'w = 8 × 55 + 35 × 92.25/144 (plf)', 462.42, k.w, 'plf', 1e-4); add(g, 'M = wL²/8 (ft-lb)', 33294.4, k.Mgov, 'ft-lb', 1e-4);
       add(g, 'C_V = (21/24)^0.1 (12/18)^0.1 (5.125/5.125)^0.1', 0.94752, k.CV, '', 1e-4); add(g, "F'b = 2400 × min(1.0, C_V) (psi)", 2274.1, k.Fb_p, 'psi', 1e-4); add(g, 'fb/F′b = 1443.7/2274.1', 0.6348, k.r_b, '', 1e-3); }
     { const q = p2(m => { GLm(m); m.design.latTop = 'Supports'; }), k = comb(q, 'D+L'); const g = 'Same glulam, top edge braced at the supports only (l_u = 24 ft): C_L governs';
-      add(g, 'R_B = √(523.44 × 18/5.125²)', 18.940, q.stab[0].top.RB, '', 1e-4); add(g, 'F_bE = 1.20 × 950,000/R_B² (psi)', 3178.0, q.stab[0].top.FbE, 'psi', 1e-4);
-      add(g, 'C_L (< C_V = 0.948)', 0.90312, k.CL, '', 1e-4); add(g, "F'b = 2400 × C_L (psi)", 2167.5, k.Fb_p, 'psi', 1e-4); add(g, 'fb/F′b', 0.6660, k.r_b, '', 1e-3); }
+      add(g, 'R_B = √(523.44 × 18/5.125²)', 18.940, q.stab[0].top.RB, '', 1e-4); add(g, 'F_bE = 1.20 × E_y,min 850,000/R_B² (psi; fix log TBE1, was 3178.0 with E_x,min)', 2843.47, q.stab[0].top.FbE, 'psi', 1e-4);
+      add(g, 'C_L (< C_V = 0.948; was 0.90312)', 0.87585, k.CL, '', 1e-4); add(g, "F'b = 2400 × C_L (psi; was 2167.5)", 2102.03, k.Fb_p, 'psi', 1e-4); add(g, 'fb/F′b (was 0.6660)', 0.6868, k.r_b, '', 1e-3); }
     { const q = p2(m => { m.material.size = '6x12'; m.material.grade = 'No.1'; m.geom.spacing = 48; m.geom.spans = [{ L: 16 }]; }), k = comb(q, 'D+L'); const g = '6x12 DF-L No.1 (Table 4D, Beams and Stringers), 16 ft, trib. 4 ft, D 15 / L 40 psf';
       add(g, 'Fb (Table 4D) (psi)', 1350, q.ref.Fb, 'psi', 1e-9); add(g, 'M = 234.93 × 16²/8 (ft-lb)', 7517.9, k.Mgov, 'ft-lb', 1e-4); add(g, 'fb = M × 12/121.23 (psi)', 744.17, k.fb, 'psi', 1e-4);
       add(g, "F'b = 1350 × C_F 1.0 (psi; C_r n/a)", 1350, k.Fb_p, 'psi', 1e-9); add(g, 'fb/F′b', 0.5512, k.r_b, '', 1e-3); }
@@ -2836,6 +2857,21 @@ function runBenchmarks() {
       add(g, "x/d ticked: P′ = 1000 × 0.5/0.7708 (lb)", 648.65, kx.Pv[0].mag, 'lb', 1e-5);
       add(g, "x/d ticked: V = 69.94 × 7 + 648.65 × 13.5/14 − 69.94 × 0.7708 (lb)", 1061.17, kx.Vd, 'lb', 1e-5);
       add(g, 'x/d ticked: fv/F′v = (1.5 × 1061.17/13.875)/180', 0.6373, kx.r_v, '', 1e-3); }
+    // 7. TBK1 (2026-11-07): creep factor K_cr = 2.0 in wet service (NDS 3.5.2; IBC 2018 Table 1604.3 footnote d)
+    { const q = p2(m => { m.design.moisture = 'Wet'; }); const g = 'Wet service, default joist (fix log TBK1): DF-L No.2 2x10 @ 16 in., 16 ft, D 15 / L 40 psf, K_cr input 1.5 (old default)';
+      add(g, 'K_cr used (wet service, NDS 3.5.2)', 2.0, q.defl.Kcr, '', 1e-12); add(g, "E' = 1,600,000 × C_M 0.9 (psi)", 1440000, q.E_p, 'psi', 1e-9);
+      add(g, 'Δ_T = 2.0 × 0.2409 + 0.5520 (in.; K_cr 1.5: 0.9134)', 1.0338, q.defl.Dtot, 'in.', 2e-4); add(g, 'Δ_T/(192/240) (K_cr 1.5: 1.142)', 1.2923, q.defl.r_dTL, '', 1e-3); }
+    // 8. TBE1 (2026-11-07): glulam beam stability with E_y,min (NDS 3.3.3.8, Supplement Table 5A)
+    { const q = p2(m => { GLm(m); m.design.latTop = 'Supports'; m.design.method = 'LRFD'; }), k = comb(q, 'U2r'); const g = 'Glulam 24F-1.8E 5-1/8 × 18 in., 24 ft, top edge at supports, LRFD 1.2D + 1.6L (fix log TBE1)';
+      add(g, "E'min = E_y,min 850,000 × 1.76 × 0.85 (psi; was 1,421,200 with E_x,min)", 1271600, q.Emin_p, 'psi', 1e-9);
+      add(g, 'F_bE = 1.20 × 1,271,600/18.940² (psi)', 4253.8, q.stab[0].top.FbE, 'psi', 2e-4); add(g, 'fb/F′b (was 0.594)', 0.6215, k.r_b, '', 1e-3); }
+    { const q = p2(m => { GLm(m); m.design.latTop = 'Supports'; m.material.glulam.combo = 'Custom'; Object.assign(m.material.glulam.custom, { Fbp: 2400, Fbn: 1450, Fv: 265, Fcp: 650, E: 1800000, Emin: 950000, Eymin: null }); });
+      const g = 'Custom glulam with no E_y,min (files saved before TBE1): conservative assumption, REVIEW note';
+      add(g, 'E_y,min = 950,000 × (690,000/900,000) (psi)', 728333.3, q.Emin_p, 'psi', 1e-6); add(g, 'REVIEW note shown', 1, q.adv.filter(t => /^REVIEW: custom glulam has no Ey,min/.test(t)).length, '', 1e-12); }
+    // 9. TBF1 (2026-11-07): Table 4D flat use of Beams and Stringers, E and Emin factor (No.1 0.90)
+    { const q = p2(m => { m.material.size = '6x12'; m.material.grade = 'No.1'; m.geom.spacing = 48; m.design.flatUse = true; }); const g = '6x12 DF-L No.1 flat (Beams and Stringers), 16 ft, trib. 4 ft, D 15 / L 40 psf (fix log TBF1)';
+      add(g, "E' = 1,600,000 × 0.90 (psi; was 1,600,000)", 1440000, q.E_p, 'psi', 1e-12); add(g, "E'min = 580,000 × 0.90 (psi)", 522000, q.Emin_p, 'psi', 1e-12);
+      add(g, 'Δ_L/(192/360) (was 1.734)', 1.9267, q.defl.r_dLL, '', 1e-3); }
   } catch (e) { out.push({ grp: 'error', what: 'Benchmark failed to run: ' + e.message, hand: NaN, tool: NaN, unit: '', diff: NaN, ok: false }); }
   return out;
 }
@@ -3005,7 +3041,7 @@ function tbrModel() {
       ['Incised', dz.incising ? 'yes' : 'no'], ['Repetitive member', dz.repetitive ? 'yes' : 'no'], ['End notch', (mt.notch || 0) > 0 ? g4(mt.notch) + ' in.' : 'none'],
       ['Lateral support, top edge', dz.latTop === 'Supports' ? 'at supports only, l_u = ' + (dz.luTop > 0 ? g4(dz.luTop) + ' ft' : 'span length') : 'continuous'],
       ['Lateral support, bottom edge', dz.latBot === 'same' ? 'same as top edge (earlier tool versions)' : dz.latBot === 'Supports' ? 'at supports only, l_u = ' + (dz.luBot > 0 ? g4(dz.luBot) + ' ft' : 'span length') : 'continuous'],
-      ['Creep factor K_cr', g4(dz.creep)], ['Deflection limits', 'L/' + g4(dz.deflLL) + ' live/snow, L/' + g4(dz.deflTL) + ' total'], ['Design method', dz.method === 'LRFD' ? 'LRFD (NDS 2018 Appendix N; floor live load from ' + (dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8') + ')' : 'ASD (NDS 2018)']);
+      ['Creep factor K_cr', R.ok && dz.moisture === 'Wet' && R.Kcr !== dz.creep ? g4(R.Kcr) + ' used (' + (dz.creep > 0 ? g4(dz.creep) + ' entered; ' : 'blank; ') + 'wet service, NDS 3.5.2)' : g4(dz.creep)], ['Deflection limits', 'L/' + g4(dz.deflLL) + ' live/snow, L/' + g4(dz.deflTL) + ' total'], ['Design method', dz.method === 'LRFD' ? 'LRFD (NDS 2018 Appendix N; floor live load from ' + (dz.lrfdLive === 'storage' ? 'storage, λ = 0.7' : 'occupancy, λ = 0.8') + ')' : 'ASD (NDS 2018)']);
     subs.push({ title: 'Section, material and design settings', items: [{ type: 'table', head: ['Item', 'Value'], rows: mrows }] });
     secs.push({ title: 'Project and inputs', subs });
   }
@@ -3033,12 +3069,12 @@ function tbrModel() {
       { type: 'note', text: 'C_L is worked per span and edge in §6 ([[tb/bd.CL]]); C_b per support in §8 ([[tb/br.Cb]]).' }] });
     const sg = R.legacyBend ? 1 : gb.gbSign, T = [];
     const fb = tbrFac(fbBase(sg), fbFacs(gb, gb.CL, gb.CV)), fv = tbrFac([R.isGL ? 'F_{vx}' : 'F_{v}', g4(r.Fv)], fvFacs(gv)), fc = tbrFac([R.isGL ? 'F_{c⊥x}' : 'F_{c⊥}', g4(r.Fcp)], fcpFacs(gc.gcJ));
-    const fe = tbrFac(['E', g4(r.E)], eFacs(false)), fm = tbrFac(['E_{min}', g4(r.Emin)], eFacs(true));
+    const fe = tbrFac(['E', g4(r.E)], eFacs(false)), fm = tbrFac(R.isGL ? ['E_{y,min}', g4(R.EminStab)] : ['E_{min}', g4(r.Emin)], eFacs(true));
     T.push({ title: 'Bending: F′_b for ' + gb.name, ref: tbrTbl(), steps: [tbrS({ id: 'dv.Fb', label: 'Adjusted bending design value, ' + gb.name + (R.isGL ? (sg > 0 ? ' (M > 0, F_bx^+)' : ' (M < 0, F_bx^−)') : ''), sym: 'F^{\\prime}_{b}', eq: fb.eq, sub: fb.sub, value: gb.Fb_p, unit: 'psi', d: 0, ref: tbrTbl(), note: 'C_L and C_V: §bd.CL' + (sawnOnly() ? '' : ', §bd.CV') + '.' })] });
     T.push({ title: 'Shear: F′_v for ' + gv.name, ref: tbrTbl(), steps: [tbrS({ id: 'dv.Fv', label: 'Adjusted shear design value, ' + gv.name, sym: 'F^{\\prime}_{v}', eq: fv.eq, sub: fv.sub, value: gv.Fv_p, unit: 'psi', d: 1, ref: tbrTbl() })] });
     T.push({ title: 'Bearing: F′_c⊥ at support ' + nodeN(gc.gcJ), ref: tbrTbl() + (isLRFD() ? ' (no λ)' : ' (no C_D)'), steps: [tbrS({ id: 'dv.Fcp', label: 'Adjusted compression perpendicular to grain, support ' + nodeN(gc.gcJ), sym: 'F^{\\prime}_{c⊥}', eq: fc.eq, sub: fc.sub, value: gc.Fcp_p, unit: 'psi', d: 1, ref: tbrTbl() })] });
     T.push({ title: 'Stiffness: E′ and E′_min', ref: tbrTbl(), res: /\.Emin$/, steps: [tbrS({ id: 'dv.E', label: 'Adjusted modulus of elasticity (deflection' + (isLRFD() ? ', service loads' : '') + ')', sym: 'E^{\\prime}', eq: fe.eq, sub: fe.sub, value: R.E_p, unit: 'psi', d: 0, ref: tbrTbl() }),
-      tbrS({ id: 'dv.Emin', label: 'Adjusted E_min (beam stability)' + (isLRFD() ? ', incl. K_F φ_s' : ''), sym: 'E^{\\prime}_{min}', eq: fm.eq, sub: fm.sub, value: R.Emin_p, unit: 'psi', d: 0, ref: tbrTbl() })] });
+      tbrS({ id: 'dv.Emin', label: 'Adjusted E_min (beam stability' + (R.isGL ? '; glulam: from E_y,min, NDS 3.3.3.8' : '') + ')' + (isLRFD() ? ', incl. K_F φ_s' : ''), sym: 'E^{\\prime}_{min}', eq: fm.eq, sub: fm.sub, value: R.Emin_p, unit: 'psi', d: 0, ref: tbrTbl() })] });
     subs.push({ title: 'Adjusted design values (governing combinations)', items: [tbrTopics(T), { type: 'note', text: 'Each combination has its own ' + (isLRFD() ? 'λ' : 'C_D') + ': the values of every combination are in §6–§8 (tables) and on the Design Values tab[[tab:dv| ↗]].' }] });
     secs.push({ title: 'Design values', subs });
   }

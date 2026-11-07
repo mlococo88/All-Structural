@@ -5057,6 +5057,113 @@ Review Phase 8, pile schedule (the open item of 8e). Code sites are tagged `RWPL
 +    return { known: sbK, iv: ivP };
 +  }, [8, 12, 16, 24, 32, 48, 64, 96, 192], [['stabPile', 'pile reactions'], ['ftgPunch', 'punching']]);
 +
+## 2026-11-07 — PR: claude/rw-pile-3d — Pile-supported footing: 3D view with the pile combinations and the pile reactions per row; no soil base reaction on piles (RWPL; display only, no result change) (PR #998: https://github.com/mlococo88/All-Structural/pull/998)
+
+Review Phase 8, 3D view (open item of 8e). Code sites are tagged `RWPL`. Nothing computed changes; on a spread footing the 3D view is as before.
+### RWPL-15. 3D "Show" list on piles (`rw3Options`, `rw3Selected`; new `rw3IsPile`, `rw3PileCombos`, `rw3PileFactors`)
+- On a pile-supported footing (`r.pile` with results) the combinations are the pile analysis' own (`r.pile.comb`, Stability tab, Pile Step 2):
+  "★ Governing pile compression combination" (`r.pile.govC`) and the group "Combinations (pile reactions per row)". The bearing combinations
+  (`rwbpCombos`) are not offered on piles. "All load cases" shows the ACI D + H + L pile reactions (AASHTO: none; every pile combination is factored).
+- Factored arrows (RW3F) on piles: the factors of a pile combination are read from the analysis' definitions:
+  - AASHTO: Strength I max = the bearing set's `CMB_S1` (same V and x_R, 8c), Strength I min = `CMB_S1A`, Extreme Event II max = `CMB_EE2`
+    (`rw3Factors` 's1', 's1a', 'ee2'). Extreme Event I and Extreme Event II min: no factor map; the arrows stay unfactored and the toggle is off.
+  - ACI / IBC (the service combinations of `rwPileAnalysis`): D + H + L all × 1.0; + 0.7E; 0.6D + H (DC, EV, P_a,V × 0.6, water uplift × 1.0,
+    no heel surcharge, column 0.6 × (D + any wind uplift)); 0.6D + 0.7E + H.
+  - The 3D title's check line (Σγ·V and Σγ·M about the toe of the arrows vs the combination's V and V·x_R) passes (✓) for every pile
+    combination of: the default wall; ACI water + k_h 0.15 + column + β 10° + q_s + key + passive (s1–s4); AASHTO collision + barrier + water +
+    column + k_h 0.10 + q_s + passive (Strength I max / min, Extreme Event II max).
+### RWPL-16. Pile reactions instead of the soil base reaction (`rw3Build`)
+- On piles: no bearing-pressure surface and no "R = ΣV" arrow. Per row an arrow at x_i under the footing (up in compression, down in uplift),
+  labelled "Row i: P = … kip/pile, q = … k/ft", and one horizontal arrow "h = H/N = … kip/pile (lateral, every pile)" toward the heel; in the
+  layer "Pile reactions" (the 'bearing' layer, relabelled on piles). Values: `r.pile.comb[k].L` (Pile Step 2).
+- Title on piles (`rw3TitlePile`): the pile combination, "pile reactions per row as the pile analysis computes them" (service / factored),
+  the arrows unfactored or factored with the check line, and a link to Pile Step 2.
+- Report overview figure caption on piles: "the governing pile compression combination (…) with its pile reactions per row".
+### Check case
+- Default wall, pile mode, ACI (2 rows 1.5 / 11.0 ft, s 6 ft): GOV = D + H + L; Row 1 P = 59.7, Row 2 P = 56.6 kip/pile; h = 13.50 kip/pile;
+  factored arrows: Σγ·V = 19395 lb/ft = V ✓, Σγ·M = 118751 = V·x_R ✓ (x_R = 6.12 ft). These are Pile Step 2's numbers.
+### How verified
+- origin/main vs branch, the 12 audit walls (spread): `_R`, Export JSON, autosave, Report, tab texts and DXF identical; the 3D title text of
+  every "Show" option, unfactored and factored, identical on an ACI and an AASHTO (collision, water, k_h) spread wall.
+- Pile mode: every option of the list run unfactored and factored, the check lines above; screenshot of the 3D view (3 rows).
+- `check-syntax`; `retaining-wall-checks`; `phone-layout --tool rwall --w 390,768`; `project-library --tool retwall`; `dxf-print-sheets --tool rw`.
+### Open items
+- **Decision (pending engineer review):** Extreme Event I and Extreme Event II (minimum vertical) pile combinations offer unfactored arrows only (no factor map in the tool for those sets); their pile reactions are shown as computed.
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html`)
+```diff
++/* RWPL (2026-11-07, Phase 8 3D): on a pile-supported footing the combinations of the 3D view are the pile analysis' own
++   (r.pile.comb, Stability tab, Pile Step 2): V (lb/ft) at x_R, with the pile reactions per row; no soil base reaction. */
++const rw3IsPile = r => !!(r && r.pile && !r.pile.err && r.pile.comb && r.pile.comb.length);
++function rw3PileCombos(r) {
++  const P = r.pile;
++  return { list: P.comb.map(c => ({ key: c.key, name: c.label, kind: 'pile', V: c.V * 1000, xR: c.xR, e: r.B / 2 - c.xR, pile: c })), gov: P.govC ? P.govC.key : P.comb[0].key };
++}
++/* the load factors of a pile combination for the factored arrows (RW3F), or null (arrows unfactored only):
++   AASHTO: Strength I max / min and Extreme Event II max are the bearing sets' own V and x_R (8c), so their definitions apply
++   (rw3Factors 's1', 's1a', 'ee2'); Extreme Event I and Extreme Event II min have no factor map here.
++   ACI / IBC: the service combinations of rwPileAnalysis (ASCE 7-16 §2.4.1): D + H + L (all loads × 1.0), + 0.7E, and
++   0.6D + H (0.6 on the dead loads and on the vertical earth thrust, water uplift 1.0, no surcharge or column L / S), + 0.7E. */
++function rw3PileFactors(r, key) {
++  if (r.isAASHTO) { const m = { str_max: 's1', str_min: 's1a', ee2_max: 'ee2' }[key]; return m ? rw3Factors(r, m) : null; }
++  const E = r.hasSeismic ? 0.7 : 0, all = { EH: 1, EHv: 1, ES: 1, WA: 1, UP: 1, SV: 1, DC: 1, EV: 1, PP: 0 };
++  const min6 = { EH: 1, EHv: 0.6, ES: 1, WA: 1, UP: 1, SV: 0, DC: 0.6, EV: 0.6, PP: 0 };
++  const colMin = r.hasCol ? { v: 0.6 * (r.inp.col_DL + Math.min(0, r.inp.col_WL || 0)) * 1000 / r.inp.col_Ldist, how: '0.6 × (column dead load + any wind uplift)' } : null;
++  if (key === 's1') return { def: 'D + H + L (service)', f: { ...all, EQ: 0 }, col: r.hasCol ? { v: r.W_col, how: 'the service column load' } : null };
++  if (key === 's2') return { def: 'D + H + L + 0.7E', f: { ...all, EQ: E }, col: r.hasCol ? { v: r.W_col, how: 'the service column load' } : null };
++  if (key === 's3') return { def: '0.6D + H', f: { ...min6, EQ: 0 }, col: colMin };
++  if (key === 's4') return { def: '0.6D + 0.7E + H', f: { ...min6, EQ: E }, col: colMin };
++  return null;
++}
+-  const C = (typeof rwbpCombos === 'function') ? rwbpCombos(r) : { list: [], gov: null };
++  const pm = rw3IsPile(r);   // RWPL
++  const C = pm ? rw3PileCombos(r) : (typeof rwbpCombos === 'function') ? rwbpCombos(r) : { list: [], gov: null };
+-  const o = [['Governing', [['GOV', '★ Governing bearing combination' + (g ? ': ' + g.name.replace(/ — .*$/, '') : '')]]]];
++  const o = [['Governing', [['GOV', (pm ? '★ Governing pile compression combination' : '★ Governing bearing combination') + (g ? ': ' + g.name.replace(/ — .*$/, '') : '')]]]];
+-  o.push(['Combinations (base reaction and bearing pressure)', C.list.map(x => ['C:' + x.key, (x.key === C.gov ? '★ ' : '') + x.name])]);
++  o.push([pm ? 'Combinations (pile reactions per row)' : 'Combinations (base reaction and bearing pressure)', C.list.map(x => ['C:' + x.key, (x.key === C.gov ? '★ ' : '') + x.name])]);
+-  const svc = C.list.find(x => x.key === 'svc');
+-  if (sel === 'ALL') return { sel, cases, combo: svc || null, comboNote: 'service (unfactored)' };
++  const pm = rw3IsPile(r), svc = C.list.find(x => x.key === (pm ? 's1' : 'svc') && (!pm || !r.isAASHTO));   // RWPL: on piles, ACI D + H + L (service); AASHTO none
++  if (sel === 'ALL') return { sel, cases, combo: svc || null, comboNote: pm ? 'service combination D + H + L' : 'service (unfactored)' };
+-  const F = rw3Factors(r, k);
++  const F = pm ? rw3PileFactors(r, k) : rw3Factors(r, k);   // RWPL
++  if (rw3IsPile(r)) return rw3TitlePile(r, S, unit);   // RWPL: pile-supported footing
++/* RWPL (2026-11-07): the 3D title on a pile-supported footing (pile combinations, pile reactions per row; no soil base reaction) */
++function rw3TitlePile(r, S, unit) {
++  const sign = 'Arrows point the way each load acts on the wall: earth, surcharge, water, seismic and collision toward the toe; weights down; uplift up; passive toward the heel. Pile reactions act on the footing: up in compression, down in uplift (tension), and toward the heel against the lateral load.';
++  const c = S.combo, cmb = c ? `<b>${c.name}</b>` : '';
++  let what;
++  if (S.sel.startsWith('CASE:')) what = `<b>${S.cases[0] ? S.cases[0].name : ''}</b>: unfactored. No pile reactions are shown for a single load case.`;
++  else if (S.sel === 'ALL') what = `<b>All load cases</b>, unfactored` + (c ? `; pile reactions per row for the ${S.comboNote} (${c.name}).` : '; no pile reactions (every pile combination in AASHTO mode is factored: choose one in the list).');
++  else if (S.fac) {
++    const X = S.FX, F = S.F, tol = v => 1e-6 * Math.max(1, Math.abs(v));
++    const okV = Math.abs(X.V - c.V) <= tol(c.V), okM = Math.abs(X.M - c.V * c.xR) <= tol(c.V * c.xR) * 10;
++    what = `${S.gov ? '<b>Governing</b> pile compression combination: ' : ''}${cmb}. <b>Load arrows: factored</b>, each load case × its load factor γ in this combination, read from the analysis' definition of ${F.def}${F.eta != null && F.eta !== 1 ? ` (γ includes η = ${f(F.eta, 3)})` : ''}; pile reactions per row as the pile analysis computes them.`
++      + (X.omit.length ? ` Not in this combination's vertical resultant: ${X.omit.join(', ')}.` : '')
++      + `<div class="c3d-sign">Check: Σγ·V of the arrows = ${f(X.V, 0)} lb/ft vs V = ${f(c.V, 0)} lb/ft ${okV ? '✓' : '✗'}; Σγ·M about the toe = ${f(X.M, 0)} vs V·x_R = ${f(c.V * c.xR, 0)} lb·ft/ft ${okM ? '✓' : '✗'}.</div>`;
++  }
++  else what = `${S.gov ? '<b>Governing</b> pile compression combination: ' : ''}${cmb}: pile reactions per row (kip per pile) as the pile analysis computes them${r.isAASHTO ? ' (factored)' : ' (service loads)'}; <b>load arrows: unfactored</b>, the load cases${S.F ? ' (choose Factored to see them × this combination\'s load factors)' : ' (no factor map for this combination: the arrows stay unfactored)'}.`;
++  return `<div>${what}</div><div class="c3d-sign">${unit} ${sign} Worked on the Stability tab (<a class="wkA" href="#" data-card="stabPile">pile reactions</a>).</div>`;
++}
+-  if (c) {
++  if (c && c.kind === 'pile') {   // RWPL (2026-11-07): pile reactions per row (kip per pile) in the 'bearing' layer; no soil base reaction
++    const L = c.pile.L, Pm = Math.max(...L.rows.map(x => Math.abs(x.P)), 1e-9), gb = G.bearing;
++    L.rows.forEach((x, i) => { const len = La * (0.35 + 0.65 * Math.abs(x.P) / Pm), y0 = -0.15;
++      if (x.P >= 0) rw3Arrow(gb, V3(x.x, y0 - len), V3(x.x, y0), '#ffd040');
++      else rw3Arrow(gb, V3(x.x, y0), V3(x.x, y0 - len), '#ffd040');
++      rw3Label(gb, `Row ${i + 1}: P = ${f(x.P, 1)} kip/pile${x.P < 0 ? ' (uplift)' : ''}, q = ${f(x.q, 2)} k/ft`, V3(x.x, y0 - len), '#c0a020'); });
++    const h = L.rows.length ? L.rows[0].h : 0, xh = Math.min(...L.rows.map(x => x.x));
++    if (h > 1e-6) { rw3Arrow(gb, V3(xh - La * 0.6, 0.05), V3(xh, 0.05), '#ffd040'); rw3Label(gb, `h = H/N = ${f(h, 2)} kip/pile (lateral, every pile)`, V3(xh - La * 0.6, 0.05), '#c0a020'); }
++    S.rInfo = `V = ${rw3K(c.V)} at x_R = ${f(c.xR, 2)} ft; P_max = ${f(L.Pmax, 1)} kip, P_min = ${f(L.Pmin, 1)} kip per pile; H = ${f(c.pile.H, 3)} k/ft`;
++  } else if (c) {
+-  const t = document.getElementById('c3d-title'); if (t) t.innerHTML = rw3Title(r, S) + (S.rInfo ? `<div class="c3d-sign">Base reaction: ${S.rInfo}.</div>` : '');
++  const t = document.getElementById('c3d-title'); if (t) t.innerHTML = rw3Title(r, S) + (S.rInfo ? `<div class="c3d-sign">${c && c.kind === 'pile' ? 'Pile reactions' : 'Base reaction'}: ${S.rInfo}.</div>` : '');
++  const lb = document.querySelector('#t3d-bearing + span'); if (lb) lb.textContent = rw3IsPile(r) ? 'Pile reactions' : 'Bearing';   // RWPL: the layer holds the pile reactions on piles
+-  let gname = ''; try { const C = rwbpCombos(r), g = C.list.find(x => x.key === C.gov); gname = g ? g.name.replace(/ — .*$/, '') : ''; } catch (e) { /* none */ }
++  let gname = ''; try { const C = rw3IsPile(r) ? rw3PileCombos(r) : rwbpCombos(r), g = C.list.find(x => x.key === C.gov); gname = g ? g.name.replace(/ — .*$/, '') : ''; } catch (e) { /* none */ }   // RWPL: on piles, the governing pile combination
+-    '3D model tab[[tab:threed| ↗]] at its default view: the governing bearing combination' + (gname ? ' (' + gname + ')' : '') + ' with its base reaction R and bearing pressure, the load cases as unfactored arrows with their values, every layer on, no section cut, the Reset-view camera. Perspective: not to scale; B = ' + rwrN(r.B, 2) + ' ft, H = ' + rwrN(r.H, 2) + ' ft, a ' + rwrN(wallLen3D(r), 0) + ' ft run of wall.');
++    '3D model tab[[tab:threed| ↗]] at its default view: the governing ' + (rw3IsPile(r) ? 'pile compression combination' : 'bearing combination') + (gname ? ' (' + gname + ')' : '') + (rw3IsPile(r) ? ' with its pile reactions per row' : ' with its base reaction R and bearing pressure') + ', the load cases as unfactored arrows with their values, every layer on, no section cut, the Reset-view camera. Perspective: not to scale; B = ' + rwrN(r.B, 2) + ' ft, H = ' + rwrN(r.H, 2) + ' ft, a ' + rwrN(wallLen3D(r), 0) + ' ft run of wall.');
 ```
 
 ## 2026-11-07 — PR: claude/rw-pile-8f — Pile-supported footing, Phase 8f: hand-off with Pile Designer — foundationLoads revision 2 (element.type "wall") sent, pileResults read back with the stale check (RWPX; no change to a computed result unless results are pulled; cross-tool PR with Pile Designer)
