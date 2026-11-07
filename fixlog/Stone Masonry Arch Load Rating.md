@@ -1534,3 +1534,73 @@ function transDisp(w,n,c,cap){
 - headless main vs branch (Playwright, `tests/lib.mjs` `openPage`), reported RFs on seven cases: default, 30/6, semicircle, 4 ft cover, Lanes = 1, 80/16: identical; 20/4: HS20 0.391 → 0.390 only;
 - all 14 tabs with 0 console errors on the default and the 20/4 case; the new panels appear in the Report.
 - **Saved data:** one new field `mu` in the project file (old files open on 0.6); no key changed.
+
+## 2026-11-07 — PR: claude/sa-mechanism — Four-hinge collapse mechanism cross-check (MECH; review S-1; advisory)
+
+### MECH-1. Mechanism load factor λ for every vehicle, beside the elastic rating   [§4: new advisory check; no rating factor changes]
+- **Problem (review S-1):** the tool had no collapse-mechanism or thrust-line limit analysis. That check is independent of the elastic mesh, and commercial programs report it.
+- **Where:**
+  - Engine: new `mechanismSet(model)` and `mechanism(model,vehicle,impMode,mechs)`, placed just before the comment `/* Rating factor at EVERY section` and exported from `ARCH`.
+  - Render: new `archMechRun(p)`, placed before `/* the convergence table`. `render()` calls it after `archSlideRun` (anchor `archMechRun(p);   /* MECH (S-1)`).
+  - Rating tab: panel `rate_mech`, placed after `rate_slide`.
+  - Dashboard: row "Collapse mechanism cross-check (advisory)", placed after the "Outside the scope of this model" row.
+  - Text updated to say the factor is an advisory cross-check: the scope bullet in the Summary `o_basis` panel and the scope N/A row.
+- **Before:** no mechanism check. The scope list said "collapse-mechanism capacity" was not modelled.
+- **After (method):**
+  - **Hinge grid:** the nodes of an n_H-element mesh, n_H = 4·ceil(max(24, n1)/4), at most 48. The tool reuses the convergence model when one has that count. The default is 24.
+  - **Hinge positions:** each hinge sits on the intrados or the extrados, h = ∓d/2 from the axis along the outward normal. A pinned springing is an axis hinge, h = 0, and is always one of the four.
+  - **Kinematics:** the four hinges form a four-bar chain. Block 1 rotates ω1 = 1 about A. ω2 and ω3 come from the velocity of C, which gives two linear equations. Δω = ω_right − ω_left. The mechanism is admissible when every hinge opens: Δω < 0 at an intrados hinge, Δω > 0 at an extrados hinge. Either running sense is tried.
+  - **Work:** P = Σ Δω·m, with m = M − P·h, the moment of the elastic section forces about the hinge point. This holds for any set of section forces in equilibrium with the loads, because a self-stress does no work in a mechanism. Then λ = −P_D / P_L over the mechanisms with P_L > 0, with λ = 0 when P_D ≥ 0, i.e. when dead load alone drives the mechanism.
+  - **Vehicle sweep:** every selected vehicle, at 0.5 ft steps in both directions. The wheel-load distribution and impact are the same as for the rating, applied as the same nodal loads (`nodalLL`, `llEffects`).
+  - **Reported:**
+    - a table of λ, the elastic RF, λ/RF and the hinges for each vehicle;
+    - the worked mechanism for the vehicle that controls the elastic rating: hinge table, P_D, P_L and λ;
+    - the dashboard row: OK when λ ≥ RF for every vehicle; REVIEW when λ < RF for any vehicle; FAIL when dead load alone forms a mechanism.
+- **Basis:** rigid-block limit analysis after Heyman (*The Masonry Arch*, 1982): no tension, unlimited compressive strength, no sliding. **Verify (not in references).** It is not a MassDOT §7.2.7 procedure, and the §7.2.7 rating is unchanged.
+- **Method check (in the tool, headless):** a semicircular ring under its own weight alone (40 ft span, no fill, no wearing surface, K = 0). Bisecting the ring depth finds the thickness at which a dead-load mechanism first appears:
+  - t/R = 0.1062 on a 24-element mesh and 0.1067 on 48 elements (R = axis radius);
+  - Heyman's approximate value is 0.106; the exact value usually quoted is 0.1075.
+  The small difference comes from self weight lumped along the axis and from hinges only at the nodes. This confirms the signs, the admissibility rule and the kinematics.
+- **Check case (default, EV3, which controls the elastic rating at RF 0.439; lead axle x = −4.50 ft, left to right; 24-element grid):**
+
+| Hinge | face | h | Δω | m_D = M_D − P_D·h | m_L |
+|---|---|---|---|---|---|
+| SL-L | intrados | −1.0 | −1.0000 | −7.457 + 27.508 = 20.051 | −0.827 |
+| N8 (x = 12.89) | extrados | +1.0 | 3.5571 | 1.318 − 18.850 = −17.532 | 6.433 |
+| N16 (x = 28.71) | intrados | −1.0 | −4.6050 | 1.318 + 18.850 = 20.167 | −2.728 |
+| SL-R | extrados | +1.0 | 2.0480 | −7.457 − 27.508 = −34.966 | 8.666 |
+
+  - P_D = −20.051 − 62.363 − 92.871 − 71.610 = −246.895;
+  - P_L = 0.827 + 22.882 + 12.564 + 17.749 = 54.022;
+  - **λ = 246.895 / 54.022 = 4.570**, which is 10.4 × the elastic RF.
+- **Other cases (λ of the controlling vehicle, elastic RF):**
+  - 30/6 rise: EV3 1.27 vs 0.196.
+  - 20/4 rise: EV2 16.46 vs 0.373.
+  - Semicircle: EV3 1.33. Elastic RF 0: dead load overstresses in compression, but no dead-load mechanism forms.
+  - 4 ft cover: EV3 7.81 vs 0.445.
+  - Lanes = 1: EV3 5.35 vs 0.607.
+  - 80/16: EV3 11.55. Elastic 0.
+  - Pinned: EV3 2.25 vs 0.782.
+  - λ > RF in every case.
+- **Decisions (pending engineer review):**
+  1. Advisory only; no rating factor changes.
+  2. Live load includes the same impact and the same wheel-load spread as the rating. There is no extra spread through the fill and no passive restraint.
+  3. Hinges are placed only at the nodes of the 24 to 48 element grid.
+  4. Depth is the stress-check depth `dn`, so deterioration enters only through the reduced depth.
+  5. The flag is raised only when λ < RF. No λ threshold (e.g. a factor of 2) is imposed.
+- **What is missing (recorded as the review asked):**
+  - finite compressive strength (crushing at hinges);
+  - sliding in the mechanism (the separate SLD check covers sliding at the elastic forces);
+  - fill passive pressure and dispersion beyond the wheel-load rules;
+  - hinges between nodes;
+  - multi-ring separation;
+  - MEXE / modified MEXE screening (S-3).
+- **Performance:** about 0.1 s per vehicle; 0.5 to 1.1 s per input change for 11 vehicles. It is cached on the inputs, so tab changes do not re-run it.
+- **How verified:**
+  - `node tests/check-syntax.mjs` (all pass);
+  - `tests/smoke/phone-layout.mjs --tool arch` (pass);
+  - `tests/smoke/project-library.mjs --tool stonearch`: the four A-vs-B identity checks differ only in the Summary text (the scope wording and the new dashboard row); the model and the ratings are identical, and the other checks pass;
+  - headless main vs branch on eight cases (default, 20/4, 30/6, semicircle, 4 ft cover, Lanes = 1, 80/16, pinned): every reported RF identical;
+  - all 14 tabs on the default and the semicircle with 0 console errors;
+  - the panel appears in the Report.
+- **Saved data:** no change.

@@ -2563,6 +2563,109 @@ function slideDL(model,mu){
   return {rows,worst:w};
 }
 
+/* MECH (review S-1, 2026-11-07): four-hinge collapse mechanism, an ADVISORY cross-check beside the elastic rating
+   (Heyman's rigid-block limit analysis: no tensile strength, unlimited compressive strength, no sliding).
+   Hinges sit at the nodes of `model`, on the intrados or the extrados (h = -d/2 or +d/2 from the axis along the
+   outward normal n); a pinned springing is an axis hinge (h = 0) that is always one of the four.
+   Kinematics (four-bar chain A-B-C-D, blocks A-B, B-C, C-D, ground outside A and D): w1 = 1 about A; B moves
+   w1 k x (B - A); block C-D turns about D; w2 and w3 from the velocity of C (two linear equations).
+   Relative rotation at a hinge dw = w(right block) - w(left block). With n = t rotated +90 deg (outward), the joint
+   opens only if dw < 0 at an intrados hinge and dw > 0 at an extrados hinge; the whole mechanism may run either way
+   (all w times -1), and a mechanism is admissible when every hinge opens.
+   Work: for ANY set of section forces in equilibrium with the loads, the power of the external loads in a mechanism
+   equals sum over hinges of dw * m_h, where m_h = M - P h is the section moment about the hinge point (P compression
+   positive, M sagging positive, e = M/P toward the extrados, as in the stress check). A self-stressing set does no
+   work, so the elastic section forces may be used: P_D = sum dw m_D, P_L = sum dw m_L, and the collapse load factor on
+   the live load (impact included, dead load factor 1) is lambda = -P_D / P_L over mechanisms with P_L > 0.
+   P_D >= 0 for an admissible mechanism means dead load alone drives it (lambda = 0). */
+function mechanismSet(model){
+  const g=model.g, nN=model.nN, pinned=(model.p&&model.p.support==="pinned");
+  const pt=[], tv=[];
+  for(let i=0;i<nN;i++){
+    const nd=g.nodes[i];
+    let nx=nd.extX-nd.x, ny=nd.extY-nd.y; const L=Math.hypot(nx,ny)||1; nx/=L; ny/=L;
+    tv.push({x:ny,y:-nx});                       /* t = n rotated -90 deg: points along increasing s */
+    const d=model.dn[i];
+    pt.push([{x:nd.x-nx*d/2,y:nd.y-ny*d/2,h:-d/2},{x:nd.x+nx*d/2,y:nd.y+ny*d/2,h:d/2},{x:nd.x,y:nd.y,h:0}]);
+  }
+  const mechs=[];
+  const opens=(f,dw)=>(f===2)?true:(f===0?dw<-1e-12:dw>1e-12);
+  const facesA=pinned?[2]:[0,1], facesM=[0,1];
+  const aRange=pinned?[0]:null;
+  for(let a=0;a<nN-3;a++){
+    if(pinned&&a!==0)break;
+    for(let b=a+1;b<nN-2;b++)for(let c=b+1;c<nN-1;c++)for(let d=c+1;d<nN;d++){
+      if(pinned&&d!==nN-1)continue;
+      for(const fa of facesA)for(const fb of facesM)for(const fc of facesM)for(const fd of facesA){
+        const A=pt[a][fa],B=pt[b][fb],C=pt[c][fc],D=pt[d][fd];
+        const vBx=-(B.y-A.y), vBy=(B.x-A.x);           /* w1 = 1 */
+        /* w3 k x (C-D) - w2 k x (C-B) = vB */
+        const a11=-(C.y-D.y), a12=(C.y-B.y), a21=(C.x-D.x), a22=-(C.x-B.x);
+        const det=a11*a22-a12*a21;
+        if(Math.abs(det)<1e-9)continue;
+        const w3=(vBx*a22-a12*vBy)/det, w2=(a11*vBy-a21*vBx)/det;
+        if(!isFinite(w2)||!isFinite(w3)||Math.abs(w2)>1e6||Math.abs(w3)>1e6)continue;
+        const dws=[1,w2-1,w3-w2,-w3], fs=[fa,fb,fc,fd], ns=[a,b,c,d];
+        for(const sg of [1,-1]){
+          if(!dws.every((x,k)=>opens(fs[k],sg*x)))continue;
+          mechs.push({n:ns,f:fs,h:fs.map((f,k)=>pt[ns[k]][f].h),dw:dws.map(x=>sg*x)});
+        }
+      }
+    }
+  }
+  /* flat copies for the position loop: index 3*node+face into the per-position moment table, and dw */
+  const I=new Int32Array(4*mechs.length), W=new Float64Array(4*mechs.length);
+  mechs.forEach((m,j)=>{for(let k=0;k<4;k++){I[4*j+k]=3*m.n[k]+m.f[k];W[4*j+k]=m.dw[k];}});
+  Object.defineProperty(mechs,"flat",{value:{I,W},enumerable:false});
+  return mechs;
+}
+function mechanism(model,vehicle,impMode,mechs){
+  impMode=impMode||"crown";
+  mechs=mechs||mechanismSet(model);
+  const DL=model.DL;
+  const impCrown=impactAt(model.p,model.g.coverCrown+model.p.tws);
+  const impComb=(impMode==="local")?0:impCrown;
+  /* dead load work of each mechanism, and the worst one (largest P_D: closest to running under dead load) */
+  const PD=mechs.map(m=>{let s=0;for(let k=0;k<4;k++){const i=m.n[k];s+=m.dw[k]*(DL[i].M-DL[i].C*m.h[k]);}return s;});
+  let dlRun=-1; for(let j=0;j<mechs.length;j++)if(PD[j]>=0&&(dlRun<0||PD[j]>PD[dlRun]))dlRun=j;
+  const PDa=Float64Array.from(PD);
+  const Lveh=vehicle.axles[vehicle.axles.length-1].x;
+  const x0=model.g.xmin-Lveh-2.0, x1=model.g.xmax+2.0;
+  const step=Math.max(0.5,(x1-x0)/400);
+  let best={lam:Infinity,j:-1,pos:x0,dir:1,PL:0};
+  const nN=model.nN, mL=new Float64Array(nN*3);
+  for(let pos=x0;pos<=x1;pos+=step){
+    for(const dir of [1,-1]){
+      let q=nodalLL(model,vehicle,pos,dir);
+      if(impMode==="local")q=applyLocalImpact(model,q);
+      const LL=llEffects(model,q);
+      for(let i=0;i<nN;i++){const C=(1+impComb)*LL[i].C, Mv=(1+impComb)*LL[i].M, d=model.dn[i];
+        mL[3*i]=Mv+C*d/2; mL[3*i+1]=Mv-C*d/2; mL[3*i+2]=Mv;}
+      const FI=mechs.flat.I, FW=mechs.flat.W, nM=mechs.length;
+      let bl=best.lam, bj=-1, bP=0;
+      for(let j=0,o=0;j<nM;j++,o+=4){
+        const PL=FW[o]*mL[FI[o]]+FW[o+1]*mL[FI[o+1]]+FW[o+2]*mL[FI[o+2]]+FW[o+3]*mL[FI[o+3]];
+        if(!(PL>1e-12))continue;
+        let lam=-PDa[j]/PL; if(lam<0)lam=0;
+        if(lam<bl){bl=lam;bj=j;bP=PL;}
+      }
+      if(bj>=0)best={lam:bl,j:bj,pos,dir,PL:bP};
+    }
+  }
+  let out=null;
+  if(best.j>=0){
+    const m=mechs[best.j];
+    let q=nodalLL(model,vehicle,best.pos,best.dir);
+    if(impMode==="local")q=applyLocalImpact(model,q);
+    const LL=llEffects(model,q);
+    out={lam:best.lam,pos:best.pos,dir:best.dir,PD:PD[best.j],PL:best.PL,imp:impComb,
+      hinges:m.n.map((i,k)=>{const C=(1+impComb)*LL[i].C, Mv=(1+impComb)*LL[i].M;
+        return {i,face:["intrados","extrados","axis (pin)"][m.f[k]],h:m.h[k],dw:m.dw[k],
+          PDl:DL[i].C,MDl:DL[i].M,PLl:C,MLl:Mv,mD:DL[i].M-DL[i].C*m.h[k],mL:Mv-C*m.h[k]};})};
+  }
+  return {best:out,nMech:mechs.length,step,dlRun:(dlRun>=0)?{n:mechs[dlRun].n,f:mechs[dlRun].f,PD:PD[dlRun]}:null};
+}
+
 /* Rating factor at EVERY section, each at its own critical vehicle position.
 
    rateVehicle answers "what is the rating of this bridge" — the minimum over
@@ -2764,7 +2867,7 @@ function vehiclesFor(mode){return (mode==="rail")?RAIL_VEHICLES:VEHICLES;}
 return {buildModel,buildGeometry,denseIntrados,fitAll,fitOk,stressPair,
         SHALLOW_FILL,slabWidthE,shallowWidth,shallowRate,rateAt,isLrfdRate,LRFD_MIN_FILL,shallowRuleOn,stripLoadConc,coverAtX,llRegime,deepTire,
         RAIL_VEHICLES,ALL_VEHICLES,vehiclesFor,railSpread,railGroups,railTracks,TIE_LONG,nodalLL,nodalLLByAxle,llEffects,stressMax,
-        impactFor,impactForRail,impactAt,baseDepth,faAt,leadAxleX,shearRF,deterZones,tribSpan,coverFrac,rateTrace,rateAllSections,extremeAt,railRate,llEffectsSplit,llAtSection,axleLs,axleTrib,axleFoot,axleHalves,trackExtents,applyLocalImpact,rateVehicle,slideScan,slideDL,thrustOffsets,VEHICLES,
+        impactFor,impactForRail,impactAt,baseDepth,faAt,leadAxleX,shearRF,deterZones,tribSpan,coverFrac,rateTrace,rateAllSections,extremeAt,railRate,llEffectsSplit,llAtSection,axleLs,axleTrib,axleFoot,axleHalves,trackExtents,applyLocalImpact,rateVehicle,slideScan,slideDL,mechanismSet,mechanism,thrustOffsets,VEHICLES,
         TIRE_L,TIRE_W,GAGE,sideBySide,sideBySideAt,lanesOn,TRUCK_CLR};
 })();
 
@@ -7672,8 +7775,23 @@ function validate(p,M,results){
     "§7.2.7.4B says to neglect); passive restraint of the fill against sway of the ring (the fill is load only); "+
     "three-dimensional behaviour (skew, transverse distribution beyond the wheel-load rules, longitudinal cracking of "+
     "the barrel, edge strips); ring separation of multi-ring barrels (the ring acts as one solid section); abutment and "+
-    "pier capacity, foundation movement and scour; and collapse-mechanism capacity (the rating is an elastic "+
-    "allowable-stress rating). Assess these separately where they matter.","—");
+    "pier capacity, foundation movement and scour; and collapse-mechanism capacity as a rating (the rating is an "+
+    "elastic allowable-stress rating; the four-hinge mechanism factor on the Rating tab is an advisory cross-check). "+
+    "Assess these separately where they matter.","—");
+  /* MECH (S-1, 2026-11-07): advisory four-hinge mechanism cross-check */
+  if(M&&M.mech&&M.mech.rows.length){
+    const C=M.mech, G=C.gov, lam=G.r.best?G.r.best.lam:Infinity;
+    const st=C.dlRun?"bad":(C.low.length?"wn":"ok");
+    add(st,"Collapse mechanism cross-check (advisory)",
+      (C.dlRun?"<b>Dead load alone forms a four-hinge mechanism</b>: no thrust line fits inside the ring under dead load. ":"")+
+      `Controlling vehicle <b>${esc(G.name)}</b>: mechanism load factor &lambda; = <b>${nfx(lam,2)}</b> against the elastic `+
+      `RF ${nfx(G.rf,3)} (hinge grid ${C.nH} elements). `+
+      (C.low.length?`For ${C.low.map(q=>esc(q.name)).join(", ")} &lambda; is below the elastic rating, which a correct elastic `+
+          "rating should not allow: review the model before relying on the rating. ":
+        (C.dlRun?"":"&lambda; exceeds the elastic rating for every vehicle, as expected. "))+
+      "Rigid-block limit analysis (no tension, unlimited compressive strength, no sliding); it does not change a rating."+
+      archWorkedIn([{tab:"rate",card:"rate_mech",txt:"λ "+nfx(lam,2),lab:"Rating · Collapse mechanism"}]),"advisory");
+  }
   add("na","Spandrel wall participation",
     "§7.2.7.4B permits a spandrel to act as an independent member but states the ability of a spandrel to "+
     "support itself and a portion of the arch is uncertain and shall be neglected. Spandrel weight must be "+
@@ -10978,7 +11096,9 @@ function buildOutput(p){
           the barrel and edge strips.</li>
       <li>Ring separation of multi-ring barrels: the ring is one solid section.</li>
       <li>Abutment and pier capacity, foundation movement and scour.</li>
-      <li>Collapse-mechanism capacity: the rating is an elastic allowable-stress rating (§7.2.7).</li>
+      <li>Collapse-mechanism capacity is not a rating here: the rating is an elastic allowable-stress rating (§7.2.7). A
+          four-hinge mechanism load factor (no tension, unlimited compressive strength, no sliding) is reported on the
+          Rating tab as an advisory cross-check only.</li>
       </ul>`;})(),"");
   panes.sum=s;
 
@@ -11299,6 +11419,58 @@ function buildOutput(p){
        compression governs and the joints do not slide at the rated load. The check uses the section normal at the node as
        the joint, the same section the stress check uses; real bed joints may be inclined to it.</div>`;
     s+=UI.pnl("rate_slide",c5(),"Bed-joint sliding — |V| ≤ μN (advisory)",sh,"advisory");
+  }
+  if(archMech&&archMech.rows.length){
+    const C=archMech, G=C.gov, b=G.r.best, Mh=C.Mh;
+    let mh=msg("inf","Collapse mechanism: an advisory cross-check, not a rating",
+      "Rigid-block limit analysis after Heyman (<i>The Masonry Arch</i>, 1982; verify, not in references): the masonry "+
+      "has no tensile strength, unlimited compressive strength, and joints do not slide. Four hinges, on the intrados "+
+      "or the extrados at the nodes of the "+C.nH+"-element mesh (a pinned springing is an axis hinge), turn the ring into "+
+      "a three-block chain. For each admissible chain (every hinge opening) the virtual work of the loads gives the "+
+      "live load factor at collapse; the lowest over "+C.nMech.toLocaleString("en-US")+" chains and every vehicle position "+
+      "(swept at "+nfx(G.r.step,2)+" ft in both directions, same wheel-load distribution and impact as the rating) is "+
+      "&lambda;. The elastic §7.2.7 rating stands; &lambda; carries no safety factor and ignores crushing, so it is only "+
+      "a check that the elastic rating is not above the collapse load.");
+    if(C.dlRun)mh+=msg("err","Dead load alone forms a mechanism",
+      `Hinges at ${C.dlRun.n.map((i,k)=>esc(CALC.secTag(Mh,i))+" ("+["intrados","extrados","axis"][C.dlRun.f[k]]+")").join(", ")}: `+
+      `the dead load does positive work (P<sub>D</sub> = ${nfx(C.dlRun.PD,3)} k·ft/ft per unit rotation), so no thrust line `+
+      `fits inside the ring under dead load and &lambda; = 0 for every vehicle.`);
+    mh+=dtab([{k:"tag",h:"Vehicle",txt:1},{k:"rf",h:"Elastic RF (reported)",dp:3},{k:"lam",h:"Mechanism &lambda;",dp:2},
+        {k:"ratio",h:"&lambda; / RF",dp:2},{k:"hin",h:"hinges",txt:1}],
+      C.rows.map((q,i)=>({__i:i,tag:esc(q.name)+(q===G?" (controls the rating)":""),rf:q.rf,lam:q.r.best?q.r.best.lam:Infinity,
+        ratio:(q.r.best&&q.rf>0)?q.r.best.lam/q.rf:Infinity,
+        hin:q.r.best?q.r.best.hinges.map(h=>CALC.secTag(Mh,h.i)+(h.face==="intrados"?" i":h.face==="extrados"?" e":" pin")).join(", "):"none admissible"})),{});
+    if(b){
+      mh+=`<h4>Worked: ${esc(G.name)}, lead axle at x = ${nfx(ARCH.leadAxleX(G.veh,b.pos,b.dir),2)} ft, ${b.dir<0?"right to left":"left to right"}</h4>`+
+        dtab([{k:"tag",h:"Hinge",txt:1},{k:"face",h:"face",txt:1},{k:"h",h:"h (ft)",dp:3},{k:"dw",h:"&Delta;&omega;",dp:4},
+          {k:"PD",h:"P<sub>D</sub> (k/ft)",dp:3},{k:"MD",h:"M<sub>D</sub> (k·ft/ft)",dp:3},{k:"mD",h:"m<sub>D</sub> = M<sub>D</sub> − P<sub>D</sub>h",dp:3},
+          {k:"PL",h:"P<sub>L</sub>(1+I)",dp:3},{k:"ML",h:"M<sub>L</sub>(1+I)",dp:3},{k:"mL",h:"m<sub>L</sub>",dp:3},
+          {k:"wD",h:"&Delta;&omega;·m<sub>D</sub>",dp:3},{k:"wL",h:"&Delta;&omega;·m<sub>L</sub>",dp:3}],
+          b.hinges.map((h,k)=>({__i:k,tag:CALC.secTag(Mh,h.i)+" (x = "+nfx(Mh.g.nodes[h.i].x,2)+" ft)",face:h.face,h:h.h,dw:h.dw,
+            PD:h.PDl,MD:h.MDl,mD:h.mD,PL:h.PLl,ML:h.MLl,mL:h.mL,wD:h.dw*h.mD,wL:h.dw*h.mL})),{})+
+        R.step({label:"Dead load work in the mechanism",ref:"virtual work",sym:"P_D=\\sum \\Delta\\omega_h\\, m_{D,h}",
+          sub:b.hinges.map(h=>`(${R.num(h.dw*h.mD,3)})`).join("+"),res:R.num(b.PD,3),units:"k·ft/ft"})+
+        R.step({label:"Live load work in the mechanism",ref:"virtual work",sym:"P_L=\\sum \\Delta\\omega_h\\, m_{L,h}",
+          sub:b.hinges.map(h=>`(${R.num(h.dw*h.mL,3)})`).join("+"),res:R.num(b.PL,3),units:"k·ft/ft",
+          note:"Each term is &Delta;&omega;·m from the last two columns of the table above."})+
+        R.step({label:"Collapse load factor on the live load",ref:"advisory",sym:"\\lambda=-P_D/P_L",
+          sub:`-(${R.num(b.PD,3)})/${R.num(b.PL,3)}`,res:R.num(b.lam,3),units:"",
+          note:`Elastic RF for this vehicle ${nfx(G.rf,3)}; &lambda;/RF = ${nfx(G.rf>0?b.lam/G.rf:Infinity,2)}.`})+
+        `<div class="note"><b>How it is worked.</b> h is the hinge offset from the axis along the outward normal (−d/2 intrados,
+         +d/2 extrados, 0 at a pin). m = M − P·h is the section moment about the hinge point (P compression positive, M sagging
+         positive, as in the stress check). &Delta;&omega; is the relative rotation of the block to the right of the hinge
+         against the block to its left, from the four-bar kinematics with the first block turning +1 about the first hinge
+         (anticlockwise positive); an intrados hinge opens only for &Delta;&omega; &lt; 0 and an extrados hinge only for
+         &Delta;&omega; &gt; 0. The work of the loads equals &Sigma; &Delta;&omega;·m for any set of section forces in
+         equilibrium with them (a self-stress does no work in a mechanism), so the elastic section forces at the hinges are
+         used. Check of the method: a semicircular ring under its own weight alone first forms a mechanism at a thickness of
+         0.1067 of the axis radius on a 48-element mesh, against Heyman's 0.106 and the 0.1075 usually quoted.</div>`;
+    }
+    mh+=`<div class="note"><b>Not included:</b> crushing (finite compressive strength) and sliding at the hinges, passive
+     restraint and load spread by the fill beyond the wheel-load rules, spandrel walls, ring separation, and hinges between
+     nodes (the hinge grid is the ${C.nH}-element mesh). Deterioration zones enter through the reduced depth at the nodes
+     only. MEXE / modified MEXE screening is not provided. Computed in ${nfx(C.ms/1000,1)} s.</div>`;
+    s+=UI.pnl("rate_mech",c5(),"Collapse mechanism — four-hinge cross-check (advisory)",mh,"advisory");
   }
   const govId=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b).id:null;
   {
@@ -11958,6 +12130,34 @@ function archSlideRun(p){
   Object.defineProperty(M,"slide",{value:C,writable:true,configurable:true,enumerable:false});
   return C;
 }
+/* MECH (review S-1, 2026-11-07): four-hinge collapse mechanism, advisory cross-check (ARCH.mechanism). Hinge grid =
+   the nodes of a mesh of nH = 4*ceil(max(24, n1)/4) elements (at most 48); every selected vehicle is swept (0.5 ft,
+   both directions, same impact and wheel-load distribution as the rating). It never changes a rating factor. */
+let archMech=null;
+function archMechRun(p){
+  archMech=null;
+  if(!results.length)return null;
+  const n1=(archConv&&archConv.n1)||M.nEl;
+  const nH=Math.min(48,Math.ceil(Math.max(24,n1)/4)*4);
+  const key=JSON.stringify(p)+"|"+nH;
+  if(!(archMechRun.cache&&archMechRun.cache.key===key)){
+    const t0=Date.now();
+    const Mh=(archConv&&archConv.models&&archConv.models[nH])||ARCH.buildModel(Object.assign({},p,{nEl:nH}));
+    const set=ARCH.mechanismSet(Mh);
+    const vs=ARCH.vehiclesFor(p.loadMode).filter(v=>p.vehicles.includes(v.id));
+    const rows=vs.map(v=>{const r=ARCH.mechanism(Mh,v,p.impMode,set);return {id:v.id,name:v.name,veh:v,r};});
+    archMechRun.cache={key,nH,Mh,nMech:set.length,rows,ms:Date.now()-t0};
+  }
+  archMech=archMechRun.cache;
+  const C=archMech;
+  for(const row of C.rows){const r=results.find(q=>q.id===row.id);row.rf=r?r.rf:NaN;}
+  const gv=results.reduce((a,b)=>a.rf<b.rf?a:b);
+  C.gov=C.rows.find(q=>q.id===gv.id)||C.rows[0];
+  C.dlRun=C.rows.length?C.rows[0].r.dlRun:null;
+  C.low=C.rows.filter(q=>q.r.best&&q.r.best.lam<q.rf-5e-4);
+  Object.defineProperty(M,"mech",{value:C,writable:true,configurable:true,enumerable:false});
+  return C;
+}
 /* the convergence table (Rating tab, Verification tab and Report) */
 function archConvTable(){
   const C=archConv; if(!C||!C.rows)return "";
@@ -12009,6 +12209,7 @@ function render(){
   archHsvRun(p);    /* HSV (L-5): HS20 rear-axle spacing V = 14 to 30 ft; lowest RF reported */
   archLaneRun(p);   /* HLN (M-1): H vehicles at 12 tons or less also rated with the lane loading */
   archSlideRun(p);  /* SLD (S-2): bed-joint sliding |V| <= mu N, advisory; does not change a rating */
+  archMechRun(p);   /* MECH (S-1): four-hinge collapse mechanism, advisory cross-check */
   window.__impCmp=impCmp;
   /* The editor's "Resolves to" column depends on the model that was just built,
      so it is refreshed here rather than left showing whatever was true when the
