@@ -1803,7 +1803,7 @@ Review of 2026-11-07, LOW findings. L7 (closed-form FER) is a separate PR. Every
   - `node tests/smoke/project-library.mjs --tool smd` fails against main only on `tabR` (TBS, intended); with `tabR` and the new `crits.zR` / `env.R` moment fields left out of its readout, it passes in full.
 - **Saved data:** no key or format changed; LV never writes to `loads`. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/sm-fer-exact (FERX: closed-form fixed-end forces for uniform and trapezoidal loads; review L7)   [CALCULATION CHANGE — numerical, about 1e-5 relative] [neither more nor less conservative: closer to exact]
+## 2026-11-07 — PR: claude/sm-fer-exact (PR #1118: https://github.com/mlococo88/All-Structural/pull/1118) (FERX: closed-form fixed-end forces for uniform and trapezoidal loads; review L7)   [CALCULATION CHANGE — numerical, about 1e-5 relative] [neither more nor less conservative: closer to exact]
 - **Problem:** `spanFER()` integrated the fixed-end forces of uniform and linearly varying (partial) loads with a 400-strip midpoint sum. The reported values differed from closed form in the 4th–5th digit:
   - 2-span UDL |M_B| = 70.3127 vs wL²/8 = 70.3125;
   - propped cantilever M_fix = 100.0003 vs 100.
