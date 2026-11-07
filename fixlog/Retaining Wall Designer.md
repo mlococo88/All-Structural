@@ -2316,7 +2316,7 @@ function renderStatus(r) {
   - The REVIEW list is kept short: β < 0 and φ > 1.
 - **Observation (not changed):** `getInputs` applies the variable-height rule (H = H_lo + 0.75(H_hi − H_lo)) whenever its box is ticked, also in ACI mode, where the card is hidden.
 
-## 2026-11-07 — PR: claude/rw-self-checks (RWSC) — self-consistency checks panel under the check summary   [display only; no result change]
+## 2026-11-07 — PR: claude/rw-self-checks (PR #937: https://github.com/mlococo88/All-Structural/pull/937) (RWSC) — self-consistency checks panel under the check summary   [display only; no result change]
 - **Why:** engineer-approved 2026-11-06 (task 4, review Phase 4b; as Spread Footing's "Self-consistency checks — all n passed").
 - **What:** a collapsed `<details>` "Self-consistency checks — all n passed ✓" (or "— k MISMATCH", which opens itself) under the check summary (`#rwSelf` in `#rwDashBox`; hidden while the summary is collapsed or while an input is in error). Each row: the internal check, ✓ OK / ✗ MISMATCH, and the detail with both numbers. Each value is recomputed by an independent path:
   1. B = L_t + t_s + L_h vs B.
