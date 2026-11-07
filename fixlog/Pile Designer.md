@@ -19995,7 +19995,7 @@ index 06a42e4..b58d4e3 100644
 - **Hand-off:** `pileResults.fixity.Lf` (= `R.buckling.Lf_buck`) changes with L_f for these cases. The format is unchanged.
 - **Other copies:** the integral-abutment path already uses 0.465 S_u (PDA-D2) and is unchanged.
 
-## 2026-11-07 — PR: claude/pile-m3-plunge (PDA-M3) — plunge: AASHTO 10.9.3.10.5 casing-to-grout bond and bar development added; the 40 d_b / 3 ft rule kept and labelled a tool detailing rule   [check-logic change]
+## 2026-11-07 — PR: claude/pile-m3-plunge (PR #1024: https://github.com/mlococo88/All-Structural/pull/1024) (PDA-M3) — plunge: AASHTO 10.9.3.10.5 casing-to-grout bond and bar development added; the 40 d_b / 3 ft rule kept and labelled a tool detailing rule   [check-logic change]
 - **Problem (review M3):** the "plunge develops the cased load" check was a hard fail on a tool rule, L_p ≥ max(40 d_b, 3 ft), which is not an AASHTO provision. The checks that 10.9.3.10.5 requires were missing: casing-to-grout bond, and bar development per Sec. 5.
 - **Governing provision:** AASHTO LRFD 10th Ed. (2024):
   - Art. 10.9.3.10.5: casing-to-grout bond and bar development length are to be checked per Sec. 5.
