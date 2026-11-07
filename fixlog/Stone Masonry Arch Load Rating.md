@@ -1365,7 +1365,7 @@ function transDisp(w,n,c,cap){
 - **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool arch`; `tests/smoke/project-library.mjs --tool stonearch` (the only failures are the four A-vs-B identity checks, by design: live-load envelopes and ratings move; undo, dialog, quota and console checks pass); all 14 tabs with 0 console errors.
 - **Open item closed:** the 2026-10-12 "Remaining" item (Art. 6.4.2 slab-width limit).
 
-## 2026-11-07 — PR: claude/stonearch-m3-quarter-nodes — Auto element count a multiple of 4; QP / CR labels only on the true nodes (MQN; review M-3)
+## 2026-11-07 — PR #1075: https://github.com/mlococo88/All-Structural/pull/1075 — Auto element count a multiple of 4; QP / CR labels only on the true nodes (MQN; review M-3)
 
 ### MQN-1. Auto count = §7.2.7.2B minimum rounded up to a multiple of 4   [§4 result change]
 - **Problem (review M-3):** the auto count was max(10, ceil(S/4)), which is 10 at the 40 ft default. On a 10-element mesh, node 3 sits at 0.3 of the arc (x = 11.38 ft), not at the quarter point (arc 0.25, x ≈ 10.4 ft). §7.2.7.7B and §7.2.2.6 require influence lines and ratings at the quarter points at a minimum.
