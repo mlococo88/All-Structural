@@ -1663,7 +1663,7 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
   - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"`, `node tests/smoke/phone-layout.mjs --tool smd` and `node tests/smoke/project-library.mjs --tool smd` pass.
 - **Other copies:** none. Steel Beam Design has its own engine and no pattern loading; not changed.
 
-## 2026-11-07 — PR: claude/sm-case-warn (CZF + WPM: warning for a load case with no factor in any combination; one-direction wind note; review M2, M3)   [display only; no result change]
+## 2026-11-07 — PR: claude/sm-case-warn (PR #1108: https://github.com/mlococo88/All-Structural/pull/1108) (CZF + WPM: warning for a load case with no factor in any combination; one-direction wind note; review M2, M3)   [display only; no result change]
 ### CZF (review M2). A load case with no factor in any combination is flagged
 - **Problem:** `addCase()` creates a case with no factor in any combination, so loads put in it are multiplied by `fac[ld.lc]||0` = 0 everywhere. Every combination and the envelope ignored them without a message. Check: one UDL in a new case EQ, envelope: R = M = 0.
 - **Where:**
