@@ -2512,7 +2512,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Saved data:** none. **ENGINEER_CHECKS:** the edition, K_d, K_z and ice items added to the Light Pole line.
 - **Open items (flagged, not changed):** (1) the ice design thickness under ASCE 7-16 Ch. 10 (equation and map basis) — verify; (2) K_z constants against the printed ASCE 7-16 Table 26.11-1; (3) Fig. 29.3-1 s/h = 0.7 row (review M8) — not implemented (cannot verify).
 
-## 2026-11-07 — PR: claude/lp-m2-soil-torsion (LPM2: drilled-shaft soil torsion — a REVIEW row instead of a silent pass, both modes)   [status display only; no computed value; cable values identical]
+## 2026-11-07 — PR: claude/lp-m2-soil-torsion (PR #1046: https://github.com/mlococo88/All-Structural/pull/1046) (LPM2: drilled-shaft soil torsion — a REVIEW row instead of a silent pass, both modes)   [status display only; no computed value; cable values identical]
 - **Problem (review M2, 2026-11-07):** LRFDLTS Art. 13.6 (p. 13-2, verified in the 2015 PDF) requires drilled shafts to provide adequate resistance to the applied torsion; it gives no method. The tool computes the groundline T_u (monopost sign Cases B/C, 0.15b torsion, arm wind) but not the soil's torsional resistance. This was a note on the Shaft tab (open item N2, accepted 2026-11-02); the LTS Summary and the check panel showed nothing, so the shaft looked passed.
 - **Where:**
   - LTS Summary card (anchor `// LPM2`): when T_u > 0, row "Shaft — soil torsion resistance — **REVIEW — not computed**: T_u = … lb·ft at the groundline; check the soil's torsional resistance around the shaft (geotechnical engineer) — Art. 13.6 (p. 13-2) …".
