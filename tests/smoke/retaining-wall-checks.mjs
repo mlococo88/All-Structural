@@ -10,6 +10,7 @@
 // RWSC (2026-11-07): the self-consistency panel passes on representative walls, reports MISMATCH on a tampered result, hides on error.
 // RWPR (2026-11-07): the Report prints alone, with every section, the overview figures and the input echo; 0 KaTeX errors.
 // RWKX (2026-11-07): the tabs' equations are all set by KaTeX, none in error; MathJax is not loaded.
+// RWPL (2026-11-07): pile-supported footing (Phase 8c) input errors and results are in CASES and AUD.
 // Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, RWFF front-face T&S, RWSK shear key, RWE1 AASHTO Extreme Event I, RWIB ACI/IBC 0.7E, RWSQ stem seismic, RWCV EE II vertical earth thrust, RWUP ACI uplift split, ...).
 //   node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 import path from 'path';
@@ -39,6 +40,10 @@ const CASES = [
   ['AASHTO: variable height high < low', { design_basis: 'AASHTO', vh_enable: true, vh_hlo: 10, vh_hhi: 6 }, 'vh_hhi', 'e'],
   ['AASHTO: collision joint spacing blank', { design_basis: 'AASHTO', aashto_ct_enable: true, aashto_ct_tl: 'manual', aashto_ct_ljoint: '' }, 'aashto_ct_ljoint', 'e'],
   ['REVIEW: β < 0', { beta: -5 }, 'beta', 'r'],
+  ['RWPL pile row outside the footing', { fnd_type: 'pile', pile_x2: 20 }, 'pile_x2', 'e'],
+  ['RWPL two pile rows at the same x', { fnd_type: 'pile', pile_x2: 1.5 }, 'pile_x2', 'e'],
+  ['RWPL embedment + clear ≥ t_f', { fnd_type: 'pile', pile_embed: 16 }, 'pile_embed', 'e'],
+  ['RWPL AASHTO φ_c > 1', { fnd_type: 'pile', design_basis: 'AASHTO', pile_phic: 1.2 }, 'pile_phic', 'e'],
 ];
 const TABS = ['overview', 'stability', 'stem', 'footing', 'rebar', 'diagram', 'threed', 'drawings', 'report'];
 
@@ -239,6 +244,16 @@ const AUD = [
     ['Math.abs(R.Mu_toe_net - 7325) < 1 && Math.abs(R.Mu_heel_net - 19032) < 1 && R.upS', 'toe 7325, heel 19032']]],
   ['RWUP ACI no water: no split', {}, [['R.upS === null && !/Soil reaction without the water/.test(T.footing)', 'no split']]],
   ['RWUP AASHTO with water: no split', { design_basis: 'AASHTO', wt_mode: 'depth', wt_depth: 6 }, [['R.upS === null', 'no split']]],
+  ['RWPL ACI default wall on 2 pile rows (x 1.5 / 11.0 ft, s 6 ft): P 47.45 / 52.04 kip (D + H + L), 32.62 / 27.08 (0.6D + H)', { fnd_type: 'pile' }, [
+    ['Math.abs(R.pile.g.N - 1 / 3) < 1e-12 && Math.abs(R.pile.g.xbar - 6.25) < 1e-9 && Math.abs(R.pile.g.I - 7.520833) < 1e-5', 'N, x̄, I'],
+    ['Math.abs(R.pile.comb[0].L.rows[0].P - 47.455) < 0.001 && Math.abs(R.pile.comb[0].L.rows[1].P - 52.040) < 0.001 && Math.abs(R.pile.comb[1].L.rows[0].P - 32.617) < 0.001', 'pile loads'],
+    ['Math.abs(R.pile.govH.L.rows[0].h - 10.935) < 0.001 && !R.checks.pileLat.ok && R.checks.pileComp.ok && R.checks.pileUplift.ok', 'H/N 10.94 > H_a 8 (placeholder) FAIL; compression, uplift pass'],
+    ['!R.checks.ot && !R.checks.sliding && !R.checks.bearing && !R.checks.ecc', 'soil checks replaced'],
+    ['/Pile Step 2 — Pile Reactions and Checks/i.test(T.stability) && /Not applicable: pile-supported footing/i.test(T.stability) && /Pile Compression/i.test(T.overview) && /Pile Step 2 — Pile reactions and checks/.test(P)', 'Stability cards, N/A notes, dashboard, Report']]],
+  ['RWPL AASHTO default wall on 2 pile rows: Strength I max 83.60 / 77.66 kip, φ_cR_n 195', { fnd_type: 'pile', design_basis: 'AASHTO' }, [
+    ['Math.abs(R.pile.comb[0].L.rows[0].P - 83.604) < 0.001 && Math.abs(R.pile.comb[0].L.rows[1].P - 77.664) < 0.001 && Math.abs(R.pile.govC.cap.c - 195) < 1e-9', 'Strength I max'],
+    ['R.checks.pileSpacing.ok && R.checks.pileEdge.ok && R.checks.pileEmbed.ok && !R.checks.eeSliding && !R.warnings.some(w => /^AASHTO bearing/.test(w))', 'detailing checks (Art. 10.7.1.2), no soil notes']]],
+  ['RWPL spread footing unchanged: no pile results', {}, [['!R.pile && !(\'pile\' in R) && R.checks.bearing && R.checks.ot', 'spread footing checks, no pile field in the results']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {

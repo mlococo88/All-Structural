@@ -3725,6 +3725,45 @@ function comboCapacities(cc, combo){
     }
     pryDem=combo.tors.sumV;
   }
+  /* BPH1 (2026-11-07): INCLINED SHEAR — each edge for its own component (ACI 318-19 §17.7.2.1(c), (d) and
+     R17.7.2.1: anchors near a corner with shear components normal to each edge are checked for each component
+     independently). Rectangular pedestal, no torsion (the torsion sweep above already includes the axis directions),
+     V_x ≠ 0 and V_y ≠ 0: the x component alone and the y component alone are each run through the full Fig.
+     R17.7.2.1b case logic (shearCases: Case 1 / 2 / 3 toward the edge that component pushes toward, plus the
+     §17.7.2.1(c) parallel check of that component on the two side edges, ψ_ed,V = 1.0 and 2V_cbg). The resultant
+     check above stays a candidate (decision pending engineer review: kept, conservative). The worst ratio governs;
+     its demand is the component (the same basis as the resultant check: the full V of that check). Axis-aligned
+     shear: nothing here runs, so every result is unchanged. */
+  let sbkComp=null;
+  if(!combo.tors && !bpCircPier()){
+    const vx0=+combo.raw.Vx||0, vy0=+combo.raw.Vy||0;
+    if(Math.abs(vx0)>1e-9 && Math.abs(vy0)>1e-9){
+      const baseD=sbk.phiVcbg>1e-9? combo.Vres/sbk.phiVcbg : Infinity;
+      const comps=[{ax:"x",V:vx0},{ax:"y",V:vy0}].map(o=>{
+        const vc=shearCases(o.ax==="x"? {Vx:o.V,Vy:0,Vres:Math.abs(o.V)} : {Vx:0,Vy:o.V,Vres:Math.abs(o.V)}, condAV);
+        if(!vc.applicable || !vc.used) return null;
+        const sb=vc.used.sb, dem=Math.abs(o.V);
+        return {ax:o.ax, V:o.V, dem, sb, caseId:vc.used.id, edge:vc.edgeName, dcr:sb.phiVcbg>1e-9? dem/sb.phiVcbg : Infinity};
+      }).filter(Boolean);
+      const worst=comps.reduce((m,x)=>(!m || x.dcr>m.dcr)? x : m, null);
+      const govC=(worst && worst.dcr>baseD+1e-12)? worst : null;
+      const caseTxt=o=>(o.caseId==="single"? "single row" : "Case "+o.caseId);
+      const stp={title:"Inclined shear — each edge for its own component",ref:"ACI 318-19 §17.7.2.1(c), (d); R17.7.2.1",
+        lines:["V_x="+fmt(vx0,3)+",\\ V_y="+fmt(vy0,3)+",\\ V_{res}="+fmt(combo.Vres,3)+"\\ \\text{kip}",
+          "\\text{resultant: }"+fmt(combo.Vres,3)+"/"+fmt(sbk.phiVcbg,3)+"="+fmt(baseD,3)+"\\ \\text{(edge "+sbk.govEdge+")}"]
+          .concat(comps.map(o=>"V_"+o.ax+"\\text{ alone (toward "+o.edge+", "+caseTxt(o)+"; edge "+o.sb.govEdge+"): }"+fmt(o.dem,3)+"/"+fmt(o.sb.phiVcbg,3)+"="+fmt(o.dcr,3)))
+          .concat(["\\text{governing: }"+(govC? "V_"+govC.ax+"\\text{ alone}" : "\\text{the resultant}")]),
+        vars:[["rule","","each shear component is checked toward the edge it pushes toward (Fig. R17.7.2.1b cases) and parallel to the two side edges (§17.7.2.1(c)); the resultant check is kept as a further candidate; the largest ratio governs"]]};
+      sbkComp={baseD, comps, gov:govC? govC.ax : "res"};
+      if(govC){
+        sbkUse=Object.assign({},govC.sb,{component:{ax:govC.ax,V:govC.V,dem:govC.dem,caseId:govC.caseId,dcr:govC.dcr,baseD}});
+        sbkUse.steps=[stp].concat(govC.sb.steps||[]);
+        sbkDem=govC.dem;
+      } else {
+        sbkUse=Object.assign({},sbk); sbkUse.steps=[stp].concat(sbk.steps||[]);
+      }
+    }
+  }
   /* Shear bases mirror the tension ones: steel rupture and stand-off bending are
      per-bolt; breakout and pryout envelop the group. */
   let shearModes=[ {label:"Steel (φVsa)", ref:"§17.7.1", per:"anchor",
@@ -3777,7 +3816,7 @@ function comboCapacities(cc, combo){
   const govTfor=(c)=> tensionModes.reduce((m,x)=> tDCR(c,x)>tDCR(c,m)?x:m, tensionModes[0]);
   const govVfor=(c)=> shearModes.reduce((m,x)=> vDCR(c,x)>vDCR(c,m)?x:m, shearModes[0]);
 
-  return {nT,nV,st,po,tb,sfb,sv,sbk:sbkUse,pry,la,tensionModes,shearModes,sbkDem,pryDem,
+  return {nT,nV,st,po,tb,sfb,sv,sbk:sbkUse,pry,la,tensionModes,shearModes,sbkDem,pryDem,sbkComp:sbkComp||undefined,   /* BPH1 */
     cageT:cageT||undefined, cageV:cageV||undefined, cageTSub:cageTSub||undefined, cageVSub:cageVSub||undefined,   /* BC-5 (circular pier only) */
     tDemand,vDemand,tDCR,vDCR,govTfor,govVfor,
     Tu_group:combo.Tu_group, Vu_group:combo.Vres};
@@ -9560,7 +9599,7 @@ function openAnchorDetail(p, c, cap){
     if(!cap.sfb.na) grows.push(["Side-face blowout","§17.6.4", sfbEdgeDemand(c, (typeof CC!=="undefined"&&CC)?CC.g:anchorGeom()), cap.sfb.phiNsb]);
   }
   grows.push(["Pryout","§17.7.3", c.Vres, cap.pry.phiVcpg]);
-  if(!S.vRebar.present) grows.push(["Concrete breakout (shear)","§17.7.2", c.Vres, cap.sbk.phiVcbg]);
+  if(!S.vRebar.present) grows.push(["Concrete breakout (shear)","§17.7.2", (cap.sbkComp && cap.sbkDem!==undefined)? cap.sbkDem : c.Vres, cap.sbk.phiVcbg]);   /* BPH1 */
 
   const gt=el("table","tbl");
   {const tr=el("tr");["Limit state","Ref","Group demand ("+Fu+")","φ Capacity ("+Fu+")","DCR","Status"]
@@ -10659,7 +10698,7 @@ function profisResultsTable(body, c, cap, which){
     rows.push({mode:"Pryout Strength", basis:"group",
       loadA:Vanc, capA:cap.pry.phiVcpg/nV, loadG:Vgrp, capG:cap.pry.phiVcpg});
     rows.push({mode:"Concrete edge failure ("+(cap.sbk.govEdge||"—")+")", basis:"group",
-      loadA:Vanc, capA:cap.sbk.phiVcbg/nV, loadG:Vgrp, capG:cap.sbk.phiVcbg});
+      loadA:Vanc, capA:cap.sbk.phiVcbg/nV, loadG:(cap.sbkComp && cap.sbkDem!==undefined)? cap.sbkDem : Vgrp, capG:cap.sbk.phiVcbg});   /* BPH1: a governing component check's demand */
   }
 
   const t=el("table","tbl");
@@ -17124,6 +17163,8 @@ manPart("p4c","4C. Shear & Interaction",[
 
 {h3:"4C.3.5 Shear parallel to an edge"},
 {p:"When the shear runs <b>parallel</b> to a nearby edge rather than toward it, the edge can still break out sideways. ACI 318-19 §17.7.2.1(c) covers this: evaluate V<sub>cbg</sub> as if the shear acted perpendicular toward that edge with &psi;<sub>ed,V</sub> = 1.0, and <b>twice</b> that value is permitted. The program includes every parallel edge as a candidate alongside the toward-edge, and the governing (lowest) capacity wins; a parallel case is labelled explicitly in the output, e.g. &ldquo;+y (parallel)&rdquo;. Skipping parallel edges is a common software omission and is unconservative whenever a side edge is much closer than the edge the shear points at."},
+{h3:"4C.3.6 Inclined shear: each edge for its own component"},
+{p:"When the shear has both an x and a y component (and no torsion), each component is also checked on its own, as ACI 318-19 R17.7.2.1 advises for anchors near a corner with shear components normal to each edge (§17.7.2.1(c) and (d)). The x component alone is run through the Fig. R17.7.2.1b cases toward the edge it pushes toward, plus the parallel check on the two side edges; the y component the same way. The check of the resultant described above stays a candidate. The largest ratio governs, and its demand is that component. The Breakout (V) steps list all three ratios. A rectangular pedestal only: a circular pier uses the tangent-edge model, and with torsion the direction sweep already includes the x and y directions."},
 {h:"4C.4 Pryout"},
 {p:"Pryout is the mirror image of edge breakout. A short, stiff anchor loaded in shear rotates about a point near its head, and the <b>back</b> of the anchor kicks out a wedge of concrete on the side <i>opposite</i> the applied load. It governs when the anchor is short and far from any edge — precisely the case where edge breakout is not a concern."},
 {eqn:["V_{cpg} = k_{cp}\\,N_{cbg}",
