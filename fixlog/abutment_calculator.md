@@ -15737,3 +15737,101 @@ index 92a3437..edde439 100644
 -      ["Type",at?("attached, "+(w.orient==="inline"?"in-line":"U-wing")+"; junction method: "+(w.jMethod==="strip"?"most loaded horizontal strip":"total moment over H₀")):("independent, θ = "+fmt(+w.theta,1)+"°; design section "+(w.secMode==="user"?"x/L = "+fmt(+w.secFr,3):"owner / FHWA rule")+"; EH height "+(w.ehPlane==="heel"?"virtual back plane":"stem face")),""],
 +      ["Type",at?("attached, "+(w.orient==="inline"?"in-line":"U-wing")+"; junction method: "+(w.jMethod==="strip"?"most loaded horizontal strip":w.jMethod==="avgOnly"?"total moment over H₀ (strength), strip (Service I)":"larger of the total moment over H₀ and the most loaded strip")):("independent, θ = "+fmt(+w.theta,1)+"°; design section "+(w.secMode==="user"?"x/L = "+fmt(+w.secFr,3):"owner / FHWA rule")+"; EH height "+(w.ehPlane==="heel"?"virtual back plane":"stem face")),""],
 ```
+
+## 2026-11-07 — PR: claude/abut-m8-ts (ABM8: provided shrinkage and temperature bars checked for the stem, backwall and footing — area and spacing per 5.10.6)   [new check] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M8.
+
+### ABM8. S&T bars provided
+- **Where:** `defaultState` reinf (anchor `stemH:{size:"6", sp:9}, bwH:{size:"5", sp:12}, ftgL:{size:"6", sp:12},`); `migrate` (anchor `a saved project has no S&T bars entered`); panel I-9 inputs (anchor `Shrinkage &amp; temperature bars, each face [5.10.6] (Tab 5 §5.7a)`); `computeAll` C-12b (anchor `R.checks.ts={stem:tsOf(`); dashboard rows `ts_stem`, `ts_bw`, `ts_ftg` (anchor `ABM8: S&T bars provided [5.10.6]`); Tab 5 panel §5.7a `o-ts`; Input ID (bars "0" and the defaults left out); select handler (bar sizes kept as strings).
+- **Before:** A_s,ST of Eq. 5.10.6-1 was reported (and a #5 spacing suggested in schedule row E1), but the bars actually provided were never checked except on the wingwall.
+- **After:** new inputs for the bars provided on each face: stem horizontal, backwall horizontal, and footing longitudinal (top and bottom). Check: D/C = max(A_s,ST / A_s, s / s_max), where
+  - A_s,ST is the section's Eq. 5.10.6-1 value (the b and h of its flexure check, 0.11 ≤ A_s,ST ≤ 0.60 in²/ft);
+  - s_max = 12 in for walls and footings thicker than 18 in, else min(3t, 18 in), as the existing wing check.
+  
+  Bar "0" = not entered: a REVIEW dashboard row (counted as "design incomplete").
+  - Integral abutments: not applied (the integral wall has its own bars).
+  - Semi-integral: no backwall row (the end diaphragm replaces the backwall).
+- **Problem:** a required check on the element itself (5.10.6) was missing.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 5.10.6 (Eq. 5.10.6-1, f_y ≤ 75 ksi, area limits, spacing limits).
+- **Check case (built-in project, f_y = 60 ksi):**
+  - Stem: b = min(L_ab, h_stem) = 168 in, h = 54 in, so A_s,ST = 1.30·168·54/(2·222·60) = 0.443 in²/ft. #6 @ 9 gives A_s = 0.44·12/9 = 0.587, with s_max = 12 (t = 54 in). D/C = max(0.443/0.587, 9/12) = **0.755**.
+  - Backwall: b = 60, h = 18, so A_s,ST = max(0.11, 1.30·60·18/(2·78·60)) = 0.150. #5 @ 12 gives 0.31, with s_max = min(54, 18) = 18. D/C = max(0.484, 0.667) = **0.667**.
+  - Footing: b = 156, h = 36, so A_s,ST = 0.317. #6 @ 12 gives 0.44, with s_max = 12 (t = 36 in). D/C = max(0.720, 1.000) = **1.000** (passes).
+  - #5 @ 14 on the stem: A_s = 0.266, so D/C = max(1.666, 1.167) = **1.666 FAIL**.
+- **Saved data:** no key renamed. A saved project (no fields) gets size "0" (not entered) → three REVIEW rows until the bars are entered; its other results are identical. New projects start with the defaults above (they pass).
+- **How verified:**
+  - Headless origin/main vs branch, 24 scenarios: no existing result moves; only the new `R.checks.ts` and dashboard rows are added.
+  - `project-library --tool abutment`: the main-vs-branch "results identical" checks differ by the new result fields. Against the branch itself (`--a HEAD`): ALL PASS.
+  - All tabs and the Report render with 0 console errors; the self-test passes; `check-syntax` passes.
+- **Decision (pending engineer review):**
+  - For components 18 in thick or less, s_max = min(3t, 18 in). This is the existing wing rule. The 10th Ed. wording for "other situations" reads 3t "but not less than 18 in"; the smaller value is used, which is conservative.
+  - The footing longitudinal bars use the toe section's b and h.
+- **Other copies:** the wing S&T check (`W.ts`) uses the same rule (unchanged).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index d823b9f..fa506cf 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -769,0 +770 @@ function defaultState(){
++      stemH:{size:"6", sp:9}, bwH:{size:"5", sp:12}, ftgL:{size:"6", sp:12},   // ABM8: shrinkage & temperature bars provided, each face [5.10.6]: stem and backwall horizontal, footing longitudinal (top and bottom); size "0" = not entered
+@@ -1708,0 +1710 @@ function migrate(){
++    ["stemH","bwH","ftgL"].forEach(k=>{ if(!S.reinf[k]||typeof S.reinf[k]!=="object") S.reinf[k]={size:"0", sp:12}; });   // ABM8: a saved project has no S&T bars entered (REVIEW rows until they are)
+@@ -2329,0 +2332,4 @@ function buildInputs(){
++    ${iabType()==="integral"?"":`<div class="subhead">Shrinkage &amp; temperature bars, each face [5.10.6] (Tab 5 §5.7a)</div>
++      ${selRow("Stem — horizontal, bar","reinf.stemH.size",[["0","— not entered"]].concat(barOpts))}${inpRow("&nbsp;&nbsp;spacing","reinf.stemH.sp","in")}
++      ${iabType()==="semi"?"":`${selRow("Backwall — horizontal, bar","reinf.bwH.size",[["0","— not entered"]].concat(barOpts))}${inpRow("&nbsp;&nbsp;spacing","reinf.bwH.sp","in")}`}
++      ${selRow("Footing — longitudinal (top and bottom), bar","reinf.ftgL.size",[["0","— not entered"]].concat(barOpts))}${inpRow("&nbsp;&nbsp;spacing","reinf.ftgL.sp","in")}`}
+@@ -3769,10 +3774,0 @@ function computeAll(){
+-      /* PG1 (2026-11-07): a group with no lever arm about an axis (Σx'² = 0: one pile row in the moment direction; or Σy'² = 0)
+-         cannot resist a moment about it. Before, the moment was dropped (every pile V/n); now it is an input error and the pile and
+-         pile-cap checks are not computed (as with no active pile). Layouts with Σx'² > 0 and Σy'² > 0 are unchanged. */
+-      for(const lsName of Object.keys(LIMITS)){   // the largest unresisted moment of every permutation
+-        for(const pl of permutations(lsName,true)){ const c=comboEffects(lsName,pl.perm,pl.liveOn,false); if(c.V<=0) continue;
+-          const My=c.V*((c.Mv-c.Mh)/c.V-xgcT), Mx=c.Mt-c.V*ygc, u=SharedPileGroup.unresisted(c.V,My,Mx,R.pile);
+-          if(u && (!R.pile.unresisted || Math.abs(u.M)>Math.abs(R.pile.unresisted.M))) R.pile.unresisted={...u, ls:lsName, lbl:c.lbl}; } }
+-      if(R.pile.unresisted){ const u=R.pile.unresisted; R.pile.nActive=n; R.pile.n=0;   // as with no active pile: no pile results, every pile view and check skipped
+-        warnFor("conv",`Pile layout: ${u.axis==="y"?"a single pile row in the longitudinal direction (all active piles at one x, Σx′² = 0)":"a single pile line along the abutment (all active piles at one y, Σy′² = 0)"} cannot resist the overturning moment ${u.axis==="y"?"M_y":"M_x"} = ${fmt(u.M)} kip-ft (largest; ${u.ls}, ${u.lbl||""}) on pinned-head vertical piles. Add a pile row. The pile and pile-cap checks (pile reactions, punching, toe / heel on the piles) are not computed.`,"err"); }
+-      else{
+@@ -3827 +3822,0 @@ function computeAll(){
+-      }   // PG1
+@@ -4594,0 +4590,10 @@ function computeAll(){
++  /* ===== C-12b ABM8 (2026-11-07): shrinkage & temperature bars provided [AASHTO LRFD 10th Ed. 5.10.6] — stem and backwall horizontal, footing
++     longitudinal, each face: A_s ≥ A_s,ST of Eq. 5.10.6-1 (the section's b, h as in its flexure check; 0.11 ≤ A_s,ST ≤ 0.60 in²/ft) and the spacing
++     ≤ 12 in for walls and footings thicker than 18 in, else ≤ min(3t, 18 in) (as the wingwall check). Size "0" = not entered (REVIEW). ===== */
++  if(iabType()!=="integral"){ const tsOf=(key,name,c,tIn)=>{ const r=S.reinf[key]||{size:"0",sp:12}, ent=String(r.size)!=="0"&&BARS[String(r.size)];
++      const sMax=tIn>18+1e-9? 12 : Math.min(3*tIn,18), out={key,name,bar:String(r.size),sp:+r.sp,req:c?c.AsST:NaN,bST:c?c.bST:NaN,hST:c?c.hST:NaN,t:tIn,sMax,ent:!!ent};
++      if(ent){ out.As=BARS[String(r.size)].Ab*12/Math.max(1e-9,+r.sp); out.dcA=out.req/out.As; out.dcS=(+r.sp)/sMax; out.dc=Math.max(out.dcA,out.dcS); }
++      return out; };
++    R.checks.ts={stem:tsOf("stemH","Stem horizontal",R.checks.stemFlex,g.tsb*12), ftg:tsOf("ftgL","Footing longitudinal",R.checks.toeFlex,g.tf*12)};
++    if(iabType()!=="semi") R.checks.ts.bw=tsOf("bwH","Backwall horizontal",R.checks.bwFlex,g.tbw*12); }
++
+@@ -5040 +5045 @@ function computeAll(){
+-      dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct"]);
++      dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct","stemH","bwH","ftgL"]); ["stemH","bwH","ftgL"].forEach(k=>{ if(fpS.reinf&&fpS.reinf[k]&&String(fpS.reinf[k].size)==="0") delete fpS.reinf[k]; });   // ABM8
+@@ -5113,0 +5119,3 @@ function computeAll(){
++  if(R.checks.ts) Object.entries(R.checks.ts).forEach(([k,q])=>{   // ABM8: S&T bars provided [5.10.6]
++    if(q.ent) addD("ts_"+k,q.name+" bars — S&T [5.10.6]",q.dc,"tab-struct","#"+q.bar+" @ "+fmt(q.sp,1)+" in each face: A_s "+fmt(q.As,3)+" vs "+fmt(q.req,3)+" in²/ft, s ≤ "+fmt(q.sMax,0)+" in");
++    else addD("ts_"+k,"REVIEW — "+q.name+" bars — S&T [5.10.6]",NaN,"tab-struct","not entered (panel I-9): A_s,ST = "+fmt(q.req,3)+" in²/ft each face, s ≤ "+fmt(q.sMax,0)+" in",true); });
+@@ -5942 +5950,2 @@ function svgIabSection(R){
+-const DASH_ANCHOR={iabPile:"o-iab-pile",iabTip:"o-iab-pile",iabGeo:"o-iab-pile",iabUp:"o-iab-pile",iabGeoEE:"o-iab-pile",   // IAB; ABR2
++const DASH_ANCHOR={ts_stem:"o-ts",ts_bw:"o-ts",ts_ftg:"o-ts",   // ABM8
++  iabPile:"o-iab-pile",iabTip:"o-iab-pile",iabGeo:"o-iab-pile",iabUp:"o-iab-pile",iabGeoEE:"o-iab-pile",   // IAB; ABR2
+@@ -7348,0 +7358,10 @@ function renderTabStruct(R){
++  /* ---- 5.7a ABM8: shrinkage & temperature bars provided [5.10.6] ---- */
++  if(R.checks.ts){ const t=fmtT, rows=Object.values(R.checks.ts);
++    h+=panel("o-ts","5.7a","Shrinkage & Temperature Reinforcement Provided [AASHTO 5.10.6]",
++      eqB("Required area, each face and each direction","AASHTO 5.10.6, Eq. 5.10.6-1",["A_{s,ST} \\ge \\dfrac{1.30\\,b\\,h}{2(b+h)f_y}\\,, \\quad 0.11 \\le A_{s,ST} \\le 0.60\\ \\text{in}^2/\\text{ft}\\,; \\quad s \\le 12\\ \\text{in (walls and footings } t > 18\\ \\text{in), else } s \\le \\min(3t,\\ 18\\ \\text{in})"].concat(rows.map(q=>
++        `\\text{${q.name}: } A_{s,ST} = ${t(q.req,3)}\\ \\text{in}^2/\\text{ft}\\ (b = ${t(q.bST,1)},\\ h = ${t(q.hST,1)}\\ \\text{in, as its flexure check})`+(q.ent?`\\,, \\quad A_s = ${t(BARS[q.bar].Ab,2)}\\dfrac{12}{${t(q.sp,1)}} = ${t(q.As,3)}\\,, \\quad s_{max} = ${t(q.sMax,0)}\\ \\text{in}\\ (t = ${t(q.t,1)}\\ \\text{in})`:`\\,, \\quad \\text{bars not entered (panel I-9)}`))),
++        "Stem and backwall: horizontal bars on each face; footing: longitudinal bars (along the abutment), top and bottom. The transverse footing and the vertical wall bars are the flexural bars (§5.2–5.5).")
++      +rows.map(q=>q.ent? checkLine(q.name+" S&T (#"+q.bar+" @ "+fmt(q.sp,1)+" in)",`\\max\\left(\\dfrac{A_{s,ST}}{A_s},\\ \\dfrac{s}{s_{max}}\\right) = \\max\\left(\\dfrac{${t(q.req,3)}}{${t(q.As,3)}},\\ \\dfrac{${t(q.sp,1)}}{${t(q.sMax,0)}}\\right)`,q.dc)
++        : `<div class="checkline fail"><span class="flagchip warn">REVIEW</span> ${esc(q.name)} S&amp;T bars not entered (panel I-9): provide A<sub>s</sub> ≥ ${fmt(q.req,3)} in²/ft each face at s ≤ ${fmt(q.sMax,0)} in.</div>`).join(""));
++  }
++
+@@ -10070 +10089 @@ document.addEventListener("change",ev=>{
+-  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
++  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
+```
