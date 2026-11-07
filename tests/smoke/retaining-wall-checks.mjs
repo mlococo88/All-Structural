@@ -249,7 +249,7 @@ const AUD = [
     ['Math.abs(R.pile.comb[0].L.rows[0].P - 47.455) < 0.001 && Math.abs(R.pile.comb[0].L.rows[1].P - 52.040) < 0.001 && Math.abs(R.pile.comb[1].L.rows[0].P - 32.617) < 0.001', 'pile loads'],
     ['Math.abs(R.pile.govH.L.rows[0].h - 10.935) < 0.001 && !R.checks.pileLat.ok && R.checks.pileComp.ok && R.checks.pileUplift.ok', 'H/N 10.94 > H_a 8 (placeholder) FAIL; compression, uplift pass'],
     ['!R.checks.ot && !R.checks.sliding && !R.checks.bearing && !R.checks.ecc', 'soil checks replaced'],
-    ['/Pile Step 2 — Pile Reactions and Checks/i.test(T.stability) && /Not applicable: pile-supported footing/i.test(T.stability) && /Pile Compression/i.test(T.overview) && /Pile Step 2 — Pile reactions and checks/.test(P)', 'Stability cards, N/A notes, dashboard, Report']]],
+    ['/Pile Step 2 — Pile Reactions and Checks/i.test(T.piles) && !/Pile Step 2 — Pile Reactions and Checks/i.test(T.stability) && /Pile-Supported Footing — Summary/i.test(T.stability) && /Not applicable: pile-supported footing/i.test(T.stability) && /Pile Compression/i.test(T.overview) && /Pile Step 2 — Pile reactions and checks/.test(P)', 'Piles tab cards (RWPT: moved from Stability), Stability summary and N/A notes, dashboard, Report']]],
   ['RWPL AASHTO default wall on 2 pile rows: Strength I max 83.60 / 77.66 kip, φ_cR_n 195', { fnd_type: 'pile', design_basis: 'AASHTO' }, [
     ['Math.abs(R.pile.comb[0].L.rows[0].P - 83.604) < 0.001 && Math.abs(R.pile.comb[0].L.rows[1].P - 77.664) < 0.001 && Math.abs(R.pile.govC.cap.c - 195) < 1e-9', 'Strength I max'],
     ['R.checks.pileSpacing.ok && R.checks.pileEdge.ok && R.checks.pileEmbed.ok && !R.checks.eeSliding && !R.warnings.some(w => /^AASHTO bearing/.test(w))', 'detailing checks (Art. 10.7.1.2), no soil notes']]],
@@ -297,7 +297,7 @@ const AUD = [
     ['/Service I heel and toe moments at the stem faces/.test(T.stability) && /Service I heel and toe moments \\(all γ = 1\\.0\\)/.test(P)', 'Stability Step 9 and Report']]],
   ['RW2M3 ACI on piles, water 2 ft: a pile in tension → Pile–Cap Tension FAIL with T and the embedment; no uplift → no row', { fnd_type: 'pile', tf: 36, wt_depth: 2 }, [
     ['R.checks.pileCapT && !R.checks.pileCapT.ok && /T=10\\.4k, embed 12\\.0/.test(R.checks.pileCapT.val) && R.warnings.some(w => /^Pile uplift: P_min/.test(w))', 'FAIL row and warning'],
-    ['/Pile–cap tension \\(not designed\\): FAIL/.test(T.stability) && /Pile–cap tension connection for T = /.test(P)', 'Stability Pile Step 2 and Report']]],
+    ['/Pile–cap tension \\(not designed\\): FAIL/.test(T.piles) && /Pile–cap tension connection for T = /.test(P) && /Notes on the Piles tab/.test(P)', 'Piles tab Pile Step 2 and Report (RWPT: the note follows the card)']]],
   ['RW2M3 piles without uplift: no tension row', { fnd_type: 'pile', tf: 36 }, [['!R.checks.pileCapT', 'no row']]],
   ['RW2M1 AASHTO default k_h 0.20 + collision: heel / toe checked for EE I and EE II (φ = 1.0): heel 22994 ≤ M_n 33.4 k, toe 7.46 k', { design_basis: 'AASHTO', kh: 0.2, aashto_ct_enable: true }, [
     ['R.eeFtg && R.checks.heelEE.ok && R.checks.toeEE.ok && Math.abs(R.eeFtg.gH.Mh - 22993.5) < 1 && Math.abs(R.eeFtg.gT.Mt - 7460) < 5 && R.eeFtg.cases.length === 4', 'governing EE I case 2; duplicate min rows merged'],
@@ -330,7 +330,7 @@ for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0
   const o = await p.evaluate(async ({ set, tests }) => {
     for (const [k, v] of Object.entries(set)) { const e = document.getElementById(k); if (e.type === 'checkbox') e.checked = !!v; else e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }
     if (typeof syncConditionalUI === 'function') syncConditionalUI(); if (set.design_basis) onBasisChange(); onInputChange(); await new Promise(r => setTimeout(r, 600));
-    const T = {}; for (const t of ['overview', 'stability', 'stem', 'footing', 'rebar']) { document.querySelector(`.tab-btn[data-tab="${t}"]`).click(); await new Promise(r => setTimeout(r, 300)); T[t] = document.getElementById('tab-' + t).innerText; }
+    const T = {}; for (const t of ['overview', 'stability', 'stem', 'footing', 'piles', 'rebar']) { document.querySelector(`.tab-btn[data-tab="${t}"]`).click(); await new Promise(r => setTimeout(r, 300)); T[t] = document.getElementById('tab-' + t).innerText; }   // RWPT: + piles
     document.querySelector('.tab-btn[data-tab="report"]').click(); await new Promise(r => setTimeout(r, 3000));
     const P = document.getElementById('tab-report').textContent, R = window._R;
     return tests.map(([x, l]) => { let v; try { v = !!(new Function('R', 'T', 'P', 'return (' + x + ');'))(R, T, P); } catch (e) { v = false; l += ' (' + e.message + ')'; } return [v, l]; });
@@ -346,11 +346,63 @@ if (!process.env.RW_AUD || 'RW2L3'.startsWith(process.env.RW_AUD)) for (const se
   const o = await p.evaluate(async (set) => {
     for (const [k, v] of Object.entries(set)) { const e = document.getElementById(k); if (e.type === 'checkbox') e.checked = !!v; else e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }
     if (typeof syncConditionalUI === 'function') syncConditionalUI(); if (set.design_basis) onBasisChange(); onInputChange(); await new Promise(r => setTimeout(r, 600));
-    const res = {}; for (const t of ['stability', 'footing']) { document.querySelector(`.tab-btn[data-tab="${t}"]`).click(); await new Promise(r => setTimeout(r, 1200)); res[t] = document.documentElement.scrollWidth; }
+    const res = {}; for (const t of ['stability', 'footing', 'piles']) { /* RWPT: + piles */ document.querySelector(`.tab-btn[data-tab="${t}"]`).click(); await new Promise(r => setTimeout(r, 1200)); res[t] = document.documentElement.scrollWidth; }
     return res; }, set);
   await b.close();
   console.log('audit: RW2L3 phone 390 px, ' + JSON.stringify(set));
-  check(o.stability <= 392 && o.footing <= 392, `no sideways page scroll (stability ${o.stability}, footing ${o.footing} px)`);
+  check(o.stability <= 392 && o.footing <= 392 && o.piles <= 392, `no sideways page scroll (stability ${o.stability}, footing ${o.footing}, piles ${o.piles} px)`);
+  check(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+}
+// RWPT (2026-11-07): the Piles output tab: shown for a pile-supported footing only (after Footing design), its cards, the check summary
+// and "Worked in" links land on it, the Stability summary links to it, leaving pile mode while it is open opens Stability, the input-error
+// banner, and the Report section "Piles (pile-supported footing)" with Pile Step 3
+if (!process.env.RW_AUD || 'RWPT'.startsWith(process.env.RW_AUD)) for (const [name, set] of [['ACI piles + uplift', { fnd_type: 'pile', tf: 36, wt_depth: 2 }], ['AASHTO piles + k_h 0.2 + collision', { design_basis: 'AASHTO', fnd_type: 'pile', tf: 36, kh: 0.2, aashto_ct_enable: true }], ['spread footing', {}]]) {
+  const { b, p, errs } = await openPage(SRC.file); await p.waitForTimeout(2500);
+  const o = await p.evaluate(async set => {
+    const W = ms => new Promise(r => setTimeout(r, ms));
+    for (const [k, v] of Object.entries(set)) { const e = document.getElementById(k); if (e.type === 'checkbox') e.checked = !!v; else e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (typeof syncConditionalUI === 'function') syncConditionalUI(); if (set.design_basis) onBasisChange(); onInputChange(); await W(600);
+    const btn = document.querySelector('.tab-btn[data-tab="piles"]'), order = [...document.querySelectorAll('.tab-btn')].map(x => x.dataset.tab);
+    const out = { shown: getComputedStyle(btn).display !== 'none', after: order.indexOf('piles') === order.indexOf('footing') + 1 };
+    if (!out.shown) return out;
+    const act = () => (document.querySelector('.tab-btn.active') || {}).dataset.tab, inView = t => { const c = [...document.querySelectorAll('#tab-piles .card')].find(e => e.querySelector('.card-title').textContent.startsWith(t)); if (!c) return false; const q = c.getBoundingClientRect(); return q.top < innerHeight && q.bottom > 0; };
+    btn.click(); await W(900);
+    const P = document.getElementById('tab-piles');
+    out.titles = [...P.querySelectorAll('.card-title')].map(e => e.textContent);
+    out.kx = P.querySelectorAll('.eq-math .katex-display').length; out.eq = P.querySelectorAll('.eq-math').length; out.kerr = P.querySelectorAll('.katex-error').length;
+    out.btns = ['rwpxSendOpen()', 'rwpxPullOpen()'].every(f => P.querySelector(`button[onclick="${f}"]`)) && !!P.querySelector('input[type=file][onchange="rwpxImportFile(this)"]');
+    out.ckRows = P.querySelectorAll('.card:nth-of-type(4) tbody tr').length;
+    document.querySelector('.tab-btn[data-tab="overview"]').click(); await W(300);
+    const chip = document.querySelector('.rwdCh[data-chk="pileComp"]'); if (chip) chip.click(); await W(900);
+    out.chip = act() === 'piles' && inView('Pile Step 2');
+    document.querySelector('.tab-btn[data-tab="stability"]').click(); await W(400);
+    const S = document.getElementById('tab-stability'); out.sum = /Pile-Supported Footing — Summary/i.test(S.innerText);
+    const ln = S.querySelector('a.wkA[data-card="pileCk"]'); if (ln) ln.click(); await W(900);
+    out.link = act() === 'piles' && inView('Pile Step 3');
+    document.querySelector('.tab-btn[data-tab="report"]').click(); await W(3500);
+    const R = document.getElementById('tab-report').textContent; out.rep = /Piles \(pile-supported footing\)/.test(R) && /Pile Step 3 — Pile checks/.test(R) && /Piles tab · Pile Step 2/.test(R) && !/Stability tab · Pile Step/.test(R);
+    document.querySelector('.tab-btn[data-tab="piles"]').click(); await W(300);
+    const ft = document.getElementById('fnd_type'); ft.value = 'spread'; ft.dispatchEvent(new Event('change', { bubbles: true })); onInputChange(); await W(500);
+    out.back = act() === 'stability' && getComputedStyle(btn).display === 'none';
+    ft.value = 'pile'; ft.dispatchEvent(new Event('change', { bubbles: true })); const x2 = document.getElementById('pile_x2'); x2.value = 40; x2.dispatchEvent(new Event('change', { bubbles: true })); onInputChange(); await W(500);
+    btn.click(); await W(300); out.banner = /Input error: no results/.test(document.getElementById('tab-piles').innerText);
+    return out;
+  }, set);
+  await b.close();
+  console.log('RWPT Piles tab: ' + name);
+  if (!set.fnd_type) { check(!o.shown, 'tab hidden for a spread footing'); }
+  else {
+    check(o.shown && o.after, 'tab shown, after Footing design');
+    const want = ['Pile Layout', 'Pile Step 1 — Pile Group', 'Pile Step 2 — Pile Reactions and Checks', 'Pile Step 3 — Pile Checks', 'Pile Designer Hand-off'];
+    check(want.every(t => o.titles.some(x => x.startsWith(t))), 'cards: ' + o.titles.join(' | '));
+    check(o.eq >= 5 && o.kx === o.eq && !o.kerr, `${o.kx} of ${o.eq} equations by KaTeX, ${o.kerr} errors`);
+    check(o.btns, 'hand-off buttons (send, pull, import)');
+    check(o.chip, 'check summary chip "Pile Compression" opens the Piles tab at Pile Step 2');
+    check(o.sum && o.link, 'Stability summary card; its link opens Pile Step 3');
+    check(o.rep, 'Report: section "Piles (pile-supported footing)", Pile Step 3, links name the Piles tab');
+    check(o.back, 'switching to a spread footing while the tab is open: Stability opens, the tab hides');
+    check(o.banner, 'input error: banner on the Piles tab');
+  }
   check(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
 }
 console.log(failures ? `${failures} FAILED` : 'all ok');
