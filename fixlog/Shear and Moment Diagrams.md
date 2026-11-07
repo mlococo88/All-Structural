@@ -1689,3 +1689,116 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
 - 0 console errors.
 - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"`, `node tests/smoke/phone-layout.mjs --tool smd` and `node tests/smoke/project-library.mjs --tool smd` pass.
 - **Saved data:** none changed. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sm-low-items (review LOW items L1–L6, L8, L9: LV, SMDL, SMDC, MRE, TBS, ZSR, SMD8, SMW)   [L1: results change only for invalid input; L4: new output; L5: table rows; others display only]
+Review of 2026-11-07, LOW findings. L7 (closed-form FER) is a separate PR. Every code site is tagged with its item code.
+
+### LV (L1). Solver input check: positions clamped and flagged, NaN blocked, saved data not rewritten   [results change for invalid input only]
+- **Problem:**
+  - Imported or edited data was not checked in `solve()`.
+  - A trapezoid with start > end gave a reversed (upward) load: 176 kip·ft from an 8 kip load.
+  - A trapezoid running past its span was integrated with inconsistent FER and statics.
+  - A point load off the span was moved without a message.
+  - The "all spans" flag on a point load was kept in the statics but left out of the FER.
+  - A zero or negative span gave NaN or nonsense with ✓.
+- **Where:**
+  1. **New `smdSolveLoads()` before `/* SOLVE for one factor set`, and globals `SL`, `smdLoadFlags`.** The solver reads checked copies (`SL`). `loads` (the saved data) is never changed. Each copy:
+     - non-number magnitudes or positions: left out;
+     - a span index out of range: nearest span;
+     - point or couple off the span: moved to the nearer end;
+     - trapezoid start > end: turned round with each intensity kept at its own x;
+     - ends kept on the span;
+     - end x = 0: the span end (as before);
+     - zero length: left out;
+     - "all spans" only for uniform loads.
+
+     Each change is listed.
+  2. **Uses of the checked loads:**
+     - defaults of `solveFor(fac,lds=SL)` and `evalVM(X,R,fac,lds=SL)` (were `lds=loads`);
+     - `stationList()` reads `SL`;
+     - ΣF in the Support Reactions card and the Report reads `SL` (was `loads`);
+     - `smdPatLoads()` reads `SL`.
+  3. **`solve()`, after `totL=…`:** a span that is not a number > 0 sets `window.smdBad`. The analysis is suppressed through the unstable path, and the cards, the calculation panel and the Report show the message.
+  4. **`updStats()`:** an amber note `.smd-lv` lists the changes. The Report has the same note under "Applied loads".
+- **Check cases** (20 + 10 ft spans, pin / roller / roller, DL):
+  - **Trapezoid 1 kip/ft from 12 to 4 ft (file):**
+    - Before: R = −3.947 / −5.760 / 1.707, M −176.0.
+    - After: turned round to 4–12 ft, so R = 3.947 / 5.760 / −1.707 (ΣR = 8.0 = 1 × 8), M⁺ 23.575.
+    - Hand check: R_A,SS = 8 × (20 − 8)/20 = 4.8 on a 20 ft simple span. The continuity over B gives 3.947, as the independent solver does.
+  - **Trapezoid 1 kip/ft from 15 to 25 ft on the 20 ft span 1:**
+    - Before: R 0.208 / 9.375 / 0.417 (inconsistent).
+    - After: kept on 15–20 ft, so R 0.306 / 5.332 / −0.638 (ΣR = 5.0), flagged.
+  - **Point load 10 kip at 25 ft on span 1:** results unchanged (R_B = 10), now flagged.
+  - **Valid input:** the 27 review cases and 16 extras are identical to main (0 differences in R, V, M, δ, envelope).
+- **Decision (pending engineer review):**
+  - a strip that runs past its span is kept on its span (as the UI's own `clampLoad` does), not continued onto the next span;
+  - start > end is turned round (load kept) rather than left out.
+
+### SMDL (L2). Deflection: the analysed combination and IBC Table 1604.3   [display only]
+- **What changed:**
+  - The δ max card names the analysed combination.
+  - The Section Analysis deflection box and the Report step say which combination they use. They also say that the L/x limit is user-selected per IBC 2018 Table 1604.3 (l/360 for L only, l/240 for D + L and so on) and that a factored combination gives a factored deflection (`SMD_DEFL_TXT`).
+  - The envelope note cites the same table.
+- **Provision:** IBC 2018 Table 1604.3, cited only.
+
+### SMDC (L3). Wording and citations   [display / code reference]
+- **Envelope card:** "Each IBC combination solved independently" became "Each enabled combination of the combination table solved independently".
+- **AISC citations:** "AISC 360 Sec. G2.1 (edition: verify)" and "AISC 360 G2.1" became "AISC 360-16 Sec. G2.1" (Report steps ×2, the τ box).
+- **References table (`smdRefs`):**
+  - Before: "IBC … edition: verify" (envelope only), and "AISC 360 … edition: verify".
+  - After: "IBC 2018: Sec. 1605.1 / 1605.2, Sec. 1607.12, Table 1604.3" (always listed), and "AISC 360-16 … Sec. G2.1".
+- **Check:** A_w = d·t_w is the AISC 360-16 Sec. G2.1 definition; no value changes.
+
+### MRE (L4). Envelope of the fixed-support moment reaction   [new output]
+- **Where:** `solve()` `env.R` adds `mmx, mmc, mmn, mmnc` (max / min of `R[j].m` over the combinations and patterns). For a fixed node, the reaction card, the Support Reactions — Envelope card and the Report (steps `MR*max/min`, summary row) show M_R max / min (+CCW) with the governing combination.
+- **Check case:** fixed–roller 20 ft, D 1, L 2, W −1 kip/ft, envelope: M_R,A max = w L²/8 = 4.4 × 400 / 8 = **220.0 kip·ft** (1.2D + 1.6L), min −5.0 (0.9D + 1.0W: (0.9 − 1) × 400 / 8). The M envelope at x = 0 gives −220.0, the same value.
+
+### TBS (L5). Tabular results: tenth points of each span, both sides of each support   [table rows change]
+- **Where:** `solve()`, block `/* TBS`, and `mkRow(x,t,dx=0)`.
+  - Before: 11 rows at tenths of the total length.
+  - After:
+    - each span's tenth points;
+    - at an interior node, rows "B left" and "B right", read at x ∓ 1e-6 (the analysis stations beside the support);
+    - "End A", and the last end read just left of it (before the closing reaction);
+    - user positions as before.
+  - The Report table title says so.
+- **Check:** 12 / 16 / 12 template. The supports at 12 and 28 ft are now listed: B left V = −10.889, B right V = 17.100.
+
+### ZSR (L6). Zero-shear runs   [display only]
+- **What changed:**
+  - A run of zero-shear stations longer than 1e-4·L is one interval `crits.zR`, shown once as "Zero shear over an interval (M constant there)" (card and Report), instead of one "moment extremum" per station.
+  - The shear peak label leaves out the closing value after the last reaction.
+- **Check:** case 22 (couple at a cantilever tip): one interval 0–8 ft, M = 12.000; before, about 400 lines.
+
+### SMD8 (L8, O11). Display items   [display only; one unit conversion shown]
+- **Card labels:** σ and δ on the cards are no longer upper-cased to "Σ" / "Δ" (O11).
+- **Stress in other units (`smdStrAlt`):** σ (cards, Report) and τ (Report) also in ksi for kip and ft (÷ 144 in²/ft²), psi for lb and ft (÷ 144), MPa for kN and m (÷ 1000).
+  - Check: σ = 2500.01 kip/ft² → 17.361 ksi.
+- **Mixed envelope:** when the enabled list mixes the "Unfactored (1.0 All)" row with factored rows, the |M| env card, the envelope card and the Report say "mixed service / factored".
+
+### SMW (L9). Reactions and deflection worked (§6)   [display only]
+- **`solveFor` also returns:**
+  - `FE`: the fixed-end forces per span;
+  - `EF = FE − k_e·d_e`: the member end forces (up / CCW +);
+  - `dF` and `EI`.
+
+  `deflOf()` attaches `meta = {C1, C2, EI, F2at, xa, xb}` to its result.
+- **Support Reactions card and Report:**
+  - a table per span of FEF, solved d (v, θ) and member end forces;
+  - each reaction worked as the sum of the end forces at its node (R_B = V⁽¹⁾_R + V⁽²⁾_L = … ), and so is a reaction couple.
+- **Deflection (card and Report):** δ(x) = [−F₂(x) + C₁x + C₂]/EI, with C₁ and C₂ from the anchors and the substituted numbers at the governing x.
+- **Check case:** 12 / 16 / 12 template:
+  - R_B = −10.8889 + 38.8778 = 27.9889;
+  - beam moment at B = M_R⁽¹⁾ = −M_L⁽²⁾ = −44.2667, equal to the M diagram at B;
+  - propped cantilever: −M_L = −100.0003 = M(0).
+- **Verified:** the table moments equal the M diagram beside every support in 3 cases.
+
+### How verified (all items)
+- **Headless main vs branch:** the 27 review cases (single and envelope) and 16 extras.
+  - R, V, M, δ, and the envelope V / M / δ / R max / min with their governing combinations are identical, except the two invalid-input cases (LV).
+  - Expected differences: `tabR` rows (TBS), the new `env.R` moment fields (MRE) and card text.
+  - 0 console errors, 0 KaTeX errors on the cards and the Report.
+- **Tests:**
+  - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"` and `node tests/smoke/phone-layout.mjs --tool smd` pass.
+  - `node tests/smoke/project-library.mjs --tool smd` fails against main only on `tabR` (TBS, intended); with `tabR` and the new `crits.zR` / `env.R` moment fields left out of its readout, it passes in full.
+- **Saved data:** no key or format changed; LV never writes to `loads`. **Other copies:** none.
