@@ -2351,7 +2351,7 @@ function listTables() {
 - **Saved data:** no key or format change (§5).
 - **Other copies:** none. **Open items:** the post-collision "single column missing" case (3.6.5.1) remains a suggestion.
 
-## 2026-11-07 — PR: claude/subloads-zone1-fixed (Z1F) — Zone 1 longitudinal connection force at a line of fixed bearings from the total permanent load of the segment (review H2; §4 result change)
+## 2026-11-07 — PR: claude/subloads-zone1-fixed (PR #1112: https://github.com/mlococo88/All-Structural/pull/1112) (Z1F) — Zone 1 longitudinal connection force at a line of fixed bearings from the total permanent load of the segment (review H2; §4 result change)
 - **Why:** in-depth code review of 2026-11-07, finding H2.
 - **Problem:** in Seismic Zone 1, `eqLoads` gave every restrained bearing line `cf × (N + γEQ·N_LL)` with its own reaction. For each uninterrupted segment the code takes the tributary permanent load at the line of fixed bearings, for the longitudinal connection force, as the total permanent load of the segment. The fixed pier got about 40 % of the code force (**unconservative**).
 - **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.10.9.2 (0.15 / 0.25 × the vertical reaction from the tributary permanent load and the live load assumed during the earthquake; at the line of fixed bearings of an uninterrupted segment, the total permanent load of the segment) and C3.10.9.2.
