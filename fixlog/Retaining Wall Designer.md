@@ -5515,3 +5515,15 @@ Review Phase 8, PR 8f, following the abutment calculator's contract (HANDOFF.md 
 +function rwpxClear() { const el = document.getElementById('pile_pxr'); if (!el || !el.value) return; if (!confirm('Clear the Pile Designer results record? The imported input values stay as they are.')) return; el.value = ''; onInputChange(); }
 +</script>
 ```
+
+## 2026-11-07 — PR: claude/pile-m7-group-handoff (PR #1050: https://github.com/mlococo88/All-Structural/pull/1050) (PDA-M7) — pile results import: Pile Designer's group reduction applied to R_n and R_n,up   [imported value change with a group]
+- **Problem (Pile Designer review M7):** `rwpxPlan` set `pile_Rn` / `pile_Rnup` to the single-pile static resistance even when Pile Designer's group efficiency or block governs.
+- **Where:** `rwpxPlan` (RWPX engine block).
+  - New `G`, `grR` (`res.group.reduce` when < 1) and `grU` (`res.group.uplift.reduceUp` when < 1).
+  - Before: `to: g.Rn` and `to: g.RnUp`. After: `to: g.Rn * grR` and `to: g.RnUp * grU`, with the labels stating the factor.
+  - The plan also returns `group: { reduce, reduceUp, eta, blockGoverns }` (or null).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 10.7.3.9 / 10.9.3.6, 10.7.3.11 / 10.9.3.8 (through Pile Designer's Module 11). No wall formula changed.
+- **Check case** (`tests/engine/handoffs.test.mjs`, "PDA-M7 pileResults group"): static R_n 400, R_n,up 150, `reduce` 0.8, `reduceUp` 0.6.
+  - `pile_Rn` = **320**, `pile_Rnup` = **90**; φ unchanged.
+  - Without `group`, or with `reduce` 1: 400 / 150 as before.
+- **How verified:** handoffs tests 10 pass; `tests/smoke/retwall-pile-handoff.mjs` all passed; `check-syntax`: pass.

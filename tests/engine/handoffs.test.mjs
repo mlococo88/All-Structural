@@ -192,3 +192,14 @@ test('RWPX pileResults plan: stale check, what is set, per-combination match', (
   assert.ok(RWW.rwpxPlan(r, Object.assign(res(B), { units: { force: 'lb' } }), cur, null).err);
   assert.ok(RWW.rwpxPlan(r, Object.assign(res(B), { schemaVersion: 2 }), cur, null).err);
 });
+test('PDA-M7 pileResults group: R_n and R_n,up imported times the group reduction (Pile Designer Module 11)', () => {
+  const r = rwFixture(true, 20, 5.0, 4), p = RWW.rwpxBuild(r, {}).p, cur = p.contentHash;
+  const B = { producer: 'Retaining Wall Designer', producedAt: '2026-11-07T19:00:00Z', contentHash: cur };
+  const res = grp => ({ _schema: 'bridge-pile-results', schemaVersion: 1, producer: 'Pile Designer', units: { force: 'kip', length: 'ft' }, basis: B,
+    geotechnical: { static: { Rn: 400, phi: 0.5, RnUp: 150, phiUp: 0.35 } }, group: grp, cases: [] });
+  deq(RWW.rwpxPlan(r, res(null), cur, null).set.map(s => [s.id, s.to]), [['pile_Rn', 400], ['pile_phic', 0.5], ['pile_Rnup', 150], ['pile_phiup', 0.35]], 'no group: as before');
+  const q = RWW.rwpxPlan(r, res({ reduce: 0.8, eta: 0.8, blockGoverns: false, uplift: { reduceUp: 0.6 } }), cur, null);
+  deq(q.set.map(s => [s.id, +s.to.toFixed(6)]), [['pile_Rn', 320], ['pile_phic', 0.5], ['pile_Rnup', 90], ['pile_phiup', 0.35]]);
+  assert.equal(q.group.reduce, 0.8);
+  deq(RWW.rwpxPlan(r, res({ reduce: 1, uplift: null }), cur, null).set.map(s => s.to), [400, 0.5, 150, 0.35], 'reduce 1: unchanged');
+});

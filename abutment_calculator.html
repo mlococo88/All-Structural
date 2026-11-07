@@ -11361,14 +11361,20 @@ document.addEventListener("DOMContentLoaded",init);
     const g=p.geotechnical, rows=conv&&pileB? match(p) : [];
     if(conv&&!pileB) warns.push("The footing is not on piles (panel I-4): the conventional pile results are not used.");
     const geoOn=st.geo&&g&&g.static&&(conv? pileB : iabType()==="integral"), kp=conv? "piles." : "iab.";   // AXI (2026-10-21): an integral abutment takes R_n / φ into panel I-0a (iab.Rn, iab.phiC, iab.RnUp, iab.phiUp)
+    // PDA-M7 (2026-11-07): Pile Designer's group result (pileResults.group): the static R_n (R_n,up) is imported times its group
+    // reduction, so a group whose efficiency or block governs is not credited with the single-pile resistance. Integral: none.
+    const grR=(conv&&p.group&&num(p.group.reduce)&&p.group.reduce>0&&p.group.reduce<1)? p.group.reduce : 1;
+    const grU=(conv&&p.group&&p.group.uplift&&num(p.group.uplift.reduceUp)&&p.group.uplift.reduceUp>0&&p.group.uplift.reduceUp<1)? p.group.uplift.reduceUp : 1;
+    if(geoOn&&(grR<1||grU<1)) warns.push("Pile group (Pile Designer Module 11): "+(grR<1?"R_n × "+f(grR,3)+" (group φR per pile "+f(p.group.phiRnPerPile,1)+" / single "+f(p.group.phiRnSingle,1)+" kip"+(p.group.blockComputed&&p.group.blockGoverns?", block governs":"")+")":"")+(grR<1&&grU<1?"; ":"")+(grU<1?"R_n,up × "+f(grU,3)+" (group uplift)":"")+". The group of this abutment should be the group Pile Designer checked.");
+    if(geoOn&&st.rn==="field"&&g.field&&grR<1) warns.push("Field method: the required R_n is imported as sent; Pile Designer's group reduction ("+f(grR,3)+") applies to the static resistance — check the group separately.");
     if(geoOn){
       if(st.rn==="field"&&g.field){
         if(num(g.field.RnReq)&&g.field.RnReq>0&&num(g.field.phi)&&g.field.phi>0){ add(kp+"Rn",g.field.RnReq,"Nominal compression R_n (field method: required R_n = P/φ_dyn, "+(g.field.RnReqCase||"")+")","kip"); add(kp+"phiC",g.field.phi,"φ_c (φ_dyn: "+g.field.label+")");
           warns.push("Field method ("+g.field.label+"): R_n = the nominal resistance the piles are driven to (R_ndr = "+f(g.field.Rndr,1)+" kip with the scour"+(g.field.Rdd>0?" and downdrag":"")+" side resistance, EOD "+f(g.field.RndrEOD,1)+" kip). This abutment's check is then P/(φ_dyn·R_n) ≤ 1 by construction for the case that set R_n."); }
         else warns.push("Pile Designer has no required R_n for its field method (no compression case): R_n not imported.");
-      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add(kp+"Rn",g.static.Rn,"Nominal compression R_n (static analysis, Pile Designer Module "+(g.pileType==="iab"?"13":"01")+")","kip"); add(kp+"phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
+      }else if(num(g.static.Rn)&&g.static.Rn>0&&num(g.static.phi)&&g.static.phi>0){ add(kp+"Rn",g.static.Rn*grR,"Nominal compression R_n (static analysis, Pile Designer Module "+(g.pileType==="iab"?"13":"01")+")"+(grR<1?" × "+f(grR,3)+" group reduction (Pile Designer Module 11: "+(p.group.blockComputed&&p.group.blockGoverns?"block":"η = "+f(p.group.eta,3))+") = "+f(g.static.Rn,1)+" × "+f(grR,3):""),"kip"); add(kp+"phiC",g.static.phi,"φ_c (static, φR_n/R_n = "+f(g.static.phiRn,1)+"/"+f(g.static.Rn,1)+")"); }
       else warns.push("Pile Designer's static R_n is 0 (soil layers without SPT N or strength?): R_n is not imported.");
-      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add(kp+"RnUp",g.static.RnUp,"Nominal uplift R_n,up (static, side only)","kip"); add(kp+"phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
+      if(num(g.static.RnUp)&&g.static.RnUp>0&&num(g.static.phiUp)&&g.static.phiUp>0){ add(kp+"RnUp",g.static.RnUp*grU,"Nominal uplift R_n,up (static, side only)"+(grU<1?" × "+f(grU,3)+" group uplift reduction (Pile Designer Module 11, 10.7.3.11)":""),"kip"); add(kp+"phiUp",g.static.phiUp,"φ_up (φR_n,up/R_n,up = "+f(g.static.phiRnUp,1)+"/"+f(g.static.RnUp,1)+")"); }
       if(!conv&&g.pileType==="iab"){   // PDA-IAB (2026-10-21): Pile Designer's integral pile (Module 13) against this abutment's piles (panel I-0a)
         const ts=String((p.integral&&p.integral.section)||(sp.section&&sp.section.designation)||"").toUpperCase(), Lp=+S.iab.Lpile;
         if(ts&&ts!==String(S.iab.sec||"").toUpperCase()) warns.push("Different section: Pile Designer computed R_n for "+ts+", this abutment has "+S.iab.sec+" (panel I-0a).");
