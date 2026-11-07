@@ -3414,3 +3414,107 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Headless probe, main vs branch: only J of the models with n ≠ 1 changed (FHWA_n/3n/mp, the concrete-hole models, holeMulti, mixN). All other values are identical, including every model with all n = 1, all 1,660 shapes and the default project.
   - Every output tab built with the FHWA model: new labels shown, 0 console errors.
   - `project-library --tool spc`: the only differences are the 4 new fields `tors.comps[i].n`, `.nMix`, `tors.Jgeo` and `tors.Jn`. They are new keys in the results object; every value that existed before is identical. Save and open are ok.
+
+## 2026-11-07 — PR: claude/spc-l1-note — SPL1: plastic note with modulus ratios: concrete in tension is counted; composite Mp per AASHTO D6.1 / AISC I3.2a (review L1; wording only; PR #1102: https://github.com/mlococo88/All-Structural/pull/1102)
+
+- **Problem (review L1):** with n ≠ 1 the Plastic tab already said that the n-weighted PNA balance is meaningful only for yield-strength ratios. It did not say that concrete below or beside the PNA still counts in tension. For a slab of the FHWA girder geometry:
+  - with n = 0.85f′c/F_y = 0.068: Z·F_y = 6,469 k-ft against 6,462 k-ft by AASHTO D6.1 (+0.1 %);
+  - with the elastic n = 1/8: 7,020 k-ft (+8.6 %, unconservative if used as Mp).
+- **Fix (wording only):**
+  - Plastic tab note, `buildPlas`, anchor `<b>Transformed (n-weighted) areas</b>:`. Before: "…the PNA balances n·A, which is meaningful only when n is the ratio of yield strengths." After, appended: "Concrete is not treated as a no-tension material: parts below (or beside) the PNA count in tension at n times the reference yield stress, so with a concrete slab Z is not the composite plastic modulus. For the plastic moment of a composite girder use AASHTO LRFD 10th Ed. (2024) Appendix D6.1 or AISC 360-16 Sections I3.2a and I1.2a (plastic stress distribution; concrete at 0.85f′c in compression only, concrete in tension neglected)."
+  - The Report note of the Plastic section (`sprModel`, anchor `Plate model geometry (fillets neglected).`) gets the same sentence when n ≠ 1.
+- **Governing provisions cited (checked in the printed specifications):**
+  - AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Appendix D6.1 "Plastic Moment".
+  - AISC 360-16, Section I3.2a (positive flexural strength of composite beams) with Section I1.2a (plastic stress distribution method).
+  - Cited, not quoted.
+- **§4:** no computed value changes. This is a citation added to a note.
+- **Verified:**
+  - `check-syntax` passes.
+  - Headless probe, main vs branch: 0 differences in any value (40 models, all 1,660 shapes, Validation 136/136).
+  - The note shows on the Plastic tab and in the Report model with n ≠ 1, and is absent with n = 1. 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-l3-steps — SPL3: worked steps for S₁, S₂ (c₁,max, c₂,max shown and substituted); Q under "AISC tabulated" labelled (review L3; §6, display only; PR #1105: https://github.com/mlococo88/All-Structural/pull/1105)
+
+- **Problem (review L3, two §6 gaps):**
+  1. S₁ and S₂ were given as I/c, but c₁,max and c₂,max were not displayed (the open item from D11).
+  2. With "AISC tabulated", Q comes from the model geometry about the centroid that uses the tabulated A and I, and nothing said so. The mismatch is small (an angle: Δȳ = 0.007 in).
+- **Fix (display only):**
+  - Calc detail → Principal axes (`mkSec(pg, 'cP'`): two lines added after r_min:
+    - `c_{2,max} = …, c_{1,max} = …`
+    - `S_1 = I_1/c_{2,max} = I₁/c = …, S_2 = I_2/c_{1,max} = …`
+    - The result text explains which distance each c is.
+  - Properties → Principal axes table: the Note column of S₁ and S₂ now gives the value of c₂,max and c₁,max. Before: 'c measured perpendicular to axis 1' / ''.
+  - Report: new steps `pa.c2` and `pa.c1`. Steps `pa.S1` and `pa.S2` get their substitution. Before, `sub: ''`; after, `\frac{I₁}{c₂,max}` with the values.
+  - Q tab (`buildQ`): with any part on "AISC tabulated", a note says that Q is the first moment of the model geometry about the section centroid, which uses the tabulated A and I. The model and tabulated areas and centroids differ slightly (fillets), and the difference is not corrected.
+- **§4:** no computed value changes. The new lines show values that were already computed (`R.c1`, `R.c2`).
+- **Check case (default project, principal axes = x, y):**
+  - c₂,max = max(c_top, c_bottom) = max(7.2926, 14.1074) = 14.1074 in, so S₁ = 1977.34/14.1074 = **140.16 in³** (= S_x,bottom).
+  - c₁,max = 7.500 in, so S₂ = 373.99/7.500 = **49.866 in³**.
+- **Verified:**
+  - `check-syntax` passes.
+  - Headless probe, main vs branch: 0 value differences (40 models, all 1,660 shapes, Validation 136/136).
+  - The new lines appear on the Properties and Calc detail tabs and in the Report model (rotated L6X4X1/2 with the tabulated option and a Q cut: c₂,max = 4.0739 in, and the Q note is shown).
+  - 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-l4-pna — SPL4: PNA in a gap reported as the gap range and its middle (review L4; PNA display value, Z unchanged; PR #1107: https://github.com/mlococo88/All-Structural/pull/1107)
+
+- **Problem (review L4):** when the plastic neutral axis lies in a gap with no material, any line in the gap halves the area. The bisection stopped at one end of the gap and reported it, with `flat` = false. Example: PL 12 × 1 over PL 6 × 2, 10 in apart: PNA y = 1.000. Z was correct (138 in³).
+- **Fix (`plastic()`, anchor `SPL4 (2026-11-07)`):**
+  - After the bisection, if the area above c equals A/2 within 1e-12·A, the two ends of the gap are found by bisection. `cHi` is the largest c with |A_above − A/2| ≤ tol; `cLo` is the smallest c with A_above − A/2 ≤ tol.
+  - The result is `flat` = (cHi − cLo > 1e-7 × the depth). When flat, the PNA c is the **middle** of the gap, and `cLo`, `cHi` are returned.
+  - Before: `const c = (lo + hi) / 2, …` followed by a ±1e-6 flat test (which always failed at the end of a gap).
+  - After: as above. Z is computed at c as before; for a line in the gap it is the same anywhere in the gap.
+- **Display:**
+  - Plastic tab result: "(the PNA lies in a gap with no material, anywhere from y = 1 in to 11 in; the middle of the gap is shown, and any position in the gap gives the same Z)".
+  - Report step label: "PNA at y = 6 in; middle of a gap with no material, which spans y = 1 to 11 in; any line in the gap gives the same Z". The same applies for x and the principal axes (s₁, s₂).
+- **§4 callout:** the reported PNA location changes for sections whose PNA lies in a gap, from one end of the gap to its middle. Z does not change. Basis: mechanics of materials (equal-area axis; Z = A₁d₁ + A₂d₂ is the same for any line in a region with no material).
+- **Check case:** PL 12 × 1 (centred at y = 11.5) and PL 6 × 2 (centred at y = 0).
+  - A = 24, so A/2 = 12 = the top plate.
+  - The gap spans y = 1 to 11. PNA before: 1.000; after: **6.000** (range 1–11).
+  - Z = 12 × (11.5 − 6) + 12 × (6 − 0) = 66 + 72 = **138 in³**, unchanged.
+  - 2C15X33.9 back to back with a 3/8 in gap: PNA for Z_y moves from −0.1875 to 0 (the middle of the gap); Z_y unchanged.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch, tolerance 1e-13: the only differences are the PNA location of the two gap models (gap, dblC) and the `flat` flag. Every Z and all other values are identical, including all 1,660 shapes.
+  - The new wording shows on the Plastic tab and in the Report. 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-l6-verify — SPL6: "verify" badges removed from AISC 360-16 Eq. E4-8, E4-9, F2-7 and the J2.4 / Table J2.5 weld strength; engineer checks A4 and A5 closed (review L6; wording only; PR #1110: https://github.com/mlococo88/All-Structural/pull/1110)
+
+- **Outcome of the checks (against the printed AISC 360-16 Specification and the AISC v16.0 Design Examples, both in the engineer's reference folder; cited, not quoted):**
+  - **A4 / P2a-O1 — closed.** The equation numbers and forms match the printed Specification:
+    - Eq. E4-9: r̄o² = x_o² + y_o² + (I_x + I_y)/A_g. The Specification defines it with I_x, I_y about the principal axes. The tool uses I_x + I_y about the centroidal x and y axes, which is the same sum (invariant).
+    - Eq. E4-8: H = 1 − (x_o² + y_o²)/r̄o².
+    - Eq. F2-7: r_ts² = √(I_y C_w)/S_x.
+  - **A5 / P2b, O2 — closed.**
+    - Fillet weld in shear per Section J2.4 with Table J2.5: φ = 0.75, Ω = 2.00, F_nw = 0.60F_EXX on the effective throat 0.707w (equal-leg fillet, J2.2a). The tool takes no directional increase (1.0 + 0.50 sin^1.5 θ), which is conservative; for longitudinal welds θ = 0 anyway.
+    - HSS corner radii: the AISC v16.0 Design Examples state that the Manual Table 1-11 properties use an outside corner radius of 2t_des (Examples I.3 and I.4). This confirms the tool's 2t_des outside / t_des inside basis (C1 O2).
+  - Still open: A3 (AutoCAD MASSPROP sign and principal-moment order). Only the engineer can do it. The independent DXF re-parse of the review matches the tool exactly.
+- **Changes (wording and badges only):**
+  - Properties → buckling table: "AISC 360-16 Eq. E4-9 " + `VFY2('Equation number as understood …')` → "AISC 360-16 Eq. E4-9". The same for E4-8.
+  - Calc block "Polar radius of gyration about the shear centre, and flexural constant": badge `VFY2('Equation numbers as understood …; shear centre from the thin-wall model')` → `VFY` ("thin-wall — verify"). The shear centre is still thin-wall.
+  - Report steps bk.ro, bk.H, bk.rts: ref "AISC 360-16 Eq. E4-9 (equation number: verify)" → "AISC 360-16 Eq. E4-9". The same for E4-8 and F2-7.
+  - References table: "Eq. E4-8 (H), E4-9 (r̄o), F2-7 (r_ts): equation numbers as understood by the tool, verify" → "Eq. E4-8 (H), E4-9 (r̄o), F2-7 (r_ts)".
+  - Weld calc block:
+    - ref "… throat 0.707w — verify" → "… throat 0.707w".
+    - badge `VFY2('Weld strength as understood for AISC 360-16 J2.4; minimum size (Table J2.4) and base metal not checked')` → `VFY2('Weld metal strength per AISC 360-16 J2.4 / Table J2.5. Not checked: minimum and maximum weld size (Table J2.4, J2.2b) and base metal (J4.2)')`. The badge stays, for the items that are not checked (review L2).
+  - Method text: "(AISC 360-16 J2.4, Table J2.5 — verify)" → "(AISC 360-16 J2.4, Table J2.5)".
+  - HSS model: "the basis of the AISC tables as understood — verify" → "the basis of AISC Manual Table 1-11 as stated in the AISC v16.0 Design Examples".
+  - Code comment of `WELD_PHI`: "— verify" → "checked against the printed Specification, SPL6".
+- **ENGINEER_CHECKS.md:** rows A4 and A5 removed. **tools.html** ("Open engineer checks"): the Section Properties item for E4-8/E4-9/F2-7, J2.4/J2.5 and HSS radii is removed; the A3 MASSPROP item stays. AUDIT.md has no separate entry for A4 or A5.
+- **§4:** no formula, factor or value changed. Code references are unchanged apart from removing "verify".
+- **Verified:**
+  - `check-syntax` passes.
+  - Headless probe, main vs branch: 0 value differences (40 models, all 1,660 shapes, Validation 136/136).
+  - Every output tab built; 0 console errors.
+
+## 2026-11-07 — PR: claude/spc-l7-pipe — SPL7: note on the accuracy of the pipe and round-HSS annulus model (review L7; wording only; PR #1111: https://github.com/mlococo88/All-Structural/pull/1111)
+
+- **Problem (review L7):** the annulus model of Pipe shapes (OD, t_des) differs from the v16.0 Pipe table by up to ±3.4 % in A, I, S, Z and J, in both directions (Pipe20XS +3.4 %, Pipe10STD −3.3 %, Pipe12XXS −2.9 %). Because the sign varies, it is not always conservative. The tool did not say so. The numbers are in the SPH1 table.
+- **Fix (wording only):**
+  - Single-shape AISC comparison hint (`aisCompare`): for a Pipe part, the sentence "**Pipe:** the annulus (OD, t_des) differs from the tabulated A, I, S, Z and J by up to about ±3.4 % over the v16.0 Pipe table (Pipe20XS +3.4 %, Pipe10STD −3.3 %), in both directions; for design, use the tabulated values (tick "Use AISC tabulated" for A, I) or check against the Manual." is added.
+  - Method → Rolled shapes: "round HSS/pipe as an annulus (OD, t_des)." → "… (OD, t_des; over the v16.0 tables round HSS agree within about −0.4 to +1.9 % and Pipe within about ±3.4 % in A, I, S, Z and J, both signs, so for pipe use the tabulated values for design)."
+- **§4:** no computed value changes. Basis: AISC Shapes Database v16.0 (comparison only).
+- **Verified:**
+  - `check-syntax` passes.
+  - Headless probe, main vs branch: 0 value differences.
+  - The note shows for Pipe20XS (Section and Properties tabs) and in the Method tab. 0 console errors.

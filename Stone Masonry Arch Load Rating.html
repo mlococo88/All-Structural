@@ -10663,6 +10663,14 @@ function dashboard(p){
         v.trail>0?`; ${nfx(v.trail,1)} k/ft trailing load included in the search`:""}</td>
       <td>§7.2.7.12</td></tr>`;
   }
+  if(archLane&&archLane.rows)for(const row of archLane.rows){   /* HLN (M-1) */
+    const lr=row.best.res.rf, gov=lr<row.truckRF;
+    rows+=`<tr><td>${badge(lr>=1?"ok":"bad",lr>=1?"PASS":"FAIL")}</td>
+      <td><a class="jump" data-go="rate_lane">${esc(row.name)} lane loading</a></td>
+      <td>Truck rating ${nfx(row.truckTons,1)} tons is 12 tons or less, so the lane loading is also rated: RF = <b>${nfx(lr,3)}</b>
+        (worst of ${row.runs.length} loaded lengths). ${gov?"<b>Lane loading governs</b>; the reported rating above is the lane value.":"The truck governs."}</td>
+      <td>§7.2.4.2B</td></tr>`;
+  }
   for(const c of checks){
     /* add() is called with eleven distinct states across this file — ok, bad,
        wn, na, key, inf, on, dl, el, ev, ll — but only four were mapped, so the
@@ -11104,6 +11112,23 @@ function buildOutput(p){
   if(archConv&&archConv.rows&&archConv.rows.length)
     s+=UI.pnl("rate_mcv",c5(),"Mesh convergence — every vehicle rated at "+archConv.meshes.join(", ")+" elements",
       archConvTable(),"§7.2.7.2B");
+  if(archLane&&archLane.rows.length){
+    let lh=msg("warn","An H vehicle rates at 12 tons or less: lane loading also rated",
+      "MassDOT §7.2.4.2B: a component rated for an H vehicle at 12 tons or less is also rated with the Std. Spec. "+
+      "lane loading (0.64 klf plus an 18 kip concentrated load for moment; Std. Spec. Art. 3.7, verify, not in "+
+      "references). The lane loading is a load train swept like a vehicle over four loaded lengths; its point loads use "+
+      "the wheel-load distribution (6 ft gage), a narrower width than the 10 ft lane, which is conservative. The reported "+
+      "rating of the vehicle is the lower of the truck and the lane loading.");
+    for(const row of archLane.rows){
+      lh+=`<h4>${esc(row.name)}: truck RF ${nfx(row.truckRF,3)} (${nfx(row.truckTons,1)} tons)</h4>`+
+        dtab([{k:"L",h:"Loaded length (ft)",dp:1},{k:"rf",h:"Lane loading RF",dp:3}],row.runs.map((q,i)=>({__i:i,L:q.L,rf:q.rf})),{})+
+        `<div class="note">Reported for ${esc(row.name)}: RF = <b>${nfx(Math.min(row.truckRF,row.best.res.rf),3)}</b> `+
+        `(${row.best.res.rf<row.truckRF?"lane loading governs":"truck governs"}). The governing lane case is worked below.</div>`+
+        UI.pnl("lane_"+row.id,null,esc(row.best.veh.name)+" — worked",CALC.vehicleSection(p,M,row.best.veh,row.best.res,{}),
+          "RF = "+nfx(row.best.res.rf,3));
+    }
+    s+=UI.pnl("rate_lane",c5(),"Lane loading — MassDOT §7.2.4.2B (H vehicles at 12 tons or less)",lh,"§7.2.4.2B");
+  }
   const govId=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b).id:null;
   {
     const atSec=(rateBasis==="sec");
@@ -11122,6 +11147,9 @@ function buildOutput(p){
       const off=(atSec&&rr.sec!==r.sec);
       s+=UI.pnl("veh_"+r.id,c5(),
         esc(v.name)+(r.id===govId?" &mdash; GOVERNS":""),
+        (r.laneGov?msg("warn","This vehicle's reported rating is from the lane loading",
+          `The lane loading rates ${nfx(r.rf,3)} against ${nfx(r.truckRF,3)} for the truck (MassDOT §7.2.4.2B); the steps `+
+          `below are the truck's. The lane loading is worked in the "Lane loading" panel above.`):"")+
         (r.nElR?msg("warn","This vehicle's reported rating is from the "+r.nElR+"-element mesh",
           `It rates lowest on the ${r.nElR}-element mesh: RF = <b>${nfx(r.rf,3)}</b> at ${esc(CALC.secTag(r.Mo,r.secOwn))} `+
           `of that mesh (x = ${nfx(r.Mo.g.nodes[r.secOwn].x,2)} ft). The steps below are worked on the ${M.nEl}-element mesh `+
@@ -11643,6 +11671,50 @@ function archConvRun(p){
   Object.defineProperty(M,"conv",{value:C,writable:true,configurable:true,enumerable:false});
   return C;
 }
+/* HLN (M-1, 2026-11-07): MassDOT BM Pt. I §7.2.4.2B — a component rated for an H vehicle at 12 tons or less must also
+   be rated with the Std. Spec. lane loading (H20 / HS20: 0.64 klf uniform + 18 kip concentrated for moment; Std. Spec.
+   Art. 3.7, verify — not in references). Modelled as a load train: the 18 kip load at the front, then the uniform
+   load as 1.28 kip point loads at 2 ft centres, over loaded lengths of 1/4, 1/2, 3/4 and 1 of the axis span (+4 ft);
+   each train is swept in both directions like a vehicle, so partial and full loading at every position are covered.
+   Each point load goes through the same wheel-load distribution as an axle (6 ft gage), which spreads it over a
+   narrower width than the 10 ft lane: conservative. Rated on the mesh used for the worked steps only. The reported
+   rating of the H vehicle is the lower of truck and lane. */
+const LANE_W=0.64, LANE_P=18, LANE_DX=2;
+let archLane=null;
+function archLaneVeh(base,L){
+  const ax=[{x:0,P:LANE_P}];
+  for(let x=LANE_DX/2;x<L;x+=LANE_DX)ax.push({x,P:LANE_W*LANE_DX});
+  return {id:"LANE_"+base.id+"_"+Math.round(L),name:"Lane loading for "+base.name+", loaded length "+L.toFixed(1)+" ft",
+    tons:base.tons,axles:ax,mode:"hwy",trail:0,lane:true,gvw:LANE_P+LANE_W*LANE_DX*(ax.length-1)};
+}
+function archLaneRun(p){
+  archLane=null;
+  if(p.loadMode==="rail")return null;
+  const cand=results.filter(r=>(r.id==="H20"||r.id==="HS20")&&isFinite(r.rf)&&r.tons<=12+1e-9);
+  if(!cand.length)return null;
+  const key=JSON.stringify(p)+"|"+M.nEl+"|"+cand.map(r=>r.id).join(",");
+  if(!(archLaneRun.cache&&archLaneRun.cache.key===key)){
+    const Ls=[0.25,0.5,0.75,1].map(k=>k*M.g.axisSpan+4), rows=[];
+    for(const r of cand){
+      const base=ARCH.ALL_VEHICLES.find(v=>v.id===r.id);
+      let best=null;
+      const runs=Ls.map(L=>{const v=archLaneVeh(base,L);const q=ARCH.rateVehicle(M,v,p.fa,p.impMode);q.id=v.id;
+        if(!best||q.rf<best.res.rf)best={veh:v,res:q};return {L,rf:q.rf};});
+      rows.push({id:r.id,name:base.name,truckRF:r.rf,truckTons:r.tons,runs,best});
+    }
+    archLaneRun.cache={key,rows};
+  }
+  archLane=archLaneRun.cache;
+  for(const row of archLane.rows){
+    const r=results.find(q=>q.id===row.id); if(!r)continue;
+    if(row.best.res.rf<r.rf){
+      const i=results.indexOf(r), o=Object.assign({},r);
+      o.truckRF=r.rf; o.rf=row.best.res.rf; o.tons=o.rf*ARCH.ALL_VEHICLES.find(v=>v.id===r.id).tons; o.laneGov=true;
+      results[i]=o;
+    }
+  }
+  return archLane;
+}
 /* the convergence table (Rating tab, Verification tab and Report) */
 function archConvTable(){
   const C=archConv; if(!C||!C.rows)return "";
@@ -11691,6 +11763,7 @@ function render(){
     r.id=v.id; results.push(r);
   }
   archConvRun(p);   /* MCV (H-1): rate at n1, 2n1, 4n1; lowest RF per vehicle; M may become a finer mesh */
+  archLaneRun(p);   /* HLN (M-1): H vehicles at 12 tons or less also rated with the lane loading */
   window.__impCmp=impCmp;
   /* The editor's "Resolves to" column depends on the model that was just built,
      so it is refreshed here rather than left showing whatever was true when the

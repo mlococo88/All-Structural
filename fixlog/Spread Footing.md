@@ -6511,3 +6511,29 @@ index 50f3837..c2d5000 100644
   - Default project (depth factors off, no water table): no result change (only the stored k). Seymour: no change.
 - **Not done (left for later):** the plain-text Report export still prints KaTeX command names such as "mathrm" (L12). That conversion is in the shared `shared/report.js` / `shared/steps.js`, which 20+ tools load, so it needs its own shared-file PR.
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-scroll-1280 (PR #1099: https://github.com/mlococo88/All-Structural/pull/1099) (SFST: scroll smoke test waits for the dashboard chip's smooth scroll and wheels the panel back until 0; test only, the tool is unchanged)
+- **Problem:** `tests/smoke/spread-footing-scroll.mjs` failed intermittently on origin/main. Under machine load it failed 3 of 3 parallel runs.
+  - "dashboard chip 12 (o-fd-bear): its section is not shown in the output panel", at 1280, 1366 and 1920 px.
+  - "scrollIntoView of the panel bottom: after wheeling up … output 7495", at 1280 px.
+- **Cause (test, not app):**
+  - The chip check waited a fixed 900 ms for a smooth `scrollIntoView` of ~7 000 px. Card 5.6 at 1280 px: after 900 ms its top was 602 px into a 703 px panel; after 2 s it was at 0.
+  - The wheel-back used a fixed 40 notches of 2000 px. The lazily rendered Report grows from ~52 000 to ~145 000 px while it is wheeled up, so ~50 notches were needed.
+  - The app behaves correctly: the chip opens its card and lands it at the top of the output panel, the document stays at 0, and the panel wheels back to 0.
+- **Decision (pending engineer review):** this was treated as a stale test assumption. The app is not changed, and the summary column stays on the left from 1200 px (SFLB, #988).
+- **Where (test only), `tests/smoke/spread-footing-scroll.mjs`:**
+  - `wheelBack`, before: `for (let k = 0; k < 40; k++) await p.mouse.wheel(0, -2000);`
+    after: `for (let k = 0; k < 240; k++) { await p.mouse.wheel(0, -2000); if (k % 10 === 9 && await p.$eval(sel, e => e.scrollTop === 0)) break; }`
+  - Dashboard-chip loop, before: `await p.waitForTimeout(900); const vis = await p.evaluate(…)`
+    after: `let vis = false; for (let t = 0; t < 30 && !vis; t++) { await p.waitForTimeout(200); vis = await p.evaluate(…); }`. The visibility condition is unchanged.
+- **Formulas, factors, units, code references:** none (§4 does not apply). `Spread Footing.html` and `shared/` are byte-identical to origin/main. **Saved data:** none.
+- **Check case:** default project, 1280×800, click the "Concrete bearing" chip.
+  - Before: the card top was 602 px below the panel top at 900 ms (fails under load).
+  - After: the test waits until the card is in view; it reaches 0 within ~2 s.
+- **How verified:**
+  - Scroll test: PASS in 3 parallel runs under load (main: 3/3 FAIL).
+  - check-syntax: pass.
+  - phone-layout `--tool sf`: pass.
+  - spread-footing-nobear: pass.
+  - start-chooser: 68/68 on re-run; the first run under load had 2 failures in the list order, which looks like load flakiness, with the app unchanged.
+  - project-library `--tool spreadfooting`: ALL PASS.

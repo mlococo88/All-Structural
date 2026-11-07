@@ -1765,3 +1765,106 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Check case:** Example 5, Pier 1 (back 12+07.50, ahead 12+12.50), girder G4. Before: "99.41" (back) and "99.49" (ahead) printed in the same place, unreadable. After: "99.41" left of the back node, "99.49" right of the ahead node. Top girder with offset 0.5 ft: the side-by-side left label hit the "Sta 12+10.00" callout, so the pair is stacked above the deck edge with leaders. Bottom girder: stacking below would hit the bearing station labels, so it stays side by side.
 - **How verified:** origin/main vs branch on the 5 examples plus Example 5 with offsets 1 ft and 0.5 ft: every tab's text, Export JSON and all localStorage identical. Export DXF (local, auto) and the sheets DXF byte-identical (Examples 1, 2, 3, 5 and both variants; 18 files). Plan canvas pixel-identical for Examples 1 and 4 (no dual bearings). Tests: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, project-library --tool bgeo. Screenshots before and after looked at.
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/bg-h2-extend-tangents (PR #1103: https://github.com/mlococo88/All-Structural/pull/1103) (BGX1, review H2 + L3 part: points before the POB / after the POE on the extended end tangents, with a warning)   [calc change] [results change only for deck points outside the alignment]
+
+- **Why:** in-depth review 2026-11-07, H2. A deck point before the POB or after the POE was evaluated at the POB / POE station (`projectToPGL` found no sign change of the along-tangent residual and kept the nearest end station). The skewed chord puts half the girders of the default demo bridge past both alignment ends, so Abut 1 G4 was 0.10 ft high. Also L3 (part): an alignment that starts or ends with a spiral put every station beyond its end on the end point, and a curve end continued around the circle.
+- **Governing provision:** none (route-surveying geometry). Commercial practice (and the review): a point beyond the alignment ends is referred to the end tangent extended, with a warning.
+- **Where (anchors):**
+  - `buildAlignment`: the element loop (a `TAN` set of the tangent elements) and the returned `at(s)` (anchor `function extTan(e, s0, s)`).
+  - `projectToPGL`: anchor `// BGX (H2): the extended end tangents`.
+  - New `geometryWarnings()` / `showGeomWarnings()` just before `function compute(){`, called right after `ENG=buildEngine();`; new box `<div id="geom_warn">` right after `<div id="geom_err">`.
+- **Before:**
+```js
+  let sta=pob.sta,x=pob.x,y=pob.y,brg=pob.brg*DEG; const elems=[];
+  for(const ln of lines){ const p=ln.split(',').map(s=>s.trim()); const type=p[0].toLowerCase();
+    if(type==='tan') elems.push(makeTangent(sta,x,y,brg,+p[1]));
+  …
+  if(elems.length===0) elems.push(makeTangent(pob.sta, pob.x, pob.y, pob.brg*DEG, 0));
+  return { staStart:pob.sta, staEnd:sta,
+    at(s){ let el=elems.find(e=>s>=e.staStart-1e-9&&s<=e.staEnd+1e-9);
+      if(!el) el=(s<elems[0].staStart)?elems[0]:elems[elems.length-1]; return el.at(s); }, elems };
+```
+```js
+  let sstar;
+  if(brk.length){ let bestD=Infinity;
+    for(const [lo,hi] of brk){ … if(d<bestD){ bestD=d; sstar=r; } }
+  } else { sstar=bestS; } // no sign change (point beyond the ends) -> nearest endpoint station
+  const a=align.at(sstar); const nrm=a.brg+Math.PI/2;
+  const off=(x-a.x)*Math.sin(nrm)+(y-a.y)*Math.cos(nrm); // signed perpendicular offset
+  return { sta:sstar, off };
+```
+- **After:**
+```js
+  let sta=pob.sta,x=pob.x,y=pob.y,brg=pob.brg*DEG; const elems=[], TAN=new Set();   // TAN: the tangent elements (BGX, H2)
+  for(const ln of lines){ const p=ln.split(',').map(s=>s.trim()); const type=p[0].toLowerCase();
+    if(type==='tan'){ elems.push(makeTangent(sta,x,y,brg,+p[1])); TAN.add(elems[elems.length-1]); }
+  …
+  if(elems.length===0){ elems.push(makeTangent(pob.sta, pob.x, pob.y, pob.brg*DEG, 0)); TAN.add(elems[0]); }
+  const eF=elems[0], eL=elems[elems.length-1];
+  function extTan(e, s0, s){ const a=e.at(s0), d=s-s0; return { x:a.x+Math.sin(a.brg)*d, y:a.y+Math.cos(a.brg)*d, brg:a.brg }; }
+  return { staStart:pob.sta, staEnd:sta,
+    at(s){ let el=elems.find(e=>s>=e.staStart-1e-9&&s<=e.staEnd+1e-9);
+      if(!el){ const e=(s<eF.staStart)?eF:eL; if(TAN.has(e)) return e.at(s);
+        return extTan(e, (e===eF&&s<eF.staStart)?e.staStart:e.staEnd, s); }
+      return el.at(s); }, elems };
+```
+```js
+  let sstar, bestD=Infinity, ext=0;
+  if(brk.length){
+    for(const [lo,hi] of brk){ … if(d<bestD){ bestD=d; sstar=r; } }
+  }
+  // BGX (H2): the extended end tangents (align.at continues on them past the POB / POE)
+  if(s1>s0){ const f0=f(s0), f1=f(s1);
+    [[f0<0, s0+f0, -1], [f1>0, s1+f1, 1]].forEach(([on, se, k])=>{ if(!on) return;
+      const q=align.at(se), d=Math.hypot(x-q.x, y-q.y); if(d<bestD-1e-9){ bestD=d; sstar=se; ext=k; } }); }
+  if(sstar===undefined) sstar=bestS;   // zero-length alignment: the POB
+  const a=align.at(sstar); const nrm=a.brg+Math.PI/2;
+  const off=(x-a.x)*Math.sin(nrm)+(y-a.y)*Math.cos(nrm); // signed perpendicular offset
+  return { sta:sstar, off, ext };
+```
+  `geometryWarnings()` evaluates `ENG.deckAtSupport(bl, off)` for every bearing line of every support at both deck edges and every girder, and reports the furthest point before the POB and after the POE: "Deck points lie up to X ft before the POB (Sta …), at <bearing line>. Their plan position is projected onto the start tangent extended. Extend the alignment to cover the whole deck." (same for the POE). The box shows only when there is a warning; results are not changed by it.
+- **Check case (default demo bridge):** tangent 200 ft from POB 0+00 at N90E, then the spiral 0→800; profile +2.0 % from EL 100 at 0+00; crown 2 % at the PGL; no overlay; seat stack 8 + 1.5 + 0 + 36 + 3 = 48.5 in = 4.0417 ft. Abut 1 line is normal to the chord (chord bearing 106.0°, unit normal to the right (−0.2775, −0.9607)).
+  - G4 (w = +18): point (−4.996, −17.293). Before the POB: f(POB) = −4.996 → station −0+04.996 on the start tangent, offset +17.293 ft right.
+  - TD = 100 + 0.02 × (−4.996) − 0.02 × 17.293 = 100 − 0.0999 − 0.3459 = **99.554** (before 99.654, the point taken at 0+00 with offset 17.293). Seat = 99.554 − 4.0417 = **95.51** (before 95.61).
+  - G3 (w = +6): sta −0+01.665, off +5.764: TD = 100 − 0.0333 − 0.1153 = 99.851, seat **95.81** (before 95.84).
+  - Abut 2 (after the POE, end tangent, profile −0.8 % past 9+00): G3 seat 99.04 → **99.03**; G4 seat 98.81 → **98.77** (TD 102.854 → 102.814).
+  - G1, G2 (inside the alignment) unchanged (95.71, 95.88 at Abut 1). Warning: "Deck points lie up to 6.66 ft before the POB … at Abut 1 brg" and "6.66 ft after the POE … at Abut 2 brg" (the deck edges at ±24 ft).
+  - All eight Abut 1 / Abut 2 girder TD and seat values agree with the review's independent engine (scratchpad `bg/indep.mjs` + extended tangents) to 1e-4 ft.
+- **How verified:** headless Chromium, origin/main vs branch (scratchpad probe): demo, the review's spiral-curve-spiral variant and the 5 built-in examples; text of the Top-of-Deck table, Beam Seat table and seat sections, Derived table, span summary, warnings, LL & DL hand-off payload (`producedAt` aside), Export JSON, Export DXF (local). Only the demo moves (the 4 Abut 1 / Abut 2 values above, the same values in the Top-of-Deck table row "Abut 1 CL" / "Abut 2 CL" and the DXF elevation labels, 12 DXF lines); the variant and Examples 1–5 identical (DXF: the time stamp line only). Hand-off payload identical (spans and skews do not depend on it). Spiral-first and curve-first alignments: `align.at(-50)` was the POB (spiral) / a point on the circle (curve); now (−50, 0) on the start tangent. 0 console errors. Tests: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, home-projects --tool bgeo, tests/engine/run.mjs: pass. project-library --tool bgeo and list-input --part bgeo compare the page with origin/main and report exactly the intended differences (the demo's Abut 1 G3/G4 seats 95.84/95.61 → 95.81/95.51, the "Abut 1 CL" Top-of-Deck row, and the plan colour-scale minimum 99.54 → 99.41, the deck corner); nothing else.
+- **Also affected (same rule, intended):** map picks, the plan hover and the N/E → station converter beyond the alignment ends now report the station on the extended tangent (was the POB / POE station).
+- **Saved data:** none touched (§5). **Other copies:** none.
+
+## 2026-11-07 — PR: claude/bg-h1-chord-warnings (PR #1109: https://github.com/mlococo88/All-Structural/pull/1109) (BGX2, review H1 quick fix + M1: geometry warnings; no result change)   [display only]
+
+- **Why:** in-depth review 2026-11-07. H1: the whole bridge is one straight chord from the first to the last support; on a curved alignment the interior supports and the deck leave the roadway with no warning (default demo: Pier 1 reference line 106.63 ft from the PGL). M1: no warning when supports or deck points lie outside the alignment / profile, or when a pier is stationed past an abutment (it silently becomes the end support).
+- **Where:** `geometryWarnings()` (added in BGX1, just before `function compute(){`): the deck-point loop also records the first / last deck station (`dMin`, `dMax`), and new blocks after the BGX1 POB/POE messages, anchors `// M1: supports outside the alignment`, `// M1: deck points outside the vertical profile`, `// H1: one straight chord`. Shown in the `#geom_warn` box (BGX1).
+- **Before:** `geometryWarnings()` returned the BGX1 POB / POE messages only.
+- **After (exact code added before `return w;`):**
+```js
+  // M1: supports outside the alignment; supports out of order (a pier at or beyond an end); two supports at one station
+  su.forEach(u=>{
+    if(u.sta<s0-0.005) w.push(`${u.name} (Sta ${formatStation(u.sta)}) is ${(s0-u.sta).toFixed(2)} ft before the POB (Sta ${formatStation(s0)}): it is placed on the start tangent extended.`);
+    if(u.sta>s1+0.005) w.push(`${u.name} (Sta ${formatStation(u.sta)}) is ${(u.sta-s1).toFixed(2)} ft after the POE (Sta ${formatStation(s1)}): it is placed on the end tangent extended.`); });
+  const uF=su[0], uL=su[su.length-1];
+  [[uF,'first'],[uL,'last']].forEach(([u,k])=>{ if(u.type!=='abut') w.push(`${u.name} (Sta …) is the ${k} support by station, so the bridge ${k==='first'?'starts':'ends'} there (the chord, the deck end and the span numbering use it), not at an abutment. Check the support stations.`); });
+  for(let i=1;i<su.length;i++) if(Math.abs(su[i].sta-su[i-1].sta)<0.005) w.push(`… are at the same station (…): the span between them has zero length.`);
+  // M1: deck points outside the vertical profile (its elevations are the first / last grade extended)
+  const pv=ENG.prof.pvis||[];
+  if(pv.length>=2 && dMin && dMax){ const p0=pv[0], pn=pv[pv.length-1];
+    if(dMin.sta<p0.sta-0.005) w.push(`Deck points lie up to … ft before the profile Start point (Sta …), at …: their elevations use the first grade (… %) extended. Extend the profile to cover the whole deck.`);
+    if(dMax.sta>pn.sta+0.005) w.push(`Deck points lie up to … ft past the profile End point (Sta …), at …: their elevations use the last grade (… %) extended. Extend the profile to cover the whole deck.`); }
+  // H1: … Tolerance: the smaller of 0.5 ft and 2 % of the deck width.
+  if(ENG.chord && su.length>2){ const {a1,a2}=abutOffsets(), S1=uF.sta, S2=uL.sta; const out=[];
+    su.slice(1,-1).forEach(u=>{ const sp=Math.max(1,Math.min(su.length-1,spanOfSta(u.sta))), ed=edgesForSpan(sp), tol=Math.min(0.5, 0.02*Math.abs(ed.r-ed.l));
+      const f=(S2>S1)?(u.sta-S1)/(S2-S1):0, want=a1+(a2-a1)*f, got=ENG.bclOffAtSta(u.sta);
+      if(isFinite(got) && Math.abs(got-want)>tol) out.push(`${u.name}: reference line ±x.xx ft from the PGL (±x.xx ft off the line between the end offsets; tolerance x.xx ft)`); });
+    if(out.length) w.push(`The alignment curves within the bridge, but the girders, deck edges and supports are laid out on ONE straight chord from … to …, so the deck leaves the roadway at the interior supports: …. The elevations there are the cross slope extended to those offsets. Check against the plans (the girders are not chorded span by span).`); }
+```
+  (Message texts shortened here with "…"; the file has them in full.)
+- **Governing provision:** none (display only; no formula, factor or result changed).
+- **Check case (default demo bridge):** the box lists: deck points 6.66 ft before the POB and after the POE (BGX1); 6.66 ft before the profile Start (Sta 0+00, first grade +2.000 %); 106.66 ft past the profile End (Sta 9+00, last grade −0.800 %; Abut 2 is at 10+00); and "Pier 1: reference line +106.63 ft from the PGL (+106.63 ft off the line between the end offsets; tolerance 0.50 ft)". Review variant (R 1500): Pier 1 −10.41 ft, Pier 2 −10.63 ft. Example 3 (curved, chord reference line by design): Pier 1 +10.49 ft from the PGL, +6.49 ft off the line between the end offsets (+4.00 / +4.00 ft). Abut 1 moved to −1+50: "Abut 1 … is 150.00 ft before the POB". Pier 1 moved to 12+00 (past Abut 2 at 10+00): "Pier 1 … is 200.00 ft after the POE" and "Pier 1 … is the last support by station, so the bridge ends there …". Examples 1, 2, 4, 5: no warning.
+- **How verified:** headless probe origin/main vs branch (demo, variant, Examples 1–5, the two M1 variants above): every table, the hand-off payload, Export JSON and DXF identical (DXF time stamp aside); only the warning box differs. 0 console errors. Tests: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, project-library --tool bgeo, home-projects --tool bgeo, tests/engine/run.mjs handoffs lldf list-input: pass. list-input --part bgeo: the 2 differences are BGX1's demo seat values against its recorded base commit (not re-baselined: a result difference); nothing from this PR.
+- **Decision (pending engineer review):** H1 tolerance = the smaller of 0.5 ft and 2 % of the deck width (the review's two suggestions; the smaller warns more). The deviation is measured against the straight-line interpolation of the end offsets, so a chord reference line that is intentionally off the PGL on a tangent does not warn.
+- **Decision (pending engineer review):** no new tangent example. Examples 1 (single-span tangent) and 2 (3-span skewed overpass, tangent) already are tangent bridges; the demo (the New project) is left as it is because it is the review's check case; BGX3 (per-span chords for new projects) removes its H1 condition.
+- **Saved data:** none (§5). **Other copies:** none.
