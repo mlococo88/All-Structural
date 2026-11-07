@@ -5163,7 +5163,7 @@ Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2
 - **Saved data:** additive field `mat.g3spec`; new cover preset key 'exterior'; no key change.
 - **Open items:** L5 left (conservative); lightweight w_c for E_c.
 
-## 2026-11-07 — PR: claude/cbc-aashto-torsion (CBH1b: AASHTO torsion design of a solid section for every combination above the 5.7.2.1 threshold — V_eff in ε_s (5.7.3.4.2), T_n (5.7.3.6.2), combined shear + torsion transverse steel (5.7.3.6.1), section limit, longitudinal steel with torsion (5.7.3.6.3); the threshold row no longer FAILs; CALCULATION CHANGE, Beam Capacity tab, AASHTO mode, T_u > 0.25φT_cr only)
+## 2026-11-07 — PR: claude/cbc-aashto-torsion, PR #1032: https://github.com/mlococo88/All-Structural/pull/1032 (CBH1b: AASHTO torsion design of a solid section for every combination above the 5.7.2.1 threshold — V_eff in ε_s (5.7.3.4.2), T_n (5.7.3.6.2), combined shear + torsion transverse steel (5.7.3.6.1), section limit, longitudinal steel with torsion (5.7.3.6.3); the threshold row no longer FAILs; CALCULATION CHANGE, Beam Capacity tab, AASHTO mode, T_u > 0.25φT_cr only)
 
 Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summary. Found in the in-depth review of 2026-11-07 (item H1, second part; the first part was CBH1a, PR #987).
 
