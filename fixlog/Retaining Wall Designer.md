@@ -3785,6 +3785,65 @@ Calculation audit, item 9 (3). Engineer decision (2026-11-07). Code sites are ta
 ### Saved data
 - No input or format change. Old projects with k_h > 0 get the stem seismic combination; their stem results can change (ACI).
 
+## 2026-11-07 — PR: claude/rw-ee2-vertical-eh — AASHTO Extreme Event II (collision): the vertical earth-thrust component P_a,V follows the EH choice (0 under MassDOT, 1.00 under "full") (RWCV; calculation change) (PR #956: https://github.com/mlococo88/All-Structural/pull/956)
+
+Follow-up to item 3 (#944). Engineer answer (2026-11-07): the vertical component of the earth thrust follows the EH choice in Extreme Event II. Code sites are tagged `RWCV`.
+
+### RWCV-1. `calcAll`, Extreme Event II block   [§4]
+- **Where:** `calcAll`, anchors `const CMB_EE2 = {`, `const V_ct_min =`, `const Mr_ct =`.
+- **Problem:** the resisting vertical load V and moment M_r counted P_a,V at 1.00 as EV, whatever the EH choice. With the MassDOT option (γ_EH,CT = 0) the horizontal earth thrust was dropped but its vertical (stabilizing) component was still counted. Unconservative for sliding, and it moved the resultant toward the heel, on walls with a sloped backfill (Rankine) or wall friction δ > 0 (Coulomb).
+- **Fix:** P_a,V and its moment P_a,V·B take γ_EH,CT, the new `CMB_EE2.EHv`: 0 with the MassDOT option, 1.00 with "full". W_soil stays EV at 1.00. V feeds sliding, e and (through V_max = V + 0.50 V_LS) bearing, so all three use the same factor.
+- **Provisions:**
+  - AASHTO LRFD 10th Ed. Table 3.4.1-1 (EE II row): γp = 1.00 for the permanent loads; one load (EH) takes one factor in all its effects.
+  - MassDOT LRFD Bridge Manual 3.3.2.4: earth pressure need not act with the collision force for stability (γp = 0). The engineer applies this to both components of the thrust.
+- **Before / after** (`git diff -U0`):
+```diff
+@@ -2653 +2653 @@ function calcAll(inp) {
+-      const CMB_EE2 = { CT: 1.00, DC: 1.00, EV: 1.00, EH: gEH_ct, LS: gLS_ct, WA: 1.00, ES: gEH_ct, ESv: 1.00 };   // Extreme Event II factors (RW3F)
++      const CMB_EE2 = { CT: 1.00, DC: 1.00, EV: 1.00, EH: gEH_ct, EHv: gEH_ct, LS: gLS_ct, WA: 1.00, ES: gEH_ct, ESv: 1.00 };   // Extreme Event II factors (RW3F); RWCV (2026-11-07): EHv = the vertical earth-thrust component follows the EH choice
+@@ -2665 +2665 @@ function calcAll(inp) {
+-      const V_ct_min = CMB_EE2.DC*(Wftg + Wstem + W_bar) + CMB_EE2.EV*(Wsoil + Pa_tri_v) + CMB_EE2.ESv*V_ES_v - CMB_EE2.WA*F_uplift;   // RWCT: + 1.00 ES vertical
++      const V_ct_min = CMB_EE2.DC*(Wftg + Wstem + W_bar) + CMB_EE2.EV*Wsoil + CMB_EE2.EHv*Pa_tri_v + CMB_EE2.ESv*V_ES_v - CMB_EE2.WA*F_uplift;   // RWCT: + 1.00 ES vertical; RWCV: P_a,V at γ_EH,CT (was 1.00 as EV)
+@@ -2679 +2679 @@ function calcAll(inp) {
+-      const Mr_ct = CMB_EE2.DC*(Ms_ftg + Ms_stem + Ms_bar) + CMB_EE2.EV*(Ms_soil + Ms_Pv) + CMB_EE2.ESv*V_ES_v*xESv + CMB_EE2.WA*Ms_uplift;   // RWCT: + 1.00 ES vertical
++      const Mr_ct = CMB_EE2.DC*(Ms_ftg + Ms_stem + Ms_bar) + CMB_EE2.EV*Ms_soil + CMB_EE2.EHv*Ms_Pv + CMB_EE2.ESv*V_ES_v*xESv + CMB_EE2.WA*Ms_uplift;   // RWCT: + 1.00 ES vertical; RWCV: P_a,V at γ_EH,CT
+```
+- **Results move** only for AASHTO walls with collision on, the MassDOT option, and P_a,V > 0 (Rankine with β > 0, or Coulomb with δ > 0). Coulomb with δ = 0 has P_a,V = 0 even with β > 0 (the thrust is inclined at δ), so those walls do not move. The stem EE II case (EH at 1.00, MassDOT 3.3.2.4) does not use P_a,V and is unchanged.
+
+### RWCV-2. Display (Stability Step 7b, Report Step 7b, 3D view)
+- `renderStabilityAASHTO`, anchor `Resisting vertical load (DC + EV at`:
+  - the title names the factor on P_a,V; the equation shows the values substituted; a P_a,V row is added to the "where" list;
+  - new step "Resisting moment about the toe (same factors as V)": M_r worked with each W·x (was quoted only in the eccentricity step);
+  - the MassDOT alert says the vertical component is dropped with the horizontal thrust.
+- `rwrModel`, Step 7b (`sa7b`): `V` gets its substituted values and, under the MassDOT option with P_a,V > 0, a note; new step `Mr` (worked); the Eccentricity group is `sb.slice(3, 6)` and Bearing `sb.slice(6)` (were 3–5 and 5).
+- `rw3Factors`, key `ee2`: the 3D view's EH,v factor is `E.EHv` (was `E.EV`).
+- Item 3b: no change. The manual h_eq already overrides the H/2 rule and is noted on the Traffic tab (RWLS).
+
+### Check cases (AASHTO default + collision TL-4: 28 kip / 41 ft = 0.683 k/ft at 30 in; `calcAll` in Node and in the browser)
+- **Default (P_a,V = 0):** unchanged. V 16583, sliding D/C 0.246, e −0.222 ft, q 1535 psf.
+- **β 10°, Rankine, MassDOT:** P_a,V = 819.2 lb/ft (Stability Step 2), moment P_a,V·B = 819.2 × 12.5 = 10240.
+  - V = 1.0(2813 + 2250) + 1.0(12284) + 0 × 819 = **17347** (was 18166).
+  - Sliding: R = 1.0 × 17347 × 0.364 = 6314; D/C = 1619 / 6314 = **0.256** (was 1619 / 6612 = 0.245).
+  - M_r 141302 → 131062; e = 6.25 − (131062 − 17944) / 17347 = **−0.271 ft** (was −0.541).
+  - Bearing: V_max 19594 → 18775; q 1754 → **1611 psf** (limit 9000).
+- **β 10°, Rankine, "full":** unchanged (V 18166, sliding 0.947, e 0.738, q 1710).
+- **Coulomb δ 20°, MassDOT:** P_a,V = 1112 lb/ft. V 17694 → **16583**; sliding 0.217 → **0.232**; e −0.634 → **−0.257 ft**; q 1740 → **1543 psf**.
+- **Coulomb δ 20°, "full":** unchanged (V 17694, sliding 0.692).
+
+### How verified
+- origin/main vs branch, headless Chromium (results `_R`, Export JSON, localStorage, tab text, Report model and text): the twelve audit walls + the four β / δ collision walls.
+  - Walls without collision (all ACI walls, `aashto_water_col_eta`): identical in every part.
+  - Collision walls with P_a,V = 0 (`aashto_ct`, `aashto_rock_ct_water` (Coulomb δ 0, β 10°), `aashto_vh_ct`, the q_s 250 + water walls) and the "full" walls: `_R` differs only by the new `CMB_EE2.EHv`; the text differs by the Step 7b display.
+  - β 10° / δ 20° MassDOT walls: only `aashtoR.ct.ee2` (V, V_max, R, D/C, M_r, x̄, e, bearing) and the `ct*` check values change, as above.
+  - 0 console errors; self-consistency panel: all passed.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWCV β 10° MassDOT and "full", δ 20° MassDOT); phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+- Screenshot looked at: Stability Step 7b (β 10°, MassDOT).
+
+### Decisions (pending engineer review)
+- The factor on P_a,V applies to all three EE II stability checks (sliding, eccentricity, bearing), as one load takes one factor. Under the MassDOT option this lowers the bearing pressure slightly (β 10°: 1754 → 1611 psf); the alternative (keep P_a,V at 1.00 for bearing only) was not adopted because the horizontal thrust that goes with it is not applied.
+
+### Saved data
+- No input or format change.
 ## 2026-11-07 — PR: claude/rw-pile-8b-inputs — Pile-supported footing, Phase 8b: foundation type and pile-row inputs, piles in the Analysis diagram, Overview, 3D and Drawings (RWPL; inputs and display only, no result change)
 
 Review Phase 8 (pile-supported footing), PR 8b. Engineer decisions 2026-11-07 (review Q11–Q18, taken as recommended): pile mode follows the code mode; one pile type per wall; spacing per row; vertical piles; no staggering. Code sites are tagged `RWPL`.
