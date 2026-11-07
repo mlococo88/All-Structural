@@ -15657,3 +15657,105 @@ index ce6e74c..92a3437 100644
 -        `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
 +        q.EQtSrc==="analysis"? `EQ_{sup,t} = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat (entered from the seismic analysis, panel I-11)}` : `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
 ```
+
+## 2026-11-07 — PR: claude/abut-m4-wingstrip (PR #1013: https://github.com/mlococo88/All-Structural/pull/1013) (ABM4: attached-wing junction — the default method takes, per limit state, the larger of the total moment over H₀ and the most loaded strip; a new option keeps the averaged moment at strength with crack control on the strip)   [calc change] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M4 (fix log WING open item 1).
+
+### ABM4. Junction design moment
+- **Where:** `computeWing`, attached branch (anchor `const jm=w.jMethod==="strip"?"strip":(w.jMethod==="avgOnly"?"avgOnly":"env"); W.jMode=jm;`, functions `comps`, `buildLS`); panel I-13 selector `wing.jMethod` (labels; new option `avgOnly`); Tab 9 §9.2 per-foot equations and the limit-state table (method named per row); input echo (`junction method:`).
+- **Before:** `jMethod = "avg"` (default): every limit state used m = M/H₀, v = F/H₀ (total junction moment spread over the junction height); `"strip"`: the most loaded 1-ft horizontal strip.
+- **After:** `"avg"` (default, label "Larger of: total moment over H₀ and the most loaded 1-ft strip"): both are computed; in each limit state the one with the larger M_u governs (its V_u with it). `"strip"`: unchanged. New `"avgOnly"`: the averaged moment at Strength I / Extreme Events (yield-line redistribution, engineer's choice) with Service I (crack control) on the strip.
+- **Problem:** the averaged moment assumes full redistribution along the junction height. That cannot be relied on for crack control at service, and the most-loaded strip gives about twice the moment at the default geometry: unconservative.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 5.6.3 (flexural resistance), 5.6.7 (crack control at Service I), 11.6.1.5.2 (wingwall reinforcement at the junction). The method of distributing the junction moment is not specified; the strip is the elastic, conservative distribution.
+- **Check case (built-in project: wing L = 10 ft, H₀ = 19 ft, H_L = 8 ft, t = 1.5 ft, #6 @ 9 horizontal; K_a = 0.30726, γ = 0.120, h_eq = 2.1 ft; γ_EH = 1.50, γ_LS = 1.75):**
+  - Before (avg): m_EH = M_EH/H₀ = 6.929, m_LS = 2.264 kip-ft/ft → M_u = 1.5·6.929 + 1.75·2.264 = **14.36 kip-ft/ft**; flexure D/C **0.358**; Service I M_s = 9.19; crack control D/C 0.225 (s_max 40.0 in).
+  - After (strip governs, y* = 11.0 ft): m_EH = 14.712, m_LS = 3.687 → M_u = 1.5·14.712 + 1.75·3.687 = **28.52 kip-ft/ft**; flexure D/C **0.711**; shear D/C 0.143 → 0.299; minimum steel 0.476 → 0.693; Service I M_s = 18.40, crack control D/C 0.225 → 0.511 (s_max 17.6 in). All pass.
+  - Integral abutment built-in wing: flexure D/C 0.594 → **1.004 (FAIL)**.
+  - `avgOnly`: strength as before (14.36), Service I on the strip (crack D/C 0.511).
+- **Saved data:** no key or format change. Saved projects with `"avg"` (the default) get the larger of the two methods (more conservative); `"strip"` projects are unchanged.
+- **How verified:** headless origin/main vs branch, 22 scenarios. Every project with an attached wing on "avg" moves as above. The independent wing and the strip method do not move (the strip scenario only gains the new fields). `node tests/smoke/project-library.mjs --tool abutment`: the 4 main-vs-branch "results identical" checks differ by design (the default project's wing values); against this branch itself (`--a HEAD`) ALL PASS. All tabs + Report render, 0 console errors; self-test passes (its benchmark has no wing loads); `check-syntax` passes.
+- **Decision (pending engineer review):** the default is the envelope. The averaged moment at strength remains available (`avgOnly`) when the engineer accepts yield-line redistribution, but crack control always uses the strip. WING open item 1 is settled this way unless the engineer decides otherwise.
+- **Other copies:** none.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 92a3437..edde439 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -2417 +2417 @@ function buildInputs(){
+-    ${att?selRow("Junction design moment","wing.jMethod",[["avg","Total junction moment spread over the junction height"],["strip","Most loaded 1-ft horizontal strip"]]):""}
++    ${att?selRow("Junction design moment","wing.jMethod",[["avg","Larger of: total moment over H₀ and the most loaded 1-ft strip (per limit state)"],["strip","Most loaded 1-ft horizontal strip"],["avgOnly","Total moment over H₀ at strength (yield-line redistribution); crack control on the strip"]]):""}
+@@ -2779,6 +2779,10 @@ function computeWing(R,X){
+-    const avg=w.jMethod!=="strip"; W.avg=avg;
+-    const per=(M,Fv,ms,vs)=>avg? {m:M/H0, v:Fv/H0} : {m:ms, v:vs};
+-    const sEH=per(Tst.MEH,Tst.FEH,sg.mEH,sg.vEH), sLS=per(Tst.MLS,Tst.FLS,sg.mLS,sg.vLS);
+-    const e2=W.stripEE2, eEH=per(Tee2.MEH,Tee2.FEH,e2.mEH,e2.vEH), eLS=per(Tee2.MLS,Tee2.FLS,e2.mLS,e2.vLS);
+-    const sEQ=per(TEQ.M,TEQ.F,W.stripEQ.m,W.stripEQ.v), sCT={m:MCT/H0, v:(CT?CT.F:0)/H0};
+-    const LS={};
++    /* ABM4 (2026-11-07): junction method. "avg" (the default): per limit state, the larger M_u of the total moment spread over H₀ and the most
++       loaded 1-ft strip governs (with its V_u); "strip": the strip; "avgOnly": the total moment over H₀ at the strength / extreme limit states
++       (yield-line redistribution, engineer's choice) with Service I (crack control) on the strip — redistribution does not apply at service. */
++    const jm=w.jMethod==="strip"?"strip":(w.jMethod==="avgOnly"?"avgOnly":"env"); W.jMode=jm;
++    const avg=jm!=="strip"; W.avg=avg;
++    const sCT={m:MCT/H0, v:(CT?CT.F:0)/H0};
++    const comps=useAvg=>{ const per=(M,Fv,ms,vs)=>useAvg? {m:M/H0, v:Fv/H0} : {m:ms, v:vs}, e2=W.stripEE2;
++      return {sEH:per(Tst.MEH,Tst.FEH,sg.mEH,sg.vEH), sLS:per(Tst.MLS,Tst.FLS,sg.mLS,sg.vLS), eEH:per(Tee2.MEH,Tee2.FEH,e2.mEH,e2.vEH), eLS:per(Tee2.MLS,Tee2.FLS,e2.mLS,e2.vLS),
++        sEQ:per(TEQ.M,TEQ.F,W.stripEQ.m,W.stripEQ.v), sCT}; };
++    const buildLS=(P,meth)=>{ const {sEH,sLS,eEH,eLS,sEQ}=P, LS={};
+@@ -2792 +2795,0 @@ function computeWing(R,X){
+-    W.per={sEH,sLS,eEH,eLS,sEQ,sCT}; W.LS=LS;
+@@ -2795,0 +2799,7 @@ function computeWing(R,X){
++    Object.values(LS).forEach(o=>{ o.meth=meth; }); return LS; };
++    const Pa=comps(true), Ps=comps(false), LSa=buildLS(Pa,"avg"), LSs=buildLS(Ps,"strip");
++    let LS;
++    if(jm==="strip") LS=LSs;
++    else if(jm==="avgOnly"){ LS=LSa; LS["Service I"]=LSs["Service I"]; }
++    else{ LS={}; Object.keys(LSa).forEach(k=>{ LS[k]=(LSs[k].Mu>LSa[k].Mu+1e-12)? LSs[k] : LSa[k]; }); }
++    W.per=avg? Pa : Ps; W.perS=Ps; W.LS=LS; W.LSa=LSa; W.LSs=LSs;
+@@ -2797 +2807 @@ function computeWing(R,X){
+-    W.alt=avg? {m:W.gEHst*sg.mEH+gLS1*sg.mLS, lbl:"most loaded 1-ft horizontal strip"} : {m:(W.gEHst*Tst.MEH+gLS1*Tst.MLS)/H0, lbl:"total junction moment / H₀"};
++    W.alt=avg? {m:W.gEHst*sg.mEH+gLS1*sg.mLS, lbl:"most loaded 1-ft horizontal strip"} : {m:(W.gEHst*Tst.MEH+gLS1*Tst.MLS)/H0, lbl:"total junction moment / H₀"};   // (ABM4: in "avg", the larger governs)
+@@ -5259 +5269 @@ function renderTabWing(R){
+-    Object.entries(W.LS).forEach(([k,q])=>{ tb+=`<tr><td class="lft">${esc(k)}</td><td class="lft">${esc(q.lbl)}</td><td>${fmt(q.Mu)}</td><td>${fmt(q.Vu)}</td><td>${q.svc?"—":(q.phi==="ee"?"1.00":"strain-based (≤ 0.90)")}</td></tr>`; });
++    Object.entries(W.LS).forEach(([k,q])=>{ tb+=`<tr><td class="lft">${esc(k)}</td><td class="lft">${esc(q.lbl)}${att&&q.meth?` <span class="small">(${q.meth==="strip"?"most loaded strip":"total / H₀"})</span>`:""}</td><td>${fmt(q.Mu)}</td><td>${fmt(q.Vu)}</td><td>${q.svc?"—":(q.phi==="ee"?"1.00":"strain-based (≤ 0.90)")}</td></tr>`; });
+@@ -5278 +5288 @@ function renderTabWing(R){
+-      ${eqB(W.avg?"Per foot of junction height — total moment spread over H<sub>0</sub>":"Per foot of junction height — most loaded horizontal strip","method of panel I-13",(W.avg?[
++      ${eqB(W.jMode==="env"?"Per foot of junction height — total moment over H<sub>0</sub> and the most loaded horizontal strip (the larger governs each limit state)":W.jMode==="avgOnly"?"Per foot of junction height — total moment over H<sub>0</sub> (strength); most loaded strip (Service I)":W.avg?"Per foot of junction height — total moment spread over H<sub>0</sub>":"Per foot of junction height — most loaded horizontal strip","method of panel I-13",(W.avg?[
+@@ -5280 +5290,2 @@ function renderTabWing(R){
+-        `v_{EH} = ${t(W.per.sEH.v,3)}\\,, \\ v_{LS} = ${t(W.per.sLS.v,3)}\\ \\text{kip/ft}`+(W.CT?`\\,, \\quad m_{CT} = \\tfrac{${t(W.MCT)}}{${t(W.H0)}} = ${t(W.per.sCT.m,3)}`:"")]:[
++        `v_{EH} = ${t(W.per.sEH.v,3)}\\,, \\ v_{LS} = ${t(W.per.sLS.v,3)}\\ \\text{kip/ft}`+(W.CT?`\\,, \\quad m_{CT} = \\tfrac{${t(W.MCT)}}{${t(W.H0)}} = ${t(W.per.sCT.m,3)}`:""),
++        `\\text{strip at } y^* = ${t(s.y)}\\ \\text{ft above the junction bottom, length } L_m = ${t(s.l)}\\ \\text{ft}:\\quad m_{EH} = ${t(s.mEH,3)}\\,, \\ m_{LS} = ${t(s.mLS,3)}\\,, \\ v_{EH} = ${t(s.vEH,3)}\\,, \\ v_{LS} = ${t(s.vLS,3)}`]:[
+@@ -5284 +5295,3 @@ function renderTabWing(R){
+-        (W.avg?`For information, the most loaded 1-ft horizontal strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft).`:`For information, the total junction moment over H<sub>0</sub> gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`)+(W.CT?" The collision moment is spread over the junction height in both methods.":"")+" Strip at y: strip length L<sub>m</sub> where the wing exists at that elevation; b<sub>T</sub> = slope of the wing top ("+fmt(W.bT,4)+").")}
++        (W.jMode==="env"?`Each limit state takes the method with the larger M<sub>u</sub> (ABM4; method named in the table below). Strength I: total / H<sub>0</sub> ${fmt(W.LSa["Strength I"].Mu)}, strip ${fmt(W.LSs["Strength I"].Mu)} kip-ft/ft (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft; strip formula as in the strip method).`
++        :W.jMode==="avgOnly"?`Strength and extreme limit states use the total moment over H<sub>0</sub> (yield-line redistribution, panel I-13); Service I crack control uses the most loaded strip (m<sub>s</sub> = ${fmt(W.LSs["Service I"].Mu)} kip-ft/ft), since redistribution does not apply at service. The strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`
++        :W.avg?`For information, the most loaded 1-ft horizontal strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft).`:`For information, the total junction moment over H<sub>0</sub> gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`)+(W.CT?" The collision moment is spread over the junction height in both methods.":"")+" Strip at y: strip length L<sub>m</sub> where the wing exists at that elevation; b<sub>T</sub> = slope of the wing top ("+fmt(W.bT,4)+").")}
+@@ -10411 +10424 @@ function inputEchoHTML(){
+-      ["Type",at?("attached, "+(w.orient==="inline"?"in-line":"U-wing")+"; junction method: "+(w.jMethod==="strip"?"most loaded horizontal strip":"total moment over H₀")):("independent, θ = "+fmt(+w.theta,1)+"°; design section "+(w.secMode==="user"?"x/L = "+fmt(+w.secFr,3):"owner / FHWA rule")+"; EH height "+(w.ehPlane==="heel"?"virtual back plane":"stem face")),""],
++      ["Type",at?("attached, "+(w.orient==="inline"?"in-line":"U-wing")+"; junction method: "+(w.jMethod==="strip"?"most loaded horizontal strip":w.jMethod==="avgOnly"?"total moment over H₀ (strength), strip (Service I)":"larger of the total moment over H₀ and the most loaded strip")):("independent, θ = "+fmt(+w.theta,1)+"°; design section "+(w.secMode==="user"?"x/L = "+fmt(+w.secFr,3):"owner / FHWA rule")+"; EH height "+(w.ehPlane==="heel"?"virtual back plane":"stem face")),""],
+```
+
+## 2026-11-07 — PR: claude/pile-group-one-row — PG1: one pile row in the moment direction is an input error (was: overturning moment silently dropped) (calculation change for Σx'² = 0 or Σy'² = 0 layouts only) (PR #996: https://github.com/mlococo88/All-Structural/pull/996)
+### Where / before / after (C-8, computeAll)
+```diff
++      /* PG1 (2026-11-07): a group with no lever arm about an axis (Σx'² = 0: one pile row in the moment direction; or Σy'² = 0)
++         cannot resist a moment about it. Before, the moment was dropped (every pile V/n); now it is an input error and the pile and
++         pile-cap checks are not computed (as with no active pile). Layouts with Σx'² > 0 and Σy'² > 0 are unchanged. */
++      for(const lsName of Object.keys(LIMITS)){   // the largest unresisted moment of every permutation
++        for(const pl of permutations(lsName,true)){ const c=comboEffects(lsName,pl.perm,pl.liveOn,false); if(c.V<=0) continue;
++          const My=c.V*((c.Mv-c.Mh)/c.V-xgcT), Mx=c.Mt-c.V*ygc, u=SharedPileGroup.unresisted(c.V,My,Mx,R.pile);
++          if(u && (!R.pile.unresisted || Math.abs(u.M)>Math.abs(R.pile.unresisted.M))) R.pile.unresisted={...u, ls:lsName, lbl:c.lbl}; } }
++      if(R.pile.unresisted){ const u=R.pile.unresisted; R.pile.nActive=n; R.pile.n=0;   // as with no active pile: no pile results, every pile view and check skipped
++        warnFor("conv",`Pile layout: ${u.axis==="y"?"a single pile row in the longitudinal direction (all active piles at one x, Σx′² = 0)":"a single pile line along the abutment (all active piles at one y, Σy′² = 0)"} cannot resist the overturning moment ${u.axis==="y"?"M_y":"M_x"} = ${fmt(u.M)} kip-ft (largest; ${u.ls}, ${u.lbl||""}) on pinned-head vertical piles. Add a pile row. The pile and pile-cap checks (pile reactions, punching, toe / heel on the piles) are not computed.`,"err"); }
++      else{
++      }   // PG1
+```
+### Problem / §4
+- Before: with all active piles at one x (Σx'² = 0), pileReaction dropped M_y: every pile got ΣV/n. Default abutment with one row: P = 386.17 kip per pile, M_y = −2980.4 kip-ft of the governing case ignored (unconservative).
+- After: C-8 scans every permutation with SharedPileGroup.unresisted; if any has an unresisted moment, an input error names the largest ("M_y = −5,410.12 kip-ft (largest; Strength I, …)", default with one row) and the pile branch is computed as with no active pile (R.pile.n = 0, R.pile.nActive = n, R.pile.unresisted): no pile reactions, pile checks, punching or pile-cap toe / heel demands. Statics of a rigid cap (AASHTO LRFD 10th Ed. Art. 10.7, no closed form).
+- Every layout with Σx'² > 0 and Σy'² > 0 is unchanged (14 layouts main vs branch identical; 2000 random reactions bit-identical).
+### Open items
+- Decision (pending engineer review): the error blocks the pile results rather than showing V/n with a warning (a single row of pinned vertical piles has no moment resistance; battered piles, 8g, would be the remedy).

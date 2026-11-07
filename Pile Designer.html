@@ -4672,13 +4672,19 @@ function computeAll(I, opts = {}) {
   // profile was silently ignored here and Davisson fell back to the global
   // solverSoil/solverNh values. Use the layers whenever they exist, matching what
   // the p-y solver itself does.
-  let bklSoilIsSand, bklStiff, bklSoilSrc;
+  let bklSoilIsSand, bklStiff, bklSoilSrc, bklSu = null, bklKhLayer = null;
   const bklLayers = Array.isArray(I.soilLayers) && I.soilLayers.length ? I.soilLayers : null;
   if (bklLayers) {
     const top = [...bklLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0];
     bklSoilIsSand = top.type === "sand";
     bklStiff = bklSoilIsSand ? top.nh : top.kh;
     bklSoilSrc = "layered profile (top layer: " + (top.type || "sand") + ")";
+    // PDA-M4 (2026-11-07): clay top layer with an undrained strength -> E_s = 0.465 S_u (ksi, S_u in ksf; Eq. C10.7.3.13.4-1),
+    // x 144 to kip/ft^2. Both S_u entries of a layer (p-y su in psf, static Su in ksf) -> the smaller (conservative). Before: the p-y k_h.
+    if (top.type === "clay" || top.type === "stiffclay") {
+      const suC = [top.su > 0 ? top.su / 1000 : null, top.Su > 0 ? top.Su : null].filter(x => x != null && isFinite(x));
+      if (suC.length) { bklSu = Math.min(...suC); bklKhLayer = bklStiff; bklStiff = 0.465 * bklSu * 144; bklSoilSrc += "; E_s = 0.465 S_u, S_u = " + fmt(bklSu, 2) + " ksf"; }
+    }
     // nh/kh can be missing on layers imported before the soil-JSON importer stopped deleting
     // them. Fall back to the new-row defaults (nh 60, kh 150) and say so, instead of NaN.
     if (!(typeof bklStiff === "number" && isFinite(bklStiff) && bklStiff > 0)) {
@@ -4690,6 +4696,14 @@ function computeAll(I, opts = {}) {
     bklSoilIsSand = I.solverSoil === "cohesionless";
     bklStiff = bklSoilIsSand ? I.solverNh : I.solverKh;
     bklSoilSrc = "uniform soil (" + (bklSoilIsSand ? "cohesionless" : "cohesive") + ")";
+  }
+  // PDA-M5 (2026-11-07): group spacing effect on the soil modulus (C10.7.3.13.4): 25 % of the single-pile value at s = 3B,
+  // 100 % at s >= 8B, linear between; below 3B the 25 % is kept (conservative). Applied to n_h / E_s (k_h) when the group is on.
+  const bklStiffSingle = bklStiff;
+  let bklGrpF = 1, bklGrpSB = null;
+  if (I.groupEnable && I.pileType !== "iab") {
+    const Bg = groupB(I), sc = groupCcSpacing(I);
+    if (Bg > 0 && sc > 0) { bklGrpSB = sc / Bg; bklGrpF = bklGrpSB >= 8 ? 1 : bklGrpSB <= 3 ? 0.25 : 0.25 + 0.75 * (bklGrpSB - 3) / 5; bklStiff = bklStiffSingle * bklGrpF; }
   }
   const T_char = Math.pow(EI_dav_ft / Math.max(bklStiff, 1e-6), 1 / 5); // ft (sand); PDA-D1: EI_w for the H-pile
   const R_char = Math.pow(EI_dav_ft / Math.max(bklStiff, 1e-6), 1 / 4); // ft (clay); PDA-D1: EI_w for the H-pile
@@ -4973,6 +4987,7 @@ function computeAll(I, opts = {}) {
     bklBasis,
     bklStiff,
     bklSoilSrc,
+    bklSu, bklKhLayer, bklStiffSingle, bklGrpF, bklGrpSB,   // PDA-M4 / M5
     bklLayerCount: bklLayers ? bklLayers.length : 0,
     lateralFixity: opts.solvedFixity,
     zFix2: (opts.zFix2 != null && isFinite(opts.zFix2)) ? opts.zFix2 : null,
@@ -5286,6 +5301,16 @@ function computeAll(I, opts = {}) {
   const z_MbelowTip = (opts.Mbelow != null && isFinite(opts.Mbelow) && isFinite(opts.zMbelow)) ? opts.zMbelow : null;
   const MbelowSrc = (opts.Mbelow != null && isFinite(opts.Mbelow)) ? (opts.MbelowSrc || "") : "tip";
   const uncasedFlex_pass = phiMn_uncased >= M_belowTip;
+  // PDA-M1 (2026-11-07): combined axial + flexure of the uncased length (10.9.3.10.1 -> Sec. 5: 5.6.6.2 / 5.6.4 via the
+  // P-M interaction of 5.6.2). Interim, conservative: linear interaction with the bar-only phi M_n above,
+  //   tension:     (T_u - P_t)/(phi_t f_yb A_b) + M_u,unc/phi M_n <= 1   (bar alone carries the tension, 5.6.6.1)
+  //   compression: P_u,unc/phi_CU R_n          + M_u,unc/phi M_n <= 1   (grout compression block neglected in M_n)
+  // Decision (pending engineer review): a strain-compatibility P-M of the grout + bar section (5.6.2) would be less conservative.
+  const uncMr = phiMn_uncased > 0 ? Math.abs(M_belowTip) / phiMn_uncased : (Math.abs(M_belowTip) > 0 ? Infinity : 0);
+  const uncPMon = I.pileType !== "hpile" && I.pileType !== "iab";   // micropile only
+  const uncPM_c = (uncPMon && R.axial && STL > 0 && R.axial.phiRn_ucased > 0) ? (R.axial.Pu_unc != null ? R.axial.Pu_unc : STL) / R.axial.phiRn_ucased + uncMr : null;
+  const uncPM_t = (uncPMon && R.tension && R.tension.enable && R.tension.phiPn_tension > 0) ? (R.tension.Tu_unc || 0) / R.tension.phiPn_tension + uncMr : null;
+  const uncPM_pass = (uncPM_c == null || uncPM_c <= 1.0) && (uncPM_t == null || uncPM_t <= 1.0);
 
   // AASHTO / FHWA geometric limits
   const Db_min_in = 3.0;                             // practical min bond dia
@@ -5308,6 +5333,7 @@ function computeAll(I, opts = {}) {
     // uncased flexure (answers the "is uncased pure-axial?" question)
     Mn_uncased, phiMn_uncased, M_belowTip, z_MbelowTip, MbelowSrc, uncasedFlex_pass, db_un, Z_bar,
     Mn_uncased_fiber: (opts.Mn_uncased_fiber != null ? opts.Mn_uncased_fiber : null),
+    uncMr, uncPM_c, uncPM_t, uncPM_pass,   // PDA-M1
     casedMn: R.flex.phiMn,
     // diameter
     dh, Db_min_in, Db_max_in, dia_ok,
@@ -5322,7 +5348,7 @@ function computeAll(I, opts = {}) {
     // overall (advisory items excluded from hard pass)
     // dia_ok is ADVISORY (not in pass): FHWA NHI-05-039's 3-12 in is the TYPICAL
     // micropile diameter range, not a code limit. Reported as a flag only.
-    pass: uncasedFlex_pass && Lb_min_ok && Lb_geoReq_ok && plungeDev_ok && cover_ok && R.geo.geomValid && (casingPastActive !== false)
+    pass: uncasedFlex_pass && uncPM_pass && Lb_min_ok && Lb_geoReq_ok && plungeDev_ok && cover_ok && R.geo.geomValid && (casingPastActive !== false)
   };
 
   // ---- H-PILE geotechnical axial capacity (only meaningful when pileType==="hpile") ----
@@ -5879,7 +5905,7 @@ function computeAll(I, opts = {}) {
     if (R.comb) R.comb.pass = false;
     if (R.cfst) { R.cfst.cfst_pm_pass = false; R.cfst.pass = false; }
     if (R.casingExt) R.casingExt.pass = false;
-    if (R.geoChecks) { R.geoChecks.uncasedFlex_pass = false; R.geoChecks.casingPastActive = false; R.geoChecks.pass = false; }
+    if (R.geoChecks) { R.geoChecks.uncasedFlex_pass = false; R.geoChecks.uncPM_pass = false; R.geoChecks.casingPastActive = false; R.geoChecks.pass = false; }
     if (R.hpileStruct) { R.hpileStruct.flex_pass = false; R.hpileStruct.comb_pass2 = false; }
   }
 
@@ -6468,6 +6494,8 @@ function gcSummaryRows(r, keys) {
   const gc = r && r.geoChecks; if (!gc) return [];
   const k = id => keys ? "gc/" + id : undefined;
   const o = [
+    ...(gc.uncPM_c != null ? [["Uncased combined compression + flexure (D/C)", 1.0, "", gc.uncPM_c, !!gc.uncPM_pass || gc.uncPM_c <= 1.0, "AASHTO 10.9.3.10.1 / 5.6.2 (linear, interim)", k("pmc")]] : []),   // PDA-M1
+    ...(gc.uncPM_t != null ? [["Uncased combined tension + flexure (D/C)", 1.0, "", gc.uncPM_t, gc.uncPM_t <= 1.0, "AASHTO 10.9.3.10.1 / 5.6.6.2 (linear, interim)", k("pmt")]] : []),
     ["Code limit — effective bond length ≥ required", gc.Lb_eff, "ft", gc.Lb_req, !!gc.Lb_geoReq_ok, "AASHTO 10.9.3.5", k("Lb")],
     ["Code limit — effective bond length ≥ practical minimum", gc.Lb_eff, "ft", gc.Lb_min_ft, !!gc.Lb_min_ok, "FHWA NHI-05-039", k("Lbmin")],
     ["Code limit — casing plunge length", gc.L_plunge, "ft", Math.min(gc.plungeMin_dev, gc.L_bond), !!gc.plungeDev_ok, "FHWA NHI-05-039", k("pl")],
@@ -6491,6 +6519,7 @@ function checkNoFor(name, pileType) {
   if (/Casing past active/i.test(n)) return "G";
   if (/^Uncased flexure/i.test(n)) return "G";   // F40 (O23)
   if (/^Code limit/i.test(n)) return "G";        // PDA-M2
+  if (/^Uncased combined/i.test(n)) return "G";  // PDA-M1
   if (/^Group/i.test(n)) return "11";            // F40 (O52)
   if (/Head fixity/i.test(n)) return pileType === "hpile" ? "06" : "02";
   if (/uplift|tension/i.test(n)) return pileType === "hpile" && /uplift/i.test(n) ? "01" : "09";
@@ -9485,7 +9514,7 @@ const DEFAULT_INPUTS = {
   hpPhiUp: 0.25,   // uplift: SPT / alpha method
   hpDriveCond: "good", // "good" (phi_c 0.60) | "severe" (phi_c 0.50) | "static_generic" (custom / legacy)
   hpPhiRev: 2,     // migration marker for the H-pile phi defaults (see mergeSavedInputs)
-  pdaRev: 5,           // PDA (2026-10-20): migration marker (mergeSavedInputs); 2 = part B, 3 = part C, 4 = PDA-H1 note, 5 = PDA-H2 note (2026-11-07)
+  pdaRev: 7,           // PDA (2026-10-20): migration marker (mergeSavedInputs); 2 = part B, 3 = part C, 4 = PDA-H1 note, 5 = PDA-H2 note, 6 = PDA-M1 note, 7 = PDA-M4/M5 note (2026-11-07)
   hpSptBasis: "N60",   // PDA-D5 (2026-10-20): SPT values entered as N60 (C_N applied, 10.4.6.2.4) | "N160"; saved projects without it: "N160"
   scourDepth: 0,       // PDA-D12 (2026-10-20): design scour depth below grade (ft); no side / bond / p-y resistance above it (10.7.3.6)
   hpSmallGroup: false, // apply Table 10.5.5.2.3-1 small-group 0.80 reduction on φ_stat
@@ -10072,6 +10101,19 @@ function mergeSavedInputs(parsed) {
   if (parsed && typeof parsed === "object" && !(parsed.pdaRev >= 5)) {
     if (bklAutoOn(out)) notes.push("Buckling (Module 10, 2026-11-07): the column check over the unsupported length now runs automatically when the pile has a stickup or design scour (10.9.3.10.2, 10.7.3.13.4). This project had it switched off: results change" + (out.pileType === "hpile" ? " (H-pile axial P_n and the combined check use the Module 10 column)" : " (the Module 10 buckling check is added)") + ". Review the buckling and axial checks.");
     out.pdaRev = 5;
+  }
+  // PDA-M1 (2026-11-07): one-time note for a micropile project saved before it (pdaRev < 6). No input is changed.
+  if (parsed && typeof parsed === "object" && !(parsed.pdaRev >= 6)) {
+    if (out.pileType !== "hpile" && out.pileType !== "iab") notes.push("Uncased length (Module G, 2026-11-07): a combined axial + flexure check is added below the casing tip (compression and tension, linear interaction with the bar-only \u03c6M_n; 10.9.3.10.1 \u2192 Sec. 5). The Module G status can change: review it.");
+    out.pdaRev = 6;
+  }
+  // PDA-M4 / M5 (2026-11-07): one-time note for a project saved before it (pdaRev < 7). No input is changed.
+  if (parsed && typeof parsed === "object" && !(parsed.pdaRev >= 7)) {
+    const ly0 = Array.isArray(out.soilLayers) && out.soilLayers.length ? [...out.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0] : null;
+    const clayS = !!ly0 && (ly0.type === "clay" || ly0.type === "stiffclay") && ((ly0.su || 0) > 0 || (ly0.Su || 0) > 0);
+    const grp = !!out.groupEnable && out.pileType !== "iab";
+    if (out.pileType !== "iab" && (clayS || grp)) notes.push("Davisson depth to fixity (Module 10, 2026-11-07): " + [clayS ? "a clay top layer now uses E_s = 0.465 S_u (Eq. C10.7.3.13.4-1) instead of the p-y k_h" : null, grp ? "the group spacing reduces the soil modulus (25 % at 3B, 100 % at 8B, C10.7.3.13.4)" : null].filter(Boolean).join("; ") + ". Results change: review the buckling and combined checks.");
+    out.pdaRev = 7;
   }
   LAST_LOAD_NOTES = notes;
   return out;
@@ -10675,6 +10717,9 @@ function RptGeomChecks({ I, r }) {
     e(RptCheck, { pass: gc.uncasedFlex_pass, eq: r.lateralNoConv ? PY_NC_TEX : `\\phi M_{n,uncased}=${fmt(gc.phiMn_uncased, 2)}\\text{ kip}\\cdot\\text{ft}${gc.uncasedFlex_pass ? ' \\geq ' : ' < '}M_{u,unc}=${fmt(gc.M_belowTip, 1)}\\text{ kip}\\cdot\\text{ft}` }),
     note("Uncased flexure over the whole uncased length below the casing tip: bar only, grout neglected (the fiber M–φ model gives M_n ≈ " + fmt(gc.Mn_uncased_fiber != null ? gc.Mn_uncased_fiber : 23, 0) + " kip·ft). φ = 0.90 kept for this bar-in-grout section (conservative; AASHTO 6.5.4.2's φ_f = 1.00 is the steel-member flexure factor — verify). Cased φM_n = " + fmt(gc.casedMn, 1) + " kip·ft for comparison."),
     e(RptSee, { items: [{ txt: "M_u,unc (p-y moment below the casing tip)", mods: ["02R", "02"] }] }),
+    gc.uncPM_c != null && e(RptCheck, { pass: gc.uncPM_c <= 1.0 && !r.lateralNoConv, eq: `\\tfrac{P_{u,unc}}{\\phi_{CU}R_n}+\\tfrac{M_{u,unc}}{\\phi M_n}=\\tfrac{${fmt(r.axial.Pu_unc != null ? r.axial.Pu_unc : I.STL, 1)}}{${fmt(r.axial.phiRn_ucased, 1)}}+\\tfrac{${fmt(gc.M_belowTip, 2)}}{${fmt(gc.phiMn_uncased, 2)}}=${fmt(gc.uncPM_c, 3)}${gc.uncPM_c <= 1 ? '\\leq' : '>'}1.0` }),   // PDA-M1
+    gc.uncPM_t != null && e(RptCheck, { pass: gc.uncPM_t <= 1.0 && !r.lateralNoConv, eq: `\\tfrac{T_u-P_t}{\\phi_t f_{yb}A_b}+\\tfrac{M_{u,unc}}{\\phi M_n}=\\tfrac{${fmt(r.tension.Tu_unc, 1)}}{${fmt(r.tension.phiPn_tension, 1)}}+\\tfrac{${fmt(gc.M_belowTip, 2)}}{${fmt(gc.phiMn_uncased, 2)}}=${fmt(gc.uncPM_t, 3)}${gc.uncPM_t <= 1 ? '\\leq' : '>'}1.0` }),
+    (gc.uncPM_c != null || gc.uncPM_t != null) && note("Uncased length, combined axial + flexure (AASHTO 10.9.3.10.1 \u2192 Sec. 5): linear interaction with the bar-only \u03c6M_n, an interim conservative form of the 5.6.2 P\u2013M check (tension: bar alone, 5.6.6.1)."),
     e(RptCheck, { pass: gc.Lb_geoReq_ok, eq: `L_{b,eff}=${fmt(gc.Lb_eff, 1)}\\text{ ft}${gc.Lb_geoReq_ok ? ' \\geq ' : ' < '}L_{b,req}=${fmt(gc.Lb_req, 1)}\\text{ ft}` }),
     note("Effective bond (plunge included, 10.9.3.10.4) L_b,eff = L_bond" + (r.geo.Lb_scour > 0 ? " − L_scour" : "") + " = " + fmt(gc.Lb_total, 1) + (r.geo.Lb_scour > 0 ? " − " + fmt(r.geo.Lb_scour, 1) : "") + " = " + fmt(gc.Lb_eff, 1) + " ft vs the geotechnically required bond (AASHTO 10.9.3.5, section 01)."),
     e(RptCheck, { pass: gc.Lb_min_ok, eq: `L_{b,eff}=${fmt(gc.Lb_eff, 1)}\\text{ ft}${gc.Lb_min_ok ? ' \\geq ' : ' < '}L_{b,min}=${fmt(gc.Lb_min_ft, 0)}\\text{ ft}` }),
@@ -15195,6 +15240,12 @@ function BucklingTabs({ b, I, set, pcr, computePcr }) {
       /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-500 mb-1" },
         "Soil stiffness from: ", /*#__PURE__*/React.createElement("b", null, b.bklSoilSrc),
         b.bklLayerCount > 1 ? [" \u2014 ", b.bklLayerCount, " layers defined; the closed form uses only the TOP layer, since it assumes uniform soil. Where layering matters, use the deflection-matched or P-crit tab, which run on the full profile."] : ""),
+      (b.bklSu != null || b.bklGrpF < 1) && /*#__PURE__*/React.createElement(Calc, {   // PDA-M4 / M5
+        label: "Soil modulus for the fixity depth",
+        eq: (b.bklSu != null ? `E_s=0.465\\,S_u=0.465(${fmt(b.bklSu, 2)})(144)=${fmt(b.bklStiffSingle, 1)}\\ \\text{kip/ft}^2` : `${b.bklSoilIsSand ? "n_h" : "k_h"}=${fmt(b.bklStiffSingle, 1)}`) + (b.bklGrpF < 1 ? `;\\ \\text{group } s/B=${fmt(b.bklGrpSB, 2)}:\\ f=${b.bklGrpSB <= 3 ? "0.25" : `0.25+0.75(${fmt(b.bklGrpSB, 2)}-3)/5`}=${fmt(b.bklGrpF, 3)},\\ ${b.bklSoilIsSand ? "n_h" : "k_h"}=${fmt(b.bklGrpF, 3)}(${fmt(b.bklStiffSingle, 1)})=${fmt(b.bklStiff, 1)}` : ""),
+        cite: (b.bklSu != null ? "Eq. C10.7.3.13.4-1" : "") + (b.bklSu != null && b.bklGrpF < 1 ? "; " : "") + (b.bklGrpF < 1 ? "C10.7.3.13.4 (25 % at 3B, 100 % at 8B)" : ""),
+        note: b.bklSu != null ? "Clay: E_s from the top layer's undrained strength (the smaller S_u entered), used as k_h below" + (b.bklKhLayer > 0 ? "; the layer's p-y k_h = " + fmt(b.bklKhLayer, 0) + " kip/ft\u00b2 is not used here" : "") + "." : null
+      }),
       /*#__PURE__*/React.createElement(Calc, {
         label: "Characteristic length",
         eq: b.bklSoilIsSand
@@ -16024,9 +16075,13 @@ function pdrModel(I, r, pyRes, pcr, sel) {
         pdrS("dh", "Bond-zone diameter vs the typical range (advisory, not in the status)", "d_{h}", "", pdrN(gc.Db_min_in, 0) + " \\le " + pdrN(gc.dh, 2) + " \\le " + pdrN(gc.Db_max_in, 0), gc.dh, "in", 2, { note: gc.dia_ok ? "within the typical range" : "outside the typical range (advisory)" }),
         pdrS("pl", "Casing plunge develops the cased load", "L_{plunge}", "\\ge L_{plunge,min}", pdrN(gc.L_plunge, 1) + " \\ge " + pdrN(Math.min(gc.plungeMin_dev, gc.L_bond), 1), gc.L_plunge, "ft", 1, { ok: !!gc.plungeDev_ok }),
         pdrS("cov", "Grout cover around the bar", "\\frac{d_{h} \\minus d_{b}}{2}", "\\ge 0.5", pdrN(gc.grout_cover_in, 2) + " \\ge 0.5", gc.grout_cover_in, "in", 2, { ok: !!gc.cover_ok })];
+      const pmSt = [];   // PDA-M1: uncased combined axial + flexure (linear, interim)
+      if (gc.uncPM_c != null) pmSt.push(pdrS("pmc", "Uncased compression + flexure (linear interim; grout compression neglected in M_n)" + (nc ? ": p-y did not converge" : ""), "D/C", "\\frac{P_{u,unc}}{\\phi_{CU}R_{n}} + \\frac{M_{u,unc}}{\\phi M_{n}}", "\\frac{" + pdrN(r.axial.Pu_unc != null ? r.axial.Pu_unc : I.STL, 1) + "}{" + pdrN(r.axial.phiRn_ucased, 1) + "} + \\frac{" + pdrN(gc.M_belowTip, 2) + "}{" + pdrN(gc.phiMn_uncased, 2) + "}", gc.uncPM_c, "", 3, { ok: gc.uncPM_c <= 1.0 && !nc, ref: AA("Art. 10.9.3.10.1, 5.6.2") }));
+      if (gc.uncPM_t != null) pmSt.push(pdrS("pmt", "Uncased tension + flexure (linear interim; bar alone in tension)" + (nc ? ": p-y did not converge" : ""), "D/C", "\\frac{T_{u} \\minus P_{t}}{\\phi_{t}f_{yb}A_{b}} + \\frac{M_{u,unc}}{\\phi M_{n}}", "\\frac{" + pdrN(r.tension.Tu_unc, 1) + "}{" + pdrN(r.tension.phiPn_tension, 1) + "} + \\frac{" + pdrN(gc.M_belowTip, 2) + "}{" + pdrN(gc.phiMn_uncased, 2) + "}", gc.uncPM_t, "", 3, { ok: gc.uncPM_t <= 1.0 && !nc, ref: AA("Art. 10.9.3.10.1, 5.6.6.2") }));
+      st.splice(4, 0, ...pmSt);
       if (gc.casingPastActive !== null) st.push(pdrS("tip", "Casing tip below the moment-decay depth", "z_{tip}", "\\ge z_{M \\to 0}", pdrN(gc.tipBelowGrade, 1) + " \\ge " + pdrN(gc.zDecay, 1), gc.tipBelowGrade, "ft", 1, { ok: !!gc.casingPastActive }));
       st.push(pdrS("geo", "Geometry consistency (plunge \u2264 bond, cased \u2265 plunge)", "", "", "", gc.geomValid ? "consistent" : "inconsistent", "", 2, { ok: !!gc.geomValid }));
-      add("geom", sub("G Code-limit checks", [pdrItem("gc", [{ title: "Uncased flexure", ref: "AASHTO 10.9 / FHWA NHI-05-039", steps: st.slice(0, 4) }, { title: "Bond, plunge, cover and casing length", ref: "FHWA NHI-05-039", steps: st.slice(4) }]), goto("geom", "Geometry & limits tab")])); }
+      add("geom", sub("G Code-limit checks", [pdrItem("gc", [{ title: "Uncased flexure", ref: "AASHTO 10.9 / FHWA NHI-05-039", steps: st.slice(0, 4 + pmSt.length) }, { title: "Bond, plunge, cover and casing length", ref: "FHWA NHI-05-039", steps: st.slice(4 + pmSt.length) }]), goto("geom", "Geometry & limits tab")])); }
     const g = r.geo;
     add("geo", sub("01 Geotechnical bond resistance", [pdrItem("geo", [{ title: "Bond resistance", ref: AA("Art. 10.9.3.5"), steps: [
       pdrS("beta", "Bond stress (Table C10.9.3.5.2-1)", "\\beta", "", "", g.beta_ksf, "ksf", 2, { note: "= " + fmt(g.beta_ksf * 1000 / 144, 1) + " psi" }),
@@ -16114,6 +16169,7 @@ function pdrModel(I, r, pyRes, pcr, sel) {
 
   /* ---------- buckling (micropile and H-pile) ---------- */
   if (!isIAB && r.buckling && r.buckling.enable) { const K = r.buckling, st = [];
+    if (K.bklSu != null || K.bklGrpF < 1) st.push(pdrS("Es", "Soil modulus for the fixity depth" + (K.bklSu != null ? " (clay: E_s = 0.465 S_u, S_u = " + fmt(K.bklSu, 2) + " ksf)" : "") + (K.bklGrpF < 1 ? "; group s/B = " + fmt(K.bklGrpSB, 2) + ", factor " + fmt(K.bklGrpF, 3) + " on " + fmt(K.bklStiffSingle, 1) : ""), K.bklSoilIsSand ? "n_{h}" : "k_{h}", K.bklSu != null ? "0.465S_{u}(144)" + (K.bklGrpF < 1 ? " \\times f_{grp}" : "") : "f_{grp}" + (K.bklSoilIsSand ? "n_{h}" : "k_{h}"), "", K.bklStiff, K.bklSoilIsSand ? "kip/ft^{3}" : "kip/ft^{2}", 1, { ref: AA((K.bklSu != null ? "Eq. C10.7.3.13.4-1" : "") + (K.bklSu != null && K.bklGrpF < 1 ? ", " : "") + (K.bklGrpF < 1 ? "C10.7.3.13.4" : "")) }));   // PDA-M4 / M5
     st.push(pdrS("Ldav", "Preliminary fixity (Davisson 1965), " + (K.bklSoilIsSand ? "L_f = 1.8T, T = (EI/n_h)^1/5" : "L_f = 1.4R, R = (EI/k_h)^1/4") + "; soil basis " + (K.bklSoilSrc || "\u2014"), "L_{f}", "", "", K.Lf_davisson, "ft", 1, { ref: AA("Eqs. C10.7.3.13.4-1, -2") }));
     if (K.lpileMatchOk) st.push(pdrS("Lmatch", "Deflection-matched fixity (" + (K.deflSrc || "lateral analysis") + ", " + (K.deflHeadBasis === "fixed" ? "fixed" : "free") + " head)", "L_{f}", "L_{equiv} \\minus L_{u}", pdrN(K.L_equiv_lpile, 2) + " \\minus L_{u}", K.Lf_lpile, "ft", 1));
     st.push(pdrS("Lf", "Selected fixity basis: " + K.lfGoverning.src + (K.resultIsFallback ? " (selected method has no result: Davisson used)" : ""), "L_{f}", "", "", K.Lf_buck, "ft", 1, { note: K.mostConsIsOther ? "another method is more conservative (\u03c6_cP_n = " + fmt(K.mostConsPhiPn, 0) + " kip); not substituted" : "" }));
@@ -19126,6 +19182,16 @@ function App() {
       tex: r.lateralNoConv ? PY_NC_TEX : `\\phi M_{n,uncased}=${fmt(r.geoChecks.phiMn_uncased, 2)}\\text{ kip}\\cdot\\text{ft}${r.geoChecks.uncasedFlex_pass ? ' \\geq ' : ' < '}M_{u,unc}=${fmt(r.geoChecks.M_belowTip, 1)}\\text{ kip}\\cdot\\text{ft}`,
       note: "Uncased nominal from the central bar (grout tension neglected): φM_n = 0.90·f_yb·Z_bar. M_u,unc is the largest moment over the whole uncased length below the casing tip (" + belowTipSrcText(r.geoChecks) + "). Cased φM_n = " + fmt(r.geoChecks.casedMn, 1) + " kip·ft for comparison — the uncased section is far weaker, so keep demand off it (extend the casing past the active-moment zone)."
     }), React.createElement(PdWorkedIn, { I: I, items: [{ mod: "02", txt: "M_u,unc", title: "Lateral Analysis \u2014 Maximum Moment" }] }),
+    r.geoChecks.uncPM_c != null && /*#__PURE__*/React.createElement(CheckRow, {   // PDA-M1
+      pass: r.geoChecks.uncPM_c <= 1.0 && !r.lateralNoConv,
+      tex: r.lateralNoConv ? PY_NC_TEX : `\\tfrac{P_{u,unc}}{\\phi_{CU}R_n}+\\tfrac{M_{u,unc}}{\\phi M_n}=\\tfrac{${fmt(r.axial.Pu_unc != null ? r.axial.Pu_unc : I.STL, 1)}}{${fmt(r.axial.phiRn_ucased, 1)}}+\\tfrac{${fmt(r.geoChecks.M_belowTip, 2)}}{${fmt(r.geoChecks.phiMn_uncased, 2)}}=${fmt(r.geoChecks.uncPM_c, 3)}${r.geoChecks.uncPM_c <= 1 ? '\\leq' : '>'}1.0`,
+      note: "Uncased length, compression + flexure (AASHTO 10.9.3.10.1 \u2192 Sec. 5, 5.6.2): linear interaction with the bar-only \u03c6M_n (grout compression block neglected), an interim conservative form of the P\u2013M check. P_u,unc and \u03c6_CU R_n from Module 03."
+    }),
+    r.geoChecks.uncPM_t != null && /*#__PURE__*/React.createElement(CheckRow, {
+      pass: r.geoChecks.uncPM_t <= 1.0 && !r.lateralNoConv,
+      tex: r.lateralNoConv ? PY_NC_TEX : `\\tfrac{T_u-P_t}{\\phi_t f_{yb}A_b}+\\tfrac{M_{u,unc}}{\\phi M_n}=\\tfrac{${fmt(r.tension.Tu_unc, 1)}}{${fmt(r.tension.phiPn_tension, 1)}}+\\tfrac{${fmt(r.geoChecks.M_belowTip, 2)}}{${fmt(r.geoChecks.phiMn_uncased, 2)}}=${fmt(r.geoChecks.uncPM_t, 3)}${r.geoChecks.uncPM_t <= 1 ? '\\leq' : '>'}1.0`,
+      note: "Uncased length, tension + flexure (AASHTO 10.9.3.10.1 \u2192 Sec. 5, 5.6.6.2): the bar alone carries T_u \u2212 P_t (5.6.6.1, Module 09); linear interaction with the bar-only \u03c6M_n (interim, conservative)."
+    }), (r.geoChecks.uncPM_c != null || r.geoChecks.uncPM_t != null) && React.createElement(PdWorkedIn, { I: I, items: [{ mod: "03", txt: "\u03c6_CU R_n, P_u,unc", title: "Structural Axial Resistance" }, ...(r.geoChecks.uncPM_t != null ? [{ mod: "09", txt: "\u03c6_t f_yb A_b, T_u \u2212 P_t", title: "Tension / Uplift" }] : [])] }),
     /*#__PURE__*/React.createElement(CheckRow, {
       pass: r.geoChecks.Lb_geoReq_ok,
       tex: `L_{b,eff}=${fmt(r.geoChecks.Lb_eff, 1)}\\text{ ft}${r.geoChecks.Lb_geoReq_ok ? ' \\geq ' : ' < '}L_{b,req}=${fmt(r.geoChecks.Lb_req, 1)}\\text{ ft}`,

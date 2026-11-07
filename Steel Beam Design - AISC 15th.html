@@ -483,6 +483,31 @@ function resolveSection(){
        ratio at DB thickness, then re-ratio with the resolved thickness. */
     const hDb=(db.htw!=null&&db.tw)?db.htw*db.tw:null;
     if(src.hClear!=='ovr')p.hClear=hDb;
+    /* H3 (2026-11-07): a built-up (welded) I-shape is three plates. Unless entered, h is the clear distance between the
+       flanges, h = d - 2t_f (AISC 360-16 Table B4.1b note on h for built-up sections; Sec. G2.1, F4, F5), not the parent rolled
+       shape's T-distance; and h_o, I_y, S_y, Z_y, r_y, J, C_w, r_ts are computed from the plates (Sec. F2.2 Eq. F2-7 and its
+       User Note, C_w = I_y h_o^2/4). Every other property not entered stays the parent shape's and is listed by sectionWarnings. */
+    if(kind==='I'&&p._built&&p.d>0&&p.bf>0&&p.tf>0&&p.tw>0){
+      const hw=p.d-2*p.tf,Apl=2*p.bf*p.tf+hw*p.tw,pl={};
+      /* H3-2 (2026-11-07): plate-girder input (S.section.plates): every other property not entered is computed from the
+         plates too (doubly symmetric, welds neglected; k = t_f unless entered, i.e. no weld leg: conservative for J10) */
+      if(S.section.plates){
+        const Ixp=p.bf*(Math.pow(p.d,3)-Math.pow(hw,3))/12+p.tw*Math.pow(hw,3)/12,pg={A:Apl,Ix:Ixp,Sx:Ixp/(p.d/2),
+          Zx:p.bf*p.tf*(p.d-p.tf)+p.tw*hw*hw/4,kdes:p.tf,
+          Qf:(p.bf-p.tw)/2*p.tf*(p.d-p.tf)/2,Qw:p.bf*p.tf*(p.d-p.tf)/2+p.tw*hw*hw/8,
+          Wno:p.bf*(p.d-p.tf)/4,Sw1:p.tf*p.bf*p.bf*(p.d-p.tf)/16,Wt:Apl*490/144};
+        ['A','Ix','Sx','Zx','kdes','Qf','Qw','Wno','Sw1','Wt'].forEach(k=>{if(src[k]!=='ovr'){p[k]=pg[k];src[k]='plates';}});
+        if(src.rx!=='ovr'){p.rx=Math.sqrt(p.Ix/p.A);src.rx='plates';}
+      }
+      pl.hClear=hw;pl.ho=p.d-p.tf;
+      pl.Iy=2*p.tf*Math.pow(p.bf,3)/12+hw*Math.pow(p.tw,3)/12;
+      pl.Sy=pl.Iy/(p.bf/2);pl.Zy=p.bf*p.bf*p.tf/2+hw*p.tw*p.tw/4;
+      pl.ry=Math.sqrt(pl.Iy/(src.A==='ovr'?p.A:Apl));
+      pl.J=(2*p.bf*Math.pow(p.tf,3)+hw*Math.pow(p.tw,3))/3;
+      pl.Cw=pl.Iy*pl.ho*pl.ho/4;
+      ['hClear','ho','Iy','Sy','Zy','ry','J','Cw'].forEach(k=>{if(src[k]!=='ovr'){p[k]=pl[k];src[k]='plates';}});
+      if(src.rts!=='ovr'&&p.Sx>0){p.rts=Math.sqrt(Math.sqrt(p.Iy*p.Cw)/p.Sx);src.rts='plates';}
+    }
     p.htw=(p.hClear!=null&&p.tw)?p.hClear/p.tw:db.htw;
   }else if(kind==='R'){
     /* AISC G4 / B4 convention when corner radii unknown: flat = outside − 3t */
@@ -506,6 +531,18 @@ function sectionWarnings(p){
     if(pct(Acalc,p.A)>5)w.push('Cross-section area inconsistency: A = '+fmt(p.A)+' in\u00B2 resolved vs '+fmt(Acalc)+' in\u00B2 recomputed from d, b\u2093, t\u2093, t\u1D65 (idealized, no fillets). Check overrides for consistency.');
     const Zc=p.bf*p.tf*(p.d-p.tf)+0.25*p.tw*Math.pow(p.d-2*p.tf,2);
     if(p._kind==='I'&&pct(Zc,p.Zx)>6)w.push('Plastic modulus inconsistency: Z\u2093 = '+fmt(p.Zx)+' in\u00B3 resolved vs '+fmt(Zc)+' in\u00B3 recomputed from overridden geometry (idealized).');
+    /* H3: a built-up section whose plate geometry was entered: every property neither entered nor computed from the plates
+       is still the parent rolled shape's value */
+    const src=p._src||{};
+    if(p._kind==='I'&&p._built&&['d','bf','tf','tw'].some(k=>src[k]==='ovr')){
+      const hw=p.d-2*p.tf,Ix=p.bf*(Math.pow(p.d,3)-Math.pow(p.d-2*p.tf,3))/12+p.tw*Math.pow(hw,3)/12;
+      const plv={A:2*p.bf*p.tf+hw*p.tw,Ix,Sx:Ix/(p.d/2),Zx:p.bf*p.tf*(p.d-p.tf)+0.25*p.tw*hw*hw};
+      plv.rx=Math.sqrt(Ix/plv.A);
+      const stale=['A','Ix','Sx','Zx','rx','kdes','Qf','Qw','Wno','Sw1','Wt'].filter(k=>src[k]==='db');
+      if(stale.length)w.push('Built-up section: these properties were not entered and are still the values of the parent shape '+p.lbl+': '+
+        stale.map(k=>k+' = '+fmt(p[k],3)+(plv[k]!=null?' (plates: '+fmt(plv[k],3)+')':'')).join(', ')+
+        '. Enter them for the welded section (k = t\u2093 + weld size; Q\u2093, Q\u1D65, W_no, S_w1 for torsion). Computed from the plates where not entered: h = d \u2212 2t\u2093, h\u2092, I\u1D67, S\u1D67, Z\u1D67, r\u1D67, J, C\u1D65 and r\u209C\u209B (Eq. F2-7).');
+    }
   }else if(p._kind==='P'){
     const Acalc=Math.PI/4*(p.OD*p.OD-Math.pow(p.OD-2*p.tdes,2));
     if(pct(Acalc,p.A)>4)w.push('Area inconsistency: A = '+fmt(p.A)+' in\u00B2 vs '+fmt(Acalc)+' in\u00B2 from OD and t_des.');
@@ -2492,6 +2529,11 @@ function rebuildInputs(){
   mkSection('inSect','Section &amp; Material',body=>{
     fRow(body,'Built-up (welded) section',chkInput(()=>S.section.builtUp,v=>{S.section.builtUp=v;SB_BU_NOTE=false;rebuildInputs();},'bltUp'),'',
       '\u00A7G2.1(a) \u03C6\u1D65 = 1.00 is limited to ROLLED I-shapes \u2014 tick this when overriding properties to model a plate girder');
+    /* H3-2: plate-girder input (new field section.plates; absent = off, as before) */
+    if(S.section.builtUp&&DBKIND[S.section.family]==='I'){
+      fRow(body,'Plate girder: every property from the plates',chkInput(()=>!!S.section.plates,v=>{S.section.plates=v;rebuildInputs();},'bltPl'),'',
+        'Enter d, b\u2093, t\u2093, t\u1D65 under Property overrides; A, I, S, Z, r, J, C\u1D65, r\u209C\u209B, h, h\u2092, Q, W\u2099\u2092, S_w1, Wt and k are then computed from the plates (doubly symmetric, welds neglected). A value you enter still wins.');
+    }
     if(SB_BU_NOTE)body.appendChild(el('div','warnBox','This project was saved without the built-up setting (a Validation / Report tab visit dropped it before 2026-11-06), so it opens as <b>rolled</b>. If this section is a built-up (welded) girder, tick the box above.'));
     fRow(body,'Shape family',selInput(FAMS.map(f=>f.id),()=>S.section.family,v=>{
       S.section.family=v;S.section.grade=famMeta(v).defMat;S.section.ovr={};
@@ -2522,7 +2564,7 @@ function rebuildInputs(){
         const lab=el('label','small',k);r.appendChild(lab);
         const inp=numInput(()=>S.section.ovr[k]!=null?S.section.ovr[k]:null,
           v=>{if(v==null)delete S.section.ovr[k];else S.section.ovr[k]=v;},'any','ovr_'+k);
-        inp.placeholder=fmt(shapeRow(S.section.family,S.section.label)[k],3);
+        inp.placeholder=fmt((p._src[k]==='plates'?p:shapeRow(S.section.family,S.section.label))[k],3);   /* H3: computed value shown for a built-up */
         if(S.section.ovr[k]!=null)inp.classList.add('ovrIn');
         r.appendChild(inp);grid.appendChild(r);
       });
@@ -3326,12 +3368,40 @@ function buildSectionTab(pg){
       const lab=PROP_LABELS[k];
       const src=p._src[k]==='ovr'?'<span class="dirty">override</span>':
         p._src[k]==='rule'?'A1085 rule (t\u2099\u2092\u2098)':
+        p._src[k]==='plates'?'built-up: from the plates':
         (k==='bf2tf'||k==='htw'||k==='btdes'||k==='htdes'||k==='Dt'||k==='bFlat'||k==='hFlat'||k==='hClear')?'computed':'database';
       const tr=el('tr');
       [lab[0]+' ('+k+')',fmt(p[k],4),lab[1],src].forEach((v,i)=>tr.appendChild(el('td',i===0?'lft':null,v)));
       t.appendChild(tr);
     });
     body.appendChild(t);
+    /* H3: worked plate properties of a built-up I-shape (those not entered) */
+    if(p._kind==='I'&&p._built&&p._src&&Object.keys(p._src).some(k=>p._src[k]==='plates')){
+      const hw=p.d-2*p.tf,f3=v=>fmt(v,3),E={
+        hClear:'h = d \u2212 2t\u2093 = '+f3(p.d)+' \u2212 2\u00B7'+f3(p.tf)+' = '+f3(p.hClear)+' in',
+        ho:'h\u2092 = d \u2212 t\u2093 = '+f3(p.d)+' \u2212 '+f3(p.tf)+' = '+f3(p.ho)+' in',
+        Iy:'I\u1D67 = 2t\u2093b\u2093\u00B3/12 + h t\u1D65\u00B3/12 = 2\u00B7'+f3(p.tf)+'\u00B7'+f3(p.bf)+'\u00B3/12 + '+f3(hw)+'\u00B7'+f3(p.tw)+'\u00B3/12 = '+f3(p.Iy)+' in\u2074',
+        Sy:'S\u1D67 = I\u1D67/(b\u2093/2) = '+f3(p.Iy)+'/'+f3(p.bf/2)+' = '+f3(p.Sy)+' in\u00B3',
+        Zy:'Z\u1D67 = b\u2093\u00B2t\u2093/2 + h t\u1D65\u00B2/4 = '+f3(p.Zy)+' in\u00B3',
+        ry:'r\u1D67 = \u221A(I\u1D67/A) = \u221A('+f3(p.Iy)+'/'+f3(p._src.A==='ovr'?p.A:2*p.bf*p.tf+hw*p.tw)+') = '+f3(p.ry)+' in',
+        J:'J = (2b\u2093t\u2093\u00B3 + h t\u1D65\u00B3)/3 = (2\u00B7'+f3(p.bf)+'\u00B7'+f3(p.tf)+'\u00B3 + '+f3(hw)+'\u00B7'+f3(p.tw)+'\u00B3)/3 = '+f3(p.J)+' in\u2074',
+        Cw:'C\u1D65 = I\u1D67h\u2092\u00B2/4 = '+f3(p.Iy)+'\u00B7'+f3(p.ho)+'\u00B2/4 = '+fmt(p.Cw,1)+' in\u2076',
+        rts:'r\u209C\u209B = \u221A(\u221A(I\u1D67C\u1D65)/S\u2093) (Eq. F2-7) = \u221A(\u221A('+f3(p.Iy)+'\u00B7'+fmt(p.Cw,1)+')/'+f3(p.Sx)+') = '+f3(p.rts)+' in',
+        /* H3-2: plate-girder input */
+        A:'A = 2b\u2093t\u2093 + h t\u1D65 = 2\u00B7'+f3(p.bf)+'\u00B7'+f3(p.tf)+' + '+f3(hw)+'\u00B7'+f3(p.tw)+' = '+f3(p.A)+' in\u00B2',
+        Ix:'I\u2093 = b\u2093(d\u00B3 \u2212 h\u00B3)/12 + t\u1D65h\u00B3/12 = '+f3(p.bf)+'('+f3(p.d)+'\u00B3 \u2212 '+f3(hw)+'\u00B3)/12 + '+f3(p.tw)+'\u00B7'+f3(hw)+'\u00B3/12 = '+fmt(p.Ix,1)+' in\u2074',
+        Sx:'S\u2093 = I\u2093/(d/2) = '+fmt(p.Ix,1)+'/'+f3(p.d/2)+' = '+fmt(p.Sx,2)+' in\u00B3',
+        Zx:'Z\u2093 = b\u2093t\u2093(d \u2212 t\u2093) + t\u1D65h\u00B2/4 = '+f3(p.bf)+'\u00B7'+f3(p.tf)+'\u00B7'+f3(p.d-p.tf)+' + '+f3(p.tw)+'\u00B7'+f3(hw)+'\u00B2/4 = '+fmt(p.Zx,2)+' in\u00B3',
+        rx:'r\u2093 = \u221A(I\u2093/A) = \u221A('+fmt(p.Ix,1)+'/'+f3(p.A)+') = '+f3(p.rx)+' in',
+        kdes:'k = t\u2093 = '+f3(p.kdes)+' in (weld leg not included: enter k = t\u2093 + weld size to count it; smaller k is conservative in \u00A7J10)',
+        Qf:'Q\u2093 = (b\u2093 \u2212 t\u1D65)/2\u00B7t\u2093\u00B7h\u2092/2 = '+f3(p.Qf)+' in\u00B3 (flange at the web face)',
+        Qw:'Q\u1D65 = b\u2093t\u2093h\u2092/2 + t\u1D65h\u00B2/8 = '+f3(p.Qw)+' in\u00B3 (mid-depth)',
+        Wno:'W\u2099\u2092 = b\u2093h\u2092/4 = '+f3(p.Wno)+' in\u00B2 (AISC DG 9)',
+        Sw1:'S_w1 = t\u2093b\u2093\u00B2h\u2092/16 = '+f3(p.Sw1)+' in\u2074 (AISC DG 9)',
+        Wt:'Wt = 490/144\u00B7A = 3.403\u00B7'+f3(p.A)+' = '+fmt(p.Wt,1)+' lb/ft (steel 490 pcf)'};
+      body.appendChild(el('div','hint','<b>Built-up section: properties computed from the plates</b> (welds neglected; AISC 360-16 Table B4.1b note on h, \u00A7F2.2):<br>'+
+        Object.keys(E).filter(k=>p._src[k]==='plates').map(k=>E[k]).join('<br>')));
+    }
     if(p._kind==='I'||p._kind==='C')body.appendChild(el('div','hint','<b>h clear</b> is the clear web depth driving h/t\u1D65 and, where transverse stiffeners are entered, a/h. It is backed out of the tabulated h/t\u1D65 at database thickness; override it together with d, t\u1D65, b\u1DA0 and t\u1DA0 to model a built-up plate girder.'));
     if(p._kind==='R')body.appendChild(el('div','hint','Flat widths use the AISC convention b = B \u2212 3t, h = H \u2212 3t when corner radii are unknown (Spec. \u00A7B4.1b(d), G4). For A500, the tabulated design wall t_des = 0.93\u00B7t_nom is used; selecting A1085 switches to the nominal wall.'));
   },pg);

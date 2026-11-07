@@ -1939,3 +1939,147 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
 - **How verified:** `tbcRun` on 33 review cases, origin/main vs branch, headless Chromium from `file://`: only the wet cases moved (dTL and K<sub>cr</sub> only; bending, shear, bearing and live-load deflection identical). Moved: default wet 1.1418 → 1.2923, wet glulam 0.8889 → 1.0075, wet LRFD joist 1.1418 → 1.2923, wet incised 125–150 °F joist 1.3354 → 1.5115, wet with K<sub>cr</sub> blank 1.1418 → 1.2923. Wet with K<sub>cr</sub> 2.0 or 1.8 entered: unchanged. Validation 106/106 match (the 102 existing unchanged). Every output tab at 1400 px (Summary and Report at 400 px) without NaN / undefined / KaTeX errors; save → open round trip identical; no console errors; no horizontal scroll at 400 px. `node tests/check-syntax.mjs` passes.
 - **Other copies:** none.
 - **Open items:** a seasoned / unseasoned input for sawn lumber (K<sub>cr</sub> 2.0 for unseasoned in dry service) was not added; advisory for timbers only.
+
+## 2026-11-07 — PR: claude/timber-eymin (PR #1011: https://github.com/mlococo88/All-Structural/pull/1011) (TBE1: glulam beam stability F<sub>bE</sub> with E<sub>y,min</sub>)   [calc change] [MORE conservative]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBE1`.
+
+### TBE1. Glulam F<sub>bE</sub> uses E<sub>y,min</sub>, not E<sub>x,min</sub> (review finding H1)
+
+- **Where:**
+  - `GLULAM_5A` (anchor `const GLULAM_5A = {`): an 8th value, E<sub>y,min</sub>, is added to each `v` array. A new constant `GL_EYMIN_RATIO` follows the table.
+  - `tbcRun`: the glulam `ref` objects get `Eymin`. Custom glulam: the block after `errors.push('Enter all glulam reference design values`. Stability: anchor `const EminStab = isGL ? ref.Eymin : ref.Emin;`. `EminStab` is added to the result object.
+  - `tbcDefaultModel` and `tbcSanitize`: `custom: { … Eymin: null … }` and `Eymin: nb(glc.Eymin, null)`.
+  - Custom-glulam inputs: a new row `['Eymin', 'E<sub>y,min</sub> (beam stability)', 'psi']`.
+  - Displays: `refLineHTML` (`Ey,min`), the Reference Values Table 5A (new column "E<sub>y,min</sub> (stability)"), the Design Values "Stiffness" card and the Report step `dv.Emin` (base value E<sub>y,min</sub> for glulam), and the Bending card's E′<sub>min</sub> row.
+- **Problem:** for glulam bent about x–x, lateral-torsional buckling is weak-axis behaviour. NDS uses E′<sub>y,min</sub> in F<sub>bE</sub>, but the tool used E<sub>x,min</sub>, so C<sub>L</sub> came out too high whenever stability governed. This was unconservative.
+- **Governing provision:** NDS 2018 3.3.3.8 (F<sub>bE</sub> = 1.20 E′<sub>min</sub>/R<sub>B</sub>²). For glulam, E′<sub>min</sub> is E<sub>y,min</sub> per NDS Supplement 2018 Table 5A / 5A Expanded and its footnote on beam stability. **Verify against NDS 2018 (not in references).** E<sub>x</sub> is still used for deflection (NDS 5.3, Table 5A).
+- **E<sub>y,min</sub> values added (psi), as best known. Verify against NDS 2018 Supplement Table 5A / 5A Expanded (not in references):**
+
+  | Combination | E<sub>y,min</sub> (psi) |
+  |---|---|
+  | 20F-1.5E | 630,000 |
+  | 24F-1.7E | 690,000 |
+  | 24F-1.8E | 850,000 |
+  | 24F-V4 DF | 850,000 |
+  | 24F-V8 DF | 850,000 |
+  | 24F-V3 SP | 850,000 |
+  | 24F-V5 SP | 790,000 |
+
+  The Southern Pine values have the lowest confidence.
+- **Before:**
+  ```js
+    const Emin_p = ref.Emin * CM.E * Ct.E * Ci.E * KF.Emin * PHI.Emin;
+  ```
+  The table rows had 7 values, e.g. `'24F-1.8E': { table: '5A', grp: null, v: [2400, 1450, 650, 650, 265, 1800000, 950000] },`
+- **After:**
+  ```js
+    const EminStab = isGL ? ref.Eymin : ref.Emin;
+    const Emin_p = EminStab * CM.E * Ct.E * Ci.E * KF.Emin * PHI.Emin;
+  ```
+  - Table row: `'24F-1.8E': { table: '5A', grp: null, v: [2400, 1450, 650, 650, 265, 1800000, 950000, 850000] },` (and likewise for the other rows).
+  - New constant: `const GL_EYMIN_RATIO = Math.min(...Object.values(GLULAM_5A).map(s => s.v[7] / s.v[6]));` gives 690,000/900,000 = 0.76667.
+  - Custom glulam:
+    ```js
+            else if (!(ref.Eymin > 0)) {   // TBE1: never an optimistic default for Ey,min
+                ref.Eymin = ref.Emin * GL_EYMIN_RATIO; ref.EyminAssumed = true;
+                adv.push(`REVIEW: custom glulam has no Ey,min … Assumed Ey,min = Ex,min × ${GL_EYMIN_RATIO.toFixed(4)} … Enter Ey,min from NDS Supplement Table 5A or the manufacturer.`);
+            }
+    ```
+- **Saved data (§5):** no key was renamed and nothing was discarded. Custom glulam gains an optional `Eymin`, which is `null` in files saved before this change.
+  - **Decision (pending engineer review):** a custom glulam with no E<sub>y,min</sub> (every file saved before this change) uses E<sub>x,min</sub> × 0.7667, the lowest E<sub>y,min</sub>/E<sub>x,min</sub> ratio in the built-in table, and shows a REVIEW note. This is conservative, never a silent optimistic default. A blocking error was not chosen, because it would hide every result of an old file.
+  - Opening and saving such a file adds only `"Eymin": null`, and its results are identical before and after the round trip.
+- **Check case:** 24F-1.8E DF, 5-1/8 × 18 in., simple span 24 ft, trib. 8 ft, D 15 / L 40 psf, top edge braced at the supports only. This is the Validation glulam case. l<sub>e</sub> = 523.44 in., R<sub>B</sub> = 18.940, F<sub>b</sub>* = 2400 psi (ASD), f<sub>b</sub> = 1443.7 psi.
+
+  | Quantity | ASD before | ASD after | LRFD before | LRFD after |
+  |---|---|---|---|---|
+  | E′<sub>min</sub> (psi) | 950,000 | 850,000 | 950,000 × 1.76 × 0.85 = 1,421,200 | 1,271,600 |
+  | F<sub>bE</sub> (psi) | 3178.0 | 2843.5 | 4754 | 4253.8 |
+  | C<sub>L</sub> | 0.9031 | 0.8759 | 0.8663 | 0.8276 |
+  | F′<sub>b</sub> (psi) | 2167.5 | 2102.0 | 3591.0 | 3430.6 |
+  | Ratio | **0.666** | **0.687** | **0.594** | **0.6215** |
+
+  LRFD: F<sub>b</sub>* = 2400 × 0.8 × 2.54 × 0.85 = 4145.3 psi, f<sub>b</sub> = 2132.0 psi.
+- **Benchmarks:**
+  - Validation group 3, glulam "C<sub>L</sub> governs": its 4 values were intentionally changed to the E<sub>y,min</sub> values above. The labels give the old values.
+  - New group 8 (TBE1) adds 5 benchmarks: LRFD E′<sub>min</sub>, F<sub>bE</sub>, ratio; custom glulam with no E<sub>y,min</sub>: assumed value and REVIEW note.
+  - Total 106 → 111, all match.
+- **How verified:** 35 review cases were run on origin/main and on the branch (headless Chromium, `file://`). Only glulam cases with stability moved, and only the bending ratio and E′<sub>min</sub>:
+
+  | Case | Before | After |
+  |---|---|---|
+  | 24F-1.8E ASD | 0.6660 | 0.6868 |
+  | LRFD | 0.5937 | 0.6215 |
+  | Wet | 0.8252 | 0.8480 |
+  | 20F-1.5E | 0.7996 | 0.8617 |
+  | Cantilevered glulam | 0.2838 | 0.2881 |
+  | Custom glulam with E<sub>y,min</sub> 850,000 entered | 0.6660 | 0.6868 |
+  | Custom glulam with none | 0.6660 | 0.7306 (assumed 728,333 psi) |
+
+  - Glulam with continuous top-edge bracing: E′<sub>min</sub> is shown changed, and every ratio is unchanged.
+  - Sawn lumber, SCL and timbers: identical.
+  - Every output tab: no NaN, no undefined, no KaTeX errors.
+  - Save → open: identical results.
+  - No console errors. At 400 px there is no horizontal scroll.
+  - `node tests/check-syntax.mjs` passes.
+- **Other copies:** none.
+- **Open items:** the E<sub>y,min</sub> values need checking against the printed Supplement (engineer).
+
+## 2026-11-07 — PR: claude/timber-flat-e (PR #1014: https://github.com/mlococo88/All-Structural/pull/1014) (TBF1: Table 4D flat use of Beams and Stringers, E and E<sub>min</sub> factor)   [calc change] [MORE conservative]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBF1`.
+
+### TBF1. Flat-use factor on E and E<sub>min</sub> for Beams and Stringers (review finding H3)
+
+- **Where:**
+  - New constant `T4D_FLAT_E`, after `const T4D_FLAT_FB = {`.
+  - `tbcRun`: `const CfuE = …` after the `const Cfu =` line; the `const Emin_p =` and `const E_p =` lines; and `CfuE` added to the result object.
+  - Displays:
+    - `eFacs`, which shows `C_{fu,E}` when it is not 1;
+    - the Design Values factor table row `'C<sub>fu</sub> flat use'` (E column);
+    - the Reference Values Table 4D hint;
+    - the comment above `T4D_FLAT_FB`.
+  - Validation: new group 9 (3 benchmarks; 111 → 114, all match).
+- **Problem:** for Beams and Stringers used flat (load on the wide face), the Table 4D footnote factors E and E<sub>min</sub> as well as F<sub>b</sub>. The tool applied only the F<sub>b</sub> factor, so for No.1 the deflection came out about 11 % low (unconservative). Beam stability does not apply in flat use, so only deflection moves.
+- **Governing provision:** NDS Supplement 2018, Table 4D footnote (flat-use factors for Beams and Stringers).
+  - Values as best known: F<sub>b</sub> 0.86 / 0.74 / 1.00 and E, E<sub>min</sub> 1.00 / 0.90 / 1.00 (SS / No.1 / No.2).
+  - **Verify against NDS 2018 (not in references).** Confidence is medium.
+  - Applied to the same members as the F<sub>b</sub> factor: Table 4D timbers that are not Posts and Timbers, including Southern Pine timbers (conservative, as before), and not when manual or custom values are used.
+- **Before:**
+  ```js
+    const Emin_p = EminStab * CM.E * Ct.E * Ci.E * KF.Emin * PHI.Emin;
+    const E_p = ref.E * CM.E * Ct.E * Ci.E;
+  ```
+- **After:**
+  ```js
+  const T4D_FLAT_E = { 'SS': 1.00, 'No.1': 0.90, 'No.2': 1.00 };
+  ...
+    const CfuE = (flat && cat === 'timber' && !userVals && cls4D !== 'PT') ? (T4D_FLAT_E[mt.grade] || 1.0) : 1.0;   // TBF1: E, Emin (Table 4D footnote)
+  ...
+    const Emin_p = EminStab * CM.E * Ct.E * Ci.E * CfuE * KF.Emin * PHI.Emin;
+    const E_p = ref.E * CM.E * Ct.E * Ci.E * CfuE;
+  ```
+- **Check case:** 6x12 DF-L No.1 used flat, 16 ft simple span, spacing 48 in., D 15 / L 40 psf, self-weight on.
+
+  | | Before | After |
+  |---|---|---|
+  | E′ (psi) | 1,600,000 | 1,600,000 × 0.90 = 1,440,000 |
+  | Live-load deflection ratio | 1.734 | **1.927** (= 1.734 / 0.90) |
+  | Total deflection ratio | 1.968 | **2.187** |
+
+  Bending is unchanged at 1.558 (F′<sub>b</sub> = 1350 × 0.74 = 999 psi).
+- **How verified:** 37 review cases were run on origin/main and on the branch (headless Chromium, `file://`). Only the two No.1 Beams and Stringers flat cases moved:
+
+  | Case | Live-load deflection ratio | Total deflection ratio |
+  |---|---|---|
+  | DF-L 6x12 No.1 flat | 1.7340 → 1.9267 | 1.9681 → 2.1868 |
+  | SP 6x12 No.1 flat | 1.8496 → 2.0552 | 2.1095 → 2.3439 |
+
+  - SS and No.2 flat, Posts and Timbers flat, dimension lumber flat and every edgewise case are identical.
+  - Validation: 114/114 match.
+  - Output tabs: no NaN, undefined or KaTeX errors.
+  - Save → open: identical.
+  - No console errors; no horizontal scroll at 400 px.
+  - `node tests/check-syntax.mjs`: passes.
+- **Other copies:** none.
+- **Saved data:** no change.
