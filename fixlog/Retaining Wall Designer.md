@@ -2426,7 +2426,7 @@ function renderStatus(r) {
 - **Other copies:** none.
 - **PDFs** (scratch, not committed): `aci.pdf`, `aashto.pdf` from the session scratchpad `rw4/pdf`.
 
-## 2026-11-07 — PR: claude/rw-katex (RWKX) — the result tabs' worked steps set by KaTeX; MathJax removed (one maths library)   [display only; no result change]
+## 2026-11-07 — PR: claude/rw-katex (PR #941: https://github.com/mlococo88/All-Structural/pull/941) (RWKX) — the result tabs' worked steps set by KaTeX; MathJax removed (one maths library)   [display only; no result change]
 - **Why:** engineer-approved 2026-11-06 (task 5, review Phase 5b). The page loaded two maths libraries: MathJax 3.2.2 for the tabs, and KaTeX 0.16.9 (approved in #549) for the Report. CLAUDE.md §2: no new library. KaTeX was already loaded, at the pinned version the other apps use.
 - **What:**
   - `typesetActivePanel()` now sets every `$$…$$` of the visible panel with `katex.renderToString` (display mode, `throwOnError: false`, `strict: 'ignore'`), on the same TeX source. Before: `MathJax.typesetPromise([panel])`.
