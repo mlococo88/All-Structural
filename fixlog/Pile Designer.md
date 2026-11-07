@@ -19938,3 +19938,34 @@ index 06a42e4..b58d4e3 100644
   - `check-syntax`: pass. `pile-library`: library checks pass; the "page text identical" checks show the new rows (autosaved inputs identical). 0 console errors.
 - **Saved data:** none changed.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/pile-m1-uncased-pm (PDA-M1) — uncased length: combined axial + flexure check (compression and tension)   [check-logic change]
+- **Problem (review M1):** below the casing tip, the bar + grout section was checked for axial (Module 03), tension (Module 09) and bar-only flexure (Module G), each on its own. There was no interaction. An uplift + lateral case (T_u 50, M 0.5) passed each check, 0.88 and 0.53, while the combined demand is 1.41.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024):
+  - Art. 10.9.3.10.1: micropile structural design per Sec. 5 for the reinforced grout section, cased and uncased lengths.
+  - Art. 5.6.6.1: in tension, the axial force is carried by the steel only.
+  - Art. 5.6.6.2: combined tension and flexure is proportioned per 5.6.2.
+  - Art. 5.6.2 / 5.6.4: compression with flexure uses the P–M interaction.
+- **Decision (pending engineer review):** an interim, conservative linear interaction with the existing bar-only φM_n (0.90 f_yb Z_bar), in both directions:
+  - compression: P_u,unc/φ_CU R_n + M_u,unc/φM_n ≤ 1;
+  - tension: (T_u − P_t)/φ_t f_yb A_b + M_u,unc/φM_n ≤ 1.
+
+  P_u,unc is taken at the casing tip, with the largest moment below the tip (both maxima together, conservative). A strain-compatibility P–M of the grout + bar section (5.6.2) would credit the grout compression block and be less conservative; that is listed as a future feature. Micropile only.
+- **Where:**
+  - `computeAll`, Module G, after `const uncasedFlex_pass = …` (anchor `// PDA-M1 (2026-11-07)`): `uncMr`, `uncPM_c` (null without compression), `uncPM_t` (null without tension demand) and `uncPM_pass`.
+  - `uncPM_pass` is added to `R.geoChecks.pass`, so it counts in Module G and `allPass`. With p-y not converged it is false, like the uncased flexure.
+  - Display:
+    - on-screen Module G: two CheckRows plus a "Worked in" link to Modules 03 and 09;
+    - printed `RptGeomChecks`: two RptChecks and a note;
+    - Report steps `gc/pmc` and `gc/pmt` in "Uncased flexure";
+    - summary rows "Uncased combined compression + flexure (D/C)" and "Uncased combined tension + flexure (D/C)" via `gcSummaryRows`, with `checkNoFor` → G.
+  - One-time load note for a micropile project saved before (pdaRev < 6); `pdaRev` 5 → 6; no input changed.
+- **Check cases:**
+  - V4 (default, STL 0, T_u 50 kip, input M_max 0.5 kip-ft): (50 − 8.2)/47.4 + 0.50/0.946 = 0.881 + 0.529 = **1.410 NG**. Before: no check; uncased flexure 0.53 OK and tension 0.88 OK.
+  - Default (p-y, M_u,unc 1.27): 76.4/119.5 + 1.27/0.946 = 0.639 + 1.338 = **1.977 NG**. Before: no check; uncased flexure alone 1.338 was already NG.
+  - V2 (`computeAll`, M_u,unc 0): compression 0.803 and tension 0.572. These are the axial ratios alone, no change of status.
+- **How verified:**
+  - `computeAll` on 15 cases main vs branch: only the new `geoChecks` fields (`uncMr`, `uncPM_*`). No other value moved. H-pile cases: null (not applied).
+  - App and Report main vs branch: the new rows, steps and note only. 0 unresolved references, 0 duplicate keys, no NaN.
+  - `check-syntax`: pass. `pile-library`: library checks pass; its page-text checks show the new check text and `pdaRev`. 0 console errors.
+- **Other copies:** none.
