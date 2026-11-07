@@ -1605,3 +1605,59 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
   - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"`, `node tests/smoke/phone-layout.mjs --tool smd` and `node tests/smoke/project-library.mjs --tool smd` pass.
 - **Decision (pending engineer review):** only case `LL` is treated as live load. User cases (for example L1, L2) are taken as the user's own pattern and are not warned about.
 - **Saved data:** none changed. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sm-pattern-ll (PATL: pattern live load in the envelope; review H2)   [CALCULATION CHANGE — envelope, new projects; old saves opt in] [MORE conservative]
+- **Why:** review finding H2 (PATW, the interim warning, was merged first). The envelope applied LL to all of its spans at once. That under-reports the positive span moments, the end reactions and the minimum (uplift) reactions of a continuous beam.
+- **Governing provision:** 2018 IBC Sec. 1607.12 (floor live load on the spans that give the greatest effect at each location, dead load on all spans), ASCE 7-16 Sec. 4.3.3 (partial loading), and 2018 IBC Sec. 1605.1 (variable loads also set to zero). Cited and paraphrased only.
+- **What the envelope does now (option "Pattern live load (envelope)", `patLL`):**
+  - **Which combinations:** every enabled combination with an LL factor ≠ 0.
+  - **Which patterns:** S is the set of spans that carry an enabled LL load. Each combination is also solved with its LL loads kept only on each pattern's spans; dead and all other loads stay as entered.
+    - S of up to 6 spans: every subset of S except S itself (S itself is the combination as entered), with the empty set (LL off) included.
+    - More than 6 spans: the standard set, each taken within S: LL off; alternate spans (odd, and even); and each adjacent pair (j, j+1) with every second span beyond it on both sides.
+  - **How patterns enter the envelope:** they join the point-wise envelope (V, M, δ, R max / min) as pseudo combinations named "<combination> · LL on spans …" or "… · LL off". Every place that names a governing combination therefore names the pattern.
+  - **Per-combination rows:** `env.per` keeps one row per combination: the full-pattern curves (legend traces), and the largest |V|, |M| and |δ| over its patterns. The tables label it "(max of N LL patterns)", and "governed by" names the governing pattern.
+  - **Single-combination view:** unchanged. A note says the envelope includes the patterns.
+- **Where:**
+  1. **`solveFor(fac,lds=loads)` and `evalVM(X,R,fac,lds=loads)`:** an optional load list replaces the two reads of `loads`. With the default, the computation is identical to before, so every existing call is unchanged.
+  2. **`solve()`, envelope branch, anchor `/* PATL (2026-11-07): pattern live load.`:**
+     - Before: `EK.forEach(k=>{const c=COMBOS[k];res[k]=solveFor(c.f); … env.per.push({id:k,name:c.name,vm,mm,sh:res[k].sh,mo:res[k].mo});});` and then the station, reaction and deflection loops over `EK`.
+     - After: the same, plus each pattern of `smdPatSets()` solved with `smdPatLoads(ps)` under the key `k+'|P'+ps.join('.')` (registered in `COMBOS` with `pat:true`, and removed at the start of each solve). `EK` becomes the list of all solved keys, so the loops below are unchanged. Deflection per row: the largest over its keys (anchor `/* PATL: per combination, the largest over its patterns */`).
+  3. **New helpers after `function smdPatWarn(){`:** `smdPatSets()`, `smdPatName()`, `smdPatLoads()` (an all-spans uniform LL becomes one uniform per loaded span; other LL loads are kept when their span is loaded), `SMD_PATL_TXT()`, `smdPatSpanCount()`.
+  4. **State and saved data:**
+     - `let patLL=true;` (page default);
+     - `gatherProject` adds `patLL`;
+     - `applyProject`: `patLL=d.patLL===undefined?false:!!d.patLL`;
+     - the checkbox `#patT` is under "Envelope — run ALL combinations", plus its change handler and `smdPatEnable()`.
+  5. **`updStats()`, the PATW note:**
+     - option off: the warning with an "Enable pattern live load" button;
+     - option on, envelope: an info note (`.smd-patl`) that says what is included;
+     - option on, single combination: a warning that this view has no patterns.
+  6. **Report:** `smdPatNote()` gives the same three variants in the Summary and in §2.
+  7. **Also:** `curName()` reads "Envelope (all enabled combos, with LL patterns)" when patterns are solved. The KaTeX envelope card and the Report envelope table name the governing pattern.
+- **Saved data (§5):**
+  - New optional field `patLL` in the project JSON, autosave and saved projects; no key changed.
+  - Projects, autosaves and files saved before this change have no field and open with the option **off**, so their results are as saved. The warning shows with a one-click enable, and Ctrl+Z undoes it.
+  - New projects (page defaults, New) have it on. A file written by this version keeps its setting.
+- **Decision (pending engineer review):**
+  - the option is on for new projects and off for old saves (visible warning, one-click enable);
+  - only case LL is patterned (user cases such as L1 are the user's own patterns; snow drift and unbalanced snow are not generated);
+  - exhaustive subsets up to 6 loaded spans, and the standard set beyond that;
+  - the empty pattern (LL off) is included.
+- **Check case (hand):** two 15 ft spans, pin / roller / roller, D = 1 and L = 2 kip/ft on both spans, new project, default combinations, envelope.
+  - Before: M⁺ = 69.61 kip·ft and R_A,max = 24.75 kip (1.2D + 1.6L, LL on both spans).
+  - After, governed by 1.2DL+1.6LL · LL on span 1:
+    - M_B = −(4.4 + 1.2)(15²)/16 = −78.75 kip·ft;
+    - R_A = 4.4 × 7.5 − 78.75/15 = **27.75 kip**;
+    - M⁺ = 27.75² / (2 × 4.4) = **87.50 kip·ft** (tool 87.5069; the difference is the 400-strip FER noise of L7).
+    - M⁻ = −123.75 is unchanged (both spans loaded).
+    - R_A,min: 5.06 → 3.75 kip (LL on span 2 only).
+- **Independent check:** the reviewer's solver (`indep.mjs`), exhaustive over every LL subset and every default combination.
+  - 2 × 15 ft: M 87.500 / −123.750, R 27.75 / 3.75, 82.5 / 16.875 (tool 87.5069 / −123.7504, R identical to 1e-4).
+  - 4 spans 10 / 14 / 12 / 8, fixed far end, LL as a UDL, a point load and a partial trapezoid on separate spans plus an all-spans UDL: M 48.9629 / −61.0993; tool 48.9565 / −61.0995. The 1.3e-4 on M⁺ is station sampling inside the trapezoid; it predates this change. All five R max / min agree to 1e-4.
+- **Speed:** 6 spans with LL everywhere: 315 extra solves, `solve()` about 0.26 s headless (debounced as before).
+- **How verified:**
+  - Headless main vs branch on the 27 review cases (single and envelope) and 16 extra cases: every result identical except the new-project envelope cases with LL on more than one span (2 × 15, 3-span mixed, 4-span, 8-span), which move as above. Old saves (no `patLL`) are identical.
+  - 0 console errors, 0 KaTeX errors.
+  - UI: an old save shows the warning; Enable gives 87.507 / 27.750; Ctrl+Z gives 69.609 again; Export holds `patLL:true`.
+  - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"`, `node tests/smoke/phone-layout.mjs --tool smd` and `node tests/smoke/project-library.mjs --tool smd` pass.
+- **Other copies:** none. Steel Beam Design has its own engine and no pattern loading; not changed.
