@@ -253,6 +253,7 @@ const AUD = [
   ['RWPL AASHTO default wall on 2 pile rows: Strength I max 83.60 / 77.66 kip, φ_cR_n 195', { fnd_type: 'pile', design_basis: 'AASHTO' }, [
     ['Math.abs(R.pile.comb[0].L.rows[0].P - 83.604) < 0.001 && Math.abs(R.pile.comb[0].L.rows[1].P - 77.664) < 0.001 && Math.abs(R.pile.govC.cap.c - 195) < 1e-9', 'Strength I max'],
     ['R.checks.pileSpacing.ok && R.checks.pileEdge.ok && R.checks.pileEmbed.ok && !R.checks.eeSliding && !R.warnings.some(w => /^AASHTO bearing/.test(w))', 'detailing checks (Art. 10.7.1.2), no soil notes']]],
+<<<<<<< HEAD
   ['RWPL 8d ACI t_f 36 in on piles: toe M_u 17521.6 (q 12896 at 1.5 ft), heel M_up 44434.6 (U = 0.9D + 1.6H), punching 77.38 ≤ 403.0 kip', { fnd_type: 'pile', tf: 36 }, [
     ['Math.abs(R.pileFtg.cmax.rows[0].q - 12896.05) < 0.1 && Math.abs(R.Mu_toe_net - 17521.58) < 0.1 && Math.abs(R.Vu_toe - 11681.05) < 0.1 && Math.abs(R.d_toe - 20.625) < 1e-9', 'toe from the pile row, d over the pile heads'],
     ['R.heel_min_governs && Math.abs(R.Mu_heel_up - 44434.60) < 0.1 && Math.abs(R.Mu_heel_net - 9997.40) < 0.1', 'heel'],
@@ -260,6 +261,8 @@ const AUD = [
     ['/Pile Cap — Punching around the Piles/.test(T.footing) && /Factored pile reactions under the toe/.test(T.footing) && /Pile cap — punching around the piles/.test(P)', 'Footing tab and Report']]],
   ['RWPL 8d AASHTO t_f 36 in on piles: punching φV_n = 0.90(0.126)√f\'c b_o d_v', { fnd_type: 'pile', tf: 36, design_basis: 'AASHTO' }, [
     ['R.pilePunch && Math.abs(R.pilePunch.rows[0].phiVc - 0.9 * 0.126 * Math.sqrt(4) * R.pilePunch.rows[0].bo * R.pilePunch.dvp * 1000) < 1 && !R.checks.pileCapD', 'AASHTO two-way shear; no ACI cap-depth row']]],
+=======
+>>>>>>> origin/main
   ['RWPL spread footing unchanged: no pile results', {}, [['!R.pile && !(\'pile\' in R) && R.checks.bearing && R.checks.ot', 'spread footing checks, no pile field in the results']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
