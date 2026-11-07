@@ -4960,7 +4960,7 @@ Frame: Development & Splice (`suite-frame-dev`). Found in the in-depth review of
 - **Saved data:** no key or format change.
 - **Open items:** none.
 
-## 2026-11-07 — PR: claude/cbc-aci-asmin-fy80 (CBH4: ACI A_s,min with f_y limited to 80,000 psi per 9.6.1.2; CALCULATION CHANGE, Beam Capacity tab, ACI mode, f_y > 80 ksi only; less conservative before)
+## 2026-11-07 — PR: claude/cbc-aci-asmin-fy80, PR #975: https://github.com/mlococo88/All-Structural/pull/975 (CBH4: ACI A_s,min with f_y limited to 80,000 psi per 9.6.1.2; CALCULATION CHANGE, Beam Capacity tab, ACI mode, f_y > 80 ksi only; less conservative before)
 
 Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (item H4).
 
