@@ -3478,7 +3478,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Headless probe, main vs branch, tolerance 1e-13: the only differences are the PNA location of the two gap models (gap, dblC) and the `flat` flag. Every Z and all other values are identical, including all 1,660 shapes.
   - The new wording shows on the Plastic tab and in the Report. 0 console errors.
 
-## 2026-11-07 — PR: claude/spc-l6-verify — SPL6: "verify" badges removed from AISC 360-16 Eq. E4-8, E4-9, F2-7 and the J2.4 / Table J2.5 weld strength; engineer checks A4 and A5 closed (review L6; wording only)
+## 2026-11-07 — PR: claude/spc-l6-verify — SPL6: "verify" badges removed from AISC 360-16 Eq. E4-8, E4-9, F2-7 and the J2.4 / Table J2.5 weld strength; engineer checks A4 and A5 closed (review L6; wording only; PR #1110: https://github.com/mlococo88/All-Structural/pull/1110)
 
 - **Outcome of the checks (against the printed AISC 360-16 Specification and the AISC v16.0 Design Examples, both in the engineer's reference folder; cited, not quoted):**
   - **A4 / P2a-O1 — closed.** The equation numbers and forms match the printed Specification:
