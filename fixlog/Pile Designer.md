@@ -19913,7 +19913,7 @@ index 06a42e4..b58d4e3 100644
   - `check-syntax`: pass. `pile-library`: every library check passes; its two "page text identical" checks show the intended buckling text and `pdaRev`. 0 console errors.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/pile-m2-summary (PDA-M2) — Report summary: a row for each Module G code-limit item; never "not satisfied" over an all-PASS table   [display only; no result change]
+## 2026-11-07 — PR: claude/pile-m2-summary (PR #1003: https://github.com/mlococo88/All-Structural/pull/1003) (PDA-M2) — Report summary: a row for each Module G code-limit item; never "not satisfied" over an all-PASS table   [display only; no result change]
 - **Problem (review M2):** `R.allPass` includes `R.geoChecks.pass`, which covers the uncased flexure, L_b ≥ L_b,req, L_b ≥ L_b,min, the plunge, the grout cover, the geometry consistency and the casing past the active zone. The Summary-of-results rows listed only the uncased flexure and the casing past the active zone. With a failing plunge (default, input M_max 0.5), the Report said "One or more checks not satisfied" and every row read PASS.
 - **Where:**
   - New `gcSummaryRows(r, keys)` and `sumFallbackRow(r, rows, keys)` before `function checkNoFor(` (anchor `/* PDA-M2 (2026-11-07)`).
