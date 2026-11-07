@@ -1575,3 +1575,14 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.4.2.1 (L2), C14.8.3.1 (L3), 14.7.5.3.
 ### Verification
 - check-syntax pass; headless main-vs-branch probe (26 scenarios): only the cases above move (rect tolerance 0.010, Δs,cy 0.20, zone C ×4, Girder Run with P_min, input error → no PAD); saved state gains `loads.deltaScy`, `tog.ltZone`, `tog.ltOption`; 0 console errors. Abutment ↔ module round trip unchanged (abutment receives 0.1495 from 0.130).
 - **Saved data:** additive fields with the old behaviour as default. HANDOFF.md §4.13 updated (`Gmult`, L8).
+
+## 2026-11-07 — PR: claude/edm-low-notes (PR #1097: https://github.com/mlococo88/All-Structural/pull/1097) (L1, L5, L6, L7, L9, L10, review 2026-11-07) — notes, labels and warnings   [no computed value changes]
+
+- **L1 (tapered plate):** new warning in `computeEDM` when θ_pg + θ_DL + θ_c > 0.010 rad: a tapered (beveled) sole or internal load plate is required [AASHTO LRFD 10th Ed. 14.8.2; MassDOT §3.5.7.6, §3.5.7.8]. Check: θ_pg 0.008 + θ_DL 0.004 = 0.012 → warning; default pad (0) → none.
+- **L5 (thermal reference calculation):** the note on the Rotation & Movement tab and in the Report says the half span is for a floating bridge with zero movement at midspan (MassDOT §3.1.8.3), that a layout with a fixed bearing needs the distance from the point of zero movement, and that transverse movement (MassDOT Figs 3.5.7-2 to -4) is not included.
+- **L6 (large bearing):** new warning for steel-reinforced pads with total thickness (h_rt + (n + 1)h_s, as H3) over 8 in or plan area over 1000 in²: specify the more rigorous testing [MassDOT §3.5.7.3; C14.7.5.2; AASHTO M 251]. Check: D 40, n 14 → 9.29 in, 1257 in² → warning.
+- **L7:** the σ_DL < 0.20 ksi warning now reads "Practice guidance (not an AASHTO or MassDOT limit) …". Before: "Dead-load stress σ_DL = … < 0.20 ksi — risk of bearing walking/creep; increase DL or reduce pad area."
+- **L9:** "Seat concrete f′c" is labelled "(not used by any check)" in I-3 and in the Report input table (the 5.6.5 bearing check is not part of this module).
+- **L10:** `tog.fixedShear` comment corrected (it affects only the Method B stability equation; the old comment said Method A stress); the label reads "Bridge deck fixed against horizontal translation (Method B stability, Eq. 14.7.5.3.4-5)" with a tooltip paraphrasing C14.7.5.3.4 (a bearing restrained elsewhere on the bridge counts as fixed). Same wording in the Report settings table.
+- **How verified:** check-syntax pass; headless main-vs-branch probe (27 scenarios): every computed value and dashboard item identical; only the warning texts above change; 0 console errors. `tests/smoke/project-library.mjs --tool edm`: ALL PASS. `tests/compare.mjs --tool page`: text only.
+- **Saved data:** none changed. **§4:** no formula, factor or result change (labels and warnings only).
