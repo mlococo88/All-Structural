@@ -11876,7 +11876,7 @@ function rwdwBuild(r) {
     const iS = D.mark(), h = 0.08 * P, hs = 0.07 * P;
     concrete(P, false); const gr = grades(P, false); water(P, gr.xe, '');
     // lateral pressures on the vertical plane through the heel (x = B), height H' (sloped backfill) or H
-    const xp = G.B + 0.15 * P, Hp = G.Hp, maxW = 1.6 * P;   // RWPS: zero line 0.15 in (paper) beyond the heel face (was on it)
+    const xp = G.B + 0.15 * P, Hp = G.Hp, maxW = 1.45 * P;   // RWPS: zero line 0.15 in (paper) beyond the heel face (was on it); maxW 1.6 → 1.45 P keeps the sheet's extent (and plot scale)
     const Ka = r.Ka, gs = inp.gamma_s, gsub = r.gamma_s_sub;
     const ha = r.h_above * 12, hb = r.h_below * 12;
     const p1 = Ka * gs * r.h_above, p2 = p1 + Ka * gsub * r.h_below;   // soil ordinates on the plane (psf): the model's distribution
@@ -11909,7 +11909,7 @@ function rwdwBuild(r) {
     // the toe grade line); the shear-key block (D_f -> D_f + d_k, P_P,KEY) continues it below the footing
     if (r.Df > 0 && G.Lt > 0) {
       const Dft = G.tf + G.Dfa, pp = r.Kp * gs * r.Df, key = G.dk > 0;
-      const pk = key ? (r.keyR ? r.keyR.p_bot : r.Kp * gs * (r.Df + r.dk_ft)) : pp, pps = Math.min(maxW, 0.9 * P) / Math.max(pk, 1), x0 = -0.15 * P;
+      const pk = key ? (r.keyR ? r.keyR.p_bot : r.Kp * gs * (r.Df + r.dk_ft)) : pp, pps = 0.75 * P / Math.max(pk, 1), x0 = -0.15 * P;   // RWPS: 0.75 P (was min(maxW, 0.9 P)) + the 0.15 P gap: the same extent
       D.line(L.load, x0, Dft, x0, key ? -G.dk : 0, D.ltype('DASHED'));
       D.pline(L.load, [[x0, Dft], [x0, 0], [x0 - pp * pps, 0]], true);
       if (key) D.pline(L.load, [[x0, 0], [x0 - pp * pps, 0], [x0 - pk * pps, -G.dk], [x0, -G.dk]], true);
