@@ -4848,6 +4848,55 @@ Review Phase 8, PR 8e. This PR changes no computed value.
 - **How verified:** origin/main (after #957) vs branch, headless Chromium at 1920 px, three walls (ACI default; AASHTO default; ACI H_s 22 / q_a 2500 with 5 FAIL): `window._R`, Export JSON fields (`snapshotFields()`), every localStorage key and value, the Report tab text and the four-sheet DXF **identical**; 0 console errors. No sideways page scroll at 390, 768, 1280, 1400 and 1920 px. Screenshots before / after at 1280, 1400, 1920 and 390 px (deviceScaleFactor 2) next to Spread Footing at the same widths, and the FAIL wall at 1920 and 1400 px, looked at. Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall.
 - **Other copies:** none.
 
+## 2026-11-07 — PR: claude/rw-partial-contact — Footing design in partial contact: the factored soil reaction is the triangular block of length 3x̄, not the whole-base interpolation (ACI without water and AASHTO Strength I / Ia) (RWPC; calculation change) (PR #980: https://github.com/mlococo88/All-Structural/pull/980)
+
+Open item raised in #960 (RWUP). Engineer instruction relayed 2026-11-07 (no questions; conservative choice). Code sites are tagged `RWPC`.
+
+### RWPC-1. Problem
+- When a factored resultant lies outside the kern (|e| > B/6), the trapezoid becomes a triangle of length 3x̄ from the toe (q_toe = 2V/(3x̄)) or 3(B − x̄) from the heel end. The face pressures q_u,front / q_u,back (ACI 1.2D + 1.6H and 0.9D + 1.6H; AASHTO Strength I `quA_*` and Strength Ia `quIa_*`) were interpolated linearly from q_toe at x = 0 to 0 at x = B, i.e. a triangle of length B. That distribution is not in equilibrium (its area q_toe·B/2 exceeds V).
+  - Heel: upward relief overstated → heel M_u **unconservative**.
+  - Toe: upward pressure overstated → toe M_u and V_u conservative, sometimes grossly.
+- ACI walls with water were already done statically in #960 (RWUP); they are not changed here.
+
+### RWPC-2. Fix (`calcAll`)
+- New `q_blk(x, qt, qh, e, xR)` next to `q_at`: full contact → `q_at` (same arithmetic, bit-identical); partial contact → the block. Used for `quf_front`, `quf_back`, `quf_front_min`, `quf_back_min`, `quA_front`, `quA_back`, `quIa_front`, `quIa_back` (were `q_at` / the same linear expression).
+- Members: a combination with |e| > B/6 and no water split loads the heel and toe with the RWUP pieces at γ_U = 0 (`rwUpSplit(V, M, 0, …)`, `rwUpMember`), so a block that ends inside a member is integrated exactly: `pcS` after the RWUP block; `heelCase` / `toeCase` get `pcS[0]` (ACI 1.2D + 1.6H / AASHTO Strength I) and `pcS[1]` (ACI 0.9D + 1.6H / AASHTO Strength Ia). AASHTO returns `M_net_tot`, `M_net_Ia`, `x_R_Ia` for this.
+- Pile-supported footings (RWPL, #961) design the heel and toe from the pile-row reactions and are not affected (`pcS` is skipped in pile mode).
+- A resultant outside the base (x̄ ≤ 0 or ≥ B) is handled as in RWUP (warning "Footing (partial contact)"; V at the toe tip for the toe, no relief on the heel). Before, the toe pressure became 0 there.
+- **Basis:** statics of a rigid footing on soil that takes no tension (the linear distribution the tool already uses for the stability and rock-bearing checks, cf. AASHTO LRFD 10th Ed. Eqs. 11.6.3.2-2/-3). No code formula, load factor or resistance factor changes.
+
+### RWPC-3. Display
+- Footing tab Heel/Toe Step 1–2 (via `rwUpSteps`, new "no water split" branch): ΣV_u (or V_u), x̄ = M_u/V, e, L_c, peak pressure, q(0), q(L), M_soil = M_up. Stability Step 7 (ACI) title says "partial contact: triangular block" when it applies; Report `rwrTrap` face values use the block formula. The §5.3.8 reference and the "uplift split" notes stay only with water.
+
+### Check cases
+- **ACI, L_t 2, L_h 3, t_f 24 in (B = 6.5 ft), no water** (hand check):
+  - Toe, U = 0.9D + 1.6H governs: ΣV_u = 7668 lb/ft, M_u = 1207 lb-ft/ft → x̄ = 0.157 ft, e = 3.093 > B/6 = 1.083; L_c = 0.472 ft, q_toe = 2(7668)/0.472 = 32478 psf. The block lies inside the toe: M_up = V(L_t − L_c/3) = 7668(2 − 0.157) = 14129; M_u = 14129 − 270(2²)/2 = **13589** (was **57755**: face pressure 22487 psf from the whole-base line, upward force on the toe 54,965 lb/ft > V = 7668). V_u 54424 → 8046. F2 #6 @ 8 → **#5 @ 7**.
+  - Heel, U = 1.2D + 1.6H governs: ΣV_u = 10224, x̄ = 1.112, L_c = 3.335 ft < x_back = 3.5 ft → no soil under the heel: M_u = M_down = 2088(3²)/2 = **9396** (was **5151** = 9396 − 2830(3²)/6). F1 #5 @ 7 unchanged. Heel and toe shear checks, which failed on the old (non-equilibrium) pressure, now pass.
+- **AASHTO, Rankine β 20°** (hand check): Strength Ia V = 19761, x̄ = 3.730, e = 2.520 > 2.083; L_c = 11.189 ft, q_toe = 3532.1; at the back face q = 3532.1(1 − 4.5/11.189) = 2111.6, contact ends 6.689 ft into the heel. M_up = 6.689²/6 (2111.6) = 15747 (was 2260.5(8²)/6 = 24112); M_u = 60713 − 15747 = **44966** (was **36600**); F1 #5 @ 6 → **#6 @ 7**.
+- **Audit walls that move** (main vs branch):
+
+| Wall | Before | After |
+|---|---|---|
+| `aashto_water_col_eta` | heel M_u 33125, F1 #5 @ 7 | **43381, #6 @ 7** |
+| `aashto_rock_ct_water` | heel 43557 (Strength I) | **45189** (Strength Ia governs); bars unchanged |
+| `aashto_vh_ct` | heel 49416 (Strength I) | **51291** (Strength Ia governs); bars unchanged |
+| `aci_mix`, `aci_tall_seis` (water: RWUP) | — | design unchanged; only the informational `quf_front_min` / `quf_back_min` (Stability Step 7) change |
+
+- **Extra walls:** ACI `aci_mix` without water: heel 10147 → **23021** (#4 @ 6 unchanged). AASHTO L_t 2, L_h 3, t_f 24: heel 7695 → 13176 (#3 @ 12 → #3 @ 7), toe 31166 → 18989 (#5 @ 8 → #4 @ 8). AASHTO L_t 4, L_h 4: toe 22204 → 19501 (#5 @ 8 → #5 @ 9).
+- **Full contact unchanged:** `aci_default`, `aci_water_uni`, `aci_water_tri`, `aci_shorttoe` identical in every part (`_R`, export, tabs, Report); `aashto_ct`, `aashto_qs250_water_ct(_full)` differ only by the new fields `M_net_tot`, `M_net_Ia`, `x_R_Ia`.
+
+### How verified
+- origin/main vs branch, headless Chromium (`_R`, Export JSON, localStorage, tabs, Report): the twelve audit walls + 5 partial-contact walls (above). 0 console errors.
+- Hand checks above reproduced with the tool's `calcAll` in Node.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWPC ACI L_t 2 / L_h 3, AASHTO β 20°, default full contact); phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+
+### Decisions (pending engineer review)
+- The block is applied to toes too, so toe M_u / V_u / bars can go **down** where the old line overstated the pressure (statics; e.g. L_t 2 / L_h 3: toe #6 @ 8 → #5 @ 7). No envelope with the old non-equilibrium distribution.
+- Resultant outside the base: toe takes V at its tip (upper bound), heel no relief, with a warning (was zero pressure).
+- AASHTO on rock: the footing-design trapezoid is treated the same way (linear distribution with no tension, as Eqs. 11.6.3.2-2/-3).
+
+### Saved data
+- No input or format change.
 ## 2026-11-07 — PR: claude/rw-left-breakpoint — Check summary as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (RWLB; display only, no result change)
 
 ### RWLB. The check summary is on the left at common laptop widths   [display only]
