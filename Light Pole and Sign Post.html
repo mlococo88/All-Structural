@@ -4792,6 +4792,25 @@ function lppInputErrors(inp){
     if(inp.bpB>0 && inp.boltBC>0 && inp.boltQty>=1){ const R=inp.boltBC/2, n=Math.round(inp.boltQty);
       const ext=Math.max(...Array.from({length:n},(_,j)=>{ const a=(inp.boltTheta+j*360/n)*RAD; return Math.max(Math.abs(R*Math.cos(a)),Math.abs(R*Math.sin(a))); }));
       if(ext+(inp.boltDia||0)/2>=inp.bpB/2) e.push('Square base plate: a rod hole reaches the plate edge (rod at '+fmt(ext,2)+' in from the centre, half side '+fmt(inp.bpB/2,2)+' in) — increase B or reduce the bolt circle.'); } }
+  // LPM6 (2026-11-07, review M6): base plate / anchor geometry. Before: only the square plate above was checked, so a bolt circle inside
+  // the pole gave m ≤ 0 and t_req = 0 "OK", and rods outside a round plate or outside the shaft passed.
+  if(inp.boltBC>0 && inp.boltQty>=1){
+    const R=inp.boltBC/2, dr=inp.boltDia||0, n=Math.round(inp.boltQty);
+    // (1) every rod clear of the pole wall: R − d/2 > the pole's outline at the rod's azimuth (round: D/2; square / rect.: the
+    //     rectangle with the depth along x and the width B along y, as the drawings and the plate model)
+    const D=inp.poleDiaBase, hx=(inp.poleShape==='rect'?(inp.poleDepthBase||inp.poleDepthTop||D):D)/2, hy=D/2;
+    if(D>0){ let worst=null;
+      for(let j=0;j<n;j++){ const a=(inp.boltTheta+j*360/n)*RAD, c=Math.abs(Math.cos(a)), s=Math.abs(Math.sin(a));
+        const rb=inp.poleShape==='round'?D/2:Math.min(c>1e-12?hx/c:Infinity, s>1e-12?hy/s:Infinity);
+        if(R-dr/2<=rb+1e-9 && (!worst||rb>worst)) worst=rb; }
+      if(worst!==null) e.push('Bolt circle BC '+fmt(inp.boltBC,2)+' in: a rod is not clear of the '+lbl.toLowerCase()+' (rod inner edge at '+fmt(R-dr/2,2)+' in from the centre, '+lbl.toLowerCase()+' face at '+fmt(worst,2)+' in). The rods must be outside the '+lbl.toLowerCase()+' (the plate cantilever m = (BC − D)/2 would be zero or negative) — increase BC.'); }
+    // (2) round plate: every rod inside the plate
+    if(inp.bpShape!=='square' && inp.bpDia>0 && R+dr/2>=inp.bpDia/2)
+      e.push('Round base plate Ø'+fmt(inp.bpDia,2)+' in: the rods (BC '+fmt(inp.boltBC,2)+' in + rod '+fmt(dr,3)+' in = '+fmt(inp.boltBC+dr,2)+' in) are not inside the plate — increase the plate diameter or reduce the bolt circle.');
+    // (3) rods inside the shaft reinforcing cage: BC + d ≤ b − 2·cover
+    if(inp.b>0 && inp.cover>=0){ const cage=inp.b*12-2*inp.cover;
+      if(inp.boltBC+dr>cage) e.push('Bolt circle BC '+fmt(inp.boltBC,2)+' in + rod '+fmt(dr,3)+' in = '+fmt(inp.boltBC+dr,2)+' in is outside the shaft cage (b − 2·cover = '+fmt(inp.b*12,1)+' − 2·'+fmt(inp.cover,2)+' = '+fmt(cage,2)+' in): the rods must be within the concrete core — increase the shaft size or reduce the bolt circle.'); }
+  }
   return e;
 }
 // LTS-L2 (2026-11-03): the inputs the LRFDLTS run reads that the shared check above does not cover: V, V_svc, the fillet weld (w,
