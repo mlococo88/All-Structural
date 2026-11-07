@@ -6332,3 +6332,12 @@ index 50f3837..c2d5000 100644
   - `tests/smoke/spread-footing-scroll.mjs`: the dashboard-column assertion `vw >= 1500` → `vw >= 1200` (its 1280 and 1366 px sizes now expect the column) and its comments.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
 - **How verified:** origin/main vs branch at 1920, 1280 and 1200 px, three projects (default, 2 NG; Direct load mode, 3 NG; B 7 × L 6 ft with water table at 2 ft, 6 NG): `R`, `P2`, `state` (Export JSON), the dashboard text, the Report text (Plotly / SVG figures removed: their tick labels follow the plot width) and every localStorage key and value (the `at` time stamp of `bridgeSuite.v1.projectsUI.spread-footing.start` masked) **identical**; 0 console errors. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px (and no output cut off on any of the ten tabs at 1200, 1280, 1400). Screenshots before / after at 1200, 1280, 1400 and after at 1920, 768, 390 looked at. Tests: check-syntax; spread-footing-scroll; phone-layout sf 390/768; project-library spreadfooting.
+
+## 2026-11-07 — PR: claude/sf-manual-1200 — User Manual: the summary dashboard column starts at 1200 px (SFLB follow-up; text only, no result change)
+- **Why:** after SFLB (#988) the User Manual still said the dashboard is a left column on screens 1500 px and wider.
+- **Where (User Manual, three sentences):**
+  - §0 paragraph `The screen is split into an <b>input panel</b> …`: before `On screens 1500&nbsp;px and wider it is a left column`; after `On screens 1200&nbsp;px and wider it is a left column`.
+  - next paragraph: before `(under the dashboard on screens narrower than 1500&nbsp;px)`; after `(under the dashboard on screens narrower than 1200&nbsp;px)`.
+  - §3.1 `One chip per check family, on one line: …`: before `On screens 1500&nbsp;px and wider the dashboard is a left column`; after `On screens 1200&nbsp;px and wider the dashboard is a left column`.
+- **Formulas, factors, units, code references:** none (§4 does not apply). **Saved data:** unchanged.
+- **How verified:** origin/main vs branch at 1920 px, three projects (default; Direct mode; B 7 × L 6 ft with water at 2 ft): `R`, `P2`, `state`, dashboard, Report text and localStorage identical (the Manual is not in the Report unless "Include this manual when printing" is ticked); check-syntax passes.
