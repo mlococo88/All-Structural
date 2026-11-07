@@ -4745,3 +4745,77 @@ Review Phase 8, PR 8d. Code sites are tagged `RWPL`. Spread-footing results are 
 +      subs.push(sub('Pile cap — punching around the piles', [rwrItem('ppn', [{ title: 'Two-way shear at the pile heads', ref: isA ? AA('Art. 5.12.8.6') : 'ACI 318-19 §22.6', steps: PS }]), onTab('ftgPunch')]));
 +    }
 ```
+
+## 2026-11-07 — PR: claude/rw-pile-8e-drawings — Pile-supported footing, Phase 8e: Drawings show the pile reactions and the bottom mat on the pile heads; no soil-bearing graphics on piles (RWPL; display only) (PR #966: https://github.com/mlococo88/All-Structural/pull/966)
+
+Review Phase 8, PR 8e. This PR changes no computed value.
+### RWPL-9. Drawings (`RWDW_SUPPORT.piles.loads`, `rwdwBars`, the loads sheet notes)
+- `RWDW_SUPPORT.piles.loads(c)`: the loads sheet now shows the pile reactions per row (kip per pile) as upward arrows under the footing, drawn to their own scale. Uplift is drawn as a downward arrow marked "(UPLIFT)".
+  - It draws the governing compression combination, with P_max against the capacity and H/N.
+  - It then draws the combination with the smallest pile load, with P_min and, under uplift, the capacity T.
+  - Before (8b): one line, "PILE REACTIONS WITH THE PILE ANALYSIS (NOT YET IN THIS VERSION)".
+- `rwdwBars`: `cb = r.cov_bot` (8d; it equals c_c on soil). F2 is drawn at `cb + d_b/2` and the stem hook at `cb + …`, so on piles the bottom mat sits above the pile heads. On soil the drawing is unchanged.
+- Loads sheet notes in pile mode:
+  - "soil bearing, sliding and overturning not applicable";
+  - N, x̄ and I;
+  - compression, uplift and lateral, each with its capacity;
+  - punching.
+  - These replace the soil FOS / q / eccentricity lines.
+### RWPL-10. Section views
+- `buildCrossSection` (Analysis diagram): the bearing layer is hidden on piles (`data-layer="bearing"` with `display:none`).
+- `buildOverviewSVG`: the bearing block is skipped on piles (`tog.bearing && !r.pile`).
+### Check case
+- Default wall, t_f 36 in, 2 rows at 1.5 / 11.0 ft, s = 6 ft, ACI. Sheet 3 shows:
+  - D + H + L: 59.7 and 56.6 kip per pile, "P_MAX = 59.7 KIP <= 100.0 KIP; H/N = 13.50 KIP/PILE";
+  - 0.6D + H: 41.5 and 28.3 kip.
+  - These are the Stability tab, Pile Step 2 values.
+- Sheet 1 shows the bottom mat 15 in above the base.
+### How verified
+- origin/main vs branch, the 12 spread walls: `_R`, Export JSON, autosave, Report, tab texts and DXF are identical.
+- Pile mode: the sheets were screenshotted and checked, with no console errors.
+- Also run: `dxf-print-sheets.mjs --tool rw`, `check-syntax`.
+### Open items
+- The 3D view's bearing layer and its "Show" combination selector still offer the soil base reaction on piles. The pile reactions in 3D are to come with the Pile Designer link (8f) or a later display PR.
+- No pile schedule table: the piles are described in the general notes (8b).
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html` against main after 8d)
+```diff
+-  s += `<g data-layer="bearing">`;
++  s += `<g data-layer="bearing"${r.pile ? ' style="display:none"' : ''}>`;   // RWPL (8e): no soil bearing under a pile-supported footing
+-  if (tog.bearing) {
++  if (tog.bearing && !r.pile) {   // RWPL (8e): no soil bearing under a pile-supported footing
+-  const yHook = cf + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
++  const cb = r.cov_bot != null ? r.cov_bot : cf;                      // RWPL (8e): on piles the bottom mat sits above the pile heads (cov_bot = c_c on soil)
++  const yHook = cb + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
+-    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cf + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
++    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cb + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
+-    loads(c) { const { L, G, k, T } = c; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
+-      T(L.lt, G.B / 2, y0 - 0.2 * k, 0.085 * k, 'PILE-SUPPORTED FOOTING: PILE REACTIONS WITH THE PILE ANALYSIS (NOT YET IN THIS VERSION)', 1); return y0 - 0.6 * k; },
++    /* RWPL (8e): the pile reactions per row (kip per pile) of the governing compression combination, as upward arrows under the
++       footing, with the governing uplift / minimum combination below them; values from r.pile (Stability tab, Pile Step 2) */
++    loads(c) {
++      const { D, L, G, k, T, r } = c, P = r.pile, h = 0.085 * k; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
++      if (!P || P.err) { T(L.lt, G.B / 2, y0 - 0.2 * k, h, 'PILE-SUPPORTED FOOTING: NO PILE RESULTS (INPUT ERROR)', 1); return y0 - 0.6 * k; }
++      const one = (cmb, title) => {
++        const Pm = Math.max(...cmb.L.rows.map(x => Math.abs(x.P)), 1e-9), sc = 0.55 * k / Pm;
++        D.line(L.load, 0, y0, G.B, y0);
++        cmb.L.rows.forEach(x => { const xi = x.x * 12, len = Math.abs(x.P) * sc, yt = y0 - Math.max(len, 0.08 * k);
++          if (x.P >= 0) arrowV(D, L.load, xi, yt, y0, k); else arrowV(D, L.load, xi, y0, yt, k);
++          T(L.lt, xi, yt - 0.14 * k, h, rwdwN(x.P, 1) + ' KIP/PILE' + (x.P < 0 ? ' (UPLIFT)' : ''), 1); });
++        const yl = y0 - 0.55 * k - 0.4 * k; T(L.lt, G.B / 2, yl, h, title, 1); y0 = yl - 0.3 * k;
++      };
++      one(P.govC, 'PILE REACTIONS, ' + P.govC.label.toUpperCase() + ': P_MAX = ' + rwdwN(P.govC.L.Pmax, 1) + ' KIP ' + (r.checks.pileComp.ok ? '<=' : '>') + ' ' + rwdwN(P.govC.cap.c, 1) + ' KIP; H/N = ' + rwdwN(P.govH.L.rows[0].h, 2) + ' KIP/PILE');
++      const mn = P.comb.reduce((b, x) => (!b || x.L.Pmin < b.L.Pmin) ? x : b, null);
++      if (mn && mn !== P.govC) one(mn, 'PILE REACTIONS, ' + mn.label.toUpperCase() + ' (SMALLEST PILE LOAD): P_MIN = ' + rwdwN(mn.L.Pmin, 1) + ' KIP' + (mn.L.Pmin < 0 ? ' (UPLIFT, T <= ' + rwdwN(mn.cap.t, 1) + ' KIP)' : ''));
++      return y0;
++    },
++    if (r.pile && !r.pile.err) {   // RWPL (8e): on piles the soil checks do not apply; the pile results instead
++      const pc = r.pile;
++      foot = ['PILE-SUPPORTED FOOTING: SOIL BEARING, SLIDING AND OVERTURNING NOT APPLICABLE (STABILITY TAB, PILE STEP 2)',
++        'PILE GROUP PER FT: N = ' + F(pc.g.N, 4) + ' /FT, X_BAR = ' + F(pc.g.xbar, 3) + ' FT, I = ' + F(pc.g.I, 4) + ' FT2/FT',
++        'COMPRESSION: P_MAX = ' + F(pc.govC.L.Pmax, 1) + ' KIP <= ' + F(pc.govC.cap.c, 1) + ' (' + pc.govC.label.toUpperCase() + ')',
++        'UPLIFT: ' + (pc.govT.L.Pmin < 0 ? F(-pc.govT.L.Pmin, 1) + ' KIP VS ' + F(pc.govT.cap.t, 1) : 'NONE'),
++        'LATERAL: H/N = ' + F(pc.govH.L.rows[0].h, 2) + ' KIP/PILE VS ' + F(pc.govH.cap.h, 1) + ' KIP',
++        ...(r.pilePunch ? ['PUNCHING AT THE PILES: P_U = ' + F(r.pilePunch.gov.Pu / 1000, 1) + ' KIP VS PHI V_C = ' + F(r.pilePunch.gov.phiVc / 1000, 1) + ' KIP (FOOTING DESIGN TAB)'] : [])];
++    }
+```
