@@ -1,6 +1,6 @@
 # Fix log — shared/pile-group.js (window.SharedPileGroup)
 
-## 2026-11-07 — PR: claude/rw-pile-8a-shared — new shared file: rigid-cap pile-group statics (discrete group and rows per ft of wall)
+## 2026-11-07 — PR #955: https://github.com/mlococo88/All-Structural/pull/955 (claude/rw-pile-8a-shared) — new shared file: rigid-cap pile-group statics (discrete group and rows per ft of wall)
 ### Where
 - New file `shared/pile-group.js` (classic script, one namespace `window.SharedPileGroup`, no DOM). Functions:
   - `reaction(V, My, Mx, xi, yi, pi)`: the rigid-cap load on one vertical pile, general biaxial form with Σx'y'. Same expression and
