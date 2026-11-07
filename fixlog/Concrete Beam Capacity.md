@@ -4856,7 +4856,7 @@ function buildDrawingsTab(pg){
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/cbc-aci-comp-lap-fy (CBH2: ACI compression lap splice for f_y > 80,000 psi is the longer of (0.0009f_y − 24)d_b and l_st, per 25.5.5.1(c); CALCULATION CHANGE, Development & Splice tab, ACI mode, f_y > 80 ksi only; less conservative before)
+## 2026-11-07 — PR: claude/cbc-aci-comp-lap-fy, PR #969: https://github.com/mlococo88/All-Structural/pull/969 (CBH2: ACI compression lap splice for f_y > 80,000 psi is the longer of (0.0009f_y − 24)d_b and l_st, per 25.5.5.1(c); CALCULATION CHANGE, Development & Splice tab, ACI mode, f_y > 80 ksi only; less conservative before)
 
 Frame: Development & Splice (`suite-frame-dev`, srcdoc of `Concrete Beam Capacity.html`; decoded/encoded with a byte-exact srcdoc helper, CRLF kept). Found in the in-depth review of 2026-11-07 (item H2).
 
