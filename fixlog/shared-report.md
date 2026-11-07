@@ -231,7 +231,7 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
 - Verified: `node tests/engine/run.mjs` (steps-totext: a model through `text()` with and without `legacy`); headless comparison of every
   consumer (PR).
 
-## 2026-11-07 — PR: fix/steps-fallback-html (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — `$…$` in titles, notes and cells: TeX beyond the subset readable (TXH; display only; no change to this file)
+## 2026-11-07 — PR: fix/steps-fallback-html (PR #1145: https://github.com/mlococo88/All-Structural/pull/1145) — `$…$` in titles, notes and cells: TeX beyond the subset readable (TXH; display only; no change to this file)
 - **Where:** no code change in `shared/report.js`. `rich()` sets `$…$` with `lite()`, which always calls `SharedSteps.toHTML` with
   `window.katex` hidden (the built-in renderer, also when the page has KaTeX). That renderer now converts the commands outside the
   README subset (TXH, `fixlog/shared-steps.md`), so a report title, note, caption, kv row or table cell such as `$\mathrm{DCR} \leq 1$`

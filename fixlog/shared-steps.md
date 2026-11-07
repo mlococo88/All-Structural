@@ -68,7 +68,7 @@ Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
 - The built-in HTML renderer (used for `$…$` in report titles / cells and when KaTeX is not loaded) still prints the names of commands
   outside the subset (e.g. `mathrm`); not changed here (the screen / print must stay as it is). Raise separately if wanted.
 
-## 2026-11-07 — PR: fix/steps-fallback-html (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) — built-in HTML renderer: TeX beyond the subset shown as HTML, not by command name (TXH; display only)
+## 2026-11-07 — PR: fix/steps-fallback-html (PR #1145: https://github.com/mlococo88/All-Structural/pull/1145) — built-in HTML renderer: TeX beyond the subset shown as HTML, not by command name (TXH; display only)
 ### Where
 - `render(src, html, rd)`, built-in **HTML** path only (`html === true`), i.e. `toHTML()` when `window.katex` is absent (offline / CDN
   blocked), `line(step, true)` and `summary(t, true)` without KaTeX, and `SharedReport`'s `$…$` in titles, notes and table cells
@@ -124,10 +124,14 @@ Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
   `H_∥ = wL²/8s   … α = tan⁻¹ 4s/L` (fractions stacked).
 ### How verified
 - `node tests/engine/run.mjs steps-tohtml` (new, 11 tests) and the whole engine suite; `node tests/check-syntax.mjs`.
-- Every TeX-bearing string literal in the repository (10,302 strings): `toText(s)` and `toText(s, { legacy: true })` byte-identical to
-  origin/main; built-in `toHTML(s)` differs for 2,785, every one of them a string with a command outside the subset (or a `\text{…}`
+- Every TeX-bearing string literal in the repository (10,310 strings): `toText(s)` and `toText(s, { legacy: true })` byte-identical to
+  origin/main; built-in `toHTML(s)` differs for 2,791, every one of them a string with a command outside the subset (or a `\text{…}`
   with commands inside, or `\sqrt[n]`).
-- Every consumer opened headless, origin/main vs this branch, with the KaTeX CDN routed to fail and with KaTeX served (PR description).
+- Every consumer opened headless (default project, Report opened), origin/main vs this branch:
+  - KaTeX served: the HTML of every rendered step (`.rp-m`, `.rp-tsum`, `ol.steps li`, `.sg-sum`) and `.rp-doc` textContent identical in all
+    21; `.rp-doc` innerHTML identical once Plotly's random SVG ids and the timing lines are masked.
+  - KaTeX CDN routed to fail: the same structure (steps, rows, headings, tables) and the same digits in the page and the Report text in all
+    21; only the notation changes (e.g. Gusset Plate 125 of 215 steps, Light Pole 60 of 142); no page errors.
 ### Other copies
 - None.
 ### Open items
