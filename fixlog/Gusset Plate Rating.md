@@ -3101,3 +3101,63 @@ From the code-compliance review of 2026-11-07 (finding H2). Engineer asleep, mer
 - **How verified:** headless Chromium, file://, `GPR.compute` main vs branch on the review cases; every tab rendered (calc sheet included), 0 console errors; `node tests/check-syntax.mjs`, `tests/smoke/project-library.mjs --tool gusset`, `tests/smoke/phone-layout.mjs --tool gusset`: pass.
 - **Other copies:** none.
 - **Open items:** the engineer to confirm the reversal of C4.4 and the K to pair with the average if `lmidAvg` = 1 (FHWA-IF-09-014 / MBE not in references).
+
+## 2026-11-07 — PR: claude/gusset-m1-rp-rupture (PR #1036: https://github.com/mlococo88/All-Structural/pull/1036) — Shear rupture on the shear planes includes R<sub>p</sub> (LRFD 10th Ed. Eq. 6.13.5.3-2) (M1; §4, results go down for punched holes)
+
+From the code-compliance review of 2026-11-07 (finding M1). Engineer asleep, merge-as-you-go approved.
+
+### M1. SPn-U: φ<sub>vu</sub> 0.58 R<sub>p</sub> F<sub>u</sub> A<sub>vn</sub>   [§4: formula]
+- **Where:** `capPV(pl, meth, kind)`, the shear-rupture branch after `if (kind === 'pvy') { … }`; `ref.pvu`.
+- **Problem:** LRFD 10th Ed. 6.14.2.8.3 rates shear rupture of a gusset plane by Eq. 6.13.5.3-2, which includes the hole reduction factor R<sub>p</sub> (6.13.4: 1.0 drilled / subpunched and reamed, 0.90 punched full size). The tool left R<sub>p</sub> out (it already used it in block shear, `capBS`). 10 % unconservative for punched holes; drilled holes (the default) unchanged.
+- **Before:**
+```js
+      const phi = lrfr ? p.phiVU : p.phiVUL, An = pl.Ln * sumT, C = phi * 0.58 * Fu * An;
+```
+- **After:**
+```js
+      const hsP = [...pl.cross, ...(pl.stag && pl.stag.used ? (pl.stag.chain || []).map(z => z && z.h).filter(Boolean) : [])], pun = hsP.some(h => P.members[h.m] && P.members[h.m].fast.prep === 'punched'),
+        Rp = hsP.length ? Math.min(...hsP.map(h => P.members[h.m] && P.members[h.m].fast.prep === 'punched' ? p.RpP : p.RpD)) : p.RpD, RpK = pun && p.RpP <= p.RpD ? 'RpP' : 'RpD';
+      const phi = lrfr ? p.phiVU : p.phiVUL, An = pl.Ln * sumT, C = phi * 0.58 * Rp * Fu * An;
+```
+  plus an R<sub>p</sub> row in the calculation, `R_p` in the equation, and the R<sub>p</sub> key (`RpP` / `RpD`) in `keys`.
+- **Decisions (pending engineer review):**
+  1. A plane through holes of members with different hole preparation takes the **lowest** R<sub>p</sub> of the holes on it (the straight-line holes, plus the holes of a staggered chain when that chain governs). A plane with no holes takes R<sub>p</sub> for drilled holes (1.0).
+  2. R<sub>p</sub> is applied to LFR shear rupture too, as the tool already does for LFR block shear (FHWA-IF-09-014 not in references: verify).
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.3 → Eq. 6.13.5.3-2; R<sub>p</sub> per Art. 6.13.4. MBE 3rd Ed. 6A.6.12.6.6: verify (MBE not in references).
+- **Check case** (review §2.3 variant: plate 1 loses 1/16 in, Σt = 0.9375 in; A325 7/8 in bolts, threads included, punched holes; SP1 net length 36.000 in):
+  - **Before:** SP1-U = 0.80 × 0.58 × 58 × 36.000 × 0.9375 = **908.3 kip**; RF LRFR Inventory **1.436**.
+  - **After:** 0.80 × 0.58 × **0.90** × 58 × 36.000 × 0.9375 = **817.5 kip**; RF LRFR Inventory = (0.85 × 817.45 − 287.33)/337.46 = **1.208** (Operating 1.862 → 1.565; Legal 2.167 → 1.822; LFR Inventory 1.925 → 1.642).
+  - Default project with punched holes: SP1-U 968.8 → 871.9 kip, RF LRFR Inv 2.020 → 1.732.
+- **How verified:** main vs branch on 20 review cases: only SPn-U moved, and only in the cases with punched holes (all punched; only L2-L3 punched, whose chord holes lie on SP1; the §2.3 variant; the validation model with punched holes). Drilled cases identical. Validation tab 17 of 17 (drilled holes; unchanged). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks, which differ only in the SPn-U equation text (now shows R<sub>p</sub>) on the default (drilled) project. 0 console errors.
+- **Saved data:** no change. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/gusset-m2-splice-demand (PR #1040: https://github.com/mlococo88/All-Structural/pull/1040) — Chord-splice demand: the larger of the resolved forces on the two sides (LRFD 10th Ed. C6.14.2.8.6) (M2; §4)
+
+From the code-compliance review of 2026-11-07 (finding M2; answers open item C14.7-3).
+
+### M2. Splice demand N = larger magnitude of the right- and left-hand free bodies, per load column   [§4: demand definition]
+- **Where:** `compute()`, chord-splice block, anchor `const N = zeroD(), V = zeroD(), M = zeroD(), Cpt = mul(nrm, S.yb), right = [], strad = [];` and the lines after the straddle warning; `demandHtml()` (splice text); Method tab "Demand" item.
+- **Problem:** the splice demand was the right-hand free body only. C6.14.2.8.6 says the splice is investigated for the larger of the two resolved forces on either side; they differ with envelope (non-concurrent) forces. With envelope inputs the right-hand side could be the smaller one (unconservative).
+- **Before:**
+```js
+        const N = zeroD(), V = zeroD(), M = zeroD(), Cpt = mul(nrm, S.yb), right = [], strad = [];
+        P.members.forEach((m, j) => { if (dot(G[j].centroid, axis) > 1e-6) { right.push(j); accD(N, m, dot(G[j].u, axis)); accD(V, m, dot(G[j].u, nrm)); accD(M, m, crs(mul(Cpt, -1), G[j].u)); }
+```
+- **After:**
+```js
+        const N = zeroD(), NL = zeroD(), V = zeroD(), M = zeroD(), Cpt = mul(nrm, S.yb), right = [], strad = [];
+        P.members.forEach((m, j) => { if (dot(G[j].centroid, axis) > 1e-6) { right.push(j); accD(N, m, dot(G[j].u, axis)); accD(V, m, dot(G[j].u, nrm)); accD(M, m, crs(mul(Cpt, -1), G[j].u)); }
+          else accD(NL, m, -dot(G[j].u, axis));
+        …
+        const NR = { DC: N.DC, DW: N.DW, LL: N.LL.slice() }, pick = (a, b) => Math.abs(b) > Math.abs(a) + 1e-9 ? b : a, difL = [];
+        N.DC = pick(NR.DC, NL.DC); N.DW = pick(NR.DW, NL.DW); N.LL = NR.LL.map((x, k) => pick(x, NL.LL[k]));
+```
+  plus a warning when the two sides differ by more than max(0.5 kip, 0.5 %).
+- **Decisions (pending engineer review):** the larger magnitude is chosen per load column (DC, DW, each LL column), keeping that side's sign. V and M (used only by the advisory combined check on the splice line) stay from the right-hand side; the advisory N uses the governing N.
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.6 and C6.14.2.8.6.
+- **Check case** (validation model spliced, CL DC −200 / DW −20 / LL −130, CR −200 / −20 / −100, diagonal 0; SPL-C φP<sub>n</sub> = 382.5 kip):
+  - **Before:** N<sub>LL</sub> = −100 (right side); RF LRFR Inv = (382.5 − 250 − 30)/(1.75 × 100) = **0.586**.
+  - **After:** N<sub>LL</sub> = −130 (left side); RF = (382.5 − 280)/(1.75 × 130) = **0.451** (Operating 0.759 → 0.584). New warning names the HL-93 column, −100.0 (right) / −130.0 (left).
+- **RFs that moved (main vs branch, 20 review cases):** the non-concurrent case above; the default project spliced moves in the 4th decimal only (its entered forces are rounded: DW right 94.527, left 94.573 kip; SPL-TY Operating −0.6299 → −0.6300). All other cases identical. Validation 17 of 17 (continuous chord).
+- **How verified:** as above; `check-syntax`, `project-library --tool gusset` (all pass), `phone-layout --tool gusset`; 0 console errors.
+- **Saved data:** no change. **Open items:** C14.7-3 answered by LRFD 10th Ed.; engineer to confirm.
