@@ -6163,16 +6163,16 @@ function renderStem(r) {
 
   let h = `<div class="sec-heading">Stem Design — ${r.isAASHTO?'AASHTO LRFD 10th Ed.':'ACI 318-19'} · Cantilever Fixed at Footing · b = 12 in Strip</div>`;
 
-  const gEH = r.isAASHTO ? 1.50 : 1.6;
+  const gEH = r.gEH;   // RWGE (2026-11-07): the analysis' factor (AASHTO Table 3.4.1-2 EH max: active 1.50, at-rest 1.35; ACI 1.6); was 1.50 hard-coded
   const gLS = r.isAASHTO ? 1.75 : 1.6;
   const gES = r.isAASHTO ? 1.50 : 1.6;
   const q_ll_stem = r.isAASHTO ? r.q_ll_aashto : 0;
 
   // ════ STEP 1 — FACTORED DEMANDS ════
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Step 1 — Factored Demands at Base of Stem</span><span class="card-ref">${r.isAASHTO?'Strength I: 1.50EH + 1.75LS' + (r.sq_base ? ' / Extreme Event I' : '') + ' · AASHTO §3.4.1':'U = 1.6H' + (r.sq_base ? ' / 1.2D + 1.0E + 1.6H' : '') + ' · ACI 318-19 §5.3'} · H_s = ${F(inp.Hs,2)} ft</span></div>
+    <div class="card-hd"><span class="card-title">Step 1 — Factored Demands at Base of Stem</span><span class="card-ref">${r.isAASHTO?'Strength I: ' + F(gEH,2) + 'EH + 1.75LS' + (r.sq_base ? ' / Extreme Event I' : '') + ' · AASHTO §3.4.1':'U = 1.6H' + (r.sq_base ? ' / 1.2D + 1.0E + 1.6H' : '') + ' · ACI 318-19 §5.3'} · H_s = ${F(inp.Hs,2)} ft</span></div>
     <div class="card-body">`;
-  h += eq('Factored moment — triangular soil pressure component (γ'+(r.isAASHTO?'_{EH}=1.50':'=1.6')+')',
+  h += eq('Factored moment — triangular soil pressure component (γ'+(r.isAASHTO?'_{EH}='+F(gEH,2)+(inp.aashto.ep_cond==='atrest'?', at-rest':'')+', Table 3.4.1-2':'=1.6')+')',
     `M_{u,soil} = ${gEH}\\cdot\\frac{K_a\\gamma_s H_s^3}{6} = ${gEH}\\cdot\\frac{(${F(r.Ka,4)})(${F(inp.gamma_s,0)})(${F(inp.Hs,2)})^3}{6} = \\boxed{${F(gEH*r.Ka*inp.gamma_s*inp.Hs**3/6,1)}\\ \\text{lb·ft/ft}}`,'',
     [{sym:'K_a', desc:'active/at-rest coefficient', val:F(r.Ka,4), unit:''},
      {sym:'\\gamma_s', desc:'soil unit weight', val:F(inp.gamma_s,0), unit:'pcf'},
@@ -11109,8 +11109,8 @@ function rwrModel(r) {
 
   /* ---------- 4. Stem ---------- */
   {
-    const subs = [], gEH = isA ? 1.50 : 1.6, gLS = isA ? 1.75 : 1.6, gES = isA ? 1.50 : 1.6, qll = isA ? r.q_ll_aashto : 0, ss = r.sel_stem;
-    const T1 = [rwrS({ id: 'Msoil', label: 'Factored moment, triangular soil pressure (γ' + (isA ? '_EH = 1.50' : ' = 1.6') + ')', sym: 'M_{u,soil}', eq: gEH + '\\cdot\\frac{K_{a}\\gamma_{s} H_{s}^{3}}{6}', sub: gEH + '\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{3}}{6}', value: gEH * r.Ka * inp.gamma_s * inp.Hs ** 3 / 6, unit: 'lb-ft/ft', d: 1})];
+    const subs = [], gEH = r.gEH, gLS = isA ? 1.75 : 1.6, gES = isA ? 1.50 : 1.6, qll = isA ? r.q_ll_aashto : 0, ss = r.sel_stem;
+    const T1 = [rwrS({ id: 'Msoil', label: 'Factored moment, triangular soil pressure (γ' + (isA ? '_EH = ' + rwrN(gEH, 2) + (A.ep_cond === 'atrest' ? ', at-rest' : '') + ', Table 3.4.1-2' : ' = 1.6') + ')', sym: 'M_{u,soil}', eq: gEH + '\\cdot\\frac{K_{a}\\gamma_{s} H_{s}^{3}}{6}', sub: gEH + '\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{3}}{6}', value: gEH * r.Ka * inp.gamma_s * inp.Hs ** 3 / 6, unit: 'lb-ft/ft', d: 1})];
     if (inp.q_sur > 0) T1.push(rwrS({ id: 'MES', label: 'Factored moment, dead surcharge (γ' + (isA ? '_ES = 1.50' : ' = 1.6') + ')', sym: 'M_{u,ES}', eq: gES + '\\cdot\\frac{K_{a} q_{s} H_{s}^{2}}{2}', sub: gES + '\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{2}}{2}', value: gES * r.Ka * inp.q_sur * inp.Hs ** 2 / 2, unit: 'lb-ft/ft', d: 1 }));
     if (isA && qll > 0) T1.push(rwrS({ id: 'MLS', label: 'Factored moment, live-load surcharge (γ_LS = 1.75)', sym: 'M_{u,LS}', eq: '1.75\\cdot\\frac{K_{a}\\gamma_{s}h_{eq}H_{s}^{2}}{2}', sub: '1.75\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(qll, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{2}}{2}', value: gLS * r.Ka * qll * inp.Hs ** 2 / 2, unit: 'lb-ft/ft', d: 1}));
     if (isA && r.etaMx !== 1) T1.push(rwrS({ id: 'Meta', label: 'Load modifier η on the Strength I demand (sum of the factored moments above)', sym: 'M_{u,StrI}', eq: '\\eta\\sum\\gamma_{i} M_{i}', sub: rwrN(r.etaMx, 3) + '(' + rwrN(r.Mu_stem_strI / r.etaMx, 1) + ')', value: r.Mu_stem_strI, unit: 'lb-ft/ft', d: 1, ref: AA('Art. 1.3.2.1') }));   // RW2H4
@@ -11168,7 +11168,7 @@ function rwrModel(r) {
     CK.tsStem = 'stb/s6.S2';
     const pre = (p, L) => L.map(s => Object.assign({}, s, { id: p + '.' + s.id }));
     subs.push(sub('Base section: Steps 1 to 6', [rwrItem('stb', [
-      { title: 'Step 1 — Factored demands at the base of the stem', ref: isA ? AA('Table 3.4.1-1, Strength I: 1.50EH + 1.75LS') : 'ACI 318-19 §5.3, U = 1.6H', steps: pre('s1', T1) },
+      { title: 'Step 1 — Factored demands at the base of the stem', ref: isA ? AA('Table 3.4.1-1, Strength I: ' + rwrN(gEH, 2) + 'EH + 1.75LS') : 'ACI 318-19 §5.3, U = 1.6H', steps: pre('s1', T1) },
       { title: 'Step 2 — Effective depth', steps: pre('s2', T2) }, { title: 'Step 3 — Flexural reinforcement (φ = 0.90)', ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5 / §22.2', steps: pre('s3', T3) },
       { title: 'Step 4 — One-way shear check (φ = ' + phiS + ')', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('s4', T4) },
       { title: 'Step 5 — Development length and dowel lap', ref: isA ? AA('Art. 5.10.8') : 'ACI 318-19 §25.4 / §25.5', steps: pre('s5', T5) },
