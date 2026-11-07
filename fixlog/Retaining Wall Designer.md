@@ -2831,7 +2831,7 @@ Calculation audit, item 3b. Engineer decision (2026-11-07). The approach-slab op
 - `aashto_traffic_dir` is additive and saved only when "perpendicular".
 - A project whose real traffic edge is beyond H/2 changes only once the user enters the real distance. Old saves hold 0 or 1 ft and keep their results.
 
-## 2026-11-07 — PR: claude/rw-varheight-both-modes — Variable-height wall offered in both modes; the locked Stem Height box shows why (RWVH; display only, no result change)
+## 2026-11-07 — PR: claude/rw-varheight-both-modes — Variable-height wall offered in both modes; the locked Stem Height box shows why (RWVH; display only, no result change) (PR #946: https://github.com/mlococo88/All-Structural/pull/946)
 
 Calculation audit, item 4. Engineer decision (2026-11-07): offer the variable-height wall in both modes. Code sites are tagged `RWVH`.
 
