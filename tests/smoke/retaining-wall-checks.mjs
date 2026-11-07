@@ -10,7 +10,7 @@
 // RWSC (2026-11-07): the self-consistency panel passes on representative walls, reports MISMATCH on a tampered result, hides on error.
 // RWPR (2026-11-07): the Report prints alone, with every section, the overview figures and the input echo; 0 KaTeX errors.
 // RWKX (2026-11-07): the tabs' equations are all set by KaTeX, none in error; MathJax is not loaded.
-// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, RWFF front-face T&S, RWSK shear key, RWE1 AASHTO Extreme Event I, ...).
+// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, RWFF front-face T&S, RWSK shear key, RWE1 AASHTO Extreme Event I, RWIB ACI/IBC 0.7E, ...).
 //   node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 import path from 'path';
 import { openPage, resolveFile } from '../lib.mjs';
@@ -215,6 +215,10 @@ const AUD = [
     ['R.checks.eeSliding.ok && R.checks.eeEcc.ok && R.checks.eeBearing.ok && !R.warnings.some(w => /not evaluated/.test(w))', 'checks pass, no "not evaluated" warning'],
     ['/Step 7a — Extreme Event I/i.test(T.stability) && /EQ Sliding/.test(T.overview) && /Step 7a — Extreme Event I/.test(P)', 'Stability card, dashboard, Report']]],
   ['RWE1 AASHTO k_h 0.20: sliding 1.153 FAIL', { design_basis: 'AASHTO', kh: 0.20 }, [['!R.checks.eeSliding.ok && Math.abs(R.aashtoR.ee1.sliding_dcr - 1.153) < 0.001', 'FAIL, DCR 1.153']]],
+  ['RWIB ACI k_h 0.10: static FS 7.54 / 1.656 (≥ 1.5), with 0.7E 6.09 / 1.462 (≥ 1.1)', { kh: 0.10 }, [
+    ['Math.abs(R.FOS_OT - 7.54) < 0.005 && Math.abs(R.FOS_SL - 1.656) < 0.001 && Math.abs(R.FOS_OT_E - 6.086) < 0.001 && Math.abs(R.FOS_SL_E - 1.462) < 0.001', 'static and 0.7E factors of safety'],
+    ['R.checks.sliding.ok && R.checks.slidingE.ok && R.checks.otE.ok', 'all pass (sliding failed before: 1.392 < 1.5)'],
+    ['/0\\.7 × ΔP_E, FOS ≥ 1\\.1/.test(T.stability) && /Sliding \\(0\\.7E\\)/.test(T.overview) && /IBC 2018 §1807\\.2\\.3 Exception/.test(P) && !/IBC 2021/.test(P + T.stability)', 'tab, dashboard, Report; IBC 2018 cited']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {

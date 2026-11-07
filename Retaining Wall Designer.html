@@ -1006,7 +1006,7 @@ body.rwDashColl #rwDash { display: none; }
   <div class="brand">
     <div class="brand-text">
       <span class="logo-name">Retaining Wall Designer</span>
-      <span class="brand-sub">by Mario Lococo · cantilever retaining wall · <span class="logo-pill" id="logo-pill">ACI 318-19 / IBC 2021</span></span>
+      <span class="brand-sub">by Mario Lococo · cantilever retaining wall · <span class="logo-pill" id="logo-pill">ACI 318-19 / IBC 2018</span></span>
     </div>
   </div>
   <a class="bx-all-tools" href="tools.html" target="_top" title="Open the list of all tools">&larr; All tools</a>
@@ -1074,7 +1074,7 @@ body.rwDashColl #rwDash { display: none; }
     <hr class="sec-divider">
     <div class="ig"><label for="design_basis">Design basis <span class="lbl-note">locked per project</span></label>
       <select id="design_basis" onchange="onBasisChange()">
-        <option value="ACI">ACI 318-19 / IBC 2021 (ASD stability)</option>
+        <option value="ACI">ACI 318-19 / IBC 2018 (ASD stability)</option>
         <option value="AASHTO">AASHTO LRFD 10th Ed. (limit states)</option>
       </select></div>
   </div>
@@ -1756,7 +1756,7 @@ const RW_CARDS = {
   ftgKey:      ['footing', 'Shear Key — Structural Design', 'Shear Key — Structural Design'],   // RWSK   // RWBP (2026-11-06): link target of the bearing selector
 };
 // r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
-const RW_CHECK_CARD = { ot:'stabOT', sliding:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
+const RW_CHECK_CARD = { ot:'stabOT', otE:'stabOT', sliding:'stabSlide', slidingE:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
   stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid', stemLap:'stemDev', heelDev:'heelShear', toeDev:'toeShear', stemS3Lap:'stemS13', stemMAlong:'stemS13',
   heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', colAxial:'stabCol',
   ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFF:'stemTS', tsFtg:'ftgTS', keyFlex:'ftgKey', keyShear:'ftgKey', keyDev:'ftgKey', eeSliding:'stabEE1', eeEcc:'stabEE1', eeBearing:'stabEE1', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
@@ -2339,7 +2339,12 @@ function calcAll(inp) {
   // loads (not certain to be present). Bearing (x_R, q) still uses the full Ms.
   const Ms_OT_excl = Ms_sur + (pLL + pSL) * x_col;
   const Ms_OT      = Ms - Ms_OT_excl;
-  const FOS_OT = Mo > 0 ? Ms_OT / Mo : 999;
+  // RWIB (2026-11-07): IBC 2018 §1807.2.3 — FS 1.5 on sliding and overturning with the earthquake load set to zero (static case),
+  // and, where earthquake loads are included, 0.7 × the nominal earthquake load with FS ≥ 1.1 (Exception). Before: one check,
+  // 1.0·ΔP_E included, against 1.5. M_o (incl. 1.0·M_o,E) still drives x̄, e and the service bearing (unchanged).
+  const Mo_st    = Mo - Mo_seis;
+  const FOS_OT   = Mo_st > 0 ? Ms_OT / Mo_st : 999;
+  const FOS_OT_E = hasSeismic ? (Mo_st + 0.7 * Mo_seis > 0 ? Ms_OT / (Mo_st + 0.7 * Mo_seis) : 999) : null;
 
   // ── Stability: Sliding ───────────────────────────────────────
   // Friction may only rely on loads that are certain to be present when the thrust acts.
@@ -2348,7 +2353,8 @@ function calcAll(inp) {
   const V_slide_excl = Wsur + pLL + pSL;
   const SumV_slide   = SumV - V_slide_excl;
   const Fr     = SumV_slide * inp.mu + Pp;
-  const FOS_SL = Fh  > 0 ? Fr / (Fh + (hasSeismic ? Pe_inc : 0)) : 999;
+  const FOS_SL = Fh  > 0 ? Fr / Fh : 999;   // RWIB: static case (E = 0), FS ≥ 1.5
+  const FOS_SL_E = hasSeismic ? (Fh + 0.7 * Pe_inc > 0 ? Fr / (Fh + 0.7 * Pe_inc) : 999) : null;   // RWIB: 0.7E, FS ≥ 1.1
 
   // ── Bearing pressures (service) ──────────────────────────────
   const x_R = SumV > 0 ? (Ms - Mo) / SumV : B / 2;
@@ -3573,6 +3579,7 @@ function calcAll(inp) {
   } : {
     ot:      { ok: FOS_OT >= 1.5,        label: 'O.T.',         val: `FOS=${f(FOS_OT)}` },
     sliding: { ok: FOS_SL >= 1.5,        label: 'Sliding',      val: `FOS=${f(FOS_SL)}` },
+    ...(hasSeismic ? { otE: { ok: FOS_OT_E >= 1.1, label: 'O.T. (0.7E)', val: `FOS=${f(FOS_OT_E)}` }, slidingE: { ok: FOS_SL_E >= 1.1, label: 'Sliding (0.7E)', val: `FOS=${f(FOS_SL_E)}` } } : {}),   // RWIB
     bearing: { ok: bearing_ok,           label: 'Bearing',      val: `${f(q_max/1000,2)} ksf` },
     ...(ecc_lim_aci !== null ? { ecc: { ok: ecc_ok_aci, label: 'Eccentricity', val: `e=${f(Math.abs(e),2)}${ecc_ok_aci ? '≤' : '>'}${f(ecc_lim_aci,2)}ft` } } : {}),   // RWEC
   };
@@ -3654,7 +3661,7 @@ function calcAll(inp) {
     // Water table
     hasWT, wt_d, hw, gamma_w, gamma_sat, gamma_s_sub, wt_depth_eff, inclHydro, F_hyd, F_uplift,
     // Seismic
-    hasSeismic, Pae, Pe_inc, Mo_seis, Kae,
+    hasSeismic, Pae, Pe_inc, Mo_seis, Kae, Mo_st, FOS_OT_E, FOS_SL_E,   // RWIB
     // Earth pressure
     Ka, Kp, Pa_tri, Pa_tri_h, Pa_tri_v, Pa_sur_h, Fh, Pp, Pp_full, Pp_toe, Pp_key,
     p_top, p_stem_base, p_ftg_base, p_hyd_base, p_wt,
@@ -3924,7 +3931,7 @@ function onBasisChange() {
   document.querySelectorAll('.aashto-only').forEach(el => { el.style.display = isA ? '' : 'none'; });
   document.querySelectorAll('.aci-only').forEach(el => { el.style.display = isA ? 'none' : ''; });
   if (window.refreshInputTabs) refreshInputTabs();
-  document.getElementById('logo-pill').textContent = isA ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19 / IBC 2021';
+  document.getElementById('logo-pill').textContent = isA ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19 / IBC 2018';
   onInputChange();
 }
 
@@ -4702,7 +4709,7 @@ function renderStability(r) {
 
   // ════ STEP 1 — EARTH PRESSURE COEFFICIENTS ════
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Step 1 — Earth Pressure Coefficients</span><span class="card-ref">Rankine · IBC 2021 §1807.2.3</span></div>
+    <div class="card-hd"><span class="card-title">Step 1 — Earth Pressure Coefficients</span><span class="card-ref">Rankine · IBC 2018 §1807.2.3</span></div>
     <div class="card-body">`;
   if (inp.beta === 0) {
     h += eq('Active coefficient — level backfill',
@@ -4863,7 +4870,7 @@ function renderStability(r) {
 
   // ════ STEP 4 — OVERTURNING ════
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Step 4 — Overturning Check</span><span class="card-ref">IBC 2021 §1807.2.3 · FOS ≥ 1.5</span></div>
+    <div class="card-hd"><span class="card-title">Step 4 — Overturning Check</span><span class="card-ref">IBC 2018 §1807.2.3 · FOS ≥ 1.5${r.hasSeismic ? " (≥ 1.1 with 0.7E)" : ""}</span></div>
     <div class="card-body">`;
   h += eq('Overturning moment — active soil (resultant height y_a)',
     `M_{o,a} = P_{a,H}\\cdot y_a = (${F(r.Pa_tri_h,1)})(${F(r.y_Pa,3)}) = \\boxed{${F(r.Mo_tri,1)}\\ \\text{lb·ft/ft}}`,'',
@@ -4893,16 +4900,19 @@ function renderStability(r) {
     [{sym:'M_{stab}', desc:'total stabilizing moment (used for bearing / resultant location)', val:F(r.Ms,1), unit:'lb·ft/ft'},
      {sym:'M_{excl}', desc:'surcharge-over-heel + column live/snow moments — excluded', val:F(r.Ms_OT_excl,1), unit:'lb·ft/ft'}]);
   h += `<div class="alert info" style="margin:4px 0 8px;">ℹ <b>Why the surcharge and column live/snow loads are left out:</b> a resisting moment may only rely on weight certain to be present while the overturning thrust acts. The surcharge over the heel and column live/snow loads can be absent while the lateral soil and surcharge pressures remain, so they are excluded from <b>all</b> resisting forces (overturning and sliding). They are still included in the bearing check, where they add demand.</div>`;
-  h += eqCheck('Factor of safety against overturning',
-    `FOS_{OT} = \\frac{M_{stab,OT}}{M_{OT}} = \\frac{${F(r.Ms_OT,1)}}{${F(r.Mo,1)}} = \\boxed{${F(r.FOS_OT,3)}} \\geq 1.5`, r.FOS_OT >= 1.5,'',
+  h += eqCheck('Factor of safety against overturning' + (r.hasSeismic ? ' — static case (earthquake set to zero, IBC 2018 §1807.2.3)' : ''),
+    `FOS_{OT} = \\frac{M_{stab,OT}}{M_{OT}${r.hasSeismic ? ' - M_{o,E}' : ''}} = \\frac{${F(r.Ms_OT,1)}}{${F(r.Mo_st,1)}} = \\boxed{${F(r.FOS_OT,3)}} \\geq 1.5`, r.FOS_OT >= 1.5,'',
     [{sym:'M_{stab,OT}', desc:'stabilizing moment used for overturning', val:F(r.Ms_OT,1), unit:'lb·ft/ft'},
-     {sym:'M_{OT}', desc:'total overturning moment', val:F(r.Mo,1), unit:'lb·ft/ft'},
+     {sym:'M_{OT}', desc:'total overturning moment' + (r.hasSeismic ? ' (incl. 1.0·M_o,E, used for x̄ and bearing)' : ''), val:F(r.Mo,1), unit:'lb·ft/ft'},
      {sym:'FOS_{OT}', desc:'factor of safety (overturning)', val:F(r.FOS_OT,3), unit:''}]);
+  if (r.hasSeismic)   // RWIB (2026-11-07)
+    h += eqCheck('Factor of safety against overturning — with earthquake: 0.7 × ΔP_E, FOS ≥ 1.1 (IBC 2018 §1807.2.3 Exception)',
+      `FOS_{OT,E} = \\frac{M_{stab,OT}}{M_{OT} - M_{o,E} + 0.7M_{o,E}} = \\frac{${F(r.Ms_OT,1)}}{${F(r.Mo_st,1)} + 0.7(${F(r.Mo_seis,1)})} = \\boxed{${F(r.FOS_OT_E,3)}} \\geq 1.1`, r.FOS_OT_E >= 1.1, 'IBC 1807.2.3');
   h += `</div></div>`;
 
   // ════ STEP 5 — SLIDING ════
   h += `<div class="card" style="margin-bottom:16px;">
-    <div class="card-hd"><span class="card-title">Step 5 — Sliding Check</span><span class="card-ref">IBC 2021 §1807.2.3 · FOS ≥ 1.5 · μ = ${F(inp.mu,4)}</span></div>
+    <div class="card-hd"><span class="card-title">Step 5 — Sliding Check</span><span class="card-ref">IBC 2018 §1807.2.3 · FOS ≥ 1.5${r.hasSeismic ? " (≥ 1.1 with 0.7E)" : ""} · μ = ${F(inp.mu,4)}</span></div>
     <div class="card-body">`;
   h += eq('Vertical load relied on for friction (live / transient loads excluded)',
     `\\Sigma V_{fr} = \\Sigma V - q_{sur}L_h - (P_{LL}+P_{S})_{col} = ${F(r.SumV,1)} - ${F(r.V_slide_excl,1)} = \\boxed{${F(r.SumV_slide,1)}\\ \\text{lb/ft}}`,'',
@@ -4919,10 +4929,13 @@ function renderStability(r) {
     [{sym:'P_p', desc:inp.inclPassive?'passive resistance (included)':'passive (neglected — toggle off)', val:F(r.Pp,1), unit:'lb/ft'},
      {sym:'F_r', desc:'total sliding resistance', val:F(r.Fr,1), unit:'lb/ft'}]);
   h += eqCheck('Factor of safety against sliding',
-    `FOS_{SL} = \\frac{F_r}{F_h${r.hasSeismic?'+\\Delta P_E':''}} = \\frac{${F(r.Fr,1)}}{${F(r.Fh + (r.hasSeismic?r.Pe_inc:0),1)}} = \\boxed{${F(r.FOS_SL,3)}} \\geq 1.5`, r.FOS_SL >= 1.5,'',
+    `FOS_{SL} = \\frac{F_r}{F_h} = \\frac{${F(r.Fr,1)}}{${F(r.Fh,1)}} = \\boxed{${F(r.FOS_SL,3)}} \\geq 1.5`, r.FOS_SL >= 1.5, r.hasSeismic ? 'static case, E = 0' : '',   // RWIB: was F_h + 1.0ΔP_E
     [{sym:'F_r', desc:'total sliding resistance', val:F(r.Fr,1), unit:'lb/ft'},
      {sym:'F_h', desc:'total horizontal thrust', val:F(r.Fh,1), unit:'lb/ft'},
      {sym:'FOS_{SL}', desc:'factor of safety (sliding)', val:F(r.FOS_SL,3), unit:''}]);
+  if (r.hasSeismic)   // RWIB (2026-11-07)
+    h += eqCheck('Factor of safety against sliding — with earthquake: 0.7 × ΔP_E, FOS ≥ 1.1 (IBC 2018 §1807.2.3 Exception)',
+      `FOS_{SL,E} = \\frac{F_r}{F_h + 0.7\\Delta P_E} = \\frac{${F(r.Fr,1)}}{${F(r.Fh,1)} + 0.7(${F(r.Pe_inc,1)})} = \\boxed{${F(r.FOS_SL_E,3)}} \\geq 1.1`, r.FOS_SL_E >= 1.1, 'IBC 1807.2.3');
   if (inp.useShearKey && !inp.inclPassive) h += `<div class="alert warn" style="margin-top:6px;">\u26a0 Shear key gives no sliding credit: passive resistance is off (MassDOT BDM 3.3.1.1 neglects passive in front of the wall).</div>`;   // RWSK (b)
   h += `</div></div>`;
 
@@ -8438,7 +8451,7 @@ function buildOverviewSVG(r) {
     font-size="${FS.b}" font-weight="700" fill="#1c2a42" text-anchor="middle" letter-spacing=".04em">
     CANTILEVER RETAINING WALL — GEOMETRY &amp; PRESSURE DIAGRAM</text>`;
   s += `<text x="${SVG_W/2}" y="33" font-size="${FS.s}" fill="#5a6a80" text-anchor="middle">
-    ${r.isAASHTO ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19 / IBC 2021'}  ·  f'c=${inp.fc} psi · fy=${inp.fy/1000} ksi · γc=${inp.gamma_c} pcf · Ka=${f(r.Ka,4)} · Kp=${f(r.Kp,4)}</text>`;
+    ${r.isAASHTO ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19 / IBC 2018'}  ·  f'c=${inp.fc} psi · fy=${inp.fy/1000} ksi · γc=${inp.gamma_c} pcf · Ka=${f(r.Ka,4)} · Kp=${f(r.Kp,4)}</text>`;
   s += `<text x="${SVG_W/2}" y="48" font-size="${FS.s}" fill="#7a5a20" text-anchor="middle">
     Soil: γs=${inp.gamma_s} pcf · φ=${inp.phi}° · qa=${inp.qa} psf</text>`;
 
@@ -8767,7 +8780,7 @@ function leader(x1, y1, x2, y2, color) {
 const RW_REFS = {
   ACI: [
     ['ACI 318-19', 'Building Code Requirements for Structural Concrete — §5.3 (load factors), §7.6.1.1 / §13.3.7 (minimum flexural steel), §9.5 / §22.2 (flexure), Table 22.5.5.1(c) (one-way shear), §22.4 (stem axial), §24.3.2 (crack control), §24.4.3 (temperature &amp; shrinkage), §25.4.2 / §25.4.3 (development, hooks), §7.7.3.3 (extension of S1 past where it is no longer required), §13.3.6.3 (stem investigated along the height), §25.5.2 (lap splices)'],
-    ['IBC 2021', 'International Building Code — §1807.2.3 (retaining-wall stability, FOS ≥ 1.5)'],
+    ['IBC 2018', 'International Building Code — §1807.2.3 (retaining-wall stability, FOS ≥ 1.5)'],
     ['ASCE 7-22', 'Minimum Design Loads — §2.3.1 (strength combinations for column / beam loads), §11.8 (seismic lateral earth pressure)'],
     ['Rankine (1857)', 'Active / passive earth pressure coefficients'],
     ['Seed &amp; Whitman (1970)', 'Simplified Mononobe-Okabe seismic increment (when k<sub>h</sub> &gt; 0)'],
@@ -8820,8 +8833,10 @@ function rwResultRows(r) {
   const AA = s => 'AASHTO LRFD 10th Ed. Art. ' + s;
   const E = a && a.ct ? a.ct.ee2 : null, sv = a && a.serv, s = a && a.ish;
   const D = {
-    ot:           () => ['IBC 2021 §1807.2.3; FOS ≥ 1.5, D/C = 1.5 / FOS', 1.5 / r.FOS_OT],
-    sliding:      () => A ? [AA('10.6.3.4') + '; Strength I', a.sliding_dcr] : ['IBC 2021 §1807.2.3; FOS ≥ 1.5, D/C = 1.5 / FOS', 1.5 / r.FOS_SL],
+    ot:           () => ['IBC 2018 §1807.2.3; FOS ≥ 1.5' + (r.hasSeismic ? ' (earthquake set to zero)' : '') + ', D/C = 1.5 / FOS', 1.5 / r.FOS_OT],
+    otE:          () => ['IBC 2018 §1807.2.3 Exception; 0.7 × ΔP<sub>E</sub>, FOS ≥ 1.1, D/C = 1.1 / FOS', 1.1 / r.FOS_OT_E],   // RWIB
+    slidingE:     () => ['IBC 2018 §1807.2.3 Exception; 0.7 × ΔP<sub>E</sub>, FOS ≥ 1.1, D/C = 1.1 / FOS', 1.1 / r.FOS_SL_E],   // RWIB
+    sliding:      () => A ? [AA('10.6.3.4') + '; Strength I', a.sliding_dcr] : ['IBC 2018 §1807.2.3; FOS ≥ 1.5' + (r.hasSeismic ? ' (earthquake set to zero)' : '') + ', D/C = 1.5 / FOS', 1.5 / r.FOS_SL],
     bearing:      () => A ? [AA(a.onRock ? '10.6.5' : '10.6.3.1') + '; Strength I / Ia', a.q_ult_gov / a.q_R_A] : ['service loads; q<sub>max</sub> ≤ q<sub>a</sub>', r.q_max / r.inp.qa],
     ecc:          () => A ? [AA('11.6.3.3') + '; e ≤ ' + a.e_limit_label, Math.abs(a.e_A) / a.e_limit] : ['service loads; e ≤ ' + (r.aci_ecc_limit === 'b6' ? 'B/6 (middle third)' : 'B/4') + ', the engineer\u2019s limit (no limit in ACI 318-19 §13.2.6.1 / IBC 2018 §1807.2.1)', Math.abs(r.e) / r.ecc_lim_aci],   // RWEC
     stemFlex:     () => [A ? AA('5.6.3') : 'ACI 318-19 §9.5 / §22.2', r.As_stem_des / r.sel_stem.As_prov,
@@ -9707,7 +9722,7 @@ function rwrModel(r) {
   const ok = k => !!(r.checks[k] && r.checks[k].ok);
   const onTab = (key, txt) => (RW_CARDS[key] && rwCardTitle(key, isA)) ? { type: 'note', text: `[[tab:card:${key}|On screen: ${txt || (RW_TABNAME[RW_CARDS[key][0]] + ' tab · ' + rwCardTitle(key, isA))}]]` } : null;   // a note that is only the link: hidden in print (.rp-go)
   const sub = (title, items) => ({ title, items: items.filter(Boolean) });
-  const fosRef = 'IBC 2021 §1807.2.3';
+  const fosRef = 'IBC 2018 §1807.2.3';
   /* RWRP2: the factored bearing trapezoid under the footing: q at the toe and heel from V and e (kern or triangular, as calcAll),
      and q at the stem faces by linear interpolation q(x) = q_toe + (q_heel - q_toe) x / B. e is null when the tool does not
      return it (AASHTO Strength I footing trapezoid with water uplift): the equation is then shown without substitution. */
@@ -9729,7 +9744,7 @@ function rwrModel(r) {
     subs.push(sub('Project', [{ type: 'kv', rows: [
       ['Project', meta.name || '—'], ['Project number', meta.num || '—'], ['Engineer of record', meta.eng || '—'], ['Date', meta.date || '—'], ['Checked by', meta.chk || '—'], ['Checked date', meta.chkDate || '—'],   // RWPR: + the Project tab dates
       ...(meta.notes ? [['Notes / description', meta.notes]] : []),
-      ['Design basis', isA ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), limit-state design' : 'ACI 318-19 (concrete), IBC 2021 §1807.2.3 (stability, service loads), ASCE 7-22'],
+      ['Design basis', isA ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), limit-state design' : 'ACI 318-19 (concrete), IBC 2018 §1807.2.3 (stability, service loads), ASCE 7-22'],
       ['Earth pressure', isA ? ((A.ep_method === 'coulomb' ? 'Coulomb' : 'Rankine') + ', ' + (A.ep_cond === 'atrest' ? 'at-rest' : 'active')) : 'Rankine, active']] },
       { type: 'note', text: 'Units: lb, ft, psf, pcf unless noted; per foot of wall. Every value in this report is the value the tool computes on its result tabs (Stability, Stem design, Footing design, Rebar schedule).' }]));
     const geo = [['Stem height H_s' + (inp.vh_enable ? ' (variable height: H_lo + 0.75(H_hi − H_lo), MassDOT §3.3.2.2)' : ''), rwrCell(inp.Hs, 2), 'ft'],
@@ -9820,16 +9835,18 @@ function rwrModel(r) {
       T.push({ title: 'Overturning moments', steps: s1 });
       const s2 = [rwrS({ id: 'MsOT', label: 'Resisting moment relied on for overturning (surcharge and column live / snow excluded)', sym: 'M_{stab,OT}', eq: 'M_{stab} \\minus q_{sur}L_{h}x_{sur} \\minus (P_{LL} + P_{S})_{col}x_{col}', sub: rwrN(r.Ms, 1) + ' \\minus ' + rwrN(r.Ms_OT_excl, 1), value: r.Ms_OT, unit: 'lb-ft/ft', d: 1,
         note: 'loads that may be absent while the thrust acts are excluded from all resisting forces; they stay in the bearing check' }),
-        rwrS({ id: 'FOS', label: 'Factor of safety against overturning', sym: 'FOS_{OT}', eq: '\\frac{M_{stab,OT}}{M_{OT}}', sub: '\\frac{' + rwrN(r.Ms_OT, 1) + '}{' + rwrN(r.Mo, 1) + '}', value: r.FOS_OT, unit: '', d: 3, ref: fosRef }),
+        rwrS({ id: 'FOS', label: 'Factor of safety against overturning' + (r.hasSeismic ? ', static case (earthquake set to zero)' : ''), sym: 'FOS_{OT}', eq: '\\frac{M_{stab,OT}}{M_{OT}' + (r.hasSeismic ? ' \\minus M_{o,E}' : '') + '}', sub: '\\frac{' + rwrN(r.Ms_OT, 1) + '}{' + rwrN(r.Mo_st, 1) + '}', value: r.FOS_OT, unit: '', d: 3, ref: fosRef }),
         rwrS({ id: 'dc', label: 'Overturning check: FOS_OT ≥ 1.5 (D/C = 1.5 / FOS, as the Overview scorecard)', sym: 'D/C', eq: '\\frac{1.5}{FOS_{OT}}', sub: '\\frac{1.5}{' + rwrN(r.FOS_OT, 3) + '}', value: dcv('ot'), unit: '', d: 3, ok: ok('ot'), ref: fosRef })];
+      if (r.hasSeismic) { s2.push(rwrS({ id: 'FOSE', label: 'With earthquake: 0.7 × ΔP_E, FOS ≥ 1.1 (IBC 2018 §1807.2.3 Exception)', sym: 'FOS_{OT,E}', eq: '\\frac{M_{stab,OT}}{M_{OT} \\minus M_{o,E} + 0.7M_{o,E}}', sub: '\\frac{' + rwrN(r.Ms_OT, 1) + '}{' + rwrN(r.Mo_st, 1) + ' + 0.7(' + rwrN(r.Mo_seis, 1) + ')}', value: r.FOS_OT_E, unit: '', d: 3, ok: ok('otE'), ref: 'IBC 2018 §1807.2.3' })); CK.otE = 'st4/FOSE'; }   // RWIB
       CK.ot = 'st4/dc';
       T.push({ title: 'Factor of safety', ref: fosRef, steps: s2 });
       subs.push(sub('Step 4 — Overturning check', [rwrItem('st4', T), onTab('stabOT')])); }
     { const st = [rwrS({ id: 'SumVfr', label: 'Vertical load relied on for friction (surcharge and column live / snow excluded)', sym: '\\sum V_{fr}', eq: '\\sum V \\minus q_{sur}L_{h} \\minus (P_{LL} + P_{S})_{col}', sub: rwrN(r.SumV, 1) + ' \\minus ' + rwrN(r.V_slide_excl, 1), value: r.SumV_slide, unit: 'lb/ft', d: 1 }),
       rwrS({ id: 'Ffr', label: 'Friction resistance at the base', sym: 'F_{fr}', eq: '\\mu\\,\\sum V_{fr}', sub: '(' + rwrN(inp.mu, 4) + ')(' + rwrN(r.SumV_slide, 1) + ')', value: inp.mu * r.SumV_slide, unit: 'lb/ft', d: 1 }),
       rwrS({ id: 'Fr', label: 'Total sliding resistance (friction + passive)', sym: 'F_{r}', eq: '\\mu\\,\\sum V_{fr} + P_{p}', sub: rwrN(inp.mu * r.SumV_slide, 1) + ' + ' + rwrN(r.Pp, 1), value: r.Fr, unit: 'lb/ft', d: 1, note: inp.inclPassive ? 'P_p included' : 'P_p neglected (option off)' }),
-      rwrS({ id: 'FOS', label: 'Factor of safety against sliding', sym: 'FOS_{SL}', eq: '\\frac{F_{r}}{F_{h}' + (r.hasSeismic ? ' + \\Delta P_{E}' : '') + '}', sub: '\\frac{' + rwrN(r.Fr, 1) + '}{' + rwrN(r.Fh + (r.hasSeismic ? r.Pe_inc : 0), 1) + '}', value: r.FOS_SL, unit: '', d: 3, ref: fosRef }),
+      rwrS({ id: 'FOS', label: 'Factor of safety against sliding' + (r.hasSeismic ? ', static case (earthquake set to zero)' : ''), sym: 'FOS_{SL}', eq: '\\frac{F_{r}}{F_{h}}', sub: '\\frac{' + rwrN(r.Fr, 1) + '}{' + rwrN(r.Fh, 1) + '}', value: r.FOS_SL, unit: '', d: 3, ref: fosRef }),
       rwrS({ id: 'dc', label: 'Sliding check: FOS_SL ≥ 1.5 (D/C = 1.5 / FOS)', sym: 'D/C', eq: '\\frac{1.5}{FOS_{SL}}', sub: '\\frac{1.5}{' + rwrN(r.FOS_SL, 3) + '}', value: dcv('sliding'), unit: '', d: 3, ok: ok('sliding'), ref: fosRef })];
+      if (r.hasSeismic) { st.push(rwrS({ id: 'FOSE', label: 'With earthquake: 0.7 × ΔP_E, FOS ≥ 1.1 (IBC 2018 §1807.2.3 Exception)', sym: 'FOS_{SL,E}', eq: '\\frac{F_{r}}{F_{h} + 0.7\\Delta P_{E}}', sub: '\\frac{' + rwrN(r.Fr, 1) + '}{' + rwrN(r.Fh, 1) + ' + 0.7(' + rwrN(r.Pe_inc, 1) + ')}', value: r.FOS_SL_E, unit: '', d: 3, ok: ok('slidingE'), ref: 'IBC 2018 §1807.2.3' })); CK.slidingE = 'st5/FOSE'; }   // RWIB
       CK.sliding = 'st5/dc';
       subs.push(sub('Step 5 — Sliding check (μ = ' + rwrN(inp.mu, 4) + ')', [rwrItem('st5', [{ title: 'Sliding', steps: st }]), onTab('stabSlide')])); }
     { const st = [rwrS({ id: 'xR', label: 'Location of the resultant from the toe', sym: '\\bar{x}', eq: '\\frac{M_{stab} \\minus M_{OT}}{\\sum V}', sub: '\\frac{' + rwrN(r.Ms, 1) + ' \\minus ' + rwrN(r.Mo, 1) + '}{' + rwrN(r.SumV, 1) + '}', value: r.x_R, unit: 'ft', d: 4 }),
@@ -10207,7 +10224,7 @@ function rwrModel(r) {
     (isA ? ['AASHTO LRFD limit-state design: load factors Tables 3.4.1-1/-2, resistance factors as entered (Design Options).',
       'Earth pressure ' + (A.ep_method === 'coulomb' ? 'Coulomb' : 'Rankine') + ', ' + (A.ep_cond === 'atrest' ? 'at-rest' : 'active') + '; one coefficient is used for the stability and the stem design.',
       'Concrete design is enveloped Strength I / Ia' + (a.ct ? ' and Extreme Event II' : '') + '; b = 12 in design strip.']
-      : ['Stability with service (unfactored) loads, FOS ≥ 1.5 (IBC 2021 §1807.2.3); concrete design with U = 1.2D + 1.6H and 0.9D + 1.6H (ACI 318-19 §5.3).',
+      : ['Stability with service (unfactored) loads, FOS ≥ 1.5 (IBC 2018 §1807.2.3); concrete design with U = 1.2D + 1.6H and 0.9D + 1.6H (ACI 318-19 §5.3).',
         'Rankine earth pressure; surcharge over the heel and column live / snow loads are excluded from the resisting forces and included in the bearing check.',
         'b = 12 in design strip; no shear reinforcement (ACI 318-19 Table 22.5.5.1(c)).']).forEach(t => items.push({ type: 'note', text: t }));
     (r.warnings || []).forEach(w => items.push({ type: 'note', warn: true, text: 'Warning: ' + rwrPlain(w) }));
@@ -10224,7 +10241,7 @@ function rwrModel(r) {
     secs.unshift({ title: 'Design summary', subs: [sub(nF ? nF + ' of ' + nT + ' checks fail' : 'All ' + nT + ' checks pass', [{ type: 'table', wide: true, head: ['Check', 'Value', 'D/C', 'Basis', 'Status', 'Worked in'], rows },
       { type: 'note', text: 'The checks of the status bar, with their D/C (for a factor-of-safety check D/C = 1.5 / FOS). ' + (isA ? '' : 'Crack control (ACI 318-19 §24.3.2) is counted in the status bar. ') + '' }, { type: 'note', text: '[[tab:overview|On screen: Overview tab (scorecard)]]' }])] });
   }
-  const codes = isA ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)' : 'ACI 318-19 · IBC 2021 · ASCE 7-22';
+  const codes = isA ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024)' : 'ACI 318-19 · IBC 2018 · ASCE 7-22';
   return { title: 'Cantilever Retaining Wall — Calculation Report', subtitle: meta.name || 'Unnamed project', code: codes,
     info: [['Project', meta.name], ['Project No.', meta.num], ['Calculated by', meta.eng], ['Date', meta.date], ['Checked by', meta.chk], ['Checked date', meta.chkDate]],   // RWTB: Date / Checked date from the Project tab (were blank)
     head: { left: 'Project No. ' + (meta.num || '—') + ' — ' + String(meta.notes || meta.name || '—').slice(0, 40), right: 'Computed: ' + (meta.eng || '—') + (meta.date ? ' ' + meta.date : '') + ' · Checked: ' + (meta.chk || '—') + (meta.chkDate ? ' ' + meta.chkDate : ''), foot: (meta.name || 'Unnamed project') + ' (Retaining Wall Designer)' },
@@ -10609,7 +10626,7 @@ function rwdwBuild(r) {
     lt: D.layer('LOAD-TEXT', 1), sup: D.layer('SURCHARGE', 30), tbl: D.layer('TABLE', 7), ldr: D.layer('LEADER', 5), tb: D.layer('TBLK', 7), br: D.layer('BRDR', 7) };
   const G = rwdwGeo(r), BR = rwdwBars(r, G), SUP = rwdwSupport(r);
   const AW = RWDW.W - 2 * RWDW.m - 0.5, AH = RWDW.H - 2 * RWDW.m - RWDW.tbH - 0.6;
-  const basis = isA ? 'AASHTO LRFD 10TH ED. (2024)' : 'ACI 318-19 / IBC 2021';
+  const basis = isA ? 'AASHTO LRFD 10TH ED. (2024)' : 'ACI 318-19 / IBC 2018';
   let ox = 0;
   /* one sheet: content(k) draws at scale k around any origin; the smallest k (largest scale) of ks it fits is used */
   function sheet(id, title, content, ks, src) {
@@ -10891,7 +10908,7 @@ function rwdwBuild(r) {
         ...(r.F_hyd > 0 ? [['F_HYD', F(r.F_hyd / 1000), F(r.hw / 3), F(r.Mo_hyd / 1000)]] : []), ...(r.hasSeismic ? [['DELTA P_E (SEISMIC)', F(r.Pe_inc / 1000), F(0.6 * r.H), F(r.Mo_seis / 1000)]] : []),
         ['SUM M_O', '', '', F(r.Mo / 1000)]];
       title = 'SERVICE LOADS (STABILITY, ASD), ABOUT THE TOE';
-      foot = ['FOS OVERTURNING = ' + F(r.FOS_OT) + ', SLIDING = ' + F(r.FOS_SL) + ' (>= 1.5, IBC 2021 1807.2.3)', 'X_R = (SUM M_R - SUM M_O) / SUM V = ' + F(r.x_R, 3) + ' FT; E = B/2 - X_R = ' + F(r.e, 3) + ' FT',
+      foot = ['FOS OVERTURNING = ' + F(r.FOS_OT) + ', SLIDING = ' + F(r.FOS_SL) + ' (>= 1.5, IBC 2018 1807.2.3)' + (r.hasSeismic ? '; WITH 0.7E: ' + F(r.FOS_OT_E) + ', ' + F(r.FOS_SL_E) + ' (>= 1.1)' : ''), 'X_R = (SUM M_R - SUM M_O) / SUM V = ' + F(r.x_R, 3) + ' FT; E = B/2 - X_R = ' + F(r.e, 3) + ' FT',
         'Q_TOE = ' + rwdwK(r.q_toe) + ', Q_HEEL = ' + rwdwK(r.q_heel) + ' KSF; Q_A = ' + rwdwK(inp.qa) + ' KSF', 'FACTORED (FOOTING DESIGN, 1.2D + 1.6H): Q_U = ' + rwdwK(r.qu_toe) + ' / ' + rwdwK(r.qu_heel) + ' KSF'];
     } else {
       rows = [['EH  LATERAL EARTH', F(a.P_EH / 1000), F(a.y_EH), '1.50 / 0.90'.replace('1.50', rwdwN(a.gEH_max, 2))], ...(a.P_ES > 0 ? [['ES  SURCHARGE (DEAD)', F(a.P_ES / 1000), F(r.Hp / 2), '1.50']] : []),
@@ -10960,7 +10977,7 @@ function rwdwBuild(r) {
       ...(isA ? ['1. AASHTO LRFD BRIDGE DESIGN SPECIFICATIONS, 10TH ED. (2024): STRENGTH I / IA' + (a.ct ? ', EXTREME EVENT II (COLLISION)' : '') + ' AND SERVICE I (CRACK CONTROL); ETA = ' + rwdwN(a.eta, 2) + '.',
         '2. LOAD FACTORS: AASHTO TABLES 3.4.1-1 AND 3.4.1-2; RESISTANCE FACTORS AS ENTERED IN THE TOOL (DESIGN TAB).']
         : ['1. CONCRETE: ACI 318-19 STRENGTH DESIGN, U = 1.2D + 1.6H AND 0.9D + 1.6H. STABILITY: SERVICE LOADS, FOS >= 1.5',
-          '   (OVERTURNING, SLIDING) AND Q_MAX <= Q_A, IBC 2021 1807.2.3.' + (r.hasCol ? ' COLUMN LOADS: ASCE 7-22 2.3.1.' : '')]),
+          '   (OVERTURNING, SLIDING) AND Q_MAX <= Q_A, IBC 2018 1807.2.3.' + (r.hasCol ? ' COLUMN LOADS: ASCE 7-22 2.3.1.' : '')]),
       '3. EARTH PRESSURE ' + epm + ': K_A = ' + rwdwN(r.Ka, 4) + ', K_P = ' + rwdwN(r.Kp, 4) + '. VALUES PER FOOT OF WALL (12 IN DESIGN STRIP).',
       'MATERIALS',
       '4. CONCRETE: F\'C = ' + rwdwN(inp.fc, 0) + ' PSI, UNIT WEIGHT ' + rwdwN(inp.gamma_c, 0) + ' PCF. REINFORCEMENT: F_Y = ' + rwdwN(inp.fy / 1000, 0) + ' KSI.',
