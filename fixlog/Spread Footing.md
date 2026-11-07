@@ -6363,7 +6363,7 @@ index 50f3837..c2d5000 100644
   - ε_t = 0.003(7.295 − 8.10)/8.10 = **−0.0003 < 0.005** → NG (before: not checked).
 - **Cases that move:** none of the SF harness cases changes a value. def, sey, rev, slender: new fields only, all checks OK (default ε_t = 0.039 / 0.041, d_min = 25.5 in). thin and m3 / m4 add the new reasons to flexure that was already FAIL.
 
-## 2026-11-07 — PR: claude/sf-m2-dev-faces (SFDE: footing bar development checked at every pedestal face with moment of that sign, ACI 318-19 13.2.8.3 / 13.2.7.1; CALCULATION CHANGE, pass / fail logic)
+## 2026-11-07 — PR: claude/sf-m2-dev-faces (PR #1020: https://github.com/mlococo88/All-Structural/pull/1020) (SFDE: footing bar development checked at every pedestal face with moment of that sign, ACI 318-19 13.2.8.3 / 13.2.7.1; CALCULATION CHANGE, pass / fail logic)
 
 - **Problem:** `sfdDevAll` checked ℓ_d / ℓ_dh only at the governing-moment section (`des.govMloc` / `govNegLoc`). ACI 318-19 13.2.8.3 requires the reinforcement to be developed at every critical section of 13.2.7.1, i.e. at each pedestal face. A short cantilever at another pedestal could PASS unseen.
 - **Where / exact code (`Spread Footing.html`, `sfdDevAll`, anchor `/* SFDE (2026-11-07)`):**
