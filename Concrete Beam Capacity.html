@@ -7903,11 +7903,12 @@ function calcHook(inp,f){
 function calcComp(inp,f){
   if(f.AASHTO){
     // AASHTO LRFD 10th Ed. 5.10.8.2.2a: l_db >= the larger of (0.63 db fy/√f'c) and (0.3 db fy) (Eqs. 5.10.8.2.2a-2/-3), ksi;
-    // l_d = l_db·λer·λrc/λ (Eq. 5.10.8.2.2a-1), min 8 in. The tool applies λer only (λrc = 1.0, λ not applied; open item).
+    // l_d = l_db·λer·λrc/λ (Eq. 5.10.8.2.2a-1), min 8 in. λrc = 1.0 (no reduction for spirals or hoops taken, conservative).
+    // CBH3 (2026-11-07): λ (5.4.2.8; entered value for lightweight concrete, 1.0 normalweight) divides, per Eq. 5.10.8.2.2a-1.
     const a = 0.63*f.db*f.fy_ksi/f.sqrtFc_ksi;
     const b = 0.3*f.db*f.fy_ksi;
     const base = Math.max(a,b);
-    const ldc_calc = base*f.excess;   // excess reinf factor applies
+    const ldc_calc = base*f.excess/f.lambda;   // excess reinf factor λer applies; divided by λ
     const min = 8;
     const ldc = Math.max(ldc_calc, min);
     return {a,b,ldc_calc,min,ldc, gov: ldc===min?&quot;8in&quot;:(a>=b?&quot;eqA&quot;:&quot;eqB&quot;)};
@@ -7957,7 +7958,7 @@ function calcTensSplice(inp,f,tens){
   return {factor, ldBase, lst_calc, lst, cls:inp.tensClass};
 }
 function calcCompSplice(inp,f){
-  let lsc_calc;
+  let lsc_calc, hiFy = null;
   if(f.AASHTO){
     // AASHTO LRFD 10th Ed. 5.10.8.4.5a: l_c = 0.5·m·fy·db (fy <= 60 ksi), m·(0.9fy - 24)·db (fy > 60 ksi), fy in ksi;
     // x4/3 where f'c < 3.0 ksi; >= 12 in. m = 1.0 (no reduction for ties or spirals; engineer decision 2026-10-19).
@@ -7968,10 +7969,21 @@ function calcCompSplice(inp,f){
   } else {
     if(inp.fy<=60000) lsc_calc = 0.0005*inp.fy*f.db;
     else lsc_calc = (0.0009*inp.fy-24)*f.db;
+    // CBH2: ACI 318-19 25.5.5.1(c), f_y > 80,000 psi: l_sc is the longer of (0.0009 f_y - 24) d_b and l_st (25.5.2.1).
+    // l_st: Class A only where Class A is selected and shown eligible, else Class B (Decision pending engineer review);
+    // the 4/3 increase for f'c < 3000 psi is applied to the longer of the two.
+    if(inp.fy>80000){
+      const e = classAEligible(inp,f);
+      const cls = (inp.tensClass===&quot;A&quot; &amp;&amp; e.known &amp;&amp; e.eligible) ? &quot;A&quot; : &quot;B&quot;;
+      const inpC = Object.assign({},inp,{tensClass:cls});
+      const ts = calcTensSplice(inpC,f,calcTension(inp,f));
+      hiFy = {term:lsc_calc, lst:ts.lst, ldBase:ts.ldBase, factor:ts.factor, cls, gov: ts.lst>lsc_calc?&quot;lst&quot;:&quot;term&quot;};
+      lsc_calc = Math.max(lsc_calc, ts.lst);
+    }
     if(inp.fc<3000) lsc_calc *= (4/3);
   }
   const lsc = Math.max(lsc_calc, 12);
-  return {lsc_calc, lsc, lowFc: inp.fc<3000};
+  return {lsc_calc, lsc, lowFc: inp.fc<3000, hiFy};
 }
 
 /* =====================================================================
@@ -8085,7 +8097,7 @@ function buildInputPanel(){
         <option value=&quot;1.0&quot; selected>Other (1.0)</option>
         <option value=&quot;0.75&quot;>Enclosed in spiral, circular tie (db≥1/4&amp;quot;, pitch≤4&amp;quot;), #4 ties or hoops @ ≤4&amp;quot; c-c (0.75)</option>
       </select></div>
-    <div class=&quot;hint&quot;>ACI only. AASHTO: &amp;lambda;<sub>rc</sub> = 0.75 for spirals or hoops (5.10.8.2.2b) is not applied (conservative); &amp;lambda; is not applied to compression development either (see the validation notice for lightweight concrete).</div>`)}
+    <div class=&quot;hint&quot;>ACI only. AASHTO: &amp;lambda;<sub>rc</sub> = 0.75 for spirals or hoops (5.10.8.2.2b) is not applied (conservative); &amp;lambda; divides the compression development length (Eq. 5.10.8.2.2a-1).</div>`)}
 
   ${panel(&quot;F&quot;,&quot;Splices&quot;,true,`
     <div class=&quot;field&quot;><label>Tension Lap Class</label>
@@ -8253,7 +8265,6 @@ function validate(inp,f){
     { const hk = calcHook(inp,f);
       if (hk.Rentered &amp;&amp; hk.R < hk.Rmin - 1e-9) w.push(`Bend radius R = ${fmt(hk.R,3)} in. is less than the minimum standard bend for #${inp.barSize} (R = D/2 + d_b/2 = ${fmt(hk.Rmin,3)} in., Table 5.10.2.3-1); the entered R is used.`);
       if (hk.num <= 0) w.push(`Hook: F_h/A_b = ${fmt(hk.Fh/f.Ab,2)} ksi ≥ λ_er·f_y; the straight portion l_d of Eq. 5.10.8.2.1a-2 is taken as 0.`); }
-    if (inp.lightweight) w.push(`AASHTO Eq. 5.10.8.2.2a-1 divides the compression development length by λ; this tool does not apply λ to compression development (open item, engineer decision pending).`);
   } else {
     if (inp.fc > 10000) w.push(`f'c = ${fmt(inp.fc,0)} psi exceeds 10,000 psi; √f'c is capped at 100 (ACI 25.4.1.4). Provisions not calibrated above this.`);
     if (f.sqrtFc_raw > 100) w.push(`√f'c capped: using 100 psi^0.5 instead of ${fmt(f.sqrtFc_raw,1)} (ACI 25.4.1.4).`);
@@ -8720,13 +8731,14 @@ function tabCompAASHTO(inp,f,c){
   return hero(&quot;Compression Development&quot;,&quot;AASHTO LRFD 10th Ed. (2024) §5.10.8.2.2a&quot;,`${fmt(c.ldc,2)} in`,&quot;Required l_dc&quot;)
   + `<div class=&quot;narr&quot;>AASHTO compression development takes the larger of two expressions (ksi units), then applies the
      applicable modification factors, with an 8 in floor. As in ACI, the splitting mechanism is absent so the length is short.
-     This tool applies λ_er only: λ_rc = 1.0 (no reduction for spirals or hoops, §5.10.8.2.2b) and λ is not applied
-     (Eq. 5.10.8.2.2a-1 divides by λ; open item for lightweight concrete).</div>`
+     This tool applies λ_er and λ (Eq. 5.10.8.2.2a-1 divides by λ, the concrete density modification factor of §5.4.2.8:
+     the entered value for lightweight concrete, 1.0 for normalweight); λ_rc = 1.0 (no reduction for spirals or hoops, §5.10.8.2.2b).</div>`
   + subsec(&quot;1. Governing Expressions&quot;,&quot;§5.10.8.2.2a&quot;, varTable([
       [&quot;f_y&quot;,&quot;Yield strength&quot;,fmt(f.fy_ksi,1),&quot;ksi&quot;],
       [&quot;f'_c&quot;,&quot;Concrete strength&quot;,fmt(f.fc_ksi,2),&quot;ksi&quot;],
       [&quot;\\sqrt{f'_c}&quot;,&quot;Square root&quot;,fmt(f.sqrtFc_ksi,3),&quot;ksi^{0.5}&quot;],
       [&quot;d_b&quot;,&quot;Bar diameter&quot;,fmt(f.db,3),&quot;in&quot;],
+      [&quot;\\lambda&quot;,&quot;Concrete density modification factor (§5.4.2.8; divides l_db, Eq. 5.10.8.2.2a-1)&quot;,fmt(f.lambda,2),&quot;—&quot;],
     ])
     + note(`<p>The two expressions parallel ACI's, converted to ksi. Expression (a) governs for lower-strength concrete; expression (b) is the strength-independent floor.</p>`)
     + eqBlock(&quot;Expression (a)&quot;,&quot;Eq. 5.10.8.2.2a-2&quot;,
@@ -8738,8 +8750,9 @@ function tabCompAASHTO(inp,f,c){
         `0.3\\times ${fmt(f.db,3)}\\times ${fmt(f.fy_ksi,1)}`,
         `l_{dc,b} = ${fmt(c.b,2)}\\ \\text{in}`)
     + eqBlock(&quot;Governing length&quot;,&quot;Eq. 5.10.8.2.2a-1&quot;,
-        &quot;l_{dc} = \\max\\!\\left(l_{dc,a},\\ l_{dc,b},\\ 8\\ \\text{in}\\right)&quot;+(inp.useExcess?&quot;\\times\\tfrac{A_{s,req}}{A_{s,prov}}&quot;:&quot;&quot;),
-        `\\max(${fmt(c.a,2)},\\ ${fmt(c.b,2)})${inp.useExcess?`\\times ${fmt(f.excess,3)}`:&quot;&quot;},\\ 8`,
+        f.lambda!==1 ? &quot;l_{dc} = \\max\\!\\left[\\max(l_{dc,a},\\ l_{dc,b})&quot;+(inp.useExcess?&quot;\\times\\tfrac{A_{s,req}}{A_{s,prov}}&quot;:&quot;&quot;)+&quot;\\,/\\,\\lambda,\\ 8\\ \\text{in}\\right]&quot;
+          : &quot;l_{dc} = \\max\\!\\left(l_{dc,a},\\ l_{dc,b},\\ 8\\ \\text{in}\\right)&quot;+(inp.useExcess?&quot;\\times\\tfrac{A_{s,req}}{A_{s,prov}}&quot;:&quot;&quot;),
+        `\\max(${fmt(c.a,2)},\\ ${fmt(c.b,2)})${inp.useExcess?`\\times ${fmt(f.excess,3)}`:&quot;&quot;}${f.lambda!==1?`\\,/\\,${fmt(f.lambda,2)}`:&quot;&quot;},\\ 8`,
         `\\boxed{l_{dc} = ${fmt(c.ldc,2)}\\ \\text{in}}`))
   + excessBlock(inp,f);
 }
@@ -8797,13 +8810,20 @@ function tabCSplice(inp,f){
       <p>Compression lap splices are governed by a simple empirical formula rather than the bond mechanics of tension. Because the bars push toward each other, load transfers efficiently and the required length depends only on the steel grade and bar size — not on cover, spacing, or confinement.</p>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>f_y ≤ 60,000 psi</span> — Uses the linear form 0.0005·f_y·d_b.</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>f_y > 60,000 psi</span> — Switches to (0.0009·f_y − 24)·d_b, a steeper relationship for high-strength bars.</div>
+      <div class=&quot;vardef&quot;><span class=&quot;s&quot;>f_y > 80,000 psi</span> — l_sc is the longer of (0.0009·f_y − 24)·d_b and the tension lap splice length l_st of §25.5.2.1 (§25.5.5.1(c)). l_st is taken as Class B unless Class A is selected and shown eligible.${s.hiFy?&quot; <b>This applies to your input.</b>&quot;:&quot;&quot;}</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>f'c < 3,000 psi</span> — Weak concrete grips less, so the length is increased by one-third (×4/3).${s.lowFc?&quot; <b>This increase is active for your input.</b>&quot;:&quot;&quot;}</div>
       <div class=&quot;vardef&quot;><span class=&quot;s&quot;>12 in minimum</span> — Absolute floor.</div>`)
     + eqBlock(fyLE60?&quot;Splice length (f_y ≤ 60,000 psi)&quot;:&quot;Splice length (f_y > 60,000 psi)&quot;,&quot;§25.5.5.1&quot;,
         fyLE60 ? &quot;l_{sc} = 0.0005\\,f_y\\,d_b&quot; : &quot;l_{sc} = (0.0009\\,f_y - 24)\\,d_b&quot;,
         fyLE60 ? `0.0005\\times ${fmt(inp.fy,0)}\\times ${fmt(f.db,3)}`
                : `(0.0009\\times ${fmt(inp.fy,0)} - 24)\\times ${fmt(f.db,3)}`,
-        `${s.lowFc?&quot;\\text{(×4/3 for }f'_c<3000)\\ &quot;:&quot;&quot;}l_{sc,calc} = ${fmt(s.lsc_calc,2)}\\ \\text{in}`)
+        s.hiFy ? `(0.0009\\,f_y - 24)\\,d_b = ${fmt(s.hiFy.term,2)}\\ \\text{in}`
+               : `${s.lowFc?&quot;\\text{(×4/3 for }f'_c<3000)\\ &quot;:&quot;&quot;}l_{sc,calc} = ${fmt(s.lsc_calc,2)}\\ \\text{in}`)
+    + (s.hiFy ? eqBlock(`f_y > 80,000 psi: longer of the above and l_st (Class ${s.hiFy.cls})`,&quot;§25.5.5.1(c), §25.5.2.1&quot;,
+        &quot;l_{sc,calc} = \\max\\!\\left[(0.0009\\,f_y - 24)\\,d_b,\\ l_{st}\\right],\\quad l_{st} = \\max(\\text{factor}\\cdot l_d,\\ 12)&quot;,
+        `\\max\\!\\left[${fmt(s.hiFy.term,2)},\\ \\max(${fmt(s.hiFy.factor,1)}\\times ${fmt(s.hiFy.ldBase,2)},\\ 12) = ${fmt(s.hiFy.lst,2)}\\right]`,
+        `${s.lowFc?&quot;\\times\\tfrac{4}{3}\\ (f'_c<3000)\\quad &quot;:&quot;&quot;}l_{sc,calc} = ${fmt(s.lsc_calc,2)}\\ \\text{in}`)
+        + rebarWorkedIn([[&quot;tsLen&quot;,&quot;l_d (splice base, without the excess-reinforcement factor)&quot;]]) : &quot;&quot;)
     + eqBlock(&quot;Minimum governs&quot;,f.AASHTO?&quot;§5.10.8.4.5&quot;:&quot;§25.5.5.1&quot;,
         &quot;l_{sc} = \\max\\!\\left(l_{sc,calc},\\ 12\\ \\text{in}\\right)&quot;,
         `\\max(${fmt(s.lsc_calc,2)},\\ 12)`,
@@ -9633,8 +9653,8 @@ function rbrComp(inp,f){
   const gov=c.gov==='8in'?'the 8 in. minimum governs':(c.gov==='eqA'?'expression (a) governs':'expression (b) governs');
   const exS=inp.useExcess?[rbS({id:'excess',label:'Excess reinforcement factor',sym:f.AASHTO?'\\lambda_{er}':'\\text{factor}',value:f.excess,unit:'',d:3,note:'see §excess'})]:[];
   const tail=r=>[
-    rbS({id:'ldccalc',label:'Larger expression'+(inp.useExcess?', times the excess reinforcement factor':''),sym:'l_{dc,calc}',eq:'\\max(l_{dc,a},\\, l_{dc,b})'+(inp.useExcess?'\\cdot \\frac{A_{s,req}}{A_{s,prov}}':''),
-      sub:'\\max('+rbN(c.a)+',\\, '+rbN(c.b)+')'+(inp.useExcess?'\\times '+rbN(f.excess,3):''),value:c.ldc_calc,unit:'in'}),
+    rbS({id:'ldccalc',label:'Larger expression'+(inp.useExcess?', times the excess reinforcement factor':'')+(f.AASHTO?', divided by λ':''),sym:'l_{dc,calc}',eq:'\\max(l_{dc,a},\\, l_{dc,b})'+(inp.useExcess?'\\cdot \\frac{A_{s,req}}{A_{s,prov}}':'')+(f.AASHTO?'\\, /\\, \\lambda':''),
+      sub:'\\max('+rbN(c.a)+',\\, '+rbN(c.b)+')'+(inp.useExcess?'\\times '+rbN(f.excess,3):'')+(f.AASHTO?'\\, /\\, '+rbN(f.lambda):''),value:c.ldc_calc,unit:'in'}),
     rbS({id:'ldc',label:'Compression development length (8 in. minimum)',sym:'l_{dc}',eq:'\\max(l_{dc,calc},\\, 8\\, \\text{in.})',sub:'\\max('+rbN(c.ldc_calc)+',\\, 8)',value:c.ldc,unit:'in',ref:r,note:gov})];
   if(!f.AASHTO){
     T.push({title:'Governing expressions',ref:'ACI 318-19 25.4.9.2',steps:[
@@ -9649,7 +9669,8 @@ function rbrComp(inp,f){
       rbS({id:'fy',label:'Yield strength',sym:'f_{y}',value:f.fy_ksi,unit:'ksi',d:1}),
       rbS({id:'fc',label:'Concrete strength',sym:RB_FC,value:f.fc_ksi,unit:'ksi'}),
       rbS({id:'sqrtFc',label:'Square root of f′c (f′c limited to 10 ksi)',sym:'\\sqrt{'+RB_FC+'}',eq:'\\min(\\sqrt{'+RB_FC+'},\\, \\sqrt{10})',sub:'\\min(\\sqrt{'+rbN(f.fc_ksi)+'},\\, \\sqrt{10})',value:f.sqrtFc_ksi,unit:'ksi^{0.5}',d:3}),
-      rbS({id:'db',label:'Bar diameter (#'+inp.barSize+')',sym:'d_{b}',value:f.db,unit:'in',d:3})].concat(exS,[
+      rbS({id:'db',label:'Bar diameter (#'+inp.barSize+')',sym:'d_{b}',value:f.db,unit:'in',d:3}),
+      rbS({id:'lam',label:'Concrete density modification factor (divides l_db, Eq. 5.10.8.2.2a-1)',sym:'\\lambda',value:f.lambda,unit:'',d:2,note:'see §lam'})].concat(exS,[
       rbS({id:'a',label:'Expression (a)',sym:'l_{dc,a}',eq:'\\frac{0.63\\, d_{b} f_{y}}{\\sqrt{'+RB_FC+'}}',sub:'\\frac{0.63\\times '+rbN(f.db,3)+'\\times '+rbN(f.fy_ksi,1)+'}{'+rbN(f.sqrtFc_ksi,3)+'}',value:c.a,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.2a-2'}),
       rbS({id:'b',label:'Expression (b)',sym:'l_{dc,b}',eq:'0.3\\, d_{b} f_{y}',sub:'0.3\\times '+rbN(f.db,3)+'\\times '+rbN(f.fy_ksi,1),value:c.b,unit:'in',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.2a-3'})])});
     T.push({title:'Compression development length',ref:'AASHTO LRFD 10th Ed. Eq. 5.10.8.2.2a-1',steps:tail('AASHTO LRFD 10th Ed. Eq. 5.10.8.2.2a-1')});
@@ -9700,6 +9721,15 @@ function rbrCSplice(inp,f){
     rbS({id:'lsccalc',label:'Compression lap splice length (f_y '+(le?'≤':'>')+' 60 ksi'+(s.lowFc?'; ×4/3 for f′c < 3.0 ksi':'')+')',sym:'l_{sc,calc}',
       eq:(le?'0.5\\, m\\, f_{y} d_{b}':'m\\, (0.9\\, f_{y} \\minus 24)\\, d_{b}')+(s.lowFc?'\\cdot \\frac{4}{3}':''),
       sub:(le?'0.5\\times 1.0\\times '+rbN(f.fy_ksi,1)+'\\times '+rbN(f.db,3):'1.0\\times (0.9\\times '+rbN(f.fy_ksi,1)+' \\minus 24)\\times '+rbN(f.db,3))+(s.lowFc?'\\times \\frac{4}{3}':''),value:s.lsc_calc,unit:'in',ref:'AASHTO LRFD 10th Ed. 5.10.8.4.5a'}));
+  if(!A&amp;&amp;s.hiFy){   /* CBH2: 25.5.5.1(c), f_y > 80,000 psi */
+    L.pop();
+    L.push(rbS({id:'lscterm',label:'Compression lap splice expression (f_y > 80,000 psi)',sym:'l_{sc,1}',eq:'(0.0009\\, f_{y} \\minus 24)\\, d_{b}',
+        sub:'(0.0009\\times '+rbG(inp.fy,0)+' \\minus 24)\\times '+rbN(f.db,3),value:s.hiFy.term,unit:'in',ref:'ACI 318-19 25.5.5.1(c)'}),
+      rbS({id:'lscst',label:'Tension lap splice length, Class '+s.hiFy.cls+' (Class B unless Class A is selected and shown eligible)',sym:'l_{st}',note:'l_d without the excess-reinforcement factor: see §ldBase',
+        eq:'\\max(\\text{factor}\\cdot l_{d},\\, 12\\, \\text{in.})',sub:'\\max('+rbN(s.hiFy.factor,1)+'\\times '+rbN(s.hiFy.ldBase)+',\\, 12)',value:s.hiFy.lst,unit:'in',ref:'ACI 318-19 25.5.2.1'}),
+      rbS({id:'lsccalc',label:'Compression lap splice length (f_y > 80,000 psi: the longer of the two'+(s.lowFc?'; ×4/3 for f′c < 3,000 psi':'')+')',sym:'l_{sc,calc}',
+        eq:'\\max(l_{sc,1},\\, l_{st})'+(s.lowFc?'\\cdot \\frac{4}{3}':''),sub:'\\max('+rbN(s.hiFy.term)+',\\, '+rbN(s.hiFy.lst)+')'+(s.lowFc?'\\times \\frac{4}{3}':''),value:s.lsc_calc,unit:'in',ref:'ACI 318-19 25.5.5.1(c)'}));
+  }
   L.push(rbS({id:'lsc',label:'Compression lap splice length (12 in. minimum)',sym:'l_{sc}',eq:'\\max(l_{sc,calc},\\, 12\\, \\text{in.})',sub:'\\max('+rbN(s.lsc_calc)+',\\, 12)',value:s.lsc,unit:'in',ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.5a':'ACI 318-19 25.5.5.1'}));
   if(lapProhibited(inp,f)) L.push(rbS({id:'lapOK',label:'Lap splice of #'+inp.barSize+' to #'+inp.barSize+' permitted',sym:'',value:'no: use a mechanical or welded splice (the length above is for reference only)',unit:'',ok:false,ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.2a':'ACI 318-19 25.5.1.1, 25.5.5.3'}));
   return [{title:'Splice length',ref:A?'AASHTO LRFD 10th Ed. 5.10.8.4.5a':'ACI 318-19 25.5.5.1',steps:L}];
@@ -9768,7 +9798,7 @@ function rbrModel(){
   secs.push({title:'Tension lap splice',subs:[{title:'Tension lap splice length $l_{st}$',items:[
     rbTopics('ts',rbrTSplice(inp,f),{title:'Worked steps',see:'td'}),{type:'note',text:tabLink('tsplice','On screen: Tension Splice tab')}]}].concat(rbCommSub(tabTSplice(inp,f)))});
   secs.push({title:'Compression lap splice',subs:[{title:'Compression lap splice length $l_{sc}$',items:[
-    rbTopics('cs',rbrCSplice(inp,f),{title:'Worked steps'}),{type:'note',text:tabLink('csplice','On screen: Comp. Splice tab')}]}].concat(rbCommSub(tabCSplice(inp,f)))});
+    rbTopics('cs',rbrCSplice(inp,f),{title:'Worked steps',see:'ts'}),{type:'note',text:tabLink('csplice','On screen: Comp. Splice tab')}]}].concat(rbCommSub(tabCSplice(inp,f)))});
   /* 7. bar schedule (tabBatch: the same functions for every bar size) */
   {
     const rows=BAR_ORDER.map(b=>{
