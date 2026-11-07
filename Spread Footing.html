@@ -470,6 +470,8 @@ a.wkA:hover{text-decoration:underline}
  <div class="row"><label>Custom e/B limit</label><input type="number" step="0.01" data-path="stab.eccCustom" data-num><span class="unit">&ndash;</span><span class="hint">used only when Custom is selected</span></div>
  <div class="row"><label>Target FS, sliding</label><input type="number" step="0.1" data-path="stab.FSsl" data-num><span class="unit">&ndash;</span></div>
  <div class="row"><label>Target FS, flotation</label><input type="number" step="0.05" data-path="stab.FSfl" data-num><span class="unit">&ndash;</span></div>
+ <div class="row"><label>Simultaneous wind 0.75(W<sub>x</sub> + W<sub>y</sub>)</label><select data-path="stab.windSim"><option value="on">Add (ASCE 7-16 Fig. 27.3-8, Case 3)</option><option value="off">Off (W<sub>x</sub> or W<sub>y</sub> alone)</option></select><span class="hint">Adds the four 0.75(&plusmn;W<sub>x</sub> &plusmn;W<sub>y</sub>) wind cases wherever both W<sub>x</sub> and W<sub>y</sub> loads are entered (MWFRS load Case 3 of ASCE 7-16 27.3.5; Case 2 / 4 torsion is not modelled). Projects saved before this option: Off.</span></div>
+ <div class="row"><label>S<sub>DS</sub> (seismic, for E<sub>v</sub>)</label><input type="number" step="0.01" data-path="stab.SDS" data-num><span class="unit">g</span><span class="hint">E<sub>v</sub> = 0.2S<sub>DS</sub>D (ASCE 7-16 12.4.2.2). Used only where E loads are entered (load type E = E<sub>h</sub>; the overstrength factor is not applied unless you enter E<sub>mh</sub>).</span></div>
  <div class="row"><label>Pedestal shear couple (V&middot;h)</label><select data-path="stab.shearCouple"><option value="on">Include (V generates base moment)</option><option value="off">Exclude (shear at base)</option></select></div>
  <div class="note" style="font-size:10px">Include: a horizontal shear at the pedestal top generates an overturning couple V&middot;h at the footing base (rigorous). Exclude: shear is taken directly at the footing base with no couple (matches some tools, e.g. certain ENERCALC conventions).</div>
 </div>
@@ -728,8 +730,8 @@ function sfdGoto(card){
   const s=sec.querySelector('summary')||sec;const old=s.style.background;s.style.background='#fff3cd';setTimeout(()=>{s.style.background=old;},1100);},60);}
 document.addEventListener('click',e=>{const a=e.target.closest&&e.target.closest('a.wkA');if(!a)return;e.preventDefault();sfdGoto(a.dataset.card);});
 /* ================= state ================= */
-const TYPES=['D','L','Lr','S','Wx','Wy'];
-const TYPE_DESC={D:'Dead',L:'Live',Lr:'Roof live',S:'Snow',Wx:'Wind, x-dir',Wy:'Wind, y-dir'};
+const TYPES=['D','L','Lr','S','Wx','Wy','E'];   /* SFEQ: E = horizontal seismic load effect E_h (rho Q_E, or E_mh where entered) */
+const TYPE_DESC={D:'Dead',L:'Live',Lr:'Roof live',S:'Snow',Wx:'Wind, x-dir',Wy:'Wind, y-dir',E:'Seismic, horizontal effect E_h = \u03c1Q_E (both directions as entered; enter E_mh for overstrength)'};
 const COMP=['P','Vx','Vy','Mx','My'];
 const COMP_UNIT={P:'kips',Vx:'kips',Vy:'kips',Mx:'kip-ft',My:'kip-ft'};
 /* rebar database: area (in^2) and diameter (in), US #3-#11 */
@@ -757,7 +759,7 @@ function defaultState(){
  soil:{mode:'vesic',qa:4,qaBasis:'gross',c:0,phi:32,gs:120,FSb:3,dw:'',qaOverride:'off',qaOverVal:4,sfdDepthF:'off',sfdShearMode:'general'},
  ev:{cover:1.5,gev:120,qDsur:0,qLsur:0},
  freinf:{botX:{size:8,spc:9,mode:'spacing'},botY:{size:8,spc:9,mode:'spacing'},topX:{size:0,spc:12,mode:'spacing'},topY:{size:0,spc:12,mode:'spacing'},botOuter:'y'},
- stab:{muMode:'phi',mu:0.45,pf:0,FSot:2,FSsl:1.5,FSfl:1.25,shearCouple:'on',otGate:'off',eccMode:'kern',eccCustom:0.25},
+ stab:{muMode:'phi',mu:0.45,pf:0,FSot:2,FSsl:1.5,FSfl:1.25,shearCouple:'on',otGate:'off',eccMode:'kern',eccCustom:0.25,windSim:'on',SDS:0},
  manPrint:false,manPart:'p0',lrRefRpt:true,pedCbRpt:true,ovRpt:true,
  assump:'',peds:[p1,p2]};}
 let state=defaultState(), collapseState={};
@@ -776,6 +778,8 @@ function migrateState(){
  ['botX','botY','topX','topY'].forEach(k=>{const m=state.freinf[k];if(m&&!m.mode)m.mode='spacing';});   /* SFRQ: older saves entered a spacing */
  if(state.freinf.botOuter!=='x')state.freinf.botOuter='y';   /* SFBO: outer bottom layer; saves without the field: y-bars outermost (as before) */
  const dm=defaultState().mat;['fy','lambda','coverBot','coverTop','vcMode','coating','dagg','sideExp'].forEach(k=>{if(state.mat[k]===undefined)state.mat[k]=dm[k];});   /* SFAG: dagg, older saves 3/4 in; SFCV: sideExp, older saves cast against earth */
+ if(state.stab&&state.stab.windSim!=='on')state.stab.windSim='off';   /* SFW3: simultaneous wind 0.75(Wx + Wy); saves without the field: off (as before); new projects: on */
+ if(state.stab&&!(num(state.stab.SDS)>0))state.stab.SDS=0;   /* SFEQ: S_DS for E_v = 0.2 S_DS D; older saves 0 */
  if(state.mat.ldExcess!=='on')state.mat.ldExcess='off';   /* SFDV: excess-reinforcement reduction of l_d (ACI 318-19 25.4.10.1); saves without the field: off (not taken, as before) */
  if(state.mat.vcMode!=='a'&&state.mat.vcMode!=='c')state.mat.vcMode='c';
  if(state.mat.lamsFtg!=='on')state.mat.lamsFtg='off';   /* SFLN: neglect lambda_s in footing shear (ACI 318-19 13.2.6.2); saves without the field: off (lambda_s applied, as before) */
@@ -799,6 +803,7 @@ function migrateState(){
   else ['P','Vx','Vy','Mx','My'].forEach(k=>{if(p.direct[k]===undefined)p.direct[k]=0;});
   if(!p.reinf)p.reinf={longSize:8,nx:3,ny:3,tieSize:3,tieSpc:12,cover:2,dowelSize:8,dowelN:8};
   if(!p.loads)p.loads=newPed(1).loads;
+  if(!p.loads.E)p.loads.E={P:0,Vx:0,Vy:0,Mx:0,My:0};   /* SFEQ: older saves have no seismic row (E = 0: no seismic combinations, as before) */
   if(!p.reinf.longMode)p.reinf.longMode='faces';   /* SFRQ: older saves entered bars per face */
   if(!SFTC_EXP[p.reinf.exposure])p.reinf.exposure='weather';   /* SFTC: pedestal exposure for the tie-cover check; older saves: exposed to weather or in contact with ground */
   if(p.reinf.dowelHook!=='hook90')p.reinf.dowelHook='straight';   /* SFDO: dowel end in the footing; older saves: straight */
@@ -1289,6 +1294,12 @@ function genCombos(kind,present){
  const winds=[];
  if(present.Wx){winds.push({lbl:'+Wx',k:'Wx',s:1});winds.push({lbl:'\u2212Wx',k:'Wx',s:-1});}
  if(present.Wy){winds.push({lbl:'+Wy',k:'Wy',s:1});winds.push({lbl:'\u2212Wy',k:'Wy',s:-1});}
+ /* SFW3 (2026-11-07): ASCE 7-16 27.3.5, Fig. 27.3-8 Case 3: 75% of the wind in both principal directions at once. Where Wx and
+    Wy are both entered and stab.windSim is on, four more wind cases 0.75(+-Wx +-Wy) take part in every wind combination
+    (the factor of the combination times 0.75 on each). Each wind case carries its factors in w.f (one direction: {Wx: +-1}). */
+ winds.forEach(w=>{w.f={[w.k]:w.s};});
+ if(present.Wx&&present.Wy&&state.stab.windSim==='on')[[1,1],[1,-1],[-1,1],[-1,-1]].forEach(([a,b])=>winds.push({lbl:'0.75('+(a>0?'+':'\u2212')+'Wx '+(b>0?'+':'\u2212')+' Wy)',f:{Wx:0.75*a,Wy:0.75*b},sim:true}));
+ const wf=(w,c)=>{const o={};Object.keys(w.f).forEach(k=>{o[k]=c*w.f[k];});return o;};
  const roofs=[];if(present.Lr)roofs.push('Lr');if(present.S)roofs.push('S');
  function add(name,f,ref){out.push({name,f,ref});}
  if(kind==='ASD'){
@@ -1296,11 +1307,11 @@ function genCombos(kind,present){
   if(present.L)add('D + L',{D:1,L:1},'ASCE 7-16 2.4.1(2)');
   roofs.forEach(r=>add('D + '+r,{D:1,[r]:1},'ASCE 7-16 2.4.1(3)'));
   if(present.L)roofs.forEach(r=>add('D + 0.75L + 0.75'+r,{D:1,L:0.75,[r]:0.75},'ASCE 7-16 2.4.1(4)'));
-  winds.forEach(w=>add('D + 0.6('+w.lbl+')',{D:1,[w.k]:0.6*w.s},'ASCE 7-16 2.4.1(5)'));
+  winds.forEach(w=>add('D + 0.6('+w.lbl+')',{D:1,...wf(w,0.6)},'ASCE 7-16 2.4.1(5)'));
   winds.forEach(w=>{
-   if(roofs.length)roofs.forEach(r=>add('D + 0.75L + 0.45('+w.lbl+') + 0.75'+r,{D:1,L:present.L?0.75:0,[w.k]:0.45*w.s,[r]:0.75},'ASCE 7-16 2.4.1(6a)'));
-   else if(present.L)add('D + 0.75L + 0.45('+w.lbl+')',{D:1,L:0.75,[w.k]:0.45*w.s},'ASCE 7-16 2.4.1(6a)');});
-  winds.forEach(w=>add('0.6D + 0.6('+w.lbl+')',{D:0.6,[w.k]:0.6*w.s},'ASCE 7-16 2.4.1(7)'));
+   if(roofs.length)roofs.forEach(r=>add('D + 0.75L + 0.45('+w.lbl+') + 0.75'+r,{D:1,L:present.L?0.75:0,...wf(w,0.45),[r]:0.75},'ASCE 7-16 2.4.1(6a)'));
+   else if(present.L)add('D + 0.75L + 0.45('+w.lbl+')',{D:1,L:0.75,...wf(w,0.45)},'ASCE 7-16 2.4.1(6a)');});
+  winds.forEach(w=>add('0.6D + 0.6('+w.lbl+')',{D:0.6,...wf(w,0.6)},'ASCE 7-16 2.4.1(7)'));
  }else{
   add('1.4D',{D:1.4},'ASCE 7-16 2.3.1(1)');
   if(present.L){
@@ -1308,12 +1319,26 @@ function genCombos(kind,present){
    else add('1.2D + 1.6L',{D:1.2,L:1.6},'ASCE 7-16 2.3.1(2)');}
   roofs.forEach(r=>{
    add('1.2D + 1.6'+r+(present.L?' + L':''),Object.assign({D:1.2,[r]:1.6},present.L?{L:1}:{}),'ASCE 7-16 2.3.1(3)');
-   winds.forEach(w=>add('1.2D + 1.6'+r+' + 0.5('+w.lbl+')',{D:1.2,[r]:1.6,[w.k]:0.5*w.s},'ASCE 7-16 2.3.1(3)'));});
+   winds.forEach(w=>add('1.2D + 1.6'+r+' + 0.5('+w.lbl+')',{D:1.2,[r]:1.6,...wf(w,0.5)},'ASCE 7-16 2.3.1(3)'));});
   winds.forEach(w=>{
-   if(roofs.length)roofs.forEach(r=>add('1.2D + 1.0('+w.lbl+')'+(present.L?' + L':'')+' + 0.5'+r,Object.assign({D:1.2,[w.k]:1*w.s,[r]:0.5},present.L?{L:1}:{}),'ASCE 7-16 2.3.1(4)'));
-   else add('1.2D + 1.0('+w.lbl+')'+(present.L?' + L':''),Object.assign({D:1.2,[w.k]:1*w.s},present.L?{L:1}:{}),'ASCE 7-16 2.3.1(4)');});
-  winds.forEach(w=>add('0.9D + 1.0('+w.lbl+')',{D:0.9,[w.k]:1*w.s},'ASCE 7-16 2.3.1(5)'));
+   if(roofs.length)roofs.forEach(r=>add('1.2D + 1.0('+w.lbl+')'+(present.L?' + L':'')+' + 0.5'+r,Object.assign({D:1.2,...wf(w,1),[r]:0.5},present.L?{L:1}:{}),'ASCE 7-16 2.3.1(4)'));
+   else add('1.2D + 1.0('+w.lbl+')'+(present.L?' + L':''),Object.assign({D:1.2,...wf(w,1)},present.L?{L:1}:{}),'ASCE 7-16 2.3.1(4)');});
+  winds.forEach(w=>add('0.9D + 1.0('+w.lbl+')',{D:0.9,...wf(w,1)},'ASCE 7-16 2.3.1(5)'));
  }
+ /* SFEQ (2026-11-07): seismic combinations where E loads are entered (present.E). ASCE 7-16 2.3.6 (strength) (6), (7) and
+    2.4.5 (ASD) (8), (9), (10) with E = E_h +- E_v, E_v = 0.2 S_DS D (12.4.2.2) folded into the dead-load factor; E_h = the E row as
+    entered (rho Q_E; overstrength only if the user enters E_mh). Both signs of E_h. L at 1.0 in (6) (exception 1, 0.5L, not
+    taken: conservative); S at 0.2 in (6). Not combined with wind (2.3.6). */
+ if(present.E){const sds=Math.max(num(state.stab.SDS),0), ev=0.2*sds, r2=v=>Math.round(v*1000)/1000;
+  [1,-1].forEach(sg=>{const el=(sg>0?'+':'\u2212')+'E';
+   if(kind==='ASD'){
+    add(r2(1+0.7*ev)+'D + 0.7('+el+')',{D:1+0.7*ev,E:0.7*sg},'ASCE 7-16 2.4.5(8)');
+    add(r2(1+0.525*ev)+'D + 0.525('+el+')'+(present.L?' + 0.75L':'')+(present.S?' + 0.75S':''),Object.assign({D:1+0.525*ev,E:0.525*sg},present.L?{L:0.75}:{},present.S?{S:0.75}:{}),'ASCE 7-16 2.4.5(9)');
+    add(r2(0.6-0.7*ev)+'D + 0.7('+el+')',{D:0.6-0.7*ev,E:0.7*sg},'ASCE 7-16 2.4.5(10)');
+   }else{
+    add(r2(1.2+ev)+'D + 1.0('+el+')'+(present.L?' + L':'')+(present.S?' + 0.2S':''),Object.assign({D:1.2+ev,E:1*sg},present.L?{L:1}:{},present.S?{S:0.2}:{}),'ASCE 7-16 2.3.6(6)');
+    add(r2(0.9-ev)+'D + 1.0('+el+')',{D:0.9-ev,E:1*sg},'ASCE 7-16 2.3.6(7)');
+   }});}
  return out;
 }
 /* ================= biaxial bearing solver ================= */
@@ -1557,6 +1582,8 @@ function computeAll(){
  const present={};TYPES.forEach(tp=>{present[tp]=peds.some(p=>COMP.some(cm=>num(p.loads[tp][cm])!==0));});
  present.D=true;
  if(surL>0)present.L=true; // a live surcharge on its own must still generate the L combinations
+ if(!directMode&&present.Wx&&present.Wy&&state.stab.windSim!=='on')W.push({lvl:'warn',msg:'Wx and Wy are both entered but the simultaneous wind cases 0.75(\u00b1Wx \u00b1Wy) (ASCE 7-16 Fig. 27.3-8, Case 3) are off (Stability inputs). Turn them on where the MWFRS load cases of 27.3.5 apply.'});   /* SFW3 */
+ if(!directMode&&present.E&&!(num(state.stab.SDS)>0))W.push({lvl:'warn',msg:'Seismic loads E are entered with S_DS = 0: E_v = 0.2S_DS D = 0 in the seismic combinations. Enter S_DS (Stability inputs) unless E_v is zero by ASCE 7-16 12.4.2.2, Exception.'});   /* SFEQ */
  let combosASD,combosLRFD;
  if(directMode){
   /* single factored envelope; dead bracket 1.2 (max) for demand/bearing, 0.9 (min) for stability/uplift.
@@ -1973,12 +2000,12 @@ function renderDashboard(){
    const grouped=(P2.punchWarn&&P2.punchWarn.length)?true:false;
    d.appendChild(chip('Punching shear',grouped?('DCR '+f2(pmax)+' \u2014 perimeters overlap, verify grouped'):('max DCR = '+f2(pmax)),
     pmax>1?'fail':(grouped?'warn':'pass'),undefined,{tab:'tab-footdes',sec:'o-fd-punch'}));}
-  const brmax=P2.bearing.reduce((a,z)=>Math.max(a,z.dcr),0);
+  const brmax=P2.bearing.reduce((a,z)=>Math.max(a,z.dcrEff),0);   /* SFBX: with the excess compression on the dowels */
   const dowOK=P2.bearing.every(z=>z.dowelOK);
   const ldcBad=P2.bearing.filter(z=>!z.ldcOK);
   // bearing stress (strength) and dowel detailing are distinct checks — report separately
-  const brG=P2.bearing.reduce((a,z)=>(!a||z.dcr>a.dcr)?z:a,null);   /* SFBL: governing element and side */
-  d.appendChild(chip('Concrete bearing','DCR = '+f2(brmax)+(brG?' ('+brG.label+', '+(brG.isPatch||brG.brgGov==='footing'?'footing':brG.brgGov==='pedestal'?'pedestal':'pedestal = footing')+' side governs)':''),brmax<=1?'pass':'fail',undefined,{tab:'tab-footdes',sec:'o-fd-bear'}));
+  const brG=P2.bearing.reduce((a,z)=>(!a||z.dcrEff>a.dcrEff)?z:a,null);   /* SFBL: governing element and side; SFBX: dcrEff */
+  d.appendChild(chip('Concrete bearing','DCR = '+f2(brmax)+(brG?' ('+brG.label+', '+(brG.isPatch||brG.brgGov==='footing'?'footing':brG.brgGov==='pedestal'?'pedestal':'pedestal = footing')+' side governs'+(brG.excess?'; P_u > \u03c6B_n = '+f2(brG.phiPn)+' k: excess to the dowels, A_s,req '+f2(brG.AsComp)+' in\u00b2 vs '+f2(brG.AsDowProv)+' provided':'')+')':''),brmax<=1?'pass':'fail',undefined,{tab:'tab-footdes',sec:'o-fd-bear'}));
   const wSel=P2.bearing.filter(z=>z.wall&&z.wall.sel);   /* SFWL */
   d.appendChild(chip(sfdDowChipName(),(dowOK?'\u2265 minimum':'below code minimum')+(wSel.some(z=>z.wall.applied)?' (wall: '+wSel.filter(z=>z.wall.applied).map(z=>z.label+' \u03c1_l '+sfdRhoTxt(z.wall.rhoDow)+' A_g, 16.3.4.2 \u2192 '+(z.wall.dow1162?'11.6.2':'Table 11.6.1')).join('; ')+')':''),dowOK?'pass':'fail',undefined,{tab:'tab-footdes',sec:'o-fd-bear'}));
   {const wA=wSel.filter(z=>z.wall.applied);   /* SFWC: the wall's own minimum rho_l / rho_t, ACI 318-19 11.6 */
@@ -3643,7 +3670,7 @@ function sfdResultRows(){
   'One-way shear':()=>[(state.mat.vcMode==='a'?'override 2λ√f′<sub>c</sub> (not ACI 318-19 Table 22.5.5.1(c))':'ACI 318-19 Table 22.5.5.1(c), size effect §22.5.5.1.3')+(state.mat.lamsFtg==='on'?'; λ<sub>s</sub> neglected, §13.2.6.2':''),
    (P2.desX.oneWayOutside&&P2.desY.oneWayOutside)?null:Math.max(P2.desX.dcrV,P2.desY.dcrV),['o-fd-x','o-fd-y']],
   'Punching shear':()=>['ACI 318-19 §22.6.5.2, §8.4.4.2'+(state.mat.lamsFtg==='on'?'; λ<sub>s</sub> neglected, §13.2.6.2':''),mx(P2.punch.filter(z=>!z.perimOutside).map(z=>z.dcr)),['o-fd-punch']],
-  'Concrete bearing':()=>['ACI 318-19 §16.3.3.4, §22.8.3.2, Table 22.8.3.2: φB<sub>n</sub> = lesser of the footing (√(A<sub>2</sub>/A<sub>1</sub>) ≤ 2) and the pedestal (0.85f′<sub>c</sub>A<sub>1</sub>)',mx(P2.bearing.map(z=>z.dcr)),['o-fd-bear']],
+  'Concrete bearing':()=>['ACI 318-19 §16.3.3.4, §22.8.3.2, Table 22.8.3.2: φB<sub>n</sub> = lesser of the footing (√(A<sub>2</sub>/A<sub>1</sub>) ≤ 2) and the pedestal (0.85f′<sub>c</sub>A<sub>1</sub>)',mx(P2.bearing.map(z=>z.dcrEff)),['o-fd-bear']],
   'Dowel steel (min 0.005A_g)':()=>['ACI 318-19 §16.3.4.1'+(real.some(z=>z.wall&&z.wall.applied)?'; walls §16.3.4.2 → the larger of §11.6.1, Table 11.6.1 and §11.6.2':'')+'; D/C = A<sub>s,min</sub>/A<sub>s,prov</sub>',mx(real.map(z=>z.AsDowProv>0?z.AsDowMin/z.AsDowProv:Infinity)),['o-fd-bear']],
   'Dowel development (ℓdc)':()=>['ACI 318-19 §25.4.9.2; '+(state.mat.ldcAlways==='on'?'required for every pedestal / wall by the engineer’s option (detailing practice); §16.3.1.2(a) alone requires it only where P<sub>u</sub> exceeds the concrete bearing strength':'required only where P<sub>u</sub> exceeds the concrete bearing strength, §16.3.1.2(a)')+'; D/C = ℓ<sub>dc</sub>/available',real.some(z=>z.ldcReq)?mx(real.filter(z=>z.ldcReq).map(z=>z.availEmb>0?z.Ldc/z.availEmb:Infinity)):null,['o-fd-bear']],   /* SFBC */
   'Pedestal design':()=>['ACI 318-19 §22.4.2.1 (axial; D/C shown); §10.6.1.1, §10.7.3.1, §25.7.2',
@@ -4090,7 +4117,10 @@ function sfrModel(){
    S({id:sc+'.phiF',label:'Bearing strength, supporting footing (Table 22.8.3.2 '+(bz.conf>1+1e-9?(bz.conf>=2-1e-9?'(b)':'(a)'):'(a), √(A_2/A_1) = 1')+')',sym:'\\phi B_{n,ftg}',eq:'0.65\\cdot 0.85 '+SFR_FC+' A_{1}\\sqrt{A_{2}/A_{1}}',sub:'0.65\\cdot 0.85\\cdot'+sfrN(P2.fc,0)+'\\cdot'+sfrN(bz.A1,1)+'\\cdot'+sfrN(bz.conf,3)+'/1000',value:bz.phiPnFtg,unit:'kip',ref:'ACI 318-19 22.8.3.2, Table 22.8.3.2'}),   /* SFBL */
    ...(bz.isPatch?[]:[S({id:sc+'.phiP',label:'Bearing strength, supported pedestal (its own loaded area, no increase; Table 22.8.3.2 (c))',sym:'\\phi B_{n,ped}',eq:'0.65\\cdot 0.85 '+SFR_FC+' A_{1}',sub:'0.65\\cdot 0.85\\cdot'+sfrN(P2.fc,0)+'\\cdot'+sfrN(bz.A1,1)+'/1000',value:bz.phiBsup,unit:'kip',ref:'ACI 318-19 22.8.3.2, Table 22.8.3.2'})]),
    S({id:sc+'.phiPn',label:'Design bearing strength at the interface: '+(bz.isPatch?'footing (bearing patch: no supported concrete member)':'the lesser of the footing and the pedestal; '+(bz.brgGov==='pedestal'?'the pedestal governs':bz.brgGov==='footing'?'the footing governs':'equal (√(A_2/A_1) = 1)')),sym:'\\phi B_{n}',eq:bz.isPatch?'\\phi B_{n,ftg}':'\\min(\\phi B_{n,ftg},\\; \\phi B_{n,ped})',sub:bz.isPatch?sfrN(bz.phiPnFtg):'\\min('+sfrN(bz.phiPnFtg)+',\\; '+sfrN(bz.phiBsup)+')',value:bz.phiPn,unit:'kip',ref:'ACI 318-19 16.3.3.4, 22.8.3.2'}),
-   S({id:sc+'.DCR',label:'Concrete bearing: demand / capacity',sym:'DCR',eq:'\\frac{P_{u}}{\\phi B_{n}}',sub:'\\frac{'+sfrN(bz.PuMax)+'}{'+sfrN(bz.phiPn)+'}',value:bz.dcr,unit:'',d:3,ok:bz.dcr<=1+1e-9})];
+   S({id:sc+'.DCR',label:'Concrete bearing: demand / capacity'+(bz.excess?' (concrete alone; the excess goes to the dowels below)':''),sym:'DCR',eq:'\\frac{P_{u}}{\\phi B_{n}}',sub:'\\frac{'+sfrN(bz.PuMax)+'}{'+sfrN(bz.phiPn)+'}',value:bz.dcr,unit:'',d:3,ok:bz.excess?undefined:bz.dcr<=1+1e-9}),
+   ...(bz.excess?[S({id:sc+'.AsC',label:'Dowel area for the compression beyond φB_n (φ = 0.65, compression-controlled)',sym:'A_{s,comp}',eq:'\\frac{P_{u} \\minus \\phi B_{n}}{\\phi f_{y}}',sub:'\\frac{'+sfrN(bz.PuMax)+' \\minus '+sfrN(bz.phiPn)+'}{0.65\\cdot'+sfrN(P2.fy/1000,0)+'}',value:bz.AsComp,unit:'in^{2}',d:3,ref:'ACI 318-19 16.3.1.2(a), R16.3.3.4, Table 21.2.2'}),
+    S({id:sc.concat('.AsCk'),label:'Dowels provided vs required for compression (ℓ_dc into the footing is then required: see ℓ_dc)',sym:'A_{s,dow}',eq:'\\ge A_{s,comp}',sub:sfrN(bz.AsDowProv,3)+(bz.AsDowProv>=bz.AsComp?' \\ge ':' \\lt ')+sfrN(bz.AsComp,3),value:bz.AsDowProv,unit:'in^{2}',d:3,ok:bz.AsDowProv>=bz.AsComp-1e-9}),
+    S({id:sc+'.DCRe',label:'Bearing with the dowels: demand / capacity',sym:'DCR',eq:'\\frac{P_{u}}{\\phi B_{n} + \\phi f_{y} A_{s,dow}}',sub:'\\frac{'+sfrN(bz.PuMax)+'}{'+sfrN(bz.phiPn)+' + 0.65\\cdot'+sfrN(P2.fy/1000,0)+'\\cdot'+sfrN(bz.AsDowProv,3)+'}',value:bz.dcrEff,unit:'',d:3,ok:bz.dcrEff<=1+1e-9})]:[])];   /* SFBX */
    if(!bz.isPatch)st.push(
     ...(bz.wall&&bz.wall.applied?(w=>[   /* SFWL: wall-foundation interface, 16.3.4.2 -> 11.6.1 */
      S({id:sc+'.wlt',label:'Wall by definition: horizontal length / thickness (l_w along '+w.dir+')',sym:'\\ell_{w}/t',eq:'\\gt 3',sub:sfrN(w.lw,1)+'/'+sfrN(w.tw,1),value:w.lt,unit:'',d:2,ok:true,ref:'ACI 318-19 2.3'}),
@@ -6767,7 +6797,16 @@ function computePhase2(R){
   const ldcByOpt=!isPatch&&!ldcGate&&state.mat.ldcAlways==='on';
   const ldcReq=ldcGate||ldcByOpt;
   const ldcOK=isPatch?true:(!ldcReq||Ldc<=availEmb);
-  return{idx:i,label:p.label,A1,A2,conf,confGov,kEdgeX,kEdgeY,kFrust,phiPn,phiPnFtg,brgGov,PuMax,dcr:phiPn>0?PuMax/phiPn:Infinity,
+  /* SFBX (2026-11-07): ACI 318-19 16.3.1.2(a), R16.3.3.4: compression beyond the lesser concrete bearing strength phiB_n is
+     transferred by the dowels (or continuing bars). Required area A_s,comp = (P_u - phiB_n)/(phi f_y), phi = 0.65 (compression-
+     controlled, Table 21.2.2); the interface passes bearing when A_s,dow >= A_s,comp (with l_dc then required: SFBC, ldcOK).
+     Equivalent D/C: dcrEff = P_u/(phiB_n + phi f_y A_s,dow) where P_u > phiB_n, otherwise P_u/phiB_n. A bearing patch (no dowels)
+     keeps the concrete-alone D/C. Before SFBX: bearing NG whenever P_u > phiB_n (dcr > 1). */
+  const excess=!isPatch&&PuMax>phiPn+1e-9;
+  const AsComp=excess?(PuMax-phiPn)/(0.65*fy/1000):0;
+  const phiPnDow=isPatch?phiPn:phiPn+0.65*fy/1000*AsDowProv;
+  const dcrEff=excess?(phiPnDow>0?PuMax/phiPnDow:Infinity):(phiPn>0?PuMax/phiPn:Infinity);
+  return{excess,AsComp,phiPnDow,dcrEff,idx:i,label:p.label,A1,A2,conf,confGov,kEdgeX,kEdgeY,kFrust,phiPn,phiPnFtg,brgGov,PuMax,dcr:phiPn>0?PuMax/phiPn:Infinity,
    isPatch,AsDowMin,AsDowProv,dowelOK:isPatch?true:(AsDowProv>=AsDowMin),Ldc,availEmb,ldcOK,ldcReq,...(ldcByOpt?{ldcByOpt:true}:{}),phiBsup,phiBgate,dSize,wall};
  });
  /* ----- PEDESTAL P-M (Bresler), ties, classification, slenderness ----- */
@@ -7343,7 +7382,7 @@ function renderFootingDesign(){
  const seen=[];   /* SFML: the statuses that occur, with their elements */
  bt.innerHTML='<tr><th>Element</th><th>A\u2081 (in\u00b2)</th><th>\u221a(A\u2082/A\u2081)</th><th>governed by</th><th>\u03c6P<sub>nb</sub> (k)</th><th>P<sub>u</sub> (k)</th><th>DCR</th><th>A<sub>s,dow</sub> min</th><th>prov</th><th>L<sub>dc</sub> (in)</th><th>avail (in)</th><th>Status</th></tr>';
  P2.bearing.forEach(bz=>{const tr=document.createElement('tr');
-  const bearOK=bz.dcr<=1, dowOK=bz.dowelOK, ldOK=bz.ldcOK;
+  const bearOK=bz.dcrEff<=1, dowOK=bz.dowelOK, ldOK=bz.ldcOK;   /* SFBX: excess compression on the dowels */
   let status,statColor;
   if(bz.isPatch){status='PATCH \u2014 no dowels';statColor='#555';}
   else if(!bearOK){status='BEARING NG';statColor='#b71c1c';}
@@ -7351,7 +7390,7 @@ function renderFootingDesign(){
   else if(!dowOK){status='DOWELS < MIN';statColor='#b71c1c';}
   else{status='OK';statColor='#1b5e20';}
   seen.push([status,bz]);   /* SFML */
-  [bz.label,f2(bz.A1),f2(bz.conf),bz.confGov,f2(bz.phiPn)+(bz.isPatch?' (footing)':bz.brgGov==='pedestal'?' (pedestal)':bz.brgGov==='footing'?' (footing)':' (equal)'),f2(bz.PuMax),f2(bz.dcr),   /* SFBL: governing side */
+  [bz.label,f2(bz.A1),f2(bz.conf),bz.confGov,f2(bz.phiPn)+(bz.isPatch?' (footing)':bz.brgGov==='pedestal'?' (pedestal)':bz.brgGov==='footing'?' (footing)':' (equal)'),f2(bz.PuMax),f2(bz.dcr)+(bz.excess?' (dowels: A_s,req '+f2(bz.AsComp)+' in\u00b2; '+f2(bz.dcrEff)+')':''),   /* SFBL: governing side; SFBX */
    bz.isPatch?'\u2013':f2(bz.AsDowMin),bz.isPatch?'\u2013':f2(bz.AsDowProv),
    bz.isPatch?'\u2013':f2(bz.Ldc)+(bz.ldcByOpt?' (option)':bz.ldcReq?'':' (not req.)'),bz.isPatch?'\u2013':f2(bz.availEmb),status]   /* SFBC */
    .forEach((x,k)=>{const td=document.createElement('td');td.textContent=x;
@@ -7810,7 +7849,7 @@ const V3D={inited:false,scene:null,cam:null,renderer:null,raf:null,layers:{},
 function e2v(x,y,z){return new THREE.Vector3(x,z,-y);} // eng -> three
 /* SF3L (2026-11-05): selector = Governing (service) [default] + unfactored load cases + service (ASD) + LRFD (reference only);
    direct (factored envelope) mode: the envelope only. 'grp' = optgroup. Display only. */
-const SF3L_CASE={D:'Dead',L:'Live',Lr:'Roof live',S:'Snow',Wx:'Wind x',Wy:'Wind y'};
+const SF3L_CASE={D:'Dead',L:'Live',Lr:'Roof live',S:'Snow',Wx:'Wind x',Wy:'Wind y',E:'Seismic E_h'};
 function v3dActiveList(){ // combos available for the selector
  const list=[];const gi=R.asd.indexOf(R.govBear);
  if(R.directMode){
@@ -8426,7 +8465,7 @@ function showInspect(i){
   '<tr><td class="cls">P<sub>u</sub> / M<sub>ux</sub> / M<sub>uy</sub></td><td>'+f2(pd.PuMax)+' k / '+f2(pd.MuxMax)+' / '+f2(pd.MuyMax)+' k-ft</td></tr>'+
   '<tr><td class="cls">Axial DCR (P-M)</td><td>'+bd(f2(pd.dcrAxial),pd.dcrAxial<=1)+' \u03c1='+f2(pd.rho*100)+'%</td></tr>'+
   '<tr><td class="cls">Punching DCR</td><td>'+bd(f2(pu.dcr),pu.dcr<=1)+' ('+pu.pos+', v<sub>u</sub>='+f2(pu.vuMax)+' psi)</td></tr>'+
-  '<tr><td class="cls">Bearing DCR</td><td>'+bd(f2(bz.dcr),bz.dcr<=1)+' (\u03c6P<sub>nb</sub>='+f2(bz.phiPn)+' k)</td></tr>'+
+  '<tr><td class="cls">Bearing DCR</td><td>'+bd(f2(bz.dcrEff),bz.dcrEff<=1)+' (\u03c6P<sub>nb</sub>='+f2(bz.phiPn)+' k'+(bz.excess?', excess to dowels':'')+')</td></tr>'+
   '<tr><td class="cls">Dowels</td><td>'+bd(bz.dowelOK?'OK':'NG',bz.dowelOK)+' '+f2(bz.AsDowProv)+'/'+f2(bz.AsDowMin)+' in\u00b2, L<sub>dc</sub>='+f2(bz.Ldc)+'"</td></tr>'+
   '<tr><td class="cls">Ties</td><td>'+bd((pd.tieOK&&pd.tieSizeOK)?'OK':'CHK',pd.tieOK&&pd.tieSizeOK)+' s\u2264'+f2(pd.tieMax)+'"</td></tr>'+
   '<tr><td class="cls">Slenderness</td><td>'+bd(pd.slenderFlag?(pd.slFail?'NG':'MAGNIFIED'):'OK',!pd.slFail)+' kl/r='+f2(pd.klu_r)+(pd.slGov?' \u03b4<sub>s</sub>\u03b4='+f2(pd.slGov.amp):'')+'</td></tr>'+
