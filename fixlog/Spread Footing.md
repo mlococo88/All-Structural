@@ -6385,4 +6385,21 @@ index 50f3837..c2d5000 100644
   - `rev` (Seymour-like, Ped 1 b_y = 9.33 ft with faces 0.5 ft from the edges): bottom and top y-bars now NG at y = ±6 ft (3 in available, M_u 2.3 / −0.15 kip-ft), and bottom x-bars worst at Ped 2's face (11 in).
   - Seymour as saved: bottom x-bars were already FAIL, D/C 1.669 → 1.672 (Ped 1 face 1.335 ft). The y-bars are unchanged (PASS).
   - def, edgeHook, thin: no value change.
+
+## 2026-11-07 — PR: claude/sf-m5-flotation (PR #1022: https://github.com/mlococo88/All-Structural/pull/1022) (SFFG: flotation FS on the gross basis and on the earlier net basis, the smaller governs; CALCULATION CHANGE where water is above the base)
+
+- **Problem:** the flotation FS was (W_f + ΣW_ped + EV′)/U, with EV′ at the buoyant soil unit weight below the water table and U the buoyancy of the submerged concrete only. Subtracting the pore-water weight from both terms raises the ratio, although the net margin is the same. The usual definition compares the full uplift on the base, γ_w(D_f − d_w)·BL, with the weights at total unit weight. That is consistent with ASCE 7-16 2.3.6 / 2.4.1 and IBC 1605, which set the dead load against the full hydrostatic uplift H. The tool's ratio was therefore higher than the conventional one wherever submerged soil sits on the footing.
+- **Where / exact code (`Spread Footing.html`, `computeAll`, anchor `/* SFFG (2026-11-07)`):**
+  - Before: `const flot=(U>1e-9)?{U,R:Wf+Wpeds.reduce((a,b)=>a+b,0)+EV,FS:(Wf+Wpeds.reduce((a,b)=>a+b,0)+EV)/U}:null;`
+  - After, `flot` holds both bases:
+    - `net = {U, R: W_c + EV, FS}` (the earlier basis).
+    - `gross = {U: γ_w·max(D_f − d_w, 0)·B·L, R: W_c + γ_EV·h_cover·A_EV, FS}`.
+    - `FS = min(gross.FS, net.FS)`; `basis` = the one that governs; `U` / `R` of that basis.
+  - Card 4.4: two eqBlocks (gross, net) and the min. Report: steps `Ugr`, `EVt`, `FSgr`, `FSnet`, `FSfl`. Dashboard chip: "(gross basis; min …)". Summary reference text updated.
+- **Decision (pending engineer review):** the gross basis is the definition. The net basis is kept as a recognised alternative, and the smaller FS governs (conservative). Live and transient loads and surcharges stay excluded.
+- **Check case (harness `wt`: default project, d_w = 0.5 ft; D_f = 4 ft; B·L = 80 ft²):**
+  - Gross: U = 0.0624·(4 − 0.5)·80 = **17.47 k**; R = 30.00 + 1.35 + 0.12·1.5·75.5 = 30.00 + 1.35 + 13.59 = **44.94 k**; FS = **2.57**.
+  - Net (before): U = 12.76 k (submerged concrete), R = 40.23 k (EV′ buoyant), FS = **3.15**.
+  - **Before FS 3.15 → after 2.57** (gross governs). Target 1.25: PASS both.
+  - `seyW` (Seymour, d_w = 1 ft): 6.72 → 6.18. Seymour as saved (no water table): not applicable, unchanged.
 - **Saved data:** none. **Other copies:** none.
