@@ -5807,7 +5807,7 @@ Second-pass review finding H3 (2026-11-07). Code sites are tagged `RW2H3`.
 ### Saved data
 - No input or format change.
 
-## 2026-11-07 — PR: claude/rw2-m2-service-heel-toe — AASHTO heel and toe crack control (Art. 5.6.7) from Service I moments of the Service I base reaction (RW2M2; calculation change, AASHTO mode)
+## 2026-11-07 — PR: claude/rw2-m2-service-heel-toe — AASHTO heel and toe crack control (Art. 5.6.7) from Service I moments of the Service I base reaction (RW2M2; calculation change, AASHTO mode) (PR #1141: https://github.com/mlococo88/All-Structural/pull/1141)
 
 Second-pass review finding M2 (2026-11-07). Code sites are tagged `RW2M2`.
 
