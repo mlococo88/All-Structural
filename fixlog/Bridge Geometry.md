@@ -1934,7 +1934,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Open item (pre-existing, not changed):** the heatmap leaves one column unfilled after each pier (it does not join columns of different spans); the same on main with one chord.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/bg-h4-skew-datum (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX4, review H4, engineer item Q-BG2 / O1: skew datum "alignment normal (plans)" or "chord normal"; new projects alignment normal)   [calc change: new option] [hand-off value for new projects] [saved data: additive field with migration]
+## 2026-11-07 — PR: claude/bg-h4-skew-datum (PR #1119: https://github.com/mlococo88/All-Structural/pull/1119) (BGX4, review H4, engineer item Q-BG2 / O1: skew datum "alignment normal (plans)" or "chord normal"; new projects alignment normal)   [calc change: new option] [hand-off value for new projects] [saved data: additive field with migration]
 
 - **Why:** review 2026-11-07 H4. Skew was always measured from the normal to the chord. Plans give skew from the survey baseline: MassDOT Bridge Manual Part I, survey section, defines skew between the bearing centerlines and the baseline (paraphrased), and AASHTO LRFD 10th Ed. Art. 4.2 defines the skew angle from a line normal to the roadway centerline. A plan skew entered as is was therefore off by the chord-to-alignment angle (review variant: 30° plan skew = 23.43° from the chord, 3.46 ft along the chord at the deck edge).
 - **Decision (pending engineer review):**
