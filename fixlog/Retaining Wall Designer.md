@@ -5917,3 +5917,56 @@ Second-pass review finding M3 (2026-11-07). Code sites are tagged `RW2M3`.
 
 ### Saved data
 - No input or format change.
+
+## 2026-11-07 — PR: claude/rw2-m1-ee-footing — AASHTO heel and toe checked for Extreme Event I (both cases) and Extreme Event II (collision), φ = 1.0, with the Strength I bars; pile mode: a note (RW2M1; check added, AASHTO with EE I or EE II only) (PR #1143: https://github.com/mlococo88/All-Structural/pull/1143)
+
+Second-pass review finding M1 (2026-11-07). Code sites are tagged `RW2M1`.
+
+### RW2M1-1. Problem
+- The heel, toe and key were designed for Strength I / Ia only.
+- AASHTO LRFD 10th Ed. Art. 11.6.4 and 11.6.5.1 require the structural design (Section 5) for every limit state.
+- EE I was mentioned in a warning only; EE II had no note.
+- With a large k_h, a short heel or full EH under collision, the toe pressure can exceed the Strength I value.
+
+### RW2M1-2. Fix (`calcAll`, block `eeFtg` before `checks`)
+- **Cases.** Each extreme-event case is checked with its maximum- and minimum-vertical sets:
+  - EE I case 1, `V_max` at `c1.xRb`, and `V_min` at `c1.xR`;
+  - EE I case 2, the same at `c2.xRb` and `c2.xR`;
+  - EE II, `V_ct_max` at `x_R_brg_ct`, and `V_ct_min` at `x_R_ct`;
+  - a minimum set identical to its maximum is merged (γ_EQ = 0, no column; cf. L7).
+- **Base reaction.** The total base reaction is V + U, with the moment V·x̄ + U·x_U (water at 1.0). It is applied as a trapezoid, or as the soil block 3x̄ in partial contact (`q_blk`).
+- **Heel.**
+  - Downward load: w = soil + footing + q_s + γ_LS·LS, with γ_LS = γ_EQ in EE I and 0.50 in EE II, and the wedge, all at γ = 1.0.
+  - M = M_down − ∫q·a dx, with V at the face.
+- **Toe.** M = ∫q·a dx − γ_c t_f L_t²/2, with γ = 1.0, and V at the face.
+- **Check.** The governing M and V are compared with M_n of F1 / F2 as designed for Strength I (φ = 1.0, i.e. φM_n/0.9) and with V_c (φ = 1.0).
+- **New check rows.** `heelEE` and `toeEE` carry the D/C, the governing case and the reference, and are linked to the new Footing card `ftgEE`.
+- **Pile mode.** A warning says the EE pile reactions are not applied to the heel and toe; check them by hand.
+- **Display.**
+  - Footing tab: a new card, "Heel and Toe — Extreme Event I / II Check". It shows a table per case (V_tot, x̄, q_toe / q_heel, w, M_heel = M_down − M_up, V_heel, M_toe, V_toe) and the two checks.
+  - Report: a new sub-section, "Heel and toe: Extreme Event I / II check".
+- ACI mode and AASHTO walls without EE I / II are unchanged.
+
+### Check case (AASHTO default wall, k_h 0.20, collision TL-4)
+- EE I case 2 (γ_EQ = 0): V_tot = 16582.5 lb/ft, x̄ = 5.209 ft, e = 1.041 ft. Then q = 1326.6(1 ± 0.4997) = 1989 / 664 psf, and 1512 psf at the back face.
+- **Heel:** w = 1440 + 225 = 1665 psf. M_down = 1665(64)/2 = 53280. M_up = 1512(32) − 848(64)/3 = 30290.
+  - M = **22994** ≤ M_n = 33.4 kip-ft/ft (F1 #5 @ 8), D/C 0.69.
+- **Toe:** M_up = 8476, less 1012.5 (225 × 3²/2), gives M = **7464** ≤ M_n = 16.1 kip-ft/ft (F2), D/C 0.46. The review's spot check gave about 7.5.
+- **EE II:**
+  - max vertical: heel 8.03, toe 4.47 kip-ft/ft;
+  - min vertical: heel 8.23, toe 4.42 kip-ft/ft.
+  - Neither governs.
+- **Review variant, AASHTO** (β 15°, water, k_h 0.20): heel 53.8 ≤ 82.1, toe 14.0 ≤ 28.9 kip-ft/ft. PASS.
+
+### How verified
+- Headless probe, origin/main (after #1142) vs this branch, 28 walls. Only AASHTO walls with EE I or EE II gain the two rows. The AASHTO pile walls with EE gain the note. No other value changes. 0 console errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (new `AUD` rows RW2M1); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Decisions (pending engineer review)
+- **A check, not a redesign.** A failing EE case shows FAIL, and the bars are increased by the bar override. This keeps one design path.
+- **Load factors γ = 1.0** for DC, EV, ES and water in both events, as the tool's EE stability (O5 closed, RW3F). The toe self-weight is at 1.0, not 0.9.
+- **Not checked for EE:** the shear key, the stem–footing development and the crack control.
+- **Pile mode:** the EE pile reactions are not applied to the heel and toe; the note says so.
+
+### Saved data
+- No input or format change.
