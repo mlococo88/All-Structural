@@ -2359,7 +2359,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/lp-h1-ibc-embed-12ft (LPH1: IBC Eq. 18-1 — d not over 12 ft when the lateral pressure S₁ is computed)   [§4: embedment deeper than 12 ft, less conservative before; d ≤ 12 ft identical; cable values identical]
+## 2026-11-07 — PR: claude/lp-h1-ibc-embed-12ft (PR #977: https://github.com/mlococo88/All-Structural/pull/977) (LPH1: IBC Eq. 18-1 — d not over 12 ft when the lateral pressure S₁ is computed)   [§4: embedment deeper than 12 ft, less conservative before; d ≤ 12 ft identical; cable values identical]
 - **Problem (review H1, 2026-11-07):** the non-constrained IBC embedment kept increasing S₁ with depth below 12 ft. IBC 2018 §1807.3.2.1 (Eq. 18-1, verified on the 2018 IBC p. 437; the same in IBC 2021) defines d for that formula as the embedment depth, but not over 12 ft for computing the lateral pressure. The tool used S₁ = S₁,tab·iso·min(d/3, 15), i.e. only the §1806.3.3 15× cap, which never binds before the 12 ft limit. Unconservative for d > 12 ft.
 - **Where:** `solveEmbed()`, anchor `const S1=S1coef*`.
   - Before: `const S1=S1coef*Math.min(d/3,15);`
