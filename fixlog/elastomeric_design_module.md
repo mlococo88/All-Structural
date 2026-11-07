@@ -1431,3 +1431,32 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.2 (G within the M 251 acceptance 
   - Method A / plain H_bu and PAD.G use the highest G of the durometer range (GmaxA), as the slip check (least favourable for a force).
   - The abutment's G in INIT is still taken as the specified G unless it equals the module's own sent G (echo); an abutment G that is neither (e.g. 0.184 with a specified G other than 0.160) becomes the specified G as before.
 - **Other copies:** none. `abutment_calculator.html` unchanged (it reads `G` only).
+
+## 2026-11-07 — PR: claude/edm-h2-stab-lw (H2, review 2026-11-07) — Method B stability also with L and W interchanged   [calc change] [MORE conservative]
+
+Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.4 (Eqs. 14.7.5.3.4-1 to -5): for a rectangular bearing with L greater than W, stability is investigated with L and W interchanged in Eqs. 14.7.5.3.4-2 and -3.
+
+- **Problem:** the check used L (longitudinal) and W (transverse) as entered only. For L > W the interchanged orientation gives a much larger A and a much lower stress limit. Unconservative (review: 4.6 × the D/C).
+- **Where:** `computeEDM`, anchor `// stability (14.7.5.3.4)`.
+  - Before:
+    ```js
+    let Lp=planL,Wp=planW; if(isCirc()){const aeq=0.8*(+g.D);Lp=aeq;Wp=aeq;}
+    const Ac=1.92*(hrt/Lp)/Math.sqrt(1+2*Lp/Wp);
+    const Bc=2.67/((Sf+2.0)*(1+Lp/(4*Wp)));
+    const stable=(2*Ac<=Bc);
+    const denom=tg.fixedShear?(Ac-Bc):(2*Ac-Bc);
+    const sigLim=(denom>0)?Gmin*Sf/denom:Infinity;   // H1: G_min
+    R.stab={Ac,Bc,stable,sigLim,denom,Lp,Wp};
+    ```
+  - After: `stabOf(Lp,Wp)` returns the same object for one orientation. Circular: `stabOf(0.8D,0.8D)` (unchanged). Rectangular: `s1=stabOf(L,W)`, `s2=stabOf(W,L)`; the one with the lower `sigLim` governs (`swapped` = s2 governs; ties keep s1); `R.stab` = the governing one plus `swapped` and `alt` (the other). The dashboard item, D/C and pass/fail read `R.stab` as before.
+  - Both orientations are taken for every rectangular pad (for L < W the interchanged case is less critical and does not govern), so the result is never below the provision's.
+  - Worked steps: the Design Checks block now shows the symbolic A, B, the other orientation with its values, then the governing one substituted (`stabAltLines`); the Report tab adds A′, B′, σ_lim′ of the other orientation and labels the governing one.
+- **Check case:** rectangular L = 20, W = 10 in, h_ri 0.5, n 10, cover 0.25 → h_rt 5.5 in, S = 200/(2·0.5·30) = 6.667; P 100 + 50 → σ_s = 0.750 ksi; G_min = 0.136 ksi (H1); AASHTO tolerance, deck free (2A − B).
+  - As entered: A = 1.92(5.5/20)/√(1 + 2·20/10) = 0.2361; B = 2.67/((6.667 + 2)(1 + 20/40)) = 0.2054; σ_lim = 0.136·6.667/0.2669 = 3.397 ksi → D/C 0.221 (the value before this PR).
+  - Interchanged: A = 1.92(5.5/10)/√(1 + 2·10/20) = 0.7467; B = 2.67/((8.667)(1 + 10/80)) = 0.2738; 2A − B = 1.2196; σ_lim = 0.9067/1.2196 = 0.743 ksi → **D/C 1.009 FAIL** (governs).
+  - Same pad entered as L = 10, W = 20: 1.009 before and after (unchanged).
+  - Same pad, deck fixed (A − B): 0.025 → 0.391.
+  - Circular pads (default project): unchanged (0.242).
+- **How verified:** `node tests/check-syntax.mjs elastomeric_design_module.html` pass; headless main-vs-branch probe, 15 scenarios: only the rectangular L > W stability values move (rect 20×10: stab 0.221 → 1.009, nFail 0 → 1, PAD pass/govDC; rect 20×10 fixed: 0.025 → 0.391); every other value identical; Report tab renders; 0 console errors. Screenshot of the worked block checked.
+- **Saved data:** none changed.
+- **Other copies:** none. **Open items:** none.
