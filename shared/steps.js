@@ -65,7 +65,10 @@
   const esc = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   /* TXP (2026-11-07): the plain-text path only (toText, render(…, false)): the TeX the tools write beyond the subset above
      (\mathrm{kips}, \tfrac, \qquad, \varphi, \checkmark, \begin{cases}, …) as readable text instead of the command names
-     ("mathrmkips", "tfrac", "qquad"). The HTML path (toHTML without KaTeX, the report's inline notation) is unchanged. Display only. */
+     ("mathrmkips", "tfrac", "qquad"). TXP itself left the HTML path (toHTML without KaTeX, the report's inline notation) as it was. Display only.
+     TXH (2026-11-07): the same commands on the built-in HTML path (toHTML without KaTeX, line()/summary() without KaTeX, and the report's
+     $…$ in titles, notes and cells), as HTML: fractions stacked (.st-frac), sub/superscripts, Unicode symbols, cases / aligned / matrices as
+     an inline table. The KaTeX path, the plain text (TXP) and toText's legacy option are unchanged. Display only. */
   const TSYM = { varphi: 'φ', vartheta: 'θ', varepsilon: 'ε', varrho: 'ρ', varsigma: 'σ', kappa: 'κ', nu: 'ν', xi: 'ξ', zeta: 'ζ', iota: 'ι',
     upsilon: 'υ', Gamma: 'Γ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω', Upsilon: 'Υ',
     leq: '≤', geq: '≥', leqslant: '≤', geqslant: '≥', neq: '≠', mp: '∓', div: '÷', ast: '*', star: '*', bullet: '•', checkmark: '✓',
@@ -75,6 +78,7 @@
     int: '∫', iint: '∬', oint: '∮', prod: 'Π', cdots: '⋯', dots: '…', dotsb: '⋯', dotsc: '…', vdots: '⋮', angle: '∠', deg: '°',
     lfloor: '⌊', rfloor: '⌋', lceil: '⌈', rceil: '⌉', langle: '⟨', rangle: '⟩', vert: '|', Vert: '‖', mid: '|', lvert: '|', rvert: '|',
     lbrack: '[', rbrack: ']', lbrace: '{', rbrace: '}', backslash: '\\', '|': '‖', colon: ':', ll: '≪', gg: '≫', triangle: '△', square: '□', degree: '°' };
+  const HSYM = { textendash: '–', textemdash: '—', cdotp: '·', circlearrowleft: '↺', circlearrowright: '↻', emptyset: '∅', varnothing: '∅' };   // TXH: HTML path only
   const TFRAC = /^(dfrac|tfrac|cfrac)$/;
   const TWRAP = /^(mathrm|mathbf|mathit|mathsf|mathtt|mathnormal|mathcal|mathbb|mathscr|textrm|textbf|textit|textsf|texttt|textup|textnormal|emph|operatorname|boldsymbol|bm|boxed|mathrel|mathbin|mathop|mathord|mathopen|mathclose|mathpunct|overbrace|underbrace|underline|hbox|mbox|fbox)$/;
   const TDROP = /^(displaystyle|textstyle|scriptstyle|scriptscriptstyle|limits|nolimits|relax|big|Big|bigg|Bigg|bigl|bigr|Bigl|Bigr|biggl|biggr|Biggl|Biggr|middle|nonumber|notag|centering|small|tiny|large|Large|normalsize|footnotesize)$/;
@@ -117,11 +121,67 @@
       if (TSYM[cmd] != null) { out += TSYM[cmd]; return true; }
       return false;
     };
+    /* TXH: one command of the built-in HTML path (true: handled), as txt() for the plain text; the subset's own commands fall through */
+    const htm = cmd => {
+      const R = t => render(t, true, true);
+      if (TFRAC.test(cmd)) { const a = R(group()), b = R(group()); out += `<span class="st-frac"><span class="st-num">${a}</span><span class="st-den">${b}</span></span>`; return true; }
+      if (TWRAP.test(cmd)) { const a = R(group());
+        out += /^(mathbf|textbf|boldsymbol|bm)$/.test(cmd) ? `<b>${a}</b>` : /^(mathit|textit|emph)$/.test(cmd) ? `<i>${a}</i>` : /^(boxed|fbox)$/.test(cmd) ? `<span class="st-box" style="border:1px solid currentColor;padding:0 2px">${a}</span>`
+          : cmd === 'underline' ? `<u>${a}</u>` : a; return true; }
+      if (TDROP.test(cmd)) { while (src[i] === ' ') i++; return true; }
+      if (cmd === 'textcolor') { const c = group(), a = R(group()); out += /^([A-Za-z]+|#[0-9A-Fa-f]{3,8})$/.test(c) ? `<span style="color:${c}">${a}</span>` : a; return true; }
+      if (cmd === 'colorbox') { group(); out += R(group()); return true; }
+      if (cmd === 'color' || cmd === 'phantom' || cmd === 'hphantom' || cmd === 'vphantom' || cmd === 'label') { group(); return true; }
+      if (cmd === 'stackrel' || cmd === 'overset' || cmd === 'underset') { group(); out += R(group()); return true; }
+      if (cmd === 'quad') { out += '&emsp;'; return true; }
+      if (cmd === 'qquad') { out += '&emsp;&emsp;'; return true; }
+      if (cmd === '!' || cmd === 'negthinspace' || cmd === 'allowbreak') return true;
+      if (cmd === ':' || cmd === '>' || cmd === 'thinspace' || cmd === 'medspace' || cmd === 'thickspace') { out += '&thinsp;'; return true; }
+      if (cmd === 'enspace') { out += '&ensp;'; return true; }
+      if (/^(kern|mkern|hskip|mskip|hspace|vspace)$/.test(cmd)) { const m = /^\s*(\{[^}]*\}|-?[\d.]+\s*[a-z]{2})/.exec(src.slice(i)); if (m) i += m[0].length; return true; }
+      if (cmd === '\\') { out += '<br>'; return true; }   // a line break (cases, aligned): a new line
+      if (cmd === '&') { out += '&amp;'; return true; }
+      if (cmd === '#' || cmd === '$') { out += cmd; return true; }
+      if (cmd === 'begin') {   // cases / aligned / array / …matrix: an inline table, one cell per &, one row per \\, with its brackets
+        const env = group(), spec = env === 'array' || env === 'alignedat' ? group() : '';
+        let d = 0, e = -1; for (let k = i; k < src.length; k++) { if (src.startsWith('\\begin{', k)) d++; else if (src.startsWith('\\end{', k)) { if (!d) { e = k; break; } d--; } else if (src[k] === '\\') k++; }
+        const body = src.slice(i, e < 0 ? src.length : e); if (e < 0) i = src.length; else { i = e + 4; group(); }
+        const rows = [[]]; let b = 0, n = 0, cell = '';
+        for (let k = 0; k < body.length; k++) { const c = body[k];
+          if (c === '\\') { if (body[k + 1] === '\\' && !b && !n) { rows[rows.length - 1].push(cell); rows.push([]); cell = ''; k++; continue; }
+            if (body.startsWith('\\begin{', k)) n++; else if (body.startsWith('\\end{', k)) n--; cell += c + (body[k + 1] || ''); k++; continue; }
+          if (c === '{') b++; else if (c === '}') b--;
+          if (c === '&' && !b && !n) { rows[rows.length - 1].push(cell); cell = ''; continue; }
+          cell += c; }
+        rows[rows.length - 1].push(cell); if (rows.length > 1 && rows[rows.length - 1].join('').trim() === '') rows.pop();
+        const al = /^cases/.test(env) ? () => 'left' : /^(aligned|align|split|alignedat)/.test(env) ? k => (k % 2 ? 'left' : 'right') : spec ? k => ({ l: 'left', r: 'right' }[(spec.replace(/[^lcr]/g, '')[k] || 'c')] || 'center') : () => 'center';
+        /* brackets: border lines that stretch to the table's height (an inline flex row); cases: a '{' scaled to the rows */
+        const nr = rows.length, br = (side, st) => `<span class="st-br" style="width:.3em;border-${side}:1px solid currentColor;${st}"></span>`;
+        const [o, c] = /^cases/.test(env) ? [`<span class="st-br" style="display:flex;align-items:center;line-height:1;font-size:${nr > 1 ? (1.15 * nr).toFixed(2) : 1}em${nr > 1 ? ';transform:scaleX(.6)' : ''}">{</span>`, '']
+          : /^pmatrix/.test(env) ? [br('left', 'border-radius:50% 0 0 50%'), br('right', 'border-radius:0 50% 50% 0')]
+          : /^bmatrix/.test(env) ? [br('left', 'border-top:1px solid currentColor;border-bottom:1px solid currentColor'), br('right', 'border-top:1px solid currentColor;border-bottom:1px solid currentColor')]
+          : /^Bmatrix/.test(env) ? ['{', '}'] : /^vmatrix/.test(env) ? [br('left', ''), br('right', '')] : /^Vmatrix/.test(env) ? [br('left', 'border-left-style:double;border-left-width:3px'), br('right', 'border-right-style:double;border-right-width:3px')] : ['', ''];
+        const tb = '<span class="st-env" style="display:inline-table;vertical-align:middle">' + rows.map(r => '<span style="display:table-row">' + r.map((x, k) => `<span style="display:table-cell;padding:0 .3em;text-align:${al(k)}">${R(x.trim())}</span>`).join('') + '</span>').join('') + '</span>';
+        out += o || c ? `<span class="st-mx" style="display:inline-flex;align-items:stretch;vertical-align:middle">${o}${tb}${c}</span>` : tb;
+        return true; }
+      if (cmd === 'end') { group(); return true; }   // an \end without its \begin: nothing
+      if (cmd === 'left' || cmd === 'right') { if (src[i] === '.') i++; return true; }   // \left. / \right. (no bracket): nothing; any other bracket follows as is
+      if (cmd === 'sqrt' && src[i] === '[') { const j = src.indexOf(']', i); const n = R(src.slice(i + 1, j)); i = j + 1; out += `<sup>${n}</sup>√<span class="st-bar">${R(group())}</span>`; return true; }
+      if (cmd === 'tag') { out += '&ensp;(' + R(group()) + ')'; return true; }
+      if (TACC[cmd] != null) { const a = R(group()); out += [...a].length === 1 ? (a + TACC[cmd]).normalize('NFC') : /^(overline|widehat)$/.test(cmd) ? `<span class="st-bar">${a}</span>` : cmd.replace(/^wide/, '') + '(' + a + ')'; return true; }
+      if (cmd === 'not') { const a = R(group()); out += a === '=' ? '≠' : a + '\u0338'; return true; }
+      if (TOPS.test(cmd)) { out += (/[\p{L}\p{N})]$/u.test(out) ? '&thinsp;' : '') + cmd; if (/^[A-Za-z\\{]/.test(src.slice(i))) out += '&thinsp;'; return true; }   // \cos\theta -> 'cos θ' (as \tan)
+      if (cmd === 'text' && /\\/.test(src.slice(i, src.indexOf('}', i) + 1))) { out += R(group()); return true; }   // \text{kip\text{-}ft}, \text{50\%}: its commands rendered, not printed
+      if (TSYM[cmd] != null) { out += TSYM[cmd]; return true; }
+      if (HSYM[cmd] != null) { out += HSYM[cmd]; return true; }
+      return false;
+    };
     while (i < src.length) {
       const c = src[i];
       if (c === '\\') {
         const m = /^\\([A-Za-z]+|.)/.exec(src.slice(i)); i += m[0].length; const cmd = m[1];
         if (!html && rd && txt(cmd)) continue;   // TXP: plain text only
+        if (html && rd && htm(cmd)) continue;   // TXH: the built-in HTML path
         if (cmd === 'frac') { const a = render(group(), html, rd), b = render(group(), html, rd);
           out += html ? `<span class="st-frac"><span class="st-num">${a}</span><span class="st-den">${b}</span></span>` : `${atom(a) ? a : '(' + a + ')'}/${atom(b) ? b : '(' + b + ')'}`; }
         else if (cmd === 'bar') { const a = render(group(), html, rd); out += html ? `<span class="st-bar">${a}</span>` : a.length === 1 ? (a + '\u0304').normalize('NFC') : 'bar(' + a + ')'; }   // HTML: an overline (CSS .st-bar), whatever the font has
@@ -139,6 +199,7 @@
       } else if (c === '{' ) { out += render(group(), html, rd); }
       else if (c === '&' && !html && rd) { out += ' '; i++; }   // TXP: an alignment tab (cases, aligned) in plain text
       else if (c === '~' && !html && rd) { out += ' '; i++; }   // TXP: a non-breaking space in plain text
+      else if (c === '~' && html && rd) { out += '&nbsp;'; i++; }   // TXH: a non-breaking space
       else { out += html ? esc(c) : c; i++; }
     }
     return out;
@@ -151,7 +212,7 @@
   /* unitTeX(u): a unit as KaTeX source, its words upright ('kip-ft' -> '\text{kip-ft}', 'in^{2}' -> '\text{in}^{2}'); the built-in
      renderer shows units as typed, so this is used for KaTeX only. */
   const unitTeX = u => String(u == null ? '' : u).replace(/[A-Za-z][A-Za-z\-\/. ]*/g, (m, at, all) => at > 0 && all[at - 1] === '\\' ? m : `\\text{${m}}`);
-  const toHTML = s => { const t = String(s == null ? '' : s), K = kx(); return K && t ? K.renderToString(t, KATEX_OPT) : render(t, true); };
+  const toHTML = s => { const t = String(s == null ? '' : s), K = kx(); return K && t ? K.renderToString(t, KATEX_OPT) : render(t, true, true); };   // TXH: rd true
   /* toText(s, opt): plain text. opt.legacy (TXP, 2026-11-07): the output as before TXP (commands outside the subset by name), for the
      tools that compare a report's text with their tabs' text to decide what to copy into the report (so that choice stays as it was) */
   const toText = (s, o) => render(String(s == null ? '' : s), false, !(o && o.legacy));
