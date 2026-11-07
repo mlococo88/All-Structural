@@ -20035,3 +20035,47 @@ index 06a42e4..b58d4e3 100644
   - App and Report main vs branch: the relabelled rule, the new steps, rows and notes. 0 unresolved references, 0 duplicate keys, no NaN.
   - `check-syntax`: pass. `pile-library`: library checks pass; its page-text checks show the new text. 0 console errors.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/pile-m6-uplift-cap (PR #1030: https://github.com/mlococo88/All-Structural/pull/1030) (PDA-M6) — micropile group uplift (10.9.3.8 → 10.7.3.11); review items for required checks the tool does not compute   [check-logic change]
+- **Problem (review M6):** some required micropile checks were missing:
+  - group uplift (10.9.3.8 → 10.7.3.11, φ_ug 0.50);
+  - the bar connection into the cap (10.9.3.7, 10.9.3.10.7);
+  - drag load (10.9.3.4);
+  - liquefaction (10.9.4 → 10.7.4);
+  - settlement (O6).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024):
+  - Art. 10.9.3.8 → 10.7.3.11 (Eqs. 10.7.3.11-1, -2; Figs. 10.7.3.11-1, -2); φ_ug = 0.50 (Table 10.5.5.2.3-1, group uplift, all soils);
+  - Art. 10.9.3.7 and 10.9.3.10.7; Art. 10.9.3.4 and 3.11.8; Art. 10.9.4 → 10.7.4; Art. 10.9.2 / 10.7.2.
+- **(a) Group uplift (computed)**, anchor `// PDA-M6a (2026-11-07)` in the micropile group block (`computeAll`):
+  - It applies when the group is on, there is an uplift demand and n > 1.
+  - φR_ug = min(n φ_up R_up, 0.50 R_ug,block), with demand n T_u.
+  - Cohesive soil: R_ug = (2XZ + 2YZ) S̄_u + W_g. Cohesionless soil: R_ug = W_g, the 1H:4V block from the toe (top (X + Z/2) × (Y + Z/2), frustum volume).
+  - X, Y = the group footprint (c/c + d_h). Z = grade (or head / scour) to the toe, as the 10.7.3.9 block. S̄_u comes from `hpGroupAashto`.
+  - `R.group.upl` is part of `allPass` and of the Module 11 status.
+  - Display: Module 11 on screen (values plus a CheckRow), Report steps `grp/uW`, `grp/uS`, `grp/uB`, `grp/uI` and `grp/upl`, and the summary row "Group uplift" (Report and printed).
+  - **Decisions (pending engineer review):**
+    - W_g counts the soil only (piles and cap neglected).
+    - The buoyant unit weight γ − 62.4 pcf is used throughout, because the groundwater level is not an input.
+    - γ is the thickness-weighted layer γ over Z, or 120 pcf when missing.
+- **(b) Review items (listed, not computed, not in the status)**, anchor `// PDA-M6b`, `R.reviewItems`. They are listed in the Report summary ("Items for review", REVIEW) and in Module G on screen, under these triggers:
+  - uplift demand → bar connection into the cap (10.9.3.7, 10.9.3.10.7 → Sec. 5);
+  - a soft cohesive layer (S_u < 0.50 ksf, the ET1 definition) → drag load (10.9.3.4, 3.11.8) and service settlement (10.9.2, 10.7.2);
+  - an extreme-event load case → liquefaction (10.9.4 → 10.7.4).
+
+  **Future features:** full methods for these (a liquefiable-zone input that removes bond and scales p-y, the micropile drag-load neutral plane, settlement, and a bar anchorage check with a bearing plate).
+- **One-time load note:** micropile group with uplift, pdaRev < 9 (`pdaRev` 8 → 9).
+- **Check cases:**
+  - U1: default, 2×3 group at 3D, STL 0, T_u 40 kip.
+    - X × Y = 2.33 × 4.08 ft, Z = 36 ft; top 20.33 × 22.08 ft.
+    - V = 36/3 (9.53 + 449.0 + 65.4) = 6288 ft³; W_g = 0.0576(6288) = 362.2 kip, so the block gives 0.50(362.2) = **181.1 kip**.
+    - Σ individual = 6(74.22) = 445.3 kip.
+    - Demand 240 kip: **NG** (block governs). Before: no check.
+  - U2: as U1 with soft clay (S_u 0.40 ksf, γ 115).
+    - Side (2(2.33)(36) + 2(4.08)(36))(0.40) = 184.8 kip; W_g = 0.0526(343) = 18.0 kip.
+    - 0.50(202.8) = **101.4 kip < 240 NG**.
+    - REVIEW items: cap connection, drag load, settlement.
+- **How verified:**
+  - `computeAll` on 17 cases main vs branch: only `R.group.upl` (U1 and U2) and `R.reviewItems`; no other value moved.
+  - App and Report: the new rows, steps and table. 0 unresolved references, 0 duplicate keys, no NaN.
+  - `check-syntax`: pass. `pile-library`: library checks pass. 0 console errors.
+- **Other copies:** none. The H-pile group uplift is not added; it is listed as a future feature.
