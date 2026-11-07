@@ -1545,3 +1545,37 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data:** none changed (no new field; the hint is not an input).
 - **How verified:** headless origin/main vs branch (see the shared fix log); `check-syntax`, `phone-layout --tool mlg`,
   `project-library --tool mlg`: pass; 0 console errors.
+
+## 2026-11-07 — PR: claude/ml-review-low-items (PR #1121: https://github.com/mlococo88/All-Structural/pull/1121) (review LOW items L1–L4, L6, L7: notes, a Service III option, an impact warning; no result change)
+- **Source:** code-compliance review of 2026-11-07 (LOW findings). L5 (open "Needs engineer" items) is unchanged and stays open.
+- **L2 — Service III γ_LL = 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-4):**
+  - Where: `ADDED UI` block, after the line `$('lls').options[4].insertAdjacentHTML('beforebegin','<option value="0.80">Service III / Fatigue II (0.80)</option>');`.
+  - Before: no such option. After: `$('lls').options[5].insertAdjacentHTML('beforebegin','<option value="1.0">Service III, PS refined losses + elastic gain (1.00, Table 3.4.1-4)</option>');`
+  - The option value is `1.0` (Service I is `1.00`), so a save made with it restores as itself, and old saves (`lls` = `1.00` → Service I,
+    `0.80` → Service III / Fatigue II) restore exactly as before. Choosing it sets LLF = 1.0, the same factor as Service I; the label
+    only names the case. No result changes for any existing input.
+- **L3 — warning when IM is applied to the LRFD lane load (Art. 3.6.2.1: IM is not applied to the design lane load or pedestrian loads):**
+  - Where: the page's `analyze` wrapper (anchor `var _an=analyze; analyze=function(m){`), before the `perFootStrip` warning.
+  - After: when `!m.rail && m.imp.onUdl && m.imp.method!=='std' && (m.udl.mode==='lane'||'full') && m.udl.w>0`, `R.warn` gets
+    "Impact is applied to the uniform load (…). For the LRFD design lane load, IM is not applied (LRFD 10th Ed. Art. 3.6.2.1); untick
+    it unless the owner requires it." The input-tab map (`MSG`) sends it to the Impact tab (`|^Impact is applied to the uniform load`).
+  - Std. Spec. impact (`method 'std'`) is excluded: Std. Spec. 3.8.1 applies impact to the lane loading. Results unchanged.
+- **L1 / L4 — 90 % two-truck case (Art. 3.6.1.3.1, C3.6.1.3.1):** new hint `#mlgMultiNote` under the multi-vehicle inputs and a sentence
+  in the report's vehicle note (`cr-note`, anchor `' · rail vehicle (rail DF set)':' · highway vehicle'`):
+  the 90 % lane load is kept on the contributing parts of the influence line only (the 10th Ed. article text reads "all spans"; the
+  patterned load is larger, e.g. 80/100/80 pier −M: 0.9 × lane −535 patterned vs −473 all spans, about 3 % on the total), and the two
+  trucks are not forced into adjacent spans (all headways from the minimum to twice the longest span: covers more positions).
+  **Decision (pending engineer review):** keep both (conservative); no result change.
+- **L6 — FHWA benchmark 0.7L +M:** `benchmarkReport`, row `i===7` (0.7L = 84 ft, the plate transition): the cell shows the difference in
+  grey with "(not graded, see note)" and is left out of `worst`; new note `#bmNote07`: an independent variable-EI force-method solver
+  (review 2026-11-07) gives 1250.6 kip-ft, the tool 1250.7, FHWA 1318; the difference is taken to be in the FHWA table.
+  Display only; the analysis and the other cells are unchanged.
+- **L7 — deflection width option is approximate:** label `Defl. width / girder (in)` → `Defl. width / girder (in, approx.)`; the
+  deflection note's `stiffness factor … (… in width)` now adds "approximate: deflections divided by the length-weighted mean of
+  I(width)/I(b_eff) over the segments, not re-solved with each segment's I". `deflK()` unchanged.
+- **Governing provisions:** AASHTO LRFD 10th Ed. (2024) Table 3.4.1-4, Art. 3.6.2.1, Art. 3.6.1.3.1 and C3.6.1.3.1.
+- **Check case:** default project (2 × 100 ft, HL-93): results identical to origin/main; tick "Apply impact to uniform load" → the
+  L3 warning appears (lane 0.64 klf, IM 1.33), and +M rises by 0.33 × 0.64 × patterned area as before (the warning does not change
+  the number). LLF select → "Service III, PS refined losses…" → LLF 1.0, cards equal to Service I. FHWA benchmark: 0.7L cell grey,
+  "Largest graded difference" no longer driven by 0.7L.
+- **Saved data:** no key or format change; `lls` may now also hold `1.0`.
