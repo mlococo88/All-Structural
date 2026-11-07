@@ -6172,7 +6172,7 @@ After:
 - No input or format change. Old pile saves open with the mat at c_c (engineer instruction: no option).
 
 
-## 2026-11-07 — PR: claude/rw-stem-projection — Stem projection above the retained grade h_p: earth, water and surcharge on the retained height H_ret = H − h_p in both modes and both footing types; worked steps and Report show H_ret (RWHP part 1: input, loads, stability, stem, footing, piles, hand-off; §4)
+## 2026-11-07 — PR: claude/rw-stem-projection (PR #1150: https://github.com/mlococo88/All-Structural/pull/1150) — Stem projection above the retained grade h_p: earth, water and surcharge on the retained height H_ret = H − h_p in both modes and both footing types; worked steps and Report show H_ret (RWHP part 1: input, loads, stability, stem, footing, piles, hand-off; §4)
 
 ### What changed
 - **New input** `h_proj` (Wall pane, Geometry): "Stem projection above retained grade h_p", ft, default 0. Saved only when not 0 (`RWLS_DEF.h_proj = '0'`); a save without the field opens with 0 (`restoreFields`), so older projects, autosaves and JSON exports open with h_p = 0 and their results unchanged.
