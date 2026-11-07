@@ -5970,3 +5970,98 @@ Second-pass review finding M1 (2026-11-07). Code sites are tagged `RW2M1`.
 
 ### Saved data
 - No input or format change.
+
+## 2026-11-07 — PR: claude/rw2-low-items — Second-pass review LOW items L1–L8: citations and the 6-in rule, AASHTO Rebar labels and schedule, phone overflow on piles, S3 crack control, AASHTO auto shear, ACI §13.2.6.2 option, EE I duplicate rows, ACI joint shear friction (RW2L1–L8; small calculation changes and checks added, §4 where noted) (PR #1144: https://github.com/mlococo88/All-Structural/pull/1144)
+
+Second-pass review LOW findings (2026-11-07). Code sites are tagged `RW2L1` … `RW2L8`.
+
+### RW2L1 — citations; ACI §13.3.1.2 check (check added)
+- **Pile-cap depth row (`pileCapD`):** the reference was "ACI 318-19 §13.3.1.2". It is now **§13.4.6.1**: the effective depth of the bottom bars of a pile cap is at least 12 in.
+  - In 318-19, §13.3.1.2 is the 6-in rule for shallow foundations.
+  - Verified on the rendered pages: printed 197 (PDF 199) and printed 202 (PDF 204).
+- **New ACI check row `ftgDepth`** (spread footings only): "Footing d ≥ 6 in". It tests d of F2 (the bottom bars) against ACI 318-19 §13.3.1.2. The dashboard links it to Toe Step 3.
+- Check cases:
+  - default ACI: d = 14.75 in, PASS (D/C 0.41);
+  - t_f 8 in, cover 3 in: d = 4.75 in, **FAIL** (D/C 1.26).
+
+### RW2L2 — AASHTO Rebar tab (display only)
+- The schedule card reference and the "General Detailing Requirements" card now read "AASHTO LRFD 10th Ed." in AASHTO mode (was "ACI 318-19").
+- The S2 and F3 notes cite AASHTO §5.10.6 in AASHTO mode (was "ACI §24.4.3").
+- Maximum spacings: 1.5h ≤ 18 in for AASHTO (was 3h).
+- New schedule rows, as on Drawings sheet 2, in both modes:
+  - **S1D:** the hooked stem dowel. Its ℓ column shows ℓ_dh.
+  - **K1:** the reinforced shear key, when present.
+- "Stem S1 dev. into ftg" (the straight ℓ_d) is now "Stem S1D dowel hook ℓ_dh into ftg": ℓ_dh ≤ t_f − c_c, with the straight ℓ_d in brackets.
+- "Worked in" links added for S1D and K1.
+
+### RW2L3 — phone layout in pile mode (display only)
+- The pile-group table (Stability tab, Pile Step 1; 499 px) and the pile punching table (Footing tab; 514 px) are now wrapped in `overflow-x:auto`.
+- At 390 px the page no longer scrolls sideways. scrollWidth was 522 px (Stability) and 537 px (Footing); it is now 390 px on both.
+- New block RW2L3 in `smoke/retaining-wall-checks.mjs`: ACI and AASHTO pile cases at 390 px.
+
+### RW2L4 — crack control on S3 (check added)
+- **ACI:** `aciCr.stemT = aciCrack(c_c, s of S3)` (ACI 318-19 §24.3.2, f_s = ⅔f_y). It adds the row "Stem S3 Crack Ctrl" and a Report step "Crack-control bar spacing".
+  - Default: s_max 10.0 in vs S3 #4 @ 7, PASS.
+- **AASHTO:** the Service I moment at mid-height, `M_serv_stemT` (as `M_serv_stem`, with K_0 when that option is chosen). It uses `crackSpacing(d_stemT, …, t_mid, …, γ_e2)`.
+  - The row is "Stem S3 Crack Ctrl". A worked check is added in Stability Step 9 and in the Report.
+  - Default: s_max 13.4 in, PASS.
+- **Not added (Decision, pending engineer review):**
+  - S4 (front-face T&S): no Service I flexural tension.
+  - K1: the passive load on the key is a resistance, not a service load.
+  - Both are noted here, not checked.
+
+### RW2L5 — AASHTO "auto" shear: the 3d_v rule for footings only (§4)
+- Before: `simpleAllowed = h < 16 || (L·12 < 3d_v)`, used for the stem, mid-height and key as well.
+- After: `simpleAllowed = h < 16 || (ftg && L·12 < 3d_v)`, where `ftg` is true for the heel and toe only.
+- **Provision:** AASHTO LRFD 10th Ed. Art. 5.7.3.4.1 (paraphrased). β = 2.0 may be used for footings where the zero-shear point is within 3d_v of the face. Other sections may use it only when h < 16 in, among the listed conditions. Otherwise Art. 5.7.3.4.2 applies.
+- **Check case:** AASHTO, H_s 3 ft, t_bot 18 in.
+  - Stem d_v ≈ 14.1 in, so 3d_v = 42 in > 36 in. The stem was β = 2.0 (φV_c = 19427 lb/ft).
+  - It is now the general procedure (φV_c = 23149 lb/ft). The general procedure can give β > 2 here.
+  - The toe keeps β = 2.0.
+- Walls with H_s·12 ≥ 3d_v are unchanged (all review walls).
+
+### RW2L6 — ACI §13.2.6.2 size-effect option (§4; default off)
+- New input `aci_ftg_nolams`, ACI only: "Heel / toe one-way shear: neglect the size-effect factor λ_s (ACI §13.2.6.2)".
+  - Default **off**: λ_s is applied, as before (conservative).
+  - Spread footings only; pile caps keep λ_s (§13.2.6.2 covers shallow foundations).
+- **Saved data:** the field is saved only when checked (`snapshotFields` deletes the default). Older saves and default projects are unchanged and open with the option off.
+- **Check case:** default ACI toe. λ_s = 0.899 gives V_c = 10565 lb/ft; with the option on, λ_s = 1 gives V_c = **11752** lb/ft (φV_c 7923 → 8814).
+
+### RW2L7 — EE I duplicate rows (display; pile combinations)
+- `rwPileAnalysis` (AASHTO): when V_max = V_min and x̄_b = x̄ (γ_EQ = 0 and no column), one row "(maximum = minimum vertical)" is listed instead of two identical rows.
+- The footing EE check (RW2M1) does the same.
+- The governing values are unchanged. Probe: AASHTO pile variant, 6 → 4 EE I rows, with identical numbers.
+
+### RW2L8 — ACI shear friction at the stem–footing joint (check added)
+- New result `sfJ` and row "Joint Shear Friction" (`ishAci`) in ACI mode:
+  - φV_n = 0.75·min(μA_vf f_y, 0.2f′c A_c, 800A_c) ≥ V_u;
+  - A_vf = the S1D dowels (flexural tension steel may serve, R22.9.4.6);
+  - μ = 0.6 (concrete against hardened concrete not intentionally roughened, Table 22.9.4.2(c));
+  - A_c = t_bot × 12.
+- **Provision:** ACI 318-19 Eq. 22.9.4.2 and Table 22.9.4.4(d),(e). Verified on the rendered pages: printed 432–434 (PDF 434–436).
+- Worked in Stem Step 4 (tab and Report).
+- **Check case:** default ACI.
+  - A_vf = 0.40 in²/ft (#4 @ 6) and A_c = 216 in².
+  - V_n = min(0.6(0.40)(60000), 0.2(4000)(216), 800(216)) = min(14400, 172800, 172800) = 14400.
+  - φV_n = **10800 lb/ft** ≥ V_u = 4608, PASS.
+  - A_vf,req = 0.171 in²/ft.
+- **Decision (pending engineer review):**
+  - μ = 0.6 (no roughening assumed). The engineer may adopt 1.0 for a roughened joint or a keyway.
+  - Permanent compression across the joint (§22.9.4.5) is not added.
+- AASHTO mode already has the optional interface-shear check (Art. 5.7.4).
+
+### How verified
+- Headless probe, origin/main (after #1143) vs this branch, 32 walls. The only differences are:
+  - the new rows (`crackStemT`, `ishAci`, `ftgDepth`), all PASS on the review walls except the t_f 8 in case;
+  - the merged pile EE I row;
+  - the L5 / L6 cases above.
+  - 0 console errors.
+- Phone 390 px pile: no sideways scroll.
+- Tests:
+  - check-syntax;
+  - smoke/retaining-wall-checks: new `AUD` rows RW2L1–RW2L8 and the RW2L3 phone block;
+  - phone-layout rwall;
+  - project-library retwall;
+  - dxf-print-sheets rw;
+  - retwall-pile-handoff;
+  - engine handoffs, pile-group.

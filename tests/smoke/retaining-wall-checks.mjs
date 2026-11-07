@@ -303,6 +303,20 @@ const AUD = [
     ['R.eeFtg && R.checks.heelEE.ok && R.checks.toeEE.ok && Math.abs(R.eeFtg.gH.Mh - 22993.5) < 1 && Math.abs(R.eeFtg.gT.Mt - 7460) < 5 && R.eeFtg.cases.length === 4', 'governing EE I case 2; duplicate min rows merged'],
     ['/Heel and Toe — Extreme Event I \\/ II Check/i.test(T.footing) && /Heel and toe: Extreme Event I \\/ II check/.test(P)', 'Footing card and Report']]],
   ['RW2M1 ACI and AASHTO without EE: no row', { design_basis: 'AASHTO' }, [['!R.eeFtg && !R.checks.heelEE', 'no row']]],
+  ['RW2L1 ACI t_f 8 in, cover 3 in: footing d = 4.75 < 6 in → FAIL (ACI 318-19 §13.3.1.2); pile cap depth cites §13.4.6.1', { tf: 8, cov_ftg: 3 }, [
+    ['R.checks.ftgDepth && !R.checks.ftgDepth.ok && /d=4\\.75<6/.test(R.checks.ftgDepth.val)', 'FAIL d 4.75']]],
+  ['RW2L1 pile cap depth citation', { fnd_type: 'pile', tf: 36 }, [['/§13\\.4\\.6\\.1/.test(R.checks.pileCapD.ref) && !R.checks.ftgDepth', '§13.4.6.1; no shallow-footing row on piles']]],
+  ['RW2L2 AASHTO Rebar tab: AASHTO labels, S1D and K1 in the schedule, S1D with ℓdh', { design_basis: 'AASHTO', use_shear_key: true, dk: 12, incl_passive: true }, [
+    ['/AASHTO LRFD 10th Ed\\. · f\'c=/.test(T.rebar) && /S1D\\s+Stem dowel/.test(T.rebar) && /K1\\s+Shear key/.test(T.rebar) && /AASHTO §5\\.10\\.6/.test(T.rebar) && !/ACI §24\\.4\\.3/.test(T.rebar) && /S1D dowel hook/.test(T.rebar)', 'labels and schedule']]],
+  ['RW2L5 AASHTO H_s 3 ft, t_bot 18 in: stem shear by the general procedure (3d_v rule is for footings only)', { design_basis: 'AASHTO', Hs: 3, ts_bot: 18, ts_top: 12 }, [
+    ['/General procedure/.test(R.shearStem.method) && /β = 2\\.0/.test(R.shearToe.method)', 'stem general, toe β = 2']]],
+  ['RW2L6 ACI option: λ_s = 1 for the heel and toe (§13.2.6.2); default off', { aci_ftg_nolams: true }, [
+    ['R.shearToe.lam_s === 1 && R.shearHeel.lam_s === 1 && R.shearStem.lam_s < 1 && Math.abs(R.Vc_toe - 11752.3) < 1', 'λ_s = 1 on footing only']]],
+  ['RW2L6 default: λ_s applied', {}, [['R.shearToe.lam_s < 1 && Math.abs(R.Vc_toe - 10564.5) < 1', 'λ_s 0.899']]],
+  ['RW2L7 AASHTO piles k_h 0.20 (γ_EQ 0): one EE I row per case', { design_basis: 'AASHTO', fnd_type: 'pile', tf: 36, kh: 0.2 }, [['R.pile.comb.filter(c => /^ee1_/.test(c.key)).length === 2', 'two EE I rows']]],
+  ['RW2L4 / RW2L8 ACI default: S3 crack control and joint shear friction', {}, [
+    ['R.checks.crackStemT.ok && Math.abs(R.sfJ.phiVn - 10800) < 1 && R.checks.ishAci.ok', 'S3 s_max, φV_n 10800 ≥ 4608'], ['/Shear friction at the stem–footing construction joint/.test(T.stem)', 'Stem tab Step 4']]],
+  ['RW2L4 AASHTO default: S3 crack control at mid-height', { design_basis: 'AASHTO' }, [['R.checks.crackStemT && R.checks.crackStemT.ok && R.aashtoR.serv.M_serv_stemT > 0', 'S3 row']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {
@@ -324,6 +338,19 @@ for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0
   await b.close();
   console.log('audit: ' + name);
   for (const [v, l] of o) check(v, l);
+  check(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+}
+// RW2L3 (2026-11-07): phone width (390 px) in pile mode — the pile tables scroll inside their card; the page does not scroll sideways
+if (!process.env.RW_AUD || 'RW2L3'.startsWith(process.env.RW_AUD)) for (const set of [{ fnd_type: 'pile', tf: 36 }, { design_basis: 'AASHTO', fnd_type: 'pile', tf: 36, wt_depth: 6, kh: 0.2 }]) {
+  const { b, p, errs } = await openPage(SRC.file, { vw: 390, vh: 844 }); await p.waitForTimeout(3000);
+  const o = await p.evaluate(async (set) => {
+    for (const [k, v] of Object.entries(set)) { const e = document.getElementById(k); if (e.type === 'checkbox') e.checked = !!v; else e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (typeof syncConditionalUI === 'function') syncConditionalUI(); if (set.design_basis) onBasisChange(); onInputChange(); await new Promise(r => setTimeout(r, 600));
+    const res = {}; for (const t of ['stability', 'footing']) { document.querySelector(`.tab-btn[data-tab="${t}"]`).click(); await new Promise(r => setTimeout(r, 1200)); res[t] = document.documentElement.scrollWidth; }
+    return res; }, set);
+  await b.close();
+  console.log('audit: RW2L3 phone 390 px, ' + JSON.stringify(set));
+  check(o.stability <= 392 && o.footing <= 392, `no sideways page scroll (stability ${o.stability}, footing ${o.footing} px)`);
   check(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
 }
 console.log(failures ? `${failures} FAILED` : 'all ok');
