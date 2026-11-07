@@ -6316,7 +6316,7 @@ Part 2 of the RWPT request (part 1: #1148). Code sites are tagged `RWPT2`. **Dis
 - Hand check above (40.98 kip). Screenshots at 1400 px and 390 px (no sideways scroll).
 - Tests: check-syntax; smoke/retaining-wall-checks (RWPT block plus the combination table rows and highlight, the zoomable sketches, the substituted N, and the Report D/C columns and plan figure); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs.
 
-## 2026-11-07 — PR: claude/rw-user-manual — User Manual tab, part 1: the Manual tab, printing (alone or as a Report appendix) and the parts on scope, screen, code modes, inputs, projects, drawings and the Report (RWMAN; display only, no result change)
+## 2026-11-07 — PR: claude/rw-user-manual (PR #1154: https://github.com/mlococo88/All-Structural/pull/1154) — User Manual tab, part 1: the Manual tab, printing (alone or as a Report appendix) and the parts on scope, screen, code modes, inputs, projects, drawings and the Report (RWMAN; display only, no result change)
 
 Review Phase 6a (rwreview plan): the User Manual tab, asked for by the engineer. This first PR holds the tab, the printing and the descriptive parts; the calculation parts (loads, stability, seismic, collision, stem, footing, key, bar layout, piles), the limits and the appendix of pending decisions follow in part 2. Code sites are tagged `RWMAN`.
 
