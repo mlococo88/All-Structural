@@ -6066,6 +6066,49 @@ Second-pass review LOW findings (2026-11-07). Code sites are tagged `RW2L1` … 
   - retwall-pile-handoff;
   - engine handoffs, pile-group.
 
+## 2026-11-07 — PR: claude/rw-stem-geh-display (PR #1146: https://github.com/mlococo88/All-Structural/pull/1146) — Stem tab and Report Step 1: the earth-pressure factor shown is the analysis' γ_EH (1.35 at-rest, 1.50 active; Table 3.4.1-2), was 1.50 hard-coded (RWGE; display only, no result change)
+
+Follow-up A1 of the second-pass fix round. Code sites are tagged `RWGE`.
+
+### Problem
+- `calcAll` factors the stem earth pressure with `gEH = isAASHTO ? (A.ep_cond === 'atrest' ? 1.35 : 1.50) : 1.6` (AASHTO LRFD 10th Ed. (2024) Table 3.4.1-2, EH maximum: active 1.50, at-rest 1.35). M_u, V_u, the mid-height and the M-along-height values all use it.
+- The Stem tab (`renderStem`, Step 1) and the Report (§5.1 Step 1, `rwrModel` "4. Stem") wrote their own `gEH = isAASHTO ? 1.50 : 1.6`. With at-rest pressure they showed "Strength I: 1.50EH + 1.75LS", γ_EH = 1.50 and an M_u,soil 11 % too high, while the total M_u below it was the 1.35 value.
+- Display only: the computed demands were always right (checked below). Only the shown component and the shown factor were wrong. The stem is designed for Strength I maximum only; no minimum EH factor enters the stem, so no min/max choice is shown.
+
+### Fix
+`renderStem`, anchor `const gEH = r.isAASHTO ? 1.50 : 1.6;`:
+```js
+// before
+  const gEH = r.isAASHTO ? 1.50 : 1.6;
+// after
+  const gEH = r.gEH;   // RWGE (2026-11-07): the analysis' factor ...
+```
+- Card reference: `'Strength I: 1.50EH + 1.75LS'` → `'Strength I: ' + F(gEH,2) + 'EH + 1.75LS'`.
+- Step label: `(γ_{EH}=1.50)` → `(γ_{EH}=<gEH>[, at-rest], Table 3.4.1-2)`.
+
+`rwrModel`, section "4. Stem", anchor `const subs = [], gEH = isA ? 1.50 : 1.6`:
+- `gEH = isA ? 1.50 : 1.6` → `gEH = r.gEH`;
+- label `'(γ_EH = 1.50)'` → `'(γ_EH = ' + rwrN(gEH, 2) + [', at-rest'] + ', Table 3.4.1-2)'`;
+- Step 1 reference `'Table 3.4.1-1, Strength I: 1.50EH + 1.75LS'` → with `rwrN(gEH, 2)`.
+
+`r.gEH` is the value `calcAll` already returns (RWSC). ACI shows 1.6 as before. The shear-key factor (passive as EH, 1.50) is not touched: Table 3.4.1-2 gives 1.50 for passive whatever the backfill condition.
+
+### Governing provision
+AASHTO LRFD 10th Ed. (2024) Table 3.4.1-2 (γ_p for EH: active 1.50 / 0.90, at-rest 1.35 / 0.90). No factor or formula changed.
+
+### Check case (AASHTO default wall, Pressure Condition "At-rest K₀", OCR 1)
+- K_0 = 1 − sin 30° = 0.5000.
+- M_u,soil = 1.35 × 0.5 × 120 × 12³ / 6 = **23328 lb-ft/ft** (shown before: 1.50 × … = 25920).
+- M_u,LS = 1.75 × 0.5 × 357 × 12² / 2 = 22491; M_u = 23328 + 22491 = **45819 lb-ft/ft**: the tool's total, before and after (#6 @ 7).
+- Active (default): 1.50 and 17280 / 25920 as before; only the label gains "Table 3.4.1-2".
+
+### How verified
+- Headless, origin/main vs branch, `calcAll` on the 32 review walls plus AASHTO at-rest (spread and pile): **no value differs**; 0 console errors.
+- Stem tab text and the Report model: only the at-rest factor, M_u,soil and the reference move; the default AASHTO wall gains "Table 3.4.1-2" in the label; ACI identical.
+- Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Saved data
+- No input or format change.
 ## 2026-11-07 — PR: claude/rw-pile-bottom-mat — Pile-supported footing: the bottom mat stays at the footing cover c_c, between the pile heads (was lifted onto the pile heads, cover = embedment + clear); punching and the ACI cap depth keep the depth over the pile heads (RWPB; calculation change, pile mode only)
 
 Engineer instruction (2026-11-07, paraphrased): on piles the bottom footing bars must stay at the normal bottom position; they are not to be lifted onto the pile heads. The bars run between and around the embedded pile heads (the usual New England detail). This applies to every project, old saves included, with no option. Depths that physically start at the pile head (punching, the pile-cap depth) stay as they are. Code sites are tagged `RWPB`.
