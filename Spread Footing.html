@@ -137,7 +137,7 @@ body.sfdStale .tabbar button:not([data-tab="tab-manual"])::after{content:" \26A0
 /* SFNL (2026-11-07): a long note as a bold lead line and a list with bold lead words (sfNL); action items first, in a warnbox */
 .sfNL .sfNLl{font-weight:bold;margin:0 0 1px}
 .sfNL .sfNLu{margin:2px 0 3px;padding-left:18px}
-.sfNL .sfNLu>li{margin:1px 0}
+.sfNL .sfNLu>li{margin:1px 0;overflow-wrap:anywhere}
 .sfNL .sfNLa{font-style:normal;margin:2px 0 4px}
 .sfNL.warnbox .sfNLl,.sfNL.errbox .sfNLl,.sfNL.failbox .sfNLl{font-style:normal}
 @media print{.sfNL .sfNLu>li{break-inside:avoid}}
