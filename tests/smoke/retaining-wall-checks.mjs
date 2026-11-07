@@ -230,6 +230,13 @@ const AUD = [
   ['RWSQ AASHTO k_h 0.10: stem Extreme Event I 14335 < Strength I 32274', { design_basis: 'AASHTO', kh: 0.10 }, [
     ['Math.abs(R.Mu_stem_eq - 14335) < 1 && !R.stem_eq_governs && Math.abs(R.Mu_stem_lbft - 32274) < 1', 'EE I computed, does not govern'],
     ['/Extreme Event I at the stem base/.test(T.stem)', 'Stem Step 1']]],
+  ['RWCV AASHTO collision, β 10° Rankine, MassDOT γ_EH = 0: P_a,V drops from the EE II resisting load (V 18166 → 17347)', { design_basis: 'AASHTO', beta: 10, aashto_ep_method: 'rankine', aashto_ct_enable: true, aashto_ct_eh: 'zero' }, [
+    ['Math.abs(R.aashtoR.ct.ee2.V_ct_min - 17347) < 1 && Math.abs(R.aashtoR.ct.ee2.sliding_dcr_ct - 0.256) < 0.001', 'V 17347, sliding DCR 0.256']]],
+  ['RWCV same with γ_EH "full": unchanged (V 18166)', { design_basis: 'AASHTO', beta: 10, aashto_ep_method: 'rankine', aashto_ct_enable: true, aashto_ct_eh: 'full' }, [
+    ['Math.abs(R.aashtoR.ct.ee2.V_ct_min - 18166) < 1', 'V 18166']]],
+  ['RWCV AASHTO collision, Coulomb δ 20°, MassDOT: V 17694 → 16583, sliding 0.232, e −0.257; Step 7b M_r worked', { design_basis: 'AASHTO', aashto_delta: 20, aashto_ct_enable: true, aashto_ct_eh: 'zero' }, [
+    ['Math.abs(R.aashtoR.ct.ee2.V_ct_min - 16583) < 1 && Math.abs(R.aashtoR.ct.ee2.sliding_dcr_ct - 0.232) < 0.001 && Math.abs(R.aashtoR.ct.ee2.e_ct + 0.257) < 0.001', 'V 16583, DCR 0.232, e −0.257'],
+    ['/Resisting moment about the toe/.test(T.stability)', 'Stability Step 7b M_r']]],
   ['RWPL ACI default wall on 2 pile rows (x 1.5 / 11.0 ft, s 6 ft): P 47.45 / 52.04 kip (D + H + L), 32.62 / 27.08 (0.6D + H)', { fnd_type: 'pile' }, [
     ['Math.abs(R.pile.g.N - 1 / 3) < 1e-12 && Math.abs(R.pile.g.xbar - 6.25) < 1e-9 && Math.abs(R.pile.g.I - 7.520833) < 1e-5', 'N, x̄, I'],
     ['Math.abs(R.pile.comb[0].L.rows[0].P - 47.455) < 0.001 && Math.abs(R.pile.comb[0].L.rows[1].P - 52.040) < 0.001 && Math.abs(R.pile.comb[1].L.rows[0].P - 32.617) < 0.001', 'pile loads'],
