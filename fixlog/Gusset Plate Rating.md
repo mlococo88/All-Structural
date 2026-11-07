@@ -3067,7 +3067,7 @@ From the code-compliance review of 2026-11-07 (finding H1). Engineer asleep, mer
 - **Other copies:** none.
 - **Open items:** C14.7-1 (MBE wording of the splice equations, φ<sub>cs</sub>) stays with the engineer: verify (MBE not in references).
 
-## 2026-11-07 — PR: claude/gusset-h2-lmid — LRFR Whitmore buckling: L<sub>mid</sub> from the middle of the Whitmore section (LRFD 10th Ed. 6.14.2.8.4) by default; the average of three kept as an option (H2; §4, reverses C4.4, decision pending engineer review)
+## 2026-11-07 — PR: claude/gusset-h2-lmid (PR #1031: https://github.com/mlococo88/All-Structural/pull/1031) — LRFR Whitmore buckling: L<sub>mid</sub> from the middle of the Whitmore section (LRFD 10th Ed. 6.14.2.8.4) by default; the average of three kept as an option (H2; §4, reverses C4.4, decision pending engineer review)
 
 From the code-compliance review of 2026-11-07 (finding H2). Engineer asleep, merge-as-you-go approved; no questions asked.
 
