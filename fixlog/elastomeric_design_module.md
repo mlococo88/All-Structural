@@ -1587,7 +1587,7 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.4.2.1 (L2), C14.8.3.1 (L3), 14.7.5.3.
 - **How verified:** check-syntax pass; headless main-vs-branch probe (27 scenarios): every computed value and dashboard item identical; only the warning texts above change; 0 console errors. `tests/smoke/project-library.mjs --tool edm`: ALL PASS. `tests/compare.mjs --tool page`: text only.
 - **Saved data:** none changed. **§4:** no formula, factor or result change (labels and warnings only).
 
-## 2026-11-07 — PR: claude/abut-pad-gmult (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (EGM, closes the L11 open item of #1095: the Abutment app applies `Gmult`)   [warning / alert text only; no computed value changes in this tool]
+## 2026-11-07 — PR: claude/abut-pad-gmult (PR #1113: https://github.com/mlococo88/All-Structural/pull/1113) (EGM, closes the L11 open item of #1095: the Abutment app applies `Gmult`)   [warning / alert text only; no computed value changes in this tool]
 
 - **Problem:** the L11 warning and the alert on "↩ Send Pad to Abutment" said the Abutment app does not apply `Gmult`. The abutment now multiplies its TU and CR·SH pad forces by `PAD.Gmult` (see `fixlog/abutment_calculator.md`, same PR; AASHTO LRFD 10th Ed. Art. 14.7.5.2, Table 14.7.5.2-1).
 - **computeEDM** (applicability warnings), before:

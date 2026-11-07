@@ -16383,7 +16383,7 @@ index 2547b26..432d945 100644
 
 - **Note added after merging main (PDA-M7, #1050):** `Pull pile results` now imports R_n already times Pile Designer's group reduction. The ABM7 η text says to enter η = 1.0 in that case, so the reduction is not applied twice. Text only (anchor `η = 1.0 when R_n already carries Pile Designer's group reduction`).
 
-## 2026-11-07 — PR: claude/abut-pad-gmult (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (EGM: the elastomeric module's low-temperature multiplier `Gmult` applied to the TU and CR·SH pad forces; cross-tool with `elastomeric_design_module.html`)   [calc change: new input, default ×1 = no change] [MORE conservative with ×2 / ×4]
+## 2026-11-07 — PR: claude/abut-pad-gmult (PR #1113: https://github.com/mlococo88/All-Structural/pull/1113) (EGM: the elastomeric module's low-temperature multiplier `Gmult` applied to the TU and CR·SH pad forces; cross-tool with `elastomeric_design_module.html`)   [calc change: new input, default ×1 = no change] [MORE conservative with ×2 / ×4]
 
 Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.6.3.1 (pad shear force H = G·A·Δ/h_rt), Art. 14.7.5.2 and Table 14.7.5.2-1 (low-temperature design option: special force provisions, ×2 with a low-friction slider, ×4 without).
 
