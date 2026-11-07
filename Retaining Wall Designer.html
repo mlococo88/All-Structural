@@ -852,7 +852,17 @@ body.rwDashColl #rwDash { display: none; }
 .rwdMsg { grid-column: 1/-1; font-size: 8.5pt; padding: 5px 8px; border: 1px solid var(--border); border-left: 4px solid var(--fail); background: #FEF2F2; color: #7F1D1D; border-radius: 3px; }
 .rwdMsg ul { margin: 4px 0 0 18px; padding: 0; }
 .rwdMsg.none { border-left-color: var(--slate-400); background: var(--slate-50); color: var(--slate-600); }
-@media screen and (min-width: 1500px) {
+/* RWLB (2026-11-07, Decision pending engineer review: "the summary cards should be on the left panel"): the left column starts at
+   1200 px (was 1500 px), as in Spread Footing and Light Pole; from 1200 to 1499 px it is 240 px wide, at 1500 px and wider 292 px as before. */
+@media screen and (min-width: 1200px) and (max-width: 1499.98px) { body.rwDashWide #rwDashCol { flex-basis: 240px; width: 240px; } }
+/* RWLB: with the column open from 1200 to 1279 px the output panel is about 616-696 px wide, as at 960-1040 px without it: the Overview
+   card's Stability / Structural groups stack, as they already do at 1100 px and below */
+@media screen and (min-width: 1200px) and (max-width: 1279.98px) {
+  body.rwDashWide:not(.rwDashColl) .sc-cols { grid-template-columns: 1fr; }
+  body.rwDashWide:not(.rwDashColl) .sc-group + .sc-group { border-left: 0; border-top: 1px solid var(--border); }
+  body.rwDashWide:not(.rwDashColl) .sc-gov { text-align: left; }
+}
+@media screen and (min-width: 1200px) {
   body.rwDashWide #rwDashCol { display: block; flex: 0 0 292px; width: 292px; min-height: 0; overflow-y: auto; overflow-x: hidden; position: relative;
     padding: 0 6px 24px; border-right: 1px solid var(--border); background: var(--slate-50); overscroll-behavior: contain; }
   body.rwDashWide #status-bar { display: none; }
@@ -11803,7 +11813,7 @@ document.querySelector('.tab-btn[data-tab="drawings"]').addEventListener('click'
    Collapse state: per-browser UI key retaincalcpro.dashCollapsed.v1 ('1' = collapsed, '0' or absent = open); not in the
    project, the autosave or Export JSON.
    ================================================================ */
-const RWDC = { key: 'retaincalcpro.dashCollapsed.v1', mq: window.matchMedia ? window.matchMedia('screen and (min-width:1500px)') : null, open: new Map(), coll: false };
+const RWDC = { key: 'retaincalcpro.dashCollapsed.v1', mq: window.matchMedia ? window.matchMedia('screen and (min-width:1200px)')   /* RWLB: was 1500px */ : null, open: new Map(), coll: false };
 try { RWDC.coll = localStorage.getItem(RWDC.key) === '1'; } catch (e) { /* not kept */ }
 const RWDC_ST = { pass: 'PASS', fail: 'FAIL', warn: 'REVIEW', na: 'N/A' };
 // ACI crack control is worked only in the Report (Reinforcement schedule › Crack-control bar spacing): its step key there
