@@ -526,18 +526,20 @@ The stiffness solver, fixed-end forces, couple sign convention, indeterminate be
 
 | Location | What | Why | Conf. |
 |---|---|---|---|
-| :7811-7841 | SI toggle overwrites inputs; engine is US-only | All results are meaningless in SI mode. | High |
-| :1624-1626 | Coulomb Kp uses the backfill β and the back-face batter at the toe | Example: β = 20° raises Kp from 3.0 to about 5.7. **[U]** (passive off by default) | High |
-| :1668-1669 | Coulomb thrust inclined at β, not δ | Example: δ = 0, β = 20° gives horizontal 6% low plus a spurious vertical credit. **[U]** | Medium |
-| :1864, :1890, :1900 | Vertical EH component factored as EV (1.00 min) | Table 3.4.1-2 EH min 0.90. **[U]** | Med-Low |
-| :1918-1956, :1815-1831 | Footing structural design and AASHTO bearing use the max-vertical case only | Strength Ia (min DC/EV) and ACI 0.9D + 1.6H are not checked. **[U]** | Medium |
-| :1934-1935 | Default `q_n = 3·q_a`, φb 0.55 | Back-calculated nominal resistance. **[U]** if q_a is settlement-controlled. | Medium |
-| :2193 | ACI As,min `max(0.0014, 0.0018·60000/fy)` | **verify** 318-19 Table 24.4.3.2 (believed 0.0018 flat). | Medium |
-| :1471, :2295 | ψg = 1.0 hardcoded; cb ignores s/2 | 25.4.2.5, 25.4.2.4. **[U]** | Medium |
-| :1539 | M-O fallback `Ka(1 + 1.5kh)` when φ − θ − β ≤ 0 | That condition means the backfill is unstable; should be an error. **[U]** | Med-Low |
-| :1763 | Shear-key passive given a resisting overturning moment | The key is below the pivot. **[U]** | Low-Med |
-| :1972-2015 | Collision CT defaults are MassDOT-specific (γ = 1.0 for DC/EV in EE II) | AASHTO γp min 0.90. **[U]** for non-MassDOT work. | Medium |
-| :782 | Cohesion input unused | — | Low |
+| :7811-7841 | SI toggle overwrites inputs; engine is US-only | All results are meaningless in SI mode. | High ✅ **Fixed** (F1, F14, PR #9: SI toggle removed; US customary only). |
+| :1624-1626 | Coulomb Kp uses the backfill β and the back-face batter at the toe | Example: β = 20° raises Kp from 3.0 to about 5.7. **[U]** (passive off by default) | High ✅ **Fixed** (F3, PR #9: K_p at the toe with level ground, vertical face, δ = 0). |
+| :1668-1669 | Coulomb thrust inclined at β, not δ | Example: δ = 0, β = 20° gives horizontal 6% low plus a spurious vertical credit. **[U]** | Medium ✅ **Fixed** (F2, PR #9: thrust inclined at δ + batter). |
+| :1864, :1890, :1900 | Vertical EH component factored as EV (1.00 min) | Table 3.4.1-2 EH min 0.90. **[U]** | Med-Low ✅ **Fixed** (F4, PR #9: factored as EH 1.50 max / 0.90 min). The 0.90 minimum is kept as the engineer's choice (2026-11-07), more conservative than AASHTO Fig. C11.5.6-2 (EH max on both components). |
+| :1918-1956, :1815-1831 | Footing structural design and AASHTO bearing use the max-vertical case only | Strength Ia (min DC/EV) and ACI 0.9D + 1.6H are not checked. **[U]** | Medium ✅ **Fixed** (F5, PR #9: Strength Ia / ACI 0.9D + 1.6H enveloped). |
+| :1934-1935 | Default `q_n = 3·q_a`, φb 0.55 | Back-calculated nominal resistance. **[U]** if q_a is settlement-controlled. | Medium ✅ **Fixed** (F17, PR #128: q_n from the geotechnical report by default). |
+| :2193 | ACI As,min `max(0.0014, 0.0018·60000/fy)` | **verify** 318-19 Table 24.4.3.2 (believed 0.0018 flat). | Medium ✅ **Fixed** (F9, PR #9: 0.0018A_g, all grades; ACI 318-19 §7.6.1.1 / §24.4.3.2). |
+| :1471, :2295 | ψg = 1.0 hardcoded; cb ignores s/2 | 25.4.2.5, 25.4.2.4. **[U]** | Medium ✅ **Fixed** (F8, PR #9: ψ_g by grade, Table 25.4.2.5; c_b = min(cover, s/2), §25.4.2.4). |
+| :1539 | M-O fallback `Ka(1 + 1.5kh)` when φ − θ − β ≤ 0 | That condition means the backfill is unstable; should be an error. **[U]** | Med-Low ✅ **Fixed** (F6, PR #9: error instead of the fallback). |
+| :1763 | Shear-key passive given a resisting overturning moment | The key is below the pivot. **[U]** | Low-Med ✅ **Fixed** (F7, PR #9: no overturning credit). |
+| :1972-2015 | Collision CT defaults are MassDOT-specific (γ = 1.0 for DC/EV in EE II) | AASHTO γp min 0.90. **[U]** for non-MassDOT work. | Medium ✅ **Closed (O5, 2026-11-07):** γp = 1.00 for DC/EV in EE II is AASHTO LRFD 10th Ed. Table 3.4.1-1 (not a MassDOT value; "γp min 0.90" is out of date for the 10th Ed.); γ_EH = 0 for stability, the full-joint distribution and the test-level forces are MassDOT Bridge Manual 3.3.2.4 / Table 3.3.2-1 (verified). Water, ES and the vertical earth thrust in EE II: PRs #944, #9xx-RWCV. |
+| :782 | Cohesion input unused | — | Low ✅ **Noted** (F10, PR #9: the input is labelled "not used"). |
+
+**Status (2026-11-07):** every row above is resolved (fix log `fixlog/Retaining Wall Designer.md`, F1–F17 and the 2026-11-07 calculation audit). Fix-log open items O4 (AASHTO φ_τ default 1.00, kept per Table 11.5.7-1 for semi-gravity walls) and O5 (collision factors, see the row above) are closed. The 2026-11-07 calculation audit of this tool was merged as PRs #942–#9xx (see the fix log).
 
 **Verified OK:**
 - Rankine/Coulomb Ka, K0;
@@ -1025,8 +1027,8 @@ Items marked **❓** need your decision on the provision, edition or owner rule 
 | A25 | `index.html` | φc·φs ≥ 0.85 floor; permit γLL table; remove the 0.7·Mn+ placeholder or flag it | M |
 | A26 | `Light Pole and Sign Post.html` | `fmt()` shows NaN as an error (do first); check all combinations for bolt tension / shaft P-M (0.9D + W); add a base-section check | M |
 | A27 | `Light Pole and Sign Post.html` | Cable transverse wind reaction; Case C double count; anchor shear breakout and side-face blowout; φ label | M |
-| A28 | `Retaining Wall Designer.html` | Disable the SI toggle (or convert in `getInputs`) with a migration for SI-autosaved values ❓ | M |
-| A29 | `Retaining Wall Designer.html` | Coulomb thrust inclination (δ, not β); passive Kp with level toe; EH vertical factor; Strength Ia / 0.9D footing case; M-O unstable → error | M |
+| A28 | `Retaining Wall Designer.html` | ✅ **Done** (F1, F14, PR #9: SI toggle removed, US only). Was: disable the SI toggle (or convert in `getInputs`) with a migration for SI-autosaved values | M |
+| A29 | `Retaining Wall Designer.html` | ✅ **Done** (F2–F7, PR #9, 2026-10-04). Was: Coulomb thrust inclination (δ, not β); passive Kp with level toe; EH vertical factor; Strength Ia / 0.9D footing case; M-O unstable → error | M |
 | A30 | `ASCE7-16 Load Generator.html` | C_vx height above base; Kzt 2H substitution; combination 3 "(L or 0.5W)"; Cs floor logic; roof Cp interpolation | M |
 | A31 | `Timber Beam Check.html` | ❓ Decide: rewrite factor tables (grades, CF, CM, Ct, Ci, Cfu, Cb) and the reaction/deflection logic, **or** retire. Recommend a "not for design" banner first. | L / H |
 | A32 | `elastomeric_design_module.html` | γa,st ≤ 3.0 check; plain-pad G·S and rotation; 0.8D stability; Da by shape; Method A limits per current edition ❓ | M |
