@@ -6109,6 +6109,68 @@ AASHTO LRFD 10th Ed. (2024) Table 3.4.1-2 (γ_p for EH: active 1.50 / 0.90, at-r
 
 ### Saved data
 - No input or format change.
+## 2026-11-07 — PR: claude/rw-pile-bottom-mat (PR #1149: https://github.com/mlococo88/All-Structural/pull/1149) — Pile-supported footing: the bottom mat stays at the footing cover c_c, between the pile heads (was lifted onto the pile heads, cover = embedment + clear); punching and the ACI cap depth keep the depth over the pile heads (RWPB; calculation change, pile mode only)
+
+Engineer instruction (2026-11-07, paraphrased): on piles the bottom footing bars must stay at the normal bottom position; they are not to be lifted onto the pile heads. The bars run between and around the embedded pile heads (the usual New England detail). This applies to every project, old saves included, with no option. Depths that physically start at the pile head (punching, the pile-cap depth) stay as they are. Code sites are tagged `RWPB`.
+
+### RWPB-1. Problem
+- RWPL Phase 8d (#961) set `cov_bot = max(c_c, embedment + clear)` on piles: 15 in at the defaults (12 + 3). The toe d, the toe ℓ_d / λ_rc cover, the toe crack control, the stem-hook length available and the Drawings bottom mat all used it.
+- Consequences at the defaults: toe crack control FAILed with a negative s_max (ACI −22.5 in, AASHTO −18.3 in), the toe d was 12 in short, and a warning asked for "a bar mat below the pile heads, or the engineer's judgement". The 8d decision "the bottom cover on piles is max(c_c, embedment + clear)" is superseded by this instruction.
+
+### RWPB-2. Fix (`calcAll`)
+Before (anchor `RWPL (2026-11-07, Phase 8d): on piles the bottom mat sits on the pile heads`):
+```js
+  const cov_bot = (inp.fnd && inp.fnd.type === 'pile') ? Math.max(inp.cov_ftg, (+inp.fnd.embed || 0) + (+inp.fnd.clr || 0)) : inp.cov_ftg;
+```
+After:
+```js
+  const cov_bot = inp.cov_ftg;
+  const cov_ph  = (inp.fnd && inp.fnd.type === 'pile') ? Math.max(inp.cov_ftg, (+inp.fnd.embed || 0) + (+inp.fnd.clr || 0)) : inp.cov_ftg;
+```
+- `cov_bot` (now c_c) feeds, unchanged in code: `d_toe`, the toe ℓ_d cover (ACI ψ / AASHTO λ_rc c_b), `aciCr.toe`, the AASHTO toe `crackSpacing`, `ldh_avail = t_f − cov_bot` (the stem hook bears on the bottom mat) and the Drawings `rwdwBars` `cb` (F2/F3 and the S1D hook drawn at the bottom; the piles project through the mat, embedded length dashed, as before). The heel already used c_c.
+- Punching: `dp = inp.tf - cov_bot - sel_toe.bar.db` → `dp = inp.tf - cov_ph - sel_toe.bar.db`. The depth over the pile head stays t_f − max(c_c, embedment + clear) − d_b, the abutment calculator's C-13 rule (`d_e = h_p − c_top − d_b`, h_p = t_f − embedment). The ACI "Cap Depth over Bars" row (§13.4.6.1, d_p ≥ 12 in) uses the same d_p, as before. The embedment check is unchanged.
+- `cov_ph` is returned with the pile results.
+- Warning (pile mode), was "Pile cap: the bottom bars sit … in above the base (embedment + clear) … fails for large covers …" (shown when cov_bot > 6). Now, always on piles: "Pile cap: the bottom bars are at the footing cover c_c = … in and pass between the pile heads, which project … in into the footing. Detail the bars to clear the piles (bar spacing against the pile width D; field adjustment of bars at a pile). Punching uses the depth over the pile heads, t_f − … in − d_b."
+- Display: Footing tab Toe Step 3 c_c description; the punching step "d_p = t_f − c_ph − d_b" with c_ph explained; Report Toe Step 3 label and the punching step (`r.cov_ph`). The Report's cap-depth step cited "ACI 318-19 §13.3.1.2"; it now cites §13.4.6.1, as the check row has since RW2L1 (#1144) (citation in the Report only; the check is unchanged).
+
+### Governing provisions
+- Engineer instruction 2026-11-07 (detailing basis).
+- ACI 318-19 §20.5.1.3 / AASHTO LRFD 10th Ed. (2024) Art. 5.10.1 (cover: the footing cover input, unchanged); d of the toe per ACI 318-19 §22.2 / AASHTO Art. 5.6.2; crack control ACI 318-19 §24.3.2 / AASHTO Art. 5.6.7.
+- Punching: ACI 318-19 §22.6.4.1, Table 22.6.5.2; AASHTO Art. 5.12.8.6.1 / 5.12.8.6.3 (unchanged; depth over the pile heads).
+
+### Check cases
+**Default pile wall, ACI** (t_f 36 in, c_c 3, embedment 12, clear 3, rows 1.5 / 11.0 ft at s 6 ft; toe F2 #6 @ 6, A_s 0.88 in²/ft; M_u 17521.6 lb-ft/ft, V_u 11681 lb/ft):
+- d: before 36 − 15 − 0.375 = 20.625 in; after 36 − 3 − 0.375 = **32.625 in**.
+- a = 0.88(60000)/(0.85·4000·12) = 1.294 in. φM_n: before 0.9(0.88)(60000)(20.625 − 0.647) = 949,352 lb-in (79.1 kip-ft/ft, D/C 0.221); after 0.9(0.88)(60000)(32.625 − 0.647) = **1,519,590 lb-in** (126.6 kip-ft/ft, **D/C 0.138**).
+- One-way shear (λ_s = √(2/(1 + d/10))): before φV_c 11584 lb/ft, D/C 1.008 **FAIL**; after λ_s 0.685, ρ_w 0.002248, φV_c = 0.75·8(0.685)(0.002248)^⅓√4000(12)(32.625) = **13330 lb/ft**, D/C 0.876 **PASS**.
+- Crack control (f_s = 40 ksi): before s_max = 15 − 2.5(15) = −22.5 in **FAIL**; after min(15 − 2.5(3), 12) = **7.5 in** ≥ 6 **PASS**.
+- Stem hook available: 21 → **33 in** (ℓ_dh 8.5 in).
+- Punching (row 1): d_p = 36 − 15 − 0.75 = 20.25 in, unchanged: 77.4 ≤ 403.0 kip, D/C 0.192. Cap depth 20.25 ≥ 12 in, unchanged.
+
+**Default pile wall, AASHTO** (M_u 23433 lb-ft/ft, V_u 15622 lb/ft, M_s 15907 lb-ft/ft):
+- d 20.75 (#4 @ 7) → **32.81 in** (#3 @ 6, the minimum now governs with A_s 0.22 in²/ft).
+- φM_n 379,504 → **387,891 lb-in**; D/C 0.741 → **0.725**. φV_c 35384 → **40314 lb/ft** (D/C 0.441 → 0.388).
+- Crack control s_max −18.3 → **16.2 in** (FAIL → PASS).
+- Punching d_p 20.5 → 20.625 in (smaller toe bar); d_v = max(0.9d_p, 0.72t_f) = 25.92 in either way, D/C 0.154 unchanged.
+
+**Review pile variant** (β 15°, q_s 250, water 6 ft, key 18 in, passive, k_h 0.20, t_f 36):
+- ACI: d 20.625 → 32.625; φM_n 949,352 → 1,519,590 lb-in; φV_c 11584 → 13330; crack −22.5 → 7.5 in (FAIL → PASS).
+- AASHTO: toe #5 @ 7 → #4 @ 7; d 20.69 → 32.75; φM_n 582,459 → 601,675 lb-in; φV_c 35384 → 40237; crack −18.6 → 16.1 in (FAIL → PASS); toe ℓ_d 14.8 → 12.0 in (c_b now with c_c).
+
+### How verified
+- Headless, origin/main vs branch, `calcAll` on the 32 review walls plus AASHTO at-rest (spread and pile): only pile walls move, and only the toe d and what follows from it (toe bars, φM_n, φV_c, ℓ_d, crack control, stem-hook length available, the warning). Spread footings identical; pile reactions and the Pile Designer hand-off identical. 0 console errors.
+- Drawings sheet 1 on piles looked at: bottom mat at the bottom cover, pile heads projecting 12 in through it.
+- Tests: check-syntax; smoke/retaining-wall-checks (the RWPL 8d row now expects d_toe 32.625 with cov_bot 3, cov_ph 15, toe crack control and shear PASS; punching and cap-depth rows unchanged); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Decisions (pending engineer review)
+- The punching depth keeps the abutment's C-13 rule (t_f − embedment − clear − d_b), conservative now that the bars are below the pile heads.
+- The clear-cover input "clear, pile top to the bottom bars" is kept for that depth only; its label is unchanged.
+- No in-tool check of bar clearance to the piles; the warning asks for it.
+- The abutment calculator still lifts its bottom mat onto the pile heads (`cBot = embed + clrTop`); not changed here (one tool per PR).
+
+### Saved data
+- No input or format change. Old pile saves open with the mat at c_c (engineer instruction: no option).
+
 
 ## 2026-11-07 — PR: claude/rw-stem-projection — Stem projection above the retained grade h_p: earth, water and surcharge on the retained height H_ret = H − h_p in both modes and both footing types; worked steps and Report show H_ret (RWHP part 1: input, loads, stability, stem, footing, piles, hand-off; §4)
 
