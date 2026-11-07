@@ -3844,7 +3844,7 @@ Follow-up to item 3 (#944). Engineer answer (2026-11-07): the vertical component
 
 ### Saved data
 - No input or format change.
-## 2026-11-07 — PR: claude/rw-left-summary — Check summary in the left panel exactly as Spread Footing's Summary Dashboard: rows styled as SF's chips (RWDL; display only, no result change)
+## 2026-11-07 — PR: claude/rw-left-summary — Check summary in the left panel exactly as Spread Footing's Summary Dashboard: rows styled as SF's chips (RWDL; display only, no result change) (PR #959: https://github.com/mlococo88/All-Structural/pull/959)
 
 ### RWDL. Check summary rows styled as Spread Footing's dashboard chips; position and breakpoints confirmed against SF   [display only]
 - **Request (engineer, 2026-11-07):** "the summary cards should be on the left panel" — RW's check summary panel (RWDC, #926) to sit in the left column exactly like Spread Footing's Summary Dashboard (SFDC #737 / SFDF #740) and Light Pole's panel (LPDC #747): same position, breakpoints, collapse behaviour and card styling.
