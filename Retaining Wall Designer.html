@@ -10572,6 +10572,7 @@ function buildGeometry3D(r) {
     });
   }
 
+  const gap3 = Math.max(B, H) * 0.02;   // RWPS (2026-11-07): diagrams on the planes through the heel and the toe face, a gap off the concrete (RWHP: declared outside the block below, on the full H)
   { const r = rwHpView(r0), H = r.H;   // RWHP: the pressure prisms from the grade
   // ── ACTIVE PRESSURE (triangular prism behind back face) ──
   // Y is up: max pressure at base (y=0), min/zero at top (y=H)
@@ -10590,7 +10591,6 @@ function buildGeometry3D(r) {
   pShape.closePath();
   const pGeo = new THREE.ExtrudeGeometry(pShape, { depth: WL, bevelEnabled:false });
   const pMesh = new THREE.Mesh(pGeo, mat(0x3399ff, 0.32));
-  const gap3 = Math.max(B, H) * 0.02;   // RWPS (2026-11-07): diagrams on the planes through the heel and the toe face, a gap off the concrete
   pMesh.position.set(B + gap3, 0, 0);   // RWPS: was Lt + ts_bot (the stem back face: inside the backfill and the heel)
   G.pressure.add(pMesh);
 
