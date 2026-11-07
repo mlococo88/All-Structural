@@ -6316,6 +6316,58 @@ Part 2 of the RWPT request (part 1: #1148). Code sites are tagged `RWPT2`. **Dis
 - Hand check above (40.98 kip). Screenshots at 1400 px and 390 px (no sideways scroll).
 - Tests: check-syntax; smoke/retaining-wall-checks (RWPT block plus the combination table rows and highlight, the zoomable sketches, the substituted N, and the Report D/C columns and plan figure); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs.
 
+
+
+
+## 2026-11-07 — PR: claude/rw-stem-projection (PR #1150: https://github.com/mlococo88/All-Structural/pull/1150) — Stem projection above the retained grade h_p: earth, water and surcharge on the retained height H_ret = H − h_p in both modes and both footing types; worked steps and Report show H_ret (RWHP part 1: input, loads, stability, stem, footing, piles, hand-off; §4)
+
+### What changed
+- **New input** `h_proj` (Wall pane, Geometry): "Stem projection above retained grade h_p", ft, default 0. Saved only when not 0 (`RWLS_DEF.h_proj = '0'`); a save without the field opens with 0 (`restoreFields`), so older projects, autosaves and JSON exports open with h_p = 0 and their results unchanged.
+- **Validation:** `rwInputErrors` (named error on `h_proj`): h_p ≥ 0 and h_p ≤ H_s − 1.0 ft (with Variable-height wall ticked: H_low − 1.0 ft). `calcAll` repeats the H_s check (error "Stem projection above retained grade …", mapped to the field by `rwIeIdOf`). The 1.0 ft minimum is the constant `RW_HP_MINRET`.
+- **calcAll** (anchor `RWHP (2026-11-07): stem projection above the retained grade h_p`): `h_p`, `H_ret = H − h_p`, `Hs_ret = H_s − h_p`, `t_g` (stem thickness at the grade, = t_top at h_p = 0), `wt_r = max(0, d_WT − h_p)` (WT depth below the grade; d_WT is still entered from the top of the wall; a WT above the grade is taken at the grade, with a warning).
+- Every earth / water / surcharge quantity uses the retained heights; the stem self weight, the barrier and the collision stay on the full stem.
+
+### §4 changes (before → after; identical at h_p = 0)
+| Quantity | Before | After | Provision |
+|---|---|---|---|
+| Pressure-plane height | `Hp = H + dH_slope`, `L_rise = L_h + (t_bot − t_top)` | `Hp = H_ret + dH_slope`, `L_rise = L_h + (t_bot − t_g)` (slope from the grade at the stem back face) | Rankine / Coulomb thrust (AASHTO LRFD 10th Art. 3.11.5.3; ACI/IBC mode as before) |
+| Water | `hw = H − wt_d`, pressures with `wt_d` | `hw = H_ret − wt_r`, pressures with `wt_r` | AASHTO Art. 3.11.3; ACI 318-19 §5.3.8 |
+| p at stem base / footing base / WT | on `H_s`, `H`, `wt_d` | on `H_s,ret`, `H_ret`, `wt_r` | — |
+| Heel soil column | `γ_s(H_s − h_sat) + γ_sat h_sat`, `h_sat = H_s − wt_d` | the same on `H_s,ret`, `wt_r` | — |
+| Slope wedge arm | `x = L_t + t_top + ⅔L_rise` | `x = L_t + t_g + ⅔L_rise` | — |
+| AASHTO LS | `heqAASHTO(H, …)`, `ls_half = H/2` | `heqAASHTO(H_ret, …)`, `ls_half = H_ret/2` | AASHTO LRFD 10th Art. 3.11.6.4.1 and Tables 3.11.6.4.1-1/-2: the wall height is the distance from the backfill surface to the bottom of the footing (verified on the printed article) |
+| Seismic (both modes) | `Hq = H + (L_h + t_bot − t_top)tanβ` | `Hq = H_ret + (L_h + t_bot − t_g)tanβ` (= H′) | ASCE 7-22 §11.8.3 (M-O); AASHTO Art. 11.6.5.1 |
+| EE I inertia height | soil block at `t_f + H_s/2`, wedge at `H + dH/3` | `t_f + H_s,ret/2`, `H_ret + dH/3` (wall weight on the full stem, unchanged) | AASHTO Art. 11.6.5.1 |
+| Stem demand `stemDemand(z)` (base, mid-height S3, S1 termination `MuS`/`MuE`, service crack control, seismic `stemSeis`) | earth/water on depth z below the stem top; surcharge `K_a q z²/2` | on `z_r = max(0, z − h_p)`; the collision arm and the stem inertia on the full z | ACI 318-19 §5.3 / Eq. 5.3.1e; AASHTO Table 3.4.1-1/-2, Art. 11.6.5.1 |
+| Rankine heel test | `L_h ≥ H tan(45 − φ/2)` | `H_ret` | (warning text only) |
+
+Unchanged: passive side (D_f), stem weight `W_stem` and its arm, the barrier, collision lever arm `y_CT = H + h_CT` (Decision below), the 45° CT spread `L_t + 2H_s`, the S2/S4 T&S widths (b = H_s), the lap length available `H_s`.
+
+### Check case (hand) — default walls (H_s 12 ft, t_f 18 in, t 18/12 in, L_t 3, L_h 8, γ_s 120, φ 30°, q_s 0, γ_c 150, μ = tan 20°)
+- **h_p = 0:** identical to main (headless probe, every numeric result and every tab text, 7 walls).
+- **ACI, h_p = 3 ft:** H_ret = 13.5 − 3 = 10.5 ft. P_a = ½(⅓)(120)(10.5²) = **2205** lb/ft (was 3645). W_soil = 120·9·8 = 8640 (was 11520); W_stem 2250 unchanged. M_o = 2205·10.5/3 = **7717.5** (was 16402.5). M_s = 123673.1 − 2880·8.5 = 99193.1. **FS_OT = 99193.1/7717.5 = 12.853** (was 7.540). ΣV = 13702.5; **FS_SL = 13702.5·0.36397/2205 = 2.262** (was 1.656). x̄ = (99193.1 − 7717.5)/13702.5 = 6.676, e = −0.426; **q_max = 1096.2(1 + 6·0.426/12.5) = 1320.3 psf** (was 1466.0). Stem: **M_u = 1.6·(⅓)(120)(9³)/6 = 7776 lb·ft/ft** (was 18432), V_u = 1.6·½·40·81 = 2592 (was 4608); S3 at mid-height: z_r = 3 ft, M_u = 1.6·40·27/6 = 288 (was 2304).
+- **AASHTO, h_p = 3 ft:** h_eq at H_ret 10.5 (Table 3.11.6.4.1-2, d = 0) = 3.5 − 1.5(0.5/10) = **3.425 ft** (was 2.975 at H 13.5); q_LS = 411 psf; P_EH = 2205, P_LS = ⅓·411·10.5 = 1438.5. Sliding: H = 1.5·2205 + 1.75·1438.5 = 5824.9; R = 13196.25·tan20° = 4803.0; **D/C = 1.213** (was 1.415). M_o = 1.5·2205·3.5 + 1.75·1438.5·5.25 = 24792.5; M_r,min = 0.9(17578.1 + 8175) + 73440 = 96617.8; **e = 6.25 − 71825.3/13196.25 = 0.807 ft** (was 1.428) ≤ B/4. Bearing: V = 23746.1, M_r = 180244.4, x̄ = 6.546, e = −0.296, B′ = 11.907, **q = 1994.3 psf** (was 2212.2). Stem **M_u = 1.5·4860 + 1.75·(⅓)(411)(81)/2 = 16999.9** (was 32274).
+
+### Worked steps and Report (§6)
+- Helpers `rwHt/rwHu/rwHst/rwHsu` (symbols: `H`/`H_s` at h_p = 0, `H_ret`/`H_s,ret` otherwise) and `rwHpEq(r, stem)` (the step H_ret = H − h_p, or H_s,ret = H_s − h_p), shown only when h_p > 0: ACI Stability Step 2, AASHTO Stability Step 2 (LS) or Step 3, Stem Step 1; P_a, P_a,sur, W_soil, LS table and H/2 rule, M-O, stem soil/ES/LS moments, seismic stem steps, heel soil height, MassDOT heel w_DL, mid-height retained depth, plots (stem pressure: grade line, zero above it; stem M/V). Report: geometry echo rows h_p and H_ret, steps `Hret` / `Hsret`, and the same substitutions. Self-consistency panel (stem base integral) starts the pressure at the grade.
+- Pile Designer hand-off (`rwpxBuild`): the loads come from the pile analysis (already corrected); with h_p > 0 one note is added. At h_p = 0 the payload and its content hash are unchanged (format unchanged, HANDOFF.md §4 unaffected).
+
+### Decisions (pending engineer review)
+1. Minimum retained height on the stem with a projection: 1.0 ft (`RW_HP_MINRET`).
+2. The water-table depth stays entered from the top of the wall (saved meaning unchanged); a WT above the retained grade is taken at the grade, with a warning.
+3. Collision (AASHTO EE II): still applied from the stem top (`y_CT = H + h_CT`), as instructed and conservative; a roadway on the retained grade would put it at H_ret + h_CT.
+4. AASHTO crack control: γ_e2 ("stem / above grade") is already applied to both stem checks (S1 at the base, S3 at mid-height); the exposed part of the stem has no earth-induced flexural tension, so no separate check is added.
+5. The variable-height wall keeps one h_p along the length (the design H_s − h_p; validation on H_low).
+
+### Open items (not changed; raised)
+- With a sloped backfill the ACI Stability Step 2 shows P_a = ½K_aγH² with H (now H_ret), while the analysis uses H′ (pressure plane through the heel end). Display only, pre-existing.
+- The MassDOT heel w_DL display uses γ_s·H_s(,ret) and ignores the water table (the analysis uses the water-aware column). Display only, pre-existing.
+- Graphics (section, analysis diagram, 3D, Drawings/DXF, Report figures) still draw the backfill at the stem top: part 2 (next PR).
+
+### How verified
+- Headless main vs branch probe at h_p = 0: every numeric result, every tab text and SVG size identical (default ACI, AASHTO, water, slope + seismic + collision, ACI seismic + surcharge, ACI and AASHTO piles); 0 console errors.
+- `tests/smoke/retaining-wall-checks.mjs`: new CASES (h_p too large, negative, beyond H_low) and AUD rows `RWHP` (the hand checks above, water/seismic/slope/collision, piles, self-checks, old autosave).
+- Tests (after merging origin/main): check-syntax; smoke/retaining-wall-checks (all ok); phone-layout rwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs: all pass. project-library retwall: against origin/main the results differ only by the new keys (`inp.h_proj`, `h_p`, `H_ret`, `Hs_ret`, `t_g`, `wt_r`, `Hs_mid_r`, all 0 or equal to the old values), as intended; with `--a HEAD` (same calculation both sides) ALL PASS.
 ## 2026-11-07 — PR: claude/rw-user-manual (PR #1154: https://github.com/mlococo88/All-Structural/pull/1154) — User Manual tab, part 1: the Manual tab, printing (alone or as a Report appendix) and the parts on scope, screen, code modes, inputs, projects, drawings and the Report (RWMAN; display only, no result change)
 
 Review Phase 6a (rwreview plan): the User Manual tab, asked for by the engineer. This first PR holds the tab, the printing and the descriptive parts; the calculation parts (loads, stability, seismic, collision, stem, footing, key, bar layout, piles), the limits and the appendix of pending decisions follow in part 2. Code sites are tagged `RWMAN`.
