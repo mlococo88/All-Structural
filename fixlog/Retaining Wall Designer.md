@@ -6158,3 +6158,4 @@ Unchanged: passive side (D_f), stem weight `W_stem` and its arm, the barrier, co
 ### How verified
 - Headless main vs branch probe at h_p = 0: every numeric result, every tab text and SVG size identical (default ACI, AASHTO, water, slope + seismic + collision, ACI seismic + surcharge, ACI and AASHTO piles); 0 console errors.
 - `tests/smoke/retaining-wall-checks.mjs`: new CASES (h_p too large, negative, beyond H_low) and AUD rows `RWHP` (the hand checks above, water/seismic/slope/collision, piles, self-checks, old autosave).
+- Tests (after merging origin/main): check-syntax; smoke/retaining-wall-checks (all ok); phone-layout rwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs: all pass. project-library retwall: against origin/main the results differ only by the new keys (`inp.h_proj`, `h_p`, `H_ret`, `Hs_ret`, `t_g`, `wt_r`, `Hs_mid_r`, all 0 or equal to the old values), as intended; with `--a HEAD` (same calculation both sides) ALL PASS.
