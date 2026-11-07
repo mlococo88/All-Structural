@@ -5310,3 +5310,45 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** probe (default, e_y = 0 and 3, e_x = 2 with V_y); `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects, all e = 0): results identical to main; `node tests/bpad-profis.mjs`, `node tests/anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `tests/smoke/standard-save.mjs`, `tests/smoke/dxf-print-sheets.mjs --tool bp`; 0 console errors.
 - **Other copies:** none.
 - **Open items:** decisions 1–4. The PROFIS export still writes the offset as Profile OffsetX/Y (unchanged, unconfirmed mapping, ENGINEER_CHECKS A10).
+
+## 2026-11-07 — BPM1: side-face blowout checked at every edge within 0.4h_ef (PR: claude/bp-m1-sfb-edges, PR #965: https://github.com/mlococo88/All-Structural/pull/965)
+
+### BPM1. Side-face blowout: each near edge with its own row demand   [calculation change, more conservative; saved data: none]
+- **Problem (review M1):** `sfbEdgeDemand()` took the tension of the anchor row at the edge with the SMALLEST c_a1, and `sideFaceBlowout(nT, ca1 = min of four)` the capacity there. A tension row at another edge with c_a1 < 0.4h_ef was not checked: the Summary row read 0.00. The tension envelope (Σ T / φN_sb at the nearest edge) protected pass/fail in the review case, but the check itself was missing.
+- **Governing provision:** ACI 318-19 §17.6.4.1 (single headed anchor, c_a1 < 0.4h_ef; Eq. (17.6.4.1); corner §17.6.4.1.1) and §17.6.4.2 (multiple anchors along the edge, Eq. (17.6.4.2)). Unchanged equations; what changes is which edges are checked.
+- **Where:**
+  - new `sfbRowAt()` and `sideFaceBlowoutEdges()` before the shear-breakout section (anchor `/* BPM1 (2026-11-07): SIDE-FACE BLOWOUT AT EVERY EDGE`);
+  - `sideFaceBlowout(nT, ca1, condA, edgeOv)` takes an optional edge (`nearIsX`, side) instead of picking the nearest; `bpSfbRowSpread(g, nearIsX, posOv)` likewise;
+  - `comboCapacities()`: before `sideFaceBlowout(nT, ca1, condAT)` → after `sideFaceBlowoutEdges(combo, nT, condAT)`; the tension-envelope mode's demand (`sfbEnvDem`);
+  - `allChecks()` (Summary and the DCR matrix), the per-anchor group table and the PROFIS-style table: demand `cap.sfb.demand` (falls back to `sfbEdgeDemand`); the Concrete tab box shows the governing edge row when a farther edge governs.
+  - User Manual 4B.6: one paragraph.
+- **Before / after:**
+  - Summary ratio: before `sfbEdgeDemand(c)/φN_sb(c_a1,min)` → after **max over the edges with c_a1 < 0.4h_ef of ΣT(row nearest that edge)/φN_sbg(that edge's c_a1, c_a2, s)**. When the nearest edge governs, or every ratio is 0, the old object and numbers are returned.
+  - Tension envelope (interaction): before ΣT_group/φN_sb(nearest) → after **max(ΣT_group/φN_sb(nearest), N_row/φN_sbg(governing edge))** (as a demand on the governing edge's φN_sbg). Unchanged when the nearest edge governs.
+- **Decision (pending engineer review):** the envelope keeps its old group basis as a floor (conservative), as before this fix.
+- **Check case (review M1):** default project, pedestal B_x = 20, plate offset x = −1, plate B = 16, e_dx = 2.5, h_ef = 15 (0.4h_ef = 6), one combination M_y = −600 kip-in, P = 0. Edge distances: −x 3.5, +x 5.5.
+  - Before: Side-Face Blowout **0.00** (−x edge, no tension in that row).
+  - After: +x row T = 2 × 24.048 = 48.10 kip; N_sb = 160 × 5.5 × √1.501 × √4000 / 1000 = 68.19 kip; group α = 1 + 12/(6 × 5.5) = 1.364; φN_sbg = 0.70 × 1.364 × 68.19 = 65.09 kip; **48.10 / 65.09 = 0.739** (review 0.74 ✓). The −x edge: 0 / 47.73.
+  - Envelope ratio (interaction input) 1.008, unchanged (48.10 / 47.73 at the nearest edge).
+  - Mirror (M_y = +600): 1.008 before and after (the −x row at the nearest edge).
+- **How verified:** probe on main and branch; `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs`, `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors (results in the PR).
+- **Other copies:** none.
+- **Open items:** none new.
+- **Correction to BPH2 (same PR, display only):** the worked step "Column eccentric on the plate — …" in `plateBending()` (anchor `let eccStep=null;`) was written with single backslashes in its JavaScript strings (`"\ \text{kip-in}"`), so `\t` became a tab and the KaTeX text was wrong. Every backslash in that block is now doubled (`"\\ \\text{kip-in}"`), as in the rest of the file. No value changes. The new BPM1 step was corrected the same way before commit. Checked: every line of the plate-bending, Breakout (V) and side-face blowout steps of an eccentric-column case and of the M1 case typesets in KaTeX 0.16.9 with throwOnError.
+
+## 2026-11-07 — BPM2: shear breakout demand = the V of the case the check uses (PR: claude/bp-m2-case1-demand, PR #968: https://github.com/mlococo88/All-Structural/pull/968)
+
+### BPM2. Case 1 demand in the Summary, the DCR matrix and the interaction   [calculation change, LESS conservative where Case 1 governs; saved data: none]
+- **Problem (review M2):** the case table (Fig. R17.7.2.1b) picks the governing case by each case's own V (Case 1: the front row's tributary share), and the breakout capacity is that case's. But the Summary, the DCR matrix and the interaction divided V_res, the full shear, by that capacity. When Case 1 governs, the result was twice the case table's ratio for a 2 × 2 group, and inconsistent with it. The torsion sweep already used the case's V.
+- **Governing provision:** ACI 318-19 §17.7.2.1 and Fig. R17.7.2.1b (printed p. 264): Case 1, half (the tributary share) of the shear is critical on the front row with c_a1 = c_a1,1; Case 2, the full V on the rear row; Case 3, the full V on the front row; for s ≥ c_a1,1 both Case 1 and Case 2 are evaluated.
+- **Where:**
+  - `computeAll()`: `vCase` also stores `V:u.V, nRes:u.nRes` (anchor `/* BPM2: V of the case`);
+  - `comboCapacities()`: before the BPH1 block, `if(!combo.tors && sbkDem===undefined && combo.vCase && isFinite(combo.vCase.V)) sbkDem=combo.vCase.V;` (anchor `/* BPM2 (2026-11-07): the breakout demand`); in the BPH1 component block, the resultant ratio uses that V (`baseV`) and each component's ratio uses `vc.used.V` (before: `combo.Vres` and `Math.abs(o.V)`);
+  - the per-anchor group table and the PROFIS-style table: `(cap.sbkDem!==undefined)? cap.sbkDem : …` (before only for a governing BPH1 component; now also for torsion, whose sweep demand was already used by the Summary).
+- **Before / after:** breakout demand V_res → **V of the governing (or forced) case**: Case 1 V·n_front/n; Cases 2, 3 and a single row V. Pryout (V_res) and steel shear (per anchor) unchanged.
+- **Check case (review M2):** default project, plate offset y = +5, V_y = 9 kip only (P = −20). Case table: Case 1 V = 9 × 2/4 = 4.5 kip on φV_cbg = 6.375 kip → 0.706; Case 2 V = 9 on 12.95 → 0.695; Case 1 governs. Summary Breakout (V): **before 1.412 → after 0.706** (= the case table); interaction 1.777 → 0.706.
+- **Effect on BPH1 (#962):** V_x = 10, V_y = 8 case: 1.932 → **1.208** (V_y alone is now Case 1, 4/4.141 = 0.966; V_x alone, +y parallel check, 10/8.282 = 1.208 governs) = max of the single-component results (review: "at least max(1.208, 0.966) = 1.21" ✓). PROFIS msa3a: the +y component is now Case 1 (1/9.109 = 0.110) and the resultant Case 2 (2.828/18.057 = 0.157) governs again: the reported φV_cbg goes back to 18,057 lb (PROFIS 7,962 lb; the +y edge check, 9,109 lb, is in the step). See the L6 note.
+- **Proof against the case table:** for every combination of the default project the Summary ratio equals `shearCases(c).used.dcr` (0.5576, 1.1261, 1.1261: Case 2 governs, unchanged); for the check case both are 0.7059.
+- **How verified:** probe; `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs`, `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors (results in the PR).
+- **Other copies:** none.
+- **Open items:** none new.
