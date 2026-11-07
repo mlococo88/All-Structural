@@ -1229,7 +1229,8 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
    - cases: per row of the last "Run all cases": the loads it ran (P, V, M_head), the p-y maximum moment and its depth, the head
      deflection and rotation, z_fix (first moment zero below M_max, reference), the D/C ratios, and where the row came from
      (the abutment's per-pile governing load id, or its case name for a Group row);
-   - integral: the integral-abutment results (gravity D/C; with Tier 2 the pile-head moments and the interaction D/C).
+   - integral: the integral-abutment results (gravity D/C; with Tier 2 the pile-head moments and the interaction D/C);
+   - group (PDA-M7): Module 11's group efficiency / block result as a factor on the single-pile R_n (and R_n,up), or null.
    Reads the live results the App registers with note(); computes nothing that feeds a result. Uses BridgeXfer v1 (above). */
 (function(){
   if(window.PileResultsXfer) return;
@@ -1287,6 +1288,23 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
         basis:'grout-to-ground bond over the bond length (micropile)' }, method:{ key:'static', label:'bond (micropile)', phiDyn:null }, field:null, minPen:null };
     }
     return null;
+  }
+  /* PDA-M7 (2026-11-07): the group result, so a receiver does not credit each pile with the single-pile phi R_n when the group
+     efficiency (10.7.3.9 / 10.9.3.6) or the block governs. reduce = (governing group phi R per pile) / (single-pile phi R_n) <= 1;
+     reduceUp likewise for the group uplift (10.7.3.11 / 10.9.3.8, micropile). null without a group (Module 11 off) or for an integral pile. */
+  function group(I,r){
+    var g=r.group; if(!g || !g.enable || I.pileType==='iab') return null;
+    var n=g.nPiles||1, single=isNum(g.phiRn_single)? g.phiRn_single : (r.geo? r.geo.phiPn_geo : null);
+    if(!isNum(single) || !(single>0)) return null;
+    var eta=isNum(g.eta)? g.eta : 1, per=eta*single, blk=!!g.blockComputed && isNum(g.phiGroupBond);
+    if(blk) per=Math.min(per, g.phiGroupBond/n);
+    var u=g.upl||null, t=r.tension||{}, upSingle=I.pileType==='hpile'? (r.hpileGeo? r.hpileGeo.phiRn_up : null) : t.phiPn_up;
+    var redUp=(u && isNum(upSingle) && upSingle>0)? Math.min(1, u.phiR/(n*upSingle)) : null;
+    return { nPiles:n, nRows:g.nRows, nCols:g.nCols, spacing:rn(g.s_in,3), B:rn(g.dh_in,3), eta:nr(eta), etaBasis:g.aashto? (g.aashto.etaCase||'AASHTO 10.7.3.9') : 'FHWA',
+      phiRnSingle:nr(single), phiRnPerPile:nr(per), blockComputed:blk, phiBlockTotal:blk? nr(g.phiBlock) : null, blockGoverns:!!g.blockGoverns,
+      reduce:nr(Math.min(1, per/single)),
+      uplift:u? { phiRTotal:nr(u.phiR), phiSum:nr(u.phiSum), phiBlock:nr(u.phiBlk), blockGoverns:!!u.blockGoverns, reduceUp:nr(redUp) } : null,
+      basis:'Module 11: group phi R per pile = min(eta x single phi R_n, block phi R_g / n) (10.7.3.9, 10.9.3.6); reduce = that / single phi R_n. Uplift (micropile): min(n phi_up R_up, 0.50 R_ug) (10.7.3.11, 10.9.3.8). A receiver multiplies R_n (R_n,up) by reduce (reduceUp).' };
   }
   function structural(I,r){
     var s=r.hpileStruct; if(I.pileType!=='hpile' || !s) return null;
@@ -1348,6 +1366,7 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
       geotechnical:geotech(I,r,LIVE.cases),   // PDA-IAB: integral mode too (Module 13, when on)
       structural:iab? null : structural(I,r),
       fixity:fixity(I,r,LIVE.pyRes),
+      group:iab? null : group(I,r),   // PDA-M7 (2026-11-07, additive, optional)
       casesRunAt:cs.at, cases:cs.rows,
       integral:integral(I,r),
       notes:[
