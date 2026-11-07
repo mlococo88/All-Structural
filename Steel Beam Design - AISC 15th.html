@@ -10421,7 +10421,9 @@ function buildMxTab(pg){
       if(g.mode==='calc'&&g.win){
         const q=g.win.q;
         body.appendChild(eqBlock({title:'Worst window ['+fmt(g.win.a,2)+', '+fmt(g.win.b,2)+'] ft \u2014 C\u1D47',ref:'Eq. F1-1',
-          lines:['C_b=\\tfrac{12.5M_{max}}{2.5M_{max}+3M_A+4M_B+3M_C}=\\mathbf{'+fmt(g.Cb,2)+'}']}));
+          /* L4 (2026-11-07): the moments substituted (section 6, show the work) */
+          lines:['C_b=\\tfrac{12.5M_{max}}{2.5M_{max}+3M_A+4M_B+3M_C}=\\tfrac{12.5('+fmt(q.Mmax,1)+')}{2.5('+fmt(q.Mmax,1)+')+3('+fmt(q.MA,1)+')+4('+fmt(q.MB,1)+')+3('+fmt(q.MC,1)+')}=\\mathbf{'+fmt(g.Cb,2)+'}'],
+          vars:[['M_{max}','kip\u00B7ft','largest |M| in the window'],['M_A,M_B,M_C','kip\u00B7ft','|M| at the window quarter points']]}));
       }
       dcrLine(body,'Governing DCR \u2014 '+(g.basis==='composite'?'composite section':(D.member?'bare steel':g.flange+' flange, region '+fmt(g.x1,1)+'\u2013'+fmt(g.x2,1)+' ft')),
         g.cap.gov?g.cap.gov.clause:'',' M',g.Mu,g.phiMn,g.dcr);
