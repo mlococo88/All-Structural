@@ -2616,7 +2616,7 @@ function sfqcCard(bp,r){
  }else{
   box.appendChild(eqBlock('Footing-corner pressures (the labels on the heat map below)','no-tension plane, solution above',
    'q = \\max\\left(0,\\; q_0 + g_x x + g_y y\\right),\\quad x = \\pm\\tfrac{B}{2},\\; y = \\pm\\tfrac{L}{2}',
-   'q_0 = '+f3(pl.q0)+'\\;\\mathrm{ksf},\\;\\; g_x = '+sfdF5(pl.gx)+',\\;\\; g_y = '+sfdF5(pl.gy)+'\\;\\mathrm{ksf/ft},\\;\\; B/2 = '+f2(R.B/2)+',\\;\\; L/2 = '+f2(R.L/2)+'\\;\\mathrm{ft}',
+   'q_0 = '+f3(pl.q0)+'\\;\\mathrm{ksf},\\;\\; g_x = '+f4(pl.gx)+',\\;\\; g_y = '+f4(pl.gy)+'\\;\\mathrm{ksf/ft},\\;\\; B/2 = '+f2(R.B/2)+',\\;\\; L/2 = '+f2(R.L/2)+'\\;\\mathrm{ft}',
    C.map(c=>'q_'+(c.i+1)+' = '+(c.off?'0':f2(c.q))).join(',\\;\\;')+'\\;\\mathrm{ksf}\\quad(q_{max} = '+f2(bp.qmax)+')'));
  }
  const t=document.createElement('table');t.className='tbl';
