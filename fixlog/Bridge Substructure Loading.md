@@ -2303,3 +2303,30 @@ function listTables() {
 - **How verified:** main vs branch on the default project: every localStorage key (1), page text (8641 chars), Export JSON (11648 chars identical) and the printed report text (print media, 271162 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Bridge Substructure Loading.html"`; `node tests/smoke/project-library.mjs --tool bsl`; `node tests/smoke/github-sync-tools.mjs --tool bsl`; `node tests/smoke/home-projects.mjs --tool bsl`; `node tests/smoke/phone-layout.mjs --tool bsl`: pass.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/subloads-kz-strv (KZG) — K_Z and G taken as 1.0 for Strength V and Service I wind, superstructure and substructure (review H1 + L6; §4 result change)
+- **Why:** in-depth code review of 2026-11-07 (`reviews/substructure-loading.md`), findings H1 and L6.
+- **Problem:** `windSuper` and `subWindPts` applied the pressure exposure and elevation coefficient K_z (Eqs. 3.8.1.2.1-2 to -4) and the entered gust effect factor G to every limit state. The code defines K_z and G that way for Strength III and Service IV only and takes both as 1.0 for the other combinations; the commentary says Strength V and Service I use constant wind speeds that do not depend on height or exposure. Exposure B (K_z = 0.709 for Z ≤ 33 ft): Strength V and Service I wind was 29 % low (**unconservative**). Exposure C/D with Z > 33 ft: K_z > 1 made it conservative. A G ≠ 1 also moved Strength V / Service I (L6).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.8.1.2.1 (definitions of K_Z and G under Eq. 3.8.1.2.1-1) and C3.8.1.2.1.
+- **Where / code:**
+  - New helper before `function subWindPts` (anchor `const wsKzG = key =>`):
+    `const wsKzG = key => !key || key === 'III' || key === 'SIV';`
+  - `subWindPts(G, UG, k, V, wL, wT)` → `subWindPts(G, UG, k, V, wL, wT, key)` (key omitted = Strength III, as the Wind tab table, the report and the 3D view call it).
+    Before: `Gf = nz(P.br.Gf) || 1, … Pz = z => 2.56e-6 * V * V * Kz(z - g, ex) * Gf * cd;`
+    After: `kg = wsKzG(key), Gf = kg ? nz(P.br.Gf) || 1 : 1, … Pz = z => 2.56e-6 * V * V * (kg ? Kz(z - g, ex) : 1) * Gf * cd;`
+  - `windSuper(G, key)`, anchor `const kz = Kz(Z, b.exp || 'C'), Pz =`:
+    Before: `const kz = Kz(Z, b.exp || 'C'), Pz = 2.56e-6 * V * V * kz * (nz(b.Gf) || 1) * (nz(b.CDsup) || 1.3), …; return { V, D, Z, kz, Pz, w0, …`
+    After: `const kg = wsKzG(key), kz = kg ? Kz(Z, b.exp || 'C') : 1, gf = kg ? nz(b.Gf) || 1 : 1, Pz = 2.56e-6 * V * V * kz * gf * (nz(b.CDsup) || 1.3), …; return { V, D, Z, kz, gf, Pz, w0, …`
+  - `phase3`: the per-limit-state call passes the key: `lc.pts = subWindPts(G, UG, k, W.V, …, c.sT * Math.cos(rad(c.a)), key);`
+  - The abutment hand-off (`abutExportData`, `wsCases`) uses `windSuper`, so its Strength V / Service I wind cases follow.
+- **Display (show the work, §6):** Wind tab table: new G column; K_z shows 1.000 and G 1.00 for Strength V and Service I; card subtitle "G = … (Strength III, Service IV)"; note "K_z and G apply to Strength III and Service IV only; … 1.0 (3.8.1.2.1)". Report §"Bridge-wide load parameters", Wind on the superstructure: Strength III / Service IV keep the K_z step (Eqs. 3.8.1.2.1-2 to -4); Strength V / Service I show "K_z = G = 1.0 (constant wind speed)", Art. 3.8.1.2.1, and the P_z substitution uses the G actually applied. Manual (wind) and Methods text say the same.
+- **Check case (hand):** default bridge with exposure B, all skews 30° (the reviewer's variant), Pier 1, at the top of footing. Z = 21.81 ft (< 33 ft), K_z(B) = 0.70897, D = 9.583 ft, C_D = 1.3.
+  - Strength V superstructure: before P_Z = 2.56e-6 × 80² × 0.70897 × 1.0 × 1.3 = 0.015100 ksf, w_0 = 0.1447 klf. After P_Z = 2.56e-6 × 80² × 1.0 × 1.0 × 1.3 = 0.021299 ksf, w_0 = 0.2041 klf.
+  - Service I: before 0.011561 ksf, after 2.56e-6 × 70² × 1.3 = 0.016307 ksf.
+  - Substructure (C_D 1.6), Strength V: before 0.018585 ksf, after 2.56e-6 × 80² × 1.6 = 0.026214 ksf.
+  - Strength V at the top of footing: M_l 2815.9 → 2985.0 kip-ft (+6.0 %); V_t 98.6 → 106.9 kip (+8.4 %); V_l 150.0 → 159.7 kip; M_t 7972.8 → 8155.3 kip-ft. Service I M_l 2552.7 → 2682.2 kip-ft.
+  - Default project (exposure C, K_z = 1.0014): Strength V / Service I wind 0.14 % lower (e.g. Pier 1 Str V M_l 3200.5 → 3199.7 kip-ft). Strength III and Service IV unchanged.
+- **How verified:** headless main vs branch, every combination value of every unit (5,849 values) and the abutment hand-off payload, default project and the reviewer's variants (exposure B + 30° skew; + one-way traffic, CE, Zone 1 site): only Strength V and Service I values and the abutment payload's WS.V / WS.SI cases change. Hand-off receivers: SubLoads sent abutmentLoads and foundationLoads (Pier 1, top and bottom of footing, 37 cases); the abutment calculator, Spread Footing and Pile Designer pulled and applied them with no page errors; only the StrV / SerI cases differ from main. `check-syntax`, `phone-layout --tool bsl` (390 / 768), `engine/run.mjs handoffs` (10 / 10), `abutment-pile-group-parity` (14 / 14), `spread-footing-nobear`: pass. `project-library --tool bsl`: all library / undo checks pass; its three "results identical to main" checks fail by design (the WS.V / WS.SI results change). 0 console errors on all tabs.
+- **Hand-offs changed (§7):** foundationLoads (Strength V, Service I cases) and abutmentLoads (WS.V, WS.SI) values; receivers abutment calculator, Pile Designer, Spread Footing re-run (no format change).
+- **Saved data:** no key or format change (§5).
+- **Other copies:** none. **Open items:** L3 (Z definition) is a separate item.
