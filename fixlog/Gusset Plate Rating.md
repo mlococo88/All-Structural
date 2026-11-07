@@ -3024,3 +3024,229 @@ function gageTables() {
 - **How verified:** main vs branch on the default project: every localStorage key (1), page text (14485 chars), Export JSON (7391 chars identical) and the printed report text (print media, 128381 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Gusset Plate Rating.html"`; `node tests/smoke/project-library.mjs --tool gusset`; `node tests/smoke/github-sync-tools.mjs --tool gusset`; `node tests/smoke/home-projects.mjs --tool gusset`; `node tests/smoke/phone-layout.mjs --tool gusset`: pass.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/gusset-h1-tension-splice (PR #1026: https://github.com/mlococo88/All-Structural/pull/1026) — Tension chord splice rated with LRFD 10th Ed. Eqs. 6.14.2.8.6-3 and -4 (H1; §4 calculation change, results go down)
+
+From the code-compliance review of 2026-11-07 (finding H1). Engineer asleep, merge-as-you-go approved; no questions asked.
+
+### H1. SPL-TY / SPL-TF: eccentric form with φ<sub>cs</sub>   [§4: formula and resistance factor]
+- **Where:** `compute()`, the chord-splice block (`if (P.chord === 'spliced' && chordIdx.length >= 2)`), the `net` map (anchor `parts.forEach(z => { z.An = capOn ? Math.min(z.An0, p.capAn * z.Ag) : z.An0; });`), and the functions `capSPY()` / `capSPF()` just before `/* ----- checks ----- */`. Also `ref.spy`, `ref.spf`, the block comment above `let spl = null;` and the Method tab item "Tension (SPL-TY, SPL-TF)".
+- **Problem:** the tension chord splice was rated concentric with the member factors: SPL-TY = φ<sub>y</sub>ΣF<sub>y</sub>A<sub>g</sub> (φ<sub>y</sub> = 0.95) and SPL-TF = φ<sub>u</sub>UΣF<sub>u</sub>A<sub>n</sub> (φ<sub>u</sub> = 0.80). LRFD 10th Ed. 6.14.2.8.6 rates the tension splice in the same eccentric form as the compression splice, with the chord-splice factor φ<sub>cs</sub>: Eq. 6.14.2.8.6-3 on the gross section (F<sub>y</sub>, S<sub>g</sub>, A<sub>g</sub>, e<sub>p</sub>) and Eq. 6.14.2.8.6-4 on the net section (F<sub>u</sub>, S<sub>n</sub>, A<sub>n</sub>, e<sub>p</sub>). The old form was unconservative (validation model: 44 % lower capacity now). Fix log C14.1 had marked the tension form "not confirmed"; LRFD 10th Ed. now settles it.
+- **Before (code):**
+```js
+          return { i, Q, segs, Lg, Ln, cross, parts, Rn: parts.reduce((s, z) => s + z.Fu * z.An, 0) * p.U }; });
+    function capSPY() { const z = spl, phi = p.phiY, Rn = z.S.Py, C = phi * Rn;
+    function capSPF() { const z = spl, phi = p.phiU, gov = z.net.reduce((a, q) => q.Rn < a.Rn ? q : a), C = phi * gov.Rn;
+```
+- **After (code, calculation lines; the display rows are new text around them):**
+```js
+        const dnS = Math.max(G[i0].dn, G[i1].dn), capOn = p.capAnOn >= 0.5, FuMin = Math.min(...els.map(q => q.Fu));
+          const kG = parts[0].An0 > 1e-12 ? parts[0].An / parts[0].An0 : 1, nst = [...ivn.map(([a, b]) => ({ w: sumT * kG, y0: a, y1: b })),
+            ...cross.map(h => { const sh = dot(sub([h.x, h.y], Q), nrm); return { w: -sumT * kG, y0: sh - h.dn / 2, y1: sh + h.dn / 2, hole: 1 }; }),
+            ...els.filter(q => q.kind !== 'gusset').map((q, k) => ({ w: q.w * (parts[k + 1].Ag > 1e-12 ? parts[k + 1].An / parts[k + 1].Ag : 0), y0: q.y0, y1: q.y1 }))];
+          (nA, nyb, nI = area, centroid, inertia of nst; nc = distance from nyb to the extreme fibre on the side of the chord force; nS = nI / nc)
+          const den = 1 / nA + (isFinite(nS) ? ne / nS : 0);
+          return { i, Q, segs, Lg, Ln, cross, parts, An: nA, yb: nyb, In: nI, cn: nc, en: ne, Sn: nS, den, Rn: p.U * FuMin / den }; });
+    function capSPY() { const z = spl, phi = p.phiCS, den = 1 / z.S.A + (isFinite(z.Se) ? z.e / z.Se : 0), Rn = z.FyMin / den, C = phi * Rn;
+    function capSPF() { const z = spl, phi = p.phiCS, gov = z.net.reduce((a, q) => q.Rn < a.Rn ? q : a), C = phi * gov.Rn;
+```
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.6, Eqs. 6.14.2.8.6-3 and 6.14.2.8.6-4 (φ<sub>cs</sub> per Art. 6.5.4.2). The tool keeps φ<sub>cs</sub> = 0.85, the MBE rating value (engineer decision 2026-10-19; LRFD design value 0.65 not used). MBE 3rd Ed. 6A.6.12.6.9 equation numbers: verify (MBE not in references).
+- **Decisions (pending engineer review):**
+  1. **Net section location:** S<sub>n</sub> and A<sub>n</sub> are taken on the line through the first fastener row of each chord, perpendicular to the chord (the lines the tool already used for SPL-TF), the lower of the two governing. The holes on the gusset line are removed at their positions, so the net centroid and S<sub>n</sub> follow the holes. Splice plates enter at their own position with A<sub>n</sub>/A<sub>g</sub> (their hole positions are not entered). Where the A<sub>n</sub> ≤ 0.85 A<sub>g</sub> cap governs an element, that element is scaled uniformly (centroid kept).
+  2. **F<sub>y</sub>, F<sub>u</sub>:** the lowest of all plates crossing the line (the article names the gusset plate; lowest is conservative and matches SPL-C, which already used the lowest F<sub>y</sub>). Before, each element entered with its own F<sub>y</sub>, F<sub>u</sub>.
+  3. **U:** Eq. 6.14.2.8.6-4 has no shear-lag factor. The code parameter U (default 1.0) is kept as a further reduction if a user lowers it (conservative); with the default, the result is exactly Eq. -4.
+  4. LFR: unchanged (no splice check; FHWA-IF-09-014 not in references).
+- **Check case 1** (validation model, `chord = 'spliced'`, both chord members DC +200, DW +20, LL +100, diagonal force 0; LRFR Inventory, γ 1.25/1.50/1.75):
+  - Gross section at the splice line: gusset 20.0 in long (y −8 to +12 from the chord work line) × Σt 1.0 in: A<sub>g</sub> = 20.0 in², ȳ = e<sub>p</sub> = 2.000 in, I = 20³/12 = 666.67 in⁴, c = 2 + 8 = 10.0 in, S<sub>g</sub> = 66.667 in³. Demand N = DC 200, DW 20, LL 100 (tension).
+  - **SPL-TY before:** 0.95 × 36 × 20.0 = 684.0 kip; RF = (684.0 − 250 − 30)/175 = **2.309**.
+  - **SPL-TY after:** 0.85 × 36 / (1/20 + 2/66.667) = 30.6/0.0800 = **382.5 kip**; RF = (382.5 − 280)/175 = **0.586**.
+  - **SPL-TF line 1** (first fastener line of CR, 1.5 in from the WP): gusset line 21.5 in (y −8 to +13.5), two holes d<sub>h</sub> + 1/16 = 1.000 in at y = −5 and 0. A<sub>n0</sub> = 19.5, cap 0.85 × 21.5 = 18.275 governs (scale 0.93718). ȳ<sub>n</sub> = (21.5 × 2.75 + 5 − 0)/19.5 = 3.288 in; I<sub>n</sub> = 0.93718 × (828.17 + 6.23 − 68.78 − 10.90) = 707.3 in⁴; c = 3.288 + 8 = 11.288 in; S<sub>n</sub> = 62.66 in³. R<sub>n</sub> = 58/(1/18.275 + 3.288/62.66) = 58/0.10720 = 541.0 kip. Line 2 (CL): 582.9 kip. **After:** 0.85 × 541.0 = **459.9 kip**, RF = (459.9 − 280)/175 = **1.028**. **Before:** 0.80 × 1.0 × 58 × 15.725 (line 2) = 729.6 kip, RF **2.569**.
+- **Check case 2** (default project, `chord = 'spliced'`): A<sub>g</sub> = 46.625 in², e = 14.31 in, S<sub>g</sub> = 362.3 in³. SPL-TY 1594.6 → **502.0 kip**, RF LRFR Inv 0.861 → **−0.486** (Operating 1.116 → −0.630). SPL-TF 1838.9 → 610.1 kip, RF Inv 1.162 → −0.353. That model is already governed by L2-U1-FS at −0.519 (unchanged).
+- **How verified:** headless Chromium, file://, `GPR.compute` on 16 review cases, main vs branch: only SPL-TY / SPL-TF capacities and RFs moved, in the four spliced cases (default spliced, default spliced RIDOT, validation spliced in tension / compression / non-concurrent); every other value of every case identical (default, validation, punched holes, bolts, LRFR only, LFR only, variant of the review §2.3, …). Validation tab: 17 of 17 hand values unchanged (the validation model has a continuous chord). `node tests/check-syntax.mjs`, `tests/smoke/project-library.mjs --tool gusset`, `tests/smoke/phone-layout.mjs --tool gusset`: pass. No console errors on any tab, report included.
+- **Saved data:** no key or format change.
+- **Other copies:** none.
+- **Open items:** C14.7-1 (MBE wording of the splice equations, φ<sub>cs</sub>) stays with the engineer: verify (MBE not in references).
+
+## 2026-11-07 — PR: claude/gusset-h2-lmid (PR #1031: https://github.com/mlococo88/All-Structural/pull/1031) — LRFR Whitmore buckling: L<sub>mid</sub> from the middle of the Whitmore section (LRFD 10th Ed. 6.14.2.8.4) by default; the average of three kept as an option (H2; §4, reverses C4.4, decision pending engineer review)
+
+From the code-compliance review of 2026-11-07 (finding H2). Engineer asleep, merge-as-you-go approved; no questions asked.
+
+### H2. L<sub>mid</sub> for LRFR = the length from the middle of the Whitmore section   [§4: definition of L<sub>mid</sub>; new code parameter `lmidAvg`]
+- **Where:** `compute()`, Whitmore block, anchor `W.LmidAuto = (W.L3[0].L + W.L3[1].L + W.L3[2].L) / 3` (old) / `W.LmidMid = W.L3[1].L` (new); `capWB()` (first line and the L<sub>mid</sub> row); `PARAMS` (rows `K` and the new `lmidAvg`); the C8 warning (`W.LmidAlt`); Summary "Whitmore sections and L<sub>mid</sub>" table; Method tab item "L<sub>mid</sub>"; `HAND` label of the L<sub>mid</sub> row.
+- **Problem:** LRFR Whitmore buckling used L<sub>mid</sub> = the average of the three lengths from the two ends and the middle of the Whitmore section, with K = 0.5. LRFD 10th Ed. 6.14.2.8.4 defines L<sub>mid</sub> as the distance from the **middle** of the Whitmore section to the nearest member fastener line in the member direction, and its Eq. 6.14.2.8.4-2 (factor 3.29 = π²/(0.5² × 12)) builds in K = 0.5 (C6.14.2.8.4). The three-length average is the FHWA-IF-09-014 method, which pairs it with K = 1.2 (FHWA not in references: verify). The engineer confirmed the average on 2026-10-05 (C4.4) without the specification at hand; this change reverses that confirmation.
+- **Decision (pending engineer review):**
+  1. LRFR default: the middle length L<sub>2</sub> (LRFD 10th Ed. 6.14.2.8.4) with K = 0.5.
+  2. The previous rule stays selectable: code parameter `lmidAvg` = 1 ("average of the lengths from the two ends and the middle", labelled FHWA-IF-09-014, pairs with K = 1.2, verify). Choosing it does not change K; the note tells the user to set K to the value it pairs with.
+  3. LFR unchanged: the average with K<sub>LFR</sub> = 1.2.
+  4. An L<sub>mid</sub> override still replaces the value for both methods, as before.
+  5. **Saved data:** no migration. Projects saved before this change have no `lmidAvg` in `code` and open with the LRFD middle length. Reason: the old LRFR rule is not the LRFD 10th Ed. definition, and keeping it silently would hide the change; a project can return to it with `lmidAvg` = 1. No key or format change.
+- **Before:**
+```js
+        W.LmidAuto = (W.L3[0].L + W.L3[1].L + W.L3[2].L) / 3; W.ovL = ovr(m.ovr.lmid); W.Lmid = W.ovL ?? W.LmidAuto;
+    function capWB(g, meth) { const lrfr = meth === 'lrfr', W = g.W, K = lrfr ? p.K : p.KL, phi = lrfr ? p.phiC : p.phiCL, E = p.E, L = W.Lmid; let Pn = 0; const per = [];
+```
+- **After:**
+```js
+        W.LmidAvg = (W.L3[0].L + W.L3[1].L + W.L3[2].L) / 3; W.LmidMid = W.L3[1].L; W.avgL = p.lmidAvg >= 0.5;
+        W.LmidAuto = W.avgL ? W.LmidAvg : W.LmidMid; W.ovL = ovr(m.ovr.lmid); W.Lmid = W.ovL ?? W.LmidAuto; W.LmidF = W.ovL ?? W.LmidAvg;
+    function capWB(g, meth) { const lrfr = meth === 'lrfr', W = g.W, K = lrfr ? p.K : p.KL, phi = lrfr ? p.phiC : p.phiCL, E = p.E, L = lrfr ? W.Lmid : W.LmidF, avg = !lrfr || W.avgL; let Pn = 0; const per = [];
+```
+  New `PARAMS` row after `K`: `['lmidAvg', 'lrfr', 'LRFR plate resistances', 'L_{mid}', 'L_mid for LRFR Whitmore buckling: 0 = from the middle … ; 1 = average …', 0, '', 'LRFD 10th Ed. 6.14.2.8.4; FHWA-IF-09-014 (verify)', 1, …]`.
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.4, Eq. 6.14.2.8.4-2 and C6.14.2.8.4 (K = 0.5). MBE 3rd Ed. 6A.6.12.6.8: verify (MBE not in references).
+- **Check case** (default project, L2-U1, LRFR Inventory HL-93): L<sub>1</sub> / L<sub>2</sub> / L<sub>3</sub> = 5.533 / 19.112 / 8.384 in; per plate A<sub>g</sub> = 25.570 × 0.5 = 12.785 in², r = 0.5/√12 = 0.14434 in.
+  - **Before:** L<sub>mid</sub> = (5.533 + 19.112 + 8.384)/3 = 11.010 in; KL/r = 38.14; P<sub>e</sub> = 2515.5, P<sub>o</sub> = 460.26, P<sub>n</sub> = 426.3 kip per plate; φP<sub>n</sub> = 0.90 × 2 × 426.3 = **767.4 kip**; RF = (767.4 − 187.5 − 36.0)/262.5 = **2.072**.
+  - **After:** L<sub>mid</sub> = **19.112 in**; KL/r = 0.5 × 19.112/0.14434 = 66.21; P<sub>e</sub> = π² × 29000 × 12.785/66.21² = 834.8 kip; P<sub>e</sub>/P<sub>o</sub> = 1.814 ≥ 0.44; P<sub>n</sub> = 0.658<sup>1/1.814</sup> × 460.26 = 365.4 kip per plate; φP<sub>n</sub> = 0.90 × 2 × 365.4 = **657.8 kip**; RF = (657.8 − 187.5 − 36.0)/262.5 = **1.654**. Governing LRFR stays L2-U1-FS 1.172. LFR WB 576.3 kip, RF 1.403: unchanged.
+- **RFs that moved (main vs branch, 18 review cases):** only LRFR WB capacities and RFs. Governing value changed in: review §2.3 variant (Inventory SP1-Y 1.231 → L2-U1-WB 1.082; Legal 1.857 → 1.632), 1 in A325 bolts (SP1-Y 1.762 → L2-U1-WB 1.654), A502 Gr. 1 rivets (L2-U1-FS 1.700 → L2-U1-WB 1.654), 3/8 in plates (SP1-Y 1.109 → L2-U1-WB 0.719). Spliced validation models: CL/CR-WB 463.3 / 508.1 → 403.1 kip. With `lmidAvg` = 1 every value equals main. Every LFR value is unchanged in every case.
+- **Validation tab:** 17 of 17 match. The L<sub>mid</sub> row keeps its hand value 20.000 in (in that model the middle length and the average are equal); only its label now names the middle length (intentional, follows the definition).
+- **How verified:** headless Chromium, file://, `GPR.compute` main vs branch on the review cases; every tab rendered (calc sheet included), 0 console errors; `node tests/check-syntax.mjs`, `tests/smoke/project-library.mjs --tool gusset`, `tests/smoke/phone-layout.mjs --tool gusset`: pass.
+- **Other copies:** none.
+- **Open items:** the engineer to confirm the reversal of C4.4 and the K to pair with the average if `lmidAvg` = 1 (FHWA-IF-09-014 / MBE not in references).
+
+## 2026-11-07 — PR: claude/gusset-m1-rp-rupture (PR #1036: https://github.com/mlococo88/All-Structural/pull/1036) — Shear rupture on the shear planes includes R<sub>p</sub> (LRFD 10th Ed. Eq. 6.13.5.3-2) (M1; §4, results go down for punched holes)
+
+From the code-compliance review of 2026-11-07 (finding M1). Engineer asleep, merge-as-you-go approved.
+
+### M1. SPn-U: φ<sub>vu</sub> 0.58 R<sub>p</sub> F<sub>u</sub> A<sub>vn</sub>   [§4: formula]
+- **Where:** `capPV(pl, meth, kind)`, the shear-rupture branch after `if (kind === 'pvy') { … }`; `ref.pvu`.
+- **Problem:** LRFD 10th Ed. 6.14.2.8.3 rates shear rupture of a gusset plane by Eq. 6.13.5.3-2, which includes the hole reduction factor R<sub>p</sub> (6.13.4: 1.0 drilled / subpunched and reamed, 0.90 punched full size). The tool left R<sub>p</sub> out (it already used it in block shear, `capBS`). 10 % unconservative for punched holes; drilled holes (the default) unchanged.
+- **Before:**
+```js
+      const phi = lrfr ? p.phiVU : p.phiVUL, An = pl.Ln * sumT, C = phi * 0.58 * Fu * An;
+```
+- **After:**
+```js
+      const hsP = [...pl.cross, ...(pl.stag && pl.stag.used ? (pl.stag.chain || []).map(z => z && z.h).filter(Boolean) : [])], pun = hsP.some(h => P.members[h.m] && P.members[h.m].fast.prep === 'punched'),
+        Rp = hsP.length ? Math.min(...hsP.map(h => P.members[h.m] && P.members[h.m].fast.prep === 'punched' ? p.RpP : p.RpD)) : p.RpD, RpK = pun && p.RpP <= p.RpD ? 'RpP' : 'RpD';
+      const phi = lrfr ? p.phiVU : p.phiVUL, An = pl.Ln * sumT, C = phi * 0.58 * Rp * Fu * An;
+```
+  plus an R<sub>p</sub> row in the calculation, `R_p` in the equation, and the R<sub>p</sub> key (`RpP` / `RpD`) in `keys`.
+- **Decisions (pending engineer review):**
+  1. A plane through holes of members with different hole preparation takes the **lowest** R<sub>p</sub> of the holes on it (the straight-line holes, plus the holes of a staggered chain when that chain governs). A plane with no holes takes R<sub>p</sub> for drilled holes (1.0).
+  2. R<sub>p</sub> is applied to LFR shear rupture too, as the tool already does for LFR block shear (FHWA-IF-09-014 not in references: verify).
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.3 → Eq. 6.13.5.3-2; R<sub>p</sub> per Art. 6.13.4. MBE 3rd Ed. 6A.6.12.6.6: verify (MBE not in references).
+- **Check case** (review §2.3 variant: plate 1 loses 1/16 in, Σt = 0.9375 in; A325 7/8 in bolts, threads included, punched holes; SP1 net length 36.000 in):
+  - **Before:** SP1-U = 0.80 × 0.58 × 58 × 36.000 × 0.9375 = **908.3 kip**; RF LRFR Inventory **1.436**.
+  - **After:** 0.80 × 0.58 × **0.90** × 58 × 36.000 × 0.9375 = **817.5 kip**; RF LRFR Inventory = (0.85 × 817.45 − 287.33)/337.46 = **1.208** (Operating 1.862 → 1.565; Legal 2.167 → 1.822; LFR Inventory 1.925 → 1.642).
+  - Default project with punched holes: SP1-U 968.8 → 871.9 kip, RF LRFR Inv 2.020 → 1.732.
+- **How verified:** main vs branch on 20 review cases: only SPn-U moved, and only in the cases with punched holes (all punched; only L2-L3 punched, whose chord holes lie on SP1; the §2.3 variant; the validation model with punched holes). Drilled cases identical. Validation tab 17 of 17 (drilled holes; unchanged). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks, which differ only in the SPn-U equation text (now shows R<sub>p</sub>) on the default (drilled) project. 0 console errors.
+- **Saved data:** no change. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/gusset-m2-splice-demand (PR #1040: https://github.com/mlococo88/All-Structural/pull/1040) — Chord-splice demand: the larger of the resolved forces on the two sides (LRFD 10th Ed. C6.14.2.8.6) (M2; §4)
+
+From the code-compliance review of 2026-11-07 (finding M2; answers open item C14.7-3).
+
+### M2. Splice demand N = larger magnitude of the right- and left-hand free bodies, per load column   [§4: demand definition]
+- **Where:** `compute()`, chord-splice block, anchor `const N = zeroD(), V = zeroD(), M = zeroD(), Cpt = mul(nrm, S.yb), right = [], strad = [];` and the lines after the straddle warning; `demandHtml()` (splice text); Method tab "Demand" item.
+- **Problem:** the splice demand was the right-hand free body only. C6.14.2.8.6 says the splice is investigated for the larger of the two resolved forces on either side; they differ with envelope (non-concurrent) forces. With envelope inputs the right-hand side could be the smaller one (unconservative).
+- **Before:**
+```js
+        const N = zeroD(), V = zeroD(), M = zeroD(), Cpt = mul(nrm, S.yb), right = [], strad = [];
+        P.members.forEach((m, j) => { if (dot(G[j].centroid, axis) > 1e-6) { right.push(j); accD(N, m, dot(G[j].u, axis)); accD(V, m, dot(G[j].u, nrm)); accD(M, m, crs(mul(Cpt, -1), G[j].u)); }
+```
+- **After:**
+```js
+        const N = zeroD(), NL = zeroD(), V = zeroD(), M = zeroD(), Cpt = mul(nrm, S.yb), right = [], strad = [];
+        P.members.forEach((m, j) => { if (dot(G[j].centroid, axis) > 1e-6) { right.push(j); accD(N, m, dot(G[j].u, axis)); accD(V, m, dot(G[j].u, nrm)); accD(M, m, crs(mul(Cpt, -1), G[j].u)); }
+          else accD(NL, m, -dot(G[j].u, axis));
+        …
+        const NR = { DC: N.DC, DW: N.DW, LL: N.LL.slice() }, pick = (a, b) => Math.abs(b) > Math.abs(a) + 1e-9 ? b : a, difL = [];
+        N.DC = pick(NR.DC, NL.DC); N.DW = pick(NR.DW, NL.DW); N.LL = NR.LL.map((x, k) => pick(x, NL.LL[k]));
+```
+  plus a warning when the two sides differ by more than max(0.5 kip, 0.5 %).
+- **Decisions (pending engineer review):** the larger magnitude is chosen per load column (DC, DW, each LL column), keeping that side's sign. V and M (used only by the advisory combined check on the splice line) stay from the right-hand side; the advisory N uses the governing N.
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.6 and C6.14.2.8.6.
+- **Check case** (validation model spliced, CL DC −200 / DW −20 / LL −130, CR −200 / −20 / −100, diagonal 0; SPL-C φP<sub>n</sub> = 382.5 kip):
+  - **Before:** N<sub>LL</sub> = −100 (right side); RF LRFR Inv = (382.5 − 250 − 30)/(1.75 × 100) = **0.586**.
+  - **After:** N<sub>LL</sub> = −130 (left side); RF = (382.5 − 280)/(1.75 × 130) = **0.451** (Operating 0.759 → 0.584). New warning names the HL-93 column, −100.0 (right) / −130.0 (left).
+- **RFs that moved (main vs branch, 20 review cases):** the non-concurrent case above; the default project spliced moves in the 4th decimal only (its entered forces are rounded: DW right 94.527, left 94.573 kip; SPL-TY Operating −0.6299 → −0.6300). All other cases identical. Validation 17 of 17 (continuous chord).
+- **How verified:** as above; `check-syntax`, `project-library --tool gusset` (all pass), `phone-layout --tool gusset`; 0 console errors.
+- **Saved data:** no change. **Open items:** C14.7-3 answered by LRFD 10th Ed.; engineer to confirm.
+
+## 2026-11-07 — PR: claude/gusset-m4-dead-load (PR #1044: https://github.com/mlococo88/All-Structural/pull/1044) — Warning when the factored dead load alone exceeds a resistance in a direction the live load does not act (M4; pass/fail display, no RF changes)
+
+From the code-compliance review of 2026-11-07 (finding M4).
+
+### M4. Dead-load-only overstress is reported   [§4: pass/fail logic of the verdicts; no rating factor changes]
+- **Where:** `compute()`, after `const incomplete = …` (new `deadOver` list and warnings; `deadOver` added to the returned object); new functions `dlL()`, `dlN()`, `dlNote()` before `renderSummary()`; the verdict in `renderStatus()` (anchor `t: 'All rating factors ≥ 1.00'`) and the Summary heading (anchor `'All rating factors are at least 1.00'`).
+- **Problem:** a rating factor is formed only in the live-load direction. A check overstressed by the factored dead load in the other direction (or with zero live load in that column) showed "—", and the joint could still read "All rating factors are at least 1.00". Review run: vertical L2-U2 with DC −700, DW −50, LL +55: factored compression 1.25 × 700 + 1.5 × 50 = 950 kip against L2-U2-WB 658.6 kip, but the summary said all RF ≥ 1.
+- **Before:** verdict `nFail ? … : { cls: 'pass', ico: '✓', t: 'All rating factors ≥ 1.00' }`; Summary heading `nFail ? … : low.length ? 'All rating factors are at least 1.00' : 'No rating cases'`.
+- **After:** for every check, rating case and direction with a resistance: LRFR D = γ<sub>DC</sub>DC + γ<sub>DW</sub>DW (minimum factors where that load acts against the direction), compared with φ<sub>c</sub>φ<sub>s</sub>C; LFR A<sub>1</sub>D (A<sub>1,min</sub> where D < 0) compared with C. Where D > 0 and D > resistance, and that case has no rating factor in that direction (live load opposite or zero), a warning per check lists the cases with D, the resistance and D/C. The verdict and the Summary heading then read "Dead load alone exceeds the resistance in n checks (ids)" (fail), or append it to "n rating cases below 1.00". Where the RF is already formed in that direction it is negative and already shows the failure, so no extra warning is given.
+- **Decision (pending engineer review):** reported as a warning and a failed verdict; no rating factor value (e.g. −∞) is invented. The dead load factors are those the rating uses (MBE 3rd Ed. Table 6A.4.2.2-1 / 6B.4.3; verify, MBE not in references).
+- **Check case** (default project, L2-U2 forces DC −700, DW −50, LL +55 / +40): L2-U2-WB φP<sub>n</sub> = 658.6 kip; LRFR D = 1.25 × 700 + 1.50 × 50 = 950.0 kip > 658.6 kip (D/C 1.44); LFR D = 1.3 × 750 = 975.0 kip > 557.6 kip (D/C 1.75). Also L2-U2-FS (950.0 > 221.3 kip) and L2-U2-BR (LFR 975.0 > 913.5 kip). **Before:** "All rating factors are at least 1.00", governing 1.172. **After:** "Dead load alone exceeds the resistance in 3 checks (L2-U2-FS, L2-U2-BR, L2-U2-WB)", 3 warnings; every RF unchanged.
+- **How verified:** main vs branch on 20 review cases: every capacity and RF identical; only the warning count moved, in the dead-load case above and in two spliced validation models whose LFR live load columns are zero (CL-WB LFR D 286.0 > 242.4 kip). Validation 17 of 17. `check-syntax`, `project-library --tool gusset`, `phone-layout --tool gusset` pass; 0 console errors.
+- **Saved data:** no change.
+
+## 2026-11-07 — PR: claude/gusset-m5-ridot (PR #1049: https://github.com/mlococo88/All-Structural/pull/1049) — Owner selection; RIDOT: LRFD 10th Ed. 6.5.4.2 resistance factors for gusset plates and the condition-factor requirement (M5; §4 for RIDOT only, AASHTO unchanged)
+
+From the code-compliance review of 2026-11-07 (finding M5). Engineer asleep; no question asked; decision pending engineer review.
+
+### M5. `P.owner` and the RIDOT rules   [§4: resistance factors, owner RIDOT only]
+- **Where:** new `OWNERS`, `ownOf`, `ownCode`, `ownDef`, `ownPhi` just before `function prm(code)` (exported `OWNERS`, `ownDef`); `compute()` first line, anchor `const p = prm({ ...ownCode(P), ...P.code })` (was `const p = prm(P.code)`); the φ<sub>c</sub>, φ<sub>vy</sub>, φ<sub>cs</sub> rows in `capWB`, `capPV`, `capSPC`, `capSPY`, `capSPF` (text and reference follow the owner); a RIDOT warning after `const CASES = ratingCases(P, p), fac = …`; Rating input pane, new "Owner" section (`paneRating`); `onInput` (owner change rebuilds the Rating pane and the Code parameters tab; a code value equal to the *owner* default is no longer stored as a change); `fillInputs` and `renderParams` (Value and Default show the owner default); `defaults()` gets `owner: ''`.
+- **Problem:** RIDOT LRFR Guidelines (Sept 2022) 4.2.1 take the resistance factor φ as specified in the LRFD Specifications for new construction; 4.2.2 makes the condition factor φ<sub>c</sub> mandatory (Table 4); 4.2.3 applies the MBE system factors; 6.5.4 rates gussets per MBE 6A.6.12.6. The tool had no owner choice and always used the MBE rating values φ = 0.90 (compression), 1.00 (shear yielding), 0.85 (chord splice).
+- **After:** owner `RIDOT`: default p.phiC = 0.75, p.phiVY = 0.80, p.phiCS = 0.65 (LRFD 10th Ed. 6.5.4.2 φ<sub>cg</sub>, φ<sub>vy</sub>, φ<sub>cs</sub>); a value the user entered on the Code parameters tab still wins. A warning states the factors used, the Table 4 condition-factor values (1.00 CS 1–2; 0.95 / 1.00 CS 3; 0.85 / 0.90 CS 4, estimated / field-measured loss) and the entered φ<sub>c</sub> and φ<sub>s</sub> (the user enters φ<sub>c</sub>; it is not chosen automatically). Owners `''` (AASHTO), `MassDOT`, `CTDOT`: no change (notes only: MassDOT Bridge Manual 7.2.2.3B LFR requirement for ASD/LFD trusses; CTDOT BDM has no gusset rules). LFR unchanged for every owner.
+- **Decisions (pending engineer review):** (1) RIDOT 4.2.1 is read as overriding the MBE rating values kept by the engineer's 2026-10-19 decision, for RIDOT projects only. (2) The other LRFD-identical factors (φ<sub>y</sub>, φ<sub>u</sub>, φ<sub>bs</sub>, φ<sub>bb</sub>, bolts, φ<sub>vu</sub>) and the rivet values (MBE only) are unchanged. (3) No automatic condition factor: the rater enters φ<sub>c</sub> (Table 4 is guidance with rater discretion). (4) Whether MBE Table 6A.4.2.4-1's 0.90 for riveted truss members applies to gusset plates: verify (MBE not in references).
+- **Governing provisions:** RIDOT LRFR Guidelines (Sept 2022) 4.2.1, 4.2.2 (Table 4), 4.2.3, 6.5.4; AASHTO LRFD BDS 10th Ed. (2024) 6.5.4.2.
+- **Check case** (default project, owner RIDOT, φ<sub>c</sub> = φ<sub>s</sub> = 1.0, LRFR Inventory HL-93):
+  - L2-U1-WB: 0.90 × 730.84 = 657.8 kip → **0.75** × 730.84 = **548.1 kip**; RF (657.8 − 223.5)/262.5 = 1.654 → (548.1 − 223.5)/262.5 = **1.237**.
+  - SP1-Y: 1.00 × 0.58 × 36 × 48 × 1.0 × 0.88 = 882.0 kip → **0.80** × 882.0 = **705.6 kip**; RF (882.0 − 241.05 − 46.28)/337.46 = 1.762 → (705.6 − 287.33)/337.46 = **1.239**.
+  - Governing stays L2-U1-FS 1.172 (LRFR) and L2-U1-WB 1.403 (LFR).
+  - Default spliced, RIDOT: SPL-TY 502.0 → 383.9 kip (×0.65/0.85), governing LRFR Inv L1-L2-FS −0.519 → SPL-TY −0.632.
+- **How verified:** main vs branch on 20 review cases: every AASHTO case identical; only the two RIDOT cases moved (values above). UI: choosing RIDOT in the Owner select changes the note, the Code parameters show 0.75 (Default "0.75 (RIDOT; AASHTO 0.9)"), typing 0.90 there is kept as a change and restores 657.8 kip. Validation 17 of 17 (owner AASHTO). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks, whose only difference is the new field `P.owner = ''`. 0 console errors.
+- **Saved data:** new field `owner` (default `''`, AASHTO): older saves open as AASHTO, unchanged; no key change. An older copy of the tool ignores the field.
+
+## 2026-11-07 — PR: claude/gusset-m6-lfr-rivet (PR #1051: https://github.com/mlococo88/All-Structural/pull/1051) — LFR rivets of unknown origin: φF<sub>v</sub> 30 → 23.8 ksi, consistent with LRFR (M6; §4, conservative, verify)
+
+From the code-compliance review of 2026-11-07 (finding M6).
+
+### M6. Default `FvR0L`   [§4: fastener strength default]
+- **Where:** `PARAMS`, row `['FvR0L', 'lfr', 'LFR fastener strengths', …]`.
+- **Problem:** LFR rated rivets "built before 1936 or of unknown origin" with the A502 Grade 1 value (30 ksi), while LRFR distinguishes them (MBE Table 6A.6.12.5.1-1: 23 vs 29 ksi, −21 %). Likely unconservative for old rivets, and it matters for MassDOT (Bridge Manual 7.2.2.3B requires LFR gusset ratings of ASD/LFD trusses). The FHWA-IF-09-014 / MBE 6B value could not be checked (not in references).
+- **Before:** `…, 'Rivet design shear strength: built before 1936 or of unknown origin', 30, 'ksi', 'FHWA-IF-09-014; AASHTO Std. Spec. 17th Ed. Table 10.56A', 1, 'Taken equal to A502 Grade 1. Some owners require a lower value for old rivets.'],`
+- **After:** `…, 'Rivet design shear strength: built before 1936 or of unknown origin', 23.8, 'ksi', 'Judgment, consistent with MBE 3rd Ed. Table 6A.6.12.5.1-1 (verify FHWA-IF-09-014 / MBE 6B; not in references)', 1, '<note: 30 × 23/29 = 23.8; 30 restores the former value>'],`
+- **Decision (pending engineer review):** 23.8 ksi = 30 × 23/29 (the LRFR ratio of unknown-origin to Grade 1 rivet strength), flagged "least certain" / verify. **Saved data:** no migration: projects that never changed `FvR0L` take the new, lower default (conservative); a project that entered a value keeps it. No key or format change.
+- **Check case** (default project, L2-U1, 48 shear planes, A = 0.6013 in², LFR Inventory HS20, A<sub>1</sub>D = 1.3 × 174 = 226.2, A<sub>2</sub>L = 2.17 × 115 = 249.55):
+  - **Before:** C = 48 × 30 × 0.6013 = **865.9 kip**, RF = (865.9 − 226.2)/249.55 = **2.563**.
+  - **After:** C = 48 × 23.8 × 0.6013 = **686.9 kip**, RF = (686.9 − 226.2)/249.55 = **1.846**.
+  - Governing LFR Inventory stays L2-U1-WB 1.403. Default spliced: governing LFR Inv L1-L2-FS −0.205 → −0.402.
+- **How verified:** main vs branch on 20 review cases: only LFR fastener-shear values of unknown-origin rivets (r0) moved; Grade 1 rivet and bolt cases (validation model, r1, bolts, variant) identical. Validation 17 of 17 (Grade 1). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset`: its four "identical to main" checks show exactly this change; all other checks pass. 0 console errors.
+
+## 2026-11-07 — PR: claude/gusset-m3-partial-planes (PR #1057: https://github.com/mlococo88/All-Structural/pull/1057) — Partial shear planes around compression members (LRFD 10th Ed. 6.14.2.8.3): automatic planes, and user planes as segments with a loaded member (M3; §4, new check)
+
+From the code-compliance review of 2026-11-07 (finding M3). Engineer asleep; decisions pending engineer review.
+
+### M3. New partial-plane checks   [§4: new limit-state check; existing checks unchanged]
+- **Where:** `compute()`, the shear-planes block: user-plane segment clipping (anchor `const segL = q.kind === 'user' && q.seg ?`), loaded member (anchor `const ldI = q.kind === 'user' && q.loaded ?`), and the new automatic block after the `(P.planes || []).forEach` loop (anchor `if (P.autoPartial !== false) P.members.forEach((mi, i) =>`); the check builder `planes.forEach((pl, k) => { const id = \`SP${k + 1}\`;` (new `if (pl.part)` branch); the advisory combined-action loop skips partial planes (`if (!pl.mem.length || pl.part) return;`); `defaults()` gets `autoPartial: true`; Plates input pane: the "Automatic partial planes…" switch, and per user plane "Segment only" and "Loaded member".
+- **Problem:** LRFD 10th Ed. 6.14.2.8.3 requires partial shear planes around compression members, along the adjoining member fastener lines between the plate edge and other fastener lines, shear yielding only (Eq. 6.14.2.8.3-1). The tool had only full-width planes; a user plane was a whole line and its demand was every member on one side, so a code partial plane could not be entered.
+- **After:**
+  - **Automatic partial planes** (on by default): for every non-chord member that can be in compression (DC + DW < 0 or any LL column < 0), and for each of its two **adjoining** members (next in angle on either side): the line along that member's outermost fastener line on the compression member's side (a continuous chord: the outermost chord line), from the plate edge to the first fastener line of another member (fastener-field strips extended toward the WP but not past it), taking the part of the line that contains the projection of the compression member's fastener centroid. Demand = the compression member's force × |u<sub>i</sub> · e|; rated only with that member in compression (`dirs: '-'`); capacity φ<sub>vy</sub> 0.58 F<sub>y</sub> A<sub>vg</sub> Ω (LRFR) and the existing LFR form; SPn-U is "not applicable" (rupture not required on partial planes).
+  - **User planes:** "Segment only" clips the plane to point 1 → point 2; "Loaded member" makes it a partial plane with that member's force component as demand (same rules as above). Both default off / none, so existing user planes are unchanged.
+- **Decisions (pending engineer review):**
+  1. Every candidate plane (one per adjoining member) is checked and the lowest governs, instead of choosing one by the three bullets of 6.14.2.8.3 (chamfer, smaller framing angle, least area): conservative.
+  2. Verticals are not excluded (C6.14.2.8.3 says they are generally not subject): conservative.
+  3. "Can be in compression" = DC + DW < 0 or any LL column < 0.
+  4. LFR also rates the partial planes, with its own Ω and φ (FHWA-IF-09-014 not in references: verify): conservative.
+  5. Old saves have no `autoPartial` and open with it on (new check, conservative); it can be switched off.
+- **Governing provision:** AASHTO LRFD BDS 10th Ed. (2024) Art. 6.14.2.8.3, Eq. 6.14.2.8.3-1, C6.14.2.8.3.
+- **Check case** (default project; L2-U1 at 130°, DC −150, DW −24, LL −150 HL-93 / −115 HS20):
+  - Plane SP3 along the chord top fastener line y = 6 in, from the plate edge x = −24 to the vertical's fastener line x = −2.5: L<sub>g</sub> = 21.5 in. Demand = 150 cos 50° = 96.42 DC, 15.43 DW, 96.42 LL (73.92 HS20).
+  - LRFR: V<sub>r</sub> = 1.00 × 0.58 × 36 × 21.5 × 1.0 × 0.88 = **395.0 kip**; RF Inv = (395.0 − 1.25 × 96.42 − 1.50 × 15.43)/(1.75 × 96.42) = 251.39/168.73 = **1.490**; Operating 1.931.
+  - LFR: 1.00 × 0.58 × 36 × 21.5 × 0.74 = **332.2 kip**; RF Inv = (332.2 − 1.3 × 111.85)/(2.17 × 73.92) = **1.165**; Operating 1.944.
+  - Plane SP4 along the vertical's left fastener line x = −2.5 from the chord line up to the plate edge: L<sub>g</sub> 31.63 in, demand 150 cos 40° = 114.9 kip DC; LRFR 581.1 kip, RF 2.038; LFR RF 1.650.
+  - **Governing:** LRFR Inventory stays L2-U1-FS 1.172; **LFR Inventory L2-U1-WB 1.403 → SP3-Y 1.165**, Operating 2.342 → 1.944.
+- **RFs that moved (main vs branch, 22 review cases):** every existing check value is unchanged; checks are added. Governing changes: default (LFR → SP3-Y 1.165); §2.3 variant (LRFR Inv L2-U1-WB 1.082 → SP3-Y 1.014, Legal 1.632 → 1.530, LFR 1.148 → 1.035); 1 in A325 bolts and A502 Gr. 1 rivets (LRFR Inv WB 1.654 → SP3-Y 1.490); RIDOT (LRFR Inv FS 1.172 → SP3-Y 1.022). With `autoPartial` off, every value equals main. A user plane (−24, 6) → (−2.5, 6), segment, loaded L2-U1 gives exactly SP3 above (L<sub>g</sub> 21.5, RF 1.490).
+- **Validation tab:** 17 of 17; its SP1 rows are unchanged (the automatic plane of the validation model is appended as SP2).
+- **How verified:** headless runs as above; drawing screenshot checked (SP3 on the chord top line left of the vertical, SP4 on the vertical's left line); `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks (only differences: the new field `autoPartial` and the two added planes). 0 console errors.
+- **Saved data:** new fields `autoPartial` (project) and `seg`, `loaded` (user planes); defaults keep existing user planes as they were. No key change.
+
+## 2026-11-07 — PR: claude/gusset-m7-slip (PR #1058: https://github.com/mlococo88/All-Structural/pull/1058) — Optional bolt-slip check, Service II (advisory, off by default) (M7; no rating factor change)
+
+From the code-compliance review of 2026-11-07 (finding M7).
+
+### M7. Advisory "Bolt slip, Service II"   [advisory only; never enters the governing rating factor; default off]
+- **Where:** `compute()`, before `const adv = { pint, edges, ecc, spl };` (now `{ …, slip }`), anchor `const PT = { 0.625: [19, 24]`; `advItems()` (new item `adv-slip` before "C17 (O4)"); `paneRating()` (new section "Bolt slip (advisory)"); `defaults()` gets `slip: { on: false, cls: 'A' }`; `SCOPE_OUT` text for slip.
+- **Problem:** LRFD 10th Ed. 6.13.2.8 (Service II slip resistance) was listed as "not included". Whether the MBE requires slip in a gusset rating could not be confirmed (MBE not in references); RIDOT LRFR Guidelines 6.5.4 asks for splices to be rated where slip is observed.
+- **After (only when switched on):** for every fastener-shear check whose fasteners are all bolts (members and the continuous-chord ΔF group): R<sub>n</sub> = K<sub>c</sub>K<sub>h</sub>K<sub>s</sub>N<sub>s</sub>P<sub>t</sub> per bolt and slip plane (LRFD 10th Ed. Eq. 6.13.2.8-1; P<sub>t</sub> Table 6.13.2.8-1, 120 ksi column for A325 and 150 ksi for A490; K<sub>h</sub> Table 6.13.2.8-2, 1.00 standard / 0.85 oversize; K<sub>s</sub> Table 6.13.2.8-3 by surface class A/B/C/D; K<sub>c</sub> 0.80 for Class C), times the shear-plane count of the fastener-shear check. RF = (R<sub>n</sub> − DC − DW)/(γ<sub>LL</sub>LL) in the live-load direction, γ<sub>LL</sub> 1.30 Inventory / 1.00 other levels; shown with ratio 1/RF among the advisory checks.
+- **Decisions (pending engineer review):** advisory and off by default (verify flag); Service II load factors per MBE Table 6A.4.2.2-1 as recalled (verify, MBE not in references); φ = 1.0.
+- **Check case** (default project with A325 7/8 in bolts, threads excluded, Class B, slip on; L2-U1: 6 × 4 = 24 bolts per plate, 2 plates, single shear: N = 48): R<sub>n</sub> = 1.0 × 1.0 × 0.50 × 48 × 39 = **936 kip**; D = 150 + 24 = 174 kip (compression, with the live load); RF Inventory = (936 − 174)/(1.30 × 150) = **3.908**; Operating (936 − 174)/(1.00 × 150) = 5.080.
+- **How verified:** main vs branch on 23 review cases: every value identical (the check is off by default; with it on, only the advisory list grows). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks (only differences: the new field `P.slip` and `R.adv.slip = null`). 0 console errors; the item renders in Summary, Checks and the Report.
+- **Saved data:** new field `slip` (default off). No key change.

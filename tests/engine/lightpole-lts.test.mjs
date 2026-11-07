@@ -163,7 +163,7 @@ test('LTS-5 HC-2: Service I top deflection 0.582 in (hand closed form); 2.5 % H 
   near(d.B, 1.00442, 2e-5, 'B'); const n0 = d.rows.find(r => r.lc === 'n0');
   near(n0.d, 0.58206, 0.002, 'Δ'); near(n0.slope, 0.0658, 0.0005, 'slope');
   const tr = d.checks.find(c => c.key === 'trans'); near(tr.limit, 3.60, 1e-9, 'limit'); assert.equal(tr.applies, false); assert.equal(tr.ok, true);
-  assert.equal(d.checks.find(c => c.key === 'slope').applies, false); assert.equal(d.checks.some(c => c.key === 'lum'), false);
+  assert.equal(d.checks.find(c => c.key === 'slope').applies, false); assert.equal(d.checks.some(c => c.key === 'lum'), false);   // sign: no moment load (LPM4)
 });
 test('LTS-5: fatigue not required < 55 ft and for roadside signs; required (HMLT, outside the tool) at ≥ 55 ft; breakaway checklist', () => {
   const L = ltsEngine();
@@ -172,8 +172,10 @@ test('LTS-5: fatigue not required < 55 ft and for roadside signs; required (HMLT
   assert.equal(L.breakaway(false).needed, false); assert.ok(L.breakaway(true).items.length >= 6);
   // HC-1 has an arm-mounted fixture with an unbalanced dead load: the 0.35 in/ft slope check applies; the luminaire limit is 10 % H = 48 in
   const secs = roundSecs(40, 4.5, 8, 0.1793, 490), d = L.deflection({ ...HC1, DCpole: secs[0].Wabove, taper: true }, { V: 130, Vsvc: 76, tIce: 0 }, secs, 55);
-  // engineer, 2026-11-02 (Q-B4): 2.5 % H and 0.35 in/ft are information only; the 10 % H luminaire limit is a check
-  assert.equal(d.checks.find(c => c.key === 'slope').applies, false); assert.equal(d.checks.find(c => c.key === 'trans').applies, false);
+  // engineer, 2026-11-02 (Q-B4): 2.5 % H is information only; the 10 % H luminaire limit is a check.
+  // LPM4 (2026-11-07): the 0.35 in/ft slope is a check for a moment load application (unbalanced arm), information otherwise
+  const sl = d.checks.find(c => c.key === 'slope'); assert.equal(d.momentLoad, true); assert.equal(sl.applies, true); assert.equal(sl.ok, sl.ratio <= 1);
+  assert.equal(d.checks.find(c => c.key === 'trans').applies, false);
   const lum = d.checks.find(c => c.key === 'lum'); near(lum.limit, 48, 1e-9, '0.10H'); assert.equal(lum.applies, true);
 });
 
@@ -192,6 +194,19 @@ test('LTS-6 HC-1: base plate P_rod 17,959 lb, t_req 0.939 in ≤ 1.25 in; fillet
   const wd = L.baseWeld(ba, mc.Bs, { type: 'fillet', size: 0.3125, Fexx: 70, D: 8 });
   near(wd.phiRn, 6.9596, 1e-3, 'φRn'); near(wd.gov.q, 4.6507, 2e-3, 'q'); near(wd.ratio, 0.6682, 5e-4, 'ratio'); assert.ok(['d45', 'd315'].includes(wd.gov.lc));
   assert.equal(L.baseWeld(ba, mc.Bs, { type: 'cjp' }).ok, true);
+});
+/* LPL8 (2026-11-07): rectangular tube, the weld as a rectangular line group. Hand check, B_x = 8 in (along x), B_y = 6 in, one row
+   M_x 10,000, M_y 5,000 lb·ft, P 1,000 lb, V_x 500, V_y 300 lb, T 2,000 lb·ft, B = 1.02:
+   S_wx = 6·8 + 8²/3 = 69.333, S_wy = 8·6 + 6²/3 = 60.0 in², L_w = 28 in;
+   q_n = 122.4/69.333 + 61.2/60 + 1.0/28 = 2.82110; q_s = 0.5/16 + 0.3/12 + 24/96 = 0.30625; q = 2.83767 kip/in → 2.83767/6.95953 = 0.40774. */
+test('LPL8: square / rectangular tube base weld as a rectangular line weld (hand check q 2.8377 kip/in, ratio 0.4077)', () => {
+  const L = ltsEngine();
+  const ba = { rows: [{ combo: 'E1max', name: 'Extreme I', lcName: 'test', Mx: 10000, My: 5000, M: Math.hypot(10000, 5000), P: 1000, Vx: 500, Vy: 300, V: Math.hypot(500, 300), T: 2000 }] };
+  const wd = L.baseWeld(ba, { E1max: { B: 1.02 } }, { type: 'fillet', size: 0.3125, Fexx: 70, D: 6, shape: 'rect', Bx: 8, By: 6 });
+  near(wd.Swx, 69.3333, 1e-3, 'S_wx'); near(wd.Swy, 60, 1e-9, 'S_wy'); near(wd.gov.qn, 2.82110, 1e-4, 'q_n'); near(wd.gov.qs, 0.30625, 1e-6, 'q_s');
+  near(wd.gov.q, 2.83767, 1e-4, 'q'); near(wd.ratio, 0.40774, 1e-4, 'ratio'); assert.equal(wd.ok, true);
+  const wr = L.baseWeld(ba, { E1max: { B: 1.02 } }, { type: 'fillet', size: 0.3125, Fexx: 70, D: 6 });   // round (no shape): the circle formula, unchanged
+  assert.equal(wr.shape, undefined); near(wr.Sw, Math.PI * 9, 1e-9, 'S_w circle');
 });
 
 /* ---------- LTS-7: Broms embedment with the LTS factored groundline actions (Art. 13.6.1.1, C13.6.1.1), the page's bromsEmbedment ----------

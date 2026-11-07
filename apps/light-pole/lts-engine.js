@@ -429,7 +429,7 @@
     const r = res.gov, s = r.sec, cl = r.cl, gv = r.gov, st = [], R = ref, n = f;
     const rd = s.shape === 'round';
     st.push({ id: 'm.phi', label: 'Resistance factors', sym: '\\phi_{f},\\phi_{v},\\phi_{t},\\phi_{c}', eq: '', sub: '', value: '0.90, 0.90, 0.95, 0.90', unit: '', ref: R('Art. 5.5.3.2 (p. 5-6); Art. 5.5.4') });
-    st.push({ id: 'm.lam', label: `Width–thickness ratio at z = ${n(s.z, 2)} ft (${rd ? 'round' : s.shape})`, sym: rd ? 'D/t' : 'b/t', eq: rd ? '\\frac{D}{t}' : '\\frac{b}{t},\\,b = B_{max} - 3t',
+    st.push({ id: 'm.lam', label: `Width–thickness ratio at z = ${n(s.z, 2)} ft (${rd ? 'round' : s.shape})`, sym: rd ? 'D/t' : 'b/t', eq: rd ? '\\frac{D}{t}' : (cl.bRule === 'B-3t' ? '\\frac{b}{t},\\,b = B_{max} - 3t' : '\\frac{b}{t},\\,b = (B_{max} - 2t) - 2\\min(r_{i}, 4t)'),   // LPL5 (2026-11-07): the equation follows the rule used
       sub: rd ? `\\frac{${n(s.D, 3)}}{${n(s.t, 4)}}` : `\\frac{${n(cl.b, 3)}}{${n(s.t, 4)}}`, value: cl.lam, unit: '', d: 2, ref: R('Art. 5.7.2, Table 5.7.2-1 (p. 5-14)'),
       note: `λp = ${n(cl.lp, 1)}, λr = ${n(cl.lrF, 1)} (flexure), ${n(cl.lrC, 1)} (compression), λmax = ${n(cl.lmax, 1)} → ${r.mx.cls}.` + (rd ? '' : cl.bRule === 'B-3t' ? ' Flat width b = B − 3t (no corner radius entered).' : ` Flat width b = (B − 2t) − 2·min(r_i, 4t) with the entered inside corner radius r_i = ${n(s.ri, 3)} in (Art. 5.7.2, Eq. 5.7.2-1 with n = 4).`) });
     st.push({ id: 'm.mn', label: 'Nominal bending strength', sym: 'M_{n}', eq: rd ? (r.mx.cls === 'compact' ? 'Z F_{y}' : r.mx.cls === 'noncompact' ? 'M_{p}\\left[0.77 + \\frac{0.016(E/F_{y})}{D/t}\\right]' : 'M_{p}\\left[\\frac{0.25(E/F_{y})}{D/t}\\right]') : (r.mx.cls === 'compact' ? 'Z F_{y}' : r.mx.cls === 'noncompact' ? 'M_{p}\\left[1.37 - \\frac{0.33(b/t)}{\\sqrt{E/F_{y}}}\\right]' : 'M_{p}\\left[1.23 - \\frac{0.23(b/t)}{\\sqrt{E/F_{y}}}\\right]'),
@@ -500,8 +500,11 @@
     // engineer, 2026-11-02 (Q-B4): the 2.5 % H and 0.35 in/ft limits are information only (shown, never a failure); the 10 % H luminaire limit is a check
     checks.push({ key: 'trans', label: 'Vertical support, transverse loads: top deflection, Service I', value: gov.d, limit: lim.trans, unit: 'in', applies: false,
       ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 2.5 % of the height'), flag: 'Information only (engineer, 2026-11-02): the commentary (C10.4.2.1) describes it as a dead-load appearance limit developed for strain poles.' });
-    checks.push({ key: 'slope', label: 'Vertical support, moment loads: slope at the top, Service I', value: govS.slope, limit: lim.slope, unit: 'in/ft', applies: false,
-      ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 0.35 in/ft'), flag: 'Information only (engineer, 2026-11-02)' + (momentLoad ? '; the arm-mounted fixtures put a dead-load moment on the pole.' : '; no unbalanced arm-mounted dead load.') });
+    // LPM4 (2026-11-07, review M4): the 2017 interim makes the 0.35 in/ft slope a "shall" limit for vertical supports with moment load
+    // applications (C10.4.2.1: eccentric dead load of single or unbalanced arms) → a check when momentLoad, information otherwise.
+    // Before: information only in every case (Q-B4, 2026-11-02). Decision (pending engineer review).
+    checks.push({ key: 'slope', label: 'Vertical support, moment loads: slope at the top, Service I', value: govS.slope, limit: lim.slope, unit: 'in/ft', applies: momentLoad,
+      ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 0.35 in/ft'), flag: momentLoad ? 'Checked: the arm-mounted fixtures put an unbalanced dead-load moment on the pole (moment load application, Art. 10.4.2.1 / C10.4.2.1; review M4, 2026-11-07, pending engineer review).' : 'Information only: no unbalanced arm-mounted dead load (not a moment load application, C10.4.2.1).' });
     checks.forEach(c => { c.ratio = c.value / c.limit; c.ok = !c.applies || c.ratio <= 1; });
     return { B, rows: res, gov, govS, checks, momentLoad, slopeDL: Math.hypot(s0x, s0y) * 12 };
   }
@@ -553,9 +556,27 @@
      q = √((M/S_w + P/(πD))² + (2V/(πD) + 2T/(πD²))²), S_w = πD²/4 (in²); capacity per AWS D1.1 / AISC 360-16 §J2.4: φR_n = φ·0.60F_EXX·0.707w,
      φ = 0.75 (LRFDLTS Art. 5.14 refers to AWS D1.1 and gives no weld strength method: coordinator decision Q-B5); no directional increase.
      CJP: the base metal governs (the member check at the base); no separate weld check. w: {type 'fillet'|'cjp', size (in), Fexx (ksi), D (in)} */
+  /* LPL8 (2026-11-07, review L8): a square or rectangular tube (w.shape 'square' | 'rect', Bx = side along x, By = side along y, in)
+     takes the weld as a rectangular line group instead of a circle of D = side (which overstated the force by about 1.7×):
+     S_wx = By·Bx + Bx²/3 for M_x (extreme lines at x = ±Bx/2), S_wy = Bx·By + By²/3 for M_y; normal force at the corner
+     q_n = B·|M_x|/S_wx + B·|M_y|/S_wy + P/(2(Bx + By)); shear q_s = |V_x|/(2Bx) + |V_y|/(2By) + T/(2·Bx·By) (V_x on the two walls
+     parallel to x; T by the closed-tube shear flow T/(2A), A = Bx·By); q = √(q_n² + q_s²). The line-weld section properties of a
+     rectangle (weld treated as a line; engineering method, as for the circle). Round: unchanged. */
   function baseWeld(ba, Bs, w) {
     if (w.type === 'cjp') return { type: 'cjp', ok: true };
-    const D = w.D, Sw = Math.PI * D * D / 4, phiRn = 0.75 * 0.60 * w.Fexx * 0.707 * w.size;   // kip/in
+    const phiRn = 0.75 * 0.60 * w.Fexx * 0.707 * w.size;   // kip/in
+    if ((w.shape === 'square' || w.shape === 'rect') && w.Bx > 0 && w.By > 0) {
+      const bx = w.Bx, by = w.By, Swx = by * bx + bx * bx / 3, Swy = bx * by + by * by / 3, Lw = 2 * (bx + by);
+      let gov = null;
+      ba.rows.filter(r => r.combo !== 'SV1').forEach(r => {
+        const B = Bs[r.combo] ? Bs[r.combo].B : 1, Mx = B * Math.abs(r.Mx) * 12 / 1000, My = B * Math.abs(r.My) * 12 / 1000, P = Math.abs(r.P) / 1000,
+          Vx = Math.abs(r.Vx) / 1000, Vy = Math.abs(r.Vy) / 1000, T = Math.abs(r.T) * 12 / 1000;
+        const qn = Mx / Swx + My / Swy + P / Lw, qs = Vx / (2 * bx) + Vy / (2 * by) + T / (2 * bx * by), q = Math.hypot(qn, qs);
+        if (!gov || q > gov.q) gov = { ...r, B, Mk: Math.hypot(Mx, My), Mxk: Mx, Myk: My, Pk: P, Vk: Math.hypot(Vx, Vy), Vxk: Vx, Vyk: Vy, Tk: T, qn, qs, q };
+      });
+      return { type: 'fillet', shape: 'rect', Bx: bx, By: by, Swx, Swy, Lw, gov, phiRn, ratio: gov.q / phiRn, ok: gov.q <= phiRn };
+    }
+    const D = w.D, Sw = Math.PI * D * D / 4;
     let gov = null;
     ba.rows.filter(r => r.combo !== 'SV1').forEach(r => {
       const B = Bs[r.combo] ? Bs[r.combo].B : 1, M = B * r.M * 12 / 1000, P = Math.abs(r.P) / 1000, V = r.V / 1000, T = Math.abs(r.T) * 12 / 1000;
