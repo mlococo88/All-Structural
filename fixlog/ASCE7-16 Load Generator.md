@@ -1343,7 +1343,7 @@ Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 a
 - `check-syntax` (pass); `project-library --tool asce7`: against main its result comparison differs only by the Note 2 advisory (`R.warn`) and `seis.sysLimit` (NL → 100), as intended; with `--a HEAD` (same calculation both sides) ALL PASS, so the save / open / undo paths are unaffected; `phone-layout --tool asce7` pass; `engine handoffs` 10 passed.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/asce7-m3m4-elf-permitted — A7M3 + A7M4: ELF permission checks, Sec. 11.4.8 Exception 3 (Site E, S_1 ≥ 0.2) and Table 12.6-1 (review M3, M4; §4)
+## 2026-11-07 — PR: claude/asce7-m3m4-elf-permitted — A7M3 + A7M4: ELF permission checks, Sec. 11.4.8 Exception 3 (Site E, S_1 ≥ 0.2) and Table 12.6-1 (review M3, M4; §4; PR #1074: https://github.com/mlococo88/All-Structural/pull/1074)
 
 ### A7M3 / A7M4. ELF procedure permitted?   [check logic change] [more conservative]
 - **Where:** `solve()`, new block just before `/* manually entered hazard data */` (anchor `/* A7M3 + A7M4 (2026-11-07)`); seismic tab panel `o-se4` before `eq(b,"Base value"` (anchor `if(q.elf && (q.elf.siteE`); the "Not Included in the Seismic Module" note; User Manual 8.1; Excel seismic section (two `statusRow`s before the Sec. 11.6 note row); new input `S.irreg` (DEF, anchor `irreg:"none"`) on the Seismic input tab, "Weight and Period" panel.
