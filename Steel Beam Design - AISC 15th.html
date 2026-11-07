@@ -1532,8 +1532,8 @@ function computeAll(){
         let dm=0,dx=xa;
         dc.xs.forEach((x,k)=>{if(x>=xa-1e-9&&x<=xb+1e-9&&Math.abs(dc.d[k])>Math.abs(dm)){dm=dc.d[k];dx=x;}});
         const cant=cantSpanF(i),lim=c.den>0?(cant?2:1)*sp.L/c.den:null;   /* ft — per-span length (defect fix); L6: 2L for a cantilever */
-        perSpan.push({span:i,dmax:dm,x:dx,lim,cant,ratio:lim?Math.abs(dm)/lim:null,
-          pass:lim?Math.abs(dm)<=lim*1.0001:null});
+        perSpan.push(Object.assign({span:i,dmax:dm,x:dx,lim,ratio:lim?Math.abs(dm)/lim:null,
+          pass:lim?Math.abs(dm)<=lim*1.0001:null},cant?{cant:true}:{}));
       });
     }
     res.svc.push({id:c.id,name:comboName(c.f),f:c.f,den:c.den,R:sol.R,defl:dc,perSpan});
@@ -9668,8 +9668,8 @@ function applyCompositeDeflection(A){
       let dm=0,dx=xa;
       sp.xs.forEach((x,k)=>{if(x>=xa-1e-9&&x<=xb+1e-9&&Math.abs(sp.d[k])>Math.abs(dm)){dm=sp.d[k];dx=x;}});
       const cant=cantSpanF(i),lim=c.den>0?(cant?2:1)*s2.L/c.den:null;   /* L6: 2L for a cantilever */
-      sc.perSpan.push({span:i,dmax:dm,x:dx,lim,cant,ratio:lim?Math.abs(dm)/lim:null,
-        pass:lim?Math.abs(dm)<=lim*1.0001:null});
+      sc.perSpan.push(Object.assign({span:i,dmax:dm,x:dx,lim,ratio:lim?Math.abs(dm)/lim:null,
+        pass:lim?Math.abs(dm)<=lim*1.0001:null},cant?{cant:true}:{}));
     });
   });
   A.compDefl=used?{Ibare,Icomp}:null;
