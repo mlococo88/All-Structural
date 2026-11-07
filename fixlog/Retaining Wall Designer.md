@@ -2589,7 +2589,7 @@ Calculation audit, item 2. Engineer decision (2026-11-07): in AASHTO mode the ve
   - **AASHTO q_s 250, and AASHTO q_s 250 + water + collision + η 1.05:** results change as above; the EE II values (`aashtoR.ct`) are unchanged.
 - Tests: check-syntax, smoke/retaining-wall-checks (self-consistency panel passes), phone-layout rwall 390/768, project-library retwall, dxf-print-sheets rw.
 
-## 2026-11-07 — PR: claude/rw-aashto-ee2-ct — AASHTO Extreme Event II (collision) stability: LS instead of the dead surcharge for bearing, ES vertical in the resisting load, water at WA = 1.0, lateral ES with the EH choice (RWCT; calculation change)
+## 2026-11-07 — PR: claude/rw-aashto-ee2-ct — AASHTO Extreme Event II (collision) stability: LS instead of the dead surcharge for bearing, ES vertical in the resisting load, water at WA = 1.0, lateral ES with the EH choice (RWCT; calculation change) (PR #944: https://github.com/mlococo88/All-Structural/pull/944)
 
 Calculation audit, item 3. Engineer decision (2026-11-07). Code sites are tagged `RWCT`.
 
