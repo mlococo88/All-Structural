@@ -2432,7 +2432,7 @@ function listTables() {
 - **Hand-offs changed (§7):** foundationLoads Extreme Event I (γEQ); abutmentLoads per-bearing `LL.envelopeMax` (skew), for new projects.
 - **Saved data (§5):** new fields `br.skCorr`, `br.skKg`, `br.skOld`; old saves migrated as above (γEQ and the skew correction keep their old behaviour). No key renamed.
 
-## 2026-11-07 — PR: claude/subloads-review-low (VW4, L01, WZ, CIT, EC10, CHK) — review LOW items L1–L5, L7 (§4 result changes: E_c (L5) on every project; Z (L3) only where Z > 33 ft; L1 opt-in)
+## 2026-11-07 — PR: claude/subloads-review-low (PR #1127: https://github.com/mlococo88/All-Structural/pull/1127) (VW4, L01, WZ, CIT, EC10, CHK) — review LOW items L1–L5, L7 (§4 result changes: E_c (L5) on every project; Z (L3) only where Z > 33 ft; L1 opt-in)
 - **Why:** in-depth code review of 2026-11-07, LOW findings L1–L5 and L7 (L6 was fixed with H1, KZG).
 
 ### VW4 (L1). Service IV vertical wind: option 0.010 ksf; default kept 0.020 ksf
