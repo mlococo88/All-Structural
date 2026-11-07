@@ -1851,7 +1851,7 @@ Review of 2026-11-07, LOW findings. L7 (closed-form FER) is a separate PR. Every
   - **O3:** the cantilever deflection limit uses l = the overhang length. The IBC 2018 Table 1604.3 footnote (l = 2 × the cantilever length) would be less conservative.
   - **O9:** the Report has no Project No. / Computed by / Checked by fields.
 
-## 2026-11-07 — PR: claude/sm-left-summary (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SMLS: the result cards in a left summary column from 1200 px, as Retaining Wall / Spread Footing / Light Pole)   [display only; no result change]
+## 2026-11-07 — PR: claude/sm-left-summary (PR #1130: https://github.com/mlococo88/All-Structural/pull/1130) (SMLS: the result cards in a left summary column from 1200 px, as Retaining Wall / Spread Footing / Light Pole)   [display only; no result change]
 
 ### SMLS. Results summary column on the left at 1200 px and wider   [display only]
 - **Request (engineer, 2026-11-07):** the summary / result cards should move into a left summary panel, as in Retaining Wall Designer (RWDL #959, RWLB #984), Spread Footing (SFLB #988) and Light Pole and Sign Post (LPLB #991).
