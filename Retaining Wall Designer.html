@@ -1258,14 +1258,19 @@ body.rwDashColl #rwDash { display: none; }
     </div>
     <div class="ig full"><label for="aashto_heq_mode">h<sub>eq</sub> Source</label>
       <select id="aashto_heq_mode" onchange="onInputChange()">
-        <option value="auto">Auto from wall height (Table 3.11.6.4.1-2, walls)</option>
+        <option value="auto">Auto from wall height and distance (Tables 3.11.6.4.1-1 / -2)</option>
         <option value="manual">Manual override</option>
       </select></div>
-    <div class="ig full"><label for="aashto_heq_dist">Wall back face → edge of traffic</label>
-      <select id="aashto_heq_dist" onchange="onInputChange()">
-        <option value="0">0 ft (traffic at the wall)</option>
-        <option value="1">≥ 1.0 ft (h<sub>eq</sub> = 2.0 ft)</option>
+    <!-- RWLS (2026-11-07): traffic direction (new field, saved only when not the default) and a numeric distance (same id and saved
+         field as the old 0 / ≥ 1 ft list: old saves hold "0" or "1" and give the same h_eq) -->
+    <div class="ig full"><label for="aashto_traffic_dir">Traffic direction</label>
+      <select id="aashto_traffic_dir" onchange="onInputChange()">
+        <option value="parallel" selected>Wall parallel to traffic (Table 3.11.6.4.1-2)</option>
+        <option value="perpendicular">Abutment, traffic perpendicular (Table 3.11.6.4.1-1)</option>
       </select></div>
+    <div class="ig full"><label for="aashto_heq_dist">Distance from back face of wall to edge of traffic</label>
+      <div class="iw"><input type="number" id="aashto_heq_dist" value="0" min="0" max="100" step="0.5" onchange="onInputChange()"><span class="iw-unit">ft</span></div></div>
+    <div class="hint" id="hint_ls_req"></div>
     <div class="ig full" id="grp_heq_manual" style="display:none"><label for="aashto_heq">h<sub>eq</sub> (manual)</label>
       <div class="iw"><input type="number" id="aashto_heq" value="2.0" min="0" max="6" step="0.5"><span class="iw-unit">ft</span></div></div>
     </div>
@@ -1873,16 +1878,25 @@ function calcK_AASHTO(method, cond, phi, delta, beta, batter, ocr) {
   return calcKa(phi, beta);   // Rankine active
 }
 
-/** AASHTO LL surcharge equivalent soil height h_eq (ft)
- *  Table 3.11.6.4.1-2 (walls parallel to traffic) — interpolated by wall height H (ft).
- *  Distance to traffic 0 ft: ≤5 ft → 5.0; 10 ft → 3.5; ≥20 ft → 2.0.  ≥1 ft: 2.0.
+/** AASHTO LL surcharge equivalent soil height h_eq (ft), AASHTO LRFD 10th Ed. Art. 3.11.6.4.1
+ *  Table 3.11.6.4.1-2 (walls parallel to traffic): 0-ft column 5.0 / 3.5 / 2.0 at H = 5 / 10 / ≥20 ft; ≥ 1 ft: 2.0.
+ *  Table 3.11.6.4.1-1 (abutments perpendicular to traffic): 4.0 / 3.0 / 2.0.  Linear on H.
  */
-function heqAASHTO(H_ft, dist_ft=0) {
-  // AASHTO Table 3.11.6.4.1-2 (retaining walls, traffic parallel to wall):
-  //   distance wall back face → edge of traffic = 0 ft : 5.0 / 3.5 / 2.0 ft at H = 5 / 10 / ≥20 ft
-  //   distance ≥ 1 ft                                  : 2.0 ft for all heights
-  if (dist_ft >= 1) return 2.0;
-  const pts = [[5, 5.0], [10, 3.5], [20, 2.0]];
+// RWLS (2026-11-07): the table's columns at wall height H (ft), interpolated linearly on H (Art. 3.11.6.4.1):
+//   'parallel'      Table 3.11.6.4.1-2 (retaining walls, traffic parallel): c0 = the 0-ft column, c1 = the "1.0 ft or further" column;
+//   'perpendicular' Table 3.11.6.4.1-1 (abutments, traffic perpendicular): 4.0 / 3.0 / 2.0 ft at H = 5 / 10 / ≥20 ft (no distance column).
+function heqCols(H_ft, dir) {
+  const ab = dir === 'perpendicular';
+  const c0 = heqInterpH(H_ft, ab ? [[5, 4.0], [10, 3.0], [20, 2.0]] : [[5, 5.0], [10, 3.5], [20, 2.0]]);
+  return { c0, c1: ab ? c0 : 2.0, tbl: ab ? 'Table 3.11.6.4.1-1' : 'Table 3.11.6.4.1-2' };
+}
+// h_eq for a distance d (ft) from the back face to the edge of traffic. Parallel table: d ≥ 1 ft → the 1-ft column; 0 < d < 1 ft →
+// linear between the 0-ft and 1-ft columns (engineer decision 2026-11-07; the table gives the two columns only). Abutment table: no d.
+function heqAASHTO(H_ft, dist_ft=0, dir='parallel') {
+  const c = heqCols(H_ft, dir), d = Math.max(0, +dist_ft || 0);
+  return d >= 1 ? c.c1 : c.c0 + (c.c1 - c.c0) * d;
+}
+function heqInterpH(H_ft, pts) {
   if (H_ft <= pts[0][0]) return pts[0][1];
   if (H_ft >= pts[pts.length-1][0]) return pts[pts.length-1][1];
   for (let i = 0; i < pts.length - 1; i++) {
@@ -2145,8 +2159,15 @@ function calcAll(inp) {
   }
 
   // AASHTO live-load surcharge → equivalent soil height heq (converted to psf: γ·heq)
-  const heq = isAASHTO && A.ll_surcharge
-    ? (A.heq_mode === 'manual' ? A.heq : heqAASHTO(H, A.heq_dist || 0))
+  // RWLS (2026-11-07): Art. 3.11.6.4.1 requires LS where vehicular load can act on the backfill within H/2 behind the back face
+  // (H = backfill surface to footing bottom, as the table lookup). Auto h_eq: beyond H/2 → LS not required (h_eq = 0, noted);
+  // a manual h_eq is the user's override and is applied whatever the distance. The checkbox stays the off switch.
+  const ls_dir  = A.traffic_dir === 'perpendicular' ? 'perpendicular' : 'parallel';
+  const ls_dist = Math.max(0, A.heq_dist || 0), ls_half = H / 2;
+  const ls_auto_off = isAASHTO && !!A.ll_surcharge && A.heq_mode !== 'manual' && ls_dist > ls_half;
+  const ls_on = isAASHTO && !!A.ll_surcharge && !ls_auto_off;
+  const heq = ls_on
+    ? (A.heq_mode === 'manual' ? A.heq : heqAASHTO(H, ls_dist, ls_dir))
     : 0;
   const q_ll_aashto = heq * inp.gamma_s;   // psf, AASHTO LL surcharge pressure
   // Effective surcharge used in pressure calcs: ACI uses q_sur; AASHTO adds heq surcharge
@@ -2661,7 +2682,7 @@ function calcAll(inp) {
     }
 
     aashtoR = {
-      eta, heq, q_ll_aashto,
+      eta, heq, q_ll_aashto, ls_on, ls_auto_off, ls_dir, ls_dist, ls_half,   // RWLS: LS applicability and table (exposure)
       P_EH, y_EH, P_LS, y_LS, P_ES, P_hyd,
       tanDelta, delta_b, fric_label, fricMode, gEH_max, V_up, M_up, V_str_max_tot, V_col, ct,
       // sliding
@@ -3573,6 +3594,7 @@ function getInputs() {
       base_fric: s('aashto_base_fric') || 'two_thirds',
       ecc_limit: s('aashto_ecc_limit') || 'b4',
       heq_dist:  n('aashto_heq_dist'),
+      ...(s('aashto_traffic_dir') === 'perpendicular' ? { traffic_dir: 'perpendicular' } : {}),   // RWLS (2026-11-07): Table 3.11.6.4.1-1; absent = 'parallel' (Table 3.11.6.4.1-2), as before
       shear_method: s('aashto_shear_method') || 'auto',
       phi_ep:    nd('aashto_phi_ep', 0.50),
       phi_b:     nd('aashto_phi_b', 0.55),
@@ -4057,15 +4079,29 @@ function renderStabilityAASHTO(r) {
     [{sym:'K_p', desc:'passive earth pressure coefficient', val:F(r.Kp,4), unit:''}]);
   h += `</div></div>`;
 
-  if (A.ll_surcharge) {
+  if (A.ll_surcharge) {   // RWLS (2026-11-07): table by traffic direction, distance and the H/2 applicability test worked
+    const lsC = heqCols(r.H, a.ls_dir), lsPar = a.ls_dir !== 'perpendicular';
     h += `<div class="card" style="margin-bottom:16px;">
-      <div class="card-hd"><span class="card-title">Step 2 \u2014 Live Load Surcharge (equivalent soil height)</span><span class="card-ref">AASHTO \u00a73.11.6.4.1 \u00b7 Table 3.11.6.4.1-2</span></div>
+      <div class="card-hd"><span class="card-title">Step 2 \u2014 Live Load Surcharge (equivalent soil height)</span><span class="card-ref">AASHTO \u00a73.11.6.4.1 \u00b7 ${lsC.tbl}</span></div>
       <div class="card-body">`;
-    h += eq(A.heq_mode === 'manual' ? 'Equivalent height (manual override)' : 'Equivalent height from wall height (interpolated)',
-      `h_{eq} = \\boxed{${F(a.heq,2)}\\ \\text{ft}}`,'Table 3.11.6.4.1-2',
-      [{sym:'H', desc:'total wall height', val:F(r.H,2), unit:'ft'},
-       {sym:'h_{eq}', desc:'equivalent height of soil for LL surcharge', val:F(a.heq,2), unit:'ft'}]);
-    h += eq('Equivalent surcharge pressure',
+    h += eq('Where LS applies: vehicular load within H/2 behind the back face',
+      `d = ${F(a.ls_dist,2)}\\ \\text{ft} ${a.ls_dist <= a.ls_half ? '\\leq' : '>'} \\frac{H}{2} = \\frac{${F(r.H,2)}}{2} = ${F(a.ls_half,2)}\\ \\text{ft} \\;\\Rightarrow\\; \\text{${a.ls_dist <= a.ls_half ? 'LS required' : 'LS not required'}}`, '\u00a73.11.6.4.1',
+      [{sym:'d', desc:'distance from the back face of the wall to the edge of traffic', val:F(a.ls_dist,2), unit:'ft'},
+       {sym:'H', desc:'wall height, backfill surface to footing bottom', val:F(r.H,2), unit:'ft'}]);
+    if (a.ls_auto_off)
+      h += `<div class="alert info" style="margin:4px 0 8px;">\u2139 <b>LS not required</b> \u2014 the traffic edge is farther than H/2 behind the back face (AASHTO \u00a73.11.6.4.1), so no live-load surcharge is applied: h<sub>eq</sub> = 0, P<sub>LS</sub> = 0 and the heel LS load is 0 in every limit state. A manual h<sub>eq</sub> (h<sub>eq</sub> Source) overrides this.</div>`;
+    else if (A.heq_mode !== 'manual')
+      h += eq('Equivalent height of soil from ' + lsC.tbl + (lsPar ? ' (walls parallel to traffic), interpolated on H and d' : ' (abutments perpendicular to traffic), interpolated on H'),
+        lsPar
+          ? `h_{eq,0} = ${F(lsC.c0,3)},\\; h_{eq,1} = ${F(lsC.c1,2)} \\;\\Rightarrow\\; h_{eq} = ${a.ls_dist >= 1 ? 'h_{eq,1}' : `h_{eq,0} + (h_{eq,1} - h_{eq,0})\\,d = ${F(lsC.c0,3)} + (${F(lsC.c1,2)} - ${F(lsC.c0,3)})(${F(a.ls_dist,2)})`} = \\boxed{${F(a.heq,3)}\\ \\text{ft}}`
+          : `h_{eq} = \\boxed{${F(a.heq,3)}\\ \\text{ft}}`, lsC.tbl,
+        [{sym:'H', desc:'wall height (linear interpolation between 5, 10 and 20 ft)', val:F(r.H,2), unit:'ft'},
+         ...(lsPar ? [{sym:'h_{eq,0}', desc:'0-ft column at H', val:F(lsC.c0,3), unit:'ft'}, {sym:'h_{eq,1}', desc:'"1.0 ft or further" column at H', val:F(lsC.c1,2), unit:'ft'}] : []),
+         {sym:'h_{eq}', desc:'equivalent height of soil for LL surcharge' + (lsPar && a.ls_dist > 0 && a.ls_dist < 1 ? ' (0 < d < 1 ft: linear between the two columns)' : ''), val:F(a.heq,3), unit:'ft'}]);
+    else
+      h += eq('Equivalent height (manual override)', `h_{eq} = \\boxed{${F(a.heq,2)}\\ \\text{ft}}`,'',
+        [{sym:'h_{eq}', desc:'equivalent height of soil for LL surcharge (user value)', val:F(a.heq,2), unit:'ft'}]);
+    if (a.ls_on) h += eq('Equivalent surcharge pressure',
       `q_{LS} = \\gamma_s\\,h_{eq} = (${F(inp.gamma_s,0)})(${F(a.heq,2)}) = \\boxed{${F(a.q_ll_aashto,0)}\\ \\text{psf}}`,'\u00a73.11.6.4',
       [{sym:'\\gamma_s', desc:'soil unit weight', val:F(inp.gamma_s,0), unit:'pcf'},
        {sym:'h_{eq}', desc:'equivalent surcharge height', val:F(a.heq,2), unit:'ft'},
@@ -4085,7 +4121,7 @@ function renderStabilityAASHTO(r) {
      {sym:"H'", desc: inp.beta>0 ? 'pressure-plane height at heel end = H + L·tanβ' : 'total wall height', val:F(r.Hp,2), unit:'ft'},
      {sym:'P_{EH}', desc:'horizontal earth resultant', val:F(a.P_EH,0), unit:'lb/ft'},
      {sym:'y', desc:'height of resultant above base', val:F(a.y_EH,2), unit:'ft'}]);
-  if (A.ll_surcharge)
+  if (a.ls_on)   // RWLS
     h += eq('Live-load surcharge horizontal (LS)',
       `P_{LS} = K_a\\,q_{LS}\\,H' = \\boxed{${F(a.P_LS,0)}\\ \\text{lb/ft}} \\ \\text{at}\\ y=\\tfrac{H'}{2}=${F(a.y_LS,2)}\\,\\text{ft}`,'\u00a73.11.6.4',
       [{sym:'q_{LS}', desc:'LL surcharge pressure', val:F(a.q_ll_aashto,0), unit:'psf'},
@@ -5667,6 +5703,7 @@ const LS_OK = _lsAvailable();
 
 // Snapshot every form field by id → plain object
 const RWTB_FIELDS = ['proj_date', 'proj_chkdate'];   // RWTB (2026-11-06): the optional title-block dates (Project tab)
+const RWLS_DEF = { aashto_traffic_dir: 'parallel' };   // RWLS (2026-11-07): saved only when not the default; absent → the default
 function snapshotFields() {
   const out = {};
   document.querySelectorAll('.sidebar input, .sidebar select, .sidebar textarea').forEach(el => {
@@ -5676,6 +5713,7 @@ function snapshotFields() {
   /* RWTB (2026-11-06): the optional title-block dates are saved only when filled, so a project without them saves, autosaves and
      exports exactly as before (saved-format addition only) */
   RWTB_FIELDS.forEach(id => { if (out[id] === '') delete out[id]; });
+  Object.entries(RWLS_DEF).forEach(([id, d]) => { if (out[id] === d) delete out[id]; });   // RWLS: old saves and default projects unchanged
   return out;
 }
 // Restore fields from a snapshot object, then fire dependent UI toggles
@@ -5684,6 +5722,7 @@ function restoreFields(fields) {
   /* RWTB (2026-11-06): a project or autosave saved before the title-block dates (or with them blank) has no such field: they open
      blank (not the value of the project open before) */
   RWTB_FIELDS.forEach(id => { if (!(id in fields)) { const el = document.getElementById(id); if (el) el.value = ''; } });
+  Object.entries(RWLS_DEF).forEach(([id, d]) => { if (!(id in fields)) { const el = document.getElementById(id); if (el) el.value = d; } });   // RWLS
   Object.entries(fields).forEach(([id, val]) => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -6023,6 +6062,7 @@ function rwInputErrors() {
     opt('aashto_delta', ge0);
     if (sel('aashto_qn_mode') === 'manual') need('aashto_qR', gt0);
     if (on('aashto_ll_surcharge') && sel('aashto_heq_mode') === 'manual') need('aashto_heq', ge0);
+    if (on('aashto_ll_surcharge') && sel('aashto_heq_mode') !== 'manual') need('aashto_heq_dist', ge0);   // RWLS: numeric distance
     if (sel('aashto_base_fric') === 'manual') need('aashto_delta_b', Object.assign(v => v > 0 && v < 90, { msg: 'must be greater than 0° and less than 90° (0 fell back to ⅔φ)' }));
     if (on('aashto_ct_enable')) {
       need('aashto_ct_h', gt0); need('aashto_ct_wh', gt0); need('aashto_ct_h_app', ge0); need('aashto_ct_ljoint', gt0);
@@ -6987,7 +7027,7 @@ function buildCrossSection(r) {
   // Surcharge arrows (dead qs + AASHTO LL surcharge γ·h_eq)
   if (r.q_sur_eff > 0) {
     const stip = (r.isAASHTO && r.q_ll_aashto > 0)
-      ? `<b>Live-load surcharge (LS)</b><br>h_eq = ${f(r.heq,2)} ft (AASHTO Table 3.11.6.4.1-2)<br>q_LS = γ·h_eq = ${f(r.q_ll_aashto,0)} psf${inp.q_sur>0?`<br>+ dead qs = ${f(inp.q_sur,0)} psf`:''}<br>Lateral: Kₐ·q = ${f(r.Ka*r.q_sur_eff,0)} psf (uniform)`
+      ? `<b>Live-load surcharge (LS)</b><br>h_eq = ${f(r.heq,2)} ft (AASHTO ${r.inp.aashto.heq_mode==='manual'?'manual':heqCols(r.H, r.aashtoR.ls_dir).tbl})<br>q_LS = γ·h_eq = ${f(r.q_ll_aashto,0)} psf${inp.q_sur>0?`<br>+ dead qs = ${f(inp.q_sur,0)} psf`:''}<br>Lateral: Kₐ·q = ${f(r.Ka*r.q_sur_eff,0)} psf (uniform)`
       : `<b>Surcharge</b><br>qs = ${f(inp.q_sur,0)} psf<br>Lateral: Kₐ·qs = ${f(r.Ka*inp.q_sur,0)} psf (uniform)<br>P_sur = ${f(r.Pa_sur_h,0)} lb/ft at H/2`;
     s += `<g data-layer="surcharge">`;
     const na = Math.min(6, Math.max(3, Math.floor(Lh_px/18)));
@@ -8361,7 +8401,7 @@ const RW_REFS = {
     ['Seed &amp; Whitman (1970)', 'Simplified Mononobe-Okabe seismic increment (when k<sub>h</sub> &gt; 0)'],
   ],
   AASHTO: [
-    ['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) — Tables 3.4.1-1/-2 (load factors), Art. 3.11.5 / 3.11.6.4.1 and Table 3.11.6.4.1-2 (earth pressure, live-load surcharge), 5.6.3 / 5.6.3.3 (flexure, minimum reinforcement), 5.6.7 (crack control), 5.7.2.8 / 5.7.3 (shear), 5.7.4.3 (interface shear), 5.10.6 (temperature &amp; shrinkage), 5.10.8 (development, hooks, cutoff), 10.6.3.1 / 10.6.3.4 / 10.6.5 (bearing, sliding, rock), 11.5.6 and Table 11.5.7-1 (resistance factors), 11.6.3.2 / 11.6.3.3 (bearing on rock, eccentricity), A13.3.1 (barrier yield line)'],
+    ['AASHTO LRFD', 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024) — Tables 3.4.1-1/-2 (load factors), Art. 3.11.5 / 3.11.6.4.1 and Tables 3.11.6.4.1-1 / -2 (earth pressure, live-load surcharge), 5.6.3 / 5.6.3.3 (flexure, minimum reinforcement), 5.6.7 (crack control), 5.7.2.8 / 5.7.3 (shear), 5.7.4.3 (interface shear), 5.10.6 (temperature &amp; shrinkage), 5.10.8 (development, hooks, cutoff), 10.6.3.1 / 10.6.3.4 / 10.6.5 (bearing, sliding, rock), 11.5.6 and Table 11.5.7-1 (resistance factors), 11.6.3.2 / 11.6.3.3 (bearing on rock, eccentricity), A13.3.1 (barrier yield line)'],
     ['MassDOT LRFD Bridge Manual', 'Part I §3.3.2.2 (heel top steel, variable-height wall), §3.3.2.4 and Table 3.3.2-1 (vehicular collision on walls), when selected; edition: verify'],
     ['ACI 318-19', '§25.4.2 (development length of the footing bars, as cited in the footing tab)'],
     ['ASCE 7-22', '§2.3.1 (strength combinations for column / beam loads, when entered)'],
@@ -9327,9 +9367,10 @@ function rwrModel(r) {
       ...(inp.massdot_ftg ? [['MassDOT §3.3.2.2 heel top steel rule', 'on', '–']] : [])];
     if (isA) mat.push(['Load modifier η', rwrCell(a.eta, 2), '–'], ['φ_τ / φ_ep / φ_b', rwrN(A.phi_tau, 2) + ' / ' + rwrN(A.phi_ep, 2) + ' / ' + rwrN(A.phi_b, 2), '–'],
       ['Base interface: ' + rwrPlain(a.fric_label), 'δ_b = ' + rwrN(a.delta_b, 1) + '°, tan δ_b = ' + rwrN(a.tanDelta, 3), '–'], ['Eccentricity limit', rwrPlain(a.e_limit_label), '–'],
-      ['Nominal bearing q_n', a.useManualQn ? 'from geotechnical report' : 'estimated as 3 q_a', '–'], ['Live-load surcharge', A.ll_surcharge ? 'on (h_eq ' + (A.heq_mode === 'manual' ? 'manual' : 'from Table 3.11.6.4.1-2') + ')' : 'off', '–'],
+      ['Nominal bearing q_n', a.useManualQn ? 'from geotechnical report' : 'estimated as 3 q_a', '–'], ['Live-load surcharge', A.ll_surcharge ? (a.ls_auto_off ? 'not required (traffic beyond H/2, Art. 3.11.6.4.1)' : 'on (h_eq ' + (A.heq_mode === 'manual' ? 'manual' : 'from ' + heqCols(r.H, a.ls_dir).tbl) + ')') : 'off', '–'],
+      ...(A.ll_surcharge && A.heq_mode !== 'manual' ? [['Traffic: ' + (a.ls_dir === 'perpendicular' ? 'abutment, perpendicular' : 'wall parallel') + '; distance back face to edge of traffic d', rwrCell(a.ls_dist, 2), 'ft']] : []),   // RWLS
       ...(A.ep_method === 'coulomb' ? [['Coulomb wall friction δ / wall batter θ', rwrN(A.delta, 1) + ' / ' + rwrN(A.batter, 1), 'deg']] : []), ...(A.ep_cond === 'atrest' ? [['Over-consolidation ratio OCR', rwrCell(A.ocr, 2), '–']] : []),
-      ...(A.ll_surcharge ? [['Equivalent height of soil h_eq', rwrCell(a.heq, 2), 'ft']] : []),   // RWPR: the earth-pressure and LS inputs in use
+      ...(a.ls_on ? [['Equivalent height of soil h_eq', rwrCell(a.heq, 2), 'ft']] : []),   // RWPR: the earth-pressure and LS inputs in use
       ['Shear method', A.shear_method || 'auto', '–'], ['Exposure factors γ_e (footing / stem)', rwrN(A.gamma_e1, 2) + ' / ' + rwrN(A.gamma_e2, 2), '–'],
       ['Vehicular collision (Extreme Event II)', A.ct_enable ? 'on' : 'off', '–'], ['Interface shear check', A.ish_enable ? 'on' : 'off', '–']);
     { const MK = { s1: 'S1', s2: 'S2', s3: 'S3', f1: 'F1', f2: 'F2', f3: 'F3' }, ov = Object.keys(MK).filter(k => inp.ovr[k] && inp.ovr[k].bar >= 3 && inp.ovr[k].bar <= 10 && inp.ovr[k].spc >= 3 && inp.ovr[k].spc <= 18);   // RWPR: the bar-size overrides (Rebar tab)
@@ -9438,11 +9479,16 @@ function rwrModel(r) {
       else st.push(rwrS({ id: 'K', label: 'Rankine active coefficient', sym: 'K_{a}', eq: '\\tan^{2}\\left(45' + RWR_DEG + ' \\minus \\frac{\\phi}{2}\\right)', sub: '\\tan^{2}\\left(45' + RWR_DEG + ' \\minus \\frac{' + ph + '}{2}\\right)', value: r.Ka, unit: '', d: 4, ref: AA('Art. 3.11.5.3') }));
       st.push(rwrS({ id: 'Kp', label: 'Passive coefficient (toe resistance)', sym: 'K_{p}', eq: '', sub: '', value: r.Kp, unit: '', d: 4, ref: AA('Art. 3.11.5.4') }));
       subs.push(sub('Step 1 — Earth pressure coefficient', [rwrItem('sa1', [{ title: 'Coefficients', steps: st }]), onTab('stabKa')])); }
-    if (A.ll_surcharge) subs.push(sub('Step 2 — Live-load surcharge (equivalent soil height)', [rwrItem('sa2', [{ title: 'Surcharge', steps: [
-      rwrS({ id: 'heq', label: A.heq_mode === 'manual' ? 'Equivalent height (manual override)' : 'Equivalent height from the wall height H = ' + rwrN(r.H, 2) + ' ft (interpolated)', sym: 'h_{eq}', eq: '', sub: '', value: a.heq, unit: 'ft', d: 2, ref: AA('Table 3.11.6.4.1-2') }),
-      rwrS({ id: 'qLS', label: 'Equivalent surcharge pressure', sym: 'q_{LS}', eq: '\\gamma_{s}\\,h_{eq}', sub: '(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(a.heq, 2) + ')', value: a.q_ll_aashto, unit: 'psf', d: 0, ref: AA('Art. 3.11.6.4') })] }]), onTab('stabLS')]));
+    if (A.ll_surcharge) { const lsC = heqCols(r.H, a.ls_dir), lsPar = a.ls_dir !== 'perpendicular', lsMid = lsPar && a.ls_dist > 0 && a.ls_dist < 1;   // RWLS (2026-11-07)
+      const ls = [rwrS({ id: 'half', label: 'Where LS applies: vehicular load within H/2 behind the back face (d = ' + rwrN(a.ls_dist, 2) + ' ft' + (a.ls_dist <= a.ls_half ? ' ≤ H/2: LS required)' : ' > H/2: LS not required)'), sym: '\\frac{H}{2}', eq: '', sub: '\\frac{' + rwrN(r.H, 2) + '}{2}', value: a.ls_half, unit: 'ft', d: 2, ref: AA('Art. 3.11.6.4.1') })];
+      if (!a.ls_auto_off) ls.push(A.heq_mode === 'manual'
+        ? rwrS({ id: 'heq', label: 'Equivalent height (manual override)', sym: 'h_{eq}', eq: '', sub: '', value: a.heq, unit: 'ft', d: 2 })
+        : rwrS({ id: 'heq', label: 'Equivalent height, ' + (lsPar ? 'walls parallel to traffic' : 'abutments perpendicular to traffic') + ', interpolated on H = ' + rwrN(r.H, 2) + ' ft' + (lsPar ? ' (columns at H: 0 ft ' + rwrN(lsC.c0, 3) + ', 1.0 ft or further ' + rwrN(lsC.c1, 2) + ')' : ''), sym: 'h_{eq}', eq: lsMid ? 'h_{eq,0} + (h_{eq,1} \\minus h_{eq,0})\\,d' : '', sub: lsMid ? rwrN(lsC.c0, 3) + ' + (' + rwrN(lsC.c1, 2) + ' \\minus ' + rwrN(lsC.c0, 3) + ')(' + rwrN(a.ls_dist, 2) + ')' : '', value: a.heq, unit: 'ft', d: 3, ref: AA(lsC.tbl) }));
+      else ls.push({ type: 'note', text: 'LS not required (Art. 3.11.6.4.1): h_eq = 0, so P_LS = 0 and the heel LS load is 0 in every limit state.' });
+      subs.push(sub('Step 2 — Live-load surcharge (equivalent soil height)', [rwrItem('sa2', [{ title: 'Surcharge', steps: a.ls_auto_off ? ls.slice(0, 1) : ls.concat([
+      rwrS({ id: 'qLS', label: 'Equivalent surcharge pressure', sym: 'q_{LS}', eq: '\\gamma_{s}\\,h_{eq}', sub: '(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(a.heq, 2) + ')', value: a.q_ll_aashto, unit: 'psf', d: 0, ref: AA('Art. 3.11.6.4') })]) }]), onTab('stabLS')])); }
     { const st = [rwrS({ id: 'PEH', label: 'Horizontal earth pressure resultant EH (at y = ' + rwrN(a.y_EH, 2) + ' ft)', sym: 'P_{EH}', eq: r.hasWT ? '\\text{3-block effective-stress resultant on } H^{\\prime}' : '\\frac{1}{2}K_{a}\\gamma_{s} H^{\\prime 2}' + (inp.beta > 0 ? '\\cos\\beta' : ''), sub: r.hasWT ? '' : '\\frac{1}{2}(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(r.Hp, 2) + ')^{2}' + (inp.beta > 0 ? '\\cos ' + rwrN(inp.beta, 0) + RWR_DEG : ''), value: a.P_EH, unit: 'lb/ft', d: 0, ref: AA('Art. 3.11.5') })];
-      if (A.ll_surcharge) st.push(rwrS({ id: 'PLS', label: "Live-load surcharge horizontal LS (at y = H'/2 = " + rwrN(a.y_LS, 2) + ' ft)', sym: 'P_{LS}', eq: 'K_{a}\\,q_{LS}\\,H^{\\prime}', sub: '(' + rwrN(r.Ka, 4) + ')(' + rwrN(a.q_ll_aashto, 0) + ')(' + rwrN(r.Hp, 2) + ')', value: a.P_LS, unit: 'lb/ft', d: 0, ref: AA('Art. 3.11.6.4') }));
+      if (a.ls_on) st.push(rwrS({ id: 'PLS', label: "Live-load surcharge horizontal LS (at y = H'/2 = " + rwrN(a.y_LS, 2) + ' ft)', sym: 'P_{LS}', eq: 'K_{a}\\,q_{LS}\\,H^{\\prime}', sub: '(' + rwrN(r.Ka, 4) + ')(' + rwrN(a.q_ll_aashto, 0) + ')(' + rwrN(r.Hp, 2) + ')', value: a.P_LS, unit: 'lb/ft', d: 0, ref: AA('Art. 3.11.6.4') }));
       st.push(rwrS({ id: 'VDC', label: 'Vertical dead load of the structure DC', sym: 'V_{DC}', eq: 'W_{ftg} + W_{stem}' + (r.W_bar > 0 ? ' + W_{bar}' : ''), sub: rwrN(r.Wftg, 0) + ' + ' + rwrN(r.Wstem, 0) + (r.W_bar > 0 ? ' + ' + rwrN(r.W_bar, 0) : ''), value: r.Wftg + r.Wstem + r.W_bar, unit: 'lb/ft', d: 0 }));
       st.push(rwrS({ id: 'VEV', label: 'Vertical earth load EV' + (r.Wwedge > 0 ? ' (soil on the heel + slope wedge)' : ' (soil on the heel)'), sym: 'V_{EV}', eq: 'W_{soil}', sub: '', value: r.Wsoil, unit: 'lb/ft', d: 0 }));
       if (r.Pa_tri_v > 0) st.push(rwrS({ id: 'VEHv', label: 'Vertical component of the earth thrust (factored as EH, not EV)', sym: 'V_{EH,v}', eq: 'P_{a,V}', sub: '', value: r.Pa_tri_v, unit: 'lb/ft', d: 0 }));
@@ -10670,8 +10716,19 @@ function rwSelfRender(r) {
     <div class="rwsc-w"><table class="rwsc-t"><thead><tr><th>Internal check</th><th>Result</th><th>Detail</th></tr></thead><tbody>${C.map(c => `<tr class="${c.ok ? '' : 'ng'}"><td>${esc(c.name)}</td><td class="${c.ok ? 'ok' : 'ng'}">${c.ok ? '✓ OK' : '✗ MISMATCH'}</td><td>${esc(c.detail)}</td></tr>`).join('')}</tbody></table></div>
     <p class="rwsc-n">Internal cross-checks: each quantity is recomputed by an independent path (geometry, decomposition, integration, the bar table) and compared with what the tool shows. A mismatch indicates an engine inconsistency; investigate it before relying on the output. Display only.</p></details>`;
 }
+// RWLS (2026-11-07): one line under the distance input: H/2 test and the h_eq in use (display only)
+function rwLsHint(r) {
+  const el = document.getElementById('hint_ls_req'); if (!el) return;
+  const a = r && !r.fatal && r.aashtoR; if (!a) { el.innerHTML = ''; return; }
+  const A = r.inp.aashto;
+  el.innerHTML = !A.ll_surcharge ? 'Live-load surcharge switched off.'
+    : a.ls_auto_off ? `<b>LS not required</b>: the traffic edge (${f(a.ls_dist, 2)} ft) is farther than H/2 = ${f(a.ls_half, 2)} ft behind the back face (AASHTO Art. 3.11.6.4.1; H = ${f(r.H, 2)} ft). h<sub>eq</sub> = 0. A manual h<sub>eq</sub> overrides this.`
+    : A.heq_mode === 'manual' ? `Manual h<sub>eq</sub> = ${f(a.heq, 2)} ft${a.ls_dist > a.ls_half ? ` (the traffic edge is beyond H/2 = ${f(a.ls_half, 2)} ft, where Art. 3.11.6.4.1 does not require LS)` : ''}.`
+    : `Traffic within H/2 = ${f(a.ls_half, 2)} ft: LS applies, h<sub>eq</sub> = ${f(a.heq, 3)} ft (${heqCols(r.H, a.ls_dir).tbl}).`;
+}
 function rwDashRender(r) {
   rwSelfRender(r);   // RWSC
+  rwLsHint(r);   // RWLS
   const box = document.getElementById('rwDash'), cnt = document.getElementById('rwDashCnt'); if (!box) return;
   box.innerHTML = '';
   if (!r || r.fatal) {

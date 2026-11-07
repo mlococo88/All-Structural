@@ -2690,3 +2690,143 @@ Calculation audit, item 3. Engineer decision (2026-11-07). Code sites are tagged
 ### Saved data
 - No field or key change.
 - AASHTO projects with collision on give the new Extreme Event II results. This is the fix, by the engineer's decision.
+
+## 2026-11-07 — PR: claude/rw-aashto-ls-distance — AASHTO live-load surcharge: numeric distance to traffic, the H/2 applicability rule, traffic direction (walls / abutments table) (RWLS; calculation change)
+
+Calculation audit, item 3b. Engineer decision (2026-11-07). The approach-slab option was declined. Code sites are tagged `RWLS`.
+
+### RWLS-1. Inputs (Traffic pane, "Live-load surcharge")   [saved data: additive]
+- **`aashto_heq_dist`:**
+  - It was a `<select>` with values "0" (traffic at the wall) and "1" (≥ 1.0 ft). It is now a number input in ft, with **the same id and saved field**.
+  - Old saves hold "0" or "1" and give the same h_eq: 0 ft gives the 0-ft column and 1 ft gives the 1-ft column (2.0 ft). So no migration is needed. This was proven in a browser (below).
+- **New `aashto_traffic_dir`:**
+  - Values: "parallel" (Table 3.11.6.4.1-2, the default, which is today's behaviour) or "perpendicular" (Table 3.11.6.4.1-1, abutments).
+  - It is saved only when it is not the default (`RWLS_DEF` in `snapshotFields` / `restoreFields`). Old projects therefore save, autosave and export exactly as before, and a save without it opens as "parallel".
+  - `getInputs` puts `traffic_dir` in `inp.aashto` only when it is "perpendicular".
+- **Other input changes:**
+  - The h_eq Source option now reads "Auto from wall height and distance (Tables 3.11.6.4.1-1 / -2)".
+  - A new line under the distance input (`hint_ls_req`, from `rwLsHint`) shows the H/2 test and the h_eq in use.
+  - RWIE: the distance is required (≥ 0) when LS is on with Auto h_eq.
+
+### RWLS-2. `heqAASHTO` / `calcAll`   [§4]
+- **Provision (verified in the 10th Ed. PDF; paraphrased):** AASHTO LRFD 10th Ed. (2024) Art. 3.11.6.4.1.
+  - LS is applied where vehicular load can act on the backfill within one-half the wall height behind the back face.
+  - h_eq may be taken from Table 3.11.6.4.1-1 (abutments perpendicular to traffic: 4.0 / 3.0 / 2.0 ft at 5 / 10 / ≥ 20 ft) or Table 3.11.6.4.1-2 (walls parallel to traffic: 0-ft column 5.0 / 3.5 / 2.0; "1.0 ft or further" 2.0 / 2.0 / 2.0).
+  - Linear interpolation on height.
+  - The height is measured from the backfill surface to the footing bottom.
+  - (The coordinator's message used the older numbering "3.11.6.4-1/-2". The 10th Ed. numbers them 3.11.6.4.1-1/-2, as the tool does.)
+- **Rules:**
+  - Height: H = H_s + t_f, as before.
+  - Parallel table: d ≥ 1 ft takes the 1-ft column. 0 < d < 1 ft is linear between the two columns. That is the engineer's decision; the table gives only the two columns.
+  - Abutment table: d does not enter.
+  - H/2 rule: with Auto h_eq and d > H/2, LS is not required. h_eq = 0, so P_LS = 0 and V_LS = 0 in every limit state (Strength, the EE II LS terms of RWCT, the stem, service). It is noted on the tab and in the Report.
+  - At d = H/2, LS is still required.
+  - The checkbox stays the off switch.
+  - A **manual h_eq is the user's override** and is applied whatever the distance; the hint notes that d > H/2.
+- **Before / after** (`git diff -U0`, inputs and calculation):
+```diff
+@@ -1876,3 +1881,3 @@ function calcK_AASHTO(method, cond, phi, delta, beta, batter, ocr) {
+-/** AASHTO LL surcharge equivalent soil height h_eq (ft)
+- *  Table 3.11.6.4.1-2 (walls parallel to traffic) — interpolated by wall height H (ft).
+- *  Distance to traffic 0 ft: ≤5 ft → 5.0; 10 ft → 3.5; ≥20 ft → 2.0.  ≥1 ft: 2.0.
++/** AASHTO LL surcharge equivalent soil height h_eq (ft), AASHTO LRFD 10th Ed. Art. 3.11.6.4.1
++ *  Table 3.11.6.4.1-2 (walls parallel to traffic): 0-ft column 5.0 / 3.5 / 2.0 at H = 5 / 10 / ≥20 ft; ≥ 1 ft: 2.0.
++ *  Table 3.11.6.4.1-1 (abutments perpendicular to traffic): 4.0 / 3.0 / 2.0.  Linear on H.
+@@ -1880,6 +1885,15 @@ function calcK_AASHTO(method, cond, phi, delta, beta, batter, ocr) {
+-function heqAASHTO(H_ft, dist_ft=0) {
+-  // AASHTO Table 3.11.6.4.1-2 (retaining walls, traffic parallel to wall):
+-  //   distance wall back face → edge of traffic = 0 ft : 5.0 / 3.5 / 2.0 ft at H = 5 / 10 / ≥20 ft
+-  //   distance ≥ 1 ft                                  : 2.0 ft for all heights
+-  if (dist_ft >= 1) return 2.0;
+-  const pts = [[5, 5.0], [10, 3.5], [20, 2.0]];
++// RWLS (2026-11-07): the table's columns at wall height H (ft), interpolated linearly on H (Art. 3.11.6.4.1):
++//   'parallel'      Table 3.11.6.4.1-2 (retaining walls, traffic parallel): c0 = the 0-ft column, c1 = the "1.0 ft or further" column;
++//   'perpendicular' Table 3.11.6.4.1-1 (abutments, traffic perpendicular): 4.0 / 3.0 / 2.0 ft at H = 5 / 10 / ≥20 ft (no distance column).
++function heqCols(H_ft, dir) {
++  const ab = dir === 'perpendicular';
++  const c0 = heqInterpH(H_ft, ab ? [[5, 4.0], [10, 3.0], [20, 2.0]] : [[5, 5.0], [10, 3.5], [20, 2.0]]);
++  return { c0, c1: ab ? c0 : 2.0, tbl: ab ? 'Table 3.11.6.4.1-1' : 'Table 3.11.6.4.1-2' };
++}
++// h_eq for a distance d (ft) from the back face to the edge of traffic. Parallel table: d ≥ 1 ft → the 1-ft column; 0 < d < 1 ft →
++// linear between the 0-ft and 1-ft columns (engineer decision 2026-11-07; the table gives the two columns only). Abutment table: no d.
++function heqAASHTO(H_ft, dist_ft=0, dir='parallel') {
++  const c = heqCols(H_ft, dir), d = Math.max(0, +dist_ft || 0);
++  return d >= 1 ? c.c1 : c.c0 + (c.c1 - c.c0) * d;
++}
++function heqInterpH(H_ft, pts) {
+@@ -2148,2 +2162,9 @@ function calcAll(inp) {
+-  const heq = isAASHTO && A.ll_surcharge
+-    ? (A.heq_mode === 'manual' ? A.heq : heqAASHTO(H, A.heq_dist || 0))
++  // RWLS (2026-11-07): Art. 3.11.6.4.1 requires LS where vehicular load can act on the backfill within H/2 behind the back face
++  // (H = backfill surface to footing bottom, as the table lookup). Auto h_eq: beyond H/2 → LS not required (h_eq = 0, noted);
++  // a manual h_eq is the user's override and is applied whatever the distance. The checkbox stays the off switch.
++  const ls_dir  = A.traffic_dir === 'perpendicular' ? 'perpendicular' : 'parallel';
++  const ls_dist = Math.max(0, A.heq_dist || 0), ls_half = H / 2;
++  const ls_auto_off = isAASHTO && !!A.ll_surcharge && A.heq_mode !== 'manual' && ls_dist > ls_half;
++  const ls_on = isAASHTO && !!A.ll_surcharge && !ls_auto_off;
++  const heq = ls_on
++    ? (A.heq_mode === 'manual' ? A.heq : heqAASHTO(H, ls_dist, ls_dir))
+@@ -2664 +2685 @@ function calcAll(inp) {
+-      eta, heq, q_ll_aashto,
++      eta, heq, q_ll_aashto, ls_on, ls_auto_off, ls_dir, ls_dist, ls_half,   // RWLS: LS applicability and table (exposure)
+@@ -3575,0 +3597 @@ function getInputs() {
++      ...(s('aashto_traffic_dir') === 'perpendicular' ? { traffic_dir: 'perpendicular' } : {}),   // RWLS (2026-11-07): Table 3.11.6.4.1-1; absent = 'parallel' (Table 3.11.6.4.1-2), as before
+@@ -5669,0 +5706 @@ const RWTB_FIELDS = ['proj_date', 'proj_chkdate'];   // RWTB (2026-11-06): the o
++const RWLS_DEF = { aashto_traffic_dir: 'parallel' };   // RWLS (2026-11-07): saved only when not the default; absent → the default
+@@ -5678,0 +5716 @@ function snapshotFields() {
++  Object.entries(RWLS_DEF).forEach(([id, d]) => { if (out[id] === d) delete out[id]; });   // RWLS: old saves and default projects unchanged
+@@ -5686,0 +5725 @@ function restoreFields(fields) {
++  Object.entries(RWLS_DEF).forEach(([id, d]) => { if (!(id in fields)) { const el = document.getElementById(id); if (el) el.value = d; } });   // RWLS
+@@ -6025,0 +6065 @@ function rwInputErrors() {
++    if (on('aashto_ll_surcharge') && sel('aashto_heq_mode') !== 'manual') need('aashto_heq_dist', ge0);   // RWLS: numeric distance
+```
+
+### RWLS-3. Display   [display]
+- **Stability tab, Step 2:**
+  - The card reference names the table in use.
+  - The H/2 test is worked: d vs H/2, with "LS required" or "LS not required".
+  - The h_eq lookup is worked: the two columns at H and the interpolation in d.
+  - With d > H/2 a note replaces the q_LS line.
+  - P_LS in Step 3 now shows only when LS is applied (`a.ls_on`).
+- **Report:**
+  - The input echo gives the LS state, and the traffic direction and distance.
+  - Step 2 has the step `half` (H/2), and an h_eq step with the columns and the interpolation.
+  - P_LS shows only when applied.
+- **Cross-section tooltip and references list:** they name the table in use / both tables.
+
+### Check cases (AASHTO default: H = 13.5 ft, so H/2 = 6.75 ft; γ_s 120)
+| Case | h_eq | Sliding D/C | e (ft) | q (psf) | Stem M_u / bar | Heel M_u | Toe M_u |
+|---|---|---|---|---|---|---|---|
+| d = 0, parallel (= main) | 3.5 + (2.0 − 3.5)(13.5 − 10)/10 = **2.975** | 1.415 | 1.428 | 2212 | 32274 / #5@7 | 27580 | 9447 |
+| d = 1 (= main "≥ 1 ft") | 2.0 | 1.257 | 1.041 | 2047 | 27360 / #5@9 | 23198 | 8490 |
+| d = 0.5 (new, interpolated) | 2.975 + (2.0 − 2.975)(0.5) = **2.4875** | 1.336 | 1.235 | 2130 | 29817 / #5@8 | 25389 | 8969 |
+| d = 6.75 = H/2 | 2.0 (LS required) | 1.257 | 1.041 | 2047 | 27360 / #5@9 | 23198 | 8490 |
+| **d = 8 > H/2** (main: h_eq 2.0) | **0** (LS not required) | 1.257 → **0.934** (FAIL → PASS) | 1.041 → **0.248** | 2047 → **1790** | 27360 #5@9 → **17280 #4@7** | 23198 → **14211** | 8490 → **6526** |
+| Abutment table, any d ≤ H/2 (new) | 3.0 + (2.0 − 3.0)(3.5/10) = **2.65** | 1.362 | 1.299 | 2157 | 30636 / #5@8 | 26119 | 9128 |
+
+- At d = 8 ft, compared with main's d = 0 setting: sliding 1.415 → 0.934, stem #5@7 → #4@7, heel 27580 → 14211, toe 9447 → 6526. These are the audit briefing's values, reproduced.
+- **With collision on (TL-4, MassDOT), d = 8:**
+  - the EE II LS terms drop out: H_drive 1223 → 683, V_ct,max 17543 → 16583, q 1508 → 1454 psf;
+  - the stem's EE II case then governs: 21422 lb·ft/ft, #4@6.
+  - At d = 0, EE II is unchanged (1486 / 18011 / 1535).
+
+### How verified
+- The tool's `calcAll` was run in Node, main vs branch: d = 0 and d = 1 are identical to main in every value above. The new cases are in the table.
+- **Old saves:** autosaves made by **main** (AASHTO with d "1"; d "0" with collision + q_s 250; manual h_eq 3 with d "1") were opened in the branch.
+  - The distance input shows 0 / 1 and the direction is "parallel".
+  - `_R` is identical except the added `ls_*` fields.
+  - The autosave has no `aashto_traffic_dir`.
+  - 0 console errors.
+- **Restore:** a save with "perpendicular" round-trips (h_eq 2.65). A save without the field, opened after it, resets to "parallel" (h_eq 2.975). "parallel" is not written to the save.
+- **origin/main vs branch, headless Chromium, eleven walls** (the eight audit walls, AASHTO d "1" + collision, AASHTO q_s 250 + water + collision ± "full"):
+  - Every computed value is identical. `_R` differs only by the added `aashtoR.ls_on`, `ls_auto_off`, `ls_dir`, `ls_dist`, `ls_half`.
+  - Export JSON and every localStorage key are identical.
+  - ACI tab and Report text are identical. The AASHTO Stability tab and Report text differ by the new Step 2 lines.
+  - 0 console errors.
+- Screenshots looked at: d = 8 (not required), d = 0.5 (interpolated), abutment.
+- Tests: check-syntax, smoke/retaining-wall-checks, phone-layout rwall 390/768, project-library retwall, dxf-print-sheets rw. All pass.
+
+### Saved data
+- `aashto_heq_dist` keeps its id and its values; old "0" / "1" give the same h_eq.
+- `aashto_traffic_dir` is additive and saved only when "perpendicular".
+- A project whose real traffic edge is beyond H/2 changes only once the user enters the real distance. Old saves hold 0 or 1 ft and keep their results.
