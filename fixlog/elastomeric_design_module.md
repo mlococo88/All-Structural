@@ -1529,7 +1529,7 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.6 (Eqs. 14.7.5.3.6-1 to -3; C14
 - **How verified:** check-syntax pass; headless main-vs-branch probe (19 scenarios): only the new items are added (Method B default: one INFO item; Method A: deflA; plain: deflP FAIL, nFail +1); every other value identical; 0 console errors; worked block screenshot checked.
 - **Saved data:** additive `tog.dLLmax`, `tog.dLTmax`, `coef.acr`. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/edm-m2-hydrostatic (M2, review 2026-11-07) — bonded external plates toggle and hydrostatic tension check   [new check, off by default]
+## 2026-11-07 — PR: claude/edm-m2-hydrostatic (PR #1090: https://github.com/mlococo88/All-Structural/pull/1090) (M2, review 2026-11-07) — bonded external plates toggle and hydrostatic tension check   [new check, off by default]
 
 Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.3, Eqs. 14.7.5.3.3-11 to -17 and C14.7.5.3.3 (bearings with external steel plates bonded top and bottom: peak hydrostatic stress ≤ 2.25G; satisfied automatically for α > 1/3). Practice: CTDOT BDM §9.2.1 (top vulcanized to a steel plate on steel beams; bottom plate vulcanized and anchored when H exceeds 20 % of P_min).
 
