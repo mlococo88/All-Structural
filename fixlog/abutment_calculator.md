@@ -15928,7 +15928,7 @@ index 4cb6603..c8b38ca 100644
 +          sl.und?`Footing on clay: S<sub>u</sub> = ${fmt(sl.und.Su,3)} ksf (${sl.und.src==="entered"?"entered, panel I-4":"the cohesion c of the φ<sub>f</sub> = 0 bearing stratum, panel I-4"}). The undrained resistance is the lesser of the cohesion and half the normal stress on the interface (Fig. 10.6.3.4-1), taken on the effective width B′ (uniform pressure); both the drained and the undrained resistance are checked and the lesser governs. 10.6.3.4 assumes at least 6 in of compacted granular material under the footing for the 0.5σ<sub>v</sub> limit; consider the possible shrinkage gap on clay.`:"")
 ```
 
-## 2026-11-07 — PR: claude/abut-m6-wa (ABM6: unbalanced water WA — a water level in front of the wall; the net hydrostatic thrust acts on the abutment and the stem at γ_WA = 1.00)   [calc change only when the new input is entered] [MORE conservative]
+## 2026-11-07 — PR: claude/abut-m6-wa (PR #1029: https://github.com/mlococo88/All-Structural/pull/1029) (ABM6: unbalanced water WA — a water level in front of the wall; the net hydrostatic thrust acts on the abutment and the stem at γ_WA = 1.00)   [calc change only when the new input is entered] [MORE conservative]
 
 Source: code-compliance review of 2026-11-07, item M6.
 
