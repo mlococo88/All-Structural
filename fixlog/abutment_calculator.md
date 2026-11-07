@@ -15760,7 +15760,7 @@ index 92a3437..edde439 100644
 ### Open items
 - Decision (pending engineer review): the error blocks the pile results rather than showing V/n with a warning (a single row of pinned vertical piles has no moment resistance; battered piles, 8g, would be the remedy).
 
-## 2026-11-07 — PR: claude/abut-m8-ts (ABM8: provided shrinkage and temperature bars checked for the stem, backwall and footing — area and spacing per 5.10.6)   [new check] [MORE conservative]
+## 2026-11-07 — PR: claude/abut-m8-ts (PR #1019: https://github.com/mlococo88/All-Structural/pull/1019) (ABM8: provided shrinkage and temperature bars checked for the stem, backwall and footing — area and spacing per 5.10.6)   [new check] [MORE conservative]
 
 Source: code-compliance review of 2026-11-07, item M8.
 
