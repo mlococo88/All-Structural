@@ -6215,3 +6215,36 @@ index 50f3837..c2d5000 100644
   - A renderer sweep over 38 inputs (selector picks included): no renderer error, no Out-of-date banner, no Report error.
   - check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser. Screenshots checked.
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-m6-loadcases (SFW3: simultaneous wind 0.75(±Wx ±Wy); SFEQ: seismic load type E with the ASCE 7-16 2.3.6 / 2.4.5 combinations; CALCULATION CHANGE only where both Wx and Wy, or E, are entered; old saves unchanged)
+
+- **Problem:** only Wx or Wy entered a combination, never both at once. MWFRS load Case 3 (ASCE 7-16 27.3.5, Fig. 27.3-8) applies 75 % of the wind in both directions simultaneously, and biaxial corner pressure under it can govern a footing. There was also no seismic load type.
+- **Where / exact code (`Spread Footing.html`):**
+  - `TYPES` adds `'E'`; `TYPE_DESC` / `SF3L_CASE` gain E. `migrateState` adds `loads.E` = 0 to older pedestals. The load tables show the E row.
+  - `stab.windSim` ('on' for new projects; `migrateState`: anything but 'on' becomes 'off', so saves without the field keep the earlier combinations). `stab.SDS` (default 0). Both are inputs on the Stability inputs.
+  - `genCombos` (anchors `/* SFW3 (2026-11-07)`, `/* SFEQ (2026-11-07)`):
+    - Each wind case carries its factors `w.f` (one direction: `{Wx:±1}`).
+    - With `windSim` on and both Wx and Wy present, four cases `0.75(±Wx ±Wy)` (`{Wx:±0.75, Wy:±0.75}`) join every wind combination: 2.4.1(5), (6a), (7); 2.3.1(3), (4), (5).
+    - Before: `[w.k]:c*w.s`. After: `...wf(w,c)` (identical for one direction).
+    - Seismic (present.E), both signs of E_h, with E_v = 0.2S_DS·D folded into the dead factor:
+      - ASD 2.4.5(8): (1 + 0.14S_DS)D + 0.7E_h.
+      - ASD 2.4.5(9): (1 + 0.105S_DS)D + 0.525E_h + 0.75L + 0.75S.
+      - ASD 2.4.5(10): (0.6 − 0.14S_DS)D + 0.7E_h.
+      - LRFD 2.3.6(6): (1.2 + 0.2S_DS)D + 1.0E_h + L + 0.2S.
+      - LRFD 2.3.6(7): (0.9 − 0.2S_DS)D + 1.0E_h.
+  - Warnings: Wx and Wy entered with windSim off; E entered with S_DS = 0.
+- **Governing provisions:** ASCE 7-16 2.3.6 (6), (7) and 2.4.5 (8)–(10) (text read); 12.4.2.2, E_v = 0.2S_DS·D (text read); 27.3.5 / Fig. 27.3-8 Case 3. The licensed ASCE 7-16 PDF on file is truncated before Chapter 27, so the figure could not be re-read; Case 3 (75 % in both directions) is from the standard as published. The engineer should confirm.
+- **Decisions (pending engineer review):**
+  - The E row is E_h = ρQ_E as entered, applied with both signs, in both directions as entered (the user enters the 100 % / 30 % split if wanted). The overstrength Ω₀ is not applied unless the user enters E_mh.
+  - L at 1.0 in 2.3.6(6) (exception 1, 0.5L, not taken: conservative).
+  - Seismic is not combined with wind (2.3.6).
+  - Wind Case 2 / 4 (torsional eccentricity) is not modelled.
+  - windSim on for new projects, off for older saves (unchanged results; a warning points to it).
+- **Check case 1 (default project plus Wy.V_y = 6 k on each pedestal, windSim on):**
+  - ASD combinations 16 → 28, LRFD 15 → 27.
+  - Governing bearing D + 0.75L + 0.45(+Wx) + 0.75S, D/C 0.699 → D + 0.75L + 0.45(0.75(+Wx + Wy)) + 0.75S, **0.706**.
+- **Check case 2 (default project plus E: V_x = 15 k on each pedestal, Ped 2 V_y = 5 k; S_DS = 0.5, so E_v = 0.1D):**
+  - ASD adds 1.07D + 0.7(±E), 1.053D + 0.525(±E) + 0.75L + 0.75S, 0.53D + 0.7(±E). LRFD adds 1.3D + 1.0(±E) + L + 0.2S, 0.8D + 1.0(±E).
+  - Bearing D/C 0.699 → **0.771** (1.053D + 0.525(+E) + 0.75L + 0.75S). x-flexure 0.057 → 0.059.
+- **Cases that move:** only projects with both Wx and Wy (and windSim on) or with E entered. SF harness def / sey: no result change (new `loads.E` and `present.E` fields only).
+- **Saved data:** new fields `peds[].loads.E`, `stab.windSim`, `stab.SDS`, with a migration that keeps older saves' results (E = 0, windSim off, S_DS = 0).
