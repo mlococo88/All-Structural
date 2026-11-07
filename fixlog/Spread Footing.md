@@ -7098,7 +7098,7 @@ index 50f3837..c2d5000 100644
 - **How verified:** harness origin/main vs the branch, 9 cases (def, rev, dir, wTall, w769, w769h, wAll, wHCe, wSel): R, P2 0 differences, dashboard identical, the digit sequence of the Report text identical in all 9 (only the wording / splitting changed). 390-px screenshot of the wall card. 0 console errors, 0 KaTeX errors. Tests: see the PR.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: sf-beff-base-max (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (SFWD-7: wall b_eff,base = the larger of b_eff,top and the 45° spread, capped by s and ℓ_w; CALCULATION CHANGE for Wall elements with a concentrated load only)
+## 2026-11-07 — PR: sf-beff-base-max (PR #1170: https://github.com/mlococo88/All-Structural/pull/1170) (SFWD-7: wall b_eff,base = the larger of b_eff,top and the 45° spread, capped by s and ℓ_w; CALCULATION CHANGE for Wall elements with a concentrated load only)
 
 ### SFWD-7. b_eff,base never less than b_eff,top   [CALCULATION CHANGE, Wall elements only; CLAUDE.md §4]
 - **Problem:** SFWD-3 took b_eff,base = min[min(b/2 + h, a₁) + min(b/2 + h, a₂), s, ℓ_w], starting from the bearing width b. For a short wall it came out smaller than b_eff,top (hand check `wHC`: 60 in at the base vs 118 in at the load): the load "narrowed" going down the wall, which is not physical. Over-conservative at the base for short walls (the per-ft base demand was up to ℓ_w/b_eff,base times the top demand).
