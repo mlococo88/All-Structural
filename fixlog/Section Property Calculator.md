@@ -3333,7 +3333,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Headless probe, main vs branch: only the models whose hole n differed from the host's changed (concHole_n1, concHole_n1b). Holes with a matching n (concHole_n8, holeMulti with two hosts of n = 1 and 0.5, barHole, plHole) are identical, as are all 1,660 shapes and the default project.
   - `project-library --tool spc`: ALL PASS. 0 console errors.
 
-## 2026-11-07 — PR: claude/spc-hole-outside — SPM2: a hole partly outside the material is an error that blocks the results (review M2; §4 check logic)
+## 2026-11-07 — PR: claude/spc-hole-outside — SPM2: a hole partly outside the material is an error that blocks the results (review M2; §4 check logic; PR #1091: https://github.com/mlococo88/All-Structural/pull/1091)
 
 - **Problem (review M2):** a hole that was not inside material still gave results, with only a warning. Example: a 10 × 2 plate with a 2 × 2 hole straddling its top edge gave A = 16 (the true net area is 19), I_x = −5.92 in⁴ and S_x < 0. This can happen with Prevent overlap off, an imported file or a typed position.
 - **Fix (engine, conservative):** new `holeCoverCheck(R)` (anchor `function holeCoverCheck(R) {`), called in `analyze()` before `holeHostN`.
