@@ -299,6 +299,10 @@ const AUD = [
     ['R.checks.pileCapT && !R.checks.pileCapT.ok && /T=10\\.4k, embed 12\\.0/.test(R.checks.pileCapT.val) && R.warnings.some(w => /^Pile uplift: P_min/.test(w))', 'FAIL row and warning'],
     ['/Pile–cap tension \\(not designed\\): FAIL/.test(T.stability) && /Pile–cap tension connection for T = /.test(P)', 'Stability Pile Step 2 and Report']]],
   ['RW2M3 piles without uplift: no tension row', { fnd_type: 'pile', tf: 36 }, [['!R.checks.pileCapT', 'no row']]],
+  ['RW2M1 AASHTO default k_h 0.20 + collision: heel / toe checked for EE I and EE II (φ = 1.0): heel 22994 ≤ M_n 33.4 k, toe 7.46 k', { design_basis: 'AASHTO', kh: 0.2, aashto_ct_enable: true }, [
+    ['R.eeFtg && R.checks.heelEE.ok && R.checks.toeEE.ok && Math.abs(R.eeFtg.gH.Mh - 22993.5) < 1 && Math.abs(R.eeFtg.gT.Mt - 7460) < 5 && R.eeFtg.cases.length === 4', 'governing EE I case 2; duplicate min rows merged'],
+    ['/Heel and Toe — Extreme Event I \\/ II Check/i.test(T.footing) && /Heel and toe: Extreme Event I \\/ II check/.test(P)', 'Footing card and Report']]],
+  ['RW2M1 ACI and AASHTO without EE: no row', { design_basis: 'AASHTO' }, [['!R.eeFtg && !R.checks.heelEE', 'no row']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {

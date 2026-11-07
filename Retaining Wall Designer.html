@@ -1853,6 +1853,7 @@ const RW_CARDS = {
   ftgLoads:    ['footing', 'Factored Loads on Footing', 'Factored Loads on Footing'],
   ftgHeelUp:   ['footing', 'Heel Step 1 — Factored Loads', 'Heel Step 1 — Factored Loads'],   // RWUP (2026-11-07): water uplift split
   ftgToeUp:    ['footing', 'Toe Step 1 — Net Upward Load', 'Toe Step 1 — Net Upward Load'],   // RWUP
+  ftgEE:       ['footing', null, 'Heel and Toe — Extreme Event I / II Check'],   // RW2M1
   ftgKey:      ['footing', 'Shear Key — Structural Design', 'Shear Key — Structural Design'],   // RWSK   // RWBP (2026-11-06): link target of the bearing selector
   stabPile:    ['stability', 'Pile Step 2 — Pile Reactions and Checks', 'Pile Step 2 — Pile Reactions and Checks'],   // RWPL
   ftgPunch:    ['footing', 'Pile Cap — Punching around the Piles', 'Pile Cap — Punching around the Piles'],   // RWPL 8d
@@ -1860,7 +1861,7 @@ const RW_CARDS = {
 // r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
 const RW_CHECK_CARD = { pilePunch:'ftgPunch', pileCapD:'ftgPunch', pileComp:'stabPile', pileUplift:'stabPile', pileCapT:'stabPile', pileLat:'stabPile', pileSpacing:'stabPile', pileEdge:'stabPile', pileEmbed:'stabPile', ot:'stabOT', otE:'stabOT', sliding:'stabSlide', slidingE:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
   stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid', stemLap:'stemDev', heelDev:'heelShear', toeDev:'toeShear', stemS3Lap:'stemS13', stemMAlong:'stemS13',
-  heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', colAxial:'stabCol',
+  heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', colAxial:'stabCol', heelEE:'ftgEE', toeEE:'ftgEE',
   ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFF:'stemTS', tsFtg:'ftgTS', keyFlex:'ftgKey', keyShear:'ftgKey', keyDev:'ftgKey', eeSliding:'stabEE1', eeEcc:'stabEE1', eeBearing:'stabEE1', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
   crackStem:'stabServ', minRfStem:'stabServ', crackHeel:'stabServ', minRfHeel:'stabServ', crackToe:'stabServ', minRfToe:'stabServ' };
 function rwCardTitle(key, isAASHTO) { const c = RW_CARDS[key]; return c ? c[isAASHTO ? 2 : 1] : null; }
@@ -4068,6 +4069,42 @@ function calcAll(inp) {
       if (pc.passive) warnings.push(`Pile mode: passive in front of the toe credited against H: ${f(pc.Hpass,3)} kip/ft${isAASHTO ? ' (φ_ep = ' + f(inp.aashto.phi_ep,2) + ')' : ''}.`);
     }
   }
+  // RW2M1 (2026-11-07): AASHTO footing (heel and toe) checked for Extreme Event I (both Art. 11.6.5.1 cases) and Extreme Event II (collision),
+  // AASHTO LRFD 10th Art. 11.6.4 / 11.6.5.1 (structural design per Section 5 for every limit state), φ = 1.0 (Art. 1.3.2.1 / 5.5.5).
+  // A check of the bars designed for Strength I, not a redesign. For each case (maximum and minimum vertical) the total base reaction
+  // (water uplift added back, it acts on the same underside) as a trapezoid, or the soil block 3x̄ in partial contact; the heel takes
+  // soil + footing + q_s + γ_LS·LS down (γ = 1.0), the toe its own weight (γ = 1.0). Spread footings only (pile mode: a note).
+  let eeFtg = null;
+  if (isAASHTO && aashtoR && (aashtoR.ee1 || (aashtoR.ct && aashtoR.ct.ee2))) {
+    if (pileFtg) warnings.push('Pile-supported footing: the heel and toe are designed for Strength I only; Extreme Event I / II pile reactions (Stability tab, Pile Step 2) are not applied to the heel and toe. Check them by hand (AASHTO Art. 11.6.4).');   // RW2M1
+    else {
+      const Q = aashtoR.ee1, E = aashtoR.ct && aashtoR.ct.ee2, cs = [];
+      if (Q) [['c1', 'P_AE + 0.5P_IR'], ['c2', 'max(0.5P_AE, P_A) + P_IR']].forEach(([k, t]) => {
+        cs.push({ key: 'ee1_' + k + '_max', label: 'Extreme Event I, ' + t + ' (max. vertical)', V: Q.V_max, xR: Q[k].xRb, gLS: Q.gEQ });
+        cs.push({ key: 'ee1_' + k + '_min', label: 'Extreme Event I, ' + t + ' (min. vertical)', V: Q.V_min, xR: Q[k].xR, gLS: 0 }); });
+      if (E) { cs.push({ key: 'ee2_max', label: 'Extreme Event II, collision (max. vertical)', V: E.V_ct_max, xR: E.x_R_brg_ct, gLS: E.gLS_ct });
+               cs.push({ key: 'ee2_min', label: 'Extreme Event II, collision (min. vertical)', V: E.V_ct_min, xR: E.x_R_ct, gLS: 0 }); }
+      for (let i = cs.length - 1; i > 0; i--) if (/_min$/.test(cs[i].key) && Math.abs(cs[i].V - cs[i - 1].V) < 1e-6 && Math.abs(cs[i].xR - cs[i - 1].xR) < 1e-9) { cs[i - 1].label = cs[i - 1].label.replace(' (max. vertical)', ' (max. = min. vertical)'); cs.splice(i, 1); }   // identical when γ_EQ = 0 and no column (as L7)
+      const simp = (x0, x1, fx) => { const n = 400, h = (x1 - x0) / n; let a = 0; for (let i = 0; i <= n; i++) a += ((i === 0 || i === n) ? 1 : (i % 2 ? 4 : 2)) * fx(x0 + i * h); return a * h / 3; };
+      cs.forEach(c => {
+        c.Vt = c.V + F_uplift; c.xRt = c.Vt > 0 ? (c.V * c.xR + F_uplift * x_uplift) / c.Vt : B / 2; c.e = B / 2 - c.xRt;
+        if (Math.abs(c.e) <= B / 6) { c.qt = c.Vt / B * (1 + 6 * c.e / B); c.qh = c.Vt / B * (1 - 6 * c.e / B); }
+        else if (c.e > 0) { c.qt = c.xRt > 0 ? 2 * c.Vt / (3 * c.xRt) : 0; c.qh = 0; } else { c.qt = 0; c.qh = 2 * c.Vt / (3 * (B - c.xRt)); }
+        const q = x => q_blk(x, c.qt, c.qh, c.e, c.xRt);
+        c.w = w_soil_col + inp.gamma_c * tf_ft + inp.q_sur + c.gLS * q_ll_aashto;
+        c.Md = c.w * inp.Lh ** 2 / 2 + M_wedge_heel; c.Mup = simp(x_back, B, x => q(x) * (x - x_back)); c.Fup = simp(x_back, B, q);
+        c.Mh = c.Md - c.Mup; c.Vh = Math.abs(c.w * inp.Lh + V_wedge_heel - c.Fup);
+        c.MupT = simp(0, x_front, x => q(x) * (x_front - x)); c.FupT = simp(0, x_front, q);
+        c.Mt = c.MupT - inp.gamma_c * tf_ft * inp.Lt ** 2 / 2; c.Vt_toe = Math.max(0, c.FupT - inp.gamma_c * tf_ft * inp.Lt);
+      });
+      const gov = f => cs.reduce((b, c) => (b === null || f(c) > f(b)) ? c : b, null);
+      const Mn_heel = phiMn_heel / phiF_heel / 12, Mn_toe = phiMn_toe / 0.9 / 12;   // lb·ft/ft, φ = 1.0
+      const gH = gov(c => c.Mh), gT = gov(c => c.Mt), gHV = gov(c => c.Vh), gTV = gov(c => c.Vt_toe);
+      eeFtg = { cases: cs, Mn_heel, Mn_toe, Vn_heel: Vc_heel, Vn_toe: Vc_toe, gH, gT, gHV, gTV,
+        heelOk: gH.Mh <= Mn_heel + 1e-6 && gHV.Vh <= Vc_heel + 1e-6, toeOk: gT.Mt <= Mn_toe + 1e-6 && gTV.Vt_toe <= Vc_toe + 1e-6,
+        heelDC: Math.max(Math.max(0, gH.Mh) / Math.max(Mn_heel, 1e-9), gHV.Vh / Math.max(Vc_heel, 1e-9)), toeDC: Math.max(Math.max(0, gT.Mt) / Math.max(Mn_toe, 1e-9), gTV.Vt_toe / Math.max(Vc_toe, 1e-9)) };
+    }
+  }
   const checks = {
     ...(pileChecks || stabChecks),
     stemFlex:  { ok: !stem_overstressed && sel_stem.As_prov >= As_stem_des - 0.001,
@@ -4088,6 +4125,9 @@ function calcAll(inp) {
     toeFlex:   { ok: !toe_overstressed && sel_toe.As_prov >= As_toe_des - 0.001,
                  label: 'Toe Flex' },
     toeShear:  { ok: toe_shear_ok,                 label: 'Toe Shear' },
+    ...(eeFtg ? {   // RW2M1
+      heelEE: { ok: eeFtg.heelOk, label: 'Heel EE I/II', val: `M ${f(Math.max(0, eeFtg.gH.Mh)/1000,1)}≤${f(eeFtg.Mn_heel/1000,1)}k-ft`, dc: eeFtg.heelDC, ref: 'AASHTO LRFD 10th Ed. Art. 11.6.4 / 11.6.5.1; φ = 1.0, F1 as designed for Strength I; ' + eeFtg.gH.label },
+      toeEE:  { ok: eeFtg.toeOk,  label: 'Toe EE I/II',  val: `M ${f(Math.max(0, eeFtg.gT.Mt)/1000,1)}≤${f(eeFtg.Mn_toe/1000,1)}k-ft`,  dc: eeFtg.toeDC,  ref: 'AASHTO LRFD 10th Ed. Art. 11.6.4 / 11.6.5.1; φ = 1.0, F2 as designed for Strength I; ' + eeFtg.gT.label } } : {}),
     tsStem:    { ok: sel_temp.As_prov >= As_temp_stem - 0.001,     label: 'Stem T&amp;S (S2)' },
     tsFtg:     { ok: sel_ftg_long.As_prov >= As_ftg_long - 0.001,  label: 'Ftg T&amp;S (F3)' },
     ...(isAASHTO ? { tsFF: { ok: sel_ff.As_prov >= As_ff_stem - 0.001, label: 'Stem Front T&amp;S (S4)' } } : {}),   // RWFF
@@ -4168,6 +4208,7 @@ function calcAll(inp) {
     comb: { u12: CMB_U12, u09: CMB_U09 },   // RW3F (2026-11-06): ACI combination factors, returned for the 3D view (exposure only)
     qu_toe, qu_heel, quf_front, quf_back,
     SumVu_min, Msu_min, x_Ru_min, e_u_min, qu_toe_min, qu_heel_min, quf_front_min, quf_back_min,
+    eeFtg,   // RW2M1
     heel_min_governs, toe_min_governs, gHeel: hcG.g, etHeel: hcG.et, etaMx, etaMn,   // RW2H4
     Pa_incl_deg, coulombThrust,
     // Stem
@@ -6659,6 +6700,21 @@ function renderFooting(r) {
     `\\text{\\#${r.sel_ftg_long.bar.num} @ ${r.sel_ftg_long.spacing}'' o.c.} \\Rightarrow A_{s,prov} = ${F(r.sel_ftg_long.As_prov,4)}\\ \\text{in}^2/\\text{ft} \\geq ${F(r.As_ftg_long,4)}`,
     r.sel_ftg_long.As_prov >= r.As_ftg_long - 0.001);
   h += `</div></div>`;
+
+  // RW2M1 (2026-11-07): heel and toe checked for Extreme Event I / II (φ = 1.0), bars as designed for Strength I
+  if (r.eeFtg) {
+    const X = r.eeFtg, k = v => F(v / 1000, 2);
+    h += `<div class="card" style="margin-bottom:16px;">
+    <div class="card-hd"><span class="card-title">Heel and Toe — Extreme Event I / II Check</span><span class="card-ref">AASHTO \u00a711.6.4 / \u00a711.6.5.1 \u00b7 \u03c6 = 1.0 \u00b7 the Strength I bars F1 / F2</span></div>
+    <div class="card-body">`;
+    h += `<div class="alert info" style="margin-bottom:8px;">\u2139 Each extreme-event case (Stability tab, Steps 7a / 7b; maximum and minimum vertical) loads the footing with its total base reaction (water uplift added back; trapezoid, or the block 3x\u0304 in partial contact). Heel down: w = soil + footing + q_s + \u03b3_LS\u00b7LS at \u03b3 = 1.0; toe down: the footing weight at \u03b3 = 1.0. Capacity: M_n and V_c of the Strength I design with \u03c6 = 1.0.</div>`;
+    h += `<div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Case</th><th>V<sub>tot</sub> (k/ft)</th><th>x\u0304 (ft)</th><th>q<sub>toe</sub> / q<sub>heel</sub> (ksf)</th><th>w heel (psf)</th><th>M heel = M<sub>down</sub> \u2212 M<sub>up</sub> (k-ft/ft)</th><th>V heel (k/ft)</th><th>M toe (k-ft/ft)</th><th>V toe (k/ft)</th></tr></thead><tbody>${X.cases.map(c => `<tr><td>${c.label}</td><td>${k(c.Vt)}</td><td>${F(c.xRt,3)}</td><td>${k(c.qt)} / ${k(c.qh)}</td><td>${F(c.w,0)}</td><td>${k(c.Md)} \u2212 ${k(c.Mup)} = ${k(c.Mh)}</td><td>${k(c.Vh)}</td><td>${k(c.MupT)} \u2212 ${k(inp.gamma_c*r.tf_ft*inp.Lt**2/2)} = ${k(c.Mt)}</td><td>${k(c.Vt_toe)}</td></tr>`).join('')}</tbody></table></div>`;
+    h += eqCheck('Heel (F1) under the extreme events, \u03c6 = 1.0',
+      `M = ${k(Math.max(0, X.gH.Mh))} \\le M_n = ${k(X.Mn_heel)};\\quad V = ${k(X.gHV.Vh)} \\le V_c = ${k(X.Vn_heel)}\\ \\text{kip, kip·ft per ft}`, r.checks.heelEE.ok, r.checks.heelEE.ref);
+    h += eqCheck('Toe (F2) under the extreme events, \u03c6 = 1.0',
+      `M = ${k(Math.max(0, X.gT.Mt))} \\le M_n = ${k(X.Mn_toe)};\\quad V = ${k(X.gTV.Vt_toe)} \\le V_c = ${k(X.Vn_toe)}\\ \\text{kip, kip·ft per ft}`, r.checks.toeEE.ok, r.checks.toeEE.ref);
+    h += `</div></div>`;
+  }
 
   // RWSK (2026-11-07): structural design of the shear key
   if (r.keyR) {
@@ -11068,6 +11124,13 @@ function rwrModel(r) {
       { title: 'Toe Step 3 — Flexural steel (bottom face)', ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5', steps: pre('t3', T3) },
       { title: 'Toe Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('t4', T4) }], { title: 'Toe' }), { type: 'note', text: (upTr && r.upS ? 'ΣV_u and its moment: [[st7/SumVu]], [[st7/SumVumin]] (the water uplift is split out in Toe Step 1, ACI 318-19 §5.3.8)' : upTr ? 'Partial contact: the soil block is worked in Toe Step 1 (RWPC)' : 'q_u,front and q_u,toe: ' + (isA ? '[[saf/qufront]], [[saf/qutoe]] (Strength Ia: [[saf/qufrontIa]])' : '[[st7/qufront]], [[st7/qutoe]] (minimum-vertical case: [[st7/qufrontmin]])')) + '; ' + (r.toe_min_governs ? 'the minimum-vertical case governs the toe.' : 'the maximum-vertical case governs the toe.') },
       onTab('toeFlex', 'Footing design tab, Toe')]));
+    if (r.eeFtg) { const X = r.eeFtg;   // RW2M1 (2026-11-07)
+      const st = [];
+      X.cases.forEach((c, i) => st.push(rwrS({ id: 'c' + i, label: c.label + ': V_tot = ' + rwrN(c.Vt, 0) + ' lb/ft at x̄ = ' + rwrN(c.xRt, 3) + ' ft, q = ' + rwrN(c.qt, 0) + ' / ' + rwrN(c.qh, 0) + ' psf; heel w = ' + rwrN(c.w, 0) + ' psf', sym: 'M_{heel},\\,M_{toe}', eq: 'M_{down} \\minus M_{up},\\; M_{up,toe} \\minus \\frac{\\gamma_{c}t_{f}L_{t}^{2}}{2}', sub: rwrN(c.Md, 0) + ' \\minus ' + rwrN(c.Mup, 0) + ',\\; ' + rwrN(c.MupT, 0) + ' \\minus ' + rwrN(inp.gamma_c * r.tf_ft * inp.Lt ** 2 / 2, 0), value: Math.max(c.Mh, c.Mt), unit: 'lb-ft/ft (larger)', d: 0 })));
+      st.push(rwrS({ id: 'heel', label: 'Heel F1, φ = 1.0: M = ' + rwrN(Math.max(0, X.gH.Mh), 0) + ' ≤ M_n = ' + rwrN(X.Mn_heel, 0) + ' lb-ft/ft, V = ' + rwrN(X.gHV.Vh, 0) + ' ≤ V_c = ' + rwrN(X.Vn_heel, 0) + ' lb/ft', sym: 'D/C', eq: '', sub: '', value: X.heelDC, unit: '', d: 3, ok: ok('heelEE'), ref: AA('Art. 11.6.4 / 11.6.5.1') }));
+      st.push(rwrS({ id: 'toe', label: 'Toe F2, φ = 1.0: M = ' + rwrN(Math.max(0, X.gT.Mt), 0) + ' ≤ M_n = ' + rwrN(X.Mn_toe, 0) + ' lb-ft/ft, V = ' + rwrN(X.gTV.Vt_toe, 0) + ' ≤ V_c = ' + rwrN(X.Vn_toe, 0) + ' lb/ft', sym: 'D/C', eq: '', sub: '', value: X.toeDC, unit: '', d: 3, ok: ok('toeEE') }));
+      CK.heelEE = 'ftgee/s.heel'; CK.toeEE = 'ftgee/s.toe';
+      subs.push(sub('Heel and toe: Extreme Event I / II check (φ = 1.0, Strength I bars)', [rwrItem('ftgee', [{ title: 'Extreme-event footing loads and check', steps: pre('s', st) }]), onTab('ftgEE')])); }
     const L = [isA ? rwrS({ id: 'As', label: 'Required temperature and shrinkage steel, per face (b = footing width ' + rwrN(r.b_TS_ftg, 0) + ' in)', sym: 'A_{s,TS}', eq: '\\frac{1.30\\,b\\,h}{2(b + h)f_{y}},\\; 0.11 \\le A_{s} \\le 0.60', sub: '\\frac{1.30(' + rwrN(r.b_TS_ftg, 0) + ')(' + rwrN(inp.tf, 1) + ')}{2(' + rwrN(r.b_TS_ftg, 0) + ' + ' + rwrN(inp.tf, 1) + ')(' + rwrN(r.fy_TS, 0) + ')}', value: r.As_ftg_long, unit: 'in^{2}/ft', d: 4, ref: AA('Eq. 5.10.6-1') })
       : rwrS({ id: 'As', label: 'Required temperature and shrinkage steel', sym: 'A_{s,TS}', eq: '0.0018\\,b\\,t_{f}', sub: '0.0018(12)(' + rwrN(inp.tf, 1) + ')', value: r.As_ftg_long, unit: 'in^{2}/ft', d: 4, ref: 'ACI 318-19 §24.4.3.2' }),
       rwrS({ id: 'F3', label: 'Bar selection F3 (longitudinal, both faces): #' + r.sel_ftg_long.bar.num + ' at ' + r.sel_ftg_long.spacing + ' in' + (r.sel_ftg_long.overridden ? ' (user override)' : ''), sym: 'A_{s,prov}', eq: '', sub: rwrN(r.sel_ftg_long.As_prov, 4) + ' \\ge ' + rwrN(r.As_ftg_long, 4), value: r.sel_ftg_long.As_prov, unit: 'in^{2}/ft', d: 4, ok: ok('tsFtg') })];
