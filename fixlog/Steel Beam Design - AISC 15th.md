@@ -2546,3 +2546,55 @@ function sectionFor(fam,label,gradeId){
 - **Why:** #891 took Save and Saved projects… out of the header; `steel-beam-builtup.mjs` opened saved projects through the header's Saved projects… (`[data-sp=hlib]`).
 - **What:** `openP()` clicks the chip (Project tab) and then the card's Saved projects… (`#sbSaveCard [data-sp=lib]`). Nothing else changed.
 - **How verified:** `node tests/smoke/steel-beam-builtup.mjs`: 11 checks passed. **Saved data / formulas:** none (test file only).
+
+## 2026-11-07 — PR: claude/steelbeam-h1-j10-sum — J10 demand at a point load is the total factored force at that location (H1; calculation change)
+
+From the code-compliance review of 2026-11-07 (finding H1). Engineer-approved overnight job, merge-as-you-go.
+
+### H1. Point loads at one location are one J10 location; R_u = Σ γ·P   [calculation change, more conservative]
+- **Problem:** `designAll` made one J10 location per point-load entry. A load entry carries one load case, so a dead and a live point load at the same place were two locations, each checked with its own factored load only. In a combination the web sees their sum. Unconservative wherever two or more point loads share an x.
+- **Governing provision:** AISC 360-16 §J10.2 (web local yielding) and §J10.3 (web local crippling): R_u is the required strength of the concentrated force at the location (Specification §B3.1 with the ASCE 7-16 §2.3.1 combination, so the factored sum of every load acting there).
+- **Where (1):** `designAll`, block `/* J10 locations (I & C only) */`, anchor `locs.push({kind:'load',label:'point load '+(ld.nm||'')`.
+- **Before:**
+```js
+    S.loads.forEach(ld=>{
+      if(ld.off||ld.type!=='point')return;
+      const si=Math.min(ld.si||0,S.geom.spans.length-1);
+      locs.push({kind:'load',label:'point load '+(ld.nm||''),x:nX[si]+Math.max(0,Math.min(S.geom.spans[si].L,ld.pos||0)),load:ld,lb:dsn.lbPt});
+    });
+```
+- **After:** point loads whose global x agree within 1e-6 ft (any load case; loads in the two spans at a shared node too) join one location; the label of a grouped location names every load and the x.
+```js
+    S.loads.forEach(ld=>{
+      if(ld.off||ld.type!=='point')return;
+      const si=Math.min(ld.si||0,S.geom.spans.length-1);
+      const x=nX[si]+Math.max(0,Math.min(S.geom.spans[si].L,ld.pos||0));
+      const g=locs.find(l=>l.kind==='load'&&Math.abs(l.x-x)<=1e-6);
+      if(g){g.loads.push(ld);g.label='point loads '+g.loads.map(q=>q.nm||q.lc).join(' + ')+' (x = '+fmt(x,2)+' ft)';}
+      else locs.push({kind:'load',label:'point load '+(ld.nm||''),x,load:ld,loads:[ld],lb:dsn.lbPt});
+    });
+```
+- **Where (2):** `designAll`, block `/* J10 demands */`, anchor `let terms=null;` (was `const fk=cb.f[lo.load.lc]||0;`).
+- **Before:**
+```js
+        else{const fk=cb.f[lo.load.lc]||0;const P=lo.load.mag*fk;dem=P>0?P:null;}
+        const r={label:lo.label,x:lo.x,dem,lb:lo.lb,endDist:lo.endDist};
+```
+- **After:**
+```js
+        let terms=null;
+        if(lo.kind==='load'){terms=lo.loads.map(q=>({nm:q.nm||'',lc:q.lc,f:cb.f[q.lc]||0,mag:q.mag||0})).filter(t=>t.f&&t.mag);
+          const P=terms.reduce((s,t)=>s+t.f*t.mag,0);dem=P>0?P:null;}
+        const r={label:lo.label,x:lo.x,dem,lb:lo.lb,endDist:lo.endDist};
+        if(terms&&lo.loads.length>1)r.terms=terms;
+```
+  A location with one load gives exactly the old demand (one term, same product). A net upward sum still gives no demand (as before for one upward load).
+- **Where (3), display (§6 show the work):** `buildJ10Tab`, per-combination section, after `body.appendChild(t);`, anchor `/* H1: worked demand where several point loads act at one location */`. For a grouped location the tab adds the line R_u at <location> = Σ γ·P = γ₁·P₁ (name, case) + … = R_u kip.
+- **Check case (AISC Design Examples v16.0, Example J.7 geometry):** W24X55 A992, 20 ft simple span, no tributary load, P_D = 15 kip and P_L = 30 kip both at 8 ft, l_b = 7.5 in at the point load, combination 1.2D + 1.6L + 0.5S.
+  - R_n WLY (J10-2, interior) = F_y t_w (5k + l_b) = 50 × 0.395 × (5 × 1.01 + 7.5) = 247.9 kip, φ = 1.00.
+  - R_n WLC (J10-4) = 282.0 kip, φR_n = 0.75 × 282.0 = 211.5 kip.
+  - **Before:** two locations; governing demand 1.6 × 30 = 48 kip; WLY DCR 48/247.9 = **0.194**, WLC DCR 48/211.5 = **0.227**.
+  - **After:** one location; R_u = 1.2 × 15 + 1.6 × 30 = 66 kip (Example J.7 uses 66 kip); WLY DCR 66/247.9 = **0.266**, WLC DCR 66/211.5 = **0.312**.
+- **How verified:** headless Chromium, `file://`, origin/main vs this branch on 11 scenarios (default, 2-span W16X26, J.7 two loads at one x, J.7 loads at different x, built-up, G.8B, W8X67 torsion, axial, cantilever, HSS, member mode) and the v16 engine cases: only the J.7 two-loads scenario moved (its point-load row, every combination; supports unchanged). Kit: check-syntax, steel-beam-builtup (11/11), project-library steelbeam, phone-layout sbeam, list-input sbeam: all pass; 0 console errors.
+- **Saved data:** none changed (no key, no field; the grouping is computed).
+- **Other copies:** batch mode and member mode take a user-entered R (unchanged).
