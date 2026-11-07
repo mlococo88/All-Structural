@@ -16026,7 +16026,7 @@ index c8b38ca..86d5f78 100644
 +  else if(el.type==="number") v=el.value===""?(el.dataset.blank?null:0):Number(el.value);   // ABM6: data-blank inputs store null when empty
 ```
 
-## 2026-11-07 — PR: claude/abut-m3-wingftg (ABM3: independent wingwall footing designed — toe and heel flexure, shear, minimum steel and crack control per ft; REVIEW rows for a pile-supported wing footing or bars not entered)   [new check] [MORE conservative]
+## 2026-11-07 — PR: claude/abut-m3-wingftg (PR #1035: https://github.com/mlococo88/All-Structural/pull/1035) (ABM3: independent wingwall footing designed — toe and heel flexure, shear, minimum steel and crack control per ft; REVIEW rows for a pile-supported wing footing or bars not entered)   [new check] [MORE conservative]
 
 Source: code-compliance review of 2026-11-07, item M3.
 
