@@ -3297,3 +3297,146 @@ Calculation audit, item 8. Engineer decision (2026-11-07). Code sites are tagged
 
 ### Saved data
 - `ovr_bar_s4` / `ovr_spc_s4` are additive and saved only when not 0 (`RWLS_DEF`). Old saves and default projects are unchanged.
+
+## 2026-11-07 — PR: claude/rw-shear-key — Shear key: structural design (ACI plain concrete first, else reinforced K1; AASHTO reinforced), key width input b_k; "no sliding credit" note when passive is off (RWSK; calculation change: new checks)
+
+Calculation audit, item 6 (a) and (b). Engineer decision (2026-11-07). Code sites are tagged `RWSK`. Walls without a key are unchanged.
+
+### RWSK-1. Input, calculation   [§4: new checks]
+- **New input** "Shear Key Width b_k" (`key_bk`, default 12 in, Design tab under the key depth). It is saved only when not 12 in (`RWLS_DEF`); old projects open with 12 in.
+- **Demand:** the key is a cantilever from the footing underside, loaded by the passive pressure on its depth. The pressure is a trapezoid from p_top = K_p γ_s D_f to p_bot = K_p γ_s (D_f + d_k), the same as the existing P_p,key.
+  - P_k = (p_top + p_bot)/2 · d_k.
+  - M_k = p_top d_k²/2 + (p_bot − p_top) d_k²/6.
+  - Factored with 1.6 in ACI (passive taken as H, ACI 318-19 §5.3.8) or 1.50 in AASHTO (passive taken as EH max, Table 3.4.1-2).
+  - The key is designed whenever one is entered, passive on or off.
+- **ACI, plain concrete first** (ACI 318-19 Ch. 14, verified in the PDF, pp. 208–209):
+  - h = b_k − 2 in (cast against soil, §14.5.1.7).
+  - M_n = min(5λ√f'c, 0.85 f'c)·S_m (§14.5.2.1).
+  - V_n = (4/3)λ√f'c b h (Table 14.5.5.1(a); R14.5.5.1 names shear keys).
+  - φ = 0.60 (Table 21.2.1(i), PDF p. 393).
+- **Reinforced (ACI when plain fails; AASHTO always):** K1 bars on the toe face, d = b_k − c_c − d_b/2.
+  - Flexure φ 0.90 with A_s,min `asMin` (ACI 0.0018 A_g; AASHTO 1.33M_u / M_cr).
+  - One-way shear `shearVc`, φ 0.75 (ACI) / 0.90 (AASHTO).
+  - Development: hooked up into the footing, ℓ_dh ≤ t_f − c_c. Straight down into the key, ℓ_d ≤ d_k − c_c; if ℓ_d does not fit, a standard hook at the key bottom, ℓ_dh ≤ d_k − c_c.
+  - Provisions: ACI §22.2 / Table 22.5.5.1(c) / §25.4; AASHTO 5.6.3 / 5.7.3 / 5.10.8.2.1a / 5.10.8.2.4a.
+- **New checks** `keyFlex`, `keyShear`, and `keyDev` (reinforced only).
+- **Decisions (pending engineer review):**
+  - The key is designed whether or not passive is counted (conservative: the key can still be loaded).
+  - AASHTO has no article specific to keys; Section 5 is used with passive as EH 1.50, per the engineer's decision.
+  - K1 is hooked at the key bottom when straight ℓ_d does not fit.
+  - The key stays centred under the stem, as drawn before.
+  - Water is not considered on the key face (as for P_p).
+- **Before / after** (`git diff -U0`, calculation, input and drawing geometry):
+```diff
+@@ -3340,0 +3345,51 @@ function calcAll(inp) {
++  // ── RWSK (2026-11-07): structural design of the shear key (engineer decision, audit item 6a) ──
++  // Cantilever from the footing underside, loaded by the passive pressure on its depth (trapezoid p_top = K_p γ D_f to
++  // p_bot = K_p γ (D_f + d_k), the same pressure as P_p,key), factored as H 1.6 (ACI 318-19 §5.3.8) or EH max 1.50 (AASHTO 10th
++  // Table 3.4.1-2). Designed whenever a key is entered, passive on or off. ACI: plain concrete first (Ch. 14: h = b_k − 2 in,
++  // §14.5.1.7; M_n = 5λ√f'c S_m ≤ 0.85 f'c S_m, §14.5.2.1; V_n = (4/3)λ√f'c b h, Table 14.5.5.1(a); φ = 0.60, Table 21.2.1(i)),
++  // reinforced (K1 bars on the toe face, hooked into the footing) if it fails. AASHTO: reinforced (Section 5).
++  let keyR = null;
++  if (inp.useShearKey && dk_ft > 0) {
++    const bk = inp.key_bk > 0 ? inp.key_bk : 12;
++    const gP = isAASHTO ? 1.50 : 1.6;
++    const p_top = Kp * inp.gamma_s * Df, p_bot = Kp * inp.gamma_s * (Df + dk_ft);
++    const P_k = (p_top + p_bot) / 2 * dk_ft;                                        // lb/ft (= P_p,key)
++    const M_k = p_top * dk_ft * dk_ft / 2 + (p_bot - p_top) * dk_ft * dk_ft / 6;    // lb·ft/ft at the footing underside
++    const Vu = gP * P_k, Mu = gP * M_k;
++    const sq = Math.sqrt(inp.fc);
++    const h_pl = bk - 2, S_pl = bw * h_pl * h_pl / 6;
++    const Mn_pl = h_pl > 0 ? Math.min(5 * sq * S_pl, 0.85 * inp.fc * S_pl) / 12 : 0;
++    const Vn_pl = h_pl > 0 ? 4 / 3 * sq * bw * h_pl : 0;
++    const phiMn_pl = 0.60 * Mn_pl, phiVn_pl = 0.60 * Vn_pl;
++    const plain_flex_ok = Mu <= phiMn_pl, plain_shear_ok = Vu <= phiVn_pl;
++    const plain = !isAASHTO && plain_flex_ok && plain_shear_ok;
++    let rf = null;
++    if (!plain) {
++      const cov = inp.cov_ftg, maxS = isAASHTO ? Math.min(1.5 * bk, 18) : Math.min(3 * bk, 18);
++      let d = bk - cov - 0.375, sel = null, As_req = 0, As_min = 0, As_des = 0, os = false;
++      for (let pass = 0; pass < 2 && d > 0; pass++) {
++        const Rn = Mu * 12 / (0.9 * bw * d * d), disc = 1 - 2 * Rn / (0.85 * inp.fc);
++        os = disc < 0;
++        As_req = os ? 0 : (0.85 * inp.fc / inp.fy) * (1 - Math.sqrt(disc)) * bw * d;
++        As_min = asMin(d, bk, Mu * 12, 0.9);
++        As_des = Math.max(os ? As_min : As_req, As_min);
++        sel = selectBar(As_des, maxS);
++        d = bk - cov - sel.bar.db / 2;
++      }
++      const a = sel.As_prov * inp.fy / (0.85 * inp.fc * bw), phiMn = 0.9 * sel.As_prov * inp.fy * (d - a / 2) / 12;
++      const sh = shearVc(d, bk, sel.As_prov, Mu, Vu, dk_ft), phiV = isAASHTO ? 0.90 : 0.75, phiVc = phiV * sh.Vc;
++      const db = sel.bar.db;
++      const ldP = isAASHTO ? devLengthAASHTOParts(db, inp.fy, inp.fc, false, cov + db / 2, sel.spacing) : null;
++      const ld = isAASHTO ? devLengthAASHTO(db, inp.fy, inp.fc, false, cov + db / 2, sel.spacing)
++                          : devLength(db, inp.fy, inp.fc, 1.0, 1.0, cov + db / 2, 1.0, sel.spacing);
++      const ldh = hookDevLength(db, inp.fy, inp.fc, isAASHTO, sel.bar, ldP ? ldP.lam_rc : 1.0);
++      const av_ftg = inp.tf - inp.cov_ftg, av_key = inp.dk - cov;               // hooked up into the footing; down into the key
++      const hook_bot = ld > av_key, need_key = hook_bot ? ldh : ld;                // straight into the key if ℓd fits, else a standard hook at the key bottom
++      rf = { d, As_req, As_min, As_des, os, sel, a, phiMn, sh, phiV, phiVc, ld, ldh, av_ftg, av_key, hook_bot, need_key,
++             flex_ok: !os && sel.As_prov >= As_des - 0.001 && phiMn >= Mu - 1e-6, shear_ok: phiVc >= Vu, dev_ok: ldh <= av_ftg && need_key <= av_key };
++      if (!rf.dev_ok) warnings.push(`Shear key bars K1: ℓdh = ${f(ldh,1)}" into the footing (${f(av_ftg,1)}" available) / ${hook_bot ? 'ℓdh' : 'ℓd'} = ${f(need_key,1)}" into the key (${f(av_key,1)}" available) — deepen the key or the footing, or use smaller bars.`);
++    }
++    keyR = { bk, gP, p_top, p_bot, P_k, M_k, Vu, Mu, h_pl, S_pl, Mn_pl, Vn_pl, phiMn_pl, phiVn_pl, plain_flex_ok, plain_shear_ok, plain, rf,
++             no_credit: !inp.inclPassive };
++  }
++
+@@ -3501,0 +3557,4 @@ function calcAll(inp) {
++    ...(keyR ? {   // RWSK
++      keyFlex:  { ok: keyR.plain ? keyR.plain_flex_ok : keyR.rf.flex_ok,   label: 'Key Flex',  val: keyR.plain ? 'plain concrete' : 'K1 ' + keyR.rf.sel.label },
++      keyShear: { ok: keyR.plain ? keyR.plain_shear_ok : keyR.rf.shear_ok, label: 'Key Shear', val: keyR.plain ? 'plain concrete' : undefined },
++      ...(keyR.rf ? { keyDev: { ok: keyR.rf.dev_ok, label: 'Key K1 ℓdh/ℓd' } } : {}) } : {}),
+@@ -3611,0 +3671 @@ function calcAll(inp) {
++    keyR,   // RWSK
+@@ -3664,0 +3725 @@ function getInputs() {
++    key_bk: n('key_bk') > 0 ? n('key_bk') : 12,   // RWSK (2026-11-07): key width (in)
+@@ -5877 +5973 @@ const RWTB_FIELDS = ['proj_date', 'proj_chkdate'];   // RWTB (2026-11-06): the o
+-const RWLS_DEF = { aashto_traffic_dir: 'parallel', toe_hook: false, ovr_bar_s4: '0', ovr_spc_s4: '0' };   // RWFF: + the S4 override (saved only when set)   // RWLS (2026-11-07) / RWDS (toe_hook): saved only when not the default; absent → the default
++const RWLS_DEF = { aashto_traffic_dir: 'parallel', toe_hook: false, ovr_bar_s4: '0', ovr_spc_s4: '0', key_bk: '12' };   // RWSK: + key width (saved only when not 12 in; absent = 12 in)   // RWFF: + the S4 override (saved only when set)   // RWLS (2026-11-07) / RWDS (toe_hook): saved only when not the default; absent → the default
+@@ -10265,2 +10386,2 @@ function rwdwGeo(r) {
+-  // shear key: width not in the model; drawn as the tool's own section drawings (0.36 t_s,base wide, 0.32 t_s,base from the front face)
+-  G.kw = 0.36 * G.tsb; G.kx = G.xf + 0.32 * G.tsb;
++  // shear key: width b_k (input, RWSK; before 2026-11-07 drawn nominal 0.36 t_s,base wide), centred under the stem
++  G.kw = inp.key_bk || 12; G.kx = G.xf + G.tsb / 2 - G.kw / 2;   // RWSK (2026-11-07): key width = the input b_k (was 0.36 t_s,base, drawn nominal), centred under the stem as before
+```
+
+### RWSK-2. Display
+- **Footing design tab:** new card "Shear Key — Structural Design": pressures, demand, plain checks (ACI), K1 design, development. Dashboard rows "Key Flex", "Key Shear" and "Key K1 ℓdh/ℓd" link to it.
+- **(b) "No sliding credit" note:** when a key is entered and "Include passive" is off, the note reads "Shear key gives no sliding credit: passive resistance is off (MassDOT BDM 3.3.1.1 neglects passive in front of the wall)". It appears:
+  - under the key input;
+  - in the sliding check (ACI Step 5, AASHTO Step 4);
+  - on the key card and in the Report.
+- **Report:** sub "Shear key (b_k, d_k)" in Footing design (`key/*`); K1 in the bar schedule; b_k in the input echo.
+- **Overview input table, cross-sections, 3D view and drawings:** the key is drawn b_k wide, centred under the stem. Before, the drawings used a nominal 0.36·t_s,base and the 3D view 0.40·t_s,base.
+  - Sheet 1: "SHEAR KEY, B_K = …" (was "WIDTH NOT IN THE MODEL, DRAWN NOMINAL").
+  - Sheet 2: the K1 bar and its note "PLAIN CONCRETE (ACI 318-19 CH. 14)" or "K1 … TOE FACE, HOOKED INTO THE FOOTING" (was "NO REINFORCEMENT DESIGNED IN THE TOOL"); bar schedule row K1.
+
+### Check cases (`calcAll` in Node and in the browser; default wall, φ = 30°, K_p = 3.0, D_f = 1.5 ft)
+- **ACI, 12-in key, passive on:**
+  - p_top = 3·120·1.5 = 540 psf; p_bot = 900 psf.
+  - P_k = 720 lb/ft; M_k = 540·1/2 + 360·1/6 = 330 lb·ft/ft.
+  - V_u = 1152, M_u = 528.
+  - Plain concrete, h = 10 in, S_m = 200 in³:
+    - φM_n = 0.6·5·63.25·200/12 = **3162** → D/C **0.167**;
+    - φV_n = 0.6·(4/3)·63.25·12·10 = **6072** → D/C **0.190**.
+  - **Plain OK.** Sliding FS 1.964 (unchanged).
+- **ACI, 36-in key:**
+  - P_k = 3240, M_k = 540·9/2 + 1080·9/6 = 4050.
+  - M_u = **6480 > 3162** → reinforced. d = 8.75 in.
+  - A_s,req 0.1669 < A_s,min 0.0018·12·12 = 0.2592 → **K1 #4@9** (0.267).
+  - φM_n 10 265 ≥ 6480; φV_c 5436 ≥ V_u 5184.
+  - ℓ_dh 8.5 ≤ 15; ℓ_d 12 ≤ 33. OK.
+- **AASHTO, 12-in key:**
+  - M_u = 1.50·330 = 495; V_u 1080.
+  - Reinforced: A_s,min 0.0166 → K1 #3@18; φM_n 2890.
+  - ℓ_d 12 > d_k − c_c = 9, so K1 is hooked at the key bottom: ℓ_dh 7.3 ≤ 9 OK.
+- **AASHTO, 36-in key:** M_u 6075 → K1 #3@6, φM_n 8564, all OK.
+- **ACI, 12-in key, passive off:** sliding FS 1.656 (no key credit), the note shown, the key designed as above.
+- **Walls without a key:** unchanged, no key rows.
+
+### How verified
+- origin/main vs branch, headless Chromium: the twelve audit walls plus ACI 12-in key (passive on / off), ACI 36-in key and AASHTO 12-in key. `_R` differs only by the new `keyR` and `inp.key_bk` fields; walls with a key also gain the new key checks (and the ACI mix wall, which has an 18-in key, gains them too). Every existing value is identical. Export JSON and localStorage are identical (b_k is saved only when not 12 in). 0 console errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: the RWSK cases); phone-layout rwall 390/768; project-library retwall (its "results identical" comparisons list only `keyR` / `inp.key_bk`); dxf-print-sheets rw.
+- Screenshots looked at: Footing tab key card (ACI 36-in key), Drawings sheet 2 (AASHTO 12-in key, K1).
+
+### Saved data
+- `key_bk` is additive (saved only when not 12 in; absent = 12 in). No other change.
