@@ -5311,7 +5311,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open items:** decisions 1–4. The PROFIS export still writes the offset as Profile OffsetX/Y (unchanged, unconfirmed mapping, ENGINEER_CHECKS A10).
 
-## 2026-11-07 — BPM1: side-face blowout checked at every edge within 0.4h_ef (PR: claude/bp-m1-sfb-edges)
+## 2026-11-07 — BPM1: side-face blowout checked at every edge within 0.4h_ef (PR: claude/bp-m1-sfb-edges, PR #965: https://github.com/mlococo88/All-Structural/pull/965)
 
 ### BPM1. Side-face blowout: each near edge with its own row demand   [calculation change, more conservative; saved data: none]
 - **Problem (review M1):** `sfbEdgeDemand()` took the tension of the anchor row at the edge with the SMALLEST c_a1, and `sideFaceBlowout(nT, ca1 = min of four)` the capacity there. A tension row at another edge with c_a1 < 0.4h_ef was not checked: the Summary row read 0.00. The tension envelope (Σ T / φN_sb at the nearest edge) protected pass/fail in the review case, but the check itself was missing.
