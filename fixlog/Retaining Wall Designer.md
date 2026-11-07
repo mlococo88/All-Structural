@@ -4407,7 +4407,7 @@ Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as
 +  }
 ```
 
-## 2026-11-07 — PR: claude/rw-pile-8d-footing — Pile-supported footing, Phase 8d: heel and toe designed from the factored pile-row reactions, bottom cover over the pile heads, punching around the piles, ACI cap depth (RWPL; calculation change in pile mode only)
+## 2026-11-07 — PR: claude/rw-pile-8d-footing — Pile-supported footing, Phase 8d: heel and toe designed from the factored pile-row reactions, bottom cover over the pile heads, punching around the piles, ACI cap depth (RWPL; calculation change in pile mode only) (PR #961: https://github.com/mlococo88/All-Structural/pull/961)
 
 Review Phase 8, PR 8d. Code sites are tagged `RWPL`. Spread-footing results are unchanged: `cov_bot` = c_c, and the pile paths run only when `pile` exists.
 
@@ -4454,6 +4454,7 @@ Review Phase 8, PR 8d. Code sites are tagged `RWPL`. Spread-footing results are 
   - The 8c note "heel and toe still from soil" is replaced by "designed from the factored pile reactions".
   - New: with cov_bot > 6 in, the toe crack-control check uses that cover and fails for large covers. The remedy is a bar mat below the pile heads, or the engineer's judgement.
 - **Returned (pile mode only, with `pile`):** `pileFtg`, `cov_bot`, `pilePunch`, `heelPile`, `toePile`. A spread footing's results have none of them; the displays use `r.cov_bot ?? c_c`.
+- **RWUP (#960) on piles:** the water-uplift split (`upS`) requires `!isPile`. On piles the factored vertical load, water included, goes to the pile rows. `heelCase` / `toeCase` take `(…, up, pc)`, and the pile path runs first.
 ### RWPL-8. Display / Report
 - Footing tab:
   - Heel Step 1 / Toe Step 1: the pile-row line loads instead of the bearing pressures (link to Pile Step 2).
