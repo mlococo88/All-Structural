@@ -6386,7 +6386,7 @@ index 50f3837..c2d5000 100644
   - Seymour as saved: bottom x-bars were already FAIL, D/C 1.669 → 1.672 (Ped 1 face 1.335 ft). The y-bars are unchanged (PASS).
   - def, edgeHook, thin: no value change.
 
-## 2026-11-07 — PR: claude/sf-m5-flotation (SFFG: flotation FS on the gross basis and on the earlier net basis, the smaller governs; CALCULATION CHANGE where water is above the base)
+## 2026-11-07 — PR: claude/sf-m5-flotation (PR #1022: https://github.com/mlococo88/All-Structural/pull/1022) (SFFG: flotation FS on the gross basis and on the earlier net basis, the smaller governs; CALCULATION CHANGE where water is above the base)
 
 - **Problem:** the flotation FS was (W_f + ΣW_ped + EV′)/U, with EV′ at the buoyant soil unit weight below the water table and U the buoyancy of the submerged concrete only. Subtracting the pore-water weight from both terms raises the ratio, although the net margin is the same. The usual definition compares the full uplift on the base, γ_w(D_f − d_w)·BL, with the weights at total unit weight. That is consistent with ASCE 7-16 2.3.6 / 2.4.1 and IBC 1605, which set the dead load against the full hydrostatic uplift H. The tool's ratio was therefore higher than the conventional one wherever submerged soil sits on the footing.
 - **Where / exact code (`Spread Footing.html`, `computeAll`, anchor `/* SFFG (2026-11-07)`):**
