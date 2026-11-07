@@ -194,6 +194,27 @@ node tests/st-span.mjs --a origin/main --record-baseline tests/baselines/st_inte
 
 Options: `--target st|sbd` (`sbd`: "Steel Bridge Design.html" opens the project, owner and girder named by the payload `gd_<project>_<owner>_G<n>`, `window.gdStOpen(n)` loads the frame, and the span button is clicked in the frame), `--payload` (names in `projects/st`, comma list, or `all` = every `gd_*` payload; default `all`), `--span` (default `2,3`), `--jobs` (default 2), `--timeout` (page default timeouts, ms; default 120000), `--tries` (attempts per span after a timeout or a closed browser; default 3), `--resume` (with `--record-baseline`: skip the spans already in the file), `--a`, `--b`, `--file`, `--baseline`, `--record-baseline`, `--out`, `--max-diffs`. Case names are `payload <name> / span <n>`. `baselines/st_interior.json` holds spans 2 and 3 of the 100 `gd_*` payloads (200 cases), recorded on `origin/main` `stgirder.html` (cb584ac and 0fc31d9, the same `stgirder.html`); since S2-1 (2026-10-22) re-recorded in full from the Steel Bridge Design frame (`--target sbd`, the default), every section. The readout code is a copy of `compare.mjs`'s (the header of `st-span.mjs` lists it); keep the two in step.
 
+## Shear and Moment Diagrams: solver regression test (`smd-verify.mjs`, added 2026-11-07)
+
+```bash
+node tests/smd-verify.mjs                                   # the working tree
+node tests/smd-verify.mjs --file "<path>/Shear and Moment Diagrams.html"   # another copy (for example an extracted older tree)
+```
+
+The solver is inline in the tool, so the test drives the page headless (file://) through its own globals (`applyProject`, `readIn`, `solve`, `nodeR`, `shD`, `moD`, `deD`, `env`) and checks:
+1. closed forms (simple span, propped cantilever, fixed-fixed, cantilever triangle, couple, two equal spans);
+2. the 27 cases of the 2026-11-07 review (`tests/smd/cases.json`) against the independent solver `tests/smd/indep.mjs` (fine-mesh Hermite elements, no code shared with the tool). Tolerances: R and M_R 1e-5, M 5e-4, V 1e-4, δ 3e-3 relative (station sampling and the double integration of the deflection);
+3. the review fixes, by hand values:
+   - combination 3 (220 and 245 kip·ft) and an old save keeping its list;
+   - pattern live load (87.5 kip·ft / R_A 27.75 kip), an old save without `patLL`, and a 3-span pattern envelope against an exhaustive independent one;
+   - the envelope moment reaction (220 / −5 kip·ft);
+   - the zero-factor case note;
+   - the solver input check;
+   - kip-ft vs lb-in;
+   - no console errors.
+
+Exit code 0 when every check passes. The test takes about 10 s. Run against the review's base (a84df4f), it fails on the closed-form fixed-end forces, combination 3 and pattern loading, as it should.
+
 ## Base Plate & Anchor Designer: PROFIS export (`bpad-profis.mjs`)
 
 ```bash
