@@ -5233,7 +5233,7 @@ Frame: Development & Splice (`suite-frame-dev`; byte-exact srcdoc helper, CRLF k
 - **How verified:** headless main vs branch, all Dev probe cases: only the f′c < 3000 psi ACI cases with expression < 12 in move (above); all Beam Capacity cases identical; screenshot of the Comp. Splice tab (#4 case) looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** no change.
 
-## 2026-11-07 — PR: claude/cbc-lw-unit-weight (CBL7b: AASHTO E_c for the computed f_ss uses an entered unit weight w_c, or 0.110 kcf for lightweight concrete (λ < 1) when none is entered; new optional input "Unit weight w_c"; CALCULATION CHANGE, Beam Capacity tab, AASHTO mode, lightweight concrete or an entered w_c, computed f_ss only; less conservative before for lightweight concrete)
+## 2026-11-07 — PR: claude/cbc-lw-unit-weight, PR #1048: https://github.com/mlococo88/All-Structural/pull/1048 (CBL7b: AASHTO E_c for the computed f_ss uses an entered unit weight w_c, or 0.110 kcf for lightweight concrete (λ < 1) when none is entered; new optional input "Unit weight w_c"; CALCULATION CHANGE, Beam Capacity tab, AASHTO mode, lightweight concrete or an entered w_c, computed f_ss only; less conservative before for lightweight concrete)
 
 Frame: Beam Capacity (`suite-frame-capacity`). Open item of CBL7 (#1005), review item L7.
 
