@@ -6109,7 +6109,155 @@ AASHTO LRFD 10th Ed. (2024) Table 3.4.1-2 (γ_p for EH: active 1.50 / 0.90, at-r
 
 ### Saved data
 - No input or format change.
-## 2026-11-07 — PR: claude/rw-gfx-passive (PR #__PR__: https://github.com/mlococo88/All-Structural/pull/__PR__) (RWPS) — pressure diagrams drawn off the structure: passive (and the shear-key block) in front of the toe face; earth, surcharge and water side by side beyond the heel; bearing under the footing and the key   [display only; no result change]
+## 2026-11-07 — PR: claude/rw-pile-bottom-mat (PR #1149: https://github.com/mlococo88/All-Structural/pull/1149) — Pile-supported footing: the bottom mat stays at the footing cover c_c, between the pile heads (was lifted onto the pile heads, cover = embedment + clear); punching and the ACI cap depth keep the depth over the pile heads (RWPB; calculation change, pile mode only)
+
+Engineer instruction (2026-11-07, paraphrased): on piles the bottom footing bars must stay at the normal bottom position; they are not to be lifted onto the pile heads. The bars run between and around the embedded pile heads (the usual New England detail). This applies to every project, old saves included, with no option. Depths that physically start at the pile head (punching, the pile-cap depth) stay as they are. Code sites are tagged `RWPB`.
+
+### RWPB-1. Problem
+- RWPL Phase 8d (#961) set `cov_bot = max(c_c, embedment + clear)` on piles: 15 in at the defaults (12 + 3). The toe d, the toe ℓ_d / λ_rc cover, the toe crack control, the stem-hook length available and the Drawings bottom mat all used it.
+- Consequences at the defaults: toe crack control FAILed with a negative s_max (ACI −22.5 in, AASHTO −18.3 in), the toe d was 12 in short, and a warning asked for "a bar mat below the pile heads, or the engineer's judgement". The 8d decision "the bottom cover on piles is max(c_c, embedment + clear)" is superseded by this instruction.
+
+### RWPB-2. Fix (`calcAll`)
+Before (anchor `RWPL (2026-11-07, Phase 8d): on piles the bottom mat sits on the pile heads`):
+```js
+  const cov_bot = (inp.fnd && inp.fnd.type === 'pile') ? Math.max(inp.cov_ftg, (+inp.fnd.embed || 0) + (+inp.fnd.clr || 0)) : inp.cov_ftg;
+```
+After:
+```js
+  const cov_bot = inp.cov_ftg;
+  const cov_ph  = (inp.fnd && inp.fnd.type === 'pile') ? Math.max(inp.cov_ftg, (+inp.fnd.embed || 0) + (+inp.fnd.clr || 0)) : inp.cov_ftg;
+```
+- `cov_bot` (now c_c) feeds, unchanged in code: `d_toe`, the toe ℓ_d cover (ACI ψ / AASHTO λ_rc c_b), `aciCr.toe`, the AASHTO toe `crackSpacing`, `ldh_avail = t_f − cov_bot` (the stem hook bears on the bottom mat) and the Drawings `rwdwBars` `cb` (F2/F3 and the S1D hook drawn at the bottom; the piles project through the mat, embedded length dashed, as before). The heel already used c_c.
+- Punching: `dp = inp.tf - cov_bot - sel_toe.bar.db` → `dp = inp.tf - cov_ph - sel_toe.bar.db`. The depth over the pile head stays t_f − max(c_c, embedment + clear) − d_b, the abutment calculator's C-13 rule (`d_e = h_p − c_top − d_b`, h_p = t_f − embedment). The ACI "Cap Depth over Bars" row (§13.4.6.1, d_p ≥ 12 in) uses the same d_p, as before. The embedment check is unchanged.
+- `cov_ph` is returned with the pile results.
+- Warning (pile mode), was "Pile cap: the bottom bars sit … in above the base (embedment + clear) … fails for large covers …" (shown when cov_bot > 6). Now, always on piles: "Pile cap: the bottom bars are at the footing cover c_c = … in and pass between the pile heads, which project … in into the footing. Detail the bars to clear the piles (bar spacing against the pile width D; field adjustment of bars at a pile). Punching uses the depth over the pile heads, t_f − … in − d_b."
+- Display: Footing tab Toe Step 3 c_c description; the punching step "d_p = t_f − c_ph − d_b" with c_ph explained; Report Toe Step 3 label and the punching step (`r.cov_ph`). The Report's cap-depth step cited "ACI 318-19 §13.3.1.2"; it now cites §13.4.6.1, as the check row has since RW2L1 (#1144) (citation in the Report only; the check is unchanged).
+
+### Governing provisions
+- Engineer instruction 2026-11-07 (detailing basis).
+- ACI 318-19 §20.5.1.3 / AASHTO LRFD 10th Ed. (2024) Art. 5.10.1 (cover: the footing cover input, unchanged); d of the toe per ACI 318-19 §22.2 / AASHTO Art. 5.6.2; crack control ACI 318-19 §24.3.2 / AASHTO Art. 5.6.7.
+- Punching: ACI 318-19 §22.6.4.1, Table 22.6.5.2; AASHTO Art. 5.12.8.6.1 / 5.12.8.6.3 (unchanged; depth over the pile heads).
+
+### Check cases
+**Default pile wall, ACI** (t_f 36 in, c_c 3, embedment 12, clear 3, rows 1.5 / 11.0 ft at s 6 ft; toe F2 #6 @ 6, A_s 0.88 in²/ft; M_u 17521.6 lb-ft/ft, V_u 11681 lb/ft):
+- d: before 36 − 15 − 0.375 = 20.625 in; after 36 − 3 − 0.375 = **32.625 in**.
+- a = 0.88(60000)/(0.85·4000·12) = 1.294 in. φM_n: before 0.9(0.88)(60000)(20.625 − 0.647) = 949,352 lb-in (79.1 kip-ft/ft, D/C 0.221); after 0.9(0.88)(60000)(32.625 − 0.647) = **1,519,590 lb-in** (126.6 kip-ft/ft, **D/C 0.138**).
+- One-way shear (λ_s = √(2/(1 + d/10))): before φV_c 11584 lb/ft, D/C 1.008 **FAIL**; after λ_s 0.685, ρ_w 0.002248, φV_c = 0.75·8(0.685)(0.002248)^⅓√4000(12)(32.625) = **13330 lb/ft**, D/C 0.876 **PASS**.
+- Crack control (f_s = 40 ksi): before s_max = 15 − 2.5(15) = −22.5 in **FAIL**; after min(15 − 2.5(3), 12) = **7.5 in** ≥ 6 **PASS**.
+- Stem hook available: 21 → **33 in** (ℓ_dh 8.5 in).
+- Punching (row 1): d_p = 36 − 15 − 0.75 = 20.25 in, unchanged: 77.4 ≤ 403.0 kip, D/C 0.192. Cap depth 20.25 ≥ 12 in, unchanged.
+
+**Default pile wall, AASHTO** (M_u 23433 lb-ft/ft, V_u 15622 lb/ft, M_s 15907 lb-ft/ft):
+- d 20.75 (#4 @ 7) → **32.81 in** (#3 @ 6, the minimum now governs with A_s 0.22 in²/ft).
+- φM_n 379,504 → **387,891 lb-in**; D/C 0.741 → **0.725**. φV_c 35384 → **40314 lb/ft** (D/C 0.441 → 0.388).
+- Crack control s_max −18.3 → **16.2 in** (FAIL → PASS).
+- Punching d_p 20.5 → 20.625 in (smaller toe bar); d_v = max(0.9d_p, 0.72t_f) = 25.92 in either way, D/C 0.154 unchanged.
+
+**Review pile variant** (β 15°, q_s 250, water 6 ft, key 18 in, passive, k_h 0.20, t_f 36):
+- ACI: d 20.625 → 32.625; φM_n 949,352 → 1,519,590 lb-in; φV_c 11584 → 13330; crack −22.5 → 7.5 in (FAIL → PASS).
+- AASHTO: toe #5 @ 7 → #4 @ 7; d 20.69 → 32.75; φM_n 582,459 → 601,675 lb-in; φV_c 35384 → 40237; crack −18.6 → 16.1 in (FAIL → PASS); toe ℓ_d 14.8 → 12.0 in (c_b now with c_c).
+
+### How verified
+- Headless, origin/main vs branch, `calcAll` on the 32 review walls plus AASHTO at-rest (spread and pile): only pile walls move, and only the toe d and what follows from it (toe bars, φM_n, φV_c, ℓ_d, crack control, stem-hook length available, the warning). Spread footings identical; pile reactions and the Pile Designer hand-off identical. 0 console errors.
+- Drawings sheet 1 on piles looked at: bottom mat at the bottom cover, pile heads projecting 12 in through it.
+- Tests: check-syntax; smoke/retaining-wall-checks (the RWPL 8d row now expects d_toe 32.625 with cov_bot 3, cov_ph 15, toe crack control and shear PASS; punching and cap-depth rows unchanged); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Decisions (pending engineer review)
+- The punching depth keeps the abutment's C-13 rule (t_f − embedment − clear − d_b), conservative now that the bars are below the pile heads.
+- The clear-cover input "clear, pile top to the bottom bars" is kept for that depth only; its label is unchanged.
+- No in-tool check of bar clearance to the piles; the warning asks for it.
+- The abutment calculator still lifts its bottom mat onto the pile heads (`cBot = embed + clrTop`); not changed here (one tool per PR).
+
+### Saved data
+- No input or format change. Old pile saves open with the mat at c_c (engineer instruction: no option).
+
+## 2026-11-07 — PR: claude/rw-pile-thin-cap-error (PR #1151: https://github.com/mlococo88/All-Structural/pull/1151) — Pile-supported footing: a named input error when t_f ≤ embedment + clear + 2 in (the depth over the pile heads), never a throw; the page catches any calculation error (RWTE; input-validation change, pile mode only; valid inputs: no result change)
+
+Follow-up A2 of the second-pass fix round. Code sites are tagged `RWTE`.
+
+### RWTE-1. Problem and root cause
+- Report: in pile mode t_f = 8 in made the calculation throw while the page showed only "Input error: no results".
+- Root cause (before #1149, RWPB): `calcAll` took the bottom cover on piles as max(c_c, embedment + clear) = 15 in, and its only thickness guard was the spread-footing rule `t_f ≤ c_c + 2`. With t_f ≤ 15.375 in the toe d of the first pass was ≤ 0, the bar loop never ran, `sel_toe` stayed null and `shearVc(…, sel_toe.As_prov, …)` threw `TypeError: Cannot read properties of null (reading 'As_prov')`.
+  - For t_f ≤ embedment + clear (8 in) the page's own validation (RWIE) blocked the calculation first, so the banner was named. Other callers of `calcAll` still threw.
+  - For 15 < t_f ≤ 15.375 in, `onInputChange` itself threw: the page stopped updating, with no message.
+- After RWPB (bottom bars at c_c) the toe no longer throws. But the depth over the pile heads d_p = t_f − embedment − clear − d_b was still unguarded, which gave nonsense punching results:
+  - t_f 15.5 in: d_p = 0, D/C 5.9 × 10¹³;
+  - embedment 3 / clear 3, t_f 6.5 in: d_p −0.5 in, negative φV_c;
+  - a direct `calcAll` call at t_f 8 in: d_p −7.75 in with punching marked "ok".
+
+### RWTE-2. Fix
+- `calcAll`, after the spread "Footing too thin" rule (anchor `Stem too thin (`). Pile mode returns a fatal, named error when `t_f ≤ embedment + clear + 2`:
+  "Footing too thin over the pile heads: t_f = … in must exceed embedment … in + clear … in + 2 in for the bars = … in (depth over the pile heads d_p = t_f − embedment − clear − d_b > 0). Increase t_f or reduce the pile embedment."
+  The 2-in allowance for the bar is the same as in the spread rule. `rwIeIdOf` marks it on `tf` (/Footing too thin/).
+- `calcAll`, defensive: if `sel_heel` or `sel_toe` is null after its bar loop, return a fatal error "Heel: d ≤ 0 (…)" / "Toe: d ≤ 0 (…)" (marked on `tf`) instead of throwing.
+- Page validation (`rwInputErrors`, pile block): `embed + clr ≥ t_f` → `embed + clr + 2 ≥ t_f`. The message names the limit: "Embedment into the footing 12 in + clear 3 in + 2 in for the bars = 17.00 in is not less than the footing thickness t_f = 8 in: the depth over the pile heads would be ≤ 0. Increase t_f to more than 17.00 in or reduce the embedment."
+- `onInputChange`: `calcAll` in try/catch. An unexpected error becomes the banner "Calculation error: <message>. No results for these inputs; …" (fatal, no results). The page keeps working, and the error goes to `console.warn`.
+
+### §4 (input limit)
+- **Before:** a pile footing gave results for t_f > embedment + clear (UI) and threw for 15 < t_f ≤ 15.375 in.
+- **After:** results need t_f > embedment + clear + 2 in. Inputs with embedment + clear < t_f ≤ embedment + clear + 2 in now show the named input error instead of results with d_p ≤ ~1.25 in.
+- This is not a formula change. Basis: d_p > 0 is required by the punching equations (ACI 318-19 §22.6.5.2; AASHTO LRFD 10th Ed. (2024) Art. 5.12.8.6.3). The 2-in bar allowance matches the tool's spread-footing rule.
+- **Check cases** (defaults: embedment 12, clear 3; limit 17 in):
+  - t_f 8 → error naming 17.00 in (was a throw from `calcAll`; the banner was named by RWIE);
+  - t_f 15.5 → error (was d_p = 0, punching D/C 5.9e13);
+  - t_f 17 → error (at the limit; d_p would be 17 − 15 − 0.75 = 1.25 in);
+  - t_f 17.1 → results as before (d_p 1.6 in; punching FAILs; cap depth FAIL);
+  - embedment 3 / clear 3, t_f 6.5 → error (was d_p −0.5);
+  - spread footing t_f 5.5, cover 3 → unchanged (d 2.125).
+
+### How verified
+- Headless, origin/main vs branch:
+  - `calcAll` on the 32 review walls plus the at-rest walls: identical. One run showed a probe state leak on `aci_var`; a re-run of that case was identical.
+  - The cases above: the banner and `calcAll` give the named errors.
+  - A forced throw from `calcAll` gives the "Calculation error" banner, and the page recovers on the next input.
+  - 0 console errors.
+- Tests:
+  - check-syntax;
+  - smoke/retaining-wall-checks (new RWIE rows RWTE t_f 8 and t_f 17 marked on `pile_embed`);
+  - phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Decision (pending engineer review)
+- The limit is embedment + clear + 2 in, the same allowance as the spread rule. A thicker-cap minimum (ACI §13.4.6.1, d_p ≥ 12 in) stays a check row (FAIL), not an input error.
+
+### Saved data
+- No input or format change. A saved pile project with embedment + clear < t_f ≤ embedment + clear + 2 in now opens with the input error, and its inputs are kept.
+## 2026-11-07 — PR: claude/rw-pile-tab — Piles output tab (pile-supported footing only): the pile cards move from the Stability tab, with a layout card, a pile-checks card and the Pile Designer hand-off card; links, chips and the Report follow (RWPT; display only) (PR #1148: https://github.com/mlococo88/All-Structural/pull/1148)
+
+Engineer request (2026-11-07): "there is no output tab for the piles". Code sites are tagged `RWPT`. **Display and organisation only: no computed result changes** (§4), no saved field or key changes (§5).
+
+### Tab
+- New tab button `data-tab="piles"` ("Piles", `id="tabbtn-piles"`) after "Footing design", and panel `#tab-piles`.
+  - Anchor: `<button class="tab-btn" data-tab="piles" id="tabbtn-piles" style="display:none">Piles</button>`.
+  - Shown only for a pile-supported footing: `rwPileUI()` sets `tabbtn-piles` display with the pile-only inputs. Leaving pile mode while the tab is open opens Stability.
+- `renderPiles(r)` (new; called by `onInputChange` after `renderFooting`). Input error: the common banner (`rwInputErrHTML`). Spread footing: a one-line note. Cards:
+  1. **Pile Layout**: per row x from the toe, x from the heel (B − x), spacing, piles per ft (1/s); pile type, designation, D, embedment, clear, the bottom cover used (`r.cov_bot`, c_c since RWPB #1149) and the cover over the pile heads for punching (`r.cov_ph`), B × t_f, the capacities as entered, the passive credit.
+  2. **Pile Step 1 — Pile Group (per ft of wall)** and 3. **Pile Step 2 — Pile Reactions and Checks**: moved **unchanged** from `rwPileStability` (the same HTML, equations and the RW2M3 pile–cap tension alert).
+  4. **Pile Step 3 — Pile Checks**: every pile row of `r.checks` (pileComp, pileUplift, pileCapT, pileLat, pileSpacing, pileEdge, pileEmbed, pileCapD, pilePunch) with its value, D/C, PASS/FAIL, basis and a "worked in" link (`RW_CHECK_CARD`); failing rows shaded (`.tbl tr.rwpt-ng`).
+  5. **Pile Designer Hand-off** (`rwptHandoff(r)`): loads sent (the `bridgeSuite.v1.foundationLoads.by.retwall` copy: time, content hash, whether it equals what the wall sends now), results received (`pile_pxr` record and `r.pxr`: CURRENT / STALE / other, why), the imported inputs with Pile Designer's single-pile value and the group reduction (imported / `rec.geo`), the pulled per-combination results, and the same buttons as the Foundation card (`rwpxSendOpen`, `rwpxPullOpen`, `rwpxImportFile`, `rwpxClear`). Reads only; nothing is written.
+
+### Stability tab
+- `rwPileStability(r)`: before, it inserted the two pile cards at the top. After, it inserts **Pile-Supported Footing — Summary** (N, x̄, P_max with D/C, P_min, h = H/N with D/C, pile checks pass/fail count) with "Worked in" links to Pile Step 1, Step 2 and Step 3. The "not applicable" soil-card notes now end "(Piles tab, Pile Step 2)" (was "(Pile Step 2)").
+
+### Links
+- `RW_TABNAME`: + `piles: 'Piles'`.
+- `RW_CARDS.stabPile`: tab `'stability'` → `'piles'` (key and title kept, so every `RW_CHECK_CARD` row, `rwWorkedIn`, the check summary chips, the Overview check table, the Drawings index and the Report "On screen" note follow). New keys `pileLay`, `pileGrp`, `pileCk`, `pilePD` (Piles tab) and `stabPileSum` (Stability).
+- 3D pile-reaction label: "Worked on the Stability tab" → "Worked on the Piles tab".
+- Text: warning RW2M1 pile note "(Stability tab, Pile Step 2)" → "(Piles tab, Pile Step 2)" (wording only); Report pile-schedule note "on screen: Stability tab" → "Piles tab"; DXF notes "(STABILITY TAB, PILE STEP 2)" → "(SEE PILES TAB, PILE STEP 2)" (the same length, so the sheets keep their scales: with "(PILES TAB, …)" the loads sheet of a pile wall moved from 1/8" to 3/16" = 1'-0").
+
+### Report
+- Section "Pile-supported footing" → **"Piles (pile-supported footing)"**, as the tab.
+- New sub **Pile Step 3 — Pile checks**: the table of the tab's Pile Step 3 (value, D/C, basis, status, "see §" to the step that works it), with the on-screen link.
+- `rwTabSource` / `rwrTabNotes` / `rwrAddNotes`: + `piles`. The pile cards' alerts (RW2M3 pile–cap tension) moved with the cards: they are now in "Notes on the Piles tab" of the pile section (were in "Notes on the Stability tab").
+
+### Decision (pending engineer review)
+- The Pile Designer payload (`rwpxBuild`) is **unchanged**: its `pileLayout.distribution` text "(Stability tab, Pile Step 2)" is inside the content hash, so editing it would mark every pulled result STALE. Its notes keep the same wording.
+- The hand-off buttons stay on the Foundation card as well (the tab repeats them).
+- Spacing row: ACI / IBC has none (IBC 2018 has no minimum spacing, §1810.2.5), as before; the Pile Step 3 note says so.
+
+### How verified
+- Headless probe, origin/main (95d5810) vs this branch, 9 walls (ACI and AASHTO spread; ACI pile default, t_f 36 with water 2 ft (uplift), seismic 3 rows with passive; AASHTO pile default, EE I + collision 4 rows with water): `window._R` identical except the RW2M1 warning wording; Report text differs only in the section title, the new Pile Step 3 and the notes moved to the Piles tab; DXF identical except the two note lines; 0 console errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (AUD rows read the Piles tab; new RWPT block: shown only on piles, after Footing design, cards, KaTeX, buttons, the chip "Pile Compression" lands on Pile Step 2, the Stability summary link, the Report section, back to Stability on spread, input-error banner; RW2L3 phone 390 px includes the Piles tab); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs.
+## 2026-11-07 — PR: claude/rw-gfx-passive (PR #1147: https://github.com/mlococo88/All-Structural/pull/1147) (RWPS) — pressure diagrams drawn off the structure: passive (and the shear-key block) in front of the toe face; earth, surcharge and water side by side beyond the heel; bearing under the footing and the key   [display only; no result change]
 - **Why:** engineer, 2026-11-07: "the passive pressure triangle is overlapping the structure, it should be drawn off to the side so they don't overlap."
 - **Before (origin/main after #1144):**
   - Overview section and Analysis diagram: the passive triangle grew left from the **stem front face**, from toe grade to the footing base, so it lay over the toe soil hatching **and the toe of the footing**; it was squeezed to 0.65 L_t, and its value label sat on the toe (Analysis: above the F2 bars).
@@ -6136,7 +6284,8 @@ AASHTO LRFD 10th Ed. (2024) Table 3.4.1-2 (γ_p for EH: active 1.50 / 0.90, at-r
   - The lateral diagrams are drawn separately (earth, surcharge band, water) rather than stacked, so none overlaps another; the earth values exclude the K_a q_s share, which is the band's value.
   - The bearing diagram's zero line is drawn a small gap under the footing (under the key when there is one), tied to the base corners by dashed leaders.
 
-## 2026-11-07 — PR: claude/rw-gfx-rebar (PR #__PR2__: https://github.com/mlococo88/All-Structural/pull/__PR2__) (RWRB) — Analysis diagram: the reinforcement drawn from the Drawings' bar model (bars in the section as lines at their extents, bars along the wall as dots), labels in columns with leaders   [display only; no result change]
+
+## 2026-11-07 — PR: claude/rw-gfx-rebar (PR #1152: https://github.com/mlococo88/All-Structural/pull/1152) (RWRB) — Analysis diagram: the reinforcement drawn from the Drawings' bar model (bars in the section as lines at their extents, bars along the wall as dots), labels in columns with leaders   [display only; no result change]
 - **Why:** engineer, 2026-11-07: "The analysis diagram tab doesn't show the rebar correctly, please review."
 - **Before (`buildCrossSection`, block `// ── REINFORCING BARS`):**
   - the orientation was reversed: F1 (heel top) and F2 (toe bottom), which run in the plane of the section, were rows of dots;

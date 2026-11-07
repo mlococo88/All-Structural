@@ -230,3 +230,15 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
   "W_f = 30.00 kips". `text(doc, { legacy: true })`: exactly as before (used by the tools that compare it with their tabs).
 - Verified: `node tests/engine/run.mjs` (steps-totext: a model through `text()` with and without `legacy`); headless comparison of every
   consumer (PR).
+
+## 2026-11-07 — PR: fix/steps-fallback-html (PR #1145: https://github.com/mlococo88/All-Structural/pull/1145) — `$…$` in titles, notes and cells: TeX beyond the subset readable (TXH; display only; no change to this file)
+- **Where:** no code change in `shared/report.js`. `rich()` sets `$…$` with `lite()`, which always calls `SharedSteps.toHTML` with
+  `window.katex` hidden (the built-in renderer, also when the page has KaTeX). That renderer now converts the commands outside the
+  README subset (TXH, `fixlog/shared-steps.md`), so a report title, note, caption, kv row or table cell such as `$\mathrm{DCR} \leq 1$`
+  shows `DCR ≤ 1` instead of `mathrmDCR leq 1`, and `$\tfrac{1}{2}\varphi$` a stacked ½ and φ instead of `tfrac12varphi`.
+  With KaTeX not loaded, the worked steps (`line()`) and topic summaries of the Report use the same renderer.
+- `text(doc, o)` (plain text, TXP) and `text(doc, { legacy: true })` are unchanged.
+- **Check case:** `SharedReport.html(doc)` of a model with sub title `Cell $\mathrm{DCR} \leq 1$`: before `Cell mathrmDCR leq 1`; after `Cell DCR ≤ 1`
+  (`tests/engine/steps-tohtml.test.mjs`). In the default projects of the 21 consumers no `$…$` title / cell uses such a command, so with
+  KaTeX loaded every Report is byte-identical to origin/main (PR).
+- **Consumers (CLAUDE.md §3):** the 21 tools listed in `fixlog/shared-steps.md`.

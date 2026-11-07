@@ -76,12 +76,11 @@ test('toText: the README subset renders as before (frac, bar, text, sum, minus, 
   assert.equal(T(R`\max(a, b)`), 'max(a, b)');
 });
 
-test('toHTML (built-in renderer) is unchanged by the plain-text converter: commands outside the subset keep their old output', () => {
-  // the HTML path is not touched (TXP is plain text only); these are the outputs before the change
-  assert.equal(S.toHTML(R`W_f = 30.00\;\mathrm{kips}`), 'W<sub>f</sub> = 30.00&thinsp;mathrmkips');
-  assert.equal(S.toHTML(R`\tfrac{B}{2}`), 'tfracB2');
+test('toHTML (built-in renderer): the subset unchanged by the plain-text converter; commands outside it now in HTML (TXH, steps-tohtml.test.mjs)', () => {
+  // TXP was plain text only; since TXH (2026-11-07) the built-in HTML path converts the same commands (see steps-tohtml.test.mjs)
+  assert.equal(S.toHTML(R`W_f = 30.00\;\mathrm{kips}`), 'W<sub>f</sub> = 30.00&thinsp;kips');
   assert.equal(S.toHTML(R`\frac{a}{b}`), '<span class="st-frac"><span class="st-num">a</span><span class="st-den">b</span></span>');
-  assert.equal(S.toHTML(R`a \& b`), 'a & b');
+  assert.equal(S.toHTML(R`a \& b`), 'a &amp; b');
 });
 
 test('line(step, false): a step in the tool notation reads as text; the value and its digits are unchanged', () => {
