@@ -5488,7 +5488,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open items:** L1, L4, L7 of the review are not changed (L1 conservative; L4 reading stated in the step; L7 = open item N1).
 
-## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
 ### Where
 - the worked-equation step notes ("where …", `$…$` as text). Anchor text: `legacy` next to the call below.
 - Before: `'+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};`

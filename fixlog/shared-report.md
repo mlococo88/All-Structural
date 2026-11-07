@@ -222,7 +222,7 @@ Loaded by: `apps/steel-bridge/index.html` (Report tab, `ui/report.js`). Tests: `
   - Ctrl+P with every section collapsed gives the same pages as the button (134, 144), and the sections stay collapsed.
   - BSL pp. 67–68 and Stone Arch pp. 15 and 43 were checked by eye.
 
-## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — `text(doc, opt)`: readable equation notation (TXP; display only)
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — `text(doc, opt)`: readable equation notation (TXP; display only)
 - `text(doc)` → `text(doc, o)`; `rich(doc, s, html)` → `rich(doc, s, html, o)`; `noteOf(doc, it, t, html)` → `noteOf(doc, it, t, html, o)`;
   in `rich`: `ST().toText(p.slice(1, -1))` → `ST().toText(p.slice(1, -1), o)`; in `text`: `ST().line(st, false)` → `ST().line(st, false, o)`,
   `ST().summary(t, false)` → `SM(t)` (`SM = t => ST().summary(t, false, o)`). The HTML path is unchanged.

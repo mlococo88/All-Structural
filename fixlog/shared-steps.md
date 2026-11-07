@@ -7,7 +7,7 @@ Loaded by (2026-11-07): `ASCE7-16 Load Generator.html`, `Pile Designer.html`, `P
 `BasePlateAnchorDesigner.html`, `Moving Load Generator.html`, `Spread Footing.html`, `Steel Beam Design - AISC 15th.html`.
 Tests: `node tests/engine/run.mjs` (steps, steps-totext, tex, report, …).
 
-## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — plain-text report: TeX beyond the subset reads as text (TXP; display only)
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — plain-text report: TeX beyond the subset reads as text (TXP; display only)
 ### Where
 - `render(src, html)`, plain-text path only (`html === false`, i.e. `toText()`, `line(step, false)`, `summary(t, false)`, and so
   `SharedReport.text()`). Anchor text: `/* TXP (2026-11-07): the plain-text path only`.

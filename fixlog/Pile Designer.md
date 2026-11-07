@@ -20152,7 +20152,7 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
   - `check-syntax` for the three tools: pass. 0 console errors.
 - **Saved data:** no key or format change on the sender. The receivers' records keep their format (the imported values are smaller).
 
-## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
 ### Where
 - `pdrRest` (the hidden PrintReport harvest: which tables / notes are added to the Report). Anchor text: `legacy` next to the call below.
 - Before: `let txt = ""; try { txt = SharedReport.text(SharedReport.build(M)); } catch (e) { txt = JSON.stringify(M); }`

@@ -3518,7 +3518,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - `check-syntax` passes.
   - Headless probe, main vs branch: 0 value differences.
   - The note shows for Pipe20XS (Section and Properties tabs) and in the Method tab. 0 console errors.
-## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
 ### Where
 - the Report harvest (which tab content is added to the Report). Anchor text: `legacy` next to the call below.
 - Before: `let txt = ''; try { txt = SharedReport.text(SharedReport.build(model)); } catch (e) { return; }`

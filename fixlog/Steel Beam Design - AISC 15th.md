@@ -2933,7 +2933,7 @@ From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field ac
 - **How verified:** engine call (above); origin/main vs branch on 18 scenarios + v16 engine cases: identical (option off). With the option on (60 ft built-up girder, a = 90 in, UDL) the end panel governs and the Shear Vₓ value is unchanged; only its detail (end panel, x) is added. V_x tab: 0 KaTeX errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam: pass. list-input sbeam: its differences are those already merged earlier today (minor-axis case label, J10.4 and Validation text); nothing from this change. 0 console errors.
 - **Saved data:** new optional field `design.stiff.tfa` (absent = off). No key changed.
 
-## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
 ### Where
 - the worked-equation step notes ("where …", `$…$` as text). Anchor text: `legacy` next to the call below.
 - Before: `'+vars.join('; ').replace(/\$([^$]+)\$/g,(m,t)=>SharedSteps.toText(t))).replace(/\u00A7(?=[A-Za-z])/g,'\u00A7\u2060'):''};   /* a code section "§G2.1" is not a step reference (shared/report.js reads "§<id>" in notes) */`

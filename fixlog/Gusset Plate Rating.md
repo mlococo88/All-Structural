@@ -3293,7 +3293,7 @@ From the code-compliance review of 2026-11-07 (LOW findings L3 to L7).
 - **How verified:** `node tests/check-syntax.mjs` passes; no tool HTML file changed (`git diff --stat`: `ENGINEER_CHECKS.md`, `tools.html`, this log).
 - **Saved data:** no change.
 
-## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
 ### Where
 - the worked-equation step labels of the shared Report (`$…$` in a label as text). Anchor text: `legacy` next to the call below.
 - Before: `id(lab), label: (lab.replace(/\$[^$]*\$/g, m => SharedSteps.toText(m.slice(1, -1))) || 'Equation') + (lines.length > 1 ? ` (${k + 1} of ${lines.length})` : ''), sym: tx, eq: '', sub: '', value: null, unit: '', ref: k ? '' : ref })`

@@ -5280,7 +5280,7 @@ Frame: Beam Capacity (`suite-frame-capacity`). Open item of CBM3 (#1001), review
 - **How verified:** headless main vs branch, all probe cases: every computed result identical. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** no change.
 
-## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
 ### Where
 - `rxRest` and the CBRF move (which tab content is added to the combined Report). Anchor text: `legacy` next to the call below.
 - Before: `var txt=''; try{ txt=SharedReport.text(SharedReport.build(M)); }catch(e){ return; }`

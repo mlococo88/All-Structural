@@ -4008,7 +4008,7 @@ the inner border (0.25 in from the page edge, 0.375 in on the left) is the visib
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
 ### Where
 - `engine/sheets.js` `plain()` (check titles on the drawing sheets). Anchor text: `legacy` next to the call below.
 - Before: `oText ? String(s || '').replace(/\$([^$]*)\$/g, (m, q) => S.toText(q)) : String(s || ''); return t.replace(/\$/g, ''); };`

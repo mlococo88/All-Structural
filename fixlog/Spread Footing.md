@@ -6537,7 +6537,7 @@ index 50f3837..c2d5000 100644
   - spread-footing-nobear: pass.
   - start-chooser: 68/68 on re-run; the first run under load had 2 failures in the list order, which looks like load flakiness, with the app unchanged.
   - project-library `--tool spreadfooting`: ALL PASS.
-## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
 ### Where
 - `sfxApply` and `sfrfMove` (which tab content is added to / moved in the Report). Anchor text: `legacy` next to the call below.
 - Before: `let txt='';try{txt=SharedReport.text(SharedReport.build(model));}catch(e){return model;}`

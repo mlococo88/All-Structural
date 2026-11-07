@@ -4475,7 +4475,7 @@ function NumberListInput({value, onChange, placeholder, label, col = 'Value', un
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** the same change in the other two Bridge Suite pages (index.html, lldf.html, Prestressed Bridge Design.html) and `shared/bridge-suite-projects.js` (one PR). **Open items:** none.
 
-## 2026-11-07 — PR: fix/report-plaintext-tex (PR: PR_LINK) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
+## 2026-11-07 — PR: fix/report-plaintext-tex (PR #1138: https://github.com/mlococo88/All-Structural/pull/1138) — the plain text this tool compares keeps its pre-TXP form (shared/steps.js TXP; no change on screen or in print)
 ### Where
 - the Report step harvest (`rep=SharedReport.text(...)`: which tab content is added to the Report). Anchor text: `legacy` next to the call below.
 - Before: `try{ rep=SharedReport.text(SharedReport.build(M)); }catch(e){ return M; }`
