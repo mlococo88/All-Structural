@@ -216,3 +216,7 @@ Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clea
 - Done: RW stem projection #1150/#1155, RW display #1160, abutment bottom mat #1158, SF P–M fix #1159 + views/3D #1161, SF Wall tab #1162 + out-of-plane #1163.
 - Container restart ~17:30: relaunched SF Wall Design (b_eff per 11.2.3.1 + 45° spread, in-plane, graphics) from branch claude/sf-wall-inplane; SF long-notes → bullets from claude/sf-notes-split (+ survey of other tools).
 - Open questions to engineer: pedestal torsion; abutment toe strut-and-tie with V_u=0; left summary panel in other apps; tool-specific raw TeX when CDN blocked; RW heel wedge thickness (conservative, left).
+
+## Check-in 2026-11-07 19:21 UTC (2:21 PM ET)
+- Merged: SF torsion #1164, wall b_eff #1165, wall in-plane #1166, long notes #1167, wall graphics #1168.
+- Running: SF Wall Design final piece (wall notes). Then: fix garbled J_c note (awaiting engineer wording), pick next tools for note cleanup (survey in scratchpad/nl/survey.json), Base Plate literal <b> tags.
