@@ -1535,7 +1535,7 @@ function transDisp(w,n,c,cap){
 - all 14 tabs with 0 console errors on the default and the 20/4 case; the new panels appear in the Report.
 - **Saved data:** one new field `mu` in the project file (old files open on 0.6); no key changed.
 
-## 2026-11-07 — PR: claude/sa-mechanism — Four-hinge collapse mechanism cross-check (MECH; review S-1; advisory)
+## 2026-11-07 — PR #1124: https://github.com/mlococo88/All-Structural/pull/1124 — Four-hinge collapse mechanism cross-check (MECH; review S-1; advisory)
 
 ### MECH-1. Mechanism load factor λ for every vehicle, beside the elastic rating   [§4: new advisory check; no rating factor changes]
 - **Problem (review S-1):** the tool had no collapse-mechanism or thrust-line limit analysis. That check is independent of the elastic mesh, and commercial programs report it.
