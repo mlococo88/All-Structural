@@ -2408,6 +2408,34 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Saved data:** none.
 - **Open items (not changed):** (1) IBC sign mode, rectangular post: the post drag (`signWind`, exposed clearance height) uses B for every azimuth; at edge-on wind (90°/270°, panel force 0) the depth face is loaded. Decision (pending engineer review): left as is in this PR (small, edge-on post drag only). (2) Mast ice weight on a rectangular pole uses a round of diameter B.
 
+## 2026-11-07 — PR: claude/lp-left-breakpoint (PR #991: https://github.com/mlococo88/All-Structural/pull/991) — Check summary panel as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (LPLB; display only, no result change)
+
+### LPLB. The check summary is on the left at common laptop widths   [display only]
+- **Decision (pending engineer review):** the engineer asked (2026-11-07, for the Retaining Wall Designer) for "the summary cards … on the left panel", most likely at a laptop width below 1500 px, where LPDC (#747) put the panel above the output tabs. The left column now starts at **1200 px** in Light Pole and Sign Post, Retaining Wall Designer (RWLB, #984) and Spread Footing (SFLB, #988) alike. From 1200 to 1499 px it is **240 px** wide and the input panel is 33 % of the rest; at 1500 px and wider 292 px as before (layout and panel widths unchanged there). Below 1200 px nothing changes (panel above the output tabs; phone layout). Same collapse button (« / » → 42 px strip) and key `lpp_dashCollapsed_v1`.
+- **Output panel with the column open:** 643 px at 1200 px, 697 at 1280, 777 at 1400 (the tool already works at 670 px, a 1000 px window): no output tab is cut off or scrolls the page sideways (measured on all nine tabs at 1200, 1280, 1400).
+- **Where:**
+  - CSS: `  @media screen and (min-width:1500px){` (anchor `.wrap{max-width:1792px}`) → `  @media screen and (min-width:1200px){` with a comment `/* LPLB … */` above; after that block, added:
+```css
+  @media screen and (min-width:1200px) and (max-width:1499.98px){   /* LPLB */
+    body.lppDashWide #lppDashCol{flex-basis:240px;width:240px}
+    body.lppDashWide .grid2 .col-in{flex-basis:calc((100% - 240px)*.33);max-width:calc((100% - 240px)*.33)}
+    body.lppDashWide.lppDashColl #lppDashCol{flex-basis:42px;width:42px}
+    body.lppDashWide.lppDashColl .grid2 .col-in{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
+  }
+```
+  - JS: `const LPDC={key:'lpp_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,…` → `'screen and (min-width:1200px)'` (comment `/* LPLB: was 1500px */`).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: all cases identical (results, cable values, every output tab's text, drawings; 0 console errors); its readouts are taken at 1280 px, where the column is now open. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px. Screenshots before / after at 1200, 1280, 1400 and after at 1920, 768, 390 looked at. Tests: check-syntax; phone-layout lp 390/768; project-library lightpole.
+- **Open item:** the User Manual's "Check summary panel" paragraph still says "On screens 1500 px and wider it is a column on the left"; left unchanged so the Manual tab text stays identical in the comparison. A one-line wording update can follow.
+
+## 2026-11-07 — PR: claude/lp-manual-1200 (PR #994: https://github.com/mlococo88/All-Structural/pull/994) — User Manual: the check summary column starts at 1200 px (LPLB follow-up; text only, no result change)
+- **Why:** open item of LPLB (#991): the Manual still said the column starts at 1500 px.
+- **Where:** User Manual, paragraph `<b>Check summary panel</b> (2026-11-03): …` (anchor `On screens 1500 px and wider it is a column on the left`).
+  - Before: `On screens 1500 px and wider it is a column on the left (« shrinks it to a strip)`
+  - After: `On screens 1200 px and wider it is a column on the left (« shrinks it to a strip)`
+- **Formulas, factors, units, code references:** none (§4 does not apply). **Saved data:** unchanged.
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main`: ALL CASES IDENTICAL (23 cases; it does not read the Manual tab); the only diff is the one sentence; check-syntax passes.
+
 ## 2026-11-07 — PR: claude/lp-h4-lts-shaft-checks (LPH4 + LPM7: the drilled-shaft checks in the LRFDLTS Summary / check panel / report; the manual-cage tie size and shear spacing in the IBC Summary)   [pass/fail reporting; no computed value changes; cable values identical]
 - **Problem (review H4, M7, 2026-11-07):**
   - H4: in LRFDLTS mode the Summary card (`ltsCalc()`, "LRFDLTS summary"), the check panel (`lppDashItems()`, LTS branch) and the LTS report listed the member, deflection, base plate, weld, Broms L, anchors, fatigue and breakaway, but **no** shaft reinforcement check (ACI 318-19 P–M, shear, min / max steel, clear spacing, ties) and no torsion threshold. A failing shaft was visible only on the Shaft tab.

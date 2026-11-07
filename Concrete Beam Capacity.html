@@ -1463,6 +1463,30 @@ function cbcMin5633(svc,Mu,phiMn){
   const M133=Math.abs(Mu)>0?1.33*Math.abs(Mu):Infinity, need=Math.min(McrF,M133);
   return {g1,g3,McrF,M133,need,dcr:phiMn>0?need/phiMn:Infinity,ok:phiMn>=need-1e-9};
 }
+/* CBH1 (2026-11-07): AASHTO LRFD 10th Ed. 5.7.2.1 torsion threshold. The tool does not design AASHTO torsion; it checks
+   whether torsion may be neglected: T_u <= 0.25 phi T_cr (Eq. 5.7.2.1-3), T_cr = 0.126 K lambda sqrt(f'c) A_cp^2/p_c
+   (Eq. 5.7.2.1-4, solid section; K = 1.0 without prestress, Eq. 5.7.2.1-6; f'c <= 10 ksi for torsion, 5.7.2.1),
+   phi = 0.90 (5.5.4.2). A_cp and p_c from b_w x h (the flange is ignored, as in the ACI module: smaller T_cr, conservative).
+   Above the threshold the combination FAILs (&quot;torsion must be considered&quot;); torsion is never silently ignored. */
+function cbcTorA(Tu_kft){
+  const {bw,h}=S.sec, fcT=Math.min(S.mat.fc,10), lam=S.mat.lambda, K=1.0, phi=0.90;
+  const Acp=bw*h, pc=2*(bw+h);
+  const Tcr=0.126*K*lam*Math.sqrt(fcT)*Acp*Acp/pc;   /* kip-in */
+  const thr=0.25*phi*Tcr;                            /* kip-in */
+  const Tu=Math.abs(Tu_kft||0)*12;                   /* kip-in */
+  return {bw,h,fcT,lam,K,phi,Acp,pc,Tcr,thr,Tu,consider:Tu>thr+1e-9,dcr:thr>0?Tu/thr:(Tu>0?Infinity:0)};
+}
+/* CBM2 (2026-11-07): AASHTO LRFD 10th Ed. 5.7.3.5 longitudinal reinforcement, Eq. 5.7.3.5-1 (no prestress, N_u = 0):
+   A_s f_y >= |M_u|/(d_v phi_f) + (|V_u|/phi_v - 0.5 V_s) cot(theta), V_s not over |V_u|/phi_v. A_s = tension steel of the
+   combination's sense (all of it taken as fully developed at the section), phi_f = the combination's flexural phi,
+   d_v, theta, V_s and phi_v from shear(). Sections with torsion: 5.7.3.6.3 (not implemented; the 5.7.2.1 check FAILs). */
+function cbcLonA(F,sh,pf,Mu,Vu){
+  const fy=S.mat.fy, phif=pf.phi, phiv=sh.phi, dv=sh.dv, th=sh.theta, cot=1/Math.tan(th*Math.PI/180);
+  const M=Math.abs(Mu)*12, V=Math.abs(Vu), VsCap=V/phiv, VsUse=Math.min(sh.Vs,VsCap);
+  const tM=(dv>0&amp;&amp;phif>0)?M/(dv*phif):0, tV=Math.max(0,V/phiv-0.5*VsUse)*cot;
+  const dem=tM+tV, cap=F.As*fy;
+  return {fy,phif,phiv,dv,th,cot,M,V,Vs:sh.Vs,VsCap,VsUse,tM,tV,dem,As:F.As,cap,dcr:cap>0?dem/cap:(dem>0?Infinity:0)};
+}
 function computeAll(){
   const combos=S.combos.map((c,i)=>({...c,ci:i}));
   /* Sign of the governing moment sets which face is in tension. A negative
@@ -1475,6 +1499,8 @@ function computeAll(){
     const sh=shear(F,Math.abs(c.Mu),Math.abs(c.Vu));
     const tor=torsion(F,Math.abs(c.Tu),Math.abs(c.Vu),sh);
     const svc=servicecalc(F,neg);
+    const lonA=(S.code==='AASHTO')?cbcLonA(F,sh,pf,c.Mu,c.Vu):null;   /* CBM2 */
+    const torA=(S.code==='AASHTO')?cbcTorA(c.Tu):null;   /* CBH1 */
     const mr=(S.code==='AASHTO')?cbcMin5633(svc,c.Mu,phiMn):null;   /* CBM1 */
     const dcM=phiMn>0?Math.abs(c.Mu)/phiMn:0;
     const dcV=sh.phiVn>0?Math.abs(c.Vu)/sh.phiVn:0;
@@ -1512,7 +1538,7 @@ function computeAll(){
       else if(!isFinite(ratio)) detWorst=Math.max(detWorst,1.01);
     });
     const worst=Math.max(dcM,dcV_eff,dcT,detWorst);
-    return {...c,neg,F,pf,phiMn,sh,tor,svc,...(mr?{mr}:{}),dcM,dcV,dcT,det,share,dcV_eff,
+    return {...c,neg,F,pf,phiMn,sh,tor,svc,...(lonA?{lonA}:{}),...(torA?{torA}:{}),...(mr?{mr}:{}),dcM,dcV,dcT,det,share,dcV_eff,
             detWorst,detFails,worst};
   });
   /* §7.2 identical-result detection: exact match on the factored action set */
@@ -1603,8 +1629,11 @@ function validate(){
   const allZero=S.combos.every(c=>!c.Mu&amp;&amp;!c.Vu&amp;&amp;!c.Tu);
   if(allZero) W.push({code:&quot;Loads&quot;,msg:&quot;All factored actions are zero. Capacities are reported, but no demand/capacity ratio is meaningful.&quot;});
   /* torsion */
-  if(S.tor.present &amp;&amp; S.code==='AASHTO')
-    N.push({code:&quot;Scope&quot;,msg:&quot;The torsion module implements ACI 318-19 Ch. 22.7 only. It is hidden while AASHTO is selected.&quot;});
+  if(S.code==='AASHTO'){   /* CBH1 */
+    N.push({code:&quot;AASHTO 5.7.2.1&quot;,msg:&quot;AASHTO torsion: the tool checks the 5.7.2.1 threshold T_u \u2264 0.25\u03c6T_cr for every combination (Shear tab). Torsion design to 5.7.3.6 is not implemented; a combination above the threshold is reported FAIL.&quot;});
+    const big=S.combos.filter(c=>cbcTorA(c.Tu).consider).map(c=>c.name);
+    if(big.length) W.push({code:&quot;AASHTO 5.7.2.1&quot;,msg:&quot;T_u exceeds 0.25\u03c6T_cr in &quot;+big.join(&quot;, &quot;)+&quot;: torsion must be considered, and this tool does not design AASHTO torsion. Those combinations are reported FAIL (Shear tab, Torsion Threshold).&quot;});
+  }
   if(S.tor.present &amp;&amp; S.code==='ACI' &amp;&amp; S.tor.Al>0){
     const flexTot=S.layers.reduce((a,L)=>a+L.n*REBAR[L.size].a,0);
     if(Math.abs(S.tor.Al-flexTot)<0.01)
@@ -1732,6 +1761,8 @@ function cbcWorkedIn(parent,items){   /* items: [{tab, c:{card,name}, txt}] */
 function cbcCheckCard(c){
   if(!c||c.na) return null;
   if(c.tab===&quot;tabFlex&quot;) return cbcComboCard(&quot;flexC&quot;,c.ci);
+  if(c.id===&quot;torA&quot;) return {card:&quot;shTorA&quot;,name:&quot;Torsion Threshold (AASHTO 5.7.2.1)&quot;};   /* CBH1 */
+  if(c.id===&quot;lonA&quot;) return {card:&quot;shLonA&quot;,name:&quot;Longitudinal Reinforcement (AASHTO 5.7.3.5)&quot;};   /* CBM2 */
   if(c.tab===&quot;tabShear&quot;) return cbcComboCard(&quot;shC&quot;,c.ci);
   if(c.tab===&quot;tabTor&quot;) return cbcComboCard(&quot;torC&quot;,c.ci);
   if(c.tab===&quot;tabServ&quot;) return S.code==='AASHTO'?{card:&quot;svcMinAll&quot;,name:&quot;Minimum Reinforcement \u2014 Every Combination&quot;}:{card:&quot;svcMain&quot;,name:&quot;Cracking Moment and Minimum Reinforcement&quot;};   /* CBM1 */
@@ -2034,14 +2065,14 @@ function buildInput(){
     b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Enter factored actions for each combination. Every combination is worked in full in the output.&quot;));
     const t=el(&quot;table&quot;,&quot;cbT&quot;);
     t.innerHTML=&quot;<tr><th>Name</th><th>M_u (k-ft)</th><th>V_u (kip)</th>&quot;+
-      (S.tor.present&amp;&amp;S.code==='ACI'?&quot;<th>T_u (k-ft)</th>&quot;:&quot;&quot;)+&quot;<th></th></tr>&quot;;
+      ((S.tor.present&amp;&amp;S.code==='ACI')||S.code==='AASHTO'?&quot;<th>T_u (k-ft)</th>&quot;:&quot;&quot;)+&quot;<th></th></tr>&quot;;   /* CBH1: T_u shown in AASHTO mode */
     S.combos.forEach((c,i)=>{
       const tr=el(&quot;tr&quot;);
       const c0=el(&quot;td&quot;); const nm=tag(el(&quot;input&quot;,&quot;nm&quot;),&quot;cn&quot;+i); nm.type=&quot;text&quot;; nm.value=c.name;
       nm.addEventListener(&quot;input&quot;,()=>{ c.name=nm.value; refresh(); }); c0.appendChild(nm); tr.appendChild(c0);
       const c1=el(&quot;td&quot;); c1.appendChild(numIn(()=>c.Mu,v=>c.Mu=v,&quot;1&quot;,&quot;cM&quot;+i)); tr.appendChild(c1);
       const c2=el(&quot;td&quot;); c2.appendChild(numIn(()=>c.Vu,v=>c.Vu=v,&quot;1&quot;,&quot;cV&quot;+i)); tr.appendChild(c2);
-      if(S.tor.present&amp;&amp;S.code==='ACI'){
+      if((S.tor.present&amp;&amp;S.code==='ACI')||S.code==='AASHTO'){
         const c3=el(&quot;td&quot;); c3.appendChild(numIn(()=>c.Tu,v=>c.Tu=v,&quot;0.5&quot;,&quot;cT&quot;+i)); tr.appendChild(c3); }
       const c4=el(&quot;td&quot;,&quot;x&quot;); const rm=el(&quot;button&quot;,null,&quot;\u00d7&quot;); rm.title=&quot;Remove&quot;;
       rm.addEventListener(&quot;click&quot;,()=>{ if(S.combos.length>1){S.combos.splice(i,1);refresh();} });
@@ -2295,6 +2326,15 @@ function allChecks(){
   env(&quot;Shear capacity&quot;+(CC.combos.some(r=>r.share)?&quot; (after torsion demand)&quot;:&quot;&quot;),
     S.code==='ACI'?&quot;ACI 22.5&quot;:&quot;AASHTO 5.7.3&quot;,
     r=>({dcr:r.dcV_eff,na:Math.abs(r.Vu)<1e-9}),&quot;tabShear&quot;);
+  if(S.code==='AASHTO'){   /* CBH1: 5.7.2.1 torsion threshold; above it the combination FAILs (AASHTO torsion design is not implemented) */
+    env(&quot;Torsion threshold, T_u \u2264 0.25\u03c6T_cr (above: torsion must be considered; not designed by this tool)&quot;,&quot;AASHTO 5.7.2.1&quot;,
+      r=>(r.torA&amp;&amp;r.torA.Tu>0)?{dcr:r.torA.dcr,na:false}:{na:true},&quot;tabShear&quot;);
+    out[out.length-1].id=&quot;torA&quot;;
+    /* CBM2: 5.7.3.5 longitudinal reinforcement (shear-moment interaction), every combination */
+    env(&quot;Longitudinal reinforcement for moment and shear&quot;,&quot;AASHTO 5.7.3.5&quot;,
+      r=>(r.lonA&amp;&amp;(Math.abs(r.Mu)>1e-9||Math.abs(r.Vu)>1e-9))?{dcr:r.lonA.dcr,na:false}:{na:true},&quot;tabShear&quot;);
+    out[out.length-1].id=&quot;lonA&quot;;
+  }
   if(S.tor.present&amp;&amp;S.code==='ACI'){
     env(&quot;Torsional capacity&quot;,&quot;ACI 22.7.6.1&quot;,r=>{
       if(!r.tor) return {na:true};
@@ -2729,6 +2769,40 @@ function workFlexure(b,r){
 
 /* ---------------- SHEAR tab ---------------- */
 function buildShearTab(pg){
+  if(S.code==='AASHTO'){   /* CBH1 (2026-11-07): AASHTO 5.7.2.1 torsion threshold, every combination */
+    mkSection(&quot;shTorA&quot;,&quot;Torsion Threshold (AASHTO 5.7.2.1)&quot;,b=>{
+      const t0=CC.combos[0].torA, any=CC.combos.some(r=>r.torA&amp;&amp;r.torA.consider);
+      b.appendChild(eqBlock({
+        title:&quot;Torsional cracking moment, solid section&quot;,ref:&quot;AASHTO 5.7.2.1, Eq. 5.7.2.1-4&quot;,
+        lines:[`A_{cp} = b_w h = (${fmt(t0.bw)})(${fmt(t0.h)}) = ${fmt(t0.Acp,1)}\\text{ in}^2,\\qquad p_c = 2(b_w+h) = ${fmt(t0.pc,1)}\\text{ in}`,
+          `T_{cr} = 0.126K\\lambda\\sqrt{f'_c}\\dfrac{A_{cp}^2}{p_c} = 0.126(${fmt(t0.K,2)})(${fmt(t0.lam,2)})\\sqrt{${fmt(t0.fcT)}}\\dfrac{(${fmt(t0.Acp,1)})^2}{${fmt(t0.pc,1)}} = ${fmt(t0.Tcr,1)}\\text{ k-in}`,
+          `0.25\\phi T_{cr} = 0.25(${fmt(t0.phi,2)})(${fmt(t0.Tcr,1)}) = ${fmt(t0.thr,1)}\\text{ k-in} = ${fmt(t0.thr/12)}\\text{ k-ft}`],
+        vars:[[&quot;K&quot;,&quot;1.0: no prestress (Eq. 5.7.2.1-6)&quot;,fmt(t0.K,2),&quot;&quot;],[&quot;f'_c&quot;,&quot;Limited to 10 ksi for torsion (5.7.2.1)&quot;,fmt(t0.fcT),&quot;ksi&quot;],
+              [&quot;\\phi&quot;,&quot;Torsion, reinforced concrete (5.5.4.2)&quot;,fmt(t0.phi,2),&quot;&quot;]]
+      }));
+      b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;A_cp and p_c are taken from the web, b_w \u00d7 h (any flange ignored: smaller T_cr, conservative). The threshold of Eq. 5.7.2.1-3 decides whether torsion may be neglected.&quot;));
+      CC.combos.forEach(r=>{ const T=r.torA; if(!T) return;
+        b.appendChild(eqBlock({title:&quot;Combination &quot;+(r.ci+1)+&quot; (&quot;+r.name+&quot;)&quot;,ref:&quot;AASHTO 5.7.2.1, Eq. 5.7.2.1-3&quot;,
+          lines:[`T_u = ${fmt(T.Tu/12)}\\text{ k-ft} = ${fmt(T.Tu,1)}\\text{ k-in} \\;${T.consider?&quot;>&quot;:&quot;\\le&quot;}\\; 0.25\\phi T_{cr} = ${fmt(T.thr,1)}\\text{ k-in}\\qquad T_u/(0.25\\phi T_{cr}) = ${isFinite(T.dcr)?fmt(T.dcr,3):&quot;\\infty&quot;}`]}));
+        if(T.consider){ const w=el(&quot;div&quot;,&quot;errBox&quot;); w.innerHTML=&quot;<b>FAIL \u2014 torsion must be considered</b> (AASHTO 5.7.2.1).&quot;;
+          w.appendChild(document.createTextNode(&quot; This tool does not design AASHTO torsion (5.7.3.6): the shear, longitudinal-steel and flexure results ignore it. Design for combined shear and torsion separately, or reduce T_u where the torsion is compatibility torsion and redistribution is accounted for.&quot;));
+          b.appendChild(w); }
+      });
+      if(!any) b.appendChild(el(&quot;div&quot;,&quot;okBox&quot;,&quot;No combination exceeds the threshold: torsion may be neglected (5.7.2.1).&quot;));
+    },pg);
+    /* CBM2 (2026-11-07): AASHTO 5.7.3.5 longitudinal reinforcement, every combination */
+    mkSection(&quot;shLonA&quot;,&quot;Longitudinal Reinforcement (AASHTO 5.7.3.5)&quot;,b=>{
+      b.appendChild(el(&quot;div&quot;,&quot;note&quot;,&quot;Shear adds tension in the longitudinal reinforcement on the flexural tension side (Eq. 5.7.3.5-1, no prestress, N_u = 0). A_s is the tension steel of the combination's sense, taken as fully developed at the section; V_s is not taken greater than V_u/\u03c6_v. With torsion, 5.7.3.6.3 applies instead (not implemented: see Torsion Threshold).&quot;));
+      CC.combos.forEach(r=>{ const L=r.lonA; if(!L) return;
+        b.appendChild(eqBlock({title:&quot;Combination &quot;+(r.ci+1)+&quot; (&quot;+r.name+&quot;)&quot;,ref:&quot;AASHTO 5.7.3.5, Eq. 5.7.3.5-1&quot;,
+          lines:[`A_s f_y \\ge \\dfrac{|M_u|}{d_v\\phi_f} + \\left(\\dfrac{|V_u|}{\\phi_v} - 0.5V_s\\right)\\cot\\theta,\\qquad V_s \\le \\dfrac{|V_u|}{\\phi_v}`,
+            `V_s = \\min(${fmt(L.Vs)},\\;${fmt(L.V)}/${fmt(L.phiv,2)} = ${fmt(L.VsCap)}) = ${fmt(L.VsUse)}\\text{ kip}`,
+            `\\dfrac{${fmt(L.M,1)}}{(${fmt(L.dv)})(${fmt(L.phif,3)})} + \\left(${fmt(L.VsCap)} - 0.5(${fmt(L.VsUse)})\\right)\\cot(${fmt(L.th,2)}^\\circ) = ${fmt(L.tM,1)} + ${fmt(L.tV,1)} = ${fmt(L.dem,1)}\\text{ kip}`,
+            `A_s f_y = (${fmt(L.As,3)})(${fmt(L.fy)}) = ${fmt(L.cap,1)}\\text{ kip} \\;${L.dcr<=1?&quot;\\ge&quot;:&quot;<&quot;}\\; ${fmt(L.dem,1)}\\text{ kip}\\qquad D/C = ${isFinite(L.dcr)?fmt(L.dcr,3):&quot;\\infty&quot;}`]}));
+        cbcWorkedIn(b,[{tab:&quot;tabShear&quot;,c:cbcComboCard(&quot;shC&quot;,r.ci),txt:&quot;d_v, \u03b8, V_s&quot;},{tab:&quot;tabFlex&quot;,c:cbcComboCard(&quot;flexC&quot;,r.ci),txt:&quot;\u03c6_f&quot;}]);
+      });
+    },pg);
+  }
   mkSection(&quot;shAll&quot;,&quot;Shear Results — All Combinations&quot;,b=>{
     const t=el(&quot;table&quot;,&quot;rt&quot;);
     const A=S.code==='AASHTO';
@@ -5085,7 +5159,7 @@ function cbcRptModel(){
   }
   /* 2. summary of checks */
   { const K=allChecks(), keyOf=c=>{ if(c.na||c.ci==null) return undefined;
-      if(c.tab==='tabFlex') return 'fx'+c.ci+'/DCR'; if(c.tab==='tabShear') return CC.combos[c.ci].share?'sh'+c.ci+'/DCRs':'sh'+c.ci+'/DCR';
+      if(c.tab==='tabFlex') return 'fx'+c.ci+'/DCR'; if(c.id==='torA') return 'tth/Tu'+c.ci; if(c.id==='lonA') return 'lon/dc'+c.ci; if(c.tab==='tabShear') return CC.combos[c.ci].share?'sh'+c.ci+'/DCRs':'sh'+c.ci+'/DCR';
       if(c.tab==='tabTor') return /cross/i.test(c.label)?'tq'+c.ci+'/size':(/Combined/.test(c.label)?'tq'+c.ci+'/combVT':'tq'+c.ci+'/DCR');
       if(c.tab==='tabServ') return c.ci!=null?'svm/minr'+c.ci:'sv/minr';   /* CBM1: the combination that governs 5.6.3.3 */ if(c.tab==='tabDetail') return 'dt/'+c.id+'.cmp'; };
     const st=c=>{ if(c.na) return {t:'N/A',cls:'na'}; const ok=c.forceOK!=null?c.forceOK:(c.dcr<=1.0001); return {t:ok?'PASS':'FAIL',cls:ok?(c.dcr>=0.9&amp;&amp;c.forceOK==null?'hi':'ok'):'ng'}; };
@@ -5102,6 +5176,28 @@ function cbcRptModel(){
     secs.push({title,subs}); };
   per('Flexure','fx',cbcRptFlex,'tabFlex',CC.govFlexIndex);
   per('Shear','sh',cbcRptShear,'tabShear',CC.govShearIndex);
+  if(!ACI){   /* CBH1 (2026-11-07): AASHTO 5.7.2.1 torsion threshold */
+    const t0=CC.combos[0].torA, st=[
+      cS({id:'Acp',label:'Area enclosed by the outside perimeter (web, b_w × h)',sym:'A_{cp}',eq:'b_w h',sub:'('+fmt(t0.bw)+')('+fmt(t0.h)+')',value:t0.Acp,unit:'in^{2}',d:1}),
+      cS({id:'pc',label:'Outside perimeter',sym:'p_{c}',eq:'2(b_w+h)',sub:'2('+fmt(t0.bw)+'+'+fmt(t0.h)+')',value:t0.pc,unit:'in',d:1}),
+      cS({id:'Tcr',label:'Torsional cracking moment (K = 1.0, f′c ≤ 10 ksi)',sym:'T_{cr}',eq:&quot;0.126K\\lambda\\sqrt{f'_c}\\dfrac{A_{cp}^2}{p_c}&quot;,sub:'0.126('+fmt(t0.K,2)+')('+fmt(t0.lam,2)+')\\sqrt{'+fmt(t0.fcT)+'}\\dfrac{('+fmt(t0.Acp,1)+')^2}{'+fmt(t0.pc,1)+'}',value:t0.Tcr,unit:'kip-in',d:1,ref:'AASHTO LRFD 10th Ed. Eq. 5.7.2.1-4'}),
+      cS({id:'thr',label:'Threshold (φ = 0.90, 5.5.4.2)',sym:'0.25\\phi T_{cr}',eq:'',sub:'0.25('+fmt(t0.phi,2)+')('+fmt(t0.Tcr,1)+')',value:t0.thr,unit:'kip-in',d:1,ref:'AASHTO LRFD 10th Ed. Eq. 5.7.2.1-3'})];
+    CC.combos.forEach(r=>{ const T=r.torA; if(!T) return;
+      st.push(cS({id:'Tu'+r.ci,label:cn(r)+': T_u against the threshold'+(T.consider?' — torsion must be considered; AASHTO torsion design is not implemented by this tool':''),sym:'T_{u}/(0.25\\phi T_{cr})',eq:'\\le 1',sub:'\\dfrac{'+fmt(T.Tu,1)+'}{'+fmt(T.thr,1)+'}',value:T.dcr,d:3,ok:!T.consider})); });
+    secs.push({title:'Torsion threshold (AASHTO 5.7.2.1)',subs:[{title:'Torsion threshold, every combination',items:[{type:'topics',scope:'tth',title:'Worked steps',list:[{title:'Torsion threshold',ref:'AASHTO LRFD 10th Ed. 5.7.2.1',steps:st}]},
+      {type:'note',text:'Torsion design to AASHTO 5.7.3.6 is not implemented: a combination above the threshold is reported FAIL. [[tab:tabShear|On screen: Shear tab]]'}]}]});
+    /* CBM2 (2026-11-07): AASHTO 5.7.3.5 longitudinal reinforcement */
+    const lst=[];
+    CC.combos.forEach(r=>{ const L=r.lonA; if(!L) return;
+      lst.push({title:cn(r),ref:'AASHTO LRFD 10th Ed. 5.7.3.5',steps:[
+        cS({id:'Vs'+r.ci,label:'V_s, not greater than |V_u|/φ_v',sym:'V_{s}',eq:'\\min(V_s,\\;|V_u|/\\phi_v)',sub:'\\min('+fmt(L.Vs)+',\\;'+fmt(L.V)+'/'+fmt(L.phiv,2)+')',value:L.VsUse,unit:'kip'}),
+        cS({id:'dem'+r.ci,label:'Tension demand on the longitudinal reinforcement (d_v, θ, V_s: Shear; φ_f: Flexure, this combination)',sym:'T_{req}',eq:'\\dfrac{|M_u|}{d_v\\phi_f} + \\left(\\dfrac{|V_u|}{\\phi_v} - 0.5V_s\\right)\\cot\\theta',
+          sub:'\\dfrac{'+fmt(L.M,1)+'}{('+fmt(L.dv)+')('+fmt(L.phif,3)+')} + ('+fmt(L.VsCap)+' - 0.5('+fmt(L.VsUse)+'))\\cot('+fmt(L.th,2)+'^\\circ)',value:L.dem,unit:'kip',d:1,ref:'AASHTO LRFD 10th Ed. Eq. 5.7.3.5-1'}),
+        cS({id:'cap'+r.ci,label:'Tensile capacity of the tension steel',sym:'A_{s}f_{y}',eq:'',sub:'('+fmt(L.As,3)+')('+fmt(L.fy)+')',value:L.cap,unit:'kip',d:1}),
+        cS({id:'dc'+r.ci,label:'Longitudinal reinforcement: demand / capacity',sym:'T_{req}/(A_s f_y)',eq:'\\le 1',sub:'\\dfrac{'+fmt(L.dem,1)+'}{'+fmt(L.cap,1)+'}',value:L.dcr,d:3,ok:L.dcr<=1+1e-9})]}); });
+    secs.push({title:'Longitudinal reinforcement (AASHTO 5.7.3.5)',subs:[{title:'Longitudinal reinforcement for moment and shear, every combination',items:[{type:'topics',scope:'lon',title:'Worked steps',list:lst},
+      {type:'note',text:'A_s taken as fully developed at the section; with torsion, 5.7.3.6.3 applies (not implemented). [[tab:tabShear|On screen: Shear tab]]'}]}]});
+  }
   if(S.tor.present&amp;&amp;ACI) per('Torsion','tq',r=>r.tor?cbcRptTor(r):[{type:'note',text:'Torsion is not enabled.'}],'tabTor',CC.govTorIndex);
   /* 6. serviceability (governing combination, as the tab) */
   { const g=CC.govRow, svc=g.svc, T=[], subs=[];
@@ -5155,7 +5251,7 @@ function cbcRptModel(){
   { const W=[].concat((V.blockers||[]).map(x=>({warn:true,text:'Blocker ('+x.code+'): '+x.msg})),(V.warnings||[]).map(x=>({warn:true,text:'Warning ('+x.code+'): '+x.msg})),(V.notes||[]).map(x=>({text:(x.code?x.code+': ':'')+x.msg})));
     if(W.length) secs.push({title:'Validation notices',subs:[{title:'Notices',items:W.map(w=>Object.assign({type:'note'},w,{text:String(w.text).replace(/<[^>]+>/g,'')}))}]});
   }
-  const keep=cbcRxFilter(secs,RX,{'Inputs':'tabInputEcho','Summary of checks':'tabSummary','Flexure':'tabFlex','Shear':'tabShear','Torsion':'tabTor','Serviceability':'tabServ','Detailing':'tabDetail','Validation notices':'tabValid'},RXO);   /* CBRX */
+  const keep=cbcRxFilter(secs,RX,{'Inputs':'tabInputEcho','Summary of checks':'tabSummary','Flexure':'tabFlex','Shear':'tabShear','Torsion threshold (AASHTO 5.7.2.1)':'tabShear','Longitudinal reinforcement (AASHTO 5.7.3.5)':'tabShear','Torsion':'tabTor','Serviceability':'tabServ','Detailing':'tabDetail','Validation notices':'tabValid'},RXO);   /* CBRX */
   return {title:'Beam Capacity',code:codeName,proj:P,refs:cbcRefs(document.getElementById('pageBody')||document.body),sections:keep};
 }
 
@@ -10494,6 +10590,8 @@ window.addEventListener('DOMContentLoaded',()=>{
       if(!msg) its.forEach(function(it,i){ var c=K[i]||{}, ks=[];
         if(!c.na&&c.ci!=null){ var ci=c.ci;
           if(c.tab==='tabFlex') ks=['fx'+ci+'/DCR'];
+          else if(c.id==='torA') ks=['tth/Tu'+ci];   /* CBH1 */
+          else if(c.id==='lonA') ks=['lon/dc'+ci];   /* CBM2 */
           else if(c.tab==='tabShear') ks=['sh'+ci+'/DCRs','sh'+ci+'/DCR'];
           else if(c.tab==='tabTor') ks=[/cross/i.test(c.label)?'tq'+ci+'/size':(/Combined/.test(c.label)?'tq'+ci+'/combVT':'tq'+ci+'/DCR')];
           else if(c.tab==='tabServ') ks=['svm/minr'+ci,'sv/minr'];   /* CBM1: the combination that governs 5.6.3.3 */
