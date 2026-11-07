@@ -3991,11 +3991,16 @@ function computeAll(I, opts = {}) {
 
   // Required bond length (geotechnical): STL / (dh*pi*beta*phi)
   const perFt_bond = dh * PI * beta_ksi * 12; // kip per ft of bond (nominal)
-  const Lb_req = STL / (perFt_bond * phi_geo); // ft, required EFFECTIVE bond below the tip
-  // Grout-to-ground bond develops only BELOW the casing tip: over the plunge length
-  // the permanent casing occupies the hole, so the grout there transfers load to the
-  // bar/casing (structural overlap), not to the ground. The effective bond length
-  // credited for geotechnical capacity therefore excludes the plunge.
+  // PDA-L6 (2026-11-07): the bond demand includes the factored pile self-weight, gamma_DC W_pile (gamma_DC = 1.25, Table 3.4.1-2;
+  // STL is taken to exclude it). W_pile = grout-filled hole (casing OD over the cased length, d_h below) at 0.150 kcf plus the
+  // steel (casing over the cased length, bar over the full length) at 0.490 - 0.150 kcf. Uplift: the weight is not credited.
+  const Wself = (0.150 * (PI * OD * OD / 4 * (I.Lcased || 0) + PI * dh * dh / 4 * Math.max((I.Lcased || 0) - (I.Lplunge || 0) + (I.LbProvided || 0) - (I.Lcased || 0), 0))
+    + (0.490 - 0.150) * (PI * (OD * OD - Math.pow(OD - 2 * (I.tc || 0), 2)) / 4 * (I.Lcased || 0) + (I.Ab || 0) * ((I.Lcased || 0) - (I.Lplunge || 0) + (I.LbProvided || 0)))) / 144;   // kip
+  const gDCself = 1.25;
+  const geoDemand = STL > 0 ? STL + gDCself * Wself : STL;
+  const Lb_req = geoDemand / (perFt_bond * phi_geo); // ft, required EFFECTIVE bond (PDA-L6: STL + gamma_DC W_pile)
+  // Grout-to-ground bond: since PDA-D8 the plunge length is included (it transfers load to the ground,
+  // 10.9.3.10.4); the effective bond length below is L_bond less any bond above the design scour line.   (PDA-L4: comment only)
   const Lb_total = L_bond;                       // total drilled bond zone (entered)
   // PDA-D12 (2026-10-20): design scour depth (AASHTO LRFD 10th Ed. 10.7.3.6): bond above the scour line gives no
   // resistance. Scour line from the head = stickup (signed) + scour depth below grade. 0 (default): unchanged.
@@ -4024,8 +4029,9 @@ function computeAll(I, opts = {}) {
     Lb_eff,
     Pn_geo,
     phiPn_geo,
-    pass: phiPn_geo >= STL,
-    demand: STL,
+    pass: phiPn_geo >= geoDemand,
+    demand: geoDemand,
+    Wself, gDCself,   // PDA-L6
     // geometry
     L_cased,
     L_plunge,
@@ -11600,7 +11606,7 @@ function PrintReport({
     eq: `P_n = d_h\\,\\pi\\,\\beta\\,L_{b,eff} = ${fmt(r.geo.Pn_geo, 1)}\\ \\text{kip}`
   }), /*#__PURE__*/React.createElement(RptCheck, {
     pass: r.geo.pass,
-    eq: `\\phi_{geo}P_n = ${fmt(r.geo.phiPn_geo, 1)}\\ \\text{kip} \\;${r.geo.pass ? '\\geq' : '<'}\\; STL = ${fmt(I.STL, 0)}\\ \\text{kip}`
+    eq: `\\phi_{geo}P_n = ${fmt(r.geo.phiPn_geo, 1)}\\ \\text{kip} \\;${r.geo.pass ? '\\geq' : '<'}\\; STL + \\gamma_{DC}W_{pile} = ${fmt(I.STL, 0)} + ${fmt(r.geo.gDCself, 2)}(${fmt(r.geo.Wself, 2)}) = ${fmt(r.geo.demand, 1)}\\ \\text{kip}`
   })), /*#__PURE__*/React.createElement("div", {
     className: "rpt-section"
   }, /*#__PURE__*/React.createElement(RptHeading, {
@@ -11684,7 +11690,7 @@ function PrintReport({
   }), /*#__PURE__*/React.createElement(RptCheck, {
     pass: r.axial.ucased_pass,
     eq: `\\phi_{cu}R_n = ${fmt((r.phiUsed || I).phiCU, 2)}(${fmt(r.axial.Rn_ucased, 1)}) = ${fmt(r.axial.phiRn_ucased, 1)}\\ \\text{kip} \\;${r.axial.ucased_pass ? '\\geq' : '<'}\\; P_u = STL - P_t = ${fmt(I.STL, 0)} - ${fmt(r.axial.Pt_c, 1)} = ${fmt(r.axial.Pu_unc, 1)}\\ \\text{kip}`   // PDA-D8
-  }), /*#__PURE__*/React.createElement(Narr, null, "The outer 0.85 factor and f", /*#__PURE__*/React.createElement("sub", null, "y"), " = min(f", /*#__PURE__*/React.createElement("sub", null, "yc"), ", f", /*#__PURE__*/React.createElement("sub", null, "yb"), ") (also used for the uncased section, which has no casing) are a conservative deviation from AASHTO 10.9.3.10.2 / FHWA NHI-05-039 Eq. 5-13 (verify); neither has the outer 0.85."), /*#__PURE__*/React.createElement(Narr, null, "The cased section governs from the pile head to the casing tip at ", fmt(r.geo.casingTip, 0), " ft; the uncased section governs over the remaining ", fmt(r.axial.L_uncasedBond, 0), " ft of bond below the casing tip. Load is transferred across the ", fmt(r.axial.L_plunge, 0), " ft plunge overlap, which is to be confirmed to develop the casing load into the bar and grout per FHWA NHI-05-039.")), /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement(Narr, null, "The outer 0.85 factor is that of AASHTO Eqs. 10.9.3.10.2a-2 and 10.9.3.10.2b-2. f", /*#__PURE__*/React.createElement("sub", null, "y"), " = min(f", /*#__PURE__*/React.createElement("sub", null, "yb"), ", f", /*#__PURE__*/React.createElement("sub", null, "yc"), ", 0.003E) for the cased length (Eq. 10.9.3.10.2a-2) and min(f", /*#__PURE__*/React.createElement("sub", null, "yb"), ", 0.003E) for the uncased length (Eq. 10.9.3.10.2b-2)."), /*#__PURE__*/React.createElement(Narr, null, "The cased section governs from the pile head to the casing tip at ", fmt(r.geo.casingTip, 0), " ft; the uncased section governs over the remaining ", fmt(r.axial.L_uncasedBond, 0), " ft of bond below the casing tip. Load is transferred across the ", fmt(r.axial.L_plunge, 0), " ft plunge overlap, which is to be confirmed to develop the casing load into the bar and grout per FHWA NHI-05-039.")), /*#__PURE__*/React.createElement("div", {
     className: "rpt-section"
   }, /*#__PURE__*/React.createElement(RptHeading, {
     n: "04",
@@ -16178,10 +16184,11 @@ function pdrModel(I, r, pyRes, pcr, sel) {
     add("geo", sub("01 Geotechnical bond resistance", [pdrItem("geo", [{ title: "Bond resistance", ref: AA("Art. 10.9.3.5"), steps: [
       pdrS("beta", "Bond stress (Table C10.9.3.5.2-1)", "\\beta", "", "", g.beta_ksf, "ksf", 2, { note: "= " + fmt(g.beta_ksf * 1000 / 144, 1) + " psi" }),
       pdrS("qb", "Nominal bond per unit length", "q_{b}", "d_{h}\\,\\pi\\,\\beta", pdrN(g.dh, 3) + "\\,\\pi\\,(" + pdrN(g.beta_ksi, 4) + ")", g.perFt_bond, "kip/ft", 2),
-      pdrS("Lreq", "Required bond length", "L_{b,req}", "\\frac{STL}{\\phi_{geo}\\,q_{b}}", "\\frac{" + pdrN(I.STL, 0) + "}{" + pdrN(g.phi_geo, 2) + "(" + pdrN(g.perFt_bond, 2) + ")}", g.Lb_req, "ft", 1, { ref: AA("Eq. 10.9.3.5.2-1") }),
+      pdrS("Wp", "Factored pile self-weight added to the demand (\u03b3_DC = 1.25; grout-filled hole + steel)", "\\gamma_{DC}W_{pile}", "", pdrN(g.gDCself, 2) + "(" + pdrN(g.Wself, 2) + ")", g.gDCself * g.Wself, "kip", 2, { ref: AA("Table 3.4.1-2") }),   // PDA-L6
+      pdrS("Lreq", "Required bond length", "L_{b,req}", "\\frac{STL + \\gamma_{DC}W_{pile}}{\\phi_{geo}\\,q_{b}}", "\\frac{" + pdrN(g.demand, 1) + "}{" + pdrN(g.phi_geo, 2) + "(" + pdrN(g.perFt_bond, 2) + ")}", g.Lb_req, "ft", 1, { ref: AA("Eq. 10.9.3.5.2-1") }),
       pdrS("Leff", "Effective bond length" + (g.Lb_scour > 0 ? " (bond above the design scour line removed, 10.7.3.6)" : " (plunge included, 10.9.3.10.4)"), "L_{b,eff}", g.Lb_scour > 0 ? "L_{bond} \\minus L_{scour}" : "L_{bond}", g.Lb_scour > 0 ? pdrN(g.Lb_total, 1) + " \\minus " + pdrN(g.Lb_scour, 1) : "", g.Lb_eff, "ft", 1),
       pdrS("Pn", "Nominal resistance", "P_{n}", "d_{h}\\,\\pi\\,\\beta\\,L_{b,eff}", "", g.Pn_geo, "kip", 1),
-      pdrS("dc", "Geotechnical: \u03c6_geo P_n \u2265 STL", "\\frac{STL}{\\phi_{geo}P_{n}}", "", "\\frac{" + pdrN(g.demand, 0) + "}{" + pdrN(g.phiPn_geo, 1) + "}", g.phiPn_geo > 0 ? g.demand / g.phiPn_geo : Infinity, "", 3, { ok: !!g.pass })] }]), goto("geo", "Geotechnical tab")]));
+      pdrS("dc", "Geotechnical: \u03c6_geo P_n \u2265 STL + \u03b3_DC W_pile", "\\frac{STL + \\gamma_{DC}W_{pile}}{\\phi_{geo}P_{n}}", "", "\\frac{" + pdrN(g.demand, 0) + "}{" + pdrN(g.phiPn_geo, 1) + "}", g.phiPn_geo > 0 ? g.demand / g.phiPn_geo : Infinity, "", 3, { ok: !!g.pass })] }]), goto("geo", "Geotechnical tab")]));
     const lat = [pdrS("M", "Maximum moment (" + (I.lateralSource === "py" ? "built-in nonlinear p-y" : I.lateralSource === "input" ? "external LPILE" : "linear estimate") + ")", "M_{max}", "", "", r.MmaxUsed != null ? r.MmaxUsed : I.Mmax, "kip-ft", 1)];
     if (r.casingExt.checked) { lat.push(pdrS("tip", "Casing tip below grade", "L_{cased} \\minus e_{stickup}", "", pdrN(I.Lcased, 1) + " \\minus " + pdrN(I.solverFree, 1), r.casingExt.tipBelowGrade, "ft", 1),
       pdrS("z", "Moment-decay depth (|M| \u2264 5% M_max)", "z_{M \\to 0}", "", "", r.casingExt.zDecay || 0, "ft", 1, { note: r.casingExt.Mtip != null ? "moment at the casing tip \u2248 " + fmt(r.casingExt.Mtip, 1) + " kip-ft (" + fmt((r.casingExt.MtipFrac || 0) * 100, 0) + "% M_max)" : "" }),
@@ -16200,7 +16207,7 @@ function pdrModel(I, r, pyRes, pcr, sel) {
         pdrS("Rnu", "Uncased nominal resistance (f_y = min(f_yb, 0.003E) = " + fmt(A.fyU, 0) + " ksi)", "R_{n}", "0.85[0.85 f^{\\prime}_{c} A_{g} + f_{y} A_{b}]", "0.85[0.85(" + pdrN(A.fcGrout, 2) + ")(" + pdrN(A.Ag_ucas, 1) + ") + " + pdrN(A.fyU, 0) + "(" + pdrN(A.Ab, 2) + ")]", A.Rn_ucased, "kip", 1, { ref: AA("Eq. 10.9.3.10.2b-2") }),
         pdrS("Puu", "Demand on the uncased section (load transferred by the plunge removed)", "P_{u}", "STL \\minus P_{t}", pdrN(I.STL, 0) + " \\minus " + pdrN(A.Pt_c, 1), A.Pu_unc, "kip", 1),
         pdrS("udc", "Uncased: \u03c6_cu R_n \u2265 P_u", "\\frac{P_{u}}{\\phi_{cu}R_{n}}", "", "\\frac{" + pdrN(A.Pu_unc, 1) + "}{" + pdrN(A.phiRn_ucased, 1) + "}", A.phiRn_ucased > 0 ? A.Pu_unc / A.phiRn_ucased : Infinity, "", 3, { ok: !!A.ucased_pass, note: "\u03c6_cu = " + fmt(pU.phiCU, 2) })] }]),
-      note("The outer 0.85 factor and f_y = min(f_yc, f_yb) are a conservative deviation from AASHTO 10.9.3.10.2 / FHWA NHI-05-039 Eq. 5-13 (verify), as on the Structural tab."), goto("struct", "Structural tab")]));
+      note("The outer 0.85 factor is that of AASHTO Eqs. 10.9.3.10.2a-2 / 10.9.3.10.2b-2; f_y = min(f_yb, f_yc, 0.003E) for the cased length and min(f_yb, 0.003E) for the uncased length, as on the Structural tab."), goto("struct", "Structural tab")]));
     const F = r.flex;
     add("struct", sub("04 Casing flexural resistance", [pdrItem("fl", [{ title: "Casing flexure at the joints", ref: AA("Art. 6.12.2.2.3"), steps: [
       pdrS("S", "Elastic section modulus at the joint", "S", "\\frac{\\pi(OD_{r}^{4} \\minus ID_{j}^{4})}{32\\,OD_{r}}", "", F.Sj, "in^{3}", 2, { note: "Z = (OD_r\u00b3 \u2212 ID_j\u00b3)/6 = " + fmt(F.Zj, 2) + " in\u00b3" }),
@@ -16397,7 +16404,7 @@ function pdrRest(root, M, grpOf, capBox) {
     if (!numsOf(t.innerText || t.textContent).some(n => !have.has(n))) return;
     const hd = trs[0].querySelector("th") ? [...trs[0].cells].map(tx) : null;
     let cap = ""; for (let e = t.previousElementSibling; e && !cap; e = e.previousElementSibling) { const x = tx(e); if (x && x.length <= 160 && !e.querySelector("table")) cap = x; break; }
-    put(grpOf(t), { type: "table", wide: (trs[0].cells.length > 6) || undefined, caption: cap || "Table (as printed)", head: hd || [], rows: trs.slice(hd ? 1 : 0).map(r => [...r.cells].map(c => { const v = tx(c); return /^[-\u2212\d.,e+\s%/×()]+$/.test(v) && /\d/.test(v) ? { t: v, n: true } : v; })), lazy: trs.length > 31 || undefined, title: trs.length > 31 ? (cap || "Table (as printed)") : undefined }, "Tables as printed");
+    put(grpOf(t), { type: "table", wide: (trs[0].cells.length > 6) || undefined, caption: cap || "Table (as printed)", head: hd || [], rows: trs.slice(hd ? 1 : 0).map(r => [...r.cells].map(c => { const v = tx(c).replace(/^(\S+) \u00b7 \u00a7\d+(?:\.\d+)*$/, "$1"); return /^[-\u2212\d.,e+\s%/×()]+$/.test(v) && /\d/.test(v) ? { t: v, n: true } : v; })), lazy: trs.length > 31 || undefined, title: trs.length > 31 ? (cap || "Table (as printed)") : undefined }, "Tables as printed");
     trs.forEach(r => numsOf(r.textContent).forEach(n => have.add(n)));
   });
   const BLK = /^(P|LI|DIV|H3|H4|H5)$/;
@@ -17489,13 +17496,13 @@ function App() {
           return {
             name: c.name, type: c.type, Mmax: noConv ? null : (Mx != null ? Mx : R2.MmaxUsed), y0, prof: (typeof prof !== "undefined") ? prof : null,
             zMmax: noConv ? null : zMx, rot0: noConv ? null : rot0, zFix: noConv ? null : zFx,   // PXR (hand-off only)
-            geoR: c.type === "service" ? null : (isHPc ? rat(I2.STL, hg.phiRn_comp) : rat(I2.STL, R2.geo.phiPn_geo)),
+            geoR: c.type === "service" ? null : (isHPc ? rat(I2.STL, hg.phiRn_comp) : rat(R2.geo.demand, R2.geo.phiPn_geo)),   // PDA-L6: the bond demand
             // F22 (O33): no lateral demand when the p-y solve did not converge -> the
             // flexure / combined columns read NG (noConv), not a ratio of the fallback moment
             flexR: (c.type === "service" || noConv) ? null : (isHPc ? rat(hs.Mu, hs.phiMn) : rat(R2.MmaxUsed, R2.flex.phiMn)),
             combR: (c.type === "service" || noConv) ? null : (isHPc ? hs.comb_ratio : R2.comb.interaction), // P-M interaction value (was R2.comb.ratio = Po/Pe)
             buckR: (c.type === "service" || !R2.buckling.enable) ? null : rat(I2.STL, R2.buckling.phiPn_buck),
-            tenR: c.type === "tension" ? (isHPc ? rat(I2.Tu, Math.min(hg.phiRn_up || 1e9, hs.phiPn_tension || 1e9)) : rat(I2.Tu, Math.min(R2.tension && R2.tension.phiPn_up || 1e9, R2.tension && R2.tension.phiPn_tension_total || 1e9))) : null,
+            tenR: c.type === "tension" ? (isHPc ? rat(I2.Tu, Math.min(hg.phiRn_up || 1e9, hs.phiPn_tension || 1e9)) : (R2.tension ? Math.max(rat(I2.Tu, R2.tension.phiPn_up || 1e9), rat(I2.Tu, R2.tension.phiPn_tension_cased || 1e9), rat(R2.tension.Tu_unc || 0, R2.tension.phiPn_tension || 1e9)) : null)) : null,   // PDA-L3: as the pass logic (uncased bar vs T_u - P_t)
             svcR: c.type === "service" && y0 != null ? Math.abs(y0) / Math.max(I.deflLimit || 1, 0.01) : null,
             pass: noConv ? false : (c.type === "service" ? (y0 == null || Math.abs(y0) <= (I.deflLimit || 1)) : R2.allPass),
             noConv, ncWhy,
@@ -19857,7 +19864,7 @@ function App() {
     className: "mt-3"
   }, /*#__PURE__*/React.createElement(CheckRow, {
     pass: r.geo.pass,
-    tex: `\\phi_{geo}P_n = ${fmt(r.geo.phiPn_geo, 1)}\\text{ kip} \\;${r.geo.pass ? ' \\geq ' : ' < '}\\; STL=${fmt(I.STL, 0)}\\text{ kip}`
+    tex: `\\phi_{geo}P_n = ${fmt(r.geo.phiPn_geo, 1)}\\text{ kip} \\;${r.geo.pass ? ' \\geq ' : ' < '}\\; STL+\\gamma_{DC}W_{pile}=${fmt(I.STL, 0)}+${fmt(r.geo.gDCself, 2)}(${fmt(r.geo.Wself, 2)})=${fmt(r.geo.demand, 1)}\\text{ kip}`
   }))))), /*#__PURE__*/(I.pileType !== "iab") && /*#__PURE__*/React.createElement(Module, {
     idx: "02",
     title: "Lateral Analysis — Maximum Moment",
@@ -20378,7 +20385,7 @@ function App() {
   }, "Uncased typically governs (no casing contribution).")),
   // F50 (O1): display only -- the outer 0.85 and f_y = min(f_yc, f_yb) are kept (conservative)
   /*#__PURE__*/React.createElement("p", { className: "lg:col-span-2 text-[10px] leading-snug", style: { color: "#7a4d15" } },
-    "Outer 0.85 factor and f", /*#__PURE__*/React.createElement("sub", null, "y"), " = min(f", /*#__PURE__*/React.createElement("sub", null, "yc"), ", f", /*#__PURE__*/React.createElement("sub", null, "yb"), ") (also for the uncased section): conservative deviation from AASHTO 10.9.3.10.2 / FHWA NHI-05-039 Eq. 5-13 (verify). Neither has the outer 0.85; the uncased section has no casing.")), /*#__PURE__*/React.createElement("div", {
+    "Outer 0.85 factor: AASHTO Eqs. 10.9.3.10.2a-2 / 10.9.3.10.2b-2. f", /*#__PURE__*/React.createElement("sub", null, "y"), " = min(f", /*#__PURE__*/React.createElement("sub", null, "yb"), ", f", /*#__PURE__*/React.createElement("sub", null, "yc"), ", 0.003E) cased, min(f", /*#__PURE__*/React.createElement("sub", null, "yb"), ", 0.003E) uncased (the uncased section has no casing).")), /*#__PURE__*/React.createElement("div", {
     className: "mt-4 p-3 rounded-sm border",
     style: {
       borderColor: r.axial.plunge_ok ? "#cbd5e1" : "#f3c0c0",
