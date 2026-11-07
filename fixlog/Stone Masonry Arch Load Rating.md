@@ -1308,3 +1308,59 @@ if(/^H[3-6]$/.test(tag)){topic(arptInline(e,ctx).replace(/\$([_^])\{\\text\{([^{
 - **Performance:** default render on an input change 1.15 s (main 1.04 s); 80 ft span 2.5 s (0.9), 120 ft 2.9 s (1.5). Tab changes use the cache (unchanged). The page stays synchronous so every displayed number belongs to one consistent state.
 - **How verified:** `node tests/check-syntax.mjs` (all pass); `tests/smoke/phone-layout.mjs --tool arch` (pass); `tests/smoke/project-library.mjs --tool stonearch`: the only differences A vs B are the dashboard row text (the model JSON is identical on the default and after the test's input change); all 14 tabs on default / 30 ft / semicircle with 0 console errors; the table appears in the Report.
 - **Saved data:** no key or format change; the study is not saved (recomputed on open).
+
+## 2026-11-07 — PR: claude/stonearch-h2-barrel-cap — Wheel-load spread capped at the barrel width (BWC; review H-2)
+
+### BWC-1. Merged 6.4.2 distribution width ≤ barrel width   [§4 result change, MORE conservative]
+- **Problem (review H-2; open item of 2026-10-12, "Remaining", Art. 6.4.2 slab-width limit not applied):** under deep fill the merged distribution width exceeded the barrel, so part of each axle was spread onto ground beside the arch. One truck at the springing (H = 13.1 ft): 6 + 23 = 29 ft; two trucks at node 9 of the default (H = 9.43 ft): 16 + 16.5 = 32.5 ft, against a 24 ft barrel.
+- **Where:** `transDisp` (anchor `width=Math.min(xs[j]-xs[i]+w,lim)`) and `sideBySide` (anchor `const cap=(!conc&&p&&+p.barrelW>0)?+p.barrelW:Infinity;`). Every highway 6.4.2 path (`nodalLL`, `nodalLLByAxle`, the credited-spread 6.4.1 path, `sideBySideAt` and the worked steps) goes through `sideBySide`, so the cap is in one place.
+- **Before:**
+```js
+function transDisp(w,n,c){
+  const xs=wheelLinesX(n,c); let best=0,bk=0,bw=0;
+  for(let i=0;i<xs.length;){
+    let j=i; while(j+1<xs.length&&xs[j+1]-xs[j]<=w)j++;
+    const k=j-i+1, width=xs[j]-xs[i]+w, v=k*0.5/width;
+...
+  const one=f(w,1,c);
+...
+    const t=f(w,n,c), m=multiPres(n), v=m*t.v;
+...
+  best.kappa=(best.n===1)?1:best.v/one.v; ... best.one=one; ...
+```
+- **After:**
+```js
+function transDisp(w,n,c,cap){
+  const xs=wheelLinesX(n,c); let best=0,bk=0,bw=0;
+  const lim=(cap>0)?cap:Infinity;
+  for(let i=0;i<xs.length;){
+    let j=i; while(j+1<xs.length&&xs[j+1]-xs[j]<=w)j++;
+    const k=j-i+1, width=Math.min(xs[j]-xs[i]+w,lim), v=k*0.5/width;
+...
+  const cap=(!conc&&p&&+p.barrelW>0)?+p.barrelW:Infinity;
+  const one=f(w,1,c,cap), oneU=conc?one:f(w,1,c,Infinity);
+...
+    const t=f(w,n,c,cap), m=multiPres(n), v=m*t.v;
+...
+  best.kappa=(best.n===1&&best.v===oneU.v)?1:best.v/oneU.v; ... best.one=oneU; ...
+  best.capW=cap; best.capped=(isFinite(cap)&&best.width>=cap-1e-9);
+```
+  κ stays relative to the **uncapped** one-truck value, because the callers multiply their one-truck pressure P/((s_g + w_t)·L_s) by κ; so the pressure is now P·m·k·0.5/(min(W, W_barrel)·L_s). With one truck under the cap, κ = 1 exactly as before. When the cap acts on one truck, κ > 1.
+- **Not capped:** the 6.4.1 concentrated width E (≤ 7 ft), and rail mode (its own dashboard warning is unchanged).
+- **Display:** the "Side-by-side trucks" step (Live Load tab worked example and the per-node worked calculation) is shown whenever the cap acts. Its equation reads min(W_n, W_barrel), and the note says when the barrel width limits the spread.
+- **Governing provision:** AASHTO Std. Spec. 17th Ed. Art. 6.4.2 (total distribution width limited to the width of the supporting slab), applied to the arch barrel. **Verify (not in references).** MassDOT BM Pt. I §7.2.7.8B points to the Std. Spec. for the live-load distribution.
+- **Check case (default model, node 9, H = 9.427 ft, w_t = 16.497 ft, two trucks):**
+  - before: W = 32.497 ft, v = 2·0.5/32.497 = 0.03077, κ = 0.03077/(1/22.497) = 1.3846;
+  - after: W = 24 ft, v = 2·0.5/24 = 0.04167, κ = 1.875.
+- **Reported RFs, main → branch:**
+
+| Case | main | branch |
+|---|---|---|
+| Default (10 el governs) | H20 0.690, HS20 0.626, T3 0.822, 3S2 0.901, 3-3 0.998, SU4 0.705, SU5 0.675, SU6 0.638, SU7 0.656, EV2 0.638, EV3 0.451 | 0.623, **0.554**, 0.732, 0.802, 0.888, 0.635, 0.606, 0.564, 0.574, 0.573, **0.401** (the review's §2.4 capped row, to 3 decimals) |
+| 40/10, 4 ft cover | HS20 0.729, EV3 0.455 | 0.579, 0.366 |
+| 30/6, 18 in ring | T3 0.345, SU7 0.451, EV3 0.189 (H20/HS20 0.278, EV2 0.266 unchanged) | 0.342, 0.442, 0.188 |
+| 20/4 (Kingston variant), 40/20 semicircle, Lanes = 1 | — | unchanged |
+
+- **Saved data:** no key or format change. Old projects open with the cap (more conservative). There is no option to switch it off, and no migration: this is a correction toward the provision, not a choice the user made.
+- **How verified:** `node tests/check-syntax.mjs`; `tests/smoke/phone-layout.mjs --tool arch`; `tests/smoke/project-library.mjs --tool stonearch` (the only failures are the four A-vs-B identity checks, by design: live-load envelopes and ratings move; undo, dialog, quota and console checks pass); all 14 tabs with 0 console errors.
+- **Open item closed:** the 2026-10-12 "Remaining" item (Art. 6.4.2 slab-width limit).

@@ -1871,11 +1871,14 @@ function wheelLinesX(n,c){const xs=[];for(let k=0;k<n;k++){const o=k*(GAGE+c);xs
 /* Peak strip line load per unit axle load, n trucks, spread width w, 6.4.2 merge
    over the outside limits (wheel spreads merge when the gap is <= w, matching
    the w_t >= s_g test for one axle). */
-function transDisp(w,n,c){
+/* BWC (H-2, 2026-11-07): cap = the barrel width. Std. Spec. Art. 6.4.2 limits the total width of distribution to the
+   width of the supporting slab (verify, not in references), so a merged width never exceeds the barrel. */
+function transDisp(w,n,c,cap){
   const xs=wheelLinesX(n,c); let best=0,bk=0,bw=0;
+  const lim=(cap>0)?cap:Infinity;
   for(let i=0;i<xs.length;){
     let j=i; while(j+1<xs.length&&xs[j+1]-xs[j]<=w)j++;
-    const k=j-i+1, width=xs[j]-xs[i]+w, v=k*0.5/width;
+    const k=j-i+1, width=Math.min(xs[j]-xs[i]+w,lim), v=k*0.5/width;
     if(v>best){best=v;bk=k;bw=width;}
     i=j+1;
   }
@@ -1891,13 +1894,18 @@ function transConc(E,n,c){
 function sideBySide(p,w,conc){
   const N=lanesOn(p), c=truckClr(p);
   const f=conc?transConc:transDisp;
-  const one=f(w,1,c);
+  /* BWC (H-2): the 6.4.2 (distributed) widths are capped at the barrel width. kappa stays relative to the UNCAPPED
+     one-truck value, which the callers' one-truck pressure expressions use, so pressure x kappa = P x v_capped / L_s
+     (with one truck and no cap, kappa = 1 exactly as before). The 6.4.1 concentrated width E <= 7 ft is not capped. */
+  const cap=(!conc&&p&&+p.barrelW>0)?+p.barrelW:Infinity;
+  const one=f(w,1,c,cap), oneU=conc?one:f(w,1,c,Infinity);
   let best={v:one.v,n:1,k:one.k,width:one.width,m:1};
   for(let n=2;n<=N;n++){
-    const t=f(w,n,c), m=multiPres(n), v=m*t.v;
+    const t=f(w,n,c,cap), m=multiPres(n), v=m*t.v;
     if(v>best.v*(1+1e-12))best={v,n,k:t.k,width:t.width,m};
   }
-  best.kappa=(best.n===1)?1:best.v/one.v; best.lanes=N; best.clr=c; best.one=one; best.w=w; best.conc=!!conc;
+  best.kappa=(best.n===1&&best.v===oneU.v)?1:best.v/oneU.v; best.lanes=N; best.clr=c; best.one=oneU; best.w=w; best.conc=!!conc;
+  best.capW=cap; best.capped=(isFinite(cap)&&best.width>=cap-1e-9);   /* BWC */
   return best;
 }
 /* The same at a cover depth H, on the branch an axle landing there takes (for
@@ -8208,13 +8216,15 @@ function liveLoadSection(p,M,veh,pos,dir){
     note:merged?"The transverse spreads of the two wheel lines overlap, so the full axle load is distributed over "+
       "the combined width (s_g + w_t)."
       :"The spreads do not reach each other; each wheel line is distributed over its own width w_t."});
-  if(sbW.lanes>1)
-    h+=step({label:"Side-by-side trucks",ref:"Std Spec 6.4.2 / 3.12.1",
-      sym:"\\kappa=\\dfrac{m_n\\,k_n\\,(P/2)/W_n}{\\text{one truck}}",
-      sub:(sbW.n>1)?`\\dfrac{${num(sbW.m,2)}\\times${sbW.k}\\times0.5/${num(sbW.width,3)}}{${num(sbW.one.v,5)}}`:"\\text{no overlap with the adjacent truck}",
+  if(sbW.lanes>1||sbW.capped)
+    h+=step({label:"Side-by-side trucks"+(sbW.capped?", width capped at the barrel (BWC)":""),ref:"Std Spec 6.4.2 / 3.12.1",
+      sym:"\\kappa=\\dfrac{m_n\\,k_n\\,(P/2)/\\min(W_n,\\,W_{barrel})}{\\text{one truck}}",
+      sub:(sbW.n>1||sbW.capped)?`\\dfrac{${num(sbW.m,2)}\\times${sbW.k}\\times0.5/${num(sbW.width,3)}}{${num(sbW.one.v,5)}}`:"\\text{no overlap with the adjacent truck}",
       res:num(kW,4),units:"",
       note:(sbW.n>1)?`${sbW.n} lanes loaded govern: ${sbW.k} wheel lines merge over W = ${nfx(sbW.width,3)} ft `+
-        `(gap ${nfx(sbW.clr,2)} ft between adjacent trucks), multiple presence m = ${nfx(sbW.m,2)}.`
+        `(gap ${nfx(sbW.clr,2)} ft between adjacent trucks), multiple presence m = ${nfx(sbW.m,2)}.`+
+        (sbW.capped?` The merged width is limited to the ${nfx(sbW.capW,2)} ft barrel width (Std. Spec. 6.4.2).`:"")
+        :sbW.capped?`One truck governs; its spread is limited to the ${nfx(sbW.capW,2)} ft barrel width (Std. Spec. 6.4.2), so κ > 1.`
         :`With a ${nfx(sbW.clr,2)} ft gap between adjacent trucks and w_t = ${nfx(wt,3)} ft their spreads do not meet here.`});
   if(contrib.length===0){
     h+=msg("inf","No axle over this node","At this truck position no axle spread reaches the node.");
@@ -9461,14 +9471,16 @@ function worked(p,M,veh,pos,dir,i){
   h+=step({label:"Spread area",sym:"A_{sp}=w_{eff}\\,L_s",
     sub:`${num(wEff,4)}\\times${num(Ls,4)}`,res:num(wEff*Ls,4),units:"ft²"});
   const sbK=ARCH.sideBySide(p,wt,false), kW=sbK.kappa;   // side-by-side trucks
-  if(sbK.lanes>1)
-    h+=step({label:"Side-by-side trucks",ref:"Std Spec 6.4.2 / 3.12.1",
-      sym:"\\kappa=\\dfrac{m_n\\,k_n\\,(P/2)/W_n}{\\text{one truck}}",
-      sub:(sbK.n>1)?`\\dfrac{${num(sbK.m,2)}\\times${sbK.k}\\times0.5/${num(sbK.width,4)}}{${num(sbK.one.v,5)}}`:"\\text{no overlap with the adjacent truck}",
+  if(sbK.lanes>1||sbK.capped)
+    h+=step({label:"Side-by-side trucks"+(sbK.capped?", width capped at the barrel (BWC)":""),ref:"Std Spec 6.4.2 / 3.12.1",
+      sym:"\\kappa=\\dfrac{m_n\\,k_n\\,(P/2)/\\min(W_n,\\,W_{barrel})}{\\text{one truck}}",
+      sub:(sbK.n>1||sbK.capped)?`\\dfrac{${num(sbK.m,2)}\\times${sbK.k}\\times0.5/${num(sbK.width,4)}}{${num(sbK.one.v,5)}}`:"\\text{no overlap with the adjacent truck}",
       res:num(kW,4),units:"",
       note:`${sbK.lanes} lanes on this barrel. `+((sbK.n>1)?`${sbK.n} lanes loaded govern: ${sbK.k} wheel lines merge over `+
         `W = ${nfx(sbK.width,4)} ft (gap ${nfx(sbK.clr,2)} ft between adjacent trucks), multiple presence m = ${nfx(sbK.m,2)}; `+
-        "the one-truck pressure is multiplied by κ."
+        "the one-truck pressure is multiplied by κ."+
+        (sbK.capped?` The merged width is limited to the ${nfx(sbK.capW,2)} ft barrel width (Std. Spec. 6.4.2).`:"")
+        :sbK.capped?`One truck governs; its spread is limited to the ${nfx(sbK.capW,2)} ft barrel width (Std. Spec. 6.4.2), so κ > 1.`
         :`With a ${nfx(sbK.clr,2)} ft gap between adjacent trucks and w_t = ${nfx(wt,4)} ft their spreads do not meet, so κ = 1.`)});
 
   const contrib=[];
