@@ -1697,7 +1697,16 @@ function computeAll(){
  }
  const minContact=asd.reduce((a,b)=>{const cf=(b.bear.contactFrac!==undefined)?b.bear.contactFrac:1;return Math.min(a,cf);},1);
  /* flotation */
- const flot=(U>1e-9)?{U,R:Wf+Wpeds.reduce((a,b)=>a+b,0)+EV,FS:(Wf+Wpeds.reduce((a,b)=>a+b,0)+EV)/U}:null;
+ /* SFFG (2026-11-07): flotation FS on the gross basis (the uplift pressure at the base, gamma_w (D_f - d_w), on the whole base
+    area B L, against the concrete and the soil cover at its total unit weight), the usual definition (e.g. IBC 1605 / ASCE 7-16
+    2.3.6 and 2.4.1, which compare the dead load with the full hydrostatic uplift H). The tool's earlier net basis (buoyant soil
+    weight against the buoyancy of the submerged concrete only) is a recognised alternative with the same net uplift margin, but a
+    higher ratio wherever soil above the footing is submerged. FS = the smaller of the two (conservative).
+    Before: FS = (W_f + sum W_ped + EV')/U with EV' at the buoyant unit weight below the water table, U = submerged concrete only. */
+ const flot=(()=>{if(!(U>1e-9))return null;const Wc=Wf+Wpeds.reduce((a,b)=>a+b,0);
+  const net={U,R:Wc+EV};net.FS=net.R/net.U;
+  const hb=Math.max(Df-dwc,0), Ug=gw*hb*B*L, EVt=gev*covEff*Aev, gr={U:Ug,R:Wc+EVt,hb,EVt,Wc};gr.FS=Ug>1e-9?gr.R/Ug:Infinity;
+  const g=gr.FS<=net.FS;return {U:g?gr.U:net.U,R:g?gr.R:net.R,FS:Math.min(gr.FS,net.FS),basis:g?'gross':'net',gross:gr,net};})();
  /* rigidity */
  const Ec_ksf=57000*Math.sqrt(Math.max(fc,1))*144/1000;
  const ks_kcf=ks*1.728;
@@ -1887,7 +1896,7 @@ function renderDashboard(){
  d.appendChild(chip('Sliding, x',(R.govSlx.FSslx===Infinity?'N/A \u2014 no net horizontal load in x':'FS = '+f2(R.govSlx.FSslx)+' (min '+f2(FSsl)+')'),R.govSlx.FSslx===Infinity?'na':(R.govSlx.FSslx>=FSsl?'pass':'fail'),R.asd.indexOf(R.govSlx),{tab:'tab-stab',sec:'o-st-slide'}));
  d.appendChild(chip('Sliding, y',(R.govSly.FSsly===Infinity?'N/A \u2014 no net horizontal load in y':'FS = '+f2(R.govSly.FSsly)+' (min '+f2(FSsl)+')'),R.govSly.FSsly===Infinity?'na':(R.govSly.FSsly>=FSsl?'pass':'fail'),R.asd.indexOf(R.govSly),{tab:'tab-stab',sec:'o-st-slide'}));
  d.appendChild(chip('Sliding, resultant \u221a(Hx\u00b2+Hy\u00b2)',(R.govSlr.FSslr===Infinity?'N/A \u2014 no net horizontal load':'FS = '+f2(R.govSlr.FSslr)+' (min '+f2(FSsl)+')'),R.govSlr.FSslr===Infinity?'na':(R.govSlr.FSslr>=FSsl?'pass':'fail'),R.asd.indexOf(R.govSlr),{tab:'tab-stab',sec:'o-st-slide'}));
- if(R.flot)d.appendChild(chip('Flotation','FS = '+f2(R.flot.FS)+' (min '+f2(FSfl)+')',R.flot.FS>=FSfl?'pass':'fail',undefined,{tab:'tab-stab',sec:'o-st-flot'}));
+ if(R.flot)d.appendChild(chip('Flotation','FS = '+f2(R.flot.FS)+' ('+R.flot.basis+' basis; min '+f2(FSfl)+')',R.flot.FS>=FSfl?'pass':'fail',undefined,{tab:'tab-stab',sec:'o-st-flot'}));
  else d.appendChild(chip('Flotation','No water table above base','na',undefined,{tab:'tab-stab',sec:'o-st-flot'}));
  /* SF-ST1 (2026-10-19, engineer): full contact PASS; partial contact REVIEW (a warning: bearing and
     overturning govern strength); no contact or resultant off the footing (anyUnstable) FAIL. */
@@ -3286,11 +3295,16 @@ function renderStability(){
  }
  const b3=secPanel(T,'o-st-flot','4.4  Flotation');
  if(R.flot){
-  b3.appendChild(eqBlock('Flotation check (permanent resisting weight vs. buoyancy)','FS_target = '+f2(num(state.stab.FSfl)),
-   'FS_{fl} = \\frac{W_f + \\Sigma W_{ped} + EV}{U}',
-   'FS_{fl} = \\frac{'+f2(R.Wf)+' + '+f2(R.Wpeds.reduce((a,b)=>a+b,0))+' + '+f2(R.EV)+'}{'+f2(R.U)+'}',
-   'FS_{fl} = \\mathbf{'+f2(R.flot.FS)+'}'+(R.flot.FS>=num(state.stab.FSfl)?'\\;\\checkmark':'\\;\\text{NG}')));
-  b3.appendChild(el('p','note','EV already uses buoyant unit weight below the water table; concrete buoyancy is carried in U. Live and transient loads are excluded from flotation resistance.'));
+  const fg=R.flot.gross,fn=R.flot.net;   /* SFFG */
+  b3.appendChild(eqBlock('Flotation check, gross basis (full uplift pressure on the base)','FS_target = '+f2(num(state.stab.FSfl)),
+   'FS_{fl,gross} = \\frac{W_f + \\Sigma W_{ped} + EV_{total}}{\\gamma_w (D_f - d_w) B L}',
+   'FS_{fl,gross} = \\frac{'+f2(R.Wf)+' + '+f2(R.Wpeds.reduce((a,b)=>a+b,0))+' + '+f2(fg.EVt)+'}{'+f3(R.gw)+'\\cdot'+f2(fg.hb)+'\\cdot'+f2(R.B)+'\\cdot'+f2(R.L)+'} = \\frac{'+f2(fg.R)+'}{'+f2(fg.U)+'}',
+   'FS_{fl,gross} = '+f2(fg.FS)));
+  b3.appendChild(eqBlock('Flotation check, net basis (buoyant soil weight vs. buoyancy of the submerged concrete)','',
+   'FS_{fl,net} = \\frac{W_f + \\Sigma W_{ped} + EV}{U}',
+   'FS_{fl,net} = \\frac{'+f2(R.Wf)+' + '+f2(R.Wpeds.reduce((a,b)=>a+b,0))+' + '+f2(R.EV)+'}{'+f2(fn.U)+'} = '+f2(fn.FS),
+   'FS_{fl} = \\min('+f2(fg.FS)+',\\;'+f2(fn.FS)+') = \\mathbf{'+f2(R.flot.FS)+'}'+(R.flot.FS>=num(state.stab.FSfl)?'\\;\\checkmark':'\\;\\text{NG}')));
+  b3.appendChild(el('p','note','Gross basis: the uplift pressure at the base, \u03b3<sub>w</sub>(D<sub>f</sub> \u2212 d<sub>w</sub>), on the whole base area, against the concrete and the soil cover at its total unit weight. Net basis (the tool\u2019s earlier definition): EV at the buoyant unit weight below the water table, against the buoyancy of the submerged concrete. Both have the same net margin; the gross ratio is the usual definition and is lower wherever submerged soil sits on the footing. The smaller governs (decision pending engineer review). Live and transient loads are excluded from flotation resistance.'));
   b3.appendChild(sfdWorkedIn([['o-cb-weights','W<sub>f</sub>, \u03a3W<sub>ped</sub>, EV, U']]));   /* D11 links */
  }else b3.appendChild(el('p','note','Water table is below the footing base (or not defined) \u2014 flotation is not applicable.'));
  /* rigidity */
@@ -3596,7 +3610,7 @@ function sfdResultRows(){
   'Sliding, x':()=>['FS<sub>sl</sub> = (μΣP + P<sub>p</sub>)/|ΣH|; '+FST(FSsl),fs(FSsl,R.govSlx.FSslx),['o-st-slide']],
   'Sliding, y':()=>['FS<sub>sl</sub> = (μΣP + P<sub>p</sub>)/|ΣH|; '+FST(FSsl),fs(FSsl,R.govSly.FSsly),['o-st-slide']],
   'Sliding, resultant √(Hx²+Hy²)':()=>['FS<sub>sl</sub> = (μΣP + P<sub>p</sub>)/|ΣH|; '+FST(FSsl),fs(FSsl,R.govSlr.FSslr),['o-st-slide']],
-  'Flotation':()=>R.flot?['FS<sub>fl</sub> = (W<sub>f</sub> + ΣW<sub>ped</sub> + EV)/U; '+FST(FSfl),fs(FSfl,R.flot.FS),['o-st-flot']]:['no water table above the base',null,['o-st-flot']],
+  'Flotation':()=>R.flot?['FS<sub>fl</sub> = min(gross (W<sub>f</sub> + ΣW<sub>ped</sub> + EV<sub>total</sub>)/γ<sub>w</sub>(D<sub>f</sub> − d<sub>w</sub>)BL, net (W<sub>f</sub> + ΣW<sub>ped</sub> + EV′)/U); '+FST(FSfl),fs(FSfl,R.flot.FS),['o-st-flot']]:['no water table above the base',null,['o-st-flot']],
   'Contact area':()=>['no-tension soil, rigid footing',null,['o-br-press']],
   'Rigidity (rigid method)':()=>['Bowles: λℓ ≤ π/4; D/C = λℓ/(π/4)',Math.max(R.rig.vx,R.rig.vy)/R.rig.limit,['o-st-rig']],
   'Input validation':()=>['input checks',null,[]],
@@ -3920,7 +3934,12 @@ function sfrModel(){
    S({id:'FS',label:'Overturning factor of safety',sym:'FS_{OT}',eq:'\\frac{M_{r}}{M_{o}}',sub:'\\frac{'+sfrN(ot.Mr)+'}{'+sfrN(ot.Mo)+'}',value:ot.FS,unit:'',d:2,note:R.otGate?'':'reported only (the overturning FS does not gate the result; input)'})];
   if(R.otGate&&isFinite(ot.FS))otS.push(S({id:'DC',label:'Demand / capacity (target FS '+sfrN(FSot)+')',sym:'D/C',eq:'\\frac{FS_{target}}{FS_{OT}}',sub:'\\frac{'+sfrN(FSot)+'}{'+sfrN(ot.FS)+'}',value:FSot/ot.FS,unit:'',d:3,ok:ot.FS>=FSot-1e-9}));
   const T=[{title:'Sliding resistance parameters',ref:'',steps:fr},{title:'Sliding',ref:'FS target '+sfrN(FSsl),steps:st},{title:'Overturning (governing edge)',ref:'arm = '+ot.armLabel,steps:otS}];
-  if(R.flot)T.push({title:'Flotation',ref:'FS target '+sfrN(FSfl),steps:[S({id:'FSfl',label:'Flotation factor of safety',sym:'FS_{fl}',eq:'\\frac{W_{f} + \\sum W_{ped} + EV}{U}',sub:'\\frac{'+sfrN(R.Wf)+' + '+sfrN(R.Wpeds.reduce((a,b)=>a+b,0))+' + '+sfrN(R.EV)+'}{'+sfrN(R.U)+'}',value:R.flot.FS,unit:'',d:2}),
+  if(R.flot)T.push({title:'Flotation',ref:'FS target '+sfrN(FSfl),steps:[   /* SFFG: gross and net bases, the smaller governs */
+    S({id:'Ugr',label:'Gross uplift: water pressure at the base on the whole base area (d_w = '+sfrN(R.dw)+' ft)',sym:'U_{gross}',eq:'\\gamma_{w} (D_{f} \\minus d_{w}) B L',sub:sfrN(R.gw,4)+'\\cdot'+sfrN(R.flot.gross.hb)+'\\cdot'+sfrN(R.B)+'\\cdot'+sfrN(R.L),value:R.flot.gross.U,unit:'kip'}),
+    S({id:'EVt',label:'Soil cover at its total unit weight',sym:'EV_{total}',eq:'\\gamma_{EV}\\,h_{cover}\\,A_{EV}',sub:sfrN(R.gev,3)+'\\cdot'+sfrN(R.covEff)+'\\cdot'+sfrN(R.Aev),value:R.flot.gross.EVt,unit:'kip'}),
+    S({id:'FSgr',label:'Flotation factor of safety, gross basis',sym:'FS_{fl,gross}',eq:'\\frac{W_{f} + \\sum W_{ped} + EV_{total}}{U_{gross}}',sub:'\\frac{'+sfrN(R.Wf)+' + '+sfrN(R.Wpeds.reduce((a,b)=>a+b,0))+' + '+sfrN(R.flot.gross.EVt)+'}{'+sfrN(R.flot.gross.U)+'}',value:R.flot.gross.FS,unit:'',d:2}),
+    S({id:'FSnet',label:'Flotation factor of safety, net basis (EV at the buoyant unit weight below the water table; U = buoyancy of the submerged concrete)',sym:'FS_{fl,net}',eq:'\\frac{W_{f} + \\sum W_{ped} + EV}{U}',sub:'\\frac{'+sfrN(R.Wf)+' + '+sfrN(R.Wpeds.reduce((a,b)=>a+b,0))+' + '+sfrN(R.EV)+'}{'+sfrN(R.flot.net.U)+'}',value:R.flot.net.FS,unit:'',d:2}),
+    S({id:'FSfl',label:'Flotation factor of safety (the smaller; decision pending engineer review)',sym:'FS_{fl}',eq:'\\min(FS_{fl,gross},\\;FS_{fl,net})',sub:'\\min('+sfrN(R.flot.gross.FS)+',\\,'+sfrN(R.flot.net.FS)+')',value:R.flot.FS,unit:'',d:2}),
     S({id:'DCfl',label:'Demand / capacity',sym:'D/C',eq:'\\frac{FS_{target}}{FS_{fl}}',sub:'\\frac{'+sfrN(FSfl)+'}{'+sfrN(R.flot.FS)+'}',value:FSfl/R.flot.FS,unit:'',d:3,ok:R.flot.FS>=FSfl-1e-9})]});
   else T.push({title:'Flotation',ref:'',steps:[S({id:'flna',label:'No water table at or above the base of the footing (water table depth: '+(R.dw===Infinity?'none entered':sfrN(R.dw)+' ft below grade')+'): no buoyancy, so flotation does not apply. Checked (FS_fl = resisting weight / U) when a water table above the base is entered',sym:'',eq:'',sub:'',value:'not applicable'})]});   /* SFFL (2026-11-03; review C8) */
   if(R.rig&&R.rig.lam!=null)T.push({title:'Rigid-footing verification',ref:'Bowles: λℓ ≤ π/4',steps:[
