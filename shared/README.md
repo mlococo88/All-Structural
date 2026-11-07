@@ -81,7 +81,10 @@ It renders as `label` over `sym = eq = sub = value unit`, with `ref` beside the 
   plain-text report) never uses KaTeX; it also reads the TeX the tools write beyond the subset as text (TXP, 2026-11-07:
   `\mathrm{…}` / `\mathbf{…}` / `\operatorname{…}` → their content, `\dfrac` / `\tfrac` as `\frac`, `\quad` / `\qquad` / `\!` as
   spacing, `\varphi` and the other Greek variants, `\checkmark` ✓, `\Rightarrow` ⇒, `\cos` / `\sin` / `\cot`, `\begin{cases}`, …;
-  `tests/engine/steps-totext.test.mjs`); the HTML path is unchanged. `tests/engine/tex.test.mjs` parses every step string the engine tests make with
+  `tests/engine/steps-totext.test.mjs`). The built-in HTML renderer (no KaTeX, and SharedReport's `$…$` in titles, notes and cells)
+  converts the same commands to HTML (TXH, 2026-11-07: `\dfrac` / `\tfrac` stacked like `\frac`, `\mathbf` bold, `\boxed` boxed,
+  `\begin{cases}` / `aligned` / matrices as lines, `\sqrt[n]{x}`, Unicode symbols; `tests/engine/steps-tohtml.test.mjs`); the KaTeX
+  path is unchanged. `tests/engine/tex.test.mjs` parses every step string the engine tests make with
   KaTeX (the copy in `tests/libs`).
 - **Collecting:** `const w = SharedSteps.work('sec.s'); const A = w.add({ id: 'A', … , value });` stores
   the step (id `sec.s.A`) and returns its value, so the value used downstream is the value shown.
