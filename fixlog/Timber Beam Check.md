@@ -2259,3 +2259,59 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
   - The paragraph letter and equation number of the compression-face expression in NDS 2018 3.4.3.2.
   - The glulam compression-face depth limit (5.4.4.2).
   - Different notches at the two ends (O8).
+
+## 2026-11-07 — PR: claude/timber-low (TBL1: cantilever citation footnote i; snow "S or W" note; negative dead load warning; IBC footnote d quantity as information; AUDIT.md timber section)   [citation / notes / information only; no result change]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBL1`.
+
+### TBL1-a. Cantilever deflection length: IBC 2018 Table 1604.3 footnote **i**, not h   [citation]
+- **Where:** every "footnote h" in the tool was changed to "footnote i". There are 7 places:
+  - the comment above `const dSpan = Ls.map(`;
+  - the Total limit input hint;
+  - the Deflection card `where` row;
+  - the Method text;
+  - the Reference-values row "Deflection limits (defaults)";
+  - the references table row `['IBC 2018', 'Table 1604.3 and footnote i, …']`;
+  - the Report step `df.limLL`.
+- **Before:** `… (IBC Table 1604.3 footnote h)`. **After:** `… (IBC Table 1604.3 footnote i)`.
+- **Governing provision:** IBC 2018 Table 1604.3, checked in `2018_IBC.pdf`. Footnote i says ℓ is the length between supports and, for cantilevers, twice the cantilever length. Footnote h covers aluminum members. The value used (twice the cantilever length) was already right.
+- **Note on older entries:** fix log R1-c and later entries cite "footnote h". They are history and are left as written. Read them as footnote i.
+
+### TBL1-b. Snow against the "S or W" column   [note]
+- **Where:**
+  - the Total limit input hint, anchor `The live/snow limit is used for L, Lr and S`;
+  - the Live / snow deflection card, new `where` row `n_{LL}`.
+- **Content:** IBC 2018 Table 1604.3 gives snow in its "S or W" column, which for roof members equals the "L or Lr" column (checked in `2018_IBC.pdf`). Floor members have no S limit. The tool keeps one live/snow limit for L, Lr and S, and the note now says this. No result changes.
+- **Verify:** whether a separate snow limit input is wanted. That would be a decision for the engineer.
+
+### TBL1-c. Negative dead load warning   [advisory]
+- **Where:** `tbcRun`, after `const Kcr =`. Anchor: `if (num(ld.D) < 0 || pls.some(p => p.type === 'D' && p.mag < 0)) adv.push('Negative dead load entered'`.
+- **Content:** a negative area D, or a D point load, is still accepted, and an advisory is now shown. No result changes.
+
+### TBL1-d. IBC Table 1604.3 footnote d quantity shown as information   [information only]
+- **Where:**
+  - `tbcRun`: `const cIBC = (wet || Kcr >= 2) ? 1.0 : 0.5;`, `Dibc` per span, and `defl_` gains `cIBC, Dibc, r_dIBC, spanIBC`;
+  - Deflection tab: a new card "IBC Table 1604.3 footnote d quantity (information only, not a check)";
+  - Report: a new topic with step `df.IBC`. It has no ok/NG status.
+- **Formula:** Δ<sub>IBC</sub> = c Δ<sub>D</sub> + Δ<sub>LL</sub>, the largest at the stations over the transient cases. c = 0.5 when the member is dry at installation and in use, and 1.0 otherwise. The tool takes "otherwise" as Wet service ticked or K<sub>cr</sub> ≥ 2.
+- **Decision (pending engineer review):** the total-deflection check stays as it is: Δ<sub>T</sub> = K<sub>cr</sub>Δ<sub>D</sub> + Δ<sub>LL</sub> against L/n<sub>TL</sub>. That check includes the immediate dead-load deflection, so it is more conservative than footnote d, which counts only the creep component plus the short-term live load. The footnote-d quantity is shown as information only.
+- **Check case (default joist):** Δ<sub>D</sub> = 0.2168 in., Δ<sub>L</sub> = 0.4968 in.
+  - Δ<sub>IBC</sub> = 0.5 × 0.2168 + 0.4968 = 0.605 in.; 0.605/0.800 = 0.757 (information).
+  - The check stays Δ<sub>T</sub> = 0.822 in., ratio 1.028.
+  - With Wet ticked: Δ<sub>IBC</sub> = 0.2409 + 0.5520 = 0.793 in. (0.991).
+
+### TBL1-e. AUDIT.md timber section   [documentation]
+- **Inventory row:** now describes the current tool: materials, ASD/LRFD, pinned libraries, storage keys, size. The audited description is kept in the row's note.
+- **§3.8:** a status note says the old table is history and lists the 2026-11-07 review changes.
+- **A31:** marked done (rebuilt and kept).
+
+### How verified (TBL1)
+- **No results moved.** `tbcRun` was run on 55 review cases, origin/main vs the branch: every ratio is identical. The only new output is the negative-D advisory.
+- **Validation:** 123/123.
+- **Every output tab:**
+  - no NaN / undefined / KaTeX errors;
+  - save → open identical;
+  - no console errors;
+  - no horizontal scroll at 400 px.
+- **Footnote d values:** checked on the Deflection tab for the default joist (0.605 in., 0.757) and the wet joist (0.793 in., 0.991).
+- **Syntax:** `node tests/check-syntax.mjs` passes.

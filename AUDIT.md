@@ -59,7 +59,7 @@ Sizes are on-disk bytes rounded. "Blob" means embedded base64 images, inlined li
 | `ACI Rebar Development Length.html` (**retired 2026-11-05**, RBRT: now a redirect page to the Development & Splice tab of `Concrete Beam Capacity.html#dev`, the same app; the findings below refer to the old file) | **Rebar development and splice calculator** (tension, hook, compression, lap). | **ACI 318-19**; AASHTO LRFD **9th Ed.** §5.10.8 | KaTeX 0.16.9 + auto-render, Plotly 2.27.0 | **`rebar_aci_autosave_v1`, `rebar_aci_projects_v1`** (shared with the suite's Dev tab) | 712 KB (625 KB base64) |
 | `Concrete Beam ASD.html` (**retired 2026-11-01**, #562: now a redirect page to the ASD tab of `Concrete Beam Capacity.html#asd`, with a reader for its old .json files; the findings below refer to the old file) | **"Universal ASD Bridge Rater":** working-stress RC beam capacity and Inv/Op rating factor. | "AASHTO Std. Specs / MassDOT", 8.15. **No edition.** | **Tailwind Play CDN (unpinned)**, **@phosphor-icons/web (unpinned)**, KaTeX 0.16.9 | None (file save/load only) | 41 KB |
 | `Steel Beam Design - AISC 15th.html` | **Steel beam designer:** multi-span direct-stiffness analysis plus AISC 360-16 LRFD checks, composite, torsion, batch. | **AISC 360-16**, Manual 15th, Shapes DB v16.0, Design Examples v15.0; DG9; ASCE 7 (edition "verify") | KaTeX 0.16.11, plotly-basic 2.35.2; ExcelJS 4.4.0 on demand | `sbd_autosave_v1`, `sbd_projects_v1` | 766 KB (shape DB inline) |
-| `Timber Beam Check.html` | **Sawn-lumber simple-span beam check** (bending, shear, bearing, deflection). | **NDS 2018**, ASD only | **Tailwind Play CDN (unpinned)**, **@babel/standalone (unpinned)**, **lucide@latest**, React 18.2 + lucide-react 0.292 via **esm.sh**, Google Fonts | None (file save/load only) | 58 KB |
+| `Timber Beam Check.html` (**rebuilt 2026-10-10**, fix log R1–R5; the row as audited on 2026-10-03 described the old React tool: "sawn-lumber simple span, ASD only", Tailwind / Babel / lucide / esm.sh CDNs, file save/load only, 58 KB) | **Timber beam check:** sawn lumber (Tables 4A, 4B, 4D), glulam (Table 5A) and SCL; single span, continuous spans and cantilevers; bending with C<sub>L</sub> (glulam E<sub>y,min</sub>) and C<sub>V</sub>, shear and end notches (tension or compression face), bearing (beam, supporting member, under point loads), deflection with K<sub>cr</sub> by service condition; Validation tab with live benchmarks; Report tab. | **NDS 2018** + Supplement 2018, **ASD and LRFD** (App. N); ASCE 7-16 2.4.1 / 2.3.1; IBC 2018 Table 1604.3 | KaTeX 0.16.11, plotly-basic 2.35.2 (pinned); `shared/` steps, report, projects, projects-ui, github-sync | `tbc_autosave_v1`, `tbc_projects_v1`, `tbc_inputTab_v1`; reads/writes `bridgeSuite.v1.projectMeta`; JSON file save/open (all formats migrated) | 347 KB |
 | `Shear and Moment Diagrams.html` | **"Multi-Span Beam Pro":** continuous-beam V/M/deflection diagrams with load cases, combinations, envelope. | No design code; "ASCE 7" combination presets (no edition) | KaTeX 0.16.9, plotly-basic 2.27.0 | **`beamProSaves`, `beamProAuto` (generic names)** | 126 KB |
 | `BasePlateAnchorDesigner.html` (since 2026-11-01: bolt circles, circular plates and round piers with the pier cage, torsion, anchor groups received from Light Pole and Sign Post, #600–#613; Report in the shared viewer, old report retired, #580) | **Column base plate** (AISC DG1) plus **cast-in anchors** (ACI 318-19 Ch. 17), anchor reinforcement, PROFIS PDF import. | **ACI 318-19 Ch. 17**; AISC **DG1 2nd Ed.**; ASCE 7-22 §2.3 combination generator; AISC 360 (J3.10, E3; edition not stated) | KaTeX 0.16.11, three 0.160.0, Plotly 2.32.0, **pdf.js 3.11.174** | `bpad_autosave_v1`, `bpad_projects_v1`, `bpad_lastproject_v1` | 1.07 MB (341 KB base64 figures) |
 | `Concrete Anchor.html` | **"Structural Anchor Pro":** simple 1- or 4-anchor cast-in anchor check plus a crude plate check. | "ACI 318-19 Ch. 17" | **React 18 *development* builds (unpinned `@18`)**, **@babel/standalone (unpinned)**, **Tailwind Play CDN**, KaTeX 0.16.9 | None (file save/load only) | 45 KB |
@@ -489,6 +489,16 @@ The shape DB was spot-checked and matches AISC v16.0 exactly (W24X68, W14X90, W8
 - stiffness analysis with load-point stations and per-span deflection.
 
 **Timber Beam Check** (NDS 2018, ASD)
+
+**Status (2026-11-07):** the table below describes the tool as audited on 2026-10-03. Every item in it was fixed in the 2026-10-04 fixes and the 2026-10-10 rebuild (fix log F1–F23, R1–R5). See `fixlog/Timber Beam Check.md` for each fix. The code-compliance review of 2026-11-07 led to these changes:
+- TBK1: K<sub>cr</sub> 2.0 in wet service.
+- TBE1: glulam F<sub>bE</sub> with E<sub>y,min</sub>.
+- TBF1: Table 4D flat-use E factor.
+- TBB1: supporting-member and point-load bearing.
+- TBN1: notch face.
+- TBL1: citations, notes and the IBC footnote d quantity as information.
+
+Open items are listed in the fix log. They include values to verify against the printed NDS 2018 / Supplement (not in the references), pattern live loading (declined by the engineer 2026-10-10), and the NDS edition question (O13). The line numbers below refer to the old file.
 
 | Location | What | Conf. |
 |---|---|---|
@@ -1030,7 +1040,7 @@ Items marked **❓** need your decision on the provision, edition or owner rule 
 | A28 | `Retaining Wall Designer.html` | ✅ **Done** (F1, F14, PR #9: SI toggle removed, US only). Was: disable the SI toggle (or convert in `getInputs`) with a migration for SI-autosaved values | M |
 | A29 | `Retaining Wall Designer.html` | ✅ **Done** (F2–F7, PR #9, 2026-10-04). Was: Coulomb thrust inclination (δ, not β); passive Kp with level toe; EH vertical factor; Strength Ia / 0.9D footing case; M-O unstable → error | M |
 | A30 | `ASCE7-16 Load Generator.html` | C_vx height above base; Kzt 2H substitution; combination 3 "(L or 0.5W)"; Cs floor logic; roof Cp interpolation | M |
-| A31 | `Timber Beam Check.html` | ❓ Decide: rewrite factor tables (grades, CF, CM, Ct, Ci, Cfu, Cb) and the reaction/deflection logic, **or** retire. Recommend a "not for design" banner first. | L / H |
+| A31 | `Timber Beam Check.html` | ❓ Decide: rewrite factor tables (grades, CF, CM, Ct, Ci, Cfu, Cb) and the reaction/deflection logic, **or** retire. Recommend a "not for design" banner first. **Done:** rewritten in the 2026-10-10 rebuild (fix log R1–R5) and kept; see §3.8 status. | L / H |
 | A32 | `elastomeric_design_module.html` | γa,st ≤ 3.0 check; plain-pad G·S and rotation; 0.8D stability; Da by shape; Method A limits per current edition ❓ | M |
 | A33 | `abutment_calculator.html` | T&S b = least width; seismic connection 0.15/0.25 (align with SubLoads); roughened shear-friction values; trapezoidal pressure for toe/heel | M |
 | A34 | `abutment_calculator.html` | Wind per limit state; Strength IV; sloping-backfill height/wedge | M |
