@@ -1298,7 +1298,7 @@ const GPR = (function () {
     ['gOp', 'lrfr', 'LRFR load and rating factors', '\\gamma_{LL}', 'Live load, design load operating', 1.35, '', 'MBE 3rd Ed. Table 6A.4.2.2-1', 0, ''],
     ['phiCSmin', 'lrfr', 'LRFR load and rating factors', '\\phi_c\\phi_s', 'Lower limit on the product of condition and system factors', 0.85, '', 'MBE 3rd Ed. Eq. 6A.4.2.1-3', 0, ''],
     // LFR
-    ['FvR0L', 'lfr', 'LFR fastener strengths', '\\phi F_v', 'Rivet design shear strength: built before 1936 or of unknown origin', 30, 'ksi', 'FHWA-IF-09-014; AASHTO Std. Spec. 17th Ed. Table 10.56A', 1, 'Taken equal to A502 Grade 1. Some owners require a lower value for old rivets.'],
+    ['FvR0L', 'lfr', 'LFR fastener strengths', '\\phi F_v', 'Rivet design shear strength: built before 1936 or of unknown origin', 23.8, 'ksi', 'Judgment, consistent with MBE 3rd Ed. Table 6A.6.12.5.1-1 (verify FHWA-IF-09-014 / MBE 6B; not in references)', 1, 'M6, 2026-11-07 (decision pending engineer review): the A502 Grade 1 value 30 ksi reduced in the LRFR ratio of unknown-origin to Grade 1 rivets, 30 × 23/29 = 23.8 ksi (conservative). Until 2026-11-07 the tool took 30 ksi (equal to Grade 1). Set 30 here to return to that value if the governing LFR method allows it.'],
     ['FvR1L', 'lfr', 'LFR fastener strengths', '\\phi F_v', 'Rivet design shear strength: ASTM A502 Grade 1', 30, 'ksi', 'AASHTO Std. Spec. 17th Ed. Table 10.56A', 1, ''],
     ['FvR2L', 'lfr', 'LFR fastener strengths', '\\phi F_v', 'Rivet design shear strength: ASTM A502 Grade 2', 38, 'ksi', 'AASHTO Std. Spec. 17th Ed. Table 10.56A', 1, ''],
     ['Fv325L', 'lfr', 'LFR fastener strengths', '\\phi F_v', 'Bolt design shear strength: A325, threads excluded', 46, 'ksi', 'AASHTO Std. Spec. 17th Ed. Table 10.56A', 1, ''],
