@@ -220,3 +220,8 @@ Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clea
 ## Check-in 2026-11-07 19:21 UTC (2:21 PM ET)
 - Merged: SF torsion #1164, wall b_eff #1165, wall in-plane #1166, long notes #1167, wall graphics #1168.
 - Running: SF Wall Design final piece (wall notes). Then: fix garbled J_c note (awaiting engineer wording), pick next tools for note cleanup (survey in scratchpad/nl/survey.json), Base Plate literal <b> tags.
+
+## Check-in 2026-11-07 20:53 UTC (3:53 PM ET)
+- SF Wall Design done: #1165 b_eff, #1166 in-plane, #1168 graphics, #1169 notes. No agents running.
+- Awaiting engineer: b_eff,base vs b_eff,top (base measured from b — conservative but non-physical for short walls); J_c garbled note wording; next tools for note cleanup; Base Plate literal <b> tags; abutment toe strut-and-tie; left summary panel in other apps.
+- Check-ins stopped (no work running).
