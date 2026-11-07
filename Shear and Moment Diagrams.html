@@ -544,9 +544,11 @@ function spanFER(spL,sl,fac){const r=[0,0,0,0];
       r[0]+=C*(6*a*b)/(L*L*L);r[1]-=C*b*(b-2*a)/(L*L);r[2]-=C*(6*a*b)/(L*L*L);r[3]+=C*a*(2*b-a)/(L*L);}
     else{const x1=ld.type==='uniform'?0:(ld.sx||0),x2=ld.type==='uniform'?spL:(ld.ex||spL);
       const w1=(ld.type==='uniform'?ld.mag:ld.sm)*fk,w2=(ld.type==='uniform'?ld.mag:ld.em)*fk;
-      const N=400,dx=(x2-x1)/N;
-      for(let k=0;k<N;k++){const s=x1+(k+.5)*dx,w=w1+(w2-w1)*(x2>x1?(s-x1)/(x2-x1):0),b=spL-s,L=spL;
-        r[0]+=w*b*b*(L+2*s)/(L*L*L)*dx;r[1]+=w*s*b*b/(L*L)*dx;r[2]+=w*s*s*(3*L-2*s)/(L*L*L)*dx;r[3]-=w*s*s*b/(L*L)*dx;}}});
+      /* FERX (2026-11-07, review L7): 3-point Gauss-Legendre over [x1, x2] (was a 400-strip midpoint sum). The integrand, linear w(s)
+         times a cubic in s, is a polynomial of degree 4 and the rule is exact to degree 5, so this is the closed-form fixed-end force. */
+      const hl=(x2-x1)/2,mid=(x1+x2)/2,GQ=[[-Math.sqrt(.6),5/9],[0,8/9],[Math.sqrt(.6),5/9]];
+      GQ.forEach(([t,wt])=>{const s=mid+hl*t,dx=hl*wt,w=w1+(w2-w1)*(x2>x1?(s-x1)/(x2-x1):0),b=spL-s,L=spL;
+        r[0]+=w*b*b*(L+2*s)/(L*L*L)*dx;r[1]+=w*s*b*b/(L*L)*dx;r[2]+=w*s*s*(3*L-2*s)/(L*L*L)*dx;r[3]-=w*s*s*b/(L*L)*dx;});}});
   return r;}
 
 /* Analysis stations: the uniform 400-division grid used before, plus every node and every
