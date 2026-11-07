@@ -2576,8 +2576,8 @@ function sideFaceBlowoutEdges(combo, nT, condA){
   out.sfbEdges=ev.map(o=>({name:o.name,c:o.c,dem:o.dem,phiNsb:o.obj.phiNsb,dcr:o.dcr}));
   out.sfbBase={phiNsb:base.phiNsb,dem:old,dcr:baseD};
   out.steps=[{title:"Side-face blowout — every edge closer than 0.4h_ef",ref:"ACI 318-19 §17.6.4.1, §17.6.4.2",
-    lines:["0.4h_{ef}="+fmt(0.4*hef,2)+"\ \text{in}"].concat(ev.map(o=>"\text{edge }"+o.name+":\ c_{a1}="+fmt(o.c,3)+"\ \text{in},\ N_{ua}=\sum T_{row}="+fmt(o.dem,3)+"\ \text{kip}\ ("+o.nTen+"\ \text{in tension}),\ \phi N_{sbg}="+fmt(o.obj.phiNsb,3)+"\ \text{kip}\Rightarrow "+fmt(o.dcr,3)))
-      .concat(["\text{governing: edge }"+(gov? gov.name : (ev.find(o=>Math.abs(o.c-ca1)<1e-9)||{name:"(nearest)"}).name)]),
+    lines:["0.4h_{ef}="+fmt(0.4*hef,2)+"\\ \\text{in}"].concat(ev.map(o=>"\\text{edge }"+o.name+":\\ c_{a1}="+fmt(o.c,3)+"\\ \\text{in},\\ N_{ua}=\\sum T_{row}="+fmt(o.dem,3)+"\\ \\text{kip}\\ ("+o.nTen+"\\ \\text{in tension}),\\ \\phi N_{sbg}="+fmt(o.obj.phiNsb,3)+"\\ \\text{kip}\\Rightarrow "+fmt(o.dcr,3)))
+      .concat(["\\text{governing: edge }"+(gov? gov.name : (ev.find(o=>Math.abs(o.c-ca1)<1e-9)||{name:"(nearest)"}).name)]),
     vars:[["rule","","each edge within 0.4h_ef is checked with its own c_a1, c_a2 and row spacing against the tension of the anchor row nearest that edge; the largest ratio governs"]]}]
     .concat(out.steps||[]);
   return out;
@@ -4073,11 +4073,11 @@ function plateBending(combo, cc){
   let eccStep=null;
   if(eccSides){ const ce=(combo.raw&&combo.raw.colEcc)||{ex:ecx,ey:ecy,P:0,Mx0:0,My0:0,dMx:0,dMy:0,dT:0,T0:0};
     eccStep={title:"Column eccentric on the plate — loads moved to the plate centre, cantilever per side",ref:"AISC DG1 §3.1 / §3.3 (column face per side); statics",
-      lines:["e_x="+fmt(ecx,3)+",\ e_y="+fmt(ecy,3)+"\ \text{in (column centroid from the plate centre)}",
-        "M_{x}=M_{x,0}+P\,e_y="+fmt(ce.Mx0,2)+"+("+fmt(ce.P,2)+")("+fmt(ecy,3)+")="+fmt(ce.Mx0+ce.dMx,2)+"\ \text{kip-in}",
-        "M_{y}=M_{y,0}-P\,e_x="+fmt(ce.My0,2)+"-("+fmt(ce.P,2)+")("+fmt(ecx,3)+")="+fmt(ce.My0+ce.dMy,2)+"\ \text{kip-in}",
-        "T=T_0+e_xV_y-e_yV_x="+fmt(ce.T0,2)+"+"+fmt(ce.dT,2)+"="+fmt(ce.T0+ce.dT,2)+"\ \text{kip-in}"]
-        .concat(eccSides.map(o=>"\ell("+o.nm+")="+(o.ax==="N"? "m"+(o.nm==="+y"?"-e_y":"+e_y") : "n"+(o.nm==="+x"?"-e_x":"+e_x"))+"="+fmt(o.ell,3)+"\ \text{in};\ "+(o.comp?"\text{compressed edge}":"\text{far edge}")+",\ q="+fmt(o.q,3)+"\ \text{ksi on }"+fmt(o.a,2)+"\text{–}"+fmt(o.b,2)+"\ \text{in}:\ M="+fmt(o.M,3)+"\ \text{kip-in/in},\ t=\sqrt{4M/(\phi F_y)}="+fmt(o.t,3)+"\ \text{in}")),
+      lines:["e_x="+fmt(ecx,3)+",\\ e_y="+fmt(ecy,3)+"\\ \\text{in (column centroid from the plate centre)}",
+        "M_{x}=M_{x,0}+P\\,e_y="+fmt(ce.Mx0,2)+"+("+fmt(ce.P,2)+")("+fmt(ecy,3)+")="+fmt(ce.Mx0+ce.dMx,2)+"\\ \\text{kip-in}",
+        "M_{y}=M_{y,0}-P\\,e_x="+fmt(ce.My0,2)+"-("+fmt(ce.P,2)+")("+fmt(ecx,3)+")="+fmt(ce.My0+ce.dMy,2)+"\\ \\text{kip-in}",
+        "T=T_0+e_xV_y-e_yV_x="+fmt(ce.T0,2)+"+"+fmt(ce.dT,2)+"="+fmt(ce.T0+ce.dT,2)+"\\ \\text{kip-in}"]
+        .concat(eccSides.map(o=>"\\ell("+o.nm+")="+(o.ax==="N"? "m"+(o.nm==="+y"?"-e_y":"+e_y") : "n"+(o.nm==="+x"?"-e_x":"+e_x"))+"="+fmt(o.ell,3)+"\\ \\text{in};\\ "+(o.comp?"\\text{compressed edge}":"\\text{far edge}")+",\\ q="+fmt(o.q,3)+"\\ \\text{ksi on }"+fmt(o.a,2)+"\\text{–}"+fmt(o.b,2)+"\\ \\text{in}:\\ M="+fmt(o.M,3)+"\\ \\text{kip-in/in},\\ t=\\sqrt{4M/(\\phi F_y)}="+fmt(o.t,3)+"\\ \\text{in}")),
       vars:[["P","tension +","axial load at the column centroid"],["M_{side}","q[(ℓ−a)² − (ℓ−b)²]/2","bearing block of that axis beyond the side's critical section ([a, b] measured from that plate edge)"]]}; }
 
   /* tension side — arm to the nearest DG1 critical section */
