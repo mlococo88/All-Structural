@@ -3785,7 +3785,7 @@ Calculation audit, item 9 (3). Engineer decision (2026-11-07). Code sites are ta
 ### Saved data
 - No input or format change. Old projects with k_h > 0 get the stem seismic combination; their stem results can change (ACI).
 
-## 2026-11-07 — PR: claude/rw-ee2-vertical-eh — AASHTO Extreme Event II (collision): the vertical earth-thrust component P_a,V follows the EH choice (0 under MassDOT, 1.00 under "full") (RWCV; calculation change)
+## 2026-11-07 — PR: claude/rw-ee2-vertical-eh — AASHTO Extreme Event II (collision): the vertical earth-thrust component P_a,V follows the EH choice (0 under MassDOT, 1.00 under "full") (RWCV; calculation change) (PR #956: https://github.com/mlococo88/All-Structural/pull/956)
 
 Follow-up to item 3 (#944). Engineer answer (2026-11-07): the vertical component of the earth thrust follows the EH choice in Extreme Event II. Code sites are tagged `RWCV`.
 
