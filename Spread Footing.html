@@ -133,6 +133,13 @@ body.sfdStale .tabbar button:not([data-tab="tab-manual"])::after{content:" \26A0
 .vart td:nth-child(1){text-align:center}
 .vart td:nth-child(2){text-align:left}
 .note{color:#444;font-style:italic;margin:5px 0;line-height:1.45}
+/* SFNL (2026-11-07): a long note as a bold lead line and a list with bold lead words (sfNL); action items first, in a warnbox */
+.sfNL .sfNLl{font-weight:bold;margin:0 0 1px}
+.sfNL .sfNLu{margin:2px 0 3px;padding-left:18px}
+.sfNL .sfNLu>li{margin:1px 0}
+.sfNL .sfNLa{font-style:normal;margin:2px 0 4px}
+.sfNL.warnbox .sfNLl,.sfNL.errbox .sfNLl,.sfNL.failbox .sfNLl{font-style:normal}
+@media print{.sfNL .sfNLu>li{break-inside:avoid}}
 .svgbox{border:1px solid #ccc;background:#fff;margin:6px 0}
 .plot{width:100%;height:380px;margin:6px 0}
 .sfpmSel{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 2px}.sfpmSel button{font:inherit;font-size:12px;padding:4px 10px;border:1px solid #9aa9bd;background:#f4f6f9;color:#1f3550;border-radius:4px;cursor:pointer}.sfpmSel button.on{background:#1f4e8c;border-color:#1f4e8c;color:#fff}
@@ -407,7 +414,7 @@ a.wkA:hover{text-decoration:underline}
  <div class="row sm-vesic"><label>Friction angle &phi;</label><input type="number" step="0.5" data-path="soil.phi" data-num><span class="unit">deg</span></div>
  <div class="row sm-vesic"><label>Bearing capacity FS</label><input type="number" step="0.1" data-path="soil.FSb" data-num><span class="unit">&ndash;</span></div>
  <div class="row sm-vesic"><label>Depth factors d<sub>q</sub>, d<sub>c</sub></label><select data-path="soil.sfdDepthF"><option value="off">Off (d = 1.0)</option><option value="on">On (Vesi&cacute;)</option></select><span class="hint">Vesi&cacute; form (not AASHTO LRFD 10th Ed. Eq. 10.6.3.1.2a-10); use condition per AASHTO 10.6.3.1.2a</span></div>
-<div class="row sm-vesic"><label>Shear failure mode</label><select data-path="soil.sfdShearMode"><option value="general">General shear (c, &phi; as entered)</option><option value="local">Local / punching shear (c* = 0.67c, &phi;* = tan<sup>&minus;1</sup>(0.67 tan &phi;))</option></select><span class="hint">AASHTO LRFD 10th Ed. 10.6.3.1.2b: use the reduced parameters where local or punching shear failure is possible (loose or compressible soil, weak soil under slow loading, dense sand under a deep footing with a high load). Bearing capacity only; sliding and passive use &phi;.</span></div>
+<div class="row sm-vesic"><label>Shear failure mode</label><select data-path="soil.sfdShearMode"><option value="general">General shear (c, &phi; as entered)</option><option value="local">Local / punching shear (c* = 0.67c, &phi;* = tan<sup>&minus;1</sup>(0.67 tan &phi;))</option></select><span class="hint"><b class="sfNLk">AASHTO LRFD 10th Ed. 10.6.3.1.2b:</b> use the reduced parameters where local or punching shear failure is possible (loose or compressible soil, weak soil under slow loading, dense sand under a deep footing with a high load).<br><b class="sfNLk">Applies to:</b> bearing capacity only; sliding and passive use &phi;.</span></div>
  <div class="row sm-vesic"><label>Override q<sub>allow</sub></label><select data-path="soil.qaOverride" id="qaOverSel"><option value="off">Off (use computed)</option><option value="on">On (user value)</option></select></div>
  <div class="row sm-vesic qa-over"><label>User q<sub>allow</sub></label><input type="number" step="0.25" data-path="soil.qaOverVal" data-num><span class="unit">ksf</span></div>
  <div class="row"><label>Soil unit weight &gamma;<sub>s</sub></label><input type="number" step="1" data-path="soil.gs" data-num><span class="unit">pcf</span></div>
@@ -420,17 +427,17 @@ a.wkA:hover{text-decoration:underline}
 <div class="secbody">
  <div class="row"><label>Cover depth over footing</label><input type="number" step="0.25" data-path="ev.cover" data-num><span class="unit">ft</span></div>
  <div class="row"><label>Cover soil unit weight &gamma;<sub>EV</sub></label><input type="number" step="1" data-path="ev.gev" data-num><span class="unit">pcf</span></div>
- <div class="note">Applied over footing plan area outside pedestal footprints. Tracked as its own line item (EV); carries the dead-load factor in each combination, so min/max bracketing is achieved through the 0.6D-type combinations.</div>
+ <div class="note sfNL"><div class="sfNLl">Soil cover (EV): a dead load, in every combination.</div><ul class="sfNLu"><li><b class="sfNLk">Acts on:</b> the footing plan area outside the pedestal footprints.</li><li><b class="sfNLk">Load item:</b> tracked as its own line item (EV); carries the dead-load factor in each combination.</li><li><b class="sfNLk">Bracketing:</b> min/max bracketing is achieved through the 0.6D-type combinations.</li></ul></div>
  <div class="row"><label>Dead surcharge q<sub>D,sur</sub></label><input type="number" step="10" data-path="ev.qDsur" data-num><span class="unit">psf</span></div>
  <div class="row"><label>Live surcharge q<sub>L,sur</sub></label><input type="number" step="10" data-path="ev.qLsur" data-num><span class="unit">psf</span></div>
- <div class="note">Applied (dead/live) surcharge pressure acting over the footing plan area outside the pedestals \u2014 e.g. slab-on-grade, stored material, or traffic. Dead surcharge carries the dead-load factor; live surcharge carries the live-load factor of each combination (so it is bracketed out of the minimum-dead/uplift cases). Acts downward through the footing centroid.</div>
+ <div class="note sfNL"><div class="sfNLl">Surcharge: applied (dead/live) pressure on the footing plan area outside the pedestals.</div><ul class="sfNLu"><li><b class="sfNLk">Examples:</b> slab-on-grade, stored material, or traffic.</li><li><b class="sfNLk">Dead surcharge:</b> carries the dead-load factor.</li><li><b class="sfNLk">Live surcharge:</b> carries the live-load factor of each combination (so it is bracketed out of the minimum-dead/uplift cases).</li><li><b class="sfNLk">Line of action:</b> acts downward through the footing centroid.</li></ul></div>
 </div>
 </details>
 
 <details class="sec" id="sec-rebar" open>
 <summary>Footing Reinforcement</summary>
 <div class="secbody">
- <div class="note">Bottom mat resists positive (cantilever/sagging) moment; top mat resists negative moment between pedestals. Bars in the x-direction resist bending about the y-axis (x-bars are spread across L, y-bars across B). Each mat is entered either as a <b>spacing</b> s or as a <b>total quantity</b> n of bars across the footing width. Enter #0 spacing to omit a mat. Check-only: the tool reports DCR and required A<sub>s</sub>.</div>
+ <div class="note sfNL"><div class="sfNLl">Four mats, each checked (not designed).</div><ul class="sfNLu"><li><b class="sfNLk">Bottom mat:</b> resists positive (cantilever/sagging) moment.</li><li><b class="sfNLk">Top mat:</b> resists negative moment between pedestals.</li><li><b class="sfNLk">Bar direction:</b> bars in the x-direction resist bending about the y-axis (x-bars are spread across L, y-bars across B).</li><li><b class="sfNLk">Input:</b> each mat is entered either as a <b>spacing</b> s or as a <b>total quantity</b> n of bars across the footing width.</li><li><b class="sfNLk">Omit a mat:</b> enter #0 spacing.</li><li><b class="sfNLk">Check-only:</b> the tool reports DCR and required A<sub>s</sub>.</li></ul></div>
  <table class="tbl sfdRbTbl" style="font-size:10.5px"><tr><th>Mat</th><th>Bar #</th><th>Input</th><th>s (in) / n</th><th>A<sub>b</sub> (in&sup2;)</th><th>A<sub>s</sub>/ft (in&sup2;)</th><th>s vs s<sub>max</sub> (in)</th></tr>
  <tr><td>Bottom x</td><td><select data-path="freinf.botX.size" class="barsel" style="width:60px"></select></td><td><select data-path="freinf.botX.mode" class="sfdRbMode" style="width:74px"><option value="spacing">Spacing</option><option value="qty">Total qty</option></select></td><td><input type="number" step="0.5" data-path="freinf.botX.spc" data-num style="width:46px" class="sfdRbSpc" data-mat="botX" title="center-to-center spacing, in"><input type="number" step="1" min="0" data-path="freinf.botX.n" data-num style="width:46px" class="sfdRbN" data-mat="botX" title="total number of bars across the footing width"><div class="sfdRbD" data-mat="botX" style="font-size:10px"></div></td><td class="sfdRbAb" data-mat="botX"></td><td class="sfdRbAs" data-mat="botX"></td><td class="sfdRbS" data-mat="botX"></td></tr>
  <tr><td>Bottom y</td><td><select data-path="freinf.botY.size" class="barsel" style="width:60px"></select></td><td><select data-path="freinf.botY.mode" class="sfdRbMode" style="width:74px"><option value="spacing">Spacing</option><option value="qty">Total qty</option></select></td><td><input type="number" step="0.5" data-path="freinf.botY.spc" data-num style="width:46px" class="sfdRbSpc" data-mat="botY" title="center-to-center spacing, in"><input type="number" step="1" min="0" data-path="freinf.botY.n" data-num style="width:46px" class="sfdRbN" data-mat="botY" title="total number of bars across the footing width"><div class="sfdRbD" data-mat="botY" style="font-size:10px"></div></td><td class="sfdRbAb" data-mat="botY"></td><td class="sfdRbAs" data-mat="botY"></td><td class="sfdRbS" data-mat="botY"></td></tr>
@@ -473,10 +480,10 @@ a.wkA:hover{text-decoration:underline}
  <div class="row"><label>Custom e/B limit</label><input type="number" step="0.01" data-path="stab.eccCustom" data-num><span class="unit">&ndash;</span><span class="hint">used only when Custom is selected</span></div>
  <div class="row"><label>Target FS, sliding</label><input type="number" step="0.1" data-path="stab.FSsl" data-num><span class="unit">&ndash;</span></div>
  <div class="row"><label>Target FS, flotation</label><input type="number" step="0.05" data-path="stab.FSfl" data-num><span class="unit">&ndash;</span></div>
- <div class="row"><label>Simultaneous wind 0.75(W<sub>x</sub> + W<sub>y</sub>)</label><select data-path="stab.windSim"><option value="on">Add (ASCE 7-16 Fig. 27.3-8, Case 3)</option><option value="off">Off (W<sub>x</sub> or W<sub>y</sub> alone)</option></select><span class="hint">Adds the four 0.75(&plusmn;W<sub>x</sub> &plusmn;W<sub>y</sub>) wind cases wherever both W<sub>x</sub> and W<sub>y</sub> loads are entered (MWFRS load Case 3 of ASCE 7-16 27.3.5; Case 2 / 4 torsion is not modelled). Projects saved before this option: Off.</span></div>
+ <div class="row"><label>Simultaneous wind 0.75(W<sub>x</sub> + W<sub>y</sub>)</label><select data-path="stab.windSim"><option value="on">Add (ASCE 7-16 Fig. 27.3-8, Case 3)</option><option value="off">Off (W<sub>x</sub> or W<sub>y</sub> alone)</option></select><span class="hint"><b class="sfNLk">Adds:</b> the four 0.75(&plusmn;W<sub>x</sub> &plusmn;W<sub>y</sub>) wind cases wherever both W<sub>x</sub> and W<sub>y</sub> loads are entered (MWFRS load Case 3 of ASCE 7-16 27.3.5;<br><b class="sfNLk">Not modelled:</b> Case 2 / 4 torsion).<br><b class="sfNLk">Projects saved before this option:</b> Off.</span></div>
  <div class="row"><label>S<sub>DS</sub> (seismic, for E<sub>v</sub>)</label><input type="number" step="0.01" data-path="stab.SDS" data-num><span class="unit">g</span><span class="hint">E<sub>v</sub> = 0.2S<sub>DS</sub>D (ASCE 7-16 12.4.2.2). Used only where E loads are entered (load type E = E<sub>h</sub>; the overstrength factor is not applied unless you enter E<sub>mh</sub>).</span></div>
  <div class="row"><label>Pedestal shear couple (V&middot;h)</label><select data-path="stab.shearCouple"><option value="on">Include (V generates base moment)</option><option value="off">Exclude (shear at base)</option></select></div>
- <div class="note" style="font-size:10px">Include: a horizontal shear at the pedestal top generates an overturning couple V&middot;h at the footing base (rigorous). Exclude: shear is taken directly at the footing base with no couple (matches some tools, e.g. certain ENERCALC conventions).</div>
+ <div class="note sfNL" style="font-size:10px"><ul class="sfNLu"><li><b class="sfNLk">Include:</b> a horizontal shear at the pedestal top generates an overturning couple V&middot;h at the footing base (rigorous).</li><li><b class="sfNLk">Exclude:</b> shear is taken directly at the footing base with no couple (matches some tools, e.g. certain ENERCALC conventions).</li></ul></div>
 </div>
 </details>
 
@@ -484,15 +491,15 @@ a.wkA:hover{text-decoration:underline}
 <summary>Pedestals &amp; Applied Loads</summary>
 <div class="secbody">
  <div class="row"><label>Load input mode</label><select data-path="loadMode" id="loadModeSel"><option value="type">By load type (D, L, Lr, S, Wx, Wy)</option><option value="direct">Direct factored (LRFD envelope)</option></select></div>
- <div class="note" id="loadModeNote"></div>
- <div class="note" style="background:#eef4fb;border:1px solid #b9c8dc;padding:6px 8px;border-radius:3px">
-  <b>Axes &amp; sign convention</b> (origin at footing centroid, plan view):<br>
-  &bull; <b>+x</b> points toward the B/2 edge (right); <b>+y</b> points toward the L/2 edge (up in plan); <b>+z</b> is up.<br>
-  &bull; <b>P</b> positive = downward (compression on soil).<br>
-  &bull; <b>V<sub>x</sub></b> positive = horizontal force toward +x; <b>V<sub>y</sub></b> positive = toward +y (both applied at pedestal top).<br>
-  &bull; <b>M<sub>x</sub></b> positive = moment that shifts the soil resultant toward +y; <b>M<sub>y</sub></b> positive = shifts it toward +x.<br>
-  &bull; A shear at the pedestal top also creates a base moment V&middot;h (h = pedestal height): +V<sub>x</sub> adds to M<sub>y</sub>, +V<sub>y</sub> adds to M<sub>x</sub> (toggle in Stability).
-  &bull; <b>Load offset e<sub>x</sub>, e<sub>y</sub></b> (per pedestal): where the loads act on the pedestal top, measured from the pedestal centroid, same axes. P of every load type (and the direct factored P) acts there, so +P&middot;e<sub>x</sub> adds to M<sub>y</sub> and +P&middot;e<sub>y</sub> adds to M<sub>x</sub> for the footing and the pedestal. 0 = centred.
+ <div class="note sfNL" id="loadModeNote"></div>
+ <div class="note sfNL" style="background:#eef4fb;border:1px solid #b9c8dc;padding:6px 8px;border-radius:3px">
+  <div class="sfNLl">Axes &amp; sign convention <span style="font-weight:normal">(origin at footing centroid, plan view):</span></div><ul class="sfNLu">
+  <li><b>+x</b> points toward the B/2 edge (right); <b>+y</b> points toward the L/2 edge (up in plan); <b>+z</b> is up.</li>
+  <li><b>P</b> positive = downward (compression on soil).</li>
+  <li><b>V<sub>x</sub></b> positive = horizontal force toward +x; <b>V<sub>y</sub></b> positive = toward +y (both applied at pedestal top).</li>
+  <li><b>M<sub>x</sub></b> positive = moment that shifts the soil resultant toward +y; <b>M<sub>y</sub></b> positive = shifts it toward +x.</li>
+  <li><b>Shear couple:</b> a shear at the pedestal top also creates a base moment V&middot;h (h = pedestal height): +V<sub>x</sub> adds to M<sub>y</sub>, +V<sub>y</sub> adds to M<sub>x</sub> (toggle in Stability).</li>
+  <li><b>Load offset e<sub>x</sub>, e<sub>y</sub></b> (per pedestal): where the loads act on the pedestal top, measured from the pedestal centroid, same axes. P of every load type (and the direct factored P) acts there, so +P&middot;e<sub>x</sub> adds to M<sub>y</sub> and +P&middot;e<sub>y</sub> adds to M<sub>x</sub> for the footing and the pedestal. 0 = centred.</li></ul>
  </div>
  <div class="note">Enter loads at the <b>top of each pedestal</b>. The 3D View and schematics use the same axes (see the labeled x/y/z triad in the 3D scene).</div>
  <div id="pedContainer"></div>
@@ -699,6 +706,13 @@ function varTable(rows){
   const c3=document.createElement('td');c3.textContent=r[3];tr.appendChild(c3);t.appendChild(tr);});
  return t;}
 function el(tag,cls,html){const e=document.createElement(tag);if(cls)e.className=cls;if(html!==undefined)e.innerHTML=html;return e;}
+/* SFNL (2026-11-07, engineer: a long note is "a text that will likely get overlooked because it's too long"; split it into a list):
+   the HTML of a note as an optional action line (act: strings, each a .warnbox line on top), a bold one-line lead and a list of
+   items, each [lead word(s), text] or plain text. Used inside a 'note sfNL' / 'warnbox sfNL' element; the Report (sfxWalk) prints
+   each part as its own line. Display only. */
+function sfNL(lead,items,o){o=o||{};const L=o.ol?'ol':'ul';
+ const li=(items||[]).filter(Boolean).map(x=>'<li>'+(Array.isArray(x)?'<b class="sfNLk">'+x[0]+'</b> '+x[1]:x)+'</li>').join('');
+ return (o.act||[]).filter(Boolean).map(a=>'<div class="warnbox sfNLa">'+a+'</div>').join('')+(lead?'<div class="sfNLl">'+lead+'</div>':'')+(li?'<'+L+' class="sfNLu">'+li+'</'+L+'>':'');}
 function secPanel(parent,id,title,openDefault){
  const d=document.createElement('details');d.className='sec';d.id=id;
  const st=collapseState[id];d.open=(st===undefined)?(openDefault!==false):st;
@@ -913,7 +927,12 @@ function refreshVis(){
  $$('.swUser').forEach(e=>e.style.display=state.mat.swMode==='user'?'flex':'none');
  const lmn=$('#loadModeNote');
  if(lmn){lmn.innerHTML=(state.loadMode==='direct')
-  ?'<b>Direct factored mode.</b> Enter one already-factored (LRFD/strength) load set per pedestal. The combination engine is bypassed \u2014 a single "Direct LRFD" envelope drives all checks. Footing self-weight, pedestal self-weight, and EV are still auto-computed and added, bracketed per ASCE 7-16 (factor 1.2 where they add to demand; 0.9 where they resist, i.e. uplift/overturning/sliding). A case imported from the abutment calculator or Bridge Substructure Loading uses that case\'s AASHTO LRFD 10th Ed. factors instead (Strength γp as built, Extreme Event 1.00). Bearing is checked conservatively (factored loads vs allowable bearing \u2014 a service quantity). Stability results are indicative only, since a single envelope is not a true combination-by-combination sweep.'
+  ?sfNL('Direct factored mode: enter one already-factored (LRFD/strength) load set per pedestal.',[
+   ['Combinations:','the combination engine is bypassed \u2014 a single "Direct LRFD" envelope drives all checks.'],
+   ['Self-weight and EV:','footing self-weight, pedestal self-weight, and EV are still auto-computed and added, bracketed per ASCE 7-16 (factor 1.2 where they add to demand; 0.9 where they resist, i.e. uplift/overturning/sliding).'],
+   ['Imported case:','a case imported from the abutment calculator or Bridge Substructure Loading uses that case\'s AASHTO LRFD 10th Ed. factors instead (Strength γp as built, Extreme Event 1.00).'],
+   ['Bearing:','checked conservatively (factored loads vs allowable bearing \u2014 a service quantity).'],
+   ['Stability:','results are indicative only, since a single envelope is not a true combination-by-combination sweep.']])
   :'<b>By-load-type mode.</b> Enter unfactored loads by type; the app generates the full ASD and LRFD combination sets (ASCE 7-16) and runs bearing/stability on service (ASD) and concrete design on strength (LRFD).';}
 }
 function buildPedCards(){
@@ -1253,8 +1272,14 @@ function sfdRebarInfo(){
   q('sfdRbS').innerHTML=sTxt;
  });
  const n=document.getElementById('sfdRbNote');
- if(n)n.innerHTML='A<sub>b</sub> from the bar table (#3\u2013#11); A<sub>s</sub> per ft of width is the value used in the footing design: A<sub>b</sub>&middot;12/s (spacing) or n&middot;A<sub>b</sub>/w (quantity; w = L for x-bars, B for y-bars). With a quantity, s = (12w &minus; 2c &minus; d<sub>b</sub>)/(n &minus; 1), c = side/end cover (Materials; blank = bottom cover), is used for the s<sub>max</sub> check and for c<sub>b</sub> of &ell;<sub>d</sub>; with a spacing, the bar count shown is floor((12w &minus; 2c &minus; d<sub>b</sub>)/s) + 1. s<sub>max</sub> = min(2h, 18 in) (ACI 318-19 8.7.2.2; 13.3.3.1 / 13.3.4.1); top mats are checked only where hogging makes them flexural mats.'+
-  ((P2&&P2.desX)?' Worked in: '+sfdLink('o-fd-x','x-bars',['tab-footdes','5.2 Longitudinal (x-direction)'])+' · '+sfdLink('o-fd-y','y-bars',['tab-footdes','5.3 Transverse (y-direction)']):'');
+ if(n){n.classList.add('sfNL');n.innerHTML=sfNL('How the table columns are found:',[   /* SFNL */
+  ['A<sub>b</sub>:','from the bar table (#3\u2013#11).'],
+  ['A<sub>s</sub> per ft of width:','the value used in the footing design: A<sub>b</sub>&middot;12/s (spacing) or n&middot;A<sub>b</sub>/w (quantity; w = L for x-bars, B for y-bars).'],
+  ['With a quantity:','s = (12w &minus; 2c &minus; d<sub>b</sub>)/(n &minus; 1), c = side/end cover (Materials; blank = bottom cover), is used for the s<sub>max</sub> check and for c<sub>b</sub> of &ell;<sub>d</sub>.'],
+  ['With a spacing:','the bar count shown is floor((12w &minus; 2c &minus; d<sub>b</sub>)/s) + 1.'],
+  ['Maximum spacing:','s<sub>max</sub> = min(2h, 18 in) (ACI 318-19 8.7.2.2; 13.3.3.1 / 13.3.4.1).'],
+  ['Top mats:','checked only where hogging makes them flexural mats.'],
+  (P2&&P2.desX)?['Worked in:',sfdLink('o-fd-x','x-bars',['tab-footdes','5.2 Longitudinal (x-direction)'])+' · '+sfdLink('o-fd-y','y-bars',['tab-footdes','5.3 Transverse (y-direction)'])]:null]);}
 }
 /* SFRQ: pedestal cards: which longitudinal-bar inputs apply, and the bars they give */
 function sfdPedBarInfo(){
@@ -1262,11 +1287,14 @@ function sfdPedBarInfo(){
   const show=(path,on)=>{const x=card.querySelector('[data-path="peds.'+i+'.reinf.'+path+'"]');if(x)x.disabled=!on;};
   show('nx',b.mode==='faces');show('ny',b.mode==='faces');show('nTot',b.mode==='total');show('longSpc',b.mode==='spacing');
   const DB=sfdDowelBars(i);show('dowelSize',!DB.fromLong);show('dowelN',!DB.fromLong);show('dowelProj',!DB.fromLong);   /* SFDB: greyed out when the longitudinal bars act as the dowels */
-  d.innerHTML='Longitudinal bars: '+sfEsc(sfdPedBarTxt(i))+'. Corner-bar centre span L<sub>c</sub> = b \u2212 2&middot;cover \u2212 d<sub>b</sub> = '+f2(b.Lx)+' in (x-face), '+f2(b.Ly)+' in (y-face).'+
-   (b.mode==='spacing'?' Bars per face = ceil(L<sub>c</sub>/s) + 1.':b.mode==='total'?' Split so the two faces have spacings as equal as possible.':'')+
-   (DB.fromLong?' Dowels: the '+DB.n+' #'+DB.size+' longitudinal bars, continuous into the footing.':'')+
-   (P2&&P2.dowels&&P2.dowels[i]&&!P2.dowels[i].isPatch?' Dowels and shear friction worked in: '+sfdLink('o-fd-bear','',['tab-footdes','5.6 Concrete Bearing & Dowels'])+'.':'')+   /* SFLK */
-   (P2&&P2.pedDes&&P2.pedDes[i]&&!P2.pedDes[i].isPatch?' '+sftcTxt(P2.pedDes[i])+' Worked in: '+sfdElLink(i):'');});   /* SFWD */
+  d.classList.add('sfNL');   /* SFNL: the same facts as a list */
+  d.innerHTML=sfNL('Longitudinal bars: '+sfEsc(sfdPedBarTxt(i))+'.',[
+   ['Corner-bar centre span:','L<sub>c</sub> = b \u2212 2&middot;cover \u2212 d<sub>b</sub> = '+f2(b.Lx)+' in (x-face), '+f2(b.Ly)+' in (y-face).'],
+   b.mode==='spacing'?['Bars per face:','ceil(L<sub>c</sub>/s) + 1.']:b.mode==='total'?['Split:','so the two faces have spacings as equal as possible.']:null,
+   DB.fromLong?['Dowels:','the '+DB.n+' #'+DB.size+' longitudinal bars, continuous into the footing.']:null,
+   P2&&P2.dowels&&P2.dowels[i]&&!P2.dowels[i].isPatch?['Dowels and shear friction worked in:',sfdLink('o-fd-bear','',['tab-footdes','5.6 Concrete Bearing & Dowels'])+'.']:null,   /* SFLK */
+   P2&&P2.pedDes&&P2.pedDes[i]&&!P2.pedDes[i].isPatch?['Cover:',sftcTxt(P2.pedDes[i])]:null,
+   P2&&P2.pedDes&&P2.pedDes[i]&&!P2.pedDes[i].isPatch?['Worked in:',sfdElLink(i)]:null]);});   /* SFWD */
 }
 /* SFTC: one line for the clear cover to the ties */
 function sftcTxt(pd){return 'Clear cover to the vertical bars c = '+f2(pd.cov)+' in '+(pd.vertCovOK?'\u2265':'<')+' '+f2(pd.vertCovMin)+' in min'+(pd.vertCovOK?'':' \u2014 NG')+'. Clear cover to the ties c \u2212 d<sub>b,tie</sub> = '+f2(pd.cov)+' \u2212 '+f3(pd.tieDb)+' = '+f3(pd.tieCov)+' in '+(pd.tieCovOK?'\u2265':'<')+' '+f2(pd.tieCovMin)+' in min ('+SFTC_EXP[pd.exposure][1]+', ACI 318-19 Table 20.5.1.3.1)'+(pd.tieCovOK?'.':' \u2014 NG.');
@@ -2220,19 +2248,28 @@ function renderSchematic(){
  if(R.fatal)return;
  const b1=secPanel(T,'o-schem-plan','1.1  Plan Schematic (to scale, live)');
  b1.appendChild(planSVG());
- b1.appendChild(el('div','legendbox','Kern (middle-third diamond) shown dashed. Red \u2297 = service resultant of the governing bearing combination. Shaded band = zero-pressure (neutral-axis) line when contact is partial. Soil cover (EV) region shaded tan.'));
+ b1.appendChild(el('div','legendbox sfNL',sfNL('Legend:',[['Dashed:','kern (middle-third diamond).'],['Red ⊗:','service resultant of the governing bearing combination.'],['Shaded band:','zero-pressure (neutral-axis) line when contact is partial.'],['Shaded tan:','soil cover (EV) region.']])));   /* SFNL */
  const b2=secPanel(T,'o-schem-sect','1.2  Section Schematic (to scale, live)');
  b2.appendChild(sectSVG());
  const b3=secPanel(T,'o-schem-sign','1.3  Sign Convention');
- b3.appendChild(el('div','note','Origin at footing centroid. +x toward the B/2 edge, +y toward the L/2 edge. P positive downward (compression). +V\u2093, +V\u1D67 act in +x, +y at the top of the pedestal and generate base moments V\u00b7h. +M\u2093 shifts the resultant toward +y; +M\u1D67 shifts the resultant toward +x. Eccentricities: e\u2093 = \u03a3M\u1D67 / \u03a3P, e\u1D67 = \u03a3M\u2093 / \u03a3P.'));
+ b3.appendChild(el('div','note sfNL',sfNL('Origin at footing centroid.',[['Axes:','+x toward the B/2 edge, +y toward the L/2 edge.'],['P:','positive downward (compression).'],['Shears:','+Vₓ, +Vᵧ act in +x, +y at the top of the pedestal and generate base moments V·h.'],['Moments:','+Mₓ shifts the resultant toward +y; +Mᵧ shifts the resultant toward +x.'],['Eccentricities:','eₓ = ΣMᵧ / ΣP, eᵧ = ΣMₓ / ΣP.']])));   /* SFNL */
  const b4=secPanel(T,'o-schem-echo','1.4  Input Echo');
  b4.appendChild(buildInputEcho());
  b4.appendChild(sfdWorkedIn([['o-cb-weights','footing self-weight']]));   /* D11 links */
  const b5=secPanel(T,'o-schem-assump','1.5  Engineering Assumptions & Items Not Considered');
  const ul=el('div');
  if(state.assump.trim())ul.appendChild(el('p','', '<b>User assumptions:</b> '+state.assump.replace(/</g,'&lt;').replace(/\n/g,'<br>')));
- if(R.directMode)ul.appendChild(el('p','note','<b>Direct factored load mode is active.</b> Loads were entered as a single already-factored (LRFD) envelope per pedestal; the ASCE 7-16 combination sweep was bypassed. '+(R.aashtoDirect?'Imported AASHTO case "'+sfEsc(R.aashtoDirect.caseName)+'" ('+sfEsc(R.aashtoDirect.ls)+'): self-weight, EV and surcharge are added at its AASHTO LRFD 10th Ed. factors ('+R.aashtoDirect.sets.map(st=>'DC '+st.dc.toFixed(2)+', EV '+st.ev.toFixed(2)+', ES '+st.es.toFixed(2)+', LS '+st.ls.toFixed(2)).join('; ')+'; Tables 3.4.1-1, 3.4.1-2).':'Self-weight/EV are auto-added with 1.2 (demand) / 0.9 (resisting) dead brackets.')+' Bearing is checked conservatively against allowable bearing, and overturning/sliding/flotation are indicative (single envelope, not a full combination evaluation). The engineer is responsible for confirming the entered factored loads envelope the governing code combinations.'));
- ul.appendChild(el('p','note','<b>Not considered in this version (v1 audit trail):</b> settlement; live-load patterning; seismic loads (E); rain load (R); minimum/accidental eccentricity; lateral earth pressure; slender-pedestal moment magnification; non-rectangular footings. Passive resistance is neglected unless a mobilized fraction is entered. Buoyancy U is applied at a factor of 1.0 in all combinations as a permanent action. Structural (LRFD, ACI 318-19) design of the footing and pedestals uses the generated LRFD combinations and is reported on the Footing Design and Pedestal Design tabs.'));
+ if(R.directMode)ul.appendChild(el('div','note sfNL',sfNL('Direct factored load mode is active.',[   /* SFNL */
+  ['REVIEW:','the engineer is responsible for confirming the entered factored loads envelope the governing code combinations.'],
+  ['Loads:','entered as a single already-factored (LRFD) envelope per pedestal; the ASCE 7-16 combination sweep was bypassed.'],
+  R.aashtoDirect?['Imported AASHTO case "'+sfEsc(R.aashtoDirect.caseName)+'" ('+sfEsc(R.aashtoDirect.ls)+'):','self-weight, EV and surcharge are added at its AASHTO LRFD 10th Ed. factors ('+R.aashtoDirect.sets.map(st=>'DC '+st.dc.toFixed(2)+', EV '+st.ev.toFixed(2)+', ES '+st.es.toFixed(2)+', LS '+st.ls.toFixed(2)).join('; ')+'; Tables 3.4.1-1, 3.4.1-2).']:['Self-weight/EV:','auto-added with 1.2 (demand) / 0.9 (resisting) dead brackets.'],
+  ['Bearing:','checked conservatively against allowable bearing.'],
+  ['Overturning/sliding/flotation:','indicative (single envelope, not a full combination evaluation).']])));
+ ul.appendChild(el('div','note sfNL',sfNL('Not considered in this version (v1 audit trail):',[   /* SFNL */
+  'settlement;','live-load patterning;','seismic loads (E);','rain load (R);','minimum/accidental eccentricity;','lateral earth pressure;','slender-pedestal moment magnification;','non-rectangular footings.',
+  ['Passive resistance:','neglected unless a mobilized fraction is entered.'],
+  ['Buoyancy U:','applied at a factor of 1.0 in all combinations as a permanent action.'],
+  ['Structural design:','structural (LRFD, ACI 318-19) design of the footing and pedestals uses the generated LRFD combinations and is reported on the Footing Design and Pedestal Design tabs.']])));
  b5.appendChild(ul);
 }
 /* SFTS (2026-11-05, engineer: every drawing to scale): helpers of the elevation drawings. Display only.
@@ -2421,9 +2458,20 @@ function renderCombos(){
  if(R.fatal)return;
  const intro=secPanel(T,'o-cb-basis','2.1  Load Basis & Common Quantities');
  if(R.directMode){
-  intro.appendChild(el('div','warnbox','<b>Direct factored (LRFD) mode.</b> A single user-entered factored envelope drives all checks; the ASCE 7-16 combination sweep is bypassed. Footing/pedestal self-weight and EV are auto-added and bracketed: factor 1.2 where they increase demand (bearing, footing/pedestal design); factor 0.9 in the minimum-dead case used for uplift/overturning/sliding. Bearing DCR is computed conservatively by checking the factored envelope against the allowable bearing (a service-level quantity). Stability results are <b>indicative only</b> \u2014 a single envelope is not a true combination-by-combination evaluation. For full dual-basis (service bearing/stability + strength design) results, switch to by-load-type input.'+(R.aashtoDirect?' <b>Imported AASHTO case "'+sfEsc(R.aashtoDirect.caseName)+'" ('+sfEsc(R.aashtoDirect.ls)+'):</b> the 1.2 / 0.9 bracket is replaced by the case\'s AASHTO LRFD 10th Ed. factors (Tables 3.4.1-1, 3.4.1-2) on the footing and pedestal self-weight (DC), EV, dead surcharge (ES) and live surcharge: '+R.aashtoDirect.sets.map(st=>st.tag+': DC '+st.dc.toFixed(2)+', EV '+st.ev.toFixed(2)+', ES '+st.es.toFixed(2)+', LS '+st.ls.toFixed(2)).join('; ')+' (see the resultant breakdown below for each factor × magnitude).':'')));   // SFAD
+  intro.appendChild(el('div','warnbox sfNL',sfNL('Direct factored (LRFD) mode: a single user-entered factored envelope drives all checks; the ASCE 7-16 combination sweep is bypassed.',[   /* SFNL */
+   ['Self-weight and EV:','footing/pedestal self-weight and EV are auto-added and bracketed: factor 1.2 where they increase demand (bearing, footing/pedestal design); factor 0.9 in the minimum-dead case used for uplift/overturning/sliding.'],
+   ['Bearing DCR:','computed conservatively by checking the factored envelope against the allowable bearing (a service-level quantity).'],
+   ['Stability:','results are <b>indicative only</b> — a single envelope is not a true combination-by-combination evaluation.'],
+   ['Full results:','for full dual-basis (service bearing/stability + strength design) results, switch to by-load-type input.'],
+   R.aashtoDirect?['Imported AASHTO case "'+sfEsc(R.aashtoDirect.caseName)+'" ('+sfEsc(R.aashtoDirect.ls)+'):','the 1.2 / 0.9 bracket is replaced by the case\'s AASHTO LRFD 10th Ed. factors (Tables 3.4.1-1, 3.4.1-2) on the footing and pedestal self-weight (DC), EV, dead surcharge (ES) and live surcharge: '+R.aashtoDirect.sets.map(st=>st.tag+': DC '+st.dc.toFixed(2)+', EV '+st.ev.toFixed(2)+', ES '+st.es.toFixed(2)+', LS '+st.ls.toFixed(2)).join('; ')+' (see the resultant breakdown below for each factor × magnitude).']:null])));   // SFAD
  }else{
-  intro.appendChild(el('p','note','Service (ASD) combinations per ASCE 7-16 \u00a72.4.1 / IBC 2021 \u00a71605.1 govern all geotechnical and stability checks. Strength (LRFD) combinations per ASCE 7-16 \u00a72.3.1 / ACI 318-19 \u00a75.3 are generated for the Phase 2 structural design of the footing and pedestals. EV (soil on footing) and self-weights carry the dead-load factor of each combination; minimum-dead bracketing is provided by the 0.6D (ASD) and 0.9D (LRFD) combinations. Wind is swept in \u00b1x and \u00b1y as separate cases. Buoyancy U is applied at 1.0 in every combination.'));
+  intro.appendChild(el('div','note sfNL',sfNL('Two combination sets:',[   /* SFNL */
+   ['Service (ASD):','combinations per ASCE 7-16 §2.4.1 / IBC 2021 §1605.1 govern all geotechnical and stability checks.'],
+   ['Strength (LRFD):','combinations per ASCE 7-16 §2.3.1 / ACI 318-19 §5.3 are generated for the Phase 2 structural design of the footing and pedestals.'],
+   ['EV and self-weights:','EV (soil on footing) and self-weights carry the dead-load factor of each combination.'],
+   ['Minimum dead:','bracketing is provided by the 0.6D (ASD) and 0.9D (LRFD) combinations.'],
+   ['Wind:','swept in ±x and ±y as separate cases.'],
+   ['Buoyancy U:','applied at 1.0 in every combination.']])));
  }
  intro.appendChild(eqBlock('Resultant per combination (each pedestal i, load type with factor f)','See sign convention',
   '\\Sigma P = \\sum f\\,P_i + f_D(W_f{+}\\Sigma W_p{+}EV) - U;\\;\\; \\Sigma M_x = \\sum f\\,(P_i y_i + M_{x,i} + V_{y,i} h_i)+\\ldots',
@@ -2431,7 +2479,10 @@ function renderCombos(){
   'e_x = \\Sigma M_y / \\Sigma P, \\qquad e_y = \\Sigma M_x / \\Sigma P'));
  /* ---- 2.2 dedicated weights subsection ---- */
  const wt=secPanel(T,'o-cb-weights','2.2  Self-Weights, Soil Overburden & Buoyancy');
- wt.appendChild(el('p','note','Permanent gravity actions computed by the tool and carried into every combination at the dead-load factor of that combination (1.4 / 1.2 / 0.9 for LRFD; 1.0 / 0.6 for ASD). Buoyancy U, when present, is applied at 1.0. Concrete unit weight \u03b3_c = '+f2(R.gc)+' kcf; overburden \u03b3_EV = '+f2(R.gev)+' kcf.'));
+ wt.appendChild(el('div','note sfNL',sfNL('Permanent gravity actions computed by the tool:',[   /* SFNL */
+   ['Factor:','carried into every combination at the dead-load factor of that combination (1.4 / 1.2 / 0.9 for LRFD; 1.0 / 0.6 for ASD).'],
+   ['Buoyancy U:','when present, is applied at 1.0.'],
+   ['Unit weights:','concrete γ_c = '+f2(R.gc)+' kcf; overburden γ_EV = '+f2(R.gev)+' kcf.']])));
  wt.appendChild(eqBlock('Footing self-weight','dead load D: ASCE 7-16 3.1, IBC 2021 1606',   /* SFLW: before "ACI 318-19 5.3 dead load" (5.3 is the load factors) */
   'W_f = B \\cdot L \\cdot t \\cdot \\gamma_c',
   'W_f = '+f2(R.B)+' \\cdot '+f2(R.L)+' \\cdot '+f2(R.t)+' \\cdot '+f2(R.gc)+'\\;\\mathrm{kcf}',
@@ -2521,7 +2572,11 @@ function renderPedCb(b){
   return;}
  const cb=s.a.cb;
  const what=s.basis==='env'?'the direct factored envelope (pedestal loads as entered, \u03b3 = 1)':s.basis==='LRFD'?'<b>LRFD (factored) combination '+(s.i+1)+': '+sfEsc(cb.name)+'</b> (reference only)':(s.a===R.govBear?'the governing service combination ':'service combination ')+(s.i+1)+': <b>'+sfEsc(cb.name)+'</b>';
- b.appendChild(el('p','note','Loads at the top of each pedestal for '+what+'. Each component is <b>\u03a3 \u03b3<sub>i</sub>\u00b7Q<sub>i</sub></b> over the load types: \u03b3<sub>i</sub> is this combination\u2019s factor ('+sfEsc(cb.ref||'')+'), Q<sub>i</sub> the pedestal load entered for type i (Pedestals tab). Pedestal self-weight, soil cover, surcharge and buoyancy act on the footing, not at the pedestal top (2.2). Sign convention: +P downward; +V<sub>x</sub>, +V<sub>y</sub> in +x, +y; +M<sub>x</sub> shifts the resultant toward +y, +M<sub>y</sub> toward +x. These are the values the 3D view labels and the drawings\u2019 sections show.'));
+ b.appendChild(el('div','note sfNL',sfNL('Loads at the top of each pedestal for '+what+'.',[   /* SFNL */
+   ['Each component:','<b>Σ γ<sub>i</sub>·Q<sub>i</sub></b> over the load types: γ<sub>i</sub> is this combination’s factor ('+sfEsc(cb.ref||'')+'), Q<sub>i</sub> the pedestal load entered for type i (Pedestals tab).'],
+   ['Not included here:','pedestal self-weight, soil cover, surcharge and buoyancy act on the footing, not at the pedestal top (2.2).'],
+   ['Sign convention:','+P downward; +V<sub>x</sub>, +V<sub>y</sub> in +x, +y; +M<sub>x</sub> shifts the resultant toward +y, +M<sub>y</sub> toward +x.'],
+   ['Used by:','these are the values the 3D view labels and the drawings’ sections show.']])));
  const t=document.createElement('table');t.className='tbl';
  t.innerHTML='<tr><th>Pedestal</th><th>Component</th><th>\u03a3 \u03b3<sub>i</sub>\u00b7Q<sub>i</sub> (terms: '+(s.basis==='env'?'envelope':'type')+')</th><th>Substituted</th><th>Value</th><th>Units</th></tr>';
  R.peds.forEach((p,i)=>{const v=sfdPedCb(p,cb.f);
@@ -2562,7 +2617,11 @@ function sfdOTMaRows(r,e){
 function resultantBreakdown(a){
  const r=a.r, wrap=el('div');
  const det=secPanel(wrap,'o-cb-resbrk','Resultant breakdown \u2014 '+a.cb.name+' (fully substituted)');
- det.appendChild(el('p','note','Every action contributing to the resultant of this combination, with its factored vertical load, its factored horizontal shear and its moment contributions about the footing centroid (at the bottom of the footing). \u03a3M includes P\u00b7(lever arm), each applied pedestal moment, and each shear couple V\u00b7(t + h): V\u2093 adds to \u03a3M\u1D67 and V\u1D67 to \u03a3M\u2093. e = \u03a3M/\u03a3P. This is the same arithmetic the summary table (above) reports as a single row, expanded so each term can be checked by hand.'));
+ det.appendChild(el('div','note sfNL',sfNL('Every action contributing to the resultant of this combination:',[   /* SFNL */
+   ['Shown:','its factored vertical load, its factored horizontal shear and its moment contributions about the footing centroid (at the bottom of the footing).'],
+   ['ΣM includes:','P·(lever arm), each applied pedestal moment, and each shear couple V·(t + h): Vₓ adds to ΣMᵧ and Vᵧ to ΣMₓ.'],
+   ['Eccentricity:','e = ΣM/ΣP.'],
+   ['Purpose:','the same arithmetic the summary table (above) reports as a single row, expanded so each term can be checked by hand.']])));
  // vertical load table
  const tp=document.createElement('table');tp.className='tbl';
  tp.innerHTML='<tr><th>Action</th><th>factor \u00d7 magnitude</th><th>\u03a3P term (k)</th><th>x (ft)</th><th>y (ft)</th><th>\u03a3H\u2093 term (k)</th><th>\u03a3H\u1D67 term (k)</th><th>shear lever (ft)</th><th>contrib to \u03a3M\u1D67 (k-ft)</th><th>contrib to \u03a3M\u2093 (k-ft)</th></tr>';
@@ -2585,7 +2644,11 @@ function resultantBreakdown(a){
  det.appendChild(tp);
  // E-1: expose the V·h shear-couple lever arm and datum so the couple term is hand-checkable
  if(state.stab.shearCouple!=='off'&&R.peds.some(p=>{const dd=p.direct||{};return num(dd.Vx)||num(dd.Vy)||TYPES.some(tp=>p.loads&&p.loads[tp]&&(num(p.loads[tp].Vx)||num(p.loads[tp].Vy)));})){
-  det.appendChild(el('p','note','<b>Shear-couple lever arm:</b> horizontal pedestal shears act at the top of each pedestal; the base-pressure / overturning / sliding datum is the bottom of the footing, so the V\u00b7h couple uses lever = t + h (footing thickness + pedestal height) = '+R.peds.map(p=>f2(R.t)+' + '+f2(p.h)+' = '+f2(R.t+p.h)+' ft').join('; ')+'. Toggle in the Stability inputs.'));
+  det.appendChild(el('div','note sfNL',sfNL('Shear-couple lever arm: lever = t + h (footing thickness + pedestal height).',[   /* SFNL */
+   ['Shears:','horizontal pedestal shears act at the top of each pedestal.'],
+   ['Datum:','the base-pressure / overturning / sliding datum is the bottom of the footing.'],
+   ['Lever per pedestal:','the V·h couple uses t + h = '+R.peds.map(p=>f2(R.t)+' + '+f2(p.h)+' = '+f2(R.t+p.h)+' ft').join('; ')+'.'],
+   ['Toggle:','in the Stability inputs.']])));
  }
  if(R.peds.some(p=>p.lex||p.ley))det.appendChild(el('p','note','<b>Load offsets on the pedestals:</b> pedestal loads act at the load point (x + e<sub>x</sub>, y + e<sub>y</sub>), so their x, y above include the offset: '+R.peds.filter(p=>p.lex||p.ley).map(p=>sfEsc(p.label)+': '+f2(p.x)+' + '+f3(p.lex)+' = '+f3(p.x+p.lex)+', '+f2(p.y)+' + '+f3(p.ley)+' = '+f3(p.y+p.ley)+' ft').join('; ')+'. Pedestal self-weight stays at the pedestal centroid.'));   /* SFLO */
  // horizontal resultants
@@ -2958,10 +3021,13 @@ function renderBearing(){
  if(lv){
   b0.appendChild(el('p','','Selected combination: <b>'+sfEsc(g.cb.name)+'</b> &nbsp;['+sfEsc(g.cb.ref)+'], LRFD (factored), #'+(lv.i+1)+' of \u00a72.5 and \u00a73.4. Reference only: its factored resultant and pressure distribution are worked below; they are not compared with the allowable bearing pressure and give no D/C. The bearing check (\u00a73.3) stays on the service combinations (governing = '+sfEsc(R.govBear.cb.name)+').'));
  }else if(R.directMode){
-  b0.appendChild(el('div','warnbox','<b>Conservative check.</b> The entered loads are factored (LRFD/strength), but allowable bearing is a service-level quantity. Checking the factored envelope against q<sub>allow</sub> therefore overstates the demand \u2014 the reported bearing DCR is conservative. For a code-consistent geotechnical check, use by-load-type input so the app evaluates service (ASD) combinations.'));
+  b0.appendChild(el('div','warnbox sfNL',sfNL('Conservative check: the reported bearing DCR is conservative.',[   /* SFNL */
+   ['Why:','the entered loads are factored (LRFD/strength), but allowable bearing is a service-level quantity; checking the factored envelope against q<sub>allow</sub> therefore overstates the demand.'],
+   ['For a code-consistent geotechnical check:','use by-load-type input so the app evaluates service (ASD) combinations.']])));
   b0.appendChild(el('p','','Envelope: <b>'+g.cb.name+'</b>. The full calculation follows.'));
  }else if(g===R.govBear){
-  b0.appendChild(el('p','','Governing combination (maximum bearing DCR): <b>'+g.cb.name+'</b> &nbsp;['+g.cb.ref+']. All combinations are tabulated in Section 2.3; the complete calculation for the selected combination follows. The same procedure is applied to every combination.'));
+  b0.appendChild(el('div','sfNL',sfNL('Governing combination (maximum bearing DCR): '+g.cb.name+' &nbsp;['+g.cb.ref+'].',[   /* SFNL */
+   ['All combinations:','tabulated in Section 2.3.'],['Below:','the complete calculation for the selected combination follows.'],['Every combination:','the same procedure is applied.']])));
  }else{
   b0.appendChild(el('p','','Selected combination: <b>'+g.cb.name+'</b> &nbsp;['+g.cb.ref+']. This is <b>not</b> the governing case (governing = '+R.govBear.cb.name+', DCR = '+f2(R.govBear.DCR)+'). Full worked calculation for the selected combination follows.'));
  }
@@ -3065,7 +3131,12 @@ function renderBearing(){
  // interactive biaxial contact-zone map
  if(bp.mode!=='unstable'&&!lvT){
   const bz=secPanel(T,'o-br-zone','3.2a  Biaxial Contact-Zone Map (interactive)');
-  bz.appendChild(el('p','note','Where the load resultant (e\u2093, e\u1D67) falls relative to the kern determines the base-contact shape. Inside the green kern diamond (\u00bd-diagonals B/6, L/6) the whole base bears (full 4-corner contact) and q = P/A(1 \u00b1 6e\u2093/B \u00b1 6e\u1D67/L) applies. Outside it, part of the footing lifts off and the contact area becomes a pentagon, trapezoid, or (far corner) a triangle, each with its own closed-form pressure solution. The colored regions are the analytical zone map; drag the sliders to move the resultant. Every reported number (contact %, q_max) comes from the tool\u2019s own no-tension solver at that point, so the map and the design values stay consistent. Screen-only \u2014 the printed report uses the governing resultant.'));
+  bz.appendChild(el('div','note sfNL',sfNL('Where the load resultant (eₓ, eᵧ) falls relative to the kern determines the base-contact shape.',[   /* SFNL */
+   ['Inside the green kern diamond','(½-diagonals B/6, L/6): the whole base bears (full 4-corner contact) and q = P/A(1 ± 6eₓ/B ± 6eᵧ/L) applies.'],
+   ['Outside it:','part of the footing lifts off and the contact area becomes a pentagon, trapezoid, or (far corner) a triangle, each with its own closed-form pressure solution.'],
+   ['Map:','the colored regions are the analytical zone map; drag the sliders to move the resultant.'],
+   ['Numbers:','every reported number (contact %, q_max) comes from the tool’s own no-tension solver at that point, so the map and the design values stay consistent.'],
+   ['Screen-only:','the printed report uses the governing resultant.']])));
   bz.appendChild(contactZoneMap(r,bp));
  }
  /* capacity */
@@ -3082,7 +3153,11 @@ function renderBearing(){
   const b2=secPanel(T,'o-br-cap','3.3  Bearing Capacity \u2014 Vesi\u0107 Method (effective area)');
   if(v.fail){b2.appendChild(el('div','errbox','Effective area is non-positive (eccentricity too large) \u2014 capacity cannot be computed.'+(g.DCR===Infinity?' <b>D/C = \u221e (FAIL).</b>':'')));}   /* SFNB-2 */
   else{
-  b2.appendChild(el('p','note','General bearing capacity equation (Vesi\u0107) with shape, depth, and load-inclination factors, applied to the Meyerhof effective footing B\u2032 \u00d7 L\u2032. The uniform effective pressure q_eff = \u03a3P/(B\u2032L\u2032) is compared with q_allow = q_ult/FS. Reference: Vesi\u0107 (1973, 1975). AASHTO LRFD 10th Ed. (2024) Art. 10.6.3.1.2a uses the same N, shape and inclination factors, but its depth factor (Eq. 10.6.3.1.2a-10) differs from the Vesi\u0107 depth factors used here (see the Depth factors line).'));
+  b2.appendChild(el('div','note sfNL',sfNL('General bearing capacity equation (Vesić) with shape, depth, and load-inclination factors.',[   /* SFNL */
+   ['Applied to:','the Meyerhof effective footing B′ × L′.'],
+   ['Check:','the uniform effective pressure q_eff = ΣP/(B′L′) is compared with q_allow = q_ult/FS.'],
+   ['Reference:','Vesić (1973, 1975).'],
+   ['AASHTO LRFD 10th Ed. (2024) Art. 10.6.3.1.2a:','uses the same N, shape and inclination factors, but its depth factor (Eq. 10.6.3.1.2a-10) differs from the Vesić depth factors used here (see the Depth factors line).']])));
   b2.appendChild(eqBlock('Effective footing dimensions (Meyerhof)','Meyerhof (1953)',
    "B' = B - 2|e_x| ,\\qquad L' = L - 2|e_y|",
    "B' = "+f2(R.B)+' - 2\\cdot'+f2(Math.abs(r.ex))+',\\qquad L\' = '+f2(R.L)+' - 2\\cdot'+f2(Math.abs(r.ey)),
@@ -3438,13 +3513,16 @@ function sfdLrTable(head,rows,gov){
  return t;}
 function sfdLrHead(b,txt){
  const d=b.parentElement;if(d)d.classList.add('sfLrRef');
- b.appendChild(el('div','warnbox','<b>LRFD (factored) \u2014 reference only; not used in the checks.</b> '+txt));
+ b.appendChild(el('div','warnbox sfNL',sfNL('LRFD (factored) — reference only; not used in the checks.',txt)));   /* SFNL: txt = the list items */
  if(!R.directMode)b.appendChild(el('p','note','Click a row to show that combination in this tab\u2019s per-combination views (the combination selector at the top; reference only). The selected row is highlighted; click it again to return to the governing service combination.'));}   /* SFLS */
 /* Bearing tab, 3.4 */
 function sfdLrBearCard(T){
  const X=sfdLrRef();if(!X)return;
  const b=secPanel(T,'o-br-lrfd','3.4  LRFD (factored) combinations \u2014 reference only; not used in the checks');
- sfdLrHead(b,'Each '+(R.directMode?'factored envelope':'strength combination (ASCE 7-16 \u00a72.3.1, the set used for the footing and pedestal design)')+' is run through the same rigid-footing, no-tension pressure solution as \u00a73.2. The pressures are factored: they are not compared with the allowable bearing pressure (a service quantity), and no row enters a D/C, a status, the dashboard or the NG / REVIEW list. The service (ASD) checks above are unchanged.');
+ sfdLrHead(b,[['What:','each '+(R.directMode?'factored envelope':'strength combination (ASCE 7-16 §2.3.1, the set used for the footing and pedestal design)')+' is run through the same rigid-footing, no-tension pressure solution as §3.2.'],
+  ['Not checked:','the pressures are factored: they are not compared with the allowable bearing pressure (a service quantity).'],
+  ['No status:','no row enters a D/C, a status, the dashboard or the NG / REVIEW list.'],
+  ['Unchanged:','the service (ASD) checks above.']]);
  b.appendChild(sfdLrTable(['#','Combination','P<sub>u</sub> (k)','M<sub>x</sub> (k-ft)','M<sub>y</sub> (k-ft)','e<sub>x</sub> (ft)','e<sub>y</sub> (ft)','Contact','q<sub>max</sub> (ksf)','q<sub>min</sub> (ksf)','Contact area (%)'],
   X.rows.map(z=>{const bp=z.bear,ok=bp.mode==='full'||bp.mode==='partial';
    return {z,cells:[String(z.i+1),z.a.cb.name,f2(z.r.P),f2(z.r.Mx),f2(z.r.My),f3(z.r.ex),f3(z.r.ey),sfdLrContact(bp),ok?f2(bp.qmax):'\u2013',ok?f2(bp.qmin):'\u2013',ok?f2(100*bp.contactFrac):(bp.mode==='tension'?'0.00':'\u2013')]};}),X.gB));
@@ -3470,7 +3548,10 @@ function sfdLrBearCard(T){
 function sfdLrStabCard(T){
  const X=sfdLrRef();if(!X)return;
  const b=secPanel(T,'o-st-lrfd','4.6  LRFD (factored) combinations \u2014 reference only; not used in the checks');
- sfdLrHead(b,'Overturning, eccentricity and sliding of each '+(R.directMode?'factored envelope':'strength combination (ASCE 7-16 \u00a72.3.1, incl. 0.9D + 1.0W)')+', computed as in \u00a74.2 and \u00a74.3 (same edges, same resisting / overturning split, same \u03bc and passive). The ratios are reported as ratios only: no target, no factor of safety check, no resistance factor, and no row enters a D/C, a status, the dashboard or the NG / REVIEW list. The service (ASD) checks above and the eccentricity limit of \u00a74.3a are unchanged.');
+ sfdLrHead(b,[['What:','overturning, eccentricity and sliding of each '+(R.directMode?'factored envelope':'strength combination (ASCE 7-16 §2.3.1, incl. 0.9D + 1.0W)')+', computed as in §4.2 and §4.3 (same edges, same resisting / overturning split, same μ and passive).'],
+  ['Not checked:','the ratios are reported as ratios only: no target, no factor of safety check, no resistance factor.'],
+  ['No status:','no row enters a D/C, a status, the dashboard or the NG / REVIEW list.'],
+  ['Unchanged:','the service (ASD) checks above and the eccentricity limit of §4.3a.']]);
  b.appendChild(el('p','','<b>Eccentricity and overturning (factored)</b>'));
  b.appendChild(sfdLrTable(['#','Combination','P<sub>u</sub> (k)','e<sub>x</sub> (ft)','e<sub>y</sub> (ft)','6|e<sub>x</sub>|/B','6|e<sub>y</sub>|/L','6|e<sub>x</sub>|/B + 6|e<sub>y</sub>|/L','Critical edge','M<sub>o</sub> (k-ft)','M<sub>r</sub> (k-ft)','M<sub>r</sub>/M<sub>o</sub> (ratio)'],
   X.rows.map(z=>({z,cells:[String(z.i+1),z.a.cb.name,f2(z.r.P),f3(z.r.ex),f3(z.r.ey),f3(z.ix),f3(z.iy),f3(z.ik),isFinite(z.ot.FS)?z.ot.name:'\u2013 (M\u2092 = 0)',f2(z.ot.Mo),f2(z.ot.Mr),f2(z.ot.FS)]})),X.gO));
@@ -4603,6 +4684,9 @@ function sfxWalk(root,scope,T){
   if(e.matches('.manEq')){const s=step(texOf(e),card||'Equation','');if(s)push({type:'steps',scope,steps:[s]});return;}
   if(e.matches('.dash')){dash(e);return;}
   const kids=[...e.children],leaf=kids.every(x=>INL.test(x.tagName)&&!x.querySelector('table,svg,div,p,ul,ol,li,h2,h3,details'));
+  /* SFNL: a list note: kept or skipped as one note (the same test as before), then one Report line per part */
+  if(e.matches('.sfNL')){const P=[...e.querySelectorAll('.sfNLa,.sfNLl,.sfNLu>li')],t=P.map(txt).filter(Boolean).join(' '),w=e.matches('.warnbox,.errbox,.failbox');
+   if(t.length>=8&&(T.fresh(t)||T.newNum(t))){P.forEach(p=>{const x=txt(p);if(x)push({type:'note',warn:(w||p.matches('.sfNLa'))||undefined,text:(p.tagName==='LI'?'• ':'')+x});});T.seen(t);}return;}
   if(leaf){const t=txt(e);if(t.length>=8&&(T.fresh(t)||T.newNum(t))){push({type:'note',warn:e.matches('.warnbox,.errbox,.failbox')||undefined,text:(e.tagName==='LI'?'• ':'')+t});T.seen(t);}return;}
   kids.forEach(visit);};
  [...root.children].forEach(visit);
@@ -5366,7 +5450,11 @@ function renderDrawings(){
   '<button type="button" id="sfdwPrint1" title="Print the sheet shown: one 11 x 17 in landscape page at its plot scale">Print sheet</button>'+
   '<button type="button" id="sfdwPrintAll" title="Print every sheet: one 11 x 17 in landscape page per sheet, each at its plot scale">Print all sheets ('+B.S.length+')</button></div>'+
   '<div class="note">'+sfEsc(SharedDxf.PRINT_NOTE)+'</div>'+
-  '<div class="note">One DXF file (AutoCAD R12, model space, full size in inches): each sheet is a B-size sheet (17 × 11 in) drawn at its plot scale inside its border and title block, side by side; plot each sheet at its scale. Layers S-CONC, S-PED, S-REBAR, S-DIMS, S-TEXT, S-CNTR, S-LOAD, S-SOIL, S-CUT, S-TBLK, S-BRDR; dimensions are DIMENSION entities. The preview is drawn from the same entities as the file. Geometry and bars as entered; every value is worked on the tab named in the index.</div>'+
+  '<div class="note sfNL">'+sfNL('One DXF file (AutoCAD R12, model space, full size in inches):',[   /* SFNL */
+   ['Sheets:','each sheet is a B-size sheet (17 × 11 in) drawn at its plot scale inside its border and title block, side by side; plot each sheet at its scale.'],
+   ['Layers:','S-CONC, S-PED, S-REBAR, S-DIMS, S-TEXT, S-CNTR, S-LOAD, S-SOIL, S-CUT, S-TBLK, S-BRDR; dimensions are DIMENSION entities.'],
+   ['Preview:','drawn from the same entities as the file.'],
+   ['Values:','geometry and bars as entered; every value is worked on the tab named in the index.']])+'</div>'+
   '<div class="sfdwHead"><b>'+(B.S.indexOf(cur)+1)+'. '+sfEsc(cur.title)+'</b> · scale '+sfEsc(scName(cur.k))+(cur.over?' · <span style="color:#b71c1c">does not fit the sheet even at the smallest scale</span>':'')+'</div>'+
   '<div class="sfdwBox"></div><div class="note">Wheel: zoom about the cursor · drag: pan · pinch on a touch screen · double-click: fit · + / − / Fit buttons.</div>'+
   '<table class="tbl sfdwIdx"><tr><th>No.</th><th>Sheet</th><th>Scale</th><th>Worked on</th></tr>'+B.S.map((s,j)=>{const w=src(s.id);
@@ -8568,9 +8656,11 @@ function v3dTitle(item){
   :item.env?'Direct factored envelope: <b>'+sfEsc(cb.name)+'</b> (pedestal loads as entered, factored)'
   :item.basis==='LRFD'?'<b style="color:#8a4b00">LRFD (factored) combination '+(item.idx+1)+': '+sfEsc(cb.name)+'</b> \u2014 reference only; the checks use the service combinations'+(cb.ref?' ('+sfEsc(cb.ref)+')':'')
   :(item.gov?'Governing service (bearing) combination ':'Service (ASD) combination ')+(item.idx+1)+': <b>'+sfEsc(cb.name)+'</b>'+(cb.ref?' ('+sfEsc(cb.ref)+')':'');
- d.innerHTML='<b>3D view \u2014 showing:</b> '+what+'. Arrows and labels are the loads at the top of each pedestal'+(item.basis==='CASE'?'':' at this combination\u2019s factors')+' (self-weight, EV and surcharge not included; worked in '+
-  sfdLink('o-cb-ped','')+').<br><span style="font-size:11px;color:#445"><b>Sign convention:</b> +P downward (compression); +V<sub>x</sub>, +V<sub>y</sub> act toward +x, +y; '+
-  '+M<sub>x</sub> shifts the resultant toward +y, +M<sub>y</sub> toward +x (arcs drawn in that sense). Labels give the signed value; the arrow points the way the load acts; a zero component is not drawn.</span>';
+ d.classList.add('sfNL');   /* SFNL */
+ d.innerHTML=sfNL('3D view — showing: <span style="font-weight:normal">'+what+'.</span>',[
+  ['Arrows and labels:','the loads at the top of each pedestal'+(item.basis==='CASE'?'':' at this combination’s factors')+' (self-weight, EV and surcharge not included; worked in '+sfdLink('o-cb-ped','')+').'],
+  ['Sign convention:','<span style="font-size:11px;color:#445">+P downward (compression); +V<sub>x</sub>, +V<sub>y</sub> act toward +x, +y; +M<sub>x</sub> shifts the resultant toward +y, +M<sub>y</sub> toward +x (arcs drawn in that sense).</span>'],
+  ['Reading the arrows:','<span style="font-size:11px;color:#445">labels give the signed value; the arrow points the way the load acts; a zero component is not drawn.</span>']]);
  }
 function buildLegend(){
  const lg=$('#v3dLegend');if(!lg)return;
