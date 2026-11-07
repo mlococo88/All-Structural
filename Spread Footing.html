@@ -4009,7 +4009,8 @@ function sfrModel(){
     st.push(S({id:q+'ld',label:'Straight development length, '+z.lab+(z.top?' (top bars: more than 12 in of concrete below, ψ_t = 1.3)':''),sym:'\\ell_{d}',eq:'\\frac{3}{40}\\frac{f_{y}}{\\lambda\\sqrt{'+SFR_FC+'}}\\frac{\\psi_{t}\\psi_{e}\\psi_{s}\\psi_{g}}{(c_{b} + K_{tr})/d_{b}} d_{b} \\ge 12',
      sub:'\\frac{3}{40}\\cdot\\frac{'+sfrN(P2.fy,0)+'}{'+sfrN(dv.lam)+'\\cdot'+sfrN(dv.sqfc,2)+'}\\cdot\\frac{'+sfrN(dv.psi_te)+'\\cdot'+sfrN(dv.psi_s)+'\\cdot'+sfrN(dv.psi_g)+'}{'+sfrN(dv.conf,3)+'}\\cdot'+sfrN(dv.db,3),value:dv.Ld,unit:'in',
      note:'ψ_tψ_e = min('+sfrN(dv.psi_t)+'·'+sfrN(dv.psi_e)+', 1.7) = '+sfrN(dv.psi_te)+' (Table 25.4.2.5, coating '+(state.mat.coating==='epoxy'?'epoxy':'none')+'), ψ_s = '+sfrN(dv.psi_s)+', ψ_g = '+sfrN(dv.psi_g)+'; c_b = min(c + d_b/2, s/2) = min('+sfrN(z.cov)+' + '+sfrN(dv.db/2,3)+', '+sfrN(sfdMat(z.k).spc/2,3)+') = '+sfrN(dv.cb,3)+' in, K_tr = 0, (c_b + K_tr)/d_b ≤ 2.5'}));
-    st.push(S({id:q+'avail',label:'Available from the governing '+(z.top?'hogging':'sagging')+' section ('+sc+' = '+sfrN(z.sec,3)+' ft) to the nearer edge, less the end cover',sym:'\\ell_{avail}',eq:'12\\left(\\frac{'+BL+'}{2} \\minus |'+sc+'_{sec}|\\right) \\minus c_{end}',sub:'12\\cdot('+sfrN(z.hf,3)+' \\minus '+sfrN(Math.abs(z.sec),3)+') \\minus '+sfrN(z.endC),value:z.avail,unit:'in'}));
+    if(z.cand&&z.cand.length>1)st.push(S({id:q+'secs',label:'Sections checked (ACI 318-19 13.2.8.3, 13.2.7.1: the governing '+(z.top?'hogging':'sagging')+' section and every pedestal face with '+(z.top?'hogging':'sagging')+' moment): '+z.cand.map(c=>(c.gov?'governing':c.ped+' face')+' '+sc+' = '+sfrN(c.sec,3)+' ft (M_u = '+sfrN(c.M)+' kip-ft, available '+sfrN(c.avail)+' in, '+(c.status==='pass'?'straight OK':(c.status==='review'?'hook':'NG'))+')').join('; '),sym:'',eq:'',sub:'',value:z.cand.length+' sections',ref:'ACI 318-19 13.2.8.3'}));   /* SFDE */
+    st.push(S({id:q+'avail',label:'Available from the '+(z.wSec&&!z.wSec.gov?'critical pedestal face ('+z.wSec.ped+', the worst section)':'governing '+(z.top?'hogging':'sagging')+' section')+' ('+sc+' = '+sfrN(z.sec,3)+' ft) to the nearer edge, less the end cover',sym:'\\ell_{avail}',eq:'12\\left(\\frac{'+BL+'}{2} \\minus |'+sc+'_{sec}|\\right) \\minus c_{end}',sub:'12\\cdot('+sfrN(z.hf,3)+' \\minus '+sfrN(Math.abs(z.sec),3)+') \\minus '+sfrN(z.endC),value:z.avail,unit:'in'}));
     if(P2.dev.exOn&&!z.flexGov)st.push(S({id:q+'ldx',label:'Reduced for excess reinforcement (option on; A_s,min governs A_s,req): A_s,req = A_s,min = 0.0018A_g = '+sfrN(z.AsMin,3)+' in²/ft (flexure alone '+sfrN(z.AsFlex,3)+'), A_s,prov = '+sfrN(z.AsProv,3)+' in²/ft. The 0.0018A_g is the minimum flexural reinforcement of the footing (7.6.1.1 / 8.6.1.1; R8.6.1.1: same area as 24.4.3.2, but flexural steel), not 24.4 shrinkage and temperature reinforcement, to which R25.4.10.2 refers',sym:'\\ell_{d,red}',eq:'\\max\\left(\\ell_{d}\\frac{A_{s,min}}{A_{s,prov}},\\,12\\right)',sub:'\\max('+sfrN(dv.LdRaw)+'\\cdot\\frac{'+sfrN(z.AsReq,3)+'}{'+sfrN(z.AsProv,3)+'},\\,12)',value:z.LdEx,unit:'in',ref:'ACI 318-19 25.4.10.1, 25.4.2.1(b), R8.6.1.1, R25.4.10.2'}));   /* SFEM */
     else if(P2.dev.exOn)st.push(S({id:q+'ldx',label:'Reduced for excess reinforcement (option on; flexure governs A_s,req): A_s,req = '+sfrN(z.AsReq,3)+' in²/ft (flexure ≥ A_s,min = '+sfrN(z.AsMin,3)+'), A_s,prov = '+sfrN(z.AsProv,3)+' in²/ft',sym:'\\ell_{d,red}',eq:'\\max\\left(\\ell_{d}\\frac{A_{s,req}}{A_{s,prov}},\\,12\\right)',sub:'\\max('+sfrN(dv.LdRaw)+'\\cdot\\frac{'+sfrN(z.AsReq,3)+'}{'+sfrN(z.AsProv,3)+'},\\,12)',value:z.LdEx,unit:'in',ref:'ACI 318-19 25.4.10.1, 25.4.2.1(b)'}));
     const ls=P2.dev.exOn?'\\ell_{d,red}':'\\ell_{d}';
@@ -7147,8 +7148,20 @@ function sfdDevAll(){
   let sec=top?des.govNegLoc:des.govMloc;
   if(sec===null||sec===undefined){if(top)return;const d0=sfdDevData(dir);sec=d0?d0.sec:null;}
   if(sec===null||sec===undefined)return;
-  const endC=sfdEndCover(), avail=(hf-Math.abs(sec))*12-endC;
-  if(!(avail>0))return;
+  const endC=sfdEndCover();
+  /* SFDE (2026-11-07): ACI 318-19 13.2.8.3 / 13.2.7.1: the bars must develop at every critical section, i.e. at the governing
+     section AND at every pedestal face where the moment of this sign is non-zero (bottom bars: sagging; top bars: hogging) in
+     any LRFD combination. Each section is checked over the length to the nearer footing edge; the row reports the worst one.
+     Before SFDE only the governing-moment section was checked, so a short cantilever at another pedestal could pass unseen.
+     A_s,req of the 25.4.10.1 option stays the governing-section value at every section (the largest, conservative). */
+  const cand=[{sec,M:top?-des.MuNeg:des.MuPos,gov:true}];
+  R.peds.forEach(ped=>{const s0=dir==='x'?ped.x:ped.y, hw=(dir==='x'?ped.bx:ped.by)/2;
+   [[s0+hw,+1],[s0-hw,-1]].forEach(([sf,side])=>{if(Math.abs(sf)>=hf-1e-9)return;
+    let M=0;P2.combos.forEach(c=>{const m=P2.pressMomentAbout(c.pp,dir,sf,side,c.nr.pl,c.nr);if(top?m<M:m>M)M=m;});
+    if(top?M<-0.01:M>0.01)cand.push({sec:sf,M,gov:false,ped:ped.label});});});
+  cand.forEach(z=>{z.avail=(hf-Math.abs(z.sec))*12-endC;});
+  if(!(cand[0].avail>0)&&!cand.some(z=>!z.gov&&z.avail>0))return;
+  let avail=cand[0].avail;
   const cov=top?num(state.mat.coverTop):sfdCbCover();
   const dv=devLength(size,fc,fy,top,{lam,cover:cov,spc:m.spc,coating:coat,detail:true});
   /* SFEX (2026-11-03, engineer): 25.4.10.1 only where flexure governs A_s,req; where the 0.0018 A_g minimum (shrinkage and
@@ -7163,10 +7176,13 @@ function sfdDevAll(){
   const db=dv.db, pe=coat==='epoxy'?1.2:1.0, pr=(size<=11&&m.spc>=6*db-1e-9)?1.0:1.6, po=(size<=11&&endC>=6*db-1e-9)?1.0:1.25, pc=fc<6000?fc/15000+0.6:1.0;
   const ldhRaw=fy*pe*pr*po*pc/(55*lam*sq)*Math.pow(db,1.5), Ldh=Math.max(ldhRaw,8*db,6);
   const ldhInt=Math.max(fy*pe*pr*1.0*pc/(55*lam*sq)*Math.pow(db,1.5),8*db,6);   // interior bars (side cover large): psi_o = 1.0, information
-  const strOK=LdUse<=avail+1e-9, hookOK=Ldh<=avail+1e-9;
-  const status=strOK?'pass':(hookOK?'review':'fail');
-  out.rows.push({k,dir,top,size,db,hf,sec,endC,avail,cov,dv,AsReq,AsFlex,flexGov,AsMin:des.AsMinPerFt,AsProv,rEx,LdEx,LdUse,pe,pr,po,pc,sq,ldhRaw,Ldh,ldhInt,strOK,hookOK,status,
-   lab:(top?'Top ':'Bottom ')+dir+'-bars (#'+size+')',dc:(strOK?LdUse:Ldh)/avail});
+  cand.forEach(z=>{const av=Math.max(z.avail,0);z.strOK=LdUse<=av+1e-9;z.hookOK=Ldh<=av+1e-9;z.status=z.strOK?'pass':(z.hookOK?'review':'fail');z.dc=av>0?(z.strOK?LdUse:Ldh)/av:Infinity;});   /* SFDE */
+  const rk={pass:0,review:1,fail:2}, w=cand.reduce((a,z)=>(rk[z.status]>rk[a.status]||(rk[z.status]===rk[a.status]&&z.dc>a.dc))?z:a,cand[0]);
+  sec=w.sec;avail=w.avail;
+  const strOK=w.strOK, hookOK=w.hookOK;
+  const status=w.status;
+  out.rows.push({cand,wSec:w,k,dir,top,size,db,hf,sec,endC,avail,cov,dv,AsReq,AsFlex,flexGov,AsMin:des.AsMinPerFt,AsProv,rEx,LdEx,LdUse,pe,pr,po,pc,sq,ldhRaw,Ldh,ldhInt,strOK,hookOK,status,
+   lab:(top?'Top ':'Bottom ')+dir+'-bars (#'+size+')',dc:w.dc});
  });
  out.status=out.rows.some(z=>z.status==='fail')?'fail':(out.rows.some(z=>z.status==='review')?'review':'pass');
  return out;
@@ -7285,6 +7301,7 @@ function renderFootingDesign(){
   if(!z.strOK)bd.appendChild(el('div','note','Standard hook, ACI 318-19 25.4.3.1 / Table 25.4.3.2: \u03c8<sub>e</sub> = '+f2(z.pe)+'; \u03c8<sub>r</sub> = '+f2(z.pr)+' (c-c spacing '+f2(sfdMat(z.k).spc)+' in '+(z.pr===1?'\u2265':'<')+' 6d<sub>b</sub> = '+f2(6*z.db)+' in; confining ties not considered); \u03c8<sub>o</sub> = '+f2(z.po)+' (side cover of the outermost bar '+f2(z.endC)+' in '+(z.po===1?'\u2265':'<')+' 6d<sub>b</sub>'+(z.po!==1?'; interior bars with \u03c8<sub>o</sub> = 1.0: \u2113<sub>dh</sub> = '+f2(z.ldhInt)+' in':'')+'); \u03c8<sub>c</sub> = f\u2032<sub>c</sub>/15000 + 0.6 = '+f3(z.pc)+'. No excess-reinforcement reduction for hooks (25.4.10.2(d)).'));
   if(P2.dev.exOn&&!z.flexGov)bd.appendChild(el('div','note','<b>'+z.lab+': A<sub>s,req</sub> = A<sub>s,min</sub>.</b> A<sub>s,min</sub> = 0.0018A<sub>g</sub> = '+f3(z.AsMin)+' in\u00b2/ft governs A<sub>s,req</sub> (flexure alone '+f3(z.AsFlex)+' in\u00b2/ft), so it is the A<sub>s,req</sub> of the 25.4.10.1 ratio. It is the minimum <i>flexural</i> reinforcement of the footing (ACI 318-19 7.6.1.1 / 8.6.1.1; commentary R8.6.1.1: the same area as 24.4.3.2, but flexural steel near the tension face), not the 24.4 shrinkage and temperature reinforcement that R25.4.10.2 excludes from the factor.'));   /* SFEM */
  });
+ bd.appendChild(el('div','note','<b>Sections (SFDE):</b> the bars are checked at the governing flexural section and at every pedestal face where the moment of that sign is non-zero (ACI 318-19 13.2.8.3, 13.2.7.1); each block shows the worst. '+((P2.dev&&P2.dev.rows)||[]).filter(z=>z.cand&&z.cand.length>1).map(z=>z.lab+': '+z.cand.map(c=>(c.gov?'governing':sfEsc(c.ped)+' face')+' '+z.dir+' = '+f3(c.sec)+' ft, '+f2(c.avail)+' in available').join('; ')).join(' \u2014 ')));
  bd.appendChild(el('div','note','Available length is measured from the <b>governing flexural section</b> to the nearer footing edge, less the end cover \u2014 the length over which the bar must develop the stress that section demands. c<sub>b</sub> uses '+(sfdSideCoverIn()===null?'the bottom clear cover (side/end cover not entered, so assumed not less than it)':'the smaller of the bottom cover and the entered side/end cover ('+f2(sfdCbCover())+' in)')+' and half the bar spacing; K<sub>tr</sub> = 0 (no transverse reinforcement); \u03bb is the input lightweight factor; \u03c8<sub>g</sub> follows f<sub>y</sub> (Grade 60 / 80 / 100); \u03c8<sub>e</sub> follows the bar-coating input. Bundled bars are not covered. Where \u2113<sub>d</sub> exceeds the available length, a standard hook <i>is</i> permitted in tension (25.4.3) \u2014 unlike the compression dowels in \u00a75.6.'));
  renderPunching(T);
  const bb=secPanel(T,'o-fd-bear','5.6  Concrete Bearing & Dowels at Pedestal Interface');

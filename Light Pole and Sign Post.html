@@ -3116,7 +3116,7 @@ manPart("pL","L. AASHTO LRFDLTS Mode",[
 ["Load combinations","Table 3.4-1: Strength I (1.25DC), Extreme I (1.1DC + W, 0.9DC + W), Service I (1.0DC + W, 10-yr)"],
 ["Wind","Eq. 3.8.1-1 P<sub>z</sub> = 0.00256K<sub>z</sub>K<sub>d</sub>GV²C<sub>d</sub>; Eq. 3.8.4-1 K<sub>z</sub>; Table 3.8.5-1 K<sub>d</sub>; Art. 3.8.6 G = 1.14; Art. 3.8.7 and Table 3.8.7-1 C<sub>d</sub>, C<sub>v</sub>; Art. 3.9.1 EPA; Table 3.9.3-1 load cases; Art. 3.9.4.2 torsion"],
 ["Members","Arts. 5.5.3.2 (φ), 5.6.1, 5.6.2, Table 5.7.2-1, Table 5.8.2-1, Art. 5.10, Art. 5.11, Art. 5.12.1 (combined forces), Art. 4.8.1 / Eq. 5.12.1-10 (second order)"],
-["Deflection","Art. 10.4.2.1: 10 % H for luminaire supports (Service I, checked); 2.5 % H and 0.35 in/ft shown as information"],
+["Deflection","Art. 10.4.2.1: 10 % H for luminaire supports (Service I, checked); 0.35 in/ft slope checked for a pole with an unbalanced arm-mounted dead load (moment load application; LPM4, 2026-11-07), information otherwise; 2.5 % H shown as information"],
 ["Fatigue","Arts. 11.4, 11.7.2: not required for luminaire poles under 55 ft or roadside signs; warning at 55 ft and above"],
 ["Base plate","bending line at the pole face (engineering method, not an LRFDLTS article; Art. 5.6.3 only requires the thickness to be considered)"],
 ["Base weld","Art. 5.14 → AWS D1.1; strength per AISC 360-16 §J2.4"],
@@ -8188,7 +8188,7 @@ function ltsReportModel(){
       tbl(['Service I load case','Δx (in)','Δy (in)','Δ (in)','slope (in/ft)'],d.rows.map(r=>[r.lcName,N(r.dx,2),N(r.dy,2),N(r.d,2),N(r.slope,3)])),
       {type:'note',text:`Elastic double integration of M/(EI), times the Service I B = ${N(d.B,4)} (C10.4.2.1).`}]},
       {title:'Fatigue',items:[{type:'note',text:X.fat.text}]}]});
-    flags.push('Deflection: 10 % H for luminaire supports is checked; the 2.5 % H and 0.35 in/ft limits of Art. 10.4.2.1 are shown as information (engineer, 2026-11-02).'); }
+    flags.push('Deflection: 10 % H for luminaire supports is checked; the 0.35 in/ft slope of Art. 10.4.2.1 is checked when unbalanced arm-mounted fixtures put a dead-load moment on the pole (moment load application; review M4, pending engineer review) and shown as information otherwise; the 2.5 % H limit is shown as information (engineer, 2026-11-02).'); }
   // 5. Base plate and weld
   if(X.bp){ secs.push({title:'Base plate and base weld',subs:[{title:'Base plate (engineering method)'+post,items:[{type:'note',text:LPP_BP_VERIFY},...(lppBpSqNote(X.inp)?[{type:'note',text:lppBpSqNote(X.inp)}]:[]),steps('lts.bp',X.bpSteps)]},
       {title:'Pole-to-base-plate weld',items:X.wd.type==='cjp'?[{type:'note',text:'Full-penetration groove weld: the base metal governs (member check at the base); no separate weld check (AWS D1.1).'}]:[steps('lts.wd',X.wdSteps)]}]});
