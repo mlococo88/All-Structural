@@ -3632,3 +3632,155 @@ Calculation audit, item 9 (2). Engineer decision (2026-11-07). Code sites are ta
 
 ### Saved data
 - No input or format change. Old ACI projects with k_h > 0 change their stability FOS and pass/fail as above.
+
+## 2026-11-07 — PR: claude/rw-stem-seismic — Stem designed for the seismic increment: ACI U = 1.2D + 1.0E + 1.6H, AASHTO Extreme Event I (two cases, φ 1.0), at the base, at mid-height and along the height (RWSQ; calculation change)
+
+Calculation audit, item 9 (3). Engineer decision (2026-11-07). Code sites are tagged `RWSQ`.
+
+### RWSQ-1. `calcAll`   [§4]
+- **Provisions (cited and paraphrased; verified for the audit):**
+  - ACI 318-19 Table 5.3.1, Eq. (5.3.1e): U = 1.2D + 1.0E + 1.0L + 0.2S.
+  - ACI 318-19 §5.3.8: H (lateral earth pressure, incl. water in soil) is added at 1.6 where it adds to the effect.
+  - AASHTO LRFD 10th Ed. Art. 11.6.5.1: the wall elements are designed per Section 5 for the seismic case, with P_AE and P_IR combined in the two cases.
+  - AASHTO Art. 5.5.4.3: φ = 1.0 at the extreme event.
+- **New `stemSeis(z)`:** the factored seismic combination at depth z below the stem top.
+  - **ACI:** the U = 1.6H stem load, plus 1.0·ΔP_E,s at 0.6z, with ΔP_E,s = ΔP_E·(z/H)². This is the stability M-O increment over the stem height; ΔP_E stays at 0.6H, as decided.
+  - **AASHTO, when Extreme Event I is active (RWE1):** max of two cases.
+    - (1) P_AE,s·z/3 + 0.5·M_IR.
+    - (2) max(0.5P_AE,s, P_A,s) + M_IR, with P_A,s = the static soil on the stem.
+    - P_AE,s = ½K_AEγ_s z²(1 − k_v).
+    - M_IR = k_h × (stem weight above the section, tapered, 24 strips, + barrier at its centroid) × arm.
+    - ES and water at 1.0; LS at γ_EQ.
+- **Envelope:** the stem base M_u and V_u are max(Strength I / U = 1.6H, Extreme Event II, seismic). The same applies at mid-height (S3) and along the height (RWS13 check, φ 0.90 ACI / 1.00 AASHTO EE I).
+  - AASHTO φ = 1.0 when an extreme event governs.
+  - `stem_ee2_governs` is now false when the seismic case governs; new flags `stem_eq_governs` and `stemT_eq_governs`.
+- **Warnings:**
+  - AASHTO: the stem is designed for EE I; the footing is not.
+  - ACI: the stem is designed for U = 1.2D + 1.0E + 1.6H; the footing uses 1.0·ΔP_E as before; inertia is not included in ACI mode.
+- **Before / after** (`git diff -U0`, `calcAll`):
+```diff
+@@ -2191,2 +2191,2 @@ function calcAll(inp) {
+-    warnings.push(isAASHTO ? 'Seismic: Extreme Event I stability is checked (Art. 11.6.5.1: P_AE and wall inertia P_IR, Stability Step 7a); the stem and footing are NOT designed for the seismic case.'   // RWE1
+-                           : 'Seismic: stem and footing are NOT designed for the seismic case — the increment is applied to stability only, and wall/soil inertia (AASHTO 11.6.5.1 P_IR) is not included.');
++    warnings.push(isAASHTO ? 'Seismic: Extreme Event I stability is checked (Art. 11.6.5.1: P_AE and wall inertia P_IR, Stability Step 7a) and the stem is designed for Extreme Event I; the footing is NOT designed for the seismic case.'   // RWE1 / RWSQ
++                           : 'Seismic: the stem is designed for U = 1.2D + 1.0E + 1.6H (ΔP_E at 0.6H); the footing uses the factored bearing with 1.0·ΔP_E; wall/soil inertia (AASHTO 11.6.5.1 P_IR) is not included in ACI mode.');   // RWSQ
+@@ -2863,3 +2863,33 @@ function calcAll(inp) {
+-  // Governing stem demand = envelope of Strength I and Extreme Event II
+-  const stem_ee2_governs = Mu_stem_ee2 > Mu_stem_strI;
+-  const Mu_stem_lbft = Math.max(Mu_stem_strI, Mu_stem_ee2);
++  // ── RWSQ (2026-11-07): stem seismic load combination (engineer decision, audit item 9(3)) ──
++  //  ACI 318-19 Eq. 5.3.1e with H per §5.3.8: U = 1.2D + 1.0E + 1.6H — the static stem load at 1.6 plus 1.0·ΔP_E over the stem
++  //    (ΔP_E,s = ΔP_E·(z/H)², at 0.6z, the stability assumption); no D effect on the stem moment.
++  //  AASHTO Extreme Event I (Art. 11.6.5.1; Section 5 for the structure, φ = 1.0): the stability cases applied to the stem above the
++  //    section: (1) P_AE,s + 0.5P_IR,s, (2) max(0.5P_AE,s, P_A,s) + P_IR,s; P_IR,s = k_h(stem above the section + barrier); ES and
++  //    water at 1.0, LS at γ_EQ.
++  const eeQ = isAASHTO && aashtoR && aashtoR.ee1 ? aashtoR.ee1 : null;
++  const stemSeis = z => {   // factored seismic-combination M (lb·ft/ft) and V (lb/ft) at depth z below the stem top; null without seismic
++    if (!hasSeismic || !(z > 0)) return null;
++    const sd = stemDemand(z);
++    if (!isAASHTO) {
++      const Pe = Pe_inc * (z / H) ** 2;
++      return { M: gEH*sd.M_soil + gWA*sd.M_hyd + gES*Ka*inp.q_sur*z*z/2 + gLS*Ka*q_ll_stem*z*z/2 + Pe*0.6*z,
++               V: gEH*sd.V_soil + gWA*sd.V_hyd + gES*Ka*inp.q_sur*z + gLS*Ka*q_ll_stem*z + Pe, Pe };
++    }
++    if (!eeQ) return null;
++    const PAE = 0.5 * Kae * inp.gamma_s * z * z * (1 - inp.kv), MAE = PAE * z / 3;
++    let WI = 0, MI = 0; const n = 24;
++    for (let i = 0; i < n; i++) { const zz = (i + 0.5) * z / n, w = inp.gamma_c * (inp.ts_top + (inp.ts_bot - inp.ts_top) * zz / inp.Hs) / 12 * z / n; WI += w; MI += w * (z - zz); }
++    WI += W_bar; MI += W_bar * (z + bar_h_ft / 2);
++    const PIR = inp.kh * WI, MIR = inp.kh * MI;
++    const oM = Ka*inp.q_sur*z*z/2 + sd.M_hyd + eeQ.gEQ*Ka*q_ll_stem*z*z/2, oV = Ka*inp.q_sur*z + sd.V_hyd + eeQ.gEQ*Ka*q_ll_stem*z;
++    const useAE = 0.5 * PAE > sd.V_soil;
++    const c1 = { M: MAE + 0.5*MIR + oM, V: PAE + 0.5*PIR + oV };
++    const c2 = { M: (useAE ? 0.5*MAE : sd.M_soil) + MIR + oM, V: (useAE ? 0.5*PAE : sd.V_soil) + PIR + oV };
++    return { M: Math.max(c1.M, c2.M), V: Math.max(c1.V, c2.V), PAE, MAE, PIR, MIR, WI, c1, c2, useAE };
++  };
++  const sq_base = stemSeis(inp.Hs);
++  const Mu_stem_eq = sq_base ? sq_base.M : 0, Vu_stem_eq = sq_base ? sq_base.V : 0;
++  // Governing stem demand = envelope of Strength I, Extreme Event II and (RWSQ) the seismic combination
++  const stem_eq_governs  = Mu_stem_eq > Math.max(Mu_stem_strI, Mu_stem_ee2);
++  const stem_ee2_governs = !stem_eq_governs && Mu_stem_ee2 > Mu_stem_strI;
++  const Mu_stem_lbft = Math.max(Mu_stem_strI, Mu_stem_ee2, Mu_stem_eq);
+@@ -2867 +2897 @@ function calcAll(inp) {
+-  const Vu_stem      = Math.max(Vu_stem_strI, Vu_stem_ee2);
++  const Vu_stem      = Math.max(Vu_stem_strI, Vu_stem_ee2, Vu_stem_eq);
+@@ -2944 +2974 @@ function calcAll(inp) {
+-  const phiF_stem = (isAASHTO && stem_ee2_governs) ? 1.00 : 0.90;
++  const phiF_stem = (isAASHTO && (stem_ee2_governs || stem_eq_governs)) ? 1.00 : 0.90;   // RWSQ: extreme events φ = 1.0
+@@ -2979 +3009 @@ function calcAll(inp) {
+-  const phiV     = isAASHTO ? (stem_ee2_governs ? 1.00 : 0.90) : 0.75;
++  const phiV     = isAASHTO ? ((stem_ee2_governs || stem_eq_governs) ? 1.00 : 0.90) : 0.75;   // RWSQ
+@@ -3049,2 +3079,5 @@ function calcAll(inp) {
+-  const stemT_ee2_governs = Mu_stemT_ee2 > Mu_stemT_strI;
+-  const Mu_stemT_lbft = Math.max(Mu_stemT_strI, Mu_stemT_ee2);
++  const sq_mid = stemSeis(Hs_mid);   // RWSQ
++  const Mu_stemT_eq = sq_mid ? sq_mid.M : 0, Vu_stemT_eq = sq_mid ? sq_mid.V : 0;
++  const stemT_eq_governs  = Mu_stemT_eq > Math.max(Mu_stemT_strI, Mu_stemT_ee2);
++  const stemT_ee2_governs = !stemT_eq_governs && Mu_stemT_ee2 > Mu_stemT_strI;
++  const Mu_stemT_lbft = Math.max(Mu_stemT_strI, Mu_stemT_ee2, Mu_stemT_eq);
+@@ -3053 +3086 @@ function calcAll(inp) {
+-  const Vu_stemT      = Math.max(Vu_stemT_strI, Vu_stemT_ee2);
++  const Vu_stemT      = Math.max(Vu_stemT_strI, Vu_stemT_ee2, Vu_stemT_eq);   // RWSQ
+@@ -3055 +3088 @@ function calcAll(inp) {
+-  const phiF_stemT = (isAASHTO && stemT_ee2_governs) ? 1.00 : 0.90;
++  const phiF_stemT = (isAASHTO && (stemT_ee2_governs || stemT_eq_governs)) ? 1.00 : 0.90;   // RWSQ
+@@ -3072 +3105 @@ function calcAll(inp) {
+-  const phiV_T = isAASHTO ? (stemT_ee2_governs ? 1.00 : 0.90) : 0.75;
++  const phiV_T = isAASHTO ? ((stemT_ee2_governs || stemT_eq_governs) ? 1.00 : 0.90) : 0.75;   // RWSQ
+@@ -3338,3 +3371,4 @@ function calcAll(inp) {
+-  const dcAt = (sets, zb) => { const Mn = MnOf(sets, zb), mS = MuS(zb), mE = MuE(zb);
+-    if (mS <= 1e-6 && mE <= 1e-6) return 0; if (Mn <= 0) return Infinity;
+-    return Math.max(mS / (0.90 * Mn), mE / (phiE * Mn)); };
++  const MuQ = zb => { const q = stemSeis(inp.Hs - zb); return q ? q.M : 0; }, phiQ = isAASHTO ? 1.00 : 0.90;   // RWSQ: seismic combination
++  const dcAt = (sets, zb) => { const Mn = MnOf(sets, zb), mS = MuS(zb), mE = MuE(zb), mQ = MuQ(zb);
++    if (mS <= 1e-6 && mE <= 1e-6 && mQ <= 1e-6) return 0; if (Mn <= 0) return Infinity;
++    return Math.max(mS / (0.90 * Mn), mE / (phiE * Mn), mQ / (phiQ * Mn)); };
+@@ -3373 +3407 @@ function calcAll(inp) {
+-  const s13_Mu_at  = Math.max(MuS(s13_dc_z), MuE(s13_dc_z)), s13_Mn_at = MnOf(setsAt(s13_dc_z), s13_dc_z);
++  const s13_Mu_at  = Math.max(MuS(s13_dc_z), MuE(s13_dc_z), MuQ(s13_dc_z)), s13_Mn_at = MnOf(setsAt(s13_dc_z), s13_dc_z);
+@@ -3589 +3623 @@ function calcAll(inp) {
+-                 label: 'Stem Flex', val: stem_ee2_governs ? 'EE-II governs' : undefined },
++                 label: 'Stem Flex', val: stem_eq_governs ? (isAASHTO ? 'EE-I governs' : 'seismic U governs') : stem_ee2_governs ? 'EE-II governs' : undefined },
+@@ -3597 +3631 @@ function calcAll(inp) {
+-                 label: 'Stem Mid Flex', val: stemT_ee2_governs ? 'EE-II governs' : undefined },
++                 label: 'Stem Mid Flex', val: stemT_eq_governs ? (isAASHTO ? 'EE-I governs' : 'seismic U governs') : stemT_ee2_governs ? 'EE-II governs' : undefined },
+@@ -3706,0 +3741 @@ function calcAll(inp) {
++    sq_base, Mu_stem_eq, Vu_stem_eq, stem_eq_governs, sq_mid, Mu_stemT_eq, stemT_eq_governs,   // RWSQ
+```
+
+### RWSQ-2. Display
+- **Stem design:**
+  - Step 1: the seismic combination worked, the governing note and the card reference.
+  - Steps 3 and 4: φ.
+  - Mid Step 1: the seismic M_u at mid-height.
+  - The "ΔPE is not included in stem flexure" note is replaced.
+- **Report:**
+  - Step 1 `stb/s1.MuEQ`, the envelope in `stb/s1.Mu`, and the V_u note;
+  - check label "Extreme Event I governs" / "U = 1.2D + 1.0E + 1.6H governs".
+- **Drawings:** general note 10.
+
+### Check cases (`calcAll` in Node and in the browser)
+- **ACI default, k_h = 0.10:**
+  - ΔP_E = 691.3, so ΔP_E,s = 691.3·(12/13.5)² = 546.2 lb/ft.
+  - M_u = 18432 + 546.2·0.6·12 = **22365** lb·ft/ft (was 18432, +21 %). The seismic combination governs.
+  - S1 stays #4@6 (A_s,min governs). V_u 4608 → 5154. Mid-height M_u 2304 → 2796. Along-height D/C 0.663 → 0.804.
+- **ACI default, k_h = 0.20:** M_u 27137; along-height D/C 0.975.
+- **ACI tall wall + water + k_h 0.15:** M_u 304035 → **382750**, S1 #8@3 → **#9@3**; mid-height 30036 → 39876.
+- **AASHTO default, k_h = 0.10:**
+  - P_AE,s = ½·0.3966·120·12² = 3426 at 4.0 ft, so M = 13706.
+  - P_IR,s = 0.10·2250 = 225 at 5.6 ft, so M_IR = 1260.
+  - Case 1: 13706 + 630 = **14335**; case 2: 11520 + 1260 = 12780.
+  - 14335 < Strength I 32274, so it does not govern (as in the audit). Nothing moves.
+- **AASHTO default, k_h = 0.30:** EE I 21566 < 32274, so it does not govern.
+
+### How verified
+- origin/main vs branch, headless Chromium: the twelve audit walls + ACI k_h 0.10 + AASHTO k_h 0.10 + AASHTO k_h 0.30 with collision.
+  - Walls without k_h: `_R` differs only by the new null / 0 fields.
+  - The AASHTO seismic walls gain the new fields only; EE I does not govern, so no value moves.
+  - ACI seismic walls: the stem M_u / V_u, mid-height, along-height and downstream stem values (bars, d, φM_n, shear, crack spacing, laps) change as above.
+  - The footing and stability are identical.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWSQ ACI and AASHTO); phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+- Screenshot looked at: ACI Stem Step 1 (k_h 0.10).
+
+### Saved data
+- No input or format change. Old projects with k_h > 0 get the stem seismic combination; their stem results can change (ACI).
