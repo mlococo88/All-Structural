@@ -2667,7 +2667,7 @@ From the code-compliance review of 2026-11-07 (finding H3, the plate-girder buil
 - **How verified:** origin/main vs branch, the 11 earlier scenarios and the v16 engine cases: identical (option off). A new plate-girder scenario (F.14 plates, 60 ft span) moves as expected (properties from the plates, self-weight 296 lb/ft). UI: the checkbox appears with Built-up, sets `section.plates`, worked lines shown. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
 - **Saved data:** new optional field `section.plates` in the saved state (absent = off, so every saved project opens as before). No key changed.
 
-## 2026-11-07 — PR: claude/steelbeam-h2-h33-stations — §H3.3 open-section torsion checked at every station, per element (flange tip, flange, web), with V(z) and M(z); web shear by VQ/It (H2; calculation change)
+## 2026-11-07 — PR: claude/steelbeam-h2-h33-stations (PR #1023: https://github.com/mlococo88/All-Structural/pull/1023) — §H3.3 open-section torsion checked at every station, per element (flange tip, flange, web), with V(z) and M(z); web shear by VQ/It (H2; calculation change)
 
 From the code-compliance review of 2026-11-07 (finding H2).
 
