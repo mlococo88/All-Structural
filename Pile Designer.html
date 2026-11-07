@@ -16397,7 +16397,7 @@ function pdrRest(root, M, grpOf, capBox) {
     if (!numsOf(t.innerText || t.textContent).some(n => !have.has(n))) return;
     const hd = trs[0].querySelector("th") ? [...trs[0].cells].map(tx) : null;
     let cap = ""; for (let e = t.previousElementSibling; e && !cap; e = e.previousElementSibling) { const x = tx(e); if (x && x.length <= 160 && !e.querySelector("table")) cap = x; break; }
-    put(grpOf(t), { type: "table", wide: (trs[0].cells.length > 6) || undefined, caption: cap || "Table (as printed)", head: hd || [], rows: trs.slice(hd ? 1 : 0).map(r => [...r.cells].map(c => { const v = tx(c); return /^[-\u2212\d.,e+\s%/×()]+$/.test(v) && /\d/.test(v) ? { t: v, n: true } : v; })), lazy: trs.length > 31 || undefined, title: trs.length > 31 ? (cap || "Table (as printed)") : undefined }, "Tables as printed");
+    put(grpOf(t), { type: "table", wide: (trs[0].cells.length > 6) || undefined, caption: cap || "Table (as printed)", head: hd || [], rows: trs.slice(hd ? 1 : 0).map(r => [...r.cells].map(c => { const v = tx(c).replace(/^(\S+) \u00b7 \u00a7\d+(?:\.\d+)*$/, "$1"); return /^[-\u2212\d.,e+\s%/×()]+$/.test(v) && /\d/.test(v) ? { t: v, n: true } : v; })), lazy: trs.length > 31 || undefined, title: trs.length > 31 ? (cap || "Table (as printed)") : undefined }, "Tables as printed");
     trs.forEach(r => numsOf(r.textContent).forEach(n => have.add(n)));
   });
   const BLK = /^(P|LI|DIV|H3|H4|H5)$/;
