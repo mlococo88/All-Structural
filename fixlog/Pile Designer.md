@@ -20079,3 +20079,24 @@ index 06a42e4..b58d4e3 100644
   - App and Report: the new rows, steps and table. 0 unresolved references, 0 duplicate keys, no NaN.
   - `check-syntax`: pass. `pile-library`: library checks pass. 0 console errors.
 - **Other copies:** none. The H-pile group uplift is not added; it is listed as a future feature.
+
+## 2026-11-07 — PR: claude/rw-pile-8f — foundationLoads from the Retaining Wall Designer listed (copy by.retwall); pileResults dialog names both receivers (RWPX; no calculation change) (PR #1015: https://github.com/mlococo88/All-Structural/pull/1015)
+
+Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4.10). Minimal change.
+### Where / before / after
+```diff
+-  var CH='foundationLoads', SCHEMA='bridge-foundation-loads', MAXV=1, RID='pileDesigner', BY=['abutment','subloads'];
++  var CH='foundationLoads', SCHEMA='bridge-foundation-loads', MAXV=1, RID='pileDesigner', BY=['abutment','subloads','retwall'];   // RWPX (2026-11-07): + the Retaining Wall Designer's copy (element.type "wall", revision 2)
+-    x+='<div style="color:#334155;margin:4px 0">Channel pileResults (receiver: abutment calculator, "Pull pile results"). '+(p.basis? 'Based on the foundation loads from <b>'+esc(p.basis.producer)+'</b>, sent '+esc(when(p.basis.producedAt))+' ('+esc(p.basis.target||'?')+' import'+(p.basis.contentHash?', content '+esc(p.basis.contentHash):'')+').' : 'No foundation-load hand-off recorded.')+'</div>';
++    x+='<div style="color:#334155;margin:4px 0">Channel pileResults (receivers: abutment calculator and Retaining Wall Designer, "Pull pile results"). '+(p.basis? 'Based on the foundation loads from <b>'+esc(p.basis.producer)+'</b>, sent '+esc(when(p.basis.producedAt))+' ('+esc(p.basis.target||'?')+' import'+(p.basis.contentHash?', content '+esc(p.basis.contentHash):'')+').' : 'No foundation-load hand-off recorded.')+'</div>';
+```
+### Problem
+- The wall sends `foundationLoads` revision 2 (element.type "wall") with a copy at `bridgeSuite.v1.foundationLoads.by.retwall`; the receiver listed only the abutment and SubLoads copies (the channel key itself was read already). The import, its checks and the targets are unchanged: a wall payload is a revision-2 payload like the abutment's (its section has no d, b_f, t_f, t_w, so it is not adopted).
+### Governing provision
+- None (data hand-off).
+### Check case
+- tests/smoke/retwall-pile-handoff.mjs: the wall's payload is listed, imported on the group target with the layout adopted; "Per-pile check: for all 2 case(s), every pile's reaction … equals … within 0.0005 kip"; Run all cases; pileResults sent with basis.contentHash = the wall's.
+### How verified
+- The smoke test above; `pile-library` smoke; `project-library --tool pile`; `check-syntax`.
+### Open items
+- The per-pile check message and the "Pull from Abutment / SubLoads" label still name the abutment; wording only.

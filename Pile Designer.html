@@ -690,7 +690,7 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
    and the drag load hpDR / hpGammaDR (structural check at the neutral plane). */
 (function(){
   if(window.PileFoundationXfer) return;
-  var CH='foundationLoads', SCHEMA='bridge-foundation-loads', MAXV=1, RID='pileDesigner', BY=['abutment','subloads'];
+  var CH='foundationLoads', SCHEMA='bridge-foundation-loads', MAXV=1, RID='pileDesigner', BY=['abutment','subloads','retwall'];   // RWPX (2026-11-07): + the Retaining Wall Designer's copy (element.type "wall", revision 2)
   var FORCE={kip:1,kips:1,k:1,lb:0.001,lbf:0.001,lbs:0.001};               /* -> kip */
   var MOMENT={'kip-ft':1,'kip·ft':1,'k-ft':1,'ft-kip':1,'kip-in':1/12,'lb-ft':0.001,'ft-lb':0.001,'lb-in':0.001/12};   /* -> kip-ft */
   var AX=['+x','-x','+y','-y'], AXL={'+x':'+x of the hand-off','-x':'−x of the hand-off','+y':'+y of the hand-off','-y':'−y of the hand-off'};
@@ -1368,7 +1368,7 @@ function pileProjShareValues(I){ var v={}; PILE_PROJ_MAP.forEach(function(m){ va
     var ov=document.createElement('div'); ov.id='pxrOverlay'; ov.style.cssText='position:fixed;inset:0;background:rgba(8,18,28,.55);z-index:1000;display:flex;align-items:center;justify-content:center;font-family:system-ui,sans-serif';
     var p=b.p, g=p.geotechnical, s=p.structural, fx=p.fixity, ib=p.integral, x='';
     x+='<div style="font-size:14px;font-weight:700">Send pile results to the abutment calculator</div>';
-    x+='<div style="color:#334155;margin:4px 0">Channel pileResults (receiver: abutment calculator, "Pull pile results"). '+(p.basis? 'Based on the foundation loads from <b>'+esc(p.basis.producer)+'</b>, sent '+esc(when(p.basis.producedAt))+' ('+esc(p.basis.target||'?')+' import'+(p.basis.contentHash?', content '+esc(p.basis.contentHash):'')+').' : 'No foundation-load hand-off recorded.')+'</div>';
+    x+='<div style="color:#334155;margin:4px 0">Channel pileResults (receivers: abutment calculator and Retaining Wall Designer, "Pull pile results"). '+(p.basis? 'Based on the foundation loads from <b>'+esc(p.basis.producer)+'</b>, sent '+esc(when(p.basis.producedAt))+' ('+esc(p.basis.target||'?')+' import'+(p.basis.contentHash?', content '+esc(p.basis.contentHash):'')+').' : 'No foundation-load hand-off recorded.')+'</div>';
     if(b.warn.length) x+='<div style="'+WB+'">'+b.warn.map(esc).join('<br>')+'</div>';
     var tb=function(rows){ return '<table style="border-collapse:collapse;width:100%;margin:4px 0">'+rows.map(function(rw,i){ return '<tr>'+rw.map(function(c){ return '<'+(i?'td':'th')+' style="'+TD+'">'+c+'</'+(i?'td':'th')+'>'; }).join('')+'</tr>'; }).join('')+'</table>'; };
     if(g){ var gr=[['Geotechnical axial','R<sub>n</sub> (kip)','φ','φR<sub>n</sub> (kip)'],['Compression (static, '+esc(g.pileType)+')',f(g.static.Rn,1),f(g.static.phi,3),f(g.static.phiRn,1)],['Uplift (static)',f(g.static.RnUp,1),f(g.static.phiUp,3),f(g.static.phiRnUp,1)]];
