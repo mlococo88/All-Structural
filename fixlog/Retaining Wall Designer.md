@@ -6342,12 +6342,16 @@ Engineer request (2026-11-07): "there is no output tab for the piles". Code site
 - **Drawings sheet 3:**
   - The two surcharge bands' labels (ES / LS, Q_S / LS) were at the same height and overlapped; they are now on two rows (+0.13 in).
   - "N PSF AT W.T." sat over the bands; it is now left of the pressure plane, under the water line.
+- **Analysis diagram layer toggles:** the label column of the lateral diagrams (RWPS) was outside the layer groups, so "Active pressure", "Surcharge" and "Water" off left their labels on screen. Each label now sits in its diagram's layer (`rwpsLateral`, `rows` carry the layer).
 - **Checked and found correct:**
   - the arrows (toward the wall for earth / surcharge / water, toward the heel for passive, upward for the base reaction);
   - the legend chips of the Overview against their colours;
   - the 3D prisms (RWPS);
   - the scale bars against the drawn footing (RWTS);
   - the elevation (AASHTO CT).
+- **Found, not changed (engineer to decide):**
+  - The Analysis diagram draws bearing in green (its layer chip is green), the same green as passive. The Overview draws it in blue.
+  - On Drawings sheet 3 the resultant arrows (P_EH, P_ES, P_LS, P_WA, ΔP_E) cross the pressure diagrams to the plane through the heel, as in the drafting convention. They are left as they are.
 - **Formulas, factors, units, code references:** none changed (§4 does not apply).
 - **Saved data (§5):** none (no storage key; the WeakMap is in memory).
 - **How verified:** see the PR (main vs branch probe of `_R`, localStorage keys, tab and Report text with SVG removed, DXF sheets; in-page widths above; screenshots).
