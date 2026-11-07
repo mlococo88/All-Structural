@@ -1579,3 +1579,18 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   the number). LLF select → "Service III, PS refined losses…" → LLF 1.0, cards equal to Service I. FHWA benchmark: 0.7L cell grey,
   "Largest graded difference" no longer driven by 0.7L.
 - **Saved data:** no key or format change; `lls` may now also hold `1.0`.
+
+## 2026-11-07 — PR: claude/ml-pedestrian-load (M2: optional pedestrian load input, default off)
+- **Engine:** `shared/moving-load.js` `m.ped` (see `fixlog/shared-moving-load.md`, same date).
+- **Where (page):**
+  - Load Model Rules, before `<div class="lbl" style="margin-top:4px">Variable axle spacing</div>`: checkbox `#pedOn` (off), `#pedF`
+    with `#pedW` (w_PL, k/ft on this girder line, 0.45) and `#pedDF` (DF_PL, 1.00), hint `#pedH`. `syncVis()` shows `#pedF` when on.
+  - `applyFam(m,key)`: `m.ped={w,df}` when `#pedOn` is ticked, the vehicle is not rail, not the fatigue truck and w > 0.
+  - `mlgApply(d)`: a save without `pedOn` (all saves before this change) opens with the pedestrian load off and the defaults, so its
+    results are unchanged (§5; no key or format change).
+  - Shown work: the vehicle line (`#vehInfo`) names the PL; the printed report's inputs table gets a "Pedestrian load" row; the
+    print report's factoring line of each governing value adds "it includes the pedestrian load w_PL·A·g_PL/g = … = …"; the Report tab
+    gets a "Pedestrian load" settings row and, in each governing value's worked steps, the step "of which pedestrian load:
+    w_PL × A × DF_PL / g" with values substituted (e.g. 0.450 · 1250.00 · 1.00 / 1.0000 = 562.50 for the check case).
+- **Check case:** 1 span 100 ft, HL-93, DF 1, LLF 1, PL on with 0.45 k/ft: Max +M 2821.6 → 3384.1 kip-ft (+0.45 × 100²/8).
+- **Saved data:** new fields `pedOn`, `pedW`, `pedDF` in the autosave / export (`fields`); old saves open with PL off.

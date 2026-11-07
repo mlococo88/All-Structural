@@ -17,6 +17,8 @@
                            Simple: span effects come from that span only; interior support reactions are the left +
                            right span reactions summed; the multi-vehicle case is still gated to M with a negative
                            influence-line total (none in simple spans) and interior reactions (3.6.1.3.1).
+                           m.ped: optional {w, df} pedestrian load (k/ft on the girder line, its DF; added 2026-11-07,
+                           LRFD 3.6.1.6): patterned, no IM, not scaled; R.ped holds w, df, areas and w·A·df per effect.
                            m.negX: optional [[x0,x1],…] (ft): M sections in these ranges also take the multi-vehicle
                            case for the minimum (added 2026-10-29 for Steel Bridge: GirderDetail's LL5 region).
                            Positions (H1, 2026-11-07): the lead axle is swept at m.step, and each axle is also placed
@@ -183,6 +185,15 @@ function analyze(m,opt){
   const laneMax=effs.map((ef,ei)=>{const uf=m.imp.onUdl?imArr[ei]:1;return m.udl.mode==='lane'?uf*uw*DER[ei].lp:uf*uw*DER[ei].end;});
   const laneMin=effs.map((ef,ei)=>{const uf=m.imp.onUdl?imMinArr[ei]:1;return m.udl.mode==='lane'?uf*uw*DER[ei].ln:uf*uw*DER[ei].end;});
 
+  // Pedestrian load (M2, 2026-11-07; LRFD 10th Ed. Art. 3.6.1.6, 3.6.2.1). Optional m.ped = {w: k/ft on this girder line, df: its
+  // distribution factor (default 1.0)}. Patterned like the lane load (contributing parts of the influence line), no IM, not scaled
+  // by the multi-vehicle factor (full PL with every vehicle case). The envelope is per lane and the page multiplies it by γ_LL and
+  // the vehicle DF g, so PL enters as w·A·df/g: the factored result then carries γ_LL·w·A·df. Absent m.ped: nothing changes.
+  const PED=m.ped&&m.ped.w>0?{w:m.ped.w,df:m.ped.df>0?m.ped.df:1,max:[],min:[],Ap:[],An:[],g:[]}:null;
+  const pedMax=effs.map(()=>0),pedMin=effs.map(()=>0);
+  if(PED)effs.forEach((ef,ei)=>{const gp=dfOf(ef,1),gn=dfOf(ef,-1),D=DER[ei];
+    PED.Ap[ei]=D.lp;PED.An[ei]=D.ln;PED.max[ei]=PED.w*D.lp*PED.df;PED.min[ei]=PED.w*D.ln*PED.df;PED.g[ei]=[gp,gn];
+    pedMax[ei]=gp>0?PED.max[ei]/gp:0;pedMin[ei]=gn>0?PED.min[ei]/gn:0;});
   const res=effs.map(()=>({max:0,maxG:null,min:0,minG:null}));
 
   // Axle standing exactly at a shear cut (the unit jump in the V influence line): the envelope is the limit of the
@@ -219,7 +230,7 @@ function analyze(m,opt){
             else{if(tr.trunc){uMax=Math.max(D.smax[jc+1],CIs)-CIs;uMin=Math.min(D.smin[jc+1],CIs)-CIs;}else uMax=uMin=D.end-CIs;}
             uMax*=tr.w;uMin*=tr.w;}
           const uf=m.imp.onUdl?im:1, ufn=m.imp.onUdl?imn:1;
-          const vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]), vMin=cfg.scale*(imn*axMin+ufn*uMin+laneMin[ei]);
+          const vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei])+pedMax[ei], vMin=cfg.scale*(imn*axMin+ufn*uMin+laneMin[ei])+pedMin[ei];
           const r=res[ei];
           if(dMax&&vMax>r.max+1e-9){r.max=vMax;r.maxG=gov(cfg,p,dir,on);}
           if(dMin&&vMin<r.min-1e-9){r.min=vMin;r.minG=gov(cfg,p,dir,on);}
@@ -280,7 +291,7 @@ function analyze(m,opt){
         if(dir>0){if(tr.trunc){uMax=CIs-Math.min(D.pmin[jc],CIs);uMin=CIs-Math.max(D.pmax[jc],CIs);}else uMax=uMin=CIs;}
         else{if(tr.trunc){uMax=Math.max(D.smax[jc+1],CIs)-CIs;uMin=Math.min(D.smin[jc+1],CIs)-CIs;}else uMax=uMin=D.end-CIs;}
         uMax*=tr.w;uMin*=tr.w;}
-      const uf=m.imp.onUdl?im:1,ufn=m.imp.onUdl?imn:1,vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei]),vMin=cfg.scale*(imn*axMin+ufn*uMin+laneMin[ei]),r=res[ei];
+      const uf=m.imp.onUdl?im:1,ufn=m.imp.onUdl?imn:1,vMax=cfg.scale*(im*axMax+uf*uMax+laneMax[ei])+pedMax[ei],vMin=cfg.scale*(imn*axMin+ufn*uMin+laneMin[ei])+pedMin[ei],r=res[ei];
       if(dMax&&vMax>r.max+1e-9){r.max=vMax;r.maxG={lab:cfg.lab,p,dir,pos:[...pos]};}
       if(dMin&&vMin<r.min-1e-9){r.min=vMin;r.minG={lab:cfg.lab,p,dir,pos:[...pos]};}
     });
@@ -315,7 +326,7 @@ function analyze(m,opt){
         [[a,x[j]],[bb,x[j+1]]].forEach(([v,xv])=>{if(v>hi){hi=v;xh=xv;}if(v<lo){lo=v;xl=xv;kl=k;}if(v<spMin[k][0])spMin[k]=[v,xv];});}
       let lo2=0,x2=null;
       if(ef.t==='M'&&ns>1&&kl>=0)spMin.forEach(([v,xv],s)=>{if(s!==kl&&v<lo2){lo2=v;x2=xv;}});
-      const vMax=imArr[ei]*(SL.w*D.lp+P1*hi), vMin=imMinArr[ei]*(SL.w*D.ln+P1*(lo+lo2)), r=res[ei];
+      const vMax=imArr[ei]*(SL.w*D.lp+P1*hi)+pedMax[ei], vMin=imMinArr[ei]*(SL.w*D.ln+P1*(lo+lo2))+pedMin[ei], r=res[ei];
       const lab=`Std. lane ${P1}k`;
       if(vMax>r.max+1e-9){r.max=vMax;r.maxG={lab,p:xh,dir:1,pos:[xh],lane:true};}
       if(vMin<r.min-1e-9){r.min=vMin;r.minG={lab:x2!=null?`Std. lane 2×${P1}k`:lab,p:xl,dir:1,pos:x2!=null?[xl,x2]:[xl],lane:true};}
@@ -397,7 +408,9 @@ function analyze(m,opt){
   const imSpan=m.spans.map((_,k)=>imOf({spans:[k]}));
   const effR=effs.filter(ef=>ef.t==='R'), imR=effs.map((ef,i)=>ef.t==='R'?imArr[i]:null).filter(v=>v!==null);
 
-  return {m,effs,res,rows,x,sup,Lt,IL,ends,dfOf,warn,check,supNodes,stepSolve,stepCase,varOK,imSpan,imR,effR,A,nf,fmap,nn};
+  if(PED){warn.push(`Pedestrian load ${PED.w} k/ft on this girder line (DF ${PED.df}) is included with every vehicle case: patterned on the parts of the influence line that add, no impact, not reduced in the multi-vehicle case (LRFD 3.6.1.6, 3.6.2.1). Per-lane values include w·A·DF_PL / g so that the factored values carry γ_LL·w·A·DF_PL. Step mode and deflection do not include it.`);
+    if(effs.some((ef,ei)=>!(PED.g[ei][0]>0)||!(PED.g[ei][1]>0)))warn.push('Pedestrian load: a distribution factor is zero or blank, so the pedestrian load is left out where it is.');}
+  return {m,effs,res,rows,x,sup,Lt,IL,ends,dfOf,warn,check,supNodes,stepSolve,stepCase,varOK,imSpan,imR,effR,A,nf,fmap,nn,...(PED?{ped:PED}:{})};
 }
 const ENGINE_ANALYZE=analyze;
 function deflection(R,opt){
