@@ -3954,16 +3954,46 @@ function calcAll(inp) {
                       + sd_base.M_hyd
                       + (Ka * inp.q_sur   * inp.Hs ** 2 / 2)
                       + (Ka * q_ll_stem   * inp.Hs ** 2 / 2);
-    // Heel: unfactored full downward load, no upward relief (conservative,
-    // matches DOT hand-calc practice; relief at service would be a small credit).
-    const M_serv_heel = (w_soil_col + inp.gamma_c * tf_ft
-                       + (isAASHTO ? q_ll_aashto : 0) + inp.q_sur) * inp.Lh ** 2 / 2 + M_wedge_heel;
-    // Toe: net factored / avg load factor ≈ service (small moment; approximation noted)
-    const M_serv_toe  = Math.abs(Mu_toe_net) / 1.5;
+    // RW2M2 (2026-11-07): heel and toe Service I moments (all γ = 1.0, η = 1.0) from the Service I base reaction, worked the same way
+    // as the Strength I footing design (AASHTO LRFD 10th Art. 5.6.7 with Table 3.4.1-1 Service I). Spread footing: the total vertical
+    // load (water uplift added back, it acts on the same underside) as a trapezoid, or the soil block of length 3x̄ in partial contact
+    // (RWPC); on piles: the Service I pile-row reactions (rigid cap, shared/pile-group.js), with the heel water split as RW2H3 (γ = 1.0).
+    // Was: heel = full downward load with no upward relief (64,704 at the default; f_ss 121 ksi, capped at 0.6f_y, with a
+    // contradictory warning), toe = |M_u|/1.5.
+    const svA = aashtoR;
+    const V_svc = Wftg + Wstem + W_bar + Wsoil + Pa_tri_v + q_ll_aashto * inp.Lh + inp.q_sur * inp.Lh + pDL + pLL + pSL;
+    const Mr_svc = Wftg * x_ftg + Wstem * x_stem + W_bar * x_bar + Wsoil * x_soil + Pa_tri_v * B + (q_ll_aashto + inp.q_sur) * inp.Lh * x_sur + (pDL + pLL + pSL) * x_col;
+    const Mo_svc = svA.P_EH * svA.y_EH + svA.P_LS * svA.y_LS + svA.P_ES * (Hp / 2) + svA.P_hyd * (hw / 3);
+    const xR_svc = V_svc > 0 ? (Mr_svc - Mo_svc) / V_svc : B / 2, e_svc = B / 2 - xR_svc;
+    let qt_svc, qh_svc;
+    if (Math.abs(e_svc) <= B / 6) { qt_svc = V_svc / B * (1 + 6 * e_svc / B); qh_svc = V_svc / B * (1 - 6 * e_svc / B); }
+    else if (e_svc > 0) { qt_svc = xR_svc > 0 ? 2 * V_svc / (3 * xR_svc) : 0; qh_svc = 0; }
+    else { qt_svc = 0; qh_svc = 2 * V_svc / (3 * (B - xR_svc)); }
+    const integ = (x0, x1, fx) => { const n = 400, h = (x1 - x0) / n; let a = 0; for (let i = 0; i <= n; i++) { const w = (i === 0 || i === n) ? 1 : (i % 2 ? 4 : 2); a += w * fx(x0 + i * h); } return a * h / 3; };   // Simpson
+    const w_dn_svc = w_soil_col + inp.gamma_c * tf_ft + q_ll_aashto + inp.q_sur;
+    const Md_svc_heel = w_dn_svc * inp.Lh ** 2 / 2 + M_wedge_heel;
+    let Mup_svc_heel, Mup_svc_toe, svcPile = null;
+    if (pileFtg) {
+      const SPG = window.SharedPileGroup, g = pile.g, gU = F_uplift > 0 ? 1.0 : 0;
+      const mkS = (V, xR) => { const M = SPG.momentAbout(V, xR, g.xbar); return SPG.rowLoads(g, V, M, 0).rows; };
+      const rowsT = mkS(V_svc, xR_svc);                                                       // toe: total routing (as RW2H3)
+      const Vh = V_svc - gU * F_uplift, rowsH = mkS(Vh, Math.abs(Vh) > 1e-9 ? (V_svc * xR_svc - gU * F_uplift * x_uplift) / Vh : g.xbar);
+      const uAt = x => gU * gamma_w * hw * (upliftTri ? x / B : 1);
+      Mup_svc_heel = rowsH.filter(rw => rw.x > x_back + 1e-9).reduce((t, rw) => t + rw.q * (rw.x - x_back), 0) + integ(x_back, B, x => uAt(x) * (x - x_back));
+      Mup_svc_toe  = rowsT.filter(rw => rw.x < x_front - 1e-9).reduce((t, rw) => t + rw.q * (x_front - rw.x), 0);
+      svcPile = { rowsH, rowsT };
+    } else {
+      const q = x => q_blk(x, qt_svc, qh_svc, e_svc, xR_svc);
+      Mup_svc_heel = integ(x_back, B, x => q(x) * (x - x_back));
+      Mup_svc_toe  = integ(0, x_front, x => q(x) * (x_front - x));
+    }
+    const M_serv_heel = Math.max(0, Md_svc_heel - Mup_svc_heel);                              // top bars (F1); ≤ 0: no tension on F1
+    const M_serv_toe  = Math.max(0, Mup_svc_toe - inp.gamma_c * tf_ft * inp.Lt ** 2 / 2);    // bottom bars (F2), soil over the toe not credited (as strength)
 
     aashtoR.serv = {
       n_modular, Ec, fr, beta1, K_serv, Ko_serv, serv_ko: !!A.serv_ko,
       M_serv_stem, M_serv_heel, M_serv_toe,
+      svc: { V: V_svc, Mr: Mr_svc, Mo: Mo_svc, xR: xR_svc, e: e_svc, qt: qt_svc, qh: qh_svc, w_dn: w_dn_svc, Md_heel: Md_svc_heel, Mup_heel: Mup_svc_heel, Mup_toe: Mup_svc_toe, pile: !!svcPile },   // RW2M2
       stem: {
         minR: minReinf(d_stem, inp.ts_bot, sel_stem.As_prov, Mu_stem_lbft),
         crack: crackSpacing(d_stem, sel_stem.bar.db, inp.cov_stem, inp.ts_bot,
@@ -5208,15 +5238,26 @@ function renderStabilityAASHTO(r) {
        {sym:'M_r', desc:'factored flexural resistance', val:F(sv.stem.minR.Mr/1000,1), unit:'kip·ft/ft'}]);
     h += eqCheck('Heel crack-control spacing',
       `s_{max} = ${F(sv.heel.crack.s_max,1)}\\ \\text{in} \\geq s = ${F(sv.heel.spacing,1)}\\ \\text{in}`, sv.heel.crack.ok,'\u00a75.6.7',
-      [{sym:'M_{serv}', desc:'Service I, full downward (no upward relief)', val:F(sv.M_serv_heel/1000,1), unit:'kip·ft/ft'},
+      [{sym:'M_{serv}', desc:'Service I heel moment (worked below)', val:F(sv.M_serv_heel/1000,1), unit:'kip·ft/ft'},
        {sym:'f_{ss}', desc:'service tensile stress', val:F(sv.heel.crack.fss/1000,1), unit:'ksi'},
        {sym:'\\gamma_e', desc:'exposure factor (footing)', val:F(A.gamma_e1,2), unit:''},
        {sym:'s_{max}', desc:'max allowable spacing', val:F(sv.heel.crack.s_max,1), unit:'in'}]);
     h += eqCheck('Toe crack-control spacing',
       `s_{max} = ${F(sv.toe.crack.s_max,1)}\\ \\text{in} \\geq s = ${F(sv.toe.spacing,1)}\\ \\text{in}`, sv.toe.crack.ok,'\u00a75.6.7',
-      [{sym:'f_{ss}', desc:'service tensile stress', val:F(sv.toe.crack.fss/1000,1), unit:'ksi'},
+      [{sym:'M_{serv}', desc:'Service I toe moment (worked below)', val:F(sv.M_serv_toe/1000,1), unit:'kip·ft/ft'},{sym:'f_{ss}', desc:'service tensile stress', val:F(sv.toe.crack.fss/1000,1), unit:'ksi'},
        {sym:'\\gamma_e', desc:'exposure factor (footing)', val:F(A.gamma_e1,2), unit:''},
        {sym:'s_{max}', desc:'max allowable spacing', val:F(sv.toe.crack.s_max,1), unit:'in'}]);
+    if (sv.svc) {   // RW2M2 (2026-11-07): the Service I heel and toe moments worked
+      const S = sv.svc;
+      h += eq('Service I base reaction for the heel and toe crack control (all \u03b3 = 1.0; ' + (S.pile ? 'pile-row reactions, rigid cap; heel with the water uplift split out' : 'total vertical, the water uplift acting on the same underside') + ')',
+        `V = ${F(S.V,0)},\\ M_r = ${F(S.Mr,0)},\\ M_o = ${F(S.Mo,0)} \\Rightarrow \\bar{x} = \\frac{M_r - M_o}{V} = ${F(S.xR,3)}\\ \\text{ft},\\ e = ${F(S.e,3)}\\ \\text{ft}` + (S.pile ? '' : `,\\ q_{toe} = ${F(S.qt,0)},\\ q_{heel} = ${F(S.qh,0)}\\ \\text{psf}` + (Math.abs(S.e) > r.B/6 ? '\\ (\\text{partial contact: block } 3\\bar{x})' : '')), 'Table 3.4.1-1 Service I',
+        [{sym:'V', desc:'DC + EV + P_a,V + LS_v + ES_v + column (DL + LL), \u03b3 = 1.0', val:F(S.V,0), unit:'lb/ft'},
+         {sym:'M_o', desc:'P_EH y_EH + P_LS y_LS + P_ES H\u2032/2 + P_WA h_w/3', val:F(S.Mo,0), unit:'lb·ft/ft'}]);
+      h += eq('Service I heel and toe moments at the stem faces',
+        `M_{s,heel} = \\frac{w L_h^2}{2}${inp.beta>0?' + M_{wedge}':''} - M_{up} = ${F(S.Md_heel,0)} - ${F(S.Mup_heel,0)} = \\boxed{${F(sv.M_serv_heel,0)}};\\quad M_{s,toe} = M_{up} - \\frac{\\gamma_c t_f L_t^2}{2} = ${F(S.Mup_toe,0)} - ${F(inp.gamma_c*r.tf_ft*inp.Lt**2/2,0)} = \\boxed{${F(sv.M_serv_toe,0)}}\\ \\text{lb·ft/ft}`, '\u00a75.6.7',
+        [{sym:'w', desc:'service downward load on the heel: soil + footing + LS + q_s', val:F(S.w_dn,1), unit:'psf'},
+         {sym:'M_{up}', desc: S.pile ? 'pile-row reactions (and, heel, the water uplift) about the face' : 'upward base pressure about the face (\u222bq(x)\u00b7a dx)', val:F(S.Mup_heel,0) + ' / ' + F(S.Mup_toe,0), unit:'lb·ft/ft'}]);
+    }
     h += rwWorkedIn(r, [['stemFlex','S1 (s, A<sub>s</sub>, M<sub>u</sub>)'], ['heelFlex','F1'], ['toeFlex','F2']]);
     h += `</div></div>`;
   }
@@ -10803,6 +10844,11 @@ function rwrModel(r) {
         rwrS({ id: k + '.Mcr', label: nm + ': cracking moment', sym: 'M_{cr}', eq: '\\gamma_{3}\\gamma_{1} f_{r} S_{nc}', sub: 'f_{r} = ' + rwrN(sv.fr, 0) + '\\;\\text{psi}', value: m.Mcr / 1000, unit: 'kip-ft/ft', d: 1, ref: AA('Art. 5.6.3.3') }),
         rwrS({ id: k + '.mr', label: nm + ': minimum reinforcement M_r ≥ min(M_cr, 1.33 M_u)', sym: '\\frac{\\min(M_{cr}, 1.33M_{u})}{M_{r}}', eq: '', sub: '\\frac{' + rwrN(m.demand / 1000, 1) + '}{' + rwrN(m.Mr / 1000, 1) + '}', value: dcv('minRf' + k[0].toUpperCase() + k.slice(1)), unit: '', d: 3, ok: ok('minRf' + k[0].toUpperCase() + k.slice(1)) })]; };
       T.push({ title: 'Stem crack control', ref: AA('Art. 5.6.7'), steps: cr('stem', 'Stem', A.gamma_e2, sv.M_serv_stem, 'S1') });
+      if (sv.svc) { const S = sv.svc;   // RW2M2 (2026-11-07): Service I heel and toe moments from the Service I base reaction
+        T.push({ title: 'Service I heel and toe moments (all γ = 1.0)', ref: AA('Table 3.4.1-1, Art. 5.6.7'), steps: [
+          rwrS({ id: 'svc.xR', label: 'Service I resultant' + (S.pile ? ' (pile-row reactions, rigid cap; the heel with the water uplift split out)' : ' (total vertical; trapezoid, or the block 3x̄ in partial contact)'), sym: '\\bar{x}', eq: '\\frac{M_{r} \\minus M_{o}}{V}', sub: '\\frac{' + rwrN(S.Mr, 0) + ' \\minus ' + rwrN(S.Mo, 0) + '}{' + rwrN(S.V, 0) + '}', value: S.xR, unit: 'ft', d: 3 }),
+          rwrS({ id: 'svc.heel', label: 'Heel: service downward load w = ' + rwrN(S.w_dn, 1) + ' psf less the upward reaction about the back face', sym: 'M_{s,heel}', eq: 'M_{down} \\minus M_{up}', sub: rwrN(S.Md_heel, 0) + ' \\minus ' + rwrN(S.Mup_heel, 0), value: sv.M_serv_heel, unit: 'lb-ft/ft', d: 0 }),
+          rwrS({ id: 'svc.toe', label: 'Toe: upward reaction about the front face less the footing weight', sym: 'M_{s,toe}', eq: 'M_{up} \\minus \\frac{\\gamma_{c} t_{f} L_{t}^{2}}{2}', sub: rwrN(S.Mup_toe, 0) + ' \\minus ' + rwrN(inp.gamma_c * r.tf_ft * inp.Lt ** 2 / 2, 0), value: sv.M_serv_toe, unit: 'lb-ft/ft', d: 0 })] }); }
       T.push({ title: 'Heel crack control', ref: AA('Art. 5.6.7'), steps: cr('heel', 'Heel', A.gamma_e1, sv.M_serv_heel, 'F1') });
       T.push({ title: 'Toe crack control', ref: AA('Art. 5.6.7'), steps: cr('toe', 'Toe', A.gamma_e1, sv.M_serv_toe, 'F2') });
       T.push({ title: 'Minimum reinforcement', ref: AA('Art. 5.6.3.3'), steps: [].concat(mr('stem', 'Stem'), mr('heel', 'Heel'), mr('toe', 'Toe')) });
@@ -10982,7 +11028,7 @@ function rwrModel(r) {
       { title: 'Heel Step 1 — Factored loads', steps: pre('h1', H1) }, { title: 'Heel Step 2 — Design moment and shear at the face of the stem', steps: pre('h2', H2) },
       { title: 'Heel Step 3 — Flexural steel (' + (down ? 'top' : 'bottom') + ' face)', ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5', steps: pre('h3', H3) },
       { title: 'Heel Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('h4', H4) }], { title: 'Heel' }), { type: 'note', text: (upHr && r.upS ? 'ΣV_u and its moment: [[st7/SumVu]], [[st7/SumVumin]] (the water uplift is split out in Heel Step 1, ACI 318-19 §5.3.8)' : upHr ? 'Partial contact: the soil block is worked in Heel Step 1 (RWPC)' : 'q_u,back and q_u,heel: ' + (isA ? '[[saf/quback]], [[saf/quheel]] (Strength Ia: [[saf/qubackIa]])' : '[[st7/quback]], [[st7/quheel]] (minimum-vertical case: [[st7/qubackmin]])')) + '; ' + (r.heel_min_governs ? 'the minimum-vertical case governs the heel.' : 'the maximum-vertical case governs the heel.') },
-      { type: 'note', text: 'Serviceability (crack control) uses the unfactored no-relief moment.' }, onTab('heelFlex', 'Footing design tab, Heel (shear and moment diagrams)')]));
+      { type: 'note', text: (isA ? 'Serviceability (crack control) uses the Service I heel moment from the Service I base reaction (RW2M2; Stability tab Step 9).' : 'Serviceability (crack control) uses the unfactored no-relief moment.') }, onTab('heelFlex', 'Footing design tab, Heel (shear and moment diagrams)')]));
     const sT = r.sel_toe, T1 = [rwrS({ id: 'wsw', label: 'Factored self-weight of the footing (downward)' + (r.toe_min_governs ? '; bearing from ' + (isA ? 'Strength Ia' : 'U = 0.9D + 1.6H') + ' governs the toe' : ''), sym: 'w_{sw}', eq: (r.etaMn !== 1 ? '\\tfrac{1}{\\eta}\\,' : '') + '0.9\\,\\gamma_{c} t_{f}', sub: (r.etaMn !== 1 ? rwrN(r.etaMn, 3) + '\\cdot ' : '') + '0.9(' + rwrN(inp.gamma_c, 0) + ')(' + rwrN(r.tf_ft, 3) + ')', value: r.wu_toe_down, unit: 'psf', d: 1 }),
       ...(upTr ? upTr.filter(o => !/^uM/.test(o.id)) : []),   // RWUP
       rwrS({ id: 'q0', label: 'Net upward pressure at the front face', sym: 'q_{net}(0)', eq: (upTr ? 'q(0)' : 'q_{u,front}') + ' \\minus w_{sw}', sub: '', value: r.net_q0t, unit: 'psf', d: 1, }),

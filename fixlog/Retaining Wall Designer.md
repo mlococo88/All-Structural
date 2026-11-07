@@ -5806,3 +5806,73 @@ Second-pass review finding H3 (2026-11-07). Code sites are tagged `RW2H3`.
 
 ### Saved data
 - No input or format change.
+
+## 2026-11-07 — PR: claude/rw2-m2-service-heel-toe — AASHTO heel and toe crack control (Art. 5.6.7) from Service I moments of the Service I base reaction (RW2M2; calculation change, AASHTO mode)
+
+Second-pass review finding M2 (2026-11-07). Code sites are tagged `RW2M2`.
+
+### RW2M2-1. Problem
+- **Heel:** `M_serv_heel` was the full unfactored downward load with no upward relief (64,704 lb-ft/ft at the default, against a factored M_u of 27,580).
+  - The raw f_ss ≈ 121 ksi was capped at 0.6f_y, so the check row passed.
+  - At the same time the warning "Heel service steel stress exceeds 0.6f_y — increase A_s" appeared on the default AASHTO wall, contradicting the check row. Neither value was a real service stress.
+- **Toe:** `M_serv_toe = |M_u|/1.5`. This is unconservative where the average factor is below 1.5.
+
+### RW2M2-2. Fix (`calcAll`, Service I block, anchor `RW2M2`)
+Before:
+```js
+    const M_serv_heel = (w_soil_col + inp.gamma_c * tf_ft
+                       + (isAASHTO ? q_ll_aashto : 0) + inp.q_sur) * inp.Lh ** 2 / 2 + M_wedge_heel;
+    const M_serv_toe  = Math.abs(Mu_toe_net) / 1.5;
+```
+After:
+- **Service I loads (all γ = 1.0, η = 1.0; AASHTO LRFD 10th Ed. Table 3.4.1-1):**
+  - V = DC + EV + P_a,V + LS_v + ES_v + column (DL + LL + S);
+  - M_r about the toe;
+  - M_o = P_EH y_EH + P_LS y_LS + P_ES H′/2 + P_WA h_w/3;
+  - x̄ = (M_r − M_o)/V.
+- **Spread footing:** the total vertical as a trapezoid, or the RWPC soil block 3x̄ in partial contact (`q_blk`), the same as the Strength I footing design. M_up is integrated over the member (Simpson, 400 strips).
+- **Piles:** the Service I pile-row reactions (`SharedPileGroup.momentAbout` / `rowLoads`). The heel takes the RW2H3 water split (γ = 1.0) and the toe the total routing.
+- **Moments:**
+  - `M_serv_heel = max(0, w L_h²/2 + M_wedge − M_up)`, with w = soil + footing + LS + q_s;
+  - `M_serv_toe = max(0, M_up − γ_c t_f L_t²/2)`; soil over the toe is not credited, as in strength.
+- `aashtoR.serv.svc` exposes V, M_r, M_o, x̄, e, q, w, M_down and M_up.
+- **Display:**
+  - Stability Step 9: two worked steps (the Service I resultant and pressures; the heel and toe M_s), with M_serv in the heel and toe check rows.
+  - Report Step 9: "Service I heel and toe moments".
+  - The Report heel note now says which moment is used in AASHTO mode.
+- The "Heel service steel stress exceeds 0.6f_y" warning stays. It now fires only for a real Service I stress.
+- ACI mode is unchanged.
+
+### Check case (AASHTO default wall)
+- V = 2812.5 + 2250 + 11520 + 357(8) = 19438.5 lb/ft.
+- M_r = 123673 + 2856(8.5) = 147949.
+- M_o = 3645(4.5) + 1606.5(6.75) = 27246.
+- x̄ = 6.2096 ft, e = 0.040 ft.
+- q_toe / q_heel = 1585 / 1525 psf; 1563.5 psf at the back face.
+- **Heel:** w = 1440 + 225 + 357 = 2022 psf.
+  - M_down = 2022(64)/2 = 64704.
+  - M_up = 1563.5(32) − 38.6(64)/3 = 49208.
+  - M_s = **15496** (was **64704**). f_ss is now below 0.6f_y and the warning is gone.
+  - s_max 8.1 → **11.7 in** (F1 #5 @ 8: PASS).
+- **Toe:** M_up ≈ 7112, less 225(9)/2 = 1012.5, gives M_s = **6100** (was 6298 = 9447/1.5). s_max 15.8 → 16.5 in.
+
+Other walls (heel M_s, before → after):
+
+| Wall | Before | After | Note |
+|---|---|---|---|
+| L_t 5 / L_h 6, η 1.05 | 36396 | 10568 | crack check FAIL → PASS |
+| piles, t_f 36 | 71040 | 5517 | |
+| water + column | 66624 | 0 | net upward: F1 not in tension |
+
+### How verified
+- Headless probe, H3 branch vs this branch, 28 walls. Only AASHTO walls move, and only `serv.M_serv_heel` / `M_serv_toe`, the crack-control rows and the warning. 0 console errors.
+- ACI walls identical. Self-consistency passes; 0 KaTeX errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (new `AUD` row RW2M2); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Decisions (pending engineer review)
+- **One Service I set for both members:** the column LL and LS are included in V and M_r, and LS in M_o.
+- **Net upward heel (M_s < 0):** F1 is not checked in tension (M_s = 0). The bottom face of the heel has no crack check, as before.
+- **Pile toe:** the existing "negative s_max" with the cover over the pile heads is unchanged (8d decision).
+
+### Saved data
+- No input or format change.
