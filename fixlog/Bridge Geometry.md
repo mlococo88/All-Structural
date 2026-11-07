@@ -1973,7 +1973,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Saved data (§5):** additive scalar `skew_datum`. Migration: `BG_OLD_DEFAULTS.skew_datum='chord'` (applied before the saved scalars); `BG_NEW_DEFAULTS.skew_datum='align'`. No key changed. Hand-off payload shape unchanged (HANDOFF §4.2); the receiver is not changed.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/bg-h5-seat-stack (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX5, review H5 + M6, engineer item Q-BG3 / O3: optional seat terms, net camber, midspan haunch check, worked seat derivation)   [calc change: new option] [saved data: additive fields with migration]
+## 2026-11-07 — PR: claude/bg-h5-seat-stack (PR #1122: https://github.com/mlococo88/All-Structural/pull/1122) (BGX5, review H5 + M6, engineer item Q-BG3 / O3: optional seat terms, net camber, midspan haunch check, worked seat derivation)   [calc change: new option] [saved data: additive fields with migration]
 
 - **Why:** review 2026-11-07 H5. The seat stack had no vertical-curve ordinate and no cross slope × b_f/2. Camber was undefined (gross or net). Nothing checked the minimum haunch along the span. Review sag case: −2 % / +2 %, VC 400 centred on a 100 ft span, min haunch 1.5 in, camber 0. The midspan haunch was 0 in, and the low flange edge was a further 0.48 in short at 6 % with b_f = 16 in. M6: the seat sections showed values only (§6, show the work).
 - **Owner practice (read in the manuals, paraphrased):**
