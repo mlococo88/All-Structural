@@ -1340,5 +1340,5 @@ Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 a
 ### How verified
 - Headless Chromium, main vs branch, 13 cases (the 9 earlier ones plus Methuen h_n 70, ORC frame, Other-jurisdiction h_n 70): leaf diff of `R` and the hand-off. Moved: `seis.SDC` (Chatham only, A → B; hand-off SDC), `seis.sysLimit`, new `seis.sdcASCE/sdcMA`, `R.warn` (Note 2), the two new errors. No load, pressure, C_s or V moved.
 - Rendered text of every tab and the Report: 0 console errors, 0 KaTeX errors. Excel built for all cases.
-- `check-syntax`, `project-library --tool asce7` (its main-vs-branch result comparison differs by the Note 2 advisory and `sysLimit`, as intended), `phone-layout --tool asce7`, `engine handoffs`.
+- `check-syntax` (pass); `project-library --tool asce7`: against main its result comparison differs only by the Note 2 advisory (`R.warn`) and `seis.sysLimit` (NL → 100), as intended; with `--a HEAD` (same calculation both sides) ALL PASS, so the save / open / undo paths are unaffected; `phone-layout --tool asce7` pass; `engine handoffs` 10 passed.
 - **Other copies:** none.
