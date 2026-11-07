@@ -2342,7 +2342,7 @@ function renderStatus(r) {
   - The panel is collapsed when all checks pass and opens on a mismatch, as in SF.
   - It is not in the Report.
 
-## 2026-11-07 — PR: claude/rw-report-overview (RWOV) — Report: "Overview of the wall" after the Design summary (3D snapshot, typical section, elevation)   [display only; no result change]
+## 2026-11-07 — PR: claude/rw-report-overview (PR #938: https://github.com/mlococo88/All-Structural/pull/938) (RWOV) — Report: "Overview of the wall" after the Design summary (3D snapshot, typical section, elevation)   [display only; no result change]
 - **Why:** engineer-approved 2026-11-06 (task 5, review Phase 5a; as Spread Footing SFOV #780 and CBC #795).
 - **What:** a new Report section 2, "Overview of the wall", right after the Design summary. Its subsection "3D view, typical section and elevation" holds three figures:
   1. **3D snapshot.** The 3D model tab's own scene at its default view: the governing bearing combination, unfactored load arrows with value labels, every layer on, no section cut, the Reset-view camera. It is rendered off screen once per result (`rwovSnap3D`, WebGL with `preserveDrawingBuffer`, 1000 × 600, white background). The viewer's 3D state (selection, Factored toggle, layers, cut, opacity, rotation) is put back after the snapshot (tested). When WebGL or three.js is missing, a note says why.
