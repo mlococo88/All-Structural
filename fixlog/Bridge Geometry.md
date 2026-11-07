@@ -1835,7 +1835,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Also affected (same rule, intended):** map picks, the plan hover and the N/E → station converter beyond the alignment ends now report the station on the extended tangent (was the POB / POE station).
 - **Saved data:** none touched (§5). **Other copies:** none.
 
-## 2026-11-07 — PR: claude/bg-h1-chord-warnings (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX2, review H1 quick fix + M1: geometry warnings; no result change)   [display only]
+## 2026-11-07 — PR: claude/bg-h1-chord-warnings (PR #1109: https://github.com/mlococo88/All-Structural/pull/1109) (BGX2, review H1 quick fix + M1: geometry warnings; no result change)   [display only]
 
 - **Why:** in-depth review 2026-11-07. H1: the whole bridge is one straight chord from the first to the last support; on a curved alignment the interior supports and the deck leave the roadway with no warning (default demo: Pier 1 reference line 106.63 ft from the PGL). M1: no warning when supports or deck points lie outside the alignment / profile, or when a pier is stationed past an abutment (it silently becomes the end support).
 - **Where:** `geometryWarnings()` (added in BGX1, just before `function compute(){`): the deck-point loop also records the first / last deck station (`dMin`, `dMax`), and new blocks after the BGX1 POB/POE messages, anchors `// M1: supports outside the alignment`, `// M1: deck points outside the vertical profile`, `// H1: one straight chord`. Shown in the `#geom_warn` box (BGX1).
