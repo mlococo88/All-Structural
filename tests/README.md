@@ -58,6 +58,10 @@ node tests/smoke/spread-footing-scroll.mjs [--libs <folder with the pinned katex
 # a renderer that throws marks its tab "Out of date"
 node tests/smoke/spread-footing-nobear.mjs [--file <file or git ref>] [--shots <dir>]
 
+# Retaining Wall Designer: required inputs (RWIE): a blank / invalid input gives the "Input error: no results" banner on the check
+# summary, every output tab, the Drawings and the Report, the field marked with its reason, a working link; REVIEW does not block
+node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
+
 # Phone / tablet layout (PHN): at 390 and 768 px the page never scrolls sideways, on load and on every tab (one entry per tool in TOOLS)
 node tests/smoke/phone-layout.mjs [--tool smd,...] [--file <file or git ref>] [--w 390,768]
 
