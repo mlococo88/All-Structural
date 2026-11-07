@@ -20127,3 +20127,27 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
   - App and Report text: the L1 notes, the L2 table cells and the L6 lines; 0 unresolved references, 0 duplicate keys, no NaN.
   - `check-syntax`: pass. `pile-library`: see the PR. 0 console errors.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/pile-m7-group-handoff (PDA-M7) — pileResults carries the group result (η / block, group uplift); the abutment and the Retaining Wall Designer import the group-reduced R_n   [cross-tool; receivers' imported values change with a group]
+- **Problem (review M7):** `pileResults` sent the single-pile R_n / φ only. A receiver checked its piles at the single-pile φR_n. That over-credits the piles when Pile Designer's group efficiency η < 1 or its block governs (10.7.3.9, 10.9.3.6), and likewise for the group uplift (10.7.3.11, PDA-M6).
+- **Where (sender):** new `group(I,r)` in the `PileResultsXfer` IIFE (anchor `/* PDA-M7 (2026-11-07): the group result`), added to the payload as `group` (additive, optional; `schemaVersion` stays 1). The fields:
+  - `phiRnPerPile` = min(η × single φR_n, block φR_g / n);
+  - `reduce` = `phiRnPerPile` / single φR_n, at most 1;
+  - `uplift`: the group uplift total and `reduceUp` = total / (n × single φR_up);
+  - plus n, the layout, η and its basis, and `blockGoverns`.
+  - It is null without a group, or for an integral pile.
+- **Receivers:** `abutment_calculator.html` (`AbutPileResults.plan`) and `Retaining Wall Designer.html` (`rwpxPlan`) import static R_n × `reduce` and R_n,up × `reduceUp` (see their fix logs). HANDOFF.md §4.10 is updated.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.7.3.9 / 10.9.3.6 (group resistance, η, block) and 10.7.3.11 / 10.9.3.8 (group uplift). No formula changed in Pile Designer: the values are those of Module 11.
+- **Check case (V3 + uplift):** micropile, 3×3 group at 2.5D, clay S_u 2 ksf, cap not in contact, T_u 40 kip.
+  - Single φR_n = 86.59 kip. Block φR_g = 737.1 kip, so per pile 737.1/9 = 81.9 kip and **reduce = 0.9458**.
+  - Uplift: min(9 × 74.22 = 668.0, 516.7) = 516.7 kip, so **reduceUp = 0.7735**.
+  - Abutment import: piles.Rn = 123.70 × 0.9458 = **117.0** (before 123.70); piles.RnUp = 123.70 × 0.7735 = **95.68** (before 123.70).
+  - Default project (no group): `group: null`, imports unchanged.
+- **How verified:**
+  - `PileResultsXfer.build()` on the V3 project and on the default.
+  - `AbutPileResults.plan` in the page with and without `group`.
+  - `tests/engine/run.mjs handoffs` (a new test for the wall's plan): 10 pass.
+  - `pile-group`: pass.
+  - `tests/smoke/retwall-pile-handoff.mjs`: all passed.
+  - `check-syntax` for the three tools: pass. 0 console errors.
+- **Saved data:** no key or format change on the sender. The receivers' records keep their format (the imported values are smaller).

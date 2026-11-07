@@ -16133,3 +16133,16 @@ index 86d5f78..9d50d7b 100644
 -  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
 +  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","wing.ftBBar","wing.ftTBar","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
 ```
+
+## 2026-11-07 — PR: claude/pile-m7-group-handoff (PDA-M7) — pile results import: Pile Designer's group reduction applied to R_n and R_n,up   [imported value change with a group]
+- **Problem (Pile Designer review M7):** the import set `piles.Rn` / `piles.RnUp` to Pile Designer's single-pile static resistance even when its Module 11 group efficiency or block governs. The abutment then over-credited the piles.
+- **Where:** `AbutPileResults` IIFE, `plan(p,st)`.
+  - Before the `if(geoOn){` block (anchor `// PDA-M7 (2026-11-07): Pile Designer's group result`): `grR` = `p.group.reduce` when < 1 (conventional abutment only), `grU` = `p.group.uplift.reduceUp` when < 1, and two warnings (the group factors; for a field-method R_n, which is imported as sent).
+  - Before: `add(kp+"Rn",g.static.Rn,…)` and `add(kp+"RnUp",g.static.RnUp,…)`. After: `g.static.Rn*grR` and `g.static.RnUp*grU`, with the labels stating the factor.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.7.3.9 / 10.9.3.6 and 10.7.3.11 / 10.9.3.8 (through Pile Designer's Module 11). The abutment's own formulas are unchanged.
+- **Check case:** payload R_n 123.7, φ 0.70, R_n,up 123.7, φ_up 0.60, `group.reduce` 0.9458, `uplift.reduceUp` 0.7735.
+  - Before: piles.Rn 123.7, piles.RnUp 123.7.
+  - After: **116.995** and **95.682**, plus the warning.
+  - Without `group`: unchanged.
+- **How verified:** `AbutPileResults.plan` evaluated in the page, both payloads. `check-syntax`: pass. No console errors.
+- **Other copies:** the Retaining Wall Designer receiver gets the same rule (fixlog/Retaining Wall Designer.md, PDA-M7).
