@@ -4863,7 +4863,7 @@ Review Phase 8, PR 8f, following the abutment calculator's contract (HANDOFF.md 
 - `onInputChange`: `r = rwpxCheck(inp, calcAll(inp))`: with a record and pile results, the status is re-checked; **STALE**: every imported input still holding its imported value is computed with its `prev` value (calcAll re-run with those values in `inp.fnd`), with a warning; the inputs keep the imported values. `r.pxr` = {status, why, producedAt, fields, cases} only when a record exists.
 - Report, "Pile-supported footing" › Pile data: a source note (status, imported values; "not used while stale").
 ### Check case (end-to-end smoke, AASHTO default wall on piles, t_f 36 in, 2 rows 1.5 / 11.0 ft, s 6 ft)
-- Segment 6 ft, 2 piles; Σ pileP = P per case; pileDesign P = the wall's P_max (Strength I max 83.60 kip per 8c's hand check with t_f 24; here with t_f 36 the Pile Step 2 value).
+- Segment 6 ft (one spacing), 2 piles; Σ pileP = P per case; each pileDesign compression P = the wall's Pile Step 2 P_max of that combination (to 0.0006 kip).
 - Pile Designer: per-pile check "every pile's reaction … equals … to within 0.0005 kip"; static R_n = 123.70 kip, φ = 0.70 sent back; content hash echoed.
 - Wall after Import: R_n = 123.70, φ_c = 0.70 used, CURRENT. Stem height + 1 ft: STALE, the calculation uses R_n = 300, φ_c = 0.65 (before the import), the input still shows 123.70. Height back: CURRENT.
 - Engine test (3 rows x = 1.5 / 6 / 11 ft, s = 6 / 6 / 8 ft): N = 0.45833 /ft, x̄ = 5.72727 ft, L = 24 ft, 11 piles; every pile = its row's per-ft P.
