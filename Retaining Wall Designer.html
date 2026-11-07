@@ -411,6 +411,12 @@ select option { background: #fff; color: var(--text); }
 .tbl .unit { font-size: 11.5px; color: var(--muted); text-align: left; width: 1%; white-space: nowrap; }
 .tbl .right { text-align: right; }
 .tbl tr.rwpt-ng td { background: var(--fail-dim); }   /* RWPT: a failing pile check */
+.tbl.rwpt-comb td, .tbl.rwpt-comb th { white-space: nowrap; }   /* RWPT2: the combination table scrolls inside its card */
+.tbl.rwpt-comb tr.rwpt-gov td { background: var(--info-dim); }
+.tbl.rwpt-comb td.rwpt-hi { font-weight: 700; }
+.rwpt-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 10px; }
+.rwpt-fig { margin: 10px 0 4px; min-width: 0; border: 1px solid var(--border); border-radius: 6px; padding: 6px; background: #fff; }
+.rwpt-fig figcaption { font-size: 11.5px; color: var(--muted); margin-top: 4px; }
 
 .chk-row {
   display: flex; align-items: center; justify-content: space-between;
@@ -5420,6 +5426,61 @@ function rwPileStability(r) {
    Designer hand-off record; nothing is computed here but the presentation. Cards: Pile Layout; Pile Step 1 — Pile Group and Pile
    Step 2 — Pile Reactions and Checks (moved unchanged from the Stability tab); Pile Step 3 — Pile Checks (every pile check with its
    D/C and status, and where it is worked); Pile Designer Hand-off (status and the buttons of the Foundation card). */
+/* RWPT2 (2026-11-07): Piles tab, part 2 (display only; every value from r.pile / rwPileAnalysis, nothing recomputed but the
+   substitutions shown):
+   - rwptSketch(r): the pile layout plan and the typical section of the Drawings tab (rwdwBuild, sheets "piles" and "section"; the
+     Report's overview helper rwovView), to scale with their scale bars;
+   - rwptGroupSteps(r): N, x̄, I worked symbolically → substituted → result, and the reaction method (shared/pile-group.js: rowGroup,
+     momentAbout, rowLoads = reaction() with n → N, Sxx → I; unresisted() when I = 0), with the discrete hand-off segment's
+     groupProps (n = N·L, Σx'² = I·L) as the link to Pile Designer;
+   - rwptCombHead / rwptCombRows / rwptCombNote: every pile combination of r.pile.comb with V, x_R, M, H, P per row, P_max / P_min with
+     their rows, h = H/N, and the D/C of compression, uplift and lateral; the governing combinations (P.govC, P.govT, P.govH)
+     highlighted and tagged, and in each row the largest P in bold. */
+function rwptLS(r, c) { return !r.isAASHTO ? 'Service (ASD)' : /^ee1/.test(c.key) ? 'Extreme Event I' : /^ee2/.test(c.key) ? 'Extreme Event II' : 'Strength I'; }
+function rwptCombHead(r) {
+  return ['Combination', 'Limit state', 'V (kip/ft)', 'x<sub>R</sub> (ft)', 'M about x̄ (kip-ft/ft)', 'H (kip/ft)', ...r.pile.rows.map((x, i) => `P row ${i + 1} (kip)`),
+    'P<sub>max</sub> (kip)', 'P<sub>min</sub> (kip)', 'H per pile (kip)', 'D/C comp.', 'D/C uplift', 'D/C lateral', 'Governs'];
+}
+function rwptCombRows(r) {
+  const P = r.pile, F = (v, d = 2) => (isFinite(v) ? (+v).toFixed(d) : '—');
+  return P.comb.map(c => {
+    const gv = [c === P.govC && c.dcC > 0 ? 'compression' : '', c === P.govT && c.dcT > 0 ? 'uplift' : '', c === P.govH && c.dcH > 0 ? 'lateral' : ''].filter(Boolean);
+    return `<tr${gv.length ? ' class="rwpt-gov"' : ''}><td>${c.label}</td><td>${rwptLS(r, c)}</td><td>${F(c.V, 3)}</td><td>${F(c.xR, 3)}</td><td>${F(c.M, 3)}</td><td>${F(c.H, 3)}</td>`
+      + c.L.rows.map((x, i) => `<td${i === c.L.iMax ? ' class="rwpt-hi"' : ''}>${F(x.P, 2)}</td>`).join('')
+      + `<td>${F(c.L.Pmax, 2)} (row ${c.L.iMax + 1})</td><td>${F(c.L.Pmin, 2)} (row ${c.L.iMin + 1})${c.L.Pmin < 0 ? ' uplift' : ''}</td><td>${F(c.L.rows[0].h, 2)}</td>`
+      + `<td>${F(c.dcC, 3)}</td><td>${c.dcT > 0 ? F(c.dcT, 3) : '—'}</td><td>${F(c.dcH, 3)}</td><td>${gv.length ? '<b>' + gv.join(', ') + '</b>' : ''}</td></tr>`;
+  }).join('');
+}
+function rwptCombNote(r) {
+  const P = r.pile, A = r.isAASHTO;
+  return `Every combination the wall checks on piles (${A ? 'AASHTO LRFD 10th Ed.: Strength I maximum / minimum vertical' + (P.comb.some(c => /^ee1/.test(c.key)) ? ', Extreme Event I (both Art. 11.6.5.1 cases)' : '') + (P.comb.some(c => /^ee2/.test(c.key)) ? ', Extreme Event II (collision)' : '') + '; resistances φ<sub>c</sub>R<sub>n</sub>, φ<sub>up</sub>R<sub>n,up</sub>, H<sub>r</sub> (Strength), 1.0R<sub>n</sub>, 0.80R<sub>n,up</sub>, H<sub>r</sub> (Extreme Event)'
+    : 'ACI / IBC: the service (ASD) combinations of ASCE 7-16 §2.4.1' + (P.comb.length > 2 ? ', with 0.7E' : '') + ', against P<sub>a</sub>, T<sub>a</sub>, H<sub>a</sub>'}). Only the active design basis is computed. Shaded: the combination that governs compression, uplift or lateral (D/C largest); bold: the largest pile load of each combination. P per pile = V/N + M·x'/I (Pile Step 1, 1.3); H per pile = H/N, the same on every pile${P.passive ? ', H net of the passive credit' : ''}.`;
+}
+function rwptGroupSteps(r) {
+  const P = r.pile, g = P.g, F = (v, d = 2) => (isFinite(v) ? (+v).toFixed(d) : '—'), R = P.rows;
+  const sN = R.map(q => `\\frac{1}{${F(q.s)}}`).join(' + '), sX = R.map(q => `\\frac{${F(q.x)}}{${F(q.s)}}`).join(' + '), sI = R.map(q => `\\frac{(${F(q.x - g.xbar, 3)})^2}{${F(q.s)}}`).join(' + ');
+  let h = eq('1.1 Piles per ft of wall', `N = \\sum \\frac{1}{s_i} = ${sN} = \\boxed{${F(g.N, 4)}\\ \\text{/ft}}`, 'n_i = 1/s_i')
+    + eq('1.2 Pile-group centroid from the toe', `\\bar{x} = \\frac{\\sum n_i x_i}{N} = \\frac{${sX}}{${F(g.N, 4)}} = \\boxed{${F(g.xbar, 3)}\\ \\text{ft}}`, 'from the toe')
+    + eq('1.3 Moment of inertia of the group per ft', `I = \\sum n_i (x_i - \\bar{x})^2 = ${sI} = \\boxed{${F(g.I, 4)}\\ \\text{ft}^2\\text{/ft}}`, '');
+  const c = P.govC, x0 = c.L.rows[c.L.iMax];
+  h += eq('1.4 Load on one pile of row i (rigid cap, vertical piles, pinned heads)', `M = V(x_R - \\bar{x}), \\qquad P_i = \\frac{V}{N} + \\frac{M\\,(x_i - \\bar{x})}{I}, \\qquad h = \\frac{H}{N}`, 'shared/pile-group.js: rowLoads = reaction() with n → N, Σx\'² → I',
+    [{ sym: 'V, x_R', desc: 'vertical load per ft and its resultant from the toe, per combination (Pile Step 2)', val: '', unit: '' },
+     { sym: 'M', desc: 'moment about the group centroid; I > 0, so the group resists it (unresisted(): none)', val: '', unit: '' },
+     { sym: 'P_i', desc: `e.g. ${c.label}, row ${c.L.iMax + 1}: ${F(c.V, 3)}/${F(g.N, 4)} + (${F(c.M, 3)})(${F(x0.xp, 3)})/${F(g.I, 4)}`, val: F(x0.P, 2), unit: 'kip' }]);
+  let seg = null; try { const b = typeof rwpxBuild === 'function' ? rwpxBuild(r, {}) : null; seg = b && b.Lay ? b : null; } catch (e) { seg = null; }
+  if (seg) h += `<div class="note">Discrete group of the Pile Designer hand-off (a ${F(seg.seg.L, 2)} ft segment, groupProps()): n = ${seg.Lay.n} piles = N·L = ${F(g.N * seg.seg.L, 3)}; Σx'² = ${F(seg.Lay.Sxx, 3)} ft² ${seg.seg.exact ? '= I·L = ' + F(g.I * seg.seg.L, 3) + ' ft²: reaction() on the segment gives these per-pile loads exactly' : '(≈ I·L = ' + F(g.I * seg.seg.L, 3) + ' ft²: not a common multiple of the spacings, the segment\'s loads differ slightly)'}.</div>`;
+  return h;
+}
+function rwptSketch(r) {
+  let Bd = null; try { Bd = rwdwBuild(r); } catch (e) { Bd = null; }
+  if (!Bd || typeof rwovView !== 'function') return '<div class="note">The plan and section sketch could not be drawn (shared/dxf.js not loaded); see the Drawings tab.</div>';
+  const sh = id => Bd.S.find(s => s.id === id), pl = sh('piles'), sc = sh('section'), n = s => Bd.S.indexOf(s) + 1;
+  let h = '';
+  const rows = r.pile.rows.map((q, i) => 'row ' + (i + 1) + ' at ' + (+q.x).toFixed(2) + ' ft from the toe @ ' + (+q.s).toFixed(2) + ' ft').join('; ');
+  if (pl && pl.iv) h += `<figure class="rwpt-fig"><div class="rwpt-zoom">${rwovView(Bd, pl.i0, pl.iv, '340px')}</div><figcaption>Pile layout plan, from above, toe at the bottom (${rows}), to scale with its scale bar — Drawings tab, sheet ${n(pl)} (${pl.scale}). Wheel / pinch to zoom, drag to pan.</figcaption></figure>`;
+  if (sc && sc.ic) h += `<figure class="rwpt-fig"><div class="rwpt-zoom">${rwovView(Bd, sc.i0, sc.ic, '340px')}</div><figcaption>Typical wall section with the pile rows (embedded length dashed), to scale — Drawings tab, sheet ${n(sc)} (${sc.scale}).</figcaption></figure>`;
+  return h ? `<div class="rwpt-figs">${h}</div>` : '';
+}
 const RWPT_SHAPE = { hp: 'Steel H-pile', pipe: 'Steel pipe pile', square: 'Square precast concrete', round: 'Round (timber / cast-in-place)' };
 function renderPiles(r) {
   const el = document.getElementById('tab-piles'); if (!el) return;
@@ -5439,20 +5500,20 @@ function renderPiles(r) {
   h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Layout</span><span class="card-ref">as entered · Wall tab, Foundation</span></div><div class="card-body">
     <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Row</th><th>x from toe (ft)</th><th>x from heel (ft)</th><th>s along wall (ft)</th><th>piles per ft (1/s)</th></tr></thead><tbody>${lay}</tbody></table></div>
     <div style="overflow-x:auto;margin-top:10px"><table class="tbl"><tbody>${dat.map(([k, v]) => `<tr><td class="lbl">${k}</td><td class="right">${v}</td></tr>`).join('')}</tbody></table></div>
-    <div class="note">Rows of identical vertical piles, each row with its own spacing along the wall; one pile type per wall; no staggering. The footing acts as a rigid cap. Plan and schedule to scale: Drawings tab, pile layout sheet.</div></div></div>`;
+    <div class="note">Rows of identical vertical piles, each row with its own spacing along the wall; one pile type per wall; no staggering. The footing acts as a rigid cap.</div>${rwptSketch(r)}</div></div>`;
   const rowsT = P.rows.map((rw, i) => { const n = 1 / rw.s, xp = rw.x - g.xbar; return `<tr><td>${i + 1}</td><td>${F(rw.x)}</td><td>${F(rw.s)}</td><td>${F(n, 4)}</td><td>${F(xp, 3)}</td><td>${F(n * xp * xp, 4)}</td></tr>`; }).join('');
   h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Step 1 — Pile Group (per ft of wall)</span><span class="card-ref">rigid cap · identical vertical piles · shared/pile-group.js</span></div><div class="card-body">
     <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Row</th><th>x from toe (ft)</th><th>s along wall (ft)</th><th>n = 1/s (/ft)</th><th>x' = x − x̄ (ft)</th><th>n·x'² (ft²/ft)</th></tr></thead><tbody>${rowsT}</tbody></table></div>`
-    + eq('1.1 Piles per ft and centroid', `N = \\sum \\frac{1}{s_i} = \\boxed{${F(g.N, 4)}\\ \\text{/ft}}, \\quad \\bar{x} = \\frac{\\sum n_i x_i}{N} = \\boxed{${F(g.xbar, 3)}\\ \\text{ft}}`, 'from the toe')
-    + eq('1.2 Moment of inertia of the group', `I = \\sum n_i (x_i - \\bar{x})^2 = \\boxed{${F(g.I, 4)}\\ \\text{ft}^2\\text{/ft}}`, '')
+    + rwptGroupSteps(r)
     + `<div class="note">${A ? 'AASHTO LRFD 10th Ed.: factored loads per limit state; resistances φ<sub>c</sub>R<sub>n</sub>, φ<sub>up</sub>R<sub>n,up</sub> (Art. 10.5.5.2.3), H<sub>r</sub> as entered; Extreme Event φ = 1.0, uplift 0.80 (Art. 10.5.5.3.3).' : 'ACI 318-19 / IBC 2018: service (ASD) loads, ASCE 7-16 §2.4.1, against the allowable capacities (IBC 2018 §1810.3.3.1, §1810.3.3.2). The soil under the cap carries no vertical load (§1810.3.11).'} Each pile takes H/N of the horizontal load.${P.passive ? ' Passive in front of the toe credited: ' + F(P.Hpass, 3) + ' kip/ft.' : ' No passive or base friction credited.'}</div></div></div>`;
-  const cr = P.comb.map(c => `<tr><td>${c.label}</td><td>${F(c.V, 3)}</td><td>${F(c.xR, 3)}</td><td>${F(c.M, 3)}</td><td>${F(c.H, 3)}</td>${c.L.rows.map(x => `<td>${F(x.P, 2)}</td>`).join('')}<td>${F(c.L.rows[0].h, 2)}</td></tr>`).join('');
+  const cr = rwptCombRows(r);   // RWPT2: every combination, P per row, P_max / P_min, h, D/C; governing rows highlighted
   const gc = P.govC, x0 = gc.L.rows[gc.L.iMax];
   h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Step 2 — Pile Reactions and Checks</span><span class="card-ref">${A ? 'AASHTO LRFD 10th Ed. Sec. 10.7' : 'IBC 2018 §1810; ASCE 7-16 §2.4.1'}</span></div><div class="card-body">
-    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Combination</th><th>V (kip/ft)</th><th>x<sub>R</sub> (ft)</th><th>M about x̄ (kip-ft/ft)</th><th>H (kip/ft)</th>${P.rows.map((x, i) => `<th>P row ${i + 1} (kip)</th>`).join('')}<th>H per pile (kip)</th></tr></thead><tbody>${cr}</tbody></table></div>`
-    + eq('2.1 Governing pile compression (' + gc.label + ')', `M = V(x_R - \\bar{x}) = ${F(gc.V, 3)}(${F(gc.xR, 3)} - ${F(g.xbar, 3)}) = ${F(gc.M, 3)}\\ \\text{kip-ft/ft}; \\quad P = \\frac{V}{N} + \\frac{M\\,x'}{I} = \\frac{${F(gc.V, 3)}}{${F(g.N, 4)}} + \\frac{(${F(gc.M, 3)})(${F(x0.xp, 3)})}{${F(g.I, 4)}} = \\boxed{${F(x0.P, 2)}\\ \\text{kip}}`, 'row ' + (gc.L.iMax + 1))
+    <div style="overflow-x:auto"><table class="tbl rwpt-comb"><thead><tr>${rwptCombHead(r).map(t => `<th>${t}</th>`).join('')}</tr></thead><tbody>${cr}</tbody></table></div>
+    <div class="note">${rwptCombNote(r)}</div>`
+    + eq('2.1 Governing pile compression (' + gc.label + ')', `\\begin{aligned} M &= V(x_R - \\bar{x}) = ${F(gc.V, 3)}(${F(gc.xR, 3)} - ${F(g.xbar, 3)}) = ${F(gc.M, 3)}\\ \\text{kip-ft/ft} \\\\ P &= \\frac{V}{N} + \\frac{M\\,x'}{I} = \\frac{${F(gc.V, 3)}}{${F(g.N, 4)}} + \\frac{(${F(gc.M, 3)})(${F(x0.xp, 3)})}{${F(g.I, 4)}} = \\boxed{${F(x0.P, 2)}\\ \\text{kip}} \\end{aligned}`, 'row ' + (gc.L.iMax + 1))   // RWPT2: two lines (was one, too wide)
     + eqCheck('2.2 Compression', `P_{max} = ${F(gc.L.Pmax, 2)} \\le ${gc.cap.cs} = ${F(gc.cap.c, 2)}\\ \\text{kip} \\quad (D/C = ${F(gc.dcC, 3)})`, r.checks.pileComp.ok, r.checks.pileComp.ref)
-    + eqCheck('2.3 Uplift', P.govT.L.Pmin < 0 ? `-P_{min} = ${F(-P.govT.L.Pmin, 2)} \\le ${P.govT.cap.ts} = ${F(P.govT.cap.t, 2)}\\ \\text{kip} \\quad (${P.govT.label.replace(/[^A-Za-z0-9 .+()]/g, '')})` : `P_{min} = ${F(Math.min(...P.comb.map(c => c.L.Pmin)), 2)}\\ \\text{kip} \\ge 0\\ \\text{(no uplift)}`, r.checks.pileUplift.ok, r.checks.pileUplift.ref)
+    + eqCheck('2.3 Uplift', P.govT.L.Pmin < 0 ? `-P_{min} = ${F(-P.govT.L.Pmin, 2)} \\le ${P.govT.cap.ts} = ${F(P.govT.cap.t, 2)}\\ \\text{kip} \\quad \\text{(${P.govT.label.replace(/[^A-Za-z0-9 .+()]/g, '')})}` : `P_{min} = ${F(Math.min(...P.comb.map(c => c.L.Pmin)), 2)}\\ \\text{kip} \\ge 0\\ \\text{(no uplift)}`, r.checks.pileUplift.ok, r.checks.pileUplift.ref)
     + (r.checks.pileCapT ? `<div class="alert warn" style="margin:4px 0 8px;">\u26a0 <b>Pile\u2013cap tension (not designed): FAIL.</b> T = ${F(-P.govT.L.Pmin, 2)} kip per pile (${P.govT.label}); embedment ${F(P.det.embed, 1)} in. The uplift needs a designed pile-to-cap tension connection: embedded bars, strands or dowels developed into the cap and the pile's own tension capacity (${r.checks.pileCapT.ref}). Design it outside this tool (Pile Designer) and keep the record with the calculation.</div>` : '')   // RW2M3
     + eqCheck('2.4 Lateral', `h = \\frac{H}{N} = \\frac{${F(P.govH.H, 3)}}{${F(g.N, 4)}} = ${F(P.govH.L.rows[0].h, 2)} \\le ${P.govH.cap.hs} = ${F(P.govH.cap.h, 2)}\\ \\text{kip}`, r.checks.pileLat.ok, r.checks.pileLat.ref)
     + `<div class="note">Detailing: c-c spacing ${F(P.det.cc, 1)} in${P.det.ccMin ? ' (min. ' + F(P.det.ccMin, 1) + ' in)' : ''}; pile side to footing edge ${F(P.det.edge, 1)} in (min. ${F(P.det.edgeMin, 0)} in); embedment ${F(P.det.embed, 1)} in (min. ${F(P.det.embMin, 0)} in) — ${P.det.ref}.</div></div></div>`;
@@ -5465,6 +5526,8 @@ function renderPiles(r) {
     <div class="note">The pile rows of the check summary (status bar), with the values computed in Pile Step 2 and, for punching and the cap depth, on the Footing design tab (Pile Cap — Punching around the Piles).${A ? '' : ' IBC 2018 has no minimum pile spacing (group effects, §1810.2.5): no spacing row in ACI / IBC mode.'}${r.checks.pileCapT ? ' The pile–cap tension row stays FAIL until the connection is designed (Pile Designer) and recorded with the calculation.' : ''}</div></div></div>`;
   h += rwptHandoff(r);
   el.innerHTML = h;
+  // RWPT2: the two sketches with zoom and pan (the Drawings tab's viewer); the static SVG stays when the viewer is not loaded
+  if (window.SharedDxf && SharedDxf.viewer) el.querySelectorAll('.rwpt-zoom').forEach(z => { const sv = z.querySelector('svg'); if (sv) SharedDxf.viewer(z, sv.outerHTML, { height: '300px' }); });
 }
 /* RWPT: the Pile Designer hand-off card: what was sent (channel foundationLoads, copy by.retwall) and whether it matches what the wall
    sends now (content hash), what was pulled back (the saved record pile_pxr, its stale status r.pxr), the imported values with
@@ -8274,14 +8337,18 @@ function buildCrossSection(r) {
   // RWTS-2 (2026-11-06): one scale across and up (SCALE, px per ft) as before, now with a scale bar; text sized for the
   // view the tab opens with (the whole drawing fitted in the viewport): K grows the text for tall drawings, which are
   // fitted at a smaller zoom. Margins grow with what they hold.
-  const SVG_W   = 820;
-  const ML      = 60;    // left (toe side + passive label, D_f dimension)   (was 30)
-  const MR      = 190;   // right (dimensions + active pressure labels)     (was 180)
-
-  const drawW   = SVG_W - ML - MR;
+  // RWPS (2026-11-07): the passive diagram is drawn in front of the toe face and the lateral diagrams (earth, surcharge, water)
+  // side by side beyond the heel dimensions with a label column (were on the stem faces, over the footing, the toe and the
+  // backfill). The wall keeps its size in the drawing (drawW 570 as before); the margins hold the diagrams, so SVG_W grows.
+  const drawW   = 570;   // RWPS: = the former 820 − 60 − 190
   const SCALE   = drawW / (r.B + 0.4);
-  const K   = Math.min(2, Math.max(1, (r.H * SCALE + 280) / SVG_W));   // RWTS-2: text scale (1 for a drawing about as tall as wide)
+  const K   = Math.min(2, Math.max(1, (r.H * SCALE + 280) / 820));      // RWTS-2: text scale (1 for a drawing about as tall as wide); RWPS: 820 = the former SVG_W
   const FS  = { s: 12 * K, m: 12.5 * K, d: 13 * K, b: 14 * K };          // RWTS-2: text sizes (small, values, dimensions, bold)
+  const PGAP = 10, PP_W = 55;                                            // RWPS: passive zero line in front of the toe; its largest ordinate
+  const ML  = Math.max(60, PGAP + PP_W + 16 + FS.d + 8, PGAP + 9.5 * FS.s + 8);   // left: passive diagram + its labels, D_f dimension   (was 60)
+  const ACT_W = 160;                                                     // RWPS: lateral diagrams' width (= the former ACT_MAX_W)
+  const MR  = 6 + FS.d + FS.b + 10 + 16 + ACT_W + 8 + 10.5 * FS.s + 8;    // right: dimensions, lateral diagrams, label column   (was 190)
+  const SVG_W = ML + drawW + MR;                                         // RWPS: was 820
 
   const Hs_px    = inp.Hs      * SCALE;
   const tf_px    = r.tf_ft     * SCALE;
@@ -8305,7 +8372,9 @@ function buildCrossSection(r) {
     r.hasCol ? off_col + 9 + FS.m + 4 : 0, rise0 > 0 ? rise0 + FS.s + 6 : 0);
   // RWTS-2: rows below the footing (shear key + its tag, bearing ordinates + their labels, two dimension rows, scale bar)
   const brg_ord = 50 / Math.max(Math.max(r.q_toe, r.q_heel, inp.qa) * 1.15, 50);   // = BRG_SCALE below
-  const drop0   = Math.max(inp.useShearKey ? dk_px + FS.s + 4 : 0, Math.max(r.q_toe, r.q_heel, 0) * brg_ord + FS.m + 6);
+  const b0Off   = (inp.useShearKey ? dk_px : 0) + 10;                              // RWPS: bearing zero line under the footing and the key
+  const drop0   = Math.max(inp.useShearKey ? dk_px + 4 : 0, r.pile ? Math.max(28, 1.6 * SCALE) + 8 : b0Off + Math.max(r.q_toe, r.q_heel, inp.qa, 0) * brg_ord + FS.m + 6,
+    r.Df > 0 ? (inp.useShearKey ? dk_px : 0) + 2 * (FS.s + 3) + 4 : 0);   // RWPS: + piles, the passive labels
   const dimOff1 = drop0 + FS.d + 8, dimOff2 = dimOff1 + FS.b + 8, sbOff = dimOff2 + FS.s + 16;
   const SVG_H   = H_px + MT + sbOff + 5 + 2 * FS.s + 20;   // scale bar labels + the note line under them
 
@@ -8327,23 +8396,14 @@ function buildCrossSection(r) {
   const cov_f_px = (inp.cov_ftg  / 12) * SCALE;
   const bar_r    = Math.max(2.5, SCALE * 0.038);
 
-  // Pressure scales
-  // Active: RIGHT of back face, grows right → into MR zone
-  const MAX_ACT   = Math.max(r.p_ftg_base + r.p_hyd_base, r.Ka*r.q_sur_eff, 50) * 1.1;
-  const ACT_MAX_W = 160;   // RWTS-2: = the former MR − 20 (pressure ordinates keep their size)
-  const PSCALE    = ACT_MAX_W / MAX_ACT;
-  function xAct(psf) { return x_bbot + psf * PSCALE; }
-
-  // Passive: LEFT of front face, grows left
+  // Pressure scales — RWPS: the lateral and passive diagrams are drawn by rwpsLateral / rwpsPassive (off the structure)
   const p_pass_base = r.Kp * inp.gamma_s * r.Df;
-  const PP_MAX_W    = Math.min(Lt_px * 0.65, 55);
-  const PP_SCALE    = r.Df > 0 ? PP_MAX_W / Math.max(p_pass_base, 50) : 1;
-  function xPass(psf) { return x_ftoe - psf * PP_SCALE; }
 
-  // Bearing: below footing, grows down
+  // Bearing: below footing and key, grows down
   const MAX_BRG    = Math.max(r.q_toe, r.q_heel, inp.qa) * 1.15;
   const BRG_SCALE  = 50 / Math.max(MAX_BRG, 50);   // RWTS-2: = the former (MB × 0.50) with MB = 100
-  function yBrg(psf) { return y_fbot + psf * BRG_SCALE; }
+  const y_b0       = y_fbot + b0Off;               // RWPS: was y_fbot (the key was drawn over the diagram)
+  function yBrg(psf) { return y_b0 + psf * BRG_SCALE; }
 
   const CC = { fill:'rgba(33,85,196,0.14)', stroke:'#2155c4' };
   const SC = '#9a7a3a';
@@ -8373,9 +8433,9 @@ function buildCrossSection(r) {
   // ── Ground lines ─────────────────────────────────────────────
   s += `<line x1="${x_bbot-4}" y1="${y_top}" x2="${x_heel+4}" y2="${y_top}"
     stroke="#7a6030" stroke-width="0.9" stroke-dasharray="5,4"/>`;
-  s += `<line x1="${x_toe-16}" y1="${y_grdetoe}" x2="${x_ftoe+4}" y2="${y_grdetoe}"
-    stroke="#7a6030" stroke-width="0.9" stroke-dasharray="5,4"/>`;
-  s += `<text x="${x_toe-14}" y="${y_grdetoe-4}" font-size="8" fill="#7a6030">GL (toe)</text>`;   // RWTS-2: above the line (was left of it, past the edge)
+  s += `<line x1="${x_toe}" y1="${y_grdetoe}" x2="${x_ftoe+4}" y2="${y_grdetoe}"
+    stroke="#7a6030" stroke-width="0.9" stroke-dasharray="5,4"/>`;   // RWPS: from the toe (was 16 in front of it, over the passive diagram)
+  s += `<text x="${x_toe-PGAP}" y="${y_grdetoe-4}" font-size="8" fill="#7a6030" text-anchor="end">GL (toe)</text>`;   // RWPS: above the passive diagram's zero point
 
   // ── Soil — retained (heel side) ──────────────────────────────
   s += `<g data-layer="soil">`;
@@ -8415,7 +8475,7 @@ function buildCrossSection(r) {
 
   // Toe soil
   if (Df_px > 1) {
-    s += `<g data-layer="soil"><rect x="${x_toe-10}" y="${y_grdetoe}" width="${Lt_px+10}" height="${Df_px}"
+    s += `<g data-layer="soil"><rect x="${x_toe}" y="${y_grdetoe}" width="${Lt_px}" height="${Df_px}"
       fill="url(#cs-h2)" stroke="${SC}" stroke-width="0.4" stroke-opacity="0.3"
       data-tip="<b>Toe soil cover</b><br>Embedment D_f = ${f(r.Df,2)} ft<br>Provides passive resistance<br>K_p = ${f(r.Kp,4)}"/></g>`;
   }
@@ -8471,7 +8531,7 @@ function buildCrossSection(r) {
     s += `<rect x="${skx}" y="${y_fbot}" width="${skw}" height="${dk_px}"
       fill="${CC.fill}" stroke="${CC.stroke}" stroke-width="1.2"
       data-tip="<b>Shear key</b><br>Depth d_k = ${f(inp.dk,0)} in · width b_k = ${f(inp.key_bk||12,0)} in<br>${r.keyR ? (r.keyR.plain ? 'Plain concrete (ACI Ch. 14)' : 'Reinforced: K1 ' + r.keyR.rf.sel.label) + '<br>' : ''}Added passive P_p,key = ${f(r.Pp_key,0)} lb/ft"/>`;
-    s += `<text x="${skx+skw/2}" y="${y_fbot+dk_px+FS.s+1}" font-size="7" fill="#2155c4" text-anchor="middle">key</text>`;
+    s += `<text x="${skx+skw+3}" y="${y_fbot+dk_px/2+4}" font-size="7" fill="#2155c4">key</text>`;   // RWPS: beside the key (was under it, on the bearing diagram)
   }
   s += rwPileSVG(r, x_toe, y_fbot, SCALE, '#3d4650');   // RWPL: pile rows (pile-supported footing only)
   s += `</g>`;
@@ -8574,115 +8634,12 @@ function buildCrossSection(r) {
   });
   s += `</g>`;
 
-  // ── ACTIVE PRESSURE (right of back face, grows right) ────────
-  const acttip = `<b>Active earth pressure</b><br>Kₐ = ${f(r.Ka,4)} (${inp.beta>0?'sloped backfill':'Rankine, level'})<br>P_a = ${f(r.Pa_tri,0)} lb/ft at H/3 = ${f(r.H/3,2)} ft<br>p at base = ${f(r.p_ftg_base,0)} psf${r.hasWT?`<br>Breaks at W.T.: γ above → γ′ = ${f(r.gamma_s_sub,1)} pcf below`:''}<br>M_OT = ${f(r.Mo/1000,1)} kip·ft/ft`;
-  s += `<g data-layer="active">`;
-  const pb = r.p_ftg_base;
-  const x_act_top  = xAct(r.p_top);
-  const x_act_base = xAct(pb);
-  s += `<line x1="${x_bbot}" y1="${y_top}" x2="${x_bbot}" y2="${y_fbot}"
-    stroke="#c42121" stroke-width="0.7" stroke-dasharray="3,3" opacity="0.6"/>`;
-  if (r.hasWT && r.wt_d < r.H) {
-    // Pressure diagram breaks at the water table (slope change: γ above → γ' below)
-    const y_wt_line = y_top + r.wt_d*SCALE;
-    const x_act_wt  = xAct(r.p_wt);
-    s += `<polygon points="${x_bbot},${y_top} ${x_act_top},${y_top} ${x_act_wt},${y_wt_line} ${x_act_base},${y_fbot} ${x_bbot},${y_fbot}"
-      fill="rgba(196,33,33,0.10)" stroke="#c42121" stroke-width="1.2" data-tip="${acttip}"/>`;
-    // Dashed guide line at the water level across the whole active zone
-    s += `<line x1="${x_bbot}" y1="${y_wt_line}" x2="${x_act_base + r.p_hyd_base*PSCALE + 24}" y2="${y_wt_line}"
-      stroke="#1f7fd6" stroke-width="0.8" stroke-dasharray="4,3" opacity="0.9"/>`;
-    // Break-point marker on the profile
-    s += `<circle cx="${x_act_wt}" cy="${y_wt_line}" r="2.2" fill="#c42121"/>`;
-    // Pressure value at the break
-    s += `<text x="${x_act_wt+4}" y="${y_wt_line-3}" font-size="7" fill="#c42121" font-weight="600">${f(r.p_wt,0)} psf</text>`;
-    // γ' annotation for the saturated zone (slope change explanation)
-    const y_below_mid = Math.min(y_wt_line + 3.4*FS.s, (y_wt_line + y_fbot)/2);   // RWTS-2: just under the water line (was halfway down; the saturated label is now at the right)
-    const gamma_prime = r.gamma_s_sub;
-    s += `<text x="${x_bbot+4}" y="${y_below_mid}" font-size="6.8" fill="#1f7fd6" opacity="0.95">γ′=γ_sat−γ_w=${f(gamma_prime,0)} pcf</text>`;
-    s += `<text x="${x_bbot+4}" y="${y_below_mid+FS.s+2}" font-size="6.8" fill="#1f7fd6" opacity="0.95">(slope ∝ Ka·γ′ below WT)</text>`;
-    // "W.T." tag on the guide line
-    s += `<text x="${x_act_base + r.p_hyd_base*PSCALE + 26}" y="${y_wt_line+3}" font-size="7" fill="#1f7fd6" font-weight="700">W.T.</text>`;
-  } else {
-    s += `<polygon points="${x_bbot},${y_top} ${x_act_top},${y_top} ${x_act_base},${y_fbot} ${x_bbot},${y_fbot}"
-      fill="rgba(196,33,33,0.10)" stroke="#c42121" stroke-width="1.2" data-tip="${acttip}"/>`;
-  }
-  // Arrows: from outer tip → back face, pointing LEFT (follow the broken profile)
-  [0.1, 0.35, 0.6, 0.85].forEach(t => {
-    const py = y_top+t*H_px;
-    const depth_ft = t * r.H;
-    // pressure at this depth, honoring the water-table break
-    let pv;
-    if (r.hasWT && depth_ft > r.wt_d) {
-      const frac = (depth_ft - r.wt_d) / (r.H - r.wt_d);
-      pv = r.p_wt + (pb - r.p_wt) * frac;
-    } else if (r.hasWT) {
-      pv = r.p_top + (r.p_wt - r.p_top) * (depth_ft / r.wt_d);
-    } else {
-      pv = r.p_top + (pb - r.p_top) * t;
-    }
-    const xx = xAct(pv);
-    if (xx-x_bbot > 8)
-      s += `<line x1="${xx}" y1="${py}" x2="${x_bbot}" y2="${py}"
-        stroke="#c42121" stroke-width="0.85" marker-end="url(#cs-ar)"/>`;
-  });
-  // Labels
-  if (r.p_top > 0)
-    s += `<text x="${x_act_top+3}" y="${y_top+FS.s+2}" font-size="7.5" fill="#c42121">${f(r.p_top,0)} psf</text>`;
-  s += `<text x="${x_act_base+3}" y="${y_fbot-4}" font-size="7.5" fill="#c42121">${f(pb,0)} psf</text>`;
-  const mid_ax = (x_bbot+x_act_base)/2, mid_ay = y_top+H_px*0.5;
-  s += `<text x="${mid_ax}" y="${mid_ay}" font-size="7.5" fill="#c42121"
-    text-anchor="middle" transform="rotate(90,${mid_ax},${mid_ay})">Active (Ka·γ·z)</text>`;
-  s += `</g>`;
-
-  // Surcharge uniform strip on active diagram (dead + AASHTO LL)
-  if (r.q_sur_eff > 0) {
-    const p_sur = r.Ka * r.q_sur_eff;
-    const xs = xAct(p_sur);
-    const striptip = `<b>Surcharge lateral band</b><br>Kₐ·q = ${f(p_sur,0)} psf (uniform over H)<br>P_sur = ${f(r.Pa_sur_h,0)} lb/ft at H/2<br>M = ${f(r.Mo_sur/1000,2)} kip·ft/ft`;
-    s += `<g data-layer="surcharge">`;
-    s += `<rect x="${x_bbot}" y="${y_top}" width="${xs-x_bbot}" height="${H_px}"
-      fill="rgba(185,100,0,0.07)" stroke="#b96400" stroke-width="0.8" stroke-dasharray="3,3" data-tip="${striptip}"/>`;
-    s += `<text x="${xs+2}" y="${y_top+(r.p_top > 0 ? 2*FS.s+6 : FS.s+2)}" font-size="7" fill="#b96400" font-weight="600">Ka·q=${f(p_sur,0)} psf</text>`;   // RWTS-2: a row under the p_top value when there is one
-    s += `<text x="${xs+3}" y="${y_top+H_px*0.5}" font-size="7" fill="#b96400"
-      transform="rotate(90,${xs+3},${y_top+H_px*0.5})">${r.isAASHTO&&r.q_ll_aashto>0?'LS surcharge':'Surcharge'}</text>`;
-    s += `</g>`;
-  }
-
-  // Hydrostatic
-  if (r.hasWT && r.hw > 0) {
-    const y_wt_line  = y_top + r.wt_d*SCALE;
-    const x_act_b    = xAct(r.p_ftg_base);
-    const x_hyd_tip  = x_act_b + r.p_hyd_base*PSCALE;
-    const hytip = `<b>Hydrostatic pressure</b><br>u = γ_w·h_w = ${f(r.p_hyd_base,0)} psf at base<br>F_hyd = ${f(r.F_hyd,0)} lb/ft at h_w/3<br>Uplift on base U = ${f(r.F_uplift,0)} lb/ft ↑<br>Acts <i>in addition to</i> effective earth pressure`;
-    s += `<g data-layer="water">`;
-    s += `<polygon points="${x_act_b},${y_wt_line} ${x_hyd_tip},${y_fbot} ${x_act_b},${y_fbot}"
-      fill="rgba(0,85,196,0.09)" stroke="#0055c4" stroke-width="0.9" data-tip="${hytip}"/>`;
-    s += `<text x="${x_hyd_tip+3}" y="${y_fbot-4}" font-size="7" fill="#0055c4">+${f(r.p_hyd_base,0)} psf</text>`;
-    s += `</g>`;
-  }
-
-  // ── PASSIVE PRESSURE (left of front face) ────────────────────
-  if (r.Df > 0) {
-    const x_tip = xPass(p_pass_base);
-    const ptip = `<b>Passive resistance</b><br>K_p = ${f(r.Kp,4)} · D_f = ${f(r.Df,2)} ft<br>p at base = ${f(p_pass_base,0)} psf<br>P_p = ${f(r.Pp_full,0)} lb/ft (computed)<br>${inp.inclPassive?'<b style=&#39;color:#7fd6a8&#39;>Included</b> in sliding &amp; O.T.':'<b style=&#39;color:#ffb84d&#39;>Neglected</b> (toggle off) — conservative'}`;
-    s += `<g data-layer="passive">`;
-    s += `<polygon points="${x_ftoe},${y_grdetoe} ${x_ftoe},${y_fbot} ${x_tip},${y_fbot}"
-      fill="rgba(15,122,90,0.11)" stroke="#0f7a5a" stroke-width="1.2" data-tip="${ptip}"/>`;
-    [0.45, 0.75, 1.0].forEach(t => {
-      const yy = y_grdetoe+t*Df_px;
-      const xx = xPass(p_pass_base*t);
-      if (x_ftoe-xx > 6)
-        s += `<line x1="${xx}" y1="${yy}" x2="${x_ftoe}" y2="${yy}"
-          stroke="#0f7a5a" stroke-width="0.85" marker-end="url(#cs-ag)"/>`;
-    });
-    s += `<text x="${x_tip-2}" y="${f2_y-bar_r-3}" font-size="7.5" fill="#0f7a5a" text-anchor="end">${f(p_pass_base,0)} psf</text>`;   // RWTS-2: above the F2 bars (was on them)
-    if (Df_px > 6.5*FS.s) {   // RWTS-2: only where the tag fits beside the F2 label (was Df_px > 20)
-      const mx=(x_tip+x_ftoe)/2, my=y_grdetoe+Df_px*0.5;
-      s += `<text x="${mx}" y="${my}" font-size="7" fill="#0f7a5a" text-anchor="middle"
-        transform="rotate(-90,${mx},${my})">Passive</text>`;
-    }
-    s += `</g>`;
-  }
+  // ── ACTIVE / SURCHARGE / WATER and PASSIVE: RWPS, drawn after the text scaling below (rwpsLateral / rwpsPassive) ──
+  const acttip = `<b>Active earth pressure</b><br>Kₐ = ${f(r.Ka,4)} (${inp.beta>0?'sloped backfill':'Rankine, level'})<br>P_a = ${f(r.Pa_tri,0)} lb/ft at H/3 = ${f(r.H/3,2)} ft<br>p at base = ${f(r.p_ftg_base,0)} psf${r.p_top > 0 ? ` (incl. Kₐ·q_s = ${f(r.p_top,0)} psf, drawn as the surcharge band)` : ''}${r.hasWT?`<br>Breaks at W.T.: γ above → γ′ = ${f(r.gamma_s_sub,1)} pcf below`:''}<br>M_OT = ${f(r.Mo/1000,1)} kip·ft/ft`;
+  const striptip = r.q_sur_eff > 0 ? `<b>Surcharge lateral band</b><br>Kₐ·q = ${f(r.Ka * r.q_sur_eff,0)} psf (uniform over H)<br>P_sur = ${f(r.Pa_sur_h,0)} lb/ft at H/2<br>M = ${f(r.Mo_sur/1000,2)} kip·ft/ft` : '';
+  const hytip = `<b>Hydrostatic pressure</b><br>u = γ_w·h_w = ${f(r.p_hyd_base,0)} psf at base<br>F_hyd = ${f(r.F_hyd,0)} lb/ft at h_w/3<br>Uplift on base U = ${f(r.F_uplift,0)} lb/ft ↑<br>Acts <i>in addition to</i> effective earth pressure`;
+  const ptip = `<b>Passive resistance</b><br>K_p = ${f(r.Kp,4)} · D_f = ${f(r.Df,2)} ft<br>p at base = ${f(p_pass_base,0)} psf<br>P_p = ${f(r.Pp_full,0)} lb/ft (computed)<br>${inp.inclPassive?'<b style=&#39;color:#7fd6a8&#39;>Included</b> in sliding &amp; O.T.':'<b style=&#39;color:#ffb84d&#39;>Neglected</b> (toggle off) — conservative'}`;
+  const pktip = `<b>Passive on the shear key</b><br>D_f → D_f + d_k<br>P_p,key = ${f(r.Pp_key,0)} lb/ft`;
 
   // ── BEARING PRESSURE ─────────────────────────────────────────
   const yt = yBrg(r.q_toe), yh = yBrg(r.q_heel);
@@ -8690,7 +8647,9 @@ function buildCrossSection(r) {
   // ended the attribute, and the rest of the drawing (bearing labels, critical sections, dimensions) fell out of the SVG
   const brgtip = `<b>Bearing pressure (service)</b><br>q_toe = ${f(r.q_toe,0)} psf · q_heel = ${f(r.q_heel,0)} psf<br>q_max = ${f(r.q_max,0)} psf vs q_a = ${f(inp.qa,0)} psf<br>e = ${f(r.e,3)} ft · B/6 = ${f(r.B/6,3)} ft<br>${r.tension_zone?'<b style=&#39;color:#ff9090&#39;>Resultant OUTSIDE kern</b> — triangular':'Resultant within kern — trapezoidal'}<br>${r.bearing_ok?'<b style=&#39;color:#7fd6a8&#39;>PASS</b>':'<b style=&#39;color:#ff9090&#39;>FAIL</b>'}`;
   s += `<g data-layer="bearing"${r.pile ? ' style="display:none"' : ''}>`;   // RWPL (8e): no soil bearing under a pile-supported footing
-  s += `<polygon points="${x_toe},${y_fbot} ${x_toe},${yt} ${x_heel},${yh} ${x_heel},${y_fbot}"
+  s += `<line x1="${x_toe}" y1="${y_fbot}" x2="${x_toe}" y2="${y_b0}" stroke="#0f7a5a" stroke-width="0.6" stroke-dasharray="2,2"/>`;   // RWPS: leaders from the base corners
+  s += `<line x1="${x_heel}" y1="${y_fbot}" x2="${x_heel}" y2="${y_b0}" stroke="#0f7a5a" stroke-width="0.6" stroke-dasharray="2,2"/>`;
+  s += `<polygon points="${x_toe},${y_b0} ${x_toe},${yt} ${x_heel},${yh} ${x_heel},${y_b0}"
     fill="rgba(15,122,90,0.09)" stroke="#0f7a5a" stroke-width="1.2" data-tip="${brgtip}"/>`;
   const y_qa = yBrg(inp.qa);
   s += `<line x1="${x_toe}" y1="${y_qa}" x2="${x_heel}" y2="${y_qa}"
@@ -8698,7 +8657,7 @@ function buildCrossSection(r) {
   s += `<text x="${x_heel+3}" y="${y_qa+3}" font-size="7" fill="#0f7a5a">qa=${f(inp.qa/1000,1)} ksf</text>`;
   s += `<text x="${x_toe}" y="${yt+FS.m+2}" font-size="7.5" fill="#0f7a5a">${f(r.q_toe,0)}</text>`;
   s += `<text x="${x_heel}" y="${yh+FS.m+2}" font-size="7.5" fill="#0f7a5a" text-anchor="end">${f(r.q_heel,0)}</text>`;
-  s += `<text x="${x_toe+B_px*0.62}" y="${Math.max(yt,yh)+FS.m+2}" font-size="7.5" fill="#0f7a5a"
+  s += `<text x="${x_toe+B_px*0.62}" y="${Math.max(yt,yh,y_qa)+FS.m+2}" font-size="7.5" fill="#0f7a5a"
     text-anchor="middle">Bearing (psf) — service</text>`;
   s += `</g>`;
 
@@ -8714,6 +8673,14 @@ function buildCrossSection(r) {
   // RWTS-2: the fixed text sizes used above (6.3–8 units) scaled to the drawing's text sizes (the dimensions and the scale bar below use FS)
   s = s.replace(/<text ([^>]*?)font-size="([\d.]+)"/g, (m0, pre, v) => `<text ${pre}font-size="${(Math.max(+v * 1.5, 12) * K).toFixed(1)}"`);
 
+  // RWPS: lateral diagrams beyond the heel dimensions, passive in front of the toe (text at the drawing's sizes)
+  const vx1 = x_heel+6+FS.d, vx2 = vx1+FS.b+10;   // RWTS-2: room for the text along each line (was x_heel+14, +30)
+  const x_a0 = vx2 + 16;
+  s += rwpsLateral(r, { x0: x_a0, yTop: y_top, yBot: y_fbot, sc: SCALE, W: ACT_W, xLab: x_a0 + ACT_W + 8, fs: FS.s, mk: 'cs-ar',
+    tipSoil: acttip, tipSur: striptip, tipWat: hytip });
+  const PAS = r.Df > 0 ? rwpsPassive(r, { xToe: x_toe, yFbot: y_fbot, sc: SCALE, gap: PGAP, W: PP_W, fs: FS.s, mk: 'cs-ag', tip: ptip, tipKey: pktip }) : null;
+  if (PAS) s += PAS.svg;
+
   // ── DIMENSION LINES ──────────────────────────────────────────
   const dim_y1   = y_fbot + dimOff1;   // RWTS-2: rows placed under the key and the bearing labels
   const dim_y2   = y_fbot + dimOff2;
@@ -8724,11 +8691,12 @@ function buildCrossSection(r) {
   s += dL(x_bbot, x_heel,  dim_y1, `Lh=${f(inp.Lh,1)}'`, false, FS.d);
   s += dL(x_toe,  x_heel,  dim_y2, `B = ${f(r.B,2)} ft`, true, FS.b);
 
-  const vx1 = x_heel+6+FS.d, vx2 = vx1+FS.b+10;   // RWTS-2: room for the text along each line (was x_heel+14, +30)
   s += dV(vx1, y_ftop, y_fbot,  `tf=${inp.tf}"`, false, FS.d);
   s += dV(vx1, y_top,  y_ftop,  `Hs=${f(inp.Hs,1)}'`, false, FS.d);
   s += dV(vx2, y_top,  y_fbot,  `H=${f(r.H,2)}'`, true, FS.b);
-  if (r.Df > 0.05) s += dV(x_toe-14, y_grdetoe, y_fbot, `Df=${f(r.Df,2)}'`, false, FS.d);
+  const xDf = PAS ? PAS.xMin - 14 : x_toe - 14;   // RWPS: left of the passive diagram (was through it); the key depth under D_f
+  if (r.Df > 0.05) s += dV(xDf, y_grdetoe, y_fbot, `Df=${f(r.Df,2)}'`, false, FS.d);
+  if (PAS && PAS.key) s += dV(xDf, y_fbot, PAS.yK, `dk=${f(inp.dk,0)}"`, false, FS.d);
 
   s += dL(x_ftoe, x_btop, y_top-off_d, `${f(inp.ts_top,0)}" top`, false, FS.d);
   s += `</g>`;
@@ -9362,10 +9330,12 @@ function buildOverviewSVG(r) {
   // RWTS (2026-11-06): one scale across and up (SCALE, px per ft), a scale bar, and label sizes chosen for the
   // rendered size: the tab shows the drawing at least 620 px wide (it scrolls sideways in a narrower window), so
   // 11-unit text renders at 9 px or more; the Report prints it about 670 px wide. Margins grow with what they hold.
-  const SVG_W   = 760;
-  const ML      = 70;   // left margin (passive + toe soil, Df dimension)
+  // RWPS (2026-11-07): the passive diagram sits in front of the toe face and the lateral diagrams side by side beyond the
+  // heel dimensions, with a label column: the left margin +46 and the right +104, the drawing width with them (SCALE unchanged).
+  const SVG_W   = 910;  // RWPS: was 760
+  const ML      = 116;  // left margin (passive diagram in front of the toe, its labels, Df dimension)   (RWPS: was 70)
   const DIM_GAP = 56;   // gap between heel and vertical dim lines
-  const PRESS_W = 160;  // width reserved for active pressure diagram (right side)
+  const PRESS_W = 264;  // width reserved for the lateral pressure diagrams + their label column (right side)   (RWPS: was 160)
   const FS = { s: 11, m: 11.5, d: 12.5, b: 13.5 };   // RWTS: text sizes (small, values, dimensions, bold)
   const HALO = 'paint-order="stroke" stroke="#fafbfd" stroke-width="3" stroke-linejoin="round"';   // RWTS: readable over hatching
 
@@ -9413,27 +9383,26 @@ function buildOverviewSVG(r) {
   // ── Active pressure: LEFT anchor = zero-pressure reference line ──
   //    Triangle grows RIGHT from act_left (mirrors passive which grows LEFT from x_ftoe)
   //    Arrows point LEFT ← from outer face (right) toward act_left (wall face reference)
-  const act_left  = SVG_W - PRESS_W + 10;   // left edge = zero pressure / wall face ref
-  const press_ref = SVG_W - 8;               // right edge = labels
-  const MAX_ACT   = Math.max(r.p_ftg_base + r.p_hyd_base, r.Ka * r.q_sur_eff, 50) * 1.08;
-  const ACT_MAX_W = press_ref - act_left - 4;
-  const PSCALE    = ACT_MAX_W / MAX_ACT;
-  function xAct(psf) { return act_left + psf * PSCALE; }   // grows RIGHT from act_left
+  // RWPS: zero line of the lateral diagrams (earth, surcharge band, water side by side, 136 wide), then their label column
+  const act_left  = x_heel + DIM_GAP - 2;
+  const ACT_W     = 136;
+  const lab_x     = act_left + ACT_W + 8;
 
-  // ── Passive pressure (left of front face, toe zone) ──────────
-  const p_pass_base = r.Kp * inp.gamma_s * r.Df;
-  const PP_MAX_W    = Math.min(Lt_px * 0.65, 50);
-  const PP_SCALE    = r.Df > 0 ? PP_MAX_W / Math.max(p_pass_base, 50) : 1;
-  function xPass(psf) { return x_ftoe - psf * PP_SCALE; }   // grows LEFT from front face
+  // ── Passive pressure: in front of the toe face (RWPS; was from the stem front face over the toe and the footing) ──
+  const PGAP = 8;   // RWPS: gap between the toe face and the passive diagram's zero line
 
-  // ── Bearing (below footing, grows down) ───────────────────────
+  // ── Bearing (below footing and key, grows down) ───────────────
   const MAX_BRG   = Math.max(r.q_toe, r.q_heel, inp.qa) * 1.15;
   const BRG_SCALE = 40 / Math.max(MAX_BRG, 50);   // RWTS: 40 px for the largest ordinate (was 0.48 × the 82 px bottom margin = 39 px)
-  function yBrg(psf) { return y_fbot + psf * BRG_SCALE; }
+  const y_b0      = y_fbot + (inp.useShearKey ? dk_px : 0) + 8;   // RWPS: zero line clear under the footing and the key (was y_fbot)
+  function yBrg(psf) { return y_b0 + psf * BRG_SCALE; }
 
   // RWTS: bottom rows (below the footing): bearing block, two dimension rows, scale bar + note
-  const brg_drop = tog.bearing ? Math.max(yBrg(r.q_toe)-y_fbot, yBrg(r.q_heel)-y_fbot) + 30 : 0;
-  const dim_y1   = y_fbot + Math.max(inp.useShearKey ? dk_px : 0, brg_drop) + 22;
+  // RWPS: piles (no bearing block) and the passive labels left of the toe are kept clear of the dimension rows
+  const brg_drop  = (tog.bearing && !r.pile) ? Math.max(yBrg(r.q_toe), yBrg(r.q_heel), yBrg(inp.qa)) - y_fbot + 30 : 0;
+  const pile_drop = r.pile ? Math.max(28, 1.6 * SCALE) + 8 : 0;
+  const pas_drop  = (tog.passive && r.Df > 0) ? (inp.useShearKey ? dk_px : 0) + 2 * (FS.s + 3) + 4 : 0;
+  const dim_y1   = y_fbot + Math.max(inp.useShearKey ? dk_px : 0, brg_drop, pile_drop, pas_drop) + 22;
   const dim_y2   = dim_y1 + 22;
   const sb_y     = dim_y2 + 24;
   const SVG_H    = sb_y + 40;
@@ -9458,14 +9427,14 @@ function buildOverviewSVG(r) {
     <marker id="m-dn"  markerWidth="5" markerHeight="5" refX="2.5" refY="5" orient="auto">
       <polygon points="0 0,5 0,2.5 5" fill="#b96400"/>
     </marker>
-    <marker id="m-lft" markerWidth="6" markerHeight="5" refX="0" refY="2.5" orient="auto">
-      <polygon points="6 0,0 2.5,6 5" fill="#c42121"/>
+    <marker id="m-lft" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0,6 2.5,0 5" fill="#c42121"/>
     </marker>
-    <marker id="m-lft-grn" markerWidth="6" markerHeight="5" refX="0" refY="2.5" orient="auto">
-      <polygon points="6 0,0 2.5,6 5" fill="#0f7a5a"/>
+    <marker id="m-lft-grn" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0,6 2.5,0 5" fill="#0f7a5a"/>
     </marker>
-    <marker id="m-lft-blu" markerWidth="6" markerHeight="5" refX="0" refY="2.5" orient="auto">
-      <polygon points="6 0,0 2.5,6 5" fill="#0055c4"/>
+    <marker id="m-lft-blu" markerWidth="6" markerHeight="5" refX="6" refY="2.5" orient="auto">
+      <polygon points="0 0,6 2.5,0 5" fill="#0055c4"/>
     </marker>
     <marker id="m-col" markerWidth="7" markerHeight="7" refX="3.5" refY="7" orient="auto">
       <polygon points="0 0,7 0,3.5 7" fill="#8b0000"/>
@@ -9485,9 +9454,9 @@ function buildOverviewSVG(r) {
   // ── Ground lines ──────────────────────────────────────────────
   s += `<line x1="${x_bbot-4}" y1="${y_top}" x2="${x_heel+4}" y2="${y_top}"
     stroke="#7a6030" stroke-width="0.8" stroke-dasharray="5,4"/>`;
-  s += `<line x1="${x_toe-24}" y1="${y_grade_toe}" x2="${x_ftoe+4}" y2="${y_grade_toe}"
-    stroke="#7a6030" stroke-width="0.8" stroke-dasharray="5,4"/>`;
-  s += `<text x="${x_toe-22}" y="${y_grade_toe-4}" font-size="${FS.s}" fill="#7a6030" ${HALO}>GL(toe)</text>`;
+  s += `<line x1="${x_toe}" y1="${y_grade_toe}" x2="${x_ftoe+4}" y2="${y_grade_toe}"
+    stroke="#7a6030" stroke-width="0.8" stroke-dasharray="5,4"/>`;   // RWPS: from the toe (was 24 in front of it, over the passive diagram)
+  s += `<text x="${x_toe-PGAP}" y="${y_grade_toe-4}" font-size="${FS.s}" fill="#7a6030" text-anchor="end" ${HALO}>GL(toe)</text>`;
 
   // ── Retained soil (heel side) ─────────────────────────────────
   s += `<rect x="${x_bbot}" y="${y_top}" width="${Lh_px}" height="${Hs_px+tf_px}"
@@ -9501,8 +9470,8 @@ function buildOverviewSVG(r) {
 
   // ── Toe soil (passive side) ───────────────────────────────────
   if (Df_px > 1) {
-    s += `<rect x="${x_toe-10}" y="${y_grade_toe}" width="${Lt_px+10}" height="${Df_px}"
-      fill="url(#oh2)" stroke="${C_SOIL}" stroke-width="0.4" stroke-opacity="0.3"/>`;
+    s += `<rect x="${x_toe}" y="${y_grade_toe}" width="${Lt_px}" height="${Df_px}"
+      fill="url(#oh2)" stroke="${C_SOIL}" stroke-width="0.4" stroke-opacity="0.3"/>`;   // RWPS: over the toe only (was from 10 in front of it)
   }
 
   // ── Surcharge downward arrows (dead q_s + AASHTO LL surcharge γ·h_eq) ──
@@ -9571,124 +9540,31 @@ function buildOverviewSVG(r) {
   //  PRESSURE DIAGRAMS
   // ════════════════════════════════════════════════════════════
 
-  // ── ACTIVE/SURCHARGE/HYDRO — far right zone
-  //    Zero-pressure reference line at act_left (LEFT side)
-  //    Triangle grows RIGHT → mirrored vs passive (which grows LEFT)
-  //    Arrows: from outer face (right, high pressure) → act_left (wall ref), pointing LEFT ←
-  s += `<line x1="${act_left}" y1="${y_top}" x2="${act_left}" y2="${y_fbot}"
-    stroke="#c42121" stroke-width="0.7" stroke-dasharray="3,3" opacity="0.5"/>`;
+  // ── ACTIVE / SURCHARGE / WATER — beyond the heel dimensions (RWPS: side by side, each clear of the others; were stacked
+  //    on one zero line with the surcharge strip over the earth triangle and the water triangle on its base)
+  s += rwpsLateral(r, { x0: act_left, yTop: y_top, yBot: y_fbot, sc: SCALE, W: ACT_W, xLab: lab_x, fs: FS.s, halo: HALO, mk: 'm-lft',
+    show: { soil: !!tog.active, sur: !!tog.surcharge, wat: !!tog.hydro } });
 
-  if (tog.active) {
-    const pb = r.p_ftg_base;
-    const xt = xAct(r.p_top);   // x at top (small if p_top≈0, near act_left)
-    const xb = xAct(pb);        // x at base (rightmost, max pressure)
-
-    if (r.hasWT && r.wt_d < r.H) {
-      // Broken profile: slope changes at the water table (Ka·γ above → Ka·γ' below)
-      const y_wt_line = y_top + r.wt_d * SCALE;
-      const x_wt      = xAct(r.p_wt);
-      s += `<polygon points="${act_left},${y_top} ${xt},${y_top} ${x_wt},${y_wt_line} ${xb},${y_fbot} ${act_left},${y_fbot}"
-        fill="rgba(196,33,33,0.10)" stroke="#c42121" stroke-width="1.2"/>`;
-      // Dashed water-level guide across the pressure zone + W.T. tag
-      s += `<line x1="${act_left}" y1="${y_wt_line}" x2="${xb + r.p_hyd_base*PSCALE + 18}" y2="${y_wt_line}"
-        stroke="#1f7fd6" stroke-width="0.8" stroke-dasharray="4,3" opacity="0.9"/>`;
-      s += `<circle cx="${x_wt}" cy="${y_wt_line}" r="2.2" fill="#c42121"/>`;
-      s += `<text x="${x_wt+4}" y="${y_wt_line-3}" font-size="${FS.s}" fill="#c42121" font-weight="600" ${HALO}>${f(r.p_wt,0)} psf</text>`;
-      const y_bm = (y_wt_line + y_fbot)/2;
-      s += `<text x="${act_left+3}" y="${y_bm}" font-size="${FS.s}" fill="#1f7fd6" ${HALO}>γ′=${f(r.gamma_s_sub,0)} pcf</text>`;
-      s += `<text x="${act_left+3}" y="${y_bm+13}" font-size="${FS.s}" fill="#1f7fd6" ${HALO}>(Ka·γ′ below WT)</text>`;
-    } else {
-      // Filled triangle/trapezoid: left edge = act_left (zero ref), right = pressure face
-      s += `<polygon points="${act_left},${y_top} ${xt},${y_top} ${xb},${y_fbot} ${act_left},${y_fbot}"
-        fill="rgba(196,33,33,0.10)" stroke="#c42121" stroke-width="1.2"/>`;
-    }
-
-    // Arrows: FROM outer pressure face (right) → TO act_left (wall ref), pointing LEFT ←
-    // Follow the broken profile when a water table is present
-    [0.1, 0.35, 0.6, 0.85].forEach(t => {
-      const py = y_top + t*H_px;
-      const depth_ft = t * r.H;
-      let pv;
-      if (r.hasWT && r.wt_d < r.H && depth_ft > r.wt_d) {
-        pv = r.p_wt + (pb - r.p_wt) * ((depth_ft - r.wt_d) / (r.H - r.wt_d));
-      } else if (r.hasWT && r.wt_d < r.H) {
-        pv = r.p_top + (r.p_wt - r.p_top) * (depth_ft / r.wt_d);
-      } else {
-        pv = r.p_top + (pb - r.p_top)*t;
-      }
-      const xx = xAct(pv);
-      if (xx - act_left > 8)
-        s += `<line x1="${xx}" y1="${py}" x2="${act_left}" y2="${py}"
-          stroke="#c42121" stroke-width="0.85" marker-end="url(#m-lft)"/>`;
-    });
-
-    // Labels: zero at top-left, max at bottom-right (outside triangle to the right)
-    // RWTS: values inside the pressure zone (the base value was cut off at the right edge)
-    if (r.p_top > 0)
-      s += `<text x="${xt+3}" y="${y_top+13}" font-size="${FS.s}" fill="#c42121" ${HALO}>${f(r.p_top,0)} psf</text>`;
-    s += `<text x="${SVG_W-4}" y="${y_fbot+14}" font-size="${FS.m}" fill="#c42121" text-anchor="end" font-weight="600">${f(pb,0)} psf at base</text>`;
-    // Rotated "Active" label along the hypotenuse
-    const mid_x = (act_left + xb)/2, mid_y = y_top + H_px*0.5;
-    s += `<text x="${mid_x}" y="${mid_y}" font-size="${FS.s}" fill="#c42121" ${HALO}
-      text-anchor="middle" transform="rotate(90,${mid_x},${mid_y})">Active (Ka·γ·z)</text>`;
-  }
-
-  if (tog.surcharge && r.q_sur_eff > 0) {
-    // Uniform lateral strip: Ka·q over full height (dead + AASHTO LL surcharge)
-    const p_sur = r.Ka * r.q_sur_eff;
-    const xs = xAct(p_sur);
-    s += `<rect x="${act_left}" y="${y_top}" width="${xs - act_left}" height="${H_px}"
-      fill="rgba(185,100,0,0.08)" stroke="#b96400" stroke-width="0.8" stroke-dasharray="3,3"/>`;
-    s += `<text x="${act_left}" y="${y_top-5}" font-size="${FS.s}" fill="#b96400" font-weight="600">Ka·q = ${f(p_sur,0)} psf</text>`;
-    s += `<text x="${(act_left+xs)/2}" y="${y_top+H_px*0.35}" font-size="${FS.s}" fill="#b96400" ${HALO}
-      text-anchor="middle" transform="rotate(90,${(act_left+xs)/2},${y_top+H_px*0.35})">${r.isAASHTO&&r.q_ll_aashto>0?'LS surcharge':'Surcharge'}</text>`;
-  }
-
-  if (tog.hydro && r.hasWT && r.hw > 0) {
-    // Hydrostatic triangular block stacked to the RIGHT of the active base
-    const y_wt_line  = y_top + r.wt_d * SCALE;
-    const x_act_base = xAct(r.p_ftg_base);
-    const x_hyd_tip  = x_act_base + r.p_hyd_base * PSCALE;
-    s += `<polygon points="${x_act_base},${y_wt_line} ${x_hyd_tip},${y_fbot} ${x_act_base},${y_fbot}"
-      fill="rgba(0,85,196,0.09)" stroke="#0055c4" stroke-width="0.9"/>`;
-    s += `<text x="${SVG_W-4}" y="${y_fbot+28}" font-size="${FS.m}" fill="#0055c4" text-anchor="end">+${f(r.p_hyd_base,0)} psf (hydro.)</text>`;
-  }
-
-  // ── PASSIVE — LEFT of front face, in toe zone ──────────────────
-  //    Grows LEFT; arrows point RIGHT → toward wall
-  if (tog.passive && r.Df > 0) {
-    const x0    = x_ftoe;
-    const x_tip = xPass(p_pass_base);
-    s += `<polygon points="${x0},${y_grade_toe} ${x0},${y_fbot} ${x_tip},${y_fbot}"
-      fill="rgba(15,122,90,0.12)" stroke="#0f7a5a" stroke-width="1.1"/>`;
-    // Arrows pointing RIGHT →
-    [0.45, 0.75, 1.0].forEach(t => {
-      const yy = y_grade_toe + t*Df_px;
-      const xx = xPass(p_pass_base*t);
-      if (x0 - xx > 6)
-        s += `<line x1="${xx}" y1="${yy}" x2="${x0-2}" y2="${yy}"
-          stroke="#0f7a5a" stroke-width="0.85" marker-end="url(#m-lft-grn)"/>`;
-    });
-    s += `<text x="${x_tip-2}" y="${y_fbot-3}" font-size="${FS.s}" fill="#0f7a5a" text-anchor="end" ${HALO}>${f(p_pass_base,0)} psf</text>`;
-    if (Df_px > 40) {
-      const px_mid = (x_tip+x0)/2, py_mid = y_grade_toe+Df_px*0.5;
-      s += `<text x="${px_mid}" y="${py_mid}" font-size="${FS.s}" fill="#0f7a5a" ${HALO}
-        text-anchor="middle" transform="rotate(-90,${px_mid},${py_mid})">Passive</text>`;
-    }
-  }
+  // ── PASSIVE — in front of the toe face (RWPS; was from the stem front face, over the toe soil and the footing) ──
+  //    Grows LEFT from its zero line; arrows point RIGHT → toward the wall
+  const PAS = (tog.passive && r.Df > 0)
+    ? rwpsPassive(r, { xToe: x_toe, yFbot: y_fbot, sc: SCALE, gap: PGAP, W: 50, fs: FS.s, halo: HALO, mk: 'm-lft-grn' }) : null;
+  if (PAS) s += PAS.svg;
 
   // ── BEARING — below footing ────────────────────────────────────
   if (tog.bearing && !r.pile) {   // RWPL (8e): no soil bearing under a pile-supported footing
     const yt = yBrg(r.q_toe), yh = yBrg(r.q_heel);
-    s += `<polygon points="${x_toe},${y_fbot} ${x_toe},${yt} ${x_heel},${yh} ${x_heel},${y_fbot}"
+    s += `<line x1="${x_toe}" y1="${y_fbot}" x2="${x_toe}" y2="${y_b0}" stroke="#2155c4" stroke-width="0.6" stroke-dasharray="2,2"/>`;   // RWPS: leaders from the base corners
+    s += `<line x1="${x_heel}" y1="${y_fbot}" x2="${x_heel}" y2="${y_b0}" stroke="#2155c4" stroke-width="0.6" stroke-dasharray="2,2"/>`;
+    s += `<polygon points="${x_toe},${y_b0} ${x_toe},${yt} ${x_heel},${yh} ${x_heel},${y_b0}"
       fill="rgba(33,85,196,0.08)" stroke="#2155c4" stroke-width="1.1"/>`;
     const y_qa = yBrg(inp.qa);
     s += `<line x1="${x_toe}" y1="${y_qa}" x2="${x_heel}" y2="${y_qa}"
       stroke="#0f7a5a" stroke-width="0.8" stroke-dasharray="4,3"/>`;
     s += `<text x="${x_heel+4}" y="${y_qa+4}" font-size="${FS.s}" fill="#0f7a5a">qa=${f(inp.qa/1000,1)} ksf</text>`;
-    s += `<text x="${x_toe}" y="${yt+14}" font-size="${FS.m}" fill="#2155c4" text-anchor="middle">${f(r.q_toe,0)}</text>`;
-    s += `<text x="${x_heel}" y="${yh+14}" font-size="${FS.m}" fill="#2155c4" text-anchor="middle">${f(r.q_heel,0)}</text>`;
-    s += `<text x="${x_toe+B_px/2}" y="${Math.max(yt,yh)+16}" font-size="${FS.m}" fill="#2155c4" text-anchor="middle" ${HALO}>Bearing (psf; ordinates not to scale)</text>`;
+    s += `<text x="${x_toe+2}" y="${yt+14}" font-size="${FS.m}" fill="#2155c4" text-anchor="start" ${HALO}>${f(r.q_toe,0)}</text>`;   // RWPS: inside the ends (were centred on them, into the passive labels)
+    s += `<text x="${x_heel-2}" y="${yh+14}" font-size="${FS.m}" fill="#2155c4" text-anchor="end" ${HALO}>${f(r.q_heel,0)}</text>`;
+    s += `<text x="${x_toe+B_px/2}" y="${Math.max(yt,yh,y_qa)+16}" font-size="${FS.m}" fill="#2155c4" text-anchor="middle" ${HALO}>Bearing (psf; ordinates not to scale)</text>`;
   }
 
   // ════════════════════════════════════════════════════════════
@@ -9706,8 +9582,11 @@ function buildOverviewSVG(r) {
   s += ovDimV(vdim_x2, y_top,  y_fbot,  `H=${f(r.H,2)}'`,        'rot', '#2155c4', true, FS.b);
 
   // Toe embedment dim
+  // RWPS: left of the passive diagram when it is drawn (was 14 in front of the toe, through the diagram); the key depth under it
+  const xDf = PAS ? PAS.xMin - 14 : x_toe - 14;
   if (r.Df > 0.05)
-    s += ovDimV(x_toe-14, y_grade_toe, y_fbot, `Df=${f(r.Df,2)}'`, 'rot', '#0f7a5a', false, FS.d);
+    s += ovDimV(xDf, y_grade_toe, y_fbot, `Df=${f(r.Df,2)}'`, 'rot', '#0f7a5a', false, FS.d);
+  if (PAS && PAS.key) s += ovDimV(xDf, y_fbot, PAS.yK, `dk=${f(inp.dk,0)}"`, 'rot', '#0f7a5a', false, FS.d);
 
   // Stem top width dim (above the barrier when there is one)
   s += ovDimH(x_ftoe, x_btop, y_top-11-bar_px, `${f(inp.ts_top,0)}" top`, '#5a6a80', false, FS.d);
@@ -9790,6 +9669,86 @@ function rwtsScaleBar(x, y, sc, fs, note, noteBelow) {   // RWTS-2: noteBelow = 
   if (note) t += noteBelow ? `<text x="${x}" y="${y+h+2*fs+6}" font-size="${fs}" fill="#5a6a80">${note}</text>`
                           : `<text x="${x+w+28}" y="${y+h+1}" font-size="${fs}" fill="#5a6a80">${note}</text>`;
   return t + '</g>';
+}
+
+// RWPS (2026-11-07): pressure diagrams drawn OFF the structure (engineer: "the passive pressure triangle is overlapping the
+// structure, it should be drawn off to the side"). Display only: every ordinate and label is a value the analysis already has.
+//  • rwpsPassive: passive on the vertical plane of the toe face, its zero line `gap` in front of the toe; the shear-key block
+//    (D_f → D_f + d_k, as P_p,key) continues it below the footing. Arrows point toward the wall (toward the heel).
+//  • rwpsLateral: earth (effective, with the water-table break), surcharge band and water triangle side by side from x0
+//    (beyond the heel), each clear of the others; values in a label column at xLab. Arrows point toward the wall (toe).
+// o.fs = the text size written into the markup; o.halo = extra text attributes; o.mk = marker id (forward-pointing).
+function rwpsPassive(r, o) {
+  const inp = r.inp, Df = r.Df;
+  if (!(Df > 0)) return { svg: '', xMin: o.xToe, yBot: o.yFbot };
+  const key = !!(inp.useShearKey && r.dk_ft > 0);
+  const pT = r.Kp * inp.gamma_s * Df;                                                          // at the footing base (D_f)
+  const pK = key ? (r.keyR ? r.keyR.p_bot : r.Kp * inp.gamma_s * (Df + r.dk_ft)) : pT;        // at the key base (D_f + d_k)
+  const x0 = o.xToe - o.gap, yG = o.yFbot - Df * o.sc, yK = o.yFbot + (key ? r.dk_ft * o.sc : 0);
+  const PS = o.W / Math.max(pK, 50), xp = p => x0 - p * PS;
+  const G = '#0f7a5a', h = o.halo || '', fs = o.fs;
+  let t = `<g data-layer="passive">`;
+  t += `<line x1="${x0}" y1="${yG}" x2="${x0}" y2="${yK}" stroke="${G}" stroke-width="0.8" stroke-dasharray="3,3"/>`;
+  t += `<line x1="${x0}" y1="${o.yFbot}" x2="${o.xToe}" y2="${o.yFbot}" stroke="${G}" stroke-width="0.6" stroke-dasharray="2,2" opacity="0.8"/>`;   // leader to the toe corner
+  t += `<polygon points="${x0},${yG} ${x0},${o.yFbot} ${xp(pT)},${o.yFbot}" fill="rgba(15,122,90,0.12)" stroke="${G}" stroke-width="1.1"${o.tip ? ` data-tip="${o.tip}"` : ''}/>`;
+  if (key) t += `<polygon points="${x0},${o.yFbot} ${xp(pT)},${o.yFbot} ${xp(pK)},${yK} ${x0},${yK}" fill="rgba(15,122,90,0.06)" stroke="${G}" stroke-width="1.1" stroke-dasharray="4,2"${o.tipKey ? ` data-tip="${o.tipKey}"` : ''}/>`;
+  const yy = [0.45, 0.75, 1.0].map(f_ => [yG + f_ * (o.yFbot - yG), pT * f_]);
+  if (key) yy.push([(o.yFbot + yK) / 2, (pT + pK) / 2]);
+  yy.forEach(([y, p]) => { const xx = xp(p); if (x0 - xx > 7) t += `<line x1="${xx}" y1="${y}" x2="${x0 - 1}" y2="${y}" stroke="${G}" stroke-width="0.85" marker-end="url(#${o.mk})"/>`; });
+  // value labels under the diagram, right-aligned on the zero line
+  const yL = yK + fs + 3;
+  t += `<text x="${x0}" y="${yL}" font-size="${fs}" fill="${G}" text-anchor="end" font-weight="600" ${h}>Passive ${f(pT,0)} psf</text>`;
+  if (key) t += `<text x="${x0}" y="${yL + fs + 3}" font-size="${fs}" fill="${G}" text-anchor="end" ${h}>key base ${f(pK,0)} psf</text>`;
+  t += `</g>`;
+  return { svg: t, xMin: xp(pK), x0, yG, yK, key, yLab: yL + (key ? fs + 3 : 0) };
+}
+function rwpsLateral(r, o) {
+  const H = r.H, gap = o.gap || 6, fs = o.fs, h = o.halo || '', sh = o.show || {};
+  const pS0 = r.p_top;                                               // Ka·q_s, the dead-surcharge share of the analysis' active ordinates
+  const wet = r.hasWT && r.wt_d < H;
+  const sB = sh.soil === false ? 0 : r.p_ftg_base - pS0, sW = r.p_wt - pS0;
+  const pSur = sh.sur !== false && r.q_sur_eff > 0 ? r.Ka * r.q_sur_eff : 0;
+  const pW = sh.wat !== false && r.hasWT && r.hw > 0 ? r.p_hyd_base : 0;
+  const nG = (sB > 0 && pSur > 0 ? 1 : 0) + ((sB > 0 || pSur > 0) && pW > 0 ? 1 : 0);
+  const PS = (o.W - nG * gap) / Math.max(sB + pSur + pW, 50);
+  const yT = o.yTop, yB = o.yBot, yWT = yT + r.wt_d * o.sc, x0 = o.x0;
+  const R = '#c42121', O = '#b96400', Bl = '#0055c4', Lb = '#1f7fd6';
+  let t = '', xo = x0;
+  const rows = [];   // [y, text, colour, bold]
+  if (sB > 0) {
+    const pts = wet ? `${x0},${yT} ${x0 + sW * PS},${yWT} ${x0 + sB * PS},${yB} ${x0},${yB}` : `${x0},${yT} ${x0 + sB * PS},${yB} ${x0},${yB}`;
+    t += `<g data-layer="active"><line x1="${x0}" y1="${yT}" x2="${x0}" y2="${yB}" stroke="${R}" stroke-width="0.7" stroke-dasharray="3,3" opacity="0.6"/>`;
+    t += `<polygon points="${pts}" fill="rgba(196,33,33,0.10)" stroke="${R}" stroke-width="1.2"${o.tipSoil ? ` data-tip="${o.tipSoil}"` : ''}/>`;
+    [0.1, 0.35, 0.6, 0.85].forEach(f_ => {
+      const z = f_ * H, pv = wet ? (z <= r.wt_d ? sW * z / r.wt_d : sW + (sB - sW) * (z - r.wt_d) / (H - r.wt_d)) : sB * f_;
+      const xx = x0 + pv * PS, y = yT + f_ * (yB - yT);
+      if (xx - x0 > 8) t += `<line x1="${xx}" y1="${y}" x2="${x0 + 1}" y2="${y}" stroke="${R}" stroke-width="0.85" marker-end="url(#${o.mk})"/>`;
+    });
+    if (wet) t += `<circle cx="${x0 + sW * PS}" cy="${yWT}" r="2.2" fill="${R}"/>`;
+    t += `</g>`;
+    xo = x0 + sB * PS + gap;
+    rows.push([yB - 3 - (pW > 0 ? fs + 3 : 0), `${f(sB,0)} psf earth`, R, true]);
+    if (wet) { rows.push([yWT - 3, `W.T.: ${f(sW,0)} psf`, R, true]); rows.push([yWT + fs + 2, `γ′ = ${f(r.gamma_s_sub,0)} pcf below`, Lb, false]); }
+  }
+  if (pSur > 0) {
+    t += `<g data-layer="surcharge"><rect x="${xo}" y="${yT}" width="${pSur * PS}" height="${yB - yT}" fill="rgba(185,100,0,0.08)" stroke="${O}" stroke-width="0.9" stroke-dasharray="3,3"${o.tipSur ? ` data-tip="${o.tipSur}"` : ''}/></g>`;
+    xo += pSur * PS + gap;
+    rows.push([yT + fs, `Ka·q = ${f(pSur,0)} psf`, O, true]);
+    rows.push([yT + 2 * fs + 3, r.isAASHTO && r.q_ll_aashto > 0 ? '(LS surcharge)' : '(surcharge)', O, false]);
+  }
+  if (pW > 0) {
+    t += `<g data-layer="water"><polygon points="${xo},${yWT} ${xo + pW * PS},${yB} ${xo},${yB}" fill="rgba(0,85,196,0.09)" stroke="${Bl}" stroke-width="0.9"${o.tipWat ? ` data-tip="${o.tipWat}"` : ''}/></g>`;
+    rows.push([yB - 3, `+${f(pW,0)} psf water`, Bl, false]);
+  }
+  if (wet && (sB > 0 || pW > 0)) t += `<line x1="${x0}" y1="${yWT}" x2="${o.xLab - 3}" y2="${yWT}" stroke="${Lb}" stroke-width="0.8" stroke-dasharray="4,3" opacity="0.9"/>`;
+  if (sB > 0) {   // the earth diagram's name, at mid-height clear of the other rows
+    let ym = (yT + yB) / 2;
+    const busy = y => rows.some(rw => Math.abs(rw[0] - y) < 2 * fs + 2);
+    for (const c of [ym, ym + 3 * fs, ym - 3 * fs, ym + 6 * fs, ym - 6 * fs]) if (!busy(c) && c > yT + 3 * fs && c < yB - 2 * fs) { ym = c; break; }
+    rows.push([ym, 'Active Ka·γ·z', R, false]);
+  }
+  rows.forEach(([y, txt, c, b]) => { t += `<text x="${o.xLab}" y="${y}" font-size="${fs}" fill="${c}"${b ? ' font-weight="600"' : ''} ${h}>${txt}</text>`; });
+  return t;
 }
 
 // ── SVG helper: callout leader line ───────────────────────────
@@ -10539,7 +10498,8 @@ function buildGeometry3D(r) {
   pShape.closePath();
   const pGeo = new THREE.ExtrudeGeometry(pShape, { depth: WL, bevelEnabled:false });
   const pMesh = new THREE.Mesh(pGeo, mat(0x3399ff, 0.32));
-  pMesh.position.set(Lt + ts_bot, 0, 0);
+  const gap3 = Math.max(B, H) * 0.02;   // RWPS (2026-11-07): diagrams on the planes through the heel and the toe face, a gap off the concrete
+  pMesh.position.set(B + gap3, 0, 0);   // RWPS: was Lt + ts_bot (the stem back face: inside the backfill and the heel)
   G.pressure.add(pMesh);
 
   // Hydrostatic prism (stacked beyond the soil pressure, below WT only)
@@ -10552,7 +10512,7 @@ function buildGeometry3D(r) {
     hShape.closePath();
     const hGeo = new THREE.ExtrudeGeometry(hShape, { depth: WL, bevelEnabled:false });
     const hMesh = new THREE.Mesh(hGeo, mat(0x1f7fd6, 0.30));
-    hMesh.position.set(Lt + ts_bot, 0, 0);
+    hMesh.position.set(B + gap3, 0, 0);   // RWPS: as the earth prism
     G.pressure.add(hMesh);
   }
 
@@ -10562,13 +10522,15 @@ function buildGeometry3D(r) {
     const pp = r.Kp * inp.gamma_s * Df;
     const ppW = Math.max(B,H)*0.18 / Math.max(pp,1);
     const ppShape = new THREE.Shape();
-    ppShape.moveTo(0, 0);
-    ppShape.lineTo(-pp*ppW, 0);   // max pressure at base
+    const dk3 = inp.useShearKey ? r.dk_ft : 0, pk = dk3 > 0 ? (r.keyR ? r.keyR.p_bot : r.Kp * inp.gamma_s * (Df + dk3)) : pp;   // RWPS: + the key block
+    ppShape.moveTo(0, -dk3);
+    ppShape.lineTo(-pk*ppW, -dk3); // at the key base (= the footing base without a key)
+    if (dk3 > 0) ppShape.lineTo(-pp*ppW, 0);   // at the footing base
     ppShape.lineTo(0, Df);         // zero at grade
     ppShape.closePath();
     const ppGeo = new THREE.ExtrudeGeometry(ppShape, { depth: WL, bevelEnabled:false });
     const ppMesh = new THREE.Mesh(ppGeo, mat(0x30c880, 0.32));
-    ppMesh.position.set(Lt, 0, 0);
+    ppMesh.position.set(-gap3, 0, 0);   // RWPS: in front of the toe face (was Lt, the stem front face: over the toe and the footing)
     G.passive.add(ppMesh);
   }
 
@@ -11397,13 +11359,19 @@ function rwrModel(r) {
       ['Passive in front of the toe', P.passive ? 'credited against H: ' + N(P.Hpass, 3) + ' kip/ft' : 'not credited (no passive, no base friction)', '–']] },
       { type: 'note', text: isA ? 'AASHTO LRFD 10th Ed.: rigid cap on vertical piles; factored loads per limit state; φ_c R_n, φ_up R_n,up (Art. 10.5.5.2.3); Extreme Event φ = 1.0, uplift φ = 0.80 (Art. 10.5.5.3.3); H_r as entered. Soil bearing, base sliding and overturning are not checked.'
                                 : 'IBC 2018 §1810: service (ASD) combinations of ASCE 7-16 §2.4.1 against the allowable capacities (§1810.3.3.1, §1810.3.3.2); the soil under the cap carries no vertical load (§1810.3.11). Soil bearing, base sliding and overturning are not checked.' }]));
+    { let Bd = null; try { Bd = rwdwBuild(r); } catch (e) { Bd = null; }   // RWPT2: the pile layout plan of the Piles tab (Drawings sheet), to scale
+      const pl = Bd && Bd.S ? Bd.S.find(x => x.id === 'piles') : null;
+      if (pl && pl.iv) subs[subs.length - 1].items.push({ type: 'figure', svg: rwovView(Bd, pl.i0, pl.iv, '3.4in'), caption: 'Pile layout plan, from above, toe at the bottom, to scale with its scale bar — Piles tab[[tab:piles| ↗]] and Drawings tab, sheet ' + (Bd.S.indexOf(pl) + 1) + ' (' + pl.scale + ').' }); }
     if (r.pxr) subs[subs.length - 1].items.push({ type: 'note', warn: r.pxr.status === 'stale', text: 'Pile Designer results (Pull pile results, ' + rwpxWhen(r.pxr.producedAt) + '): ' + r.pxr.status.toUpperCase() + ' (' + r.pxr.why + '). ' + (Object.keys(r.pxr.fields).length ? 'Imported: ' + Object.entries(r.pxr.fields).map(([k, v]) => k.replace('pile_', '') + ' = ' + v).join(', ') + (r.pxr.status === 'stale' ? '; not used while stale (the values held before the import are used).' : '.') : 'No input imported (reference only).') });   // RWPX
     const st = [rwrS({ id: 'N', label: 'Piles per ft of wall', sym: 'N', eq: '\\sum \\frac{1}{s_i}', sub: P.rows.map(rw => '\\frac{1}{' + N(rw.s, 2) + '}').join(' + '), value: G.N, unit: '/ft', d: 4 }),
       rwrS({ id: 'xbar', label: 'Pile-group centroid from the toe', sym: '\\bar{x}', eq: '\\frac{\\sum x_i / s_i}{N}', sub: '\\frac{' + P.rows.map(rw => N(rw.x, 2) + '/' + N(rw.s, 2)).join(' + ') + '}{' + N(G.N, 4) + '}', value: G.xbar, unit: 'ft', d: 3 }),
       rwrS({ id: 'I', label: 'Moment of inertia of the group per ft', sym: 'I', eq: '\\sum \\frac{(x_i \\minus \\bar{x})^2}{s_i}', sub: P.rows.map(rw => '\\frac{(' + N(rw.x - G.xbar, 3) + ')^2}{' + N(rw.s, 2) + '}').join(' + '), value: G.I, unit: 'ft^{2}/ft', d: 4 })];
     subs.push(sub('Pile Step 1 — Pile group (per ft of wall)', [rwrItem('pl1', [{ title: 'Group properties', steps: st }])]));
-    const head = ['Combination', 'V (kip/ft)', 'x_R (ft)', 'M (kip-ft/ft)', 'H (kip/ft)', ...P.rows.map((x, i) => 'P row ' + (i + 1) + ' (kip)'), 'h (kip)'];
-    const rows = P.comb.map(c => [c.label, rwrCell(c.V, 3), rwrCell(c.xR, 3), rwrCell(c.M, 3), rwrCell(c.H, 3), ...c.L.rows.map(x => rwrCell(x.P, 2)), rwrCell(c.L.rows[0].h, 2)]);
+    // RWPT2 (2026-11-07): the table of the Piles tab: limit state, P_max / P_min with their rows, D/C; the governing combinations marked
+    const head = ['Combination', 'Limit state', 'V (kip/ft)', 'x_R (ft)', 'M (kip-ft/ft)', 'H (kip/ft)', ...P.rows.map((x, i) => 'P row ' + (i + 1) + ' (kip)'), 'P_max (kip)', 'P_min (kip)', 'h (kip)', 'D/C comp.', 'D/C uplift', 'D/C lateral', 'Governs'];
+    const rows = P.comb.map(c => { const gv = [c === P.govC && c.dcC > 0 ? 'compression' : '', c === P.govT && c.dcT > 0 ? 'uplift' : '', c === P.govH && c.dcH > 0 ? 'lateral' : ''].filter(Boolean);
+      return { cells: [c.label, rwptLS(r, c), rwrCell(c.V, 3), rwrCell(c.xR, 3), rwrCell(c.M, 3), rwrCell(c.H, 3), ...c.L.rows.map(x => rwrCell(x.P, 2)), rwrN(c.L.Pmax, 2) + ' (row ' + (c.L.iMax + 1) + ')', rwrN(c.L.Pmin, 2) + ' (row ' + (c.L.iMin + 1) + ')', rwrCell(c.L.rows[0].h, 2),
+        rwrCell(c.dcC, 3), c.dcT > 0 ? rwrCell(c.dcT, 3) : '—', rwrCell(c.dcH, 3), gv.join(', ')], cls: gv.length ? 'gov' : '' }; });
     const gc = P.govC, x0 = gc.L.rows[gc.L.iMax], gt = P.govT, gh = P.govH;
     const ck = [rwrS({ id: 'M', label: 'Moment about the group centroid, ' + gc.label, sym: 'M', eq: 'V(x_R \\minus \\bar{x})', sub: N(gc.V, 3) + '(' + N(gc.xR, 3) + ' \\minus ' + N(G.xbar, 3) + ')', value: gc.M, unit: 'kip-ft/ft', d: 3 }),
       rwrS({ id: 'Pmax', label: 'Largest pile load (row ' + (gc.L.iMax + 1) + ')', sym: 'P_{max}', eq: '\\frac{V}{N} + \\frac{M\\,(x_i \\minus \\bar{x})}{I}', sub: '\\frac{' + N(gc.V, 3) + '}{' + N(G.N, 4) + '} + \\frac{(' + N(gc.M, 3) + ')(' + N(x0.xp, 3) + ')}{' + N(G.I, 4) + '}', value: x0.P, unit: 'kip', d: 2 }),
@@ -11415,7 +11383,7 @@ function rwrModel(r) {
       rwrS({ id: 'latdc', label: 'Lateral check', sym: '\\frac{h}{' + gh.cap.hs + '}', eq: '', sub: '\\frac{' + N(gh.L.rows[0].h, 2) + '}{' + N(gh.cap.h, 2) + '}', value: gh.dcH, unit: '', d: 3, ok: ok('pileLat') })];
     const d = P.det, dt = [['Center-to-center spacing (along the wall and row to row)', N(d.cc, 1) + ' in', d.ccMin ? '≥ ' + N(d.ccMin, 1) + ' in' : 'no minimum (group effects: §1810.2.5)'],
       ['Pile side to the footing edge (toe / heel)', N(d.edge, 1) + ' in', '≥ ' + N(d.edgeMin, 0) + ' in'], ['Embedment into the footing', N(d.embed, 1) + ' in', '≥ ' + N(d.embMin, 0) + ' in']];
-    subs.push(sub('Pile Step 2 — Pile reactions and checks', [{ type: 'table', head, rows }, rwrItem('pl2', [{ title: 'Governing pile loads', ref: isA ? AA('Sec. 10.7') : 'IBC 2018 §1810', steps: ck }]),
+    subs.push(sub('Pile Step 2 — Pile reactions and checks', [{ type: 'table', wide: true, head, rows }, { type: 'note', text: rwrPlain(rwptCombNote(r)) }, rwrItem('pl2', [{ title: 'Governing pile loads', ref: isA ? AA('Sec. 10.7') : 'IBC 2018 §1810', steps: ck }]),
       { type: 'table', head: ['Detailing', 'Provided', 'Required (' + d.ref + ')'], rows: dt }, onTab('stabPile')]));
     // RWPL (2026-11-07, pile schedule; display only): one row per pile row; values from Pile Step 2 (rwPileSchedule)
     const PS = rwPileSchedule(r);
@@ -12340,7 +12308,7 @@ function rwdwBuild(r) {
     const iS = D.mark(), h = 0.08 * P, hs = 0.07 * P;
     concrete(P, false); const gr = grades(P, false); water(P, gr.xe, '');
     // lateral pressures on the vertical plane through the heel (x = B), height H' (sloped backfill) or H
-    const xp = G.B, Hp = G.Hp, maxW = 1.6 * P;
+    const xp = G.B + 0.15 * P, Hp = G.Hp, maxW = 1.45 * P;   // RWPS: zero line 0.15 in (paper) beyond the heel face (was on it); maxW 1.6 → 1.45 P keeps the sheet's extent (and plot scale)
     const Ka = r.Ka, gs = inp.gamma_s, gsub = r.gamma_s_sub;
     const ha = r.h_above * 12, hb = r.h_below * 12;
     const p1 = Ka * gs * r.h_above, p2 = p1 + Ka * gsub * r.h_below;   // soil ordinates on the plane (psf): the model's distribution
@@ -12369,11 +12337,18 @@ function rwdwBuild(r) {
       arrowH(D, L.load, xA2, xA, y, P); D.line(L.ldr, xA2, y, xA2 + 0.1 * P, yl);
       T(L.lt, xA2 + 0.15 * P, yl - 0.03 * P, h, s + ' AT ' + rwdwFI(y), 0); });
     // passive at the toe
+    // RWPS (2026-11-07): drawn 0.15 in (paper) in front of the toe face on its own dashed zero line (was on the toe face, over
+    // the toe grade line); the shear-key block (D_f -> D_f + d_k, P_P,KEY) continues it below the footing
     if (r.Df > 0 && G.Lt > 0) {
-      const Dft = G.tf + G.Dfa, pp = r.Kp * gs * r.Df, pps = Math.min(maxW, 0.9 * P) / Math.max(pp, 1);
-      D.pline(L.load, [[0, Dft], [0, 0], [-pp * pps, 0]], true);
-      T(L.lt, -pp * pps - 0.05 * P, 0.1 * P, hs, 'PASSIVE ' + rwdwN(pp, 0) + ' PSF, ' + (inp.inclPassive ? 'INCLUDED' : 'NEGLECTED'), 2);
-      T(L.lt, -pp * pps - 0.05 * P, -0.05 * P, hs, 'P_P = ' + rwdwK(r.Pp_toe) + (G.dk > 0 ? ' + ' + rwdwK(r.Pp_key) + ' (KEY)' : '') + ' K/FT', 2);
+      const Dft = G.tf + G.Dfa, pp = r.Kp * gs * r.Df, key = G.dk > 0;
+      const pk = key ? (r.keyR ? r.keyR.p_bot : r.Kp * gs * (r.Df + r.dk_ft)) : pp, pps = 0.75 * P / Math.max(pk, 1), x0 = -0.15 * P;   // RWPS: 0.75 P (was min(maxW, 0.9 P)) + the 0.15 P gap: the same extent
+      D.line(L.load, x0, Dft, x0, key ? -G.dk : 0, D.ltype('DASHED'));
+      D.pline(L.load, [[x0, Dft], [x0, 0], [x0 - pp * pps, 0]], true);
+      if (key) D.pline(L.load, [[x0, 0], [x0 - pp * pps, 0], [x0 - pk * pps, -G.dk], [x0, -G.dk]], true);
+      const xl = x0 - pk * pps - 0.05 * P;
+      T(L.lt, xl, 0.1 * P, hs, 'PASSIVE ' + rwdwN(pp, 0) + ' PSF, ' + (inp.inclPassive ? 'INCLUDED' : 'NEGLECTED'), 2);
+      T(L.lt, xl, -0.05 * P, hs, 'P_P = ' + rwdwK(r.Pp_toe) + (key ? ' + ' + rwdwK(r.Pp_key) + ' (KEY)' : '') + ' K/FT', 2);
+      if (key) T(L.lt, xl, -G.dk - 0.05 * P, hs, rwdwN(pk, 0) + ' PSF AT THE KEY BASE', 2);
     }
     // vertical: the resultant on the base
     const xR = (isA ? a.x_R_A : r.x_R) * 12, eV = isA ? a.e_A : r.e;
