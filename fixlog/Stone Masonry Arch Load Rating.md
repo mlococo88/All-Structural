@@ -1460,3 +1460,27 @@ function transDisp(w,n,c,cap){
   - MS = 21.92 / 1.8 = 12.18.
   - Review's example (old default 22.53 t): 20.28 t and 11.27.
 - **How verified:** `check-syntax`; `phone-layout --tool arch`; `project-library --tool stonearch` (only the Summary text differs, by the new panel; the model and ratings are identical); all 14 tabs with 0 console errors; the panel appears in the Report.
+
+## 2026-11-07 — PR: claude/stonearch-m1-lane-load — H vehicles at 12 tons or less also rated with the lane loading (HLN; review M-1)
+
+### HLN-1. Lane loading check, MassDOT §7.2.4.2B   [§4: new check; can only lower a reported rating]
+- **Problem (review M-1):** MassDOT §7.2.4.2B (checked in the MassDOT PDF): lane loadings are not used for H20 / HS20 on spans under 200 ft, except that a component rated for an H vehicle at 12 tons or less must also be rated with the lane loading. The same paragraph says to use the Std. Spec. standard lane loading for H20 and HS20. The tool had no lane loading.
+- **Where:** new `archLaneVeh`, `archLaneRun` (constants `LANE_W=0.64, LANE_P=18, LANE_DX=2`) before `archConvTable`. `render()`, anchor `archLaneRun(p);   /* HLN (M-1)`, called after `archConvRun`. Rating tab panel `rate_lane`; dashboard row "… lane loading"; vehicle panel note when the lane governs.
+- **Before:** no lane rating.
+- **After:**
+  - **Trigger:** highway mode, and H20 or HS20 reported at 12 tons or less.
+  - **Load trains:** the 18 kip concentrated load at the front, then 0.64 klf as 1.28 kip point loads at 2 ft centres. Four loaded lengths: ¼, ½, ¾ and 1 × the axis span, + 4 ft.
+  - **Rating:** each train is rated with `ARCH.rateVehicle` (swept both directions, impact and side-by-side κ as for trucks). The worst train is worked in full (`CALC.vehicleSection`).
+  - **Reported RF** for the vehicle = min(truck, lane), with `r.truckRF` and `r.laneGov` kept on the result.
+- **Governing provisions:** MassDOT BM Pt. I §7.2.4.2B (12-ton rule; Std. Spec. lane loading for H20/HS20; checked). The lane values come from AASHTO Std. Spec. 17th Ed. Art. 3.7 (H20/HS20 lane: 0.64 klf + 18 kip for moment). **Verify (not in references).**
+- **Decisions (pending engineer review):**
+  1. "H vehicle" is taken as both H20 and HS20, which is conservative.
+  2. The uniform load goes through the wheel-load distribution (6 ft gage). That is a narrower spread than a 10 ft lane, so it is conservative.
+  3. Lane rating runs on the worked mesh only, not repeated over the three convergence meshes. This is for performance: one lane train costs about 15 trucks.
+  4. The 18 kip load sits at the train end (front or back, by sweep direction), not inside the uniform load.
+  5. The 26 kip shear concentrated load is not used: the rating is governed by compressive stress, and the optional shear check is off by default.
+- **Check case (20/4 rise, ring 20→23.4 in, cover 1.24 ft):** H20 truck RF 0.390 (7.8 t ≤ 12 t), so the check is triggered.
+  - Lane RF = 0.680, 0.681, 0.681, 0.681 for L = 9.3, 14.7, 20.0, 25.3 ft.
+  - The truck governs, so the reported H20 RF of 0.390 is unchanged.
+  - HS20 (14.1 t) is not triggered. On the default (H20 14.9 t) nothing changes.
+- **How verified:** `check-syntax`; `phone-layout --tool arch`; `project-library --tool stonearch`: on load identical (not triggered); after the test's input change (H20 1.7 t) the only difference is the new dashboard lane row (truck governs, ratings identical); all 14 tabs on the 20/4 case with 0 console errors; the lane panel appears in the Report.
