@@ -3162,7 +3162,7 @@ From the code-compliance review of 2026-11-07 (finding M2; answers open item C14
 - **How verified:** as above; `check-syntax`, `project-library --tool gusset` (all pass), `phone-layout --tool gusset`; 0 console errors.
 - **Saved data:** no change. **Open items:** C14.7-3 answered by LRFD 10th Ed.; engineer to confirm.
 
-## 2026-11-07 — PR: claude/gusset-m4-dead-load — Warning when the factored dead load alone exceeds a resistance in a direction the live load does not act (M4; pass/fail display, no RF changes)
+## 2026-11-07 — PR: claude/gusset-m4-dead-load (PR #1044: https://github.com/mlococo88/All-Structural/pull/1044) — Warning when the factored dead load alone exceeds a resistance in a direction the live load does not act (M4; pass/fail display, no RF changes)
 
 From the code-compliance review of 2026-11-07 (finding M4).
 
