@@ -5048,3 +5048,30 @@ Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summa
 - **How verified:** headless main vs branch, review probe cases: only `aasMinNeg` and `aasMinNeg45` moved (values above); default, aciD, aasT, aciFy100, aciDeep, aa100, the tee cases and every Dev case identical. Full dumps: default project identical; `aa100` values identical, only the new card/subsection and link targets differ. Screenshot of the Serviceability tab looked at; Report summary link checked (§7.2). `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
 - **Saved data:** no key or format change.
 - **Open items:** CBAR-1 (A_s,req passed to Development & Splice) still takes the 5.6.3.3 minimum of the flexure-governing combination; unchanged.
+
+## 2026-11-07 — PR: claude/cbc-aashto-torsion-threshold, PR #987: https://github.com/mlococo88/All-Structural/pull/987 (CBH1a: AASHTO mode checks the 5.7.2.1 torsion threshold for every combination; above it the combination FAILs "torsion must be considered" (AASHTO torsion design not implemented); T_u column shown in AASHTO mode; CALCULATION CHANGE (new check), Beam Capacity tab, AASHTO mode; less conservative before)
+
+Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summary. Found in the in-depth review of 2026-11-07 (item H1, first part: the quick blocker). The full AASHTO 5.7.3.6 torsion design is NOT in this change (see Open items).
+
+### CBH1a. AASHTO torsion threshold   [CALCULATION CHANGE: new FAIL check]
+- **Problem:** in AASHTO mode `torsion()` returns null, the T_u column was hidden, and any T_u (entered earlier or in a saved project) was ignored without a FAIL: only a Validation note said the torsion module is ACI-only.
+- **Governing provisions (10th Ed. text checked):** AASHTO LRFD 10th Ed. (2024) 5.7.2.1: torsion is investigated where T_u > 0.25φT_cr (Eq. 5.7.2.1-3); solid sections T_cr = 0.126Kλ√f′c A_cp²/p_c (Eq. 5.7.2.1-4), K from Eq. 5.7.2.1-6 (1.0 without prestress); f′c not over 10 ksi for torsion; φ = 0.90 for torsion in reinforced concrete (5.5.4.2).
+- **Where / what (all new, anchors `CBH1`):**
+  - `cbcTorA(Tu_kft)` (before `function computeAll(){`): A_cp = b_w h, p_c = 2(b_w + h), T_cr, threshold 0.25φT_cr (kip-in), D/C = T_u/threshold, `consider` when T_u exceeds it.
+  - `computeAll()` row: `torA` (AASHTO mode only).
+  - `allChecks()` (after the shear row): `env("Torsion threshold, T_u ≤ 0.25φT_cr (above: torsion must be considered; not designed by this tool)","AASHTO 5.7.2.1", …,"tabShear")` with id `torA`; N/A where T_u = 0. A ratio above 1 is FAIL.
+  - Shear tab: new first card "Torsion Threshold (AASHTO 5.7.2.1)" (`shTorA`): A_cp, p_c, T_cr, 0.25φT_cr worked, then each combination's comparison and, where exceeded, a FAIL box saying torsion must be considered and that the shear, longitudinal-steel and flexure results ignore it. `cbcCheckCard` links the Summary row there.
+  - Loads input: the T_u column is shown in AASHTO mode (before: ACI with torsion ticked only).
+  - Validation: the Scope note ("torsion module … hidden while AASHTO is selected") is replaced by a note on the threshold check; a warning lists the combinations above the threshold.
+  - Report: new section "Torsion threshold (AASHTO 5.7.2.1)" (scope `tth`: steps Acp, pc, Tcr, thr, Tu<ci>); the chapter Summary and the suite shell's Report summary (anchor `else if(c.id==='torA') ks=`) link to `tth/Tu<ci>`.
+- **Decisions (pending engineer review):**
+  1. A_cp and p_c from the web b_w × h, flange ignored (as the ACI module): smaller T_cr, so the threshold is lower (conservative).
+  2. The threshold is checked whatever the ACI "Check torsion" tick (which is hidden in AASHTO mode): any T_u entered counts. Saved AASHTO projects that carry a T_u from ACI use (e.g. the 13.5 k-ft of the default project's first combination) now show it and may FAIL; the user zeroes it if it does not apply.
+  3. Compatibility torsion (5.7.2.1 allows T_u to be reduced to φT_cr with redistribution) is not taken into account here: the reduced value is still above 0.25φT_cr, so the result is the same.
+- **Check cases:**
+  - `aa100` (AASHTO 12 × 18 in, f′c 4 ksi, T_u 5 k-ft): A_cp 216 in², p_c 60 in, T_cr = 0.126 · 1 · 1 · 2 · 216²/60 = 195.9 k-in, 0.25 · 0.90 · 195.9 = 44.1 k-in = 3.67 k-ft; T_u 60 k-in → **D/C 1.36 FAIL (before: no torsion row, no FAIL).**
+  - `aasT` (12 × 36 in tee, f′c 12 ksi → 10 ksi for torsion, T_u 25 k-ft): A_cp 432 in², p_c 96 in, T_cr = 0.126√10 · 432²/96 = 774.6 k-in; threshold 174.3 k-in (14.52 k-ft); T_u 300 k-in → **D/C 1.72 FAIL.** (The review's 848 k-in used f′c 12 ksi; 5.7.2.1 limits it to 10 ksi.)
+  - Combinations with T_u = 0: N/A. ACI mode: unchanged (no `torA` field, no new row).
+- **How verified:** headless main vs branch, review probe cases: ACI cases and every Dev case identical; every AASHTO case gains only the threshold row (N/A where T_u = 0), the new note and, for aa100 and aasT, the warning; no other value moved. Screenshot of the Shear tab (aasT) looked at. `check-syntax`, `phone-layout --tool cbc`, `project-library --tool cbc/asd/rebar`, `rebar-redirect`, `dxf-print-sheets --tool cbc` pass, 0 console errors.
+- **Saved data:** no key or format change (T_u was already saved per combination).
+- **Open items:** full AASHTO torsion design (5.7.3.4.2 V_eff in ε_s, 5.7.3.6.1/-.2 transverse, 5.7.3.6.3 longitudinal, Summary interaction) is not implemented yet; until then a combination above the threshold stays FAIL.
