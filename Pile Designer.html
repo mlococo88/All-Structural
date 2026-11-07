@@ -17495,7 +17495,7 @@ function App() {
             flexR: (c.type === "service" || noConv) ? null : (isHPc ? rat(hs.Mu, hs.phiMn) : rat(R2.MmaxUsed, R2.flex.phiMn)),
             combR: (c.type === "service" || noConv) ? null : (isHPc ? hs.comb_ratio : R2.comb.interaction), // P-M interaction value (was R2.comb.ratio = Po/Pe)
             buckR: (c.type === "service" || !R2.buckling.enable) ? null : rat(I2.STL, R2.buckling.phiPn_buck),
-            tenR: c.type === "tension" ? (isHPc ? rat(I2.Tu, Math.min(hg.phiRn_up || 1e9, hs.phiPn_tension || 1e9)) : rat(I2.Tu, Math.min(R2.tension && R2.tension.phiPn_up || 1e9, R2.tension && R2.tension.phiPn_tension_total || 1e9))) : null,
+            tenR: c.type === "tension" ? (isHPc ? rat(I2.Tu, Math.min(hg.phiRn_up || 1e9, hs.phiPn_tension || 1e9)) : (R2.tension ? Math.max(rat(I2.Tu, R2.tension.phiPn_up || 1e9), rat(I2.Tu, R2.tension.phiPn_tension_cased || 1e9), rat(R2.tension.Tu_unc || 0, R2.tension.phiPn_tension || 1e9)) : null)) : null,   // PDA-L3: as the pass logic (uncased bar vs T_u - P_t)
             svcR: c.type === "service" && y0 != null ? Math.abs(y0) / Math.max(I.deflLimit || 1, 0.01) : null,
             pass: noConv ? false : (c.type === "service" ? (y0 == null || Math.abs(y0) <= (I.deflLimit || 1)) : R2.allPass),
             noConv, ncWhy,
