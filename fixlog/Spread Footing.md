@@ -6216,7 +6216,7 @@ index 50f3837..c2d5000 100644
   - check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser. Screenshots checked.
 - **Saved data:** none. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/sf-h2-phi-fy (SFPY: φ by net tensile strain uses ε_ty = f_y/E_s, ACI 318-19 Table 21.2.2 and 21.2.2.1; CALCULATION CHANGE for f_y > 60,000 psi only; Grade 60 and below unchanged)
+## 2026-11-07 — PR: claude/sf-h2-phi-fy (PR #967: https://github.com/mlococo88/All-Structural/pull/967) (SFPY: φ by net tensile strain uses ε_ty = f_y/E_s, ACI 318-19 Table 21.2.2 and 21.2.2.1; CALCULATION CHANGE for f_y > 60,000 psi only; Grade 60 and below unchanged)
 
 - **Problem:** `phiFlexure` used fixed strain limits, 0.002 (compression-controlled) and 0.005 (tension-controlled), for every f_y. ACI 318-19 Table 21.2.2 sets the limits at ε_ty and ε_ty + 0.003, with ε_ty = f_y/E_s (21.2.2.1); 0.002 is permitted only for Grade 60. For Grade 80 or 100 bars in the transition zone the old φ was too high (unconservative): pedestal P–M (strain compatibility, `pmContour.phiOf`), dowel interface tension (through `sfpmRatios`) and footing flexure (`flexCap`) all used it.
 - **Where / exact code (`Spread Footing.html`, Phase 2 engine, anchor `/* SFPY (2026-11-07)`):**
