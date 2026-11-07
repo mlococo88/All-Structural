@@ -211,3 +211,8 @@ Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clea
 - Merged: RW Piles tab #1148/#1153, bottom mat #1149, thin-cap error #1151, γ_EH #1146, graphics #1147/#1152/#1156, manual #1154/#1157, stem projection part 1 #1150.
 - Running: RW stem projection part 2 (graphics + drawings note 11); abutment pile bottom mat at normal cover (engineer: "same deal for abutment").
 - Open: left summary panel in other apps (unanswered); bearing colour green vs blue in RW figures; tool-specific KaTeX calls (SF notes) raw TeX when CDN blocked.
+
+## Check-in 2026-11-07 17:50 UTC (12:50 PM ET)
+- Done: RW stem projection #1150/#1155, RW display #1160, abutment bottom mat #1158, SF P–M fix #1159 + views/3D #1161, SF Wall tab #1162 + out-of-plane #1163.
+- Container restart ~17:30: relaunched SF Wall Design (b_eff per 11.2.3.1 + 45° spread, in-plane, graphics) from branch claude/sf-wall-inplane; SF long-notes → bullets from claude/sf-notes-split (+ survey of other tools).
+- Open questions to engineer: pedestal torsion; abutment toe strut-and-tie with V_u=0; left summary panel in other apps; tool-specific raw TeX when CDN blocked; RW heel wedge thickness (conservative, left).
