@@ -2130,7 +2130,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Saved data (§5):** additive scalar `brg_off_mode`. Migration: `BG_OLD_DEFAULTS.brg_off_mode='pgl'`; `BG_NEW_DEFAULTS.brg_off_mode='chord'`. No key changed.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/bg-m4-m5-girder-tables (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX9, review M4 + M5: grid rows explained and off-deck points marked; span lengths named; girder lengths and tenth points)   [display only; no result change]
+## 2026-11-07 — PR: claude/bg-m4-m5-girder-tables (PR #1133: https://github.com/mlococo88/All-Structural/pull/1133) (BGX9, review M4 + M5: grid rows explained and off-deck points marked; span lengths named; girder lengths and tenth points)   [display only; no result change]
 
 - **Why:** review 2026-11-07.
   - M4: Top-of-Deck grid rows named "Abut 1 CL" / "Pier n CL" are square to the reference line, not on the skewed support. At skewed ends some grid points lie outside the deck.
