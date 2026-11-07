@@ -267,6 +267,9 @@ const AUD = [
   ['RWPC AASHTO Rankine β 20° (Strength Ia beyond the kern): heel 36600 → 44966, #6 @ 7', { design_basis: 'AASHTO', beta: 20, aashto_ep_method: 'rankine' }, [
     ['Math.abs(R.Mu_heel_net - 44966.2) < 1 && R.sel_heel.label === \'#6 @ 7" o.c.\'', 'heel 44966, #6 @ 7']]],
   ['RWPC default (full contact): no block', {}, [['R.hcG_up === null && R.tcG_up === null && Math.abs(R.Mu_toe_net - 6572) < 1 && Math.abs(R.Mu_heel_net - 15533) < 1', 'unchanged']]],
+  ['RW2H5 AASHTO default + collision TL-4: EE II bearing φ_b 0.8 (Art. 11.5.8): q_R 9000 → 7200, D/C 0.171 → 0.213; sliding φ 1.0', { design_basis: 'AASHTO', aashto_ct_enable: true }, [
+    ['Math.abs(R.aashtoR.ct.ee2.q_R_ct - 7200) < 0.5 && R.aashtoR.ct.ee2.phi_b_ct === 0.8 && R.aashtoR.ct.ee2.phi_ct === 1 && Math.abs(R.aashtoR.ct.ee2.q_ult_ct / R.aashtoR.ct.ee2.q_R_ct - 0.213) < 0.001', 'q_R 7200, D/C 0.213'],
+    ['/φ_b = 0\\.80 bearing/.test(T.stability) && /φ_b q_n = 0\\.80 × 9\\.00 = 7\\.20 ksf/.test(P)', 'Stability Step 7b and Report']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {
