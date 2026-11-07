@@ -2599,7 +2599,7 @@ From the code-compliance review of 2026-11-07 (finding H1). Engineer-approved ov
 - **Saved data:** none changed (no key, no field; the grouping is computed).
 - **Other copies:** batch mode and member mode take a user-entered R (unchanged).
 
-## 2026-11-07 — PR: claude/steelbeam-h3-builtup-h — Built-up I-shape: h = d − 2t_f and the minor-axis / torsion constants from the plates; warning for every property still the parent shape's (H3 part 1; calculation change)
+## 2026-11-07 — PR: claude/steelbeam-h3-builtup-h (PR #1012: https://github.com/mlococo88/All-Structural/pull/1012) — Built-up I-shape: h = d − 2t_f and the minor-axis / torsion constants from the plates; warning for every property still the parent shape's (H3 part 1; calculation change)
 
 From the code-compliance review of 2026-11-07 (finding H3). The plate-girder input mode (every property from the plates) is a separate PR.
 
