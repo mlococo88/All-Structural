@@ -4426,3 +4426,35 @@ Review Phase 8, PR 8d. Code sites are tagged `RWPL`. Spread-footing results are 
 - **Decision (pending engineer review):** the ACI 318-19 Table 22.6.5.2 and §13.3.1.2 citations are from the standard; the ACI PDF text was not readable in this session. AASHTO 5.12.8.6.1 / 5.12.8.6.3 were verified.
 - **Decision (pending engineer review):** the heel bottom bars when piles lift the heel (M_u < 0) follow the existing heel logic (bars for |M_u|, the face shown on the tab). The Drawings still draw F1 at the top. This is to be detailed in 8e.
 - Next steps: 8e (Drawings loads sheet with the pile reactions, bottom mat above the pile heads in the sheets, pile schedule), 8f (Pile Designer hand-off).
+
+## 2026-11-07 — PR: claude/rw-pile-8e-drawings — Pile-supported footing, Phase 8e: Drawings show the pile reactions and the bottom mat on the pile heads; no soil-bearing graphics on piles (RWPL; display only)
+
+Review Phase 8, PR 8e. This PR changes no computed value.
+### RWPL-9. Drawings (`RWDW_SUPPORT.piles.loads`, `rwdwBars`, the loads sheet notes)
+- `RWDW_SUPPORT.piles.loads(c)`: the loads sheet now shows the pile reactions per row (kip per pile) as upward arrows under the footing, drawn to their own scale. Uplift is drawn as a downward arrow marked "(UPLIFT)".
+  - It draws the governing compression combination, with P_max against the capacity and H/N.
+  - It then draws the combination with the smallest pile load, with P_min and, under uplift, the capacity T.
+  - Before (8b): one line, "PILE REACTIONS WITH THE PILE ANALYSIS (NOT YET IN THIS VERSION)".
+- `rwdwBars`: `cb = r.cov_bot` (8d; it equals c_c on soil). F2 is drawn at `cb + d_b/2` and the stem hook at `cb + …`, so on piles the bottom mat sits above the pile heads. On soil the drawing is unchanged.
+- Loads sheet notes in pile mode:
+  - "soil bearing, sliding and overturning not applicable";
+  - N, x̄ and I;
+  - compression, uplift and lateral, each with its capacity;
+  - punching.
+  - These replace the soil FOS / q / eccentricity lines.
+### RWPL-10. Section views
+- `buildCrossSection` (Analysis diagram): the bearing layer is hidden on piles (`data-layer="bearing"` with `display:none`).
+- `buildOverviewSVG`: the bearing block is skipped on piles (`tog.bearing && !r.pile`).
+### Check case
+- Default wall, t_f 36 in, 2 rows at 1.5 / 11.0 ft, s = 6 ft, ACI. Sheet 3 shows:
+  - D + H + L: 59.7 and 56.6 kip per pile, "P_MAX = 59.7 KIP <= 100.0 KIP; H/N = 13.50 KIP/PILE";
+  - 0.6D + H: 41.5 and 28.3 kip.
+  - These are the Stability tab, Pile Step 2 values.
+- Sheet 1 shows the bottom mat 15 in above the base.
+### How verified
+- origin/main vs branch, the 12 spread walls: `_R`, Export JSON, autosave, Report, tab texts and DXF are identical.
+- Pile mode: the sheets were screenshotted and checked, with no console errors.
+- Also run: `dxf-print-sheets.mjs --tool rw`, `check-syntax`.
+### Open items
+- The 3D view's bearing layer and its "Show" combination selector still offer the soil base reaction on piles. The pile reactions in 3D are to come with the Pile Designer link (8f) or a later display PR.
+- No pile schedule table: the piles are described in the general notes (8b).
