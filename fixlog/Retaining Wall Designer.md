@@ -4139,3 +4139,195 @@ Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as
 - Next steps: 8d (footing from the pile reactions), 8e (Drawings loads sheet, 3D and diagram reaction display), 8f (Pile Designer hand-off). Battered piles: 8g, which needs a method decision.
 
 ### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html` against the 8b branch)
+```diff
++<script src="shared/pile-group.js"></script>   <!-- RWPL (2026-11-07): rigid-cap pile-group statics (pile-supported footing, Phase 8c) -->
+-  ftgKey:      ['footing', 'Shear Key — Structural Design', 'Shear Key — Structural Design'],   // RWSK   // RWBP (2026-11-06): link target of the bearing selector
++  ftgKey:      ['footing', 'Shear Key — Structural Design', 'Shear Key — Structural Design'],
++  stabPile:    ['stability', 'Pile Step 2 — Pile Reactions and Checks', 'Pile Step 2 — Pile Reactions and Checks'],   // RWPL   // RWSK   // RWBP (2026-11-06): link target of the bearing selector
+-const RW_CHECK_CARD = { ot:'stabOT', otE:'stabOT', sliding:'stabSlide', slidingE:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
++const RW_CHECK_CARD = { pileComp:'stabPile', pileUplift:'stabPile', pileLat:'stabPile', pileSpacing:'stabPile', pileEdge:'stabPile', pileEmbed:'stabPile', ot:'stabOT', otE:'stabOT', sliding:'stabSlide', slidingE:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
++/* RWPL (2026-11-07, Phase 8c): pile-supported footing analysis. Rigid cap on rows of identical vertical piles (shared/pile-group.js,
++   SharedPileGroup.rowGroup / rowLoads): per ft of wall, n_i = 1/s_i, N = Σn_i, x̄ = Σn_i·x_i/N, I = Σn_i·(x_i − x̄)²; for a combination
++   with vertical load V (per ft, net of water uplift on the cap base) whose resultant is at x_R from the toe, M = V·(x_R − x̄) and the
++   load on one pile of row i is P_i = V/N + M·(x_i − x̄)/I; each pile takes H/N of the horizontal load (vertical piles, equal share).
++   Basis by mode (engineer decisions 2026-11-07, review Q11–Q15):
++   - ACI / IBC: service (ASD) combinations of ASCE 7-16 §2.4.1 against the allowable pile capacities (IBC 2018 §1810.3.3.1 axial,
++     §1810.3.3.2 lateral): D + H + L (+ surcharge), D + H + L + 0.7E, 0.6D + H (0.6 on the resisting vertical earth thrust, 1.0 on water
++     uplift; 0.6W of a column uplift), 0.6D + 0.7E + H. IBC 2018 §1810.3.11: the soil under the cap carries no vertical load.
++   - AASHTO: Strength I maximum (the bearing set) and minimum (Ia, the eccentricity set) factored loads against φ_c·R_n, φ_up·R_n,up and the
++     factored H_r; Extreme Event I (both Art. 11.6.5.1 cases) and II (collision) with φ = 1.0, uplift φ = 0.80 (Art. 10.5.5.3.3).
++   Soil bearing, base sliding and overturning / eccentricity are not checked in pile mode. Passive in front of the toe (P_p,toe) is
++   credited against H only when ticked (φ_ep in AASHTO). The footing design (8d) moves to the pile reactions in a later phase.
++   ctx (lb, ft): the calcAll quantities named below. Returns the pile results in kip and ft. */
++function rwPileAnalysis(ctx) {
++  const P = ctx.fnd, isA = ctx.isAASHTO, SPG = window.SharedPileGroup, k = 1000;
++  const out = { rows: P.rows.map(r => ({ x: r.x, s: r.s })), D: P.D, embed: P.embed, clr: P.clr, shape: P.shape, desig: P.desig, passive: !!P.passive, isA };
++  if (!SPG) { out.err = 'shared/pile-group.js is not loaded: keep the shared folder next to this file.'; return out; }
++  const g = SPG.rowGroup(P.rows); out.g = g;
++  if (!g.ok || !(g.I > 0)) { out.err = 'Pile rows: ' + (g.err || 'the rows must be at two or more different positions'); return out; }
++  const Hp = P.passive ? (isA ? ctx.phi_ep : 1.0) * ctx.Pp_toe : 0;   // passive credit (lb/ft), opt-in
++  out.Hpass = Hp / k;
++  const comb = [];   // {key, label, V (kip/ft), xR (ft), H (kip/ft), cap: {c, t, h} (kip per pile), kind}
++  const add = (key, label, V, xR, H, cap, kind, Hp0) => comb.push({ key, label, V: V / k, xR, H: Math.max(0, H - (Hp0 == null ? Hp : Hp0)) / k, Hgross: H / k, cap, kind });
++  if (!isA) {
++    const cap = { c: P.Pa, t: P.Ta, h: P.Ha, cs: 'P_a', ts: 'T_a', hs: 'H_a' };
++    const c = ctx;
++    const Mst = c.Ms - c.Ms_Pp;   // the toe-passive moment is not credited to the piles
++    add('s1', 'D + H + L (service)', c.SumV, (Mst - c.Mo_st) / c.SumV, c.Fh, cap, 'max');
++    const D6 = 0.6 * (c.Wftg + c.Wstem + c.Wsoil + c.W_bar + c.pDL) + 0.6 * c.Pa_tri_v + 0.6 * Math.min(0, c.pWL) - c.F_uplift;
++    const M6 = 0.6 * (c.Ms_ftg + c.Ms_stem + c.Ms_soil + c.Ms_bar + c.pDL * c.x_col) + 0.6 * c.Ms_Pv + 0.6 * Math.min(0, c.pWL) * c.x_col + c.Ms_uplift;
++    add('s3', '0.6D + H (minimum vertical)', D6, (M6 - c.Mo_st) / D6, c.Fh, cap, 'min');
++    if (c.hasSeismic) {
++      add('s2', 'D + H + L + 0.7E', c.SumV, (Mst - c.Mo_st - 0.7 * c.Mo_seis) / c.SumV, c.Fh + 0.7 * c.Pe_inc, cap, 'max');
++      add('s4', '0.6D + 0.7E + H', D6, (M6 - c.Mo_st - 0.7 * c.Mo_seis) / D6, c.Fh + 0.7 * c.Pe_inc, cap, 'min');
++    }
++  } else {
++    const a = ctx.aashtoR, capS = { c: P.phic * P.Rn, t: P.phiup * P.Rnup, h: P.Hr, cs: '\\phi_c R_n', ts: '\\phi_{up} R_{n,up}', hs: 'H_r' };
++    const capE = { c: 1.0 * P.Rn, t: 0.80 * P.Rnup, h: P.Hr, cs: '1.0 R_n', ts: '0.80 R_{n,up}', hs: 'H_r' };
++    add('str_max', 'Strength I (maximum vertical)', a.V_str_max, a.x_R_brg, a.H_drive_str, capS, 'max');
++    add('str_min', 'Strength I (minimum vertical)', a.V_str_min, a.x_R_A, a.H_drive_str, capS, 'min');
++    const HpE = P.passive ? 1.0 * ctx.Pp_toe : 0;
++    if (a.ee1) [['c1', 'P_AE + 0.5P_IR'], ['c2', 'max(0.5P_AE, P_A) + P_IR']].forEach(([q, t]) => { const c = a.ee1[q];
++      add('ee1_' + q + '_max', 'Extreme Event I, ' + t + ' (maximum vertical)', a.ee1.V_max, c.xRb, c.H, capE, 'max', HpE);
++      add('ee1_' + q + '_min', 'Extreme Event I, ' + t + ' (minimum vertical)', a.ee1.V_min, c.xR, c.H, capE, 'min', HpE); });
++    if (a.ct && a.ct.ee2) { const E = a.ct.ee2;
++      add('ee2_max', 'Extreme Event II, collision (maximum vertical)', E.V_ct_max, E.x_R_brg_ct, E.H_drive_ct, capE, 'max', HpE);
++      add('ee2_min', 'Extreme Event II, collision (minimum vertical)', E.V_ct_min, E.x_R_ct, E.H_drive_ct, capE, 'min', HpE); }
++  }
++  comb.forEach(c => { if (!(c.V > 0) || !isFinite(c.xR)) { c.xR = isFinite(c.xR) ? c.xR : g.xbar; }
++    c.M = SPG.momentAbout(c.V, c.xR, g.xbar); c.L = SPG.rowLoads(g, c.V, c.M, c.H);
++    c.dcC = c.L.Pmax > 0 ? c.L.Pmax / Math.max(c.cap.c, 1e-9) : 0;
++    c.dcT = c.L.Pmin < 0 ? -c.L.Pmin / Math.max(c.cap.t, 1e-9) : 0;
++    c.dcH = c.L.rows.length ? c.L.rows[0].h / Math.max(c.cap.h, 1e-9) : 0; });
++  if (!isA) comb.sort((p, q) => (p.key < q.key ? -1 : 1));   // s1 D+H+L, s2 +0.7E, s3 0.6D+H, s4 0.6D+0.7E+H
++  out.comb = comb;
++  const gov = f => comb.reduce((b, c) => (b === null || f(c) > f(b)) ? c : b, null);
++  out.govC = gov(c => c.dcC); out.govT = gov(c => c.dcT); out.govH = gov(c => c.dcH);
++  // detailing minimums: AASHTO Art. 10.7.1.2 (c-c ≥ max(30 in, 2.5D); pile side to cap edge ≥ 9 in; embedment ≥ 12 in);
++  // IBC 2018 §1810.3.11 (embedment ≥ 3 in; cap ≥ 4 in beyond the pile edges); IBC has no minimum spacing (group effects, §1810.2.5)
++  const Din = P.D, B = ctx.B, xs = P.rows.map(r => r.x).slice().sort((p, q) => p - q);
++  const minRowDx = xs.slice(1).reduce((m, x, i) => Math.min(m, (x - xs[i]) * 12), Infinity);
++  const minS = Math.min(...P.rows.map(r => r.s)) * 12, cc = Math.min(minS, minRowDx);
++  const edge = Math.min(...P.rows.map(r => Math.min(r.x * 12, (B - r.x) * 12) - Din / 2));
++  out.det = { cc, minS, minRowDx, edge, embed: P.embed,
++    ccMin: isA ? Math.max(30, 2.5 * Din) : null, edgeMin: isA ? 9 : 4, embMin: isA ? 12 : 3,
++    ref: isA ? 'AASHTO LRFD 10th Ed. Art. 10.7.1.2' : 'IBC 2018 §1810.3.11' };
++  out.det.grp3 = cc < 3 * Din; out.det.grp8 = minRowDx < 8 * Din;
++  return out;
++}
+-  // RWPL (2026-11-07, Phase 8b): pile-supported footing selected: inputs and drawings only in this version
+-  if (inp.fnd && inp.fnd.type === 'pile') warnings.push('Pile-supported footing selected: the piles are drawn, but the pile analysis is not in this version yet (Phase 8c). The stability and footing results shown are still those of a spread footing on soil.');
++  // ── RWPL (2026-11-07, Phase 8c): pile-supported footing — pile reactions and checks replace soil bearing, sliding and overturning ──
++  const isPile = !!(inp.fnd && inp.fnd.type === 'pile');
++  const pile = isPile ? rwPileAnalysis({ fnd: inp.fnd, isAASHTO, aashtoR, B, phi_ep: inp.aashto.phi_ep, Pp_toe,
++    SumV, Ms, Ms_Pp, Mo_st, Mo_seis, Fh, Pe_inc, hasSeismic, Wftg, Wstem, Wsoil, W_bar, pDL, pWL, x_col, Pa_tri_v, F_uplift,
++    Ms_ftg, Ms_stem, Ms_soil, Ms_bar, Ms_Pv, Ms_uplift }) : null;
++  let pileChecks = null;
++  if (pile) {
++    if (pile.err) errors.push(pile.err);
++    else {
++      const pc = pile, d = pc.det;
++      pileChecks = {
++        pileComp:   { ok: pc.govC.dcC <= 1 + 1e-9, label: 'Pile Compression', val: `${f(pc.govC.L.Pmax,1)}${pc.govC.dcC <= 1 + 1e-9 ? '≤' : '>'}${f(pc.govC.cap.c,1)}k`, dc: pc.govC.dcC,
++                      ref: (isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 10.5.5.2.3 (φ) / 10.7.3.9' : 'IBC 2018 §1810.3.3.1; ASD (ASCE 7-16 §2.4.1)') + '; ' + pc.govC.label },
++        pileUplift: { ok: pc.govT.dcT <= 1 + 1e-9, label: 'Pile Uplift', val: pc.govT.L.Pmin < 0 ? `${f(-pc.govT.L.Pmin,1)}${pc.govT.dcT <= 1 + 1e-9 ? '≤' : '>'}${f(pc.govT.cap.t,1)}k` : 'no uplift', dc: pc.govT.dcT,
++                      ref: (isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 10.7.3.10' : 'IBC 2018 §1810.3.3.1.5') + '; ' + pc.govT.label },
++        pileLat:    { ok: pc.govH.dcH <= 1 + 1e-9, label: 'Pile Lateral', val: `${f(pc.govH.L.rows[0].h,2)}${pc.govH.dcH <= 1 + 1e-9 ? '≤' : '>'}${f(pc.govH.cap.h,1)}k`, dc: pc.govH.dcH,
++                      ref: (isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 10.7.3.12; H<sub>r</sub> as entered' : 'IBC 2018 §1810.3.3.2; H<sub>a</sub> as entered') + '; H/N per pile, ' + pc.govH.label },
++        ...(isAASHTO ? { pileSpacing: { ok: d.cc >= d.ccMin - 1e-9, label: 'Pile Spacing', val: `${f(d.cc,1)}${d.cc >= d.ccMin - 1e-9 ? '≥' : '<'}${f(d.ccMin,1)}"`, dc: d.ccMin / Math.max(d.cc, 1e-9), ref: d.ref + '; c-c ≥ max(30 in, 2.5D), along the wall and row to row' } } : {}),
++        pileEdge:   { ok: d.edge >= d.edgeMin - 1e-9, label: 'Pile Edge Distance', val: `${f(d.edge,1)}${d.edge >= d.edgeMin - 1e-9 ? '≥' : '<'}${f(d.edgeMin,0)}"`, dc: d.edgeMin / Math.max(d.edge, 1e-9), ref: d.ref + '; pile side to the footing edge (toe / heel)' },
++        pileEmbed:  { ok: d.embed >= d.embMin - 1e-9, label: 'Pile Embedment', val: `${f(d.embed,1)}${d.embed >= d.embMin - 1e-9 ? '≥' : '<'}${f(d.embMin,0)}"`, dc: d.embMin / Math.max(d.embed, 1e-9), ref: d.ref + '; pile top into the footing' },
++      };
++      if (d.grp3) warnings.push(`Pile spacing ${f(d.cc,1)} in < 3D = ${f(3 * pc.D,1)} in: axial group effects apply (IBC 2018 §1810.2.5; AASHTO Art. 10.7.2.4 / 10.7.3.9). The capacities entered must include them.`);
++      if (d.grp8) warnings.push(`Row-to-row spacing ${f(d.minRowDx,1)} in < 8D = ${f(8 * pc.D,1)} in in the direction of the lateral load: lateral group effects apply (IBC 2018 §1810.2.5; AASHTO Art. 10.7.2.4). The lateral capacity entered must include them.`);
++      for (let i = warnings.length - 1; i >= 0; i--) if (/^AASHTO bearing|tension zone in soil/.test(warnings[i])) warnings.splice(i, 1);   // soil-bearing notes do not apply
++      warnings.push('Pile-supported footing: soil bearing, base sliding and overturning are not checked (the piles carry the wall). The heel and toe are still designed from the soil bearing pressure in this version; the design from the pile reactions follows (Phase 8d).');
++      if (pc.passive) warnings.push(`Pile mode: passive in front of the toe credited against H: ${f(pc.Hpass,3)} kip/ft${isAASHTO ? ' (φ_ep = ' + f(inp.aashto.phi_ep,2) + ')' : ''}.`);
++    }
++  }
+-    ...stabChecks,
++    ...(pileChecks || stabChecks),
+-    ...(isAASHTO && aashtoR && aashtoR.ee1 ? {   // RWE1
++    ...(!isPile && isAASHTO && aashtoR && aashtoR.ee1 ? {   // RWE1
+-    ...(isAASHTO && aashtoR && aashtoR.ct && aashtoR.ct.ee2 ? {
++    ...(!isPile && isAASHTO && aashtoR && aashtoR.ct && aashtoR.ct.ee2 ? {
++    pile,   // RWPL (2026-11-07): pile-supported footing results (null for a spread footing)
++/* RWPL (2026-11-07, Phase 8c): in pile mode the Stability tab opens with the pile cards (group, reactions per combination, checks);
++   the soil cards below stay for the earth pressures and are marked "not applicable" where they check the soil. */
++  renderStabilitySoil(r);
++  if (!r.fatal && r.pile && !r.pile.err) rwPileStability(r);
++}
++function rwPileStability(r) {
++  const el = document.getElementById('tab-stability'); if (!el) return;
++  const P = r.pile, g = P.g, A = r.isAASHTO, F = (v, d = 2) => (isFinite(v) ? (+v).toFixed(d) : '—');
++  const rowsT = P.rows.map((rw, i) => { const n = 1 / rw.s, xp = rw.x - g.xbar; return `<tr><td>${i + 1}</td><td>${F(rw.x)}</td><td>${F(rw.s)}</td><td>${F(n, 4)}</td><td>${F(xp, 3)}</td><td>${F(n * xp * xp, 4)}</td></tr>`; }).join('');
++  let h = `<div class="sec-heading">Pile-Supported Footing — Rigid Cap on Rows of Vertical Piles</div>`;
++  h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Step 1 — Pile Group (per ft of wall)</span><span class="card-ref">rigid cap · identical vertical piles · shared/pile-group.js</span></div><div class="card-body">
++    <table class="tbl"><thead><tr><th>Row</th><th>x from toe (ft)</th><th>s along wall (ft)</th><th>n = 1/s (/ft)</th><th>x' = x − x̄ (ft)</th><th>n·x'² (ft²/ft)</th></tr></thead><tbody>${rowsT}</tbody></table>`
++    + eq('1.1 Piles per ft and centroid', `N = \\sum \\frac{1}{s_i} = \\boxed{${F(g.N, 4)}\\ \\text{/ft}}, \\quad \\bar{x} = \\frac{\\sum n_i x_i}{N} = \\boxed{${F(g.xbar, 3)}\\ \\text{ft}}`, 'from the toe')
++    + eq('1.2 Moment of inertia of the group', `I = \\sum n_i (x_i - \\bar{x})^2 = \\boxed{${F(g.I, 4)}\\ \\text{ft}^2\\text{/ft}}`, '')
++    + `<div class="note">${A ? 'AASHTO LRFD 10th Ed.: factored loads per limit state; resistances φ<sub>c</sub>R<sub>n</sub>, φ<sub>up</sub>R<sub>n,up</sub> (Art. 10.5.5.2.3), H<sub>r</sub> as entered; Extreme Event φ = 1.0, uplift 0.80 (Art. 10.5.5.3.3).' : 'ACI 318-19 / IBC 2018: service (ASD) loads, ASCE 7-16 §2.4.1, against the allowable capacities (IBC 2018 §1810.3.3.1, §1810.3.3.2). The soil under the cap carries no vertical load (§1810.3.11).'} Each pile takes H/N of the horizontal load.${P.passive ? ' Passive in front of the toe credited: ' + F(P.Hpass, 3) + ' kip/ft.' : ' No passive or base friction credited.'}</div></div></div>`;
++  const cr = P.comb.map(c => `<tr><td>${c.label}</td><td>${F(c.V, 3)}</td><td>${F(c.xR, 3)}</td><td>${F(c.M, 3)}</td><td>${F(c.H, 3)}</td>${c.L.rows.map(x => `<td>${F(x.P, 2)}</td>`).join('')}<td>${F(c.L.rows[0].h, 2)}</td></tr>`).join('');
++  const gc = P.govC, x0 = gc.L.rows[gc.L.iMax];
++  h += `<div class="card" style="margin-bottom:16px;"><div class="card-hd"><span class="card-title">Pile Step 2 — Pile Reactions and Checks</span><span class="card-ref">${A ? 'AASHTO LRFD 10th Ed. Sec. 10.7' : 'IBC 2018 §1810; ASCE 7-16 §2.4.1'}</span></div><div class="card-body">
++    <div style="overflow-x:auto"><table class="tbl"><thead><tr><th>Combination</th><th>V (kip/ft)</th><th>x<sub>R</sub> (ft)</th><th>M about x̄ (kip-ft/ft)</th><th>H (kip/ft)</th>${P.rows.map((x, i) => `<th>P row ${i + 1} (kip)</th>`).join('')}<th>H per pile (kip)</th></tr></thead><tbody>${cr}</tbody></table></div>`
++    + eq('2.1 Governing pile compression (' + gc.label + ')', `M = V(x_R - \\bar{x}) = ${F(gc.V, 3)}(${F(gc.xR, 3)} - ${F(g.xbar, 3)}) = ${F(gc.M, 3)}\\ \\text{kip-ft/ft}; \\quad P = \\frac{V}{N} + \\frac{M\\,x'}{I} = \\frac{${F(gc.V, 3)}}{${F(g.N, 4)}} + \\frac{(${F(gc.M, 3)})(${F(x0.xp, 3)})}{${F(g.I, 4)}} = \\boxed{${F(x0.P, 2)}\\ \\text{kip}}`, 'row ' + (gc.L.iMax + 1))
++    + eqCheck('2.2 Compression', `P_{max} = ${F(gc.L.Pmax, 2)} \\le ${gc.cap.cs} = ${F(gc.cap.c, 2)}\\ \\text{kip} \\quad (D/C = ${F(gc.dcC, 3)})`, r.checks.pileComp.ok, r.checks.pileComp.ref)
++    + eqCheck('2.3 Uplift', P.govT.L.Pmin < 0 ? `-P_{min} = ${F(-P.govT.L.Pmin, 2)} \\le ${P.govT.cap.ts} = ${F(P.govT.cap.t, 2)}\\ \\text{kip} \\quad (${P.govT.label.replace(/[^A-Za-z0-9 .+()]/g, '')})` : `P_{min} = ${F(Math.min(...P.comb.map(c => c.L.Pmin)), 2)}\\ \\text{kip} \\ge 0\\ \\text{(no uplift)}`, r.checks.pileUplift.ok, r.checks.pileUplift.ref)
++    + eqCheck('2.4 Lateral', `h = \\frac{H}{N} = \\frac{${F(P.govH.H, 3)}}{${F(g.N, 4)}} = ${F(P.govH.L.rows[0].h, 2)} \\le ${P.govH.cap.hs} = ${F(P.govH.cap.h, 2)}\\ \\text{kip}`, r.checks.pileLat.ok, r.checks.pileLat.ref)
++    + `<div class="note">Detailing: c-c spacing ${F(P.det.cc, 1)} in${P.det.ccMin ? ' (min. ' + F(P.det.ccMin, 1) + ' in)' : ''}; pile side to footing edge ${F(P.det.edge, 1)} in (min. ${F(P.det.edgeMin, 0)} in); embedment ${F(P.det.embed, 1)} in (min. ${F(P.det.embMin, 0)} in) — ${P.det.ref}.</div></div></div>`;
++  el.insertAdjacentHTML('afterbegin', h);
++  // the soil checks do not apply in pile mode
++  const na = A ? ['Step 4 — Sliding', 'Step 5 — Eccentricity', 'Step 6 — Bearing', 'Step 7a — Extreme Event I'] : ['Step 4 — Overturning', 'Step 5 — Sliding', 'Step 6 — Bearing', 'Step 7 — Factored Bearing'];
++  el.querySelectorAll('.card').forEach(c => { const t = c.querySelector('.card-title'); if (!t) return; const tt = t.textContent;
++    if (na.some(x => tt.startsWith(x)) || (A && /Stability under Collision/.test(tt))) {
++      c.style.opacity = '0.55'; c.querySelector('.card-hd').insertAdjacentHTML('afterend', '<div class="note" style="margin:8px 12px;font-weight:600">Not applicable: pile-supported footing. Shown for information only; the piles carry the wall (Pile Step 2).</div>'); } });
++}
++function renderStabilitySoil(r) {
+-  const stab = r.isAASHTO ? [
++  const pc = r.pile && !r.pile.err ? r.pile : null;   // RWPL: pile mode shows the pile checks (demand vs capacity, kip per pile)
++  const stab = pc ? [
++    { label:'Pile Compression', val: pc.govC.L.Pmax, req: pc.govC.cap.c, unit:'kip/pile', ok: r.checks.pileComp.ok, invert:true },
++    { label:'Pile Uplift',      val: Math.max(0, -pc.govT.L.Pmin), req: pc.govT.cap.t, unit:'kip/pile', ok: r.checks.pileUplift.ok, invert:true },
++    { label:'Pile Lateral',     val: pc.govH.L.rows[0].h, req: pc.govH.cap.h, unit:'kip/pile', ok: r.checks.pileLat.ok, invert:true },
++  ] : r.isAASHTO ? [
+-      <div class="sc-group"><h3>Stability <span>${r.isAASHTO ? 'Strength limit states' : 'Service, ASD'}</span></h3>${stab.map(row).join('')}${scale}</div>
++      <div class="sc-group"><h3>${pc ? 'Piles' : 'Stability'} <span>${r.isAASHTO ? (pc ? 'Factored, per limit state' : 'Strength limit states') : 'Service, ASD'}</span></h3>${stab.map(row).join('')}${scale}</div>
+-    try { if (D[k]) v = D[k](); } catch (e) { /* value not available: D/C n/a */ }
++    try { if (D[k]) v = D[k](); else if (c.ref !== undefined) v = [c.ref, c.dc, c.note || '']; } catch (e) { /* value not available: D/C n/a */ }   // RWPL: the pile checks carry their own reference and D/C
++  /* ---------- RWPL (2026-11-07, Phase 8c): pile-supported footing (after the stability section) ---------- */
++  if (r.pile && !r.pile.err) {
++    const P = r.pile, G = P.g, subs = [], N = (v, d) => rwrN(v, d);
++    subs.push(sub('Pile data', [{ type: 'table', head: ['Quantity', 'Value', 'Unit'], rows: [
++      ['Pile type', ({ hp: 'steel H-pile', pipe: 'steel pipe pile', square: 'square precast concrete', round: 'round (timber / cast-in-place)' }[P.shape] || P.shape) + (P.desig ? ', ' + P.desig : ''), '–'],
++      ['Pile width / diameter D', rwrCell(P.D, 1), 'in'], ['Embedment into the footing', rwrCell(P.embed, 1), 'in'], ['Clear, pile top to the bottom bars', rwrCell(P.clr, 2), 'in'],
++      ...P.rows.map((rw, i) => ['Row ' + (i + 1) + ': x from the toe / spacing along the wall', N(rw.x, 2) + ' / ' + N(rw.s, 2), 'ft']),
++      ...(isA ? [['Nominal compression R_n, φ_c', N(inp.fnd.Rn, 1) + ', ' + N(inp.fnd.phic, 2), 'kip, –'], ['Nominal uplift R_n,up, φ_up', N(inp.fnd.Rnup, 1) + ', ' + N(inp.fnd.phiup, 2), 'kip, –'], ['Factored lateral resistance H_r', rwrCell(inp.fnd.Hr, 1), 'kip']]
++             : [['Allowable compression P_a', rwrCell(inp.fnd.Pa, 1), 'kip'], ['Allowable uplift T_a', rwrCell(inp.fnd.Ta, 1), 'kip'], ['Allowable lateral H_a', rwrCell(inp.fnd.Ha, 1), 'kip']]),
++      ['Passive in front of the toe', P.passive ? 'credited against H: ' + N(P.Hpass, 3) + ' kip/ft' : 'not credited (no passive, no base friction)', '–']] },
++      { type: 'note', text: isA ? 'AASHTO LRFD 10th Ed.: rigid cap on vertical piles; factored loads per limit state; φ_c R_n, φ_up R_n,up (Art. 10.5.5.2.3); Extreme Event φ = 1.0, uplift φ = 0.80 (Art. 10.5.5.3.3); H_r as entered. Soil bearing, base sliding and overturning are not checked.'
++                                : 'IBC 2018 §1810: service (ASD) combinations of ASCE 7-16 §2.4.1 against the allowable capacities (§1810.3.3.1, §1810.3.3.2); the soil under the cap carries no vertical load (§1810.3.11). Soil bearing, base sliding and overturning are not checked.' }]));
++    const st = [rwrS({ id: 'N', label: 'Piles per ft of wall', sym: 'N', eq: '\\sum \\frac{1}{s_i}', sub: P.rows.map(rw => '\\frac{1}{' + N(rw.s, 2) + '}').join(' + '), value: G.N, unit: '/ft', d: 4 }),
++      rwrS({ id: 'xbar', label: 'Pile-group centroid from the toe', sym: '\\bar{x}', eq: '\\frac{\\sum x_i / s_i}{N}', sub: '\\frac{' + P.rows.map(rw => N(rw.x, 2) + '/' + N(rw.s, 2)).join(' + ') + '}{' + N(G.N, 4) + '}', value: G.xbar, unit: 'ft', d: 3 }),
++      rwrS({ id: 'I', label: 'Moment of inertia of the group per ft', sym: 'I', eq: '\\sum \\frac{(x_i \\minus \\bar{x})^2}{s_i}', sub: P.rows.map(rw => '\\frac{(' + N(rw.x - G.xbar, 3) + ')^2}{' + N(rw.s, 2) + '}').join(' + '), value: G.I, unit: 'ft^{2}/ft', d: 4 })];
++    subs.push(sub('Pile Step 1 — Pile group (per ft of wall)', [rwrItem('pl1', [{ title: 'Group properties', steps: st }])]));
++    const head = ['Combination', 'V (kip/ft)', 'x_R (ft)', 'M (kip-ft/ft)', 'H (kip/ft)', ...P.rows.map((x, i) => 'P row ' + (i + 1) + ' (kip)'), 'h (kip)'];
++    const rows = P.comb.map(c => [c.label, rwrCell(c.V, 3), rwrCell(c.xR, 3), rwrCell(c.M, 3), rwrCell(c.H, 3), ...c.L.rows.map(x => rwrCell(x.P, 2)), rwrCell(c.L.rows[0].h, 2)]);
++    const gc = P.govC, x0 = gc.L.rows[gc.L.iMax], gt = P.govT, gh = P.govH;
++    const ck = [rwrS({ id: 'M', label: 'Moment about the group centroid, ' + gc.label, sym: 'M', eq: 'V(x_R \\minus \\bar{x})', sub: N(gc.V, 3) + '(' + N(gc.xR, 3) + ' \\minus ' + N(G.xbar, 3) + ')', value: gc.M, unit: 'kip-ft/ft', d: 3 }),
++      rwrS({ id: 'Pmax', label: 'Largest pile load (row ' + (gc.L.iMax + 1) + ')', sym: 'P_{max}', eq: '\\frac{V}{N} + \\frac{M\\,(x_i \\minus \\bar{x})}{I}', sub: '\\frac{' + N(gc.V, 3) + '}{' + N(G.N, 4) + '} + \\frac{(' + N(gc.M, 3) + ')(' + N(x0.xp, 3) + ')}{' + N(G.I, 4) + '}', value: x0.P, unit: 'kip', d: 2 }),
++      rwrS({ id: 'comp', label: 'Compression check', sym: '\\frac{P_{max}}{' + gc.cap.cs + '}', eq: '', sub: '\\frac{' + N(gc.L.Pmax, 2) + '}{' + N(gc.cap.c, 2) + '}', value: P.govC.dcC, unit: '', d: 3, ok: ok('pileComp') }),
++      gt.L.Pmin < 0 ? rwrS({ id: 'upl', label: 'Uplift check (' + gt.label + ')', sym: '\\frac{\\minus P_{min}}{' + gt.cap.ts + '}', eq: '', sub: '\\frac{' + N(-gt.L.Pmin, 2) + '}{' + N(gt.cap.t, 2) + '}', value: gt.dcT, unit: '', d: 3, ok: ok('pileUplift') })
++                    : rwrS({ id: 'upl', label: 'Uplift: the smallest pile load of all combinations is not negative', sym: 'P_{min}', eq: '', sub: '', value: Math.min(...P.comb.map(c => c.L.Pmin)), unit: 'kip', d: 2, ok: ok('pileUplift') }),
++      rwrS({ id: 'lat', label: 'Lateral load per pile (' + gh.label + ')', sym: 'h', eq: '\\frac{H}{N}', sub: '\\frac{' + N(gh.H, 3) + '}{' + N(G.N, 4) + '}', value: gh.L.rows[0].h, unit: 'kip', d: 2 }),
++      rwrS({ id: 'latdc', label: 'Lateral check', sym: '\\frac{h}{' + gh.cap.hs + '}', eq: '', sub: '\\frac{' + N(gh.L.rows[0].h, 2) + '}{' + N(gh.cap.h, 2) + '}', value: gh.dcH, unit: '', d: 3, ok: ok('pileLat') })];
++    const d = P.det, dt = [['Center-to-center spacing (along the wall and row to row)', N(d.cc, 1) + ' in', d.ccMin ? '≥ ' + N(d.ccMin, 1) + ' in' : 'no minimum (group effects: §1810.2.5)'],
++      ['Pile side to the footing edge (toe / heel)', N(d.edge, 1) + ' in', '≥ ' + N(d.edgeMin, 0) + ' in'], ['Embedment into the footing', N(d.embed, 1) + ' in', '≥ ' + N(d.embMin, 0) + ' in']];
++    subs.push(sub('Pile Step 2 — Pile reactions and checks', [{ type: 'table', head, rows }, rwrItem('pl2', [{ title: 'Governing pile loads', ref: isA ? AA('Sec. 10.7') : 'IBC 2018 §1810', steps: ck }]),
++      { type: 'table', head: ['Detailing', 'Provided', 'Required (' + d.ref + ')'], rows: dt }, onTab('stabPile')]));
++    CK.pileComp = 'pl2/comp'; CK.pileUplift = 'pl2/upl'; CK.pileLat = 'pl2/latdc';
++    const iS = secs.findIndex(x => x.key === 'stab');
++    secs.splice(iS + 1, 0, { title: 'Pile-supported footing', subs, key: 'pile' });
++    if (iS >= 0) secs[iS].subs.unshift(sub('Pile-supported footing: soil checks not applicable', [{ type: 'note', text: 'The footing is on piles. The overturning, sliding, eccentricity and soil-bearing steps of this section are shown for information only and are not checks; the piles carry the wall (next section). The earth pressures and the factored loads of this section are used.' }]));
++  }
+```
