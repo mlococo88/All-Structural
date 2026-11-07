@@ -2035,7 +2035,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
 - **Saved data (§5):** additive scalars `seat_terms`, `d_bf`. Migration: `BG_OLD_DEFAULTS` `{seat_terms:false, d_bf:'0'}`; `BG_NEW_DEFAULTS` `{seat_terms:true, d_bf:'0'}`. No key changed.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/bg-h3-super-table (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX6, review H3, engineer item O2 / BG-O2: optional superelevation transition table)   [calc change: new option, default = existing behaviour] [saved data: additive field]
+## 2026-11-07 — PR: claude/bg-h3-super-table (PR #1126: https://github.com/mlococo88/All-Structural/pull/1126) (BGX6, review H3, engineer item O2 / BG-O2: optional superelevation transition table)   [calc change: new option, default = existing behaviour] [saved data: additive field]
 
 - **Why:** review 2026-11-07, H3. Cross-slope controls can only sit at substructure stations, and each side's slope is interpolated linearly between them, so a transition cannot be tied to the TS/SC stations or follow the Green Book method. Green Book method (*A Policy on Geometric Design*, 7th Ed. 2018, Sec. 3.3.8; not in the references folder, **verify**): the outside lane rotates first, the inside lane stays at normal crown until reverse crown, and full super is reached at the SC.
 - **Decision (pending engineer review):**
