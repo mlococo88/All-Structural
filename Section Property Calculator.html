@@ -2328,14 +2328,23 @@ const SPC = (function () {
     const half = tot.A / 2, tolc = 1e-13 * Math.max(1, Math.abs(hi0) + Math.abs(lo0) + (hi0 - lo0));
     let fl = null;
     while (hi - lo > tolc && it < 200) { const m = (lo + hi) / 2; const a = sideSum(W, nv, m).A; if (a > half) lo = m; else hi = m; it++; }
-    const c = (lo + hi) / 2, up = sideSum(W, nv, c);
+    let c = (lo + hi) / 2;
+    /* SPL4 (2026-11-07): the PNA may lie in a gap with no material (e.g. a slab over a girder with a haunch gap), where any line
+       halves the area. The bisection stops at one end of the gap; find both ends (cLo, cHi) and report the middle of the gap.
+       Z is the same for any line in the gap. */
+    const Aat = m => sideSum(W, nv, m).A, tolA = 1e-12 * Math.abs(tot.A);
+    let cLo = c, cHi = c;
+    if (Math.abs(Aat(c) - half) <= tolA) {
+      let a = c, b = hi0; for (let k = 0; k < 200 && b - a > tolc; k++) { const m = (a + b) / 2; if (Math.abs(Aat(m) - half) <= tolA) a = m; else b = m; } cHi = a;
+      a = lo0; b = c; for (let k = 0; k < 200 && b - a > tolc; k++) { const m = (a + b) / 2; if (Aat(m) - half <= tolA) b = m; else a = m; } cLo = b;
+    }
+    fl = cHi - cLo > 1e-7 * (hi0 - lo0);
+    if (fl) c = (cLo + cHi) / 2; else { cLo = c; cHi = c; }
+    const up = sideSum(W, nv, c);
     const Mup = nv[0] * up.Sy + nv[1] * up.Sx, Mtot = nv[0] * tot.Sy + nv[1] * tot.Sx;
     const Adn = tot.A - up.A, Mdn = Mtot - Mup;
     const Z = (Mup - c * up.A) + (c * Adn - Mdn);
-    // flat region (no material near the PNA, e.g. a gap): report its extent
-    const a1 = sideSum(W, nv, c - 1e-6 * (hi0 - lo0)).A, a2 = sideSum(W, nv, c + 1e-6 * (hi0 - lo0)).A;
-    fl = Math.abs(a1 - a2) < 1e-12 * tot.A;
-    return { c, Z, Aup: up.A, Adn, dUp: up.A > 0 ? Mup / up.A - c : 0, dDn: Adn > 0 ? c - Mdn / Adn : 0, it, flat: fl };
+    return { c, Z, Aup: up.A, Adn, dUp: up.A > 0 ? Mup / up.A - c : 0, dDn: Adn > 0 ? c - Mdn / Adn : 0, it, flat: fl, cLo, cHi };
   }
   // material length along the line nv·p = c (holes subtract)
   function chordLen(W, nv, c) {
@@ -5912,7 +5921,7 @@ function buildPlas(pg) {
   const blk = (title, p, axis, ref) => calc(pg, { title, ref: 'plastic section modulus', lines: [
     TX`\Sigma A_{above}=\Sigma A_{below}=\tfrac{A}{2}=${nt(R.Ageo / 2, 'A')}\ \text{${A}}\quad\Rightarrow\quad \text{PNA at } ${axis}=${nt(p.c, 'L')}\ \text{${L}}`,
     TX`Z=A_{1}d_{1}+A_{2}d_{2}=${nt(p.Aup, 'A')}\times${nt(p.dUp, 'L')}+${nt(p.Adn, 'A')}\times${nt(p.dDn, 'L')}=${nt(p.Z, 'S')}\ \text{${S}}`],
-    result: `Z = ${nu(p.Z, 'S')}` + (p.flat ? ' (the PNA lies in a gap with no material: any position in the gap gives the same Z)' : '') });
+    result: `Z = ${nu(p.Z, 'S')}` + (p.flat ? ` (the PNA lies in a gap with no material, anywhere from ${p === R.pl1 ? 's₂' : p === R.pl2 ? 's₁' : axis} = ${nu(p.cLo, 'L')} to ${nu(p.cHi, 'L')}; the middle of the gap is shown, and any position in the gap gives the same Z)` : '') });
   blk('Z<sub>x</sub> — bending about the x axis (PNA horizontal)', R.plX, 'y').setAttribute('data-secid', 'plZx');   // data-secid: D11 link targets
   blk('Z<sub>y</sub> — bending about the y axis (PNA vertical)', R.plY, 'x').setAttribute('data-secid', 'plZy');
   blk('Z<sub>1</sub> — about the major principal axis', R.pl1, TX`s_2`).setAttribute('data-secid', 'plZ1');
@@ -7489,7 +7498,7 @@ function sprModel() {
     sprS('pa.r1', 'Radius of gyration about axis 1', 'r_{1}', '\\sqrt{\\frac{I_{1}}{A}}', '\\sqrt{\\frac{' + nt(R.I1, 'I') + '}{' + nt(R.A, 'A') + '}}', R.r1, 'L'),
     sprS('pa.r2', 'Least radius of gyration', 'r_{min}', '\\sqrt{\\frac{I_{2}}{A}}', '\\sqrt{\\frac{' + nt(R.I2, 'I') + '}{' + nt(R.A, 'A') + '}}', R.r2, 'L')] }];
   /* ---------- 5. Plastic ---------- */
-  const zs = (id, lab, sym, pl, axis) => sprS(id, lab + ' (PNA at ' + axis + ' = ' + nf(pl.c, 'L') + ' ' + un('L') + (pl.flat ? '; in a gap with no material' : '') + ')', sym, 'A_{1} d_{1} + A_{2} d_{2}', nt(pl.Aup, 'A') + ' \\times ' + nt(pl.dUp, 'L') + ' + ' + nt(pl.Adn, 'A') + ' \\times ' + nt(pl.dDn, 'L'), pl.Z, 'S', '', 'A₁ = A₂ = A/2 = ' + nf(R.Ageo / 2, 'A') + ' ' + un('A') + '.');
+  const zs = (id, lab, sym, pl, axis) => sprS(id, lab + ' (PNA at ' + axis + ' = ' + nf(pl.c, 'L') + ' ' + un('L') + (pl.flat ? '; middle of a gap with no material, which spans ' + axis + ' = ' + nf(pl.cLo, 'L') + ' to ' + nf(pl.cHi, 'L') + ' ' + un('L') + '; any line in the gap gives the same Z' : '') + ')', sym, 'A_{1} d_{1} + A_{2} d_{2}', nt(pl.Aup, 'A') + ' \\times ' + nt(pl.dUp, 'L') + ' + ' + nt(pl.Adn, 'A') + ' \\times ' + nt(pl.dDn, 'L'), pl.Z, 'S', '', 'A₁ = A₂ = A/2 = ' + nf(R.Ageo / 2, 'A') + ' ' + un('A') + '.');
   const T5 = [{ title: 'Plastic section moduli', ref: 'equal-area plastic neutral axis', res: /\.Zx$/, steps: [zs('pl.Zx', 'Plastic modulus about x', 'Z_{x}', R.plX, 'y'), zs('pl.Zy', 'Plastic modulus about y', 'Z_{y}', R.plY, 'x'), zs('pl.Z1', 'Plastic modulus about the major principal axis', 'Z_{1}', R.pl1, 's₂'), zs('pl.Z2', 'Plastic modulus about the minor principal axis', 'Z_{2}', R.pl2, 's₁')] },
     { title: 'Shape factors', ref: '', res: /\.SFx$/, steps: [
       SharedSteps.step({ id: 'pl.SFx', label: 'Shape factor about x', sym: '\\frac{Z_{x}}{S_{x,min}}', eq: '', sub: '\\frac{' + nt(R.Zx, 'S') + '}{' + nt(Math.min(R.Sxt, R.Sxb), 'S') + '}', value: R.SFx, unit: '', d: 4 }),
