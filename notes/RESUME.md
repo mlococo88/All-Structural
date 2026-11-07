@@ -195,3 +195,9 @@ Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clea
 - Asked engineer: left summary panel in the other apps too?
 - Note: scratchpad TMPDIR too long for Chromium sockets — agents use default /tmp/allstruct-tests (never delete it while agents run).
 - Then: RW User Manual (Phase 6) last.
+
+## Check-in 2026-11-07 11:42 UTC (6:42 AM ET)
+- Done since last: Moving Load #1106/#1121/#1125/#1129; Bridge Geometry #1103–#1135; S&M left summary #1130; abutment Zone 1 Manual #1132; plain-text report #1138; RW 2nd review done → fixes #1134, #1136, #1137, #1139, #1140, #1141 merged (M3, M1, LOW in progress).
+- Running: RW 2nd-review fixes; shared steps fallback renderer (KaTeX blocked) follow-up.
+- Open question to engineer: left summary panel in other apps?
+- Next: RW User Manual (Phase 6) after RW fixes.
