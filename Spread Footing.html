@@ -1587,7 +1587,7 @@ function computeAll(){
  if(state.soil.mode==='vesic'&&state.soil.sfdShearMode!=='local'&&phiDeg<30){const a='Vesić bearing with φ = '+f2(phiDeg)+'° < 30° and general shear: in loose or compressible soil local or punching shear failure is possible',b='AASHTO LRFD 10th Ed. 10.6.3.1.2b then reduces c and φ (Soil: Shear failure mode, Local / punching).',c='Confirm the failure mode with the geotechnical engineer.';   /* SFVL; SFNL: msg unchanged */
   W.push({lvl:'warn',msg:a+'; '+b+' '+c,nl:[c,[['Condition:',a+'.'],['Local / punching shear:',b]]]});}
  if(state.soil.mode==='vesic'&&state.soil.sfdDepthF==='on'&&Df>0){const a='Depth factors d_q, d_c are applied in the Vesić bearing capacity.',b='Use them only where the soil above the base is as competent as the bearing soil and will not be removed (AASHTO LRFD 10.6.3.1.2a);',c='otherwise set "Depth factors" to Off.';   /* SFNL: msg unchanged */
-  W.push({lvl:'warn',msg:a+' '+b+' '+c,nl:[a,[['Use them only:',b],['Otherwise:',c]]]});}
+  W.push({lvl:'warn',msg:a+' '+b+' '+c,nl:[a,[['Use:',b.replace(/;$/,'.')],['Otherwise:',c]]]});}
  ['otGate','eccMode','eccCustom'].forEach(k=>{if(state.stab[k]===undefined)state.stab[k]=defaultState().stab[k];});
  ['FSot','FSsl','FSfl'].forEach(k=>{if(num(state.stab[k])<1)W.push({lvl:'warn',msg:'Target factor of safety '+k+' = '+f2(num(state.stab[k]))+' is less than 1.0.'});});
  if(num(state.mat.ks)<=0)W.push({lvl:'warn',msg:'Subgrade modulus k_s must be positive for the rigid-footing verification; the rigidity check will be skipped.'});
@@ -1607,7 +1607,7 @@ function computeAll(){
    W.push({lvl:'err',msg:'Pedestal "'+p.label+'": footprint extends beyond the footing edge.'});
   if(Math.abs(p.lex)>p.bx/2+1e-9||Math.abs(p.ley)>p.by/2+1e-9)   /* SFLO */
    {const a='Pedestal "'+p.label+'": the load point (eₓ = '+f2(p.lex)+' ft, eᵧ = '+f2(p.ley)+' ft from its centroid) is outside the pedestal top ('+f2(p.bx)+' × '+f2(p.by)+' ft, |e| ≤ b/2).',b='The load is still applied there;',c='check the input and the bearing / bracket detail.';   /* SFNL: msg unchanged */
-   W.push({lvl:'warn',msg:a+' '+b+' '+c,nl:['Pedestal "'+p.label+'": load point outside the pedestal top — '+c,[['Load point:','(eₓ = '+f2(p.lex)+' ft, eᵧ = '+f2(p.ley)+' ft from its centroid) is outside the pedestal top ('+f2(p.bx)+' × '+f2(p.by)+' ft, |e| ≤ b/2).'],['Still applied:',b]]]});}});
+   W.push({lvl:'warn',msg:a+' '+b+' '+c,nl:['Pedestal "'+p.label+'": load point outside the pedestal top — '+c,[['Load point:','(eₓ = '+f2(p.lex)+' ft, eᵧ = '+f2(p.ley)+' ft from its centroid) is outside the pedestal top ('+f2(p.bx)+' × '+f2(p.by)+' ft, |e| ≤ b/2).'],['Still applied:',b.replace(/;$/,'.')]]]});}});
  for(let i=0;i<peds.length;i++)for(let j=i+1;j<peds.length;j++){
   const a=peds[i],b=peds[j];
   if(Math.abs(a.x-b.x)<(a.bx+b.bx)/2&&Math.abs(a.y-b.y)<(a.by+b.by)/2)
