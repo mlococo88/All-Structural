@@ -2331,7 +2331,7 @@ function listTables() {
 - **Saved data:** no key or format change (§5).
 - **Other copies:** none. **Open items:** L3 (Z definition) is a separate item.
 
-## 2026-11-07 — PR: claude/subloads-ct-height (CTH) — vehicle collision force at 2.0 to 5.0 ft above the ground, the critical height for each effect (review H4; §4 result change)
+## 2026-11-07 — PR: claude/subloads-ct-height (PR #1104: https://github.com/mlococo88/All-Structural/pull/1104) (CTH) — vehicle collision force at 2.0 to 5.0 ft above the ground, the critical height for each effect (review H4; §4 result change)
 - **Why:** in-depth code review of 2026-11-07, finding H4.
 - **Problem:** `phase6` applied the 600 kip collision force only at `z = ground + 5`. The code places it anywhere from 2.0 to 5.0 ft above the ground, whichever produces the critical effect. Column base shear is largest at the lowest height, so the tool's column base shear was 21–26 % low (**unconservative**). Moments at the footing and the column base moments in the default pier still govern at 5.0 ft and do not change.
 - **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.6.5.1 (600 kip equivalent static force, 0 to 15° to the edge of pavement, 2.0 to 5.0 ft above the ground, whichever is critical).
