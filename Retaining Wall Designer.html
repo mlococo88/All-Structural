@@ -1107,6 +1107,75 @@ body.rwDashColl #rwDash { display: none; }
     <div class="ig full"><label for="Df_add">Soil Cover — Toe (above ftg top)</label>
       <div class="iw"><input type="number" id="Df_add" value="0" min="0" max="10" step="0.25"><span class="iw-unit">ft</span></div></div>
   </div>
+<!-- RWPL (2026-11-07): Phase 8b, foundation type and pile rows (pile-supported footing). Spread footing is the default; every field
+     below is saved only when it differs from its default, so a spread-footing project saves and opens exactly as before. -->
+<button type="button" class="sec-hd" data-target="sec-fnd" aria-expanded="true"><span class="sec-hd-label">Foundation</span><svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+<div class="sec-body" id="sec-fnd">
+    <div class="ig full"><label for="fnd_type">Foundation type</label>
+      <select id="fnd_type">
+        <option value="spread">Spread footing on soil</option>
+        <option value="pile">Pile-supported footing (rows of vertical piles)</option>
+      </select></div>
+    <div class="note pile-only" id="note_pile" style="display:none">Rows of identical vertical piles across the footing, each with its own spacing along the wall; one pile type per wall; no staggering. The footing acts as a rigid cap (Phase 8). <span class="aci-only">ACI / IBC mode: allowable pile capacities (service loads).</span><span class="aashto-only" style="display:none">AASHTO mode: nominal resistances with their φ, factored lateral resistance.</span></div>
+    <div class="ig full pile-only" style="display:none"><label for="pile_nrows">Number of pile rows</label>
+      <select id="pile_nrows">
+        <option value="2" selected>2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+      </select></div>
+    <div class="ig pile-only pile-row pile-row-1" style="display:none"><label for="pile_x1">Row 1: x from toe</label>
+      <div class="iw"><input type="number" id="pile_x1" value="1.5" min="0" max="60" step="0.25"><span class="iw-unit">ft</span></div></div>
+    <div class="ig pile-only pile-row pile-row-1" style="display:none"><label for="pile_s1">Row 1: spacing along wall</label>
+      <div class="iw"><input type="number" id="pile_s1" value="6" min="1" max="30" step="0.25"><span class="iw-unit">ft</span></div></div>
+    <div class="ig pile-only pile-row pile-row-2" style="display:none"><label for="pile_x2">Row 2: x from toe</label>
+      <div class="iw"><input type="number" id="pile_x2" value="11" min="0" max="60" step="0.25"><span class="iw-unit">ft</span></div></div>
+    <div class="ig pile-only pile-row pile-row-2" style="display:none"><label for="pile_s2">Row 2: spacing along wall</label>
+      <div class="iw"><input type="number" id="pile_s2" value="6" min="1" max="30" step="0.25"><span class="iw-unit">ft</span></div></div>
+    <div class="ig pile-only pile-row pile-row-3" style="display:none"><label for="pile_x3">Row 3: x from toe</label>
+      <div class="iw"><input type="number" id="pile_x3" value="6" min="0" max="60" step="0.25"><span class="iw-unit">ft</span></div></div>
+    <div class="ig pile-only pile-row pile-row-3" style="display:none"><label for="pile_s3">Row 3: spacing along wall</label>
+      <div class="iw"><input type="number" id="pile_s3" value="6" min="1" max="30" step="0.25"><span class="iw-unit">ft</span></div></div>
+    <div class="ig pile-only pile-row pile-row-4" style="display:none"><label for="pile_x4">Row 4: x from toe</label>
+      <div class="iw"><input type="number" id="pile_x4" value="9" min="0" max="60" step="0.25"><span class="iw-unit">ft</span></div></div>
+    <div class="ig pile-only pile-row pile-row-4" style="display:none"><label for="pile_s4">Row 4: spacing along wall</label>
+      <div class="iw"><input type="number" id="pile_s4" value="6" min="1" max="30" step="0.25"><span class="iw-unit">ft</span></div></div>
+    <div class="ig full pile-only" style="display:none"><label for="pile_shape">Pile type</label>
+      <select id="pile_shape">
+        <option value="hp">Steel H-pile</option>
+        <option value="pipe">Steel pipe pile</option>
+        <option value="square">Square precast concrete</option>
+        <option value="round">Round (timber / cast-in-place)</option>
+      </select></div>
+    <div class="ig pile-only" style="display:none"><label for="pile_desig">Designation <span class="lbl-note">optional</span></label>
+      <input type="text" id="pile_desig" placeholder="e.g. HP 12×53"></div>
+    <div class="ig pile-only" style="display:none"><label for="pile_size">Pile width / diameter D</label>
+      <div class="iw"><input type="number" id="pile_size" value="12" min="6" max="48" step="0.5"><span class="iw-unit">in</span></div></div>
+    <div class="ig pile-only" style="display:none"><label for="pile_embed">Embedment into the footing</label>
+      <div class="iw"><input type="number" id="pile_embed" value="12" min="0" max="48" step="1"><span class="iw-unit">in</span></div></div>
+    <div class="ig pile-only" style="display:none"><label for="pile_clr">Clear, pile top to bottom bars</label>
+      <div class="iw"><input type="number" id="pile_clr" value="3" min="0" max="12" step="0.25"><span class="iw-unit">in</span></div></div>
+    <div class="ig pile-only aci-only" style="display:none"><label for="pile_Pa">Allowable compression P<sub>a</sub> per pile</label>
+      <div class="iw"><input type="number" id="pile_Pa" value="100" min="0" max="5000" step="1"><span class="iw-unit">kip</span></div></div>
+    <div class="ig pile-only aci-only" style="display:none"><label for="pile_Ta">Allowable uplift T<sub>a</sub> per pile</label>
+      <div class="iw"><input type="number" id="pile_Ta" value="25" min="0" max="5000" step="1"><span class="iw-unit">kip</span></div></div>
+    <div class="ig pile-only aci-only" style="display:none"><label for="pile_Ha">Allowable lateral H<sub>a</sub> per pile</label>
+      <div class="iw"><input type="number" id="pile_Ha" value="8" min="0" max="500" step="0.5"><span class="iw-unit">kip</span></div></div>
+    <div class="ig pile-only aashto-only" style="display:none"><label for="pile_Rn">Nominal compression R<sub>n</sub> per pile</label>
+      <div class="iw"><input type="number" id="pile_Rn" value="300" min="0" max="10000" step="1"><span class="iw-unit">kip</span></div></div>
+    <div class="ig pile-only aashto-only" style="display:none"><label for="pile_phic">φ<sub>c</sub> (compression)</label>
+      <div class="iw"><input type="number" id="pile_phic" value="0.65" min="0.1" max="1" step="0.05"></div></div>
+    <div class="ig pile-only aashto-only" style="display:none"><label for="pile_Rnup">Nominal uplift R<sub>n,up</sub> per pile</label>
+      <div class="iw"><input type="number" id="pile_Rnup" value="100" min="0" max="10000" step="1"><span class="iw-unit">kip</span></div></div>
+    <div class="ig pile-only aashto-only" style="display:none"><label for="pile_phiup">φ<sub>up</sub> (uplift)</label>
+      <div class="iw"><input type="number" id="pile_phiup" value="0.5" min="0.1" max="1" step="0.05"></div></div>
+    <div class="ig pile-only aashto-only" style="display:none"><label for="pile_Hr">Factored lateral resistance H<sub>r</sub> per pile</label>
+      <div class="iw"><input type="number" id="pile_Hr" value="20" min="0" max="500" step="0.5"><span class="iw-unit">kip</span></div></div>
+    <div class="ck-row pile-only" style="display:none">
+      <input type="checkbox" id="pile_passive">
+      <label for="pile_passive">Credit passive in front of the footing against the lateral load (pile mode)</label>
+    </div>
+    <div class="hint pile-only" id="hint_pile_cap" style="display:none">Enter the capacities from the geotechnical report or from Pile Designer. The defaults are placeholders.</div>
+  </div>
 <!-- RWVH (2026-11-07): offered in both modes (getInputs applies it in both; it was hidden in ACI mode) -->
 <button type="button" class="sec-hd" data-target="sec-vh" aria-expanded="true"><span class="sec-hd-label">Variable-height wall <span class="sec-tag">MassDOT</span></span><svg class="sec-hd-chevron" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5 6 7.5 9 4.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
 <div class="sec-body" id="sec-vh">
@@ -2061,6 +2130,8 @@ function calcAll(inp) {
   // ── Seismic: Mononobe-Okabe with Seed & Whitman increment location ──
   //    (ASCE 7-22 §11.8.3 requires the geotech report to give this pressure; method per M-O)
   const hasSeismic = inp.kh > 0;
+  // RWPL (2026-11-07, Phase 8b): pile-supported footing selected: inputs and drawings only in this version
+  if (inp.fnd && inp.fnd.type === 'pile') warnings.push('Pile-supported footing selected: the piles are drawn, but the pile analysis is not in this version yet (Phase 8c). The stability and footing results shown are still those of a spread footing on soil.');
   let Pae = 0, Pe_inc = 0, Mo_seis = 0, Kae = 0;
   if (hasSeismic) {
     const kh = inp.kh, kv = inp.kv;
@@ -3788,6 +3859,32 @@ function renderStatus(r) {
 // ================================================================
 // READ INPUTS
 // ================================================================
+/* RWPL (2026-11-07): Phase 8 pile-supported footing. The inputs (Wall tab, Foundation card): foundation type, 2 to 4 rows of identical
+   vertical piles (x from the toe, spacing along the wall), pile type and width, embedment and clear cover over the pile heads,
+   capacities per mode (ACI / IBC: allowable P_a, T_a, H_a; AASHTO: R_n with φ_c, R_n,up with φ_up, factored H_r), and the opt-in
+   passive credit. type 'spread' (the default, and every project saved before) is the spread footing on soil, unchanged. */
+const RWPL_DEF = { fnd_type: 'spread', pile_nrows: '2', pile_x1: '1.5', pile_s1: '6', pile_x2: '11', pile_s2: '6', pile_x3: '6', pile_s3: '6', pile_x4: '9', pile_s4: '6',
+  pile_shape: 'hp', pile_desig: '', pile_size: '12', pile_embed: '12', pile_clr: '3', pile_Pa: '100', pile_Ta: '25', pile_Ha: '8',
+  pile_Rn: '300', pile_phic: '0.65', pile_Rnup: '100', pile_phiup: '0.5', pile_Hr: '20', pile_passive: false };
+function rwPileInputs() {
+  const el = id => document.getElementById(id), v = id => { const e = el(id); return e ? parseFloat(e.value) : NaN; };
+  const type = (el('fnd_type') || {}).value === 'pile' ? 'pile' : 'spread';
+  const nr = Math.max(2, Math.min(4, parseInt((el('pile_nrows') || {}).value, 10) || 2));
+  const rows = []; for (let k = 1; k <= nr; k++) rows.push({ x: v('pile_x' + k), s: v('pile_s' + k) });
+  return { type, rows, shape: (el('pile_shape') || {}).value || 'hp', desig: ((el('pile_desig') || {}).value || '').trim(),
+    D: v('pile_size'), embed: v('pile_embed'), clr: v('pile_clr'),
+    Pa: v('pile_Pa'), Ta: v('pile_Ta'), Ha: v('pile_Ha'), Rn: v('pile_Rn'), phic: v('pile_phic'), Rnup: v('pile_Rnup'), phiup: v('pile_phiup'), Hr: v('pile_Hr'),
+    passive: !!(el('pile_passive') && el('pile_passive').checked) };
+}
+function rwPileUI() {
+  const el = id => document.getElementById(id);
+  const pile = el('fnd_type') && el('fnd_type').value === 'pile', isA = el('design_basis') && el('design_basis').value === 'AASHTO';
+  const nr = parseInt((el('pile_nrows') || {}).value, 10) || 2;
+  document.querySelectorAll('.pile-only').forEach(e => {
+    const m = /pile-row-(\d)/.exec(e.className), show = pile && !(e.classList.contains('aci-only') && isA) && !(e.classList.contains('aashto-only') && !isA) && !(m && +m[1] > nr);
+    e.style.display = show ? '' : 'none';
+  });
+}
 function getInputs() {
   const n = id => parseFloat(document.getElementById(id).value) || 0;
   // number with default for a BLANK field only — an entered 0 is kept as 0
@@ -3823,6 +3920,7 @@ function getInputs() {
     heel_basis: s('heel_basis') || 'std', uplift_mode: s('uplift_mode') || 'uniform',
     mu, useShearKey: b('use_shear_key'), dk: n('dk'), inclPassive: b('incl_passive'),
     key_bk: n('key_bk') > 0 ? n('key_bk') : 12,   // RWSK (2026-11-07): key width (in)
+    ...(() => { const fd = rwPileInputs(); return fd.type === 'pile' ? { fnd: fd } : {}; })(),   // RWPL (2026-11-07): foundation type and pile rows (Phase 8); present only on piles, so a spread footing's inputs are as before
     // Barrier / railing on top of stem (adds weight + collision lever arm; retains NO soil)
     bar_enable: b('bar_enable'),
     bar_h:      n('bar_h'),
@@ -3973,6 +4071,7 @@ function onBasisChange() {
   const isA = basis === 'AASHTO';
   document.querySelectorAll('.aashto-only').forEach(el => { el.style.display = isA ? '' : 'none'; });
   document.querySelectorAll('.aci-only').forEach(el => { el.style.display = isA ? 'none' : ''; });
+  rwPileUI();   // RWPL: the pile fields follow the foundation type, the row count and the mode
   if (window.refreshInputTabs) refreshInputTabs();
   document.getElementById('logo-pill').textContent = isA ? 'AASHTO LRFD 10th Ed.' : 'ACI 318-19 / IBC 2018';
   onInputChange();
@@ -6137,6 +6236,7 @@ const LS_OK = _lsAvailable();
 // Snapshot every form field by id → plain object
 const RWTB_FIELDS = ['proj_date', 'proj_chkdate'];   // RWTB (2026-11-06): the optional title-block dates (Project tab)
 const RWLS_DEF = { aashto_traffic_dir: 'parallel', toe_hook: false, ovr_bar_s4: '0', ovr_spc_s4: '0', key_bk: '12', aashto_gamma_eq: '0' };   // RWE1: + γ_EQ (saved only when not 0)   // RWSK: + key width (saved only when not 12 in; absent = 12 in)   // RWFF: + the S4 override (saved only when set)   // RWLS (2026-11-07) / RWDS (toe_hook): saved only when not the default; absent → the default
+Object.assign(RWLS_DEF, RWPL_DEF);   // RWPL (2026-11-07): the pile fields are saved only when changed; old saves open as a spread footing
 function snapshotFields() {
   const out = {};
   document.querySelectorAll('.sidebar input, .sidebar select, .sidebar textarea').forEach(el => {
@@ -6209,6 +6309,7 @@ function syncConditionalUI() {
   const val = id => { const e=document.getElementById(id); return e?e.value:''; };
   const chk = id => { const e=document.getElementById(id); return e?e.checked:false; };
   setDisp('grp_mu',        val('mu_method')==='custom');
+  rwPileUI();   // RWPL
   setDisp('grp_sk',        chk('use_shear_key'));
   setDisp('grp_skb',       chk('use_shear_key'));   // RWSK
   setDisp('hint_key_pp',   chk('use_shear_key') && !chk('incl_passive'));   // RWSK (b)
@@ -6470,6 +6571,26 @@ function rwInputErrors() {
   if (!(isA && sel('aashto_qn_mode') === 'manual')) need('qa', gt0);
   if (sel('mu_method') === 'custom') need('custom_mu', gt0);
   if (on('use_shear_key')) { need('dk', gt0); need('key_bk', Object.assign(v => v > 2, { msg: 'must be greater than 2 in (the plain-concrete check takes 2 in off for concrete cast against soil)' })); }   // RWSK
+  // ── RWPL (2026-11-07): pile-supported footing ──
+  if (sel('fnd_type') === 'pile') {
+    const nr = Math.max(2, Math.min(4, parseInt(sel('pile_nrows'), 10) || 2));
+    const Bft = (val('Lt') || 0) + (val('ts_bot') || 0) / 12 + (val('Lh') || 0), xs = [];
+    for (let k = 1; k <= nr; k++) {
+      const xi = 'pile_x' + k, si = 'pile_s' + k;
+      if (need(xi, Object.assign(v => v >= 0 && v <= Bft + 1e-9, { msg: `must be within the footing, 0 to B = ${f(Bft, 2)} ft from the toe` }))) {
+        if (xs.some(x => Math.abs(x - val(xi)) < 1e-6)) err(xi, `${lab(xi)} = ${raw(xi)} ft: two rows at the same x; give each row its own position.`);
+        xs.push(val(xi));
+      }
+      need(si, gt0);
+    }
+    const D = need('pile_size', gt0), em = need('pile_embed', ge0), cl = need('pile_clr', ge0);
+    if (D && nr) for (let k = 1; k <= nr; k++) { const xi = val('pile_x' + k), r2 = val('pile_size') / 24;
+      if (isFinite(xi) && (xi < r2 - 1e-9 || xi > Bft - r2 + 1e-9)) R.push(['pile_x' + k, `${lab('pile_x' + k)} = ${raw('pile_x' + k)} ft: the pile (D = ${raw('pile_size')} in) extends past the footing edge. Confirm the edge distance.`]); }
+    if (tfOk && em && cl && val('pile_embed') + val('pile_clr') >= val('tf')) err('pile_embed', `${lab('pile_embed')} ${raw('pile_embed')} in + clear ${raw('pile_clr')} in is not less than the footing thickness t_f = ${raw('tf')} in.`);
+    if (isA) { need('pile_Rn', gt0); need('pile_Rnup', ge0); need('pile_Hr', ge0);
+      const phi = Object.assign(v => v > 0 && v <= 1, { msg: 'must be greater than 0 and not more than 1' }); need('pile_phic', phi); need('pile_phiup', phi); }
+    else { need('pile_Pa', gt0); need('pile_Ta', ge0); need('pile_Ha', ge0); }
+  }
   // ── Water ──
   if (sel('wt_mode') === 'elev') { need('el_tow'); need('el_gw'); }
   else opt('wt_depth', ge0);
@@ -6557,6 +6678,7 @@ document.addEventListener('click', e => { const a = e.target.closest && e.target
 
 function onInputChange() {
   updateHints();
+  rwPileUI();   // RWPL: pile fields follow the foundation type and the row count
   rwVhHint();   // RWVH: the locked-box reason follows H_lo / H_hi
   const IE = rwInputErrors();   // RWIE: clear and redo the input marks before the older highlights below
   rwInputMarks({ E: [], R: [] });
@@ -7317,6 +7439,20 @@ function downloadDiagramSVG(r) {
 // ================================================================
 // CROSS-SECTION SVG — clean, correct orientation
 // ================================================================
+/* RWPL (2026-11-07): the pile rows under the footing in an elevation-style SVG (Analysis diagram, Overview): each row drawn as a pile of
+   width D, its embedded length dashed inside the footing, a stub below with a break line. Display only. */
+function rwPileSVG(r, x_toe, y_fbot, SCALE, stroke) {
+  const P = r.inp && r.inp.fnd; if (!P || P.type !== 'pile') return '';
+  const d = Math.max(3, P.D / 12 * SCALE), em = P.embed / 12 * SCALE, L = Math.max(28, 1.6 * SCALE);
+  let o = '<g class="rw-piles">';
+  P.rows.forEach((rw, i) => {
+    const xc = x_toe + rw.x * SCALE, x0 = xc - d / 2, x1 = xc + d / 2, yb = y_fbot + L, h = Math.min(5, d / 3);
+    o += `<rect x="${x0}" y="${y_fbot - em}" width="${d}" height="${em}" fill="none" stroke="${stroke}" stroke-width="0.9" stroke-dasharray="3 2"/>`;
+    o += `<path d="M${x0},${y_fbot} L${x0},${yb} L${xc - d / 4},${yb - h} L${xc + d / 4},${yb + h} L${x1},${yb} L${x1},${y_fbot} Z" fill="rgba(90,100,110,0.18)" stroke="${stroke}" stroke-width="1.1"`
+      + ` data-tip="<b>Pile row ${i + 1}</b><br>x = ${f(rw.x, 2)} ft from the toe · spacing ${f(rw.s, 2)} ft along the wall<br>D = ${f(P.D, 1)} in · embedment ${f(P.embed, 1)} in${P.desig ? '<br>' + P.desig.replace(/[<>&"]/g, '') : ''}"/>`;
+  });
+  return o + '</g>';
+}
 function buildCrossSection(r) {
   const { inp } = r;
 
@@ -7528,6 +7664,7 @@ function buildCrossSection(r) {
       data-tip="<b>Shear key</b><br>Depth d_k = ${f(inp.dk,0)} in · width b_k = ${f(inp.key_bk||12,0)} in<br>${r.keyR ? (r.keyR.plain ? 'Plain concrete (ACI Ch. 14)' : 'Reinforced: K1 ' + r.keyR.rf.sel.label) + '<br>' : ''}Added passive P_p,key = ${f(r.Pp_key,0)} lb/ft"/>`;
     s += `<text x="${skx+skw/2}" y="${y_fbot+dk_px+FS.s+1}" font-size="7" fill="#2155c4" text-anchor="middle">key</text>`;
   }
+  s += rwPileSVG(r, x_toe, y_fbot, SCALE, '#3d4650');   // RWPL: pile rows (pile-supported footing only)
   s += `</g>`;
 
   // Column load arrow
@@ -8598,6 +8735,7 @@ function buildOverviewSVG(r) {
       fill="${C_CONC.fill}" stroke="${C_CONC.stroke}" stroke-width="1.2"/>`;
     s += `<rect x="${skx}" y="${y_fbot}" width="${skw}" height="${dk_px}" fill="url(#oc)"/>`;
   }
+  s += rwPileSVG(r, x_toe, y_fbot, SCALE, '#3d4650');   // RWPL: pile rows (pile-supported footing only)
 
   // ── Water table ───────────────────────────────────────────────
   if (r.hasWT) {
@@ -9403,6 +9541,15 @@ function buildGeometry3D(r) {
     const key = new THREE.Mesh(new THREE.BoxGeometry((inp.key_bk || 12) / 12, r.dk_ft, WL), mat(0x7788aa));
     key.position.set(Lt + ts_bot*0.5, -r.dk_ft/2, WL/2); key.castShadow = true;
     G.concrete.add(key);
+  }
+
+  // RWPL (2026-11-07): pile rows under a pile-supported footing (display; length drawn nominal, 0.6 H, at least 4 ft)
+  if (inp.fnd && inp.fnd.type === 'pile') {
+    const P = inp.fnd, d = P.D / 12, top = P.embed / 12, Lp = Math.max(4, 0.6 * H), steel = P.shape === 'hp' || P.shape === 'pipe';
+    const geo = (P.shape === 'pipe' || P.shape === 'round') ? new THREE.CylinderGeometry(d / 2, d / 2, top + Lp, 16) : new THREE.BoxGeometry(d, top + Lp, d);
+    const pm = mat(steel ? 0x5a6470 : 0x8a8f96);
+    P.rows.forEach(rw => { if (!(rw.s > 0)) return;
+      for (let z = rw.s / 2; z < WL - 1e-6; z += rw.s) { const m = new THREE.Mesh(geo, pm); m.position.set(rw.x, (top - Lp) / 2, z); m.castShadow = true; G.concrete.add(m); } });
   }
 
   // Retained soil (heel side)
@@ -10632,9 +10779,43 @@ const RWDW_SUPPORT = {
     },
     schedule() { return []; },
   },
-  // piles: { section, elev, loads, notes, schedule }   planned (pile rows across the footing: plan / section / schedule)
+  /* RWPL (2026-11-07): pile-supported footing (Phase 8b): pile rows in the section and the elevation, the pile notes. The pile
+     reactions on the loads sheet and the pile schedule follow with the pile analysis (8c / 8e). */
+  piles: {
+    label: 'PILE-SUPPORTED FOOTING',
+    section(c) {
+      const { D, L, G, k, r } = c, P = r.inp.fnd, d = P.D, em = P.embed, yb = -1.6 * k, hid = D.ltype('HIDDEN');
+      if (G.dk > 0) { D.line(L.soil, -0.15 * k, 0, G.kx, 0); D.line(L.soil, G.kx + G.kw, 0, G.B + 0.15 * k, 0); } else D.line(L.soil, -0.15 * k, 0, G.B + 0.15 * k, 0);
+      P.rows.forEach((rw, i) => {
+        const x = rw.x * 12, x0 = x - d / 2, x1 = x + d / 2;
+        D.line(L.hid, x0, 0, x0, em, hid); D.line(L.hid, x1, 0, x1, em, hid); D.line(L.hid, x0, em, x1, em, hid);   // embedded length
+        D.line(L.conc, x0, 0, x0, yb); D.line(L.conc, x1, 0, x1, yb);
+        const m = (x0 + x1) / 2, h = 0.06 * k;   // break line
+        D.pline(L.conc, [[x0 - 0.03 * k, yb], [m - h / 2, yb], [m - h / 4, yb + h], [m + h / 4, yb - h], [m + h / 2, yb], [x1 + 0.03 * k, yb]], false);
+        D.text(L.txt, x, yb - 0.18 * k, 0.085 * k, 'ROW ' + (i + 1) + ' @ ' + rwdwFI(rw.s * 12) + ' O.C.', 1);
+      });
+    },
+    elev(c) {
+      const { D, L, k, r, x0, x1 } = c, P = r.inp.fnd, d = P.D, yb = -1.4 * k, hid = D.ltype('HIDDEN');
+      D.line(L.soil, x0, 0, x1, 0);
+      const order = P.rows.map((rw, i) => ({ rw, i })).sort((a, b) => a.rw.x - b.rw.x);   // the toe row is nearest the viewer
+      order.forEach(({ rw }, j) => { const s = rw.s * 12; if (!(s > 0)) return;
+        for (let x = x0 + s / 2; x < x1 - 1e-6; x += s) { const lt = j ? hid : undefined, l = j ? L.hid : L.conc;
+          D.line(l, x - d / 2, 0, x - d / 2, yb, lt); D.line(l, x + d / 2, 0, x + d / 2, yb, lt); } });
+    },
+    loads(c) { const { L, G, k, T } = c; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
+      T(L.lt, G.B / 2, y0 - 0.2 * k, 0.085 * k, 'PILE-SUPPORTED FOOTING: PILE REACTIONS WITH THE PILE ANALYSIS (NOT YET IN THIS VERSION)', 1); return y0 - 0.6 * k; },
+    notes(r) {
+      const P = r.inp.fnd, isA = r.isAASHTO, sh = { hp: 'STEEL H-PILES', pipe: 'STEEL PIPE PILES', square: 'SQUARE PRECAST CONCRETE PILES', round: 'ROUND PILES' }[P.shape] || 'PILES';
+      return ['PILE-SUPPORTED FOOTING: ' + P.rows.length + ' ROWS OF VERTICAL ' + sh + (P.desig ? ' (' + P.desig + ')' : '') + ', D = ' + rwdwIn(P.D) + ', EMBEDDED ' + rwdwIn(P.embed) + ' INTO THE FOOTING; ROWS AT '
+        + P.rows.map(rw => rwdwFI(rw.x * 12) + ' FROM THE TOE @ ' + rwdwFI(rw.s * 12)).join(', ') + '.',
+        isA ? 'PILE RESISTANCES (AS ENTERED): R_N = ' + rwdwN(P.Rn, 0) + ' KIP (PHI_C = ' + rwdwN(P.phic, 2) + '), R_N,UP = ' + rwdwN(P.Rnup, 0) + ' KIP (PHI_UP = ' + rwdwN(P.phiup, 2) + '), H_R = ' + rwdwN(P.Hr, 1) + ' KIP (FACTORED), PER THE GEOTECHNICAL ENGINEER.'
+            : 'ALLOWABLE PILE CAPACITIES (SERVICE LOADS, AS ENTERED): P_A = ' + rwdwN(P.Pa, 0) + ' KIP, T_A = ' + rwdwN(P.Ta, 0) + ' KIP (UPLIFT), H_A = ' + rwdwN(P.Ha, 1) + ' KIP (LATERAL), PER THE GEOTECHNICAL ENGINEER.'];
+    },
+    schedule() { return []; },
+  },
 };
-const rwdwSupport = r => RWDW_SUPPORT.soil;   // the foundation type of the model; spread footing only today
+const rwdwSupport = r => (r && r.inp && r.inp.fnd && r.inp.fnd.type === 'pile') ? RWDW_SUPPORT.piles : RWDW_SUPPORT.soil;   // RWPL: the foundation type of the model
 
 /* bearing diagrams (soil): ACI service trapezoid + factored trapezoid for the footing design; AASHTO the governing Strength I / Ia
    bearing over B' (soil) and the Strength I footing-design trapezoid. Values: the computed results. */
