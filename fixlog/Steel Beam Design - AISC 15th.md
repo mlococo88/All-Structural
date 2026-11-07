@@ -2730,3 +2730,23 @@ function stiffenerReq(p,stiff){
   - **Before:** I_st = **0.504 in⁴**. **After:** 0.504 + (2.123 − 0.504) × 0.719 = **1.667 in⁴**.
 - **How verified:** engine call on G.8B (above); V_x tab renders the block with 0 KaTeX errors. origin/main vs branch on 15 scenarios + v16 engine cases: every check identical (no DCR uses I_st). Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
 - **Saved data:** none changed.
+
+## 2026-11-07 — PR: claude/steelbeam-m2-f13-proportions — §F13.2 proportioning limits checked for built-up I-shapes and slender webs (M2; new check)
+
+From the code-compliance review of 2026-11-07 (finding M2).
+
+### M2. Proportioning limits (§F13.2)   [new check row; more conservative]
+- **Problem:** the tool did not check the §F13.2 limits. A girder outside them (very slender web, too small a compression flange) was designed as if Chapters F and G applied. `flexMajorIC` caps a_w at 10 in R_pg without saying that a_w > 10 is outside the limits.
+- **Governing provision:** AISC 360-16 §F13.2: for slender webs (h/t_w > λ_r = 5.70√(E/F_y), Table B4.1b case 15), (h/t_w)max = 12.0√(E/F_y) for a/h ≤ 1.5 (Eq. F13-3) and 0.40E/F_y for a/h > 1.5 (Eq. F13-4); unstiffened girders h/t_w ≤ 260; web area to compression flange area ≤ 10. Eq. F13-2 (I_yc/I_y) is for singly symmetric members, which the tool does not model.
+- **Where (1):** new `f13Prop(p)`, anchor `/* M2 (2026-11-07): AISC 360-16 Sec. F13.2 proportioning limits`, just before `stiffenerReq`.
+- **Where (2):** `buildDesignChecks`, anchor `/* M2: Sec. F13.2 proportioning limits (geometry only; no combination) */`: a check row "Proportioning limits [F13.2]", DCR = the largest ratio value/limit, tab Section Properties.
+- **Where (3):** `buildSectionTab`, a section "Proportioning Limits (§F13.2)" before Resolved Properties, anchor `/* M2: Sec. F13.2 proportioning limits, worked */`: h/t_w and λ_r substituted, each limit with its value, limit, ratio and status.
+- **Before:** no check. **After:** for built-up I-shapes (any web) and any I-shape with a slender web.
+- **Decision (pending engineer review):** the 260 limit (unstiffened) and the a_w ≤ 10 limit are applied to every built-up I-shape, not only to slender webs (the paragraph that states them follows the slender-web limits; for a nonslender web they rarely govern). An unstiffened slender web is checked against Eq. F13-4 as well as 260 (no stiffeners, so a/h > 1.5).
+- **Check case:** built-up (plate girder) h = 60 in, t_w = 3/16, b_f 16, t_f 1.5, unstiffened, F_y 50.
+  - h/t_w = 60/0.1875 = 320 > λ_r = 5.70√(29000/50) = 137.3 → slender.
+  - F13-4: 0.40 × 29000/50 = 232 → 320/232 = **1.379 FAIL**; 260 limit: 320/260 = 1.231 FAIL; a_w = 60 × 0.1875/(16 × 1.5) = 0.47 OK.
+  - **Before:** no flag (the F5 / G2 results shown). **After:** Proportioning limits DCR **1.379 FAIL**.
+  - Review built-up case (d 30, b_f 10, t_f 0.75, t_w 0.3125, unstiffened): h/t_w 91.2 ≤ 137.3 (not slender), 91.2/260 = 0.351 OK. G.8B (a = 42 in): a_w = 33 × 0.3125/(16 × 1.5) = 0.430, 0.043 OK.
+- **How verified:** origin/main vs branch on 16 scenarios + v16 engine cases: the new row appears only for built-up sections (builtup, g8, plates, f13bad); every other check identical in all scenarios. Summary, Section Properties and Report show the row; 0 console errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass.
+- **Saved data:** none changed.
