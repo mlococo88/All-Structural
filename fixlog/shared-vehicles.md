@@ -17,7 +17,7 @@ Vehicle presets and their live-load rules. Loaded by: `Moving Load Generator.htm
 ### Open items
 - SV-O1. The rail equipment (F40PH, HSP46, 286K, 315K, ES44AC) and E80 data are not yet checked against a cited source and edition; a verified library needs each vehicle's source, edition and axle table recorded here before other tools load it.
 
-## 2026-11-07 — PR: claude/ml-legal-vehicles (M1: AASHTO legal, emergency and owner rating vehicles added; existing presets unchanged)
+## 2026-11-07 — PR: claude/ml-legal-vehicles (PR #1129: https://github.com/mlococo88/All-Structural/pull/1129) (M1: AASHTO legal, emergency and owner rating vehicles added; existing presets unchanged)
 Loaded by: `Moving Load Generator.html` (preset list) and `apps/steel-bridge/index.html` (`engine/analysis.js` reads only
 `presets['HL93-Truck']` and `fatigue`; unaffected).
 ### Problem (review 2026-11-07, M1)

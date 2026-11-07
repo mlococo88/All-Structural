@@ -1595,7 +1595,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Check case:** 1 span 100 ft, HL-93, DF 1, LLF 1, PL on with 0.45 k/ft: Max +M 2821.6 → 3384.1 kip-ft (+0.45 × 100²/8).
 - **Saved data:** new fields `pedOn`, `pedW`, `pedDF` in the autosave / export (`fields`); old saves open with PL off.
 
-## 2026-11-07 — PR: claude/ml-legal-vehicles (M1: rating vehicles in the preset list; page wiring only here)
+## 2026-11-07 — PR: claude/ml-legal-vehicles (PR #1129: https://github.com/mlococo88/All-Structural/pull/1129) (M1: rating vehicles in the preset list; page wiring only here)
 - **Engine data:** `shared/vehicles.js` adds 13 rating vehicles (see `fixlog/shared-vehicles.md`, same date). They appear in the
   Preset list after the rail presets.
 - **Where (page):**
