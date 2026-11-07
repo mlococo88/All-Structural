@@ -1606,14 +1606,14 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
 - **Decision (pending engineer review):** only case `LL` is treated as live load. User cases (for example L1, L2) are taken as the user's own pattern and are not warned about.
 - **Saved data:** none changed. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/sm-pattern-ll (PATL: pattern live load in the envelope; review H2)   [CALCULATION CHANGE — envelope, new projects; old saves opt in] [MORE conservative]
+## 2026-11-07 — PR: claude/sm-pattern-ll (PR #1096: https://github.com/mlococo88/All-Structural/pull/1096) (PATL: pattern live load in the envelope; review H2)   [CALCULATION CHANGE — envelope, new projects; old saves opt in] [MORE conservative]
 - **Why:** review finding H2 (PATW, the interim warning, was merged first). The envelope applied LL to all of its spans at once. That under-reports the positive span moments, the end reactions and the minimum (uplift) reactions of a continuous beam.
 - **Governing provision:** 2018 IBC Sec. 1607.12 (floor live load on the spans that give the greatest effect at each location, dead load on all spans), ASCE 7-16 Sec. 4.3.3 (partial loading), and 2018 IBC Sec. 1605.1 (variable loads also set to zero). Cited and paraphrased only.
 - **What the envelope does now (option "Pattern live load (envelope)", `patLL`):**
   - **Which combinations:** every enabled combination with an LL factor ≠ 0.
   - **Which patterns:** S is the set of spans that carry an enabled LL load. Each combination is also solved with its LL loads kept only on each pattern's spans; dead and all other loads stay as entered.
     - S of up to 6 spans: every subset of S except S itself (S itself is the combination as entered), with the empty set (LL off) included.
-    - More than 6 spans: the standard set, each taken within S: LL off; alternate spans (odd, and even); and each adjacent pair (j, j+1) with every second span beyond it on both sides.
+    - More than 6 spans: the standard set, each taken within S: LL off; alternate spans (odd, and even); each adjacent pair (j, j+1) with every second span beyond it on both sides; and the complement of each such pair pattern (the pattern for the least reaction at support j).
   - **How patterns enter the envelope:** they join the point-wise envelope (V, M, δ, R max / min) as pseudo combinations named "<combination> · LL on spans …" or "… · LL off". Every place that names a governing combination therefore names the pattern.
   - **Per-combination rows:** `env.per` keeps one row per combination: the full-pattern curves (legend traces), and the largest |V|, |M| and |δ| over its patterns. The tables label it "(max of N LL patterns)", and "governed by" names the governing pattern.
   - **Single-combination view:** unchanged. A note says the envelope includes the patterns.
@@ -1654,6 +1654,7 @@ const uxCtl=SharedListInput.bindInput(g('iUX'),{label:'Custom x stations',events
 - **Independent check:** the reviewer's solver (`indep.mjs`), exhaustive over every LL subset and every default combination.
   - 2 × 15 ft: M 87.500 / −123.750, R 27.75 / 3.75, 82.5 / 16.875 (tool 87.5069 / −123.7504, R identical to 1e-4).
   - 4 spans 10 / 14 / 12 / 8, fixed far end, LL as a UDL, a point load and a partial trapezoid on separate spans plus an all-spans UDL: M 48.9629 / −61.0993; tool 48.9565 / −61.0995. The 1.3e-4 on M⁺ is station sampling inside the trapezoid; it predates this change. All five R max / min agree to 1e-4.
+- **8 equal 10 ft spans (standard set) vs exhaustive (256 subsets, independent solver):** M⁺ 41.1894 vs 41.2009 (3e-4, station sampling); M⁻ −51.0237 vs −51.0236; every R max and R min identical to 1e-4 (for example R_B 52.614 / 9.642, R_C 48.775 / 5.205). Without the complement patterns the interior R_min was missed (R_C,min 8.675 instead of 5.205), so they were added before merge.
 - **Speed:** 6 spans with LL everywhere: 315 extra solves, `solve()` about 0.26 s headless (debounced as before).
 - **How verified:**
   - Headless main vs branch on the 27 review cases (single and envelope) and 16 extra cases: every result identical except the new-project envelope cases with LL on more than one span (2 × 15, 3-span mixed, 4-span, 8-span), which move as above. Old saves (no `patLL`) are identical.

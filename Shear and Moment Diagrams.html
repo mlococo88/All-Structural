@@ -2079,14 +2079,14 @@ function smdPatWarn(){return spans.length>1&&loads.some(ld=>!ld.off&&ld.lc==='LL
 /* PATL (2026-11-07): the LL patterns of the envelope. S = the spans that carry an enabled LL load. Up to 6 such spans:
    every subset of S except S itself (S is the combination as entered), the empty set included (LL off: IBC 2018
    Sec. 1605.1). More than 6: the standard set (LL off; alternate spans, odd and even; each adjacent pair with every
-   second span beyond on both sides), each taken within S. Each pattern is a sorted array of span indexes. */
+   second span beyond on both sides, and its complement for the least reaction), each taken within S. Each pattern is a sorted array of span indexes. */
 function smdPatSets(){
   if(!patLL||!envOn||!smdPatWarn())return[];
   const n=spans.length,S=[...new Set(loads.filter(ld=>!ld.off&&ld.lc==='LL').flatMap(ld=>ld.allSpans?spans.map((_,i)=>i):[Math.min(ld.si||0,n-1)]))].sort((a,b)=>a-b);
   const out=new Map(),add=a=>{const b=S.filter(i=>a.includes(i));if(b.length<S.length)out.set(b.join('.'),b);};
   if(S.length<=6)for(let m=0;m<(1<<S.length)-1;m++)add(S.filter((_,t)=>(m>>t)&1));
   else{const all=spans.map((_,i)=>i);add([]);add(all.filter(i=>i%2===0));add(all.filter(i=>i%2===1));
-    for(let j=1;j<n;j++)add(all.filter(i=>i===j-1||i===j||(i<j-1&&(j-1-i)%2===0)||(i>j&&(i-j)%2===0)));}
+    for(let j=1;j<n;j++){const a=all.filter(i=>i===j-1||i===j||(i<j-1&&(j-1-i)%2===0)||(i>j&&(i-j)%2===0));add(a);add(all.filter(i=>!a.includes(i)));}}
   return[...out.values()];
 }
 function smdPatName(ps){return ps.length?'LL on span'+(ps.length>1?'s ':' ')+ps.map(i=>i+1).join(', '):'LL off';}
