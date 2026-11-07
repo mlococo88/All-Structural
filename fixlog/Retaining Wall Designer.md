@@ -4848,7 +4848,7 @@ Review Phase 8, PR 8e. This PR changes no computed value.
 - **How verified:** origin/main (after #957) vs branch, headless Chromium at 1920 px, three walls (ACI default; AASHTO default; ACI H_s 22 / q_a 2500 with 5 FAIL): `window._R`, Export JSON fields (`snapshotFields()`), every localStorage key and value, the Report tab text and the four-sheet DXF **identical**; 0 console errors. No sideways page scroll at 390, 768, 1280, 1400 and 1920 px. Screenshots before / after at 1280, 1400, 1920 and 390 px (deviceScaleFactor 2) next to Spread Footing at the same widths, and the FAIL wall at 1920 and 1400 px, looked at. Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/rw-partial-contact — Footing design in partial contact: the factored soil reaction is the triangular block of length 3x̄, not the whole-base interpolation (ACI without water and AASHTO Strength I / Ia) (RWPC; calculation change)
+## 2026-11-07 — PR: claude/rw-partial-contact — Footing design in partial contact: the factored soil reaction is the triangular block of length 3x̄, not the whole-base interpolation (ACI without water and AASHTO Strength I / Ia) (RWPC; calculation change) (PR #980: https://github.com/mlococo88/All-Structural/pull/980)
 
 Open item raised in #960 (RWUP). Engineer instruction relayed 2026-11-07 (no questions; conservative choice). Code sites are tagged `RWPC`.
 
