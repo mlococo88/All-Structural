@@ -1545,6 +1545,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Saved data:** none changed (no new field; the hint is not an input).
 - **How verified:** headless origin/main vs branch (see the shared fix log); `check-syntax`, `phone-layout --tool mlg`,
   `project-library --tool mlg`: pass; 0 console errors.
+
 ## 2026-11-07 — PR: claude/ml-review-low-items (review LOW items L1–L4, L6, L7: notes, a Service III option, an impact warning; no result change)
 - **Source:** code-compliance review of 2026-11-07 (LOW findings). L5 (open "Needs engineer" items) is unchanged and stays open.
 - **L2 — Service III γ_LL = 1.00 (AASHTO LRFD 10th Ed. Table 3.4.1-4):**
