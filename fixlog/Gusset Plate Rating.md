@@ -3194,7 +3194,7 @@ From the code-compliance review of 2026-11-07 (finding M5). Engineer asleep; no 
 - **How verified:** main vs branch on 20 review cases: every AASHTO case identical; only the two RIDOT cases moved (values above). UI: choosing RIDOT in the Owner select changes the note, the Code parameters show 0.75 (Default "0.75 (RIDOT; AASHTO 0.9)"), typing 0.90 there is kept as a change and restores 657.8 kip. Validation 17 of 17 (owner AASHTO). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks, whose only difference is the new field `P.owner = ''`. 0 console errors.
 - **Saved data:** new field `owner` (default `''`, AASHTO): older saves open as AASHTO, unchanged; no key change. An older copy of the tool ignores the field.
 
-## 2026-11-07 — PR: claude/gusset-m6-lfr-rivet — LFR rivets of unknown origin: φF<sub>v</sub> 30 → 23.8 ksi, consistent with LRFR (M6; §4, conservative, verify)
+## 2026-11-07 — PR: claude/gusset-m6-lfr-rivet (PR #1051: https://github.com/mlococo88/All-Structural/pull/1051) — LFR rivets of unknown origin: φF<sub>v</sub> 30 → 23.8 ksi, consistent with LRFR (M6; §4, conservative, verify)
 
 From the code-compliance review of 2026-11-07 (finding M6).
 
