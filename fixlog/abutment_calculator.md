@@ -16404,3 +16404,61 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.6.3.1 (pad shear force H = G·A·Δ/h
 - **How verified:** check-syntax; tests/engine/run.mjs handoffs; project-library abutment and edm (results identical to main on load, after an input change and on main's saves); abutment-pile-group-parity 14/14 identical; headless round trip abutment → module (×1, ×2, ×4, ×1) → abutment, plus a PAD without `Gmult`: forces as in the check case, Report model shows m_LT in §1.7 / §1.8 and the echo, 0 KaTeX errors, 0 console errors, no alerts.
 - **Saved data:** additive field `bearing.Gmult` (older projects get 1, the force as before). HANDOFF.md §4.13 updated.
 - **Other copies:** none. Sender side: `fixlog/elastomeric_design_module.md` (same PR).
+
+## 2026-11-07 — PR: claude/abut-zone1-fixed-manual (Z1S: Zone 1 / single-span longitudinal connection force at fixed bearings also with panel I-6 "Manual share"; new input `seismic.fixSeg`)   [calc change: design note] [MORE conservative, only when the new input is set to Yes]
+
+Source: follow-up to SubLoads PR #1112 (Z1F, `fixlog/Bridge Substructure Loading.md`), which fixed the same 3.10.9.2 segment rule in SubLoads.
+
+### Z1S. Connection force, longitudinal, fixed bearings with the manual restraint model
+- **Finding:** this tool already applies the 3.10.9.2 segment rule (ABM1, PR #1004) — but only when panel I-6 is "Defined fixed bearing". With "Manual share per load type" there was no way to say the bearings here are fixed, so the longitudinal connection force always used this abutment's own reactions. The SubLoads hand-off import (Linked calculator settings) switches a "Defined fixed bearing" project to "Manual" with 100 % shares, so after an import a fixed abutment silently dropped back to its own reaction (**unconservative**, e.g. 145.5 instead of 291.0 kip on the built-in project).
+- **Where:** `computeAll` C-9, anchor `const fixSeg=String(S.seismic.fixSeg||""), manM=`; new select `seismic.fixSeg` in panel I-6 (manual branch, anchor `Longitudinally fixed bearings at this abutment (seismic connection force)`); REVIEW warning (anchor `panel I-6 is 'Manual share'`); `defaultState` / `migrate` fill / Input ID `dropDef` (default "" left out); SubLoads import `plan()` linked items (anchor `keeps the 3.10.9.2 segment rule`); W_seg tooltip.
+- **Before:** `const fixL=S.dist&&S.dist.model==="fixed", WsegIn=…`
+- **After:** `const fixSeg=String(S.seismic.fixSeg||""), manM=S.dist&&S.dist.model==="manual";`
+  `const fixL=S.dist&&(S.dist.model==="fixed"||(manM&&fixSeg==="yes")), WsegIn=…` (the rest of the ABM1 formulas unchanged: W_seg = entered, or 2(ΣP_DC + W_dia + ΣP_DW)·L_tot/L; F_conn,L = c·(W_seg + γ_EQ·ΣP_LL); single span ≥ A_s·W_seg; F_conn = max(F_conn,L, F_conn,T)).
+  - New warning: `if(manM&&!fixSeg&&(zone===1||single)) warn("REVIEW — Seismic connection force: panel I-6 is 'Manual share', and whether the bearings at this abutment are fixed longitudinally is not stated; …")`.
+  - SubLoads import: when the project was "Defined fixed bearing" and the import switches it to "Manual", a linked item also sets `seismic.fixSeg = "yes"` (shown in the import preview), so the segment rule is kept.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.10.9.2 (Zone 1: 0.15 / 0.25 × the reaction from the tributary permanent and earthquake live load; at the line of fixed bearings of an uninterrupted segment the tributary permanent load for the longitudinal force is the total permanent load of the segment); Art. 3.10.9.1 (single span ≥ A_s × tributary permanent load). Checked against the 10th Ed. PDF, p. 3-77.
+- **Check case (built-in project, 6 girders, ΣP_DC = 510, ΣP_DW = 72 → 582 kip; L = 80 ft; Zone 1, A_s = 0.15 → c = 0.25; γ_EQ = 0; panel I-6 "Manual share"):**
+  - Before (any manual project): F_conn = 0.25·582 = **145.5 kip** (24.25 kip per beam).
+  - After, fixed here = Yes, single span: W_seg = 2·582·80/80 = 1164 kip; F_conn,L = 0.25·1164 = **291.0 kip** (48.5 per beam); F_1span,L = 0.15·1164 = 174.6; F_conn,T = 145.5.
+  - After, Yes, multispan (panel I-1 stem + backwall), L_tot = 240 ft: W_seg = 2·582·240/80 = 3492 kip; F_conn,L = 0.25·3492 = **873.0 kip**.
+  - After, Yes, A_s = 0.04 (c = 0.15), single span: F_conn,L = max(0.15·1164, 0.04·1164) = **174.6 kip** (before 87.3).
+  - Not stated / No: 145.5 kip as before (not stated: plus the REVIEW warning in Zone 1 or single span).
+- **Decision (pending engineer review):** the default for old saves and new projects is "Not stated" (result as before + REVIEW warning) rather than forcing a choice; the selector is shown and used only with "Manual share" (with "Floating" there are no fixed bearings, with "Defined fixed bearing" the rule already applies).
+- **How verified:** headless origin/main vs branch, 12 scenarios (default, single span, Defined fixed single / multispan L_tot 240, Manual not stated single / multispan, Manual Yes single / multispan / A_s 0.04, Manual No, Zone 2 multispan, Floating with fixSeg = yes): `LAST_R` identical except `R.seismic` in the three "Yes" cases and the Input ID `fingerprint` where fixSeg is not the default; new warning only in the two "not stated" Zone 1 cases. UI: the select appears with Manual, Yes drives F_conn 145.5 → 291.0 and clears the warning; all tabs render, 0 console errors. `check-syntax`, `project-library --tool abutment` (ALL PASS), `engine/run.mjs handoffs` (10/10), `abutment-pile-group-parity` (14/14 identical).
+- **Saved data:** additive field `seismic.fixSeg` (""); saved projects compute as before (§5). No hand-off key or format change.
+- **Other copies:** SubLoads' own Zone 1 force: `fixlog/Bridge Substructure Loading.md` (#1112, Z1F). The MassDOT backwall-stop check uses its own W_sup (unchanged).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index ead16a0..e48ecac 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -745 +745 @@ function defaultState(){
+-      khRAuto:true, Wseg:0, EQsupL:0, EQsupT:0, SD1:0,   // ABL6: SD1 = S_D1 for the zone consistency check (0 = not entered) [T.3.10.6-1]
++      khRAuto:true, Wseg:0, EQsupL:0, EQsupT:0, SD1:0, fixSeg:"",   // Z1S: fixSeg = longitudinally fixed bearings here with panel I-6 "Manual" ("" not stated, "yes", "no") [3.10.9.2]   // ABL6: SD1 = S_D1 for the zone consistency check (0 = not entered) [T.3.10.6-1]
+@@ -1720 +1720 @@ function migrate(){
+-    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt","Wseg","EQsupL","EQsupT","SD1"]);   // ABM9: EQsupL, EQsupT 0   // ABM1: Wseg 0   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
++    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt","Wseg","EQsupL","EQsupT","SD1","fixSeg"]);   // Z1S: fixSeg "" (not stated: as before, with a REVIEW warning)   // ABM9: EQsupL, EQsupT 0   // ABM1: Wseg 0   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
+@@ -2193,0 +2194,2 @@ function buildInputs(){
++      ${selRow("Longitudinally fixed bearings at this abutment (seismic connection force)","seismic.fixSeg",[["","Not stated — this abutment's reaction (review)"],["yes","Yes — total permanent load of the segment [3.10.9.2]"],["no","No — expansion / not fixed here"]],{rebuild:true})}
++      <div class="in-note">Seismic connection force [3.10.9.2]: at a line of fixed bearings the longitudinal force uses the total permanent load of the uninterrupted segment (W<sub>seg</sub>, panel I-11), not this abutment's reaction. Tab 3 §3.6.</div>
+@@ -2393 +2395 @@ function buildInputs(){
+-      ${inpRow("Segment permanent load for the longitudinal connection force (0 = auto)","seismic.Wseg","kip",{title:"Total permanent load (DC + DW) of the uninterrupted superstructure segment held longitudinally by fixed bearings at this abutment [3.10.9.2]. Used only with panel I-6 'Defined fixed bearing'. 0 = 2(ΣP_DC + ΣP_DW)·L_tot/L (whole bridge length; single span: both ends' reactions). Tab 3 §3.6."})}
++      ${inpRow("Segment permanent load for the longitudinal connection force (0 = auto)","seismic.Wseg","kip",{title:"Total permanent load (DC + DW) of the uninterrupted superstructure segment held longitudinally by fixed bearings at this abutment [3.10.9.2]. Used only with panel I-6 'Defined fixed bearing', or 'Manual' with fixed bearings here = Yes. 0 = 2(ΣP_DC + ΣP_DW)·L_tot/L (whole bridge length; single span: both ends' reactions). Tab 3 §3.6."})}
+@@ -4109 +4111,4 @@ function computeAll(){
+-  const fixL=S.dist&&S.dist.model==="fixed", WsegIn=Math.max(0,+S.seismic.Wseg||0), LtotC=(+S.own.Ltot>0)? +S.own.Ltot : +g.spanL;
++  // Z1S (2026-11-07): panel I-6 "Manual" with "fixed bearings here = Yes" takes the same segment rule; "not stated" keeps this abutment's
++  // reactions (as before) with a REVIEW warning in Zone 1 / single span (the manual model is also what a SubLoads hand-off sets).
++  const fixSeg=String(S.seismic.fixSeg||""), manM=S.dist&&S.dist.model==="manual";
++  const fixL=S.dist&&(S.dist.model==="fixed"||(manM&&fixSeg==="yes")), WsegIn=Math.max(0,+S.seismic.Wseg||0), LtotC=(+S.own.Ltot>0)? +S.own.Ltot : +g.spanL;
+@@ -4115,0 +4121 @@ function computeAll(){
++  if(manM&&!fixSeg&&(zone===1||single)) warn("REVIEW — Seismic connection force: panel I-6 is 'Manual share', and whether the bearings at this abutment are fixed longitudinally is not stated; this abutment's own reactions are used. If the bearings here are fixed, the longitudinal force uses the total permanent load of the uninterrupted segment [3.10.9.2] — set 'Longitudinally fixed bearings at this abutment' (panel I-6). Tab 3 §3.6.");
+@@ -5143 +5149 @@ function computeAll(){
+-      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg","EQsupL","EQsupT","SD1"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
++      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg","EQsupL","EQsupT","SD1","fixSeg"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
+@@ -10869,0 +10876 @@ document.addEventListener("DOMContentLoaded",init);
++        if(d.model==="fixed"&&String((S.seismic||{}).fixSeg||"")!=="yes") lk.push(one("seismic.fixSeg","yes","Longitudinally fixed bearings at this abutment — keeps the 3.10.9.2 segment rule for the seismic connection force"));   // Z1S
+```
