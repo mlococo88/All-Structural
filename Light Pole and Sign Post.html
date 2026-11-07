@@ -425,7 +425,10 @@
     .lpdMsg{grid-column:1/-1;font-size:8.5pt;padding:5px 8px;border:1px solid var(--line);border-left:4px solid var(--bad);background:#FEF2F2;color:#7F1D1D;border-radius:3px}
     .lpdMsg.none{border-left-color:var(--slate-400);background:var(--slate-50);color:var(--slate-600)}
   }
-  @media screen and (min-width:1500px){
+  /* LPLB (2026-11-07, Decision pending engineer review: "the summary cards should be on the left panel"): the left column starts at
+     1200 px (was 1500 px), as in Retaining Wall Designer and Spread Footing; from 1200 to 1499 px it is 240 px wide (rule after this
+     block), at 1500 px and wider 292 px as before */
+  @media screen and (min-width:1200px){
     .wrap{max-width:1792px}   /* 1500 + 292 (the column): at 1792 px and wider the input and output panels keep their old widths */
     body.lppDashWide #lppDashCol{display:block;flex:0 0 292px;width:292px;height:100%;overflow-y:auto;overflow-x:hidden;position:relative;
       padding:0 6px 24px;border-right:1px solid var(--line);background:var(--slate-50);overscroll-behavior:contain}
@@ -440,6 +443,12 @@
     body.lppDashWide.lppDashColl #lppDashCnt span{font-size:7.5pt;padding:1px 2px;white-space:normal;text-align:center;width:36px}
     body.lppDashWide #lppDashCol::-webkit-scrollbar{width:7px}
     body.lppDashWide #lppDashCol::-webkit-scrollbar-thumb{background:#c2ccd6;border-radius:4px}
+  }
+  @media screen and (min-width:1200px) and (max-width:1499.98px){   /* LPLB */
+    body.lppDashWide #lppDashCol{flex-basis:240px;width:240px}
+    body.lppDashWide .grid2 .col-in{flex-basis:calc((100% - 240px)*.33);max-width:calc((100% - 240px)*.33)}
+    body.lppDashWide.lppDashColl #lppDashCol{flex-basis:42px;width:42px}
+    body.lppDashWide.lppDashColl .grid2 .col-in{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
   }
 </style>
 </head>
@@ -2784,7 +2793,7 @@ manPart("p2","2. Input Reference",[
 manPart("p3","3. Output Reference",[
 {h:"3.1 Summary tab"},
 {p:"The Summary is the answer sheet. Every number on it is read from the same result objects the discipline tabs consume, so it cannot disagree with them."},
-{p:"<b>Check summary panel</b> (2026-11-03): a short list of every check, one line each \u2014 name, D/C (or the failing condition where the ratio is not what fails) and status, with a count of NG / REVIEW items. NG and REVIEW lines open to show the result and the reference; \u25b8 opens any line, and a click on a line opens the card where that check is worked. On screens 1500 px and wider it is a column on the left (\u00ab shrinks it to a strip); on narrower screens it sits above the output tabs (Hide / Show checks). It lists the same checks as this tab (IBC mode) or the LRFDLTS summary (LRFDLTS mode), shows the input errors instead when there are any, and is not printed."},
+{p:"<b>Check summary panel</b> (2026-11-03): a short list of every check, one line each \u2014 name, D/C (or the failing condition where the ratio is not what fails) and status, with a count of NG / REVIEW items. NG and REVIEW lines open to show the result and the reference; \u25b8 opens any line, and a click on a line opens the card where that check is worked. On screens 1200 px and wider it is a column on the left (\u00ab shrinks it to a strip); on narrower screens it sits above the output tabs (Hide / Show checks). It lists the same checks as this tab (IBC mode) or the LRFDLTS summary (LRFDLTS mode), shows the input errors instead when there are any, and is not printed."},
 
 {h3:"3.1.1 Verdict banner and strip"},
 {p:"The banner states either <b>ALL CHECKS PASS</b>, naming the governing utilisation, or <b>N CHECKS FAIL</b>, naming each failure. Below it, one chip per check gives a green tick or a red cross. In two-post sign mode each chip is labelled P1 or P2, so a failure is attributed to the post that has it."},
@@ -3188,6 +3197,24 @@ manPart("pA","A. Notation &amp; References",[
 // ================= DESIGN SUMMARY (answer sheet) =================
 // Reads ONLY the same result objects the discipline tabs consume, so it can never disagree
 // with them. Each check contributes {name, code, demand, cap, unit, ratio, ok}.
+// LPH4 / LPM7 (2026-11-07): the drilled-shaft reinforcement rows of the check list, one source for the IBC Summary
+// (collectChecks) and the LRFDLTS summary, dashboard and report (ltsShaftChecks). reo = designRebar(); Mu in lb·ft, Vu in lb.
+// The manual cage (check mode) adds the §25.7.2.2 tie size and the shear / A_v,min tie spacing, which were on the Shaft tab only.
+function lppShaftRows(push, reo, Mu, Vu){
+  const T=reo.tie, L=reo.long;
+  push('Shaft flexure (P–M)','ACI 318-19 §22.4',Mu,L.phiMn,'lb·ft');
+  push('Shaft shear','ACI 318-19 §22.5',Vu,T.phiVc,'lb');
+  push('Longitudinal steel, min','ACI 318-19 §10.6.1.1',reo.AsMin,L.As,'in²',L.As>=reo.AsMin,reo.AsMin/Math.max(L.As,1e-9));
+  push('Longitudinal steel, max','ACI 318-19 §10.6.1.1',L.As,reo.AsMax,'in²');
+  push('Bar clear spacing','ACI 318-19 §25.2.3',Math.max(1.5,1.5*L.bar.d),L.sClear,'in',L.sClear>=Math.max(1.5,1.5*L.bar.d),Math.max(1.5,1.5*L.bar.d)/Math.max(L.sClear,1e-9));
+  push('Tie spacing','ACI 318-19 §25.7.2.1',T.s,T.sLimit,'in');
+  if(T.checks){   // LPM7: manual cage only (the auto design sizes these itself)
+    const r1=push('Tie size','ACI 318-19 §25.7.2.2',T.tieAuto.d,T.bar.d,'in',T.checks.sizeMin,T.tieAuto.d/Math.max(T.bar.d,1e-9)); r1.dec=3;
+    const sReq=Math.min(T.sShear,T.sAvMin), lim=T.mode!=='min'&&isFinite(sReq);
+    const r2=push('Tie spacing, shear','ACI 318-19 §22.5, §10.6.2',T.s,lim?sReq:NaN,'in',T.checks.shear,lim?T.s/sReq:0); r2.dec=1;
+    if(!lim) r2.capTxt=T.mode==='min'?'not required (V_u ≤ ½φV_c)':'not limiting (V_s = 0)';
+  }
+}
 function collectChecks(ctx){
   const C=[];
   const {found,pstress,inp,label}=ctx;
@@ -3195,13 +3222,9 @@ function collectChecks(ctx){
   const push=(name,code,demand,cap,unit,ok,ratio)=>{
     const r=(ratio!==undefined)?ratio:(cap>0?demand/cap:0);
     C.push({name,code,demand,cap,unit,ratio:r,ok:(ok!==undefined?ok:r<=1.0),label});
+    return C[C.length-1];
   };
-  push('Shaft flexure (P–M)','ACI 318-19 §22.4',found.Mu,L.phiMn,'lb·ft');
-  push('Shaft shear','ACI 318-19 §22.5',found.Vu,T.phiVc,'lb');
-  push('Longitudinal steel, min','ACI 318-19 §10.6.1.1',reo.AsMin,L.As,'in²',L.As>=reo.AsMin,reo.AsMin/Math.max(L.As,1e-9));
-  push('Longitudinal steel, max','ACI 318-19 §10.6.1.1',L.As,reo.AsMax,'in²');
-  push('Bar clear spacing','ACI 318-19 §25.2.3',Math.max(1.5,1.5*L.bar.d),L.sClear,'in',L.sClear>=Math.max(1.5,1.5*L.bar.d),Math.max(1.5,1.5*L.bar.d)/Math.max(L.sClear,1e-9));
-  push('Tie spacing','ACI 318-19 §25.7.2.1',T.s,T.sLimit,'in');
+  lppShaftRows(push, reo, found.Mu, found.Vu);
   push('Soil bearing','IBC Table 1806.2',found.bearing.q,found.bearing.qAllow,'ksf');
   if(b){
     // anchor rod checks (ACI 318-19 Ch.17) are done in the Anchorage app (retired from this tool 2026-11-01);
@@ -3276,7 +3299,7 @@ function summaryHTML(ctx){
     const pct=Math.max(0,Math.min(150,100*c.ratio));
     H+=`<tr><td style="text-align:left">${c.name}${c.label?' · '+c.label:''}</td><td style="text-align:left"><span class="eq-ref">${c.code}</span></td>
       <td>${fmt(c.demand,c.dec!==undefined?c.dec:(c.unit==='in²'||c.unit==='—'||c.unit==='ksf'?2:0))} ${c.unit}</td>
-      <td>${fmt(c.cap,c.dec!==undefined?c.dec:(c.unit==='in²'||c.unit==='—'||c.unit==='ksf'?2:0))} ${c.unit}</td>
+      <td>${c.capTxt!==undefined?c.capTxt:fmt(c.cap,c.dec!==undefined?c.dec:(c.unit==='in²'||c.unit==='—'||c.unit==='ksf'?2:0))+' '+c.unit}</td>
       <td>${fmt(100*c.ratio,0)}%</td>
       <td style="width:110px"><span class="ratiobar"><i class="${c.ok?(pct>85?'warn':'ok'):'bad'}" style="width:${Math.min(100,pct)}%"></i></span></td>
       <td>${c.ok?'<span class="pill ok">OK</span>':'<span class="pill bad">NG</span>'}</td><td style="text-align:left">${lppLink(LPP_CHK2K[c.name],si)}</td></tr>`;
@@ -4769,6 +4792,25 @@ function lppInputErrors(inp){
     if(inp.bpB>0 && inp.boltBC>0 && inp.boltQty>=1){ const R=inp.boltBC/2, n=Math.round(inp.boltQty);
       const ext=Math.max(...Array.from({length:n},(_,j)=>{ const a=(inp.boltTheta+j*360/n)*RAD; return Math.max(Math.abs(R*Math.cos(a)),Math.abs(R*Math.sin(a))); }));
       if(ext+(inp.boltDia||0)/2>=inp.bpB/2) e.push('Square base plate: a rod hole reaches the plate edge (rod at '+fmt(ext,2)+' in from the centre, half side '+fmt(inp.bpB/2,2)+' in) — increase B or reduce the bolt circle.'); } }
+  // LPM6 (2026-11-07, review M6): base plate / anchor geometry. Before: only the square plate above was checked, so a bolt circle inside
+  // the pole gave m ≤ 0 and t_req = 0 "OK", and rods outside a round plate or outside the shaft passed.
+  if(inp.boltBC>0 && inp.boltQty>=1){
+    const R=inp.boltBC/2, dr=inp.boltDia||0, n=Math.round(inp.boltQty);
+    // (1) every rod clear of the pole wall: R − d/2 > the pole's outline at the rod's azimuth (round: D/2; square / rect.: the
+    //     rectangle with the depth along x and the width B along y, as the drawings and the plate model)
+    const D=inp.poleDiaBase, hx=(inp.poleShape==='rect'?(inp.poleDepthBase||inp.poleDepthTop||D):D)/2, hy=D/2;
+    if(D>0){ let worst=null;
+      for(let j=0;j<n;j++){ const a=(inp.boltTheta+j*360/n)*RAD, c=Math.abs(Math.cos(a)), s=Math.abs(Math.sin(a));
+        const rb=inp.poleShape==='round'?D/2:Math.min(c>1e-12?hx/c:Infinity, s>1e-12?hy/s:Infinity);
+        if(R-dr/2<=rb+1e-9 && (!worst||rb>worst)) worst=rb; }
+      if(worst!==null) e.push('Bolt circle BC '+fmt(inp.boltBC,2)+' in: a rod is not clear of the '+lbl.toLowerCase()+' (rod inner edge at '+fmt(R-dr/2,2)+' in from the centre, '+lbl.toLowerCase()+' face at '+fmt(worst,2)+' in). The rods must be outside the '+lbl.toLowerCase()+' (the plate cantilever m = (BC − D)/2 would be zero or negative) — increase BC.'); }
+    // (2) round plate: every rod inside the plate
+    if(inp.bpShape!=='square' && inp.bpDia>0 && R+dr/2>=inp.bpDia/2)
+      e.push('Round base plate Ø'+fmt(inp.bpDia,2)+' in: the rods (BC '+fmt(inp.boltBC,2)+' in + rod '+fmt(dr,3)+' in = '+fmt(inp.boltBC+dr,2)+' in) are not inside the plate — increase the plate diameter or reduce the bolt circle.');
+    // (3) rods inside the shaft reinforcing cage: BC + d ≤ b − 2·cover
+    if(inp.b>0 && inp.cover>=0){ const cage=inp.b*12-2*inp.cover;
+      if(inp.boltBC+dr>cage) e.push('Bolt circle BC '+fmt(inp.boltBC,2)+' in + rod '+fmt(dr,3)+' in = '+fmt(inp.boltBC+dr,2)+' in is outside the shaft cage (b − 2·cover = '+fmt(inp.b*12,1)+' − 2·'+fmt(inp.cover,2)+' = '+fmt(cage,2)+' in): the rods must be within the concrete core — increase the shaft size or reduce the bolt circle.'); }
+  }
   return e;
 }
 // LTS-L2 (2026-11-03): the inputs the LRFDLTS run reads that the shared check above does not cover: V, V_svc, the fillet weld (w,
@@ -5479,7 +5521,7 @@ function rebarWorkedHTML(reo, inp, Mu, Pu, Vu){
       ${T.checks?`
       <tr><td style="text-align:left">Tie size</td><td style="text-align:left">≥ ${T.tieAuto.n} for ${L.bar.n} longitudinal  <span class="eq-ref">[§25.7.2.2]</span></td><td>${T.bar.n}</td><td>${T.tieAuto.n}</td><td>${pill(T.checks.sizeMin)}</td></tr>
       <tr><td style="text-align:left">Tie spacing limit</td><td style="text-align:left">s ≤ min(16d_b, 48d_tie, b)  <span class="eq-ref">[§25.7.2.1]</span></td><td>${fmt(T.s,1)} in</td><td>${fmt(T.sLimit,1)} in</td><td>${pill(T.checks.limit)}</td></tr>
-      <tr><td style="text-align:left">Tie spacing, shear</td><td style="text-align:left">${T.mode==='min'?'V_u ≤ ½φV_c — min ties govern':'s ≤ A_v f_y d / V_s'}  <span class="eq-ref">[§22.5 / §10.7.6]</span></td><td>${fmt(T.s,1)} in</td><td>${T.mode==='min'?'—':fmt(T.sShear,1)+' in'}</td><td>${pill(T.checks.shear)}</td></tr>`:''}
+      <tr><td style="text-align:left">Tie spacing, shear</td><td style="text-align:left">${T.mode==='min'?'V_u ≤ ½φV_c — min ties govern':'s ≤ min(A_v f_y d / V_s, A_v / A_v,min per inch)'}  <span class="eq-ref">[§22.5 / §10.7.6]</span></td><td>${fmt(T.s,1)} in</td><td>${T.mode==='min'?'—':(isFinite(Math.min(T.sShear,T.sAvMin))?fmt(Math.min(T.sShear,T.sAvMin),1)+' in':'not limiting (V<sub>s</sub> = 0)')}</td><td>${pill(T.checks.shear)}</td></tr>`:''}
     </table>`;
     H+=`<p class="eq-why">The full derivation below substantiates each row — same strain-compatibility, spacing, and shear derivations as design mode, evaluated for the specified bars.</p>`;
   }
@@ -6054,7 +6096,7 @@ const lppEsc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').
 const LPP_TABNAME={geometry:'Geometry',summary:'Summary',loading:'Loading',post:'Post',anchors:'Anchorage',shaft:'Shaft',drawings:'Drawings',report:'Report'};
 // collectChecks name -> derivation key
 const LPP_CHK2K={'Shaft flexure (P–M)':'flex','Shaft shear':'shear','Longitudinal steel, min':'asmin','Longitudinal steel, max':'asmax',
-  'Bar clear spacing':'spacing','Tie spacing':'ties','Soil bearing':'bearing','Anchor tension':'anchors','Anchor shear':'anchors',
+  'Bar clear spacing':'spacing','Tie spacing':'ties','Tie size':'ties','Tie spacing, shear':'ties','Soil bearing':'bearing','Anchor tension':'anchors','Anchor shear':'anchors',
   'Anchor T–V interaction':'anchors','Anchor breakout (group)':'anchors','Base plate thickness':'anchors','Anchor reinforcement, tension':'anchors','Anchor reinforcement, development':'anchors','Anchor reinforcement within 0.5h_ef':'anchors','Anchor min. spacing':'anchors','Anchor min. edge distance':'anchors','Shaft torsion ≤ φT_th (neglect)':'torsion','Post combined stress':'post','Round HSS D/t < 0.45E/Fy':'dt'};
 // derivation key -> [tab, element id (sign mode: + '_sp' + post), card]
 const LPP_K2TGT={flex:['shaft','rebarExample','Shaft structural check'],shear:['shaft','rebarExample','Shaft structural check'],
@@ -6094,7 +6136,7 @@ document.addEventListener('click',ev=>{ const a=ev.target.closest&&ev.target.clo
    On screens >= 1500 px the box is moved into the left column #lppDashCol; below that it sits on top of the output panel.
    Collapse state: per-browser UI key lpp_dashCollapsed_v1 ('1' = collapsed, '0' or absent = open); not in the project, the
    autosave or the export. The Summary tab, the Report and printing are unchanged. */
-const LPDC={key:'lpp_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,open:new Map(),coll:false};
+const LPDC={key:'lpp_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1200px)')/* LPLB: was 1500px */:null,open:new Map(),coll:false};
 try{LPDC.coll=localStorage.getItem(LPDC.key)==='1';}catch(e){}
 const LPDC_ST={pass:'OK',fail:'NG',warn:'REVIEW',na:'INFO'};
 function lppDashDC(r){ return (r==null||isNaN(r))?'':'D/C '+(isFinite(r)?fmt(r,2):'∞'); }
@@ -6134,6 +6176,8 @@ function lppDashItems(){
     if(X.fd) out.push(Object.assign(X.fd.gov?{name:'Shaft embedment (Broms)',dc:null,st:'na',none:'L = '+fmt(X.fd.gov.br.L,2)+' ft',cond:[],
         text:`L = ${fmt(X.fd.gov.br.L,2)} ft required; shaft moment ${fmt(X.fd.gm.br.Mu,2)} kip-ft`,ref:'Art. 13.6.1.1, C13.6.1.1'}
       :{name:'Drilled shaft',dc:null,st:'warn',cond:['select the Broms soil model'],text:'select the Broms soil model',ref:'Art. 13.6.1.1'},card('shaft','ltsFndCard',post+' foundation — drilled shaft')));
+    if(X.fd) ltsShaftChecks(X.fd).forEach(c=>out.push(Object.assign({name:c.name,dc:c.ratio,st:c.ok?'pass':'fail',cond:[],   // LPH4
+      text:lppChkVal(c)+` (utilization ${fmt(100*c.ratio,0)}%)`,ref:c.code+' (shaft reinforcement per ACI 318-19, Q-C4)'},card('shaft','ltsFndCard',post+' foundation — drilled shaft'))));
     anch();
     if(X.fat) out.push(Object.assign({name:'Fatigue',dc:null,st:X.fat.required?'warn':'na',none:'not required',cond:X.fat.required?['outside this tool']:[],
       text:X.fat.required?'REQUIRED — outside this tool (high-mast tower)':'not required',ref:'Arts. 11.4, 11.7.2'},card('post','ltsDeflCard',post+' — deflection and fatigue')));
@@ -6150,10 +6194,10 @@ function lppDashItems(){
       if(!c.ok&&!(c.ratio>1)){
         if(isNaN(c.ratio)) cond.push('not computed');
         else if(c.name==='Round HSS D/t < 0.45E/Fy') cond.push('D/t ≥ 0.45E/F_y');
-        else cond.push(`${fmt(c.demand,d)} vs ${fmt(c.cap,d)} ${c.unit}`);
+        else cond.push(`${fmt(c.demand,d)} vs ${c.capTxt!==undefined?c.capTxt:fmt(c.cap,d)+' '+c.unit}`);
       }
       out.push({name:c.name+(c.label?' · '+c.label:''),dc:c.ratio,st:c.ok?'pass':'fail',cond,
-        text:`${fmt(c.demand,d)} ${c.unit} vs ${fmt(c.cap,d)} ${c.unit} (utilization ${fmt(100*c.ratio,0)}%)`,ref:c.code,go:()=>lppGoto(k,si),where:lppTgt(k,si)});
+        text:`${fmt(c.demand,d)} ${c.unit} vs ${c.capTxt!==undefined?c.capTxt:fmt(c.cap,d)+' '+c.unit} (utilization ${fmt(100*c.ratio,0)}%)`,ref:c.code,go:()=>lppGoto(k,si),where:lppTgt(k,si)});
     });
     if(s.pstress&&s.pstress.lim&&s.pstress.lim.e7Slender)
       out.push({name:'Slender wall (§E7 not applied)'+(s.label?' · '+s.label:''),dc:null,st:'warn',cond:['verify'],
@@ -6989,7 +7033,7 @@ function lprModel(){
         {type:'note',warn:!!fails,text:fails?fails+' check(s) fail: '+C.filter(c=>!c.ok).map(c=>c.name).join(', ')+'.':'All checks pass.'},
         {type:'table',head:['Limit state','Code','Demand','Capacity','D/C','Status'],rows:C.slice().sort((a,b)=>b.ratio-a.ratio).map(c=>{
           const d=c.dec!==undefined?c.dec:(c.unit==='in²'||c.unit==='—'||c.unit==='ksf'?2:0);
-          return {cells:[c.name,c.code,{t:lprN(c.demand,d)+' '+c.unit,n:true},{t:lprN(c.cap,d)+' '+c.unit,n:true},lprDC(c.ratio),{t:c.ok?'OK':'NG',cls:c.ok?'ok':'ng'}]};})}]});
+          return {cells:[c.name,c.code,{t:lprN(c.demand,d)+' '+c.unit,n:true},c.capTxt!==undefined?c.capTxt:{t:lprN(c.cap,d)+' '+c.unit,n:true},lprDC(c.ratio),{t:c.ok?'OK':'NG',cls:c.ok?'ok':'ng'}]};})}]});
     });
     { const sm=document.createElement('div'); sm.innerHTML=summaryHTML(ctx);   // LPRX: the Summary tab's content (same function, same context), as the Calc sheet printed it
       subs.unshift(xsub('Verdict, design and governing demands (Summary tab)',sm)); }
@@ -7879,6 +7923,21 @@ function ltsFoundation(inp,g,ba,mc,L){
   if(sh) out.sh=sh;
   return out;
 }
+// LPH4 (2026-11-07, review H4): the drilled-shaft checks of the LRFDLTS mode as a check list (as collectChecks in the IBC mode):
+// ACI 318-19 P–M (M_u of the governing pair, as on the Shaft tab), shear, min/max steel, clear spacing, ties (+ the manual-cage
+// tie size and shear spacing, LPM7) and the torsion threshold. Shown in the LTS summary, the check panel and the report.
+function ltsShaftChecks(fd){
+  if(!fd||!fd.gov||!fd.reo) return [];
+  const C=[], push=(name,code,demand,cap,unit,ok,ratio)=>{
+    const r=(ratio!==undefined)?ratio:(cap>0?demand/cap:0);
+    C.push({name,code,demand,cap,unit,ratio:r,ok:(ok!==undefined?ok:r<=1.0)}); return C[C.length-1]; };
+  const gd=fd.reo.long.govDem||{Mu:fd.gm.br.Mu*1000};
+  lppShaftRows(push, fd.reo, gd.Mu, fd.Vu);
+  if(fd.Tu>0) push('Shaft torsion ≤ φT_th (neglect)','ACI 318-19 §22.7.1.1',fd.Tu,fd.tor.phiTth,'lb·ft');
+  return C;
+}
+const lppChkVal=(c)=>{ const d=c.dec!==undefined?c.dec:(c.unit==='in²'||c.unit==='—'||c.unit==='ksf'?2:0);
+  return `${fmt(c.demand,d)} ${c.unit} / ${c.capTxt!==undefined?c.capTxt:fmt(c.cap,d)+' '+c.unit}`; };
 // LTS-3: the check sections (z = 0 to H in 20 steps) with their properties (the tool's hssProps) and the self-weight above
 function ltsSections(inp){
   const H=inp.H, sh=inp.poleShape||'round', taper=!!inp.poleTaper, N=20, den=inp.poleDen;
@@ -8054,6 +8113,7 @@ function ltsCalc(){
     +`${lppLtsLast&&lppLtsLast.bp?`<tr><td>Base plate (bending line, engineering method)</td><td><b>${lppLtsLast.bp.ok?'OK':'NOT OK'}</b>, t<sub>req</sub> ${fmt(lppLtsLast.bp.tReq,3)} / t ${fmt(lppLtsLast.bp.tProv,3)} in</td><td>Art. 5.6.3 (p. 5-7): thickness to be considered; no LRFDLTS method</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.wd?`<tr><td>Base weld</td><td>${lppLtsLast.wd.type==='cjp'?'CJP: base metal governs':`<b>${lppLtsLast.wd.ok?'OK':'NOT OK'}</b>, ratio ${fmt(lppLtsLast.wd.ratio,3)}`}</td><td>Art. 5.14 → AWS D1.1 / AISC 360-16 §J2</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.fd?(lppLtsLast.fd.gov?`<tr><td>Drilled shaft embedment (Broms)</td><td>L = <b>${fmt(lppLtsLast.fd.gov.br.L,2)} ft</b> required; shaft moment ${fmt(lppLtsLast.fd.gm.br.Mu,2)} kip-ft</td><td>Art. 13.6.1.1, C13.6.1.1 (pp. 13-3, 13-4)</td></tr>`:`<tr><td>Drilled shaft</td><td><b>select the Broms soil model</b></td><td>Art. 13.6.1.1</td></tr>`):''}`
+    +`${lppLtsLast&&lppLtsLast.fd?ltsShaftChecks(lppLtsLast.fd).map(c=>`<tr><td>${lppEsc(c.name)}</td><td><b>${c.ok?'OK':'NOT OK'}</b>, ${lppChkVal(c)} (${fmt(c.ratio,3)})</td><td>${lppEsc(c.code)}${c.name.startsWith('Shaft torsion')&&!c.ok?'; torsion reinforcement required (not designed here)':''}</td></tr>`).join(''):''}`   // LPH4
     +`${lppLtsLast&&typeof lppAnchorChipHTML==='function'&&LPP_ANCH?`<tr><td>Anchors — Anchorage app</td><td>${LPP_ANCH.groups.map(gg=>`${lppEsc(gg.label)}: ${lppAnchorChipHTML(gg.id)}`).join('<br>')}</td><td>LRFDLTS combinations sent from the Anchorage tab (HANDOFF.md §4.11)</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.fat?`<tr><td>Fatigue</td><td>${lppLtsLast.fat.required?'<b>REQUIRED — outside this tool (high-mast tower)</b>':'not required'}</td><td>Arts. 11.4, 11.7.2 (pp. 11-3, 11-10, 2017)</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.brk?`<tr><td>Breakaway</td><td>${lppLtsLast.brk.needed?'required — see the checklist':'not required (outside the clear zone)'}</td><td>Art. 2.5.2; Section 12</td></tr>`:''}`
@@ -8135,7 +8195,11 @@ function ltsReportModel(){
     if(X.wd.type!=='cjp') flags.push('Base weld per AWS D1.1 / AISC 360-16 §J2.4, φ = 0.75 (LRFDLTS Art. 5.14 gives no weld strength method; accepted by the engineer, 2026-11-02).'); }
   // 6. Foundation
   if(X.fd){ const it=[{type:'note',text:'Broms (Art. 13.6.1.1, C13.6.1.1) with the factored groundline actions (M × B); shaft reinforcement per ACI 318-19 (engineer, Q-C4); LRFDLTS Art. 13.6.2 refers to the AASHTO LRFD BDS — not applied.'}];
-    if(X.fd.gov){ it.push(steps('lts.f',X.fdSteps)); it.push({type:'kv',rows:[['Required embedment L',N(X.fd.gov.br.L,2)+' ft'],['Largest shaft moment',N(X.fd.gm.br.Mu,2)+' kip-ft'],['Shaft reinforcement (ACI 318-19)',X.fd.reo?'('+X.fd.reo.long.n+') '+X.fd.reo.long.bar.n+'; ties '+X.fd.reo.tie.bar.n+' @ '+N(X.fd.reo.tie.s,0)+' in':'—'],['Torsion',`T_u = ${N(X.fd.Tu,0)} lb·ft; φT_th = ${N(X.fd.tor.phiTth,0)} lb·ft (ACI 318-19 §22.7.1.1); soil torsion not checked (Art. 13.6 gives no method; open item N2)`]]}); }
+    if(X.fd.gov){ it.push(steps('lts.f',X.fdSteps)); it.push({type:'kv',rows:[['Required embedment L',N(X.fd.gov.br.L,2)+' ft'],['Largest shaft moment',N(X.fd.gm.br.Mu,2)+' kip-ft'],['Shaft reinforcement (ACI 318-19)',X.fd.reo?'('+X.fd.reo.long.n+') '+X.fd.reo.long.bar.n+'; ties '+X.fd.reo.tie.bar.n+' @ '+N(X.fd.reo.tie.s,0)+' in':'—'],['Torsion',`T_u = ${N(X.fd.Tu,0)} lb·ft; φT_th = ${N(X.fd.tor.phiTth,0)} lb·ft (ACI 318-19 §22.7.1.1); soil torsion not checked (Art. 13.6 gives no method; open item N2)`]]});
+      { const SC=ltsShaftChecks(X.fd);   // LPH4: the shaft checks as on the Summary tab
+        if(SC.length){ const nf=SC.filter(c=>!c.ok);
+          if(nf.length) flags.push('Drilled shaft (ACI 318-19): '+nf.map(c=>c.name).join(', ')+' NOT OK.');
+          it.push(tbl(['Check','Code','Demand / capacity','Ratio','Result'],SC.map(c=>[c.name,c.code,lppChkVal(c),N(c.ratio,3),c.ok?'OK':'NOT OK']))); } } }
     else it.push({type:'note',text:'No Broms soil model selected: the embedment is not computed.'});
     secs.push({title:'Foundation (Section 13)'+post,subs:[{title:'Drilled shaft',items:it,key:'lts:fnd'}]}); }
   // 7. Anchorage, breakaway, assumptions
