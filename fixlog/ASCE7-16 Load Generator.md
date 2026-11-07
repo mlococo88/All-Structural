@@ -1365,7 +1365,7 @@ Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 a
 - **Saved data:** one new optional field `irreg` in the project / autosave JSON (`asce7bldg.*`); older saves open with `none`. No key or existing field changed.
 - **Correction to the A7M1/M2 entry above:** its check case says the Table 12.2-1 error "blocks the calculation". It shows as a blocking check ("Blocked" on the dashboard); like every `xc("err",…)` check it does not stop the other results. Nothing was changed for this.
 
-## 2026-11-07 — PR: claude/asce7-m5-snow-in-w — A7M5: 20 % of the design snow in the effective seismic weight where p_f > 30 psf (review M5; §4)
+## 2026-11-07 — PR: claude/asce7-m5-snow-in-w — A7M5: 20 % of the design snow in the effective seismic weight where p_f > 30 psf (review M5; §4; PR #1076: https://github.com/mlococo88/All-Structural/pull/1076)
 
 ### A7M5. Snow in W, Sec. 12.7.2   [calc change] [more conservative]
 - **Where:** `solve()` seismic block, anchor `sq.Wt=S.seisW;` (now preceded by the `A7M5` block) and the level list just after `const lv=S.levels.filter(l=>l.w>0)`; seismic tab panel `o-se5` (new first step); Excel seismic section, the `inp("Wt",…)` row; new input `S.snowInW` (DEF, Seismic input tab, "Weight and Period" panel).
