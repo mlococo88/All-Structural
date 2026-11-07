@@ -59,7 +59,7 @@ Sizes are on-disk bytes rounded. "Blob" means embedded base64 images, inlined li
 | `ACI Rebar Development Length.html` (**retired 2026-11-05**, RBRT: now a redirect page to the Development & Splice tab of `Concrete Beam Capacity.html#dev`, the same app; the findings below refer to the old file) | **Rebar development and splice calculator** (tension, hook, compression, lap). | **ACI 318-19**; AASHTO LRFD **9th Ed.** §5.10.8 | KaTeX 0.16.9 + auto-render, Plotly 2.27.0 | **`rebar_aci_autosave_v1`, `rebar_aci_projects_v1`** (shared with the suite's Dev tab) | 712 KB (625 KB base64) |
 | `Concrete Beam ASD.html` (**retired 2026-11-01**, #562: now a redirect page to the ASD tab of `Concrete Beam Capacity.html#asd`, with a reader for its old .json files; the findings below refer to the old file) | **"Universal ASD Bridge Rater":** working-stress RC beam capacity and Inv/Op rating factor. | "AASHTO Std. Specs / MassDOT", 8.15. **No edition.** | **Tailwind Play CDN (unpinned)**, **@phosphor-icons/web (unpinned)**, KaTeX 0.16.9 | None (file save/load only) | 41 KB |
 | `Steel Beam Design - AISC 15th.html` | **Steel beam designer:** multi-span direct-stiffness analysis plus AISC 360-16 LRFD checks, composite, torsion, batch. | **AISC 360-16**, Manual 15th, Shapes DB v16.0, Design Examples v15.0; DG9; ASCE 7 (edition "verify") | KaTeX 0.16.11, plotly-basic 2.35.2; ExcelJS 4.4.0 on demand | `sbd_autosave_v1`, `sbd_projects_v1` | 766 KB (shape DB inline) |
-| `Timber Beam Check.html` | **Sawn-lumber simple-span beam check** (bending, shear, bearing, deflection). | **NDS 2018**, ASD only | **Tailwind Play CDN (unpinned)**, **@babel/standalone (unpinned)**, **lucide@latest**, React 18.2 + lucide-react 0.292 via **esm.sh**, Google Fonts | None (file save/load only) | 58 KB |
+| `Timber Beam Check.html` (**rebuilt 2026-10-10**, fix log R1–R5; the row as audited on 2026-10-03 described the old React tool: "sawn-lumber simple span, ASD only", Tailwind / Babel / lucide / esm.sh CDNs, file save/load only, 58 KB) | **Timber beam check:** sawn lumber (Tables 4A, 4B, 4D), glulam (Table 5A) and SCL; single span, continuous spans and cantilevers; bending with C<sub>L</sub> (glulam E<sub>y,min</sub>) and C<sub>V</sub>, shear and end notches (tension or compression face), bearing (beam, supporting member, under point loads), deflection with K<sub>cr</sub> by service condition; Validation tab with live benchmarks; Report tab. | **NDS 2018** + Supplement 2018, **ASD and LRFD** (App. N); ASCE 7-16 2.4.1 / 2.3.1; IBC 2018 Table 1604.3 | KaTeX 0.16.11, plotly-basic 2.35.2 (pinned); `shared/` steps, report, projects, projects-ui, github-sync | `tbc_autosave_v1`, `tbc_projects_v1`, `tbc_inputTab_v1`; reads/writes `bridgeSuite.v1.projectMeta`; JSON file save/open (all formats migrated) | 347 KB |
 | `Shear and Moment Diagrams.html` | **"Multi-Span Beam Pro":** continuous-beam V/M/deflection diagrams with load cases, combinations, envelope. | No design code; "ASCE 7" combination presets (no edition) | KaTeX 0.16.9, plotly-basic 2.27.0 | **`beamProSaves`, `beamProAuto` (generic names)** | 126 KB |
 | `BasePlateAnchorDesigner.html` (since 2026-11-01: bolt circles, circular plates and round piers with the pier cage, torsion, anchor groups received from Light Pole and Sign Post, #600–#613; Report in the shared viewer, old report retired, #580) | **Column base plate** (AISC DG1) plus **cast-in anchors** (ACI 318-19 Ch. 17), anchor reinforcement, PROFIS PDF import. | **ACI 318-19 Ch. 17**; AISC **DG1 2nd Ed.**; ASCE 7-22 §2.3 combination generator; AISC 360 (J3.10, E3; edition not stated) | KaTeX 0.16.11, three 0.160.0, Plotly 2.32.0, **pdf.js 3.11.174** | `bpad_autosave_v1`, `bpad_projects_v1`, `bpad_lastproject_v1` | 1.07 MB (341 KB base64 figures) |
 | `Concrete Anchor.html` | **"Structural Anchor Pro":** simple 1- or 4-anchor cast-in anchor check plus a crude plate check. | "ACI 318-19 Ch. 17" | **React 18 *development* builds (unpinned `@18`)**, **@babel/standalone (unpinned)**, **Tailwind Play CDN**, KaTeX 0.16.9 | None (file save/load only) | 45 KB |
@@ -490,6 +490,16 @@ The shape DB was spot-checked and matches AISC v16.0 exactly (W24X68, W14X90, W8
 
 **Timber Beam Check** (NDS 2018, ASD)
 
+**Status (2026-11-07):** the table below describes the tool as audited on 2026-10-03. Every item in it was fixed in the 2026-10-04 fixes and the 2026-10-10 rebuild (fix log F1–F23, R1–R5). See `fixlog/Timber Beam Check.md` for each fix. The code-compliance review of 2026-11-07 led to these changes:
+- TBK1: K<sub>cr</sub> 2.0 in wet service.
+- TBE1: glulam F<sub>bE</sub> with E<sub>y,min</sub>.
+- TBF1: Table 4D flat-use E factor.
+- TBB1: supporting-member and point-load bearing.
+- TBN1: notch face.
+- TBL1: citations, notes and the IBC footnote d quantity as information.
+
+Open items are listed in the fix log. They include values to verify against the printed NDS 2018 / Supplement (not in the references), pattern live loading (declined by the engineer 2026-10-10), and the NDS edition question (O13). The line numbers below refer to the old file.
+
 | Location | What | Conf. |
 |---|---|---|
 | :67-79, :381-382 | Base values are already No. 2, and a grade multiplier is applied on top; E/Emin don't vary with grade (Stud stiffness **[U]**) | High |
@@ -526,18 +536,20 @@ The stiffness solver, fixed-end forces, couple sign convention, indeterminate be
 
 | Location | What | Why | Conf. |
 |---|---|---|---|
-| :7811-7841 | SI toggle overwrites inputs; engine is US-only | All results are meaningless in SI mode. | High |
-| :1624-1626 | Coulomb Kp uses the backfill β and the back-face batter at the toe | Example: β = 20° raises Kp from 3.0 to about 5.7. **[U]** (passive off by default) | High |
-| :1668-1669 | Coulomb thrust inclined at β, not δ | Example: δ = 0, β = 20° gives horizontal 6% low plus a spurious vertical credit. **[U]** | Medium |
-| :1864, :1890, :1900 | Vertical EH component factored as EV (1.00 min) | Table 3.4.1-2 EH min 0.90. **[U]** | Med-Low |
-| :1918-1956, :1815-1831 | Footing structural design and AASHTO bearing use the max-vertical case only | Strength Ia (min DC/EV) and ACI 0.9D + 1.6H are not checked. **[U]** | Medium |
-| :1934-1935 | Default `q_n = 3·q_a`, φb 0.55 | Back-calculated nominal resistance. **[U]** if q_a is settlement-controlled. | Medium |
-| :2193 | ACI As,min `max(0.0014, 0.0018·60000/fy)` | **verify** 318-19 Table 24.4.3.2 (believed 0.0018 flat). | Medium |
-| :1471, :2295 | ψg = 1.0 hardcoded; cb ignores s/2 | 25.4.2.5, 25.4.2.4. **[U]** | Medium |
-| :1539 | M-O fallback `Ka(1 + 1.5kh)` when φ − θ − β ≤ 0 | That condition means the backfill is unstable; should be an error. **[U]** | Med-Low |
-| :1763 | Shear-key passive given a resisting overturning moment | The key is below the pivot. **[U]** | Low-Med |
-| :1972-2015 | Collision CT defaults are MassDOT-specific (γ = 1.0 for DC/EV in EE II) | AASHTO γp min 0.90. **[U]** for non-MassDOT work. | Medium |
-| :782 | Cohesion input unused | — | Low |
+| :7811-7841 | SI toggle overwrites inputs; engine is US-only | All results are meaningless in SI mode. | High ✅ **Fixed** (F1, F14, PR #9: SI toggle removed; US customary only). |
+| :1624-1626 | Coulomb Kp uses the backfill β and the back-face batter at the toe | Example: β = 20° raises Kp from 3.0 to about 5.7. **[U]** (passive off by default) | High ✅ **Fixed** (F3, PR #9: K_p at the toe with level ground, vertical face, δ = 0). |
+| :1668-1669 | Coulomb thrust inclined at β, not δ | Example: δ = 0, β = 20° gives horizontal 6% low plus a spurious vertical credit. **[U]** | Medium ✅ **Fixed** (F2, PR #9: thrust inclined at δ + batter). |
+| :1864, :1890, :1900 | Vertical EH component factored as EV (1.00 min) | Table 3.4.1-2 EH min 0.90. **[U]** | Med-Low ✅ **Fixed** (F4, PR #9: factored as EH 1.50 max / 0.90 min). The 0.90 minimum is kept as the engineer's choice (2026-11-07), more conservative than AASHTO Fig. C11.5.6-2 (EH max on both components). |
+| :1918-1956, :1815-1831 | Footing structural design and AASHTO bearing use the max-vertical case only | Strength Ia (min DC/EV) and ACI 0.9D + 1.6H are not checked. **[U]** | Medium ✅ **Fixed** (F5, PR #9: Strength Ia / ACI 0.9D + 1.6H enveloped). |
+| :1934-1935 | Default `q_n = 3·q_a`, φb 0.55 | Back-calculated nominal resistance. **[U]** if q_a is settlement-controlled. | Medium ✅ **Fixed** (F17, PR #128: q_n from the geotechnical report by default). |
+| :2193 | ACI As,min `max(0.0014, 0.0018·60000/fy)` | **verify** 318-19 Table 24.4.3.2 (believed 0.0018 flat). | Medium ✅ **Fixed** (F9, PR #9: 0.0018A_g, all grades; ACI 318-19 §7.6.1.1 / §24.4.3.2). |
+| :1471, :2295 | ψg = 1.0 hardcoded; cb ignores s/2 | 25.4.2.5, 25.4.2.4. **[U]** | Medium ✅ **Fixed** (F8, PR #9: ψ_g by grade, Table 25.4.2.5; c_b = min(cover, s/2), §25.4.2.4). |
+| :1539 | M-O fallback `Ka(1 + 1.5kh)` when φ − θ − β ≤ 0 | That condition means the backfill is unstable; should be an error. **[U]** | Med-Low ✅ **Fixed** (F6, PR #9: error instead of the fallback). |
+| :1763 | Shear-key passive given a resisting overturning moment | The key is below the pivot. **[U]** | Low-Med ✅ **Fixed** (F7, PR #9: no overturning credit). |
+| :1972-2015 | Collision CT defaults are MassDOT-specific (γ = 1.0 for DC/EV in EE II) | AASHTO γp min 0.90. **[U]** for non-MassDOT work. | Medium ✅ **Closed (O5, 2026-11-07):** γp = 1.00 for DC/EV in EE II is AASHTO LRFD 10th Ed. Table 3.4.1-1 (not a MassDOT value; "γp min 0.90" is out of date for the 10th Ed.); γ_EH = 0 for stability, the full-joint distribution and the test-level forces are MassDOT Bridge Manual 3.3.2.4 / Table 3.3.2-1 (verified). Water, ES and the vertical earth thrust in EE II: PRs #944 (RWCT) and #956 (RWCV). |
+| :782 | Cohesion input unused | — | Low ✅ **Noted** (F10, PR #9: the input is labelled "not used"). |
+
+**Status (2026-11-07):** every row above is resolved (fix log `fixlog/Retaining Wall Designer.md`, F1–F17 and the 2026-11-07 calculation audit). Fix-log open items O4 (AASHTO φ_τ default 1.00, kept per Table 11.5.7-1 for semi-gravity walls) and O5 (collision factors, see the row above) are closed. The 2026-11-07 calculation audit of this tool was merged as PRs #942–#954, #956 (RWCV), #960 (RWUP) and #963 (this bookkeeping) (see the fix log).
 
 **Verified OK:**
 - Rankine/Coulomb Ka, K0;
@@ -1025,10 +1037,10 @@ Items marked **❓** need your decision on the provision, edition or owner rule 
 | A25 | `index.html` | φc·φs ≥ 0.85 floor; permit γLL table; remove the 0.7·Mn+ placeholder or flag it | M |
 | A26 | `Light Pole and Sign Post.html` | `fmt()` shows NaN as an error (do first); check all combinations for bolt tension / shaft P-M (0.9D + W); add a base-section check | M |
 | A27 | `Light Pole and Sign Post.html` | Cable transverse wind reaction; Case C double count; anchor shear breakout and side-face blowout; φ label | M |
-| A28 | `Retaining Wall Designer.html` | Disable the SI toggle (or convert in `getInputs`) with a migration for SI-autosaved values ❓ | M |
-| A29 | `Retaining Wall Designer.html` | Coulomb thrust inclination (δ, not β); passive Kp with level toe; EH vertical factor; Strength Ia / 0.9D footing case; M-O unstable → error | M |
+| A28 | `Retaining Wall Designer.html` | ✅ **Done** (F1, F14, PR #9: SI toggle removed, US only). Was: disable the SI toggle (or convert in `getInputs`) with a migration for SI-autosaved values | M |
+| A29 | `Retaining Wall Designer.html` | ✅ **Done** (F2–F7, PR #9, 2026-10-04). Was: Coulomb thrust inclination (δ, not β); passive Kp with level toe; EH vertical factor; Strength Ia / 0.9D footing case; M-O unstable → error | M |
 | A30 | `ASCE7-16 Load Generator.html` | C_vx height above base; Kzt 2H substitution; combination 3 "(L or 0.5W)"; Cs floor logic; roof Cp interpolation | M |
-| A31 | `Timber Beam Check.html` | ❓ Decide: rewrite factor tables (grades, CF, CM, Ct, Ci, Cfu, Cb) and the reaction/deflection logic, **or** retire. Recommend a "not for design" banner first. | L / H |
+| A31 | `Timber Beam Check.html` | ❓ Decide: rewrite factor tables (grades, CF, CM, Ct, Ci, Cfu, Cb) and the reaction/deflection logic, **or** retire. Recommend a "not for design" banner first. **Done:** rewritten in the 2026-10-10 rebuild (fix log R1–R5) and kept; see §3.8 status. | L / H |
 | A32 | `elastomeric_design_module.html` | γa,st ≤ 3.0 check; plain-pad G·S and rotation; 0.8D stability; Da by shape; Method A limits per current edition ❓ | M |
 | A33 | `abutment_calculator.html` | T&S b = least width; seismic connection 0.15/0.25 (align with SubLoads); roughened shear-friction values; trapezoidal pressure for toe/heel | M |
 | A34 | `abutment_calculator.html` | Wind per limit state; Strength IV; sloping-backfill height/wedge | M |
