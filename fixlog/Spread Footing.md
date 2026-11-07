@@ -6215,3 +6215,27 @@ index 50f3837..c2d5000 100644
   - A renderer sweep over 38 inputs (selector picks included): no renderer error, no Out-of-date banner, no Report error.
   - check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser. Screenshots checked.
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-m2-dev-faces (SFDE: footing bar development checked at every pedestal face with moment of that sign, ACI 318-19 13.2.8.3 / 13.2.7.1; CALCULATION CHANGE, pass / fail logic)
+
+- **Problem:** `sfdDevAll` checked ℓ_d / ℓ_dh only at the governing-moment section (`des.govMloc` / `govNegLoc`). ACI 318-19 13.2.8.3 requires the reinforcement to be developed at every critical section of 13.2.7.1, i.e. at each pedestal face. A short cantilever at another pedestal could PASS unseen.
+- **Where / exact code (`Spread Footing.html`, `sfdDevAll`, anchor `/* SFDE (2026-11-07)`):**
+  - Before:
+    - `const endC=sfdEndCover(), avail=(hf-Math.abs(sec))*12-endC; if(!(avail>0))return;`
+    - `const strOK=LdUse<=avail+1e-9, hookOK=Ldh<=avail+1e-9;` (one section)
+  - After: `cand` = the governing section plus each pedestal face (`R.peds`, x ± b/2 inside the footing) where the envelope moment of that sign over the LRFD combinations (`P2.pressMomentAbout`) exceeds 0.01 kip-ft (bottom bars: sagging; top bars: hogging).
+    - Every candidate gets `avail = 12(hf − |s|) − c_end`, a straight / hook status and `dc`.
+    - The row reports the worst (fail > review > pass, then the larger dc): `sec`, `avail`, `status`, `dc`, plus `cand` and `wSec`.
+    - ℓ_d, ℓ_dh and the 25.4.10.1 option are unchanged. A_s,req stays the governing-section value at every face (conservative).
+  - Report: a "Sections checked" step listing each section (M_u, available length, status). The "available" step names the critical face. Card 5.4: a note listing the sections.
+- **Governing provisions:** ACI 318-19 13.2.8.3 (development at each critical section), 13.2.7.1 / Table 13.2.7.1 (critical sections at the face of the column or pedestal), 25.4.2.4, 25.4.3.1.
+- **Decision (pending engineer review):** every face with a non-zero moment of that sign is checked for the full ℓ_d (or ℓ_dh where hooked), also where the moment there is small. That is code-literal and conservative. Where the face is within the end cover of the edge, the available length is ≤ 0 and the check is NG. The 25.4.10.1 option (A_s,req/A_s,prov) reduces ℓ_d, using the governing-section A_s,req. Alternative, not taken: develop only the force at that face.
+- **Check case (harness `devsec`):** B = 12 ft, Ped 1 (D 20, L 10 k) at x = −4.75, Ped 2 (D 250, L 150 k) at x = 1.5, bottom x #6 @ 12 in.
+  - Ped 1 outer face x = −5.50 ft: available = 12(6 − 5.5) − 3 = **3 in**; M_u > 0; ℓ_d = 17.1 in, ℓ_dh = 12.1 in > 3 → NG.
+  - Before: bottom x-bars **PASS**, D/C 0.28 (section x = 0.75 ft, 60 in available).
+  - After: **FAIL**, D/C 4.05 (worst section x = −5.50 ft).
+- **Other cases:**
+  - `rev` (Seymour-like, Ped 1 b_y = 9.33 ft with faces 0.5 ft from the edges): bottom and top y-bars now NG at y = ±6 ft (3 in available, M_u 2.3 / −0.15 kip-ft), and bottom x-bars worst at Ped 2's face (11 in).
+  - Seymour as saved: bottom x-bars were already FAIL, D/C 1.669 → 1.672 (Ped 1 face 1.335 ft). The y-bars are unchanged (PASS).
+  - def, edgeHook, thin: no value change.
+- **Saved data:** none. **Other copies:** none.
