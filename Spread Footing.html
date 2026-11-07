@@ -135,6 +135,8 @@ body.sfdStale .tabbar button:not([data-tab="tab-manual"])::after{content:" \26A0
 .note{color:#444;font-style:italic;margin:5px 0;line-height:1.45}
 .svgbox{border:1px solid #ccc;background:#fff;margin:6px 0}
 .plot{width:100%;height:380px;margin:6px 0}
+.sfpmSel{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 2px}.sfpmSel button{font:inherit;font-size:12px;padding:4px 10px;border:1px solid #9aa9bd;background:#f4f6f9;color:#1f3550;border-radius:4px;cursor:pointer}.sfpmSel button.on{background:#1f4e8c;border-color:#1f4e8c;color:#fff}
+.sfpmPair{display:flex;flex-wrap:wrap;gap:8px}.sfpmPair>.plot{flex:1 1 320px;min-width:0}
 /* 3D view */
 #v3dTitle{font-size:12px;margin:0 0 4px;padding:4px 8px;background:#f6f8fa;border:1px solid #ccd;line-height:1.45}   /* SF3L */
 #v3dwrap{position:relative;width:100%;height:620px;border:1px solid #ccc;background:#eef1f4;overflow:hidden}
@@ -3507,6 +3509,82 @@ function sfpPlot(id,data,layout,cfg){
  if(typeof Plotly==='undefined'||!Plotly.newPlot){const e=document.getElementById(id);
   if(e){e.classList.add('sfp-na');e.style.height='auto';e.innerHTML='<p class="note">Chart unavailable (Plotly not loaded): the values are in the tables.</p>';}return;}
  return Plotly.newPlot(id,data,layout,cfg);}
+/* ---- SFPV (2026-11-07): P–M plot helpers, display only. Reusable for any rectangular section: S = sfpmSec(...), pts = demand points
+   {name, P, Mx, My, ratio, mode} (ratio = the check's own value, coloured; NaN / infinite drawn apart). ---- */
+const SFPV_CFG={responsive:true,displaylogo:false};
+function sfpvScale(cmax){const c=Math.max(1,cmax),q=v=>v/c;
+ const L=[[0,'#1a9850'],[q(0.6),'#91cf60'],[q(0.9),'#e0c020'],[q(1),'#f08030']];if(c>1+1e-6)L.push([1,'#b2182b']);return L;}
+function sfpvRmax(pts){return Math.max(1,...pts.map(z=>z.ratio).filter(v=>isFinite(v)));}
+function sfpvHover(z){return z.name+'<br>P_u = '+f2(z.P)+' k<br>M_ux = '+f2(z.Mx)+', M_uy = '+f2(z.My)+' k-ft<br>ratio = '+(isFinite(z.ratio)?f3(z.ratio):(z.ratio===Infinity?'∞':'n/a'))+(z.mode&&z.mode!=='radial'?' ('+sfpmModeTxt(z)+')':'');}
+/* demand markers at (mx(z), P): coloured by ratio; labels = the combination numbers, merged where points coincide (readable in print) */
+function sfpvDemand(pts,mx,showScale){
+ const lab={},txt=pts.map((z,k)=>{const key=f2(z.P)+'|'+f2(mx(z));if(lab[key]){lab[key].push(k+1);return '';}lab[key]=[k+1];return key;});
+ const text=txt.map(key=>key?lab[key].join(','):''), cmax=sfpvRmax(pts), fin=pts.map(z=>isFinite(z.ratio)), tr=[];
+ const I=pts.map((z,k)=>k).filter(k=>fin[k]), J=pts.map((z,k)=>k).filter(k=>!fin[k]);
+ if(I.length)tr.push({x:I.map(k=>mx(pts[k])),y:I.map(k=>pts[k].P),type:'scatter',mode:'markers+text',name:'LRFD combinations (colour = ratio)',
+  text:I.map(k=>text[k]),textposition:'top center',textfont:{size:9},hovertext:I.map(k=>sfpvHover(pts[k])),hoverinfo:'text',
+  marker:{size:9,color:I.map(k=>pts[k].ratio),cmin:0,cmax,colorscale:sfpvScale(cmax),showscale:!!showScale,
+   colorbar:showScale?{title:{text:'ratio',side:'top'},thickness:10,len:0.6,x:1.02,y:0.5}:undefined,line:{color:I.map(k=>pts[k].ratio>1?'#7f0000':'#333'),width:I.map(k=>pts[k].ratio>1?2:1)}}});
+ if(J.length)tr.push({x:J.map(k=>mx(pts[k])),y:J.map(k=>pts[k].P),type:'scatter',mode:'markers+text',name:'ratio not computed / ∞',
+  text:J.map(k=>text[k]),textposition:'top center',textfont:{size:9},hovertext:J.map(k=>sfpvHover(pts[k])),hoverinfo:'text',marker:{size:10,symbol:'x',color:'#8b0000'}});
+ return tr;}
+/* (a) uniaxial P–M diagram about one axis (ax 'x': P–M_x, NA angle 90 deg; 'y': P–M_y, NA angle 0) */
+function sfpmPlotAxis(id,S,pts,ax,o){
+ o=o||{};const font={family:'Times New Roman',size:12}, ang=ax==='x'?Math.PI/2:0, C=sfpmAxisCurve(S,ang), B=sfpmBalanced(S,ang);
+ const mx=z=>Math.abs(ax==='x'?z.Mx:z.My), Mmax=Math.max(...C.map(q=>q.M),...pts.map(mx)), Pmin=Math.min(S.Pt,...pts.map(z=>z.P));
+ const tr=[
+  {x:C.map(q=>q.M),y:C.map(q=>q.Pn),type:'scatter',mode:'lines',name:'nominal (M_n, P_n)',line:{color:'#888',width:1.5,dash:'dash'},hovertemplate:'M_n = %{x:.1f} k-ft<br>P_n = %{y:.1f} k<extra>nominal</extra>'},
+  {x:C.map(q=>q.phiM),y:C.map(q=>q.phiPn),type:'scatter',mode:'lines',name:'design (φM_n, φP_n)',line:{color:'#1f4e8c',width:2.5},
+   customdata:C.map(q=>q.phi),hovertemplate:'φM_n = %{x:.1f} k-ft<br>φP_n = %{y:.1f} k<br>φ = %{customdata:.3f}<extra>design</extra>'},
+  {x:[B.M,B.phi*B.M],y:[B.Pn,B.phi*B.Pn],type:'scatter',mode:'markers+text',name:'balanced point (ε_t = ε_ty)',text:['','balanced'],textposition:'middle right',textfont:{size:10},
+   marker:{symbol:['diamond-open','diamond'],size:10,color:'#000'},hovertemplate:'balanced, c_b = '+f2(B.cb)+' in<br>M = %{x:.1f} k-ft<br>P = %{y:.1f} k<extra></extra>'},
+  ...sfpvDemand(pts,mx,o.scale)];
+ sfpPlot(id,tr,{font,title:{text:(o.title||S.label)+' — P–M'+(ax==='x'?'x (about x)':'y (about y)'),font:{size:12}},margin:{t:34,r:o.scale?70:20,l:60,b:40},
+  xaxis:{title:(ax==='x'?'M_x':'M_y')+' (k-ft)',rangemode:'tozero',range:[0,1.12*Mmax]},yaxis:{title:'P (kip)',zeroline:true,zerolinewidth:1.5},
+  shapes:[{type:'rect',xref:'paper',x0:0,x1:1,yref:'y',y0:Math.min(Pmin,S.Pt)*1.05,y1:0,fillcolor:'rgba(198,40,40,0.06)',line:{width:0},layer:'below'},
+   {type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:S.phiPnMax,y1:S.phiPnMax,line:{color:'#c62828',width:1,dash:'dot'}}],
+  annotations:[{xref:'paper',x:0.99,y:S.phiPnMax,yref:'y',xanchor:'right',yanchor:'bottom',showarrow:false,text:'φP_n,max = '+f2(S.phiPnMax)+' k',font:{size:10,color:'#c62828'}},
+   {xref:'paper',x:0.99,y:S.Pt*0.5,yref:'y',xanchor:'right',showarrow:false,text:'tension',font:{size:10,color:'#a33'}}],
+  legend:{orientation:'h',y:-0.2,font:{size:10}}},SFPV_CFG);
+ return {C,B};}
+/* (b) design P–M curve along the moment direction theta of one demand (the curve its ratio is measured on: at constant P_u) */
+function sfpmPlotTheta(id,S,g,o){
+ o=o||{};const font={family:'Times New Roman',size:12}, th=g&&g.theta!=null?g.theta:0, C=sfpmThetaCurve(S,th,o.n||36);
+ const tr=[{x:C.map(q=>q.M),y:C.map(q=>q.P),type:'scatter',mode:'lines',name:'design |φM_n|_θ at each P (θ = '+f2(th)+'°)',line:{color:'#6a3d9a',width:2.5},
+  hovertemplate:'|φM_n|_θ = %{x:.1f} k-ft<br>P = %{y:.1f} k<extra></extra>'}], ann=[];
+ if(g){const Md=Math.hypot(g.Mx,g.My);
+  if(g.mode==='radial'&&g.Rc!=null){tr.push({x:[0,g.Rc],y:[g.P,g.P],type:'scatter',mode:'lines+markers',name:'capacity at P_u = '+f2(g.P)+' k: '+f2(g.Rc)+' k-ft',line:{color:'#6a3d9a',dash:'dot',width:1},marker:{size:[0,8],color:'#6a3d9a',symbol:'circle-open'},hoverinfo:'skip'});
+   ann.push({x:g.Rc,y:g.P,xref:'x',yref:'y',ax:30,ay:-26,text:'ratio = '+f2(Md)+' / '+f2(g.Rc)+' = '+f3(g.ratio),font:{size:10},arrowsize:0.7});}
+  tr.push({x:[Md],y:[g.P],type:'scatter',mode:'markers+text',name:'governing demand: '+g.name,text:['|M_u|'],textposition:'top left',textfont:{size:10},
+   marker:{size:11,color:isFinite(g.ratio)&&g.ratio<=1?'#1a9850':'#b2182b',line:{color:'#333',width:1}},hovertext:[sfpvHover(g)],hoverinfo:'text'});}
+ sfpPlot(id,tr,{font,title:{text:(o.title||S.label)+' — P–M along θ = '+f2(th)+'°'+(g?' ('+g.name+')':''),font:{size:12}},margin:{t:34,r:20,l:60,b:40},
+  xaxis:{title:'|M| in the direction θ (k-ft)',rangemode:'tozero'},yaxis:{title:'P (kip)',zeroline:true,zerolinewidth:1.5},
+  shapes:[{type:'line',xref:'paper',x0:0,x1:1,yref:'y',y0:S.phiPnMax,y1:S.phiPnMax,line:{color:'#c62828',width:1,dash:'dot'}}],annotations:ann,
+  legend:{orientation:'h',y:-0.2,font:{size:10}}},SFPV_CFG);}
+/* (c) 3D phi failure surface (M_y, M_x, P) from load contours, with the demand points */
+function sfpmPlot3D(id,S,pts,o){
+ o=o||{};const R3=sfpmSurface(S,o.nP||24,o.nA||36);
+ if(!R3.length){sfpPlot(id,[],{title:{text:'surface unavailable',font:{size:12}}},SFPV_CFG);return;}
+ const cmax=sfpvRmax(pts), fin=pts.filter(z=>isFinite(z.ratio)), inf=pts.filter(z=>!isFinite(z.ratio));
+ const tr=[{type:'surface',x:R3.map(r=>r.x),y:R3.map(r=>r.y),z:R3.map(r=>r.x.map(()=>r.P)),opacity:0.55,showscale:false,colorscale:[[0,'#9ecae1'],[1,'#2171b5']],
+  hovertemplate:'φM_ny = %{x:.1f}<br>φM_nx = %{y:.1f} k-ft<br>φP_n = %{z:.1f} k<extra>surface</extra>',name:'φ surface'}];
+ if(fin.length)tr.push({type:'scatter3d',mode:'markers',name:'LRFD combinations',x:fin.map(z=>z.My),y:fin.map(z=>z.Mx),z:fin.map(z=>z.P),text:fin.map(sfpvHover),hoverinfo:'text',
+  marker:{size:5,color:fin.map(z=>z.ratio),cmin:0,cmax,colorscale:sfpvScale(cmax),showscale:true,colorbar:{title:{text:'ratio'},thickness:10,len:0.6},line:{color:'#333',width:1}}});
+ if(inf.length)tr.push({type:'scatter3d',mode:'markers',name:'ratio not computed / ∞',x:inf.map(z=>z.My),y:inf.map(z=>z.Mx),z:inf.map(z=>z.P),text:inf.map(sfpvHover),hoverinfo:'text',marker:{size:5,symbol:'x',color:'#8b0000'}});
+ sfpPlot(id,tr,{font:{family:'Times New Roman',size:12},title:{text:(o.title||S.label)+' — φ failure surface',font:{size:12}},margin:{t:34,l:0,r:0,b:0},showlegend:false,
+  scene:{xaxis:{title:'M_y (k-ft)'},yaxis:{title:'M_x (k-ft)'},zaxis:{title:'P (kip)'},aspectmode:'cube',camera:{eye:{x:1.6,y:1.6,z:0.9}}}},SFPV_CFG);}
+/* per-pedestal view selector (SFPV): the chosen view per pedestal, kept for the session only */
+const SFPMV={};
+function sfpmViewOf(i){return SFPMV[i]||'ux';}
+function sfpmShow(i,v){SFPMV[i]=v;const w=document.getElementById('sfpm-views-'+i);if(!w)return;sfpmApply(w,v);
+ if(v==='3d'){const d=document.getElementById('plot-pm3-'+i);if(d&&!d.classList.contains('js-plotly-plot')&&!d.classList.contains('sfp-na')&&P2&&P2.pedDes[i])sfpmDraw3D(i);}
+ if(typeof Plotly!=='undefined'&&Plotly.Plots)w.querySelectorAll('[data-sfpmv="'+v+'"] .js-plotly-plot').forEach(d=>{try{Plotly.Plots.resize(d);}catch(e){}});}
+function sfpmApply(w,v){
+ w.querySelectorAll('[data-sfpmv]').forEach(d=>{d.style.display=d.dataset.sfpmv===v?'':'none';});
+ w.querySelectorAll('.sfpmSel button').forEach(b=>{const on=b.dataset.v===v;b.classList.toggle('on',on);b.setAttribute('aria-pressed',on?'true':'false');});}
+function sfpmPedSec(pd){return sfpmSec(pd.pmBars,pd.bx,pd.by,pd.fc,pd.fy,pd.phiPn_max,pd.label);}
+function sfpmPedPts(pd){const rat=pd.pmRat||[];return pd.pmPts.map((p,k)=>({name:p.name,P:p.P,Mx:p.Mx,My:p.My,ratio:rat[k]?rat[k].ratio:NaN,mode:rat[k]?rat[k].mode:''}));}
+function sfpmDraw3D(i){const pd=P2.pedDes[i];sfpmPlot3D('plot-pm3-'+i,sfpmPedSec(pd),sfpmPedPts(pd));}
 function renderPlots(){
  if(R.fatal)return;
  SFPLT.skip=false;
@@ -3634,6 +3712,11 @@ function renderPlots(){
     {font,title:{text:pd.label+' \u2014 biaxial interaction (solid contour at P_u,max = '+f2(Pu)+' k; colours: ratio at own P_u)',font:{size:12}},
      margin:{t:34},xaxis:{title:'\u03c6M_ny (k-ft) \u2014 about y',zeroline:true},yaxis:{title:'\u03c6M_nx (k-ft) \u2014 about x',zeroline:true,scaleanchor:'x'},
      legend:{orientation:'h',y:-0.22}},{responsive:true,displaylogo:false});
+   /* SFPV: the added views (display only) */
+   const S=sfpmPedSec(pd), pts=sfpmPedPts(pd);
+   if(document.getElementById('plot-pmx-'+i)){sfpmPlotAxis('plot-pmx-'+i,S,pts,'x',{});sfpmPlotAxis('plot-pmy-'+i,S,pts,'y',{scale:true});}
+   if(document.getElementById('plot-pmt-'+i))sfpmPlotTheta('plot-pmt-'+i,S,pd.pmGov,{});
+   if(document.getElementById('plot-pm3-'+i)&&sfpmViewOf(i)==='3d')sfpmDraw3D(i);
   });
  }
 }
@@ -7008,10 +7091,10 @@ function pedBarCoords(bx,by,coverIn,nx,ny,barArea){
 }
 /* ---- biaxial interaction: capacity contour (phiMnx, phiMny) at a target axial load Pu ----
    Sweeps the neutral-axis orientation; for each angle finds the c that yields phiPn = Pu, returns (phiMnx,phiMny). */
-function pmContour(bars,bx,by,fc,fy,Pu_target,nAngles,angList){   // SFPM: angList (optional) = neutral-axis angles (rad) to evaluate instead of the uniform grid
+/* SFPV (2026-11-07): the section analysis of pmContour, hoisted unchanged so the P–M plots use the same engine (display only;
+   pmContour calls it exactly as before). Nominal (P_n kip, M_nx, M_ny kip-ft) at neutral-axis depth cDepth (in.) and angle angleRad. */
+function sfpmAnalyze(bars,bx,by,fc,fy,cDepth,angleRad){
  const Es=29000000,ecu=0.003,b1=beta1(fc);
- const Ag=bx*by;
- function analyze(cDepth,angleRad){
   // neutral axis line: rotate section so compression edge is perpendicular to angle
   const ca=Math.cos(angleRad),sa=Math.sin(angleRad);
   // signed distance from each point to the NA, measured along compression normal
@@ -7053,8 +7136,9 @@ function pmContour(bars,bx,by,fc,fy,Pu_target,nAngles,angList){   // SFPM: angLi
   const Mny=(Ccx+Msy)/12000;
   return{Pn,Mnx,Mny,cDepth};
  }
- // phi factor by strain (approx tension-controlled check on extreme bar)
- function phiOf(cDepth,angleRad){
+/* SFPV: phi of pmContour by the net tensile strain of the extreme bar (hoisted unchanged) */
+function sfpmPhi(bars,bx,by,fy,cDepth,angleRad){
+ const ecu=0.003;
   const ca=Math.cos(angleRad),sa=Math.sin(angleRad);const proj=p=>p.x*ca+p.y*sa;
   const corners=[{x:-bx/2,y:-by/2},{x:bx/2,y:-by/2},{x:bx/2,y:by/2},{x:-bx/2,y:by/2}];
   const pmax=Math.max(...corners.map(proj));
@@ -7062,6 +7146,11 @@ function pmContour(bars,bx,by,fc,fy,Pu_target,nAngles,angList){   // SFPM: angLi
   const et=ecu*(dt-cDepth)/cDepth;
   return phiFlexure(et,fy);   /* SFPY: eps_ty from f_y */
  }
+function pmContour(bars,bx,by,fc,fy,Pu_target,nAngles,angList){   // SFPM: angList (optional) = neutral-axis angles (rad) to evaluate instead of the uniform grid
+ const Es=29000000,ecu=0.003,b1=beta1(fc);
+ const Ag=bx*by;
+ const analyze=(cDepth,angleRad)=>sfpmAnalyze(bars,bx,by,fc,fy,cDepth,angleRad);   // SFPV
+ const phiOf=(cDepth,angleRad)=>sfpmPhi(bars,bx,by,fy,cDepth,angleRad);
  const pts=[];
  const angs=nAngles||24;
  const nA=angList?angList.length:angs;
@@ -7119,6 +7208,52 @@ function sfpmRatios(bars,bx,by,fc,fy,pts,phiPnMax){
   o.alpha=a*180/Math.PI;o.Rc=Rc;o.cMx=c.phiMnx;o.cMy=c.phiMny;o.ratio=Md<1e-9?0:(Rc>0?Md/Rc:Infinity);
   return o;});
 }
+/* ---- SFPV (2026-11-07, engineer: "it doesn't look like the typical P–M curve"): P–M curves for the plots. DISPLAY ONLY: no check
+   reads them. The same section analysis as the check (sfpmAnalyze / sfpmPhi / pmContour / sfpmRatios, ACI 318-19 22.2, 21.2.2,
+   22.4.2.1). Reusable: a section S = sfpmSec(bars, b_x, b_y, f'c, f_y, phiP_n,max) (bars {x, y, A} in in. from the centroid, f'c and f_y
+   in psi) and demand points {name, P, Mx, My, ratio, mode} (kip, kip-ft). ---- */
+function sfpmSec(bars,bx,by,fc,fy,phiPnMax,label){
+ const Ast=bars.reduce((q,b)=>q+b.A,0), P0=(0.85*fc*(bx*by-Ast)+fy*Ast)/1000;
+ return {bars,bx,by,fc,fy,Ast,P0,Pt:-fy*Ast/1000,phiPnMax:phiPnMax!=null?phiPnMax:0.65*0.80*P0,label:label||''};}
+/* uniaxial curve, neutral axis normal at angle ang (0: compression at +x, moment M_ny; pi/2: compression at +y, M_nx): c swept from
+   pure tension to pure compression. Each point: nominal (P_n, M_n), phi, and the design point (phi M_n, min(phi P_n, phiP_n,max)). */
+function sfpmAxisCurve(S,ang){
+ const ca=Math.cos(ang),sa=Math.sin(ang),pr=[-S.bx/2*ca-S.by/2*sa,S.bx/2*ca-S.by/2*sa,S.bx/2*ca+S.by/2*sa,-S.bx/2*ca+S.by/2*sa];
+ const D=Math.max(...pr)-Math.min(...pr), cs=[];
+ for(let k=0;k<=30;k++)cs.push(D*1e-3*Math.pow(100,k/30));          // 0.001 D .. 0.1 D (log)
+ for(let k=1;k<=90;k++)cs.push(D*(0.1+1.4*k/90));                     // .. 1.5 D
+ [2,3,5,10,30].forEach(m=>cs.push(D*m));
+ const pts=[{c:0,Pn:S.Pt,M:0,phi:0.9}];
+ cs.forEach(c=>{const r=sfpmAnalyze(S.bars,S.bx,S.by,S.fc,S.fy,c,ang);pts.push({c,Pn:r.Pn,M:r.Mny*ca+r.Mnx*sa,phi:sfpmPhi(S.bars,S.bx,S.by,S.fy,c,ang)});});
+ pts.push({c:Infinity,Pn:S.P0,M:0,phi:0.65});
+ pts.forEach(q=>{q.phiPn=Math.min(q.phi*q.Pn,S.phiPnMax);q.phiM=q.phi*q.M;});
+ return pts;}
+/* balanced point (eps_t = eps_ty, the compression-controlled limit of 21.2.2; eps_ty as the tool's phi, sfdEty) about angle ang */
+function sfpmBalanced(S,ang){
+ const ca=Math.cos(ang),sa=Math.sin(ang),proj=p=>p.x*ca+p.y*sa;
+ const pmax=Math.max(-S.bx/2*ca-S.by/2*sa,S.bx/2*ca-S.by/2*sa,S.bx/2*ca+S.by/2*sa,-S.bx/2*ca+S.by/2*sa);
+ let dt=0;S.bars.forEach(b=>{dt=Math.max(dt,pmax-proj(b));});
+ const ety=sfdEty(S.fy), cb=0.003*dt/(0.003+ety), r=sfpmAnalyze(S.bars,S.bx,S.by,S.fc,S.fy,cb,ang), phi=sfpmPhi(S.bars,S.bx,S.by,S.fy,cb,ang);
+ return {dt,ety,cb,Pn:r.Pn,M:r.Mny*ca+r.Mnx*sa,phi};}
+/* design curve along the moment direction theta (deg, atan2(M_x, M_y), as the ratio): |phiM_n|_theta at each P (sfpmRatios, the check's
+   own routine), from the design tension strength to phiP_n,max, then the cap to M = 0 */
+function sfpmThetaCurve(S,thDeg,n){
+ const th=thDeg*Math.PI/180, N=n||36, P1=0.9*S.Pt, out=[{P:P1,M:0}];
+ for(let k=1;k<=N;k++){const P=P1+(S.phiPnMax-P1)*k/N;
+  const r=sfpmRatios(S.bars,S.bx,S.by,S.fc,S.fy,[{name:'',P,Mx:Math.sin(th),My:Math.cos(th)}],S.phiPnMax)[0];
+  if(r.mode==='radial'&&r.Rc!=null)out.push({P,M:r.Rc});}
+ out.push({P:S.phiPnMax,M:0});
+ return out;}
+/* the phi failure surface: load contours (pmContour, nA neutral-axis angles) at nP axial levels from the design tension strength to
+   phiP_n,max; a level whose contour does not close (a point off P by more than 1 kip) is left out */
+function sfpmSurface(S,nP,nA){
+ const P1=0.9*S.Pt, NA=nA||36, rows=[];
+ for(let k=1;k<=nP;k++){const P=P1+(S.phiPnMax-P1)*k/nP;
+  const C=pmContour(S.bars,S.bx,S.by,S.fc,S.fy,P,NA);
+  if(C.length===NA&&C.every(q=>Math.abs(q.phiPn-P)<=1))rows.push({P,x:C.map(q=>q.phiMny).concat([C[0].phiMny]),y:C.map(q=>q.phiMnx).concat([C[0].phiMnx])});}
+ const z0=a=>a.map(()=>0);
+ if(rows.length){rows.unshift({P:P1,x:z0(rows[0].x),y:z0(rows[0].x)});rows.push({P:S.phiPnMax,x:z0(rows[0].x),y:z0(rows[0].x)});}
+ return rows;}
 </script>
 <script>
 /* ================= PHASE 2 rendering ================= */
@@ -7835,8 +7970,38 @@ function renderPedestalDesign(){
     '\\text{'+tn(pd.govMy.name)+'}:\\;P_{u,a}e_x = '+f2(gy.Pa)+'\\cdot '+f3(gy.lex)+' = '+f2(gy.PeMy)+',\\;M_{uy} = '+f2(gy.myPed-gy.PeMy)+' + '+f2(gy.PeMy)+' = '+f2(gy.myPed)+'\\;\\mathrm{k\\text{-}ft}\\quad(|M_{ux}|_{max} = '+f2(pd.MuxMax)+',\\;|M_{uy}|_{max} = '+f2(pd.MuyMax)+')'));
    b.appendChild(el('div','note','M at the pedestal base; P<sub>u,a</sub> = factored applied load at the load point (the pedestal self-weight acts at the centroid). The same P\u00b7e reaches the footing as an interface moment (flexure, one-way shear, punching moment transfer).'));
   }
-  const pmDiv=el('div','plot');pmDiv.id='plot-pm-'+i;pmDiv.style.height='420px';b.appendChild(pmDiv);
-  b.appendChild(el('div','note','Biaxial load contour: the closed curve is the capacity envelope \u03c6M_nx\u2013\u03c6M_ny computed at the governing axial load by strain compatibility for the entered bar layout, bar centres at d\u2032 = cover + d<sub>b</sub>/2 from each face (0.85f\u2032c stress block, \u03b5cu = 0.003, \u03c6 by strain). Each point is a factored combination\u2019s (M_ux, M_uy) demand at this pedestal. <b>The solid contour is at P_u,max</b> (for reference); the dashed contour is at the governing combination\u2019s own P_u. <b>Point colours are the ratio at each combination\u2019s own P_u</b> (green \u2264 1, red > 1; the ratio table above).'));
+  /* SFPV (2026-11-07, engineer): four views of the same P–M check (display only): the uniaxial P–M_x and P–M_y diagrams (default),
+     the load contour at P (the check, as before), the P–M curve along the governing combination's own theta, and the 3D surface.
+     The Report prints the uniaxial diagrams and the contour (the theta and 3D views are screen-only, .noprint). */
+  if(!pd.isPatch){const Bx=sfpmBalanced(sfpmPedSec(pd),Math.PI/2), By=sfpmBalanced(sfpmPedSec(pd),0), ety=Bx.ety;
+   b.appendChild(eqBlock('Balanced points of the uniaxial P\u2013M diagrams (marked on the plots)','ACI 318-19 21.2.2, Table 21.2.2 (\u03b5_t = \u03b5_ty: compression-controlled limit, \u03c6 = 0.65), 22.2 (strain compatibility, as the ratio)',
+    'c_b = \\frac{\\varepsilon_{cu}}{\\varepsilon_{cu}+\\varepsilon_{ty}}\\,d_t,\\qquad \\varepsilon_{cu} = 0.003,\;\\varepsilon_{ty} = '+(pd.fy>60000?'f_y/E_s':'0.002')+' = '+sfdF5(ety)+',\\qquad (P_b,\\,M_b)\\text{ by strain compatibility at }c_b,\;\\phi = 0.65',
+    '\\text{about }x:\;d_t = '+f3(Bx.dt)+',\;c_b = \\frac{0.003}{0.003+'+sfdF5(ety)+'}\\cdot'+f3(Bx.dt)+' = '+f3(Bx.cb)+'\;\\mathrm{in}\;\\Rightarrow\;P_b = '+f2(Bx.Pn)+'\;\\mathrm{k},\;M_{bx} = '+f2(Bx.M)+'\;\\mathrm{k\\text{-}ft}',
+    '\\text{about }y:\;d_t = '+f3(By.dt)+',\;c_b = '+f3(By.cb)+'\;\\mathrm{in}\;\\Rightarrow\;P_b = '+f2(By.Pn)+'\;\\mathrm{k},\;M_{by} = '+f2(By.M)+'\;\\mathrm{k\\text{-}ft};\\quad \\phi P_b = '+f2(0.65*Bx.Pn)+'\\,/\\,'+f2(0.65*By.Pn)+',\;\\phi M_b = '+f2(0.65*Bx.M)+'\\,/\\,'+f2(0.65*By.M)));}
+  const vw=el('div','sfpmViews');vw.id='sfpm-views-'+i;
+  const sel=el('div','sfpmSel noprint');sel.setAttribute('role','group');sel.setAttribute('aria-label','P\u2013M view');
+  [['ux','P\u2013Mx & P\u2013My'],['pc','Load contour at P'],['th','P\u2013M at \u03b8_gov'],['3d','3D surface']].forEach(([v,t])=>{const bt=el('button','',t);bt.type='button';bt.dataset.v=v;bt.onclick=()=>sfpmShow(i,v);sel.appendChild(bt);});
+  vw.appendChild(sel);
+  const ux=el('div','');ux.dataset.sfpmv='ux';
+  const pair=el('div','sfpmPair');const px=el('div','plot');px.id='plot-pmx-'+i;px.style.height='420px';const py=el('div','plot');py.id='plot-pmy-'+i;py.style.height='420px';
+  pair.appendChild(px);pair.appendChild(py);ux.appendChild(pair);
+  ux.appendChild(el('div','note','Uniaxial P\u2013M interaction diagrams (P vertical, M horizontal), from the same strain-compatibility routine as the ratio (0.85f\u2032c stress block of depth \u03b2<sub>1</sub>c clipped to the section, \u03b5<sub>cu</sub> = 0.003, the bars at their positions with the displaced concrete deducted). Dashed grey: nominal (M<sub>n</sub>, P<sub>n</sub>); solid blue: design (\u03c6M<sub>n</sub>, \u03c6P<sub>n</sub>), with \u03c6 by the net tensile strain (21.2.2) and \u03c6P<sub>n</sub> capped at \u03c6P<sub>n,max</sub> (22.4.2.1, dotted red line). The shaded band below P = 0 is the tension region. \u25c6 balanced point (\u03b5<sub>t</sub> = \u03b5<sub>ty</sub>, worked above): open = nominal, filled = design. Each LRFD combination is plotted at (|M<sub>ux</sub>|, P<sub>u</sub>) and (|M<sub>uy</sub>|, P<sub>u</sub>), numbered as in the ratio table and <b>coloured by its biaxial ratio</b> (the check: green low, orange at 1.0, red above 1.0). A combination with moments about both axes can lie inside both uniaxial curves and still fail: the check is biaxial (the load contour view and the ratio table).'));
+  vw.appendChild(ux);
+  const pc=el('div','');pc.dataset.sfpmv='pc';
+  const pmDiv=el('div','plot');pmDiv.id='plot-pm-'+i;pmDiv.style.height='420px';pc.appendChild(pmDiv);
+  pc.appendChild(el('div','note','Biaxial load contour: the closed curve is the capacity envelope \u03c6M_nx\u2013\u03c6M_ny computed at the governing axial load by strain compatibility for the entered bar layout, bar centres at d\u2032 = cover + d<sub>b</sub>/2 from each face (0.85f\u2032c stress block, \u03b5cu = 0.003, \u03c6 by strain). Each point is a factored combination\u2019s (M_ux, M_uy) demand at this pedestal. <b>The solid contour is at P_u,max</b> (for reference); the dashed contour is at the governing combination\u2019s own P_u. <b>Point colours are the ratio at each combination\u2019s own P_u</b> (green \u2264 1, red > 1; the ratio table above).'));
+  pc.appendChild(el('div','note','Shape of the contour: on a doubly symmetric section the \u03c6 contour is pinched toward the 45\u00b0 direction, more than the nominal one: bent diagonally only the corner bar is at the extreme tension depth, so \u03b5<sub>t</sub> and \u03c6 are lower there than in uniaxial bending (default pedestal at P<sub>u</sub> = 240.8 k: \u03c6 = 0.79 uniaxial, 0.68 at 45\u00b0; the 45\u00b0 point is at 0.53 of the uniaxial \u03c6M<sub>n</sub> on each axis, 0.62 on the nominal contour). The plotted contour joins 28 neutral-axis angles with straight lines; the ratio does not use them: it finds the capacity point exactly in the demand direction (the ratio table).'));
+  vw.appendChild(pc);
+  const th=el('div','noprint');th.dataset.sfpmv='th';
+  const pt=el('div','plot');pt.id='plot-pmt-'+i;pt.style.height='420px';th.appendChild(pt);
+  th.appendChild(el('div','note','P\u2013M interaction curve along the moment direction \u03b8 = atan2(M<sub>ux</sub>, M<sub>uy</sub>) of the governing combination: at each P the design capacity |\u03c6M<sub>n</sub>|<sub>\u03b8</sub> = \u221a(\u03c6M<sub>nx</sub>\u00b2 + \u03c6M<sub>ny</sub>\u00b2) found in that direction by the routine of the ratio (the neutral-axis angle is iterated until the capacity points along \u03b8), capped at \u03c6P<sub>n,max</sub>. The ratio is measured at constant P<sub>u</sub> (dotted horizontal line): ratio = |M<sub>u</sub>| / |\u03c6M<sub>n</sub>|<sub>\u03b8</sub>, worked in the governing-ratio block above. Other combinations have their own \u03b8 and are not on this curve. Screen only (not in the Report).'));
+  vw.appendChild(th);
+  const t3=el('div','noprint');t3.dataset.sfpmv='3d';
+  const p3=el('div','plot');p3.id='plot-pm3-'+i;p3.style.height='480px';t3.appendChild(p3);
+  t3.appendChild(el('div','note','\u03c6 failure surface (M<sub>y</sub>, M<sub>x</sub>, P), built from load contours (36 neutral-axis angles) at 24 axial levels from the design tension strength 0.9A<sub>st</sub>f<sub>y</sub> to \u03c6P<sub>n,max</sub>, with the flat top of the axial cap. Markers: the LRFD combinations (M<sub>uy</sub>, M<sub>ux</sub>, P<sub>u</sub>), coloured by ratio. Drag to rotate. A horizontal cut of this surface at P<sub>u</sub> is the load contour. Screen only (not in the Report).'));
+  vw.appendChild(t3);
+  b.appendChild(vw);
+  sfpmApply(vw,sfpmViewOf(i));
   b.appendChild(eqBlock('Tie spacing limit','ACI 318-19 25.7.2.1',
    's_{max} = \\min(16 d_{b,long},\\,48 d_{b,tie},\\,\\text{least dim})',
    's_{max} = \\min(16\\cdot'+f2(BAR_DIA[state.peds[i].reinf.longSize||8])+',\\,48\\cdot'+f2(BAR_DIA[state.peds[i].reinf.tieSize||3])+',\\,'+f2(pd.bmin)+')',
