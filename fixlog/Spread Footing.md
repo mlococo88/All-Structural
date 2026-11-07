@@ -7082,3 +7082,18 @@ index 50f3837..c2d5000 100644
 - **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none (the view choice is session-only, `SFWPV`).
 - **How verified:** harness origin/main vs the branch on def, rev, dir, wTall, w769h, wAll, wHC, wHCe, wHCd: R and P2 **0 differences**, dashboard text identical; the Report differs only by the wall figures and their notes. 0 console errors, 0 KaTeX errors. Screenshots at 1400 and 390 px. Tests: see the PR.
 - **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-wall-notes (PR #1169: https://github.com/mlococo88/All-Structural/pull/1169) (SFWD-6: the remaining run-on notes on the Wall Design tab and in the Report's Wall design section as a bold lead and items, with the SFNL helpers; display only, no result change)
+
+### SFWD-6. Wall notes as items   [display only] [no result change]
+- **Request (engineer, 2026-11-07):** no run-on paragraph notes on the Wall Design tab or in the Wall Report section: a bold lead and bullets, action items ("Input needed: horizontal bars") on their own warning line at the top; every fact and citation kept. The other long notes of the tool were done in SFNL-1 / SFNL-2 (#1167, which left the Wall Design tab out). The "pedestal checks stand in" wording was removed in SFWD-2 / SFWD-4.
+- **Changed (each `el('div',…)` now `el('div','… sfNL',sfNL(lead,[[lead words, text], …]))`; text unchanged except the split):**
+  - `sfdWallCard`, anchor `if(w.hz.need)b.appendChild(el('div','warnbox`: "Input needed: enter the wall's horizontal bars." + "Where:" + "Until then REVIEW:" (was one paragraph). Still the first element of the card.
+  - `sfdWallConn`, anchor `Listed with the other elements in`: before "Concrete bearing (16.3.3.4, …) … are listed with the other elements in 5.6 …; the dowels and the shear friction of this wall are worked below." After: lead "Listed with the other elements in 5.6 Concrete Bearing & Dowels:" + "Concrete bearing:", "Dowel minimum:", "ℓ_dc:", "Worked below:".
+  - `sfsfRender` (shared with card 5.6), anchor `Drawing note required:`: lead "Drawing note required: roughen the top of the footing under the pedestal." + "Why:" (μ = 1.0λ, Table 22.9.4.2, about 1/4 in amplitude) + "Action:".
+  - `sfdoRender` (shared with card 5.6): "A_s,req = 0." + "Why:" + "So:" (16.3.3, 5.6); "(2d) Pedestal side." + "Dowels:" + "So:".
+  - `sfdWallItems` "Not checked": the full list (it is the card's closing list and now a Report list) replaced by a pointer with the short names: "the list at the end of this wall's card and Report section (Chapter 18, openings, strut-and-tie, 11.8, 21.2.4, loads between top and base, deflections)".
+  - Report `sfrWallSub`: the wall statement `{type:'note',text:sfdWallTxt(w,false)}` → `...sfrNL('Wall statement:', items)`; "Out of plane, per ft … Not checked: <list>." → the first sentence as a note + `...sfrNL('Not checked for this wall:', SFWD_NOT_L)`.
+- **Formulas, factors, units, code references:** none changed. **Saved data:** none.
+- **How verified:** harness origin/main vs the branch, 9 cases (def, rev, dir, wTall, w769, w769h, wAll, wHCe, wSel): R, P2 0 differences, dashboard identical, the digit sequence of the Report text identical in all 9 (only the wording / splitting changed). 390-px screenshot of the wall card. 0 console errors, 0 KaTeX errors. Tests: see the PR.
+- **Other copies:** none.
