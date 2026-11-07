@@ -2191,7 +2191,7 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
   - The member delivering a point load (post end grain, hanger) is not checked.
   - Supporting-member C<sub>b</sub> is fixed at 1.0.
 
-## 2026-11-07 — PR: claude/timber-notch-face (TBN1: notch face selector — tension face, compression face, interior)   [calc change: new check option] [old projects unchanged]
+## 2026-11-07 — PR: claude/timber-notch-face (PR #1034: https://github.com/mlococo88/All-Structural/pull/1034) (TBN1: notch face selector — tension face, compression face, interior)   [calc change: new check option] [old projects unchanged]
 
 Line numbers are approximate; search for the anchor text. Code sites are tagged `TBN1`.
 
