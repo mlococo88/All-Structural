@@ -2666,3 +2666,42 @@ From the code-compliance review of 2026-11-07 (finding H3, the plate-girder buil
 - **Decision (pending engineer review):** k defaults to t_f (no weld leg) in plate-girder mode; it lowers R_n in J10.2 and J10.3, so it is conservative; the user enters k = t_f + weld size to count the weld. Only doubly symmetric girders (equal flanges).
 - **How verified:** origin/main vs branch, the 11 earlier scenarios and the v16 engine cases: identical (option off). A new plate-girder scenario (F.14 plates, 60 ft span) moves as expected (properties from the plates, self-weight 296 lb/ft). UI: the checkbox appears with Built-up, sets `section.plates`, worked lines shown. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
 - **Saved data:** new optional field `section.plates` in the saved state (absent = off, so every saved project opens as before). No key changed.
+
+## 2026-11-07 — PR: claude/steelbeam-h2-h33-stations (PR #1023: https://github.com/mlococo88/All-Structural/pull/1023) — §H3.3 open-section torsion checked at every station, per element (flange tip, flange, web), with V(z) and M(z); web shear by VQ/It (H2; calculation change)
+
+From the code-compliance review of 2026-11-07 (finding H2).
+
+### H2. h33Check at every torsion station   [calculation change; more conservative in the check cases]
+- **Problem:** `h33Check` took the torsional stresses at one station, `tor.crit`, picked by a torsion-only criterion (midspan for a midspan torque on fork supports, where θ′ = 0). The support, where the St-Venant shear and the flexural shear are both largest, was never checked. The web's flexural shear was the average V/(d t_w), not VQ_w/(I_x t_w), and the St-Venant shear G·max(t_f,t_w)·θ′ (the flange value) was added to it. The moment was the governing region's largest moment, not M at the station.
+- **Governing provision:** AISC 360-16 §H3.3 (stresses combined at the same point; (a) yielding under normal stress φF_y, (b) shear yielding φ0.6F_y, (c) buckling); AISC Design Guide 9 (1997) Eqs. 4.1 (τ_t = Gtθ′), 4.3a (σ_w), 4.3b (τ_w), 4.5 (M/S), 4.6 (VQ/It). Example H.6 (v16) checks midspan and support separately.
+- **Where (1):** `h33Check` replaced, anchor `/* ---- §H3.3 combination with the other member demands ----`.
+- **Before (core):**
+```js
+  const fbx=(Math.abs(dem.Mux||0)*12)/p.Sx;
+  const fvx=(Math.abs(dem.Vux||0))/(p.d*p.tw);
+  const s=tor.crit;
+  const sigW=kT*Math.abs(s.sigW),tauT=kT*Math.abs(s.tauT),tauW=kT*Math.abs(s.tauW);
+  const fn=fa+fbx+fby+sigW;
+  const fv=fvx+fvy+tauT+tauW;
+```
+- **After (core):** for every station z of `tor.st` (201 points), with {V, M} = `dem.vm(z)` (or the constant |V_ux|, |M_ux| when `vm` is absent):
+```js
+    const fbx=M*12/p.Sx,sigW=kT*Math.abs(s.sigW),fn=fa+fbx+fby+sigW;                       // flange tip, normal
+    const fbF=V*Qf/(p.Ix*p.tf),tTf=kT*Math.abs(G*p.tf*th1),tW=kT*Math.abs(s.tauW),fvF=fbF+fvy+tTf+tW;  // flange, shear
+    const fbW=V*Qw/(p.Ix*p.tw),tTw=kT*Math.abs(G*p.tw*th1),fvW=fbW+tTw;                    // web, shear
+```
+  and each is maximised over z: f_n (governing z_N), f_v = max(f_vf, f_vw) (governing z_V and element). DCR_N = f_n/(0.9F_y), DCR_V = f_v/(0.9·0.6F_y), unchanged; §H3.3(c) buckling (`h33Buckling`) uses the stresses of the governing normal station, unchanged. Q_f, Q_w from the section (database or plates); if missing, from the idealised plates.
+- **Where (2):** `designAll`, per combination, anchor `/* H2: V(z), M(z) of this combination when the torsional span is the whole analysed beam`. `vm(z) = evalVM(z/12, cb.R, cb.f)` when the torsional span equals the analysed beam length (z = x); otherwise (an entered torsional span differing from the beam, e.g. one span of a continuous beam) the combination's |V|max and |M|max act at every station (conservative envelope). Member and batch modes pass the entered V_ux, M_ux (constant at every station, as before for M).
+- **Where (3):** `buildDesignChecks`, the summary detail names the element and the governing z of the governing stress. Torsion tab: a note on the stations and Q values, the normal-stress block with its z and M(z), and a shear block with the flange and web lines each at its own z (anchor `/* H2: every station checked`). Old print-report note text updated.
+- **Decision (pending engineer review):** where the torsional span is not the analysed beam, the largest |V| and |M| of the combination are combined with the torsional stresses at every station (envelope, conservative), as no mapping of torsion z to beam x is defined.
+- **Check case 1 (review case):** W8X67 A992 (I_x 272, t_w 0.570, t_f 0.935, Q_w 34.8, Q_f 14.5), 30 ft simple span, fork supports (`conc_pp`), T_u = 10 kip-ft at midspan, 80 kip DL point loads at 1 ft and 29 ft, self-weight, combination 1.2D + 1.6L + 0.5S.
+  - **Before:** station z = 180 in; f_n = 39.78 ksi, f_v = 20.39 ksi; **DCR 0.884 PASS**.
+  - **After:** support z = 0, V = 97.21 kip, Gθ′ = 11.85 ksi/in: web f_v = 97.21 × 34.8/(272 × 0.570) + 11.85 × 0.570 = 21.82 + 6.75 = 28.57 ksi; 28.57/27.0 = **1.058 FAIL** (flange 16.63 ksi; normal 39.78 ksi at midspan, unchanged).
+  - Combination 1.4D governs: **0.961 → 1.193** (web at the support, 32.21 ksi).
+- **Check case 2 (AISC Design Examples v16.0, H.6):** W10X49 A992, 15 ft, P_u = 1.2(2.5) + 1.6(7.5) = 15 kip and T_u = 90 kip-in at midspan, fork supports, no self-weight.
+  - **Before:** f_v = 3.49 ksi at midspan.
+  - **After:** flange at the support = 0.630 + 10.07 + 0.56 = **11.26 ksi** (H.6: 11.4 ksi, chart-read θ′ = 0.28); web at the support 8.53 ksi; f_n = 40.89 ksi at midspan (H.6: 40.4, chart-read θ″), unchanged.
+- **Check case 3 (member mode):** W8X67, M_ux 100 kip-ft, V_ux 60 kip, same torsion: f_v 13.14 → 20.22 ksi (web at the support).
+- **How verified:** origin/main vs branch on the 13 earlier scenarios plus H.6 and a member-mode torsion case: only the torsion scenarios moved (torsion, plates, h6, memtor), in the §H3.3 shear values; f_n identical in every case; every other check identical; v16 engine cases identical. Torsion tab renders with 0 KaTeX errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
+- **Note:** for a section where the old average-shear value mixed with the flange St-Venant stress exceeded both new element sums at the same station, the new value can be lower; it is the DG 9 value per element.
+- **Saved data:** none changed.

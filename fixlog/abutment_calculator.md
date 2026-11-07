@@ -15857,3 +15857,73 @@ index d823b9f..fa506cf 100644
 -  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
 +  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
 ```
+
+## 2026-11-07 — PR: claude/abut-m5-undrained (PR #1021: https://github.com/mlococo88/All-Structural/pull/1021) (ABM5: sliding of a spread footing on clay also checked undrained — the lesser of S_u·B′L and 0.5ΣV — and the lesser of the drained and undrained resistance governs)   [calc change only on clay] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M5.
+
+### ABM5. Undrained sliding on clay
+- **Where:** `computeAll` C-7 sliding (anchors `const SuS=fn.matl==="soil"?`, `const RnD = fn.matl==="soil"`, `const Rn = und? Math.min(RnD, und.Ru) : RnD;`); new input `fnd.SuSl` (panel I-4, before the base friction angle); Tab 3 §3.1 (the undrained lines and note); `migrate` back-fill; Input ID (0 left out).
+- **Before:** R_n = ΣV·tan δ_base on soil, always, even when the bearing stratum is entered as clay (q_n computed with φ_f = 0, c > 0).
+- **After:** S_u is taken as `fnd.SuSl` when entered, or else as the cohesion c of a φ_f = 0 bearing stratum (q_n computed). With S_u known:
+  - R_n,u = min(S_u·B′·L_ftg, 0.5·ΣV), where B′ = B − 2|e| for the permutation (uniform pressure on the effective width).
+  - R_n = min(R_n,drained, R_n,u), with φ_τ and the passive term as before.
+  
+  Without S_u: unchanged. Rock: unchanged.
+- **Problem:** on clay the friction-only resistance is not the governing provision; undrained sliding could be overstated.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 10.6.3.4: Eq. 10.6.3.4-1; footings on clay over at least 6 in of compacted granular material take the lesser of the cohesion and one-half the normal stress (Fig. 10.6.3.4-1). Table 10.5.5.2.2-1 lists φ_τ for concrete on clay.
+- **Check case (built-in project, S_u = 1.0 ksf entered; governing Strength I permutation ΣV = 1712.5 kip, ΣH = 744.2 kip, e = 2.782 ft; B = 13 ft, L_ftg = 44 ft, δ = 29°, φ_τ = 0.80):**
+  - Drained: R_n = 1712.5·tan 29° = 949.3 kip.
+  - Undrained: B′ = 13 − 2(2.782) = 7.436 ft. S_u B′L = 1.0·7.436·44 = 327.2 kip; 0.5ΣV = 856.3 kip, so R_n,u = **327.2** kip.
+  - R_R = 0.80·327.2 = 261.8 kip, so D/C = 744.2/261.8 = **2.843 FAIL**.
+  - Before: the governing case was the construction stage at D/C **1.101** (R_R = 535.1 kip, already failing).
+  - Bearing-stratum clay (q_n computed, φ_f = 0, c = 1.5 ksf): D/C 1.101 → 1.895.
+- **Decisions (pending engineer review):**
+  - When S_u is known, both resistances are checked and the lesser governs.
+  - The undrained resistance uses the Meyerhof effective width (uniform pressure) instead of the trapezoidal distribution of Fig. 10.6.3.4-1; this is conservative in contact area.
+  - φ_τ stays the panel I-4 value (default 0.80). Table 10.5.5.2.2-1 gives 0.85 on clay, so this is conservative.
+  - The cohesion of a φ_f = 0 bearing stratum is taken as S_u automatically.
+- **Saved data:** new optional field `fnd.SuSl` (0). A saved project changes only if its q_n is computed with φ_f = 0 and c > 0 (clay).
+- **How verified:** headless origin/main vs branch, 27 scenarios: only the 3 clay scenarios move. All tabs and the Report render with 0 console errors; the self-test passes; `check-syntax` passes; `project-library --tool abutment` ALL PASS (the result object of a non-clay project is unchanged).
+- **Other copies:** Spread Footing.html and Retaining Wall Designer.html have their own sliding checks (not changed; one tool per PR).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 4cb6603..c8b38ca 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -707 +707 @@ function defaultState(){
+-      imBuried:true, imFrac:0, dNeg:0,    // ABR4: dNeg = depth of soil in front of the footing neglected for passive (frost, scour, future excavation; ft) [10.6.3.4, 11.6.3.5]
++      imBuried:true, imFrac:0, dNeg:0, SuSl:0,   // ABM5: SuSl = undrained shear strength of clay under the footing for sliding (ksf, 0 = from the bearing inputs when φ_f = 0 and c > 0, else not checked) [10.6.3.4]    // ABR4: dNeg = depth of soil in front of the footing neglected for passive (frost, scour, future excavation; ft) [10.6.3.4, 11.6.3.5]
+@@ -1706 +1706 @@ function migrate(){
+-    fill(S.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","imBuried","imFrac","dNeg"]);   // ABR4: dNeg   // ABR3: imBuried, imFrac
++    fill(S.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","imBuried","imFrac","dNeg","SuSl"]);   // ABM5: SuSl   // ABR4: dNeg   // ABR3: imBuried, imFrac
+@@ -2100,0 +2101 @@ function buildInputs(){
++        ${inpRow("Clay under the footing: undrained S<sub>u</sub> for sliding (0 = none)","fnd.SuSl","ksf",{title:"Footing on clay: the sliding resistance is also checked undrained, the lesser of S_u·B′L and 0.5·ΣV [10.6.3.4, Fig. 10.6.3.4-1]; the lesser of the drained and undrained resistance governs. 0 = the cohesion c of the bearing stratum when q_n is computed with φ_f = 0, else not checked. Tab 3 §3.1."})}
+@@ -3631,0 +3633,5 @@ function computeAll(){
++    // ABM5 (2026-11-07): footing on clay — undrained resistance R_u = min(S_u·B′·L_ftg, 0.5·ΣV) (lesser of the cohesion and half the normal stress,
++    // Fig. 10.6.3.4-1, on the Meyerhof effective width B′ = B − 2|e|). S_u entered (panel I-4) or, when 0, the cohesion c of a φ_f = 0 bearing stratum
++    // (q_n computed). When S_u is known both the drained (friction) and the undrained resistance are checked and the lesser governs (decision).
++    const SuS=fn.matl==="soil"? ((+fn.SuSl>0)? +fn.SuSl : ((fn.qnMode==="soil"&&!((+fn.qnPhi||0)>0)&&(+fn.qnC||0)>0)? +fn.qnC : 0)) : 0;
++    const SuSrc=(+fn.SuSl>0)? "entered" : "bearing";
+@@ -3638 +3644,4 @@ function computeAll(){
+-        const Rn = fn.matl==="soil" ? c.V*Math.tan(deg2rad(fn.deltaB)) : c.V*fn.muRock + fn.caRock*B*Lftg;
++        const RnD = fn.matl==="soil" ? c.V*Math.tan(deg2rad(fn.deltaB)) : c.V*fn.muRock + fn.caRock*B*Lftg;
++        let und=null;   // ABM5
++        if(SuS>0){ const xb=(c.Mv-c.Mh)/c.V, eU=Math.abs(B/2-xb), Bp=Math.max(0,B-2*eU), RuS=SuS*Bp*Lftg, RuH=0.5*c.V; und={Su:SuS, src:SuSrc, e:eU, Bp, RuS, RuH, Ru:Math.min(RuS,RuH)}; }
++        const Rn = und? Math.min(RnD, und.Ru) : RnD;
+@@ -3645 +3654 @@ function computeAll(){
+-        if(dc>slid.dc) slid={dc, D:c.Hx, Rn, RR, V:c.V, phiTau:rf.phiTau, lbl:c.lbl, ls:lsName, c, pUsed, Hy:Hyv, HxN, Hres:Math.hypot(HxN,Hyv), dcX, dcV, vec:dcV>dcX};
++        if(dc>slid.dc) slid={dc, D:c.Hx, Rn, ...(und?{RnD, und, undGov:und.Ru<RnD}:{}), RR, V:c.V, phiTau:rf.phiTau, lbl:c.lbl, ls:lsName, c, pUsed, Hy:Hyv, HxN, Hres:Math.hypot(HxN,Hyv), dcX, dcV, vec:dcV>dcX};
+@@ -5055 +5064 @@ function computeAll(){
+-      dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth"]);
++      dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","SuSl"]);
+@@ -6564 +6573,4 @@ function renderTabStab(R){
+-          `R_R = \\varphi_\\tau R_n${(sl.pUsed??R.passive.on)?" + \\varphi_{ep}P_p":""} = (${fmtT(sl.phiTau??fn.phiTau)})(${fmtT(sl.Rn)})${(sl.pUsed??R.passive.on)?` + (${fmtT(fn.phiEP)})(${fmtT(R.passive.Pp)})`:""} = ${fmtT(sl.RR)}\\ \\text{kip}`])
++          ...(sl.und?[`R_{n,drained} = ${fmtT(sl.RnD)}\\ \\text{kip}\\,; \\quad \\text{undrained (clay): } R_{n,u} = \\min(S_u B'L_{ftg},\\ 0.5\\,\\Sigma V_f) = \\min((${fmtT(sl.und.Su,3)})(${fmtT(sl.und.Bp)})(${fmtT(g.Lftg)}),\\ 0.5(${fmtT(sl.V)})) = ${fmtT(sl.und.Ru)}\\ \\text{kip}`,
++            `B' = B - 2|e| = ${fmtT(geo.B)} - 2(${fmtT(sl.und.e,3)}) = ${fmtT(sl.und.Bp)}\\ \\text{ft}\\,, \\quad R_n = \\min(R_{n,drained},\\ R_{n,u}) = ${fmtT(sl.Rn)}\\ \\text{kip}\\ (${sl.undGov?"undrained governs":"drained governs"})`]:[]),
++          `R_R = \\varphi_\\tau R_n${(sl.pUsed??R.passive.on)?" + \\varphi_{ep}P_p":""} = (${fmtT(sl.phiTau??fn.phiTau)})(${fmtT(sl.Rn)})${(sl.pUsed??R.passive.on)?` + (${fmtT(fn.phiEP)})(${fmtT(R.passive.Pp)})`:""} = ${fmtT(sl.RR)}\\ \\text{kip}`],
++          sl.und?`Footing on clay: S<sub>u</sub> = ${fmt(sl.und.Su,3)} ksf (${sl.und.src==="entered"?"entered, panel I-4":"the cohesion c of the φ<sub>f</sub> = 0 bearing stratum, panel I-4"}). The undrained resistance is the lesser of the cohesion and half the normal stress on the interface (Fig. 10.6.3.4-1), taken on the effective width B′ (uniform pressure); both the drained and the undrained resistance are checked and the lesser governs. 10.6.3.4 assumes at least 6 in of compacted granular material under the footing for the 0.5σ<sub>v</sub> limit; consider the possible shrinkage gap on clay.`:"")
+```
