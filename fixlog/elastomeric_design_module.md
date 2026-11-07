@@ -1511,7 +1511,7 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.6.1 and C14.7.6.1 (Method A for ste
 - `node tests/check-syntax.mjs elastomeric_design_module.html` pass. Headless main-vs-branch probe (18 scenarios): only the items above move; saved state differs only by `tog.hsMin`; Report tab renders; 0 console errors. Screenshot of the Method A panel checked.
 - **Saved data:** additive `tog.hsMin` (0.1196 for old saves). **Other copies:** none.
 
-## 2026-11-07 — PR: claude/edm-m3-deflection (M3, review 2026-11-07) — compressive deflection: Method A check 0.09 h_ri; Method B δ_L, δ_d, δ_lt reported (checked against entered limits)   [new check]
+## 2026-11-07 — PR: claude/edm-m3-deflection (PR #1089: https://github.com/mlococo88/All-Structural/pull/1089) (M3, review 2026-11-07) — compressive deflection: Method A check 0.09 h_ri; Method B δ_L, δ_d, δ_lt reported (checked against entered limits)   [new check]
 
 Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.6 (Eqs. 14.7.5.3.6-1 to -3; C14.7.5.3.6, Eq. C14.7.5.3.6-1), Art. 14.7.6.3.3 / C14.7.6.3.3 (Method A: LL + initial DL deflection of an internal layer or PEP ≤ 0.09 h_ri; PEP ≈ 3 × the steel-reinforced value), Table 14.7.6.2-1 (a_cr 0.25 / 0.35 / 0.45). No owner limit found in MassDOT Part I §3.5.7 or CTDOT BDM §9.2.1.
 
