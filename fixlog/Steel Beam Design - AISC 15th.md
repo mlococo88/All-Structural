@@ -2784,7 +2784,7 @@ From the code-compliance review of 2026-11-07 (finding M4).
 - **How verified:** origin/main vs branch on 16 scenarios + v16 engine cases: only the axial scenario moved (its 1.2D + 1.6L interaction, 0.7403 → 0.7430). Interaction tab renders the B1 block, 0 KaTeX errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
 - **Saved data:** none changed.
 
-## 2026-11-07 — PR: claude/steelbeam-m3-j10-more — J10.4 web sidesway buckling, J10.1 flange local bending, and web local yielding for tensile forces (M3; new checks)
+## 2026-11-07 — PR: claude/steelbeam-m3-j10-more (PR #1056: https://github.com/mlococo88/All-Structural/pull/1056) — J10.4 web sidesway buckling, J10.1 flange local bending, and web local yielding for tensile forces (M3; new checks)
 
 From the code-compliance review of 2026-11-07 (finding M3). Beam mode; member and batch modes unchanged.
 
