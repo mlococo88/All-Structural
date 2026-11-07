@@ -195,6 +195,19 @@ test('LTS-6 HC-1: base plate P_rod 17,959 lb, t_req 0.939 in ≤ 1.25 in; fillet
   near(wd.phiRn, 6.9596, 1e-3, 'φRn'); near(wd.gov.q, 4.6507, 2e-3, 'q'); near(wd.ratio, 0.6682, 5e-4, 'ratio'); assert.ok(['d45', 'd315'].includes(wd.gov.lc));
   assert.equal(L.baseWeld(ba, mc.Bs, { type: 'cjp' }).ok, true);
 });
+/* LPL8 (2026-11-07): rectangular tube, the weld as a rectangular line group. Hand check, B_x = 8 in (along x), B_y = 6 in, one row
+   M_x 10,000, M_y 5,000 lb·ft, P 1,000 lb, V_x 500, V_y 300 lb, T 2,000 lb·ft, B = 1.02:
+   S_wx = 6·8 + 8²/3 = 69.333, S_wy = 8·6 + 6²/3 = 60.0 in², L_w = 28 in;
+   q_n = 122.4/69.333 + 61.2/60 + 1.0/28 = 2.82110; q_s = 0.5/16 + 0.3/12 + 24/96 = 0.30625; q = 2.83767 kip/in → 2.83767/6.95953 = 0.40774. */
+test('LPL8: square / rectangular tube base weld as a rectangular line weld (hand check q 2.8377 kip/in, ratio 0.4077)', () => {
+  const L = ltsEngine();
+  const ba = { rows: [{ combo: 'E1max', name: 'Extreme I', lcName: 'test', Mx: 10000, My: 5000, M: Math.hypot(10000, 5000), P: 1000, Vx: 500, Vy: 300, V: Math.hypot(500, 300), T: 2000 }] };
+  const wd = L.baseWeld(ba, { E1max: { B: 1.02 } }, { type: 'fillet', size: 0.3125, Fexx: 70, D: 6, shape: 'rect', Bx: 8, By: 6 });
+  near(wd.Swx, 69.3333, 1e-3, 'S_wx'); near(wd.Swy, 60, 1e-9, 'S_wy'); near(wd.gov.qn, 2.82110, 1e-4, 'q_n'); near(wd.gov.qs, 0.30625, 1e-6, 'q_s');
+  near(wd.gov.q, 2.83767, 1e-4, 'q'); near(wd.ratio, 0.40774, 1e-4, 'ratio'); assert.equal(wd.ok, true);
+  const wr = L.baseWeld(ba, { E1max: { B: 1.02 } }, { type: 'fillet', size: 0.3125, Fexx: 70, D: 6 });   // round (no shape): the circle formula, unchanged
+  assert.equal(wr.shape, undefined); near(wr.Sw, Math.PI * 9, 1e-9, 'S_w circle');
+});
 
 /* ---------- LTS-7: Broms embedment with the LTS factored groundline actions (Art. 13.6.1.1, C13.6.1.1), the page's bromsEmbedment ----------
    HC-2 by hand: governing Extreme I max, case 1 (wind toward 0°): V_F = 737.22 lb, M_F = 6,653.9 × B 1.00487 = 6,686.3 lb·ft.
