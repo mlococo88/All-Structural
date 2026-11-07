@@ -2373,7 +2373,7 @@ function listTables() {
 - **Saved data:** no key or format change (§5).
 - **Other copies:** `abutment_calculator.html` has its own seismic connection force (AUDIT row "Earth-retaining / abutment"); not changed here (one tool per PR).
 
-## 2026-11-07 — PR: claude/subloads-dry-case (DRY) — a no-water (dry / low-water) case alongside the design flood, with dry soil weight; each effect takes whichever governs (review H3; §4 result change)
+## 2026-11-07 — PR: claude/subloads-dry-case (PR #1117: https://github.com/mlococo88/All-Structural/pull/1117) (DRY) — a no-water (dry / low-water) case alongside the design flood, with dry soil weight; each effect takes whichever governs (review H3; §4 result change)
 - **Why:** in-depth code review of 2026-11-07, finding H3.
 - **Problem:** with water on, every Strength, Service and Extreme Event I combination always included the design flood WA (alternative with no zero option: `alt(p4.WAd)`), with its buoyancy, and the soil over the footing was always taken buoyant below the design flood level (`earthPier`). Buoyancy and the lighter soil relieve axial compression, so the maximum footing / pile compression was too low (**unconservative**, −9.9 % in the check case). The code leaves the design water levels for each limit state to the Owner and requires the extreme force effect.
 - **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 3.7.1 (design water levels as specified or approved by the Owner) and Art. 3.4.1 (the extreme force effect; loads that reduce the effect left out where that governs).
