@@ -6867,3 +6867,32 @@ index 50f3837..c2d5000 100644
 - **How verified:** SF harness (19 existing cases + `tq` above + `tqDir`, direct mode, Ped 1 T_u = −6 → |T_u| = 6, N_u = 264 k: φT_th = 11.84, D/C 0.507) on origin/main vs the branch: with T_u = 0 every R and P2 value identical (only the new `P2.pedTor` key), dashboard text identical, Report adds only the note; 0 console errors, 0 KaTeX errors. Old save without `Tu` migrates to 0; entering 40 in the input gives D/C 4.266. Tests: see the PR.
 - **Other copies:** none.
 - **Open items:** torsion design (22.7.6, A_t/s, A_ℓ, 9.6.4, 9.7.5) not performed; hollow sections (Table 22.7.4.1(b)) not offered (pedestals are solid).
+
+## 2026-11-07 — PR: claude/sf-wall-inplane (PR #1166: https://github.com/mlococo88/All-Structural/pull/1166) (SFWD-4: wall in-plane axial and flexure of the whole wall about its strong axis by strain compatibility, every LRFD combination; the biaxial pedestal P–M stand-in removed for walls; in-plane shear 11.5.4 verified, unchanged; CALCULATION CHANGE for Wall elements only)
+
+### SFWD-4. Wall in-plane checks   [CALCULATION CHANGE, Wall elements only; CLAUDE.md §4]
+- **Request (engineer, 2026-11-07):** "do the structural checks for that wall". Part (b): in-plane. #1163 left the biaxial pedestal P–M of the whole section as an in-plane stand-in. This PR replaces it.
+- **Provisions read (ACI 318-19, pp. 169–170 = PDF pp. 171–172; paraphrased):**
+  - 11.5.4.1: V_n by 11.5.4.2–11.5.4.4 (strut-and-tie permitted where h_w/ℓ_w < 2: not used); reinforcement per 11.6, 11.7.2, 11.7.3.
+  - 11.5.4.2: V_n ≤ 8√f′c A_cv.
+  - 11.5.4.3 (Eq. 11.5.4.3): V_n = (α_cλ√f′c + ρ_t f_yt)A_cv, α_c = 3 for h_w/ℓ_w ≤ 1.5, 2 for ≥ 2.0, linear between.
+  - 11.5.4.4 (Eq. 11.5.4.4): with net axial tension, α_c = 2(1 + N_u/(500A_g)) ≥ 0, N_u negative in tension.
+  - 11.5.2.1 / 22.4: P_n, M_n by 22.4; 11.4.2.1 axial cap. Errata 2022: nothing on Chapter 11.
+- **In-plane shear (11.5.4): verified against the text, no change.** `sfdWallInfo`: α_c from h_w/ℓ_w, Eq. 11.5.4.4 for net tension, V_c + V_s capped at 8√f′c A_cv (no λ in the cap, as printed), f_yt ≤ 60 000 psi (Table 20.2.2.4(a)), φ = 0.75, A_cv = tℓ_w, ρ_t provided; ρ_ℓ enters through 11.6.2 (Wall reinforcement). Check (`w769h`): h_w/ℓ_w = 24/72 = 0.333 → α_c = 3; φV_n = 0.75·469.10 = 351.82 k; V_u = 120 k → 0.341 (unchanged).
+- **In-plane axial + flexure (new; `sfdWallOOP`, anchor `/* SFWD-3 (2026-11-07): in-plane axial and flexure of the whole wall` — the block tag is the WIP name, kept):**
+  - Section t × ℓ_w with every vertical bar of the cage at its position along ℓ_w (`pd.pmBars`, both curtains and the end bars), `sfwSec` (22.2: ε_cu = 0.003, 0.85f′c over β₁c, bars ±f_y, displaced concrete deducted), φ by ε_t of the farthest bar (21.2.2), φP_n,max = 0.65·0.80P₀ (11.4.2.1, 22.4.2.1).
+  - Demand: every LRFD combination, P_u (with self-weight) and M_u,in at the wall base (M_ux for a wall along y; V h and P e included). Ratio = M_c/φM_n(P_u); P_u/φP_n,max above the cap; P_u/φP_n,t below the tension capacity.
+  - In-plane slenderness: r = 0.3ℓ_w, I_g = tℓ_w³/12, M_2,min = P_u(0.6 + 0.03ℓ_w), magnified as out of plane where kℓ_u/r exceeds the limit. **Decision (pending engineer review):** k, ℓ_u and the top bracing are the out-of-plane inputs.
+  - Not a biaxial check: the out-of-plane moment acts with the in-plane moment through the per-ft check at the two ends (N = P/ℓ_w ± 6M_u,in/ℓ_w², SFWD-2/-3). **Decision (pending engineer review):** this replaces the biaxial stand-in.
+- **What replaces what:** "Pedestal P–M (biaxial)" no longer includes walls (dashboard chip, Check Summary row and its card links, `sfdChCond`); new chip / Summary row "Wall in-plane P–M (ACI 318-19 11.5.2)" (`S-wd<i>` in the Report); card block "Wall: in-plane P–M, whole wall" with every combination in a table; Report topic "In-plane axial and flexure, whole wall" (`wi.Pmax`, `wi.klr`, `wi.c`, `wi.Mn`, `wi.R`); 6W.1 summary column "In-plane P–M"; the stand-in wording removed (`SFWD_INTRO`, `sfdWallItems` "In plane", "Wall checks" chip and row, the card's not-checked list).
+- **§4 callout, before / after (in-plane flexure of a wall):** before: biaxial pedestal P–M ratio of the whole section (SFPM, ACI 318-19 22.4). After: uniaxial strong-axis P–M ratio, ACI 318-19 (2019) 11.5.2.1 → 22.4, 22.2.
+- **Hand check (`wTall`: wall 12 × 72 in along y, h = 12 ft, 14 #5 (7 per long face), f′c 4000, f_y 60 000, governing 0.9D + 1.0(+Wy)):**
+  - Bars: d′ = 2 + 0.625/2 = 2.3125 in, 7 positions at s = (72 − 4.625)/6 = 11.229 in, 2 × 0.31 in² each; A_st = 4.34 in².
+  - P₀ = 0.85·4(864 − 4.34) + 60·4.34 = 3183.24 k, φP_n,max = 1655.29 k.
+  - r = 0.3·72 = 21.6 in, kℓ_u/r = 2·144/21.6 = 13.33 ≤ 22: slenderness neglected.
+  - P_u = 0.9(60 + 10.8) = 63.72 k, M_u,in = 20 k × 12 ft = 240.00 k-ft.
+  - At P_u: c = 7.466 in, a = 0.85c = 6.346 in, C_c = 0.85·4·6.346·12 = 258.91 k, P_n = 70.80 k (φP_n = 63.72), M_n = 911.21 k-ft, ε_t = 0.0250 → φ = 0.90, φM_n = **820.09 k-ft**; ratio 240.00/820.09 = **0.293**. Checked by an independent script (same 820.09).
+  - Before: Pedestal P–M (biaxial) chip 0.30 (Ped 1 wall stand-in 0.2986). After: Wall in-plane P–M 0.29; Pedestal P–M 0.06 (Ped 2 only).
+  - `w769h` (18 × 72 in, 8 #9): P_u = 266.43 k, M_u,in = 240 k-ft, φM_n = 1672.98 k-ft → 0.143 (stand-in 0.148). `wHCe`: 0.152 (stand-in 0.156). `wAll`, `wOOP`, `wHC`: M_u,in = 0 → 0 (stand-in 0.20 / 0.20 / 0.06 came from the out-of-plane moment, now in the per-ft check: 0.22 / 0.21 / 0.105).
+- **How verified:** harness origin/main 4f458f8 vs the branch: pedestal cases (def, rev, sfe, sfe5, dir, sfe9, revEx, thin, revHook, edgeHook): R, P2, dashboard, Report identical. Wall cases: only `P2.wallD[i].ip` added and the texts above. 0 console errors, 0 KaTeX errors. Tests: see the PR.
+- **Other copies:** none.
