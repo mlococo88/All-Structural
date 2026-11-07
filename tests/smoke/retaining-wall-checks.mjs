@@ -11,7 +11,7 @@
 // RWPR (2026-11-07): the Report prints alone, with every section, the overview figures and the input echo; 0 KaTeX errors.
 // RWKX (2026-11-07): the tabs' equations are all set by KaTeX, none in error; MathJax is not loaded.
 // RWPL (2026-11-07): pile-supported footing (Phase 8c) input errors and results are in CASES and AUD.
-// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, RWFF front-face T&S, RWSK shear key, RWE1 AASHTO Extreme Event I, RWIB ACI/IBC 0.7E, RWSQ stem seismic, RWCV EE II vertical earth thrust, RWUP ACI uplift split, ...).
+// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, RWFF front-face T&S, RWSK shear key, RWE1 AASHTO Extreme Event I, RWIB ACI/IBC 0.7E, RWSQ stem seismic, RWCV EE II vertical earth thrust, RWUP ACI uplift split, RWPC partial-contact soil block, ...).
 //   node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 import path from 'path';
 import { openPage, resolveFile } from '../lib.mjs';
@@ -254,6 +254,12 @@ const AUD = [
     ['Math.abs(R.pile.comb[0].L.rows[0].P - 83.604) < 0.001 && Math.abs(R.pile.comb[0].L.rows[1].P - 77.664) < 0.001 && Math.abs(R.pile.govC.cap.c - 195) < 1e-9', 'Strength I max'],
     ['R.checks.pileSpacing.ok && R.checks.pileEdge.ok && R.checks.pileEmbed.ok && !R.checks.eeSliding && !R.warnings.some(w => /^AASHTO bearing/.test(w))', 'detailing checks (Art. 10.7.1.2), no soil notes']]],
   ['RWPL spread footing unchanged: no pile results', {}, [['!R.pile && !(\'pile\' in R) && R.checks.bearing && R.checks.ot', 'spread footing checks, no pile field in the results']]],
+  ['RWPC ACI L_t 2, L_h 3, t_f 24 (no water, e_u > B/6): soil block 3x̄ — toe 57755 → 13589, heel 5151 → 9396', { Lt: 2, Lh: 3, tf: 24 }, [
+    ['Math.abs(R.Mu_toe_net - 13589.1) < 1 && Math.abs(R.Mu_heel_net - 9396) < 1 && R.tcG_up && R.tcG_up.sp.g === 0 && R.tcG_up.sp.kind === "toe"', 'toe 13589, heel 9396'],
+    ['/its resultant lies outside the kern/.test(T.footing) && /partial contact: triangular block/.test(T.stability)', 'Footing Step 1 and Stability Step 7']]],
+  ['RWPC AASHTO Rankine β 20° (Strength Ia beyond the kern): heel 36600 → 44966, #6 @ 7', { design_basis: 'AASHTO', beta: 20, aashto_ep_method: 'rankine' }, [
+    ['Math.abs(R.Mu_heel_net - 44966.2) < 1 && R.sel_heel.label === \'#6 @ 7" o.c.\'', 'heel 44966, #6 @ 7']]],
+  ['RWPC default (full contact): no block', {}, [['R.hcG_up === null && R.tcG_up === null && Math.abs(R.Mu_toe_net - 6572) < 1 && Math.abs(R.Mu_heel_net - 15533) < 1', 'unchanged']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {
