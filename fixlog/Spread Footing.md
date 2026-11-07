@@ -6238,7 +6238,7 @@ index 50f3837..c2d5000 100644
 - **How verified:** SF harness as above; `phiFlexure` evaluated in Node at the check points; check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser, spread-footing-nobear.
 - **Saved data:** none. **Other copies:** none (the φ function is local to this tool).
 
-## 2026-11-07 — PR: claude/sf-h1-slender (SFSL: slender pedestal: P–M check with moment magnification, ACI 318-19 6.6.4; fails where unstable or beyond 1.4× first order, 6.2.5.3; CALCULATION CHANGE for slender pedestals only)
+## 2026-11-07 — PR: claude/sf-h1-slender (PR #974: https://github.com/mlococo88/All-Structural/pull/974) (SFSL: slender pedestal: P–M check with moment magnification, ACI 318-19 6.6.4; fails where unstable or beyond 1.4× first order, 6.2.5.3; CALCULATION CHANGE for slender pedestals only)
 
 - **Problem:** when k ℓ_u/r > 22 (6.2.5.1(a), k = 2.0 since SFKS), the tool showed a "slender" flag but the P–M ratio used the first-order base moments, so the pedestal could PASS silently.
 - **Where / exact code (`Spread Footing.html`):**
