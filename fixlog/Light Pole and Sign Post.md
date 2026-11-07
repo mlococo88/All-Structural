@@ -2536,7 +2536,7 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **How verified:** `node tests/lightpole-compare.mjs --a origin/main` (29 cases): **results identical, cable values identical**, 0 console errors; text differences only in the min-steel code column and the LTS known-limits sentence. Probe for L2 (above). `check-syntax`, `phone-layout --tool lp`, `project-library --tool lightpole`, `lightpole-anchor-handoff`, `lightpole-projection`, `lightpole-signviews`, `tests/engine/run.mjs lightpole`: pass.
 - **Saved data:** none.
 
-## 2026-11-07 — PR: claude/lp-l8-square-weld (LPL8: LRFDLTS base weld of a square / rectangular tube as a rectangular line weld)   [§4: square / rect. LTS posts only, less conservative (was a circle of D = side); round identical; cable values identical]
+## 2026-11-07 — PR: claude/lp-l8-square-weld (PR #1060: https://github.com/mlococo88/All-Structural/pull/1060) (LPL8: LRFDLTS base weld of a square / rectangular tube as a rectangular line weld)   [§4: square / rect. LTS posts only, less conservative (was a circle of D = side); round identical; cable values identical]
 - **Problem (review L8, 2026-11-07):** `LpLts.baseWeld()` treated every fillet-welded socket as a line around a circle of diameter D = the side, S_w = πD²/4. For a square tube the weld runs around the square (S_w = B² + B²/3), so the circle overstated the weld force by about 1.7× and failed welds that are adequate.
 - **Where:**
   - `apps/light-pole/lts-engine.js`, `baseWeld(ba, Bs, w)`, anchor `if ((w.shape === 'square' || w.shape === 'rect')`. New branch for `w.shape` 'square' / 'rect' with `w.Bx` (side along x = the rectangular depth H_t) and `w.By` (side along y = the width B):
