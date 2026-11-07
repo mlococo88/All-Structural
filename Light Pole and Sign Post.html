@@ -6179,6 +6179,8 @@ function lppDashItems(){
     if(X.fd) ltsShaftChecks(X.fd).forEach(c=>out.push(Object.assign({name:c.name,dc:c.ratio,st:c.ok?'pass':'fail',cond:[],   // LPH4
       text:lppChkVal(c)+` (utilization ${fmt(100*c.ratio,0)}%)`,ref:c.code+' (shaft reinforcement per ACI 318-19, Q-C4)'},card('shaft','ltsFndCard',post+' foundation — drilled shaft'))));
     anch();
+    out.push(Object.assign({name:'Anchorage ductility',dc:null,st:'na',none:'verify in the Anchorage app',cond:[],   // LPM3
+      text:'Required (Art. 5.16.3): the rods must reach their steel strength before the concrete fails — verify in the Anchorage app (not checked here).',ref:'LRFDLTS Art. 5.16.3, C5.16.3'},card('anchors','ltsBpCard',post+' base plate and base weld')));
     if(X.fat) out.push(Object.assign({name:'Fatigue',dc:null,st:X.fat.required?'warn':'na',none:'not required',cond:X.fat.required?['outside this tool']:[],
       text:X.fat.required?'REQUIRED — outside this tool (high-mast tower)':'not required',ref:'Arts. 11.4, 11.7.2'},card('post','ltsDeflCard',post+' — deflection and fatigue')));
     if(X.brk) out.push(Object.assign({name:'Breakaway',dc:null,st:X.brk.needed?'warn':'na',none:'not required',cond:X.brk.needed?['see the checklist']:[],
@@ -7750,6 +7752,11 @@ function lppHash(str){ let h=0x811c9dc5; for(let i=0;i<str.length;i++){ h^=str.c
 // LTS-8 (2026-11-02): in the LRFDLTS mode the hand-off carries the LTS combinations (HANDOFF.md §4.11 schema unchanged): Table 3.4-1
 // Strength I and Extreme I (max/min DC) for every load case of Table 3.9.3-1, M = B·M (Art. 4.8.1 / Eq. 5.12.1-10), the LTS shaft depth
 // (Broms, LTS-7) and the ACI cage of the LTS run. Service I and Fatigue are not sent.
+// LPM3 (2026-11-07, review M3): LRFDLTS 1st Ed. (2015) Art. 5.16.3 (p. 5-37; not revised by the 2017 interim): the anchorage is to be
+// proportioned so that the steel anchor reaches its minimum tensile strength before the concrete fails (C5.16.3: a ductile steel
+// failure). The Anchorage app checks the ACI 318-19 Ch. 17 strengths but is not told that ductility is required: stated here, in the
+// hand-off notes, the LTS Summary, the check panel and the report. Not checked by this tool.
+const LTS_DUCT_NOTE='Anchorage ductility required (LRFDLTS Art. 5.16.3, C5.16.3): proportion the anchorage so that the steel rods reach their minimum tensile strength before the concrete fails, i.e. the concrete-governed tension strengths (breakout, pullout, side-face blowout) must exceed the rod steel strength N_sa, or anchor reinforcement must carry the load. Check this in the Anchorage app; Light Pole does not check it.';
 function ltsAnchorPayload(){
   const inp=lppLtsBlocked?null:lppLastInp, X=lppLtsLast;   // LTS-L2
   if(!inp||!X||!X.ba||!X.mc) return {error:'No LRFDLTS results yet (correct any input errors first).'};
@@ -7759,6 +7766,7 @@ function ltsAnchorPayload(){
   notes.push('Double-nut base: the leveling-nut standoff is not a Light Pole input (standoffClear sent as 0); set it in the Anchorage app.');
   notes.push('AASHTO LRFDLTS 1st Ed. (2015) with 2017 Interim Revisions: Table 3.4-1 Strength I (1.25DC) and Extreme I (1.1DC + W, 0.9DC + W) for the load cases of Table 3.9.3-1 (1: normal, 2: transverse, 3: 0.75 of both); M = B·M (Art. 4.8.1 tapered pole / Eq. 5.12.1-10 prismatic post) at the top of the shaft; torsion per Art. 3.9.4.2. Service I and Fatigue are not sent (fatigue design is not required for these supports, Arts. 11.4, 11.7.2).');
   notes.push('LRFDLTS C5.16.3 refers to ACI 318-11 Appendix D for the anchorage; the Anchorage app uses ACI 318-19 Ch. 17. Cast-in anchor bolts for new work (Art. 5.16.1).');
+  notes.push(LTS_DUCT_NOTE);   // LPM3 (2026-11-07): Art. 5.16.3 ductility, a note only (the Anchorage app shows sender notes; no schema field)
   if(inp.pProj>0) notes.push('Shaft projection above grade p = '+fmt(inp.pProj,2)+' ft: pier depth = Broms embedment L + p (the full concrete below the plate); the combinations are the actions at the top of the shaft.');   // LPPJ
   const nG=appMode==='sign'?(signPosts===2?2:1):1, reo=X.fd.reo;
   const combos=X.ba.rows.filter(r=>r.combo!=='SV1').map(r=>{ const B=X.mc.Bs[r.combo]?X.mc.Bs[r.combo].B:1;
@@ -8057,7 +8065,7 @@ function ltsCalc(){
       ltsAddCard('anchors','ltsBpCard','7',(g.mode==='sign'?'Post':'Pole')+' base plate and base weld','engineering method · AWS D1.1',
         basis+`<p class="lts-dev">${lppEsc(LPP_BP_VERIFY)}</p>`+(lppBpSqNote(inp)?`<p class="tbl-note">${lppEsc(lppBpSqNote(inp))}</p>`:'')+ltsStepsHTML(bpSteps)
         +`<p class="eq-title" style="margin-top:10px"><b>Pole-to-base-plate weld</b></p>`+wSteps
-        +`<p class="tbl-note">Anchor rods: designed in the Anchorage app — the Anchorage card on this tab sends the LRFDLTS combinations (Strength I, Extreme I; M × B). LRFDLTS Arts. 5.16–5.16.3: cast-in-place anchor bolts for new work; hooked bolts only with F<sub>y</sub> ≤ 55 ksi; anchorage per ACI 318 (C5.16.3).${g.mode==='sign'&&g.sign.nPost===2?' Values per post.':''}</p>`); }
+        +`<p class="tbl-note">Anchor rods: designed in the Anchorage app — the Anchorage card on this tab sends the LRFDLTS combinations (Strength I, Extreme I; M × B). LRFDLTS Arts. 5.16–5.16.3: cast-in-place anchor bolts for new work; hooked bolts only with F<sub>y</sub> ≤ 55 ksi; anchorage per ACI 318 (C5.16.3). <b>Ductility (Art. 5.16.3):</b> the rods must reach their minimum tensile strength before the concrete fails (concrete-governed tension strengths &gt; N<sub>sa</sub>, or anchor reinforcement): verify in the Anchorage app; stated in the hand-off notes.${g.mode==='sign'&&g.sign.nPost===2?' Values per post.':''}</p>`); }
     // LTS-7: foundation
     { const fd=ltsFoundation(inp,g,ba,mc,L); lppLtsLast.fd=fd;
       const notes=[], bIn=inp.b*12, n2=(x,d)=>SharedSteps.n(x,d);
@@ -8114,6 +8122,7 @@ function ltsCalc(){
     +`${lppLtsLast&&lppLtsLast.wd?`<tr><td>Base weld</td><td>${lppLtsLast.wd.type==='cjp'?'CJP: base metal governs':`<b>${lppLtsLast.wd.ok?'OK':'NOT OK'}</b>, ratio ${fmt(lppLtsLast.wd.ratio,3)}`}</td><td>Art. 5.14 → AWS D1.1 / AISC 360-16 §J2</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.fd?(lppLtsLast.fd.gov?`<tr><td>Drilled shaft embedment (Broms)</td><td>L = <b>${fmt(lppLtsLast.fd.gov.br.L,2)} ft</b> required; shaft moment ${fmt(lppLtsLast.fd.gm.br.Mu,2)} kip-ft</td><td>Art. 13.6.1.1, C13.6.1.1 (pp. 13-3, 13-4)</td></tr>`:`<tr><td>Drilled shaft</td><td><b>select the Broms soil model</b></td><td>Art. 13.6.1.1</td></tr>`):''}`
     +`${lppLtsLast&&lppLtsLast.fd?ltsShaftChecks(lppLtsLast.fd).map(c=>`<tr><td>${lppEsc(c.name)}</td><td><b>${c.ok?'OK':'NOT OK'}</b>, ${lppChkVal(c)} (${fmt(c.ratio,3)})</td><td>${lppEsc(c.code)}${c.name.startsWith('Shaft torsion')&&!c.ok?'; torsion reinforcement required (not designed here)':''}</td></tr>`).join(''):''}`   // LPH4
+    +`${lppLtsLast&&lppLtsLast.mc?`<tr><td>Anchorage ductility</td><td><b>required — verify in the Anchorage app</b>: concrete-governed tension strengths &gt; rod steel strength N<sub>sa</sub> (or anchor reinforcement); not checked by this tool</td><td>Art. 5.16.3, C5.16.3 (p. 5-37)</td></tr>`:''}`   // LPM3
     +`${lppLtsLast&&typeof lppAnchorChipHTML==='function'&&LPP_ANCH?`<tr><td>Anchors — Anchorage app</td><td>${LPP_ANCH.groups.map(gg=>`${lppEsc(gg.label)}: ${lppAnchorChipHTML(gg.id)}`).join('<br>')}</td><td>LRFDLTS combinations sent from the Anchorage tab (HANDOFF.md §4.11)</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.fat?`<tr><td>Fatigue</td><td>${lppLtsLast.fat.required?'<b>REQUIRED — outside this tool (high-mast tower)</b>':'not required'}</td><td>Arts. 11.4, 11.7.2 (pp. 11-3, 11-10, 2017)</td></tr>`:''}`
     +`${lppLtsLast&&lppLtsLast.brk?`<tr><td>Breakaway</td><td>${lppLtsLast.brk.needed?'required — see the checklist':'not required (outside the clear zone)'}</td><td>Art. 2.5.2; Section 12</td></tr>`:''}`
@@ -8204,7 +8213,7 @@ function ltsReportModel(){
     secs.push({title:'Foundation (Section 13)'+post,subs:[{title:'Drilled shaft',items:it,key:'lts:fnd'}]}); }
   // 7. Anchorage, breakaway, assumptions
   secs.push({title:'Anchorage, breakaway, assumptions',subs:[
-    {title:'Anchor rods',items:[{type:'note',text:'Designed in the Anchorage app (Base Plate & Anchor Bolt Designer) from the LRFDLTS combinations sent from the Anchorage tab (HANDOFF.md §4.11): Strength I and Extreme I, M × B. LRFDLTS Arts. 5.16–5.16.3.'}]},
+    {title:'Anchor rods',items:[{type:'note',text:'Designed in the Anchorage app (Base Plate & Anchor Bolt Designer) from the LRFDLTS combinations sent from the Anchorage tab (HANDOFF.md §4.11): Strength I and Extreme I, M × B. LRFDLTS Arts. 5.16–5.16.3.'},{type:'note',warn:true,text:LTS_DUCT_NOTE}]},
     {title:'Breakaway (Art. 2.5.2, Section 12)',items:[{type:'note',text:X.brk.items.join(' ')}]},
     {title:'Assumptions and decisions',items:[{type:'note',text:['Cables (catenary spans) are not supported in this mode.','Wind directions: the 8 load cases of Table 3.9.3-1.','Pole-top fixture width for the 0.15b torsion taken as √EPA (accepted).'].concat(flags).join(' • ')}]}]});
   return {title:'Light Pole and Sign Post — AASHTO LRFDLTS', subtitle:sign?(g.sign.nPost===2?'Two-post roadside sign':'Monopost roadside sign'):'Highway luminaire pole', code:LpLts.BASIS,

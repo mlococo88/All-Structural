@@ -2203,8 +2203,11 @@ function designAll(A){
     }
     /* torsion */
     if(D.torOpen&&!D.torOpen.blocked)
-      C.h33=h33Check(p,D.torOpen,{Pu:man.Pu||0,Mux:C.flexGov?C.flexGov.Mu:0,Muy:man.Muy||0,
-        Vux:C.Vu||0,Vuy:man.Vuy||0,kT:torScale(D.torOpen,cb.id)});
+      C.h33=h33Check(p,D.torOpen,{Pu:man.Pu||0,Muy:man.Muy||0,Vuy:man.Vuy||0,kT:torScale(D.torOpen,cb.id),
+        /* H2: V(z), M(z) of this combination when the torsional span is the whole analysed beam (z = x); otherwise the
+           combination's largest |V| and |M| at every station (conservative envelope) */
+        vm:Math.abs(D.torOpen.L/12-Ltot)<1e-6?(z=>{const r=evalVM(Math.min(Ltot,z/12),cb.R,cb.f);return{V:r.V,M:r.M};}):null,
+        Vux:Math.abs(cb.Vabs.v),Mux:Math.abs(cb.Mabs.v)});
     if(man.Tu&&D.tors){
       if(D.tors.blocked)C.torsBlocked=D.tors.blocked;
       else{C.phiTn=D.tors.phiTn/12;C.dcrT=Math.abs(man.Tu)/C.phiTn;C.torsNeglect=C.dcrT<=0.20;}
@@ -2286,7 +2289,7 @@ function buildDesignChecks(D,A){
     dem:hg==='B'?hGov.c.h33.dcrB:hg==='V'?hGov.c.h33.fv:hGov.c.h33.fn,
     cap:hg==='B'?1.0:hg==='N'?hGov.c.h33.phiFy:hGov.c.h33.phiFv,
     unit:hg==='B'?'\u2014':'ksi',capSym:hg==='B'?'limit':hg==='N'?'\u03C6F\u1D67':'\u03C6(0.6F\u1D67)',
-    detail:(hg==='B'?'normal stresses against the buckling stresses':hg==='N'?'normal stress':'shear stress')+' at z = '+fmt(hGov.c.h33.z,1)+' in'});}
+    detail:(hg==='B'?'normal stresses against the buckling stresses':hg==='N'?'normal stress':'shear stress ('+hGov.c.h33.elV+')')+' at z = '+fmt(hg==='V'?hGov.c.h33.zV:hGov.c.h33.zN,1)+' in'});}
   else if(tGov)D.checks.push({label:'Torsion',ref:'H3',dcr:tGov.d,combo:tGov.c.name,tab:'tabTors',
     dem:Math.abs(tGov.c.man.Tu),cap:tGov.c.phiTn,unit:'kip\u00B7ft',capSym:'\u03C6T\u2099'});
   else D.checks.push({label:'Torsion',ref:(D.p._kind==='I'||D.p._kind==='C')?'H3.3 / DG 9':'H3.1',na:true,
@@ -5538,13 +5541,28 @@ function stiffKv(p,stiff){
     note:'a/h = '+fmt(ah,2)+' \u2264 3.0 \u2192 k\u1D65 = 5 + 5/(a/h)\u00B2'};
 }
 /* G2.3 stiffener proportioning (no tension field action) — informational */
-function stiffenerReq(p,stiff){
+/* M1 (2026-11-07): AISC 360-16 Sec. G2.3(e), Eq. G2-13: I_st >= I_st2 + (I_st1 - I_st2) rho_w, with
+   I_st1 = h^4 rho_st^1.3/40 (F_yw/E)^1.5 (G2-14), I_st2 = [2.5/(a/h)^2 - 2] b_p t_w^3 >= 0.5 b_p t_w^3 (G2-15),
+   rho_w = (V_r - V_c2)/(V_c1 - V_c2) >= 0 (V_c1 = phi V_n of Sec. G2.1, V_c2 = phi 0.6 F_y A_w C_v2).
+   Before: I_st2 only (the 360-10 form). V_r = the largest |V_u| of the combinations (one stiffener spacing is entered for
+   the whole member); F_yst = F_yw (rho_st = 1). */
+function stiffenerReq(p,stiff,Vr,sh){
   const h=webH(p);
   if(!stiff||!stiff.on||!(stiff.a>0)||!h)return null;
   const ah=stiff.a/h;
   const j=Math.max(0.5,2.5/(ah*ah)-2);
   const b=Math.min(stiff.a,h);
-  return{j,b,ah,Ist:b*Math.pow(p.tw,3)*j,btLim:0.56*SQ(EKSI/p.mat.Fy)};
+  const Ist2=b*Math.pow(p.tw,3)*j,Fy=p.mat.Fy,rhoSt=1;
+  const Ist1=Math.pow(h,4)*Math.pow(rhoSt,1.3)/40*Math.pow(Fy/EKSI,1.5);
+  const r={j,b,ah,Ist2,Ist1,rhoSt,Ist:Ist2,btLim:0.56*SQ(EKSI/Fy)};
+  if(sh&&sh.Vn>0&&sh.Aw>0&&Vr!=null){
+    const kv=sh.kv||5.34,cv=cv2Of(p.htw,kv,Fy),phi=sh.phi||0.90;
+    r.Vr=Math.abs(Vr);r.Vc1=phi*sh.Vn;r.Cv2=cv.Cv2;r.cv2reg=cv.reg;r.Vc2=phi*0.6*Fy*sh.Aw*cv.Cv2;r.phi=phi;
+    const den=r.Vc1-r.Vc2;
+    r.rhoW=den>1e-9?Math.max(0,(r.Vr-r.Vc2)/den):(r.Vr>r.Vc2+1e-9?1:0);
+    r.Ist=Ist2+(Ist1-Ist2)*r.rhoW;
+  }else{r.rhoW=null;r.Ist=Math.max(Ist1,Ist2);}   /* no shear demand known: I_st1 (User Note: conservative) */
+  return r;
 }
 /* ---- shearMajor with stiffener-aware kv (overrides the base version) ---- */
 function shearMajor(p,LvIn,stiff){
@@ -5621,13 +5639,22 @@ function stiffBlock(body,p,sh,D){
       ' (unstiffened, k\u1D65 = 5.34) to '+fmt(sh.Cv,3)+' \u2014 \u03C6V\u2099 increases from '+
       fmt(0.9*0.6*p.mat.Fy*sh.Aw*Cvu,1)+' to '+fmt(sh.phi*sh.Vn,1)+' kip.'));
   }
-  const req=stiffenerReq(p,S.design.stiff);
+  const Vr=(D&&D.perCombo&&D.perCombo.length)?Math.max.apply(null,D.perCombo.map(C=>Math.abs(C.Vu||0))):null;
+  const req=stiffenerReq(p,S.design.stiff,Vr,sh);
   if(req)mkSection('vxStReq','Stiffener Proportioning (\u00A7G2.3, no tension field action)',body2=>{
     body2.appendChild(el('div','note','The tool does <b>not</b> design the stiffener plate. These are the \u00A7G2.3 requirements the plate you provide must satisfy; size it and verify against the Specification directly.'));
-    body2.appendChild(eqBlock({title:'Minimum stiffener moment of inertia',ref:'\u00A7G2.3',
-      lines:['j=\\tfrac{2.5}{(a/h)^2}-2\\ \\ge 0.5=\\max\\left(\\tfrac{2.5}{'+fmt(req.ah,3)+'^2}-2,\\ 0.5\\right)=\\mathbf{'+fmt(req.j,3)+'}',
-        'I_{st}\\ \\ge\\ b\\,t_w^3\\,j='+fmt(req.b,2)+'\\times '+fmt(p.tw,3)+'^3\\times '+fmt(req.j,3)+'=\\mathbf{'+fmt(req.Ist,4)+'}\\ \\text{in}^4'],
-      vars:[['b',fmt(req.b,2)+' in','smaller of a and h'],
+    const IL=['j=\\tfrac{2.5}{(a/h)^2}-2\\ \\ge 0.5=\\max\\left(\\tfrac{2.5}{'+fmt(req.ah,3)+'^2}-2,\\ 0.5\\right)=\\mathbf{'+fmt(req.j,3)+'}',
+        'I_{st2}=j\\,b_p\\,t_w^3='+fmt(req.j,3)+'\\times '+fmt(req.b,2)+'\\times '+fmt(p.tw,4)+'^3=\\mathbf{'+fmt(req.Ist2,4)+'}\\ \\text{in}^4\\quad\\text{(G2-15)}',
+        'I_{st1}=\\tfrac{h^4\\rho_{st}^{1.3}}{40}\\left(\\tfrac{F_{yw}}{E}\\right)^{1.5}=\\tfrac{'+fmt(webH(p),2)+'^4\\times '+fmt(req.rhoSt,2)+'^{1.3}}{40}\\left(\\tfrac{'+p.mat.Fy+'}{29000}\\right)^{1.5}=\\mathbf{'+fmt(req.Ist1,4)+'}\\ \\text{in}^4\\quad\\text{(G2-14)}'];
+    if(req.rhoW!=null)IL.push(
+        'V_{c2}=\\phi\\,0.6F_yA_wC_{v2}='+fmt(req.phi,2)+'\\times 0.6\\times '+p.mat.Fy+'\\times '+fmt(sh.Aw,3)+'\\times '+fmt(req.Cv2,3)+'='+fmt(req.Vc2,1)+'\\ \\text{kip}\\ (C_{v2}\\ \\text{Eq. '+req.cv2reg+'}),\\quad V_{c1}=\\phi V_n='+fmt(req.Vc1,1)+'\\ \\text{kip}',
+        '\\rho_w=\\max\\left(\\tfrac{V_r-V_{c2}}{V_{c1}-V_{c2}},0\\right)=\\max\\left(\\tfrac{'+fmt(req.Vr,1)+'-'+fmt(req.Vc2,1)+'}{'+fmt(req.Vc1,1)+'-'+fmt(req.Vc2,1)+'},0\\right)=\\mathbf{'+fmt(req.rhoW,3)+'}',
+        'I_{st}\\ \\ge\\ I_{st2}+(I_{st1}-I_{st2})\\rho_w='+fmt(req.Ist2,4)+'+('+fmt(req.Ist1,4)+'-'+fmt(req.Ist2,4)+')\\times '+fmt(req.rhoW,3)+'=\\mathbf{'+fmt(req.Ist,4)+'}\\ \\text{in}^4\\quad\\text{(G2-13)}');
+    else IL.push('I_{st}\\ \\ge\\ \\max(I_{st1},I_{st2})=\\mathbf{'+fmt(req.Ist,4)+'}\\ \\text{in}^4\\quad\\text{(no shear demand: I}_{st1}\\text{, User Note)}');
+    body2.appendChild(eqBlock({title:'Minimum stiffener moment of inertia',ref:'\u00A7G2.3(e), Eq. G2-13 to G2-15',
+      lines:IL,
+      vars:[['b_p',fmt(req.b,2)+' in','smaller of a and h'],['\\rho_{st}','1.00','larger of F\u1D67\u1D65/F\u1D67\u209B\u209C and 1.0 (stiffener F\u1D67 taken equal to the web)'],
+        ['V_r',req.Vr!=null?fmt(req.Vr,1)+' kip':'\u2014','required shear: the largest V\u1D64 of the '+(isMember()?'cases':'combinations')+' (one spacing for the whole member)'],
         ['I_{st}','in\u2074','about the web centerline for a pair of stiffeners, or the web face for a single stiffener']]}));
     body2.appendChild(eqBlock({title:'Stiffener slenderness limit',ref:'\u00A7G2.3',
       lines:['\\left(\\tfrac{b}{t}\\right)_{st}\\le 0.56\\sqrt{\\tfrac{E}{F_{yst}}}=\\mathbf{'+fmt(req.btLim,1)+'}\\quad(\\text{at }F_{yst}=F_y='+p.mat.Fy+'\\ \\text{ksi})']}));
@@ -5874,24 +5901,44 @@ function torsionOpen(p,cfg){
   out.crit=st[wi];
   return out;
 }
-/* ---- §H3.3 combination with the other member demands ---- */
+/* ---- §H3.3 combination with the other member demands ----
+   H2 (2026-11-07): checked at EVERY torsion station z, per element, with the flexural demands at the same z:
+     flange tip, normal:  f_n  = |P_u|/A + |M(z)|/S_x + |M_uy|/S_y + |sigma_w(z)|                 (DG 9 Eq. 4.5, 4.3a)
+     flange, shear:       f_vf = |V(z)| Q_f/(I_x t_f) + |V_uy|/(2 b_f t_f) + G t_f |theta'(z)| + |tau_w(z)|   (DG 9 Eq. 4.6, 4.1, 4.3b)
+     web, shear:          f_vw = |V(z)| Q_w/(I_x t_w) + G t_w |theta'(z)|                          (DG 9 Eq. 4.6, 4.1)
+   Each is maximised over z (AISC 360-16 Sec. H3.3: the stresses at the same point; Example H.6 checks the support too).
+   dem.vm(z) gives {V kip, M kip-ft} of the combination at torsion station z (in). Without it (member and batch modes,
+   or a torsional span that is not the analysed beam) the entered / envelope |V| and |M| act at every station
+   (conservative). Before H2: one station chosen by the torsion stresses alone, V/(d t_w) for the web and
+   G max(t_f,t_w) theta' added to it. */
 function h33Check(p,tor,dem){
-  const Fy=p.mat.Fy,phi=0.90;
+  const Fy=p.mat.Fy,phi=0.90,G=GKSI;
   const fa=Math.abs(dem.Pu||0)/p.A;   /* magnitude: an axial tension stress adds to the bending stress on the tension side */
-  const fbx=(Math.abs(dem.Mux||0)*12)/p.Sx;
   const fby=(Math.abs(dem.Muy||0)*12)/p.Sy;
-  const fvx=(Math.abs(dem.Vux||0))/(p.d*p.tw);
   const fvy=(Math.abs(dem.Vuy||0))/(2*p.bf*p.tf);
-  const s=tor.crit;
   /* kT scales the torsional stresses to this combination's torque (torque entered per load case); 1 = the torque as solved */
   const kT=(dem.kT!=null&&isFinite(dem.kT))?Math.abs(dem.kT):1;
-  const sigW=kT*Math.abs(s.sigW),tauT=kT*Math.abs(s.tauT),tauW=kT*Math.abs(s.tauW);
-  const fn=fa+fbx+fby+sigW;
-  const fv=fvx+fvy+tauT+tauW;
-  const out={fa,fbx,fby,fvx,fvy,sigW,tauT,tauW,kT,
-    z:s.z,fn,fv,phiFy:phi*Fy,phiFv:phi*0.6*Fy,
-    dcrN:fn/(phi*Fy),dcrV:fv/(phi*0.6*Fy),
-    dcr:Math.max(fn/(phi*Fy),fv/(phi*0.6*Fy))};
+  const Qf=p.Qf>0?p.Qf:(p.bf-p.tw)/2*p.tf*(p.d-p.tf)/2;
+  const Qw=p.Qw>0?p.Qw:p.bf*p.tf*(p.d-p.tf)/2+p.tw*Math.pow(p.d/2-p.tf,2)/2;
+  const vmC={V:Math.abs(dem.Vux||0),M:Math.abs(dem.Mux||0)};
+  let N=null,VF=null,VW=null;
+  tor.st.forEach((s,i)=>{
+    const vm=dem.vm?dem.vm(s.z):vmC,V=Math.abs(vm.V||0),M=Math.abs(vm.M||0),th1=tor.th1[i];
+    const fbx=M*12/p.Sx,sigW=kT*Math.abs(s.sigW),fn=fa+fbx+fby+sigW;
+    if(!N||fn>N.fn+1e-12)N={z:s.z,M,fbx,sigW,fn};
+    const fbF=V*Qf/(p.Ix*p.tf),tTf=kT*Math.abs(G*p.tf*th1),tW=kT*Math.abs(s.tauW),fvF=fbF+fvy+tTf+tW;
+    if(!VF||fvF>VF.fv+1e-12)VF={z:s.z,V,fvb:fbF,fvy,tauT:tTf,tauW:tW,fv:fvF};
+    const fbW=V*Qw/(p.Ix*p.tw),tTw=kT*Math.abs(G*p.tw*th1),fvW=fbW+tTw;
+    if(!VW||fvW>VW.fv+1e-12)VW={z:s.z,V,fvb:fbW,tauT:tTw,fv:fvW};
+  });
+  const VG=VW.fv>VF.fv?VW:VF;
+  const out={fa,fbx:N.fbx,fby,sigW:N.sigW,Mz:N.M,kT,Qf,Qw,basis:dem.vm?'diagram':'envelope',
+    zN:N.z,zV:VG.z,elV:VG===VW?'web':'flange',flange:VF,web:VW,
+    fvx:VG.fvb,fvy:VG===VF?fvy:0,tauT:VG.tauT,tauW:VG===VF?VF.tauW:0,
+    z:N.z,fn:N.fn,fv:VG.fv,phiFy:phi*Fy,phiFv:phi*0.6*Fy,
+    dcrN:N.fn/(phi*Fy),dcrV:VG.fv/(phi*0.6*Fy)};
+  out.dcr=Math.max(out.dcrN,out.dcrV);
+  if(out.dcrV>out.dcrN)out.z=VG.z;
   if(dem.FcrF!=null||dem.FcrE!=null)h33Buckling(out,dem.FcrF,dem.FcrE);
   return out;
 }
@@ -6107,14 +6154,23 @@ function buildTorsTab(pg){
       if(cb)S.cases.forEach(cs=>{const g=cb.f[cs.id]||0,tv=+bc.Tc[cs.id]||0;if(g&&tv)tm.push(fmtF(g)+'\u00D7'+fmt(tv,2));});
       body.appendChild(el('div','note','T\u1D64 = '+(tm.length?tm.join(' + '):'0')+' = <b>'+fmt(bc.Tu[C.id]||0,2)+' kip\u00B7ft</b>; torsional stresses = solved values \u00D7 '+fmt(h.kT,3)+'.'));}
     body.appendChild(el('div','note','\u00A7H3.3 requires the torsional stresses to be added to the axial, flexural and shear stresses at the same point and checked against yielding and, where the Chapter E/F buckling stress is below F\u1D67, against buckling \u2014 there is no separate \u201C\u03C6T\u2099\u201D for an open section.'));
-    body.appendChild(eqBlock({title:'Normal stresses at the critical station (z = '+fmt(h.z,1)+' in)',ref:'\u00A7H3.3(a)',
-      lines:['f_n=\\tfrac{P_u}{A_g}+\\tfrac{M_{ux}}{S_x}+\\tfrac{M_{uy}}{S_y}+\\sigma_w='+
+    /* H2: every station checked; the governing station of each stress is shown */
+    body.appendChild(el('div','note','Checked at all '+tor.st.length+' torsion stations, with '+(h.basis==='diagram'?
+      'the shear V(z) and moment M(z) of this combination at the same z (the torsional span is the analysed beam, z = x)':
+      'the largest |V| and |M| of this '+(isMember()?'case':'combination')+' at every station (the torsional span is not the analysed beam: conservative envelope)')+
+      '. Flexural shear by VQ/(I t) (DG 9 Eq. 4.6): Q\u2093 = '+fmt(h.Qf,2)+' in\u00B3 (flange), Q\u1D65 = '+fmt(h.Qw,2)+' in\u00B3 (web), I\u2093 = '+fmt(p.Ix,1)+' in\u2074.'));
+    body.appendChild(eqBlock({title:'Normal stress at the flange tip, governing station z = '+fmt(h.zN,1)+' in (M = '+fmt(h.Mz,2)+' kip\u00B7ft)',ref:'\u00A7H3.3(a)',
+      lines:['f_n=\\tfrac{P_u}{A_g}+\\tfrac{M_{ux}(z)}{S_x}+\\tfrac{M_{uy}}{S_y}+\\sigma_w(z)='+
         fmt(h.fa,2)+'+'+fmt(h.fbx,2)+'+'+fmt(h.fby,2)+'+'+fmt(h.sigW,2)+'=\\mathbf{'+fmt(h.fn,2)+'\\ \\text{ksi}}',
         '\\text{DCR}=\\tfrac{f_n}{\\phi F_y}=\\tfrac{'+fmt(h.fn,2)+'}{0.90\\times '+p.mat.Fy+'}=\\mathbf{'+fmt(h.dcrN,3)+'}'+
         (h.dcrN>1?'\\ \\color{#B42318}{\\text{FAIL}}':'\\ \\checkmark')]}));
-    body.appendChild(eqBlock({title:'Shear stresses at the same station',ref:'\u00A7H3.3(b)',
-      lines:['f_v=\\tfrac{V_{ux}}{dt_w}+\\tfrac{V_{uy}}{2b_ft_f}+\\tau_t+\\tau_w='+
-        fmt(h.fvx,2)+'+'+fmt(h.fvy,2)+'+'+fmt(h.tauT,2)+'+'+fmt(h.tauW,3)+'=\\mathbf{'+fmt(h.fv,2)+'\\ \\text{ksi}}',
+    const hf=h.flange,hw=h.web;
+    body.appendChild(eqBlock({title:'Shear stresses, flange and web, each at its governing station',ref:'\u00A7H3.3(b)',
+      lines:['f_{v,f}=\\tfrac{V_{ux}(z)Q_f}{I_xt_f}+\\tfrac{V_{uy}}{2b_ft_f}+Gt_f\\theta\'(z)+\\tau_w(z)='+
+        fmt(hf.fvb,2)+'+'+fmt(hf.fvy,2)+'+'+fmt(hf.tauT,2)+'+'+fmt(hf.tauW,3)+'=\\mathbf{'+fmt(hf.fv,2)+'\\ \\text{ksi}}\\quad(z='+fmt(hf.z,1)+'\\ \\text{in},\\ V='+fmt(hf.V,2)+'\\ \\text{kip})',
+        'f_{v,w}=\\tfrac{V_{ux}(z)Q_w}{I_xt_w}+Gt_w\\theta\'(z)='+
+        fmt(hw.fvb,2)+'+'+fmt(hw.tauT,2)+'=\\mathbf{'+fmt(hw.fv,2)+'\\ \\text{ksi}}\\quad(z='+fmt(hw.z,1)+'\\ \\text{in},\\ V='+fmt(hw.V,2)+'\\ \\text{kip})',
+        'f_v=\\max(f_{v,f},f_{v,w})=\\mathbf{'+fmt(h.fv,2)+'\\ \\text{ksi}}\\ ('+h.elV+')',
         '\\text{DCR}=\\tfrac{f_v}{\\phi(0.6F_y)}=\\tfrac{'+fmt(h.fv,2)+'}{0.90\\times 0.6\\times '+p.mat.Fy+'}=\\mathbf{'+fmt(h.dcrV,3)+'}'+
         (h.dcrV>1?'\\ \\color{#B42318}{\\text{FAIL}}':'\\ \\checkmark')]}));
     if(h.dcrB!=null)body.appendChild(eqBlock({title:'Buckling limit state, same normal stresses',ref:'\u00A7H3.3(c)',
@@ -6132,7 +6188,7 @@ function buildTorsTab(pg){
     const hg=h33Gov(h);
     body.appendChild(el('div',h.dcr>1?'errBox':'okBox','Governing \u00A7H3.3 DCR = <b>'+fmt(h.dcr,3)+'</b> ('+(hg==='B'?'normal stress, buckling':hg==='N'?'normal':'shear')+' stress)'));
   },C=>C.h33?fmt(C.h33.dcr,4):'x');
-  pg.appendChild(el('div','hint','Stresses are combined conservatively by direct summation of magnitudes at the critical station, which is the practice DG 9 recommends for design. The critical station is chosen as the worst combination of warping normal and shear stress along the member.'));
+  pg.appendChild(el('div','hint','Stresses are combined conservatively by direct summation of magnitudes at the same point, which is the practice DG 9 recommends for design. Every torsion station is checked (H2, 2026-11-07): the normal stress at the flange tip, the shear in the flange (mid-flange) and the shear in the web, each with the flexural V and M at that station; the largest of each governs.'));
 }
 /* =====================================================================
    INPUT PANEL ORGANISATION
@@ -6838,7 +6894,7 @@ async function xlChecks(X,p,D,mem,Fy,E){
         {v:N2(C.h33.fv,2),dp:2},{v:N2(C.h33.phiFv,2),dp:2},
         {v:N2(C.h33.dcrV,3),dp:3,kind:C.h33.dcrV>1?'bad':'ok'},
         {v:C.h33.dcr>1?'FAIL':'OK',kind:C.h33.dcr>1?'bad':'ok'}]));
-    X.note('fn = Pu/Ag + Mux/Sx + Muy/Sy + \u03C3w ;  fv = Vux/(d\u00B7tw) + Vuy/(2bf\u00B7tf) + \u03C4t + \u03C4w, summed by magnitude at the critical station.');
+    X.note('Every torsion station z is checked (H2): fn = Pu/Ag + Mux(z)/Sx + Muy/Sy + \u03C3w(z) at the flange tip; fv = max of the flange, Vux(z)\u00B7Qf/(Ix\u00B7tf) + Vuy/(2bf\u00B7tf) + G\u00B7tf\u00B7\u03B8\u2032(z) + \u03C4w(z), and the web, Vux(z)\u00B7Qw/(Ix\u00B7tw) + G\u00B7tw\u00B7\u03B8\u2032(z); magnitudes summed; the largest over z governs.');
     const hB=D.perCombo.filter(C=>C.h33&&C.h33.dcrB!=null);
     if(hB.length){
       X.sub('\u00A7H3.3(c) buckling limit state');

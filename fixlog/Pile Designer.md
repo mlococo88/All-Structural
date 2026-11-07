@@ -19994,3 +19994,88 @@ index 06a42e4..b58d4e3 100644
   - `check-syntax`: pass. `tests/engine` handoffs and pile-group: pass. `pile-library`: see the PR. 0 console errors.
 - **Hand-off:** `pileResults.fixity.Lf` (= `R.buckling.Lf_buck`) changes with L_f for these cases. The format is unchanged.
 - **Other copies:** the integral-abutment path already uses 0.465 S_u (PDA-D2) and is unchanged.
+
+## 2026-11-07 — PR: claude/pile-m3-plunge (PR #1024: https://github.com/mlococo88/All-Structural/pull/1024) (PDA-M3) — plunge: AASHTO 10.9.3.10.5 casing-to-grout bond and bar development added; the 40 d_b / 3 ft rule kept and labelled a tool detailing rule   [check-logic change]
+- **Problem (review M3):** the "plunge develops the cased load" check was a hard fail on a tool rule, L_p ≥ max(40 d_b, 3 ft), which is not an AASHTO provision. The checks that 10.9.3.10.5 requires were missing: casing-to-grout bond, and bar development per Sec. 5.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024):
+  - Art. 10.9.3.10.5: casing-to-grout bond and bar development length are to be checked per Sec. 5.
+  - C10.9.3.10.5: typical ultimate bond is 0.15–0.25 ksi for smooth bar and pipe, 0.30–0.50 ksi for deformed bars.
+  - Art. 5.10.8.2.1a (Eqs. 5.10.8.2.1a-1, -2): tension development.
+  - Art. 5.10.8.2.2a (Eqs. 5.10.8.2.2a-1 to -3): compression development.
+- **Decisions (pending engineer review):**
+  - The plunge rule stays as a check, in the status, labelled "detailing rule (tool, not AASHTO)".
+  - (a) Casing-to-grout bond:
+    - The demand is the casing's share of the load at the top of the plunge, by axial stiffness EA_c / (EA_c + EA_b + E_g A_g) × STL. E_g = 2500 f'c^0.33 (as the CFST module). In tension, the share is A_ct/(A_ct + A_b) × T_u, used only when the joint efficiency is > 0.
+    - The resistance is φ τ π ID L_p, with τ = 0.15 ksi (the lower end of C10.9.3.10.5 for smooth pipe), the inner casing surface only, and φ = φ_CC (no factor is given in Table 10.5.5.2.5-2).
+  - (b) Bar development within L_p, for the uncased-length force with the grout neglected (compression P_u,unc, tension T_u − P_t, each at most f_yb A_b):
+    - λ_er = force / (f_yb A_b); λ_rc, λ_rl, λ_cf and λ = 1.0 (no reduction taken).
+    - Compression: ℓ_d = max(0.63 d_b f_y/√f'c, 0.3 d_b f_y) λ_er, at least 8 in.
+    - Tension: ℓ_d = 0.17 d_b [λ_er f_y / (1.97 f'c^0.25)]², at least 12 in.
+    - Note for f_yb > 100 ksi: outside the Sec. 5 bar range; confirm with the bar supplier.
+  - Micropile only, and only when L_p > 0 (with L_p = 0 the plunge rule already fails).
+- **Where:**
+  - `computeAll`, Module G, after `const cover_ok = …` (anchor `// PDA-M3 (2026-11-07)`): `R.geoChecks.cgBond`, `R.geoChecks.barDev` and `casID`. Both `.ok` flags are in `R.geoChecks.pass`.
+  - Display:
+    - on-screen Module G: the plunge note is relabelled and two CheckRows are added;
+    - printed `RptGeomChecks`: two RptChecks with notes;
+    - Report steps `gc/cgs`, `gc/cgb`, `gc/ldc`, `gc/ldt` and `gc/bdev`; the `gc/pl` label is changed;
+    - summary rows (`gcSummaryRows`): the plunge row is renamed, with basis "tool rule: max(40 d_b, 3 ft)", and there are new rows for "casing-to-grout bond in the plunge" and "bar development in the plunge";
+    - the Module 03 plunge note.
+  - One-time load note for a micropile with a plunge (pdaRev < 8); `pdaRev` 7 → 8. No input changed.
+- **Check cases:**
+  - Default (L_p 3 ft, STL 86 kip):
+    - Casing share: EA_c 29000(7.955) = 230.7e3; EA_b 22.9e3; E_g A_g 3950(28.38) = 112.1e3; share 0.631, so P_cas = 54.3 kip.
+    - Bond: φR_n = 0.75(0.15)π(6.094)(36) = **77.5 kip ≥ 54.3 OK**.
+    - Bar, compression: F = min(76.4, 59.25) = 59.25 kip, λ_er = 1; ℓ_d = max(0.63(1.003)(75)/2, 0.3(1.003)(75)) = **23.7 in ≤ 36 OK**.
+    - The tool rule stays NG (3.0 < 3.34 ft).
+  - V4 (STL 0, T_u 50): F = 41.75 kip, λ_er = 0.705; ℓ_d = 0.17(1.003)[0.705(75)/(1.97 · 4^0.25)]² = **61.4 in > 36 NG**. The bond check passes (no casing share; e_j = 0).
+  - V2 (f_yb 120, STL 150, T_u 100, e_j 50 %): P_cas = 150(0.598) = 89.8 > 77.5 kip **NG**; ℓ_d,t = 93.8 in > 36 **NG**; the f_yb > 100 ksi note is shown.
+- **How verified:**
+  - `computeAll` on 15 cases main vs branch: only the new `geoChecks` fields. The Module G and overall status do not move in these cases, because the tool plunge rule already fails at L_p = 3 ft.
+  - App and Report main vs branch: the relabelled rule, the new steps, rows and notes. 0 unresolved references, 0 duplicate keys, no NaN.
+  - `check-syntax`: pass. `pile-library`: library checks pass; its page-text checks show the new text. 0 console errors.
+- **Other copies:** none.
+
+## 2026-11-07 — PR: claude/pile-m6-uplift-cap (PR #1030: https://github.com/mlococo88/All-Structural/pull/1030) (PDA-M6) — micropile group uplift (10.9.3.8 → 10.7.3.11); review items for required checks the tool does not compute   [check-logic change]
+- **Problem (review M6):** some required micropile checks were missing:
+  - group uplift (10.9.3.8 → 10.7.3.11, φ_ug 0.50);
+  - the bar connection into the cap (10.9.3.7, 10.9.3.10.7);
+  - drag load (10.9.3.4);
+  - liquefaction (10.9.4 → 10.7.4);
+  - settlement (O6).
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024):
+  - Art. 10.9.3.8 → 10.7.3.11 (Eqs. 10.7.3.11-1, -2; Figs. 10.7.3.11-1, -2); φ_ug = 0.50 (Table 10.5.5.2.3-1, group uplift, all soils);
+  - Art. 10.9.3.7 and 10.9.3.10.7; Art. 10.9.3.4 and 3.11.8; Art. 10.9.4 → 10.7.4; Art. 10.9.2 / 10.7.2.
+- **(a) Group uplift (computed)**, anchor `// PDA-M6a (2026-11-07)` in the micropile group block (`computeAll`):
+  - It applies when the group is on, there is an uplift demand and n > 1.
+  - φR_ug = min(n φ_up R_up, 0.50 R_ug,block), with demand n T_u.
+  - Cohesive soil: R_ug = (2XZ + 2YZ) S̄_u + W_g. Cohesionless soil: R_ug = W_g, the 1H:4V block from the toe (top (X + Z/2) × (Y + Z/2), frustum volume).
+  - X, Y = the group footprint (c/c + d_h). Z = grade (or head / scour) to the toe, as the 10.7.3.9 block. S̄_u comes from `hpGroupAashto`.
+  - `R.group.upl` is part of `allPass` and of the Module 11 status.
+  - Display: Module 11 on screen (values plus a CheckRow), Report steps `grp/uW`, `grp/uS`, `grp/uB`, `grp/uI` and `grp/upl`, and the summary row "Group uplift" (Report and printed).
+  - **Decisions (pending engineer review):**
+    - W_g counts the soil only (piles and cap neglected).
+    - The buoyant unit weight γ − 62.4 pcf is used throughout, because the groundwater level is not an input.
+    - γ is the thickness-weighted layer γ over Z, or 120 pcf when missing.
+- **(b) Review items (listed, not computed, not in the status)**, anchor `// PDA-M6b`, `R.reviewItems`. They are listed in the Report summary ("Items for review", REVIEW) and in Module G on screen, under these triggers:
+  - uplift demand → bar connection into the cap (10.9.3.7, 10.9.3.10.7 → Sec. 5);
+  - a soft cohesive layer (S_u < 0.50 ksf, the ET1 definition) → drag load (10.9.3.4, 3.11.8) and service settlement (10.9.2, 10.7.2);
+  - an extreme-event load case → liquefaction (10.9.4 → 10.7.4).
+
+  **Future features:** full methods for these (a liquefiable-zone input that removes bond and scales p-y, the micropile drag-load neutral plane, settlement, and a bar anchorage check with a bearing plate).
+- **One-time load note:** micropile group with uplift, pdaRev < 9 (`pdaRev` 8 → 9).
+- **Check cases:**
+  - U1: default, 2×3 group at 3D, STL 0, T_u 40 kip.
+    - X × Y = 2.33 × 4.08 ft, Z = 36 ft; top 20.33 × 22.08 ft.
+    - V = 36/3 (9.53 + 449.0 + 65.4) = 6288 ft³; W_g = 0.0576(6288) = 362.2 kip, so the block gives 0.50(362.2) = **181.1 kip**.
+    - Σ individual = 6(74.22) = 445.3 kip.
+    - Demand 240 kip: **NG** (block governs). Before: no check.
+  - U2: as U1 with soft clay (S_u 0.40 ksf, γ 115).
+    - Side (2(2.33)(36) + 2(4.08)(36))(0.40) = 184.8 kip; W_g = 0.0526(343) = 18.0 kip.
+    - 0.50(202.8) = **101.4 kip < 240 NG**.
+    - REVIEW items: cap connection, drag load, settlement.
+- **How verified:**
+  - `computeAll` on 17 cases main vs branch: only `R.group.upl` (U1 and U2) and `R.reviewItems`; no other value moved.
+  - App and Report: the new rows, steps and table. 0 unresolved references, 0 duplicate keys, no NaN.
+  - `check-syntax`: pass. `pile-library`: library checks pass. 0 console errors.
+- **Other copies:** none. The H-pile group uplift is not added; it is listed as a future feature.
