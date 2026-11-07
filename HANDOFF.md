@@ -519,6 +519,18 @@ Pole / sign-post anchorage designed in the Base Plate & Anchor Bolt Designer ins
 - **Sender: BasePlateAnchorDesigner.** **"Send result to Light Pole"** (in the anchor-group bar, shown once an `anchorGroup` payload was imported) publishes with `BridgeXfer.publish` and offers the same payload as a JSON file (**Export hand-off**). Click only. Each group is computed in its own state.
 - **Receiver: Light Pole and Sign Post** (2026-11-01, LP anchor result; display only, read live from the key or from "Import result (JSON)" for the session; nothing saved): shows, in the Summary design table and the Anchorage-tab card (the tab replaced the Light Pole anchor checks on 2026-11-01; Light Pole no longer checks the anchor rods), "Anchors (Anchorage app, <date>): D/C … — <mode>, <combo>", "stale" when its current `inputsHash` differs from `source.inputsHash`, and "not yet checked" without a result.
 
+### 4.13 Abutment ↔ elastomeric bearing module (postMessage, not a storage channel; documented 2026-11-07)
+
+`abutment_calculator.html` opens `elastomeric_design_module.html` (window name `edm`) and the two talk by `postMessage` with `app:"abutment-edm"`: the module sends `EDM_READY`, the abutment answers `INIT` `{ bearing:{ padL, padW, G, hrt }, loads:{ Pdl, Pll, deltaS, thetaLL }, thermal:{…}, girders:[…] }`, and **"↩ Send Pad to Abutment"** sends `PAD`:
+
+```js
+{ G,            // ksi: the G of the pad shear force, i.e. the least favourable (upper) value — Method B (1 + tol)·specified G (MassDOT 0.184), Method A / plain the highest G of the durometer range (since 2026-11-07, H1; before: the specified G)
+  Gspec, Gmin, Gmax, H, Hbu,   // added 2026-11-07 (H1), additive: specified G, the low / high design G (ksi), slip-check H and H_bu (kip per bearing)
+  hrt, padL, padW, D, A, shape, nBrgPerGird:1, pass, govDC }
+```
+
+- The abutment reads `G`, `hrt`, `padL`/`padW` or `D`/`A`; the new fields are for information. A `G` coming back in `INIT` that equals the G the module sends for its current inputs is not taken as a new specified G (round trip).
+
 ## 5. Shared helper (copy into each tool that sends or receives)
 
 A small IIFE, `window.BridgeXfer`, providing:
