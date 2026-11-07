@@ -3025,7 +3025,7 @@ function gageTables() {
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/gusset-h1-tension-splice — Tension chord splice rated with LRFD 10th Ed. Eqs. 6.14.2.8.6-3 and -4 (H1; §4 calculation change, results go down)
+## 2026-11-07 — PR: claude/gusset-h1-tension-splice (PR #1026: https://github.com/mlococo88/All-Structural/pull/1026) — Tension chord splice rated with LRFD 10th Ed. Eqs. 6.14.2.8.6-3 and -4 (H1; §4 calculation change, results go down)
 
 From the code-compliance review of 2026-11-07 (finding H1). Engineer asleep, merge-as-you-go approved; no questions asked.
 
