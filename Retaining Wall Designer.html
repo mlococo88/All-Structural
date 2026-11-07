@@ -1827,16 +1827,10 @@ const RW_CARDS = {
   ftgToeUp:    ['footing', 'Toe Step 1 — Net Upward Load', 'Toe Step 1 — Net Upward Load'],   // RWUP
   ftgKey:      ['footing', 'Shear Key — Structural Design', 'Shear Key — Structural Design'],   // RWSK   // RWBP (2026-11-06): link target of the bearing selector
   stabPile:    ['stability', 'Pile Step 2 — Pile Reactions and Checks', 'Pile Step 2 — Pile Reactions and Checks'],   // RWPL
-<<<<<<< HEAD
   ftgPunch:    ['footing', 'Pile Cap — Punching around the Piles', 'Pile Cap — Punching around the Piles'],   // RWPL 8d
 };
 // r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
 const RW_CHECK_CARD = { pilePunch:'ftgPunch', pileCapD:'ftgPunch', pileComp:'stabPile', pileUplift:'stabPile', pileLat:'stabPile', pileSpacing:'stabPile', pileEdge:'stabPile', pileEmbed:'stabPile', ot:'stabOT', otE:'stabOT', sliding:'stabSlide', slidingE:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
-=======
-};
-// r.checks key → card where the check is worked (ACI crack control has no card in the tabs; the report adds one)
-const RW_CHECK_CARD = { pileComp:'stabPile', pileUplift:'stabPile', pileLat:'stabPile', pileSpacing:'stabPile', pileEdge:'stabPile', pileEmbed:'stabPile', ot:'stabOT', otE:'stabOT', sliding:'stabSlide', slidingE:'stabSlide', bearing:'stabBrg', ecc:'stabEcc',
->>>>>>> origin/main
   stemFlex:'stemFlex', stemShear:'stemShear', stemMidShear:'stemMid', stemHook:'stemDev', stemMidFlex:'stemMid', stemLap:'stemDev', heelDev:'heelShear', toeDev:'toeShear', stemS3Lap:'stemS13', stemMAlong:'stemS13',
   heelFlex:'heelFlex', heelShear:'heelShear', toeFlex:'toeFlex', toeShear:'toeShear', colAxial:'stabCol',
   ishFtg:'stabISH', ishStem:'stabISH', tsStem:'stemTS', tsFF:'stemTS', tsFtg:'ftgTS', keyFlex:'ftgKey', keyShear:'ftgKey', keyDev:'ftgKey', eeSliding:'stabEE1', eeEcc:'stabEE1', eeBearing:'stabEE1', ctSliding:'stabCT', ctEcc:'stabCT', ctBearing:'stabCT', ctYield:'stabYL',
@@ -3896,13 +3890,6 @@ function calcAll(inp) {
     ...(ecc_lim_aci !== null ? { ecc: { ok: ecc_ok_aci, label: 'Eccentricity', val: `e=${f(Math.abs(e),2)}${ecc_ok_aci ? '≤' : '>'}${f(ecc_lim_aci,2)}ft` } } : {}),   // RWEC
   };
   // ── RWPL (2026-11-07, Phase 8c): pile-supported footing — pile reactions and checks replace soil bearing, sliding and overturning ──
-<<<<<<< HEAD
-=======
-  const isPile = !!(inp.fnd && inp.fnd.type === 'pile');
-  const pile = isPile ? rwPileAnalysis({ fnd: inp.fnd, isAASHTO, aashtoR, B, phi_ep: inp.aashto.phi_ep, Pp_toe,
-    SumV, Ms, Ms_Pp, Mo_st, Mo_seis, Fh, Pe_inc, hasSeismic, Wftg, Wstem, Wsoil, W_bar, pDL, pWL, x_col, Pa_tri_v, F_uplift,
-    Ms_ftg, Ms_stem, Ms_soil, Ms_bar, Ms_Pv, Ms_uplift }) : null;
->>>>>>> origin/main
   let pileChecks = null;
   if (pile) {
     if (pile.err) errors.push(pile.err);
@@ -3917,24 +3904,17 @@ function calcAll(inp) {
                       ref: (isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 10.7.3.12; H<sub>r</sub> as entered' : 'IBC 2018 §1810.3.3.2; H<sub>a</sub> as entered') + '; H/N per pile, ' + pc.govH.label },
         ...(isAASHTO ? { pileSpacing: { ok: d.cc >= d.ccMin - 1e-9, label: 'Pile Spacing', val: `${f(d.cc,1)}${d.cc >= d.ccMin - 1e-9 ? '≥' : '<'}${f(d.ccMin,1)}"`, dc: d.ccMin / Math.max(d.cc, 1e-9), ref: d.ref + '; c-c ≥ max(30 in, 2.5D), along the wall and row to row' } } : {}),
         pileEdge:   { ok: d.edge >= d.edgeMin - 1e-9, label: 'Pile Edge Distance', val: `${f(d.edge,1)}${d.edge >= d.edgeMin - 1e-9 ? '≥' : '<'}${f(d.edgeMin,0)}"`, dc: d.edgeMin / Math.max(d.edge, 1e-9), ref: d.ref + '; pile side to the footing edge (toe / heel)' },
-<<<<<<< HEAD
         ...(pilePunch ? { pilePunch: { ok: pilePunch.ok, label: 'Pile Punching', val: `${f(pilePunch.gov.Pu/1000,1)}${pilePunch.ok ? '≤' : '>'}${f(pilePunch.gov.phiVc/1000,1)}k`, dc: pilePunch.gov.dc,
                       ref: (isAASHTO ? 'AASHTO LRFD 10th Ed. Art. 5.12.8.6.3, φ 0.90' : 'ACI 318-19 Table 22.6.5.2, φ 0.75') + '; row ' + (pilePunch.gov.i + 1) + ', ' + pilePunch.gov.loc + ', b<sub>o</sub> = ' + f(pilePunch.gov.bo,1) + ' in' } } : {}),
         ...(pilePunch && !isAASHTO ? { pileCapD: { ok: pilePunch.dp >= 12 - 1e-9, label: 'Cap Depth over Bars', val: `${f(pilePunch.dp,2)}${pilePunch.dp >= 12 - 1e-9 ? '≥' : '<'}12"`, dc: 12 / Math.max(pilePunch.dp, 1e-9),
                       ref: 'ACI 318-19 §13.3.1.2; depth above the bottom bars, footings on piles' } } : {}),
-=======
->>>>>>> origin/main
         pileEmbed:  { ok: d.embed >= d.embMin - 1e-9, label: 'Pile Embedment', val: `${f(d.embed,1)}${d.embed >= d.embMin - 1e-9 ? '≥' : '<'}${f(d.embMin,0)}"`, dc: d.embMin / Math.max(d.embed, 1e-9), ref: d.ref + '; pile top into the footing' },
       };
       if (d.grp3) warnings.push(`Pile spacing ${f(d.cc,1)} in < 3D = ${f(3 * pc.D,1)} in: axial group effects apply (IBC 2018 §1810.2.5; AASHTO Art. 10.7.2.4 / 10.7.3.9). The capacities entered must include them.`);
       if (d.grp8) warnings.push(`Row-to-row spacing ${f(d.minRowDx,1)} in < 8D = ${f(8 * pc.D,1)} in in the direction of the lateral load: lateral group effects apply (IBC 2018 §1810.2.5; AASHTO Art. 10.7.2.4). The lateral capacity entered must include them.`);
       for (let i = warnings.length - 1; i >= 0; i--) if (/^AASHTO bearing|tension zone in soil/.test(warnings[i])) warnings.splice(i, 1);   // soil-bearing notes do not apply
-<<<<<<< HEAD
       if (cov_bot > 6) warnings.push(`Pile cap: the bottom bars sit ${f(cov_bot,2)} in above the base (embedment + clear). The toe crack-control check uses this cover (ACI 318-19 §24.3.2 / AASHTO Art. 5.6.7) and fails for large covers; a bar mat below the pile heads, or the engineer's judgement, is needed.`);
       warnings.push('Pile-supported footing: soil bearing, base sliding and overturning are not checked (the piles carry the wall). The heel and toe are designed from the factored pile reactions (Footing design tab).');
-=======
-      warnings.push('Pile-supported footing: soil bearing, base sliding and overturning are not checked (the piles carry the wall). The heel and toe are still designed from the soil bearing pressure in this version; the design from the pile reactions follows (Phase 8d).');
->>>>>>> origin/main
       if (pc.passive) warnings.push(`Pile mode: passive in front of the toe credited against H: ${f(pc.Hpass,3)} kip/ft${isAASHTO ? ' (φ_ep = ' + f(inp.aashto.phi_ep,2) + ')' : ''}.`);
     }
   }
@@ -4010,11 +3990,7 @@ function calcAll(inp) {
   // ── Return ────────────────────────────────────────────────────
   return {
     inp, errors, warnings, fatal: false,
-<<<<<<< HEAD
     ...(pile ? { pile, pileFtg, cov_bot, pilePunch, heelPile: hcG.pile || null, toePile: tcG.pile || null } : {}),   // RWPL (2026-11-07): pile-supported footing results, absent for a spread footing (its results are as before); 8d: factored pile reactions for the footing, bottom cover, punching
-=======
-    ...(pile ? { pile } : {}),   // RWPL (2026-11-07): pile-supported footing results (absent for a spread footing, so its results are as before)
->>>>>>> origin/main
     basis: inp.basis, isAASHTO, aashtoR, heq, q_ll_aashto, q_sur_eff,
     // Geometry
     B, H, Df, tf_ft, ts_bot_ft, ts_top_ft, dk_ft, x_front, x_back,
