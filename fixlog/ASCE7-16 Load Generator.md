@@ -1386,7 +1386,7 @@ Basis: 780 CMR 10th Ed. (Massachusetts amendments to IBC 2021), Ch. 16: 1613.1 a
 - **How verified:** headless Chromium, main vs branch, 16 cases: leaf diff of `R` + hand-off (moved: W, V, level forces, story shears and moments, the seismic lateral column of the combinations; hand-off unchanged); rendered text of every tab and the Report (0 console / KaTeX errors); Excel built in all cases; `check-syntax`, `project-library --tool asce7`, `phone-layout --tool asce7`, `engine handoffs`.
 - **Saved data:** new optional field `snowInW` (default false); no key or existing field changed.
 
-## 2026-11-07 — PR: claude/asce7-low-text — A7L1–L6: stale scope text, Fig. 26.8-1 caption, health-care debris basis, Site E message, slippery-surface conditions (review L1–L6)
+## 2026-11-07 — PR: claude/asce7-low-text — A7L1–L6: stale scope text, Fig. 26.8-1 caption, health-care debris basis, Site E message, slippery-surface conditions (review L1–L6; PR #1078: https://github.com/mlococo88/All-Structural/pull/1078)
 
 ### A7L1. Stale "drift not generated" statements   [text only]
 - **Where / before → after:**
