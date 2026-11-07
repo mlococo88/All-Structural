@@ -15469,7 +15469,7 @@ Review Phase 8, PR 8h (planned move into `shared/`, CLAUDE.md §3). No computed 
 - C-13 punching perimeter: see above.
 
 
-## 2026-11-07 — PR: claude/abut-m2-kh (ABM2: seismic k_h ratio follows the foundation for new projects — 1.0·k_h0 on piles or rock, 0.5·k_h0 on a spread footing on soil; saved projects keep their stored ratio, with a REVIEW warning)   [calc change: new-project default] [MORE conservative]
+## 2026-11-07 — PR: claude/abut-m2-kh (PR #1000: https://github.com/mlococo88/All-Structural/pull/1000) (ABM2: seismic k_h ratio follows the foundation for new projects — 1.0·k_h0 on piles or rock, 0.5·k_h0 on a spread footing on soil; saved projects keep their stored ratio, with a REVIEW warning)   [calc change: new-project default] [MORE conservative]
 
 Source: code-compliance review of 2026-11-07, item M2.
 
