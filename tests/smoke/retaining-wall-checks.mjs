@@ -10,7 +10,7 @@
 // RWSC (2026-11-07): the self-consistency panel passes on representative walls, reports MISMATCH on a tampered result, hides on error.
 // RWPR (2026-11-07): the Report prints alone, with every section, the overview figures and the input echo; 0 KaTeX errors.
 // RWKX (2026-11-07): the tabs' equations are all set by KaTeX, none in error; MathJax is not loaded.
-// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, ...).
+// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, ...).
 //   node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 import path from 'path';
 import { openPage, resolveFile } from '../lib.mjs';
@@ -184,15 +184,31 @@ const AUD = [
   ['RWS13 AASHTO default: S3 #3 / S1 #5, ℓst = max(14.78, 12.0)', { design_basis: 'AASHTO' }, [
     ['R.s13_diff && R.s13_big === "S1" && Math.abs(R.s13_lst - 14.78) < 0.01', 'ℓst = ℓd(#5) = 14.78 in'], ['Math.abs(R.s1_ext - 13.22) < 0.01', 'extension max(d, 15d_b, L/20) = 13.22 in'],
     ['R.checks.stemS3Lap.ok && R.checks.stemMAlong.ok', 'both new checks pass']]],
+  ['RWEC ACI default: middle third by default, e −0.22 ft, D/C 0.105', {}, [
+    ['document.getElementById("aci_ecc_limit").value === "b6" && R.checks.ecc && R.checks.ecc.ok', 'select b6, check passes'], ['Math.abs(Math.abs(R.e) / R.ecc_lim_aci - 0.105) < 0.001', 'D/C 0.105'],
+    ['/Eccentricity/.test(T.overview) && /Eccentricity limit \\(engineer/i.test(T.stability)', 'dashboard row and Stability Step 6'], ['/Eccentricity limit \\(service\\)/.test(P) && /Eccentricity limit e ≤ B\\/6/.test(P)', 'Report input echo and Step 6']]],
+  ['RWEC ACI variant L_t 2, L_h 3, t_f 24, key 36 in, passive: e 1.366 > B/6 → FAIL 1.26', { Lt: 2, Lh: 3, tf: 24, use_shear_key: true, dk: 36, incl_passive: true, qa: 4000 }, [
+    ['!R.checks.ecc.ok && Math.abs(Math.abs(R.e) / R.ecc_lim_aci - 1.261) < 0.001', 'FAIL, D/C 1.261']]],
+  ['RWEC same variant with B/4: PASS 0.84', { Lt: 2, Lh: 3, tf: 24, use_shear_key: true, dk: 36, incl_passive: true, qa: 4000, aci_ecc_limit: 'b4' }, [
+    ['R.checks.ecc.ok && Math.abs(Math.abs(R.e) / R.ecc_lim_aci - 0.841) < 0.001', 'PASS, D/C 0.841']]],
+  ['RWEC an autosave saved before the option opens with "No eccentricity limit" (old behaviour)', {}, [
+    ['document.getElementById("aci_ecc_limit").value === "none" && !R.checks.ecc && R.ecc_lim_aci === null', 'set to none, no ecc check row'], ['/saved before the option existed/.test(T.stability)', 'the notice on Stability Step 6']], { strip: ['aci_ecc_limit'] }],
+  ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
-for (const [name, set, tests] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {
-  const { b, p, errs } = await openPage(SRC.file); await p.waitForTimeout(2500);
+for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {
+  let ls = null;
+  if (opt && opt.strip) {   // an older save: the autosave of the default project without the given fields
+    const o0 = await openPage(SRC.file); await o0.p.waitForTimeout(2500);
+    ls = await o0.p.evaluate(ids => { const k = Object.keys(localStorage).find(x => /^retaincalcpro\.autosave/.test(x)); const a = JSON.parse(localStorage.getItem(k)); ids.forEach(i => delete a.fields[i]); return { [k]: JSON.stringify(a) }; }, opt.strip);
+    await o0.b.close();
+  }
+  const { b, p, errs } = await openPage(SRC.file, ls ? { ls } : {}); await p.waitForTimeout(2500);
   const o = await p.evaluate(async ({ set, tests }) => {
     for (const [k, v] of Object.entries(set)) { const e = document.getElementById(k); if (e.type === 'checkbox') e.checked = !!v; else e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }
     if (typeof syncConditionalUI === 'function') syncConditionalUI(); if (set.design_basis) onBasisChange(); onInputChange(); await new Promise(r => setTimeout(r, 600));
     const T = {}; for (const t of ['overview', 'stability', 'stem', 'footing', 'rebar']) { document.querySelector(`.tab-btn[data-tab="${t}"]`).click(); await new Promise(r => setTimeout(r, 300)); T[t] = document.getElementById('tab-' + t).innerText; }
     document.querySelector('.tab-btn[data-tab="report"]').click(); await new Promise(r => setTimeout(r, 3000));
-    const P = document.getElementById('tab-report').innerText, R = window._R;
+    const P = document.getElementById('tab-report').textContent, R = window._R;
     return tests.map(([x, l]) => { let v; try { v = !!(new Function('R', 'T', 'P', 'return (' + x + ');'))(R, T, P); } catch (e) { v = false; l += ' (' + e.message + ')'; } return [v, l]; });
   }, { set, tests });
   await b.close();
