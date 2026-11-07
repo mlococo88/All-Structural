@@ -1432,7 +1432,7 @@ Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.2 (G within the M 251 acceptance 
   - The abutment's G in INIT is still taken as the specified G unless it equals the module's own sent G (echo); an abutment G that is neither (e.g. 0.184 with a specified G other than 0.160) becomes the specified G as before.
 - **Other copies:** none. `abutment_calculator.html` unchanged (it reads `G` only).
 
-## 2026-11-07 — PR: claude/edm-h2-stab-lw (H2, review 2026-11-07) — Method B stability also with L and W interchanged   [calc change] [MORE conservative]
+## 2026-11-07 — PR: claude/edm-h2-stab-lw (PR #1079: https://github.com/mlococo88/All-Structural/pull/1079) (H2, review 2026-11-07) — Method B stability also with L and W interchanged   [calc change] [MORE conservative]
 
 Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.3.4 (Eqs. 14.7.5.3.4-1 to -5): for a rectangular bearing with L greater than W, stability is investigated with L and W interchanged in Eqs. 14.7.5.3.4-2 and -3.
 
