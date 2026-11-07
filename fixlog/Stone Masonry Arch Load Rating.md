@@ -1485,7 +1485,7 @@ function transDisp(w,n,c,cap){
   - HS20 (14.1 t) is not triggered. On the default (H20 14.9 t) nothing changes.
 - **How verified:** `check-syntax`; `phone-layout --tool arch`; `project-library --tool stonearch`: on load identical (not triggered); after the test's input change (H20 1.7 t) the only difference is the new dashboard lane row (truck governs, ratings identical); all 14 tabs on the 20/4 case with 0 console errors; the lane panel appears in the Report.
 
-## 2026-11-07 — PR: claude/sa-sliding-hs20v — Bed-joint sliding check, HS20 variable axle spacing, stated assumptions and scope (SLD / HSV / ASM; review S-2, L-5, L-3, S-4)
+## 2026-11-07 — PR #1114: https://github.com/mlococo88/All-Structural/pull/1114 — Bed-joint sliding check, HS20 variable axle spacing, stated assumptions and scope (SLD / HSV / ASM; review S-2, L-5, L-3, S-4)
 
 ### SLD-1. Bed-joint sliding |V| ≤ μN at every section, reported with D/C   [§4: new advisory check; no rating factor changes]
 - **Problem (review S-2):** the only joint check was the optional f_v·A shear rating (off by default), which takes no account of the thrust that actually resists sliding in a masonry joint. The dashboard carried an N/A row "Shear / radial joint sliding".
@@ -1530,7 +1530,7 @@ function transDisp(w,n,c,cap){
 - **After:** spandrel walls (overturning, bulging, separation; participation neglected per §7.2.7.4B), passive restraint of the fill, 3-D effects (skew, transverse distribution, longitudinal cracking, edge strips), ring separation, abutments/piers/foundations/scour, and collapse-mechanism capacity.
 
 ### How verified
-- `node tests/check-syntax.mjs` (all pass); `tests/smoke/phone-layout.mjs --tool arch` (pass); `tests/smoke/project-library.mjs --tool stonearch` (see the PR);
+- `node tests/check-syntax.mjs` (all pass); `tests/smoke/phone-layout.mjs --tool arch` (pass); `tests/smoke/project-library.mjs --tool stonearch` (the four A-vs-B identity checks differ only by `M.p.mu` and the new Summary text; the other checks pass);
 - headless main vs branch (Playwright, `tests/lib.mjs` `openPage`), reported RFs on seven cases: default, 30/6, semicircle, 4 ft cover, Lanes = 1, 80/16: identical; 20/4: HS20 0.391 → 0.390 only;
 - all 14 tabs with 0 console errors on the default and the 20/4 case; the new panels appear in the Report.
 - **Saved data:** one new field `mu` in the project file (old files open on 0.6); no key changed.
