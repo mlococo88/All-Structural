@@ -15,7 +15,7 @@
    reaction(V,My,Mx,xi,yi,pi) the load on one pile at (xi, yi) from the group centroid:
         P_i = V/n + [(My·Syy − Mx·Sxy)·xi + (Mx·Sxx − My·Sxy)·yi] / (Sxx·Syy − Sxy²)   when Sxy ≠ 0,
         P_i = V/n + My·xi/Sxx + Mx·yi/Syy                                              when Sxy = 0
-      (a zero Sxx or Syy drops that term). pi = {n, Sxx, Syy, Sxy}. Same expression and operation order as the abutment
+      (a zero Sxx or Syy with a non-zero moment about that axis gives NaN since PG1, 2026-11-07: unresisted(V, My, Mx, pi) names the moment; a zero Sxx or Syy with no moment drops the term). pi = {n, Sxx, Syy, Sxy}. Same expression and operation order as the abutment
       calculator's pileReaction (abutment_calculator.html, ABPX2), so the two give identical numbers.
 
    Rows of piles along a wall (per unit length of wall; the Retaining Wall Designer's form):
@@ -33,9 +33,21 @@
 (function () {
   'use strict';
 
+  /* PG1 (2026-11-07): a moment about an axis the group has no lever arm for (Σx'² = 0 with M_y ≠ 0: one row of piles in the
+     moment direction; or Σy'² = 0 with M_x ≠ 0) cannot be resisted by vertical piles on a pinned-head rigid cap. Before, that term
+     was dropped (every pile got V/n plus the other term); now reaction() returns NaN for it and unresisted() says which moment.
+     |M| ≤ 1e-6·max(1, |V|) counts as zero (round-off). Any layout with Σx'² > 0 and Σy'² > 0 is evaluated exactly as before. */
+  function unresisted(V, My, Mx, pi) {
+    const Sxx = pi.Sxx, Syy = pi.Syy, Sxy = pi.Sxy || 0, D = Sxx * Syy - Sxy * Sxy, tol = 1e-6 * Math.max(1, Math.abs(+V || 0));
+    if (Math.abs(Sxy) > 1e-9 * Math.max(1, Sxx + Syy) && D > 1e-9) return null;
+    if (!(Sxx > 1e-9) && Math.abs(My) > tol) return { axis: 'y', M: My, S: 'Sxx' };
+    if (!(Syy > 1e-9) && Math.abs(Mx) > tol) return { axis: 'x', M: Mx, S: 'Syy' };
+    return null;
+  }
   function reaction(V, My, Mx, xi, yi, pi) {
     const n = pi.n, Sxx = pi.Sxx, Syy = pi.Syy, Sxy = pi.Sxy || 0, D = Sxx * Syy - Sxy * Sxy;
     if (Math.abs(Sxy) > 1e-9 * Math.max(1, Sxx + Syy) && D > 1e-9) return V / n + ((My * Syy - Mx * Sxy) * xi + (Mx * Sxx - My * Sxy) * yi) / D;
+    if (unresisted(V, My, Mx, pi)) return NaN;   // PG1: no silent drop of an unresisted moment
     return V / n + (Sxx > 1e-9 ? My * xi / Sxx : 0) + (Syy > 1e-9 ? Mx * yi / Syy : 0);
   }
 
@@ -80,5 +92,5 @@
       iMax, iMin, uplift: rows.length > 0 && rows[iMin].P < 0, unstable, sumQ, sumQx };
   }
 
-  window.SharedPileGroup = { reaction, groupProps, rowGroup, rowLoads, momentAbout };
+  window.SharedPileGroup = { reaction, unresisted, groupProps, rowGroup, rowLoads, momentAbout };
 })();

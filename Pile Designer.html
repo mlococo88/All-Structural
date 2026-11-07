@@ -4672,13 +4672,19 @@ function computeAll(I, opts = {}) {
   // profile was silently ignored here and Davisson fell back to the global
   // solverSoil/solverNh values. Use the layers whenever they exist, matching what
   // the p-y solver itself does.
-  let bklSoilIsSand, bklStiff, bklSoilSrc;
+  let bklSoilIsSand, bklStiff, bklSoilSrc, bklSu = null, bklKhLayer = null;
   const bklLayers = Array.isArray(I.soilLayers) && I.soilLayers.length ? I.soilLayers : null;
   if (bklLayers) {
     const top = [...bklLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0];
     bklSoilIsSand = top.type === "sand";
     bklStiff = bklSoilIsSand ? top.nh : top.kh;
     bklSoilSrc = "layered profile (top layer: " + (top.type || "sand") + ")";
+    // PDA-M4 (2026-11-07): clay top layer with an undrained strength -> E_s = 0.465 S_u (ksi, S_u in ksf; Eq. C10.7.3.13.4-1),
+    // x 144 to kip/ft^2. Both S_u entries of a layer (p-y su in psf, static Su in ksf) -> the smaller (conservative). Before: the p-y k_h.
+    if (top.type === "clay" || top.type === "stiffclay") {
+      const suC = [top.su > 0 ? top.su / 1000 : null, top.Su > 0 ? top.Su : null].filter(x => x != null && isFinite(x));
+      if (suC.length) { bklSu = Math.min(...suC); bklKhLayer = bklStiff; bklStiff = 0.465 * bklSu * 144; bklSoilSrc += "; E_s = 0.465 S_u, S_u = " + fmt(bklSu, 2) + " ksf"; }
+    }
     // nh/kh can be missing on layers imported before the soil-JSON importer stopped deleting
     // them. Fall back to the new-row defaults (nh 60, kh 150) and say so, instead of NaN.
     if (!(typeof bklStiff === "number" && isFinite(bklStiff) && bklStiff > 0)) {
@@ -4690,6 +4696,14 @@ function computeAll(I, opts = {}) {
     bklSoilIsSand = I.solverSoil === "cohesionless";
     bklStiff = bklSoilIsSand ? I.solverNh : I.solverKh;
     bklSoilSrc = "uniform soil (" + (bklSoilIsSand ? "cohesionless" : "cohesive") + ")";
+  }
+  // PDA-M5 (2026-11-07): group spacing effect on the soil modulus (C10.7.3.13.4): 25 % of the single-pile value at s = 3B,
+  // 100 % at s >= 8B, linear between; below 3B the 25 % is kept (conservative). Applied to n_h / E_s (k_h) when the group is on.
+  const bklStiffSingle = bklStiff;
+  let bklGrpF = 1, bklGrpSB = null;
+  if (I.groupEnable && I.pileType !== "iab") {
+    const Bg = groupB(I), sc = groupCcSpacing(I);
+    if (Bg > 0 && sc > 0) { bklGrpSB = sc / Bg; bklGrpF = bklGrpSB >= 8 ? 1 : bklGrpSB <= 3 ? 0.25 : 0.25 + 0.75 * (bklGrpSB - 3) / 5; bklStiff = bklStiffSingle * bklGrpF; }
   }
   const T_char = Math.pow(EI_dav_ft / Math.max(bklStiff, 1e-6), 1 / 5); // ft (sand); PDA-D1: EI_w for the H-pile
   const R_char = Math.pow(EI_dav_ft / Math.max(bklStiff, 1e-6), 1 / 4); // ft (clay); PDA-D1: EI_w for the H-pile
@@ -4973,6 +4987,7 @@ function computeAll(I, opts = {}) {
     bklBasis,
     bklStiff,
     bklSoilSrc,
+    bklSu, bklKhLayer, bklStiffSingle, bklGrpF, bklGrpSB,   // PDA-M4 / M5
     bklLayerCount: bklLayers ? bklLayers.length : 0,
     lateralFixity: opts.solvedFixity,
     zFix2: (opts.zFix2 != null && isFinite(opts.zFix2)) ? opts.zFix2 : null,
@@ -5313,6 +5328,39 @@ function computeAll(I, opts = {}) {
   // Bar clear cover in bond zone (grout annulus): (dh - db)/2 >= 0.5 in typ
   const grout_cover_in = (dh - db_un) / 2;
   const cover_ok = grout_cover_in >= 0.5;
+  // PDA-M3 (2026-11-07): AASHTO 10.9.3.10.5 grout-to-steel bond, over the plunge length L_p (micropile only).
+  // Decisions (pending engineer review): (a) casing-to-grout bond: the casing's share of the load at the top of the plunge,
+  //   by axial stiffness of the cased section (E_g = 2500 f'c^0.33, as the CFST module), against phi tau pi ID L_p with
+  //   tau = 0.15 ksi (lower end of C10.9.3.10.5 for smooth pipe), the inner casing surface only and phi = phi_CC;
+  // (b) bar development in the plunge (Sec. 5): the bar develops, within L_p, the force the uncased length gives it
+  //   (grout neglected: compression P_u,unc, tension T_u - P_t, at most f_yb A_b): compression 5.10.8.2.2a,
+  //   l_db = max(0.63 d_b f_y / sqrt(f'c), 0.3 d_b f_y) x lambda_er, >= 8 in; tension 5.10.8.2.1a,
+  //   l_db = 0.17 d_b [(lambda_er f_y)/(1.97 f'c^0.25)]^2, >= 12 in; lambda_er = force / (f_yb A_b); lambda_rc, lambda_rl,
+  //   lambda_cf, lambda = 1.0 (no reduction taken).
+  const pdOn = I.pileType !== "hpile" && I.pileType !== "iab" && L_plunge > 0;
+  let cgBond = null, barDev = null;
+  if (pdOn) {
+    const Eg = 2500 * Math.pow(Math.max(fcGrout, 0.5), 0.33);   // ksi
+    const EAc = Es * Acas, EAb = Es * Ab, EAg = Eg * Math.max(Ag_cas, 0);
+    const share = EAc / (EAc + EAb + EAg);
+    const ejT = casingJointTenEffOf(I);
+    const AcT = Acas * ejT;
+    const shareT = AcT > 0 ? AcT / (AcT + Ab) : 0;
+    const Pcas = Math.max(STL * share, (R.tension && R.tension.enable ? R.tension.Tu : 0) * shareT);
+    const tau = 0.15, phiCB = phiCC;
+    const Rn = tau * PI * ID * L_plunge * 12;      // kip
+    cgBond = { Eg, share, shareT, Pcas, tau, phiCB, Rn, phiRn: phiCB * Rn, ok: phiCB * Rn >= Pcas };
+    const fyD = fyb, AbF = fyD * Ab, sq = Math.sqrt(Math.max(fcGrout, 0.5));
+    const Fc = STL > 0 ? Math.min(R.axial.Pu_unc != null ? R.axial.Pu_unc : STL, AbF) : 0;
+    const Ft = (R.tension && R.tension.enable) ? Math.min(R.tension.Tu_unc || 0, AbF) : 0;
+    const lerC = AbF > 0 ? Fc / AbF : 0, lerT = AbF > 0 ? Ft / AbF : 0;
+    const ldbC = Math.max(0.63 * barDia * fyD / sq, 0.3 * barDia * fyD);
+    const ldC = Fc > 0 ? Math.max(ldbC * lerC, 8) : null;          // in
+    const ldbT = 0.17 * barDia * Math.pow(lerT * fyD / (1.97 * Math.pow(Math.max(fcGrout, 0.5), 0.25)), 2);
+    const ldT = Ft > 0 ? Math.max(ldbT, 12) : null;                 // in
+    const ldReq = Math.max(ldC || 0, ldT || 0);
+    barDev = { fy: fyD, Fc, Ft, lerC, lerT, ldbC, ldC, ldbT, ldT, ldReq, Lp_in: L_plunge * 12, fyHigh: fyD > 100, ok: ldReq <= L_plunge * 12 };
+  }
 
   R.geoChecks = {
     // uncased flexure (answers the "is uncased pure-axial?" question)
@@ -5328,12 +5376,13 @@ function computeAll(I, opts = {}) {
     casingPastActive, tipBelowGrade: R.casingExt.tipBelowGrade, zDecay: R.casingExt.zDecay,
     // plunge + cover
     plungeDev_ok, plungeMin_dev, L_plunge, grout_cover_in, cover_ok,
+    cgBond, barDev, casID: ID,   // PDA-M3 (10.9.3.10.5)
     // geometry consistency (from R.geo)
     geomValid: R.geo.geomValid,
     // overall (advisory items excluded from hard pass)
     // dia_ok is ADVISORY (not in pass): FHWA NHI-05-039's 3-12 in is the TYPICAL
     // micropile diameter range, not a code limit. Reported as a flag only.
-    pass: uncasedFlex_pass && uncPM_pass && Lb_min_ok && Lb_geoReq_ok && plungeDev_ok && cover_ok && R.geo.geomValid && (casingPastActive !== false)
+    pass: uncasedFlex_pass && uncPM_pass && (!cgBond || cgBond.ok) && (!barDev || barDev.ok) && Lb_min_ok && Lb_geoReq_ok && plungeDev_ok && cover_ok && R.geo.geomValid && (casingPastActive !== false)
   };
 
   // ---- H-PILE geotechnical axial capacity (only meaningful when pileType==="hpile") ----
@@ -6483,7 +6532,9 @@ function gcSummaryRows(r, keys) {
     ...(gc.uncPM_t != null ? [["Uncased combined tension + flexure (D/C)", 1.0, "", gc.uncPM_t, gc.uncPM_t <= 1.0, "AASHTO 10.9.3.10.1 / 5.6.6.2 (linear, interim)", k("pmt")]] : []),
     ["Code limit — effective bond length ≥ required", gc.Lb_eff, "ft", gc.Lb_req, !!gc.Lb_geoReq_ok, "AASHTO 10.9.3.5", k("Lb")],
     ["Code limit — effective bond length ≥ practical minimum", gc.Lb_eff, "ft", gc.Lb_min_ft, !!gc.Lb_min_ok, "FHWA NHI-05-039", k("Lbmin")],
-    ["Code limit — casing plunge length", gc.L_plunge, "ft", Math.min(gc.plungeMin_dev, gc.L_bond), !!gc.plungeDev_ok, "FHWA NHI-05-039", k("pl")],
+    ["Code limit — casing plunge length (detailing rule, tool, not AASHTO)", gc.L_plunge, "ft", Math.min(gc.plungeMin_dev, gc.L_bond), !!gc.plungeDev_ok, "tool rule: max(40 d_b, 3 ft)", k("pl")],   // PDA-M3: relabelled
+    ...(gc.cgBond ? [["Code limit — casing-to-grout bond in the plunge", gc.cgBond.phiRn, "kip", gc.cgBond.Pcas, !!gc.cgBond.ok, "AASHTO 10.9.3.10.5", k("cgb")]] : []),
+    ...(gc.barDev && gc.barDev.ldReq > 0 ? [["Code limit — bar development in the plunge", gc.barDev.Lp_in, "in", gc.barDev.ldReq, !!gc.barDev.ok, "AASHTO 10.9.3.10.5, 5.10.8.2", k("bdev")]] : []),
     ["Code limit — grout cover around the bar", gc.grout_cover_in, "in", 0.5, !!gc.cover_ok, "FHWA NHI-05-039", k("cov")],
     ["Code limit — geometry consistency", 1, "", gc.geomValid ? 0 : 1, !!gc.geomValid, "plunge ≤ bond, cased ≥ plunge", k("geo")]];
   return o.map(x => keys ? x : x.slice(0, 6));
@@ -6503,7 +6554,7 @@ function checkNoFor(name, pileType) {
   if (/stability/i.test(n)) return "02";
   if (/Casing past active/i.test(n)) return "G";
   if (/^Uncased flexure/i.test(n)) return "G";   // F40 (O23)
-  if (/^Code limit/i.test(n)) return "G";        // PDA-M2
+  if (/^Code limit/i.test(n)) return "G";        // PDA-M2 (PDA-M3 rows too)
   if (/^Uncased combined/i.test(n)) return "G";  // PDA-M1
   if (/^Group/i.test(n)) return "11";            // F40 (O52)
   if (/Head fixity/i.test(n)) return pileType === "hpile" ? "06" : "02";
@@ -9499,7 +9550,7 @@ const DEFAULT_INPUTS = {
   hpPhiUp: 0.25,   // uplift: SPT / alpha method
   hpDriveCond: "good", // "good" (phi_c 0.60) | "severe" (phi_c 0.50) | "static_generic" (custom / legacy)
   hpPhiRev: 2,     // migration marker for the H-pile phi defaults (see mergeSavedInputs)
-  pdaRev: 6,           // PDA (2026-10-20): migration marker (mergeSavedInputs); 2 = part B, 3 = part C, 4 = PDA-H1 note, 5 = PDA-H2 note, 6 = PDA-M1 note (2026-11-07)
+  pdaRev: 8,           // PDA (2026-10-20): migration marker (mergeSavedInputs); 2 = part B, 3 = part C, 4 = PDA-H1 note, 5 = PDA-H2 note, 6 = PDA-M1 note, 7 = PDA-M4/M5 note, 8 = PDA-M3 note (2026-11-07)
   hpSptBasis: "N60",   // PDA-D5 (2026-10-20): SPT values entered as N60 (C_N applied, 10.4.6.2.4) | "N160"; saved projects without it: "N160"
   scourDepth: 0,       // PDA-D12 (2026-10-20): design scour depth below grade (ft); no side / bond / p-y resistance above it (10.7.3.6)
   hpSmallGroup: false, // apply Table 10.5.5.2.3-1 small-group 0.80 reduction on φ_stat
@@ -10091,6 +10142,19 @@ function mergeSavedInputs(parsed) {
   if (parsed && typeof parsed === "object" && !(parsed.pdaRev >= 6)) {
     if (out.pileType !== "hpile" && out.pileType !== "iab") notes.push("Uncased length (Module G, 2026-11-07): a combined axial + flexure check is added below the casing tip (compression and tension, linear interaction with the bar-only \u03c6M_n; 10.9.3.10.1 \u2192 Sec. 5). The Module G status can change: review it.");
     out.pdaRev = 6;
+  }
+  // PDA-M4 / M5 (2026-11-07): one-time note for a project saved before it (pdaRev < 7). No input is changed.
+  if (parsed && typeof parsed === "object" && !(parsed.pdaRev >= 7)) {
+    const ly0 = Array.isArray(out.soilLayers) && out.soilLayers.length ? [...out.soilLayers].sort((a, b) => (a.topDepth || 0) - (b.topDepth || 0))[0] : null;
+    const clayS = !!ly0 && (ly0.type === "clay" || ly0.type === "stiffclay") && ((ly0.su || 0) > 0 || (ly0.Su || 0) > 0);
+    const grp = !!out.groupEnable && out.pileType !== "iab";
+    if (out.pileType !== "iab" && (clayS || grp)) notes.push("Davisson depth to fixity (Module 10, 2026-11-07): " + [clayS ? "a clay top layer now uses E_s = 0.465 S_u (Eq. C10.7.3.13.4-1) instead of the p-y k_h" : null, grp ? "the group spacing reduces the soil modulus (25 % at 3B, 100 % at 8B, C10.7.3.13.4)" : null].filter(Boolean).join("; ") + ". Results change: review the buckling and combined checks.");
+    out.pdaRev = 7;
+  }
+  // PDA-M3 (2026-11-07): one-time note for a micropile project with a plunge saved before it (pdaRev < 8). No input is changed.
+  if (parsed && typeof parsed === "object" && !(parsed.pdaRev >= 8)) {
+    if (out.pileType !== "hpile" && out.pileType !== "iab" && (out.Lplunge || 0) > 0) notes.push("Casing plunge (Module G, 2026-11-07): the AASHTO 10.9.3.10.5 checks are added over the plunge length (casing-to-grout bond and bar development, Sec. 5); the 40 d_b / 3 ft plunge rule is kept and labelled a tool detailing rule. The Module G status can change: review it.");
+    out.pdaRev = 8;
   }
   LAST_LOAD_NOTES = notes;
   return out;
@@ -10704,7 +10768,11 @@ function RptGeomChecks({ I, r }) {
     e(RptCheck, { pass: gc.dia_ok, advisory: true, eq: `${fmt(gc.Db_min_in, 0)}\\text{ in}\\le d_h=${fmt(gc.dh, 2)}\\text{ in}\\le ${fmt(gc.Db_max_in, 0)}\\text{ in}` }),
     note("Bond-zone (drilled-hole) diameter vs the typical micropile range (FHWA NHI-05-039) — advisory only, not a code limit; not in the module or overall status."),
     e(RptCheck, { pass: gc.plungeDev_ok, eq: `L_{plunge}=${fmt(gc.L_plunge, 1)}\\text{ ft}${gc.plungeDev_ok ? ' \\geq ' : ' < '}L_{plunge,min}=${fmt(Math.min(gc.plungeMin_dev, gc.L_bond), 1)}\\text{ ft}` }),
-    note("Casing plunge into the bond zone develops the cased load into the bar + grout (≈ 40·d_b bar development, floored at 3 ft)."),
+    note("Detailing rule (tool, not AASHTO): plunge \u2265 max(40\u00b7d_b, 3 ft)."),
+    gc.cgBond && e(RptCheck, { pass: gc.cgBond.ok, eq: `\\phi\\tau\\pi ID\\,L_p=${fmt(gc.cgBond.phiCB, 2)}(0.15)\\pi(${fmt(gc.casID, 3)})(${fmt(gc.L_plunge * 12, 0)})=${fmt(gc.cgBond.phiRn, 1)}\\text{ kip}${gc.cgBond.ok ? '\\geq' : '<'}P_{cas}=${fmt(gc.cgBond.Pcas, 1)}\\text{ kip}` }),   // PDA-M3
+    gc.cgBond && note("Casing-to-grout bond over the plunge (AASHTO 10.9.3.10.5): casing share " + fmt(gc.cgBond.share, 3) + " by axial stiffness (E_g = " + fmt(gc.cgBond.Eg, 0) + " ksi); \u03c4 = 0.15 ksi (C10.9.3.10.5, smooth pipe, lower end), inner surface, \u03c6 = \u03c6_CC."),
+    gc.barDev && gc.barDev.ldReq > 0 && e(RptCheck, { pass: gc.barDev.ok, eq: `L_p=${fmt(gc.barDev.Lp_in, 0)}\\text{ in}${gc.barDev.ok ? '\\geq' : '<'}\\ell_d=${fmt(gc.barDev.ldReq, 1)}\\text{ in}` }),
+    gc.barDev && gc.barDev.ldReq > 0 && note("Bar development within the plunge (AASHTO 10.9.3.10.5 \u2192 5.10.8.2.2a compression / 5.10.8.2.1a tension), for the uncased-length force with grout neglected; \u03bb_er = force/(f_yb A_b), other factors 1.0." + (gc.barDev.fyHigh ? " f_yb > 100 ksi: outside the Sec. 5 bar range \u2014 confirm with the bar supplier." : "")),
     e(RptCheck, { pass: gc.cover_ok, eq: `\\text{grout cover}=\\tfrac{d_h-d_b}{2}=${fmt(gc.grout_cover_in, 2)}\\text{ in}${gc.cover_ok ? ' \\geq ' : ' < '}0.5\\text{ in}` }),
     note("Minimum grout annulus around the central bar in the bond zone."),
     gc.casingPastActive !== null && e(RptCheck, { pass: gc.casingPastActive, eq: `\\text{casing tip}=${fmt(gc.tipBelowGrade, 1)}\\text{ ft}${gc.casingPastActive ? ' \\geq ' : ' < '}\\text{moment-decay depth}=${fmt(gc.zDecay, 1)}\\text{ ft}` }),
@@ -15217,6 +15285,12 @@ function BucklingTabs({ b, I, set, pcr, computePcr }) {
       /*#__PURE__*/React.createElement("p", { className: "text-[9px] text-slate-500 mb-1" },
         "Soil stiffness from: ", /*#__PURE__*/React.createElement("b", null, b.bklSoilSrc),
         b.bklLayerCount > 1 ? [" \u2014 ", b.bklLayerCount, " layers defined; the closed form uses only the TOP layer, since it assumes uniform soil. Where layering matters, use the deflection-matched or P-crit tab, which run on the full profile."] : ""),
+      (b.bklSu != null || b.bklGrpF < 1) && /*#__PURE__*/React.createElement(Calc, {   // PDA-M4 / M5
+        label: "Soil modulus for the fixity depth",
+        eq: (b.bklSu != null ? `E_s=0.465\\,S_u=0.465(${fmt(b.bklSu, 2)})(144)=${fmt(b.bklStiffSingle, 1)}\\ \\text{kip/ft}^2` : `${b.bklSoilIsSand ? "n_h" : "k_h"}=${fmt(b.bklStiffSingle, 1)}`) + (b.bklGrpF < 1 ? `;\\ \\text{group } s/B=${fmt(b.bklGrpSB, 2)}:\\ f=${b.bklGrpSB <= 3 ? "0.25" : `0.25+0.75(${fmt(b.bklGrpSB, 2)}-3)/5`}=${fmt(b.bklGrpF, 3)},\\ ${b.bklSoilIsSand ? "n_h" : "k_h"}=${fmt(b.bklGrpF, 3)}(${fmt(b.bklStiffSingle, 1)})=${fmt(b.bklStiff, 1)}` : ""),
+        cite: (b.bklSu != null ? "Eq. C10.7.3.13.4-1" : "") + (b.bklSu != null && b.bklGrpF < 1 ? "; " : "") + (b.bklGrpF < 1 ? "C10.7.3.13.4 (25 % at 3B, 100 % at 8B)" : ""),
+        note: b.bklSu != null ? "Clay: E_s from the top layer's undrained strength (the smaller S_u entered), used as k_h below" + (b.bklKhLayer > 0 ? "; the layer's p-y k_h = " + fmt(b.bklKhLayer, 0) + " kip/ft\u00b2 is not used here" : "") + "." : null
+      }),
       /*#__PURE__*/React.createElement(Calc, {
         label: "Characteristic length",
         eq: b.bklSoilIsSand
@@ -16044,12 +16118,19 @@ function pdrModel(I, r, pyRes, pcr, sel) {
         pdrS("Lb", "Effective bond length \u2265 required bond length", "L_{b,eff}", "\\ge L_{b,req}", pdrN(gc.Lb_eff, 1) + " \\ge " + pdrN(gc.Lb_req, 1), gc.Lb_eff, "ft", 1, { ok: !!gc.Lb_geoReq_ok }),
         pdrS("Lbmin", "Effective bond length \u2265 FHWA practical minimum", "L_{b,eff}", "\\ge L_{b,min}", pdrN(gc.Lb_eff, 1) + " \\ge " + pdrN(gc.Lb_min_ft, 0), gc.Lb_eff, "ft", 1, { ok: !!gc.Lb_min_ok }),
         pdrS("dh", "Bond-zone diameter vs the typical range (advisory, not in the status)", "d_{h}", "", pdrN(gc.Db_min_in, 0) + " \\le " + pdrN(gc.dh, 2) + " \\le " + pdrN(gc.Db_max_in, 0), gc.dh, "in", 2, { note: gc.dia_ok ? "within the typical range" : "outside the typical range (advisory)" }),
-        pdrS("pl", "Casing plunge develops the cased load", "L_{plunge}", "\\ge L_{plunge,min}", pdrN(gc.L_plunge, 1) + " \\ge " + pdrN(Math.min(gc.plungeMin_dev, gc.L_bond), 1), gc.L_plunge, "ft", 1, { ok: !!gc.plungeDev_ok }),
+        pdrS("pl", "Casing plunge length: detailing rule (tool, not AASHTO), max(40 d_b, 3 ft)", "L_{plunge}", "\\ge L_{plunge,min}", pdrN(gc.L_plunge, 1) + " \\ge " + pdrN(Math.min(gc.plungeMin_dev, gc.L_bond), 1), gc.L_plunge, "ft", 1, { ok: !!gc.plungeDev_ok }),
         pdrS("cov", "Grout cover around the bar", "\\frac{d_{h} \\minus d_{b}}{2}", "\\ge 0.5", pdrN(gc.grout_cover_in, 2) + " \\ge 0.5", gc.grout_cover_in, "in", 2, { ok: !!gc.cover_ok })];
       const pmSt = [];   // PDA-M1: uncased combined axial + flexure (linear, interim)
       if (gc.uncPM_c != null) pmSt.push(pdrS("pmc", "Uncased compression + flexure (linear interim; grout compression neglected in M_n)" + (nc ? ": p-y did not converge" : ""), "D/C", "\\frac{P_{u,unc}}{\\phi_{CU}R_{n}} + \\frac{M_{u,unc}}{\\phi M_{n}}", "\\frac{" + pdrN(r.axial.Pu_unc != null ? r.axial.Pu_unc : I.STL, 1) + "}{" + pdrN(r.axial.phiRn_ucased, 1) + "} + \\frac{" + pdrN(gc.M_belowTip, 2) + "}{" + pdrN(gc.phiMn_uncased, 2) + "}", gc.uncPM_c, "", 3, { ok: gc.uncPM_c <= 1.0 && !nc, ref: AA("Art. 10.9.3.10.1, 5.6.2") }));
       if (gc.uncPM_t != null) pmSt.push(pdrS("pmt", "Uncased tension + flexure (linear interim; bar alone in tension)" + (nc ? ": p-y did not converge" : ""), "D/C", "\\frac{T_{u} \\minus P_{t}}{\\phi_{t}f_{yb}A_{b}} + \\frac{M_{u,unc}}{\\phi M_{n}}", "\\frac{" + pdrN(r.tension.Tu_unc, 1) + "}{" + pdrN(r.tension.phiPn_tension, 1) + "} + \\frac{" + pdrN(gc.M_belowTip, 2) + "}{" + pdrN(gc.phiMn_uncased, 2) + "}", gc.uncPM_t, "", 3, { ok: gc.uncPM_t <= 1.0 && !nc, ref: AA("Art. 10.9.3.10.1, 5.6.6.2") }));
       st.splice(4, 0, ...pmSt);
+      if (gc.cgBond) { const c = gc.cgBond;   // PDA-M3 (10.9.3.10.5)
+        st.push(pdrS("cgs", "Casing share of the load at the top of the plunge (axial stiffness, E_g = 2500 f'c^0.33 = " + fmt(c.Eg, 0) + " ksi)", "P_{cas}", "STL\\frac{EA_{c}}{EA_{c} + EA_{b} + E_{g}A_{g}}", pdrN(I.STL, 0) + "(" + pdrN(c.share, 3) + ")", c.Pcas, "kip", 1, { note: c.shareT > 0 && c.Pcas > I.STL * c.share ? "tension governs: T_u \u00d7 " + fmt(c.shareT, 3) : "" }));
+        st.push(pdrS("cgb", "Casing-to-grout bond over the plunge (inner surface, \u03c4 = 0.15 ksi, C10.9.3.10.5; \u03c6 = \u03c6_CC)", "\\phi R_{n}", "\\phi\\,\\tau\\,\\pi\\,ID\\,L_{p}", pdrN(c.phiCB, 2) + "(0.15)\\pi(" + pdrN(gc.casID, 3) + ")(" + pdrN(gc.L_plunge * 12, 0) + ")", c.phiRn, "kip", 1, { ok: !!c.ok, ref: AA("Art. 10.9.3.10.5") })); }
+      if (gc.barDev && gc.barDev.ldReq > 0) { const d = gc.barDev;
+        if (d.ldC != null) st.push(pdrS("ldc", "Bar development in compression (F = " + fmt(d.Fc, 1) + " kip, \u03bb_er = " + fmt(d.lerC, 3) + ")", "\\ell_{d,c}", "\\max(0.63d_{b}f_{y}/\\sqrt{f'_{c}},\\;0.3d_{b}f_{y})\\lambda_{er} \\ge 8", "\\max(" + pdrN(0.63 * gc.db_un * d.fy / Math.sqrt(Math.max(I.fcGrout / 1000, 0.5)), 1) + ",\\;" + pdrN(0.3 * gc.db_un * d.fy, 1) + ")(" + pdrN(d.lerC, 3) + ")", d.ldC, "in", 1, { ref: AA("Eqs. 5.10.8.2.2a-1 to -3") }));
+        if (d.ldT != null) st.push(pdrS("ldt", "Bar development in tension (F = T_u \u2212 P_t = " + fmt(d.Ft, 1) + " kip, \u03bb_er = " + fmt(d.lerT, 3) + ")", "\\ell_{d,t}", "0.17d_{b}\\left(\\frac{\\lambda_{er}f_{y}}{1.97f'^{0.25}_{c}}\\right)^{2} \\ge 12", "0.17(" + pdrN(gc.db_un, 3) + ")\\left(\\frac{" + pdrN(d.lerT, 3) + "(" + pdrN(d.fy, 0) + ")}{1.97(" + pdrN(Math.max(I.fcGrout / 1000, 0.5), 2) + ")^{0.25}}\\right)^{2}", d.ldT, "in", 1, { ref: AA("Eqs. 5.10.8.2.1a-1, -2") }));
+        st.push(pdrS("bdev", "Bar developed within the plunge" + (d.fyHigh ? " (f_yb > 100 ksi: outside the Sec. 5 bar range, confirm with the bar supplier)" : ""), "L_{p}", "\\ge \\ell_{d}", pdrN(d.Lp_in, 0) + " \\ge " + pdrN(d.ldReq, 1), d.Lp_in, "in", 0, { ok: !!d.ok, ref: AA("Art. 10.9.3.10.5") })); }
       if (gc.casingPastActive !== null) st.push(pdrS("tip", "Casing tip below the moment-decay depth", "z_{tip}", "\\ge z_{M \\to 0}", pdrN(gc.tipBelowGrade, 1) + " \\ge " + pdrN(gc.zDecay, 1), gc.tipBelowGrade, "ft", 1, { ok: !!gc.casingPastActive }));
       st.push(pdrS("geo", "Geometry consistency (plunge \u2264 bond, cased \u2265 plunge)", "", "", "", gc.geomValid ? "consistent" : "inconsistent", "", 2, { ok: !!gc.geomValid }));
       add("geom", sub("G Code-limit checks", [pdrItem("gc", [{ title: "Uncased flexure", ref: "AASHTO 10.9 / FHWA NHI-05-039", steps: st.slice(0, 4 + pmSt.length) }, { title: "Bond, plunge, cover and casing length", ref: "FHWA NHI-05-039", steps: st.slice(4 + pmSt.length) }]), goto("geom", "Geometry & limits tab")])); }
@@ -16140,6 +16221,7 @@ function pdrModel(I, r, pyRes, pcr, sel) {
 
   /* ---------- buckling (micropile and H-pile) ---------- */
   if (!isIAB && r.buckling && r.buckling.enable) { const K = r.buckling, st = [];
+    if (K.bklSu != null || K.bklGrpF < 1) st.push(pdrS("Es", "Soil modulus for the fixity depth" + (K.bklSu != null ? " (clay: E_s = 0.465 S_u, S_u = " + fmt(K.bklSu, 2) + " ksf)" : "") + (K.bklGrpF < 1 ? "; group s/B = " + fmt(K.bklGrpSB, 2) + ", factor " + fmt(K.bklGrpF, 3) + " on " + fmt(K.bklStiffSingle, 1) : ""), K.bklSoilIsSand ? "n_{h}" : "k_{h}", K.bklSu != null ? "0.465S_{u}(144)" + (K.bklGrpF < 1 ? " \\times f_{grp}" : "") : "f_{grp}" + (K.bklSoilIsSand ? "n_{h}" : "k_{h}"), "", K.bklStiff, K.bklSoilIsSand ? "kip/ft^{3}" : "kip/ft^{2}", 1, { ref: AA((K.bklSu != null ? "Eq. C10.7.3.13.4-1" : "") + (K.bklSu != null && K.bklGrpF < 1 ? ", " : "") + (K.bklGrpF < 1 ? "C10.7.3.13.4" : "")) }));   // PDA-M4 / M5
     st.push(pdrS("Ldav", "Preliminary fixity (Davisson 1965), " + (K.bklSoilIsSand ? "L_f = 1.8T, T = (EI/n_h)^1/5" : "L_f = 1.4R, R = (EI/k_h)^1/4") + "; soil basis " + (K.bklSoilSrc || "\u2014"), "L_{f}", "", "", K.Lf_davisson, "ft", 1, { ref: AA("Eqs. C10.7.3.13.4-1, -2") }));
     if (K.lpileMatchOk) st.push(pdrS("Lmatch", "Deflection-matched fixity (" + (K.deflSrc || "lateral analysis") + ", " + (K.deflHeadBasis === "fixed" ? "fixed" : "free") + " head)", "L_{f}", "L_{equiv} \\minus L_{u}", pdrN(K.L_equiv_lpile, 2) + " \\minus L_{u}", K.Lf_lpile, "ft", 1));
     st.push(pdrS("Lf", "Selected fixity basis: " + K.lfGoverning.src + (K.resultIsFallback ? " (selected method has no result: Davisson used)" : ""), "L_{f}", "", "", K.Lf_buck, "ft", 1, { note: K.mostConsIsOther ? "another method is more conservative (\u03c6_cP_n = " + fmt(K.mostConsPhiPn, 0) + " kip); not substituted" : "" }));
@@ -19181,7 +19263,17 @@ function App() {
     /*#__PURE__*/React.createElement(CheckRow, {
       pass: r.geoChecks.plungeDev_ok,
       tex: `L_{plunge}=${fmt(r.geoChecks.L_plunge, 1)}\\text{ ft}${r.geoChecks.plungeDev_ok ? ' \\geq ' : ' < '}L_{plunge,min}=${fmt(Math.min(r.geoChecks.plungeMin_dev, r.geoChecks.L_bond), 1)}\\text{ ft}`,
-      note: "Casing plunge into the bond zone must develop the cased load into the bar+grout (≈ 40·d_b bar development, floored at 3 ft)."
+      note: "Detailing rule (tool, not AASHTO): plunge \u2265 max(40\u00b7d_b, 3 ft). The AASHTO 10.9.3.10.5 checks (casing-to-grout bond and bar development over the plunge) follow."
+    }),
+    r.geoChecks.cgBond && /*#__PURE__*/React.createElement(CheckRow, {   // PDA-M3
+      pass: r.geoChecks.cgBond.ok,
+      tex: `\\phi\\tau\\pi ID\\,L_p=${fmt(r.geoChecks.cgBond.phiCB, 2)}(0.15)\\pi(${fmt(r.geoChecks.casID, 3)})(${fmt(r.geoChecks.L_plunge * 12, 0)})=${fmt(r.geoChecks.cgBond.phiRn, 1)}\\text{ kip}${r.geoChecks.cgBond.ok ? '\\geq' : '<'}P_{cas}=${fmt(I.STL, 0)}(${fmt(r.geoChecks.cgBond.share, 3)})=${fmt(r.geoChecks.cgBond.Pcas, 1)}\\text{ kip}`,
+      note: "Casing-to-grout bond over the plunge (AASHTO 10.9.3.10.5): the casing's share of the load at the top of the plunge, by axial stiffness EA_c/(EA_c + EA_b + E_gA_g) with E_g = 2500 f'c^0.33 = " + fmt(r.geoChecks.cgBond.Eg, 0) + " ksi" + (r.geoChecks.cgBond.Pcas > I.STL * r.geoChecks.cgBond.share ? " (tension governs: T_u \u00d7 " + fmt(r.geoChecks.cgBond.shareT, 3) + ")" : "") + "; bond \u03c4 = 0.15 ksi (lower end of C10.9.3.10.5 for smooth pipe) on the inner casing surface, \u03c6 = \u03c6_CC. Decision pending engineer review."
+    }),
+    r.geoChecks.barDev && r.geoChecks.barDev.ldReq > 0 && /*#__PURE__*/React.createElement(CheckRow, {
+      pass: r.geoChecks.barDev.ok,
+      tex: `L_p=${fmt(r.geoChecks.barDev.Lp_in, 0)}\\text{ in}${r.geoChecks.barDev.ok ? '\\geq' : '<'}\\ell_d=\\max(${r.geoChecks.barDev.ldC != null ? `\\ell_{d,c}=${fmt(r.geoChecks.barDev.ldC, 1)}` : ""}${r.geoChecks.barDev.ldC != null && r.geoChecks.barDev.ldT != null ? "," : ""}${r.geoChecks.barDev.ldT != null ? `\\ell_{d,t}=${fmt(r.geoChecks.barDev.ldT, 1)}` : ""})=${fmt(r.geoChecks.barDev.ldReq, 1)}\\text{ in}`,
+      note: "Bar development within the plunge (AASHTO 10.9.3.10.5 \u2192 Sec. 5): the bar develops the uncased-length force, grout neglected" + (r.geoChecks.barDev.ldC != null ? "; compression F = " + fmt(r.geoChecks.barDev.Fc, 1) + " kip, \u2113_d,c = max(0.63 d_b f_y/\u221af'c, 0.3 d_b f_y)\u00b7\u03bb_er \u2265 8 in (5.10.8.2.2a), \u03bb_er = " + fmt(r.geoChecks.barDev.lerC, 3) : "") + (r.geoChecks.barDev.ldT != null ? "; tension F = T_u \u2212 P_t = " + fmt(r.geoChecks.barDev.Ft, 1) + " kip, \u2113_d,t = 0.17 d_b[\u03bb_er f_y/(1.97 f'c^0.25)]\u00b2 \u2265 12 in (5.10.8.2.1a), \u03bb_er = " + fmt(r.geoChecks.barDev.lerT, 3) : "") + "; \u03bb_rc = \u03bb_rl = \u03bb_cf = \u03bb = 1.0." + (r.geoChecks.barDev.fyHigh ? " f_yb > 100 ksi: outside the Sec. 5 bar range \u2014 confirm with the bar supplier." : "") + " Decision pending engineer review."
     }),
     /*#__PURE__*/React.createElement(CheckRow, {
       pass: r.geoChecks.cover_ok,
@@ -20250,7 +20342,7 @@ function App() {
   }, /*#__PURE__*/React.createElement(CheckRow, {
     pass: r.axial.plunge_ok,
     tex: `L_{plunge}=${fmt(r.axial.L_plunge, 1)}\\text{ ft}${r.axial.plunge_ok ? ' \\geq ' : ' < '}L_{plunge,min}\\approx${fmt(r.axial.plungeMin_dev, 1)}\\text{ ft}`,
-    note: "Approximate minimum plunge (≈ bar development or a practical floor). Verify against project detail and FHWA NHI-05-039."
+    note: "Detailing rule (tool, not AASHTO): plunge \u2265 max(40\u00b7d_b, 3 ft). The AASHTO 10.9.3.10.5 bond and bar-development checks over the plunge are in Module G."
   }))),
   /*#__PURE__*/React.createElement("div", { className: "mt-4 p-3 rounded-sm border border-slate-200", style: { background: "rgba(20,48,74,0.03)" } },
     /*#__PURE__*/React.createElement("div", { className: "font-mono-tech text-[11px] text-[var(--blueprint2)] mb-1 uppercase tracking-wider" }, "Structural tensile resistance"),
