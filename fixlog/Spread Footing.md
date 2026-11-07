@@ -6311,7 +6311,7 @@ index 50f3837..c2d5000 100644
   - The governing flexure (y, 0.687) is unchanged.
 - **Saved data:** none. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/sf-m3m4-depth-strain (SFMD: footing depth d ≥ 6 in, ACI 318-19 13.3.1.2; SFET: footing mats tension-controlled, ACI 318-19 7.3.3.1 / 8.3.3.1; CALCULATION CHANGE, pass / fail logic: two new checks)
+## 2026-11-07 — PR: claude/sf-m3m4-depth-strain (PR #989: https://github.com/mlococo88/All-Structural/pull/989) (SFMD: footing depth d ≥ 6 in, ACI 318-19 13.3.1.2; SFET: footing mats tension-controlled, ACI 318-19 7.3.3.1 / 8.3.3.1; CALCULATION CHANGE, pass / fail logic: two new checks)
 
 - **Problem:** two code limits were not checked.
   - The depth of the bottom reinforcement must be at least 6 in (13.3.1.2).
