@@ -2407,3 +2407,23 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **How verified:** `node tests/lightpole-compare.mjs --a origin/main` (23 cases): identical except `nocable`, `rect610`, `rect106` (the rectangular pole cases); sign and LRFDLTS cases identical; **cable values identical in every case**; 0 console errors. `check-syntax`, `phone-layout --tool lp`, `project-library --tool lightpole`, `lightpole-anchor-handoff`, `lightpole-projection`, `lightpole-signviews`, `tests/engine/run.mjs lightpole` (42): pass.
 - **Saved data:** none.
 - **Open items (not changed):** (1) IBC sign mode, rectangular post: the post drag (`signWind`, exposed clearance height) uses B for every azimuth; at edge-on wind (90°/270°, panel force 0) the depth face is loaded. Decision (pending engineer review): left as is in this PR (small, edge-on post drag only). (2) Mast ice weight on a rectangular pole uses a round of diameter B.
+
+## 2026-11-07 — PR: claude/lp-left-breakpoint — Check summary panel as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (LPLB; display only, no result change)
+
+### LPLB. The check summary is on the left at common laptop widths   [display only]
+- **Decision (pending engineer review):** the engineer asked (2026-11-07, for the Retaining Wall Designer) for "the summary cards … on the left panel", most likely at a laptop width below 1500 px, where LPDC (#747) put the panel above the output tabs. The left column now starts at **1200 px** in Light Pole and Sign Post, Retaining Wall Designer (RWLB, #984) and Spread Footing (SFLB, #988) alike. From 1200 to 1499 px it is **240 px** wide and the input panel is 33 % of the rest; at 1500 px and wider 292 px as before (layout and panel widths unchanged there). Below 1200 px nothing changes (panel above the output tabs; phone layout). Same collapse button (« / » → 42 px strip) and key `lpp_dashCollapsed_v1`.
+- **Output panel with the column open:** 643 px at 1200 px, 697 at 1280, 777 at 1400 (the tool already works at 670 px, a 1000 px window): no output tab is cut off or scrolls the page sideways (measured on all nine tabs at 1200, 1280, 1400).
+- **Where:**
+  - CSS: `  @media screen and (min-width:1500px){` (anchor `.wrap{max-width:1792px}`) → `  @media screen and (min-width:1200px){` with a comment `/* LPLB … */` above; after that block, added:
+```css
+  @media screen and (min-width:1200px) and (max-width:1499.98px){   /* LPLB */
+    body.lppDashWide #lppDashCol{flex-basis:240px;width:240px}
+    body.lppDashWide .grid2 .col-in{flex-basis:calc((100% - 240px)*.33);max-width:calc((100% - 240px)*.33)}
+    body.lppDashWide.lppDashColl #lppDashCol{flex-basis:42px;width:42px}
+    body.lppDashWide.lppDashColl .grid2 .col-in{flex-basis:calc((100% - 42px)*.33);max-width:calc((100% - 42px)*.33)}
+  }
+```
+  - JS: `const LPDC={key:'lpp_dashCollapsed_v1',mq:window.matchMedia?window.matchMedia('screen and (min-width:1500px)'):null,…` → `'screen and (min-width:1200px)'` (comment `/* LPLB: was 1500px */`).
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data (§5):** no key or format changed.
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main` and `--old-saves`: all cases identical (results, cable values, every output tab's text, drawings; 0 console errors); its readouts are taken at 1280 px, where the column is now open. No sideways page scroll at 390, 768, 1200, 1280, 1400, 1920 px. Screenshots before / after at 1200, 1280, 1400 and after at 1920, 768, 390 looked at. Tests: check-syntax; phone-layout lp 390/768; project-library lightpole.
+- **Open item:** the User Manual's "Check summary panel" paragraph still says "On screens 1500 px and wider it is a column on the left"; left unchanged so the Manual tab text stays identical in the comparison. A one-line wording update can follow.
