@@ -6066,7 +6066,7 @@ Second-pass review LOW findings (2026-11-07). Code sites are tagged `RW2L1` … 
   - retwall-pile-handoff;
   - engine handoffs, pile-group.
 
-## 2026-11-07 — PR: claude/rw-stem-geh-display — Stem tab and Report Step 1: the earth-pressure factor shown is the analysis' γ_EH (1.35 at-rest, 1.50 active; Table 3.4.1-2), was 1.50 hard-coded (RWGE; display only, no result change)
+## 2026-11-07 — PR: claude/rw-stem-geh-display (PR #1146: https://github.com/mlococo88/All-Structural/pull/1146) — Stem tab and Report Step 1: the earth-pressure factor shown is the analysis' γ_EH (1.35 at-rest, 1.50 active; Table 3.4.1-2), was 1.50 hard-coded (RWGE; display only, no result change)
 
 Follow-up A1 of the second-pass fix round. Code sites are tagged `RWGE`.
 
