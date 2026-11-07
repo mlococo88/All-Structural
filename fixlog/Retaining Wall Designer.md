@@ -3995,3 +3995,88 @@ Review Phase 8 (pile-supported footing), PR 8b. Engineer decisions 2026-11-07 (r
 -const rwdwSupport = r => RWDW_SUPPORT.soil;   // the foundation type of the model; spread footing only today
 +const rwdwSupport = r => (r && r.inp && r.inp.fnd && r.inp.fnd.type === 'pile') ? RWDW_SUPPORT.piles : RWDW_SUPPORT.soil;   // RWPL: the foundation type of the model
 ```
+
+## 2026-11-07 — PR: claude/rw-pile-8c-analysis — Pile-supported footing, Phase 8c: rigid-cap pile reactions per combination, pile compression / uplift / lateral and detailing checks; soil bearing, sliding and overturning replaced in pile mode (RWPL; calculation change in pile mode only)
+
+Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as recommended) and the decisions listed under Open items. Code sites are tagged `RWPL`. Spread-footing results are unchanged.
+
+### RWPL-4. `rwPileAnalysis(ctx)` (new, before `calcAll`)   [§4]
+- Uses `shared/pile-group.js` (new script tag before `shared/dxf.js`). Per ft of wall, with n_i = 1/s_i:
+  - N = Σn_i, x̄ = Σn_i·x_i/N, I = Σn_i·(x_i − x̄)².
+  - For each combination (V net of water uplift on the cap base, resultant at x_R from the toe): M = V·(x_R − x̄) and P_i = V/N + M·(x_i − x̄)/I per pile.
+  - h = H/N per pile.
+- **ACI / IBC (allowable, service):** ASCE 7-16 §2.4.1 combinations against P_a, T_a and H_a (IBC 2018 §1810.3.3.1, §1810.3.3.1.5, §1810.3.3.2).
+  - **s1, D + H + L:** V = ΣV (as the bearing check). x_R = (M_s − M_s,Pp − M_o,static)/ΣV. H = F_h.
+  - **s2, D + H + L + 0.7E** (when k_h > 0): M_o,static + 0.7·M_o,E. H = F_h + 0.7·ΔP_E.
+  - **s3, 0.6D + H:**
+    - V = 0.6(W_ftg + W_stem + W_soil + W_bar + w_col,D) + 0.6·P_a,V + 0.6·min(0, w_col,W) − U_water.
+    - Moments are taken the same way about the toe (water uplift at 1.0). The surcharge and column L / S are omitted.
+  - **s4, 0.6D + 0.7E + H** (when k_h > 0).
+- **AASHTO (factored):** the tool's own limit-state sets.
+  - **Strength I max (bearing set):** V_str,max, x_R,brg, H_str. Checked against φ_c R_n, φ_up R_n,up and H_r.
+  - **Strength I min (Ia, eccentricity set):** V_str,min, x_R,A, H_str.
+  - **Extreme Event I (both Art. 11.6.5.1 cases):** V_max with x_Rb, and V_min with x_R.
+  - **Extreme Event II (collision):** V_ct,max with x_R,brg,ct, and V_ct,min with x_R,ct.
+  - The extreme events are checked against 1.0 R_n, 0.80 R_n,up and H_r (Art. 10.5.5.3.3).
+- **Passive (opt-in `pile_passive`):** H − P_p,toe (ACI) or H − φ_ep P_p,toe (AASHTO; 1.0 in the extreme events). There is no base friction.
+- **Detailing:**
+  - AASHTO Art. 10.7.1.2: c-c spacing ≥ max(30 in, 2.5D), along the wall and row to row (Δx, conservative for no staggering); pile side to the footing edge ≥ 9 in; embedment ≥ 12 in.
+  - IBC 2018 §1810.3.11: embedment ≥ 3 in; the cap extends ≥ 4 in beyond the pile; no minimum spacing.
+  - Group-effect warnings at s < 3D (axial) and row spacing < 8D (lateral) (IBC 2018 §1810.2.5; AASHTO Art. 10.7.2.4 / 10.7.3.9).
+### RWPL-5. `calcAll` (block `// ── RWPL (2026-11-07, Phase 8c): pile-supported footing`, before `const checks = {`)
+- In pile mode, `checks` starts with `pileComp`, `pileUplift`, `pileLat`, `pileSpacing` (AASHTO), `pileEdge` and `pileEmbed` **instead of** `stabChecks` (ot / sliding / bearing / ecc / otE / slidingE).
+- The soil checks of Extreme Event I and II (eeSliding / eeEcc / eeBearing, ctSliding / ctEcc / ctBearing) are not listed (`!isPile &&`).
+- Each pile check carries its own `ref` and `dc`. `rwResultRows` uses them when `D[k]` has no entry.
+- Warnings:
+  - the soil checks are not done; the heel and toe are still designed from the soil bearing until 8d;
+  - group effects;
+  - the passive credit, when ticked.
+- The soil-bearing notes ("AASHTO bearing: φb·qn = 4950 psf …", "tension zone in soil") are removed in pile mode.
+- `return` gains `pile` (null for a spread footing).
+### RWPL-6. Display / Report
+- **Stability tab:** `renderStability` now calls `renderStabilitySoil` (the former body, unchanged) and, in pile mode, `rwPileStability(r)`:
+  - Pile Step 1, the group table and N, x̄, I;
+  - Pile Step 2, the reactions table per combination, the governing compression worked, and the compression, uplift and lateral checks, and the detailing.
+  - The soil cards are dimmed with "Not applicable: pile-supported footing".
+- **Overview scorecard:** a "Piles" group (compression, uplift, lateral) replaces Stability in pile mode.
+- **Dashboard / summary links:** `RW_CARDS.stabPile`, `RW_CHECK_CARD` for the pile keys.
+- **Report:** a new section "Pile-supported footing" after the stability section:
+  - pile data;
+  - Pile Step 1 steps (N, x̄, I);
+  - Pile Step 2 (reactions table, governing steps, detailing table);
+  - a note at the head of the stability section that its soil checks do not apply.
+  - The summary "Worked in" links point to pl2/comp, pl2/upl and pl2/latdc.
+### Check case (default wall, 2 rows at x = 1.5 / 11.0 ft, s = 6 ft)
+- Group: N = 2/6 = 0.3333 /ft; x̄ = (1.5 + 11.0)/2 = 6.25 ft; I = 2(1/6)(4.75²) = 7.5208 ft²/ft.
+- **ACI s1 (D + H + L):**
+  - ΣV = 16582.5 lb/ft; M_s = 123673.1; M_o = 16402.5 lb-ft/ft.
+  - x_R = 107270.6/16582.5 = 6.4689 ft; M = 16.5825(6.4689 − 6.25) = 3.630 kip-ft/ft.
+  - P_toe = 16.5825/0.3333 − 3.630(4.75)/7.5208 = 49.748 − 2.293 = **47.45 kip**; P_heel = 49.748 + 2.293 = **52.04 kip** ≤ P_a 100 (D/C 0.52).
+  - H = 3.645 kip/ft gives 10.94 kip/pile > H_a 8 (placeholder): FAIL, D/C 1.37.
+- **ACI s3 (0.6D + H):**
+  - V = 0.6(2812.5 + 2250 + 11520) = 9949.5 lb/ft; x_R = 5.8095 ft; M = −4.383 kip-ft/ft.
+  - P = 29.849 ± 4.383(4.75)/7.5208 = **32.62 / 27.08 kip** (no uplift).
+- **AASHTO Strength I max:**
+  - V = 26.878 kip/ft at x_R = 6.0750 ft; M = −4.702 kip-ft/ft.
+  - P_toe = 80.634 + 2.970 = **83.60 kip**; P_heel = **77.66 kip** ≤ φ_c R_n = 0.65 × 300 = 195 (D/C 0.43).
+- Before (the same wall as a spread footing): O.T. FOS 7.54, sliding 1.66, bearing 1.47 ksf. Spread-footing walls are unchanged.
+### How verified
+- origin/main vs branch, headless Chromium, the 12 walls of 8b in spread mode: every `_R` value (`inp.fnd` and `pile` aside), the Export JSON, the autosave, the Report text, the tab texts and the DXF are identical.
+- Pile mode on the default wall (ACI and AASHTO), ACI k_h 0.15 (s1 to s4), and AASHTO k_h 0.10 + collision + water + passive: no console errors, and the numbers above.
+- `tests/smoke/retaining-wall-checks.mjs` extended:
+  - 4 pile input-error cases;
+  - the ACI and AASHTO pile cases above;
+  - a spread case with no pile results.
+- Also run: `node tests/check-syntax.mjs`; phone layout rwall 390/768; project library retwall; DXF sheets rw.
+### Other copies
+- The rigid-cap formula: `shared/pile-group.js` (loaded here) and `abutment_calculator.html` `pileReaction` (to move onto the shared file, PR 8h).
+### Open items / decisions (pending engineer review)
+- **Decision (pending engineer review):** ACI uplift case 0.6D + H with 0.6 on the vertical earth thrust (resisting, permanent) and 1.0 on water uplift (ASCE 7-16 §2.4.1 H rule). The surcharge and the column L / S are omitted.
+- **Decision (pending engineer review):** ACI compression with E uses D + H + L + 0.7E, which covers ASCE 7-16 combinations 5 and 6b.
+- **Decision (pending engineer review):** the AASHTO extreme-event uplift φ is 0.80 (the Art. 10.5.5.3.3 upper limit) and the compression φ is 1.0. The entered factored H_r is used for every limit state (conservative for the extreme events).
+- **Decision (pending engineer review):** the passive credit uses the toe passive only (no shear-key passive) and does not reduce the moment.
+- **Decision (pending engineer review):** row-to-row spacing is checked with Δx, as if piles of adjacent rows were in line.
+- **Decision (pending engineer review):** ACI 318-19 Ch. 13 is cited without article numbers. The PDF text could not be read in this session, and the IBC 2018 §1810 sections were verified.
+- Next steps: 8d (footing from the pile reactions), 8e (Drawings loads sheet, 3D and diagram reaction display), 8f (Pile Designer hand-off). Battered piles: 8g, which needs a method decision.
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html` against the 8b branch)
