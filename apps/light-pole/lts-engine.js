@@ -500,8 +500,11 @@
     // engineer, 2026-11-02 (Q-B4): the 2.5 % H and 0.35 in/ft limits are information only (shown, never a failure); the 10 % H luminaire limit is a check
     checks.push({ key: 'trans', label: 'Vertical support, transverse loads: top deflection, Service I', value: gov.d, limit: lim.trans, unit: 'in', applies: false,
       ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 2.5 % of the height'), flag: 'Information only (engineer, 2026-11-02): the commentary (C10.4.2.1) describes it as a dead-load appearance limit developed for strain poles.' });
-    checks.push({ key: 'slope', label: 'Vertical support, moment loads: slope at the top, Service I', value: govS.slope, limit: lim.slope, unit: 'in/ft', applies: false,
-      ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 0.35 in/ft'), flag: 'Information only (engineer, 2026-11-02)' + (momentLoad ? '; the arm-mounted fixtures put a dead-load moment on the pole.' : '; no unbalanced arm-mounted dead load.') });
+    // LPM4 (2026-11-07, review M4): the 2017 interim makes the 0.35 in/ft slope a "shall" limit for vertical supports with moment load
+    // applications (C10.4.2.1: eccentric dead load of single or unbalanced arms) → a check when momentLoad, information otherwise.
+    // Before: information only in every case (Q-B4, 2026-11-02). Decision (pending engineer review).
+    checks.push({ key: 'slope', label: 'Vertical support, moment loads: slope at the top, Service I', value: govS.slope, limit: lim.slope, unit: 'in/ft', applies: momentLoad,
+      ref: ref('Art. 10.4.2.1 (p. 10-1, 2017): 0.35 in/ft'), flag: momentLoad ? 'Checked: the arm-mounted fixtures put an unbalanced dead-load moment on the pole (moment load application, Art. 10.4.2.1 / C10.4.2.1; review M4, 2026-11-07, pending engineer review).' : 'Information only: no unbalanced arm-mounted dead load (not a moment load application, C10.4.2.1).' });
     checks.forEach(c => { c.ratio = c.value / c.limit; c.ok = !c.applies || c.ratio <= 1; });
     return { B, rows: res, gov, govS, checks, momentLoad, slopeDL: Math.hypot(s0x, s0y) * 12 };
   }
