@@ -2448,3 +2448,24 @@ function renderStatus(r) {
   - `tests/smoke/retaining-wall-checks.mjs` gains the KaTeX checks: MathJax not loaded; every equation by KaTeX; 0 errors, 0 red, no `$$`.
 - **Other copies:** none.
 - **Library:** MathJax 3.2.2 is no longer loaded by this tool (other tools still use it; `tests/libs` unchanged).
+
+## 2026-11-07 — PR: claude/rw-aci-uplift-note — ACI footing design: note that the factored base pressure includes the water uplift (RWUPN; display only, no calculation change) (PR #942: https://github.com/mlococo88/All-Structural/pull/942)
+
+Calculation audit, item 1. Engineer decision (2026-11-07): no calculation change; a one-line note on the Footing design tab and in the Report. Code site tagged `RWUPN`.
+
+### RWUPN. Note in the "Factored Loads on Footing" card, ACI mode with a water table   [display only]
+- **Where:** `renderFooting`, the "Factored Loads on Footing" card (anchor `<div class="card-body"><div id="plt-ftg-loads"></div>`).
+- **Before:** the card body held only the chart div `plt-ftg-loads`.
+- **After:** after the chart div, when `!r.isAASHTO && r.F_uplift > 0`, an `alert info` box: in U = 1.2D + 1.6H and U = 0.9D + 1.6H the factored base pressure q_u is the total contact pressure on the footing underside (soil + water); the uplift U is part of that reaction, so it is not subtracted from ΣV_u and is already in the heel and toe design (the same as splitting it out while the base is in full contact; the AASHTO mode also uses the total pressure). The closing line of the template literal gains the comment `// RWUPN (2026-11-07): ACI uplift note, display only`.
+- **Report:** no Report code changed. The Report carries each tab's `.alert` boxes (RWRX, `rwrTabNotes` / `rwrAddNotes`), so the note appears under Footing design → "Notes on the Footing design tab", prefixed with the card title.
+- **Why (the audit's reasoning, re-checked):** `calcAll` builds `SumVu` (1.2D + 1.6H) and `SumVu_min` (0.9D + 1.6H) from the downward loads with no −U term, so the trapezoids `qu_*` / `qu_*_min` are the total pressure on the underside. The heel's downward load already uses the saturated soil column (`w_soil_col`). The AASHTO branch does the same on purpose (`V_str_max_tot`, "total vertical").
+- **Provision:** ACI 318-19 5.3.8 (H, which per R5.3.8 includes water in soil, at 1.6 / 0.9 / 0) was the basis of the question; nothing is cited in the note.
+- **Check case (ACI default, water 6 ft below the top, uniform uplift):** U = 62.4·7.5·12.5 = 5850 lb/ft; SumVu = 20475 lb/ft, e_u = 0.291 ft; heel upward moment M_up (max case) = 48214 lb·ft/ft whether the uplift is in the total pressure (now) or split out (soil reaction from ΣV_u − γ_U·U plus γ_U·u(x)) with γ_U = 1.6 or 0.9; toe M_up 8237 both ways. Heel M_u 19032, toe M_u 7325: unchanged (no calculation change).
+- **Open item (found while checking the wording; for the engineer):** the decision's phrase "slightly conservative in partial contact" holds for the heel but not for the toe, so it was left out of the note. Water 2 ft below the top (h_w = 11.5 ft), triangular uplift U = 4485 lb/ft, ACI default otherwise; split-out soil reaction outside the kern:
+  - max case γ_U = 1.6: heel M_up 40633 (split) vs 40529 (now): now is conservative; toe M_up 10216 (split) vs 10161 (now): now is 0.5 % unconservative;
+  - min case (0.9D + 1.6H) γ_U = 1.6: toe M_up 13256 (split) vs 9234 (now), i.e. toe M_u about 12345 vs 9250; with γ_U = 0.9: 9501 vs 9234 (the max case still governs the toe at 9250).
+  - Whether the uplift in the minimum-vertical case takes 1.6 or 0.9 (ACI 5.3.8) is the engineer's call (audit option (b)).
+
+### How verified
+- origin/main vs branch, eight walls (ACI default; ACI water uniform; ACI water triangular at 2 ft; ACI water + k_h + column + q_s + β + key + passive; AASHTO with barrier + collision; AASHTO water + column + η 1.05 + at-rest + passive; AASHTO rock + collision (γ_EH,CT 0) + water + β; tall ACI wall with k_h and water): `_R`, Export JSON, every localStorage key and the Report model identical in all eight; the Footing design tab text and the Report text differ only by the note, in the four ACI cases with water; the four other cases identical; 0 console errors.
+- Tests: check-syntax, `tests/smoke/retaining-wall-checks.mjs`, phone-layout rwall 390 / 768, project-library retwall, dxf-print-sheets rw: all pass.
