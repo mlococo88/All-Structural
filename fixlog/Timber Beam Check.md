@@ -2190,3 +2190,72 @@ Line numbers are approximate; search for the anchor text. Code sites are tagged 
   - Glulam supporting members (C<sub>M</sub> 0.53) are not a preset.
   - The member delivering a point load (post end grain, hanger) is not checked.
   - Supporting-member C<sub>b</sub> is fixed at 1.0.
+
+## 2026-11-07 — PR: claude/timber-notch-face (TBN1: notch face selector — tension face, compression face, interior)   [calc change: new check option] [old projects unchanged]
+
+Line numbers are approximate; search for the anchor text. Code sites are tagged `TBN1`.
+
+### TBN1. Notch location: tension face (as before), compression face (new check), interior (refused) (review finding M3; closes part of O8)
+
+- **Where:**
+  - `tbcRun`, notch block: the anchor `const notchFace = ['comp', 'interior'].includes(mt.notchFace)` comes before `const Cn =`. The result object gains `notchFace, notchE, notchEIn, notchDe`.
+  - `tbcSanitize`: after `m.material.scl = {`, `notchFace` and `notchE` are kept only when set.
+  - Inputs: the End notch card gets a new "Notch location" select and, for the compression face, an input for "e".
+  - Shear tab: a new card for the compression face (`if (R.hasNotch && R.notchFace === 'comp') mkSec(pg, 'sNotch', 'Notched ends (compression face …`).
+  - Report Shear steps: `const nc = R.notchFace === 'comp';` adds step `sh.de` and the compression-face `sh.Cn`.
+  - Input summary rows of Design values and the Report.
+  - Method limitation text.
+  - Validation group 11 (3 benchmarks; 120 → 123).
+- **Problem:** the tool checked every end notch as a tension-face notch, and a user could not say that a notch was on the compression face or in the interior. A notch entered for an interior location was silently checked as an end notch.
+- **Governing provision (verify against NDS 2018, not in references):**
+  - NDS 2018 3.4.3.2(a), Eq. 3.4-3: tension-face end notch, unchanged.
+  - NDS 2018 3.4.3.2, compression-face end notch (paragraph (c) per the review; the brief asked whether it is (b)): V′<sub>r</sub> = (2/3) F′<sub>v</sub> b [d − ((d − d<sub>n</sub>)/d<sub>n</sub>) e], with e ≤ d<sub>n</sub> the distance the notch extends past the inner edge of the support. The paragraph letter and the equation number need checking.
+  - NDS 4.4.3.1 / 5.4.4.1: interior notches are restricted.
+- **Before:**
+  ```js
+    const Cn = hasNotch ? Math.pow(dn / dep, 2) : 1.0;
+  ```
+- **After:**
+  ```js
+    const notchFace = ['comp', 'interior'].includes(mt.notchFace) ? mt.notchFace : 'tension';
+    const notchEIn = (mt.notchE === undefined || mt.notchE === null || mt.notchE === '') ? null : num(mt.notchE);
+    if (hasNotch && notchFace === 'interior') { errors.push('Interior notch: not permitted by this tool and not checked (…)'); return base; }
+    if (hasNotch && notchFace === 'comp' && notchEIn !== null && !(notchEIn >= 0 && notchEIn <= dn)) { errors.push(`Compression-face notch: e … must be between 0 and d_n …`); return base; }
+    const notchE = hasNotch && notchFace === 'comp' ? (notchEIn === null ? dn : notchEIn) : null;
+    const notchDe = notchE === null ? null : dep - ((dep - dn) / dn) * notchE;
+    const Cn = hasNotch ? (notchFace === 'comp' ? notchDe / dn : Math.pow(dn / dep, 2)) : 1.0;
+  ```
+  - The existing notch ratio is still `fvn / (Fv_p * Cn * Cvr)` with `fvn = 1.5 R/(b d_n)`.
+  - For the compression face, setting C<sub>n</sub> = d<sub>e</sub>/d<sub>n</sub> makes the check V ≤ (2/3) F′<sub>v</sub> b d<sub>e</sub>.
+- **Decisions (pending engineer review):**
+  - **Interior notch:** input error ("not permitted / not checked"), so no results are shown. This is conservative.
+  - **e not entered:** e = d<sub>n</sub> is used, the largest permitted value, which gives the net section (d<sub>e</sub> = d<sub>n</sub>). This is conservative. e must lie between 0 and d<sub>n</sub>; otherwise an input error is shown.
+  - **Notch-depth limits** (d/4 sawn; min(d/10, 3 in.) glulam) are kept for the compression face. This is conservative: the glulam compression-face limit is believed to be larger.
+  - **Glulam C<sub>vr</sub>** is kept on the compression-face check (conservative).
+  - The same face and depth apply at both end supports (O8).
+- **Saved data (§5):** `material.notchFace` (`'comp'` / `'interior'`) and `material.notchE` are optional. They are written only when set. A missing value means a tension-face notch, which is exactly the old behaviour. Files without them give identical results and displays, and identical JSON on save.
+- **Check case:** the fix-log joist (DF-L No.2 2x10 @ 16 in., 14 ft, D 10 / L 40 psf), 2 in. end notch, D + L.
+  - Inputs: R = 489.6 lb; d<sub>n</sub> = 7.25 in.; f<sub>v,n</sub> = 1.5 × 489.6/(1.5 × 7.25) = 67.5 psi; F′<sub>v</sub> = 180 psi.
+  - Tension face (unchanged): C<sub>n</sub> = (7.25/9.25)² = 0.6143, ratio **0.611**.
+  - Compression face, e = 3 in.: d<sub>e</sub> = 9.25 − (2/7.25) × 3 = 8.422 in.; C<sub>n</sub> = 8.422/7.25 = 1.1617; ratio 67.5/(180 × 1.1617) = **0.323**. In V terms: V′<sub>r</sub> = (2/3)(180)(1.5)(8.422) = 1516 lb ≥ 489.6 lb.
+  - Compression face, e blank (e = d<sub>n</sub>): C<sub>n</sub> = 1.0, notched ratio 0.375.
+  - Interior: input error.
+- **How verified:**
+  - **origin/main vs branch** (headless Chromium, `file://`): 55 review cases.
+    - Only the cases that select the new options moved: compression face 0.6107 → 0.3752 (e blank), 0.3229 (e = 3), 0.2941 (e = 0, where the unnotched check governs); glulam LRFD compression face 0.4798 → 0.4279.
+    - Interior and e > d<sub>n</sub> give input errors.
+    - Tension-face and un-notched cases: identical.
+  - **Full text** of every output tab and the input panel for 7 old-style cases (default, notch, glulam, glulam LRFD with notch, tension notch, LRFD, SCL): identical except the Validation tab (new benchmarks).
+  - **Validation:** 123/123.
+  - **Other checks:**
+    - Save → open: identical, including key order.
+    - No NaN or KaTeX errors.
+    - No console errors.
+    - No horizontal scroll at 400 px.
+    - Input card screenshot.
+    - `node tests/check-syntax.mjs`: passes.
+- **Other copies:** none.
+- **Open items:**
+  - The paragraph letter and equation number of the compression-face expression in NDS 2018 3.4.3.2.
+  - The glulam compression-face depth limit (5.4.4.2).
+  - Different notches at the two ends (O8).
