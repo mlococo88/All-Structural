@@ -5564,3 +5564,69 @@ After:
 
 ### Saved data
 - No input or format change. `aashto_ct_phi` keeps its value and now governs sliding/passive only (and bearing when below 0.80).
+
+## 2026-11-07 — PR: claude/rw2-h4-eta — AASHTO load modifier η on every Strength I load effect (stem, heel, toe, key, column) and 1/η on the minimum-factor loads (Art. 1.3.2.1) (RW2H4; calculation change, η ≠ 1.00 only)
+
+Second-pass review finding H4 (2026-11-07). Code sites are tagged `RW2H4`.
+
+### RW2H4-1. Problem
+- η multiplied only `H_drive_str`, `Mo_str`, `V_str_max_tot` and `Mr_str_max_tot` (without the column load). It was missing on the stem demands (base, mid-height, M along the height), on the heel's factored downward load, on the toe self-weight and on the shear-key demand.
+- The minimum-factor loads (`V_resist_min`, `V_str_min`, `Mr_str_min`, Strength Ia trapezoid, heel Ia downward load, toe self-weight 0.90 DC) were not divided by η.
+- AASHTO LRFD 10th Ed. (2024) Art. 1.3.2.1:
+  - loads at their maximum factor take η_i = η_Dη_Rη_I ≥ 0.95 (Eq. 1.3.2.1-2);
+  - loads at their minimum factor take η_i = 1/(η_Dη_Rη_I) ≤ 1.0 (Eq. 1.3.2.1-3).
+- With η > 1 the old code was unconservative. With η < 1 the heel took un-reduced downward loads against an η-reduced trapezoid.
+
+### RW2H4-2. Fix (`calcAll`)
+- AASHTO block: `etaMn = Math.min(1, 1/eta)`.
+- Minimum side (min loads × `etaMn`; water uplift × `eta`, since there it reduces the resistance):
+  - `V_resist_min = etaMn*(0.90(DC) + 1.00 EV + 0.90 P_aV + 0.75 ES) − eta*U` (was `… − U`, no η);
+  - `V_str_min`, `Mr_str_min`: the same (was `… − 1.00·U`).
+- Bearing side:
+  - `V_str_max = V_str_max_tot − etaMn*U`, and `Mr_str_max` likewise (the uplift relieves the soil pressure; was `− U`).
+  - `V_str_min_tot = V_str_min + eta*U` (adds back exactly what was taken out).
+- Column: `V_col = eta*(1.25 DL + 1.75(LL + S))` (was outside η).
+- Members (`etaMx = isAASHTO ? A.eta : 1`, `etaMn = isAASHTO ? min(1, 1/η) : 1`):
+  - `Mu_stem_strI`, `Vu_stem_strI`, `Mu_stemT_strI`, `Vu_stemT_strI` and `MuS(z)` = `etaMx*(…)` (were the bracket alone);
+  - `heelCase(..., et)`: `wu = et*(…)` and the wedge `et*γ_EV`; Strength I max passes `etaMx`, Strength Ia passes `etaMn`;
+  - `wu_toe_down = etaMn*0.90γ_c t_f`;
+  - shear key `gP = 1.50*etaMx`.
+- Extreme Event I / II, Service I and ACI mode are unchanged.
+- Display:
+  - Stem Step 1 and the Report: a step "Load modifier η on the Strength I demand", M = η(Σ).
+  - Heel Step 1: w_u = η(…) or 1/η(…).
+  - Toe Step 1: w_sw = (1/η)·0.9γ_c t_f.
+  - Stability Step 4: R_R = φ_τ(1/η[…] − ηU)tan δ_b, with 1/η in the variable list. Labels for M_r and V_u. Report Steps 4 and 6 and the Strength Ia footing load.
+  - 3D load arrows (`rw3Factors`): the minimum factors × 1/η, and uplift as above.
+  - Self-consistency stem M_u × η.
+  - Every η line is shown only when η ≠ 1.00, so the default display is unchanged.
+
+### Check case (AASHTO default wall, η = 1.05)
+- Stem:
+  - Σγ_iM_i = 1.50(17280) + 1.75(8568) = 32274;
+  - M_u = 1.05 × 32274 = **33888** (was 32274);
+  - V_u = 1.05 × 6819 = **7160**.
+- Sliding:
+  - H = 1.05 × 8278.88 = 8692.8;
+  - V_min = 16076.3 / 1.05 = 15310.7;
+  - R = 1.0 × 15310.7 × tan 20° = 5572.6;
+  - D/C = **1.560** (was 1.486, with η on H only).
+- Eccentricity: e_A 1.564 → **1.706** ft (≤ 3.125).
+- Heel: Strength Ia governs. Md = 52560 / 1.05 = 50057; M_u 29115 → **29264**. Toe M_u 9965 → **10009** (w_sw = 202.5 / 1.05 = 192.9 psf).
+- η = 1.00: every result is identical. η = 0.95: maximum-factor effects × 0.95, minimum factors × 1.0 (capped). Stem M_u 30660; the heel is now consistent (Ia governs, 26045; before, 28980 from un-reduced down loads against a reduced trapezoid).
+
+### How verified
+- origin/main vs branch, headless, 21 walls.
+  - Every η = 1.00 wall is identical, including the ACI, pile, seismic and collision walls.
+  - The η walls move as above: η 1.05 with water and column, bearing q 7225 → 7519 psf; η 1.05 on piles; η 1.05 with key, key M_u 1215 → 1276; η 0.95.
+  - 0 console errors.
+  - At η 1.05 with water and column: self-consistency panel all passed, 0 KaTeX errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (new `AUD` rows RW2H4 η 1.05 and η 1.00); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Decisions (pending engineer review)
+- Water uplift (WA, a single factor 1.00) takes η where it reduces the resistance (sliding, eccentricity, Strength Ia) and 1/η where it relieves the soil bearing. Both choices are conservative.
+- η is not applied in Extreme Event I / II. The tool's η input is the strength-limit-state modifier, as before; Art. 1.3.5 lets η_I apply to extreme events, which the engineer may want.
+- Pile mode (AASHTO) uses the same Strength I / Ia sets, so the pile reactions follow. The Pile Designer hand-off at η = 1.00 is unchanged.
+
+### Saved data
+- No input or format change.
