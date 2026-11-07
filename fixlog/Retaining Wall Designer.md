@@ -5754,7 +5754,7 @@ After:
 ### Saved data
 - No input or format change. ACI pile walls with β > 0 and k_h > 0 send larger s2 / s4 loads in the Pile Designer hand-off (foundationLoads). The Pile Designer then shows a stale flag, as for any changed load.
 
-## 2026-11-07 — PR: claude/rw2-h3-pile-water — Pile-supported footing with water: the piles take V − γ_U·U and the uplift acts on the heel underside (the #960 split; the toe keeps the total routing, conservative); the Report's heel pile steps fixed (RW2H3; calculation change, pile mode with water only)
+## 2026-11-07 — PR: claude/rw2-h3-pile-water — Pile-supported footing with water: the piles take V − γ_U·U and the uplift acts on the heel underside (the #960 split; the toe keeps the total routing, conservative); the Report's heel pile steps fixed (RW2H3; calculation change, pile mode with water only) (PR #1140: https://github.com/mlococo88/All-Structural/pull/1140)
 
 Second-pass review finding H3 (2026-11-07). Code sites are tagged `RW2H3`.
 
@@ -5794,7 +5794,7 @@ Second-pass review finding H3 (2026-11-07). Code sites are tagged `RW2H3`.
 - Without water: identical.
 
 ### How verified
-- Headless probe, H2 branch vs this branch, 28 walls. Only pile walls with water move, as above. Pile combinations (`r.pile.comb`) are identical. 0 console errors.
+- Headless probe, origin/main (after #1139) vs this branch, 28 walls. Only pile walls with water move, as above. Pile combinations (`r.pile.comb`) are identical. 0 console errors.
 - Self-consistency passes; 0 KaTeX errors.
 - Tests: check-syntax; smoke/retaining-wall-checks (new `AUD` rows RW2H3; RWPL 8d rows unchanged); phone-layout rwall; project-library retwall; dxf-print-sheets rw; **retwall-pile-handoff** and engine **handoffs, pile-group** (the Pile Designer hand-off values do not change).
 
