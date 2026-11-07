@@ -3734,6 +3734,16 @@ function computeAll(){
         if(xt<0||xt>B||Math.abs(c.y)>Lftg/2) warnFor("conv",`Active pile at x=${fmt(c.x)}, y=${fmt(c.y)} ft falls outside the footing plan — check coordinates.`,"err");
       });
 
+      /* PG1 (2026-11-07): a group with no lever arm about an axis (Σx'² = 0: one pile row in the moment direction; or Σy'² = 0)
+         cannot resist a moment about it. Before, the moment was dropped (every pile V/n); now it is an input error and the pile and
+         pile-cap checks are not computed (as with no active pile). Layouts with Σx'² > 0 and Σy'² > 0 are unchanged. */
+      for(const lsName of Object.keys(LIMITS)){   // the largest unresisted moment of every permutation
+        for(const pl of permutations(lsName,true)){ const c=comboEffects(lsName,pl.perm,pl.liveOn,false); if(c.V<=0) continue;
+          const My=c.V*((c.Mv-c.Mh)/c.V-xgcT), Mx=c.Mt-c.V*ygc, u=SharedPileGroup.unresisted(c.V,My,Mx,R.pile);
+          if(u && (!R.pile.unresisted || Math.abs(u.M)>Math.abs(R.pile.unresisted.M))) R.pile.unresisted={...u, ls:lsName, lbl:c.lbl}; } }
+      if(R.pile.unresisted){ const u=R.pile.unresisted; R.pile.nActive=n; R.pile.n=0;   // as with no active pile: no pile results, every pile view and check skipped
+        warnFor("conv",`Pile layout: ${u.axis==="y"?"a single pile row in the longitudinal direction (all active piles at one x, Σx′² = 0)":"a single pile line along the abutment (all active piles at one y, Σy′² = 0)"} cannot resist the overturning moment ${u.axis==="y"?"M_y":"M_x"} = ${fmt(u.M)} kip-ft (largest; ${u.ls}, ${u.lbl||""}) on pinned-head vertical piles. Add a pile row. The pile and pile-cap checks (pile reactions, punching, toe / heel on the piles) are not computed.`,"err"); }
+      else{
       const perLS={};
       for(const lsName of Object.keys(LIMITS)){
         let best={Pmax:-Infinity}, worstMin={Pmin:Infinity}, worstH={H:-1};
@@ -3782,6 +3792,7 @@ function computeAll(){
       const eeR=perLS["Extreme Event I"]&&perLS["Extreme Event I"].best&&isFinite(perLS["Extreme Event I"].best.Pmax)? perLS["Extreme Event I"].best : null;
       R.checks.pileStr=pileStructural(R.checks.pileComp, eeR);
       R.checks.pileCF=pileCombined(perLS, R.checks.pileStr);   // ABR2: combined axial and flexure, shear (Tab 4 §4.4b)
+      }   // PG1
     }
   }
   /* ABCHK: structural axial resistance of a vertical pile [10.7.3.13.1; 6.15.2, 6.15.3.1; 6.9.4.1.1, 6.9.4.2].
