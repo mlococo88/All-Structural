@@ -270,6 +270,13 @@ const AUD = [
   ['RW2H5 AASHTO default + collision TL-4: EE II bearing φ_b 0.8 (Art. 11.5.8): q_R 9000 → 7200, D/C 0.171 → 0.213; sliding φ 1.0', { design_basis: 'AASHTO', aashto_ct_enable: true }, [
     ['Math.abs(R.aashtoR.ct.ee2.q_R_ct - 7200) < 0.5 && R.aashtoR.ct.ee2.phi_b_ct === 0.8 && R.aashtoR.ct.ee2.phi_ct === 1 && Math.abs(R.aashtoR.ct.ee2.q_ult_ct / R.aashtoR.ct.ee2.q_R_ct - 0.213) < 0.001', 'q_R 7200, D/C 0.213'],
     ['/φ_b = 0\\.80 bearing/.test(T.stability) && /φ_b q_n = 0\\.80 × 9\\.00 = 7\\.20 ksf/.test(P)', 'Stability Step 7b and Report']]],
+  ['RW2H4 AASHTO default η = 1.05 (Art. 1.3.2.1): stem M_u 32274 → 33888, V_u 7160; sliding 1.486 → 1.560 (1/η on the minimum loads)', { design_basis: 'AASHTO', aashto_eta: 1.05 }, [
+    ['Math.abs(R.Mu_stem_lbft - 33887.7) < 0.5 && Math.abs(R.Vu_stem - 7160.0) < 0.5 && Math.abs(R.aashtoR.sliding_dcr - 1.5599) < 0.0005 && Math.abs(R.aashtoR.V_resist_min - 15310.7) < 0.5', 'stem and sliding'],
+    ['R.heel_min_governs && Math.abs(R.Md_heel - 52560 / 1.05) < 0.5 && Math.abs(R.wu_toe_down - 0.9 * 150 * 1.5 / 1.05) < 1e-6', 'heel Ia and toe self-weight × 1/η'],
+    ['/Load modifier η on the Strength I demand/.test(T.stem) && /Load modifier η on the Strength I demand/.test(P) && /1\\/η/.test(T.stability)', 'Stem Step 1, Report, Stability Step 4'],
+    ['/all \\d+ passed/.test(document.getElementById("rwSelf").innerText)', 'self-consistency panel passes']]],
+  ['RW2H4 AASHTO default η = 1.00 unchanged', { design_basis: 'AASHTO' }, [
+    ['Math.abs(R.Mu_stem_lbft - 32274) < 0.5 && Math.abs(R.aashtoR.sliding_dcr - 1.41488) < 0.0001 && Math.abs(R.Mu_heel_net - 27579.9) < 0.5 && !/Load modifier η on the Strength I/.test(T.stem)', 'unchanged']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {

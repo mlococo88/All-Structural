@@ -2655,6 +2655,10 @@ function calcAll(inp) {
   let aashtoR = null;
   if (isAASHTO) {
     const eta = A.eta;   // validated > 0 above (blank → 1.0 in getInputs)
+    // RW2H4 (2026-11-07): AASHTO LRFD 10th Art. 1.3.2.1 — η on loads at their maximum factors (Eq. 1.3.2.1-2), 1/η ≤ 1.0 on loads at
+    // their minimum factors (Eq. 1.3.2.1-3). Water uplift (WA, single factor 1.00): × η where it reduces the resistance (sliding,
+    // eccentricity), × 1/η where it relieves the effect (soil bearing). Was η on the maximum side of the stability checks only.
+    const etaMn = Math.min(1, 1 / eta);
     // Lateral earth force with heq surcharge (EH soil triangle + LS surcharge rect)
     const P_EH   = Pa_tri_h;                    // horizontal soil (already water-aware, on H')
     const y_EH   = y_Pa;                        // resultant height (H'/3 when dry)
@@ -2677,7 +2681,7 @@ function calcAll(inp) {
     const xESv  = x_sur;
     const V_LS_v = q_ll_aashto * inp.Lh;         // LS live surcharge vertical over heel
     // Column: AASHTO Strength I factors (DC 1.25, LL 1.75; snow input treated as LL)
-    const V_col  = 1.25 * pDL + 1.75 * (pLL + pSL);
+    const V_col  = eta * (1.25 * pDL + 1.75 * (pLL + pSL));   // RW2H4: × η (was outside η)
 
     // Moment arms about toe
     const xDC = (Wftg * x_ftg + Wstem * x_stem) / Math.max(V_DC, 1e-9);
@@ -2705,7 +2709,7 @@ function calcAll(inp) {
     // more conservative reading; AASHTO Fig. C11.5.6-2 shows the EH max factor on both components there.
     const gEH_min = 0.90;
     const CMB_S1A = { DC: 0.90, EV: 1.00, EH: gEH_min, ES: 0.75 };   // Strength Ia, minimum vertical factors (RW3F); ES min 0.75 (RWES)
-    const V_resist_min = CMB_S1A.DC*(V_DC + W_bar) + CMB_S1A.EV*Wsoil + CMB_S1A.EH*Pa_tri_v + CMB_S1A.ES*V_ES_v + 0*V_LS_v - V_up;   // min vertical for sliding (net of uplift); RWES: + 0.75 ES
+    const V_resist_min = etaMn * (CMB_S1A.DC*(V_DC + W_bar) + CMB_S1A.EV*Wsoil + CMB_S1A.EH*Pa_tri_v + CMB_S1A.ES*V_ES_v + 0*V_LS_v) - eta*V_up;   // RW2H4: 1/η on the minimum loads, η on the uplift   // min vertical for sliding (net of uplift); RWES: + 0.75 ES
     const R_tau = A.phi_tau * V_resist_min * tanDelta;        // friction resistance
     const R_ep  = A.phi_ep * Pp;                               // passive resistance
     const R_slide = R_tau + R_ep;
@@ -2715,8 +2719,8 @@ function calcAll(inp) {
     // ── ECCENTRICITY / OVERTURNING (Strength I): e ≤ B/4 ──
     // Max overturning: max EH/LS horizontal, min DC/EV vertical
     const Mo_str = eta * (CMB_S1.EH*P_EH*y_EH + CMB_S1.LS*P_LS*y_LS + CMB_S1.ES*P_ES*y_ES + CMB_S1.WA*P_hyd*y_hyd);
-    const V_str_min = CMB_S1A.DC*(V_DC + W_bar) + CMB_S1A.EV*Wsoil + CMB_S1A.EH*Pa_tri_v + CMB_S1A.ES*V_ES_v - CMB_S1.WA*V_up;  // min stabilizing vertical (net of uplift); RWES: + 0.75 ES
-    const Mr_str_min = CMB_S1A.DC*(Wftg*x_ftg + Wstem*x_stem + W_bar*x_bar) + CMB_S1A.EH*Pa_tri_v*B + CMB_S1A.EV*Wsoil*x_soil + CMB_S1A.ES*V_ES_v*xESv - CMB_S1.WA*M_up;   // RWES: + 0.75 ES
+    const V_str_min = etaMn * (CMB_S1A.DC*(V_DC + W_bar) + CMB_S1A.EV*Wsoil + CMB_S1A.EH*Pa_tri_v + CMB_S1A.ES*V_ES_v) - eta*CMB_S1.WA*V_up;   // RW2H4  // min stabilizing vertical (net of uplift); RWES: + 0.75 ES
+    const Mr_str_min = etaMn * (CMB_S1A.DC*(Wftg*x_ftg + Wstem*x_stem + W_bar*x_bar) + CMB_S1A.EH*Pa_tri_v*B + CMB_S1A.EV*Wsoil*x_soil + CMB_S1A.ES*V_ES_v*xESv) - eta*CMB_S1.WA*M_up;   // RW2H4   // RWES: + 0.75 ES
     const x_R_A = V_str_min > 0 ? (Mr_str_min - Mo_str) / V_str_min : B/2;
     const e_A   = B/2 - x_R_A;
     // Eccentricity limit — user-selectable (see UI description for when each applies)
@@ -2737,8 +2741,8 @@ function calcAll(inp) {
     const Mr_str_max_tot = eta * (CMB_S1.DC*(Wftg*x_ftg + Wstem*x_stem + W_bar*x_bar) + CMB_S1.EV*Wsoil*x_soil + CMB_S1.EH*Pa_tri_v*B
                      + CMB_S1.LS*V_LS_v*xLSv + CMB_S1.ES*V_ES_v*xESv) + V_col*x_col;   // RWES: + 1.50 ES
     // … and effective (for the soil bearing check — uplift carried by the water, γ_WA = 1.0)
-    const V_str_max  = V_str_max_tot - CMB_S1.WA*V_up;
-    const Mr_str_max = Mr_str_max_tot - CMB_S1.WA*M_up;
+    const V_str_max  = V_str_max_tot - etaMn*CMB_S1.WA*V_up;   // RW2H4: uplift relieves the bearing → 1/η
+    const Mr_str_max = Mr_str_max_tot - etaMn*CMB_S1.WA*M_up;
     const Mo_str_max = Mo_str;                                 // same driving moment
     const x_R_brg = V_str_max > 0 ? (Mr_str_max - Mo_str_max) / V_str_max : B/2;
     const e_brg   = B/2 - x_R_brg;
@@ -2795,8 +2799,8 @@ function calcAll(inp) {
     const quA_back  = q_blk(x_back,  quA_toe, quA_heel, e_tot, x_R_tot);
     const M_net_tot = Mr_str_max_tot - Mo_str_max;                          // RWPC: net moment about the toe (for the member pieces)
     // Strength Ia trapezoid for footing design (total vertical, uplift added back as above)
-    const V_str_min_tot  = V_str_min + V_up;
-    const Mr_str_min_tot = Mr_str_min + M_up;
+    const V_str_min_tot  = V_str_min + eta*V_up;   // RW2H4: the uplift taken out above is added back
+    const Mr_str_min_tot = Mr_str_min + eta*M_up;
     const x_R_Ia = V_str_min_tot > 0 ? (Mr_str_min_tot - Mo_str_max) / V_str_min_tot : B/2;
     const e_Ia   = B/2 - x_R_Ia;
     let quIa_toe, quIa_heel;
@@ -2980,7 +2984,7 @@ function calcAll(inp) {
 
     aashtoR = {
       ee1,   // RWE1
-      eta, heq, q_ll_aashto, ls_on, ls_auto_off, ls_dir, ls_dist, ls_half,   // RWLS: LS applicability and table (exposure)
+      eta, etaMn, heq, q_ll_aashto, ls_on, ls_auto_off, ls_dir, ls_dist, ls_half,   // RWLS: LS applicability and table (exposure)
       P_EH, y_EH, P_LS, y_LS, P_ES, P_hyd,
       tanDelta, delta_b, fric_label, fricMode, gEH_max, V_up, M_up, V_str_max_tot, V_col, ct,
       // sliding
@@ -3014,6 +3018,9 @@ function calcAll(inp) {
   const gLS = isAASHTO ? 1.75 : 1.6;   // live surcharge
   const gES = isAASHTO ? 1.50 : 1.6;   // dead/other surcharge (q_sur)
   const q_ll_stem = isAASHTO ? q_ll_aashto : 0;   // heq LL surcharge (psf)
+  // RW2H4 (2026-11-07): AASHTO Art. 1.3.2.1 load modifier on the Strength I member demands: η on maximum-factor loads, 1/η (≤ 1.0)
+  // on minimum-factor loads; ACI 1.0. Extreme events unchanged (as the stability checks).
+  const etaMx = isAASHTO ? A.eta : 1, etaMn = isAASHTO ? Math.min(1, 1 / A.eta) : 1;
   // ── Water-aware stem demand helper ──
   // Unfactored soil moment/shear at a section h_sec above... actually measured as a
   // cantilever of height hsec (from top of stem down). Splits into the 3-block
@@ -3041,14 +3048,14 @@ function calcAll(inp) {
   const gWA = isAASHTO ? 1.00 : 1.6;
   const stem_water = hasWT && wt_d < inp.Hs;    // WT intersects the stem
 
-  const Mu_stem_strI = gEH * sd_base.M_soil
+  const Mu_stem_strI = etaMx * (gEH * sd_base.M_soil   // RW2H4: × η
                      + gWA * sd_base.M_hyd
                      + gES * (Ka * inp.q_sur   * inp.Hs ** 2 / 2)
-                     + gLS * (Ka * q_ll_stem   * inp.Hs ** 2 / 2);
-  const Vu_stem_strI = gEH * sd_base.V_soil
+                     + gLS * (Ka * q_ll_stem   * inp.Hs ** 2 / 2));
+  const Vu_stem_strI = etaMx * (gEH * sd_base.V_soil
                      + gWA * sd_base.V_hyd
                      + gES * (Ka * inp.q_sur * inp.Hs)
-                     + gLS * (Ka * q_ll_stem * inp.Hs);
+                     + gLS * (Ka * q_ll_stem * inp.Hs));
 
   // ── EXTREME EVENT II stem case (MassDOT §3.3.2.4) ──
   // Earth pressure at γ_p = 1.0 PLUS the collision at γ_CT = 1.0.
@@ -3262,14 +3269,14 @@ function calcAll(inp) {
   const sd_mid = stemDemand(Hs_mid);                           // water-aware
 
   // Strength I at the mid-height section (soil + water + surcharge)
-  const Mu_stemT_strI = gEH * sd_mid.M_soil
+  const Mu_stemT_strI = etaMx * (gEH * sd_mid.M_soil   // RW2H4: × η
                       + gWA * sd_mid.M_hyd
                       + gES * (Ka * inp.q_sur   * Hs_mid ** 2 / 2)
-                      + gLS * (Ka * q_ll_stem   * Hs_mid ** 2 / 2);
-  const Vu_stemT_strI = gEH * sd_mid.V_soil
+                      + gLS * (Ka * q_ll_stem   * Hs_mid ** 2 / 2));
+  const Vu_stemT_strI = etaMx * (gEH * sd_mid.V_soil
                       + gWA * sd_mid.V_hyd
                       + gES * (Ka * inp.q_sur * Hs_mid)
-                      + gLS * (Ka * q_ll_stem * Hs_mid);
+                      + gLS * (Ka * q_ll_stem * Hs_mid));
 
   // Extreme Event II at the mid-height section (MassDOT: γ_p = 1.0 earth + γ_CT = 1.0)
   let Mu_stemT_ee2 = 0, Vu_stemT_ee2 = 0, Mu_stemT_ct = 0;
@@ -3443,26 +3450,27 @@ function calcAll(inp) {
   const pcS = (upS || pileFtg) ? [null, null] : pcV.map(([V, M, e, c]) => Math.abs(e) > B / 6
     ? { heel: rwUpMember(rwUpSplit(V, M, 0, 'Heel, ' + c), x_back, B), toe: rwUpMember(rwUpSplit(V, M, 0, 'Toe, ' + c), x_front, 0) } : null);
   if (!upS) upWarn.forEach(w => warnings.push('Footing (partial contact): ' + w));
-  function heelCase(gEVc, gDCc, gESc, gLSc, q0, qL, up, pc) {   // up: RWUP split (soil + water) for this combination, or null; pc: RWPL pile rows
-    const wu  = gEVc * w_soil_col + gDCc * (inp.gamma_c * tf_ft) + gESc * inp.q_sur
-              + (isAASHTO ? gLSc * q_ll_aashto : 0);
+  function heelCase(gEVc, gDCc, gESc, gLSc, q0, qL, up, pc, et = 1) {   // up: RWUP split (soil + water) for this combination, or null; pc: RWPL pile rows; et: RW2H4 η (max) or 1/η (min), AASHTO
+    const wu  = et * (gEVc * w_soil_col + gDCc * (inp.gamma_c * tf_ft) + gESc * inp.q_sur
+              + (isAASHTO ? gLSc * q_ll_aashto : 0));
+    gEVc = et * gEVc;   // RW2H4: the wedge below takes the same η
     const Md  = wu * inp.Lh ** 2 / 2 + gEVc * M_wedge_heel;
     if (pc) {   // RWPL: pile rows behind the back face, line loads q_i at a_i = x_i − x_back
       const hr = pc.rows.filter(rw => rw.x > x_back + 1e-9).map(rw => ({ x: rw.x, q: rw.q, a: rw.x - x_back }));
       const Mup = hr.reduce((t, rw) => t + rw.q * rw.a, 0), Vup = hr.reduce((t, rw) => t + rw.q, 0);
-      return { wu, Md, Mup, q0: NaN, qL: NaN, up: null, g: [gEVc, gDCc, gESc, gLSc], pile: { key: pc.key, label: pc.label, rows: hr, Vup },
+      return { wu, Md, Mup, q0: NaN, qL: NaN, up: null, g: [gEVc / et, gDCc, gESc, gLSc], et, pile: { key: pc.key, label: pc.label, rows: hr, Vup },
                Mstd: Md - Mup, Vstd: Math.abs(wu * inp.Lh + gEVc * V_wedge_heel - Vup), Vnr: wu * inp.Lh + gEVc * V_wedge_heel };
     }
     if (up) { q0 = up.q0; qL = up.qL; }
     const Mup = up ? up.M : q0 * inp.Lh ** 2 / 2 + (qL - q0) * inp.Lh ** 2 / 3;
     const Fup = up ? up.F : ((q0 + qL) / 2) * inp.Lh;
-    return { wu, Md, Mup, q0, qL, up: up || null, g: [gEVc, gDCc, gESc, gLSc],
+    return { wu, Md, Mup, q0, qL, up: up || null, g: [gEVc / et, gDCc, gESc, gLSc], et,
              Mstd: Md - Mup,                                        // +ve = downward → top bars
              Vstd: Math.abs(wu * inp.Lh + gEVc * V_wedge_heel - Fup),
              Vnr:  wu * inp.Lh + gEVc * V_wedge_heel };
   }
-  const hcMax = heelCase(gEV, gDC, gES, gLS, bq_back, bq_heel, upS ? upS.heelMax : pcS[0] ? pcS[0].heel : null, pileFtg && pileFtg.cmax);   // RWUP, RWPL; RWPC
-  const hcMin = isAASHTO ? heelCase(1.00, 0.90, 0.75, 0, bqm_back, bqm_heel, pcS[1] ? pcS[1].heel : null, pileFtg && pileFtg.cmin)
+  const hcMax = heelCase(gEV, gDC, gES, gLS, bq_back, bq_heel, upS ? upS.heelMax : pcS[0] ? pcS[0].heel : null, pileFtg && pileFtg.cmax, etaMx);   // RWUP, RWPL; RWPC
+  const hcMin = isAASHTO ? heelCase(1.00, 0.90, 0.75, 0, bqm_back, bqm_heel, pcS[1] ? pcS[1].heel : null, pileFtg && pileFtg.cmin, etaMn)
                          : heelCase(0.9, 0.9, 0, 0, bqm_back, bqm_heel, upS ? upS.heelMin : pcS[1] ? pcS[1].heel : null, pileFtg && pileFtg.cmin);
   const heel_min_governs = hcMin.Mstd > hcMax.Mstd;
   const hcG = heel_min_governs ? hcMin : hcMax;
@@ -3560,7 +3568,7 @@ function calcAll(inp) {
   // soil pressure." Only the footing's own self-weight (DC) is deducted below — soil cover
   // over the toe is intentionally NOT credited, so this is compliant by construction.
   // Self-weight RELIEVES toe demand → minimum factor (AASHTO DC 0.90 / ACI 0.9D)
-  const wu_toe_down = 0.90 * inp.gamma_c * tf_ft;   // factored footing self-weight (DC) only
+  const wu_toe_down = etaMn * 0.90 * inp.gamma_c * tf_ft;   // factored footing self-weight (DC) only; RW2H4: × 1/η (minimum factor, AASHTO)
   // Envelope of the max- and min-vertical bearing trapezoids (see heel)
   function toeCase(q0, qL, up, pc) {   // up: RWUP split (soil + water) for this combination, or null; pc: RWPL pile rows
     if (pc) {   // RWPL: pile rows in front of the front face, line loads q_i at a_i = x_front − x_i, less the footing weight
@@ -3706,7 +3714,7 @@ function calcAll(inp) {
   const tAt  = zb => inp.ts_bot - (inp.ts_bot - inp.ts_top) * zb / inp.Hs;           // stem thickness at zb ft above the joint (in)
   const ctArmTop = ctR ? (ctR.y_CT - tf_ft - inp.Hs) : 0;                              // collision height above the stem top
   const MuS = zb => { const z = inp.Hs - zb, sd = stemDemand(z);                       // Strength I / U = 1.6H at zb (lb·ft/ft)
-    return gEH*sd.M_soil + gWA*sd.M_hyd + gES*(Ka*inp.q_sur*z*z/2) + gLS*(Ka*q_ll_stem*z*z/2); };
+    return etaMx * (gEH*sd.M_soil + gWA*sd.M_hyd + gES*(Ka*inp.q_sur*z*z/2) + gLS*(Ka*q_ll_stem*z*z/2)); };   // RW2H4: × η
   const MuE = zb => { if (!ctR) return 0; const z = inp.Hs - zb, sd = stemDemand(z);  // AASHTO Extreme Event II at zb
     return sd.M_soil + sd.M_hyd + Ka*inp.q_sur*z*z/2 + 0.5*Ka*q_ll_stem*z*z/2 + ctR.CT_h*1000*(ctArmTop + z); };
   const phiE = isAASHTO ? 1.00 : 0.90;
@@ -3782,7 +3790,7 @@ function calcAll(inp) {
   let keyR = null;
   if (inp.useShearKey && dk_ft > 0) {
     const bk = inp.key_bk > 0 ? inp.key_bk : 12;
-    const gP = isAASHTO ? 1.50 : 1.6;
+    const gP = isAASHTO ? 1.50 * etaMx : 1.6;   // RW2H4: × η (AASHTO)
     const p_top = Kp * inp.gamma_s * Df, p_bot = Kp * inp.gamma_s * (Df + dk_ft);
     const P_k = (p_top + p_bot) / 2 * dk_ft;                                        // lb/ft (= P_p,key)
     const M_k = p_top * dk_ft * dk_ft / 2 + (p_bot - p_top) * dk_ft * dk_ft / 6;    // lb·ft/ft at the footing underside
@@ -4092,7 +4100,7 @@ function calcAll(inp) {
     comb: { u12: CMB_U12, u09: CMB_U09 },   // RW3F (2026-11-06): ACI combination factors, returned for the 3D view (exposure only)
     qu_toe, qu_heel, quf_front, quf_back,
     SumVu_min, Msu_min, x_Ru_min, e_u_min, qu_toe_min, qu_heel_min, quf_front_min, quf_back_min,
-    heel_min_governs, toe_min_governs, gHeel: hcG.g,
+    heel_min_governs, toe_min_governs, gHeel: hcG.g, etHeel: hcG.et, etaMx, etaMn,   // RW2H4
     Pa_incl_deg, coulombThrust,
     // Stem
     d_stem, Mu_stem_lbft, Mu_stem_in, Vu_stem,
@@ -4858,10 +4866,11 @@ function renderStabilityAASHTO(r) {
      {sym:'P_{EH}', desc:'horizontal earth force', val:F(a.P_EH,0), unit:'lb/ft'},
      {sym:'P_{LS}', desc:'LL surcharge force', val:F(a.P_LS,0), unit:'lb/ft'}]);
   h += eq('Factored friction resistance (min vertical 0.90DC+1.00EV' + (r.Pa_tri_v>0?'+0.90EH,v':'') + (a.V_ES_v>0?'+0.75ES':'') + ')',
-    `R_R = \\phi_\\tau (0.90\\,V_{DC}+1.00\\,V_{EV}${r.Pa_tri_v>0?'+0.90\\,V_{EH,v}':''}${a.V_ES_v>0?'+0.75\\,V_{ES}':''}${a.V_up>0?'-U':''})\\tan\\delta_b = (${F(A.phi_tau,2)})(${F(a.V_resist_min,0)})(${F(a.tanDelta,3)}) = \\boxed{${F(a.R_tau,0)}\\ \\text{lb/ft}}`,'\u00a710.6.3.4 \u00b7 Table 11.5.7-1',
+    `R_R = \\phi_\\tau (${a.etaMn!==1?'\\tfrac{1}{\\eta}[':''}0.90\\,V_{DC}+1.00\\,V_{EV}${r.Pa_tri_v>0?'+0.90\\,V_{EH,v}':''}${a.V_ES_v>0?'+0.75\\,V_{ES}':''}${a.etaMn!==1?']':''}${a.V_up>0?(a.etaMn!==1?'-\\eta U':'-U'):''})\\tan\\delta_b = (${F(A.phi_tau,2)})(${F(a.V_resist_min,0)})(${F(a.tanDelta,3)}) = \\boxed{${F(a.R_tau,0)}\\ \\text{lb/ft}}`,'\u00a710.6.3.4 \u00b7 Table 11.5.7-1',
     [{sym:'\\phi_\\tau', desc:'sliding resistance factor (semi-gravity walls: 1.0)', val:F(A.phi_tau,2), unit:''},
      {sym:'\\delta_b', desc:'equivalent base interface angle — basis: ' + a.fric_label, val:F(a.delta_b,1), unit:'°'},
      {sym:'\\tan\\delta_b', desc:'base friction coefficient', val:F(a.tanDelta,3), unit:''},
+     ...(a.etaMn!==1 ? [{sym:'1/\\eta', desc:'load modifier on the minimum-factor loads, Eq. 1.3.2.1-3 (\u2264 1.0); also on M_r and in Strength Ia', val:F(a.etaMn,3), unit:''}] : []),   // RW2H4
      {sym:'R_R', desc:'factored friction resistance', val:F(a.R_tau,0), unit:'lb/ft'}]);
   h += eq('Factored passive resistance',
     `\\phi_{ep}P_p = (${F(A.phi_ep,2)})(${F(r.Pp,0)}) = ${F(a.R_ep,0)}\\ \\text{lb/ft}`,'',
@@ -4886,7 +4895,7 @@ function renderStabilityAASHTO(r) {
     [{sym:'P_{EH}', desc:'horizontal earth force', val:F(a.P_EH,0), unit:'lb/ft'},
      {sym:'y_{EH}', desc:'EH resultant height', val:F(a.y_EH,2), unit:'ft'},
      {sym:'M_o', desc:'factored overturning moment', val:F(a.Mo_str,0), unit:'lb·ft/ft'}]);
-  h += eq('Factored resisting moment (min vertical: 0.90DC + 1.00EV' + (r.Pa_tri_v>0?' + 0.90EH,v':'') + (a.V_ES_v>0?' + 0.75ES':'') + ')',
+  h += eq('Factored resisting moment (min vertical: ' + (a.etaMn!==1?'(1/\u03b7)(':'') + '0.90DC + 1.00EV' + (r.Pa_tri_v>0?' + 0.90EH,v':'') + (a.V_ES_v>0?' + 0.75ES':'') + (a.etaMn!==1?')' + (a.V_up>0?' \u2212 \u03b7U':''):'') + ')',
     `M_r = \\boxed{${F(a.Mr_str_min,0)}\\ \\text{lb\u00b7ft/ft}}`,'',
     [{sym:'M_r', desc:'factored resisting moment (min vertical)', val:F(a.Mr_str_min,0), unit:'lb·ft/ft'}]);
   h += eq('Location of resultant and eccentricity',
@@ -4903,7 +4912,7 @@ function renderStabilityAASHTO(r) {
   h += `<div class="card" style="margin-bottom:16px;">
     <div class="card-hd"><span class="card-title">Step 6 \u2014 Bearing Resistance (Strength I)</span><span class="card-ref">${a.onRock ? 'AASHTO \u00a710.6.5 \u00b7 \u00a711.6.3.2 \u00b7 footing on rock, linear distribution' : 'AASHTO \u00a710.6.3.1 \u00b7 Meyerhof effective width'}</span></div>
     <div class="card-body">`;
-  h += eq('Factored vertical load (max: 1.25DC + 1.35EV' + (r.Pa_tri_v>0?' + '+F(a.gEH_max,2)+'EH,v':'') + ' + 1.75LS' + (a.V_ES_v>0?' + 1.50ES':'') + (a.V_up>0?' − uplift U':'') + ')',
+  h += eq('Factored vertical load (max: ' + (a.eta!==1?'\u03b7(':'') + '1.25DC + 1.35EV' + (r.Pa_tri_v>0?' + '+F(a.gEH_max,2)+'EH,v':'') + ' + 1.75LS' + (a.V_ES_v>0?' + 1.50ES':'') + (a.eta!==1?(r.hasCol?' + column':'') + ')':'') + (a.V_up>0?(a.eta!==1?' − (1/\u03b7) uplift U':' − uplift U'):'') + ')',
     `V_u = \\boxed{${F(a.V_str_max,0)}\\ \\text{lb/ft}} = ${Fk(a.V_str_max)}\\ \\text{kip/ft}`,'',
     [{sym:'V_u', desc:'max factored vertical load', val:F(a.V_str_max,0), unit:'lb/ft'}]);
   h += eq('Eccentricity for bearing and effective width (Meyerhof)',
@@ -5925,6 +5934,10 @@ function renderStem(r) {
       : eq('Seismic combination U = 1.2D + 1.0E + 1.6H (ACI 318-19 Eq. 5.3.1e, H per §5.3.8)',
           `\\Delta P_{E,s} = \\Delta P_E\\left(\\tfrac{H_s}{H}\\right)^2 = ${F(r.Pe_inc,1)}\\left(\\tfrac{${F(inp.Hs,2)}}{${F(r.H,2)}}\\right)^2 = ${F(q.Pe,1)};\\quad M_{u,E} = M_{u,1.6H} + 1.0\\,\\Delta P_{E,s}(0.6H_s) = ${F(r.Mu_stem_strI,0)} + ${F(q.Pe,1)}(${F(0.6*inp.Hs,2)}) = \\boxed{${F(q.M,0)}\\ \\text{lb·ft/ft}}`, 'ACI 5.3.1e');
   }
+  if (r.isAASHTO && r.etaMx !== 1)   // RW2H4
+    h += eq('Load modifier \u03b7 on the Strength I demand (AASHTO Art. 1.3.2.1, Eq. 1.3.2.1-2)',
+      `M_{u,StrI} = \\eta\\sum\\gamma_i M_i = ${F(r.etaMx,3)}(${F(r.Mu_stem_strI/r.etaMx,1)}) = \\boxed{${F(r.Mu_stem_strI,1)}\\ \\text{lb·ft/ft}};\\quad V_{u,StrI} = ${F(r.etaMx,3)}(${F(r.Vu_stem_strI/r.etaMx,1)}) = ${F(r.Vu_stem_strI,1)}\\ \\text{lb/ft}`,'\u00a71.3.2.1',
+      [{sym:'\\eta', desc:'load modifier \u03b7_D\u03b7_R\u03b7_I', val:F(r.etaMx,3), unit:''}]);
   h += eq('Total factored design moment' + (r.stem_eq_governs ? (r.isAASHTO ? ' — EXTREME EVENT I GOVERNS' : ' — SEISMIC COMBINATION GOVERNS') : r.stem_ee2_governs ? ' — EXTREME EVENT II GOVERNS' : ''),
     `M_u = \\boxed{${F(r.Mu_stem_lbft,1)}\\ \\text{lb·ft/ft}} = ${Fk(r.Mu_stem_lbft)}\\ \\text{kip·ft/ft} = ${F(r.Mu_stem_in,0)}\\ \\text{lb·in/ft}`,'',
     [{sym:'K_a', desc:'active/at-rest coefficient', val:F(r.Ka,4), unit:''},
@@ -6291,7 +6304,7 @@ function renderFooting(r) {
     <div class="card-hd"><span class="card-title">Heel Step 1 — Factored Loads</span><span class="card-ref">downward: soil + surcharge + self-weight · upward: bearing</span></div>
     <div class="card-body">`;
   h += eq('Factored downward load (uniform over heel)',
-`w_u = ${r.isAASHTO ? `${F(r.gHeel[0],2)}\\,w_{EV} + ${F(r.gHeel[1],2)}\\gamma_c t_f + ${F(r.gHeel[2],2)}\\,q_s + ${F(r.gHeel[3],2)}\\,q_{LS}` : `${F(r.gHeel[0],1)}(w_{EV} + \\gamma_c t_f) + ${F(r.gHeel[2],1)}\\,q_s`} = \\boxed{${F(r.wu_heel,1)}\\ \\text{psf}}`,
+`w_u = ${r.isAASHTO ? `${r.etHeel !== 1 ? F(r.etHeel,3) + '\\big(' : ''}${F(r.gHeel[0],2)}\\,w_{EV} + ${F(r.gHeel[1],2)}\\gamma_c t_f + ${F(r.gHeel[2],2)}\\,q_s + ${F(r.gHeel[3],2)}\\,q_{LS}${r.etHeel !== 1 ? '\\big)\\ (' + (r.heel_min_governs ? '1/\\eta' : '\\eta') + ', Art.\\ 1.3.2.1)' : ''}` : `${F(r.gHeel[0],1)}(w_{EV} + \\gamma_c t_f) + ${F(r.gHeel[2],1)}\\,q_s`} = \\boxed{${F(r.wu_heel,1)}\\ \\text{psf}}`,
     r.heel_min_governs ? (r.isAASHTO ? 'Strength Ia (min vertical) governs Case A' : 'U = 0.9D + 1.6H governs Case A') : (r.isAASHTO ? 'Strength I (max vertical) governs Case A' : 'U = 1.2D + 1.6H governs Case A'),
     [{sym:'w_{EV}', desc: r.hasWT ? 'soil column on heel (moist above WT, saturated below)' : 'soil column on heel = γ_s·H_s', val:F(r.w_soil_col,1), unit:'psf'},
      {sym:'\\gamma_s', desc:'soil unit weight', val:F(inp.gamma_s,0), unit:'pcf'},
@@ -6411,7 +6424,7 @@ function renderFooting(r) {
     <div class="card-hd"><span class="card-title">Toe Step 1 — Net Upward Load</span><span class="card-ref">bearing up − footing self-weight down</span></div>
     <div class="card-body">`;
   h += eq('Factored self-weight of footing (downward)',
-    `w_{sw} = 0.9\\,\\gamma_c t_f = 0.9(${F(inp.gamma_c,0)})(${F(r.tf_ft,3)}) = \\boxed{${F(r.wu_toe_down,1)}\\ \\text{psf}}`,
+    `w_{sw} = ${r.etaMn !== 1 ? '\\tfrac{1}{\\eta}\\,' : ''}0.9\\,\\gamma_c t_f = ${r.etaMn !== 1 ? F(r.etaMn,3) + '\\cdot ' : ''}0.9(${F(inp.gamma_c,0)})(${F(r.tf_ft,3)}) = \\boxed{${F(r.wu_toe_down,1)}\\ \\text{psf}}`,   // RW2H4
     r.toe_min_governs ? (r.isAASHTO ? 'bearing from Strength Ia (min vertical) — governs toe' : 'bearing from U = 0.9D + 1.6H — governs toe') : '',
     [{sym:'\\gamma_c', desc:'concrete unit weight', val:F(inp.gamma_c,0), unit:'pcf'},
      {sym:'t_f', desc:'footing thickness', val:F(r.tf_ft,3), unit:'ft'},
@@ -9796,11 +9809,11 @@ function rw3Factors(r, key) {
     return null;
   }
   if (!a || !a.CMB_S1 || !a.CMB_S1A) return null;
-  const S = a.CMB_S1, I = a.CMB_S1A, et = a.eta;
+  const S = a.CMB_S1, I = a.CMB_S1A, et = a.eta, en = a.etaMn != null ? a.etaMn : 1;   // RW2H4: 1/η on the minimum factors
   const lat = { EH: et * S.EH, LS: et * S.LS, ES: et * S.ES, WA: et * S.WA, CT: 0, PP: 0 };
-  if (key === 's1' || key === 's1t') return { def: 'Strength I (maximum)', eta: et, f: { ...lat, EHv: et * S.EH, LSv: et * S.LS, SV: et * S.ES, DC: et * S.DC, EV: et * S.EV, UP: key === 's1' ? S.WA : 0 },
+  if (key === 's1' || key === 's1t') return { def: 'Strength I (maximum)', eta: et, f: { ...lat, EHv: et * S.EH, LSv: et * S.LS, SV: et * S.ES, DC: et * S.DC, EV: et * S.EV, UP: key === 's1' ? en * S.WA : 0 },
     col: r.hasCol ? { v: a.V_col, how: 'the analysis\' Strength I column load' } : null };
-  if (key === 's1a' || key === 's1at') return { def: 'Strength Ia (minimum vertical)', eta: et, f: { ...lat, EHv: I.EH, LSv: 0, SV: I.ES, DC: I.DC, EV: I.EV, UP: key === 's1a' ? S.WA : 0 },
+  if (key === 's1a' || key === 's1at') return { def: 'Strength Ia (minimum vertical)', eta: et, f: { ...lat, EHv: en * I.EH, LSv: 0, SV: en * I.ES, DC: en * I.DC, EV: en * I.EV, UP: key === 's1a' ? et * S.WA : 0 },
     col: r.hasCol ? { v: 0 } : null };
   const E = a.ct && a.ct.ee2 && a.ct.ee2.CMB_EE2;
   if (key === 'ee2' && E) return { def: 'Extreme Event II', f: { CT: E.CT, EH: E.EH, WA: E.WA, LS: E.LS, ES: E.ES, EHv: E.EHv, LSv: E.LS, SV: E.ESv, DC: E.DC, EV: E.EV, UP: E.WA, PP: 0 },   // RWCT
@@ -10648,20 +10661,20 @@ function rwrModel(r) {
       if (a.V_up > 0) st.push(rwrS({ id: 'U', label: 'Water uplift on the base (WA, γ = 1.0), subtracted', sym: 'U', eq: '\\gamma_{w} h_{w} B', sub: '', value: a.V_up, unit: 'lb/ft', d: 0 }));
       subs.push(sub('Step 3 — Unfactored load components (per ft of wall)', [rwrItem('sa3', [{ title: 'Loads', steps: st }])])); }
     { const st = [rwrS({ id: 'Q', label: 'Factored sliding demand (γ_EH = ' + rwrN(a.gEH_max, 2) + ', γ_LS = 1.75)', sym: '\\sum\\gamma Q', eq: '\\eta(' + rwrN(a.gEH_max, 2) + '\\,P_{EH} + 1.75\\,P_{LS}' + (a.P_ES > 0 ? ' + 1.50\\,P_{ES}' : '') + (a.P_hyd > 0 ? ' + 1.00\\,P_{WA}' : '') + ')', sub: rwrN(a.eta, 2) + '(' + rwrN(a.gEH_max, 2) + '\\cdot' + rwrN(a.P_EH, 0) + ' + 1.75\\cdot' + rwrN(a.P_LS, 0) + (a.P_ES > 0 ? ' + 1.50\\cdot' + rwrN(a.P_ES, 0) : '') + (a.P_hyd > 0 ? ' + 1.00\\cdot' + rwrN(a.P_hyd, 0) : '') + ')', value: a.H_drive_str, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-1') }),
-      rwrS({ id: 'RR', label: 'Factored friction resistance (minimum vertical 0.90DC + 1.00EV' + (r.Pa_tri_v > 0 ? ' + 0.90EH,v' : '') + (a.V_ES_v > 0 ? ' + 0.75ES' : '') + ')', sym: 'R_{R}', eq: '\\phi_{\\tau}(0.90\\,V_{DC} + 1.00\\,V_{EV}' + (r.Pa_tri_v > 0 ? ' + 0.90\\,V_{EH,v}' : '') + (a.V_ES_v > 0 ? ' + 0.75\\,V_{ES}' : '') + (a.V_up > 0 ? ' \\minus U' : '') + ')\\tan\\delta_{b}', sub: '(' + rwrN(A.phi_tau, 2) + ')(' + rwrN(a.V_resist_min, 0) + ')(' + rwrN(a.tanDelta, 3) + ')', value: a.R_tau, unit: 'lb/ft', d: 0, ref: AA('Art. 10.6.3.4, Table 11.5.7-1'), note: 'δ_b = ' + rwrN(a.delta_b, 1) + '°, basis: ' + rwrPlain(a.fric_label) }),
+      rwrS({ id: 'RR', label: 'Factored friction resistance (minimum vertical 0.90DC + 1.00EV' + (r.Pa_tri_v > 0 ? ' + 0.90EH,v' : '') + (a.V_ES_v > 0 ? ' + 0.75ES' : '') + ')', sym: 'R_{R}', eq: '\\phi_{\\tau}(' + (a.etaMn !== 1 ? '\\tfrac{1}{\\eta}[' : '') + '0.90\\,V_{DC} + 1.00\\,V_{EV}' + (r.Pa_tri_v > 0 ? ' + 0.90\\,V_{EH,v}' : '') + (a.V_ES_v > 0 ? ' + 0.75\\,V_{ES}' : '') + (a.etaMn !== 1 ? ']' : '') + (a.V_up > 0 ? (a.etaMn !== 1 ? ' \\minus \\eta U' : ' \\minus U') : '') + ')\\tan\\delta_{b}', sub: '(' + rwrN(A.phi_tau, 2) + ')(' + rwrN(a.V_resist_min, 0) + ')(' + rwrN(a.tanDelta, 3) + ')', value: a.R_tau, unit: 'lb/ft', d: 0, ref: AA('Art. 10.6.3.4, Table 11.5.7-1'), note: 'δ_b = ' + rwrN(a.delta_b, 1) + '°, basis: ' + rwrPlain(a.fric_label) + (a.etaMn !== 1 ? '; 1/η = ' + rwrN(a.etaMn, 3) + ' (Art. 1.3.2.1)' : '') }),
       rwrS({ id: 'Rep', label: 'Factored passive resistance' + (inp.inclPassive ? '' : ' (passive neglected, option off: P_p = ' + rwrN(r.Pp_full, 0) + ' lb/ft not counted)'), sym: '\\phi_{ep}P_{p}', eq: '', sub: '(' + rwrN(A.phi_ep, 2) + ')(' + rwrN(r.Pp, 0) + ')', value: a.R_ep, unit: 'lb/ft', d: 0 }),
       rwrS({ id: 'Rs', label: 'Total sliding resistance', sym: 'R_{R} + \\phi_{ep}P_{p}', eq: '', sub: rwrN(a.R_tau, 0) + ' + ' + rwrN(a.R_ep, 0), value: a.R_slide, unit: 'lb/ft', d: 0 }),
       rwrS({ id: 'dc', label: 'Sliding check: resistance ≥ demand', sym: 'DCR', eq: '\\frac{\\sum\\gamma Q}{R_{R} + \\phi_{ep}P_{p}}', sub: '\\frac{' + rwrN(a.H_drive_str, 0) + '}{' + rwrN(a.R_slide, 0) + '}', value: a.sliding_dcr, unit: '', d: 3, ok: ok('sliding'), ref: AA('Art. 10.6.3.4') })];
       CK.sliding = 'sa4/dc';
       subs.push(sub('Step 4 — Sliding resistance (Strength I)', [rwrItem('sa4', [{ title: 'Sliding', steps: st }]), onTab('stabSlide')])); }
     { const st = [rwrS({ id: 'Mo', label: 'Factored overturning moment about the toe (maximum horizontal)', sym: 'M_{o}', eq: '\\eta(' + rwrN(a.gEH_max, 2) + '\\,P_{EH}y_{EH} + 1.75\\,P_{LS}y_{LS}' + (a.P_hyd > 0 ? ' + P_{WA}y_{WA}' : '') + ')', sub: '', value: a.Mo_str, unit: 'lb-ft/ft', d: 0 }),
-      rwrS({ id: 'Mr', label: 'Factored resisting moment (minimum vertical 0.90DC + 1.00EV' + (r.Pa_tri_v > 0 ? ' + 0.90EH,v' : '') + (a.V_ES_v > 0 ? ' + 0.75ES' : '') + ')', sym: 'M_{r}', eq: '', sub: '', value: a.Mr_str_min, unit: 'lb-ft/ft', d: 0 }),
+      rwrS({ id: 'Mr', label: 'Factored resisting moment (minimum vertical ' + (a.etaMn !== 1 ? '(1/η)(' : '') + '0.90DC + 1.00EV' + (r.Pa_tri_v > 0 ? ' + 0.90EH,v' : '') + (a.V_ES_v > 0 ? ' + 0.75ES' : '') + (a.etaMn !== 1 ? ')' + (a.V_up > 0 ? ' − ηU' : '') : '') + ')', sym: 'M_{r}', eq: '', sub: '', value: a.Mr_str_min, unit: 'lb-ft/ft', d: 0 }),
       rwrS({ id: 'xR', label: 'Location of the resultant from the toe', sym: '\\bar{x}', eq: '\\frac{M_{r} \\minus M_{o}}{V}', sub: '', value: a.x_R_A, unit: 'ft', d: 3 }),
       rwrS({ id: 'e', label: 'Eccentricity of the resultant', sym: 'e', eq: '\\frac{B}{2} \\minus \\bar{x}', sub: '\\frac{' + rwrN(r.B, 2) + '}{2} \\minus ' + rwrN(a.x_R_A, 3), value: a.e_A, unit: 'ft', d: 3 }),
       rwrS({ id: 'dc', label: 'Eccentricity check, foundation on ' + (a.onRock ? 'rock' : 'soil') + ': |e| ≤ ' + rwrPlain(a.e_limit_label) + ' = ' + rwrN(a.e_limit, 3) + ' ft', sym: '\\frac{|e|}{e_{lim}}', eq: '', sub: '\\frac{' + rwrN(Math.abs(a.e_A), 3) + '}{' + rwrN(a.e_limit, 3) + '}', value: dcv('ecc'), unit: '', d: 3, ok: ok('ecc'), ref: AA('Art. 11.6.3.3') })];
       CK.ecc = 'sa5/dc';
       subs.push(sub('Step 5 — Eccentricity limit (Strength I)', [rwrItem('sa5', [{ title: 'Eccentricity', steps: st }]), onTab('stabEcc')])); }
-    { const s1 = [rwrS({ id: 'Vu', label: 'Factored vertical load (maximum: 1.25DC + 1.35EV' + (r.Pa_tri_v > 0 ? ' + ' + rwrN(a.gEH_max, 2) + 'EH,v' : '') + ' + 1.75LS' + (a.V_ES_v > 0 ? ' + 1.50ES' : '') + (a.V_up > 0 ? ' − U' : '') + ')', sym: 'V_{u}', eq: '', sub: '', value: a.V_str_max, unit: 'lb/ft', d: 0 }),
+    { const s1 = [rwrS({ id: 'Vu', label: 'Factored vertical load (maximum: ' + (a.eta !== 1 ? 'η(' : '') + '1.25DC + 1.35EV' + (r.Pa_tri_v > 0 ? ' + ' + rwrN(a.gEH_max, 2) + 'EH,v' : '') + ' + 1.75LS' + (a.V_ES_v > 0 ? ' + 1.50ES' : '') + (a.eta !== 1 ? (r.hasCol ? ' + column' : '') + ')' : '') + (a.V_up > 0 ? (a.eta !== 1 ? ' − (1/η)U' : ' − U') : '') + ')', sym: 'V_{u}', eq: '', sub: '', value: a.V_str_max, unit: 'lb/ft', d: 0 }),
       rwrS({ id: 'e', label: 'Eccentricity for bearing', sym: 'e', eq: '', sub: '', value: a.e_brg, unit: 'ft', d: 3 }),
       rwrS({ id: 'Beff', label: 'Effective width (Meyerhof)', sym: 'B^{\\prime}', eq: 'B \\minus 2e', sub: rwrN(r.B, 2) + ' \\minus 2(' + rwrN(a.e_brg, 3) + ')', value: a.B_eff, unit: 'ft', d: 3 })];
       const inK = Math.abs(a.e_brg) <= r.B / 6;
@@ -10737,10 +10750,10 @@ function rwrModel(r) {
       ['Stem', 'Heel', 'Toe'].forEach(x => { CK['crack' + x] = 'sa9/' + x.toLowerCase() + '.ok'; CK['minRf' + x] = 'sa9/' + x.toLowerCase() + '.mr'; });
       subs.push(sub('Step 9 — Serviceability: crack control and minimum reinforcement', [rwrItem('sa9', T),
         { type: 'note', text: 'n = ' + rwrN(sv.n_modular, 0) + ' (E_c = ' + rwrN(sv.Ec / 1000, 0) + ' ksi, Eq. 5.4.2.4-1). Service I stem moment: ' + (sv.serv_ko ? 'K_0 = ' + rwrN(sv.K_serv, 3) + ' for the earth term, K_a for the surcharge' : 'K_a') + '; heel: full downward load, no upward relief; toe: |M_u| / 1.5 (approximation of the tool). Heel and toe minimum reinforcement are status-bar checks without a card on the tab.' }, onTab('stabServ')])); }
-    { const sI = [rwrS({ id: 'V', label: 'Factored vertical load on the footing underside, Strength I maximum (total: water uplift added back, it acts on the same underside)', sym: 'V_{u}', eq: '\\eta(1.25\\,DC + 1.35\\,EV + \\gamma_{EH}\\,P_{a,V} + 1.75\\,LS_{v}' + (a.V_ES_v > 0 ? ' + 1.50\\,ES_{v}' : '') + ') + V_{col}', sub: '', value: a.V_str_max_tot, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-1') })];
+    { const sI = [rwrS({ id: 'V', label: 'Factored vertical load on the footing underside, Strength I maximum (total: water uplift added back, it acts on the same underside)', sym: 'V_{u}', eq: '\\eta(1.25\\,DC + 1.35\\,EV + \\gamma_{EH}\\,P_{a,V} + 1.75\\,LS_{v}' + (a.V_ES_v > 0 ? ' + 1.50\\,ES_{v}' : '') + (a.eta !== 1 ? ' + V_{col})' : ') + V_{col}'), sub: '', value: a.V_str_max_tot, unit: 'lb/ft', d: 0, ref: AA('Table 3.4.1-1') })];
       const eI = a.e_tot;   // RWETOT: the Strength I footing-design eccentricity returned by calcAll (with or without water uplift)
       sI.push(...rwrTrap('', a.V_str_max_tot, eI, a.x_R_tot, a.quA_toe, a.quA_heel, a.quA_front, a.quA_back, 'V_{u}'));
-      const sIa = [rwrS({ id: 'VIa', label: 'Factored vertical load, Strength Ia minimum (total)', sym: 'V_{u}', eq: '0.90\\,DC + 1.00\\,EV + 0.90\\,P_{a,V}' + (a.V_ES_v > 0 ? ' + 0.75\\,ES_{v}' : ''), sub: '', value: a.V_str_min_tot, unit: 'lb/ft', d: 0 }),
+      const sIa = [rwrS({ id: 'VIa', label: 'Factored vertical load, Strength Ia minimum (total)', sym: 'V_{u}', eq: (a.etaMn !== 1 ? '\\tfrac{1}{\\eta}(' : '') + '0.90\\,DC + 1.00\\,EV + 0.90\\,P_{a,V}' + (a.V_ES_v > 0 ? ' + 0.75\\,ES_{v}' : '') + (a.etaMn !== 1 ? ')' : ''), sub: '', value: a.V_str_min_tot, unit: 'lb/ft', d: 0 }),
         rwrS({ id: 'eIa', label: 'Eccentricity of the Strength Ia resultant (total vertical)', sym: 'e', eq: '\\frac{B}{2} \\minus \\bar{x}', sub: '', value: a.e_Ia, unit: 'ft', d: 3 })];
       sIa.push(...rwrTrap('Ia', a.V_str_min_tot, a.e_Ia, r.B / 2 - a.e_Ia, a.quIa_toe, a.quIa_heel, a.quIa_front, a.quIa_back, 'V_{u}', ', Strength Ia'));
       subs.push(sub('Factored bearing for footing design (Strength I / Ia, full width B)', [rwrItem('saf', [{ title: 'Strength I (maximum vertical)', ref: AA('Table 3.4.1-1'), steps: sI }, { title: 'Strength Ia (minimum vertical)', ref: AA('C11.5.6'), steps: sIa }]),
@@ -10777,6 +10790,7 @@ function rwrModel(r) {
     const T1 = [rwrS({ id: 'Msoil', label: 'Factored moment, triangular soil pressure (γ' + (isA ? '_EH = 1.50' : ' = 1.6') + ')', sym: 'M_{u,soil}', eq: gEH + '\\cdot\\frac{K_{a}\\gamma_{s} H_{s}^{3}}{6}', sub: gEH + '\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.gamma_s, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{3}}{6}', value: gEH * r.Ka * inp.gamma_s * inp.Hs ** 3 / 6, unit: 'lb-ft/ft', d: 1})];
     if (inp.q_sur > 0) T1.push(rwrS({ id: 'MES', label: 'Factored moment, dead surcharge (γ' + (isA ? '_ES = 1.50' : ' = 1.6') + ')', sym: 'M_{u,ES}', eq: gES + '\\cdot\\frac{K_{a} q_{s} H_{s}^{2}}{2}', sub: gES + '\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(inp.q_sur, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{2}}{2}', value: gES * r.Ka * inp.q_sur * inp.Hs ** 2 / 2, unit: 'lb-ft/ft', d: 1 }));
     if (isA && qll > 0) T1.push(rwrS({ id: 'MLS', label: 'Factored moment, live-load surcharge (γ_LS = 1.75)', sym: 'M_{u,LS}', eq: '1.75\\cdot\\frac{K_{a}\\gamma_{s}h_{eq}H_{s}^{2}}{2}', sub: '1.75\\cdot\\frac{(' + rwrN(r.Ka, 4) + ')(' + rwrN(qll, 0) + ')(' + rwrN(inp.Hs, 2) + ')^{2}}{2}', value: gLS * r.Ka * qll * inp.Hs ** 2 / 2, unit: 'lb-ft/ft', d: 1}));
+    if (isA && r.etaMx !== 1) T1.push(rwrS({ id: 'Meta', label: 'Load modifier η on the Strength I demand (sum of the factored moments above)', sym: 'M_{u,StrI}', eq: '\\eta\\sum\\gamma_{i} M_{i}', sub: rwrN(r.etaMx, 3) + '(' + rwrN(r.Mu_stem_strI / r.etaMx, 1) + ')', value: r.Mu_stem_strI, unit: 'lb-ft/ft', d: 1, ref: AA('Art. 1.3.2.1') }));   // RW2H4
     if (r.stem_water) T1.push(rwrS({ id: 'Mhyd', label: 'Water-table adjustment: buoyant soil below the water table + hydrostatic (h_2 = ' + rwrN(Math.max(0, inp.Hs - r.wt_d), 2) + ' ft)', sym: 'M_{u,hyd}', eq: (isA ? '\\gamma_{WA}' : '\\gamma') + '\\cdot\\frac{1}{2}\\gamma_{w} h_{2}^{2}\\cdot\\frac{h_{2}}{3}', sub: '', value: (isA ? 1.0 : 1.6) * r.sd_base_Mhyd, unit: 'lb-ft/ft', d: 1, ref: isA ? AA('Table 3.4.1-1, γ_WA = 1.0') : 'γ = 1.6 (ACI H)' }));
     if (r.sq_base) T1.push(isA ? rwrS({ id: 'MuEQ', label: 'Extreme Event I at the stem base (φ = 1.0): case 1 P_AE,s + 0.5P_IR,s, case 2 max(0.5P_AE,s, P_A,s) + P_IR,s (P_AE,s = ' + rwrN(r.sq_base.PAE, 0) + ' at H_s/3, P_IR,s = ' + rwrN(r.sq_base.PIR, 0) + ' lb/ft)', sym: 'M_{u,EQ}', eq: '\\max(M_{1},\\, M_{2})', sub: '\\max(' + rwrN(r.sq_base.c1.M, 0) + ',\\, ' + rwrN(r.sq_base.c2.M, 0) + ')', value: r.Mu_stem_eq, unit: 'lb-ft/ft', d: 0, ref: AA('Art. 11.6.5.1') })
       : rwrS({ id: 'MuEQ', label: 'Seismic combination U = 1.2D + 1.0E + 1.6H: ΔP_E,s = ΔP_E(H_s/H)² = ' + rwrN(r.sq_base.Pe, 1) + ' lb/ft at 0.6H_s', sym: 'M_{u,E}', eq: 'M_{u,1.6H} + 1.0\\,\\Delta P_{E,s}(0.6H_{s})', sub: rwrN(r.Mu_stem_strI, 0) + ' + ' + rwrN(r.sq_base.Pe, 1) + '(' + rwrN(0.6 * inp.Hs, 2) + ')', value: r.Mu_stem_eq, unit: 'lb-ft/ft', d: 0, ref: 'ACI 318-19 Eq. 5.3.1e' }));   // RWSQ
@@ -10864,7 +10878,7 @@ function rwrModel(r) {
     const subs = [], down = r.Mu_heel_net >= 0, fk = x => rwrN(x / 1000, 3), phiF = isA ? '0.90' : '0.75';
     const upR = (up, mem) => up ? rwUpSteps(r, up, mem).map(o => rwrS(Object.assign({}, o, { id: 'u' + o.id, ref: o.id === 'Vs' && r.upS ? 'ACI 318-19 §5.3.8' : '' }))) : null;   // RWUP; RWPC: no §5.3.8 without the split
     const upHr = upR(r.hcG_up, 'heel'), upTr = upR(r.tcG_up, 'toe');
-    const H1 = [rwrS({ id: 'wu', label: 'Factored downward load, uniform over the heel (' + (r.heel_min_governs ? (isA ? 'Strength Ia' : 'U = 0.9D + 1.6H') : (isA ? 'Strength I' : 'U = 1.2D + 1.6H')) + ' governs case A)', sym: 'w_{u}', eq: isA ? rwrN(r.gHeel[0], 2) + '\\,w_{EV} + ' + rwrN(r.gHeel[1], 2) + '\\gamma_{c} t_{f} + ' + rwrN(r.gHeel[2], 2) + '\\,q_{s} + ' + rwrN(r.gHeel[3], 2) + '\\,q_{LS}' : rwrN(r.gHeel[0], 1) + '(w_{EV} + \\gamma_{c} t_{f}) + ' + rwrN(r.gHeel[2], 1) + '\\,q_{s}', sub: 'w_{EV} = ' + rwrN(r.w_soil_col, 1) + ',\\; \\gamma_{c} t_{f} = ' + rwrN(inp.gamma_c * r.tf_ft, 1), value: r.wu_heel, unit: 'psf', d: 1 }),
+    const H1 = [rwrS({ id: 'wu', label: 'Factored downward load, uniform over the heel (' + (r.heel_min_governs ? (isA ? 'Strength Ia' : 'U = 0.9D + 1.6H') : (isA ? 'Strength I' : 'U = 1.2D + 1.6H')) + ' governs case A)', sym: 'w_{u}', eq: isA ? (r.etHeel !== 1 ? rwrN(r.etHeel, 3) + '\\big(' : '') + rwrN(r.gHeel[0], 2) + '\\,w_{EV} + ' + rwrN(r.gHeel[1], 2) + '\\gamma_{c} t_{f} + ' + rwrN(r.gHeel[2], 2) + '\\,q_{s} + ' + rwrN(r.gHeel[3], 2) + '\\,q_{LS}' + (r.etHeel !== 1 ? '\\big)' : '') : rwrN(r.gHeel[0], 1) + '(w_{EV} + \\gamma_{c} t_{f}) + ' + rwrN(r.gHeel[2], 1) + '\\,q_{s}', sub: 'w_{EV} = ' + rwrN(r.w_soil_col, 1) + ',\\; \\gamma_{c} t_{f} = ' + rwrN(inp.gamma_c * r.tf_ft, 1), value: r.wu_heel, unit: 'psf', d: 1 }),
       ...(upHr ? upHr.filter(o => !/^uM/.test(o.id)) : [   // RWUP (2026-11-07): water uplift split out (ACI)
       rwrS({ id: 'q0', label: 'Factored upward bearing at the stem face', sym: 'q_{u}(0)', eq: 'q_{u,back}', sub: '', value: r.q0h, unit: 'psf', d: 1, note: '' }),
       rwrS({ id: 'qL', label: 'Factored upward bearing at the heel tip', sym: 'q_{u}(L_{h})', eq: 'q_{u,heel}', sub: '', value: r.qLh, unit: 'psf', d: 1 })])];
@@ -10901,7 +10915,7 @@ function rwrModel(r) {
       { title: 'Heel Step 3 — Flexural steel (' + (down ? 'top' : 'bottom') + ' face)', ref: isA ? AA('Art. 5.6.3') : 'ACI 318-19 §9.5', steps: pre('h3', H3) },
       { title: 'Heel Step 4 — Shear and development', ref: isA ? AA('Art. 5.7.3') : 'ACI 318-19 Table 22.5.5.1(c)', steps: pre('h4', H4) }], { title: 'Heel' }), { type: 'note', text: (upHr && r.upS ? 'ΣV_u and its moment: [[st7/SumVu]], [[st7/SumVumin]] (the water uplift is split out in Heel Step 1, ACI 318-19 §5.3.8)' : upHr ? 'Partial contact: the soil block is worked in Heel Step 1 (RWPC)' : 'q_u,back and q_u,heel: ' + (isA ? '[[saf/quback]], [[saf/quheel]] (Strength Ia: [[saf/qubackIa]])' : '[[st7/quback]], [[st7/quheel]] (minimum-vertical case: [[st7/qubackmin]])')) + '; ' + (r.heel_min_governs ? 'the minimum-vertical case governs the heel.' : 'the maximum-vertical case governs the heel.') },
       { type: 'note', text: 'Serviceability (crack control) uses the unfactored no-relief moment.' }, onTab('heelFlex', 'Footing design tab, Heel (shear and moment diagrams)')]));
-    const sT = r.sel_toe, T1 = [rwrS({ id: 'wsw', label: 'Factored self-weight of the footing (downward)' + (r.toe_min_governs ? '; bearing from ' + (isA ? 'Strength Ia' : 'U = 0.9D + 1.6H') + ' governs the toe' : ''), sym: 'w_{sw}', eq: '0.9\\,\\gamma_{c} t_{f}', sub: '0.9(' + rwrN(inp.gamma_c, 0) + ')(' + rwrN(r.tf_ft, 3) + ')', value: r.wu_toe_down, unit: 'psf', d: 1 }),
+    const sT = r.sel_toe, T1 = [rwrS({ id: 'wsw', label: 'Factored self-weight of the footing (downward)' + (r.toe_min_governs ? '; bearing from ' + (isA ? 'Strength Ia' : 'U = 0.9D + 1.6H') + ' governs the toe' : ''), sym: 'w_{sw}', eq: (r.etaMn !== 1 ? '\\tfrac{1}{\\eta}\\,' : '') + '0.9\\,\\gamma_{c} t_{f}', sub: (r.etaMn !== 1 ? rwrN(r.etaMn, 3) + '\\cdot ' : '') + '0.9(' + rwrN(inp.gamma_c, 0) + ')(' + rwrN(r.tf_ft, 3) + ')', value: r.wu_toe_down, unit: 'psf', d: 1 }),
       ...(upTr ? upTr.filter(o => !/^uM/.test(o.id)) : []),   // RWUP
       rwrS({ id: 'q0', label: 'Net upward pressure at the front face', sym: 'q_{net}(0)', eq: (upTr ? 'q(0)' : 'q_{u,front}') + ' \\minus w_{sw}', sub: '', value: r.net_q0t, unit: 'psf', d: 1, }),
       rwrS({ id: 'qL', label: 'Net upward pressure at the toe tip', sym: 'q_{net}(L_{t})', eq: (upTr ? 'q(L_{t})' : 'q_{u,toe}') + ' \\minus w_{sw}', sub: '', value: r.net_qLt, unit: 'psf', d: 1 })];
@@ -12082,7 +12096,7 @@ function rwSelfChecks(r) {
       `earth ${n(Ms, 0)} vs ${n(r.sd_base_Msoil, 0)}; water ${n(Mw, 0)} vs ${n(r.sd_base_Mhyd, 0)} lb·ft/ft (unfactored)`, 'stemFlex');
     if (r.gEH != null && r.gWA != null) {
       const qll = r.isAASHTO ? r.q_ll_aashto : 0;
-      const Mu = r.gEH * Ms + r.gWA * Mw + r.gES * r.Ka * inp.q_sur * Hs * Hs / 2 + r.gLS * r.Ka * qll * Hs * Hs / 2;
+      const Mu = (r.etaMx || 1) * (r.gEH * Ms + r.gWA * Mw + r.gES * r.Ka * inp.q_sur * Hs * Hs / 2 + r.gLS * r.Ka * qll * Hs * Hs / 2);   // RW2H4: × η
       add('Stem base: factored M_u from the integrated pressures', near(Mu, r.Mu_stem_strI, 1e-4, 0.5),
         `γ_EH·${n(Ms, 0)} + γ_WA·${n(Mw, 0)} + γ_ES·K_a q_s H_s²/2 + γ_LS·K_a q_LL H_s²/2 = ${n(Mu, 0)} vs M_u = ${n(r.Mu_stem_strI, 0)} lb·ft/ft (${r.isAASHTO ? 'Strength I' : 'U = 1.6H'}; factors as the analysis: ${[r.gEH, r.gWA, r.gES, r.gLS].map(g => n(g, 2)).join(', ')})`, 'stemFlex');
     }
