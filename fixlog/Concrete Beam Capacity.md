@@ -5102,7 +5102,7 @@ Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summa
 - **Saved data:** no key or format change.
 - **Open items:** torsion in the longitudinal demand (5.7.3.6.3) with the full AASHTO torsion design.
 
-## 2026-11-07 — PR: claude/cbc-skin-reinf (CBM3: skin reinforcement checked where required — ACI 318-19 9.7.2.3 (h > 36 in) and AASHTO 5.6.7 (d_ℓ > 36 in); new input "Skin bars (each side face)", blank = none entered → FAIL where required; CALCULATION CHANGE (new checks), Beam Capacity tab; less conservative before)
+## 2026-11-07 — PR: claude/cbc-skin-reinf, PR #1001: https://github.com/mlococo88/All-Structural/pull/1001 (CBM3: skin reinforcement checked where required — ACI 318-19 9.7.2.3 (h > 36 in) and AASHTO 5.6.7 (d_ℓ > 36 in); new input "Skin bars (each side face)", blank = none entered → FAIL where required; CALCULATION CHANGE (new checks), Beam Capacity tab; less conservative before)
 
 Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (item M3).
 
