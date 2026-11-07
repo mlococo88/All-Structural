@@ -3238,7 +3238,7 @@ From the code-compliance review of 2026-11-07 (finding M3). Engineer asleep; dec
 - **How verified:** headless runs as above; drawing screenshot checked (SP3 on the chord top line left of the vertical, SP4 on the vertical's left line); `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks (only differences: the new field `autoPartial` and the two added planes). 0 console errors.
 - **Saved data:** new fields `autoPartial` (project) and `seg`, `loaded` (user planes); defaults keep existing user planes as they were. No key change.
 
-## 2026-11-07 — PR: claude/gusset-m7-slip — Optional bolt-slip check, Service II (advisory, off by default) (M7; no rating factor change)
+## 2026-11-07 — PR: claude/gusset-m7-slip (PR #1058: https://github.com/mlococo88/All-Structural/pull/1058) — Optional bolt-slip check, Service II (advisory, off by default) (M7; no rating factor change)
 
 From the code-compliance review of 2026-11-07 (finding M7).
 
