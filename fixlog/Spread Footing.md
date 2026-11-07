@@ -6215,3 +6215,25 @@ index 50f3837..c2d5000 100644
   - A renderer sweep over 38 inputs (selector picks included): no renderer error, no Out-of-date banner, no Report error.
   - check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser. Screenshots checked.
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sf-h2-phi-fy (SFPY: φ by net tensile strain uses ε_ty = f_y/E_s, ACI 318-19 Table 21.2.2 and 21.2.2.1; CALCULATION CHANGE for f_y > 60,000 psi only; Grade 60 and below unchanged)
+
+- **Problem:** `phiFlexure` used fixed strain limits, 0.002 (compression-controlled) and 0.005 (tension-controlled), for every f_y. ACI 318-19 Table 21.2.2 sets the limits at ε_ty and ε_ty + 0.003, with ε_ty = f_y/E_s (21.2.2.1); 0.002 is permitted only for Grade 60. For Grade 80 or 100 bars in the transition zone the old φ was too high (unconservative): pedestal P–M (strain compatibility, `pmContour.phiOf`), dowel interface tension (through `sfpmRatios`) and footing flexure (`flexCap`) all used it.
+- **Where / exact code (`Spread Footing.html`, Phase 2 engine, anchor `/* SFPY (2026-11-07)`):**
+  - Before: `function phiFlexure(eps_t){ … if(eps_t>=0.005)return 0.90; if(eps_t<=0.002)return 0.65; return 0.65+0.25*(eps_t-0.002)/0.003;}`
+  - After: new `function sfdEty(fy){return (fy>60000)?fy/29000000:0.002;}` and `function phiFlexure(eps_t,fy){ const ety=sfdEty(fy); if(eps_t>=ety+0.003)return 0.90; if(eps_t<=ety)return 0.65; return 0.65+0.25*(eps_t-ety)/0.003;}`
+  - `flexCap`: `const phi=phiFlexure(eps_t,fy);` (before `phiFlexure(eps_t)`).
+  - `pmContour` → `phiOf`: `return phiFlexure(et,fy);` (before `phiFlexure(et)`). `fy` is already a parameter of `pmContour`.
+  - Report, footing flexure step `phi`: the label now states ε_ty and the tension-controlled limit (display only).
+- **Governing provision:** ACI 318-19 Table 21.2.2 (rows (b), (d), (f): "Other" transverse reinforcement), 21.2.2.1 (ε_ty = f_y/E_s; 0.002 permitted for Grade 60), 20.2.2.2 (E_s = 29,000,000 psi). Checked on the printed pages (PDF pp. 394–395).
+- **Decision (pending engineer review):** for f_y < 60,000 psi the tool keeps ε_ty = 0.002. The code value f_y/E_s is smaller (Grade 40: 0.00138), which would give a higher φ; keeping 0.002 never raises φ above the previous value (conservative).
+- **Check case 1 (the function, Grade 80, ε_t = 0.0040):** ε_ty = 80,000/29,000,000 = 0.002759; tension-controlled at 0.005759.
+  - Before: φ = 0.65 + 0.25(0.0040 − 0.002)/0.003 = **0.817**.
+  - After: φ = 0.65 + 0.25(0.0040 − 0.002759)/0.003 = **0.753**.
+  - Grade 60, ε_t = 0.0040: 0.817 before and after (ε_ty = 0.002). Grade 80, ε_t = 0.0058: 0.900 (≥ 0.005759).
+- **Check case 2 (default project, f_y = 80,000 psi, harness case `fy80`):** pedestal P–M (biaxial), governing combination 1.2D + 1.0(+Wx) + L + 0.5S:
+  - Ped 1 ratio 0.0581 → **0.0647**; Ped 2 0.0636 → **0.0682** (capacity at P_u = 204.8 k: |φM_n| 251.55 → 234.65 kip-ft).
+  - Footing flexure unchanged: ε_t = 0.0285 / 0.0297 ≥ 0.005759, φ = 0.90.
+- **Grade 60 unchanged (proof):** with f_y = 60,000 psi, `sfdEty` returns 0.002 and 0.002 + 0.003 === 0.005 in IEEE arithmetic, so both branches and the interpolation are the same expressions as before. SF harness (16 cases: def, rev, sfe, sfe5, dir, sfe9, revEx, thin, revHook, edgeHook, slender, devsec, sey = Seymour as saved, wt, seyW, fy80), origin/main vs branch: `R` and `P2` 0 differences in every Grade 60 case (15 of 16); only `fy80` moves (52 values, all P–M ratios and capacities). Dashboard text identical in the Grade 60 cases; the Report differs only in the φ label. 0 console / KaTeX errors.
+- **How verified:** SF harness as above; `phiFlexure` evaluated in Node at the check points; check-syntax, spread-footing-scroll, phone-layout --tool sf, project-library --tool spreadfooting, start-chooser, spread-footing-nobear.
+- **Saved data:** none. **Other copies:** none (the φ function is local to this tool).
