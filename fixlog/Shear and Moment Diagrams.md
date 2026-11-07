@@ -1834,3 +1834,19 @@ Review of 2026-11-07, LOW findings. L7 (closed-form FER) is a separate PR. Every
   - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"` and `node tests/smoke/phone-layout.mjs --tool smd` pass.
   - `node tests/smoke/project-library.mjs --tool smd`: its main-vs-branch "results identical" checks fail by design (`tabR` V changes, for example 3.511105 → 3.511111, the closed form of the 3-span template, R_A = 3.5111 by the independent solver). Its save, undo and dialog checks pass.
 - **Saved data:** none changed. **Other copies:** Steel Beam Design has its own engine; not changed.
+
+## 2026-11-07 — PR: claude/sm-verify-test (PR #1120: https://github.com/mlococo88/All-Structural/pull/1120) (SMDV: solver regression test `tests/smd-verify.mjs`; review S3)   [test only; the tool is not changed]
+- **What:** new `tests/smd-verify.mjs`, `tests/smd/indep.mjs` (the review's independent solver) and `tests/smd/cases.json` (the review's 27 cases); a section in `tests/README.md`. The test drives the tool headless through its globals, because extracting the inline solver into `shared/` would be a refactor.
+- **Checks:**
+  - closed forms;
+  - the 27 cases against the independent solver;
+  - every fix of this review series with its hand values: CMB3 220 / 245 kip·ft; PATL 87.5 kip·ft and R_A 27.75 kip, plus an exhaustive 3-span pattern envelope; MRE 220 / −5 kip·ft; CZF; LV; FERX 70.3125;
+  - old saves keep their combinations and the pattern setting off;
+  - units;
+  - console errors.
+- **How verified:**
+  - On main (this tool as merged through #1118): ALL PASS, about 10 s.
+  - On the review's base a84df4f: it fails on the closed-form FER (FERX), combination 3 (CMB3), pattern loading (PATL) and the envelope M_R (MRE), as it should.
+- **Open items (pending the engineer; not changed by this series):**
+  - **O3:** the cantilever deflection limit uses l = the overhang length. The IBC 2018 Table 1604.3 footnote (l = 2 × the cantilever length) would be less conservative.
+  - **O9:** the Report has no Project No. / Computed by / Checked by fields.
