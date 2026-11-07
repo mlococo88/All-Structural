@@ -1835,7 +1835,7 @@ Review of 2026-11-07, LOW findings. L7 (closed-form FER) is a separate PR. Every
   - `node tests/smoke/project-library.mjs --tool smd`: its main-vs-branch "results identical" checks fail by design (`tabR` V changes, for example 3.511105 → 3.511111, the closed form of the 3-span template, R_A = 3.5111 by the independent solver). Its save, undo and dialog checks pass.
 - **Saved data:** none changed. **Other copies:** Steel Beam Design has its own engine; not changed.
 
-## 2026-11-07 — PR: claude/sm-verify-test (SMDV: solver regression test `tests/smd-verify.mjs`; review S3)   [test only; the tool is not changed]
+## 2026-11-07 — PR: claude/sm-verify-test (PR #1120: https://github.com/mlococo88/All-Structural/pull/1120) (SMDV: solver regression test `tests/smd-verify.mjs`; review S3)   [test only; the tool is not changed]
 - **What:** new `tests/smd-verify.mjs`, `tests/smd/indep.mjs` (the review's independent solver) and `tests/smd/cases.json` (the review's 27 cases); a section in `tests/README.md`. The test drives the tool headless through its globals, because extracting the inline solver into `shared/` would be a refactor.
 - **Checks:**
   - closed forms;
