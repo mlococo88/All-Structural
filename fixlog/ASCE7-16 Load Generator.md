@@ -1461,3 +1461,13 @@ Basis: ASCE/SEI 7-16 Fig. 29.3-1 (Cases A, B, C; Case C table and the (1.8 − s
 
 ### How verified
 - Headless Chromium main vs branch, 23 cases including 6 elements: `R` identical except the element fields above (`cf/p/F` for the small pipe only; new `caseB`, `caseC`, `Dsq`, messages); rendered text of all tabs and the Report (0 console / KaTeX errors); Excel built; `check-syntax`, `project-library --tool asce7` (ALL PASS), `phone-layout --tool asce7`, `engine handoffs`.
+
+## 2026-11-07 — PR: claude/asce7-partial-snow — A7P1: Sec. 7.5 partial loading reported as a load pattern (review M6 backlog)
+
+### A7P1. Partial loading   [new output] [no existing result changed]
+- **Where:** `solve()` snow block after `sn.balanced=…` (anchor `A7P1 (2026-11-07): Sec. 7.5 partial loading`): `sn.partial={full:sn.ps, half:0.5*sn.ps, gableExempt:(Gable && θ ≥ 2.38°)}`; `renderSnow` new panel `o-snpl` "Partial Loading" before "Design Snow Summary"; Excel snow section rows `psPL`, `phPL = 0.5*psPL` and a note row (replacing the "partial loading … not generated" row).
+- **Text updated (partial loading removed from the "not generated" lists):** Snow summary note, User Manual Part 1 exclusions list, Report disclaimer, Report Notes "Warnings and assumptions" (that string also still said "Snow drift and sliding snow" — corrected to "Sliding snow", completing A7L1), Excel "Assumptions and Limitations".
+- **Provision:** ASCE/SEI 7-16 Sec. 7.5 and Fig. 7.5-1; the exemption for members spanning perpendicular to the ridge of gable roofs with θ ≥ 2.38° (1/2 on 12) — **verify (ASCE 7-16 PDF unreadable)**.
+- **Decision (pending engineer review):** reported as a pattern (full p_s / 0.5 p_s, without the p_m minimum and without the rain-on-snow surcharge) for the member analysis; not carried into the combinations or the `buildingLoads` hand-off (HANDOFF §4.7 `S` stays the balanced load).
+- **Check cases:** Melrose default: p_s = 28.00 psf, half 14.00 psf. Variant B (gable 4:12): p_s = 45.44, half 22.72 psf; gable exemption noted (θ = 18.43° ≥ 2.38°).
+- **How verified:** headless Chromium main vs branch, 20 cases: `R` identical except the new `snow.partial`; hand-off identical; rendered text of all tabs and the Report: only the new panel, the text above and the Report section numbering after Snow (9.7 → 9.8 for Design Snow Summary); 0 console / KaTeX errors; Excel built. `check-syntax`; `project-library --tool asce7` against main differs only by `R.snow.partial` (intended), and with `--a HEAD` (same calculation) passes; `phone-layout --tool asce7`; `engine handoffs`.
