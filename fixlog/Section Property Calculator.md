@@ -3414,3 +3414,21 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Headless probe, main vs branch: only J of the models with n ≠ 1 changed (FHWA_n/3n/mp, the concrete-hole models, holeMulti, mixN). All other values are identical, including every model with all n = 1, all 1,660 shapes and the default project.
   - Every output tab built with the FHWA model: new labels shown, 0 console errors.
   - `project-library --tool spc`: the only differences are the 4 new fields `tors.comps[i].n`, `.nMix`, `tors.Jgeo` and `tors.Jn`. They are new keys in the results object; every value that existed before is identical. Save and open are ok.
+
+## 2026-11-07 — PR: claude/spc-l1-note — SPL1: plastic note with modulus ratios: concrete in tension is counted; composite Mp per AASHTO D6.1 / AISC I3.2a (review L1; wording only)
+
+- **Problem (review L1):** with n ≠ 1 the Plastic tab already said that the n-weighted PNA balance is meaningful only for yield-strength ratios. It did not say that concrete below or beside the PNA still counts in tension. For a slab of the FHWA girder geometry:
+  - with n = 0.85f′c/F_y = 0.068: Z·F_y = 6,469 k-ft against 6,462 k-ft by AASHTO D6.1 (+0.1 %);
+  - with the elastic n = 1/8: 7,020 k-ft (+8.6 %, unconservative if used as Mp).
+- **Fix (wording only):**
+  - Plastic tab note, `buildPlas`, anchor `<b>Transformed (n-weighted) areas</b>:`. Before: "…the PNA balances n·A, which is meaningful only when n is the ratio of yield strengths." After, appended: "Concrete is not treated as a no-tension material: parts below (or beside) the PNA count in tension at n times the reference yield stress, so with a concrete slab Z is not the composite plastic modulus. For the plastic moment of a composite girder use AASHTO LRFD 10th Ed. (2024) Appendix D6.1 or AISC 360-16 Sections I3.2a and I1.2a (plastic stress distribution; concrete at 0.85f′c in compression only, concrete in tension neglected)."
+  - The Report note of the Plastic section (`sprModel`, anchor `Plate model geometry (fillets neglected).`) gets the same sentence when n ≠ 1.
+- **Governing provisions cited (checked in the printed specifications):**
+  - AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), Appendix D6.1 "Plastic Moment".
+  - AISC 360-16, Section I3.2a (positive flexural strength of composite beams) with Section I1.2a (plastic stress distribution method).
+  - Cited, not quoted.
+- **§4:** no computed value changes. This is a citation added to a note.
+- **Verified:**
+  - `check-syntax` passes.
+  - Headless probe, main vs branch: 0 differences in any value (40 models, all 1,660 shapes, Validation 136/136).
+  - The note shows on the Plastic tab and in the Report model with n ≠ 1, and is absent with n = 1. 0 console errors.
