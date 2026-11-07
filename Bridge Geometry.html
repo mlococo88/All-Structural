@@ -507,6 +507,8 @@
     <p class="note vdatum_cap" style="margin:6px 0 0;" title="Label only — no datum conversion is applied.">Elevations in feet · vertical datum: not specified</p>
     <div class="noprint" style="display:flex; gap:8px; margin:6px 0;"><button class="sm ghost" type="button" onclick="exportTableCSV('tbl_wrap','top-of-deck')" title="Download the table above as a CSV file.">Export CSV</button><button class="sm ghost" type="button" onclick="window.print()" title="Print this tab.">Print</button></div>
     <div id="tbl_wrap" style="overflow-x:auto;"></div>
+    <!-- BGX9 (2026-11-07, review M5): girder lengths and tenth points along each girder -->
+    <details id="gird10_box" style="margin-top:12px;"><summary class="note" style="cursor:pointer;">Girder lines: bearing-to-bearing length and top-of-deck at tenth points along each girder</summary><div id="gird10_wrap" style="overflow-x:auto;"></div></details>
 
     <h2 class="sec" style="margin-top:26px;">Validation · known points</h2>
     <p class="note" style="margin-top:-6px;">Spot-check the model against points whose elevation you already know (e.g. from a plan or independent calc). Enter each point's station, transverse offset (from the PGL, offset 0), and expected top-of-deck elevation in its own box. Each is compared to the computed elevation and flagged if it differs by more than the tolerance.</p>
@@ -1342,8 +1344,8 @@ function buildEngine(){
   function supT(bl,w){ return PS ? psSupT(bl,w) : supportChordT(bl.sta)+w*Math.tan(effSkew(bl)*DEG); }
   function spanBrgs(k){ const su=sortedUnits(); if(k<1||k>su.length-1) return null; const A=bearingLinesFor(su[k-1]), B=bearingLinesFor(su[k]); return {A:A[A.length-1], B:B[0]}; }
   function girderSag(k, bi){ const sb=spanBrgs(k); if(!sb||!CH) return null; const gs=girdersForSpan(k); if(bi==null||gs[bi]==null) return null;
-    const w=gs[bi]-bridgeCL(), tA=supT(sb.A,w), tB=supT(sb.B,w), zA=deckPointCW(tA,w).z, zB=deckPointCW(tB,w).z, zM=deckPointCW((tA+tB)/2,w).z;
-    return { m:(zA+zB)/2-zM, tA, tB, tM:(tA+tB)/2, zA, zB, zM, w, len:Math.abs(tB-tA) }; }
+    const w=gs[bi]-bridgeCL(), tA=supT(sb.A,w), tB=supT(sb.B,w), pA=deckPointCW(tA,w), pB=deckPointCW(tB,w), zA=pA.z, zB=pB.z, zM=deckPointCW((tA+tB)/2,w).z;
+    return { m:(zA+zB)/2-zM, tA, tB, tM:(tA+tB)/2, zA, zB, zM, w, len:Math.hypot(pB.x-pA.x,pB.y-pA.y) }; }   // BGX9: len = plan length A to B (was |tB − tA|, the same with one chord)
   function crossDrop(t,w){ if(!(BF>0)) return 0; const z=deckPointCW(t,w).z; return Math.max(0, z-Math.min(deckPointCW(t,w-BF/2).z, deckPointCW(t,w+BF/2).z)); }
   // the spans a bearing line carries: back / ahead of a pier: one; a single line at a pier: both; an abutment: its span
   function brgSpans(bl){ const su=sortedUnits(); const j=su.findIndex(u=>Math.abs(u.sta-(bl.supSta!=null?bl.supSta:bl.sta))<1e-6); if(j<0) return [];
@@ -1576,7 +1578,7 @@ function compute(){
   { const R=sectionStaRange();
     if(ACTIVE_STA===null||ACTIVE_STA<R.s0-1e-6||ACTIVE_STA>R.s1+1e-6) ACTIVE_STA=(R.s0+R.s1)/2; }
   drawPlan('svg_plan_a'); drawProfile('svg_prof_a');
-  buildSpanSummary(); buildDerived(); drawSection(); buildTable(); drawHeatmap(); buildSeatTable(); buildSeatWork(); buildSeatSections(); syncSectionControls(); renderSnapButtons();
+  buildSpanSummary(); buildDerived(); drawSection(); buildTable(); drawHeatmap(); buildSeatTable(); buildSeatWork(); buildGirderTenths(); buildSeatSections(); syncSectionControls(); renderSnapButtons();
   render3DAlign(); render3DSub();
   if(typeof bgdwRefresh==='function') bgdwRefresh();   // BGDW: the Drawings tab, when it is open
   document.getElementById('plan_len').textContent='L = '+(ENG.align.staEnd-ENG.align.staStart).toFixed(1)+' ft';
@@ -2580,7 +2582,7 @@ function drawHeatmap(){
   // ---- span length labels (midspan, on centerline) ----
   if(LY('ly_sta')){ ctx.fillStyle=INK; ctx.textAlign='center'; ctx.font='10px monospace';
     for(let i=0;i<su.length-1;i++){ const sm=(su[i].sta+su[i+1].sta)/2; const p=ENG.getDeckPoint(sm,0);
-      ctx.fillText(`Span ${i+1}: ${(su[i+1].sta-su[i].sta).toFixed(2)} ft`, TX(p.x), TY(p.y)-2); } }
+      ctx.fillText(`Span ${i+1}: ${(su[i+1].sta-su[i].sta).toFixed(2)} ft (PGL)`+(ENG.chord?` · ${(ENG.supportChordT(su[i+1].sta)-ENG.supportChordT(su[i].sta)).toFixed(2)} ft (ref line)`:''), TX(p.x), TY(p.y)-2); } }   // BGX9 (M5): both lengths, named
 
   // ---- elevation nodes at girder×support ----
   /* BGDE (2026-11-06, engineer): at a pier with two bearing lines the top-of-deck labels of the back and ahead lines were drawn
@@ -2855,18 +2857,23 @@ function buildTable(){
         // crown is PGL-referenced here; chord w = crownOff(PGL) − bclOff(PGL) at this station
         const zCrown=ENG.chord ? ENG.deckPointCW(tRow, crO-bclOffAtSta(sta)).z : ENG.getDeckPoint(sta,crO).z;
         h+=`<tr${note?' style="background:rgba(27,110,120,.06)"':''}><td class="lbl">${span}</td><td class="lbl">${formatStation(sta)}</td><td class="lbl" style="color:var(--cyan);font-size:10px">${note}</td>`;
-        h+=TD('edgeL',zDeck(ed.l).toFixed(2));
-        h+=TD('curbL',zDeck(cl).toFixed(2));
-        gs.forEach((o,bi)=>h+=TD('g'+bi,zGird(o,bi).toFixed(2)));
+        /* BGX9 (review M4): a point of this row that lies beyond the skewed deck end (its t outside the deck's ends at that
+           offset) is shown in grey italics with a tooltip; the value is unchanged */
+        const off=(o)=>{ if(!ENG.chord) return false; const e=ENG.chordExtent(o-bridgeCL()); return tRow<e.t0-1e-6||tRow>e.t1+1e-6; };
+        const TDo=(key,val,o)=> colVisible(key)?(off(o)?`<td style="color:var(--ink-soft);font-style:italic" title="Beyond the skewed deck end: the deck does not reach this point on this row.">${val}</td>`:`<td>${val}</td>`):'';
+        h+=TDo('edgeL',zDeck(ed.l).toFixed(2),ed.l);
+        h+=TDo('curbL',zDeck(cl).toFixed(2),cl);
+        gs.forEach((o,bi)=>h+=TDo('g'+bi,zGird(o,bi).toFixed(2),o));
         h+=TD('pgl',zPGL.toFixed(2));
         h+=TD('crown',zCrown.toFixed(2));
         h+=TD('bcl',zBCL.toFixed(2));
-        h+=TD('curbR',zDeck(cr).toFixed(2));
-        h+=TD('edgeR',zDeck(ed.r).toFixed(2));
+        h+=TDo('curbR',zDeck(cr).toFixed(2),cr);
+        h+=TDo('edgeR',zDeck(ed.r).toFixed(2),ed.r);
         h+='</tr>';
       });
     }
-    h+=`</tbody></table><p class="note">${seat?'Beam-seat':'Top-of-deck'} elevations per span. Rows are the even divisions plus each support centerline and bearing line (highlighted). Curb offsets interpolate between supports; columns G1..Gn use the global girder set (per-span overrides apply when counts match).</p>`;
+    h+=`</tbody></table><p class="note">${seat?'Beam-seat':'Top-of-deck'} elevations per span. Rows are the even divisions plus each support centerline and bearing line (highlighted). Curb offsets interpolate between supports; columns G1..Gn use the global girder set (per-span overrides apply when counts match).`+
+      ` Every row, including those named "… CL" and "… brg", is a line square to the construction reference line through the reference-line point at that station; on a skewed support it is <b>not</b> the support line. For elevations along the skewed support and bearing lines use Rows = bearing lines (above) or the Beam Seat tab. Grey italic values lie beyond the skewed deck end.</p>`;   // BGX9 (review M4)
   } else {
     h='<table class="wide"><thead><tr><th class="lbl">Line</th><th>Skew°</th>'+
       TH('edgeL','<th>Edge L</th>')+TH('curbL','<th>Curb L</th>');
@@ -2950,6 +2957,20 @@ function seatWorkText(s){ const P=s.parts; if(!P) return '';
   const extra=on?(P.sag+P.cross):0;
   return `seat = TD − t_s − (h_min + c`+(on?' + m_sag + Δ_cs':'')+`) − d − t_brg = ${f(P.td)} − ${f(P.slab)} − (${f(P.hmin)} + ${f(P.camber)}`+(on?` + ${f(P.sag)} + ${f(P.cross)}`:'')+`) − ${f(P.beam)} − ${f(P.bearing)} = ${f(P.td-P.slab-P.hmin-P.camber-extra-P.beam-P.bearing)} ft`+
     (on?` [${sagTxt}; Δ_cs = cross slope × b_f/2 = ${f(P.cross)}]`:` [Seat terms off: ${sagTxt}, Δ_cs ${f(P.cross)} not applied]`);
+}
+/* BGX9 (review M5): for each span and girder, the bearing-to-bearing length along the girder (the bearing points of the span's
+   start and end bearing lines) and the top of deck over the girder at 0.0, 0.1 … 1.0 of that length. With per-span chords each
+   girder is straight within its span, so these are points on the girder line. */
+function buildGirderTenths(){
+  const box=document.getElementById('gird10_wrap'); if(!box) return; const su=sortedUnits();
+  if(su.length<2||!ENG||!ENG.chord||!ENG.spanBrgs){ box.innerHTML='<p class="note">Define at least two supports.</p>'; return; }
+  let h='<table class="wide" style="font-size:11px"><thead><tr><th class="lbl">Span</th><th class="lbl">Girder</th><th class="lbl">from &rarr; to</th><th title="Bearing-to-bearing length along the girder.">L (ft)</th>'+[0,1,2,3,4,5,6,7,8,9,10].map(k=>`<th>${(k/10).toFixed(1)}</th>`).join('')+'</tr></thead><tbody>';
+  for(let k=1;k<=su.length-1;k++){ const sb=ENG.spanBrgs(k);
+    girdersForSpan(k).forEach((o,bi)=>{ const w=o-bridgeCL(), tA=ENG.supT(sb.A,w), tB=ENG.supT(sb.B,w), pA=ENG.deckPointCW(tA,w), pB=ENG.deckPointCW(tB,w);
+      h+=`<tr><td class="lbl">${k}</td><td class="lbl">G${bi+1}@${w.toFixed(2)}</td><td class="lbl">${sb.A.label} &rarr; ${sb.B.label}</td><td>${Math.hypot(pB.x-pA.x,pB.y-pA.y).toFixed(2)}</td>`+
+        [0,1,2,3,4,5,6,7,8,9,10].map(j=>`<td>${ENG.deckPointCW(tA+(tB-tA)*j/10,w).z.toFixed(3)}</td>`).join('')+'</tr>'; }); }
+  h+='</tbody></table><p class="note" style="margin:4px 0 0">Top of deck (ft) over each girder at tenth points of its bearing-to-bearing length (0.0 = the span\'s start bearing line, 1.0 = its end bearing line); L is measured along the girder in plan. For haunch and screed work (CTDOT BDM 8.3.2 asks for deck elevations at bearings and tenth points) subtract the deck thickness and add the dead-load deflections; those are not modelled here.</p>';
+  box.innerHTML=h;
 }
 function buildSeatWork(){
   const box=document.getElementById('seat_work_wrap'); if(!box) return;
@@ -3186,8 +3207,15 @@ function buildDerived(){
 }
 function buildSpanSummary(){
   const su=sortedUnits();
-  let h='<table><thead><tr><th class="lbl">Span</th><th class="lbl">From</th><th class="lbl">To</th><th>Length</th></tr></thead><tbody>';
-  for(let i=0;i<su.length-1;i++) h+=`<tr><td class="lbl">${i+1}</td><td class="lbl">${su[i].name}</td><td class="lbl">${su[i+1].name}</td><td>${(su[i+1].sta-su[i].sta).toFixed(2)}</td></tr>`;
+  /* BGX9 (review M5): three span lengths, each named: the PGL station difference (as before), the length along the construction
+     reference line between the support points (the girders' span; what LL & DL receives) and the bearing-to-bearing length of
+     each girder (shortest – longest) */
+  let h='<table><thead><tr><th class="lbl">Span</th><th class="lbl">From</th><th class="lbl">To</th><th title="Difference of the support stations along the PGL (as before).">Length, PGL stations (ft)</th><th title="Distance along the construction reference line between the two support points: the girders\' span, as sent to LL &amp; DL (support centerlines).">Along ref line (ft)</th><th title="Bearing-to-bearing length along each girder of the span, shortest – longest (see Girder lines, Top of Deck Output).">Girder brg–brg (ft)</th></tr></thead><tbody>';
+  for(let i=0;i<su.length-1;i++){ let rl='—', gb='—';
+    if(ENG&&ENG.chord){ rl=(ENG.supportChordT(su[i+1].sta)-ENG.supportChordT(su[i].sta)).toFixed(2);
+      if(ENG.girderSag){ const L=girdersForSpan(i+1).map((o,bi)=>{ const r=ENG.girderSag(i+1,bi); return r?r.len:NaN; }).filter(isFinite);
+        if(L.length) gb=Math.min(...L).toFixed(2)+(Math.max(...L)-Math.min(...L)>0.005?' – '+Math.max(...L).toFixed(2):''); } }
+    h+=`<tr><td class="lbl">${i+1}</td><td class="lbl">${su[i].name}</td><td class="lbl">${su[i+1].name}</td><td>${(su[i+1].sta-su[i].sta).toFixed(2)}</td><td>${rl}</td><td>${gb}</td></tr>`; }
   h+='</tbody></table>';
   document.getElementById('span_wrap').innerHTML=h;
 }
@@ -6187,10 +6215,10 @@ function bgdwBuild(){
   tableSheets('tal','ALIGNMENT AND PROFILE DATA',['NO.','ELEMENT','BEGIN STA','END STA','BEGIN BEARING','END BEARING','RADIUS (FT)','LENGTH (FT)'],aRows,['align','Alignment'],
     ('POB STA '+formatStation(E.align.staStart)+', N '+(+document.getElementById('h_y0').value||0)+', E '+(+document.getElementById('h_x0').value||0)+'.  RADIUS + = CURVE TO THE RIGHT.  VERTICAL DATUM: '+((typeof vDatumLabel==='function'&&vDatumLabel())||'NOT SPECIFIED')).toUpperCase());
   const sRows=[]; su.forEach((u,j)=>bearingLinesFor(u).forEach((bl,bj)=>sRows.push([bj?'':u.name.toUpperCase(),bj?'':(u.type==='abut'?'ABUTMENT':'PIER'),bj?'':formatStation(u.sta),bj?'':(+u.skew||0).toFixed(2)+'°',bl.label.toUpperCase(),formatStation(bl.sta),String(bearingSpan(u,bl,su))])));
-  sRows.push(['','','','','','','']); sRows.push(['SPAN','FROM','TO','LENGTH (FT)','','','']);
-  for(let i=0;i<su.length-1;i++) sRows.push([String(i+1),su[i].name.toUpperCase(),su[i+1].name.toUpperCase(),(su[i+1].sta-su[i].sta).toFixed(2),'','','']);
+  sRows.push(['','','','','','','']); sRows.push(['SPAN','FROM','TO','LENGTH, PGL STA (FT)','ALONG REF LINE (FT)','','']);   // BGX9 (M5)
+  for(let i=0;i<su.length-1;i++) sRows.push([String(i+1),su[i].name.toUpperCase(),su[i+1].name.toUpperCase(),(su[i+1].sta-su[i].sta).toFixed(2),(E.supportChordT(su[i+1].sta)-E.supportChordT(su[i].sta)).toFixed(2),'','']);
   tableSheets('tsup','SUPPORTS AND BEARING LINES',['SUPPORT','TYPE','CL STATION','SKEW','BEARING LINE','STATION','SPAN'],sRows,['bridge','Bridge'],
-    'SKEW FROM THE NORMAL TO THE REFERENCE LINE (ABUT 1 TO ABUT 2 CHORD).  SPAN LENGTHS = DIFFERENCE OF PGL STATIONS (SPAN SUMMARY, BRIDGE TAB).');
+    ('SKEW FROM THE '+(skewDatumUI()==='align'?'NORMAL TO THE PGL AT THE SUPPORT (ALIGNMENT NORMAL)':(E.frameInfo().poly?'NORMAL TO THE REFERENCE LINE (SPAN CHORD; AT A PIER THE BISECTOR OF THE TWO CHORDS)':'NORMAL TO THE REFERENCE LINE (ABUT 1 TO ABUT 2 CHORD)'))+'.  SPAN LENGTHS: DIFFERENCE OF PGL STATIONS, AND ALONG THE REFERENCE LINE BETWEEN SUPPORT POINTS (SPAN SUMMARY, BRIDGE TAB).'));   // BGX9
   const domTable=sel=>{ const t=document.querySelector(sel); if(!t) return null;
     const txt=c=>c.textContent.replace(/\s+/g,' ').trim();
     const head=[...t.querySelectorAll('thead th')].map(txt), rows=[...t.querySelectorAll('tbody tr')].map(tr=>[...tr.children].map(txt));
