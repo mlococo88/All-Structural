@@ -2557,8 +2557,20 @@ function calcAll(inp) {
   const FOS_SL_E = hasSeismic ? (Fh + 0.7 * Pe_inc > 0 ? Fr / (Fh + 0.7 * Pe_inc) : 999) : null;   // RWIB: 0.7E, FS ≥ 1.1
 
   // ── Bearing pressures (service) ──────────────────────────────
-  const x_R = SumV > 0 ? (Ms - Mo) / SumV : B / 2;
+  // RW2H1 (2026-11-07): ACI/IBC with earthquake — the service bearing and the eccentricity are checked for the static case (E = 0)
+  // AND the case with the seismic increment (1.0·ΔP_E, as before); the case with the larger |e| governs (ΣV is the same in both, so
+  // it also gives the larger q_max). IBC 2018 §1807.2.3 / ASCE 7-16 §2.4.1: the combinations without E must be satisfied on their own.
+  // Was: the 1.0E case only (M_o incl. M_o,E). AASHTO mode: the service reference keeps M_o (unchanged).
+  const xR_E = SumV > 0 ? (Ms - Mo) / SumV : B / 2, e_E = B / 2 - xR_E;
+  const xR_S = SumV > 0 ? (Ms - Mo_st) / SumV : B / 2, e_S = B / 2 - xR_S;
+  const brg_static = !isAASHTO && hasSeismic && Math.abs(e_S) > Math.abs(e_E);
+  const Mo_brg = brg_static ? Mo_st : Mo;
+  const x_R = brg_static ? xR_S : xR_E;
   const e   = B / 2 - x_R;
+  const qmaxOf = (ee, xr) => Math.abs(ee) <= B / 6 ? SumV / B * (1 + 6 * Math.abs(ee) / B) : (ee > 0 ? (xr > 0 ? 2 * SumV / (3 * xr) : 0) : 2 * SumV / (3 * (B - xr)));
+  const brgAlt = (!isAASHTO && hasSeismic) ? (brg_static
+    ? { gov: 'static', other: 'seismic', Mo, x_R: xR_E, e: e_E, q_max: qmaxOf(e_E, xR_E) }
+    : { gov: 'seismic', other: 'static', Mo: Mo_st, x_R: xR_S, e: e_S, q_max: qmaxOf(e_S, xR_S) }) : null;
   const tension_zone = Math.abs(e) > B / 6;
   // RWEC (2026-11-07): ACI-mode eccentricity limit (engineer decision, audit item 7). Neither ACI 318-19 §13.2.6.1 nor IBC 2018
   // §1807.2.1 sets a maximum e; the user picks middle third (B/6, default for new projects), B/4, or none (information only;
@@ -4094,7 +4106,7 @@ function calcAll(inp) {
     col_axial_ratio, col_axial_ok, Pu_stem_axial, Ag_stem,
     // Stability
     FOS_OT, FOS_SL, e, x_R, tension_zone,
-    q_toe, q_heel, q_max, bearing_ok, Fr,
+    q_toe, q_heel, q_max, bearing_ok, Fr, Mo_brg, brgAlt,   // RW2H1
     // Factored bearing
     SumVu, Mou, Msu, x_Ru, e_u: B/2 - x_Ru,
     comb: { u12: CMB_U12, u09: CMB_U09 },   // RW3F (2026-11-06): ACI combination factors, returned for the 3D view (exposure only)
@@ -5464,10 +5476,20 @@ function renderStabilitySoil(r) {
   h += `<div class="card" style="margin-bottom:16px;">
     <div class="card-hd"><span class="card-title">Step 6 — Bearing Pressure Check</span><span class="card-ref">service loads · q_a = ${F(inp.qa,0)} psf</span></div>
     <div class="card-body">`;
-  h += eq('Location of resultant from toe',
-    `\\bar{x} = \\frac{M_{stab} - M_{OT}}{\\Sigma V} = \\frac{${F(r.Ms,1)} - ${F(r.Mo,1)}}{${F(r.SumV,1)}} = \\boxed{${F(r.x_R,4)}\\ \\text{ft}}`,'',
+  if (r.brgAlt) {   // RW2H1 (2026-11-07)
+    const A2 = r.brgAlt, mS = A2.gov === 'static' ? r.Mo_brg : A2.Mo, mE = A2.gov === 'static' ? A2.Mo : r.Mo_brg;
+    const xS = A2.gov === 'static' ? r.x_R : A2.x_R, xE = A2.gov === 'static' ? A2.x_R : r.x_R;
+    const eS = r.B/2 - xS, eE = r.B/2 - xE, qS = A2.gov === 'static' ? r.q_max : A2.q_max, qE = A2.gov === 'static' ? A2.q_max : r.q_max;
+    h += `<div class="alert info" style="margin-bottom:8px;">\u2139 <b>Earthquake included (k_h &gt; 0):</b> bearing and eccentricity are checked for the static case (E = 0) and for the case with the seismic increment 1.0\u00b7\u0394P_E at 0.6H; the case with the larger |e| (and q_max, \u03a3V being the same) governs and is worked below. IBC 2018 \u00a71807.2.3 / ASCE 7-16 \u00a72.4.1: the load combinations without E must be satisfied on their own.</div>`;
+    h += eq('Both cases: resultant, eccentricity and peak pressure',
+      `\\text{static: } \\bar{x} = \\frac{${F(r.Ms,1)} - ${F(mS,1)}}{${F(r.SumV,1)}} = ${F(xS,4)},\\ e = ${F(eS,4)},\\ q_{max} = ${F(qS,1)};\\quad \\text{seismic: } \\bar{x} = \\frac{${F(r.Ms,1)} - ${F(mE,1)}}{${F(r.SumV,1)}} = ${F(xE,4)},\\ e = ${F(eE,4)},\\ q_{max} = ${F(qE,1)}\\ \\Rightarrow\\ \\text{${A2.gov} governs}`, 'IBC 1807.2.3',
+      [{sym:'M_{OT,0}', desc:'overturning moment without E', val:F(mS,1), unit:'lb·ft/ft'},
+       {sym:'M_{OT,E}', desc:'overturning moment with 1.0\u00b7M_o,E = 1.0\u0394P_E(0.6H)', val:F(mE,1), unit:'lb·ft/ft'}]);
+  }
+  h += eq('Location of resultant from toe' + (r.brgAlt ? ' \u2014 ' + r.brgAlt.gov + ' case (governs)' : ''),
+    `\\bar{x} = \\frac{M_{stab} - M_{OT}}{\\Sigma V} = \\frac{${F(r.Ms,1)} - ${F(r.Mo_brg,1)}}{${F(r.SumV,1)}} = \\boxed{${F(r.x_R,4)}\\ \\text{ft}}`,'',
     [{sym:'M_{stab}', desc:'stabilizing moment', val:F(r.Ms,1), unit:'lb·ft/ft'},
-     {sym:'M_{OT}', desc:'overturning moment', val:F(r.Mo,1), unit:'lb·ft/ft'},
+     {sym:'M_{OT}', desc:'overturning moment' + (r.brgAlt ? (r.brgAlt.gov === 'static' ? ' (E = 0)' : ' (incl. 1.0\u00b7M_o,E)') : ''), val:F(r.Mo_brg,1), unit:'lb·ft/ft'},
      {sym:'\\Sigma V', desc:'total vertical force', val:F(r.SumV,1), unit:'lb/ft'},
      {sym:'\\bar{x}', desc:'resultant location from toe', val:F(r.x_R,4), unit:'ft'}]);
   h += eq('Eccentricity from footing centerline',
@@ -10603,7 +10625,7 @@ function rwrModel(r) {
       if (r.hasSeismic) { st.push(rwrS({ id: 'FOSE', label: 'With earthquake: 0.7 × ΔP_E, FOS ≥ 1.1 (IBC 2018 §1807.2.3 Exception)', sym: 'FOS_{SL,E}', eq: '\\frac{F_{r}}{F_{h} + 0.7\\Delta P_{E}}', sub: '\\frac{' + rwrN(r.Fr, 1) + '}{' + rwrN(r.Fh, 1) + ' + 0.7(' + rwrN(r.Pe_inc, 1) + ')}', value: r.FOS_SL_E, unit: '', d: 3, ok: ok('slidingE'), ref: 'IBC 2018 §1807.2.3' })); CK.slidingE = 'st5/FOSE'; }   // RWIB
       CK.sliding = 'st5/dc';
       subs.push(sub('Step 5 — Sliding check (μ = ' + rwrN(inp.mu, 4) + ')', [rwrItem('st5', [{ title: 'Sliding', steps: st }]), onTab('stabSlide')])); }
-    { const st = [rwrS({ id: 'xR', label: 'Location of the resultant from the toe', sym: '\\bar{x}', eq: '\\frac{M_{stab} \\minus M_{OT}}{\\sum V}', sub: '\\frac{' + rwrN(r.Ms, 1) + ' \\minus ' + rwrN(r.Mo, 1) + '}{' + rwrN(r.SumV, 1) + '}', value: r.x_R, unit: 'ft', d: 4 }),
+    { const st = [rwrS({ id: 'xR', label: 'Location of the resultant from the toe' + (r.brgAlt ? ', ' + r.brgAlt.gov + ' case (governs; the ' + r.brgAlt.other + ' case gives x̄ = ' + rwrN(r.brgAlt.x_R, 4) + ' ft, e = ' + rwrN(r.brgAlt.e, 4) + ' ft, q_max = ' + rwrN(r.brgAlt.q_max, 1) + ' psf with M_OT = ' + rwrN(r.brgAlt.Mo, 1) + '; IBC 2018 §1807.2.3: with and without E)' : ''), sym: '\\bar{x}', eq: '\\frac{M_{stab} \\minus M_{OT}}{\\sum V}', sub: '\\frac{' + rwrN(r.Ms, 1) + ' \\minus ' + rwrN(r.Mo_brg, 1) + '}{' + rwrN(r.SumV, 1) + '}', value: r.x_R, unit: 'ft', d: 4 }),   // RW2H1
       rwrS({ id: 'e', label: 'Eccentricity from the footing centreline (B/6 = ' + rwrN(r.B / 6, 4) + ' ft)', sym: 'e', eq: '\\frac{B}{2} \\minus \\bar{x}', sub: '\\frac{' + rwrN(r.B, 3) + '}{2} \\minus ' + rwrN(r.x_R, 4), value: r.e, unit: 'ft', d: 4 })];
       if (!r.tension_zone) { st.push(rwrS({ id: 'qtoe', label: 'Bearing pressure at the toe, resultant within the kern (trapezoidal)', sym: 'q_{toe}', eq: '\\frac{\\sum V}{B}\\left(1 + \\frac{6e}{B}\\right)', sub: '\\frac{' + rwrN(r.SumV, 1) + '}{' + rwrN(r.B, 3) + '}\\left(1 + \\frac{6(' + rwrN(r.e, 4) + ')}{' + rwrN(r.B, 3) + '}\\right)', value: r.q_toe, unit: 'psf', d: 1 }));
         st.push(rwrS({ id: 'qheel', label: 'Bearing pressure at the heel', sym: 'q_{heel}', eq: '\\frac{\\sum V}{B}\\left(1 \\minus \\frac{6e}{B}\\right)', sub: '\\frac{' + rwrN(r.SumV, 1) + '}{' + rwrN(r.B, 3) + '}\\left(1 \\minus \\frac{6(' + rwrN(r.e, 4) + ')}{' + rwrN(r.B, 3) + '}\\right)', value: r.q_heel, unit: 'psf', d: 1 })); }
@@ -12069,7 +12091,7 @@ function rwSelfChecks(r) {
   const Mr = Wf * B / 2 + Wr * xr + Wt * xt + r.Wsoil * r.x_soil + r.Wsur * xs + r.Pa_tri_v * B + r.W_col * r.x_col
     + (r.W_bar || 0) * (r.x_bar || 0) - r.F_uplift * (r.x_uplift || 0) * (r.hasWT ? 1 : 0) + (r.Ms_Pp || 0);
   const Mo = r.Pa_tri_h * r.y_Pa + r.Pa_sur_h * r.Hp / 2 + (r.hasWT ? r.F_hyd * r.hw / 3 : 0) + (r.Mo_seis || 0);
-  const xR = (Mr - Mo) / V;
+  const xR = (Mr - Mo + (r.Mo_brg != null ? r.Mo - r.Mo_brg : 0)) / V;   // RW2H1: the governing bearing case (static or with 1.0E)
   add('ΣM about the toe (service)', near(Mr, r.Ms, 1e-9, 1e-3) && near(Mo, r.Mo, 1e-9, 1e-3),
     `resisting ${n(Mr, 0)} vs M_s = ${n(r.Ms, 0)}; overturning ${n(Mo, 0)} vs M_o = ${n(r.Mo, 0)} lb·ft/ft (stem centroid by rectangle + triangle)`, 'stabOT');
   add('Resultant location x̄ = (M_s − M_o) / ΣV', near(xR, r.x_R, 1e-9, 1e-6), `${n(xR, 4)} vs x̄ = ${n(r.x_R, 4)} ft; e = B/2 − x̄ = ${n(B / 2 - xR, 4)} vs ${n(r.e, 4)} ft`, 'stabBrg');
