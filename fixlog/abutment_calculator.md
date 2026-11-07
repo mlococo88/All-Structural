@@ -15657,3 +15657,203 @@ index ce6e74c..92a3437 100644
 -        `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
 +        q.EQtSrc==="analysis"? `EQ_{sup,t} = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat (entered from the seismic analysis, panel I-11)}` : `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
 ```
+
+## 2026-11-07 — PR: claude/abut-m4-wingstrip (PR #1013: https://github.com/mlococo88/All-Structural/pull/1013) (ABM4: attached-wing junction — the default method takes, per limit state, the larger of the total moment over H₀ and the most loaded strip; a new option keeps the averaged moment at strength with crack control on the strip)   [calc change] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M4 (fix log WING open item 1).
+
+### ABM4. Junction design moment
+- **Where:** `computeWing`, attached branch (anchor `const jm=w.jMethod==="strip"?"strip":(w.jMethod==="avgOnly"?"avgOnly":"env"); W.jMode=jm;`, functions `comps`, `buildLS`); panel I-13 selector `wing.jMethod` (labels; new option `avgOnly`); Tab 9 §9.2 per-foot equations and the limit-state table (method named per row); input echo (`junction method:`).
+- **Before:** `jMethod = "avg"` (default): every limit state used m = M/H₀, v = F/H₀ (total junction moment spread over the junction height); `"strip"`: the most loaded 1-ft horizontal strip.
+- **After:** `"avg"` (default, label "Larger of: total moment over H₀ and the most loaded 1-ft strip"): both are computed; in each limit state the one with the larger M_u governs (its V_u with it). `"strip"`: unchanged. New `"avgOnly"`: the averaged moment at Strength I / Extreme Events (yield-line redistribution, engineer's choice) with Service I (crack control) on the strip.
+- **Problem:** the averaged moment assumes full redistribution along the junction height. That cannot be relied on for crack control at service, and the most-loaded strip gives about twice the moment at the default geometry: unconservative.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 5.6.3 (flexural resistance), 5.6.7 (crack control at Service I), 11.6.1.5.2 (wingwall reinforcement at the junction). The method of distributing the junction moment is not specified; the strip is the elastic, conservative distribution.
+- **Check case (built-in project: wing L = 10 ft, H₀ = 19 ft, H_L = 8 ft, t = 1.5 ft, #6 @ 9 horizontal; K_a = 0.30726, γ = 0.120, h_eq = 2.1 ft; γ_EH = 1.50, γ_LS = 1.75):**
+  - Before (avg): m_EH = M_EH/H₀ = 6.929, m_LS = 2.264 kip-ft/ft → M_u = 1.5·6.929 + 1.75·2.264 = **14.36 kip-ft/ft**; flexure D/C **0.358**; Service I M_s = 9.19; crack control D/C 0.225 (s_max 40.0 in).
+  - After (strip governs, y* = 11.0 ft): m_EH = 14.712, m_LS = 3.687 → M_u = 1.5·14.712 + 1.75·3.687 = **28.52 kip-ft/ft**; flexure D/C **0.711**; shear D/C 0.143 → 0.299; minimum steel 0.476 → 0.693; Service I M_s = 18.40, crack control D/C 0.225 → 0.511 (s_max 17.6 in). All pass.
+  - Integral abutment built-in wing: flexure D/C 0.594 → **1.004 (FAIL)**.
+  - `avgOnly`: strength as before (14.36), Service I on the strip (crack D/C 0.511).
+- **Saved data:** no key or format change. Saved projects with `"avg"` (the default) get the larger of the two methods (more conservative); `"strip"` projects are unchanged.
+- **How verified:** headless origin/main vs branch, 22 scenarios. Every project with an attached wing on "avg" moves as above. The independent wing and the strip method do not move (the strip scenario only gains the new fields). `node tests/smoke/project-library.mjs --tool abutment`: the 4 main-vs-branch "results identical" checks differ by design (the default project's wing values); against this branch itself (`--a HEAD`) ALL PASS. All tabs + Report render, 0 console errors; self-test passes (its benchmark has no wing loads); `check-syntax` passes.
+- **Decision (pending engineer review):** the default is the envelope. The averaged moment at strength remains available (`avgOnly`) when the engineer accepts yield-line redistribution, but crack control always uses the strip. WING open item 1 is settled this way unless the engineer decides otherwise.
+- **Other copies:** none.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 92a3437..edde439 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -2417 +2417 @@ function buildInputs(){
+-    ${att?selRow("Junction design moment","wing.jMethod",[["avg","Total junction moment spread over the junction height"],["strip","Most loaded 1-ft horizontal strip"]]):""}
++    ${att?selRow("Junction design moment","wing.jMethod",[["avg","Larger of: total moment over H₀ and the most loaded 1-ft strip (per limit state)"],["strip","Most loaded 1-ft horizontal strip"],["avgOnly","Total moment over H₀ at strength (yield-line redistribution); crack control on the strip"]]):""}
+@@ -2779,6 +2779,10 @@ function computeWing(R,X){
+-    const avg=w.jMethod!=="strip"; W.avg=avg;
+-    const per=(M,Fv,ms,vs)=>avg? {m:M/H0, v:Fv/H0} : {m:ms, v:vs};
+-    const sEH=per(Tst.MEH,Tst.FEH,sg.mEH,sg.vEH), sLS=per(Tst.MLS,Tst.FLS,sg.mLS,sg.vLS);
+-    const e2=W.stripEE2, eEH=per(Tee2.MEH,Tee2.FEH,e2.mEH,e2.vEH), eLS=per(Tee2.MLS,Tee2.FLS,e2.mLS,e2.vLS);
+-    const sEQ=per(TEQ.M,TEQ.F,W.stripEQ.m,W.stripEQ.v), sCT={m:MCT/H0, v:(CT?CT.F:0)/H0};
+-    const LS={};
++    /* ABM4 (2026-11-07): junction method. "avg" (the default): per limit state, the larger M_u of the total moment spread over H₀ and the most
++       loaded 1-ft strip governs (with its V_u); "strip": the strip; "avgOnly": the total moment over H₀ at the strength / extreme limit states
++       (yield-line redistribution, engineer's choice) with Service I (crack control) on the strip — redistribution does not apply at service. */
++    const jm=w.jMethod==="strip"?"strip":(w.jMethod==="avgOnly"?"avgOnly":"env"); W.jMode=jm;
++    const avg=jm!=="strip"; W.avg=avg;
++    const sCT={m:MCT/H0, v:(CT?CT.F:0)/H0};
++    const comps=useAvg=>{ const per=(M,Fv,ms,vs)=>useAvg? {m:M/H0, v:Fv/H0} : {m:ms, v:vs}, e2=W.stripEE2;
++      return {sEH:per(Tst.MEH,Tst.FEH,sg.mEH,sg.vEH), sLS:per(Tst.MLS,Tst.FLS,sg.mLS,sg.vLS), eEH:per(Tee2.MEH,Tee2.FEH,e2.mEH,e2.vEH), eLS:per(Tee2.MLS,Tee2.FLS,e2.mLS,e2.vLS),
++        sEQ:per(TEQ.M,TEQ.F,W.stripEQ.m,W.stripEQ.v), sCT}; };
++    const buildLS=(P,meth)=>{ const {sEH,sLS,eEH,eLS,sEQ}=P, LS={};
+@@ -2792 +2795,0 @@ function computeWing(R,X){
+-    W.per={sEH,sLS,eEH,eLS,sEQ,sCT}; W.LS=LS;
+@@ -2795,0 +2799,7 @@ function computeWing(R,X){
++    Object.values(LS).forEach(o=>{ o.meth=meth; }); return LS; };
++    const Pa=comps(true), Ps=comps(false), LSa=buildLS(Pa,"avg"), LSs=buildLS(Ps,"strip");
++    let LS;
++    if(jm==="strip") LS=LSs;
++    else if(jm==="avgOnly"){ LS=LSa; LS["Service I"]=LSs["Service I"]; }
++    else{ LS={}; Object.keys(LSa).forEach(k=>{ LS[k]=(LSs[k].Mu>LSa[k].Mu+1e-12)? LSs[k] : LSa[k]; }); }
++    W.per=avg? Pa : Ps; W.perS=Ps; W.LS=LS; W.LSa=LSa; W.LSs=LSs;
+@@ -2797 +2807 @@ function computeWing(R,X){
+-    W.alt=avg? {m:W.gEHst*sg.mEH+gLS1*sg.mLS, lbl:"most loaded 1-ft horizontal strip"} : {m:(W.gEHst*Tst.MEH+gLS1*Tst.MLS)/H0, lbl:"total junction moment / H₀"};
++    W.alt=avg? {m:W.gEHst*sg.mEH+gLS1*sg.mLS, lbl:"most loaded 1-ft horizontal strip"} : {m:(W.gEHst*Tst.MEH+gLS1*Tst.MLS)/H0, lbl:"total junction moment / H₀"};   // (ABM4: in "avg", the larger governs)
+@@ -5259 +5269 @@ function renderTabWing(R){
+-    Object.entries(W.LS).forEach(([k,q])=>{ tb+=`<tr><td class="lft">${esc(k)}</td><td class="lft">${esc(q.lbl)}</td><td>${fmt(q.Mu)}</td><td>${fmt(q.Vu)}</td><td>${q.svc?"—":(q.phi==="ee"?"1.00":"strain-based (≤ 0.90)")}</td></tr>`; });
++    Object.entries(W.LS).forEach(([k,q])=>{ tb+=`<tr><td class="lft">${esc(k)}</td><td class="lft">${esc(q.lbl)}${att&&q.meth?` <span class="small">(${q.meth==="strip"?"most loaded strip":"total / H₀"})</span>`:""}</td><td>${fmt(q.Mu)}</td><td>${fmt(q.Vu)}</td><td>${q.svc?"—":(q.phi==="ee"?"1.00":"strain-based (≤ 0.90)")}</td></tr>`; });
+@@ -5278 +5288 @@ function renderTabWing(R){
+-      ${eqB(W.avg?"Per foot of junction height — total moment spread over H<sub>0</sub>":"Per foot of junction height — most loaded horizontal strip","method of panel I-13",(W.avg?[
++      ${eqB(W.jMode==="env"?"Per foot of junction height — total moment over H<sub>0</sub> and the most loaded horizontal strip (the larger governs each limit state)":W.jMode==="avgOnly"?"Per foot of junction height — total moment over H<sub>0</sub> (strength); most loaded strip (Service I)":W.avg?"Per foot of junction height — total moment spread over H<sub>0</sub>":"Per foot of junction height — most loaded horizontal strip","method of panel I-13",(W.avg?[
+@@ -5280 +5290,2 @@ function renderTabWing(R){
+-        `v_{EH} = ${t(W.per.sEH.v,3)}\\,, \\ v_{LS} = ${t(W.per.sLS.v,3)}\\ \\text{kip/ft}`+(W.CT?`\\,, \\quad m_{CT} = \\tfrac{${t(W.MCT)}}{${t(W.H0)}} = ${t(W.per.sCT.m,3)}`:"")]:[
++        `v_{EH} = ${t(W.per.sEH.v,3)}\\,, \\ v_{LS} = ${t(W.per.sLS.v,3)}\\ \\text{kip/ft}`+(W.CT?`\\,, \\quad m_{CT} = \\tfrac{${t(W.MCT)}}{${t(W.H0)}} = ${t(W.per.sCT.m,3)}`:""),
++        `\\text{strip at } y^* = ${t(s.y)}\\ \\text{ft above the junction bottom, length } L_m = ${t(s.l)}\\ \\text{ft}:\\quad m_{EH} = ${t(s.mEH,3)}\\,, \\ m_{LS} = ${t(s.mLS,3)}\\,, \\ v_{EH} = ${t(s.vEH,3)}\\,, \\ v_{LS} = ${t(s.vLS,3)}`]:[
+@@ -5284 +5295,3 @@ function renderTabWing(R){
+-        (W.avg?`For information, the most loaded 1-ft horizontal strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft).`:`For information, the total junction moment over H<sub>0</sub> gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`)+(W.CT?" The collision moment is spread over the junction height in both methods.":"")+" Strip at y: strip length L<sub>m</sub> where the wing exists at that elevation; b<sub>T</sub> = slope of the wing top ("+fmt(W.bT,4)+").")}
++        (W.jMode==="env"?`Each limit state takes the method with the larger M<sub>u</sub> (ABM4; method named in the table below). Strength I: total / H<sub>0</sub> ${fmt(W.LSa["Strength I"].Mu)}, strip ${fmt(W.LSs["Strength I"].Mu)} kip-ft/ft (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft; strip formula as in the strip method).`
++        :W.jMode==="avgOnly"?`Strength and extreme limit states use the total moment over H<sub>0</sub> (yield-line redistribution, panel I-13); Service I crack control uses the most loaded strip (m<sub>s</sub> = ${fmt(W.LSs["Service I"].Mu)} kip-ft/ft), since redistribution does not apply at service. The strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`
++        :W.avg?`For information, the most loaded 1-ft horizontal strip gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I (y* = ${fmt(W.strip.y,2)} ft, strip length ${fmt(W.strip.l,2)} ft).`:`For information, the total junction moment over H<sub>0</sub> gives m<sub>u</sub> = ${fmt(W.alt.m)} kip-ft/ft at Strength I.`)+(W.CT?" The collision moment is spread over the junction height in both methods.":"")+" Strip at y: strip length L<sub>m</sub> where the wing exists at that elevation; b<sub>T</sub> = slope of the wing top ("+fmt(W.bT,4)+").")}
+@@ -10411 +10424 @@ function inputEchoHTML(){
+-      ["Type",at?("attached, "+(w.orient==="inline"?"in-line":"U-wing")+"; junction method: "+(w.jMethod==="strip"?"most loaded horizontal strip":"total moment over H₀")):("independent, θ = "+fmt(+w.theta,1)+"°; design section "+(w.secMode==="user"?"x/L = "+fmt(+w.secFr,3):"owner / FHWA rule")+"; EH height "+(w.ehPlane==="heel"?"virtual back plane":"stem face")),""],
++      ["Type",at?("attached, "+(w.orient==="inline"?"in-line":"U-wing")+"; junction method: "+(w.jMethod==="strip"?"most loaded horizontal strip":w.jMethod==="avgOnly"?"total moment over H₀ (strength), strip (Service I)":"larger of the total moment over H₀ and the most loaded strip")):("independent, θ = "+fmt(+w.theta,1)+"°; design section "+(w.secMode==="user"?"x/L = "+fmt(+w.secFr,3):"owner / FHWA rule")+"; EH height "+(w.ehPlane==="heel"?"virtual back plane":"stem face")),""],
+```
+
+## 2026-11-07 — PR: claude/pile-group-one-row — PG1: one pile row in the moment direction is an input error (was: overturning moment silently dropped) (calculation change for Σx'² = 0 or Σy'² = 0 layouts only) (PR #996: https://github.com/mlococo88/All-Structural/pull/996)
+### Where / before / after (C-8, computeAll)
+```diff
++      /* PG1 (2026-11-07): a group with no lever arm about an axis (Σx'² = 0: one pile row in the moment direction; or Σy'² = 0)
++         cannot resist a moment about it. Before, the moment was dropped (every pile V/n); now it is an input error and the pile and
++         pile-cap checks are not computed (as with no active pile). Layouts with Σx'² > 0 and Σy'² > 0 are unchanged. */
++      for(const lsName of Object.keys(LIMITS)){   // the largest unresisted moment of every permutation
++        for(const pl of permutations(lsName,true)){ const c=comboEffects(lsName,pl.perm,pl.liveOn,false); if(c.V<=0) continue;
++          const My=c.V*((c.Mv-c.Mh)/c.V-xgcT), Mx=c.Mt-c.V*ygc, u=SharedPileGroup.unresisted(c.V,My,Mx,R.pile);
++          if(u && (!R.pile.unresisted || Math.abs(u.M)>Math.abs(R.pile.unresisted.M))) R.pile.unresisted={...u, ls:lsName, lbl:c.lbl}; } }
++      if(R.pile.unresisted){ const u=R.pile.unresisted; R.pile.nActive=n; R.pile.n=0;   // as with no active pile: no pile results, every pile view and check skipped
++        warnFor("conv",`Pile layout: ${u.axis==="y"?"a single pile row in the longitudinal direction (all active piles at one x, Σx′² = 0)":"a single pile line along the abutment (all active piles at one y, Σy′² = 0)"} cannot resist the overturning moment ${u.axis==="y"?"M_y":"M_x"} = ${fmt(u.M)} kip-ft (largest; ${u.ls}, ${u.lbl||""}) on pinned-head vertical piles. Add a pile row. The pile and pile-cap checks (pile reactions, punching, toe / heel on the piles) are not computed.`,"err"); }
++      else{
++      }   // PG1
+```
+### Problem / §4
+- Before: with all active piles at one x (Σx'² = 0), pileReaction dropped M_y: every pile got ΣV/n. Default abutment with one row: P = 386.17 kip per pile, M_y = −2980.4 kip-ft of the governing case ignored (unconservative).
+- After: C-8 scans every permutation with SharedPileGroup.unresisted; if any has an unresisted moment, an input error names the largest ("M_y = −5,410.12 kip-ft (largest; Strength I, …)", default with one row) and the pile branch is computed as with no active pile (R.pile.n = 0, R.pile.nActive = n, R.pile.unresisted): no pile reactions, pile checks, punching or pile-cap toe / heel demands. Statics of a rigid cap (AASHTO LRFD 10th Ed. Art. 10.7, no closed form).
+- Every layout with Σx'² > 0 and Σy'² > 0 is unchanged (14 layouts main vs branch identical; 2000 random reactions bit-identical).
+### Open items
+- Decision (pending engineer review): the error blocks the pile results rather than showing V/n with a warning (a single row of pinned vertical piles has no moment resistance; battered piles, 8g, would be the remedy).
+
+## 2026-11-07 — PR: claude/abut-m8-ts (PR #1019: https://github.com/mlococo88/All-Structural/pull/1019) (ABM8: provided shrinkage and temperature bars checked for the stem, backwall and footing — area and spacing per 5.10.6)   [new check] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M8.
+
+### ABM8. S&T bars provided
+- **Where:** `defaultState` reinf (anchor `stemH:{size:"6", sp:9}, bwH:{size:"5", sp:12}, ftgL:{size:"6", sp:12},`); `migrate` (anchor `a saved project has no S&T bars entered`); panel I-9 inputs (anchor `Shrinkage &amp; temperature bars, each face [5.10.6] (Tab 5 §5.7a)`); `computeAll` C-12b (anchor `R.checks.ts={stem:tsOf(`); dashboard rows `ts_stem`, `ts_bw`, `ts_ftg` (anchor `ABM8: S&T bars provided [5.10.6]`); Tab 5 panel §5.7a `o-ts`; Input ID (bars "0" and the defaults left out); select handler (bar sizes kept as strings).
+- **Before:** A_s,ST of Eq. 5.10.6-1 was reported (and a #5 spacing suggested in schedule row E1), but the bars actually provided were never checked except on the wingwall.
+- **After:** new inputs for the bars provided on each face: stem horizontal, backwall horizontal, and footing longitudinal (top and bottom). Check: D/C = max(A_s,ST / A_s, s / s_max), where
+  - A_s,ST is the section's Eq. 5.10.6-1 value (the b and h of its flexure check, 0.11 ≤ A_s,ST ≤ 0.60 in²/ft);
+  - s_max = 12 in for walls and footings thicker than 18 in, else min(3t, 18 in), as the existing wing check.
+  
+  Bar "0" = not entered: a REVIEW dashboard row (counted as "design incomplete").
+  - Integral abutments: not applied (the integral wall has its own bars).
+  - Semi-integral: no backwall row (the end diaphragm replaces the backwall).
+- **Problem:** a required check on the element itself (5.10.6) was missing.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) 5.10.6 (Eq. 5.10.6-1, f_y ≤ 75 ksi, area limits, spacing limits).
+- **Check case (built-in project, f_y = 60 ksi):**
+  - Stem: b = min(L_ab, h_stem) = 168 in, h = 54 in, so A_s,ST = 1.30·168·54/(2·222·60) = 0.443 in²/ft. #6 @ 9 gives A_s = 0.44·12/9 = 0.587, with s_max = 12 (t = 54 in). D/C = max(0.443/0.587, 9/12) = **0.755**.
+  - Backwall: b = 60, h = 18, so A_s,ST = max(0.11, 1.30·60·18/(2·78·60)) = 0.150. #5 @ 12 gives 0.31, with s_max = min(54, 18) = 18. D/C = max(0.484, 0.667) = **0.667**.
+  - Footing: b = 156, h = 36, so A_s,ST = 0.317. #6 @ 12 gives 0.44, with s_max = 12 (t = 36 in). D/C = max(0.720, 1.000) = **1.000** (passes).
+  - #5 @ 14 on the stem: A_s = 0.266, so D/C = max(1.666, 1.167) = **1.666 FAIL**.
+- **Saved data:** no key renamed. A saved project (no fields) gets size "0" (not entered) → three REVIEW rows until the bars are entered; its other results are identical. New projects start with the defaults above (they pass).
+- **How verified:**
+  - Headless origin/main vs branch, 24 scenarios: no existing result moves; only the new `R.checks.ts` and dashboard rows are added.
+  - `project-library --tool abutment`: the main-vs-branch "results identical" checks differ by the new result fields. Against the branch itself (`--a HEAD`): ALL PASS.
+  - All tabs and the Report render with 0 console errors; the self-test passes; `check-syntax` passes.
+- **Decision (pending engineer review):**
+  - For components 18 in thick or less, s_max = min(3t, 18 in). This is the existing wing rule. The 10th Ed. wording for "other situations" reads 3t "but not less than 18 in"; the smaller value is used, which is conservative.
+  - The footing longitudinal bars use the toe section's b and h.
+- **Other copies:** the wing S&T check (`W.ts`) uses the same rule (unchanged).
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index d823b9f..fa506cf 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -769,0 +770 @@ function defaultState(){
++      stemH:{size:"6", sp:9}, bwH:{size:"5", sp:12}, ftgL:{size:"6", sp:12},   // ABM8: shrinkage & temperature bars provided, each face [5.10.6]: stem and backwall horizontal, footing longitudinal (top and bottom); size "0" = not entered
+@@ -1708,0 +1710 @@ function migrate(){
++    ["stemH","bwH","ftgL"].forEach(k=>{ if(!S.reinf[k]||typeof S.reinf[k]!=="object") S.reinf[k]={size:"0", sp:12}; });   // ABM8: a saved project has no S&T bars entered (REVIEW rows until they are)
+@@ -2329,0 +2332,4 @@ function buildInputs(){
++    ${iabType()==="integral"?"":`<div class="subhead">Shrinkage &amp; temperature bars, each face [5.10.6] (Tab 5 §5.7a)</div>
++      ${selRow("Stem — horizontal, bar","reinf.stemH.size",[["0","— not entered"]].concat(barOpts))}${inpRow("&nbsp;&nbsp;spacing","reinf.stemH.sp","in")}
++      ${iabType()==="semi"?"":`${selRow("Backwall — horizontal, bar","reinf.bwH.size",[["0","— not entered"]].concat(barOpts))}${inpRow("&nbsp;&nbsp;spacing","reinf.bwH.sp","in")}`}
++      ${selRow("Footing — longitudinal (top and bottom), bar","reinf.ftgL.size",[["0","— not entered"]].concat(barOpts))}${inpRow("&nbsp;&nbsp;spacing","reinf.ftgL.sp","in")}`}
+@@ -3769,10 +3774,0 @@ function computeAll(){
+-      /* PG1 (2026-11-07): a group with no lever arm about an axis (Σx'² = 0: one pile row in the moment direction; or Σy'² = 0)
+-         cannot resist a moment about it. Before, the moment was dropped (every pile V/n); now it is an input error and the pile and
+-         pile-cap checks are not computed (as with no active pile). Layouts with Σx'² > 0 and Σy'² > 0 are unchanged. */
+-      for(const lsName of Object.keys(LIMITS)){   // the largest unresisted moment of every permutation
+-        for(const pl of permutations(lsName,true)){ const c=comboEffects(lsName,pl.perm,pl.liveOn,false); if(c.V<=0) continue;
+-          const My=c.V*((c.Mv-c.Mh)/c.V-xgcT), Mx=c.Mt-c.V*ygc, u=SharedPileGroup.unresisted(c.V,My,Mx,R.pile);
+-          if(u && (!R.pile.unresisted || Math.abs(u.M)>Math.abs(R.pile.unresisted.M))) R.pile.unresisted={...u, ls:lsName, lbl:c.lbl}; } }
+-      if(R.pile.unresisted){ const u=R.pile.unresisted; R.pile.nActive=n; R.pile.n=0;   // as with no active pile: no pile results, every pile view and check skipped
+-        warnFor("conv",`Pile layout: ${u.axis==="y"?"a single pile row in the longitudinal direction (all active piles at one x, Σx′² = 0)":"a single pile line along the abutment (all active piles at one y, Σy′² = 0)"} cannot resist the overturning moment ${u.axis==="y"?"M_y":"M_x"} = ${fmt(u.M)} kip-ft (largest; ${u.ls}, ${u.lbl||""}) on pinned-head vertical piles. Add a pile row. The pile and pile-cap checks (pile reactions, punching, toe / heel on the piles) are not computed.`,"err"); }
+-      else{
+@@ -3827 +3822,0 @@ function computeAll(){
+-      }   // PG1
+@@ -4594,0 +4590,10 @@ function computeAll(){
++  /* ===== C-12b ABM8 (2026-11-07): shrinkage & temperature bars provided [AASHTO LRFD 10th Ed. 5.10.6] — stem and backwall horizontal, footing
++     longitudinal, each face: A_s ≥ A_s,ST of Eq. 5.10.6-1 (the section's b, h as in its flexure check; 0.11 ≤ A_s,ST ≤ 0.60 in²/ft) and the spacing
++     ≤ 12 in for walls and footings thicker than 18 in, else ≤ min(3t, 18 in) (as the wingwall check). Size "0" = not entered (REVIEW). ===== */
++  if(iabType()!=="integral"){ const tsOf=(key,name,c,tIn)=>{ const r=S.reinf[key]||{size:"0",sp:12}, ent=String(r.size)!=="0"&&BARS[String(r.size)];
++      const sMax=tIn>18+1e-9? 12 : Math.min(3*tIn,18), out={key,name,bar:String(r.size),sp:+r.sp,req:c?c.AsST:NaN,bST:c?c.bST:NaN,hST:c?c.hST:NaN,t:tIn,sMax,ent:!!ent};
++      if(ent){ out.As=BARS[String(r.size)].Ab*12/Math.max(1e-9,+r.sp); out.dcA=out.req/out.As; out.dcS=(+r.sp)/sMax; out.dc=Math.max(out.dcA,out.dcS); }
++      return out; };
++    R.checks.ts={stem:tsOf("stemH","Stem horizontal",R.checks.stemFlex,g.tsb*12), ftg:tsOf("ftgL","Footing longitudinal",R.checks.toeFlex,g.tf*12)};
++    if(iabType()!=="semi") R.checks.ts.bw=tsOf("bwH","Backwall horizontal",R.checks.bwFlex,g.tbw*12); }
++
+@@ -5040 +5045 @@ function computeAll(){
+-      dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct"]);
++      dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct","stemH","bwH","ftgL"]); ["stemH","bwH","ftgL"].forEach(k=>{ if(fpS.reinf&&fpS.reinf[k]&&String(fpS.reinf[k].size)==="0") delete fpS.reinf[k]; });   // ABM8
+@@ -5113,0 +5119,3 @@ function computeAll(){
++  if(R.checks.ts) Object.entries(R.checks.ts).forEach(([k,q])=>{   // ABM8: S&T bars provided [5.10.6]
++    if(q.ent) addD("ts_"+k,q.name+" bars — S&T [5.10.6]",q.dc,"tab-struct","#"+q.bar+" @ "+fmt(q.sp,1)+" in each face: A_s "+fmt(q.As,3)+" vs "+fmt(q.req,3)+" in²/ft, s ≤ "+fmt(q.sMax,0)+" in");
++    else addD("ts_"+k,"REVIEW — "+q.name+" bars — S&T [5.10.6]",NaN,"tab-struct","not entered (panel I-9): A_s,ST = "+fmt(q.req,3)+" in²/ft each face, s ≤ "+fmt(q.sMax,0)+" in",true); });
+@@ -5942 +5950,2 @@ function svgIabSection(R){
+-const DASH_ANCHOR={iabPile:"o-iab-pile",iabTip:"o-iab-pile",iabGeo:"o-iab-pile",iabUp:"o-iab-pile",iabGeoEE:"o-iab-pile",   // IAB; ABR2
++const DASH_ANCHOR={ts_stem:"o-ts",ts_bw:"o-ts",ts_ftg:"o-ts",   // ABM8
++  iabPile:"o-iab-pile",iabTip:"o-iab-pile",iabGeo:"o-iab-pile",iabUp:"o-iab-pile",iabGeoEE:"o-iab-pile",   // IAB; ABR2
+@@ -7348,0 +7358,10 @@ function renderTabStruct(R){
++  /* ---- 5.7a ABM8: shrinkage & temperature bars provided [5.10.6] ---- */
++  if(R.checks.ts){ const t=fmtT, rows=Object.values(R.checks.ts);
++    h+=panel("o-ts","5.7a","Shrinkage & Temperature Reinforcement Provided [AASHTO 5.10.6]",
++      eqB("Required area, each face and each direction","AASHTO 5.10.6, Eq. 5.10.6-1",["A_{s,ST} \\ge \\dfrac{1.30\\,b\\,h}{2(b+h)f_y}\\,, \\quad 0.11 \\le A_{s,ST} \\le 0.60\\ \\text{in}^2/\\text{ft}\\,; \\quad s \\le 12\\ \\text{in (walls and footings } t > 18\\ \\text{in), else } s \\le \\min(3t,\\ 18\\ \\text{in})"].concat(rows.map(q=>
++        `\\text{${q.name}: } A_{s,ST} = ${t(q.req,3)}\\ \\text{in}^2/\\text{ft}\\ (b = ${t(q.bST,1)},\\ h = ${t(q.hST,1)}\\ \\text{in, as its flexure check})`+(q.ent?`\\,, \\quad A_s = ${t(BARS[q.bar].Ab,2)}\\dfrac{12}{${t(q.sp,1)}} = ${t(q.As,3)}\\,, \\quad s_{max} = ${t(q.sMax,0)}\\ \\text{in}\\ (t = ${t(q.t,1)}\\ \\text{in})`:`\\,, \\quad \\text{bars not entered (panel I-9)}`))),
++        "Stem and backwall: horizontal bars on each face; footing: longitudinal bars (along the abutment), top and bottom. The transverse footing and the vertical wall bars are the flexural bars (§5.2–5.5).")
++      +rows.map(q=>q.ent? checkLine(q.name+" S&T (#"+q.bar+" @ "+fmt(q.sp,1)+" in)",`\\max\\left(\\dfrac{A_{s,ST}}{A_s},\\ \\dfrac{s}{s_{max}}\\right) = \\max\\left(\\dfrac{${t(q.req,3)}}{${t(q.As,3)}},\\ \\dfrac{${t(q.sp,1)}}{${t(q.sMax,0)}}\\right)`,q.dc)
++        : `<div class="checkline fail"><span class="flagchip warn">REVIEW</span> ${esc(q.name)} S&amp;T bars not entered (panel I-9): provide A<sub>s</sub> ≥ ${fmt(q.req,3)} in²/ft each face at s ≤ ${fmt(q.sMax,0)} in.</div>`).join(""));
++  }
++
+@@ -10070 +10089 @@ document.addEventListener("change",ev=>{
+-  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
++  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
+```

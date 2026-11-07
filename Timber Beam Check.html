@@ -461,9 +461,12 @@ const REF_4D = {
         ALL: { 'SS': [1500, 1000, 165, 375, 950, 1500000, 550000], 'No.1': [1350, 900, 165, 375, 825, 1500000, 550000], 'No.2': [850, 550, 165, 375, 525, 1200000, 440000] },
     },
 };
-// Table 4D footnote: Beams and Stringers loaded on the wide face (flat use), factor on Fb by grade (E, Emin and the
-// other values 1.00). Applied to Southern Pine timbers too (conservative; SP has no BS / PT split). PT: 1.00.
+// Table 4D footnote: Beams and Stringers loaded on the wide face (flat use), factor on Fb by grade (E and Emin: T4D_FLAT_E
+// below, since TBF1; the other values 1.00). Applied to Southern Pine timbers too (conservative; SP has no BS / PT split). PT: 1.00.
 const T4D_FLAT_FB = { 'SS': 0.86, 'No.1': 0.74, 'No.2': 1.00 };
+// Table 4D footnote, flat use of Beams and Stringers: E and Emin factor by grade (fix log TBF1, 2026-11-07; values as best known,
+// verify against NDS 2018 Supplement Table 4D (not in references)). Applied with the Fb factor above (same members).
+const T4D_FLAT_E = { 'SS': 1.00, 'No.1': 0.90, 'No.2': 1.00 };
 // Structural glued laminated softwood timber, bending about x-x (load perpendicular to the wide faces of the laminations).
 // NDS Supplement 2018 Table 5A (stress classes) and Table 5A Expanded (combination symbols) (Phase 2, fix log R3).
 // v = [Fbx+ (tension zone stressed in tension), Fbx- (compression zone stressed in tension), Fc_perp,x (tension face),
@@ -875,6 +878,7 @@ function tbcRun(m) {
     if (dz.repetitive && cat === 'dim' && spacing > 24) notes.push('Cr requires spacing ≤ 24 in. (NDS 4.3.9); Cr = 1.0 used.');
     if (dz.repetitive && cat === 'scl' && spacing > 24) notes.push('Cr requires spacing ≤ 24 in. (NDS 8.3.7); Cr = 1.0 used.');
     const Cfu = (flat && cat === 'dim') ? T4A_CFU[wg][thick4 ? 1 : 0] : (flat && cat === 'timber' && !userVals && cls4D !== 'PT') ? T4D_FLAT_FB[mt.grade] : 1.0;
+    const CfuE = (flat && cat === 'timber' && !userVals && cls4D !== 'PT') ? (T4D_FLAT_E[mt.grade] || 1.0) : 1.0;   // TBF1: E, Emin (Table 4D footnote)
     // LRFD (NDS 2018 Appendix N): KF and phi multiply the reference values (exactly 1 in ASD)
     const KF = lrfd ? LRFD_KF : { Fb: 1, Fv: 1, Fcp: 1, Emin: 1 };
     const PHI = lrfd ? LRFD_PHI : { Fb: 1, Fv: 1, Fcp: 1, Emin: 1 };
@@ -889,8 +893,8 @@ function tbcRun(m) {
     // --- Beam stability (NDS 3.3.3), per span; top edge for M > 0, bottom edge for M < 0 ---
     // TBE1: glulam bent about x-x buckles laterally about y-y, so F_bE uses Ey,min (NDS 3.3.3.8, Supplement Table 5A); E_x stays in deflection
     const EminStab = isGL ? ref.Eymin : ref.Emin;
-    const Emin_p = EminStab * CM.E * Ct.E * Ci.E * KF.Emin * PHI.Emin;
-    const E_p = ref.E * CM.E * Ct.E * Ci.E;
+    const Emin_p = EminStab * CM.E * Ct.E * Ci.E * CfuE * KF.Emin * PHI.Emin;
+    const E_p = ref.E * CM.E * Ct.E * Ci.E * CfuE;
     const hasPL = pls.some(p => p.mag !== 0);
     const fn1 = hasPL || !simple;   // Table 3.3.3 footnote 1 general rule (loading not specified / continuous / cantilever)
     const leFor = (lu) => {
@@ -1213,7 +1217,7 @@ function tbcRun(m) {
 
     return {
         ...base, ok: true, bw, dep, A, S, I, thick4, cfIncluded,
-        CF, CFnote, CM, Ct, Ci, Cr, Cfu, Cb, lb, lu, luD, le, leRule, RB, stabilityApplies, Emin_p, EminStab, E_p, FbE,
+        CF, CFnote, CM, Ct, Ci, Cr, Cfu, CfuE, Cb, lb, lu, luD, le, leRule, RB, stabilityApplies, Emin_p, EminStab, E_p, FbE,
         notch, hasNotch, dn, Cn, trib, w_self, wu, combos, gov,
         defl: defl_,
         diag: { key: dc.key, name: dc.name, shearData, momentData, maxV, maxM },
@@ -2136,7 +2140,7 @@ function fbFacs(c, CL, CV) {
 }
 function fvFacs(c) { const f = [tfFac(c), ['C_M', g4(R.CM.Fv)], ['C_t', g4(R.Ct.Fv)]]; if (sawnOnly()) f.push(['C_i', g4(R.Ci.Fv)]); return f.concat(lrfdFac('Fv')); }
 function fcpFacs(j) { const f = [['C_M', g4(R.CM.Fcp)], ['C_t', g4(R.Ct.Fcp)]]; if (sawnOnly()) f.push(['C_i', g4(R.Ci.Fcp)]); f.push(['C_b', f3(R.Cbs[j])]); return f.concat(lrfdFac('Fcp')); }
-function eFacs(min) { const f = [['C_M', g4(R.CM.E)], ['C_t', g4(R.Ct.E)]]; if (sawnOnly()) f.push(['C_i', g4(R.Ci.E)]); return min ? f.concat(lrfdFac('Emin')) : f; }
+function eFacs(min) { const f = [['C_M', g4(R.CM.E)], ['C_t', g4(R.Ct.E)]]; if (sawnOnly()) f.push(['C_i', g4(R.Ci.E)]); if (R.CfuE !== 1) f.push(['C_{fu,E}', g4(R.CfuE)]); return min ? f.concat(lrfdFac('Emin')) : f; }
 // one TeX line: symbols = values = result
 function facEq1(lhs, base, facs, res) { const e = facEq(lhs, base, facs, res); return e[0] + ' = ' + e[1].slice(lhs.length + 3); }
 // two TeX lines: symbols, then values = result
@@ -2392,7 +2396,7 @@ function factorRows() {
   ];
   if (sawnOnly()) rows.push(
     ['C<sub>F</sub> size', g4(R.CF), '—', '—', '—', esc(R.CFnote), (R.cat === 'dim' ? (R.cfIncluded ? (builtIn ? 'NDS Supplement Table 4B ' + VFY : 'included in the entered F<sub>b</sub>') : 'NDS Supplement Table 4A ' + VFY) : 'NDS 4.3.6.2, Eq. (12/d)^(1/9)')],
-    ['C<sub>fu</sub> flat use', g4(R.Cfu), '—', '—', '—', R.flat ? 'flat use' + (R.cat === 'timber' ? (R.cls4D === 'PT' ? ' (Posts and Timbers: 1.00)' : ' (Table 4D Beams and Stringers factor, by grade)') : '') : 'edgewise', R.flat ? (R.cat === 'timber' ? 'NDS Supplement Table 4D footnote ' : 'NDS Supplement Table 4A/4B ') + VFY : 'NDS 4.3.7'],
+    ['C<sub>fu</sub> flat use', g4(R.Cfu), '—', '—', R.cat === 'timber' && R.flat ? g4(R.CfuE) : '—', R.flat ? 'flat use' + (R.cat === 'timber' ? (R.cls4D === 'PT' ? ' (Posts and Timbers: 1.00)' : ' (Table 4D Beams and Stringers factors by grade, on F<sub>b</sub> and on E, E<sub>min</sub>)') : '') : 'edgewise', R.flat ? (R.cat === 'timber' ? 'NDS Supplement Table 4D footnote ' : 'NDS Supplement Table 4A/4B ') + VFY : 'NDS 4.3.7'],
     ['C<sub>i</sub> incising', g4(R.Ci.Fb), g4(R.Ci.Fv), g4(R.Ci.Fcp), g4(R.Ci.E), M.design.incising ? 'incised' : 'not incised', 'NDS 4.3.8, Table 4.3.8 ' + VFY],
     ['C<sub>r</sub> repetitive member', g4(R.Cr), '—', '—', '—', M.design.repetitive ? (R.Cr > 1 ? 'repetitive, s ≤ 24 in.' : 'not applicable (see notes)') : 'not repetitive', (R.isSCL ? 'NDS 8.3.7 ' : 'NDS 4.3.9 ') + VFY]);
   else rows.push(R.isGL
@@ -2676,7 +2680,7 @@ function buildRefv(pg) {
       return { cls: key === inUse ? 'inuse' : '', cells: [DEFAULT_SPECIES[sp].name, cn[cl], (GRADES_DB[gr] || {}).name, ...a.map(v => String(v)), 'Table 4D', { h: '<b>' + conf + ': VERIFY</b> ' + VFY + (key === inUse ? ' <span class="badge use">in use</span>' : '') }] };
     })));
     body.appendChild(tblEl(['Species', 'Size class', 'Grade', 'F<sub>b</sub>', 'F<sub>t</sub>', 'F<sub>v</sub>', 'F<sub>c⊥</sub>', 'F<sub>c</sub>', 'E', 'E<sub>min</sub>', 'Table', 'Confidence'], rows, { left: [0, 1, 2, 11] }));
-    body.appendChild(el('div', 'hint', 'psi. Added in Phase 2 (fix log R3, open item O3). Size class from the section: Beams and Stringers when d − b > 2 in., else Posts and Timbers. C<sub>F</sub> = (12/d)<sup>1/9</sup> for d > 12 in. (NDS 4.3.6.2); C<sub>r</sub> does not apply. Flat use (load on the wide face), Table 4D footnote: Beams and Stringers F<sub>b</sub> × ' + T4D_FLAT_FB['SS'] + ' (SS), ' + T4D_FLAT_FB['No.1'] + ' (No.1), ' + T4D_FLAT_FB['No.2'].toFixed(2) + ' (No.2) ' + VFY + '; Posts and Timbers 1.00; Southern Pine timbers take the Beams and Stringers factors (conservative). Wet service: F<sub>c⊥</sub> × 0.67 only. Spruce-Pine-Fir timbers, Dense grades and Stud are not built in (Manual values).'));
+    body.appendChild(el('div', 'hint', 'psi. Added in Phase 2 (fix log R3, open item O3). Size class from the section: Beams and Stringers when d − b > 2 in., else Posts and Timbers. C<sub>F</sub> = (12/d)<sup>1/9</sup> for d > 12 in. (NDS 4.3.6.2); C<sub>r</sub> does not apply. Flat use (load on the wide face), Table 4D footnote: Beams and Stringers F<sub>b</sub> × ' + T4D_FLAT_FB['SS'] + ' (SS), ' + T4D_FLAT_FB['No.1'] + ' (No.1), ' + T4D_FLAT_FB['No.2'].toFixed(2) + ' (No.2), and E, E<sub>min</sub> × ' + T4D_FLAT_E['SS'].toFixed(2) + ' (SS), ' + T4D_FLAT_E['No.1'].toFixed(2) + ' (No.1), ' + T4D_FLAT_E['No.2'].toFixed(2) + ' (No.2; fix log TBF1) ' + VFY + '; Posts and Timbers 1.00; Southern Pine timbers take the Beams and Stringers factors (conservative). Wet service: F<sub>c⊥</sub> × 0.67 only. Spruce-Pine-Fir timbers, Dense grades and Stud are not built in (Manual values).'));
   });
   mkSec(pg, 'rvGL', 'NDS Supplement 2018 Table 5A — structural glued laminated softwood timber (bending about x–x)', body => {
     const rows = Object.keys(GLULAM_5A).map(k => {
@@ -2864,6 +2868,10 @@ function runBenchmarks() {
     { const q = p2(m => { GLm(m); m.design.latTop = 'Supports'; m.material.glulam.combo = 'Custom'; Object.assign(m.material.glulam.custom, { Fbp: 2400, Fbn: 1450, Fv: 265, Fcp: 650, E: 1800000, Emin: 950000, Eymin: null }); });
       const g = 'Custom glulam with no E_y,min (files saved before TBE1): conservative assumption, REVIEW note';
       add(g, 'E_y,min = 950,000 × (690,000/900,000) (psi)', 728333.3, q.Emin_p, 'psi', 1e-6); add(g, 'REVIEW note shown', 1, q.adv.filter(t => /^REVIEW: custom glulam has no Ey,min/.test(t)).length, '', 1e-12); }
+    // 9. TBF1 (2026-11-07): Table 4D flat use of Beams and Stringers, E and Emin factor (No.1 0.90)
+    { const q = p2(m => { m.material.size = '6x12'; m.material.grade = 'No.1'; m.geom.spacing = 48; m.design.flatUse = true; }); const g = '6x12 DF-L No.1 flat (Beams and Stringers), 16 ft, trib. 4 ft, D 15 / L 40 psf (fix log TBF1)';
+      add(g, "E' = 1,600,000 × 0.90 (psi; was 1,600,000)", 1440000, q.E_p, 'psi', 1e-12); add(g, "E'min = 580,000 × 0.90 (psi)", 522000, q.Emin_p, 'psi', 1e-12);
+      add(g, 'Δ_L/(192/360) (was 1.734)', 1.9267, q.defl.r_dLL, '', 1e-3); }
   } catch (e) { out.push({ grp: 'error', what: 'Benchmark failed to run: ' + e.message, hand: NaN, tool: NaN, unit: '', diff: NaN, ok: false }); }
   return out;
 }
