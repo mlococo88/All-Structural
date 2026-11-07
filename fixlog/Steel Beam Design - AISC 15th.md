@@ -2706,7 +2706,7 @@ From the code-compliance review of 2026-11-07 (finding H2).
 - **Note:** for a section where the old average-shear value mixed with the flange St-Venant stress exceeded both new element sums at the same station, the new value can be lower; it is the DG 9 value per element.
 - **Saved data:** none changed.
 
-## 2026-11-07 — PR: claude/steelbeam-m1-stiffener-ist — Transverse stiffener I_st per AISC 360-16 Eq. G2-13 (with I_st1 and ρ_w) (M1; calculation change, requirement display)
+## 2026-11-07 — PR: claude/steelbeam-m1-stiffener-ist (PR #1028: https://github.com/mlococo88/All-Structural/pull/1028) — Transverse stiffener I_st per AISC 360-16 Eq. G2-13 (with I_st1 and ρ_w) (M1; calculation change, requirement display)
 
 From the code-compliance review of 2026-11-07 (finding M1).
 
