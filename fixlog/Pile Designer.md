@@ -20036,7 +20036,7 @@ index 06a42e4..b58d4e3 100644
   - `check-syntax`: pass. `pile-library`: library checks pass; its page-text checks show the new text. 0 console errors.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/pile-m6-uplift-cap (PDA-M6) — micropile group uplift (10.9.3.8 → 10.7.3.11); review items for required checks the tool does not compute   [check-logic change]
+## 2026-11-07 — PR: claude/pile-m6-uplift-cap (PR #1030: https://github.com/mlococo88/All-Structural/pull/1030) (PDA-M6) — micropile group uplift (10.9.3.8 → 10.7.3.11); review items for required checks the tool does not compute   [check-logic change]
 - **Problem (review M6):** some required micropile checks were missing:
   - group uplift (10.9.3.8 → 10.7.3.11, φ_ug 0.50);
   - the bar connection into the cap (10.9.3.7, 10.9.3.10.7);
