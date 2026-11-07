@@ -329,6 +329,7 @@ function defaultState(){
       fixedShear:false,      // bearing fixed against shear translation (affects Method A stress & stability form)
       exteriorCheck:false,   // exterior-beam check → uses 5.0 limit regardless
       anchored:false,        // pad anchored / doweled against horizontal movement → anchorage check is informational (design the anchorage for H)
+      bonded:false,          // M2 (2026-11-07): bearing with steel plates bonded (vulcanized) to the top and bottom → hydrostatic tension check, Eq. 14.7.5.3.3-11 (Method B); older saves off (migrate)
       dLLmax:0, dLTmax:0,    // M3 (2026-11-07): Method B compressive-deflection limits entered by the engineer (in): instantaneous LL δ_L and long-term DL δ_lt; 0 = report only (no owner value in MassDOT §3.5.7 / CTDOT §9.2.1; C14.7.5.3.6 suggests 0.125 in relative LL deflection across a joint)
       hsMin:0.1196           // M5 (2026-11-07): minimum steel laminate thickness, a pass/fail check: 0.1196 in (11 ga) MassDOT §3.5.7.5 | 0.0747 in AASHTO 14.7.5.3.5; older saves get 0.1196 (migrate)
     },
@@ -457,6 +458,7 @@ function buildInputs(){
     ${selRow("Minimum steel laminate thickness","tog.hsMin",[[0.1196,"0.1196 in (11 ga) — MassDOT [§3.5.7.5]"],[0.0747,"0.0747 in — AASHTO [14.7.5.3.5]"]])}
     <div class="chk-row"><input type="checkbox" data-path="tog.fixedShear"${tg.fixedShear?" checked":""}><label>Bearing fixed against shear translation</label></div>
     <div class="chk-row"><input type="checkbox" data-path="tog.exteriorCheck"${tg.exteriorCheck?" checked":""}><label>Exterior-beam check (forces the 5.0 limit)</label></div>
+    <div class="chk-row"><input type="checkbox" data-path="tog.bonded"${tg.bonded?" checked":""}><label>External steel plates bonded (vulcanized) to the top and bottom of the pad (Method B: hydrostatic tension check, Eq. 14.7.5.3.3-11)</label></div>
     <div class="chk-row"><input type="checkbox" data-path="tog.anchored"${tg.anchored?" checked":""}><label>Pad anchored / doweled against horizontal movement (slip and restraint checks become "design the anchorage for H")</label></div>`);
   // editable coefficients
   h+=panel("in-coef","I-6","Code Coefficients (editable — EOR confirms)",`
@@ -688,7 +690,13 @@ function computeEDM(loadsOverride){
   // Method B restraint [14.7.5.4, Eq. 14.7.5.4-1]: a bearing without bonded external plates needs a restraint system when θs/n ≥ 3εa/Si;
   // εa = σs/(3 Ba G Si²) [Eq. 14.7.5.3.3-15, Ba = 1.6, Eqs. 14.7.5.3.3-16/-17]; σs and θs = static + 1.75 × cyclic; rectangular: the larger of θs about L and θt about W
   if(S.method==="B"&&!isPlain()){ const Ba=1.6, sigS=sigDL+1.75*sigLL, epsA=sigS/(3*Ba*Gmax*Sf*Sf), thSL=thSt+1.75*thLongCyclic, thSW=isCirc()?0:thTransW, thS=Math.max(thSL,thSW), lhs=thS/n, rhs=3*epsA/Sf;
-    R.res={Ba,G:Gmax,sigS,epsA,thSL,thSW,thS,lhs,rhs,dc:rhs>0?lhs/rhs:Infinity,anchored:!!tg.anchored}; } else R.res=null;   // H1: G_max (a larger G gives a smaller εa, so a smaller 3εa/Si)
+    R.res={Ba,G:Gmax,sigS,epsA,thSL,thSW,thS,lhs,rhs,dc:rhs>0?lhs/rhs:Infinity,anchored:!!tg.anchored}; } else R.res=null;
+  // M2 (2026-11-07): hydrostatic tension of a bearing with bonded external plates top and bottom [Eqs. 14.7.5.3.3-11 to -15]: α = εa·n/(Si·θs),
+  // Cα = 4/3[(α² + 1/3)^1.5 − α(1 − α²)], σhyd = 3G·Si³·(θs/n)·Cα ≤ 2.25G; satisfied when α > 1/3. εa, θs as in the restraint test (static + 1.75 cyclic),
+  // G = G_max (a larger G gives a smaller εa and α, so a larger Cα; the ratio σhyd/2.25G depends on G only through α).
+  if(R.res&&tg.bonded){ const r=R.res, al=r.thS>0?r.epsA*n/(Sf*r.thS):Infinity, auto=!(al<=1/3), Ca=auto?0:(4/3)*(Math.pow(al*al+1/3,1.5)-al*(1-al*al)),
+      sh=3*Gmax*Math.pow(Sf,3)*(r.thS/n)*Ca, lim=2.25*Gmax;
+    R.hyd={al,auto,Ca,sh,lim,G:Gmax,dc:auto?0:sh/lim}; } else R.hyd=null;   // H1: G_max (a larger G gives a smaller εa, so a smaller 3εa/Si)
   R.edge=isPlain()?null:{ce:+g.edge,min:0.25,pass:+g.edge>=0.25-1e-9};
   // M3 (2026-11-07): compressive deflection [14.7.5.3.6, 14.7.6.3.3]: layer strain ε = σ/(4.8·G·S²) (Eq. C14.7.5.3.6-1, linear approximation), G = the low design G
   // (Method B G_min; Method A / plain GminA); PEP × 3 [C14.7.6.3.3]; δ = Σ ε·h_ri over the internal layers (the cover layers are not counted);
@@ -733,6 +741,7 @@ function computeEDM(loadsOverride){
     addEdge("edge","14.7.5.1");
     addAnc("anc");
     addRes();
+    if(R.hyd) add("hyd","Hydrostatic tension, bonded external plates [14.7.5.3.3]",R.hyd.dc,"σhyd ≤ 2.25G");   // M2
     addDeflB();   // M3
   } else {
     add("sigA","Compressive stress [14.7.6.3.2]",sigTL/Math.min(sigGS,sigCap),"σs ≤ min(1.25GS, cap)");
@@ -810,10 +819,10 @@ const EDM_CARDS={"o-geom":["tab-in","Plan Geometry & Shape Factor"],"o-rot":["ta
   sig:["tab-des","Compressive stress"],shear:["tab-des","Shear deformation"],gast:["tab-des","Axial shear strain"],rot:["tab-des","Rotational shear strain"],
   gs:["tab-des","Shear strain from movement"],comb:["tab-des","Combined static + cyclic limit"],stab:["tab-des","Stability"],stabT:["tab-des","Stability thickness"],
   uplift:["tab-des","Combined compression & rotation (uplift)"],reinf:["tab-des","Steel reinforcement thickness"],cover:["tab-des","Cover layer"],
-  anc:["tab-des","Anchorage"],res:["tab-des","Restraint"],appA:["tab-des","Method A applicability"],defl:["tab-des","Compressive deflection"],grange:["tab-des","Design shear modulus range"],edge:["tab-des","Edge cover"],hbu:["tab-des","Horizontal force"]};
+  anc:["tab-des","Anchorage"],res:["tab-des","Restraint"],appA:["tab-des","Method A applicability"],hyd:["tab-des","Hydrostatic tension"],defl:["tab-des","Compressive deflection"],grange:["tab-des","Design shear modulus range"],edge:["tab-des","Edge cover"],hbu:["tab-des","Horizontal force"]};
 // dashboard item id -> the check block (data-chk) where it is worked
 const EDM_DASH2CHK={gast:"gast",comb:"comb",stab:"stab",shearB:"gs",reinf:"reinf",cover:"cover",anc:"anc",ancA:"anc",ancP:"anc",
-  sigP:"sig",sigA:"sig",shearP:"shear",shearA:"shear",stabP:"stabT",stabA:"stabT",rotA:"uplift",rotAW:"uplift",appA:"appA",deflP:"defl",deflA:"defl",deflL:"defl",deflLT:"defl",deflI:"defl",hsmin:"reinf",hsminA:"reinf",reinfA:"reinf",coverA:"cover",res:"res",edge:"edge",edgeA:"edge"};
+  sigP:"sig",sigA:"sig",shearP:"shear",shearA:"shear",stabP:"stabT",stabA:"stabT",rotA:"uplift",rotAW:"uplift",appA:"appA",hyd:"hyd",deflP:"defl",deflA:"defl",deflL:"defl",deflLT:"defl",deflI:"defl",hsmin:"reinf",hsminA:"reinf",reinfA:"reinf",coverA:"cover",res:"res",edge:"edge",edgeA:"edge"};
 function edmLink(card,txt){ const cd=EDM_CARDS[card]; if(!cd)return "";
   return `<a href="#" class="wkA" data-tab="${cd[0]}" data-card="${card}"${txt?` data-txt="${esc(txt)}"`:""}>${txt?esc(txt)+" ":""}→ ${EDM_TABNAME[cd[0]]} · ${cd[1]}</a>`; }
 function edmWorkedIn(items){   /* items: [[card, txt]] */
@@ -933,6 +942,7 @@ function renderDesign(R){
       ${deflEq(R)}
       ${ancEq(R)}
       ${resEq(R)}
+      ${hydEq(R)}
       ${hbuEq(R)}`);
   }
   // Method A
@@ -1036,6 +1046,15 @@ function resEq(R){ const r=R.res; if(!r) return ""; const m=S.loads;
   +(r.anchored&&EDM_RPT?edmResLine("Restraint — pad anchored / doweled: restraint provided",null,"14.7.5.4","INFO")
     :r.anchored?`<div class="checkline" data-chk="res"><span class="verdict" style="background:#888">INFO</span><span style="flex:1">Pad anchored / doweled (panel I-5) — restraint provided; (θ<sub>s</sub>/n)/(3ε<sub>a</sub>/S<sub>i</sub>) = ${fmt(r.dc)} for reference <span class="eqref">[14.7.5.4]</span></span></div>`
     :checkLine("Restraint θs/n < 3εa/Si",r.dc,"[14.7.5.4]","res")); }
+/* M2 (2026-11-07): hydrostatic tension, bonded external plates (Eqs. 14.7.5.3.3-11 to -15), worked */
+function hydEq(R){ const h=R.hyd, r=R.res; if(!h) return "";
+  const L=[`\\alpha = \\dfrac{\\varepsilon_a\\,n}{S_i\\,\\theta_s} = \\dfrac{(${fmtT(r.epsA,5)})(${fmtT(R.n,0)})}{(${fmtT(R.S,3)})(${fmtT(r.thS,4)})} = ${fmtT(h.al,4)}`];
+  if(h.auto) L.push(`\\alpha > 1/3 \\Rightarrow \\text{hydrostatic stress compressive: Eq. 14.7.5.3.3-11 satisfied}`);
+  else L.push(`C_\\alpha = \\tfrac{4}{3}\\left[(\\alpha^2+\\tfrac13)^{1.5} - \\alpha(1-\\alpha^2)\\right] = \\tfrac{4}{3}\\left[(${fmtT(h.al,4)}^2+0.3333)^{1.5} - ${fmtT(h.al,4)}(1-${fmtT(h.al,4)}^2)\\right] = ${fmtT(h.Ca,5)}`,
+    `\\sigma_{hyd} = 3\\,G_{max}\\,S_i^3\\,\\dfrac{\\theta_s}{n}\\,C_\\alpha = 3(${fmtT(h.G,3)})(${fmtT(R.S,3)})^3\\dfrac{${fmtT(r.thS,4)}}{${fmtT(R.n,0)}}(${fmtT(h.Ca,5)}) = ${fmtT(h.sh,4)}\\ \\text{ksi} \;${h.dc<=1.0001?"\\le":">"}\; 2.25\\,G_{max} = ${fmtT(h.lim,3)}\\ \\text{ksi}`);
+  return eqB("Hydrostatic tension, bonded external plates top and bottom","AASHTO 14.7.5.3.3, Eqs. 14.7.5.3.3-11 to -15",L,
+    `ε<sub>a</sub> and θ<sub>s</sub> as in the restraint test above (static + 1.75 × cyclic; G = G<sub>max</sub>, the least favourable here). The commentary asks for this check also in the construction case (light axial load, large camber rotation, cyclic = 0), which is not modelled. Panel I-5: “External steel plates bonded”.`,"hyd")
+    +checkLine("Hydrostatic tension σhyd ≤ 2.25G",h.dc,"[14.7.5.3.3]","hyd"); }
 /* edge cover of the steel laminates ≥ 1/4 in. (pass/fail, no D/C) */
 function edgeEq(R,ref){ const e=R.edge; if(!e) return ""; const v=e.pass?"PASS":"FAIL";
   return eqB("Edge cover of the steel laminates","AASHTO "+ref,[`c_e = ${fmtT(e.ce,3)}\\ \\text{in} ${e.pass?"\\ge":"<"} 0.25\\ \\text{in}`],"Plan cover of elastomer over the edges of the steel laminates (input I-2).","edge")
@@ -1403,6 +1422,12 @@ function edrModel(){
         w.add({id:"rhs",label:"Restraint threshold",sym:"\\frac{3\\,\\epsilon_{a}}{S_{i}}",eq:"",sub:"\\frac{3\\cdot "+edrN(r.epsA,5)+"}{"+edrN(R.S,3)+"}",value:r.rhs,unit:"",d:5});
         if(r.anchored){ KEY.res="chk/res.info"; w.add({id:"info",label:"Pad anchored / doweled (panel I-5): restraint provided; ratio "+edrN(r.dc)+" for reference",sym:"",eq:"",sub:"",value:"restraint provided",unit:"",ref:EDR_AA+"Art. 14.7.5.4"}); }
         else dcStep(w,"res","Restraint: a restraint system is required when θ_s/n ≥ 3ε_a/S_i","\\frac{\\theta_{s}/n}{3\\,\\epsilon_{a}/S_{i}}","\\frac{"+edrN(r.lhs,5)+"}{"+edrN(r.rhs,5)+"}",EDR_AA+"Art. 14.7.5.4"); }
+      if(R.hyd){ const h=R.hyd, r=R.res; w=topic(T,"hyd","Hydrostatic tension, bonded external plates",EDR_AA+"Eqs. 14.7.5.3.3-11 to -15");   /* M2 */
+        w.add({id:"al",label:"α",sym:"\\alpha",eq:"\\frac{\\epsilon_{a}\\,n}{S_{i}\\,\\theta_{s}}",sub:"\\frac{"+edrN(r.epsA,5)+"\\cdot "+R.n+"}{"+edrN(R.S,3)+"\\cdot "+edrN(r.thS,4)+"}",value:h.al,unit:"",d:4,ref:EDR_AA+"Eq. 14.7.5.3.3-14"});
+        if(h.auto){ KEY.hyd="chk/hyd.ok"; w.add({id:"ok",label:"α > 1/3: hydrostatic stress compressive, Eq. 14.7.5.3.3-11 satisfied",sym:"\\alpha",eq:"",sub:"",value:edrN(h.al,4)+" > 0.333",unit:"",ok:true}); }
+        else { w.add({id:"Ca",label:"C_α",sym:"C_{\\alpha}",eq:"\\frac{4}{3}\\left[(\\alpha^{2} + \\frac{1}{3})^{1.5} \\minus \\alpha(1 \\minus \\alpha^{2})\\right]",sub:"\\frac{4}{3}\\left[("+edrN(h.al,4)+"^{2} + 0.3333)^{1.5} \\minus "+edrN(h.al,4)+"(1 \\minus "+edrN(h.al,4)+"^{2})\\right]",value:h.Ca,unit:"",d:5,ref:EDR_AA+"Eq. 14.7.5.3.3-13"});
+          w.add({id:"sh",label:"Peak hydrostatic stress (G = G_max)",sym:"\\sigma_{hyd}",eq:"3\\,G\\,S_{i}^{3}\\,\\frac{\\theta_{s}}{n}\\,C_{\\alpha}",sub:"3\\cdot "+edrN(h.G,3)+"\\cdot "+edrN(R.S,3)+"^{3}\\cdot \\frac{"+edrN(r.thS,4)+"}{"+R.n+"}\\cdot "+edrN(h.Ca,5),value:h.sh,unit:"ksi",d:4,ref:EDR_AA+"Eq. 14.7.5.3.3-12"});
+          dcStep(w,"hyd","Hydrostatic tension: σ_hyd ≤ 2.25G","\\frac{\\sigma_{hyd}}{2.25\\,G}","\\frac{"+edrN(h.sh,4)+"}{2.25\\cdot "+edrN(h.G,3)+"}",EDR_AA+"Eq. 14.7.5.3.3-11"); } }
       hbu();
     } else {
       intro="Method A, stress and rotation [14.7.6].";
