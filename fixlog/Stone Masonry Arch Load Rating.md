@@ -1439,7 +1439,7 @@ function transDisp(w,n,c,cap){
   - q = 0.5679 × 3.717 = 2.111 k/ft = the solver's 2.1111.
 - **How verified:** `check-syntax`; `phone-layout --tool arch`; `project-library --tool stonearch` (results identical A vs B); all 14 tabs with 0 console errors; ratings unchanged (main vs branch, default).
 
-## 2026-11-07 — PR: claude/stonearch-m2-ms18 — MS18 tonnage and MS equivalent for Items 64 / 66 (MS18; review M-2; reporting only)
+## 2026-11-07 — PR #1087: https://github.com/mlococo88/All-Structural/pull/1087 — MS18 tonnage and MS equivalent for Items 64 / 66 (MS18; review M-2; reporting only)
 
 ### MS18-1. Summary panel "MassDOT Items 64 / 66 — MS18 (Allowable Stress Rating)"   [new reported value; no rating change]
 - **Problem (review M-2):** MassDOT §7.1.7.2B requires, for stone masonry, the HS20 gross tonnage converted to MS18 with the factor 0.9, and an MS equivalent = MS18 / 1.8, for Items 64 and 66. The Summary of Bridge Rating table header is noted as Allowable Stress Rating. The tool reported only the HS20 tons.
