@@ -2358,3 +2358,20 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **How verified:** main vs branch on the default project: every localStorage key (1), page text (74143 chars), Export JSON (2665 chars identical) and the printed report text (print media, 67595 chars) identical (clock times normalised); 0 console errors; chip click → card on screen, no dialog; Ctrl+S / Ctrl+Shift+S → Save as; header at 1280 / 1400 / 1920 / 390 px (390: no sideways scroll), screenshots looked at. `node tests/check-syntax.mjs "Light Pole and Sign Post.html"`; `node tests/smoke/project-library.mjs --tool lightpole`; `node tests/smoke/github-sync-tools.mjs --tool lightpole`; `node tests/smoke/home-projects.mjs --tool lightpole`; `node tests/smoke/phone-layout.mjs --tool lp`: pass. node tests/lightpole-compare.mjs (13 cases, every result, cable value, tab text and drawing): ALL CASES IDENTICAL.
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
+
+## 2026-11-07 — PR: claude/lp-h1-ibc-embed-12ft (PR #977: https://github.com/mlococo88/All-Structural/pull/977) (LPH1: IBC Eq. 18-1 — d not over 12 ft when the lateral pressure S₁ is computed)   [§4: embedment deeper than 12 ft, less conservative before; d ≤ 12 ft identical; cable values identical]
+- **Problem (review H1, 2026-11-07):** the non-constrained IBC embedment kept increasing S₁ with depth below 12 ft. IBC 2018 §1807.3.2.1 (Eq. 18-1, verified on the 2018 IBC p. 437; the same in IBC 2021) defines d for that formula as the embedment depth, but not over 12 ft for computing the lateral pressure. The tool used S₁ = S₁,tab·iso·min(d/3, 15), i.e. only the §1806.3.3 15× cap, which never binds before the 12 ft limit. Unconservative for d > 12 ft.
+- **Where:** `solveEmbed()`, anchor `const S1=S1coef*`.
+  - Before: `const S1=S1coef*Math.min(d/3,15);`
+  - After: `const S1=S1coef*(Math.min(d,12)/3);` (parenthesised so that d ≤ 12 ft gives the same floating-point value as before).
+  - Constrained branch (Eq. 18-2, S₃ "based on a depth equal to the depth of embedment", no 12 ft wording): unchanged, `S1coef*Math.min(d,15)`.
+- **Worked steps / report / manual (display):** Shaft tab step 2 and Report §6 show `S₁ = S₁,tab·min(d, 12)/3 (IBC §1807.3.2.1: d ≤ 12 ft for the lateral pressure)` (before `min(d/3, 15)`, "IBC §1806.3.3: ≤ 15× tabulated"); iteration table headers "S₁ at min(d,12)/3" (before "S₁ at d/3"); Manual §4B.2 paragraph on the caps rewritten (12 ft for S₁, 15× for S₃).
+- **Governing provision:** IBC 2018 / 2021 §1807.3.2.1, Eq. 18-1 (definition of d); §1806.3.3 (15× cap, now relevant to S₃ only).
+- **Check case** (harness case `deep12`, added to `tests/lightpole-compare.mjs`): default project with H = 50 ft, OD 6 → 12 in, t_base 0.3125 in, clay (S₁ = 100 psf/ft), b = 2 ft, V = 170 mph. ASD P = 1,521.2 lb, h = 26.50 ft.
+  - Before: S₁ = 100·13.09/3 = 436.2 psf, A = 2.34·1521.2/(436.2·2) = 4.080, **d = 13.09 ft**.
+  - After: S₁ = 100·12/3 = 400 psf, A = 2.34·1521.2/(400·2) = 4.449; d = 0.5·4.449·[1 + √(1 + 4.36·26.50/4.449)] = 2.2247·(1 + 5.193) = **13.78 ft** (+5.3 %).
+  - Default project: d = 6.46 ft < 12 ft, identical.
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main` (21 cases): every result identical except `deep12` (emb.d, its iteration rows and d/b, the elevation drawings); only label text changed elsewhere; **cable values identical in every case**; 0 console errors. `project-library --tool lightpole`: the 4 "results identical" failures are the intended worked-step text change only (`.H`, S₁ expression); saved data opens unchanged. `check-syntax`, `phone-layout --tool lp`, `lightpole-anchor-handoff`, `lightpole-projection`, `lightpole-signviews`, `tests/engine/run.mjs lightpole` (42): pass.
+- **Saved data:** no key or format change.
+- **ENGINEER_CHECKS:** the "IBC 15× cap reading" item now says the cap applies to S₃ only.
+- **Open item (not changed):** Eq. 18-1 defines b for a square post or footing as its diagonal; the tool uses the side for a square shaft, which gives a deeper d (conservative).
