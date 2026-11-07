@@ -5399,7 +5399,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Other copies:** none.
 - **Open items:** the λn′ inner panel still uses the DG1 q. The bedding modulus (E_conc = 3600 ksi constant, D) is the existing NA-solve setting (Anchor Bolts tab).
 
-## 2026-11-07 — BPM7: ψ_ec,V applied in the torsion breakout sweep (PR: claude/bp-m7-torsion-psiec)
+## 2026-11-07 — BPM7: ψ_ec,V applied in the torsion breakout sweep (PR: claude/bp-m7-torsion-psiec, PR #973: https://github.com/mlococo88/All-Structural/pull/973)
 
 ### BPM7. Torsion: eccentric shear on the critical row   [calculation change, more conservative with torsion; saved data: none]
 - **Problem (review M7):** the BC-3 torsion sweep checked shear breakout in every direction û with the Fig. R17.7.2.1b case logic, but with ψ_ec,V = 1.0. Torsion makes the shear on the critical row unequal (more on one end), so the row's shear resultant is eccentric along the edge.
