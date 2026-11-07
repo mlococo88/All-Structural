@@ -539,7 +539,7 @@ The stiffness solver, fixed-end forces, couple sign convention, indeterminate be
 | :1972-2015 | Collision CT defaults are MassDOT-specific (γ = 1.0 for DC/EV in EE II) | AASHTO γp min 0.90. **[U]** for non-MassDOT work. | Medium ✅ **Closed (O5, 2026-11-07):** γp = 1.00 for DC/EV in EE II is AASHTO LRFD 10th Ed. Table 3.4.1-1 (not a MassDOT value; "γp min 0.90" is out of date for the 10th Ed.); γ_EH = 0 for stability, the full-joint distribution and the test-level forces are MassDOT Bridge Manual 3.3.2.4 / Table 3.3.2-1 (verified). Water, ES and the vertical earth thrust in EE II: PRs #944 (RWCT) and #956 (RWCV). |
 | :782 | Cohesion input unused | — | Low ✅ **Noted** (F10, PR #9: the input is labelled "not used"). |
 
-**Status (2026-11-07):** every row above is resolved (fix log `fixlog/Retaining Wall Designer.md`, F1–F17 and the 2026-11-07 calculation audit). Fix-log open items O4 (AASHTO φ_τ default 1.00, kept per Table 11.5.7-1 for semi-gravity walls) and O5 (collision factors, see the row above) are closed. The 2026-11-07 calculation audit of this tool was merged as PRs #942–#954, #956 (RWCV), #960 (RWUP) and this bookkeeping PR (see the fix log).
+**Status (2026-11-07):** every row above is resolved (fix log `fixlog/Retaining Wall Designer.md`, F1–F17 and the 2026-11-07 calculation audit). Fix-log open items O4 (AASHTO φ_τ default 1.00, kept per Table 11.5.7-1 for semi-gravity walls) and O5 (collision factors, see the row above) are closed. The 2026-11-07 calculation audit of this tool was merged as PRs #942–#954, #956 (RWCV), #960 (RWUP) and #963 (this bookkeeping) (see the fix log).
 
 **Verified OK:**
 - Rankine/Coulomb Ka, K0;

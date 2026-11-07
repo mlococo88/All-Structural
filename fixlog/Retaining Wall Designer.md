@@ -4130,7 +4130,7 @@ Review Phase 8 (pile-supported footing), PR 8b. Engineer decisions 2026-11-07 (r
 +const rwdwSupport = r => (r && r.inp && r.inp.fnd && r.inp.fnd.type === 'pile') ? RWDW_SUPPORT.piles : RWDW_SUPPORT.soil;   // RWPL: the foundation type of the model
 ```
 
-## 2026-11-07 — PR: claude/rw-audit-bookkeeping — Calculation audit item 10: bookkeeping (EH vertical 0.90 labelled as the engineer's choice; O4 and O5 closed; AUDIT.md §3.9 updated; two ACI citations in comments corrected) (RWBK; no result change)
+## 2026-11-07 — PR: claude/rw-audit-bookkeeping — Calculation audit item 10: bookkeeping (EH vertical 0.90 labelled as the engineer's choice; O4 and O5 closed; AUDIT.md §3.9 updated; two ACI citations in comments corrected) (RWBK; no result change) (PR #963: https://github.com/mlococo88/All-Structural/pull/963)
 
 Calculation audit, item 10. Engineer answers (2026-11-07). Code sites are tagged `RWBK`. No computed value changes.
 
