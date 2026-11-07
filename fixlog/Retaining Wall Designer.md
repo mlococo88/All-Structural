@@ -5516,7 +5516,7 @@ Review Phase 8, PR 8f, following the abutment calculator's contract (HANDOFF.md 
 +</script>
 ```
 
-## 2026-11-07 — PR: claude/pile-m7-group-handoff (PDA-M7) — pile results import: Pile Designer's group reduction applied to R_n and R_n,up   [imported value change with a group]
+## 2026-11-07 — PR: claude/pile-m7-group-handoff (PR #1050: https://github.com/mlococo88/All-Structural/pull/1050) (PDA-M7) — pile results import: Pile Designer's group reduction applied to R_n and R_n,up   [imported value change with a group]
 - **Problem (Pile Designer review M7):** `rwpxPlan` set `pile_Rn` / `pile_Rnup` to the single-pile static resistance even when Pile Designer's group efficiency or block governs.
 - **Where:** `rwpxPlan` (RWPX engine block).
   - New `G`, `grR` (`res.group.reduce` when < 1) and `grU` (`res.group.uplift.reduceUp` when < 1).

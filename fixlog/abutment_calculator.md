@@ -16218,7 +16218,7 @@ index 9d50d7b..7c34a8a 100644
 +      +(U&&U.uplift? `<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Piles in tension (minimum ${fmt(U.P,1)} kip, ${esc(U.ls||"")}): the group uplift resistance φ<sub>ug</sub>R<sub>ug</sub> [10.7.3.11, Eq. 10.7.3.11-1] — the lesser of the sum of the individual uplift resistances and the block — is by the geotechnical engineer (the individual check is §4.3).</div>` : `<div class="note-box">No pile in tension in any combination: group uplift [10.7.3.11] does not apply.</div>`)); }
 ```
 
-## 2026-11-07 — PR: claude/pile-m7-group-handoff (PDA-M7) — pile results import: Pile Designer's group reduction applied to R_n and R_n,up   [imported value change with a group]
+## 2026-11-07 — PR: claude/pile-m7-group-handoff (PR #1050: https://github.com/mlococo88/All-Structural/pull/1050) (PDA-M7) — pile results import: Pile Designer's group reduction applied to R_n and R_n,up   [imported value change with a group]
 - **Problem (Pile Designer review M7):** the import set `piles.Rn` / `piles.RnUp` to Pile Designer's single-pile static resistance even when its Module 11 group efficiency or block governs. The abutment then over-credited the piles.
 - **Where:** `AbutPileResults` IIFE, `plan(p,st)`.
   - Before the `if(geoOn){` block (anchor `// PDA-M7 (2026-11-07): Pile Designer's group result`): `grR` = `p.group.reduce` when < 1 (conventional abutment only), `grU` = `p.group.uplift.reduceUp` when < 1, and two warnings (the group factors; for a field-method R_n, which is imported as sent).

@@ -20128,7 +20128,7 @@ Cross-tool PR with the Retaining Wall Designer (Phase 8f, HANDOFF.md §4.6 / §4
   - `check-syntax`: pass. `pile-library`: see the PR. 0 console errors.
 - **Other copies:** none.
 
-## 2026-11-07 — PR: claude/pile-m7-group-handoff (PDA-M7) — pileResults carries the group result (η / block, group uplift); the abutment and the Retaining Wall Designer import the group-reduced R_n   [cross-tool; receivers' imported values change with a group]
+## 2026-11-07 — PR: claude/pile-m7-group-handoff (PR #1050: https://github.com/mlococo88/All-Structural/pull/1050) (PDA-M7) — pileResults carries the group result (η / block, group uplift); the abutment and the Retaining Wall Designer import the group-reduced R_n   [cross-tool; receivers' imported values change with a group]
 - **Problem (review M7):** `pileResults` sent the single-pile R_n / φ only. A receiver checked its piles at the single-pile φR_n. That over-credits the piles when Pile Designer's group efficiency η < 1 or its block governs (10.7.3.9, 10.9.3.6), and likewise for the group uplift (10.7.3.11, PDA-M6).
 - **Where (sender):** new `group(I,r)` in the `PileResultsXfer` IIFE (anchor `/* PDA-M7 (2026-11-07): the group result`), added to the payload as `group` (additive, optional; `schemaVersion` stays 1). The fields:
   - `phiRnPerPile` = min(η × single φR_n, block φR_g / n);
