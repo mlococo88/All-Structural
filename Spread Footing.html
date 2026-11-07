@@ -2116,10 +2116,12 @@ function renderDashboard(){
    if(pm.length)d.appendChild(chip('Wall out-of-plane P–M (ACI 318-19 11.5.2)',pm.map(z=>z.label+': ratio '+(isFinite(z.o.allMax)?f2(z.o.allMax):'\u221e')+' per ft (base '+f2(z.o.gov.ratio)+', top '+f2(z.o.topGov.rTop)+', dowels '+f2(z.o.dowGov.rDow)+'; b_eff '+f2(z.o.bTop)+' / '+f2(z.o.bBase)+' in; '+z.o.gov.name+(z.o.slender?'; slender kℓu/r '+f2(z.o.klr)+', '+(z.o.slFail?'NG: unstable or > 1.4× (6.2.5.3)':'magnified up to ×'+f2(z.o.slGov.amp)):'')+')').join('; '),bad.length?'fail':'pass',undefined,sfdElNav((bad[0]||gv||WD[0]).i)));
    const vw=WD.filter(z=>z.o.vGov),vb=vw.filter(z=>!z.o.vOK),vg=vw.reduce((a,z)=>(!a||z.o.vGov.vr>a.o.vGov.vr)?z:a,null);
    if(vw.length)d.appendChild(chip('Wall out-of-plane shear (ACI 318-19 11.5.5)',vw.map(z=>z.label+': V_u '+f2(z.o.vGov.vu)+' vs φV_c '+f2(z.o.vGov.phiVc)+' k/ft ('+z.o.vGov.name+')').join('; '),vb.length?'fail':'pass',undefined,sfdElNav((vb[0]||vg||WD[0]).i)));
+   {const ipw=WD.filter(z=>z.o.ip&&z.o.ip.gov),ib=ipw.filter(z=>!z.o.ip.ok),ig=ipw.reduce((a,z)=>(!a||z.o.ip.gov.ratio>a.o.ip.gov.ratio)?z:a,null);   /* SFWD-4 */
+    if(ipw.length)d.appendChild(chip('Wall in-plane P–M (ACI 318-19 11.5.2)',ipw.map(z=>z.label+': ratio '+(isFinite(z.o.ip.gov.ratio)?f2(z.o.ip.gov.ratio):'∞')+' whole wall ('+z.o.ip.gov.name+(z.o.ip.slender?'; kℓu/r '+f2(z.o.ip.klr)+(z.o.ip.slFail?' NG':' magnified'):'')+')').join('; '),ib.length?'fail':'pass',undefined,sfdElNav((ib[0]||ig||WD[0]).i)));}
    const tb=WD.filter(z=>!z.o.tieOK||!z.o.fitOK),tr=WD.filter(z=>z.o.tieReq&&P2.xties&&P2.xties[z.i]&&P2.xties[z.i].nXt>0);
    d.appendChild(chip('Wall ties and bar fit (ACI 318-19 11.7.4.1, 25.2.3)',WD.map(z=>z.label+': ρ_g '+sfdRhoTxt(z.o.rhoG)+(z.o.tieReq?' > 0.01, ties '+(z.o.tieOK?'OK':'NG')+(tr.includes(z)?', '+P2.xties[z.i].nXt+' crosstie(s) per set to detail':''):' ≤ 0.01, ties not required')+(z.o.fitOK?'':', bars do not fit (25.2.3)')).join('; '),tb.length?'fail':(tr.length?'warn':'pass'),undefined,sfdElNav((tb[0]||tr[0]||WD[0]).i)));
    d.appendChild(chip('Wall minimum thickness (ACI 318-19 11.3.1.1)',WD.map(z=>z.label+': t '+f2(z.o.tw)+(z.o.tw>=z.o.tmin.v-1e-9?' ≥ ':' < ')+f2(z.o.tmin.v)+' in').join('; ')+' (information: Table 11.3.1.1 applies only to a wall designed by 11.5.3; designed by 11.5.2)','na',undefined,sfdElNav(WD[0].i)));}}
-  if(wSel.length)d.appendChild(chip('Wall checks (ACI 318-19 Ch. 11)',wSel.map(z=>z.label+': '+(z.wall.applied?'not checked: Chapter 18 (special walls, boundary elements, coupling), openings, strut-and-tie 11.5.4.1, 11.8 (list on the Wall Design tab); in-plane flexure: the biaxial P–M of the whole section (stand-in)':'l_w/t '+f2(z.wall.lt)+' \u2264 3, checked as a pedestal')).join('; '),'warn',undefined,sfdElNav(wSel[0].idx)));   /* SFWD */
+  if(wSel.length)d.appendChild(chip('Wall checks (ACI 318-19 Ch. 11)',wSel.map(z=>z.label+': '+(z.wall.applied?'not checked: Chapter 18 (special walls, boundary elements, coupling), openings, strut-and-tie 11.5.4.1, 11.8 (list on the Wall Design tab)':'l_w/t '+f2(z.wall.lt)+' \u2264 3, checked as a pedestal')).join('; '),'warn',undefined,sfdElNav(wSel[0].idx)));   /* SFWD */
   { const rl=P2.bearing.filter(z=>!z.isPatch), nr=rl.filter(z=>!z.ldcReq), rq=rl.filter(z=>z.ldcReq), op=rl.filter(z=>z.ldcByOpt);   /* SFBC: 16.3.1.2(a); SFLA: op = required by the option only */
   d.appendChild(chip('Dowel development (\u2113dc)',(ldcBad.length?('\u2113dc > available: '+ldcBad.map(z=>z.label).join(', ')):
    (!rl.length||rq.length?'\u2113dc \u2264 available'+(nr.length?' ('+rq.map(z=>z.label).join(', ')+')':''):'')+(nr.length?(rq.length?'; ':'')+'not required: concrete bearing carries P_u (16.3.1.2(a))'+(rq.length?': '+nr.map(z=>z.label).join(', '):''):''))
@@ -2154,8 +2156,8 @@ function renderDashboard(){
    const mn=[P2.desX,P2.desY].filter(z=>z.AsBot>0).map(z=>z.clrB-z.clrMinB);
    d.appendChild(chip('Footing bar clear spacing',bad.length?bad.join('; '):'\u2265 max(1 in, d_b, 4/3 d_agg)'+(mn.length?' (min margin '+f2(Math.min(...mn))+' in)':''),bad.length?'fail':'pass',undefined,{tab:'tab-footdes',sec:'o-fd-x'}));}
   /* SFPM: biaxial P–M ratio of every LRFD combination at its own P_u */
-  if(realPeds.length){const gv=realPeds.filter(z=>z.pmGov&&!isNaN(z.pmGov.ratio)).reduce((a,z)=>(!a||z.pmGov.ratio>a.pmGov.ratio)?z:a,null), nr=realPeds.filter(z=>z.pmRange&&z.pmRange.length);
-   const sl=realPeds.filter(z=>z.slm), txt=(gv?('max ratio '+f2(gv.pmGov.ratio)+' \u2014 '+gv.label+', '+gv.pmGov.name+' (at its own P_u)'):'not computed')+(sl.length?'; slender: moments magnified, ACI 318-19 6.6.4 ('+sl.map(z=>z.label+' \u03b4_s\u03b4 up to '+f2(z.slGov.amp)).join(', ')+')':'');   /* SFSL */
+  if(pedOnly.length){const gv=pedOnly.filter(z=>z.pmGov&&!isNaN(z.pmGov.ratio)).reduce((a,z)=>(!a||z.pmGov.ratio>a.pmGov.ratio)?z:a,null), nr=pedOnly.filter(z=>z.pmRange&&z.pmRange.length);   /* SFWD-4: walls have Wall in-plane P–M */
+   const sl=pedOnly.filter(z=>z.slm), txt=(gv?('max ratio '+f2(gv.pmGov.ratio)+' \u2014 '+gv.label+', '+gv.pmGov.name+' (at its own P_u)'):'not computed')+(sl.length?'; slender: moments magnified, ACI 318-19 6.6.4 ('+sl.map(z=>z.label+' \u03b4_s\u03b4 up to '+f2(z.slGov.amp)).join(', ')+')':'');   /* SFSL */
    d.appendChild(chip('Pedestal P\u2013M (biaxial)',txt+(nr.length?'; P_u below the section\u2019s tension capacity in some combinations ('+nr.map(z=>z.label).join(', ')+'): NG':''),
     (gv&&gv.pmGov.ratio>1)||nr.length?'fail':(!gv?'warn':'pass'),undefined,gv?sfdElNav(P2.pedDes.indexOf(gv)):{tab:'tab-peddes',sec:'o-pd-intro'}));}
   /* SFCV: concrete cover, footing and pedestal vertical bars (ACI 318-19 Table 20.5.1.3.1) */
@@ -2250,7 +2252,8 @@ function sfdChCond(name){
    add(!z.asOK||!z.tenOK,'A_s,gov > A_s,prov');add(!z.ftgOKpf,(z.hook==='hook90'?'ℓ_dh':'ℓ_d')+' > avail');
    add(!z.projOKpf,z.full?'pedestal development short':'projection short');
    add(z.ok&&z.sfReview,'shear-friction dev. short');add(z.ok&&z.countDiff,'dowels ≠ bars');});break;
-  case 'Pedestal P–M (biaxial)':add(!realPeds.some(z=>z.pmGov&&!isNaN(z.pmGov.ratio)),'not computed');break;
+  case 'Pedestal P–M (biaxial)':add(!realPeds.filter(z=>!sfdIsWallEl(z.idx)).some(z=>z.pmGov&&!isNaN(z.pmGov.ratio)),'not computed');break;
+  case 'Wall in-plane P–M (ACI 318-19 11.5.2)':add((P2.wallD||[]).some(o=>o&&o.applied&&o.ip&&o.ip.slFail),'slender limit');break;   /* SFWD-4 */
   case 'Footing bar development':add(!!(P2.dev&&P2.dev.rows.some(z=>z.status==='review')),'straight ℓ_d > avail');break;
   case 'Pedestal torsion':add((P2.pedTor||[]).some(z=>z.on&&!z.isPatch&&!z.ok&&!sfdIsWallEl(z.idx)),'T_u \u2265 \u03c6T_th');break;   /* SFTQ */
   case 'Pedestal shear':add((P2.pedShear||[]).some(z=>!z.isPatch&&z.gov&&z.avFail&&!sfdIsWallEl(z.idx)),'A_v < A_v,min');break;
@@ -3943,7 +3946,7 @@ function sfdResultRows(){
   'Footing bar clear spacing':()=>['ACI 318-19 §25.2.1; D/C = s<sub>clr,min</sub>/(s − d<sub>b</sub>)',mx([P2.desX,P2.desY].flatMap(z=>[z.AsBot>0?z.clrMinB/z.clrB:0,z.AsTop>0?z.clrMinT/z.clrT:0])),['o-fd-x','o-fd-y']],
   'Interface shear friction':()=>['ACI 318-19 §22.9.4.2, Table 22.9.4.2, §22.9.4.4–22.9.4.6; D/C = V<sub>u</sub>/φV<sub>n</sub>',mx((P2.shearFr||[]).filter(z=>!z.isPatch&&z.gov).map(z=>z.gov.ratio)),['o-fd-bear']],
   'Dowels (tension, laps)':()=>['ACI 318-19 §16.3.1.1, §16.3.3, §22.4 (interface tension), §25.4.2 / §25.4.3 (tension development), §25.5.2 / §25.5.5 (laps); §16.3.4.1 (minimum); D/C = A<sub>s,gov</sub>/A<sub>s,prov</sub>, A<sub>s,gov</sub> = max(0.005A<sub>g</sub>, A<sub>s,req</sub>)',mx((P2.dowels||[]).filter(z=>!z.isPatch).map(z=>z.dcAs)),['o-fd-bear']],
-  'Pedestal P\u2013M (biaxial)':()=>['ACI 318-19 §22.4, §22.2; D/C = |M<sub>u</sub>|/|φM<sub>n</sub>|<sub>θ</sub> on the contour at each combination’s own P<sub>u</sub> (P<sub>u</sub>/φP<sub>n,max</sub> above the axial cap)'+(P2.pedDes.some(z=>z.slm)?'; slender pedestal: magnified moments, §6.6.4.6, §6.6.4.5, §6.2.5.3':''),mx(P2.pedDes.filter(z=>!z.isPatch&&z.pmGov).map(z=>z.pmRange&&z.pmRange.length?Infinity:(isNaN(z.pmGov.ratio)?0:z.pmGov.ratio))),P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)],
+  'Pedestal P\u2013M (biaxial)':()=>['ACI 318-19 §22.4, §22.2; D/C = |M<sub>u</sub>|/|φM<sub>n</sub>|<sub>θ</sub> on the contour at each combination’s own P<sub>u</sub> (P<sub>u</sub>/φP<sub>n,max</sub> above the axial cap)'+(P2.pedDes.some(z=>z.slm)?'; slender pedestal: magnified moments, §6.6.4.6, §6.6.4.5, §6.2.5.3':''),mx(P2.pedDes.filter(z=>!z.isPatch&&z.pmGov&&!sfdIsWallEl(z.idx)).map(z=>z.pmRange&&z.pmRange.length?Infinity:(isNaN(z.pmGov.ratio)?0:z.pmGov.ratio))),P2.pedDes.map((z,i)=>(z.isPatch||sfdIsWallEl(i))?null:sfdElCard(i).id).filter(Boolean)],
   'Concrete cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/c',mx([...(P2.covChk?P2.covChk.rows.filter(z=>z.applies).map(z=>z.c>0?z.min/z.c:Infinity):[]),...P2.pedDes.filter(z=>!z.isPatch).map(z=>z.cov>0?z.vertCovMin/z.cov:Infinity)]),['o-fd-basis']],
   'Footing bar development':()=>['ACI 318-19 §25.4.2.4 (straight), §25.4.3.1 / Table 25.4.3.2 (standard hook)'+(state.mat.ldExcess==='on'?', §25.4.10.1 (excess A<sub>s</sub>, straight bars; A<sub>s,req</sub> = max(flexure, A<sub>s,min</sub>), R8.6.1.1)':'')+'; D/C = ℓ<sub>d</sub> (or ℓ<sub>dh</sub> where hooked)/available',mx(((P2&&P2.dev)?P2.dev.rows:[]).map(z=>z.dc)),['o-fd-dev']],
   'Pedestal shear':()=>['ACI 318-19 Table 22.5.5.1, §22.5.1.10–22.5.1.11 (biaxial), §10.6.2; D/C = V<sub>u</sub>/φV<sub>c</sub>',mx((P2.pedShear||[]).filter(z=>!z.isPatch&&z.gov&&!sfdIsWallEl(z.idx)).map(z=>z.gov.ratio)),P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)],
@@ -3953,10 +3956,11 @@ function sfdResultRows(){
   'Wall in-plane shear (ACI 318-19 11.5.4)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.5.4.2, §11.5.4.3 (Eq. 11.5.4.3), §11.5.4.4; D/C = V<sub>u</sub>/φV<sub>n</sub>',(wa.every(z=>z.wall.vOK==null)?null:mx(wa.map(z=>z.wall.vGov&&z.wall.vGov.vr!=null?z.wall.vGov.vr:0))),wa.map(z=>'o-wd-'+z.idx)];},   /* SFWC-2; SFWH: V_n input needed -> D/C n/a */
   'Wall bar spacing and layers (ACI 318-19 11.7)':()=>{const wa=real.filter(z=>z.wall&&z.wall.applied);return ['ACI 318-19 §11.7.2.1, §11.7.3.1, §11.7.2.3; D/C = max(s<sub>v</sub>/s<sub>v,max</sub>, s<sub>h</sub>/s<sub>h,max</sub>)',mx(wa.map(z=>Math.max(z.wall.v.s/z.wall.sMaxV,z.wall.hz.need?0:(z.wall.hz.s>0?z.wall.hz.s/z.wall.sMaxH:Infinity)))),wa.map(z=>'o-wd-'+z.idx)];},   /* SFWC-3; SFWH: s_h input needed: left out of the D/C */
   'Wall out-of-plane P–M (ACI 318-19 11.5.2)':()=>{const W=(P2.wallD||[]).map((o,i)=>[o,i]).filter(([o])=>o&&o.applied&&o.gov);return ['ACI 318-19 §11.5.2.1, §22.4, §22.2 (per ft, strain compatibility), §11.4.2.1; slenderness §11.4.1.3, §6.6.4, §6.2.5.3; D/C = M/φM<sub>n</sub>(N)',mx(W.map(([o])=>o.slFail?Infinity:o.allMax)),W.map(([o,i])=>'o-wd-'+i)];},   /* SFWD-2 */
+  'Wall in-plane P–M (ACI 318-19 11.5.2)':()=>{const W=(P2.wallD||[]).map((o,i)=>[o,i]).filter(([o])=>o&&o.applied&&o.ip&&o.ip.gov);return ['ACI 318-19 §11.5.2.1, §22.4, §22.2 (whole wall, strong axis, strain compatibility), §11.4.2.1; slenderness §6.6.4; D/C = M<sub>c</sub>/φM<sub>n</sub>(P<sub>u</sub>)',mx(W.map(([o])=>o.ip.slFail?Infinity:o.ip.gov.ratio)),W.map(([o,i])=>'o-wd-'+i)];},   /* SFWD-4 */
   'Wall out-of-plane shear (ACI 318-19 11.5.5)':()=>{const W=(P2.wallD||[]).map((o,i)=>[o,i]).filter(([o])=>o&&o.applied&&o.vGov);return ['ACI 318-19 §11.5.5.1, §22.5, Table 22.5.5.1(c); D/C = V<sub>u</sub>/φV<sub>c</sub> per ft',mx(W.map(([o])=>o.vGov.vr)),W.map(([o,i])=>'o-wd-'+i)];},
   'Wall ties and bar fit (ACI 318-19 11.7.4.1, 25.2.3)':()=>{const W=(P2.wallD||[]).map((o,i)=>[o,i]).filter(([o])=>o&&o.applied);return ['ACI 318-19 §11.7.4.1 (ties where A<sub>st</sub> > 0.01A<sub>g</sub>), §25.7.2, §25.2.3',null,W.map(([o,i])=>'o-wd-'+i)];},
   'Wall minimum thickness (ACI 318-19 11.3.1.1)':()=>{const W=(P2.wallD||[]).map((o,i)=>[o,i]).filter(([o])=>o&&o.applied);return ['ACI 318-19 §11.3.1.1, Table 11.3.1.1 (information: walls designed by §11.5.3 only); h<sub>min</sub>/t shown',mx(W.map(([o])=>o.tmin.v/o.tw)),W.map(([o,i])=>'o-wd-'+i)];},
-  'Wall checks (ACI 318-19 Ch. 11)':()=>['ACI 318-19 §2.3 (wall); not checked: Chapter 18 (special structural walls, boundary elements, coupling beams), §11.7.5 (openings), §11.5.4.1 strut-and-tie, §11.8, §21.2.4; in-plane flexure by the biaxial P–M of the whole section (stand-in)',null,real.filter(z=>z.wall&&z.wall.sel).map(z=>sfdElCard(z.idx).id)],   /* SFWL */
+  'Wall checks (ACI 318-19 Ch. 11)':()=>['ACI 318-19 §2.3 (wall); not checked: Chapter 18 (special structural walls, boundary elements, coupling beams), §11.7.5 (openings), §11.5.4.1 strut-and-tie, §11.8, §21.2.4',null,real.filter(z=>z.wall&&z.wall.sel).map(z=>sfdElCard(z.idx).id)],   /* SFWL */
   'Pedestal tie cover':()=>['ACI 318-19 Table 20.5.1.3.1; D/C = c<sub>min</sub>/(c \u2212 d<sub>b,tie</sub>)',mx(P2.pedDes.filter(z=>!z.isPatch).map(z=>z.tieCov>0?z.tieCovMin/z.tieCov:Infinity)),P2.pedDes.map((z,i)=>z.isPatch?null:sfdElCard(i).id).filter(Boolean)]};
  return $$('#dashboard .chip').map(c=>{
   const name=c.querySelector('.cn').textContent, val=c.querySelector('.cv').textContent;
@@ -4576,7 +4580,7 @@ function sfrModel(){
    'Wall reinforcement (ACI 318-19 11.6)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-wd'+z.idx),   /* SFWC */
    'Wall in-plane shear (ACI 318-19 11.5.4)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-wd'+z.idx),   /* SFWC-2 */
    'Wall bar spacing and layers (ACI 318-19 11.7)':((P2&&P2.bearing)||[]).filter(z=>z.wall&&z.wall.applied).map(z=>'S-wd'+z.idx)};
-  ['Wall out-of-plane P–M (ACI 318-19 11.5.2)','Wall out-of-plane shear (ACI 318-19 11.5.5)','Wall ties and bar fit (ACI 318-19 11.7.4.1, 25.2.3)','Wall minimum thickness (ACI 318-19 11.3.1.1)'].forEach(k=>{W[k]=((P2&&P2.wallD)||[]).map((o,i)=>o&&o.applied?'S-wd'+i:null).filter(Boolean);});   /* SFWD-2 */   /* SFWC-3 */
+  ['Wall out-of-plane P–M (ACI 318-19 11.5.2)','Wall in-plane P–M (ACI 318-19 11.5.2)','Wall out-of-plane shear (ACI 318-19 11.5.5)','Wall ties and bar fit (ACI 318-19 11.7.4.1, 25.2.3)','Wall minimum thickness (ACI 318-19 11.3.1.1)'].forEach(k=>{W[k]=((P2&&P2.wallD)||[]).map((o,i)=>o&&o.applied?'S-wd'+i:null).filter(Boolean);});   /* SFWD-2 */   /* SFWC-3 */
   const ST={pass:'PASS',fail:'FAIL',warn:'REVIEW',na:'N/A'};
   const RR=(typeof sfdResultRows==='function'?sfdResultRows():[]);
   const rows=RR.map(x=>{const ks=(W[sfdChipKey(x.name)]||[]).filter(k=>have.has(k));
@@ -4628,7 +4632,7 @@ function sfrWallMinTopics(i,wI,S){const T=[];let wNote='';
  return {T,wNote};}
 /* SFWD-2 (2026-11-07): a wall's subsection of the Report's "Wall design" (key S-wd<i>; step scope pd<i> as before): the worked steps of
    sfdWallOOP (out of plane: section, slenderness, P-M per ft, shear; 11.5.3 and 11.3.1.1 for information), the wall's 11.6 / 11.5.4 /
-   11.7 topics (sfrWallMinTopics, unchanged), ties / bar fit / cover, and the in-plane stand-in (display of computed values only). */
+   11.7 topics (sfrWallMinTopics, unchanged), ties / bar fit / cover, and the in-plane P-M (SFWD-4) (display of computed values only). */
 function sfrWallSub(i,pd,S){
  const w=P2.bearing[i].wall,o=P2.wallD[i],rf=state.peds[i].reinf,T=[],fx=v=>isFinite(v)?v:'∞';
  const ob=o.env?Object.assign({},o,{ldc:'conc',bTop:o.env.conc.bTop,bBase:o.env.conc.bBase}):o;   /* SFWD-3: older save, show the concentrated b_eff */
@@ -4663,7 +4667,13 @@ function sfrWallSub(i,pd,S){
   S({id:'wo.lams',label:'Size-effect factor',sym:'\\lambda_{s}',eq:'\\sqrt{\\frac{2}{1 + d/10}} \\le 1',sub:'\\sqrt{\\frac{2}{1 + '+sfrN(o.d,3)+'/10}}',value:o.lams,unit:'',d:3,ref:'ACI 318-19 22.5.5.1.3'}),
   S({id:'wo.Vc',label:'Concrete shear strength per ft, Table 22.5.5.1(c) (ρ_w = '+sfrN(o.rhow,5)+'; N_u/(6A_g) = '+sfrN(g.nt,1)+' psi, net tension only)',sym:'V_{c}',eq:'\\left[8\\lambda_{s}\\lambda\\rho_{w}^{1/3}\\sqrt{'+SFR_FC+'} + \\frac{N_{u}}{6A_{g}}\\right] b d',sub:'['+sfrN(o.vcCoef,1)+(g.nt<0?' \\minus '+sfrN(-g.nt,1):'')+']\\cdot 12\\cdot'+sfrN(o.d,3)+'/1000',value:g.Vc,unit:'kip/ft',ref:'ACI 318-19 Table 22.5.5.1'}),
   S({id:'wo.V',chk:'wall out-of-plane shear',label:'Out-of-plane shear per ft (V_u = '+sfrN(Math.abs(g.Vo))+' kip over b_eff,base = '+sfrN(g.LbV*12)+' in = '+sfrN(g.LbV,3)+' ft: V_u/b_eff,base = '+sfrN(g.vu)+' kip/ft; φ = 0.75)',sym:'\\frac{V_{u}}{\\phi V_{c}}',eq:'\\frac{V_{u}/b_{eff,base}}{\\phi V_{c}}',sub:'\\frac{'+sfrN(Math.abs(g.Vo))+'/'+sfrN(g.LbV,3)+'}{0.75\\cdot'+sfrN(g.Vc)+'}',value:fx(g.vr),unit:'',d:3,ok:!!o.vOK})]});}
- if(pd.pmGov)T.push({title:'In-plane flexure and axial: whole section (stand-in, governing: '+pd.pmGov.name+')',ref:SFPM_REF,steps:[S({id:'wo.ip',chk:'wall in-plane P–M (stand-in)',label:'Biaxial P–M ratio of the whole section, both moments together (as for a pedestal)',sym:'ratio',eq:'\\frac{|M_{u}|}{|\\phi M_{n}|_{\\theta}}',sub:'',value:isNaN(pd.pmGov.ratio)?'n/a':pd.pmGov.ratio,unit:'',d:3,ok:!(pd.pmGov.ratio>1)})]});
+ {const ip=o.ip,g=ip&&ip.gov;if(g)T.push({title:'In-plane axial and flexure, whole wall (governing: '+g.name+')',ref:'ACI 318-19 11.5.2.1, 22.4, 22.2, 21.2.2, 11.4.2.1; 6.2.5, 6.6.4',steps:[   /* SFWD-4 */
+  S({id:'wi.Pmax',label:'Whole wall t × ℓ_w = '+sfrN(o.tw)+' × '+sfrN(o.lw)+' in, '+ip.nb+' vertical bars at their positions (A_st = '+sfrN(ip.As)+' in²): maximum design axial strength',sym:'\\phi P_{n,max}',eq:'0.65\\cdot 0.80 P_{0}',sub:'0.65\\cdot 0.80\\cdot'+sfrN(ip.S.P0),value:ip.S.phiPnMax,unit:'kip',ref:'ACI 318-19 11.4.2.1, 22.4.2.1'}),
+  S({id:'wi.klr',label:'In-plane slenderness (r = 0.3ℓ_w = '+sfrN(ip.r)+' in; k, ℓ_u as out of plane)'+(ip.slender?': slender, M_c = magnified':': neglected'),sym:'k\\ell_{u}/r',eq:'',sub:'\\frac{'+sfrN(o.k)+'\\cdot'+sfrN(o.lu)+'}{'+sfrN(ip.r)+'}',value:ip.klr,unit:'',d:2,ok:!ip.slFail,ref:'ACI 318-19 6.2.5.1, 6.6.4'}),
+  ...(g.mode==='ok'?[S({id:'wi.c',label:'Neutral axis at P_u = '+sfrN(g.P)+' kip (strain compatibility; a = '+sfrN(g.q.a)+' in, C_c = '+sfrN(g.q.Cc)+' kip, ε_t = '+sfrN(g.q.et,5)+', φ = '+sfrN(g.q.phi,3)+')',sym:'c',eq:'',sub:'',value:g.q.c,unit:'in',ref:'ACI 318-19 22.2, 21.2.2'}),
+   S({id:'wi.Mn',label:'Design moment strength at P_u',sym:'\\phi M_{n}',eq:'',sub:'',value:g.q.phiMn,unit:'kip-ft'}),
+   S({id:'wi.R',chk:'wall in-plane P–M',label:'In-plane axial and flexure (M_u,in = '+sfrN(g.Mi)+' kip-ft'+(ip.slender?', M_c magnified':'')+')',sym:'ratio',eq:'\\frac{M_{c}}{\\phi M_{n}}',sub:'\\frac{'+sfrN(g.Mc)+'}{'+sfrN(g.q.phiMn)+'}',value:g.ratio,unit:'',d:3,ok:g.ratio<=1+1e-9})]
+   :[S({id:'wi.R',chk:'wall in-plane P–M',label:g.mode==='axial'?'P_u above the axial cap':g.mode==='range'?'P_u below the tension capacity':'unstable (slender)',sym:'ratio',eq:'',sub:'',value:isFinite(g.ratio)?g.ratio:'∞',unit:'',d:3,ok:false})])]});}
  const M=sfrWallMinTopics(i,w,S);T.push(...M.T);
  {const X=P2.xties&&P2.xties[i];T.push({title:'Ties, bar clear spacing and cover',ref:'ACI 318-19 11.7.4.1, 25.7.2, 25.2.3, 11.7.1.1, Table 20.5.1.3.1',steps:[
   S({id:'wo.rg',label:'Ties required by 11.7.4.1 where A_st > 0.01A_g (bars taken as compression reinforcement): '+(o.tieReq?'yes':'no'),sym:'\\rho_{g}',eq:'\\frac{A_{st}}{A_{g}}',sub:'\\frac{'+sfrN(pd.Ast)+'}{'+sfrN(pd.Ag,1)+'}',value:o.rhoG,unit:'',d:5,ref:'ACI 318-19 11.7.4.1'}),
@@ -6252,7 +6262,7 @@ function sfdWallItems(w){
   ['Wall minimum steel','ρ_l and ρ_t ≥ the larger of Table 11.6.1 and 11.6.2 (engineer 2026-11-06): Wall reinforcement'],
   ['Code case','in-plane V_u '+(w.t1161?'≤':'>')+' 0.5φα_cλ√f′c A_cv = '+f2(w.gov?w.gov.thr:0)+' kip: '+(w.t1161?'11.6.1 / Table 11.6.1 is the code minimum; 11.6.2 also applied by the engineer’s choice':'11.6.2 applies (the condition of 11.6.2 is printed “≤” in the engineer’s copy; the reading “above the 11.6.1 limit” is used); Table 11.6.1 also checked')],
   ['Out of plane','per foot of the effective length b_eff (11.2.3.1 at the load, 45° spread to the base): axial and flexure by 11.5.2.1 / 22.4 with slenderness by 6.6.4 (11.4.1.3); shear by 11.5.5.1 / 22.5; ties 11.7.4.1 (11.5.3 and 11.3.1.1 for information)'],
-  ['In plane','shear by 11.5.4 (Wall in-plane shear); flexure and axial: the biaxial P–M of the whole section'],
+  ['In plane','shear by 11.5.4 (Wall in-plane shear); axial and flexure of the whole wall about its strong axis by 11.5.2.1 / 22.4 (Wall in-plane P–M)'],
   ['Spacing and layers','11.7.2.1, 11.7.3.1, 11.7.2.3: Wall bar spacing and layers'],
   ['Two-way shear around the wall','still checked (conservative): ACI 318-19 22.6.4.1 does not exempt walls; the footing one-way shear at d from the wall faces (13.2.7.1, Table 13.2.7.1: face of a concrete wall) is also checked'],
   ['Not checked',SFWD_NOT]];
@@ -6538,6 +6548,31 @@ function sfdWallOOP(i,p,pd,w,combos,fc,fy,lam){
  {const lc=Math.min(lu,lw);o.tmin={lc,v:Math.max(4,lc/25),bearing:o.rows.some(z=>z.P>1e-9)};}
  o.rhoG=pd.Ag>0?pd.Ast/pd.Ag:0;o.tieReq=o.rhoG>0.01+1e-12;
  o.tieOK=!o.tieReq||!!(pd.tieOK&&pd.tieSizeOK);o.fitOK=!!pd.barFitOK;
+ /* SFWD-4 (2026-11-07): in-plane axial and flexure of the whole wall, about its strong axis (ACI 318-19 11.5.1.1, 11.5.2.1 -> 22.4,
+    22.2): section t x l_w with every vertical bar of the cage at its position along l_w (the distributed curtains and the end bars),
+    strain compatibility (sfwSec), phi by eps_t of the farthest bar (21.2.2), phiP_n <= phiP_n,max (11.4.2.1). Demand: every LRFD
+    combination, P_u and the in-plane moment M_u,in at the wall base (M_ux for a wall along y, M_uy along x; V h and P e included);
+    ratio = |M_u,in|/phiM_n(P_u) (P_u/phiP_n,max above the cap, P_u/phiP_n,t below the tension capacity). In-plane slenderness as out of
+    plane (same k, l_u and brace inputs) with r = 0.3 l_w, I_g = t l_w^3/12, M_2,min = P_u(0.6 + 0.03 l_w). The interaction with the
+    out-of-plane moment is checked per ft at the two ends (N = P_u/l_w +- 6M_u,in/l_w^2, out-of-plane check above). */
+ {const bars=(pd.pmBars||[]).map(q=>({u:dir==='y'?q.y:q.x,A:q.A}));
+  const S2=sfwSec(tw,lw,bars.map(q=>({d:lw/2-q.u,A:q.A})).sort((a,b)=>a.d-b.d),fc,fy);
+  const r2=0.3*lw,klr2=r2>0?k*lu/r2:Infinity,sl2=klr2>lim+1e-9,Ig2=tw*Math.pow(lw,3)/12;
+  const ip=o.ip={S:S2,r:r2,klr:klr2,slender:sl2,Ig:Ig2,nb:bars.length,As:S2.Ast};
+  ip.rows=(pd.pmPts1||[]).map(pt=>{
+   const Mi=dir==='y'?pt.Mx:pt.My,P=pt.P,sus=pt.sus,z={name:pt.name,P,Mi};let Mc=Math.abs(Mi),amp=1;
+   if(sl2){const bdns=sus?(P>1e-9?clamp(sus.P/P):0):1,Mod=sus?(dir==='y'?sus.mx:sus.my):0,bds=sus?(Math.abs(Mi)>1e-9?clamp(Math.abs(Mod)/Math.abs(Mi)):0):1;
+    const mag=Pc=>P<=0?1:(1-P/(0.75*Pc)>1e-9?Math.max(1,1/(1-P/(0.75*Pc))):Infinity),Mmin=P>0?P*(0.6+0.03*lw)/12:0;
+    if(brace==='unbraced'){const Pcs=Math.PI*Math.PI*(0.35*Ec*Ig2/(1+bds))/Math.pow(k*lu,2),Pcn=Math.PI*Math.PI*(0.35*Ec*Ig2/(1+bdns))/Math.pow(lu,2),dS=mag(Pcs),dN=mag(Pcn);
+     Object.assign(z,{bdns,bds,Pcs,Pcn,dS,dN,Mmin});Mc=dN*Math.max(dS*Math.abs(Mi),Mmin);amp=Math.abs(Mi)>1e-9?dS*dN:1;}
+    else{const Pcn=Math.PI*Math.PI*(0.35*Ec*Ig2/(1+bdns))/Math.pow(k*lu,2),dN=mag(Pcn);Object.assign(z,{bdns,Pcn,dN,Mmin});Mc=dN*Math.max(Math.abs(Mi),Mmin);amp=Math.abs(Mi)>1e-9?dN:1;}}
+   z.unstable=!isFinite(Mc)||!isFinite(amp);z.Mc=Mc;z.amp=amp;z.over14=!z.unstable&&amp>1.4+1e-9;
+   if(z.unstable){z.ratio=Infinity;z.mode='unstable';}else{const a=sfwRatio(S2,P,Mc);z.mode=a.mode;z.q=a.q;z.ratio=a.ratio;}
+   return z;});
+  ip.gov=ip.rows.reduce((a,z)=>(!a||z.ratio>a.ratio)?z:a,null);
+  ip.slGov=sl2?ip.rows.reduce((a,z)=>(!a||!(z.amp<=a.amp))?z:a,null):null;
+  ip.slFail=ip.rows.some(z=>z.unstable||z.over14);
+  ip.ok=(!ip.gov||ip.gov.ratio<=1+1e-9)&&!ip.slFail;}
  return o;
 }
 function computePhase2(R){
@@ -8437,11 +8472,21 @@ function sfdWallCard(b,i){
   '\\lambda_s = '+f3(o.lams)+',\\;\\rho_w = \\frac{'+f3(o.Asf)+'}{12\\cdot'+f3(o.d)+'} = '+sfdF5(o.rhow)+',\\;\\frac{N_u}{6A_g} = '+f2(g.nt)+'\\;\\mathrm{psi}\\;(\\text{net tension only}),\\;V_c = ['+f2(o.vcCoef)+(g.nt<0?' '+f2(g.nt):'')+']\\cdot12\\cdot'+f3(o.d)+'/1000 = '+f2(g.Vc)+'\\;\\mathrm{kip/ft}',
   'V_u = \\frac{'+f2(Math.abs(g.Vo))+'}{b_{eff,base}} = \\frac{'+f2(Math.abs(g.Vo))+'}{'+f3(g.LbV)+'} = '+f2(g.vu)+'\\;\\mathrm{kip/ft},\\;\\phi V_c = '+f2(g.phiVc)+'\\;\\Rightarrow\\;\\frac{V_u}{\\phi V_c} = \\mathbf{'+(isFinite(g.vr)?f3(g.vr):'\\infty')+'}'+ck(o.vOK)));
   b.appendChild(sfwUl([['V<sub>u</sub>','out-of-plane shear V<sub>u'+(o.dir==='y'?'x':'y')+'</sub> of every LRFD combination, divided by b<sub>eff,base</sub> = '+f2(g.LbV*12)+' in'],['V<sub>c</sub>','row (c): no shear reinforcement across the thickness; compression N<sub>u</sub> not counted (conservative)'],['In-plane shear','11.5.4, below']]));}
- /* in-plane (part (b): the biaxial P-M of the whole section stands in until the in-plane check is added) */
- {const g=pd.pmGov;if(g)b.appendChild(eqBlock('Wall: in-plane flexure and axial \u2014 whole section (stand-in)','ACI 318-19 22.4, 22.2; biaxial ratio of the section as for a pedestal (SFPM)',
-  '\\text{ratio} = \\frac{|M_u|}{|\\phi M_n|_\\theta}\\;\\text{(the whole }'+f2(pd.bx)+'\\times'+f2(pd.by)+'\\text{ in section, every bar of the cage, both moments together)}',
-  '\\text{governing: '+tn(g.name)+'},\\;P_u = '+f2(g.P)+'\\;\\mathrm{k}',
-  '\\text{ratio} = '+(isNaN(g.ratio)?'\\text{n/a}':f3(g.ratio))+((g.ratio<=1)?'\\;\\checkmark':'\\;\\text{NG}')));}
+ /* SFWD-4: in-plane axial and flexure of the whole wall (strong axis) */
+ {const ip=o.ip,g=ip&&ip.gov;if(g){
+  b.appendChild(eqBlock('Wall: in-plane P–M, whole wall — '+g.name,'ACI 318-19 11.5.2.1, 22.4, 22.2, 21.2.2, 11.4.2.1, 6.6.4',
+   '\\begin{gathered}\\text{section } t\\times\\ell_w = '+f2(o.tw)+'\\times'+f2(o.lw)+'\\text{ in}\\\\ '+ip.nb+'\\text{ vertical bars at their positions, }A_{st} = '+f2(ip.As)+'\\text{ in}^2\\\\ P_0 = 0.85f\'_c(A_g - A_{st}) + f_yA_{st},\\quad \\phi P_{n,max} = 0.65\\cdot0.80P_0\\\\ \\text{ratio} = \\frac{M_c}{\\phi M_n(P_u)},\\quad \\phi\\text{ by }\\varepsilon_t\\text{ of the farthest bar}\\end{gathered}',
+   '\\begin{gathered}P_0 = '+f2(ip.S.P0)+',\\quad \\phi P_{n,max} = '+f2(ip.S.phiPnMax)+',\\quad \\phi P_{n,t} = '+f2(ip.S.phiTn)+'\\text{ kip}\\\\ r = 0.3\\ell_w = '+f2(ip.r)+'\\text{ in},\\quad \\frac{k\\ell_u}{r} = \\frac{'+f2(o.k)+'\\cdot'+f2(o.lu)+'}{'+f2(ip.r)+'} = '+f2(ip.klr)+(ip.slender?' > '+o.lim+'\\text{ (slender: magnified)}':' \\le '+o.lim+'\\text{ (neglected)}')+'\\end{gathered}',
+   g.mode==='ok'?('\\begin{gathered}\\text{'+tn(g.name)+'}:\\quad P_u = '+f2(g.P)+'\\text{ k},\\quad M_c = '+fx(g.Mc)+'\\text{ k-ft}\\\\ c = '+f3(g.q.c)+',\\quad a = \\beta_1c = '+f3(g.q.a)+'\\text{ in},\\quad C_c = 0.85f\'_c\\,a\\,t = '+f2(g.q.Cc)+'\\text{ k},\\quad \\varepsilon_t = '+sfdF5(g.q.et)+',\\quad \\phi = '+f3(g.q.phi)+'\\\\ \\phi M_n = '+f2(g.q.phiMn)+'\\text{ k-ft}\\quad\\Rightarrow\\quad \\text{ratio} = \\frac{'+fx(g.Mc)+'}{'+f2(g.q.phiMn)+'} = \\mathbf{'+f3(g.ratio)+'}'+ck(g.ratio<=1+1e-9)+'\\end{gathered}')
+   :g.mode==='axial'?'P_u = '+f2(g.P)+' > \\phi P_{n,max}\\quad\\Rightarrow\\quad\\text{ratio} = \\mathbf{'+f3(g.ratio)+'}\\text{ NG}':g.mode==='range'?'P_u = '+f2(g.P)+' < \\phi P_{n,t}\\quad\\Rightarrow\\quad\\text{ratio} = \\mathbf{'+f3(g.ratio)+'}\\text{ NG}':'\\text{unstable (slender): NG}'));
+  const t=document.createElement('table');t.className='tbl';t.style.fontSize='11px';
+  t.innerHTML='<tr><th>#</th><th>Combination</th><th>P_u (k)</th><th>M_u,in (k-ft)</th><th>'+(ip.slender?'M_c (k-ft)':'M_u (k-ft)')+'</th><th>φM_n at P_u (k-ft)</th><th>Ratio</th></tr>';
+  ip.rows.forEach((z,k)=>{const tr=document.createElement('tr');
+   [k+1,z.name,f2(z.P),f2(z.Mi),fx(z.Mc),z.q?f2(z.q.phiMn):(z.mode==='axial'?'axial cap':z.mode==='range'?'tension':'—'),isFinite(z.ratio)?f3(z.ratio):'∞'].forEach((x,c)=>{const td=document.createElement('td');td.textContent=x;if(c===6)td.style.color=z.ratio<=1+1e-9?'#1b5e20':'#b71c1c';tr.appendChild(td);});
+   if(z===g)tr.style.fontWeight='bold';t.appendChild(tr);});
+  b.appendChild(t);
+  b.appendChild(sfwUl([['Section','the whole wall, every vertical bar of the cage at its position along ℓ<sub>w</sub> (curtains and end bars)'],['M<sub>u,in</sub>','about the strong axis at the wall base (M<sub>u'+(o.dir==='y'?'x':'y')+'</sub>: V h, applied moment, P·e)'],['Interaction with the out-of-plane moment','checked per ft at the two ends (out-of-plane check above, N = P<sub>u</sub>/ℓ<sub>w</sub> ± 6M<sub>u,in</sub>/ℓ<sub>w</sub>²)'],['Bold','the governing row']]));
+  if(!ip.ok)b.appendChild(el('div','failbox','<b>NG — wall in-plane axial and flexure</b> (ratio '+(isFinite(g.ratio)?f3(g.ratio):'∞')+', '+sfEsc(g.name)+(ip.slFail?'; slender limit':'')+').'));}}
  sfdWallRhoBlocks(b,w);   /* SFWC: 11.6, 11.5.4, 11.7.2 / 11.7.3 */
  /* 11.7.4.1 ties, bar fit, covers */
  {const X=P2.xties&&P2.xties[i];
@@ -8462,23 +8507,23 @@ function sfdWallCard(b,i){
   'h_{min} = \\max\\left(4\\;\\mathrm{in},\\;\\frac{\\min(\\ell_u,\\,\\ell_w)}{25}\\right)\\;\\text{(bearing walls designed by 11.5.3 only)}',
   'h_{min} = \\max(4,\\;'+f2(o.tmin.lc)+'/25) = '+f2(o.tmin.v)+'\\;\\mathrm{in},\\quad t = '+f2(o.tw)+'\\;\\mathrm{in}',
   '\\text{not required: the wall is designed by 11.5.2 (note [1] of Table 11.3.1.1); }t'+(o.tw>=o.tmin.v-1e-9?'\\ge':'<')+'h_{min}'));
- b.appendChild(el('div','note','<b>Not checked for this wall:</b><ul class="sfwList">'+SFWD_NOT_L.map(t=>'<li>'+sfEsc(t)+'</li>').join('')+'<li>in-plane flexure: for now the biaxial P\u2013M of the whole section (above)</li></ul>'));
+ b.appendChild(el('div','note','<b>Not checked for this wall:</b><ul class="sfwList">'+SFWD_NOT_L.map(t=>'<li>'+sfEsc(t)+'</li>').join('')+'</ul>'));
 }
 /* SFWD (2026-11-07): the wall tab's summary note and each wall's connection to the footing (display only) */
 const SFWD_INTRO=[['What is on this tab','each element that is a <b>wall</b> by ACI 318-19 2.3 (element type Wall on the Pedestals card, horizontal length-to-thickness ratio \u2113<sub>w</sub>/t &gt; 3)'],
  ['Out of plane','axial and flexure per foot (11.5.2.1, 22.4) with slenderness (11.4.1.3, 6.6.4); shear (11.5.5.1, 22.5)'],
- ['In plane','shear (11.5.4); flexure and axial: the biaxial P\u2013M of the whole section'],
+ ['In plane','shear (11.5.4); axial and flexure of the whole wall about its strong axis (11.5.2.1, 22.4)'],
  ['Reinforcement','minimum \u03c1<sub>\u2113</sub>, \u03c1<sub>t</sub> (11.6); spacing and layers (11.7.2, 11.7.3); ties (11.7.4.1); cover'],
  ['Connection to the footing','bearing, dowels, shear friction (16.3), at the end of each card']];
 /* SFWD-2: the 6W.1 summary table of the walls */
 function sfdWallSumTable(L){
  const t=document.createElement('table');t.className='tbl';
- t.innerHTML='<tr><th>Wall</th><th>\u2113<sub>w</sub>\u00d7t\u00d7h (in)</th><th>\u03c1<sub>\u2113</sub> / \u03c1<sub>t</sub></th><th>Out-of-plane P\u2013M ratio</th><th>k\u2113<sub>u</sub>/r</th><th>Out-of-plane shear</th><th>In-plane shear</th><th>Ties (11.7.4.1)</th></tr>';
+ t.innerHTML='<tr><th>Wall</th><th>\u2113<sub>w</sub>\u00d7t\u00d7h (in)</th><th>\u03c1<sub>\u2113</sub> / \u03c1<sub>t</sub></th><th>Out-of-plane P\u2013M ratio</th><th>k\u2113<sub>u</sub>/r</th><th>Out-of-plane shear</th><th>In-plane P–M</th><th>In-plane shear</th><th>Ties (11.7.4.1)</th></tr>';
  L.forEach(i=>{const w=P2.bearing[i].wall,o=P2.wallD[i],pd=P2.pedDes[i];if(!o||!o.applied)return;const tr=document.createElement('tr');
   const g=o.gov,v=o.vGov,ok=(r)=>r<=1+1e-9;
   [[pd.label],[f2(o.lw)+'\u00d7'+f2(o.tw)+'\u00d7'+f2(pd.h)],[sfdRhoTxt(w.v.rho)+' / '+(w.hz.need?'input needed':sfdRhoTxt(w.hz.rho))],
    [g?(isFinite(o.allMax)?f3(o.allMax):'\u221e')+' (b_eff '+f2(o.bBase)+' in)':'\u2014',g?(o.ok?'#1b5e20':'#b71c1c'):null],[f2(o.klr)+(o.slender?(o.slFail?' (NG)':' (magnified)'):''),o.slFail?'#b71c1c':null],
-   [v?(isFinite(v.vr)?f3(v.vr):'\u221e'):'\u2014',v?(o.vOK?'#1b5e20':'#b71c1c'):null],[w.vOK==null?'input needed':(w.vGov&&w.vGov.vr!=null?f3(w.vGov.vr):'\u2014'),w.vOK==null?'#8a6d00':(w.vOK?'#1b5e20':'#b71c1c')],
+   [v?(isFinite(v.vr)?f3(v.vr):'\u221e'):'\u2014',v?(o.vOK?'#1b5e20':'#b71c1c'):null],[o.ip&&o.ip.gov?(isFinite(o.ip.gov.ratio)?f3(o.ip.gov.ratio):'\u221e'):'\u2014',o.ip?(o.ip.ok?'#1b5e20':'#b71c1c'):null],[w.vOK==null?'input needed':(w.vGov&&w.vGov.vr!=null?f3(w.vGov.vr):'\u2014'),w.vOK==null?'#8a6d00':(w.vOK?'#1b5e20':'#b71c1c')],
    [o.tieReq?((pd.tieOK&&pd.tieSizeOK)?'required: OK':'required: NG'):'not required',o.tieOK?'#1b5e20':'#b71c1c']].forEach(([x,c])=>{const td=document.createElement('td');td.textContent=x;if(c)td.style.color=c;tr.appendChild(td);});
   t.appendChild(tr);});
  return t;}
