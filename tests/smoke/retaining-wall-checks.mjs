@@ -292,6 +292,9 @@ const AUD = [
     ['/Water uplift on the heel underside/.test(T.footing) && /Water uplift on the heel underside/.test(P) && /Factored pile-row reactions behind the back face/.test(P)', 'Footing tab and Report (heel pile steps now in the Report)']]],
   ['RW2H3 AASHTO on piles, water 6 ft: heel M_u 24996 → 29840 (γ_WA 1.0)', { design_basis: 'AASHTO', fnd_type: 'pile', tf: 36, wt_depth: 6 }, [
     ['Math.abs(R.Mu_heel_net - 29840.1) < 1 && R.heelPile.water.g === 1', 'heel M_u 29840']]],
+  ['RW2M2 AASHTO default: heel / toe crack control from the Service I base reaction: heel M_s 64704 → 15496, toe 6298 → 6100; no spurious f_ss warning', { design_basis: 'AASHTO' }, [
+    ['Math.abs(R.aashtoR.serv.M_serv_heel - 15496.5) < 1 && Math.abs(R.aashtoR.serv.M_serv_toe - 6099.7) < 1 && R.aashtoR.serv.heel.crack.fss_ok && !R.warnings.some(w => /Heel service steel stress/.test(w))', 'Service I moments, f_ss ≤ 0.6f_y, no warning'],
+    ['/Service I heel and toe moments at the stem faces/.test(T.stability) && /Service I heel and toe moments \\(all γ = 1\\.0\\)/.test(P)', 'Stability Step 9 and Report']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {
