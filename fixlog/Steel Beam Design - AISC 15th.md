@@ -2638,3 +2638,31 @@ From the code-compliance review of 2026-11-07 (finding H3). The plate-girder inp
 - **Saved data:** no key or field changed. A saved project with Built-up ticked now opens with the plate-derived h and constants for the properties it did not enter; its entered values are untouched.
 - **Decision (pending engineer review):** no migration that keeps the old (parent-shape) values for saved built-up projects: the old values were the wrong section and unconservative in the check case. The properties listed in the warning (A, I_x, S_x, Z_x, r_x, k, Q, W_no, S_w1, Wt) are not replaced, only flagged, because the user may have entered the welded values on purpose elsewhere; the plate-girder input mode (next PR) computes all of them.
 - **Open items:** singly symmetric built-up girders are not modelled (top and bottom flanges are the same plates here).
+
+## 2026-11-07 — PR: claude/steelbeam-h3-plate-girder — Plate-girder input: every built-up I-shape property computed from the plates (H3 part 2; new option, default off)
+
+From the code-compliance review of 2026-11-07 (finding H3, the plate-girder builder). Follows H3 part 1 (#1012).
+
+### H3-2. "Plate girder: every property from the plates"   [new option; no result change unless ticked]
+- **Problem:** after H3-1, a built-up section still took A, I_x, S_x, Z_x, r_x, k, Q_f, Q_w, W_no, S_w1 and Wt from the parent rolled shape unless each was typed in (flagged by the H3-1 warning).
+- **Governing provision:** section properties of three welded plates (doubly symmetric; welds neglected): AISC 360-16 Table B4.1b note on h; §F2.2 Eq. F2-7; §J10.2 (k for welded sections = flange face to weld toe); AISC Design Guide 9 (2nd Ed.) Appendix C forms for W_no = b_f h_o/4 and S_w1 = t_f b_f² h_o/16.
+- **Where (1):** `resolveSection`, inside the H3-1 block, anchor `/* H3-2 (2026-11-07): plate-girder input (S.section.plates)`. When `S.section.plates` is true (new field), every property not entered is computed:
+```js
+      if(S.section.plates){
+        const Ixp=p.bf*(Math.pow(p.d,3)-Math.pow(hw,3))/12+p.tw*Math.pow(hw,3)/12,pg={A:Apl,Ix:Ixp,Sx:Ixp/(p.d/2),
+          Zx:p.bf*p.tf*(p.d-p.tf)+p.tw*hw*hw/4,kdes:p.tf,
+          Qf:(p.bf-p.tw)/2*p.tf*(p.d-p.tf)/2,Qw:p.bf*p.tf*(p.d-p.tf)/2+p.tw*hw*hw/8,
+          Wno:p.bf*(p.d-p.tf)/4,Sw1:p.tf*p.bf*p.bf*(p.d-p.tf)/16,Wt:Apl*490/144};
+        ['A','Ix','Sx','Zx','kdes','Qf','Qw','Wno','Sw1','Wt'].forEach(k=>{if(src[k]!=='ovr'){p[k]=pg[k];src[k]='plates';}});
+        if(src.rx!=='ovr'){p.rx=Math.sqrt(p.Ix/p.A);src.rx='plates';}
+      }
+```
+  (Q_f and Q_w follow the AISC shapes database definitions: Q_f at the flange over the web face, Q_w at mid-depth; checked on W8X67: 14.53 / 34.84 vs database 14.5 / 34.8.)
+- **Where (2), UI:** Section & Material input, below Built-up (shown for I-shape families with Built-up ticked), anchor `/* H3-2: plate-girder input`. Override placeholders show the computed value for a property from the plates (anchor `/* H3: computed value shown for a built-up */`).
+- **Where (3), display:** the Section Properties worked block (H3-1) also shows A, I_x, S_x, Z_x, r_x, k, Q_f, Q_w, W_no, S_w1, Wt.
+- **Check case (AISC Design Examples v16.0, Example F.14):** Plate girder ticked, A572 Gr 50, d 66, b_f 14, t_f 2, t_w 0.5 (nothing else entered).
+  - A = 2(14)(2) + 62(0.5) = 87.0 in²; I_x = 14(66³ − 62³)/12 + 0.5(62³)/12 = 67 293 in⁴ (F.14: 67 300); S_x = 2039 in³ (2040); Z_x = 14(2)(64) + 0.5(62²)/4 = 2272.5 in³ (2270); I_y = 915.3 in⁴ (915); J = 77.25 in⁴; h_o 64; r_ts 3.79 in; Wt 296 lb/ft.
+  - φM_n (L_b 150 in, C_b 1.25, F4) = 7895.5 kip-ft (F.14: 7880, +0.2 %); φV_n (a = 298 in) = 439.9 kip (F.14: 440).
+- **Decision (pending engineer review):** k defaults to t_f (no weld leg) in plate-girder mode; it lowers R_n in J10.2 and J10.3, so it is conservative; the user enters k = t_f + weld size to count the weld. Only doubly symmetric girders (equal flanges).
+- **How verified:** origin/main vs branch, the 11 earlier scenarios and the v16 engine cases: identical (option off). A new plate-girder scenario (F.14 plates, 60 ft span) moves as expected (properties from the plates, self-weight 296 lb/ft). UI: the checkbox appears with Built-up, sets `section.plates`, worked lines shown. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
+- **Saved data:** new optional field `section.plates` in the saved state (absent = off, so every saved project opens as before). No key changed.
