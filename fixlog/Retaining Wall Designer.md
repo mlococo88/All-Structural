@@ -5565,7 +5565,7 @@ After:
 ### Saved data
 - No input or format change. `aashto_ct_phi` keeps its value and now governs sliding/passive only (and bearing when below 0.80).
 
-## 2026-11-07 — PR: claude/rw2-h4-eta — AASHTO load modifier η on every Strength I load effect (stem, heel, toe, key, column) and 1/η on the minimum-factor loads (Art. 1.3.2.1) (RW2H4; calculation change, η ≠ 1.00 only)
+## 2026-11-07 — PR: claude/rw2-h4-eta — AASHTO load modifier η on every Strength I load effect (stem, heel, toe, key, column) and 1/η on the minimum-factor loads (Art. 1.3.2.1) (RW2H4; calculation change, η ≠ 1.00 only) (PR #1136: https://github.com/mlococo88/All-Structural/pull/1136)
 
 Second-pass review finding H4 (2026-11-07). Code sites are tagged `RW2H4`.
 
