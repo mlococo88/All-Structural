@@ -5398,3 +5398,22 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **How verified:** probe on main and branch (KaTeX of the new steps: all typeset); `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects: the changes are exactly the combinations with both moments; listed in the PR), `bpad-profis.mjs`, `anchor-parity.mjs`; `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
 - **Other copies:** none.
 - **Open items:** the λn′ inner panel still uses the DG1 q. The bedding modulus (E_conc = 3600 ksi constant, D) is the existing NA-solve setting (Anchor Bolts tab).
+
+## 2026-11-07 — BPM7: ψ_ec,V applied in the torsion breakout sweep (PR: claude/bp-m7-torsion-psiec, PR #973: https://github.com/mlococo88/All-Structural/pull/973)
+
+### BPM7. Torsion: eccentric shear on the critical row   [calculation change, more conservative with torsion; saved data: none]
+- **Problem (review M7):** the BC-3 torsion sweep checked shear breakout in every direction û with the Fig. R17.7.2.1b case logic, but with ψ_ec,V = 1.0. Torsion makes the shear on the critical row unequal (more on one end), so the row's shear resultant is eccentric along the edge.
+- **Governing provision:** ACI 318-19 §17.7.2.3.1, Eq. (17.7.2.3.1): ψ_ec,V = 1/(1 + e′_V/(1.5c_a1)) ≤ 1.0. §17.7.2.3.2: only the anchors in shear in the same direction count for e′_V. Read in the PDF, printed p. 268.
+- **Where:** `comboCapacities()`, torsion sweep (anchor `/* BPM7 (2026-11-07): ψ_ec,V`).
+  - **Before:** `const sb=vc.used.sb, dcr=…vc.used.V/sb.phiVcbg`.
+  - **After:** for the case's critical-row anchors with V_i·û > 0: t_i = their coordinate along the edge (t̂ ⊥ û), f_i = V_i·û. Then e′_V = |Σf_i t_i/Σf_i − mean(t_i)|, ψ = 1/(1 + e′_V/(1.5c_a1)), and V_cbg, φV_cbg of that direction are multiplied by ψ before the ratio. Fewer than two loaded row anchors → ψ = 1.
+  - `sbk.torsion` carries `eV` and `psi_ecV`. A line in the torsion step works ψ_ec,V; the inner Step 4 of the breakout still prints the concentric factors, and the torsion line states that φV_cbg includes ψ_ec,V.
+- **Check case (review M7):** default project (2 × 2 at ±6 in, pedestal 30 × 30), V_x = 5 kip, T = 120 kip-in, P = −20.
+  - V_i = (3.75, ∓2.5) at x = +6 and (−1.25, ∓2.5) at x = −6.
+  - **Before:** 0° governs, Case 2, D = 7.5, φV_cbg = 14.346, DCR **0.523**.
+  - **After:** 330° governs, Case 2, D = 6.663 kip, c_a1 = 21 in, e′_V = 4.823 in.
+    - ψ = 1/(1 + 4.823/31.5) = 0.8672.
+    - φV_cbg = 12.441 kip, DCR **0.536**.
+- **How verified:** probe on main and branch (KaTeX of the steps: all typeset); `node tests/check-syntax.mjs`; `node tests/bpad-circle.mjs` (40 projects), `bpad-profis.mjs`, `anchor-parity.mjs` (torsion cases T = 6 kip·ft); `tests/smoke/project-library.mjs --tool baseplate`, `standard-save.mjs`, `dxf-print-sheets.mjs --tool bp`; 0 console errors.
+- **Other copies:** none.
+- **Open items:** without torsion, ψ_ec,V stays 1.0: the elastic plate gives equal shares to the row anchors.

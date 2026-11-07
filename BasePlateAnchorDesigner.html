@@ -3770,14 +3770,25 @@ function comboCapacities(cc, combo){
     let best=null;
     dirs.forEach(u=>{ const D=tv.reduce((a,o)=>a+Math.max(0,o.vx*u.x+o.vy*u.y),0); if(D<=1e-9) return;
       const vc=shearCases({Vx:D*u.x,Vy:D*u.y,Vres:D}, condAV); if(!vc.applicable||!vc.used) return;
-      const sb=vc.used.sb, dcr=sb.phiVcbg>1e-9? vc.used.V/sb.phiVcbg : Infinity;
-      if(!best || dcr>best.dcr) best={dcr,u,D,dem:vc.used.V,sb,caseId:vc.used.id,nRes:vc.used.nRes}; });
+      /* BPM7 (2026-11-07): ψ_ec,V (ACI 318-19 §17.7.2.3.1, Eq. (17.7.2.3.1); §17.7.2.3.2). The torsion makes the shear on
+         the critical row eccentric: e'_V = distance, along the edge, from the centroid of the row anchors loaded toward the
+         edge (V_i·û > 0; only those, §17.7.2.3.2) to the resultant of those V_i·û. ψ_ec,V = 1/(1 + e'_V/(1.5c_a1)) ≤ 1.0
+         multiplies V_cbg of that direction. Before: ψ_ec,V = 1.0 in the sweep. */
+      let sb=vc.used.sb, eV=0, psiE=1;
+      { const msk=vc.used.mask||[], tt={x:-u.y,y:u.x}, rI=[];
+        g.pts.forEach((p,i)=>{ if(msk[i]){ const f=tv[i].vx*u.x+tv[i].vy*u.y; if(f>1e-12) rI.push({f,t:p.x*tt.x+p.y*tt.y}); } });
+        if(rI.length>1){ const F=rI.reduce((a,o)=>a+o.f,0), tc=rI.reduce((a,o)=>a+o.t,0)/rI.length, tr=rI.reduce((a,o)=>a+o.f*o.t,0)/F;
+          eV=Math.abs(tr-tc); psiE=1/(1+eV/(1.5*sb.ca1)); }
+        if(psiE<1-1e-12) sb=Object.assign({},sb,{Vcbg:sb.Vcbg*psiE, phiVcbg:sb.phiVcbg*psiE}); }
+      const dcr=sb.phiVcbg>1e-9? vc.used.V/sb.phiVcbg : Infinity;
+      if(!best || dcr>best.dcr) best={dcr,u,D,dem:vc.used.V,sb,caseId:vc.used.id,nRes:vc.used.nRes,eV,psiE}; });
     if(best){
-      sbkUse=Object.assign({},best.sb,{torsion:{D:best.D,dir:best.u,dem:best.dem,caseId:best.caseId,dcr:best.dcr}});
+      sbkUse=Object.assign({},best.sb,{torsion:{D:best.D,dir:best.u,dem:best.dem,caseId:best.caseId,dcr:best.dcr,eV:best.eV,psi_ecV:best.psiE}});
       sbkUse.steps=[{title:"Torsion — governing breakout direction",ref:"ACI 318-19 §17.7.2.1, R17.7.2.1 (elastic polar distribution, vector sum)",
         lines:["V_i=\\left(\\frac{V_x}{n}-\\frac{T(y_i-\\bar y)}{J},\\ \\frac{V_y}{n}+\\frac{T(x_i-\\bar x)}{J}\\right),\\quad J=\\sum r_i^2="+fmt(combo.tors.J,3)+"\\ \\text{in}^2,\\ T="+fmt(combo.tors.T,2)+"\\ \\text{kip-in}",
           "D(\\hat u)=\\sum_i\\max(0,\\ \\mathbf V_i\\cdot\\hat u)\\ \\text{for }\\hat u\\text{ every }15^\\circ\\text{ and along }V",
-          "\\text{governing: }\\hat u\\text{ at }"+fmt(best.u.deg,1)+"^\\circ,\\ D="+fmt(best.D,3)+"\\ \\text{kip};\\ \\text{"+(best.caseId==="single"?"single row":"Case "+best.caseId)+": }V_{ua}="+fmt(best.dem,3)+"\\ \\text{kip}\\ \\text{on }\\phi V_{cbg}="+fmt(best.sb.phiVcbg,3)+"\\ \\text{kip}"],
+          "\\text{governing: }\\hat u\\text{ at }"+fmt(best.u.deg,1)+"^\\circ,\\ D="+fmt(best.D,3)+"\\ \\text{kip};\\ \\text{"+(best.caseId==="single"?"single row":"Case "+best.caseId)+": }V_{ua}="+fmt(best.dem,3)+"\\ \\text{kip}\\ \\text{on }\\phi V_{cbg}="+fmt(best.sb.phiVcbg,3)+"\\ \\text{kip}",
+          "\\psi_{ec,V}=\\frac{1}{1+e'_V/(1.5c_{a1})}=\\frac{1}{1+"+fmt(best.eV,3)+"/(1.5\\times"+fmt(best.sb.ca1,3)+")}="+fmt(best.psiE,4)+"\\ (\\text{§17.7.2.3; }e'_V\\text{ of the row anchors loaded toward the edge; }\\phi V_{cbg}\\text{ above includes it})"],
         vars:[["V_i",tv.map((o,i)=>(i+1)+": "+fmt(o.v,3)).join(", ")+" kip","per-anchor shear, vector sum of the direct and torsion parts"]]}].concat(best.sb.steps||[]);
       sbkDem=best.dem;
     }
