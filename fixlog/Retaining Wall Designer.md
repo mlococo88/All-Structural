@@ -4091,7 +4091,7 @@ Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as
   - group effects;
   - the passive credit, when ticked.
 - The soil-bearing notes ("AASHTO bearing: φb·qn = 4950 psf …", "tension zone in soil") are removed in pile mode.
-- `return` gains `pile` (null for a spread footing).
+- `return` gains `pile` only in pile mode (`...(pile ? { pile } : {})`): a spread footing's results have no new field.
 ### RWPL-6. Display / Report
 - **Stability tab:** `renderStability` now calls `renderStabilitySoil` (the former body, unchanged) and, in pile mode, `rwPileStability(r)`:
   - Pile Step 1, the group table and N, x̄, I;
@@ -4251,7 +4251,7 @@ Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as
 +    ...(!isPile && isAASHTO && aashtoR && aashtoR.ee1 ? {   // RWE1
 -    ...(isAASHTO && aashtoR && aashtoR.ct && aashtoR.ct.ee2 ? {
 +    ...(!isPile && isAASHTO && aashtoR && aashtoR.ct && aashtoR.ct.ee2 ? {
-+    pile,   // RWPL (2026-11-07): pile-supported footing results (null for a spread footing)
++    ...(pile ? { pile } : {}),   // RWPL (2026-11-07): pile-supported footing results (absent for a spread footing, so its results are as before)
 +/* RWPL (2026-11-07, Phase 8c): in pile mode the Stability tab opens with the pile cards (group, reactions per combination, checks);
 +   the soil cards below stay for the earth pressures and are marked "not applicable" where they check the soil. */
 +  renderStabilitySoil(r);

@@ -242,11 +242,11 @@ const AUD = [
     ['Math.abs(R.pile.comb[0].L.rows[0].P - 47.455) < 0.001 && Math.abs(R.pile.comb[0].L.rows[1].P - 52.040) < 0.001 && Math.abs(R.pile.comb[1].L.rows[0].P - 32.617) < 0.001', 'pile loads'],
     ['Math.abs(R.pile.govH.L.rows[0].h - 10.935) < 0.001 && !R.checks.pileLat.ok && R.checks.pileComp.ok && R.checks.pileUplift.ok', 'H/N 10.94 > H_a 8 (placeholder) FAIL; compression, uplift pass'],
     ['!R.checks.ot && !R.checks.sliding && !R.checks.bearing && !R.checks.ecc', 'soil checks replaced'],
-    ['/Pile Step 2 — Pile Reactions and Checks/.test(T.stability) && /Not applicable: pile-supported footing/.test(T.stability) && /Pile Compression/.test(T.overview) && /Pile Step 2 — Pile reactions and checks/.test(P)', 'Stability cards, N/A notes, dashboard, Report']]],
+    ['/Pile Step 2 — Pile Reactions and Checks/i.test(T.stability) && /Not applicable: pile-supported footing/i.test(T.stability) && /Pile Compression/i.test(T.overview) && /Pile Step 2 — Pile reactions and checks/.test(P)', 'Stability cards, N/A notes, dashboard, Report']]],
   ['RWPL AASHTO default wall on 2 pile rows: Strength I max 83.60 / 77.66 kip, φ_cR_n 195', { fnd_type: 'pile', design_basis: 'AASHTO' }, [
     ['Math.abs(R.pile.comb[0].L.rows[0].P - 83.604) < 0.001 && Math.abs(R.pile.comb[0].L.rows[1].P - 77.664) < 0.001 && Math.abs(R.pile.govC.cap.c - 195) < 1e-9', 'Strength I max'],
     ['R.checks.pileSpacing.ok && R.checks.pileEdge.ok && R.checks.pileEmbed.ok && !R.checks.eeSliding && !R.warnings.some(w => /^AASHTO bearing/.test(w))', 'detailing checks (Art. 10.7.1.2), no soil notes']]],
-  ['RWPL spread footing unchanged: no pile results', {}, [['R.pile === null && R.checks.bearing && R.checks.ot', 'spread footing checks']]],
+  ['RWPL spread footing unchanged: no pile results', {}, [['!R.pile && !(\'pile\' in R) && R.checks.bearing && R.checks.ot', 'spread footing checks, no pile field in the results']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {

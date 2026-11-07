@@ -3859,7 +3859,7 @@ function calcAll(inp) {
   // ── Return ────────────────────────────────────────────────────
   return {
     inp, errors, warnings, fatal: false,
-    pile,   // RWPL (2026-11-07): pile-supported footing results (null for a spread footing)
+    ...(pile ? { pile } : {}),   // RWPL (2026-11-07): pile-supported footing results (absent for a spread footing, so its results are as before)
     basis: inp.basis, isAASHTO, aashtoR, heq, q_ll_aashto, q_sur_eff,
     // Geometry
     B, H, Df, tf_ft, ts_bot_ft, ts_top_ft, dk_ft, x_front, x_back,
