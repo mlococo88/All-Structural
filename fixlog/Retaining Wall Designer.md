@@ -3440,3 +3440,127 @@ Calculation audit, item 6 (a) and (b). Engineer decision (2026-11-07). Code site
 
 ### Saved data
 - `key_bk` is additive (saved only when not 12 in; absent = 12 in). No other change.
+
+## 2026-11-07 — PR: claude/rw-aashto-ee1 — AASHTO Extreme Event I (seismic) stability per Art. 11.6.5.1: P_AE + 0.5P_IR and max(0.5P_AE, P_A) + P_IR; φ 1.0 sliding, 0.8 bearing; e limit B/3 to 0.4B by γ_EQ (RWE1; calculation change: new checks)
+
+Calculation audit, item 9 (1). Engineer decision (2026-11-07). Code sites are tagged `RWE1`. ACI mode is unchanged (item 9 (2) follows).
+
+### RWE1-1. `calcAll` (AASHTO block)   [§4: new checks; replaces the warning "Extreme Event I stability is not evaluated"]
+- **Provisions (verified in the AASHTO LRFD 10th Ed. (2024) PDF; cited and paraphrased):**
+  - **Art. 11.6.5.1:** gravity and semigravity walls are checked for sliding (10.6.3.4), bearing (11.6.3) and overall stability with the seismic earth pressure and the inertial forces, using Extreme Event I factors (11.5.8).
+    - The total seismic force combines P_AE and P_IR = k_h(W_w + W_s), with W_s the soil immediately above the wall, including the heel.
+    - It is investigated in two non-concurrent cases: (1) 100 % P_AE + 50 % P_IR; (2) 50 % P_AE, but not less than the static active force, + 100 % P_IR.
+    - The resultant must lie within the middle 2/3 of the base for γ_EQ = 0 and within the middle 8/10 for γ_EQ = 1.0, interpolated between.
+  - **Art. 11.5.8:** φ = 1.0 for the extreme event, except φ = 0.8 for bearing of gravity and semigravity walls (and 0.9 for overall stability, not computed by the tool).
+  - **Art. 11.6.5.3:** M-O P_AE, resultant at H/3 (the tool's K_AE, unchanged).
+- **Loads:**
+  - P_AE = ½K_AE γ_s H′²(1 − k_v), horizontal, at H′/3, where H′ is the static pressure height (H with no slope).
+  - P_A = the static P_EH at its own height.
+  - W_w = footing + stem + barrier; W_s = soil over the heel (with the wedge); y_IR = their combined centroid.
+  - DC, EV, ES (lateral and vertical) and water (WA) at 1.0; LS at the new input γ_EQ (default 0): lateral, and vertical in bearing only.
+  - Column: DL + γ_EQ·LL, in bearing only.
+  - Friction R = V tan δ_b + P_p (φ = 1.0); q_R = 0.8 q_n.
+- **New input** "γ_EQ on live load / LS (Extreme Event I)" (`aashto_gamma_eq`, AASHTO only, default 0, saved only when not 0). New checks `eeSliding`, `eeEcc`, `eeBearing`.
+- **Warnings:**
+  - AASHTO: the "not evaluated" warning is removed.
+  - AASHTO: the seismic note now says Extreme Event I is checked and the stem and footing are not designed for it.
+  - The ΔP_E at 0.6H warning (an ACI-branch quantity) is shown in ACI mode only.
+- **Decisions (pending engineer review):**
+  - Vertical components of P_AE and P_A are neglected (conservative).
+  - P_AE uses the moist γ_s, with water as hydrostatic at 1.0.
+  - P_AE is taken on H′, the plane of the static analysis.
+  - η is 1.0.
+  - Overall (global) stability, φ 0.9, is not computed (as for the static case).
+- **Before / after** (`git diff -U0`, `calcAll`):
+```diff
+@@ -2083 +2089 @@ function calcAll(inp) {
+-    warnings.push(`Seismic: ΔPe = ${f(Pe_inc/1000,3)} k/ft acting at 0.6H = ${f(0.6*H,2)} ft. Add to O.T. check. Verify with geotechnical engineer.`);
++    if (inp.basis !== 'AASHTO') warnings.push(`Seismic: ΔPe = ${f(Pe_inc/1000,3)} k/ft acting at 0.6H = ${f(0.6*H,2)} ft. Add to O.T. check. Verify with geotechnical engineer.`);   // RWE1: ACI branch only (AASHTO: Extreme Event I)
+@@ -2185,2 +2191,2 @@ function calcAll(inp) {
+-    warnings.push('Seismic: stem and footing are NOT designed for the seismic case — the increment is applied to stability only, and wall/soil inertia (AASHTO 11.6.5.1 P_IR) is not included.');
+-    if (isAASHTO) warnings.push('Seismic: AASHTO Extreme Event I stability is not evaluated — the k_h input currently affects only the ASD/ACI branch.');
++    warnings.push(isAASHTO ? 'Seismic: Extreme Event I stability is checked (Art. 11.6.5.1: P_AE and wall inertia P_IR, Stability Step 7a); the stem and footing are NOT designed for the seismic case.'   // RWE1
++                           : 'Seismic: stem and footing are NOT designed for the seismic case — the increment is applied to stability only, and wall/soil inertia (AASHTO 11.6.5.1 P_IR) is not included.');
+@@ -2717,0 +2724,38 @@ function calcAll(inp) {
++    // ── RWE1 (2026-11-07): EXTREME EVENT I (seismic) stability — AASHTO LRFD 10th Art. 11.6.5.1 (engineer decision, audit item 9(1)) ──
++    // Two non-concurrent cases: (1) P_AE + 0.5P_IR; (2) max(0.5P_AE, P_A) + P_IR, P_IR = k_h(W_w + W_s). P_AE = ½K_AEγH′²(1 − k_v)
++    // (M-O K_AE as above), horizontal, at H′/3; P_A = the static active force P_EH at its own height. Other loads at γ = 1.0 (DC, EV,
++    // ES lateral and vertical, water WA), LS at γ_EQ (lateral; vertical only for bearing). φ = 1.0 sliding (Art. 11.5.8),
++    // φ_b = 0.8 bearing (semigravity walls, Art. 11.5.8). e within the middle 2/3 (γ_EQ = 0) to 8/10 (γ_EQ = 1.0) of B, interpolated.
++    let ee1 = null;
++    if (hasSeismic && Kae > 0) {
++      const gEQ = Math.min(1, Math.max(0, A.gamma_eq || 0));
++      const P_AE = 0.5 * Kae * inp.gamma_s * Hp * Hp * (1 - inp.kv), y_AE = Hp / 3;
++      const Ww = Wftg + Wstem + W_bar, Ws = Wsoil;
++      const y_stem_c = tf_ft + inp.Hs * (ts_bot_ft + 2 * ts_top_ft) / (3 * (ts_bot_ft + ts_top_ft));
++      const y_IR = (Wftg * tf_ft / 2 + Wstem * y_stem_c + W_bar * (H + bar_h_ft / 2) + Wsoil_rect * (tf_ft + inp.Hs / 2) + Wwedge * (H + dH_slope / 3)) / Math.max(Ww + Ws, 1e-9);
++      const P_IR = inp.kh * (Ww + Ws);
++      const H_oth = P_ES + gEQ * P_LS + P_hyd, M_oth = P_ES * y_ES + gEQ * P_LS * y_LS + P_hyd * y_hyd;
++      const V_min  = V_DC + W_bar + Wsoil + V_ES_v - V_up;                         // resisting vertical (sliding, e)
++      const Mr_min = Wftg * x_ftg + Wstem * x_stem + W_bar * x_bar + Wsoil * x_soil + V_ES_v * xESv - M_up;
++      const V_colE = pDL + gEQ * (pLL + pSL);
++      const V_max  = V_min + gEQ * V_LS_v + V_colE;                                 // bearing
++      const Mr_max = Mr_min + gEQ * V_LS_v * xLSv + V_colE * x_col;
++      const phiS = 1.0, phiB = 0.8;
++      const R = phiS * V_min * tanDelta + phiS * Pp;
++      const eLim = B * (1 / 3 + (0.4 - 1 / 3) * gEQ);
++      const q_n = useManualQn ? A.qR / Math.max(A.phi_b, 1e-6) : q_n_A, q_R = phiB * q_n;
++      const mk = (PA, yA, PI) => {
++        const Hd = PA + PI + H_oth, Mo = PA * yA + PI * y_IR + M_oth;
++        const xR = V_min > 0 ? (Mr_min - Mo) / V_min : B / 2, e = B / 2 - xR;
++        const xRb = V_max > 0 ? (Mr_max - Mo) / V_max : B / 2, eb = B / 2 - xRb, Be = B - 2 * Math.abs(eb);
++        const q = onRock ? qRock(V_max, eb) : (Be > 0 ? V_max / Be : 999999);
++        return { PA, yA, PI, H: Hd, dcS: Hd / Math.max(R, 1e-9), Mo, xR, e, dcE: Math.abs(e) / eLim, xRb, eb, Be, q, dcB: q / q_R };
++      };
++      const PA2 = Math.max(0.5 * P_AE, P_EH);
++      const c1 = mk(P_AE, y_AE, 0.5 * P_IR), c2 = mk(PA2, 0.5 * P_AE > P_EH ? y_AE : y_EH, P_IR);
++      ee1 = { gEQ, P_AE, y_AE, Kae, P_A: P_EH, y_A: y_EH, Ww, Ws, y_IR, P_IR, H_oth, M_oth, V_min, Mr_min, V_colE, V_max, Mr_max, phiS, phiB, R, eLim, q_n, q_R, c1, c2,
++        sliding_dcr: Math.max(c1.dcS, c2.dcS), ecc_dcr: Math.max(c1.dcE, c2.dcE), bearing_dcr: Math.max(c1.dcB, c2.dcB),
++        e_gov: Math.abs(c1.e) >= Math.abs(c2.e) ? c1.e : c2.e, q_gov: Math.max(c1.q, c2.q) };
++      ee1.sliding_ok = ee1.sliding_dcr <= 1 + 1e-9; ee1.ecc_ok = ee1.ecc_dcr <= 1 + 1e-9; ee1.bearing_ok = ee1.bearing_dcr <= 1 + 1e-9;
++    }
++
+@@ -2718,0 +2763 @@ function calcAll(inp) {
++      ee1,   // RWE1
+@@ -3567,0 +3613,5 @@ function calcAll(inp) {
++    ...(isAASHTO && aashtoR && aashtoR.ee1 ? {   // RWE1
++      eeSliding: { ok: aashtoR.ee1.sliding_ok, label: 'EQ Sliding', val: `DCR=${f(aashtoR.ee1.sliding_dcr,2)}` },
++      eeEcc:     { ok: aashtoR.ee1.ecc_ok,     label: 'EQ Eccentricity', val: `e=${f(Math.abs(aashtoR.ee1.e_gov),2)}≤${f(aashtoR.ee1.eLim,2)}ft` },
++      eeBearing: { ok: aashtoR.ee1.bearing_ok, label: 'EQ Bearing', val: `${f(aashtoR.ee1.q_gov/1000,2)}≤${f(aashtoR.ee1.q_R/1000,2)}ksf` },
++    } : {}),
+```
+
+### RWE1-2. Display
+- **Stability tab:**
+  - new card "Step 7a — Extreme Event I (Seismic) Stability": P_AE, P_IR, V, M_r, and sliding, e and bearing for each case;
+  - an EE I row in the Load Combination Summary.
+- **Dashboard rows** "EQ Sliding", "EQ Eccentricity" and "EQ Bearing" (→ Step 7a).
+- **Report:** a summary-table row and the sub "Step 7a — Extreme Event I" (`sa7a/*`).
+- **Drawings:** the loads note and general note 10 give the EE I results (before: "not evaluated").
+- **Seismic card:** the γ_EQ input and a hint (AASHTO).
+
+### Check cases (`calcAll` in Node and in the browser; AASHTO default, k_v 0, δ_MO 0, γ_EQ 0)
+- **k_h = 0.10:** θ = 5.71°, K_AE = 0.3966.
+  - P_AE = ½·0.3966·120·13.5² = **4336** lb/ft; P_A = 3645.
+  - W_w = 5062.5, W_s = 11520 → P_IR = 0.10·16582.5 = **1658** at 6.30 ft.
+  - V = 16582.5, M_r = 123673; R = 16582.5·tan 20° = **6036**.
+
+  | Case | H | Sliding D/C | M_o | e (≤ B/3 = 4.167) | q = V/(B − 2e) vs 7200 |
+  |---|---|---|---|---|---|
+  | 1: P_AE + 0.5P_IR | 5165 | **0.856** | 24738 | 0.284 | 1390 |
+  | 2: P_A + P_IR | 5303 | **0.879** | 26851 | 0.411 | 1420 |
+
+  Before: not evaluated. Strength I sliding D/C 1.415 is unchanged.
+- **k_h = 0.20:** K_AE 0.4733, P_AE 5175, P_IR 3317. Sliding **1.132 / 1.153, FAIL**; e 0.826 / 1.041; q 1529 / 1592.
+- **k_h 0.10, γ_EQ = 1.0:** e limit 0.4B = 5.0 ft; LS lateral added: sliding 1.122 / 1.145 (FAIL).
+
+### How verified
+- origin/main vs branch, headless Chromium, the twelve audit walls plus AASHTO k_h 0.10, k_h 0.20 and k_h 0.10 + water + q_s + collision.
+  - Walls without k_h, and every ACI wall (including the seismic ones): `_R` differs only by `aashtoR.ee1` (null) and `inp.aashto.gamma_eq`.
+  - AASHTO seismic walls also gain the EE I fields and checks, and their seismic warnings change as described.
+  - Every existing value is identical. 0 console errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (table `AUD`: RWE1 k_h 0.10 and 0.20); phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+- Screenshot looked at: Stability Step 7a (AASHTO k_h 0.10).
+
+### Saved data
+- `aashto_gamma_eq` is additive (saved only when not 0; absent = 0).
