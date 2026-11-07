@@ -2375,3 +2375,17 @@ Engineer's answers to the two open items of PR #671 (LTSV).
 - **Saved data:** no key or format change.
 - **ENGINEER_CHECKS:** the "IBC 15× cap reading" item now says the cap applies to S₃ only.
 - **Open item (not changed):** Eq. 18-1 defines b for a square post or footing as its diagonal; the tool uses the side for a square shaft, which gives a deeper d (conservative).
+
+## 2026-11-07 — PR: claude/lp-h3-fixture-axial (PR #983: https://github.com/mlococo88/All-Structural/pull/983) (LPH3: IBC pole mode — fixture weights counted once in the foundation / anchor axial)   [§4: axial N lower by ΣW_fixtures × γ_D; anchor hand-off tension slightly higher; cable values identical]
+- **Problem (review H3, 2026-11-07):** `evalComboDir()` adds each fixture's factored weight (`Wg = f.D*fc.Wdead + f.Di*fc.Wice`) to N, and then adds `f.D*inp.DLtotal` for the mast, where the pole-mode `calc()` sets `DLtotal = DL + pole self-weight + ΣW_fixtures`. The fixture dead load was therefore counted twice in the axial of every IBC combination (pole mode). The extra compression is unconservative for the rod tension sent to the Anchorage app (T = M·y/Σy² − P/n) and for the shaft φM_n (slightly), conservative for soil bearing. Sign mode (`DLtotal = DL + post weight`, no fixtures), `poleStress` (own N) and the LRFDLTS engine (`gravity()`) are not affected.
+- **Where:**
+  - `evalComboDir()`, anchor `N += f.D*(inp.DLtotal`. Before: `N += f.D*(inp.DLtotal!==undefined?inp.DLtotal:inp.DL) + f.Di*pw.WiceMast;` After: `N += f.D*(inp.DLaxial!==undefined?inp.DLaxial:(inp.DLtotal!==undefined?inp.DLtotal:inp.DL)) + f.Di*pw.WiceMast;`
+  - pole-mode `calc()`, after `inp.DLtotal=inp.DL+poleSeg.totalW+fixW;`: new line `inp.DLaxial=inp.DL+poleSeg.totalW;`. `DLtotal` stays for the display ("total dead … lb").
+- **Governing provision:** none changed (ASCE 7 §2.3 / §2.4 combinations; D counted once). Load model correction.
+- **Check case:** default project (2 fixtures × 55 lb, pole 644.46 lb, DL 0):
+  - ASD D + 0.6W axial: 906.46 → **796.46 lb** (−110 = 2 × 55; without cables, as in the review: 864.46 → 754.46 lb; the cables add 42.0 lb, unchanged).
+  - LRFD 1.2D + 1.0W axial: 1,087.76 → **955.76 lb** (−1.2 × 110).
+  - Rod tension, governing 1.2D + 1.0W (sent to the Anchorage app as `dr.axial` with the moment): T_max 9,655.9 → **9,677.9 lb** (+22.0 = 132/6 rods, +0.23 %).
+  - Shaft φM_n (12 #6, P–M at P_u): 353,377 → 353,244 lb·ft; soil bearing q 0.156 → 0.141 ksf; base plate t_req 0.842 → 0.841 in. Embedment d and the pole member checks: unchanged.
+- **How verified:** `node tests/lightpole-compare.mjs --a origin/main` (21 cases): every pole-mode case moves only in the axial-dependent values (asd/lrfd axial, found.Pu, bolts, bearing, shaft P–M, the IBC text rows that show them); the sign cases, the LTS sign cases and `poleStress` / `found.d` are identical; `ltspole` / `ltspoleb` move only in the IBC objects the page also computes in LRFDLTS mode (the LTS engine does not call `evalComboDir`; `apps/light-pole/lts-engine.js` unchanged); **cable values identical in every case**; 0 console errors. `project-library --tool lightpole`: the 4 "results identical" failures are this intended axial change only (first diffs `.inp.DLaxial`, `.allCombos[0].axial`); saved projects open. `check-syntax`, `phone-layout --tool lp`, `lightpole-anchor-handoff`, `lightpole-projection`, `lightpole-signviews`, `tests/engine/run.mjs lightpole` (42): pass.
+- **Saved data:** none (DLaxial is computed, not saved).
