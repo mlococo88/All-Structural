@@ -2425,3 +2425,26 @@ function renderStatus(r) {
   - The smoke test passes, as do the standard tests (see the PR).
 - **Other copies:** none.
 - **PDFs** (scratch, not committed): `aci.pdf`, `aashto.pdf` from the session scratchpad `rw4/pdf`.
+
+## 2026-11-07 — PR: claude/rw-katex (PR #941: https://github.com/mlococo88/All-Structural/pull/941) (RWKX) — the result tabs' worked steps set by KaTeX; MathJax removed (one maths library)   [display only; no result change]
+- **Why:** engineer-approved 2026-11-06 (task 5, review Phase 5b). The page loaded two maths libraries: MathJax 3.2.2 for the tabs, and KaTeX 0.16.9 (approved in #549) for the Report. CLAUDE.md §2: no new library. KaTeX was already loaded, at the pinned version the other apps use.
+- **What:**
+  - `typesetActivePanel()` now sets every `$$…$$` of the visible panel with `katex.renderToString` (display mode, `throwOnError: false`, `strict: 'ignore'`), on the same TeX source. Before: `MathJax.typesetPromise([panel])`.
+  - The MathJax configuration and its script tag are removed: `<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js" id="MathJax-main">`.
+  - The boot wait `waitMJ` now waits for `window.katex`.
+  - The KaTeX CSS / JS tags are unchanged (0.16.9, cdnjs).
+- **Differences found and resolved:**
+  1. The tool's `.fbox` style (the formula boxes of the ACI cards) also matched KaTeX's `span.fbox`, which draws `\boxed{}`. The boxed results were drawn as empty grey boxes with the value spilling out. Fix: the tool's two rules became `div.fbox` (its three formula boxes are divs).
+  2. A "·" inside `\text{…}` (units such as lb·ft/ft) has no text-mode glyph in KaTeX, which printed `\cdotp` in red. MathJax set it as typed. Fix: `rwKxText()` sets each "·" inside `\text{…}` as `\(\mathord{\cdotp}\)` before rendering. Nothing else in the TeX is changed.
+  3. KaTeX keeps a hidden MathML copy of each formula, absolutely positioned. With no positioned ancestor it escaped the equation box's own horizontal scroll, and on a 390 px phone the page scrolled sideways (Stability 101 px, Stem 38 px, Footing 3 px; caught by `phone-layout`). Fix: `.eq-math { position: relative; }`.
+- **Checks:**
+  - Eight walls (ACI and AASHTO; water, seismic, key, passive, column, collision, yield line, interface shear, Coulomb, LS, rock, manual δ_b / q_R): every `.eq-math` of the Stability, Stem and Footing tabs is set by KaTeX. 0 `.katex-error`, 0 red output, no `$$` left, 0 console errors.
+  - The tab text with the maths removed is identical, main vs branch.
+  - Screenshots before / after (Stability, Stem at 1400; Footing at 390) looked at: the same equations, boxes and line breaks, and the same left start on a phone (PHN).
+- **Where:** the `<head>` script tags (`<!-- RWKX … -->`); CSS `.eq-math .katex-display` (was `.eq-math mjx-container[display="true"]`), `div.fbox` ×2; `rwKatex`, `rwKxText`, `typesetActivePanel`; the boot `waitMJ`.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none.
+- **How verified:**
+  - origin/main vs branch, eight cases: `_R`, Export JSON, every localStorage key, the Report text and the DXF identical. The tab text differs only in the typeset maths.
+  - `tests/smoke/retaining-wall-checks.mjs` gains the KaTeX checks: MathJax not loaded; every equation by KaTeX; 0 errors, 0 red, no `$$`.
+- **Other copies:** none.
+- **Library:** MathJax 3.2.2 is no longer loaded by this tool (other tools still use it; `tests/libs` unchanged).

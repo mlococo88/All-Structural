@@ -442,7 +442,8 @@ select option { background: #fff; color: var(--text); }
   display: flex; align-items: center; justify-content: center; gap: 14px;
 }
 .eq-block.eq-fail .eq-math { border-left-color: var(--fail); background: #fdf7f6; }
-.eq-math mjx-container[display="true"] { margin: 4px 0 !important; }
+.eq-math .katex-display { margin: 4px 0 !important; }   /* RWKX: KaTeX (was mjx-container, MathJax) */
+.eq-math { position: relative; }   /* RWKX: KaTeX's hidden MathML copy is absolutely positioned; contained here, it stays inside the box's own scroll (else the page scrolled sideways on a phone) */
 .eq-math-row { display: flex; align-items: center; gap: 12px; }
 .eq-math-row .eq-math { flex: 1; }
 .eq-where { padding: 10px 16px 12px; }
@@ -484,7 +485,7 @@ select option { background: #fff; color: var(--text); }
 [data-tip] { cursor: help; }
 [data-tip]:hover { filter: brightness(1.06) saturate(1.1); }
 
-.fbox {
+div.fbox {   /* RWKX: div only — KaTeX draws \boxed with its own span.fbox */
   background: #f7f8fa; border: 1px solid var(--border);
   border-left: 3px solid var(--blue); border-radius: var(--r);
   padding: 10px 13px; font-family: var(--mono); font-size: 11.5px;
@@ -755,7 +756,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--blue-600); box-s
 .eq-title .eq-num { color: var(--navy-800); font-family: var(--font-ui); }
 .eq-math { background: var(--slate-50); border-left-color: var(--blue); }
 .eq-where-hd { font-size: 8.5pt; letter-spacing: .05em; text-transform: uppercase; }
-.fbox { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--slate-50); border-left-color: var(--blue); }
+div.fbox { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; background: var(--slate-50); border-left-color: var(--blue); }
 .alert { border-radius: 4px; border-left-width: 4px; font-size: 9.5pt; }
 .alert.fail { background: #FEF2F2; border-color: var(--slate-200); border-left-color: var(--fail); color: #7F1D1D; }
 .alert.warn { background: #FFFBEB; border-color: var(--slate-200); border-left-color: var(--warn); color: #78350F; }
@@ -875,15 +876,8 @@ body.rwDashColl #rwDash { display: none; }
   'https://cdn.jsdelivr.net/npm/plotly.js-dist-min@2.35.2/plotly.min.js'
 ], 0);
 </script>
-<script>
-window.MathJax = {
-  tex: { inlineMath: [['\\(','\\)']], displayMath: [['$$','$$']], processEscapes: true },
-  options: { skipHtmlTags: ['script','noscript','style','textarea','pre'] },
-  startup: { typeset: false }
-};
-</script>
-<script src="https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml.js" id="MathJax-main"></script>
-<!-- RWRP: KaTeX for the Report tab only (engineer-approved 2026-11-01; the result tabs keep MathJax), then the shared worked steps and
+<!-- RWKX (2026-11-07): KaTeX is the one maths library, for the result tabs' worked steps (MathJax 3.2.2 removed) and the Report tab
+     (RWRP, engineer-approved 2026-11-01); then the shared worked steps and
      the shared report viewer (classic scripts, relative path: keep the shared folder next to this file) -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js"></script>
@@ -1757,14 +1751,43 @@ document.addEventListener('click', e => {
 });
 
 // Typeset only the visible panel (perf) — debounced
+// RWKX (2026-11-07): KaTeX (display mode) on every $$…$$ of the panel's text, in place of MathJax.typesetPromise; the same TeX source.
+// A formula KaTeX cannot parse is shown as its source in red (throwOnError: false) and logged; none in the tool's tabs (tested).
 let _mjTimer = null;
+function rwKatex(root) {
+  if (!window.katex || !root) return 0;
+  const W = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode: n => n.nodeValue.indexOf('$$') >= 0 && !(n.parentNode && n.parentNode.closest && n.parentNode.closest('script,style,textarea,pre,.katex')) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP });
+  const L = []; while (W.nextNode()) L.push(W.currentNode);
+  let n = 0;
+  L.forEach(t => {
+    const parts = t.nodeValue.split(/\$\$([\s\S]+?)\$\$/); if (parts.length < 3) return;
+    const f = document.createDocumentFragment();
+    parts.forEach((x, i) => {
+      if (!(i % 2)) { if (x) f.appendChild(document.createTextNode(x)); return; }
+      const sp = document.createElement('span');
+      try { sp.innerHTML = katex.renderToString(rwKxText(x), { displayMode: true, throwOnError: false, strict: 'ignore' }); } catch (e) { sp.textContent = '$$' + x + '$$'; }
+      if (sp.querySelector('.katex-error')) console.warn('KaTeX:', x);
+      f.appendChild(sp.firstChild || sp); n++;
+    });
+    t.parentNode.replaceChild(f, t);
+  });
+  return n;
+}
+// inside \text{…} KaTeX has no text-mode "·" (MathJax set it as typed): it is set as inline maths there, \(\mathord{\cdotp}\) (no spacing)
+function rwKxText(tex) {
+  let out = '', i = 0;
+  while (i < tex.length) {
+    const j = tex.indexOf('\\text{', i); if (j < 0) { out += tex.slice(i); break; }
+    out += tex.slice(i, j + 6); let k = j + 6, d = 1, body = '';
+    while (k < tex.length && d > 0) { const c = tex[k]; if (c === '\\' && k + 1 < tex.length) { body += c + tex[k + 1]; k += 2; continue; } if (c === '{') d++; else if (c === '}') { d--; if (!d) break; } body += c; k++; }
+    out += body.replace(/·/g, '\\(\\mathord{\\cdotp}\\)') + (k < tex.length ? '}' : ''); i = k + 1;
+  }
+  return out;
+}
 function typesetActivePanel() {
-  if (!window.MathJax || !MathJax.typesetPromise) return;
+  if (!window.katex) return;
   clearTimeout(_mjTimer);
-  _mjTimer = setTimeout(() => {
-    const panel = document.querySelector('.tab-panel.active');
-    if (panel) MathJax.typesetPromise([panel]).catch(()=>{});
-  }, 120);
+  _mjTimer = setTimeout(() => { rwKatex(document.querySelector('.tab-panel.active')); }, 120);
 }
 
 // ================================================================
@@ -9118,9 +9141,9 @@ document.querySelectorAll('input, select, textarea').forEach(el => {
 // Boot — restore last session BEFORE first calc so we pick up where we left off
 restoreSession();
 onInputChange();
-// If MathJax loads after first render, typeset once ready
+// If KaTeX loads after first render, typeset once ready (RWKX: was MathJax)
 (function waitMJ(n) {
-  if (window.MathJax && MathJax.typesetPromise) { typesetActivePanel(); return; }
+  if (window.katex) { typesetActivePanel(); return; }
   if (n < 100) setTimeout(() => waitMJ(n+1), 150);
 })(0);
 // If Plotly loads after first render, flush the active tab's plots.
@@ -9194,7 +9217,7 @@ onInputChange();
 // REPORT TAB (RWRP, 2026-11-01): the calculation report in the shared viewer
 // (shared/report.js: navigation tree, numbered sections §n.m, collapse / expand, search, Print with a title block,
 // running header and page numbers). Worked steps are shared/steps.js steps (equation → substituted values → result),
-// set by KaTeX 0.16.9 (Report tab only; the result tabs keep MathJax) or, without it, by the built-in renderer.
+// set by KaTeX 0.16.9 (since RWKX 2026-11-07 also the result tabs) or, without it, by the built-in renderer.
 // Every value shown is a value the tool has already computed (window._R from calcAll, and the D/C values of
 // rwResultRows used by the Export report); only the substitution strings are formatted here. The few products shown
 // on a tab without a field of _R (P_a,1..3, M_u,soil, θ, the column combinations, the crack-control terms) are the
