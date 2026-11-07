@@ -46,6 +46,9 @@ const CASES = [
   ['RWTE pile t_f 8 in ≤ embedment + clear + 2 (was a throw)', { fnd_type: 'pile', tf: 8 }, 'pile_embed', 'e'],
   ['RWTE pile t_f 17 in = embedment 12 + clear 3 + 2 (d_p ≤ 0)', { fnd_type: 'pile', tf: 17 }, 'pile_embed', 'e'],
   ['RWPL AASHTO φ_c > 1', { fnd_type: 'pile', design_basis: 'AASHTO', pile_phic: 1.2 }, 'pile_phic', 'e'],
+  ['RWHP stem projection leaves < 1 ft retained (H_s 12, h_p 11.5)', { h_proj: 11.5 }, 'h_proj', 'e'],
+  ['RWHP stem projection negative', { h_proj: -1 }, 'h_proj', 'e'],
+  ['RWHP variable height: h_p beyond the low end (H_low 8, h_p 7.5)', { vh_enable: true, vh_hlo: 8, vh_hhi: 16, h_proj: 7.5 }, 'h_proj', 'e'],
 ];
 const TABS = ['overview', 'stability', 'stem', 'footing', 'rebar', 'diagram', 'threed', 'drawings', 'report'];
 
@@ -319,6 +322,27 @@ const AUD = [
   ['RW2L4 / RW2L8 ACI default: S3 crack control and joint shear friction', {}, [
     ['R.checks.crackStemT.ok && Math.abs(R.sfJ.phiVn - 10800) < 1 && R.checks.ishAci.ok', 'S3 s_max, φV_n 10800 ≥ 4608'], ['/Shear friction at the stem–footing construction joint/.test(T.stem)', 'Stem tab Step 4']]],
   ['RW2L4 AASHTO default: S3 crack control at mid-height', { design_basis: 'AASHTO' }, [['R.checks.crackStemT && R.checks.crackStemT.ok && R.aashtoR.serv.M_serv_stemT > 0', 'S3 row']]],
+  // RWHP (2026-11-07): stem projection above the retained grade h_p — hand checks (fixlog RWHP) on the default walls, h_p = 3 ft (H_ret = 10.5 ft)
+  ['RWHP ACI default h_p 0: as before (FS_OT 7.540, FS_SL 1.656, q_max 1466, M_u 18432)', {}, [
+    ['R.h_p === 0 && R.H_ret === R.H && Math.abs(R.FOS_OT - 7.5399) < 1e-4 && Math.abs(R.FOS_SL - 1.6558) < 1e-4 && Math.abs(R.q_max - 1465.99) < 0.01 && Math.abs(R.Mu_stem_lbft - 18432) < 0.01', 'unchanged'],
+    ['!/H_ret|H_\{ret\}|Retained height/.test(T.stability + T.stem + P)', 'no retained-height step at h_p = 0']]],
+  ['RWHP ACI default h_p 3 ft: P_a 2205, M_o 7717.5, FS_OT 12.853, FS_SL 2.262, q_max 1320.3, M_u,stem 7776', { h_proj: 3 }, [
+    ['Math.abs(R.H_ret - 10.5) < 1e-9 && Math.abs(R.Pa_tri - 2205) < 1e-6 && Math.abs(R.Mo - 7717.5) < 1e-6 && Math.abs(R.Wsoil - 8640) < 1e-6 && Math.abs(R.Wstem - 2250) < 1e-6', 'P_a on H_ret; W_soil on H_s − h_p; W_stem full'],
+    ['Math.abs(R.FOS_OT - 12.8530) < 1e-4 && Math.abs(R.FOS_SL - 2.2618) < 1e-4 && Math.abs(R.q_max - 1320.26) < 0.01 && Math.abs(R.Mu_stem_lbft - 7776) < 1e-6 && Math.abs(R.Vu_stem - 2592) < 1e-6 && Math.abs(R.Mu_stemT_lbft - 288) < 1e-6', 'FS_OT, FS_SL, q_max, stem M_u / V_u, S3 M_u 288'],
+    ['/H_\{ret\}|H_ret/.test(T.stability) && /Retained height/.test(T.stability) && /Retained height on the stem/.test(T.stem) && /Retained height/.test(P) && /Stem projection above the retained grade/.test(P)', 'worked H_ret (Stability, Stem, Report)'],
+    ['rwSelfChecks(R).every(c => c.ok)', 'self-consistency panel passes']]],
+  ['RWHP AASHTO default h_p 0: as before (sliding 1.415, e 1.428, q 2212)', { design_basis: 'AASHTO' }, [
+    ['Math.abs(R.aashtoR.sliding_dcr - 1.41488) < 1e-4 && Math.abs(R.aashtoR.e_A - 1.42815) < 1e-4 && Math.abs(R.aashtoR.q_ult_A - 2212.17) < 0.01 && Math.abs(R.heq - 2.975) < 1e-9 && Math.abs(R.Mu_stem_lbft - 32274) < 0.01', 'unchanged']]],
+  ['RWHP AASHTO default h_p 3 ft: h_eq 3.425 on H_ret 10.5, P_LS 1438.5, sliding 1.213, e 0.807, q 1994.3, M_u,stem 17000', { design_basis: 'AASHTO', h_proj: 3 }, [
+    ['Math.abs(R.heq - 3.425) < 1e-9 && Math.abs(R.aashtoR.P_LS - 1438.5) < 1e-6 && Math.abs(R.aashtoR.ls_half - 5.25) < 1e-9 && Math.abs(R.aashtoR.P_EH - 2205) < 1e-6', 'Table 3.11.6.4.1-2 on H_ret, H_ret/2 rule'],
+    ['Math.abs(R.aashtoR.H_drive_str - 5824.875) < 1e-6 && Math.abs(R.aashtoR.sliding_dcr - 1.21275) < 1e-4 && Math.abs(R.aashtoR.e_A - 0.80714) < 1e-4 && Math.abs(R.aashtoR.q_ult_A - 1994.27) < 0.01 && Math.abs(R.Mu_stem_lbft - 16999.875) < 1e-6', 'sliding, eccentricity, bearing, stem M_u'],
+    ['/Retained height/.test(T.stability) && /Retained height on the stem/.test(T.stem)', 'worked H_ret']]],
+  ['RWHP water, seismic, slope, collision and piles at h_p 3 ft: no NaN, self-checks pass', { design_basis: 'AASHTO', h_proj: 3, wt_depth: 6, kh: 0.15, beta: 10, aashto_ct_enable: true, q_sur: 200 }, [
+    ['isFinite(R.Mu_stem_lbft) && isFinite(R.aashtoR.ee1.c1.e) && Math.abs(R.wt_r - 3) < 1e-9 && Math.abs(R.hw - 7.5) < 1e-9 && Math.abs(R.Hp - (10.5 + (8 + 1.5 - R.t_g / 12) * Math.tan(10 * Math.PI / 180))) < 1e-9', 'wt_r = d_WT − h_p, h_w = H_ret − wt_r, H′ from the grade'],
+    ['rwSelfChecks(R).every(c => c.ok)', 'self-consistency panel passes']]],
+  ['RWHP ACI piles h_p 3 ft: pile loads from the corrected lateral loads', { fnd_type: 'pile', h_proj: 3 }, [
+    ['R.pile && !R.pile.err && Math.abs(R.Fh - 2205) < 1e-6 && rwSelfChecks(R).every(c => c.ok)', 'F_h 2205 to the piles']]],
+  ['RWHP an autosave without h_proj opens with h_p = 0', {}, [['document.getElementById("h_proj").value === "0" && R.h_p === 0', 'h_p = 0']], { strip: ['h_proj'] }],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {
