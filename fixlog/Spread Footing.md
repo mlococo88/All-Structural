@@ -7059,3 +7059,26 @@ index 50f3837..c2d5000 100644
   - Tests: check-syntax, phone-layout (sf), spread-footing-nobear, start-chooser, spread-footing-scroll, project-library (spreadfooting): pass.
 - **Other copies:** none.
 - **Open items:** the J_c note (Footing Design 5.5) contains the fragment "see the checks below.fers from the interior form — verify governing cases and the γ_f flexural transfer by hand", from an earlier edit. It is kept verbatim; the intended wording is needed from the engineer.
+
+## 2026-11-07 — PR: claude/sf-wall-graphics (PR #1168: https://github.com/mlococo88/All-Structural/pull/1168) (SFWD-5: wall graphics: elevation / plan sketch with the bars and the b_eff spread; P–M diagrams out of plane per ft, in plane whole wall, 3D surface, with a view selector; Report figures; DISPLAY ONLY, no computed value changes)
+
+### SFWD-5. Wall graphics   [display only] [no result change]
+- **Request (engineer, 2026-11-07):** part (c) of the wall work: a wall sketch with the bar layout and the b_eff spread lines, and P–M diagrams with the combinations plotted, reusing the pedestal P–M helpers of SFPV (#1161).
+- **Where (code):** new `sfdWallSketchSVG(i)`, `sfdWallPMData(i)`, `SFWPV`, `sfdWallPMShow(i,v)`, `sfdWallPMDraw3D(i)`, `sfdWallPMViews(b,i)`, `sfdWallPMRender()` (anchor `/* ---- SFWD-5 (2026-11-07, engineer: wall graphics)`), before `sfdWallCard`.
+  - `sfdWallCard`: the sketch after the b_eff block (`{const sv=sfdWallSketchSVG(i);…}`, `.noprint`: the Report has it as its own figure); `sfdWallPMViews(b,i);` before `sfdWallRhoBlocks(b,w);`.
+  - `renderPlots`: `sfdWallPMRender();` at the end (after the pedestal P–M loop).
+  - `sfrWallSub`: `{type:'figure',svg:sfdWallSketchSVG(i),caption:…}` after the wall statement.
+- **Sketch:**
+  - Elevation along ℓ_w, to scale both ways: the vertical bars at their positions (`pd.pmBars`), the horizontal bars at s_h (schematic, from s_h/2 above the base), the load at its offset with the bearing width b, b_eff,top dimensioned above the top (11.2.3.1), the 45° spread lines from the edges of b clipped at the wall ends, b_eff,base dimensioned below the base (the values of `sfdWallOOP`; an older save shows the concentrated values).
+  - Plan t × ℓ_w with every vertical bar (t drawn larger where thinner than 10 px, stated).
+  - Distributed load: arrows along the top and "b_eff = ℓ_w".
+- **P–M views (selector: Out of plane per ft (default) / In plane whole wall / Both / 3D surface):**
+  - Out of plane: `sfpmSec` of the 12-in strip (bars at ±(t/2 − d′), A_s per ft each, φP_n,max of the check), `sfpmPlotAxis(…,'y')`; markers = each combination at its governing end (M per ft, N per ft), coloured by its ratio; axes relabelled "M per ft (k-ft/ft)", "N per ft (kip/ft)".
+  - In plane: `sfpmSec(pd.pmBars, …)` of the whole wall, `sfpmPlotAxis` about the strong axis; markers (M_c in plane, P_u), coloured by the in-plane ratio.
+  - 3D: `sfpmPlot3D` of the whole wall with every combination (M_ux, M_uy, P_u, first order), coloured by the in-plane ratio; note: information only, the out-of-plane moment is checked per ft.
+  - "Both" and "3D" are screen-only (`.noprint`); the Report gets the out-of-plane and in-plane diagrams (SFX figure pick-up under card 6W.n) and the sketch.
+  - `sfpmPlotTheta` is not used for walls: along the in-plane direction it is the in-plane diagram.
+- **Check that the plots show the checks:** the plotted design curves (sfpmAxisCurve) against the checks' own routine (`sfwSec`) at every demand's axial force: max difference 0.12 % (`wTall`, 54 points), 0.03 % (`wHC`), 0.05 % (`w769h`): the interpolation between curve points.
+- **Formulas, factors, units, code references:** none changed (§4 does not apply). **Saved data:** none (the view choice is session-only, `SFWPV`).
+- **How verified:** harness origin/main vs the branch on def, rev, dir, wTall, w769h, wAll, wHC, wHCe, wHCd: R and P2 **0 differences**, dashboard text identical; the Report differs only by the wall figures and their notes. 0 console errors, 0 KaTeX errors. Screenshots at 1400 and 390 px. Tests: see the PR.
+- **Other copies:** none.

@@ -3881,6 +3881,7 @@ function renderPlots(){
    if(document.getElementById('plot-pm3-'+i)&&sfpmViewOf(i)==='3d')sfpmDraw3D(i);
   });
  }
+ sfdWallPMRender();   /* SFWD-5: wall P-M diagrams */
 }
 /* point-in-polygon (ray casting) */
 function ptInPoly(px,py,poly){
@@ -4682,7 +4683,7 @@ function sfrWallSub(i,pd,S){
   S({id:'wo.vcov',label:'Clear cover to the vertical bars (min '+sfrN(pd.vertCovMin)+' in)',sym:'c',eq:'',sub:'',value:pd.cov,unit:'in',ok:!!pd.vertCovOK,ref:'ACI 318-19 Table 20.5.1.3.1'}),
   S({id:'wo.tcov',label:'Clear cover to the ties (min '+sfrN(pd.tieCovMin)+' in)',sym:'c_{tie}',eq:'c \\minus d_{b,tie}',sub:sfrN(pd.cov)+' \\minus '+sfrN(pd.tieDb,3),value:pd.tieCov,unit:'in',d:3,ok:!!pd.tieCovOK,ref:'ACI 318-19 Table 20.5.1.3.1'}),
   S({id:'wo.tmin',label:'Minimum thickness, Table 11.3.1.1 (information: applies only to a wall designed by 11.5.3; this wall is designed by 11.5.2); t = '+sfrN(o.tw)+' in',sym:'h_{min}',eq:'\\max\\left(4,\\;\\frac{\\min(\\ell_{u},\\ell_{w})}{25}\\right)',sub:'\\max(4,\\;'+sfrN(o.tmin.lc)+'/25)',value:o.tmin.v,unit:'in',ref:'ACI 318-19 11.3.1.1'})]});}
- return {key:'S-wd'+i,title:pd.label+' (wall, '+sfrN(pd.bx,1)+' × '+sfrN(pd.by,1)+' × '+sfrN(pd.h,1)+' in)',items:[{type:'note',text:sfdWallTxt(w,false)},sfrTopics('pd'+i,T),
+ return {key:'S-wd'+i,title:pd.label+' (wall, '+sfrN(pd.bx,1)+' × '+sfrN(pd.by,1)+' × '+sfrN(pd.h,1)+' in)',items:[{type:'note',text:sfdWallTxt(w,false)},{type:'figure',svg:sfdWallSketchSVG(i),caption:pd.label+': wall elevation and plan, bars, load, b_eff,top (ACI 318-19 11.2.3.1) and b_eff,base (45° spread: decision pending engineer review)'},sfrTopics('pd'+i,T),
   {type:'table',wide:true,head:['Combination','P_u (kip)','M_u,out (kip-ft)','M_u,in (kip-ft)',o.slender?'M_c (kip-ft)':'M_u (kip-ft)','N more / less (kip/ft)','M (kip-ft/ft)','φM_n at N','ratio','V_u/φV_c'],
    rows:o.rows.map(z=>({cells:[z.name,sfrCell(z.P),sfrCell(z.Mo),sfrCell(z.Mi),sfrCell(isFinite(z.Mc)?z.Mc:'∞'),sfrN(z.Nhi)+' / '+sfrN(z.Nlo),sfrCell(isFinite(z.Mft)?z.Mft:'∞'),z.q?sfrCell(z.q.phiMn):sfrCell(z.mode==='axial'?'axial cap':z.mode==='range'?'tension':'—'),sfrDC(z.ratio),sfrDC(z.vr)],cls:z===o.gov?'gov':''}))},
   {type:'note',text:'Out of plane, per ft, every LRFD combination at both ends (the same procedure as the governing row, worked above). Not checked: '+SFWD_NOT+'.'},
@@ -8406,6 +8407,90 @@ function renderPunching(parent){
 /* SFWD-2 (2026-11-07): what the tool does not check for a wall (stated on the tab, the dashboard and in the Report) */
 const SFWD_NOT_L=['special structural walls and seismic detailing (ACI 318-19 Chapter 18, incl. 18.10: boundary elements, coupling beams)','walls with openings (11.7.5) or of a non-rectangular section','the strut-and-tie alternative for in-plane shear (11.5.4.1, Chapter 23)','the alternative slender-wall method (11.8)','the shear \u03c6 of 21.2.4 (special systems)','loads applied between the top and the base of the wall (the tool takes them at the top of the element)','deflections'];
 const SFWD_NOT=SFWD_NOT_L.join('; ');
+/* ---- SFWD-5 (2026-11-07, engineer: wall graphics): display only, no computed value changes ----
+   sfdWallSketchSVG(i): wall elevation (along l_w, to scale both ways) and plan: the vertical bars at their positions (pd.pmBars), the
+   horizontal bars at s_h (schematic, from the base), the load at its offset with the bearing width b, b_eff,top above the top
+   (ACI 318-19 11.2.3.1), the 45-degree spread lines from the edges of b down to the base (decision pending engineer review) and
+   b_eff,base below the base, the values from sfdWallOOP (o.bTop, o.bBase; for an older save, the concentrated values). The plan shows
+   the t x l_w section with every vertical bar. Used on the Wall Design card and as a static figure of the Report.
+   sfdWallPM*: the P-M diagrams with the pedestal helpers of SFPV (sfpmSec, sfpmPlotAxis, sfpmPlot3D): out of plane, the 12-in strip
+   with the two curtains (bars at +-(t/2 - d'), A_s per ft each), demand = each combination's governing end (N, M per ft over
+   b_eff,base, the check's own ratio); in plane, the whole wall section with every bar, demand = (P_u, M_c in plane, the in-plane
+   ratio); 3D: the whole-wall phi surface with every combination (M_ux, M_uy, P_u), coloured by the in-plane ratio. */
+function sfdWallSketchSVG(i){
+ const o=P2.wallD&&P2.wallD[i],pd=P2.pedDes[i],w=P2.bearing[i]&&P2.bearing[i].wall;if(!o||!o.applied||!pd)return '';
+ const lw=o.lw,tw=o.tw,H=Math.max(o.hs,1),dir=o.dir,conc=o.ldc!=='dist'||!!o.env;
+ const bTop=o.env?o.env.conc.bTop:o.bTop,bBase=o.env?o.env.conc.bBase:o.bBase,b=o.bw,u0=lw/2+o.eAl;   /* load point from the left end */
+ const W=600,padL=64,padR=72,padT=84,gap=70,sc=Math.min((W-padL-padR)/lw,260/H),wl=lw*sc,hh=H*sc,ft=18,tpx=Math.max(tw*sc,10);
+ const x0=padL+(W-padL-padR-wl)/2,yTop=padT,yBase=yTop+hh,yPlan=yBase+ft+gap,Ht=yPlan+tpx+46;
+ const X=u=>x0+u*sc,f=v=>f2(v),E=[];
+ const t=(x,y,s,o2)=>E.push('<text x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" font-size="'+((o2&&o2.fs)||11)+'" text-anchor="'+((o2&&o2.a)||'middle')+'"'+((o2&&o2.c)?' fill="'+o2.c+'"':'')+'>'+s+'</text>');
+ const ln=(x1,y1,x2,y2,st)=>E.push('<line x1="'+x1.toFixed(1)+'" y1="'+y1.toFixed(1)+'" x2="'+x2.toFixed(1)+'" y2="'+y2.toFixed(1)+'" '+st+'/>');
+ const dim=(a,c,y,lab,col)=>{ln(X(a),y,X(c),y,'stroke="'+col+'" stroke-width="1.2" marker-start="url(#swA)" marker-end="url(#swA)"');ln(X(a),y-4,X(a),y+4,'stroke="'+col+'"');ln(X(c),y-4,X(c),y+4,'stroke="'+col+'"');t((X(a)+X(c))/2,y-4,lab,{c:col,fs:10.5});};
+ E.push('<defs><marker id="swA" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0,2 L10,5 L0,8 z" fill="#333"/></marker>'+
+  '<marker id="swL" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#c62828"/></marker></defs>');
+ /* elevation: footing, wall, bars */
+ E.push('<rect x="'+(x0-14).toFixed(1)+'" y="'+yBase.toFixed(1)+'" width="'+(wl+28).toFixed(1)+'" height="'+ft+'" fill="#e3e3e3" stroke="#777"/>');
+ t(x0-16,yBase+ft-4,'footing',{a:'end',fs:10,c:'#555'});
+ E.push('<rect x="'+x0.toFixed(1)+'" y="'+yTop.toFixed(1)+'" width="'+wl.toFixed(1)+'" height="'+hh.toFixed(1)+'" fill="#f4f1ea" stroke="#333" stroke-width="1.4"/>');
+ const us=[...new Set((pd.pmBars||[]).map(q=>Math.round((lw/2+(dir==='y'?q.y:q.x))*100)/100))].sort((a,c)=>a-c),cv=pd.dPr||2;
+ us.forEach(u=>ln(X(u),yTop+cv*sc,X(u),yBase+ft-3,'stroke="#1f4e8c" stroke-width="1.1"'));
+ if(w&&w.hz&&!w.hz.need&&w.hz.s>0){for(let y=w.hz.s/2;y<H-1e-6;y+=w.hz.s)ln(x0+cv*sc,yBase-y*sc,x0+wl-cv*sc,yBase-y*sc,'stroke="#2e7d32" stroke-width="1" stroke-dasharray="5 3"');}
+ /* load at the top */
+ if(conc){const a=Math.max(0,u0-b/2),c=Math.min(lw,u0+b/2);
+  E.push('<rect x="'+X(a).toFixed(1)+'" y="'+(yTop-5).toFixed(1)+'" width="'+Math.max(X(c)-X(a),2).toFixed(1)+'" height="5" fill="#c62828"/>');
+  ln(X(u0),yTop-30,X(u0),yTop-6,'stroke="#c62828" stroke-width="2" marker-end="url(#swL)"');t(X(u0)+6,yTop-22,'P, M (b = '+f(b)+' in)',{a:'start',c:'#c62828',fs:10.5});
+  /* 45-degree spread from the edges of b to the base, clipped at the wall ends */
+  const sp=(e,sg)=>{const dx=Math.min(H,sg<0?e:lw-e),u2=e+sg*dx,y2=yTop+dx*sc;ln(X(e),yTop,X(u2),y2,'stroke="#8e44ad" stroke-width="1.2" stroke-dasharray="4 3"');};
+  sp(Math.max(0,u0-b/2),-1);sp(Math.min(lw,u0+b/2),1);
+  /* b_eff,top above the top: centred on the load, shifted to stay on the wall */
+  let a1=u0-bTop/2;a1=Math.max(0,Math.min(lw-bTop,a1));dim(a1,a1+bTop,yTop-48,'b_eff,top = '+f(bTop)+' in (11.2.3.1)','#c62828');
+  let a2=Math.max(0,u0-b/2-H),c2=Math.min(lw,u0+b/2+H);if(c2-a2>bBase+1e-6){const m=(a2+c2)/2;a2=Math.max(0,Math.min(lw-bBase,m-bBase/2));c2=a2+bBase;}
+  dim(a2,c2,yBase+ft+16,'b_eff,base = '+f(bBase)+' in (45° spread)','#8e44ad');}
+ else{for(let k=0;k<=8;k++){const u=lw*k/8;ln(X(u),yTop-24,X(u),yTop-4,'stroke="#c62828" stroke-width="1.4" marker-end="url(#swL)"');}
+  t(X(lw/2),yTop-30,'load distributed over ℓ_w: b_eff = ℓ_w = '+f(lw)+' in',{c:'#c62828',fs:10.5});}
+ t(x0+wl+6,yTop+hh/2,'h = '+f(H)+' in',{a:'start',fs:10.5});
+ t(W/2,14,'Elevation along ℓ_w = '+f(lw)+' in (to scale)',{fs:12});
+ /* plan */
+ E.push('<rect x="'+x0.toFixed(1)+'" y="'+yPlan.toFixed(1)+'" width="'+wl.toFixed(1)+'" height="'+tpx.toFixed(1)+'" fill="#f4f1ea" stroke="#333" stroke-width="1.2"/>');
+ (pd.pmBars||[]).forEach(q=>{const u=lw/2+(dir==='y'?q.y:q.x),v=(dir==='y'?q.x:q.y)/tw*tpx;E.push('<circle cx="'+X(u).toFixed(1)+'" cy="'+(yPlan+tpx/2+v).toFixed(1)+'" r="2.4" fill="#1f4e8c"/>');});
+ if(conc){const a=Math.max(0,u0-b/2),c=Math.min(lw,u0+b/2);E.push('<rect x="'+X(a).toFixed(1)+'" y="'+yPlan.toFixed(1)+'" width="'+Math.max(X(c)-X(a),2).toFixed(1)+'" height="'+tpx.toFixed(1)+'" fill="rgba(198,40,40,0.18)" stroke="#c62828"/>');}
+ t(W/2,yPlan-10,'Plan: t = '+f(tw)+' in'+(tpx>tw*sc*1.05?' (drawn ×'+(tpx/(tw*sc)).toFixed(1)+')':'')+', '+(pd.pmBars||[]).length+' vertical bars',{fs:11});
+ t(8,Ht-12,'blue: vertical bars; green dashed: horizontal bars'+(w&&w.hz&&!w.hz.need&&w.hz.s>0?' @ '+f(w.hz.s)+' in':' (input needed)')+'; red: load and b; purple dashed: 45° spread (decision pending engineer review)',{a:'start',fs:10,c:'#444'});
+ return '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 '+W+' '+Ht.toFixed(0)+'" style="width:100%;max-width:'+W+'px;height:auto;font-family:Times New Roman,serif" role="img" aria-label="Wall elevation and plan">'+E.join('')+'</svg>';}
+/* the wall's P-M sections and demand points (display only, from sfdWallOOP) */
+function sfdWallPMData(i){const o=P2.wallD[i],pd=P2.pedDes[i];if(!o||!o.applied)return null;
+ const xo=o.tw/2-o.dPr, Soop=sfpmSec([{x:-xo,y:0,A:o.Asf},{x:xo,y:0,A:o.Asf}],o.tw,12,o.fc,o.fy,o.S.phiPnMax,pd.label+' out of plane, per ft');
+ const oop=(o.rows||[]).map(z=>({name:z.name,P:isFinite(z.N)?z.N:z.Nhi,Mx:0,My:isFinite(z.Mft)?z.Mft:0,ratio:z.ratio,mode:z.mode==='ok'?'radial':z.mode}));
+ const Sip=sfpmSec(pd.pmBars,pd.bx,pd.by,pd.fc,pd.fy,o.ip?o.ip.S.phiPnMax:pd.phiPn_max,pd.label+' in plane, whole wall');
+ const ax=o.dir==='y'?'x':'y';
+ const ip=((o.ip&&o.ip.rows)||[]).map(z=>({name:z.name,P:z.P,Mx:ax==='x'?(isFinite(z.Mc)?z.Mc:0):0,My:ax==='y'?(isFinite(z.Mc)?z.Mc:0):0,ratio:z.ratio,mode:z.mode==='ok'?'radial':z.mode}));
+ const p3=(pd.pmPts1||[]).map((p,k)=>{const r=o.ip&&o.ip.rows[k];return {name:p.name,P:p.P,Mx:p.Mx,My:p.My,ratio:r?r.ratio:NaN,mode:r&&r.mode!=='ok'?r.mode:'radial'};});
+ return {Soop,oop,Sip,ip,ax,p3};}
+const SFWPV={};
+function sfdWallPMShow(i,v){SFWPV[i]=v;const w=document.getElementById('sfwpm-views-'+i);if(!w)return;sfpmApply(w,v);
+ if(v==='3d'){const d=document.getElementById('plot-wpm3-'+i);if(d&&!d.classList.contains('js-plotly-plot')&&!d.classList.contains('sfp-na')&&P2)sfdWallPMDraw3D(i);}
+ if(typeof Plotly!=='undefined'&&Plotly.Plots)w.querySelectorAll('[data-sfpmv="'+v+'"] .js-plotly-plot').forEach(d=>{try{Plotly.Plots.resize(d);}catch(e){}});}
+function sfdWallPMDraw3D(i){const D=sfdWallPMData(i);if(D)sfpmPlot3D('plot-wpm3-'+i,D.Sip,D.p3,{title:P2.pedDes[i].label+' whole wall'});}
+function sfdWallPMViews(b,i){
+ const vw=el('div','sfpmViews');vw.id='sfwpm-views-'+i;
+ const sel=el('div','sfpmSel noprint');sel.setAttribute('role','group');sel.setAttribute('aria-label','Wall P–M view');
+ [['op','Out of plane, per ft'],['ip','In plane, whole wall'],['both','Both'],['3d','3D surface, whole wall']].forEach(([v,tx])=>{const bt=el('button','',tx);bt.type='button';bt.dataset.v=v;bt.onclick=()=>sfdWallPMShow(i,v);sel.appendChild(bt);});
+ vw.appendChild(sel);
+ const mk=(v,ids,note,np)=>{const d=el('div',np?'noprint':'');d.dataset.sfpmv=v;const pr=el('div','sfpmPair');ids.forEach(id=>{const p=el('div','plot');p.id=id;p.style.height=v==='3d'?'480px':'400px';pr.appendChild(p);});d.appendChild(pr);d.appendChild(el('div','note',note));vw.appendChild(d);};
+ const nOp='<b>Out of plane, per ft.</b><ul class="sfwList"><li>Section: the 12-in strip, the two curtains of vertical bars (A<sub>s</sub> per ft each, d′ from each face), the same strain-compatibility theory as the check.</li><li>Markers: each LRFD combination at the end that governs: (M per ft over b<sub>eff,base</sub>, N per ft); colour = its ratio; label = the combination number.</li><li>Not plotted: the top section at the load and the dowels (their ratios are in the table above).</li></ul>';
+ const nIp='<b>In plane, whole wall.</b><ul class="sfwList"><li>Section: t × ℓ<sub>w</sub> with every vertical bar at its position.</li><li>Markers: each LRFD combination (M<sub>c</sub> in plane, P<sub>u</sub>); colour = the in-plane ratio.</li></ul>';
+ mk('op',['plot-wpmo-'+i],nOp);mk('ip',['plot-wpmi-'+i],nIp);
+ mk('both',['plot-wpmo2-'+i,'plot-wpmi2-'+i],'Both diagrams side by side (as above).',true);
+ mk('3d',['plot-wpm3-'+i],'<b>3D surface, whole wall.</b><ul class="sfwList"><li>The φ failure surface of the whole t × ℓ<sub>w</sub> section (M<sub>y</sub>, M<sub>x</sub>, P), built as for a pedestal.</li><li>Markers: every LRFD combination (M<sub>ux</sub>, M<sub>uy</sub>, P<sub>u</sub>), first order, coloured by the in-plane ratio.</li><li>Information only: the out-of-plane moment is checked per ft over b<sub>eff</sub>, not on this surface.</li></ul>',true);
+ b.appendChild(vw);sfpmApply(vw,SFWPV[i]||'op');}
+function sfdWallPMRender(){
+ if(!P2||!P2.wallD)return;
+ P2.wallD.forEach((o,i)=>{if(!o||!o.applied)return;const D=sfdWallPMData(i);if(!D)return;
+  [['plot-wpmo-'+i,1],['plot-wpmo2-'+i,0]].forEach(([id,s])=>{if(sfpOn(id)){sfpmPlotAxis(id,D.Soop,D.oop,'y',{scale:!!s,title:P2.pedDes[i].label+' out of plane, per ft'});
+   if(typeof Plotly!=='undefined'&&Plotly.relayout&&document.getElementById(id).classList.contains('js-plotly-plot'))Plotly.relayout(id,{'xaxis.title.text':'M per ft (k-ft/ft)','yaxis.title.text':'N per ft (kip/ft)'});}});
+  [['plot-wpmi-'+i,1],['plot-wpmi2-'+i,1]].forEach(([id,s])=>{if(sfpOn(id))sfpmPlotAxis(id,D.Sip,D.ip,D.ax,{scale:!!s,title:P2.pedDes[i].label+' in plane, whole wall'});});
+  if(sfpOn('plot-wpm3-'+i)&&(SFWPV[i]||'op')==='3d')sfdWallPMDraw3D(i);});}
 /* SFWD-2: a wall's card on the Wall Design tab (replaces the pedestal stand-in checks; display of sfdWallOOP / sfdWallInfo / pedDes) */
 function sfdWallCard(b,i){
  const pd=P2.pedDes[i],w=P2.bearing[i].wall,o=P2.wallD&&P2.wallD[i],rf=state.peds[i].reinf;
@@ -8426,6 +8511,7 @@ function sfdWallCard(b,i){
   o2.ldc==='dist'?'b_{eff} = '+f2(o2.lw)+'\\text{ in}':'b = '+f2(o2.bw)+(o2.bIn?'':'\\text{ (= t)}')+',\\quad s = '+(isFinite(o2.sL)?f2(o2.sL):'\\infty\\text{ (none)}')+',\\quad h = '+f2(o2.hs)+',\\quad a_1 = '+f2(o2.a1)+',\\quad a_2 = '+f2(o2.a2)+'\\text{ in}',
   o2.ldc==='dist'?'\\text{per ft: force}\\times 12/\\ell_w':'\\begin{gathered}b_{eff,top} = \\min('+f2(o2.bw+4*o2.tw)+',\\,'+(isFinite(o2.sL)?f2(o2.sL):'\\infty')+',\\,'+f2(o2.lw)+') = '+f2(o2.bTop)+'\\text{ in}\\\\ b_{eff,base} = \\min\\left[\\min('+f2(o2.bw/2+o2.hs)+',\\,'+f2(o2.a1)+') + \\min('+f2(o2.bw/2+o2.hs)+',\\,'+f2(o2.a2)+'),\\,'+(isFinite(o2.sL)?f2(o2.sL):'\\infty')+',\\,'+f2(o2.lw)+'\\right] = '+f2(o2.bBase)+'\\text{ in}\\end{gathered}'));
  b.appendChild(sfwUl([['Decision (pending engineer review)','the 45° spread from the bearing width b down the element height h to the base section is common practice, not a code article; a<sub>1</sub>, a<sub>2</sub> = the distances from the load point to the two wall ends'],['Load application',o2.ldc==='dist'?'distributed over the full wall length (input)':'concentrated over a bearing width b'+(o2.bIn?' (entered)':' = the wall thickness t (default, conservative)')+(o2.sIn?', next load at s = '+f2(o2.sL)+' in':'')],['b<sub>eff,top</sub>','the top section (applied P and out-of-plane M at the load) per ft'],['b<sub>eff,base</sub>','the base P–M, the slenderness strip, the out-of-plane shear and the dowels per ft'],['Self-weight','spread over ℓ<sub>w</sub> = '+f2(o2.lw)+' in'],['Full wall','the in-plane checks, the footing and the soil use the full wall and the full loads'],['Strip','12 in, the two curtains of vertical bars (the end bars of the cage are not counted: conservative)'],['Axial force per ft','the in-plane moment adds ±6M<sub>u,in</sub>/ℓ<sub>w</sub>² at the two ends; both ends are checked (decision pending engineer review)']]));}
+ {const sv=sfdWallSketchSVG(i);if(sv){const fg=el('div','sfwFig noprint');fg.innerHTML=sv;b.appendChild(fg);b.appendChild(el('div','note noprint','Elevation and plan of the wall: the bars, the load and the effective lengths above (the Report prints the same figure at the top of the wall\u2019s section).'));}}
  /* slenderness */
  b.appendChild(eqBlock('Wall: out-of-plane slenderness','ACI 318-19 11.4.1.3, 6.2.5.1('+(o.brace==='braced'?'b':'a')+'), 6.2.5.2(b); k: Table 11.5.3.2'+(o.kIn?' (k entered)':''),
   'r = 0.3t,\\qquad \\frac{k\\ell_u}{r} \\le '+(o.brace==='braced'?'34 + 12\\tfrac{M_1}{M_2} = 34\\;(M_1 = 0\\text{ at the braced top})':'22\\;(\\text{free top: not braced against lateral translation})'),
@@ -8487,6 +8573,7 @@ function sfdWallCard(b,i){
   b.appendChild(t);
   b.appendChild(sfwUl([['Section','the whole wall, every vertical bar of the cage at its position along ℓ<sub>w</sub> (curtains and end bars)'],['M<sub>u,in</sub>','about the strong axis at the wall base (M<sub>u'+(o.dir==='y'?'x':'y')+'</sub>: V h, applied moment, P·e)'],['Interaction with the out-of-plane moment','checked per ft at the two ends (out-of-plane check above, N = P<sub>u</sub>/ℓ<sub>w</sub> ± 6M<sub>u,in</sub>/ℓ<sub>w</sub>²)'],['Bold','the governing row']]));
   if(!ip.ok)b.appendChild(el('div','failbox','<b>NG — wall in-plane axial and flexure</b> (ratio '+(isFinite(g.ratio)?f3(g.ratio):'∞')+', '+sfEsc(g.name)+(ip.slFail?'; slender limit':'')+').'));}}
+ sfdWallPMViews(b,i);   /* SFWD-5: P-M diagrams, display only */
  sfdWallRhoBlocks(b,w);   /* SFWC: 11.6, 11.5.4, 11.7.2 / 11.7.3 */
  /* 11.7.4.1 ties, bar fit, covers */
  {const X=P2.xties&&P2.xties[i];
