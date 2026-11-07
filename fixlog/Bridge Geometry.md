@@ -2163,3 +2163,39 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
     - pass: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, home-projects --tool bgeo, tests/engine/run.mjs handoffs lldf list-input.
     - project-library --tool bgeo: text-only differences (the note, the span summary columns, the haunch-check L column).
 - **Saved data:** none. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/bg-review-low-items (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX10, review LOW items L1, L2, L5, L6: precision option, State Plane / scale-factor note, phone layout, comment fixes)   [display; one load fix] [saved data: additive field]
+
+- **L1, precision:** new select **Elevations to** 0.01 ft / 0.001 ft (`#out_dec`), in the Top of Deck Output controls (the empty third cell after Divisions).
+  - It sets the decimals of the elevations in the Top-of-Deck table (both modes) and the Beam-Seat table, so also their CSV files and the Drawings-tab tables copied from them. Display only.
+  - Default 0.01 ft (as before) for saved and new projects (`BG_OLD_DEFAULTS` / `BG_NEW_DEFAULTS` `out_dec:'2'`).
+  - Code: `outDec()` (before `skewDatumUI`); `buildTable` uses `const DEC=outDec();` with `.toFixed(DEC)` in its elevation cells (was `.toFixed(2)`); `buildSeatTable` uses `s.seatZ.toFixed(outDec())`.
+  - Check: demo at 0.001 ft, Abut 1 seats 95.598 / 95.838 / 95.838 / 95.598 (0.01 ft: 95.60 / 95.84 / 95.84 / 95.60).
+- **L2, State Plane:**
+  - The Export DXF basis notes gain one line (State Plane only): the alignment is laid out at ground distance from the POB, no combined scale factor is applied, and the coordinates differ from grid by (1 − CSF) × the distance; apply the project CSF in CAD if the plans are on grid.
+  - The Site Map intro note says the same, and that NAD 83 is taken as WGS 84 for the map (about 1–1.5 m).
+  - No coordinate changed (Q-BG5, a CSF input, stays open).
+- **L5, phone layout:**
+  - Before: the page scrolled sideways at 390 px (1,086 px wide on the Alignment tab, 666 px elsewhere) and at 768 px.
+  - CSS added after the `@media (max-width: 1020px){ .cols … }` rule. At ≤ 1020 px: the tab strip scrolls inside itself; fieldsets may shrink below their content (`min-width:0`); the Site Map's survey-point table is a containing block for its hidden screen-reader label. At ≤ 700 px: inline 4-column field grids become 2 columns.
+  - The section "Cut / Surface" row wraps (`flex-wrap:wrap`).
+  - On a tab switch, the visible pane's Plotly plots are resized (`Plotly.Plots.resize`). A plot drawn while hidden kept Plotly's default 700 px width.
+  - Desktop (> 1020 px) is unchanged.
+  - Bridge Geometry is added to `tests/smoke/phone-layout.mjs` (`bgeo`): 390 and 768 px pass, every tab. The 12 console errors are the Site Map tiles, which the test kit blocks.
+- **L6, comments and one load fix:**
+  - `deckPointCW` comment: "+left" → "+right of the chord direction, as in the tables" (the code was right).
+  - `x_pivot` is marked as not used (kept for old saves).
+  - `applyProject`: a file without `VALPTS` now opens with no validation points. Before (`if(p.VALPTS){…}`) it kept the previous project's list. Saved projects always carry `VALPTS`, so they are unaffected.
+- **Not changed:**
+  - L3: spiral node interpolation, up to 5e-3 ft at R 100 / L 400. The start-spiral part was fixed in BGX1.
+  - L4: overlapping vertical curves warn only; making it an error could block existing saves. Left for the engineer.
+  - L7: open decisions.
+- **Governing provision:** none (§4 does not apply: no formula or value changed).
+- **How verified:**
+  - Headless probe origin/main vs branch (demo, variant, Examples 1–5): every table, the hand-off payload and DXF identical (the time stamp aside); Export JSON gains `out_dec:'2'`.
+  - 0.001 ft display checked. phone-layout --tool bgeo: pass at 390 and 768 px (main: 1,086 / 1,086 px wide).
+  - Tests:
+    - pass: check-syntax, bgeo-examples, dxf-print-sheets --tool bg, home-projects --tool bgeo, tests/engine/run.mjs handoffs lldf list-input.
+    - project-library --tool bgeo: text-only difference (the new select).
+- **Saved data (§5):** additive scalar `out_dec` (absent = '2', as before). No key changed.
+- **Other copies:** none. `tests/smoke/phone-layout.mjs` gains the `bgeo` entry.
