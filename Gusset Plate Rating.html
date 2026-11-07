@@ -1499,6 +1499,7 @@ const GPR = (function () {
       planes: [{ kind: 'above', name: 'Horizontal plane through the top line of chord fasteners', on: true, side: 'auto', Lg: '', Ln: '' },
         { kind: 'below', name: 'Horizontal plane through the bottom line of chord fasteners', on: true, side: 'auto', Lg: '', Ln: '' }],
       fac: { phiC: 1.0, phiS: 1.0 },
+      slip: { on: false, cls: 'A' },
       code: {},
       src: '',
       ui: { itab: 'project', otab: 'summary', col: {}, view: { members: true, fasteners: true, whitmore: true, planes: true, block: true, lmid: true, labels: true, dc: true }, dcCase: 0, rpt: { inputs: true, params: true, geometry: true, checks: true, rating: true, drawing: true, validation: true, method: false, detail: 'full' }, open: {} }
@@ -2100,7 +2101,21 @@ const GPR = (function () {
     const ecc = P.members.map((m, i) => { const g = G[i], e = dot(g.centroid, g.v), tol = Math.max(p.eccTol, p.eccPct / 100 * (g.tmax - g.tmin)); if (!(Math.abs(e) > tol + 1e-9)) return null;
       const F = memDem(m), Mf = CASES.map((cs, j) => ({ j, M: Math.abs(facVal(F, cs)) * Math.abs(e) })).reduce((a, r) => !a || r.M > a.M ? r : a, null);
       return { i, id: m.id, e, tol, spread: g.tmax - g.tmin, M: { DC: F.DC * e, DW: F.DW * e, LL: F.LL.map(x => x * e) }, Mf }; }).filter(Boolean);
-    const adv = { pint, edges, ecc, spl };
+    /* M7 (advisory, off by default): bolt slip, Service II. LRFD 10th Ed. Eq. 6.13.2.8-1: R_n = K_c K_h K_s N_s P_t per bolt and slip plane (P_t: Table 6.13.2.8-1,
+       120 ksi column for A325, 150 ksi for A490; K_h: Table 6.13.2.8-2, standard 1.00 / oversize 0.85; K_s: Table 6.13.2.8-3 by surface class; K_c 0.80 for Class C).
+       Total = R_n per plane × the shear-plane count of the fastener-shear check. RF = (R_n − (DC + DW)) / (γ_LL LL), dead and live in the live-load direction,
+       γ_LL = 1.30 Inventory / 1.00 other levels (MBE Service II, verify; MBE not in references). Never part of the governing rating factor. */
+    const PT = { 0.625: [19, 24], 0.75: [28, 35], 0.875: [39, 49], 1: [51, 64], 1.125: [64, 80], 1.25: [81, 102], 1.375: [97, 121], 1.5: [118, 148] }, KS = { A: 0.30, B: 0.50, C: 0.30, D: 0.45 };
+    const SL = P.slip || {}, slip = !SL.on ? null : (() => { const cls = KS[SL.cls] != null ? SL.cls : 'A', Ks = KS[cls], Kc = cls === 'C' ? 0.80 : 1.0, rows = [];
+      checks.filter(c => c.ls === 'fs' && c.cap.lrfr && c.cap.lrfr['+'] && !c.err).forEach(c => { const mids = c.mem != null ? [c.mem] : c.chord ? [c.chord.i0, c.chord.i1] : []; const parts = c.cap.lrfr['+'].parts || [];
+        if (!mids.length || !mids.every(i => FAST[P.members[i].fast.grade].kind === 'bolt')) return;
+        let Rn = 0; const bits = []; mids.forEach((i, k) => { const f = P.members[i].fast, d = Math.round(num(f.d) * 1000) / 1000, pt = PT[d], Pt = pt ? pt[f.grade === 'A490' ? 1 : 0] : NaN, Kh = f.hole === 'oversize' ? 0.85 : 1.0, Np_ = parts[k] ? parts[k].planes : NaN;
+          Rn += Kc * Kh * Ks * Pt * Np_; bits.push({ id: P.members[i].id, d, Pt, Kh, N: Np_ }); });
+        const cases = CASES.map((cs, j) => { if (cs.meth !== 'lrfr') return null; const L = c.dem.LL[cs.k]; if (!(Math.abs(L) > 1e-9)) return null; const dd = Math.sign(L), D = (c.dem.DC + c.dem.DW) * dd, g = cs.lvl === 'Inventory' ? 1.30 : 1.00;
+          return { j, g, D, L: Math.abs(L), RF: (Rn - D) / (g * Math.abs(L)) }; }).filter(Boolean);
+        rows.push({ id: c.id, who: c.who, Rn, bits, cases, min: cases.length ? Math.min(...cases.map(q => q.RF)) : null }); });
+      return { cls, Ks, Kc, rows }; })();
+    const adv = { pint, edges, ecc, spl, slip };
     return { errors: [], warnings: warn, P, p, poly, ts, Np, Fy, Fu, G, holes, planes, checks, cases: CASES, gov, incomplete, deadOver, eqm, span, stops, adv };
   }
 
@@ -3187,6 +3202,8 @@ function paneRating() { return `
     <p class="note">${P.owner === 'RIDOT' ? 'RIDOT LRFR Guidelines (Sept 2022): 4.2.1, resistance factors as in the LRFD Specifications for new construction, so the LRFR gusset factors default to LRFD 10th Ed. 6.5.4.2 (φ compression 0.75, shear yielding 0.80, chord splice 0.65) instead of the MBE rating values; 4.2.2, condition factor φ<sub>c</sub> required (Table 4); 4.2.3, system factor per MBE Table 6A.4.2.4-1 (verify); 6.5.4, gusset plates per MBE 6A.6.12.6. Decision pending engineer review (M5).' : P.owner === 'MassDOT' ? 'No MassDOT rule changes a gusset result here. Bridge Manual 7.2.2.3B: gusset plates of trusses designed by ASD or LFD are rated by LFR as well (choose the method above).' : P.owner === 'CTDOT' ? 'The CTDOT Bridge Design Manual has no gusset-plate rating rules; AASHTO values are used.' : 'AASHTO MBE / LRFD values, as in the code parameters.'}</p></div>
   ${secHd('sec-fac', 'LRFR condition and system factors')}<div class="sec-body" id="sec-fac">${fld('Condition factor φ<sub>c</sub>', 'fac.phiC', '')}${fld('System factor φ<sub>s</sub>', 'fac.phiS', '')}
     <p class="note">MBE Eq. 6A.4.2.1-1: C = φ<sub>c</sub>φ<sub>s</sub>φR<sub>n</sub>, with φ<sub>c</sub>φ<sub>s</sub> ≥ 0.85. Defaults 1.0; MBE Table 6A.4.2.4-1 lists 0.90 for riveted members in truss bridges. Confirm the values the owner applies to gusset plates (verify).</p></div>
+  ${secHd('sec-slip', 'Bolt slip (advisory)')}<div class="sec-body" id="sec-slip">${fld('Check bolt slip, Service II (advisory)', 'slip.on', '', 'bool')}${fld('Faying surface class', 'slip.cls', '', 'sel', { options: [['A', 'Class A (K_s 0.30)'], ['B', 'Class B (K_s 0.50)'], ['C', 'Class C, galvanized (K_s 0.30, K_c 0.80)'], ['D', 'Class D (K_s 0.45)']] })}
+    <p class="note">LRFD 10th Ed. 6.13.2.8; shown under Advisory checks, never in the rating factor. Off by default: whether the MBE requires slip in a gusset rating is not confirmed (verify).</p></div>
   ${secHd('sec-dc', 'Drawing colours')}<div class="sec-body one-col" id="sec-dc">${fld('Colour the drawing by D/C for', 'ui.dcCase', '', 'sel', { options: [['0', '—']] })}
     <p class="note">D/C = (factored dead + factored live) / (φ<sub>c</sub>φ<sub>s</sub>)φR<sub>n</sub> for the selected rating case. D/C &gt; 1 is equivalent to RF &lt; 1.</p></div>`; }
 
@@ -3341,7 +3358,7 @@ function renderSummary() {
   const scope = card('sum-scope', 'Not included in Phase 1', '', `<ul class="dlist">${SCOPE_OUT.map(s => `<li>${s}</li>`).join('')}</ul>`);
   $('#tab-summary').innerHTML = vfy + head + errC + tbl + warns + advC + eqmC + scope;
 }
-const SCOPE_OUT = ['LFR chord splice check (the LFR rating checks a spliced chord through the Whitmore checks of the chord members, FHWA-IF-09-014)', 'Combined shear, axial force and moment on a plane, shear with a normal force on a partial shear plane, free-edge slenderness and eccentric fastener groups: advisory only, with a ratio, never in the rating factor (see Advisory checks)', 'Fastener groups loaded eccentrically: the fasteners share the member force equally (the advisory note gives the eccentric moment)', 'Localized section loss (loss is applied uniformly to each plate)', 'Fatigue and serviceability (slip) of bolted connections'];
+const SCOPE_OUT = ['LFR chord splice check (the LFR rating checks a spliced chord through the Whitmore checks of the chord members, FHWA-IF-09-014)', 'Combined shear, axial force and moment on a plane, shear with a normal force on a partial shear plane, free-edge slenderness and eccentric fastener groups: advisory only, with a ratio, never in the rating factor (see Advisory checks)', 'Fastener groups loaded eccentrically: the fasteners share the member force equally (the advisory note gives the eccentric moment)', 'Localized section loss (loss is applied uniformly to each plate)', 'Fatigue of bolted connections; bolt slip (Service II) is only an optional advisory check (Rating input tab, off by default)'];
 
 /* ---------- drawing ---------- */
 const DCOL = { pass: '#2c7a4b', warn: '#c98a1b', fail: '#c3352b', na: '#9aa39d' };
@@ -3471,6 +3488,11 @@ function advItems() { const A = R.adv, out = [], lds = `DC / DW / ${P.ll.map(c =
       body: `<p class="note-p">${ADV_NOTE} Limit L<sub>g</sub>/t ≤ ${f2(R.p.edgeC)}√(E/F<sub>y</sub>) = ${f2(R.p.edgeC)}√(${f0(R.p.E)}/${f1(R.Fy)}) = ${f2(E.limR || 0)}, t = ${f4(E.t || 0)} in (thinnest plate after section loss), so L<sub>g</sub> ≤ ${f2(E.lim || 0)} in. This is the former design rule for stiffening a free edge (AASHTO Std. Spec. 17th Ed. 10.16.11, former LRFD 6.14.2.8; FHWA-IF-09-014; verify). MBE 3rd Ed. 6A.6.12.6 and NCHRP W-197 (NCHRP 12-84) did not adopt it as a rating limit: the Whitmore buckling check with L<sub>mid</sub> covers plate stability in rating.</p>
         <p class="note-p">Free edge: a run of the plate outline that is not beside a member, i.e. outside every member outline (width in the plate plane, from the member end outward) and outside the strip of every fastener field (outer holes across, from the row nearest the WP outward). L<sub>g</sub> is measured along the outline, corners included (conservative). The member widths are the drawing inputs.</p>
         ${E.runs.length ? `<div class="tscroll"><table class="tbl narrow"><thead><tr><th>Free edge</th><th>From (x, y)</th><th>To (x, y)</th><th class="right">L<sub>g</sub> (in)</th><th class="right">L<sub>g</sub>/t</th><th class="right">Ratio</th></tr></thead><tbody>${E.runs.map((r, k) => `<tr><td class="lbl">E${k + 1}: ${esc(r.fromN.join(', ') || 'plate')} to ${esc(r.toN.join(', ') || 'plate')}</td><td>${f2(r.a[0])}, ${f2(r.a[1])}</td><td>${f2(r.b[0])}, ${f2(r.b[1])}</td><td class="val">${f2(r.L)}</td><td class="val">${f1(r.Lt)}</td><td class="val">${advR(r.ratio)}</td></tr>`).join('')}</tbody></table></div>` : '<p class="note-p">No free edge: the whole outline is beside members.</p>'}` }); }
+  // M7: bolt slip, Service II (advisory, only when switched on)
+  if (A.slip) { const S = A.slip, mn = S.rows.filter(r => r.min != null).reduce((a, r) => Math.min(a, r.min), Infinity);
+    out.push({ id: 'adv-slip', title: 'Bolt slip, Service II (M7)', ref: 'LRFD 10th Ed. 6.13.2.8, Eq. 6.13.2.8-1, Tables 6.13.2.8-1 to -3; MBE Service II (verify)', ratio: isFinite(mn) ? 1 / Math.max(mn, 1e-9) : null,
+      body: `<p class="note-p">${ADV_NOTE} Whether the MBE requires a slip check in a gusset rating is not confirmed (verify, MBE not in references); RIDOT LRFR Guidelines 6.5.4 asks for splices to be rated where slip is observed. R<sub>n</sub> = K<sub>c</sub>K<sub>h</sub>K<sub>s</sub>N<sub>s</sub>P<sub>t</sub> per bolt and slip plane (LRFD 10th Ed. Eq. 6.13.2.8-1), surface Class ${esc(S.cls)}: K<sub>s</sub> = ${f2(S.Ks)}, K<sub>c</sub> = ${f2(S.Kc)}; total = R<sub>n</sub> × slip planes (the shear-plane count of the fastener-shear check). RF = (R<sub>n</sub> − DC − DW)/(γ<sub>LL</sub>LL), with γ<sub>LL</sub> = 1.30 (Inventory) or 1.00 (other levels), dead and live load in the live-load direction (MBE Service II, verify). Ratio shown = 1/RF.</p>
+        ${S.rows.length ? `<div class="tscroll"><table class="tbl narrow"><thead><tr><th>Check</th><th>Bolts</th><th class="right">R<sub>n</sub> (kip)</th>${R.cases.map(cs => cs.meth === 'lrfr' ? `<th class="right">${esc(cs.label)}</th>` : '').join('')}</tr></thead><tbody>${S.rows.map(r => `<tr><td class="lbl">${esc(r.id)}</td><td>${r.bits.map(b => `${esc(b.id)}: d ${frac(b.d)}, P<sub>t</sub> ${isFinite(b.Pt) ? f0(b.Pt) : '— (no table value)'}, K<sub>h</sub> ${f2(b.Kh)}, ${b.N} planes`).join('; ')}</td><td class="val">${f1(r.Rn)}</td>${R.cases.map((cs, j) => { if (cs.meth !== 'lrfr') return ''; const q = r.cases.find(z => z.j === j); return `<td class="val">${q ? `<span class="${q.RF < 1 ? 'n-warn' : ''}">${f2(q.RF)}</span> <small class="n-dim">(γ ${f2(q.g)})</small>` : '—'}</td>`; }).join('')}</tr>`).join('')}</tbody></table></div>` : '<p class="note-p">No bolted member: every fastener group is riveted (slip does not apply).</p>'}` }); }
   // C17 (O4): eccentric fastener groups
   { const ec = A.ecc;
     out.push({ id: 'adv-ecc', title: 'Eccentric fastener groups (O4)', ref: 'Judgment; LRFD 10th Ed. 6.13.1 (verify)', ratio: null, flag: ec.length,
