@@ -3131,7 +3131,7 @@ From the code-compliance review of 2026-11-07 (finding M1). Engineer asleep, mer
 - **How verified:** main vs branch on 20 review cases: only SPn-U moved, and only in the cases with punched holes (all punched; only L2-L3 punched, whose chord holes lie on SP1; the §2.3 variant; the validation model with punched holes). Drilled cases identical. Validation tab 17 of 17 (drilled holes; unchanged). `check-syntax`, `phone-layout --tool gusset` pass; `project-library --tool gusset` passes except its four "identical to main" checks, which differ only in the SPn-U equation text (now shows R<sub>p</sub>) on the default (drilled) project. 0 console errors.
 - **Saved data:** no change. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/gusset-m2-splice-demand — Chord-splice demand: the larger of the resolved forces on the two sides (LRFD 10th Ed. C6.14.2.8.6) (M2; §4)
+## 2026-11-07 — PR: claude/gusset-m2-splice-demand (PR #1040: https://github.com/mlococo88/All-Structural/pull/1040) — Chord-splice demand: the larger of the resolved forces on the two sides (LRFD 10th Ed. C6.14.2.8.6) (M2; §4)
 
 From the code-compliance review of 2026-11-07 (finding M2; answers open item C14.7-3).
 
