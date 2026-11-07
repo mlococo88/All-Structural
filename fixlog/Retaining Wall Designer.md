@@ -6170,3 +6170,54 @@ After:
 
 ### Saved data
 - No input or format change. Old pile saves open with the mat at c_c (engineer instruction: no option).
+
+## 2026-11-07 — PR: claude/rw-pile-thin-cap-error — Pile-supported footing: a named input error when t_f ≤ embedment + clear + 2 in (the depth over the pile heads), never a throw; the page catches any calculation error (RWTE; input-validation change, pile mode only; valid inputs: no result change)
+
+Follow-up A2 of the second-pass fix round. Code sites are tagged `RWTE`.
+
+### RWTE-1. Problem and root cause
+- Report: in pile mode t_f = 8 in made the calculation throw while the page showed only "Input error: no results".
+- Root cause (before #1149, RWPB): `calcAll` took the bottom cover on piles as max(c_c, embedment + clear) = 15 in, and its only thickness guard was the spread-footing rule `t_f ≤ c_c + 2`. With t_f ≤ 15.375 in the toe d of the first pass was ≤ 0, the bar loop never ran, `sel_toe` stayed null and `shearVc(…, sel_toe.As_prov, …)` threw `TypeError: Cannot read properties of null (reading 'As_prov')`.
+  - For t_f ≤ embedment + clear (8 in) the page's own validation (RWIE) blocked the calculation first, so the banner was named. Other callers of `calcAll` still threw.
+  - For 15 < t_f ≤ 15.375 in, `onInputChange` itself threw: the page stopped updating, with no message.
+- After RWPB (bottom bars at c_c) the toe no longer throws. But the depth over the pile heads d_p = t_f − embedment − clear − d_b was still unguarded, which gave nonsense punching results:
+  - t_f 15.5 in: d_p = 0, D/C 5.9 × 10¹³;
+  - embedment 3 / clear 3, t_f 6.5 in: d_p −0.5 in, negative φV_c;
+  - a direct `calcAll` call at t_f 8 in: d_p −7.75 in with punching marked "ok".
+
+### RWTE-2. Fix
+- `calcAll`, after the spread "Footing too thin" rule (anchor `Stem too thin (`). Pile mode returns a fatal, named error when `t_f ≤ embedment + clear + 2`:
+  "Footing too thin over the pile heads: t_f = … in must exceed embedment … in + clear … in + 2 in for the bars = … in (depth over the pile heads d_p = t_f − embedment − clear − d_b > 0). Increase t_f or reduce the pile embedment."
+  The 2-in allowance for the bar is the same as in the spread rule. `rwIeIdOf` marks it on `tf` (/Footing too thin/).
+- `calcAll`, defensive: if `sel_heel` or `sel_toe` is null after its bar loop, return a fatal error "Heel: d ≤ 0 (…)" / "Toe: d ≤ 0 (…)" (marked on `tf`) instead of throwing.
+- Page validation (`rwInputErrors`, pile block): `embed + clr ≥ t_f` → `embed + clr + 2 ≥ t_f`. The message names the limit: "Embedment into the footing 12 in + clear 3 in + 2 in for the bars = 17.00 in is not less than the footing thickness t_f = 8 in: the depth over the pile heads would be ≤ 0. Increase t_f to more than 17.00 in or reduce the embedment."
+- `onInputChange`: `calcAll` in try/catch. An unexpected error becomes the banner "Calculation error: <message>. No results for these inputs; …" (fatal, no results). The page keeps working, and the error goes to `console.warn`.
+
+### §4 (input limit)
+- **Before:** a pile footing gave results for t_f > embedment + clear (UI) and threw for 15 < t_f ≤ 15.375 in.
+- **After:** results need t_f > embedment + clear + 2 in. Inputs with embedment + clear < t_f ≤ embedment + clear + 2 in now show the named input error instead of results with d_p ≤ ~1.25 in.
+- This is not a formula change. Basis: d_p > 0 is required by the punching equations (ACI 318-19 §22.6.5.2; AASHTO LRFD 10th Ed. (2024) Art. 5.12.8.6.3). The 2-in bar allowance matches the tool's spread-footing rule.
+- **Check cases** (defaults: embedment 12, clear 3; limit 17 in):
+  - t_f 8 → error naming 17.00 in (was a throw from `calcAll`; the banner was named by RWIE);
+  - t_f 15.5 → error (was d_p = 0, punching D/C 5.9e13);
+  - t_f 17 → error (at the limit; d_p would be 17 − 15 − 0.75 = 1.25 in);
+  - t_f 17.1 → results as before (d_p 1.6 in; punching FAILs; cap depth FAIL);
+  - embedment 3 / clear 3, t_f 6.5 → error (was d_p −0.5);
+  - spread footing t_f 5.5, cover 3 → unchanged (d 2.125).
+
+### How verified
+- Headless, origin/main vs branch:
+  - `calcAll` on the 32 review walls plus the at-rest walls: identical. One run showed a probe state leak on `aci_var`; a re-run of that case was identical.
+  - The cases above: the banner and `calcAll` give the named errors.
+  - A forced throw from `calcAll` gives the "Calculation error" banner, and the page recovers on the next input.
+  - 0 console errors.
+- Tests:
+  - check-syntax;
+  - smoke/retaining-wall-checks (new RWIE rows RWTE t_f 8 and t_f 17 marked on `pile_embed`);
+  - phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Decision (pending engineer review)
+- The limit is embedment + clear + 2 in, the same allowance as the spread rule. A thicker-cap minimum (ACI §13.4.6.1, d_p ≥ 12 in) stays a check row (FAIL), not an input error.
+
+### Saved data
+- No input or format change. A saved pile project with embedment + clear < t_f ≤ embedment + clear + 2 in now opens with the input error, and its inputs are kept.
