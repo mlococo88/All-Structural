@@ -189,6 +189,13 @@ input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin
 input:hover, select:hover, textarea:hover { border-color: var(--muted); }
 input:focus, select:focus, textarea:focus { border-color: var(--blue); box-shadow: var(--ring); }
 input.err { border-color: var(--fail); background: #fdf5f4; box-shadow: 0 0 0 3px var(--fail-dim); }
+/* RWIE (2026-11-06): input-error banner and field messages */
+.rwie-box { margin: 0 0 12px; padding: 8px 12px; border: 1px solid var(--border); border-left: 4px solid var(--fail); background: #fdf5f4; color: #7f1d1d; font-size: 13px; line-height: 1.5; border-radius: 4px; grid-column: 1 / -1; }
+.rwie-box ul { margin: 4px 0 4px 18px; padding: 0; }
+.rwie-box a.rwie-go { color: #7f1d1d; text-decoration: underline; }
+.rwie-msg { grid-column: 1 / -1; font-size: 11.5px; line-height: 1.4; color: #991b1b; margin: 3px 0 0; padding: 2px 6px; border-left: 3px solid var(--fail); background: #fdf5f4; }
+.rwie-msg.rv { color: #7a4a00; border-left-color: #c98a00; background: #fff8e6; }
+input.rwie-rv { border-color: #c98a00; }
 select {
   appearance: none; -webkit-appearance: none; cursor: pointer;
   font-family: var(--sans); font-size: 12.5px;
@@ -4335,7 +4342,7 @@ function renderStabilityAASHTO(r) {
 
 function renderStability(r) {
   const el = document.getElementById('tab-stability');
-  if (r.fatal) { el.innerHTML = r.errors.map(e=>`<div class="alert fail">⚠ ${e}</div>`).join(''); return; }
+  if (r.fatal) { el.innerHTML = rwInputErrHTML(r); return; }
   if (r.isAASHTO) { renderStabilityAASHTO(r); return; }
   const { inp } = r;
   const F = (v,d=1) => (isFinite(v)?v.toFixed(d):'—');
@@ -4983,7 +4990,7 @@ min ℓ_d = 12 in</div>
 // ================================================================
 function renderStem(r) {
   const el = document.getElementById('tab-stem');
-  if (r.fatal) { el.innerHTML = r.errors.map(e=>`<div class="alert fail">⚠ ${e}</div>`).join(''); return; }
+  if (r.fatal) { el.innerHTML = rwInputErrHTML(r); return; }
   const { inp } = r;
   const F = (v,d=1) => (isFinite(v)?v.toFixed(d):'—');
   const Fk = (v,d=3) => (v/1000).toFixed(d);
@@ -5286,7 +5293,7 @@ function buildStemPressureDiagram(r) {
 // ================================================================
 function renderFooting(r) {
   const el = document.getElementById('tab-footing');
-  if (r.fatal) { el.innerHTML = r.errors.map(e=>`<div class="alert fail">⚠ ${e}</div>`).join(''); return; }
+  if (r.fatal) { el.innerHTML = rwInputErrHTML(r); return; }
   const { inp } = r;
   const F = (v,d=1) => (isFinite(v)?v.toFixed(d):'—');
   const Fk = (v,d=3) => (v/1000).toFixed(d);
@@ -5893,8 +5900,137 @@ function importProjectJSON(file) {
   reader.readAsText(file);
 }
 
+// ================================================================
+// RWIE (2026-11-06): required inputs. One validation pass by code mode over every input the analysis reads, on the
+// values as typed (a blank box used to read as 0 or fell back silently). While any error stands there are no results:
+// the check summary, every output tab, the Drawings and the Report show the common "Input error: no results" banner
+// listing each error with a link to its field, and the field is outlined with the reason under it. Only blank or
+// clearly invalid values are errors (negative or zero sizes, cover at or beyond the thickness, an override the tool
+// cannot use); no engineering-judgment limits. Doubtful values are REVIEW notes (shown, not blocking).
+// Valid inputs: no change (calcAll is not touched).
+// ================================================================
+function rwInputErrors() {
+  const E = [], R = [], el = id => document.getElementById(id);
+  const raw = id => { const e = el(id); return e ? String(e.value).trim() : null; };
+  const val = id => { const v = raw(id); return v === '' || v == null ? NaN : Number(v); };
+  const blank = id => { const v = raw(id); return v === '' || (v != null && !isFinite(Number(v))); };
+  const on = id => !!(el(id) && el(id).checked);
+  const sel = id => (el(id) ? el(id).value : '');
+  const lab = id => { const l = document.querySelector(`label[for="${id}"]`); return l ? l.textContent.replace(/\s+/g, ' ').trim() : id; };
+  const err = (id, msg) => { if (!E.some(e => e[0] === id)) E.push([id, msg]); };
+  const need = (id, cond, what) => { if (blank(id)) { err(id, `${lab(id)}: enter a value${what ? ' (' + what + ')' : ''}.`); return false; } if (cond && !cond(val(id))) { err(id, `${lab(id)} = ${raw(id)}: ${cond.msg}.`); return false; } return true; };
+  const gt0 = Object.assign(v => v > 0, { msg: 'must be greater than 0' });
+  const ge0 = Object.assign(v => v >= 0, { msg: 'must be 0 or greater' });
+  const opt = (id, cond) => { if (!blank(id) && !cond(val(id))) err(id, `${lab(id)} = ${raw(id)}: ${cond.msg}.`); };   // blank keeps its documented default
+  const isA = sel('design_basis') === 'AASHTO';
+  // ── Wall geometry ──
+  if (on('vh_enable')) {
+    const a = need('vh_hlo', gt0), b = need('vh_hhi', gt0);
+    if (a && b && val('vh_hhi') < val('vh_hlo')) err('vh_hhi', `${lab('vh_hhi')} (${raw('vh_hhi')}) must not be less than ${lab('vh_hlo')} (${raw('vh_hlo')}).`);
+  } else need('Hs', gt0);
+  const tfOk = need('tf', gt0), tsbOk = need('ts_bot', gt0); need('ts_top', gt0);
+  need('Lt', ge0, '0 for no toe'); need('Lh', ge0, '0 for no heel'); opt('Df_add', ge0);
+  // ── Materials ──
+  need('fc', gt0); need('fy', gt0); need('gamma_c', gt0);
+  const csOk = need('cov_stem', ge0), cfOk = need('cov_ftg', ge0);
+  if (tsbOk && csOk && val('cov_stem') >= val('ts_bot')) err('cov_stem', `Stem cover ${raw('cov_stem')} in is not less than the stem thickness t_s = ${raw('ts_bot')} in.`);
+  if (tfOk && cfOk && val('cov_ftg') >= val('tf')) err('cov_ftg', `Footing cover ${raw('cov_ftg')} in is not less than the footing thickness t_f = ${raw('tf')} in.`);
+  // ── Soil ──
+  need('gamma_s', gt0);
+  need('phi', Object.assign(v => v > 0 && v < 90, { msg: 'must be greater than 0° and less than 90°' }));
+  opt('coh', ge0); opt('q_sur', ge0);
+  if (!blank('beta') && val('beta') < 0) R.push(['beta', `${lab('beta')} = ${raw('beta')}° (backfill sloping down from the wall): the earth-pressure formulas are used with β < 0 as entered. Confirm.`]);
+  if (!(isA && sel('aashto_qn_mode') === 'manual')) need('qa', gt0);
+  if (sel('mu_method') === 'custom') need('custom_mu', gt0);
+  if (on('use_shear_key')) need('dk', gt0);
+  // ── Water ──
+  if (sel('wt_mode') === 'elev') { need('el_tow'); need('el_gw'); }
+  else opt('wt_depth', ge0);
+  opt('gamma_w', gt0); opt('gamma_sat', gt0);
+  if (!blank('gamma_sat') && !blank('gamma_w') && val('gamma_sat') > 0 && val('gamma_sat') < val('gamma_w'))
+    err('gamma_sat', `${lab('gamma_sat')} = ${raw('gamma_sat')} pcf is less than γ_w = ${raw('gamma_w')} pcf (the buoyant weight would be negative).`);
+  // ── Column / beam loads ──
+  ['col_DL', 'col_LL', 'col_SL'].forEach(id => opt(id, Object.assign(v => v >= 0, { msg: 'must be 0 or greater (a downward load; W may be negative for uplift)' })));
+  const hasCol = ['col_DL', 'col_LL', 'col_SL', 'col_WL'].some(id => val(id) !== 0 && !blank(id));
+  if (hasCol) need('col_Ldist', gt0);
+  // ── Seismic ──
+  opt('kh', ge0); opt('kv', Object.assign(v => v < 1, { msg: 'must be less than 1 (the analysis divides by 1 − k_v)' }));
+  opt('delta_mo', ge0);
+  // ── Bar overrides (0 = automatic) ──
+  ['s1', 's2', 's3', 'f1', 'f2', 'f3'].forEach(k => {
+    const b = 'ovr_bar_' + k, s = 'ovr_spc_' + k, bv = blank(b) ? 0 : val(b), sv = blank(s) ? 0 : val(s);
+    if (bv !== 0 && !(Number.isInteger(bv) && bv >= 3 && bv <= 10)) err(b, `${lab(b)} = ${raw(b)}: the override takes bar sizes #3 to #10 (0 = automatic).`);
+    else if (bv !== 0 && !(sv >= 3 && sv <= 18)) err(s, `${lab(s)} = ${raw(s) || 'blank'}: with bar #${bv} the override needs a spacing of 3 to 18 in (0 / blank bar = automatic).`);
+    else if (bv === 0 && sv !== 0) err(b, `${lab(b)}: a spacing of ${raw(s)} in is entered with no bar size; enter the bar (#3 to #10) or clear the spacing (automatic).`);
+  });
+  // ── Barrier ──
+  if (on('bar_enable')) {
+    need('bar_h', gt0);
+    if (sel('bar_mode') === 'geom') need('bar_t', gt0); else need('bar_w', gt0);
+  }
+  // ── AASHTO ──
+  if (isA) {
+    opt('aashto_eta', gt0); opt('aashto_phi_b', gt0); opt('aashto_gamma_e1', gt0); opt('aashto_gamma_e2', gt0);
+    opt('aashto_phi_tau', ge0); opt('aashto_phi_ep', ge0);
+    [['aashto_phi_tau'], ['aashto_phi_ep'], ['aashto_phi_b']].forEach(([id]) => { if (!blank(id) && val(id) > 1) R.push([id, `${lab(id)} = ${raw(id)} is greater than 1. Confirm the resistance factor.`]); });
+    opt('aashto_delta', ge0);
+    if (sel('aashto_qn_mode') === 'manual') need('aashto_qR', gt0);
+    if (on('aashto_ll_surcharge') && sel('aashto_heq_mode') === 'manual') need('aashto_heq', ge0);
+    if (sel('aashto_base_fric') === 'manual') need('aashto_delta_b', Object.assign(v => v > 0 && v < 90, { msg: 'must be greater than 0° and less than 90° (0 fell back to ⅔φ)' }));
+    if (on('aashto_ct_enable')) {
+      need('aashto_ct_h', gt0); need('aashto_ct_wh', gt0); need('aashto_ct_h_app', ge0); need('aashto_ct_ljoint', gt0);
+      opt('aashto_ct_phi', gt0); opt('aashto_ct_ecc_div', gt0);
+      if (on('yl_enable')) { need('yl_Mb', ge0); need('yl_Mw', ge0); need('yl_Mc', gt0); }
+    }
+    if (on('aashto_ish_enable')) {
+      need('aashto_ish_c', ge0); need('aashto_ish_mu', gt0); need('aashto_ish_k1', gt0); need('aashto_ish_k2', gt0); need('aashto_fc_sub', gt0);
+      need('aashto_dowel_bar', Object.assign(v => (typeof BARS !== 'undefined' ? BARS : []).some(b => b.num === v), { msg: 'must be a bar size of the tool\'s bar table (#3 to #' + (typeof BARS !== 'undefined' ? BARS[BARS.length - 1].num : 10) + ')' }));
+      need('aashto_dowel_spc', gt0);
+    }
+  }
+  return { E, R };
+}
+// the field ids of the analysis' own fatal messages (calcAll), so they get a link too
+function rwIeIdOf(msg) {
+  const T = [[/f'c/, 'fc'], [/f_y/, 'fy'], [/q_a/, 'qa'], [/η/, 'aashto_eta'], [/φ_b/, 'aashto_phi_b'], [/γ_e/, 'aashto_gamma_e1'],
+    [/Backfill slope/, 'beta'], [/Footing too thin/, 'tf'], [/Stem too thin/, 'ts_bot'], [/^Seismic/, 'kh'], [/Stem: d/, 'ts_bot'], [/Heel: d/, 'tf']];
+  const t = T.find(([re]) => re.test(msg)); return t ? t[1] : null;
+}
+function rwInputMarks(IE) {
+  document.querySelectorAll('.rwie-msg').forEach(n => n.remove());
+  document.querySelectorAll('[data-rwie]').forEach(n => { n.classList.remove('err', 'rwie-rv'); n.removeAttribute('aria-invalid'); n.removeAttribute('data-rwie'); });
+  const put = (id, msg, rev) => { const i = document.getElementById(id); if (!i) return;
+    i.setAttribute('data-rwie', rev ? 'r' : 'e');
+    if (rev) i.classList.add('rwie-rv'); else { i.classList.add('err'); i.setAttribute('aria-invalid', 'true'); }
+    const m = document.createElement('div'); m.className = 'rwie-msg' + (rev ? ' rv' : ''); m.textContent = (rev ? 'REVIEW: ' : '') + msg;
+    const g = i.closest('.ig') || i.parentNode; g.appendChild(m); };
+  IE.E.forEach(([id, msg]) => put(id, msg, false));
+  IE.R.forEach(([id, msg]) => { if (!IE.E.some(e => e[0] === id)) put(id, msg, true); });
+}
+// the common banner (dashboard, every output tab, Drawings, Report)
+function rwInputErrHTML(r, what) {
+  const L = (r && r.inputErrors) ? r.inputErrors : ((r && r.errors) || ['No results.']).map(m => [rwIeIdOf(m), m]);
+  const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return `<div class="rwie-box" role="alert"><b>Input error: no results${what ? ' (' + what + ')' : ''}.</b><ul>${L.map(([id, m]) => `<li>${id ? `<a href="#" class="rwie-go" data-rwiego="${esc(id)}">${esc(m)}</a>` : esc(m)}</li>`).join('')}</ul>Correct the marked inputs.</div>`;
+}
+// a link to a field: its input tab, its card opened, the drawer shown on a phone, then the field focused
+function rwIeGoto(id) {
+  const i = document.getElementById(id); if (!i) return;
+  const app = document.getElementById('app'), btn = document.getElementById('inputs-toggle');
+  if (app && app.classList.contains('inputs-hidden') && btn) btn.click();
+  const f = document.querySelector('.finder'); if (f && f.value) { f.value = ''; f.dispatchEvent(new Event('input')); }
+  const pane = i.closest('[id^="ipane-"]');
+  if (pane) { const t = document.querySelector(`#itabs .itab[data-pane="${pane.id.slice(6)}"]`); if (t && t.getAttribute('aria-selected') !== 'true') t.click(); }
+  const body = i.closest('.sec-body');
+  if (body && body.classList.contains('hidden')) { const hd = document.querySelector(`.sec-hd[data-target="${body.id}"]`); if (hd) hd.click(); else body.classList.remove('hidden'); }
+  setTimeout(() => { try { i.scrollIntoView({ block: 'center' }); i.focus({ preventScroll: true }); } catch (e) {} }, 30);
+}
+document.addEventListener('click', e => { const a = e.target.closest && e.target.closest('.rwie-go'); if (!a) return; e.preventDefault(); rwIeGoto(a.dataset.rwiego); });
+
 function onInputChange() {
   updateHints();
+  const IE = rwInputErrors();   // RWIE: clear and redo the input marks before the older highlights below
+  rwInputMarks({ E: [], R: [] });
   const inp = getInputs();
   // Validation highlights
   document.getElementById('ts_bot').classList.toggle('err', inp.ts_bot < inp.ts_top);
@@ -5902,7 +6038,9 @@ function onInputChange() {
   document.getElementById('beta').classList.toggle('err',   inp.beta >= inp.phi);
   document.getElementById('tf').classList.toggle('err',     inp.tf <= inp.cov_ftg + 2);
 
-  const r = calcAll(inp);
+  rwInputMarks(IE);
+  const r = IE.E.length ? { inp, errors: IE.E.map(e => e[1]), warnings: [], fatal: true, inputErrors: IE.E } : calcAll(inp);   // RWIE: no results while an input is in error
+  if (r.fatal && !r.inputErrors) rwInputMarks({ E: (r.errors || []).map(m => [rwIeIdOf(m), m]).filter(x => x[0]), R: IE.R });   // RWIE: the analysis' own input errors marked on their fields too
   window._R = r;
   renderStatus(r);
   renderOverview(r);
@@ -5927,7 +6065,7 @@ function onInputChange() {
 // ================================================================
 function renderRebar(r) {
   const el = document.getElementById('tab-rebar');
-  if (r.fatal) { el.innerHTML = r.errors.map(e=>`<div class="alert fail">⚠ ${e}</div>`).join(''); return; }
+  if (r.fatal) { el.innerHTML = rwInputErrHTML(r); return; }
   const { inp } = r;
 
   // Build the 7-row schedule
@@ -6415,7 +6553,7 @@ function buildElevationSVG(r) {
 
 function renderDiagram(r) {
   const el = document.getElementById('tab-diagram');
-  if (r.fatal) { el.innerHTML = r.errors.map(e=>`<div class="alert fail">⚠ ${e}</div>`).join(''); return; }
+  if (r.fatal) { el.innerHTML = rwInputErrHTML(r); return; }
 
   const LAYERS = [
     ['concrete','Concrete','#2155c4'],
@@ -7582,7 +7720,7 @@ const TOGGLE_DEFS = [
 function renderOverview(r) {
   const el = document.getElementById('tab-overview');
   if (r.fatal) {
-    el.innerHTML = r.errors.map(e => `<div class="alert fail">⚠ ${e}</div>`).join('');
+    el.innerHTML = rwInputErrHTML(r);
     return;
   }
   const { inp } = r;
@@ -8276,7 +8414,7 @@ let _3d = null;  // persistent scene state
 
 function render3D(r) {
   const el = document.getElementById('tab-threed');
-  if (r.fatal) { el.innerHTML = r.errors.map(e=>`<div class="alert fail">⚠ ${e}</div>`).join(''); return; }
+  if (r.fatal) { el.innerHTML = rwInputErrHTML(r); return; }
   if (typeof THREE === 'undefined') {
     el.innerHTML = `<div class="alert warn">3D library failed to load. Check your network connection (requires cdnjs.cloudflare.com).</div>`;
     return;
@@ -9558,7 +9696,7 @@ function renderRwReport() {
   const T = document.getElementById('tab-report'); if (!T) return;
   if (!window.SharedReport || !window.SharedSteps) { T.innerHTML = '<div class="alert fail">⚠ shared/report.js or shared/steps.js is not loaded: keep the shared folder next to this file.</div>'; RWRP.api = null; RWRP.doc = null; return; }
   const r = window._R;
-  if (!r || r.fatal) { T.innerHTML = (r && r.errors ? r.errors : ['No results.']).map(e => `<div class="alert fail">⚠ ${e}</div>`).join('') + '<div class="alert info">Correct the input errors to see the report.</div>'; RWRP.api = null; RWRP.doc = null; return; }
+  if (!r || r.fatal) { T.innerHTML = rwInputErrHTML(r, 'no report'); RWRP.api = null; RWRP.doc = null; return; }
   if (RWRP.imgsFor !== r) { RWRP.imgsFor = r; RWRP.imgs = null; const tok = r;   // charts: drawn off screen by the tabs' own plot jobs (async), then the report is mounted again
     RWRP.imgsP = rwPlotImages().then(im => { if (RWRP.imgsFor !== tok || !Object.keys(im).length) return; RWRP.imgs = im; const T2 = document.getElementById('tab-report'); if (T2 && T2.classList.contains('active')) renderRwReport(); }).catch(() => {}); }
   let M;
@@ -10196,7 +10334,7 @@ function rwdwRender(r) {
   const T = document.getElementById('tab-drawings'); if (!T) return;
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   if (!r) { T.innerHTML = '<div class="pending">Calculating…</div>'; return; }
-  if (r.fatal) { T.innerHTML = r.errors.map(e => `<div class="alert fail">⚠ ${e}</div>`).join('') + '<div class="note">Input error: no drawings.</div>'; return; }
+  if (r.fatal) { T.innerHTML = rwInputErrHTML(r, 'no drawings'); return; }
   if (!window.SharedDxf) { T.innerHTML = '<div class="alert fail">shared/dxf.js is not loaded: keep the shared folder next to this file.</div>'; return; }
   let B; try { B = rwdwBuild(r); } catch (e) { console.warn(e); T.innerHTML = '<div class="alert fail">The drawings could not be drawn: ' + esc(e && e.message) + '</div>'; return; }
   RWDW.B = B;
@@ -10284,7 +10422,7 @@ function rwDashRender(r) {
   box.innerHTML = '';
   if (!r || r.fatal) {
     box.innerHTML = r && r.errors && r.errors.length
-      ? '<div class="rwdMsg"><b>Input error: no results.</b> Correct the inputs:<ul>' + r.errors.map(e => '<li>' + e + '</li>').join('') + '</ul></div>'
+      ? rwInputErrHTML(r)   // RWIE: the common banner, with links to the fields
       : '<div class="rwdMsg none">No results yet.</div>';
     if (cnt) cnt.innerHTML = r && r.fatal ? '<span class="rwdCf">input error</span>' : '';
     return;

@@ -2256,3 +2256,62 @@ function renderStatus(r) {
 - **How verified:** origin/main vs branch, eight cases (as RW3F): `_R`, Export JSON, every localStorage key, tab text, DXF identical; the Report text differs only by the new caption in the three AASHTO cases (Strength I soil; Strength Ia soil, resultant near the toe; Strength Ia on rock, triangular); ACI Reports identical; links resolve (no `§?`); 0 console errors. Screenshots of the figure looked at.
 - **Other copies:** none.
 - **Decisions (pending engineer review):** only the governing combination is drawn (the tab's selector shows the others); Extreme Event II keeps its worked steps without a figure.
+
+## 2026-11-07 — PR: claude/rw-input-errors (RWIE) — required inputs: "Input error: no results" banner with links, fields marked with their reason, one validation pass by code mode   [behaviour change for blank / invalid input only; valid inputs: no result change]
+- **Why:** engineer-approved 2026-11-06 (task 3, review Phase 4a; as CBC #794, LP #744, SF). Before, only f′c, f_y, q_a, η, φ_b, γ_e and a few geometry cases (β ≥ φ, members too thin for cover) stopped the run. Every other blank box was read as 0 by `getInputs` (`parseFloat(…) || 0`), and some invalid values fell back silently: an out-of-range bar override fell back to automatic; a blank distribution length became 0.5 ft (`Math.max(0.5, …)`); a manual δ_b of 0 fell back to ⅔φ; a blank barrier height switched the barrier off.
+- **What:**
+  - `rwInputErrors()`: one pass over the values as typed. Blank boxes are told apart from 0. It runs by code mode, and conditional fields only when their option is on.
+  - Errors stop the run: `window._R = { inp, errors, warnings: [], fatal: true, inputErrors }`, and `calcAll` is not called.
+  - REVIEW notes (doubtful values) are shown on the field in amber and do not block.
+  - `rwInputMarks()`: an invalid field gets class `err` with `aria-invalid` and the reason under it. The input tab's red dot comes from the existing `refreshInputTabs`.
+  - The analysis' own fatal messages (β ≥ φ, member too thin, M-O, …) are marked on their fields too (`rwIeIdOf`).
+  - `rwInputErrHTML(r)`: the common banner "Input error: no results." with one linked line per error. It is used by the check summary, every output tab (Overview, Stability, Stem, Footing, Rebar, Analysis diagram, 3D), the Drawings ("no drawings") and the Report ("no report"). Before, each showed red "⚠ <message>" alerts with no link.
+  - `rwIeGoto(id)` (the link) does the following, in order:
+    - opens the drawer on a phone;
+    - clears the finder;
+    - switches the input tab;
+    - opens the card if it is closed;
+    - scrolls to the field and focuses it.
+- **Rules.** Errors are for blank or clearly invalid values only; there are no engineering-judgment limits.
+  - **Required (blank is an error):**
+    - H_s, or H_low / H_high when the wall varies in height (H_high must be ≥ H_low);
+    - t_f, t_s,base, t_s,top (> 0);
+    - L_t, L_h (≥ 0; "0 for no toe / heel");
+    - f′c, f_y, γ_c (> 0);
+    - stem and footing cover (≥ 0, and less than t_s / t_f);
+    - γ_s (> 0);
+    - φ (0 < φ < 90°);
+    - q_a (> 0), unless AASHTO with a manual q_R;
+    - custom μ (> 0) when chosen;
+    - key depth d_k (> 0) when the shear key is on;
+    - top-of-wall and water elevations, in elevation mode;
+    - distribution length (> 0) when any column load is non-zero;
+    - barrier h (> 0) and w or t (> 0) when the barrier is on;
+    - AASHTO: q_R (> 0) when manual; h_eq (≥ 0) when manual with LS on; δ_b (0 < δ_b < 90°) when the base friction is manual;
+    - AASHTO collision: F_t, L_t (> 0), h_CT (≥ 0), joint spacing (> 0); yield line: M_b, M_w (≥ 0), M_c (> 0);
+    - AASHTO interface shear: c (≥ 0), μ, K1, K2, f′c,sub (> 0), dowel bar in the bar table, dowel spacing (> 0).
+  - **Optional (blank keeps 0 or its documented default; checked only when entered):**
+    - D_f,add, c, q_s, water depth, k_h, δ_MO (≥ 0); k_v (< 1);
+    - column D / L / S (≥ 0);
+    - γ_w, γ_sat (> 0); γ_sat must not be less than γ_w;
+    - η, φ_b, γ_e1, γ_e2, collision φ and e-divisor (> 0); φ_τ, φ_ep, δ (≥ 0).
+  - **Bar overrides:** a bar outside #3–#10, a bar without a 3–18 in spacing, or a spacing without a bar is an error. These are the limits `applyOvr` applies; before, such an override silently fell back to automatic.
+  - **REVIEW (not blocking):** β < 0; a resistance factor φ_τ, φ_ep or φ_b > 1.
+  - Unchanged: the existing `calcAll` validation and warnings (stem top > base stays a warning).
+- **Where:**
+  - New block before `function onInputChange() {`: `rwInputErrors`, `rwIeIdOf`, `rwInputMarks`, `rwInputErrHTML`, `rwIeGoto`, and a delegated click on `.rwie-go`.
+  - In `onInputChange`: before, `const r = calcAll(inp);`. After: `rwInputMarks(IE); const r = IE.E.length ? { inp, errors: …, fatal: true, inputErrors: IE.E } : calcAll(inp);` and the marks for `calcAll`'s fatal messages.
+  - The fatal branches of `renderOverview`, `renderStability`, `renderStem`, `renderFooting`, `renderRebar`, `renderDiagram`, `render3D`, `renderRwReport`, `rwdwRender` and `rwDashRender`: before, ``r.errors.map(e=>`<div class="alert fail">⚠ ${e}</div>`).join('')``. After: `rwInputErrHTML(r)`.
+  - CSS `.rwie-box`, `.rwie-msg`, `input.rwie-rv`.
+- **Formulas, factors, units, code references:** none changed. Pass/fail logic changes only in that results are withheld for invalid input (§4: behaviour change for invalid input only, as LP #744).
+- **Saved data (§5):** no key or format change. An older project saved with a blank or invalid value opens on the banner, with the field marked (tested: autosave with H_s and f′c blank).
+- **Check case:** default project: no banner, no mark, results as before. H_s blank: "Input error: no results. Stem Height Hs: enter a value." on every tab; the link focuses H_s.
+- **How verified:**
+  - origin/main vs branch, eight valid cases (as RW3F): `_R`, Export JSON, every localStorage key, Report and tab text, DXF **identical**. The f′c-blank case differs only by the new banner text and the added `inp` / `inputErrors`.
+  - New smoke test `tests/smoke/retaining-wall-checks.mjs`: 14 cases plus the old-save case, each with the banner on all nine output views, the field marked, the link focusing the field, and 0 console errors. A further 25-case scratch run covered every rule group.
+  - Screenshots at 1400 and 390 looked at.
+- **Other copies:** none.
+- **Decisions (pending engineer review):**
+  - A blank "none-type" input (loads, cohesion, surcharge, seismic, water depth) stays 0 and is not an error. Geometry, materials and q_a must be entered.
+  - The REVIEW list is kept short: β < 0 and φ > 1.
+- **Observation (not changed):** `getInputs` applies the variable-height rule (H = H_lo + 0.75(H_hi − H_lo)) whenever its box is ticked, also in ACI mode, where the card is hidden.
