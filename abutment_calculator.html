@@ -739,7 +739,7 @@ function defaultState(){
       epsCRSH:0.0002,                          // combined long-term creep+shrinkage strain (in/in)
       brLoadedLen:80.0, roadwayW:40.0 },       // braking: lane-load loaded length (ft), clear roadway width (ft) → design lanes
     seismic:{ on:false, As:0.15, khR:0.5, kv:0.0, hEQr:0.6,       // EE-I: site accel coeff, kh = khR·As (walls free to displace), ΔPAE at hEQr·H
-      khRAuto:true,                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
+      khRAuto:true, Wseg:0,                                       // ABM1: Wseg = segment permanent load for the longitudinal connection force at fixed bearings (kip, 0 = auto) [3.10.9.2]                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
       gEHEQ:1.00, gEQll:0.0,                                      // γEH at EE-I (used only with gEHEQmode "agency"); γEQ on live load (project-specific)
       gEHEQmode:"gp",                                             // EE-I γEH: "gp" = per Table 3.4.1-1 (10th Ed.: 1.00, EEP; the stored value is kept); "agency" = fixed gEHEQ
       phiTauEQ:1.00, phiBEQ:0.80, phiCEQ:1.00, eFracEQ:0.3333,    // extreme-event resistance factors [11.5.8: 1.0; bearing 0.8 for semigravity walls; 10.5.5.3.3]; e/B (used only with eLimEQmode "user")
@@ -1709,7 +1709,7 @@ function migrate(){
     // notice, defRev 10); any other saved ratio is kept ("ratio" mode, same value)
     if(S.seismic&&S.seismic.hEQmode===undefined) S.seismic.hEQmode=Math.abs((+S.seismic.hEQr||0)-0.6)<1e-9? "static" : "ratio";
     if(S.seismic&&S.seismic.khRAuto===undefined) S.seismic.khRAuto=!(S.seismic.khR!==undefined&&S.seismic.khR!==""&&isFinite(+S.seismic.khR));   // ABM2: a saved project keeps its stored k_h ratio (khRAuto false); one without a stored ratio follows the foundation
-    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt"]);   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
+    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt","Wseg"]);   // ABM1: Wseg 0   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
     if(!S.bwLL||typeof S.bwLL!=="object") S.bwLL=clone(T.bwLL); }
   if(S.own.dv===2){   // CLMB (2026-10-20): new owner defaults (MassDOT Coulomb, RIDOT at-rest rule) for a project saved with the earlier defaults
     S.own.dv=3;
@@ -2367,6 +2367,7 @@ function buildInputs(){
       <div class="chk-row"><input type="checkbox" id="chkNC" data-path="seismic.nonConc" ${sq.nonConc!==false?"checked":""}>
       <label for="chkNC">P<sub>AE</sub> and the wall inertia P<sub>IR</sub> not concurrent: P<sub>AE</sub> + 0.5P<sub>IR</sub> and max(0.5P<sub>AE</sub>, P<sub>A</sub>) + P<sub>IR</sub> [11.6.5.1]</label></div>
       ${inpRow("Seismic share of superstructure inertia at this abutment","seismic.shEQ","%",{title:"EQ_sup = A_s·(DC + DW)·share, at the seat (Tab 3 §3.6a). 100 % = all of the superstructure inertia through this abutment's keepers / shear keys. Independent of the static longitudinal shares of panel I-6."})}
+      ${inpRow("Segment permanent load for the longitudinal connection force (0 = auto)","seismic.Wseg","kip",{title:"Total permanent load (DC + DW) of the uninterrupted superstructure segment held longitudinally by fixed bearings at this abutment [3.10.9.2]. Used only with panel I-6 'Defined fixed bearing'. 0 = 2(ΣP_DC + ΣP_DW)·L_tot/L (whole bridge length; single span: both ends' reactions). Tab 3 §3.6."})}
       ${inpRow("Seismic share of superstructure inertia, transverse","seismic.shEQt","%",{title:"Transverse EQ along the abutment: A_s·(DC + DW)·share at the seat (keepers / shear keys), plus the wall inertia k_h·W_wall; combined 100 % / 30 % with the longitudinal case [3.10.8] (Tab 3 §3.6a). 0 = no transverse superstructure force at this abutment."})}
       ${selRow("γ<sub>EH</sub> at Extreme Event I","seismic.gEHEQmode",[["gp","1.00, as DC, DW, EV, ES [T.3.4.1-1, 10th Ed.]"],["agency","Fixed value (agency policy)"]],{rebuild:true})}
       ${S.seismic.gEHEQmode==="agency"?inpRow("&nbsp;&nbsp;γ<sub>EH</sub> (agency policy)","seismic.gEHEQ","–",{title:"Fixed static earth-pressure factor within EE-I where the owner requires a value other than the 1.00 of AASHTO LRFD 10th Ed. Table 3.4.1-1."}):""}
@@ -3989,8 +3990,19 @@ function computeAll(){
   const single=g.HsupMode==="single";
   const Wperm=agg.DC.P+WdiaAdd+agg.DW.P, Wtrib=Wperm+gEQc*agg.LL.P, cZ1=AsC<0.05?0.15:0.25;
   const F1=zone===1? cZ1*Wtrib : 0, F0=AsC*Wperm;
-  const Fconn=zone===1? (single? Math.max(F1,F0) : F1) : (single? F0 : NaN);
-  R.seismic={Fconn, perBeam:Fconn/Math.max(1,S.beams.N), trib:Wperm, Wtrib, zone, As:AsC, gEQ:gEQc, cZ1, F1, F0, single, LL:agg.LL.P};
+  const FconnT=zone===1? (single? Math.max(F1,F0) : F1) : (single? F0 : NaN);   // ABM1: transverse (and longitudinal where not fixed here): this abutment's reactions
+  // ABM1 (2026-11-07): longitudinal force at a line of fixed bearings (panel I-6 "Defined fixed bearing"): the tributary permanent load is the total
+  // permanent load of the uninterrupted segment [3.10.9.2]; W_seg entered (panel I-11) or, when 0, 2(ΣP_DC + W_dia + ΣP_DW)·L_tot/L (the whole bridge
+  // length, conservative; single span: both ends' permanent reactions). The single-span minimum A_s × permanent load [3.10.9.1] uses the same load
+  // longitudinally (decision: conservative). Tributary live load stays this abutment's.
+  const fixL=S.dist&&S.dist.model==="fixed", WsegIn=Math.max(0,+S.seismic.Wseg||0), LtotC=(+S.own.Ltot>0)? +S.own.Ltot : +g.spanL;
+  const WsegAuto=2*Wperm*LtotC/Math.max(1e-9,+g.spanL), Wseg=fixL? (WsegIn>0? WsegIn : WsegAuto) : Wperm;
+  const F1L=zone===1? cZ1*(Wseg+gEQc*agg.LL.P) : 0, F0L=AsC*Wseg;
+  const FconnL=zone===1? (single? Math.max(F1L,F0L) : F1L) : (single? F0L : NaN);
+  const Fconn=fixL? Math.max(FconnL,FconnT) : FconnT;
+  R.seismic={Fconn, perBeam:Fconn/Math.max(1,S.beams.N), trib:Wperm, Wtrib, zone, As:AsC, gEQ:gEQc, cZ1, F1, F0, single, LL:agg.LL.P,
+    ...(fixL?{lon:{Wseg, WsegIn, WsegAuto, LtotC, F1L, F0L, FconnL, FconnT}}:{})};   // ABM1: only with fixed bearings here (other projects: R.seismic as before)
+  if(fixL&&!single&&!(WsegIn>0)&&!(+S.own.Ltot>0)) warn("REVIEW — Seismic connection force: bearings fixed at this abutment on a multispan bridge, but neither the segment permanent load W_seg (panel I-11) nor the total bridge length (panel I-0) is entered; W_seg = 2(DC + DW) is used (one span). Enter the total permanent load of the uninterrupted segment [3.10.9.2] (Tab 3 §3.6).");
 
   /* ===== C-10 Structural concrete checks ===== */
   const kah=ka*Math.cos(deg2rad(iota)); // horizontal pressure coefficient used on wall faces
@@ -4996,7 +5008,7 @@ function computeAll(){
     { const T=defaultState(), dropDef=(o,t,keys)=>{ if(o) keys.forEach(k=>{ if(JSON.stringify(o[k])===JSON.stringify(t[k])) delete o[k]; }); };   // ABCHK: new inputs at their default
       dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth"]);
       dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct"]);
-      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
+      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
       if(fpS.iab) dropDef(fpS.iab,iabDefault(),["KpE","Rn","phiC","RnUp","phiUp","MuPy2"]); }   // PXR2: MuPy2   // ABR1: new inputs at their default
     const s=JSON.stringify(fpS);
     let h1=5381,h2=52711;
@@ -6681,6 +6693,13 @@ function renderTabStab(R){
       ...(sz.single?[
       "F_{1span} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW}) \\quad [3.10.9.1,\\ 4.7.4.2:\\ \\text{single-span bridges, any zone}]",
       `F_{1span} = (${fmtT(sz.As,3)})(${fmtT(R.groups.DCsup.V)} + ${fmtT(R.groups.DW.V)}) = ${fmtT(sz.F0)}\\ \\text{kip}`]:[]),
+      ...(sz.lon&&isFinite(sz.lon.FconnL)?[
+      "\\text{Longitudinal, fixed bearings here: } W_{seg} = "+(sz.lon.WsegIn>0?"\\text{entered (panel I-11)}":"2\\,(\\Sigma P_{DC} + \\Sigma P_{DW})\\,L_{tot}/L")+" \\quad [3.10.9.2:\\ \\text{total permanent load of the segment}]",
+      sz.lon.WsegIn>0?`W_{seg} = ${fmtT(sz.lon.Wseg)}\\ \\text{kip}`:`W_{seg} = 2\\,(${fmtT(sz.trib)})(${fmtT(sz.lon.LtotC,1)}/${fmtT(+S.geom.spanL,1)}) = ${fmtT(sz.lon.Wseg)}\\ \\text{kip}`,
+      ...(sz.zone===1?[`F_{Z1,L} = ${fmtT(sz.cZ1)}\\,(${fmtT(sz.lon.Wseg)} + (${fmtT(sz.gEQ)})(${fmtT(sz.LL)})) = ${fmtT(sz.lon.F1L)}\\ \\text{kip}`]:[]),
+      ...(sz.single?[`F_{1span,L} = (${fmtT(sz.As,3)})(${fmtT(sz.lon.Wseg)}) = ${fmtT(sz.lon.F0L)}\\ \\text{kip}`]:[]),
+      `F_{conn,L} = ${fmtT(sz.lon.FconnL)}\\ \\text{kip (longitudinal)}, \\quad F_{conn,T} = ${fmtT(sz.lon.FconnT)}\\ \\text{kip (transverse, this abutment's reactions)}`]:[]),
+      sz.lon&&isFinite(sz.Fconn)? `F_{conn} = \\max(F_{conn,L},\\,F_{conn,T}) = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})` :
       sz.zone===1?(sz.single?`F_{conn} = \\max(F_{Z1},\\,F_{1span}) = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})`
                             :`F_{conn} = F_{Z1} = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})`)
                  :(sz.single?`F_{conn} \\ge F_{1span} = ${fmtT(sz.Fconn)}\\ \\text{kip per bearing line} \\quad(${fmtT(sz.perBeam)}\\ \\text{kip per beam})`
