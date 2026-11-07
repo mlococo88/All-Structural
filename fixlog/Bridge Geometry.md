@@ -2092,7 +2092,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
     - list-input --part bgeo: unchanged from main, failing only against its recorded base commit for the earlier BGX1/BGX3 results.
 - **Saved data:** none. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/bg-m3-bearing-offsets (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX8, review M3: dual bearing offsets measured along the girders; new projects only)   [calc change: new option] [saved data: additive field with migration]
+## 2026-11-07 — PR: claude/bg-m3-bearing-offsets (PR #1131: https://github.com/mlococo88/All-Structural/pull/1131) (BGX8, review M3: dual bearing offsets measured along the girders; new projects only)   [calc change: new option] [saved data: additive field with migration]
 
 - **Why:** review 2026-11-07, M3. A dual-bearing pier's offset was applied in PGL stationing and then mapped onto the chord. Off the PGL on a curve it scaled by about (R ± offset)/R: in the demo the 2.5 ft offsets became 2.167 ft along the girders (bearing lines 4.33 ft apart instead of 5.0).
 - **Decision (pending engineer review):**
