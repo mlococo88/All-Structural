@@ -4086,18 +4086,23 @@ function plateBending(combo, cc){
       vars:[["P","tension +","axial load at the column centroid"],["M_{side}","q[(ℓ−a)² − (ℓ−b)²]/2","bearing block of that axis beyond the side's critical section ([a, b] measured from that plate edge)"]]}; }
 
   /* tension side — arm to the nearest DG1 critical section */
-  const Tu_per=combo.Tu_per;
+  /* BPM4 (2026-11-07): the anchor forces of the SAME force model as the anchor checks (combo.perAnchor: neutral-axis or
+     elastic bolt group), each with its own arm to the nearest DG1 critical section; the anchor with the largest T_i·x_i
+     governs. Before: T = combo.Tu_per (the DG1 per-axis tensions combined by SRSS, a different model) times the arm of
+     the highest-tension anchor. */
   const faceY=fM*dcol/2, faceX=fN*bcol/2;
-  let hx=0,hy=0,ht=-1;
-  (combo.perAnchor||[]).forEach(pa=>{ if(pa.t>ht){ht=pa.t;hx=Math.abs(pa.x-ecx);hy=Math.abs(pa.y-ecy);} });   /* BPH2: from the column centre */
-  const armCands=[];
-  if(hy-faceY>1e-9) armCands.push(hy-faceY);
-  if(hx-faceX>1e-9) armCands.push(hx-faceX);
-  let armT, armNote;
-  if(armCands.length){ armT=Math.min(...armCands);
-    armNote="highest-tension anchor to the nearest DG1 critical section ("+(isRound?"0.80D / 0.80D":("0.95d / "+(isW?"0.80b_f":"0.95b")))+")"; }
-  else { armT=bpCircPattern()? bpPlateEdgeMin() : Math.min(S.anchor.edx,S.anchor.edy);
-    armNote="anchor lies INSIDE the column footprint — cantilever to a column face is undefined; falling back to the edge distance. Verify plate bending locally (web bending per DG1 Step 3)."; }
+  const armOf=pa=>{ const hx=Math.abs(pa.x-ecx), hy=Math.abs(pa.y-ecy), c=[];   /* BPH2: from the column centre */
+    if(hy-faceY>1e-9) c.push(hy-faceY);
+    if(hx-faceX>1e-9) c.push(hx-faceX);
+    return c.length? {arm:Math.min(...c), inside:false} : {arm:(bpCircPattern()? bpPlateEdgeMin() : Math.min(S.anchor.edx,S.anchor.edy)), inside:true}; };
+  let govA=null;
+  (combo.perAnchor||[]).forEach((pa,i)=>{ if(!(pa.t>1e-9)) return; const a=armOf(pa), M=pa.t*a.arm;
+    if(!govA || M>govA.M+1e-12) govA={i, n:(pa.n||i+1), t:pa.t, arm:a.arm, inside:a.inside, M}; });
+  const Tu_per=govA? govA.t : 0;
+  const armT=govA? govA.arm : 0;
+  const armNote=!govA? "no anchor in tension in this combination (anchor force model): no tension-side bending"
+    : govA.inside? "anchor "+govA.n+" lies INSIDE the column footprint — cantilever to a column face is undefined; falling back to the edge distance. Verify plate bending locally (web bending per DG1 Step 3)."
+    : "anchor "+govA.n+" (largest T·x of the anchors in tension, same force model as the anchor checks) to the nearest DG1 critical section ("+(isRound?"0.80D / 0.80D":("0.95d / "+(isW?"0.80b_f":"0.95b")))+")";
   const beff=Math.max(P.B,P.N)/2;
   const Mu_t=Tu_per*armT;
   const tReqT=Math.sqrt(4*Mu_t/(phi*Fy*beff));
