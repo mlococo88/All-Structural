@@ -8191,10 +8191,15 @@ function liveLoadSection(p,M,veh,pos,dir){
   const offs=veh.axles.map(a=>a.x), maxOff=offs[offs.length-1];
   const contrib=[];
   let concHere=0;
-  for(const ax of veh.axles){
+  /* LLW (M-4, 2026-11-07): the spread contributions are read from the solver's own per-axle split (nodalLLByAxle), so
+     each p_i is f·p0·κ with f the share of the node's extrados tributary the footprint covers, exactly as nodalLL
+     loads the node. It used to point-sample |x_node − x_axle| <= L_s/2, which loaded or skipped whole axles and did
+     not reproduce the printed q_j (EV3 at x = −8.75 ft: printed 0.3648 × 4.640 against the solver's 2.1014). */
+  const BA=ARCH.nodalLLByAxle(M,veh,pos,dir), TJ=ARCH.tribSpan(M,jm);
+  for(const [ai,ax] of veh.axles.entries()){
     const xa=(dir>0)?pos+ax.x:pos+maxOff-ax.x;
     const reg=ARCH.llRegime(M,xa);
-    if(reg.conc){
+    if(reg.conc&&!(reg.r>0)){
       /* concentrated axle — this node gets its interpolation share, if any */
       const one=new Array(M.nN).fill(0);
       const kC=ARCH.sideBySide(p,reg.E,true).kappa;
@@ -8211,8 +8216,14 @@ function liveLoadSection(p,M,veh,pos,dir){
       if(one[jm]>0){concHere+=one[jm];
         contrib.push({ax,xa,conc:true,w,share:one[jm],kC,
           p:(M.tribH[jm]>1e-9)?one[jm]/M.tribH[jm]:0,E:reg.E,Hax:reg.H});}
-    }else if(Math.abs(nd.x-xa)<=Ls/2)contrib.push({ax,xa,
-      p:(merged?ax.P/((ARCH.GAGE+wt)*Ls):(ax.P/2)/(wt*Ls))*kW});
+    }else{
+      /* 6.4.2 spread, or the credited 6.4.1 spread at rate r (TIRE + r·H), as in nodalLLByAxle */
+      const cr=(reg.conc&&reg.r>0);
+      const LsA=cr?ARCH.TIRE_L+reg.r*H:Ls, wtA=cr?ARCH.TIRE_W+reg.r*H:wt, mgA=(wtA>=ARCH.GAGE);
+      const kA=cr?ARCH.sideBySide(p,wtA,false).kappa:kW;
+      const f=ARCH.coverFrac(TJ,xa-LsA/2,xa+LsA/2), pp=BA.axP[ai][jm];
+      if(pp>0)contrib.push({ax,xa,f,p:pp,Ls:LsA,wt:wtA,merged:mgA,kap:kA,cr,r:reg.r});
+    }
   }
   const pTot=contrib.reduce((a,c)=>a+c.p,0);
 
@@ -8256,11 +8267,15 @@ function liveLoadSection(p,M,veh,pos,dir){
             `is ${nfx(c.share,4)} kip — equivalent to a pressure of ${nfx(c.p,4)} ksf over the node's `+
             `${nfx(M.tribH[jm],3)} ft tributary length.`});
       }else{
-        h+=step({label:`Pressure from axle at x = ${nfx(c.xa,2)} ft (P = ${nfx(c.ax.P,1)} kip)`,ref:"Std Spec 6.4",
-          sym:(merged?"p_i=\\dfrac{P_{ax}}{(s_g+w_t)L_s}":"p_i=\\dfrac{P_{ax}/2}{w_t L_s}")+(kW!==1?"\\,\\kappa":""),
-          sub:(merged?`\\dfrac{${num(c.ax.P,1)}}{(${num(ARCH.GAGE,2)}+${num(wt,3)})\\times${num(Ls,3)}}`
-                    :`\\dfrac{${num(c.ax.P,1)}/2}{${num(wt,3)}\\times${num(Ls,3)}}`)+(kW!==1?`\\times${num(kW,4)}`:""),
-          res:num(c.p,4),units:"ksf"});
+        h+=step({label:`Pressure from axle at x = ${nfx(c.xa,2)} ft (P = ${nfx(c.ax.P,1)} kip)`+
+            (c.cr?`, credited ${nfx(c.r,2)}H spread (Std Spec 6.4.1 branch)`:""),ref:"Std Spec 6.4",
+          sym:"p_i=f_i\\,"+(c.merged?"\\dfrac{P_{ax}}{(s_g+w_t)L_s}":"\\dfrac{P_{ax}/2}{w_t L_s}")+(c.kap!==1?"\\,\\kappa":""),
+          sub:`${num(c.f,4)}\\times`+(c.merged?`\\dfrac{${num(c.ax.P,1)}}{(${num(ARCH.GAGE,2)}+${num(c.wt,3)})\\times${num(c.Ls,3)}}`
+                    :`\\dfrac{${num(c.ax.P,1)}/2}{${num(c.wt,3)}\\times${num(c.Ls,3)}}`)+(c.kap!==1?`\\times${num(c.kap,4)}`:""),
+          res:num(c.p,4),units:"ksf",
+          note:`f_i = ${nfx(c.f,4)} is the share of this node's tributary length on the extrados `+
+            `(${nfx(TJ[0],3)} to ${nfx(TJ[1],3)} ft) that the axle's ${nfx(c.Ls,3)} ft footprint covers; the solver `+
+            `loads the node the same way (nodalLL).`});
       }
     });
     if(contrib.length>1)
