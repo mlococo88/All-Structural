@@ -11,7 +11,7 @@
 // RWPR (2026-11-07): the Report prints alone, with every section, the overview figures and the input echo; 0 KaTeX errors.
 // RWKX (2026-11-07): the tabs' equations are all set by KaTeX, none in error; MathJax is not loaded.
 // RWPL (2026-11-07): pile-supported footing (Phase 8c) input errors and results are in CASES and AUD.
-// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, RWFF front-face T&S, RWSK shear key, RWE1 AASHTO Extreme Event I, RWIB ACI/IBC 0.7E, RWSQ stem seismic, ...).
+// Audit items (2026-11-07, table AUD): the new checks of the calculation audit on their check cases (RWS13 stem S1/S3 layout, RWEC ACI eccentricity limit, RWFF front-face T&S, RWSK shear key, RWE1 AASHTO Extreme Event I, RWIB ACI/IBC 0.7E, RWSQ stem seismic, RWCV EE II vertical earth thrust, RWUP ACI uplift split, ...).
 //   node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 import path from 'path';
 import { openPage, resolveFile } from '../lib.mjs';
@@ -237,6 +237,13 @@ const AUD = [
   ['RWCV AASHTO collision, Coulomb δ 20°, MassDOT: V 17694 → 16583, sliding 0.232, e −0.257; Step 7b M_r worked', { design_basis: 'AASHTO', aashto_delta: 20, aashto_ct_enable: true, aashto_ct_eh: 'zero' }, [
     ['Math.abs(R.aashtoR.ct.ee2.V_ct_min - 16583) < 1 && Math.abs(R.aashtoR.ct.ee2.sliding_dcr_ct - 0.232) < 0.001 && Math.abs(R.aashtoR.ct.ee2.e_ct + 0.257) < 0.001', 'V 16583, DCR 0.232, e −0.257'],
     ['/Resisting moment about the toe/.test(T.stability)', 'Stability Step 7b M_r']]],
+  ['RWUP ACI water 2 ft below the top, triangular uplift: uplift split (toe γ_U 1.6, heel 0.9): toe M_u 9250 → 12344, heel 28267 → 27772', { wt_mode: 'depth', wt_depth: 2, uplift_mode: 'triangular' }, [
+    ['Math.abs(R.Mu_toe_net - 12344.3) < 1 && R.toe_min_governs && Math.abs(R.Mu_heel_net - 27772.1) < 1 && R.tcG_up && R.tcG_up.sp.kind === "toe"', 'toe 12344 (0.9D + 1.6H), heel 27772'],
+    ['/Soil reaction without the water/.test(T.footing) && /Moment of the soil reaction about the stem face/.test(T.footing) && /split out/.test(T.footing)', 'Footing Heel / Toe Step 1–2 worked'], ['/Soil reaction without the water/.test(P)', 'Report']]],
+  ['RWUP ACI water 6 ft (uniform): unchanged (toe 7325, heel 19032)', { wt_mode: 'depth', wt_depth: 6 }, [
+    ['Math.abs(R.Mu_toe_net - 7325) < 1 && Math.abs(R.Mu_heel_net - 19032) < 1 && R.upS', 'toe 7325, heel 19032']]],
+  ['RWUP ACI no water: no split', {}, [['R.upS === null && !/Soil reaction without the water/.test(T.footing)', 'no split']]],
+  ['RWUP AASHTO with water: no split', { design_basis: 'AASHTO', wt_mode: 'depth', wt_depth: 6 }, [['R.upS === null', 'no split']]],
   ['RWPL ACI default wall on 2 pile rows (x 1.5 / 11.0 ft, s 6 ft): P 47.45 / 52.04 kip (D + H + L), 32.62 / 27.08 (0.6D + H)', { fnd_type: 'pile' }, [
     ['Math.abs(R.pile.g.N - 1 / 3) < 1e-12 && Math.abs(R.pile.g.xbar - 6.25) < 1e-9 && Math.abs(R.pile.g.I - 7.520833) < 1e-5', 'N, x̄, I'],
     ['Math.abs(R.pile.comb[0].L.rows[0].P - 47.455) < 0.001 && Math.abs(R.pile.comb[0].L.rows[1].P - 52.040) < 0.001 && Math.abs(R.pile.comb[1].L.rows[0].P - 32.617) < 0.001', 'pile loads'],
