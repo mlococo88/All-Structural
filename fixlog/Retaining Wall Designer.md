@@ -2395,7 +2395,7 @@ function renderStatus(r) {
   - The appendix is a list with links, not a second print of every figure. The figures are in their sections, as SF #779 moved them out of its appendix.
   - Drawings sheets 2–3 are listed as on screen only (Print sheet / Print all).
 
-## 2026-11-07 — PR: claude/rw-report-print (RWPR) — Report in print checked (PDF); input echo completed (Project dates, barrier, Coulomb / at-rest / h_eq inputs, bar overrides); print smoke test   [display only; no result change]
+## 2026-11-07 — PR: claude/rw-report-print (PR #940: https://github.com/mlococo88/All-Structural/pull/940) (RWPR) — Report in print checked (PDF); input echo completed (Project dates, barrier, Coulomb / at-rest / h_eq inputs, bar overrides); print smoke test   [display only; no result change]
 - **Why:** engineer-approved 2026-11-06 (task 5, review Phase 5a: verify the input echo prints correctly, as SF #781, and that the page breaks print correctly).
 - **Print check (PDF, Letter):**
   - ACI (water, column, seismic): 29–30 pages. AASHTO (barrier, CT, variable height, key): 31–32 pages.
