@@ -15858,7 +15858,7 @@ index d823b9f..fa506cf 100644
 +  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
 ```
 
-## 2026-11-07 — PR: claude/abut-m5-undrained (ABM5: sliding of a spread footing on clay also checked undrained — the lesser of S_u·B′L and 0.5ΣV — and the lesser of the drained and undrained resistance governs)   [calc change only on clay] [MORE conservative]
+## 2026-11-07 — PR: claude/abut-m5-undrained (PR #1021: https://github.com/mlococo88/All-Structural/pull/1021) (ABM5: sliding of a spread footing on clay also checked undrained — the lesser of S_u·B′L and 0.5ΣV — and the lesser of the drained and undrained resistance governs)   [calc change only on clay] [MORE conservative]
 
 Source: code-compliance review of 2026-11-07, item M5.
 
