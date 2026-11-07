@@ -2783,3 +2783,39 @@ From the code-compliance review of 2026-11-07 (finding M4).
   - **After:** 0.637 + 8/9 × (1.0258 × 0.1162) = **0.7430**.
 - **How verified:** origin/main vs branch on 16 scenarios + v16 engine cases: only the axial scenario moved (its 1.2D + 1.6L interaction, 0.7403 → 0.7430). Interaction tab renders the B1 block, 0 KaTeX errors. Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam, list-input sbeam: pass; 0 console errors.
 - **Saved data:** none changed.
+
+## 2026-11-07 — PR: claude/steelbeam-m3-j10-more — J10.4 web sidesway buckling, J10.1 flange local bending, and web local yielding for tensile forces (M3; new checks)
+
+From the code-compliance review of 2026-11-07 (finding M3). Beam mode; member and batch modes unchanged.
+
+### M3-1. §J10.4 web sidesway buckling at compressive point loads   [new check; more conservative]
+- **Problem:** stated as "not checked". AISC 360-16 §J10.4 applies to compressive single forces where the loaded flange can move laterally relative to the tension flange; Example J.7 checks it.
+- **Governing provision:** AISC 360-16 §J10.4: r = (h/t_w)/(L_b/b_f); (a) compression flange restrained against rotation, r ≤ 2.3: R_n = C_r t_w³ t_f/h² [1 + 0.4r³] (Eq. J10-6); (b) not restrained, r ≤ 1.7: R_n = C_r t_w³ t_f/h² [0.4r³] (Eq. J10-7); otherwise not applicable. C_r = 960 000 ksi when M_u < M_y at the load, 480 000 ksi otherwise; L_b = largest unbraced length along either flange at the load; φ = 0.85.
+- **Where:** new `j10WSB(p,LbIn,Mu,mode)` after `j10WLC` (anchor `/* M3: Sec. J10.4 web sidesway buckling`); `designAll` J10 demands (anchor `/* M3: Sec. J10.4 web sidesway buckling, compressive point loads`), with M_u = `evalVM` at the load; `buildDesignChecks` row "Web sidesway buckling [J10.4]" (only when the beam has point loads); worked block and per-combination table in `j10More` (Concentrated Forces tab); new input "Flanges at point loads (J10.4)" in the Concentrated Forces input section.
+- **New input (saved field `design.wsb`, absent = `env`):** `env` "not stated" = the lower of (a) and (b) where either applies (default); `rot` (a); `free` (b); `braced` (relative lateral movement restrained at the loads: not applicable).
+- **Decision (pending engineer review):** the default `env` takes the lower available strength of (a) and (b) where either applies, since the tool does not know the restraint (conservative). Supports are not checked for J10.4: the flanges are taken as restrained there, as Chapter F already assumes torsional restraint at supports. L_b = max(top-flange L_b, bottom-flange L_b) of the Lateral Bracing input.
+- **Check case (AISC Design Examples v16.0, J.7):** W24X55 A992, 20 ft, P_u = 66 kip at 8 ft (P_D 15 + P_L 30), top flange continuously braced (L_b = 20 ft, bottom flange).
+  - r = 54.6/(240/7.01) = 1.595; M_u = 316.8 kip-ft (with self-weight 320.0) < M_y = 50 × 114/12 = 475 kip-ft → C_r = 960 000 ksi; C_r t_w³ t_f/h² = 960 000 × 0.395³ × 0.505/21.57² = 64.1 kip.
+  - With `rot` (a), as J.7: R_n = 64.1 × (1 + 0.4 × 1.595³) = 168.4 kip, φR_n = **143.2 kip** (J.7: 142); DCR 66/143.2 = **0.461**.
+  - With the default `env`: (b) governs, R_n = 64.1 × 0.4 × 1.595³ = 104.2 kip, φR_n = **88.6 kip**, DCR **0.745**.
+  - **Before:** not checked (N/A text).
+
+### M3-2. §J10.1 flange local bending for tensile forces   [new check]
+- **Problem:** not checked. A tensile concentrated force (uplift reaction at a hold-down, upward point load) bends the flange locally.
+- **Governing provision:** AISC 360-16 §J10.1: R_n = 6.25 F_yf t_f² (Eq. J10-1), φ = 0.90; R_n halved when the force is within 10t_f of the member end; the check is not needed when the loading length across the flange is < 0.15b_f.
+- **Where:** new `j10FLB(p,endDistIn)` (anchor `/* M3 (2026-11-07): AISC 360-16 Sec. J10.1`); `designAll` J10 demands (anchor `/* M3: Sec. J10.1 flange local bending`); check row "Flange local bending [J10.1]" (only when a tensile force exists); table in `j10More`.
+- **Decision (pending engineer review):** the 0.15b_f exemption is not taken (loading width unknown: conservative). A downward point load is taken as bearing on the top flange (compression); an upward load or uplift reaction as tensile.
+- **Check case:** W18X50 A992 (t_f 0.570), 10 ft back span + 14 ft cantilever, default loads with LL 100 psf, l_b 4 in at supports; 1.2D + 1.6L + 0.5S: uplift at support A = 8.83 kip, at the end (0 < 10t_f) → R_n = 0.5 × 6.25 × 50 × 0.570² = 50.77 kip, φR_n = 45.69 kip, **DCR 0.193** (before: not checked).
+
+### M3-3. §J10.2 web local yielding for tensile forces   [calculation change]
+- **Problem:** WLY was skipped for uplift reactions and upward point loads (`dem=R>0?R:null`), although §J10.2 applies to tensile and compressive single forces.
+- **Where:** `designAll` J10 demands, anchor `/* M3: web local yielding applies to tensile forces too`: WLY demand |F| (r.demY; r.tens marks tension); WLC stays compressive only. The WLY summary row and the J10 tables show |F| with "(tension)".
+- **Check case (same uplift case):** support A, 8.83 kip tension: WLY φR_n = 114.1 kip, **DCR 0.077** (before: no WLY demand at A).
+
+### How verified
+- origin/main vs branch on 18 scenarios + v16 engine cases: new J10.4 rows in every scenario with point loads (j7, j7single, torsion, h6, j7rot), a new J10.1 row and tension WLY at support A in the uplift scenario; every other check and every existing J10.2/J10.3 value identical.
+- Concentrated Forces tab renders the new section (0 KaTeX errors).
+- Kit: check-syntax, steel-beam-builtup 11/11, project-library steelbeam, phone-layout sbeam: pass.
+- list-input sbeam: results and saved data identical; it reports page-text differences only (the new J10.4 input and the replaced "J10.4 is not checked" hint), which are intended.
+- 0 console errors.
+- **Saved data:** new optional field `design.wsb` (absent = `env`). No key changed. Old projects with point loads now show the J10.4 row (new check).
