@@ -295,6 +295,10 @@ const AUD = [
   ['RW2M2 AASHTO default: heel / toe crack control from the Service I base reaction: heel M_s 64704 → 15496, toe 6298 → 6100; no spurious f_ss warning', { design_basis: 'AASHTO' }, [
     ['Math.abs(R.aashtoR.serv.M_serv_heel - 15496.5) < 1 && Math.abs(R.aashtoR.serv.M_serv_toe - 6099.7) < 1 && R.aashtoR.serv.heel.crack.fss_ok && !R.warnings.some(w => /Heel service steel stress/.test(w))', 'Service I moments, f_ss ≤ 0.6f_y, no warning'],
     ['/Service I heel and toe moments at the stem faces/.test(T.stability) && /Service I heel and toe moments \\(all γ = 1\\.0\\)/.test(P)', 'Stability Step 9 and Report']]],
+  ['RW2M3 ACI on piles, water 2 ft: a pile in tension → Pile–Cap Tension FAIL with T and the embedment; no uplift → no row', { fnd_type: 'pile', tf: 36, wt_depth: 2 }, [
+    ['R.checks.pileCapT && !R.checks.pileCapT.ok && /T=10\\.4k, embed 12\\.0/.test(R.checks.pileCapT.val) && R.warnings.some(w => /^Pile uplift: P_min/.test(w))', 'FAIL row and warning'],
+    ['/Pile–cap tension \\(not designed\\): FAIL/.test(T.stability) && /Pile–cap tension connection for T = /.test(P)', 'Stability Pile Step 2 and Report']]],
+  ['RW2M3 piles without uplift: no tension row', { fnd_type: 'pile', tf: 36 }, [['!R.checks.pileCapT', 'no row']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {
