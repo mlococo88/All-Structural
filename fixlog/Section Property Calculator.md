@@ -3359,7 +3359,7 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - Headless probe, main vs branch: only holeEdge, holeEdgeTiny and holeInTube changed, all to the error. Every other model (holes inside one part, across a joint, round holes, concrete holes) is identical, as are all 1,660 shapes.
   - `project-library --tool spc`: ALL PASS. 0 console errors.
 
-## 2026-11-07 — PR: claude/spc-j-thick — SPM3: J statement corrected; thin-wall J flagged for thick-flanged W, M, HP, WT, MT shapes (review M3; display only, no value change)
+## 2026-11-07 — PR: claude/spc-j-thick — SPM3: J statement corrected; thin-wall J flagged for thick-flanged W, M, HP, WT, MT shapes (review M3; display only, no value change; PR #1094: https://github.com/mlococo88/All-Structural/pull/1094)
 
 - **Problem (review M3):** the C1 entry ("Plate model vs AISC tables") said that the thin-wall J is lower than the AISC J and therefore conservative for torsional stiffness. That is true for light shapes and false for heavy ones. The thin-wall J of **155** W, WT, HP, M and MT shapes is above the table, for example W14X730 +9.1 % and WT7X436.5 +11.1 %. Σbt³/3 overestimates J of stocky flange elements, and for these shapes that outweighs the neglected fillets. All 155 have b_f/2t_f ≤ 5.33.
 - **Correction of the C1 statement (old entry not rewritten):** the thin-wall J is **not** always lower than the AISC J. It is lower for light shapes and for all S, C, MC and ST shapes (−1 to −27 %). It is higher for heavy W, M, HP, WT and MT shapes, by up to +11 %. In that case it is unconservative wherever J resists torsion (torsional stiffness, LTB terms).
