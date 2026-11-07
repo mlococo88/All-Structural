@@ -6110,7 +6110,7 @@ AASHTO LRFD 10th Ed. (2024) Table 3.4.1-2 (γ_p for EH: active 1.50 / 0.90, at-r
 ### Saved data
 - No input or format change.
 
-## 2026-11-07 — PR: claude/rw-pile-tab — Piles output tab (pile-supported footing only): the pile cards move from the Stability tab, with a layout card, a pile-checks card and the Pile Designer hand-off card; links, chips and the Report follow (RWPT; display only) (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM)
+## 2026-11-07 — PR: claude/rw-pile-tab — Piles output tab (pile-supported footing only): the pile cards move from the Stability tab, with a layout card, a pile-checks card and the Pile Designer hand-off card; links, chips and the Report follow (RWPT; display only) (PR #1148: https://github.com/mlococo88/All-Structural/pull/1148)
 
 Engineer request (2026-11-07): "there is no output tab for the piles". Code sites are tagged `RWPT`. **Display and organisation only: no computed result changes** (§4), no saved field or key changes (§5).
 
