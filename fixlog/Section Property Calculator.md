@@ -3312,3 +3312,23 @@ Bold: positive (overstated, unconservative) for every shape of the family. ST, W
   - D-SPH2-2. **MC slope:** 2 : 12 where that gives at least the tabulated I_y. Otherwise the slope is found from I_y (no toe radius). The MC flange slopes vary by shape, so this was the conservative reading of "MC slopes per AISC tables".
   - D-SPH2-3. **Reference point kept** at the outline centroid. This keeps every saved project, library section and template in place without a migration. The Centroid x / y fields and the tooltip show the true centroid. Rotation and flips act about the reference point, which is 0.004–0.09 in from the true centroid.
   - D-SPH2-4. **Torsion unchanged** (J, C_w, shear centre from the centre-line model with the average t_f). A fillet-and-taper J was trialled: tapered ∫t³dx/3 plus El Darwish & Johnston (1965) junction terms αD⁴ minus the toe end corrections. It gave C −3.6 / +3.8 %, MC −5.1 / +1.0 % and S +1.3 / **+13.7 %** (unconservative) against the table. It was not adopted, because it would also change J of every built-up section with these shapes. J therefore stays below the table (−1 to −27 %): conservative for torsional stiffness and torsional shear stress. The tabulated J stays beside it for a single shape. **The ~2–3 % J target of the task is not met; this is open for the engineer.**
+
+## 2026-11-07 — PR: claude/spc-hole-n — SPM1: a hole takes the modulus ratio n of the part it lies in (review M1; §4 result change)
+
+- **Problem (review M1):** a hole's modulus ratio n was its own input, which defaults to 1, and was not tied to the part it cuts. A hole left at n = 1 in a concrete part (n = 1/8) removed 8 times too much transformed area, with no warning. The only guidance was the hint "Give it the same n as the part it is in". Example: concrete 10 × 10 at n = 1/8 with a Ø2 hole at n = 1 gave A = 9.358 instead of 12.107 (−23 %). The weight already charged a hole at its host's density (`weight()`).
+- **Fix (engine):** new `holeHostN(R)` (anchor `function holeHostN(R) {`, just before `analyze`), called in `analyze()` right after the per-part loop (`if (R.errors.length) return R;` → `holeHostN(R);`).
+  - It finds each hole's host the same way `weight()` does: the solid part with the largest exact overlap (`novShape` / `novInter`).
+  - It sets the hole's `q.n = host.n` and `q.host`. Every later use (parallel-axis rows, the weighted primitives for plastic, Q and fibres, `anyN`) then uses the host's n.
+  - When the hole's own n differs from the host's, it adds a warning: "Hole H1 has n = 1 but lies in PL1 (n = 0.125): it uses n = 0.125, the n of the material it removes."
+  - A hole that overlaps no solid part keeps its own n. That case is reported by `overlapChecks` (see SPM2).
+  - Before: `const n = pt.n …; R.parts.push({ pt, n, ...pp });` with nothing after it. After: the same, then `holeHostN(R);`.
+- **UI:** the Hole checkbox hint changes from "A hole removes area from whatever it covers. Give it the same n as the part it is in." to "A hole removes area from the part it lies in and takes that part's modulus ratio n (its own n is not used)."
+- **§4 callout:** transformed-section area with holes, A = Σ n_i A_i with n_hole = n_host. Governing basis: mechanics of materials (transformed section: a void in material i removes n_i·A_hole). No code provision.
+- **Check case:** concrete PL 10 × 10, n = 1/8, Ø2 hole at y = +2, hole n left at 1.
+  - Before: A = 9.358 in², I_x = 86.60 in⁴, Z_x = 22.99 in³ (and the Ø4 variant: "net area is not positive" error).
+  - After: A = (100 − π)/8 = **12.107 in²**. ȳ = −(π × 2)/(100 − π) = −0.0649 in. I_x = [833.33 − (0.7854 + π × 2²)]/8 − 12.107 × 0.0649² = 102.50 − 0.051 = **102.45 in⁴**. Z_x = 30.43 in³. The new warning is shown.
+- **Saved data:** no change. A hole's saved n is kept, and it is simply not used while the hole lies in a part.
+- **Verified:**
+  - `check-syntax` passes; Validation 136/136.
+  - Headless probe, main vs branch: only the models whose hole n differed from the host's changed (concHole_n1, concHole_n1b). Holes with a matching n (concHole_n8, holeMulti with two hosts of n = 1 and 0.5, barHole, plHole) are identical, as are all 1,660 shapes and the default project.
+  - `project-library --tool spc`: ALL PASS. 0 console errors.

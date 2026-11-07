@@ -2430,6 +2430,21 @@ const SPC = (function () {
     const use = !!(pt.useTab && tab);
     return { G, geo, tab, use, P: use ? tab : geo };
   }
+  /* SPM1 (2026-11-07): a hole removes the material it lies in, so it takes the modulus ratio n of that part (the host: the solid
+     part it overlaps most, as for its weight). A hole's own n is not used; when it differs from the host's, a warning says so.
+     A hole that overlaps no solid part keeps its own n (it is reported by overlapChecks). */
+  function holeHostN(R) {
+    const sol = R.parts.filter(q => !q.pt.hole).map(q => ({ q, S: novShape(q.pt) }));
+    R.parts.forEach(q => {
+      if (!q.pt.hole) return;
+      const h = novShape(q.pt); let best = 0, host = null;
+      sol.forEach(s => { const a = bbHit(h.bbox, s.S.bbox) ? novInter(h, s.S) : 0; if (a > best) { best = a; host = s.q; } });
+      if (!host) return;
+      q.host = host.pt.lbl || host.pt.id;
+      if (Math.abs(q.n - host.n) > 1e-12 * Math.max(1, Math.abs(host.n))) R.warnings.push(`Hole ${q.pt.lbl || q.pt.id} has n = ${+q.n.toPrecision(6)} but lies in ${q.host} (n = ${+host.n.toPrecision(6)}): it uses n = ${+host.n.toPrecision(6)}, the n of the material it removes.`);
+      q.n = host.n;
+    });
+  }
   function analyze(model) {
     const parts = model.parts || [], settings = model.settings || {}, tol = pos(settings.tol) ? settings.tol : 0.001;
     const R = { ok: false, errors: [], warnings: [], notes: [], rows: [], parts: [] };
@@ -2448,6 +2463,7 @@ const SPC = (function () {
       R.parts.push({ pt, n, ...pp });
     });
     if (R.errors.length) return R;
+    holeHostN(R);
     const W = []; // weighted primitives (geometry) for plastic, Q, extreme fibres
     let A = 0, Sx = 0, Sy = 0;
     R.parts.forEach(q => { const P = q.P; A += q.n * P.A; Sx += q.n * P.A * P.c[1]; Sy += q.n * P.A * P.c[0]; q.G.prims.forEach(pr => W.push({ pr, w: q.n * pr.s, part: q })); });
@@ -4323,7 +4339,7 @@ function buildPartPane(P) {
       fRow(body, 'Density ρ', numIn(() => SPC.partRho(pt), v => { pt.rho = v; }, 'pp_rho', { k: 'rho', min: 0, geo: true }), un('rho'), 'For the weight per length only (Properties → Weight). n does not change the weight.');
       fRow(body, 'Density preset', selIn(RHO_PRESETS(), () => '', v => { if (v) { pushUndo(); pt.rho = +v; } }, 'pp_rhoP', false), '', 'Typical values — use the actual material density where it matters.');
     } else body.appendChild(el('div', 'hint', 'A hole removes weight at the density of the solid part it lies in.'));
-    if (SPC.TYPES[pt.type].hole) chkRow(body, 'Hole / cut-out (negative area)', chkIn(() => pt.hole, v => { pt.hole = v; }, 'pp_hole', true, true, GD), 'A hole removes area from whatever it covers. Give it the same n as the part it is in.');
+    if (SPC.TYPES[pt.type].hole) chkRow(body, 'Hole / cut-out (negative area)', chkIn(() => pt.hole, v => { pt.hole = v; }, 'pp_hole', true, true, GD), 'A hole removes area from the part it lies in and takes that part\'s modulus ratio n (its own n is not used).');
   });
   mkSec(P, 'ppProps', 'This part\'s own properties', body => {
     const s = el('div'); s.setAttribute('data-live', 'part'); body.appendChild(s);
