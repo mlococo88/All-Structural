@@ -54,6 +54,10 @@
   .cols { display: grid; grid-template-columns: minmax(0, 420px) minmax(0, 1fr); gap: 26px; align-items: start; }
   .cols > div { min-width: 0; }
   @media (max-width: 1020px){ .cols { grid-template-columns: 1fr; } }
+  /* BGX10 (2026-11-07, review L5): at phone widths the tab strip scrolls inside itself and fieldsets may shrink below their
+     content (a fieldset's default min-width is its content), so wide grids and tables scroll in their own boxes, not the page */
+  @media (max-width: 1020px){ .tabs { overflow-x:auto; overflow-y:hidden; } .tabs .tabbtn { flex:0 0 auto; } fieldset { min-width:0; } #pane-map .sli { max-width:100%; overflow-x:auto; } #pane-map .sli-scroll { position:relative; } }
+  @media (max-width: 700px){ fieldset > div[style*="grid-template-columns"] { grid-template-columns:repeat(2,minmax(0,1fr)) !important; } }
   /* print: the active tab only, without the project bar, tab strip, inputs and buttons */
   @media print {
     body { background:#fff; }
@@ -286,7 +290,7 @@
             <div><label>Construction ref line offset @ Abut 1, from PGL <span class="unit">(ft)</span></label><input type="number" id="bcl_off_a1" value="0" step="0.1" title="Perpendicular offset (ft) of the construction reference line from the PGL at Abutment 1 (the lowest-station support). The reference line is the straight chord between the Abut 1 and Abut 2 points; girders, edges and curbs are dimensioned from it. It need not be the deck centerline."></div>
             <div><label>Construction ref line offset @ Abut 2, from PGL <span class="unit">(ft)</span></label><input type="number" id="bcl_off_a2" value="0" step="0.1" title="Perpendicular offset (ft) of the construction reference line from the PGL at Abutment 2 (the highest-station support). Set equal to Abut 1 for a reference line parallel to the PGL."></div>
           </div>
-          <input type="hidden" id="x_pivot" value="0">
+          <input type="hidden" id="x_pivot" value="0"><!-- not used by the engine; kept so older saved projects read and write the same scalars -->
           <input type="hidden" id="bcl_off" value="0">
           <input type="hidden" id="crown_off" value="0">
           <p class="note">The <strong>PGL = baseline = reference line</strong>, fixed at offset 0 — the deck elevation equals the vertical profile elevation here. The <strong>construction reference line</strong> is a straight chord between its offset at each abutment — the line the plans dimension the superstructure from. It need not be the deck centerline. Girders, edges, and curbs are built parallel to it. The <strong>crown</strong> reference (dropdown) sets what the crown offset is measured from: choose <em>PGL</em> and the crown follows the alignment curve at that offset (offset 0 = on the PGL); choose <em>construction ref line</em> and the crown is a straight line offset from the reference-line chord. This drives both the drawn crown line and the cross-slope pivot in the elevations.</p>
@@ -453,7 +457,7 @@
       <input type="range" id="sec_sta_slider" min="0" max="1000" step="0.1" value="0" style="width:100%;" title="Drag to move the cross-section along the bridge.">
       <div style="display:flex; gap:4px; flex-wrap:wrap;" id="sec_snap"></div>
     </div>
-    <div style="display:flex; gap:8px; align-items:center; margin:-2px 0 8px; font-size:11px;">
+    <div style="display:flex; gap:8px; align-items:center; margin:-2px 0 8px; font-size:11px; flex-wrap:wrap;"><!-- BGX10 (L5): wraps at phone widths -->
       <label style="font-size:11px; margin:0">Cut the section</label>
       <select id="sec_cut" style="width:230px" title="Square to the reference line: the cut is perpendicular to the construction reference line, i.e. the true transverse section of the structure. Because the reference line is not parallel to the PGL, points across the cut fall at slightly different stations and the slopes shown include a share of the profile grade.&#10;&#10;Square to the PGL: the cut is perpendicular to the alignment, so every point is at the same station and the slopes shown are the pure cross-slope.">
         <option value="ref">square to the reference line (structure)</option>
@@ -482,7 +486,7 @@
           <option value="bearings">at bearing lines</option>
         </select></div>
       <div><label>Divisions</label><input type="number" id="rep_div" value="10" min="2" step="1" style="width:90px" title="Number of equal intervals per span for the elevation table (span-divisions mode). Support centerlines and bearing lines are always added as extra rows."></div>
-      <div></div>
+      <div><label>Elevations to</label><select id="out_dec" style="width:110px" title="Decimals of the elevations in the Top-of-Deck and Beam-Seat tables and their CSV files (display only; the calculation is not rounded). 0.01 ft as before, or 0.001 ft."><option value="2">0.01 ft</option><option value="3">0.001 ft</option></select></div><!-- BGX10 (2026-11-07, review L1) -->
     </div>
     <div style="margin-bottom:10px;">
       <button class="sm ghost" id="colfilt_toggle" type="button">&#9656; Columns</button>
@@ -592,7 +596,7 @@
   </section>
 
   <section class="tabpane" id="pane-map" role="tabpanel">
-    <p class="note">Plot the computed bridge geometry on a real-world map. The bridge's Point of Beginning Northing/Easting are interpreted as State Plane coordinates in the datum below, projected to the map through proj4. You can also paste arbitrary survey points to plot alongside. Requires an internet connection for map tiles.</p>
+    <p class="note">Plot the computed bridge geometry on a real-world map. The bridge's Point of Beginning Northing/Easting are interpreted as State Plane coordinates in the datum below, projected to the map through proj4. The alignment is laid out from the POB at ground distance (no combined scale factor), and NAD 83 is taken as WGS 84 for the map (about 1–1.5 m); the map is for orientation, not for survey. You can also paste arbitrary survey points to plot alongside. Requires an internet connection for map tiles.</p>
     <div class="cols">
       <div>
         <fieldset>
@@ -1230,7 +1234,7 @@ function buildEngine(){
     const dz = xsec.dzAbout(pr.off, crownAtSta(pr.sta), pr.sta);
     return { x, y, z:zb+dz-depths.hma, sta:pr.sta, off:pr.off, bearing:align.at(pr.sta).brg };
   }
-  // chord-frame deck point: t = distance along chord from Abut1 (ft), w = perpendicular offset from chord (ft, +left)
+  // chord-frame deck point: t = distance along chord from Abut1 (ft), w = perpendicular offset from chord (ft, +right of the chord direction, as in the tables)
   function deckPointCW(t,w){
     if(!CH) return getDeckPoint(align.staStart+t, w);   // no chord (need ≥2 supports) → legacy
     if(PS){ const q=psXY(t,w); return deckPointAtXY(q.x,q.y); }   // BGX3: per-span chords
@@ -2802,6 +2806,7 @@ function syncGroupChecks(){
   });
 }
 function buildTable(){
+  const DEC=outDec();   // BGX10 (L1): elevation decimals (2 or 3)
   const mode=document.getElementById('rep_mode').value; const su=sortedUnits();
   if(su.length<2){ document.getElementById('tbl_wrap').innerHTML='<p class="note">Define at least two substructure units to generate the output table.</p>'; return; }
   const seat=false; // this tab is top-of-deck only
@@ -2861,14 +2866,14 @@ function buildTable(){
            offset) is shown in grey italics with a tooltip; the value is unchanged */
         const off=(o)=>{ if(!ENG.chord) return false; const e=ENG.chordExtent(o-bridgeCL()); return tRow<e.t0-1e-6||tRow>e.t1+1e-6; };
         const TDo=(key,val,o)=> colVisible(key)?(off(o)?`<td style="color:var(--ink-soft);font-style:italic" title="Beyond the skewed deck end: the deck does not reach this point on this row.">${val}</td>`:`<td>${val}</td>`):'';
-        h+=TDo('edgeL',zDeck(ed.l).toFixed(2),ed.l);
-        h+=TDo('curbL',zDeck(cl).toFixed(2),cl);
-        gs.forEach((o,bi)=>h+=TDo('g'+bi,zGird(o,bi).toFixed(2),o));
-        h+=TD('pgl',zPGL.toFixed(2));
-        h+=TD('crown',zCrown.toFixed(2));
-        h+=TD('bcl',zBCL.toFixed(2));
-        h+=TDo('curbR',zDeck(cr).toFixed(2),cr);
-        h+=TDo('edgeR',zDeck(ed.r).toFixed(2),ed.r);
+        h+=TDo('edgeL',zDeck(ed.l).toFixed(DEC),ed.l);
+        h+=TDo('curbL',zDeck(cl).toFixed(DEC),cl);
+        gs.forEach((o,bi)=>h+=TDo('g'+bi,zGird(o,bi).toFixed(DEC),o));
+        h+=TD('pgl',zPGL.toFixed(DEC));
+        h+=TD('crown',zCrown.toFixed(DEC));
+        h+=TD('bcl',zBCL.toFixed(DEC));
+        h+=TDo('curbR',zDeck(cr).toFixed(DEC),cr);
+        h+=TDo('edgeR',zDeck(ed.r).toFixed(DEC),ed.r);
         h+='</tr>';
       });
     }
@@ -2895,14 +2900,14 @@ function buildTable(){
       // crown is PGL-referenced; deckAtSupport treats its arg as Bridge-CL-relative, so subtract the bcl offset
       const zCrown=ENG.deckAtSupport(bl, ENG.crownAtSta(bl.sta)-bclOffAtSta(bl.sta)).z;
       h+=`<tr><td class="lbl">${bl.label}</td><td>${bl.skew.toFixed(1)}</td>`;
-      h+=TD('edgeL',zDeck(ed.l).toFixed(2));
-      h+=TD('curbL',zDeck(cl).toFixed(2));
-      ENG.globalGirders.forEach((o,bi)=>{ h+=TD('g'+bi,zGird(o,bi).toFixed(2)); });
-      h+=TD('pgl',zPGL.toFixed(2));
-      h+=TD('crown',zCrown.toFixed(2));
-      h+=TD('bcl',zBCL.toFixed(2));
-      h+=TD('curbR',zDeck(cr).toFixed(2));
-      h+=TD('edgeR',zDeck(ed.r).toFixed(2));
+      h+=TD('edgeL',zDeck(ed.l).toFixed(DEC));
+      h+=TD('curbL',zDeck(cl).toFixed(DEC));
+      ENG.globalGirders.forEach((o,bi)=>{ h+=TD('g'+bi,zGird(o,bi).toFixed(DEC)); });
+      h+=TD('pgl',zPGL.toFixed(DEC));
+      h+=TD('crown',zCrown.toFixed(DEC));
+      h+=TD('bcl',zBCL.toFixed(DEC));
+      h+=TD('curbR',zDeck(cr).toFixed(DEC));
+      h+=TD('edgeR',zDeck(ed.r).toFixed(DEC));
       h+='</tr>'; }));
     h+=`</tbody></table><p class="note">${seat?'Beam-seat':'Top-of-deck'} elevations at each bearing line, taken along the skewed support.</p>`;
   }
@@ -2942,7 +2947,7 @@ function buildSeatTable(){
   data.forEach(r=>{
     h+=`<tr><td class="lbl" style="color:var(--cyan)">${r.label}</td><td class="lbl">${formatStation(r.sta)}</td><td>${r.skew.toFixed(1)}</td><td class="lbl">${r.span}</td>`;
     // map each global girder column to this span's seat (by index)
-    gcols.forEach((o,k)=>{ const s=r.seats[k]; h+=`<td${s&&s.parts?` title="${seatWorkText(s).replace(/"/g,'&quot;')}"`:''}>${s?s.seatZ.toFixed(2):'—'}</td>`; });   // BGX5: hover = the working
+    gcols.forEach((o,k)=>{ const s=r.seats[k]; h+=`<td${s&&s.parts?` title="${seatWorkText(s).replace(/"/g,'&quot;')}"`:''}>${s?s.seatZ.toFixed(outDec()):'—'}</td>`; });   // BGX10 (L1): decimals   // BGX5: hover = the working
     h+='</tr>';
   });
   h+='</tbody></table><p class="note">Beam-seat elevations at each bearing line. Columns G1..Gn use the global girder set; each value resolves camber/beam-depth/bearing for that girder in that bearing\u2019s span.</p>';
@@ -3128,6 +3133,7 @@ function drawSeatSection(divId, r){
 function ftin(v){ const sg=v<0?'-':''; v=Math.abs(v); const ft=Math.floor(v+1e-9);
   let inch=(v-ft)*12; if(inch>=11.9995){ return sg+(ft+1)+"'-0\""; }
   return sg+ft+"'-"+inch.toFixed(2).replace(/\.?0+$/,'')+'"'; }
+function outDec(){ return (document.getElementById('out_dec')||{}).value==='3'?3:2; }   // BGX10 (L1): output table decimals (2 = as before)
 function skewDatumUI(){ return (document.getElementById('skew_datum')||{}).value==='align'?'align':'chord'; }   // BGX4
 function buildDerived(){
   const box=document.getElementById('derived_wrap'); if(!box||!ENG) return;
@@ -4503,6 +4509,8 @@ document.querySelectorAll('.tabbtn').forEach(btn=>btn.addEventListener('click',(
         c.renderer.setSize(c.canvas.clientWidth,c.canvas.clientHeight,false);
         c.cam.aspect=c.canvas.clientWidth/c.canvas.clientHeight; c.cam.updateProjectionMatrix(); } });
       render3DAlign(); render3DSub(); drawHeatmap(); buildSeatSections();
+      // BGX10 (L5): Plotly plots drawn while their pane was hidden keep Plotly's default 700 px width; fit them to the pane now
+      try{ if(window.Plotly&&Plotly.Plots) document.querySelectorAll('#pane-'+btn.dataset.tab+' .js-plotly-plot').forEach(el=>Plotly.Plots.resize(el)); }catch(e){}
     },40);
   }
 }));
@@ -4639,7 +4647,7 @@ let _heatResizeT=null;
 window.addEventListener('resize',()=>{ clearTimeout(_heatResizeT); _heatResizeT=setTimeout(()=>{ if(ENG) drawHeatmap(); },120); });
 ['ly_fill','ly_align','ly_crown','ly_bcl','ly_dcl','ly_ov','ly_gird','ly_edge','ly_sub','ly_brg','ly_sta','ly_gpt','ly_elev','ly_cut','ly_cont'].forEach(id=>{
   const el=document.getElementById(id); if(el) el.addEventListener('change',()=>{ if(ENG) drawHeatmap(); }); });
-['x_mode_global','x_rate_global','crown_ref','girder_frame','skew_datum','seat_terms','d_bf','brg_off_mode','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma'].forEach(id=>
+['x_mode_global','x_rate_global','crown_ref','girder_frame','skew_datum','seat_terms','d_bf','brg_off_mode','out_dec','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma'].forEach(id=>
   document.getElementById(id).addEventListener('change',()=>{ renderOvrGrid(); renderSpanTable(); if(ENG) compute(); }));
 document.getElementById('xs_add').addEventListener('click',()=>{   // BGX6: a new row after the last (or at the first support)
   const rows=xsRows(), su=sortedUnits(); const last=XSLOPES[XSLOPES.length-1];
@@ -4734,7 +4742,7 @@ const STORAGE_KEY = 'bridgeGeomEngine.project.v1';
 const LIBRARY_KEY = 'bridgeGeomEngine.library.v1';
 let CURRENT_NAME = null; // name of the loaded library entry, if any
 const SCALAR_IDS = ['h_sta0','h_x0','h_y0','h_brg0','nspans','x_mode_global','x_rate_global',
-  'x_pivot','sec_cut','sec_surf','cont_int','heat_surf','crown_ref','girder_frame','skew_datum','seat_terms','d_bf','brg_off_mode','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma','divs','rep_mode','rep_div','val_tol','map_datum','map_units','vdatum_sys','vdatum_txt'];
+  'x_pivot','sec_cut','sec_surf','cont_int','heat_surf','crown_ref','girder_frame','skew_datum','seat_terms','d_bf','brg_off_mode','out_dec','crown_off','crown_off_a1','crown_off_a2','bcl_off','bcl_off_a1','bcl_off_a2','edge_l','edge_r','curb_l','curb_r','d_slab','d_haunch','d_beam','d_bearing','d_camber','d_hma','divs','rep_mode','rep_div','val_tol','map_datum','map_units','vdatum_sys','vdatum_txt'];
 
 // Vertical datum: a label only (scalars vdatum_sys / vdatum_txt). Elevations are never converted.
 // '' = not specified (the default for new projects and for saves made before the field existed).
@@ -4777,7 +4785,7 @@ function applyProject(p){
   GIRDERS.length=0; (p.GIRDERS||[]).forEach(e=>GIRDERS.push(e));
   PERBEAM = p.PERBEAM || {camber:{},beam:{},bearing:{}};
   PERBEAMSPAN = p.PERBEAMSPAN || {camber:{},beam:{},bearing:{}};
-  if(p.VALPTS){ VALPTS.length=0; p.VALPTS.forEach(v=>VALPTS.push(v)); }
+  VALPTS.length=0; (p.VALPTS||[]).forEach(v=>VALPTS.push(v));   // BGX10 (L6): a file without validation points opens with none (was: kept the previous project's)
   HVALPTS.length=0; (p.HVALPTS||[]).forEach(v=>HVALPTS.push(v));
   XSLOPES=(Array.isArray(p.XSLOPES)?p.XSLOPES:[]).map(r=>({staStr:String(r.staStr==null?'':r.staStr), L:r.L, R:r.R}));   // BGX6: saves without it: no table (as before)
   ['camber','beam','bearing'].forEach(q=>{ if(!PERBEAM[q])PERBEAM[q]={}; if(!PERBEAMSPAN[q])PERBEAMSPAN[q]={}; });
@@ -5104,8 +5112,8 @@ function armAutosave(){
 /* BGX (2026-11-07, §5): settings added by the review fixes. A project saved without one opens with the value that reproduces
    its old results (BG_OLD_DEFAULTS, applied by applyProject before the saved scalars); a new project (the page with nothing
    saved, New) uses BG_NEW_DEFAULTS, which are the HTML defaults. Decisions pending engineer review. */
-const BG_OLD_DEFAULTS={ girder_frame:'single', skew_datum:'chord', seat_terms:false, d_bf:'0', brg_off_mode:'pgl' };
-const BG_NEW_DEFAULTS={ girder_frame:'span', skew_datum:'align', seat_terms:true, d_bf:'0', brg_off_mode:'chord' };
+const BG_OLD_DEFAULTS={ girder_frame:'single', skew_datum:'chord', seat_terms:false, d_bf:'0', brg_off_mode:'pgl', out_dec:'2' };
+const BG_NEW_DEFAULTS={ girder_frame:'span', skew_datum:'align', seat_terms:true, d_bf:'0', brg_off_mode:'chord', out_dec:'2' };
 function bgOldDefaults(){ for(const id in BG_OLD_DEFAULTS){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!BG_OLD_DEFAULTS[id]; else el.value=BG_OLD_DEFAULTS[id]; } } }
 function bgNewDefaults(){ for(const id in BG_NEW_DEFAULTS){ const el=document.getElementById(id); if(el){ if(el.type==='checkbox') el.checked=!!BG_NEW_DEFAULTS[id]; else el.value=BG_NEW_DEFAULTS[id]; } } }
 function freshDefaults(){
@@ -5641,6 +5649,7 @@ else { setStatus('autosave OFF — browser storage blocked here. Use Export JSON
       k=usftToMap(1); insunits=(mapUnits()==='m')?6:2;
       basis.push('Coordinates: State Plane Easting (X), Northing (Y). Zone: '+zoneText()+', EPSG:'+mapEpsg()+'. Units: '+unitsText()+' (as set on the Site Map tab).');
       if(mapUnits()!=='usft') basis.push('The POB is in '+unitsText()+'; the alignment geometry (feet) is converted from the POB, as the Site Map does. Elevations and stations stay in feet.');
+      basis.push('Scale: the alignment geometry is laid out at ground distance from the POB; no combined (grid x elevation) scale factor is applied, so far from the POB the coordinates differ from true State Plane grid coordinates by (1 - CSF) x the distance. Apply the project CSF in CAD if the plans are on grid.');   // BGX10 (L2)
     } else {
       const O=CH.P1, ux=CH.ux, uy=CH.uy;
       T=(x,y)=>{ const dx=x-O.x, dy=y-O.y; return [dx*ux+dy*uy, -dx*uy+dy*ux]; };
