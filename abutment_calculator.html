@@ -739,7 +739,8 @@ function defaultState(){
       epsCRSH:0.0002,                          // combined long-term creep+shrinkage strain (in/in)
       brLoadedLen:80.0, roadwayW:40.0 },       // braking: lane-load loaded length (ft), clear roadway width (ft) → design lanes
     seismic:{ on:false, As:0.15, khR:0.5, kv:0.0, hEQr:0.6,       // EE-I: site accel coeff, kh = khR·As (walls free to displace), ΔPAE at hEQr·H
-      khRAuto:true, Wseg:0,                                       // ABM1: Wseg = segment permanent load for the longitudinal connection force at fixed bearings (kip, 0 = auto) [3.10.9.2]                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
+      khRAuto:true, Wseg:0, EQsupL:0, EQsupT:0,                   // ABM9: superstructure seismic force at this abutment from the seismic analysis, longitudinal / transverse (kip, 0 = not entered; Zones 2–4 multispan) [4.7.4.3, 3.10.9.3, 3.10.9.4]
+                                            // ABM1: Wseg = segment permanent load for the longitudinal connection force at fixed bearings (kip, 0 = auto) [3.10.9.2]                                               // ABM2 (2026-11-07): k_h ratio set from the foundation (abutKhAuto: 1.0 on piles or rock, 0.5 on a spread footing on soil) [11.6.5.2.2]; false = the entered khR
       gEHEQ:1.00, gEQll:0.0,                                      // γEH at EE-I (used only with gEHEQmode "agency"); γEQ on live load (project-specific)
       gEHEQmode:"gp",                                             // EE-I γEH: "gp" = per Table 3.4.1-1 (10th Ed.: 1.00, EEP; the stored value is kept); "agency" = fixed gEHEQ
       phiTauEQ:1.00, phiBEQ:0.80, phiCEQ:1.00, eFracEQ:0.3333,    // extreme-event resistance factors [11.5.8: 1.0; bearing 0.8 for semigravity walls; 10.5.5.3.3]; e/B (used only with eLimEQmode "user")
@@ -1709,7 +1710,7 @@ function migrate(){
     // notice, defRev 10); any other saved ratio is kept ("ratio" mode, same value)
     if(S.seismic&&S.seismic.hEQmode===undefined) S.seismic.hEQmode=Math.abs((+S.seismic.hEQr||0)-0.6)<1e-9? "static" : "ratio";
     if(S.seismic&&S.seismic.khRAuto===undefined) S.seismic.khRAuto=!(S.seismic.khR!==undefined&&S.seismic.khR!==""&&isFinite(+S.seismic.khR));   // ABM2: a saved project keeps its stored k_h ratio (khRAuto false); one without a stored ratio follows the foundation
-    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt","Wseg"]);   // ABM1: Wseg 0   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
+    if(S.seismic) fill(S.seismic,T.seismic,["siteClass","bwStop","bwW","nonConc","shEQt","Wseg","EQsupL","EQsupT"]);   // ABM9: EQsupL, EQsupT 0   // ABM1: Wseg 0   // ABR1: bwStop false, bwW 0 (MassDOT: owner default below); ABR3: nonConc, shEQt
     if(!S.bwLL||typeof S.bwLL!=="object") S.bwLL=clone(T.bwLL); }
   if(S.own.dv===2){   // CLMB (2026-10-20): new owner defaults (MassDOT Coulomb, RIDOT at-rest rule) for a project saved with the earlier defaults
     S.own.dv=3;
@@ -2367,6 +2368,8 @@ function buildInputs(){
       <div class="chk-row"><input type="checkbox" id="chkNC" data-path="seismic.nonConc" ${sq.nonConc!==false?"checked":""}>
       <label for="chkNC">P<sub>AE</sub> and the wall inertia P<sub>IR</sub> not concurrent: P<sub>AE</sub> + 0.5P<sub>IR</sub> and max(0.5P<sub>AE</sub>, P<sub>A</sub>) + P<sub>IR</sub> [11.6.5.1]</label></div>
       ${inpRow("Seismic share of superstructure inertia at this abutment","seismic.shEQ","%",{title:"EQ_sup = A_s·(DC + DW)·share, at the seat (Tab 3 §3.6a). 100 % = all of the superstructure inertia through this abutment's keepers / shear keys. Independent of the static longitudinal shares of panel I-6."})}
+      ${(+sq.zone>=2&&S.geom.HsupMode!=="single")?`${inpRow("Superstructure seismic force at this abutment from the analysis, longitudinal (0 = A<sub>s</sub>·W)","seismic.EQsupL","kip",{title:"Zones 2–4, multispan: the force the superstructure delivers to this abutment's bearings / keepers in the longitudinal direction from the seismic analysis [4.7.4.3, 3.10.9.3]. Replaces A_s·(DC + DW)·share. Tab 3 §3.6a."})}
+      ${inpRow("Superstructure seismic force at this abutment from the analysis, transverse (0 = A<sub>s</sub>·W)","seismic.EQsupT","kip",{title:"Zones 2–4, multispan: the transverse force at this abutment from the seismic analysis [4.7.4.3, 3.10.9.3]. Replaces A_s·(DC + DW)·share (transverse). Tab 3 §3.6a."})}`:""}
       ${inpRow("Segment permanent load for the longitudinal connection force (0 = auto)","seismic.Wseg","kip",{title:"Total permanent load (DC + DW) of the uninterrupted superstructure segment held longitudinally by fixed bearings at this abutment [3.10.9.2]. Used only with panel I-6 'Defined fixed bearing'. 0 = 2(ΣP_DC + ΣP_DW)·L_tot/L (whole bridge length; single span: both ends' reactions). Tab 3 §3.6."})}
       ${inpRow("Seismic share of superstructure inertia, transverse","seismic.shEQt","%",{title:"Transverse EQ along the abutment: A_s·(DC + DW)·share at the seat (keepers / shear keys), plus the wall inertia k_h·W_wall; combined 100 % / 30 % with the longitudinal case [3.10.8] (Tab 3 §3.6a). 0 = no transverse superstructure force at this abutment."})}
       ${selRow("γ<sub>EH</sub> at Extreme Event I","seismic.gEHEQmode",[["gp","1.00, as DC, DW, EV, ES [T.3.4.1-1, 10th Ed.]"],["agency","Fixed value (agency policy)"]],{rebuild:true})}
@@ -2379,7 +2382,7 @@ function buildInputs(){
       ${selRow("Eccentricity limit (EE)","seismic.eLimEQmode",[["aashto","Interpolated on γEQ, soil and rock [11.6.5.1]"],["user","Fixed fraction e/B (owner rule)"]],{rebuild:true})}
       ${S.seismic.eLimEQmode==="user"?inpRow("&nbsp;&nbsp;Eccentricity limit fraction e/B (EE)","seismic.eFracEQ","–",{title:"Owner rule. The 10th Ed. limit is B/3 at γEQ = 0 and 0.4B at γEQ = 1, soil and rock [11.6.5.1]; a larger value is not conservative."}):`<div class="in-note">e<sub>lim</sub> = B·(1/3 + (0.4 − 1/3)·γ<sub>EQ</sub>): B/3 at γ<sub>EQ</sub> = 0, 0.4B at γ<sub>EQ</sub> = 1; permutations without live load use γ<sub>EQ</sub> = 0 [11.6.5.1, 10.6.4.2].</div>`}
     `:`<div class="in-note">OFF — Strength/Service only. The minimum seismic connection force [3.10.9] remains surfaced as a design note in Tab 3. Enable for sites where SDC > A or where the owner requires an M–O check.</div>`}
-    ${selRow("Seismic zone [T.3.10.6-1]","seismic.zone",[["1","Zone 1 (S_D1 ≤ 0.15)"],["2","Zone 2"],["3","Zone 3"],["4","Zone 4"]])}
+    ${selRow("Seismic zone [T.3.10.6-1]","seismic.zone",[["1","Zone 1 (S_D1 ≤ 0.15)"],["2","Zone 2"],["3","Zone 3"],["4","Zone 4"]],{rebuild:true})}
     ${sq.on?"":inpRow("A<sub>s</sub> for the connection force","seismic.As","g",{title:"Zone 1 connection force: 0.15 when A_s < 0.05, else 0.25 [3.10.9.2]; single-span bridges (panel I-1 H = single-span): minimum A_s × permanent load [3.10.9.1]."})}
     ${abutOwner()==="MassDOT"&&iabType()==="conv"?`<div class="subhead">Backwall as the longitudinal seismic stop (MassDOT 3.4.8.1)</div>
     <div class="chk-row"><input type="checkbox" id="chkBwStop" data-path="seismic.bwStop" ${sq.bwStop?"checked":""}>
@@ -3383,7 +3386,12 @@ function computeAll(){
   const apSup=(R.ap&&R.ap.eqSup)? R.ap.Wi : 0;   // APS: slab mass moving with the superstructure (semi-integral, deck over the backwall)
   // superstructure inertia through the bearings/keepers: A_s·(DC + DW)·share, share = seismic.shEQ (panel I-11, default 100 %);
   // independent of the static longitudinal shares of I-6 (BR/TU/CR·SH/WS keep those)
-  if(R.seis){ const shEQ=Math.min(100,Math.max(0,+S.seismic.shEQ))/100; R.seis.shEQ=isFinite(shEQ)?shEQ:1; R.seis.EQsup=(+S.seismic.As)*(agg.DC.P+agg.DW.P+(R.seis.Wdia||0)+apSup)*R.seis.shEQ; if(apSup) R.seis.apSup=apSup; }   // ABR2: + the end diaphragm (semi-integral); APS: + the approach slab share
+  if(R.seis){ const shEQ=Math.min(100,Math.max(0,+S.seismic.shEQ))/100; R.seis.shEQ=isFinite(shEQ)?shEQ:1; R.seis.EQsup=(+S.seismic.As)*(agg.DC.P+agg.DW.P+(R.seis.Wdia||0)+apSup)*R.seis.shEQ; if(apSup) R.seis.apSup=apSup;
+    // ABM9 (2026-11-07): Zones 2–4, multispan: the force the superstructure delivers to this abutment comes from the seismic analysis [4.7.4.3, 3.10.9.3,
+    // 3.10.9.4]; an entered value replaces A_s·(DC + DW)·s_EQ, and without one the A_s estimate is kept with a REVIEW warning (Zone 1 / single span: unchanged)
+    const zA=Math.min(4,Math.max(1,Math.round(+S.seismic.zone||1))), anaZ=zA>=2&&S.geom.HsupMode!=="single", eL=Math.max(0,+S.seismic.EQsupL||0), eT=Math.max(0,+S.seismic.EQsupT||0);
+    if(anaZ){ R.seis.anaZ=zA; if(eL>0){ R.seis.EQsupA=R.seis.EQsup; R.seis.EQsup=eL; R.seis.EQsupSrc="analysis"; }
+      if(!(eL>0)||!(eT>0)) warn(`REVIEW — Seismic Zone ${zA}, multispan bridge: the superstructure seismic force at this abutment should come from the seismic analysis [4.7.4.3, 3.10.9.3, 3.10.9.4]; ${!(eL>0)&&!(eT>0)?"none is entered":(!(eL>0)?"the longitudinal force is not entered":"the transverse force is not entered")} (panel I-11), so A_s·(DC + DW)·share is used, which can be lower than the analysis force (C_sm up to S_DS). Tab 3 §3.6a.`); } }   // ABR2: + the end diaphragm (semi-integral); APS: + the approach slab share
 
   /* ===== C-5 Load groups (about toe; Mt about abutment CL) =====
      each: V (+down), Mv=V·x, Hx (+driving), Mh=Hx·z, Hy, Mt */
@@ -3479,10 +3487,11 @@ function computeAll(){
        keys at the seat, plus the wall inertia k_h·W_wall (and the attached wings) at their centroids; no earth-pressure increment and no soil-block
        inertia (no soil is retained in that direction). 100 % of one direction with 30 % of the other [3.10.8] in the Extreme Event I cases. */
     { const st=S.seismic.shEQt, s=(st===undefined||st===null||st==="")? 1 : Math.min(100,Math.max(0,+st))/100, shT=isFinite(s)? s : 1;
-      const tS=ok? (+S.seismic.As)*(agg.DC.P+agg.DW.P+(q.Wdia||0)+apSup)*shT : 0, tW=ok&&q.kh>0? q.WiW : 0, tWg=(R.wingAb&&ok&&q.kh>0)? q.kh*R.wingAb.nw*R.wingAb.Wt : 0;   // APS: + apSup
+      const tEnt=ok&&q.anaZ&&(+S.seismic.EQsupT>0);   // ABM9: transverse force from the seismic analysis (Zones 2–4, multispan)
+      const tS=ok? (tEnt? +S.seismic.EQsupT : (+S.seismic.As)*(agg.DC.P+agg.DW.P+(q.Wdia||0)+apSup)*shT) : 0, tW=ok&&q.kh>0? q.WiW : 0, tWg=(R.wingAb&&ok&&q.kh>0)? q.kh*R.wingAb.nw*R.wingAb.Wt : 0;   // APS: + apSup
       let Hy=tS+tW+tWg, Mt=tS*zB+(tW>0?tW*q.zWall:0)+(tWg>0?tWg*R.wingAb.zW:0);
       if(apW>0){ Hy+=apW; Mt+=apW*R.ap.zSlab; }   // APS: slab inertia along the abutment (anchored on the shelf)
-      if(q) Object.assign(q,{shEQt:shT, EQtSup:tS, EQtW:tW, EQtWg:tWg, EQt:Hy, MtEQt:Mt});
+      if(q) Object.assign(q,{shEQt:shT, EQtSup:tS, ...(tEnt?{EQtSrc:"analysis"}:{}), EQtW:tW, EQtWg:tWg, EQt:Hy, MtEQt:Mt});
       groups.EQt={cls:"EQ", V:0,Mv:0, Hx:0,Mh:0, Hy, Mt, desc:"Transverse EQ along the abutment: A_s·(DC+DW)·s_EQ,t + k_h·W_wall"+(apW>0?" + k_h·W_ap":"")}; }
   }
   R.groups=groups;
@@ -5008,7 +5017,7 @@ function computeAll(){
     { const T=defaultState(), dropDef=(o,t,keys)=>{ if(o) keys.forEach(k=>{ if(JSON.stringify(o[k])===JSON.stringify(t[k])) delete o[k]; }); };   // ABCHK: new inputs at their default
       dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth"]);
       dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct"]);
-      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
+      dropDef(fpS.seismic,T.seismic,["siteClass","bwStop","bwW","Wseg","EQsupL","EQsupT"]); if(fpS.seismic) delete fpS.seismic.khRAuto; if(fpS.bwLL&&fpS.bwLL.mode==="wheel") delete fpS.bwLL;   // ABM2: khRAuto left out (the k_h ratio itself is in the Input ID)
       if(fpS.iab) dropDef(fpS.iab,iabDefault(),["KpE","Rn","phiC","RnUp","phiUp","MuPy2"]); }   // PXR2: MuPy2   // ABR1: new inputs at their default
     const s=JSON.stringify(fpS);
     let h1=5381,h2=52711;
@@ -6669,15 +6678,15 @@ function renderTabStab(R){
         `W_w = \\Sigma W_i = ${R.parts.filter(pp=>!(q.Wdia>0&&pp.name==="Backwall")).map(pp=>fmtT(pp.W,1)).join(" + ")} = ${fmtT(q.Wparts,1)}\\ \\text{kip}\\,, \\quad \\bar z = \\dfrac{\\Sigma W_i\\bar y_i}{W_w} = \\dfrac{${R.parts.filter(pp=>!(q.Wdia>0&&pp.name==="Backwall")).map(pp=>`(${fmtT(pp.W,1)})(${fmtT(pp.y??S.geom.tf/2,2)})`).join(" + ")}}{${fmtT(q.Wparts,1)}} = ${fmtT(q.zWall)}\\ \\text{ft}${q.Wdia>0?"\\quad(\\text{semi-integral: end diaphragm excluded})":""}`,
         `\\text{Wall (incl. footing): } k_h W_w = (${fmtT(q.kh,4)})(${fmtT(q.Wparts,1)}) = ${fmtT(q.WiW)}\\ \\text{kip at } \\bar z = ${fmtT(q.zWall)}\\ \\text{ft}`,
         `\\text{Soil block: } k_h W_s = (${fmtT(q.kh,4)})(${fmtT(q.Wev,1)}) = ${fmtT(q.WiS)}\\ \\text{kip at } \\bar z = t_f + \\tfrac{h_{soil}}{2} = ${fmtT(S.geom.tf)} + \\tfrac{${fmtT(S.geom.soilH)}}{2} = ${fmtT(q.zSoil)}\\ \\text{ft} \\quad(W_s = \\text{EV, Tab 1 §1.2})`,
-        q.Wdia>0? "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW} + W_{dia})\\,s_{EQ}" : "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW})\\,s_{EQ}",
-        `EQ_{sup} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQ,2)}) = ${fmtT(q.EQsup)}\\ \\text{kip at the seat}${q.Wdia>0?"\\quad(W_{dia} = \\text{end diaphragm, moves with the superstructure})":""}`],
+        q.EQsupSrc==="analysis"? "\\text{Superstructure: } EQ_{sup} = \\text{entered from the seismic analysis (Zone "+q.anaZ+", multispan; panel I-11)} \\quad [4.7.4.3,\\ 3.10.9.3]" : q.Wdia>0? "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW} + W_{dia})\\,s_{EQ}" : "\\text{Superstructure: } EQ_{sup} = A_s\\,(\\Sigma P_{DC} + \\Sigma P_{DW})\\,s_{EQ}",
+        q.EQsupSrc==="analysis"? `EQ_{sup} = ${fmtT(q.EQsup)}\\ \\text{kip at the seat} \\quad (A_s\\text{ estimate } ${fmtT(q.EQsupA)}\\ \\text{kip, not used})` : `EQ_{sup} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQ,2)}) = ${fmtT(q.EQsup)}\\ \\text{kip at the seat}${q.Wdia>0?"\\quad(W_{dia} = \\text{end diaphragm, moves with the superstructure})":""}`],
         "Superstructure inertia uses the full A_s (restrained by keepers) and s_EQ = the seismic share of the superstructure inertia at this abutment (panel I-11, default 100 %); it does not use the static longitudinal shares of panel I-6. EOR to confirm the distribution for the actual bearing/keeper layout. EE-I resistance factors and the e/B limit are editable in panel I-11.")}
       ${sOK&&S.seismic.nonConc!==false?eqB("Seismic earth pressure and wall inertia not concurrent","AASHTO LRFD 10th Ed. 11.6.5.1",[
         `P_{IR} = k_h(W_w + W_s)${R.wingAb?" + k_hW_{wing}":""} = ${fmtT(q.WiW)} + ${fmtT(q.WiS)}${R.groups.WGeq?` + ${fmtT(R.groups.WGeq.Hx)}`:""} = ${fmtT(q.WiW+q.WiS+(R.groups.WGeq?R.groups.WGeq.Hx:0))}\\ \\text{kip}`,
         `\\text{case A: } \\Delta P_{AE} + 0.5P_{IR}\\,; \\qquad \\text{case B: } f_B\\,\\Delta P_{AE} + P_{IR}\\quad(f_B = ${fmtT(q.fB,3)})`],
         "Both cases run in every Extreme Event I permutation (Tab 2 §2.3; the governing one is named in each check). The superstructure inertia is not part of P<sub>IR</sub> and stays at 100 %. Uncheck in panel I-11 to combine 100 % of both (in phase, C11.6.5.1).") : ""}
       ${(R.groups.EQt&&Math.abs(R.groups.EQt.Hy)>1e-9)?eqB("Transverse direction (along the abutment) — 100/30 combination","AASHTO LRFD 10th Ed. 3.10.8, 3.10.9.1",[
-        `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
+        q.EQtSrc==="analysis"? `EQ_{sup,t} = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat (entered from the seismic analysis, panel I-11)}` : `EQ_{sup,t} = A_s(\\Sigma P_{DC} + \\Sigma P_{DW}${q.Wdia>0?" + W_{dia}":""})s_{EQ,t} = (${fmtT(+S.seismic.As,3)})(${fmtT(R.agg.DC.P)} + ${fmtT(R.groups.DW.V)}${q.Wdia>0?` + ${fmtT(q.Wdia)}`:""})(${fmtT(q.shEQt,2)}) = ${fmtT(q.EQtSup)}\\ \\text{kip at the seat}`,
         `H_{y,EQ} = EQ_{sup,t} + k_hW_w${q.EQtWg>0?" + k_hW_{wing}":""} = ${fmtT(q.EQtSup)} + ${fmtT(q.EQtW)}${q.EQtWg>0?` + ${fmtT(q.EQtWg)}`:""} = ${fmtT(q.EQt)}\\ \\text{kip}\\,, \\qquad M_{t,EQ} = \\Sigma H_yz = ${fmtT(q.MtEQt)}\\ \\text{kip-ft}`,
         `\\text{case L: } 1.0\\,EQ_{long} + 0.3\\,EQ_{trans}\\,; \\qquad \\text{case T: } 0.3\\,EQ_{long} + 1.0\\,EQ_{trans}`],
         "Along the abutment no soil is retained: the superstructure inertia through the keepers / shear keys (share s<sub>EQ,t</sub>, panel I-11) and the wall inertia at the wall centroid (and the attached wings). H<sub>y</sub> enters the sliding resultant, the eccentricity along L<sub>ftg</sub>, the bearing and the pile reactions and shear.") : ""}
