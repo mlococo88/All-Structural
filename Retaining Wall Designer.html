@@ -12418,9 +12418,12 @@ function rwpxPlan(r, res, cur, sent) {
   const u = res.units || {}; if (u.force !== 'kip' || (u.length && u.length !== 'ft')) return { err: 'Pile results units must be kip and ft.' };
   const { status, why } = rwpxStatus(res.basis || null, cur, sent);
   const set = [], g = res.geotechnical && res.geotechnical.static, F = r.inp.fnd, num = v => typeof v === 'number' && isFinite(v);
+  // PDA-M7 (2026-11-07): Pile Designer's group result (res.group, HANDOFF §4.10): R_n and R_n,up are imported times the group reduction
+  const G = res.group || null, grR = G && num(G.reduce) && G.reduce > 0 && G.reduce < 1 ? G.reduce : 1,
+    grU = G && G.uplift && num(G.uplift.reduceUp) && G.uplift.reduceUp > 0 && G.uplift.reduceUp < 1 ? G.uplift.reduceUp : 1;
   if (r.isAASHTO && g && status !== 'other') {
-    if (num(g.Rn) && g.Rn > 0 && num(g.phi) && g.phi > 0 && g.phi <= 1) { set.push({ id: 'pile_Rn', label: 'R_n (compression)', from: F.Rn, to: g.Rn }); set.push({ id: 'pile_phic', label: 'φ_c', from: F.phic, to: g.phi }); }
-    if (num(g.RnUp) && g.RnUp > 0 && num(g.phiUp) && g.phiUp > 0 && g.phiUp <= 1) { set.push({ id: 'pile_Rnup', label: 'R_n,up (uplift)', from: F.Rnup, to: g.RnUp }); set.push({ id: 'pile_phiup', label: 'φ_up', from: F.phiup, to: g.phiUp }); }
+    if (num(g.Rn) && g.Rn > 0 && num(g.phi) && g.phi > 0 && g.phi <= 1) { set.push({ id: 'pile_Rn', label: 'R_n (compression)' + (grR < 1 ? ' × ' + grR.toFixed(3) + ' group (Pile Designer Module 11)' : ''), from: F.Rn, to: g.Rn * grR }); set.push({ id: 'pile_phic', label: 'φ_c', from: F.phic, to: g.phi }); }
+    if (num(g.RnUp) && g.RnUp > 0 && num(g.phiUp) && g.phiUp > 0 && g.phiUp <= 1) { set.push({ id: 'pile_Rnup', label: 'R_n,up (uplift)' + (grU < 1 ? ' × ' + grU.toFixed(3) + ' group uplift (Pile Designer Module 11)' : ''), from: F.Rnup, to: g.RnUp * grU }); set.push({ id: 'pile_phiup', label: 'φ_up', from: F.phiup, to: g.phiUp }); }
   }
   const match = (r.pile && r.pile.comb || []).map(c => {
     const q = (res.cases || []).find(x => x.source && x.source.kind === 'perPile' && x.source.caseId === c.key + ':compression')
@@ -12431,7 +12434,7 @@ function rwpxPlan(r, res, cur, sent) {
     const dP = num(lp.P) ? Math.abs(lp.P - P) : null, dV = num(lp.V) ? Math.abs(lp.V - h) : null, tol = v => 0.01 + 0.001 * Math.abs(v);
     return { key: c.key, label: c.label, P, h, name: q.name, Ppd: lp.P, Vpd: lp.V, M: py.Mmax, y0: py.y0, pass: ck.pass, differs: (dP != null && dP > tol(P)) || (dV != null && dV > tol(h)) };
   });
-  return { status, why, set, match, aci: !r.isAASHTO };
+  return { status, why, set, match, aci: !r.isAASHTO, group: G ? { reduce: grR, reduceUp: grU, eta: G.eta, blockGoverns: !!G.blockGoverns } : null };
 }
 /* RWPX-ENGINE-END */
 </script>

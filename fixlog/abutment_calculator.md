@@ -16217,3 +16217,16 @@ index 9d50d7b..7c34a8a 100644
 +      : `<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Group efficiency η not entered (panel I-7): the group resistance in compression [10.7.3.9] is not checked (largest ΣV<sub>f</sub> = ${fmt(G.V,1)} kip, ${esc(G.ls)}). η = 1.0 in cohesionless soil or with the cap in firm contact; in clay with soft surface soil and the cap not in contact, 0.65 at 2.5D to 1.0 at 6D; the equivalent-pier check in clay is by the geotechnical engineer.</div>`)
 +      +(U&&U.uplift? `<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Piles in tension (minimum ${fmt(U.P,1)} kip, ${esc(U.ls||"")}): the group uplift resistance φ<sub>ug</sub>R<sub>ug</sub> [10.7.3.11, Eq. 10.7.3.11-1] — the lesser of the sum of the individual uplift resistances and the block — is by the geotechnical engineer (the individual check is §4.3).</div>` : `<div class="note-box">No pile in tension in any combination: group uplift [10.7.3.11] does not apply.</div>`)); }
 ```
+
+## 2026-11-07 — PR: claude/pile-m7-group-handoff (PR #1050: https://github.com/mlococo88/All-Structural/pull/1050) (PDA-M7) — pile results import: Pile Designer's group reduction applied to R_n and R_n,up   [imported value change with a group]
+- **Problem (Pile Designer review M7):** the import set `piles.Rn` / `piles.RnUp` to Pile Designer's single-pile static resistance even when its Module 11 group efficiency or block governs. The abutment then over-credited the piles.
+- **Where:** `AbutPileResults` IIFE, `plan(p,st)`.
+  - Before the `if(geoOn){` block (anchor `// PDA-M7 (2026-11-07): Pile Designer's group result`): `grR` = `p.group.reduce` when < 1 (conventional abutment only), `grU` = `p.group.uplift.reduceUp` when < 1, and two warnings (the group factors; for a field-method R_n, which is imported as sent).
+  - Before: `add(kp+"Rn",g.static.Rn,…)` and `add(kp+"RnUp",g.static.RnUp,…)`. After: `g.static.Rn*grR` and `g.static.RnUp*grU`, with the labels stating the factor.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.7.3.9 / 10.9.3.6 and 10.7.3.11 / 10.9.3.8 (through Pile Designer's Module 11). The abutment's own formulas are unchanged.
+- **Check case:** payload R_n 123.7, φ 0.70, R_n,up 123.7, φ_up 0.60, `group.reduce` 0.9458, `uplift.reduceUp` 0.7735.
+  - Before: piles.Rn 123.7, piles.RnUp 123.7.
+  - After: **116.995** and **95.682**, plus the warning.
+  - Without `group`: unchanged.
+- **How verified:** `AbutPileResults.plan` evaluated in the page, both payloads. `check-syntax`: pass. No console errors.
+- **Other copies:** the Retaining Wall Designer receiver gets the same rule (fixlog/Retaining Wall Designer.md, PDA-M7).
