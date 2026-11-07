@@ -1802,3 +1802,35 @@ Review of 2026-11-07, LOW findings. L7 (closed-form FER) is a separate PR. Every
   - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"` and `node tests/smoke/phone-layout.mjs --tool smd` pass.
   - `node tests/smoke/project-library.mjs --tool smd` fails against main only on `tabR` (TBS, intended); with `tabR` and the new `crits.zR` / `env.R` moment fields left out of its readout, it passes in full.
 - **Saved data:** no key or format changed; LV never writes to `loads`. **Other copies:** none.
+
+## 2026-11-07 — PR: claude/sm-fer-exact (PR #1118: https://github.com/mlococo88/All-Structural/pull/1118) (FERX: closed-form fixed-end forces for uniform and trapezoidal loads; review L7)   [CALCULATION CHANGE — numerical, about 1e-5 relative] [neither more nor less conservative: closer to exact]
+- **Problem:** `spanFER()` integrated the fixed-end forces of uniform and linearly varying (partial) loads with a 400-strip midpoint sum. The reported values differed from closed form in the 4th–5th digit:
+  - 2-span UDL |M_B| = 70.3127 vs wL²/8 = 70.3125;
+  - propped cantilever M_fix = 100.0003 vs 100.
+  - A hand checker notices this.
+- **Governing provision:** structural mechanics, the standard fixed-end force integrals (AISC Manual Table 3-23 forms, cited only). No code provision.
+- **Where:** `spanFER()`, the distributed-load branch (anchor `/* FERX (2026-11-07, review L7)`).
+  - Before:
+    ```js
+          const N=400,dx=(x2-x1)/N;
+          for(let k=0;k<N;k++){const s=x1+(k+.5)*dx,w=w1+(w2-w1)*(x2>x1?(s-x1)/(x2-x1):0),b=spL-s,L=spL;
+            r[0]+=w*b*b*(L+2*s)/(L*L*L)*dx;r[1]+=w*s*b*b/(L*L)*dx;r[2]+=w*s*s*(3*L-2*s)/(L*L*L)*dx;r[3]-=w*s*s*b/(L*L)*dx;}}});
+    ```
+  - After: the same four integrands, summed with 3-point Gauss-Legendre over [x1, x2] (nodes mid ± hl·√0.6 and mid, weights 5/9, 8/9, 5/9, hl = (x2 − x1)/2). The integrand (linear w times a cubic in s) has degree 4, and the rule is exact to degree 5, so the result is the closed form to round-off.
+- **Check case (hand):** two 15 ft spans, pin / roller / roller, w = 2.5 kip/ft (template "2-span": DL 1.5 + LL 1, Unfactored).
+
+  | | Before | After | Closed form |
+  |---|---|---|---|
+  | R_A | 14.062485 | 14.062500 | 3wL/8 = 14.0625 |
+  | R_B | 46.875029 | 46.875000 | 10wL/8 = 46.875 |
+  | M_B | −70.312720 | −70.312500 | −wL²/8 = −70.3125 |
+  | M⁺ | 39.550699 | 39.550781 | 9wL²/128 = 39.55078 |
+  | δ_max | 0.008205843 | 0.008205960 | (double integration of M; unchanged method) |
+- **Other cases:**
+  - 4 equal spans: R 5.499995 / 16.00001 / 13 → 5.5 / 16 / 13 exactly (0.393 / 1.143 / 0.929 wL);
+  - propped cantilever: M_fix 140.0004 → 140.0 (1.4D);
+  - cantilever triangle: M = −45.00014 → −45.0.
+- **How verified:** headless main vs branch on the 27 review cases and 16 extras. The largest relative change of any R, V, M, δ or envelope value is 1e-5 (apart from values that are round-off zero, such as −0.00016 → 0 at a free tip). Point and couple loads are unchanged. 0 console errors.
+  - `node tests/check-syntax.mjs "Shear and Moment Diagrams.html"` and `node tests/smoke/phone-layout.mjs --tool smd` pass.
+  - `node tests/smoke/project-library.mjs --tool smd`: its main-vs-branch "results identical" checks fail by design (`tabR` V changes, for example 3.511105 → 3.511111, the closed form of the 3-span template, R_A = 3.5111 by the independent solver). Its save, undo and dialog checks pass.
+- **Saved data:** none changed. **Other copies:** Steel Beam Design has its own engine; not changed.
