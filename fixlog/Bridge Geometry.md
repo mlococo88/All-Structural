@@ -2164,7 +2164,7 @@ Engineer decision 2026-10-19 ("follow the owner"): tools without an owner settin
     - project-library --tool bgeo: text-only differences (the note, the span summary columns, the haunch-check L column).
 - **Saved data:** none. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/bg-review-low-items (PR #PRNUM: https://github.com/mlococo88/All-Structural/pull/PRNUM) (BGX10, review LOW items L1, L2, L5, L6: precision option, State Plane / scale-factor note, phone layout, comment fixes)   [display; one load fix] [saved data: additive field]
+## 2026-11-07 — PR: claude/bg-review-low-items (PR #1135: https://github.com/mlococo88/All-Structural/pull/1135) (BGX10, review LOW items L1, L2, L5, L6: precision option, State Plane / scale-factor note, phone layout, comment fixes)   [display; one load fix] [saved data: additive field]
 
 - **L1, precision:** new select **Elevations to** 0.01 ft / 0.001 ft (`#out_dec`), in the Top of Deck Output controls (the empty third cell after Divisions).
   - It sets the decimals of the elevations in the Top-of-Deck table (both modes) and the Beam-Seat table, so also their CSV files and the Drawings-tab tables copied from them. Display only.
