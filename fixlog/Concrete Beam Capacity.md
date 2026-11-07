@@ -5076,7 +5076,7 @@ Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summa
 - **Saved data:** no key or format change (T_u was already saved per combination).
 - **Open items:** full AASHTO torsion design (5.7.3.4.2 V_eff in ε_s, 5.7.3.6.1/-.2 transverse, 5.7.3.6.3 longitudinal, Summary interaction) is not implemented yet; until then a combination above the threshold stays FAIL.
 
-## 2026-11-07 — PR: claude/cbc-aashto-long-reinf (CBM2: AASHTO 5.7.3.5 longitudinal reinforcement for moment and shear checked for every combination; CALCULATION CHANGE (new check), Beam Capacity tab, AASHTO mode; less conservative before)
+## 2026-11-07 — PR: claude/cbc-aashto-long-reinf, PR #992: https://github.com/mlococo88/All-Structural/pull/992 (CBM2: AASHTO 5.7.3.5 longitudinal reinforcement for moment and shear checked for every combination; CALCULATION CHANGE (new check), Beam Capacity tab, AASHTO mode; less conservative before)
 
 Frame: Beam Capacity (`suite-frame-capacity`) and the suite shell's Report summary. Found in the in-depth review of 2026-11-07 (item M2).
 
