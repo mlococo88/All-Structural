@@ -5336,7 +5336,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
 - **Open items:** none new.
 - **Correction to BPH2 (same PR, display only):** the worked step "Column eccentric on the plate — …" in `plateBending()` (anchor `let eccStep=null;`) was written with single backslashes in its JavaScript strings (`"\ \text{kip-in}"`), so `\t` became a tab and the KaTeX text was wrong. Every backslash in that block is now doubled (`"\\ \\text{kip-in}"`), as in the rest of the file. No value changes. The new BPM1 step was corrected the same way before commit. Checked: every line of the plate-bending, Breakout (V) and side-face blowout steps of an eccentric-column case and of the M1 case typesets in KaTeX 0.16.9 with throwOnError.
 
-## 2026-11-07 — BPM2: shear breakout demand = the V of the case the check uses (PR: claude/bp-m2-case1-demand)
+## 2026-11-07 — BPM2: shear breakout demand = the V of the case the check uses (PR: claude/bp-m2-case1-demand, PR #968: https://github.com/mlococo88/All-Structural/pull/968)
 
 ### BPM2. Case 1 demand in the Summary, the DCR matrix and the interaction   [calculation change, LESS conservative where Case 1 governs; saved data: none]
 - **Problem (review M2):** the case table (Fig. R17.7.2.1b) picks the governing case by each case's own V (Case 1: the front row's tributary share), and the breakout capacity is that case's. But the Summary, the DCR matrix and the interaction divided V_res, the full shear, by that capacity. When Case 1 governs, the result was twice the case table's ratio for a 2 × 2 group, and inconsistent with it. The torsion sweep already used the case's V.
