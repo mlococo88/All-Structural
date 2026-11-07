@@ -16133,3 +16133,87 @@ index 86d5f78..9d50d7b 100644
 -  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
 +  const v=(raw!==""&&!isNaN(num)&&!["soil.method","fnd.branch","fnd.matl","beams.mode","piles.mode","dist.model","ui.rxView","reinf.bw.size","reinf.stem.size","reinf.toe.size","reinf.heel.size","reinf.stemH.size","reinf.bwH.size","reinf.ftgL.size","reinf.gammaE","joint.prep","piles.pileShape","bearing.seatBar","longit.material","longit.climate","wing.hSize","wing.vSize","wing.ftBBar","wing.ftTBar","iab.capBar","iab.hBar","iab.vBar","iab.stBar","apSlab.sBar","apSlab.hBar","apSlab.aBar","apSlab.dBar","apSlab.tBar"].includes(p))?num:raw;   // APS: bar sizes stay strings
 ```
+
+## 2026-11-07 — PR: claude/abut-m7-review (ABM7: geotechnical checks not computed are no longer silent — REVIEW rows for settlement, overall stability, pile-group compression and group uplift, with references by others; pile-group compression checked when η is entered)   [check-logic change: new rows] [MORE conservative]
+
+Source: code-compliance review of 2026-11-07, item M7.
+
+### ABM7. REVIEW rows and the pile-group check
+- **Where:** `defaultState` (anchors `settleRef:"", globalRef:""` and `etaG:0`); panel I-4 text inputs (settlement / overall stability references) and panel I-7 input η; `computeAll` after `R.pile.shear=` (anchor `ABM7 (2026-11-07): pile group in compression`); dashboard (anchors `ABM7` in the pile rows and before `R.dash=dash;`); `DASH_INFO` (rows with a reference are information); Tab 4 §4.7 `o-pgrp`; `migrate` / Input ID (defaults left out).
+- **Before:** settlement (10.6.2.4), overall stability (11.6.3.7), pile-group compression (10.7.3.9) and group uplift (10.7.3.11) were not listed on the dashboard. The tool notes called them "geotechnical", but no row flagged them.
+- **After:**
+  - Spread footing: "REVIEW — Settlement / service bearing [10.6.2.4]". Every conventional / semi-integral abutment: "REVIEW — Overall (global) stability [11.6.3.7]". Each becomes an information row "by others: <reference>" once a reference is entered in panel I-4 (the design-incomplete flag clears).
+  - Piles: "Pile group in compression [10.7.3.9]" is checked as ΣV_f ≤ φ_c·η·n·R_n (largest ΣV over the strength / extreme combinations) when η is entered; with η not entered it is a REVIEW row. "REVIEW — Pile group uplift [10.7.3.11]" appears when any pile is in tension.
+  - The new rows are appended at the end of the dashboard.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024): 10.6.2.4 (settlement); 11.6.3.7 (overall stability); 10.7.3.9 (group in compression: in clay the lesser of the sum and the equivalent pier; η from 0.65 at 2.5D to 1.0 at 6D for a cap not in contact on soft soil; η = 1.0 in cohesionless soil); 10.7.3.11 and Eq. 10.7.3.11-1 (group uplift, the lesser of the sum and the block, φ_ug from Table 10.5.5.2.3-1).
+- **Check case (review §2.2 piles: 24 HP piles, R_n = 330 kip, φ_c = 0.70; η = 0.80 entered):** largest ΣV_f = 2913.81 kip (Strength I); φ_c η n R_n = 0.70·0.80·24·330 = 4435.2 kip, so D/C = **0.657**. Before: no group check. With η not entered: REVIEW row. EE I variant (a pile in tension): REVIEW group-uplift row.
+- **Decisions (pending engineer review):**
+  - η is entered by the engineer; it is not derived from the spacing.
+  - The equivalent-pier (block) check in clay and the group-uplift block are left to the geotechnical engineer (REVIEW).
+  - A REVIEW row with no reference counts as "design incomplete".
+  - Integral abutments get the overall-stability row but not the settlement row.
+  - Pile Designer does not yet send a group efficiency on `pileResults` (HANDOFF.md §4.10), so η is an input for now. When that field exists, the receiver can fill `piles.etaG`.
+- **Saved data:** new optional fields `fnd.settleRef`, `fnd.globalRef` (""), `piles.etaG` (0). Saved projects show the REVIEW rows; no computed value changes.
+- **How verified:**
+  - Headless origin/main vs branch, 35 scenarios: no existing value moves; only `R.checks.pileGroup` and the appended rows are added.
+  - `project-library --tool abutment`: the main-vs-branch checks differ only in the dashboard length (the new rows). Against this branch itself (`--a HEAD`): ALL PASS.
+  - All tabs and the Report render with 0 console errors; the self-test passes; `check-syntax` passes.
+- **Other copies:** none.
+
+Diff (`abutment_calculator.html`, `git diff -U0` against origin/main):
+
+```diff
+diff --git a/abutment_calculator.html b/abutment_calculator.html
+index 9d50d7b..7c34a8a 100644
+--- a/abutment_calculator.html
++++ b/abutment_calculator.html
+@@ -709 +709 @@ function defaultState(){
+-      imBuried:true, imFrac:0, dNeg:0, SuSl:0,   // ABM5: SuSl = undrained shear strength of clay under the footing for sliding (ksf, 0 = from the bearing inputs when φ_f = 0 and c > 0, else not checked) [10.6.3.4]    // ABR4: dNeg = depth of soil in front of the footing neglected for passive (frost, scour, future excavation; ft) [10.6.3.4, 11.6.3.5]
++      imBuried:true, imFrac:0, dNeg:0, SuSl:0, settleRef:"", globalRef:"",   // ABM7: reference to the settlement / overall-stability evaluation by others ("" = REVIEW row)   // ABM5: SuSl = undrained shear strength of clay under the footing for sliding (ksf, 0 = from the bearing inputs when φ_f = 0 and c > 0, else not checked) [10.6.3.4]    // ABR4: dNeg = depth of soil in front of the footing neglected for passive (frost, scour, future excavation; ft) [10.6.3.4, 11.6.3.5]
+@@ -722 +722 @@ function defaultState(){
+-      Rn:330.0, phiC:0.70, RnUp:100.0, phiUp:0.60,
++      Rn:330.0, phiC:0.70, RnUp:100.0, phiUp:0.60, etaG:0,   // ABM7: etaG = group efficiency η for 10.7.3.9 (0 = not entered: REVIEW row)
+@@ -1708 +1708 @@ function migrate(){
+-    fill(S.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","imBuried","imFrac","dNeg","SuSl"]);   // ABM5: SuSl   // ABR4: dNeg   // ABR3: imBuried, imFrac
++    fill(S.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","imBuried","imFrac","dNeg","SuSl","settleRef","globalRef"]);   // ABM5: SuSl   // ABR4: dNeg   // ABR3: imBuried, imFrac
+@@ -1710 +1710 @@ function migrate(){
+-    fill(S.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]);   // ABR2, ABR3
++    fill(S.piles,T.piles,["etaG","strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]);   // ABR2, ABR3
+@@ -2089,0 +2090,2 @@ function buildInputs(){
++    <div class="in-row"><label title="Reference to the settlement / service-bearing evaluation (10.6.2.4) by the geotechnical engineer, e.g. report and section. Blank = a REVIEW row on the dashboard.">Settlement by others: reference [10.6.2.4]</label><input type="text" data-path="fnd.settleRef" value="${esc(fm.settleRef||"")}" style="grid-column:span 2;"></div>
++    <div class="in-row"><label title="Reference to the overall (global) stability evaluation (11.6.3.7, 11.6.2.3) by the geotechnical engineer. Blank = a REVIEW row on the dashboard.">Overall stability by others: reference [11.6.3.7]</label><input type="text" data-path="fnd.globalRef" value="${esc(fm.globalRef||"")}" style="grid-column:span 2;"></div>
+@@ -2269,0 +2272 @@ function buildInputs(){
++      ${inpRow("Group efficiency η [10.7.3.9] (0 = not entered)","piles.etaG","–",{title:"Pile group in compression [10.7.3.9]: η = 1.0 in cohesionless soil or with the cap in firm contact; 0.65 (2.5D) to 1.0 (6D) in clay with the cap not in contact and soft surface soil. The block (equivalent pier) check in clay is by the geotechnical engineer. 0 = not entered: a REVIEW row (Tab 4 §4.7)."})}
+@@ -3876,0 +3880,3 @@ function computeAll(){
++      // ABM7 (2026-11-07): pile group in compression [10.7.3.9]: ΣV ≤ φ_c·η·n·R_n (η entered; else REVIEW); group uplift [10.7.3.11]: REVIEW when a pile is in tension
++      { let gV={V:-Infinity}; for(const lsName of STR_LIMITS){ const r=perLS[lsName]; if(r.best&&r.best.c&&r.best.c.V>gV.V) gV={V:r.best.c.V, ls:lsName, phiC:resFor(lsName).phiC, lbl:r.best.c.lbl}; }
++        const eta=+p.etaG||0; R.checks.pileGroup={V:gV.V, ls:gV.ls, lbl:gV.lbl, phiC:gV.phiC, eta, n, Rn:+p.Rn, ...(eta>0?{RR:gV.phiC*eta*n*(+p.Rn), dc:gV.V/(gV.phiC*eta*n*(+p.Rn))}:{})}; }
+@@ -5112,2 +5118,2 @@ function computeAll(){
+-      dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","SuSl"]);
+-      dropDef(fpS.piles,T.piles,["strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct","stemH","bwH","ftgL"]); ["stemH","bwH","ftgL"].forEach(k=>{ if(fpS.reinf&&fpS.reinf[k]&&String(fpS.reinf[k].size)==="0") delete fpS.reinf[k]; });   // ABM8
++      dropDef(fpS.mat,T.mat,["coverExp","coverCat","coverWcm","rebar"]); dropDef(fpS.fnd,T.fnd,["qnMode","qnC","qnPhi","qnGam","qnDw","qnIncl","qnDepth","SuSl","settleRef","globalRef"]);
++      dropDef(fpS.piles,T.piles,["etaG","strSec","Fy","drive","pipeT","PrUser","orient","headFix","MuPy","fixSoil","Su","DfUser","Lu","nhUser","DfMode"]); dropDef(fpS.reinf,T.reinf,["dwlEnd","dwlLap","dwlPct","stemH","bwH","ftgL"]); ["stemH","bwH","ftgL"].forEach(k=>{ if(fpS.reinf&&fpS.reinf[k]&&String(fpS.reinf[k].size)==="0") delete fpS.reinf[k]; });   // ABM8
+@@ -5153,0 +5160,4 @@ function computeAll(){
++    { const G=R.checks.pileGroup;   // ABM7
++      if(G&&G.eta>0) addD("pileGrp","Pile group in compression [10.7.3.9]",G.dc,"tab-found",G.ls+": ΣV "+fmt(G.V,1)+" ≤ φ·η·n·R_n = "+fmt(G.RR,1)+" kip (η = "+fmt(G.eta,2)+")");
++      else if(G) addD("pileGrp","REVIEW — Pile group in compression [10.7.3.9]",NaN,"tab-found","η not entered (panel I-7); equivalent-pier check in clay by the geotechnical engineer",true);
++      if(R.checks.pileUplift.uplift) addD("pileGrpUp","REVIEW — Pile group uplift [10.7.3.11]",NaN,"tab-found","piles in tension: group (block) uplift resistance φ_ug·R_ug by the geotechnical engineer",true); }
+@@ -5255,0 +5266,3 @@ function computeAll(){
++  { const sR=String(fn.settleRef||"").trim(), gR=String(fn.globalRef||"").trim();   // ABM7: geotechnical checks by others
++    if(fn.branch==="spread"&&iabType()!=="integral") addD(sR?"settleRef":"settle",(sR?"":"REVIEW — ")+"Settlement / service bearing [10.6.2.4]",NaN,"tab-stab",sR? "by others: "+sR : "by the geotechnical engineer — enter the reference (panel I-4)",true);
++    addD(gR?"globalRef":"global",(gR?"":"REVIEW — ")+"Overall (global) stability [11.6.3.7]",NaN,"tab-stab",gR? "by others: "+gR : "by the geotechnical engineer — enter the reference (panel I-4)",true); }
+@@ -6034 +6047 @@ function svgIabSection(R){
+-const DASH_ANCHOR={ts_stem:"o-ts",ts_bw:"o-ts",ts_ftg:"o-ts",   // ABM8
++const DASH_ANCHOR={pileGrp:"o-pgrp",pileGrpUp:"o-pgrp",ts_stem:"o-ts",ts_bw:"o-ts",ts_ftg:"o-ts",   // ABM8
+@@ -6066 +6079 @@ function gotoPanel(tab,anchor){
+-const DASH_INFO=new Set(["apDV","dowelLap"]);   // n/a rows that are information only (not a required check); ABT2 (engineer, 2026-10-21): the stem dowel lap with no lap entered is "lap not detailed", information only
++const DASH_INFO=new Set(["apDV","dowelLap","settleRef","globalRef"]);   // ABM7: geotechnical checks with a reference by others   // n/a rows that are information only (not a required check); ABT2 (engineer, 2026-10-21): the stem dowel lap with no lap entered is "lap not detailed", information only
+@@ -7065,0 +7079,7 @@ function renderTabFound(R){
++  { const G=R.checks.pileGroup, U=R.checks.pileUplift;   // ABM7: pile group checks
++    if(G) h+=panel("o-pgrp","4.7","Pile Group in Compression and Group Uplift [10.7.3.9, 10.7.3.11]",
++      (G.eta>0? eqB("Group resistance in compression","AASHTO 10.7.3.9",["\\Sigma V_f \\le \\varphi_c\\,\\eta\\,n\\,R_n",
++        `\\Sigma V_f = ${fmtT(G.V)}\\ \\text{kip (${esc(G.ls)})}\\,, \\quad \\varphi_c\\eta nR_n = (${fmtT(G.phiC)})(${fmtT(G.eta)})(${G.n})(${fmtT(G.Rn,1)}) = ${fmtT(G.RR)}\\ \\text{kip}`],
++        "η entered in panel I-7. In clay the nominal group resistance is also limited by the equivalent pier (piles and the soil block), which is by the geotechnical engineer.")+checkLine("Pile group",`\\dfrac{\\Sigma V_f}{\\varphi_c\\eta nR_n} = \\dfrac{${fmtT(G.V)}}{${fmtT(G.RR)}}`,G.dc)
++      : `<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Group efficiency η not entered (panel I-7): the group resistance in compression [10.7.3.9] is not checked (largest ΣV<sub>f</sub> = ${fmt(G.V,1)} kip, ${esc(G.ls)}). η = 1.0 in cohesionless soil or with the cap in firm contact; in clay with soft surface soil and the cap not in contact, 0.65 at 2.5D to 1.0 at 6D; the equivalent-pier check in clay is by the geotechnical engineer.</div>`)
++      +(U&&U.uplift? `<div class="checkline fail"><span class="flagchip warn">REVIEW</span> Piles in tension (minimum ${fmt(U.P,1)} kip, ${esc(U.ls||"")}): the group uplift resistance φ<sub>ug</sub>R<sub>ug</sub> [10.7.3.11, Eq. 10.7.3.11-1] — the lesser of the sum of the individual uplift resistances and the block — is by the geotechnical engineer (the individual check is §4.3).</div>` : `<div class="note-box">No pile in tension in any combination: group uplift [10.7.3.11] does not apply.</div>`)); }
+```
