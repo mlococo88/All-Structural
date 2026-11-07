@@ -1580,7 +1580,7 @@ Engineer-approved overnight job (2026-11-02): phone layout at 390 / 768 px and r
   "Largest graded difference" no longer driven by 0.7L.
 - **Saved data:** no key or format change; `lls` may now also hold `1.0`.
 
-## 2026-11-07 — PR: claude/ml-pedestrian-load (M2: optional pedestrian load input, default off)
+## 2026-11-07 — PR: claude/ml-pedestrian-load (PR #1125: https://github.com/mlococo88/All-Structural/pull/1125) (M2: optional pedestrian load input, default off)
 - **Engine:** `shared/moving-load.js` `m.ped` (see `fixlog/shared-moving-load.md`, same date).
 - **Where (page):**
   - Load Model Rules, before `<div class="lbl" style="margin-top:4px">Variable axle spacing</div>`: checkbox `#pedOn` (off), `#pedF`

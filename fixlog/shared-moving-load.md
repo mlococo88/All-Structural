@@ -249,7 +249,7 @@ Loaded by: `Moving Load Generator.html` and `apps/steel-bridge/index.html` (engi
 - Reactions were checked (82.5/82.5 ft, support off the grid): unchanged, the position refinement already finds them, so no
   reaction pass was added.
 
-## 2026-11-07 — PR: claude/ml-pedestrian-load (M2: optional pedestrian load m.ped; absent = no change)
+## 2026-11-07 — PR: claude/ml-pedestrian-load (PR #1125: https://github.com/mlococo88/All-Structural/pull/1125) (M2: optional pedestrian load m.ped; absent = no change)
 Loaded by: `Moving Load Generator.html` (new optional input, default off) and `apps/steel-bridge/index.html` (never sets `m.ped`:
 results unchanged).
 ### Problem (review 2026-11-07, M2)
