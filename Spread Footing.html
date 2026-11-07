@@ -7023,25 +7023,18 @@ function pmContour(bars,bx,by,fc,fy,Pu_target,nAngles,angList){   // SFPM: angLi
   const pmax=Math.max(...projs);
   // compression zone: proj >= pmax - a, where a=b1*c
   const a=b1*cDepth;
-  // concrete compression: integrate over polygon slice. Approximate with fine strips along compression normal.
-  const nStrip=40;let Cc=0,Ccx=0,Ccy=0;
-  const pmin=Math.min(...projs);
-  for(let s=0;s<nStrip;s++){
-   const u=pmax-a*(s+0.5)/nStrip; // projection coordinate of strip center
-   if(u<pmin)break;
-   // width of section at projection u (perpendicular extent) - approximate rectangle rotated: compute chord length
-   // sample transverse extent by scanning
-   const du=a/nStrip;
-   // find transverse span at this u by checking rectangle boundary
-   const tvals=[];for(let tv=-Math.hypot(bx,by)/2;tv<=Math.hypot(bx,by)/2;tv+=Math.hypot(bx,by)/60){
-    const px=u*ca - tv*sa, py=u*sa + tv*ca;
-    if(px>=-bx/2-1e-6&&px<=bx/2+1e-6&&py>=-by/2-1e-6&&py<=by/2+1e-6)tvals.push({tv,px,py});}
-   if(!tvals.length)continue;
-   const wStrip=(tvals.length>1)?(tvals[tvals.length-1].tv-tvals[0].tv):0;
-   const cx=tvals.reduce((q,z)=>q+z.px,0)/tvals.length, cy=tvals.reduce((q,z)=>q+z.py,0)/tvals.length;
-   const dArea=wStrip*du;const f=0.85*fc;
-   Cc+=f*dArea;Ccx+=f*dArea*cx;Ccy+=f*dArea*cy;
-  }
+  /* SFPX (2026-11-07): concrete compression = 0.85 f'c over the stress block, the part of the section with proj >= pmax - a,
+     clipped exactly (the rectangle cut by the line proj = pmax - a: area and centroid of the clipped polygon). Before SFPX
+     the block was summed in 40 strips whose widths were sampled at hypot(b_x, b_y)/60 steps, which under-counted each strip's
+     width by up to one step (moment capacities 0.5 to 7 % low). */
+  const cut=pmax-a, f=0.85*fc, poly=[];
+  for(let k=0;k<4;k++){const A=corners[k],B=corners[(k+1)%4],fa=projs[k]-cut,fb=projs[(k+1)%4]-cut;
+   if(fa>=0)poly.push(A);
+   if((fa>=0)!==(fb>=0)){const t=fa/(fa-fb);poly.push({x:A.x+t*(B.x-A.x),y:A.y+t*(B.y-A.y)});}}
+  let Ac=0,Sx=0,Sy=0;
+  for(let k=0;k<poly.length;k++){const A=poly[k],B=poly[(k+1)%poly.length],cr=A.x*B.y-B.x*A.y;Ac+=cr;Sx+=(A.x+B.x)*cr;Sy+=(A.y+B.y)*cr;}
+  Ac/=2;   // area (in^2); first moments: integral x dA = Sx/6, integral y dA = Sy/6
+  const Cc=f*Ac, Ccx=Ac>0?f*Sx/6:0, Ccy=Ac>0?f*Sy/6:0;
   // steel forces
   let Fs=0,Msx=0,Msy=0;
   bars.forEach(bar=>{
