@@ -2376,7 +2376,9 @@ function evalComboDir(key,inp,comps,fxs,pw,phi){
   const poleWindM= f.W*pw.Mpole + f.Wi*pw.MpoleI;       // lb-ft
   Vx+=poleWind*cw; Vy+=poleWind*sw;
   Mx+=poleWindM*cw; My+=poleWindM*sw;
-  N += f.D*(inp.DLtotal!==undefined?inp.DLtotal:inp.DL) + f.Di*pw.WiceMast;
+  // LPH3 (2026-11-07): the fixture weights are already in N (Wg above), so the mast term takes misc + pole self-weight only
+  // (inp.DLaxial, pole mode). Before: inp.DLtotal, which also held ΣW_fixtures, so the fixtures were counted twice.
+  N += f.D*(inp.DLaxial!==undefined?inp.DLaxial:(inp.DLtotal!==undefined?inp.DLtotal:inp.DL)) + f.Di*pw.WiceMast;
 
   const P=Math.hypot(Vx,Vy);                 // resultant base shear
   const M=Math.hypot(Mx,My);                 // resultant base moment
@@ -4864,6 +4866,7 @@ function lppCalcIbc(){
   // total service dead = misc + pole self-weight + sum of fixture weights
   const fixW=fixtures.reduce((s,x)=>s+x.W,0);
   inp.DLtotal=inp.DL+poleSeg.totalW+fixW;
+  inp.DLaxial=inp.DL+poleSeg.totalW;                 // LPH3 (2026-11-07): axial in evalComboDir (fixtures are added there one by one)
 
   // build components + evaluate every combination across four wind directions
   // When the catenary system is disabled, no cable components are built, so every
