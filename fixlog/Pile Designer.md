@@ -19889,3 +19889,26 @@ index 06a42e4..b58d4e3 100644
 - **How verified:** `computeAll` on 15 cases main vs branch (full R compared): only `R.comb` moved, and only where L_u > 0 (no stickup: P_r and D/C unchanged; H-pile cases identical). App and Report text main vs branch: only the Module 05 lines and the combined row change; Report 0 unresolved references, 0 duplicate keys, no NaN; autosaved inputs identical except `pdaRev` 3 → 4; old-project load note shown once; `check-syntax`: pass; `pile-library`: every library check passes, its two "page text identical" checks show the intended Module 05 text and `pdaRev`; 0 console errors.
 - **Other copies:** none.
 - **Open items:** `L_c` (1 ft) is kept as the soil-supported floor of P_r. Module 10 off: its column is still used here (H2 makes the column check itself automatic).
+
+## 2026-11-07 — PR: claude/pile-h2-buckling-auto (PDA-H2) — Module 10 column check runs automatically when the pile has a stickup or design scour   [calculation change]
+- **Problem (review H2):** Module 10 was off by default (`bucklingEnable: false`) while the default pile has a 3 ft stickup. While it was off, a known stickup or design scour was ignored for axial: H-pile P_n = P_o (`hasStickup = !!bkl.enable && Lu_bkl > 0`), and the micropile column check was skipped (`buck_pass = !enableBuckling || …`). Flexure already used L_b = L_u, so the tool did not agree with itself.
+- **Governing provision:** AASHTO LRFD 10th Ed. (2024) Art. 10.9.3.10.2 (micropiles: an unsupported length above ground, through scour or weak / liquefiable soil is to be considered in the axial compression resistance); Art. 10.7.3.13.4 (effective length = unsupported length + depth to fixity); Art. 6.9.4.1.
+- **Decision (pending engineer review):** automatic, not an NG "not checked" row. The check runs when stickup + design scour > 0 (not for integral abutments, which have their own scour path). The saved toggle `bucklingEnable` is kept as stored and still switches the check on without a stickup or scour (a void or soft layer entered as the added length). While automatic, the toggle shows on and says why; clicking it does nothing.
+- **Where:**
+  - New top-level `bklAutoOn(I)` / `bklOn(I)` before `function groupPmAutoOn(` (anchor `/* PDA-H2 (2026-11-07)`).
+  - `computeAll`: `const enableBuckling = I.bucklingEnable;` → `const enableBuckling = bklOn(I);`. `R.buckling.auto` added.
+  - p-y profile for the nonlinear ramp (anchor `const Lu_ft = bklOn(I)`): `I.bucklingEnable ?` → `bklOn(I) ?`, the same rule as `computeAll`.
+  - Display: the input panel "Buckling" (toggle `on: r.buckling.enable`, its sub-text, the K / added length / ramp-cap fields), Module 10 "inputs used", the printed "Buckling · unsupported length" inputs ("ON (automatic: unsupported length)"), and the Module 03 note. All went from `I.bucklingEnable` to `r.buckling.enable`.
+  - Load note (`mergeSavedInputs`, anchor `// PDA-H2 (2026-11-07): one-time note`): a project saved before this (pdaRev < 5) that has the toggle off and a stickup or scour gets a one-time note that its results change. `pdaRev` 4 → 5. No input is changed.
+- **Check case (review H2):** H-pile HP14×89, sand N1,60 20, toe 30 ft, STL 200 kip, M 60 kip-ft, stickup 10 ft, Module 10 off (Davisson weak axis, n_h 60, K_b 2.1).
+  - Hand: L_f = 7.30 ft, KL/r = 2.1(17.30)(12)/3.553 = 122.7. P_e = π²(29000)(25.83)/122.7² = 491 kip. P_o/P_e = 1291.5/491 = 2.63 > 2.25, so P_n = 0.877 P_e = 430.6 kip and φ_c P_n = 0.60(430.6) = 258.3 kip.
+  - Before: φ_c P_n = **774.9 kip** (P_o); interaction 200/904.05 + 60/557.0 = **0.329**.
+  - After: φ_c P_n = **258.3 kip**; P_r = 301.4 kip; interaction 200/301.4 + 60/557.0 = **0.771**. KL/r 122.7 > 120 is flagged in the H-pile slenderness note.
+  - Default micropile (3 ft stickup): the buckling row is added: φ_c P_n = 214.1 kip ≥ 86 kip, OK (D/C 0.40). No other value moves.
+- **Old projects:** a saved project with Module 10 off and a stickup or scour > 0 changes when it is opened. This is the fix. The one-time load note says so, and the stored toggle stays off.
+- **How verified:**
+  - `computeAll` main vs branch on 15 cases. Only cases with Module 10 off and L_u > 0 moved: `buckling.enable` and `stability.closedForm*`, plus the H-pile `hpileStruct` axial / combined fields in the H2 case. Cases with Module 10 already on, or without a stickup: only the new `auto` field.
+  - App and Report: the buckling row, the inputs table and section 10 were added (section numbers shift). 0 unresolved references, 0 duplicate keys, no NaN.
+  - The old H-pile project shows the note once.
+  - `check-syntax`: pass. `pile-library`: every library check passes; its two "page text identical" checks show the intended buckling text and `pdaRev`. 0 console errors.
+- **Other copies:** none.
