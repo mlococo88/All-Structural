@@ -6311,7 +6311,7 @@ index 50f3837..c2d5000 100644
   - The governing flexure (y, 0.687) is unchanged.
 - **Saved data:** none. **Other copies:** none.
 
-## 2026-11-07 — PR: claude/sf-left-breakpoint — Summary dashboard as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (SFLB; display only, no result change)
+## 2026-11-07 — PR: claude/sf-left-breakpoint (PR #988: https://github.com/mlococo88/All-Structural/pull/988) — Summary dashboard as a left column from 1200 px (was 1500 px); 240 px wide from 1200 to 1499 px (SFLB; display only, no result change)
 
 ### SFLB. The summary dashboard is on the left at common laptop widths   [display only]
 - **Decision (pending engineer review):** the engineer asked (2026-11-07, for the Retaining Wall Designer) for "the summary cards … on the left panel", most likely at a laptop width below 1500 px, where SFDC (#737) put the dashboard above the output tabs. The left column now starts at **1200 px** in Spread Footing, Retaining Wall Designer (RWLB, #984) and Light Pole and Sign Post alike. From 1200 to 1499 px it is **240 px** wide; at 1500 px and wider 280 px as before (layout and panel widths unchanged there). Below 1200 px nothing changes (dashboard above the output tabs; phone stacking, SFPH). Same collapse button (« / » → 42 px strip) and key `sfd_dashCollapsed_v1`.
