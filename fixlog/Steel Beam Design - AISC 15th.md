@@ -2547,7 +2547,7 @@ function sectionFor(fam,label,gradeId){
 - **What:** `openP()` clicks the chip (Project tab) and then the card's Saved projects… (`#sbSaveCard [data-sp=lib]`). Nothing else changed.
 - **How verified:** `node tests/smoke/steel-beam-builtup.mjs`: 11 checks passed. **Saved data / formulas:** none (test file only).
 
-## 2026-11-07 — PR: claude/steelbeam-h1-j10-sum — J10 demand at a point load is the total factored force at that location (H1; calculation change)
+## 2026-11-07 — PR: claude/steelbeam-h1-j10-sum (PR #1006: https://github.com/mlococo88/All-Structural/pull/1006) — J10 demand at a point load is the total factored force at that location (H1; calculation change)
 
 From the code-compliance review of 2026-11-07 (finding H1). Engineer-approved overnight job, merge-as-you-go.
 
