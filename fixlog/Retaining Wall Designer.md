@@ -2449,7 +2449,7 @@ function renderStatus(r) {
 - **Other copies:** none.
 - **Library:** MathJax 3.2.2 is no longer loaded by this tool (other tools still use it; `tests/libs` unchanged).
 
-## 2026-11-07 — PR: claude/rw-aci-uplift-note — ACI footing design: note that the factored base pressure includes the water uplift (RWUPN; display only, no calculation change)
+## 2026-11-07 — PR: claude/rw-aci-uplift-note — ACI footing design: note that the factored base pressure includes the water uplift (RWUPN; display only, no calculation change) (PR #942: https://github.com/mlococo88/All-Structural/pull/942)
 
 Calculation audit, item 1. Engineer decision (2026-11-07): no calculation change; a one-line note on the Footing design tab and in the Report. Code site tagged `RWUPN`.
 
