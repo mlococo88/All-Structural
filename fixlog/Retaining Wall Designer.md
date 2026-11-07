@@ -3298,7 +3298,7 @@ Calculation audit, item 8. Engineer decision (2026-11-07). Code sites are tagged
 ### Saved data
 - `ovr_bar_s4` / `ovr_spc_s4` are additive and saved only when not 0 (`RWLS_DEF`). Old saves and default projects are unchanged.
 
-## 2026-11-07 — PR: claude/rw-shear-key — Shear key: structural design (ACI plain concrete first, else reinforced K1; AASHTO reinforced), key width input b_k; "no sliding credit" note when passive is off (RWSK; calculation change: new checks)
+## 2026-11-07 — PR: claude/rw-shear-key — Shear key: structural design (ACI plain concrete first, else reinforced K1; AASHTO reinforced), key width input b_k; "no sliding credit" note when passive is off (RWSK; calculation change: new checks) (PR #951: https://github.com/mlococo88/All-Structural/pull/951)
 
 Calculation audit, item 6 (a) and (b). Engineer decision (2026-11-07). Code sites are tagged `RWSK`. Walls without a key are unchanged.
 
