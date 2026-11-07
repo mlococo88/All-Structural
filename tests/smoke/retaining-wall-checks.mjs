@@ -282,6 +282,11 @@ const AUD = [
     ['/Earthquake included/.test(T.stability) && /static case \\(governs\\)/.test(T.stability)', 'Stability Step 6'], ['/static case \\(governs/.test(P)', 'Report Step 6'],
     ['/all \\d+ passed/.test(document.getElementById("rwSelf").innerText)', 'self-consistency panel passes']]],
   ['RW2H1 ACI without seismic: one case, unchanged', {}, [['R.brgAlt === null && Math.abs(R.q_max - 1466.0) < 0.5 && !/Earthquake included/.test(T.stability)', 'unchanged']]],
+  ['RW2H2 ACI variant β 15°, q_s 250, water, key, k_h 0.20: ΔP_E on H′ = 15.778 ft: 2880 → 3934 lb/ft; FS_OT,E 2.005 → 1.722, FS_SL,E 0.654 → 0.609; stem unchanged', { beta: 15, q_sur: 250, wt_depth: 6, use_shear_key: true, dk: 18, incl_passive: true, kh: 0.2 }, [
+    ['Math.abs(R.Pae - 9937.3) < 0.5 && Math.abs(R.Pe_inc - 3934.2) < 0.5 && Math.abs(R.Mo_seis - 37243.4) < 1 && Math.abs(R.FOS_OT_E - 1.7219) < 0.0005 && Math.abs(R.FOS_SL_E - 0.6091) < 0.0005', 'ΔP_E, M_o,E, FS'],
+    ['Math.abs(R.Mu_stem_eq - 50218.2) < 1', 'stem seismic M_u unchanged (ΔP_E,s = ΔP_E(H_s/H′)²)'],
+    ['/0\\.6H′/.test(T.stability) && /P_AE − P_a,MO|P_\\{AE\\} \\\\minus P_\\{a,MO\\}|PAE−Pa,MO/.test(P + T.stability)', 'Stability and Report at H′']]],
+  ['RW2H2 ACI k_h 0.10 level backfill unchanged', { kh: 0.1 }, [['Math.abs(R.Pe_inc - 691.33) < 0.05 && Math.abs(R.FOS_OT_E - 6.0856) < 0.0005', 'unchanged']]],
   ['RWEC AASHTO unchanged by the ACI select', { design_basis: 'AASHTO', aci_ecc_limit: 'b6' }, [['R.ecc_lim_aci === null && /e=1\\.43/.test(R.checks.ecc.val)', 'AASHTO e check as before']]],
 ];
 for (const [name, set, tests, opt] of AUD.filter(x => !process.env.RW_AUD || x[0].startsWith(process.env.RW_AUD))) {

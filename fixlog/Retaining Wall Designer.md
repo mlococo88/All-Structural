@@ -5696,3 +5696,60 @@ After:
 
 ### Saved data
 - No input or format change.
+
+## 2026-11-07 — PR: claude/rw2-h2-aci-dpe-hprime — Mononobe-Okabe P_AE and ΔP_E on the pressure-plane height H′ (sloped backfill), applied at 0.6H′, as the static thrust and AASHTO Extreme Event I (RW2H2; calculation change, k_h > 0 with β > 0 only)
+
+Second-pass review finding H2 (2026-11-07). Code sites are tagged `RW2H2`.
+
+### RW2H2-1. Problem
+- `Pae = ½K_AEγH²(1 − k_v)`, `Pe_inc = Pae − ½K_A,MOγH²` and `Mo_seis = Pe_inc·0.6H` used the wall height H.
+- The static thrust (`Pa_tri`) and the AASHTO Extreme Event I `P_AE` act on the vertical plane through the heel end, H′ = H + (L_h + t_bot − t_top)·tanβ.
+- With a sloped backfill, ΔP_E was understated by (H′/H)². This was unconservative for FS_OT,E, FS_SL,E, the bearing and e (1.0E case), the ACI footing design with 1.0E, and the ACI pile combinations s2 / s4.
+- The tabs also labelled the subtracted static force "P_a" and showed the Rankine/Coulomb thrust `Pa_tri`, which is not the value the code subtracts (the M-O expression at θ = 0).
+
+### RW2H2-2. Fix (`calcAll`, seismic block)
+Before:
+```js
+    Pae    = 0.5 * KaeMO * inp.gamma_s * H * H * (1 - kv);
+    Pe_inc = Math.max(0, Pae - 0.5 * Ka_static_MO * inp.gamma_s * H * H);
+    Mo_seis = Pe_inc * (0.6 * H);
+```
+After:
+```js
+    const Hq = H + (inp.beta > 0 ? (inp.Lh + ts_bot_ft - ts_top_ft) * Math.tan(beta_r) : 0);   // = Hp
+    Pae    = 0.5 * KaeMO * inp.gamma_s * Hq * Hq * (1 - kv);
+    Pa_MO  = 0.5 * Ka_static_MO * inp.gamma_s * Hq * Hq;
+    Pe_inc = Math.max(0, Pae - Pa_MO);
+    Mo_seis = Pe_inc * (0.6 * Hq);
+```
+- Stem: `stemSeis` scales ΔP_E by (z/H′)², was (z/H)². The stem value is unchanged: ½(K_AE − K_A,MO)γz² either way.
+- New result `Pa_MO`.
+- Display (H′ is shown only for β > 0):
+  - Stability tab: the Earth-pressure step "ΔP_E = P_AE − ½K_A,MO γH′²", M_o,E at 0.6H′, and the M-O detail: P_AE worked with H′, ΔP_E = P_AE − P_a,MO.
+  - Stem seismic step: (H_s/H′)².
+  - Report: the same steps.
+  - Drawings: the ΔP_E arrow and the moment table at 0.6H′.
+
+### Check case (review variant, ACI: β 15°, q_s 250, water 6 ft, key 18 in, passive, k_h 0.20)
+- H′ = 13.5 + 8.5 tan 15° = **15.778 ft**; K_AE = 0.66533; K_A,MO = 0.40192.
+- P_AE = ½(0.66533)(120)(15.778²) = **9937 lb/ft** (was 7275 on H).
+- P_a,MO = ½(0.40192)(120)(15.778²) = 6003.
+- ΔP_E = **3934 lb/ft** (was 2880).
+- M_o,E = 3934(0.6)(15.778) = **37243** (was 23331).
+- FS_OT,E = 118865/(42962 + 0.7·37243) = **1.722** (was 2.005; ≥ 1.1 OK).
+- FS_SL,E = **0.609** (was 0.654; FAIL as before).
+- Seismic stem M_u 50218 is unchanged.
+- Consequences, same wall:
+  - bearing q_max 2344 → 2942 psf and e 1.81 → 2.70 ft: the eccentricity check B/6 now FAILS;
+  - ACI footing design with 1.0E: heel M_u 46177 → 55673 (#6 @ 7 → #7 @ 8).
+- ACI pile variant: s2 / s4 move; P_max 77.7 → 85.1 kip and P_min −17.1 → −24.6 kip.
+- AASHTO mode: no check moves. Only the informational service reference q and the unused ACI FS fields change; Extreme Event I already used H′.
+- Level backfill (β = 0): H′ = H, identical.
+
+### How verified
+- Headless probe, H1 branch vs this branch, 26 walls. Only walls with k_h > 0 and β > 0 move, as above. 0 console errors.
+- Self-consistency passes on the variant and on k_h 0.10; 0 KaTeX errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (new `AUD` rows RW2H2); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs, pile-group.
+
+### Saved data
+- No input or format change. ACI pile walls with β > 0 and k_h > 0 send larger s2 / s4 loads in the Pile Designer hand-off (foundationLoads). The Pile Designer then shows a stale flag, as for any changed load.
