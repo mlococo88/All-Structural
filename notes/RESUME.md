@@ -188,3 +188,10 @@ Plan: rotating in-depth code-compliance reviews (read-only) → fix PRs for clea
 - Reviews done: section-property (H1 channel/S flange slope I_y +15–34%), moving-load (H1 axle-on-section, +M up to 0.8% low). Fix agents dispatched for both.
 - Running: fixes SF, LP, Steel Beam, Gusset, ASCE7, Stone Arch, Section Property, Moving Load; review Elastomeric.
 - Next reviews: Substructure Loading, Shear & Moment, Bridge Geometry. Then RW User Manual (Phase 6).
+
+## Check-in 2026-11-07 10:09 UTC (5:09 AM ET)
+- All first-round reviews done. Fix sets DONE: CBC, Gusset (+docs #1071), LP, Steel Beam, SF (+scroll test #1099), ASCE7 (M6 backlog left: needs readable ASCE 7-16 PDF), Stone Arch (#1064–#1124), Section Property (#1070–#1111), Elastomeric (#1077–#1097, +abutment Gmult #1113), Shear & Moment (#1082–#1120), Substructure Loading (#1093–#1127).
+- Running: Moving Load fixes, Bridge Geometry fixes, shared report plain-text TeX cleanup, S&M left summary panel (engineer request 10:0x UTC), abutment Zone 1 connection-force check, RW 2nd-pass review.
+- Asked engineer: left summary panel in the other apps too?
+- Note: scratchpad TMPDIR too long for Chromium sockets — agents use default /tmp/allstruct-tests (never delete it while agents run).
+- Then: RW User Manual (Phase 6) last.
