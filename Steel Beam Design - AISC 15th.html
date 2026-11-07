@@ -2213,7 +2213,18 @@ function designAll(A){
       else{C.phiTn=D.tors.phiTn/12;C.dcrT=Math.abs(man.Tu)/C.phiTn;C.torsNeglect=C.dcrT<=0.20;}
     }
     /* interaction */
-    const rx=C.flexGov?C.flexGov.dcr:0;
+    let rx=C.flexGov?C.flexGov.dcr:0;
+    /* M4 (2026-11-07): beam mode with axial compression: the analysis moment is first-order, so M_ux is amplified for
+       P-delta by B1 = C_m/(1 - alpha P_r/P_e1) >= 1 (AISC 360-16 Sec. C1, Appendix 8 Eq. A-8-3, alpha = 1.0 LRFD;
+       C_m = 1.0 for transverse loading, Sec. 8.2.1(b); P_e1 = pi^2 EI_star / L_c1^2, Eq. A-8-5, EI_star = EI (effective length
+       method), L_c1 = the compression L_cx). Before: H1 used the first-order M_ux. M_uy is entered by the user (second-order). */
+    if(man.Pu>0&&C.phiPn>0&&D.Lcx>0&&p.Ix>0){
+      const Pe1=Math.PI*Math.PI*EKSI*p.Ix/(D.Lcx*D.Lcx),Cm=1.0,den=1-1.0*man.Pu/Pe1;
+      const B1=den>0?Math.max(1,Cm/den):Infinity;
+      C.B1={B1,Pe1,Cm,Lc1:D.Lcx,Pr:man.Pu,rx0:rx,Ix:p.Ix};
+      rx=rx*B1;
+      if(!isFinite(B1))D.warns.push('P\u1D64 = '+fmt(man.Pu,1)+' kip in '+C.name+' is at or above P\u2091\u2081 = '+fmt(Pe1,1)+' kip (Appendix 8, Eq. A-8-5): B\u2081 is unbounded, the member is unstable in the plane of bending.');
+    }
     const ry=C.dcrMy||0,rp=C.dcrP||C.dcrPt||0;
     if(C.dcrT!=null&&!C.torsNeglect){
       const vr=(C.dcrVx||0)+(C.dcrVy||0);
@@ -5513,8 +5524,15 @@ function buildInterTab(pg){
     if(C.torsBlocked)body.appendChild(el('div','errBox','Torsion: '+C.torsBlocked));
     const tm=C.inter.terms,lines=[];
     if(tm.P)lines.push('\\tfrac{P_r}{P_c}=\\tfrac{'+fmt(Math.abs(C.man.Pu),1)+'}{'+fmt(C.phiPn||C.phiPt||0,0)+'}='+fmt(tm.P,3)+(C.dcrPt!=null?'\\ \\text{(tension, \u00A7H1.2)}':''));
-    lines.push('\\tfrac{M_{rx}}{M_{cx}}='+fmt(tm.Mx,3)+'\\ \\text{(governing flexure DCR)}');
+    if(C.B1)lines.push('\\tfrac{M_{rx}}{M_{cx}}=B_1\\times'+fmt(C.B1.rx0,3)+'='+fmt(C.B1.B1,3)+'\\times'+fmt(C.B1.rx0,3)+'='+fmt(tm.Mx,3)+'\\ \\text{(governing flexure DCR}\\times B_1)');
+    else lines.push('\\tfrac{M_{rx}}{M_{cx}}='+fmt(tm.Mx,3)+'\\ \\text{(governing flexure DCR)}');
     if(tm.My)lines.push('\\tfrac{M_{ry}}{M_{cy}}=\\tfrac{'+fmt(Math.abs(C.man.Muy),1)+'}{'+fmt(C.phiMny||0,1)+'}='+fmt(tm.My,3));
+    /* M4: worked B1 */
+    if(C.B1){const b=C.B1;body.appendChild(eqBlock({title:'Second-order amplification of M\u1D64\u2093 (P-\u03B4)',ref:'\u00A7C1, App. 8 Eq. A-8-3, A-8-5',
+      lines:['P_{e1}=\\tfrac{\\pi^2EI_x}{L_{c1}^2}=\\tfrac{\\pi^2\\times 29000\\times '+fmt(b.Ix,1)+'}{'+fmt(b.Lc1,1)+'^2}='+fmt(b.Pe1,1)+'\\ \\text{kip}',
+        'B_1=\\tfrac{C_m}{1-\\alpha P_r/P_{e1}}=\\tfrac{'+fmt(b.Cm,2)+'}{1-1.0\\times '+fmt(b.Pr,1)+'/'+fmt(b.Pe1,1)+'}='+(isFinite(b.B1)?'\\mathbf{'+fmt(b.B1,4)+'}\\ \\ge 1':'\\infty\\ (P_r\\ge P_{e1})')],
+      vars:[['C_m','1.0','transverse loading between supports (App. 8 \u00A78.2.1(b), conservative)'],['\\alpha','1.0','LRFD'],
+        ['EI^*','EI','effective length method'],['L_{c1}',fmt(b.Lc1/12,2)+' ft','the compression effective length L\u1D9C\u2093 (Design Parameters)']]}));}
     body.appendChild(eqBlock({title:'Component ratios',ref:'Ch. H',lines:[lines.join(',\\quad ')]}));
     {const cn=(isMember()?'Case ':'Combination ')+C.name,w=[];   /* D11 links: where each ratio is worked */
       if(tm.P)w.push(C.dcrPt!=null?['tabComp','tnCap','Axial Tension (Chapter D)','P\u1D9C = \u03C6\u209CP\u2099']:['tabComp','cpCap','Compressive Strength','P\u1D9C = \u03C6P\u2099']);
