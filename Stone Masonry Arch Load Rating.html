@@ -1639,9 +1639,12 @@ function railSpread(p,H){
 
    Integrating the overlap fixes both. The sum telescopes to the footprint
    length exactly, so the load is conserved; and the station question becomes
-   worth a fraction of a percent instead of a quarter of a node's live load. At
-   the code minimum of 10 to 12 elements it lands about 1.3% from the converged
-   rating where the sampled form was about 5% away with an arbitrary sign.
+   worth a fraction of a percent instead of a quarter of a node's live load.
+   (MCV, 2026-11-07: an earlier note here said the code minimum then lands about
+   1.3% from the converged rating. That held for the live-load station question
+   only; the chord discretisation of the dead load moves the default rating by
+   about 30% between 10 and 40 elements, which is why every rating is now run at
+   three meshes and the lowest is reported. See render() / archConvRun.)
 
    Note this is what the 6.4.1 concentrated branch was already doing through
    addConc, which interpolates a strip load between the two bracketing nodes.
@@ -3014,9 +3017,14 @@ numbers.</p>
 
 <h4>1.3.6 Element count and convergence</h4>
 <p>§7.2.7.2B sets a minimum of 10 elements or one per 4 ft of clear span. Convergence testing on a 40 ft span
-found the springline moment at that minimum to be about 5% below the converged value — that is, the code minimum
-is slightly <i>unconservative</i> for the springline. The program defaults to the code minimum for compliance
-and flags it; refine to two to four times the minimum for production ratings.</p>
+found the springline moment at that minimum is not reliably close to the converged value, and the error can go either
+way: on the default 40 ft circular arch the springline dead-load moment at 10 elements is about 27% larger than
+converged (the rating is conservative there, by about 30%), while on a shallow 30 ft arch the HS20 rating at the
+minimum is about 15% too high, and on a 40 ft semicircle the minimum mesh rates 0.26 where the refined model is overstressed
+by dead load alone. The straight chords carry the transverse fill load as beams, which a curved ring does not. The
+program therefore rates every vehicle at the count in use and at about two and four times it (multiples of 4, capped
+at 120) and reports the <i>lowest</i> rating factor of the three (Rating tab, "Mesh convergence"; the dashboard
+gives the spread).</p>
 
 <h4>1.3.6a Modeling deterioration</h4>
 <p>Deterioration is entered by <b>station</b>: <span class="mono">x 5.56, depth, f<sub>a</sub>, treatment</span>
@@ -3499,8 +3507,8 @@ monotonically at approximately second order:</p>
 <tr><td class="s">40</td><td>−1.36654</td><td>−2.38245</td><td>0.90236</td></tr>
 <tr><td class="s">80</td><td>−1.37009</td><td>−2.38589</td><td>0.90237</td></tr>
 </tbody></table>
-<p>This is the source of the caution in Part 1.3.6: at the code minimum element count the springline moment is
-about 5% below converged, in the unconservative direction.</p>
+<p>On this load case the springline moment at the code minimum is about 5% below converged. Part 1.3.6 explains why
+that figure does not carry over to other geometries or load cases, and why the program rates at three meshes.</p>
 
 <h4>7.1.5 Closed-form stress checks</h4>
 <p>The stress equations were verified against hand values at e = 0 (f = P/A), at e = d/6 (f = 2P/A, the kern
@@ -6870,9 +6878,26 @@ function validate(p,M,results){
        not. The study is not run automatically: it is three extra position
        sweeps, which is free at 12 elements and slow at 120, and it has no place
        on the critical path of every report build. */
-    const CV=(typeof MESHCONV!=="undefined")?MESHCONV.resultFor(M):null;
+    const CV=null;   /* MCV (H-1): the manual study is replaced by the automatic one (archConv, below) */
+    const AC=(M.conv&&M.conv.rows&&M.conv.gN===M.nEl)?M.conv:null;   /* set by archConvRun (render scope) */
     const mult=nfx(M.nEl/specMin,1);
-    if(CV){
+    if(AC&&AC.rows.length){
+      const gr=AC.rows.find(q=>q.id===AC.govId)||AC.rows[0];
+      const moved=AC.rows.filter(q=>q.lo<q.rf[0]-5e-4);
+      const conv=(AC.spread<=3);
+      add(AC.n1<specMin?"bad":(conv?"ok":"wn"),"Element count — convergence",
+        `Rated at ${AC.meshes.join(", ")} elements (§7.2.7.2B minimum ${specMin}; ${AC.n1} in use as n<sub>1</sub>). `+
+        `Controlling vehicle <b>${esc(gr.name)}</b>: RF = ${gr.rf.map(x=>nfx(x,3)).join(", ")}, a spread of `+
+        `<b>${nfx(AC.spread,1)}%</b> of the highest. `+
+        (conv?`Within 3%: the rating has settled on these meshes. `
+             :`More than 3%: the element count still moves the answer, so the LOWEST of the three is reported. `)+
+        (moved.length?`${moved.length} vehicle${moved.length>1?"s rate":" rates"} lower on a finer mesh than at n<sub>1</sub> `+
+          `and ${moved.length>1?"are":"is"} reported from it (${moved.map(q=>esc(q.name)).join(", ")}). `
+          :`Every vehicle rates lowest at n<sub>1</sub>, so the reported ratings are the n<sub>1</sub> ratings. `)+
+        `The worked steps use the ${M.nEl}-element mesh.`+
+        archWorkedIn([{tab:"rate",card:"rate_mcv",txt:"spread "+nfx(AC.spread,1)+"%",lab:"Rating · Mesh convergence"}]),
+        "§7.2.7.2B");
+    }else if(CV){
       const drift=Math.abs(CV.rf4-CV.rf1)/Math.max(CV.rf1,1e-9)*100;
       const last=Math.abs(CV.rf4-CV.rf2)/Math.max(CV.rf2,1e-9)*100;
       add(drift>3?"wn":"ok","Element count — mesh study run",
@@ -7590,9 +7615,9 @@ function geometrySection(p,M){
     note:(M.nEl>specMin
       ?`${nfx(M.nEl/specMin,1)}× the code minimum. `
       :`At the code minimum. `)+
-      "The minimum is a compliance floor, not evidence of convergence — whether this count has settled is "+
-      "answered by the mesh convergence study on the Verification tab, and the dashboard reports whether "+
-      "that study has been run for this model."});
+      "The minimum is a compliance floor, not evidence of convergence. Every vehicle is also rated at about "+
+      "two and four times the count in use and the lowest rating is reported; the worked steps use the mesh "+
+      "on which the controlling vehicle rates lowest (Rating tab, Mesh convergence)."});
 
   const axSpan=Math.abs(M.g.nodes[M.nN-1].x-M.g.nodes[0].x);
   if(Math.abs(axSpan-M.g.span)/Math.max(M.g.span,1e-9)>0.03)
@@ -11011,6 +11036,9 @@ function buildOutput(p){
        <b>${esc(worst.tag)}</b> at RF ${nfx(worst.rf,3)}.</div>`,
       "§7.2.7.9B / 10B");
   }
+  if(archConv&&archConv.rows&&archConv.rows.length)
+    s+=UI.pnl("rate_mcv",c5(),"Mesh convergence — every vehicle rated at "+archConv.meshes.join(", ")+" elements",
+      archConvTable(),"§7.2.7.2B");
   const govId=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b).id:null;
   {
     const atSec=(rateBasis==="sec");
@@ -11029,6 +11057,11 @@ function buildOutput(p){
       const off=(atSec&&rr.sec!==r.sec);
       s+=UI.pnl("veh_"+r.id,c5(),
         esc(v.name)+(r.id===govId?" &mdash; GOVERNS":""),
+        (r.nElR?msg("warn","This vehicle's reported rating is from the "+r.nElR+"-element mesh",
+          `It rates lowest on the ${r.nElR}-element mesh: RF = <b>${nfx(r.rf,3)}</b> at ${esc(CALC.secTag(r.Mo,r.secOwn))} `+
+          `of that mesh (x = ${nfx(r.Mo.g.nodes[r.secOwn].x,2)} ft). The steps below are worked on the ${M.nEl}-element mesh `+
+          `used on every tab, where it rates ${nfx(((archConv.rows.find(q=>q.id===r.id)||{rf:[]}).rf[archConv.meshes.indexOf(M.nEl)]),3)}; `+
+          `the reported value is the lower one (Mesh convergence table above).`):"")+
         CALC.vehicleSection(p,M,v,rr,{atSec:off,gov:r}),
         off
           ? `RF at ${esc(CALC.secTag(M,rr.sec))} = ${nfx(rr.rf,3)} &nbsp;
@@ -11182,15 +11215,10 @@ function verifyPane(p){
     `<p>§7.2.7.2B fixes the element count by span — ten elements, or one per four feet of clear span,
      whichever gives more. That is a compliance floor, not evidence that the answer has settled: it takes no
      account of the rise-to-span ratio, the ring depth, or where the deterioration is. This runs the rating
-     again at twice and four times the element count in use and reports how far it moves.</p>
-     <p>It is not run automatically. Each refinement is a full position sweep in both directions, which is
-     immediate at the code minimum and slow past about eighty elements, and it has no business on the
-     critical path of every report build. The result is kept with the model and is what the dashboard and the
-     printed report cite; change the geometry, the loading or the deterioration and it is discarded rather
-     than reported against a model it no longer describes.</p>`+
-    `<div class="btnrow noprint"><button class="pri" id="bMeshRun">Run the study</button>${
-      MESHCONV.resultFor(M)?`<button id="bMeshClr">Discard</button>`:""}</div>`+
-    `<div id="meshOut">${MESHCONV.block(M)}</div>`,"§7.2.7.2B");
+     again at about twice and four times the element count in use and reports how far it moves.</p>
+     <p>It runs automatically on every change of input (MCV, 2026-11-07): every vehicle is rated on all three
+     meshes and the lowest rating factor is the one reported. The same table is on the Rating tab.</p>`+
+    `<div id="meshOut">${archConvTable()}</div>`,"§7.2.7.2B");
 
   s+=UI.pnl("v_imp",c(),"Paste Midas Beam Force Results",
     `<textarea id="impText" rows="7" class="noprint" placeholder="Paste the Midas beam force table here, including the column headings (Elem, Load, Part, Axial, Shear-z, Moment-y).">${esc(impText)}</textarea>
@@ -11497,6 +11525,76 @@ function rsMargin(p,R){
   return h;
 }
 function readPSafe(){try{return readP();}catch(e){return M?M.p:null;}}
+/* MCV (H-1, 2026-11-07): automatic mesh convergence. §7.2.7.2B sets a MINIMUM element count; on some geometries the
+   rating at that minimum is unconservative (a shallow 30 ft arch rates about 13% high, a 40 ft semicircle rates 0.26
+   where the refined model is overstressed by dead load alone). So every vehicle is rated at the count in use n1 and at
+   about 2x and 4x it (rounded up to a multiple of 4, capped at 120), and the LOWEST of the three rating factors is
+   reported for each vehicle. The model shown on every tab (M) is the mesh on which the controlling vehicle rates
+   lowest; a vehicle whose lowest rating is on another mesh keeps that mesh's result object (r.nElR, r.Mo) with its
+   section mapped by arc length onto M (the meshes are equal arc length, so the mapping is exact when the counts nest).
+   Cached on the full input set, so tab changes do not re-run it. */
+let archConv=null;
+function archConvMeshes(n1){
+  const up4=n=>Math.min(120,Math.ceil(n/4)*4);
+  return [...new Set([n1,up4(2*n1),up4(4*n1)])];
+}
+function archConvRun(p){
+  const vs=ARCH.vehiclesFor(p.loadMode).filter(v=>p.vehicles.includes(v.id));
+  const n1=M.nEl, key=JSON.stringify(p);
+  if(!(archConv&&archConv.key===key)){
+    const t0=Date.now(), meshes=archConvMeshes(n1), models={}, res={};
+    models[n1]=M; res[n1]=results;
+    for(const n of meshes){
+      if(n===n1)continue;
+      const Mo=ARCH.buildModel(Object.assign({},p,{nEl:n}));
+      models[n]=Mo;
+      res[n]=vs.map(v=>{const r=ARCH.rateVehicle(Mo,v,p.fa,p.impMode);r.id=v.id;return r;});
+    }
+    archConv={key,n1,meshes,models,res,ms:Date.now()-t0};
+  }
+  const C=archConv;
+  const rfOf=(n,id)=>{const r=C.res[n].find(q=>q.id===id);return r?r.rf:Infinity;};
+  /* governing mesh: the one with the lowest controlling rating (the base mesh on a tie) */
+  let gN=C.meshes[0], gRF=Infinity;
+  for(const n of C.meshes){const lo=Math.min(...vs.map(v=>rfOf(n,v.id)));if(lo<gRF-1e-12){gRF=lo;gN=n;}}
+  C.gN=gN;
+  M=C.models[gN];
+  results=vs.map(v=>{
+    let kN=gN;
+    for(const n of C.meshes)if(rfOf(n,v.id)<rfOf(kN,v.id)-1e-12)kN=n;
+    const r0=C.res[kN].find(q=>q.id===v.id);
+    if(kN===gN)return r0;
+    const r=Object.assign({},r0);
+    r.secOwn=r0.sec; r.sec=Math.round(r0.sec*gN/kN); r.nElR=kN; r.Mo=C.models[kN];
+    return r;
+  });
+  C.rows=vs.map(v=>({id:v.id,name:v.name,rf:C.meshes.map(n=>rfOf(n,v.id)),
+    lo:Math.min(...C.meshes.map(n=>rfOf(n,v.id)))}));
+  const gv=results.length?results.reduce((a,b)=>a.rf<b.rf?a:b):null;
+  C.govId=gv?gv.id:null;
+  const gr=gv?C.rows.find(q=>q.id===gv.id):null;
+  C.spread=gr?100*(Math.max(...gr.rf)-Math.min(...gr.rf))/Math.max(Math.max(...gr.rf),1e-9):0;   /* % of the highest of the three */
+  /* CALC.validate reads it from the model (it cannot see this scope); not enumerable, so it stays out of exports */
+  Object.defineProperty(M,"conv",{value:C,writable:true,configurable:true,enumerable:false});
+  return C;
+}
+/* the convergence table (Rating tab, Verification tab and Report) */
+function archConvTable(){
+  const C=archConv; if(!C||!C.rows)return "";
+  const cols=[{k:"tag",h:"Vehicle",txt:1}].concat(C.meshes.map((n,i)=>({k:"m"+i,h:"RF, "+n+" elements"+(n===C.n1?" (n<sub>1</sub>)":""),dp:3})),
+    [{k:"lo",h:"Reported (lowest)",dp:3},{k:"on",h:"on mesh",txt:1}]);
+  const rows=C.rows.map(r=>{const o={tag:esc(r.name)+(r.id===C.govId?" (controls)":""),lo:r.lo,
+      on:String(C.meshes[r.rf.indexOf(r.lo)])+" el"};
+    r.rf.forEach((x,i)=>o["m"+i]=x);return o;});
+  return dtab(cols,rows,{})+
+    `<div class="note">Each column is a complete rating: the model is rebuilt at that element count (equal arc length,
+     nodes at the ring mid-depth) and every vehicle is swept in both directions at the same 0.25 ft step. §7.2.7.2B
+     sets ${C.n1} elements as the minimum for this span (or the count entered, if larger); finer meshes are compliant.
+     The lowest rating factor of the three is reported for each vehicle, so the reported rating is never above what
+     any of the three meshes gives. The worked steps on every tab use the ${C.gN}-element mesh, on which the
+     controlling vehicle rates lowest. Spread for the controlling vehicle: <b>${nfx(C.spread,1)}%</b> of its highest rating
+     (rated in ${nfx(C.ms/1000,1)} s).</div>`;
+}
 /* ---------------- render ---------------- */
 const TABS=[["sum","Summary"],["geo","Model"],["dl","Dead Load"],["ll","Live Load"],
             ["veh","Vehicles"],["lat","Earth Pressure"],["diag","Diagrams"],["il","Influence Lines"],["rate","Rating"],["rsum","Rating Summary"],["nodes","Nodal Results"],
@@ -11527,6 +11625,7 @@ function render(){
     const r=ARCH.rateVehicle(M,v,p.fa,p.impMode);
     r.id=v.id; results.push(r);
   }
+  archConvRun(p);   /* MCV (H-1): rate at n1, 2n1, 4n1; lowest RF per vehicle; M may become a finer mesh */
   window.__impCmp=impCmp;
   /* The editor's "Resolves to" column depends on the model that was just built,
      so it is refreshed here rather than left showing whatever was true when the
@@ -12028,7 +12127,7 @@ function postRender(p){
   }
   if($("rsRF"))$("rsRF").onclick=()=>{rsBasis="rf";render();autosave();};
   if($("rsTN"))$("rsTN").onclick=()=>{rsBasis="tons";render();autosave();};
-  if($("bMeshRun")){
+  if($("bMeshRun")){   /* MCV: the button is gone (automatic study); kept inert for old markup */
     $("bMeshRun").onclick=()=>{
       const b=$("bMeshRun"); b.disabled=true; b.textContent="Running…";
       /* Yield once so the button repaints before three position sweeps block
