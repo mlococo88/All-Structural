@@ -5128,7 +5128,7 @@ Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2
 - **Saved data:** one new additive field `skin` (old saves read with the default "none"; no key change).
 - **Open items:** the skin bars are not drawn in the section figure or the DXF sheets.
 
-## 2026-11-07 — PR: claude/cbc-low-items (CBL: review LOW items — L1 AASHTO γ_3 list per 5.6.3.3, L2 AASHTO-mode citations and ACI-only notes, L3 9.7.6.2.2 disclosure (reading kept), L4 h ≤ 10 in A_v,min exemption only where V_u ≤ φV_c, L6 AASHTO cover preset labels, L7 AASHTO w_c per Table 3.5.1-1; CALCULATION CHANGES in L4 (ACI, more conservative) and L7 (AASHTO f′c > 5 ksi, computed f_ss); L1 adds a γ_3 value)
+## 2026-11-07 — PR: claude/cbc-low-items, PR #1005: https://github.com/mlococo88/All-Structural/pull/1005 (CBL: review LOW items — L1 AASHTO γ_3 list per 5.6.3.3, L2 AASHTO-mode citations and ACI-only notes, L3 9.7.6.2.2 disclosure (reading kept), L4 h ≤ 10 in A_v,min exemption only where V_u ≤ φV_c, L6 AASHTO cover preset labels, L7 AASHTO w_c per Table 3.5.1-1; CALCULATION CHANGES in L4 (ACI, more conservative) and L7 (AASHTO f′c > 5 ksi, computed f_ss); L1 adds a γ_3 value)
 
 Frame: Beam Capacity (`suite-frame-capacity`). Found in the in-depth review of 2026-11-07 (items L1–L7). L5 (C4, l_st from l_d after its 12 in floor) is left as is (conservative), as the brief says.
 
