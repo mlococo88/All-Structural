@@ -6221,6 +6221,43 @@ Follow-up A2 of the second-pass fix round. Code sites are tagged `RWTE`.
 
 ### Saved data
 - No input or format change. A saved pile project with embedment + clear < t_f ≤ embedment + clear + 2 in now opens with the input error, and its inputs are kept.
+## 2026-11-07 — PR: claude/rw-pile-tab — Piles output tab (pile-supported footing only): the pile cards move from the Stability tab, with a layout card, a pile-checks card and the Pile Designer hand-off card; links, chips and the Report follow (RWPT; display only) (PR #1148: https://github.com/mlococo88/All-Structural/pull/1148)
+
+Engineer request (2026-11-07): "there is no output tab for the piles". Code sites are tagged `RWPT`. **Display and organisation only: no computed result changes** (§4), no saved field or key changes (§5).
+
+### Tab
+- New tab button `data-tab="piles"` ("Piles", `id="tabbtn-piles"`) after "Footing design", and panel `#tab-piles`.
+  - Anchor: `<button class="tab-btn" data-tab="piles" id="tabbtn-piles" style="display:none">Piles</button>`.
+  - Shown only for a pile-supported footing: `rwPileUI()` sets `tabbtn-piles` display with the pile-only inputs. Leaving pile mode while the tab is open opens Stability.
+- `renderPiles(r)` (new; called by `onInputChange` after `renderFooting`). Input error: the common banner (`rwInputErrHTML`). Spread footing: a one-line note. Cards:
+  1. **Pile Layout**: per row x from the toe, x from the heel (B − x), spacing, piles per ft (1/s); pile type, designation, D, embedment, clear, the bottom cover used (`r.cov_bot`, c_c since RWPB #1149) and the cover over the pile heads for punching (`r.cov_ph`), B × t_f, the capacities as entered, the passive credit.
+  2. **Pile Step 1 — Pile Group (per ft of wall)** and 3. **Pile Step 2 — Pile Reactions and Checks**: moved **unchanged** from `rwPileStability` (the same HTML, equations and the RW2M3 pile–cap tension alert).
+  4. **Pile Step 3 — Pile Checks**: every pile row of `r.checks` (pileComp, pileUplift, pileCapT, pileLat, pileSpacing, pileEdge, pileEmbed, pileCapD, pilePunch) with its value, D/C, PASS/FAIL, basis and a "worked in" link (`RW_CHECK_CARD`); failing rows shaded (`.tbl tr.rwpt-ng`).
+  5. **Pile Designer Hand-off** (`rwptHandoff(r)`): loads sent (the `bridgeSuite.v1.foundationLoads.by.retwall` copy: time, content hash, whether it equals what the wall sends now), results received (`pile_pxr` record and `r.pxr`: CURRENT / STALE / other, why), the imported inputs with Pile Designer's single-pile value and the group reduction (imported / `rec.geo`), the pulled per-combination results, and the same buttons as the Foundation card (`rwpxSendOpen`, `rwpxPullOpen`, `rwpxImportFile`, `rwpxClear`). Reads only; nothing is written.
+
+### Stability tab
+- `rwPileStability(r)`: before, it inserted the two pile cards at the top. After, it inserts **Pile-Supported Footing — Summary** (N, x̄, P_max with D/C, P_min, h = H/N with D/C, pile checks pass/fail count) with "Worked in" links to Pile Step 1, Step 2 and Step 3. The "not applicable" soil-card notes now end "(Piles tab, Pile Step 2)" (was "(Pile Step 2)").
+
+### Links
+- `RW_TABNAME`: + `piles: 'Piles'`.
+- `RW_CARDS.stabPile`: tab `'stability'` → `'piles'` (key and title kept, so every `RW_CHECK_CARD` row, `rwWorkedIn`, the check summary chips, the Overview check table, the Drawings index and the Report "On screen" note follow). New keys `pileLay`, `pileGrp`, `pileCk`, `pilePD` (Piles tab) and `stabPileSum` (Stability).
+- 3D pile-reaction label: "Worked on the Stability tab" → "Worked on the Piles tab".
+- Text: warning RW2M1 pile note "(Stability tab, Pile Step 2)" → "(Piles tab, Pile Step 2)" (wording only); Report pile-schedule note "on screen: Stability tab" → "Piles tab"; DXF notes "(STABILITY TAB, PILE STEP 2)" → "(SEE PILES TAB, PILE STEP 2)" (the same length, so the sheets keep their scales: with "(PILES TAB, …)" the loads sheet of a pile wall moved from 1/8" to 3/16" = 1'-0").
+
+### Report
+- Section "Pile-supported footing" → **"Piles (pile-supported footing)"**, as the tab.
+- New sub **Pile Step 3 — Pile checks**: the table of the tab's Pile Step 3 (value, D/C, basis, status, "see §" to the step that works it), with the on-screen link.
+- `rwTabSource` / `rwrTabNotes` / `rwrAddNotes`: + `piles`. The pile cards' alerts (RW2M3 pile–cap tension) moved with the cards: they are now in "Notes on the Piles tab" of the pile section (were in "Notes on the Stability tab").
+
+### Decision (pending engineer review)
+- The Pile Designer payload (`rwpxBuild`) is **unchanged**: its `pileLayout.distribution` text "(Stability tab, Pile Step 2)" is inside the content hash, so editing it would mark every pulled result STALE. Its notes keep the same wording.
+- The hand-off buttons stay on the Foundation card as well (the tab repeats them).
+- Spacing row: ACI / IBC has none (IBC 2018 has no minimum spacing, §1810.2.5), as before; the Pile Step 3 note says so.
+
+### How verified
+- Headless probe, origin/main (95d5810) vs this branch, 9 walls (ACI and AASHTO spread; ACI pile default, t_f 36 with water 2 ft (uplift), seismic 3 rows with passive; AASHTO pile default, EE I + collision 4 rows with water): `window._R` identical except the RW2M1 warning wording; Report text differs only in the section title, the new Pile Step 3 and the notes moved to the Piles tab; DXF identical except the two note lines; 0 console errors.
+- Tests: check-syntax; smoke/retaining-wall-checks (AUD rows read the Piles tab; new RWPT block: shown only on piles, after Footing design, cards, KaTeX, buttons, the chip "Pile Compression" lands on Pile Step 2, the Stability summary link, the Report section, back to Stability on spread, input-error banner; RW2L3 phone 390 px includes the Piles tab); phone-layout rwall; project-library retwall; dxf-print-sheets rw; retwall-pile-handoff; engine handoffs.
+
 
 
 ## 2026-11-07 — PR: claude/rw-stem-projection (PR #1150: https://github.com/mlococo88/All-Structural/pull/1150) — Stem projection above the retained grade h_p: earth, water and surcharge on the retained height H_ret = H − h_p in both modes and both footing types; worked steps and Report show H_ret (RWHP part 1: input, loads, stability, stem, footing, piles, hand-off; §4)
