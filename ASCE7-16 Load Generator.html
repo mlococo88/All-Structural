@@ -367,6 +367,16 @@ const CF_MEMBER={hD:[1,7,25],rows:[["Square (wind normal to face)",[1.3,1.4,2.0]
  ["Hexagonal or octagonal",[1.0,1.2,1.4]],["Round, moderately smooth",[0.5,0.6,0.7]],["Round, rough (D'/D = 0.02)",[0.7,0.8,0.9]],
  ["Round, very rough (D'/D = 0.08)",[0.8,1.0,1.2]],["Round, D\u221Aqz \u2264 2.5",[0.7,0.8,1.2]]]};
 
+/* A7M9 (2026-11-07): Fig. 29.3-1 Case C, B/s >= 2: C_f by horizontal distance from the windward edge, in multiples of s,
+   for B/s = 2 ... 10 (columns). null = region absent at that B/s. Values as recalled from the ASCE 7 figure (the same
+   table since ASCE 7-05 Fig. 6-20); verify (ASCE 7-16 PDF unreadable). For s/h > 0.8 the Case C coefficients are
+   multiplied by (1.8 - s/h). B/s > 10 is not tabulated here (the 13 and >= 45 columns add further regions). */
+const CF_CASEC={Bs:[2,3,4,5,6,7,8,9,10],
+ regions:[{a:0,b:1,v:[2.25,2.60,2.90,3.10,3.30,3.40,3.55,3.65,3.75]},
+          {a:1,b:2,v:[1.50,1.70,1.90,2.00,2.15,2.25,2.30,2.35,2.45]},
+          {a:2,b:3,v:[null,1.15,1.30,1.45,1.55,1.65,1.70,1.75,1.85]},
+          {a:3,b:10,v:[null,null,1.10,1.05,1.05,1.05,1.05,1.00,0.95]}]};
+
 /* ---- Chapter 11 / 12 seismic tables ---- */
 const FA_TAB={Ss:[0.25,0.5,0.75,1.0,1.25,1.5],
  A:[0.8,0.8,0.8,0.8,0.8,0.8], B:[0.9,0.9,0.9,0.9,0.9,0.9], C:[1.3,1.3,1.2,1.2,1.2,1.2],
@@ -1018,7 +1028,27 @@ function solve(S){
       const b1=interp1(CF_WALL.Bs,CF_WALL.Bs,o.Bs), b2=interp1(shAsc,shAsc,o.sh);
       o.cf=r2.v; o.cfInfo={brBs:{a:CF_WALL.Bs[b1.i0],b:CF_WALL.Bs[b1.i1]},brSh:{a:shAsc[b2.i0],b:shAsc[b2.i1]}};
       o.As=o.s*e.B;
-      if(o.Bs>=2) o.msg.push("B/s \u2265 2 requires Fig. 29.3-1 Case C to be investigated as well; Case C is not generated.");
+      /* A7M9: Case B, the Case A force with its resultant 0.2B off the geometric center (horizontal eccentricity) */
+      o.caseB={e:0.2*e.B};
+      /* A7M9: Case C for B/s >= 2 (computed for B/s <= 10) */
+      if(o.Bs>=2){
+        if(o.Bs<=10+1e-9){
+          const T=CF_CASEC, red=o.sh>0.8?(1.8-o.sh):1;
+          const regs=[];
+          T.regions.forEach(rg=>{
+            const x0=rg.a*o.s, x1=Math.min(rg.b*o.s, e.B);
+            if(x1<=x0+1e-9) return;
+            /* interpolate on B/s between columns; where the lower column has no value, the next defined column is used */
+            const ks=[],vs=[]; T.Bs.forEach((k,j)=>{ if(rg.v[j]!==null){ks.push(k);vs.push(rg.v[j]);} });
+            const cf=(o.Bs<=ks[0])?vs[0]:tblPick(ks,vs,o.Bs,S.tblMode).v;
+            regs.push({a:rg.a,b:rg.b,x0:x0,x1:x1,cf0:cf,cf:cf*red,A:(x1-x0)*o.s});
+          });
+          o.caseC={red:red,regs:regs};
+        } else {
+          o.caseC=null;
+          o.msg.push("B/s = "+RN(o.Bs,2)+" > 10: Fig. 29.3-1 Case C is required but this tool tabulates Case C only up to B/s = 10. Evaluate Case C by hand (verify the B/s = 13 and \u2265 45 columns).");
+        }
+      }
     } else {
       o.h=e.zTop-e.zBot; o.D=e.D/12; o.hD=o.D>0?o.h/o.D:0;
       o.zRef=(e.zTop+e.zBot)/2; o.zRefNote="centroid of the projected area A_f (Sec. 29.4.1)";
@@ -1029,8 +1059,26 @@ function solve(S){
       if(o.hD>25) o.msg.push("h/D exceeds 25; the h/D = 25 column is used without extrapolation.");
     }
     o.q=qAt(o.zRef,kd);
+    /* A7M9: Fig. 29.4-1 round sections: the moderately smooth / rough / very rough rows apply only for D sqrt(q_z) > 2.5
+       (D in ft, q_z in psf). For D sqrt(q_z) <= 2.5 the "D sqrt(q_z) <= 2.5" row applies; the larger of it and the
+       selected row is used (conservative; Decision pending engineer review). */
+    if(e.type!=="wall" && /^Round/.test(e.section||"")){
+      o.Dsq=o.D*Math.sqrt(o.q.q);
+      const low=CF_MEMBER.rows.find(r=>/\u221Aqz \u2264 2.5|\u221Aqz/.test(r[0])&&r[0].indexOf("2.5")>=0);
+      if(o.Dsq<=2.5 && low && e.section!==low[0]){
+        const cfLow=tblPick(CF_MEMBER.hD,low[1],o.hD,S.tblMode).v;
+        o.cfSel=o.cf; o.cfLow=cfLow; o.cf=Math.max(o.cf,cfLow);
+        o.msg.push("D\u221Aq_z = "+RN(o.Dsq,3)+" \u2264 2.5: the Fig. 29.4-1 row for D\u221Aq_z \u2264 2.5 applies (C\u1da0 = "+RN(cfLow,3)+"); the larger of it and the selected row ("+RN(o.cfSel,3)+") is used.");
+      } else if(o.Dsq>2.5 && low && e.section===low[0]){
+        o.msg.push("D\u221Aq_z = "+RN(o.Dsq,3)+" > 2.5: the surface-roughness rows of Fig. 29.4-1 apply; the D\u221Aq_z \u2264 2.5 row selected is kept (it is not smaller).");
+      }
+    }
     o.p=o.q.q*w.G*o.cf;
     o.F=o.p*(e.type==="wall"?o.As:o.Af);
+    if(o.caseB) o.caseB.MT=o.F*o.caseB.e;
+    if(o.caseC){ o.caseC.regs.forEach(r=>{ r.p=o.q.q*w.G*r.cf; r.F=r.p*r.A; });
+      o.caseC.F=o.caseC.regs.reduce((t,r)=>t+r.F,0);
+      o.caseC.xR=o.caseC.F>0?o.caseC.regs.reduce((t,r)=>t+r.F*(r.x0+r.x1)/2,0)/o.caseC.F:0; }
     return o;
   });
 
@@ -3025,6 +3073,8 @@ function renderElem(host){
         CF_MEMBER.rows.map(r=>{const hit=r[0]===e.section;
           return [{v:r[0],cls:hit?"hl":""}].concat(r[1].map((v,j)=>({v:v.toFixed(2),cls:(hit&&(j===e.cfInfo.i0||j===e.cfInfo.i1))?"hl":""})));}));
       eq(eb,"Projected area","Sec. 29.4.1","A_f = h\\,D","A_f = "+R2(e.h)+"("+R2(e.D)+")","A_f = "+R2(e.Af)+"\\ \\text{ft}^2");
+      if(e.Dsq!==undefined) eq(eb,"Round section: roughness rows apply only where D\u221Aq_z > 2.5 (D in ft, q_z in psf)","Fig. 29.4-1",
+        "D\\sqrt{q_z}","D\\sqrt{q_z} = "+R2(e.D)+"\\sqrt{"+R2(e.q.q)+"}","D\\sqrt{q_z} = "+RN(e.Dsq,3)+(e.cfLow!==undefined?"\\ \\le 2.5:\\ C_f = \\max("+RN(e.cfSel,3)+",\\ "+RN(e.cfLow,3)+") = "+RN(e.cf,3):(e.Dsq>2.5?"\\ > 2.5":"")));
     }
     note(eb,"Reference height for the velocity pressure: <b>"+esc(e.zRefNote)+"</b>, z = "+R2(e.zRef)+" ft. K\u2094 = "+R2(e.kd)+" from Table 26.6-1 for this element type.");
     eq(eb,"Velocity pressure at the element","Eq. 26.10-1","q_z = 0.00256\\,K_zK_{zt}K_dK_eV^2",
@@ -3034,8 +3084,24 @@ function renderElem(host){
       "p = "+R2(e.q.q)+"("+R2(w.G)+")("+RN(e.cf,3)+")","p = "+R2(e.p)+"\\ \\text{psf}");
     eq(eb,"Total force",e.type==="wall"?"Eq. 29.3-1":"Eq. 29.4-1","F = q_z\\,G\\,C_f\\,A",
       "F = "+R2(e.p)+"("+R2(e.type==="wall"?e.As:e.Af)+")","F = "+R2(e.F)+"\\ \\text{lbf}");
-    if(e.type==="wall") note(eb,"Fig. 29.3-1 Case A places the resultant at the geometric center and is the case computed. "+
-      "Case B places it at 0.2B from the windward edge, an eccentricity of "+R2(0.2*e.B)+" ft, and is not generated.","w");
+    if(e.type==="wall"){   /* A7M9: Cases B and C */
+      note(eb,"Fig. 29.3-1 Case A: the force above with its resultant at the geometric center of the solid area.");
+      eq(eb,"Case B, eccentric resultant","Fig. 29.3-1 Case B","e = 0.2\\,B,\\qquad M_T = F\\,e",
+        "e = 0.2("+R2(e.B)+") = "+R2(e.caseB.e)+"\\ \\text{ft},\\quad M_T = "+R2(e.F)+"("+R2(e.caseB.e)+")",
+        "M_T = "+R2(e.caseB.MT)+"\\ \\text{lbf\\cdot ft}");
+      note(eb,"Case B applies the Case A force F = "+R2(e.F)+" lbf with its resultant 0.2B = "+R2(e.caseB.e)+" ft horizontally off the geometric center, "+
+        "giving a torsion of "+R2(e.caseB.MT)+" lbf\u00B7ft about the vertical axis through the center for the supports. Verify (ASCE 7-16 PDF unreadable).");
+      if(e.caseC){
+        dtable(eb,"Fig. 29.3-1 Case C, B/s = "+RN(e.Bs,2)+" \u2265 2: C\u1da0 by distance from the windward edge",
+          ["Region (from the windward edge)","x (ft)","C\u1da0 tabulated","C\u1da0 used","Area (ft\u00B2)","p (psf)","F (lbf)"],
+          e.caseC.regs.map(r=>[{v:(r.a===0?"0":r.a+"s")+" to "+(r.b===10?"10s / end":r.b+"s")},{v:R2(r.x0)+" \u2013 "+R2(r.x1)},{v:RN(r.cf0,3)},{v:RN(r.cf,3),cls:"hl"},
+            {v:R2(r.A)},{v:R2(r.p)},{v:R2(r.F)}]).concat([[{v:"Total"},{v:""},{v:""},{v:""},{v:R2(e.As)},{v:""},{v:R2(e.caseC.F),cls:"hl"}]]),
+          "Coefficients interpolated on B/s; "+(e.caseC.red<1?"s/h = "+RN(e.sh,3)+" > 0.8, so each is multiplied by 1.8 \u2212 s/h = "+RN(e.caseC.red,3)+". ":"")+
+          "q = "+R2(e.q.q)+" psf at the top, G = "+R2(w.G)+". Table values as recalled from the figure: verify (ASCE 7-16 PDF unreadable).");
+        eq(eb,"Case C total and resultant location","Fig. 29.3-1 Case C","F_C = \\sum q_h\\,G\\,C_{f,i}\\,A_i,\\qquad x_R = \\dfrac{\\sum F_i x_i}{F_C}",
+          "F_C = "+e.caseC.regs.map(r=>R2(r.F)).join(" + "),"F_C = "+R2(e.caseC.F)+"\\ \\text{lbf},\\quad x_R = "+R2(e.caseC.xR)+"\\ \\text{ft from the windward edge}");
+      }
+    }
   });
 }
 
