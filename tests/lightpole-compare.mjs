@@ -72,6 +72,8 @@ export const CASES = {
   bcinside: { inputs: { boltBC: '9' } },
   bpsmall: { inputs: { bpDia: '14' } },
   bcoutside: { inputs: { boltBC: '40', bpDia: '44' } },
+  // LRFDLTS pole with one long arm (added 2026-11-07, LPM4: the 0.35 in/ft slope is a check for a moment load application)
+  ltsarm: { inputs: { H: '40', poleDiaTop: '4.5', poleDiaBase: '8', poleTwTop: '0.1196', poleTwBase: '0.1196', bromsSoil: 'cohesive', bromsC: '1.0' }, top: { codeMode: 'lts' }, fixtures: [{ hf: 40, th: 0, a: 12, epa: 1.6, aIce: 1.6, tIce: 0.5, W: 55 }] },
   deep12: { inputs: { H: '50', poleDiaTop: '6', poleDiaBase: '12', poleTwBase: '0.3125', soilClass: 'clay', S1: '100', b: '2', V: '170' } },
 };
 

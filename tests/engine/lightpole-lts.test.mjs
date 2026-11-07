@@ -163,7 +163,7 @@ test('LTS-5 HC-2: Service I top deflection 0.582 in (hand closed form); 2.5 % H 
   near(d.B, 1.00442, 2e-5, 'B'); const n0 = d.rows.find(r => r.lc === 'n0');
   near(n0.d, 0.58206, 0.002, 'Δ'); near(n0.slope, 0.0658, 0.0005, 'slope');
   const tr = d.checks.find(c => c.key === 'trans'); near(tr.limit, 3.60, 1e-9, 'limit'); assert.equal(tr.applies, false); assert.equal(tr.ok, true);
-  assert.equal(d.checks.find(c => c.key === 'slope').applies, false); assert.equal(d.checks.some(c => c.key === 'lum'), false);
+  assert.equal(d.checks.find(c => c.key === 'slope').applies, false); assert.equal(d.checks.some(c => c.key === 'lum'), false);   // sign: no moment load (LPM4)
 });
 test('LTS-5: fatigue not required < 55 ft and for roadside signs; required (HMLT, outside the tool) at ≥ 55 ft; breakaway checklist', () => {
   const L = ltsEngine();
@@ -172,8 +172,10 @@ test('LTS-5: fatigue not required < 55 ft and for roadside signs; required (HMLT
   assert.equal(L.breakaway(false).needed, false); assert.ok(L.breakaway(true).items.length >= 6);
   // HC-1 has an arm-mounted fixture with an unbalanced dead load: the 0.35 in/ft slope check applies; the luminaire limit is 10 % H = 48 in
   const secs = roundSecs(40, 4.5, 8, 0.1793, 490), d = L.deflection({ ...HC1, DCpole: secs[0].Wabove, taper: true }, { V: 130, Vsvc: 76, tIce: 0 }, secs, 55);
-  // engineer, 2026-11-02 (Q-B4): 2.5 % H and 0.35 in/ft are information only; the 10 % H luminaire limit is a check
-  assert.equal(d.checks.find(c => c.key === 'slope').applies, false); assert.equal(d.checks.find(c => c.key === 'trans').applies, false);
+  // engineer, 2026-11-02 (Q-B4): 2.5 % H is information only; the 10 % H luminaire limit is a check.
+  // LPM4 (2026-11-07): the 0.35 in/ft slope is a check for a moment load application (unbalanced arm), information otherwise
+  const sl = d.checks.find(c => c.key === 'slope'); assert.equal(d.momentLoad, true); assert.equal(sl.applies, true); assert.equal(sl.ok, sl.ratio <= 1);
+  assert.equal(d.checks.find(c => c.key === 'trans').applies, false);
   const lum = d.checks.find(c => c.key === 'lum'); near(lum.limit, 48, 1e-9, '0.10H'); assert.equal(lum.applies, true);
 });
 
