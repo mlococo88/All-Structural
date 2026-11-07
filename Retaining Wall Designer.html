@@ -9264,7 +9264,7 @@ function rwrModel(r) {
   {
     const subs = [];
     subs.push(sub('Project', [{ type: 'kv', rows: [
-      ['Project', meta.name || '—'], ['Project number', meta.num || '—'], ['Engineer of record', meta.eng || '—'], ['Checked by', meta.chk || '—'],
+      ['Project', meta.name || '—'], ['Project number', meta.num || '—'], ['Engineer of record', meta.eng || '—'], ['Date', meta.date || '—'], ['Checked by', meta.chk || '—'], ['Checked date', meta.chkDate || '—'],   // RWPR: + the Project tab dates
       ...(meta.notes ? [['Notes / description', meta.notes]] : []),
       ['Design basis', isA ? 'AASHTO LRFD Bridge Design Specifications, 10th Ed. (2024), limit-state design' : 'ACI 318-19 (concrete), IBC 2021 §1807.2.3 (stability, service loads), ASCE 7-22'],
       ['Earth pressure', isA ? ((A.ep_method === 'coulomb' ? 'Coulomb' : 'Rankine') + ', ' + (A.ep_cond === 'atrest' ? 'at-rest' : 'active')) : 'Rankine, active']] },
@@ -9274,7 +9274,8 @@ function rwrModel(r) {
       ['Toe length L_t', rwrCell(inp.Lt, 2), 'ft'], ['Heel length L_h', rwrCell(inp.Lh, 2), 'ft'], ['Toe soil cover above footing D_f,add', rwrCell(inp.Df_add, 2), 'ft'],
       ['Total toe embedment D_f = t_f + D_f,add', rwrCell(r.Df, 3), 'ft'], ['Footing width B', rwrCell(r.B, 3), 'ft'], ['Total wall height H = H_s + t_f', rwrCell(r.H, 3), 'ft'],
       ...(inp.useShearKey ? [['Shear key depth d_k', rwrCell(inp.dk, 0), 'in']] : []),
-      ...(r.hasBarrier ? [['Barrier height / weight W_bar', rwrN(r.bar_h_ft, 2) + ' ft / ' + rwrN(r.W_bar, 0) + ' lb/ft', '–']] : [])];
+      ...(r.hasBarrier ? [['Barrier height / weight W_bar', rwrN(r.bar_h_ft, 2) + ' ft / ' + rwrN(r.W_bar, 0) + ' lb/ft', '–'],
+        ['Barrier weight from', inp.bar_mode === 'geom' ? 'geometry: thickness ' + rwrN(inp.bar_t, 1) + ' in × height × γ_c' : 'entered weight', '–'], ['Barrier offset from the stem-top centreline (+ toward the heel)', rwrCell(inp.bar_ecc, 1), 'in']] : [])];   // RWPR: + barrier mode / offset
     const fig = (() => { try { return buildOverviewSVG(r); } catch (e) { return ''; } })();
     subs.push(sub('Wall geometry', [{ type: 'table', head: ['Quantity', 'Value', 'Unit'], rows: geo },
       fig ? { type: 'figure', svg: fig, caption: 'Wall section (as on the Overview tab)' } : null]));
@@ -9292,8 +9293,12 @@ function rwrModel(r) {
     if (isA) mat.push(['Load modifier η', rwrCell(a.eta, 2), '–'], ['φ_τ / φ_ep / φ_b', rwrN(A.phi_tau, 2) + ' / ' + rwrN(A.phi_ep, 2) + ' / ' + rwrN(A.phi_b, 2), '–'],
       ['Base interface: ' + rwrPlain(a.fric_label), 'δ_b = ' + rwrN(a.delta_b, 1) + '°, tan δ_b = ' + rwrN(a.tanDelta, 3), '–'], ['Eccentricity limit', rwrPlain(a.e_limit_label), '–'],
       ['Nominal bearing q_n', a.useManualQn ? 'from geotechnical report' : 'estimated as 3 q_a', '–'], ['Live-load surcharge', A.ll_surcharge ? 'on (h_eq ' + (A.heq_mode === 'manual' ? 'manual' : 'from Table 3.11.6.4.1-2') + ')' : 'off', '–'],
+      ...(A.ep_method === 'coulomb' ? [['Coulomb wall friction δ / wall batter θ', rwrN(A.delta, 1) + ' / ' + rwrN(A.batter, 1), 'deg']] : []), ...(A.ep_cond === 'atrest' ? [['Over-consolidation ratio OCR', rwrCell(A.ocr, 2), '–']] : []),
+      ...(A.ll_surcharge ? [['Equivalent height of soil h_eq', rwrCell(a.heq, 2), 'ft']] : []),   // RWPR: the earth-pressure and LS inputs in use
       ['Shear method', A.shear_method || 'auto', '–'], ['Exposure factors γ_e (footing / stem)', rwrN(A.gamma_e1, 2) + ' / ' + rwrN(A.gamma_e2, 2), '–'],
       ['Vehicular collision (Extreme Event II)', A.ct_enable ? 'on' : 'off', '–'], ['Interface shear check', A.ish_enable ? 'on' : 'off', '–']);
+    { const MK = { s1: 'S1', s2: 'S2', s3: 'S3', f1: 'F1', f2: 'F2', f3: 'F3' }, ov = Object.keys(MK).filter(k => inp.ovr[k] && inp.ovr[k].bar >= 3 && inp.ovr[k].bar <= 10 && inp.ovr[k].spc >= 3 && inp.ovr[k].spc <= 18);   // RWPR: the bar-size overrides (Rebar tab)
+      mat.push(['Bar overrides (Rebar tab)', ov.length ? ov.map(k => MK[k] + ' #' + inp.ovr[k].bar + ' @ ' + rwrN(inp.ovr[k].spc, 1) + ' in').join(', ') : 'none (automatic selection)', '–']); }
     subs.push(sub('Materials, cover and design options', [{ type: 'table', head: ['Quantity', 'Value', 'Unit'], rows: mat }]));
     if (!r.hasCol) subs.push(sub('Column / beam loads', [{ type: 'note', text: 'No column or beam loads applied.' }]));   // RWRX: as the Export report §2.3
     if (r.hasCol) subs.push(sub('Column / beam loads', [{ type: 'table', head: ['Quantity', 'Value', 'Unit'], rows: [

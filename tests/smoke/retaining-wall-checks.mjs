@@ -8,6 +8,7 @@
 // A doubtful value (REVIEW) is marked but does not block the results. A saved autosave holding a blank value opens on the banner
 // (no crash). The default project has no banner and no mark.
 // RWSC (2026-11-07): the self-consistency panel passes on representative walls, reports MISMATCH on a tampered result, hides on error.
+// RWPR (2026-11-07): the Report prints alone, with every section, the overview figures and the input echo; 0 KaTeX errors.
 //   node tests/smoke/retaining-wall-checks.mjs [--file <file or git ref>]
 import path from 'path';
 import { openPage, resolveFile } from '../lib.mjs';
@@ -112,6 +113,39 @@ for (const [name, set] of SC) {
   check(/all \d+ passed/.test(o.ok) && o.n >= 10, o.ok + ` (${o.n} checks)`);
   check(/MISMATCH/.test(o.ng) && o.open, 'ΣV made inconsistent: ' + o.ng + (o.open ? ' (opened)' : ''));
   check(o.gone, 'no panel while an input is in error');
+  check(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
+}
+// RWPR (2026-11-07): the Report in print (Print report, window.print stubbed, print media, page.pdf): the report alone, every section,
+// the overview figures, the input echo with the Project tab dates, 0 KaTeX errors, a multi-page PDF; the page comes back after printing
+for (const [name, set] of [['ACI, water + column + seismic', { proj_name: 'Main St Wall', proj_date: '2026-11-06', proj_chkdate: '2026-11-07', Hs: 14, wt_depth: 6, incl_hydro: true, col_DL: 20, col_LL: 10, kh: 0.1, ovr_bar_s1: 6, ovr_spc_s1: 8 }],
+  ['AASHTO, barrier + collision + variable height + key', { design_basis: 'AASHTO', bar_enable: true, aashto_ct_enable: true, vh_enable: true, use_shear_key: true }]]) {
+  const { b, p, errs } = await openPage(SRC.file); await p.waitForTimeout(2500);
+  await p.evaluate(async set => {
+    for (const [k, v] of Object.entries(set)) { const e = document.getElementById(k); if (e.type === 'checkbox') e.checked = !!v; else e.value = v; e.dispatchEvent(new Event('change', { bubbles: true })); }
+    if (typeof syncConditionalUI === 'function') syncConditionalUI(); onInputChange();
+    document.querySelector('.tab-btn[data-tab="report"]').click(); await new Promise(r => setTimeout(r, 6000));
+    window.__printed = 0; window.print = () => { window.__printed++; };
+  }, set);
+  await p.click('[data-rpact="print"]'); await p.waitForFunction(() => window.__printed > 0);
+  await p.emulateMedia({ media: 'print' }); await p.waitForTimeout(1000);
+  const o = await p.evaluate(() => { const box = document.getElementById('rp-print'), vis = e => !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0, t = box ? box.innerText : '';
+    return { box: vis(box), app: vis(document.getElementById('app')), kerr: box ? box.querySelectorAll('.katex-error').length : -1, t,
+      img3d: !!(box && box.querySelector('img[alt="3D model of the wall"]')), svgs: box ? box.querySelectorAll('figure svg').length : 0 }; });
+  const pdf = await p.pdf({ format: 'Letter', preferCSSPageSize: true }), pages = (pdf.toString('latin1').match(/\/Type\s*\/Page[^s]/g) || []).length;
+  await p.emulateMedia({ media: 'screen' }); await p.evaluate(() => window.dispatchEvent(new Event('afterprint')));
+  const back = await p.evaluate(() => !document.body.classList.contains('rp-printing'));
+  await b.close();
+  console.log('print: ' + name);
+  check(o.box && !o.app, 'the report alone on the page');
+  const secs = ['DESIGN SUMMARY', 'OVERVIEW OF THE WALL', 'INPUT PARAMETERS', 'STABILITY', 'STEM DESIGN', 'FOOTING DESIGN', 'REINFORCEMENT SCHEDULE', 'ASSUMPTIONS AND WARNINGS', 'REFERENCES', 'APPENDIX: FIGURES OF THE RESULT TABS'];
+  const miss = secs.filter(x => !o.t.toUpperCase().includes(x));
+  check(!miss.length, 'every section printed' + (miss.length ? ' — missing ' + miss.join(', ') : ''));
+  check(o.img3d && o.svgs >= 5, `overview 3D image and ${o.svgs} drawn figures`);
+  check(/Checked date/.test(o.t) && /Bar overrides/.test(o.t), 'input echo: Project dates and bar overrides');
+  if (set.proj_date) check(o.t.includes('2026-11-06') && o.t.includes('S1 #6 @ 8'), 'input echo values: date 2026-11-06, S1 #6 @ 8 in');
+  check(o.kerr === 0, `0 KaTeX errors (${o.kerr})`);
+  check(pages >= 15, `${pages} printed pages`);
+  check(back, 'the page comes back after printing');
   check(!errs.length, 'no console errors' + (errs.length ? ': ' + errs.join(' | ') : ''));
 }
 console.log(failures ? `${failures} FAILED` : 'all ok');
