@@ -5057,7 +5057,7 @@ Review Phase 8, pile schedule (the open item of 8e). Code sites are tagged `RWPL
 +    return { known: sbK, iv: ivP };
 +  }, [8, 12, 16, 24, 32, 48, 64, 96, 192], [['stabPile', 'pile reactions'], ['ftgPunch', 'punching']]);
 +
-## 2026-11-07 — PR: claude/rw-pile-3d — Pile-supported footing: 3D view with the pile combinations and the pile reactions per row; no soil base reaction on piles (RWPL; display only, no result change)
+## 2026-11-07 — PR: claude/rw-pile-3d — Pile-supported footing: 3D view with the pile combinations and the pile reactions per row; no soil base reaction on piles (RWPL; display only, no result change) (PR #998: https://github.com/mlococo88/All-Structural/pull/998)
 
 Review Phase 8, 3D view (open item of 8e). Code sites are tagged `RWPL`. Nothing computed changes; on a spread footing the 3D view is as before.
 ### RWPL-15. 3D "Show" list on piles (`rw3Options`, `rw3Selected`; new `rw3IsPile`, `rw3PileCombos`, `rw3PileFactors`)
