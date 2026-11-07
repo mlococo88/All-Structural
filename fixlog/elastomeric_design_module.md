@@ -1398,7 +1398,7 @@ index 13f0165..656e0f1 100644
 - **Saved data:** no key or format changed (§5).
 - **Other copies:** none. **Open items:** none.
 
-## 2026-11-07 — PR: claude/edm-h1-g-range (H1, review 2026-11-07) — Method B design G = least favourable of the specified G ±15 %   [calc change] [MORE conservative]
+## 2026-11-07 — PR: claude/edm-h1-g-range (PR #1077: https://github.com/mlococo88/All-Structural/pull/1077) (H1, review 2026-11-07) — Method B design G = least favourable of the specified G ±15 %   [calc change] [MORE conservative]
 
 Basis: AASHTO LRFD 10th Ed. (2024) Art. 14.7.5.2 (G within the M 251 acceptance of ±15 %; design takes the least favourable value of the range); MassDOT LRFD Bridge Manual Part I §3.5.7.4 (specified 0.160 ksi, design range 0.136 to 0.184 ksi); Art. 14.6.3.1 (H_bu); Art. 14.7.5.4 / Eq. 14.7.5.3.3-15 (restraint); C14.8.3.1 (slip). Closes O12(b) ("Method B uses the specified G").
 
