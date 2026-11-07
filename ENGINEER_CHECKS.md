@@ -267,7 +267,7 @@ Each item has my recommendation; the tool currently follows it. Details are in t
 
 **Base Plate / Concrete Anchor** — ASCE 7-22 snow factors · −W combos and rain slot · plate b_eff rule (rec 2l_x) · narrow-member c_a1 limit (less conservative; rec yes) · §17.6.2.1.2 interpretation · seismic §17.10 (rec warning) · inline CSS instead of Tailwind CDN (rec).
 **Concrete Beam Capacity / Rebar / ASD** — sign off A_ℓ,min (9.6.4.3) and A_v,min trigger (9.6.3.1), both less conservative per 318-19 · printed checks of AASHTO 5.6.2.1, 5.4.3.1, 5.10.8.2.4b, 5.10.8.4.2a · ASD operating f_c 1,900 psi (MassDOT?) · ASD allowables for other grades · Headed Bar tab (rec yes) · relabel "9th Ed.".
-**Retaining Wall** — φτ 1.00 vs MassDOT 0.80 · MassDOT collision values · φb 0.45 on rock (rec) · w_c in E_c.
+**Retaining Wall** — φb 0.45 on rock (rec) · w_c in E_c. (φτ 1.00 and the collision values closed 2026-11-07: O4, O5 in the fix log.)
 **Elastomeric** — 14.7.6.3.2/14.7.6.3.5 printed check · plain-pad rotation form · MassDOT 0.03 rad / 4.75 limits · anchorage basis · 0.005 rad about each axis.
 **Spread Footing** — Direct mode basis (label ASCE 7 / indicative) · seismic E load type · old saves depth factors On (rec keep) · passive on the footing face.
 **Timber** — deflection transient set (rec keep) · x/d option default off · ASCE 7 edition.

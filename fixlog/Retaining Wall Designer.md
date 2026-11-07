@@ -4407,6 +4407,36 @@ Review Phase 8, PR 8c. Engineer decisions 2026-11-07 (review Q11–Q15, taken as
 +  }
 ```
 
+## 2026-11-07 — PR: claude/rw-audit-bookkeeping — Calculation audit item 10: bookkeeping (EH vertical 0.90 labelled as the engineer's choice; O4 and O5 closed; AUDIT.md §3.9 updated; two ACI citations in comments corrected) (RWBK; no result change) (PR #963: https://github.com/mlococo88/All-Structural/pull/963)
+
+Calculation audit, item 10. Engineer answers (2026-11-07). Code sites are tagged `RWBK`. No computed value changes.
+
+### RWBK-1. EH vertical minimum 0.90 kept (engineer's choice)
+- **Where:** `calcAll`, AASHTO block, anchor `const gEH_min = 0.90;` (comment added); `renderStabilityAASHTO` Step 3, anchor `{sym:'V_{EH,v}', desc:'vertical component of the earth thrust`; `rwrModel`, Report step `VEHv` (label).
+- **Before:** the comment and labels said only "factored as EH (γ_EH max/min), not EV".
+- **After:** they add that the 0.90 minimum in sliding and eccentricity is the engineer's choice, more conservative than AASHTO LRFD 10th Ed. Fig. C11.5.6-2, which shows the EH maximum factor on both components of the thrust there.
+- **Check case:** Rankine β 20° (AASHTO): sliding D/C 1.938 stays (with 1.50 on the vertical it would be 1.810). No result change.
+
+### RWBK-2. Comments citing the wrong ACI table (comments only)
+- `devLengthACIRaw`, anchor `const psi_s = db <= 0.75 ? 0.8 : 1.0;`: the comment cited "ACI Table 25.5.2.1" (the lap table); now ACI 318-19 Table 25.4.2.5.
+- `asMin`, anchor `if (!isAASHTO) return 0.0018 * bw * h;`: the comment cited "Table 24.4.3.2"; in ACI 318-19, §24.4.3.2 is a paragraph (0.0018, all grades), so it now reads §7.6.1.1 / §24.4.3.2.
+
+### RWBK-3. Open items O4 and O5 closed (decisions 2026-11-07)
+- **O4 (N1). AASHTO φ_τ default 1.00:** kept. AASHTO LRFD 10th Ed. Table 11.5.7-1 (semi-gravity walls) gives 1.0 for sliding; the shallow-foundation values of Table 10.5.5.2.2-1 (0.80 CIP on sand) are not used for walls. Closed; no change.
+- **O5 (N2). Collision factors:** γp = 1.00 for DC/EV in Extreme Event II is AASHTO LRFD 10th Ed. Table 3.4.1-1 (γp = 1.00 in EE I/II), not a MassDOT value; γ_EH = 0 for stability, the full-joint distribution, the test-level forces (Table 3.3.2-1) and the 0.75 variable-height rule are MassDOT Bridge Manual 3.3.2.4 / 3.3.2.2 (verified in the audit). Water, ES and the vertical earth thrust in EE II were settled in #944 (RWCT) and #956 (RWCV). Closed.
+- `ENGINEER_CHECKS.md`, Retaining Wall line: φτ and collision values removed (closed).
+
+### RWBK-4. AUDIT.md
+- §3.9 Retaining Wall table: every row marked with the fix that resolved it (F1/F14 SI toggle; F2 thrust at δ; F3 K_p; F4 EH vertical, 0.90 kept by the engineer; F5 Strength Ia / 0.9D; F17 q_n; F9 A_s,min; F8 ψ_g / c_b; F6 M-O; F7 key; O5 collision; F10 cohesion), plus a status line naming O4/O5 closed and the audit PRs.
+- §8 plan: A28 and A29 marked done (PR #9).
+
+### How verified
+- `_R`, Export JSON and localStorage identical main vs branch on the twelve audit walls; the tab and Report text differ only by the RWBK-1 labels.
+- Tests: check-syntax; smoke/retaining-wall-checks; phone-layout rwall 390/768; project-library retwall; dxf-print-sheets rw.
+
+### Saved data
+- No change.
+
 ## 2026-11-07 — PR: claude/rw-pile-8d-footing — Pile-supported footing, Phase 8d: heel and toe designed from the factored pile-row reactions, bottom cover over the pile heads, punching around the piles, ACI cap depth (RWPL; calculation change in pile mode only) (PR #961: https://github.com/mlococo88/All-Structural/pull/961)
 
 Review Phase 8, PR 8d. Code sites are tagged `RWPL`. Spread-footing results are unchanged: `cov_bot` = c_c, and the pile paths run only when `pile` exists.
@@ -4747,3 +4777,45 @@ Review Phase 8, PR 8e. This PR changes no computed value.
 ### Open items
 - The 3D view's bearing layer and its "Show" combination selector still offer the soil base reaction on piles. The pile reactions in 3D are to come with the Pile Designer link (8f) or a later display PR.
 - No pile schedule table: the piles are described in the general notes (8b).
+
+### Before / after (code, `git diff -U0` of `Retaining Wall Designer.html` against main after 8d)
+```diff
+-  s += `<g data-layer="bearing">`;
++  s += `<g data-layer="bearing"${r.pile ? ' style="display:none"' : ''}>`;   // RWPL (8e): no soil bearing under a pile-supported footing
+-  if (tog.bearing) {
++  if (tog.bearing && !r.pile) {   // RWPL (8e): no soil bearing under a pile-supported footing
+-  const yHook = cf + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
++  const cb = r.cov_bot != null ? r.cov_bot : cf;                      // RWPL (8e): on piles the bottom mat sits above the pile heads (cov_bot = c_c on soil)
++  const yHook = cb + db(f2) + db(f3) + db(s1) / 2;                   // the hook bears on the bottom mat
+-    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cf + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
++    F2: { s: f2, x0: cf, x1: Math.min(G.B - cf, G.xf + r.ld_toe), y: cb + db(f2) / 2, hook: r.toe_hook ? 12 * db(f2) : 0 },   // RWDS: 90° hook up at the toe end when ticked
+-    loads(c) { const { L, G, k, T } = c; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
+-      T(L.lt, G.B / 2, y0 - 0.2 * k, 0.085 * k, 'PILE-SUPPORTED FOOTING: PILE REACTIONS WITH THE PILE ANALYSIS (NOT YET IN THIS VERSION)', 1); return y0 - 0.6 * k; },
++    /* RWPL (8e): the pile reactions per row (kip per pile) of the governing compression combination, as upward arrows under the
++       footing, with the governing uplift / minimum combination below them; values from r.pile (Stability tab, Pile Step 2) */
++    loads(c) {
++      const { D, L, G, k, T, r } = c, P = r.pile, h = 0.085 * k; let y0 = c.y0 != null ? c.y0 : -G.dk - 0.35 * k;
++      if (!P || P.err) { T(L.lt, G.B / 2, y0 - 0.2 * k, h, 'PILE-SUPPORTED FOOTING: NO PILE RESULTS (INPUT ERROR)', 1); return y0 - 0.6 * k; }
++      const one = (cmb, title) => {
++        const Pm = Math.max(...cmb.L.rows.map(x => Math.abs(x.P)), 1e-9), sc = 0.55 * k / Pm;
++        D.line(L.load, 0, y0, G.B, y0);
++        cmb.L.rows.forEach(x => { const xi = x.x * 12, len = Math.abs(x.P) * sc, yt = y0 - Math.max(len, 0.08 * k);
++          if (x.P >= 0) arrowV(D, L.load, xi, yt, y0, k); else arrowV(D, L.load, xi, y0, yt, k);
++          T(L.lt, xi, yt - 0.14 * k, h, rwdwN(x.P, 1) + ' KIP/PILE' + (x.P < 0 ? ' (UPLIFT)' : ''), 1); });
++        const yl = y0 - 0.55 * k - 0.4 * k; T(L.lt, G.B / 2, yl, h, title, 1); y0 = yl - 0.3 * k;
++      };
++      one(P.govC, 'PILE REACTIONS, ' + P.govC.label.toUpperCase() + ': P_MAX = ' + rwdwN(P.govC.L.Pmax, 1) + ' KIP ' + (r.checks.pileComp.ok ? '<=' : '>') + ' ' + rwdwN(P.govC.cap.c, 1) + ' KIP; H/N = ' + rwdwN(P.govH.L.rows[0].h, 2) + ' KIP/PILE');
++      const mn = P.comb.reduce((b, x) => (!b || x.L.Pmin < b.L.Pmin) ? x : b, null);
++      if (mn && mn !== P.govC) one(mn, 'PILE REACTIONS, ' + mn.label.toUpperCase() + ' (SMALLEST PILE LOAD): P_MIN = ' + rwdwN(mn.L.Pmin, 1) + ' KIP' + (mn.L.Pmin < 0 ? ' (UPLIFT, T <= ' + rwdwN(mn.cap.t, 1) + ' KIP)' : ''));
++      return y0;
++    },
++    if (r.pile && !r.pile.err) {   // RWPL (8e): on piles the soil checks do not apply; the pile results instead
++      const pc = r.pile;
++      foot = ['PILE-SUPPORTED FOOTING: SOIL BEARING, SLIDING AND OVERTURNING NOT APPLICABLE (STABILITY TAB, PILE STEP 2)',
++        'PILE GROUP PER FT: N = ' + F(pc.g.N, 4) + ' /FT, X_BAR = ' + F(pc.g.xbar, 3) + ' FT, I = ' + F(pc.g.I, 4) + ' FT2/FT',
++        'COMPRESSION: P_MAX = ' + F(pc.govC.L.Pmax, 1) + ' KIP <= ' + F(pc.govC.cap.c, 1) + ' (' + pc.govC.label.toUpperCase() + ')',
++        'UPLIFT: ' + (pc.govT.L.Pmin < 0 ? F(-pc.govT.L.Pmin, 1) + ' KIP VS ' + F(pc.govT.cap.t, 1) : 'NONE'),
++        'LATERAL: H/N = ' + F(pc.govH.L.rows[0].h, 2) + ' KIP/PILE VS ' + F(pc.govH.cap.h, 1) + ' KIP',
++        ...(r.pilePunch ? ['PUNCHING AT THE PILES: P_U = ' + F(r.pilePunch.gov.Pu / 1000, 1) + ' KIP VS PHI V_C = ' + F(r.pilePunch.gov.phiVc / 1000, 1) + ' KIP (FOOTING DESIGN TAB)'] : [])];
++    }
+```
