@@ -2904,7 +2904,7 @@ From the code-compliance review of 2026-11-07 (LOW findings). One commit per ite
 - 0 console errors.
 - **Saved data:** new optional field `member.j10.dist` (absent = old behaviour). No key changed.
 
-## 2026-11-07 — PR: claude/steelbeam-tfa-option — Tension field action option per §G2.2, interior panels only (TFA; new option, default off)
+## 2026-11-07 — PR: claude/steelbeam-tfa-option (PR #1073: https://github.com/mlococo88/All-Structural/pull/1073) — Tension field action option per §G2.2, interior panels only (TFA; new option, default off)
 
 From the code-compliance review of 2026-11-07 (SUGGESTION: G2.2 tension field action).
 
