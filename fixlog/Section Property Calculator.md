@@ -3196,7 +3196,7 @@ index 56a8a3f..13f8372 100644
 
 Bold: positive (overstated, unconservative) for every shape of the family. ST, WT, MT and L: S_y, Z_y not in the stored data (—); r_y = √(I_y/A) of the table. Values from the production engine (`SPC.analyze`, one part, n = 1) against the stored v16.0 rows, all 1,660 shapes. Also corrects the C1 note "the thin-wall J is lower (conservative …)": J is higher than the table for the heaviest W and WT shapes (W14X730 +9.1 %, WT7X436.5 +11.1 %); see the M3 entry.
 
-## 2026-11-07 — PR: claude/spc-h1-geom — SPH2: S, C, MC and ST shapes modelled with the flange slope, root fillets and toe radii (review H1; §4 result change)
+## 2026-11-07 — PR: claude/spc-h1-geom — SPH2: S, C, MC and ST shapes modelled with the flange slope, root fillets and toe radii (review H1; §4 result change; PR #1086: https://github.com/mlococo88/All-Structural/pull/1086)
 
 - **Problem (review H1):** the plate model of S, C, MC and ST shapes (average t_f over the full b_f, no fillets) overstated the minor-axis properties of **every** shape in these families: I_y +5 to +34 %, S_y up to +34 %, Z_y up to +16 % and r_y up to +14 % over the AISC v16.0 tables (SPH1 table above). This is unconservative, e.g. Fe about y of built-up channels.
 - **Fix (engine, `buildGeom`):** for these four families the material polygon is now the outline with the sloped inner flange faces, root fillets and toe radii. The thin-wall torsion elements, the tabulated-option data (`tab`), `refPts` and the snap points are unchanged.
